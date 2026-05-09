@@ -1,5 +1,6 @@
 
 using System.Numerics;
+using System.Text.Json;
 using Foster.Framework;
 
 namespace TinyLink;
@@ -18,6 +19,7 @@ class Program
 /// </summary>
 public class Manager : App
 {
+	private const string WindowSettingsFileName = "window.json";
 	private const float Scale = 3.0f;
 	private const float ButtonSize = 24;
 	private const float ButtonSpacing = 2;
@@ -149,6 +151,8 @@ public class Manager : App
 
 	protected override void Startup()
 	{
+		LoadWindowSettings();
+
 		Assets.Load(GraphicsDevice);
 		Factory.RegisterTypes();
 
@@ -157,8 +161,56 @@ public class Manager : App
 
 	protected override void Shutdown()
 	{
+		SaveWindowSettings();
+
 		Assets.Unload();
 		Factory.Clear();
+	}
+
+	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
+
+	private void LoadWindowSettings()
+	{
+		try
+		{
+			if (!File.Exists(WindowSettingsPath))
+				return;
+
+			var settings = JsonSerializer.Deserialize<WindowSettings>(File.ReadAllText(WindowSettingsPath));
+			if (settings != null)
+				Window.Position = new Point2(settings.X, settings.Y);
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load window settings: {e}");
+		}
+	}
+
+	private void SaveWindowSettings()
+	{
+		try
+		{
+			Directory.CreateDirectory(UserPath);
+
+			var position = Window.Position;
+			var settings = new WindowSettings
+			{
+				X = position.X,
+				Y = position.Y
+			};
+
+			File.WriteAllText(WindowSettingsPath, JsonSerializer.Serialize(settings));
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to save window settings: {e}");
+		}
+	}
+
+	private sealed class WindowSettings
+	{
+		public int X { get; set; }
+		public int Y { get; set; }
 	}
 
 	protected override void Update()
