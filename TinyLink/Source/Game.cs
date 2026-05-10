@@ -19,6 +19,7 @@ public class Game
 
 	public Input Input => Manager.Input;
 	public GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
+	public Audio Audio => Manager.Audio;
 	public Time Time => Manager.Time;
 
 	private Room? room;
@@ -26,7 +27,10 @@ public class Game
 	private float nextRoomEase;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
-	private float hitstun = 0;
+	private readonly HashSet<string> audioFailures = [];
+	private SoundInstance? music;
+	private string? musicArea;
+	private float hitStun = 0;
 	private float shaking = 0;
 	private Point2 shake;
 	private Rng rng = new();
@@ -43,12 +47,14 @@ public class Game
 		Screen = new(manager.GraphicsDevice, Width, Height, name: "GameScreen");
 		Controls = new(manager.Input);
 
-		if (Assets.Rooms.TryGetValue(start, out room))
-		{
-			Camera = new Vector2(room.Cell.X * Width, room.Cell.Y * Height);
-			LoadRoom(room);
+			if (Assets.Rooms.TryGetValue(start, out room))
+			{
+				Camera = new Vector2(room.Cell.X * Width, room.Cell.Y * Height);
+				LoadRoom(room);
+				StartMusic();
+				ApplyMusicArea(room);
+			}
 		}
-	}
 
 	public void Update()
 	{
@@ -63,8 +69,8 @@ public class Game
 			if (Input.Keyboard.Pressed(Keys.R))
 				ReloadRoom();
 
-			// only run normal updates if no hitstun
-			if (hitstun <= 0)
+			// only run normal updates if no hitStun
+			if (hitStun <= 0)
 			{
 				// Remove Destroyed Actors
 				for (int i = 0; i < destroying.Count; i ++)
@@ -89,7 +95,7 @@ public class Game
 					shake = Point2.Zero;
 			}
 			else
-				hitstun -= Time.Delta;
+				hitStun -= Time.Delta;
 		}
 		// Lerp the Camera to the new Room
 		else if (nextRoomEase < 1.0f)
@@ -102,7 +108,8 @@ public class Game
 		{
 			room = nextRoom;
 			nextRoom = null;
-			Hitstun(0.1f);
+			ApplyMusicArea(room);
+			HitStun(0.1f);
 		}
 	}
 
@@ -128,7 +135,7 @@ public class Game
 		Batcher.PopMatrix();
 
 		// draw player HP
-		if (GetFirst<Player>() is Player player)
+		if (GetFirst<Player>() is { } player)
 		{
 			Point2 pos = new(0, Height - 16);
 			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
@@ -194,6 +201,155 @@ public class Game
 			destroying.Add(actor);
 	}
 
+	public void PlayAudioEvent(string path)
+	{
+		if (!Audio.Initialized)
+			return;
+
+		try
+		{
+			Audio.PlayEvent(path);
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add(path))
+				Console.Error.WriteLine($"Failed to play audio event '{path}': {e}");
+		}
+	}
+
+	public void PlayAudioEvent(string path, string parameterName, string parameterLabel)
+	{
+		if (!Audio.Initialized)
+			return;
+
+		try
+		{
+			using var instance = Audio.CreateEvent(path);
+			instance.SetParameterLabel(parameterName, parameterLabel, true);
+			instance.Start();
+			instance.Release();
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add($"{path}:{parameterName}:{parameterLabel}"))
+				Console.Error.WriteLine($"Failed to play audio event '{path}' with {parameterName} '{parameterLabel}': {e}");
+		}
+	}
+
+	public string GetSurfaceTypeBelow(Actor actor)
+	{
+		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
+			return Factory.DefaultSurfaceType;
+
+		var bounds = actor.Hitbox.Rect + actor.Position;
+		var y = bounds.Bottom;
+		var left = GetSurfaceTypeAtWorldPoint(new(bounds.Left + 1, y));
+		var right = GetSurfaceTypeAtWorldPoint(new(bounds.Right - 1, y));
+
+		if (left != Factory.DefaultSurfaceType)
+			return left;
+		if (right != Factory.DefaultSurfaceType)
+			return right;
+		return left;
+	}
+
+	private string GetSurfaceTypeAtWorldPoint(Point2 point)
+	{
+		if (room == null)
+			return Factory.DefaultSurfaceType;
+
+		var local = point - room.WorldBounds.TopLeft;
+		var tile = new Point2(
+			(int)MathF.Floor(local.X / (float)TileSize),
+			(int)MathF.Floor(local.Y / (float)TileSize));
+
+		if (tile.X < 0 || tile.Y < 0 || tile.X >= Columns || tile.Y >= Rows)
+			return Factory.DefaultSurfaceType;
+
+		if (Factory.Find(room.Tiles[tile.X, tile.Y]) is { SurfaceType: { } surfaceType })
+			return surfaceType;
+
+		return Factory.DefaultSurfaceType;
+	}
+
+	public void StopMusic(bool immediate = false) {
+		if (music == null)
+			return;
+
+		try {
+			music.Stop(immediate);
+			music.Release();
+		} catch (Exception e) {
+			Console.Error.WriteLine($"Failed to stop background music: {e}");
+		}
+
+		music = null;
+		musicArea = null;
+	}
+
+	public void RefreshMusic()
+	{
+		if (!Manager.MusicEnabled)
+		{
+			StopMusic(true);
+			return;
+		}
+
+		if (room == null)
+			return;
+
+		StartMusic();
+		ApplyMusicArea(room);
+	}
+
+	private void StartMusic()
+	{
+		if (!Manager.MusicEnabled || !Audio.Initialized || music != null)
+			return;
+
+		try
+		{
+			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, Manager.DefaultMusicArea, true);
+			musicArea = Manager.DefaultMusicArea;
+			music.Start();
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add(Manager.BackgroundMusicEventPath))
+				Console.Error.WriteLine($"Failed to start background music '{Manager.BackgroundMusicEventPath}': {e}");
+			music = null;
+			musicArea = null;
+		}
+	}
+
+	private void ApplyMusicArea(Room room)
+	{
+		if (!Manager.MusicEnabled)
+		{
+			StopMusic(true);
+			return;
+		}
+
+		if (string.IsNullOrEmpty(room.MusicArea))
+			return;
+
+		StartMusic();
+		if (music == null || musicArea == room.MusicArea)
+			return;
+
+		try
+		{
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, room.MusicArea, true);
+			musicArea = room.MusicArea;
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{room.MusicArea}"))
+				Console.Error.WriteLine($"Failed to set background music area '{room.MusicArea}': {e}");
+		}
+	}
+
 	public bool Transition(Point2 direction)
 	{
 		if (room != null && nextRoom == null)
@@ -205,10 +361,11 @@ public class Game
 					if (it is not Player)
 						Destroy(it);
 
-				nextRoomEase = 0.0f;
-				LoadRoom(nextRoom);
-				return true;
-			}
+					nextRoomEase = 0.0f;
+					LoadRoom(nextRoom);
+					ApplyMusicArea(nextRoom);
+					return true;
+				}
 		}
 
 		return false;
@@ -238,13 +395,54 @@ public class Game
 		return null;
 	}
 
-	public void ReloadRoom()
+	public void ReloadRoom(bool restartMusic = false)
 	{
-		if (room != null)
+		if (room == null) return;
+
+		if (restartMusic)
+			StopMusic(true);
+
+		foreach (var actor in Actors)
+			Destroy(actor);
+		LoadRoom(room);
+
+		if (restartMusic)
 		{
-			foreach (var actor in Actors)
-				Destroy(actor);
-			LoadRoom(room);
+			StartMusic();
+			ApplyMusicArea(room);
+		}
+	}
+
+	public void RefreshRoomTiles()
+	{
+		if (room == null)
+			return;
+
+		Grid? bg = null;
+		Grid? fg = null;
+		foreach (var actor in Actors)
+		{
+			if (actor is not Grid grid)
+				continue;
+
+			if (grid.Mask.Has(Actor.Masks.Solid))
+				fg = grid;
+			else
+				bg = grid;
+		}
+
+		if (bg == null || fg == null)
+			return;
+
+		bg.Clear();
+		fg.Clear();
+
+		for (var x = 0; x < Columns; x ++)
+		for (var y = 0; y < Rows; y ++)
+		{
+			var tile = new Point2(x, y);
+			if (Factory.Find(room.Tiles[x, y]) is { } entry)
+				entry.Tile?.Invoke(tile, fg, bg);
 		}
 	}
 
@@ -274,7 +472,7 @@ public class Game
 		}
 	}
 
-	public void Hitstun(float time) => hitstun = MathF.Max(hitstun, time);
+	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
 
 	public void Shake(float time) => shaking = MathF.Max(shaking, time);
 }

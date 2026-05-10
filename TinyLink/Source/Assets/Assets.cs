@@ -35,6 +35,12 @@ public static class Assets
 	}
 
 	public static void Load(GraphicsDevice gfx)
+		=> Reload(gfx, true);
+
+	public static void Reload(GraphicsDevice gfx)
+		=> Reload(gfx, false);
+
+	private static void Reload(GraphicsDevice gfx, bool reloadRooms)
 	{
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
@@ -42,8 +48,11 @@ public static class Assets
 		var tilesetFiles = new Dictionary<string, Aseprite>();
 
 		// load main font file
-		Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
-		Font.LineGap = 4;
+		if (Font == null)
+		{
+			Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
+			Font.LineGap = 4;
+		}
 
 		// get sprite files
 		foreach (var file in Directory.EnumerateFiles(spritesPath, "*.ase", SearchOption.AllDirectories))
@@ -90,51 +99,108 @@ public static class Assets
 		}
 
 		// create texture file
-		Atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
+		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
 
 		// create subtextures
+		var subtextures = new Dictionary<string, Subtexture>();
 		foreach (var it in output.Entries)
-			Subtextures.Add(it.Name, new Subtexture(Atlas, it.Source, it.Frame));
+			subtextures.Add(it.Name, new Subtexture(atlas, it.Source, it.Frame));
+
+		var oldAtlas = Atlas;
+		Atlas = atlas;
+
+		Subtextures.Clear();
+		foreach (var (name, subtexture) in subtextures)
+			Subtextures.Add(name, subtexture);
 
 		// create sprite assets
+		var foundSprites = new HashSet<string>();
 		foreach (var (name, ase) in spriteFiles)
 		{
+			foundSprites.Add(name);
+
 			// find origin
 			Vector2 origin = Vector2.Zero;
 			if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
 				origin = ase.Slices[0].Keys[0].Pivot!.Value;
 
-			var sprite = new Sprite(name, origin);
+			if (!Sprites.TryGetValue(name, out var sprite))
+			{
+				sprite = new Sprite(name, origin);
+				Sprites.Add(name, sprite);
+			}
 
 			// add frames
+			var frames = new List<Sprite.Frame>();
 			for (int i = 0; i < ase.Frames.Length; i ++)
-				sprite.Frames.Add(new(GetSubtexture($"{name}/{i}"), ase.Frames[i].Duration / 1000.0f));
+				frames.Add(new(subtextures[$"{name}/{i}"], ase.Frames[i].Duration / 1000.0f));
 
 			// add animations
+			var animations = new List<Sprite.Animation>();
 			foreach (var tag in ase.Tags)
 			{
 				if (!string.IsNullOrEmpty(tag.Name))
-					sprite.AddAnimation(tag.Name, tag.From, tag.To - tag.From + 1);
+				{
+					var duration = 0.0f;
+					for (int i = tag.From; i <= tag.To && i < frames.Count; i ++)
+						duration += frames[i].Duration;
+					animations.Add(new(tag.Name, tag.From, tag.To - tag.From + 1, duration));
+				}
 			}
 
-			Sprites.Add(name, sprite);
+			sprite.Reload(origin, frames, animations);
+		}
+
+		foreach (var (name, sprite) in Sprites.ToArray())
+		{
+			if (foundSprites.Contains(name))
+				continue;
+
+			sprite.Reload(Vector2.Zero, [], []);
+			Sprites.Remove(name);
 		}
 
 		// create tileset assets
+		var foundTilesets = new HashSet<string>();
 		foreach (var (name, ase) in tilesetFiles)
 		{
+			foundTilesets.Add(name);
+
 			var columns = ase.Width / Game.TileSize;
 			var rows = ase.Height / Game.TileSize;
-			var tileset = new Tileset(name, columns, rows);
+			if (!Tilesets.TryGetValue(name, out var tileset))
+			{
+				tileset = new Tileset(name, columns, rows);
+				Tilesets.Add(name, tileset);
+			}
 
+			var tiles = new List<Subtexture>();
 			for (int x = 0; x < columns; x ++)
 				for (int y = 0; y < rows; y ++)
-					tileset.Tiles[x + y * columns] = GetSubtexture($"tilesets/{name}{x}x{y}");
+					tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
 
-			Tilesets.Add(name, tileset);
+			tileset.Reload(columns, rows, tiles);
 		}
 
-		// load rooms
+		foreach (var (name, tileset) in Tilesets.ToArray())
+		{
+			if (foundTilesets.Contains(name))
+				continue;
+
+			tileset.Reload(0, 0, []);
+			Tilesets.Remove(name);
+		}
+
+		oldAtlas?.Dispose();
+
+		if (reloadRooms)
+			LoadRooms();
+	}
+
+	private static void LoadRooms()
+	{
+		Rooms.Clear();
+
 		foreach (var file in Directory.EnumerateFiles(Path.Join(AssetsPath, "Rooms"), "*.txt"))
 		{
 			var name = Path.GetFileNameWithoutExtension(file).Split('x');

@@ -23,6 +23,11 @@ public class Room
 	public string Text = string.Empty;
 
 	/// <summary>
+	/// Optional FMOD background music Area parameter label.
+	/// </summary>
+	public string? MusicArea;
+
+	/// <summary>
 	/// Bounds in World Space in Pixels
 	/// </summary>
 	public RectInt WorldBounds => new(Cell.X * Game.Width, Cell.Y * Game.Height, Game.Width, Game.Height);
@@ -44,19 +49,26 @@ public class Room
 		var text = new StringBuilder();
 		var y = 0;
 
-		foreach (var line in lines)
-		{
-			// parse text line
-			if (line.StartsWith(":"))
+			foreach (var line in lines)
 			{
-				text.AppendLine(line[1..]);
-			}
-			// parse row of tiles
-			else if (y < Game.Rows)
-			{
-				for (int x = 0; x < line.Length && x < Game.Columns; x ++)
-					Tiles[x, y] = line[x];
-				y++;
+				// parse text line
+				if (line.StartsWith(":"))
+				{
+					text.AppendLine(line[1..]);
+				}
+				// parse metadata line
+				else if (line.StartsWith("@area ", StringComparison.OrdinalIgnoreCase))
+				{
+					MusicArea = line["@area ".Length..].Trim();
+					if (MusicArea.Length <= 0)
+						MusicArea = null;
+				}
+				// parse row of tiles
+				else if (y < Game.Rows)
+				{
+					for (int x = 0; x < line.Length && x < Game.Columns; x ++)
+						Tiles[x, y] = line[x];
+					y++;
 			}
 		}
 
@@ -71,13 +83,16 @@ public class Room
 
 	public void Save()
 	{
-		StringBuilder result = new();
+			StringBuilder result = new();
 
-		// write text lines first
-		foreach (var line in Text.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries))
-			result.AppendLine($":{line}");
+			// write text lines first
+			foreach (var line in Text.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+				result.AppendLine($":{line}");
 
-		// write tile grid next
+			if (!string.IsNullOrEmpty(MusicArea))
+				result.AppendLine($"@area {MusicArea}");
+
+			// write tile grid next
 		for (int y = 0; y < Game.Rows; y ++)
 		{
 			for (int x = 0; x < Game.Columns; x ++)

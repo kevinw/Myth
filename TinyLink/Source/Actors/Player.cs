@@ -14,28 +14,31 @@ public class Player : Actor
 	}
 
 	public const int MaxHealth = 4;
-	private const float MaxGroundSpeed = 60;
-	private const float MaxAirSpeed = 70;
-	private const float GroundAccel = 500;
-	private const float AirAccel = 100;
-	private const float Friction = 800;
-	private const float AttackFriction = 150;
-	private const float HurtFriction = 200;
-	private const float Gravity = 450;
-	private const float JumpForce = -105;
-	private const float JumpTime = 0.18f;
-	private const float HurtDuration = 0.5f;
-	private const float DeathDuration = 1.5f;
-	private const float InvincibleDuration = 1.5f;
+
+	static float MaxGroundSpeed => 80;
+	static float MaxAirSpeed => 90;
+	static float GroundAccel => 500;
+	static float AirAccel => 150;
+	static float Friction => 500;
+	static float AttackFriction => 150;
+	static float HurtFriction => 200;
+	static float Gravity => 450;
+	static float JumpForce => -105;
+	static float JumpTime => 0.18f;
+	static float HurtDuration => 0.5f;
+	static float DeathDuration => 1.5f;
+	static float InvincibleDuration => 1.5f;
 
 	public int Health = MaxHealth;
 	public States State;
 	public Controls Controls => Game.Controls;
 
-	private float stateDuration = 0;
-	private float jumpTimer = 0;
-	private bool grounded = false;
-	private bool ducking = false;
+	private float stateDuration;
+	private float prevStateDuration;
+	private float jumpTimer;
+	private int footstepFrame = -1;
+	private bool grounded;
+	private bool ducking;
 
 	public Player()
 	{
@@ -55,7 +58,10 @@ public class Player : Actor
 		// update grounded state
 		var nowGrounded = Velocity.Y >= 0 && Grounded();
 		if (nowGrounded && !grounded)
+		{
 			Squish = new Vector2(1.5f, 0.70f);
+			Game.PlayAudioEvent("event:/land", "Type", Game.GetSurfaceTypeBelow(this));
+		}
 		grounded = nowGrounded;
 
 		// increment state timer
@@ -77,6 +83,8 @@ public class Player : Actor
 				StartState();
 				break;
 		}
+
+		UpdateFootsteps();
 
 		// ducking collider(s)
 		if (ducking && State != States.Normal)
@@ -130,9 +138,10 @@ public class Player : Actor
 		}
 
 		// detect getting hit
-		if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is Actor hit)
+		if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
 
+		prevStateDuration = stateDuration;
 		stateDuration += Time.Delta;
 		if (State != wasState)
 			stateDuration = 0.0f;
@@ -148,6 +157,8 @@ public class Player : Actor
 		if (ducking)
 			input = 0;
 
+		int facing = input;
+
 		// sprite
 		if (grounded)
 		{
@@ -155,13 +166,18 @@ public class Player : Actor
 				Play("duck");
 			else if (input == 0)
 				Play("idle");
+			else if (Velocity.X > 0 && input < 0 || Velocity.X < 0 && input > 0)
+			{
+				facing *= -1;
+				Play("skid");
+			}
 			else
 				Play("run");
 		}
 		else
 		{
 			Play("jump");
-		} 
+		}
 
 		// horizontal movement
 		{
@@ -169,19 +185,19 @@ public class Player : Actor
 			Velocity.X += input * (grounded ? GroundAccel : AirAccel) * Time.Delta;
 
 			// Max Speed
-			var maxspd = grounded ? MaxGroundSpeed : MaxAirSpeed;
-			if (MathF.Abs(Velocity.X) > maxspd)
-				Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxspd, 2000 * Time.Delta);
-			
+			var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
+			if (MathF.Abs(Velocity.X) > maxSpeed)
+				Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
+
 			// Friction
 			if (input == 0 && grounded)
 				Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
 
 			// Facing
 			if (grounded && input != 0)
-				Facing = input;
+				Facing = facing;
 		}
-		
+
 		// Start jumping
 		if (grounded && Controls.Jump.ConsumePress())
 		{
@@ -189,6 +205,7 @@ public class Player : Actor
 			StopX();
 			Velocity.X = input * MaxAirSpeed;
 			jumpTimer = JumpTime;
+			Game.PlayAudioEvent("event:/jump");
 		}
 
 		// Begin Attack
@@ -197,6 +214,34 @@ public class Player : Actor
 			State = States.Attack;
 			if (grounded)
 				StopX();
+		}
+
+		// Force yourself to die
+		if (Controls.Die.ConsumePress())
+		{
+			ApplyHurt(-100);
+		}
+	}
+
+	private void UpdateFootsteps()
+	{
+		if (State != States.Normal || !grounded || !IsPlaying("run"))
+		{
+			footstepFrame = -1;
+			return;
+		}
+
+		var frame = AnimationFrameIndex;
+		if (frame < 0 || frame == footstepFrame)
+			return;
+
+		footstepFrame = frame;
+
+		var animation = Animation;
+		var localFrame = frame - animation.FrameStart;
+		if (localFrame >= 0 && localFrame % 2 == 0)
+		{
+			Game.PlayAudioEvent("event:/footstep", "Type", Game.GetSurfaceTypeBelow(this));
 		}
 	}
 
@@ -208,11 +253,15 @@ public class Player : Actor
 
 		if (stateDuration < 0.2f)
 		{
-			hitbox = new RectInt(-16, -12, 17, 8);
+			hitbox = new (-16, -12, 17, 8);
 		}
 		else if (stateDuration < 0.50f)
 		{
-			hitbox = new RectInt(8, -8, 16, 8);
+			if (prevStateDuration < 0.2f)
+			{
+				Game.PlayAudioEvent("event:/sword");
+			}
+			hitbox = new (8, -8, 16, 8);
 		}
 
 		if (hitbox != null)
@@ -222,18 +271,18 @@ public class Player : Actor
 				it.X = -(it.X + it.Width);
 			it += Position;
 
-			if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard) is Actor hit)
+			if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard) is { } hit)
 				Hit(hit);
 		}
 
 		if (Grounded())
 			Velocity.X = Calc.Approach(Velocity.X, 0, AttackFriction * Time.Delta);
-		
+
 		if (stateDuration >= Animation.Duration)
 		{
 			Play("idle");
 			State = States.Normal;
-		} 
+		}
 	}
 
 	public void HurtState()
@@ -252,7 +301,9 @@ public class Player : Actor
 			State = States.Normal;
 
 		if (stateDuration >= DeathDuration && Health <= 0)
-			Game.ReloadRoom();
+		{
+			Game.ReloadRoom(restartMusic: true);
+		}
 	}
 
 	public void StartState()
@@ -263,13 +314,25 @@ public class Player : Actor
 
 	public override void OnWasHit(Actor by)
 	{
-		Game.Hitstun(0.1f);
+		ApplyHurt();
+	}
+
+	private void ApplyHurt(int healthDelta = -1) {
+		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
 
 		Play("hurt");
 
 		Velocity = new Vector2(-Facing * 100, -80);
 		State = States.Hurt;
-		Health--;
+
+		var wasHealth = Health;
+		Health += healthDelta;
+
+		if (Health <= 0 && wasHealth > 0)
+		{
+			Game.StopMusic();
+			Game.PlayAudioEvent("event:/death");
+		}
 	}
 }

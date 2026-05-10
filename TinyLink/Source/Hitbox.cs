@@ -18,6 +18,8 @@ public readonly struct Hitbox
 	private readonly RectInt rect;
 	private readonly bool[,]? grid;
 
+	public RectInt Rect => rect;
+
 	public Hitbox()
 	{
 		Shape = Shapes.Rect;

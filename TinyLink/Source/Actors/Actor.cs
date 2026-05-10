@@ -41,18 +41,28 @@ public class Actor
 			if (sprite != value)
 			{
 				sprite = value;
-				animation = value?.Animations[0] ?? new();
+				animationName = value?.Animations.Count > 0 ? value.Animations[0].Name : null;
 				animationTime = 0;
 			}
 		}
 	}
 
-	public Sprite.Animation Animation => animation;
+	public Sprite.Animation Animation
+	{
+		get
+		{
+			if (sprite == null || sprite.Frames.Count <= 0 || sprite.Animations.Count <= 0)
+				return new();
+
+			return sprite.GetAnimation(animationName) ?? sprite.Animations[0];
+		}
+	}
 	public float AnimationTime => animationTime;
+	public int AnimationFrameIndex => sprite?.GetFrameIndexAt(Animation, animationTime, animationLooping) ?? -1;
 
 	private Vector2 remainder;
 	private Sprite? sprite;
-	private Sprite.Animation animation;
+	private string? animationName;
 	private float animationTime = 0;
 	private bool animationLooping = true;
 	private float hitCooldown = 0;
@@ -62,9 +72,9 @@ public class Actor
 	/// </summary>
 	public void Play(string name, bool looping = true, bool restart = false)
 	{
-		if (sprite != null && sprite.GetAnimation(name) is {} anim && (restart || animation.Name != name))
+		if (sprite != null && sprite.GetAnimation(name) is {} && (restart || animationName != name))
 		{
-			animation = anim;
+			animationName = name;
 			animationTime = 0;
 		}
 
@@ -300,8 +310,9 @@ public class Actor
 		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
 			return;
 
-		if (sprite != null)
+		if (sprite != null && sprite.Frames.Count > 0)
 		{
+			var animation = Animation;
 			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
 			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
 			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, Color.White);

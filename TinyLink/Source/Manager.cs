@@ -19,6 +19,14 @@ class Program
 /// </summary>
 public class Manager : App
 {
+	public const string DefaultMusicArea = "Calm";
+	public const string BackgroundMusicAreaParameter = "Area";
+	private static readonly string[] BackgroundMusicEventPathCandidates =
+	[
+		"event:/background_music",
+	];
+
+	private const float AssetReloadDelay = 0.25f;
 	private const string WindowSettingsFileName = "window.json";
 	private const float Scale = 3.0f;
 	private const float ButtonSize = 24;
@@ -56,7 +64,7 @@ public class Manager : App
 	/// <summary>
 	/// Visible Space
 	/// </summary>
-	private Rect View 
+	private Rect View
 		=> new Rect(0, 0, Window.WidthInPixels / Scale, Window.HeightInPixels / Scale).Inflate(-ScreenPadding);
 
 	/// <summary>
@@ -105,7 +113,7 @@ public class Manager : App
 	/// Eases the PaletteView out/in as the Game opens/closes
 	/// </summary>
 	/// <value></value>
-	private Rect PaletteSlideRect => 
+	private Rect PaletteSlideRect =>
 		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
 	/// <summary>
@@ -136,6 +144,16 @@ public class Manager : App
 	private Point2 tilePlaceFrom;
 	private char tileTypePlacing;
 	private bool tilePlacing;
+	private readonly object assetReloadLock = new();
+	private FileSystemWatcher? assetWatcher;
+	private bool assetReloadRequested;
+	private float assetReloadTimer;
+	private readonly List<string> musicAreas = [];
+	private bool musicEnabled = true;
+	private bool alwaysOnTop;
+
+	public bool MusicEnabled => musicEnabled;
+	public string BackgroundMusicEventPath { get; private set; } = BackgroundMusicEventPathCandidates[0];
 
 	public Manager() : base(new AppConfig()
 	{
@@ -154,7 +172,11 @@ public class Manager : App
 		LoadWindowSettings();
 
 		Assets.Load(GraphicsDevice);
+		if (Assets.GetRoom(cell) == null)
+			cell = Point2.Zero;
 		Factory.RegisterTypes();
+		LoadAudioBanks();
+		StartAssetWatcher();
 
 		game = new Game(this, cell);
 	}
@@ -162,12 +184,90 @@ public class Manager : App
 	protected override void Shutdown()
 	{
 		SaveWindowSettings();
+		game?.StopMusic();
+		assetWatcher?.Dispose();
+		assetWatcher = null;
 
 		Assets.Unload();
 		Factory.Clear();
 	}
 
 	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
+
+	private void LoadAudioBanks()
+	{
+		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
+		if (!Directory.Exists(fmodPath))
+			return;
+
+		var banks = Directory
+			.EnumerateFiles(fmodPath, "*.bank", SearchOption.AllDirectories)
+			.OrderBy(BankLoadOrder)
+			.ThenBy(Path.GetFileName)
+			.ToArray();
+
+		if (banks.Length <= 0)
+		{
+			Console.Error.WriteLine($"No FMOD banks found under '{Path.GetFullPath(fmodPath)}'. Build banks from the FMOD Studio project before playing events.");
+			musicAreas.Clear();
+			musicAreas.Add(DefaultMusicArea);
+			return;
+		}
+
+		try
+		{
+			Audio.Initialize();
+			foreach (var bank in banks)
+				Audio.LoadBank(bank);
+			LoadMusicAreas();
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load FMOD banks: {e}");
+			musicAreas.Clear();
+			musicAreas.Add(DefaultMusicArea);
+		}
+	}
+
+	private void LoadMusicAreas()
+	{
+		foreach (var path in BackgroundMusicEventPathCandidates)
+		{
+			try
+			{
+				var labels = Audio.GetEventParameterLabels(path, BackgroundMusicAreaParameter);
+				if (labels.Length <= 0)
+					continue;
+
+				BackgroundMusicEventPath = path;
+				musicAreas.Clear();
+				musicAreas.AddRange(labels);
+				if (!musicAreas.Contains(DefaultMusicArea))
+					musicAreas.Insert(0, DefaultMusicArea);
+				return;
+			}
+			catch
+			{
+				// Try the next likely event path before falling back to the default label.
+			}
+		}
+
+		musicAreas.Clear();
+		musicAreas.Add(DefaultMusicArea);
+		Console.Error.WriteLine($"Could not discover FMOD labels for '{BackgroundMusicAreaParameter}' on background music event.");
+	}
+
+	private static int BankLoadOrder(string path)
+	{
+		var name = Path.GetFileName(path);
+		return name switch
+		{
+			"Master.bank" => 0,
+			"Master.strings.bank" => 1,
+			_ when name.EndsWith(".strings.bank", StringComparison.OrdinalIgnoreCase) => 2,
+			_ => 3
+		};
+	}
 
 	private void LoadWindowSettings()
 	{
@@ -178,7 +278,13 @@ public class Manager : App
 
 			var settings = JsonSerializer.Deserialize<WindowSettings>(File.ReadAllText(WindowSettingsPath));
 			if (settings != null)
+			{
 				Window.Position = new Point2(settings.X, settings.Y);
+				cell = new Point2(settings.RoomX, settings.RoomY);
+				musicEnabled = settings.MusicEnabled;
+				alwaysOnTop = settings.AlwaysOnTop;
+				Window.AlwaysOnTop = alwaysOnTop;
+			}
 		}
 		catch (Exception e)
 		{
@@ -193,10 +299,15 @@ public class Manager : App
 			Directory.CreateDirectory(UserPath);
 
 			var position = Window.Position;
+			var currentCell = game?.Cell ?? cell;
 			var settings = new WindowSettings
 			{
 				X = position.X,
-				Y = position.Y
+				Y = position.Y,
+				RoomX = currentCell.X,
+				RoomY = currentCell.Y,
+				MusicEnabled = musicEnabled,
+				AlwaysOnTop = alwaysOnTop
 			};
 
 			File.WriteAllText(WindowSettingsPath, JsonSerializer.Serialize(settings));
@@ -211,13 +322,19 @@ public class Manager : App
 	{
 		public int X { get; set; }
 		public int Y { get; set; }
+		public int RoomX { get; set; }
+		public int RoomY { get; set; }
+		public bool MusicEnabled { get; set; } = true;
+		public bool AlwaysOnTop { get; set; }
 	}
 
 	protected override void Update()
 	{
+		UpdateAssetReload();
+
 		// Misc. Hotkeys
 		if (Input.Keyboard.Pressed(Keys.F1) && game == null)
-			Reload();
+			ReloadAssets(true);
 		if (Input.Keyboard.Pressed(Keys.F4))
 			Window.Fullscreen = !Window.Fullscreen;
 		if (Input.Keyboard.Pressed(Keys.Escape))
@@ -270,13 +387,75 @@ public class Manager : App
 		game?.Render((RectInt)(WorkspaceRect.Inflate(-BoxPadding) * Scale));
 	}
 
-	private void Reload()
+	private void StartAssetWatcher()
 	{
-		Assets.Unload();
-		Factory.Clear();
+		assetWatcher = new FileSystemWatcher(Path.GetFullPath(Assets.AssetsPath), "*.ase")
+		{
+			IncludeSubdirectories = true,
+			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
+		};
 
-		Assets.Load(GraphicsDevice);
-		Factory.RegisterTypes();
+		assetWatcher.Changed += (_, _) => RequestAssetReload();
+		assetWatcher.Created += (_, _) => RequestAssetReload();
+		assetWatcher.Deleted += (_, _) => RequestAssetReload();
+		assetWatcher.Renamed += (_, _) => RequestAssetReload();
+		assetWatcher.EnableRaisingEvents = true;
+	}
+
+	private void RequestAssetReload()
+	{
+		lock (assetReloadLock)
+		{
+			assetReloadRequested = true;
+			assetReloadTimer = AssetReloadDelay;
+		}
+	}
+
+	private void UpdateAssetReload()
+	{
+		var reload = false;
+
+		lock (assetReloadLock)
+		{
+			if (assetReloadRequested)
+			{
+				assetReloadTimer -= Time.Delta;
+				if (assetReloadTimer <= 0)
+				{
+					assetReloadRequested = false;
+					reload = true;
+				}
+			}
+		}
+
+		if (reload)
+			ReloadAssets(false);
+	}
+
+	private void ReloadAssets(bool reloadRooms)
+	{
+		try
+		{
+			if (reloadRooms)
+			{
+				Assets.Unload();
+				Assets.Load(GraphicsDevice);
+			}
+			else
+			{
+				Assets.Reload(GraphicsDevice);
+			}
+
+			Factory.Clear();
+			Factory.RegisterTypes();
+			game?.RefreshRoomTiles();
+
+			Console.WriteLine("Reloaded assets.");
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to reload assets: {e}");
+		}
 	}
 
 	/// <summary>
@@ -314,9 +493,9 @@ public class Manager : App
 		if (hovering && Assets.Font != null)
 		{
 			var at = new Rect(
-				Cursor.X + 32, 
-				Cursor.Y - Assets.Font.LineHeight / 2, 
-				Assets.Font.WidthOf(text), 
+				Cursor.X + 32,
+				Cursor.Y - Assets.Font.LineHeight / 2,
+				Assets.Font.WidthOf(text),
 				Assets.Font.LineHeight).Inflate(12, 6, 12, 6);
 
 			at.X = Calc.Clamp(at.X, View.Left + 8, View.Right - at.Width - 8);
@@ -335,6 +514,19 @@ public class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
+	private bool TextButton(Rect button, string text, bool selected = false)
+	{
+		var hovering = button.Contains(Cursor);
+
+		batcher.Rect(button, Color.Black);
+		batcher.RectRoundedLine(button, 4, LineWeight, hovering ? Color.White : (selected ? highlight : Color.Gray));
+
+		if (Assets.Font != null)
+			batcher.Text(Assets.Font, text, button.Center, new Vector2(0.50f, 0.50f), Color.White);
+
+		return hovering && Input.Mouse.LeftPressed;
+	}
+
 	/// <summary>
 	/// Displays the Toolbar
 	/// </summary>
@@ -344,8 +536,8 @@ public class Manager : App
 
 		if (game == null)
 		{
-			if (Button(rect, Assets.GetSubtexture("buttons/0"), "Play [Space]") || 
-				Input.Keyboard.Pressed(Keys.Space))
+			if (Button(rect, Assets.GetSubtexture("buttons/0"), "Play [Space]") ||
+				Input.Keyboard.Pressed(Keys.Tab))
 			{
 				CurrentRoom?.Save();
 				if (CurrentRoom != null)
@@ -359,23 +551,58 @@ public class Manager : App
 			if (Button(rect, Assets.GetSubtexture("buttons/8"), "Big Brush", brushBig))
 				brushBig = true;
 			rect.X += rect.Width + ButtonSpacing;
+
+			if (CurrentRoom is { } room && musicAreas.Count > 0)
+			{
+				var area = room.MusicArea ?? DefaultMusicArea;
+				var areaRect = new Rect(rect.X + ToolbarSpacing, rect.Y, 96, ButtonSize);
+				if (TextButton(areaRect, area, room.MusicArea != null))
+					CycleMusicArea(room);
+			}
 		}
 		else
 		{
-			if (Button(rect, Assets.GetSubtexture("buttons/1"), "Stop [Space]") || 
-				Input.Keyboard.Pressed(Keys.Space))
+			if (Button(rect, Assets.GetSubtexture("buttons/1"), "Stop [Space]") ||
+				Input.Keyboard.Pressed(Keys.Tab))
 			{
 				cell = game.Cell;
+				game.StopMusic();
 				game = null;
+			}
+			rect.X += rect.Width + ButtonSpacing;
+
+			if (Button(rect, Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
+			{
+				musicEnabled = !musicEnabled;
+				game?.RefreshMusic();
+			}
+			rect.X += rect.Width + ButtonSpacing;
+
+			if (Button(rect, Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
+			{
+				alwaysOnTop = !alwaysOnTop;
+				Window.AlwaysOnTop = alwaysOnTop;
 			}
 		}
 
-  
 		if (Assets.Font != null)
 		{
 			var cell = (game?.Cell ?? this.cell);
 			batcher.Text(Assets.Font, $"Room {cell.X} x {cell.Y}", ToolbarRect.Center, new Vector2(0.50f, 0.50f), Color.White);
 		}
+	}
+
+	private void CycleMusicArea(Room room)
+	{
+		if (musicAreas.Count <= 0)
+			return;
+
+		var current = room.MusicArea ?? DefaultMusicArea;
+		var index = musicAreas.IndexOf(current);
+		if (index < 0)
+			index = 0;
+
+		room.MusicArea = musicAreas[(index + 1) % musicAreas.Count];
 	}
 
 	/// <summary>
@@ -448,9 +675,9 @@ public class Manager : App
 			var gridColor = Color.White * 0.10f;
 			var gridWeight = 1.0f / scale;
 
-			var matrix = 
-				Matrix3x2.CreateTranslation(-new Vector2(width, height) / 2) * 
-				Matrix3x2.CreateScale(scale) * 
+			var matrix =
+				Matrix3x2.CreateTranslation(-new Vector2(width, height) / 2) *
+				Matrix3x2.CreateScale(scale) *
 				Matrix3x2.CreateTranslation(inner.Center);
 
 			var localMouse = Vector2.Zero;
@@ -461,7 +688,7 @@ public class Manager : App
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, Game.Width, Game.Height).Contains(localMouse);
-			
+
 			batcher.PushMatrix(matrix);
 			batcher.Rect(new Rect(0, 0, Game.Width, Game.Height), Color.Black);
 			batcher.PushScissor((RectInt)(inner * Scale));
@@ -511,7 +738,7 @@ public class Manager : App
 			// return tile placing to selected brush
 			if (!Input.Mouse.RightDown)
 				tileTypePlacing = brush;
-		
+
 			// change shift/size based opn big brush
 			var shift = brushBig ? -1 : 0;
 			var size = brushBig ? 3 : 1;

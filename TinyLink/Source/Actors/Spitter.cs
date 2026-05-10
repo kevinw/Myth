@@ -37,7 +37,7 @@ public class Spitter : Actor
 
 	public override void OnWasHit(Actor by)
 	{
-		Game.Hitstun(0.1f);
+		Game.HitStun(0.1f);
 		Game.Destroy(this);
 		Game.Create<Pop>(Position + new Point2(0, -4));
 	}

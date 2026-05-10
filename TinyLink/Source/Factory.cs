@@ -9,6 +9,8 @@ namespace TinyLink;
 /// </summary>
 public static class Factory
 {
+	public const string DefaultSurfaceType = "Grass";
+
 	/// <summary>
 	/// Used to Spawn an Actor
 	/// </summary>
@@ -27,6 +29,7 @@ public static class Factory
 		public readonly Point2 Offset;
 		public readonly SpawnFn? Spawn;
 		public readonly TileFn? Tile;
+		public readonly string? SurfaceType;
 
 		public Entry(string name, Subtexture image, Vector2 origin, Point2 offset, SpawnFn spawn)
 		{
@@ -37,11 +40,12 @@ public static class Factory
 			Spawn = spawn;
 		}
 
-		public Entry(string name, Subtexture image, TileFn tile)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null)
 		{
 			Name = name;
 			Image = image;
 			Tile = tile;
+			SurfaceType = surfaceType;
 		}
 
 		public static Entry AsActor<T>(string spriteName, Point2? offset = null, bool exclusive = false, Action<T>? additional = null) where T : Actor, new()
@@ -60,7 +64,7 @@ public static class Factory
 			});
 		}
 
-		public static Entry AsTile(string tilesetName, bool isFg)
+		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null)
 		{
 			var tileset = Assets.GetTileset(tilesetName);
 			if (tileset == null)
@@ -70,7 +74,7 @@ public static class Factory
 			{
 				Rng rng = new(tile.X + tile.Y * Game.Columns);
 				(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-			});
+			}, surfaceType);
 		}
 	}
 
@@ -107,10 +111,10 @@ public static class Factory
 		Register('0', new Entry("Empty", new Subtexture(), null!));
 
 		// Add Tile Types
-		Register('1', Entry.AsTile("castle", true));
-		Register('G', Entry.AsTile("grass", true));
-		Register('g', Entry.AsTile("plants", false));
-		Register('w', Entry.AsTile("water", false));
+		Register('1', Entry.AsTile("castle", true, "Brick"));
+		Register('G', Entry.AsTile("grass", true, "Grass"));
+		Register('g', Entry.AsTile("plants", false, "Grass"));
+		Register('w', Entry.AsTile("water", false, "Water"));
 		Register('#', Entry.AsTile("back", false));
 
 		// Add Actor Types

@@ -19,6 +19,12 @@ public class Grid : Actor
 		grid[x, y] = true;
 	}
 
+	public void Clear()
+	{
+		Array.Clear(tilemap);
+		Array.Clear(grid);
+	}
+
 	public override void Render(Batcher batcher)
 	{
 		for (int x = 0; x < Game.Columns; x ++)

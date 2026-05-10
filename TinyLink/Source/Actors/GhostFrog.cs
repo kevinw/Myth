@@ -267,7 +267,7 @@ public class GhostFrog : Actor
 			for (int y = -1; y < 2; y ++)
 				Game.Create<Pop>(Position + new Point2(x * 12, -8 + y * 12));
 
-		Game.Hitstun(0.3f);
+		Game.HitStun(0.3f);
 		Game.Shake(0.1f);
 		Game.Destroy(this);
 	}
@@ -322,7 +322,7 @@ public class GhostFrog : Actor
 			if (state == States.Waiting)
 			{
 				Game.Create<Pop>(Position + new Point2(0, -8));
-				Game.Hitstun(0.25f);
+				Game.HitStun(0.25f);
 				SetState(States.ReadyingAttack);
 			}
 		}
