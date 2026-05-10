@@ -334,5 +334,9 @@ public class Player : Actor
 			Game.StopMusic();
 			Game.PlayAudioEvent("event:/death");
 		}
+		else
+		{
+			Game.PlayAudioEvent("event:/hurt");
+		}
 	}
 }

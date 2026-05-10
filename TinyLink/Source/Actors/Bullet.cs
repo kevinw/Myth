@@ -4,7 +4,7 @@ namespace TinyLink;
 
 public class Bullet : Actor
 {
-	public const float Gravity = 130;
+	const float Gravity = 130;
 
 	public Bullet()
 	{
@@ -33,7 +33,7 @@ public class Bullet : Actor
 	public override void OnPerformHit(Actor hitting) => Pop();
 	public override void OnWasHit(Actor by) => Pop();
 
-	public void Pop()
+	void Pop()
 	{
 		Game.HitStun(0.1f);
 		Game.Destroy(this);
