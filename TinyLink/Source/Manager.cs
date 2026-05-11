@@ -171,7 +171,7 @@ public class Manager : App
 	{
 		LoadWindowSettings();
 
-		GraphicsDevice.VSync = true; // TODO: make this an option?
+		GraphicsDevice.VSync = true; // TODO: make this an option? sdl3 crashes my mac when i fullscreen the window @kev 2026
 
 		Assets.Load(GraphicsDevice);
 		if (Assets.GetRoom(cell) == null)

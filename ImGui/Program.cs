@@ -4,7 +4,7 @@ using ImGuiNET;
 
 namespace FosterImGui;
 
-class Program
+internal static class Program
 {
 	public static void Main()
 	{
@@ -13,7 +13,7 @@ class Program
 	}
 }
 
-class Editor : App
+internal class Editor : App
 {
 	private readonly Texture image;
 	private readonly Renderer imRenderer;
@@ -58,7 +58,7 @@ class Editor : App
 			if (ImGui.ImageButton("Image", imageId, new Vector2(32, 32)))
 				ImGui.OpenPopup("Image Button");
 
-			// image buttton popup
+			// image button popup
 			if (ImGui.BeginPopup("Image Button"))
 			{
 				ImGui.Text("You pressed the Image Button!");
@@ -75,7 +75,7 @@ class Editor : App
 			}
 			imRenderer.EndBatch();
 
-			ImGui.Text("That weas pretty cool!");	
+			ImGui.Text("That weas pretty cool!");
 		}
 		ImGui.End();
 

@@ -296,7 +296,7 @@ public class GhostFrog : Actor
 		}
 
 		// floaty visual behavior
-		if (state == States.Floating || state == States.Shoot || state == States.Reflect)
+		if (state is States.Floating or States.Shoot or States.Reflect)
 			Shift.Y = MathF.Sin(Timer * 2) * 3;
 		else
 			Shift.Y = 0;
