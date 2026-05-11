@@ -112,7 +112,7 @@ public class GhostFrog : Actor
 			if (Facing < 0)
 				rect.X = -(rect.X + rect.Width);
 
-			if (Game.OverlapsFirst(Position + rect, Masks.Player) is Actor hit)
+			if (Game.OverlapsFirst(Position + rect, Masks.Player) is { } hit)
 				Hit(hit);
 
 			yield return 0;
@@ -313,18 +313,16 @@ public class GhostFrog : Actor
 
 	public override void OnWasHit(Actor by)
 	{
-		if (health > 0)
-		{
-			health--;
-			if (health <= 0 && phase > 0)
-				SetState(States.Dead);
+		if (health <= 0) return;
+		health--;
+		if (health <= 0 && phase > 0)
+			SetState(States.Dead);
 
-			if (state == States.Waiting)
-			{
-				Game.Create<Pop>(Position + new Point2(0, -8));
-				Game.HitStun(0.25f);
-				SetState(States.ReadyingAttack);
-			}
+		if (state == States.Waiting)
+		{
+			Game.Create<Pop>(Position + new Point2(0, -8));
+			Game.HitStun(0.25f);
+			SetState(States.ReadyingAttack);
 		}
 	}
 }
