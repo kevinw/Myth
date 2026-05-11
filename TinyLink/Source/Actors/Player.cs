@@ -51,6 +51,14 @@ public class Player : Actor
 		Play("sword");
 	}
 
+	float JumpUpSquish = 0;
+
+	public override void OnCollideY()
+	{
+		base.OnCollideY();
+		JumpUpSquish = 0.1f;
+	}
+
 	public override void Update()
 	{
 		base.Update();
@@ -110,6 +118,9 @@ public class Player : Actor
 			if (State == States.Normal && MathF.Abs(Velocity.Y) < 20 && Controls.Jump.Down)
 				grav *= 0.40f;
 			Velocity.Y += grav * Time.Delta;
+
+			JumpUpSquish -= Time.Delta;
+			if (JumpUpSquish <= 0) JumpUpSquish = 0;
 		}
 
 		// goto next room
@@ -125,8 +136,7 @@ public class Player : Actor
 			}
 			else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
 			{
-				Health = 0;
-				State = States.Hurt;
+				ApplyHurt(-1000);
 			}
 			else if (Position.Y < Game.Bounds.Top)
 			{
@@ -176,7 +186,7 @@ public class Player : Actor
 		}
 		else
 		{
-			Play("jump");
+			Play(JumpUpSquish > 0 ? "jump_squish" : "jump");
 		}
 
 		// horizontal movement
@@ -201,6 +211,7 @@ public class Player : Actor
 		// Start jumping
 		if (grounded && Controls.Jump.ConsumePress())
 		{
+			JumpUpSquish = 0;
 			Squish = new Vector2(0.65f, 1.4f);
 			StopX();
 			Velocity.X = input * MaxAirSpeed;
