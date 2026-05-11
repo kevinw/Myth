@@ -207,15 +207,59 @@ public class Game
 
 	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
 	{
+		try
+		{
+			using var instance = CreateAudioEvent(path, position);
+			if (instance == null)
+				return;
+
+			if (parameterName != "" || parameterLabel != "")
+				instance.SetParameterLabel(parameterName, parameterLabel, true);
+
+			instance.Start();
+		}
+		catch(Exception e)
+		{
+			Console.WriteLine(e);
+		}
+	}
+
+	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null)
+	{
 		if (!Audio.Initialized)
+			return null;
+
+		try
+		{
+			var instance = Audio.CreateEvent($"event:/{path}");
+			if (position is { } pos)
+				SetAudioEventPosition(instance, pos);
+			return instance;
+		}
+		catch(Exception e)
+		{
+			Console.WriteLine(e);
+			return null;
+		}
+	}
+
+	public void SetAudioEventPosition(SoundInstance? instance, Vector2 position, Vector2? relativeTo = null)
+	{
+		if (instance == null || !Audio.Initialized)
 			return;
 
-		using var instance = Audio.CreateEvent($"event:/{path}");
-		if (parameterName != "" || parameterLabel != "")
-			instance.SetParameterLabel(parameterName, parameterLabel, true);
-		if (position is {} pos)
-			instance.Set3DAttributes(ToAudioPosition(pos));
-		instance.Start();
+		try
+		{
+			var effectivePosition = position;
+			if (relativeTo is { } origin)
+				effectivePosition = Camera + new Vector2(Width, Height) / 2 + position - origin;
+
+			instance.Set3DAttributes(ToAudioPosition(effectivePosition));
+		}
+		catch(Exception e)
+		{
+			Console.WriteLine(e);
+		}
 	}
 
 	private void UpdateAudioListener()

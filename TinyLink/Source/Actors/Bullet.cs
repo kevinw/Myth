@@ -28,7 +28,12 @@ public class Bullet : Actor
 	}
 
 	public override void OnCollideX() => Game.Destroy(this);
-	public override void OnCollideY() => Velocity.Y = -60;
+
+	public override void OnCollideY()
+	{
+		Velocity.Y = -60;
+		AudioEvent("bubble_bounce");
+	}
 
 	public override void OnPerformHit(Actor hitting) => Pop();
 	public override void OnWasHit(Actor by) => Pop();

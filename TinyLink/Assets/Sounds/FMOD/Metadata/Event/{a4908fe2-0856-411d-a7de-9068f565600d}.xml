@@ -105,8 +105,17 @@
 			<value>1</value>
 		</property>
 		<property name="startOffset">
-			<value>11</value>
+			<value>17.5</value>
 		</property>
+		<property name="volume">
+			<value>-3.5</value>
+		</property>
+		<property name="pitch">
+			<value>-5.5</value>
+		</property>
+		<relationship name="modulators">
+			<destination>{863edc32-aa62-46c4-b071-a428064f72ba}</destination>
+		</relationship>
 		<relationship name="audioFile">
 			<destination>{c190e4da-5fd3-49e4-a836-ba3ccbdad93a}</destination>
 		</relationship>
@@ -138,6 +147,14 @@
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{6376b133-9b11-4fe2-9cde-a98b8f73ca6d}" />
+	<object class="RandomizerModulator" id="{863edc32-aa62-46c4-b071-a428064f72ba}">
+		<property name="nameOfPropertyBeingModulated">
+			<value>pitch</value>
+		</property>
+		<property name="amount">
+			<value>6.5</value>
+		</property>
+	</object>
 	<object class="MixerBusFader" id="{318fc235-775c-42bc-b3f9-91c627b3bbbb}" />
 	<object class="MixerBusFader" id="{f9c5e5a0-e3f6-46c7-92dd-81da550cb62d}" />
 	<object class="SpatialiserEffect" id="{c9d2c9e0-0ea0-423e-a4fc-e47660b08b06}" />

@@ -4,7 +4,8 @@ namespace TinyLink;
 
 public class Mosquito : Actor
 {
-	public int Health = 2;
+	int Health = 2;
+	private SoundInstance? buzz;
 
 	public Mosquito()
 	{
@@ -16,11 +17,26 @@ public class Mosquito : Actor
 		Play("fly");
 	}
 
+	public override void Added()
+	{
+		try
+		{
+			buzz = Game.CreateAudioEvent("fly/idle", Position);
+			buzz?.Start();
+		}
+		catch(Exception e)
+		{
+			Console.WriteLine(e);
+			buzz?.Release();
+			buzz = null;
+		}
+	}
+
 	public override void Update()
 	{
 		base.Update();
 
-		if (Game.GetFirst(Masks.Player) is Actor player)
+		if (Game.GetFirst(Masks.Player) is {} player)
 		{
 			var diff = player.Position.X - Position.X;
 			var dist = MathF.Abs(diff);
@@ -36,6 +52,8 @@ public class Mosquito : Actor
 		}
 
 		Velocity.Y = MathF.Sin(Timer * 4) * 10;
+		var relativeTo = Game.GetFirst(Masks.Player)?.Position;
+		Game.SetAudioEventPosition(buzz, Position, relativeTo);
 	}
 
 	public override void OnWasHit(Actor by)
@@ -44,13 +62,32 @@ public class Mosquito : Actor
 
 		if (Health <= 0)
 		{
+			AudioEvent("fly/die");
 			Game.Create<Pop>(Position);
+			StopBuzz(true);
 			Game.Destroy(this);
+
 		}
 		else
 		{
+			AudioEvent("fly/hurt");
 			var sign = MathF.Sign(Position.X - by.Position.X);
 			Velocity.X = sign * 140;
 		}
+	}
+
+	public override void Destroyed()
+	{
+		StopBuzz(true);
+	}
+
+	private void StopBuzz(bool immediate)
+	{
+		if (buzz == null)
+			return;
+
+		buzz.Stop(immediate);
+		buzz.Release();
+		buzz = null;
 	}
 }
