@@ -171,6 +171,8 @@ public class Manager : App
 	{
 		LoadWindowSettings();
 
+		GraphicsDevice.VSync = true; // TODO: make this an option?
+
 		Assets.Load(GraphicsDevice);
 		if (Assets.GetRoom(cell) == null)
 			cell = Point2.Zero;
