@@ -29,6 +29,7 @@ public class Game
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
 	private readonly HashSet<string> audioFailures = [];
+	private readonly Material? crtMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
 	private float hitStun = 0;
@@ -47,6 +48,7 @@ public class Game
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
 		Screen = new(manager.GraphicsDevice, Width, Height, name: "GameScreen");
 		Controls = new(manager.Input);
+		crtMaterial = CreateCrtMaterial();
 
 		if (Assets.Rooms.TryGetValue(start, out room))
 		{
@@ -164,10 +166,63 @@ public class Game
 			var scale = Calc.Min(size.X / (float)Screen.Width, size.Y / (float)Screen.Height);
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+			if (crtMaterial != null)
+			{
+				float CrtTime = Time.SecondsF * 0.2f;
+				float Curvature = 0.005f;
+				float BloomAmount = 0.19f;
+				float ScanlineAmount = 0.07f;
+				float VignetteAmount = 0.22f;
+				float RgbOffset = 0.35f;
+				crtMaterial.Fragment.SetUniformBuffer([
+					Screen.Width,
+					Screen.Height,
+					CrtTime,
+					BloomAmount,
+					ScanlineAmount,
+					VignetteAmount,
+					RgbOffset,
+					Curvature
+				]);
+				Batcher.PushMaterial(crtMaterial);
+			}
 			Batcher.Image(Screen, center, Screen.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
+			if (crtMaterial != null)
+				Batcher.PopMaterial();
 			Batcher.PopSampler();
 			Batcher.Render(Manager.Window);
 			Batcher.Clear();
+		}
+	}
+
+	private Material? CreateCrtMaterial()
+	{
+		try
+		{
+			var ext = GraphicsDevice.Driver.GetShaderExtension();
+			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"Crt.fragment.{ext}");
+			if (!File.Exists(path))
+			{
+				Console.Error.WriteLine($"CRT shader not found at '{Path.GetFullPath(path)}'.");
+				return null;
+			}
+
+			return new Material(
+				vertexShader: null,
+				fragmentShader: new Shader(
+					GraphicsDevice,
+					ShaderStage.Fragment,
+					File.ReadAllBytes(path),
+					samplerCount: 1,
+					uniformBufferCount: 1,
+					entryPoint: "fragment_main",
+					name: "CrtFragment")
+			);
+		}
+		catch(Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load CRT shader: {e}");
+			return null;
 		}
 	}
 
