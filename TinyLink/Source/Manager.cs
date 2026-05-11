@@ -1,4 +1,4 @@
-
+using System.Diagnostics;
 using System.Numerics;
 using System.Text.Json;
 using Foster.Framework;
@@ -39,6 +39,7 @@ public class Manager : App
 	private const float ToolbarHeight = ButtonSize + 4;
 	private const float EditorInset = 24;
 	private const float PaletteWidth = BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
+	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
 	private readonly Color highlight = 0x5fcde4;
 
 	/// <summary>
@@ -60,6 +61,7 @@ public class Manager : App
 	/// Sprite Batcher for general Editor visuals
 	/// </summary>
 	private readonly Batcher batcher;
+	private readonly Controls controls;
 
 	/// <summary>
 	/// Visible Space
@@ -141,16 +143,16 @@ public class Manager : App
 	/// </summary>
 	private bool brushBig = false;
 
-	private Point2 tilePlaceFrom;
-	private char tileTypePlacing;
-	private bool tilePlacing;
-	private readonly object assetReloadLock = new();
-	private FileSystemWatcher? assetWatcher;
-	private bool assetReloadRequested;
-	private float assetReloadTimer;
-	private readonly List<string> musicAreas = [];
-	private bool musicEnabled = true;
-	private bool alwaysOnTop;
+	Point2 tilePlaceFrom;
+	char tileTypePlacing;
+	bool tilePlacing;
+	readonly Lock assetReloadLock = new();
+	FileSystemWatcher? assetWatcher;
+	bool assetReloadRequested;
+	float assetReloadTimer;
+	readonly List<string> musicAreas = [];
+	bool musicEnabled = true;
+	bool alwaysOnTop;
 
 	public bool MusicEnabled => musicEnabled;
 	public string BackgroundMusicEventPath { get; private set; } = BackgroundMusicEventPathCandidates[0];
@@ -165,13 +167,14 @@ public class Manager : App
 	})
 	{
 		batcher = new(GraphicsDevice);
+		controls = new(Input);
 	}
 
 	protected override void Startup()
 	{
 		LoadWindowSettings();
 
-		GraphicsDevice.VSync = true; // TODO: make this an option? sdl3 crashes my mac when i fullscreen the window @kev 2026
+		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my mac when I fullscreen the window... @kev 2026
 
 		Assets.Load(GraphicsDevice);
 		if (Assets.GetRoom(cell) == null)
@@ -218,7 +221,13 @@ public class Manager : App
 
 		try
 		{
-			Audio.Initialize();
+			Audio.Initialize(liveUpdate:
+#if DEBUG
+				true
+#else
+				false
+#endif
+			);
 			foreach (var bank in banks)
 				Audio.LoadBank(bank);
 			LoadMusicAreas();
@@ -344,6 +353,8 @@ public class Manager : App
 			CurrentRoom?.Save();
 			Exit();
 		}
+		if (ToggleEditorPressed())
+			ToggleGame();
 
 		// Run Game
 		if (game != null)
@@ -355,6 +366,7 @@ public class Manager : App
 		else
 		{
 			gameEase = Calc.Approach(gameEase, 0.0f, Time.Delta * 4.0f);
+			UpdateEditorNavigation();
 		}
 
 		// Build our Sprite Batch
@@ -538,13 +550,8 @@ public class Manager : App
 
 		if (game == null)
 		{
-			if (Button(rect, Assets.GetSubtexture("buttons/0"), "Play [Space]") ||
-				Input.Keyboard.Pressed(Keys.Tab))
-			{
-				CurrentRoom?.Save();
-				if (CurrentRoom != null)
-					game = new Game(this, cell);
-			}
+			if (Button(rect, Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
+				StartGame();
 			rect.X += rect.Width + ButtonSpacing;
 
 			if (Button(rect, Assets.GetSubtexture("buttons/7"), "Small Brush", !brushBig))
@@ -564,13 +571,8 @@ public class Manager : App
 		}
 		else
 		{
-			if (Button(rect, Assets.GetSubtexture("buttons/1"), "Stop [Space]") ||
-				Input.Keyboard.Pressed(Keys.Tab))
-			{
-				cell = game.Cell;
-				game.StopMusic();
-				game = null;
-			}
+			if (Button(rect, Assets.GetSubtexture("buttons/1"), "Stop [Tab/R3]"))
+				StopGame();
 			rect.X += rect.Width + ButtonSpacing;
 
 			if (Button(rect, Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
@@ -585,6 +587,10 @@ public class Manager : App
 				alwaysOnTop = !alwaysOnTop;
 				Window.AlwaysOnTop = alwaysOnTop;
 			}
+			rect.X += rect.Width + ButtonSpacing;
+
+			if (Button(rect, Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
+				OpenFmodStudio();
 		}
 
 		if (Assets.Font != null)
@@ -594,7 +600,89 @@ public class Manager : App
 		}
 	}
 
-	private void CycleMusicArea(Room room)
+	private bool ToggleEditorPressed()
+	{
+		if (Input.Keyboard.Pressed(Keys.Tab))
+			return true;
+
+		foreach (var controller in Input.Controllers)
+			if (controller.Connected && controller.Pressed(Buttons.RightStick))
+				return true;
+
+		return false;
+	}
+
+	private void ToggleGame()
+	{
+		if (game == null)
+			StartGame();
+		else
+			StopGame();
+	}
+
+	private void StartGame()
+	{
+		CurrentRoom?.Save();
+		if (CurrentRoom != null)
+			game = new Game(this, cell);
+	}
+
+	private void StopGame()
+	{
+		if (game == null)
+			return;
+
+		cell = game.Cell;
+		game.StopMusic();
+		game = null;
+	}
+
+	private void UpdateEditorNavigation()
+	{
+		var direction = Point2.Zero;
+		if (controls.Move.PressedUp)
+			direction = Point2.Up;
+		else if (controls.Move.PressedDown)
+			direction = Point2.Down;
+		else if (controls.Move.PressedLeft)
+			direction = Point2.Left;
+		else if (controls.Move.PressedRight)
+			direction = Point2.Right;
+
+		if (direction != Point2.Zero)
+		{
+			ShiftRoom(direction);
+			controls.Move.Clear();
+		}
+	}
+
+	private static void OpenFmodStudio()
+	{
+		var projectPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, FmodProjectPath));
+		if (!File.Exists(projectPath))
+		{
+			Console.Error.WriteLine($"FMOD Studio project not found at '{projectPath}'.");
+			return;
+		}
+
+		try
+		{
+			var open = new ProcessStartInfo("/usr/bin/open")
+			{
+				UseShellExecute = false
+			};
+			open.ArgumentList.Add("-a");
+			open.ArgumentList.Add("FMOD Studio");
+			open.ArgumentList.Add(projectPath);
+			Process.Start(open);
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to open FMOD Studio: {e}");
+		}
+	}
+
+	void CycleMusicArea(Room room)
 	{
 		if (musicAreas.Count <= 0)
 			return;
