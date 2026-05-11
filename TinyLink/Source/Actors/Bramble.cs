@@ -19,5 +19,6 @@ public class Bramble : Actor
 	{
 		Game.Destroy(this);
 		Game.Create<Pop>(Position + new Point2(0, -4));
+		AudioEvent("glass");
 	}
 }

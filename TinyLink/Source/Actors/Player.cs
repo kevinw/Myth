@@ -60,7 +60,7 @@ public class Player : Actor
 		if (nowGrounded && !grounded)
 		{
 			Squish = new Vector2(1.5f, 0.70f);
-			Game.PlayAudioEvent("event:/land", "Type", Game.GetSurfaceTypeBelow(this));
+			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this));
 		}
 		grounded = nowGrounded;
 
@@ -205,7 +205,7 @@ public class Player : Actor
 			StopX();
 			Velocity.X = input * MaxAirSpeed;
 			jumpTimer = JumpTime;
-			Game.PlayAudioEvent("event:/jump");
+			AudioEvent("jump");
 		}
 
 		// Begin Attack
@@ -241,7 +241,7 @@ public class Player : Actor
 		var localFrame = frame - animation.FrameStart;
 		if (localFrame >= 0 && localFrame % 2 == 0)
 		{
-			Game.PlayAudioEvent("event:/footstep", "Type", Game.GetSurfaceTypeBelow(this));
+			AudioEvent("footstep", "Type", Game.GetSurfaceTypeBelow(this));
 		}
 	}
 
@@ -259,7 +259,7 @@ public class Player : Actor
 		{
 			if (prevStateDuration < 0.2f)
 			{
-				Game.PlayAudioEvent("event:/sword");
+				AudioEvent("sword");
 			}
 			hitbox = new (8, -8, 16, 8);
 		}
@@ -332,11 +332,11 @@ public class Player : Actor
 		if (Health <= 0 && wasHealth > 0)
 		{
 			Game.StopMusic();
-			Game.PlayAudioEvent("event:/death");
+			AudioEvent("death");
 		}
 		else
 		{
-			Game.PlayAudioEvent("event:/hurt");
+			AudioEvent("hurt");
 		}
 	}
 }

@@ -5,7 +5,7 @@
 			<value>land</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{aa575bdd-75a8-4e57-b7da-876d5fc0bc57}</destination>
@@ -93,6 +93,9 @@
 		<property name="startOffset">
 			<value>8</value>
 		</property>
+		<property name="volume">
+			<value>-5.5</value>
+		</property>
 		<relationship name="audioFile">
 			<destination>{28cd58b3-02ad-4753-a77a-5218adf70bfc}</destination>
 		</relationship>
@@ -131,9 +134,11 @@
 	<object class="MixerBusEffectChain" id="{51bd4650-3e75-4030-9d72-ff7a71e72ee0}">
 		<relationship name="effects">
 			<destination>{f9c5e5a0-e3f6-46c7-92dd-81da550cb62d}</destination>
+			<destination>{c9d2c9e0-0ea0-423e-a4fc-e47660b08b06}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{6376b133-9b11-4fe2-9cde-a98b8f73ca6d}" />
 	<object class="MixerBusFader" id="{318fc235-775c-42bc-b3f9-91c627b3bbbb}" />
 	<object class="MixerBusFader" id="{f9c5e5a0-e3f6-46c7-92dd-81da550cb62d}" />
+	<object class="SpatialiserEffect" id="{c9d2c9e0-0ea0-423e-a4fc-e47660b08b06}" />
 </objects>

@@ -30,4 +30,16 @@ public class Tileset
 
 	public Subtexture GetRandomTile(ref Rng rng)
 		=> Tiles[rng.Int(Tiles.Count)];
+
+	public Subtexture GetTile(int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= Columns || y >= Rows)
+			return new();
+
+		var index = x * Rows + y;
+		if (index < 0 || index >= Tiles.Count)
+			return new();
+
+		return Tiles[index];
+	}
 }

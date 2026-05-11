@@ -93,6 +93,12 @@ public class Actor
 	public bool IsFinishedPlaying(string? name = null)
 		=> !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
 
+	public void AudioEvent(string name)
+		=> Game.PlayAudioEvent(name, "", "", Position);
+
+	public void AudioEvent(string name, string parameterName, string parameterLabel)
+		=> Game.PlayAudioEvent(name, parameterName, parameterLabel, Position);
+
 	/// <summary>
 	/// Checks to see if we overlap any actors of the given mask
 	/// </summary>
@@ -116,7 +122,7 @@ public class Actor
 	/// <summary>
 	/// Checks to see if we overlap the given actor
 	/// </summary>
-	public bool OverlapsAny(Point2 offset, Actor other) 
+	public bool OverlapsAny(Point2 offset, Actor other)
 		=> Hitbox.Overlaps(Position + offset - other.Position, other.Hitbox);
 
 	/// <summary>
@@ -190,7 +196,7 @@ public class Actor
 		remainder += value;
 		Point2 move = (Point2)remainder;
 		remainder -= move;
-		
+
 		while (move.X != 0)
 		{
 			var sign = Math.Sign(move.X);

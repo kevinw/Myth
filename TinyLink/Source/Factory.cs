@@ -19,7 +19,7 @@ public static class Factory
 	/// <summary>
 	/// Used to Place a Tile
 	/// </summary>
-	public delegate void TileFn(Point2 tile, Grid fg, Grid bg);
+	public delegate void TileFn(Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual);
 
 	public readonly struct Entry
 	{
@@ -56,7 +56,7 @@ public static class Factory
 
 			return new Entry(typeof(T).Name, sprite.Frames[0].Subtexture, sprite.Origin, offset ?? Point2.Zero, (position, game) =>
 			{
-				if (!exclusive || game.GetFirst<T>() == null) 
+				if (!exclusive || game.GetFirst<T>() == null)
 				{
 					var it = game.Create<T>(position);
 					additional?.Invoke(it);
@@ -70,10 +70,22 @@ public static class Factory
 			if (tileset == null)
 				return new();
 
-			return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Grid fg, Grid bg) =>
+			return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 			{
 				Rng rng = new(tile.X + tile.Y * Game.Columns);
 				(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
+			}, surfaceType);
+		}
+
+		public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
+		{
+			var tileset = Assets.GetTileset(tilesetName);
+			if (tileset == null)
+				return new();
+
+			return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
+			{
+				fg.Set(tile.X, tile.Y, new());
 			}, surfaceType);
 		}
 	}
@@ -113,6 +125,8 @@ public static class Factory
 		// Add Tile Types
 		Register('1', Entry.AsTile("castle", true, "Brick"));
 		Register('G', Entry.AsTile("grass", true, "Grass"));
+		//Register('1', Entry.AsDualTile("castle", "castle-dual", "Brick"));
+		//Register('G', Entry.AsDualTile("grass", "grass-dual", "Grass"));
 		Register('g', Entry.AsTile("plants", false, "Grass"));
 		Register('w', Entry.AsTile("water", false, "Water"));
 		Register('#', Entry.AsTile("back", false));

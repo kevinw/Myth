@@ -5,7 +5,7 @@
 			<value>hurt</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{aa575bdd-75a8-4e57-b7da-876d5fc0bc57}</destination>
@@ -72,6 +72,9 @@
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{747f27f7-d52a-4d29-bdc9-fed1b4d85115}">
+		<property name="volume">
+			<value>-6</value>
+		</property>
 		<relationship name="effectChain">
 			<destination>{d247c46f-efee-4fa4-b888-b2807e7777b2}</destination>
 		</relationship>
@@ -96,6 +99,7 @@
 	<object class="MixerBusEffectChain" id="{d247c46f-efee-4fa4-b888-b2807e7777b2}">
 		<relationship name="effects">
 			<destination>{f49feba2-1024-4843-a854-217f0ffbf252}</destination>
+			<destination>{de87e366-697c-458c-960f-279df7e4508e}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{c59941aa-1878-4193-b52c-9838f23db6e9}" />
@@ -107,6 +111,7 @@
 	</object>
 	<object class="MixerBusFader" id="{20bb750b-55f5-41ea-88f9-4b9efcb779a6}" />
 	<object class="MixerBusFader" id="{f49feba2-1024-4843-a854-217f0ffbf252}" />
+	<object class="SpatialiserEffect" id="{de87e366-697c-458c-960f-279df7e4508e}" />
 	<object class="SingleSound" id="{3c6b8a2f-5b14-4763-a34e-040ee5ad55b5}">
 		<relationship name="audioFile">
 			<destination>{71e1b920-51f8-4795-8c17-ed5e75604f59}</destination>

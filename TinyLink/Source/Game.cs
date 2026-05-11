@@ -10,6 +10,7 @@ public class Game
 	public const int Columns = Width / TileSize;
 	public const int Rows = Height / TileSize + 1;
 	public const int TileSize = 8;
+	public const float AudioPixelsPerUnit = 32;
 
 	public readonly Manager Manager;
 	public readonly Controls Controls;
@@ -47,14 +48,15 @@ public class Game
 		Screen = new(manager.GraphicsDevice, Width, Height, name: "GameScreen");
 		Controls = new(manager.Input);
 
-			if (Assets.Rooms.TryGetValue(start, out room))
-			{
-				Camera = new Vector2(room.Cell.X * Width, room.Cell.Y * Height);
-				LoadRoom(room);
-				StartMusic();
-				ApplyMusicArea(room);
-			}
+		if (Assets.Rooms.TryGetValue(start, out room))
+		{
+			Camera = new Vector2(room.Cell.X * Width, room.Cell.Y * Height);
+			UpdateAudioListener();
+			LoadRoom(room);
+			StartMusic();
+			ApplyMusicArea(room);
 		}
+	}
 
 	public void Update()
 	{
@@ -81,7 +83,7 @@ public class Game
 				destroying.Clear();
 
 				// Update Actors
-				for (int i = 0; i < Actors.Count; i ++)
+				for (var i = 0; i < Actors.Count; i ++)
 					Actors[i].Update();
 
 				// screen shaking
@@ -111,6 +113,8 @@ public class Game
 			ApplyMusicArea(room);
 			HitStun(0.1f);
 		}
+
+		UpdateAudioListener();
 	}
 
 	public void Render(in RectInt viewport)
@@ -201,39 +205,30 @@ public class Game
 			destroying.Add(actor);
 	}
 
-	public void PlayAudioEvent(string path)
+	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
 	{
 		if (!Audio.Initialized)
 			return;
 
-		try
-		{
-			Audio.PlayEvent(path);
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add(path))
-				Console.Error.WriteLine($"Failed to play audio event '{path}': {e}");
-		}
+		using var instance = Audio.CreateEvent($"event:/{path}");
+		if (parameterName != "" || parameterLabel != "")
+			instance.SetParameterLabel(parameterName, parameterLabel, true);
+		if (position is {} pos)
+			instance.Set3DAttributes(ToAudioPosition(pos));
+		instance.Start();
 	}
 
-	public void PlayAudioEvent(string path, string parameterName, string parameterLabel)
+	private void UpdateAudioListener()
 	{
 		if (!Audio.Initialized)
 			return;
 
-		try
-		{
-			using var instance = Audio.CreateEvent(path);
-			instance.SetParameterLabel(parameterName, parameterLabel, true);
-			instance.Start();
-			instance.Release();
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add($"{path}:{parameterName}:{parameterLabel}"))
-				Console.Error.WriteLine($"Failed to play audio event '{path}' with {parameterName} '{parameterLabel}': {e}");
-		}
+		Audio.SetListenerAttributes(ToAudioPosition(Camera + new Vector2(Width, Height) / 2));
+	}
+
+	private static Vector3 ToAudioPosition(Vector2 position)
+	{
+		return new(-position.X / AudioPixelsPerUnit, position.Y / AudioPixelsPerUnit, 0);
 	}
 
 	public string GetSurfaceTypeBelow(Actor actor)
@@ -361,11 +356,11 @@ public class Game
 					if (it is not Player)
 						Destroy(it);
 
-					nextRoomEase = 0.0f;
-					LoadRoom(nextRoom);
-					ApplyMusicArea(nextRoom);
-					return true;
-				}
+				nextRoomEase = 0.0f;
+				LoadRoom(nextRoom);
+				ApplyMusicArea(nextRoom);
+				return true;
+			}
 		}
 
 		return false;
@@ -420,8 +415,15 @@ public class Game
 
 		Grid? bg = null;
 		Grid? fg = null;
+		DualGrid? dual = null;
 		foreach (var actor in Actors)
 		{
+			if (actor is DualGrid dualGrid)
+			{
+				dual = dualGrid;
+				continue;
+			}
+
 			if (actor is not Grid grid)
 				continue;
 
@@ -431,19 +433,51 @@ public class Game
 				bg = grid;
 		}
 
-		if (bg == null || fg == null)
+		if (bg == null || fg == null || dual == null)
 			return;
 
 		bg.Clear();
 		fg.Clear();
+		dual.Clear();
 
 		for (var x = 0; x < Columns; x ++)
 		for (var y = 0; y < Rows; y ++)
 		{
 			var tile = new Point2(x, y);
 			if (Factory.Find(room.Tiles[x, y]) is { } entry)
-				entry.Tile?.Invoke(tile, fg, bg);
+				entry.Tile?.Invoke(tile, room, fg, bg, dual);
 		}
+
+		BuildDualTiles();
+	}
+
+	void BuildDualTiles()
+	{
+
+	}
+
+	void BuildDualTilesBroken()
+	{
+		if (room == null)
+			return;
+
+		DualGrid? dual = null;
+		foreach (var actor in Actors)
+		{
+			if (actor is DualGrid dualGrid)
+			{
+				dual = dualGrid;
+				continue;
+			}
+		}
+
+		if (dual == null) return;
+
+		dual.Clear();
+		if (Assets.GetTileset("grass-dual") is { } grassDual)
+		    dual.Build(room, 'G', grassDual);
+		if (Assets.GetTileset("castle-dual") is { }  castleDual)
+		    dual.Build(room, '1', castleDual);
 	}
 
 	public void LoadRoom(Room room)
@@ -453,23 +487,28 @@ public class Game
 		var bg = Create<Grid>(offset);
 		bg.Depth = 10;
 
+		var dual = Create<DualGrid>(offset);
+		dual.Depth = 7;
+
 		var fg = Create<Grid>(offset);
 		fg.Mask = Actor.Masks.Solid;
 		fg.Depth = 5;
 
 		// loop over room grid placing objects
-		for (int x = 0; x < Columns; x ++)
-		for (int y = 0; y < Rows; y ++)
+		for (var x = 0; x < Columns; x++)
+		for (var y = 0; y < Rows; y++)
 		{
 			var tile = new Point2(x, y);
 			var at = offset + tile * TileSize;
 
-			if (Factory.Find(room.Tiles[x, y]) is Factory.Entry entry)
+			if (Factory.Find(room.Tiles[x, y]) is { } entry)
 			{
 				entry.Spawn?.Invoke(at + entry.Offset, this);
-				entry.Tile?.Invoke(tile, fg, bg);
+				entry.Tile?.Invoke(tile, room, fg, bg, dual);
 			}
 		}
+
+		BuildDualTiles();
 	}
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);

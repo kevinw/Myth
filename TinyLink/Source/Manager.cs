@@ -157,8 +157,8 @@ public class Manager : App
 
 	public Manager() : base(new AppConfig()
 	{
-		ApplicationName = "TinyLink",
-		WindowTitle = "TinyLink",
+		ApplicationName = "Myth",
+		WindowTitle = "Myth",
 		Width = 1280,
 		Height = 720,
 		Resizable = true

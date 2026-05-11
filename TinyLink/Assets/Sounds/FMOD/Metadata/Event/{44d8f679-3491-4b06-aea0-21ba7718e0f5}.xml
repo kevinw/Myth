@@ -5,7 +5,7 @@
 			<value>bubble</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{aa575bdd-75a8-4e57-b7da-876d5fc0bc57}</destination>
@@ -99,11 +99,11 @@
 	<object class="MixerBusEffectChain" id="{77944899-5504-459f-9e56-93fca5d9302d}">
 		<relationship name="effects">
 			<destination>{57949cb4-9cd3-486d-a21e-f2c41d9edd25}</destination>
+			<destination>{3e78c29b-6a04-405d-ad77-405e250da8ec}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{46a36e60-b704-4a63-8794-80f59a0bf36e}" />
 	<object class="MultiSound" id="{e09b5f50-cbff-4aa7-9356-4ca5c047a30d}">
-		<property name="name" />
 		<relationship name="sounds">
 			<destination>{7d9d7edf-5a62-4294-afdb-b05e191ad938}</destination>
 			<destination>{de729743-2bda-4c36-828a-2715fd28ef44}</destination>
@@ -112,6 +112,7 @@
 	</object>
 	<object class="MixerBusFader" id="{e6d82aee-7ba3-4a8b-ab2d-fa6824c23d8f}" />
 	<object class="MixerBusFader" id="{57949cb4-9cd3-486d-a21e-f2c41d9edd25}" />
+	<object class="SpatialiserEffect" id="{3e78c29b-6a04-405d-ad77-405e250da8ec}" />
 	<object class="SingleSound" id="{7d9d7edf-5a62-4294-afdb-b05e191ad938}">
 		<property name="volume">
 			<value>-5</value>

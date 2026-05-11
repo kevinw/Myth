@@ -38,6 +38,6 @@ public class Bullet : Actor
 		Game.HitStun(0.1f);
 		Game.Destroy(this);
 		Game.Create<Pop>(Position);
-		Game.PlayAudioEvent("event:/bubble");
+		AudioEvent("bubble");
 	}
 }
