@@ -41,6 +41,7 @@ public class Game
 	private Point2 shake;
 	private Rng rng = new();
 	private bool showCollisionRects;
+	private bool showLightMask;
 
 	public Vector2 Camera { get; private set; }
 	public RectInt Bounds => room?.WorldBounds ?? new();
@@ -84,6 +85,9 @@ public class Game
 
 			if (Input.Keyboard.Pressed(Keys.C))
 				showCollisionRects = !showCollisionRects;
+
+			if (Input.Keyboard.Pressed(Keys.L))
+				showLightMask = !showLightMask;
 
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
@@ -176,6 +180,8 @@ public class Game
 		Batcher.Clear();
 
 		var output = ApplyLighting();
+		if (showLightMask)
+			output = LightMask;
 
 		// draw screen to window
 		{
@@ -285,6 +291,7 @@ public class Game
 			if (!CircleOverlapsRect(lightPosition, radius, rect))
 				continue;
 
+			Batcher.Rect(rect, Color.Black);
 			DrawShadowEdges(lightPosition, radius, rect);
 		}
 	}
@@ -608,7 +615,7 @@ public class Game
 			if (Assets.Rooms.TryGetValue(nextCell, out nextRoom))
 			{
 				foreach (var it in Actors)
-					if (it is not Player)
+					if (it is not Player && !it.KeepOnRoomTransition)
 						Destroy(it);
 
 				nextRoomEase = 0.0f;

@@ -39,6 +39,7 @@ public class Player : Actor
 	private int footstepFrame = -1;
 	private bool grounded;
 	private bool ducking;
+	private Light? light;
 
 	public Player()
 	{
@@ -49,6 +50,19 @@ public class Player : Actor
 		IFrameTime = InvincibleDuration;
 		grounded = true;
 		Play("sword");
+	}
+
+	public override void Added()
+	{
+		light = Game.Create<Light>(Position);
+		light.Radius = 36;
+		light.Intensity = 0.45f;
+		light.LightColor = 0xffcfa0;
+		light.FlickerFrequency = 1.5f;
+		light.FlickerIntensity = 0.02f;
+		light.DrawSprite = false;
+		light.KeepOnRoomTransition = true;
+		UpdateLightPosition();
 	}
 
 	float JumpUpSquish = 0;
@@ -62,6 +76,7 @@ public class Player : Actor
 	public override void Update()
 	{
 		base.Update();
+		UpdateLightPosition();
 
 		// update grounded state
 		var nowGrounded = Velocity.Y >= 0 && Grounded();
@@ -348,6 +363,21 @@ public class Player : Actor
 		else
 		{
 			AudioEvent("hurt");
+		}
+	}
+
+	private void UpdateLightPosition()
+	{
+		if (light != null)
+			light.Position = Position + new Point2(0, -6);
+	}
+
+	public override void Destroyed()
+	{
+		if (light != null)
+		{
+			Game.Destroy(light);
+			light = null;
 		}
 	}
 }

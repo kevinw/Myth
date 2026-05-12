@@ -9,6 +9,7 @@ public class Light : Actor
 	public float Intensity = 1.0f;
 	public float FlickerFrequency = 4;
 	public float FlickerIntensity = 0.08f;
+	public bool DrawSprite = true;
 
 	public float FlickerScale => 1 + MathF.Sin(Timer * FlickerFrequency * MathF.Tau) * FlickerIntensity;
 
@@ -19,6 +20,12 @@ public class Light : Actor
 		Play("idle");
 		CollidesWithSolids = false;
 		Depth = -5;
+	}
+
+	public override void Render(Batcher batcher)
+	{
+		if (DrawSprite)
+			base.Render(batcher);
 	}
 
 }

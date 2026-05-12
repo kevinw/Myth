@@ -30,6 +30,7 @@ public class Actor
 	public bool Visible = true;
 	public float IFrameTime = 0.50f;
 	public bool CollidesWithSolids = true;
+	public bool KeepOnRoomTransition;
 
 	public Time Time => Game.Time;
 

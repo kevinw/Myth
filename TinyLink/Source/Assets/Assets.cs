@@ -121,10 +121,11 @@ public static class Assets
 
 			// find origin
 			Vector2 origin = Vector2.Zero;
+
+			// Aseprite files can define an origin with their first slice's pivot.
 			if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
 			{
 				origin = ase.Slices[0].Keys[0].Pivot!.Value;
-				Console.WriteLine($"origin from slice in sprite {name} is {origin}");
 			}
 
 			if (!Sprites.TryGetValue(name, out var sprite))
