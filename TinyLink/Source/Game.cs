@@ -36,6 +36,7 @@ public class Game
 	private float shaking = 0;
 	private Point2 shake;
 	private Rng rng = new();
+	private bool showCollisionRects;
 
 	public Vector2 Camera { get; private set; }
 	public RectInt Bounds => room?.WorldBounds ?? new();
@@ -72,6 +73,9 @@ public class Game
 			// Reload Room Debug
 			if (Input.Keyboard.Pressed(Keys.R))
 				ReloadRoom();
+
+			if (Input.Keyboard.Pressed(Keys.C))
+				showCollisionRects = !showCollisionRects;
 
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
@@ -138,6 +142,10 @@ public class Game
 			Batcher.PopMatrix();
 		}
 		rendering.Clear();
+
+		if (showCollisionRects)
+			DrawCollisionRects();
+
 		Batcher.PopMatrix();
 
 		// draw player HP
@@ -193,6 +201,15 @@ public class Game
 			Batcher.Render(Manager.Window);
 			Batcher.Clear();
 		}
+	}
+
+	private void DrawCollisionRects()
+	{
+		if (room == null)
+			return;
+
+		foreach (var rect in room.CollisionRects)
+			Batcher.RectLine(rect, 1, Color.Red);
 	}
 
 	private Material? CreateCrtMaterial()
@@ -489,6 +506,21 @@ public class Game
 		return null;
 	}
 
+	public bool OverlapsRoomCollision(Actor actor, Point2 offset)
+	{
+		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
+			return false;
+
+		var bounds = actor.Hitbox.Rect + actor.Position + offset;
+		foreach (var rect in room.CollisionRects)
+		{
+			if (bounds.Overlaps(rect))
+				return true;
+		}
+
+		return false;
+	}
+
 	public void ReloadRoom(bool restartMusic = false)
 	{
 		if (room == null) return;
@@ -581,6 +613,8 @@ public class Game
 
 	public void LoadRoom(Room room)
 	{
+		room.RebuildGeometry();
+
 		var offset = room.WorldBounds.TopLeft;
 
 		var bg = Create<Grid>(offset);

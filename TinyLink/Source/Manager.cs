@@ -178,6 +178,7 @@ public class Manager : App
 		if (Assets.GetRoom(cell) == null)
 			cell = Point2.Zero;
 		Factory.RegisterTypes();
+		Assets.RebuildRoomGeometry();
 		LoadAudioBanks();
 		StartAssetWatcher();
 
@@ -452,6 +453,7 @@ public class Manager : App
 
 			Factory.Clear();
 			Factory.RegisterTypes();
+			Assets.RebuildRoomGeometry();
 			game?.RefreshRoomTiles();
 
 			Console.WriteLine("Reloaded assets.");
@@ -631,13 +633,13 @@ public class Manager : App
 	{
 		var direction = Point2.Zero;
 		if (controls.Move.PressedUp)
-			direction = Point2.Up;
-		else if (controls.Move.PressedDown)
-			direction = Point2.Down;
-		else if (controls.Move.PressedLeft)
-			direction = Point2.Left;
-		else if (controls.Move.PressedRight)
-			direction = Point2.Right;
+			direction += Point2.Up;
+		if (controls.Move.PressedDown)
+			direction += Point2.Down;
+		if (controls.Move.PressedLeft)
+			direction += Point2.Left;
+		if (controls.Move.PressedRight)
+			direction += Point2.Right;
 
 		if (direction != Point2.Zero)
 		{
@@ -738,16 +740,19 @@ public class Manager : App
 			batcher.PushLayer(-1);
 			if (Button(arrow + bounds.TopCenter, upImg, "Move Up Room [W]", upExits) || Input.Keyboard.Pressed(Keys.W))
 				ShiftRoom(Point2.Up);
-			if (Button(arrow + bounds.CenterLeft, leftImg, "Move Left Room [A]", leftExits) || Input.Keyboard.Pressed(Keys.A))
+			if (Button(arrow + bounds.CenterLeft, leftImg, "Move Left Room [A]", leftExits) ||
+			    Input.Keyboard.Pressed(Keys.A))
 				ShiftRoom(Point2.Left);
-			if (Button(arrow + bounds.BottomCenter, rightImg, "Move Down Room [S]", downExits) || Input.Keyboard.Pressed(Keys.S))
+			if (Button(arrow + bounds.BottomCenter, rightImg, "Move Down Room [S]", downExits) ||
+			    Input.Keyboard.Pressed(Keys.S))
 				ShiftRoom(Point2.Down);
-			if (Button(arrow + bounds.CenterRight, downImg, "Move Right Room [D]", rightExits) || Input.Keyboard.Pressed(Keys.D))
+			if (Button(arrow + bounds.CenterRight, downImg, "Move Right Room [D]", rightExits) ||
+			    Input.Keyboard.Pressed(Keys.D))
 				ShiftRoom(Point2.Right);
 			batcher.PopLayer();
 		}
 
-		if (CurrentRoom is Room editing)
+		if (CurrentRoom is {} editing)
 		{
 			var width = Game.Width;
 			var height = Game.Height;

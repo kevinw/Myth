@@ -215,6 +215,12 @@ public static class Assets
 		}
 	}
 
+	public static void RebuildRoomGeometry()
+	{
+		foreach (var room in Rooms.Values)
+			room.RebuildGeometry();
+	}
+
 	public static void Unload()
 	{
 		Atlas?.Dispose();

@@ -110,8 +110,14 @@ public class Actor
 	/// </summary>
 	public bool OverlapsAny(Point2 offset, Masks mask)
 	{
+		if (mask.Has(Masks.Solid) && Game.OverlapsRoomCollision(this, offset))
+			return true;
+
 		foreach (var other in Game.Actors)
 		{
+			if (other is Grid && other.Mask.Has(Masks.Solid))
+				continue;
+
 			if (other != this && other.Mask.Has(mask) && OverlapsAny(offset, other))
 				return true;
 		}
@@ -132,6 +138,9 @@ public class Actor
 	{
 		foreach (var other in Game.Actors)
 		{
+			if (other is Grid && other.Mask.Has(Masks.Solid))
+				continue;
+
 			if (other != this && other.Mask.Has(mask) && OverlapsAny(offset, other))
 				return other;
 		}
@@ -150,8 +159,14 @@ public class Actor
 	/// </summary>
 	public bool Grounded()
 	{
+		if (Game.OverlapsRoomCollision(this, Point2.Down))
+			return true;
+
 		foreach (var other in Game.Actors)
 		{
+			if (other is Grid && other.Mask.Has(Masks.Solid))
+				continue;
+
 			if (other == this || !other.Mask.Has(Masks.Solid | Masks.Jumpthru))
 				continue;
 

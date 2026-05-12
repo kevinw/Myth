@@ -30,8 +30,10 @@ public static class Factory
 		public readonly SpawnFn? Spawn;
 		public readonly TileFn? Tile;
 		public readonly string? SurfaceType;
+		public readonly bool BlocksMovement;
+		public readonly bool CastsShadow;
 
-		public Entry(string name, Subtexture image, Vector2 origin, Point2 offset, SpawnFn spawn)
+		private Entry(string name, Subtexture image, Vector2 origin, Point2 offset, SpawnFn spawn)
 		{
 			Name = name;
 			Image = image;
@@ -40,12 +42,14 @@ public static class Factory
 			Spawn = spawn;
 		}
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false)
 		{
 			Name = name;
 			Image = image;
 			Tile = tile;
 			SurfaceType = surfaceType;
+			BlocksMovement = blocksMovement;
+			CastsShadow = castsShadow;
 		}
 
 		public static Entry AsActor<T>(string spriteName, Point2? offset = null, bool exclusive = false, Action<T>? additional = null) where T : Actor, new()
@@ -64,7 +68,7 @@ public static class Factory
 			});
 		}
 
-		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null)
+		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null)
 		{
 			var tileset = Assets.GetTileset(tilesetName);
 			if (tileset == null)
@@ -74,7 +78,7 @@ public static class Factory
 			{
 				Rng rng = new(tile.X + tile.Y * Game.Columns);
 				(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-			}, surfaceType);
+			}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg);
 		}
 
 		public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
@@ -86,7 +90,7 @@ public static class Factory
 			return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 			{
 				fg.Set(tile.X, tile.Y, new());
-			}, surfaceType);
+			}, surfaceType, blocksMovement: true, castsShadow: true);
 		}
 	}
 
@@ -119,7 +123,7 @@ public static class Factory
 	/// </summary>
 	public static void RegisterTypes()
 	{
-		// Empty Type, purely for the Editord
+		// Empty Type, purely for the editor
 		Register('0', new Entry("Empty", new Subtexture(), null!));
 
 		// Add Tile Types
@@ -137,6 +141,7 @@ public static class Factory
 		Register('B', Entry.AsActor<Bramble>("bramble", new Point2(4, 8)));
 		Register('S', Entry.AsActor<Spitter>("spitter", new Point2(4, 8)));
 		Register('M', Entry.AsActor<Mosquito>("mosquito", new Point2(4, 4)));
+		Register('L', Entry.AsActor<Light>("circle", new Point2(4, 4)));
 		Register('D', Entry.AsActor<Door>("door", new Point2(4, 8), false, (it) => it.Appear()));
 		Register('C', Entry.AsActor<Door>("door", new Point2(4, 8)));
 		Register('b', Entry.AsActor<Blob>("blob", new Point2(4, 8)));
