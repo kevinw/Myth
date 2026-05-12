@@ -5,7 +5,7 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-class Program
+internal abstract class Program
 {
 	public static void Main()
 	{
@@ -21,26 +21,24 @@ public class Manager : App
 {
 	public const string DefaultMusicArea = "Calm";
 	public const string BackgroundMusicAreaParameter = "Area";
-	private static readonly string[] BackgroundMusicEventPathCandidates =
-	[
-		"event:/background_music",
-	];
 
 	private const float AssetReloadDelay = 0.25f;
+
 	private const string WindowSettingsFileName = "window.json";
-	private const float Scale = 3.0f;
-	private const float ButtonSize = 24;
-	private const float ButtonSpacing = 2;
-	private const float BoxPadding = 4;
-	private const float BoxSpacing = 12;
-	private const int PaletteColumns = 4;
-	private const int ToolbarSpacing = 4;
-	private const float ScreenPadding = 4;
-	private const float ToolbarHeight = ButtonSize + 4;
-	private const float EditorInset = 24;
-	private const float PaletteWidth = BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
-	private readonly Color highlight = 0x5fcde4;
+
+	static float Scale => 3.0f;
+	static float ButtonSize => 24;
+	static float ButtonSpacing => 2;
+	static float BoxPadding => 4;
+	static float BoxSpacing => 12;
+	static int PaletteColumns => 4;
+	static int ToolbarSpacing => 4;
+	static float ScreenPadding => 0;
+	static float ToolbarHeight => ButtonSize + 4;
+	static float EditorInset => 14;
+	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
+	static Color highlight => 0x5fcde4;
 
 	/// <summary>
 	/// The current Room Cell we're viewing
@@ -50,12 +48,12 @@ public class Manager : App
 	/// <summary>
 	/// Our game, if it's running
 	/// </summary>
-	private Game? game;
+	Game? game;
 
 	/// <summary>
-	/// Eases in/out as the Game starts/stops plaing
+	/// Eases in/out as the Game starts/stops playing
 	/// </summary>
-	private float gameEase = 1.0f;
+	float gameEase = 1.0f;
 
 	/// <summary>
 	/// Sprite Batcher for general Editor visuals
@@ -155,7 +153,7 @@ public class Manager : App
 	bool alwaysOnTop;
 
 	public bool MusicEnabled => musicEnabled;
-	public string BackgroundMusicEventPath { get; private set; } = BackgroundMusicEventPathCandidates[0];
+	public const string BackgroundMusicEventPath = "event:/background_music";
 
 	public Manager() : base(new AppConfig()
 	{
@@ -203,7 +201,10 @@ public class Manager : App
 	{
 		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
 		if (!Directory.Exists(fmodPath))
+		{
+			Console.Error.WriteLine("Sounds/FMOD not found.");
 			return;
+		}
 
 		var banks = Directory
 			.EnumerateFiles(fmodPath, "*.bank", SearchOption.AllDirectories)
@@ -242,30 +243,19 @@ public class Manager : App
 
 	private void LoadMusicAreas()
 	{
-		foreach (var path in BackgroundMusicEventPathCandidates)
-		{
-			try
-			{
-				var labels = Audio.GetEventParameterLabels(path, BackgroundMusicAreaParameter);
-				if (labels.Length <= 0)
-					continue;
+		musicAreas.Clear();
 
-				BackgroundMusicEventPath = path;
-				musicAreas.Clear();
-				musicAreas.AddRange(labels);
-				if (!musicAreas.Contains(DefaultMusicArea))
-					musicAreas.Insert(0, DefaultMusicArea);
-				return;
-			}
-			catch
-			{
-				// Try the next likely event path before falling back to the default label.
-			}
+		var labels = Audio.GetEventParameterLabels(BackgroundMusicEventPath, BackgroundMusicAreaParameter);
+		if (labels.Length <= 0)
+		{
+			musicAreas.Add(DefaultMusicArea);
+			Console.Error.WriteLine($"Could not discover FMOD labels for '{BackgroundMusicAreaParameter}' on background music event.");
+			return;
 		}
 
-		musicAreas.Clear();
-		musicAreas.Add(DefaultMusicArea);
-		Console.Error.WriteLine($"Could not discover FMOD labels for '{BackgroundMusicAreaParameter}' on background music event.");
+		musicAreas.AddRange(labels);
+		if (!musicAreas.Contains(DefaultMusicArea))
+			musicAreas.Insert(0, DefaultMusicArea);
 	}
 
 	private static int BankLoadOrder(string path)
@@ -331,12 +321,12 @@ public class Manager : App
 
 	private sealed class WindowSettings
 	{
-		public int X { get; set; }
-		public int Y { get; set; }
-		public int RoomX { get; set; }
-		public int RoomY { get; set; }
-		public bool MusicEnabled { get; set; } = true;
-		public bool AlwaysOnTop { get; set; }
+		public int X { get; init; }
+		public int Y { get; init; }
+		public int RoomX { get; init; }
+		public int RoomY { get; init; }
+		public bool MusicEnabled { get; init; } = true;
+		public bool AlwaysOnTop { get; init; }
 	}
 
 	protected override void Update()
@@ -375,7 +365,7 @@ public class Manager : App
 			batcher.PushMatrix(Matrix3x2.CreateScale(Scale));
 
 			// draw editor/game box
-			Box(WorkspaceRect);
+			// Box(WorkspaceRect);
 
 			// draw editor stuff if it's open
 			if (gameEase < 1.0f)
