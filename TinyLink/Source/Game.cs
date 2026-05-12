@@ -16,6 +16,9 @@ public class Game
 	public readonly Controls Controls;
 	public readonly Batcher Batcher;
 	public readonly Target Screen;
+	public readonly Target LightMask;
+	public readonly Target SingleLightMask;
+	public readonly Target LitScreen;
 	public readonly List<Actor> Actors = [];
 
 	public Input Input => Manager.Input;
@@ -30,6 +33,7 @@ public class Game
 	private readonly List<Actor> rendering = [];
 	private readonly HashSet<string> audioFailures = [];
 	private readonly Material? crtMaterial;
+	private readonly Material? lightingCompositeMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
 	private float hitStun = 0;
@@ -48,8 +52,12 @@ public class Game
 		Manager = manager;
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
 		Screen = new(manager.GraphicsDevice, Width, Height, name: "GameScreen");
+		LightMask = new(manager.GraphicsDevice, Width, Height, name: "LightMask");
+		SingleLightMask = new(manager.GraphicsDevice, Width, Height, name: "SingleLightMask");
+		LitScreen = new(manager.GraphicsDevice, Width, Height, name: "LitScreen");
 		Controls = new(manager.Input);
-		crtMaterial = CreateCrtMaterial();
+		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
+		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 2);
 
 		if (Assets.Rooms.TryGetValue(start, out room))
 		{
@@ -167,11 +175,13 @@ public class Game
 		Batcher.Render(Screen);
 		Batcher.Clear();
 
+		var output = ApplyLighting();
+
 		// draw screen to window
 		{
 			var size = viewport.Size;
 			var center = viewport.Center;
-			var scale = Calc.Min(size.X / (float)Screen.Width, size.Y / (float)Screen.Height);
+			var scale = Calc.Min(size.X / (float)output.Width, size.Y / (float)output.Height);
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (crtMaterial != null)
@@ -194,13 +204,132 @@ public class Game
 				]);
 				Batcher.PushMaterial(crtMaterial);
 			}
-			Batcher.Image(Screen, center, Screen.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
+			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
 			if (crtMaterial != null)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
 			Batcher.Render(Manager.Window);
 			Batcher.Clear();
 		}
+	}
+
+	private Target ApplyLighting()
+	{
+		if (lightingCompositeMaterial == null)
+			return Screen;
+
+		DrawLightMask();
+
+		LitScreen.Clear(Color.Black);
+		lightingCompositeMaterial.Fragment.Samplers[1] = new(LightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(lightingCompositeMaterial);
+		Batcher.Image(Screen, Screen.Bounds.Center, Screen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(LitScreen);
+		Batcher.Clear();
+
+		return LitScreen;
+	}
+
+	private void DrawLightMask()
+	{
+		LightMask.Clear(new Color(0.42f, 0.42f, 0.46f, 1.0f));
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not Light light)
+				continue;
+
+			DrawSingleLightMask(light);
+			AddSingleLightMask();
+		}
+	}
+
+	private void DrawSingleLightMask(Light light)
+	{
+		SingleLightMask.Clear(Color.Transparent);
+		Batcher.PushMatrix(-(Point2)Camera + shake);
+
+		var radius = light.Radius * light.FlickerScale;
+		var color = ScaleColor(light.LightColor, light.Intensity * light.FlickerScale);
+		Batcher.Circle(light.Position, radius, 32, color, Color.Transparent);
+
+		DrawLightShadows(light.Position, radius);
+
+		Batcher.PopMatrix();
+		Batcher.Render(SingleLightMask);
+		Batcher.Clear();
+	}
+
+	private void AddSingleLightMask()
+	{
+		Batcher.PushBlend(new BlendMode(BlendOp.Add, BlendFactor.One, BlendFactor.One));
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(SingleLightMask, SingleLightMask.Bounds.Center, SingleLightMask.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.PopBlend();
+		Batcher.Render(LightMask);
+		Batcher.Clear();
+	}
+
+	private void DrawLightShadows(Vector2 lightPosition, float radius)
+	{
+		if (room == null)
+			return;
+
+		foreach (var rect in room.LightOccluders)
+		{
+			if (!CircleOverlapsRect(lightPosition, radius, rect))
+				continue;
+
+			DrawShadowEdges(lightPosition, radius, rect);
+		}
+	}
+
+	private void DrawShadowEdges(Vector2 lightPosition, float radius, RectInt rect)
+	{
+		var left = rect.Left;
+		var right = rect.Right;
+		var top = rect.Top;
+		var bottom = rect.Bottom;
+
+		if (lightPosition.X < left)
+			DrawShadowQuad(lightPosition, radius, new(left, top), new(left, bottom));
+		else if (lightPosition.X > right)
+			DrawShadowQuad(lightPosition, radius, new(right, bottom), new(right, top));
+
+		if (lightPosition.Y < top)
+			DrawShadowQuad(lightPosition, radius, new(right, top), new(left, top));
+		else if (lightPosition.Y > bottom)
+			DrawShadowQuad(lightPosition, radius, new(left, bottom), new(right, bottom));
+	}
+
+	private void DrawShadowQuad(Vector2 lightPosition, float radius, Vector2 a, Vector2 b)
+	{
+		var shadowLength = radius * 2.5f;
+		var aFar = a + DirectionFromLight(lightPosition, a) * shadowLength;
+		var bFar = b + DirectionFromLight(lightPosition, b) * shadowLength;
+		Batcher.Quad(a, b, bFar, aFar, Color.Black);
+	}
+
+	private static Vector2 DirectionFromLight(Vector2 lightPosition, Vector2 point)
+	{
+		var direction = point - lightPosition;
+		if (direction.LengthSquared() <= 0.0001f)
+			return Vector2.Zero;
+
+		return Vector2.Normalize(direction);
+	}
+
+	private static bool CircleOverlapsRect(Vector2 center, float radius, RectInt rect)
+	{
+		var x = Math.Clamp(center.X, rect.Left, rect.Right);
+		var y = Math.Clamp(center.Y, rect.Top, rect.Bottom);
+		var closest = new Vector2(x, y);
+		return Vector2.DistanceSquared(center, closest) <= radius * radius;
 	}
 
 	private void DrawCollisionRects()
@@ -212,15 +341,15 @@ public class Game
 			Batcher.RectLine(rect, 1, Color.Red);
 	}
 
-	private Material? CreateCrtMaterial()
+	private Material? CreateFragmentMaterial(string name, int samplerCount, int uniformBufferCount = 0)
 	{
 		try
 		{
 			var ext = GraphicsDevice.Driver.GetShaderExtension();
-			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"Crt.fragment.{ext}");
+			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"{name}.fragment.{ext}");
 			if (!File.Exists(path))
 			{
-				Console.Error.WriteLine($"CRT shader not found at '{Path.GetFullPath(path)}'.");
+				Console.Error.WriteLine($"{name} shader not found at '{Path.GetFullPath(path)}'.");
 				return null;
 			}
 
@@ -230,17 +359,27 @@ public class Game
 					GraphicsDevice,
 					ShaderStage.Fragment,
 					File.ReadAllBytes(path),
-					samplerCount: 1,
-					uniformBufferCount: 1,
+					samplerCount: samplerCount,
+					uniformBufferCount: uniformBufferCount,
 					entryPoint: "fragment_main",
-					name: "CrtFragment")
+					name: $"{name}Fragment")
 			);
 		}
 		catch(Exception e)
 		{
-			Console.Error.WriteLine($"Failed to load CRT shader: {e}");
+			Console.Error.WriteLine($"Failed to load {name} shader: {e}");
 			return null;
 		}
+	}
+
+	private static Color ScaleColor(Color color, float scale)
+	{
+		var value = (Vector4)color;
+		value.X = Math.Clamp(value.X * scale, 0, 1);
+		value.Y = Math.Clamp(value.Y * scale, 0, 1);
+		value.Z = Math.Clamp(value.Z * scale, 0, 1);
+		value.W = Math.Clamp(value.W * scale, 0, 1);
+		return value;
 	}
 
 	public T Create<T>(Point2? position = null) where T : Actor, new()

@@ -633,13 +633,13 @@ public class Manager : App
 	{
 		var direction = Point2.Zero;
 		if (controls.Move.PressedUp)
-			direction += Point2.Up;
+			direction = Point2.Up;
 		if (controls.Move.PressedDown)
-			direction += Point2.Down;
+			direction = Point2.Down;
 		if (controls.Move.PressedLeft)
-			direction += Point2.Left;
+			direction = Point2.Left;
 		if (controls.Move.PressedRight)
-			direction += Point2.Right;
+			direction = Point2.Right;
 
 		if (direction != Point2.Zero)
 		{
@@ -738,16 +738,13 @@ public class Manager : App
 			var rightExits = Assets.GetRoom(cell + Point2.Right) != null;
 
 			batcher.PushLayer(-1);
-			if (Button(arrow + bounds.TopCenter, upImg, "Move Up Room [W]", upExits) || Input.Keyboard.Pressed(Keys.W))
+			if (Button(arrow + bounds.TopCenter, upImg, "Move Up Room [W]", upExits))
 				ShiftRoom(Point2.Up);
-			if (Button(arrow + bounds.CenterLeft, leftImg, "Move Left Room [A]", leftExits) ||
-			    Input.Keyboard.Pressed(Keys.A))
+			if (Button(arrow + bounds.CenterLeft, leftImg, "Move Left Room [A]", leftExits))
 				ShiftRoom(Point2.Left);
-			if (Button(arrow + bounds.BottomCenter, rightImg, "Move Down Room [S]", downExits) ||
-			    Input.Keyboard.Pressed(Keys.S))
+			if (Button(arrow + bounds.BottomCenter, rightImg, "Move Down Room [S]", downExits))
 				ShiftRoom(Point2.Down);
-			if (Button(arrow + bounds.CenterRight, downImg, "Move Right Room [D]", rightExits) ||
-			    Input.Keyboard.Pressed(Keys.D))
+			if (Button(arrow + bounds.CenterRight, downImg, "Move Right Room [D]", rightExits))
 				ShiftRoom(Point2.Right);
 			batcher.PopLayer();
 		}

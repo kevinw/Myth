@@ -4,21 +4,15 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public class Sprite
+public class Sprite(string name, Vector2 origin)
 {
 	public readonly record struct Frame(Subtexture Subtexture, float Duration);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
 
-	public string Name { get; }
-	public Vector2 Origin { get; private set; }
+	public string Name { get; } = name;
+	public Vector2 Origin { get; private set; } = origin;
 	public readonly List<Frame> Frames = new();
 	public readonly List<Animation> Animations = new();
-
-	public Sprite(string name, Vector2 origin)
-	{
-		Name = name;
-		Origin = origin;
-	}
 
 	public void Reload(Vector2 origin, List<Frame> frames, List<Animation> animations)
 	{
@@ -34,10 +28,7 @@ public class Sprite
 	public Frame GetFrameAt(in Animation animation, float time, bool loop)
 	{
 		var index = GetFrameIndexAt(animation, time, loop);
-		if (index < 0)
-			return new();
-
-		return Frames[index];
+		return index < 0 ? new() : Frames[index];
 	}
 
 	public int GetFrameIndexAt(in Animation animation, float time, bool loop)

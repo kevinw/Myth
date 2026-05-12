@@ -94,22 +94,16 @@ public static class Factory
 		}
 	}
 
-	/// <summary>
-	/// List of all the Types
-	/// </summary>
+	// List of all the Types
 	public static readonly Dictionary<char, Entry> Entries = new();
 
-	/// <summary>
-	/// Registers a new Type
-	/// </summary>
+	// Registers a new Type
 	public static void Register(char id, in Entry entry)
 	{
 		Entries[id] = entry;
 	}
 
-	/// <summary>
-	/// Finds a given Type entry by its character ID
-	/// </summary>
+	// Finds a given Type entry by its character ID
 	public static Entry? Find(char id)
 	{
 		if (Entries.TryGetValue(id, out var entry))
@@ -118,9 +112,7 @@ public static class Factory
 		return null;
 	}
 
-	/// <summary>
-	/// Registers the Default types built into the game.
-	/// </summary>
+	// Registers the Default types built into the game.
 	public static void RegisterTypes()
 	{
 		// Empty Type, purely for the editor
@@ -141,7 +133,7 @@ public static class Factory
 		Register('B', Entry.AsActor<Bramble>("bramble", new Point2(4, 8)));
 		Register('S', Entry.AsActor<Spitter>("spitter", new Point2(4, 8)));
 		Register('M', Entry.AsActor<Mosquito>("mosquito", new Point2(4, 4)));
-		Register('L', Entry.AsActor<Light>("circle", new Point2(4, 4)));
+		Register('L', Entry.AsActor<Light>("fire", new Point2(4, 4)));
 		Register('D', Entry.AsActor<Door>("door", new Point2(4, 8), false, (it) => it.Appear()));
 		Register('C', Entry.AsActor<Door>("door", new Point2(4, 8)));
 		Register('b', Entry.AsActor<Blob>("blob", new Point2(4, 8)));
