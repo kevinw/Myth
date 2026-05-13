@@ -1,9 +1,11 @@
+using System.Numerics;
 using Foster.Framework;
 
 namespace TinyLink;
 
 public class Bullet : Actor
 {
+	public bool dissolves = false;
 	const float Gravity = 130;
 
 	public Bullet()
@@ -12,6 +14,7 @@ public class Bullet : Actor
 		Mask = Masks.Enemy;
 		Sprite = Assets.GetSprite("bullet");
 		Depth = -5;
+		Play("idle");
 	}
 
 	public override void Update()
@@ -27,7 +30,20 @@ public class Bullet : Actor
 			Game.Destroy(this);
 	}
 
-	public override void OnCollideX() => Game.Destroy(this);
+	public override void OnCollideX()
+	{
+		if (dissolves)
+		{
+			Game.Create<Pop>(Position, (actor) =>
+			{
+				actor.SpriteName = "bullet";
+				actor.AnimationName = "dissolve";
+				actor.Velocity = Velocity * 0.25f;
+			});
+		}
+
+		Game.Destroy(this);
+	}
 
 	public override void OnCollideY()
 	{

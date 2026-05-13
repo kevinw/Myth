@@ -6,6 +6,15 @@
 - Submit pitch to [BRIEFS - LOVE (2026)](https://goldextra.com/en/briefs-a-microgame-series/briefs-2026-love)
 - Consider some [pixel art ideas](https://chatgpt.com/c/6a030b73-3564-83eb-b4ca-9ab1e9e787bb)
 
+## ideas
+
+- finding love in a datacenter
+  - what's in a datacenter?
+    - racks
+    - cooling fans
+    - ducts
+- boss rush storylets: like Hades, each time you face off against one, you get new dialog. but winning doesn't mean they won't come back and that you are "punished" with less dialog; maybe they come back stronger!
+
 ## resources
 
 - [PixelLab](https://www.pixellab.ai) - ai pixel art generator

@@ -4,11 +4,18 @@ namespace TinyLink;
 
 public class Pop : Actor
 {
+	public string SpriteName = "pop";
+	public string AnimationName = "pop";
+
 	public Pop()
 	{
-		Sprite = Assets.GetSprite("pop");
-		Play("pop", false);
 		Depth = -20;
+	}
+
+	public override void Added()
+	{
+		Sprite = Assets.GetSprite(SpriteName);
+		Play(AnimationName, false);
 	}
 
 	public override void Update()

@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public class Game
+public class Game : IDisposable
 {
 	public const int Width = 240;
 	public const int Height = 135;
@@ -66,6 +66,7 @@ public class Game
 	private bool actorSpriteShadowsEnabled = true;
 	private Vector2 mouseLightPosition;
 	private float timeScale = 1.0f;
+	private bool disposed;
 
 	public Vector2 Camera { get; private set; }
 	public RectInt Bounds => room?.WorldBounds ?? new();
@@ -91,7 +92,7 @@ public class Game
 
 		if (start != null)
 		{
-			room = start;
+			room = start.CloneRuntime();
 			Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
 			UpdateAudioListener();
 			LoadRoom(room);
@@ -103,8 +104,37 @@ public class Game
 		}
 	}
 
+	public void Dispose()
+	{
+		if (disposed)
+			return;
+
+		disposed = true;
+		StopMusic(true);
+
+		var stopped = new HashSet<Actor>();
+		foreach (var actor in Actors)
+			if (stopped.Add(actor))
+				actor.Destroyed();
+		foreach (var actor in destroying)
+			if (stopped.Add(actor))
+				actor.Destroyed();
+
+		Actors.Clear();
+		destroying.Clear();
+		rendering.Clear();
+		DisposeRenderTargets();
+		crtMaterial?.Dispose();
+		lightingCompositeMaterial?.Dispose();
+		normalLightMaterial?.Dispose();
+		reflectionDistortMaterial?.Dispose();
+		Batcher.Dispose();
+	}
+
 	public void Update()
 	{
+		CollisionRectsThisFrame.Clear();
+
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
 			return;
@@ -206,7 +236,6 @@ public class Game
 
 		index = Math.Clamp(index + direction, 0, scales.Length - 1);
 		timeScale = scales[index];
-		Console.WriteLine($"Time scale: {timeScale:0.##}x");
 	}
 
 	private void UpdateCamera()
@@ -396,7 +425,7 @@ public class Game
 		rendering.Clear();
 
 		if (!background && showCollisionRects)
-			DrawCollisionRects();
+			DrawCollisionRects(); // TODO: don't do this in post-processing context
 
 		Batcher.PopMatrix();
 		Batcher.Render(target);
@@ -765,7 +794,11 @@ public class Game
 
 		foreach (var rect in room.CollisionRects)
 			Batcher.RectLine(rect, 1, Color.Red);
+		foreach (var rect in CollisionRectsThisFrame)
+			Batcher.RectLine(rect, 1, Color.Red);
 	}
+
+	public List<RectInt> CollisionRectsThisFrame = new();
 
 	private void DrawNormalBuffer()
 	{
@@ -882,7 +915,7 @@ public class Game
 		}
 	}
 
-	private sealed class ReloadableMaterial
+	private sealed class ReloadableMaterial : IDisposable
 	{
 		private readonly GraphicsDevice graphicsDevice;
 		private readonly string name;
@@ -901,6 +934,9 @@ public class Game
 			fragmentShader = CreateShader();
 			Material = new Material(vertexShader: null, fragmentShader: fragmentShader);
 		}
+
+		public void Dispose()
+			=> fragmentShader.Dispose();
 
 #if DEBUG
 		public void Reload()
@@ -948,13 +984,14 @@ public class Game
 		return value;
 	}
 
-	public T Create<T>(Point2? position = null) where T : Actor, new()
+	public T Create<T>(Point2? position = null, Action<T>? init = null) where T : Actor, new()
 	{
 		var instance = new T
 		{
 			Game = this,
 			Position = position ?? Point2.Zero
 		};
+		init?.Invoke(instance);
 		instance.Added();
 		Actors.Add(instance);
 		return instance;
@@ -1173,7 +1210,7 @@ public class Game
 			var exitPosition = GetFirst<Player>()?.Position ?? (Vector2)room.WorldBounds.Center;
 			if (Assets.FindAdjacentRoom(room, direction, exitPosition) is { } foundRoom)
 			{
-				nextRoom = foundRoom;
+				nextRoom = foundRoom.CloneRuntime();
 				foreach (var it in Actors)
 					if (it is not Player && !it.KeepOnRoomTransition)
 						Destroy(it);
@@ -1229,6 +1266,51 @@ public class Game
 		return false;
 	}
 
+	public bool BreakTiles(RectInt hitbox)
+	{
+		if (room == null)
+			return false;
+
+		if (!hitbox.Overlaps(room.WorldBounds))
+			return false;
+
+		var local = hitbox - room.WorldBounds.TopLeft;
+		var left = Math.Clamp((int)MathF.Floor(local.Left / (float)TileSize), 0, room.Size.X - 1);
+		var right = Math.Clamp((int)MathF.Floor((local.Right - 1) / (float)TileSize), 0, room.Size.X - 1);
+		var top = Math.Clamp((int)MathF.Floor(local.Top / (float)TileSize), 0, room.Size.Y - 1);
+		var bottom = Math.Clamp((int)MathF.Floor((local.Bottom - 1) / (float)TileSize), 0, room.Size.Y - 1);
+		var brokeAny = false;
+
+		var tileTypesBroken = new HashSet<string>();
+
+		for (var y = top; y <= bottom; y ++)
+		for (var x = left; x <= right; x ++)
+		{
+			var tile = room.Tiles[x, y];
+
+			if (Factory.Find(tile) is not { Destructible: true })
+				continue;
+
+			if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
+				tileTypesBroken.Add(surfaceType);
+
+			room.Set(new Point2(x, y), '0');
+			Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
+			brokeAny = true;
+		}
+
+		if (brokeAny)
+		{
+			RefreshRoomTiles();
+			foreach (var surfaceType in tileTypesBroken)
+			{
+				PlayAudioEvent("tile_break", "Type", surfaceType, position: hitbox.Center);
+			}
+		}
+
+		return brokeAny;
+	}
+
 	public void ReloadRoom(bool restartMusic = false)
 	{
 		if (room == null) return;
@@ -1236,8 +1318,10 @@ public class Game
 		if (restartMusic)
 			StopMusic(true);
 
+		var reloaded = Assets.GetRoom(room.Id)?.CloneRuntime() ?? room.CloneRuntime();
 		foreach (var actor in Actors)
 			Destroy(actor);
+		room = reloaded;
 		LoadRoom(room);
 
 		if (restartMusic)

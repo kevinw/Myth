@@ -33,6 +33,7 @@ public static class Factory
 		public readonly bool BlocksMovement;
 		public readonly bool CastsShadow;
 		public readonly bool ReflectsSprites;
+		public readonly bool Destructible;
 
 		private Entry(string name, Subtexture image, Vector2 origin, Point2 offset, SpawnFn spawn)
 		{
@@ -43,7 +44,7 @@ public static class Factory
 			Spawn = spawn;
 		}
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false)
 		{
 			Name = name;
 			Image = image;
@@ -52,6 +53,7 @@ public static class Factory
 			BlocksMovement = blocksMovement;
 			CastsShadow = castsShadow;
 			ReflectsSprites = reflectsSprites;
+			Destructible = destructible;
 		}
 
 		public static Entry AsActor<T>(string spriteName, Point2? offset = null, bool exclusive = false, Action<T>? additional = null) where T : Actor, new()
@@ -63,24 +65,21 @@ public static class Factory
 			return new Entry(typeof(T).Name, sprite.Frames[0].Subtexture, sprite.Origin, offset ?? Point2.Zero, (position, game) =>
 			{
 				if (!exclusive || game.GetFirst<T>() == null)
-				{
-					var it = game.Create<T>(position);
-					additional?.Invoke(it);
-				}
+					game.Create<T>(position, additional);
 			});
 		}
 
-		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false)
+		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false, bool destructible = false, string? name = null)
 		{
 			var tileset = Assets.GetTileset(tilesetName);
 			if (tileset == null)
 				return new();
 
-			return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
+			return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 			{
 				Rng rng = new(tile.X + tile.Y * room.Size.X);
 				(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-			}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites);
+			}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible);
 		}
 
 		public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
@@ -122,7 +121,9 @@ public static class Factory
 
 		// Add Tile Types
 		Register('1', Entry.AsTile("castle", true, "Brick"));
+		Register('x', Entry.AsTile("castle", true, "Brick", destructible: true, name: "Breakable Brick"));
 		Register('G', Entry.AsTile("grass", true, "Grass"));
+		Register('X', Entry.AsTile("grass", true, "Grass", destructible: true, name: "Breakable Grass"));
 		//Register('1', Entry.AsDualTile("castle", "castle-dual", "Brick"));
 		//Register('G', Entry.AsDualTile("grass", "grass-dual", "Grass"));
 		Register('g', Entry.AsTile("plants", false, "Grass"));

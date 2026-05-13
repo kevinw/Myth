@@ -27,8 +27,11 @@ public class Spitter : Actor
 			Play("shoot", false);
 			timer = 3.0f;
 
-			var bullet = Game.Create<Bullet>(Position + new Point2(-8, -8));
-			bullet.Velocity = new Vector2(-40, 0);
+			var bullet = Game.Create<Bullet>(Position + new Point2(-8, -8), (actor) =>
+			{
+				actor.Velocity = new Vector2(-40, 0);
+				actor.dissolves = true;
+			});
 		}
 
 		if (IsPlaying("shoot") && IsFinishedPlaying())

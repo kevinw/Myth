@@ -19,6 +19,9 @@ public class Mosquito : Actor
 
 	public override void Added()
 	{
+		if (!Game.AudioEventsEnabled)
+			return;
+
 		try
 		{
 			buzz = Game.CreateAudioEvent("fly/idle", Position);

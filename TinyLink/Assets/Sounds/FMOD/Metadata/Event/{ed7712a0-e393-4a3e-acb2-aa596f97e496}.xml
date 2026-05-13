@@ -155,6 +155,7 @@
 		<relationship name="effects">
 			<destination>{9b116eed-adc5-4638-afc0-55532cd66f25}</destination>
 			<destination>{4e278fef-a710-48c1-a098-ad9e04732ddb}</destination>
+			<destination>{6dca25e6-5ce5-47c5-9771-55ecf864ab50}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{0d6874d8-034c-4616-a3f3-3248396f3ee2}" />
@@ -192,6 +193,14 @@
 	</object>
 	<object class="MixerBusFader" id="{9b116eed-adc5-4638-afc0-55532cd66f25}" />
 	<object class="SpatialiserEffect" id="{4e278fef-a710-48c1-a098-ad9e04732ddb}" />
+	<object class="MultibandEqEffect" id="{6dca25e6-5ce5-47c5-9771-55ecf864ab50}">
+		<property name="frequencyA">
+			<value>1085.00952</value>
+		</property>
+		<property name="qualityA">
+			<value>1.40323079</value>
+		</property>
+	</object>
 	<object class="AutomationPoint" id="{9d5299a4-8b5a-4803-ab67-e02adf61f26f}">
 		<property name="position">
 			<value>0</value>

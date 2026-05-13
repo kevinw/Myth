@@ -67,11 +67,18 @@ public class Player : Actor
 	}
 
 	float JumpUpSquish = 0;
+	private bool CanPlaySquishSound = false;
 
 	public override void OnCollideY()
 	{
+		bool wasGoingUp = Velocity.Y < 0;
 		base.OnCollideY();
-		JumpUpSquish = 0.1f;
+		if (wasGoingUp && CanPlaySquishSound && State == States.Normal)
+		{
+			AudioEvent("player/squish");
+			CanPlaySquishSound = false;
+			JumpUpSquish = 0.15f;
+		}
 	}
 
 	public override void Update()
@@ -85,6 +92,7 @@ public class Player : Actor
 		{
 			Squish = new Vector2(1.5f, 0.70f);
 			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this));
+			CanPlaySquishSound = true;
 		}
 		grounded = nowGrounded;
 
@@ -288,18 +296,21 @@ public class Player : Actor
 			{
 				AudioEvent("sword");
 			}
-			hitbox = new (8, -8, 16, 8);
+			hitbox = new (8, -9, 16, 9);
 		}
 
-		if (hitbox != null)
+		if (hitbox is {} it)
 		{
-			var it = hitbox.Value;
 			if (Facing == Signs.Negative)
 				it.X = -(it.X + it.Width);
 			it += Position;
 
+			Game.CollisionRectsThisFrame.Add(it);
 			if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard) is { } hit)
 				Hit(hit);
+
+			Game.BreakTiles(it);
+			Game.Batcher.RectLine(it, 1, Color.Red);
 		}
 
 		if (Grounded())

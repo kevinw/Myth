@@ -79,6 +79,22 @@ public class Room
 	{
 	}
 
+	public Room CloneRuntime()
+	{
+		var clone = new Room(Id, Position, Size)
+		{
+			Text = Text,
+			MusicArea = MusicArea
+		};
+
+		for (var x = 0; x < Size.X; x ++)
+		for (var y = 0; y < Size.Y; y ++)
+			clone.Tiles[x, y] = Tiles[x, y];
+
+		clone.RebuildGeometry();
+		return clone;
+	}
+
 	private Room(string id, Point2 position, Point2 size, string? path = null)
 	{
 		var lines = path != null ? File.ReadAllLines(path) : [];
@@ -227,7 +243,7 @@ public class Room
 			StringBuilder result = new();
 
 			// write text lines first
-			foreach (var line in Text.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+			foreach (var line in Text.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries))
 				result.AppendLine($":{line}");
 
 			if (!string.IsNullOrEmpty(MusicArea))
@@ -237,9 +253,9 @@ public class Room
 			result.AppendLine($"@size {Size.X},{Size.Y}");
 
 			// write tile grid next
-		for (int y = 0; y < Size.Y; y ++)
+		for (var y = 0; y < Size.Y; y ++)
 		{
-			for (int x = 0; x < Size.X; x ++)
+			for (var x = 0; x < Size.X; x ++)
 				result.Append(Tiles[x, y]);
 			result.AppendLine();
 		}

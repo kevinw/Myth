@@ -213,7 +213,7 @@ public partial class Manager : App
 	protected override void Shutdown()
 	{
 		SaveWindowSettings();
-		game?.StopMusic();
+		game?.Dispose();
 		imgui.Dispose();
 		assetWatcher?.Dispose();
 		assetWatcher = null;
@@ -423,6 +423,10 @@ public partial class Manager : App
 		// Misc. Hotkeys
 		if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 			ReloadAssets(true);
+#if DEBUG
+		if (Input.Keyboard.Pressed(Keys.F))
+			Window.Fullscreen = !Window.Fullscreen;
+#endif
 		if (Input.Keyboard.Pressed(Keys.F4))
 			Window.Fullscreen = !Window.Fullscreen;
 		if (Input.Keyboard.Pressed(Keys.Escape))
@@ -952,7 +956,7 @@ public partial class Manager : App
 		CurrentRoom?.Save();
 		if (CurrentRoom is { } room)
 		{
-			game?.StopMusic(true);
+			game?.Dispose();
 			game = new Game(this, room);
 			var target = game.GetGameplayCameraTarget();
 			playTransition = 0.0f;
@@ -970,7 +974,8 @@ public partial class Manager : App
 		if (game?.CurrentRoom is { } room)
 			SelectRoom(room);
 		MatchEditorCameraToGame();
-		game?.StopMusic(true);
+		game?.Dispose();
+		game = null;
 		startingPlay = false;
 		playing = false;
 		SyncEditorGame();
@@ -981,7 +986,7 @@ public partial class Manager : App
 		if (playing || startingPlay)
 			return;
 
-		game?.StopMusic(true);
+		game?.Dispose();
 		game = CurrentRoom is { } room ? new Game(this, room, audioEventsEnabled: false) : null;
 	}
 

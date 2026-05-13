@@ -200,6 +200,18 @@ public partial class Manager
 		return null;
 	}
 
+	private void DrawEditorEyedropperCursor(Rect tileRect, float lineWeight)
+	{
+		var width = lineWeight * 2;
+		batcher.RectLine(tileRect, width, highlight);
+
+		var start = tileRect.TopLeft + tileRect.Size * 0.25f;
+		var end = tileRect.BottomRight - tileRect.Size * 0.20f;
+		batcher.Line(start, end, width, Color.White);
+		batcher.Rect(new Rect(start - Vector2.One * width, Vector2.One * width * 2), highlight);
+		batcher.Rect(new Rect(end - Vector2.One * width * 0.75f, Vector2.One * width * 1.5f), Color.White);
+	}
+
 	private static Vector2 RectCenter(RectInt rect)
 		=> new(rect.X + rect.Width * 0.5f, rect.Y + rect.Height * 0.5f);
 
@@ -212,30 +224,6 @@ public partial class Manager
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
 
-		if (!playing)
-		{
-			var upImg = Assets.GetSubtexture("buttons/6");
-			var leftImg = Assets.GetSubtexture("buttons/4");
-			var downImg = Assets.GetSubtexture("buttons/3");
-			var rightImg = Assets.GetSubtexture("buttons/5");
-
-			var upExits = HasAdjacentEditorRoom(Point2.Up);
-			var leftExits = HasAdjacentEditorRoom(Point2.Left);
-			var downExits = HasAdjacentEditorRoom(Point2.Down);
-			var rightExits = HasAdjacentEditorRoom(Point2.Right);
-
-			batcher.PushLayer(-1);
-			if (Button(arrow + bounds.TopCenter, upImg, "Move Up Room [W]", upExits))
-				ShiftRoom(Point2.Up);
-			if (Button(arrow + bounds.CenterLeft, leftImg, "Move Left Room [A]", leftExits))
-				ShiftRoom(Point2.Left);
-			if (Button(arrow + bounds.BottomCenter, rightImg, "Move Down Room [S]", downExits))
-				ShiftRoom(Point2.Down);
-			if (Button(arrow + bounds.CenterRight, downImg, "Move Right Room [D]", rightExits))
-				ShiftRoom(Point2.Right);
-			batcher.PopLayer();
-		}
-
 		UpdateEditorWorldView(inner);
 
 		batcher.PushScissor((RectInt)(inner * Scale));
@@ -246,7 +234,9 @@ public partial class Manager
 		batcher.PushMatrix(worldMatrix);
 		DrawEditorRooms();
 
-		if (inner.Contains(Cursor) && Input.Mouse.LeftPressed)
+		var eyedropper = Input.Keyboard.Alt;
+
+		if (inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 		{
 			var worldMouse = ScreenToEditorWorld(Cursor, inner);
 			if (GetRoomAtWorld(worldMouse) is { } selected && selected != CurrentRoom)
@@ -283,7 +273,15 @@ public partial class Manager
 			for (int y = 1; y < editing.Size.Y; y ++)
 				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize),  roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, gridColor);
 
-			if (lastCell == cell && overGame && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
+			if (eyedropper)
+				tilePlacing = false;
+
+			if (eyedropper && overGame && Input.Mouse.LeftPressed)
+			{
+				brush = editing.Tiles[tileOver.X, tileOver.Y];
+				tileTypePlacing = brush;
+			}
+			else if (lastCell == cell && overGame && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
 				tilePlaceFrom = tileOver;
 				tileTypePlacing = Input.Mouse.LeftPressed ? brush : '0';
@@ -299,10 +297,18 @@ public partial class Manager
 			if (overGame)
 			{
 				var cursorRect = ((new Rect(tileOver.X + shift, tileOver.Y + shift, size, size) * Game.TileSize) + roomTopLeft).Inflate(gridWeight * 2);
-				var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
-				batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
+				if (eyedropper)
+				{
+					var sampleRect = ((new Rect(tileOver.X, tileOver.Y, 1, 1) * Game.TileSize) + roomTopLeft).Inflate(gridWeight * 2);
+					DrawEditorEyedropperCursor(sampleRect, gridWeight);
+				}
+				else
+				{
+					var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
+					batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
+				}
 
-				if (Factory.Find(brush) is {} placing)
+				if (!eyedropper && Factory.Find(brush) is {} placing)
 				{
 					var position = roomTopLeft + tileOver * Game.TileSize + placing.Offset;
 
@@ -312,7 +318,7 @@ public partial class Manager
 				}
 			}
 
-			if (tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
+			if (!eyedropper && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
 			{
 				editing.Set(tilePlaceFrom, tileTypePlacing);
 				editorGameDirty = true;
@@ -344,7 +350,7 @@ public partial class Manager
 				batcher.Rect(proposalBounds, Color.Gray * 0.35f);
 				batcher.RectLine(proposalBounds, gridWeight * 2, Color.Gray);
 
-				if (inner.Contains(Cursor) && Input.Mouse.LeftPressed)
+				if (inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 				{
 					CreateRoom(proposal.Position, proposal.Size);
 					proposedRoomTiles = null;
