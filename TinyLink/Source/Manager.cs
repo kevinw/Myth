@@ -165,6 +165,10 @@ public class Manager : App
 	readonly List<string> musicAreas = [];
 	bool musicEnabled = true;
 	bool alwaysOnTop;
+#if DEBUG
+	int fpsFrames;
+	float fpsElapsed;
+#endif
 
 	public bool MusicEnabled => musicEnabled;
 	public const string BackgroundMusicEventPath = "event:/background_music";
@@ -355,6 +359,9 @@ public class Manager : App
 
 	protected override void Update()
 	{
+#if DEBUG
+		UpdateWindowTitleFps();
+#endif
 		UpdateAssetReload();
 #if DEBUG
 		UpdateShaderReload();
@@ -397,7 +404,6 @@ public class Manager : App
 			// draw editor stuff if it's open
 			if (gameEase < 1.0f)
 			{
-				Palette();
 				Editor();
 			}
 
@@ -410,9 +416,26 @@ public class Manager : App
 			Window.StartTextInput();
 		else
 			Window.StopTextInput();
+		if (gameEase < 1.0f)
+			PaletteImGui();
 		ToolbarImGui();
 		imgui.EndLayout();
 	}
+
+#if DEBUG
+	private void UpdateWindowTitleFps()
+	{
+		fpsFrames++;
+		fpsElapsed += Time.Delta;
+		if (fpsElapsed < 1.0f)
+			return;
+
+		var fps = fpsFrames / fpsElapsed;
+		Window.Title = $"Myth - {fps:0} FPS";
+		fpsFrames = 0;
+		fpsElapsed = 0;
+	}
+#endif
 
 	protected override void Render()
 	{
@@ -762,8 +785,11 @@ public class Manager : App
 	}
 
 	private bool ImGuiIconButton(string id, Subtexture icon, string tooltip, bool selected = false)
+		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize));
+
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string tooltip, bool selected, Vector2 size)
 	{
-		var pressed = imgui.ImageButton(id, icon, new Vector2(ButtonSize, ButtonSize), selected, highlight);
+		var pressed = imgui.ImageButton(id, icon, size, selected, highlight);
 		var hovered = ImGui.IsItemHovered();
 
 		if (hovered)
@@ -912,6 +938,47 @@ public class Manager : App
 	/// <summary>
 	/// Displays the Palette type buttons
 	/// </summary>
+	private void PaletteImGui()
+	{
+		var rect = PaletteSlideRect;
+		var flags =
+			ImGuiWindowFlags.NoTitleBar |
+			ImGuiWindowFlags.NoMove |
+			ImGuiWindowFlags.NoResize |
+			ImGuiWindowFlags.NoCollapse |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoBringToFrontOnFocus;
+
+		ImGui.SetNextWindowPos(rect.TopLeft, ImGuiCond.Always);
+		ImGui.SetNextWindowSize(rect.Size, ImGuiCond.Always);
+
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BoxPadding, BoxPadding));
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, ButtonSpacing));
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, LineWeight);
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+		ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+
+		if (ImGui.Begin("Palette", flags))
+		{
+			var index = 0;
+			foreach (var (id, entry) in Factory.Entries)
+			{
+				if (index > 0 && index % PaletteColumns != 0)
+					ImGui.SameLine();
+
+				if (ImGuiSubtextureButton($"Palette_{id}", entry.Image, entry.Name, brush == id, new Vector2(ButtonSize, ButtonSize)))
+					brush = id;
+
+				index++;
+			}
+		}
+		ImGui.End();
+
+		ImGui.PopStyleColor(2);
+		ImGui.PopStyleVar(4);
+	}
+
 	private void Palette()
 	{
 		Box(PaletteSlideRect);
@@ -1061,7 +1128,7 @@ public class Manager : App
 			}
 
 			batcher.PopScissor();
-			batcher.RectLine(new Rect(0, 0, Game.Width, Game.Height), LineWeight, Color.Black);
+			//batcher.RectLine(new Rect(0, 0, Game.Width, Game.Height), LineWeight, Color.Black);
 			batcher.PopMatrix();
 		}
 		else
