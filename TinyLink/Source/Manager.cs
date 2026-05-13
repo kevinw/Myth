@@ -33,12 +33,12 @@ public partial class Manager : App
 	static float ButtonSize => 24;
 	static float ButtonSpacing => 2;
 	static float BoxPadding => 4;
-	static float BoxSpacing => 12;
+	static float BoxSpacing => 0;
 	static int PaletteColumns => 4;
 	static int ToolbarSpacing => 4;
 	static float ScreenPadding => 0;
 	static float ToolbarHeight => ButtonSize + 4;
-	static float EditorInset => 14;
+	static float EditorInset => 0;
 	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
 	static Color highlight => 0x5fcde4;
 
@@ -106,7 +106,7 @@ public partial class Manager : App
 	/// <summary>
 	/// Play Workspace when the Game is Open
 	/// </summary>
-	private Rect GameOpenRect => WorkRect;
+	private Rect GameOpenRect => View;
 
 	/// <summary>
 	/// Eases between the EditView and the PlayView as the Game opens/closes
@@ -484,7 +484,8 @@ public partial class Manager : App
 			Window.StopTextInput();
 		if (gameEase < 1.0f && !startingPlay)
 			PaletteImGui();
-		ToolbarImGui();
+		if (!playing && !startingPlay)
+			ToolbarImGui();
 		imgui.EndLayout();
 	}
 
@@ -837,54 +838,44 @@ public partial class Manager : App
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.08f, 0.15f, 1.0f));
 		ImGui.Begin("Toolbar", flags);
 
-		var gameActive = playing || startingPlay;
-		if (!gameActive)
+		if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
+			StartGame();
+		ImGui.SameLine();
+
+		if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Small Brush", !brushBig))
+			brushBig = false;
+		ImGui.SameLine();
+		if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Big Brush", brushBig))
+			brushBig = true;
+		ImGui.SameLine(0, ToolbarSpacing);
+
+		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
 		{
-			if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
-				StartGame();
-			ImGui.SameLine();
-
-			if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Small Brush", !brushBig))
-				brushBig = false;
-			ImGui.SameLine();
-			if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Big Brush", brushBig))
-				brushBig = true;
-
-			if (CurrentRoom is { } room && musicAreas.Count > 0)
-			{
-				ImGui.SameLine(0, ToolbarSpacing);
-				var area = room.MusicArea ?? DefaultMusicArea;
-				if (ImGuiTextButton($"{area}##MusicArea", new Vector2(96, ButtonSize), room.MusicArea != null))
-					CycleMusicArea(room);
-			}
+			musicEnabled = !musicEnabled;
+			game?.RefreshMusic();
 		}
-		else
+		ImGui.SameLine();
+
+		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
 		{
-			if (ImGuiIconButton("Stop", Assets.GetSubtexture("buttons/1"), "Stop [Tab/R3]"))
-				StopGame();
-			ImGui.SameLine();
+			alwaysOnTop = !alwaysOnTop;
+			Window.AlwaysOnTop = alwaysOnTop;
+		}
+		ImGui.SameLine();
 
-			if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
-			{
-				musicEnabled = !musicEnabled;
-				game?.RefreshMusic();
-			}
-			ImGui.SameLine();
+		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
+			OpenFmodStudio();
 
-			if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
-			{
-				alwaysOnTop = !alwaysOnTop;
-				Window.AlwaysOnTop = alwaysOnTop;
-			}
-			ImGui.SameLine();
-
-			if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
-				OpenFmodStudio();
+		if (CurrentRoom is { } room && musicAreas.Count > 0)
+		{
+			ImGui.SameLine(0, ToolbarSpacing);
+			var area = room.MusicArea ?? DefaultMusicArea;
+			if (ImGuiTextButton($"{area}##MusicArea", new Vector2(96, ButtonSize), room.MusicArea != null))
+				CycleMusicArea(room);
 		}
 
-		var displayedRoom = gameActive ? game?.CurrentRoom : CurrentRoom;
-		var displayedCell = displayedRoom?.Cell ?? cell;
-		DrawCenteredToolbarText(displayedRoom != null ? $"Room {displayedRoom.Id}" : $"Room {displayedCell.X} x {displayedCell.Y}");
+		var displayedRoom = CurrentRoom;
+		DrawCenteredToolbarText(displayedRoom != null ? $"Room {displayedRoom.Id}" : $"Room {cell.X} x {cell.Y}");
 
 		ImGui.End();
 		ImGui.PopStyleColor();
