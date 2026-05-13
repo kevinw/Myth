@@ -81,7 +81,10 @@ public static class Assets
 			{
 				var frames = ase.RenderAllFrames();
 				for (int i = 0; i < frames.Length; i ++)
+				{
 					packer.Add($"{name}/{i}", frames[i]);
+					packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+				}
 			}
 
 			foreach (var (name, ase) in tilesetFiles)
@@ -137,7 +140,10 @@ public static class Assets
 			// add frames
 			var frames = new List<Sprite.Frame>();
 			for (int i = 0; i < ase.Frames.Length; i ++)
-				frames.Add(new(subtextures[$"{name}/{i}"], ase.Frames[i].Duration / 1000.0f));
+				frames.Add(new(
+					subtextures[$"{name}/{i}"],
+					subtextures[$"{name}/normal/{i}"],
+					ase.Frames[i].Duration / 1000.0f));
 
 			// add animations
 			var animations = new List<Sprite.Animation>();
@@ -223,6 +229,39 @@ public static class Assets
 	{
 		foreach (var room in Rooms.Values)
 			room.RebuildGeometry();
+	}
+
+	private static Image GenerateNormalMap(Image source)
+	{
+		var normal = new Image(source.Width, source.Height);
+		const float bend = 1.25f;
+
+		for (var y = 0; y < source.Height; y ++)
+		for (var x = 0; x < source.Width; x ++)
+		{
+			var alpha = AlphaAt(source, x, y);
+			if (alpha <= 0)
+				continue;
+
+			var sx = AlphaAt(source, x - 1, y) - AlphaAt(source, x + 1, y);
+			var sy = AlphaAt(source, x, y - 1) - AlphaAt(source, x, y + 1);
+			var n = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
+			normal[x, y] = new Color(
+				n.X * 0.5f + 0.5f,
+				n.Y * 0.5f + 0.5f,
+				n.Z * 0.5f + 0.5f,
+				alpha);
+		}
+
+		return normal;
+	}
+
+	private static float AlphaAt(Image image, int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= image.Width || y >= image.Height)
+			return 0;
+
+		return image[x, y].A / 255.0f;
 	}
 
 	public static void Unload()

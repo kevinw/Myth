@@ -7,6 +7,36 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <ShaderPlatform>mac</ShaderPlatform>
+    <ShaderOutputExtension>msl</ShaderOutputExtension>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <ShaderPlatform>windows</ShaderPlatform>
+    <ShaderOutputExtension>dxil</ShaderOutputExtension>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <ShaderPlatform>linux</ShaderPlatform>
+    <ShaderOutputExtension>spv</ShaderOutputExtension>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ShaderInputs Include="Assets/Shaders/*.hlsl" />
+    <ShaderOutputs Include="@(ShaderInputs->'Assets/Shaders/Compiled/%(Filename).vertex.$(ShaderOutputExtension)')" />
+    <ShaderOutputs Include="@(ShaderInputs->'Assets/Shaders/Compiled/%(Filename).fragment.$(ShaderOutputExtension)')" />
+  </ItemGroup>
+
+  <Target
+    Name="CompileShaders"
+    BeforeTargets="BeforeBuild"
+    Inputs="@(ShaderInputs)"
+    Outputs="@(ShaderOutputs)"
+    Condition="'$(ShaderPlatform)' != ''">
+    <Exec Command="Assets/Shaders/compile.sh $(ShaderPlatform)" />
+  </Target>
   
   <ItemGroup>
     <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" />

@@ -31,6 +31,7 @@ public class Actor
 	public float IFrameTime = 0.50f;
 	public bool CollidesWithSolids = true;
 	public bool KeepOnRoomTransition;
+	public virtual bool CastsSpriteShadow => sprite != null;
 
 	public Time Time => Game.Time;
 
@@ -338,6 +339,36 @@ public class Actor
 			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
 			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
 			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, Color.White);
+			batcher.PopMatrix();
+		}
+	}
+
+	public virtual void RenderNormals(Batcher batcher)
+	{
+		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
+			return;
+
+		if (sprite != null && sprite.Frames.Count > 0)
+		{
+			var animation = Animation;
+			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
+			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
+			batcher.Image(frame.NormalSubtexture, Shift, sprite.Origin, Vector2.One, 0, Color.White);
+			batcher.PopMatrix();
+		}
+	}
+
+	public virtual void RenderShadow(Batcher batcher, Color color)
+	{
+		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
+			return;
+
+		if (sprite != null && sprite.Frames.Count > 0)
+		{
+			var animation = Animation;
+			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
+			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
+			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
 			batcher.PopMatrix();
 		}
 	}

@@ -46,9 +46,11 @@ public class Manager : App
 	private Point2 cell = new(0, 0);
 
 	/// <summary>
-	/// Our game, if it's running
+	/// The room renderer / simulation.
 	/// </summary>
 	Game? game;
+	bool playing;
+	bool editorGameDirty;
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -109,6 +111,8 @@ public class Manager : App
 		}
 	}
 
+	private Rect GameViewRect => WorkspaceRect.Inflate(-BoxPadding * 2);
+
 	/// <summary>
 	/// Eases the PaletteView out/in as the Game opens/closes
 	/// </summary>
@@ -146,8 +150,16 @@ public class Manager : App
 	bool tilePlacing;
 	readonly Lock assetReloadLock = new();
 	FileSystemWatcher? assetWatcher;
+#if DEBUG
+	FileSystemWatcher? shaderWatcher;
+#endif
 	bool assetReloadRequested;
 	float assetReloadTimer;
+#if DEBUG
+	readonly Lock shaderReloadLock = new();
+	bool shaderReloadRequested;
+	float shaderReloadTimer;
+#endif
 	readonly List<string> musicAreas = [];
 	bool musicEnabled = true;
 	bool alwaysOnTop;
@@ -181,8 +193,11 @@ public class Manager : App
 		Assets.RebuildRoomGeometry();
 		LoadAudioBanks();
 		StartAssetWatcher();
+#if DEBUG
+		StartShaderWatcher();
+#endif
 
-		game = new Game(this, cell);
+		SyncEditorGame();
 	}
 
 	protected override void Shutdown()
@@ -191,6 +206,10 @@ public class Manager : App
 		game?.StopMusic();
 		assetWatcher?.Dispose();
 		assetWatcher = null;
+#if DEBUG
+		shaderWatcher?.Dispose();
+		shaderWatcher = null;
+#endif
 
 		Assets.Unload();
 		Factory.Clear();
@@ -333,9 +352,12 @@ public class Manager : App
 	protected override void Update()
 	{
 		UpdateAssetReload();
+#if DEBUG
+		UpdateShaderReload();
+#endif
 
 		// Misc. Hotkeys
-		if (Input.Keyboard.Pressed(Keys.F1) && game == null)
+		if (Input.Keyboard.Pressed(Keys.F1) && !playing)
 			ReloadAssets(true);
 		if (Input.Keyboard.Pressed(Keys.F4))
 			Window.Fullscreen = !Window.Fullscreen;
@@ -348,10 +370,10 @@ public class Manager : App
 			ToggleGame();
 
 		// Run Game
-		if (game != null)
+		if (playing)
 		{
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
-			game.Update();
+			game?.Update();
 		}
 		// Show Editor
 		else
@@ -384,12 +406,10 @@ public class Manager : App
 
 	protected override void Render()
 	{
-		// draw the main UI first
 		Window.Clear(0x2e1426);
-		batcher.Render(Window);
 
-		// draw game on top if it exists
-		game?.Render((RectInt)(WorkspaceRect.Inflate(-BoxPadding) * Scale));
+		game?.Render((RectInt)(GameViewRect * Scale), playing);
+		batcher.Render(Window);
 	}
 
 	private void StartAssetWatcher()
@@ -406,6 +426,27 @@ public class Manager : App
 		assetWatcher.Renamed += (_, _) => RequestAssetReload();
 		assetWatcher.EnableRaisingEvents = true;
 	}
+
+#if DEBUG
+	private void StartShaderWatcher()
+	{
+		var shadersPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders"));
+		if (!Directory.Exists(shadersPath))
+			return;
+
+		shaderWatcher = new FileSystemWatcher(shadersPath, "*.hlsl")
+		{
+			IncludeSubdirectories = false,
+			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
+		};
+
+		shaderWatcher.Changed += (_, _) => RequestShaderReload();
+		shaderWatcher.Created += (_, _) => RequestShaderReload();
+		shaderWatcher.Deleted += (_, _) => RequestShaderReload();
+		shaderWatcher.Renamed += (_, _) => RequestShaderReload();
+		shaderWatcher.EnableRaisingEvents = true;
+	}
+#endif
 
 	private void RequestAssetReload()
 	{
@@ -437,6 +478,104 @@ public class Manager : App
 			ReloadAssets(false);
 	}
 
+#if DEBUG
+	private void RequestShaderReload()
+	{
+		lock (shaderReloadLock)
+		{
+			shaderReloadRequested = true;
+			shaderReloadTimer = AssetReloadDelay;
+		}
+	}
+
+	private void UpdateShaderReload()
+	{
+		var reload = false;
+
+		lock (shaderReloadLock)
+		{
+			if (shaderReloadRequested)
+			{
+				shaderReloadTimer -= Time.Delta;
+				if (shaderReloadTimer <= 0)
+				{
+					shaderReloadRequested = false;
+					reload = true;
+				}
+			}
+		}
+
+		if (reload)
+			CompileAndReloadShaders();
+	}
+
+	private void CompileAndReloadShaders()
+	{
+		var script = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders", "compile.sh"));
+		if (!File.Exists(script))
+		{
+			Console.Error.WriteLine($"Shader compile script not found at '{script}'.");
+			return;
+		}
+
+		try
+		{
+			var compile = new ProcessStartInfo(script)
+			{
+				UseShellExecute = false,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+				WorkingDirectory = Path.GetDirectoryName(script) ?? Environment.CurrentDirectory
+			};
+			compile.ArgumentList.Add(CurrentShaderPlatform());
+
+			using var process = Process.Start(compile);
+			if (process == null)
+			{
+				Console.Error.WriteLine("Failed to start shader compiler.");
+				return;
+			}
+
+			var stdout = process.StandardOutput.ReadToEnd();
+			var stderr = process.StandardError.ReadToEnd();
+			process.WaitForExit();
+
+			if (process.ExitCode != 0)
+			{
+				Console.Error.WriteLine($"Shader compile failed with exit code {process.ExitCode}.");
+				if (!string.IsNullOrWhiteSpace(stdout))
+					Console.Error.WriteLine(stdout);
+				if (!string.IsNullOrWhiteSpace(stderr))
+					Console.Error.WriteLine(stderr);
+				return;
+			}
+
+			if (!string.IsNullOrWhiteSpace(stdout))
+				Console.WriteLine(stdout.Trim());
+			if (!string.IsNullOrWhiteSpace(stderr))
+				Console.Error.WriteLine(stderr.Trim());
+
+			game?.ReloadShaders();
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to compile shaders: {e}");
+		}
+	}
+
+	private static string CurrentShaderPlatform()
+	{
+		if (OperatingSystem.IsMacOS())
+			return "mac";
+		if (OperatingSystem.IsWindows())
+			return "windows";
+		if (OperatingSystem.IsLinux())
+			return "linux";
+
+		return "all";
+	}
+#endif
+
 	private void ReloadAssets(bool reloadRooms)
 	{
 		try
@@ -454,7 +593,10 @@ public class Manager : App
 			Factory.Clear();
 			Factory.RegisterTypes();
 			Assets.RebuildRoomGeometry();
-			game?.RefreshRoomTiles();
+			if (playing)
+				game?.RefreshRoomTiles();
+			else
+				SyncEditorGame();
 
 			Console.WriteLine("Reloaded assets.");
 		}
@@ -474,6 +616,7 @@ public class Manager : App
 
 		// set next room
 		cell += direction;
+		SyncEditorGame();
 	}
 
 	/// <summary>
@@ -540,7 +683,7 @@ public class Manager : App
 	{
 		var rect = new Rect(ToolbarRect.X, ToolbarRect.Y, ButtonSize, ButtonSize);
 
-		if (game == null)
+		if (!playing)
 		{
 			if (Button(rect, Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
 				StartGame();
@@ -587,8 +730,8 @@ public class Manager : App
 
 		if (Assets.Font != null)
 		{
-			var cell = (game?.Cell ?? this.cell);
-			batcher.Text(Assets.Font, $"Room {cell.X} x {cell.Y}", ToolbarRect.Center, new Vector2(0.50f, 0.50f), Color.White);
+			var displayedCell = playing ? (game?.Cell ?? cell) : cell;
+			batcher.Text(Assets.Font, $"Room {displayedCell.X} x {displayedCell.Y}", ToolbarRect.Center, new Vector2(0.50f, 0.50f), Color.White);
 		}
 	}
 
@@ -606,27 +749,38 @@ public class Manager : App
 
 	private void ToggleGame()
 	{
-		if (game == null)
-			StartGame();
-		else
+		if (playing)
 			StopGame();
+		else
+			StartGame();
 	}
 
 	private void StartGame()
 	{
 		CurrentRoom?.Save();
 		if (CurrentRoom != null)
+		{
+			game?.StopMusic(true);
 			game = new Game(this, cell);
+			playing = true;
+		}
 	}
 
 	private void StopGame()
 	{
-		if (game == null)
+		cell = game?.Cell ?? cell;
+		game?.StopMusic(true);
+		playing = false;
+		SyncEditorGame();
+	}
+
+	private void SyncEditorGame()
+	{
+		if (playing)
 			return;
 
-		cell = game.Cell;
-		game.StopMusic();
-		game = null;
+		game?.StopMusic(true);
+		game = CurrentRoom != null ? new Game(this, cell, audioEventsEnabled: false) : null;
 	}
 
 	private void UpdateEditorNavigation()
@@ -720,12 +874,12 @@ public class Manager : App
 	private void Editor()
 	{
 		var bounds = WorkspaceRect;
-		var inner = bounds.Inflate(-BoxPadding * 2);
+		var inner = GameViewRect;
 		var arrow = new Rect().Inflate(ButtonSize / 2);
 		var lastCell = cell;
 
 		// buttons to move between rooms
-		if (game == null)
+		if (!playing)
 		{
 			var upImg = Assets.GetSubtexture("buttons/6");
 			var leftImg = Assets.GetSubtexture("buttons/4");
@@ -772,36 +926,7 @@ public class Manager : App
 			var overGame = new Rect(0, 0, Game.Width, Game.Height).Contains(localMouse);
 
 			batcher.PushMatrix(matrix);
-			batcher.Rect(new Rect(0, 0, Game.Width, Game.Height), Color.Black);
 			batcher.PushScissor((RectInt)(inner * Scale));
-
-			// draw "tiles" first
-			for (int x = 0; x < Game.Columns; x ++)
-			for (int y = 0; y < Game.Rows; y ++)
-			{
-				if (Factory.Find(editing.Tiles[x, y]) is not {} it || it.Image.Texture == null)
-					continue;
-
-				if (it.Tile == null)
-					continue;
-
-				var position = new Vector2(x, y) * Game.TileSize + it.Offset;
-				batcher.Image(it.Image, position, it.Origin, Vector2.One, 0, Color.White);
-			}
-
-			// draw "actors" second
-			for (int x = 0; x < Game.Columns; x ++)
-			for (int y = 0; y < Game.Rows; y ++)
-			{
-				if (Factory.Find(editing.Tiles[x, y]) is not {} it || it.Image.Texture == null)
-					continue;
-
-				if (it.Spawn == null)
-					continue;
-
-				var position = new Vector2(x, y) * Game.TileSize + it.Offset;
-				batcher.Image(it.Image, position, it.Origin, Vector2.One, 0, Color.White);
-			}
 
 			// draw grid
 			for (int x = 1; x < Game.Columns; x ++)
@@ -846,6 +971,7 @@ public class Manager : App
 			if (tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
 			{
 				editing.Set(tilePlaceFrom, tileTypePlacing);
+				editorGameDirty = true;
 
 				while (tilePlaceFrom != tileOver)
 				{
@@ -859,7 +985,10 @@ public class Manager : App
 
 					for (int x = shift; x < shift + size; x ++)
 						for (int y = shift; y < shift + size; y ++)
+						{
 							editing.Set(tilePlaceFrom + new Point2(x, y), tileTypePlacing);
+							editorGameDirty = true;
+						}
 				}
 			}
 
@@ -874,6 +1003,7 @@ public class Manager : App
 				var it = new Room(cell);
 				Assets.Rooms.Add(cell, it);
 				it.Save();
+				SyncEditorGame();
 			}
 		}
 
@@ -881,6 +1011,13 @@ public class Manager : App
 		{
 			tileTypePlacing = brush;
 			tilePlacing = false;
+		}
+
+		if (editorGameDirty)
+		{
+			editorGameDirty = false;
+			CurrentRoom?.Save();
+			SyncEditorGame();
 		}
 	}
 }

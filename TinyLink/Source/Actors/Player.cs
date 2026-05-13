@@ -58,6 +58,7 @@ public class Player : Actor
 		light.Radius = 36;
 		light.Intensity = 0.45f;
 		light.LightColor = 0xffcfa0;
+		light.Height = 16;
 		light.FlickerFrequency = 1.5f;
 		light.FlickerIntensity = 0.02f;
 		light.DrawSprite = false;

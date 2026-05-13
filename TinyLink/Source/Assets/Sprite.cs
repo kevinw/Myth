@@ -6,7 +6,7 @@ namespace TinyLink;
 
 public class Sprite(string name, Vector2 origin)
 {
-	public readonly record struct Frame(Subtexture Subtexture, float Duration);
+	public readonly record struct Frame(Subtexture Subtexture, Subtexture NormalSubtexture, float Duration);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
 
 	public string Name { get; } = name;

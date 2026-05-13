@@ -38,6 +38,9 @@ VsOutput vertex_main(VsInput input)
 float4 fragment_main(VsOutput input) : SV_Target0
 {
     float4 scene = Texture.Sample(Sampler, input.TexCoord) * input.Color;
-    float3 light = LightTexture.Sample(LightSampler, input.TexCoord).rgb;
-    return float4(saturate(scene.rgb * light), scene.a);
+    float4 light = LightTexture.Sample(LightSampler, input.TexCoord);
+    float brightness = max(max(scene.r, scene.g), scene.b);
+    float rimAmount = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
+    float3 color = scene.rgb * light.rgb + light.rgb * rimAmount;
+    return float4(saturate(color), scene.a);
 }

@@ -14,6 +14,7 @@ using Color = Foster.Framework.Color;
 public class TitleText : Actor
 {
 	private float stateDuration = 0;
+	public override bool CastsSpriteShadow => false;
 
 	public override void Update()
 	{
