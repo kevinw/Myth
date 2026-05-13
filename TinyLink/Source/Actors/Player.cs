@@ -18,7 +18,7 @@ public class Player : Actor
 	static float MaxGroundSpeed => 80;
 	static float MaxAirSpeed => 90;
 	static float GroundAccel => 500;
-	static float AirAccel => 150;
+	static float AirAccel => 290;
 	static float Friction => 500;
 	static float AttackFriction => 150;
 	static float HurtFriction => 200;

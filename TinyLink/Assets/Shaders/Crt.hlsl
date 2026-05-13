@@ -78,8 +78,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float brightness = max(max(glow.r, glow.g), glow.b);
     color += glow * smoothstep(0.35, 1.0, brightness) * BloomAmount;
 
-    float scanline = 0.5 + 0.5 * cos((uv.y * TextureSize.y + Time * 10.0) * 3.14159265);
-    color *= 1.0 - scanline * ScanlineAmount;
+    //float scanline = 0.5 + 0.5 * cos((uv.y * TextureSize.y + Time * 10.0) * 3.14159265);
+    //color *= 1.0 - scanline * ScanlineAmount;
 
     float vignette = smoothstep(1.25, 0.35, radius);
     color *= lerp(1.0, vignette, VignetteAmount);

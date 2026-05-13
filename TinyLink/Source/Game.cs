@@ -244,6 +244,8 @@ public class Game
 		var roomSize = max - min;
 		if (roomSize <= viewportSize)
 			return min + (roomSize - viewportSize) / 2;
+		if (roomSize - viewportSize <= 1.0f)
+			return min;
 
 		return Math.Clamp(value, min, max - viewportSize);
 	}
