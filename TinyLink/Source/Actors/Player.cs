@@ -341,16 +341,26 @@ public class Player : Actor
 
 	public override void OnWasHit(Actor by)
 	{
-		ApplyHurt();
+		ApplyHurt(fromActor: by);
 	}
 
-	private void ApplyHurt(int healthDelta = -1) {
+	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null) {
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
 
 		Play("hurt");
 
-		Velocity = new Vector2(-Facing * 100, -80);
+		// Apply a hurt velocity
+		int signDirection = -Facing;
+		if (fromActor != null)
+		{
+			// Get pushed away from the actor that hurt us.
+			int actorDelta = Math.Sign(Position.X - fromActor.Position.X);
+			if (actorDelta != 0)
+				signDirection = actorDelta;
+		}
+		Velocity = new Vector2(signDirection * 100, -80);
+
 		State = States.Hurt;
 
 		var wasHealth = Health;
