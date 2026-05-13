@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Text.Json;
 using Foster.Framework;
+using ImGuiNET;
 
 namespace TinyLink;
 
@@ -62,6 +63,7 @@ public class Manager : App
 	/// </summary>
 	private readonly Batcher batcher;
 	private readonly Controls controls;
+	private readonly ImGuiRenderer imgui;
 
 	/// <summary>
 	/// Visible Space
@@ -178,6 +180,7 @@ public class Manager : App
 	{
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
+		imgui = new(this) { Scale = Scale };
 	}
 
 	protected override void Startup()
@@ -204,6 +207,7 @@ public class Manager : App
 	{
 		SaveWindowSettings();
 		game?.StopMusic();
+		imgui.Dispose();
 		assetWatcher?.Dispose();
 		assetWatcher = null;
 #if DEBUG
@@ -397,11 +401,17 @@ public class Manager : App
 				Editor();
 			}
 
-			Toolbar();
-
 			// draw to screen
 			batcher.PopMatrix();
 		}
+
+		imgui.BeginLayout();
+		if (imgui.WantsTextInput)
+			Window.StartTextInput();
+		else
+			Window.StopTextInput();
+		ToolbarImGui();
+		imgui.EndLayout();
 	}
 
 	protected override void Render()
@@ -410,6 +420,7 @@ public class Manager : App
 
 		game?.Render((RectInt)(GameViewRect * Scale), playing);
 		batcher.Render(Window);
+		imgui.Render();
 	}
 
 	private void StartAssetWatcher()
@@ -679,60 +690,117 @@ public class Manager : App
 	/// <summary>
 	/// Displays the Toolbar
 	/// </summary>
-	private void Toolbar()
+	private void ToolbarImGui()
 	{
-		var rect = new Rect(ToolbarRect.X, ToolbarRect.Y, ButtonSize, ButtonSize);
+		var flags =
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.NoMove |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoScrollbar |
+			ImGuiWindowFlags.NoScrollWithMouse |
+			ImGuiWindowFlags.NoBringToFrontOnFocus;
+
+		ImGui.SetNextWindowPos(Vector2.Zero, ImGuiCond.Always);
+		ImGui.SetNextWindowSize(new Vector2(Window.WidthInPixels / imgui.Scale, ToolbarHeight), ImGuiCond.Always);
+
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, 0));
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.08f, 0.15f, 1.0f));
+		ImGui.Begin("Toolbar", flags);
 
 		if (!playing)
 		{
-			if (Button(rect, Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
+			if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
 				StartGame();
-			rect.X += rect.Width + ButtonSpacing;
+			ImGui.SameLine();
 
-			if (Button(rect, Assets.GetSubtexture("buttons/7"), "Small Brush", !brushBig))
+			if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Small Brush", !brushBig))
 				brushBig = false;
-			rect.X += rect.Width + ButtonSpacing;
-			if (Button(rect, Assets.GetSubtexture("buttons/8"), "Big Brush", brushBig))
+			ImGui.SameLine();
+			if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Big Brush", brushBig))
 				brushBig = true;
-			rect.X += rect.Width + ButtonSpacing;
 
 			if (CurrentRoom is { } room && musicAreas.Count > 0)
 			{
+				ImGui.SameLine(0, ToolbarSpacing);
 				var area = room.MusicArea ?? DefaultMusicArea;
-				var areaRect = new Rect(rect.X + ToolbarSpacing, rect.Y, 96, ButtonSize);
-				if (TextButton(areaRect, area, room.MusicArea != null))
+				if (ImGuiTextButton($"{area}##MusicArea", new Vector2(96, ButtonSize), room.MusicArea != null))
 					CycleMusicArea(room);
 			}
 		}
 		else
 		{
-			if (Button(rect, Assets.GetSubtexture("buttons/1"), "Stop [Tab/R3]"))
+			if (ImGuiIconButton("Stop", Assets.GetSubtexture("buttons/1"), "Stop [Tab/R3]"))
 				StopGame();
-			rect.X += rect.Width + ButtonSpacing;
+			ImGui.SameLine();
 
-			if (Button(rect, Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
+			if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
 			{
 				musicEnabled = !musicEnabled;
 				game?.RefreshMusic();
 			}
-			rect.X += rect.Width + ButtonSpacing;
+			ImGui.SameLine();
 
-			if (Button(rect, Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
+			if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
 			{
 				alwaysOnTop = !alwaysOnTop;
 				Window.AlwaysOnTop = alwaysOnTop;
 			}
-			rect.X += rect.Width + ButtonSpacing;
+			ImGui.SameLine();
 
-			if (Button(rect, Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
+			if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
 				OpenFmodStudio();
 		}
 
-		if (Assets.Font != null)
-		{
-			var displayedCell = playing ? (game?.Cell ?? cell) : cell;
-			batcher.Text(Assets.Font, $"Room {displayedCell.X} x {displayedCell.Y}", ToolbarRect.Center, new Vector2(0.50f, 0.50f), Color.White);
-		}
+		var displayedCell = playing ? (game?.Cell ?? cell) : cell;
+		DrawCenteredToolbarText($"Room {displayedCell.X} x {displayedCell.Y}");
+
+		ImGui.End();
+		ImGui.PopStyleColor();
+		ImGui.PopStyleVar(3);
+	}
+
+	private bool ImGuiIconButton(string id, Subtexture icon, string tooltip, bool selected = false)
+	{
+		var pressed = imgui.ImageButton(id, icon, new Vector2(ButtonSize, ButtonSize), selected, highlight);
+		var hovered = ImGui.IsItemHovered();
+
+		if (hovered)
+			ImGui.SetTooltip(tooltip);
+
+		return pressed;
+	}
+
+	private static bool ImGuiTextButton(string label, Vector2 size, bool selected)
+	{
+		if (selected)
+			PushSelectedImGuiButtonStyle();
+
+		var pressed = ImGui.Button(label, size);
+
+		if (selected)
+			ImGui.PopStyleColor(3);
+
+		return pressed;
+	}
+
+	private static void PushSelectedImGuiButtonStyle()
+	{
+		ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.14f, 0.39f, 0.45f, 1.0f));
+		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.54f, 0.62f, 1.0f));
+		ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.10f, 0.30f, 0.35f, 1.0f));
+	}
+
+	private static void DrawCenteredToolbarText(string text)
+	{
+		var size = ImGui.CalcTextSize(text);
+		var windowPos = ImGui.GetWindowPos();
+		var windowSize = ImGui.GetWindowSize();
+		var pos = new Vector2(
+			windowPos.X + windowSize.X * 0.5f - size.X * 0.5f,
+			windowPos.Y + windowSize.Y * 0.5f - size.Y * 0.5f);
+		ImGui.GetWindowDrawList().AddText(pos, ImGui.GetColorU32(ImGuiCol.Text), text);
 	}
 
 	private bool ToggleEditorPressed()
