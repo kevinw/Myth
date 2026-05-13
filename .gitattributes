@@ -7,3 +7,4 @@
 *.ase filter=lfs diff=lfs merge=lfs -text
 *.spv filter=lfs diff=lfs merge=lfs -text
 *.dxil filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text

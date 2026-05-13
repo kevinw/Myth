@@ -8,6 +8,7 @@ public static class Assets
 {
 	public static SpriteFont? Font { get; private set; }
 	public static Texture? Atlas { get; private set; }
+	public static Texture? LightingNoise { get; private set; }
 	public static readonly Dictionary<string, Sprite> Sprites = new();
 	public static readonly Dictionary<string, Tileset> Tilesets = new();
 	public static readonly Dictionary<string, Subtexture> Subtextures = new();
@@ -111,7 +112,9 @@ public static class Assets
 			subtextures.Add(it.Name, new Subtexture(atlas, it.Source, it.Frame));
 
 		var oldAtlas = Atlas;
+		var oldLightingNoise = LightingNoise;
 		Atlas = atlas;
+		LightingNoise = LoadTexture(gfx, Path.Join("Textures", "noise_tess2.png"), "LightingNoise");
 
 		Subtextures.Clear();
 		foreach (var (name, subtexture) in subtextures)
@@ -203,9 +206,20 @@ public static class Assets
 		}
 
 		oldAtlas?.Dispose();
+		oldLightingNoise?.Dispose();
 
 		if (reloadRooms)
 			LoadRooms();
+	}
+
+	private static Texture? LoadTexture(GraphicsDevice gfx, string relativePath, string name)
+	{
+		var path = Path.Join(AssetsPath, relativePath);
+		if (!File.Exists(path))
+			return null;
+
+		using var image = new Image(path);
+		return new Texture(gfx, image, name);
 	}
 
 	private static void LoadRooms()
@@ -269,6 +283,8 @@ public static class Assets
 	{
 		Atlas?.Dispose();
 		Atlas = null;
+		LightingNoise?.Dispose();
+		LightingNoise = null;
 		Font = null;
 
 		Sprites.Clear();

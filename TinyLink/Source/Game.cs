@@ -530,7 +530,27 @@ public class Game
 		Batcher.Render(LitScreen);
 		Batcher.Clear();
 
+		ApplyLightingNoise(LitScreen);
+
 		return LitScreen;
+	}
+
+	private void ApplyLightingNoise(Target target)
+	{
+		if (Assets.LightingNoise == null)
+			return;
+
+		Batcher.PushBlend(BlendMode.Multiply);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat, TextureWrap.Repeat));
+		Batcher.Image(
+			Assets.LightingNoise,
+			new Rect(Camera.X - Time.SecondsF * 5.0f, Camera.Y, target.Width, target.Height),
+			Vector2.Zero,
+			Color.White * 0.30f);
+		Batcher.PopSampler();
+		Batcher.PopBlend();
+		Batcher.Render(target);
+		Batcher.Clear();
 	}
 
 	private void CompositeLayer(Target color, Target light, Target output)
