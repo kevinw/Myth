@@ -25,15 +25,16 @@ public class DualGrid : Actor
 		new(2, 1),
 	];
 
-	private readonly Subtexture[,] tilemap = new Subtexture[Game.Columns + 1, Game.Rows + 1];
+	private Subtexture[,] tilemap = new Subtexture[Game.Columns + 1, Game.Rows + 1];
 	private Tileset? tileset;
 
 	public void Build(Room room, char tileType, Tileset tileset)
 	{
 		this.tileset = tileset;
+		EnsureSize(room.Size.X + 1, room.Size.Y + 1);
 
-		for (var x = 0; x <= Game.Columns; x ++)
-		for (var y = 0; y <= Game.Rows; y ++)
+		for (var x = 0; x <= room.Size.X; x ++)
+		for (var y = 0; y <= room.Size.Y; y ++)
 		{
 			var mask = 0;
 			if (IsFilled(room, tileType, x - 1, y - 1))
@@ -60,7 +61,7 @@ public class DualGrid : Actor
 
 	private static bool IsFilled(Room room, char tileType, int x, int y)
 	{
-		return x >= 0 && y >= 0 && x < Game.Columns && y < Game.Rows && room.Tiles[x, y] == tileType;
+		return x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && room.Tiles[x, y] == tileType;
 	}
 
 	public override void Render(Batcher batcher)
@@ -68,12 +69,20 @@ public class DualGrid : Actor
 		if (tileset == null)
 			return;
 
-		for (var x = 0; x <= Game.Columns; x ++)
-		for (var y = 0; y <= Game.Rows; y ++)
+		for (var x = 0; x < tilemap.GetLength(0); x ++)
+		for (var y = 0; y < tilemap.GetLength(1); y ++)
 		{
 			var tile = tilemap[x, y];
 			if (tile.Texture != null)
 				batcher.Image(tile, new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize, Color.White);
 		}
+	}
+
+	private void EnsureSize(int width, int height)
+	{
+		if (tilemap.GetLength(0) == width && tilemap.GetLength(1) == height)
+			return;
+
+		tilemap = new Subtexture[width, height];
 	}
 }

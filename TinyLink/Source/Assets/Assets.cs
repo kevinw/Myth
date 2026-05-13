@@ -12,6 +12,7 @@ public static class Assets
 	public static readonly Dictionary<string, Tileset> Tilesets = new();
 	public static readonly Dictionary<string, Subtexture> Subtextures = new();
 	public static readonly Dictionary<Point2, Room> Rooms = new();
+	public static readonly Dictionary<string, Room> RoomsById = new();
 
 	private const string assetsFolderName = "Assets";
 	private static string? path = null;
@@ -210,18 +211,18 @@ public static class Assets
 	private static void LoadRooms()
 	{
 		Rooms.Clear();
+		RoomsById.Clear();
 
 		foreach (var file in Directory.EnumerateFiles(Path.Join(AssetsPath, "Rooms"), "*.txt"))
 		{
 			var name = Path.GetFileNameWithoutExtension(file).Split('x');
-			if (name.Length <= 1)
-				continue;
+			var p = Point2.Zero;
+			if (name.Length > 1 && int.TryParse(name[0], out var x) && int.TryParse(name[1], out var y))
+				p = new Point2(x, y);
 
-			if (!int.TryParse(name[0], out var x) || !int.TryParse(name[1], out var y))
-				continue;
-
-			var p = new Point2(x, y);
-			Rooms.Add(p, new Room(p, file));
+			var room = new Room(p, file);
+			Rooms[room.Cell] = room;
+			RoomsById[room.Id] = room;
 		}
 	}
 
@@ -274,11 +275,64 @@ public static class Assets
 		Tilesets.Clear();
 		Subtextures.Clear();
 		Rooms.Clear();
+		RoomsById.Clear();
 	}
 
 	public static Sprite? GetSprite(string name) => Sprites.GetValueOrDefault(name);
 	public static Tileset? GetTileset(string name) => Tilesets.GetValueOrDefault(name);
 	public static Room? GetRoom(Point2 cell) => Rooms.GetValueOrDefault(cell);
+	public static Room? GetRoom(string id) => RoomsById.GetValueOrDefault(id);
+
+	public static Room? FindAdjacentRoom(Room room, Point2 direction, Vector2 exitPosition)
+	{
+		var bounds = room.WorldBounds;
+		Room? best = null;
+		var bestDistance = float.MaxValue;
+
+		foreach (var candidate in RoomsById.Values)
+		{
+			if (candidate == room)
+				continue;
+
+			var candidateBounds = candidate.WorldBounds;
+			if (!TouchesExitEdge(bounds, candidateBounds, direction, exitPosition))
+				continue;
+
+			var distance = TransitionAxisDistance(candidateBounds, direction, exitPosition);
+			if (distance < bestDistance)
+			{
+				best = candidate;
+				bestDistance = distance;
+			}
+		}
+
+		return best;
+	}
+
+	private static bool TouchesExitEdge(RectInt from, RectInt to, Point2 direction, Vector2 exitPosition)
+	{
+		if (direction.X > 0)
+			return to.Left == from.Right && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
+		if (direction.X < 0)
+			return to.Right == from.Left && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
+		if (direction.Y > 0)
+			return to.Top == from.Bottom && ContainsAxis(to.Left, to.Right, exitPosition.X);
+		if (direction.Y < 0)
+			return to.Bottom == from.Top && ContainsAxis(to.Left, to.Right, exitPosition.X);
+
+		return false;
+	}
+
+	private static bool ContainsAxis(float min, float max, float value)
+		=> value >= min && value < max;
+
+	private static float TransitionAxisDistance(RectInt bounds, Point2 direction, Vector2 exitPosition)
+	{
+		if (direction.X != 0)
+			return MathF.Abs(bounds.CenterY - exitPosition.Y);
+
+		return MathF.Abs(bounds.CenterX - exitPosition.X);
+	}
 
 	public static Subtexture GetSubtexture(string name)
 	{

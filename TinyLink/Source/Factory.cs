@@ -76,7 +76,7 @@ public static class Factory
 
 			return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 			{
-				Rng rng = new(tile.X + tile.Y * Game.Columns);
+				Rng rng = new(tile.X + tile.Y * room.Size.X);
 				(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
 			}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg);
 		}

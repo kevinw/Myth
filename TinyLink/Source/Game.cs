@@ -41,6 +41,8 @@ public class Game
 	private Room? room;
 	private Room? nextRoom;
 	private float nextRoomEase;
+	private Vector2 transitionCameraFrom;
+	private Vector2 transitionCameraTo;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
 	private readonly bool[,] roomNormalMask = new bool[Width, Height];
@@ -68,6 +70,11 @@ public class Game
 	public Room? CurrentRoom => room;
 
 	public Game(Manager manager, Point2 start, bool audioEventsEnabled = true)
+		: this(manager, Assets.GetRoom(start), audioEventsEnabled)
+	{
+	}
+
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true)
 	{
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled;
@@ -88,9 +95,10 @@ public class Game
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 2);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 
-		if (Assets.Rooms.TryGetValue(start, out room))
+		if (start != null)
 		{
-			Camera = new Vector2(room.Cell.X * Width, room.Cell.Y * Height);
+			room = start;
+			Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
 			UpdateAudioListener();
 			LoadRoom(room);
 			if (AudioEventsEnabled)
@@ -152,6 +160,8 @@ public class Game
 				for (var i = 0; i < Actors.Count; i ++)
 					Actors[i].Update();
 
+				UpdateCamera();
+
 				// screen shaking
 				if (shaking > 0)
 				{
@@ -168,7 +178,7 @@ public class Game
 		// Lerp the Camera to the new Room
 		else if (nextRoomEase < 1.0f)
 		{
-			Camera = Vector2.Lerp(room.WorldBounds.TopLeft, nextRoom.WorldBounds.TopLeft, Ease.Cube.InOut(nextRoomEase));
+			Camera = Vector2.Lerp(transitionCameraFrom, transitionCameraTo, Ease.Cube.InOut(nextRoomEase));
 			nextRoomEase = Calc.Approach(nextRoomEase, 1.0f, Time.Delta * 4.0f);
 		}
 		// Finished Lerping the Camera to the new room, return to normal update
@@ -205,7 +215,42 @@ public class Game
 		Console.WriteLine($"Time scale: {timeScale:0.##}x");
 	}
 
-	public void Render(in RectInt viewport, bool showHud = true)
+	private void UpdateCamera()
+	{
+		if (room == null || nextRoom != null)
+			return;
+
+		if (GetFirst<Player>() is not { } player)
+			return;
+
+		Camera = ClampCameraToRoom(player.Position - new Vector2(Width, Height) / 2);
+	}
+
+	private Vector2 ClampCameraToRoom(Vector2 target)
+	{
+		if (room == null)
+			return target;
+
+		return ClampCameraToRoom(target, room.WorldBounds);
+	}
+
+	private static Vector2 ClampCameraToRoom(Vector2 target, RectInt bounds)
+	{
+		return new Vector2(
+			ClampCameraAxis(target.X, bounds.Left, bounds.Right, Width),
+			ClampCameraAxis(target.Y, bounds.Top, bounds.Bottom, Height));
+	}
+
+	private static float ClampCameraAxis(float value, float min, float max, float viewportSize)
+	{
+		var roomSize = max - min;
+		if (roomSize <= viewportSize)
+			return min + (roomSize - viewportSize) / 2;
+
+		return Math.Clamp(value, min, max - viewportSize);
+	}
+
+	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
 	{
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
@@ -252,7 +297,7 @@ public class Game
 			if (crtMaterial != null)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
-			Batcher.Render(Manager.Window);
+			Batcher.Render(Manager.Window, scissor: scissor);
 			Batcher.Clear();
 		}
 	}
@@ -858,7 +903,7 @@ public class Game
 			(int)MathF.Floor(local.X / (float)TileSize),
 			(int)MathF.Floor(local.Y / (float)TileSize));
 
-		if (tile.X < 0 || tile.Y < 0 || tile.X >= Columns || tile.Y >= Rows)
+		if (tile.X < 0 || tile.Y < 0 || tile.X >= room.Size.X || tile.Y >= room.Size.Y)
 			return Factory.DefaultSurfaceType;
 
 		if (Factory.Find(room.Tiles[tile.X, tile.Y]) is { SurfaceType: { } surfaceType })
@@ -949,13 +994,16 @@ public class Game
 	{
 		if (room != null && nextRoom == null)
 		{
-			var nextCell = room.Cell + direction;
-			if (Assets.Rooms.TryGetValue(nextCell, out nextRoom))
+			var exitPosition = GetFirst<Player>()?.Position ?? (Vector2)room.WorldBounds.Center;
+			if (Assets.FindAdjacentRoom(room, direction, exitPosition) is { } foundRoom)
 			{
+				nextRoom = foundRoom;
 				foreach (var it in Actors)
 					if (it is not Player && !it.KeepOnRoomTransition)
 						Destroy(it);
 
+				transitionCameraFrom = Camera;
+				transitionCameraTo = ClampCameraToRoom(exitPosition - new Vector2(Width, Height) / 2, nextRoom.WorldBounds);
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				ApplyMusicArea(nextRoom);
@@ -1055,8 +1103,8 @@ public class Game
 		fg.Clear();
 		dual.Clear();
 
-		for (var x = 0; x < Columns; x ++)
-		for (var y = 0; y < Rows; y ++)
+		for (var x = 0; x < room.Size.X; x ++)
+		for (var y = 0; y < room.Size.Y; y ++)
 		{
 			var tile = new Point2(x, y);
 			if (Factory.Find(room.Tiles[x, y]) is { } entry)
@@ -1112,8 +1160,8 @@ public class Game
 		fg.Depth = 5;
 
 		// loop over room grid placing objects
-		for (var x = 0; x < Columns; x++)
-		for (var y = 0; y < Rows; y++)
+		for (var x = 0; x < room.Size.X; x++)
+		for (var y = 0; y < room.Size.Y; y++)
 		{
 			var tile = new Point2(x, y);
 			var at = offset + tile * TileSize;

@@ -18,7 +18,7 @@ internal abstract class Program
 /// <summary>
 /// Runs the Game and, when the game is not running, displays a tiny tile-based Level Editor
 /// </summary>
-public class Manager : App
+public partial class Manager : App
 {
 	public const string DefaultMusicArea = "Calm";
 	public const string BackgroundMusicAreaParameter = "Area";
@@ -42,16 +42,17 @@ public class Manager : App
 	static Color highlight => 0x5fcde4;
 
 	/// <summary>
-	/// The current Room Cell we're viewing
+	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
 	/// </summary>
 	private Point2 cell = new(0, 0);
+	private string? selectedRoomId;
+	private Point2 roomCreatePosition;
 
 	/// <summary>
 	/// The room renderer / simulation.
 	/// </summary>
 	Game? game;
 	bool playing;
-	bool editorGameDirty;
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -135,21 +136,17 @@ public class Manager : App
 	/// <summary>
 	/// Tries to get the Existing Room
 	/// </summary>
-	private Room? CurrentRoom => Assets.GetRoom(cell);
+	private Room? CurrentRoom
+	{
+		get
+		{
+			if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
+				return byId;
 
-	/// <summary>
-	/// The current Type we're painting in the Editor
-	/// </summary>
-	private char brush = '0';
+			return Assets.GetRoom(cell);
+		}
+	}
 
-	/// <summary>
-	/// If it's a big Brush
-	/// </summary>
-	private bool brushBig = false;
-
-	Point2 tilePlaceFrom;
-	char tileTypePlacing;
-	bool tilePlacing;
 	readonly Lock assetReloadLock = new();
 	FileSystemWatcher? assetWatcher;
 #if DEBUG
@@ -194,8 +191,7 @@ public class Manager : App
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my mac when I fullscreen the window... @kev 2026
 
 		Assets.Load(GraphicsDevice);
-		if (Assets.GetRoom(cell) == null)
-			cell = Point2.Zero;
+		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
 		LoadAudioBanks();
@@ -224,6 +220,52 @@ public class Manager : App
 	}
 
 	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
+
+	private void SelectRoom(Room room)
+	{
+		selectedRoomId = room.Id;
+		cell = room.Cell;
+		roomCreatePosition = room.Position;
+	}
+
+	private void SelectRoom(Point2 targetCell)
+	{
+		cell = targetCell;
+		selectedRoomId = Assets.GetRoom(targetCell)?.Id;
+		roomCreatePosition = new Point2(targetCell.X * Game.Columns, targetCell.Y * Game.Rows);
+	}
+
+	private void SelectEmptyRoomPosition(Point2 position)
+	{
+		selectedRoomId = null;
+		cell = new Point2(position.X / Game.Columns, position.Y / Game.Rows);
+		roomCreatePosition = position;
+	}
+
+	private void ResolveSelectedRoom()
+	{
+		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
+		{
+			SelectRoom(byId);
+			return;
+		}
+
+		if (Assets.GetRoom(cell) is { } byCell)
+		{
+			SelectRoom(byCell);
+			return;
+		}
+
+		if (Assets.GetRoom(Point2.Zero) is { } origin)
+		{
+			SelectRoom(origin);
+			return;
+		}
+
+		selectedRoomId = null;
+		cell = Point2.Zero;
+		roomCreatePosition = Point2.Zero;
+	}
 
 	private void LoadAudioBanks()
 	{
@@ -310,6 +352,7 @@ public class Manager : App
 			{
 				Window.Position = new Point2(settings.X, settings.Y);
 				cell = new Point2(settings.RoomX, settings.RoomY);
+				selectedRoomId = settings.RoomId;
 				musicEnabled = settings.MusicEnabled;
 				alwaysOnTop = settings.AlwaysOnTop;
 				Window.AlwaysOnTop = alwaysOnTop;
@@ -328,11 +371,13 @@ public class Manager : App
 			Directory.CreateDirectory(UserPath);
 
 			var position = Window.Position;
-			var currentCell = game?.Cell ?? cell;
+			var currentRoom = game?.CurrentRoom ?? CurrentRoom;
+			var currentCell = currentRoom?.Cell ?? cell;
 			var settings = new WindowSettings
 			{
 				X = position.X,
 				Y = position.Y,
+				RoomId = currentRoom?.Id ?? selectedRoomId,
 				RoomX = currentCell.X,
 				RoomY = currentCell.Y,
 				MusicEnabled = musicEnabled,
@@ -351,6 +396,7 @@ public class Manager : App
 	{
 		public int X { get; init; }
 		public int Y { get; init; }
+		public string? RoomId { get; init; }
 		public int RoomX { get; init; }
 		public int RoomY { get; init; }
 		public bool MusicEnabled { get; init; } = true;
@@ -441,7 +487,10 @@ public class Manager : App
 	{
 		Window.Clear(0x2e1426);
 
-		game?.Render((RectInt)(GameViewRect * Scale), playing);
+		if (playing)
+			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
+		else
+			RenderEditorActiveRoom();
 		batcher.Render(Window);
 		imgui.Render();
 	}
@@ -627,6 +676,7 @@ public class Manager : App
 			Factory.Clear();
 			Factory.RegisterTypes();
 			Assets.RebuildRoomGeometry();
+			ResolveSelectedRoom();
 			if (playing)
 				game?.RefreshRoomTiles();
 			else
@@ -645,12 +695,53 @@ public class Manager : App
 	/// </summary>
 	private void ShiftRoom(Point2 direction)
 	{
-		// save last room
-		CurrentRoom?.Save();
+		var current = CurrentRoom;
+		current?.Save();
 
-		// set next room
-		cell += direction;
+		if (current != null)
+		{
+			var exitPosition = EditorExitPosition(current, direction);
+			if (Assets.FindAdjacentRoom(current, direction, exitPosition) is { } adjacent)
+				SelectRoom(adjacent);
+			else
+				SelectEmptyRoomPosition(AdjacentRoomPosition(current, direction));
+		}
+		else
+		{
+			SelectRoom(cell + direction);
+		}
+
 		SyncEditorGame();
+		FocusEditorOnCurrentRoom();
+	}
+
+	private static Vector2 EditorExitPosition(Room room, Point2 direction)
+	{
+		var bounds = room.WorldBounds;
+		if (direction.X > 0)
+			return new Vector2(bounds.Right, bounds.CenterY);
+		if (direction.X < 0)
+			return new Vector2(bounds.Left - 1, bounds.CenterY);
+		if (direction.Y > 0)
+			return new Vector2(bounds.CenterX, bounds.Bottom);
+		if (direction.Y < 0)
+			return new Vector2(bounds.CenterX, bounds.Top - 1);
+
+		return bounds.Center;
+	}
+
+	private static Point2 AdjacentRoomPosition(Room room, Point2 direction)
+	{
+		if (direction.X > 0)
+			return new Point2(room.Position.X + room.Size.X, room.Position.Y);
+		if (direction.X < 0)
+			return new Point2(room.Position.X - Room.DefaultSize.X, room.Position.Y);
+		if (direction.Y > 0)
+			return new Point2(room.Position.X, room.Position.Y + room.Size.Y);
+		if (direction.Y < 0)
+			return new Point2(room.Position.X, room.Position.Y - Room.DefaultSize.Y);
+
+		return room.Position;
 	}
 
 	/// <summary>
@@ -776,8 +867,9 @@ public class Manager : App
 				OpenFmodStudio();
 		}
 
-		var displayedCell = playing ? (game?.Cell ?? cell) : cell;
-		DrawCenteredToolbarText($"Room {displayedCell.X} x {displayedCell.Y}");
+		var displayedRoom = playing ? game?.CurrentRoom : CurrentRoom;
+		var displayedCell = displayedRoom?.Cell ?? cell;
+		DrawCenteredToolbarText(displayedRoom != null ? $"Room {displayedRoom.Id}" : $"Room {displayedCell.X} x {displayedCell.Y}");
 
 		ImGui.End();
 		ImGui.PopStyleColor();
@@ -852,17 +944,18 @@ public class Manager : App
 	private void StartGame()
 	{
 		CurrentRoom?.Save();
-		if (CurrentRoom != null)
+		if (CurrentRoom is { } room)
 		{
 			game?.StopMusic(true);
-			game = new Game(this, cell);
+			game = new Game(this, room);
 			playing = true;
 		}
 	}
 
 	private void StopGame()
 	{
-		cell = game?.Cell ?? cell;
+		if (game?.CurrentRoom is { } room)
+			SelectRoom(room);
 		game?.StopMusic(true);
 		playing = false;
 		SyncEditorGame();
@@ -874,26 +967,7 @@ public class Manager : App
 			return;
 
 		game?.StopMusic(true);
-		game = CurrentRoom != null ? new Game(this, cell, audioEventsEnabled: false) : null;
-	}
-
-	private void UpdateEditorNavigation()
-	{
-		var direction = Point2.Zero;
-		if (controls.Move.PressedUp)
-			direction = Point2.Up;
-		if (controls.Move.PressedDown)
-			direction = Point2.Down;
-		if (controls.Move.PressedLeft)
-			direction = Point2.Left;
-		if (controls.Move.PressedRight)
-			direction = Point2.Right;
-
-		if (direction != Point2.Zero)
-		{
-			ShiftRoom(direction);
-			controls.Move.Clear();
-		}
+		game = CurrentRoom is { } room ? new Game(this, room, audioEventsEnabled: false) : null;
 	}
 
 	private static void OpenFmodStudio()
@@ -935,224 +1009,4 @@ public class Manager : App
 		room.MusicArea = musicAreas[(index + 1) % musicAreas.Count];
 	}
 
-	/// <summary>
-	/// Displays the Palette type buttons
-	/// </summary>
-	private void PaletteImGui()
-	{
-		var rect = PaletteSlideRect;
-		var flags =
-			ImGuiWindowFlags.NoTitleBar |
-			ImGuiWindowFlags.NoMove |
-			ImGuiWindowFlags.NoResize |
-			ImGuiWindowFlags.NoCollapse |
-			ImGuiWindowFlags.NoSavedSettings |
-			ImGuiWindowFlags.NoBringToFrontOnFocus;
-
-		ImGui.SetNextWindowPos(rect.TopLeft, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(rect.Size, ImGuiCond.Always);
-
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BoxPadding, BoxPadding));
-		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, ButtonSpacing));
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, LineWeight);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
-		ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
-
-		if (ImGui.Begin("Palette", flags))
-		{
-			var index = 0;
-			foreach (var (id, entry) in Factory.Entries)
-			{
-				if (index > 0 && index % PaletteColumns != 0)
-					ImGui.SameLine();
-
-				if (ImGuiSubtextureButton($"Palette_{id}", entry.Image, entry.Name, brush == id, new Vector2(ButtonSize, ButtonSize)))
-					brush = id;
-
-				index++;
-			}
-		}
-		ImGui.End();
-
-		ImGui.PopStyleColor(2);
-		ImGui.PopStyleVar(4);
-	}
-
-	private void Palette()
-	{
-		Box(PaletteSlideRect);
-
-		var bounds = PaletteSlideRect.Inflate(-BoxPadding);
-		var at = bounds.TopLeft;
-		var index = 0;
-
-		foreach (var (id, it) in Factory.Entries)
-		{
-			var btn = new Rect(at.X, at.Y, ButtonSize, ButtonSize);
-			if (Button(btn, it.Image, it.Name, brush == id))
-				brush = id;
-
-			at.X += ButtonSize + ButtonSpacing;
-			if (index > 0 && (index + 1) % PaletteColumns == 0)
-			{
-				at.X = bounds.Left;
-				at.Y += ButtonSize + ButtonSpacing;
-			}
-			index++;
-		}
-	}
-
-	/// <summary>
-	/// Displays the main Editor workspace
-	/// </summary>
-	private void Editor()
-	{
-		var bounds = WorkspaceRect;
-		var inner = GameViewRect;
-		var arrow = new Rect().Inflate(ButtonSize / 2);
-		var lastCell = cell;
-
-		// buttons to move between rooms
-		if (!playing)
-		{
-			var upImg = Assets.GetSubtexture("buttons/6");
-			var leftImg = Assets.GetSubtexture("buttons/4");
-			var downImg = Assets.GetSubtexture("buttons/3");
-			var rightImg = Assets.GetSubtexture("buttons/5");
-
-			var upExits = Assets.GetRoom(cell + Point2.Up) != null;
-			var leftExits = Assets.GetRoom(cell + Point2.Left) != null;
-			var downExits = Assets.GetRoom(cell + Point2.Down) != null;
-			var rightExits = Assets.GetRoom(cell + Point2.Right) != null;
-
-			batcher.PushLayer(-1);
-			if (Button(arrow + bounds.TopCenter, upImg, "Move Up Room [W]", upExits))
-				ShiftRoom(Point2.Up);
-			if (Button(arrow + bounds.CenterLeft, leftImg, "Move Left Room [A]", leftExits))
-				ShiftRoom(Point2.Left);
-			if (Button(arrow + bounds.BottomCenter, rightImg, "Move Down Room [S]", downExits))
-				ShiftRoom(Point2.Down);
-			if (Button(arrow + bounds.CenterRight, downImg, "Move Right Room [D]", rightExits))
-				ShiftRoom(Point2.Right);
-			batcher.PopLayer();
-		}
-
-		if (CurrentRoom is {} editing)
-		{
-			var width = Game.Width;
-			var height = Game.Height;
-			var scale = Math.Min(inner.Width / width, inner.Height / height);
-			var gridColor = Color.White * 0.10f;
-			var gridWeight = 1.0f / scale;
-
-			var matrix =
-				Matrix3x2.CreateTranslation(-new Vector2(width, height) / 2) *
-				Matrix3x2.CreateScale(scale) *
-				Matrix3x2.CreateTranslation(inner.Center);
-
-			var localMouse = Vector2.Zero;
-			var tileOver = Point2.Zero;
-			if (Matrix3x2.Invert(matrix, out var inverse))
-			{
-				localMouse = Vector2.Transform(Cursor, inverse);
-				tileOver = (Point2)(localMouse / Game.TileSize);
-			}
-			var overGame = new Rect(0, 0, Game.Width, Game.Height).Contains(localMouse);
-
-			batcher.PushMatrix(matrix);
-			batcher.PushScissor((RectInt)(inner * Scale));
-
-			// draw grid
-			for (int x = 1; x < Game.Columns; x ++)
-				batcher.Line(new Vector2(x* Game.TileSize, 0),  new Vector2(x* Game.TileSize, Game.Height), gridWeight, gridColor);
-			for (int y = 1; y < Game.Rows; y ++)
-				batcher.Line(new Vector2(0, y * Game.TileSize),  new Vector2(Game.Width, y * Game.TileSize), gridWeight, gridColor);
-
-			// begin placing tiles
-			if (lastCell == cell && overGame && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
-			{
-				tilePlaceFrom = tileOver;
-				tileTypePlacing = Input.Mouse.LeftPressed ? brush : '0';
-				tilePlacing = true;
-			}
-
-			// return tile placing to selected brush
-			if (!Input.Mouse.RightDown)
-				tileTypePlacing = brush;
-
-			// change shift/size based opn big brush
-			var shift = brushBig ? -1 : 0;
-			var size = brushBig ? 3 : 1;
-
-			// draw cursor
-			if (overGame)
-			{
-				var cursorRect = (new Rect(tileOver.X + shift, tileOver.Y + shift, size, size) * Game.TileSize).Inflate(gridWeight * 2);
-				var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
-				batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
-
-				if (Factory.Find(brush) is {} placing)
-				{
-					var position = tileOver * Game.TileSize + placing.Offset;
-
-					for (int x = shift; x < shift + size; x ++)
-						for (int y = shift; y < shift + size; y ++)
-							batcher.Image(placing.Image, position + new Point2(x, y) * Game.TileSize, placing.Origin, Vector2.One, 0, Color.White);
-				}
-			}
-
-			// place tiles
-			if (tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
-			{
-				editing.Set(tilePlaceFrom, tileTypePlacing);
-				editorGameDirty = true;
-
-				while (tilePlaceFrom != tileOver)
-				{
-					var diff = tileOver - tilePlaceFrom;
-					if (Math.Abs(diff.X) > Math.Abs(diff.Y))
-						diff.Y = 0;
-					else
-						diff.X = 0;
-					tilePlaceFrom.X += Math.Sign(diff.X);
-					tilePlaceFrom.Y += Math.Sign(diff.Y);
-
-					for (int x = shift; x < shift + size; x ++)
-						for (int y = shift; y < shift + size; y ++)
-						{
-							editing.Set(tilePlaceFrom + new Point2(x, y), tileTypePlacing);
-							editorGameDirty = true;
-						}
-				}
-			}
-
-			batcher.PopScissor();
-			//batcher.RectLine(new Rect(0, 0, Game.Width, Game.Height), LineWeight, Color.Black);
-			batcher.PopMatrix();
-		}
-		else
-		{
-			if (Button(arrow + bounds.Center, Assets.GetSubtexture("buttons/2"), "Create New Room Here"))
-			{
-				var it = new Room(cell);
-				Assets.Rooms.Add(cell, it);
-				it.Save();
-				SyncEditorGame();
-			}
-		}
-
-		if (!Input.Mouse.LeftDown && !Input.Mouse.RightDown)
-		{
-			tileTypePlacing = brush;
-			tilePlacing = false;
-		}
-
-		if (editorGameDirty)
-		{
-			editorGameDirty = false;
-			CurrentRoom?.Save();
-			SyncEditorGame();
-		}
-	}
 }

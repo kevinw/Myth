@@ -355,12 +355,11 @@ public class Player : Actor
 		if (fromActor != null)
 		{
 			// Get pushed away from the actor that hurt us.
-			int actorDelta = Math.Sign(Position.X - fromActor.Position.X);
+			var actorDelta = Math.Sign(Position.X - fromActor.Position.X);
 			if (actorDelta != 0)
 				signDirection = actorDelta;
 		}
 		Velocity = new Vector2(signDirection * 100, -80);
-
 		State = States.Hurt;
 
 		var wasHealth = Health;

@@ -4,6 +4,7 @@
 
 - Player folds out a piano and plays it every time they need to speak to someone.
 - Submit pitch to [BRIEFS - LOVE (2026)](https://goldextra.com/en/briefs-a-microgame-series/briefs-2026-love)
+- Consider some [pixel art ideas](https://chatgpt.com/c/6a030b73-3564-83eb-b4ca-9ab1e9e787bb)
 
 ## resources
 
