@@ -24,6 +24,7 @@ public partial class Manager
 	Point2 tilePlaceFrom;
 	char tileTypePlacing;
 	bool tilePlacing;
+	RectInt? proposedRoomTiles;
 
 	private void FocusEditorOnCurrentRoom()
 	{
@@ -34,6 +35,16 @@ public partial class Manager
 		var view = GameViewRect;
 		editorCamera = RectCenter(bounds);
 		editorZoom = Math.Clamp(Math.Min(view.Width / bounds.Width, view.Height / bounds.Height), 0.15f, 8.0f);
+		editorViewInitialized = true;
+	}
+
+	private void MatchEditorCameraToGame()
+	{
+		if (game == null)
+			return;
+
+		editorCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
+		editorZoom = Math.Clamp(GameViewRect.Width / Game.Width, 0.15f, 8.0f);
 		editorViewInitialized = true;
 	}
 
@@ -66,7 +77,7 @@ public partial class Manager
 		if (!viewport.Overlaps(clip))
 			return;
 
-		game.Render(viewport, showHud: false, scissor: clip);
+		game.RenderRoomPreview(viewport, scissor: clip);
 	}
 
 	private RectInt EditorWorldRectToScreen(RectInt world)
@@ -256,14 +267,16 @@ public partial class Manager
 			var height = roomBounds.Height;
 
 			var localMouse = Vector2.Zero;
+			var worldMouse = Vector2.Zero;
 			var tileOver = Point2.Zero;
 			if (Matrix3x2.Invert(worldMatrix, out var inverse))
 			{
-				var worldMouse = Vector2.Transform(Cursor, inverse);
+				worldMouse = Vector2.Transform(Cursor, inverse);
 				localMouse = worldMouse - roomTopLeft;
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, width, height).Contains(localMouse);
+			proposedRoomTiles = overGame ? null : GetProposedRoomTiles(editing, worldMouse);
 
 			for (int x = 1; x < editing.Size.X; x ++)
 				batcher.Line(roomTopLeft + new Vector2(x * Game.TileSize, 0),  roomTopLeft + new Vector2(x * Game.TileSize, height), gridWeight, gridColor);
@@ -324,21 +337,23 @@ public partial class Manager
 			}
 
 			batcher.RectLine(roomBounds, gridWeight * 2, Color.Black);
+
+			if (proposedRoomTiles is { } proposal)
+			{
+				var proposalBounds = TileRectToWorldRect(proposal);
+				batcher.Rect(proposalBounds, Color.Gray * 0.35f);
+				batcher.RectLine(proposalBounds, gridWeight * 2, Color.Gray);
+
+				if (inner.Contains(Cursor) && Input.Mouse.LeftPressed)
+				{
+					CreateRoom(proposal.Position, proposal.Size);
+					proposedRoomTiles = null;
+				}
+			}
 		}
 
 		batcher.PopMatrix();
 		batcher.PopScissor();
-
-		if (CurrentRoom == null && Button(arrow + bounds.Center, Assets.GetSubtexture("buttons/2"), "Create New Room Here"))
-		{
-			var it = new Room(roomCreatePosition, Room.DefaultSize);
-			Assets.Rooms[it.Cell] = it;
-			Assets.RoomsById[it.Id] = it;
-			SelectRoom(it);
-			it.Save();
-			SyncEditorGame();
-			FocusEditorOnCurrentRoom();
-		}
 
 		if (!Input.Mouse.LeftDown && !Input.Mouse.RightDown)
 		{
@@ -360,5 +375,111 @@ public partial class Manager
 			return Assets.GetRoom(cell + direction) != null;
 
 		return Assets.FindAdjacentRoom(room, direction, EditorExitPosition(room, direction)) != null;
+	}
+
+	private RectInt? GetProposedRoomTiles(Room source, Vector2 worldMouse)
+	{
+		var sourceTiles = new RectInt(source.Position, source.Size);
+		var mouseTile = new Point2(
+			(int)MathF.Floor(worldMouse.X / Game.TileSize),
+			(int)MathF.Floor(worldMouse.Y / Game.TileSize));
+
+		if (mouseTile.X >= sourceTiles.Right &&
+		    mouseTile.X < sourceTiles.Right + Room.DefaultSize.X &&
+		    mouseTile.Y >= sourceTiles.Top &&
+		    mouseTile.Y < sourceTiles.Bottom)
+			return FitProposedRoom(sourceTiles, Point2.Right, mouseTile.Y);
+
+		if (mouseTile.X < sourceTiles.Left &&
+		    mouseTile.X >= sourceTiles.Left - Room.DefaultSize.X &&
+		    mouseTile.Y >= sourceTiles.Top &&
+		    mouseTile.Y < sourceTiles.Bottom)
+			return FitProposedRoom(sourceTiles, Point2.Left, mouseTile.Y);
+
+		if (mouseTile.Y >= sourceTiles.Bottom &&
+		    mouseTile.Y < sourceTiles.Bottom + Room.DefaultSize.Y &&
+		    mouseTile.X >= sourceTiles.Left &&
+		    mouseTile.X < sourceTiles.Right)
+			return FitProposedRoom(sourceTiles, Point2.Down, mouseTile.X);
+
+		if (mouseTile.Y < sourceTiles.Top &&
+		    mouseTile.Y >= sourceTiles.Top - Room.DefaultSize.Y &&
+		    mouseTile.X >= sourceTiles.Left &&
+		    mouseTile.X < sourceTiles.Right)
+			return FitProposedRoom(sourceTiles, Point2.Up, mouseTile.X);
+
+		return null;
+	}
+
+	private RectInt? FitProposedRoom(RectInt source, Point2 direction, int mouseAxis)
+	{
+		var vertical = direction.X != 0;
+		var depth = vertical ? Room.DefaultSize.X : Room.DefaultSize.Y;
+		var start = vertical ? source.Top : source.Left;
+		var end = vertical ? source.Bottom : source.Right;
+		var blocked = new bool[end - start];
+
+		var candidate = direction switch
+		{
+			{ X: > 0 } => new RectInt(source.Right, source.Top, depth, source.Height),
+			{ X: < 0 } => new RectInt(source.Left - depth, source.Top, depth, source.Height),
+			{ Y: > 0 } => new RectInt(source.Left, source.Bottom, source.Width, depth),
+			{ Y: < 0 } => new RectInt(source.Left, source.Top - depth, source.Width, depth),
+			_ => new RectInt()
+		};
+
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			var roomTiles = new RectInt(room.Position, room.Size);
+			if (!candidate.Overlaps(roomTiles))
+				continue;
+
+			var blockStart = Math.Max(start, vertical ? roomTiles.Top : roomTiles.Left);
+			var blockEnd = Math.Min(end, vertical ? roomTiles.Bottom : roomTiles.Right);
+			for (var i = blockStart; i < blockEnd; i ++)
+				blocked[i - start] = true;
+		}
+
+		var index = mouseAxis - start;
+		if (index < 0 || index >= blocked.Length || blocked[index])
+			return null;
+
+		var freeStart = index;
+		while (freeStart > 0 && !blocked[freeStart - 1])
+			freeStart --;
+
+		var freeEnd = index + 1;
+		while (freeEnd < blocked.Length && !blocked[freeEnd])
+			freeEnd ++;
+
+		var axisStart = start + freeStart;
+		var axisLength = freeEnd - freeStart;
+		if (axisLength <= 0)
+			return null;
+
+		return direction switch
+		{
+			{ X: > 0 } => new RectInt(source.Right, axisStart, depth, axisLength),
+			{ X: < 0 } => new RectInt(source.Left - depth, axisStart, depth, axisLength),
+			{ Y: > 0 } => new RectInt(axisStart, source.Bottom, axisLength, depth),
+			{ Y: < 0 } => new RectInt(axisStart, source.Top - depth, axisLength, depth),
+			_ => null
+		};
+	}
+
+	private static Rect TileRectToWorldRect(RectInt tiles)
+		=> new(tiles.X * Game.TileSize, tiles.Y * Game.TileSize, tiles.Width * Game.TileSize, tiles.Height * Game.TileSize);
+
+	private void CreateRoom(Point2 position, Point2 size)
+	{
+		CurrentRoom?.Save();
+
+		var it = new Room(position, size);
+		Assets.Rooms[it.Cell] = it;
+		Assets.RoomsById[it.Id] = it;
+		SelectRoom(it);
+		it.Save();
+		SyncEditorGame();
+		FocusEditorOnCurrentRoom();
 	}
 }

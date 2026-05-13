@@ -19,17 +19,17 @@ public class Game
 	public readonly Manager Manager;
 	public readonly Controls Controls;
 	public readonly Batcher Batcher;
-	public readonly Target Screen;
-	public readonly Target BackgroundScreen;
-	public readonly Target ForegroundScreen;
-	public readonly Target LightMask;
-	public readonly Target BackgroundLightMask;
-	public readonly Target ForegroundLightMask;
-	public readonly Target SingleLightMask;
-	public readonly Target LitBackground;
-	public readonly Target LitForeground;
-	public readonly Target LitScreen;
-	public readonly Target NormalBuffer;
+	public Target Screen { get; private set; } = null!;
+	public Target BackgroundScreen { get; private set; } = null!;
+	public Target ForegroundScreen { get; private set; } = null!;
+	public Target LightMask { get; private set; } = null!;
+	public Target BackgroundLightMask { get; private set; } = null!;
+	public Target ForegroundLightMask { get; private set; } = null!;
+	public Target SingleLightMask { get; private set; } = null!;
+	public Target LitBackground { get; private set; } = null!;
+	public Target LitForeground { get; private set; } = null!;
+	public Target LitScreen { get; private set; } = null!;
+	public Target NormalBuffer { get; private set; } = null!;
 	public readonly List<Actor> Actors = [];
 
 	public Input Input => Manager.Input;
@@ -45,7 +45,7 @@ public class Game
 	private Vector2 transitionCameraTo;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
-	private readonly bool[,] roomNormalMask = new bool[Width, Height];
+	private bool[,] roomNormalMask = new bool[Width, Height];
 	private readonly HashSet<string> audioFailures = [];
 	private readonly ReloadableMaterial? crtMaterial;
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
@@ -79,17 +79,7 @@ public class Game
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled;
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
-		Screen = new(manager.GraphicsDevice, Width, Height, name: "GameScreen");
-		BackgroundScreen = new(manager.GraphicsDevice, Width, Height, name: "BackgroundScreen");
-		ForegroundScreen = new(manager.GraphicsDevice, Width, Height, name: "ForegroundScreen");
-		LightMask = new(manager.GraphicsDevice, Width, Height, name: "LightMask");
-		BackgroundLightMask = new(manager.GraphicsDevice, Width, Height, name: "BackgroundLightMask");
-		ForegroundLightMask = new(manager.GraphicsDevice, Width, Height, name: "ForegroundLightMask");
-		SingleLightMask = new(manager.GraphicsDevice, Width, Height, name: "SingleLightMask");
-		LitBackground = new(manager.GraphicsDevice, Width, Height, name: "LitBackground");
-		LitForeground = new(manager.GraphicsDevice, Width, Height, name: "LitForeground");
-		LitScreen = new(manager.GraphicsDevice, Width, Height, name: "LitScreen");
-		NormalBuffer = new(manager.GraphicsDevice, Width, Height, name: "NormalBuffer");
+		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 2);
@@ -220,11 +210,19 @@ public class Game
 		if (room == null || nextRoom != null)
 			return;
 
-		if (GetFirst<Player>() is not { } player)
-			return;
-
-		Camera = ClampCameraToRoom(player.Position - new Vector2(Width, Height) / 2);
+		Camera = GetGameplayCameraTarget();
 	}
+
+	public Vector2 GetGameplayCameraTarget()
+	{
+		if (room == null || GetFirst<Player>() is not { } player)
+			return Camera;
+
+		return ClampCameraToRoom(player.Position - new Vector2(Width, Height) / 2);
+	}
+
+	public void SnapCameraToGameplayTarget()
+		=> Camera = GetGameplayCameraTarget();
 
 	private Vector2 ClampCameraToRoom(Vector2 target)
 	{
@@ -251,6 +249,72 @@ public class Game
 	}
 
 	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
+	{
+		EnsureRenderTargets(Width, Height);
+		RenderCurrentView(viewport, showHud, scissor);
+	}
+
+	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null)
+	{
+		var oldCamera = Camera;
+		var oldShake = shake;
+		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
+		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height));
+
+		EnsureRenderTargets(width, height);
+		Camera = worldView.TopLeft;
+		shake = Point2.Zero;
+		RenderCurrentView(viewport, showHud, scissor);
+		Camera = oldCamera;
+		shake = oldShake;
+	}
+
+	public void RenderRoomPreview(in RectInt viewport, RectInt? scissor = null)
+	{
+		if (room == null)
+			return;
+
+		var bounds = room.WorldBounds;
+		RenderWorldView(viewport, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height), showHud: false, scissor);
+	}
+
+	private void EnsureRenderTargets(int width, int height)
+	{
+		if (Screen != null && Screen.Width == width && Screen.Height == height)
+			return;
+
+		DisposeRenderTargets();
+
+		Screen = new Target(GraphicsDevice, width, height, name: "GameScreen");
+		BackgroundScreen = new Target(GraphicsDevice, width, height, name: "BackgroundScreen");
+		ForegroundScreen = new Target(GraphicsDevice, width, height, name: "ForegroundScreen");
+		LightMask = new Target(GraphicsDevice, width, height, name: "LightMask");
+		BackgroundLightMask = new Target(GraphicsDevice, width, height, name: "BackgroundLightMask");
+		ForegroundLightMask = new Target(GraphicsDevice, width, height, name: "ForegroundLightMask");
+		SingleLightMask = new Target(GraphicsDevice, width, height, name: "SingleLightMask");
+		LitBackground = new Target(GraphicsDevice, width, height, name: "LitBackground");
+		LitForeground = new Target(GraphicsDevice, width, height, name: "LitForeground");
+		LitScreen = new Target(GraphicsDevice, width, height, name: "LitScreen");
+		NormalBuffer = new Target(GraphicsDevice, width, height, name: "NormalBuffer");
+		roomNormalMask = new bool[width, height];
+	}
+
+	private void DisposeRenderTargets()
+	{
+		Screen?.Dispose();
+		BackgroundScreen?.Dispose();
+		ForegroundScreen?.Dispose();
+		LightMask?.Dispose();
+		BackgroundLightMask?.Dispose();
+		ForegroundLightMask?.Dispose();
+		SingleLightMask?.Dispose();
+		LitBackground?.Dispose();
+		LitForeground?.Dispose();
+		LitScreen?.Dispose();
+		NormalBuffer?.Dispose();
+	}
+
+	private void RenderCurrentView(in RectInt viewport, bool showHud, RectInt? scissor)
 	{
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
@@ -335,7 +399,7 @@ public class Game
 	{
 		if (GetFirst<Player>() is { } player)
 		{
-			Point2 pos = new(0, Height - 16);
+			Point2 pos = new(0, target.Height - 16);
 			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
 
 			for (int i = 0; i < Player.MaxHealth; i++)
@@ -626,9 +690,9 @@ public class Game
 		foreach (var rect in room.LightOccluders)
 			FillRoomNormalMask(rect);
 
-		var offset = room.WorldBounds.TopLeft;
-		for (var y = 0; y < Height; y ++)
-		for (var x = 0; x < Width; x ++)
+		var offset = (Point2)Camera;
+		for (var y = 0; y < NormalBuffer.Height; y ++)
+		for (var x = 0; x < NormalBuffer.Width; x ++)
 		{
 			if (!RoomNormalSolid(x, y))
 				continue;
@@ -647,11 +711,10 @@ public class Game
 		if (room == null)
 			return;
 
-		var bounds = room.WorldBounds;
-		var left   = Math.Clamp(rect.Left - bounds.Left, 0, Width);
-		var right  = Math.Clamp(rect.Right - bounds.Left, 0, Width);
-		var top    = Math.Clamp(rect.Top - bounds.Top, 0, Height);
-		var bottom = Math.Clamp(rect.Bottom - bounds.Top, 0, Height);
+		var left   = Math.Clamp(rect.Left - (int)Camera.X, 0, NormalBuffer.Width);
+		var right  = Math.Clamp(rect.Right - (int)Camera.X, 0, NormalBuffer.Width);
+		var top    = Math.Clamp(rect.Top - (int)Camera.Y, 0, NormalBuffer.Height);
+		var bottom = Math.Clamp(rect.Bottom - (int)Camera.Y, 0, NormalBuffer.Height);
 
 		for (var y = top; y < bottom; y ++)
 		for (var x = left; x < right; x ++)
@@ -660,7 +723,7 @@ public class Game
 
 	private bool RoomNormalSolid(int x, int y)
 	{
-		if (x < 0 || y < 0 || x >= Width || y >= Height)
+		if (x < 0 || y < 0 || x >= NormalBuffer.Width || y >= NormalBuffer.Height)
 			return false;
 
 		return roomNormalMask[x, y];
@@ -677,8 +740,8 @@ public class Game
 
 	private void UpdateMouseLightPosition(RectInt viewport)
 	{
-		var scale = Calc.Min(viewport.Width / (float)Width, viewport.Height / (float)Height);
-		var size = new Vector2(Width, Height) * scale;
+		var scale = Calc.Min(viewport.Width / (float)Screen.Width, viewport.Height / (float)Screen.Height);
+		var size = new Vector2(Screen.Width, Screen.Height) * scale;
 		var topLeft = (Vector2)viewport.Center - size / 2;
 		var local = (Input.Mouse.Position - topLeft) / scale;
 		mouseLightPosition = Camera - shake + local;

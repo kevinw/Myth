@@ -24,6 +24,7 @@ public partial class Manager : App
 	public const string BackgroundMusicAreaParameter = "Area";
 
 	private const float AssetReloadDelay = 0.25f;
+	private const float PlayTransitionDuration = 0.25f;
 
 	private const string WindowSettingsFileName = "window.json";
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
@@ -53,6 +54,12 @@ public partial class Manager : App
 	/// </summary>
 	Game? game;
 	bool playing;
+	bool startingPlay;
+	float playTransition;
+	Vector2 playTransitionFromCenter;
+	Vector2 playTransitionFromSize;
+	Vector2 playTransitionToCenter;
+	Vector2 playTransitionToSize;
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -414,7 +421,7 @@ public partial class Manager : App
 #endif
 
 		// Misc. Hotkeys
-		if (Input.Keyboard.Pressed(Keys.F1) && !playing)
+		if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 			ReloadAssets(true);
 		if (Input.Keyboard.Pressed(Keys.F4))
 			Window.Fullscreen = !Window.Fullscreen;
@@ -427,7 +434,20 @@ public partial class Manager : App
 			ToggleGame();
 
 		// Run Game
-		if (playing)
+		if (startingPlay)
+		{
+			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
+			playTransition += Time.Delta / PlayTransitionDuration;
+			if (playTransition >= 1.0f)
+			{
+				playTransition = 1.0f;
+				startingPlay = false;
+				playing = true;
+				if (game != null)
+					game.SnapCameraToGameplayTarget();
+			}
+		}
+		else if (playing)
 		{
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
 			game?.Update();
@@ -448,7 +468,7 @@ public partial class Manager : App
 			// Box(WorkspaceRect);
 
 			// draw editor stuff if it's open
-			if (gameEase < 1.0f)
+			if (gameEase < 1.0f && !startingPlay)
 			{
 				Editor();
 			}
@@ -462,7 +482,7 @@ public partial class Manager : App
 			Window.StartTextInput();
 		else
 			Window.StopTextInput();
-		if (gameEase < 1.0f)
+		if (gameEase < 1.0f && !startingPlay)
 			PaletteImGui();
 		ToolbarImGui();
 		imgui.EndLayout();
@@ -487,12 +507,26 @@ public partial class Manager : App
 	{
 		Window.Clear(0x2e1426);
 
-		if (playing)
+		if (startingPlay)
+			RenderPlayTransition();
+		else if (playing)
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
 		else
 			RenderEditorActiveRoom();
 		batcher.Render(Window);
 		imgui.Render();
+	}
+
+	private void RenderPlayTransition()
+	{
+		if (game == null)
+			return;
+
+		var t = Ease.Cube.InOut(Math.Clamp(playTransition, 0.0f, 1.0f));
+		var center = Vector2.Lerp(playTransitionFromCenter, playTransitionToCenter, t);
+		var size = Vector2.Lerp(playTransitionFromSize, playTransitionToSize, t);
+		var worldView = new Rect(center - size / 2, size);
+		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
 	}
 
 	private void StartAssetWatcher()
@@ -696,21 +730,15 @@ public partial class Manager : App
 	private void ShiftRoom(Point2 direction)
 	{
 		var current = CurrentRoom;
-		current?.Save();
+		if (current == null)
+			return;
 
-		if (current != null)
-		{
-			var exitPosition = EditorExitPosition(current, direction);
-			if (Assets.FindAdjacentRoom(current, direction, exitPosition) is { } adjacent)
-				SelectRoom(adjacent);
-			else
-				SelectEmptyRoomPosition(AdjacentRoomPosition(current, direction));
-		}
-		else
-		{
-			SelectRoom(cell + direction);
-		}
+		var exitPosition = EditorExitPosition(current, direction);
+		if (Assets.FindAdjacentRoom(current, direction, exitPosition) is not { } adjacent)
+			return;
 
+		current.Save();
+		SelectRoom(adjacent);
 		SyncEditorGame();
 		FocusEditorOnCurrentRoom();
 	}
@@ -728,20 +756,6 @@ public partial class Manager : App
 			return new Vector2(bounds.CenterX, bounds.Top - 1);
 
 		return bounds.Center;
-	}
-
-	private static Point2 AdjacentRoomPosition(Room room, Point2 direction)
-	{
-		if (direction.X > 0)
-			return new Point2(room.Position.X + room.Size.X, room.Position.Y);
-		if (direction.X < 0)
-			return new Point2(room.Position.X - Room.DefaultSize.X, room.Position.Y);
-		if (direction.Y > 0)
-			return new Point2(room.Position.X, room.Position.Y + room.Size.Y);
-		if (direction.Y < 0)
-			return new Point2(room.Position.X, room.Position.Y - Room.DefaultSize.Y);
-
-		return room.Position;
 	}
 
 	/// <summary>
@@ -823,7 +837,8 @@ public partial class Manager : App
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.08f, 0.15f, 1.0f));
 		ImGui.Begin("Toolbar", flags);
 
-		if (!playing)
+		var gameActive = playing || startingPlay;
+		if (!gameActive)
 		{
 			if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
 				StartGame();
@@ -867,7 +882,7 @@ public partial class Manager : App
 				OpenFmodStudio();
 		}
 
-		var displayedRoom = playing ? game?.CurrentRoom : CurrentRoom;
+		var displayedRoom = gameActive ? game?.CurrentRoom : CurrentRoom;
 		var displayedCell = displayedRoom?.Cell ?? cell;
 		DrawCenteredToolbarText(displayedRoom != null ? $"Room {displayedRoom.Id}" : $"Room {displayedCell.X} x {displayedCell.Y}");
 
@@ -935,7 +950,7 @@ public partial class Manager : App
 
 	private void ToggleGame()
 	{
-		if (playing)
+		if (playing || startingPlay)
 			StopGame();
 		else
 			StartGame();
@@ -948,7 +963,14 @@ public partial class Manager : App
 		{
 			game?.StopMusic(true);
 			game = new Game(this, room);
-			playing = true;
+			var target = game.GetGameplayCameraTarget();
+			playTransition = 0.0f;
+			playTransitionFromCenter = editorCamera;
+			playTransitionFromSize = GameViewRect.Size / editorZoom;
+			playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
+			playTransitionToSize = new Vector2(Game.Width, Game.Height);
+			startingPlay = true;
+			playing = false;
 		}
 	}
 
@@ -956,14 +978,16 @@ public partial class Manager : App
 	{
 		if (game?.CurrentRoom is { } room)
 			SelectRoom(room);
+		MatchEditorCameraToGame();
 		game?.StopMusic(true);
+		startingPlay = false;
 		playing = false;
 		SyncEditorGame();
 	}
 
 	private void SyncEditorGame()
 	{
-		if (playing)
+		if (playing || startingPlay)
 			return;
 
 		game?.StopMusic(true);
