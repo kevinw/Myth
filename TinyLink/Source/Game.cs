@@ -15,6 +15,7 @@ public class Game
 	private const float ActorShadowStrength = 0.5f;
 	private const float ActorShadowMinLength = 4.0f;
 	private const float ActorShadowMaxLength = 28.0f;
+	private const float ReflectionOpacity = 0.5f;
 
 	public readonly Manager Manager;
 	public readonly Controls Controls;
@@ -30,6 +31,7 @@ public class Game
 	public Target LitForeground { get; private set; } = null!;
 	public Target LitScreen { get; private set; } = null!;
 	public Target NormalBuffer { get; private set; } = null!;
+	public Target ReflectionScreen { get; private set; } = null!;
 	public readonly List<Actor> Actors = [];
 
 	public Input Input => Manager.Input;
@@ -50,6 +52,7 @@ public class Game
 	private readonly ReloadableMaterial? crtMaterial;
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
 	private readonly ReloadableMaterial? normalLightMaterial;
+	private readonly ReloadableMaterial? reflectionDistortMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
 	private float hitStun = 0;
@@ -84,6 +87,7 @@ public class Game
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 2);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
+		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
 
 		if (start != null)
 		{
@@ -298,6 +302,7 @@ public class Game
 		LitForeground = new Target(GraphicsDevice, width, height, name: "LitForeground");
 		LitScreen = new Target(GraphicsDevice, width, height, name: "LitScreen");
 		NormalBuffer = new Target(GraphicsDevice, width, height, name: "NormalBuffer");
+		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
 		roomNormalMask = new bool[width, height];
 	}
 
@@ -314,6 +319,7 @@ public class Game
 		LitForeground?.Dispose();
 		LitScreen?.Dispose();
 		NormalBuffer?.Dispose();
+		ReflectionScreen?.Dispose();
 	}
 
 	private void RenderCurrentView(in RectInt viewport, bool showHud, RectInt? scissor)
@@ -395,6 +401,9 @@ public class Game
 		Batcher.PopMatrix();
 		Batcher.Render(target);
 		Batcher.Clear();
+
+		if (background)
+			DrawSpriteReflections(target);
 	}
 
 	private void DrawPlayerHud(Target target)
@@ -420,6 +429,87 @@ public class Game
 
 	private static bool IsBackgroundActor(Actor actor)
 		=> actor is Grid grid && !grid.Mask.Has(Actor.Masks.Solid);
+
+	private void DrawSpriteReflections(Target target)
+	{
+		if (room == null)
+			return;
+
+		ReflectionScreen.Clear(Color.Transparent);
+		foreach (var rect in room.ReflectionRects)
+		{
+			var scissor = GetReflectionScissor(rect);
+			if (scissor.Width <= 0 || scissor.Height <= 0)
+				continue;
+
+			Batcher.PushMatrix(-(Point2)Camera + shake);
+			rendering.AddRange(Actors);
+			rendering.Sort((a, b) => b.Depth - a.Depth);
+			foreach (var actor in rendering)
+			{
+				if (!actor.Visible || !actor.CastsReflection)
+					continue;
+				if (!ActorCanReflectIn(actor, rect))
+					continue;
+
+				Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, rect.Top)));
+				Batcher.PushMatrix(actor.Position);
+				actor.RenderReflection(Batcher, Color.White * ReflectionOpacity);
+				Batcher.PopMatrix();
+				Batcher.PopMatrix();
+			}
+			rendering.Clear();
+			Batcher.PopMatrix();
+			Batcher.Render(ReflectionScreen, scissor: scissor);
+			Batcher.Clear();
+		}
+
+		CompositeReflections(target);
+	}
+
+	private RectInt GetReflectionScissor(RectInt rect)
+	{
+		var screenRect = new RectInt(
+			rect.X - (int)Camera.X + shake.X,
+			rect.Y - (int)Camera.Y + shake.Y,
+			rect.Width,
+			rect.Height);
+		return screenRect.GetIntersection(ReflectionScreen.Bounds);
+	}
+
+	private void CompositeReflections(Target target)
+	{
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		if (reflectionDistortMaterial != null)
+		{
+			reflectionDistortMaterial.Material.Fragment.SetUniformBuffer([
+				(float)ReflectionScreen.Width,
+				(float)ReflectionScreen.Height,
+				Time.SecondsF,
+				1.4f,
+				0.10f,
+				2.2f,
+				0,
+				0
+			]);
+			Batcher.PushMaterial(reflectionDistortMaterial.Material);
+		}
+		Batcher.Image(ReflectionScreen, ReflectionScreen.Bounds.Center, ReflectionScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		if (reflectionDistortMaterial != null)
+			Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	private static bool ActorCanReflectIn(Actor actor, RectInt rect)
+	{
+		var bounds = actor.GetVisualBounds().Inflate(4);
+		if (bounds.Right <= rect.Left || bounds.Left >= rect.Right)
+			return false;
+
+		return bounds.Bottom >= rect.Top - 64 && bounds.Top <= rect.Bottom + 64;
+	}
 
 	private Target ApplyLighting()
 	{
@@ -755,6 +845,7 @@ public class Game
 		crtMaterial?.Reload();
 		lightingCompositeMaterial?.Reload();
 		normalLightMaterial?.Reload();
+		reflectionDistortMaterial?.Reload();
 	}
 #endif
 

@@ -27,6 +27,7 @@ public class DualGrid : Actor
 
 	private Subtexture[,] tilemap = new Subtexture[Game.Columns + 1, Game.Rows + 1];
 	private Tileset? tileset;
+	public override bool CastsReflection => false;
 
 	public void Build(Room room, char tileType, Tileset tileset)
 	{

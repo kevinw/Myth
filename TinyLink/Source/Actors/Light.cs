@@ -14,6 +14,7 @@ public class Light : Actor
 
 	public float FlickerScale => 1 + MathF.Sin(Timer * FlickerFrequency * MathF.Tau) * FlickerIntensity;
 	public override bool CastsSpriteShadow => false;
+	public override bool CastsReflection => DrawSprite;
 
 	public Light()
 	{

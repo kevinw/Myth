@@ -32,6 +32,7 @@ public class Actor
 	public bool CollidesWithSolids = true;
 	public bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
+	public virtual bool CastsReflection => sprite != null;
 
 	public Time Time => Game.Time;
 
@@ -371,6 +372,45 @@ public class Actor
 			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
 			batcher.PopMatrix();
 		}
+	}
+
+	public virtual void RenderReflection(Batcher batcher, Color color)
+	{
+		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
+			return;
+
+		if (sprite != null && sprite.Frames.Count > 0)
+		{
+			var animation = Animation;
+			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
+			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
+			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
+			batcher.PopMatrix();
+		}
+	}
+
+	public virtual Rect GetVisualBounds()
+	{
+		if (sprite == null || sprite.Frames.Count <= 0)
+			return new Rect(Position.X, Position.Y, 0, 0);
+
+		var animation = Animation;
+		var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
+		var localLeft = Shift.X - sprite.Origin.X;
+		var localTop = Shift.Y - sprite.Origin.Y;
+		var localRight = localLeft + frame.Subtexture.Width;
+		var localBottom = localTop + frame.Subtexture.Height;
+		var scaleX = (int)Facing * Squish.X;
+		var scaleY = Squish.Y;
+
+		var x0 = Position.X + localLeft * scaleX;
+		var x1 = Position.X + localRight * scaleX;
+		var y0 = Position.Y + localTop * scaleY;
+		var y1 = Position.Y + localBottom * scaleY;
+
+		var left = MathF.Min(x0, x1);
+		var top = MathF.Min(y0, y1);
+		return new Rect(left, top, MathF.Max(x0, x1) - left, MathF.Max(y0, y1) - top);
 	}
 
 	/// <summary>

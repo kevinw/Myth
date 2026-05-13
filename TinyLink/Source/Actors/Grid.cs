@@ -13,6 +13,8 @@ public class Grid : Actor
 		Hitbox = new(grid);
 	}
 
+	public override bool CastsReflection => false;
+
 	public void Set(int x, int y, Subtexture subtexture)
 	{
 		EnsureSize(x + 1, y + 1);

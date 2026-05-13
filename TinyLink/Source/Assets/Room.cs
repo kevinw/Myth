@@ -44,6 +44,11 @@ public class Room
 	public readonly List<RectInt> LightOccluders = [];
 
 	/// <summary>
+	/// World-space rectangles built from adjacent sprite-reflecting tiles.
+	/// </summary>
+	public readonly List<RectInt> ReflectionRects = [];
+
+	/// <summary>
 	/// Optional Text string. There's no way to edit this in-game, but
 	/// it is used to display title/ending text.
 	/// </summary>
@@ -161,9 +166,11 @@ public class Room
 	{
 		CollisionRects.Clear();
 		LightOccluders.Clear();
+		ReflectionRects.Clear();
 
 		BuildRects(CollisionRects, static entry => entry.BlocksMovement);
 		BuildRects(LightOccluders, static entry => entry.CastsShadow);
+		BuildRects(ReflectionRects, static entry => entry.ReflectsSprites);
 	}
 
 	private void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)

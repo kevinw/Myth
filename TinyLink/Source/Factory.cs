@@ -32,6 +32,7 @@ public static class Factory
 		public readonly string? SurfaceType;
 		public readonly bool BlocksMovement;
 		public readonly bool CastsShadow;
+		public readonly bool ReflectsSprites;
 
 		private Entry(string name, Subtexture image, Vector2 origin, Point2 offset, SpawnFn spawn)
 		{
@@ -42,7 +43,7 @@ public static class Factory
 			Spawn = spawn;
 		}
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false)
 		{
 			Name = name;
 			Image = image;
@@ -50,6 +51,7 @@ public static class Factory
 			SurfaceType = surfaceType;
 			BlocksMovement = blocksMovement;
 			CastsShadow = castsShadow;
+			ReflectsSprites = reflectsSprites;
 		}
 
 		public static Entry AsActor<T>(string spriteName, Point2? offset = null, bool exclusive = false, Action<T>? additional = null) where T : Actor, new()
@@ -68,7 +70,7 @@ public static class Factory
 			});
 		}
 
-		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null)
+		public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false)
 		{
 			var tileset = Assets.GetTileset(tilesetName);
 			if (tileset == null)
@@ -78,7 +80,7 @@ public static class Factory
 			{
 				Rng rng = new(tile.X + tile.Y * room.Size.X);
 				(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-			}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg);
+			}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites);
 		}
 
 		public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
@@ -124,7 +126,7 @@ public static class Factory
 		//Register('1', Entry.AsDualTile("castle", "castle-dual", "Brick"));
 		//Register('G', Entry.AsDualTile("grass", "grass-dual", "Grass"));
 		Register('g', Entry.AsTile("plants", false, "Grass"));
-		Register('w', Entry.AsTile("water", false, "Water"));
+		Register('w', Entry.AsTile("water", false, "Water", reflectsSprites: true));
 		Register('#', Entry.AsTile("back", false));
 
 		// Add Actor Types
