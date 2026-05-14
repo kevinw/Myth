@@ -64,6 +64,10 @@
     {
       "type": "Bramble",
       "position": [92, 120]
+    },
+    {
+      "type": "Dropper",
+      "position": [68, 80]
     }
   ]
 }

@@ -161,6 +161,10 @@ public static class Factory
 		ActorSpecs.RegisterActor<Bramble>("Bramble");
 		ActorSpecs.RegisterActor<Spitter>("Spitter");
 		ActorSpecs.RegisterActor<Mosquito>("Mosquito");
+		ActorSpecs.RegisterActor<Watcher>("Watcher");
+		ActorSpecs.RegisterActor<Burrower>("Burrower");
+		ActorSpecs.RegisterActor<Dropper>("Dropper");
+		ActorSpecs.RegisterActor<LedgePatrol>("LedgePatrol");
 		ActorSpecs.RegisterActor<Door>("Door");
 		ActorSpecs.RegisterActor<Blob>("Blob");
 		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
@@ -193,6 +197,10 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Bramble>("bramble", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Spitter>("spitter", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Mosquito>("mosquito", new Point2(4, 4)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Watcher>("spitter", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Burrower>("blob", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Dropper>("bramble", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<LedgePatrol>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Light>("fire", new Point2(4, 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Door>("door", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Blob>("blob", new Point2(4, 8)));

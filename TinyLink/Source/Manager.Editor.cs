@@ -71,6 +71,23 @@ public partial class Manager
 		AfterUndoRedo();
 	}
 
+	private void DuplicateSelectedActor()
+	{
+		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
+			return;
+
+		using (CaptureRoomUndo("Duplicate Actor", room))
+		{
+			var copy = ActorSpecs.CloneObject(room.Actors[selectedRoomActorIndex]);
+			var position = ActorSpecs.ReadPoint(copy, "position") ?? Point2.Zero;
+			copy["position"] = new JsonArray(position.X + Game.TileSize, position.Y);
+			room.Actors.Add(copy);
+			selectedRoomActorIndex = room.Actors.Count - 1;
+			draggingRoomActor = false;
+			editorGameDirty = true;
+		}
+	}
+
 	private void AfterUndoRedo()
 	{
 		if (CurrentRoom is { } room)
@@ -101,6 +118,12 @@ public partial class Manager
 			Input.Keyboard.Down(Keys.RightOS);
 		if (!modifier)
 			return false;
+
+		if (Input.Keyboard.Pressed(Keys.D))
+		{
+			DuplicateSelectedActor();
+			return true;
+		}
 
 		if (Input.Keyboard.Pressed(Keys.Z))
 		{
