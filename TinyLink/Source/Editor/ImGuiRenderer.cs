@@ -144,6 +144,11 @@ public class ImGuiRenderer : IDisposable
 	public bool WantsTextInput { get; private set; }
 
 	/// <summary>
+	/// If the ImGui Context wants keyboard input
+	/// </summary>
+	public bool WantsKeyboardInput { get; private set; }
+
+	/// <summary>
 	/// If the ImGui Context wants mouse input
 	/// </summary>
 	public bool WantsMouseInput { get; private set; }
@@ -251,6 +256,7 @@ public class ImGuiRenderer : IDisposable
 		Debug.Assert(ImGui.GetCurrentContext() == context);
 		var io = ImGui.GetIO();
 		WantsTextInput = io.WantTextInput;
+		WantsKeyboardInput = io.WantCaptureKeyboard;
 		WantsMouseInput = io.WantCaptureMouse;
 		ImGui.Render();
 		ImGui.SetCurrentContext(nint.Zero);

@@ -14,23 +14,21 @@ using Color = Foster.Framework.Color;
 public class TitleText : Actor
 {
 	private float stateDuration = 0;
+	public float RevealSpeed = 7.0f;
 	public override bool CastsSpriteShadow => false;
 
 	public override void Update()
 	{
 		base.Update();
-		stateDuration += Time.Delta;
+		stateDuration += Time.Delta * RevealSpeed;
 	}
 
 	public override void Render(Batcher batcher)
 	{
-		if (Assets.Font != null && Game.CurrentRoom != null)
-		{
-			var text = Game.CurrentRoom.Text;
-			var numChars = text.Length;
-			var length = (int)stateDuration;
-			text = text.Substring(0, Math.Min(text.Length, length));
-			batcher.Text(Assets.Font, text, Vector2.Zero, Vector2.One * 0.50f, Color.White);
-		}
+		if (Assets.Font == null || Game.CurrentRoom == null) return;
+		var text = Game.CurrentRoom.Text;
+		var length = (int)stateDuration;
+		var span = text.AsSpan()[..Math.Min(text.Length, length)];
+		batcher.Text(Assets.Font, span, Vector2.Zero, Vector2.One * 0.50f, Color.White);
 	}
 }

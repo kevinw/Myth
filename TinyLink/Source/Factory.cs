@@ -126,14 +126,14 @@ public static class Factory
 		if (tileset == null)
 			return new();
 
-		var image = Assets.GetSlopeSubtexture(tilesetName, Room.SlopeDirection.DownRight, 1, 0);
+		var image = Assets.GetSlopeSubtexture(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, 1, 0);
 		if (image.Texture == null)
 			image = tileset.Tiles[0];
 
 		return new Entry(name ?? $"{tileset.Name} Slope", image, (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 		{
 			if (room.TryGetSlopeTile(tile, out var slope))
-				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.RunLength, slope.RunIndex));
+				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex));
 			else
 				fg.Set(tile.X, tile.Y, image);
 		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName);

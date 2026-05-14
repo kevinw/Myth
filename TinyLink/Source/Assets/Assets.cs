@@ -107,8 +107,10 @@ public static class Assets
 				{
 					for (var index = 0; index < run; index ++)
 					{
-						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.DownRight, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, run, index));
-						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.UpRight, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, run, index));
+						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index));
+						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index));
+						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index));
+						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index));
 					}
 				}
 			}
@@ -252,6 +254,45 @@ public static class Assets
 		RoomsById[room.Id] = room;
 	}
 
+	public static bool RenameRoom(Room room, string id)
+	{
+		id = id.Trim();
+		if (string.IsNullOrEmpty(id))
+			return false;
+		if (RoomsById.TryGetValue(id, out var existing) && existing != room)
+			return false;
+
+		var oldId = room.Id;
+		if (oldId == id)
+			return true;
+
+		var oldPath = Path.Join(AssetsPath, "Rooms", $"{oldId}.json");
+		room.Id = id;
+		RoomsById.Remove(oldId);
+		RoomsById[id] = room;
+		room.Save();
+
+		if (File.Exists(oldPath))
+			File.Delete(oldPath);
+
+		return true;
+	}
+
+	public static bool DeleteRoom(Room room)
+	{
+		if (!RoomsById.Remove(room.Id))
+			return false;
+
+		if (Rooms.TryGetValue(room.Cell, out var byCell) && byCell == room)
+			Rooms.Remove(room.Cell);
+
+		var path = Path.Join(AssetsPath, "Rooms", $"{room.Id}.json");
+		if (File.Exists(path))
+			File.Delete(path);
+
+		return true;
+	}
+
 	public static void RebuildRoomGeometry()
 	{
 		foreach (var room in Rooms.Values)
@@ -292,7 +333,7 @@ public static class Assets
 		return output;
 	}
 
-	private static Image GenerateSlopeTile(Image source, Room.SlopeDirection direction, int runLength, int runIndex)
+	private static Image GenerateSlopeTile(Image source, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 	{
 		var output = new Image(source.Width, source.Height);
 		var totalWidth = runLength * Game.TileSize;
@@ -305,7 +346,10 @@ public static class Assets
 			var surface = direction == Room.SlopeDirection.DownRight
 				? t * Game.TileSize
 				: (1 - t) * Game.TileSize;
-			output[x, y] = y + 0.5f >= surface ? source[x, y] : Color.Transparent;
+			var filled = fill == Room.SlopeFill.BelowLine
+				? y + 0.5f >= surface
+				: y + 0.5f <= surface;
+			output[x, y] = filled ? source[x, y] : Color.Transparent;
 		}
 
 		return output;
@@ -397,14 +441,14 @@ public static class Assets
 		return Subtextures.TryGetValue(name, out var value) ? value : new();
 	}
 
-	public static Subtexture GetSlopeSubtexture(string tilesetName, Room.SlopeDirection direction, int runLength, int runIndex)
+	public static Subtexture GetSlopeSubtexture(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 	{
 		var clampedRun = Math.Clamp(runLength, 1, MaxSlopeRun);
 		var clampedIndex = Math.Clamp(runIndex, 0, clampedRun - 1);
-		return GetSubtexture(SlopeSubtextureName(tilesetName, direction, clampedRun, clampedIndex));
+		return GetSubtexture(SlopeSubtextureName(tilesetName, direction, fill, clampedRun, clampedIndex));
 	}
 
-	private static string SlopeSubtextureName(string tilesetName, Room.SlopeDirection direction, int runLength, int runIndex)
-		=> $"slopes/{tilesetName}/{direction}/{runLength}/{runIndex}";
+	private static string SlopeSubtextureName(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+		=> $"slopes/{tilesetName}/{direction}/{fill}/{runLength}/{runIndex}";
 
 }

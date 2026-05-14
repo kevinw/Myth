@@ -1,5 +1,4 @@
 {
-  "id": "3x1",
   "position": [90, 17],
   "size": [30, 17],
   "tiles": [
@@ -52,7 +51,7 @@
     },
     {
       "type": "Light",
-      "position": [132, 100]
+      "position": [136, 97]
     },
     {
       "type": "Mosquito",

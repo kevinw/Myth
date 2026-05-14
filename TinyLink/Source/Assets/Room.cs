@@ -13,7 +13,13 @@ public class Room
 		UpRight
 	}
 
-	public readonly record struct SlopeTile(Point2 Tile, int RunLength, int RunIndex, SlopeDirection Direction)
+	public enum SlopeFill
+	{
+		BelowLine,
+		AboveLine
+	}
+
+	public readonly record struct SlopeTile(Point2 Tile, int RunLength, int RunIndex, SlopeDirection Direction, SlopeFill Fill)
 	{
 		public RectInt WorldBounds(Room room) => new(
 			room.WorldBounds.X + Tile.X * Game.TileSize,
@@ -143,7 +149,6 @@ public class Room
 			json = JsonNode.Parse(File.ReadAllText(path!))?.AsObject();
 			if (json != null)
 			{
-				id = ActorSpecs.ReadString(json, "id") ?? id;
 				position = ActorSpecs.ReadPoint(json, "position") ?? position;
 				if (ActorSpecs.ReadPoint(json, "size") is { } jsonSize && jsonSize.X > 0 && jsonSize.Y > 0)
 					size = jsonSize;
@@ -274,40 +279,47 @@ public class Room
 				x ++;
 
 			var runLength = x - start;
-			var direction = InferSlopeDirection(start, y, runLength);
+			var (direction, fill) = InferSlopeShape(start, y, runLength);
 			for (var i = 0; i < runLength; i ++)
 			{
-				var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction);
+				var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction, fill);
 				SlopeTiles.Add(slope);
 				slopeLookup[slope.Tile] = slope;
 			}
 		}
 	}
 
-	private SlopeDirection InferSlopeDirection(int startX, int y, int runLength)
+	private (SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(int startX, int y, int runLength)
 	{
 		var leftHigh = IsFullSolidTile(startX - 1, y);
 		var leftLow = IsFullSolidTile(startX - 1, y + 1);
 		var rightHigh = IsFullSolidTile(startX + runLength, y);
 		var rightLow = IsFullSolidTile(startX + runLength, y + 1);
+		var aboveLeft = IsFullSolidTile(startX, y - 1);
+		var aboveRight = IsFullSolidTile(startX + runLength - 1, y - 1);
+
+		if (rightHigh && (aboveLeft || aboveRight))
+			return (SlopeDirection.DownRight, SlopeFill.AboveLine);
+		if (leftHigh && (aboveLeft || aboveRight))
+			return (SlopeDirection.UpRight, SlopeFill.AboveLine);
 
 		if (leftHigh && rightLow)
-			return SlopeDirection.DownRight;
+			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 		if (leftLow && rightHigh)
-			return SlopeDirection.UpRight;
+			return (SlopeDirection.UpRight, SlopeFill.BelowLine);
 		if (rightHigh && !leftHigh)
-			return SlopeDirection.UpRight;
+			return (SlopeDirection.UpRight, SlopeFill.BelowLine);
 		if (leftHigh && !rightHigh)
-			return SlopeDirection.DownRight;
+			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 
 		var belowLeft = IsFullSolidTile(startX, y + 1);
 		var belowRight = IsFullSolidTile(startX + runLength - 1, y + 1);
 		if (belowRight && !belowLeft)
-			return SlopeDirection.DownRight;
+			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 		if (belowLeft && !belowRight)
-			return SlopeDirection.UpRight;
+			return (SlopeDirection.UpRight, SlopeFill.BelowLine);
 
-		return SlopeDirection.DownRight;
+		return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 	}
 
 	private bool IsSlopeTile(int x, int y)
@@ -319,20 +331,38 @@ public class Room
 	private void BuildSlopeLightOccluders()
 	{
 		foreach (var slope in SlopeTiles)
+			LightOccluderPolygons.Add(new(GetSlopePolygon(slope), slope.WorldBounds(this)));
+	}
+
+	public Point2[] GetSlopePolygon(SlopeTile slope)
+	{
+		var rect = slope.WorldBounds(this);
+		var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
+		var rightHeight = SlopeSurfaceHeight(slope, slope.RunIndex + 1);
+		var leftSurface = new Point2(rect.Left, rect.Top + leftHeight);
+		var rightSurface = new Point2(rect.Right, rect.Top + rightHeight);
+		var points = new List<Point2>();
+
+		if (slope.Fill == SlopeFill.BelowLine)
 		{
-			var rect = slope.WorldBounds(this);
-			var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
-			var rightHeight = SlopeSurfaceHeight(slope, slope.RunIndex + 1);
-			var leftSurface = new Point2(rect.Left, rect.Top + leftHeight);
-			var rightSurface = new Point2(rect.Right, rect.Top + rightHeight);
-			var points = new StackList8<Point2> { leftSurface, rightSurface };
+			points.Add(leftSurface);
+			points.Add(rightSurface);
 			if (rect.BottomRight != rightSurface)
 				points.Add(rect.BottomRight);
 			if (rect.BottomLeft != leftSurface)
 				points.Add(rect.BottomLeft);
-
-			LightOccluderPolygons.Add(new(points.ToArray(), rect));
 		}
+		else
+		{
+			if (rect.TopLeft != leftSurface)
+				points.Add(rect.TopLeft);
+			if (rect.TopRight != rightSurface)
+				points.Add(rect.TopRight);
+			points.Add(rightSurface);
+			points.Add(leftSurface);
+		}
+
+		return points.ToArray();
 	}
 
 	private static int SlopeSurfaceHeight(SlopeTile slope, int runEdgeIndex)
@@ -403,7 +433,6 @@ public class Room
 	{
 		var json = new JsonObject
 		{
-			["id"] = Id,
 			["position"] = new JsonArray(Position.X, Position.Y),
 			["size"] = new JsonArray(Size.X, Size.Y)
 		};
@@ -437,7 +466,6 @@ public class Room
 	public void LoadJsonState(string jsonText)
 	{
 		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
-		Id = ActorSpecs.ReadString(json, "id") ?? Id;
 		Position = ActorSpecs.ReadPoint(json, "position") ?? Position;
 		if (ActorSpecs.ReadPoint(json, "size") is { } size && size != Size)
 			throw new InvalidOperationException("Undoing room size changes is not supported yet.");

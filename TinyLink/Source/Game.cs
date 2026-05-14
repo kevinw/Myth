@@ -32,7 +32,7 @@ public class Game : IDisposable
 	public Target LitForeground { get; private set; } = null!;
 	public Target LitScreen { get; private set; } = null!;
 	public Target NormalBuffer { get; private set; } = null!;
-	public Target ReflectionScreen { get; private set; } = null!;
+	Target ReflectionScreen { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 
 	public Input Input => Manager.Input;
@@ -56,8 +56,8 @@ public class Game : IDisposable
 	private readonly ReloadableMaterial? reflectionDistortMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
-	private float hitStun = 0;
-	private float shaking = 0;
+	private float hitStun;
+	private float shaking;
 	private Point2 shake;
 	private Rng rng = new();
 	private bool showCollisionRects;
@@ -156,7 +156,7 @@ public class Game : IDisposable
 		Batcher.Dispose();
 	}
 
-	public void Update()
+	public void Update(bool allowKeyboardShortcuts = true)
 	{
 		CollisionRectsThisFrame.Clear();
 
@@ -167,34 +167,29 @@ public class Game : IDisposable
 		// Run Game normally when not moving to a new room
 		if (nextRoom == null)
 		{
-			// Reload Room Debug
-			if (Input.Keyboard.Pressed(Keys.R))
-				ReloadRoom();
-
-			if (Input.Keyboard.Pressed(Keys.C))
-				showCollisionRects = !showCollisionRects;
-
-			if (Input.Keyboard.Pressed(Keys.L))
-				showLightMask = !showLightMask;
-
-			if (Input.Keyboard.Pressed(Keys.N))
-				showNormalBuffer = !showNormalBuffer;
-
-			if (Input.Keyboard.Pressed(Keys.M))
-				mouseLightEnabled = !mouseLightEnabled;
-
-			if (Input.Keyboard.Pressed(Keys.O))
+			if (allowKeyboardShortcuts)
 			{
-				actorSpriteShadowsEnabled = !actorSpriteShadowsEnabled;
-				Console.WriteLine($"Actor sprite shadows: {(actorSpriteShadowsEnabled ? "on" : "off")}");
+				// Reload Room Debug
+				if (Input.Keyboard.Pressed(Keys.R))
+					ReloadRoom();
+
+				if (Input.Keyboard.Pressed(Keys.C)) showCollisionRects = !showCollisionRects;
+				if (Input.Keyboard.Pressed(Keys.L)) showLightMask = !showLightMask;
+				if (Input.Keyboard.Pressed(Keys.N)) showNormalBuffer = !showNormalBuffer;
+				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
+				if (Input.Keyboard.Pressed(Keys.O)) actorSpriteShadowsEnabled = !actorSpriteShadowsEnabled;
 			}
 
+			#if DEBUG
 			UpdatePlayerMouseDrag();
-
-			if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus))
-				ChangeTimeScale(-1);
-			if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
-				ChangeTimeScale(1);
+			if (allowKeyboardShortcuts)
+			{
+				if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus))
+					ChangeTimeScale(-1);
+				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
+					ChangeTimeScale(1);
+			}
+			#endif
 
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
@@ -615,8 +610,8 @@ public class Game : IDisposable
 		if (reflectionDistortMaterial != null)
 		{
 			reflectionDistortMaterial.Material.Fragment.SetUniformBuffer([
-				(float)ReflectionScreen.Width,
-				(float)ReflectionScreen.Height,
+				ReflectionScreen.Width,
+				ReflectionScreen.Height,
 				Time.SecondsF,
 				1.4f,
 				0.10f,
@@ -737,8 +732,8 @@ public class Game : IDisposable
 			var screenPosition = position - Camera + shake;
 			var lightColorValue = (Vector4)lightColor;
 			normalLightMaterial.Material.Fragment.SetUniformBuffer([
-				(float)NormalBuffer.Width,
-				(float)NormalBuffer.Height,
+				NormalBuffer.Width,
+				NormalBuffer.Height,
 				0,
 				0,
 				screenPosition.X,
@@ -919,6 +914,9 @@ public class Game : IDisposable
 				Batcher.Line(rect.TopLeft, rect.BottomRight, 1, Color.Red);
 			else
 				Batcher.Line(rect.BottomLeft, rect.TopRight, 1, Color.Red);
+			var polygon = room.GetSlopePolygon(slope);
+			for (var i = 0; i < polygon.Length; i ++)
+				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Length], 1, Color.Red);
 		}
 		foreach (var rect in CollisionRectsThisFrame)
 			Batcher.RectLine(rect, 1, Color.Red);
@@ -1461,17 +1459,12 @@ public class Game : IDisposable
 		var right = Math.Min(bounds.Right, tileBounds.Right);
 		var top = Math.Max(bounds.Top, tileBounds.Top);
 		var bottom = Math.Min(bounds.Bottom, tileBounds.Bottom);
-		var runLeft = room.WorldBounds.X + (slope.Tile.X - slope.RunIndex) * TileSize;
-		var runWidth = slope.RunLength * TileSize;
+		var polygon = room.GetSlopePolygon(slope);
 
+		for (var y = top; y < bottom; y ++)
 		for (var x = left; x < right; x ++)
 		{
-			var t = Math.Clamp((x + 0.5f - runLeft) / runWidth, 0, 1);
-			var localSurfaceY = slope.Direction == Room.SlopeDirection.DownRight
-				? t * TileSize
-				: (1 - t) * TileSize;
-			var surfaceY = tileBounds.Top + localSurfaceY;
-			if (bottom > surfaceY && top < tileBounds.Bottom)
+			if (PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
 				return true;
 		}
 
@@ -1638,8 +1631,6 @@ public class Game : IDisposable
 		for (var y = 0; y < room.Size.Y; y++)
 		{
 			var tile = new Point2(x, y);
-			var at = offset + tile * TileSize;
-
 			if (Factory.Find(room.Tiles[x, y]) is { } entry)
 			{
 				entry.Tile?.Invoke(tile, room, fg, bg, dual);

@@ -52,6 +52,11 @@ public partial class Manager : App
 	private Point2 roomCreatePosition;
 	private Point2? editorRoomEntryDirection;
 	private (string RoomId, Point2 Position)? playtestPlayerPosition;
+	private bool editingRoomName;
+	private bool focusRoomNameEditor;
+	private string roomNameEditor = string.Empty;
+	private string? roomNameEditingRoomId;
+	private string? pendingDeleteRoomId;
 
 	/// <summary>
 	/// The room renderer / simulation.
@@ -250,20 +255,6 @@ public partial class Manager : App
 		roomCreatePosition = room.Position;
 	}
 
-	private void SelectRoom(Point2 targetCell)
-	{
-		cell = targetCell;
-		selectedRoomId = Assets.GetRoom(targetCell)?.Id;
-		roomCreatePosition = new Point2(targetCell.X * Game.Columns, targetCell.Y * Game.Rows);
-	}
-
-	private void SelectEmptyRoomPosition(Point2 position)
-	{
-		selectedRoomId = null;
-		cell = new Point2(position.X / Game.Columns, position.Y / Game.Rows);
-		roomCreatePosition = position;
-	}
-
 	private void ResolveSelectedRoom()
 	{
 		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
@@ -444,21 +435,23 @@ public partial class Manager : App
 		UpdateShaderReload();
 #endif
 
+		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
+
 		// Misc. Hotkeys
-		if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
+		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 			ReloadAssets(true);
 #if DEBUG
-		if (Input.Keyboard.Pressed(Keys.F))
+		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F))
 			Window.Fullscreen = !Window.Fullscreen;
 #endif
-		if (Input.Keyboard.Pressed(Keys.F4))
+		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
 			Window.Fullscreen = !Window.Fullscreen;
-		if (Input.Keyboard.Pressed(Keys.Escape))
+		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
 		{
 			CurrentRoom?.Save();
 			Exit();
 		}
-		if (ToggleEditorPressed())
+		if (!keyboardShortcutsBlocked && ToggleEditorPressed())
 			ToggleGame();
 
 		// Run Game
@@ -478,13 +471,14 @@ public partial class Manager : App
 		else if (playing)
 		{
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
-			game?.Update();
+			game?.Update(!keyboardShortcutsBlocked);
 		}
 		// Show Editor
 		else
 		{
 			gameEase = Calc.Approach(gameEase, 0.0f, Time.Delta * 4.0f);
-			UpdateEditorNavigation();
+			if (!keyboardShortcutsBlocked)
+				UpdateEditorNavigation();
 		}
 
 		// Build our Sprite Batch
@@ -754,40 +748,6 @@ public partial class Manager : App
 		}
 	}
 
-	/// <summary>
-	/// Shifts to display a new room
-	/// </summary>
-	private void ShiftRoom(Point2 direction)
-	{
-		var current = CurrentRoom;
-		if (current == null)
-			return;
-
-		var exitPosition = EditorExitPosition(current, direction);
-		if (Assets.FindAdjacentRoom(current, direction, exitPosition) is not { } adjacent)
-			return;
-
-		current.Save();
-		SelectRoom(adjacent);
-		editorRoomEntryDirection = direction;
-		SyncEditorGame();
-		TweenEditorCameraToRoom(adjacent);
-	}
-
-	private static Vector2 EditorExitPosition(Room room, Point2 direction)
-	{
-		var bounds = room.WorldBounds;
-		if (direction.X > 0)
-			return new Vector2(bounds.Right, bounds.CenterY);
-		if (direction.X < 0)
-			return new Vector2(bounds.Left - 1, bounds.CenterY);
-		if (direction.Y > 0)
-			return new Vector2(bounds.CenterX, bounds.Bottom);
-		if (direction.Y < 0)
-			return new Vector2(bounds.CenterX, bounds.Top - 1);
-
-		return bounds.Center;
-	}
 
 	/// <summary>
 	/// Draws a box outline (for palette / workspace)
@@ -915,8 +875,8 @@ public partial class Manager : App
 			}
 		}
 
-		var displayedRoom = CurrentRoom;
-		DrawCenteredToolbarText(displayedRoom != null ? $"Room {displayedRoom.Id}" : $"Room {cell.X} x {cell.Y}");
+		DrawCenteredRoomName(CurrentRoom);
+		DrawDeleteRoomPopup();
 
 		ImGui.End();
 		ImGui.PopStyleColor();
@@ -957,7 +917,132 @@ public partial class Manager : App
 		ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.10f, 0.30f, 0.35f, 1.0f));
 	}
 
-	private static void DrawCenteredToolbarText(string text)
+	private void DrawCenteredRoomName(Room? room)
+	{
+		if (room == null)
+		{
+			DrawCenteredToolbarText($"Room {cell.X} x {cell.Y}");
+			return;
+		}
+
+		if (editingRoomName && roomNameEditingRoomId != room.Id)
+			CancelRoomRename();
+
+		if (editingRoomName)
+		{
+			var width = Math.Max(160, ImGui.CalcTextSize(roomNameEditor).X + 24);
+			var windowPos = ImGui.GetWindowPos();
+			var windowSize = ImGui.GetWindowSize();
+			var pos = new Vector2(
+				windowPos.X + windowSize.X * 0.5f - width * 0.5f,
+				windowPos.Y + windowSize.Y * 0.5f - ImGui.GetFrameHeight() * 0.5f);
+
+			ImGui.SetCursorScreenPos(pos);
+			ImGui.SetNextItemWidth(width);
+			if (focusRoomNameEditor)
+			{
+				ImGui.SetKeyboardFocusHere();
+				focusRoomNameEditor = false;
+			}
+
+			var commit = ImGui.InputText("##RoomNameEditor", ref roomNameEditor, 128, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+			var cancel = ImGui.IsKeyPressed(ImGuiKey.Escape);
+			if (cancel)
+				CancelRoomRename();
+			else if (commit || ImGui.IsItemDeactivated())
+				CommitRoomRename(room);
+			return;
+		}
+
+		DrawCenteredToolbarText($"Room {room.Id}", canDoubleClick: true);
+		var textHovered = ImGui.IsItemHovered();
+		if (textHovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+			BeginRoomRename(room);
+
+		var deleteSize = new Vector2(ButtonSize, ButtonSize);
+		var deletePos = ImGui.GetItemRectMax() + new Vector2(ToolbarSpacing, -ButtonSize * 0.5f - ImGui.GetItemRectSize().Y * 0.5f);
+		var deleteRect = new Rect(deletePos, deleteSize);
+		var mouse = ImGui.GetMousePos();
+		var showDelete = textHovered || deleteRect.Contains(mouse);
+		if (showDelete)
+		{
+			ImGui.SetCursorScreenPos(deletePos);
+			if (ImGuiSubtextureButton("DeleteRoom", Assets.GetSubtexture("buttons/14"), "Delete room", false, deleteSize))
+			{
+				pendingDeleteRoomId = room.Id;
+				ImGui.OpenPopup("Delete Room?");
+			}
+		}
+	}
+
+	private void BeginRoomRename(Room room)
+	{
+		editingRoomName = true;
+		focusRoomNameEditor = true;
+		roomNameEditor = room.Id;
+		roomNameEditingRoomId = room.Id;
+	}
+
+	private void CancelRoomRename()
+	{
+		editingRoomName = false;
+		focusRoomNameEditor = false;
+		roomNameEditor = string.Empty;
+		roomNameEditingRoomId = null;
+	}
+
+	private void CommitRoomRename(Room room)
+	{
+		var next = roomNameEditor.Trim();
+		if (!string.IsNullOrEmpty(next) && Assets.RenameRoom(room, next))
+			selectedRoomId = room.Id;
+
+		CancelRoomRename();
+	}
+
+	private void DrawDeleteRoomPopup()
+	{
+		var open = true;
+		if (!ImGui.BeginPopupModal("Delete Room?", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+			return;
+
+		var room = pendingDeleteRoomId != null ? Assets.GetRoom(pendingDeleteRoomId) : null;
+		ImGui.Text(room != null ? $"Delete room '{room.Id}'?" : "Room no longer exists.");
+		ImGui.Spacing();
+
+		if (ImGui.Button("Delete", new Vector2(90, 0)))
+		{
+			if (room != null)
+				DeleteRoom(room);
+			pendingDeleteRoomId = null;
+			ImGui.CloseCurrentPopup();
+		}
+		ImGui.SameLine();
+		if (ImGui.Button("Cancel", new Vector2(90, 0)) || !open)
+		{
+			pendingDeleteRoomId = null;
+			ImGui.CloseCurrentPopup();
+		}
+
+		ImGui.EndPopup();
+	}
+
+	private void DeleteRoom(Room room)
+	{
+		if (CurrentRoom == room)
+			CurrentRoom?.Save();
+
+		Assets.DeleteRoom(room);
+		if (selectedRoomId == room.Id)
+			selectedRoomId = null;
+		if (playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id)
+			playtestPlayerPosition = null;
+		ClearRoomPreviewCache();
+		ResolveSelectedRoom();
+		SyncEditorGame();
+	}
+
+	private static void DrawCenteredToolbarText(string text, bool canDoubleClick = false)
 	{
 		var size = ImGui.CalcTextSize(text);
 		var windowPos = ImGui.GetWindowPos();
@@ -965,6 +1050,11 @@ public partial class Manager : App
 		var pos = new Vector2(
 			windowPos.X + windowSize.X * 0.5f - size.X * 0.5f,
 			windowPos.Y + windowSize.Y * 0.5f - size.Y * 0.5f);
+		if (canDoubleClick)
+		{
+			ImGui.SetCursorScreenPos(pos);
+			ImGui.InvisibleButton("##CenteredToolbarText", size);
+		}
 		ImGui.GetWindowDrawList().AddText(pos, ImGui.GetColorU32(ImGuiCol.Text), text);
 	}
 
@@ -979,6 +1069,9 @@ public partial class Manager : App
 
 		return false;
 	}
+
+	private bool ImGuiWantsKeyboard
+		=> imgui.WantsKeyboardInput || imgui.WantsTextInput;
 
 	private void ToggleGame()
 	{

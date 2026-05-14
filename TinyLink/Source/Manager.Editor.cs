@@ -91,7 +91,7 @@ public partial class Manager
 
 	private bool UpdateEditorUndoRedo()
 	{
-		if (imgui.WantsTextInput)
+		if (ImGuiWantsKeyboard)
 			return false;
 
 		var modifier =
@@ -603,6 +603,35 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
+	private static bool TryGetSlopeToggle(char tile, out char result)
+	{
+		result = tile switch
+		{
+			'1' => '2',
+			'2' => '1',
+			'G' => 'S',
+			'S' => 'G',
+			_ => '\0'
+		};
+		return result != '\0';
+	}
+
+	private static Subtexture GetPreviewTileImage(Room room, Point2 tile, char previewTile, Factory.Entry entry)
+	{
+		if (!entry.IsSlope || entry.SlopeTilesetName == null)
+			return entry.Image;
+
+		var previous = room.Tiles[tile.X, tile.Y];
+		room.Tiles[tile.X, tile.Y] = previewTile;
+		room.RebuildGeometry();
+		var image = room.TryGetSlopeTile(tile, out var slope)
+			? Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex)
+			: entry.Image;
+		room.Tiles[tile.X, tile.Y] = previous;
+		room.RebuildGeometry();
+		return image.Texture != null ? image : entry.Image;
+	}
+
 	private void UpdateEditorWorldView(Rect inner)
 	{
 		if (imgui.WantsMouseInput)
@@ -733,6 +762,7 @@ public partial class Manager
 		var arrow = new Rect().Inflate(ButtonSize / 2);
 		var lastCell = cell;
 		var worldMouseBlocked = imgui.WantsMouseInput;
+		var keyboardBlocked = ImGuiWantsKeyboard;
 		UpdateEditorUndoRedo();
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
@@ -748,7 +778,7 @@ public partial class Manager
 		batcher.PushMatrix(worldMatrix);
 		DrawEditorRooms();
 
-		var eyedropper = Input.Keyboard.Alt;
+		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
 
 		if (!worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 		{
@@ -849,6 +879,18 @@ public partial class Manager
 					editorGameDirty = true;
 				}
 			}
+			else if (!worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && Input.Mouse.MiddlePressed && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
+			{
+				using (CaptureRoomUndo("Toggle Slope Tile", editing))
+				{
+					editing.Set(tileOver, toggledTile);
+					brush = toggledTile;
+					tileTypePlacing = toggledTile;
+					selectedActorPaletteIndex = -1;
+					tilePlacing = false;
+					editorGameDirty = true;
+				}
+			}
 			else if (!worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
 				tilePaintUndo?.Commit();
@@ -861,7 +903,7 @@ public partial class Manager
 			if (!worldMouseBlocked && actorSelectTool && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				actorMoveUndo ??= CaptureRoomUndo("Move Actor", editing);
-				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, tileOver, !Input.Keyboard.Shift);
+				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
 			}
 			if (!Input.Mouse.LeftDown)
 			{
@@ -870,7 +912,7 @@ public partial class Manager
 				actorMoveUndo = null;
 			}
 
-			if (actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
+			if (!keyboardBlocked && actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
 			{
 				using (CaptureRoomUndo("Delete Actor", editing))
 				{
@@ -908,7 +950,14 @@ public partial class Manager
 
 					for (int x = shift; x < shift + size; x ++)
 						for (int y = shift; y < shift + size; y ++)
-							batcher.Image(placing.Image, position + new Point2(x, y) * Game.TileSize, placing.Origin, Vector2.One, 0, Color.White);
+						{
+							var tile = tileOver + new Point2(x, y);
+							if (tile.X < 0 || tile.Y < 0 || tile.X >= editing.Size.X || tile.Y >= editing.Size.Y)
+								continue;
+
+							var image = GetPreviewTileImage(editing, tile, tileTypePlacing, placing);
+							batcher.Image(image, position + new Point2(x, y) * Game.TileSize, placing.Origin, Vector2.One, 0, Color.White);
+						}
 				}
 			}
 
@@ -1080,5 +1129,41 @@ public partial class Manager
 		it.Save();
 		SyncEditorGame();
 		TweenEditorCameraToRoom(it);
+	}
+
+
+	/// <summary>
+	/// Shifts to display a new room
+	/// </summary>
+	private void ShiftRoom(Point2 direction)
+	{
+		var current = CurrentRoom;
+		if (current == null)
+			return;
+
+		var exitPosition = EditorExitPosition(current, direction);
+		if (Assets.FindAdjacentRoom(current, direction, exitPosition) is not { } adjacent)
+			return;
+
+		current.Save();
+		SelectRoom(adjacent);
+		editorRoomEntryDirection = direction;
+		SyncEditorGame();
+		TweenEditorCameraToRoom(adjacent);
+	}
+
+	private static Vector2 EditorExitPosition(Room room, Point2 direction)
+	{
+		var bounds = room.WorldBounds;
+		if (direction.X > 0)
+			return new Vector2(bounds.Right, bounds.CenterY);
+		if (direction.X < 0)
+			return new Vector2(bounds.Left - 1, bounds.CenterY);
+		if (direction.Y > 0)
+			return new Vector2(bounds.CenterX, bounds.Bottom);
+		if (direction.Y < 0)
+			return new Vector2(bounds.CenterX, bounds.Top - 1);
+
+		return bounds.Center;
 	}
 }
