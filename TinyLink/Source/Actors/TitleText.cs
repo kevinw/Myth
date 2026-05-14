@@ -18,9 +18,10 @@ public class TitleText : Actor
 
 	public override void Update()
 	{
+		base.Update();
 		stateDuration += Time.Delta;
 	}
-	
+
 	public override void Render(Batcher batcher)
 	{
 		if (Assets.Font != null && Game.CurrentRoom != null)

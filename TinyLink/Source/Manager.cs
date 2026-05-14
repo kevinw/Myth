@@ -228,6 +228,7 @@ public partial class Manager : App
 	{
 		SaveWindowSettings();
 		game?.Dispose();
+		ClearRoomPreviewCache();
 		imgui.Dispose();
 		assetWatcher?.Dispose();
 		assetWatcher = null;
@@ -738,6 +739,7 @@ public partial class Manager : App
 			Factory.Clear();
 			Factory.RegisterTypes();
 			Assets.RebuildRoomGeometry();
+			ClearRoomPreviewCache();
 			ResolveSelectedRoom();
 			if (playing)
 				game?.RefreshRoomTiles();
@@ -769,7 +771,7 @@ public partial class Manager : App
 		SelectRoom(adjacent);
 		editorRoomEntryDirection = direction;
 		SyncEditorGame();
-		FocusEditorOnCurrentRoom();
+		TweenEditorCameraToRoom(adjacent);
 	}
 
 	private static Vector2 EditorExitPosition(Room room, Point2 direction)

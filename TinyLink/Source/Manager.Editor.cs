@@ -11,6 +11,11 @@ public partial class Manager
 	bool editorViewInitialized;
 	Vector2 editorCamera;
 	float editorZoom = 1.0f;
+	Vector2 editorCameraTweenFrom;
+	Vector2 editorCameraTweenTo;
+	float editorZoomTweenFrom;
+	float editorZoomTweenTo;
+	float editorCameraTween = 1.0f;
 
 	/// <summary>
 	/// The current Type we're painting in the Editor
@@ -37,6 +42,7 @@ public partial class Manager
 	JsonUndoScope? actorMoveUndo;
 	JsonUndoScope? prefabUndo;
 	string? prefabUndoSpecId;
+	readonly Dictionary<string, EditorRoomPreview> roomPreviewCache = [];
 
 	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
 		=> new RoomUndoTarget(room);
@@ -177,11 +183,37 @@ public partial class Manager
 		if (CurrentRoom is not { } room)
 			return;
 
+		GetEditorRoomFocus(room, out editorCamera, out editorZoom);
+		editorCameraTween = 1.0f;
+		editorViewInitialized = true;
+	}
+
+	private void TweenEditorCameraToRoom(Room room)
+	{
+		GetEditorRoomFocus(room, out editorCameraTweenTo, out editorZoomTweenTo);
+		editorCameraTweenFrom = editorCamera;
+		editorZoomTweenFrom = editorZoom;
+		editorCameraTween = 0.0f;
+		editorViewInitialized = true;
+	}
+
+	private void GetEditorRoomFocus(Room room, out Vector2 camera, out float zoom)
+	{
 		var bounds = room.WorldBounds;
 		var view = GameViewRect;
-		editorCamera = RectCenter(bounds);
-		editorZoom = Math.Clamp(Math.Min(view.Width / bounds.Width, view.Height / bounds.Height), 0.15f, 8.0f);
-		editorViewInitialized = true;
+		camera = RectCenter(bounds);
+		zoom = Math.Clamp(Math.Min(view.Width / bounds.Width, view.Height / bounds.Height), 0.15f, 8.0f);
+	}
+
+	private void UpdateEditorCameraTween()
+	{
+		if (editorCameraTween >= 1.0f)
+			return;
+
+		editorCameraTween = Calc.Approach(editorCameraTween, 1.0f, Time.Delta * 4.0f);
+		var t = Ease.Cube.InOut(editorCameraTween);
+		editorCamera = Vector2.Lerp(editorCameraTweenFrom, editorCameraTweenTo, t);
+		editorZoom = float.Lerp(editorZoomTweenFrom, editorZoomTweenTo, t);
 	}
 
 	private void MatchEditorCameraToGame()
@@ -192,6 +224,7 @@ public partial class Manager
 		editorCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
 		var view = EditorOpenRect;
 		editorZoom = Math.Clamp(Math.Min(view.Width / Game.Width, view.Height / Game.Height), 0.15f, 8.0f);
+		editorCameraTween = 1.0f;
 		editorViewInitialized = true;
 	}
 
@@ -349,7 +382,10 @@ public partial class Manager
 		}
 
 		if (changed)
+		{
+			ClearRoomPreviewCache();
 			SyncEditorGame();
+		}
 
 		if (ImGui.Button("Save"))
 			ActorSpecs.SaveSpec(selectedActorSpecId);
@@ -576,7 +612,10 @@ public partial class Manager
 			return;
 
 		if (Input.Mouse.MiddleDown)
+		{
+			editorCameraTween = 1.0f;
 			editorCamera -= Input.Mouse.Delta / Scale / editorZoom;
+		}
 
 		var wheel = Input.Mouse.Wheel;
 		var wheelAmount = MathF.Abs(wheel.Y) >= MathF.Abs(wheel.X) ? wheel.Y : wheel.X;
@@ -591,6 +630,7 @@ public partial class Manager
 
 		var before = ScreenToEditorWorld(Cursor, inner);
 		var zoomFactor = MathF.Pow(1.15f, wheelAmount);
+		editorCameraTween = 1.0f;
 		editorZoom = Math.Clamp(editorZoom * zoomFactor, 0.15f, 8.0f);
 		editorCamera = before - (Cursor - inner.Center) / editorZoom;
 	}
@@ -607,21 +647,46 @@ public partial class Manager
 			if (CurrentRoom == room)
 				continue;
 
-			batcher.Rect(bounds, 0x150e22);
-
-			for (var x = 0; x < room.Size.X; x ++)
-			for (var y = 0; y < room.Size.Y; y ++)
-			{
-				if (Factory.Find(room.Tiles[x, y]) is not { } entry || entry.Image.Texture == null)
-					continue;
-
-				var position = (Vector2)bounds.TopLeft + new Vector2(x, y) * Game.TileSize + entry.Offset;
-				if (entry.Tile != null)
-					batcher.Image(entry.Image, position, entry.Origin, Vector2.One, 0, Color.White);
-			}
-
+			if (GetRoomPreview(room) is { } preview)
+				batcher.Image(preview, bounds.TopLeft, Color.White);
+			else
+				batcher.Rect(bounds, 0x150e22);
 			batcher.RectLine(bounds, line, Color.Gray);
 		}
+	}
+
+	private Texture? GetRoomPreview(Room room)
+	{
+		var json = room.ToJsonString();
+		if (roomPreviewCache.TryGetValue(room.Id, out var entry) &&
+		    entry.Json == json &&
+		    entry.Target.Width == room.WorldBounds.Width &&
+		    entry.Target.Height == room.WorldBounds.Height)
+			return entry.Texture;
+
+		entry?.Dispose();
+		var target = new Target(GraphicsDevice, room.WorldBounds.Width, room.WorldBounds.Height, name: $"RoomPreview/{room.Id}");
+		using var previewGame = new Game(this, room, audioEventsEnabled: false);
+		previewGame.RenderWorldToTarget(target, new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height));
+		roomPreviewCache[room.Id] = new EditorRoomPreview(json, target);
+		return target.Attachments[0];
+	}
+
+	private void ClearRoomPreviewCache()
+	{
+		foreach (var preview in roomPreviewCache.Values)
+			preview.Dispose();
+		roomPreviewCache.Clear();
+	}
+
+	private sealed class EditorRoomPreview(string json, Target target) : IDisposable
+	{
+		public readonly string Json = json;
+		public readonly Target Target = target;
+		public Texture Texture => Target.Attachments[0];
+
+		public void Dispose()
+			=> Target.Dispose();
 	}
 
 	private Room? GetRoomAtWorld(Vector2 world)
@@ -672,6 +737,7 @@ public partial class Manager
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
 
+		UpdateEditorCameraTween();
 		UpdateEditorWorldView(inner);
 
 		batcher.PushScissor((RectInt)(inner * Scale));
@@ -696,6 +762,7 @@ public partial class Manager
 					CurrentRoom?.Save();
 					SelectRoom(selected);
 					SyncEditorGame();
+					TweenEditorCameraToRoom(selected);
 				}
 			}
 		}
@@ -1012,6 +1079,6 @@ public partial class Manager
 		SelectRoom(it);
 		it.Save();
 		SyncEditorGame();
-		FocusEditorOnCurrentRoom();
+		TweenEditorCameraToRoom(it);
 	}
 }

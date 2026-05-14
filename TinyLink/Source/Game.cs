@@ -374,7 +374,7 @@ public class Game : IDisposable
 	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
 	{
 		EnsureRenderTargets(Width, Height);
-		RenderCurrentView(viewport, showHud, scissor, applyCrt: true);
+		RenderCurrentView(Manager.Window, viewport, showHud, scissor, applyCrt: true);
 	}
 
 	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true)
@@ -387,7 +387,22 @@ public class Game : IDisposable
 		EnsureRenderTargets(width, height);
 		Camera = worldView.TopLeft;
 		shake = Point2.Zero;
-		RenderCurrentView(viewport, showHud, scissor, applyCrt);
+		RenderCurrentView(Manager.Window, viewport, showHud, scissor, applyCrt);
+		Camera = oldCamera;
+		shake = oldShake;
+	}
+
+	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false)
+	{
+		var oldCamera = Camera;
+		var oldShake = shake;
+		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
+		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height));
+
+		EnsureRenderTargets(width, height);
+		Camera = worldView.TopLeft;
+		shake = Point2.Zero;
+		RenderCurrentView(target, target.Bounds, showHud, scissor: null, applyCrt: false);
 		Camera = oldCamera;
 		shake = oldShake;
 	}
@@ -439,7 +454,7 @@ public class Game : IDisposable
 		ReflectionScreen?.Dispose();
 	}
 
-	private void RenderCurrentView(in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
+	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
@@ -486,7 +501,7 @@ public class Game : IDisposable
 			if (applyCrt && crtMaterial != null)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
-			Batcher.Render(Manager.Window, scissor: scissor);
+			Batcher.Render(destination, scissor: scissor);
 			Batcher.Clear();
 		}
 	}

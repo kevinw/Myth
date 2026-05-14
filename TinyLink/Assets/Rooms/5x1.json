@@ -35,16 +35,16 @@
       "position": [148, 60]
     },
     {
-      "type": "Player",
-      "position": [12, 72]
-    },
-    {
       "type": "Mosquito",
       "position": [164, 68]
     },
     {
       "from": "LockedDoor",
       "position": [212, 72]
+    },
+    {
+      "type": "Player",
+      "position": [12, 72]
     }
   ]
 }
