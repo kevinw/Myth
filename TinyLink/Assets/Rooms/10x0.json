@@ -23,7 +23,7 @@
   "actors": [
     {
       "from": "BlueMemoryLight",
-      "position": [60, 36]
+      "position": [60, 31]
     },
     {
       "type": "Spitter",

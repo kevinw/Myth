@@ -27,7 +27,8 @@
     },
     {
       "from": "SoftFireLight",
-      "position": [84, 68]
+      "position": [84, 68],
+      "intensity": 0.6
     },
     {
       "type": "Jumpthru",
@@ -47,7 +48,8 @@
     },
     {
       "from": "SoftFireLight",
-      "position": [116, 68]
+      "position": [116, 68],
+      "intensity": 0.6
     }
   ]
 }

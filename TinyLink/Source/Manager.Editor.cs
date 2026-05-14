@@ -331,6 +331,7 @@ public partial class Manager
 		ImGui.PopStyleVar(4);
 
 		ActorSpecInspectorImGui();
+		ActorInstanceInspectorImGui();
 	}
 
 	private void DrawTilePaletteSection()
@@ -406,7 +407,6 @@ public partial class Manager
 
 		if (changed)
 		{
-			ClearRoomPreviewCache();
 			SyncEditorGame();
 		}
 
@@ -483,6 +483,126 @@ public partial class Manager
 					ActorSpecs.ResetProperty(specId, property.JsonName);
 					changed = true;
 				}
+			}
+		}
+
+		return changed;
+	}
+
+	private void ActorInstanceInspectorImGui()
+	{
+		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
+			return;
+
+		var actor = room.Actors[selectedRoomActorIndex];
+		var title = ActorSpecs.ReadString(actor, "from") ?? ActorSpecs.ReadString(actor, "type") ?? "Actor";
+		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
+		var open = true;
+		if (!ImGui.Begin($"Actor: {title}##ActorInstanceInspector", ref open, ImGuiWindowFlags.NoSavedSettings))
+		{
+			if (!open)
+				selectedRoomActorIndex = -1;
+			ImGui.End();
+			return;
+		}
+
+		if (!open)
+		{
+			selectedRoomActorIndex = -1;
+			ImGui.End();
+			return;
+		}
+
+		if (ActorSpecs.ReadString(actor, "from") is { } specId && ActorSpecs.Get(specId) != null)
+		{
+			if (ImGui.Button("Jump to Prefab"))
+			{
+				selectedActorSpecId = specId;
+				actorSpecInspectorOpen = true;
+			}
+			ImGui.Separator();
+		}
+
+		var changed = false;
+		foreach (var property in ActorSpecs.GetEditableProperties(actor))
+		{
+			ImGui.PushID(property.JsonName);
+			changed |= DrawActorInstanceProperty(room, actor, property);
+			ImGui.PopID();
+		}
+
+		if (changed)
+		{
+			editorGameDirty = true;
+			SyncEditorGame();
+		}
+
+		ImGui.End();
+	}
+
+	private bool DrawActorInstanceProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		var changed = false;
+		var controlWidth = MathF.Min(150, MathF.Max(96, ImGui.GetContentRegionAvail().X - 72));
+		ImGui.TextWrapped(property.Name);
+		ImGui.SetNextItemWidth(controlWidth);
+		ImGui.PushID("Value");
+
+		if (property.Type == typeof(float))
+		{
+			var value = property.Value?.GetValue<float>() ?? 0;
+			if (ImGui.DragFloat("##Value", ref value, 0.05f))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(int))
+		{
+			var value = property.Value?.GetValue<int>() ?? 0;
+			if (ImGui.DragInt("##Value", ref value))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(bool))
+		{
+			var value = property.Value?.GetValue<bool>() ?? false;
+			if (ImGui.Checkbox("##Value", ref value))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(Color))
+		{
+			var color = property.Value?.GetValue<string>() ?? "ffffff";
+			var rgb = HexToVector3(color);
+			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
+				changed = true;
+			}
+		}
+		else
+		{
+			ImGui.TextUnformatted("-");
+		}
+		ImGui.PopID();
+
+		if (property.HasLocalValue)
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Reset"))
+			{
+				using (CaptureRoomUndo("Reset Actor Property", room))
+					ActorSpecs.ResetProperty(actor, property.JsonName);
+				changed = true;
 			}
 		}
 

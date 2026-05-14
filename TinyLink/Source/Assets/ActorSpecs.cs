@@ -128,6 +128,12 @@ public static class ActorSpecs
 		if (!specs.TryGetValue(id, out var spec))
 			yield break;
 
+		foreach (var property in GetEditableProperties(spec))
+			yield return property;
+	}
+
+	public static IEnumerable<EditableProperty> GetEditableProperties(JsonObject spec)
+	{
 		var resolved = Resolve(spec);
 		var typeName = ReadString(resolved, TypeKey);
 		if (typeName == null || !actorTypes.TryGetValue(typeName, out var type))
@@ -156,11 +162,17 @@ public static class ActorSpecs
 		spec[jsonName] = value?.DeepClone();
 	}
 
+	public static void SetProperty(JsonObject spec, string jsonName, JsonNode? value)
+		=> spec[jsonName] = value?.DeepClone();
+
 	public static void ResetProperty(string id, string jsonName)
 	{
 		if (specs.TryGetValue(id, out var spec))
 			spec.Remove(jsonName);
 	}
+
+	public static void ResetProperty(JsonObject spec, string jsonName)
+		=> spec.Remove(jsonName);
 
 	public static void SaveSpec(string id)
 	{
