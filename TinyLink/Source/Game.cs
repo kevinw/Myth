@@ -64,9 +64,11 @@ public class Game : IDisposable
 	private bool showLightMask;
 	private bool showNormalBuffer;
 	private bool mouseLightEnabled;
+	private bool draggingPlayer;
 	private bool actorSpriteShadowsEnabled = true;
 	private Vector2 mouseLightPosition;
 	private float timeScale = 1.0f;
+	private Point2? respawnPosition;
 	private bool disposed;
 
 	public Vector2 Camera { get; private set; }
@@ -79,7 +81,7 @@ public class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null)
 	{
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled;
@@ -97,6 +99,28 @@ public class Game : IDisposable
 			Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
 			UpdateAudioListener();
 			LoadRoom(room);
+			if (initialPlayerPosition is { } position)
+			{
+				if (GetFirst<Player>() is { } player)
+				{
+					player.Position = position;
+					player.Velocity = Vector2.Zero;
+				}
+				else if (spawnFallbackPlayer)
+				{
+					Create<Player>(position);
+				}
+				respawnPosition = position;
+			}
+			else if (spawnFallbackPlayer && GetFirst<Player>() == null)
+			{
+				respawnPosition = FindFallbackPlayerPosition(room, fallbackPlayerDirection);
+				Create<Player>(respawnPosition);
+			}
+			else if (GetFirst<Player>() is { } player)
+			{
+				respawnPosition = player.Position;
+			}
 			if (AudioEventsEnabled)
 			{
 				StartMusic();
@@ -164,6 +188,8 @@ public class Game : IDisposable
 				actorSpriteShadowsEnabled = !actorSpriteShadowsEnabled;
 				Console.WriteLine($"Actor sprite shadows: {(actorSpriteShadowsEnabled ? "on" : "off")}");
 			}
+
+			UpdatePlayerMouseDrag();
 
 			if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus))
 				ChangeTimeScale(-1);
@@ -247,6 +273,67 @@ public class Game : IDisposable
 		Camera = GetGameplayCameraTarget();
 	}
 
+	private void UpdatePlayerMouseDrag()
+	{
+		if (GetFirst<Player>() is not { } player)
+			return;
+
+		if (Input.Mouse.LeftPressed)
+		{
+			var mouse = Manager.GameMouseWorld(this);
+			if (player.GetVisualBounds().Inflate(8).Contains(mouse))
+				draggingPlayer = true;
+		}
+
+		if (!Input.Mouse.LeftDown)
+		{
+			draggingPlayer = false;
+			return;
+		}
+
+		if (!draggingPlayer)
+			return;
+
+		player.Position = (Point2)Manager.GameMouseWorld(this);
+		player.Velocity = Vector2.Zero;
+	}
+
+	private Point2 FindFallbackPlayerPosition(Room room, Point2? direction)
+	{
+		var fromLeft = direction?.X > 0;
+		var fromRight = direction?.X < 0;
+		var fromTop = direction?.Y > 0;
+		var fromBottom = direction?.Y < 0;
+		var best = room.WorldBounds.Center;
+		var bestScore = float.MaxValue;
+		var targetX = fromLeft ? 0 : fromRight ? room.Size.X - 1 : (room.Size.X - 1) * 0.5f;
+		var targetY = fromTop ? 0 : fromBottom ? room.Size.Y - 1 : (room.Size.Y - 1) * 0.5f;
+
+		for (var y = 1; y < room.Size.Y; y ++)
+		for (var x = 0; x < room.Size.X; x ++)
+		{
+			if (!IsTileWalkable(room, x, y - 1) || !IsTileSolid(room, x, y))
+				continue;
+
+			var dx = x - targetX;
+			var dy = y - targetY;
+			var score = dx * dx + dy * dy * 0.25f;
+			if (score >= bestScore)
+				continue;
+
+			bestScore = score;
+			best = room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
+		}
+
+		return best;
+	}
+
+	private static bool IsTileWalkable(Room room, int x, int y)
+		=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && !IsTileSolid(room, x, y);
+
+	private static bool IsTileSolid(Room room, int x, int y)
+		=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && Factory.Find(room.Tiles[x, y]) is { BlocksMovement: true };
+
 	public Vector2 GetGameplayCameraTarget()
 	{
 		if (room == null || GetFirst<Player>() is not { } player)
@@ -287,10 +374,10 @@ public class Game : IDisposable
 	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
 	{
 		EnsureRenderTargets(Width, Height);
-		RenderCurrentView(viewport, showHud, scissor);
+		RenderCurrentView(viewport, showHud, scissor, applyCrt: true);
 	}
 
-	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null)
+	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true)
 	{
 		var oldCamera = Camera;
 		var oldShake = shake;
@@ -300,7 +387,7 @@ public class Game : IDisposable
 		EnsureRenderTargets(width, height);
 		Camera = worldView.TopLeft;
 		shake = Point2.Zero;
-		RenderCurrentView(viewport, showHud, scissor);
+		RenderCurrentView(viewport, showHud, scissor, applyCrt);
 		Camera = oldCamera;
 		shake = oldShake;
 	}
@@ -311,7 +398,7 @@ public class Game : IDisposable
 			return;
 
 		var bounds = room.WorldBounds;
-		RenderWorldView(viewport, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height), showHud: false, scissor);
+		RenderWorldView(viewport, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height), showHud: false, scissor, applyCrt: false);
 	}
 
 	private void EnsureRenderTargets(int width, int height)
@@ -352,7 +439,7 @@ public class Game : IDisposable
 		ReflectionScreen?.Dispose();
 	}
 
-	private void RenderCurrentView(in RectInt viewport, bool showHud, RectInt? scissor)
+	private void RenderCurrentView(in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
@@ -375,7 +462,7 @@ public class Game : IDisposable
 			var scale = Calc.Min(size.X / (float)output.Width, size.Y / (float)output.Height);
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-			if (crtMaterial != null)
+			if (applyCrt && crtMaterial != null)
 			{
 				float CrtTime = Time.SecondsF * 0.2f;
 				float Curvature = 0.005f;
@@ -396,7 +483,7 @@ public class Game : IDisposable
 				Batcher.PushMaterial(crtMaterial.Material);
 			}
 			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
-			if (crtMaterial != null)
+			if (applyCrt && crtMaterial != null)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
 			Batcher.Render(Manager.Window, scissor: scissor);
@@ -1343,6 +1430,8 @@ public class Game : IDisposable
 			Destroy(actor);
 		room = reloaded;
 		LoadRoom(room);
+		if (GetFirst<Player>() == null && respawnPosition is { } position)
+			Create<Player>(position);
 
 		if (restartMusic)
 		{

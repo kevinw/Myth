@@ -50,6 +50,8 @@ public partial class Manager : App
 	private Point2 cell = new(0, 0);
 	private string? selectedRoomId;
 	private Point2 roomCreatePosition;
+	private Point2? editorRoomEntryDirection;
+	private (string RoomId, Point2 Position)? playtestPlayerPosition;
 
 	/// <summary>
 	/// The room renderer / simulation.
@@ -123,7 +125,17 @@ public partial class Manager : App
 		}
 	}
 
-	private Rect GameViewRect => WorkspaceRect.Inflate(-BoxPadding * 2);
+	private Rect GameViewRect => WorkspaceRect;
+
+	public Vector2 GameMouseWorld(Game game)
+	{
+		var viewport = (RectInt)(GameViewRect * Scale);
+		var scale = Calc.Min(viewport.Width / (float)game.Screen.Width, viewport.Height / (float)game.Screen.Height);
+		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
+		var topLeft = (Vector2)viewport.Center - size / 2;
+		var local = (Input.Mouse.Position - topLeft) / scale;
+		return game.Camera + local;
+	}
 
 	/// <summary>
 	/// Eases the PaletteView out/in as the Game opens/closes
@@ -755,6 +767,7 @@ public partial class Manager : App
 
 		current.Save();
 		SelectRoom(adjacent);
+		editorRoomEntryDirection = direction;
 		SyncEditorGame();
 		FocusEditorOnCurrentRoom();
 	}
@@ -857,11 +870,11 @@ public partial class Manager : App
 			StartGame();
 		ImGui.SameLine();
 
-		if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Small Brush", !brushBig))
-			brushBig = false;
+		if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Smaller Brush", brushSize <= 1))
+			brushSize = Math.Max(1, brushSize - 1);
 		ImGui.SameLine();
-		if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Big Brush", brushBig))
-			brushBig = true;
+		if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Larger Brush", brushSize > 1))
+			brushSize = Math.Min(10, brushSize + 1);
 		ImGui.SameLine(0, ToolbarSpacing);
 
 		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
@@ -979,7 +992,12 @@ public partial class Manager : App
 		if (CurrentRoom is { } room)
 		{
 			game?.Dispose();
-			game = new Game(this, room);
+			game = new Game(
+				this,
+				room,
+				fallbackPlayerDirection: editorRoomEntryDirection,
+				spawnFallbackPlayer: true,
+				initialPlayerPosition: playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id ? remembered.Position : null);
 			var target = game.GetGameplayCameraTarget();
 			playTransition = 0.0f;
 			playTransitionFromCenter = editorCamera;
@@ -994,7 +1012,11 @@ public partial class Manager : App
 	private void StopGame()
 	{
 		if (game?.CurrentRoom is { } room)
+		{
+			if (game.GetFirst<Player>() is { } player)
+				playtestPlayerPosition = (room.Id, player.Position);
 			SelectRoom(room);
+		}
 		MatchEditorCameraToGame();
 		game?.Dispose();
 		game = null;

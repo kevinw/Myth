@@ -170,6 +170,17 @@ public static class ActorSpecs
 		File.WriteAllText(path, ToJsonString(PruneForSave(spec)));
 	}
 
+	public static string CaptureSpecJson(string id)
+		=> specs.TryGetValue(id, out var spec) ? ToJsonString(PruneForSave(spec)) : "{}";
+
+	public static void ApplySpecJson(string id, string jsonText)
+	{
+		var spec = JsonNode.Parse(jsonText)?.AsObject() ?? [];
+		if (string.IsNullOrWhiteSpace(ReadString(spec, IdKey)))
+			spec[IdKey] = id;
+		specs[id] = spec;
+	}
+
 	public static JsonNode? ToJsonNode(object? value)
 	{
 		return value switch

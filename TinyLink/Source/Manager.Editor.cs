@@ -18,9 +18,9 @@ public partial class Manager
 	private char brush = '0';
 
 	/// <summary>
-	/// If it's a big Brush
+	/// Square tile brush size.
 	/// </summary>
-	private bool brushBig = false;
+	private int brushSize = 1;
 
 	Point2 tilePlaceFrom;
 	char tileTypePlacing;
@@ -32,6 +32,145 @@ public partial class Manager
 	bool actorSelectTool;
 	int selectedRoomActorIndex = -1;
 	bool draggingRoomActor;
+	readonly JsonUndoManager undo = new();
+	JsonUndoScope? tilePaintUndo;
+	JsonUndoScope? actorMoveUndo;
+	JsonUndoScope? prefabUndo;
+	string? prefabUndoSpecId;
+
+	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
+		=> new RoomUndoTarget(room);
+
+	private IJsonUndoTarget EditorSelectionUndoTarget()
+		=> new EditorSelectionTarget(this);
+
+	private JsonUndoScope CaptureRoomUndo(string name, Room room)
+		=> undo.Capture(name, CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
+
+	private JsonUndoScope CaptureSelectionUndo(string name)
+		=> undo.Capture(name, EditorSelectionUndoTarget());
+
+	private JsonUndoScope CapturePrefabUndo(string name, string specId)
+		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
+
+	private void UndoEditor()
+	{
+		undo.Undo();
+		AfterUndoRedo();
+	}
+
+	private void RedoEditor()
+	{
+		undo.Redo();
+		AfterUndoRedo();
+	}
+
+	private void AfterUndoRedo()
+	{
+		if (CurrentRoom is { } room)
+		{
+			if (selectedRoomActorIndex >= room.Actors.Count)
+				selectedRoomActorIndex = -1;
+			room.Save();
+		}
+
+		draggingRoomActor = false;
+		tilePlacing = false;
+		actorMoveUndo = null;
+		tilePaintUndo = null;
+		prefabUndo = null;
+		prefabUndoSpecId = null;
+		SyncEditorGame();
+	}
+
+	private bool UpdateEditorUndoRedo()
+	{
+		if (imgui.WantsTextInput)
+			return false;
+
+		var modifier =
+			Input.Keyboard.Down(Keys.LeftControl) ||
+			Input.Keyboard.Down(Keys.RightControl) ||
+			Input.Keyboard.Down(Keys.LeftOS) ||
+			Input.Keyboard.Down(Keys.RightOS);
+		if (!modifier)
+			return false;
+
+		if (Input.Keyboard.Pressed(Keys.Z))
+		{
+			if (Input.Keyboard.Shift)
+				RedoEditor();
+			else
+				UndoEditor();
+			return true;
+		}
+
+		if (Input.Keyboard.Pressed(Keys.Y))
+		{
+			RedoEditor();
+			return true;
+		}
+
+		return false;
+	}
+
+	private sealed class RoomUndoTarget(Room room) : IJsonUndoTarget
+	{
+		public string UndoId => $"room:{room.Id}";
+		public string CaptureJson() => room.ToJsonString();
+		public void ApplyJson(string json) => room.LoadJsonState(json);
+	}
+
+	private sealed class EditorSelectionTarget(Manager manager) : IJsonUndoTarget
+	{
+		public string UndoId => "editor-selection";
+
+		public string CaptureJson()
+		{
+			var json = new JsonObject
+			{
+				["roomId"] = manager.selectedRoomId,
+				["actorIndex"] = manager.selectedRoomActorIndex,
+				["actorSelectTool"] = manager.actorSelectTool,
+				["brush"] = manager.brush.ToString(),
+				["actorPaletteIndex"] = manager.selectedActorPaletteIndex,
+				["prefabId"] = manager.selectedActorSpecId,
+				["prefabInspectorOpen"] = manager.actorSpecInspectorOpen,
+				["entryDirection"] = manager.editorRoomEntryDirection is { } direction ? new JsonArray(direction.X, direction.Y) : null
+			};
+			return ActorSpecs.ToJsonString(json);
+		}
+
+		public void ApplyJson(string jsonText)
+		{
+			var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
+			var roomId = ActorSpecs.ReadString(json, "roomId");
+			if (roomId != null && Assets.GetRoom(roomId) is { } room)
+				manager.SelectRoom(room);
+
+			manager.selectedRoomActorIndex = ReadInt(json, "actorIndex", -1);
+			manager.actorSelectTool = ReadBool(json, "actorSelectTool");
+			if (ActorSpecs.ReadString(json, "brush") is { Length: > 0 } brush)
+				manager.brush = brush[0];
+			manager.selectedActorPaletteIndex = ReadInt(json, "actorPaletteIndex", -1);
+			manager.selectedActorSpecId = ActorSpecs.ReadString(json, "prefabId");
+			manager.actorSpecInspectorOpen = ReadBool(json, "prefabInspectorOpen");
+			manager.editorRoomEntryDirection = ActorSpecs.ReadPoint(json, "entryDirection");
+		}
+
+		private static int ReadInt(JsonObject json, string key, int fallback)
+			=> json.TryGetPropertyValue(key, out var node) && node != null && int.TryParse(node.ToString(), out var value) ? value : fallback;
+
+		private static bool ReadBool(JsonObject json, string key)
+			=> json.TryGetPropertyValue(key, out var node) && node != null && bool.TryParse(node.ToString(), out var value) && value;
+	}
+
+	private sealed class ActorSpecUndoTarget(string specId) : IJsonUndoTarget
+	{
+		public string UndoId => $"actor-spec:{specId}";
+		public string CaptureJson() => ActorSpecs.CaptureSpecJson(specId);
+		public void ApplyJson(string json) => ActorSpecs.ApplySpecJson(specId, json);
+	}
 
 	private void FocusEditorOnCurrentRoom()
 	{
@@ -51,7 +190,8 @@ public partial class Manager
 			return;
 
 		editorCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
-		editorZoom = Math.Clamp(GameViewRect.Width / Game.Width, 0.15f, 8.0f);
+		var view = EditorOpenRect;
+		editorZoom = Math.Clamp(Math.Min(view.Width / Game.Width, view.Height / Game.Height), 0.15f, 8.0f);
 		editorViewInitialized = true;
 	}
 
@@ -69,7 +209,8 @@ public partial class Manager
 
 		if (direction != Point2.Zero)
 		{
-			ShiftRoom(direction);
+			using (CaptureSelectionUndo("Select Room"))
+				ShiftRoom(direction);
 			controls.Move.Clear();
 		}
 	}
@@ -229,6 +370,7 @@ public partial class Manager
 			var value = property.Value?.GetValue<float>() ?? 0;
 			if (ImGui.DragFloat("##Value", ref value, 0.05f))
 			{
+				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
@@ -238,6 +380,7 @@ public partial class Manager
 			var value = property.Value?.GetValue<int>() ?? 0;
 			if (ImGui.DragInt("##Value", ref value))
 			{
+				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
@@ -247,6 +390,7 @@ public partial class Manager
 			var value = property.Value?.GetValue<bool>() ?? false;
 			if (ImGui.Checkbox("##Value", ref value))
 			{
+				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
@@ -257,6 +401,7 @@ public partial class Manager
 			var rgb = HexToVector3(color);
 			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
 			{
+				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
 				changed = true;
 			}
@@ -266,18 +411,40 @@ public partial class Manager
 			ImGui.TextUnformatted("-");
 		}
 		ImGui.PopID();
+		if (prefabUndoSpecId == specId && ImGui.IsItemDeactivatedAfterEdit())
+			CommitPrefabUndo();
 
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Reset"))
 			{
-				ActorSpecs.ResetProperty(specId, property.JsonName);
-				changed = true;
+				using (CapturePrefabUndo("Reset Prefab Property", specId))
+				{
+					ActorSpecs.ResetProperty(specId, property.JsonName);
+					changed = true;
+				}
 			}
 		}
 
 		return changed;
+	}
+
+	private void BeginPrefabUndo(string specId)
+	{
+		if (prefabUndoSpecId == specId && prefabUndo != null)
+			return;
+
+		CommitPrefabUndo();
+		prefabUndoSpecId = specId;
+		prefabUndo = CapturePrefabUndo("Edit Prefab", specId);
+	}
+
+	private void CommitPrefabUndo()
+	{
+		prefabUndo?.Commit();
+		prefabUndo = null;
+		prefabUndoSpecId = null;
 	}
 
 	private static Vector3 HexToVector3(string hex)
@@ -353,6 +520,18 @@ public partial class Manager
 		}
 	}
 
+	private void DrawPlaytestPlayerMarker(Room room)
+	{
+		if (playtestPlayerPosition is not { } remembered || remembered.RoomId != room.Id)
+			return;
+
+		var sprite = Assets.GetSprite("player");
+		if (sprite == null || sprite.Frames.Count <= 0)
+			return;
+
+		batcher.Image(sprite.Frames[0].Subtexture, remembered.Position, sprite.Origin, Vector2.One, 0, Color.White * 0.25f);
+	}
+
 	private void MoveRoomActorTo(Room room, int actorIndex, Vector2 world, Point2 tile, bool snap)
 	{
 		if (actorIndex < 0 || actorIndex >= room.Actors.Count)
@@ -380,6 +559,14 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
+	private void StampTiles(Room room, Point2 origin, int shift, int size, char tile)
+	{
+		for (var x = shift; x < shift + size; x ++)
+		for (var y = shift; y < shift + size; y ++)
+			room.Set(origin + new Point2(x, y), tile);
+		editorGameDirty = true;
+	}
+
 	private void UpdateEditorWorldView(Rect inner)
 	{
 		if (imgui.WantsMouseInput)
@@ -391,12 +578,19 @@ public partial class Manager
 		if (Input.Mouse.MiddleDown)
 			editorCamera -= Input.Mouse.Delta / Scale / editorZoom;
 
-		var wheel = Input.Mouse.Wheel.Y;
-		if (wheel == 0)
+		var wheel = Input.Mouse.Wheel;
+		var wheelAmount = MathF.Abs(wheel.Y) >= MathF.Abs(wheel.X) ? wheel.Y : wheel.X;
+		if (wheelAmount == 0)
 			return;
 
+		if (wheel.X != 0)
+		{
+			brushSize = Math.Clamp(brushSize + Math.Sign(wheelAmount), 1, 10);
+			return;
+		}
+
 		var before = ScreenToEditorWorld(Cursor, inner);
-		var zoomFactor = MathF.Pow(1.15f, wheel);
+		var zoomFactor = MathF.Pow(1.15f, wheelAmount);
 		editorZoom = Math.Clamp(editorZoom * zoomFactor, 0.15f, 8.0f);
 		editorCamera = before - (Cursor - inner.Center) / editorZoom;
 	}
@@ -409,13 +603,9 @@ public partial class Manager
 		foreach (var room in Assets.RoomsById.Values)
 		{
 			var bounds = room.WorldBounds;
-			var selected = CurrentRoom == room;
 			var line = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
-			if (selected)
-			{
-				batcher.RectLine(bounds, line * 2, highlight);
+			if (CurrentRoom == room)
 				continue;
-			}
 
 			batcher.Rect(bounds, 0x150e22);
 
@@ -458,6 +648,19 @@ public partial class Manager
 	private static Vector2 RectCenter(RectInt rect)
 		=> new(rect.X + rect.Width * 0.5f, rect.Y + rect.Height * 0.5f);
 
+	private static Point2? GetEditorEntryDirection(Room from, Room to)
+	{
+		if (to.Position.X >= from.Position.X + from.Size.X)
+			return Point2.Right;
+		if (to.Position.X + to.Size.X <= from.Position.X)
+			return Point2.Left;
+		if (to.Position.Y >= from.Position.Y + from.Size.Y)
+			return Point2.Down;
+		if (to.Position.Y + to.Size.Y <= from.Position.Y)
+			return Point2.Up;
+		return null;
+	}
+
 	private void Editor()
 	{
 		var bounds = WorkspaceRect;
@@ -465,6 +668,7 @@ public partial class Manager
 		var arrow = new Rect().Inflate(ButtonSize / 2);
 		var lastCell = cell;
 		var worldMouseBlocked = imgui.WantsMouseInput;
+		UpdateEditorUndoRedo();
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
 
@@ -485,9 +689,14 @@ public partial class Manager
 			var worldMouse = ScreenToEditorWorld(Cursor, inner);
 			if (GetRoomAtWorld(worldMouse) is { } selected && selected != CurrentRoom)
 			{
-				CurrentRoom?.Save();
-				SelectRoom(selected);
-				SyncEditorGame();
+				using (CaptureSelectionUndo("Select Room"))
+				{
+					if (CurrentRoom is { } previous)
+						editorRoomEntryDirection = GetEditorEntryDirection(previous, selected);
+					CurrentRoom?.Save();
+					SelectRoom(selected);
+					SyncEditorGame();
+				}
 			}
 		}
 
@@ -534,20 +743,26 @@ public partial class Manager
 
 			if (!worldMouseBlocked && actorSelectTool && overGame && Input.Mouse.LeftPressed)
 			{
-				selectedRoomActorIndex = hoveredActorIndex;
-				draggingRoomActor = selectedRoomActorIndex >= 0;
-				tilePlacing = false;
+				using (CaptureSelectionUndo("Select Actor"))
+				{
+					selectedRoomActorIndex = hoveredActorIndex;
+					draggingRoomActor = selectedRoomActorIndex >= 0;
+					tilePlacing = false;
+				}
 			}
 			else if (!worldMouseBlocked && overGame && brushIsActor && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
 			{
-				editing.Actors.RemoveAt(hoveredActorIndex);
-				if (selectedRoomActorIndex == hoveredActorIndex)
-					selectedRoomActorIndex = -1;
-				else if (selectedRoomActorIndex > hoveredActorIndex)
-					selectedRoomActorIndex--;
-				draggingRoomActor = false;
-				tilePlacing = false;
-				editorGameDirty = true;
+				using (CaptureRoomUndo("Delete Actor", editing))
+				{
+					editing.Actors.RemoveAt(hoveredActorIndex);
+					if (selectedRoomActorIndex == hoveredActorIndex)
+						selectedRoomActorIndex = -1;
+					else if (selectedRoomActorIndex > hoveredActorIndex)
+						selectedRoomActorIndex--;
+					draggingRoomActor = false;
+					tilePlacing = false;
+					editorGameDirty = true;
+				}
 			}
 			else if (!worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
 			{
@@ -556,39 +771,54 @@ public partial class Manager
 			}
 			else if (!worldMouseBlocked && overGame && Input.Mouse.LeftPressed && actorBrush is { } actorEntry)
 			{
-				var position = (Point2)(roomTopLeft + tileOver * Game.TileSize + actorEntry.Offset);
-				if (actorEntry.ActorSpecId != null)
-					editing.AddActorSpec(actorEntry.ActorSpecId, position);
-				else if (actorEntry.ActorTypeName != null)
-					editing.AddActorType(actorEntry.ActorTypeName, position);
-				tilePlacing = false;
-				editorGameDirty = true;
+				using (CaptureRoomUndo("Place Actor", editing))
+				{
+					var position = (Point2)(roomTopLeft + tileOver * Game.TileSize + actorEntry.Offset);
+					if (actorEntry.ActorSpecId != null)
+						editing.AddActorSpec(actorEntry.ActorSpecId, position);
+					else if (actorEntry.ActorTypeName != null)
+						editing.AddActorType(actorEntry.ActorTypeName, position);
+					tilePlacing = false;
+					editorGameDirty = true;
+				}
 			}
 			else if (!worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
+				tilePaintUndo?.Commit();
+				tilePaintUndo = CaptureRoomUndo("Paint Tiles", editing);
 				tilePlaceFrom = tileOver;
 				tileTypePlacing = Input.Mouse.LeftPressed ? brush : '0';
 				tilePlacing = true;
 			}
 
 			if (!worldMouseBlocked && actorSelectTool && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+			{
+				actorMoveUndo ??= CaptureRoomUndo("Move Actor", editing);
 				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, tileOver, !Input.Keyboard.Shift);
+			}
 			if (!Input.Mouse.LeftDown)
+			{
 				draggingRoomActor = false;
+				actorMoveUndo?.Commit();
+				actorMoveUndo = null;
+			}
 
 			if (actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
 			{
-				editing.Actors.RemoveAt(selectedRoomActorIndex);
-				selectedRoomActorIndex = -1;
-				draggingRoomActor = false;
-				editorGameDirty = true;
+				using (CaptureRoomUndo("Delete Actor", editing))
+				{
+					editing.Actors.RemoveAt(selectedRoomActorIndex);
+					selectedRoomActorIndex = -1;
+					draggingRoomActor = false;
+					editorGameDirty = true;
+				}
 			}
 
 			if (!Input.Mouse.RightDown)
 				tileTypePlacing = brush;
 
-			var shift = brushBig ? -1 : 0;
-			var size = brushBig ? 3 : 1;
+			var shift = -(brushSize - 1) / 2;
+			var size = brushSize;
 
 			if (!worldMouseBlocked && !actorSelectTool && overGame)
 			{
@@ -617,8 +847,7 @@ public partial class Manager
 
 			if (!worldMouseBlocked && !eyedropper && !brushIsActor && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
 			{
-				editing.Set(tilePlaceFrom, tileTypePlacing);
-				editorGameDirty = true;
+				StampTiles(editing, tilePlaceFrom, shift, size, tileTypePlacing);
 
 				while (tilePlaceFrom != tileOver)
 				{
@@ -630,16 +859,12 @@ public partial class Manager
 					tilePlaceFrom.X += Math.Sign(diff.X);
 					tilePlaceFrom.Y += Math.Sign(diff.Y);
 
-					for (int x = shift; x < shift + size; x ++)
-						for (int y = shift; y < shift + size; y ++)
-						{
-							editing.Set(tilePlaceFrom + new Point2(x, y), tileTypePlacing);
-							editorGameDirty = true;
-						}
+					StampTiles(editing, tilePlaceFrom, shift, size, tileTypePlacing);
 				}
 			}
 
 			batcher.RectLine(roomBounds, gridWeight * 2, Color.Black);
+			DrawPlaytestPlayerMarker(editing);
 			if (actorSelectTool)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 
@@ -664,6 +889,8 @@ public partial class Manager
 		{
 			tileTypePlacing = brush;
 			tilePlacing = false;
+			tilePaintUndo?.Commit();
+			tilePaintUndo = null;
 		}
 
 		if (editorGameDirty)

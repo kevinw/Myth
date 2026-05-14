@@ -36,10 +36,6 @@
       "position": [444, 56]
     },
     {
-      "type": "Player",
-      "position": [20, 80]
-    },
-    {
       "type": "Bramble",
       "position": [76, 96]
     },

@@ -28,10 +28,6 @@
       "position": [116, 52]
     },
     {
-      "type": "Player",
-      "position": [60, 96]
-    },
-    {
       "type": "Jumpthru",
       "position": [24, 96]
     },

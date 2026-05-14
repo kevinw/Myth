@@ -271,6 +271,13 @@ public class Room
 
 	public void Save()
 	{
+		File.WriteAllText(
+			Path.Join(Assets.AssetsPath, "Rooms", $"{Id}.json"),
+			ToJsonString());
+	}
+
+	public string ToJsonString()
+	{
 		var json = new JsonObject
 		{
 			["id"] = Id,
@@ -301,8 +308,22 @@ public class Room
 			json["actors"] = actors;
 		}
 
-		File.WriteAllText(
-			Path.Join(Assets.AssetsPath, "Rooms", $"{Id}.json"),
-			ActorSpecs.ToJsonString(json));
+		return ActorSpecs.ToJsonString(json);
+	}
+
+	public void LoadJsonState(string jsonText)
+	{
+		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
+		Id = ActorSpecs.ReadString(json, "id") ?? Id;
+		Position = ActorSpecs.ReadPoint(json, "position") ?? Position;
+		if (ActorSpecs.ReadPoint(json, "size") is { } size && size != Size)
+			throw new InvalidOperationException("Undoing room size changes is not supported yet.");
+
+		for (var x = 0; x < Size.X; x ++)
+		for (var y = 0; y < Size.Y; y ++)
+			Tiles[x, y] = '0';
+		Actors.Clear();
+		LoadJson(json);
+		RebuildGeometry();
 	}
 }

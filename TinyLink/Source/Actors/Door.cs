@@ -19,8 +19,8 @@ public class Door : Actor
 	{
 		if (StartsVisible)
 			Appear();
-	}
 
+	}
 
 	public void Appear()
 	{

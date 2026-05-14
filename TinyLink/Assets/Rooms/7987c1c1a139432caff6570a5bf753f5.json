@@ -1,0 +1,50 @@
+{
+  "id": "7987c1c1a139432caff6570a5bf753f5",
+  "position": [120, 0],
+  "size": [30, 17],
+  "tiles": [
+    "000000000000000000000000001111",
+    "000000000000000000000000001111",
+    "00000000000000000000000#001111",
+    "00000000000000000000000#001111",
+    "00000000000000000000000#001111",
+    "00000000000000000000000#00xxxx",
+    "00000000000000000000000#00xxxx",
+    "00000000000000000000000#00xxxx",
+    "xxxx00000xxxxxxx000000xxxxxxxx",
+    "xxxx00000xxxxxxx000000xxxxxxxx",
+    "xxxx00XXXXxxxxxx0000XXXXxxxxxx",
+    "xxxXXXXXXXxxxxxXXXXXXXXXxxxxxx",
+    "xxxXXXXXXXxxxxxXXXXXXXXXxxxxxx",
+    "xxxXXXXXXXxxxxxXXXXXXXXXxxxxxx",
+    "xxxXXXXXXXxxxxxXXXXXXXXXxxxxxx",
+    "xxxXXXXXXXxxxxxXXXXXXXXXxxxxxx",
+    "xxxXXXXXXXxxxxxXXXXXXXXXxxxxxx"
+  ],
+  "actors": [
+    {
+      "type": "Player",
+      "position": [12, 64]
+    },
+    {
+      "from": "SoftFireLight",
+      "position": [84, 68]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [200, 40]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [200, 16]
+    },
+    {
+      "from": "BlueMemoryLight",
+      "position": [188, 20]
+    },
+    {
+      "type": "Spitter",
+      "position": [92, 64]
+    }
+  ]
+}

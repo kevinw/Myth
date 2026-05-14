@@ -21,11 +21,5 @@
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
-  ],
-  "actors": [
-    {
-      "type": "Player",
-      "position": [220, 40]
-    }
   ]
 }
