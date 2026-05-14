@@ -311,7 +311,6 @@ public class Player : Actor
 				Hit(hit);
 
 			Game.BreakTiles(it);
-			Game.Batcher.RectLine(it, 1, Color.Red);
 		}
 
 		if (Grounded())

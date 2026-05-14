@@ -6,6 +6,8 @@ namespace TinyLink;
 
 public static class Assets
 {
+	public const int MaxSlopeRun = 10;
+
 	public static SpriteFont? Font { get; private set; }
 	public static Texture? Atlas { get; private set; }
 	public static Texture? LightingNoise { get; private set; }
@@ -99,6 +101,16 @@ public static class Assets
 				for (int x = 0; x < columns; x ++)
 					for (int y = 0; y < rows; y ++)
 						packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+
+				using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
+				for (var run = 1; run <= MaxSlopeRun; run ++)
+				{
+					for (var index = 0; index < run; index ++)
+					{
+						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.DownRight, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, run, index));
+						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.UpRight, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, run, index));
+					}
+				}
 			}
 
 			output = packer.Pack();
@@ -271,6 +283,34 @@ public static class Assets
 		return normal;
 	}
 
+	private static Image ExtractTile(Image source, RectInt sourceRect)
+	{
+		var output = new Image(sourceRect.Width, sourceRect.Height);
+		for (var y = 0; y < sourceRect.Height; y ++)
+		for (var x = 0; x < sourceRect.Width; x ++)
+			output[x, y] = source[sourceRect.X + x, sourceRect.Y + y];
+		return output;
+	}
+
+	private static Image GenerateSlopeTile(Image source, Room.SlopeDirection direction, int runLength, int runIndex)
+	{
+		var output = new Image(source.Width, source.Height);
+		var totalWidth = runLength * Game.TileSize;
+
+		for (var y = 0; y < source.Height; y ++)
+		for (var x = 0; x < source.Width; x ++)
+		{
+			var runX = runIndex * Game.TileSize + x + 0.5f;
+			var t = Math.Clamp(runX / totalWidth, 0, 1);
+			var surface = direction == Room.SlopeDirection.DownRight
+				? t * Game.TileSize
+				: (1 - t) * Game.TileSize;
+			output[x, y] = y + 0.5f >= surface ? source[x, y] : Color.Transparent;
+		}
+
+		return output;
+	}
+
 	private static float AlphaAt(Image image, int x, int y)
 	{
 		if (x < 0 || y < 0 || x >= image.Width || y >= image.Height)
@@ -356,5 +396,15 @@ public static class Assets
 	{
 		return Subtextures.TryGetValue(name, out var value) ? value : new();
 	}
+
+	public static Subtexture GetSlopeSubtexture(string tilesetName, Room.SlopeDirection direction, int runLength, int runIndex)
+	{
+		var clampedRun = Math.Clamp(runLength, 1, MaxSlopeRun);
+		var clampedIndex = Math.Clamp(runIndex, 0, clampedRun - 1);
+		return GetSubtexture(SlopeSubtextureName(tilesetName, direction, clampedRun, clampedIndex));
+	}
+
+	private static string SlopeSubtextureName(string tilesetName, Room.SlopeDirection direction, int runLength, int runIndex)
+		=> $"slopes/{tilesetName}/{direction}/{runLength}/{runIndex}";
 
 }

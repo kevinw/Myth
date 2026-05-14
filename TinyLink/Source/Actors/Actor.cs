@@ -223,14 +223,23 @@ public class Actor
 		while (move.X != 0)
 		{
 			var sign = Math.Sign(move.X);
+			var wasGrounded = CollidesWithSolids && Grounded();
 			if (!MovePixel(Point2.UnitX * sign))
 			{
+				if (TryStepUp(sign))
+				{
+					move.X -= sign;
+					continue;
+				}
+
 				OnCollideX();
 				break;
 			}
 			else
 			{
 				move.X -= sign;
+				if (wasGrounded)
+					TryStepDown();
 			}
 		}
 
@@ -247,6 +256,28 @@ public class Actor
 				move.Y -= sign;
 			}
 		}
+	}
+
+	private bool TryStepUp(int sign)
+	{
+		if (!CollidesWithSolids || !Grounded())
+			return false;
+
+		var step = new Point2(sign, -1);
+		if (OverlapsAny(Point2.Up, Masks.Solid) || OverlapsAny(step, Masks.Solid))
+			return false;
+
+		Position += step;
+		return true;
+	}
+
+	private bool TryStepDown()
+	{
+		if (!CollidesWithSolids || Grounded() || OverlapsAny(Point2.Down, Masks.Solid))
+			return false;
+
+		Position += Point2.Down;
+		return true;
 	}
 
 	/// <summary>

@@ -7,6 +7,23 @@ namespace TinyLink;
 
 public class Room
 {
+	public enum SlopeDirection
+	{
+		DownRight,
+		UpRight
+	}
+
+	public readonly record struct SlopeTile(Point2 Tile, int RunLength, int RunIndex, SlopeDirection Direction)
+	{
+		public RectInt WorldBounds(Room room) => new(
+			room.WorldBounds.X + Tile.X * Game.TileSize,
+			room.WorldBounds.Y + Tile.Y * Game.TileSize,
+			Game.TileSize,
+			Game.TileSize);
+	}
+
+	public readonly record struct LightOccluderPolygon(Point2[] Points, RectInt Bounds);
+
 	public static readonly Point2 DefaultSize = new(Game.Columns, Game.Rows);
 
 	/// <summary>
@@ -45,9 +62,21 @@ public class Room
 	public readonly List<RectInt> CollisionRects = [];
 
 	/// <summary>
+	/// Slope tiles keep their own geometry because collision follows the inferred surface line.
+	/// </summary>
+	public readonly List<SlopeTile> SlopeTiles = [];
+
+	private readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
+
+	/// <summary>
 	/// World-space rectangles built from adjacent light-occluding tiles.
 	/// </summary>
 	public readonly List<RectInt> LightOccluders = [];
+
+	/// <summary>
+	/// World-space convex polygons for light occluders that are not rectangular.
+	/// </summary>
+	public readonly List<LightOccluderPolygon> LightOccluderPolygons = [];
 
 	/// <summary>
 	/// World-space rectangles built from adjacent sprite-reflecting tiles.
@@ -212,12 +241,106 @@ public class Room
 	public void RebuildGeometry()
 	{
 		CollisionRects.Clear();
+		SlopeTiles.Clear();
+		slopeLookup.Clear();
 		LightOccluders.Clear();
+		LightOccluderPolygons.Clear();
 		ReflectionRects.Clear();
 
-		BuildRects(CollisionRects, static entry => entry.BlocksMovement);
-		BuildRects(LightOccluders, static entry => entry.CastsShadow);
+		BuildSlopeTiles();
+		BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope);
+		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope);
+		BuildSlopeLightOccluders();
 		BuildRects(ReflectionRects, static entry => entry.ReflectsSprites);
+	}
+
+	public bool TryGetSlopeTile(Point2 tile, out SlopeTile slope)
+		=> slopeLookup.TryGetValue(tile, out slope);
+
+	private void BuildSlopeTiles()
+	{
+		for (var y = 0; y < Size.Y; y ++)
+		for (var x = 0; x < Size.X;)
+		{
+			if (!IsSlopeTile(x, y))
+			{
+				x ++;
+				continue;
+			}
+
+			var start = x;
+			var slopeChar = Tiles[x, y];
+			while (x < Size.X && Tiles[x, y] == slopeChar && IsSlopeTile(x, y))
+				x ++;
+
+			var runLength = x - start;
+			var direction = InferSlopeDirection(start, y, runLength);
+			for (var i = 0; i < runLength; i ++)
+			{
+				var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction);
+				SlopeTiles.Add(slope);
+				slopeLookup[slope.Tile] = slope;
+			}
+		}
+	}
+
+	private SlopeDirection InferSlopeDirection(int startX, int y, int runLength)
+	{
+		var leftHigh = IsFullSolidTile(startX - 1, y);
+		var leftLow = IsFullSolidTile(startX - 1, y + 1);
+		var rightHigh = IsFullSolidTile(startX + runLength, y);
+		var rightLow = IsFullSolidTile(startX + runLength, y + 1);
+
+		if (leftHigh && rightLow)
+			return SlopeDirection.DownRight;
+		if (leftLow && rightHigh)
+			return SlopeDirection.UpRight;
+		if (rightHigh && !leftHigh)
+			return SlopeDirection.UpRight;
+		if (leftHigh && !rightHigh)
+			return SlopeDirection.DownRight;
+
+		var belowLeft = IsFullSolidTile(startX, y + 1);
+		var belowRight = IsFullSolidTile(startX + runLength - 1, y + 1);
+		if (belowRight && !belowLeft)
+			return SlopeDirection.DownRight;
+		if (belowLeft && !belowRight)
+			return SlopeDirection.UpRight;
+
+		return SlopeDirection.DownRight;
+	}
+
+	private bool IsSlopeTile(int x, int y)
+		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y && Factory.Find(Tiles[x, y]) is { IsSlope: true };
+
+	private bool IsFullSolidTile(int x, int y)
+		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y && Factory.Find(Tiles[x, y]) is { BlocksMovement: true, IsSlope: false };
+
+	private void BuildSlopeLightOccluders()
+	{
+		foreach (var slope in SlopeTiles)
+		{
+			var rect = slope.WorldBounds(this);
+			var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
+			var rightHeight = SlopeSurfaceHeight(slope, slope.RunIndex + 1);
+			var leftSurface = new Point2(rect.Left, rect.Top + leftHeight);
+			var rightSurface = new Point2(rect.Right, rect.Top + rightHeight);
+			var points = new StackList8<Point2> { leftSurface, rightSurface };
+			if (rect.BottomRight != rightSurface)
+				points.Add(rect.BottomRight);
+			if (rect.BottomLeft != leftSurface)
+				points.Add(rect.BottomLeft);
+
+			LightOccluderPolygons.Add(new(points.ToArray(), rect));
+		}
+	}
+
+	private static int SlopeSurfaceHeight(SlopeTile slope, int runEdgeIndex)
+	{
+		if (slope.Direction == SlopeDirection.DownRight)
+			return runEdgeIndex * Game.TileSize / slope.RunLength;
+
+		return (slope.RunLength - runEdgeIndex) * Game.TileSize / slope.RunLength;
 	}
 
 	private void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)

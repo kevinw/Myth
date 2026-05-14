@@ -800,6 +800,14 @@ public class Game : IDisposable
 			DrawShadowVolume(lightPosition, radius, rect);
 		}
 
+		foreach (var polygon in room.LightOccluderPolygons)
+		{
+			if (!CircleOverlapsRect(lightPosition, radius, polygon.Bounds))
+				continue;
+
+			DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
+		}
+
 		if (actorSpriteShadowsEnabled)
 			DrawActorSpriteShadows(lightPosition, radius);
 	}
@@ -838,32 +846,38 @@ public class Game : IDisposable
 
 	private void DrawShadowVolume(Vector2 lightPosition, float radius, RectInt rect)
 	{
-		if (rect.Contains(lightPosition))
+		Span<Point2> corners =
+		[
+			rect.TopLeft,
+			rect.TopRight,
+			rect.BottomRight,
+			rect.BottomLeft
+		];
+		DrawShadowVolume(lightPosition, radius, corners, rect);
+	}
+
+	private void DrawShadowVolume(Vector2 lightPosition, float radius, ReadOnlySpan<Point2> points, RectInt bounds)
+	{
+		if (bounds.Contains(lightPosition))
 			return;
 
-		Span<Vector2> corners =
-		[
-			new(rect.Left, rect.Top),
-			new(rect.Right, rect.Top),
-			new(rect.Right, rect.Bottom),
-			new(rect.Left, rect.Bottom)
-		];
-
-		var bestA = corners[0];
-		var bestB = corners[1];
+		var bestA = (Vector2)points[0];
+		var bestB = (Vector2)points[1];
 		var bestSpan = -1.0f;
 
-		for (var i = 0; i < corners.Length; i ++)
-		for (var j = i + 1; j < corners.Length; j ++)
+		for (var i = 0; i < points.Length; i ++)
+		for (var j = i + 1; j < points.Length; j ++)
 		{
-			var a = DirectionFromLight(lightPosition, corners[i]);
-			var b = DirectionFromLight(lightPosition, corners[j]);
+			var pointA = (Vector2)points[i];
+			var pointB = (Vector2)points[j];
+			var a = DirectionFromLight(lightPosition, pointA);
+			var b = DirectionFromLight(lightPosition, pointB);
 			var span = 1 - Vector2.Dot(a, b);
 			if (span > bestSpan)
 			{
 				bestSpan = span;
-				bestA = corners[i];
-				bestB = corners[j];
+				bestA = pointA;
+				bestB = pointB;
 			}
 		}
 
@@ -897,6 +911,15 @@ public class Game : IDisposable
 
 		foreach (var rect in room.CollisionRects)
 			Batcher.RectLine(rect, 1, Color.Red);
+		foreach (var slope in room.SlopeTiles)
+		{
+			var rect = slope.WorldBounds(room);
+			Batcher.RectLine(rect, 1, Color.Red);
+			if (slope.Direction == Room.SlopeDirection.DownRight)
+				Batcher.Line(rect.TopLeft, rect.BottomRight, 1, Color.Red);
+			else
+				Batcher.Line(rect.BottomLeft, rect.TopRight, 1, Color.Red);
+		}
 		foreach (var rect in CollisionRectsThisFrame)
 			Batcher.RectLine(rect, 1, Color.Red);
 		foreach (var it in Actors)
@@ -941,6 +964,8 @@ public class Game : IDisposable
 
 		foreach (var rect in room.LightOccluders)
 			FillRoomNormalMask(rect);
+		foreach (var polygon in room.LightOccluderPolygons)
+			FillRoomNormalMask(polygon);
 
 		var offset = (Point2)Camera;
 		for (var y = 0; y < NormalBuffer.Height; y ++)
@@ -971,6 +996,38 @@ public class Game : IDisposable
 		for (var y = top; y < bottom; y ++)
 		for (var x = left; x < right; x ++)
 			roomNormalMask[x, y] = true;
+	}
+
+	private void FillRoomNormalMask(Room.LightOccluderPolygon polygon)
+	{
+		var left   = Math.Clamp(polygon.Bounds.Left - (int)Camera.X, 0, NormalBuffer.Width);
+		var right  = Math.Clamp(polygon.Bounds.Right - (int)Camera.X, 0, NormalBuffer.Width);
+		var top    = Math.Clamp(polygon.Bounds.Top - (int)Camera.Y, 0, NormalBuffer.Height);
+		var bottom = Math.Clamp(polygon.Bounds.Bottom - (int)Camera.Y, 0, NormalBuffer.Height);
+		var camera = (Point2)Camera;
+
+		for (var y = top; y < bottom; y ++)
+		for (var x = left; x < right; x ++)
+		{
+			var worldPoint = new Vector2(camera.X + x + 0.5f, camera.Y + y + 0.5f);
+			if (PointInPolygon(worldPoint, polygon.Points))
+				roomNormalMask[x, y] = true;
+		}
+	}
+
+	private static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
+	{
+		var inside = false;
+		for (var i = 0; i < polygon.Length; i ++)
+		{
+			var a = (Vector2)polygon[i];
+			var b = (Vector2)polygon[(i + polygon.Length - 1) % polygon.Length];
+			if ((a.Y > point.Y) != (b.Y > point.Y) &&
+			    point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+				inside = !inside;
+		}
+
+		return inside;
 	}
 
 	private bool RoomNormalSolid(int x, int y)
@@ -1382,6 +1439,39 @@ public class Game : IDisposable
 		foreach (var rect in room.CollisionRects)
 		{
 			if (bounds.Overlaps(rect))
+				return true;
+		}
+
+		foreach (var slope in room.SlopeTiles)
+		{
+			if (OverlapsSlope(bounds, room, slope))
+				return true;
+		}
+
+		return false;
+	}
+
+	private static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
+	{
+		var tileBounds = slope.WorldBounds(room);
+		if (!bounds.Overlaps(tileBounds))
+			return false;
+
+		var left = Math.Max(bounds.Left, tileBounds.Left);
+		var right = Math.Min(bounds.Right, tileBounds.Right);
+		var top = Math.Max(bounds.Top, tileBounds.Top);
+		var bottom = Math.Min(bounds.Bottom, tileBounds.Bottom);
+		var runLeft = room.WorldBounds.X + (slope.Tile.X - slope.RunIndex) * TileSize;
+		var runWidth = slope.RunLength * TileSize;
+
+		for (var x = left; x < right; x ++)
+		{
+			var t = Math.Clamp((x + 0.5f - runLeft) / runWidth, 0, 1);
+			var localSurfaceY = slope.Direction == Room.SlopeDirection.DownRight
+				? t * TileSize
+				: (1 - t) * TileSize;
+			var surfaceY = tileBounds.Top + localSurfaceY;
+			if (bottom > surfaceY && top < tileBounds.Bottom)
 				return true;
 		}
 

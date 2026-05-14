@@ -28,8 +28,10 @@ public static class Factory
 		public readonly bool CastsShadow;
 		public readonly bool ReflectsSprites;
 		public readonly bool Destructible;
+		public readonly bool IsSlope;
+		public readonly string? SlopeTilesetName;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null)
 		{
 			Name = name;
 			Image = image;
@@ -39,6 +41,8 @@ public static class Factory
 			CastsShadow = castsShadow;
 			ReflectsSprites = reflectsSprites;
 			Destructible = destructible;
+			IsSlope = isSlope;
+			SlopeTilesetName = slopeTilesetName;
 		}
 	}
 
@@ -116,6 +120,25 @@ public static class Factory
 		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible);
 	}
 
+	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null)
+	{
+		var tileset = Assets.GetTileset(tilesetName);
+		if (tileset == null)
+			return new();
+
+		var image = Assets.GetSlopeSubtexture(tilesetName, Room.SlopeDirection.DownRight, 1, 0);
+		if (image.Texture == null)
+			image = tileset.Tiles[0];
+
+		return new Entry(name ?? $"{tileset.Name} Slope", image, (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
+		{
+			if (room.TryGetSlopeTile(tile, out var slope))
+				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.RunLength, slope.RunIndex));
+			else
+				fg.Set(tile.X, tile.Y, image);
+		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName);
+	}
+
 	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
@@ -148,8 +171,10 @@ public static class Factory
 
 		// Add Tile Types
 		Register('1', AsTile("castle", true, "Brick"));
+		Register('2', AsSlopeTile("castle", "Brick", "Castle Slope"));
 		Register('x', AsTile("castle", true, "Brick", destructible: true, name: "Breakable Brick"));
 		Register('G', AsTile("grass", true, "Grass"));
+		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope"));
 		Register('X', AsTile("grass", true, "Grass", destructible: true, name: "Breakable Grass"));
 		//Register('1', AsDualTile("castle", "castle-dual", "Brick"));
 		//Register('G', AsDualTile("grass", "grass-dual", "Grass"));
