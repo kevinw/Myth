@@ -28,6 +28,8 @@ public partial class Manager : App
 
 	private const string WindowSettingsFileName = "window.json";
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
+	private const int MinimumRestoredWindowWidth = 640;
+	private const int MinimumRestoredWindowHeight = 360;
 
 	static float Scale => 3.0f;
 	static float ButtonSize => 24;
@@ -357,6 +359,10 @@ public partial class Manager : App
 			var settings = JsonSerializer.Deserialize<WindowSettings>(File.ReadAllText(WindowSettingsPath));
 			if (settings != null)
 			{
+				if (settings.Width > 0 && settings.Height > 0)
+					Window.Size = new Point2(
+						Math.Max(settings.Width, MinimumRestoredWindowWidth),
+						Math.Max(settings.Height, MinimumRestoredWindowHeight));
 				Window.Position = new Point2(settings.X, settings.Y);
 				cell = new Point2(settings.RoomX, settings.RoomY);
 				selectedRoomId = settings.RoomId;
@@ -378,12 +384,15 @@ public partial class Manager : App
 			Directory.CreateDirectory(UserPath);
 
 			var position = Window.Position;
+			var size = Window.Size;
 			var currentRoom = game?.CurrentRoom ?? CurrentRoom;
 			var currentCell = currentRoom?.Cell ?? cell;
 			var settings = new WindowSettings
 			{
 				X = position.X,
 				Y = position.Y,
+				Width = size.X,
+				Height = size.Y,
 				RoomId = currentRoom?.Id ?? selectedRoomId,
 				RoomX = currentCell.X,
 				RoomY = currentCell.Y,
@@ -403,6 +412,8 @@ public partial class Manager : App
 	{
 		public int X { get; init; }
 		public int Y { get; init; }
+		public int Width { get; init; }
+		public int Height { get; init; }
 		public string? RoomId { get; init; }
 		public int RoomX { get; init; }
 		public int RoomY { get; init; }
@@ -874,8 +885,19 @@ public partial class Manager : App
 		{
 			ImGui.SameLine(0, ToolbarSpacing);
 			var area = room.MusicArea ?? DefaultMusicArea;
-			if (ImGuiTextButton($"{area}##MusicArea", new Vector2(96, ButtonSize), room.MusicArea != null))
-				CycleMusicArea(room);
+			ImGui.SetNextItemWidth(116);
+			if (ImGui.BeginCombo("##MusicArea", area))
+			{
+				foreach (var musicArea in musicAreas)
+				{
+					var selected = area == musicArea;
+					if (ImGui.Selectable(musicArea, selected))
+						room.MusicArea = musicArea == DefaultMusicArea ? null : musicArea;
+					if (selected)
+						ImGui.SetItemDefaultFocus();
+				}
+				ImGui.EndCombo();
+			}
 		}
 
 		var displayedRoom = CurrentRoom;
@@ -1014,19 +1036,6 @@ public partial class Manager : App
 		{
 			Console.Error.WriteLine($"Failed to open FMOD Studio: {e}");
 		}
-	}
-
-	void CycleMusicArea(Room room)
-	{
-		if (musicAreas.Count <= 0)
-			return;
-
-		var current = room.MusicArea ?? DefaultMusicArea;
-		var index = musicAreas.IndexOf(current);
-		if (index < 0)
-			index = 0;
-
-		room.MusicArea = musicAreas[(index + 1) % musicAreas.Count];
 	}
 
 }

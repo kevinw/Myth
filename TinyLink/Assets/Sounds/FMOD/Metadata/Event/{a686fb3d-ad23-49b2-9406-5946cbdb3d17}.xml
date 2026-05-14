@@ -98,6 +98,7 @@
 		<property name="start">
 			<value>1</value>
 		</property>
+		<property name="name" />
 		<relationship name="modulators">
 			<destination>{89fd2720-9c54-4b45-a3cc-eda9d8d2bbe7}</destination>
 		</relationship>
@@ -147,7 +148,7 @@
 	</object>
 	<object class="SingleSound" id="{8b5ae50c-9c41-47a6-9552-03f232adfe21}">
 		<property name="startOffset">
-			<value>6.5</value>
+			<value>10.5</value>
 		</property>
 		<relationship name="audioFile">
 			<destination>{38b292c3-43c3-4985-98cb-bcff51510500}</destination>
@@ -155,7 +156,7 @@
 	</object>
 	<object class="SingleSound" id="{232a51cc-9ec2-4358-8b44-b672371e1a17}">
 		<property name="startOffset">
-			<value>10</value>
+			<value>12.5</value>
 		</property>
 		<relationship name="audioFile">
 			<destination>{8b346752-2ea4-4e70-95b6-a17c7987ed3a}</destination>
@@ -163,7 +164,7 @@
 	</object>
 	<object class="SingleSound" id="{1bb9f98a-344b-45cc-a0b5-d7005b687ed8}">
 		<property name="startOffset">
-			<value>16.5</value>
+			<value>20.5</value>
 		</property>
 		<relationship name="audioFile">
 			<destination>{31fd108b-003d-4f42-9872-aae33c8a5a0c}</destination>

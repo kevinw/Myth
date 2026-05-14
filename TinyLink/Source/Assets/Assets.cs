@@ -46,6 +46,7 @@ public static class Assets
 	{
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
+		var actorsPath = Path.Join(AssetsPath, "Actors");
 		var spriteFiles = new Dictionary<string, Aseprite>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();
 
@@ -208,6 +209,7 @@ public static class Assets
 		oldAtlas?.Dispose();
 		oldLightingNoise?.Dispose();
 
+		ActorSpecs.LoadSpecs(actorsPath);
 		if (reloadRooms)
 			LoadRooms();
 	}
@@ -227,17 +229,15 @@ public static class Assets
 		Rooms.Clear();
 		RoomsById.Clear();
 
-		foreach (var file in Directory.EnumerateFiles(Path.Join(AssetsPath, "Rooms"), "*.txt"))
-		{
-			var name = Path.GetFileNameWithoutExtension(file).Split('x');
-			var p = Point2.Zero;
-			if (name.Length > 1 && int.TryParse(name[0], out var x) && int.TryParse(name[1], out var y))
-				p = new Point2(x, y);
+		var roomsPath = Path.Join(AssetsPath, "Rooms");
+		foreach (var file in Directory.EnumerateFiles(roomsPath, "*.json"))
+			AddRoom(new Room(file));
+	}
 
-			var room = new Room(p, file);
-			Rooms[room.Cell] = room;
-			RoomsById[room.Id] = room;
-		}
+	private static void AddRoom(Room room)
+	{
+		Rooms[room.Cell] = room;
+		RoomsById[room.Id] = room;
 	}
 
 	public static void RebuildRoomGeometry()
@@ -292,6 +292,8 @@ public static class Assets
 		Subtextures.Clear();
 		Rooms.Clear();
 		RoomsById.Clear();
+		ActorSpecs.ClearSpecs();
+		ActorSpecs.ClearActorTypes();
 	}
 
 	public static Sprite? GetSprite(string name) => Sprites.GetValueOrDefault(name);

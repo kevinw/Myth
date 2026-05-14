@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 using ImGuiNET;
 
@@ -25,6 +26,12 @@ public partial class Manager
 	char tileTypePlacing;
 	bool tilePlacing;
 	RectInt? proposedRoomTiles;
+	string? selectedActorSpecId;
+	int selectedActorPaletteIndex = -1;
+	bool actorSpecInspectorOpen;
+	bool actorSelectTool;
+	int selectedRoomActorIndex = -1;
+	bool draggingRoomActor;
 
 	private void FocusEditorOnCurrentRoom()
 	{
@@ -111,26 +118,273 @@ public partial class Manager
 
 		if (ImGui.Begin("Palette", flags))
 		{
-			var index = 0;
-			foreach (var (id, entry) in Factory.Entries)
+			if (ImGuiTextButton("Select", new Vector2(ButtonSize * 2 + ButtonSpacing, ButtonSize), actorSelectTool))
 			{
-				if (index > 0 && index % PaletteColumns != 0)
-					ImGui.SameLine();
-
-				if (ImGuiSubtextureButton($"Palette_{id}", entry.Image, entry.Name, brush == id, new Vector2(ButtonSize, ButtonSize)))
-					brush = id;
-
-				index++;
+				actorSelectTool = true;
+				brush = '0';
 			}
+			ImGui.Spacing();
+			DrawTilePaletteSection();
+			ImGui.Spacing();
+			DrawActorPaletteSection();
 		}
 		ImGui.End();
 
 		ImGui.PopStyleColor(2);
 		ImGui.PopStyleVar(4);
+
+		ActorSpecInspectorImGui();
+	}
+
+	private void DrawTilePaletteSection()
+	{
+		ImGui.TextUnformatted("Tiles");
+		var index = 0;
+		foreach (var (id, entry) in Factory.Entries)
+		{
+			if (index > 0 && index % PaletteColumns != 0)
+				ImGui.SameLine();
+
+			if (ImGuiSubtextureButton($"Palette_Tiles_{id}", entry.Image, entry.Name, selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
+			{
+				brush = id;
+				selectedActorPaletteIndex = -1;
+				actorSelectTool = false;
+			}
+
+			index++;
+		}
+	}
+
+	private void DrawActorPaletteSection()
+	{
+		ImGui.TextUnformatted("Actors");
+		var index = 0;
+		for (var i = 0; i < Factory.ActorPalette.Count; i ++)
+		{
+			var entry = Factory.ActorPalette[i];
+			if (entry.Image.Texture == null)
+				continue;
+
+			if (index > 0 && index % PaletteColumns != 0)
+				ImGui.SameLine();
+
+			if (ImGuiSubtextureButton($"Palette_Actors_{i}", entry.Image, entry.Name, selectedActorPaletteIndex == i, new Vector2(ButtonSize, ButtonSize)))
+			{
+				selectedActorPaletteIndex = i;
+				actorSelectTool = false;
+				if (entry.ActorSpecId != null)
+				{
+					selectedActorSpecId = entry.ActorSpecId;
+					actorSpecInspectorOpen = true;
+				}
+			}
+
+			index++;
+		}
+	}
+
+	private void ActorSpecInspectorImGui()
+	{
+		if (!actorSpecInspectorOpen || selectedActorSpecId == null)
+			return;
+
+		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
+		var open = actorSpecInspectorOpen;
+		if (!ImGui.Begin($"Prefab: {selectedActorSpecId}", ref open, ImGuiWindowFlags.NoSavedSettings))
+		{
+			actorSpecInspectorOpen = open;
+			ImGui.End();
+			return;
+		}
+		actorSpecInspectorOpen = open;
+
+		var changed = false;
+		foreach (var property in ActorSpecs.GetEditableProperties(selectedActorSpecId))
+		{
+			ImGui.PushID(property.JsonName);
+			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
+			ImGui.PopID();
+		}
+
+		if (changed)
+			SyncEditorGame();
+
+		if (ImGui.Button("Save"))
+			ActorSpecs.SaveSpec(selectedActorSpecId);
+
+		ImGui.End();
+	}
+
+	private bool DrawActorSpecProperty(string specId, ActorSpecs.EditableProperty property)
+	{
+		var changed = false;
+		var controlWidth = MathF.Min(150, MathF.Max(96, ImGui.GetContentRegionAvail().X - 72));
+		ImGui.TextWrapped(property.Name);
+		ImGui.SetNextItemWidth(controlWidth);
+		ImGui.PushID("Value");
+
+		if (property.Type == typeof(float))
+		{
+			var value = property.Value?.GetValue<float>() ?? 0;
+			if (ImGui.DragFloat("##Value", ref value, 0.05f))
+			{
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(int))
+		{
+			var value = property.Value?.GetValue<int>() ?? 0;
+			if (ImGui.DragInt("##Value", ref value))
+			{
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(bool))
+		{
+			var value = property.Value?.GetValue<bool>() ?? false;
+			if (ImGui.Checkbox("##Value", ref value))
+			{
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(Color))
+		{
+			var color = property.Value?.GetValue<string>() ?? "ffffff";
+			var rgb = HexToVector3(color);
+			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
+			{
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
+				changed = true;
+			}
+		}
+		else
+		{
+			ImGui.TextUnformatted("-");
+		}
+		ImGui.PopID();
+
+		if (property.HasLocalValue)
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Reset"))
+			{
+				ActorSpecs.ResetProperty(specId, property.JsonName);
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
+
+	private static Vector3 HexToVector3(string hex)
+	{
+		hex = hex.TrimStart('#');
+		if (hex.Length < 6 || !uint.TryParse(hex[..6], System.Globalization.NumberStyles.HexNumber, null, out var value))
+			return Vector3.One;
+
+		return new Vector3(
+			((value >> 16) & 0xff) / 255.0f,
+			((value >> 8) & 0xff) / 255.0f,
+			(value & 0xff) / 255.0f);
+	}
+
+	private static string Vector3ToHex(Vector3 value)
+	{
+		var r = (int)(Math.Clamp(value.X, 0, 1) * 255);
+		var g = (int)(Math.Clamp(value.Y, 0, 1) * 255);
+		var b = (int)(Math.Clamp(value.Z, 0, 1) * 255);
+		return $"{r:X2}{g:X2}{b:X2}";
+	}
+
+	private static RectInt RoomActorBounds(Room room, JsonObject actor)
+	{
+		var local = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
+		var position = room.WorldBounds.TopLeft + local;
+		if (FindRoomActorEntry(actor) is { EditorBounds: { } bounds })
+			return bounds + position;
+
+		return new RectInt(position.X - 4, position.Y - 4, 8, 8);
+	}
+
+	private static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
+	{
+		var specId = ActorSpecs.ReadString(actor, "from");
+		var typeName = ActorSpecs.ReadString(actor, "type");
+
+		foreach (var entry in Factory.ActorPalette)
+		{
+			if (specId != null && entry.ActorSpecId == specId)
+				return entry;
+			if (typeName != null && entry.ActorTypeName == typeName && entry.ActorSpecId == null)
+				return entry;
+		}
+
+		return null;
+	}
+
+	private int HitTestRoomActor(Room room, Vector2 world)
+	{
+		for (var i = room.Actors.Count - 1; i >= 0; i --)
+			if (RoomActorBounds(room, room.Actors[i]).Contains(world))
+				return i;
+
+		return -1;
+	}
+
+	private void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
+	{
+		for (var i = 0; i < room.Actors.Count; i ++)
+		{
+			var selected = i == selectedRoomActorIndex;
+			if (draggingRoomActor && !selected)
+				continue;
+
+			var hovered = i == hoveredIndex;
+			var bounds = RoomActorBounds(room, room.Actors[i]);
+			if (!selected && !hovered && !bounds.Inflate(bounds.Width * 1.5f, bounds.Height * 1.5f).Contains(worldMouse))
+				continue;
+
+			var color = selected ? highlight : hovered ? Color.White : Color.Gray;
+			batcher.RectLine(bounds.Inflate(lineWeight * 2), lineWeight * 2, color);
+		}
+	}
+
+	private void MoveRoomActorTo(Room room, int actorIndex, Vector2 world, Point2 tile, bool snap)
+	{
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count)
+			return;
+
+		var actor = room.Actors[actorIndex];
+		var specId = ActorSpecs.ReadString(actor, "from");
+		var typeName = ActorSpecs.ReadString(actor, "type");
+		var offset = Point2.Zero;
+		if (specId != null || typeName != null)
+		{
+			foreach (var entry in Factory.ActorPalette)
+			{
+				if ((specId != null && entry.ActorSpecId == specId) ||
+				    (typeName != null && entry.ActorTypeName == typeName && entry.ActorSpecId == null))
+				{
+					offset = entry.Offset;
+					break;
+				}
+			}
+		}
+
+		var local = snap ? tile * Game.TileSize + offset : (Point2)(world - (Vector2)room.WorldBounds.TopLeft);
+		actor["position"] = new JsonArray(local.X, local.Y);
+		editorGameDirty = true;
 	}
 
 	private void UpdateEditorWorldView(Rect inner)
 	{
+		if (imgui.WantsMouseInput)
+			return;
+
 		if (!inner.Contains(Cursor))
 			return;
 
@@ -176,17 +430,6 @@ public partial class Manager
 					batcher.Image(entry.Image, position, entry.Origin, Vector2.One, 0, Color.White);
 			}
 
-			for (var x = 0; x < room.Size.X; x ++)
-			for (var y = 0; y < room.Size.Y; y ++)
-			{
-				if (Factory.Find(room.Tiles[x, y]) is not { } entry || entry.Image.Texture == null)
-					continue;
-
-				var position = (Vector2)bounds.TopLeft + new Vector2(x, y) * Game.TileSize + entry.Offset;
-				if (entry.Spawn != null)
-					batcher.Image(entry.Image, position, entry.Origin, Vector2.One, 0, Color.White);
-			}
-
 			batcher.RectLine(bounds, line, Color.Gray);
 		}
 	}
@@ -221,6 +464,7 @@ public partial class Manager
 		var inner = GameViewRect;
 		var arrow = new Rect().Inflate(ButtonSize / 2);
 		var lastCell = cell;
+		var worldMouseBlocked = imgui.WantsMouseInput;
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
 
@@ -236,7 +480,7 @@ public partial class Manager
 
 		var eyedropper = Input.Keyboard.Alt;
 
-		if (inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
+		if (!worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 		{
 			var worldMouse = ScreenToEditorWorld(Cursor, inner);
 			if (GetRoomAtWorld(worldMouse) is { } selected && selected != CurrentRoom)
@@ -266,26 +510,78 @@ public partial class Manager
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, width, height).Contains(localMouse);
-			proposedRoomTiles = overGame ? null : GetProposedRoomTiles(editing, worldMouse);
+			proposedRoomTiles = worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
+			if (selectedRoomActorIndex >= editing.Actors.Count)
+				selectedRoomActorIndex = -1;
+			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
 
 			for (int x = 1; x < editing.Size.X; x ++)
 				batcher.Line(roomTopLeft + new Vector2(x * Game.TileSize, 0),  roomTopLeft + new Vector2(x * Game.TileSize, height), gridWeight, gridColor);
 			for (int y = 1; y < editing.Size.Y; y ++)
 				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize),  roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, gridColor);
 
+			var brushEntry = Factory.Find(brush);
+			Factory.ActorPaletteEntry? actorBrush = selectedActorPaletteIndex >= 0 && selectedActorPaletteIndex < Factory.ActorPalette.Count
+				? Factory.ActorPalette[selectedActorPaletteIndex]
+				: null;
+			var brushIsActor = actorBrush != null;
+
 			if (eyedropper)
 				tilePlacing = false;
 
-			if (eyedropper && overGame && Input.Mouse.LeftPressed)
+			if (worldMouseBlocked)
+				tilePlacing = false;
+
+			if (!worldMouseBlocked && actorSelectTool && overGame && Input.Mouse.LeftPressed)
+			{
+				selectedRoomActorIndex = hoveredActorIndex;
+				draggingRoomActor = selectedRoomActorIndex >= 0;
+				tilePlacing = false;
+			}
+			else if (!worldMouseBlocked && overGame && brushIsActor && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
+			{
+				editing.Actors.RemoveAt(hoveredActorIndex);
+				if (selectedRoomActorIndex == hoveredActorIndex)
+					selectedRoomActorIndex = -1;
+				else if (selectedRoomActorIndex > hoveredActorIndex)
+					selectedRoomActorIndex--;
+				draggingRoomActor = false;
+				tilePlacing = false;
+				editorGameDirty = true;
+			}
+			else if (!worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
 			{
 				brush = editing.Tiles[tileOver.X, tileOver.Y];
 				tileTypePlacing = brush;
 			}
-			else if (lastCell == cell && overGame && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
+			else if (!worldMouseBlocked && overGame && Input.Mouse.LeftPressed && actorBrush is { } actorEntry)
+			{
+				var position = (Point2)(roomTopLeft + tileOver * Game.TileSize + actorEntry.Offset);
+				if (actorEntry.ActorSpecId != null)
+					editing.AddActorSpec(actorEntry.ActorSpecId, position);
+				else if (actorEntry.ActorTypeName != null)
+					editing.AddActorType(actorEntry.ActorTypeName, position);
+				tilePlacing = false;
+				editorGameDirty = true;
+			}
+			else if (!worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
 				tilePlaceFrom = tileOver;
 				tileTypePlacing = Input.Mouse.LeftPressed ? brush : '0';
 				tilePlacing = true;
+			}
+
+			if (!worldMouseBlocked && actorSelectTool && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, tileOver, !Input.Keyboard.Shift);
+			if (!Input.Mouse.LeftDown)
+				draggingRoomActor = false;
+
+			if (actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
+			{
+				editing.Actors.RemoveAt(selectedRoomActorIndex);
+				selectedRoomActorIndex = -1;
+				draggingRoomActor = false;
+				editorGameDirty = true;
 			}
 
 			if (!Input.Mouse.RightDown)
@@ -294,22 +590,23 @@ public partial class Manager
 			var shift = brushBig ? -1 : 0;
 			var size = brushBig ? 3 : 1;
 
-			if (overGame)
+			if (!worldMouseBlocked && !actorSelectTool && overGame)
 			{
-				var cursorRect = ((new Rect(tileOver.X + shift, tileOver.Y + shift, size, size) * Game.TileSize) + roomTopLeft).Inflate(gridWeight * 2);
 				if (eyedropper)
 				{
 					var sampleRect = ((new Rect(tileOver.X, tileOver.Y, 1, 1) * Game.TileSize) + roomTopLeft).Inflate(gridWeight * 2);
 					DrawEditorEyedropperCursor(sampleRect, gridWeight);
 				}
-				else
+				else if (actorBrush is { } actorPreview)
 				{
+					var position = roomTopLeft + tileOver * Game.TileSize + actorPreview.Offset;
+					batcher.Image(actorPreview.Image, position, actorPreview.Origin, Vector2.One, 0, Color.White);
+				}
+				else if (brushEntry is {} placing)
+				{
+					var cursorRect = ((new Rect(tileOver.X + shift, tileOver.Y + shift, size, size) * Game.TileSize) + roomTopLeft).Inflate(gridWeight * 2);
 					var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
 					batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
-				}
-
-				if (!eyedropper && Factory.Find(brush) is {} placing)
-				{
 					var position = roomTopLeft + tileOver * Game.TileSize + placing.Offset;
 
 					for (int x = shift; x < shift + size; x ++)
@@ -318,7 +615,7 @@ public partial class Manager
 				}
 			}
 
-			if (!eyedropper && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
+			if (!worldMouseBlocked && !eyedropper && !brushIsActor && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
 			{
 				editing.Set(tilePlaceFrom, tileTypePlacing);
 				editorGameDirty = true;
@@ -343,6 +640,8 @@ public partial class Manager
 			}
 
 			batcher.RectLine(roomBounds, gridWeight * 2, Color.Black);
+			if (actorSelectTool)
+				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 
 			if (proposedRoomTiles is { } proposal)
 			{
@@ -350,7 +649,7 @@ public partial class Manager
 				batcher.Rect(proposalBounds, Color.Gray * 0.35f);
 				batcher.RectLine(proposalBounds, gridWeight * 2, Color.Gray);
 
-				if (inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
+				if (!worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 				{
 					CreateRoom(proposal.Position, proposal.Size);
 					proposedRoomTiles = null;

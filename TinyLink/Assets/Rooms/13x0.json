@@ -1,0 +1,111 @@
+{
+  "id": "13x0",
+  "position": [390, 0],
+  "size": [30, 17],
+  "text": "YOU SAVED POND\nAND YOU ARE\nA REAL HERO\n",
+  "tiles": [
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "111000000000000000000000000000",
+    "###000000000000000000000000000",
+    "###000000000000000000000000000",
+    "111111100011GG0000000000000000",
+    "1111111www11GGwwwwwwwwwwwwwwww",
+    "11111wwwwwwGGGwwwwwwwwwwwwwwww",
+    "11111wwwwwwwGGGwwwwwwwwwwwwwww"
+  ],
+  "actors": [
+    {
+      "type": "TitleText",
+      "position": [132, 44]
+    },
+    {
+      "type": "Player",
+      "position": [36, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [56, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [64, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [72, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [112, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [120, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [128, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [136, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [144, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [152, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [160, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [168, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [176, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [184, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [192, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [200, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [208, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [216, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [224, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [232, 104]
+    }
+  ]
+}

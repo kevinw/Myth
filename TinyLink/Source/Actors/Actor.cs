@@ -17,25 +17,27 @@ public class Actor
 		Hazard	= 1 << 4,
 	}
 
-	public Game Game = null!;
-	public Point2 Position;
-	public Vector2 Velocity;
-	public Hitbox Hitbox;
-	public Masks Mask = Masks.None;
-	public Signs Facing = Signs.Positive;
-	public Vector2 Squish = Vector2.One;
-	public Vector2 Shift = Vector2.Zero;
-	public int Depth = 0;
-	public float Timer = 0;
-	public bool Visible = true;
-	public float IFrameTime = 0.50f;
-	public bool CollidesWithSolids = true;
+	[NoSerialize] public Game Game = null!;
+	[NoSerialize] public Point2 Position;
+	[NoSerialize] public Vector2 Velocity;
+	[NoSerialize] public Hitbox Hitbox;
+	[NoSerialize] public Masks Mask = Masks.None;
+	[NoSerialize] public Signs Facing = Signs.Positive;
+	[NoSerialize] public Vector2 Squish = Vector2.One;
+	[NoSerialize] public Vector2 Shift = Vector2.Zero;
+	[NoSerialize] public int Depth = 0;
+	[NoSerialize] public float Timer = 0;
+	[NoSerialize] public bool Visible = true;
+	[NoSerialize] public float IFrameTime = 0.50f;
+	[NoSerialize] public bool CollidesWithSolids = true;
 	public bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;
 
+	[NoSerialize]
 	public Time Time => Game.Time;
 
+	[NoSerialize]
 	public Sprite? Sprite
 	{
 		get => sprite;
@@ -50,6 +52,7 @@ public class Actor
 		}
 	}
 
+	[NoSerialize]
 	public Sprite.Animation Animation
 	{
 		get
@@ -60,7 +63,9 @@ public class Actor
 			return sprite.GetAnimation(animationName) ?? sprite.Animations[0];
 		}
 	}
+	[NoSerialize]
 	public float AnimationTime => animationTime;
+	[NoSerialize]
 	public int AnimationFrameIndex => sprite?.GetFrameIndexAt(Animation, animationTime, animationLooping) ?? -1;
 
 	private Vector2 remainder;

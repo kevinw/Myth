@@ -1,0 +1,9 @@
+{
+  "id": "StrongFireLight",
+  "from": "SoftFireLight",
+  "radius": 96,
+  "intensity": 2.5,
+  "height": 24,
+  "flickerFrequency": 5.0,
+  "flickerIntensity": 0.12
+}

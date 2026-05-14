@@ -1,0 +1,60 @@
+{
+  "id": "0x0",
+  "position": [0, 0],
+  "size": [30, 17],
+  "musicArea": "Calm",
+  "text": "SWORD II: ADVENTURE OF FROG\narrow keys \u002B X/C\nstick \u002B A/X\n",
+  "tiles": [
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "0000000000000000000000000000##",
+    "GG0000000000000000000000000###",
+    "GG00000###00000000000000000###",
+    "GG00000###00000000000000000###",
+    "GG00000####0000000000000011111",
+    "GGgggg0####00gg000gg00###11111",
+    "GGGGGGGGG11111GGGGGGGGGGGGGGGG",
+    "GGGGGGGGG11111GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+  ],
+  "actors": [
+    {
+      "type": "TitleText",
+      "position": [116, 36]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [16, 64]
+    },
+    {
+      "type": "Bramble",
+      "position": [204, 80]
+    },
+    {
+      "type": "Bramble",
+      "position": [212, 80]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [16, 80]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [184, 80]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [192, 80]
+    },
+    {
+      "type": "Player",
+      "position": [92, 96]
+    }
+  ]
+}

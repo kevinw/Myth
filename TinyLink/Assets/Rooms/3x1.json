@@ -1,0 +1,70 @@
+{
+  "id": "3x1",
+  "position": [90, 17],
+  "size": [30, 17],
+  "tiles": [
+    "GGGGGGGGGGGGGG1GGGGG11###11GGG",
+    "GGGGGGGGGGGGGGGGGGGG1100#11GGG",
+    "GGGGGGGGGGGGGG00GGGG1100011GGG",
+    "GG000GGGGGGGGG00GGGG11##011GGG",
+    "GG000GGGGGGGGG11GGGG11#0011GGG",
+    "GG000GGGGGGGGGGGGGGG11###111GG",
+    "GG111GGGGGGGGGG1111G11###111GG",
+    "GGGGGGGG11GGGG11111111###11GGG",
+    "GGGGGGGG11GGGG11111110###11GGG",
+    "GGGGGGGGGGGGGG1100000###011111",
+    "GGGGGGGGGGGGG111#00000#0011111",
+    "GGGGGGGGGGGGG111##111111111###",
+    "GGGGGGGGGGGGGG110#11111110####",
+    "GGGGGGGGGG000G110#00###0000###",
+    "GGGGGGGGGG000G11##00###0000011",
+    "GGGGGGGGGG000G1111111111111111",
+    "GGGGGGGGGG111G1111111111111111"
+  ],
+  "actors": [
+    {
+      "type": "Player",
+      "position": [188, 16]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [176, 16]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [184, 16]
+    },
+    {
+      "type": "Light",
+      "position": [28, 36]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [184, 32]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [192, 32]
+    },
+    {
+      "type": "Bramble",
+      "position": [148, 88]
+    },
+    {
+      "type": "Light",
+      "position": [132, 100]
+    },
+    {
+      "type": "Mosquito",
+      "position": [92, 116]
+    },
+    {
+      "type": "Bramble",
+      "position": [196, 120]
+    },
+    {
+      "type": "Bramble",
+      "position": [204, 120]
+    }
+  ]
+}

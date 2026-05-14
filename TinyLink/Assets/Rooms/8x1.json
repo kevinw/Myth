@@ -1,0 +1,46 @@
+{
+  "id": "8x1",
+  "position": [240, 17],
+  "size": [30, 17],
+  "tiles": [
+    "111000011111111111111111111111",
+    "1###00011111111111111111111111",
+    "00###001111GGGGGGGGGGGGGGGGGGG",
+    "000##00111GGGGGGGGGGGGGGGGGGGG",
+    "111111111GGGGGGGGGGGGGGGGGGGGG",
+    "111111111GGGGGGGGGGGGGGGGGGGGG",
+    "11111GGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+  ],
+  "actors": [
+    {
+      "type": "Bramble",
+      "position": [44, 16]
+    },
+    {
+      "type": "Bramble",
+      "position": [52, 16]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [40, 16]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [48, 16]
+    },
+    {
+      "type": "Player",
+      "position": [12, 32]
+    }
+  ]
+}

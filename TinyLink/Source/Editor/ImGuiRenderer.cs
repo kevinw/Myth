@@ -143,6 +143,11 @@ public class ImGuiRenderer : IDisposable
 	/// </summary>
 	public bool WantsTextInput { get; private set; }
 
+	/// <summary>
+	/// If the ImGui Context wants mouse input
+	/// </summary>
+	public bool WantsMouseInput { get; private set; }
+
 	public ImGuiRenderer(App app, string? customFontPath = null)
 	{
 		this.app = app;
@@ -234,8 +239,6 @@ public class ImGuiRenderer : IDisposable
 				io.AddInputCharacter(app.Input.Keyboard.Text[i]);
 		}
 
-		WantsTextInput = io.WantTextInput;
-
 		ImGui.NewFrame();
 	}
 
@@ -246,6 +249,9 @@ public class ImGuiRenderer : IDisposable
 	public void EndLayout()
 	{
 		Debug.Assert(ImGui.GetCurrentContext() == context);
+		var io = ImGui.GetIO();
+		WantsTextInput = io.WantTextInput;
+		WantsMouseInput = io.WantCaptureMouse;
 		ImGui.Render();
 		ImGui.SetCurrentContext(nint.Zero);
 	}
@@ -461,11 +467,9 @@ public class ImGuiRenderer : IDisposable
 			: hovered
 				? style.Colors[(int)ImGuiCol.ButtonHovered]
 				: style.Colors[(int)ImGuiCol.Button];
-		var border = hovered
-			? style.Colors[(int)ImGuiCol.Border]
-			: selected
-				? selectedColor ?? style.Colors[(int)ImGuiCol.CheckMark]
-				: style.Colors[(int)ImGuiCol.Border];
+		var border = selected
+			? selectedColor ?? style.Colors[(int)ImGuiCol.CheckMark]
+			: new Vector4(0.18f, 0.18f, 0.20f, 1.0f);
 
 		draw.AddRectFilled(min, max, ImGui.ColorConvertFloat4ToU32(bg), style.FrameRounding);
 		draw.AddImage(

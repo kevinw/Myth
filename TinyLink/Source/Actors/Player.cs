@@ -54,15 +54,16 @@ public class Player : Actor
 
 	public override void Added()
 	{
-		light = Game.Create<Light>(Position);
-		light.Radius = 36;
-		light.Intensity = 0.45f;
-		light.LightColor = 0xffcfa0;
-		light.Height = 16;
-		light.FlickerFrequency = 1.5f;
-		light.FlickerIntensity = 0.02f;
-		light.DrawSprite = false;
-		light.KeepOnRoomTransition = true;
+		light = Game.Create<Light>(Position, it => {
+			it.Radius = 36;
+			it.Intensity = 0.45f;
+			it.LightColor = 0xffcfa0;
+			it.Height = 16;
+			it.FlickerFrequency = 1.5f;
+			it.FlickerIntensity = 0.02f;
+			it.DrawSprite = false;
+			it.KeepOnRoomTransition = true;
+		});
 		UpdateLightPosition();
 	}
 

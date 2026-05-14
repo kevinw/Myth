@@ -1,5 +1,6 @@
 
 using System.Text;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 
 namespace TinyLink;
@@ -32,6 +33,11 @@ public class Room
 	/// Grid of Tiles
 	/// </summary>
 	public readonly char[,] Tiles;
+
+	/// <summary>
+	/// Actor specs placed directly in this room.
+	/// </summary>
+	public readonly List<JsonObject> Actors = [];
 
 	/// <summary>
 	/// World-space rectangles built from adjacent movement-blocking tiles.
@@ -74,8 +80,8 @@ public class Room
 	{
 	}
 
-	public Room(Point2 cell, string path)
-		: this(Path.GetFileNameWithoutExtension(path), new Point2(cell.X * Game.Columns, cell.Y * Game.Rows), DefaultSize, path)
+	public Room(string path)
+		: this(Path.GetFileNameWithoutExtension(path), Point2.Zero, DefaultSize, path)
 	{
 	}
 
@@ -90,6 +96,8 @@ public class Room
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
 			clone.Tiles[x, y] = Tiles[x, y];
+		foreach (var actor in Actors)
+			clone.Actors.Add(ActorSpecs.CloneObject(actor));
 
 		clone.RebuildGeometry();
 		return clone;
@@ -97,24 +105,19 @@ public class Room
 
 	private Room(string id, Point2 position, Point2 size, string? path = null)
 	{
-		var lines = path != null ? File.ReadAllLines(path) : [];
-		foreach (var line in lines)
+		JsonObject? json = null;
+		if (path != null)
 		{
-			if (line.StartsWith("@id ", StringComparison.OrdinalIgnoreCase))
+			if (!string.Equals(Path.GetExtension(path), ".json", StringComparison.OrdinalIgnoreCase))
+				throw new InvalidOperationException($"Room files must be JSON: {path}");
+
+			json = JsonNode.Parse(File.ReadAllText(path!))?.AsObject();
+			if (json != null)
 			{
-				var idValue = line["@id ".Length..].Trim();
-				if (idValue.Length > 0)
-					id = idValue;
-			}
-			else if (line.StartsWith("@position ", StringComparison.OrdinalIgnoreCase))
-			{
-				if (TryParsePoint(line["@position ".Length..], out var value))
-					position = value;
-			}
-			else if (line.StartsWith("@size ", StringComparison.OrdinalIgnoreCase))
-			{
-				if (TryParsePoint(line["@size ".Length..], out var value) && value.X > 0 && value.Y > 0)
-					size = value;
+				id = ActorSpecs.ReadString(json, "id") ?? id;
+				position = ActorSpecs.ReadPoint(json, "position") ?? position;
+				if (ActorSpecs.ReadPoint(json, "size") is { } jsonSize && jsonSize.X > 0 && jsonSize.Y > 0)
+					size = jsonSize;
 			}
 		}
 
@@ -134,39 +137,37 @@ public class Room
 			return;
 		}
 
-		var text = new StringBuilder();
-		var y = 0;
+		if (json != null)
+		{
+			LoadJson(json);
+			RebuildGeometry();
+			return;
+		}
+	}
 
-			foreach (var line in lines)
+	private void LoadJson(JsonObject json)
+	{
+		Text = ActorSpecs.ReadString(json, "text") ?? string.Empty;
+		MusicArea = ActorSpecs.ReadString(json, "musicArea");
+		if (string.IsNullOrWhiteSpace(MusicArea))
+			MusicArea = null;
+
+		if (json.TryGetPropertyValue("tiles", out var tilesNode) && tilesNode is JsonArray rows)
+		{
+			for (var y = 0; y < rows.Count && y < Size.Y; y ++)
 			{
-				// parse text line
-				if (line.StartsWith(":"))
-				{
-					text.AppendLine(line[1..]);
-				}
-				// parse metadata line
-				else if (line.StartsWith("@area ", StringComparison.OrdinalIgnoreCase))
-				{
-					MusicArea = line["@area ".Length..].Trim();
-					if (MusicArea.Length <= 0)
-						MusicArea = null;
-				}
-				else if (line.StartsWith("@id ", StringComparison.OrdinalIgnoreCase) ||
-				         line.StartsWith("@position ", StringComparison.OrdinalIgnoreCase) ||
-				         line.StartsWith("@size ", StringComparison.OrdinalIgnoreCase))
-				{
-				}
-				// parse row of tiles
-				else if (y < Size.Y)
-				{
-					for (int x = 0; x < line.Length && x < Size.X; x ++)
-						Tiles[x, y] = line[x];
-					y++;
+				var row = rows[y]?.GetValue<string>() ?? "";
+				for (var x = 0; x < row.Length && x < Size.X; x ++)
+					Tiles[x, y] = row[x];
 			}
 		}
 
-		Text = text.ToString();
-		RebuildGeometry();
+		if (json.TryGetPropertyValue("actors", out var actorsNode) && actorsNode is JsonArray actorArray)
+		{
+			foreach (var node in actorArray)
+				if (node is JsonObject actor)
+					Actors.Add(ActorSpecs.CloneObject(actor));
+		}
 	}
 
 	public void Set(Point2 tile, char ch)
@@ -176,6 +177,36 @@ public class Room
 			Tiles[tile.X, tile.Y] = ch;
 			RebuildGeometry();
 		}
+	}
+
+	public void AddActorSpec(string specId, Point2 worldPosition)
+	{
+		var localPosition = worldPosition - WorldBounds.TopLeft;
+		AddActorSpecLocal(specId, localPosition);
+	}
+
+	public void AddActorType(string typeName, Point2 worldPosition)
+	{
+		var localPosition = worldPosition - WorldBounds.TopLeft;
+		AddActorTypeLocal(typeName, localPosition);
+	}
+
+	public void AddActorSpecLocal(string specId, Point2 localPosition)
+	{
+		Actors.Add(new JsonObject
+		{
+			["from"] = specId,
+			["position"] = new JsonArray(localPosition.X, localPosition.Y)
+		});
+	}
+
+	public void AddActorTypeLocal(string typeName, Point2 localPosition)
+	{
+		Actors.Add(new JsonObject
+		{
+			["type"] = typeName,
+			["position"] = new JsonArray(localPosition.X, localPosition.Y)
+		});
 	}
 
 	public void RebuildGeometry()
@@ -240,43 +271,38 @@ public class Room
 
 	public void Save()
 	{
-			StringBuilder result = new();
+		var json = new JsonObject
+		{
+			["id"] = Id,
+			["position"] = new JsonArray(Position.X, Position.Y),
+			["size"] = new JsonArray(Size.X, Size.Y)
+		};
 
-			// write text lines first
-			foreach (var line in Text.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries))
-				result.AppendLine($":{line}");
+		if (!string.IsNullOrEmpty(MusicArea))
+			json["musicArea"] = MusicArea;
+		if (!string.IsNullOrEmpty(Text))
+			json["text"] = Text;
 
-			if (!string.IsNullOrEmpty(MusicArea))
-				result.AppendLine($"@area {MusicArea}");
-			result.AppendLine($"@id {Id}");
-			result.AppendLine($"@position {Position.X},{Position.Y}");
-			result.AppendLine($"@size {Size.X},{Size.Y}");
-
-			// write tile grid next
+		var rows = new JsonArray();
 		for (var y = 0; y < Size.Y; y ++)
 		{
+			var row = new StringBuilder(Size.X);
 			for (var x = 0; x < Size.X; x ++)
-				result.Append(Tiles[x, y]);
-			result.AppendLine();
+				row.Append(Tiles[x, y]);
+			rows.Add(row.ToString());
+		}
+		json["tiles"] = rows;
+
+		if (Actors.Count > 0)
+		{
+			var actors = new JsonArray();
+			foreach (var actor in Actors)
+				actors.Add(ActorSpecs.PruneForSave(actor));
+			json["actors"] = actors;
 		}
 
-		// output to file
 		File.WriteAllText(
-			Path.Join(Assets.AssetsPath, "Rooms", $"{Id}.txt"),
-			result.ToString());
-	}
-
-	private static bool TryParsePoint(string value, out Point2 point)
-	{
-		point = Point2.Zero;
-		var parts = value.Split(',', StringSplitOptions.TrimEntries);
-		if (parts.Length != 2)
-			return false;
-
-		if (!int.TryParse(parts[0], out var x) || !int.TryParse(parts[1], out var y))
-			return false;
-
-		point = new Point2(x, y);
-		return true;
+			Path.Join(Assets.AssetsPath, "Rooms", $"{Id}.json"),
+			ActorSpecs.ToJsonString(json));
 	}
 }

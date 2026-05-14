@@ -1,0 +1,12 @@
+{
+  "id": "PlayerGlowLight",
+  "type": "Light",
+  "radius": 36,
+  "intensity": 0.45,
+  "lightColor": "ffcfa0",
+  "height": 16,
+  "flickerFrequency": 1.5,
+  "flickerIntensity": 0.02,
+  "drawSprite": false,
+  "keepOnRoomTransition": true
+}

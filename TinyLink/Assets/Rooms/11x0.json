@@ -1,0 +1,142 @@
+{
+  "id": "11x0",
+  "position": [330, 0],
+  "size": [30, 17],
+  "tiles": [
+    "111111111111111111111111111111",
+    "111111111111111111111111111111",
+    "101111111111111111111111111111",
+    "111111111111111111111111111111",
+    "111111111111111111111111111111",
+    "111111111111111111111111111111",
+    "1############################1",
+    "00##00##00##00##00##00##00##00",
+    "00##00##00##00##00##00##00##00",
+    "111000000000000000000000000111",
+    "111000000000000000000000000111",
+    "110000000000000000000000000011",
+    "11000000000000#000000000000011",
+    "11#00000000000#000000000000#11",
+    "11##0000000000#00000000000##11",
+    "11##0000000000#00000000000##11",
+    "11##0000000000#00000000000##11"
+  ],
+  "actors": [
+    {
+      "type": "Player",
+      "position": [12, 72]
+    },
+    {
+      "type": "Blob",
+      "position": [132, 72]
+    },
+    {
+      "type": "Blob",
+      "position": [164, 72]
+    },
+    {
+      "type": "Blob",
+      "position": [196, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [24, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [32, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [40, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [48, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [56, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [64, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [72, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [80, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [88, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [96, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [104, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [112, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [120, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [128, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [136, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [144, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [152, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [160, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [168, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [176, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [184, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [192, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [200, 72]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [208, 72]
+    },
+    {
+      "type": "Light",
+      "position": [116, 92]
+    }
+  ]
+}

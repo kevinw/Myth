@@ -1,0 +1,70 @@
+{
+  "id": "4x1",
+  "position": [120, 17],
+  "size": [30, 17],
+  "tiles": [
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGG11GGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGG11GGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGG11111111111",
+    "GGGGGGGGGGGGG11GGGG111######11",
+    "GGG111111111111111111#####0000",
+    "GGG111111111######11#####00000",
+    "11111####00####0000####1111111",
+    "11110###000####0000####1111111",
+    "###000000000##0001111111111GGG",
+    "###000000000##00011111111GGGGG",
+    "#000000###000011111GGGGGGGGGGG",
+    "1100000###00##11111GGGG11GGGGG",
+    "1111111111111111GGGGGGG11GGGGG",
+    "1111111111111111GGGGGGGGGGGGGG"
+  ],
+  "actors": [
+    {
+      "type": "Bramble",
+      "position": [212, 72]
+    },
+    {
+      "type": "Bramble",
+      "position": [220, 72]
+    },
+    {
+      "type": "Bramble",
+      "position": [140, 88]
+    },
+    {
+      "type": "Bramble",
+      "position": [148, 88]
+    },
+    {
+      "type": "Spitter",
+      "position": [124, 104]
+    },
+    {
+      "type": "Player",
+      "position": [12, 112]
+    },
+    {
+      "type": "Mosquito",
+      "position": [92, 108]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [96, 104]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [104, 104]
+    },
+    {
+      "type": "Bramble",
+      "position": [84, 120]
+    },
+    {
+      "type": "Bramble",
+      "position": [92, 120]
+    }
+  ]
+}

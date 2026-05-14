@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using Foster.Framework;
 
@@ -796,6 +797,10 @@ public class Game : IDisposable
 			Batcher.RectLine(rect, 1, Color.Red);
 		foreach (var rect in CollisionRectsThisFrame)
 			Batcher.RectLine(rect, 1, Color.Red);
+		foreach (var it in Actors)
+			if (!destroying.Contains(it))
+				if (it.Hitbox.Rect != new RectInt())
+					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
 	}
 
 	public List<RectInt> CollisionRectsThisFrame = new();
@@ -991,6 +996,21 @@ public class Game : IDisposable
 			Game = this,
 			Position = position ?? Point2.Zero
 		};
+		init?.Invoke(instance);
+		instance.Added();
+		Actors.Add(instance);
+		return instance;
+	}
+
+	public Actor Create(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
+		Type type,
+		Point2? position = null,
+		Action<Actor>? init = null)
+	{
+		var instance = (Actor)(Activator.CreateInstance(type) ?? throw new InvalidOperationException($"Failed to create actor '{type.Name}'."));
+		instance.Game = this;
+		instance.Position = position ?? Point2.Zero;
 		init?.Invoke(instance);
 		instance.Added();
 		Actors.Add(instance);
@@ -1428,9 +1448,17 @@ public class Game : IDisposable
 
 			if (Factory.Find(room.Tiles[x, y]) is { } entry)
 			{
-				entry.Spawn?.Invoke(at + entry.Offset, this);
 				entry.Tile?.Invoke(tile, room, fg, bg, dual);
 			}
+		}
+
+		foreach (var actor in room.Actors)
+		{
+			if (GetFirst<Player>() != null && string.Equals(ActorSpecs.GetTypeName(actor), "Player", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var localPosition = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
+			ActorSpecs.Create(this, actor, offset + localPosition);
 		}
 
 		BuildDualTiles();

@@ -1,0 +1,99 @@
+{
+  "id": "-1x0",
+  "position": [-30, 0],
+  "size": [30, 17],
+  "musicArea": "Calm",
+  "tiles": [
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "000000000000000000000000000000",
+    "GGG000000000000000000000000000",
+    "GGG000011000000000000000000000",
+    "GGG0000##00000g00000000000GGGG",
+    "GGG0000##0000gG0g0000000ggGGGG",
+    "GGG0000##0000GGGG0000000GGGGGG",
+    "GGG0000##0000GGGG00000g0GGGGGG",
+    "GGG0000##0000000000000GGGGGGGG",
+    "GGG000GGG0000000000000GGGGGGGG",
+    "GGGwwwGGGwwwwwwwwwGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGwwGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+  ],
+  "actors": [
+    {
+      "type": "Light",
+      "position": [116, 52]
+    },
+    {
+      "type": "Player",
+      "position": [60, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [24, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [32, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [40, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [72, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [80, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [88, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [96, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [104, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [112, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [120, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [128, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [136, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [144, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [152, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [160, 96]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [168, 96]
+    }
+  ]
+}

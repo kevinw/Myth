@@ -8,6 +8,7 @@
 
 ## ideas
 
+- try a room that looks screen height, but lets you go above it
 - finding love in a datacenter
   - what's in a datacenter?
     - racks
@@ -21,3 +22,4 @@
 - [bitmapflow](https://github.com/Bauxitedev/bitmapflow)
 - [coolors](https://coolors.co) - color palette generator
 - [lospec](https://lospec.com/palette-list) - color palette collection
+- [chevyray's pixel fonts](https://chevyray.itch.io)

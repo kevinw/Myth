@@ -4,6 +4,7 @@ namespace TinyLink;
 
 public class Door : Actor
 {
+	public bool StartsVisible;
 	private float delay = 0;
 
 	public Door()
@@ -13,6 +14,13 @@ public class Door : Actor
 		Visible = false;
 		Play("idle");
 	}
+
+	public override void Added()
+	{
+		if (StartsVisible)
+			Appear();
+	}
+
 
 	public void Appear()
 	{
