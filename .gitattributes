@@ -8,3 +8,4 @@
 *.spv filter=lfs diff=lfs merge=lfs -text
 *.dxil filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
+TinyLink/tools/macos/shadercross filter=lfs diff=lfs merge=lfs -text
