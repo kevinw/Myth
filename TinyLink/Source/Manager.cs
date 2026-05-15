@@ -92,19 +92,19 @@ public partial class Manager : App
 	/// Toolbar Space
 	/// </summary>
 	private Rect ToolbarRect
-		=> new (View.X, View.Y, View.Width, ToolbarHeight);
+		=> new(View.X, View.Y, View.Width, ToolbarHeight);
 
 	/// <summary>
 	/// Workspace, which is the full space below the Toolbar
 	/// </summary>
 	private Rect WorkRect
-		=> new (View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
+		=> new(View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
 
 	/// <summary>
 	/// Palette View when the Editor is Open
 	/// </summary>
 	private Rect PaletteOpenRect
-		=> new (WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
+		=> new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
 
 	/// <summary>
 	/// Edit Workspace when the Editor is Open
@@ -141,8 +141,6 @@ public partial class Manager : App
 
 		var aspect = viewport.Size / gameInstance.Screen.SizeInPixels();
 		var scale2 = Calc.Min(aspect.X, aspect.Y);
-
-		Console.WriteLine($"scale: {scale}, scale2: {scale2}");
 
 		var size = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) * scale;
 		var topLeft = (Vector2)viewport.Center - size / 2;
