@@ -12,6 +12,7 @@ public class Player : Actor
 		Hurt,
 		Start
 	}
+	private readonly StateMachine<States> state = new(States.Start);
 
 	public const int MaxHealth = 4;
 
@@ -32,11 +33,13 @@ public class Player : Actor
 	static float InvincibleDuration => 1.5f;
 
 	public int Health = MaxHealth;
-	public States State;
+	public States State
+	{
+		get => state.Current;
+		set => state.Change(value);
+	}
 	public Controls Controls => Game.Controls;
 
-	private float stateDuration;
-	private float prevStateDuration;
 	private float jumpTimer;
 	private int footstepFrame = -1;
 	private bool grounded;
@@ -47,7 +50,6 @@ public class Player : Actor
 
 	public Player()
 	{
-		State = States.Start;
 		Sprite = Assets.GetSprite("player");
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Mask = Masks.Player;
@@ -104,9 +106,6 @@ public class Player : Actor
 			wallJumpInputLockTimer = 0;
 		else if (wallJumpInputLockTimer > 0)
 			wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
-
-		// increment state timer
-		var wasState = State;
 
 		// state control
 		switch (State)
@@ -184,10 +183,7 @@ public class Player : Actor
 		if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
 
-		prevStateDuration = stateDuration;
-		stateDuration += Time.Delta;
-		if (State != wasState)
-			stateDuration = 0.0f;
+		state.Update(Time.Delta);
 	}
 
 	public void NormalState()
@@ -222,7 +218,7 @@ public class Player : Actor
 		}
 		else
 		{
-			Play(JumpUpSquish > 0 ? "jump_squish" : "jump");
+			Play(GetWallJumpDirection() != 0 ? "wall_slide" : JumpUpSquish > 0 ? "jump_squish" : "jump");
 		}
 
 		// horizontal movement
@@ -325,13 +321,13 @@ public class Player : Actor
 
 		RectInt? hitbox = null;
 
-		if (stateDuration < 0.2f)
+		if (state.Time < 0.2f)
 		{
 			hitbox = new (-16, -12, 17, 8);
 		}
-		else if (stateDuration < 0.50f)
+		else if (state.Time < 0.50f)
 		{
-			if (prevStateDuration < 0.2f)
+			if (state.PreviousTime < 0.2f)
 			{
 				AudioEvent("sword");
 			}
@@ -354,7 +350,7 @@ public class Player : Actor
 		if (Grounded())
 			Velocity.X = Calc.Approach(Velocity.X, 0, AttackFriction * Time.Delta);
 
-		if (stateDuration >= Animation.Duration)
+		if (state.Time >= Animation.Duration)
 		{
 			Play("idle");
 			State = States.Normal;
@@ -363,7 +359,7 @@ public class Player : Actor
 
 	public void HurtState()
 	{
-		if (stateDuration <= 0 && Health <= 0)
+		if (state.Time <= 0 && Health <= 0)
 		{
 			foreach (var actor in Game.Actors)
 				if (actor != this)
@@ -373,10 +369,10 @@ public class Player : Actor
 
 		Velocity.X = Calc.Approach(Velocity.X, 0, HurtFriction * Time.Delta);
 
-		if (stateDuration >= HurtDuration && Health > 0)
+		if (state.Time >= HurtDuration && Health > 0)
 			State = States.Normal;
 
-		if (stateDuration >= DeathDuration && Health <= 0)
+		if (state.Time >= DeathDuration && Health <= 0)
 		{
 			Game.ReloadRoom(restartMusic: true);
 		}
@@ -384,7 +380,7 @@ public class Player : Actor
 
 	public void StartState()
 	{
-		if (stateDuration >= 1.0f)
+		if (state.Time >= 1.0f)
 			State = States.Normal;
 	}
 
