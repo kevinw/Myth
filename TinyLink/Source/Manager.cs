@@ -132,14 +132,22 @@ public partial class Manager : App
 
 	private Rect GameViewRect => WorkspaceRect;
 
-	public Vector2 GameMouseWorld(Game game)
+	public Vector2 GameMouseWorld(Game gameInstance)
 	{
 		var viewport = (RectInt)(GameViewRect * Scale);
-		var scale = Calc.Min(viewport.Width / (float)game.Screen.Width, viewport.Height / (float)game.Screen.Height);
-		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
+
+
+		var scale = Calc.Min(viewport.Width / (float)gameInstance.Screen.Width, viewport.Height / (float)gameInstance.Screen.Height);
+
+		var aspect = viewport.Size / gameInstance.Screen.SizeInPixels();
+		var scale2 = Calc.Min(aspect.X, aspect.Y);
+
+		Console.WriteLine($"scale: {scale}, scale2: {scale2}");
+
+		var size = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) * scale;
 		var topLeft = (Vector2)viewport.Center - size / 2;
 		var local = (Input.Mouse.Position - topLeft) / scale;
-		return game.Camera + local;
+		return gameInstance.Camera + local;
 	}
 
 	/// <summary>
@@ -214,7 +222,7 @@ public partial class Manager : App
 	{
 		LoadWindowSettings();
 
-		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my mac when I fullscreen the window... @kev 2026
+		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 
 		Assets.Load(GraphicsDevice);
 		ResolveSelectedRoom();
@@ -234,6 +242,7 @@ public partial class Manager : App
 		SaveWindowSettings();
 		game?.Dispose();
 		ClearRoomPreviewCache();
+		DisposeEditorCursors();
 		imgui.Dispose();
 		assetWatcher?.Dispose();
 		assetWatcher = null;
@@ -457,6 +466,7 @@ public partial class Manager : App
 		// Run Game
 		if (startingPlay)
 		{
+			SetMouseCursor(null);
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
 			playTransition += Time.Delta / PlayTransitionDuration;
 			if (playTransition >= 1.0f)
@@ -470,6 +480,7 @@ public partial class Manager : App
 		}
 		else if (playing)
 		{
+			SetMouseCursor(null);
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
 			game?.Update(!keyboardShortcutsBlocked);
 		}
@@ -534,8 +545,6 @@ public partial class Manager : App
 			RenderPlayTransition();
 		else if (playing)
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
-		else
-			RenderEditorActiveRoom();
 		batcher.Render(Window);
 		imgui.Render();
 	}
@@ -994,7 +1003,14 @@ public partial class Manager : App
 	private void CommitRoomRename(Room room)
 	{
 		var next = roomNameEditor.Trim();
-		if (!string.IsNullOrEmpty(next) && Assets.RenameRoom(room, next))
+		if (!Assets.CanRenameRoom(room, next))
+		{
+			roomNameEditor = room.Id;
+			CancelRoomRename();
+			return;
+		}
+
+		if (Assets.RenameRoom(room, next))
 			selectedRoomId = room.Id;
 
 		CancelRoomRename();

@@ -15,6 +15,7 @@ public class Spitter : Actor
 		Depth = -5;
 		timer = 1.0f;
 		Play("idle");
+		Facing = -1;
 	}
 
 	public override void Update()
@@ -27,9 +28,9 @@ public class Spitter : Actor
 			Play("shoot", false);
 			timer = 3.0f;
 
-			var bullet = Game.Create<Bullet>(Position + new Point2(-8, -8), (actor) =>
+			var bullet = Game.Create<Bullet>(Position + new Point2(-8 * Facing, -8), (actor) =>
 			{
-				actor.Velocity = new Vector2(-40, 0);
+				actor.Velocity = new Vector2(-40 * Facing, 0);
 				actor.dissolves = true;
 			});
 		}

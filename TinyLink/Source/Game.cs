@@ -402,15 +402,6 @@ public class Game : IDisposable
 		shake = oldShake;
 	}
 
-	public void RenderRoomPreview(in RectInt viewport, RectInt? scissor = null)
-	{
-		if (room == null)
-			return;
-
-		var bounds = room.WorldBounds;
-		RenderWorldView(viewport, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height), showHud: false, scissor, applyCrt: false);
-	}
-
 	private void EnsureRenderTargets(int width, int height)
 	{
 		if (Screen != null && Screen.Width == width && Screen.Height == height)
@@ -803,6 +794,18 @@ public class Game : IDisposable
 			DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
 		}
 
+		foreach (var actor in Actors)
+		{
+			if (actor is not HiddenWallGrid hiddenWalls)
+				continue;
+
+			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+			{
+				if (CircleOverlapsRect(lightPosition, radius, rect))
+					DrawShadowVolume(lightPosition, radius, rect);
+			});
+		}
+
 		if (actorSpriteShadowsEnabled)
 			DrawActorSpriteShadows(lightPosition, radius);
 	}
@@ -964,6 +967,9 @@ public class Game : IDisposable
 			FillRoomNormalMask(rect);
 		foreach (var polygon in room.LightOccluderPolygons)
 			FillRoomNormalMask(polygon);
+		foreach (var actor in Actors)
+			if (actor is HiddenWallGrid hiddenWalls)
+				hiddenWalls.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
 
 		var offset = (Point2)Camera;
 		for (var y = 0; y < NormalBuffer.Height; y ++)
@@ -1546,8 +1552,15 @@ public class Game : IDisposable
 		Grid? bg = null;
 		Grid? fg = null;
 		DualGrid? dual = null;
+		HiddenWallGrid? hiddenWalls = null;
 		foreach (var actor in Actors)
 		{
+			if (actor is HiddenWallGrid hiddenWallGrid)
+			{
+				hiddenWalls = hiddenWallGrid;
+				continue;
+			}
+
 			if (actor is DualGrid dualGrid)
 			{
 				dual = dualGrid;
@@ -1569,6 +1582,7 @@ public class Game : IDisposable
 		bg.Clear();
 		fg.Clear();
 		dual.Clear();
+		hiddenWalls?.Resize(room.Size);
 
 		for (var x = 0; x < room.Size.X; x ++)
 		for (var y = 0; y < room.Size.Y; y ++)
@@ -1577,6 +1591,9 @@ public class Game : IDisposable
 			if (Factory.Find(room.Tiles[x, y]) is { } entry)
 				entry.Tile?.Invoke(tile, room, fg, bg, dual);
 		}
+
+		if (hiddenWalls != null)
+			PopulateHiddenWalls(room, hiddenWalls);
 
 		BuildDualTiles();
 	}
@@ -1626,6 +1643,8 @@ public class Game : IDisposable
 		fg.Mask = Actor.Masks.Solid;
 		fg.Depth = 5;
 
+		var hiddenWalls = Create<HiddenWallGrid>(offset, it => it.Resize(room.Size));
+
 		// loop over room grid placing objects
 		for (var x = 0; x < room.Size.X; x++)
 		for (var y = 0; y < room.Size.Y; y++)
@@ -1637,6 +1656,8 @@ public class Game : IDisposable
 			}
 		}
 
+		PopulateHiddenWalls(room, hiddenWalls);
+
 		foreach (var actor in room.Actors)
 		{
 			if (GetFirst<Player>() != null && string.Equals(ActorSpecs.GetTypeName(actor), "Player", StringComparison.OrdinalIgnoreCase))
@@ -1647,6 +1668,20 @@ public class Game : IDisposable
 		}
 
 		BuildDualTiles();
+	}
+
+	private static void PopulateHiddenWalls(Room room, HiddenWallGrid hiddenWalls)
+	{
+		foreach (var actor in room.Actors)
+		{
+			var resolved = ActorSpecs.Resolve(actor);
+			if (ActorSpecs.ReadString(resolved, "type") != "HiddenWall")
+				continue;
+
+			var localPosition = ActorSpecs.ReadPoint(resolved, "position") ?? Point2.Zero;
+			var size = ActorSpecs.ReadPoint(resolved, "size") ?? HiddenWall.DefaultSize;
+			hiddenWalls.AddRect(localPosition, size);
+		}
 	}
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);

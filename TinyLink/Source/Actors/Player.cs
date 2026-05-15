@@ -25,6 +25,8 @@ public class Player : Actor
 	static float Gravity => 450;
 	static float JumpForce => -105;
 	static float JumpTime => 0.18f;
+	static float WallJumpSpeed => 125;
+	static float WallJumpInputLockTime => 0.22f;
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
@@ -39,6 +41,8 @@ public class Player : Actor
 	private int footstepFrame = -1;
 	private bool grounded;
 	private bool ducking;
+	private float wallJumpInputLockTimer;
+	private int wallJumpDirection;
 	private Light? light;
 
 	public Player()
@@ -96,6 +100,10 @@ public class Player : Actor
 			CanPlaySquishSound = true;
 		}
 		grounded = nowGrounded;
+		if (grounded)
+			wallJumpInputLockTimer = 0;
+		else if (wallJumpInputLockTimer > 0)
+			wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
 
 		// increment state timer
 		var wasState = State;
@@ -193,6 +201,9 @@ public class Player : Actor
 			input = 0;
 
 		int facing = input;
+		var movementInput = input;
+		if (!grounded && wallJumpInputLockTimer > 0)
+			movementInput = wallJumpDirection;
 
 		// sprite
 		if (grounded)
@@ -217,10 +228,12 @@ public class Player : Actor
 		// horizontal movement
 		{
 			// Acceleration
-			Velocity.X += input * (grounded ? GroundAccel : AirAccel) * Time.Delta;
+			Velocity.X += movementInput * (grounded ? GroundAccel : AirAccel) * Time.Delta;
 
 			// Max Speed
 			var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
+			if (!grounded && wallJumpInputLockTimer > 0)
+				maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed);
 			if (MathF.Abs(Velocity.X) > maxSpeed)
 				Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
 
@@ -234,12 +247,24 @@ public class Player : Actor
 		}
 
 		// Start jumping
-		if (grounded && Controls.Jump.ConsumePress())
+		var wallJump = GetWallJumpDirection();
+		if (Controls.Jump.Pressed && (grounded || wallJump != 0))
 		{
+			Controls.Jump.ConsumePress();
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.65f, 1.4f);
-			StopX();
-			Velocity.X = input * MaxAirSpeed;
+			if (grounded)
+			{
+				StopX();
+				Velocity.X = input * MaxAirSpeed;
+			}
+			else
+			{
+				wallJumpDirection = wallJump;
+				wallJumpInputLockTimer = WallJumpInputLockTime;
+				Facing = wallJumpDirection;
+				Velocity.X = wallJumpDirection * WallJumpSpeed;
+			}
 			jumpTimer = JumpTime;
 			AudioEvent("jump");
 		}
@@ -257,6 +282,19 @@ public class Player : Actor
 		{
 			ApplyHurt(-100);
 		}
+	}
+
+	private int GetWallJumpDirection()
+	{
+		if (grounded)
+			return 0;
+
+		var touchingLeft = OverlapsAny(Point2.Left, Masks.Solid);
+		var touchingRight = OverlapsAny(Point2.Right, Masks.Solid);
+		if (touchingLeft == touchingRight)
+			return 0;
+
+		return touchingLeft ? 1 : -1;
 	}
 
 	private void UpdateFootsteps()

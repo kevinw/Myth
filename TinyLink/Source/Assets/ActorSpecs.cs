@@ -406,7 +406,7 @@ public static class ActorSpecs
 	public static Point2? ReadPoint(JsonObject json, string key)
 		=> json.TryGetPropertyValue(key, out var node) && node != null ? ReadPoint(node) : null;
 
-	private static Point2? ReadPoint(JsonNode node)
+	public static Point2? ReadPoint(JsonNode? node)
 	{
 		if (node is JsonArray { Count: >= 2 } array &&
 		    TryReadInt(array[0], out var x) &&

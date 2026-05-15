@@ -257,9 +257,7 @@ public static class Assets
 	public static bool RenameRoom(Room room, string id)
 	{
 		id = id.Trim();
-		if (string.IsNullOrEmpty(id))
-			return false;
-		if (RoomsById.TryGetValue(id, out var existing) && existing != room)
+		if (!CanRenameRoom(room, id))
 			return false;
 
 		var oldId = room.Id;
@@ -274,6 +272,22 @@ public static class Assets
 
 		if (File.Exists(oldPath))
 			File.Delete(oldPath);
+
+		return true;
+	}
+
+	public static bool CanRenameRoom(Room room, string id)
+	{
+		id = id.Trim();
+		if (string.IsNullOrEmpty(id))
+			return false;
+		if (RoomsById.TryGetValue(id, out var existing) && existing != room)
+			return false;
+
+		var oldPath = Path.GetFullPath(Path.Join(AssetsPath, "Rooms", $"{room.Id}.json"));
+		var newPath = Path.GetFullPath(Path.Join(AssetsPath, "Rooms", $"{id}.json"));
+		if (!string.Equals(oldPath, newPath, StringComparison.Ordinal) && File.Exists(newPath))
+			return false;
 
 		return true;
 	}
