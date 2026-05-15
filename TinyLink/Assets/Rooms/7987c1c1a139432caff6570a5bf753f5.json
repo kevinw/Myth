@@ -44,7 +44,7 @@
     },
     {
       "type": "LedgePatrol",
-      "position": [100, 72]
+      "position": [100, 64]
     },
     {
       "from": "SoftFireLight",

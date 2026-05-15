@@ -2,7 +2,6 @@
   "position": [0, 0],
   "size": [30, 17],
   "musicArea": "Calm",
-  "text": "SWORD II: ADVENTURE OF FROG\narrow keys \u002B X/C\nstick \u002B A/X\n",
   "tiles": [
     "000000000000000000000000000000",
     "000000000000000000000000000000",
@@ -25,7 +24,8 @@
   "actors": [
     {
       "type": "TitleText",
-      "position": [116, 36]
+      "position": [116, 36],
+      "text": "SWORD II: ADVENTURE OF FROG\narrow keys \u002B X/C\nstick \u002B A/X\n"
     },
     {
       "type": "Jumpthru",

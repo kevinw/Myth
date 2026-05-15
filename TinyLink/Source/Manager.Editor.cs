@@ -48,7 +48,7 @@ public partial class Manager
 	readonly Dictionary<string, EditorRoomPreview> roomPreviewCache = [];
 	Target? activeRoomPreviewTarget;
 	string? activeRoomPreviewId;
-	readonly Dictionary<Foster.Framework.Cursor.SystemTypes, Foster.Framework.Cursor> editorCursors = [];
+	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
 
 	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
 		=> new RoomUndoTarget(room);
@@ -243,7 +243,7 @@ public partial class Manager
 
 		if (!editorCursors.TryGetValue(type, out var cursor))
 		{
-			cursor = new Foster.Framework.Cursor(type);
+			cursor = new Cursor(type);
 			editorCursors[type] = cursor;
 		}
 		SetMouseCursor(cursor);
@@ -345,7 +345,7 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, LineWeight);
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
-		ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+		//ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
 
 		if (ImGui.Begin("Palette", flags))
 		{
@@ -361,7 +361,7 @@ public partial class Manager
 		}
 		ImGui.End();
 
-		ImGui.PopStyleColor(2);
+		ImGui.PopStyleColor(1);
 		ImGui.PopStyleVar(4);
 
 		ActorSpecInspectorImGui();
@@ -471,6 +471,16 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<int>() ?? 0;
 			if (ImGui.DragInt("##Value", ref value))
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(string))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (ImGui.InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, 64)))
 			{
 				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
@@ -608,6 +618,16 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<int>() ?? 0;
 			if (ImGui.DragInt("##Value", ref value))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Type == typeof(string))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (ImGui.InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, 64)))
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));

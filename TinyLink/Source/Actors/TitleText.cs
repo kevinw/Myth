@@ -1,7 +1,4 @@
-using System.ComponentModel.DataAnnotations;
-using System.Drawing;
 using System.Numerics;
-using System.Reflection.Metadata;
 using Foster.Framework;
 
 namespace TinyLink;
@@ -9,11 +6,12 @@ namespace TinyLink;
 using Color = Foster.Framework.Color;
 
 /// <summary>
-/// Uses the Room's Text Value to show text.
+/// Shows text placed as actor metadata.
 /// </summary>
 public class TitleText : Actor
 {
 	private float stateDuration = 0;
+	public string Text = string.Empty;
 	public float RevealSpeed = 7.0f;
 	public override bool CastsSpriteShadow => false;
 
@@ -25,8 +23,8 @@ public class TitleText : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		if (Assets.Font == null || Game.CurrentRoom == null) return;
-		var text = Game.CurrentRoom.Text;
+		if (Assets.Font == null || string.IsNullOrEmpty(Text)) return;
+		var text = Text;
 		var length = (int)stateDuration;
 		var span = text.AsSpan()[..Math.Min(text.Length, length)];
 		batcher.Text(Assets.Font, span, Vector2.Zero, Vector2.One * 0.50f, Color.White);

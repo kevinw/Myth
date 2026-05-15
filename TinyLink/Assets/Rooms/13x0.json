@@ -1,7 +1,6 @@
 {
   "position": [390, 0],
   "size": [30, 17],
-  "text": "YOU SAVED POND\nAND YOU ARE\nA REAL HERO\n",
   "tiles": [
     "111000000000000000000000000000",
     "111000000000000000000000000000",
@@ -24,7 +23,8 @@
   "actors": [
     {
       "type": "TitleText",
-      "position": [132, 44]
+      "position": [132, 44],
+      "text": "is this the end?"
     },
     {
       "type": "Player",

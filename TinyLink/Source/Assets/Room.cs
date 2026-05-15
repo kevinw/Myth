@@ -90,12 +90,6 @@ public class Room
 	public readonly List<RectInt> ReflectionRects = [];
 
 	/// <summary>
-	/// Optional Text string. There's no way to edit this in-game, but
-	/// it is used to display title/ending text.
-	/// </summary>
-	public string Text = string.Empty;
-
-	/// <summary>
 	/// Optional FMOD background music Area parameter label.
 	/// </summary>
 	public string? MusicArea;
@@ -124,7 +118,6 @@ public class Room
 	{
 		var clone = new Room(Id, Position, Size)
 		{
-			Text = Text,
 			MusicArea = MusicArea
 		};
 
@@ -166,7 +159,6 @@ public class Room
 
 		if (path == null)
 		{
-			Text = string.Empty;
 			RebuildGeometry();
 			return;
 		}
@@ -181,7 +173,6 @@ public class Room
 
 	private void LoadJson(JsonObject json)
 	{
-		Text = ActorSpecs.ReadString(json, "text") ?? string.Empty;
 		MusicArea = ActorSpecs.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
 			MusicArea = null;
@@ -439,8 +430,6 @@ public class Room
 
 		if (!string.IsNullOrEmpty(MusicArea))
 			json["musicArea"] = MusicArea;
-		if (!string.IsNullOrEmpty(Text))
-			json["text"] = Text;
 
 		var rows = new JsonArray();
 		for (var y = 0; y < Size.Y; y ++)
