@@ -30,6 +30,7 @@ public class Actor
 	[NoSerialize] public bool Visible = true;
 	[NoSerialize] public float IFrameTime = 0.50f;
 	[NoSerialize] public bool CollidesWithSolids = true;
+	[NoSerialize] internal string? SessionDestroyKey;
 	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;
@@ -394,6 +395,8 @@ public class Actor
 			batcher.PopMatrix();
 		}
 	}
+
+	public virtual void ForEachLight(Action<Vector2, float, float, float, Color> action) { }
 
 	public virtual void RenderShadow(Batcher batcher, Color color)
 	{

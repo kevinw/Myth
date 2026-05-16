@@ -26,9 +26,11 @@ public class HiddenWallGrid : Actor
 		tilemap = new Subtexture[size.X, size.Y];
 	}
 
-	public void AddRect(Point2 localPosition, Point2 pixelSize)
+	public void AddRect(Point2 localPosition, Point2 pixelSize, string tileType)
 	{
-		if (Assets.GetTileset("castle") is not { } tileset)
+		if (Assets.GetTileset(tileType) is not { } tileset)
+			tileset = Assets.GetTileset("castle");
+		if (tileset == null)
 			return;
 
 		var left = Math.Clamp((int)MathF.Floor(localPosition.X / (float)Game.TileSize), 0, size.X);

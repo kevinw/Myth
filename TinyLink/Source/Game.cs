@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 
 namespace TinyLink;
@@ -18,26 +19,26 @@ public class Game : IDisposable
 	private const float ActorShadowMaxLength = 28.0f;
 	private const float ReflectionOpacity = 0.5f;
 
-	public readonly Manager Manager;
+	readonly Manager Manager;
 	public readonly Controls Controls;
-	public readonly Batcher Batcher;
+	readonly Batcher Batcher;
 	public Target Screen { get; private set; } = null!;
-	public Target BackgroundScreen { get; private set; } = null!;
-	public Target ForegroundScreen { get; private set; } = null!;
-	public Target LightMask { get; private set; } = null!;
-	public Target BackgroundLightMask { get; private set; } = null!;
-	public Target ForegroundLightMask { get; private set; } = null!;
-	public Target SingleLightMask { get; private set; } = null!;
-	public Target LitBackground { get; private set; } = null!;
-	public Target LitForeground { get; private set; } = null!;
-	public Target LitScreen { get; private set; } = null!;
-	public Target NormalBuffer { get; private set; } = null!;
+	Target BackgroundScreen { get; set; } = null!;
+	Target ForegroundScreen { get; set; } = null!;
+	Target LightMask { get; set; } = null!;
+	Target BackgroundLightMask { get; set; } = null!;
+	Target ForegroundLightMask { get; set; } = null!;
+	Target SingleLightMask { get; set; } = null!;
+	Target LitBackground { get; set; } = null!;
+	Target LitForeground { get; set; } = null!;
+	Target LitScreen { get; set; } = null!;
+	Target NormalBuffer { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 
-	public Input Input => Manager.Input;
-	public GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
-	public Audio Audio => Manager.Audio;
+	Input Input => Manager.Input;
+	GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
+	Audio Audio => Manager.Audio;
 	public Time Time => Manager.Time.MultiplyDelta(timeScale);
 	public bool AudioEventsEnabled { get; }
 
@@ -46,10 +47,17 @@ public class Game : IDisposable
 	private float nextRoomEase;
 	private Vector2 transitionCameraFrom;
 	private Vector2 transitionCameraTo;
+	private Color transitionAmbientColorFrom;
+	private Color transitionAmbientColorTo;
+	private float transitionAmbientIntensityFrom;
+	private float transitionAmbientIntensityTo;
+	private float transitionLightNoiseFrom;
+	private float transitionLightNoiseTo;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
 	private bool[,] roomNormalMask = new bool[Width, Height];
 	private readonly HashSet<string> audioFailures = [];
+	private readonly HashSet<string> sessionDestroyedActors = [];
 	private readonly ReloadableMaterial? crtMaterial;
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
 	private readonly ReloadableMaterial? normalLightMaterial;
@@ -59,7 +67,7 @@ public class Game : IDisposable
 	private float hitStun;
 	private float shaking;
 	private Point2 shake;
-	private Rng rng = new();
+	internal Rng rng = new();
 
 	enum DebugView
 	{
@@ -304,21 +312,21 @@ public class Game : IDisposable
 		player.Velocity = Vector2.Zero;
 	}
 
-	private Point2 FindFallbackPlayerPosition(Room room, Point2? direction)
+	private Point2 FindFallbackPlayerPosition(Room forRoom, Point2? direction)
 	{
 		var fromLeft = direction?.X > 0;
 		var fromRight = direction?.X < 0;
 		var fromTop = direction?.Y > 0;
 		var fromBottom = direction?.Y < 0;
-		var best = room.WorldBounds.Center;
+		var best = forRoom.WorldBounds.Center;
 		var bestScore = float.MaxValue;
-		var targetX = fromLeft ? 0 : fromRight ? room.Size.X - 1 : (room.Size.X - 1) * 0.5f;
-		var targetY = fromTop ? 0 : fromBottom ? room.Size.Y - 1 : (room.Size.Y - 1) * 0.5f;
+		var targetX = fromLeft ? 0 : fromRight ? forRoom.Size.X - 1 : (forRoom.Size.X - 1) * 0.5f;
+		var targetY = fromTop ? 0 : fromBottom ? forRoom.Size.Y - 1 : (forRoom.Size.Y - 1) * 0.5f;
 
-		for (var y = 1; y < room.Size.Y; y ++)
-		for (var x = 0; x < room.Size.X; x ++)
+		for (var y = 1; y < forRoom.Size.Y; y ++)
+		for (var x = 0; x < forRoom.Size.X; x ++)
 		{
-			if (!IsTileWalkable(room, x, y - 1) || !IsTileSolid(room, x, y))
+			if (!IsTileWalkable(forRoom, x, y - 1) || !IsTileSolid(forRoom, x, y))
 				continue;
 
 			var dx = x - targetX;
@@ -328,7 +336,7 @@ public class Game : IDisposable
 				continue;
 
 			bestScore = score;
-			best = room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
+			best = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
 		}
 
 		return best;
@@ -675,7 +683,7 @@ public class Game : IDisposable
 			Assets.LightingNoise,
 			new Rect(Camera.X - Time.SecondsF * 5.0f, Camera.Y, target.Width, target.Height),
 			Vector2.Zero,
-			Color.White * 0.30f);
+			Color.White * CurrentLightNoise());
 		Batcher.PopSampler();
 		Batcher.PopBlend();
 		Batcher.Render(target);
@@ -698,15 +706,21 @@ public class Game : IDisposable
 
 	private void DrawLightMask(Target lightMask, bool includeShadows)
 	{
-		lightMask.Clear(new Color(0.42f, 0.42f, 0.46f, 1.0f));
+		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 
 		foreach (var actor in Actors)
 		{
-			if (actor is not Light light)
-				continue;
+			if (actor is Light light)
+			{
+				DrawSingleLightMask(light, includeShadows);
+				AddSingleLightMask(lightMask);
+			}
 
-			DrawSingleLightMask(light, includeShadows);
-			AddSingleLightMask(lightMask);
+			actor.ForEachLight((position, radius, intensity, height, lightColor) =>
+			{
+				DrawSingleLightMask(position, radius, intensity, height, lightColor, includeShadows);
+				AddSingleLightMask(lightMask);
+			});
 		}
 
 		if (mouseLightEnabled)
@@ -715,6 +729,33 @@ public class Game : IDisposable
 			AddSingleLightMask(lightMask);
 		}
 	}
+
+	private Color CurrentAmbientColor()
+	{
+		if (nextRoom == null)
+			return room?.AmbientColor ?? Room.DefaultAmbientColor;
+
+		return LerpColor(transitionAmbientColorFrom, transitionAmbientColorTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private float CurrentAmbientIntensity()
+	{
+		if (nextRoom == null)
+			return room?.AmbientIntensity ?? Room.DefaultAmbientIntensity;
+
+		return float.Lerp(transitionAmbientIntensityFrom, transitionAmbientIntensityTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private float CurrentLightNoise()
+	{
+		if (nextRoom == null)
+			return room?.LightNoise ?? Room.DefaultLightNoise;
+
+		return float.Lerp(transitionLightNoiseFrom, transitionLightNoiseTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private static Color LerpColor(Color from, Color to, float amount)
+		=> new(Vector4.Lerp(from, to, amount));
 
 	private void DrawSingleLightMask(Light light, bool includeShadows)
 		=> DrawSingleLightMask(
@@ -1212,6 +1253,13 @@ public class Game : IDisposable
 			destroying.Add(actor);
 	}
 
+	public void DestroyForThisSession(Actor actor)
+	{
+		if (!string.IsNullOrEmpty(actor.SessionDestroyKey))
+			sessionDestroyedActors.Add(actor.SessionDestroyKey);
+		Destroy(actor);
+	}
+
 	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
 	{
 		try
@@ -1410,6 +1458,12 @@ public class Game : IDisposable
 
 				transitionCameraFrom = Camera;
 				transitionCameraTo = ClampCameraToRoom(exitPosition - new Vector2(Width, Height) / 2, nextRoom.WorldBounds);
+				transitionAmbientColorFrom = room.AmbientColor;
+				transitionAmbientColorTo = nextRoom.AmbientColor;
+				transitionAmbientIntensityFrom = room.AmbientIntensity;
+				transitionAmbientIntensityTo = nextRoom.AmbientIntensity;
+				transitionLightNoiseFrom = room.LightNoise;
+				transitionLightNoiseTo = nextRoom.LightNoise;
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				ApplyMusicArea(nextRoom);
@@ -1449,7 +1503,14 @@ public class Game : IDisposable
 		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
 			return false;
 
-		var bounds = actor.Hitbox.Rect + actor.Position + offset;
+		return OverlapsRoomCollision(actor.Hitbox.Rect + actor.Position + offset);
+	}
+
+	public bool OverlapsRoomCollision(in RectInt bounds)
+	{
+		if (room == null)
+			return false;
+
 		foreach (var rect in room.CollisionRects)
 		{
 			if (bounds.Overlaps(rect))
@@ -1674,10 +1735,25 @@ public class Game : IDisposable
 				continue;
 
 			var localPosition = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
-			ActorSpecs.Create(this, actor, offset + localPosition);
+			var sessionDestroyKey = SessionDestroyKey(room, actor, localPosition);
+			if (sessionDestroyedActors.Contains(sessionDestroyKey))
+				continue;
+
+			if (ActorSpecs.Create(this, actor, offset + localPosition) is { } created)
+				created.SessionDestroyKey = sessionDestroyKey;
 		}
 
 		BuildDualTiles();
+	}
+
+	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)
+	{
+		var id = ActorSpecs.ReadString(actor, "id");
+		if (!string.IsNullOrWhiteSpace(id))
+			return $"{room.Id}:id:{id}";
+
+		var source = ActorSpecs.ReadString(actor, "from") ?? ActorSpecs.ReadString(actor, "type") ?? "Actor";
+		return $"{room.Id}:{source}:{localPosition.X},{localPosition.Y}";
 	}
 
 	private static void PopulateHiddenWalls(Room room, HiddenWallGrid hiddenWalls)
@@ -1690,11 +1766,19 @@ public class Game : IDisposable
 
 			var localPosition = ActorSpecs.ReadPoint(resolved, "position") ?? Point2.Zero;
 			var size = ActorSpecs.ReadPoint(resolved, "size") ?? HiddenWall.DefaultSize;
-			hiddenWalls.AddRect(localPosition, size);
+			var tileType = ActorSpecs.ReadString(resolved, "tileType") ?? "castle";
+			hiddenWalls.AddRect(localPosition, size, tileType);
 		}
 	}
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
 
 	public void Shake(float time) => shaking = MathF.Max(shaking, time);
+
+	internal void DestroyEnemy(Actor actor)
+	{
+		HitStun(0.1f);
+		DestroyForThisSession(actor);
+		Create<Pop>(actor.Position + new Point2(0, -4));
+	}
 }

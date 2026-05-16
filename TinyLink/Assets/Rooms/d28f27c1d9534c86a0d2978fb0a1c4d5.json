@@ -1,0 +1,69 @@
+{
+  "position": [270, 17],
+  "size": [30, 17],
+  "tiles": [
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGS0000GGG0000000000GGG",
+    "00000000000000XXX0000000000GGG",
+    "00000000000000XXX0000000000GGG",
+    "000000000SXXXXXGGGGGGGGGGGGGGG",
+    "00000000SXXXXXGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+  ],
+  "actors": [
+    {
+      "type": "LedgePatrol",
+      "position": [140, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [148, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [156, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [164, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [172, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [180, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [188, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [196, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [204, 112]
+    },
+    {
+      "type": "LedgePatrol",
+      "position": [212, 112]
+    },
+    {
+      "from": "BlueMemoryLight",
+      "position": [81, 63]
+    }
+  ]
+}

@@ -4,7 +4,7 @@ public sealed class StateMachine<T> where T : struct, Enum
 {
 	public T Current { get; private set; }
 	public T Previous { get; private set; }
-	public float Time { get; private set; }
+	public float Time { get; set; }
 	public float PreviousTime { get; private set; }
 	public bool JustChanged { get; private set; }
 

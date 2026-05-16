@@ -25,4 +25,6 @@ public class Pop : Actor
 		if (IsFinishedPlaying())
 			Game.Destroy(this);
 	}
+
+	public override void RenderNormals(Batcher batcher) { }
 }

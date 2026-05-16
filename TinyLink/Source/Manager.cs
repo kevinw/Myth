@@ -863,25 +863,6 @@ public partial class Manager : App
 		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
 			OpenFmodStudio();
 
-		if (CurrentRoom is { } room && musicAreas.Count > 0)
-		{
-			ImGui.SameLine(0, ToolbarSpacing);
-			var area = room.MusicArea ?? DefaultMusicArea;
-			ImGui.SetNextItemWidth(116);
-			if (ImGui.BeginCombo("##MusicArea", area))
-			{
-				foreach (var musicArea in musicAreas)
-				{
-					var selected = area == musicArea;
-					if (ImGui.Selectable(musicArea, selected))
-						room.MusicArea = musicArea == DefaultMusicArea ? null : musicArea;
-					if (selected)
-						ImGui.SetItemDefaultFocus();
-				}
-				ImGui.EndCombo();
-			}
-		}
-
 		DrawCenteredRoomName(CurrentRoom);
 		DrawDeleteRoomPopup();
 

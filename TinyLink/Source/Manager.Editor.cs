@@ -40,6 +40,10 @@ public partial class Manager
 	bool draggingRoomActor;
 	Vector2 roomActorDragOffset;
 	HiddenWallResizeHandle hiddenWallResizeHandle;
+	bool editingRoomGeometry;
+	HiddenWallResizeHandle roomGeometryHandle;
+	Point2 roomGeometryDragOffset;
+	JsonUndoScope? roomGeometryUndo;
 	readonly JsonUndoManager undo = new();
 	JsonUndoScope? tilePaintUndo;
 	JsonUndoScope? actorMoveUndo;
@@ -49,6 +53,9 @@ public partial class Manager
 	Target? activeRoomPreviewTarget;
 	string? activeRoomPreviewId;
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
+	RoomSettings? copiedRoomSettings;
+
+	private readonly record struct RoomSettings(string? MusicArea, Color AmbientColor, float AmbientIntensity, float LightNoise);
 
 	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
 		=> new RoomUndoTarget(room);
@@ -108,6 +115,8 @@ public partial class Manager
 		draggingRoomActor = false;
 		roomActorDragOffset = Vector2.Zero;
 		hiddenWallResizeHandle = HiddenWallResizeHandle.None;
+		roomGeometryHandle = HiddenWallResizeHandle.None;
+		roomGeometryUndo = null;
 		tilePlacing = false;
 		actorMoveUndo = null;
 		tilePaintUndo = null;
@@ -157,7 +166,12 @@ public partial class Manager
 	{
 		public string UndoId => $"room:{room.Id}";
 		public string CaptureJson() => room.ToJsonString();
-		public void ApplyJson(string json) => room.LoadJsonState(json);
+		public void ApplyJson(string json)
+		{
+			var oldCell = room.Cell;
+			room.LoadJsonState(json);
+			UpdateRoomCellIndex(room, oldCell);
+		}
 	}
 
 	private sealed class EditorSelectionTarget(Manager manager) : IJsonUndoTarget
@@ -355,6 +369,8 @@ public partial class Manager
 			DrawTilePaletteSection();
 			ImGui.Spacing();
 			DrawActorPaletteSection();
+			ImGui.Spacing();
+			DrawRoomPaletteSection();
 
 			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
 				SelectEditorActorTool();
@@ -422,6 +438,106 @@ public partial class Manager
 		}
 	}
 
+	private void DrawRoomPaletteSection()
+	{
+		if (CurrentRoom is not { } room)
+			return;
+
+		if (!ImGui.CollapsingHeader("Room"))
+			return;
+
+		var changed = false;
+		if (ImGui.Button(editingRoomGeometry ? "Done Room Geo" : "Edit Room Geo"))
+		{
+			editingRoomGeometry = !editingRoomGeometry;
+			roomGeometryHandle = HiddenWallResizeHandle.None;
+		}
+		ImGui.Spacing();
+
+		if (ImGui.Button("Copy"))
+			copiedRoomSettings = CaptureRoomSettings(room);
+		if (copiedRoomSettings is { } settings)
+		{
+			ImGui.SameLine();
+			if (ImGui.Button("Paste"))
+			{
+				using (CaptureRoomUndo("Paste Room Settings", room))
+					ApplyRoomSettings(room, settings);
+				changed = true;
+			}
+		}
+
+		ImGui.TextUnformatted("Ambient");
+		var ambient = ColorToVector3(room.AmbientColor);
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.ColorEdit3("##RoomAmbientColor", ref ambient, ImGuiColorEditFlags.NoInputs))
+		{
+			using (CaptureRoomUndo("Edit Room Lighting", room))
+				room.AmbientColor = Vector3ToColor(ambient);
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Intensity");
+		var ambientIntensity = room.AmbientIntensity;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomAmbientIntensity", ref ambientIntensity, 0.0f, 2.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Lighting", room))
+				room.AmbientIntensity = ambientIntensity;
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Noise");
+		var lightNoise = room.LightNoise;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomLightNoise", ref lightNoise, 0.0f, 1.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Lighting", room))
+				room.LightNoise = lightNoise;
+			changed = true;
+		}
+
+		if (musicAreas.Count > 0)
+		{
+			ImGui.TextUnformatted("Music");
+			var area = room.MusicArea ?? DefaultMusicArea;
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.BeginCombo("##RoomMusicArea", area))
+			{
+				foreach (var musicArea in musicAreas)
+				{
+					var selected = area == musicArea;
+					if (ImGui.Selectable(musicArea, selected))
+					{
+						using (CaptureRoomUndo("Edit Room Music", room))
+							room.MusicArea = musicArea == DefaultMusicArea ? null : musicArea;
+						changed = true;
+					}
+					if (selected)
+						ImGui.SetItemDefaultFocus();
+				}
+				ImGui.EndCombo();
+			}
+		}
+
+		if (changed)
+		{
+			editorGameDirty = true;
+			SyncEditorGame();
+		}
+	}
+
+	private static RoomSettings CaptureRoomSettings(Room room)
+		=> new(room.MusicArea, room.AmbientColor, room.AmbientIntensity, room.LightNoise);
+
+	private static void ApplyRoomSettings(Room room, RoomSettings settings)
+	{
+		room.MusicArea = settings.MusicArea;
+		room.AmbientColor = settings.AmbientColor;
+		room.AmbientIntensity = settings.AmbientIntensity;
+		room.LightNoise = settings.LightNoise;
+	}
+
 	private void ActorSpecInspectorImGui()
 	{
 		if (!actorSpecInspectorOpen || selectedActorSpecId == null)
@@ -482,6 +598,16 @@ public partial class Manager
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
+		}
+		else if (IsHiddenWallTileTypeProperty(property))
+		{
+			var value = property.Value?.GetValue<string>() ?? "castle";
+			if (DrawHiddenWallTileTypeButtons(value, next =>
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(next));
+			}))
+				changed = true;
 		}
 		else if (property.Type == typeof(string))
 		{
@@ -640,6 +766,16 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (IsHiddenWallTileTypeProperty(property))
+		{
+			var value = property.Value?.GetValue<string>() ?? "castle";
+			if (DrawHiddenWallTileTypeButtons(value, next =>
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(next));
+			}))
+				changed = true;
+		}
 		else if (property.Type == typeof(string))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
@@ -714,6 +850,35 @@ public partial class Manager
 
 	private static string FacingTooltip(Signs value) => "Click to face the other direction.";
 
+	private static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
+		=> property.Type == typeof(string) && property.JsonName == "tileType";
+
+	private bool DrawHiddenWallTileTypeButtons(string value, Action<string> setValue)
+	{
+		var current = NormalizeHiddenWallTileType(value);
+		var changed = false;
+
+		changed |= DrawHiddenWallTileTypeButton("castle", "Castle", current, setValue);
+		ImGui.SameLine();
+		changed |= DrawHiddenWallTileTypeButton("grass", "Grass", current, setValue);
+
+		return changed;
+	}
+
+	private bool DrawHiddenWallTileTypeButton(string tileType, string label, string current, Action<string> setValue)
+	{
+		var image = Assets.GetTileset(tileType)?.Tiles.FirstOrDefault() ?? new Subtexture();
+		if (!ImGuiSubtextureButton(tileType, image, label, current == tileType, new Vector2(ButtonSize, ButtonSize)))
+			return false;
+
+		if (current != tileType)
+			setValue(tileType);
+		return current != tileType;
+	}
+
+	private static string NormalizeHiddenWallTileType(string value)
+		=> value == "grass" ? "grass" : "castle";
+
 	private static float BeginInspectorPropertyRow(string label, bool hasResetButton)
 	{
 		var available = ImGui.GetContentRegionAvail().X;
@@ -766,6 +931,16 @@ public partial class Manager
 		var b = (int)(Math.Clamp(value.Z, 0, 1) * 255);
 		return $"{r:X2}{g:X2}{b:X2}";
 	}
+
+	private static Vector3 ColorToVector3(Color color)
+		=> new(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f);
+
+	private static Color Vector3ToColor(Vector3 value)
+		=> new(
+			Math.Clamp(value.X, 0, 1),
+			Math.Clamp(value.Y, 0, 1),
+			Math.Clamp(value.Z, 0, 1),
+			1.0f);
 
 	private static RectInt RoomActorBounds(Room room, JsonObject actor)
 	{
@@ -848,6 +1023,25 @@ public partial class Manager
 		}
 	}
 
+	private void DrawRoomGeometryHandles(Room room, float lineWeight)
+	{
+		var bounds = room.WorldBounds;
+		var color = roomGeometryHandle == HiddenWallResizeHandle.None ? highlight : Color.White;
+		batcher.RectLine(bounds.Inflate(lineWeight * 3), lineWeight * 2, color);
+
+		var size = HiddenWallHandleSize(lineWeight);
+		foreach (var handle in Enum.GetValues<HiddenWallResizeHandle>())
+		{
+			if (handle == HiddenWallResizeHandle.None)
+				continue;
+
+			var rect = HiddenWallHandleRect(bounds, handle, size);
+			var handleColor = roomGeometryHandle == handle ? Color.White : highlight;
+			batcher.Rect(rect, Color.Black * 0.75f);
+			batcher.RectLine(rect, lineWeight * 2, handleColor);
+		}
+	}
+
 	private HiddenWallResizeHandle HitTestHiddenWallResizeHandle(Room room, Vector2 world, float lineWeight)
 	{
 		if (selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
@@ -858,6 +1052,29 @@ public partial class Manager
 			return HiddenWallResizeHandle.None;
 
 		var bounds = RoomActorBounds(room, actor);
+		var size = HiddenWallHandleSize(lineWeight);
+		foreach (var handle in new[]
+		         {
+			         HiddenWallResizeHandle.TopLeft,
+			         HiddenWallResizeHandle.TopRight,
+			         HiddenWallResizeHandle.BottomLeft,
+			         HiddenWallResizeHandle.BottomRight,
+			         HiddenWallResizeHandle.Left,
+			         HiddenWallResizeHandle.Right,
+			         HiddenWallResizeHandle.Top,
+			         HiddenWallResizeHandle.Bottom
+		         })
+		{
+			if (HiddenWallHandleRect(bounds, handle, size).Contains(world))
+				return handle;
+		}
+
+		return HiddenWallResizeHandle.None;
+	}
+
+	private HiddenWallResizeHandle HitTestRoomGeometryHandle(Room room, Vector2 world, float lineWeight)
+	{
+		var bounds = room.WorldBounds;
 		var size = HiddenWallHandleSize(lineWeight);
 		foreach (var handle in new[]
 		         {
@@ -1027,6 +1244,90 @@ public partial class Manager
 		actor["position"] = new JsonArray(left, top);
 		actor["size"] = new JsonArray(right - left, bottom - top);
 		editorGameDirty = true;
+	}
+
+	private void ApplyRoomGeometryDrag(Room room, Vector2 world)
+	{
+		var mouseTile = WorldToRoomGeometryTile(world);
+		var current = new RectInt(room.Position, room.Size);
+		var candidate = roomGeometryHandle == HiddenWallResizeHandle.None
+			? new RectInt(mouseTile - roomGeometryDragOffset, room.Size)
+			: ResizeRoomGeometryBounds(current, roomGeometryHandle, mouseTile);
+
+		if (candidate.Width <= 0 || candidate.Height <= 0 || RoomGeometryOverlaps(room, candidate))
+			return;
+
+		if (candidate.Position == room.Position && candidate.Size == room.Size)
+			return;
+
+		if (candidate.Size == room.Size)
+			MoveRoomGeometry(room, candidate.Position);
+		else
+			ResizeRoomGeometry(room, candidate);
+
+		selectedRoomId = room.Id;
+		cell = room.Cell;
+		roomCreatePosition = room.Position;
+		editorGameDirty = true;
+		ClearRoomPreviewCache();
+	}
+
+	private static Point2 WorldToRoomGeometryTile(Vector2 world)
+		=> new(
+			(int)MathF.Floor(world.X / Game.TileSize),
+			(int)MathF.Floor(world.Y / Game.TileSize));
+
+	private static RectInt ResizeRoomGeometryBounds(RectInt bounds, HiddenWallResizeHandle handle, Point2 mouseTile)
+	{
+		var left = bounds.Left;
+		var top = bounds.Top;
+		var right = bounds.Right;
+		var bottom = bounds.Bottom;
+
+		if (handle is HiddenWallResizeHandle.Left or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.BottomLeft)
+			left = Math.Min(mouseTile.X, right - 1);
+		if (handle is HiddenWallResizeHandle.Right or HiddenWallResizeHandle.TopRight or HiddenWallResizeHandle.BottomRight)
+			right = Math.Max(mouseTile.X + 1, left + 1);
+		if (handle is HiddenWallResizeHandle.Top or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.TopRight)
+			top = Math.Min(mouseTile.Y, bottom - 1);
+		if (handle is HiddenWallResizeHandle.Bottom or HiddenWallResizeHandle.BottomLeft or HiddenWallResizeHandle.BottomRight)
+			bottom = Math.Max(mouseTile.Y + 1, top + 1);
+
+		return new RectInt(left, top, right - left, bottom - top);
+	}
+
+	private static bool RoomGeometryOverlaps(Room editing, RectInt candidate)
+	{
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (room == editing)
+				continue;
+			if (candidate.Overlaps(new RectInt(room.Position, room.Size)))
+				return true;
+		}
+
+		return false;
+	}
+
+	private static void MoveRoomGeometry(Room room, Point2 position)
+	{
+		var oldCell = room.Cell;
+		room.MoveTo(position);
+		UpdateRoomCellIndex(room, oldCell);
+	}
+
+	private static void ResizeRoomGeometry(Room room, RectInt bounds)
+	{
+		var oldCell = room.Cell;
+		room.ResizeTo(bounds);
+		UpdateRoomCellIndex(room, oldCell);
+	}
+
+	private static void UpdateRoomCellIndex(Room room, Point2 oldCell)
+	{
+		if (Assets.Rooms.TryGetValue(oldCell, out var indexed) && indexed == room)
+			Assets.Rooms.Remove(oldCell);
+		Assets.Rooms[room.Cell] = room;
 	}
 
 	private void StampTiles(Room room, Point2 origin, int shift, int size, char tile)
@@ -1258,7 +1559,8 @@ public partial class Manager
 
 		UpdateEditorCameraTween();
 		UpdateEditorWorldView(inner);
-		UpdateAutoSelectedRoomFromEditorCamera(inner);
+		if (!editingRoomGeometry)
+			UpdateAutoSelectedRoomFromEditorCamera(inner);
 
 		batcher.PushScissor((RectInt)(inner * Scale));
 		var worldMatrix =
@@ -1270,7 +1572,7 @@ public partial class Manager
 
 		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
 
-		if (!worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
+		if (!editingRoomGeometry && !worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 		{
 			var worldMouse = ScreenToEditorWorld(Cursor, inner);
 			if (GetRoomAtWorld(worldMouse) is { } selected && selected != CurrentRoom)
@@ -1306,7 +1608,7 @@ public partial class Manager
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, width, height).Contains(localMouse);
-			proposedRoomTiles = worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
+			proposedRoomTiles = editingRoomGeometry || worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
 			if (selectedRoomActorIndex >= editing.Actors.Count)
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
@@ -1314,7 +1616,14 @@ public partial class Manager
 			var hoveredHiddenWallHandle = !worldMouseBlocked && actorSelectActive && overGame
 				? HitTestHiddenWallResizeHandle(editing, worldMouse, gridWeight)
 				: HiddenWallResizeHandle.None;
-			SetHiddenWallResizeCursor(hiddenWallResizeHandle != HiddenWallResizeHandle.None ? hiddenWallResizeHandle : hoveredHiddenWallHandle);
+			var hoveredRoomGeometryHandle = editingRoomGeometry && !worldMouseBlocked
+				? HitTestRoomGeometryHandle(editing, worldMouse, gridWeight)
+				: HiddenWallResizeHandle.None;
+			SetHiddenWallResizeCursor(
+				roomGeometryHandle != HiddenWallResizeHandle.None ? roomGeometryHandle :
+				hoveredRoomGeometryHandle != HiddenWallResizeHandle.None ? hoveredRoomGeometryHandle :
+				hiddenWallResizeHandle != HiddenWallResizeHandle.None ? hiddenWallResizeHandle :
+				hoveredHiddenWallHandle);
 
 			for (int x = 1; x < editing.Size.X; x ++)
 				batcher.Line(roomTopLeft + new Vector2(x * Game.TileSize, 0),  roomTopLeft + new Vector2(x * Game.TileSize, height), gridWeight, gridColor);
@@ -1336,14 +1645,22 @@ public partial class Manager
 			if (worldMouseBlocked)
 				tilePlacing = false;
 
-			if (!worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != HiddenWallResizeHandle.None)
+			if (editingRoomGeometry && !worldMouseBlocked && Input.Mouse.LeftPressed && (overGame || hoveredRoomGeometryHandle != HiddenWallResizeHandle.None))
+			{
+				roomGeometryUndo ??= CaptureRoomUndo("Edit Room Geometry", editing);
+				roomGeometryHandle = hoveredRoomGeometryHandle;
+				var mouseTile = WorldToRoomGeometryTile(worldMouse);
+				roomGeometryDragOffset = mouseTile - editing.Position;
+				tilePlacing = false;
+			}
+			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != HiddenWallResizeHandle.None)
 			{
 				hiddenWallResizeHandle = hoveredHiddenWallHandle;
 				draggingRoomActor = false;
 				roomActorDragOffset = Vector2.Zero;
 				tilePlacing = false;
 			}
-			else if (!worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed)
+			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed)
 			{
 				using (CaptureSelectionUndo("Select Actor"))
 				{
@@ -1356,7 +1673,7 @@ public partial class Manager
 					tilePlacing = false;
 				}
 			}
-			else if (!worldMouseBlocked && overGame && brushIsActor && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
+			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && brushIsActor && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
 			{
 				using (CaptureRoomUndo("Delete Actor", editing))
 				{
@@ -1372,14 +1689,14 @@ public partial class Manager
 					editorGameDirty = true;
 				}
 			}
-			else if (!worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
+			else if (!editingRoomGeometry && !worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
 			{
 				brush = editing.Tiles[tileOver.X, tileOver.Y];
 				tileTypePlacing = brush;
 				selectedActorPaletteIndex = -1;
 				actorSelectTool = false;
 			}
-			else if (!worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && ctrlClick && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
+			else if (!editingRoomGeometry && !worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && ctrlClick && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
 			{
 				using (CaptureRoomUndo("Toggle Slope Tile", editing))
 				{
@@ -1391,7 +1708,7 @@ public partial class Manager
 					editorGameDirty = true;
 				}
 			}
-			else if (!worldMouseBlocked && overGame && Input.Mouse.LeftPressed && actorBrush is { } actorEntry)
+			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && Input.Mouse.LeftPressed && actorBrush is { } actorEntry)
 			{
 				using (CaptureRoomUndo("Place Actor", editing))
 				{
@@ -1404,7 +1721,7 @@ public partial class Manager
 					editorGameDirty = true;
 				}
 			}
-			else if (!worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
+			else if (!editingRoomGeometry && !worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
 				tilePaintUndo?.Commit();
 				tilePaintUndo = CaptureRoomUndo("Paint Tiles", editing);
@@ -1413,7 +1730,11 @@ public partial class Manager
 				tilePlacing = true;
 			}
 
-			if (!worldMouseBlocked && actorSelectActive && hiddenWallResizeHandle != HiddenWallResizeHandle.None && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+			if (editingRoomGeometry && !worldMouseBlocked && roomGeometryUndo != null && Input.Mouse.LeftDown)
+			{
+				ApplyRoomGeometryDrag(editing, worldMouse);
+			}
+			else if (!worldMouseBlocked && actorSelectActive && hiddenWallResizeHandle != HiddenWallResizeHandle.None && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				actorMoveUndo ??= CaptureRoomUndo("Resize Actor", editing);
 				ResizeHiddenWallActor(editing, selectedRoomActorIndex, hiddenWallResizeHandle, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
@@ -1430,6 +1751,9 @@ public partial class Manager
 				hiddenWallResizeHandle = HiddenWallResizeHandle.None;
 				actorMoveUndo?.Commit();
 				actorMoveUndo = null;
+				roomGeometryHandle = HiddenWallResizeHandle.None;
+				roomGeometryUndo?.Commit();
+				roomGeometryUndo = null;
 			}
 
 			if (!keyboardBlocked && actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
@@ -1451,7 +1775,7 @@ public partial class Manager
 			var shift = -(brushSize - 1) / 2;
 			var size = brushSize;
 
-			if (!worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
+			if (!editingRoomGeometry && !worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
 			{
 				if (eyedropper)
 				{
@@ -1483,7 +1807,7 @@ public partial class Manager
 				}
 			}
 
-			if (!worldMouseBlocked && !eyedropper && !brushIsActor && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
+			if (!editingRoomGeometry && !worldMouseBlocked && !eyedropper && !brushIsActor && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
 			{
 				StampTiles(editing, tilePlaceFrom, shift, size, tileTypePlacing);
 
@@ -1502,8 +1826,10 @@ public partial class Manager
 			}
 
 			batcher.RectLine(roomBounds, gridWeight * 2, Color.Black);
+			if (editingRoomGeometry)
+				DrawRoomGeometryHandles(editing, gridWeight);
 			DrawPlaytestPlayerMarker(editing);
-			if (actorSelectActive)
+			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 
 			if (proposedRoomTiles is { } proposal)
@@ -1531,7 +1857,11 @@ public partial class Manager
 			tilePaintUndo = null;
 		}
 
-		if (editorGameDirty)
+		if (editorGameDirty && (tilePlacing || roomGeometryUndo != null))
+		{
+			SyncEditorGame();
+		}
+		else if (editorGameDirty)
 		{
 			editorGameDirty = false;
 			CurrentRoom?.Save();

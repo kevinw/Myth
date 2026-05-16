@@ -31,6 +31,9 @@ public class Room
 	public readonly record struct LightOccluderPolygon(Point2[] Points, RectInt Bounds);
 
 	public static readonly Point2 DefaultSize = new(Game.Columns, Game.Rows);
+	public static readonly Color DefaultAmbientColor = new(0.42f, 0.42f, 0.46f, 1.0f);
+	public const float DefaultAmbientIntensity = 1.0f;
+	public const float DefaultLightNoise = 0.30f;
 
 	/// <summary>
 	/// Stable room identity, also used as the filename.
@@ -55,7 +58,7 @@ public class Room
 	/// <summary>
 	/// Grid of Tiles
 	/// </summary>
-	public readonly char[,] Tiles;
+	public char[,] Tiles;
 
 	/// <summary>
 	/// Actor specs placed directly in this room.
@@ -93,6 +96,9 @@ public class Room
 	/// Optional FMOD background music Area parameter label.
 	/// </summary>
 	public string? MusicArea;
+	public Color AmbientColor = DefaultAmbientColor;
+	public float AmbientIntensity = DefaultAmbientIntensity;
+	public float LightNoise = DefaultLightNoise;
 
 	/// <summary>
 	/// Bounds in World Space in Pixels
@@ -118,7 +124,10 @@ public class Room
 	{
 		var clone = new Room(Id, Position, Size)
 		{
-			MusicArea = MusicArea
+			MusicArea = MusicArea,
+			AmbientColor = AmbientColor,
+			AmbientIntensity = AmbientIntensity,
+			LightNoise = LightNoise
 		};
 
 		for (var x = 0; x < Size.X; x ++)
@@ -176,6 +185,9 @@ public class Room
 		MusicArea = ActorSpecs.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
 			MusicArea = null;
+		AmbientColor = ReadHexColor(json, "ambientColor") ?? DefaultAmbientColor;
+		AmbientIntensity = ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
+		LightNoise = ReadFloat(json, "lightNoise", DefaultLightNoise);
 
 		if (json.TryGetPropertyValue("tiles", out var tilesNode) && tilesNode is JsonArray rows)
 		{
@@ -252,6 +264,72 @@ public class Room
 
 	public bool TryGetSlopeTile(Point2 tile, out SlopeTile slope)
 		=> slopeLookup.TryGetValue(tile, out slope);
+
+	public void MoveTo(Point2 position)
+	{
+		Position = position;
+		RebuildGeometry();
+	}
+
+	public void ResizeTo(RectInt bounds)
+	{
+		if (bounds.Width <= 0 || bounds.Height <= 0)
+			return;
+
+		var previousPosition = Position;
+		var previousSize = Size;
+		var previousTiles = Tiles;
+
+		Position = bounds.Position;
+		Size = bounds.Size;
+		Tiles = new char[Size.X, Size.Y];
+
+		for (var x = 0; x < Size.X; x ++)
+		for (var y = 0; y < Size.Y; y ++)
+		{
+			var oldX = Position.X + x - previousPosition.X;
+			var oldY = Position.Y + y - previousPosition.Y;
+			Tiles[x, y] = oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+				? previousTiles[oldX, oldY]
+				: '0';
+		}
+
+		var actorOffset = previousPosition - Position;
+		if (actorOffset != Point2.Zero)
+		{
+			foreach (var actor in Actors)
+			{
+				var position = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
+				actor["position"] = new JsonArray(position.X + actorOffset.X * Game.TileSize, position.Y + actorOffset.Y * Game.TileSize);
+			}
+		}
+
+		RebuildGeometry();
+	}
+
+	private static Color? ReadHexColor(JsonObject json, string key)
+	{
+		if (!json.TryGetPropertyValue(key, out var node) || node == null)
+			return null;
+
+		var text = node.GetValue<string>().TrimStart('#');
+		return uint.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var hex)
+			? text.Length <= 6 ? new Color((int)hex) : new Color(hex)
+			: null;
+	}
+
+	private static float ReadFloat(JsonObject json, string key, float fallback)
+	{
+		if (!json.TryGetPropertyValue(key, out var node) || node == null)
+			return fallback;
+
+		return float.TryParse(node.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+			? value
+			: fallback;
+	}
+
+	private static string ColorToHex(Color color)
+		=> $"{color.R:X2}{color.G:X2}{color.B:X2}";
 
 	private void BuildSlopeTiles()
 	{
@@ -430,6 +508,12 @@ public class Room
 
 		if (!string.IsNullOrEmpty(MusicArea))
 			json["musicArea"] = MusicArea;
+		if (AmbientColor != DefaultAmbientColor)
+			json["ambientColor"] = ColorToHex(AmbientColor);
+		if (AmbientIntensity != DefaultAmbientIntensity)
+			json["ambientIntensity"] = AmbientIntensity;
+		if (LightNoise != DefaultLightNoise)
+			json["lightNoise"] = LightNoise;
 
 		var rows = new JsonArray();
 		for (var y = 0; y < Size.Y; y ++)
@@ -456,8 +540,11 @@ public class Room
 	{
 		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
 		Position = ActorSpecs.ReadPoint(json, "position") ?? Position;
-		if (ActorSpecs.ReadPoint(json, "size") is { } size && size != Size)
-			throw new InvalidOperationException("Undoing room size changes is not supported yet.");
+		if (ActorSpecs.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)
+		{
+			Size = size;
+			Tiles = new char[Size.X, Size.Y];
+		}
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
