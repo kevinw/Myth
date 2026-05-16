@@ -7,6 +7,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
 {
     float4 TextureSizeCamera;
     float4 DitherSettings;
+    float4 DitherGlitch;
 };
 
 Texture2D Texture : register(t0, space2);
@@ -86,6 +87,11 @@ float hash_threshold(float2 position)
 {
     float2 p = floor(position);
     return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+float hash_threshold(float value)
+{
+    return frac(sin(value) * 43758.5453);
 }
 
 float stripe_threshold(float2 position)
@@ -223,9 +229,23 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field)
 
     float family = floor(tile_field.g * 4.0 + 0.5);
     float variant = floor(tile_field.r * 255.0 + 0.5);
-    float2 dither_position = glitch_dither_position(position, tile_field);
-    float threshold = threshold_for_pattern(dither_position, pattern_for_family(family, variant));
+    float distance_to_glitch = distance(position, DitherGlitch.xy);
+    float amount = DitherSettings.w * DitherSettings.w * (3.0 - 2.0 * DitherSettings.w);
+    float active_radius = lerp(16.0, DitherGlitch.z, amount);
+    float proximity = smoothstep(active_radius, active_radius * 0.35, distance_to_glitch);
+    float global_glitch = amount * smoothstep(0.60, 1.0, amount) * 0.18;
+    float local_glitch = amount * proximity * 0.82 + global_glitch;
+
+    float dirty_frame = floor(DitherGlitch.w * 9.0);
+    float2 dirty_block = floor(position / 16.0);
+    float dirty = hash_threshold(dirty_block.x * 17.0 + dirty_block.y * 31.0 + dirty_frame * 13.0 + variant * 0.23);
+    float glitch_hash = hash_threshold(variant * 19.19 + dirty_block.x * 7.13 + dirty_block.y * 3.71 + dirty_frame * 5.17);
+    float2 glitch_offset = float2(dirty - 0.5, glitch_hash - 0.5) * local_glitch * 9.0;
+    float2 dither_position = glitch_dither_position(position + glitch_offset, tile_field);
+    float pattern = local_glitch > 0.65 ? floor(glitch_hash * 11.0) : pattern_for_family(family, variant);
+    float threshold = threshold_for_pattern(dither_position, pattern);
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
+    threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
     float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
     float scale = dithered_intensity / intensity;
     return light * lerp(1.0, scale, saturate(DitherSettings.z));

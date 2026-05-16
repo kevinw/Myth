@@ -392,6 +392,7 @@ public class Player : Actor
 	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null) {
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
+		Game.PulseDitherGlitch();
 
 		Play("hurt");
 

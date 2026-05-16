@@ -19,6 +19,9 @@ public class Game : IDisposable
 	private const float ActorShadowMaxLength = 28.0f;
 	private const float ReflectionOpacity = 0.5f;
 	private const float CameraSlackEpsilon = TileSize;
+	private const float DitherGlitchAttackSpeed = 28.0f;
+	private const float DitherGlitchDecaySpeed = 2.4f;
+	private const float DitherGlitchRadius = 150.0f;
 
 	readonly Manager Manager;
 	public readonly Controls Controls;
@@ -69,6 +72,8 @@ public class Game : IDisposable
 	private string? musicArea;
 	private float hitStun;
 	private float shaking;
+	private float ditherGlitch;
+	private float ditherGlitchTarget;
 	private Point2 shake;
 	internal Rng rng = new();
 
@@ -226,6 +231,10 @@ public class Game : IDisposable
 			if (debugViewMessageTimer <= 0)
 				DebugViewMessage = null;
 		}
+		var glitchSpeed = ditherGlitchTarget > ditherGlitch ? DitherGlitchAttackSpeed : DitherGlitchDecaySpeed;
+		ditherGlitch = Calc.Approach(ditherGlitch, ditherGlitchTarget, Time.Delta * glitchSpeed);
+		if (ditherGlitchTarget > 0 && ditherGlitch >= ditherGlitchTarget)
+			ditherGlitchTarget = 0;
 
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
@@ -783,6 +792,7 @@ public class Game : IDisposable
 		output.Clear(Color.Transparent);
 		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var glitchPosition = PlayerDitherGlitchPosition();
 		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
 			output.Width,
 			output.Height,
@@ -791,7 +801,11 @@ public class Game : IDisposable
 			Manager.LightingDitherEnabled ? 1.0f : 0.0f,
 			Manager.LightingDitherScale,
 			Manager.LightingDitherStrength,
-			0
+			ditherGlitch,
+			glitchPosition.X,
+			glitchPosition.Y,
+			DitherGlitchRadius,
+			Time.SecondsF
 		]);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -1932,6 +1946,12 @@ public class Game : IDisposable
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
 
 	public void Shake(float time) => shaking = MathF.Max(shaking, time);
+
+	public void PulseDitherGlitch()
+		=> ditherGlitchTarget = 1.0f;
+
+	private Vector2 PlayerDitherGlitchPosition()
+		=> GetFirst<Player>()?.Position ?? Camera + new Vector2(Width, Height) * 0.5f;
 
 	internal void DestroyEnemy(Actor actor)
 	{
