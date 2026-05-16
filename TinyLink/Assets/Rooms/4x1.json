@@ -1,6 +1,7 @@
 {
   "position": [160, 23],
   "size": [40, 23],
+  "ambientColor": "56565E",
   "tiles": [
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
@@ -74,6 +75,10 @@
     {
       "type": "Dropper",
       "position": [108, 104]
+    },
+    {
+      "from": "BlueMemoryLight",
+      "position": [212, 108]
     }
   ]
 }

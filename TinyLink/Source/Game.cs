@@ -19,9 +19,10 @@ public class Game : IDisposable
 	private const float ActorShadowMaxLength = 28.0f;
 	private const float ReflectionOpacity = 0.5f;
 	private const float CameraSlackEpsilon = TileSize;
-	private const float DitherGlitchAttackSpeed = 28.0f;
-	private const float DitherGlitchDecaySpeed = 2.4f;
-	private const float DitherGlitchRadius = 150.0f;
+	static float DitherGlitchAttackSpeed => 15.0f;
+	static float DitherGlitchDecaySpeed => 1.35f;
+	static float DitherGlitchRadius => 150.0f;
+	private const float ActorDitherAmount = 0.2f;
 
 	readonly Manager Manager;
 	public readonly Controls Controls;
@@ -36,8 +37,10 @@ public class Game : IDisposable
 	Target LitBackground { get; set; } = null!;
 	Target LitForeground { get; set; } = null!;
 	Target LitScreen { get; set; } = null!;
+	Target GlitchScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
+	Target DitherMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 
@@ -68,12 +71,14 @@ public class Game : IDisposable
 	private readonly ReloadableMaterial? normalLightMaterial;
 	private readonly ReloadableMaterial? reflectionDistortMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
+	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
 	private float hitStun;
 	private float shaking;
 	private float ditherGlitch;
 	private float ditherGlitchTarget;
+	private Vector2 ditherGlitchAxis = Vector2.UnitX;
 	private Point2 shake;
 	internal Rng rng = new();
 
@@ -85,7 +90,8 @@ public class Game : IDisposable
 		NormalBuffer,
 		TileFieldRed,
 		TileFieldGreen,
-		TileFieldBlue
+		TileFieldBlue,
+		DitherMask
 	}
 
 	private DebugView debugView;
@@ -122,9 +128,10 @@ public class Game : IDisposable
 			DebugView.CollisionRects => "Collision Rects",
 			DebugView.LightMask => "Light Mask",
 			DebugView.NormalBuffer => "Normal Buffer",
-			DebugView.TileFieldRed => "Tile Field R",
-			DebugView.TileFieldGreen => "Tile Field G",
-			DebugView.TileFieldBlue => "Tile Field B",
+			DebugView.TileFieldRed => "Tile Field R: Hash",
+			DebugView.TileFieldGreen => "Tile Field G: Family",
+			DebugView.TileFieldBlue => "Tile Field B: Solid",
+			DebugView.DitherMask => "Dither Mask",
 			_ => view.ToString()
 		};
 
@@ -153,10 +160,11 @@ public class Game : IDisposable
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
-		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 3, uniformBufferCount: 1);
+		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 4, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
+		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
 
 		if (start != null)
 		{
@@ -253,6 +261,7 @@ public class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
 				if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 				if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
+				if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 			}
 
@@ -493,8 +502,10 @@ public class Game : IDisposable
 		LitBackground = new Target(GraphicsDevice, width, height, name: "LitBackground");
 		LitForeground = new Target(GraphicsDevice, width, height, name: "LitForeground");
 		LitScreen = new Target(GraphicsDevice, width, height, name: "LitScreen");
+		GlitchScreen = new Target(GraphicsDevice, width, height, name: "GlitchScreen");
 		NormalBuffer = new Target(GraphicsDevice, width, height, name: "NormalBuffer");
 		TileField = new Target(GraphicsDevice, width, height, name: "TileField");
+		DitherMask = new Target(GraphicsDevice, width, height, name: "DitherMask");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
 		roomNormalMask = new bool[width, height];
 	}
@@ -511,8 +522,10 @@ public class Game : IDisposable
 		LitBackground?.Dispose();
 		LitForeground?.Dispose();
 		LitScreen?.Dispose();
+		GlitchScreen?.Dispose();
 		NormalBuffer?.Dispose();
 		TileField?.Dispose();
+		DitherMask?.Dispose();
 		ReflectionScreen?.Dispose();
 	}
 
@@ -524,11 +537,16 @@ public class Game : IDisposable
 		UpdateMouseLightPosition(viewport);
 		DrawNormalBuffer();
 		DrawTileField();
+		DrawDitherMask();
 
-		Target output;
+		Target output = Screen;
 		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen or DebugView.TileFieldBlue)
 		{
 			output = DrawTileFieldDebug();
+		}
+		else if (debugView == DebugView.DitherMask)
+		{
+			output = DitherMask;
 		}
 		else
 		{
@@ -537,9 +555,11 @@ public class Game : IDisposable
 				output = BackgroundLightMask;
 			else if (debugView == DebugView.NormalBuffer)
 				output = NormalBuffer;
+			else if (debugView == DebugView.None)
+				output = ApplyPixelSortGlitch(output);
 		}
-		if (showHud && output == LitScreen)
-			DrawPlayerHud(LitScreen);
+		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+			DrawPlayerHud(output);
 
 		// draw screen to window
 		{
@@ -787,11 +807,45 @@ public class Game : IDisposable
 		Batcher.Clear();
 	}
 
+	private Target ApplyPixelSortGlitch(Target input)
+	{
+		if (pixelSortGlitchMaterial == null || ditherGlitch <= 0.001f)
+			return input;
+
+		GlitchScreen.Clear(Color.Transparent);
+		pixelSortGlitchMaterial.Material.Fragment.Samplers[1] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var glitchPosition = PlayerDitherGlitchPosition();
+		pixelSortGlitchMaterial.Material.Fragment.SetUniformBuffer([
+			input.Width,
+			input.Height,
+			Camera.X - shake.X,
+			Camera.Y - shake.Y,
+			ditherGlitch,
+			glitchPosition.X,
+			glitchPosition.Y,
+			DitherGlitchRadius,
+			Time.SecondsF,
+			ditherGlitchAxis.X,
+			ditherGlitchAxis.Y,
+			0
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(pixelSortGlitchMaterial.Material);
+		Batcher.Image(input, input.Bounds.Center, input.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(GlitchScreen);
+		Batcher.Clear();
+		return GlitchScreen;
+	}
+
 	private void CompositeLayer(Target color, Target light, Target output)
 	{
 		output.Clear(Color.Transparent);
 		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
 			output.Width,
@@ -805,7 +859,11 @@ public class Game : IDisposable
 			glitchPosition.X,
 			glitchPosition.Y,
 			DitherGlitchRadius,
-			Time.SecondsF
+			Time.SecondsF,
+			ditherGlitchAxis.X,
+			ditherGlitchAxis.Y,
+			0,
+			0
 		]);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -829,6 +887,34 @@ public class Game : IDisposable
 		Batcher.Render(TileField);
 		Batcher.Clear();
 	}
+
+	private void DrawDitherMask()
+	{
+		DitherMask.Clear(Color.White);
+		Batcher.PushMatrix(-(Point2)Camera + shake);
+		rendering.AddRange(Actors);
+		rendering.Sort((a, b) => b.Depth - a.Depth);
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+
+			var amount = DitherAmountForActor(actor);
+			if (amount >= 0.999f)
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderShadow(Batcher, new Color(amount, amount, amount, 1.0f));
+			Batcher.PopMatrix();
+		}
+		rendering.Clear();
+		Batcher.PopMatrix();
+		Batcher.Render(DitherMask);
+		Batcher.Clear();
+	}
+
+	private static float DitherAmountForActor(Actor actor)
+		=> actor.Mask.Has(Actor.Masks.Player | Actor.Masks.Enemy) ? ActorDitherAmount : 1.0f;
 
 	private void DrawRoomTileField(Room renderRoom)
 	{
@@ -1290,6 +1376,7 @@ public class Game : IDisposable
 		normalLightMaterial?.Reload();
 		reflectionDistortMaterial?.Reload();
 		tileFieldDebugMaterial?.Reload();
+		pixelSortGlitchMaterial?.Reload();
 	}
 #endif
 
@@ -1947,8 +2034,12 @@ public class Game : IDisposable
 
 	public void Shake(float time) => shaking = MathF.Max(shaking, time);
 
-	public void PulseDitherGlitch()
-		=> ditherGlitchTarget = 1.0f;
+	public void PulseDitherGlitch(Vector2? axis = null)
+	{
+		if (axis is { } value && value.LengthSquared() > 0.001f)
+			ditherGlitchAxis = Vector2.Normalize(value);
+		ditherGlitchTarget = 1.0f;
+	}
 
 	private Vector2 PlayerDitherGlitchPosition()
 		=> GetFirst<Player>()?.Position ?? Camera + new Vector2(Width, Height) * 0.5f;

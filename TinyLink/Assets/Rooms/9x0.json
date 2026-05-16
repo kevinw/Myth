@@ -1,12 +1,6 @@
 {
-  "position": [
-    360,
-    0
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [360, 0],
+  "size": [40, 23],
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -24,159 +18,96 @@
     "0000000000##00000000000000##111#00000000",
     "000000000###000000000##000######00000000",
     "000000000###g00gg000###000###0##00000000",
-    "000001111111GGG0000GG1111111111111100000",
-    "000001111111GGG0000GGG111111111111100000",
-    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
-    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
-    "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000"
+    "111111111111GGG0000GG1111111111111111111",
+    "111111111111GGG0000GGG111111111111111111",
+    "GGGGGGGGGGGGGGG0000GGGGGGGGG111GGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGG11GGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
   ],
   "actors": [
     {
       "type": "Bramble",
-      "position": [
-        228,
-        72
-      ]
+      "position": [228, 72]
     },
     {
       "type": "Bramble",
-      "position": [
-        236,
-        72
-      ]
+      "position": [236, 72]
     },
     {
       "type": "Bramble",
-      "position": [
-        244,
-        72
-      ]
+      "position": [244, 72]
     },
     {
       "type": "Mosquito",
-      "position": [
-        180,
-        100
-      ]
+      "position": [180, 100]
     },
     {
       "type": "Mosquito",
-      "position": [
-        204,
-        116
-      ]
+      "position": [204, 116]
     },
     {
       "type": "Player",
-      "position": [
-        52,
-        128
-      ]
+      "position": [52, 128]
     },
     {
       "type": "Blob",
-      "position": [
-        116,
-        128
-      ]
+      "position": [116, 128]
     },
     {
       "type": "Bramble",
-      "position": [
-        188,
-        128
-      ]
+      "position": [188, 128]
     },
     {
       "type": "Bramble",
-      "position": [
-        196,
-        128
-      ]
+      "position": [196, 128]
     },
     {
       "type": "Bramble",
-      "position": [
-        204,
-        128
-      ]
+      "position": [204, 128]
     },
     {
       "from": "LockedDoor",
-      "position": [
-        236,
-        128
-      ]
+      "position": [236, 128]
     },
     {
       "from": "BlueMemoryLight",
-      "position": [
-        236,
-        44
-      ]
+      "position": [236, 44]
     },
     {
       "type": "HiddenWall",
-      "position": [
-        120,
-        128
-      ],
-      "size": [
-        32,
-        32
-      ],
+      "position": [120, 128],
+      "size": [32, 32],
       "tileType": "grass"
     },
     {
       "type": "Jumpthru",
-      "position": [
-        120,
-        128
-      ]
+      "position": [120, 128]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        128,
-        128
-      ]
+      "position": [128, 128]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        136,
-        128
-      ]
+      "position": [136, 128]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        144,
-        128
-      ]
+      "position": [144, 128]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        128,
-        152
-      ]
+      "position": [128, 152]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        136,
-        152
-      ]
+      "position": [136, 152]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        144,
-        152
-      ]
+      "position": [144, 152]
     }
   ]
 }

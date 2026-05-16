@@ -1353,7 +1353,8 @@ public partial class Manager
 	{
 		for (var x = shift; x < shift + size; x ++)
 		for (var y = shift; y < shift + size; y ++)
-			room.Set(origin + new Point2(x, y), tile);
+			room.Set(origin + new Point2(x, y), tile, rebuildGeometry: false);
+		room.RebuildGeometry();
 		editorGameDirty = true;
 	}
 

@@ -1,12 +1,6 @@
 {
-  "position": [
-    360,
-    23
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [360, 23],
+  "size": [40, 23],
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -35,80 +29,47 @@
   "actors": [
     {
       "type": "LedgePatrol",
-      "position": [
-        180,
-        136
-      ]
+      "position": [180, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        188,
-        136
-      ]
+      "position": [188, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        196,
-        136
-      ]
+      "position": [196, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        204,
-        136
-      ]
+      "position": [204, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        212,
-        136
-      ]
+      "position": [212, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        220,
-        136
-      ]
+      "position": [220, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        228,
-        136
-      ]
+      "position": [228, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        236,
-        136
-      ]
+      "position": [236, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        244,
-        136
-      ]
+      "position": [244, 136]
     },
     {
       "type": "LedgePatrol",
-      "position": [
-        252,
-        136
-      ]
+      "position": [252, 136]
     },
     {
       "from": "BlueMemoryLight",
-      "position": [
-        121,
-        87
-      ]
+      "position": [121, 87]
     }
   ]
 }

@@ -8,6 +8,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 TextureSizeCamera;
     float4 DitherSettings;
     float4 DitherGlitch;
+    float4 DitherGlitchAxis;
 };
 
 Texture2D Texture : register(t0, space2);
@@ -18,6 +19,9 @@ SamplerState LightSampler : register(s1, space2);
 
 Texture2D TileFieldTexture : register(t2, space2);
 SamplerState TileFieldSampler : register(s2, space2);
+
+Texture2D DitherMaskTexture : register(t3, space2);
+SamplerState DitherMaskSampler : register(s3, space2);
 
 struct VsInput
 {
@@ -218,7 +222,17 @@ float2 glitch_dither_position(float2 position, float4 tile_field)
     return cell + offset;
 }
 
-float3 dither_light_intensity(float3 light, float2 position, float4 tile_field)
+float ellipse_distance(float2 position, float2 origin, float2 axis, float long_radius, float short_radius)
+{
+    axis = normalize(axis);
+    float2 perpendicular = float2(-axis.y, axis.x);
+    float2 delta = position - origin;
+    float along = dot(delta, axis) / max(long_radius, 1.0);
+    float across = dot(delta, perpendicular) / max(short_radius, 1.0);
+    return sqrt(along * along + across * across);
+}
+
+float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, float dither_mask)
 {
     if (DitherSettings.x <= 0.0)
         return light;
@@ -229,10 +243,11 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field)
 
     float family = floor(tile_field.g * 4.0 + 0.5);
     float variant = floor(tile_field.r * 255.0 + 0.5);
-    float distance_to_glitch = distance(position, DitherGlitch.xy);
     float amount = DitherSettings.w * DitherSettings.w * (3.0 - 2.0 * DitherSettings.w);
-    float active_radius = lerp(16.0, DitherGlitch.z, amount);
-    float proximity = smoothstep(active_radius, active_radius * 0.35, distance_to_glitch);
+    float long_radius = lerp(24.0, DitherGlitch.z * 1.45, amount);
+    float short_radius = long_radius * 0.38;
+    float ellipse = ellipse_distance(position, DitherGlitch.xy, DitherGlitchAxis.xy, long_radius, short_radius);
+    float proximity = smoothstep(1.0, 0.25, ellipse);
     float global_glitch = amount * smoothstep(0.60, 1.0, amount) * 0.18;
     float local_glitch = amount * proximity * 0.82 + global_glitch;
 
@@ -248,7 +263,7 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field)
     threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
     float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
     float scale = dithered_intensity / intensity;
-    return light * lerp(1.0, scale, saturate(DitherSettings.z));
+    return light * lerp(1.0, scale, saturate(DitherSettings.z * dither_mask));
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
@@ -256,9 +271,10 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 scene = Texture.Sample(Sampler, input.tex_coord) * input.color;
     float4 light = LightTexture.Sample(LightSampler, input.tex_coord);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, input.tex_coord);
+    float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, input.tex_coord).r;
     float2 screen_pixel = input.tex_coord * TextureSizeCamera.xy;
     float2 world_pixel = TextureSizeCamera.zw + screen_pixel;
-    light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field);
+    light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;

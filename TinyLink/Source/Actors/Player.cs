@@ -392,7 +392,7 @@ public class Player : Actor
 	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null) {
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
-		Game.PulseDitherGlitch();
+		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor));
 
 		Play("hurt");
 
@@ -420,6 +420,21 @@ public class Player : Actor
 		{
 			AudioEvent("hurt");
 		}
+	}
+
+	private Vector2 HurtGlitchAxis(Actor? fromActor)
+	{
+		if (fromActor != null)
+		{
+			var axis = Position - fromActor.Position;
+			if (axis.LengthSquared() > 0.001f)
+				return Vector2.Normalize(axis);
+		}
+
+		if (Velocity.LengthSquared() > 0.001f)
+			return Vector2.Normalize(Velocity);
+
+		return new Vector2(-Facing, 0);
 	}
 
 	private void UpdateLightPosition()

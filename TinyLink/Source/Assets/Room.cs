@@ -207,12 +207,13 @@ public class Room
 		}
 	}
 
-	public void Set(Point2 tile, char ch)
+	public void Set(Point2 tile, char ch, bool rebuildGeometry = true)
 	{
 		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
 		{
 			Tiles[tile.X, tile.Y] = ch;
-			RebuildGeometry();
+			if (rebuildGeometry)
+				RebuildGeometry();
 		}
 	}
 

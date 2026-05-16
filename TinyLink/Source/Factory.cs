@@ -171,6 +171,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<Blob>("Blob");
 		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
 		ActorSpecs.RegisterActor<TitleText>("TitleText");
+		ActorSpecs.RegisterActor<Peter>("Peter");
 
 		// Empty Type, purely for the editor
 		Register('0', new Entry("Empty", new Subtexture(), null!));
@@ -185,11 +186,13 @@ public static class Factory
 		//Register('1', AsDualTile("castle", "castle-dual", "Brick"));
 		//Register('G', AsDualTile("grass", "grass-dual", "Grass"));
 		Register('g', AsTile("plants", false, "Grass"));
+		Register('r', AsTile("rocks", false));
 		Register('w', AsTile("water", false, "Water", reflectsSprites: true));
 		Register('#', AsTile("back", false));
 
 		RegisterActorPaletteEntries();
 		RegisterActorSpecPaletteEntries();
+
 	}
 
 	private static void RegisterActorPaletteEntries()
@@ -210,6 +213,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Blob>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<TitleText>("heart", new Point2(4, 4)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Peter>("peter", new Point2(4, 4)));
 	}
 
 	private static void RegisterActorSpecPaletteEntries()

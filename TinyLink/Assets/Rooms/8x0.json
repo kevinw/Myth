@@ -1,12 +1,6 @@
 {
-  "position": [
-    320,
-    0
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [320, 0],
+  "size": [40, 23],
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -24,77 +18,50 @@
     "0000000000000000####0000##00000000000000",
     "0000000000000000####0000##00000000000000",
     "0000000000###000######gg##g##00##0000000",
-    "00000000######11111111GG1111111111100000",
-    "00000g0#######1111111GGGG111111111100000",
-    "0000011100001111GGGGGGGGGGGGGGGGGGG00000",
-    "0000011100001111GGGGGGGGGGGGGGGGGGG00000",
-    "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000"
+    "00000000######11111111GG1111111111111111",
+    "00000g0#######1111111GGGG111111111111111",
+    "1111111100001111GGGGGGGGGGGGGGGGGGGGGGGG",
+    "1111111100001111GGGGGGGGGGGGGGGGGGGGGGGG",
+    "1111111100001111GGGGGGGGGGGGGGGGGGGGGGGG",
+    "1111111100001111GGGGGGGGGGGGGGGGGGGGGGGG",
+    "1111111100001111GGGGGGGGGGGGGGGGGGGGGGGG"
   ],
   "actors": [
     {
       "type": "Mosquito",
-      "position": [
-        60,
-        36
-      ]
+      "position": [60, 36]
     },
     {
       "type": "Mosquito",
-      "position": [
-        252,
-        44
-      ]
+      "position": [252, 44]
     },
     {
       "type": "Mosquito",
-      "position": [
-        92,
-        68
-      ]
+      "position": [92, 68]
     },
     {
       "type": "Mosquito",
-      "position": [
-        236,
-        92
-      ]
+      "position": [236, 92]
     },
     {
       "type": "Player",
-      "position": [
-        52,
-        144
-      ]
+      "position": [52, 144]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        64,
-        144
-      ]
+      "position": [64, 144]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        72,
-        144
-      ]
+      "position": [72, 144]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        80,
-        144
-      ]
+      "position": [80, 144]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        88,
-        144
-      ]
+      "position": [88, 144]
     }
   ]
 }

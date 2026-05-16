@@ -48,6 +48,7 @@ public class Bullet : Actor
 	public override void OnCollideY()
 	{
 		Velocity.Y = -60;
+		Squish.Y = 0.6f;
 		AudioEvent("bubble_bounce");
 	}
 

@@ -1,6 +1,7 @@
 {
   "position": [120, 23],
   "size": [40, 23],
+  "ambientColor": "47474F",
   "tiles": [
     "GGGGGGGGGGGGGGGGGGGGGGGGG1100011GGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGG1100011GGGGGGGG",
