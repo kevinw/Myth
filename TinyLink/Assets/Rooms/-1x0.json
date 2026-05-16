@@ -1,94 +1,100 @@
 {
-  "position": [-30, 0],
-  "size": [30, 17],
+  "position": [-40, 0],
+  "size": [40, 23],
   "musicArea": "Calm",
   "tiles": [
-    "000000000000000000000000000000",
-    "000000000000000000000000000000",
-    "000000000000000000000000000000",
-    "000000000000000000000000000000",
-    "000000000000000000000000000000",
-    "GGG000000000000000000000000000",
-    "GGG000011000000000000000000000",
-    "GGG0000##00000g00000000000GGGG",
-    "GGG0000##0000gGSg0000000ggGGGG",
-    "GGG0000##0000GGGG0000000GGGGGG",
-    "GGG0000##0000GGGG00000g0GGGGGG",
-    "GGG0000##0000000000000GGGGGGGG",
-    "GGG000GGG0000000000000GGGGGGGG",
-    "GGGwwwGGGwwwwwwwwwwwGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGwwwwGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "GGGGGGGG00000000000000000000000000000000",
+    "GGGGGGGG00001100000000000000000000000000",
+    "GGGGGGGG0000##00000g00000000000GGGGGGGGG",
+    "GGGGGGGG0000##0000gGSg0000000ggGGGGGGGGG",
+    "GGGGGGGG0000##0000GGGG0000000GGGGGGGGGGG",
+    "GGGGGGGG0000##0000GGGG00000g0GGGGGGGGGGG",
+    "GGGGGGGG0000##0000000000000GGGGGGGGGGGGG",
+    "GGGGGGGG000GGG0000000000000GGGGGGGGGGGGG",
+    "GGGGGGGGwwwGGGwwwwwwwwwwwGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGwwwwGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
   ],
   "actors": [
     {
       "type": "Light",
-      "position": [116, 52]
+      "position": [156, 76]
     },
     {
       "type": "Jumpthru",
-      "position": [24, 96]
+      "position": [64, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [32, 96]
+      "position": [72, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [40, 96]
+      "position": [80, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [72, 96]
+      "position": [112, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [80, 96]
+      "position": [120, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [88, 96]
+      "position": [128, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [96, 96]
+      "position": [136, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [104, 96]
+      "position": [144, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [112, 96]
+      "position": [152, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [120, 96]
+      "position": [160, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [128, 96]
+      "position": [168, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [136, 96]
+      "position": [176, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [144, 96]
+      "position": [184, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [152, 96]
+      "position": [192, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [160, 96]
+      "position": [200, 120]
     },
     {
       "type": "Jumpthru",
-      "position": [168, 96]
+      "position": [208, 120]
     }
   ]
 }

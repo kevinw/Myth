@@ -7,8 +7,8 @@ namespace TinyLink;
 
 public class Game : IDisposable
 {
-	public const int Width = 240;
-	public const int Height = 135;
+	public const int Width = 320;
+	public const int Height = 180;
 	public const int Columns = Width / TileSize;
 	public const int Rows = Height / TileSize + 1;
 	public const int TileSize = 8;
@@ -18,6 +18,7 @@ public class Game : IDisposable
 	private const float ActorShadowMinLength = 4.0f;
 	private const float ActorShadowMaxLength = 28.0f;
 	private const float ReflectionOpacity = 0.5f;
+	private const float CameraSlackEpsilon = TileSize;
 
 	readonly Manager Manager;
 	public readonly Controls Controls;
@@ -377,10 +378,8 @@ public class Game : IDisposable
 	private static float ClampCameraAxis(float value, float min, float max, float viewportSize)
 	{
 		var roomSize = max - min;
-		if (roomSize <= viewportSize)
+		if (roomSize <= viewportSize + CameraSlackEpsilon)
 			return min + (roomSize - viewportSize) / 2;
-		if (roomSize - viewportSize <= 1.0f)
-			return min;
 
 		return Math.Clamp(value, min, max - viewportSize);
 	}

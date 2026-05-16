@@ -1,69 +1,114 @@
 {
-  "position": [270, 17],
-  "size": [30, 17],
+  "position": [
+    360,
+    23
+  ],
+  "size": [
+    40,
+    23
+  ],
   "tiles": [
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGG0000GGGGGGGGGGGGGGGG",
-    "GGGGGGGGGS0000GGG0000000000GGG",
-    "00000000000000XXX0000000000GGG",
-    "00000000000000XXX0000000000GGG",
-    "000000000SXXXXXGGGGGGGGGGGGGGG",
-    "00000000SXXXXXGGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGG0000GGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGS0000GGG0000000000GGG00000",
+    "0000000000000000000XXX0000000000GGG00000",
+    "0000000000000000000XXX0000000000GGG00000",
+    "00000000000000SXXXXXGGGGGGGGGGGGGGG00000",
+    "0000000000000SXXXXXGGGGGGGGGGGGGGGG00000",
+    "00000GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG00000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000"
   ],
   "actors": [
     {
       "type": "LedgePatrol",
-      "position": [140, 112]
+      "position": [
+        180,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [148, 112]
+      "position": [
+        188,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [156, 112]
+      "position": [
+        196,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [164, 112]
+      "position": [
+        204,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [172, 112]
+      "position": [
+        212,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [180, 112]
+      "position": [
+        220,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [188, 112]
+      "position": [
+        228,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [196, 112]
+      "position": [
+        236,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [204, 112]
+      "position": [
+        244,
+        136
+      ]
     },
     {
       "type": "LedgePatrol",
-      "position": [212, 112]
+      "position": [
+        252,
+        136
+      ]
     },
     {
       "from": "BlueMemoryLight",
-      "position": [81, 63]
+      "position": [
+        121,
+        87
+      ]
     }
   ]
 }
