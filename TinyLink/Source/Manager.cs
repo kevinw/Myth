@@ -239,7 +239,8 @@ public partial class Manager : App
 	{
 		SaveWindowSettings();
 		game?.Dispose();
-		ClearRoomPreviewCache();
+		ClearRoomPreviewCache(deferDisposal: false);
+		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
 		imgui.Dispose();
 		assetWatcher?.Dispose();
@@ -434,6 +435,7 @@ public partial class Manager : App
 
 	protected override void Update()
 	{
+		DisposeDeferredRoomPreviews();
 #if DEBUG
 		UpdateWindowTitleFps();
 #endif
@@ -1035,7 +1037,7 @@ public partial class Manager : App
 			selectedRoomId = null;
 		if (playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id)
 			playtestPlayerPosition = null;
-		ClearRoomPreviewCache();
+		InvalidateRoomPreview(room);
 		ResolveSelectedRoom();
 		SyncEditorGame();
 	}

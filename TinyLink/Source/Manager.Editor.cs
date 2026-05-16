@@ -39,9 +39,9 @@ public partial class Manager
 	int selectedRoomActorIndex = -1;
 	bool draggingRoomActor;
 	Vector2 roomActorDragOffset;
-	HiddenWallResizeHandle hiddenWallResizeHandle;
+	ResizeHandle resizeHandle;
 	bool editingRoomGeometry;
-	HiddenWallResizeHandle roomGeometryHandle;
+	ResizeHandle roomGeometryHandle;
 	Point2 roomGeometryDragOffset;
 	JsonUndoScope? roomGeometryUndo;
 	readonly JsonUndoManager undo = new();
@@ -50,6 +50,7 @@ public partial class Manager
 	JsonUndoScope? prefabUndo;
 	string? prefabUndoSpecId;
 	readonly Dictionary<string, EditorRoomPreview> roomPreviewCache = [];
+	readonly List<IDisposable> deferredRoomPreviewDisposals = [];
 	Target? activeRoomPreviewTarget;
 	string? activeRoomPreviewId;
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
@@ -98,7 +99,7 @@ public partial class Manager
 			selectedRoomActorIndex = room.Actors.Count - 1;
 			draggingRoomActor = false;
 			roomActorDragOffset = Vector2.Zero;
-			hiddenWallResizeHandle = HiddenWallResizeHandle.None;
+			resizeHandle = ResizeHandle.None;
 			editorGameDirty = true;
 		}
 	}
@@ -114,8 +115,8 @@ public partial class Manager
 
 		draggingRoomActor = false;
 		roomActorDragOffset = Vector2.Zero;
-		hiddenWallResizeHandle = HiddenWallResizeHandle.None;
-		roomGeometryHandle = HiddenWallResizeHandle.None;
+		resizeHandle = ResizeHandle.None;
+		roomGeometryHandle = ResizeHandle.None;
 		roomGeometryUndo = null;
 		tilePlacing = false;
 		actorMoveUndo = null;
@@ -225,7 +226,7 @@ public partial class Manager
 		public void ApplyJson(string json) => ActorSpecs.ApplySpecJson(specId, json);
 	}
 
-	private enum HiddenWallResizeHandle
+	private enum ResizeHandle
 	{
 		None,
 		Left,
@@ -238,9 +239,9 @@ public partial class Manager
 		BottomRight
 	}
 
-	private void SetHiddenWallResizeCursor(HiddenWallResizeHandle handle)
+	private void SetHiddenWallResizeCursor(ResizeHandle handle)
 	{
-		if (handle == HiddenWallResizeHandle.None)
+		if (handle == ResizeHandle.None)
 		{
 			SetMouseCursor(null);
 			return;
@@ -248,10 +249,10 @@ public partial class Manager
 
 		var type = handle switch
 		{
-			HiddenWallResizeHandle.Left or HiddenWallResizeHandle.Right => Foster.Framework.Cursor.SystemTypes.ResizeHorizontal,
-			HiddenWallResizeHandle.Top or HiddenWallResizeHandle.Bottom => Foster.Framework.Cursor.SystemTypes.ResizeVertical,
-			HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.BottomRight => Foster.Framework.Cursor.SystemTypes.ResizeNWSE,
-			HiddenWallResizeHandle.TopRight or HiddenWallResizeHandle.BottomLeft => Foster.Framework.Cursor.SystemTypes.ResizeNESW,
+			ResizeHandle.Left or ResizeHandle.Right => Foster.Framework.Cursor.SystemTypes.ResizeHorizontal,
+			ResizeHandle.Top or ResizeHandle.Bottom => Foster.Framework.Cursor.SystemTypes.ResizeVertical,
+			ResizeHandle.TopLeft or ResizeHandle.BottomRight => Foster.Framework.Cursor.SystemTypes.ResizeNWSE,
+			ResizeHandle.TopRight or ResizeHandle.BottomLeft => Foster.Framework.Cursor.SystemTypes.ResizeNESW,
 			_ => Foster.Framework.Cursor.SystemTypes.Default
 		};
 
@@ -450,7 +451,7 @@ public partial class Manager
 		if (ImGui.Button(editingRoomGeometry ? "Done Room Geo" : "Edit Room Geo"))
 		{
 			editingRoomGeometry = !editingRoomGeometry;
-			roomGeometryHandle = HiddenWallResizeHandle.None;
+			roomGeometryHandle = ResizeHandle.None;
 		}
 		ImGui.Spacing();
 
@@ -992,7 +993,7 @@ public partial class Manager
 		for (var i = 0; i < room.Actors.Count; i ++)
 		{
 			var selected = i == selectedRoomActorIndex;
-			if ((draggingRoomActor || hiddenWallResizeHandle != HiddenWallResizeHandle.None) && !selected)
+			if ((draggingRoomActor || resizeHandle != ResizeHandle.None) && !selected)
 				continue;
 
 			var hovered = i == hoveredIndex;
@@ -1011,13 +1012,13 @@ public partial class Manager
 	private void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight)
 	{
 		var size = HiddenWallHandleSize(lineWeight);
-		foreach (var handle in Enum.GetValues<HiddenWallResizeHandle>())
+		foreach (var handle in Enum.GetValues<ResizeHandle>())
 		{
-			if (handle == HiddenWallResizeHandle.None)
+			if (handle == ResizeHandle.None)
 				continue;
 
 			var rect = HiddenWallHandleRect(bounds, handle, size);
-			var color = hiddenWallResizeHandle == handle ? Color.White : highlight;
+			var color = resizeHandle == handle ? Color.White : highlight;
 			batcher.Rect(rect, Color.Black * 0.75f);
 			batcher.RectLine(rect, lineWeight * 2, color);
 		}
@@ -1026,13 +1027,13 @@ public partial class Manager
 	private void DrawRoomGeometryHandles(Room room, float lineWeight)
 	{
 		var bounds = room.WorldBounds;
-		var color = roomGeometryHandle == HiddenWallResizeHandle.None ? highlight : Color.White;
+		var color = roomGeometryHandle == ResizeHandle.None ? highlight : Color.White;
 		batcher.RectLine(bounds.Inflate(lineWeight * 3), lineWeight * 2, color);
 
 		var size = HiddenWallHandleSize(lineWeight);
-		foreach (var handle in Enum.GetValues<HiddenWallResizeHandle>())
+		foreach (var handle in Enum.GetValues<ResizeHandle>())
 		{
-			if (handle == HiddenWallResizeHandle.None)
+			if (handle == ResizeHandle.None)
 				continue;
 
 			var rect = HiddenWallHandleRect(bounds, handle, size);
@@ -1042,75 +1043,75 @@ public partial class Manager
 		}
 	}
 
-	private HiddenWallResizeHandle HitTestHiddenWallResizeHandle(Room room, Vector2 world, float lineWeight)
+	private ResizeHandle HitTestHiddenWallResizeHandle(Room room, Vector2 world, float lineWeight)
 	{
 		if (selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
-			return HiddenWallResizeHandle.None;
+			return ResizeHandle.None;
 
 		var actor = room.Actors[selectedRoomActorIndex];
 		if (!IsHiddenWallActor(actor))
-			return HiddenWallResizeHandle.None;
+			return ResizeHandle.None;
 
 		var bounds = RoomActorBounds(room, actor);
 		var size = HiddenWallHandleSize(lineWeight);
 		foreach (var handle in new[]
 		         {
-			         HiddenWallResizeHandle.TopLeft,
-			         HiddenWallResizeHandle.TopRight,
-			         HiddenWallResizeHandle.BottomLeft,
-			         HiddenWallResizeHandle.BottomRight,
-			         HiddenWallResizeHandle.Left,
-			         HiddenWallResizeHandle.Right,
-			         HiddenWallResizeHandle.Top,
-			         HiddenWallResizeHandle.Bottom
+			         ResizeHandle.TopLeft,
+			         ResizeHandle.TopRight,
+			         ResizeHandle.BottomLeft,
+			         ResizeHandle.BottomRight,
+			         ResizeHandle.Left,
+			         ResizeHandle.Right,
+			         ResizeHandle.Top,
+			         ResizeHandle.Bottom
 		         })
 		{
 			if (HiddenWallHandleRect(bounds, handle, size).Contains(world))
 				return handle;
 		}
 
-		return HiddenWallResizeHandle.None;
+		return ResizeHandle.None;
 	}
 
-	private HiddenWallResizeHandle HitTestRoomGeometryHandle(Room room, Vector2 world, float lineWeight)
+	private ResizeHandle HitTestRoomGeometryHandle(Room room, Vector2 world, float lineWeight)
 	{
 		var bounds = room.WorldBounds;
 		var size = HiddenWallHandleSize(lineWeight);
 		foreach (var handle in new[]
 		         {
-			         HiddenWallResizeHandle.TopLeft,
-			         HiddenWallResizeHandle.TopRight,
-			         HiddenWallResizeHandle.BottomLeft,
-			         HiddenWallResizeHandle.BottomRight,
-			         HiddenWallResizeHandle.Left,
-			         HiddenWallResizeHandle.Right,
-			         HiddenWallResizeHandle.Top,
-			         HiddenWallResizeHandle.Bottom
+			         ResizeHandle.TopLeft,
+			         ResizeHandle.TopRight,
+			         ResizeHandle.BottomLeft,
+			         ResizeHandle.BottomRight,
+			         ResizeHandle.Left,
+			         ResizeHandle.Right,
+			         ResizeHandle.Top,
+			         ResizeHandle.Bottom
 		         })
 		{
 			if (HiddenWallHandleRect(bounds, handle, size).Contains(world))
 				return handle;
 		}
 
-		return HiddenWallResizeHandle.None;
+		return ResizeHandle.None;
 	}
 
 	private static float HiddenWallHandleSize(float lineWeight)
 		=> MathF.Max(4, lineWeight * 8);
 
-	private static Rect HiddenWallHandleRect(RectInt bounds, HiddenWallResizeHandle handle, float size)
+	private static Rect HiddenWallHandleRect(RectInt bounds, ResizeHandle handle, float size)
 	{
 		var half = size * 0.5f;
 		var x = handle switch
 		{
-			HiddenWallResizeHandle.Left or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.BottomLeft => bounds.X,
-			HiddenWallResizeHandle.Right or HiddenWallResizeHandle.TopRight or HiddenWallResizeHandle.BottomRight => bounds.X + bounds.Width,
+			ResizeHandle.Left or ResizeHandle.TopLeft or ResizeHandle.BottomLeft => bounds.X,
+			ResizeHandle.Right or ResizeHandle.TopRight or ResizeHandle.BottomRight => bounds.X + bounds.Width,
 			_ => bounds.X + bounds.Width * 0.5f
 		};
 		var y = handle switch
 		{
-			HiddenWallResizeHandle.Top or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.TopRight => bounds.Y,
-			HiddenWallResizeHandle.Bottom or HiddenWallResizeHandle.BottomLeft or HiddenWallResizeHandle.BottomRight => bounds.Y + bounds.Height,
+			ResizeHandle.Top or ResizeHandle.TopLeft or ResizeHandle.TopRight => bounds.Y,
+			ResizeHandle.Bottom or ResizeHandle.BottomLeft or ResizeHandle.BottomRight => bounds.Y + bounds.Height,
 			_ => bounds.Y + bounds.Height * 0.5f
 		};
 		return new Rect(x - half, y - half, size, size);
@@ -1166,9 +1167,9 @@ public partial class Manager
 			(int)MathF.Floor(adjusted.Y / Game.TileSize) * Game.TileSize + offset.Y);
 	}
 
-	private void ResizeHiddenWallActor(Room room, int actorIndex, HiddenWallResizeHandle handle, Vector2 world, Point2 tile, bool snap)
+	private void ResizeHiddenWallActor(Room room, int actorIndex, ResizeHandle handle, Vector2 world, Point2 tile, bool snap)
 	{
-		if (actorIndex < 0 || actorIndex >= room.Actors.Count || handle == HiddenWallResizeHandle.None)
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count || handle == ResizeHandle.None)
 			return;
 
 		var actor = room.Actors[actorIndex];
@@ -1187,28 +1188,28 @@ public partial class Manager
 
 		switch (handle)
 		{
-			case HiddenWallResizeHandle.Left:
-			case HiddenWallResizeHandle.TopLeft:
-			case HiddenWallResizeHandle.BottomLeft:
+			case ResizeHandle.Left:
+			case ResizeHandle.TopLeft:
+			case ResizeHandle.BottomLeft:
 				left = cursor.X;
 				break;
-			case HiddenWallResizeHandle.Right:
-			case HiddenWallResizeHandle.TopRight:
-			case HiddenWallResizeHandle.BottomRight:
+			case ResizeHandle.Right:
+			case ResizeHandle.TopRight:
+			case ResizeHandle.BottomRight:
 				right = cursor.X;
 				break;
 		}
 
 		switch (handle)
 		{
-			case HiddenWallResizeHandle.Top:
-			case HiddenWallResizeHandle.TopLeft:
-			case HiddenWallResizeHandle.TopRight:
+			case ResizeHandle.Top:
+			case ResizeHandle.TopLeft:
+			case ResizeHandle.TopRight:
 				top = cursor.Y;
 				break;
-			case HiddenWallResizeHandle.Bottom:
-			case HiddenWallResizeHandle.BottomLeft:
-			case HiddenWallResizeHandle.BottomRight:
+			case ResizeHandle.Bottom:
+			case ResizeHandle.BottomLeft:
+			case ResizeHandle.BottomRight:
 				bottom = cursor.Y;
 				break;
 		}
@@ -1222,7 +1223,7 @@ public partial class Manager
 
 		if (right - left < Game.TileSize)
 		{
-			if (handle is HiddenWallResizeHandle.Left or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.BottomLeft)
+			if (handle is ResizeHandle.Left or ResizeHandle.TopLeft or ResizeHandle.BottomLeft)
 				left = right - Game.TileSize;
 			else
 				right = left + Game.TileSize;
@@ -1230,7 +1231,7 @@ public partial class Manager
 
 		if (bottom - top < Game.TileSize)
 		{
-			if (handle is HiddenWallResizeHandle.Top or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.TopRight)
+			if (handle is ResizeHandle.Top or ResizeHandle.TopLeft or ResizeHandle.TopRight)
 				top = bottom - Game.TileSize;
 			else
 				bottom = top + Game.TileSize;
@@ -1250,7 +1251,7 @@ public partial class Manager
 	{
 		var mouseTile = WorldToRoomGeometryTile(world);
 		var current = new RectInt(room.Position, room.Size);
-		var candidate = roomGeometryHandle == HiddenWallResizeHandle.None
+		var candidate = roomGeometryHandle == ResizeHandle.None
 			? new RectInt(mouseTile - roomGeometryDragOffset, room.Size)
 			: ResizeRoomGeometryBounds(current, roomGeometryHandle, mouseTile);
 
@@ -1269,7 +1270,7 @@ public partial class Manager
 		cell = room.Cell;
 		roomCreatePosition = room.Position;
 		editorGameDirty = true;
-		ClearRoomPreviewCache();
+		InvalidateRoomPreview(room);
 	}
 
 	private static Point2 WorldToRoomGeometryTile(Vector2 world)
@@ -1277,20 +1278,20 @@ public partial class Manager
 			(int)MathF.Floor(world.X / Game.TileSize),
 			(int)MathF.Floor(world.Y / Game.TileSize));
 
-	private static RectInt ResizeRoomGeometryBounds(RectInt bounds, HiddenWallResizeHandle handle, Point2 mouseTile)
+	private static RectInt ResizeRoomGeometryBounds(RectInt bounds, ResizeHandle handle, Point2 mouseTile)
 	{
 		var left = bounds.Left;
 		var top = bounds.Top;
 		var right = bounds.Right;
 		var bottom = bounds.Bottom;
 
-		if (handle is HiddenWallResizeHandle.Left or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.BottomLeft)
+		if (handle is ResizeHandle.Left or ResizeHandle.TopLeft or ResizeHandle.BottomLeft)
 			left = Math.Min(mouseTile.X, right - 1);
-		if (handle is HiddenWallResizeHandle.Right or HiddenWallResizeHandle.TopRight or HiddenWallResizeHandle.BottomRight)
+		if (handle is ResizeHandle.Right or ResizeHandle.TopRight or ResizeHandle.BottomRight)
 			right = Math.Max(mouseTile.X + 1, left + 1);
-		if (handle is HiddenWallResizeHandle.Top or HiddenWallResizeHandle.TopLeft or HiddenWallResizeHandle.TopRight)
+		if (handle is ResizeHandle.Top or ResizeHandle.TopLeft or ResizeHandle.TopRight)
 			top = Math.Min(mouseTile.Y, bottom - 1);
-		if (handle is HiddenWallResizeHandle.Bottom or HiddenWallResizeHandle.BottomLeft or HiddenWallResizeHandle.BottomRight)
+		if (handle is ResizeHandle.Bottom or ResizeHandle.BottomLeft or ResizeHandle.BottomRight)
 			bottom = Math.Max(mouseTile.Y + 1, top + 1);
 
 		return new RectInt(left, top, right - left, bottom - top);
@@ -1464,7 +1465,7 @@ public partial class Manager
 		    activeRoomPreviewTarget.Width != bounds.Width ||
 		    activeRoomPreviewTarget.Height != bounds.Height)
 		{
-			activeRoomPreviewTarget?.Dispose();
+			DisposeRoomPreview(activeRoomPreviewTarget, defer: false);
 			activeRoomPreviewTarget = new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"ActiveRoomPreview/{room.Id}");
 			activeRoomPreviewId = room.Id;
 		}
@@ -1482,7 +1483,7 @@ public partial class Manager
 		    entry.Target.Height == room.WorldBounds.Height)
 			return entry.Texture;
 
-		entry?.Dispose();
+		DisposeRoomPreview(entry, defer: false);
 		var target = new Target(GraphicsDevice, room.WorldBounds.Width, room.WorldBounds.Height, name: $"RoomPreview/{room.Id}");
 		using var previewGame = new Game(this, room, audioEventsEnabled: false);
 		previewGame.RenderWorldToTarget(target, new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height));
@@ -1490,14 +1491,45 @@ public partial class Manager
 		return target.Attachments[0];
 	}
 
-	private void ClearRoomPreviewCache()
+	private void ClearRoomPreviewCache(bool deferDisposal = true)
 	{
 		foreach (var preview in roomPreviewCache.Values)
-			preview.Dispose();
+			DisposeRoomPreview(preview, deferDisposal);
 		roomPreviewCache.Clear();
-		activeRoomPreviewTarget?.Dispose();
+		DisposeRoomPreview(activeRoomPreviewTarget, deferDisposal);
 		activeRoomPreviewTarget = null;
 		activeRoomPreviewId = null;
+	}
+
+	private void InvalidateRoomPreview(Room room, bool deferDisposal = true)
+	{
+		if (roomPreviewCache.Remove(room.Id, out var preview))
+			DisposeRoomPreview(preview, deferDisposal);
+
+		if (activeRoomPreviewId == room.Id)
+		{
+			DisposeRoomPreview(activeRoomPreviewTarget, deferDisposal);
+			activeRoomPreviewTarget = null;
+			activeRoomPreviewId = null;
+		}
+	}
+
+	private void DisposeRoomPreview(IDisposable? disposable, bool defer)
+	{
+		if (disposable == null)
+			return;
+
+		if (defer)
+			deferredRoomPreviewDisposals.Add(disposable);
+		else
+			disposable.Dispose();
+	}
+
+	private void DisposeDeferredRoomPreviews()
+	{
+		foreach (var disposable in deferredRoomPreviewDisposals)
+			disposable.Dispose();
+		deferredRoomPreviewDisposals.Clear();
 	}
 
 	private sealed class EditorRoomPreview(string json, Target target) : IDisposable
@@ -1615,14 +1647,14 @@ public partial class Manager
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
 			var hoveredHiddenWallHandle = !worldMouseBlocked && actorSelectActive && overGame
 				? HitTestHiddenWallResizeHandle(editing, worldMouse, gridWeight)
-				: HiddenWallResizeHandle.None;
+				: ResizeHandle.None;
 			var hoveredRoomGeometryHandle = editingRoomGeometry && !worldMouseBlocked
 				? HitTestRoomGeometryHandle(editing, worldMouse, gridWeight)
-				: HiddenWallResizeHandle.None;
+				: ResizeHandle.None;
 			SetHiddenWallResizeCursor(
-				roomGeometryHandle != HiddenWallResizeHandle.None ? roomGeometryHandle :
-				hoveredRoomGeometryHandle != HiddenWallResizeHandle.None ? hoveredRoomGeometryHandle :
-				hiddenWallResizeHandle != HiddenWallResizeHandle.None ? hiddenWallResizeHandle :
+				roomGeometryHandle != ResizeHandle.None ? roomGeometryHandle :
+				hoveredRoomGeometryHandle != ResizeHandle.None ? hoveredRoomGeometryHandle :
+				resizeHandle != ResizeHandle.None ? resizeHandle :
 				hoveredHiddenWallHandle);
 
 			for (int x = 1; x < editing.Size.X; x ++)
@@ -1645,7 +1677,7 @@ public partial class Manager
 			if (worldMouseBlocked)
 				tilePlacing = false;
 
-			if (editingRoomGeometry && !worldMouseBlocked && Input.Mouse.LeftPressed && (overGame || hoveredRoomGeometryHandle != HiddenWallResizeHandle.None))
+			if (editingRoomGeometry && !worldMouseBlocked && Input.Mouse.LeftPressed && (overGame || hoveredRoomGeometryHandle != ResizeHandle.None))
 			{
 				roomGeometryUndo ??= CaptureRoomUndo("Edit Room Geometry", editing);
 				roomGeometryHandle = hoveredRoomGeometryHandle;
@@ -1653,9 +1685,9 @@ public partial class Manager
 				roomGeometryDragOffset = mouseTile - editing.Position;
 				tilePlacing = false;
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != HiddenWallResizeHandle.None)
+			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != ResizeHandle.None)
 			{
-				hiddenWallResizeHandle = hoveredHiddenWallHandle;
+				resizeHandle = hoveredHiddenWallHandle;
 				draggingRoomActor = false;
 				roomActorDragOffset = Vector2.Zero;
 				tilePlacing = false;
@@ -1669,7 +1701,7 @@ public partial class Manager
 					roomActorDragOffset = selectedRoomActorIndex >= 0
 						? worldMouse - (roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "position") ?? Point2.Zero))
 						: Vector2.Zero;
-					hiddenWallResizeHandle = HiddenWallResizeHandle.None;
+					resizeHandle = ResizeHandle.None;
 					tilePlacing = false;
 				}
 			}
@@ -1684,7 +1716,7 @@ public partial class Manager
 						selectedRoomActorIndex--;
 					draggingRoomActor = false;
 					roomActorDragOffset = Vector2.Zero;
-					hiddenWallResizeHandle = HiddenWallResizeHandle.None;
+					resizeHandle = ResizeHandle.None;
 					tilePlacing = false;
 					editorGameDirty = true;
 				}
@@ -1734,10 +1766,10 @@ public partial class Manager
 			{
 				ApplyRoomGeometryDrag(editing, worldMouse);
 			}
-			else if (!worldMouseBlocked && actorSelectActive && hiddenWallResizeHandle != HiddenWallResizeHandle.None && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+			else if (!worldMouseBlocked && actorSelectActive && resizeHandle != ResizeHandle.None && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				actorMoveUndo ??= CaptureRoomUndo("Resize Actor", editing);
-				ResizeHiddenWallActor(editing, selectedRoomActorIndex, hiddenWallResizeHandle, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
+				ResizeHiddenWallActor(editing, selectedRoomActorIndex, resizeHandle, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
 			}
 			else if (!worldMouseBlocked && actorSelectActive && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
@@ -1748,10 +1780,10 @@ public partial class Manager
 			{
 				draggingRoomActor = false;
 				roomActorDragOffset = Vector2.Zero;
-				hiddenWallResizeHandle = HiddenWallResizeHandle.None;
+				resizeHandle = ResizeHandle.None;
 				actorMoveUndo?.Commit();
 				actorMoveUndo = null;
-				roomGeometryHandle = HiddenWallResizeHandle.None;
+				roomGeometryHandle = ResizeHandle.None;
 				roomGeometryUndo?.Commit();
 				roomGeometryUndo = null;
 			}
@@ -1764,7 +1796,7 @@ public partial class Manager
 					selectedRoomActorIndex = -1;
 					draggingRoomActor = false;
 					roomActorDragOffset = Vector2.Zero;
-					hiddenWallResizeHandle = HiddenWallResizeHandle.None;
+					resizeHandle = ResizeHandle.None;
 					editorGameDirty = true;
 				}
 			}
