@@ -827,24 +827,10 @@ public class Game : IDisposable
 
 	private void DrawLightShadows(Vector2 lightPosition, float radius)
 	{
-		if (room == null)
-			return;
-
-		foreach (var rect in room.LightOccluders)
-		{
-			if (!CircleOverlapsRect(lightPosition, radius, rect))
-				continue;
-
-			DrawShadowVolume(lightPosition, radius, rect);
-		}
-
-		foreach (var polygon in room.LightOccluderPolygons)
-		{
-			if (!CircleOverlapsRect(lightPosition, radius, polygon.Bounds))
-				continue;
-
-			DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
-		}
+		if (room != null)
+			DrawRoomLightShadows(room, lightPosition, radius);
+		if (nextRoom != null && nextRoom != room)
+			DrawRoomLightShadows(nextRoom, lightPosition, radius);
 
 		foreach (var actor in Actors)
 		{
@@ -859,6 +845,17 @@ public class Game : IDisposable
 		}
 
 		DrawActorSpriteShadows(lightPosition, radius);
+	}
+
+	private void DrawRoomLightShadows(Room renderRoom, Vector2 lightPosition, float radius)
+	{
+		foreach (var rect in renderRoom.LightOccluders)
+			if (CircleOverlapsRect(lightPosition, radius, rect))
+				DrawShadowVolume(lightPosition, radius, rect);
+
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			if (CircleOverlapsRect(lightPosition, radius, polygon.Bounds))
+				DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
 	}
 
 	private void DrawActorSpriteShadows(Vector2 lightPosition, float radius)
@@ -1009,15 +1006,13 @@ public class Game : IDisposable
 
 	private void DrawRoomNormals()
 	{
-		if (room == null)
-			return;
-
 		Array.Clear(roomNormalMask);
 
-		foreach (var rect in room.LightOccluders)
-			FillRoomNormalMask(rect);
-		foreach (var polygon in room.LightOccluderPolygons)
-			FillRoomNormalMask(polygon);
+		if (room != null)
+			FillRoomNormalMask(room);
+		if (nextRoom != null && nextRoom != room)
+			FillRoomNormalMask(nextRoom);
+
 		foreach (var actor in Actors)
 			if (actor is HiddenWallGrid hiddenWalls)
 				hiddenWalls.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
@@ -1038,11 +1033,16 @@ public class Game : IDisposable
 		}
 	}
 
+	private void FillRoomNormalMask(Room renderRoom)
+	{
+		foreach (var rect in renderRoom.LightOccluders)
+			FillRoomNormalMask(rect);
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			FillRoomNormalMask(polygon);
+	}
+
 	private void FillRoomNormalMask(RectInt rect)
 	{
-		if (room == null)
-			return;
-
 		var left   = Math.Clamp(rect.Left - (int)Camera.X, 0, NormalBuffer.Width);
 		var right  = Math.Clamp(rect.Right - (int)Camera.X, 0, NormalBuffer.Width);
 		var top    = Math.Clamp(rect.Top - (int)Camera.Y, 0, NormalBuffer.Height);
