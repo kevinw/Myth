@@ -372,6 +372,8 @@ public partial class Manager
 			DrawActorPaletteSection();
 			ImGui.Spacing();
 			DrawRoomPaletteSection();
+			ImGui.Spacing();
+			DrawDitherPaletteSection();
 
 			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
 				SelectEditorActorTool();
@@ -526,6 +528,22 @@ public partial class Manager
 			editorGameDirty = true;
 			SyncEditorGame();
 		}
+	}
+
+	private void DrawDitherPaletteSection()
+	{
+		if (!ImGui.CollapsingHeader("Dither"))
+			return;
+
+		ImGui.Checkbox("Enabled", ref LightingDitherEnabled);
+
+		ImGui.TextUnformatted("Scale");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##LightingDitherScale", ref LightingDitherScale, 1.0f, 8.0f);
+
+		ImGui.TextUnformatted("Strength");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
 	}
 
 	private static RoomSettings CaptureRoomSettings(Room room)

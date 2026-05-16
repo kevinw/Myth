@@ -26,5 +26,13 @@
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+  ],
+  "actors": [
+    {
+      "type": "Light",
+      "position": [140, 44],
+      "intensity": 1.2,
+      "radius": 81.4
+    }
   ]
 }

@@ -1,12 +1,6 @@
 {
-  "position": [
-    120,
-    23
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [120, 23],
+  "size": [40, 23],
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -35,80 +29,47 @@
   "actors": [
     {
       "type": "Player",
-      "position": [
-        228,
-        40
-      ]
+      "position": [228, 40]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        216,
-        40
-      ]
+      "position": [216, 40]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        224,
-        40
-      ]
+      "position": [224, 40]
     },
     {
       "type": "Light",
-      "position": [
-        68,
-        60
-      ]
+      "position": [68, 60]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        224,
-        56
-      ]
+      "position": [224, 56]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        232,
-        56
-      ]
+      "position": [232, 56]
     },
     {
       "type": "Bramble",
-      "position": [
-        188,
-        112
-      ]
+      "position": [188, 112]
     },
     {
       "type": "Light",
-      "position": [
-        176,
-        121
-      ]
+      "position": [176, 121]
     },
     {
       "type": "Mosquito",
-      "position": [
-        132,
-        140
-      ]
+      "position": [132, 140]
     },
     {
       "type": "Bramble",
-      "position": [
-        236,
-        144
-      ]
+      "position": [236, 144]
     },
     {
       "type": "Bramble",
-      "position": [
-        244,
-        144
-      ]
+      "position": [244, 144]
     }
   ]
 }

@@ -34,6 +34,7 @@ public class Game : IDisposable
 	Target LitForeground { get; set; } = null!;
 	Target LitScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
+	Target TileField { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 
@@ -63,6 +64,7 @@ public class Game : IDisposable
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
 	private readonly ReloadableMaterial? normalLightMaterial;
 	private readonly ReloadableMaterial? reflectionDistortMaterial;
+	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
 	private float hitStun;
@@ -75,15 +77,51 @@ public class Game : IDisposable
 		None,
 		CollisionRects,
 		LightMask,
-		NormalBuffer
+		NormalBuffer,
+		TileFieldRed,
+		TileFieldGreen,
+		TileFieldBlue
 	}
 
 	private DebugView debugView;
+	private float debugViewMessageTimer;
+	public string? DebugViewMessage { get; private set; }
 
 	private void ToggleDebugView(DebugView toggle)
 	{
-		debugView = debugView == toggle ? DebugView.None : toggle;
+		SetDebugView(debugView == toggle ? DebugView.None : toggle);
 	}
+
+	private void CycleTileFieldDebugView()
+	{
+		SetDebugView(debugView switch
+		{
+			DebugView.TileFieldRed => DebugView.TileFieldGreen,
+			DebugView.TileFieldGreen => DebugView.TileFieldBlue,
+			DebugView.TileFieldBlue => DebugView.None,
+			_ => DebugView.TileFieldRed
+		});
+	}
+
+	private void SetDebugView(DebugView view)
+	{
+		debugView = view;
+		DebugViewMessage = $"Debug: {DebugViewName(view)}";
+		debugViewMessageTimer = 1.25f;
+	}
+
+	private static string DebugViewName(DebugView view)
+		=> view switch
+		{
+			DebugView.None => "Off",
+			DebugView.CollisionRects => "Collision Rects",
+			DebugView.LightMask => "Light Mask",
+			DebugView.NormalBuffer => "Normal Buffer",
+			DebugView.TileFieldRed => "Tile Field R",
+			DebugView.TileFieldGreen => "Tile Field G",
+			DebugView.TileFieldBlue => "Tile Field B",
+			_ => view.ToString()
+		};
 
 	private bool mouseLightEnabled;
 	private bool draggingPlayer;
@@ -110,9 +148,10 @@ public class Game : IDisposable
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
-		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 2);
+		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 3, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
+		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
 
 		if (start != null)
 		{
@@ -174,12 +213,19 @@ public class Game : IDisposable
 		lightingCompositeMaterial?.Dispose();
 		normalLightMaterial?.Dispose();
 		reflectionDistortMaterial?.Dispose();
+		tileFieldDebugMaterial?.Dispose();
 		Batcher.Dispose();
 	}
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
 		CollisionRectsThisFrame.Clear();
+		if (debugViewMessageTimer > 0)
+		{
+			debugViewMessageTimer -= Time.Delta;
+			if (debugViewMessageTimer <= 0)
+				DebugViewMessage = null;
+		}
 
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
@@ -197,6 +243,7 @@ public class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
 				if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
 				if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
+				if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 			}
 
@@ -438,6 +485,7 @@ public class Game : IDisposable
 		LitForeground = new Target(GraphicsDevice, width, height, name: "LitForeground");
 		LitScreen = new Target(GraphicsDevice, width, height, name: "LitScreen");
 		NormalBuffer = new Target(GraphicsDevice, width, height, name: "NormalBuffer");
+		TileField = new Target(GraphicsDevice, width, height, name: "TileField");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
 		roomNormalMask = new bool[width, height];
 	}
@@ -455,6 +503,7 @@ public class Game : IDisposable
 		LitForeground?.Dispose();
 		LitScreen?.Dispose();
 		NormalBuffer?.Dispose();
+		TileField?.Dispose();
 		ReflectionScreen?.Dispose();
 	}
 
@@ -462,17 +511,26 @@ public class Game : IDisposable
 	{
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
-		if (showHud)
-			DrawPlayerHud(ForegroundScreen);
 
 		UpdateMouseLightPosition(viewport);
 		DrawNormalBuffer();
+		DrawTileField();
 
-		var output = ApplyLighting();
-		if (debugView == DebugView.LightMask)
-			output = BackgroundLightMask;
-		else if (debugView == DebugView.NormalBuffer)
-			output = NormalBuffer;
+		Target output;
+		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen or DebugView.TileFieldBlue)
+		{
+			output = DrawTileFieldDebug();
+		}
+		else
+		{
+			output = ApplyLighting();
+			if (debugView == DebugView.LightMask)
+				output = BackgroundLightMask;
+			else if (debugView == DebugView.NormalBuffer)
+				output = NormalBuffer;
+		}
+		if (showHud && output == LitScreen)
+			DrawPlayerHud(LitScreen);
 
 		// draw screen to window
 		{
@@ -509,6 +567,37 @@ public class Game : IDisposable
 			Batcher.Clear();
 		}
 	}
+
+	private Target DrawTileFieldDebug()
+	{
+		Screen.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		if (tileFieldDebugMaterial != null)
+		{
+			tileFieldDebugMaterial.Material.Fragment.SetUniformBuffer([
+				TileFieldDebugChannel(),
+				0,
+				1,
+				0
+			]);
+			Batcher.PushMaterial(tileFieldDebugMaterial.Material);
+		}
+		Batcher.Image(TileField, TileField.Bounds.Center, TileField.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		if (tileFieldDebugMaterial != null)
+			Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(Screen);
+		Batcher.Clear();
+		return Screen;
+	}
+
+	private int TileFieldDebugChannel()
+		=> debugView switch
+		{
+			DebugView.TileFieldGreen => 1,
+			DebugView.TileFieldBlue => 2,
+			_ => 0
+		};
 
 	private void DrawWorldLayer(Target target, bool background)
 	{
@@ -693,6 +782,17 @@ public class Game : IDisposable
 	{
 		output.Clear(Color.Transparent);
 		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
+			output.Width,
+			output.Height,
+			Camera.X - shake.X,
+			Camera.Y - shake.Y,
+			Manager.LightingDitherEnabled ? 1.0f : 0.0f,
+			Manager.LightingDitherScale,
+			Manager.LightingDitherStrength,
+			0
+		]);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.PushMaterial(lightingCompositeMaterial.Material);
@@ -701,6 +801,64 @@ public class Game : IDisposable
 		Batcher.PopSampler();
 		Batcher.Render(output);
 		Batcher.Clear();
+	}
+
+	private void DrawTileField()
+	{
+		TileField.Clear(Color.Transparent);
+		Batcher.PushMatrix(-(Point2)Camera + shake);
+		if (room != null)
+			DrawRoomTileField(room);
+		if (nextRoom != null && nextRoom != room)
+			DrawRoomTileField(nextRoom);
+		Batcher.PopMatrix();
+		Batcher.Render(TileField);
+		Batcher.Clear();
+	}
+
+	private void DrawRoomTileField(Room renderRoom)
+	{
+		for (var y = 0; y < renderRoom.Size.Y; y ++)
+		for (var x = 0; x < renderRoom.Size.X; x ++)
+		{
+			var tile = renderRoom.Tiles[x, y];
+			var worldTile = renderRoom.Position + new Point2(x, y);
+			Batcher.Rect(
+				new Rect(
+					renderRoom.WorldBounds.X + x * TileSize,
+					renderRoom.WorldBounds.Y + y * TileSize,
+					TileSize,
+					TileSize),
+				TileFieldColor(tile, worldTile));
+		}
+	}
+
+	private static Color TileFieldColor(char tile, Point2 worldTile)
+	{
+		var hash = TileFieldHash(tile, worldTile);
+		var variant = (hash & 255) / 255.0f;
+		var family = TileFieldFamily(tile);
+		var solid = Factory.Find(tile) is { BlocksMovement: true } ? 1.0f : 0.0f;
+		return new Color(variant, family, solid, 1.0f);
+	}
+
+	private static float TileFieldFamily(char tile)
+		=> tile switch
+		{
+			'0' => 0.00f,
+			'1' or '2' or 'x' => 0.25f,
+			'G' or 'S' or 'X' or 'g' => 0.50f,
+			'w' => 0.75f,
+			_ => 1.00f
+		};
+
+	private static uint TileFieldHash(char tile, Point2 worldTile)
+	{
+		var hash = 2166136261u;
+		hash = (hash ^ (uint)worldTile.X) * 16777619u;
+		hash = (hash ^ (uint)worldTile.Y) * 16777619u;
+		hash = (hash ^ tile) * 16777619u;
+		return hash;
 	}
 
 	private void DrawLightMask(Target lightMask, bool includeShadows)
@@ -1117,6 +1275,7 @@ public class Game : IDisposable
 		lightingCompositeMaterial?.Reload();
 		normalLightMaterial?.Reload();
 		reflectionDistortMaterial?.Reload();
+		tileFieldDebugMaterial?.Reload();
 	}
 #endif
 
