@@ -22,7 +22,7 @@ public class Actor
 	[NoSerialize] public Vector2 Velocity;
 	[NoSerialize] public Hitbox Hitbox;
 	[NoSerialize] public Masks Mask = Masks.None;
-	[NoSerialize] public Signs Facing = Signs.Positive;
+	public Signs Facing = Signs.Positive;
 	[NoSerialize] public Vector2 Squish = Vector2.One;
 	[NoSerialize] public Vector2 Shift = Vector2.Zero;
 	[NoSerialize] public int Depth = 0;
@@ -30,7 +30,7 @@ public class Actor
 	[NoSerialize] public bool Visible = true;
 	[NoSerialize] public float IFrameTime = 0.50f;
 	[NoSerialize] public bool CollidesWithSolids = true;
-	public bool KeepOnRoomTransition;
+	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;
 

@@ -35,7 +35,7 @@ public partial class Manager
 	string? selectedActorSpecId;
 	int selectedActorPaletteIndex = -1;
 	bool actorSpecInspectorOpen;
-	bool actorSelectTool;
+	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
 	bool draggingRoomActor;
 	Vector2 roomActorDragOffset;
@@ -525,6 +525,16 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (property.Type == typeof(Signs))
+		{
+			var value = ActorSpecs.ReadSigns(property.Value);
+			if (ImGuiSubtextureButton("##Value", Assets.GetSubtexture("buttons/15"), FacingTooltip(value), false, new Vector2(ButtonSize, ButtonSize), true))
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create((-value).ToString()));
+				changed = true;
+			}
+		}
 		else
 		{
 			ImGui.TextUnformatted("-");
@@ -672,6 +682,16 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (property.Type == typeof(Signs))
+		{
+			var value = ActorSpecs.ReadSigns(property.Value);
+			if (ImGuiSubtextureButton("##Value", Assets.GetSubtexture("buttons/15"), FacingTooltip(value), false, new Vector2(ButtonSize, ButtonSize), true))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create((-value).ToString()));
+				changed = true;
+			}
+		}
 		else
 		{
 			ImGui.TextUnformatted("-");
@@ -691,6 +711,8 @@ public partial class Manager
 
 		return changed;
 	}
+
+	private static string FacingTooltip(Signs value) => "Click to face the other direction.";
 
 	private static float BeginInspectorPropertyRow(string label, bool hasResetButton)
 	{
@@ -1287,8 +1309,9 @@ public partial class Manager
 			proposedRoomTiles = worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
 			if (selectedRoomActorIndex >= editing.Actors.Count)
 				selectedRoomActorIndex = -1;
+			var actorSelectActive = actorSelectTool && !eyedropper;
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
-			var hoveredHiddenWallHandle = !worldMouseBlocked && actorSelectTool && overGame
+			var hoveredHiddenWallHandle = !worldMouseBlocked && actorSelectActive && overGame
 				? HitTestHiddenWallResizeHandle(editing, worldMouse, gridWeight)
 				: HiddenWallResizeHandle.None;
 			SetHiddenWallResizeCursor(hiddenWallResizeHandle != HiddenWallResizeHandle.None ? hiddenWallResizeHandle : hoveredHiddenWallHandle);
@@ -1313,14 +1336,14 @@ public partial class Manager
 			if (worldMouseBlocked)
 				tilePlacing = false;
 
-			if (!worldMouseBlocked && actorSelectTool && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != HiddenWallResizeHandle.None)
+			if (!worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != HiddenWallResizeHandle.None)
 			{
 				hiddenWallResizeHandle = hoveredHiddenWallHandle;
 				draggingRoomActor = false;
 				roomActorDragOffset = Vector2.Zero;
 				tilePlacing = false;
 			}
-			else if (!worldMouseBlocked && actorSelectTool && overGame && Input.Mouse.LeftPressed)
+			else if (!worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed)
 			{
 				using (CaptureSelectionUndo("Select Actor"))
 				{
@@ -1353,6 +1376,8 @@ public partial class Manager
 			{
 				brush = editing.Tiles[tileOver.X, tileOver.Y];
 				tileTypePlacing = brush;
+				selectedActorPaletteIndex = -1;
+				actorSelectTool = false;
 			}
 			else if (!worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && ctrlClick && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
 			{
@@ -1388,12 +1413,12 @@ public partial class Manager
 				tilePlacing = true;
 			}
 
-			if (!worldMouseBlocked && actorSelectTool && hiddenWallResizeHandle != HiddenWallResizeHandle.None && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+			if (!worldMouseBlocked && actorSelectActive && hiddenWallResizeHandle != HiddenWallResizeHandle.None && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				actorMoveUndo ??= CaptureRoomUndo("Resize Actor", editing);
 				ResizeHiddenWallActor(editing, selectedRoomActorIndex, hiddenWallResizeHandle, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
 			}
-			else if (!worldMouseBlocked && actorSelectTool && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+			else if (!worldMouseBlocked && actorSelectActive && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				actorMoveUndo ??= CaptureRoomUndo("Move Actor", editing);
 				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, keyboardBlocked || !Input.Keyboard.Shift);
@@ -1426,7 +1451,7 @@ public partial class Manager
 			var shift = -(brushSize - 1) / 2;
 			var size = brushSize;
 
-			if (!worldMouseBlocked && !actorSelectTool && overGame)
+			if (!worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
 			{
 				if (eyedropper)
 				{
@@ -1478,7 +1503,7 @@ public partial class Manager
 
 			batcher.RectLine(roomBounds, gridWeight * 2, Color.Black);
 			DrawPlaytestPlayerMarker(editing);
-			if (actorSelectTool)
+			if (actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 
 			if (proposedRoomTiles is { } proposal)

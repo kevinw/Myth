@@ -205,6 +205,7 @@ public static class ActorSpecs
 			Point2 it => new JsonArray(it.X, it.Y),
 			Vector2 it => new JsonArray(it.X, it.Y),
 			Color it => JsonValue.Create($"{it.R:X2}{it.G:X2}{it.B:X2}"),
+			Signs it => JsonValue.Create(it.ToString()),
 			Enum it => JsonValue.Create(it.ToString()),
 			_ => null
 		};
@@ -346,6 +347,7 @@ public static class ActorSpecs
 		   type == typeof(Point2) ||
 		   type == typeof(Vector2) ||
 		   type == typeof(Color) ||
+		   type == typeof(Signs) ||
 		   type.IsEnum;
 
 	private static Type GetMemberType(MemberInfo member)
@@ -389,6 +391,8 @@ public static class ActorSpecs
 				value = ReadVector2(node);
 			else if (type == typeof(Color))
 				value = ReadColor(node);
+			else if (type == typeof(Signs))
+				value = ReadSigns(node);
 			else if (type.IsEnum)
 				value = Enum.Parse(type, node.GetValue<string>(), ignoreCase: true);
 			else
@@ -436,6 +440,15 @@ public static class ActorSpecs
 		}
 
 		return null;
+	}
+
+	public static Signs ReadSigns(JsonNode? node)
+	{
+		if (node == null)
+			return Signs.Positive;
+		if (TryReadInt(node, out var asInt))
+			return Signs.FromInt(asInt);
+		return Signs.Parse(node.GetValue<string>());
 	}
 
 	private static bool TryReadInt(JsonNode? node, out int value)

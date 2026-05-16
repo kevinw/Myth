@@ -1134,6 +1134,7 @@ public partial class Manager : App
 		game = null;
 		startingPlay = false;
 		playing = false;
+		SelectEditorActorTool();
 		SyncEditorGame();
 	}
 

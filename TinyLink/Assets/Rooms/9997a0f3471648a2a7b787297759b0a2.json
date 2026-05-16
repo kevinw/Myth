@@ -31,7 +31,8 @@
     },
     {
       "type": "Spitter",
-      "position": [28, 64]
+      "position": [28, 64],
+      "facing": "-"
     }
   ]
 }

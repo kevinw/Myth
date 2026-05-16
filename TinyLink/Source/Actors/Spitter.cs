@@ -15,7 +15,7 @@ public class Spitter : Actor
 		Depth = -5;
 		timer = 1.0f;
 		Play("idle");
-		Facing = -1;
+		Facing = 1;
 	}
 
 	public override void Update()
