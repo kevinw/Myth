@@ -1,12 +1,6 @@
 {
-  "position": [
-    160,
-    23
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [160, 23],
+  "size": [40, 23],
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -35,87 +29,51 @@
   "actors": [
     {
       "type": "Bramble",
-      "position": [
-        252,
-        96
-      ]
+      "position": [252, 96]
     },
     {
       "type": "Bramble",
-      "position": [
-        260,
-        96
-      ]
+      "position": [260, 96]
     },
     {
       "type": "Bramble",
-      "position": [
-        180,
-        112
-      ]
+      "position": [180, 112]
     },
     {
       "type": "Bramble",
-      "position": [
-        188,
-        112
-      ]
+      "position": [188, 112]
     },
     {
       "type": "Spitter",
-      "position": [
-        164,
-        128
-      ]
+      "position": [164, 128]
     },
     {
       "type": "Player",
-      "position": [
-        52,
-        136
-      ]
+      "position": [52, 136]
     },
     {
       "type": "Mosquito",
-      "position": [
-        132,
-        132
-      ]
+      "position": [132, 132]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        136,
-        128
-      ]
+      "position": [136, 128]
     },
     {
       "type": "Jumpthru",
-      "position": [
-        144,
-        128
-      ]
+      "position": [144, 128]
     },
     {
       "type": "Bramble",
-      "position": [
-        124,
-        144
-      ]
+      "position": [124, 144]
     },
     {
       "type": "Bramble",
-      "position": [
-        132,
-        144
-      ]
+      "position": [132, 144]
     },
     {
       "type": "Dropper",
-      "position": [
-        108,
-        104
-      ]
+      "position": [108, 104]
     }
   ]
 }

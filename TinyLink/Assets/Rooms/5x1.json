@@ -1,12 +1,6 @@
 {
-  "position": [
-    200,
-    23
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [200, 23],
+  "size": [40, 23],
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -35,45 +29,27 @@
   "actors": [
     {
       "type": "Mosquito",
-      "position": [
-        212,
-        76
-      ]
+      "position": [212, 76]
     },
     {
       "type": "Light",
-      "position": [
-        136,
-        84
-      ]
+      "position": [136, 84]
     },
     {
       "type": "Light",
-      "position": [
-        184,
-        84
-      ]
+      "position": [184, 84]
     },
     {
       "type": "Mosquito",
-      "position": [
-        204,
-        92
-      ]
+      "position": [204, 92]
     },
     {
       "from": "LockedDoor",
-      "position": [
-        252,
-        96
-      ]
+      "position": [252, 96]
     },
     {
       "type": "Player",
-      "position": [
-        52,
-        96
-      ]
+      "position": [52, 96]
     }
   ]
 }
