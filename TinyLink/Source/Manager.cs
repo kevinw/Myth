@@ -894,8 +894,11 @@ public partial class Manager : App
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize));
 
 	private bool ImGuiSubtextureButton(string id, Subtexture icon, string tooltip, bool selected, Vector2 size)
+		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false);
+
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string tooltip, bool selected, Vector2 size, bool fitAspectRatio)
 	{
-		var pressed = imgui.ImageButton(id, icon, size, selected, highlight);
+		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
 		var hovered = ImGui.IsItemHovered();
 
 		if (hovered)
@@ -961,7 +964,7 @@ public partial class Manager : App
 			return;
 		}
 
-		DrawCenteredToolbarText($"Room {room.Id}", canDoubleClick: true);
+		DrawCenteredToolbarText(room.Id, canDoubleClick: true);
 		var textHovered = ImGui.IsItemHovered();
 		if (textHovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
 			BeginRoomRename(room);

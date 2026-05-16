@@ -60,15 +60,27 @@ public class Game : IDisposable
 	private float shaking;
 	private Point2 shake;
 	private Rng rng = new();
-	private bool showCollisionRects;
-	private bool showLightMask;
-	private bool showNormalBuffer;
+
+	enum DebugView
+	{
+		None,
+		CollisionRects,
+		LightMask,
+		NormalBuffer
+	}
+
+	private DebugView debugView;
+
+	private void ToggleDebugView(DebugView toggle)
+	{
+		debugView = debugView == toggle ? DebugView.None : toggle;
+	}
+
 	private bool mouseLightEnabled;
 	private bool draggingPlayer;
-	private bool actorSpriteShadowsEnabled = true;
 	private Vector2 mouseLightPosition;
 	private float timeScale = 1.0f;
-	private Point2? respawnPosition;
+	private readonly Point2? respawnPosition;
 	private bool disposed;
 
 	public Vector2 Camera { get; private set; }
@@ -173,11 +185,10 @@ public class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.R))
 					ReloadRoom();
 
-				if (Input.Keyboard.Pressed(Keys.C)) showCollisionRects = !showCollisionRects;
-				if (Input.Keyboard.Pressed(Keys.L)) showLightMask = !showLightMask;
-				if (Input.Keyboard.Pressed(Keys.N)) showNormalBuffer = !showNormalBuffer;
+				if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
+				if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
+				if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
-				if (Input.Keyboard.Pressed(Keys.O)) actorSpriteShadowsEnabled = !actorSpriteShadowsEnabled;
 			}
 
 			#if DEBUG
@@ -451,9 +462,9 @@ public class Game : IDisposable
 		DrawNormalBuffer();
 
 		var output = ApplyLighting();
-		if (showLightMask)
+		if (debugView == DebugView.LightMask)
 			output = BackgroundLightMask;
-		if (showNormalBuffer)
+		else if (debugView == DebugView.NormalBuffer)
 			output = NormalBuffer;
 
 		// draw screen to window
@@ -513,7 +524,7 @@ public class Game : IDisposable
 		}
 		rendering.Clear();
 
-		if (!background && showCollisionRects)
+		if (!background && debugView == DebugView.CollisionRects)
 			DrawCollisionRects(); // TODO: don't do this in post-processing context
 
 		Batcher.PopMatrix();
@@ -806,8 +817,7 @@ public class Game : IDisposable
 			});
 		}
 
-		if (actorSpriteShadowsEnabled)
-			DrawActorSpriteShadows(lightPosition, radius);
+		DrawActorSpriteShadows(lightPosition, radius);
 	}
 
 	private void DrawActorSpriteShadows(Vector2 lightPosition, float radius)

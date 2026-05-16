@@ -159,10 +159,14 @@ public static class Assets
 			// add frames
 			var frames = new List<Sprite.Frame>();
 			for (int i = 0; i < ase.Frames.Length; i ++)
+			{
+				var subtexture = subtextures[$"{name}/{i}"];
 				frames.Add(new(
-					subtextures[$"{name}/{i}"],
+					subtexture,
+					new Subtexture(subtexture.Texture, subtexture.Source),
 					subtextures[$"{name}/normal/{i}"],
 					ase.Frames[i].Duration / 1000.0f));
+			}
 
 			// add animations
 			var animations = new List<Sprite.Animation>();

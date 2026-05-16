@@ -74,7 +74,7 @@ public static class Factory
 				return new();
 
 			var typeName = typeof(T).Name;
-			return new ActorPaletteEntry(typeName, sprite.Frames[0].Subtexture, sprite.Origin, offset ?? Point2.Zero, typeName, null, editorBounds);
+			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, typeName, null, editorBounds);
 		}
 
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
@@ -84,7 +84,7 @@ public static class Factory
 			if (sprite == null || spec == null)
 				return new();
 
-			return new ActorPaletteEntry(specId, sprite.Frames[0].Subtexture, sprite.Origin, offset ?? Point2.Zero, ActorSpecs.GetTypeName(spec), specId, editorBounds);
+			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, ActorSpecs.GetTypeName(spec), specId, editorBounds);
 		}
 	}
 

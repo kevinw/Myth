@@ -350,14 +350,14 @@ public partial class Manager
 		if (ImGui.Begin("Palette", flags))
 		{
 			if (ImGuiTextButton("Select", new Vector2(ButtonSize * 2 + ButtonSpacing, ButtonSize), actorSelectTool))
-			{
-				actorSelectTool = true;
-				brush = '0';
-			}
+				SelectEditorActorTool();
 			ImGui.Spacing();
 			DrawTilePaletteSection();
 			ImGui.Spacing();
 			DrawActorPaletteSection();
+
+			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
+				SelectEditorActorTool();
 		}
 		ImGui.End();
 
@@ -366,6 +366,12 @@ public partial class Manager
 
 		ActorSpecInspectorImGui();
 		ActorInstanceInspectorImGui();
+	}
+
+	private void SelectEditorActorTool()
+	{
+		actorSelectTool = true;
+		brush = '0';
 	}
 
 	private void DrawTilePaletteSection()
@@ -401,7 +407,7 @@ public partial class Manager
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
 
-			if (ImGuiSubtextureButton($"Palette_Actors_{i}", entry.Image, entry.Name, selectedActorPaletteIndex == i, new Vector2(ButtonSize, ButtonSize)))
+			if (ImGuiSubtextureButton($"Palette_Actors_{i}", entry.Image, entry.Name, selectedActorPaletteIndex == i, new Vector2(ButtonSize, ButtonSize), true))
 			{
 				selectedActorPaletteIndex = i;
 				actorSelectTool = false;
@@ -490,7 +496,7 @@ public partial class Manager
 		else if (property.Type == typeof(Point2))
 		{
 			var point = ActorSpecs.ReadPoint(property.Value) ?? Point2.Zero;
-			var values = new int[] { point.X, point.Y };
+			var values = new [] { point.X, point.Y };
 			if (ImGui.DragInt2("##Value", ref values[0]))
 			{
 				BeginPrefabUndo(specId);
@@ -637,7 +643,7 @@ public partial class Manager
 		else if (property.Type == typeof(Point2))
 		{
 			var point = ActorSpecs.ReadPoint(property.Value) ?? Point2.Zero;
-			var values = new int[] { point.X, point.Y };
+			var values = new[] { point.X, point.Y };
 			if (ImGui.DragInt2("##Value", ref values[0]))
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
@@ -1124,10 +1130,10 @@ public partial class Manager
 		}
 	}
 
-	private Texture? GetEditorRoomTexture(Room room)
+	private Texture GetEditorRoomTexture(Room room)
 		=> room == CurrentRoom && game != null ? GetActiveRoomPreview(room) : GetRoomPreview(room);
 
-	private Texture? GetActiveRoomPreview(Room room)
+	private Texture GetActiveRoomPreview(Room room)
 	{
 		var bounds = room.WorldBounds;
 		if (activeRoomPreviewTarget == null ||
@@ -1144,7 +1150,7 @@ public partial class Manager
 		return activeRoomPreviewTarget.Attachments[0];
 	}
 
-	private Texture? GetRoomPreview(Room room)
+	private Texture GetRoomPreview(Room room)
 	{
 		var json = room.ToJsonString();
 		if (roomPreviewCache.TryGetValue(room.Id, out var entry) &&
@@ -1220,9 +1226,7 @@ public partial class Manager
 
 	private void Editor()
 	{
-		var bounds = WorkspaceRect;
 		var inner = GameViewRect;
-		var arrow = new Rect().Inflate(ButtonSize / 2);
 		var lastCell = cell;
 		var worldMouseBlocked = imgui.WantsMouseInput;
 		var keyboardBlocked = ImGuiWantsKeyboard;
@@ -1323,7 +1327,7 @@ public partial class Manager
 					selectedRoomActorIndex = hoveredActorIndex;
 					draggingRoomActor = selectedRoomActorIndex >= 0;
 					roomActorDragOffset = selectedRoomActorIndex >= 0
-						? worldMouse - ((Vector2)roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "position") ?? Point2.Zero))
+						? worldMouse - (roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "position") ?? Point2.Zero))
 						: Vector2.Zero;
 					hiddenWallResizeHandle = HiddenWallResizeHandle.None;
 					tilePlacing = false;
