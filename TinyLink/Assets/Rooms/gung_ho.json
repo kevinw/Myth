@@ -32,7 +32,7 @@
     {
       "type": "TitleText",
       "position": [156, 60],
-      "text": "love in the datacenter"
+      "text": "it\u0027s gonna\nbe ok"
     },
     {
       "type": "Jumpthru",
@@ -60,7 +60,11 @@
     },
     {
       "from": "StrongFireLight",
-      "position": [100, 39]
+      "position": [100, 39],
+      "flickerFrequency": 1.05,
+      "flickerIntensity": 0.02,
+      "radius": 86.05,
+      "intensity": 1.05
     }
   ]
 }

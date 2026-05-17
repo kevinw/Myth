@@ -573,7 +573,7 @@ public class Game : IDisposable
 				float CrtTime = Time.SecondsF * 0.2f;
 				float Curvature = 0.005f;
 				float BloomAmount = 0.19f;
-				float ScanlineAmount = 0.07f;
+				float ScanlineAmount = 0.22f;
 				float VignetteAmount = 0.22f;
 				float RgbOffset = 0.35f;
 				crtMaterial.Material.Fragment.SetUniformBuffer([
