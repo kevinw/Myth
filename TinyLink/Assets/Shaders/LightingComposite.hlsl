@@ -23,6 +23,9 @@ SamplerState TileFieldSampler : register(s2, space2);
 Texture2D DitherMaskTexture : register(t3, space2);
 SamplerState DitherMaskSampler : register(s3, space2);
 
+Texture2D EmissiveTexture : register(t4, space2);
+SamplerState EmissiveSampler : register(s4, space2);
+
 struct VsInput
 {
     float2 position : TEXCOORD0;
@@ -272,11 +275,13 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 light = LightTexture.Sample(LightSampler, input.tex_coord);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, input.tex_coord);
     float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, input.tex_coord).r;
+    float4 emissive = EmissiveTexture.Sample(EmissiveSampler, input.tex_coord);
     float2 screen_pixel = input.tex_coord * TextureSizeCamera.xy;
     float2 world_pixel = TextureSizeCamera.zw + screen_pixel;
     light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
+    color = lerp(color, emissive.rgb, emissive.a);
     return float4(saturate(color), scene.a);
 }

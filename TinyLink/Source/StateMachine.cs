@@ -1,18 +1,13 @@
 namespace TinyLink;
 
-public sealed class StateMachine<T> where T : struct, Enum
+public sealed class StateMachine<T>(T initial)
+	where T : struct, Enum
 {
-	public T Current { get; private set; }
-	public T Previous { get; private set; }
+	public T Current { get; private set; } = initial;
+	public T Previous { get; private set; } = initial;
 	public float Time { get; set; }
 	public float PreviousTime { get; private set; }
-	public bool JustChanged { get; private set; }
-
-	public StateMachine(T initial)
-	{
-		Current = initial;
-		Previous = initial;
-	}
+	bool JustChanged;
 
 	public bool Change(T next)
 	{

@@ -11,7 +11,8 @@ public class Floater : Actor
 	public float LaserRotationSpeed = 0.10f;
 	public float LaserRange = 160;
 	public float LaserThickness = 3;
-	public float LaserEndPadding = 6;
+	static float LaserStartPadding => 5;
+	static float LaserEndPadding => 2;
 	public float LaserPopInterval = 0.08f;
 	public float LaserLightRadius = 22;
 	public float LaserLightIntensity = 1.2f;
@@ -95,6 +96,14 @@ public class Floater : Actor
 		base.Render(batcher);
 	}
 
+	public override void RenderEmissive(Batcher batcher)
+	{
+		if (state.Current == State.Firing && state.Time > LaserWarmup)
+			RenderLasers(batcher, laserAngle, LaserVisibleScale(), 1.0f);
+		else if (laserFadeTimer > 0)
+			RenderLasers(batcher, laserFadeAngle, laserFadeTimer / LaserFadeTime, laserFadeTimer / LaserFadeTime);
+	}
+
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
 		if (state.Current == State.Firing && state.Time > LaserWarmup)
@@ -123,9 +132,12 @@ public class Floater : Actor
 		for (var i = 0; i < 4; i ++)
 		{
 			var direction = LaserDirection(angle, i);
+			var start = direction * LaserStartPadding;
 			var end = (LaserEnd(origin, direction) + direction * LaserEndPadding - origin) * scale;
-			batcher.Line(Vector2.Zero, end, LaserThickness + 2, Color.White * 0.75f * alpha);
-			batcher.Line(Vector2.Zero, end, LaserThickness, new Color(0x5fcde4, alpha));
+			if (Vector2.DistanceSquared(start, end) <= 0.001f)
+				continue;
+			batcher.Line(start, end, LaserThickness + 2, Color.White * 0.75f * alpha);
+			batcher.Line(start, end, LaserThickness, new Color(0x5fcde4, alpha));
 			batcher.Circle(end, LaserThickness * 0.5f, 12, new Color(0x5fcde4, alpha));
 		}
 	}

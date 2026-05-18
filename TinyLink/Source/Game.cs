@@ -30,6 +30,8 @@ public class Game : IDisposable
 	public Target Screen { get; private set; } = null!;
 	Target BackgroundScreen { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
+	Target BackgroundEmissive { get; set; } = null!;
+	Target ForegroundEmissive { get; set; } = null!;
 	Target LightMask { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
@@ -160,7 +162,7 @@ public class Game : IDisposable
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
-		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 4, uniformBufferCount: 1);
+		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 5, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
@@ -495,6 +497,8 @@ public class Game : IDisposable
 		Screen = new Target(GraphicsDevice, width, height, name: "GameScreen");
 		BackgroundScreen = new Target(GraphicsDevice, width, height, name: "BackgroundScreen");
 		ForegroundScreen = new Target(GraphicsDevice, width, height, name: "ForegroundScreen");
+		BackgroundEmissive = new Target(GraphicsDevice, width, height, name: "BackgroundEmissive");
+		ForegroundEmissive = new Target(GraphicsDevice, width, height, name: "ForegroundEmissive");
 		LightMask = new Target(GraphicsDevice, width, height, name: "LightMask");
 		BackgroundLightMask = new Target(GraphicsDevice, width, height, name: "BackgroundLightMask");
 		ForegroundLightMask = new Target(GraphicsDevice, width, height, name: "ForegroundLightMask");
@@ -515,6 +519,8 @@ public class Game : IDisposable
 		Screen?.Dispose();
 		BackgroundScreen?.Dispose();
 		ForegroundScreen?.Dispose();
+		BackgroundEmissive?.Dispose();
+		ForegroundEmissive?.Dispose();
 		LightMask?.Dispose();
 		BackgroundLightMask?.Dispose();
 		ForegroundLightMask?.Dispose();
@@ -533,6 +539,8 @@ public class Game : IDisposable
 	{
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
+		DrawEmissiveLayer(BackgroundEmissive, background: true);
+		DrawEmissiveLayer(ForegroundEmissive, background: false);
 
 		UpdateMouseLightPosition(viewport);
 		DrawNormalBuffer();
@@ -684,6 +692,29 @@ public class Game : IDisposable
 	private static bool IsBackgroundActor(Actor actor)
 		=> actor is Grid grid && !grid.Mask.Has(Actor.Masks.Solid);
 
+	private void DrawEmissiveLayer(Target target, bool background)
+	{
+		target.Clear(Color.Transparent);
+		Batcher.PushMatrix(-(Point2)Camera + shake);
+		rendering.AddRange(Actors);
+		rendering.Sort((a, b) => b.Depth - a.Depth);
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+			if (IsBackgroundActor(actor) != background)
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderEmissive(Batcher);
+			Batcher.PopMatrix();
+		}
+		rendering.Clear();
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
 	private void DrawSpriteReflections(Target target)
 	{
 		if (room == null)
@@ -773,8 +804,8 @@ public class Game : IDisposable
 		DrawLightMask(BackgroundLightMask, includeShadows: true);
 		DrawLightMask(ForegroundLightMask, includeShadows: false);
 
-		CompositeLayer(BackgroundScreen, BackgroundLightMask, LitBackground);
-		CompositeLayer(ForegroundScreen, ForegroundLightMask, LitForeground);
+		CompositeLayer(BackgroundScreen, BackgroundLightMask, BackgroundEmissive, LitBackground);
+		CompositeLayer(ForegroundScreen, ForegroundLightMask, ForegroundEmissive, LitForeground);
 
 		LitScreen.Clear(Color.Transparent);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -840,12 +871,13 @@ public class Game : IDisposable
 		return GlitchScreen;
 	}
 
-	private void CompositeLayer(Target color, Target light, Target output)
+	private void CompositeLayer(Target color, Target light, Target emissive, Target output)
 	{
 		output.Clear(Color.Transparent);
 		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(emissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
 			output.Width,
@@ -1676,7 +1708,7 @@ public class Game : IDisposable
 		}
 	}
 
-	private void ApplyMusicArea(Room room)
+	private void ApplyMusicArea(Room forRoom)
 	{
 		if (!Manager.MusicEnabled)
 		{
@@ -1684,22 +1716,22 @@ public class Game : IDisposable
 			return;
 		}
 
-		if (string.IsNullOrEmpty(room.MusicArea))
+		if (string.IsNullOrEmpty(forRoom.MusicArea))
 			return;
 
 		StartMusic();
-		if (music == null || musicArea == room.MusicArea)
+		if (music == null || musicArea == forRoom.MusicArea)
 			return;
 
 		try
 		{
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, room.MusicArea, true);
-			musicArea = room.MusicArea;
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, forRoom.MusicArea, true);
+			musicArea = forRoom.MusicArea;
 		}
 		catch (Exception e)
 		{
-			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{room.MusicArea}"))
-				Console.Error.WriteLine($"Failed to set background music area '{room.MusicArea}': {e}");
+			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{forRoom.MusicArea}"))
+				Console.Error.WriteLine($"Failed to set background music area '{forRoom.MusicArea}': {e}");
 		}
 	}
 

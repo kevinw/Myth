@@ -381,6 +381,8 @@ public class Actor
 		}
 	}
 
+	public virtual void RenderEmissive(Batcher batcher) { }
+
 	public virtual void RenderNormals(Batcher batcher)
 	{
 		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))

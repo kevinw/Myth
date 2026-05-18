@@ -21,10 +21,10 @@
     "111111111111GGG0000GG1111111111111111111",
     "111111111111GGG0000GGG111111111111111111",
     "GGGGGGGGGGGGGGG0000GGGGGGGGG111GGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGG11GGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+    "GGGGGGGGGGGGGGG0000GGGGGGGGGG11GGGGGGGGG",
+    "GGGGGGGGGGGGGGG0000GGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGG0000GGGGGGGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGG0000GGGGGGGGGGGGGGGGGGGGG"
   ],
   "actors": [
     {
@@ -78,7 +78,7 @@
     {
       "type": "HiddenWall",
       "position": [120, 128],
-      "size": [32, 32],
+      "size": [32, 56],
       "tileType": "grass"
     },
     {
@@ -108,6 +108,14 @@
     {
       "type": "Jumpthru",
       "position": [144, 152]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [120, 176]
+    },
+    {
+      "type": "Jumpthru",
+      "position": [128, 176]
     }
   ]
 }
