@@ -60,7 +60,7 @@ public static class Assets
 		}
 
 		// get sprite files
-		foreach (var file in Directory.EnumerateFiles(spritesPath, "*.ase", SearchOption.AllDirectories))
+		foreach (var file in EnumerateAsepriteFiles(spritesPath))
 		{
 			var name = Path.ChangeExtension(Path.GetRelativePath(spritesPath, file), null);
 			var ase = new Aseprite(file);
@@ -69,7 +69,7 @@ public static class Assets
 		}
 
 		// get tileset files
-		foreach (var file in Directory.EnumerateFiles(tilesetsPath, "*.ase", SearchOption.AllDirectories))
+		foreach (var file in EnumerateAsepriteFiles(tilesetsPath))
 		{
 			var name = Path.ChangeExtension(Path.GetRelativePath(tilesetsPath, file), null);
 			var ase = new Aseprite(file);
@@ -230,6 +230,17 @@ public static class Assets
 		ActorSpecs.LoadSpecs(actorsPath);
 		if (reloadRooms)
 			LoadRooms();
+	}
+
+	private static IEnumerable<string> EnumerateAsepriteFiles(string path)
+	{
+		if (!Directory.Exists(path))
+			yield break;
+
+		foreach (var file in Directory.EnumerateFiles(path, "*.ase", SearchOption.AllDirectories))
+			yield return file;
+		foreach (var file in Directory.EnumerateFiles(path, "*.aseprite", SearchOption.AllDirectories))
+			yield return file;
 	}
 
 	private static Texture? LoadTexture(GraphicsDevice gfx, string relativePath, string name)

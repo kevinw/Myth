@@ -71,7 +71,7 @@ public static class Factory
 		{
 			var sprite = Assets.GetSprite(spriteName);
 			if (sprite == null)
-				return new();
+				throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
 
 			var typeName = typeof(T).Name;
 			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, typeName, null, editorBounds);
@@ -81,8 +81,10 @@ public static class Factory
 		{
 			var spec = ActorSpecs.Get(specId);
 			var sprite = Assets.GetSprite(spriteName);
-			if (sprite == null || spec == null)
-				return new();
+			if (spec == null)
+				throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing actor spec.");
+			if (sprite == null)
+				throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing sprite '{spriteName}'.");
 
 			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, ActorSpecs.GetTypeName(spec), specId, editorBounds);
 		}
@@ -172,6 +174,8 @@ public static class Factory
 		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
 		ActorSpecs.RegisterActor<TitleText>("TitleText");
 		ActorSpecs.RegisterActor<Peter>("Peter");
+		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
+		ActorSpecs.RegisterActor<Arrow>("Arrow");
 
 		// Empty Type, purely for the editor
 		Register('0', new Entry("Empty", new Subtexture(), null!));
@@ -214,6 +218,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<TitleText>("heart", new Point2(4, 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Peter>("peter", new Point2(4, 4)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<ArrowTrap>("arrow_trap", new Point2(4, 4)));
 	}
 
 	private static void RegisterActorSpecPaletteEntries()
