@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Runtime.InteropServices.Swift;
 using Foster.Framework;
 
 namespace TinyLink;

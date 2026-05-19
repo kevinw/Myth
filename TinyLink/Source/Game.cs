@@ -1957,36 +1957,26 @@ public class Game : IDisposable
 		if (hiddenWalls != null)
 			PopulateHiddenWalls(room, hiddenWalls);
 
-		BuildDualTiles();
+		BuildDualTiles(room, dual);
 	}
 
-	void BuildDualTiles()
+	void BuildDualTiles(Room room, DualGrid dual)
 	{
-
-	}
-
-	void BuildDualTilesBroken()
-	{
-		if (room == null)
-			return;
-
-		DualGrid? dual = null;
-		foreach (var actor in Actors)
-		{
-			if (actor is DualGrid dualGrid)
-			{
-				dual = dualGrid;
-				continue;
-			}
-		}
-
-		if (dual == null) return;
-
 		dual.Clear();
-		if (Assets.GetTileset("grass-dual") is { } grassDual)
-		    dual.Build(room, 'G', grassDual);
-		if (Assets.GetTileset("castle-dual") is { }  castleDual)
-		    dual.Build(room, '1', castleDual);
+		var dualEntries = Factory.Entries
+			.Where(it => it.Value.DualTilesetName != null)
+			.ToArray();
+		var joinedTileTypes = dualEntries
+			.Select(it => it.Key)
+			.ToHashSet();
+
+		foreach (var (tileType, entry) in dualEntries)
+		{
+			if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } dualTileset)
+				continue;
+
+			dual.Build(room, tileType, dualTileset, joinedTileTypes);
+		}
 	}
 
 	public void LoadRoom(Room room)
@@ -2019,6 +2009,7 @@ public class Game : IDisposable
 		}
 
 		PopulateHiddenWalls(room, hiddenWalls);
+		BuildDualTiles(room, dual);
 
 		foreach (var actor in room.Actors)
 		{
@@ -2033,8 +2024,6 @@ public class Game : IDisposable
 			if (ActorSpecs.Create(this, actor, offset + localPosition) is { } created)
 				created.SessionDestroyKey = sessionDestroyKey;
 		}
-
-		BuildDualTiles();
 	}
 
 	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)

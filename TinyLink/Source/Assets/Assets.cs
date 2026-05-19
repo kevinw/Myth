@@ -94,13 +94,25 @@ public static class Assets
 
 			foreach (var (name, ase) in tilesetFiles)
 			{
-				var image = ase.RenderFrame(0);
+				var nonDebugLayers = GetNonDebugLayers(ase);
+				var variantLayers = GetVariantLayers(ase, nonDebugLayers);
+				var image = ase.RenderFrame(0, nonDebugLayers.Contains);
 				var columns = image.Width / Game.TileSize;
 				var rows = image.Height / Game.TileSize;
 
 				for (int x = 0; x < columns; x ++)
 					for (int y = 0; y < rows; y ++)
 						packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+
+				var variantIndex = 0;
+				foreach (var layer in variantLayers)
+				{
+					var variant = ase.RenderFrame(0, it => it == layer);
+					for (int x = 0; x < columns; x ++)
+						for (int y = 0; y < rows; y ++)
+							packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", variant, new RectInt(x, y, 1, 1) * Game.TileSize);
+					variantIndex++;
+				}
 
 				using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
 				for (var run = 1; run <= MaxSlopeRun; run ++)
@@ -212,7 +224,18 @@ public static class Assets
 				for (int y = 0; y < rows; y ++)
 					tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
 
-			tileset.Reload(columns, rows, tiles);
+			var variantLayers = GetVariantLayers(ase, GetNonDebugLayers(ase));
+			var variants = new List<List<Subtexture>>();
+			for (var variantIndex = 0; variantIndex < variantLayers.Count; variantIndex++)
+			{
+				var variant = new List<Subtexture>();
+				for (int x = 0; x < columns; x ++)
+					for (int y = 0; y < rows; y ++)
+						variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
+				variants.Add(variant);
+			}
+
+			tileset.Reload(columns, rows, tiles, variants);
 		}
 
 		foreach (var (name, tileset) in Tilesets.ToArray())
@@ -242,6 +265,35 @@ public static class Assets
 		foreach (var file in Directory.EnumerateFiles(path, "*.aseprite", SearchOption.AllDirectories))
 			yield return file;
 	}
+
+	private static bool IsDebugLayer(Aseprite.Layer layer)
+		=> layer.Name?.Contains("debug", StringComparison.OrdinalIgnoreCase) == true;
+
+	private static HashSet<Aseprite.Layer> GetNonDebugLayers(Aseprite ase)
+	{
+		var result = new HashSet<Aseprite.Layer>();
+		var debugChildLevel = int.MaxValue;
+		foreach (var layer in ase.Layers)
+		{
+			if (layer.ChildLevel <= debugChildLevel)
+				debugChildLevel = int.MaxValue;
+
+			if (debugChildLevel != int.MaxValue || IsDebugLayer(layer))
+			{
+				debugChildLevel = Math.Min(debugChildLevel, layer.ChildLevel);
+				continue;
+			}
+
+			result.Add(layer);
+		}
+
+		return result;
+	}
+
+	private static List<Aseprite.Layer> GetVariantLayers(Aseprite ase, HashSet<Aseprite.Layer> nonDebugLayers)
+		=> ase.Layers
+			.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)
+			.ToList();
 
 	private static Texture? LoadTexture(GraphicsDevice gfx, string relativePath, string name)
 	{

@@ -9,7 +9,7 @@ public class Floater : Actor
 	public float LaserGrowTime = 0.12f;
 	public float LaserFadeTime = 0.16f;
 	public float LaserRotationSpeed = 0.10f;
-	public float LaserRange = 160;
+	public float LaserRange = 260;
 	public float LaserThickness = 3;
 	static float LaserStartPadding => 5;
 	static float LaserEndPadding => 2;
@@ -42,7 +42,10 @@ public class Floater : Actor
 		Depth = -5;
 		Play("idle");
 		ChangeDir();
+		state.Time = rng.Float(0, 1.0f);
 	}
+
+	private static Rng rng = new();
 
 	void ChangeDir()
 	{

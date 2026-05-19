@@ -30,8 +30,9 @@ public static class Factory
 		public readonly bool Destructible;
 		public readonly bool IsSlope;
 		public readonly string? SlopeTilesetName;
+		public readonly string? DualTilesetName;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null)
 		{
 			Name = name;
 			Image = image;
@@ -43,6 +44,7 @@ public static class Factory
 			Destructible = destructible;
 			IsSlope = isSlope;
 			SlopeTilesetName = slopeTilesetName;
+			DualTilesetName = dualTilesetName;
 		}
 	}
 
@@ -144,13 +146,14 @@ public static class Factory
 	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
-		if (tileset == null)
+		var dualTileset = Assets.GetTileset(dualTilesetName);
+		if (tileset == null || dualTileset == null)
 			return new();
 
 		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 		{
 			fg.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: true, castsShadow: true);
+		}, surfaceType, blocksMovement: true, castsShadow: true, dualTilesetName: dualTilesetName);
 	}
 
 	// Registers the Default types built into the game.
@@ -181,14 +184,12 @@ public static class Factory
 		Register('0', new Entry("Empty", new Subtexture(), null!));
 
 		// Add Tile Types
-		Register('1', AsTile("castle", true, "Brick"));
+		Register('1', AsDualTile("castle", "castle-dual", "Brick"));
 		Register('2', AsSlopeTile("castle", "Brick", "Castle Slope"));
 		Register('x', AsTile("castle", true, "Brick", destructible: true, name: "Breakable Brick"));
-		Register('G', AsTile("grass", true, "Grass"));
+		Register('G', AsDualTile("grass", "grass-dual", "Grass"));
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope"));
 		Register('X', AsTile("grass", true, "Grass", destructible: true, name: "Breakable Grass"));
-		//Register('1', AsDualTile("castle", "castle-dual", "Brick"));
-		//Register('G', AsDualTile("grass", "grass-dual", "Grass"));
 		Register('g', AsTile("plants", false, "Grass"));
 		Register('r', AsTile("rocks", false));
 		Register('w', AsTile("water", false, "Water", reflectsSprites: true));

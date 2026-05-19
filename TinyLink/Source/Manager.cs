@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.Numerics;
 using System.Text.Json;
 using Foster.Framework;
 using ImGuiNET;
+using Color = Foster.Framework.Color;
 
 namespace TinyLink;
 
@@ -16,33 +18,23 @@ internal abstract class Program
 }
 
 /// <summary>
-/// Runs the Game and, when the game is not running, displays a tiny tile-based Level Editor
+/// Runs the Game and, when the game is not running, displays a tile-based Level Editor (see Manager.Editor.cs)
 /// </summary>
 public partial class Manager : App
 {
 	public const string DefaultMusicArea = "Calm";
 	public const string BackgroundMusicAreaParameter = "Area";
 
-	private const float AssetReloadDelay = 0.25f;
-	private const float PlayTransitionDuration = 0.25f;
-
 	private const string WindowSettingsFileName = "window.json";
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
-	private const int MinimumRestoredWindowWidth = 640;
-	private const int MinimumRestoredWindowHeight = 360;
+	private readonly Point MinimumRestoredWindowSize = new (640, 360);
 
 	static float Scale => 3.0f;
 	static float ButtonSize => 24;
 	static float ButtonSpacing => 2;
 	static float BoxPadding => 4;
 	static float BoxSpacing => 0;
-	static int PaletteColumns => 4;
-	static int ToolbarSpacing => 4;
 	static float ScreenPadding => 0;
-	static float ToolbarHeight => ButtonSize + 4;
-	static float EditorInset => 0;
-	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
-	static Color highlight => 0x5fcde4;
 
 	/// <summary>
 	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
@@ -59,7 +51,7 @@ public partial class Manager : App
 	private string? pendingDeleteRoomId;
 	public bool LightingDitherEnabled = true;
 	public float LightingDitherScale = 1.0f;
-	public float LightingDitherStrength = 0.235f;
+	public float LightingDitherStrength = 0.155f;
 
 	/// <summary>
 	/// The room renderer / simulation.
@@ -138,25 +130,13 @@ public partial class Manager : App
 	public Vector2 GameMouseWorld(Game gameInstance)
 	{
 		var viewport = (RectInt)(GameViewRect * Scale);
-
-
 		var scale = Calc.Min(viewport.Width / (float)gameInstance.Screen.Width, viewport.Height / (float)gameInstance.Screen.Height);
-
-		var aspect = viewport.Size / gameInstance.Screen.SizeInPixels();
-		var scale2 = Calc.Min(aspect.X, aspect.Y);
 
 		var size = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) * scale;
 		var topLeft = (Vector2)viewport.Center - size / 2;
 		var local = (Input.Mouse.Position - topLeft) / scale;
 		return gameInstance.Camera + local;
 	}
-
-	/// <summary>
-	/// Eases the PaletteView out/in as the Game opens/closes
-	/// </summary>
-	/// <value></value>
-	private Rect PaletteSlideRect =>
-		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
 	/// <summary>
 	/// Mouse Cursor relative to Scale
@@ -183,24 +163,9 @@ public partial class Manager : App
 	}
 
 	readonly Lock assetReloadLock = new();
-	FileSystemWatcher? assetWatcher;
-#if DEBUG
-	FileSystemWatcher? shaderWatcher;
-#endif
-	bool assetReloadRequested;
-	float assetReloadTimer;
-#if DEBUG
-	readonly Lock shaderReloadLock = new();
-	bool shaderReloadRequested;
-	float shaderReloadTimer;
-#endif
 	readonly List<string> musicAreas = [];
 	bool musicEnabled = true;
 	bool alwaysOnTop;
-#if DEBUG
-	int fpsFrames;
-	float fpsElapsed;
-#endif
 
 	public bool MusicEnabled => musicEnabled;
 	public const string BackgroundMusicEventPath = "event:/background_music";
@@ -230,8 +195,8 @@ public partial class Manager : App
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
 		LoadAudioBanks();
-		StartAssetWatcher();
 #if DEBUG
+		StartAssetWatcher();
 		StartShaderWatcher();
 #endif
 
@@ -259,37 +224,6 @@ public partial class Manager : App
 
 	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
 
-	private void SelectRoom(Room room)
-	{
-		selectedRoomId = room.Id;
-		cell = room.Cell;
-		roomCreatePosition = room.Position;
-	}
-
-	private void ResolveSelectedRoom()
-	{
-		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
-		{
-			SelectRoom(byId);
-			return;
-		}
-
-		if (Assets.GetRoom(cell) is { } byCell)
-		{
-			SelectRoom(byCell);
-			return;
-		}
-
-		if (Assets.GetRoom(Point2.Zero) is { } origin)
-		{
-			SelectRoom(origin);
-			return;
-		}
-
-		selectedRoomId = null;
-		cell = Point2.Zero;
-		roomCreatePosition = Point2.Zero;
-	}
 
 	private void LoadAudioBanks()
 	{
@@ -372,19 +306,17 @@ public partial class Manager : App
 				return;
 
 			var settings = JsonSerializer.Deserialize<WindowSettings>(File.ReadAllText(WindowSettingsPath));
-			if (settings != null)
-			{
-				if (settings.Width > 0 && settings.Height > 0)
-					Window.Size = new Point2(
-						Math.Max(settings.Width, MinimumRestoredWindowWidth),
-						Math.Max(settings.Height, MinimumRestoredWindowHeight));
-				Window.Position = new Point2(settings.X, settings.Y);
-				cell = new Point2(settings.RoomX, settings.RoomY);
-				selectedRoomId = settings.RoomId;
-				musicEnabled = settings.MusicEnabled;
-				alwaysOnTop = settings.AlwaysOnTop;
-				Window.AlwaysOnTop = alwaysOnTop;
-			}
+			if (settings == null) return;
+			if (settings is { Width: > 0, Height: > 0 })
+				Window.Size = new Point2(
+					Math.Max(settings.Width, MinimumRestoredWindowSize.X),
+					Math.Max(settings.Height, MinimumRestoredWindowSize.Y));
+			Window.Position = new Point2(settings.X, settings.Y);
+			cell = new Point2(settings.RoomX, settings.RoomY);
+			selectedRoomId = settings.RoomId;
+			musicEnabled = settings.MusicEnabled;
+			alwaysOnTop = settings.AlwaysOnTop;
+			Window.AlwaysOnTop = alwaysOnTop;
 		}
 		catch (Exception e)
 		{
@@ -441,9 +373,7 @@ public partial class Manager : App
 		DisposeDeferredRoomPreviews();
 #if DEBUG
 		UpdateWindowTitleFps();
-#endif
 		UpdateAssetReload();
-#if DEBUG
 		UpdateShaderReload();
 #endif
 
@@ -477,8 +407,7 @@ public partial class Manager : App
 				playTransition = 1.0f;
 				startingPlay = false;
 				playing = true;
-				if (game != null)
-					game.SnapCameraToGameplayTarget();
+				game?.SnapCameraToGameplayTarget();
 			}
 		}
 		else if (playing)
@@ -526,52 +455,6 @@ public partial class Manager : App
 		imgui.EndLayout();
 	}
 
-	private void DebugViewMessageImGui()
-	{
-		if (game?.DebugViewMessage is not { } message)
-			return;
-
-		var viewport = GameViewRect;
-		var textSize = ImGui.CalcTextSize(message);
-		var padding = new Vector2(10, 6);
-		var size = textSize + padding * 2;
-		var position = new Vector2(
-			viewport.CenterX - size.X * 0.5f,
-			viewport.Bottom - size.Y - 8);
-
-		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.78f));
-		ImGui.Begin(
-			"DebugViewMessage",
-			ImGuiWindowFlags.NoDecoration |
-			ImGuiWindowFlags.NoInputs |
-			ImGuiWindowFlags.NoSavedSettings |
-			ImGuiWindowFlags.NoFocusOnAppearing |
-			ImGuiWindowFlags.NoNav);
-		ImGui.TextUnformatted(message);
-		ImGui.End();
-		ImGui.PopStyleColor();
-		ImGui.PopStyleVar(2);
-	}
-
-#if DEBUG
-	private void UpdateWindowTitleFps()
-	{
-		fpsFrames++;
-		fpsElapsed += Time.Delta;
-		if (fpsElapsed < 1.0f)
-			return;
-
-		var fps = fpsFrames / fpsElapsed;
-		Window.Title = $"Myth - {fps:0} FPS";
-		fpsFrames = 0;
-		fpsElapsed = 0;
-	}
-#endif
-
 	protected override void Render()
 	{
 		Window.Clear(0x2e1426);
@@ -596,42 +479,6 @@ public partial class Manager : App
 		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
 	}
 
-	private void StartAssetWatcher()
-	{
-		assetWatcher = new FileSystemWatcher(Path.GetFullPath(Assets.AssetsPath), "*.ase")
-		{
-			IncludeSubdirectories = true,
-			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
-		};
-
-		assetWatcher.Changed += (_, _) => RequestAssetReload();
-		assetWatcher.Created += (_, _) => RequestAssetReload();
-		assetWatcher.Deleted += (_, _) => RequestAssetReload();
-		assetWatcher.Renamed += (_, _) => RequestAssetReload();
-		assetWatcher.EnableRaisingEvents = true;
-	}
-
-#if DEBUG
-	private void StartShaderWatcher()
-	{
-		var shadersPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders"));
-		if (!Directory.Exists(shadersPath))
-			return;
-
-		shaderWatcher = new FileSystemWatcher(shadersPath, "*.hlsl")
-		{
-			IncludeSubdirectories = false,
-			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
-		};
-
-		shaderWatcher.Changed += (_, _) => RequestShaderReload();
-		shaderWatcher.Created += (_, _) => RequestShaderReload();
-		shaderWatcher.Deleted += (_, _) => RequestShaderReload();
-		shaderWatcher.Renamed += (_, _) => RequestShaderReload();
-		shaderWatcher.EnableRaisingEvents = true;
-	}
-#endif
-
 	private void RequestAssetReload()
 	{
 		lock (assetReloadLock)
@@ -640,6 +487,8 @@ public partial class Manager : App
 			assetReloadTimer = AssetReloadDelay;
 		}
 	}
+
+#if DEBUG
 
 	private void UpdateAssetReload()
 	{
@@ -662,7 +511,7 @@ public partial class Manager : App
 			ReloadAssets(false);
 	}
 
-#if DEBUG
+
 	private void RequestShaderReload()
 	{
 		lock (shaderReloadLock)
@@ -850,64 +699,6 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
-	/// <summary>
-	/// Displays the Toolbar
-	/// </summary>
-	private void ToolbarImGui()
-	{
-		var flags =
-			ImGuiWindowFlags.NoDecoration |
-			ImGuiWindowFlags.NoMove |
-			ImGuiWindowFlags.NoSavedSettings |
-			ImGuiWindowFlags.NoScrollbar |
-			ImGuiWindowFlags.NoScrollWithMouse |
-			ImGuiWindowFlags.NoBringToFrontOnFocus;
-
-		ImGui.SetNextWindowPos(Vector2.Zero, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(new Vector2(Window.WidthInPixels / imgui.Scale, ToolbarHeight), ImGuiCond.Always);
-
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
-		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, 0));
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.08f, 0.15f, 1.0f));
-		ImGui.Begin("Toolbar", flags);
-
-		if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
-			StartGame();
-		ImGui.SameLine();
-
-		if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Smaller Brush", brushSize <= 1))
-			brushSize = Math.Max(1, brushSize - 1);
-		ImGui.SameLine();
-		if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Larger Brush", brushSize > 1))
-			brushSize = Math.Min(10, brushSize + 1);
-		ImGui.SameLine(0, ToolbarSpacing);
-
-		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
-		{
-			musicEnabled = !musicEnabled;
-			game?.RefreshMusic();
-		}
-		ImGui.SameLine();
-
-		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
-		{
-			alwaysOnTop = !alwaysOnTop;
-			Window.AlwaysOnTop = alwaysOnTop;
-		}
-		ImGui.SameLine();
-
-		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
-			OpenFmodStudio();
-
-		DrawCenteredRoomName(CurrentRoom);
-		DrawDeleteRoomPopup();
-
-		ImGui.End();
-		ImGui.PopStyleColor();
-		ImGui.PopStyleVar(3);
-	}
-
 	private bool ImGuiIconButton(string id, Subtexture icon, string tooltip, bool selected = false)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize));
 
@@ -943,166 +734,6 @@ public partial class Manager : App
 		ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.14f, 0.39f, 0.45f, 1.0f));
 		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.54f, 0.62f, 1.0f));
 		ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.10f, 0.30f, 0.35f, 1.0f));
-	}
-
-	private void DrawCenteredRoomName(Room? room)
-	{
-		if (room == null)
-		{
-			DrawCenteredToolbarText($"Room {cell.X} x {cell.Y}");
-			return;
-		}
-
-		if (editingRoomName && roomNameEditingRoomId != room.Id)
-			CancelRoomRename();
-
-		if (editingRoomName)
-		{
-			var width = Math.Max(160, ImGui.CalcTextSize(roomNameEditor).X + 24);
-			var windowPos = ImGui.GetWindowPos();
-			var windowSize = ImGui.GetWindowSize();
-			var pos = new Vector2(
-				windowPos.X + windowSize.X * 0.5f - width * 0.5f,
-				windowPos.Y + windowSize.Y * 0.5f - ImGui.GetFrameHeight() * 0.5f);
-
-			ImGui.SetCursorScreenPos(pos);
-			ImGui.SetNextItemWidth(width);
-			if (focusRoomNameEditor)
-			{
-				ImGui.SetKeyboardFocusHere();
-				focusRoomNameEditor = false;
-			}
-
-			var commit = ImGui.InputText("##RoomNameEditor", ref roomNameEditor, 128, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
-			var cancel = ImGui.IsKeyPressed(ImGuiKey.Escape);
-			if (cancel)
-				CancelRoomRename();
-			else if (commit || ImGui.IsItemDeactivated())
-				CommitRoomRename(room);
-			return;
-		}
-
-		DrawCenteredToolbarText(room.Id, canDoubleClick: true);
-		var textHovered = ImGui.IsItemHovered();
-		if (textHovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-			BeginRoomRename(room);
-
-		var deleteSize = new Vector2(ButtonSize, ButtonSize);
-		var deletePos = ImGui.GetItemRectMax() + new Vector2(ToolbarSpacing, -ButtonSize * 0.5f - ImGui.GetItemRectSize().Y * 0.5f);
-		var deleteRect = new Rect(deletePos, deleteSize);
-		var mouse = ImGui.GetMousePos();
-		var showDelete = textHovered || deleteRect.Contains(mouse);
-		if (showDelete)
-		{
-			ImGui.SetCursorScreenPos(deletePos);
-			if (ImGuiSubtextureButton("DeleteRoom", Assets.GetSubtexture("buttons/14"), "Delete room", false, deleteSize))
-			{
-				pendingDeleteRoomId = room.Id;
-				ImGui.OpenPopup("Delete Room?");
-			}
-		}
-	}
-
-	private void BeginRoomRename(Room room)
-	{
-		editingRoomName = true;
-		focusRoomNameEditor = true;
-		roomNameEditor = room.Id;
-		roomNameEditingRoomId = room.Id;
-	}
-
-	private void CancelRoomRename()
-	{
-		editingRoomName = false;
-		focusRoomNameEditor = false;
-		roomNameEditor = string.Empty;
-		roomNameEditingRoomId = null;
-	}
-
-	private void CommitRoomRename(Room room)
-	{
-		var next = roomNameEditor.Trim();
-		if (!Assets.CanRenameRoom(room, next))
-		{
-			roomNameEditor = room.Id;
-			CancelRoomRename();
-			return;
-		}
-
-		if (Assets.RenameRoom(room, next))
-			selectedRoomId = room.Id;
-
-		CancelRoomRename();
-	}
-
-	private void DrawDeleteRoomPopup()
-	{
-		var open = true;
-		if (!ImGui.BeginPopupModal("Delete Room?", ref open, ImGuiWindowFlags.AlwaysAutoResize))
-			return;
-
-		var room = pendingDeleteRoomId != null ? Assets.GetRoom(pendingDeleteRoomId) : null;
-		ImGui.Text(room != null ? $"Delete room '{room.Id}'?" : "Room no longer exists.");
-		ImGui.Spacing();
-
-		if (ImGui.Button("Delete", new Vector2(90, 0)))
-		{
-			if (room != null)
-				DeleteRoom(room);
-			pendingDeleteRoomId = null;
-			ImGui.CloseCurrentPopup();
-		}
-		ImGui.SameLine();
-		if (ImGui.Button("Cancel", new Vector2(90, 0)) || !open)
-		{
-			pendingDeleteRoomId = null;
-			ImGui.CloseCurrentPopup();
-		}
-
-		ImGui.EndPopup();
-	}
-
-	private void DeleteRoom(Room room)
-	{
-		if (CurrentRoom == room)
-			CurrentRoom?.Save();
-
-		Assets.DeleteRoom(room);
-		if (selectedRoomId == room.Id)
-			selectedRoomId = null;
-		if (playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id)
-			playtestPlayerPosition = null;
-		InvalidateRoomPreview(room);
-		ResolveSelectedRoom();
-		SyncEditorGame();
-	}
-
-	private static void DrawCenteredToolbarText(string text, bool canDoubleClick = false)
-	{
-		var size = ImGui.CalcTextSize(text);
-		var windowPos = ImGui.GetWindowPos();
-		var windowSize = ImGui.GetWindowSize();
-		var pos = new Vector2(
-			windowPos.X + windowSize.X * 0.5f - size.X * 0.5f,
-			windowPos.Y + windowSize.Y * 0.5f - size.Y * 0.5f);
-		if (canDoubleClick)
-		{
-			ImGui.SetCursorScreenPos(pos);
-			ImGui.InvisibleButton("##CenteredToolbarText", size);
-		}
-		ImGui.GetWindowDrawList().AddText(pos, ImGui.GetColorU32(ImGuiCol.Text), text);
-	}
-
-	private bool ToggleEditorPressed()
-	{
-		if (Input.Keyboard.Pressed(Keys.Tab))
-			return true;
-
-		foreach (var controller in Input.Controllers)
-			if (controller.Connected && controller.Pressed(Buttons.RightStick))
-				return true;
-
-		return false;
 	}
 
 	private bool ImGuiWantsKeyboard
@@ -1152,7 +783,6 @@ public partial class Manager : App
 		game = null;
 		startingPlay = false;
 		playing = false;
-		SelectEditorActorTool();
 		SyncEditorGame();
 	}
 

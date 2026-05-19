@@ -16,11 +16,11 @@ public class Player : Actor
 
 	public const int MaxHealth = 4;
 
-	static float MaxGroundSpeed => 80;
-	static float MaxAirSpeed => 90;
-	static float GroundAccel => 500;
-	static float AirAccel => 290;
-	static float Friction => 500;
+	static float MaxGroundSpeed => 89;
+	static float MaxAirSpeed => 95;
+	static float GroundAccel => 390;
+	static float AirAccel => 250;
+	static float Friction => 480;
 	static float AttackFriction => 150;
 	static float HurtFriction => 200;
 	static float Gravity => 450;
@@ -256,6 +256,7 @@ public class Player : Actor
 			}
 			else
 			{
+				Console.WriteLine("WallJump");
 				wallJumpDirection = wallJump;
 				wallJumpInputLockTimer = WallJumpInputLockTime;
 				Facing = wallJumpDirection;
