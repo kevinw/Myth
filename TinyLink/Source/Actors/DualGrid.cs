@@ -28,7 +28,7 @@ public class DualGrid : Actor
 	private readonly List<Layer> layers = [];
 	public override bool CastsReflection => false;
 
-	public void Build(Room room, char tileType, Tileset tileset, IReadOnlySet<char> joinedTileTypes)
+	public void Build(Room room, char tileType, Tileset tileset)
 	{
 		var layer = new Layer(tileset);
 		layer.EnsureSize(room.Size.X + 1, room.Size.Y + 1);
@@ -50,13 +50,13 @@ public class DualGrid : Actor
 				continue;
 
 			var mask = 0;
-			if (IsJoined(room, joinedTileTypes, x - 1, y - 1))
+			if (room.IsTerrainJoinedToDualVertex(x - 1, y - 1, x, y))
 				mask |= 1;
-			if (IsJoined(room, joinedTileTypes, x - 1, y))
+			if (room.IsTerrainJoinedToDualVertex(x - 1, y, x, y))
 				mask |= 2;
-			if (IsJoined(room, joinedTileTypes, x, y - 1))
+			if (room.IsTerrainJoinedToDualVertex(x, y - 1, x, y))
 				mask |= 4;
-			if (IsJoined(room, joinedTileTypes, x, y))
+			if (room.IsTerrainJoinedToDualVertex(x, y, x, y))
 				mask |= 8;
 
 			if (mask == 0)
@@ -78,11 +78,6 @@ public class DualGrid : Actor
 	private static bool IsFilled(Room room, char tileType, int x, int y)
 	{
 		return x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && room.Tiles[x, y] == tileType;
-	}
-
-	private static bool IsJoined(Room room, IReadOnlySet<char> joinedTileTypes, int x, int y)
-	{
-		return x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && joinedTileTypes.Contains(room.Tiles[x, y]);
 	}
 
 	private static int StableVariantSeed(Room room, char tileType, int x, int y)

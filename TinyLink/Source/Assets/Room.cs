@@ -1,4 +1,5 @@
 
+using System.Numerics;
 using System.Text;
 using System.Text.Json.Nodes;
 using Foster.Framework;
@@ -266,6 +267,30 @@ public class Room
 	public bool TryGetSlopeTile(Point2 tile, out SlopeTile slope)
 		=> slopeLookup.TryGetValue(tile, out slope);
 
+	public bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
+	{
+		if (!ContainsTile(tileX, tileY))
+			return false;
+
+		if (IsFullBlockTile(tileX, tileY))
+			return true;
+
+		if (!slopeLookup.TryGetValue(new Point2(tileX, tileY), out var slope))
+			return false;
+
+		var vertex = new Vector2(
+			vertexX * Game.TileSize + WorldBounds.X,
+			vertexY * Game.TileSize + WorldBounds.Y);
+		var polygon = GetSlopePolygon(slope);
+		if (PointInPolygonInclusive(vertex, polygon))
+			return true;
+
+		var sample = new Vector2(
+			((tileX + vertexX) * 0.5f + 0.25f) * Game.TileSize + WorldBounds.X,
+			((tileY + vertexY) * 0.5f + 0.25f) * Game.TileSize + WorldBounds.Y);
+		return PointInPolygonInclusive(sample, polygon);
+	}
+
 	public void MoveTo(Point2 position)
 	{
 		Position = position;
@@ -361,12 +386,12 @@ public class Room
 
 	private (SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(int startX, int y, int runLength)
 	{
-		var leftHigh = IsFullSolidTile(startX - 1, y);
-		var leftLow = IsFullSolidTile(startX - 1, y + 1);
-		var rightHigh = IsFullSolidTile(startX + runLength, y);
-		var rightLow = IsFullSolidTile(startX + runLength, y + 1);
-		var aboveLeft = IsFullSolidTile(startX, y - 1);
-		var aboveRight = IsFullSolidTile(startX + runLength - 1, y - 1);
+		var leftHigh = IsTerrainJoinTile(startX - 1, y);
+		var leftLow = IsTerrainJoinTile(startX - 1, y + 1);
+		var rightHigh = IsTerrainJoinTile(startX + runLength, y);
+		var rightLow = IsTerrainJoinTile(startX + runLength, y + 1);
+		var aboveLeft = IsTerrainJoinTile(startX, y - 1);
+		var aboveRight = IsTerrainJoinTile(startX + runLength - 1, y - 1);
 
 		if (rightHigh && (aboveLeft || aboveRight))
 			return (SlopeDirection.DownRight, SlopeFill.AboveLine);
@@ -382,8 +407,8 @@ public class Room
 		if (leftHigh && !rightHigh)
 			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 
-		var belowLeft = IsFullSolidTile(startX, y + 1);
-		var belowRight = IsFullSolidTile(startX + runLength - 1, y + 1);
+		var belowLeft = IsTerrainJoinTile(startX, y + 1);
+		var belowRight = IsTerrainJoinTile(startX + runLength - 1, y + 1);
 		if (belowRight && !belowLeft)
 			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 		if (belowLeft && !belowRight)
@@ -393,10 +418,22 @@ public class Room
 	}
 
 	private bool IsSlopeTile(int x, int y)
-		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y && Factory.Find(Tiles[x, y]) is { IsSlope: true };
+		=> GetTileEntry(x, y) is { IsSlope: true };
 
-	private bool IsFullSolidTile(int x, int y)
-		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y && Factory.Find(Tiles[x, y]) is { BlocksMovement: true, IsSlope: false };
+	private bool IsSolidTile(int x, int y)
+		=> GetTileEntry(x, y) is { BlocksMovement: true };
+
+	private bool IsFullBlockTile(int x, int y)
+		=> GetTileEntry(x, y) is { BlocksMovement: true, IsSlope: false };
+
+	private bool IsTerrainJoinTile(int x, int y)
+		=> IsFullBlockTile(x, y) || IsSlopeTile(x, y);
+
+	private Factory.Entry? GetTileEntry(int x, int y)
+		=> ContainsTile(x, y) ? Factory.Find(Tiles[x, y]) : null;
+
+	private bool ContainsTile(int x, int y)
+		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y;
 
 	private void BuildSlopeLightOccluders()
 	{
@@ -441,6 +478,52 @@ public class Room
 			return runEdgeIndex * Game.TileSize / slope.RunLength;
 
 		return (slope.RunLength - runEdgeIndex) * Game.TileSize / slope.RunLength;
+	}
+
+	private static bool PointInPolygon(Vector2 point, Point2[] polygon)
+	{
+		var inside = false;
+		for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+		{
+			var a = (Vector2)polygon[i];
+			var b = (Vector2)polygon[j];
+			if ((a.Y > point.Y) == (b.Y > point.Y))
+				continue;
+
+			var x = (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X;
+			if (point.X < x)
+				inside = !inside;
+		}
+
+		return inside;
+	}
+
+	private static bool PointInPolygonInclusive(Vector2 point, Point2[] polygon)
+	{
+		for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+		{
+			if (PointOnSegment(point, polygon[j], polygon[i]))
+				return true;
+		}
+
+		return PointInPolygon(point, polygon);
+	}
+
+	private static bool PointOnSegment(Vector2 point, Point2 segmentStart, Point2 segmentEnd)
+	{
+		var a = (Vector2)segmentStart;
+		var b = (Vector2)segmentEnd;
+		var ab = b - a;
+		var ap = point - a;
+		var cross = ab.X * ap.Y - ab.Y * ap.X;
+		if (MathF.Abs(cross) > 0.001f)
+			return false;
+
+		var dot = Vector2.Dot(ap, ab);
+		if (dot < -0.001f)
+			return false;
+
+		return dot <= Vector2.Dot(ab, ab) + 0.001f;
 	}
 
 	private void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)

@@ -1966,16 +1966,13 @@ public class Game : IDisposable
 		var dualEntries = Factory.Entries
 			.Where(it => it.Value.DualTilesetName != null)
 			.ToArray();
-		var joinedTileTypes = dualEntries
-			.Select(it => it.Key)
-			.ToHashSet();
 
 		foreach (var (tileType, entry) in dualEntries)
 		{
 			if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } dualTileset)
 				continue;
 
-			dual.Build(room, tileType, dualTileset, joinedTileTypes);
+			dual.Build(room, tileType, dualTileset);
 		}
 	}
 
