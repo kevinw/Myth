@@ -218,16 +218,33 @@ public class Player : Actor
 		}
 		else
 		{
-			Play(GetWallJumpDirection() != 0 ? "wall_slide" : JumpUpSquish > 0 ? "jump_squish" : "jump");
+			if (GetWallJumpDirection() != 0)
+			{
+				Play("wall_slide");
+			} else if (JumpUpSquish > 0)
+			{
+				Play("jump_squish");
+			}
+			else
+			{
+				if (Velocity.X != 0 && input != 0 && Math.Sign(Velocity.X) != Math.Sign(input))
+				{
+					Play("jump_turn");
+				}
+				else
+				{
+					Play("jump");
+				}
+			}
 		}
 
 		// horizontal movement
+		var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
 		{
 			// Acceleration
 			Velocity.X += movementInput * (grounded ? GroundAccel : AirAccel) * Time.Delta;
 
 			// Max Speed
-			var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
 			if (!grounded && wallJumpInputLockTimer > 0)
 				maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed);
 			if (MathF.Abs(Velocity.X) > maxSpeed)
@@ -251,8 +268,8 @@ public class Player : Actor
 			Squish = new Vector2(0.65f, 1.4f);
 			if (grounded)
 			{
-				StopX();
-				Velocity.X = input * MaxAirSpeed;
+				// we used to instantly snap to MaxAirAccel here but I'm not sure that's what I want...
+				// maybe a slight speed boost up to a point would be nice. want to encourage tech.
 			}
 			else
 			{
