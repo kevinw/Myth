@@ -266,9 +266,17 @@ public class Room
 		BuildSlopeTiles();
 		BuildDualTerrainJoinMasks();
 		BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope);
-		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope);
+		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
 		BuildSlopeLightOccluders();
 		BuildRects(ReflectionRects, static entry => entry.ReflectsSprites);
+	}
+
+	private static bool HasBakedDualOccluders(Factory.Entry entry)
+	{
+		if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
+			return false;
+
+		return tileset.OccluderTiles.Count > 0 || tileset.OccluderVariants.Count > 0;
 	}
 
 	public bool TryGetSlopeTile(Point2 tile, out SlopeTile slope)

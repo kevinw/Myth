@@ -1,10 +1,12 @@
-
+using System.Numerics;
 using Foster.Framework;
 
 namespace TinyLink;
 
 public class Tileset
 {
+	public readonly record struct OccluderSegment(Vector2 A, Vector2 B);
+
 	public string Name { get; }
 	public int Columns { get; private set; }
 	public int Rows { get; private set; }
@@ -12,6 +14,8 @@ public class Tileset
 	public readonly List<List<Subtexture>> Variants = [];
 	public readonly List<Subtexture> NormalTiles = new();
 	public readonly List<List<Subtexture>> NormalVariants = [];
+	public readonly List<OccluderSegment[]> OccluderTiles = [];
+	public readonly List<List<OccluderSegment[]>> OccluderVariants = [];
 
 	public Tileset(string name, int columns, int rows)
 	{
@@ -22,7 +26,7 @@ public class Tileset
 			Tiles.Add(new());
 	}
 
-	public void Reload(int columns, int rows, List<Subtexture> tiles, List<List<Subtexture>>? variants = null, List<Subtexture>? normalTiles = null, List<List<Subtexture>>? normalVariants = null)
+	public void Reload(int columns, int rows, List<Subtexture> tiles, List<List<Subtexture>>? variants = null, List<Subtexture>? normalTiles = null, List<List<Subtexture>>? normalVariants = null, List<OccluderSegment[]>? occluderTiles = null, List<List<OccluderSegment[]>>? occluderVariants = null)
 	{
 		Columns = columns;
 		Rows = rows;
@@ -41,6 +45,14 @@ public class Tileset
 		NormalVariants.Clear();
 		if (normalVariants != null)
 			NormalVariants.AddRange(normalVariants);
+
+		OccluderTiles.Clear();
+		if (occluderTiles != null)
+			OccluderTiles.AddRange(occluderTiles);
+
+		OccluderVariants.Clear();
+		if (occluderVariants != null)
+			OccluderVariants.AddRange(occluderVariants);
 	}
 
 	public Subtexture GetRandomTile(ref Rng rng)
@@ -100,5 +112,33 @@ public class Tileset
 			return new();
 
 		return variant[index];
+	}
+
+	public OccluderSegment[] GetVariantOccluders(int x, int y, int seed)
+	{
+		if (OccluderVariants.Count <= 0)
+			return GetOccluders(x, y);
+
+		var variant = OccluderVariants[(seed & int.MaxValue) % OccluderVariants.Count];
+		if (x < 0 || y < 0 || x >= Columns || y >= Rows)
+			return [];
+
+		var index = x * Rows + y;
+		if (index < 0 || index >= variant.Count)
+			return [];
+
+		return variant[index];
+	}
+
+	private OccluderSegment[] GetOccluders(int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= Columns || y >= Rows)
+			return [];
+
+		var index = x * Rows + y;
+		if (index < 0 || index >= OccluderTiles.Count)
+			return [];
+
+		return OccluderTiles[index];
 	}
 }

@@ -53,6 +53,7 @@ public static class Assets
 		var tilesetFiles = new Dictionary<string, Aseprite>();
 		var generatedTileImages = new Dictionary<string, List<Image>>();
 		var generatedNormalImages = new Dictionary<string, List<Image>>();
+		var generatedOccluders = new Dictionary<string, List<List<Tileset.OccluderSegment[]>>>();
 
 		// load main font file
 		if (Font == null)
@@ -84,10 +85,11 @@ public static class Assets
 			if (!name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase))
 				continue;
 
-			GenerateDualTilesetFromKit(name, ase, out var baseName, out var baseTiles, out var dualName, out var dualVariants, out var dualNormals);
+			GenerateDualTilesetFromKit(name, ase, out var baseName, out var baseTiles, out var dualName, out var dualVariants, out var dualNormals, out var dualOccluders);
 			generatedTileImages[baseName] = baseTiles;
 			generatedTileImages[dualName] = dualVariants;
 			generatedNormalImages[dualName] = dualNormals;
+			generatedOccluders[dualName] = dualOccluders;
 		}
 
 		// pack all the sprites & tilesets
@@ -322,6 +324,8 @@ public static class Assets
 
 			List<Subtexture>? normalTiles = null;
 			List<List<Subtexture>>? normalVariants = null;
+			List<Tileset.OccluderSegment[]>? occluderTiles = null;
+			List<List<Tileset.OccluderSegment[]>>? occluderVariants = null;
 			if (generatedNormalImages.TryGetValue(name, out var normals))
 			{
 				normalTiles = [];
@@ -339,8 +343,13 @@ public static class Assets
 					normalVariants.Add(variant);
 				}
 			}
+			if (generatedOccluders.TryGetValue(name, out var occluders))
+			{
+				occluderTiles = occluders[0];
+				occluderVariants = occluders;
+			}
 
-			tileset.Reload(columns, rows, tiles, variants, normalTiles, normalVariants);
+			tileset.Reload(columns, rows, tiles, variants, normalTiles, normalVariants, occluderTiles, occluderVariants);
 		}
 
 		foreach (var (name, tileset) in Tilesets.ToArray())
@@ -407,13 +416,14 @@ public static class Assets
 			.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)
 			.ToList();
 
-	private static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals)
+	private static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		baseName = kitName[..^"-kit".Length];
 		baseTiles = [];
 		dualName = $"{baseName}-dual";
 		dualVariants = [];
 		dualNormals = [];
+		dualOccluders = [];
 
 		var slices = GetKitSlices(ase);
 		if (!slices.TryGetValue("fill", out var fillSlice))
@@ -443,6 +453,7 @@ public static class Assets
 				baseTiles.Add(ExtractTile(fill, fill.Bounds));
 			dualVariants.Add(GenerateDualTilesetVariant(fill, mask, edges.Count > 0 ? edges[i % edges.Count] : null));
 			dualNormals.Add(GenerateDualTilesetNormalVariant(mask));
+			dualOccluders.Add(GenerateDualTilesetOccluderVariant(mask));
 		}
 
 		foreach (var fill in fills)
@@ -528,6 +539,89 @@ public static class Assets
 			GenerateDualNormalTile(output, source, tileMask, mask);
 		}
 		return output;
+	}
+
+	private static List<Tileset.OccluderSegment[]> GenerateDualTilesetOccluderVariant(Image mask)
+	{
+		var result = new Tileset.OccluderSegment[Game.TileSize * 2][];
+		for (var i = 0; i < result.Length; i++)
+			result[i] = [];
+
+		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
+		{
+			var tile = MaskToDualTile(tileMask);
+			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
+			result[tile.X * 4 + tile.Y] = GenerateMaskOccluderSegments(mask, source);
+		}
+
+		return result.ToList();
+	}
+
+	private static Tileset.OccluderSegment[] GenerateMaskOccluderSegments(Image mask, RectInt source)
+	{
+		var segments = new List<Tileset.OccluderSegment>();
+
+		for (var y = 0; y < Game.TileSize; y++)
+		{
+			MergeHorizontalMaskEdges(segments, mask, source, y, top: true);
+			MergeHorizontalMaskEdges(segments, mask, source, y, top: false);
+		}
+
+		for (var x = 0; x < Game.TileSize; x++)
+		{
+			MergeVerticalMaskEdges(segments, mask, source, x, left: true);
+			MergeVerticalMaskEdges(segments, mask, source, x, left: false);
+		}
+
+		return segments.ToArray();
+	}
+
+	private static void MergeHorizontalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int y, bool top)
+	{
+		var start = -1;
+		for (var x = 0; x <= Game.TileSize; x++)
+		{
+			var edge = x < Game.TileSize &&
+				IsMaskSolid(mask, source, x, y) &&
+				!IsMaskSolid(mask, source, x, y + (top ? -1 : 1));
+
+			if (edge && start < 0)
+				start = x;
+			else if (!edge && start >= 0)
+			{
+				var edgeY = y + (top ? 0 : 1);
+				segments.Add(new(new Vector2(start, edgeY), new Vector2(x, edgeY)));
+				start = -1;
+			}
+		}
+	}
+
+	private static void MergeVerticalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int x, bool left)
+	{
+		var start = -1;
+		for (var y = 0; y <= Game.TileSize; y++)
+		{
+			var edge = y < Game.TileSize &&
+				IsMaskSolid(mask, source, x, y) &&
+				!IsMaskSolid(mask, source, x + (left ? -1 : 1), y);
+
+			if (edge && start < 0)
+				start = y;
+			else if (!edge && start >= 0)
+			{
+				var edgeX = x + (left ? 0 : 1);
+				segments.Add(new(new Vector2(edgeX, start), new Vector2(edgeX, y)));
+				start = -1;
+			}
+		}
+	}
+
+	private static bool IsMaskSolid(Image mask, RectInt source, int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= Game.TileSize || y >= Game.TileSize)
+			return false;
+
+		return mask[source.X + x, source.Y + y].A > 0;
 	}
 
 	private static void GenerateDualNormalTile(Image output, RectInt source, int mask, Image alphaMask)

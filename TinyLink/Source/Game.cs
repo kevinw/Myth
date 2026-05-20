@@ -1334,6 +1334,12 @@ public class Game : IDisposable
 
 		foreach (var actor in Actors)
 		{
+			if (actor is DualGrid dualGrid)
+			{
+				dualGrid.AppendVisibilitySegments(segments, lightPosition, radius);
+				continue;
+			}
+
 			if (actor is not HiddenWallGrid hiddenWalls)
 				continue;
 

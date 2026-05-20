@@ -56,10 +56,12 @@ public class DualGrid : Actor
 			if (subtexture.Texture == null)
 				continue;
 			var normal = tileset.GetVariantNormalTile(tile.X, tile.Y, seed);
+			var occluders = tileset.GetVariantOccluders(tile.X, tile.Y, seed);
 
 			drawCommands.Add(new DrawCommand(
 				subtexture,
 				normal,
+				occluders,
 				new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize,
 				materialMask));
 		}
@@ -127,10 +129,39 @@ public class DualGrid : Actor
 		batcher.Image(tile, clip, command.Position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White);
 	}
 
-	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Vector2 position, int materialMask)
+	public void AppendVisibilitySegments(List<VisibilityPolygon.Segment> segments, Vector2 lightPosition, float radius)
+	{
+		foreach (var command in drawCommands)
+		{
+			foreach (var local in command.Occluders)
+			{
+				if (!OwnsOccluderSegment(command.MaterialMask, local))
+					continue;
+
+				var segment = new VisibilityPolygon.Segment(
+					Position + command.Position + local.A,
+					Position + command.Position + local.B);
+				if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+					segments.Add(segment);
+			}
+		}
+	}
+
+	private static bool OwnsOccluderSegment(int materialMask, Tileset.OccluderSegment segment)
+	{
+		var midpoint = (segment.A + segment.B) * 0.5f;
+		var quadrant =
+			midpoint.X < Game.TileSize / 2
+				? midpoint.Y < Game.TileSize / 2 ? TileQuadrants.TopLeft : TileQuadrants.BottomLeft
+				: midpoint.Y < Game.TileSize / 2 ? TileQuadrants.TopRight : TileQuadrants.BottomRight;
+		return (materialMask & quadrant) != 0;
+	}
+
+	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Tileset.OccluderSegment[] occluders, Vector2 position, int materialMask)
 	{
 		public readonly Subtexture Tile = tile;
 		public readonly Subtexture Normal = normal;
+		public readonly Tileset.OccluderSegment[] Occluders = occluders;
 		public readonly Vector2 Position = position;
 		public readonly int MaterialMask = materialMask;
 	}
