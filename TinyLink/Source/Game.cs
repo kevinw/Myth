@@ -49,6 +49,8 @@ public class Game : IDisposable
 	Target DitherMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
+	public bool ShowForegroundLayer { get; set; } = true;
+	public bool ShowBackgroundLayer { get; set; } = true;
 
 	Input Input => Manager.Input;
 	GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
@@ -665,6 +667,13 @@ public class Game : IDisposable
 	private void DrawWorldLayer(Target target, bool background)
 	{
 		target.Clear(background ? 0x150e22 : Color.Transparent);
+		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
+		{
+			Batcher.Render(target);
+			Batcher.Clear();
+			return;
+		}
+
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 
 		// draw actors
@@ -713,7 +722,12 @@ public class Game : IDisposable
 	}
 
 	private static bool IsBackgroundActor(Actor actor)
-		=> actor is Grid grid && !grid.Mask.Has(Actor.Masks.Solid);
+		=> actor switch
+		{
+			Grid grid => !grid.Mask.Has(Actor.Masks.Solid),
+			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
+			_ => false
+		};
 
 	private void DrawEmissiveLayer(Target target, bool background)
 	{
@@ -1281,7 +1295,7 @@ public class Game : IDisposable
 
 		foreach (var actor in Actors)
 		{
-			if (actor is DualGrid dualGrid)
+			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
 		}
 
@@ -1505,7 +1519,7 @@ public class Game : IDisposable
 
 		foreach (var actor in Actors)
 		{
-			if (actor is DualGrid dualGrid)
+			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 			{
 				dualGrid.AppendVisibilitySegments(segments, lightPosition, radius);
 				continue;
@@ -1633,11 +1647,16 @@ public class Game : IDisposable
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 
-		DrawRoomNormals();
+		if (ShowForegroundLayer)
+			DrawRoomNormals();
 
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
+				continue;
+			if ((IsBackgroundActor(actor) && !ShowBackgroundLayer) || (!IsBackgroundActor(actor) && !ShowForegroundLayer))
+				continue;
+			if (actor is DualGrid { Layer: Factory.TileLayer.Background })
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
@@ -2316,7 +2335,8 @@ public class Game : IDisposable
 
 		Grid? bg = null;
 		Grid? fg = null;
-		DualGrid? dual = null;
+		DualGrid? bgDual = null;
+		DualGrid? fgDual = null;
 		HiddenWallGrid? hiddenWalls = null;
 		foreach (var actor in Actors)
 		{
@@ -2328,7 +2348,10 @@ public class Game : IDisposable
 
 			if (actor is DualGrid dualGrid)
 			{
-				dual = dualGrid;
+				if (dualGrid.Layer == Factory.TileLayer.Background)
+					bgDual = dualGrid;
+				else
+					fgDual = dualGrid;
 				continue;
 			}
 
@@ -2341,33 +2364,38 @@ public class Game : IDisposable
 				bg = grid;
 		}
 
-		if (bg == null || fg == null || dual == null)
+		if (bg == null || fg == null || fgDual == null)
 			return;
 
 		bg.Clear();
 		fg.Clear();
-		dual.Clear();
+		bgDual?.Clear();
+		fgDual.Clear();
 		hiddenWalls?.Resize(room.Size);
 
 		for (var x = 0; x < room.Size.X; x ++)
 		for (var y = 0; y < room.Size.Y; y ++)
 		{
 			var tile = new Point2(x, y);
+			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
+				backgroundEntry.Tile?.Invoke(tile, room, fg, bg, bgDual ?? fgDual);
 			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, bg, dual);
+				entry.Tile?.Invoke(tile, room, fg, bg, fgDual);
 		}
 
 		if (hiddenWalls != null)
 			PopulateHiddenWalls(room, hiddenWalls);
 
-		BuildDualTiles(room, dual);
+		if (bgDual != null)
+			BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
+		BuildDualTiles(room, fgDual, Factory.TileLayer.Foreground);
 	}
 
-	void BuildDualTiles(Room room, DualGrid dual)
+	void BuildDualTiles(Room room, DualGrid dual, Factory.TileLayer layer)
 	{
 		dual.Clear();
 		var dualEntries = Factory.Entries
-			.Where(it => it.Value.DualTilesetName != null)
+			.Where(it => it.Value.DualTilesetName != null && it.Value.Layer == layer)
 			.ToArray();
 
 		foreach (var (tileType, entry) in dualEntries)
@@ -2375,7 +2403,7 @@ public class Game : IDisposable
 			if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } dualTileset)
 				continue;
 
-			dual.Build(room, tileType, dualTileset);
+			dual.Build(room, tileType, dualTileset, layer);
 		}
 	}
 
@@ -2388,8 +2416,13 @@ public class Game : IDisposable
 		var bg = Create<Grid>(offset);
 		bg.Depth = 10;
 
-		var dual = Create<DualGrid>(offset);
-		dual.Depth = 7;
+		var bgDual = Create<DualGrid>(offset);
+		bgDual.Layer = Factory.TileLayer.Background;
+		bgDual.Depth = 9;
+
+		var fgDual = Create<DualGrid>(offset);
+		fgDual.Layer = Factory.TileLayer.Foreground;
+		fgDual.Depth = 7;
 
 		var fg = Create<Grid>(offset);
 		fg.Mask = Actor.Masks.Solid;
@@ -2402,14 +2435,15 @@ public class Game : IDisposable
 		for (var y = 0; y < room.Size.Y; y++)
 		{
 			var tile = new Point2(x, y);
+			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
+				backgroundEntry.Tile?.Invoke(tile, room, fg, bg, bgDual);
 			if (room.GetEntry(tile) is { } entry)
-			{
-				entry.Tile?.Invoke(tile, room, fg, bg, dual);
-			}
+				entry.Tile?.Invoke(tile, room, fg, bg, fgDual);
 		}
 
 		PopulateHiddenWalls(room, hiddenWalls);
-		BuildDualTiles(room, dual);
+		BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
+		BuildDualTiles(room, fgDual, Factory.TileLayer.Foreground);
 
 		foreach (var actor in room.Actors)
 		{

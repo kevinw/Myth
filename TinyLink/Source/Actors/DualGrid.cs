@@ -27,27 +27,34 @@ public class DualGrid : Actor
 
 	private readonly List<DrawCommand> drawCommands = [];
 	private readonly List<VisibilityPolygon.Segment> visibilitySegments = [];
+	public Factory.TileLayer Layer { get; set; } = Factory.TileLayer.Foreground;
 	public override bool CastsReflection => false;
 
 	public void Build(Room room, char tileType, Tileset tileset)
+		=> Build(room, tileType, tileset, Factory.TileLayer.Foreground);
+
+	public void Build(Room room, char tileType, Tileset tileset, Factory.TileLayer layer)
 	{
+		Layer = layer;
 		for (var x = 0; x <= room.Size.X; x ++)
 		for (var y = 0; y <= room.Size.Y; y ++)
 		{
 			var materialMask = 0;
-			if (IsFilled(room, tileType, x - 1, y - 1))
+			if (IsFilled(room, tileType, layer, x - 1, y - 1))
 				materialMask |= TileQuadrants.TopLeft;
-			if (IsFilled(room, tileType, x - 1, y))
+			if (IsFilled(room, tileType, layer, x - 1, y))
 				materialMask |= TileQuadrants.BottomLeft;
-			if (IsFilled(room, tileType, x, y - 1))
+			if (IsFilled(room, tileType, layer, x, y - 1))
 				materialMask |= TileQuadrants.TopRight;
-			if (IsFilled(room, tileType, x, y))
+			if (IsFilled(room, tileType, layer, x, y))
 				materialMask |= TileQuadrants.BottomRight;
 
 			if (materialMask == 0)
 				continue;
 
-			var mask = room.GetDualTerrainJoinMask(x, y);
+			var mask = layer == Factory.TileLayer.Foreground
+				? room.GetDualTerrainJoinMask(x, y)
+				: materialMask;
 			if (mask == 0)
 				continue;
 
@@ -68,6 +75,8 @@ public class DualGrid : Actor
 
 			AppendWorldVisibilitySegments(position, materialMask, occluders);
 		}
+
+		MergeAxisAlignedVisibilitySegments();
 	}
 
 	public void Clear()
@@ -76,9 +85,10 @@ public class DualGrid : Actor
 		visibilitySegments.Clear();
 	}
 
-	private static bool IsFilled(Room room, char tileType, int x, int y)
+	private static bool IsFilled(Room room, char tileType, Factory.TileLayer layer, int x, int y)
 	{
-		return x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && room.Tiles[x, y] == tileType;
+		return x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y &&
+			(layer == Factory.TileLayer.Foreground ? room.Tiles[x, y] : room.BackgroundTiles[x, y]) == tileType;
 	}
 
 	private static int StableVariantSeed(Room room, char tileType, int x, int y)
@@ -167,6 +177,94 @@ public class DualGrid : Actor
 				: midpoint.Y < Game.TileSize / 2 ? TileQuadrants.TopRight : TileQuadrants.BottomRight;
 		return (materialMask & quadrant) != 0;
 	}
+
+	private void MergeAxisAlignedVisibilitySegments()
+	{
+		if (visibilitySegments.Count <= 1)
+			return;
+
+		var merged = new List<VisibilityPolygon.Segment>(visibilitySegments.Count);
+		MergeHorizontalVisibilitySegments(merged);
+		MergeVerticalVisibilitySegments(merged);
+
+		foreach (var segment in visibilitySegments)
+			if (!IsAxisAligned(segment))
+				merged.Add(segment);
+
+		visibilitySegments.Clear();
+		visibilitySegments.AddRange(merged);
+	}
+
+	private void MergeHorizontalVisibilitySegments(List<VisibilityPolygon.Segment> merged)
+	{
+		var horizontal = visibilitySegments
+			.Where(static it => NearlyEqual(it.A.Y, it.B.Y))
+			.Select(static it =>
+			{
+				var y = Quantize(it.A.Y);
+				var left = MathF.Min(it.A.X, it.B.X);
+				var right = MathF.Max(it.A.X, it.B.X);
+				return new SegmentRun(y, left, right);
+			})
+			.OrderBy(static it => it.Axis)
+			.ThenBy(static it => it.Start)
+			.ToArray();
+
+		MergeRuns(horizontal, merged, static run => new(new Vector2(run.Start, run.Axis), new Vector2(run.End, run.Axis)));
+	}
+
+	private void MergeVerticalVisibilitySegments(List<VisibilityPolygon.Segment> merged)
+	{
+		var vertical = visibilitySegments
+			.Where(static it => NearlyEqual(it.A.X, it.B.X))
+			.Select(static it =>
+			{
+				var x = Quantize(it.A.X);
+				var top = MathF.Min(it.A.Y, it.B.Y);
+				var bottom = MathF.Max(it.A.Y, it.B.Y);
+				return new SegmentRun(x, top, bottom);
+			})
+			.OrderBy(static it => it.Axis)
+			.ThenBy(static it => it.Start)
+			.ToArray();
+
+		MergeRuns(vertical, merged, static run => new(new Vector2(run.Axis, run.Start), new Vector2(run.Axis, run.End)));
+	}
+
+	private static void MergeRuns(SegmentRun[] runs, List<VisibilityPolygon.Segment> merged, Func<SegmentRun, VisibilityPolygon.Segment> createSegment)
+	{
+		if (runs.Length == 0)
+			return;
+
+		var current = runs[0];
+		for (var i = 1; i < runs.Length; i++)
+		{
+			var next = runs[i];
+			if (NearlyEqual(current.Axis, next.Axis) && next.Start <= current.End + 0.001f)
+			{
+				current = current with { End = MathF.Max(current.End, next.End) };
+				continue;
+			}
+
+			if (current.End > current.Start)
+				merged.Add(createSegment(current));
+			current = next;
+		}
+
+		if (current.End > current.Start)
+			merged.Add(createSegment(current));
+	}
+
+	private static bool IsAxisAligned(VisibilityPolygon.Segment segment)
+		=> NearlyEqual(segment.A.X, segment.B.X) || NearlyEqual(segment.A.Y, segment.B.Y);
+
+	private static bool NearlyEqual(float a, float b)
+		=> MathF.Abs(a - b) <= 0.001f;
+
+	private static float Quantize(float value)
+		=> MathF.Round(value * 1000.0f) / 1000.0f;
+
+	private readonly record struct SegmentRun(float Axis, float Start, float End);
 
 	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Vector2 position, int materialMask)
 	{

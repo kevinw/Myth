@@ -11,6 +11,12 @@ public static class Factory
 {
 	public const string DefaultSurfaceType = "Grass";
 
+	public enum TileLayer
+	{
+		Foreground,
+		Background
+	}
+
 	/// <summary>
 	/// Used to Place a Tile
 	/// </summary>
@@ -31,8 +37,9 @@ public static class Factory
 		public readonly bool IsSlope;
 		public readonly string? SlopeTilesetName;
 		public readonly string? DualTilesetName;
+		public readonly TileLayer Layer;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground)
 		{
 			Name = name;
 			Image = image;
@@ -45,6 +52,7 @@ public static class Factory
 			IsSlope = isSlope;
 			SlopeTilesetName = slopeTilesetName;
 			DualTilesetName = dualTilesetName;
+			Layer = layer;
 		}
 	}
 
@@ -111,7 +119,7 @@ public static class Factory
 		return null;
 	}
 
-	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false, bool destructible = false, string? name = null)
+	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		if (tileset == null)
@@ -121,7 +129,7 @@ public static class Factory
 		{
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible);
+		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer);
 	}
 
 	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null)
@@ -162,7 +170,7 @@ public static class Factory
 		}
 	}
 
-	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
+	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
@@ -171,8 +179,11 @@ public static class Factory
 
 		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 		{
-			fg.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: true, castsShadow: true, dualTilesetName: dualTilesetName);
+			if (layer == TileLayer.Foreground)
+				fg.Set(tile.X, tile.Y, new());
+			else
+				bg.Set(tile.X, tile.Y, new());
+		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, dualTilesetName: dualTilesetName, layer: layer);
 	}
 
 	// Registers the Default types built into the game.
@@ -213,7 +224,9 @@ public static class Factory
 		Register('g', AsTile("plants", false, "Grass"));
 		Register('r', AsTile("rocks", false));
 		Register('w', AsTile("water", false, "Water", reflectsSprites: true));
-		Register('#', AsTile("back", false));
+		Register('#', Assets.GetTileset("back-dual") != null
+			? AsDualTile("back", "back-dual", "Background", TileLayer.Background)
+			: AsTile("back", false, layer: TileLayer.Background));
 
 		RegisterActorPaletteEntries();
 		RegisterActorSpecPaletteEntries();

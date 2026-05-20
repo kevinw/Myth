@@ -62,7 +62,9 @@ public class Room
 	/// Grid of Tiles
 	/// </summary>
 	public char[,] Tiles;
+	public char[,] BackgroundTiles;
 	private Factory.Entry?[,] tileEntries = new Factory.Entry?[0, 0];
+	private Factory.Entry?[,] backgroundTileEntries = new Factory.Entry?[0, 0];
 
 	/// <summary>
 	/// Actor specs placed directly in this room.
@@ -149,7 +151,10 @@ public class Room
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
+		{
 			clone.Tiles[x, y] = Tiles[x, y];
+			clone.BackgroundTiles[x, y] = BackgroundTiles[x, y];
+		}
 		foreach (var actor in Actors)
 			clone.Actors.Add(ActorSpecs.CloneObject(actor));
 
@@ -178,11 +183,16 @@ public class Room
 		Position = position;
 		Size = size;
 		Tiles = new char[Size.X, Size.Y];
+		BackgroundTiles = new char[Size.X, Size.Y];
 		tileEntries = new Factory.Entry?[Size.X, Size.Y];
+		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 
 		for (int x = 0; x < Size.X; x ++)
 		for (int tileY = 0; tileY < Size.Y; tileY ++)
+		{
 			SetTileUnchecked(x, tileY, '0');
+			SetBackgroundTileUnchecked(x, tileY, '0');
+		}
 
 		if (path == null)
 		{
@@ -226,6 +236,18 @@ public class Room
 			}
 		}
 
+		if (json.TryGetPropertyValue("backgroundTiles", out var backgroundTilesNode) && backgroundTilesNode is JsonArray backgroundRows)
+		{
+			for (var y = 0; y < backgroundRows.Count && y < Size.Y; y ++)
+			{
+				var row = backgroundRows[y]?.GetValue<string>() ?? "";
+				for (var x = 0; x < row.Length && x < Size.X; x ++)
+					SetBackgroundTileUnchecked(x, y, row[x]);
+			}
+		}
+
+		NormalizeTileLayers();
+
 		if (json.TryGetPropertyValue("actors", out var actorsNode) && actorsNode is JsonArray actorArray)
 		{
 			foreach (var node in actorArray)
@@ -239,6 +261,16 @@ public class Room
 		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
 		{
 			SetTileUnchecked(tile.X, tile.Y, ch);
+			if (rebuildGeometry)
+				RebuildGeometry();
+		}
+	}
+
+	public void SetBackground(Point2 tile, char ch, bool rebuildGeometry = true)
+	{
+		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
+		{
+			SetBackgroundTileUnchecked(tile.X, tile.Y, ch);
 			if (rebuildGeometry)
 				RebuildGeometry();
 		}
@@ -352,11 +384,14 @@ public class Room
 		var previousPosition = Position;
 		var previousSize = Size;
 		var previousTiles = Tiles;
+		var previousBackgroundTiles = BackgroundTiles;
 
 		Position = bounds.Position;
 		Size = bounds.Size;
 		Tiles = new char[Size.X, Size.Y];
+		BackgroundTiles = new char[Size.X, Size.Y];
 		tileEntries = new Factory.Entry?[Size.X, Size.Y];
+		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
@@ -365,6 +400,9 @@ public class Room
 			var oldY = Position.Y + y - previousPosition.Y;
 			SetTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
 				? previousTiles[oldX, oldY]
+				: '0');
+			SetBackgroundTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+				? previousBackgroundTiles[oldX, oldY]
 				: '0');
 		}
 
@@ -532,6 +570,9 @@ public class Room
 	public Factory.Entry? GetEntry(Point2 tile)
 		=> GetTileEntry(tile.X, tile.Y);
 
+	public Factory.Entry? GetBackgroundEntry(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y) ? backgroundTileEntries[tile.X, tile.Y] : null;
+
 	private bool ContainsTile(int x, int y)
 		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y;
 
@@ -541,14 +582,42 @@ public class Room
 		tileEntries[x, y] = Factory.Find(tile);
 	}
 
+	private void SetBackgroundTileUnchecked(int x, int y, char tile)
+	{
+		BackgroundTiles[x, y] = tile;
+		backgroundTileEntries[x, y] = Factory.Find(tile);
+	}
+
 	private void RebuildTileEntryCache()
 	{
 		if (tileEntries.GetLength(0) != Size.X || tileEntries.GetLength(1) != Size.Y)
 			tileEntries = new Factory.Entry?[Size.X, Size.Y];
+		if (backgroundTileEntries.GetLength(0) != Size.X || backgroundTileEntries.GetLength(1) != Size.Y)
+			backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 
 		for (var x = 0; x < Size.X; x++)
 		for (var y = 0; y < Size.Y; y++)
+		{
 			tileEntries[x, y] = Factory.Find(Tiles[x, y]);
+			backgroundTileEntries[x, y] = Factory.Find(BackgroundTiles[x, y]);
+		}
+	}
+
+	private void NormalizeTileLayers()
+	{
+		for (var x = 0; x < Size.X; x ++)
+		for (var y = 0; y < Size.Y; y ++)
+		{
+			if (tileEntries[x, y] is { Layer: Factory.TileLayer.Background })
+			{
+				if (BackgroundTiles[x, y] == '0')
+					SetBackgroundTileUnchecked(x, y, Tiles[x, y]);
+				SetTileUnchecked(x, y, '0');
+			}
+
+			if (backgroundTileEntries[x, y] is { Layer: Factory.TileLayer.Foreground })
+				SetBackgroundTileUnchecked(x, y, '0');
+		}
 	}
 
 	private void BuildSlopeLightOccluders()
@@ -763,6 +832,19 @@ public class Room
 		}
 		json["tiles"] = rows;
 
+		if (HasBackgroundTiles())
+		{
+			var backgroundRows = new JsonArray();
+			for (var y = 0; y < Size.Y; y ++)
+			{
+				var row = new StringBuilder(Size.X);
+				for (var x = 0; x < Size.X; x ++)
+					row.Append(BackgroundTiles[x, y]);
+				backgroundRows.Add(row.ToString());
+			}
+			json["backgroundTiles"] = backgroundRows;
+		}
+
 		if (Actors.Count > 0)
 		{
 			var actors = new JsonArray();
@@ -782,14 +864,29 @@ public class Room
 		{
 			Size = size;
 			Tiles = new char[Size.X, Size.Y];
+			BackgroundTiles = new char[Size.X, Size.Y];
 			tileEntries = new Factory.Entry?[Size.X, Size.Y];
+			backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 		}
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
+		{
 			SetTileUnchecked(x, y, '0');
+			SetBackgroundTileUnchecked(x, y, '0');
+		}
 		Actors.Clear();
 		LoadJson(json);
 		RebuildGeometry();
+	}
+
+	private bool HasBackgroundTiles()
+	{
+		for (var x = 0; x < Size.X; x ++)
+		for (var y = 0; y < Size.Y; y ++)
+			if (BackgroundTiles[x, y] != '0')
+				return true;
+
+		return false;
 	}
 }

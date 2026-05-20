@@ -32,6 +32,9 @@ public partial class Manager
 	/// The current Type we're painting in the Editor
 	/// </summary>
 	private char brush = '0';
+	private Factory.TileLayer activeTileLayer = Factory.TileLayer.Foreground;
+	private bool editorShowForegroundLayer = true;
+	private bool editorShowBackgroundLayer = true;
 
 	/// <summary>
 	/// Square tile brush size.
@@ -218,6 +221,9 @@ public partial class Manager
 				["actorIndex"] = manager.selectedRoomActorIndex,
 				["actorSelectTool"] = manager.actorSelectTool,
 				["brush"] = manager.brush.ToString(),
+				["tileLayer"] = manager.activeTileLayer.ToString(),
+				["showForegroundLayer"] = manager.editorShowForegroundLayer,
+				["showBackgroundLayer"] = manager.editorShowBackgroundLayer,
 				["actorPaletteIndex"] = manager.selectedActorPaletteIndex,
 				["prefabId"] = manager.selectedActorSpecId,
 				["prefabInspectorOpen"] = manager.actorSpecInspectorOpen,
@@ -237,6 +243,10 @@ public partial class Manager
 			manager.actorSelectTool = ReadBool(json, "actorSelectTool");
 			if (ActorSpecs.ReadString(json, "brush") is { Length: > 0 } brush)
 				manager.brush = brush[0];
+			if (Enum.TryParse<Factory.TileLayer>(ActorSpecs.ReadString(json, "tileLayer"), out var layer))
+				manager.activeTileLayer = layer;
+			manager.editorShowForegroundLayer = ReadBool(json, "showForegroundLayer", true);
+			manager.editorShowBackgroundLayer = ReadBool(json, "showBackgroundLayer", true);
 			manager.selectedActorPaletteIndex = ReadInt(json, "actorPaletteIndex", -1);
 			manager.selectedActorSpecId = ActorSpecs.ReadString(json, "prefabId");
 			manager.actorSpecInspectorOpen = ReadBool(json, "prefabInspectorOpen");
@@ -248,6 +258,9 @@ public partial class Manager
 
 		private static bool ReadBool(JsonObject json, string key)
 			=> json.TryGetPropertyValue(key, out var node) && node != null && bool.TryParse(node.ToString(), out var value) && value;
+
+		private static bool ReadBool(JsonObject json, string key, bool fallback)
+			=> json.TryGetPropertyValue(key, out var node) && node != null && bool.TryParse(node.ToString(), out var value) ? value : fallback;
 	}
 
 	private sealed class ActorSpecUndoTarget(string specId) : IJsonUndoTarget
@@ -427,9 +440,13 @@ public partial class Manager
 	private void DrawTilePaletteSection()
 	{
 		ImGui.TextUnformatted("Tiles");
+		DrawTileLayerSelector();
 		var index = 0;
 		foreach (var (id, entry) in Factory.Entries)
 		{
+			if (entry.Layer != activeTileLayer)
+				continue;
+
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
 
@@ -443,6 +460,32 @@ public partial class Manager
 
 			index++;
 		}
+	}
+
+	private void DrawTileLayerSelector()
+	{
+		if (ImGui.SmallButton("##ShowFG"))
+			editorShowForegroundLayer = !editorShowForegroundLayer;
+		ImGui.SameLine();
+		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Foreground ? "FG*" : "FG"))
+			SelectTileLayer(Factory.TileLayer.Foreground);
+		ImGui.SameLine();
+		if (ImGui.SmallButton("##ShowBG"))
+			editorShowBackgroundLayer = !editorShowBackgroundLayer;
+		ImGui.SameLine();
+		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Background ? "BG*" : "BG"))
+			SelectTileLayer(Factory.TileLayer.Background);
+	}
+
+	private void SelectTileLayer(Factory.TileLayer layer)
+	{
+		activeTileLayer = layer;
+		if (Factory.Find(brush) is { } entry && entry.Layer == activeTileLayer)
+			return;
+
+		brush = Factory.Entries.FirstOrDefault(it => it.Value.Layer == activeTileLayer).Key;
+		selectedActorPaletteIndex = -1;
+		actorSelectTool = false;
 	}
 
 	private static Tileset? GetDualTilesetPreview(Factory.Entry entry)
@@ -1421,7 +1464,12 @@ public partial class Manager
 	{
 		for (var x = shift; x < shift + size; x ++)
 		for (var y = shift; y < shift + size; y ++)
-			room.Set(origin + new Point2(x, y), tile, rebuildGeometry: false);
+		{
+			if (activeTileLayer == Factory.TileLayer.Background)
+				room.SetBackground(origin + new Point2(x, y), tile, rebuildGeometry: false);
+			else
+				room.Set(origin + new Point2(x, y), tile, rebuildGeometry: false);
+		}
 		room.RebuildGeometry();
 		editorGameDirty = true;
 	}
@@ -1558,13 +1606,20 @@ public partial class Manager
 			activeRoomPreviewId = room.Id;
 		}
 
-		game?.RenderWorldToTarget(activeRoomPreviewTarget, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+		if (game != null)
+		{
+			game.ShowForegroundLayer = editorShowForegroundLayer;
+			game.ShowBackgroundLayer = editorShowBackgroundLayer;
+			game.RenderWorldToTarget(activeRoomPreviewTarget, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+			game.ShowForegroundLayer = true;
+			game.ShowBackgroundLayer = true;
+		}
 		return activeRoomPreviewTarget.Attachments[0];
 	}
 
 	private Texture GetRoomPreview(Room room)
 	{
-		var json = room.ToJsonString();
+		var json = $"{editorShowForegroundLayer}:{editorShowBackgroundLayer}:{room.ToJsonString()}";
 		if (roomPreviewCache.TryGetValue(room.Id, out var entry) &&
 		    entry.Json == json &&
 		    entry.Target.Width == room.WorldBounds.Width &&
@@ -1574,6 +1629,8 @@ public partial class Manager
 		DisposeRoomPreview(entry, defer: false);
 		var target = new Target(GraphicsDevice, room.WorldBounds.Width, room.WorldBounds.Height, name: $"RoomPreview/{room.Id}");
 		using var previewGame = new Game(this, room, audioEventsEnabled: false);
+		previewGame.ShowForegroundLayer = editorShowForegroundLayer;
+		previewGame.ShowBackgroundLayer = editorShowBackgroundLayer;
 		previewGame.RenderWorldToTarget(target, new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height));
 		roomPreviewCache[room.Id] = new EditorRoomPreview(json, target);
 		return target.Attachments[0];
@@ -1752,6 +1809,8 @@ public partial class Manager
 				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize),  roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, (y - 1)  % 4 == 0 ? gridColorHeavy : gridColor);
 
 			var brushEntry = Factory.Find(brush);
+			if (brushEntry is { } foundBrushEntry && foundBrushEntry.Layer != activeTileLayer)
+				brushEntry = null;
 			Factory.ActorPaletteEntry? actorBrush = selectedActorPaletteIndex >= 0 && selectedActorPaletteIndex < Factory.ActorPalette.Count
 				? Factory.ActorPalette[selectedActorPaletteIndex]
 				: null;
@@ -1812,12 +1871,14 @@ public partial class Manager
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
 			{
-				brush = editing.Tiles[tileOver.X, tileOver.Y];
+				brush = activeTileLayer == Factory.TileLayer.Background
+					? editing.BackgroundTiles[tileOver.X, tileOver.Y]
+					: editing.Tiles[tileOver.X, tileOver.Y];
 				tileTypePlacing = brush;
 				selectedActorPaletteIndex = -1;
 				actorSelectTool = false;
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && ctrlClick && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
+			else if (!editingRoomGeometry && !worldMouseBlocked && activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && !brushIsActor && overGame && ctrlClick && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
 			{
 				using (CaptureRoomUndo("Toggle Slope Tile", editing))
 				{
@@ -1842,7 +1903,7 @@ public partial class Manager
 					editorGameDirty = true;
 				}
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
+			else if (!editingRoomGeometry && !worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && brushEntry != null && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
 				tilePaintUndo?.Commit();
 				tilePaintUndo = CaptureRoomUndo("Paint Tiles", editing);
@@ -1928,7 +1989,7 @@ public partial class Manager
 				}
 			}
 
-			if (!editingRoomGeometry && !worldMouseBlocked && !eyedropper && !brushIsActor && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
+			if (!editingRoomGeometry && !worldMouseBlocked && !eyedropper && !brushIsActor && brushEntry != null && tilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
 			{
 				StampTiles(editing, tilePlaceFrom, shift, size, tileTypePlacing);
 
