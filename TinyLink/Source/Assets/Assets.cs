@@ -51,6 +51,8 @@ public static class Assets
 		var actorsPath = Path.Join(AssetsPath, "Actors");
 		var spriteFiles = new Dictionary<string, Aseprite>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();
+		var generatedTileImages = new Dictionary<string, List<Image>>();
+		var generatedNormalImages = new Dictionary<string, List<Image>>();
 
 		// load main font file
 		if (Font == null)
@@ -77,6 +79,17 @@ public static class Assets
 				tilesetFiles.Add(name, ase);
 		}
 
+		foreach (var (name, ase) in tilesetFiles.ToArray())
+		{
+			if (!name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			GenerateDualTilesetFromKit(name, ase, out var baseName, out var baseTiles, out var dualName, out var dualVariants, out var dualNormals);
+			generatedTileImages[baseName] = baseTiles;
+			generatedTileImages[dualName] = dualVariants;
+			generatedNormalImages[dualName] = dualNormals;
+		}
+
 		// pack all the sprites & tilesets
 		Packer.Output output;
 		{
@@ -94,6 +107,9 @@ public static class Assets
 
 			foreach (var (name, ase) in tilesetFiles)
 			{
+				if (name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase))
+					continue;
+
 				var nonDebugLayers = GetNonDebugLayers(ase);
 				var variantLayers = GetVariantLayers(ase, nonDebugLayers);
 				var image = ase.RenderFrame(0, nonDebugLayers.Contains);
@@ -123,6 +139,42 @@ public static class Assets
 						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index));
 						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index));
 						packer.Add(SlopeSubtextureName(name, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index));
+					}
+				}
+			}
+
+			foreach (var (name, variants) in generatedTileImages)
+			{
+				for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
+				{
+					var image = variants[variantIndex];
+					var columns = image.Width / Game.TileSize;
+					var rows = image.Height / Game.TileSize;
+
+					for (int x = 0; x < columns; x ++)
+					for (int y = 0; y < rows; y ++)
+					{
+						if (variantIndex == 0)
+							packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+					}
+				}
+			}
+
+			foreach (var (name, variants) in generatedNormalImages)
+			{
+				for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
+				{
+					var image = variants[variantIndex];
+					var columns = image.Width / Game.TileSize;
+					var rows = image.Height / Game.TileSize;
+
+					for (int x = 0; x < columns; x ++)
+					for (int y = 0; y < rows; y ++)
+					{
+						if (variantIndex == 0)
+							packer.Add($"tilesets/{name}/normal/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+						packer.Add($"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
 					}
 				}
 			}
@@ -209,6 +261,9 @@ public static class Assets
 		var foundTilesets = new HashSet<string>();
 		foreach (var (name, ase) in tilesetFiles)
 		{
+			if (name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase))
+				continue;
+
 			foundTilesets.Add(name);
 
 			var columns = ase.Width / Game.TileSize;
@@ -238,6 +293,56 @@ public static class Assets
 			tileset.Reload(columns, rows, tiles, variants);
 		}
 
+		foreach (var (name, images) in generatedTileImages)
+		{
+			foundTilesets.Add(name);
+
+			var columns = images[0].Width / Game.TileSize;
+			var rows = images[0].Height / Game.TileSize;
+			if (!Tilesets.TryGetValue(name, out var tileset))
+			{
+				tileset = new Tileset(name, columns, rows);
+				Tilesets.Add(name, tileset);
+			}
+
+			var tiles = new List<Subtexture>();
+			for (int x = 0; x < columns; x ++)
+			for (int y = 0; y < rows; y ++)
+				tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
+
+			var variants = new List<List<Subtexture>>();
+			for (var variantIndex = 0; variantIndex < images.Count; variantIndex++)
+			{
+				var variant = new List<Subtexture>();
+				for (int x = 0; x < columns; x ++)
+				for (int y = 0; y < rows; y ++)
+					variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
+				variants.Add(variant);
+			}
+
+			List<Subtexture>? normalTiles = null;
+			List<List<Subtexture>>? normalVariants = null;
+			if (generatedNormalImages.TryGetValue(name, out var normals))
+			{
+				normalTiles = [];
+				for (int x = 0; x < columns; x ++)
+				for (int y = 0; y < rows; y ++)
+					normalTiles.Add(subtextures[$"tilesets/{name}/normal/{x}x{y}"]);
+
+				normalVariants = [];
+				for (var variantIndex = 0; variantIndex < normals.Count; variantIndex++)
+				{
+					var variant = new List<Subtexture>();
+					for (int x = 0; x < columns; x ++)
+					for (int y = 0; y < rows; y ++)
+						variant.Add(subtextures[$"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}"]);
+					normalVariants.Add(variant);
+				}
+			}
+
+			tileset.Reload(columns, rows, tiles, variants, normalTiles, normalVariants);
+		}
+
 		foreach (var (name, tileset) in Tilesets.ToArray())
 		{
 			if (foundTilesets.Contains(name))
@@ -246,6 +351,13 @@ public static class Assets
 			tileset.Reload(0, 0, []);
 			Tilesets.Remove(name);
 		}
+
+		foreach (var images in generatedTileImages.Values)
+			foreach (var image in images)
+				image.Dispose();
+		foreach (var images in generatedNormalImages.Values)
+			foreach (var image in images)
+				image.Dispose();
 
 		oldAtlas?.Dispose();
 		oldLightingNoise?.Dispose();
@@ -294,6 +406,235 @@ public static class Assets
 		=> ase.Layers
 			.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)
 			.ToList();
+
+	private static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals)
+	{
+		baseName = kitName[..^"-kit".Length];
+		baseTiles = [];
+		dualName = $"{baseName}-dual";
+		dualVariants = [];
+		dualNormals = [];
+
+		var slices = GetKitSlices(ase);
+		if (!slices.TryGetValue("fill", out var fillSlice))
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' is missing required 'fill' slice.");
+		if (!slices.TryGetValue("mask", out var maskSlice))
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' is missing required 'mask' slice.");
+		slices.TryGetValue("edge", out var edgeSlice);
+
+		var maskBounds = GetSliceBounds(maskSlice);
+		if (maskBounds.Size != new Point2(Game.TileSize * 4, Game.TileSize * 4))
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' mask slice must be exactly {Game.TileSize * 4}x{Game.TileSize * 4} pixels.");
+
+		using var rendered = ase.RenderFrame(0, GetNonDebugLayers(ase).Contains);
+		using var mask = ExtractTile(rendered, maskBounds);
+		var fills = ExtractSliceTiles(rendered, fillSlice, kitName, required: true);
+		var edges = edgeSlice != null
+			? ExtractSliceTiles(rendered, edgeSlice, kitName, required: false)
+			: [];
+
+		if (edges.Count == 0 && edgeSlice != null)
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' edge slice does not contain any non-empty {Game.TileSize}x{Game.TileSize} tile.");
+
+		for (var i = 0; i < fills.Count; i++)
+		{
+			var fill = fills[i];
+			if (i == 0)
+				baseTiles.Add(ExtractTile(fill, fill.Bounds));
+			dualVariants.Add(GenerateDualTilesetVariant(fill, mask, edges.Count > 0 ? edges[i % edges.Count] : null));
+			dualNormals.Add(GenerateDualTilesetNormalVariant(mask));
+		}
+
+		foreach (var fill in fills)
+			fill.Dispose();
+		foreach (var edge in edges)
+			edge.Dispose();
+	}
+
+	private static string NormalizeLayerName(string? name)
+		=> (name ?? "").Trim().Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
+
+	private static Dictionary<string, Aseprite.Slice> GetKitSlices(Aseprite ase)
+	{
+		var result = new Dictionary<string, Aseprite.Slice>(StringComparer.OrdinalIgnoreCase);
+		foreach (var slice in ase.Slices)
+		{
+			var name = NormalizeLayerName(slice.Name);
+			if (string.IsNullOrEmpty(name) || name.Contains("debug", StringComparison.OrdinalIgnoreCase))
+				continue;
+			result.TryAdd(name, slice);
+		}
+		return result;
+	}
+
+	private static RectInt GetSliceBounds(Aseprite.Slice slice)
+	{
+		if (slice.Keys.Length <= 0)
+			throw new InvalidOperationException($"Aseprite slice '{slice.Name}' has no keys.");
+		return slice.Keys[0].Bounds;
+	}
+
+	private static List<Image> ExtractSliceTiles(Image source, Aseprite.Slice slice, string kitName, bool required)
+	{
+		var bounds = GetSliceBounds(slice);
+		if (bounds.Width % Game.TileSize != 0 || bounds.Height % Game.TileSize != 0)
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' slice '{slice.Name}' dimensions must be multiples of {Game.TileSize} pixels.");
+
+		var tiles = new List<Image>();
+		var columns = bounds.Width / Game.TileSize;
+		var rows = bounds.Height / Game.TileSize;
+		for (var y = 0; y < rows; y ++)
+		for (var x = 0; x < columns; x ++)
+		{
+			var rect = bounds.Position + new Point2(x, y) * Game.TileSize;
+			var tileRect = new RectInt(rect.X, rect.Y, Game.TileSize, Game.TileSize);
+			if (HasOpaquePixel(source, tileRect))
+				tiles.Add(ExtractTile(source, tileRect));
+		}
+
+		if (required && tiles.Count <= 0)
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' slice '{slice.Name}' does not contain any non-empty {Game.TileSize}x{Game.TileSize} tile.");
+		return tiles;
+	}
+
+	private static bool HasOpaquePixel(Image image, RectInt rect)
+	{
+		for (var y = rect.Y; y < rect.Bottom; y ++)
+		for (var x = rect.X; x < rect.Right; x ++)
+			if (image[x, y].A > 0)
+				return true;
+		return false;
+	}
+
+	private static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edge)
+	{
+		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
+		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
+		{
+			var tile = MaskToDualTile(tileMask);
+			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
+			GenerateDualTile(output, source, fill, tileMask, mask, edge);
+		}
+		return output;
+	}
+
+	private static Image GenerateDualTilesetNormalVariant(Image mask)
+	{
+		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
+		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
+		{
+			var tile = MaskToDualTile(tileMask);
+			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
+			GenerateDualNormalTile(output, source, tileMask, mask);
+		}
+		return output;
+	}
+
+	private static void GenerateDualNormalTile(Image output, RectInt source, int mask, Image alphaMask)
+	{
+		var tile = MaskToDualTile(mask);
+		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
+		const float bend = 1.25f;
+
+		for (var y = 0; y < Game.TileSize; y++)
+		for (var x = 0; x < Game.TileSize; x++)
+		{
+			var alpha = AlphaAt(alphaMask, source.X + x, source.Y + y);
+			if (alpha <= 0)
+				continue;
+
+			var sx =
+				AlphaAt(alphaMask, source.X + x - 1, source.Y + y - 1) +
+				AlphaAt(alphaMask, source.X + x - 1, source.Y + y) * 2 +
+				AlphaAt(alphaMask, source.X + x - 1, source.Y + y + 1) -
+				AlphaAt(alphaMask, source.X + x + 1, source.Y + y - 1) -
+				AlphaAt(alphaMask, source.X + x + 1, source.Y + y) * 2 -
+				AlphaAt(alphaMask, source.X + x + 1, source.Y + y + 1);
+			var sy =
+				AlphaAt(alphaMask, source.X + x - 1, source.Y + y - 1) +
+				AlphaAt(alphaMask, source.X + x, source.Y + y - 1) * 2 +
+				AlphaAt(alphaMask, source.X + x + 1, source.Y + y - 1) -
+				AlphaAt(alphaMask, source.X + x - 1, source.Y + y + 1) -
+				AlphaAt(alphaMask, source.X + x, source.Y + y + 1) * 2 -
+				AlphaAt(alphaMask, source.X + x + 1, source.Y + y + 1);
+
+			var strength = Math.Clamp(MathF.Sqrt(sx * sx + sy * sy) * 0.5f, 0, 1) * alpha;
+			if (strength <= 0)
+				continue;
+
+			var normal = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
+			output[destination.X + x, destination.Y + y] = new Color(
+				normal.X * 0.5f + 0.5f,
+				normal.Y * 0.5f + 0.5f,
+				normal.Z * 0.5f + 0.5f,
+				strength);
+		}
+	}
+
+	private static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edge)
+	{
+		var tile = MaskToDualTile(mask);
+		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
+		const int edgeWidth = 2;
+
+		for (var y = 0; y < Game.TileSize; y++)
+		for (var x = 0; x < Game.TileSize; x++)
+		{
+			var alpha = alphaMask[source.X + x, source.Y + y].A;
+			if (alpha == 0)
+				continue;
+
+			var color = fill[x, y];
+			if (edge != null && IsMaskEdge(alphaMask, source, x, y, edgeWidth))
+				color = edge[x, y];
+
+			color.A = (byte)(color.A * alpha / 255);
+			output[destination.X + x, destination.Y + y] = color;
+		}
+	}
+
+	private static bool IsMaskEdge(Image mask, RectInt source, int x, int y, int width)
+	{
+		for (var oy = -width; oy <= width; oy++)
+		for (var ox = -width; ox <= width; ox++)
+		{
+			if (Math.Abs(ox) + Math.Abs(oy) > width)
+				continue;
+			var sampleX = source.X + x + ox;
+			var sampleY = source.Y + y + oy;
+			if (sampleX < source.X || sampleY < source.Y || sampleX >= source.Right || sampleY >= source.Bottom)
+				continue;
+			if (mask[sampleX, sampleY].A == 0)
+				return true;
+		}
+		return false;
+	}
+
+	private static Point2 MaskToDualTile(int mask)
+	{
+		var index = Array.FindIndex(DualMaskToTile, it => it.Mask == mask);
+		return index >= 0 ? DualMaskToTile[index].Tile : Point2.Zero;
+	}
+
+	private static readonly (int Mask, Point2 Tile)[] DualMaskToTile =
+	[
+		(0, new(0, 3)),
+		(TileQuadrants.TopLeft, new(3, 3)),
+		(TileQuadrants.BottomLeft, new(0, 0)),
+		(TileQuadrants.TopLeft | TileQuadrants.BottomLeft, new(3, 2)),
+		(TileQuadrants.TopRight, new(0, 2)),
+		(TileQuadrants.TopLeft | TileQuadrants.TopRight, new(1, 2)),
+		(TileQuadrants.BottomLeft | TileQuadrants.TopRight, new(2, 3)),
+		(TileQuadrants.TopLeft | TileQuadrants.BottomLeft | TileQuadrants.TopRight, new(3, 1)),
+		(TileQuadrants.BottomRight, new(1, 3)),
+		(TileQuadrants.TopLeft | TileQuadrants.BottomRight, new(0, 1)),
+		(TileQuadrants.BottomLeft | TileQuadrants.BottomRight, new(3, 0)),
+		(TileQuadrants.TopLeft | TileQuadrants.BottomLeft | TileQuadrants.BottomRight, new(2, 0)),
+		(TileQuadrants.TopRight | TileQuadrants.BottomRight, new(1, 0)),
+		(TileQuadrants.TopLeft | TileQuadrants.TopRight | TileQuadrants.BottomRight, new(2, 2)),
+		(TileQuadrants.BottomLeft | TileQuadrants.TopRight | TileQuadrants.BottomRight, new(1, 1)),
+		(TileQuadrants.All, new(2, 1)),
+	];
 
 	private static Texture? LoadTexture(GraphicsDevice gfx, string relativePath, string name)
 	{

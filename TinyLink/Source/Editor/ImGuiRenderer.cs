@@ -499,6 +499,30 @@ public class ImGuiRenderer : IDisposable
 		return pressed;
 	}
 
+	public void Image(in Subtexture subtexture, Vector2 size)
+	{
+		if (subtexture.Texture == null)
+			return;
+
+		ImGui.Dummy(size);
+
+		var min = ImGui.GetItemRectMin();
+		var max = ImGui.GetItemRectMax();
+		var draw = ImGui.GetWindowDrawList();
+		var scale = new Vector2(
+			subtexture.Width > 0 ? size.X / subtexture.Width : 1,
+			subtexture.Height > 0 ? size.Y / subtexture.Height : 1);
+		var imageMin = min + subtexture.DrawCoords[0] * scale;
+		var imageMax = min + subtexture.DrawCoords[2] * scale;
+
+		draw.AddImage(
+			GetTextureID(subtexture.Texture),
+			imageMin,
+			imageMax,
+			subtexture.TexCoords[0],
+			subtexture.TexCoords[2]);
+	}
+
 	public void Dispose()
 	{
 		GC.SuppressFinalize(this);

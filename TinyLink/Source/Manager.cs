@@ -699,21 +699,67 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
-	private bool ImGuiIconButton(string id, Subtexture icon, string tooltip, bool selected = false)
+	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize));
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string tooltip, bool selected, Vector2 size)
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false);
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string tooltip, bool selected, Vector2 size, bool fitAspectRatio)
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio)
 	{
 		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
 		var hovered = ImGui.IsItemHovered();
 
-		if (hovered)
+		if (hovered && !string.IsNullOrEmpty(tooltip))
 			ImGui.SetTooltip(tooltip);
 
 		return pressed;
+	}
+
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Subtexture tooltipImage, bool selected, Vector2 size, bool fitAspectRatio = false)
+	{
+		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
+		if (ImGui.IsItemHovered() && (!string.IsNullOrEmpty(tooltip) || tooltipImage.Texture != null))
+		{
+			ImGui.BeginTooltip();
+			if (!string.IsNullOrEmpty(tooltip))
+				ImGui.TextUnformatted(tooltip);
+			if (tooltipImage.Texture != null)
+				imgui.Image(tooltipImage, tooltipImage.Size * Scale);
+			ImGui.EndTooltip();
+		}
+
+		return pressed;
+	}
+
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size, bool fitAspectRatio = false)
+	{
+		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
+		if (ImGui.IsItemHovered() && (!string.IsNullOrEmpty(tooltip) || tooltipTileset != null))
+		{
+			ImGui.BeginTooltip();
+			if (!string.IsNullOrEmpty(tooltip))
+				ImGui.TextUnformatted(tooltip);
+			if (tooltipTileset != null)
+				DrawImGuiTilesetPreview(tooltipTileset);
+			ImGui.EndTooltip();
+		}
+
+		return pressed;
+	}
+
+	private void DrawImGuiTilesetPreview(Tileset tileset)
+	{
+		var tileSize = new Vector2(Game.TileSize * MathF.Max(2, Scale));
+		for (var y = 0; y < tileset.Rows; y++)
+		{
+			for (var x = 0; x < tileset.Columns; x++)
+			{
+				if (x > 0)
+					ImGui.SameLine(0, 0);
+				imgui.Image(tileset.GetVariantTile(x, y, 0), tileSize);
+			}
+		}
 	}
 
 	private static bool ImGuiTextButton(string label, Vector2 size, bool selected)

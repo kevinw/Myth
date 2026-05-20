@@ -1292,9 +1292,15 @@ public class Game : IDisposable
 		Array.Clear(roomNormalMask);
 
 		if (room != null)
+		{
 			FillRoomNormalMask(room);
+			ClearDualRoomNormalMask(room);
+		}
 		if (nextRoom != null && nextRoom != room)
+		{
 			FillRoomNormalMask(nextRoom);
+			ClearDualRoomNormalMask(nextRoom);
+		}
 
 		foreach (var actor in Actors)
 			if (actor is HiddenWallGrid hiddenWalls)
@@ -1322,6 +1328,29 @@ public class Game : IDisposable
 			FillRoomNormalMask(rect);
 		foreach (var polygon in renderRoom.LightOccluderPolygons)
 			FillRoomNormalMask(polygon);
+	}
+
+	private void ClearDualRoomNormalMask(Room renderRoom)
+	{
+		var camera = (Point2)Camera;
+		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
+		for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
+		{
+			if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
+			    Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
+				continue;
+
+			var worldLeft = renderRoom.WorldBounds.X + tileX * Game.TileSize;
+			var worldTop = renderRoom.WorldBounds.Y + tileY * Game.TileSize;
+			var left = Math.Clamp(worldLeft - camera.X, 0, NormalBuffer.Width);
+			var right = Math.Clamp(worldLeft + Game.TileSize - camera.X, 0, NormalBuffer.Width);
+			var top = Math.Clamp(worldTop - camera.Y, 0, NormalBuffer.Height);
+			var bottom = Math.Clamp(worldTop + Game.TileSize - camera.Y, 0, NormalBuffer.Height);
+
+			for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+				roomNormalMask[x, y] = false;
+		}
 	}
 
 	private void FillRoomNormalMask(RectInt rect)

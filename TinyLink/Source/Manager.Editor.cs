@@ -433,7 +433,8 @@ public partial class Manager
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
 
-			if (ImGuiSubtextureButton($"Palette_Tiles_{id}", entry.Image, entry.Name, selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
+			var dualPreview = GetDualTilesetPreview(entry);
+			if (ImGuiSubtextureButton($"Palette_Tiles_{id}", entry.Image, entry.Name, dualPreview, selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
 			{
 				brush = id;
 				selectedActorPaletteIndex = -1;
@@ -443,6 +444,9 @@ public partial class Manager
 			index++;
 		}
 	}
+
+	private static Tileset? GetDualTilesetPreview(Factory.Entry entry)
+		=> entry.DualTilesetName != null ? Assets.GetTileset(entry.DualTilesetName) : null;
 
 	private void DrawActorPaletteSection()
 	{

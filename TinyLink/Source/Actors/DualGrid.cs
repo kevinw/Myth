@@ -55,9 +55,11 @@ public class DualGrid : Actor
 			var subtexture = tileset.GetVariantTile(tile.X, tile.Y, seed);
 			if (subtexture.Texture == null)
 				continue;
+			var normal = tileset.GetVariantNormalTile(tile.X, tile.Y, seed);
 
 			drawCommands.Add(new DrawCommand(
 				subtexture,
+				normal,
 				new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize,
 				materialMask));
 		}
@@ -91,33 +93,44 @@ public class DualGrid : Actor
 	}
 
 	public override void Render(Batcher batcher)
+		=> RenderTiles(batcher, static command => command.Tile);
+
+	public override void RenderNormals(Batcher batcher)
+		=> RenderTiles(batcher, static command => command.Normal);
+
+	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
 	{
 		foreach (var command in drawCommands)
 		{
+			var tile = getTile(command);
+			if (tile.Texture == null)
+				continue;
+
 			if (command.MaterialMask == TileQuadrants.All)
 			{
-				batcher.Image(command.Tile, command.Position, Color.White);
+				batcher.Image(tile, command.Position, Color.White);
 				continue;
 			}
 
-			DrawQuadrant(batcher, command, TileQuadrants.TopLeft, new Rect(0, 0, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, TileQuadrants.BottomLeft, new Rect(0, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, TileQuadrants.TopRight, new Rect(Game.TileSize / 2, 0, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, TileQuadrants.BottomRight, new Rect(Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.TopLeft, new Rect(0, 0, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomLeft, new Rect(0, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.TopRight, new Rect(Game.TileSize / 2, 0, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomRight, new Rect(Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
 		}
 	}
 
-	private static void DrawQuadrant(Batcher batcher, DrawCommand command, int mask, Rect clip)
+	private static void DrawQuadrant(Batcher batcher, DrawCommand command, Subtexture tile, int mask, Rect clip)
 	{
 		if ((command.MaterialMask & mask) == 0)
 			return;
 
-		batcher.Image(command.Tile, clip, command.Position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White);
+		batcher.Image(tile, clip, command.Position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White);
 	}
 
-	private readonly struct DrawCommand(Subtexture tile, Vector2 position, int materialMask)
+	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Vector2 position, int materialMask)
 	{
 		public readonly Subtexture Tile = tile;
+		public readonly Subtexture Normal = normal;
 		public readonly Vector2 Position = position;
 		public readonly int MaterialMask = materialMask;
 	}

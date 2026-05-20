@@ -148,7 +148,7 @@ public static class Factory
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
 		if (tileset == null || dualTileset == null)
-			return new();
+			throw new InvalidOperationException($"Dual tile '{tilesetName}' requires tilesets '{tilesetName}' and '{dualTilesetName}'.");
 
 		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 		{
@@ -190,6 +190,7 @@ public static class Factory
 		Register('G', AsDualTile("grass", "grass-dual", "Grass"));
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope"));
 		Register('X', AsTile("grass", true, "Grass", destructible: true, name: "Breakable Grass"));
+		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
 		Register('g', AsTile("plants", false, "Grass"));
 		Register('r', AsTile("rocks", false));
 		Register('w', AsTile("water", false, "Water", reflectsSprites: true));
