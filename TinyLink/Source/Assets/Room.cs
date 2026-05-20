@@ -92,6 +92,11 @@ public class Room
 	public readonly List<LightOccluderPolygon> LightOccluderPolygons = [];
 
 	/// <summary>
+	/// Cached world-space segments used by visibility-polygon shadow tests.
+	/// </summary>
+	public readonly List<VisibilityPolygon.Segment> VisibilitySegments = [];
+
+	/// <summary>
 	/// World-space rectangles built from adjacent sprite-reflecting tiles.
 	/// </summary>
 	public readonly List<RectInt> ReflectionRects = [];
@@ -261,6 +266,7 @@ public class Room
 		slopePolygonLookup.Clear();
 		LightOccluders.Clear();
 		LightOccluderPolygons.Clear();
+		VisibilitySegments.Clear();
 		ReflectionRects.Clear();
 
 		BuildSlopeTiles();
@@ -268,6 +274,7 @@ public class Room
 		BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope);
 		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
 		BuildSlopeLightOccluders();
+		BuildVisibilitySegments();
 		BuildRects(ReflectionRects, static entry => entry.ReflectsSprites);
 	}
 
@@ -503,6 +510,32 @@ public class Room
 		foreach (var slope in SlopeTiles)
 			LightOccluderPolygons.Add(new(GetSlopePolygon(slope), slope.WorldBounds(this)));
 	}
+
+	private void BuildVisibilitySegments()
+	{
+		var bounds = WorldBounds;
+		AddVisibilitySegment(bounds.TopLeft, bounds.TopRight);
+		AddVisibilitySegment(bounds.TopRight, bounds.BottomRight);
+		AddVisibilitySegment(bounds.BottomRight, bounds.BottomLeft);
+		AddVisibilitySegment(bounds.BottomLeft, bounds.TopLeft);
+
+		foreach (var rect in LightOccluders)
+		{
+			AddVisibilitySegment(rect.TopLeft, rect.TopRight);
+			AddVisibilitySegment(rect.TopRight, rect.BottomRight);
+			AddVisibilitySegment(rect.BottomRight, rect.BottomLeft);
+			AddVisibilitySegment(rect.BottomLeft, rect.TopLeft);
+		}
+
+		foreach (var polygon in LightOccluderPolygons)
+		{
+			for (var i = 0; i < polygon.Points.Length; i++)
+				AddVisibilitySegment(polygon.Points[i], polygon.Points[(i + 1) % polygon.Points.Length]);
+		}
+	}
+
+	private void AddVisibilitySegment(Vector2 a, Vector2 b)
+		=> VisibilitySegments.Add(new(a, b));
 
 	public Point2[] GetSlopePolygon(SlopeTile slope)
 		=> slopePolygonLookup.TryGetValue(slope.Tile, out var polygon) ? polygon : BuildSlopePolygon(slope);

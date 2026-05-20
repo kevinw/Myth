@@ -1354,40 +1354,20 @@ public class Game : IDisposable
 
 	private static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
 	{
-		AddRoomBoundaryVisibilitySegments(segments, renderRoom, lightPosition, radius);
+		if (!CircleOverlapsRect(lightPosition, radius, renderRoom.WorldBounds))
+			return;
 
-		foreach (var rect in renderRoom.LightOccluders)
-			AddRectVisibilitySegments(segments, rect, lightPosition, radius);
-
-		foreach (var polygon in renderRoom.LightOccluderPolygons)
-			AddPolygonVisibilitySegments(segments, polygon.Points, lightPosition, radius);
-	}
-
-	private static void AddRoomBoundaryVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
-	{
-		var bounds = renderRoom.WorldBounds;
-		AddVisibilitySegment(segments, bounds.TopLeft, bounds.TopRight, lightPosition, radius);
-		AddVisibilitySegment(segments, bounds.TopRight, bounds.BottomRight, lightPosition, radius);
-		AddVisibilitySegment(segments, bounds.BottomRight, bounds.BottomLeft, lightPosition, radius);
-		AddVisibilitySegment(segments, bounds.BottomLeft, bounds.TopLeft, lightPosition, radius);
+		foreach (var segment in renderRoom.VisibilitySegments)
+			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+				segments.Add(segment);
 	}
 
 	private static void AddRectVisibilitySegments(List<VisibilityPolygon.Segment> segments, RectInt rect, Vector2 lightPosition, float radius)
 	{
-		Span<Point2> points =
-		[
-			rect.TopLeft,
-			rect.TopRight,
-			rect.BottomRight,
-			rect.BottomLeft
-		];
-		AddPolygonVisibilitySegments(segments, points, lightPosition, radius);
-	}
-
-	private static void AddPolygonVisibilitySegments(List<VisibilityPolygon.Segment> segments, ReadOnlySpan<Point2> points, Vector2 lightPosition, float radius)
-	{
-		for (var i = 0; i < points.Length; i++)
-			AddVisibilitySegment(segments, points[i], points[(i + 1) % points.Length], lightPosition, radius);
+		AddVisibilitySegment(segments, rect.TopLeft, rect.TopRight, lightPosition, radius);
+		AddVisibilitySegment(segments, rect.TopRight, rect.BottomRight, lightPosition, radius);
+		AddVisibilitySegment(segments, rect.BottomRight, rect.BottomLeft, lightPosition, radius);
+		AddVisibilitySegment(segments, rect.BottomLeft, rect.TopLeft, lightPosition, radius);
 	}
 
 	private static void AddVisibilitySegment(List<VisibilityPolygon.Segment> segments, Vector2 a, Vector2 b, Vector2 lightPosition, float radius)

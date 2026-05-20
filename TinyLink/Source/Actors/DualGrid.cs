@@ -26,6 +26,7 @@ public class DualGrid : Actor
 	];
 
 	private readonly List<DrawCommand> drawCommands = [];
+	private readonly List<VisibilityPolygon.Segment> visibilitySegments = [];
 	public override bool CastsReflection => false;
 
 	public void Build(Room room, char tileType, Tileset tileset)
@@ -57,19 +58,22 @@ public class DualGrid : Actor
 				continue;
 			var normal = tileset.GetVariantNormalTile(tile.X, tile.Y, seed);
 			var occluders = tileset.GetVariantOccluders(tile.X, tile.Y, seed);
+			var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
 
 			drawCommands.Add(new DrawCommand(
 				subtexture,
 				normal,
-				occluders,
-				new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize,
+				position,
 				materialMask));
+
+			AppendWorldVisibilitySegments(position, materialMask, occluders);
 		}
 	}
 
 	public void Clear()
 	{
 		drawCommands.Clear();
+		visibilitySegments.Clear();
 	}
 
 	private static bool IsFilled(Room room, char tileType, int x, int y)
@@ -131,19 +135,23 @@ public class DualGrid : Actor
 
 	public void AppendVisibilitySegments(List<VisibilityPolygon.Segment> segments, Vector2 lightPosition, float radius)
 	{
-		foreach (var command in drawCommands)
+		foreach (var segment in visibilitySegments)
 		{
-			foreach (var local in command.Occluders)
-			{
-				if (!OwnsOccluderSegment(command.MaterialMask, local))
-					continue;
+			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+				segments.Add(segment);
+		}
+	}
 
-				var segment = new VisibilityPolygon.Segment(
-					Position + command.Position + local.A,
-					Position + command.Position + local.B);
-				if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-					segments.Add(segment);
-			}
+	private void AppendWorldVisibilitySegments(Vector2 commandPosition, int materialMask, Tileset.OccluderSegment[] occluders)
+	{
+		foreach (var local in occluders)
+		{
+			if (!OwnsOccluderSegment(materialMask, local))
+				continue;
+
+			visibilitySegments.Add(new(
+				Position + commandPosition + local.A,
+				Position + commandPosition + local.B));
 		}
 	}
 
@@ -157,11 +165,10 @@ public class DualGrid : Actor
 		return (materialMask & quadrant) != 0;
 	}
 
-	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Tileset.OccluderSegment[] occluders, Vector2 position, int materialMask)
+	private readonly struct DrawCommand(Subtexture tile, Subtexture normal, Vector2 position, int materialMask)
 	{
 		public readonly Subtexture Tile = tile;
 		public readonly Subtexture Normal = normal;
-		public readonly Tileset.OccluderSegment[] Occluders = occluders;
 		public readonly Vector2 Position = position;
 		public readonly int MaterialMask = materialMask;
 	}

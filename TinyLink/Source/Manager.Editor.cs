@@ -1414,8 +1414,9 @@ public partial class Manager
 		var previous = room.Tiles[tile.X, tile.Y];
 		room.Tiles[tile.X, tile.Y] = previewTile;
 		room.RebuildGeometry();
+		var seed = Factory.StableVariantSeed(room, entry.SlopeTilesetName, tile);
 		var image = room.TryGetSlopeTile(tile, out var slope)
-			? Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex)
+			? Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed)
 			: entry.Image;
 		room.Tiles[tile.X, tile.Y] = previous;
 		room.RebuildGeometry();

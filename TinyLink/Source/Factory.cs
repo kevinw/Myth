@@ -136,11 +136,30 @@ public static class Factory
 
 		return new Entry(name ?? $"{tileset.Name} Slope", image, (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
 		{
+			var seed = StableVariantSeed(room, tilesetName, tile);
 			if (room.TryGetSlopeTile(tile, out var slope))
-				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex));
+				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed));
 			else
 				fg.Set(tile.X, tile.Y, image);
 		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName);
+	}
+
+	public static int StableVariantSeed(Room room, string key, Point2 tile)
+	{
+		unchecked
+		{
+			var worldTile = room.Position + tile;
+			var hash = (uint)worldTile.X * 0x8da6b343u;
+			hash ^= (uint)worldTile.Y * 0xd8163841u;
+			foreach (var c in key)
+				hash = (hash ^ c) * 0xcb1ab31fu;
+			hash ^= hash >> 16;
+			hash *= 0x7feb352du;
+			hash ^= hash >> 15;
+			hash *= 0x846ca68bu;
+			hash ^= hash >> 16;
+			return (int)hash;
+		}
 	}
 
 	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType)
