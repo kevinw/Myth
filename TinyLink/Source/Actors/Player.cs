@@ -8,6 +8,7 @@ public class Player : Actor
 	public enum States
 	{
 		Normal,
+		Roll,
 		Attack,
 		Hurt,
 		Start
@@ -28,6 +29,15 @@ public class Player : Actor
 	static float JumpTime => 0.18f;
 	static float WallJumpSpeed => 125;
 	static float WallJumpInputLockTime => 0.22f;
+	static float RollMinHorizontalSpeed => 45;
+	static float RollMinFallSpeed => 20;
+	static float RollSpeed => 145;
+	static float RollDuration => 0.36f;
+	static float RollFriction => 220;
+	static float RollJumpForce => -82;
+	static float RollJumpTime => 0.11f;
+	static float RollJumpSpeed => 150;
+	static float RollJumpCarryTime => 0.28f;
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
@@ -46,6 +56,8 @@ public class Player : Actor
 	private bool ducking;
 	private float wallJumpInputLockTimer;
 	private int wallJumpDirection;
+	private float jumpForce = JumpForce;
+	private float rollJumpCarryTimer;
 	private Light? light;
 
 	public Player()
@@ -88,8 +100,16 @@ public class Player : Actor
 		}
 	}
 
+	public override void OnCollideX()
+	{
+		base.OnCollideX();
+		if (State == States.Roll)
+			State = States.Normal;
+	}
+
 	public override void Update()
 	{
+		var previousVelocity = Velocity;
 		base.Update();
 		UpdateLightPosition();
 
@@ -100,18 +120,27 @@ public class Player : Actor
 			Squish = new Vector2(1.5f, 0.70f);
 			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this));
 			CanPlaySquishSound = true;
+			TryStartRoll(previousVelocity);
 		}
 		grounded = nowGrounded;
 		if (grounded)
+		{
 			wallJumpInputLockTimer = 0;
+			rollJumpCarryTimer = 0;
+		}
 		else if (wallJumpInputLockTimer > 0)
 			wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
+		if (!grounded && rollJumpCarryTimer > 0)
+			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
 
 		// state control
 		switch (State)
 		{
 			case States.Normal:
 				NormalState();
+				break;
+			case States.Roll:
+				RollState();
 				break;
 			case States.Attack:
 				AttackState();
@@ -127,9 +156,9 @@ public class Player : Actor
 		UpdateFootsteps();
 
 		// ducking collider(s)
-		if (ducking && State != States.Normal)
+		if (ducking && State != States.Normal && State != States.Roll)
 			ducking = false;
-		if (ducking)
+		if (ducking || State == States.Roll)
 			Hitbox = new(new RectInt(-4, -6, 8, 6));
 		else
 			Hitbox = new(new RectInt(-4, -12, 8, 12));
@@ -137,7 +166,7 @@ public class Player : Actor
 		// variable jumping
 		if (jumpTimer > 0)
 		{
-			Velocity.Y = JumpForce;
+			Velocity.Y = jumpForce;
 			jumpTimer -= Time.Delta;
 			if (!Controls.Jump.Down)
 				jumpTimer = 0;
@@ -248,6 +277,8 @@ public class Player : Actor
 			// Max Speed
 			if (!grounded && wallJumpInputLockTimer > 0)
 				maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed);
+			if (!grounded && rollJumpCarryTimer > 0)
+				maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed);
 			if (MathF.Abs(Velocity.X) > maxSpeed)
 				Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
 
@@ -280,7 +311,7 @@ public class Player : Actor
 				Facing = wallJumpDirection;
 				Velocity.X = wallJumpDirection * WallJumpSpeed;
 			}
-			jumpTimer = JumpTime;
+			StartJump(JumpForce, JumpTime);
 			AudioEvent("jump");
 		}
 
@@ -297,6 +328,64 @@ public class Player : Actor
 		{
 			ApplyHurt(-100);
 		}
+	}
+
+	private void TryStartRoll(Vector2 impactVelocity)
+	{
+		if (State != States.Normal)
+			return;
+		if (Controls.Move.IntValue.Y <= 0)
+			return;
+		if (impactVelocity.Y < RollMinFallSpeed)
+			return;
+		if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed)
+			return;
+
+		Facing = Math.Sign(impactVelocity.X);
+		Velocity.X = Facing * RollSpeed;
+		Velocity.Y = 0;
+		ducking = true;
+		Squish = new Vector2(1.65f, 0.62f);
+		Play("roll");
+		State = States.Roll;
+	}
+
+	private void RollState()
+	{
+		ducking = true;
+		Play("roll");
+
+		if (!grounded)
+		{
+			State = States.Normal;
+			return;
+		}
+
+		Velocity.X = Calc.Approach(Velocity.X, Facing * MaxGroundSpeed, RollFriction * Time.Delta);
+
+		if (Controls.Jump.ConsumePress())
+		{
+			JumpUpSquish = 0;
+			Squish = new Vector2(0.75f, 1.25f);
+			Velocity.X = Facing * MathF.Max(MathF.Abs(Velocity.X), RollJumpSpeed);
+			rollJumpCarryTimer = RollJumpCarryTime;
+			StartJump(RollJumpForce, RollJumpTime);
+			State = States.Normal;
+			AudioEvent("jump");
+			return;
+		}
+
+		if (state.Time >= RollDuration || Controls.Move.IntValue.Y <= 0)
+		{
+			State = States.Normal;
+			ducking = grounded && Controls.Move.IntValue.Y > 0;
+		}
+	}
+
+	private void StartJump(float force, float duration)
+	{
+		jumpForce = force;
+		jumpTimer = duration;
 	}
 
 	private int GetWallJumpDirection()
