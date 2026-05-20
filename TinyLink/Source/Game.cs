@@ -414,7 +414,7 @@ public class Game : IDisposable
 		=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && !IsTileSolid(room, x, y);
 
 	private static bool IsTileSolid(Room room, int x, int y)
-		=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && Factory.Find(room.Tiles[x, y]) is { BlocksMovement: true };
+		=> room.GetEntry(new Point2(x, y)) is { BlocksMovement: true };
 
 	public Vector2 GetGameplayCameraTarget()
 	{
@@ -537,6 +537,8 @@ public class Game : IDisposable
 
 	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
+		PrepareRenderingList();
+
 		DrawWorldLayer(BackgroundScreen, background: true);
 		DrawWorldLayer(ForegroundScreen, background: false);
 		DrawEmissiveLayer(BackgroundEmissive, background: true);
@@ -605,6 +607,13 @@ public class Game : IDisposable
 		}
 	}
 
+	private void PrepareRenderingList()
+	{
+		rendering.Clear();
+		rendering.AddRange(Actors);
+		rendering.Sort((a, b) => b.Depth - a.Depth);
+	}
+
 	private Target DrawTileFieldDebug()
 	{
 		Screen.Clear(Color.Transparent);
@@ -642,8 +651,6 @@ public class Game : IDisposable
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 
 		// draw actors
-		rendering.AddRange(Actors);
-		rendering.Sort((a, b) => b.Depth - a.Depth);
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -655,7 +662,6 @@ public class Game : IDisposable
 			actor.Render(Batcher);
 			Batcher.PopMatrix();
 		}
-		rendering.Clear();
 
 		if (!background && debugView == DebugView.CollisionRects)
 			DrawCollisionRects(); // TODO: don't do this in post-processing context
@@ -696,8 +702,6 @@ public class Game : IDisposable
 	{
 		target.Clear(Color.Transparent);
 		Batcher.PushMatrix(-(Point2)Camera + shake);
-		rendering.AddRange(Actors);
-		rendering.Sort((a, b) => b.Depth - a.Depth);
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -709,7 +713,6 @@ public class Game : IDisposable
 			actor.RenderEmissive(Batcher);
 			Batcher.PopMatrix();
 		}
-		rendering.Clear();
 		Batcher.PopMatrix();
 		Batcher.Render(target);
 		Batcher.Clear();
@@ -728,8 +731,6 @@ public class Game : IDisposable
 				continue;
 
 			Batcher.PushMatrix(-(Point2)Camera + shake);
-			rendering.AddRange(Actors);
-			rendering.Sort((a, b) => b.Depth - a.Depth);
 			foreach (var actor in rendering)
 			{
 				if (!actor.Visible || !actor.CastsReflection)
@@ -743,7 +744,6 @@ public class Game : IDisposable
 				Batcher.PopMatrix();
 				Batcher.PopMatrix();
 			}
-			rendering.Clear();
 			Batcher.PopMatrix();
 			Batcher.Render(ReflectionScreen, scissor: scissor);
 			Batcher.Clear();
@@ -924,8 +924,6 @@ public class Game : IDisposable
 	{
 		DitherMask.Clear(Color.White);
 		Batcher.PushMatrix(-(Point2)Camera + shake);
-		rendering.AddRange(Actors);
-		rendering.Sort((a, b) => b.Depth - a.Depth);
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -939,7 +937,6 @@ public class Game : IDisposable
 			actor.RenderShadow(Batcher, new Color(amount, amount, amount, 1.0f));
 			Batcher.PopMatrix();
 		}
-		rendering.Clear();
 		Batcher.PopMatrix();
 		Batcher.Render(DitherMask);
 		Batcher.Clear();
@@ -1275,8 +1272,6 @@ public class Game : IDisposable
 
 		DrawRoomNormals();
 
-		rendering.AddRange(Actors);
-		rendering.Sort((a, b) => b.Depth - a.Depth);
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -1286,7 +1281,6 @@ public class Game : IDisposable
 			actor.RenderNormals(Batcher);
 			Batcher.PopMatrix();
 		}
-		rendering.Clear();
 
 		Batcher.PopMatrix();
 		Batcher.Render(NormalBuffer);
@@ -1651,7 +1645,7 @@ public class Game : IDisposable
 		if (tile.X < 0 || tile.Y < 0 || tile.X >= room.Size.X || tile.Y >= room.Size.Y)
 			return Factory.DefaultSurfaceType;
 
-		if (Factory.Find(room.Tiles[tile.X, tile.Y]) is { SurfaceType: { } surfaceType })
+		if (room.GetEntry(tile) is { SurfaceType: { } surfaceType })
 			return surfaceType;
 
 		return Factory.DefaultSurfaceType;
@@ -1950,7 +1944,7 @@ public class Game : IDisposable
 		for (var y = 0; y < room.Size.Y; y ++)
 		{
 			var tile = new Point2(x, y);
-			if (Factory.Find(room.Tiles[x, y]) is { } entry)
+			if (room.GetEntry(tile) is { } entry)
 				entry.Tile?.Invoke(tile, room, fg, bg, dual);
 		}
 
@@ -1999,7 +1993,7 @@ public class Game : IDisposable
 		for (var y = 0; y < room.Size.Y; y++)
 		{
 			var tile = new Point2(x, y);
-			if (Factory.Find(room.Tiles[x, y]) is { } entry)
+			if (room.GetEntry(tile) is { } entry)
 			{
 				entry.Tile?.Invoke(tile, room, fg, bg, dual);
 			}

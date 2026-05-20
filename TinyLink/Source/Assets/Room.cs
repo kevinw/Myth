@@ -60,6 +60,7 @@ public class Room
 	/// Grid of Tiles
 	/// </summary>
 	public char[,] Tiles;
+	private Factory.Entry?[,] tileEntries = new Factory.Entry?[0, 0];
 
 	/// <summary>
 	/// Actor specs placed directly in this room.
@@ -77,6 +78,8 @@ public class Room
 	public readonly List<SlopeTile> SlopeTiles = [];
 
 	private readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
+	private readonly Dictionary<Point2, Point2[]> slopePolygonLookup = [];
+	private byte[,] dualTerrainJoinMasks = new byte[0, 0];
 
 	/// <summary>
 	/// World-space rectangles built from adjacent light-occluding tiles.
@@ -162,10 +165,11 @@ public class Room
 		Position = position;
 		Size = size;
 		Tiles = new char[Size.X, Size.Y];
+		tileEntries = new Factory.Entry?[Size.X, Size.Y];
 
 		for (int x = 0; x < Size.X; x ++)
 		for (int tileY = 0; tileY < Size.Y; tileY ++)
-			Tiles[x, tileY] = '0';
+			SetTileUnchecked(x, tileY, '0');
 
 		if (path == null)
 		{
@@ -196,7 +200,7 @@ public class Room
 			{
 				var row = rows[y]?.GetValue<string>() ?? "";
 				for (var x = 0; x < row.Length && x < Size.X; x ++)
-					Tiles[x, y] = row[x];
+					SetTileUnchecked(x, y, row[x]);
 			}
 		}
 
@@ -212,7 +216,7 @@ public class Room
 	{
 		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
 		{
-			Tiles[tile.X, tile.Y] = ch;
+			SetTileUnchecked(tile.X, tile.Y, ch);
 			if (rebuildGeometry)
 				RebuildGeometry();
 		}
@@ -250,14 +254,17 @@ public class Room
 
 	public void RebuildGeometry()
 	{
+		RebuildTileEntryCache();
 		CollisionRects.Clear();
 		SlopeTiles.Clear();
 		slopeLookup.Clear();
+		slopePolygonLookup.Clear();
 		LightOccluders.Clear();
 		LightOccluderPolygons.Clear();
 		ReflectionRects.Clear();
 
 		BuildSlopeTiles();
+		BuildDualTerrainJoinMasks();
 		BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope);
 		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope);
 		BuildSlopeLightOccluders();
@@ -267,7 +274,15 @@ public class Room
 	public bool TryGetSlopeTile(Point2 tile, out SlopeTile slope)
 		=> slopeLookup.TryGetValue(tile, out slope);
 
-	public bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
+	public int GetDualTerrainJoinMask(int vertexX, int vertexY)
+	{
+		if (vertexX < 0 || vertexY < 0 || vertexX >= dualTerrainJoinMasks.GetLength(0) || vertexY >= dualTerrainJoinMasks.GetLength(1))
+			return 0;
+
+		return dualTerrainJoinMasks[vertexX, vertexY];
+	}
+
+	private bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
 	{
 		if (!ContainsTile(tileX, tileY))
 			return false;
@@ -309,15 +324,16 @@ public class Room
 		Position = bounds.Position;
 		Size = bounds.Size;
 		Tiles = new char[Size.X, Size.Y];
+		tileEntries = new Factory.Entry?[Size.X, Size.Y];
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
 		{
 			var oldX = Position.X + x - previousPosition.X;
 			var oldY = Position.Y + y - previousPosition.Y;
-			Tiles[x, y] = oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+			SetTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
 				? previousTiles[oldX, oldY]
-				: '0';
+				: '0');
 		}
 
 		var actorOffset = previousPosition - Position;
@@ -380,7 +396,27 @@ public class Room
 				var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction, fill);
 				SlopeTiles.Add(slope);
 				slopeLookup[slope.Tile] = slope;
+				slopePolygonLookup[slope.Tile] = BuildSlopePolygon(slope);
 			}
+		}
+	}
+
+	private void BuildDualTerrainJoinMasks()
+	{
+		dualTerrainJoinMasks = new byte[Size.X + 1, Size.Y + 1];
+		for (var x = 0; x <= Size.X; x++)
+		for (var y = 0; y <= Size.Y; y++)
+		{
+			var mask = 0;
+			if (IsTerrainJoinedToDualVertex(x - 1, y - 1, x, y))
+				mask |= TileQuadrants.TopLeft;
+			if (IsTerrainJoinedToDualVertex(x - 1, y, x, y))
+				mask |= TileQuadrants.BottomLeft;
+			if (IsTerrainJoinedToDualVertex(x, y - 1, x, y))
+				mask |= TileQuadrants.TopRight;
+			if (IsTerrainJoinedToDualVertex(x, y, x, y))
+				mask |= TileQuadrants.BottomRight;
+			dualTerrainJoinMasks[x, y] = (byte)mask;
 		}
 	}
 
@@ -430,10 +466,29 @@ public class Room
 		=> IsFullBlockTile(x, y) || IsSlopeTile(x, y);
 
 	private Factory.Entry? GetTileEntry(int x, int y)
-		=> ContainsTile(x, y) ? Factory.Find(Tiles[x, y]) : null;
+		=> ContainsTile(x, y) ? tileEntries[x, y] : null;
+
+	public Factory.Entry? GetEntry(Point2 tile)
+		=> GetTileEntry(tile.X, tile.Y);
 
 	private bool ContainsTile(int x, int y)
 		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y;
+
+	private void SetTileUnchecked(int x, int y, char tile)
+	{
+		Tiles[x, y] = tile;
+		tileEntries[x, y] = Factory.Find(tile);
+	}
+
+	private void RebuildTileEntryCache()
+	{
+		if (tileEntries.GetLength(0) != Size.X || tileEntries.GetLength(1) != Size.Y)
+			tileEntries = new Factory.Entry?[Size.X, Size.Y];
+
+		for (var x = 0; x < Size.X; x++)
+		for (var y = 0; y < Size.Y; y++)
+			tileEntries[x, y] = Factory.Find(Tiles[x, y]);
+	}
 
 	private void BuildSlopeLightOccluders()
 	{
@@ -442,6 +497,9 @@ public class Room
 	}
 
 	public Point2[] GetSlopePolygon(SlopeTile slope)
+		=> slopePolygonLookup.TryGetValue(slope.Tile, out var polygon) ? polygon : BuildSlopePolygon(slope);
+
+	private Point2[] BuildSlopePolygon(SlopeTile slope)
 	{
 		var rect = slope.WorldBounds(this);
 		var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
@@ -569,7 +627,7 @@ public class Room
 
 	private bool Matches(int x, int y, Func<Factory.Entry, bool> predicate)
 	{
-		if (Factory.Find(Tiles[x, y]) is not { } entry)
+		if (GetTileEntry(x, y) is not { } entry)
 			return false;
 
 		return predicate(entry);
@@ -628,11 +686,12 @@ public class Room
 		{
 			Size = size;
 			Tiles = new char[Size.X, Size.Y];
+			tileEntries = new Factory.Entry?[Size.X, Size.Y];
 		}
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
-			Tiles[x, y] = '0';
+			SetTileUnchecked(x, y, '0');
 		Actors.Clear();
 		LoadJson(json);
 		RebuildGeometry();

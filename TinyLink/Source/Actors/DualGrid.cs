@@ -25,54 +25,47 @@ public class DualGrid : Actor
 		new(2, 1),
 	];
 
-	private readonly List<Layer> layers = [];
+	private readonly List<DrawCommand> drawCommands = [];
 	public override bool CastsReflection => false;
 
 	public void Build(Room room, char tileType, Tileset tileset)
 	{
-		var layer = new Layer(tileset);
-		layer.EnsureSize(room.Size.X + 1, room.Size.Y + 1);
-
 		for (var x = 0; x <= room.Size.X; x ++)
 		for (var y = 0; y <= room.Size.Y; y ++)
 		{
 			var materialMask = 0;
 			if (IsFilled(room, tileType, x - 1, y - 1))
-				materialMask |= 1;
+				materialMask |= TileQuadrants.TopLeft;
 			if (IsFilled(room, tileType, x - 1, y))
-				materialMask |= 2;
+				materialMask |= TileQuadrants.BottomLeft;
 			if (IsFilled(room, tileType, x, y - 1))
-				materialMask |= 4;
+				materialMask |= TileQuadrants.TopRight;
 			if (IsFilled(room, tileType, x, y))
-				materialMask |= 8;
+				materialMask |= TileQuadrants.BottomRight;
 
 			if (materialMask == 0)
 				continue;
 
-			var mask = 0;
-			if (room.IsTerrainJoinedToDualVertex(x - 1, y - 1, x, y))
-				mask |= 1;
-			if (room.IsTerrainJoinedToDualVertex(x - 1, y, x, y))
-				mask |= 2;
-			if (room.IsTerrainJoinedToDualVertex(x, y - 1, x, y))
-				mask |= 4;
-			if (room.IsTerrainJoinedToDualVertex(x, y, x, y))
-				mask |= 8;
-
+			var mask = room.GetDualTerrainJoinMask(x, y);
 			if (mask == 0)
 				continue;
 
 			var tile = MaskToTile[mask];
 			var seed = StableVariantSeed(room, tileType, x, y);
-			layer.Tilemap[x, y] = new TileSlot(tileset.GetVariantTile(tile.X, tile.Y, seed), materialMask);
-		}
+			var subtexture = tileset.GetVariantTile(tile.X, tile.Y, seed);
+			if (subtexture.Texture == null)
+				continue;
 
-		layers.Add(layer);
+			drawCommands.Add(new DrawCommand(
+				subtexture,
+				new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize,
+				materialMask));
+		}
 	}
 
 	public void Clear()
 	{
-		layers.Clear();
+		drawCommands.Clear();
 	}
 
 	private static bool IsFilled(Room room, char tileType, int x, int y)
@@ -99,49 +92,33 @@ public class DualGrid : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		foreach (var layer in layers)
+		foreach (var command in drawCommands)
 		{
-			for (var x = 0; x < layer.Tilemap.GetLength(0); x ++)
-			for (var y = 0; y < layer.Tilemap.GetLength(1); y ++)
+			if (command.MaterialMask == TileQuadrants.All)
 			{
-				var slot = layer.Tilemap[x, y];
-				if (slot.Tile.Texture == null)
-					continue;
-
-				var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
-				DrawQuadrant(batcher, slot, 1, position, new Rect(0, 0, Game.TileSize / 2, Game.TileSize / 2));
-				DrawQuadrant(batcher, slot, 2, position, new Rect(0, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
-				DrawQuadrant(batcher, slot, 4, position, new Rect(Game.TileSize / 2, 0, Game.TileSize / 2, Game.TileSize / 2));
-				DrawQuadrant(batcher, slot, 8, position, new Rect(Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
+				batcher.Image(command.Tile, command.Position, Color.White);
+				continue;
 			}
+
+			DrawQuadrant(batcher, command, TileQuadrants.TopLeft, new Rect(0, 0, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, TileQuadrants.BottomLeft, new Rect(0, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, TileQuadrants.TopRight, new Rect(Game.TileSize / 2, 0, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, TileQuadrants.BottomRight, new Rect(Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
 		}
 	}
 
-	private static void DrawQuadrant(Batcher batcher, TileSlot slot, int mask, Vector2 position, Rect clip)
+	private static void DrawQuadrant(Batcher batcher, DrawCommand command, int mask, Rect clip)
 	{
-		if ((slot.MaterialMask & mask) == 0)
+		if ((command.MaterialMask & mask) == 0)
 			return;
 
-		batcher.Image(slot.Tile, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White);
+		batcher.Image(command.Tile, clip, command.Position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White);
 	}
 
-	private readonly struct TileSlot(Subtexture tile, int materialMask)
+	private readonly struct DrawCommand(Subtexture tile, Vector2 position, int materialMask)
 	{
 		public readonly Subtexture Tile = tile;
+		public readonly Vector2 Position = position;
 		public readonly int MaterialMask = materialMask;
-	}
-
-	private sealed class Layer(Tileset tileset)
-	{
-		public readonly Tileset Tileset = tileset;
-		public TileSlot[,] Tilemap = new TileSlot[Game.Columns + 1, Game.Rows + 1];
-
-		public void EnsureSize(int width, int height)
-		{
-			if (Tilemap.GetLength(0) == width && Tilemap.GetLength(1) == height)
-				return;
-
-			Tilemap = new TileSlot[width, height];
-		}
 	}
 }
