@@ -17,6 +17,10 @@ public class Game : IDisposable
 	private const float ActorShadowStrength = 0.5f;
 	private const float ActorShadowMinLength = 4.0f;
 	private const float ActorShadowMaxLength = 28.0f;
+	private static readonly BlendMode ShadowBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.RGB, Color.White);
 	private const float ReflectionOpacity = 0.5f;
 	private const float CameraSlackEpsilon = TileSize;
 	static float DitherGlitchAttackSpeed => 15.0f;
@@ -93,7 +97,8 @@ public class Game : IDisposable
 		TileFieldRed,
 		TileFieldGreen,
 		TileFieldBlue,
-		DitherMask
+		DitherMask,
+		Visibility
 	}
 
 	private DebugView debugView;
@@ -134,6 +139,7 @@ public class Game : IDisposable
 			DebugView.TileFieldGreen => "Tile Field G: Family",
 			DebugView.TileFieldBlue => "Tile Field B: Solid",
 			DebugView.DitherMask => "Dither Mask",
+			DebugView.Visibility => "Visibility Polygon",
 			_ => view.ToString()
 		};
 
@@ -264,6 +270,7 @@ public class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 				if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
 				if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
+				if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 			}
 
@@ -570,6 +577,8 @@ public class Game : IDisposable
 		}
 		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
 			DrawPlayerHud(output);
+		if (debugView == DebugView.Visibility)
+			DrawVisibilityDebug(output);
 
 		// draw screen to window
 		{
@@ -1055,6 +1064,7 @@ public class Game : IDisposable
 	private void DrawSingleLightMask(Vector2 position, float radius, float intensity, float height, Color lightColor, bool includeShadows)
 	{
 		SingleLightMask.Clear(Color.Transparent);
+		var drewVisibilityClippedLight = false;
 
 		if (normalLightMaterial != null)
 		{
@@ -1077,7 +1087,15 @@ public class Game : IDisposable
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			Batcher.PushMaterial(normalLightMaterial.Material);
-			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			if (includeShadows)
+			{
+				DrawVisibilityClippedNormalLight(position, radius);
+				drewVisibilityClippedLight = true;
+			}
+			else
+			{
+				Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			}
 			Batcher.PopMaterial();
 			Batcher.PopSampler();
 		}
@@ -1089,15 +1107,46 @@ public class Game : IDisposable
 			Batcher.PopMatrix();
 		}
 
-		if (includeShadows)
+		if (includeShadows && !drewVisibilityClippedLight)
 		{
 			Batcher.PushMatrix(-(Point2)Camera + shake);
+			Batcher.PushBlend(ShadowBlend);
 			DrawLightShadows(position, radius);
+			Batcher.PopBlend();
 			Batcher.PopMatrix();
 		}
 
 		Batcher.Render(SingleLightMask);
 		Batcher.Clear();
+	}
+
+	private void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
+	{
+		var segments = GatherVisibilitySegments(lightPosition, radius);
+		var hits = VisibilityPolygon.Compute(lightPosition, radius, segments);
+		if (hits.Count < 3)
+		{
+			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			return;
+		}
+
+		var screenLight = lightPosition - Camera + shake;
+		var texture = NormalBuffer.Attachments[0];
+		var textureSize = new Vector2(NormalBuffer.Width, NormalBuffer.Height);
+		for (var i = 0; i < hits.Count; i++)
+		{
+			var a = hits[i].Point - Camera + shake;
+			var b = hits[(i + 1) % hits.Count].Point - Camera + shake;
+			Batcher.Triangle(
+				texture,
+				screenLight,
+				a,
+				b,
+				screenLight / textureSize,
+				a / textureSize,
+				b / textureSize,
+				Color.White);
+		}
 	}
 
 	private void AddSingleLightMask(Target lightMask)
@@ -1213,10 +1262,167 @@ public class Game : IDisposable
 			}
 		}
 
-		var shadowLength = radius * 8.0f;
-		var aFar = bestA + DirectionFromLight(lightPosition, bestA) * shadowLength;
-		var bFar = bestB + DirectionFromLight(lightPosition, bestB) * shadowLength;
+		var aFar = ProjectToLightRadius(lightPosition, radius, bestA);
+		var bFar = ProjectToLightRadius(lightPosition, radius, bestB);
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
+	}
+
+	private void DrawVisibilityDebug(Target target)
+	{
+		if (!TryGetVisibilityDebugLight(out var lightPosition, out var radius))
+			return;
+
+		var segments = GatherVisibilitySegments(lightPosition, radius);
+		var hits = VisibilityPolygon.Compute(lightPosition, radius, segments);
+
+		Batcher.PushMatrix(-(Point2)Camera + shake);
+		Batcher.Circle(lightPosition, radius, 64, Color.Transparent, new Color(0x5fcde4, 0.35f));
+
+		for (var i = 0; i < hits.Count; i++)
+		{
+			var a = hits[i].Point;
+			var b = hits[(i + 1) % hits.Count].Point;
+			Batcher.Triangle(lightPosition, a, b, new Color(0x5fcde4, 0.08f));
+		}
+
+		for (var i = 0; i < segments.Count; i++)
+			Batcher.Line(segments[i].A, segments[i].B, 1, VisibilityDebugSegmentColor(i, 0.9f));
+
+		foreach (var hit in hits)
+		{
+			var color = hit.HitSegment
+				? VisibilityDebugSegmentColor(hit.SegmentIndex, 0.75f)
+				: new Color(0xcbdbfc, 0.45f);
+			Batcher.Line(lightPosition, hit.Point, 1, color * 0.45f);
+			Batcher.Circle(hit.Point, 1.5f, 8, color);
+		}
+
+		Batcher.Circle(lightPosition, 2.5f, 16, 0xffffff);
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	private bool TryGetVisibilityDebugLight(out Vector2 lightPosition, out float radius)
+	{
+		if (mouseLightEnabled)
+		{
+			lightPosition = mouseLightPosition;
+			radius = 48;
+			return true;
+		}
+
+		if (GetFirst<Player>() is { } player)
+		{
+			lightPosition = player.GetVisualBounds().Center;
+			radius = 64;
+			return true;
+		}
+
+		lightPosition = default;
+		radius = 0;
+		return false;
+	}
+
+	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius)
+	{
+		var segments = new List<VisibilityPolygon.Segment>();
+		if (room != null)
+			AddRoomVisibilitySegments(segments, room, lightPosition, radius);
+		if (nextRoom != null && nextRoom != room)
+			AddRoomVisibilitySegments(segments, nextRoom, lightPosition, radius);
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not HiddenWallGrid hiddenWalls)
+				continue;
+
+			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+			{
+				AddRectVisibilitySegments(segments, rect, lightPosition, radius);
+			});
+		}
+
+		return segments;
+	}
+
+	private static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
+	{
+		AddRoomBoundaryVisibilitySegments(segments, renderRoom, lightPosition, radius);
+
+		foreach (var rect in renderRoom.LightOccluders)
+			AddRectVisibilitySegments(segments, rect, lightPosition, radius);
+
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			AddPolygonVisibilitySegments(segments, polygon.Points, lightPosition, radius);
+	}
+
+	private static void AddRoomBoundaryVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
+	{
+		var bounds = renderRoom.WorldBounds;
+		AddVisibilitySegment(segments, bounds.TopLeft, bounds.TopRight, lightPosition, radius);
+		AddVisibilitySegment(segments, bounds.TopRight, bounds.BottomRight, lightPosition, radius);
+		AddVisibilitySegment(segments, bounds.BottomRight, bounds.BottomLeft, lightPosition, radius);
+		AddVisibilitySegment(segments, bounds.BottomLeft, bounds.TopLeft, lightPosition, radius);
+	}
+
+	private static void AddRectVisibilitySegments(List<VisibilityPolygon.Segment> segments, RectInt rect, Vector2 lightPosition, float radius)
+	{
+		Span<Point2> points =
+		[
+			rect.TopLeft,
+			rect.TopRight,
+			rect.BottomRight,
+			rect.BottomLeft
+		];
+		AddPolygonVisibilitySegments(segments, points, lightPosition, radius);
+	}
+
+	private static void AddPolygonVisibilitySegments(List<VisibilityPolygon.Segment> segments, ReadOnlySpan<Point2> points, Vector2 lightPosition, float radius)
+	{
+		for (var i = 0; i < points.Length; i++)
+			AddVisibilitySegment(segments, points[i], points[(i + 1) % points.Length], lightPosition, radius);
+	}
+
+	private static void AddVisibilitySegment(List<VisibilityPolygon.Segment> segments, Vector2 a, Vector2 b, Vector2 lightPosition, float radius)
+	{
+		var segment = new VisibilityPolygon.Segment(a, b);
+		if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+			segments.Add(segment);
+	}
+
+	private static Color VisibilityDebugSegmentColor(int index, float alpha)
+	{
+		var hue = (index * 0.61803398875f) % 1.0f;
+		return ColorFromHsv(hue, 0.72f, 1.0f, alpha);
+	}
+
+	private static Color ColorFromHsv(float hue, float saturation, float value, float alpha)
+	{
+		var h = hue * 6.0f;
+		var c = value * saturation;
+		var x = c * (1.0f - MathF.Abs(h % 2.0f - 1.0f));
+		var m = value - c;
+		var rgb = h switch
+		{
+			< 1.0f => new Vector3(c, x, 0),
+			< 2.0f => new Vector3(x, c, 0),
+			< 3.0f => new Vector3(0, c, x),
+			< 4.0f => new Vector3(0, x, c),
+			< 5.0f => new Vector3(x, 0, c),
+			_ => new Vector3(c, 0, x),
+		};
+		return new Color(rgb.X + m, rgb.Y + m, rgb.Z + m, alpha);
+	}
+
+	private static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
+	{
+		var direction = point - lightPosition;
+		var distance = direction.Length();
+		if (distance <= 0.0001f)
+			return point;
+
+		return lightPosition + direction / distance * radius;
 	}
 
 	private static Vector2 DirectionFromLight(Vector2 lightPosition, Vector2 point)
