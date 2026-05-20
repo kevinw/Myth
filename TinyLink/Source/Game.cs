@@ -70,6 +70,7 @@ public class Game : IDisposable
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
 	private bool[,] roomNormalMask = new bool[Width, Height];
+	private bool[,] roomNormalSuppressMask = new bool[Width, Height];
 	private readonly HashSet<string> audioFailures = [];
 	private readonly HashSet<string> sessionDestroyedActors = [];
 	private readonly ReloadableMaterial? crtMaterial;
@@ -519,6 +520,7 @@ public class Game : IDisposable
 		DitherMask = new Target(GraphicsDevice, width, height, name: "DitherMask");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
 		roomNormalMask = new bool[width, height];
+		roomNormalSuppressMask = new bool[width, height];
 	}
 
 	private void DisposeRenderTargets()
@@ -1482,16 +1484,17 @@ public class Game : IDisposable
 	private void DrawRoomNormals()
 	{
 		Array.Clear(roomNormalMask);
+		Array.Clear(roomNormalSuppressMask);
 
 		if (room != null)
 		{
 			FillRoomNormalMask(room);
-			ClearDualRoomNormalMask(room);
+			SuppressBakedDualRoomNormals(room);
 		}
 		if (nextRoom != null && nextRoom != room)
 		{
 			FillRoomNormalMask(nextRoom);
-			ClearDualRoomNormalMask(nextRoom);
+			SuppressBakedDualRoomNormals(nextRoom);
 		}
 
 		foreach (var actor in Actors)
@@ -1509,6 +1512,8 @@ public class Game : IDisposable
 			var sy = SolidValue(x, y - 1) - SolidValue(x, y + 1);
 			if (sx == 0 && sy == 0)
 				continue;
+			if (RoomNormalSuppressed(x, y))
+				continue;
 
 			Batcher.Rect(new Rect(offset.X + x, offset.Y + y, 1, 1), EncodeNormal(new Vector3(sx, sy, 1), 1));
 		}
@@ -1516,13 +1521,13 @@ public class Game : IDisposable
 
 	private void FillRoomNormalMask(Room renderRoom)
 	{
-		foreach (var rect in renderRoom.LightOccluders)
+		foreach (var rect in renderRoom.CollisionRects)
 			FillRoomNormalMask(rect);
 		foreach (var polygon in renderRoom.LightOccluderPolygons)
 			FillRoomNormalMask(polygon);
 	}
 
-	private void ClearDualRoomNormalMask(Room renderRoom)
+	private void SuppressBakedDualRoomNormals(Room renderRoom)
 	{
 		var camera = (Point2)Camera;
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
@@ -1541,7 +1546,7 @@ public class Game : IDisposable
 
 			for (var y = top; y < bottom; y++)
 			for (var x = left; x < right; x++)
-				roomNormalMask[x, y] = false;
+				roomNormalSuppressMask[x, y] = true;
 		}
 	}
 
@@ -1595,6 +1600,14 @@ public class Game : IDisposable
 			return false;
 
 		return roomNormalMask[x, y];
+	}
+
+	private bool RoomNormalSuppressed(int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= NormalBuffer.Width || y >= NormalBuffer.Height)
+			return false;
+
+		return roomNormalSuppressMask[x, y];
 	}
 
 	private float SolidValue(int x, int y)

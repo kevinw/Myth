@@ -639,19 +639,19 @@ public static class Assets
 				continue;
 
 			var sx =
-				AlphaAt(alphaMask, source.X + x - 1, source.Y + y - 1) +
-				AlphaAt(alphaMask, source.X + x - 1, source.Y + y) * 2 +
-				AlphaAt(alphaMask, source.X + x - 1, source.Y + y + 1) -
-				AlphaAt(alphaMask, source.X + x + 1, source.Y + y - 1) -
-				AlphaAt(alphaMask, source.X + x + 1, source.Y + y) * 2 -
-				AlphaAt(alphaMask, source.X + x + 1, source.Y + y + 1);
+				AlphaAtClampedToSource(alphaMask, source, x - 1, y - 1) +
+				AlphaAtClampedToSource(alphaMask, source, x - 1, y) * 2 +
+				AlphaAtClampedToSource(alphaMask, source, x - 1, y + 1) -
+				AlphaAtClampedToSource(alphaMask, source, x + 1, y - 1) -
+				AlphaAtClampedToSource(alphaMask, source, x + 1, y) * 2 -
+				AlphaAtClampedToSource(alphaMask, source, x + 1, y + 1);
 			var sy =
-				AlphaAt(alphaMask, source.X + x - 1, source.Y + y - 1) +
-				AlphaAt(alphaMask, source.X + x, source.Y + y - 1) * 2 +
-				AlphaAt(alphaMask, source.X + x + 1, source.Y + y - 1) -
-				AlphaAt(alphaMask, source.X + x - 1, source.Y + y + 1) -
-				AlphaAt(alphaMask, source.X + x, source.Y + y + 1) * 2 -
-				AlphaAt(alphaMask, source.X + x + 1, source.Y + y + 1);
+				AlphaAtClampedToSource(alphaMask, source, x - 1, y - 1) +
+				AlphaAtClampedToSource(alphaMask, source, x, y - 1) * 2 +
+				AlphaAtClampedToSource(alphaMask, source, x + 1, y - 1) -
+				AlphaAtClampedToSource(alphaMask, source, x - 1, y + 1) -
+				AlphaAtClampedToSource(alphaMask, source, x, y + 1) * 2 -
+				AlphaAtClampedToSource(alphaMask, source, x + 1, y + 1);
 
 			var strength = Math.Clamp(MathF.Sqrt(sx * sx + sy * sy) * 0.5f, 0, 1) * alpha;
 			if (strength <= 0)
@@ -664,6 +664,13 @@ public static class Assets
 				normal.Z * 0.5f + 0.5f,
 				strength);
 		}
+	}
+
+	private static float AlphaAtClampedToSource(Image image, RectInt source, int x, int y)
+	{
+		x = Math.Clamp(x, 0, source.Width - 1);
+		y = Math.Clamp(y, 0, source.Height - 1);
+		return AlphaAt(image, source.X + x, source.Y + y);
 	}
 
 	private static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edge)
