@@ -218,10 +218,11 @@ public class Player : Actor
 		}
 		else
 		{
-			if (GetWallJumpDirection() != 0)
+			var wallJumpDir = GetWallJumpDirection();
+			if (wallJumpDir != 0 && input == -wallJumpDir)
 			{
 				Play("wall_slide");
-			} else if (JumpUpSquish > 0)
+			} else if (JumpUpSquish > 0 && !grounded)
 			{
 				Play("jump_squish");
 			}
