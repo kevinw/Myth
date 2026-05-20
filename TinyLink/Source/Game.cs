@@ -67,6 +67,12 @@ public class Game : IDisposable
 	private float transitionAmbientIntensityTo;
 	private float transitionLightNoiseFrom;
 	private float transitionLightNoiseTo;
+	private Color transitionSunColorFrom;
+	private Color transitionSunColorTo;
+	private float transitionSunStrengthFrom;
+	private float transitionSunStrengthTo;
+	private Vector2 transitionSunDirectionFrom;
+	private Vector2 transitionSunDirectionTo;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
 	private bool[,] roomNormalMask = new bool[Width, Height];
@@ -1004,6 +1010,11 @@ public class Game : IDisposable
 	private void DrawLightMask(Target lightMask, bool includeShadows)
 	{
 		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
+		if (CurrentSunStrength() > SunStrengthEpsilon)
+		{
+			DrawSunLightMask(includeShadows);
+			AddSingleLightMask(lightMask);
+		}
 
 		foreach (var actor in Actors)
 		{
@@ -1051,8 +1062,84 @@ public class Game : IDisposable
 		return float.Lerp(transitionLightNoiseFrom, transitionLightNoiseTo, Ease.Cube.InOut(nextRoomEase));
 	}
 
+	private Color CurrentSunColor()
+	{
+		if (nextRoom == null)
+			return room?.SunColor ?? Room.DefaultSunColor;
+
+		return LerpColor(transitionSunColorFrom, transitionSunColorTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private float CurrentSunStrength()
+	{
+		if (nextRoom == null)
+			return room?.SunStrength ?? 0.0f;
+
+		return float.Lerp(transitionSunStrengthFrom, transitionSunStrengthTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private Vector2 CurrentSunDirection()
+	{
+		if (nextRoom == null)
+			return room?.SunDirection ?? Room.DefaultSunDirection;
+
+		var direction = Vector2.Lerp(transitionSunDirectionFrom, transitionSunDirectionTo, Ease.Cube.InOut(nextRoomEase));
+		return Room.NormalizeOrDefault(direction, Room.DefaultSunDirection);
+	}
+
 	private static Color LerpColor(Color from, Color to, float amount)
 		=> new(Vector4.Lerp(from, to, amount));
+
+	private const float SunStrengthEpsilon = 0.001f;
+
+	private void DrawSunLightMask(bool includeShadows)
+	{
+		SingleLightMask.Clear(Color.Transparent);
+		var strength = CurrentSunStrength();
+
+		var direction = CurrentSunDirection();
+		var lightColor = CurrentSunColor();
+		if (normalLightMaterial != null)
+		{
+			var lightColorValue = (Vector4)lightColor;
+			normalLightMaterial.Material.Fragment.SetUniformBuffer([
+				NormalBuffer.Width,
+				NormalBuffer.Height,
+				0,
+				0,
+				direction.X,
+				direction.Y,
+				-1.0f,
+				1.0f,
+				lightColorValue.X,
+				lightColorValue.Y,
+				lightColorValue.Z,
+				strength
+			]);
+
+			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+			Batcher.PushMaterial(normalLightMaterial.Material);
+			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			Batcher.PopMaterial();
+			Batcher.PopSampler();
+		}
+		else
+		{
+			Batcher.Rect(new Rect(0, 0, SingleLightMask.Width, SingleLightMask.Height), ScaleColor(lightColor, strength));
+		}
+
+		if (includeShadows)
+		{
+			Batcher.PushMatrix(-(Point2)Camera + shake);
+			Batcher.PushBlend(ShadowBlend);
+			DrawSunShadows(direction);
+			Batcher.PopBlend();
+			Batcher.PopMatrix();
+		}
+
+		Batcher.Render(SingleLightMask);
+		Batcher.Clear();
+	}
 
 	private void DrawSingleLightMask(Light light, bool includeShadows)
 		=> DrawSingleLightMask(
@@ -1182,6 +1269,88 @@ public class Game : IDisposable
 		}
 
 		DrawActorSpriteShadows(lightPosition, radius);
+	}
+
+	private void DrawSunShadows(Vector2 direction)
+	{
+		var distance = SunShadowDistance();
+		if (room != null)
+			DrawRoomSunShadows(room, direction, distance);
+		if (nextRoom != null && nextRoom != room)
+			DrawRoomSunShadows(nextRoom, direction, distance);
+
+		foreach (var actor in Actors)
+		{
+			if (actor is DualGrid dualGrid)
+				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
+		}
+
+		foreach (var segment in sunSegmentBuffer)
+			DrawSunShadowSegment(segment, direction, distance);
+		sunSegmentBuffer.Clear();
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not HiddenWallGrid hiddenWalls)
+				continue;
+
+			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+			{
+				DrawSunShadowVolume(direction, distance, rect);
+			});
+		}
+	}
+
+	private readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
+
+	private float SunShadowDistance()
+		=> MathF.Sqrt(NormalBuffer.Width * NormalBuffer.Width + NormalBuffer.Height * NormalBuffer.Height) + TileSize * MathF.Max(Columns, Rows) * 2;
+
+	private void DrawRoomSunShadows(Room renderRoom, Vector2 direction, float distance)
+	{
+		foreach (var rect in renderRoom.LightOccluders)
+			DrawSunShadowVolume(direction, distance, rect);
+
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			DrawSunShadowVolume(direction, distance, polygon.Points);
+	}
+
+	private void DrawSunShadowVolume(Vector2 direction, float distance, RectInt rect)
+	{
+		Span<Point2> corners =
+		[
+			rect.TopLeft,
+			rect.TopRight,
+			rect.BottomRight,
+			rect.BottomLeft
+		];
+		DrawSunShadowVolume(direction, distance, corners);
+	}
+
+	private void DrawSunShadowVolume(Vector2 direction, float distance, ReadOnlySpan<Point2> points)
+	{
+		for (var i = 0; i < points.Length; i++)
+		{
+			var a = (Vector2)points[i];
+			var b = (Vector2)points[(i + 1) % points.Length];
+			if (!IsSunShadowCastingEdge(a, b, direction))
+				continue;
+
+			DrawSunShadowSegment(new(a, b), direction, distance);
+		}
+	}
+
+	private static bool IsSunShadowCastingEdge(Vector2 a, Vector2 b, Vector2 direction)
+	{
+		var edge = b - a;
+		var outward = new Vector2(edge.Y, -edge.X);
+		return Vector2.Dot(outward, direction) > 0.001f;
+	}
+
+	private void DrawSunShadowSegment(VisibilityPolygon.Segment segment, Vector2 direction, float distance)
+	{
+		var offset = direction * distance;
+		Batcher.Quad(segment.A, segment.B, segment.B + offset, segment.A + offset, Color.Black);
 	}
 
 	private void DrawRoomLightShadows(Room renderRoom, Vector2 lightPosition, float radius)
@@ -1983,6 +2152,12 @@ public class Game : IDisposable
 				transitionAmbientIntensityTo = nextRoom.AmbientIntensity;
 				transitionLightNoiseFrom = room.LightNoise;
 				transitionLightNoiseTo = nextRoom.LightNoise;
+				transitionSunColorFrom = room.SunColor;
+				transitionSunColorTo = nextRoom.SunColor;
+				transitionSunStrengthFrom = room.SunStrength;
+				transitionSunStrengthTo = nextRoom.SunStrength;
+				transitionSunDirectionFrom = room.SunDirection;
+				transitionSunDirectionTo = nextRoom.SunDirection;
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				ApplyMusicArea(nextRoom);

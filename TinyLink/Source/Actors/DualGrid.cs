@@ -142,6 +142,9 @@ public class DualGrid : Actor
 		}
 	}
 
+	public void AppendAllVisibilitySegments(List<VisibilityPolygon.Segment> segments)
+		=> segments.AddRange(visibilitySegments);
+
 	private void AppendWorldVisibilitySegments(Vector2 commandPosition, int materialMask, Tileset.OccluderSegment[] occluders)
 	{
 		foreach (var local in occluders)

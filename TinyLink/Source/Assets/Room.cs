@@ -35,6 +35,8 @@ public class Room
 	public static readonly Color DefaultAmbientColor = new(0.42f, 0.42f, 0.46f, 1.0f);
 	public const float DefaultAmbientIntensity = 1.0f;
 	public const float DefaultLightNoise = 0.30f;
+	public static readonly Color DefaultSunColor = new(1.0f, 0.9f, 0.72f, 1.0f);
+	public static readonly Vector2 DefaultSunDirection = Vector2.Normalize(new Vector2(1, 1));
 
 	/// <summary>
 	/// Stable room identity, also used as the filename.
@@ -108,6 +110,9 @@ public class Room
 	public Color AmbientColor = DefaultAmbientColor;
 	public float AmbientIntensity = DefaultAmbientIntensity;
 	public float LightNoise = DefaultLightNoise;
+	public Color SunColor = DefaultSunColor;
+	public float SunStrength = 0.0f;
+	public Vector2 SunDirection = DefaultSunDirection;
 
 	/// <summary>
 	/// Bounds in World Space in Pixels
@@ -136,7 +141,10 @@ public class Room
 			MusicArea = MusicArea,
 			AmbientColor = AmbientColor,
 			AmbientIntensity = AmbientIntensity,
-			LightNoise = LightNoise
+			LightNoise = LightNoise,
+			SunColor = SunColor,
+			SunStrength = SunStrength,
+			SunDirection = SunDirection
 		};
 
 		for (var x = 0; x < Size.X; x ++)
@@ -198,6 +206,15 @@ public class Room
 		AmbientColor = ReadHexColor(json, "ambientColor") ?? DefaultAmbientColor;
 		AmbientIntensity = ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
 		LightNoise = ReadFloat(json, "lightNoise", DefaultLightNoise);
+		SunColor = DefaultSunColor;
+		SunStrength = 0.0f;
+		SunDirection = DefaultSunDirection;
+		if (json.TryGetPropertyValue("sun", out var sunNode) && sunNode is JsonObject sun)
+		{
+			SunColor = ReadHexColor(sun, "color") ?? DefaultSunColor;
+			SunStrength = Math.Max(0, ReadFloat(sun, "strength", 0.0f));
+			SunDirection = NormalizeOrDefault(ReadVector2(sun, "direction") ?? DefaultSunDirection, DefaultSunDirection);
+		}
 
 		if (json.TryGetPropertyValue("tiles", out var tilesNode) && tilesNode is JsonArray rows)
 		{
@@ -383,6 +400,35 @@ public class Room
 		return float.TryParse(node.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
 			? value
 			: fallback;
+	}
+
+	private static Vector2? ReadVector2(JsonObject json, string key)
+	{
+		if (!json.TryGetPropertyValue(key, out var node) || node is not JsonArray { Count: >= 2 } array)
+			return null;
+		if (!TryReadFloat(array[0], out var x) || !TryReadFloat(array[1], out var y))
+			return null;
+
+		return new Vector2(x, y);
+	}
+
+	private static bool TryReadFloat(JsonNode? node, out float value)
+	{
+		if (node == null)
+		{
+			value = 0;
+			return false;
+		}
+
+		return float.TryParse(node.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
+	}
+
+	public static Vector2 NormalizeOrDefault(Vector2 direction, Vector2 fallback)
+	{
+		if (direction.LengthSquared() <= 0.0001f)
+			return fallback;
+
+		return Vector2.Normalize(direction);
 	}
 
 	private static string ColorToHex(Color color)
@@ -697,6 +743,15 @@ public class Room
 			json["ambientIntensity"] = AmbientIntensity;
 		if (LightNoise != DefaultLightNoise)
 			json["lightNoise"] = LightNoise;
+		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
+		{
+			json["sun"] = new JsonObject
+			{
+				["strength"] = SunStrength,
+				["color"] = ColorToHex(SunColor),
+				["direction"] = new JsonArray(SunDirection.X, SunDirection.Y)
+			};
+		}
 
 		var rows = new JsonArray();
 		for (var y = 0; y < Size.Y; y ++)

@@ -48,13 +48,16 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float2 toLight2D = lightPosition - pixel;
     float distanceToLight = length(toLight2D);
-    float attenuation = saturate(1.0 - distanceToLight / radius);
+    float directional = radius < 0.0 ? 1.0 : 0.0;
+    float attenuation = directional > 0.5 ? 1.0 : saturate(1.0 - distanceToLight / radius);
     attenuation *= attenuation;
 
     float4 normalData = Texture.Sample(Sampler, input.TexCoord);
     float normalStrength = normalData.a;
     float3 normal = normalize(normalData.rgb * 2.0 - 1.0);
-    float3 lightDirection = normalize(float3(toLight2D, height));
+    float3 pointLightDirection = normalize(float3(toLight2D, height));
+    float3 sunLightDirection = normalize(float3(-lightPosition, height));
+    float3 lightDirection = directional > 0.5 ? sunLightDirection : pointLightDirection;
     float diffuse = saturate(dot(normal, lightDirection));
     float normalResponse = lerp(1.0, 0.12 + diffuse * 2.15, normalStrength);
 

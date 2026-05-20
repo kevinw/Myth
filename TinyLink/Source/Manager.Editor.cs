@@ -78,7 +78,7 @@ public partial class Manager
 	float fpsElapsed;
 #endif
 
-	private readonly record struct RoomSettings(string? MusicArea, Color AmbientColor, float AmbientIntensity, float LightNoise);
+	private readonly record struct RoomSettings(string? MusicArea, Color AmbientColor, float AmbientIntensity, float LightNoise, Color SunColor, float SunStrength, Vector2 SunDirection);
 
 	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
 		=> new RoomUndoTarget(room);
@@ -535,6 +535,36 @@ public partial class Manager
 			changed = true;
 		}
 
+		ImGui.TextUnformatted("Sun Strength");
+		var sunStrength = room.SunStrength;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomSunStrength", ref sunStrength, 0.0f, 2.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Sun", room))
+				room.SunStrength = sunStrength;
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Sun Color");
+		var sun = ColorToVector3(room.SunColor);
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.ColorEdit3("##RoomSunColor", ref sun, ImGuiColorEditFlags.NoInputs))
+		{
+			using (CaptureRoomUndo("Edit Room Sun", room))
+				room.SunColor = Vector3ToColor(sun);
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Sun Direction");
+		var sunDirection = room.SunDirection;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.DragFloat2("##RoomSunDirection", ref sunDirection, 0.01f, -1.0f, 1.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Sun", room))
+				room.SunDirection = Room.NormalizeOrDefault(sunDirection, room.SunDirection);
+			changed = true;
+		}
+
 		if (musicAreas.Count > 0)
 		{
 			ImGui.TextUnformatted("Music");
@@ -582,7 +612,7 @@ public partial class Manager
 	}
 
 	private static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.AmbientColor, room.AmbientIntensity, room.LightNoise);
+		=> new(room.MusicArea, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.SunColor, room.SunStrength, room.SunDirection);
 
 	private static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -590,6 +620,9 @@ public partial class Manager
 		room.AmbientColor = settings.AmbientColor;
 		room.AmbientIntensity = settings.AmbientIntensity;
 		room.LightNoise = settings.LightNoise;
+		room.SunColor = settings.SunColor;
+		room.SunStrength = settings.SunStrength;
+		room.SunDirection = settings.SunDirection;
 	}
 
 	private void ActorSpecInspectorImGui()
