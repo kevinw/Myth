@@ -7,6 +7,7 @@ public class Grid : Actor
 {
 	private bool[,] grid = new bool[Game.Columns, Game.Rows];
 	private Subtexture[,] tilemap = new Subtexture[Game.Columns, Game.Rows];
+	public Factory.TileLayer Layer { get; set; } = Factory.TileLayer.Foreground;
 
 	public Grid()
 	{

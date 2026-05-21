@@ -20,7 +20,7 @@ public static class Factory
 	/// <summary>
 	/// Used to Place a Tile
 	/// </summary>
-	public delegate void TileFn(Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual);
+	public delegate void TileFn(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual);
 
 	public readonly struct Entry
 	{
@@ -125,10 +125,11 @@ public static class Factory
 		if (tileset == null)
 			return new();
 
-		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
+		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
-			(isFg ? fg : bg).Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
+			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
+			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
 		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer);
 	}
 
@@ -142,7 +143,7 @@ public static class Factory
 		if (image.Texture == null)
 			image = tileset.Tiles[0];
 
-		return new Entry(name ?? $"{tileset.Name} Slope", image, (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
+		return new Entry(name ?? $"{tileset.Name} Slope", image, (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			var seed = StableVariantSeed(room, tilesetName, tile);
 			if (room.TryGetSlopeTile(tile, out var slope))
@@ -177,7 +178,7 @@ public static class Factory
 		if (tileset == null || dualTileset == null)
 			throw new InvalidOperationException($"Dual tile '{tilesetName}' requires tilesets '{tilesetName}' and '{dualTilesetName}'.");
 
-		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid bg, DualGrid dual) =>
+		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			if (layer == TileLayer.Foreground)
 				fg.Set(tile.X, tile.Y, new());

@@ -724,7 +724,7 @@ public class Game : IDisposable
 	private static bool IsBackgroundActor(Actor actor)
 		=> actor switch
 		{
-			Grid grid => !grid.Mask.Has(Actor.Masks.Solid),
+			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
 			_ => false
 		};
@@ -2334,6 +2334,7 @@ public class Game : IDisposable
 			return;
 
 		Grid? bg = null;
+		Grid? fgVisual = null;
 		Grid? fg = null;
 		DualGrid? bgDual = null;
 		DualGrid? fgDual = null;
@@ -2358,16 +2359,19 @@ public class Game : IDisposable
 			if (actor is not Grid grid)
 				continue;
 
-			if (grid.Mask.Has(Actor.Masks.Solid))
+			if (grid.Layer == Factory.TileLayer.Background)
+				bg = grid;
+			else if (grid.Mask.Has(Actor.Masks.Solid))
 				fg = grid;
 			else
-				bg = grid;
+				fgVisual = grid;
 		}
 
-		if (bg == null || fg == null || fgDual == null)
+		if (bg == null || fgVisual == null || fg == null || fgDual == null)
 			return;
 
 		bg.Clear();
+		fgVisual.Clear();
 		fg.Clear();
 		bgDual?.Clear();
 		fgDual.Clear();
@@ -2378,9 +2382,9 @@ public class Game : IDisposable
 		{
 			var tile = new Point2(x, y);
 			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-				backgroundEntry.Tile?.Invoke(tile, room, fg, bg, bgDual ?? fgDual);
+				backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual ?? fgDual);
 			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, bg, fgDual);
+				entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
 		}
 
 		if (hiddenWalls != null)
@@ -2414,6 +2418,7 @@ public class Game : IDisposable
 		var offset = room.WorldBounds.TopLeft;
 
 		var bg = Create<Grid>(offset);
+		bg.Layer = Factory.TileLayer.Background;
 		bg.Depth = 10;
 
 		var bgDual = Create<DualGrid>(offset);
@@ -2424,7 +2429,12 @@ public class Game : IDisposable
 		fgDual.Layer = Factory.TileLayer.Foreground;
 		fgDual.Depth = 7;
 
+		var fgVisual = Create<Grid>(offset);
+		fgVisual.Layer = Factory.TileLayer.Foreground;
+		fgVisual.Depth = 6;
+
 		var fg = Create<Grid>(offset);
+		fg.Layer = Factory.TileLayer.Foreground;
 		fg.Mask = Actor.Masks.Solid;
 		fg.Depth = 5;
 
@@ -2436,9 +2446,9 @@ public class Game : IDisposable
 		{
 			var tile = new Point2(x, y);
 			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-				backgroundEntry.Tile?.Invoke(tile, room, fg, bg, bgDual);
+				backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual);
 			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, bg, fgDual);
+				entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
 		}
 
 		PopulateHiddenWalls(room, hiddenWalls);

@@ -196,7 +196,7 @@ public static class Assets
 		var oldAtlas = Atlas;
 		var oldLightingNoise = LightingNoise;
 		Atlas = atlas;
-		LightingNoise = LoadTexture(gfx, Path.Join("Textures", "noise_tess2.png"), "LightingNoise");
+		LightingNoise = LoadTexture(gfx, Path.Join("Textures", "noise_tess2_seamless.png"), "LightingNoise");
 
 		Subtextures.Clear();
 		foreach (var (name, subtexture) in subtextures)
