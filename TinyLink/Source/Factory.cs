@@ -63,15 +63,17 @@ public static class Factory
 		public readonly Vector2 Origin;
 		public readonly Point2 Offset;
 		public readonly RectInt? EditorBounds;
+		public readonly RectInt DefaultEditorBounds;
 		public readonly string? ActorTypeName;
 		public readonly string? ActorSpecId;
 
-		private ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null)
+		private ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null)
 		{
 			Name = name;
 			Image = image;
 			Origin = origin;
 			Offset = offset;
+			DefaultEditorBounds = defaultEditorBounds;
 			ActorTypeName = actorTypeName;
 			ActorSpecId = actorSpecId;
 			EditorBounds = editorBounds;
@@ -84,7 +86,7 @@ public static class Factory
 				throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
 
 			var typeName = typeof(T).Name;
-			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, typeName, null, editorBounds);
+			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, null, editorBounds);
 		}
 
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
@@ -96,7 +98,28 @@ public static class Factory
 			if (sprite == null)
 				throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing sprite '{spriteName}'.");
 
-			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, ActorSpecs.GetTypeName(spec), specId, editorBounds);
+			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), ActorSpecs.GetTypeName(spec), specId, editorBounds);
+		}
+
+		private static RectInt GetDefaultEditorBounds(Sprite sprite)
+		{
+			if (sprite.Frames.Count <= 0)
+				return new RectInt(-4, -4, 8, 8);
+
+			var frame = sprite.Frames[0].Subtexture;
+			var left = -sprite.Origin.X - frame.Frame.X;
+			var top = -sprite.Origin.Y - frame.Frame.Y;
+			var right = left + frame.Source.Width;
+			var bottom = top + frame.Source.Height;
+
+			var x = (int)MathF.Floor(left);
+			var y = (int)MathF.Floor(top);
+			var width = (int)MathF.Ceiling(right) - x;
+			var height = (int)MathF.Ceiling(bottom) - y;
+
+			return width > 0 && height > 0
+				? new RectInt(x, y, width, height)
+				: new RectInt(-4, -4, 8, 8);
 		}
 	}
 
@@ -236,7 +259,7 @@ public static class Factory
 
 	private static void RegisterActorPaletteEntries()
 	{
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Jumpthru>("jumpthru", editorBounds: new RectInt(0, 0, Game.TileSize, Game.TileSize / 4)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Jumpthru>("jumpthru"));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Player>("player", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<HiddenWall>("door", editorBounds: new RectInt(0, 0, HiddenWall.DefaultSize.X, HiddenWall.DefaultSize.Y)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Bramble>("bramble", new Point2(4, 8)));

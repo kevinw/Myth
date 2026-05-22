@@ -5,14 +5,13 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public class Game : IDisposable
+public partial class Game : IDisposable
 {
 	public const int Width = 320;
 	public const int Height = 180;
 	public const int Columns = Width / TileSize;
 	public const int Rows = Height / TileSize + 1;
 	public const int TileSize = 8;
-	public const float AudioPixelsPerUnit = 72;
 	private const int ActorShadowSteps = 8;
 	private const float ActorShadowStrength = 0.5f;
 	private const float ActorShadowMinLength = 4.0f;
@@ -54,13 +53,12 @@ public class Game : IDisposable
 
 	Input Input => Manager.Input;
 	GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
-	Audio Audio => Manager.Audio;
 	public Time Time => Manager.Time.MultiplyDelta(timeScale);
-	public bool AudioEventsEnabled { get; }
 
 	private Room? room;
 	private Room? nextRoom;
 	private float nextRoomEase;
+	private Point2 transitionDirection;
 	private Vector2 transitionCameraFrom;
 	private Vector2 transitionCameraTo;
 	private Color transitionAmbientColorFrom;
@@ -79,7 +77,6 @@ public class Game : IDisposable
 	private readonly List<Actor> rendering = [];
 	private bool[,] roomNormalMask = new bool[Width, Height];
 	private bool[,] roomNormalSuppressMask = new bool[Width, Height];
-	private readonly HashSet<string> audioFailures = [];
 	private readonly HashSet<string> sessionDestroyedActors = [];
 	private readonly ReloadableMaterial? crtMaterial;
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
@@ -87,8 +84,6 @@ public class Game : IDisposable
 	private readonly ReloadableMaterial? reflectionDistortMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
-	private SoundInstance? music;
-	private string? musicArea;
 	private float hitStun;
 	private float shaking;
 	private float ditherGlitch;
@@ -97,64 +92,7 @@ public class Game : IDisposable
 	private Point2 shake;
 	internal Rng rng = new();
 
-	enum DebugView
-	{
-		None,
-		CollisionRects,
-		LightMask,
-		NormalBuffer,
-		TileFieldRed,
-		TileFieldGreen,
-		TileFieldBlue,
-		DitherMask,
-		Visibility
-	}
-
-	private DebugView debugView;
-	private float debugViewMessageTimer;
-	public string? DebugViewMessage { get; private set; }
-
-	private void ToggleDebugView(DebugView toggle)
-	{
-		SetDebugView(debugView == toggle ? DebugView.None : toggle);
-	}
-
-	private void CycleTileFieldDebugView()
-	{
-		SetDebugView(debugView switch
-		{
-			DebugView.TileFieldRed => DebugView.TileFieldGreen,
-			DebugView.TileFieldGreen => DebugView.TileFieldBlue,
-			DebugView.TileFieldBlue => DebugView.None,
-			_ => DebugView.TileFieldRed
-		});
-	}
-
-	private void SetDebugView(DebugView view)
-	{
-		debugView = view;
-		DebugViewMessage = $"Debug: {DebugViewName(view)}";
-		debugViewMessageTimer = 1.25f;
-	}
-
-	private static string DebugViewName(DebugView view)
-		=> view switch
-		{
-			DebugView.None => "Off",
-			DebugView.CollisionRects => "Collision Rects",
-			DebugView.LightMask => "Light Mask",
-			DebugView.NormalBuffer => "Normal Buffer",
-			DebugView.TileFieldRed => "Tile Field R: Hash",
-			DebugView.TileFieldGreen => "Tile Field G: Family",
-			DebugView.TileFieldBlue => "Tile Field B: Solid",
-			DebugView.DitherMask => "Dither Mask",
-			DebugView.Visibility => "Visibility Polygon",
-			_ => view.ToString()
-		};
-
-	private bool mouseLightEnabled;
 	private bool draggingPlayer;
-	private Vector2 mouseLightPosition;
 	private float timeScale = 1.0f;
 	private readonly Point2? respawnPosition;
 	private bool disposed;
@@ -335,6 +273,7 @@ public class Game : IDisposable
 		{
 			room = nextRoom;
 			nextRoom = null;
+			ResolvePlayerRoomTransition(transitionDirection);
 			ApplyMusicArea(room);
 			HitStun(0.1f);
 		}
@@ -1452,63 +1391,6 @@ public class Game : IDisposable
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
 	}
 
-	private void DrawVisibilityDebug(Target target)
-	{
-		if (!TryGetVisibilityDebugLight(out var lightPosition, out var radius))
-			return;
-
-		var segments = GatherVisibilitySegments(lightPosition, radius);
-		var hits = VisibilityPolygon.Compute(lightPosition, radius, segments);
-
-		Batcher.PushMatrix(-(Point2)Camera + shake);
-		Batcher.Circle(lightPosition, radius, 64, Color.Transparent, new Color(0x5fcde4, 0.35f));
-
-		for (var i = 0; i < hits.Count; i++)
-		{
-			var a = hits[i].Point;
-			var b = hits[(i + 1) % hits.Count].Point;
-			Batcher.Triangle(lightPosition, a, b, new Color(0x5fcde4, 0.08f));
-		}
-
-		for (var i = 0; i < segments.Count; i++)
-			Batcher.Line(segments[i].A, segments[i].B, 1, VisibilityDebugSegmentColor(i, 0.9f));
-
-		foreach (var hit in hits)
-		{
-			var color = hit.HitSegment
-				? VisibilityDebugSegmentColor(hit.SegmentIndex, 0.75f)
-				: new Color(0xcbdbfc, 0.45f);
-			Batcher.Line(lightPosition, hit.Point, 1, color * 0.45f);
-			Batcher.Circle(hit.Point, 1.5f, 8, color);
-		}
-
-		Batcher.Circle(lightPosition, 2.5f, 16, 0xffffff);
-		Batcher.PopMatrix();
-		Batcher.Render(target);
-		Batcher.Clear();
-	}
-
-	private bool TryGetVisibilityDebugLight(out Vector2 lightPosition, out float radius)
-	{
-		if (mouseLightEnabled)
-		{
-			lightPosition = mouseLightPosition;
-			radius = 48;
-			return true;
-		}
-
-		if (GetFirst<Player>() is { } player)
-		{
-			lightPosition = player.GetVisualBounds().Center;
-			radius = 64;
-			return true;
-		}
-
-		lightPosition = default;
-		radius = 0;
-		return false;
-	}
-
 	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius)
 	{
 		var segments = new List<VisibilityPolygon.Segment>();
@@ -1562,30 +1444,6 @@ public class Game : IDisposable
 			segments.Add(segment);
 	}
 
-	private static Color VisibilityDebugSegmentColor(int index, float alpha)
-	{
-		var hue = (index * 0.61803398875f) % 1.0f;
-		return ColorFromHsv(hue, 0.72f, 1.0f, alpha);
-	}
-
-	private static Color ColorFromHsv(float hue, float saturation, float value, float alpha)
-	{
-		var h = hue * 6.0f;
-		var c = value * saturation;
-		var x = c * (1.0f - MathF.Abs(h % 2.0f - 1.0f));
-		var m = value - c;
-		var rgb = h switch
-		{
-			< 1.0f => new Vector3(c, x, 0),
-			< 2.0f => new Vector3(x, c, 0),
-			< 3.0f => new Vector3(0, c, x),
-			< 4.0f => new Vector3(0, x, c),
-			< 5.0f => new Vector3(x, 0, c),
-			_ => new Vector3(c, 0, x),
-		};
-		return new Color(rgb.X + m, rgb.Y + m, rgb.Z + m, alpha);
-	}
-
 	private static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
 	{
 		var direction = point - lightPosition;
@@ -1612,35 +1470,6 @@ public class Game : IDisposable
 		var closest = new Vector2(x, y);
 		return Vector2.DistanceSquared(center, closest) <= radius * radius;
 	}
-
-	private void DrawCollisionRects()
-	{
-		if (room == null)
-			return;
-
-		foreach (var rect in room.CollisionRects)
-			Batcher.RectLine(rect, 1, Color.Red);
-		foreach (var slope in room.SlopeTiles)
-		{
-			var rect = slope.WorldBounds(room);
-			Batcher.RectLine(rect, 1, Color.Red);
-			if (slope.Direction == Room.SlopeDirection.DownRight)
-				Batcher.Line(rect.TopLeft, rect.BottomRight, 1, Color.Red);
-			else
-				Batcher.Line(rect.BottomLeft, rect.TopRight, 1, Color.Red);
-			var polygon = room.GetSlopePolygon(slope);
-			for (var i = 0; i < polygon.Length; i ++)
-				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Length], 1, Color.Red);
-		}
-		foreach (var rect in CollisionRectsThisFrame)
-			Batcher.RectLine(rect, 1, Color.Red);
-		foreach (var it in Actors)
-			if (!destroying.Contains(it))
-				if (it.Hitbox.Rect != new RectInt())
-					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
-	}
-
-	public List<RectInt> CollisionRectsThisFrame = new();
 
 	private void DrawNormalBuffer()
 	{
@@ -1807,27 +1636,6 @@ public class Game : IDisposable
 		return new Color(normal.X, normal.Y, normal.Z, strength);
 	}
 
-	private void UpdateMouseLightPosition(RectInt viewport)
-	{
-		var scale = Calc.Min(viewport.Width / (float)Screen.Width, viewport.Height / (float)Screen.Height);
-		var size = new Vector2(Screen.Width, Screen.Height) * scale;
-		var topLeft = (Vector2)viewport.Center - size / 2;
-		var local = (Input.Mouse.Position - topLeft) / scale;
-		mouseLightPosition = Camera - shake + local;
-	}
-
-#if DEBUG
-	public void ReloadShaders()
-	{
-		crtMaterial?.Reload();
-		lightingCompositeMaterial?.Reload();
-		normalLightMaterial?.Reload();
-		reflectionDistortMaterial?.Reload();
-		tileFieldDebugMaterial?.Reload();
-		pixelSortGlitchMaterial?.Reload();
-	}
-#endif
-
 	private ReloadableMaterial? CreateFragmentMaterial(string name, int samplerCount, int uniformBufferCount = 0)
 	{
 		try
@@ -1967,76 +1775,6 @@ public class Game : IDisposable
 		Destroy(actor);
 	}
 
-	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
-	{
-		try
-		{
-			using var instance = CreateAudioEvent(path, position);
-			if (instance == null)
-				return;
-
-			if (parameterName != "" || parameterLabel != "")
-				instance.SetParameterLabel(parameterName, parameterLabel, true);
-
-			instance.Start();
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-		}
-	}
-
-	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null)
-	{
-		if (!AudioEventsEnabled || !Audio.Initialized)
-			return null;
-
-		try
-		{
-			var instance = Audio.CreateEvent($"event:/{path}");
-			if (position is { } pos)
-				SetAudioEventPosition(instance, pos);
-			return instance;
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-			return null;
-		}
-	}
-
-	public void SetAudioEventPosition(SoundInstance? instance, Vector2 position, Vector2? relativeTo = null)
-	{
-		if (instance == null || !Audio.Initialized)
-			return;
-
-		try
-		{
-			var effectivePosition = position;
-			if (relativeTo is { } origin)
-				effectivePosition = Camera + new Vector2(Width, Height) / 2 + position - origin;
-
-			instance.Set3DAttributes(ToAudioPosition(effectivePosition));
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-		}
-	}
-
-	private void UpdateAudioListener()
-	{
-		if (!Audio.Initialized)
-			return;
-
-		Audio.SetListenerAttributes(ToAudioPosition(Camera + new Vector2(Width, Height) / 2));
-	}
-
-	private static Vector3 ToAudioPosition(Vector2 position)
-	{
-		return new(-position.X / AudioPixelsPerUnit, position.Y / AudioPixelsPerUnit, 0);
-	}
-
 	public string GetSurfaceTypeBelow(Actor actor)
 	{
 		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
@@ -2073,84 +1811,6 @@ public class Game : IDisposable
 		return Factory.DefaultSurfaceType;
 	}
 
-	public void StopMusic(bool immediate = false) {
-		if (music == null)
-			return;
-
-		try {
-			music.Stop(immediate);
-			music.Release();
-		} catch (Exception e) {
-			Console.Error.WriteLine($"Failed to stop background music: {e}");
-		}
-
-		music = null;
-		musicArea = null;
-	}
-
-	public void RefreshMusic()
-	{
-		if (!Manager.MusicEnabled)
-		{
-			StopMusic(true);
-			return;
-		}
-
-		if (room == null)
-			return;
-
-		StartMusic();
-		ApplyMusicArea(room);
-	}
-
-	private void StartMusic()
-	{
-		if (!Manager.MusicEnabled || !Audio.Initialized || music != null)
-			return;
-
-		try
-		{
-			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, Manager.DefaultMusicArea, true);
-			musicArea = Manager.DefaultMusicArea;
-			music.Start();
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add(Manager.BackgroundMusicEventPath))
-				Console.Error.WriteLine($"Failed to start background music '{Manager.BackgroundMusicEventPath}': {e}");
-			music = null;
-			musicArea = null;
-		}
-	}
-
-	private void ApplyMusicArea(Room forRoom)
-	{
-		if (!Manager.MusicEnabled)
-		{
-			StopMusic(true);
-			return;
-		}
-
-		if (string.IsNullOrEmpty(forRoom.MusicArea))
-			return;
-
-		StartMusic();
-		if (music == null || musicArea == forRoom.MusicArea)
-			return;
-
-		try
-		{
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, forRoom.MusicArea, true);
-			musicArea = forRoom.MusicArea;
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{forRoom.MusicArea}"))
-				Console.Error.WriteLine($"Failed to set background music area '{forRoom.MusicArea}': {e}");
-		}
-	}
-
 	public bool Transition(Point2 direction)
 	{
 		if (room != null && nextRoom == null)
@@ -2159,6 +1819,7 @@ public class Game : IDisposable
 			if (Assets.FindAdjacentRoom(room, direction, exitPosition) is { } foundRoom)
 			{
 				nextRoom = foundRoom.CloneRuntime();
+				transitionDirection = new Point2(Math.Sign(direction.X), Math.Sign(direction.Y));
 				foreach (var it in Actors)
 					if (it is not Player && !it.KeepOnRoomTransition)
 						Destroy(it);
@@ -2182,6 +1843,55 @@ public class Game : IDisposable
 				ApplyMusicArea(nextRoom);
 				return true;
 			}
+		}
+
+		return false;
+	}
+
+	private void ResolvePlayerRoomTransition(Point2 direction)
+	{
+		if (room == null || direction == Point2.Zero || GetFirst<Player>() is not { } player)
+			return;
+
+		if (!OverlapsRoomCollision(player, Point2.Zero))
+			return;
+
+		var original = player.Position;
+		var forward = Math.Abs(direction.X) > Math.Abs(direction.Y)
+			? Point2.UnitX * Math.Sign(direction.X)
+			: Point2.UnitY * Math.Sign(direction.Y);
+		var perpendicular = forward.X != 0 ? Point2.UnitY : Point2.UnitX;
+		var perpendicularVelocity = forward.X != 0 ? player.Velocity.Y : player.Velocity.X;
+
+		const int maxForwardDistance = TileSize * 4;
+		const int maxPerpendicularDistance = TileSize * 4;
+
+		for (var distance = 0; distance <= maxPerpendicularDistance; distance ++)
+		{
+			if (distance == 0)
+			{
+				if (TryPlacePlayerAfterTransition(player, original, forward, perpendicular, 0, maxForwardDistance))
+					return;
+				continue;
+			}
+
+			var firstSign = perpendicularVelocity > 0 ? -1 : 1;
+			if (TryPlacePlayerAfterTransition(player, original, forward, perpendicular, firstSign * distance, maxForwardDistance))
+				return;
+			if (TryPlacePlayerAfterTransition(player, original, forward, perpendicular, -firstSign * distance, maxForwardDistance))
+				return;
+		}
+
+		player.Position = original;
+	}
+
+	private bool TryPlacePlayerAfterTransition(Player player, Point2 original, Point2 forward, Point2 perpendicular, int perpendicularDistance, int maxForwardDistance)
+	{
+		for (var forwardDistance = 0; forwardDistance <= maxForwardDistance; forwardDistance ++)
+		{
+			player.Position = original + perpendicular * perpendicularDistance + forward * forwardDistance;
+			if (!OverlapsRoomCollision(player, Point2.Zero))
+				return true;
 		}
 
 		return false;
