@@ -175,10 +175,14 @@ public class HiddenCoverGrid : Actor
 	private void RevealForPlayer(Player player, bool immediate)
 	{
 		var playerBounds = player.Hitbox.Rect + player.Position - Position;
+		var revealedAny = false;
 		foreach (var (rect, regionId) in triggers)
 		{
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f && playerBounds.Overlaps(rect))
+			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
+				revealedAny = true;
+			}
 		}
 
 		var left = Math.Clamp((int)MathF.Floor(playerBounds.Left / (float)Game.TileSize), 0, size.X - 1);
@@ -191,8 +195,14 @@ public class HiddenCoverGrid : Actor
 		{
 			var regionId = coverRegions[x, y];
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f)
+			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
+				revealedAny = true;
+			}
 		}
+
+		if (revealedAny && !immediate)
+			Game.PlayAudioEvent("reveal", position: player.Position);
 	}
 
 	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)

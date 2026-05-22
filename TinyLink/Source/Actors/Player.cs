@@ -483,7 +483,9 @@ public class Player : Actor
 		if (attackBlocked)
 		{
 			if (state.PreviousTime <= 0)
-				AudioEvent("sword");
+			{
+				AudioEvent("player/sword_block");
+			}
 		}
 		else if (duckAttack)
 		{
@@ -500,10 +502,16 @@ public class Player : Actor
 		{
 			if (state.PreviousTime < 0.2f)
 			{
-				AudioEvent("sword");
 				attackBlocked = IsAttackBlocked(duckAttack);
 				if (attackBlocked)
+				{
 					Play(GetAttackAnimation(), false);
+					AudioEvent("player/sword_block");
+				}
+				else
+				{
+					AudioEvent("sword");
+				}
 			}
 			if (!attackBlocked)
 				hitbox = GetAttackHitbox(duckAttack);
@@ -562,7 +570,9 @@ public class Player : Actor
 	private string GetAttackAnimation()
 	{
 		if (duckAttack)
+		{
 			return attackBlocked ? "duck_attack_block" : "duck_attack";
+		}
 
 		return attackBlocked ? "attack_block" : "attack";
 	}
