@@ -2241,6 +2241,46 @@ public partial class Game : IDisposable
 		return false;
 	}
 
+	public float GetRoomCollisionOverlapRatio(in RectInt bounds)
+	{
+		if (room == null || bounds.Width <= 0 || bounds.Height <= 0)
+			return 0;
+
+		var solidPixels = 0;
+		for (var y = bounds.Top; y < bounds.Bottom; y ++)
+		for (var x = bounds.Left; x < bounds.Right; x ++)
+		{
+			if (RoomCollisionContains(new Vector2(x + 0.5f, y + 0.5f)))
+				solidPixels ++;
+		}
+
+		return solidPixels / (float)(bounds.Width * bounds.Height);
+	}
+
+	private bool RoomCollisionContains(Vector2 point)
+	{
+		if (room == null)
+			return false;
+
+		foreach (var rect in room.CollisionRects)
+		{
+			if (point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom)
+				return true;
+		}
+
+		foreach (var slope in room.SlopeTiles)
+		{
+			var tileBounds = slope.WorldBounds(room);
+			if (point.X < tileBounds.Left || point.X >= tileBounds.Right || point.Y < tileBounds.Top || point.Y >= tileBounds.Bottom)
+				continue;
+
+			if (PointInPolygon(point, room.GetSlopePolygon(slope)))
+				return true;
+		}
+
+		return false;
+	}
+
 	private static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
 	{
 		var tileBounds = slope.WorldBounds(room);

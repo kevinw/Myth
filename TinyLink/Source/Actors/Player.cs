@@ -40,6 +40,7 @@ public class Player : Actor
 	static float RollJumpSpeed => 150;
 	static float RollJumpCarryTime => 0.28f;
 	static float DuckAttackCooldown => 0.4f;
+	static float AttackBlockOverlapThreshold => 0.5f;
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
@@ -64,6 +65,7 @@ public class Player : Actor
 	private float rollJumpCarryTimer;
 	private float duckAttackCooldownTimer;
 	private bool duckAttack;
+	private bool attackBlocked;
 	private Light? light;
 
 	public Player()
@@ -335,6 +337,7 @@ public class Player : Actor
 			if (ducking && duckAttackCooldownTimer <= 0)
 			{
 				duckAttack = true;
+				attackBlocked = IsAttackBlocked(duckAttack);
 				duckAttackCooldownTimer = DuckAttackCooldown;
 				State = States.Attack;
 				if (grounded)
@@ -343,6 +346,7 @@ public class Player : Actor
 			else if (!ducking)
 			{
 				duckAttack = false;
+				attackBlocked = false;
 				State = States.Attack;
 				if (grounded)
 					StopX();
@@ -472,16 +476,21 @@ public class Player : Actor
 		if (duckAttack)
 			ducking = true;
 
-		Play(duckAttack ? "duck_attack" : "attack", false);
+		Play(GetAttackAnimation(), false);
 
 		RectInt? hitbox = null;
 
-		if (duckAttack)
+		if (attackBlocked)
+		{
+			if (state.PreviousTime <= 0)
+				AudioEvent("sword");
+		}
+		else if (duckAttack)
 		{
 			if (state.PreviousTime <= 0)
 				AudioEvent("sword");
 			if (state.Time < Animation.Duration)
-				hitbox = new(3, -6, 13, 6);
+				hitbox = GetAttackHitbox(duckAttack);
 		}
 		else if (state.Time < 0.2f)
 		{
@@ -492,8 +501,12 @@ public class Player : Actor
 			if (state.PreviousTime < 0.2f)
 			{
 				AudioEvent("sword");
+				attackBlocked = IsAttackBlocked(duckAttack);
+				if (attackBlocked)
+					Play(GetAttackAnimation(), false);
 			}
-			hitbox = new (8, -9, 16, 9);
+			if (!attackBlocked)
+				hitbox = GetAttackHitbox(duckAttack);
 		}
 
 		if (hitbox is {} it)
@@ -512,8 +525,12 @@ public class Player : Actor
 		if (Grounded())
 			Velocity.X = Calc.Approach(Velocity.X, 0, AttackFriction * Time.Delta);
 
-		if (state.Time >= Animation.Duration)
+		var attackFinished = attackBlocked
+			? IsFinishedPlaying(GetAttackAnimation())
+			: state.Time >= Animation.Duration;
+		if (attackFinished)
 		{
+			attackBlocked = false;
 			if (duckAttack)
 			{
 				duckAttack = false;
@@ -525,6 +542,29 @@ public class Player : Actor
 			}
 			State = States.Normal;
 		}
+	}
+
+	private bool IsAttackBlocked(bool duckingAttack)
+	{
+		var hitbox = GetAttackHitbox(duckingAttack);
+		if (Facing == Signs.Negative)
+			hitbox.X = -(hitbox.X + hitbox.Width);
+		hitbox += Position;
+
+		return Game.GetRoomCollisionOverlapRatio(hitbox) >= AttackBlockOverlapThreshold;
+	}
+
+	private RectInt GetAttackHitbox(bool duckingAttack)
+		=> duckingAttack
+			? new RectInt(3, -6, 13, 6)
+			: new RectInt(8, -9, 16, 9);
+
+	private string GetAttackAnimation()
+	{
+		if (duckAttack)
+			return attackBlocked ? "duck_attack_block" : "duck_attack";
+
+		return attackBlocked ? "attack_block" : "attack";
 	}
 
 	public void HurtState()
