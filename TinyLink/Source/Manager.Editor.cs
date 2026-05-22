@@ -1708,6 +1708,25 @@ public partial class Manager
 		batcher.Rect(new Rect(end - Vector2.One * width * 0.75f, Vector2.One * width * 1.5f), Color.White);
 	}
 
+	private void DrawBreakableTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
+	{
+		var color = new Color(1.0f, 0.82f, 0.24f, 0.9f);
+		for (var x = 0; x < room.Size.X; x++)
+		for (var y = 0; y < room.Size.Y; y++)
+		{
+			var tile = new Point2(x, y);
+			if (!room.IsBreakable(tile))
+				continue;
+
+			var rect = new Rect(
+				roomTopLeft.X + x * Game.TileSize + lineWeight * 2,
+				roomTopLeft.Y + y * Game.TileSize + lineWeight * 2,
+				Game.TileSize - lineWeight * 4,
+				Game.TileSize - lineWeight * 4);
+			batcher.RectLine(rect, lineWeight, color);
+		}
+	}
+
 	private static Vector2 RectCenter(RectInt rect)
 		=> new(rect.X + rect.Width * 0.5f, rect.Y + rect.Height * 0.5f);
 
@@ -1807,6 +1826,7 @@ public partial class Manager
 				batcher.Line(roomTopLeft + new Vector2(x * Game.TileSize, 0),  roomTopLeft + new Vector2(x * Game.TileSize, height), gridWeight, (x - 1) % 4 == 0 ? gridColorHeavy : gridColor);
 			for (int y = 1; y < editing.Size.Y; y ++)
 				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize),  roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, (y - 1)  % 4 == 0 ? gridColorHeavy : gridColor);
+			DrawBreakableTileMarkers(editing, roomTopLeft, gridWeight);
 
 			var brushEntry = Factory.Find(brush);
 			if (brushEntry is { } foundBrushEntry && foundBrushEntry.Layer != activeTileLayer)
@@ -1888,6 +1908,17 @@ public partial class Manager
 					selectedActorPaletteIndex = -1;
 					tilePlacing = false;
 					editorGameDirty = true;
+				}
+			}
+			else if (!editingRoomGeometry && !worldMouseBlocked && activeTileLayer == Factory.TileLayer.Foreground && overGame && !keyboardBlocked && Input.Keyboard.Pressed(Keys.B))
+			{
+				if (editing.GetEntry(tileOver) is { BlocksMovement: true })
+				{
+					using (CaptureRoomUndo("Toggle Breakable Tile", editing))
+					{
+						editing.SetBreakable(tileOver, !editing.IsBreakable(tileOver));
+						editorGameDirty = true;
+					}
 				}
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && Input.Mouse.LeftPressed && actorBrush is { } actorEntry)

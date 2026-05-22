@@ -8,6 +8,13 @@ namespace TinyLink;
 
 public class Room
 {
+	[Flags]
+	public enum TileFlags
+	{
+		None = 0,
+		Breakable = 1 << 0
+	}
+
 	public enum SlopeDirection
 	{
 		DownRight,
@@ -65,6 +72,7 @@ public class Room
 	public char[,] BackgroundTiles;
 	private Factory.Entry?[,] tileEntries = new Factory.Entry?[0, 0];
 	private Factory.Entry?[,] backgroundTileEntries = new Factory.Entry?[0, 0];
+	private TileFlags[,] tileFlags = new TileFlags[0, 0];
 
 	/// <summary>
 	/// Actor specs placed directly in this room.
@@ -154,6 +162,7 @@ public class Room
 		{
 			clone.Tiles[x, y] = Tiles[x, y];
 			clone.BackgroundTiles[x, y] = BackgroundTiles[x, y];
+			clone.tileFlags[x, y] = tileFlags[x, y];
 		}
 		foreach (var actor in Actors)
 			clone.Actors.Add(ActorSpecs.CloneObject(actor));
@@ -186,6 +195,7 @@ public class Room
 		BackgroundTiles = new char[Size.X, Size.Y];
 		tileEntries = new Factory.Entry?[Size.X, Size.Y];
 		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
+		tileFlags = new TileFlags[Size.X, Size.Y];
 
 		for (int x = 0; x < Size.X; x ++)
 		for (int tileY = 0; tileY < Size.Y; tileY ++)
@@ -244,6 +254,13 @@ public class Room
 				for (var x = 0; x < row.Length && x < Size.X; x ++)
 					SetBackgroundTileUnchecked(x, y, row[x]);
 			}
+		}
+
+		if (json.TryGetPropertyValue("breakable", out var breakableNode) && breakableNode is JsonArray breakableCells)
+		{
+			foreach (var node in breakableCells)
+				if (ActorSpecs.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
+					tileFlags[tile.X, tile.Y] |= TileFlags.Breakable;
 		}
 
 		NormalizeTileLayers();
@@ -385,6 +402,7 @@ public class Room
 		var previousSize = Size;
 		var previousTiles = Tiles;
 		var previousBackgroundTiles = BackgroundTiles;
+		var previousTileFlags = tileFlags;
 
 		Position = bounds.Position;
 		Size = bounds.Size;
@@ -392,6 +410,7 @@ public class Room
 		BackgroundTiles = new char[Size.X, Size.Y];
 		tileEntries = new Factory.Entry?[Size.X, Size.Y];
 		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
+		tileFlags = new TileFlags[Size.X, Size.Y];
 
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
@@ -404,6 +423,9 @@ public class Room
 			SetBackgroundTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
 				? previousBackgroundTiles[oldX, oldY]
 				: '0');
+			tileFlags[x, y] = oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+				? previousTileFlags[oldX, oldY]
+				: TileFlags.None;
 		}
 
 		var actorOffset = previousPosition - Position;
@@ -578,8 +600,29 @@ public class Room
 
 	private void SetTileUnchecked(int x, int y, char tile)
 	{
+		if (TryGetLegacyBreakableTileBase(tile, out var baseTile))
+		{
+			tile = baseTile;
+			tileFlags[x, y] |= TileFlags.Breakable;
+		}
+		else
+		{
+			tileFlags[x, y] = TileFlags.None;
+		}
+
 		Tiles[x, y] = tile;
 		tileEntries[x, y] = Factory.Find(tile);
+	}
+
+	private static bool TryGetLegacyBreakableTileBase(char tile, out char baseTile)
+	{
+		baseTile = tile switch
+		{
+			'x' => '1',
+			'X' => 'G',
+			_ => '\0'
+		};
+		return baseTile != '\0';
 	}
 
 	private void SetBackgroundTileUnchecked(int x, int y, char tile)
@@ -594,13 +637,35 @@ public class Room
 			tileEntries = new Factory.Entry?[Size.X, Size.Y];
 		if (backgroundTileEntries.GetLength(0) != Size.X || backgroundTileEntries.GetLength(1) != Size.Y)
 			backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
+		if (tileFlags.GetLength(0) != Size.X || tileFlags.GetLength(1) != Size.Y)
+			tileFlags = new TileFlags[Size.X, Size.Y];
 
 		for (var x = 0; x < Size.X; x++)
 		for (var y = 0; y < Size.Y; y++)
 		{
+			if (TryGetLegacyBreakableTileBase(Tiles[x, y], out var baseTile))
+			{
+				Tiles[x, y] = baseTile;
+				tileFlags[x, y] |= TileFlags.Breakable;
+			}
+
 			tileEntries[x, y] = Factory.Find(Tiles[x, y]);
 			backgroundTileEntries[x, y] = Factory.Find(BackgroundTiles[x, y]);
 		}
+	}
+
+	public bool IsBreakable(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Breakable) != 0;
+
+	public void SetBreakable(Point2 tile, bool breakable)
+	{
+		if (!ContainsTile(tile.X, tile.Y))
+			return;
+
+		if (breakable)
+			tileFlags[tile.X, tile.Y] |= TileFlags.Breakable;
+		else
+			tileFlags[tile.X, tile.Y] &= ~TileFlags.Breakable;
 	}
 
 	private void NormalizeTileLayers()
@@ -845,6 +910,16 @@ public class Room
 			json["backgroundTiles"] = backgroundRows;
 		}
 
+		if (HasBreakableTiles())
+		{
+			var breakable = new JsonArray();
+			for (var y = 0; y < Size.Y; y ++)
+			for (var x = 0; x < Size.X; x ++)
+				if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
+					breakable.Add(new JsonArray(x, y));
+			json["breakable"] = breakable;
+		}
+
 		if (Actors.Count > 0)
 		{
 			var actors = new JsonArray();
@@ -867,6 +942,7 @@ public class Room
 			BackgroundTiles = new char[Size.X, Size.Y];
 			tileEntries = new Factory.Entry?[Size.X, Size.Y];
 			backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
+			tileFlags = new TileFlags[Size.X, Size.Y];
 		}
 
 		for (var x = 0; x < Size.X; x ++)
@@ -874,6 +950,7 @@ public class Room
 		{
 			SetTileUnchecked(x, y, '0');
 			SetBackgroundTileUnchecked(x, y, '0');
+			tileFlags[x, y] = TileFlags.None;
 		}
 		Actors.Clear();
 		LoadJson(json);
@@ -885,6 +962,16 @@ public class Room
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
 			if (BackgroundTiles[x, y] != '0')
+				return true;
+
+		return false;
+	}
+
+	private bool HasBreakableTiles()
+	{
+		for (var x = 0; x < Size.X; x ++)
+		for (var y = 0; y < Size.Y; y ++)
+			if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
 				return true;
 
 		return false;

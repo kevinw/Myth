@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="Snapshot" id="{f0d19c39-949b-4775-8470-a6388f6c1996}">
+		<property name="name">
+			<value>player_hit</value>
+		</property>
+		<relationship name="mixer">
+			<destination>{6f629a80-c32f-46fd-9bd9-9503d3ee4b77}</destination>
+		</relationship>
+		<relationship name="automatableProperties">
+			<destination>{b6a70133-7980-42dc-bf0b-a84759f93da8}</destination>
+		</relationship>
+		<relationship name="markerTracks">
+			<destination>{340fe86e-90c8-4ced-8884-b5fd6d4c6e6a}</destination>
+		</relationship>
+		<relationship name="timeline">
+			<destination>{12cac443-6a7c-433d-85d6-fb5b485d4e7e}</destination>
+		</relationship>
+		<relationship name="snapshotMasterTrack">
+			<destination>{b585ffa2-4d07-4c87-ad10-26e96db57c38}</destination>
+		</relationship>
+		<relationship name="snapshotProperties">
+			<destination>{b197b0c0-838f-432e-9376-ea387bed61fc}</destination>
+			<destination>{8c1c81cc-b723-417c-bc20-289a4c1f376f}</destination>
+		</relationship>
+		<relationship name="snapshotTracks">
+			<destination>{a5f4ed35-44e0-4e31-8a6a-34bbefb59a6d}</destination>
+		</relationship>
+	</object>
+	<object class="EventAutomatableProperties" id="{b6a70133-7980-42dc-bf0b-a84759f93da8}" />
+	<object class="MarkerTrack" id="{340fe86e-90c8-4ced-8884-b5fd6d4c6e6a}" />
+	<object class="Timeline" id="{12cac443-6a7c-433d-85d6-fb5b485d4e7e}" />
+	<object class="SnapshotMasterTrack" id="{b585ffa2-4d07-4c87-ad10-26e96db57c38}" />
+	<object class="SnapshotProperty" id="{b197b0c0-838f-432e-9376-ea387bed61fc}">
+		<property name="propertyName">
+			<value>midGain</value>
+		</property>
+		<property name="value">
+			<value>-28.5</value>
+		</property>
+		<relationship name="automatableObject">
+			<destination>{e62e0b35-1608-4d21-841b-96e7add516d7}</destination>
+		</relationship>
+	</object>
+	<object class="SnapshotProperty" id="{8c1c81cc-b723-417c-bc20-289a4c1f376f}">
+		<property name="propertyName">
+			<value>highGain</value>
+		</property>
+		<property name="value">
+			<value>-32</value>
+		</property>
+		<relationship name="automatableObject">
+			<destination>{e62e0b35-1608-4d21-841b-96e7add516d7}</destination>
+		</relationship>
+	</object>
+	<object class="SnapshotTrack" id="{a5f4ed35-44e0-4e31-8a6a-34bbefb59a6d}">
+		<relationship name="mixerStrip">
+			<destination>{32afa0a8-b77c-40c3-aa0e-28a161404a77}</destination>
+		</relationship>
+	</object>
+</objects>

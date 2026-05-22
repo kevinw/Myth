@@ -171,14 +171,14 @@ public static class Factory
 		}
 	}
 
-	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground)
+	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
 		if (tileset == null || dualTileset == null)
 			throw new InvalidOperationException($"Dual tile '{tilesetName}' requires tilesets '{tilesetName}' and '{dualTilesetName}'.");
 
-		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
+		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			if (layer == TileLayer.Foreground)
 				fg.Set(tile.X, tile.Y, new());
@@ -217,10 +217,8 @@ public static class Factory
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", "Brick"));
 		Register('2', AsSlopeTile("castle", "Brick", "Castle Slope"));
-		Register('x', AsTile("castle", true, "Brick", destructible: true, name: "Breakable Brick"));
 		Register('G', AsDualTile("grass", "grass-dual", "Grass"));
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope"));
-		Register('X', AsTile("grass", true, "Grass", destructible: true, name: "Breakable Grass"));
 		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
 		Register('g', AsTile("plants", false, "Grass"));
 		Register('r', AsTile("rocks", false));

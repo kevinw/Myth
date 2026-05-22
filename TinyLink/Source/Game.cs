@@ -5,7 +5,7 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public class Game : IDisposable
+public partial class Game : IDisposable
 {
 	public const int Width = 320;
 	public const int Height = 180;
@@ -225,6 +225,7 @@ public class Game : IDisposable
 			return;
 
 		disposed = true;
+		StopPlayerHitSnapshot(true);
 		StopMusic(true);
 
 		var stopped = new HashSet<Actor>();
@@ -250,6 +251,7 @@ public class Game : IDisposable
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
 		CollisionRectsThisFrame.Clear();
+		UpdatePlayerHitSnapshot();
 		if (debugViewMessageTimer > 0)
 		{
 			debugViewMessageTimer -= Time.Delta;
@@ -2282,14 +2284,15 @@ public class Game : IDisposable
 		for (var x = left; x <= right; x ++)
 		{
 			var tile = room.Tiles[x, y];
+			var point = new Point2(x, y);
 
-			if (Factory.Find(tile) is not { Destructible: true })
+			if (!room.IsBreakable(point) && Factory.Find(tile) is not { Destructible: true })
 				continue;
 
 			if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
 				tileTypesBroken.Add(surfaceType);
 
-			room.Set(new Point2(x, y), '0');
+			room.Set(point, '0');
 			Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
 			brokeAny = true;
 		}
