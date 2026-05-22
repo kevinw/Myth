@@ -376,7 +376,7 @@ public class Room
 	private bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
 	{
 		if (!ContainsTile(tileX, tileY))
-			return false;
+			return IsOffscreenFullBlockJoinTile(tileX, tileY);
 
 		if (IsFullBlockTile(tileX, tileY))
 			return true;
@@ -395,6 +395,16 @@ public class Room
 			((tileX + vertexX) * 0.5f + 0.25f) * Game.TileSize + WorldBounds.X,
 			((tileY + vertexY) * 0.5f + 0.25f) * Game.TileSize + WorldBounds.Y);
 		return PointInPolygonInclusive(sample, polygon);
+	}
+
+	private bool IsOffscreenFullBlockJoinTile(int tileX, int tileY)
+	{
+		if (Size.X <= 0 || Size.Y <= 0)
+			return false;
+
+		var clampedX = Math.Clamp(tileX, 0, Size.X - 1);
+		var clampedY = Math.Clamp(tileY, 0, Size.Y - 1);
+		return IsFullBlockTile(clampedX, clampedY);
 	}
 
 	public void MoveTo(Point2 position)
@@ -684,6 +694,16 @@ public class Room
 
 	private bool IsFullBlockTile(int x, int y)
 		=> GetTileEntry(x, y) is { BlocksMovement: true, IsSlope: false };
+
+	public bool IsDualMaterialFilled(char tileType, Factory.TileLayer layer, int x, int y)
+	{
+		if (Size.X <= 0 || Size.Y <= 0)
+			return false;
+
+		x = Math.Clamp(x, 0, Size.X - 1);
+		y = Math.Clamp(y, 0, Size.Y - 1);
+		return (layer == Factory.TileLayer.Foreground ? Tiles[x, y] : BackgroundTiles[x, y]) == tileType;
+	}
 
 	private bool IsTerrainJoinTile(int x, int y)
 		=> IsFullBlockTile(x, y) || IsSlopeTile(x, y);
