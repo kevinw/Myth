@@ -194,6 +194,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<Player>("Player");
 		ActorSpecs.RegisterActor<Light>("Light");
 		ActorSpecs.RegisterActor<HiddenWall>("HiddenWall");
+		ActorSpecs.RegisterActor<RevealDoor>("RevealDoor");
 		ActorSpecs.RegisterActor<Jumpthru>("Jumpthru");
 		ActorSpecs.RegisterActor<Bramble>("Bramble");
 		ActorSpecs.RegisterActor<Spitter>("Spitter");
@@ -237,6 +238,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Jumpthru>("jumpthru", editorBounds: new RectInt(0, 0, Game.TileSize, Game.TileSize / 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Player>("player", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<HiddenWall>("door", editorBounds: new RectInt(0, 0, HiddenWall.DefaultSize.X, HiddenWall.DefaultSize.Y)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<RevealDoor>("door", editorBounds: new RectInt(0, 0, RevealDoor.DefaultSize.X, RevealDoor.DefaultSize.Y)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Bramble>("bramble", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Spitter>("spitter", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Mosquito>("mosquito", new Point2(4, 4)));

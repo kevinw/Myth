@@ -164,6 +164,7 @@ public partial class Game : IDisposable
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
+	public bool IsEditorPreview => !AudioEventsEnabled;
 
 	public Game(Manager manager, Point2 start, bool audioEventsEnabled = true)
 		: this(manager, Assets.GetRoom(start), audioEventsEnabled)
@@ -1299,6 +1300,8 @@ public partial class Game : IDisposable
 
 		foreach (var actor in Actors)
 		{
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.AppendAllVisibilitySegments(sunSegmentBuffer);
 			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
 		}
@@ -1528,6 +1531,11 @@ public partial class Game : IDisposable
 				dualGrid.AppendVisibilitySegments(segments, lightPosition, radius);
 				continue;
 			}
+			if (actor is HiddenCoverGrid hiddenCover)
+			{
+				hiddenCover.AppendVisibilitySegments(segments, lightPosition, radius);
+				continue;
+			}
 
 			if (actor is not HiddenWallGrid hiddenWalls)
 				continue;
@@ -1692,6 +1700,8 @@ public partial class Game : IDisposable
 		foreach (var actor in Actors)
 			if (actor is HiddenWallGrid hiddenWalls)
 				hiddenWalls.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
+			else if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
 
 		var offset = (Point2)Camera;
 		for (var y = 0; y < NormalBuffer.Height; y ++)
@@ -2026,6 +2036,13 @@ public partial class Game : IDisposable
 		{
 			Console.WriteLine(e);
 		}
+	}
+
+	public void SetHiddenCoverEditorOpacity(bool focused)
+	{
+		foreach (var actor in Actors)
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 1.0f : 0.10f : 1.0f);
 	}
 
 	private void UpdateAudioListener()
@@ -2404,11 +2421,17 @@ public partial class Game : IDisposable
 		DualGrid? bgDual = null;
 		DualGrid? fgDual = null;
 		HiddenWallGrid? hiddenWalls = null;
+		HiddenCoverGrid? hiddenCover = null;
 		foreach (var actor in Actors)
 		{
 			if (actor is HiddenWallGrid hiddenWallGrid)
 			{
 				hiddenWalls = hiddenWallGrid;
+				continue;
+			}
+			if (actor is HiddenCoverGrid hiddenCoverGrid)
+			{
+				hiddenCover = hiddenCoverGrid;
 				continue;
 			}
 
@@ -2454,6 +2477,7 @@ public partial class Game : IDisposable
 
 		if (hiddenWalls != null)
 			PopulateHiddenWalls(room, hiddenWalls);
+		hiddenCover?.Build(room);
 
 		if (bgDual != null)
 			BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
@@ -2504,6 +2528,7 @@ public partial class Game : IDisposable
 		fg.Depth = 5;
 
 		var hiddenWalls = Create<HiddenWallGrid>(offset, it => it.Resize(room.Size));
+		var hiddenCover = Create<HiddenCoverGrid>(offset);
 
 		// loop over room grid placing objects
 		for (var x = 0; x < room.Size.X; x++)
@@ -2533,6 +2558,9 @@ public partial class Game : IDisposable
 			if (ActorSpecs.Create(this, actor, offset + localPosition) is { } created)
 				created.SessionDestroyKey = sessionDestroyKey;
 		}
+
+		hiddenCover.Build(room);
+		hiddenCover.RevealForCurrentPlayer(immediate: true);
 	}
 
 	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)

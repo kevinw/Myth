@@ -1111,6 +1111,11 @@ public partial class Manager
 			var size = ActorSpecs.ReadPoint(resolved, "size") ?? HiddenWall.DefaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
+		if (ActorSpecs.ReadString(resolved, "type") == "RevealDoor")
+		{
+			var size = ActorSpecs.ReadPoint(resolved, "size") ?? RevealDoor.DefaultSize;
+			return new RectInt(position.X, position.Y, size.X, size.Y);
+		}
 
 		if (FindRoomActorEntry(actor) is { EditorBounds: { } bounds })
 			return bounds + position;
@@ -1120,6 +1125,20 @@ public partial class Manager
 
 	private static bool IsHiddenWallActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type") == "HiddenWall";
+
+	private static bool IsRevealDoorActor(JsonObject actor)
+		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type") == "RevealDoor";
+
+	private static bool IsResizableRoomRectActor(JsonObject actor)
+	{
+		var type = ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type");
+		return type is "HiddenWall" or "RevealDoor";
+	}
+
+	private static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
+		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type") == "RevealDoor"
+			? RevealDoor.DefaultSize
+			: HiddenWall.DefaultSize;
 
 	private static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
 	{
@@ -1148,6 +1167,8 @@ public partial class Manager
 
 	private void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
 	{
+		DrawRevealDoorAreaPreview(room, lineWeight, hoveredIndex);
+
 		for (var i = 0; i < room.Actors.Count; i ++)
 		{
 			var selected = i == selectedRoomActorIndex;
@@ -1162,9 +1183,58 @@ public partial class Manager
 			var color = selected ? highlight : hovered ? Color.White : Color.Gray;
 			batcher.RectLine(bounds.Inflate(lineWeight * 2), lineWeight * 2, color);
 
-			if (selected && IsHiddenWallActor(room.Actors[i]))
+			if (selected && IsResizableRoomRectActor(room.Actors[i]))
 				DrawHiddenWallResizeHandles(bounds, lineWeight);
 		}
+	}
+
+	private void DrawRevealDoorAreaPreview(Room room, float lineWeight, int hoveredIndex)
+	{
+		var show = selectedRoomActorIndex >= 0 &&
+		           selectedRoomActorIndex < room.Actors.Count &&
+		           IsRevealDoorActor(room.Actors[selectedRoomActorIndex]);
+		show |= hoveredIndex >= 0 &&
+		        hoveredIndex < room.Actors.Count &&
+		        IsRevealDoorActor(room.Actors[hoveredIndex]);
+		if (!show)
+			return;
+
+		var cells = HiddenCoverGrid.ComputePreviewCoverTiles(room);
+		if (cells.Count <= 0)
+			return;
+
+		var filled = new bool[room.Size.X, room.Size.Y];
+		foreach (var cell in cells)
+			filled[cell.X, cell.Y] = true;
+
+		var color = highlight * 0.9f;
+		var width = MathF.Max(1, lineWeight * 2);
+		var dash = MathF.Max(2, Game.TileSize * 0.25f);
+		var origin = (Vector2)room.WorldBounds.TopLeft;
+
+		for (var y = 0; y < room.Size.Y; y ++)
+		for (var x = 0; x < room.Size.X; x ++)
+		{
+			if (!filled[x, y])
+				continue;
+
+			var left = origin.X + x * Game.TileSize;
+			var top = origin.Y + y * Game.TileSize;
+			var right = left + Game.TileSize;
+			var bottom = top + Game.TileSize;
+
+			if (!Filled(x, y - 1))
+				batcher.LineDashed(new Vector2(left, top), new Vector2(right, top), width, color, dash, 0);
+			if (!Filled(x, y + 1))
+				batcher.LineDashed(new Vector2(right, bottom), new Vector2(left, bottom), width, color, dash, 0);
+			if (!Filled(x - 1, y))
+				batcher.LineDashed(new Vector2(left, bottom), new Vector2(left, top), width, color, dash, 0);
+			if (!Filled(x + 1, y))
+				batcher.LineDashed(new Vector2(right, top), new Vector2(right, bottom), width, color, dash, 0);
+		}
+
+		bool Filled(int x, int y)
+			=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && filled[x, y];
 	}
 
 	private void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight)
@@ -1207,7 +1277,7 @@ public partial class Manager
 			return ResizeHandle.None;
 
 		var actor = room.Actors[selectedRoomActorIndex];
-		if (!IsHiddenWallActor(actor))
+		if (!IsResizableRoomRectActor(actor))
 			return ResizeHandle.None;
 
 		var bounds = RoomActorBounds(room, actor);
@@ -1331,12 +1401,12 @@ public partial class Manager
 			return;
 
 		var actor = room.Actors[actorIndex];
-		if (!IsHiddenWallActor(actor))
+		if (!IsResizableRoomRectActor(actor))
 			return;
 
 		var resolved = ActorSpecs.Resolve(actor);
 		var position = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
-		var size = ActorSpecs.ReadPoint(resolved, "size") ?? HiddenWall.DefaultSize;
+		var size = ActorSpecs.ReadPoint(resolved, "size") ?? ResizableRoomRectDefaultSize(actor);
 		var cursor = snap ? tile * Game.TileSize : (Point2)(world - (Vector2)room.WorldBounds.TopLeft);
 
 		var left = position.X;
@@ -1839,6 +1909,10 @@ public partial class Manager
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
+			var revealDoorFocused =
+				hoveredActorIndex >= 0 && hoveredActorIndex < editing.Actors.Count && IsRevealDoorActor(editing.Actors[hoveredActorIndex]) ||
+				selectedRoomActorIndex >= 0 && selectedRoomActorIndex < editing.Actors.Count && IsRevealDoorActor(editing.Actors[selectedRoomActorIndex]);
+			game?.SetHiddenCoverEditorOpacity(revealDoorFocused);
 			var hoveredHiddenWallHandle = !worldMouseBlocked && actorSelectActive && overGame
 				? HitTestHiddenWallResizeHandle(editing, worldMouse, gridWeight)
 				: ResizeHandle.None;
