@@ -81,7 +81,7 @@ public partial class Manager
 	float fpsElapsed;
 #endif
 
-	private readonly record struct RoomSettings(string? MusicArea, Color AmbientColor, float AmbientIntensity, float LightNoise, Color SunColor, float SunStrength, Vector2 SunDirection);
+	private readonly record struct RoomSettings(string? MusicArea, Color AmbientColor, float AmbientIntensity, float LightNoise, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection);
 
 	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
 		=> new RoomUndoTarget(room);
@@ -578,6 +578,31 @@ public partial class Manager
 			changed = true;
 		}
 
+		ImGui.TextUnformatted("Reverb");
+		var reverbAuto = room.ReverbAuto;
+		if (ImGui.Checkbox("Auto Reverb", ref reverbAuto))
+		{
+			using (CaptureRoomUndo("Edit Room Reverb", room))
+			{
+				room.ReverbAuto = reverbAuto;
+				if (room.ReverbAuto)
+					room.RebuildGeometry();
+			}
+			changed = true;
+		}
+
+		var reverb = room.Reverb;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomReverb", ref reverb, 0.0f, 1.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Reverb", room))
+			{
+				room.ReverbAuto = false;
+				room.Reverb = Math.Clamp(reverb, 0.0f, 1.0f);
+			}
+			changed = true;
+		}
+
 		ImGui.TextUnformatted("Sun Strength");
 		var sunStrength = room.SunStrength;
 		ImGui.SetNextItemWidth(-1);
@@ -655,7 +680,7 @@ public partial class Manager
 	}
 
 	private static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.SunColor, room.SunStrength, room.SunDirection);
+		=> new(room.MusicArea, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
 
 	private static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -663,9 +688,13 @@ public partial class Manager
 		room.AmbientColor = settings.AmbientColor;
 		room.AmbientIntensity = settings.AmbientIntensity;
 		room.LightNoise = settings.LightNoise;
+		room.ReverbAuto = settings.ReverbAuto;
+		room.Reverb = settings.Reverb;
 		room.SunColor = settings.SunColor;
 		room.SunStrength = settings.SunStrength;
 		room.SunDirection = settings.SunDirection;
+		if (room.ReverbAuto)
+			room.RebuildGeometry();
 	}
 
 	private void ActorSpecInspectorImGui()

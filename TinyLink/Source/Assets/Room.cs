@@ -42,6 +42,7 @@ public class Room
 	public static readonly Color DefaultAmbientColor = new(0.42f, 0.42f, 0.46f, 1.0f);
 	public const float DefaultAmbientIntensity = 1.0f;
 	public const float DefaultLightNoise = 0.30f;
+	public const float DefaultReverb = 0.0f;
 	public static readonly Color DefaultSunColor = new(1.0f, 0.9f, 0.72f, 1.0f);
 	public static readonly Vector2 DefaultSunDirection = Vector2.Normalize(new Vector2(1, 1));
 
@@ -120,6 +121,8 @@ public class Room
 	public Color AmbientColor = DefaultAmbientColor;
 	public float AmbientIntensity = DefaultAmbientIntensity;
 	public float LightNoise = DefaultLightNoise;
+	public bool ReverbAuto = true;
+	public float Reverb = DefaultReverb;
 	public Color SunColor = DefaultSunColor;
 	public float SunStrength = 0.0f;
 	public Vector2 SunDirection = DefaultSunDirection;
@@ -152,6 +155,8 @@ public class Room
 			AmbientColor = AmbientColor,
 			AmbientIntensity = AmbientIntensity,
 			LightNoise = LightNoise,
+			ReverbAuto = ReverbAuto,
+			Reverb = Reverb,
 			SunColor = SunColor,
 			SunStrength = SunStrength,
 			SunDirection = SunDirection
@@ -226,6 +231,8 @@ public class Room
 		AmbientColor = ReadHexColor(json, "ambientColor") ?? DefaultAmbientColor;
 		AmbientIntensity = ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
 		LightNoise = ReadFloat(json, "lightNoise", DefaultLightNoise);
+		ReverbAuto = ReadBool(json, "reverbAuto", true);
+		Reverb = Clamp01(ReadFloat(json, "reverb", DefaultReverb));
 		SunColor = DefaultSunColor;
 		SunStrength = 0.0f;
 		SunDirection = DefaultSunDirection;
@@ -342,6 +349,9 @@ public class Room
 		BuildSlopeLightOccluders();
 		BuildVisibilitySegments();
 		BuildRects(ReflectionRects, static entry => entry.ReflectsSprites);
+
+		if (ReverbAuto)
+			Reverb = InferReverb();
 	}
 
 	private static bool HasBakedDualOccluders(Factory.Entry entry)
@@ -462,6 +472,14 @@ public class Room
 			: fallback;
 	}
 
+	private static bool ReadBool(JsonObject json, string key, bool fallback)
+	{
+		if (!json.TryGetPropertyValue(key, out var node) || node == null)
+			return fallback;
+
+		return bool.TryParse(node.ToString(), out var value) ? value : fallback;
+	}
+
 	private static Vector2? ReadVector2(JsonObject json, string key)
 	{
 		if (!json.TryGetPropertyValue(key, out var node) || node is not JsonArray { Count: >= 2 } array)
@@ -493,6 +511,90 @@ public class Room
 
 	private static string ColorToHex(Color color)
 		=> $"{color.R:X2}{color.G:X2}{color.B:X2}";
+
+	private float InferReverb()
+	{
+		var totalTiles = Math.Max(1, Size.X * Size.Y);
+		var terrainTiles = 0;
+		var shadowTiles = 0;
+		var openBorderTiles = 0;
+		var borderTiles = 0;
+		var ceilingColumns = 0;
+		var openSkyColumns = 0;
+		var ceilingRows = Math.Max(1, (int)MathF.Ceiling(Size.Y * 0.25f));
+
+		for (var y = 0; y < Size.Y; y ++)
+		for (var x = 0; x < Size.X; x ++)
+		{
+			var terrain = IsTerrainJoinTile(x, y);
+			var shadow = GetTileEntry(x, y) is { CastsShadow: true };
+			if (terrain)
+				terrainTiles ++;
+			if (shadow)
+				shadowTiles ++;
+
+			if (x == 0 || y == 0 || x == Size.X - 1 || y == Size.Y - 1)
+			{
+				borderTiles ++;
+				if (!terrain && !shadow)
+					openBorderTiles ++;
+			}
+		}
+
+		for (var x = 0; x < Size.X; x ++)
+		{
+			var topOpen = !IsTerrainJoinTile(x, 0) && GetTileEntry(x, 0) is not { CastsShadow: true };
+			var hasCeiling = false;
+			for (var y = 0; y < ceilingRows; y ++)
+			{
+				if (IsTerrainJoinTile(x, y) || GetTileEntry(x, y) is { CastsShadow: true })
+				{
+					hasCeiling = true;
+					break;
+				}
+			}
+
+			if (hasCeiling)
+				ceilingColumns ++;
+			else if (topOpen)
+				openSkyColumns ++;
+		}
+
+		var skyOpenRatio = Size.X > 0 ? openSkyColumns / (float)Size.X : 1.0f;
+		var areaBonus = InverseLerp(120.0f, 600.0f, totalTiles) * (1.0f - 0.35f * skyOpenRatio);
+		var heightBonus = InverseLerp(9.0f, 24.0f, Size.Y) * (1.0f - 0.75f * skyOpenRatio);
+		var widthBonus = InverseLerp(16.0f, 40.0f, Size.X);
+		var solidRatio = terrainTiles / (float)totalTiles;
+		var shadowRatio = shadowTiles / (float)totalTiles;
+		var openEdgeRatio = borderTiles > 0 ? openBorderTiles / (float)borderTiles : 1.0f;
+		var ceilingRatio = Size.X > 0 ? ceilingColumns / (float)Size.X : 0.0f;
+		var clutterPenalty = InverseLerp(0.35f, 0.70f, solidRatio);
+
+		var score =
+			0.05f +
+			0.20f * areaBonus +
+			0.20f * heightBonus +
+			0.15f * widthBonus +
+			0.25f * ceilingRatio +
+			0.15f * shadowRatio +
+			0.10f * solidRatio -
+			0.45f * skyOpenRatio -
+			0.35f * openEdgeRatio -
+			0.20f * clutterPenalty;
+
+		return MathF.Round(Clamp01(score), 3);
+	}
+
+	private static float InverseLerp(float from, float to, float value)
+	{
+		if (MathF.Abs(to - from) <= 0.0001f)
+			return value >= to ? 1.0f : 0.0f;
+
+		return Clamp01((value - from) / (to - from));
+	}
+
+	private static float Clamp01(float value)
+		=> Math.Clamp(value, 0.0f, 1.0f);
 
 	private void BuildSlopeTiles()
 	{
@@ -856,6 +958,9 @@ public class Room
 
 	public void Save()
 	{
+		if (ReverbAuto)
+			Reverb = InferReverb();
+
 		File.WriteAllText(
 			Path.Join(Assets.AssetsPath, "Rooms", $"{Id}.json"),
 			ToJsonString());
@@ -877,6 +982,10 @@ public class Room
 			json["ambientIntensity"] = AmbientIntensity;
 		if (LightNoise != DefaultLightNoise)
 			json["lightNoise"] = LightNoise;
+		if (!ReverbAuto)
+			json["reverbAuto"] = false;
+		if (Reverb != DefaultReverb || !ReverbAuto)
+			json["reverb"] = Reverb;
 		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
 		{
 			json["sun"] = new JsonObject

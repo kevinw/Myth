@@ -24,6 +24,7 @@ public partial class Manager : App
 {
 	public const string DefaultMusicArea = "Calm";
 	public const string BackgroundMusicAreaParameter = "Area";
+	public const string RoomReverbParameter = "RoomReverb";
 
 	private const string WindowSettingsFileName = "window.json";
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{990c750f-509a-4582-9af2-e02d2f221fa7}">
+		<property name="name">
+			<value>RoomReverb</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{f5b5b9dd-6d40-487d-aa4c-e2a520252ff2}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{f5b5b9dd-6d40-487d-aa4c-e2a520252ff2}">
+		<property name="isGlobal">
+			<value>true</value>
+		</property>
+		<property name="initialValue">
+			<value>0</value>
+		</property>
+		<property name="isExposedRecursively">
+			<value>false</value>
+		</property>
+	</object>
+</objects>

@@ -89,6 +89,7 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	private SoundInstance? music;
 	private string? musicArea;
+	private float? roomReverb;
 	private float hitStun;
 	private float shaking;
 	private float ditherGlitch;
@@ -215,6 +216,7 @@ public partial class Game : IDisposable
 			{
 				StartMusic();
 				ApplyMusicArea(room);
+				ApplyRoomReverb(room);
 			}
 		}
 	}
@@ -2153,6 +2155,23 @@ public partial class Game : IDisposable
 		}
 	}
 
+	private void ApplyRoomReverb(Room forRoom)
+	{
+		if (!AudioEventsEnabled || !Audio.Initialized || roomReverb == forRoom.Reverb)
+			return;
+
+		try
+		{
+			Audio.SetParameter(Manager.RoomReverbParameter, forRoom.Reverb, true);
+			roomReverb = forRoom.Reverb;
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add(Manager.RoomReverbParameter))
+				Console.Error.WriteLine($"Failed to set room reverb '{forRoom.Reverb:0.###}': {e}");
+		}
+	}
+
 	public bool Transition(Point2 direction)
 	{
 		if (room != null && nextRoom == null)
@@ -2182,6 +2201,7 @@ public partial class Game : IDisposable
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				ApplyMusicArea(nextRoom);
+				ApplyRoomReverb(nextRoom);
 				return true;
 			}
 		}
@@ -2363,6 +2383,8 @@ public partial class Game : IDisposable
 		LoadRoom(room);
 		if (GetFirst<Player>() == null && respawnPosition is { } position)
 			Create<Player>(position);
+
+		ApplyRoomReverb(room);
 
 		if (restartMusic)
 		{
