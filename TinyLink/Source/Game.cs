@@ -21,6 +21,29 @@ public partial class Game : IDisposable
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendMask.RGB, Color.White);
+	private static readonly BlendMode TileFieldStampBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
+		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
+		BlendMask.RGBA, Color.White);
+	private static readonly Point2[] DualMaskToTile =
+	[
+		new(0, 3),
+		new(3, 3),
+		new(0, 0),
+		new(3, 2),
+		new(0, 2),
+		new(1, 2),
+		new(2, 3),
+		new(3, 1),
+		new(1, 3),
+		new(0, 1),
+		new(3, 0),
+		new(2, 0),
+		new(1, 0),
+		new(2, 2),
+		new(1, 1),
+		new(2, 1),
+	];
 	private const float ReflectionOpacity = 0.5f;
 	private const float CameraSlackEpsilon = TileSize;
 	static float DitherGlitchAttackSpeed => 15.0f;
@@ -85,6 +108,7 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
 	private readonly ReloadableMaterial? normalLightMaterial;
 	private readonly ReloadableMaterial? reflectionDistortMaterial;
+	private readonly ReloadableMaterial? tileFieldStampMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	private SoundInstance? music;
@@ -182,6 +206,7 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 5, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
+		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
 		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
 
@@ -247,7 +272,9 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial?.Dispose();
 		normalLightMaterial?.Dispose();
 		reflectionDistortMaterial?.Dispose();
+		tileFieldStampMaterial?.Dispose();
 		tileFieldDebugMaterial?.Dispose();
+		pixelSortGlitchMaterial?.Dispose();
 		Batcher.Dispose();
 	}
 
@@ -947,10 +974,14 @@ public partial class Game : IDisposable
 	{
 		TileField.Clear(Color.Transparent);
 		Batcher.PushMatrix(-(Point2)Camera + shake);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushBlend(TileFieldStampBlend);
 		if (room != null)
 			DrawRoomTileField(room);
 		if (nextRoom != null && nextRoom != room)
 			DrawRoomTileField(nextRoom);
+		Batcher.PopBlend();
+		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
 		Batcher.Clear();
@@ -983,6 +1014,18 @@ public partial class Game : IDisposable
 
 	private void DrawRoomTileField(Room renderRoom)
 	{
+		DrawRoomTileFieldBaseline(renderRoom);
+		if (tileFieldStampMaterial != null)
+			Batcher.PushMaterial(tileFieldStampMaterial.Material);
+		DrawRoomVisualTileField(renderRoom);
+		DrawRoomDualTileField(renderRoom, Factory.TileLayer.Foreground);
+		if (tileFieldStampMaterial != null)
+			Batcher.PopMaterial();
+	}
+
+	private void DrawRoomTileFieldBaseline(Room renderRoom)
+	{
+		var baselineTile = tileFieldStampMaterial == null ? (char?)null : '0';
 		for (var y = 0; y < renderRoom.Size.Y; y ++)
 		for (var x = 0; x < renderRoom.Size.X; x ++)
 		{
@@ -994,7 +1037,124 @@ public partial class Game : IDisposable
 					renderRoom.WorldBounds.Y + y * TileSize,
 					TileSize,
 					TileSize),
+				TileFieldColor(baselineTile ?? tile, worldTile));
+		}
+	}
+
+	private void DrawRoomVisualTileField(Room renderRoom)
+	{
+		for (var y = 0; y < renderRoom.Size.Y; y ++)
+		for (var x = 0; x < renderRoom.Size.X; x ++)
+		{
+			var tile = renderRoom.Tiles[x, y];
+			if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground, DualTilesetName: null } entry)
+				continue;
+
+			var image = entry.Image;
+			if (entry.IsSlope && entry.SlopeTilesetName != null && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+			{
+				var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
+				image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
+			}
+			else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
+			{
+				Rng rng = new(x + y * renderRoom.Size.X);
+				image = tileset.GetRandomTile(ref rng);
+			}
+
+			if (image.Texture == null)
+				continue;
+
+			var worldTile = renderRoom.Position + new Point2(x, y);
+			Batcher.Image(
+				image,
+				new Vector2(renderRoom.WorldBounds.X + x * TileSize, renderRoom.WorldBounds.Y + y * TileSize),
 				TileFieldColor(tile, worldTile));
+		}
+	}
+
+	private void DrawRoomDualTileField(Room renderRoom, Factory.TileLayer layer)
+	{
+		foreach (var (tileType, entry) in Factory.Entries)
+		{
+			if (entry.Layer != layer ||
+			    entry.DualTilesetName == null ||
+			    Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
+				continue;
+
+			for (var y = 0; y <= renderRoom.Size.Y; y ++)
+			for (var x = 0; x <= renderRoom.Size.X; x ++)
+			{
+				var materialMask = 0;
+				if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
+					materialMask |= TileQuadrants.TopLeft;
+				if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y))
+					materialMask |= TileQuadrants.BottomLeft;
+				if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y - 1))
+					materialMask |= TileQuadrants.TopRight;
+				if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y))
+					materialMask |= TileQuadrants.BottomRight;
+
+				if (materialMask == 0)
+					continue;
+
+				var joinMask = layer == Factory.TileLayer.Foreground
+					? renderRoom.GetDualTerrainJoinMask(x, y)
+					: materialMask;
+				if (joinMask == 0)
+					continue;
+
+				var dualTile = DualMaskToTile[joinMask];
+				var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
+				var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
+				if (image.Texture == null)
+					continue;
+
+				var position = new Vector2(
+					renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
+					renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
+				var color = TileFieldColor(tileType, renderRoom.Position + new Point2(x, y));
+				DrawDualTileFieldQuadrants(image, position, materialMask, color);
+			}
+		}
+	}
+
+	private void DrawDualTileFieldQuadrants(Subtexture image, Vector2 position, int materialMask, Color color)
+	{
+		if (materialMask == TileQuadrants.All)
+		{
+			Batcher.Image(image, position, color);
+			return;
+		}
+
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft, new Rect(0, 0, TileSize / 2, TileSize / 2));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft, new Rect(0, TileSize / 2, TileSize / 2, TileSize / 2));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight, new Rect(TileSize / 2, 0, TileSize / 2, TileSize / 2));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(TileSize / 2, TileSize / 2, TileSize / 2, TileSize / 2));
+	}
+
+	private void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
+	{
+		if ((materialMask & mask) == 0)
+			return;
+
+		Batcher.Image(image, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
+	}
+
+	private static int StableDualVariantSeed(Room room, char tileType, int x, int y)
+	{
+		unchecked
+		{
+			var worldTile = room.WorldBounds.TopLeft / TileSize + new Point2(x, y);
+			var hash = (uint)worldTile.X * 0x8da6b343u;
+			hash ^= (uint)worldTile.Y * 0xd8163841u;
+			hash ^= tileType * 0xcb1ab31fu;
+			hash ^= hash >> 16;
+			hash *= 0x7feb352du;
+			hash ^= hash >> 15;
+			hash *= 0x846ca68bu;
+			hash ^= hash >> 16;
+			return (int)hash;
 		}
 	}
 
@@ -1837,6 +1997,7 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial?.Reload();
 		normalLightMaterial?.Reload();
 		reflectionDistortMaterial?.Reload();
+		tileFieldStampMaterial?.Reload();
 		tileFieldDebugMaterial?.Reload();
 		pixelSortGlitchMaterial?.Reload();
 	}

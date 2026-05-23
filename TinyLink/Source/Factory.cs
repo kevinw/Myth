@@ -35,11 +35,12 @@ public static class Factory
 		public readonly bool ReflectsSprites;
 		public readonly bool Destructible;
 		public readonly bool IsSlope;
+		public readonly string? TilesetName;
 		public readonly string? SlopeTilesetName;
 		public readonly string? DualTilesetName;
 		public readonly TileLayer Layer;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null)
 		{
 			Name = name;
 			Image = image;
@@ -50,6 +51,7 @@ public static class Factory
 			ReflectsSprites = reflectsSprites;
 			Destructible = destructible;
 			IsSlope = isSlope;
+			TilesetName = tilesetName;
 			SlopeTilesetName = slopeTilesetName;
 			DualTilesetName = dualTilesetName;
 			Layer = layer;
@@ -130,7 +132,7 @@ public static class Factory
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
 			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer);
+		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer, tilesetName: tilesetName);
 	}
 
 	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null)
@@ -150,7 +152,7 @@ public static class Factory
 				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed));
 			else
 				fg.Set(tile.X, tile.Y, image);
-		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName);
+		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName, tilesetName: tilesetName);
 	}
 
 	public static int StableVariantSeed(Room room, string key, Point2 tile)
@@ -184,7 +186,7 @@ public static class Factory
 				fg.Set(tile.X, tile.Y, new());
 			else
 				bg.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, dualTilesetName: dualTilesetName, layer: layer);
+		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName);
 	}
 
 	// Registers the Default types built into the game.

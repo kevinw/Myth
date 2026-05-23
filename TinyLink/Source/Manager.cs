@@ -212,9 +212,9 @@ public partial class Manager : App
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
 		imgui.Dispose();
+#if DEBUG
 		assetWatcher?.Dispose();
 		assetWatcher = null;
-#if DEBUG
 		shaderWatcher?.Dispose();
 		shaderWatcher = null;
 #endif
@@ -480,6 +480,7 @@ public partial class Manager : App
 		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
 	}
 
+#if DEBUG
 	private void RequestAssetReload()
 	{
 		lock (assetReloadLock)
@@ -489,7 +490,6 @@ public partial class Manager : App
 		}
 	}
 
-#if DEBUG
 
 	private void UpdateAssetReload()
 	{
