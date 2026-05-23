@@ -3,13 +3,14 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public class Player : Actor
+public partial class Player : Actor
 {
 	public enum States
 	{
 		Normal,
 		Roll,
 		Attack,
+		BlinkStrike,
 		Hurt,
 		Start
 	}
@@ -154,6 +155,9 @@ public class Player : Actor
 				break;
 			case States.Attack:
 				AttackState();
+				break;
+			case States.BlinkStrike:
+				BlinkStrikeState();
 				break;
 			case States.Hurt:
 				HurtState();
@@ -332,6 +336,20 @@ public class Player : Actor
 		}
 
 		// Begin Attack
+		if (Controls.BlinkStrike.ConsumePress())
+		{
+			blinkStrikeTarget = FindBlinkStrikeTarget();
+			if (blinkStrikeTarget != null)
+			{
+				duckAttack = false;
+				attackBlocked = false;
+				blinkStrikeResolved = false;
+				State = States.BlinkStrike;
+				Play(GetAttackAnimation(), false);
+				return;
+			}
+		}
+
 		if (Controls.Attack.ConsumePress())
 		{
 			if (ducking && duckAttackCooldownTimer <= 0)
@@ -657,6 +675,12 @@ public class Player : Actor
 			return Vector2.Normalize(Velocity);
 
 		return new Vector2(-Facing, 0);
+	}
+
+	public override void Render(Batcher batcher)
+	{
+		base.Render(batcher);
+		RenderBlink(batcher);
 	}
 
 	private void UpdateLightPosition()

@@ -25,6 +25,12 @@ public class Controls(Input input)
 			.Add(Buttons.West)
 	);
 
+	public readonly VirtualAction BlinkStrike = new(input, "BlinkStrike",
+		new ActionBindingSet()
+			.Add(Keys.Q)
+			.Add(Buttons.East)
+	);
+
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
 			.Add(Keys.K)
