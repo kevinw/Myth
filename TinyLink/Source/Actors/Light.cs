@@ -26,7 +26,7 @@ public class Light : Actor
 		Sprite = Assets.GetSprite("fire");
 		Play("idle");
 		CollidesWithSolids = false;
-		Depth = -5;
+		Depth = 1;
 	}
 
 	public override void Render(Batcher batcher)
