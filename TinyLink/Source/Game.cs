@@ -2439,7 +2439,7 @@ public partial class Game : IDisposable
 		return false;
 	}
 
-	public float GetRoomCollisionOverlapRatio(in RectInt bounds)
+	public float GetRoomCollisionOverlapRatio(in RectInt bounds, bool includeBreakableTiles = true)
 	{
 		if (room == null || bounds.Width <= 0 || bounds.Height <= 0)
 			return 0;
@@ -2448,14 +2448,14 @@ public partial class Game : IDisposable
 		for (var y = bounds.Top; y < bounds.Bottom; y ++)
 		for (var x = bounds.Left; x < bounds.Right; x ++)
 		{
-			if (RoomCollisionContains(new Vector2(x + 0.5f, y + 0.5f)))
+			if (RoomCollisionContains(new Vector2(x + 0.5f, y + 0.5f), includeBreakableTiles))
 				solidPixels ++;
 		}
 
 		return solidPixels / (float)(bounds.Width * bounds.Height);
 	}
 
-	private bool RoomCollisionContains(Vector2 point)
+	private bool RoomCollisionContains(Vector2 point, bool includeBreakableTiles = true)
 	{
 		if (room == null)
 			return false;
@@ -2463,7 +2463,7 @@ public partial class Game : IDisposable
 		foreach (var rect in room.CollisionRects)
 		{
 			if (point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom)
-				return true;
+				return includeBreakableTiles || !IsBreakableRoomCollisionPoint(point);
 		}
 
 		foreach (var slope in room.SlopeTiles)
@@ -2473,10 +2473,26 @@ public partial class Game : IDisposable
 				continue;
 
 			if (PointInPolygon(point, room.GetSlopePolygon(slope)))
-				return true;
+				return includeBreakableTiles || !IsBreakableRoomCollisionPoint(point);
 		}
 
 		return false;
+	}
+
+	private bool IsBreakableRoomCollisionPoint(Vector2 point)
+	{
+		if (room == null)
+			return false;
+
+		var local = point - (Vector2)room.WorldBounds.TopLeft;
+		var tile = new Point2(
+			(int)MathF.Floor(local.X / TileSize),
+			(int)MathF.Floor(local.Y / TileSize));
+
+		if (tile.X < 0 || tile.Y < 0 || tile.X >= room.Size.X || tile.Y >= room.Size.Y)
+			return false;
+
+		return room.IsBreakable(tile) || Factory.Find(room.Tiles[tile.X, tile.Y]) is { Destructible: true };
 	}
 
 	private static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
