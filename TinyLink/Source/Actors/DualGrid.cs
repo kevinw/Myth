@@ -40,13 +40,13 @@ public class DualGrid : Actor
 		for (var y = 0; y <= room.Size.Y; y ++)
 		{
 			var materialMask = 0;
-			if (IsFilled(room, tileType, layer, x - 1, y - 1))
+			if (room.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
 				materialMask |= TileQuadrants.TopLeft;
-			if (IsFilled(room, tileType, layer, x - 1, y))
+			if (room.IsDualMaterialFilled(tileType, layer, x - 1, y))
 				materialMask |= TileQuadrants.BottomLeft;
-			if (IsFilled(room, tileType, layer, x, y - 1))
+			if (room.IsDualMaterialFilled(tileType, layer, x, y - 1))
 				materialMask |= TileQuadrants.TopRight;
-			if (IsFilled(room, tileType, layer, x, y))
+			if (room.IsDualMaterialFilled(tileType, layer, x, y))
 				materialMask |= TileQuadrants.BottomRight;
 
 			if (materialMask == 0)
@@ -83,12 +83,6 @@ public class DualGrid : Actor
 	{
 		drawCommands.Clear();
 		visibilitySegments.Clear();
-	}
-
-	private static bool IsFilled(Room room, char tileType, Factory.TileLayer layer, int x, int y)
-	{
-		return x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y &&
-			(layer == Factory.TileLayer.Foreground ? room.Tiles[x, y] : room.BackgroundTiles[x, y]) == tileType;
 	}
 
 	private static int StableVariantSeed(Room room, char tileType, int x, int y)

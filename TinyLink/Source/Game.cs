@@ -20,6 +20,29 @@ public partial class Game : IDisposable
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendMask.RGB, Color.White);
+	private static readonly BlendMode TileFieldStampBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
+		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
+		BlendMask.RGBA, Color.White);
+	private static readonly Point2[] DualMaskToTile =
+	[
+		new(0, 3),
+		new(3, 3),
+		new(0, 0),
+		new(3, 2),
+		new(0, 2),
+		new(1, 2),
+		new(2, 3),
+		new(3, 1),
+		new(1, 3),
+		new(0, 1),
+		new(3, 0),
+		new(2, 0),
+		new(1, 0),
+		new(2, 2),
+		new(1, 1),
+		new(2, 1),
+	];
 	private const float ReflectionOpacity = 0.5f;
 	private const float CameraSlackEpsilon = TileSize;
 	static float DitherGlitchAttackSpeed => 15.0f;
@@ -82,6 +105,7 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
 	private readonly ReloadableMaterial? normalLightMaterial;
 	private readonly ReloadableMaterial? reflectionDistortMaterial;
+	private readonly ReloadableMaterial? tileFieldStampMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	private float hitStun;
@@ -101,6 +125,7 @@ public partial class Game : IDisposable
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
+	public bool IsEditorPreview => !AudioEventsEnabled;
 
 	public Game(Manager manager, Point2 start, bool audioEventsEnabled = true)
 		: this(manager, Assets.GetRoom(start), audioEventsEnabled)
@@ -118,6 +143,7 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 5, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
+		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
 		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
 
@@ -153,6 +179,7 @@ public partial class Game : IDisposable
 			{
 				StartMusic();
 				ApplyMusicArea(room);
+				ApplyRoomReverb(room);
 			}
 		}
 	}
@@ -163,6 +190,7 @@ public partial class Game : IDisposable
 			return;
 
 		disposed = true;
+		StopPlayerHitSnapshot(true);
 		StopMusic(true);
 
 		var stopped = new HashSet<Actor>();
@@ -181,13 +209,16 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial?.Dispose();
 		normalLightMaterial?.Dispose();
 		reflectionDistortMaterial?.Dispose();
+		tileFieldStampMaterial?.Dispose();
 		tileFieldDebugMaterial?.Dispose();
+		pixelSortGlitchMaterial?.Dispose();
 		Batcher.Dispose();
 	}
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
 		CollisionRectsThisFrame.Clear();
+		UpdatePlayerHitSnapshot();
 		if (debugViewMessageTimer > 0)
 		{
 			debugViewMessageTimer -= Time.Delta;
@@ -221,7 +252,7 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 			}
 
-			#if DEBUG
+#if DEBUG
 			UpdatePlayerMouseDrag();
 			if (allowKeyboardShortcuts)
 			{
@@ -230,13 +261,13 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
 					ChangeTimeScale(1);
 			}
-			#endif
+#endif
 
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
 			{
 				// Remove Destroyed Actors
-				for (var i = 0; i < destroying.Count; i ++)
+				for (var i = 0; i < destroying.Count; i++)
 				{
 					destroying[i].Destroyed();
 					Actors.Remove(destroying[i]);
@@ -244,7 +275,7 @@ public partial class Game : IDisposable
 				destroying.Clear();
 
 				// Update Actors
-				for (var i = 0; i < Actors.Count; i ++)
+				for (var i = 0; i < Actors.Count; i++)
 					Actors[i].Update();
 
 				UpdateCamera();
@@ -288,7 +319,7 @@ public partial class Game : IDisposable
 
 		var index = 0;
 		var bestDistance = float.MaxValue;
-		for (var i = 0; i < scales.Length; i ++)
+		for (var i = 0; i < scales.Length; i++)
 		{
 			var distance = MathF.Abs(scales[i] - timeScale);
 			if (distance < bestDistance)
@@ -346,21 +377,21 @@ public partial class Game : IDisposable
 		var targetX = fromLeft ? 0 : fromRight ? forRoom.Size.X - 1 : (forRoom.Size.X - 1) * 0.5f;
 		var targetY = fromTop ? 0 : fromBottom ? forRoom.Size.Y - 1 : (forRoom.Size.Y - 1) * 0.5f;
 
-		for (var y = 1; y < forRoom.Size.Y; y ++)
-		for (var x = 0; x < forRoom.Size.X; x ++)
-		{
-			if (!IsTileWalkable(forRoom, x, y - 1) || !IsTileSolid(forRoom, x, y))
-				continue;
+		for (var y = 1; y < forRoom.Size.Y; y++)
+			for (var x = 0; x < forRoom.Size.X; x++)
+			{
+				if (!IsTileWalkable(forRoom, x, y - 1) || !IsTileSolid(forRoom, x, y))
+					continue;
 
-			var dx = x - targetX;
-			var dy = y - targetY;
-			var score = dx * dx + dy * dy * 0.25f;
-			if (score >= bestScore)
-				continue;
+				var dx = x - targetX;
+				var dy = y - targetY;
+				var score = dx * dx + dy * dy * 0.25f;
+				if (score >= bestScore)
+					continue;
 
-			bestScore = score;
-			best = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
-		}
+				bestScore = score;
+				best = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
+			}
 
 		return best;
 	}
@@ -881,10 +912,14 @@ public partial class Game : IDisposable
 	{
 		TileField.Clear(Color.Transparent);
 		Batcher.PushMatrix(-(Point2)Camera + shake);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushBlend(TileFieldStampBlend);
 		if (room != null)
 			DrawRoomTileField(room);
 		if (nextRoom != null && nextRoom != room)
 			DrawRoomTileField(nextRoom);
+		Batcher.PopBlend();
+		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
 		Batcher.Clear();
@@ -917,18 +952,147 @@ public partial class Game : IDisposable
 
 	private void DrawRoomTileField(Room renderRoom)
 	{
-		for (var y = 0; y < renderRoom.Size.Y; y ++)
-		for (var x = 0; x < renderRoom.Size.X; x ++)
+		DrawRoomTileFieldBaseline(renderRoom);
+		if (tileFieldStampMaterial != null)
+			Batcher.PushMaterial(tileFieldStampMaterial.Material);
+		DrawRoomVisualTileField(renderRoom);
+		DrawRoomDualTileField(renderRoom, Factory.TileLayer.Foreground);
+		if (tileFieldStampMaterial != null)
+			Batcher.PopMaterial();
+	}
+
+	private void DrawRoomTileFieldBaseline(Room renderRoom)
+	{
+		var baselineTile = tileFieldStampMaterial == null ? (char?)null : '0';
+		for (var y = 0; y < renderRoom.Size.Y; y++)
+			for (var x = 0; x < renderRoom.Size.X; x++)
+			{
+				var tile = renderRoom.Tiles[x, y];
+				var worldTile = renderRoom.Position + new Point2(x, y);
+				Batcher.Rect(
+					new Rect(
+						renderRoom.WorldBounds.X + x * TileSize,
+						renderRoom.WorldBounds.Y + y * TileSize,
+						TileSize,
+						TileSize),
+					TileFieldColor(baselineTile ?? tile, worldTile));
+			}
+	}
+
+	private void DrawRoomVisualTileField(Room renderRoom)
+	{
+		for (var y = 0; y < renderRoom.Size.Y; y++)
+			for (var x = 0; x < renderRoom.Size.X; x++)
+			{
+				var tile = renderRoom.Tiles[x, y];
+				if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground, DualTilesetName: null } entry)
+					continue;
+
+				var image = entry.Image;
+				if (entry.IsSlope && entry.SlopeTilesetName != null && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+				{
+					var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
+					image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
+				}
+				else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
+				{
+					Rng rng = new(x + y * renderRoom.Size.X);
+					image = tileset.GetRandomTile(ref rng);
+				}
+
+				if (image.Texture == null)
+					continue;
+
+				var worldTile = renderRoom.Position + new Point2(x, y);
+				Batcher.Image(
+					image,
+					new Vector2(renderRoom.WorldBounds.X + x * TileSize, renderRoom.WorldBounds.Y + y * TileSize),
+					TileFieldColor(tile, worldTile));
+			}
+	}
+
+	private void DrawRoomDualTileField(Room renderRoom, Factory.TileLayer layer)
+	{
+		foreach (var (tileType, entry) in Factory.Entries)
 		{
-			var tile = renderRoom.Tiles[x, y];
-			var worldTile = renderRoom.Position + new Point2(x, y);
-			Batcher.Rect(
-				new Rect(
-					renderRoom.WorldBounds.X + x * TileSize,
-					renderRoom.WorldBounds.Y + y * TileSize,
-					TileSize,
-					TileSize),
-				TileFieldColor(tile, worldTile));
+			if (entry.Layer != layer ||
+				entry.DualTilesetName == null ||
+				Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
+				continue;
+
+			for (var y = 0; y <= renderRoom.Size.Y; y++)
+				for (var x = 0; x <= renderRoom.Size.X; x++)
+				{
+					var materialMask = 0;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
+						materialMask |= TileQuadrants.TopLeft;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y))
+						materialMask |= TileQuadrants.BottomLeft;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y - 1))
+						materialMask |= TileQuadrants.TopRight;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y))
+						materialMask |= TileQuadrants.BottomRight;
+
+					if (materialMask == 0)
+						continue;
+
+					var joinMask = layer == Factory.TileLayer.Foreground
+						? renderRoom.GetDualTerrainJoinMask(x, y)
+						: materialMask;
+					if (joinMask == 0)
+						continue;
+
+					var dualTile = DualMaskToTile[joinMask];
+					var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
+					var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
+					if (image.Texture == null)
+						continue;
+
+					var position = new Vector2(
+						renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
+						renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
+					var color = TileFieldColor(tileType, renderRoom.Position + new Point2(x, y));
+					DrawDualTileFieldQuadrants(image, position, materialMask, color);
+				}
+		}
+	}
+
+	private void DrawDualTileFieldQuadrants(Subtexture image, Vector2 position, int materialMask, Color color)
+	{
+		if (materialMask == TileQuadrants.All)
+		{
+			Batcher.Image(image, position, color);
+			return;
+		}
+
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft, new Rect(0, 0, TileSize / 2, TileSize / 2));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft, new Rect(0, TileSize / 2, TileSize / 2, TileSize / 2));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight, new Rect(TileSize / 2, 0, TileSize / 2, TileSize / 2));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(TileSize / 2, TileSize / 2, TileSize / 2, TileSize / 2));
+	}
+
+	private void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
+	{
+		if ((materialMask & mask) == 0)
+			return;
+
+		Batcher.Image(image, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
+	}
+
+	private static int StableDualVariantSeed(Room room, char tileType, int x, int y)
+	{
+		unchecked
+		{
+			var worldTile = room.WorldBounds.TopLeft / TileSize + new Point2(x, y);
+			var hash = (uint)worldTile.X * 0x8da6b343u;
+			hash ^= (uint)worldTile.Y * 0xd8163841u;
+			hash ^= tileType * 0xcb1ab31fu;
+			hash ^= hash >> 16;
+			hash *= 0x7feb352du;
+			hash ^= hash >> 15;
+			hash *= 0x846ca68bu;
+			hash ^= hash >> 16;
+			return (int)hash;
 		}
 	}
 
@@ -1193,7 +1357,7 @@ public partial class Game : IDisposable
 
 	private void AddSingleLightMask(Target lightMask)
 	{
-		Batcher.PushBlend(new (BlendOp.Add, BlendFactor.One, BlendFactor.One));
+		Batcher.PushBlend(new(BlendOp.Add, BlendFactor.One, BlendFactor.One));
 		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.Image(SingleLightMask, SingleLightMask.Bounds.Center, SingleLightMask.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopSampler();
@@ -1234,6 +1398,8 @@ public partial class Game : IDisposable
 
 		foreach (var actor in Actors)
 		{
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.AppendAllVisibilitySegments(sunSegmentBuffer);
 			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
 		}
@@ -1336,7 +1502,7 @@ public partial class Game : IDisposable
 			var reach = 1.0f - distance / radius;
 			var shadowLength = ActorShadowMinLength + (ActorShadowMaxLength - ActorShadowMinLength) * reach;
 
-			for (var i = 1; i <= ActorShadowSteps; i ++)
+			for (var i = 1; i <= ActorShadowSteps; i++)
 			{
 				var t = i / (float)ActorShadowSteps;
 				var offset = direction * shadowLength * t;
@@ -1370,21 +1536,21 @@ public partial class Game : IDisposable
 		var bestB = (Vector2)points[1];
 		var bestSpan = -1.0f;
 
-		for (var i = 0; i < points.Length; i ++)
-		for (var j = i + 1; j < points.Length; j ++)
-		{
-			var pointA = (Vector2)points[i];
-			var pointB = (Vector2)points[j];
-			var a = DirectionFromLight(lightPosition, pointA);
-			var b = DirectionFromLight(lightPosition, pointB);
-			var span = 1 - Vector2.Dot(a, b);
-			if (span > bestSpan)
+		for (var i = 0; i < points.Length; i++)
+			for (var j = i + 1; j < points.Length; j++)
 			{
-				bestSpan = span;
-				bestA = pointA;
-				bestB = pointB;
+				var pointA = (Vector2)points[i];
+				var pointB = (Vector2)points[j];
+				var a = DirectionFromLight(lightPosition, pointA);
+				var b = DirectionFromLight(lightPosition, pointB);
+				var span = 1 - Vector2.Dot(a, b);
+				if (span > bestSpan)
+				{
+					bestSpan = span;
+					bestA = pointA;
+					bestB = pointB;
+				}
 			}
-		}
 
 		var aFar = ProjectToLightRadius(lightPosition, radius, bestA);
 		var bFar = ProjectToLightRadius(lightPosition, radius, bestB);
@@ -1404,6 +1570,11 @@ public partial class Game : IDisposable
 			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 			{
 				dualGrid.AppendVisibilitySegments(segments, lightPosition, radius);
+				continue;
+			}
+			if (actor is HiddenCoverGrid hiddenCover)
+			{
+				hiddenCover.AppendVisibilitySegments(segments, lightPosition, radius);
 				continue;
 			}
 
@@ -1517,23 +1688,25 @@ public partial class Game : IDisposable
 		foreach (var actor in Actors)
 			if (actor is HiddenWallGrid hiddenWalls)
 				hiddenWalls.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
+			else if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
 
 		var offset = (Point2)Camera;
-		for (var y = 0; y < NormalBuffer.Height; y ++)
-		for (var x = 0; x < NormalBuffer.Width; x ++)
-		{
-			if (!RoomNormalSolid(x, y))
-				continue;
+		for (var y = 0; y < NormalBuffer.Height; y++)
+			for (var x = 0; x < NormalBuffer.Width; x++)
+			{
+				if (!RoomNormalSolid(x, y))
+					continue;
 
-			var sx = SolidValue(x - 1, y) - SolidValue(x + 1, y);
-			var sy = SolidValue(x, y - 1) - SolidValue(x, y + 1);
-			if (sx == 0 && sy == 0)
-				continue;
-			if (RoomNormalSuppressed(x, y))
-				continue;
+				var sx = SolidValue(x - 1, y) - SolidValue(x + 1, y);
+				var sy = SolidValue(x, y - 1) - SolidValue(x, y + 1);
+				if (sx == 0 && sy == 0)
+					continue;
+				if (RoomNormalSuppressed(x, y))
+					continue;
 
-			Batcher.Rect(new Rect(offset.X + x, offset.Y + y, 1, 1), EncodeNormal(new Vector3(sx, sy, 1), 1));
-		}
+				Batcher.Rect(new Rect(offset.X + x, offset.Y + y, 1, 1), EncodeNormal(new Vector3(sx, sy, 1), 1));
+			}
 	}
 
 	private void FillRoomNormalMask(Room renderRoom)
@@ -1548,63 +1721,63 @@ public partial class Game : IDisposable
 	{
 		var camera = (Point2)Camera;
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
-		for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
-		{
-			if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
-			    Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
-				continue;
+			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
+			{
+				if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
+					Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
+					continue;
 
-			var worldLeft = renderRoom.WorldBounds.X + tileX * Game.TileSize;
-			var worldTop = renderRoom.WorldBounds.Y + tileY * Game.TileSize;
-			var left = Math.Clamp(worldLeft - camera.X, 0, NormalBuffer.Width);
-			var right = Math.Clamp(worldLeft + Game.TileSize - camera.X, 0, NormalBuffer.Width);
-			var top = Math.Clamp(worldTop - camera.Y, 0, NormalBuffer.Height);
-			var bottom = Math.Clamp(worldTop + Game.TileSize - camera.Y, 0, NormalBuffer.Height);
+				var worldLeft = renderRoom.WorldBounds.X + tileX * Game.TileSize;
+				var worldTop = renderRoom.WorldBounds.Y + tileY * Game.TileSize;
+				var left = Math.Clamp(worldLeft - camera.X, 0, NormalBuffer.Width);
+				var right = Math.Clamp(worldLeft + Game.TileSize - camera.X, 0, NormalBuffer.Width);
+				var top = Math.Clamp(worldTop - camera.Y, 0, NormalBuffer.Height);
+				var bottom = Math.Clamp(worldTop + Game.TileSize - camera.Y, 0, NormalBuffer.Height);
 
-			for (var y = top; y < bottom; y++)
-			for (var x = left; x < right; x++)
-				roomNormalSuppressMask[x, y] = true;
-		}
+				for (var y = top; y < bottom; y++)
+					for (var x = left; x < right; x++)
+						roomNormalSuppressMask[x, y] = true;
+			}
 	}
 
 	private void FillRoomNormalMask(RectInt rect)
 	{
-		var left   = Math.Clamp(rect.Left - (int)Camera.X, 0, NormalBuffer.Width);
-		var right  = Math.Clamp(rect.Right - (int)Camera.X, 0, NormalBuffer.Width);
-		var top    = Math.Clamp(rect.Top - (int)Camera.Y, 0, NormalBuffer.Height);
+		var left = Math.Clamp(rect.Left - (int)Camera.X, 0, NormalBuffer.Width);
+		var right = Math.Clamp(rect.Right - (int)Camera.X, 0, NormalBuffer.Width);
+		var top = Math.Clamp(rect.Top - (int)Camera.Y, 0, NormalBuffer.Height);
 		var bottom = Math.Clamp(rect.Bottom - (int)Camera.Y, 0, NormalBuffer.Height);
 
-		for (var y = top; y < bottom; y ++)
-		for (var x = left; x < right; x ++)
-			roomNormalMask[x, y] = true;
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+				roomNormalMask[x, y] = true;
 	}
 
 	private void FillRoomNormalMask(Room.LightOccluderPolygon polygon)
 	{
-		var left   = Math.Clamp(polygon.Bounds.Left - (int)Camera.X, 0, NormalBuffer.Width);
-		var right  = Math.Clamp(polygon.Bounds.Right - (int)Camera.X, 0, NormalBuffer.Width);
-		var top    = Math.Clamp(polygon.Bounds.Top - (int)Camera.Y, 0, NormalBuffer.Height);
+		var left = Math.Clamp(polygon.Bounds.Left - (int)Camera.X, 0, NormalBuffer.Width);
+		var right = Math.Clamp(polygon.Bounds.Right - (int)Camera.X, 0, NormalBuffer.Width);
+		var top = Math.Clamp(polygon.Bounds.Top - (int)Camera.Y, 0, NormalBuffer.Height);
 		var bottom = Math.Clamp(polygon.Bounds.Bottom - (int)Camera.Y, 0, NormalBuffer.Height);
 		var camera = (Point2)Camera;
 
-		for (var y = top; y < bottom; y ++)
-		for (var x = left; x < right; x ++)
-		{
-			var worldPoint = new Vector2(camera.X + x + 0.5f, camera.Y + y + 0.5f);
-			if (PointInPolygon(worldPoint, polygon.Points))
-				roomNormalMask[x, y] = true;
-		}
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+			{
+				var worldPoint = new Vector2(camera.X + x + 0.5f, camera.Y + y + 0.5f);
+				if (PointInPolygon(worldPoint, polygon.Points))
+					roomNormalMask[x, y] = true;
+			}
 	}
 
 	private static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
 	{
 		var inside = false;
-		for (var i = 0; i < polygon.Length; i ++)
+		for (var i = 0; i < polygon.Length; i++)
 		{
 			var a = (Vector2)polygon[i];
 			var b = (Vector2)polygon[(i + polygon.Length - 1) % polygon.Length];
 			if ((a.Y > point.Y) != (b.Y > point.Y) &&
-			    point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+				point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
 				inside = !inside;
 		}
 
@@ -1642,7 +1815,7 @@ public partial class Game : IDisposable
 		{
 			return new ReloadableMaterial(GraphicsDevice, name, samplerCount, uniformBufferCount);
 		}
-		catch(Exception e)
+		catch (Exception e)
 		{
 			Console.Error.WriteLine($"Failed to load {name} shader: {e}");
 			return null;
@@ -1775,6 +1948,13 @@ public partial class Game : IDisposable
 		Destroy(actor);
 	}
 
+	public void SetHiddenCoverEditorOpacity(bool focused)
+	{
+		foreach (var actor in Actors)
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 1.0f : 0.10f : 1.0f);
+	}
+
 	public string GetSurfaceTypeBelow(Actor actor)
 	{
 		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
@@ -1841,6 +2021,7 @@ public partial class Game : IDisposable
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				ApplyMusicArea(nextRoom);
+				ApplyRoomReverb(nextRoom);
 				return true;
 			}
 		}
@@ -1866,7 +2047,7 @@ public partial class Game : IDisposable
 		const int maxForwardDistance = TileSize * 4;
 		const int maxPerpendicularDistance = TileSize * 4;
 
-		for (var distance = 0; distance <= maxPerpendicularDistance; distance ++)
+		for (var distance = 0; distance <= maxPerpendicularDistance; distance++)
 		{
 			if (distance == 0)
 			{
@@ -1887,7 +2068,7 @@ public partial class Game : IDisposable
 
 	private bool TryPlacePlayerAfterTransition(Player player, Point2 original, Point2 forward, Point2 perpendicular, int perpendicularDistance, int maxForwardDistance)
 	{
-		for (var forwardDistance = 0; forwardDistance <= maxForwardDistance; forwardDistance ++)
+		for (var forwardDistance = 0; forwardDistance <= maxForwardDistance; forwardDistance++)
 		{
 			player.Position = original + perpendicular * perpendicularDistance + forward * forwardDistance;
 			if (!OverlapsRoomCollision(player, Point2.Zero))
@@ -1949,6 +2130,46 @@ public partial class Game : IDisposable
 		return false;
 	}
 
+	public float GetRoomCollisionOverlapRatio(in RectInt bounds)
+	{
+		if (room == null || bounds.Width <= 0 || bounds.Height <= 0)
+			return 0;
+
+		var solidPixels = 0;
+		for (var y = bounds.Top; y < bounds.Bottom; y++)
+			for (var x = bounds.Left; x < bounds.Right; x++)
+			{
+				if (RoomCollisionContains(new Vector2(x + 0.5f, y + 0.5f)))
+					solidPixels++;
+			}
+
+		return solidPixels / (float)(bounds.Width * bounds.Height);
+	}
+
+	private bool RoomCollisionContains(Vector2 point)
+	{
+		if (room == null)
+			return false;
+
+		foreach (var rect in room.CollisionRects)
+		{
+			if (point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom)
+				return true;
+		}
+
+		foreach (var slope in room.SlopeTiles)
+		{
+			var tileBounds = slope.WorldBounds(room);
+			if (point.X < tileBounds.Left || point.X >= tileBounds.Right || point.Y < tileBounds.Top || point.Y >= tileBounds.Bottom)
+				continue;
+
+			if (PointInPolygon(point, room.GetSlopePolygon(slope)))
+				return true;
+		}
+
+		return false;
+	}
+
 	private static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
 	{
 		var tileBounds = slope.WorldBounds(room);
@@ -1961,12 +2182,12 @@ public partial class Game : IDisposable
 		var bottom = Math.Min(bounds.Bottom, tileBounds.Bottom);
 		var polygon = room.GetSlopePolygon(slope);
 
-		for (var y = top; y < bottom; y ++)
-		for (var x = left; x < right; x ++)
-		{
-			if (PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
-				return true;
-		}
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+			{
+				if (PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
+					return true;
+			}
 
 		return false;
 	}
@@ -1988,21 +2209,22 @@ public partial class Game : IDisposable
 
 		var tileTypesBroken = new HashSet<string>();
 
-		for (var y = top; y <= bottom; y ++)
-		for (var x = left; x <= right; x ++)
-		{
-			var tile = room.Tiles[x, y];
+		for (var y = top; y <= bottom; y++)
+			for (var x = left; x <= right; x++)
+			{
+				var tile = room.Tiles[x, y];
+				var point = new Point2(x, y);
 
-			if (Factory.Find(tile) is not { Destructible: true })
-				continue;
+				if (!room.IsBreakable(point) && Factory.Find(tile) is not { Destructible: true })
+					continue;
 
-			if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
-				tileTypesBroken.Add(surfaceType);
+				if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
+					tileTypesBroken.Add(surfaceType);
 
-			room.Set(new Point2(x, y), '0');
-			Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
-			brokeAny = true;
-		}
+				room.Set(point, '0');
+				Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
+				brokeAny = true;
+			}
 
 		if (brokeAny)
 		{
@@ -2031,6 +2253,8 @@ public partial class Game : IDisposable
 		if (GetFirst<Player>() == null && respawnPosition is { } position)
 			Create<Player>(position);
 
+		ApplyRoomReverb(room);
+
 		if (restartMusic)
 		{
 			StartMusic();
@@ -2049,11 +2273,17 @@ public partial class Game : IDisposable
 		DualGrid? bgDual = null;
 		DualGrid? fgDual = null;
 		HiddenWallGrid? hiddenWalls = null;
+		HiddenCoverGrid? hiddenCover = null;
 		foreach (var actor in Actors)
 		{
 			if (actor is HiddenWallGrid hiddenWallGrid)
 			{
 				hiddenWalls = hiddenWallGrid;
+				continue;
+			}
+			if (actor is HiddenCoverGrid hiddenCoverGrid)
+			{
+				hiddenCover = hiddenCoverGrid;
 				continue;
 			}
 
@@ -2087,18 +2317,19 @@ public partial class Game : IDisposable
 		fgDual.Clear();
 		hiddenWalls?.Resize(room.Size);
 
-		for (var x = 0; x < room.Size.X; x ++)
-		for (var y = 0; y < room.Size.Y; y ++)
-		{
-			var tile = new Point2(x, y);
-			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-				backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual ?? fgDual);
-			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
-		}
+		for (var x = 0; x < room.Size.X; x++)
+			for (var y = 0; y < room.Size.Y; y++)
+			{
+				var tile = new Point2(x, y);
+				if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
+					backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual ?? fgDual);
+				if (room.GetEntry(tile) is { } entry)
+					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
+			}
 
 		if (hiddenWalls != null)
 			PopulateHiddenWalls(room, hiddenWalls);
+		hiddenCover?.Build(room);
 
 		if (bgDual != null)
 			BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
@@ -2149,17 +2380,18 @@ public partial class Game : IDisposable
 		fg.Depth = 5;
 
 		var hiddenWalls = Create<HiddenWallGrid>(offset, it => it.Resize(room.Size));
+		var hiddenCover = Create<HiddenCoverGrid>(offset);
 
 		// loop over room grid placing objects
 		for (var x = 0; x < room.Size.X; x++)
-		for (var y = 0; y < room.Size.Y; y++)
-		{
-			var tile = new Point2(x, y);
-			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-				backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual);
-			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
-		}
+			for (var y = 0; y < room.Size.Y; y++)
+			{
+				var tile = new Point2(x, y);
+				if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
+					backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual);
+				if (room.GetEntry(tile) is { } entry)
+					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
+			}
 
 		PopulateHiddenWalls(room, hiddenWalls);
 		BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
@@ -2178,6 +2410,9 @@ public partial class Game : IDisposable
 			if (ActorSpecs.Create(this, actor, offset + localPosition) is { } created)
 				created.SessionDestroyKey = sessionDestroyKey;
 		}
+
+		hiddenCover.Build(room);
+		hiddenCover.RevealForCurrentPlayer(immediate: true);
 	}
 
 	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)

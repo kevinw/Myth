@@ -2,6 +2,7 @@
   "position": [280, -69],
   "size": [40, 23],
   "ambientColor": "ECFFD8",
+  "reverb": 0.461,
   "tiles": [
     "00000000000000000GGGGGGGGGGGGGGGGGGGGGGG",
     "00000000000000000GGGGGGGGGGGGGGGGGGGGGGG",

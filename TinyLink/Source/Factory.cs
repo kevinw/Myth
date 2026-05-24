@@ -35,11 +35,12 @@ public static class Factory
 		public readonly bool ReflectsSprites;
 		public readonly bool Destructible;
 		public readonly bool IsSlope;
+		public readonly string? TilesetName;
 		public readonly string? SlopeTilesetName;
 		public readonly string? DualTilesetName;
 		public readonly TileLayer Layer;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null)
 		{
 			Name = name;
 			Image = image;
@@ -50,6 +51,7 @@ public static class Factory
 			ReflectsSprites = reflectsSprites;
 			Destructible = destructible;
 			IsSlope = isSlope;
+			TilesetName = tilesetName;
 			SlopeTilesetName = slopeTilesetName;
 			DualTilesetName = dualTilesetName;
 			Layer = layer;
@@ -153,7 +155,7 @@ public static class Factory
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
 			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
-		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer);
+		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer, tilesetName: tilesetName);
 	}
 
 	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null)
@@ -173,7 +175,7 @@ public static class Factory
 				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed));
 			else
 				fg.Set(tile.X, tile.Y, image);
-		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName);
+		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName, tilesetName: tilesetName);
 	}
 
 	public static int StableVariantSeed(Room room, string key, Point2 tile)
@@ -194,20 +196,20 @@ public static class Factory
 		}
 	}
 
-	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground)
+	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
 		if (tileset == null || dualTileset == null)
 			throw new InvalidOperationException($"Dual tile '{tilesetName}' requires tilesets '{tilesetName}' and '{dualTilesetName}'.");
 
-		return new Entry(tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
+		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			if (layer == TileLayer.Foreground)
 				fg.Set(tile.X, tile.Y, new());
 			else
 				bg.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, dualTilesetName: dualTilesetName, layer: layer);
+		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName);
 	}
 
 	// Registers the Default types built into the game.
@@ -217,6 +219,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<Player>("Player");
 		ActorSpecs.RegisterActor<Light>("Light");
 		ActorSpecs.RegisterActor<HiddenWall>("HiddenWall");
+		ActorSpecs.RegisterActor<RevealDoor>("RevealDoor");
 		ActorSpecs.RegisterActor<Jumpthru>("Jumpthru");
 		ActorSpecs.RegisterActor<Bramble>("Bramble");
 		ActorSpecs.RegisterActor<Spitter>("Spitter");
@@ -240,10 +243,8 @@ public static class Factory
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", "Brick"));
 		Register('2', AsSlopeTile("castle", "Brick", "Castle Slope"));
-		Register('x', AsTile("castle", true, "Brick", destructible: true, name: "Breakable Brick"));
 		Register('G', AsDualTile("grass", "grass-dual", "Grass"));
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope"));
-		Register('X', AsTile("grass", true, "Grass", destructible: true, name: "Breakable Grass"));
 		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
 		Register('g', AsTile("plants", false, "Grass"));
 		Register('r', AsTile("rocks", false));
@@ -262,6 +263,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Jumpthru>("jumpthru"));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Player>("player", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<HiddenWall>("door", editorBounds: new RectInt(0, 0, HiddenWall.DefaultSize.X, HiddenWall.DefaultSize.Y)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<RevealDoor>("door", editorBounds: new RectInt(0, 0, RevealDoor.DefaultSize.X, RevealDoor.DefaultSize.Y)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Bramble>("bramble", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Spitter>("spitter", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Mosquito>("mosquito", new Point2(4, 4)));

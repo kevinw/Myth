@@ -3,13 +3,14 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public class Player : Actor
+public partial class Player : Actor
 {
 	public enum States
 	{
 		Normal,
 		Roll,
 		Attack,
+		BlinkStrike,
 		Hurt,
 		Start
 	}
@@ -19,6 +20,7 @@ public class Player : Actor
 
 	static float MaxGroundSpeed => 89;
 	static float MaxAirSpeed => 95;
+	static float CrawlSpeed => 28;
 	static float GroundAccel => 390;
 	static float AirAccel => 250;
 	static float Friction => 480;
@@ -38,9 +40,13 @@ public class Player : Actor
 	static float RollJumpTime => 0.11f;
 	static float RollJumpSpeed => 150;
 	static float RollJumpCarryTime => 0.28f;
+	static float DuckAttackCooldown => 0.4f;
+	static float AttackBlockOverlapThreshold => 0.5f;
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
+	static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
+	static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
 
 	public int Health = MaxHealth;
 	public States State
@@ -58,12 +64,15 @@ public class Player : Actor
 	private int wallJumpDirection;
 	private float jumpForce = JumpForce;
 	private float rollJumpCarryTimer;
+	private float duckAttackCooldownTimer;
+	private bool duckAttack;
+	private bool attackBlocked;
 	private Light? light;
 
 	public Player()
 	{
 		Sprite = Assets.GetSprite("player");
-		Hitbox = new(new RectInt(-4, -12, 8, 12));
+		Hitbox = new(StandingHitboxRect);
 		Mask = Masks.Player;
 		IFrameTime = InvincibleDuration;
 		grounded = true;
@@ -132,6 +141,8 @@ public class Player : Actor
 			wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
 		if (!grounded && rollJumpCarryTimer > 0)
 			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
+		if (duckAttackCooldownTimer > 0)
+			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
 
 		// state control
 		switch (State)
@@ -145,6 +156,9 @@ public class Player : Actor
 			case States.Attack:
 				AttackState();
 				break;
+			case States.BlinkStrike:
+				BlinkStrikeState();
+				break;
 			case States.Hurt:
 				HurtState();
 				break;
@@ -156,12 +170,12 @@ public class Player : Actor
 		UpdateFootsteps();
 
 		// ducking collider(s)
-		if (ducking && State != States.Normal && State != States.Roll)
+		if (ducking && State != States.Normal && State != States.Roll && !(State == States.Attack && duckAttack))
 			ducking = false;
 		if (ducking || State == States.Roll)
-			Hitbox = new(new RectInt(-4, -6, 8, 6));
+			Hitbox = new(DuckingHitboxRect);
 		else
-			Hitbox = new(new RectInt(-4, -12, 8, 12));
+			Hitbox = new(StandingHitboxRect);
 
 		// variable jumping
 		if (jumpTimer > 0)
@@ -218,12 +232,15 @@ public class Player : Actor
 	public void NormalState()
 	{
 		// update ducking state
-		ducking = grounded && Controls.Move.IntValue.Y > 0;
+		if (grounded && Controls.Move.IntValue.Y > 0)
+			ducking = true;
+		else if (ducking)
+			ducking = grounded && !CanStandUp();
+		else
+			ducking = false;
 
 		// get input
 		var input = Controls.Move.IntValue.X;
-		if (ducking)
-			input = 0;
 
 		int facing = input;
 		var movementInput = input;
@@ -234,7 +251,7 @@ public class Player : Actor
 		if (grounded)
 		{
 			if (ducking)
-				Play("duck");
+				Play(input == 0 ? "duck" : "crawl");
 			else if (input == 0)
 				Play("idle");
 			else if (Velocity.X > 0 && input < 0 || Velocity.X < 0 && input > 0)
@@ -270,6 +287,8 @@ public class Player : Actor
 
 		// horizontal movement
 		var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
+		if (ducking)
+			maxSpeed = CrawlSpeed;
 		{
 			// Acceleration
 			Velocity.X += movementInput * (grounded ? GroundAccel : AirAccel) * Time.Delta;
@@ -293,12 +312,13 @@ public class Player : Actor
 
 		// Start jumping
 		var wallJump = GetWallJumpDirection();
-		if (Controls.Jump.Pressed && (grounded || wallJump != 0))
+		var canGroundJump = grounded && CanStandUp();
+		if (Controls.Jump.Pressed && (canGroundJump || wallJump != 0))
 		{
 			Controls.Jump.ConsumePress();
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.65f, 1.4f);
-			if (grounded)
+			if (canGroundJump)
 			{
 				// we used to instantly snap to MaxAirAccel here but I'm not sure that's what I want...
 				// maybe a slight speed boost up to a point would be nice. want to encourage tech.
@@ -316,11 +336,39 @@ public class Player : Actor
 		}
 
 		// Begin Attack
+		if (Controls.BlinkStrike.ConsumePress())
+		{
+			blinkStrikeTarget = FindBlinkStrikeTarget();
+			if (blinkStrikeTarget != null)
+			{
+				duckAttack = false;
+				attackBlocked = false;
+				blinkStrikeResolved = false;
+				State = States.BlinkStrike;
+				Play(GetAttackAnimation(), false);
+				return;
+			}
+		}
+
 		if (Controls.Attack.ConsumePress())
 		{
-			State = States.Attack;
-			if (grounded)
-				StopX();
+			if (ducking && duckAttackCooldownTimer <= 0)
+			{
+				duckAttack = true;
+				attackBlocked = IsAttackBlocked(duckAttack);
+				duckAttackCooldownTimer = DuckAttackCooldown;
+				State = States.Attack;
+				if (grounded)
+					StopX();
+			}
+			else if (!ducking)
+			{
+				duckAttack = false;
+				attackBlocked = false;
+				State = States.Attack;
+				if (grounded)
+					StopX();
+			}
 		}
 
 		// Force yourself to die
@@ -388,6 +436,24 @@ public class Player : Actor
 		jumpTimer = duration;
 	}
 
+	private bool CanStandUp()
+	{
+		var standingBounds = StandingHitboxRect + Position;
+		if (Game.OverlapsRoomCollision(standingBounds))
+			return false;
+
+		foreach (var other in Game.Actors)
+		{
+			if (other == this || other is Grid || !other.Mask.Has(Masks.Solid))
+				continue;
+
+			if (other.Hitbox.Overlaps(standingBounds - other.Position))
+				return false;
+		}
+
+		return true;
+	}
+
 	private int GetWallJumpDirection()
 	{
 		if (grounded)
@@ -425,11 +491,28 @@ public class Player : Actor
 
 	public void AttackState()
 	{
-		Play("attack", false);
+		if (duckAttack)
+			ducking = true;
+
+		Play(GetAttackAnimation(), false);
 
 		RectInt? hitbox = null;
 
-		if (state.Time < 0.2f)
+		if (attackBlocked)
+		{
+			if (state.PreviousTime <= 0)
+			{
+				AudioEvent("player/sword_block");
+			}
+		}
+		else if (duckAttack)
+		{
+			if (state.PreviousTime <= 0)
+				AudioEvent("sword");
+			if (state.Time < Animation.Duration)
+				hitbox = GetAttackHitbox(duckAttack);
+		}
+		else if (state.Time < 0.2f)
 		{
 			hitbox = new (-16, -12, 17, 8);
 		}
@@ -437,9 +520,19 @@ public class Player : Actor
 		{
 			if (state.PreviousTime < 0.2f)
 			{
-				AudioEvent("sword");
+				attackBlocked = IsAttackBlocked(duckAttack);
+				if (attackBlocked)
+				{
+					Play(GetAttackAnimation(), false);
+					AudioEvent("player/sword_block");
+				}
+				else
+				{
+					AudioEvent("sword");
+				}
 			}
-			hitbox = new (8, -9, 16, 9);
+			if (!attackBlocked)
+				hitbox = GetAttackHitbox(duckAttack);
 		}
 
 		if (hitbox is {} it)
@@ -458,11 +551,48 @@ public class Player : Actor
 		if (Grounded())
 			Velocity.X = Calc.Approach(Velocity.X, 0, AttackFriction * Time.Delta);
 
-		if (state.Time >= Animation.Duration)
+		var attackFinished = attackBlocked
+			? IsFinishedPlaying(GetAttackAnimation())
+			: state.Time >= Animation.Duration;
+		if (attackFinished)
 		{
-			Play("idle");
+			attackBlocked = false;
+			if (duckAttack)
+			{
+				duckAttack = false;
+				Play("duck");
+			}
+			else
+			{
+				Play("idle");
+			}
 			State = States.Normal;
 		}
+	}
+
+	private bool IsAttackBlocked(bool duckingAttack)
+	{
+		var hitbox = GetAttackHitbox(duckingAttack);
+		if (Facing == Signs.Negative)
+			hitbox.X = -(hitbox.X + hitbox.Width);
+		hitbox += Position;
+
+		return Game.GetRoomCollisionOverlapRatio(hitbox) >= AttackBlockOverlapThreshold;
+	}
+
+	private RectInt GetAttackHitbox(bool duckingAttack)
+		=> duckingAttack
+			? new RectInt(3, -6, 13, 6)
+			: new RectInt(8, -9, 16, 9);
+
+	private string GetAttackAnimation()
+	{
+		if (duckAttack)
+		{
+			return attackBlocked ? "duck_attack_block" : "duck_attack";
+		}
+
+		return attackBlocked ? "attack_block" : "attack";
 	}
 
 	public void HurtState()
@@ -526,6 +656,8 @@ public class Player : Actor
 		}
 		else
 		{
+			if (healthDelta < 0 && wasHealth > 0)
+				Game.TriggerPlayerHitSnapshot();
 			AudioEvent("hurt");
 		}
 	}
@@ -543,6 +675,12 @@ public class Player : Actor
 			return Vector2.Normalize(Velocity);
 
 		return new Vector2(-Facing, 0);
+	}
+
+	public override void Render(Batcher batcher)
+	{
+		base.Render(batcher);
+		RenderBlink(batcher);
 	}
 
 	private void UpdateLightPosition()
