@@ -40,6 +40,12 @@
   </Target>
   
   <ItemGroup>
+    <Compile Remove="Platforms/**" />
+    <EmbeddedResource Remove="Platforms/**" />
+    <None Remove="Platforms/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" />
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>
