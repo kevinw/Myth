@@ -265,8 +265,17 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, 
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
     threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
     float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
+
+#if 1
+    // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
     float scale = dithered_intensity / intensity;
     return light * lerp(1.0, scale, saturate(DitherSettings.z * dither_mask));
+#else
+    // This looks worse because it has less interesting behaviour in dark solid areas, but is more "physically plausible" lighting wise...
+    float strength = saturate(DitherSettings.z * dither_mask);
+    float shadow = lerp(0.18, 1.0, dithered_intensity);
+    return light * lerp(1.0, shadow, strength);
+#endif
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
