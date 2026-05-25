@@ -1,0 +1,5 @@
+framework module cimgui {
+  umbrella header "cimgui.h"
+  export *
+  module * { export * }
+}
