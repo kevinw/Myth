@@ -8,6 +8,12 @@ namespace TinyLink;
 
 public class Room
 {
+	public enum StorageKind
+	{
+		Bundled,
+		User
+	}
+
 	[Flags]
 	public enum TileFlags
 	{
@@ -50,6 +56,9 @@ public class Room
 	/// Stable room identity, also used as the filename.
 	/// </summary>
 	public string Id;
+
+	public StorageKind Storage { get; internal set; } = StorageKind.Bundled;
+	public string? SourcePath { get; internal set; }
 
 	/// <summary>
 	/// Compatibility screen-grid location of the Room.
@@ -178,6 +187,7 @@ public class Room
 
 	private Room(string id, Point2 position, Point2 size, string? path = null)
 	{
+		SourcePath = path;
 		JsonObject? json = null;
 		if (path != null)
 		{
@@ -981,9 +991,7 @@ public class Room
 		if (ReverbAuto)
 			Reverb = InferReverb();
 
-		File.WriteAllText(
-			Path.Join(Assets.AssetsPath, "Rooms", $"{Id}.json"),
-			ToJsonString());
+		Assets.SaveRoom(this, ToJsonString());
 	}
 
 	public string ToJsonString()

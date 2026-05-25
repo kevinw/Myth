@@ -18,7 +18,11 @@ public static class Assets
 	public static readonly Dictionary<string, Room> RoomsById = new();
 
 	private const string assetsFolderName = "Assets";
+	private const string roomsFolderName = "Rooms";
+	private const string deletedRoomsFolderName = ".deleted";
 	private static string? path = null;
+	private static string? userRoomsPath = null;
+	private static bool? bundledRoomsWritable = null;
 
 	public static string AssetsPath
 	{
@@ -36,6 +40,15 @@ public static class Assets
 
 			return path ?? throw new Exception("Unable to find Assets path");
 		}
+	}
+
+	public static string RoomsPath => Path.Join(AssetsPath, roomsFolderName);
+	public static string? UserRoomsPath => userRoomsPath;
+
+	public static void ConfigureUserRoomsPath(string path)
+	{
+		userRoomsPath = path;
+		bundledRoomsWritable = null;
 	}
 
 	public static void Load(GraphicsDevice gfx)
@@ -753,15 +766,51 @@ public static class Assets
 		Rooms.Clear();
 		RoomsById.Clear();
 
-		var roomsPath = Path.Join(AssetsPath, "Rooms");
-		foreach (var file in Directory.EnumerateFiles(roomsPath, "*.json"))
-			AddRoom(new Room(file));
+		var deleted = LoadUserRoomTombstones();
+
+		if (Directory.Exists(RoomsPath))
+			foreach (var file in Directory.EnumerateFiles(RoomsPath, "*.json"))
+			{
+				var id = Path.GetFileNameWithoutExtension(file);
+				if (deleted.Contains(id))
+					continue;
+
+				AddRoom(new Room(file)
+				{
+					Storage = Room.StorageKind.Bundled,
+					SourcePath = file
+				});
+			}
+
+		if (userRoomsPath != null && Directory.Exists(userRoomsPath))
+			foreach (var file in Directory.EnumerateFiles(userRoomsPath, "*.json"))
+				AddRoom(new Room(file)
+				{
+					Storage = Room.StorageKind.User,
+					SourcePath = file
+				});
 	}
 
 	private static void AddRoom(Room room)
 	{
+		if (RoomsById.TryGetValue(room.Id, out var existing) &&
+			Rooms.TryGetValue(existing.Cell, out var byOldCell) &&
+			byOldCell == existing)
+			Rooms.Remove(existing.Cell);
+
 		Rooms[room.Cell] = room;
 		RoomsById[room.Id] = room;
+	}
+
+	public static void SaveRoom(Room room, string json)
+	{
+		var path = GetRoomSavePath(room);
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		File.WriteAllText(path, json);
+		room.Storage = IsUserRoomPath(path) ? Room.StorageKind.User : Room.StorageKind.Bundled;
+		room.SourcePath = path;
+		if (room.Storage == Room.StorageKind.User)
+			ClearUserRoomTombstone(room.Id);
 	}
 
 	public static bool RenameRoom(Room room, string id)
@@ -774,14 +823,17 @@ public static class Assets
 		if (oldId == id)
 			return true;
 
-		var oldPath = Path.Join(AssetsPath, "Rooms", $"{oldId}.json");
+		var oldPath = room.SourcePath;
+		var oldBundledPath = BundledRoomPath(oldId);
+		var oldHadBundledRoom = File.Exists(oldBundledPath);
 		room.Id = id;
 		RoomsById.Remove(oldId);
 		RoomsById[id] = room;
 		room.Save();
 
-		if (File.Exists(oldPath))
-			File.Delete(oldPath);
+		DeleteRoomFile(oldPath, oldId);
+		if (oldHadBundledRoom && !string.Equals(oldPath, oldBundledPath, StringComparison.Ordinal))
+			WriteUserRoomTombstone(oldId);
 
 		return true;
 	}
@@ -794,9 +846,7 @@ public static class Assets
 		if (RoomsById.TryGetValue(id, out var existing) && existing != room)
 			return false;
 
-		var oldPath = Path.GetFullPath(Path.Join(AssetsPath, "Rooms", $"{room.Id}.json"));
-		var newPath = Path.GetFullPath(Path.Join(AssetsPath, "Rooms", $"{id}.json"));
-		if (!string.Equals(oldPath, newPath, StringComparison.Ordinal) && File.Exists(newPath))
+		if (RoomFileExists(id) && !string.Equals(room.Id, id, StringComparison.OrdinalIgnoreCase))
 			return false;
 
 		return true;
@@ -810,12 +860,134 @@ public static class Assets
 		if (Rooms.TryGetValue(room.Cell, out var byCell) && byCell == room)
 			Rooms.Remove(room.Cell);
 
-		var path = Path.Join(AssetsPath, "Rooms", $"{room.Id}.json");
-		if (File.Exists(path))
-			File.Delete(path);
+		var bundledPath = BundledRoomPath(room.Id);
+		var hadBundledRoom = File.Exists(bundledPath);
+		DeleteRoomFile(room.SourcePath, room.Id);
+		if (hadBundledRoom && !string.Equals(room.SourcePath, bundledPath, StringComparison.Ordinal))
+			WriteUserRoomTombstone(room.Id);
 
 		return true;
 	}
+
+	private static string GetRoomSavePath(Room room)
+	{
+		if (room.Storage == Room.StorageKind.User)
+			return UserRoomPath(room.Id);
+
+		var bundledPath = BundledRoomPath(room.Id);
+		if (CanWriteBundledRooms())
+			return bundledPath;
+
+		return UserRoomPath(room.Id);
+	}
+
+	private static string BundledRoomPath(string id)
+		=> Path.Join(RoomsPath, $"{id}.json");
+
+	private static string UserRoomPath(string id)
+	{
+		if (userRoomsPath == null)
+			throw new InvalidOperationException("User room path has not been configured.");
+
+		return Path.Join(userRoomsPath, $"{id}.json");
+	}
+
+	private static bool IsUserRoomPath(string path)
+		=> userRoomsPath != null &&
+			Path.GetFullPath(path).StartsWith(Path.GetFullPath(userRoomsPath), StringComparison.Ordinal);
+
+	private static bool RoomFileExists(string id)
+	{
+		if (File.Exists(BundledRoomPath(id)))
+			return true;
+		if (userRoomsPath != null && File.Exists(UserRoomPath(id)))
+			return true;
+		return false;
+	}
+
+	private static void DeleteRoomFile(string? path, string id)
+	{
+		if (path == null || !File.Exists(path))
+			return;
+
+		if (CanDeleteFile(path))
+			File.Delete(path);
+		else if (!IsUserRoomPath(path))
+			WriteUserRoomTombstone(id);
+	}
+
+	private static bool CanDeleteFile(string path)
+	{
+		try
+		{
+			using (File.Open(path, FileMode.Open, FileAccess.Write))
+			{
+			}
+			return true;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool CanWriteBundledRooms()
+	{
+		if (bundledRoomsWritable is { } cached)
+			return cached;
+
+		try
+		{
+			Directory.CreateDirectory(RoomsPath);
+			var testPath = Path.Join(RoomsPath, $".write-test-{Guid.NewGuid():N}");
+			File.WriteAllText(testPath, string.Empty);
+			File.Delete(testPath);
+			bundledRoomsWritable = true;
+		}
+		catch
+		{
+			bundledRoomsWritable = false;
+		}
+
+		return bundledRoomsWritable.Value;
+	}
+
+	private static HashSet<string> LoadUserRoomTombstones()
+	{
+		var deleted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var path = UserDeletedRoomsPath();
+		if (path == null || !Directory.Exists(path))
+			return deleted;
+
+		foreach (var file in Directory.EnumerateFiles(path))
+			deleted.Add(Path.GetFileName(file));
+
+		return deleted;
+	}
+
+	private static void WriteUserRoomTombstone(string id)
+	{
+		var path = UserDeletedRoomsPath();
+		if (path == null)
+			return;
+
+		Directory.CreateDirectory(path);
+		File.WriteAllText(Path.Join(path, id), string.Empty);
+	}
+
+	private static void ClearUserRoomTombstone(string id)
+	{
+		var path = UserDeletedRoomsPath();
+		if (path == null)
+			return;
+
+		var file = Path.Join(path, id);
+		if (File.Exists(file))
+			File.Delete(file);
+	}
+
+	private static string? UserDeletedRoomsPath()
+		=> userRoomsPath != null ? Path.Join(userRoomsPath, deletedRoomsFolderName) : null;
 
 	public static void RebuildRoomGeometry()
 	{
