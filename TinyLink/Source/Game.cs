@@ -12,7 +12,6 @@ public partial class Game : IDisposable
 	public const int Columns = Width / TileSize;
 	public const int Rows = Height / TileSize + 1;
 	public const int TileSize = 8;
-	public const float AudioPixelsPerUnit = 72;
 	private const int ActorShadowSteps = 8;
 	private const float ActorShadowStrength = 0.5f;
 	private const float ActorShadowMinLength = 4.0f;
@@ -77,13 +76,12 @@ public partial class Game : IDisposable
 
 	Input Input => Manager.Input;
 	GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
-	Audio Audio => Manager.Audio;
 	public Time Time => Manager.Time.MultiplyDelta(timeScale);
-	public bool AudioEventsEnabled { get; }
 
 	private Room? room;
 	private Room? nextRoom;
 	private float nextRoomEase;
+	private Point2 transitionDirection;
 	private Vector2 transitionCameraFrom;
 	private Vector2 transitionCameraTo;
 	private Color transitionAmbientColorFrom;
@@ -102,7 +100,6 @@ public partial class Game : IDisposable
 	private readonly List<Actor> rendering = [];
 	private readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
 	private readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
-	private readonly HashSet<string> audioFailures = [];
 	private readonly HashSet<string> sessionDestroyedActors = [];
 	private readonly ReloadableMaterial? crtMaterial;
 	private readonly ReloadableMaterial? lightingCompositeMaterial;
@@ -111,9 +108,6 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? tileFieldStampMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
-	private SoundInstance? music;
-	private string? musicArea;
-	private float? roomReverb;
 	private float hitStun;
 	private float shaking;
 	private float ditherGlitch;
@@ -121,19 +115,6 @@ public partial class Game : IDisposable
 	private Vector2 ditherGlitchAxis = Vector2.UnitX;
 	private Point2 shake;
 	internal Rng rng = new();
-
-	enum DebugView
-	{
-		None,
-		CollisionRects,
-		LightMask,
-		NormalBuffer,
-		TileFieldRed,
-		TileFieldGreen,
-		TileFieldBlue,
-		DitherMask,
-		Visibility
-	}
 
 	private sealed class RoomNormalCache(Room room, Target target) : IDisposable
 	{
@@ -155,56 +136,7 @@ public partial class Game : IDisposable
 			=> Target.Dispose();
 	}
 
-	private DebugView debugView;
-	private float debugViewMessageTimer;
-	public string? DebugViewMessage { get; private set; }
-
-	private void ToggleDebugView(DebugView toggle)
-	{
-		SetDebugView(debugView == toggle ? DebugView.None : toggle);
-	}
-
-	private void CycleTileFieldDebugView()
-	{
-		SetDebugView(debugView switch
-		{
-			DebugView.TileFieldRed => DebugView.TileFieldGreen,
-			DebugView.TileFieldGreen => DebugView.TileFieldBlue,
-			DebugView.TileFieldBlue => DebugView.None,
-			_ => DebugView.TileFieldRed
-		});
-	}
-
-	private void SetDebugView(DebugView view)
-	{
-		debugView = view;
-		DisplayMessage($"Debug: {DebugViewName(view)}");
-	}
-
-	public void DisplayMessage(string message, float duration = 1.25f)
-	{
-		DebugViewMessage = message;
-		debugViewMessageTimer = duration;
-	}
-
-	private static string DebugViewName(DebugView view)
-		=> view switch
-		{
-			DebugView.None => "Off",
-			DebugView.CollisionRects => "Collision Rects",
-			DebugView.LightMask => "Light Mask",
-			DebugView.NormalBuffer => "Normal Buffer",
-			DebugView.TileFieldRed => "Tile Field R: Hash",
-			DebugView.TileFieldGreen => "Tile Field G: Family",
-			DebugView.TileFieldBlue => "Tile Field B: Solid",
-			DebugView.DitherMask => "Dither Mask",
-			DebugView.Visibility => "Visibility Polygon",
-			_ => view.ToString()
-		};
-
-	private bool mouseLightEnabled;
 	private bool draggingPlayer;
-	private Vector2 mouseLightPosition;
 	private float timeScale = 1.0f;
 	private readonly Point2? respawnPosition;
 	private bool disposed;
@@ -343,7 +275,7 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 			}
 
-			#if DEBUG
+#if DEBUG
 			UpdatePlayerMouseDrag();
 			if (allowKeyboardShortcuts)
 			{
@@ -352,13 +284,13 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
 					ChangeTimeScale(1);
 			}
-			#endif
+#endif
 
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
 			{
 				// Remove Destroyed Actors
-				for (var i = 0; i < destroying.Count; i ++)
+				for (var i = 0; i < destroying.Count; i++)
 				{
 					destroying[i].Destroyed();
 					Actors.Remove(destroying[i]);
@@ -366,7 +298,7 @@ public partial class Game : IDisposable
 				destroying.Clear();
 
 				// Update Actors
-				for (var i = 0; i < Actors.Count; i ++)
+				for (var i = 0; i < Actors.Count; i++)
 					Actors[i].Update();
 
 				UpdateCamera();
@@ -395,6 +327,7 @@ public partial class Game : IDisposable
 		{
 			room = nextRoom;
 			nextRoom = null;
+			ResolvePlayerRoomTransition(transitionDirection);
 			ApplyMusicArea(room);
 			HitStun(0.1f);
 		}
@@ -409,7 +342,7 @@ public partial class Game : IDisposable
 
 		var index = 0;
 		var bestDistance = float.MaxValue;
-		for (var i = 0; i < scales.Length; i ++)
+		for (var i = 0; i < scales.Length; i++)
 		{
 			var distance = MathF.Abs(scales[i] - timeScale);
 			if (distance < bestDistance)
@@ -467,21 +400,21 @@ public partial class Game : IDisposable
 		var targetX = fromLeft ? 0 : fromRight ? forRoom.Size.X - 1 : (forRoom.Size.X - 1) * 0.5f;
 		var targetY = fromTop ? 0 : fromBottom ? forRoom.Size.Y - 1 : (forRoom.Size.Y - 1) * 0.5f;
 
-		for (var y = 1; y < forRoom.Size.Y; y ++)
-		for (var x = 0; x < forRoom.Size.X; x ++)
-		{
-			if (!IsTileWalkable(forRoom, x, y - 1) || !IsTileSolid(forRoom, x, y))
-				continue;
+		for (var y = 1; y < forRoom.Size.Y; y++)
+			for (var x = 0; x < forRoom.Size.X; x++)
+			{
+				if (!IsTileWalkable(forRoom, x, y - 1) || !IsTileSolid(forRoom, x, y))
+					continue;
 
-			var dx = x - targetX;
-			var dy = y - targetY;
-			var score = dx * dx + dy * dy * 0.25f;
-			if (score >= bestScore)
-				continue;
+				var dx = x - targetX;
+				var dy = y - targetY;
+				var score = dx * dx + dy * dy * 0.25f;
+				if (score >= bestScore)
+					continue;
 
-			bestScore = score;
-			best = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
-		}
+				bestScore = score;
+				best = forRoom.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize);
+			}
 
 		return best;
 	}
@@ -1214,51 +1147,51 @@ public partial class Game : IDisposable
 	private void DrawRoomTileFieldBaseline(Room renderRoom)
 	{
 		var baselineTile = tileFieldStampMaterial == null ? (char?)null : '0';
-		for (var y = 0; y < renderRoom.Size.Y; y ++)
-		for (var x = 0; x < renderRoom.Size.X; x ++)
-		{
-			var tile = renderRoom.Tiles[x, y];
-			var worldTile = renderRoom.Position + new Point2(x, y);
-			Batcher.Rect(
-				new Rect(
-					renderRoom.WorldBounds.X + x * TileSize,
-					renderRoom.WorldBounds.Y + y * TileSize,
-					TileSize,
-					TileSize),
-				TileFieldColor(baselineTile ?? tile, worldTile));
-		}
+		for (var y = 0; y < renderRoom.Size.Y; y++)
+			for (var x = 0; x < renderRoom.Size.X; x++)
+			{
+				var tile = renderRoom.Tiles[x, y];
+				var worldTile = renderRoom.Position + new Point2(x, y);
+				Batcher.Rect(
+					new Rect(
+						renderRoom.WorldBounds.X + x * TileSize,
+						renderRoom.WorldBounds.Y + y * TileSize,
+						TileSize,
+						TileSize),
+					TileFieldColor(baselineTile ?? tile, worldTile));
+			}
 	}
 
 	private void DrawRoomVisualTileField(Room renderRoom)
 	{
-		for (var y = 0; y < renderRoom.Size.Y; y ++)
-		for (var x = 0; x < renderRoom.Size.X; x ++)
-		{
-			var tile = renderRoom.Tiles[x, y];
-			if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground, DualTilesetName: null } entry)
-				continue;
-
-			var image = entry.Image;
-			if (entry.IsSlope && entry.SlopeTilesetName != null && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+		for (var y = 0; y < renderRoom.Size.Y; y++)
+			for (var x = 0; x < renderRoom.Size.X; x++)
 			{
-				var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
-				image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
-			}
-			else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
-			{
-				Rng rng = new(x + y * renderRoom.Size.X);
-				image = tileset.GetRandomTile(ref rng);
-			}
+				var tile = renderRoom.Tiles[x, y];
+				if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground, DualTilesetName: null } entry)
+					continue;
 
-			if (image.Texture == null)
-				continue;
+				var image = entry.Image;
+				if (entry.IsSlope && entry.SlopeTilesetName != null && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+				{
+					var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
+					image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
+				}
+				else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
+				{
+					Rng rng = new(x + y * renderRoom.Size.X);
+					image = tileset.GetRandomTile(ref rng);
+				}
 
-			var worldTile = renderRoom.Position + new Point2(x, y);
-			Batcher.Image(
-				image,
-				new Vector2(renderRoom.WorldBounds.X + x * TileSize, renderRoom.WorldBounds.Y + y * TileSize),
-				TileFieldColor(tile, worldTile));
-		}
+				if (image.Texture == null)
+					continue;
+
+				var worldTile = renderRoom.Position + new Point2(x, y);
+				Batcher.Image(
+					image,
+					new Vector2(renderRoom.WorldBounds.X + x * TileSize, renderRoom.WorldBounds.Y + y * TileSize),
+					TileFieldColor(tile, worldTile));
+			}
 	}
 
 	private void DrawRoomDualTileField(Room renderRoom, Factory.TileLayer layer)
@@ -1266,44 +1199,44 @@ public partial class Game : IDisposable
 		foreach (var (tileType, entry) in Factory.Entries)
 		{
 			if (entry.Layer != layer ||
-			    entry.DualTilesetName == null ||
-			    Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
+				entry.DualTilesetName == null ||
+				Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
 				continue;
 
-			for (var y = 0; y <= renderRoom.Size.Y; y ++)
-			for (var x = 0; x <= renderRoom.Size.X; x ++)
-			{
-				var materialMask = 0;
-				if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
-					materialMask |= TileQuadrants.TopLeft;
-				if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y))
-					materialMask |= TileQuadrants.BottomLeft;
-				if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y - 1))
-					materialMask |= TileQuadrants.TopRight;
-				if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y))
-					materialMask |= TileQuadrants.BottomRight;
+			for (var y = 0; y <= renderRoom.Size.Y; y++)
+				for (var x = 0; x <= renderRoom.Size.X; x++)
+				{
+					var materialMask = 0;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
+						materialMask |= TileQuadrants.TopLeft;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y))
+						materialMask |= TileQuadrants.BottomLeft;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y - 1))
+						materialMask |= TileQuadrants.TopRight;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y))
+						materialMask |= TileQuadrants.BottomRight;
 
-				if (materialMask == 0)
-					continue;
+					if (materialMask == 0)
+						continue;
 
-				var joinMask = layer == Factory.TileLayer.Foreground
-					? renderRoom.GetDualTerrainJoinMask(x, y)
-					: materialMask;
-				if (joinMask == 0)
-					continue;
+					var joinMask = layer == Factory.TileLayer.Foreground
+						? renderRoom.GetDualTerrainJoinMask(x, y)
+						: materialMask;
+					if (joinMask == 0)
+						continue;
 
-				var dualTile = DualMaskToTile[joinMask];
-				var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
-				var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
-				if (image.Texture == null)
-					continue;
+					var dualTile = DualMaskToTile[joinMask];
+					var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
+					var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
+					if (image.Texture == null)
+						continue;
 
-				var position = new Vector2(
-					renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
-					renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
-				var color = TileFieldColor(tileType, renderRoom.Position + new Point2(x, y));
-				DrawDualTileFieldQuadrants(image, position, materialMask, color);
-			}
+					var position = new Vector2(
+						renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
+						renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
+					var color = TileFieldColor(tileType, renderRoom.Position + new Point2(x, y));
+					DrawDualTileFieldQuadrants(image, position, materialMask, color);
+				}
 		}
 	}
 
@@ -1608,7 +1541,7 @@ public partial class Game : IDisposable
 
 	private void AddSingleLightMask(Target lightMask)
 	{
-		Batcher.PushBlend(new (BlendOp.Add, BlendFactor.One, BlendFactor.One));
+		Batcher.PushBlend(new(BlendOp.Add, BlendFactor.One, BlendFactor.One));
 		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.Image(SingleLightMask, SingleLightMask.Bounds.Center, SingleLightMask.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopSampler();
@@ -1753,7 +1686,7 @@ public partial class Game : IDisposable
 			var reach = 1.0f - distance / radius;
 			var shadowLength = ActorShadowMinLength + (ActorShadowMaxLength - ActorShadowMinLength) * reach;
 
-			for (var i = 1; i <= ActorShadowSteps; i ++)
+			for (var i = 1; i <= ActorShadowSteps; i++)
 			{
 				var t = i / (float)ActorShadowSteps;
 				var offset = direction * shadowLength * t;
@@ -1787,82 +1720,25 @@ public partial class Game : IDisposable
 		var bestB = (Vector2)points[1];
 		var bestSpan = -1.0f;
 
-		for (var i = 0; i < points.Length; i ++)
-		for (var j = i + 1; j < points.Length; j ++)
-		{
-			var pointA = (Vector2)points[i];
-			var pointB = (Vector2)points[j];
-			var a = DirectionFromLight(lightPosition, pointA);
-			var b = DirectionFromLight(lightPosition, pointB);
-			var span = 1 - Vector2.Dot(a, b);
-			if (span > bestSpan)
+		for (var i = 0; i < points.Length; i++)
+			for (var j = i + 1; j < points.Length; j++)
 			{
-				bestSpan = span;
-				bestA = pointA;
-				bestB = pointB;
+				var pointA = (Vector2)points[i];
+				var pointB = (Vector2)points[j];
+				var a = DirectionFromLight(lightPosition, pointA);
+				var b = DirectionFromLight(lightPosition, pointB);
+				var span = 1 - Vector2.Dot(a, b);
+				if (span > bestSpan)
+				{
+					bestSpan = span;
+					bestA = pointA;
+					bestB = pointB;
+				}
 			}
-		}
 
 		var aFar = ProjectToLightRadius(lightPosition, radius, bestA);
 		var bFar = ProjectToLightRadius(lightPosition, radius, bestB);
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
-	}
-
-	private void DrawVisibilityDebug(Target target)
-	{
-		if (!TryGetVisibilityDebugLight(out var lightPosition, out var radius))
-			return;
-
-		var segments = GatherVisibilitySegments(lightPosition, radius);
-		var hits = VisibilityPolygon.Compute(lightPosition, radius, segments);
-
-		Batcher.PushMatrix(-(Point2)Camera + shake);
-		Batcher.Circle(lightPosition, radius, 64, Color.Transparent, new Color(0x5fcde4, 0.35f));
-
-		for (var i = 0; i < hits.Count; i++)
-		{
-			var a = hits[i].Point;
-			var b = hits[(i + 1) % hits.Count].Point;
-			Batcher.Triangle(lightPosition, a, b, new Color(0x5fcde4, 0.08f));
-		}
-
-		for (var i = 0; i < segments.Count; i++)
-			Batcher.Line(segments[i].A, segments[i].B, 1, VisibilityDebugSegmentColor(i, 0.9f));
-
-		foreach (var hit in hits)
-		{
-			var color = hit.HitSegment
-				? VisibilityDebugSegmentColor(hit.SegmentIndex, 0.75f)
-				: new Color(0xcbdbfc, 0.45f);
-			Batcher.Line(lightPosition, hit.Point, 1, color * 0.45f);
-			Batcher.Circle(hit.Point, 1.5f, 8, color);
-		}
-
-		Batcher.Circle(lightPosition, 2.5f, 16, 0xffffff);
-		Batcher.PopMatrix();
-		Batcher.Render(target);
-		Batcher.Clear();
-	}
-
-	private bool TryGetVisibilityDebugLight(out Vector2 lightPosition, out float radius)
-	{
-		if (mouseLightEnabled)
-		{
-			lightPosition = mouseLightPosition;
-			radius = 48;
-			return true;
-		}
-
-		if (GetFirst<Player>() is { } player)
-		{
-			lightPosition = player.GetVisualBounds().Center;
-			radius = 64;
-			return true;
-		}
-
-		lightPosition = default;
-		radius = 0;
-		return false;
 	}
 
 	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius)
@@ -1923,30 +1799,6 @@ public partial class Game : IDisposable
 			segments.Add(segment);
 	}
 
-	private static Color VisibilityDebugSegmentColor(int index, float alpha)
-	{
-		var hue = (index * 0.61803398875f) % 1.0f;
-		return ColorFromHsv(hue, 0.72f, 1.0f, alpha);
-	}
-
-	private static Color ColorFromHsv(float hue, float saturation, float value, float alpha)
-	{
-		var h = hue * 6.0f;
-		var c = value * saturation;
-		var x = c * (1.0f - MathF.Abs(h % 2.0f - 1.0f));
-		var m = value - c;
-		var rgb = h switch
-		{
-			< 1.0f => new Vector3(c, x, 0),
-			< 2.0f => new Vector3(x, c, 0),
-			< 3.0f => new Vector3(0, c, x),
-			< 4.0f => new Vector3(0, x, c),
-			< 5.0f => new Vector3(x, 0, c),
-			_ => new Vector3(c, 0, x),
-		};
-		return new Color(rgb.X + m, rgb.Y + m, rgb.Z + m, alpha);
-	}
-
 	private static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
 	{
 		var direction = point - lightPosition;
@@ -1973,35 +1825,6 @@ public partial class Game : IDisposable
 		var closest = new Vector2(x, y);
 		return Vector2.DistanceSquared(center, closest) <= radius * radius;
 	}
-
-	private void DrawCollisionRects()
-	{
-		if (room == null)
-			return;
-
-		foreach (var rect in room.CollisionRects)
-			Batcher.RectLine(rect, 1, Color.Red);
-		foreach (var slope in room.SlopeTiles)
-		{
-			var rect = slope.WorldBounds(room);
-			Batcher.RectLine(rect, 1, Color.Red);
-			if (slope.Direction == Room.SlopeDirection.DownRight)
-				Batcher.Line(rect.TopLeft, rect.BottomRight, 1, Color.Red);
-			else
-				Batcher.Line(rect.BottomLeft, rect.TopRight, 1, Color.Red);
-			var polygon = room.GetSlopePolygon(slope);
-			for (var i = 0; i < polygon.Length; i ++)
-				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Length], 1, Color.Red);
-		}
-		foreach (var rect in CollisionRectsThisFrame)
-			Batcher.RectLine(rect, 1, Color.Red);
-		foreach (var it in Actors)
-			if (!destroying.Contains(it))
-				if (it.Hitbox.Rect != new RectInt())
-					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
-	}
-
-	public List<RectInt> CollisionRectsThisFrame = new();
 
 	private void DrawNormalBuffer()
 	{
@@ -2148,21 +1971,21 @@ public partial class Game : IDisposable
 	private static void SuppressBakedDualRoomNormals(bool[,] suppressMask, Room renderRoom)
 	{
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
-		for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
-		{
-			if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
-			    Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
-				continue;
+			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
+			{
+				if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
+					Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
+					continue;
 
-			var left = Math.Clamp(tileX * Game.TileSize, 0, suppressMask.GetLength(0));
-			var right = Math.Clamp((tileX + 1) * Game.TileSize, 0, suppressMask.GetLength(0));
-			var top = Math.Clamp(tileY * Game.TileSize, 0, suppressMask.GetLength(1));
-			var bottom = Math.Clamp((tileY + 1) * Game.TileSize, 0, suppressMask.GetLength(1));
+				var left = Math.Clamp(tileX * Game.TileSize, 0, suppressMask.GetLength(0));
+				var right = Math.Clamp((tileX + 1) * Game.TileSize, 0, suppressMask.GetLength(0));
+				var top = Math.Clamp(tileY * Game.TileSize, 0, suppressMask.GetLength(1));
+				var bottom = Math.Clamp((tileY + 1) * Game.TileSize, 0, suppressMask.GetLength(1));
 
-			for (var y = top; y < bottom; y++)
-			for (var x = left; x < right; x++)
-				suppressMask[x, y] = true;
-		}
+				for (var y = top; y < bottom; y++)
+				for (var x = left; x < right; x++)
+					suppressMask[x, y] = true;
+			}
 	}
 
 	private static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
@@ -2196,12 +2019,12 @@ public partial class Game : IDisposable
 	private static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
 	{
 		var inside = false;
-		for (var i = 0; i < polygon.Length; i ++)
+		for (var i = 0; i < polygon.Length; i++)
 		{
 			var a = (Vector2)polygon[i];
 			var b = (Vector2)polygon[(i + polygon.Length - 1) % polygon.Length];
 			if ((a.Y > point.Y) != (b.Y > point.Y) &&
-			    point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+				point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
 				inside = !inside;
 		}
 
@@ -2233,35 +2056,13 @@ public partial class Game : IDisposable
 		return new Color(normal.X, normal.Y, normal.Z, strength);
 	}
 
-	private void UpdateMouseLightPosition(RectInt viewport)
-	{
-		var scale = Calc.Min(viewport.Width / (float)Screen.Width, viewport.Height / (float)Screen.Height);
-		var size = new Vector2(Screen.Width, Screen.Height) * scale;
-		var topLeft = (Vector2)viewport.Center - size / 2;
-		var local = (Input.Mouse.Position - topLeft) / scale;
-		mouseLightPosition = Camera - shake + local;
-	}
-
-#if DEBUG
-	public void ReloadShaders()
-	{
-		crtMaterial?.Reload();
-		lightingCompositeMaterial?.Reload();
-		normalLightMaterial?.Reload();
-		reflectionDistortMaterial?.Reload();
-		tileFieldStampMaterial?.Reload();
-		tileFieldDebugMaterial?.Reload();
-		pixelSortGlitchMaterial?.Reload();
-	}
-#endif
-
 	private ReloadableMaterial? CreateFragmentMaterial(string name, int samplerCount, int uniformBufferCount = 0)
 	{
 		try
 		{
 			return new ReloadableMaterial(GraphicsDevice, name, samplerCount, uniformBufferCount);
 		}
-		catch(Exception e)
+		catch (Exception e)
 		{
 			Console.Error.WriteLine($"Failed to load {name} shader: {e}");
 			return null;
@@ -2394,81 +2195,11 @@ public partial class Game : IDisposable
 		Destroy(actor);
 	}
 
-	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
-	{
-		try
-		{
-			using var instance = CreateAudioEvent(path, position);
-			if (instance == null)
-				return;
-
-			if (parameterName != "" || parameterLabel != "")
-				instance.SetParameterLabel(parameterName, parameterLabel, true);
-
-			instance.Start();
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-		}
-	}
-
-	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null)
-	{
-		if (!AudioEventsEnabled || !Audio.Initialized)
-			return null;
-
-		try
-		{
-			var instance = Audio.CreateEvent($"event:/{path}");
-			if (position is { } pos)
-				SetAudioEventPosition(instance, pos);
-			return instance;
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-			return null;
-		}
-	}
-
-	public void SetAudioEventPosition(SoundInstance? instance, Vector2 position, Vector2? relativeTo = null)
-	{
-		if (instance == null || !Audio.Initialized)
-			return;
-
-		try
-		{
-			var effectivePosition = position;
-			if (relativeTo is { } origin)
-				effectivePosition = Camera + new Vector2(Width, Height) / 2 + position - origin;
-
-			instance.Set3DAttributes(ToAudioPosition(effectivePosition));
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-		}
-	}
-
 	public void SetHiddenCoverEditorOpacity(bool focused)
 	{
 		foreach (var actor in Actors)
 			if (actor is HiddenCoverGrid hiddenCover)
 				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 1.0f : 0.10f : 1.0f);
-	}
-
-	private void UpdateAudioListener()
-	{
-		if (!Audio.Initialized)
-			return;
-
-		Audio.SetListenerAttributes(ToAudioPosition(Camera + new Vector2(Width, Height) / 2));
-	}
-
-	private static Vector3 ToAudioPosition(Vector2 position)
-	{
-		return new(-position.X / AudioPixelsPerUnit, position.Y / AudioPixelsPerUnit, 0);
 	}
 
 	public string GetSurfaceTypeBelow(Actor actor)
@@ -2507,101 +2238,6 @@ public partial class Game : IDisposable
 		return Factory.DefaultSurfaceType;
 	}
 
-	public void StopMusic(bool immediate = false) {
-		if (music == null)
-			return;
-
-		try {
-			music.Stop(immediate);
-			music.Release();
-		} catch (Exception e) {
-			Console.Error.WriteLine($"Failed to stop background music: {e}");
-		}
-
-		music = null;
-		musicArea = null;
-	}
-
-	public void RefreshMusic()
-	{
-		if (!Manager.MusicEnabled)
-		{
-			StopMusic(true);
-			return;
-		}
-
-		if (room == null)
-			return;
-
-		StartMusic();
-		ApplyMusicArea(room);
-	}
-
-	private void StartMusic()
-	{
-		if (!Manager.MusicEnabled || !Audio.Initialized || music != null)
-			return;
-
-		try
-		{
-			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, Manager.DefaultMusicArea, true);
-			musicArea = Manager.DefaultMusicArea;
-			music.Start();
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add(Manager.BackgroundMusicEventPath))
-				Console.Error.WriteLine($"Failed to start background music '{Manager.BackgroundMusicEventPath}': {e}");
-			music = null;
-			musicArea = null;
-		}
-	}
-
-	private void ApplyMusicArea(Room forRoom)
-	{
-		if (!Manager.MusicEnabled)
-		{
-			StopMusic(true);
-			return;
-		}
-
-		if (string.IsNullOrEmpty(forRoom.MusicArea))
-			return;
-
-		StartMusic();
-		if (music == null || musicArea == forRoom.MusicArea)
-			return;
-
-		try
-		{
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, forRoom.MusicArea, true);
-			musicArea = forRoom.MusicArea;
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{forRoom.MusicArea}"))
-				Console.Error.WriteLine($"Failed to set background music area '{forRoom.MusicArea}': {e}");
-		}
-	}
-
-	private void ApplyRoomReverb(Room forRoom)
-	{
-		if (!AudioEventsEnabled || !Audio.Initialized || roomReverb == forRoom.Reverb)
-			return;
-
-		try
-		{
-			Audio.SetParameter(Manager.RoomReverbParameter, forRoom.Reverb, true);
-			roomReverb = forRoom.Reverb;
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add(Manager.RoomReverbParameter))
-				Console.Error.WriteLine($"Failed to set room reverb '{forRoom.Reverb:0.###}': {e}");
-		}
-	}
-
 	public bool Transition(Point2 direction)
 	{
 		if (room != null && nextRoom == null)
@@ -2610,6 +2246,7 @@ public partial class Game : IDisposable
 			if (Assets.FindAdjacentRoom(room, direction, exitPosition) is { } foundRoom)
 			{
 				nextRoom = foundRoom.CloneRuntime();
+				transitionDirection = new Point2(Math.Sign(direction.X), Math.Sign(direction.Y));
 				foreach (var it in Actors)
 					if (it is not Player && !it.KeepOnRoomTransition)
 						Destroy(it);
@@ -2634,6 +2271,55 @@ public partial class Game : IDisposable
 				ApplyRoomReverb(nextRoom);
 				return true;
 			}
+		}
+
+		return false;
+	}
+
+	private void ResolvePlayerRoomTransition(Point2 direction)
+	{
+		if (room == null || direction == Point2.Zero || GetFirst<Player>() is not { } player)
+			return;
+
+		if (!OverlapsRoomCollision(player, Point2.Zero))
+			return;
+
+		var original = player.Position;
+		var forward = Math.Abs(direction.X) > Math.Abs(direction.Y)
+			? Point2.UnitX * Math.Sign(direction.X)
+			: Point2.UnitY * Math.Sign(direction.Y);
+		var perpendicular = forward.X != 0 ? Point2.UnitY : Point2.UnitX;
+		var perpendicularVelocity = forward.X != 0 ? player.Velocity.Y : player.Velocity.X;
+
+		const int maxForwardDistance = TileSize * 4;
+		const int maxPerpendicularDistance = TileSize * 4;
+
+		for (var distance = 0; distance <= maxPerpendicularDistance; distance++)
+		{
+			if (distance == 0)
+			{
+				if (TryPlacePlayerAfterTransition(player, original, forward, perpendicular, 0, maxForwardDistance))
+					return;
+				continue;
+			}
+
+			var firstSign = perpendicularVelocity > 0 ? -1 : 1;
+			if (TryPlacePlayerAfterTransition(player, original, forward, perpendicular, firstSign * distance, maxForwardDistance))
+				return;
+			if (TryPlacePlayerAfterTransition(player, original, forward, perpendicular, -firstSign * distance, maxForwardDistance))
+				return;
+		}
+
+		player.Position = original;
+	}
+
+	private bool TryPlacePlayerAfterTransition(Player player, Point2 original, Point2 forward, Point2 perpendicular, int perpendicularDistance, int maxForwardDistance)
+	{
+		for (var forwardDistance = 0; forwardDistance <= maxForwardDistance; forwardDistance++)
+		{
+			player.Position = original + perpendicular * perpendicularDistance + forward * forwardDistance;
+			if (!OverlapsRoomCollision(player, Point2.Zero))
+				return true;
 		}
 
 		return false;
@@ -2759,12 +2445,12 @@ public partial class Game : IDisposable
 		var bottom = Math.Min(bounds.Bottom, tileBounds.Bottom);
 		var polygon = room.GetSlopePolygon(slope);
 
-		for (var y = top; y < bottom; y ++)
-		for (var x = left; x < right; x ++)
-		{
-			if (PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
-				return true;
-		}
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+			{
+				if (PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
+					return true;
+			}
 
 		return false;
 	}
@@ -2786,22 +2472,22 @@ public partial class Game : IDisposable
 
 		var tileTypesBroken = new HashSet<string>();
 
-		for (var y = top; y <= bottom; y ++)
-		for (var x = left; x <= right; x ++)
-		{
-			var tile = room.Tiles[x, y];
-			var point = new Point2(x, y);
+		for (var y = top; y <= bottom; y++)
+			for (var x = left; x <= right; x++)
+			{
+				var tile = room.Tiles[x, y];
+				var point = new Point2(x, y);
 
-			if (!room.IsBreakable(point) && Factory.Find(tile) is not { Destructible: true })
-				continue;
+				if (!room.IsBreakable(point) && Factory.Find(tile) is not { Destructible: true })
+					continue;
 
-			if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
-				tileTypesBroken.Add(surfaceType);
+				if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
+					tileTypesBroken.Add(surfaceType);
 
-			room.Set(point, '0');
-			Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
-			brokeAny = true;
-		}
+				room.Set(point, '0');
+				Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
+				brokeAny = true;
+			}
 
 		if (brokeAny)
 		{
@@ -2896,15 +2582,15 @@ public partial class Game : IDisposable
 		fgDual.Clear();
 		hiddenWalls?.Resize(room.Size);
 
-		for (var x = 0; x < room.Size.X; x ++)
-		for (var y = 0; y < room.Size.Y; y ++)
-		{
-			var tile = new Point2(x, y);
-			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-				backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual ?? fgDual);
-			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
-		}
+		for (var x = 0; x < room.Size.X; x++)
+			for (var y = 0; y < room.Size.Y; y++)
+			{
+				var tile = new Point2(x, y);
+				if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
+					backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual ?? fgDual);
+				if (room.GetEntry(tile) is { } entry)
+					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
+			}
 
 		if (hiddenWalls != null)
 			PopulateHiddenWalls(room, hiddenWalls);
@@ -2965,14 +2651,14 @@ public partial class Game : IDisposable
 
 		// loop over room grid placing objects
 		for (var x = 0; x < room.Size.X; x++)
-		for (var y = 0; y < room.Size.Y; y++)
-		{
-			var tile = new Point2(x, y);
-			if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-				backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual);
-			if (room.GetEntry(tile) is { } entry)
-				entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
-		}
+			for (var y = 0; y < room.Size.Y; y++)
+			{
+				var tile = new Point2(x, y);
+				if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
+					backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual);
+				if (room.GetEntry(tile) is { } entry)
+					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
+			}
 
 		PopulateHiddenWalls(room, hiddenWalls);
 		BuildDualTiles(room, bgDual, Factory.TileLayer.Background);

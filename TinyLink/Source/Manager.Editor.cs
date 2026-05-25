@@ -21,6 +21,7 @@ public partial class Manager
 	bool editorViewInitialized;
 	Vector2 editorCamera;
 	float editorZoom = 1.0f;
+	float editorZoomTarget = 1.0f;
 	private const bool AutoSelectRoomByCamera = true;
 	Vector2 editorCameraTweenFrom;
 	Vector2 editorCameraTweenTo;
@@ -321,6 +322,7 @@ public partial class Manager
 			return;
 
 		GetEditorRoomFocus(room, out editorCamera, out editorZoom);
+		editorZoomTarget = editorZoom;
 		editorCameraTween = 1.0f;
 		editorViewInitialized = true;
 	}
@@ -351,6 +353,7 @@ public partial class Manager
 		var t = Ease.Cube.InOut(editorCameraTween);
 		editorCamera = Vector2.Lerp(editorCameraTweenFrom, editorCameraTweenTo, t);
 		editorZoom = float.Lerp(editorZoomTweenFrom, editorZoomTweenTo, t);
+		editorZoomTarget = editorZoom;
 	}
 
 	private void MatchEditorCameraToGame()
@@ -361,6 +364,7 @@ public partial class Manager
 		editorCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
 		var view = EditorOpenRect;
 		editorZoom = Math.Clamp(Math.Min(view.Width / Game.Width, view.Height / Game.Height), 0.15f, 8.0f);
+		editorZoomTarget = editorZoom;
 		editorCameraTween = 1.0f;
 		editorViewInitialized = true;
 	}
@@ -1158,8 +1162,8 @@ public partial class Manager
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
 
-		if (FindRoomActorEntry(actor) is { EditorBounds: { } bounds })
-			return bounds + position;
+		if (FindRoomActorEntry(actor) is { } entry)
+			return (entry.EditorBounds ?? entry.DefaultEditorBounds) + position;
 
 		return new RectInt(position.X - 4, position.Y - 4, 8, 8);
 	}
@@ -1646,34 +1650,49 @@ public partial class Manager
 
 	private void UpdateEditorWorldView(Rect inner)
 	{
-		if (imgui.WantsMouseInput)
-			return;
+		var cursor = Cursor;
+		var canInteract = !imgui.WantsMouseInput && inner.Contains(cursor);
 
-		if (!inner.Contains(Cursor))
-			return;
-
-		if (Input.Mouse.MiddleDown)
+		if (canInteract && Input.Mouse.MiddleDown)
 		{
 			editorCameraTween = 1.0f;
+			editorZoomTarget = editorZoom;
 			editorCamera -= Input.Mouse.Delta / Scale / editorZoom;
 		}
 
-		var wheel = Input.Mouse.Wheel;
-		var wheelAmount = MathF.Abs(wheel.Y) >= MathF.Abs(wheel.X) ? wheel.Y : wheel.X;
-		if (wheelAmount == 0)
-			return;
-
-		if (wheel.X != 0)
+		if (canInteract)
 		{
-			brushSize = Math.Clamp(brushSize + Math.Sign(wheelAmount), 1, 10);
+			var wheel = Input.Mouse.Wheel;
+			var useHorizontalWheel = MathF.Abs(wheel.X) > MathF.Abs(wheel.Y);
+			var wheelAmount = useHorizontalWheel ? wheel.X : wheel.Y;
+			if (wheelAmount != 0)
+			{
+				if (useHorizontalWheel)
+				{
+					brushSize = Math.Clamp(brushSize + Math.Sign(wheelAmount), 1, 10);
+				}
+				else
+				{
+					editorCameraTween = 1.0f;
+					editorZoomTarget = Math.Clamp(editorZoomTarget * MathF.Pow(1.15f, wheelAmount), 0.15f, 8.0f);
+				}
+			}
+		}
+
+		UpdateEditorZoomSmoothing(canInteract ? cursor : inner.Center, inner);
+	}
+
+	private void UpdateEditorZoomSmoothing(Vector2 screenAnchor, Rect inner)
+	{
+		if (MathF.Abs(editorZoomTarget - editorZoom) <= 0.0001f)
+		{
+			editorZoom = editorZoomTarget;
 			return;
 		}
 
-		var before = ScreenToEditorWorld(Cursor, inner);
-		var zoomFactor = MathF.Pow(1.15f, wheelAmount);
-		editorCameraTween = 1.0f;
-		editorZoom = Math.Clamp(editorZoom * zoomFactor, 0.15f, 8.0f);
-		editorCamera = before - (Cursor - inner.Center) / editorZoom;
+		var before = ScreenToEditorWorld(screenAnchor, inner);
+		editorZoom = Calc.Approach(editorZoom, editorZoomTarget, Time.Delta * MathF.Max(editorZoom, editorZoomTarget) * 18.0f);
+		editorCamera = before - (screenAnchor - inner.Center) / editorZoom;
 	}
 
 	private Vector2 ScreenToEditorWorld(Vector2 screen, Rect inner)
