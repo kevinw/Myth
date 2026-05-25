@@ -65,6 +65,14 @@ public partial class Manager : App
 	Vector2 playTransitionFromSize;
 	Vector2 playTransitionToCenter;
 	Vector2 playTransitionToSize;
+	int fpsOverlayFrames;
+	long fpsOverlayLastTimestamp;
+	float fpsOverlayValue;
+#if IOS
+	bool fpsOverlayVisible = true;
+#else
+	bool fpsOverlayVisible;
+#endif
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -76,7 +84,7 @@ public partial class Manager : App
 	/// </summary>
 	private readonly Batcher batcher;
 	private readonly Controls controls;
-	private readonly ImGuiRenderer imgui;
+	private readonly ImGuiRenderer imgui = null!;
 
 	/// <summary>
 	/// Visible Space
@@ -171,18 +179,34 @@ public partial class Manager : App
 	public bool MusicEnabled => musicEnabled;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager() : base(new AppConfig()
-	{
-		ApplicationName = "Myth",
-		WindowTitle = "Myth",
-		Width = 1280,
-		Height = 720,
-		Resizable = true
-	})
+	public Manager() : base(CreateAppConfig())
 	{
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 		imgui = new(this) { Scale = Scale };
+	}
+
+	private static AppConfig CreateAppConfig()
+	{
+#if IOS
+		return new AppConfig(
+			ApplicationName: "TinyLink",
+			WindowTitle: "TinyLink",
+			Width: 1280,
+			Height: 720,
+			Fullscreen: true,
+			Resizable: false,
+			UpdateMode: UpdateMode.UnlockedStep(),
+			PreferredGraphicsDriver: GraphicsDriver.Metal);
+#else
+		return new AppConfig(
+			ApplicationName: "Myth",
+			WindowTitle: "Myth",
+			Width: 1280,
+			Height: 720,
+			Resizable: true,
+			UpdateMode: UpdateMode.UnlockedStep());
+#endif
 	}
 
 	protected override void Startup()
@@ -191,12 +215,13 @@ public partial class Manager : App
 
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 
+		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
 		Assets.Load(GraphicsDevice);
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
 		LoadAudioBanks();
-#if DEBUG
+#if DEBUG && !IOS
 		StartAssetWatcher();
 		StartShaderWatcher();
 #endif
@@ -211,8 +236,9 @@ public partial class Manager : App
 		ClearRoomPreviewCache(deferDisposal: false);
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
-		imgui.Dispose();
-#if DEBUG
+		if (imgui != null)
+			imgui.Dispose();
+#if DEBUG && !IOS
 		assetWatcher?.Dispose();
 		assetWatcher = null;
 		shaderWatcher?.Dispose();
@@ -228,6 +254,11 @@ public partial class Manager : App
 
 	private void LoadAudioBanks()
 	{
+#if IOS
+		musicAreas.Clear();
+		musicAreas.Add(DefaultMusicArea);
+		return;
+#else
 		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
 		if (!Directory.Exists(fmodPath))
 		{
@@ -268,6 +299,7 @@ public partial class Manager : App
 			musicAreas.Clear();
 			musicAreas.Add(DefaultMusicArea);
 		}
+#endif
 	}
 
 	private void LoadMusicAreas()
@@ -371,8 +403,9 @@ public partial class Manager : App
 
 	protected override void Update()
 	{
+		using var updatePerf = PerfStats.Time(PerfStat.Update);
 		DisposeDeferredRoomPreviews();
-#if DEBUG
+#if DEBUG && !IOS
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
 		UpdateShaderReload();
@@ -383,12 +416,14 @@ public partial class Manager : App
 		// Misc. Hotkeys
 		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 			ReloadAssets(true);
-#if DEBUG
+#if DEBUG && !IOS
 		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F))
 			Window.Fullscreen = !Window.Fullscreen;
 #endif
 		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
 			Window.Fullscreen = !Window.Fullscreen;
+		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
+			ToggleFpsOverlay();
 		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
 		{
 			CurrentRoom?.Save();
@@ -396,6 +431,7 @@ public partial class Manager : App
 		}
 		if (!keyboardShortcutsBlocked && ToggleEditorPressed())
 			ToggleGame();
+		var perfToggleChordActive = UpdatePerfToggles(keyboardShortcutsBlocked);
 
 		// Run Game
 		if (startingPlay)
@@ -415,7 +451,7 @@ public partial class Manager : App
 		{
 			SetMouseCursor(null);
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
-			game?.Update(!keyboardShortcutsBlocked);
+			game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
 		}
 		// Show Editor
 		else
@@ -443,29 +479,151 @@ public partial class Manager : App
 			batcher.PopMatrix();
 		}
 
-		imgui.BeginLayout();
-		if (imgui.WantsTextInput)
-			Window.StartTextInput();
-		else
+		if (imgui != null)
+		{
+			imgui.BeginLayout();
+#if IOS
 			Window.StopTextInput();
-		if (gameEase < 1.0f && !startingPlay)
-			PaletteImGui();
-		if (!playing && !startingPlay)
-			ToolbarImGui();
-		DebugViewMessageImGui();
-		imgui.EndLayout();
+#else
+			if (imgui.WantsTextInput)
+				Window.StartTextInput();
+			else
+				Window.StopTextInput();
+#endif
+			if (gameEase < 1.0f && !startingPlay)
+				PaletteImGui();
+			if (!playing && !startingPlay)
+				ToolbarImGui();
+			DebugViewMessageImGui();
+			FpsOverlayImGui();
+			imgui.EndLayout();
+		}
+	}
+
+	private void UpdateFpsOverlay()
+	{
+		var now = Stopwatch.GetTimestamp();
+		if (fpsOverlayLastTimestamp == 0)
+		{
+			fpsOverlayLastTimestamp = now;
+			return;
+		}
+
+		fpsOverlayFrames++;
+		var elapsed = Stopwatch.GetElapsedTime(fpsOverlayLastTimestamp, now).TotalSeconds;
+		if (elapsed < 0.25f)
+			return;
+
+		fpsOverlayValue = (float)(fpsOverlayFrames / elapsed);
+		PerfStats.Publish();
+		fpsOverlayFrames = 0;
+		fpsOverlayLastTimestamp = now;
+	}
+
+	private void ToggleFpsOverlay()
+	{
+		fpsOverlayVisible = !fpsOverlayVisible;
+		game?.DisplayMessage($"FPS Overlay {(fpsOverlayVisible ? "On" : "Off")}");
+	}
+
+	private bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
+	{
+		if (!keyboardShortcutsBlocked)
+		{
+			if (Input.Keyboard.Pressed(Keys.F6))
+				ToggleLighting();
+			if (Input.Keyboard.Pressed(Keys.F7))
+				ToggleDitherAndTileField();
+			if (Input.Keyboard.Pressed(Keys.F8))
+				ToggleNormalBuffer();
+			if (Input.Keyboard.Pressed(Keys.F9))
+				TogglePostEffects();
+			if (Input.Keyboard.Pressed(Keys.F10))
+				ToggleEmissive();
+		}
+
+		var chordActive = false;
+		foreach (var controller in Input.Controllers)
+		{
+			if (!controller.Connected || !PerfModifierDown(controller))
+				continue;
+
+			chordActive = true;
+			if (controller.Pressed(Buttons.South))
+				ToggleLighting();
+			if (controller.Pressed(Buttons.East))
+				ToggleDitherAndTileField();
+			if (controller.Pressed(Buttons.West))
+				ToggleNormalBuffer();
+			if (controller.Pressed(Buttons.North))
+				TogglePostEffects();
+			if (controller.Pressed(Buttons.RightShoulder) || (!controller.IsGamepad && controller.Pressed(5)))
+				ToggleEmissive();
+		}
+
+		return chordActive;
+	}
+
+	private static bool PerfModifierDown(ControllerState controller)
+		=> controller.Down(Buttons.LeftShoulder) || (!controller.IsGamepad && controller.Down(4));
+
+	private void ToggleLighting()
+	{
+		PerfToggles.Lighting = !PerfToggles.Lighting;
+		ShowPerfToggleMessage("Lighting", PerfToggles.Lighting);
+	}
+
+	private void ToggleDitherAndTileField()
+	{
+		PerfToggles.DitherAndTileField = !PerfToggles.DitherAndTileField;
+		ShowPerfToggleMessage("Dither + Tile Field", PerfToggles.DitherAndTileField);
+	}
+
+	private void ToggleNormalBuffer()
+	{
+		PerfToggles.NormalBuffer = !PerfToggles.NormalBuffer;
+		ShowPerfToggleMessage("Normal Buffer", PerfToggles.NormalBuffer);
+	}
+
+	private void ToggleEmissive()
+	{
+		PerfToggles.Emissive = !PerfToggles.Emissive;
+		ShowPerfToggleMessage("Emissive", PerfToggles.Emissive);
+	}
+
+	private void TogglePostEffects()
+	{
+		var enabled = !(PerfToggles.Glitch || PerfToggles.Crt);
+		PerfToggles.Glitch = enabled;
+		PerfToggles.Crt = enabled;
+		ShowPerfToggleMessage("Post Effects", enabled);
+	}
+
+	private void ShowPerfToggleMessage(string name, bool enabled)
+	{
+		var message = $"Perf: {name} {(enabled ? "On" : "Off")}";
+		Console.WriteLine($"{message} ({PerfToggles.Summary})");
+		game?.DisplayMessage(message);
 	}
 
 	protected override void Render()
 	{
+		PerfStats.Record(PerfStat.Present, GraphicsDevice.LastPresentDuration);
+		UpdateFpsOverlay();
+		using var renderPerf = PerfStats.Time(PerfStat.Render);
 		Window.Clear(0x2e1426);
 
 		if (startingPlay)
+		{
 			RenderPlayTransition();
+		}
 		else if (playing)
+		{
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
+		}
 		batcher.Render(Window);
-		imgui.Render();
+		if (imgui != null)
+			imgui.Render();
 	}
 
 	private void RenderPlayTransition()
@@ -480,7 +638,7 @@ public partial class Manager : App
 		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
 	}
 
-#if DEBUG
+#if DEBUG && !IOS
 	private void RequestAssetReload()
 	{
 		lock (assetReloadLock)
@@ -784,7 +942,7 @@ public partial class Manager : App
 	}
 
 	private bool ImGuiWantsKeyboard
-		=> imgui.WantsKeyboardInput || imgui.WantsTextInput;
+		=> imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
 
 	private void ToggleGame()
 	{
@@ -806,6 +964,17 @@ public partial class Manager : App
 				fallbackPlayerDirection: editorRoomEntryDirection,
 				spawnFallbackPlayer: true,
 				initialPlayerPosition: playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id ? remembered.Position : null);
+#if IOS
+				playTransition = 1.0f;
+				playTransitionFromCenter = Vector2.Zero;
+				playTransitionFromSize = Vector2.Zero;
+				playTransitionToCenter = Vector2.Zero;
+				playTransitionToSize = Vector2.Zero;
+				gameEase = 1.0f;
+				startingPlay = false;
+				playing = true;
+			game.SnapCameraToGameplayTarget();
+#else
 			var target = game.GetGameplayCameraTarget();
 			playTransition = 0.0f;
 			playTransitionFromCenter = editorCamera;
@@ -814,6 +983,7 @@ public partial class Manager : App
 			playTransitionToSize = new Vector2(Game.Width, Game.Height);
 			startingPlay = true;
 			playing = false;
+#endif
 		}
 	}
 

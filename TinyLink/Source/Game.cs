@@ -100,8 +100,8 @@ public partial class Game : IDisposable
 	private Vector2 transitionSunDirectionTo;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
-	private bool[,] roomNormalMask = new bool[Width, Height];
-	private bool[,] roomNormalSuppressMask = new bool[Width, Height];
+	private readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
+	private readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
 	private readonly HashSet<string> audioFailures = [];
 	private readonly HashSet<string> sessionDestroyedActors = [];
 	private readonly ReloadableMaterial? crtMaterial;
@@ -135,6 +135,26 @@ public partial class Game : IDisposable
 		Visibility
 	}
 
+	private sealed class RoomNormalCache(Room room, Target target) : IDisposable
+	{
+		public readonly Room Room = room;
+		public readonly Target Target = target;
+		public bool Dirty = true;
+
+		public void Dispose()
+			=> Target.Dispose();
+	}
+
+	private sealed class RoomTileFieldCache(Room room, Target target) : IDisposable
+	{
+		public readonly Room Room = room;
+		public readonly Target Target = target;
+		public bool Dirty = true;
+
+		public void Dispose()
+			=> Target.Dispose();
+	}
+
 	private DebugView debugView;
 	private float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }
@@ -158,8 +178,13 @@ public partial class Game : IDisposable
 	private void SetDebugView(DebugView view)
 	{
 		debugView = view;
-		DebugViewMessage = $"Debug: {DebugViewName(view)}";
-		debugViewMessageTimer = 1.25f;
+		DisplayMessage($"Debug: {DebugViewName(view)}");
+	}
+
+	public void DisplayMessage(string message, float duration = 1.25f)
+	{
+		DebugViewMessage = message;
+		debugViewMessageTimer = duration;
 	}
 
 	private static string DebugViewName(DebugView view)
@@ -185,6 +210,7 @@ public partial class Game : IDisposable
 	private bool disposed;
 
 	public Vector2 Camera { get; private set; }
+	private Vector2 RenderCamera => (Point2)Camera - shake;
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
@@ -268,6 +294,8 @@ public partial class Game : IDisposable
 		destroying.Clear();
 		rendering.Clear();
 		DisposeRenderTargets();
+		DisposeRoomNormalCaches();
+		DisposeRoomTileFieldCaches();
 		crtMaterial?.Dispose();
 		lightingCompositeMaterial?.Dispose();
 		normalLightMaterial?.Dispose();
@@ -559,8 +587,6 @@ public partial class Game : IDisposable
 		TileField = new Target(GraphicsDevice, width, height, name: "TileField");
 		DitherMask = new Target(GraphicsDevice, width, height, name: "DitherMask");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
-		roomNormalMask = new bool[width, height];
-		roomNormalSuppressMask = new bool[width, height];
 	}
 
 	private void DisposeRenderTargets()
@@ -584,24 +610,81 @@ public partial class Game : IDisposable
 		ReflectionScreen?.Dispose();
 	}
 
+	private void DisposeRoomNormalCaches()
+	{
+		foreach (var cache in roomNormalCaches.Values)
+			cache.Dispose();
+		roomNormalCaches.Clear();
+	}
+
+	private void DisposeRoomTileFieldCaches()
+	{
+		foreach (var cache in roomTileFieldCaches.Values)
+			cache.Dispose();
+		roomTileFieldCaches.Clear();
+	}
+
 	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		PrepareRenderingList();
 
-		DrawWorldLayer(BackgroundScreen, background: true);
-		DrawWorldLayer(ForegroundScreen, background: false);
-		DrawEmissiveLayer(BackgroundEmissive, background: true);
-		DrawEmissiveLayer(ForegroundEmissive, background: false);
+		using (PerfStats.Time(PerfStat.World))
+		{
+			using (GraphicsDevice.DebugGroup("TinyLink/background world"))
+				DrawWorldLayer(BackgroundScreen, background: true);
+			using (GraphicsDevice.DebugGroup("TinyLink/foreground world"))
+				DrawWorldLayer(ForegroundScreen, background: false);
+		}
+		if (PerfToggles.Emissive)
+		{
+			using (PerfStats.Time(PerfStat.Emissive))
+			{
+				using (GraphicsDevice.DebugGroup("TinyLink/background emissive"))
+					DrawEmissiveLayer(BackgroundEmissive, background: true);
+				using (GraphicsDevice.DebugGroup("TinyLink/foreground emissive"))
+					DrawEmissiveLayer(ForegroundEmissive, background: false);
+			}
+		}
+		else
+		{
+			BackgroundEmissive.Clear(Color.Transparent);
+			ForegroundEmissive.Clear(Color.Transparent);
+		}
 
 		UpdateMouseLightPosition(viewport);
-		DrawNormalBuffer();
-		DrawTileField();
-		DrawDitherMask();
+		if (PerfToggles.NormalBuffer)
+		{
+			using (PerfStats.Time(PerfStat.Normal))
+			using (GraphicsDevice.DebugGroup("TinyLink/normal buffer"))
+			{
+				DrawNormalBuffer();
+			}
+		}
+		else
+		{
+			NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
+		}
+		if (PerfToggles.DitherAndTileField)
+		{
+			using (PerfStats.Time(PerfStat.TileDither))
+			{
+				using (GraphicsDevice.DebugGroup("TinyLink/tile field"))
+					DrawTileField();
+				using (GraphicsDevice.DebugGroup("TinyLink/dither mask"))
+					DrawDitherMask();
+			}
+		}
+		else
+		{
+			TileField.Clear(Color.Transparent);
+			DitherMask.Clear(Color.White);
+		}
 
 		Target output = Screen;
 		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen or DebugView.TileFieldBlue)
 		{
-			output = DrawTileFieldDebug();
+			using (GraphicsDevice.DebugGroup("TinyLink/tile field debug"))
+				output = DrawTileFieldDebug();
 		}
 		else if (debugView == DebugView.DitherMask)
 		{
@@ -609,27 +692,64 @@ public partial class Game : IDisposable
 		}
 		else
 		{
-			output = ApplyLighting();
+			if (PerfToggles.Lighting)
+			{
+				using (PerfStats.Time(PerfStat.Lighting))
+				using (GraphicsDevice.DebugGroup("TinyLink/lighting"))
+				{
+					output = ApplyLighting();
+				}
+			}
+			else
+			{
+				using (PerfStats.Time(PerfStat.Lighting))
+				using (GraphicsDevice.DebugGroup("TinyLink/raw world composite"))
+				{
+					output = CompositeRawWorld();
+				}
+			}
 			if (debugView == DebugView.LightMask)
 				output = BackgroundLightMask;
 			else if (debugView == DebugView.NormalBuffer)
 				output = NormalBuffer;
 			else if (debugView == DebugView.None)
-				output = ApplyPixelSortGlitch(output);
+			{
+				if (PerfToggles.Glitch)
+				{
+					using (PerfStats.Time(PerfStat.Post))
+					using (GraphicsDevice.DebugGroup("TinyLink/pixel sort glitch"))
+					{
+						output = ApplyPixelSortGlitch(output);
+					}
+				}
+			}
 		}
 		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
-			DrawPlayerHud(output);
+		{
+			using (PerfStats.Time(PerfStat.Hud))
+			using (GraphicsDevice.DebugGroup("TinyLink/hud"))
+			{
+				DrawPlayerHud(output);
+			}
+		}
 		if (debugView == DebugView.Visibility)
-			DrawVisibilityDebug(output);
+		{
+			using (GraphicsDevice.DebugGroup("TinyLink/visibility debug"))
+				DrawVisibilityDebug(output);
+		}
 
 		// draw screen to window
+		var crt = applyCrt && PerfToggles.Crt ? crtMaterial : null;
+		var useCrt = crt != null;
+		using (PerfStats.Time(PerfStat.FinalComposite))
+		using (GraphicsDevice.DebugGroup(useCrt ? "TinyLink/final composite crt" : "TinyLink/final composite"))
 		{
 			var size = viewport.Size;
 			var center = viewport.Center;
 			var scale = Calc.Min(size.X / (float)output.Width, size.Y / (float)output.Height);
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-			if (applyCrt && crtMaterial != null)
+			if (useCrt)
 			{
 				float CrtTime = Time.SecondsF * 0.2f;
 				float Curvature = 0.005f;
@@ -637,7 +757,7 @@ public partial class Game : IDisposable
 				float ScanlineAmount = 0.22f;
 				float VignetteAmount = 0.22f;
 				float RgbOffset = 0.35f;
-				crtMaterial.Material.Fragment.SetUniformBuffer([
+				crt!.Material.Fragment.SetUniformBuffer([
 					Screen.Width,
 					Screen.Height,
 					CrtTime,
@@ -647,15 +767,27 @@ public partial class Game : IDisposable
 					RgbOffset,
 					Curvature
 				]);
-				Batcher.PushMaterial(crtMaterial.Material);
+				Batcher.PushMaterial(crt.Material);
 			}
 			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
-			if (applyCrt && crtMaterial != null)
+			if (useCrt)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
 			Batcher.Render(destination, scissor: scissor);
 			Batcher.Clear();
 		}
+	}
+
+	private Target CompositeRawWorld()
+	{
+		Screen.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.Image(ForegroundScreen, ForegroundScreen.Bounds.Center, ForegroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.Render(Screen);
+		Batcher.Clear();
+		return Screen;
 	}
 
 	private void PrepareRenderingList()
@@ -888,11 +1020,12 @@ public partial class Game : IDisposable
 		if (Assets.LightingNoise == null)
 			return;
 
+		var renderCamera = RenderCamera;
 		Batcher.PushBlend(BlendMode.Multiply);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat, TextureWrap.Repeat));
 		Batcher.Image(
 			Assets.LightingNoise,
-			new Rect(Camera.X - Time.SecondsF * 5.0f, Camera.Y, target.Width, target.Height),
+			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, target.Width, target.Height),
 			Vector2.Zero,
 			Color.White * CurrentLightNoise());
 		Batcher.PopSampler();
@@ -909,11 +1042,12 @@ public partial class Game : IDisposable
 		GlitchScreen.Clear(Color.Transparent);
 		pixelSortGlitchMaterial.Material.Fragment.Samplers[1] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
+		var renderCamera = RenderCamera;
 		pixelSortGlitchMaterial.Material.Fragment.SetUniformBuffer([
 			input.Width,
 			input.Height,
-			Camera.X - shake.X,
-			Camera.Y - shake.Y,
+			renderCamera.X,
+			renderCamera.Y,
 			ditherGlitch,
 			glitchPosition.X,
 			glitchPosition.Y,
@@ -942,11 +1076,12 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(emissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
+		var renderCamera = RenderCamera;
 		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
 			output.Width,
 			output.Height,
-			Camera.X - shake.X,
-			Camera.Y - shake.Y,
+			renderCamera.X,
+			renderCamera.Y,
 			Manager.LightingDitherEnabled ? 1.0f : 0.0f,
 			Manager.LightingDitherScale,
 			Manager.LightingDitherStrength,
@@ -972,19 +1107,72 @@ public partial class Game : IDisposable
 
 	private void DrawTileField()
 	{
+		RoomTileFieldCache? currentRoomTileFieldCache = null;
+		RoomTileFieldCache? nextRoomTileFieldCache = null;
+		if (room != null)
+			currentRoomTileFieldCache = GetRoomTileFieldCache(room);
+		if (nextRoom != null && nextRoom != room)
+			nextRoomTileFieldCache = GetRoomTileFieldCache(nextRoom);
+
 		TileField.Clear(Color.Transparent);
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-		Batcher.PushBlend(TileFieldStampBlend);
-		if (room != null)
-			DrawRoomTileField(room);
-		if (nextRoom != null && nextRoom != room)
-			DrawRoomTileField(nextRoom);
-		Batcher.PopBlend();
+		if (currentRoomTileFieldCache != null)
+			DrawCachedRoomTileField(currentRoomTileFieldCache);
+		if (nextRoomTileFieldCache != null)
+			DrawCachedRoomTileField(nextRoomTileFieldCache);
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
 		Batcher.Clear();
+	}
+
+	private void DrawCachedRoomTileField(RoomTileFieldCache cache)
+	{
+		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
+	}
+
+	private RoomTileFieldCache GetRoomTileFieldCache(Room renderRoom)
+	{
+		var bounds = renderRoom.WorldBounds;
+		if (!roomTileFieldCaches.TryGetValue(renderRoom, out var cache) ||
+		    cache.Target.Width != bounds.Width ||
+		    cache.Target.Height != bounds.Height)
+		{
+			cache?.Dispose();
+			cache = new(renderRoom, new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"RoomTileField:{renderRoom.Id}"));
+			roomTileFieldCaches[renderRoom] = cache;
+		}
+
+		if (cache.Dirty)
+			RebuildRoomTileFieldCache(cache);
+
+		return cache;
+	}
+
+	private void MarkRoomTileFieldCacheDirty(Room renderRoom)
+	{
+		if (roomTileFieldCaches.TryGetValue(renderRoom, out var cache))
+			cache.Dirty = true;
+	}
+
+	private void RebuildRoomTileFieldCache(RoomTileFieldCache cache)
+	{
+		var renderRoom = cache.Room;
+		var target = cache.Target;
+		var previousMatrix = Batcher.Matrix;
+		Batcher.Matrix = Matrix3x2.CreateTranslation(-renderRoom.WorldBounds.TopLeft);
+
+		target.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushBlend(TileFieldStampBlend);
+		DrawRoomTileField(renderRoom);
+		Batcher.PopBlend();
+		Batcher.PopSampler();
+		Batcher.Render(target);
+		Batcher.Clear();
+		Batcher.Matrix = previousMatrix;
+		cache.Dirty = false;
 	}
 
 	private void DrawDitherMask()
@@ -1336,7 +1524,7 @@ public partial class Game : IDisposable
 
 		if (normalLightMaterial != null)
 		{
-			var screenPosition = position - Camera + shake;
+			var screenPosition = position - RenderCamera;
 			var lightColorValue = (Vector4)lightColor;
 			normalLightMaterial.Material.Fragment.SetUniformBuffer([
 				NormalBuffer.Width,
@@ -1398,13 +1586,14 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		var screenLight = lightPosition - Camera + shake;
+		var renderCamera = RenderCamera;
+		var screenLight = lightPosition - renderCamera;
 		var texture = NormalBuffer.Attachments[0];
 		var textureSize = new Vector2(NormalBuffer.Width, NormalBuffer.Height);
 		for (var i = 0; i < hits.Count; i++)
 		{
-			var a = hits[i].Point - Camera + shake;
-			var b = hits[(i + 1) % hits.Count].Point - Camera + shake;
+			var a = hits[i].Point - renderCamera;
+			var b = hits[(i + 1) % hits.Count].Point - renderCamera;
 			Batcher.Triangle(
 				texture,
 				screenLight,
@@ -1817,10 +2006,25 @@ public partial class Game : IDisposable
 	private void DrawNormalBuffer()
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
+		RoomNormalCache? currentRoomNormalCache = null;
+		RoomNormalCache? nextRoomNormalCache = null;
+		if (ShowForegroundLayer)
+		{
+			if (room != null)
+				currentRoomNormalCache = GetRoomNormalCache(room);
+			if (nextRoom != null && nextRoom != room)
+				nextRoomNormalCache = GetRoomNormalCache(nextRoom);
+		}
+
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 
 		if (ShowForegroundLayer)
-			DrawRoomNormals();
+		{
+			if (currentRoomNormalCache != null)
+				DrawCachedRoomNormals(currentRoomNormalCache);
+			if (nextRoomNormalCache != null)
+				DrawCachedRoomNormals(nextRoomNormalCache);
+		}
 
 		foreach (var actor in rendering)
 		{
@@ -1841,57 +2045,108 @@ public partial class Game : IDisposable
 		Batcher.Clear();
 	}
 
-	private void DrawRoomNormals()
+	private void DrawCachedRoomNormals(RoomNormalCache cache)
 	{
-		Array.Clear(roomNormalMask);
-		Array.Clear(roomNormalSuppressMask);
-
-		if (room != null)
-		{
-			FillRoomNormalMask(room);
-			SuppressBakedDualRoomNormals(room);
-		}
-		if (nextRoom != null && nextRoom != room)
-		{
-			FillRoomNormalMask(nextRoom);
-			SuppressBakedDualRoomNormals(nextRoom);
-		}
-
-		foreach (var actor in Actors)
-			if (actor is HiddenWallGrid hiddenWalls)
-				hiddenWalls.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
-			else if (actor is HiddenCoverGrid hiddenCover)
-				hiddenCover.ForEachVisibleCell((rect, _, _) => FillRoomNormalMask(rect));
-
-		var offset = (Point2)Camera;
-		for (var y = 0; y < NormalBuffer.Height; y ++)
-		for (var x = 0; x < NormalBuffer.Width; x ++)
-		{
-			if (!RoomNormalSolid(x, y))
-				continue;
-
-			var sx = SolidValue(x - 1, y) - SolidValue(x + 1, y);
-			var sy = SolidValue(x, y - 1) - SolidValue(x, y + 1);
-			if (sx == 0 && sy == 0)
-				continue;
-			if (RoomNormalSuppressed(x, y))
-				continue;
-
-			Batcher.Rect(new Rect(offset.X + x, offset.Y + y, 1, 1), EncodeNormal(new Vector3(sx, sy, 1), 1));
-		}
+		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
 	}
 
-	private void FillRoomNormalMask(Room renderRoom)
+	private RoomNormalCache GetRoomNormalCache(Room renderRoom)
+	{
+		var bounds = renderRoom.WorldBounds;
+		if (!roomNormalCaches.TryGetValue(renderRoom, out var cache) ||
+		    cache.Target.Width != bounds.Width ||
+		    cache.Target.Height != bounds.Height)
+		{
+			cache?.Dispose();
+			cache = new(renderRoom, new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"RoomNormals:{renderRoom.Id}"));
+			roomNormalCaches[renderRoom] = cache;
+		}
+
+		if (cache.Dirty)
+			RebuildRoomNormalCache(cache);
+
+		return cache;
+	}
+
+	private void MarkRoomNormalCacheDirty(Room renderRoom)
+	{
+		if (roomNormalCaches.TryGetValue(renderRoom, out var cache))
+			cache.Dirty = true;
+	}
+
+	private void RebuildRoomNormalCache(RoomNormalCache cache)
+	{
+		var renderRoom = cache.Room;
+		var target = cache.Target;
+		var mask = new bool[target.Width, target.Height];
+		var suppressMask = new bool[target.Width, target.Height];
+		var origin = renderRoom.WorldBounds.TopLeft;
+
+		FillRoomNormalMask(mask, renderRoom, origin);
+		SuppressBakedDualRoomNormals(suppressMask, renderRoom);
+
+		var previousMatrix = Batcher.Matrix;
+		Batcher.Matrix = Matrix3x2.Identity;
+		target.Clear(Color.Transparent);
+		for (var y = 0; y < target.Height; y ++)
+		{
+			var runStart = -1;
+			var runColor = Color.Transparent;
+
+			for (var x = 0; x < target.Width; x ++)
+			{
+				var color = RoomNormalColor(mask, suppressMask, x, y);
+				if (color.A > 0 && runStart >= 0 && color == runColor)
+					continue;
+
+				if (runStart >= 0)
+					Batcher.Rect(new Rect(runStart, y, x - runStart, 1), runColor);
+
+				if (color.A > 0)
+				{
+					runStart = x;
+					runColor = color;
+				}
+				else
+				{
+					runStart = -1;
+				}
+			}
+
+			if (runStart >= 0)
+				Batcher.Rect(new Rect(runStart, y, target.Width - runStart, 1), runColor);
+		}
+		Batcher.Render(target);
+		Batcher.Clear();
+		Batcher.Matrix = previousMatrix;
+		cache.Dirty = false;
+	}
+
+	private static Color RoomNormalColor(bool[,] mask, bool[,] suppressMask, int x, int y)
+	{
+		if (!RoomNormalSolid(mask, x, y))
+			return Color.Transparent;
+
+		var sx = SolidValue(mask, x - 1, y) - SolidValue(mask, x + 1, y);
+		var sy = SolidValue(mask, x, y - 1) - SolidValue(mask, x, y + 1);
+		if (sx == 0 && sy == 0)
+			return Color.Transparent;
+		if (RoomNormalSuppressed(suppressMask, x, y))
+			return Color.Transparent;
+
+		return EncodeNormal(new Vector3(sx, sy, 1), 1);
+	}
+
+	private void FillRoomNormalMask(bool[,] mask, Room renderRoom, Point2 origin)
 	{
 		foreach (var rect in renderRoom.CollisionRects)
-			FillRoomNormalMask(rect);
+			FillRoomNormalMask(mask, rect, origin);
 		foreach (var polygon in renderRoom.LightOccluderPolygons)
-			FillRoomNormalMask(polygon);
+			FillRoomNormalMask(mask, polygon, origin);
 	}
 
-	private void SuppressBakedDualRoomNormals(Room renderRoom)
+	private static void SuppressBakedDualRoomNormals(bool[,] suppressMask, Room renderRoom)
 	{
-		var camera = (Point2)Camera;
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
 		for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
 		{
@@ -1899,45 +2154,42 @@ public partial class Game : IDisposable
 			    Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
 				continue;
 
-			var worldLeft = renderRoom.WorldBounds.X + tileX * Game.TileSize;
-			var worldTop = renderRoom.WorldBounds.Y + tileY * Game.TileSize;
-			var left = Math.Clamp(worldLeft - camera.X, 0, NormalBuffer.Width);
-			var right = Math.Clamp(worldLeft + Game.TileSize - camera.X, 0, NormalBuffer.Width);
-			var top = Math.Clamp(worldTop - camera.Y, 0, NormalBuffer.Height);
-			var bottom = Math.Clamp(worldTop + Game.TileSize - camera.Y, 0, NormalBuffer.Height);
+			var left = Math.Clamp(tileX * Game.TileSize, 0, suppressMask.GetLength(0));
+			var right = Math.Clamp((tileX + 1) * Game.TileSize, 0, suppressMask.GetLength(0));
+			var top = Math.Clamp(tileY * Game.TileSize, 0, suppressMask.GetLength(1));
+			var bottom = Math.Clamp((tileY + 1) * Game.TileSize, 0, suppressMask.GetLength(1));
 
 			for (var y = top; y < bottom; y++)
 			for (var x = left; x < right; x++)
-				roomNormalSuppressMask[x, y] = true;
+				suppressMask[x, y] = true;
 		}
 	}
 
-	private void FillRoomNormalMask(RectInt rect)
+	private static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
 	{
-		var left   = Math.Clamp(rect.Left - (int)Camera.X, 0, NormalBuffer.Width);
-		var right  = Math.Clamp(rect.Right - (int)Camera.X, 0, NormalBuffer.Width);
-		var top    = Math.Clamp(rect.Top - (int)Camera.Y, 0, NormalBuffer.Height);
-		var bottom = Math.Clamp(rect.Bottom - (int)Camera.Y, 0, NormalBuffer.Height);
+		var left   = Math.Clamp(rect.Left - origin.X, 0, mask.GetLength(0));
+		var right  = Math.Clamp(rect.Right - origin.X, 0, mask.GetLength(0));
+		var top    = Math.Clamp(rect.Top - origin.Y, 0, mask.GetLength(1));
+		var bottom = Math.Clamp(rect.Bottom - origin.Y, 0, mask.GetLength(1));
 
 		for (var y = top; y < bottom; y ++)
 		for (var x = left; x < right; x ++)
-			roomNormalMask[x, y] = true;
+			mask[x, y] = true;
 	}
 
-	private void FillRoomNormalMask(Room.LightOccluderPolygon polygon)
+	private static void FillRoomNormalMask(bool[,] mask, Room.LightOccluderPolygon polygon, Point2 origin)
 	{
-		var left   = Math.Clamp(polygon.Bounds.Left - (int)Camera.X, 0, NormalBuffer.Width);
-		var right  = Math.Clamp(polygon.Bounds.Right - (int)Camera.X, 0, NormalBuffer.Width);
-		var top    = Math.Clamp(polygon.Bounds.Top - (int)Camera.Y, 0, NormalBuffer.Height);
-		var bottom = Math.Clamp(polygon.Bounds.Bottom - (int)Camera.Y, 0, NormalBuffer.Height);
-		var camera = (Point2)Camera;
+		var left   = Math.Clamp(polygon.Bounds.Left - origin.X, 0, mask.GetLength(0));
+		var right  = Math.Clamp(polygon.Bounds.Right - origin.X, 0, mask.GetLength(0));
+		var top    = Math.Clamp(polygon.Bounds.Top - origin.Y, 0, mask.GetLength(1));
+		var bottom = Math.Clamp(polygon.Bounds.Bottom - origin.Y, 0, mask.GetLength(1));
 
 		for (var y = top; y < bottom; y ++)
 		for (var x = left; x < right; x ++)
 		{
-			var worldPoint = new Vector2(camera.X + x + 0.5f, camera.Y + y + 0.5f);
+			var worldPoint = new Vector2(origin.X + x + 0.5f, origin.Y + y + 0.5f);
 			if (PointInPolygon(worldPoint, polygon.Points))
-				roomNormalMask[x, y] = true;
+				mask[x, y] = true;
 		}
 	}
 
@@ -1956,24 +2208,24 @@ public partial class Game : IDisposable
 		return inside;
 	}
 
-	private bool RoomNormalSolid(int x, int y)
+	private static bool RoomNormalSolid(bool[,] mask, int x, int y)
 	{
-		if (x < 0 || y < 0 || x >= NormalBuffer.Width || y >= NormalBuffer.Height)
+		if (x < 0 || y < 0 || x >= mask.GetLength(0) || y >= mask.GetLength(1))
 			return false;
 
-		return roomNormalMask[x, y];
+		return mask[x, y];
 	}
 
-	private bool RoomNormalSuppressed(int x, int y)
+	private static bool RoomNormalSuppressed(bool[,] suppressMask, int x, int y)
 	{
-		if (x < 0 || y < 0 || x >= NormalBuffer.Width || y >= NormalBuffer.Height)
+		if (x < 0 || y < 0 || x >= suppressMask.GetLength(0) || y >= suppressMask.GetLength(1))
 			return false;
 
-		return roomNormalSuppressMask[x, y];
+		return suppressMask[x, y];
 	}
 
-	private float SolidValue(int x, int y)
-		=> RoomNormalSolid(x, y) ? 1 : 0;
+	private static float SolidValue(bool[,] mask, int x, int y)
+		=> RoomNormalSolid(mask, x, y) ? 1 : 0;
 
 	private static Color EncodeNormal(Vector3 normal, float strength)
 	{
@@ -2554,6 +2806,8 @@ public partial class Game : IDisposable
 		if (brokeAny)
 		{
 			RefreshRoomTiles();
+			MarkRoomNormalCacheDirty(room);
+			MarkRoomTileFieldCacheDirty(room);
 			foreach (var surfaceType in tileTypesBroken)
 			{
 				PlayAudioEvent("tile_break", "Type", surfaceType, position: hitbox.Center);
@@ -2659,6 +2913,8 @@ public partial class Game : IDisposable
 		if (bgDual != null)
 			BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
 		BuildDualTiles(room, fgDual, Factory.TileLayer.Foreground);
+		MarkRoomNormalCacheDirty(room);
+		MarkRoomTileFieldCacheDirty(room);
 	}
 
 	void BuildDualTiles(Room room, DualGrid dual, Factory.TileLayer layer)

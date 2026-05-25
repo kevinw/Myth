@@ -69,7 +69,7 @@ public partial class Manager
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
 	RoomSettings? copiedRoomSettings;
 
-#if DEBUG
+#if DEBUG && !IOS
 	FileSystemWatcher? assetWatcher;
 	FileSystemWatcher? shaderWatcher;
 	bool assetReloadRequested;
@@ -2629,7 +2629,7 @@ public partial class Manager
 	}
 
 
-#if DEBUG
+#if DEBUG && !IOS
 	private void UpdateWindowTitleFps()
 	{
 		fpsFrames++;
@@ -2732,6 +2732,43 @@ public partial class Manager
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.78f));
 		ImGui.Begin(
 			"DebugViewMessage",
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.NoInputs |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoFocusOnAppearing |
+			ImGuiWindowFlags.NoNav);
+		ImGui.TextUnformatted(message);
+		ImGui.End();
+		ImGui.PopStyleColor();
+		ImGui.PopStyleVar(2);
+	}
+
+	private void FpsOverlayImGui()
+	{
+		if (!fpsOverlayVisible || fpsOverlayValue <= 0)
+			return;
+
+		var viewport = GameViewRect;
+		var perf = PerfStats.Snapshot;
+		var message =
+			$"FPS {fpsOverlayValue:0}\n" +
+			$"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
+			$"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +
+			$"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}";
+		var textSize = ImGui.CalcTextSize(message);
+		var padding = new Vector2(6, 3);
+		var size = textSize + padding * 2;
+		var position = new Vector2(
+			viewport.Right - size.X - 6,
+			viewport.Top + 6);
+
+		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
+		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.55f));
+		ImGui.Begin(
+			"FpsOverlay",
 			ImGuiWindowFlags.NoDecoration |
 			ImGuiWindowFlags.NoInputs |
 			ImGuiWindowFlags.NoSavedSettings |
