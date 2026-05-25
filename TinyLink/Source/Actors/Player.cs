@@ -325,7 +325,6 @@ public partial class Player : Actor
 			}
 			else
 			{
-				Console.WriteLine("WallJump");
 				wallJumpDirection = wallJump;
 				wallJumpInputLockTimer = WallJumpInputLockTime;
 				Facing = wallJumpDirection;
@@ -352,6 +351,9 @@ public partial class Player : Actor
 
 		if (Controls.Attack.ConsumePress())
 		{
+			if (!grounded && input != 0)
+				Facing = input;
+
 			if (ducking && duckAttackCooldownTimer <= 0)
 			{
 				duckAttack = true;
@@ -577,7 +579,7 @@ public partial class Player : Actor
 			hitbox.X = -(hitbox.X + hitbox.Width);
 		hitbox += Position;
 
-		return Game.GetRoomCollisionOverlapRatio(hitbox) >= AttackBlockOverlapThreshold;
+		return Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold;
 	}
 
 	private RectInt GetAttackHitbox(bool duckingAttack)
