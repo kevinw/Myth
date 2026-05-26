@@ -59,6 +59,7 @@ public partial class Manager : App
 	int fpsOverlayFrames;
 	long fpsOverlayLastTimestamp;
 	float fpsOverlayValue;
+	int fpsOverlayMode;
 #if IOS
 	bool fpsOverlayVisible = true;
 #else
@@ -397,7 +398,8 @@ public partial class Manager : App
 	protected override void Update()
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
-		DisposeDeferredRoomPreviews();
+		using (PerfStats.Time(PerfDetail.DeferredRoomPreviewDisposal))
+			DisposeDeferredRoomPreviews();
 #if DEBUG && !IOS
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
@@ -407,23 +409,26 @@ public partial class Manager : App
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
 
 		// Misc. Hotkeys
-		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
-			ReloadAssets(true);
-#if DEBUG && !IOS
-		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F))
-			Window.Fullscreen = !Window.Fullscreen;
-#endif
-		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
-			Window.Fullscreen = !Window.Fullscreen;
-		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
-			ToggleFpsOverlay();
-		if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
+		using (PerfStats.Time(PerfDetail.Hotkeys))
 		{
-			CurrentRoom?.Save();
-			Exit();
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
+				ReloadAssets(true);
+#if DEBUG && !IOS
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F))
+				Window.Fullscreen = !Window.Fullscreen;
+#endif
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
+				Window.Fullscreen = !Window.Fullscreen;
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
+				ToggleFpsOverlay();
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
+			{
+				CurrentRoom?.Save();
+				Exit();
+			}
+			if (!keyboardShortcutsBlocked && ToggleEditorPressed())
+				ToggleGame();
 		}
-		if (!keyboardShortcutsBlocked && ToggleEditorPressed())
-			ToggleGame();
 		var perfToggleChordActive = UpdatePerfToggles(keyboardShortcutsBlocked);
 
 		// Run Game
@@ -444,17 +449,22 @@ public partial class Manager : App
 		{
 			SetMouseCursor(null);
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
-			game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
+			using (PerfStats.Time(PerfDetail.GameUpdate))
+				game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
 		}
 		// Show Editor
 		else
 		{
 			gameEase = Calc.Approach(gameEase, 0.0f, Time.Delta * 4.0f);
 			if (!keyboardShortcutsBlocked)
-				UpdateEditorNavigation();
+			{
+				using (PerfStats.Time(PerfDetail.EditorNavigation))
+					UpdateEditorNavigation();
+			}
 		}
 
 		// Build our Sprite Batch
+		using (PerfStats.Time(PerfDetail.BatchBuild))
 		{
 			batcher.Clear();
 			batcher.PushMatrix(Matrix3x2.CreateScale(Scale));
@@ -474,6 +484,7 @@ public partial class Manager : App
 
 		if (imgui != null)
 		{
+			using var imguiLayoutPerf = PerfStats.Time(PerfDetail.ImGuiLayout);
 			imgui.BeginLayout();
 #if IOS
 			Window.StopTextInput();
@@ -484,11 +495,19 @@ public partial class Manager : App
 				Window.StopTextInput();
 #endif
 			if (gameEase < 1.0f && !startingPlay)
-				PaletteImGui();
+			{
+				using (PerfStats.Time(PerfDetail.PaletteImGui))
+					PaletteImGui();
+			}
 			if (!playing && !startingPlay)
-				ToolbarImGui();
-			DebugViewMessageImGui();
-			FpsOverlayImGui();
+			{
+				using (PerfStats.Time(PerfDetail.ToolbarImGui))
+					ToolbarImGui();
+			}
+			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
+				DebugViewMessageImGui();
+			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
+				FpsOverlayImGui();
 			imgui.EndLayout();
 		}
 	}
