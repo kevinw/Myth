@@ -16,12 +16,14 @@ public partial class Manager
 
 	private const float AssetReloadDelay = 0.25f;
 	private const float PlayTransitionDuration = 0.25f;
+	private const float DefaultRoomPreviewResolutionScale = 0.75f;
 
 	bool editorGameDirty;
 	bool editorViewInitialized;
 	Vector2 editorCamera;
 	float editorZoom = 1.0f;
 	float editorZoomTarget = 1.0f;
+	float roomPreviewResolutionScale = DefaultRoomPreviewResolutionScale;
 	private const bool AutoSelectRoomByCamera = true;
 	Vector2 editorCameraTweenFrom;
 	Vector2 editorCameraTweenTo;
@@ -65,6 +67,8 @@ public partial class Manager
 	string? prefabUndoSpecId;
 	readonly Dictionary<string, EditorRoomPreview> roomPreviewCache = [];
 	readonly Dictionary<string, int> roomPreviewVersions = [];
+	readonly Queue<string> roomPreviewBuildQueue = [];
+	readonly HashSet<string> queuedRoomPreviewIds = [];
 	readonly List<IDisposable> deferredRoomPreviewDisposals = [];
 	int nextRoomPreviewVersion = 1;
 	Target? activeRoomPreviewTarget;
@@ -425,6 +429,8 @@ public partial class Manager
 			DrawRoomPaletteSection();
 			ImGui.Spacing();
 			DrawDitherPaletteSection();
+			ImGui.Spacing();
+			DrawPreviewPaletteSection();
 
 			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
 				SelectEditorActorTool();
@@ -684,6 +690,21 @@ public partial class Manager
 		ImGui.TextUnformatted("Strength");
 		ImGui.SetNextItemWidth(-1);
 		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
+	}
+
+	private void DrawPreviewPaletteSection()
+	{
+		if (!ImGui.CollapsingHeader("Previews"))
+			return;
+
+		ImGui.TextUnformatted("Resolution");
+		ImGui.SetNextItemWidth(-1);
+		var scale = roomPreviewResolutionScale;
+		if (ImGui.SliderFloat("##RoomPreviewResolutionScale", ref scale, 0.05f, 1.0f))
+		{
+			roomPreviewResolutionScale = scale;
+			ClearRoomPreviewCache();
+		}
 	}
 
 	private static RoomSettings CaptureRoomSettings(Room room)
@@ -1804,6 +1825,7 @@ public partial class Manager
 	private void DrawEditorRooms(Rect visibleWorld)
 	{
 		using var perf = PerfStats.Time(PerfDetail.DrawEditorRooms);
+		BuildQueuedRoomPreview();
 		foreach (var room in Assets.RoomsById.Values)
 		{
 			var bounds = room.WorldBounds;
@@ -1813,14 +1835,22 @@ public partial class Manager
 			var line = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
 
 			if (GetEditorRoomTexture(room) is { } preview)
-				batcher.Image(preview, bounds.TopLeft, Color.White);
+				DrawEditorRoomPreview(preview, bounds);
 			else
 				batcher.Rect(bounds, 0x150e22);
 			batcher.RectLine(bounds, line, Color.Gray);
 		}
 	}
 
-	private Texture GetEditorRoomTexture(Room room)
+	private void DrawEditorRoomPreview(Texture preview, RectInt bounds)
+	{
+		var scale = new Vector2(
+			bounds.Width / (float)Math.Max(1, preview.Width),
+			bounds.Height / (float)Math.Max(1, preview.Height));
+		batcher.Image(preview, bounds.TopLeft, Vector2.Zero, scale, 0, Color.White);
+	}
+
+	private Texture? GetEditorRoomTexture(Room room)
 		=> room == CurrentRoom && game != null ? GetActiveRoomPreview(room) : GetRoomPreview(room);
 
 	private Texture GetActiveRoomPreview(Room room)
@@ -1848,30 +1878,80 @@ public partial class Manager
 		return activeRoomPreviewTarget.Attachments[0];
 	}
 
-	private Texture GetRoomPreview(Room room)
+	private Texture? GetRoomPreview(Room room)
 	{
 		EditorRoomPreview? entry;
 		var version = GetRoomPreviewVersion(room);
 		using (PerfStats.Time(PerfDetail.RoomPreviewCacheCheck))
 		{
 			if (roomPreviewCache.TryGetValue(room.Id, out entry) &&
-			    entry.Version == version &&
-			    entry.ShowForegroundLayer == editorShowForegroundLayer &&
-			    entry.ShowBackgroundLayer == editorShowBackgroundLayer &&
-			    entry.Target.Width == room.WorldBounds.Width &&
-			    entry.Target.Height == room.WorldBounds.Height)
+			    IsRoomPreviewCurrent(room, entry, version))
 				return entry.Texture;
 		}
 
+		EnqueueRoomPreview(room);
+		if (entry != null)
+			return entry.Texture;
+		return null;
+	}
+
+	private void BuildQueuedRoomPreview()
+	{
+		while (roomPreviewBuildQueue.Count > 0)
+		{
+			var roomId = roomPreviewBuildQueue.Dequeue();
+			queuedRoomPreviewIds.Remove(roomId);
+			if (!Assets.RoomsById.TryGetValue(roomId, out var room))
+				continue;
+
+			var version = GetRoomPreviewVersion(room);
+			if (roomPreviewCache.TryGetValue(room.Id, out var cached) && IsRoomPreviewCurrent(room, cached, version))
+				continue;
+
+			BuildRoomPreview(room, version);
+			return;
+		}
+	}
+
+	private bool IsRoomPreviewCurrent(Room room, EditorRoomPreview entry, int version)
+	{
+		var previewSize = GetRoomPreviewPixelSize(room);
+		return
+			entry.Version == version &&
+			entry.ShowForegroundLayer == editorShowForegroundLayer &&
+			entry.ShowBackgroundLayer == editorShowBackgroundLayer &&
+			entry.Target.Width == previewSize.X &&
+			entry.Target.Height == previewSize.Y;
+	}
+
+	private void EnqueueRoomPreview(Room room)
+	{
+		if (queuedRoomPreviewIds.Add(room.Id))
+			roomPreviewBuildQueue.Enqueue(room.Id);
+	}
+
+	private void BuildRoomPreview(Room room, int version)
+	{
 		using var perf = PerfStats.Time(PerfDetail.RoomPreviewBuild);
-		DisposeRoomPreview(entry, defer: false);
-		var target = new Target(GraphicsDevice, room.WorldBounds.Width, room.WorldBounds.Height, name: $"RoomPreview/{room.Id}");
+		if (roomPreviewCache.Remove(room.Id, out var entry))
+			DisposeRoomPreview(entry, defer: false);
+
+		var previewSize = GetRoomPreviewPixelSize(room);
+		var target = new Target(GraphicsDevice, previewSize.X, previewSize.Y, name: $"RoomPreview/{room.Id}");
 		using var previewGame = new Game(this, room, audioEventsEnabled: false);
 		previewGame.ShowForegroundLayer = editorShowForegroundLayer;
 		previewGame.ShowBackgroundLayer = editorShowBackgroundLayer;
 		previewGame.RenderWorldToTarget(target, new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height));
 		roomPreviewCache[room.Id] = new EditorRoomPreview(version, editorShowForegroundLayer, editorShowBackgroundLayer, target);
-		return target.Attachments[0];
+	}
+
+	private Point2 GetRoomPreviewPixelSize(Room room)
+	{
+		var bounds = room.WorldBounds;
+		var scale = Math.Clamp(roomPreviewResolutionScale, 0.05f, 1.0f);
+		return new Point2(
+			Math.Max(1, (int)MathF.Ceiling(bounds.Width * scale)),
+			Math.Max(1, (int)MathF.Ceiling(bounds.Height * scale)));
 	}
 
 	private void ClearRoomPreviewCache(bool deferDisposal = true)
@@ -1879,6 +1959,8 @@ public partial class Manager
 		foreach (var preview in roomPreviewCache.Values)
 			DisposeRoomPreview(preview, deferDisposal);
 		roomPreviewCache.Clear();
+		roomPreviewBuildQueue.Clear();
+		queuedRoomPreviewIds.Clear();
 		roomPreviewVersions.Clear();
 		nextRoomPreviewVersion = 1;
 		DisposeRoomPreview(activeRoomPreviewTarget, deferDisposal);

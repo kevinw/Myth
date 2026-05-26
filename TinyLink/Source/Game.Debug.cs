@@ -13,7 +13,6 @@ public partial class Game
 		NormalBuffer,
 		TileFieldRed,
 		TileFieldGreen,
-		TileFieldBlue,
 		DitherMask,
 		Visibility
 	}
@@ -37,8 +36,7 @@ public partial class Game
 		SetDebugView(debugView switch
 		{
 			DebugView.TileFieldRed => DebugView.TileFieldGreen,
-			DebugView.TileFieldGreen => DebugView.TileFieldBlue,
-			DebugView.TileFieldBlue => DebugView.None,
+			DebugView.TileFieldGreen => DebugView.None,
 			_ => DebugView.TileFieldRed
 		});
 	}
@@ -64,7 +62,6 @@ public partial class Game
 			DebugView.NormalBuffer => "Normal Buffer",
 			DebugView.TileFieldRed => "Tile Field R: Hash",
 			DebugView.TileFieldGreen => "Tile Field G: Family",
-			DebugView.TileFieldBlue => "Tile Field B: Solid",
 			DebugView.DitherMask => "Dither Mask",
 			DebugView.Visibility => "Visibility Polygon",
 			_ => view.ToString()

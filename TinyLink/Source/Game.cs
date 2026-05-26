@@ -23,7 +23,7 @@ public partial class Game : IDisposable
 	private static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
-		BlendMask.RGBA, Color.White);
+		BlendMask.Red | BlendMask.Green, Color.White);
 	private static readonly Point2[] DualMaskToTile =
 	[
 		new(0, 3),
@@ -517,9 +517,15 @@ public partial class Game : IDisposable
 		LitScreen = new Target(GraphicsDevice, width, height, name: "LitScreen");
 		GlitchScreen = new Target(GraphicsDevice, width, height, name: "GlitchScreen");
 		NormalBuffer = new Target(GraphicsDevice, width, height, name: "NormalBuffer");
-		TileField = new Target(GraphicsDevice, width, height, name: "TileField");
-		DitherMask = new Target(GraphicsDevice, width, height, name: "DitherMask");
+		TileField = CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField");
+		DitherMask = CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
+	}
+
+	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
+	{
+		ReadOnlySpan<TextureFormat> attachments = [format];
+		return new Target(GraphicsDevice, width, height, attachments, name: name);
 	}
 
 	private void DisposeRenderTargets()
@@ -614,7 +620,7 @@ public partial class Game : IDisposable
 		}
 
 		Target output = Screen;
-		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen or DebugView.TileFieldBlue)
+		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen)
 		{
 			using (GraphicsDevice.DebugGroup("TinyLink/tile field debug"))
 				output = DrawTileFieldDebug();
@@ -757,7 +763,6 @@ public partial class Game : IDisposable
 		=> debugView switch
 		{
 			DebugView.TileFieldGreen => 1,
-			DebugView.TileFieldBlue => 2,
 			_ => 0
 		};
 
@@ -1070,10 +1075,11 @@ public partial class Game : IDisposable
 		var bounds = renderRoom.WorldBounds;
 		if (!roomTileFieldCaches.TryGetValue(renderRoom, out var cache) ||
 		    cache.Target.Width != bounds.Width ||
-		    cache.Target.Height != bounds.Height)
+		    cache.Target.Height != bounds.Height ||
+		    cache.Target.Attachments[0].Format != TextureFormat.R8G8)
 		{
 			cache?.Dispose();
-			cache = new(renderRoom, new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"RoomTileField:{renderRoom.Id}"));
+			cache = new(renderRoom, CreateRenderTarget(bounds.Width, bounds.Height, TextureFormat.R8G8, $"RoomTileField:{renderRoom.Id}"));
 			roomTileFieldCaches[renderRoom] = cache;
 		}
 
@@ -1284,8 +1290,7 @@ public partial class Game : IDisposable
 		var hash = TileFieldHash(tile, worldTile);
 		var variant = (hash & 255) / 255.0f;
 		var family = TileFieldFamily(tile);
-		var solid = Factory.Find(tile) is { BlocksMovement: true } ? 1.0f : 0.0f;
-		return new Color(variant, family, solid, 1.0f);
+		return new Color(variant, family, 0.0f, 1.0f);
 	}
 
 	private static float TileFieldFamily(char tile)
