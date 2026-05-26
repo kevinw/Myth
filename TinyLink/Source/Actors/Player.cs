@@ -398,6 +398,7 @@ public partial class Player : Actor
 		Squish = new Vector2(1.65f, 0.62f);
 		Play("roll");
 		State = States.Roll;
+		AudioEvent("player/roll");
 	}
 
 	private void RollState()
