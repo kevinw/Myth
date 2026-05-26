@@ -1654,6 +1654,9 @@ public partial class Manager
 	private void UpdateEditorWorldView(Rect inner)
 	{
 		var cursor = Cursor;
+		if (UpdateEditorTouchView(inner))
+			return;
+
 		var canInteract = !imgui.WantsMouseInput && inner.Contains(cursor);
 
 		if (canInteract && Input.Mouse.MiddleDown)
@@ -1683,6 +1686,67 @@ public partial class Manager
 		}
 
 		UpdateEditorZoomSmoothing(canInteract ? cursor : inner.Center, inner);
+	}
+
+	private bool UpdateEditorTouchView(Rect inner)
+	{
+		var touch = Input.Touch;
+		if (touch.DownCount < 2)
+			return false;
+
+		var center = touch.Center / Scale;
+		if (!inner.Contains(center))
+			return false;
+
+		editorCameraTween = 1.0f;
+		var centerDelta = touch.CenterDelta / Scale;
+		editorCamera -= centerDelta / editorZoom;
+
+		var zoomScale = touch.PinchScale;
+		if (zoomScale <= 0 || MathF.Abs(zoomScale - 1.0f) < 0.0001f)
+			zoomScale = TouchDistanceScale(touch);
+
+		if (zoomScale > 0 && MathF.Abs(zoomScale - 1.0f) > 0.0001f)
+		{
+			var before = ScreenToEditorWorld(center, inner);
+			editorZoomTarget = Math.Clamp(editorZoomTarget * zoomScale, 0.15f, 8.0f);
+			editorZoom = editorZoomTarget;
+			editorCamera = before - (center - inner.Center) / editorZoom;
+		}
+
+		return true;
+	}
+
+	private bool SingleTouchInEditorWorld(Rect inner)
+	{
+		var touch = Input.Touch;
+		return touch.DownCount == 1 && inner.Contains(touch.Center / Scale);
+	}
+
+	private static float TouchDistanceScale(TouchState touch)
+	{
+		TouchState.Finger? first = null;
+		TouchState.Finger? second = null;
+		for (var i = 0; i < touch.Count; i++)
+		{
+			var finger = touch[i];
+			if (!finger.Down)
+				continue;
+			if (first == null)
+				first = finger;
+			else
+			{
+				second = finger;
+				break;
+			}
+		}
+
+		if (first is not { } a || second is not { } b)
+			return 1.0f;
+
+		var current = Vector2.Distance(a.Position, b.Position);
+		var previous = Vector2.Distance(a.Position - a.Delta, b.Position - b.Delta);
+		return previous > 0.001f ? current / previous : 1.0f;
 	}
 
 	private void UpdateEditorZoomSmoothing(Vector2 screenAnchor, Rect inner)
@@ -1946,7 +2010,7 @@ public partial class Manager
 		using var perf = PerfStats.Time(PerfDetail.EditorWorld);
 		var inner = GameViewRect;
 		var lastCell = cell;
-		var worldMouseBlocked = imgui.WantsMouseInput;
+		var worldMouseBlocked = imgui.WantsMouseInput && !SingleTouchInEditorWorld(inner);
 		var keyboardBlocked = ImGuiWantsKeyboard;
 		UpdateEditorUndoRedo();
 		if (!editorViewInitialized)
