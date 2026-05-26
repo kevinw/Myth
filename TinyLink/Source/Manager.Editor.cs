@@ -2675,12 +2675,14 @@ public partial class Manager
 			StartGame();
 		ImGui.SameLine();
 
+/*
 		if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Smaller Brush", brushSize <= 1))
 			brushSize = Math.Max(1, brushSize - 1);
 		ImGui.SameLine();
 		if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Larger Brush", brushSize > 1))
 			brushSize = Math.Min(10, brushSize + 1);
 		ImGui.SameLine(0, ToolbarSpacing);
+*/
 
 		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
 		{
@@ -2689,6 +2691,7 @@ public partial class Manager
 		}
 		ImGui.SameLine();
 
+#if !IOS
 		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
 		{
 			alwaysOnTop = !alwaysOnTop;
@@ -2698,6 +2701,7 @@ public partial class Manager
 
 		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
 			OpenFmodStudio();
+#endif
 
 		DrawCenteredRoomName(CurrentRoom);
 		DrawDeleteRoomPopup();
