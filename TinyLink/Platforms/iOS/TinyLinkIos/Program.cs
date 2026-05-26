@@ -28,7 +28,8 @@ internal static class Program
 		try
 		{
 			using var manager = new Manager();
-			ConnectVirtualController();
+			manager.VirtualGameControllerVisibilityChanged += SetVirtualControllerVisible;
+			SetVirtualControllerVisible(manager.WantsVirtualGameController);
 			LogControllerConnections(manager);
 			manager.Run();
 			DisconnectVirtualController();
@@ -66,6 +67,14 @@ internal static class Program
 			else
 				Console.WriteLine("TinyLink iOS virtual controller connected.");
 		});
+	}
+
+	private static void SetVirtualControllerVisible(bool visible)
+	{
+		if (visible)
+			ConnectVirtualController();
+		else
+			DisconnectVirtualController();
 	}
 
 	private static void DisconnectVirtualController()

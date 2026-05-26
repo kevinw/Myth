@@ -101,6 +101,29 @@ require_tool dotnet
 require_tool xcrun
 require_tool /usr/bin/python3
 
+now_ms() {
+	/usr/bin/python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+}
+
+format_elapsed() {
+	/usr/bin/python3 - "$1" <<'PY'
+import sys
+ms = int(sys.argv[1])
+print(f"{ms / 1000:.2f}s")
+PY
+}
+
+print_elapsed() {
+	local label="$1"
+	local start_ms="$2"
+	local end_ms
+	end_ms="$(now_ms)"
+	echo "$label completed in $(format_elapsed "$((end_ms - start_ms))")."
+}
+
 select_device() {
 	local json_path
 	json_path="$(mktemp)"
@@ -126,7 +149,7 @@ for device in data.get("result", {}).get("devices", []):
 		continue
 	if connection.get("pairingState") != "paired":
 		continue
-	if connection.get("tunnelState") != "connected":
+	if connection.get("tunnelState") == "unavailable":
 		continue
 	devices.append((device.get("identifier", ""), props.get("name", "Unknown iPhone")))
 
@@ -144,13 +167,19 @@ sys.exit(1)
 PY
 }
 
+script_start_ms="$(now_ms)"
+
 if [[ -z "$device_id" ]]; then
+	select_start_ms="$(now_ms)"
 	device_id="$(select_device)"
+	print_elapsed "Device selection" "$select_start_ms"
 fi
 
 if (( no_build == 0 )); then
 	echo "Building TinyLink for $runtime_id ($configuration) ..."
+	build_start_ms="$(now_ms)"
 	dotnet build "$project_path" -c "$configuration" -f net10.0-ios -r "$runtime_id" /p:ArchiveOnBuild=false
+	print_elapsed "Build" "$build_start_ms"
 fi
 
 if [[ ! -d "$app_path" ]]; then
@@ -160,7 +189,9 @@ if [[ ! -d "$app_path" ]]; then
 fi
 
 echo "Installing on device: $device_id"
+install_start_ms="$(now_ms)"
 xcrun devicectl device install app --device "$device_id" "$app_path"
+print_elapsed "Install" "$install_start_ms"
 
 launch_args=(xcrun devicectl device process launch --device "$device_id" --terminate-existing)
 if (( start_stopped != 0 )); then
@@ -175,4 +206,7 @@ if ((${#app_args[@]} > 0)); then
 fi
 
 echo "Launching $bundle_id ..."
+launch_start_ms="$(now_ms)"
 "${launch_args[@]}"
+print_elapsed "Launch" "$launch_start_ms"
+print_elapsed "Total" "$script_start_ms"

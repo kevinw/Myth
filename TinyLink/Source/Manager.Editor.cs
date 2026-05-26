@@ -2586,8 +2586,15 @@ public partial class Manager
 			return true;
 
 		foreach (var controller in Input.Controllers)
-			if (controller.Connected && controller.Pressed(Buttons.RightStick))
-				return true;
+		{
+			if (controller.Connected)
+			{
+				if (controller.Pressed(Buttons.RightStick))
+					return true;
+				if (controller.Pressed(Buttons.RightShoulder))
+					return true;
+			}
+		}
 
 		return false;
 	}

@@ -177,6 +177,8 @@ public partial class Manager : App
 	bool alwaysOnTop;
 
 	public bool MusicEnabled => musicEnabled;
+	public bool WantsVirtualGameController => playing || startingPlay;
+	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
 	public Manager() : base(CreateAppConfig())
@@ -984,6 +986,7 @@ public partial class Manager : App
 			startingPlay = true;
 			playing = false;
 #endif
+			VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 		}
 	}
 
@@ -1000,6 +1003,7 @@ public partial class Manager : App
 		game = null;
 		startingPlay = false;
 		playing = false;
+		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 		SyncEditorGame();
 	}
 
