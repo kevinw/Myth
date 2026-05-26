@@ -2,7 +2,8 @@
 
 <img alt="BRIEFS lizard" width=150 height=150 src="https://goldextra.com/sites/default/files/styles/covert_to_webp/public/2026-05/beast-jpeg.jpg.webp?itok=oIzMxkpZ">
 
-- make new "rocks" identify as castle to the dither shader
+- make Foster a submodule of this repo
+- resume codex work on mapping touch/pinch events to Foster events and route them through ImGui
 - Submit pitch to [BRIEFS - LOVE (2026)](https://goldextra.com/en/briefs-a-microgame-series/briefs-2026-love)
 - Consider some [pixel art ideas](https://chatgpt.com/c/6a030b73-3564-83eb-b4ca-9ab1e9e787bb)
 
