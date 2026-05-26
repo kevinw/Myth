@@ -8,15 +8,6 @@ using Color = Foster.Framework.Color;
 
 namespace TinyLink;
 
-internal abstract class Program
-{
-	public static void Main()
-	{
-		using var manager = new Manager();
-		manager.Run();
-	}
-}
-
 /// <summary>
 /// Runs the Game and, when the game is not running, displays a tile-based Level Editor (see Manager.Editor.cs)
 /// </summary>

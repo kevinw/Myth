@@ -40,14 +40,16 @@
   </Target>
   
   <ItemGroup>
+    <Compile Remove="Source/**" />
     <Compile Remove="Platforms/**" />
     <EmbeddedResource Remove="Platforms/**" />
     <None Remove="Platforms/**" />
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="Platforms/Desktop/Program.cs" />
+    <ProjectReference Include="Source/TinyLink.Core.csproj" />
     <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" />
-    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>
 
 </Project>

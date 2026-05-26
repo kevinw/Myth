@@ -21,12 +21,19 @@
     <CodesignKey Condition="'$(CodesignKey)' == ''">Apple Development</CodesignKey>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(Configuration)' == 'DebugInterp' ">
+    <CodesignKey Condition="'$(CodesignKey)' == ''">Apple Development</CodesignKey>
+    <MtouchInterpreter>all,-TinyLinkIos,-Foster.Framework</MtouchInterpreter>
+    <MtouchLink>SdkOnly</MtouchLink>
+    <TrimMode>copy</TrimMode>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="../../../Source/**/*.cs" LinkBase="Source" />
     <BundleResource Include="../../../Assets/**/*"
                     Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**">
       <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </BundleResource>
+    <ProjectReference Include="../../../Source/TinyLink.Core.csproj" />
     <ProjectReference Include="../../../../../Foster/Framework/Foster.Framework.csproj" />
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>
