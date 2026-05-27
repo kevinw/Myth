@@ -9,7 +9,7 @@ public class Saw : Actor
 	public float Gravity = 360;
 	public float LandingProbeDistance = 1;
 	public float SurfaceProbeDistance = 10;
-	public float CornerProbeDistance = 14;
+	public float CornerProbeDistance = 4;
 	public float MaxSurfaceSnapDistance = 1;
 	public bool DebugMovement;
 
@@ -21,11 +21,9 @@ public class Saw : Actor
 
 	public Saw()
 	{
-		Hitbox = new(new RectInt(0, 0, 8, 8));
+		Hitbox = new(new RectInt(-2, -2, 4, 4));
 		Mask = Masks.None;
 		Sprite = Assets.GetSprite("saw");
-		if (Sprite != null)
-			Console.WriteLine($"saw origin {Sprite.Origin}");
 		Depth = -5;
 		CollidesWithSolids = false;
 		//DebugMovement = true;
@@ -205,10 +203,10 @@ public class Saw : Actor
 				}
 
 				towardSurface = -surfaceHit.Normal;
+				if (surfaceHit.Slope.HasValue)
+					return TryMoveBlockedSlopeStep(step, surfaceHit);
 			}
-			else
-			{
-			}
+
 			return false;
 		}
 
@@ -231,6 +229,52 @@ public class Saw : Actor
 		return false;
 	}
 
+	private bool TryMoveBlockedSlopeStep(Point2 step, in SurfaceHit hit)
+	{
+		if (TryMoveAndReattachToSlope(step))
+			return true;
+
+		var tangentStep = Round(Tangent());
+		if (tangentStep != Point2.Zero && !OutsideRoom(Bounds() + tangentStep))
+		{
+			if (TryMoveAndReattachToSlope(tangentStep))
+				return true;
+
+			if (TryFindSurfaceDebug(Bounds(), (Vector2)tangentStep, 1, out var tangentHit) &&
+				tangentHit.Slope.HasValue)
+			{
+				var tangentCorrection = RoundCorrection(tangentHit.Correction, MaxSurfaceSnapDistance);
+				if (tangentCorrection != Point2.Zero && !OutsideRoom(Bounds() + tangentCorrection))
+				{
+					Position += tangentCorrection;
+					return true;
+				}
+			}
+		}
+
+		var correction = RoundCorrection(hit.Correction, MaxSurfaceSnapDistance);
+		if (correction != Point2.Zero && !OutsideRoom(Bounds() + correction))
+		{
+			Position += correction;
+			return true;
+		}
+
+		return false;
+	}
+
+	private bool TryMoveAndReattachToSlope(Point2 step)
+	{
+		if (step == Point2.Zero || OutsideRoom(Bounds() + step))
+			return false;
+
+		Position += step;
+		if (AttachToSurface(SurfaceProbeDistance, MaxSurfaceSnapDistance))
+			return true;
+
+		Position -= step;
+		return false;
+	}
+
 	private bool AttachToSurface(float distance)
 		=> AttachToSurface(distance, float.PositiveInfinity);
 
@@ -249,6 +293,12 @@ public class Saw : Actor
 		}
 
 		towardSurface = -hit.Normal;
+		if (hit.Slope.HasValue)
+		{
+			Position += RoundCorrection(hit.Correction, maxSnap);
+			return true;
+		}
+
 		var rawSnap = MathF.Max(0, hit.Distance - 1);
 		var snap = MathF.Min(rawSnap, maxSnap);
 		if (snap > 0)
@@ -349,17 +399,20 @@ public class Saw : Actor
 		return Game.TryFindSurface(this, bounds, direction, distance, out hit);
 	}
 
-	private Vector2 LocalCenter()
-		=> Center(Bounds()) - (Vector2)Position;
-
-	private Vector2 ToLocal(Vector2 point)
-		=> point - (Vector2)Position;
-
-	private static Vector2 Center(RectInt bounds)
-		=> (Vector2)bounds.Center;
-
 	private static Vector2 NormalizeOrDefault(Vector2 value, Vector2 fallback)
 		=> value.LengthSquared() <= 0.0001f ? fallback : Vector2.Normalize(value);
+
+	private static Point2 RoundCorrection(Vector2 correction, float maxSnap)
+	{
+		var move = Round(correction);
+		if (float.IsPositiveInfinity(maxSnap))
+			return move;
+
+		var max = (int)MathF.Ceiling(maxSnap);
+		return new Point2(
+			Math.Clamp(move.X, -max, max),
+			Math.Clamp(move.Y, -max, max));
+	}
 
 	private static Point2 Round(Vector2 value)
 		=> new((int)MathF.Round(value.X), (int)MathF.Round(value.Y));

@@ -393,7 +393,7 @@ public partial class Player : Actor
 		}
 		else if (Controls.Saw.ConsumePress())
 		{
-			Game.Create<Saw>(Position - new Point2(-5 * Facing, 20), (saw) =>
+			Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), (saw) =>
 			{
 				saw.Facing = Facing;
 			});

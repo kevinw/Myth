@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public readonly record struct SurfaceHit(Vector2 Point, Vector2 Normal, float Distance, Actor? Actor, Room.SlopeTile? Slope, RectInt? Rect);
+public readonly record struct SurfaceHit(Vector2 Point, Vector2 Normal, float Distance, Actor? Actor, Room.SlopeTile? Slope, RectInt? Rect, Vector2 Correction);
 
 public partial class Game
 {
@@ -42,14 +42,14 @@ public partial class Game
 
 			previousOffset = offset;
 			var candidate = bounds + offset;
-			if (TryGetSurfaceAt(actor, candidate, direction, i, out hit))
+			if (TryGetSurfaceAt(actor, candidate, direction, offset, i, out hit))
 				return true;
 		}
 
 		return false;
 	}
 
-	private bool TryGetSurfaceAt(Actor actor, in RectInt bounds, Vector2 searchDirection, float distance, out SurfaceHit hit)
+	private bool TryGetSurfaceAt(Actor actor, in RectInt bounds, Vector2 searchDirection, Point2 offset, float distance, out SurfaceHit hit)
 	{
 		if (room != null)
 		{
@@ -60,7 +60,8 @@ public partial class Game
 
 				room.GetSlopeSurface(slope, out var left, out var right);
 				var normal = SlopeNormal(left, right, slope.Fill);
-				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, slope, null);
+				var correction = (Vector2)offset + SlopeCorrection(bounds, left, normal);
+				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, slope, null, correction);
 				return true;
 			}
 
@@ -70,21 +71,21 @@ public partial class Game
 					continue;
 
 				var normal = AxisNormal(searchDirection);
-				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, null, rect);
+				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, null, rect, Vector2.Zero);
 				return true;
 			}
 		}
 
 		foreach (var other in Actors)
 		{
-			if (other == actor || other is Grid || !other.Mask.Has(Actor.Masks.Solid))
+			if (other == actor || other is Grid || !other.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru))
 				continue;
 
 			if (!other.Hitbox.Overlaps(bounds - other.Position))
 				continue;
 
 			var normal = AxisNormal(searchDirection);
-			hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, other, null, other.Hitbox.Rect + other.Position);
+			hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, other, null, other.Hitbox.Rect + other.Position, Vector2.Zero);
 			return true;
 		}
 
@@ -113,6 +114,26 @@ public partial class Game
 		return new Vector2(
 			normal.X < 0 ? bounds.Left : normal.X > 0 ? bounds.Right : center.X,
 			normal.Y < 0 ? bounds.Top : normal.Y > 0 ? bounds.Bottom : center.Y);
+	}
+
+	private static Vector2 SlopeCorrection(RectInt bounds, Vector2 surfacePoint, Vector2 normal)
+	{
+		var center = bounds.CenterF;
+		var radius = SupportRadius(bounds, normal);
+		var distance = Vector2.Dot(center - surfacePoint, normal);
+		return normal * (radius - distance);
+	}
+
+	private static float SupportRadius(RectInt bounds, Vector2 normal)
+	{
+		var center = bounds.CenterF;
+		return MathF.Max(
+			MathF.Max(
+				MathF.Abs(Vector2.Dot((Vector2)bounds.TopLeft - center, normal)),
+				MathF.Abs(Vector2.Dot((Vector2)bounds.TopRight - center, normal))),
+			MathF.Max(
+				MathF.Abs(Vector2.Dot((Vector2)bounds.BottomLeft - center, normal)),
+				MathF.Abs(Vector2.Dot((Vector2)bounds.BottomRight - center, normal))));
 	}
 
 	private static Point2 Round(Vector2 value)
