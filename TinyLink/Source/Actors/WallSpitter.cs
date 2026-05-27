@@ -14,9 +14,9 @@ public class WallSpitter : WallFollowerActor
 
 	public WallSpitter()
 	{
-		Hitbox = new(new RectInt(-6, -6, 12, 12));
+		Hitbox = new(new RectInt(-5, -6, 11, 10));
 		Mask = Masks.Enemy;
-		Sprite = Assets.GetSprite("spitter");
+		Sprite = Assets.GetSprite("wall_spitter");
 		Depth = -5;
 		CollidesWithSolids = false;
 		Speed = 26;

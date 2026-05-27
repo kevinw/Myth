@@ -246,6 +246,9 @@ public partial class Player : Actor
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
 	}
 
+	private float RunStartTimer;
+	private bool RunStartSkid;
+
 	public void NormalState()
 	{
 		// update ducking state
@@ -265,6 +268,8 @@ public partial class Player : Actor
 			movementInput = wallJumpDirection;
 
 		// sprite
+		bool didRun = false;
+		bool didStartRunning = false;
 		if (grounded)
 		{
 			if (ducking)
@@ -275,9 +280,24 @@ public partial class Player : Actor
 			{
 				facing *= -1;
 				Play("skid");
+				RunStartTimer = 0;
+				RunStartSkid = false;
 			}
 			else
-				Play("run");
+			{
+				RunStartTimer += Time.Delta;
+				didRun = true;
+				if (Velocity.X == 0) didStartRunning = true;
+				if (RunStartTimer < 0.35f)
+				{
+					if (RunStartTimer < 0.15f && RunStartSkid)
+						Play("skid");
+					else
+						Play("run_start");
+				}
+				else
+					Play("run");
+			}
 		}
 		else
 		{
@@ -303,8 +323,15 @@ public partial class Player : Actor
 			}
 		}
 
+		if (!didRun)
+		{
+			RunStartTimer = 0;
+			RunStartSkid = false;
+		}
+
 		// horizontal movement
 		var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
+		var lastFacing = Facing;
 		if (ducking)
 			maxSpeed = CrawlSpeed;
 		{
@@ -325,7 +352,13 @@ public partial class Player : Actor
 
 			// Facing
 			if (grounded && input != 0)
+			{
 				Facing = facing;
+				if (lastFacing != Facing && didStartRunning)
+				{
+					RunStartSkid = true;
+				}
+			}
 		}
 
 		// Start jumping
@@ -565,7 +598,7 @@ public partial class Player : Actor
 
 	private void UpdateFootsteps()
 	{
-		if (State != States.Normal || !grounded || !IsPlaying("run"))
+		if (State != States.Normal || !grounded || !IsPlaying("run") || !IsPlaying("run_start"))
 		{
 			footstepFrame = -1;
 			return;
