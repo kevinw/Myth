@@ -43,7 +43,7 @@
   "actors": [
     {
       "type": "Player",
-      "position": [68, 168]
+      "position": [268, 160]
     },
     {
       "type": "ArrowTrap",

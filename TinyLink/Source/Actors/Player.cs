@@ -35,8 +35,10 @@ public partial class Player : Actor
 	static float RollMinHorizontalSpeed => 45;
 	static float RollMinFallSpeed => 20;
 	static float RollSpeed => 145;
+	static float DownhillRollSpeed => 185;
 	static float RollDuration => 0.36f;
 	static float RollFriction => 220;
+	static float DownhillRollFriction => 90;
 	static float RollJumpForce => -82;
 	static float RollJumpTime => 0.11f;
 	static float RollJumpSpeed => 150;
@@ -241,7 +243,7 @@ public partial class Player : Actor
 		if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
 
-		state.Update(Time.Delta);
+		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
 	}
 
 	public void NormalState()
@@ -440,7 +442,10 @@ public partial class Player : Actor
 		}
 
 		Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
-		Velocity.X = Calc.Approach(Velocity.X, Facing * MaxGroundSpeed, RollFriction * Time.Delta);
+		var rollingDownSlope = RollingDownSlope();
+		var targetSpeed = rollingDownSlope ? DownhillRollSpeed : MaxGroundSpeed;
+		var friction = rollingDownSlope ? DownhillRollFriction : RollFriction;
+		Velocity.X = Calc.Approach(Velocity.X, Facing * targetSpeed, friction * Time.Delta);
 
 		if (Controls.Jump.ConsumePress())
 		{
@@ -461,6 +466,26 @@ public partial class Player : Actor
 			State = States.Normal;
 			ducking = grounded && Controls.Move.IntValue.Y > 0;
 		}
+	}
+
+	private bool RollingDownSlope()
+	{
+		if (!grounded || Velocity.LengthSquared() <= 0.001f)
+			return false;
+
+		var bounds = Hitbox.Rect + Position;
+		if (!Game.TryFindSurface(this, bounds, Vector2.UnitY, 2, out var hit) || !hit.Slope.HasValue)
+			return false;
+
+		var normal = hit.Normal;
+		if (normal.Y >= -0.001f)
+			return false;
+
+		var downhill = new Vector2(normal.Y, -normal.X);
+		if (downhill.Y < 0)
+			downhill = -downhill;
+
+		return Vector2.Dot(Velocity, downhill) > 1;
 	}
 
 	private void StartRollSound()

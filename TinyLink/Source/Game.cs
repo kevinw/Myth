@@ -702,7 +702,7 @@ public partial class Game : IDisposable
 			if (useCrt)
 			{
 				float CrtTime = Time.SecondsF * 0.2f;
-				float Curvature = 0.005f;
+				//float Curvature = 0.000f;
 				float BloomAmount = 0.09f;
 				float ScanlineAmount = 0.22f;
 				float VignetteAmount = 0.06f;
@@ -715,7 +715,7 @@ public partial class Game : IDisposable
 					ScanlineAmount,
 					VignetteAmount,
 					RgbOffset,
-					Curvature
+					//Curvature
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}

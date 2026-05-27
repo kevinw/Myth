@@ -13,7 +13,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float ScanlineAmount;
     float VignetteAmount;
     float RgbOffset;
-    float Curvature;
+    // float Curvature;
 };
 
 Texture2D Texture : register(t0, space2);
@@ -88,7 +88,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float2 centered = uv * 2.0 - 1.0;
 
     float radius = dot(centered, centered);
-    uv += centered * radius * Curvature;
+    // uv += centered * radius * Curvature;
 
     float2 texel = 1.0 / TextureSize;
 #ifdef OLD_CRT

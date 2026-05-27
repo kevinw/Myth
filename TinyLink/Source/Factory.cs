@@ -236,6 +236,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<Peter>("Peter");
 		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
 		ActorSpecs.RegisterActor<Arrow>("Arrow");
+		ActorSpecs.RegisterActor<WallBullet>("WallBullet");
 
 		// Empty Type, purely for the editor
 		Register('0', new Entry("Empty", new Subtexture(), null!));

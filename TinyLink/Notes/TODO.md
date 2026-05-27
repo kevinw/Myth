@@ -2,6 +2,7 @@
 
 <img alt="BRIEFS lizard" width=150 height=150 src="https://goldextra.com/sites/default/files/styles/covert_to_webp/public/2026-05/beast-jpeg.jpg.webp?itok=oIzMxkpZ">
 
+- a room enclosed in grass shouldn't reverb as much.
 - make Foster a submodule of this repo
 - resume codex work on mapping touch/pinch events to Foster events and route them through ImGui
 - Submit pitch to [BRIEFS - LOVE (2026)](https://goldextra.com/en/briefs-a-microgame-series/briefs-2026-love)
