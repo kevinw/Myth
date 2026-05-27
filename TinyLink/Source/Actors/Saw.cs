@@ -6,11 +6,14 @@ namespace TinyLink;
 public class Saw : Actor
 {
 	public float Speed = 90;
+	public float Gravity = 360;
+	public float LandingProbeDistance = 1;
 	public float SurfaceProbeDistance = 10;
 	public float CornerProbeDistance = 14;
 
 	private Vector2 remainder;
 	private Vector2 towardSurface = Vector2.UnitY;
+	private bool attached;
 
 	public Saw()
 	{
@@ -23,11 +26,35 @@ public class Saw : Actor
 		CollidesWithSolids = false;
 	}
 
+	public override void Added()
+	{
+		attached = AttachToSurface(CornerProbeDistance);
+		if (!attached)
+			StartAirborne();
+	}
+
 	public override void Update()
 	{
-		base.Update();
-
-		FollowSurface();
+		if (attached)
+		{
+			Velocity = Vector2.Zero;
+			CollidesWithSolids = false;
+			base.Update();
+			FollowSurface();
+		}
+		else
+		{
+			CollidesWithSolids = false;
+			Velocity.X = (float)Facing * Speed;
+			Velocity.Y += Gravity * Time.Delta;
+			var motion = Velocity * Time.Delta;
+			var velocity = Velocity;
+			Velocity = Vector2.Zero;
+			base.Update();
+			Velocity = velocity;
+			MoveAirborne(motion);
+			TryAttachAfterAirMove();
+		}
 
 		if (Timer > 2.5f && Time.BetweenInterval(0.05f))
 			Visible = !Visible;
@@ -38,6 +65,84 @@ public class Saw : Actor
 
 	//public override void RenderEmissive(Batcher batcher)
 	//=> batcher.Circle(Vector2.Zero, 2, 12, Color.Red);
+
+	private void StartAirborne()
+	{
+		attached = false;
+		remainder = Vector2.Zero;
+		Velocity = new Vector2((float)Facing * Speed, Velocity.Y);
+		CollidesWithSolids = false;
+	}
+
+	private void MoveAirborne(Vector2 motion)
+	{
+		remainder += motion;
+		var move = (Point2)remainder;
+		remainder -= (Vector2)move;
+
+		while (move.X != 0 && !attached)
+		{
+			var sign = Math.Sign(move.X);
+			if (!TryMoveAirborneStep(new Point2(sign, 0)))
+			{
+				Velocity.X = 0;
+				break;
+			}
+
+			move.X -= sign;
+		}
+
+		while (move.Y != 0 && !attached)
+		{
+			var sign = Math.Sign(move.Y);
+			if (!TryMoveAirborneStep(new Point2(0, sign)))
+			{
+				Velocity.Y = 0;
+				break;
+			}
+
+			move.Y -= sign;
+		}
+	}
+
+	private bool TryMoveAirborneStep(Point2 step)
+	{
+		if (!Game.OverlapsSolid(this, Bounds() + step))
+		{
+			Position += step;
+			return true;
+		}
+
+		TryAttachToSurface((Vector2)step, CornerProbeDistance);
+		return false;
+	}
+
+	private void TryAttachAfterAirMove()
+	{
+		if (attached)
+			return;
+
+		if (TryAttachToSurface(Vector2.UnitY, LandingProbeDistance))
+			return;
+
+		TryAttachToSurface(new Vector2((float)Facing, 0), LandingProbeDistance);
+	}
+
+	private bool TryAttachToSurface(Vector2 direction, float distance)
+	{
+		if (direction.LengthSquared() <= 0.0001f)
+			return false;
+
+		towardSurface = NormalizeOrDefault(direction, Vector2.UnitY);
+		if (!AttachToSurface(distance))
+			return false;
+
+		attached = true;
+		Velocity = Vector2.Zero;
+		CollidesWithSolids = false;
+		remainder = Vector2.Zero;
+		return true;
+	}
 
 	private void FollowSurface()
 	{
