@@ -23,3 +23,4 @@ TinyLink/Platforms/iOS/Native/cimgui.xcframework/ios-arm64_x86_64-simulator/cimg
 TinyLink/Platforms/iOS/Native/cimgui.xcframework/ios-arm64/cimgui.framework/cimgui filter=lfs diff=lfs merge=lfs -text
 TinyLink/Platforms/iOS/**/Resources/DWARF/SDL3 filter=lfs diff=lfs merge=lfs -text
 TinyLink/Platforms/iOS/Native/SDL3.xcframework/*/SDL3.framework/SDL3 filter=lfs diff=lfs merge=lfs -text
+*.ttf filter=lfs diff=lfs merge=lfs -text

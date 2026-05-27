@@ -283,6 +283,16 @@ public partial class Game : IDisposable
 					ChangeTimeScale(-1);
 				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
 					ChangeTimeScale(1);
+
+				foreach (var controller in Input.Controllers)
+				{
+					if (!controller.Connected)
+						continue;
+					if (controller.Pressed(Buttons.LeftShoulder))
+						ChangeTimeScale(-1);
+					if (controller.Pressed(Buttons.RightShoulder))
+						ChangeTimeScale(1);
+				}
 			}
 #endif
 
@@ -354,6 +364,7 @@ public partial class Game : IDisposable
 
 		index = Math.Clamp(index + direction, 0, scales.Length - 1);
 		timeScale = scales[index];
+		DisplayMessage($"Time x{timeScale:0.##}");
 	}
 
 	private void UpdateCamera()
@@ -692,9 +703,9 @@ public partial class Game : IDisposable
 			{
 				float CrtTime = Time.SecondsF * 0.2f;
 				float Curvature = 0.005f;
-				float BloomAmount = 0.19f;
+				float BloomAmount = 0.09f;
 				float ScanlineAmount = 0.22f;
-				float VignetteAmount = 0.22f;
+				float VignetteAmount = 0.06f;
 				float RgbOffset = 0.35f;
 				crt!.Material.Fragment.SetUniformBuffer([
 					Screen.Width,
@@ -2207,27 +2218,33 @@ public partial class Game : IDisposable
 				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 1.0f : 0.10f : 1.0f);
 	}
 
-	public string GetSurfaceTypeBelow(Actor actor)
+	public string GetSurfaceTypeBelow(Actor actor, bool searchOutward = false)
 	{
 		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
 			return Factory.DefaultSurfaceType;
 
 		var bounds = actor.Hitbox.Rect + actor.Position;
 		var y = bounds.Bottom;
-		var left = GetSurfaceTypeAtWorldPoint(new(bounds.Left + 1, y));
-		var right = GetSurfaceTypeAtWorldPoint(new(bounds.Right - 1, y));
+		if (TryGetSurfaceTypeAtWorldPoint(new(bounds.Left + 1, y), out var surfaceType))
+			return surfaceType;
+		if (TryGetSurfaceTypeAtWorldPoint(new(bounds.Right - 1, y), out surfaceType))
+			return surfaceType;
 
-		if (left != Factory.DefaultSurfaceType)
-			return left;
-		if (right != Factory.DefaultSurfaceType)
-			return right;
-		return left;
+		// Edge landings can sit just beside the supporting tile, so landing audio gets a one-tile horizontal grace scan.
+		if (searchOutward && TryGetSurfaceTypeOutwardFromBottom(bounds, out surfaceType))
+			return surfaceType;
+
+		return Factory.DefaultSurfaceType;
 	}
 
 	private string GetSurfaceTypeAtWorldPoint(Point2 point)
+		=> TryGetSurfaceTypeAtWorldPoint(point, out var surfaceType) ? surfaceType : Factory.DefaultSurfaceType;
+
+	private bool TryGetSurfaceTypeAtWorldPoint(Point2 point, out string surfaceType)
 	{
+		surfaceType = Factory.DefaultSurfaceType;
 		if (room == null)
-			return Factory.DefaultSurfaceType;
+			return false;
 
 		var local = point - room.WorldBounds.TopLeft;
 		var tile = new Point2(
@@ -2235,12 +2252,31 @@ public partial class Game : IDisposable
 			(int)MathF.Floor(local.Y / (float)TileSize));
 
 		if (tile.X < 0 || tile.Y < 0 || tile.X >= room.Size.X || tile.Y >= room.Size.Y)
-			return Factory.DefaultSurfaceType;
+			return false;
 
-		if (room.GetEntry(tile) is { SurfaceType: { } surfaceType })
-			return surfaceType;
+		if (room.GetEntry(tile) is { SurfaceType: { } foundSurfaceType })
+		{
+			surfaceType = foundSurfaceType;
+			return true;
+		}
 
-		return Factory.DefaultSurfaceType;
+		return false;
+	}
+
+	private bool TryGetSurfaceTypeOutwardFromBottom(RectInt bounds, out string surfaceType)
+	{
+		var centerX = bounds.Center.X;
+		var y = bounds.Bottom;
+		for (var offset = 0; offset <= TileSize; offset++)
+		{
+			if (TryGetSurfaceTypeAtWorldPoint(new(centerX - offset, y), out surfaceType))
+				return true;
+			if (offset > 0 && TryGetSurfaceTypeAtWorldPoint(new(centerX + offset, y), out surfaceType))
+				return true;
+		}
+
+		surfaceType = Factory.DefaultSurfaceType;
+		return false;
 	}
 
 	public bool Transition(Point2 direction)

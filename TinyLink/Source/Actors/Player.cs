@@ -18,17 +18,18 @@ public partial class Player : Actor
 
 	public const int MaxHealth = 4;
 
-	static float MaxGroundSpeed => 89;
-	static float MaxAirSpeed => 95;
+	static float MaxGroundSpeed => 93;
+	static float MaxAirSpeed => 99;
 	static float CrawlSpeed => 28;
-	static float GroundAccel => 390;
-	static float AirAccel => 250;
+	static float GroundAccel => 400;
+	static float AirAccel => 260;
 	static float Friction => 480;
 	static float AttackFriction => 150;
 	static float HurtFriction => 200;
 	static float Gravity => 450;
 	static float JumpForce => -105;
 	static float JumpTime => 0.18f;
+	static float CoyoteJumpTime => 0.08f;
 	static float WallJumpSpeed => 125;
 	static float WallJumpInputLockTime => 0.22f;
 	static float RollMinHorizontalSpeed => 45;
@@ -57,6 +58,8 @@ public partial class Player : Actor
 	public Controls Controls => Game.Controls;
 
 	private float jumpTimer;
+	private float coyoteJumpTimer;
+	private int coyoteJumpY;
 	private int footstepFrame = -1;
 	private bool grounded;
 	private bool ducking;
@@ -68,6 +71,7 @@ public partial class Player : Actor
 	private bool duckAttack;
 	private bool attackBlocked;
 	private Light? light;
+	private SoundInstance? rollSound;
 
 	public Player()
 	{
@@ -114,7 +118,10 @@ public partial class Player : Actor
 	{
 		base.OnCollideX();
 		if (State == States.Roll)
+		{
+			StopRollSound(false);
 			State = States.Normal;
+		}
 	}
 
 	public override void Update()
@@ -128,18 +135,25 @@ public partial class Player : Actor
 		if (nowGrounded && !grounded)
 		{
 			Squish = new Vector2(1.5f, 0.70f);
-			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this));
+			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
 			CanPlaySquishSound = true;
 			TryStartRoll(previousVelocity);
 		}
 		grounded = nowGrounded;
 		if (grounded)
 		{
+			coyoteJumpTimer = CoyoteJumpTime;
+			coyoteJumpY = Position.Y;
 			wallJumpInputLockTimer = 0;
 			rollJumpCarryTimer = 0;
 		}
-		else if (wallJumpInputLockTimer > 0)
-			wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
+		else
+		{
+			if (coyoteJumpTimer > 0)
+				coyoteJumpTimer = Calc.Approach(coyoteJumpTimer, 0, Time.Delta);
+			if (wallJumpInputLockTimer > 0)
+				wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
+		}
 		if (!grounded && rollJumpCarryTimer > 0)
 			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
 		if (duckAttackCooldownTimer > 0)
@@ -314,7 +328,8 @@ public partial class Player : Actor
 
 		// Start jumping
 		var wallJump = GetWallJumpDirection();
-		var canGroundJump = grounded && CanStandUp();
+		var canCoyoteJump = CanCoyoteJump();
+		var canGroundJump = grounded && CanStandUp() || canCoyoteJump;
 		if (Controls.Jump.Pressed && (canGroundJump || wallJump != 0))
 		{
 			Controls.Jump.ConsumePress();
@@ -322,6 +337,9 @@ public partial class Player : Actor
 			Squish = new Vector2(0.65f, 1.4f);
 			if (canGroundJump)
 			{
+				if (canCoyoteJump)
+					Position.Y = coyoteJumpY;
+				coyoteJumpTimer = 0;
 				// we used to instantly snap to MaxAirAccel here but I'm not sure that's what I want...
 				// maybe a slight speed boost up to a point would be nice. want to encourage tech.
 			}
@@ -406,7 +424,7 @@ public partial class Player : Actor
 		Squish = new Vector2(1.65f, 0.62f);
 		Play("roll");
 		State = States.Roll;
-		AudioEvent("player/roll");
+		StartRollSound();
 	}
 
 	private void RollState()
@@ -416,14 +434,17 @@ public partial class Player : Actor
 
 		if (!grounded)
 		{
+			StopRollSound(false);
 			State = States.Normal;
 			return;
 		}
 
+		Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
 		Velocity.X = Calc.Approach(Velocity.X, Facing * MaxGroundSpeed, RollFriction * Time.Delta);
 
 		if (Controls.Jump.ConsumePress())
 		{
+			StopRollSound(false);
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.75f, 1.25f);
 			Velocity.X = Facing * MathF.Max(MathF.Abs(Velocity.X), RollJumpSpeed);
@@ -436,15 +457,54 @@ public partial class Player : Actor
 
 		if (state.Time >= RollDuration || Controls.Move.IntValue.Y <= 0)
 		{
+			StopRollSound(false);
 			State = States.Normal;
 			ducking = grounded && Controls.Move.IntValue.Y > 0;
 		}
 	}
 
+	private void StartRollSound()
+	{
+		StopRollSound(true);
+
+		try
+		{
+			rollSound = Game.CreateAudioEvent("player/roll", Position);
+			rollSound?.Start();
+		}
+		catch (Exception e)
+		{
+			Console.WriteLine(e);
+			rollSound?.Release();
+			rollSound = null;
+		}
+	}
+
+	private void StopRollSound(bool immediate)
+	{
+		if (rollSound == null)
+			return;
+
+		rollSound.Stop(immediate);
+		rollSound.Release();
+		rollSound = null;
+	}
 	private void StartJump(float force, float duration)
 	{
 		jumpForce = force;
 		jumpTimer = duration;
+	}
+
+	private bool CanCoyoteJump()
+	{
+		if (grounded || coyoteJumpTimer <= 0)
+			return false;
+
+		var originalY = Position.Y;
+		Position.Y = coyoteJumpY;
+		var canJump = CanStandUp();
+		Position.Y = originalY;
+		return canJump;
 	}
 
 	private bool CanStandUp()
@@ -519,7 +579,7 @@ public partial class Player : Actor
 		else if (duckAttack)
 		{
 			if (state.PreviousTime <= 0)
-				AudioEvent("sword");
+				AudioEvent("sword_crouched");
 			if (state.Time < Animation.Duration)
 				hitbox = GetAttackHitbox(duckAttack);
 		}
@@ -703,6 +763,8 @@ public partial class Player : Actor
 
 	public override void Destroyed()
 	{
+		StopRollSound(true);
+
 		if (light != null)
 		{
 			Game.Destroy(light);

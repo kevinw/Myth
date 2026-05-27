@@ -22,6 +22,8 @@ public partial class Game
 
 	private float? roomReverb;
 
+	public readonly record struct MusicReloadState(bool WasPlaying, int TimelinePosition, string? Area);
+
 	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
 	{
 		try
@@ -125,6 +127,40 @@ public partial class Game
 
 		StartMusic();
 		ApplyMusicArea(room);
+	}
+
+	public MusicReloadState CaptureMusicReloadState()
+	{
+		if (music == null)
+			return new(false, 0, null);
+
+		var state = new MusicReloadState(true, music.GetTimelinePosition(), musicArea);
+		StopMusic(true);
+		return state;
+	}
+
+	public void RestoreMusicReloadState(MusicReloadState state)
+	{
+		if (!state.WasPlaying || !Manager.MusicEnabled || !Audio.Initialized)
+			return;
+
+		try
+		{
+			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
+			var area = state.Area ?? Manager.DefaultMusicArea;
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, area, true);
+			music.SetTimelinePosition(state.TimelinePosition);
+			music.Start();
+			musicArea = area;
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add($"{Manager.BackgroundMusicEventPath}:reload"))
+				Console.Error.WriteLine($"Failed to restore background music after bank reload: {e}");
+			music = null;
+			musicArea = null;
+			RefreshMusic();
+		}
 	}
 
 

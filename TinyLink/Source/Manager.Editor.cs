@@ -79,11 +79,15 @@ public partial class Manager
 #if DEBUG && !IOS
 	FileSystemWatcher? assetWatcher;
 	FileSystemWatcher? shaderWatcher;
+	FileSystemWatcher? audioBankWatcher;
 	bool assetReloadRequested;
 	float assetReloadTimer;
 	readonly Lock shaderReloadLock = new();
 	bool shaderReloadRequested;
 	float shaderReloadTimer;
+	readonly Lock audioBankReloadLock = new();
+	bool audioBankReloadRequested;
+	float audioBankReloadTimer;
 	int fpsFrames;
 	float fpsElapsed;
 #endif
@@ -477,17 +481,17 @@ public partial class Manager
 
 	private void DrawTileLayerSelector()
 	{
-		if (ImGui.SmallButton("##ShowFG"))
-			editorShowForegroundLayer = !editorShowForegroundLayer;
-		ImGui.SameLine();
-		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Foreground ? "FG*" : "FG"))
-			SelectTileLayer(Factory.TileLayer.Foreground);
-		ImGui.SameLine();
-		if (ImGui.SmallButton("##ShowBG"))
+		if (ImGui.SmallButton("O ##ShowBG"))
 			editorShowBackgroundLayer = !editorShowBackgroundLayer;
 		ImGui.SameLine();
-		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Background ? "BG*" : "BG"))
+		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Background ? "Background *" : "Background"))
 			SelectTileLayer(Factory.TileLayer.Background);
+
+		if (ImGui.SmallButton("O ##ShowFG"))
+			editorShowForegroundLayer = !editorShowForegroundLayer;
+		ImGui.SameLine();
+		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Foreground ? "Foreground *" : "Foreground"))
+			SelectTileLayer(Factory.TileLayer.Foreground);
 	}
 
 	private void SelectTileLayer(Factory.TileLayer layer)
@@ -2790,8 +2794,6 @@ public partial class Manager
 			{
 				if (controller.Pressed(Buttons.RightStick))
 					return true;
-				if (controller.Pressed(Buttons.RightShoulder))
-					return true;
 			}
 		}
 
@@ -2904,6 +2906,25 @@ public partial class Manager
 		shaderWatcher.Deleted += (_, _) => RequestShaderReload();
 		shaderWatcher.Renamed += (_, _) => RequestShaderReload();
 		shaderWatcher.EnableRaisingEvents = true;
+	}
+
+	private void StartAudioBankWatcher()
+	{
+		var fmodPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Sounds", "FMOD"));
+		if (!Directory.Exists(fmodPath))
+			return;
+
+		audioBankWatcher = new FileSystemWatcher(fmodPath, "*.bank")
+		{
+			IncludeSubdirectories = true,
+			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
+		};
+
+		audioBankWatcher.Changed += (_, _) => RequestAudioBankReload();
+		audioBankWatcher.Created += (_, _) => RequestAudioBankReload();
+		audioBankWatcher.Deleted += (_, _) => RequestAudioBankReload();
+		audioBankWatcher.Renamed += (_, _) => RequestAudioBankReload();
+		audioBankWatcher.EnableRaisingEvents = true;
 	}
 #endif
 

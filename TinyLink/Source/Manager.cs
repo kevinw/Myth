@@ -21,7 +21,7 @@ public partial class Manager : App
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
 	private readonly Point MinimumRestoredWindowSize = new (640, 360);
 
-	static float Scale => 3.0f;
+	static float Scale => 2.7f;
 	static float ButtonSize => 24;
 	static float ButtonSpacing => 2;
 	static float BoxPadding => 4;
@@ -177,7 +177,7 @@ public partial class Manager : App
 	{
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
-		imgui = new(this) { Scale = Scale };
+		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
 	}
 
 	private static AppConfig CreateAppConfig()
@@ -218,6 +218,7 @@ public partial class Manager : App
 #if DEBUG && !IOS
 		StartAssetWatcher();
 		StartShaderWatcher();
+		StartAudioBankWatcher();
 #endif
 
 		SyncEditorGame();
@@ -237,6 +238,8 @@ public partial class Manager : App
 		assetWatcher = null;
 		shaderWatcher?.Dispose();
 		shaderWatcher = null;
+		audioBankWatcher?.Dispose();
+		audioBankWatcher = null;
 #endif
 
 		Assets.Unload();
@@ -276,15 +279,15 @@ public partial class Manager : App
 
 		try
 		{
-			Audio.Initialize(liveUpdate:
+			Audio.ReloadBanks(
+				banks,
+				liveUpdate:
 #if DEBUG
 				true
 #else
 				false
 #endif
 			);
-			foreach (var bank in banks)
-				Audio.LoadBank(bank);
 			LoadMusicAreas();
 		}
 		catch (Exception e)
@@ -404,6 +407,7 @@ public partial class Manager : App
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
 		UpdateShaderReload();
+		UpdateAudioBankReload();
 #endif
 
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
@@ -569,15 +573,13 @@ public partial class Manager : App
 				ToggleNormalBuffer();
 			if (controller.Pressed(Buttons.North))
 				TogglePostEffects();
-			if (controller.Pressed(Buttons.RightShoulder) || (!controller.IsGamepad && controller.Pressed(5)))
-				ToggleEmissive();
 		}
 
 		return chordActive;
 	}
 
 	private static bool PerfModifierDown(ControllerState controller)
-		=> controller.Down(Buttons.LeftShoulder) || (!controller.IsGamepad && controller.Down(4));
+		=> !controller.IsGamepad && controller.Down(4);
 
 	private void ToggleLighting()
 	{
@@ -711,6 +713,53 @@ public partial class Manager : App
 
 		if (reload)
 			CompileAndReloadShaders();
+	}
+
+	private void RequestAudioBankReload()
+	{
+		lock (audioBankReloadLock)
+		{
+			audioBankReloadRequested = true;
+			audioBankReloadTimer = AssetReloadDelay;
+		}
+	}
+
+	private void UpdateAudioBankReload()
+	{
+		var reload = false;
+
+		lock (audioBankReloadLock)
+		{
+			if (audioBankReloadRequested)
+			{
+				audioBankReloadTimer -= Time.Delta;
+				if (audioBankReloadTimer <= 0)
+				{
+					audioBankReloadRequested = false;
+					reload = true;
+				}
+			}
+		}
+
+		if (reload)
+			ReloadAudioBanks();
+	}
+
+	private void ReloadAudioBanks()
+	{
+		try
+		{
+			var musicState = game?.CaptureMusicReloadState();
+			LoadAudioBanks();
+			if (musicState is { } state)
+				game?.RestoreMusicReloadState(state);
+			game?.DisplayMessage("Reloaded FMOD banks");
+			Console.WriteLine("Reloaded FMOD banks.");
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to reload FMOD banks: {e}");
+		}
 	}
 
 	private void CompileAndReloadShaders()
