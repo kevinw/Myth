@@ -33,6 +33,9 @@
                     Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**">
       <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </BundleResource>
+    <BundleResource Include="../../../Assets/Sounds/FMOD/Build/Mobile/*.bank">
+      <LogicalName>Assets/Sounds/FMOD/Build/Mobile/%(Filename)%(Extension)</LogicalName>
+    </BundleResource>
     <ProjectReference Include="../../../Source/TinyLink.Core.csproj" />
     <ProjectReference Include="../../../../../Foster/Framework/Foster.Framework.csproj" />
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />

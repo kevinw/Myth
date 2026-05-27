@@ -51,6 +51,10 @@ public partial class Manager : App
 	Game? game;
 	bool playing;
 	bool startingPlay;
+#if IOS
+	private const float PlayModePinchInThreshold = 0.82f;
+	private float playModePinchStartDistance;
+#endif
 	float playTransition;
 	Vector2 playTransitionFromCenter;
 	Vector2 playTransitionFromSize;
@@ -251,11 +255,6 @@ public partial class Manager : App
 
 	private void LoadAudioBanks()
 	{
-#if IOS
-		musicAreas.Clear();
-		musicAreas.Add(DefaultMusicArea);
-		return;
-#else
 		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
 		if (!Directory.Exists(fmodPath))
 		{
@@ -263,15 +262,16 @@ public partial class Manager : App
 			return;
 		}
 
+		var bankRoot = AudioBankRoot(fmodPath);
 		var banks = Directory
-			.EnumerateFiles(fmodPath, "*.bank", SearchOption.AllDirectories)
+			.EnumerateFiles(bankRoot, "*.bank", SearchOption.AllDirectories)
 			.OrderBy(BankLoadOrder)
 			.ThenBy(Path.GetFileName)
 			.ToArray();
 
 		if (banks.Length <= 0)
 		{
-			Console.Error.WriteLine($"No FMOD banks found under '{Path.GetFullPath(fmodPath)}'. Build banks from the FMOD Studio project before playing events.");
+			Console.Error.WriteLine($"No FMOD banks found under '{Path.GetFullPath(bankRoot)}'. Build banks from the FMOD Studio project before playing events.");
 			musicAreas.Clear();
 			musicAreas.Add(DefaultMusicArea);
 			return;
@@ -282,7 +282,7 @@ public partial class Manager : App
 			Audio.ReloadBanks(
 				banks,
 				liveUpdate:
-#if DEBUG
+#if DEBUG && !IOS
 				true
 #else
 				false
@@ -296,7 +296,17 @@ public partial class Manager : App
 			musicAreas.Clear();
 			musicAreas.Add(DefaultMusicArea);
 		}
+	}
+
+	private static string AudioBankRoot(string fmodPath)
+	{
+		var buildPath = Path.Join(fmodPath, "Build");
+#if IOS
+		var platformPath = Path.Join(buildPath, "Mobile");
+#else
+		var platformPath = Path.Join(buildPath, "Desktop");
 #endif
+		return Directory.Exists(platformPath) ? platformPath : fmodPath;
 	}
 
 	private void LoadMusicAreas()
@@ -453,8 +463,13 @@ public partial class Manager : App
 		{
 			SetMouseCursor(null);
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
-			using (PerfStats.Time(PerfDetail.GameUpdate))
-				game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
+#if IOS
+			if (!UpdatePlayModePinchIn())
+#endif
+			{
+				using (PerfStats.Time(PerfDetail.GameUpdate))
+					game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
+			}
 		}
 		// Show Editor
 		else
@@ -1013,6 +1028,63 @@ public partial class Manager : App
 			StartGame();
 	}
 
+#if IOS
+	private bool UpdatePlayModePinchIn()
+	{
+		if (!TryGetTwoFingerDistance(Input.Touch, out var distance))
+		{
+			playModePinchStartDistance = 0.0f;
+			return false;
+		}
+
+		if (playModePinchStartDistance <= 0.0f)
+		{
+			playModePinchStartDistance = distance;
+			return false;
+		}
+
+		if (distance > playModePinchStartDistance)
+			playModePinchStartDistance = distance;
+
+		if (playModePinchStartDistance <= 0.001f || distance / playModePinchStartDistance > PlayModePinchInThreshold)
+			return false;
+
+		playModePinchStartDistance = 0.0f;
+		StopGame();
+		return true;
+	}
+
+	private static bool TryGetTwoFingerDistance(TouchState touch, out float distance)
+	{
+		TouchState.Finger? first = null;
+		TouchState.Finger? second = null;
+		for (var i = 0; i < touch.Count; i++)
+		{
+			var finger = touch[i];
+			if (!finger.Down)
+				continue;
+
+			if (first == null)
+			{
+				first = finger;
+				continue;
+			}
+
+			second = finger;
+			break;
+		}
+
+		if (first is not { } a || second is not { } b)
+		{
+			distance = 0.0f;
+			return false;
+		}
+
+		distance = Vector2.Distance(a.Position, b.Position);
+		return true;
+	}
+#endif
+
 	private void StartGame()
 	{
 		CurrentRoom?.Save();
@@ -1051,6 +1123,9 @@ public partial class Manager : App
 
 	private void StopGame()
 	{
+#if IOS
+		playModePinchStartDistance = 0.0f;
+#endif
 		if (game?.CurrentRoom is { } room)
 		{
 			if (game.GetFirst<Player>() is { } player)

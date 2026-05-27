@@ -874,6 +874,7 @@ public partial class Game : IDisposable
 			if (scissor.Width <= 0 || scissor.Height <= 0)
 				continue;
 
+			var surfaceTop = ReflectionSurfaceTop(rect);
 			Batcher.PushMatrix(-(Point2)Camera + shake);
 			foreach (var actor in rendering)
 			{
@@ -882,7 +883,7 @@ public partial class Game : IDisposable
 				if (!ActorCanReflectIn(actor, rect))
 					continue;
 
-				Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, rect.Top)));
+				Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, surfaceTop)));
 				Batcher.PushMatrix(actor.Position);
 				actor.RenderReflection(Batcher, Color.White * ReflectionOpacity);
 				Batcher.PopMatrix();
@@ -930,6 +931,46 @@ public partial class Game : IDisposable
 		Batcher.Render(target);
 		Batcher.Clear();
 	}
+
+	private int ReflectionSurfaceTop(RectInt rect)
+	{
+		if (room == null)
+			return rect.Top;
+
+		var rects = room.ReflectionRects;
+		var start = rects.IndexOf(rect);
+		if (start < 0)
+			return rect.Top;
+
+		var visited = new bool[rects.Count];
+		var pending = new Stack<int>();
+		pending.Push(start);
+		visited[start] = true;
+
+		var top = rect.Top;
+		while (pending.Count > 0)
+		{
+			var current = rects[pending.Pop()];
+			top = Math.Min(top, current.Top);
+
+			for (var i = 0; i < rects.Count; i++)
+			{
+				if (visited[i] || !ReflectionRectsTouch(current, rects[i]))
+					continue;
+
+				visited[i] = true;
+				pending.Push(i);
+			}
+		}
+
+		return top;
+	}
+
+	private static bool ReflectionRectsTouch(RectInt a, RectInt b)
+		=> a.Left <= b.Right &&
+		   a.Right >= b.Left &&
+		   a.Top <= b.Bottom &&
+		   a.Bottom >= b.Top;
 
 	private static bool ActorCanReflectIn(Actor actor, RectInt rect)
 	{
@@ -2616,9 +2657,9 @@ public partial class Game : IDisposable
 		if (bg == null || fgVisual == null || fg == null || fgDual == null)
 			return;
 
-		bg.Clear();
-		fgVisual.Clear();
-		fg.Clear();
+		bg.Resize(room.Size);
+		fgVisual.Resize(room.Size);
+		fg.Resize(room.Size);
 		bgDual?.Clear();
 		fgDual.Clear();
 		hiddenWalls?.Resize(room.Size);

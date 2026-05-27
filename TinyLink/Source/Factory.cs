@@ -154,7 +154,7 @@ public static class Factory
 		{
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
-			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng));
+			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng), reflectsSprites && !isFg ? 0.55f : 1.0f);
 		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer, tilesetName: tilesetName);
 	}
 

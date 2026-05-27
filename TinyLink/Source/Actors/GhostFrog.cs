@@ -16,6 +16,8 @@ public class GhostFrog : Actor
 		Dead
 	}
 
+	public override string HitSoundType => "metal";
+
 	private const int MaxHealthPhase1 = 10;
 	private const int MaxHealthPhase2 = 3;
 
@@ -314,6 +316,7 @@ public class GhostFrog : Actor
 	public override void OnWasHit(Actor by)
 	{
 		if (health <= 0) return;
+
 		health--;
 		if (health <= 0 && phase > 0)
 			SetState(States.Dead);

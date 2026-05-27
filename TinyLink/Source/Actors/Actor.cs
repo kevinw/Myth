@@ -34,6 +34,7 @@ public class Actor
 	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;
+	public virtual string HitSoundType => "flesh";
 
 	[NoSerialize]
 	public Time Time => Game.Time;
@@ -317,6 +318,11 @@ public class Actor
 		if (actor.hitCooldown <= 0)
 		{
 			actor.hitCooldown = actor.IFrameTime;
+			if (actor.Mask == Masks.Enemy)
+			{
+				if (this is Player)
+					AudioEvent("player/sword_hit", "hit_destination", actor.HitSoundType);
+			}
 			actor.OnWasHit(this);
 			OnPerformHit(actor);
 			return true;

@@ -1,4 +1,5 @@
 using SDL3;
+using AVFoundation;
 using Foster.Framework;
 using Foundation;
 using GameController;
@@ -17,9 +18,21 @@ internal static class Program
 
 	public static unsafe int Main(string[] args)
 	{
-		NativeLibrary.SetDllImportResolver(typeof(SDL).Assembly, ResolveNativeLibrary);
-		NativeLibrary.SetDllImportResolver(typeof(ImGui).Assembly, ResolveNativeLibrary);
+		RegisterNativeLibraryResolvers(
+			typeof(SDL).Assembly,
+			typeof(ImGui).Assembly,
+			typeof(Audio).Assembly);
 		return SDL_RunAppAot(0, nint.Zero, &RunTinyLink, nint.Zero);
+	}
+
+	private static void RegisterNativeLibraryResolvers(params Assembly[] assemblies)
+	{
+		var registered = new HashSet<Assembly>();
+		foreach (var assembly in assemblies)
+		{
+			if (registered.Add(assembly))
+				NativeLibrary.SetDllImportResolver(assembly, ResolveNativeLibrary);
+		}
 	}
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -27,6 +40,7 @@ internal static class Program
 	{
 		try
 		{
+			ConfigureAudioSession();
 			using var manager = new Manager();
 			manager.VirtualGameControllerVisibilityChanged += SetVirtualControllerVisible;
 			SetVirtualControllerVisible(manager.WantsVirtualGameController);
@@ -40,6 +54,13 @@ internal static class Program
 			Console.Error.WriteLine(e);
 			return 1;
 		}
+	}
+
+	private static void ConfigureAudioSession()
+	{
+		var session = AVAudioSession.SharedInstance();
+		session.SetCategory(AVAudioSessionCategory.Playback);
+		session.SetActive(true);
 	}
 
 	private static void ConnectVirtualController()
@@ -111,6 +132,9 @@ internal static class Program
 			if (NativeLibrary.TryLoad(frameworkPath, out var handle))
 				return handle;
 		}
+
+		if (libraryName is "fmod" or "fmodstudio")
+			return NativeLibrary.GetMainProgramHandle();
 
 		return nint.Zero;
 	}
