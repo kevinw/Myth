@@ -537,21 +537,31 @@ public class Room
 		var totalTiles = Math.Max(1, Size.X * Size.Y);
 		var terrainTiles = 0;
 		var shadowTiles = 0;
+		var reflectiveTerrain = 0.0f;
+		var reflectiveShadow = 0.0f;
 		var openBorderTiles = 0;
 		var borderTiles = 0;
 		var ceilingColumns = 0;
+		var reflectiveCeilingColumns = 0.0f;
 		var openSkyColumns = 0;
 		var ceilingRows = Math.Max(1, (int)MathF.Ceiling(Size.Y * 0.25f));
 
 		for (var y = 0; y < Size.Y; y ++)
 		for (var x = 0; x < Size.X; x ++)
 		{
+			var entry = GetTileEntry(x, y);
 			var terrain = IsTerrainJoinTile(x, y);
-			var shadow = GetTileEntry(x, y) is { CastsShadow: true };
+			var shadow = entry is { CastsShadow: true };
 			if (terrain)
+			{
 				terrainTiles ++;
+				reflectiveTerrain += entry?.AcousticReflectivity ?? 1.0f;
+			}
 			if (shadow)
+			{
 				shadowTiles ++;
+				reflectiveShadow += entry?.AcousticReflectivity ?? 1.0f;
+			}
 
 			if (x == 0 || y == 0 || x == Size.X - 1 || y == Size.Y - 1)
 			{
@@ -565,17 +575,23 @@ public class Room
 		{
 			var topOpen = !IsTerrainJoinTile(x, 0) && GetTileEntry(x, 0) is not { CastsShadow: true };
 			var hasCeiling = false;
+			var ceilingReflectivity = 0.0f;
 			for (var y = 0; y < ceilingRows; y ++)
 			{
-				if (IsTerrainJoinTile(x, y) || GetTileEntry(x, y) is { CastsShadow: true })
+				var entry = GetTileEntry(x, y);
+				if (IsTerrainJoinTile(x, y) || entry is { CastsShadow: true })
 				{
 					hasCeiling = true;
+					ceilingReflectivity = entry?.AcousticReflectivity ?? 1.0f;
 					break;
 				}
 			}
 
 			if (hasCeiling)
+			{
 				ceilingColumns ++;
+				reflectiveCeilingColumns += ceilingReflectivity;
+			}
 			else if (topOpen)
 				openSkyColumns ++;
 		}
@@ -586,8 +602,11 @@ public class Room
 		var widthBonus = InverseLerp(16.0f, 40.0f, Size.X);
 		var solidRatio = terrainTiles / (float)totalTiles;
 		var shadowRatio = shadowTiles / (float)totalTiles;
+		var reflectiveSolidRatio = reflectiveTerrain / totalTiles;
+		var reflectiveShadowRatio = reflectiveShadow / totalTiles;
 		var openEdgeRatio = borderTiles > 0 ? openBorderTiles / (float)borderTiles : 1.0f;
 		var ceilingRatio = Size.X > 0 ? ceilingColumns / (float)Size.X : 0.0f;
+		var reflectiveCeilingRatio = Size.X > 0 ? reflectiveCeilingColumns / Size.X : 0.0f;
 		var clutterPenalty = InverseLerp(0.35f, 0.70f, solidRatio);
 
 		var score =
@@ -595,9 +614,10 @@ public class Room
 			0.20f * areaBonus +
 			0.20f * heightBonus +
 			0.15f * widthBonus +
-			0.25f * ceilingRatio +
-			0.15f * shadowRatio +
-			0.10f * solidRatio -
+			0.10f * ceilingRatio +
+			0.15f * reflectiveCeilingRatio +
+			0.15f * reflectiveShadowRatio +
+			0.10f * reflectiveSolidRatio -
 			0.45f * skyOpenRatio -
 			0.35f * openEdgeRatio -
 			0.20f * clutterPenalty;

@@ -157,12 +157,6 @@ public partial class Game
 			Batcher.RectLine(rect, 1, Color.Red);
 		foreach (var slope in room.SlopeTiles)
 		{
-			var rect = slope.WorldBounds(room);
-			Batcher.RectLine(rect, 1, Color.Red);
-			if (slope.Direction == Room.SlopeDirection.DownRight)
-				Batcher.Line(rect.TopLeft, rect.BottomRight, 1, Color.Red);
-			else
-				Batcher.Line(rect.BottomLeft, rect.TopRight, 1, Color.Red);
 			var polygon = room.GetSlopePolygon(slope);
 			for (var i = 0; i < polygon.Length; i ++)
 				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Length], 1, Color.Red);

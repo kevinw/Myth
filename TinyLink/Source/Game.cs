@@ -369,7 +369,7 @@ public partial class Game : IDisposable
 
 	private void UpdateCamera()
 	{
-		if (room == null || nextRoom != null)
+		if (room == null || nextRoom != null || draggingPlayer)
 			return;
 
 		Camera = GetGameplayCameraTarget();
@@ -378,7 +378,10 @@ public partial class Game : IDisposable
 	private void UpdatePlayerMouseDrag()
 	{
 		if (GetFirst<Player>() is not { } player)
+		{
+			draggingPlayer = false;
 			return;
+		}
 
 		if (Input.Mouse.LeftPressed)
 		{
