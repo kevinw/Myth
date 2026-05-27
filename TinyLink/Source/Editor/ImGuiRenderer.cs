@@ -167,6 +167,12 @@ public class ImGuiRenderer : IDisposable
 
 		// load ImGui Font
 		{
+			if (customFontPath != null && !File.Exists(customFontPath))
+			{
+				Console.Error.WriteLine($"Could not find custom font at {customFontPath}");
+				Console.Error.WriteLine($"Current working dir is: {Directory.GetCurrentDirectory()}");
+			}
+
 			if (customFontPath != null && File.Exists(customFontPath))
 			{
 				io.Fonts.AddFontFromFileTTF(customFontPath, 64);
@@ -248,7 +254,7 @@ public class ImGuiRenderer : IDisposable
 	}
 
 	/// <summary>
-	/// Ends an ImGui Frame. 
+	/// Ends an ImGui Frame.
 	/// Call this at the end of your Update method.
 	/// </summary>
 	public void EndLayout()
