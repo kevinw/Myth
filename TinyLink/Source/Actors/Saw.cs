@@ -5,15 +5,19 @@ namespace TinyLink;
 
 public class Saw : Actor
 {
-	public float Speed = 90;
+	public float Speed = 110;
 	public float Gravity = 360;
 	public float LandingProbeDistance = 1;
 	public float SurfaceProbeDistance = 10;
 	public float CornerProbeDistance = 14;
+	public float MaxSurfaceSnapDistance = 1;
+	public bool DebugMovement;
 
 	private Vector2 remainder;
 	private Vector2 towardSurface = Vector2.UnitY;
+	private Vector2 exitDirection;
 	private bool attached;
+	private bool exitingRoom;
 
 	public Saw()
 	{
@@ -24,17 +28,24 @@ public class Saw : Actor
 			Console.WriteLine($"saw origin {Sprite.Origin}");
 		Depth = -5;
 		CollidesWithSolids = false;
+		//DebugMovement = true;
 	}
 
 	public override void Added()
 	{
 		attached = AttachToSurface(CornerProbeDistance);
-		if (!attached)
+		if (!attached && !exitingRoom)
 			StartAirborne();
 	}
 
 	public override void Update()
 	{
+		if (exitingRoom)
+		{
+			MoveExitingRoom();
+			return;
+		}
+
 		if (attached)
 		{
 			Velocity = Vector2.Zero;
@@ -62,9 +73,6 @@ public class Saw : Actor
 		if (Timer > 3.0f)
 			Game.Destroy(this);
 	}
-
-	//public override void RenderEmissive(Batcher batcher)
-	//=> batcher.Circle(Vector2.Zero, 2, 12, Color.Red);
 
 	private void StartAirborne()
 	{
@@ -107,13 +115,15 @@ public class Saw : Actor
 
 	private bool TryMoveAirborneStep(Point2 step)
 	{
-		if (!Game.OverlapsSolid(this, Bounds() + step))
+		var bounds = Bounds();
+		var hit = Game.OverlapsSolid(this, bounds + step);
+		if (!hit)
 		{
 			Position += step;
 			return true;
 		}
 
-		TryAttachToSurface((Vector2)step, CornerProbeDistance);
+		var didAttach = TryAttachToSurface((Vector2)step, CornerProbeDistance);
 		return false;
 	}
 
@@ -135,7 +145,9 @@ public class Saw : Actor
 
 		towardSurface = NormalizeOrDefault(direction, Vector2.UnitY);
 		if (!AttachToSurface(distance))
+		{
 			return false;
+		}
 
 		attached = true;
 		Velocity = Vector2.Zero;
@@ -146,9 +158,10 @@ public class Saw : Actor
 
 	private void FollowSurface()
 	{
-		AttachToSurface(CornerProbeDistance);
+		AttachToSurface(CornerProbeDistance, MaxSurfaceSnapDistance);
 
-		remainder += Tangent() * Speed * Time.Delta;
+		var desired = Tangent() * Speed * Time.Delta;
+		remainder += desired;
 		var move = (Point2)remainder;
 		remainder -= (Vector2)move;
 
@@ -159,7 +172,8 @@ public class Saw : Actor
 				i < Math.Abs(move.X) ? Math.Sign(move.X) : 0,
 				i < Math.Abs(move.Y) ? Math.Sign(move.Y) : 0);
 
-			TryMoveStep(step);
+			if (!TryMoveStep(step))
+				break;
 		}
 	}
 
@@ -172,41 +186,183 @@ public class Saw : Actor
 			return true;
 
 		var bounds = Bounds();
-		if (Game.OverlapsSolid(this, bounds + step))
+		var nextBounds = bounds + step;
+		if (OutsideRoom(nextBounds))
 		{
-			if (Game.TryFindSurface(this, bounds, (Vector2)step, 1, out var hit))
-				towardSurface = -hit.Normal;
+			BeginRoomExit((Vector2)step, "bounds");
+			return false;
+		}
+
+		var hit = Game.OverlapsSolid(this, nextBounds);
+		if (hit)
+		{
+			if (TryFindSurfaceDebug(bounds, (Vector2)step, 1, out var surfaceHit))
+			{
+				if (IsRoomEdgeSurface(surfaceHit))
+				{
+					BeginRoomExit((Vector2)step, surfaceHit);
+					return false;
+				}
+
+				towardSurface = -surfaceHit.Normal;
+			}
+			else
+			{
+			}
 			return false;
 		}
 
 		Position += step;
-		if (AttachToSurface(SurfaceProbeDistance))
+		if (AttachToSurface(SurfaceProbeDistance, MaxSurfaceSnapDistance))
 			return true;
 
+		var previousTowardSurface = towardSurface;
 		towardSurface = -NormalizeOrDefault((Vector2)step, towardSurface);
-		AttachToSurface(CornerProbeDistance);
-		return true;
+		if (TryMoveAroundOutsideCorner(previousTowardSurface))
+			return true;
+
+		if (AttachToSurface(CornerProbeDistance, MaxSurfaceSnapDistance))
+			return true;
+
+		Position -= step;
+		towardSurface = previousTowardSurface;
+		remainder = Vector2.Zero;
+		AttachToSurface(CornerProbeDistance, MaxSurfaceSnapDistance);
+		return false;
 	}
 
 	private bool AttachToSurface(float distance)
+		=> AttachToSurface(distance, float.PositiveInfinity);
+
+	private bool AttachToSurface(float distance, float maxSnap)
 	{
-		if (!Game.TryFindSurface(this, Bounds(), towardSurface, distance, out var hit))
+		var bounds = Bounds();
+		if (!TryFindSurfaceDebug(bounds, towardSurface, distance, out var hit))
+		{
 			return false;
+		}
+
+		if (IsRoomEdgeSurface(hit))
+		{
+			BeginRoomExit(Tangent(), hit);
+			return false;
+		}
 
 		towardSurface = -hit.Normal;
-		var snap = MathF.Max(0, hit.Distance - 1);
+		var rawSnap = MathF.Max(0, hit.Distance - 1);
+		var snap = MathF.Min(rawSnap, maxSnap);
 		if (snap > 0)
+		{
 			Position += Round(towardSurface * snap);
+		}
 		return true;
 	}
 
 	private RectInt Bounds()
 		=> Hitbox.Rect + Position;
 
+	private bool OutsideRoom(in RectInt bounds)
+	{
+		var roomBounds = Game.Bounds;
+		return roomBounds.Width > 0 &&
+			(bounds.Left < roomBounds.Left ||
+				bounds.Right > roomBounds.Right ||
+				bounds.Top < roomBounds.Top ||
+				bounds.Bottom > roomBounds.Bottom);
+	}
+
+	private bool IsRoomEdgeSurface(in SurfaceHit hit)
+	{
+		var roomBounds = Game.Bounds;
+		if (roomBounds.Width <= 0 || roomBounds.Height <= 0)
+			return false;
+
+		return hit.Normal.X < -0.001f && hit.Point.X <= roomBounds.Left ||
+			hit.Normal.X > 0.001f && hit.Point.X >= roomBounds.Right ||
+			hit.Normal.Y < -0.001f && hit.Point.Y <= roomBounds.Top ||
+			hit.Normal.Y > 0.001f && hit.Point.Y >= roomBounds.Bottom;
+	}
+
+	private void BeginRoomExit(Vector2 direction, in SurfaceHit hit)
+	{
+		BeginRoomExit(direction, "surface");
+	}
+
+	private void BeginRoomExit(Vector2 direction, string reason)
+	{
+		if (exitingRoom)
+			return;
+
+		exitDirection = NormalizeOrDefault(direction, Tangent());
+		exitingRoom = true;
+		attached = false;
+		Velocity = exitDirection * Speed;
+		CollidesWithSolids = false;
+		remainder = Vector2.Zero;
+	}
+
+	private void MoveExitingRoom()
+	{
+		Velocity = exitDirection * Speed;
+		remainder += Velocity * Time.Delta;
+		var move = (Point2)remainder;
+		remainder -= (Vector2)move;
+
+		var steps = Math.Max(Math.Abs(move.X), Math.Abs(move.Y));
+		for (var i = 0; i < steps; i ++)
+		{
+			var step = new Point2(
+				i < Math.Abs(move.X) ? Math.Sign(move.X) : 0,
+				i < Math.Abs(move.Y) ? Math.Sign(move.Y) : 0);
+
+			Position += step;
+		}
+
+		if (!Game.Bounds.Overlaps(GetVisualBounds()))
+		{
+			Game.Destroy(this);
+		}
+	}
+
+	private bool TryMoveAroundOutsideCorner(Vector2 previousTowardSurface)
+	{
+		var cornerStep = Round(previousTowardSurface);
+		if (cornerStep == Point2.Zero)
+			return false;
+
+		var bounds = Bounds();
+		var cornerBounds = bounds + cornerStep;
+		var blocked = Game.OverlapsSolid(this, cornerBounds);
+		if (blocked)
+			return false;
+
+		Position += cornerStep;
+		if (AttachToSurface(CornerProbeDistance, MaxSurfaceSnapDistance))
+			return true;
+
+		Position -= cornerStep;
+		return false;
+	}
+
+	private bool TryFindSurfaceDebug(in RectInt bounds, Vector2 direction, float distance, out SurfaceHit hit)
+	{
+		return Game.TryFindSurface(this, bounds, direction, distance, out hit);
+	}
+
+	private Vector2 LocalCenter()
+		=> Center(Bounds()) - (Vector2)Position;
+
+	private Vector2 ToLocal(Vector2 point)
+		=> point - (Vector2)Position;
+
+	private static Vector2 Center(RectInt bounds)
+		=> (Vector2)bounds.Center;
+
 	private static Vector2 NormalizeOrDefault(Vector2 value, Vector2 fallback)
 		=> value.LengthSquared() <= 0.0001f ? fallback : Vector2.Normalize(value);
 
 	private static Point2 Round(Vector2 value)
 		=> new((int)MathF.Round(value.X), (int)MathF.Round(value.Y));
+
 
 }
