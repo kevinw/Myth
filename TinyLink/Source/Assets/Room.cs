@@ -852,6 +852,15 @@ public class Room
 	public Point2[] GetSlopePolygon(SlopeTile slope)
 		=> slopePolygonLookup.TryGetValue(slope.Tile, out var polygon) ? polygon : BuildSlopePolygon(slope);
 
+	public void GetSlopeSurface(SlopeTile slope, out Vector2 left, out Vector2 right)
+	{
+		var rect = slope.WorldBounds(this);
+		var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
+		var rightHeight = SlopeSurfaceHeight(slope, slope.RunIndex + 1);
+		left = new Vector2(rect.Left, rect.Top + leftHeight);
+		right = new Vector2(rect.Right, rect.Top + rightHeight);
+	}
+
 	private Point2[] BuildSlopePolygon(SlopeTile slope)
 	{
 		var rect = slope.WorldBounds(this);

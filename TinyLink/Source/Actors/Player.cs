@@ -81,7 +81,8 @@ public partial class Player : Actor
 
 	public override void Added()
 	{
-		light = Game.Create<Light>(Position, it => {
+		light = Game.Create<Light>(Position, it =>
+		{
 			it.Radius = 36;
 			it.Intensity = 0.45f;
 			it.LightColor = 0xffcfa0;
@@ -268,7 +269,8 @@ public partial class Player : Actor
 			if (wallJumpDir != 0 && input == -wallJumpDir)
 			{
 				Play("wall_slide");
-			} else if (JumpUpSquish > 0 && !grounded)
+			}
+			else if (JumpUpSquish > 0 && !grounded)
 			{
 				Play("jump_squish");
 			}
@@ -348,8 +350,7 @@ public partial class Player : Actor
 				return;
 			}
 		}
-
-		if (Controls.Attack.ConsumePress())
+		else if (Controls.Attack.ConsumePress())
 		{
 			if (!grounded && input != 0)
 				Facing = input;
@@ -371,6 +372,13 @@ public partial class Player : Actor
 				if (grounded)
 					StopX();
 			}
+		}
+		else if (Controls.Saw.ConsumePress())
+		{
+			Game.Create<Saw>(Position - new Point2(-5 * Facing, 20), (saw) =>
+			{
+				saw.Facing = Facing;
+			});
 		}
 
 		// Force yourself to die
@@ -517,7 +525,7 @@ public partial class Player : Actor
 		}
 		else if (state.Time < 0.2f)
 		{
-			hitbox = new (-16, -12, 17, 8);
+			hitbox = new(-16, -12, 17, 8);
 		}
 		else if (state.Time < 0.50f)
 		{
@@ -538,7 +546,7 @@ public partial class Player : Actor
 				hitbox = GetAttackHitbox(duckAttack);
 		}
 
-		if (hitbox is {} it)
+		if (hitbox is { } it)
 		{
 			if (Facing == Signs.Negative)
 				it.X = -(it.X + it.Width);
@@ -630,7 +638,8 @@ public partial class Player : Actor
 		ApplyHurt(fromActor: by);
 	}
 
-	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null) {
+	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null)
+	{
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
 		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor));

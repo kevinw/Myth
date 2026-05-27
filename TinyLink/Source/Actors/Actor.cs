@@ -9,12 +9,12 @@ public class Actor
 	[Flags]
 	public enum Masks
 	{
-		None	  = 0,
-		Solid	 = 1 << 0,
-		Jumpthru  = 1 << 1,
-		Player	= 1 << 2,
-		Enemy	 = 1 << 3,
-		Hazard	= 1 << 4,
+		None = 0,
+		Solid = 1 << 0,
+		Jumpthru = 1 << 1,
+		Player = 1 << 2,
+		Enemy = 1 << 3,
+		Hazard = 1 << 4,
 	}
 
 	[NoSerialize] public Game Game = null!;
@@ -81,7 +81,7 @@ public class Actor
 	/// </summary>
 	public void Play(string name, bool looping = true, bool restart = false)
 	{
-		if (sprite != null && sprite.GetAnimation(name) is {} && (restart || animationName != name))
+		if (sprite != null && sprite.GetAnimation(name) is { } && (restart || animationName != name))
 		{
 			animationName = name;
 			animationTime = 0;
@@ -363,72 +363,53 @@ public class Actor
 		Timer += Time.Delta;
 	}
 
-	/// <summary>
-	/// Draws the current Sprite
-	/// </summary>
-	public virtual void Render(Batcher batcher)
+	enum SubtextureType
+	{
+		Color,
+		Normals
+	}
+
+	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType) =>
+		RenderSpriteSubtexture(batcher, subtextureType, Color.White);
+
+	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
 	{
 		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
 			return;
 
-		if (sprite != null && sprite.Frames.Count > 0)
+		if (sprite == null || sprite.Frames.Count <= 0)
+			return;
+
+		var animation = Animation;
+		var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
+
+		Subtexture subtexture;
+		switch (subtextureType)
 		{
-			var animation = Animation;
-			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
-			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
-			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, Color.White);
-			batcher.PopMatrix();
+			case SubtextureType.Color:
+				subtexture = frame.Subtexture;
+				break;
+			case SubtextureType.Normals:
+				subtexture = frame.NormalSubtexture;
+				break;
+			default:
+				return;
 		}
+
+		batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
+		batcher.Image(subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
+		batcher.PopMatrix();
 	}
 
 	public virtual void RenderEmissive(Batcher batcher) { }
 
-	public virtual void RenderNormals(Batcher batcher)
-	{
-		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
-			return;
-
-		if (sprite != null && sprite.Frames.Count > 0)
-		{
-			var animation = Animation;
-			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
-			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
-			batcher.Image(frame.NormalSubtexture, Shift, sprite.Origin, Vector2.One, 0, Color.White);
-			batcher.PopMatrix();
-		}
-	}
+	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
+	public virtual void RenderNormals(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Normals);
+	public virtual void RenderShadow(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+	public virtual void RenderReflection(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
 
 	public virtual void ForEachLight(Action<Vector2, float, float, float, Color> action) { }
 
-	public virtual void RenderShadow(Batcher batcher, Color color)
-	{
-		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
-			return;
-
-		if (sprite != null && sprite.Frames.Count > 0)
-		{
-			var animation = Animation;
-			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
-			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
-			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
-			batcher.PopMatrix();
-		}
-	}
-
-	public virtual void RenderReflection(Batcher batcher, Color color)
-	{
-		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
-			return;
-
-		if (sprite != null && sprite.Frames.Count > 0)
-		{
-			var animation = Animation;
-			var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
-			batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
-			batcher.Image(frame.Subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
-			batcher.PopMatrix();
-		}
-	}
 
 	public virtual Rect GetVisualBounds()
 	{

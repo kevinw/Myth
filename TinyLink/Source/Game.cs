@@ -1074,9 +1074,9 @@ public partial class Game : IDisposable
 	{
 		var bounds = renderRoom.WorldBounds;
 		if (!roomTileFieldCaches.TryGetValue(renderRoom, out var cache) ||
-		    cache.Target.Width != bounds.Width ||
-		    cache.Target.Height != bounds.Height ||
-		    cache.Target.Attachments[0].Format != TextureFormat.R8G8)
+			cache.Target.Width != bounds.Width ||
+			cache.Target.Height != bounds.Height ||
+			cache.Target.Attachments[0].Format != TextureFormat.R8G8)
 		{
 			cache?.Dispose();
 			cache = new(renderRoom, CreateRenderTarget(bounds.Width, bounds.Height, TextureFormat.R8G8, $"RoomTileField:{renderRoom.Id}"));
@@ -1882,8 +1882,8 @@ public partial class Game : IDisposable
 	{
 		var bounds = renderRoom.WorldBounds;
 		if (!roomNormalCaches.TryGetValue(renderRoom, out var cache) ||
-		    cache.Target.Width != bounds.Width ||
-		    cache.Target.Height != bounds.Height)
+			cache.Target.Width != bounds.Width ||
+			cache.Target.Height != bounds.Height)
 		{
 			cache?.Dispose();
 			cache = new(renderRoom, new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"RoomNormals:{renderRoom.Id}"));
@@ -1916,12 +1916,12 @@ public partial class Game : IDisposable
 		var previousMatrix = Batcher.Matrix;
 		Batcher.Matrix = Matrix3x2.Identity;
 		target.Clear(Color.Transparent);
-		for (var y = 0; y < target.Height; y ++)
+		for (var y = 0; y < target.Height; y++)
 		{
 			var runStart = -1;
 			var runColor = Color.Transparent;
 
-			for (var x = 0; x < target.Width; x ++)
+			for (var x = 0; x < target.Width; x++)
 			{
 				var color = RoomNormalColor(mask, suppressMask, x, y);
 				if (color.A > 0 && runStart >= 0 && color == runColor)
@@ -1988,37 +1988,37 @@ public partial class Game : IDisposable
 				var bottom = Math.Clamp((tileY + 1) * Game.TileSize, 0, suppressMask.GetLength(1));
 
 				for (var y = top; y < bottom; y++)
-				for (var x = left; x < right; x++)
-					suppressMask[x, y] = true;
+					for (var x = left; x < right; x++)
+						suppressMask[x, y] = true;
 			}
 	}
 
 	private static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
 	{
-		var left   = Math.Clamp(rect.Left - origin.X, 0, mask.GetLength(0));
-		var right  = Math.Clamp(rect.Right - origin.X, 0, mask.GetLength(0));
-		var top    = Math.Clamp(rect.Top - origin.Y, 0, mask.GetLength(1));
+		var left = Math.Clamp(rect.Left - origin.X, 0, mask.GetLength(0));
+		var right = Math.Clamp(rect.Right - origin.X, 0, mask.GetLength(0));
+		var top = Math.Clamp(rect.Top - origin.Y, 0, mask.GetLength(1));
 		var bottom = Math.Clamp(rect.Bottom - origin.Y, 0, mask.GetLength(1));
 
-		for (var y = top; y < bottom; y ++)
-		for (var x = left; x < right; x ++)
-			mask[x, y] = true;
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+				mask[x, y] = true;
 	}
 
 	private static void FillRoomNormalMask(bool[,] mask, Room.LightOccluderPolygon polygon, Point2 origin)
 	{
-		var left   = Math.Clamp(polygon.Bounds.Left - origin.X, 0, mask.GetLength(0));
-		var right  = Math.Clamp(polygon.Bounds.Right - origin.X, 0, mask.GetLength(0));
-		var top    = Math.Clamp(polygon.Bounds.Top - origin.Y, 0, mask.GetLength(1));
+		var left = Math.Clamp(polygon.Bounds.Left - origin.X, 0, mask.GetLength(0));
+		var right = Math.Clamp(polygon.Bounds.Right - origin.X, 0, mask.GetLength(0));
+		var top = Math.Clamp(polygon.Bounds.Top - origin.Y, 0, mask.GetLength(1));
 		var bottom = Math.Clamp(polygon.Bounds.Bottom - origin.Y, 0, mask.GetLength(1));
 
-		for (var y = top; y < bottom; y ++)
-		for (var x = left; x < right; x ++)
-		{
-			var worldPoint = new Vector2(origin.X + x + 0.5f, origin.Y + y + 0.5f);
-			if (PointInPolygon(worldPoint, polygon.Points))
-				mask[x, y] = true;
-		}
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+			{
+				var worldPoint = new Vector2(origin.X + x + 0.5f, origin.Y + y + 0.5f);
+				if (PointInPolygon(worldPoint, polygon.Points))
+					mask[x, y] = true;
+			}
 	}
 
 	private static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
@@ -2388,12 +2388,12 @@ public partial class Game : IDisposable
 			return 0;
 
 		var solidPixels = 0;
-		for (var y = bounds.Top; y < bounds.Bottom; y ++)
-		for (var x = bounds.Left; x < bounds.Right; x ++)
-		{
-			if (RoomCollisionContains(new Vector2(x + 0.5f, y + 0.5f), includeBreakableTiles))
-				solidPixels ++;
-		}
+		for (var y = bounds.Top; y < bounds.Bottom; y++)
+			for (var x = bounds.Left; x < bounds.Right; x++)
+			{
+				if (RoomCollisionContains(new Vector2(x + 0.5f, y + 0.5f), includeBreakableTiles))
+					solidPixels++;
+			}
 
 		return solidPixels / (float)(bounds.Width * bounds.Height);
 	}

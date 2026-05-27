@@ -31,6 +31,11 @@ public class Controls(Input input)
 			.Add(Buttons.East)
 	);
 
+	public readonly VirtualAction Saw = new(input, "Saw",
+		new ActionBindingSet()
+			.Add(Keys.Z)
+	);
+
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
 			.Add(Keys.K)
