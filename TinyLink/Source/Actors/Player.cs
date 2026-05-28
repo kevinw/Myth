@@ -74,6 +74,8 @@ public partial class Player : Actor
 	private bool attackBlocked;
 	private Light? light;
 	private SoundInstance? rollSound;
+	float RunStartTimer; // Used to play a "running start" anim at the beginning of a run.
+	bool RunStartSkid; // Used to know if we should "start running" with a skid (we're running the opposite direction we were facing.)
 
 	public Player()
 	{
@@ -245,9 +247,6 @@ public partial class Player : Actor
 
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
 	}
-
-	private float RunStartTimer;
-	private bool RunStartSkid;
 
 	public void NormalState()
 	{
@@ -443,20 +442,15 @@ public partial class Player : Actor
 
 	private void TryStartRoll(Vector2 impactVelocity)
 	{
-		if (State != States.Normal)
-			return;
-		if (Controls.Move.IntValue.Y <= 0)
-			return;
-		if (impactVelocity.Y < RollMinFallSpeed)
-			return;
-		if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed)
-			return;
+		if (State != States.Normal) return;
+		if (Controls.Move.IntValue.Y <= 0) return;
+		if (impactVelocity.Y < RollMinFallSpeed) return;
+		if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed) return;
 
 		Facing = Math.Sign(impactVelocity.X);
-		Velocity.X = Facing * RollSpeed;
-		Velocity.Y = 0;
+		Velocity = new(Facing * RollSpeed, 0);
 		ducking = true;
-		Squish = new Vector2(1.65f, 0.62f);
+		Squish = new(1.65f, 0.62f);
 		Play("roll");
 		State = States.Roll;
 		StartRollSound();
