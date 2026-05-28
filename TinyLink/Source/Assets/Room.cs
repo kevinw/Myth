@@ -888,7 +888,7 @@ public class Room
 		var rightHeight = SlopeSurfaceHeight(slope, slope.RunIndex + 1);
 		var leftSurface = new Point2(rect.Left, rect.Top + leftHeight);
 		var rightSurface = new Point2(rect.Right, rect.Top + rightHeight);
-		var points = new List<Point2>();
+		var points = new StackList8<Point2>();
 
 		if (slope.Fill == SlopeFill.BelowLine)
 		{

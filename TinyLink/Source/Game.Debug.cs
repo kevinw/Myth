@@ -67,17 +67,21 @@ public partial class Game
 			_ => view.ToString()
 		};
 
+	private static readonly List<VisibilityPolygon.Hit> debugHits = new();
+	private static readonly List<VisibilityPolygon.Segment> debugSegments = new();
+
 	private void DrawVisibilityDebug(Target target)
 	{
 		if (!TryGetVisibilityDebugLight(out var lightPosition, out var radius))
 			return;
 
-		var segments = GatherVisibilitySegments(lightPosition, radius);
-		var hits = VisibilityPolygon.Compute(lightPosition, radius, segments);
+		GatherVisibilitySegments(lightPosition, radius, debugSegments);
+		VisibilityPolygon.Compute(lightPosition, radius, debugSegments, debugHits);
 
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 		Batcher.Circle(lightPosition, radius, 64, Color.Transparent, new Color(0x5fcde4, 0.35f));
 
+		var hits = debugHits;
 		for (var i = 0; i < hits.Count; i++)
 		{
 			var a = hits[i].Point;
@@ -85,8 +89,8 @@ public partial class Game
 			Batcher.Triangle(lightPosition, a, b, new Color(0x5fcde4, 0.08f));
 		}
 
-		for (var i = 0; i < segments.Count; i++)
-			Batcher.Line(segments[i].A, segments[i].B, 1, VisibilityDebugSegmentColor(i, 0.9f));
+		for (var i = 0; i < debugSegments.Count; i++)
+			Batcher.Line(debugSegments[i].A, debugSegments[i].B, 1, VisibilityDebugSegmentColor(i, 0.9f));
 
 		foreach (var hit in hits)
 		{

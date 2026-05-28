@@ -1569,10 +1569,13 @@ public partial class Game : IDisposable
 		Batcher.Clear();
 	}
 
+	private static readonly List<VisibilityPolygon.Hit> hits = new ();
+	private static readonly List<VisibilityPolygon.Segment> segments = new();
+
 	private void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
 	{
-		var segments = GatherVisibilitySegments(lightPosition, radius);
-		var hits = VisibilityPolygon.Compute(lightPosition, radius, segments);
+		GatherVisibilitySegments(lightPosition, radius, segments);
+		VisibilityPolygon.Compute(lightPosition, radius, segments, hits);
 		if (hits.Count < 3)
 		{
 			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
@@ -1801,9 +1804,9 @@ public partial class Game : IDisposable
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
 	}
 
-	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius)
+	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
 	{
-		var segments = new List<VisibilityPolygon.Segment>();
+		segments.Clear();
 		if (room != null)
 			AddRoomVisibilitySegments(segments, room, lightPosition, radius);
 		if (nextRoom != null && nextRoom != room)

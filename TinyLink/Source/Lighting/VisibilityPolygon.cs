@@ -16,9 +16,13 @@ public static class VisibilityPolygon
 
 	public readonly record struct Hit(float Angle, Vector2 Point, int SegmentIndex, bool HitSegment);
 
-	public static List<Hit> Compute(Vector2 origin, float radius, IReadOnlyList<Segment> segments)
+	private static readonly List<RayCandidate> candidates = new List<RayCandidate>();
+
+	public static List<Hit> Compute(Vector2 origin, float radius, IReadOnlyList<Segment> segments, List<Hit> hits)
 	{
-		var candidates = new List<RayCandidate>(segments.Count * 6);
+		candidates.Clear();
+		candidates.EnsureCapacity(segments.Count * 6);
+
 		for (var i = 0; i < BoundaryRayCount; i++)
 			candidates.Add(new(i / (float)BoundaryRayCount * MathF.Tau));
 
@@ -31,7 +35,8 @@ public static class VisibilityPolygon
 		candidates.Sort(static (a, b) => a.Angle.CompareTo(b.Angle));
 		RemoveDuplicateAngles(candidates);
 
-		var hits = new List<Hit>(candidates.Count);
+		hits.Clear();
+		hits.EnsureCapacity(candidates.Count);
 		foreach (var candidate in candidates)
 			hits.Add(CastRay(origin, radius, candidate.Angle, segments));
 
