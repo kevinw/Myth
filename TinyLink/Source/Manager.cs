@@ -63,12 +63,15 @@ public partial class Manager : App
 	int fpsOverlayFrames;
 	long fpsOverlayLastTimestamp;
 	float fpsOverlayValue;
+
+	#if DEBUG
+	private long threadAllocatedBytes;
+	private long threadAllocatedBytesOverlayValue;
+	private long lastAllocated = -1;
+	#endif
+
 	int fpsOverlayMode;
-#if IOS
 	bool fpsOverlayVisible = true;
-#else
-	bool fpsOverlayVisible;
-#endif
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -531,6 +534,7 @@ public partial class Manager : App
 		}
 	}
 
+
 	private void UpdateFpsOverlay()
 	{
 		var now = Stopwatch.GetTimestamp();
@@ -541,11 +545,32 @@ public partial class Manager : App
 		}
 
 		fpsOverlayFrames++;
+
+		#if DEBUG
+		// Get total allocated bytes; track diff from last frame; accumulate these diffs and report an approximate
+		// per frame allocation size alongside FPS.
+		var bytes = GC.GetAllocatedBytesForCurrentThread();
+
+		if (lastAllocated != -1) {
+			var diff = bytes - lastAllocated;
+			if (diff > 0)
+				threadAllocatedBytes += diff;
+		}
+
+		lastAllocated = bytes;
+		#endif
+
 		var elapsed = Stopwatch.GetElapsedTime(fpsOverlayLastTimestamp, now).TotalSeconds;
 		if (elapsed < 0.25f)
 			return;
 
 		fpsOverlayValue = (float)(fpsOverlayFrames / elapsed);
+
+		#if DEBUG
+		threadAllocatedBytesOverlayValue = (long)((float)(threadAllocatedBytes) / fpsOverlayFrames);
+		threadAllocatedBytes = 0;
+		#endif
+
 		PerfStats.Publish();
 		fpsOverlayFrames = 0;
 		fpsOverlayLastTimestamp = now;
@@ -643,13 +668,10 @@ public partial class Manager : App
 		Window.Clear(0x2e1426);
 
 		if (startingPlay)
-		{
 			RenderPlayTransition();
-		}
 		else if (playing)
-		{
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
-		}
+
 		batcher.Render(Window);
 		if (imgui != null)
 			imgui.Render();

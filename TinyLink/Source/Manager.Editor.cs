@@ -3274,7 +3274,7 @@ public partial class Manager
 		var viewport = !playing && !startingPlay ? View : GameViewRect;
 		var perf = PerfStats.Snapshot;
 		var mainMessage = fpsOverlayMode == 0
-			? $"FPS {fpsOverlayValue:0}"
+			? $"FPS {fpsOverlayValue:0} GC {threadAllocatedBytesOverlayValue} bytes"
 			: $"FPS {fpsOverlayValue:0}\n" +
 			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
 			  $"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +
