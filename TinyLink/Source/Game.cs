@@ -1635,13 +1635,17 @@ public partial class Game : IDisposable
 		DrawActorSpriteShadows(lightPosition, radius);
 	}
 
+	private IEnumerable<Room> VisibleRooms()
+	{
+		if (room != null) yield return room;
+		if (nextRoom != null && nextRoom != room) yield return nextRoom;
+	}
+
 	private void DrawSunShadows(Vector2 direction)
 	{
 		var distance = SunShadowDistance();
-		if (room != null)
-			DrawRoomSunShadows(room, direction, distance);
-		if (nextRoom != null && nextRoom != room)
-			DrawRoomSunShadows(nextRoom, direction, distance);
+		foreach (var visibleRoom in VisibleRooms())
+			DrawRoomSunShadows(visibleRoom, direction, distance);
 
 		foreach (var actor in Actors)
 		{
@@ -1656,15 +1660,8 @@ public partial class Game : IDisposable
 		sunSegmentBuffer.Clear();
 
 		foreach (var actor in Actors)
-		{
-			if (actor is not HiddenWallGrid hiddenWalls)
-				continue;
-
-			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
-			{
-				DrawSunShadowVolume(direction, distance, rect);
-			});
-		}
+			if (actor is HiddenWallGrid hiddenWalls)
+				hiddenWalls.ForEachVisibleCell((rect, _, _) => DrawSunShadowVolume(direction, distance, rect));
 	}
 
 	private readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
@@ -1807,10 +1804,8 @@ public partial class Game : IDisposable
 	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
 	{
 		segments.Clear();
-		if (room != null)
-			AddRoomVisibilitySegments(segments, room, lightPosition, radius);
-		if (nextRoom != null && nextRoom != room)
-			AddRoomVisibilitySegments(segments, nextRoom, lightPosition, radius);
+		foreach (var visibleRoom in VisibleRooms())
+			AddRoomVisibilitySegments(segments, visibleRoom, lightPosition, radius);
 
 		foreach (var actor in Actors)
 		{
@@ -1825,13 +1820,11 @@ public partial class Game : IDisposable
 				continue;
 			}
 
-			if (actor is not HiddenWallGrid hiddenWalls)
-				continue;
-
-			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+			if (actor is HiddenWallGrid hiddenWalls)
 			{
-				AddRectVisibilitySegments(segments, rect, lightPosition, radius);
-			});
+				hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+					AddRectVisibilitySegments(segments, rect, lightPosition, radius));
+			}
 		}
 
 		return segments;
