@@ -202,6 +202,9 @@ public partial class Game : IDisposable
 				ApplyMusicArea(room);
 				ApplyRoomReverb(room);
 			}
+
+			var props = Create<PropSystem>();
+			props.KeepOnRoomTransition = true;
 		}
 	}
 
@@ -347,8 +350,7 @@ public partial class Game : IDisposable
 
 	private void ChangeTimeScale(int direction)
 	{
-		var scales = ReadOnlySpan<float>.Empty;
-		scales = [0.05f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f];
+		ReadOnlySpan<float> scales = [0.05f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f];
 
 		var index = 0;
 		var bestDistance = float.MaxValue;
@@ -633,7 +635,7 @@ public partial class Game : IDisposable
 			DitherMask.Clear(Color.White);
 		}
 
-		Target output = Screen;
+		Target output;
 		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen)
 		{
 			using (GraphicsDevice.DebugGroup("TinyLink/tile field debug"))
@@ -823,12 +825,11 @@ public partial class Game : IDisposable
 			Point2 pos = new(0, target.Height - 16);
 			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
 
-			for (int i = 0; i < Player.MaxHealth; i++)
+			for (var i = 0; i < Player.MaxHealth; i++)
 			{
-				if (player.Health >= i + 1)
-					Batcher.Image(Assets.GetSubtexture("heart/0"), pos, Color.White);
-				else
-					Batcher.Image(Assets.GetSubtexture("heart/1"), pos, Color.White);
+				Batcher.Image(
+					player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1"), pos,
+					Color.White);
 				pos.X += 12;
 			}
 		}
@@ -1120,10 +1121,8 @@ public partial class Game : IDisposable
 		Batcher.Clear();
 	}
 
-	private void DrawCachedRoomTileField(RoomTileFieldCache cache)
-	{
+	private void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
 		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
-	}
 
 	private RoomTileFieldCache GetRoomTileFieldCache(Room renderRoom)
 	{
@@ -1208,18 +1207,13 @@ public partial class Game : IDisposable
 	private void DrawRoomTileFieldBaseline(Room renderRoom)
 	{
 		var baselineTile = tileFieldStampMaterial == null ? (char?)null : '0';
+		var drawRect = new Rect(0, 0, TileSize, TileSize);
 		for (var y = 0; y < renderRoom.Size.Y; y++)
 			for (var x = 0; x < renderRoom.Size.X; x++)
 			{
-				var tile = renderRoom.Tiles[x, y];
-				var worldTile = renderRoom.Position + new Point2(x, y);
-				Batcher.Rect(
-					new Rect(
-						renderRoom.WorldBounds.X + x * TileSize,
-						renderRoom.WorldBounds.Y + y * TileSize,
-						TileSize,
-						TileSize),
-					TileFieldColor(baselineTile ?? tile, worldTile));
+				var worldTile = renderRoom.TileSpacePosition + new Point2(x, y);
+				drawRect.Position = renderRoom.WorldBounds.Position + new Point2(x, y) * TileSize;
+				Batcher.Rect(drawRect, TileFieldColor(baselineTile ?? renderRoom.Tiles[x, y], worldTile));
 			}
 	}
 
@@ -1233,21 +1227,21 @@ public partial class Game : IDisposable
 					continue;
 
 				var image = entry.Image;
-				if (entry.IsSlope && entry.SlopeTilesetName != null && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+				if (entry is { IsSlope: true, SlopeTilesetName: not null } && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
 				{
 					var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
 					image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
 				}
 				else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
 				{
-					Rng rng = new(x + y * renderRoom.Size.X);
-					image = tileset.GetRandomTile(ref rng);
+					Rng localRng = new(x + y * renderRoom.Size.X);
+					image = tileset.GetRandomTile(ref localRng);
 				}
 
 				if (image.Texture == null)
 					continue;
 
-				var worldTile = renderRoom.Position + new Point2(x, y);
+				var worldTile = renderRoom.TileSpacePosition + new Point2(x, y);
 				Batcher.Image(
 					image,
 					new Vector2(renderRoom.WorldBounds.X + x * TileSize, renderRoom.WorldBounds.Y + y * TileSize),
@@ -1295,7 +1289,7 @@ public partial class Game : IDisposable
 					var position = new Vector2(
 						renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
 						renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
-					var color = TileFieldColor(tileType, renderRoom.Position + new Point2(x, y));
+					var color = TileFieldColor(tileType, renderRoom.TileSpacePosition + new Point2(x, y));
 					DrawDualTileFieldQuadrants(image, position, materialMask, color);
 				}
 		}
@@ -1309,10 +1303,12 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft, new Rect(0, 0, TileSize / 2, TileSize / 2));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft, new Rect(0, TileSize / 2, TileSize / 2, TileSize / 2));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight, new Rect(TileSize / 2, 0, TileSize / 2, TileSize / 2));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(TileSize / 2, TileSize / 2, TileSize / 2, TileSize / 2));
+		const int halfTileSize = (TileSize / 2);
+
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft,     new Rect(0, 0, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft,  new Rect(0, halfTileSize, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight,    new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
 	}
 
 	private void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
@@ -1570,12 +1566,12 @@ public partial class Game : IDisposable
 	}
 
 	private static readonly List<VisibilityPolygon.Hit> hits = new ();
-	private static readonly List<VisibilityPolygon.Segment> segments = new();
+	private static readonly List<VisibilityPolygon.Segment> _segments = new();
 
 	private void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
 	{
-		GatherVisibilitySegments(lightPosition, radius, segments);
-		VisibilityPolygon.Compute(lightPosition, radius, segments, hits);
+		GatherVisibilitySegments(lightPosition, radius, _segments);
+		VisibilityPolygon.Compute(lightPosition, radius, _segments, hits);
 		if (hits.Count < 3)
 		{
 			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
@@ -1635,7 +1631,7 @@ public partial class Game : IDisposable
 		DrawActorSpriteShadows(lightPosition, radius);
 	}
 
-	private IEnumerable<Room> VisibleRooms()
+	internal IEnumerable<Room> VisibleRooms()
 	{
 		if (room != null) yield return room;
 		if (nextRoom != null && nextRoom != room) yield return nextRoom;
@@ -1801,7 +1797,7 @@ public partial class Game : IDisposable
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
 	}
 
-	private List<VisibilityPolygon.Segment> GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
+	private void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
 	{
 		segments.Clear();
 		foreach (var visibleRoom in VisibleRooms())
@@ -1826,8 +1822,6 @@ public partial class Game : IDisposable
 					AddRectVisibilitySegments(segments, rect, lightPosition, radius));
 			}
 		}
-
-		return segments;
 	}
 
 	private static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
@@ -2277,9 +2271,6 @@ public partial class Game : IDisposable
 		return Factory.DefaultSurfaceType;
 	}
 
-	private string GetSurfaceTypeAtWorldPoint(Point2 point)
-		=> TryGetSurfaceTypeAtWorldPoint(point, out var surfaceType) ? surfaceType : Factory.DefaultSurfaceType;
-
 	private bool TryGetSurfaceTypeAtWorldPoint(Point2 point, out string surfaceType)
 	{
 		surfaceType = Factory.DefaultSurfaceType;
@@ -2684,7 +2675,7 @@ public partial class Game : IDisposable
 		MarkRoomTileFieldCacheDirty(room);
 	}
 
-	void BuildDualTiles(Room room, DualGrid dual, Factory.TileLayer layer)
+	void BuildDualTiles(Room forRoom, DualGrid dual, Factory.TileLayer layer)
 	{
 		dual.Clear();
 		var dualEntries = Factory.Entries
@@ -2696,15 +2687,15 @@ public partial class Game : IDisposable
 			if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } dualTileset)
 				continue;
 
-			dual.Build(room, tileType, dualTileset, layer);
+			dual.Build(forRoom, tileType, dualTileset, layer);
 		}
 	}
 
-	public void LoadRoom(Room room)
+	public void LoadRoom(Room forRoom)
 	{
-		room.RebuildGeometry();
+		forRoom.RebuildGeometry();
 
-		var offset = room.WorldBounds.TopLeft;
+		var offset = forRoom.WorldBounds.TopLeft;
 
 		var bg = Create<Grid>(offset);
 		bg.Layer = Factory.TileLayer.Background;
@@ -2727,31 +2718,31 @@ public partial class Game : IDisposable
 		fg.Mask = Actor.Masks.Solid;
 		fg.Depth = 5;
 
-		var hiddenWalls = Create<HiddenWallGrid>(offset, it => it.Resize(room.Size));
+		var hiddenWalls = Create<HiddenWallGrid>(offset, it => it.Resize(forRoom.Size));
 		var hiddenCover = Create<HiddenCoverGrid>(offset);
 
 		// loop over room grid placing objects
-		for (var x = 0; x < room.Size.X; x++)
-			for (var y = 0; y < room.Size.Y; y++)
+		for (var x = 0; x < forRoom.Size.X; x++)
+			for (var y = 0; y < forRoom.Size.Y; y++)
 			{
 				var tile = new Point2(x, y);
-				if (room.GetBackgroundEntry(tile) is { } backgroundEntry)
-					backgroundEntry.Tile?.Invoke(tile, room, fg, fgVisual, bg, bgDual);
-				if (room.GetEntry(tile) is { } entry)
-					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
+				if (forRoom.GetBackgroundEntry(tile) is { } backgroundEntry)
+					backgroundEntry.Tile?.Invoke(tile, forRoom, fg, fgVisual, bg, bgDual);
+				if (forRoom.GetEntry(tile) is { } entry)
+					entry.Tile?.Invoke(tile, forRoom, fg, fgVisual, bg, fgDual);
 			}
 
-		PopulateHiddenWalls(room, hiddenWalls);
-		BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
-		BuildDualTiles(room, fgDual, Factory.TileLayer.Foreground);
+		PopulateHiddenWalls(forRoom, hiddenWalls);
+		BuildDualTiles(forRoom, bgDual, Factory.TileLayer.Background);
+		BuildDualTiles(forRoom, fgDual, Factory.TileLayer.Foreground);
 
-		foreach (var actor in room.Actors)
+		foreach (var actor in forRoom.Actors)
 		{
 			if (GetFirst<Player>() != null && string.Equals(ActorSpecs.GetTypeName(actor), "Player", StringComparison.OrdinalIgnoreCase))
 				continue;
 
 			var localPosition = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
-			var sessionDestroyKey = SessionDestroyKey(room, actor, localPosition);
+			var sessionDestroyKey = SessionDestroyKey(forRoom, actor, localPosition);
 			if (sessionDestroyedActors.Contains(sessionDestroyKey))
 				continue;
 
@@ -2759,7 +2750,7 @@ public partial class Game : IDisposable
 				created.SessionDestroyKey = sessionDestroyKey;
 		}
 
-		hiddenCover.Build(room);
+		hiddenCover.Build(forRoom);
 		hiddenCover.RevealForCurrentPlayer(immediate: true);
 	}
 

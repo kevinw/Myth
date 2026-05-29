@@ -184,7 +184,7 @@ public static class Factory
 	{
 		unchecked
 		{
-			var worldTile = room.Position + tile;
+			var worldTile = room.TileSpacePosition + tile;
 			var hash = (uint)worldTile.X * 0x8da6b343u;
 			hash ^= (uint)worldTile.Y * 0xd8163841u;
 			foreach (var c in key)

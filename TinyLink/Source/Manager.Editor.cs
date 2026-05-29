@@ -1576,7 +1576,7 @@ public partial class Manager
 	private void ApplyRoomGeometryDrag(Room room, Vector2 world)
 	{
 		var mouseTile = WorldToRoomGeometryTile(world);
-		var current = new RectInt(room.Position, room.Size);
+		var current = new RectInt(room.TileSpacePosition, room.Size);
 		var candidate = roomGeometryHandle == ResizeHandle.None
 			? new RectInt(mouseTile - roomGeometryDragOffset, room.Size)
 			: ResizeRoomGeometryBounds(current, roomGeometryHandle, mouseTile);
@@ -1584,7 +1584,7 @@ public partial class Manager
 		if (candidate.Width <= 0 || candidate.Height <= 0 || RoomGeometryOverlaps(room, candidate))
 			return;
 
-		if (candidate.Position == room.Position && candidate.Size == room.Size)
+		if (candidate.Position == room.TileSpacePosition && candidate.Size == room.Size)
 			return;
 
 		if (candidate.Size == room.Size)
@@ -1594,7 +1594,7 @@ public partial class Manager
 
 		selectedRoomId = room.Id;
 		cell = room.Cell;
-		roomCreatePosition = room.Position;
+		roomCreatePosition = room.TileSpacePosition;
 		editorGameDirty = true;
 		InvalidateRoomPreview(room);
 	}
@@ -1629,7 +1629,7 @@ public partial class Manager
 		{
 			if (room == editing)
 				continue;
-			if (candidate.Overlaps(new RectInt(room.Position, room.Size)))
+			if (candidate.Overlaps(new RectInt(room.TileSpacePosition, room.Size)))
 				return true;
 		}
 
@@ -2281,13 +2281,13 @@ public partial class Manager
 
 	private static Point2? GetEditorEntryDirection(Room from, Room to)
 	{
-		if (to.Position.X >= from.Position.X + from.Size.X)
+		if (to.TileSpacePosition.X >= from.TileSpacePosition.X + from.Size.X)
 			return Point2.Right;
-		if (to.Position.X + to.Size.X <= from.Position.X)
+		if (to.TileSpacePosition.X + to.Size.X <= from.TileSpacePosition.X)
 			return Point2.Left;
-		if (to.Position.Y >= from.Position.Y + from.Size.Y)
+		if (to.TileSpacePosition.Y >= from.TileSpacePosition.Y + from.Size.Y)
 			return Point2.Down;
-		if (to.Position.Y + to.Size.Y <= from.Position.Y)
+		if (to.TileSpacePosition.Y + to.Size.Y <= from.TileSpacePosition.Y)
 			return Point2.Up;
 		return null;
 	}
@@ -2408,7 +2408,7 @@ public partial class Manager
 				roomGeometryUndo ??= CaptureRoomUndo("Edit Room Geometry", editing);
 				roomGeometryHandle = hoveredRoomGeometryHandle;
 				var mouseTile = WorldToRoomGeometryTile(worldMouse);
-				roomGeometryDragOffset = mouseTile - editing.Position;
+				roomGeometryDragOffset = mouseTile - editing.TileSpacePosition;
 				tilePlacing = false;
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != ResizeHandle.None)
@@ -2731,7 +2731,7 @@ public partial class Manager
 
 	private RectInt? GetProposedRoomTiles(Room source, Vector2 worldMouse)
 	{
-		var sourceTiles = new RectInt(source.Position, source.Size);
+		var sourceTiles = new RectInt(source.TileSpacePosition, source.Size);
 		var mouseTile = new Point2(
 			(int)MathF.Floor(worldMouse.X / Game.TileSize),
 			(int)MathF.Floor(worldMouse.Y / Game.TileSize));
@@ -2782,7 +2782,7 @@ public partial class Manager
 
 		foreach (var room in Assets.RoomsById.Values)
 		{
-			var roomTiles = new RectInt(room.Position, room.Size);
+			var roomTiles = new RectInt(room.TileSpacePosition, room.Size);
 			if (!candidate.Overlaps(roomTiles))
 				continue;
 
@@ -2843,14 +2843,14 @@ public partial class Manager
 	{
 		for (var x = 0; x < room.Size.X; x ++)
 		{
-			room.Tiles[x, 0] = SampleAdjacentRoomTile(room, new Point2(room.Position.X + x, room.Position.Y - 1));
-			room.Tiles[x, room.Size.Y - 1] = SampleAdjacentRoomTile(room, new Point2(room.Position.X + x, room.Position.Y + room.Size.Y));
+			room.Tiles[x, 0] = SampleAdjacentRoomTile(room, new Point2(room.TileSpacePosition.X + x, room.TileSpacePosition.Y - 1));
+			room.Tiles[x, room.Size.Y - 1] = SampleAdjacentRoomTile(room, new Point2(room.TileSpacePosition.X + x, room.TileSpacePosition.Y + room.Size.Y));
 		}
 
 		for (var y = 0; y < room.Size.Y; y ++)
 		{
-			room.Tiles[0, y] = SampleAdjacentRoomTile(room, new Point2(room.Position.X - 1, room.Position.Y + y));
-			room.Tiles[room.Size.X - 1, y] = SampleAdjacentRoomTile(room, new Point2(room.Position.X + room.Size.X, room.Position.Y + y));
+			room.Tiles[0, y] = SampleAdjacentRoomTile(room, new Point2(room.TileSpacePosition.X - 1, room.TileSpacePosition.Y + y));
+			room.Tiles[room.Size.X - 1, y] = SampleAdjacentRoomTile(room, new Point2(room.TileSpacePosition.X + room.Size.X, room.TileSpacePosition.Y + y));
 		}
 
 		room.RebuildGeometry();
@@ -2862,11 +2862,11 @@ public partial class Manager
 		{
 			if (room == exclude)
 				continue;
-			if (worldTile.X < room.Position.X || worldTile.Y < room.Position.Y ||
-			    worldTile.X >= room.Position.X + room.Size.X || worldTile.Y >= room.Position.Y + room.Size.Y)
+			if (worldTile.X < room.TileSpacePosition.X || worldTile.Y < room.TileSpacePosition.Y ||
+			    worldTile.X >= room.TileSpacePosition.X + room.Size.X || worldTile.Y >= room.TileSpacePosition.Y + room.Size.Y)
 				continue;
 
-			return room.Tiles[worldTile.X - room.Position.X, worldTile.Y - room.Position.Y];
+			return room.Tiles[worldTile.X - room.TileSpacePosition.X, worldTile.Y - room.TileSpacePosition.Y];
 		}
 
 		return '0';
@@ -3206,7 +3206,7 @@ public partial class Manager
 	{
 		selectedRoomId = room.Id;
 		cell = room.Cell;
-		roomCreatePosition = room.Position;
+		roomCreatePosition = room.TileSpacePosition;
 	}
 
 	private void ResolveSelectedRoom()

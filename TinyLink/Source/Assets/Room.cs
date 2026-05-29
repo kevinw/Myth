@@ -63,12 +63,12 @@ public class Room
 	/// <summary>
 	/// Compatibility screen-grid location of the Room.
 	/// </summary>
-	public Point2 Cell => new(Position.X / Game.Columns, Position.Y / Game.Rows);
+	public Point2 Cell => new(TileSpacePosition.X / Game.Columns, TileSpacePosition.Y / Game.Rows);
 
 	/// <summary>
 	/// Tile-space location of the room in the world.
 	/// </summary>
-	public Point2 Position;
+	public Point2 TileSpacePosition;
 
 	/// <summary>
 	/// Tile-space size of the room.
@@ -80,9 +80,9 @@ public class Room
 	/// </summary>
 	public char[,] Tiles;
 	public char[,] BackgroundTiles;
-	private Factory.Entry?[,] tileEntries = new Factory.Entry?[0, 0];
-	private Factory.Entry?[,] backgroundTileEntries = new Factory.Entry?[0, 0];
-	private TileFlags[,] tileFlags = new TileFlags[0, 0];
+	private Factory.Entry?[,] tileEntries;
+	private Factory.Entry?[,] backgroundTileEntries;
+	private TileFlags[,] tileFlags;
 
 	/// <summary>
 	/// Actor specs placed directly in this room.
@@ -133,13 +133,11 @@ public class Room
 	public bool ReverbAuto = true;
 	public float Reverb = DefaultReverb;
 	public Color SunColor = DefaultSunColor;
-	public float SunStrength = 0.0f;
+	public float SunStrength;
 	public Vector2 SunDirection = DefaultSunDirection;
 
-	/// <summary>
 	/// Bounds in World Space in Pixels
-	/// </summary>
-	public RectInt WorldBounds => new(Position.X * Game.TileSize, Position.Y * Game.TileSize, Size.X * Game.TileSize, Size.Y * Game.TileSize);
+	public RectInt WorldBounds => new(TileSpacePosition.X * Game.TileSize, TileSpacePosition.Y * Game.TileSize, Size.X * Game.TileSize, Size.Y * Game.TileSize);
 
 	public Room(Point2 cell)
 		: this(Guid.NewGuid().ToString("N"), new Point2(cell.X * Game.Columns, cell.Y * Game.Rows), DefaultSize)
@@ -158,7 +156,7 @@ public class Room
 
 	public Room CloneRuntime()
 	{
-		var clone = new Room(Id, Position, Size)
+		var clone = new Room(Id, TileSpacePosition, Size)
 		{
 			MusicArea = MusicArea,
 			AmbientColor = AmbientColor,
@@ -204,7 +202,7 @@ public class Room
 		}
 
 		Id = id;
-		Position = position;
+		TileSpacePosition = position;
 		Size = size;
 		Tiles = new char[Size.X, Size.Y];
 		BackgroundTiles = new char[Size.X, Size.Y];
@@ -229,7 +227,6 @@ public class Room
 		{
 			LoadJson(json);
 			RebuildGeometry();
-			return;
 		}
 	}
 
@@ -419,7 +416,7 @@ public class Room
 
 	public void MoveTo(Point2 position)
 	{
-		Position = position;
+		TileSpacePosition = position;
 		RebuildGeometry();
 	}
 
@@ -428,13 +425,13 @@ public class Room
 		if (bounds.Width <= 0 || bounds.Height <= 0)
 			return;
 
-		var previousPosition = Position;
+		var previousPosition = TileSpacePosition;
 		var previousSize = Size;
 		var previousTiles = Tiles;
 		var previousBackgroundTiles = BackgroundTiles;
 		var previousTileFlags = tileFlags;
 
-		Position = bounds.Position;
+		TileSpacePosition = bounds.Position;
 		Size = bounds.Size;
 		Tiles = new char[Size.X, Size.Y];
 		BackgroundTiles = new char[Size.X, Size.Y];
@@ -445,8 +442,8 @@ public class Room
 		for (var x = 0; x < Size.X; x ++)
 		for (var y = 0; y < Size.Y; y ++)
 		{
-			var oldX = Position.X + x - previousPosition.X;
-			var oldY = Position.Y + y - previousPosition.Y;
+			var oldX = TileSpacePosition.X + x - previousPosition.X;
+			var oldY = TileSpacePosition.Y + y - previousPosition.Y;
 			SetTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
 				? previousTiles[oldX, oldY]
 				: '0');
@@ -458,7 +455,7 @@ public class Room
 				: TileFlags.None;
 		}
 
-		var actorOffset = previousPosition - Position;
+		var actorOffset = previousPosition - TileSpacePosition;
 		if (actorOffset != Point2.Zero)
 		{
 			foreach (var actor in Actors)
@@ -536,7 +533,6 @@ public class Room
 	{
 		var totalTiles = Math.Max(1, Size.X * Size.Y);
 		var terrainTiles = 0;
-		var shadowTiles = 0;
 		var reflectiveTerrain = 0.0f;
 		var reflectiveShadow = 0.0f;
 		var openBorderTiles = 0;
@@ -559,7 +555,6 @@ public class Room
 			}
 			if (shadow)
 			{
-				shadowTiles ++;
 				reflectiveShadow += entry?.AcousticReflectivity ?? 1.0f;
 			}
 
@@ -601,7 +596,6 @@ public class Room
 		var heightBonus = InverseLerp(9.0f, 24.0f, Size.Y) * (1.0f - 0.75f * skyOpenRatio);
 		var widthBonus = InverseLerp(16.0f, 40.0f, Size.X);
 		var solidRatio = terrainTiles / (float)totalTiles;
-		var shadowRatio = shadowTiles / (float)totalTiles;
 		var reflectiveSolidRatio = reflectiveTerrain / totalTiles;
 		var reflectiveShadowRatio = reflectiveShadow / totalTiles;
 		var openEdgeRatio = borderTiles > 0 ? openBorderTiles / (float)borderTiles : 1.0f;
@@ -718,9 +712,6 @@ public class Room
 
 	private bool IsSlopeTile(int x, int y)
 		=> GetTileEntry(x, y) is { IsSlope: true };
-
-	private bool IsSolidTile(int x, int y)
-		=> GetTileEntry(x, y) is { BlocksMovement: true };
 
 	private bool IsFullBlockTile(int x, int y)
 		=> GetTileEntry(x, y) is { BlocksMovement: true, IsSlope: false };
@@ -1027,7 +1018,7 @@ public class Room
 	{
 		var json = new JsonObject
 		{
-			["position"] = new JsonArray(Position.X, Position.Y),
+			["position"] = new JsonArray(TileSpacePosition.X, TileSpacePosition.Y),
 			["size"] = new JsonArray(Size.X, Size.Y)
 		};
 
@@ -1100,7 +1091,7 @@ public class Room
 	public void LoadJsonState(string jsonText)
 	{
 		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
-		Position = ActorSpecs.ReadPoint(json, "position") ?? Position;
+		TileSpacePosition = ActorSpecs.ReadPoint(json, "position") ?? TileSpacePosition;
 		if (ActorSpecs.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)
 		{
 			Size = size;
