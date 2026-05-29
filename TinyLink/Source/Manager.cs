@@ -801,6 +801,11 @@ public partial class Manager : App
 
 	private void CompileAndReloadShaders()
 	{
+		if (OperatingSystem.IsWindows())
+		{
+			throw new Exception("TODO: implement compiling shaders on windows with something like compile.sh");
+		}
+
 		var script = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders", "compile.sh"));
 		if (!File.Exists(script))
 		{
@@ -855,12 +860,9 @@ public partial class Manager : App
 
 	private static string CurrentShaderPlatform()
 	{
-		if (OperatingSystem.IsMacOS())
-			return "mac";
-		if (OperatingSystem.IsWindows())
-			return "windows";
-		if (OperatingSystem.IsLinux())
-			return "linux";
+		if (OperatingSystem.IsMacOS()) return "mac";
+		if (OperatingSystem.IsWindows()) return "windows";
+		if (OperatingSystem.IsLinux()) return "linux";
 
 		return "all";
 	}

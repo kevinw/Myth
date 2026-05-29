@@ -251,6 +251,7 @@ public static class Factory
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope", acousticReflectivity: 0.15f));
 		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
 		Register('g', AsTile("plants", false, "Grass", acousticReflectivity: 0.20f));
+		Register('i', AsTile("gates", isFg: false, surfaceType: "Brick", acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
 		Register('w', AsTile("water", false, "Water", reflectsSprites: true, acousticReflectivity: 0.55f));
 		Register('#', Assets.GetTileset("back-dual") != null

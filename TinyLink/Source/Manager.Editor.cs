@@ -2599,7 +2599,7 @@ public partial class Manager
 				}
 			}
 
-			if (!Input.Mouse.RightDown)
+			if (!Input.Mouse.RightDown && !tilePlacing)
 				tileTypePlacing = brush;
 
 			if (!editingRoomGeometry && !worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
@@ -2620,13 +2620,14 @@ public partial class Manager
 					var cursorRect = TileRectToRoomWorldRect(editing, previewTileRect).Inflate(gridWeight * 2);
 					var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
 					batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
-					for (var y = previewTileRect.Top; y < previewTileRect.Bottom; y++)
-					for (var x = previewTileRect.Left; x < previewTileRect.Right; x++)
-					{
-						var tile = new Point2(x, y);
-						var image = GetPreviewTileImage(editing, tile, tileTypePlacing, placing);
-						batcher.Image(image, roomTopLeft + tile * Game.TileSize + placing.Offset, placing.Origin, Vector2.One, 0, Color.White);
-					}
+					if (tileTypePlacing != '0')
+						for (var y = previewTileRect.Top; y < previewTileRect.Bottom; y++)
+						for (var x = previewTileRect.Left; x < previewTileRect.Right; x++)
+						{
+							var tile = new Point2(x, y);
+							var image = GetPreviewTileImage(editing, tile, tileTypePlacing, placing);
+							batcher.Image(image, roomTopLeft + tile * Game.TileSize + placing.Offset, placing.Origin, Vector2.One, 0, Color.White);
+						}
 				}
 			}
 
@@ -2639,7 +2640,17 @@ public partial class Manager
 			if (editorSelectionRect is { } selectedRect)
 			{
 				var selectedBounds = TileRectToRoomWorldRect(editing, selectedRect).Inflate(gridWeight * 2);
-				batcher.RectLine(selectedBounds, gridWeight * 2, highlight);
+				var lineWidth = MathF.Max(1, gridWeight);
+				var dash = MathF.Max(2, Game.TileSize * 0.25f);
+				var offset = (Time.SecondsF * 0.45f) % (dash * 2);
+				var tl = selectedBounds.TopLeft;
+				var tr = selectedBounds.TopRight;
+				var bl = selectedBounds.BottomLeft;
+				var br = selectedBounds.BottomRight;
+				batcher.LineDashed(tl, tr, lineWidth, highlight, dash, offset);
+				batcher.LineDashed(tr, br, lineWidth, highlight, dash, offset);
+				batcher.LineDashed(br, bl, lineWidth, highlight, dash, offset);
+				batcher.LineDashed(bl, tl, lineWidth, highlight, dash, offset);
 			}
 			if (editingRoomGeometry)
 				DrawRoomGeometryHandles(editing, gridWeight);

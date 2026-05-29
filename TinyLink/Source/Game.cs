@@ -706,12 +706,11 @@ public partial class Game : IDisposable
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
 			{
-				float CrtTime = Time.SecondsF * 0.2f;
-				//float Curvature = 0.000f;
-				float BloomAmount = 0.09f;
-				float ScanlineAmount = 0.22f;
-				float VignetteAmount = 0.06f;
-				float RgbOffset = 0.35f;
+				var CrtTime = Time.SecondsF * 0.2f;
+				const float BloomAmount = 0.09f;
+				const float ScanlineAmount = 0.22f;
+				const float VignetteAmount = 0.06f;
+				const float RgbOffset = 0.35f;
 				crt!.Material.Fragment.SetUniformBuffer([
 					Screen.Width,
 					Screen.Height,
@@ -720,7 +719,6 @@ public partial class Game : IDisposable
 					ScanlineAmount,
 					VignetteAmount,
 					RgbOffset,
-					//Curvature
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}

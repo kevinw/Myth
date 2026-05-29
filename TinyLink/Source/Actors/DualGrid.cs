@@ -5,6 +5,8 @@ namespace TinyLink;
 
 public class DualGrid : Actor
 {
+	const int halfTileSize = Game.TileSize / 2;
+
 	private static readonly Point2[] MaskToTile =
 	[
 		new(0, 3),
@@ -29,9 +31,6 @@ public class DualGrid : Actor
 	private readonly List<VisibilityPolygon.Segment> visibilitySegments = [];
 	public Factory.TileLayer Layer { get; set; } = Factory.TileLayer.Foreground;
 	public override bool CastsReflection => false;
-
-	public void Build(Room room, char tileType, Tileset tileset)
-		=> Build(room, tileType, tileset, Factory.TileLayer.Foreground);
 
 	public void Build(Room room, char tileType, Tileset tileset, Factory.TileLayer layer)
 	{
@@ -122,10 +121,10 @@ public class DualGrid : Actor
 				continue;
 			}
 
-			DrawQuadrant(batcher, command, tile, TileQuadrants.TopLeft, new Rect(0, 0, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomLeft, new Rect(0, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.TopRight, new Rect(Game.TileSize / 2, 0, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomRight, new Rect(Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
+			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
 		}
 	}
 
@@ -166,9 +165,9 @@ public class DualGrid : Actor
 	{
 		var midpoint = (segment.A + segment.B) * 0.5f;
 		var quadrant =
-			midpoint.X < Game.TileSize / 2
-				? midpoint.Y < Game.TileSize / 2 ? TileQuadrants.TopLeft : TileQuadrants.BottomLeft
-				: midpoint.Y < Game.TileSize / 2 ? TileQuadrants.TopRight : TileQuadrants.BottomRight;
+			midpoint.X < halfTileSize
+				? midpoint.Y < halfTileSize ? TileQuadrants.TopLeft : TileQuadrants.BottomLeft
+				: midpoint.Y < halfTileSize ? TileQuadrants.TopRight : TileQuadrants.BottomRight;
 		return (materialMask & quadrant) != 0;
 	}
 
