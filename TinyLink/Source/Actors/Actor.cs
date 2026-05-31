@@ -321,7 +321,11 @@ public class Actor
 			if (actor.Mask == Masks.Enemy)
 			{
 				if (this is Player)
-					AudioEvent("player/sword_hit", "hit_destination", actor.HitSoundType);
+				{
+					var hitSoundType = actor.HitSoundType;
+					if (!string.IsNullOrEmpty(hitSoundType))
+						AudioEvent("player/sword_hit", "hit_destination", hitSoundType);
+				}
 			}
 			actor.OnWasHit(this);
 			OnPerformHit(actor);

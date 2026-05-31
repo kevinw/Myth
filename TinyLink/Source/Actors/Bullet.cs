@@ -7,6 +7,7 @@ public class Bullet : Actor
 {
 	public bool dissolves = false;
 	const float Gravity = 130;
+	public override string HitSoundType => "";
 
 	public Bullet()
 	{
