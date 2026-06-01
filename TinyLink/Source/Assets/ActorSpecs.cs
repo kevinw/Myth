@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -11,10 +12,11 @@ namespace TinyLink;
 
 public static class ActorSpecs
 {
-	private const string TypeKey = "type";
-	private const string FromKey = "from";
-	private const string IdKey = "id";
-	private const string PositionKey = "position";
+	private const string TypeKey = "Type";
+	private const string FromKey = "From";
+	private const string IdKey = "Id";
+	private const string NameKey = "Name";
+	private const string PositionKey = "Position";
 	private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
 	private static readonly Dictionary<string, JsonObject> specs = new(StringComparer.OrdinalIgnoreCase);
@@ -57,15 +59,15 @@ public static class ActorSpecs
 				if (spec == null)
 					continue;
 
-				var id = ReadString(spec, IdKey);
-				if (string.IsNullOrWhiteSpace(id))
+				var name = ReadString(spec, NameKey) ?? ReadString(spec, IdKey);
+				if (string.IsNullOrWhiteSpace(name))
 				{
-					id = Path.GetFileNameWithoutExtension(file);
-					spec[IdKey] = id;
+					name = Path.GetFileNameWithoutExtension(file);
+					spec[NameKey] = name;
 				}
 
-				specs[id] = spec;
-				specPaths[id] = file;
+				specs[name] = spec;
+				specPaths[name] = file;
 			}
 			catch (Exception e)
 			{
@@ -114,6 +116,22 @@ public static class ActorSpecs
 	public static JsonObject CloneObject(JsonObject source)
 		=> JsonNode.Parse(source.ToJsonString())?.AsObject() ?? [];
 
+	public static string GenerateActorId()
+	{
+		Span<byte> bytes = stackalloc byte[8];
+		RandomNumberGenerator.Fill(bytes);
+		return Convert.ToHexString(bytes).ToLowerInvariant();
+	}
+
+	public static void AssignNewActorId(JsonObject actor)
+		=> SetProperty(actor, IdKey, JsonValue.Create(GenerateActorId()));
+
+	public static void EnsureActorId(JsonObject actor)
+	{
+		if (string.IsNullOrWhiteSpace(ReadString(actor, IdKey)))
+			AssignNewActorId(actor);
+	}
+
 	public static string ToJsonString(JsonObject json)
 		=> CompactPointArrays(json.ToJsonString(JsonOptions));
 
@@ -142,12 +160,12 @@ public static class ActorSpecs
 		var defaults = GetBaseline(new JsonObject { [TypeKey] = typeName }, resolved);
 		foreach (var member in GetSerializableMembers(type))
 		{
-			var jsonName = ToJsonName(member.Name);
-			var hasLocal = spec.ContainsKey(jsonName);
+			var jsonName = member.Name;
+			var hasLocal = ContainsProperty(spec, jsonName);
 			JsonNode? value = null;
-			if (resolved.TryGetPropertyValue(jsonName, out var resolvedValue) && resolvedValue != null)
+			if (TryGetProperty(resolved, jsonName, out var resolvedValue) && resolvedValue != null)
 				value = resolvedValue.DeepClone();
-			else if (defaults.TryGetPropertyValue(jsonName, out var defaultValue) && defaultValue != null)
+			else if (TryGetProperty(defaults, jsonName, out var defaultValue) && defaultValue != null)
 				value = defaultValue.DeepClone();
 
 			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, hasLocal);
@@ -159,37 +177,41 @@ public static class ActorSpecs
 		if (!specs.TryGetValue(id, out var spec))
 			return;
 
+		RemoveProperty(spec, jsonName);
 		spec[jsonName] = value?.DeepClone();
 	}
 
 	public static void SetProperty(JsonObject spec, string jsonName, JsonNode? value)
-		=> spec[jsonName] = value?.DeepClone();
+	{
+		RemoveProperty(spec, jsonName);
+		spec[jsonName] = value?.DeepClone();
+	}
 
 	public static void ResetProperty(string id, string jsonName)
 	{
 		if (specs.TryGetValue(id, out var spec))
-			spec.Remove(jsonName);
+			RemoveProperty(spec, jsonName);
 	}
 
 	public static void ResetProperty(JsonObject spec, string jsonName)
-		=> spec.Remove(jsonName);
+		=> RemoveProperty(spec, jsonName);
 
 	public static void SaveSpec(string id)
 	{
 		if (!specs.TryGetValue(id, out var spec) || !specPaths.TryGetValue(id, out var path))
 			return;
 
-		File.WriteAllText(path, ToJsonString(PruneForSave(spec)));
+		File.WriteAllText(path, ToJsonString(PruneSpecForSave(id, spec)));
 	}
 
 	public static string CaptureSpecJson(string id)
-		=> specs.TryGetValue(id, out var spec) ? ToJsonString(PruneForSave(spec)) : "{}";
+		=> specs.TryGetValue(id, out var spec) ? ToJsonString(PruneSpecForSave(id, spec)) : "{}";
 
 	public static void ApplySpecJson(string id, string jsonText)
 	{
 		var spec = JsonNode.Parse(jsonText)?.AsObject() ?? [];
-		if (string.IsNullOrWhiteSpace(ReadString(spec, IdKey)))
-			spec[IdKey] = id;
+		if (string.IsNullOrWhiteSpace(ReadString(spec, NameKey)))
+			spec[NameKey] = id;
 		specs[id] = spec;
 	}
 
@@ -217,25 +239,41 @@ public static class ActorSpecs
 		var baseline = GetBaseline(spec, resolved);
 		var output = new JsonObject();
 
-		CopyIfPresent(spec, output, IdKey);
-		CopyIfPresent(spec, output, FromKey);
-		if (spec.ContainsKey(TypeKey))
-			CopyIfPresent(spec, output, TypeKey);
+		CopyIfPresent(spec, output, IdKey, IdKey);
+		CopyIfPresent(spec, output, FromKey, FromKey);
+		if (ContainsProperty(spec, TypeKey))
+			CopyIfPresent(spec, output, TypeKey, TypeKey);
 		else if (!output.ContainsKey(FromKey) && ReadString(resolved, TypeKey) is { } typeName)
 			output[TypeKey] = typeName;
-		CopyIfPresent(spec, output, PositionKey);
+		CopyIfPresent(spec, output, PositionKey, PositionKey);
+
+		var memberNames = ReadString(resolved, TypeKey) is { } resolvedTypeName &&
+		                  actorTypes.TryGetValue(resolvedTypeName, out var resolvedType)
+			? GetSerializableMembers(resolvedType).ToDictionary(it => it.Name, StringComparer.OrdinalIgnoreCase)
+			: [];
 
 		foreach (var (key, value) in spec)
 		{
 			if (IsReservedKey(key) || value == null)
 				continue;
 
-			if (baseline.TryGetPropertyValue(key, out var baselineValue) && JsonNode.DeepEquals(value, baselineValue))
+			var outputKey = memberNames.TryGetValue(key, out var member) ? member.Name : key;
+
+			if (TryGetProperty(baseline, outputKey, out var baselineValue) && JsonNode.DeepEquals(value, baselineValue))
 				continue;
 
-			output[key] = value.DeepClone();
+			output[outputKey] = value.DeepClone();
 		}
 
+		return output;
+	}
+
+	private static JsonObject PruneSpecForSave(string name, JsonObject spec)
+	{
+		var output = PruneForSave(spec);
+		RemoveProperty(output, IdKey);
+		RemoveProperty(output, NameKey);
+		output.Insert(0, NameKey, JsonValue.Create(ReadString(spec, NameKey) ?? ReadString(spec, IdKey) ?? name));
 		return output;
 	}
 
@@ -257,7 +295,7 @@ public static class ActorSpecs
 
 		foreach (var (key, value) in spec)
 		{
-			merged.Remove(key);
+			RemoveProperty(merged, key);
 			merged[key] = value?.DeepClone();
 		}
 
@@ -268,7 +306,7 @@ public static class ActorSpecs
 	{
 		foreach (var member in GetSerializableMembers(actor.GetType()))
 		{
-			if (!spec.TryGetPropertyValue(ToJsonName(member.Name), out var node) || node == null)
+			if (!TryGetProperty(spec, member.Name, out var node) || node == null)
 				continue;
 
 			if (TryReadValue(node, GetMemberType(member), out var value))
@@ -296,7 +334,9 @@ public static class ActorSpecs
 		{
 			var value = GetMemberValue(member, actor);
 			if (ToJsonNode(value) is { } node)
-				json[ToJsonName(member.Name)] = node;
+			{
+				json[member.Name] = node;
+			}
 		}
 		return json;
 	}
@@ -309,14 +349,17 @@ public static class ActorSpecs
 			_ => null
 		};
 
-	private static void CopyIfPresent(JsonObject source, JsonObject destination, string key)
+	private static void CopyIfPresent(JsonObject source, JsonObject destination, string sourceKey, string destinationKey)
 	{
-		if (source.TryGetPropertyValue(key, out var value) && value != null)
-			destination[key] = value.DeepClone();
+		if (TryGetProperty(source, sourceKey, out var value) && value != null)
+			destination[destinationKey] = value.DeepClone();
 	}
 
 	private static bool IsReservedKey(string key)
-		=> key is IdKey or FromKey or TypeKey or PositionKey;
+		=> string.Equals(key, IdKey, StringComparison.OrdinalIgnoreCase) ||
+		   string.Equals(key, FromKey, StringComparison.OrdinalIgnoreCase) ||
+		   string.Equals(key, TypeKey, StringComparison.OrdinalIgnoreCase) ||
+		   string.Equals(key, PositionKey, StringComparison.OrdinalIgnoreCase);
 
 	private static IEnumerable<MemberInfo> GetSerializableMembers([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
 	{
@@ -408,7 +451,7 @@ public static class ActorSpecs
 	}
 
 	public static Point2? ReadPoint(JsonObject json, string key)
-		=> json.TryGetPropertyValue(key, out var node) && node != null ? ReadPoint(node) : null;
+		=> TryGetProperty(json, key, out var node) && node != null ? ReadPoint(node) : null;
 
 	public static Point2? ReadPoint(JsonNode? node)
 	{
@@ -465,12 +508,42 @@ public static class ActorSpecs
 
 	public static string? ReadString(JsonObject json, string key)
 	{
-		if (!json.TryGetPropertyValue(key, out var node) || node == null)
+		if (!TryGetProperty(json, key, out var node) || node == null)
 			return null;
 
 		return node.GetValue<string>();
 	}
 
-	private static string ToJsonName(string name)
-		=> char.ToLowerInvariant(name[0]) + name[1..];
+	private static bool ContainsProperty(JsonObject json, string key)
+		=> TryGetProperty(json, key, out _);
+
+	private static bool TryGetProperty(JsonObject json, string key, out JsonNode? value)
+	{
+		if (json.TryGetPropertyValue(key, out value))
+			return true;
+
+		foreach (var property in json)
+		{
+			if (!string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			value = property.Value;
+			return true;
+		}
+
+		value = null;
+		return false;
+	}
+
+	private static void RemoveProperty(JsonObject json, string key)
+	{
+		if (json.Remove(key))
+			return;
+
+		foreach (var property in json.ToArray())
+		{
+			if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+				json.Remove(property.Key);
+		}
+	}
 }

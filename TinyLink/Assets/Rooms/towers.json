@@ -60,16 +60,19 @@
   ],
   "actors": [
     {
-      "type": "Light",
-      "position": [304, 289]
+      "Type": "Light",
+      "Position": [304, 289],
+      "Id": "b8b57eb23c24d614"
     },
     {
-      "type": "Light",
-      "position": [168, 289]
+      "Type": "Light",
+      "Position": [168, 289],
+      "Id": "22af40e504a0290d"
     },
     {
-      "type": "Floater",
-      "position": [236, 284]
+      "Type": "Floater",
+      "Position": [236, 284],
+      "Id": "3bf3c2e07e7e361f"
     }
   ]
 }

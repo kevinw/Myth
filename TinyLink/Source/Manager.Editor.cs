@@ -158,8 +158,9 @@ public partial class Manager
 		using (CaptureRoomUndo("Duplicate Actor", room))
 		{
 			var copy = ActorSpecs.CloneObject(room.Actors[selectedRoomActorIndex]);
-			var position = ActorSpecs.ReadPoint(copy, "position") ?? Point2.Zero;
-			copy["position"] = new JsonArray(position.X + Game.TileSize, position.Y);
+			var position = ActorSpecs.ReadPoint(copy, "Position") ?? Point2.Zero;
+			copy["Position"] = new JsonArray(position.X + Game.TileSize, position.Y);
+			ActorSpecs.AssignNewActorId(copy);
 			room.Actors.Add(copy);
 			selectedRoomActorIndex = room.Actors.Count - 1;
 			draggingRoomActor = false;
@@ -917,7 +918,7 @@ public partial class Manager
 			return;
 
 		var actor = room.Actors[selectedRoomActorIndex];
-		var title = ActorSpecs.ReadString(actor, "from") ?? ActorSpecs.ReadString(actor, "type") ?? "Actor";
+		var title = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
 		var inspectorPadding = Vector2.One * 16;
 		var inspectorPos = new Vector2(Window.WidthInPixels / imgui.Scale, Window.HeightInPixels / imgui.Scale) - inspectorPadding;
 		ImGui.SetNextWindowPos(inspectorPos, ImGuiCond.Appearing, Vector2.One);
@@ -938,7 +939,7 @@ public partial class Manager
 			return;
 		}
 
-		if (ActorSpecs.ReadString(actor, "from") is { } specId && ActorSpecs.Get(specId) != null)
+		if (ActorSpecs.ReadString(actor, "From") is { } specId && ActorSpecs.Get(specId) != null)
 		{
 			if (ImGui.Button("Jump to Prefab"))
 			{
@@ -1201,17 +1202,17 @@ public partial class Manager
 
 	private static RectInt RoomActorBounds(Room room, JsonObject actor)
 	{
-		var local = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
+		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var position = room.WorldBounds.TopLeft + local;
 		var resolved = ActorSpecs.Resolve(actor);
-		if (ActorSpecs.ReadString(resolved, "type") == "HiddenWall")
+		if (ActorSpecs.ReadString(resolved, "Type") == "HiddenWall")
 		{
-			var size = ActorSpecs.ReadPoint(resolved, "size") ?? HiddenWall.DefaultSize;
+			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? HiddenWall.DefaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
-		if (ActorSpecs.ReadString(resolved, "type") == "RevealDoor")
+		if (ActorSpecs.ReadString(resolved, "Type") == "RevealDoor")
 		{
-			var size = ActorSpecs.ReadPoint(resolved, "size") ?? RevealDoor.DefaultSize;
+			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? RevealDoor.DefaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
 
@@ -1222,26 +1223,26 @@ public partial class Manager
 	}
 
 	private static bool IsHiddenWallActor(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type") == "HiddenWall";
+		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "HiddenWall";
 
 	private static bool IsRevealDoorActor(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type") == "RevealDoor";
+		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor";
 
 	private static bool IsResizableRoomRectActor(JsonObject actor)
 	{
-		var type = ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type");
+		var type = ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type");
 		return type is "HiddenWall" or "RevealDoor";
 	}
 
 	private static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "type") == "RevealDoor"
+		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor"
 			? RevealDoor.DefaultSize
 			: HiddenWall.DefaultSize;
 
 	private static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
 	{
-		var specId = ActorSpecs.ReadString(actor, "from");
-		var typeName = ActorSpecs.ReadString(actor, "type");
+		var specId = ActorSpecs.ReadString(actor, "From");
+		var typeName = ActorSpecs.ReadString(actor, "Type");
 
 		foreach (var entry in Factory.ActorPalette)
 		{
@@ -1461,8 +1462,8 @@ public partial class Manager
 			return;
 
 		var actor = room.Actors[actorIndex];
-		var specId = ActorSpecs.ReadString(actor, "from");
-		var typeName = ActorSpecs.ReadString(actor, "type");
+		var specId = ActorSpecs.ReadString(actor, "From");
+		var typeName = ActorSpecs.ReadString(actor, "Type");
 		var offset = Point2.Zero;
 		if (specId != null || typeName != null)
 		{
@@ -1481,7 +1482,7 @@ public partial class Manager
 		var local = snap
 			? SnapRoomActorLocalPosition(targetLocal, offset)
 			: (Point2)targetLocal;
-		actor["position"] = new JsonArray(local.X, local.Y);
+		actor["Position"] = new JsonArray(local.X, local.Y);
 		editorGameDirty = true;
 	}
 
@@ -1503,8 +1504,8 @@ public partial class Manager
 			return;
 
 		var resolved = ActorSpecs.Resolve(actor);
-		var position = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
-		var size = ActorSpecs.ReadPoint(resolved, "size") ?? ResizableRoomRectDefaultSize(actor);
+		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+		var size = ActorSpecs.ReadPoint(resolved, "Size") ?? ResizableRoomRectDefaultSize(actor);
 		var cursor = snap ? tile * Game.TileSize : (Point2)(world - (Vector2)room.WorldBounds.TopLeft);
 
 		var left = position.X;
@@ -1568,8 +1569,8 @@ public partial class Manager
 		right = Math.Clamp(right, left + Game.TileSize, roomWidth);
 		bottom = Math.Clamp(bottom, top + Game.TileSize, roomHeight);
 
-		actor["position"] = new JsonArray(left, top);
-		actor["size"] = new JsonArray(right - left, bottom - top);
+		actor["Position"] = new JsonArray(left, top);
+		actor["Size"] = new JsonArray(right - left, bottom - top);
 		editorGameDirty = true;
 	}
 
@@ -1754,7 +1755,7 @@ public partial class Manager
 					continue;
 
 				var actor = ActorSpecs.CloneObject(room.Actors[i]);
-				var position = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
+				var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 				snapshot.Actors.Add((i, actor, position));
 			}
 		}
@@ -1792,7 +1793,8 @@ public partial class Manager
 				foreach (var (_, actor, position) in snapshot.Actors)
 				{
 					var copy = ActorSpecs.CloneObject(actor);
-					copy["position"] = new JsonArray(position.X + offset.X * Game.TileSize, position.Y + offset.Y * Game.TileSize);
+					copy["Position"] = new JsonArray(position.X + offset.X * Game.TileSize, position.Y + offset.Y * Game.TileSize);
+					ActorSpecs.AssignNewActorId(copy);
 					room.Actors.Add(copy);
 				}
 			}
@@ -1800,7 +1802,7 @@ public partial class Manager
 			{
 				foreach (var (index, _, position) in snapshot.Actors)
 					if (index >= 0 && index < room.Actors.Count)
-						room.Actors[index]["position"] = new JsonArray(position.X + offset.X * Game.TileSize, position.Y + offset.Y * Game.TileSize);
+						room.Actors[index]["Position"] = new JsonArray(position.X + offset.X * Game.TileSize, position.Y + offset.Y * Game.TileSize);
 			}
 		}
 
@@ -2456,7 +2458,7 @@ public partial class Manager
 						selectedRoomActorIndex = hoveredActorIndex;
 						editorSelectionRect = null;
 						draggingRoomActor = true;
-						roomActorDragOffset = worldMouse - (roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "position") ?? Point2.Zero));
+						roomActorDragOffset = worldMouse - (roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "Position") ?? Point2.Zero));
 						resizeHandle = ResizeHandle.None;
 						tilePlacing = false;
 					}

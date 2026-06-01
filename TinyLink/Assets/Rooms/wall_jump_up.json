@@ -30,8 +30,9 @@
   ],
   "actors": [
     {
-      "type": "Light",
-      "position": [252, 71]
+      "Type": "Light",
+      "Position": [252, 71],
+      "Id": "f1c073bca97a49dd"
     }
   ]
 }

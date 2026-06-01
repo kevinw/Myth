@@ -1,12 +1,12 @@
 {
-  "id": "PlayerGlowLight",
-  "type": "Light",
-  "radius": 36,
-  "intensity": 0.45,
-  "lightColor": "ffcfa0",
-  "height": 16,
-  "flickerFrequency": 1.5,
-  "flickerIntensity": 0.02,
-  "drawSprite": false,
-  "keepOnRoomTransition": true
+  "Name": "PlayerGlowLight",
+  "Type": "Light",
+  "Radius": 36,
+  "Intensity": 0.45,
+  "LightColor": "ffcfa0",
+  "Height": 16,
+  "FlickerFrequency": 1.5,
+  "FlickerIntensity": 0.02,
+  "DrawSprite": false,
+  "KeepOnRoomTransition": true
 }

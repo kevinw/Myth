@@ -28,48 +28,59 @@
   ],
   "actors": [
     {
-      "type": "LedgePatrol",
-      "position": [180, 136]
+      "Type": "LedgePatrol",
+      "Position": [180, 136],
+      "Id": "34e14c99bc318f98"
     },
     {
-      "type": "LedgePatrol",
-      "position": [188, 136]
+      "Type": "LedgePatrol",
+      "Position": [188, 136],
+      "Id": "cd5bd670cb48ce90"
     },
     {
-      "type": "LedgePatrol",
-      "position": [196, 136]
+      "Type": "LedgePatrol",
+      "Position": [196, 136],
+      "Id": "333d2c8b7a060105"
     },
     {
-      "type": "LedgePatrol",
-      "position": [204, 136]
+      "Type": "LedgePatrol",
+      "Position": [204, 136],
+      "Id": "846590c5c8767a17"
     },
     {
-      "type": "LedgePatrol",
-      "position": [212, 136]
+      "Type": "LedgePatrol",
+      "Position": [212, 136],
+      "Id": "da273be91fdc4a2d"
     },
     {
-      "type": "LedgePatrol",
-      "position": [220, 136]
+      "Type": "LedgePatrol",
+      "Position": [220, 136],
+      "Id": "6178bcd424dae379"
     },
     {
-      "type": "LedgePatrol",
-      "position": [228, 136]
+      "Type": "LedgePatrol",
+      "Position": [228, 136],
+      "Id": "6031aaab33669397"
     },
     {
-      "type": "LedgePatrol",
-      "position": [236, 136]
+      "Type": "LedgePatrol",
+      "Position": [236, 136],
+      "Id": "f9e20b5aa2d0af4a"
     },
     {
-      "type": "LedgePatrol",
-      "position": [244, 136]
+      "Type": "LedgePatrol",
+      "Position": [244, 136],
+      "Id": "c5774ae47a9bbb94"
     },
     {
-      "type": "LedgePatrol",
-      "position": [252, 136]
+      "Type": "LedgePatrol",
+      "Position": [252, 136],
+      "Id": "592fd85f95d7afbc"
     },
     {
-      "from": "BlueMemoryLight",
-      "position": [121, 87]
+      "From": "BlueMemoryLight",
+      "Position": [121, 87],
+      "Id": "0bcc8e631f10777f"
     }
   ]
 }

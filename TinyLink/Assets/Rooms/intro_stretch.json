@@ -57,55 +57,67 @@
   ],
   "actors": [
     {
-      "type": "Light",
-      "position": [188, 52]
+      "Id": "5d90c15b8d599e0b",
+      "Type": "Light",
+      "Position": [188, 52]
     },
     {
-      "type": "Spitter",
-      "position": [452, 80]
+      "Id": "79c1309d64180f04",
+      "Type": "Spitter",
+      "Position": [452, 80]
     },
     {
-      "type": "Spitter",
-      "position": [524, 80]
+      "Id": "d38c10422f8c7f09",
+      "Type": "Spitter",
+      "Position": [524, 80]
     },
     {
-      "type": "Bramble",
-      "position": [156, 120]
+      "Id": "9549410515f6950d",
+      "Type": "Bramble",
+      "Position": [156, 120]
     },
     {
-      "type": "Bramble",
-      "position": [164, 120]
+      "Id": "1a55f767ef8f4b89",
+      "Type": "Bramble",
+      "Position": [164, 120]
     },
     {
-      "type": "Spitter",
-      "position": [268, 120]
+      "Id": "6df622c53fcbc087",
+      "Type": "Spitter",
+      "Position": [268, 120]
     },
     {
-      "type": "Bramble",
-      "position": [444, 120]
+      "Id": "d164c82e28044d53",
+      "Type": "Bramble",
+      "Position": [444, 120]
     },
     {
-      "type": "Bramble",
-      "position": [452, 120]
+      "Id": "0873b816e834ef6c",
+      "Type": "Bramble",
+      "Position": [452, 120]
     },
     {
-      "type": "Bramble",
-      "position": [508, 120]
+      "Id": "7737165541fc3990",
+      "Type": "Bramble",
+      "Position": [508, 120]
     },
     {
-      "type": "Bramble",
-      "position": [516, 120]
+      "Id": "356629772d49c473",
+      "Type": "Bramble",
+      "Position": [516, 120]
     },
     {
-      "from": "StrongFireLight",
-      "position": [484, 44],
-      "flickerFrequency": 0.65
+      "Id": "37f4e34ad5367eb0",
+      "From": "StrongFireLight",
+      "Position": [484, 44],
+      "FlickerFrequency": 0.65
     },
     {
-      "type": "LinkedDoor",
-      "position": [100, 104],
-      "targetDoorId": "door1",
-      "targetRoomId": "big_hill"
+      "Id": "1523b22aca13ac05",
+      "Type": "LinkedDoor",
+      "Position": [100, 104],
+      "TargetDoorId": "door1",
+      "TargetRoomId": "big_hill"
     }
   ]
 }

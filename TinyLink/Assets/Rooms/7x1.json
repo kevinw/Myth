@@ -30,32 +30,39 @@
   ],
   "actors": [
     {
-      "type": "Spitter",
-      "position": [252, 72]
+      "Type": "Spitter",
+      "Position": [252, 72],
+      "Id": "0b2e09ad4987e1fd"
     },
     {
-      "type": "Bramble",
-      "position": [212, 88]
+      "Type": "Bramble",
+      "Position": [212, 88],
+      "Id": "2e867eaf76744690"
     },
     {
-      "type": "Bramble",
-      "position": [220, 88]
+      "Type": "Bramble",
+      "Position": [220, 88],
+      "Id": "00ff6aafd4ee41fb"
     },
     {
-      "type": "Player",
-      "position": [52, 96]
+      "Type": "Player",
+      "Position": [52, 96],
+      "Id": "407a416ef7c5120f"
     },
     {
-      "type": "Bramble",
-      "position": [100, 96]
+      "Type": "Bramble",
+      "Position": [100, 96],
+      "Id": "2accb0a49f48d308"
     },
     {
-      "type": "Bramble",
-      "position": [108, 96]
+      "Type": "Bramble",
+      "Position": [108, 96],
+      "Id": "6c16bea2872aaf56"
     },
     {
-      "type": "Blob",
-      "position": [188, 96]
+      "Type": "Blob",
+      "Position": [188, 96],
+      "Id": "a671c14852183d95"
     }
   ]
 }

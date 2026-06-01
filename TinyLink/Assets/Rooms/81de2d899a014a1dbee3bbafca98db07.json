@@ -30,8 +30,9 @@
   ],
   "actors": [
     {
-      "type": "Spitter",
-      "position": [112, 40]
+      "Type": "Spitter",
+      "Position": [112, 40],
+      "Id": "a0433510a2985237"
     }
   ]
 }

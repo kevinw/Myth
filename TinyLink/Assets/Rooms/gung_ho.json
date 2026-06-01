@@ -30,41 +30,49 @@
   ],
   "actors": [
     {
-      "type": "TitleText",
-      "position": [156, 60],
-      "text": "it\u0027s gonna\nbe ok"
+      "Id": "e0fe8d5b00e2dbc4",
+      "Type": "TitleText",
+      "Position": [156, 60],
+      "Text": "it\u0027s gonna\nbe ok"
     },
     {
-      "type": "Jumpthru",
-      "position": [56, 88]
+      "Id": "308faaddc4f343ca",
+      "Type": "Jumpthru",
+      "Position": [56, 88]
     },
     {
-      "type": "Bramble",
-      "position": [244, 104]
+      "Id": "6cac27634452af32",
+      "Type": "Bramble",
+      "Position": [244, 104]
     },
     {
-      "type": "Bramble",
-      "position": [252, 104]
+      "Id": "7de103cceda0f6b9",
+      "Type": "Bramble",
+      "Position": [252, 104]
     },
     {
-      "type": "Jumpthru",
-      "position": [56, 104]
+      "Id": "abdc13b1d3222d1f",
+      "Type": "Jumpthru",
+      "Position": [56, 104]
     },
     {
-      "type": "Jumpthru",
-      "position": [64, 104]
+      "Id": "d654e5d761127cc4",
+      "Type": "Jumpthru",
+      "Position": [64, 104]
     },
     {
-      "type": "Player",
-      "position": [132, 120]
+      "Id": "1ddd3605f9c779cc",
+      "Type": "Player",
+      "Position": [132, 120]
     },
     {
-      "from": "StrongFireLight",
-      "position": [100, 39],
-      "flickerFrequency": 1.05,
-      "flickerIntensity": 0.02,
-      "radius": 86.05,
-      "intensity": 1.05
+      "Id": "8b6a8dfc090608bf",
+      "From": "StrongFireLight",
+      "Position": [100, 39],
+      "FlickerFrequency": 1.05,
+      "FlickerIntensity": 0.02,
+      "Radius": 86.05,
+      "Intensity": 1.05
     }
   ]
 }

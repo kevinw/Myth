@@ -29,17 +29,20 @@
   ],
   "actors": [
     {
-      "type": "Bramble",
-      "position": [100, 96]
+      "Type": "Bramble",
+      "Position": [100, 96],
+      "Id": "6512fa7816896dc1"
     },
     {
-      "from": "SoftFireLight",
-      "position": [176, 79]
+      "From": "SoftFireLight",
+      "Position": [176, 79],
+      "Id": "3870d27e619dde84"
     },
     {
-      "type": "Spitter",
-      "position": [68, 88],
-      "facing": "-"
+      "Type": "Spitter",
+      "Position": [68, 88],
+      "Facing": "-",
+      "Id": "6a7552bd0b57b4be"
     }
   ]
 }

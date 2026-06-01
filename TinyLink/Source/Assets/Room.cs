@@ -323,8 +323,9 @@ public class Room
 	{
 		Actors.Add(new JsonObject
 		{
-			["from"] = specId,
-			["position"] = new JsonArray(localPosition.X, localPosition.Y)
+			["Id"] = ActorSpecs.GenerateActorId(),
+			["From"] = specId,
+			["Position"] = new JsonArray(localPosition.X, localPosition.Y)
 		});
 	}
 
@@ -332,8 +333,9 @@ public class Room
 	{
 		Actors.Add(new JsonObject
 		{
-			["type"] = typeName,
-			["position"] = new JsonArray(localPosition.X, localPosition.Y)
+			["Id"] = ActorSpecs.GenerateActorId(),
+			["Type"] = typeName,
+			["Position"] = new JsonArray(localPosition.X, localPosition.Y)
 		});
 	}
 
@@ -460,8 +462,8 @@ public class Room
 		{
 			foreach (var actor in Actors)
 			{
-				var position = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
-				actor["position"] = new JsonArray(position.X + actorOffset.X * Game.TileSize, position.Y + actorOffset.Y * Game.TileSize);
+				var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+				actor["Position"] = new JsonArray(position.X + actorOffset.X * Game.TileSize, position.Y + actorOffset.Y * Game.TileSize);
 			}
 		}
 
@@ -1081,7 +1083,10 @@ public class Room
 		{
 			var actors = new JsonArray();
 			foreach (var actor in Actors)
+			{
+				ActorSpecs.EnsureActorId(actor);
 				actors.Add(ActorSpecs.PruneForSave(actor));
+			}
 			json["actors"] = actors;
 		}
 

@@ -29,21 +29,24 @@
   ],
   "actors": [
     {
-      "from": "StrongFireLight",
-      "position": [152, 40]
+      "From": "StrongFireLight",
+      "Position": [152, 40],
+      "Id": "25b9cf104c2206c5"
     },
     {
-      "type": "RevealDoor",
-      "position": [168, 104],
-      "size": [8, 32],
-      "facing": "-",
-      "direction": "Left"
+      "Type": "RevealDoor",
+      "Position": [168, 104],
+      "Size": [8, 32],
+      "Facing": "-",
+      "Direction": "Left",
+      "Id": "130df633c2853d38"
     },
     {
-      "type": "RevealDoor",
-      "position": [128, 104],
-      "size": [8, 32],
-      "facing": "-"
+      "Type": "RevealDoor",
+      "Position": [128, 104],
+      "Size": [8, 32],
+      "Facing": "-",
+      "Id": "a85f7928225b986a"
     }
   ]
 }

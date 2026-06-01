@@ -42,13 +42,15 @@
   ],
   "actors": [
     {
-      "type": "Player",
-      "position": [268, 160]
+      "Type": "Player",
+      "Position": [268, 160],
+      "Id": "ce15f228e01f4482"
     },
     {
-      "type": "ArrowTrap",
-      "position": [196, 164],
-      "facing": "-"
+      "Type": "ArrowTrap",
+      "Position": [196, 164],
+      "Facing": "-",
+      "Id": "b3841e7ec2b2b1f3"
     }
   ]
 }

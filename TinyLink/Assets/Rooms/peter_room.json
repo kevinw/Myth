@@ -52,25 +52,29 @@
   ],
   "actors": [
     {
-      "type": "Light",
-      "position": [140, 44],
-      "intensity": 1.2,
-      "radius": 81.4
+      "Type": "Light",
+      "Position": [140, 44],
+      "Intensity": 1.2,
+      "Radius": 81.4,
+      "Id": "2c745bb65befbc7f"
     },
     {
-      "type": "Peter",
-      "position": [37, 53]
+      "Type": "Peter",
+      "Position": [37, 53],
+      "Id": "733c7b600ad00c84"
     },
     {
-      "type": "TitleText",
-      "position": [164, 28],
-      "text": "it pains me to say it"
+      "Type": "TitleText",
+      "Position": [164, 28],
+      "Text": "it pains me to say it",
+      "Id": "cdc12362289410cf"
     },
     {
-      "type": "HiddenWall",
-      "position": [0, 104],
-      "size": [32, 16],
-      "tileType": "grass"
+      "Type": "HiddenWall",
+      "Position": [0, 104],
+      "Size": [32, 16],
+      "TileType": "grass",
+      "Id": "d4904f9b3b673837"
     }
   ]
 }

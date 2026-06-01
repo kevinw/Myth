@@ -38,53 +38,65 @@
   ],
   "actors": [
     {
-      "type": "Player",
-      "position": [228, 40]
+      "Id": "4b440037daaa575e",
+      "Type": "Player",
+      "Position": [228, 40]
     },
     {
-      "type": "Jumpthru",
-      "position": [216, 40]
+      "Id": "0537bb23a34aad92",
+      "Type": "Jumpthru",
+      "Position": [216, 40]
     },
     {
-      "type": "Jumpthru",
-      "position": [224, 40]
+      "Id": "30fd7cfc51d97817",
+      "Type": "Jumpthru",
+      "Position": [224, 40]
     },
     {
-      "type": "Light",
-      "position": [68, 60]
+      "Id": "ba04a4ca123b71a0",
+      "Type": "Light",
+      "Position": [68, 60]
     },
     {
-      "type": "Jumpthru",
-      "position": [224, 56]
+      "Id": "11f7d648d285b773",
+      "Type": "Jumpthru",
+      "Position": [224, 56]
     },
     {
-      "type": "Jumpthru",
-      "position": [232, 56]
+      "Id": "a46c441616171096",
+      "Type": "Jumpthru",
+      "Position": [232, 56]
     },
     {
-      "type": "Bramble",
-      "position": [188, 112]
+      "Id": "ffe3e0541d2e73f8",
+      "Type": "Bramble",
+      "Position": [188, 112]
     },
     {
-      "type": "Light",
-      "position": [176, 121]
+      "Id": "0c62921c58eb3d82",
+      "Type": "Light",
+      "Position": [176, 121]
     },
     {
-      "type": "Mosquito",
-      "position": [132, 140]
+      "Id": "6a4964d3b0e0a016",
+      "Type": "Mosquito",
+      "Position": [132, 140]
     },
     {
-      "type": "Bramble",
-      "position": [236, 144]
+      "Id": "ecfd9dcae8602412",
+      "Type": "Bramble",
+      "Position": [236, 144]
     },
     {
-      "type": "Bramble",
-      "position": [244, 144]
+      "Id": "94bfda18d04e2746",
+      "Type": "Bramble",
+      "Position": [244, 144]
     },
     {
-      "type": "RevealDoor",
-      "position": [112, 136],
-      "direction": "Left"
+      "Id": "f46fb5e0cdf1a612",
+      "Type": "RevealDoor",
+      "Position": [112, 136],
+      "Direction": "Left"
     }
   ]
 }

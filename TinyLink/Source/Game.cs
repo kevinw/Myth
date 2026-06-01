@@ -2405,12 +2405,12 @@ public partial class Game : IDisposable
 		foreach (var actor in targetRoom.Actors)
 		{
 			var resolved = ActorSpecs.Resolve(actor);
-			if (!string.Equals(ActorSpecs.ReadString(resolved, "type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+			if (!string.Equals(ActorSpecs.ReadString(resolved, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 				continue;
 
 			fallback ??= resolved;
 
-			var linkId = ActorSpecs.ReadString(resolved, "linkId");
+			var linkId = ActorSpecs.ReadString(resolved, "LinkId");
 			if (!string.IsNullOrWhiteSpace(desiredLinkId) && string.Equals(linkId, desiredLinkId, StringComparison.OrdinalIgnoreCase))
 			{
 				ReadLinkedDoorDestination(resolved, out localPosition, out spawnOffset);
@@ -2432,8 +2432,8 @@ public partial class Game : IDisposable
 
 	private static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)
 	{
-		localPosition = ActorSpecs.ReadPoint(resolved, "position") ?? Point2.Zero;
-		spawnOffset = ActorSpecs.ReadPoint(resolved, "spawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
+		localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
+		spawnOffset = ActorSpecs.ReadPoint(resolved, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
 	}
 
 	private void ResolvePlayerRoomTransition(Point2 direction)
@@ -2829,7 +2829,7 @@ public partial class Game : IDisposable
 			if (GetFirst<Player>() != null && string.Equals(ActorSpecs.GetTypeName(actor), "Player", StringComparison.OrdinalIgnoreCase))
 				continue;
 
-			var localPosition = ActorSpecs.ReadPoint(actor, "position") ?? Point2.Zero;
+			var localPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 			var sessionDestroyKey = SessionDestroyKey(forRoom, actor, localPosition);
 			if (sessionDestroyedActors.Contains(sessionDestroyKey))
 				continue;
@@ -2844,11 +2844,11 @@ public partial class Game : IDisposable
 
 	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)
 	{
-		var id = ActorSpecs.ReadString(actor, "id");
+		var id = ActorSpecs.ReadString(actor, "Id");
 		if (!string.IsNullOrWhiteSpace(id))
 			return $"{room.Id}:id:{id}";
 
-		var source = ActorSpecs.ReadString(actor, "from") ?? ActorSpecs.ReadString(actor, "type") ?? "Actor";
+		var source = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
 		return $"{room.Id}:{source}:{localPosition.X},{localPosition.Y}";
 	}
 
@@ -2857,12 +2857,12 @@ public partial class Game : IDisposable
 		foreach (var actor in room.Actors)
 		{
 			var resolved = ActorSpecs.Resolve(actor);
-			if (ActorSpecs.ReadString(resolved, "type") != "HiddenWall")
+			if (ActorSpecs.ReadString(resolved, "Type") != "HiddenWall")
 				continue;
 
-			var localPosition = ActorSpecs.ReadPoint(resolved, "position") ?? Point2.Zero;
-			var size = ActorSpecs.ReadPoint(resolved, "size") ?? HiddenWall.DefaultSize;
-			var tileType = ActorSpecs.ReadString(resolved, "tileType") ?? "castle";
+			var localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
+			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? HiddenWall.DefaultSize;
+			var tileType = ActorSpecs.ReadString(resolved, "TileType") ?? "castle";
 			hiddenWalls.AddRect(localPosition, size, tileType);
 		}
 	}

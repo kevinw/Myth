@@ -29,33 +29,39 @@
   ],
   "actors": [
     {
-      "type": "Player",
-      "position": [52, 96]
+      "Type": "Player",
+      "Position": [52, 96],
+      "Id": "eaa56b484340587a"
     },
     {
-      "type": "Bramble",
-      "position": [228, 96]
+      "Type": "Bramble",
+      "Position": [228, 96],
+      "Id": "9e9ebc185fa607a6"
     },
     {
-      "type": "Bramble",
-      "position": [236, 96]
+      "Type": "Bramble",
+      "Position": [236, 96],
+      "Id": "ca94bcbba28bc787"
     },
     {
-      "type": "Bramble",
-      "position": [124, 112]
+      "Type": "Bramble",
+      "Position": [124, 112],
+      "Id": "f89a06ae8d839967"
     },
     {
-      "type": "Bramble",
-      "position": [132, 112]
+      "Type": "Bramble",
+      "Position": [132, 112],
+      "Id": "64e23e0812cb88ec"
     },
     {
-      "from": "StrongFireLight",
-      "position": [148, -4],
-      "flickerFrequency": 0,
-      "flickerIntensity": 0.02,
-      "radius": 142.4,
-      "lightColor": "A88C4B",
-      "intensity": 1.5
+      "From": "StrongFireLight",
+      "Position": [148, -4],
+      "FlickerFrequency": 0,
+      "FlickerIntensity": 0.02,
+      "Radius": 142.4,
+      "LightColor": "A88C4B",
+      "Intensity": 1.5,
+      "Id": "41270ab4eb5669b8"
     }
   ]
 }

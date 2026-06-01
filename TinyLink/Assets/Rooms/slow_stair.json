@@ -81,36 +81,44 @@
   ],
   "actors": [
     {
-      "type": "Light",
-      "position": [116, 140]
+      "Type": "Light",
+      "Position": [116, 140],
+      "Id": "ad3d38cd7aedf71e"
     },
     {
-      "type": "Light",
-      "position": [180, 172]
+      "Type": "Light",
+      "Position": [180, 172],
+      "Id": "898612adfaff3dcb"
     },
     {
-      "type": "Light",
-      "position": [244, 188]
+      "Type": "Light",
+      "Position": [244, 188],
+      "Id": "7abbc00d2a4721de"
     },
     {
-      "type": "Blob",
-      "position": [108, 176]
+      "Type": "Blob",
+      "Position": [108, 176],
+      "Id": "f98da0ca83b4bc28"
     },
     {
-      "type": "Light",
-      "position": [52, 108]
+      "Type": "Light",
+      "Position": [52, 108],
+      "Id": "db6bc4608450fc53"
     },
     {
-      "type": "Jumpthru",
-      "position": [400, 168]
+      "Type": "Jumpthru",
+      "Position": [400, 168],
+      "Id": "7e5df5ca51308fa2"
     },
     {
-      "type": "Jumpthru",
-      "position": [400, 192]
+      "Type": "Jumpthru",
+      "Position": [400, 192],
+      "Id": "bf0dec7a7dcb703c"
     },
     {
-      "type": "Light",
-      "position": [308, 188]
+      "Type": "Light",
+      "Position": [308, 188],
+      "Id": "b1d02b3eacf466fb"
     }
   ]
 }

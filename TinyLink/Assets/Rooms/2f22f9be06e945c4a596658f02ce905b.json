@@ -28,29 +28,35 @@
   ],
   "actors": [
     {
-      "type": "Jumpthru",
-      "position": [112, 88]
+      "Type": "Jumpthru",
+      "Position": [112, 88],
+      "Id": "cd5137372760cdef"
     },
     {
-      "type": "Jumpthru",
-      "position": [104, 88]
+      "Type": "Jumpthru",
+      "Position": [104, 88],
+      "Id": "ef309b8702ff6091"
     },
     {
-      "type": "Jumpthru",
-      "position": [120, 88]
+      "Type": "Jumpthru",
+      "Position": [120, 88],
+      "Id": "4de21f6e368f62d2"
     },
     {
-      "type": "Spitter",
-      "position": [124, 88],
-      "facing": "-"
+      "Type": "Spitter",
+      "Position": [124, 88],
+      "Facing": "-",
+      "Id": "1aa7d9fc3124efee"
     },
     {
-      "type": "Light",
-      "position": [263, 92]
+      "Type": "Light",
+      "Position": [263, 92],
+      "Id": "81fbb9848b75e13e"
     },
     {
-      "type": "Light",
-      "position": [263, 36]
+      "Type": "Light",
+      "Position": [263, 36],
+      "Id": "0495f530dda95e23"
     }
   ]
 }

@@ -115,16 +115,19 @@
   ],
   "actors": [
     {
-      "type": "Spitter",
-      "position": [180, 136]
+      "Type": "Spitter",
+      "Position": [180, 136],
+      "Id": "6ea3c93dd2d9237b"
     },
     {
-      "type": "Spitter",
-      "position": [268, 136]
+      "Type": "Spitter",
+      "Position": [268, 136],
+      "Id": "a996529c9da27fbe"
     },
     {
-      "type": "Player",
-      "position": [68, 136]
+      "Type": "Player",
+      "Position": [68, 136],
+      "Id": "d216c3e4e38496a5"
     }
   ]
 }

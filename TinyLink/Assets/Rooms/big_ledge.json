@@ -42,16 +42,19 @@
   ],
   "actors": [
     {
-      "type": "TitleText",
-      "position": [44, 116]
+      "Type": "TitleText",
+      "Position": [44, 116],
+      "Id": "b5adfe35fa041636"
     },
     {
-      "type": "Blob",
-      "position": [260, 152]
+      "Type": "Blob",
+      "Position": [260, 152],
+      "Id": "d7283e363001286b"
     },
     {
-      "type": "Player",
-      "position": [252, 176]
+      "Type": "Player",
+      "Position": [252, 176],
+      "Id": "aaaf96a21646b2ca"
     }
   ]
 }

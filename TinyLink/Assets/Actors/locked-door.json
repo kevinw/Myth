@@ -1,5 +1,5 @@
 {
-  "id": "LockedDoor",
-  "type": "Door",
-  "startsVisible": true
+  "Name": "LockedDoor",
+  "Type": "Door",
+  "StartsVisible": true
 }

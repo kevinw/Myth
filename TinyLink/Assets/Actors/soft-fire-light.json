@@ -1,10 +1,10 @@
 {
-  "id": "SoftFireLight",
-  "type": "Light",
-  "radius": 52,
-  "intensity": 0.85,
-  "lightColor": "ffd37a",
-  "height": 16,
-  "flickerFrequency": 3.5,
-  "flickerIntensity": 0.05
+  "Name": "SoftFireLight",
+  "Type": "Light",
+  "Radius": 52,
+  "Intensity": 0.85,
+  "LightColor": "ffd37a",
+  "Height": 16,
+  "FlickerFrequency": 3.5,
+  "FlickerIntensity": 0.05
 }

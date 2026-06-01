@@ -29,35 +29,42 @@
   ],
   "actors": [
     {
-      "from": "BlueMemoryLight",
-      "position": [100, 55]
+      "From": "BlueMemoryLight",
+      "Position": [100, 55],
+      "Id": "a7a9a265e2ac6469"
     },
     {
-      "type": "Spitter",
-      "position": [172, 96]
+      "Type": "Spitter",
+      "Position": [172, 96],
+      "Id": "086f0804528ffa0f"
     },
     {
-      "type": "HiddenWall",
-      "position": [168, 32],
-      "size": [48, 24]
+      "Type": "HiddenWall",
+      "Position": [168, 32],
+      "Size": [48, 24],
+      "Id": "1817d1cc33813349"
     },
     {
-      "type": "Jumpthru",
-      "position": [200, 32]
+      "Type": "Jumpthru",
+      "Position": [200, 32],
+      "Id": "b3ee0eb7b279670a"
     },
     {
-      "type": "Jumpthru",
-      "position": [208, 32]
+      "Type": "Jumpthru",
+      "Position": [208, 32],
+      "Id": "b8270e725342eade"
     },
     {
-      "type": "HiddenWall",
-      "position": [200, 0],
-      "size": [16, 32]
+      "Type": "HiddenWall",
+      "Position": [200, 0],
+      "Size": [16, 32],
+      "Id": "c18cfa1bb162b836"
     },
     {
-      "type": "HiddenWall",
-      "position": [144, 136],
-      "size": [40, 40]
+      "Type": "HiddenWall",
+      "Position": [144, 136],
+      "Size": [40, 40],
+      "Id": "2dc6060252981636"
     }
   ]
 }

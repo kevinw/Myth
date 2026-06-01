@@ -55,56 +55,69 @@
   ],
   "actors": [
     {
-      "type": "Bramble",
-      "position": [252, 96]
+      "Type": "Bramble",
+      "Position": [252, 96],
+      "Id": "facfb9cd264bc166"
     },
     {
-      "type": "Bramble",
-      "position": [260, 96]
+      "Type": "Bramble",
+      "Position": [260, 96],
+      "Id": "a81fa7dd6efa3bcb"
     },
     {
-      "type": "Bramble",
-      "position": [180, 112]
+      "Type": "Bramble",
+      "Position": [180, 112],
+      "Id": "5ca316a78837b40b"
     },
     {
-      "type": "Bramble",
-      "position": [188, 112]
+      "Type": "Bramble",
+      "Position": [188, 112],
+      "Id": "797f1e0bc8ec8179"
     },
     {
-      "type": "Spitter",
-      "position": [164, 128]
+      "Type": "Spitter",
+      "Position": [164, 128],
+      "Id": "8e8fd9ea994e40d3"
     },
     {
-      "type": "Player",
-      "position": [52, 136]
+      "Type": "Player",
+      "Position": [52, 136],
+      "Id": "9d8c7dfe137fe430"
     },
     {
-      "type": "Mosquito",
-      "position": [132, 132]
+      "Type": "Mosquito",
+      "Position": [132, 132],
+      "Id": "306471171d5046c3"
     },
     {
-      "type": "Jumpthru",
-      "position": [136, 128]
+      "Type": "Jumpthru",
+      "Position": [136, 128],
+      "Id": "597212ef26b171e2"
     },
     {
-      "type": "Jumpthru",
-      "position": [144, 128]
+      "Type": "Jumpthru",
+      "Position": [144, 128],
+      "Id": "81158a0968248064"
     },
     {
-      "type": "Bramble",
-      "position": [124, 144]
+      "Type": "Bramble",
+      "Position": [124, 144],
+      "Id": "b12058c3b53d8008"
     },
     {
-      "type": "Bramble",
-      "position": [132, 144]
+      "Type": "Bramble",
+      "Position": [132, 144],
+      "Id": "7d62679fbe24968b"
     },
     {
-      "type": "Dropper",
-      "position": [108, 104]
+      "Type": "Dropper",
+      "Position": [108, 104],
+      "Id": "635eeffe87293215"
     },
     {
-      "from": "BlueMemoryLight",
-      "position": [212, 108]
+      "From": "BlueMemoryLight",
+      "Position": [212, 108],
+      "Id": "0c54f51945442296"
     }
   ]
 }

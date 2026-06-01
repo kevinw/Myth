@@ -54,72 +54,89 @@
   ],
   "actors": [
     {
-      "type": "Light",
-      "position": [156, 76]
+      "Id": "7fa31fad60dcdc3a",
+      "Type": "Light",
+      "Position": [156, 76]
     },
     {
-      "type": "Jumpthru",
-      "position": [64, 120]
+      "Id": "b251fd4af06e6f16",
+      "Type": "Jumpthru",
+      "Position": [64, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [72, 120]
+      "Id": "f1a3324faf42133a",
+      "Type": "Jumpthru",
+      "Position": [72, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [80, 120]
+      "Id": "ded81efa730ca6ef",
+      "Type": "Jumpthru",
+      "Position": [80, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [112, 120]
+      "Id": "fa7294bb3f47dd06",
+      "Type": "Jumpthru",
+      "Position": [112, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [120, 120]
+      "Id": "770e488b6cdb6320",
+      "Type": "Jumpthru",
+      "Position": [120, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [128, 120]
+      "Id": "7bc0bf6f1ef73b1b",
+      "Type": "Jumpthru",
+      "Position": [128, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [136, 120]
+      "Id": "180d1ef392e8e36d",
+      "Type": "Jumpthru",
+      "Position": [136, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [144, 120]
+      "Id": "eeef27ec4cefe754",
+      "Type": "Jumpthru",
+      "Position": [144, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [152, 120]
+      "Id": "ee21b7b66d651c67",
+      "Type": "Jumpthru",
+      "Position": [152, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [160, 120]
+      "Id": "8b51cf2e73c3ba08",
+      "Type": "Jumpthru",
+      "Position": [160, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [168, 120]
+      "Id": "d853838aa70788a6",
+      "Type": "Jumpthru",
+      "Position": [168, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [176, 120]
+      "Id": "bee039052d1c7313",
+      "Type": "Jumpthru",
+      "Position": [176, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [184, 120]
+      "Id": "7deb3e740137e062",
+      "Type": "Jumpthru",
+      "Position": [184, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [192, 120]
+      "Id": "6cac0028e2c0fe11",
+      "Type": "Jumpthru",
+      "Position": [192, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [200, 120]
+      "Id": "eb853a0e9a4e5726",
+      "Type": "Jumpthru",
+      "Position": [200, 120]
     },
     {
-      "type": "Jumpthru",
-      "position": [208, 120]
+      "Id": "7c67abd6f71f920d",
+      "Type": "Jumpthru",
+      "Position": [208, 120]
     }
   ]
 }

@@ -63,38 +63,51 @@
   ],
   "actors": [
     {
-      "type": "Player",
-      "position": [84, 104]
+      "Id": "b984b4224ded6911",
+      "Type": "Player",
+      "Position": [84, 104]
     },
     {
-      "type": "Jumpthru",
-      "position": [176, 96]
+      "Id": "e1c5d44d68ad520f",
+      "Type": "Jumpthru",
+      "Position": [176, 96]
     },
     {
-      "type": "Jumpthru",
-      "position": [176, 72]
+      "Id": "1dae91bb4fc46c06",
+      "Type": "Jumpthru",
+      "Position": [176, 72]
     },
     {
-      "type": "Jumpthru",
-      "position": [136, 80]
+      "Id": "805d876c83a38182",
+      "Type": "Jumpthru",
+      "Position": [136, 80]
     },
     {
-      "type": "Jumpthru",
-      "position": [128, 80]
+      "Id": "c59c0b26a14eaf3e",
+      "Type": "Jumpthru",
+      "Position": [128, 80]
     },
     {
-      "type": "WallSpitter",
-      "position": [204, 96]
+      "Id": "480dc26f11d5cd00",
+      "Type": "WallSpitter",
+      "Position": [204, 96]
     },
     {
-      "type": "LinkedDoor",
-      "position": [132, 80],
-      "targetRoomId": "intro_stretch",
-      "targetDoorId": "door1"
+      "Id": "099943c4adef7d7e",
+      "Type": "LinkedDoor",
+      "Position": [132, 80],
+      "TargetRoomId": "intro_stretch",
+      "TargetDoorId": "door1"
     },
     {
-      "type": "RevealDoor",
-      "position": [600, 136]
+      "Id": "ec062a40acdd6a4b",
+      "Type": "RevealDoor",
+      "Position": [600, 136]
+    },
+    {
+      "Id": "bd48de76a714c059",
+      "Type": "LedgePatrol",
+      "Position": [164, 56]
     }
   ]
 }

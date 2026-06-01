@@ -31,12 +31,14 @@
   ],
   "actors": [
     {
-      "type": "Player",
-      "position": [148, 80]
+      "Type": "Player",
+      "Position": [148, 80],
+      "Id": "dd08a51630567d4f"
     },
     {
-      "type": "Light",
-      "position": [164, 36]
+      "Type": "Light",
+      "Position": [164, 36],
+      "Id": "06e5c66584236b26"
     }
   ]
 }

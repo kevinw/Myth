@@ -31,10 +31,11 @@
   ],
   "actors": [
     {
-      "type": "TitleText",
-      "position": [140, 68],
-      "text": "i had to give my selves religion",
-      "revealSpeed": 14.9
+      "Type": "TitleText",
+      "Position": [140, 68],
+      "Text": "i had to give my selves religion",
+      "RevealSpeed": 14.9,
+      "Id": "f5671f52eb2d8c0f"
     }
   ]
 }

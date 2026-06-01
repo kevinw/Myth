@@ -1,10 +1,10 @@
 {
-  "id": "BlueMemoryLight",
-  "from": "SoftFireLight",
-  "radius": 72,
-  "intensity": 1.35,
-  "lightColor": "80c8ff",
-  "height": 20,
-  "flickerFrequency": 1.25,
-  "flickerIntensity": 0.025
+  "Name": "BlueMemoryLight",
+  "From": "SoftFireLight",
+  "Radius": 72,
+  "Intensity": 1.35,
+  "LightColor": "80c8ff",
+  "Height": 20,
+  "FlickerFrequency": 1.25,
+  "FlickerIntensity": 0.025
 }

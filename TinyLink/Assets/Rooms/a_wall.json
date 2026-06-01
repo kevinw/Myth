@@ -66,38 +66,46 @@
   ],
   "actors": [
     {
-      "type": "Player",
-      "position": [52, 88]
+      "Type": "Player",
+      "Position": [52, 88],
+      "Id": "b52aa89a55e0d409"
     },
     {
-      "from": "SoftFireLight",
-      "position": [124, 92],
-      "intensity": 0.6
+      "From": "SoftFireLight",
+      "Position": [124, 92],
+      "Intensity": 0.6,
+      "Id": "38e95332c62efa82"
     },
     {
-      "type": "Jumpthru",
-      "position": [240, 64]
+      "Type": "Jumpthru",
+      "Position": [240, 64],
+      "Id": "70cbd3d38e27bf14"
     },
     {
-      "type": "Jumpthru",
-      "position": [240, 40]
+      "Type": "Jumpthru",
+      "Position": [240, 40],
+      "Id": "3099696dd3b82cf4"
     },
     {
-      "from": "BlueMemoryLight",
-      "position": [228, 44]
+      "From": "BlueMemoryLight",
+      "Position": [228, 44],
+      "Id": "4c730ba03ad59804"
     },
     {
-      "type": "LedgePatrol",
-      "position": [140, 88]
+      "Type": "LedgePatrol",
+      "Position": [140, 88],
+      "Id": "6c9406062b9c6693"
     },
     {
-      "from": "SoftFireLight",
-      "position": [156, 92],
-      "intensity": 0.6
+      "From": "SoftFireLight",
+      "Position": [156, 92],
+      "Intensity": 0.6,
+      "Id": "d6dd7a4b260bc6d9"
     },
     {
-      "type": "Jumpthru",
-      "position": [240, 16]
+      "Type": "Jumpthru",
+      "Position": [240, 16],
+      "Id": "b80bb7b4b0fbe7dd"
     }
   ]
 }

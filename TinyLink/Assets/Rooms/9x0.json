@@ -28,94 +28,116 @@
   ],
   "actors": [
     {
-      "type": "Bramble",
-      "position": [228, 72]
+      "Type": "Bramble",
+      "Position": [228, 72],
+      "Id": "771561934363bd25"
     },
     {
-      "type": "Bramble",
-      "position": [236, 72]
+      "Type": "Bramble",
+      "Position": [236, 72],
+      "Id": "9774774d3824bcd1"
     },
     {
-      "type": "Bramble",
-      "position": [244, 72]
+      "Type": "Bramble",
+      "Position": [244, 72],
+      "Id": "a54d16841ea0c2b3"
     },
     {
-      "type": "Mosquito",
-      "position": [180, 100]
+      "Type": "Mosquito",
+      "Position": [180, 100],
+      "Id": "837451bc89e7c794"
     },
     {
-      "type": "Mosquito",
-      "position": [204, 116]
+      "Type": "Mosquito",
+      "Position": [204, 116],
+      "Id": "1889117ecdf2356e"
     },
     {
-      "type": "Player",
-      "position": [52, 128]
+      "Type": "Player",
+      "Position": [52, 128],
+      "Id": "537c5526726db76c"
     },
     {
-      "type": "Blob",
-      "position": [116, 128]
+      "Type": "Blob",
+      "Position": [116, 128],
+      "Id": "b026aef2c49f38f8"
     },
     {
-      "type": "Bramble",
-      "position": [188, 128]
+      "Type": "Bramble",
+      "Position": [188, 128],
+      "Id": "99ad632e12d9883e"
     },
     {
-      "type": "Bramble",
-      "position": [196, 128]
+      "Type": "Bramble",
+      "Position": [196, 128],
+      "Id": "4e66e9a506fc5290"
     },
     {
-      "type": "Bramble",
-      "position": [204, 128]
+      "Type": "Bramble",
+      "Position": [204, 128],
+      "Id": "f0d69198cada1e4e"
     },
     {
-      "from": "LockedDoor",
-      "position": [236, 128]
+      "From": "LockedDoor",
+      "Position": [236, 128],
+      "Id": "e7ccb8645fd56ee7"
     },
     {
-      "from": "BlueMemoryLight",
-      "position": [236, 44]
+      "From": "BlueMemoryLight",
+      "Position": [236, 44],
+      "Id": "02d4e5ac0efb61b8"
     },
     {
-      "type": "HiddenWall",
-      "position": [120, 128],
-      "size": [32, 56],
-      "tileType": "grass"
+      "Type": "HiddenWall",
+      "Position": [120, 128],
+      "Size": [32, 56],
+      "TileType": "grass",
+      "Id": "63a077035e9fda6f"
     },
     {
-      "type": "Jumpthru",
-      "position": [120, 128]
+      "Type": "Jumpthru",
+      "Position": [120, 128],
+      "Id": "bd431bc545f3cc07"
     },
     {
-      "type": "Jumpthru",
-      "position": [128, 128]
+      "Type": "Jumpthru",
+      "Position": [128, 128],
+      "Id": "63e2fef2e7a06a01"
     },
     {
-      "type": "Jumpthru",
-      "position": [136, 128]
+      "Type": "Jumpthru",
+      "Position": [136, 128],
+      "Id": "d0a3d176d0c6ee48"
     },
     {
-      "type": "Jumpthru",
-      "position": [144, 128]
+      "Type": "Jumpthru",
+      "Position": [144, 128],
+      "Id": "0bd4e00356912b8e"
     },
     {
-      "type": "Jumpthru",
-      "position": [128, 152]
+      "Type": "Jumpthru",
+      "Position": [128, 152],
+      "Id": "4beb6ecfd1cdf25b"
     },
     {
-      "type": "Jumpthru",
-      "position": [136, 152]
+      "Type": "Jumpthru",
+      "Position": [136, 152],
+      "Id": "c2432a07942430c8"
     },
     {
-      "type": "Jumpthru",
-      "position": [144, 152]
+      "Type": "Jumpthru",
+      "Position": [144, 152],
+      "Id": "7ed1ee5aa5e40c34"
     },
     {
-      "type": "Jumpthru",
-      "position": [120, 176]
+      "Type": "Jumpthru",
+      "Position": [120, 176],
+      "Id": "84b6c0568ea688af"
     },
     {
-      "type": "Jumpthru",
-      "position": [128, 176]
+      "Type": "Jumpthru",
+      "Position": [128, 176],
+      "Id": "46f985d33527ebc1"
     }
   ]
 }

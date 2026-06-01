@@ -35,38 +35,46 @@
   ],
   "actors": [
     {
-      "type": "Bramble",
-      "position": [84, 40]
+      "Type": "Bramble",
+      "Position": [84, 40],
+      "Id": "450a129d5a4a0df6"
     },
     {
-      "type": "Bramble",
-      "position": [92, 40]
+      "Type": "Bramble",
+      "Position": [92, 40],
+      "Id": "692727a686f17a0f"
     },
     {
-      "type": "Jumpthru",
-      "position": [80, 40]
+      "Type": "Jumpthru",
+      "Position": [80, 40],
+      "Id": "8c16c7b04e5e16c0"
     },
     {
-      "type": "Jumpthru",
-      "position": [88, 40]
+      "Type": "Jumpthru",
+      "Position": [88, 40],
+      "Id": "9608855dc080f72e"
     },
     {
-      "type": "Player",
-      "position": [52, 56]
+      "Type": "Player",
+      "Position": [52, 56],
+      "Id": "67cb414e4aa85d8c"
     },
     {
-      "type": "HiddenWall",
-      "position": [112, 40],
-      "size": [208, 112],
-      "tileType": "grass"
+      "Type": "HiddenWall",
+      "Position": [112, 40],
+      "Size": [208, 112],
+      "TileType": "grass",
+      "Id": "c107a120c0884eff"
     },
     {
-      "type": "Jumpthru",
-      "position": [112, 96]
+      "Type": "Jumpthru",
+      "Position": [112, 96],
+      "Id": "d9bb9febc4aed27b"
     },
     {
-      "type": "Jumpthru",
-      "position": [112, 72]
+      "Type": "Jumpthru",
+      "Position": [112, 72],
+      "Id": "200fb2e993419366"
     }
   ]
 }
