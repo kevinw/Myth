@@ -96,6 +96,8 @@ public partial class Game : IDisposable
 	private float transitionSunStrengthTo;
 	private Vector2 transitionSunDirectionFrom;
 	private Vector2 transitionSunDirectionTo;
+	private float linkedDoorCooldown;
+	private bool roomSwappedThisFrame;
 	private readonly List<Actor> destroying = [];
 	private readonly List<Actor> rendering = [];
 	private readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
@@ -243,8 +245,11 @@ public partial class Game : IDisposable
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
+		roomSwappedThisFrame = false;
 		CollisionRectsThisFrame.Clear();
 		UpdatePlayerHitSnapshot();
+		if (linkedDoorCooldown > 0)
+			linkedDoorCooldown = Calc.Approach(linkedDoorCooldown, 0, Time.Delta);
 		if (debugViewMessageTimer > 0)
 		{
 			debugViewMessageTimer -= Time.Delta;
@@ -303,16 +308,15 @@ public partial class Game : IDisposable
 			if (hitStun <= 0)
 			{
 				// Remove Destroyed Actors
-				for (var i = 0; i < destroying.Count; i++)
-				{
-					destroying[i].Destroyed();
-					Actors.Remove(destroying[i]);
-				}
-				destroying.Clear();
+				RemoveDestroyedActors();
 
 				// Update Actors
 				for (var i = 0; i < Actors.Count; i++)
+				{
 					Actors[i].Update();
+					if (roomSwappedThisFrame)
+						break;
+				}
 
 				UpdateCamera();
 
@@ -2243,6 +2247,16 @@ public partial class Game : IDisposable
 		Destroy(actor);
 	}
 
+	private void RemoveDestroyedActors()
+	{
+		for (var i = 0; i < destroying.Count; i++)
+		{
+			destroying[i].Destroyed();
+			Actors.Remove(destroying[i]);
+		}
+		destroying.Clear();
+	}
+
 	public void SetHiddenCoverEditorOpacity(bool focused)
 	{
 		foreach (var actor in Actors)
@@ -2344,6 +2358,82 @@ public partial class Game : IDisposable
 		}
 
 		return false;
+	}
+
+	public bool TransitionToLinkedDoor(string targetRoomId, string targetLinkId = "", string sourceLinkId = "")
+	{
+		if (room == null || nextRoom != null || linkedDoorCooldown > 0 || GetFirst<Player>() is not { } player)
+			return false;
+		if (string.IsNullOrWhiteSpace(targetRoomId))
+			return false;
+		if (Assets.GetRoom(targetRoomId) is not { } targetAsset)
+			return false;
+
+		var targetRoom = targetAsset.CloneRuntime();
+		if (!TryFindLinkedDoorDestination(targetRoom, targetLinkId, sourceLinkId, out var localPosition, out var spawnOffset))
+			return false;
+
+		foreach (var actor in Actors)
+			if (actor is not Player && !actor.KeepOnRoomTransition)
+			{
+				actor.Visible = false;
+				Destroy(actor);
+			}
+
+		room = targetRoom;
+		nextRoom = null;
+		transitionDirection = Point2.Zero;
+		LoadRoom(room);
+
+		var targetPosition = room.WorldBounds.TopLeft + localPosition + spawnOffset;
+		player.Position = targetPosition;
+		player.Velocity = Vector2.Zero;
+		Camera = ClampCameraToRoom(player.Position - new Vector2(Width, Height) / 2);
+		ApplyMusicArea(room);
+		ApplyRoomReverb(room);
+		linkedDoorCooldown = 0.35f;
+		roomSwappedThisFrame = true;
+		PulseDitherGlitch();
+		return true;
+	}
+
+	private static bool TryFindLinkedDoorDestination(Room targetRoom, string targetLinkId, string sourceLinkId, out Point2 localPosition, out Point2 spawnOffset)
+	{
+		JsonObject? fallback = null;
+		var desiredLinkId = !string.IsNullOrWhiteSpace(targetLinkId) ? targetLinkId : sourceLinkId;
+
+		foreach (var actor in targetRoom.Actors)
+		{
+			var resolved = ActorSpecs.Resolve(actor);
+			if (!string.Equals(ActorSpecs.ReadString(resolved, "type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			fallback ??= resolved;
+
+			var linkId = ActorSpecs.ReadString(resolved, "linkId");
+			if (!string.IsNullOrWhiteSpace(desiredLinkId) && string.Equals(linkId, desiredLinkId, StringComparison.OrdinalIgnoreCase))
+			{
+				ReadLinkedDoorDestination(resolved, out localPosition, out spawnOffset);
+				return true;
+			}
+
+		}
+
+		if (fallback != null)
+		{
+			ReadLinkedDoorDestination(fallback, out localPosition, out spawnOffset);
+			return true;
+		}
+
+		localPosition = Point2.Zero;
+		spawnOffset = LinkedDoor.DefaultSpawnOffset;
+		return false;
+	}
+
+	private static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)
+	{
+		localPosition = ActorSpecs.ReadPoint(resolved, "position") ?? Point2.Zero;
+		spawnOffset = ActorSpecs.ReadPoint(resolved, "spawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
 	}
 
 	private void ResolvePlayerRoomTransition(Point2 direction)

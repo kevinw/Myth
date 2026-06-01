@@ -233,6 +233,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<Dropper>("Dropper");
 		ActorSpecs.RegisterActor<LedgePatrol>("LedgePatrol");
 		ActorSpecs.RegisterActor<Door>("Door");
+		ActorSpecs.RegisterActor<LinkedDoor>("LinkedDoor");
 		ActorSpecs.RegisterActor<Blob>("Blob");
 		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
 		ActorSpecs.RegisterActor<TitleText>("TitleText");
@@ -280,6 +281,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<LedgePatrol>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Light>("fire", new Point2(4, 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Door>("door", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<LinkedDoor>("back_door", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Blob>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<TitleText>("heart", new Point2(4, 4)));
@@ -297,7 +299,9 @@ public static class Factory
 				continue;
 			}
 
-			if (string.Equals(ActorSpecs.GetTypeName(spec), "Door", StringComparison.OrdinalIgnoreCase))
+			var typeName = ActorSpecs.GetTypeName(spec);
+			if (string.Equals(typeName, "Door", StringComparison.OrdinalIgnoreCase) ||
+			    string.Equals(typeName, "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 				ActorPalette.Add(ActorPaletteEntry.FromActorSpec(id, "door", new Point2(4, 8)));
 		}
 	}

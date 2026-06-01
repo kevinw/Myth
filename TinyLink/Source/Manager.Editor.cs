@@ -2299,6 +2299,7 @@ public partial class Manager
 		var lastCell = cell;
 		var worldMouseBlocked = imgui.WantsMouseInput && !SingleTouchInEditorWorld(inner);
 		var keyboardBlocked = ImGuiWantsKeyboard;
+		var roomActivationClickConsumed = false;
 		UpdateEditorUndoRedo();
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
@@ -2332,10 +2333,23 @@ public partial class Manager
 						editorRoomEntryDirection = GetEditorEntryDirection(previous, selected);
 					CurrentRoom?.Save();
 					SelectRoom(selected);
+					selectedRoomActorIndex = -1;
+					draggingRoomActor = false;
+					draggingEditorSelection = false;
+					selectingEditorRect = false;
+					roomActorDragOffset = Vector2.Zero;
+					resizeHandle = ResizeHandle.None;
 					SyncEditorGame();
 					TweenEditorCameraToRoom(selected);
+					roomActivationClickConsumed = true;
 				}
 			}
+		}
+
+		if (roomActivationClickConsumed)
+		{
+			worldMouseBlocked = true;
+			tilePlacing = false;
 		}
 
 		if (CurrentRoom is {} editing)

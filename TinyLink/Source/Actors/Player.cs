@@ -57,6 +57,7 @@ public partial class Player : Actor
 		get => state.Current;
 		set => state.Change(value);
 	}
+	public bool IsGrounded => grounded;
 	public Controls Controls => Game.Controls;
 
 	private float jumpTimer;
