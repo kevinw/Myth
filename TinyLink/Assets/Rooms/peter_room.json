@@ -2,7 +2,6 @@
   "position": [-80, 0],
   "size": [40, 23],
   "musicArea": "Intense",
-  "reverb": 0.005,
   "tiles": [
     "GGGGGGGG00000000000000000000000000000000",
     "GGGGGGGG00000000000000000000000000000000",
@@ -52,29 +51,28 @@
   ],
   "actors": [
     {
+      "Id": "2c745bb65befbc7f",
       "Type": "Light",
       "Position": [140, 44],
       "Intensity": 1.2,
-      "Radius": 81.4,
-      "Id": "2c745bb65befbc7f"
+      "Radius": 81.4
     },
     {
+      "Id": "733c7b600ad00c84",
       "Type": "Peter",
-      "Position": [37, 53],
-      "Id": "733c7b600ad00c84"
+      "Position": [37, 53]
     },
     {
+      "Id": "cdc12362289410cf",
       "Type": "TitleText",
       "Position": [164, 28],
-      "Text": "it pains me to say it",
-      "Id": "cdc12362289410cf"
+      "Text": "it pains me to say it"
     },
     {
-      "Type": "HiddenWall",
-      "Position": [0, 104],
-      "Size": [32, 16],
-      "TileType": "grass",
-      "Id": "d4904f9b3b673837"
+      "Id": "70cbe40c2da22297",
+      "Type": "RevealDoor",
+      "Position": [24, 104],
+      "Direction": "Left"
     }
   ]
 }
