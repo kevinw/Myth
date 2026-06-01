@@ -9,3 +9,4 @@ FosterSamples.sln.DotSettings.user
 .idea/
 TinyLink/Platforms/**/xcuserdata/
 *.swp
+__pycache__

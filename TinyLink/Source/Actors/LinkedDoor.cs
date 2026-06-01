@@ -6,14 +6,12 @@ public class LinkedDoor : Actor
 {
 	public static readonly Point2 DefaultSpawnOffset = Point2.Zero;
 
-	public string TargetRoomId = "";
-	public string LinkId = "";
-	public string TargetLinkId = "";
+	public string TargetActorId = "";
 	public Point2 SpawnOffset = DefaultSpawnOffset;
 
 	public LinkedDoor()
 	{
-		Sprite = Assets.GetSprite("back_door") ?? Assets.GetSprite("door");
+		Sprite = Assets.GetSprite("back_door");
 		Hitbox = new(new RectInt(-8, -16, 16, 16));
 		Depth = 1;
 		Play("idle");
@@ -23,7 +21,7 @@ public class LinkedDoor : Actor
 	{
 		base.Update();
 
-		if (string.IsNullOrWhiteSpace(TargetRoomId))
+		if (string.IsNullOrWhiteSpace(TargetActorId))
 			return;
 		if (Game.GetFirst<Player>() is not { } player)
 			return;
@@ -34,6 +32,6 @@ public class LinkedDoor : Actor
 		if (Game.Controls.Move.IntValue.Y >= 0)
 			return;
 
-		Game.TransitionToLinkedDoor(TargetRoomId, TargetLinkId, LinkId);
+		Game.TransitionToLinkedDoor(TargetActorId);
 	}
 }

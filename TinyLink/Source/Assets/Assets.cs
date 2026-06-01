@@ -1,5 +1,6 @@
 
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 
 namespace TinyLink;
@@ -1104,6 +1105,19 @@ public static class Assets
 	public static Tileset? GetTileset(string name) => Tilesets.GetValueOrDefault(name);
 	public static Room? GetRoom(Point2 cell) => Rooms.GetValueOrDefault(cell);
 	public static Room? GetRoom(string id) => RoomsById.GetValueOrDefault(id);
+
+	public static (Room Room, JsonObject Actor)? FindActorById(string id)
+	{
+		if (string.IsNullOrWhiteSpace(id))
+			return null;
+
+		foreach (var room in RoomsById.Values)
+		foreach (var actor in room.Actors)
+			if (string.Equals(ActorSpecs.ReadString(actor, "Id"), id, StringComparison.OrdinalIgnoreCase))
+				return (room, actor);
+
+		return null;
+	}
 
 	public static Room? FindAdjacentRoom(Room room, Point2 direction, Vector2 exitPosition)
 	{

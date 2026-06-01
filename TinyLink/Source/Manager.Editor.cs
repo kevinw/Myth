@@ -68,6 +68,7 @@ public partial class Manager
 	ResizeHandle roomGeometryHandle;
 	Point2 roomGeometryDragOffset;
 	JsonUndoScope? roomGeometryUndo;
+	string? pickingLinkedDoorTargetForActorId;
 	readonly JsonUndoManager undo = new();
 	JsonUndoScope? tilePaintUndo;
 	JsonUndoScope? actorMoveUndo;
@@ -968,6 +969,9 @@ public partial class Manager
 
 	private bool DrawActorInstanceProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
+		if (property.Name == nameof(LinkedDoor.TargetActorId) && IsLinkedDoorActor(actor))
+			return DrawLinkedDoorTargetProperty(room, actor, property);
+
 		var changed = false;
 		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
 		ImGui.SetNextItemWidth(controlWidth);
@@ -1086,6 +1090,68 @@ public partial class Manager
 	}
 
 	private static string FacingTooltip(Signs value) => "Click to face the other direction.";
+
+	private bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		var changed = false;
+		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
+		var value = property.Value?.GetValue<string>() ?? string.Empty;
+		var target = Assets.FindActorById(value);
+		var sourceId = ActorSpecs.ReadString(actor, "Id") ?? "";
+		var picking = !string.IsNullOrWhiteSpace(sourceId) &&
+		              string.Equals(pickingLinkedDoorTargetForActorId, sourceId, StringComparison.OrdinalIgnoreCase);
+
+		ImGui.BeginGroup();
+		ImGui.SetNextItemWidth(controlWidth);
+		ImGui.InputText("##Value", ref value, 128, ImGuiInputTextFlags.ReadOnly);
+
+		if (target is { } found)
+			ImGui.TextDisabled($"{found.Room.Id}");
+		else if (!string.IsNullOrWhiteSpace(value))
+			ImGui.TextColored(new Vector4(1.0f, 0.35f, 0.25f, 1.0f), "Missing target");
+		else
+			ImGui.TextDisabled("No target");
+
+		if (ImGui.SmallButton(picking ? "Cancel Pick" : "Pick"))
+			pickingLinkedDoorTargetForActorId = picking ? null : sourceId;
+
+		ImGui.SameLine();
+		if (ImGui.SmallButton("Clear"))
+		{
+			using (CaptureRoomUndo("Clear Linked Door Target", room))
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(""));
+			if (picking)
+				pickingLinkedDoorTargetForActorId = null;
+			changed = true;
+		}
+
+		if (target is { } jumpTarget)
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Jump"))
+			{
+				CurrentRoom?.Save();
+				SelectRoom(jumpTarget.Room);
+				selectedRoomActorIndex = jumpTarget.Room.Actors.IndexOf(jumpTarget.Actor);
+				SyncEditorGame();
+				TweenEditorCameraToRoom(jumpTarget.Room);
+			}
+		}
+		ImGui.EndGroup();
+
+		if (property.HasLocalValue)
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Reset"))
+			{
+				using (CaptureRoomUndo("Reset Actor Property", room))
+					ActorSpecs.ResetProperty(actor, property.JsonName);
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
 
 	private static bool DrawEnumCombo(Type type, ref string value)
 	{
@@ -1227,6 +1293,9 @@ public partial class Manager
 
 	private static bool IsRevealDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor";
+
+	private static bool IsLinkedDoorActor(JsonObject actor)
+		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
 
 	private static bool IsResizableRoomRectActor(JsonObject actor)
 	{
@@ -2247,6 +2316,83 @@ public partial class Manager
 		return null;
 	}
 
+	private bool UpdateLinkedDoorTargetPicker(Rect inner, Rect visibleWorld, bool worldMouseBlocked, bool keyboardBlocked)
+	{
+		if (pickingLinkedDoorTargetForActorId == null)
+			return false;
+
+		if (!keyboardBlocked && Input.Keyboard.Pressed(Keys.Escape))
+		{
+			pickingLinkedDoorTargetForActorId = null;
+			return true;
+		}
+
+		DrawLinkedDoorTargetPickerOverlay(visibleWorld);
+
+		var canInteract = !worldMouseBlocked && inner.Contains(Cursor);
+		if (!canInteract || !Input.Mouse.LeftPressed)
+			return true;
+
+		var world = ScreenToEditorWorld(Cursor, inner);
+		if (FindLinkedDoorAtWorld(world, pickingLinkedDoorTargetForActorId) is { } target &&
+		    Assets.FindActorById(pickingLinkedDoorTargetForActorId) is { } source)
+		{
+			using (CaptureRoomUndo("Set Linked Door Target", source.Room))
+				ActorSpecs.SetProperty(source.Actor, nameof(LinkedDoor.TargetActorId), JsonValue.Create(ActorSpecs.ReadString(target.Actor, "Id") ?? ""));
+			if (source.Room == CurrentRoom)
+				editorGameDirty = true;
+			else
+				source.Room.Save();
+			pickingLinkedDoorTargetForActorId = null;
+		}
+
+		return true;
+	}
+
+	private void DrawLinkedDoorTargetPickerOverlay(Rect visibleWorld)
+	{
+		var lineWeight = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (visibleWorld.GetIntersection(new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height)).Area <= 0)
+				continue;
+
+			foreach (var actor in room.Actors)
+			{
+				if (!IsLinkedDoorActor(actor))
+					continue;
+				if (string.Equals(ActorSpecs.ReadString(actor, "Id"), pickingLinkedDoorTargetForActorId, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				var bounds = RoomActorBounds(room, actor).Inflate(lineWeight * 3);
+				batcher.Rect(bounds, highlight * 0.18f);
+				batcher.RectLine(bounds, lineWeight * 2, highlight);
+			}
+		}
+	}
+
+	private static (Room Room, JsonObject Actor)? FindLinkedDoorAtWorld(Vector2 world, string excludeId)
+	{
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (!room.WorldBounds.Contains(world))
+				continue;
+
+			for (var i = room.Actors.Count - 1; i >= 0; i--)
+			{
+				var actor = room.Actors[i];
+				if (!IsLinkedDoorActor(actor))
+					continue;
+				if (string.Equals(ActorSpecs.ReadString(actor, "Id"), excludeId, StringComparison.OrdinalIgnoreCase))
+					continue;
+				if (RoomActorBounds(room, actor).Contains(world))
+					return (room, actor);
+			}
+		}
+
+		return null;
+	}
+
 	private void DrawEditorEyedropperCursor(Rect tileRect, float lineWeight)
 	{
 		var width = lineWeight * 2;
@@ -2323,6 +2469,8 @@ public partial class Manager
 		DrawEditorRooms(visibleWorld);
 
 		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
+		if (UpdateLinkedDoorTargetPicker(inner, visibleWorld, worldMouseBlocked, keyboardBlocked))
+			worldMouseBlocked = true;
 
 		if (!editingRoomGeometry && !worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
 		{

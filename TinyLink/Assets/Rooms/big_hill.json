@@ -97,7 +97,8 @@
       "Type": "LinkedDoor",
       "Position": [132, 80],
       "TargetRoomId": "intro_stretch",
-      "TargetDoorId": "door1"
+      "TargetDoorId": "door1",
+      "TargetActorId": "1523b22aca13ac05"
     },
     {
       "Id": "ec062a40acdd6a4b",

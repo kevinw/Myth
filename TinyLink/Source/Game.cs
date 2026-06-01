@@ -2360,18 +2360,21 @@ public partial class Game : IDisposable
 		return false;
 	}
 
-	public bool TransitionToLinkedDoor(string targetRoomId, string targetLinkId = "", string sourceLinkId = "")
+	public bool TransitionToLinkedDoor(string targetActorId)
 	{
 		if (room == null || nextRoom != null || linkedDoorCooldown > 0 || GetFirst<Player>() is not { } player)
 			return false;
-		if (string.IsNullOrWhiteSpace(targetRoomId))
+		if (string.IsNullOrWhiteSpace(targetActorId))
 			return false;
-		if (Assets.GetRoom(targetRoomId) is not { } targetAsset)
+		if (Assets.FindActorById(targetActorId) is not { } target)
 			return false;
 
-		var targetRoom = targetAsset.CloneRuntime();
-		if (!TryFindLinkedDoorDestination(targetRoom, targetLinkId, sourceLinkId, out var localPosition, out var spawnOffset))
+		var resolvedTarget = ActorSpecs.Resolve(target.Actor);
+		if (!string.Equals(ActorSpecs.ReadString(resolvedTarget, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 			return false;
+
+		ReadLinkedDoorDestination(resolvedTarget, out var localPosition, out var spawnOffset);
+		var targetRoom = target.Room.CloneRuntime();
 
 		foreach (var actor in Actors)
 			if (actor is not Player && !actor.KeepOnRoomTransition)
@@ -2395,39 +2398,6 @@ public partial class Game : IDisposable
 		roomSwappedThisFrame = true;
 		PulseDitherGlitch();
 		return true;
-	}
-
-	private static bool TryFindLinkedDoorDestination(Room targetRoom, string targetLinkId, string sourceLinkId, out Point2 localPosition, out Point2 spawnOffset)
-	{
-		JsonObject? fallback = null;
-		var desiredLinkId = !string.IsNullOrWhiteSpace(targetLinkId) ? targetLinkId : sourceLinkId;
-
-		foreach (var actor in targetRoom.Actors)
-		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (!string.Equals(ActorSpecs.ReadString(resolved, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
-				continue;
-
-			fallback ??= resolved;
-
-			var linkId = ActorSpecs.ReadString(resolved, "LinkId");
-			if (!string.IsNullOrWhiteSpace(desiredLinkId) && string.Equals(linkId, desiredLinkId, StringComparison.OrdinalIgnoreCase))
-			{
-				ReadLinkedDoorDestination(resolved, out localPosition, out spawnOffset);
-				return true;
-			}
-
-		}
-
-		if (fallback != null)
-		{
-			ReadLinkedDoorDestination(fallback, out localPosition, out spawnOffset);
-			return true;
-		}
-
-		localPosition = Point2.Zero;
-		spawnOffset = LinkedDoor.DefaultSpawnOffset;
-		return false;
 	}
 
 	private static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)

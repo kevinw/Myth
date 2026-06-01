@@ -117,7 +117,8 @@
       "Type": "LinkedDoor",
       "Position": [100, 104],
       "TargetDoorId": "door1",
-      "TargetRoomId": "big_hill"
+      "TargetRoomId": "big_hill",
+      "TargetActorId": "099943c4adef7d7e"
     }
   ]
 }
