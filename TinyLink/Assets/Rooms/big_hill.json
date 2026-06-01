@@ -2,6 +2,8 @@
   "position": [40, 23],
   "size": [80, 23],
   "musicArea": "Calm",
+  "backdropColor": "2D3E30",
+  "backdropColor2": "7200FC",
   "ambientColor": "FFFFFF",
   "reverbAuto": false,
   "reverb": 0.223,

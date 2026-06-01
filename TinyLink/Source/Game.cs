@@ -84,6 +84,10 @@ public partial class Game : IDisposable
 	private Point2 transitionDirection;
 	private Vector2 transitionCameraFrom;
 	private Vector2 transitionCameraTo;
+	private Color transitionBackdropColorFrom;
+	private Color transitionBackdropColorTo;
+	private Color transitionBackdropColor2From;
+	private Color transitionBackdropColor2To;
 	private Color transitionAmbientColorFrom;
 	private Color transitionAmbientColorTo;
 	private float transitionAmbientIntensityFrom;
@@ -786,7 +790,10 @@ public partial class Game : IDisposable
 
 	private void DrawWorldLayer(Target target, bool background)
 	{
-		target.Clear(background ? 0x150e22 : Color.Transparent);
+		target.Clear(Color.Transparent);
+		if (background)
+			DrawBackdrop(target);
+
 		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
 		{
 			Batcher.Render(target);
@@ -818,6 +825,12 @@ public partial class Game : IDisposable
 
 		if (background)
 			DrawSpriteReflections(target);
+	}
+
+	private void DrawBackdrop(Target target)
+	{
+		var (top, bottom) = CurrentBackdropColors();
+		Batcher.Rect(new Rect(0, 0, target.Width, target.Height), top, top, bottom, bottom);
 	}
 
 	private void DrawPlayerHud(Target target)
@@ -1402,6 +1415,20 @@ public partial class Game : IDisposable
 			return room?.AmbientColor ?? Room.DefaultAmbientColor;
 
 		return LerpColor(transitionAmbientColorFrom, transitionAmbientColorTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private (Color Top, Color Bottom) CurrentBackdropColors()
+	{
+		if (nextRoom == null)
+		{
+			var top = room?.BackdropColor ?? Room.DefaultBackdropColor;
+			return (top, room?.BackdropColor2 ?? top);
+		}
+
+		var amount = Ease.Cube.InOut(nextRoomEase);
+		return (
+			LerpColor(transitionBackdropColorFrom, transitionBackdropColorTo, amount),
+			LerpColor(transitionBackdropColor2From, transitionBackdropColor2To, amount));
 	}
 
 	private float CurrentAmbientIntensity()
@@ -2337,6 +2364,10 @@ public partial class Game : IDisposable
 
 				transitionCameraFrom = Camera;
 				transitionCameraTo = ClampCameraToRoom(exitPosition - new Vector2(Width, Height) / 2, nextRoom.WorldBounds);
+				transitionBackdropColorFrom = room.BackdropColor;
+				transitionBackdropColorTo = nextRoom.BackdropColor;
+				transitionBackdropColor2From = room.BackdropColor2 ?? room.BackdropColor;
+				transitionBackdropColor2To = nextRoom.BackdropColor2 ?? nextRoom.BackdropColor;
 				transitionAmbientColorFrom = room.AmbientColor;
 				transitionAmbientColorTo = nextRoom.AmbientColor;
 				transitionAmbientIntensityFrom = room.AmbientIntensity;

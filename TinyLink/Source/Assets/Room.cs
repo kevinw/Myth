@@ -45,6 +45,7 @@ public class Room
 	public readonly record struct LightOccluderPolygon(Point2[] Points, RectInt Bounds);
 
 	public static readonly Point2 DefaultSize = new(Game.Columns, Game.Rows);
+	public static readonly Color DefaultBackdropColor = new(0x150e22);
 	public static readonly Color DefaultAmbientColor = new(0.42f, 0.42f, 0.46f, 1.0f);
 	public const float DefaultAmbientIntensity = 1.0f;
 	public const float DefaultLightNoise = 0.30f;
@@ -127,6 +128,8 @@ public class Room
 	/// Optional FMOD background music Area parameter label.
 	/// </summary>
 	public string? MusicArea;
+	public Color BackdropColor = DefaultBackdropColor;
+	public Color? BackdropColor2;
 	public Color AmbientColor = DefaultAmbientColor;
 	public float AmbientIntensity = DefaultAmbientIntensity;
 	public float LightNoise = DefaultLightNoise;
@@ -159,6 +162,8 @@ public class Room
 		var clone = new Room(Id, TileSpacePosition, Size)
 		{
 			MusicArea = MusicArea,
+			BackdropColor = BackdropColor,
+			BackdropColor2 = BackdropColor2,
 			AmbientColor = AmbientColor,
 			AmbientIntensity = AmbientIntensity,
 			LightNoise = LightNoise,
@@ -235,6 +240,8 @@ public class Room
 		MusicArea = ActorSpecs.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
 			MusicArea = null;
+		BackdropColor = ReadHexColor(json, "backdropColor") ?? DefaultBackdropColor;
+		BackdropColor2 = ReadHexColor(json, "backdropColor2");
 		AmbientColor = ReadHexColor(json, "ambientColor") ?? DefaultAmbientColor;
 		AmbientIntensity = ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
 		LightNoise = ReadFloat(json, "lightNoise", DefaultLightNoise);
@@ -1026,6 +1033,10 @@ public class Room
 
 		if (!string.IsNullOrEmpty(MusicArea))
 			json["musicArea"] = MusicArea;
+		if (BackdropColor != DefaultBackdropColor)
+			json["backdropColor"] = ColorToHex(BackdropColor);
+		if (BackdropColor2.HasValue)
+			json["backdropColor2"] = ColorToHex(BackdropColor2.Value);
 		if (AmbientColor != DefaultAmbientColor)
 			json["ambientColor"] = ColorToHex(AmbientColor);
 		if (AmbientIntensity != DefaultAmbientIntensity)

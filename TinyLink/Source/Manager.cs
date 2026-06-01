@@ -172,6 +172,7 @@ public partial class Manager : App
 
 	readonly Lock assetReloadLock = new();
 	readonly List<string> musicAreas = [];
+	readonly bool dumpAtlases;
 	bool musicEnabled = true;
 	bool alwaysOnTop;
 
@@ -180,8 +181,9 @@ public partial class Manager : App
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager() : base(CreateAppConfig())
+	public Manager(bool dumpAtlases = false) : base(CreateAppConfig())
 	{
+		this.dumpAtlases = dumpAtlases;
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
@@ -217,7 +219,7 @@ public partial class Manager : App
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
-		Assets.Load(GraphicsDevice);
+		Assets.Load(GraphicsDevice, dumpAtlases);
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();

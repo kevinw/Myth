@@ -52,13 +52,13 @@ public static class Assets
 		bundledRoomsWritable = null;
 	}
 
-	public static void Load(GraphicsDevice gfx)
-		=> Reload(gfx, true);
+	public static void Load(GraphicsDevice gfx, bool dumpPackedAtlases = false)
+		=> Reload(gfx, true, dumpPackedAtlases);
 
 	public static void Reload(GraphicsDevice gfx)
-		=> Reload(gfx, false);
+		=> Reload(gfx, false, dumpPackedAtlases: false);
 
-	private static void Reload(GraphicsDevice gfx, bool reloadRooms)
+	private static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases)
 	{
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
@@ -198,6 +198,11 @@ public static class Assets
 
 			output = packer.Pack();
 		}
+
+#if !IOS
+		if (dumpPackedAtlases)
+			DumpPackedAtlasPages(output);
+#endif
 
 		// create texture file
 		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
@@ -761,6 +766,33 @@ public static class Assets
 		using var image = new Image(path);
 		return new Texture(gfx, image, name);
 	}
+
+#if !IOS
+	private static void DumpPackedAtlasPages(Packer.Output output)
+	{
+		try
+		{
+			var directory = Path.GetFullPath(Path.Join(AssetsPath, "..", "AtlasDumps"));
+			Directory.CreateDirectory(directory);
+
+			foreach (var oldFile in Directory.EnumerateFiles(directory, "batcher-atlas-*.png"))
+				File.Delete(oldFile);
+
+			for (var i = 0; i < output.Pages.Count; i++)
+			{
+				var page = output.Pages[i];
+				var file = Path.Join(directory, $"batcher-atlas-{i:00}.png");
+				page.WritePng(file);
+				Console.WriteLine($"Wrote packed Batcher atlas: {file} ({page.Width}x{page.Height})");
+			}
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to write packed Batcher atlas PNGs: {e}");
+		}
+	}
+
+#endif
 
 	private static void LoadRooms()
 	{

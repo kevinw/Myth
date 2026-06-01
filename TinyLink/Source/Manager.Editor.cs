@@ -101,7 +101,7 @@ public partial class Manager
 	float fpsElapsed;
 #endif
 
-	private readonly record struct RoomSettings(string? MusicArea, Color AmbientColor, float AmbientIntensity, float LightNoise, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection);
+	private readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, Color AmbientColor, float AmbientIntensity, float LightNoise, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection);
 
 	private sealed class EditorSelectionSnapshot
 	{
@@ -592,6 +592,37 @@ public partial class Manager
 			}
 		}
 
+		ImGui.TextUnformatted("Backdrop");
+		var backdrop = ColorToVector3(room.BackdropColor);
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.ColorEdit3("##RoomBackdropColor", ref backdrop, ImGuiColorEditFlags.NoInputs))
+		{
+			using (CaptureRoomUndo("Edit Room Backdrop", room))
+				room.BackdropColor = Vector3ToColor(backdrop);
+			changed = true;
+		}
+
+		var gradient = room.BackdropColor2.HasValue;
+		if (ImGui.Checkbox("Gradient", ref gradient))
+		{
+			using (CaptureRoomUndo("Edit Room Backdrop", room))
+				room.BackdropColor2 = gradient ? room.BackdropColor : null;
+			changed = true;
+		}
+
+		if (room.BackdropColor2 is { } backdrop2Color)
+		{
+			ImGui.TextUnformatted("Backdrop Bottom");
+			var backdrop2 = ColorToVector3(backdrop2Color);
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.ColorEdit3("##RoomBackdropColor2", ref backdrop2, ImGuiColorEditFlags.NoInputs))
+			{
+				using (CaptureRoomUndo("Edit Room Backdrop", room))
+					room.BackdropColor2 = Vector3ToColor(backdrop2);
+				changed = true;
+			}
+		}
+
 		ImGui.TextUnformatted("Ambient");
 		var ambient = ColorToVector3(room.AmbientColor);
 		ImGui.SetNextItemWidth(-1);
@@ -739,11 +770,13 @@ public partial class Manager
 	}
 
 	private static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
 
 	private static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
 		room.MusicArea = settings.MusicArea;
+		room.BackdropColor = settings.BackdropColor;
+		room.BackdropColor2 = settings.BackdropColor2;
 		room.AmbientColor = settings.AmbientColor;
 		room.AmbientIntensity = settings.AmbientIntensity;
 		room.LightNoise = settings.LightNoise;
@@ -2113,9 +2146,16 @@ public partial class Manager
 			if (GetEditorRoomTexture(room) is { } preview)
 				DrawEditorRoomPreview(preview, bounds);
 			else
-				batcher.Rect(bounds, 0x150e22);
+				DrawEditorRoomBackdrop(room, bounds);
 			batcher.RectLine(bounds, line, Color.Gray);
 		}
+	}
+
+	private void DrawEditorRoomBackdrop(Room room, RectInt bounds)
+	{
+		var top = room.BackdropColor;
+		var bottom = room.BackdropColor2 ?? top;
+		batcher.Rect(bounds, top, top, bottom, bottom);
 	}
 
 	private void DrawEditorRoomPreview(Texture preview, RectInt bounds)
