@@ -5,7 +5,7 @@ namespace TinyLink;
 
 public class HiddenCoverGrid : Actor
 {
-	private readonly record struct RevealDoorSpec(RectInt Rect, RevealDoor.RevealDirection Direction, string TileType);
+	private readonly record struct RevealDoorSpec(string Id, RectInt Rect, RevealDoor.RevealDirection Direction, string TileType);
 	private readonly record struct DrawCommand(Subtexture Tile, Subtexture Normal, Point2 Vertex, Vector2 Position, int MaterialMask, int CoverMask, int RegionId);
 	private readonly record struct HiddenSegment(VisibilityPolygon.Segment Segment, int RegionId);
 	private readonly record struct SegmentRun(float Axis, float Start, float End, int RegionId);
@@ -36,6 +36,8 @@ public class HiddenCoverGrid : Actor
 	private char[,] coverTiles = new char[0, 0];
 	private int[,] coverRegions = new int[0, 0];
 	private float[] regionAlpha = [];
+	private string[][] regionRevealDoorIds = [];
+	private readonly HashSet<string> revealedDoorIds = [];
 	private readonly List<(RectInt Rect, int RegionId)> triggers = [];
 	private float renderOpacityScale = 1.0f;
 
@@ -78,6 +80,7 @@ public class HiddenCoverGrid : Actor
 			coverRegions[x, y] = -1;
 		}
 		regionAlpha = [];
+		regionRevealDoorIds = [];
 
 		if (size.X <= 0 || size.Y <= 0)
 			return;
@@ -94,6 +97,7 @@ public class HiddenCoverGrid : Actor
 			return;
 
 		regionAlpha = Enumerable.Repeat(1.0f, hiddenRegions.Count).ToArray();
+		regionRevealDoorIds = new string[hiddenRegions.Count][];
 		var remap = hiddenRegions.Keys
 			.Select((sourceRegionId, hiddenRegionId) => (sourceRegionId, hiddenRegionId))
 			.ToDictionary(static it => it.sourceRegionId, static it => it.hiddenRegionId);
@@ -101,6 +105,10 @@ public class HiddenCoverGrid : Actor
 		foreach (var (sourceRegionId, spec) in hiddenRegions)
 		{
 			var hiddenRegionId = remap[sourceRegionId];
+			regionRevealDoorIds[hiddenRegionId] = spec.RevealDoorIds.Distinct().ToArray();
+			if (regionRevealDoorIds[hiddenRegionId].Any(revealedDoorIds.Contains))
+				regionAlpha[hiddenRegionId] = 0.0f;
+
 			var tileType = ResolveCoverTile(room, spec.TileType, airRegions, sourceRegionId);
 			foreach (var tile in spec.Tiles)
 			{
@@ -181,6 +189,7 @@ public class HiddenCoverGrid : Actor
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f && playerBounds.Overlaps(rect))
 			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
+				MarkRegionRevealed(regionId);
 				revealedAny = true;
 			}
 		}
@@ -197,12 +206,23 @@ public class HiddenCoverGrid : Actor
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f)
 			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
+				MarkRegionRevealed(regionId);
 				revealedAny = true;
 			}
 		}
 
 		if (revealedAny && !immediate)
 			Game.PlayAudioEvent("reveal", position: player.Position);
+	}
+
+	private void MarkRegionRevealed(int regionId)
+	{
+		if (regionId < 0 || regionId >= regionRevealDoorIds.Length)
+			return;
+
+		foreach (var id in regionRevealDoorIds[regionId])
+			if (!string.IsNullOrWhiteSpace(id))
+				revealedDoorIds.Add(id);
 	}
 
 	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
@@ -245,7 +265,8 @@ public class HiddenCoverGrid : Actor
 			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? RevealDoor.DefaultSize;
 			var direction = ReadDirection(resolved);
 			var tileType = ActorSpecs.ReadString(resolved, "TileType") ?? "";
-			doors.Add(new(new RectInt(localPosition.X, localPosition.Y, size.X, size.Y), direction, tileType));
+			var id = ActorSpecs.ReadString(actor, "Id") ?? "";
+			doors.Add(new(id, new RectInt(localPosition.X, localPosition.Y, size.X, size.Y), direction, tileType));
 		}
 
 		return doors;
@@ -349,6 +370,8 @@ public class HiddenCoverGrid : Actor
 				hiddenRegions[sourceRegionId] = spec;
 			}
 
+			if (!string.IsNullOrWhiteSpace(door.Id))
+				spec.RevealDoorIds.Add(door.Id);
 			spec.TileType = string.IsNullOrWhiteSpace(door.TileType) ? spec.TileType : door.TileType;
 			spec.Triggers.Add(door.Rect);
 			var doorBounds = TileBounds(door.Rect);
@@ -693,6 +716,7 @@ public class HiddenCoverGrid : Actor
 	{
 		public readonly List<Point2> Tiles = [];
 		public readonly List<RectInt> Triggers = [];
+		public readonly List<string> RevealDoorIds = [];
 		public string TileType = "";
 	}
 }
