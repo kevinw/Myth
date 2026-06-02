@@ -9,6 +9,7 @@ public partial class Player : Actor
 	{
 		Normal,
 		Roll,
+		Dash,
 		Attack,
 		BlinkStrike,
 		Hurt,
@@ -43,6 +44,9 @@ public partial class Player : Actor
 	static float RollJumpTime => 0.11f;
 	static float RollJumpSpeed => 150;
 	static float RollJumpCarryTime => 0.28f;
+	static float DashSpeed => 220;
+	static float DashDuration => 0.15f;
+	static float DashCooldown => 0.20f;
 	static float DuckAttackCooldown => 0.4f;
 	static float AttackBlockOverlapThreshold => 0.5f;
 	static float HurtDuration => 0.5f;
@@ -68,6 +72,9 @@ public partial class Player : Actor
 	private bool ducking;
 	private float wallJumpInputLockTimer;
 	private int wallJumpDirection;
+	private int dashDirection;
+	private float dashCooldownTimer;
+	private float dashRemainder;
 	private float jumpForce = JumpForce;
 	private float rollJumpCarryTimer;
 	private float duckAttackCooldownTimer;
@@ -163,6 +170,8 @@ public partial class Player : Actor
 			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
+		if (dashCooldownTimer > 0)
+			dashCooldownTimer = Calc.Approach(dashCooldownTimer, 0, Time.Delta);
 
 		// state control
 		switch (State)
@@ -172,6 +181,9 @@ public partial class Player : Actor
 				break;
 			case States.Roll:
 				RollState();
+				break;
+			case States.Dash:
+				DashState();
 				break;
 			case States.Attack:
 				AttackState();
@@ -207,7 +219,7 @@ public partial class Player : Actor
 		}
 
 		// gravity
-		if (!grounded)
+		if (!grounded && State != States.Dash)
 		{
 			float grav = Gravity;
 			if (State == States.Normal && MathF.Abs(Velocity.Y) < 20 && Controls.Jump.Down)
@@ -243,7 +255,12 @@ public partial class Player : Actor
 		}
 
 		// detect getting hit
-		if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
+		if (State == States.Dash)
+		{
+			if (OverlapsFirst(Masks.Hazard) is { } hit)
+				hit.Hit(this);
+		}
+		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
 
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
@@ -390,7 +407,11 @@ public partial class Player : Actor
 		}
 
 		// Begin Attack
-		if (Controls.BlinkStrike.ConsumePress())
+		if (Controls.Dash.ConsumePress() && TryStartDash(input))
+		{
+			return;
+		}
+		else if (Controls.BlinkStrike.ConsumePress())
 		{
 			blinkStrikeTarget = FindBlinkStrikeTarget();
 			if (blinkStrikeTarget != null)
@@ -493,6 +514,60 @@ public partial class Player : Actor
 			StopRollSound(false);
 			State = States.Normal;
 			ducking = grounded && Controls.Move.IntValue.Y > 0;
+		}
+	}
+
+	private bool TryStartDash(int input)
+	{
+		if (dashCooldownTimer > 0)
+			return false;
+
+		dashDirection = input != 0 ? Math.Sign(input) : Facing;
+		if (dashDirection == 0)
+			dashDirection = Signs.Positive;
+
+		Facing = dashDirection;
+		dashRemainder = 0;
+		dashCooldownTimer = DashCooldown;
+		jumpTimer = 0;
+		Velocity = Vector2.Zero;
+		ducking = false;
+		Squish = new Vector2(1.35f, 0.82f);
+		Play("jump");
+		State = States.Dash;
+		return true;
+	}
+
+	private void DashState()
+	{
+		ducking = false;
+		Play("jump");
+		Velocity = Vector2.Zero;
+		MoveDash(DashSpeed * Time.Delta * dashDirection);
+
+		if (state.Time >= DashDuration)
+			State = States.Normal;
+	}
+
+	private void MoveDash(float value)
+	{
+		dashRemainder += value;
+		var move = (int)dashRemainder;
+		dashRemainder -= move;
+
+		while (move != 0)
+		{
+			var sign = Math.Sign(move);
+			var bounds = Hitbox.Rect + Position + new Point2(sign, 0);
+			if (Game.OverlapsRoomCollision(bounds))
+			{
+				dashRemainder = 0;
+				State = States.Normal;
+				return;
+			}
+
+			Position.X += sign;
+			move -= sign;
 		}
 	}
 

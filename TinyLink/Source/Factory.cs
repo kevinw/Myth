@@ -258,6 +258,9 @@ public static class Factory
 		Register('#', Assets.GetTileset("back-dual") != null
 			? AsDualTile("back", "back-dual", "Background", TileLayer.Background)
 			: AsTile("back", false, layer: TileLayer.Background));
+		Register('m', AsTile("myth-back", false, "Background", name: "Myth Back", layer: TileLayer.Background, acousticReflectivity: 0.35f));
+		Register('u', AsTile("myth-runes", false, "Background", name: "Myth Runes", layer: TileLayer.Background, acousticReflectivity: 0.35f));
+		Register('v', AsTile("myth-vines", false, "Grass", name: "Myth Vines", layer: TileLayer.Background, acousticReflectivity: 0.20f));
 
 		RegisterActorPaletteEntries();
 		RegisterActorSpecPaletteEntries();

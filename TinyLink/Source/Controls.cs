@@ -31,6 +31,12 @@ public class Controls(Input input)
 			.Add(Buttons.East)
 	);
 
+	public readonly VirtualAction Dash = new(input, "Dash",
+		new ActionBindingSet()
+			.Add(Keys.LeftShift, Keys.RightShift)
+			.Add(Axes.RightTrigger, 1, 0.25f)
+	);
+
 	public readonly VirtualAction Saw = new(input, "Saw",
 		new ActionBindingSet()
 			.Add(Keys.Z)
