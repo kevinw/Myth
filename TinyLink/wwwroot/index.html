@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="icon" href="data:,">
+	<title>TinyLink</title>
+	<style>
+		html, body {
+			margin: 0;
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			background: #05030a;
+		}
+
+		body {
+			display: grid;
+			place-items: center;
+		}
+
+		canvas {
+			display: block;
+			aspect-ratio: 16 / 9;
+			width: min(100vw, calc(100vh * 16 / 9));
+			height: min(100vh, calc(100vw * 9 / 16));
+		}
+
+		#start-gate {
+			position: fixed;
+			inset: 0;
+			display: grid;
+			place-items: center;
+			background: #150e22;
+			z-index: 1;
+		}
+
+		#start-panel {
+			display: grid;
+			gap: 14px;
+			width: min(220px, calc(100vw - 48px));
+		}
+
+		#start-button {
+			border: 1px solid #e0d3a7;
+			background: #2f213f;
+			color: #f5e9c8;
+			font: 700 18px system-ui, sans-serif;
+			padding: 14px 28px;
+			cursor: pointer;
+		}
+
+		#start-button:disabled {
+			opacity: 0.55;
+			cursor: wait;
+		}
+
+		#start-progress {
+			width: 100%;
+			height: 8px;
+			accent-color: #e0d3a7;
+		}
+
+		#start-gate[hidden] {
+			display: none;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="foster-canvas" width="1280" height="720"></canvas>
+	<div id="start-gate">
+		<div id="start-panel">
+			<button id="start-button" type="button">Start</button>
+			<progress id="start-progress" value="0" max="1"></progress>
+		</div>
+	</div>
+	<script type="module" src="main.js"></script>
+</body>
+</html>

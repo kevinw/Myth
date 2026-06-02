@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -87,15 +89,15 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float time = TimePadding.x;
     float2 hit_axis = normalize(TimePadding.yz);
 
-    float4 original = Texture.Sample(Sampler, input.tex_coord) * input.color;
+    float2 screen = target_uv(input.tex_coord);
+    float4 original = Texture.SampleLevel(Sampler, screen, 0.0) * input.color;
     if (amount <= 0.001)
         return original;
 
-    float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, input.tex_coord);
+    float4 tile_field = TileFieldTexture.SampleLevel(TileFieldSampler, screen, 0.0);
     float family = tile_field.g;
     float variant = tile_field.r;
-    float2 screen_pixel = input.tex_coord * texture_size;
-    float2 world_pixel = camera + screen_pixel;
+    float2 world_pixel = camera + screen_pixel(input.position);
     float2 tile = floor(world_pixel / 8.0);
     float frame = floor(time * 7.0);
     float dirty = hash_float(tile + frame + variant * 31.0);
@@ -130,8 +132,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
             continue;
 
         float jitter = (hash_float(tile + fi * 17.0 + frame) - 0.5) * local * 3.0;
-        float2 uv = input.tex_coord + direction * (fi + jitter) / texture_size;
-        float3 sample_color = Texture.Sample(Sampler, uv).rgb;
+        float2 uv = screen + direction * (fi + jitter) / texture_size;
+        float3 sample_color = Texture.SampleLevel(Sampler, uv, 0.0).rgb;
         float sample_luma = luminance(sample_color);
 
         bool take_high = seek_high > 0.5 && sample_luma > best_luma;
@@ -149,7 +151,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float2 tear_direction = direction.yx * float2(-1.0, 1.0);
     float tear_amount = (hash_float(floor(world_pixel / 24.0) + frame * 5.0) - 0.5) * local * 7.0;
-    float3 torn_color = Texture.Sample(Sampler, input.tex_coord + tear_direction * tear_amount / texture_size).rgb;
+    float3 torn_color = Texture.SampleLevel(Sampler, screen + tear_direction * tear_amount / texture_size, 0.0).rgb;
     float3 sorted_color = lerp(best_color, torn_color, saturate(local * 0.38));
     return float4(lerp(original.rgb, sorted_color, blend), original.a);
 }

@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -280,13 +282,13 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, 
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
-    float4 scene = Texture.Sample(Sampler, input.tex_coord) * input.color;
-    float4 light = LightTexture.Sample(LightSampler, input.tex_coord);
-    float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, input.tex_coord);
-    float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, input.tex_coord).r;
-    float4 emissive = EmissiveTexture.Sample(EmissiveSampler, input.tex_coord);
-    float2 screen_pixel = input.tex_coord * TextureSizeCamera.xy;
-    float2 world_pixel = TextureSizeCamera.zw + screen_pixel;
+    float2 sample = target_uv(input.tex_coord);
+    float4 scene = Texture.Sample(Sampler, sample) * input.color;
+    float4 light = LightTexture.Sample(LightSampler, sample);
+    float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
+    float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
+    float4 emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
+    float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position);
     light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;

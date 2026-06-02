@@ -279,6 +279,7 @@ public partial class Game : IDisposable
 					ReloadRoom();
 
 				if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
+				if (Input.Keyboard.Pressed(Keys.K)) ToggleDebugView(DebugView.Reflection);
 				if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
 				if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 				if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
@@ -675,6 +676,8 @@ public partial class Game : IDisposable
 				output = BackgroundLightMask;
 			else if (debugView == DebugView.NormalBuffer)
 				output = NormalBuffer;
+			else if (debugView == DebugView.Reflection)
+				output = ReflectionScreen;
 			else if (debugView == DebugView.None)
 			{
 				if (PerfToggles.Glitch)
@@ -730,7 +733,14 @@ public partial class Game : IDisposable
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
+#if BROWSER
+			var flipTargetTextures = Batcher.FlipTargetTextures;
+			Batcher.FlipTargetTextures = false;
+#endif
 			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
+#if BROWSER
+			Batcher.FlipTargetTextures = flipTargetTextures;
+#endif
 			if (useCrt)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();

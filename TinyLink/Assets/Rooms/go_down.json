@@ -31,9 +31,9 @@
   ],
   "actors": [
     {
+      "Id": "d86ab7907f6cd08e",
       "Type": "Mosquito",
-      "Position": [196, 100],
-      "Id": "d86ab7907f6cd08e"
+      "Position": [196, 100]
     }
   ]
 }

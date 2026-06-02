@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 #define OLD_CRT
 
 cbuffer VertexUniformBlock : register(b0, space1)
@@ -47,7 +49,7 @@ VsOutput vertex_main(VsInput input)
 
 float3 sample_color(float2 uv)
 {
-    return Texture.Sample(Sampler, saturate(uv)).rgb;
+    return Texture.Sample(Sampler, texture_uv(saturate(uv))).rgb;
 }
 
 float3 sample_crt_color(float2 uv, float2 texel)

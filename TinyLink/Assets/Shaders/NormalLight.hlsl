@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -41,7 +43,10 @@ VsOutput vertex_main(VsInput input)
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
-    float2 pixel = input.TexCoord * TextureSize.xy;
+    float2 pixel = screen_pixel(input.Position);
+#if BROWSER
+    pixel.y = TextureSize.y - pixel.y;
+#endif
     float2 lightPosition = LightPositionRadiusHeight.xy;
     float radius = LightPositionRadiusHeight.z;
     float height = LightPositionRadiusHeight.w;
@@ -52,7 +57,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float attenuation = directional > 0.5 ? 1.0 : saturate(1.0 - distanceToLight / radius);
     attenuation *= attenuation;
 
-    float4 normalData = Texture.Sample(Sampler, input.TexCoord);
+    float4 normalData = Texture.Sample(Sampler, target_uv(input.TexCoord));
     float normalStrength = normalData.a;
     float3 normal = normalize(normalData.rgb * 2.0 - 1.0);
     float3 pointLightDirection = normalize(float3(toLight2D, height));

@@ -39,6 +39,5 @@ public class Controls(Input input)
 
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
-			.Add(Keys.K)
 	);
 }

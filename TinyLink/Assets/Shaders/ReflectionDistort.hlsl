@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -46,11 +48,11 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float frequency = FrequencySpeedPadding.x;
     float speed = FrequencySpeedPadding.y;
 
-    float2 pixel = input.TexCoord * textureSize;
+    float2 pixel = screen_pixel(input.Position);
     float wave = sin(pixel.y * frequency + time * speed) * amplitude;
     wave += sin(pixel.y * frequency * 2.1 + time * speed * 1.7) * amplitude * 0.35;
 
-    float2 uv = input.TexCoord + float2(wave / textureSize.x, 0.0);
+    float2 uv = target_uv(input.TexCoord) + float2(wave / textureSize.x, 0.0);
     // Snap distorted samples to texel centers so the reflection keeps a pixel-art edge.
     uv = (floor(uv * textureSize) + 0.5) / textureSize;
     float4 color = Texture.Sample(Sampler, uv) * input.Color;

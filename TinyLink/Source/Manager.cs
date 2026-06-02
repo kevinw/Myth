@@ -3,7 +3,9 @@ using System.Drawing;
 using System.Numerics;
 using System.Text.Json;
 using Foster.Framework;
+#if EDITOR
 using ImGuiNET;
+#endif
 using Color = Foster.Framework.Color;
 
 namespace TinyLink;
@@ -27,20 +29,18 @@ public partial class Manager : App
 	static float BoxPadding => 4;
 	static float BoxSpacing => 0;
 	static float ScreenPadding => 0;
+#if !EDITOR
+	static Color highlight => 0x5fcde4;
+#endif
 
 	/// <summary>
 	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
 	/// </summary>
 	private Point2 cell = new(0, 0);
 	private string? selectedRoomId;
-	private Point2 roomCreatePosition;
-	private Point2? editorRoomEntryDirection;
+#if EDITOR
 	private (string RoomId, Point2 Position)? playtestPlayerPosition;
-	private bool editingRoomName;
-	private bool focusRoomNameEditor;
-	private string roomNameEditor = string.Empty;
-	private string? roomNameEditingRoomId;
-	private string? pendingDeleteRoomId;
+#endif
 	public bool LightingDitherEnabled = true;
 	public float LightingDitherScale = 1.0f;
 	public float LightingDitherStrength = 0.155f;
@@ -55,6 +55,7 @@ public partial class Manager : App
 	private const float PlayModePinchInThreshold = 0.82f;
 	private float playModePinchStartDistance;
 #endif
+	private const float PlayTransitionDuration = 0.25f;
 	float playTransition;
 	Vector2 playTransitionFromCenter;
 	Vector2 playTransitionFromSize;
@@ -70,7 +71,9 @@ public partial class Manager : App
 	private long lastAllocated = -1;
 	#endif
 
+#if EDITOR
 	int fpsOverlayMode;
+#endif
 	bool fpsOverlayVisible = true;
 
 	/// <summary>
@@ -83,7 +86,6 @@ public partial class Manager : App
 	/// </summary>
 	private readonly Batcher batcher;
 	private readonly Controls controls;
-	private readonly ImGuiRenderer imgui = null!;
 
 	/// <summary>
 	/// Visible Space
@@ -92,48 +94,14 @@ public partial class Manager : App
 		=> new Rect(0, 0, Window.WidthInPixels / Scale, Window.HeightInPixels / Scale).Inflate(-ScreenPadding);
 
 	/// <summary>
-	/// Toolbar Space
-	/// </summary>
-	private Rect ToolbarRect
-		=> new(View.X, View.Y, View.Width, ToolbarHeight);
-
-	/// <summary>
-	/// Workspace, which is the full space below the Toolbar
-	/// </summary>
-	private Rect WorkRect
-		=> new(View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
-
-	/// <summary>
-	/// Palette View when the Editor is Open
-	/// </summary>
-	private Rect PaletteOpenRect
-		=> new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
-
-	/// <summary>
-	/// Edit Workspace when the Editor is Open
-	/// </summary>
-	private Rect EditorOpenRect
-		=> new Rect(WorkRect.X + PaletteWidth + BoxSpacing, WorkRect.Y, WorkRect.Width - PaletteWidth - BoxSpacing, WorkRect.Height).Inflate(-EditorInset);
-
-	/// <summary>
 	/// Play Workspace when the Game is Open
 	/// </summary>
 	private Rect GameOpenRect => View;
 
-	/// <summary>
-	/// Eases between the EditView and the PlayView as the Game opens/closes
-	/// </summary>
-	private Rect WorkspaceRect
-	{
-		get
-		{
-			var a = Vector2.Lerp(EditorOpenRect.TopLeft, GameOpenRect.TopLeft, Ease.Cube.InOut(gameEase));
-			var b = Vector2.Lerp(EditorOpenRect.BottomRight, GameOpenRect.BottomRight, Ease.Cube.InOut(gameEase));
-			return Rect.Between(a, b);
-		}
-	}
 
-	private Rect GameViewRect => WorkspaceRect;
+#if !EDITOR
+	private Rect GameViewRect => GameOpenRect;
+#endif
 
 	public Vector2 GameMouseWorld(Game gameInstance)
 	{
@@ -186,12 +154,23 @@ public partial class Manager : App
 		this.dumpAtlases = dumpAtlases;
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
+#if EDITOR
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
+#endif
 	}
 
 	private static AppConfig CreateAppConfig()
 	{
-#if IOS
+#if BROWSER
+		return new AppConfig(
+			ApplicationName: "TinyLink",
+			WindowTitle: "TinyLink",
+			Width: 1280,
+			Height: 720,
+			Resizable: true,
+			UpdateMode: UpdateMode.UnlockedStep(),
+			PreferredGraphicsDriver: GraphicsDriver.WebGPU);
+#elif IOS
 		return new AppConfig(
 			ApplicationName: "TinyLink",
 			WindowTitle: "TinyLink",
@@ -214,29 +193,46 @@ public partial class Manager : App
 
 	protected override void Startup()
 	{
+#if !BROWSER
 		LoadWindowSettings();
+#endif
 
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 
+#if !BROWSER
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
+#endif
 		Assets.Load(GraphicsDevice, dumpAtlases);
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
+#if BROWSER_NO_FMOD
+		musicAreas.Clear();
+		musicAreas.Add(DefaultMusicArea);
+#else
 		LoadAudioBanks();
-#if DEBUG && !IOS
+#endif
+#if BROWSER
+		StartGame();
+#endif
+#if EDITOR && DEBUG && !IOS
 		StartAssetWatcher();
 		StartShaderWatcher();
 		StartAudioBankWatcher();
 #endif
 
+#if EDITOR
 		SyncEditorGame();
+#endif
 	}
 
 	protected override void Shutdown()
 	{
+#if !BROWSER
 		SaveWindowSettings();
+#endif
 		game?.Dispose();
+#if EDITOR
 		ClearRoomPreviewCache(deferDisposal: false);
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
@@ -249,6 +245,7 @@ public partial class Manager : App
 		shaderWatcher = null;
 		audioBankWatcher?.Dispose();
 		audioBankWatcher = null;
+#endif
 #endif
 
 		Assets.Unload();
@@ -306,7 +303,7 @@ public partial class Manager : App
 	private static string AudioBankRoot(string fmodPath)
 	{
 		var buildPath = Path.Join(fmodPath, "Build");
-#if IOS
+#if IOS || BROWSER
 		var platformPath = Path.Join(buildPath, "Mobile");
 #else
 		var platformPath = Path.Join(buildPath, "Desktop");
@@ -416,37 +413,44 @@ public partial class Manager : App
 	protected override void Update()
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
+#if EDITOR
 		using (PerfStats.Time(PerfDetail.DeferredRoomPreviewDisposal))
 			DisposeDeferredRoomPreviews();
-#if DEBUG && !IOS
+#endif
+#if EDITOR && DEBUG && !IOS
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
 		UpdateShaderReload();
 		UpdateAudioBankReload();
 #endif
 
+#if EDITOR
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
+#else
+		var keyboardShortcutsBlocked = false;
+#endif
 
 		// Misc. Hotkeys
 		using (PerfStats.Time(PerfDetail.Hotkeys))
 		{
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 				ReloadAssets(true);
-#if DEBUG && !IOS
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F))
-				Window.Fullscreen = !Window.Fullscreen;
-#endif
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
-				Window.Fullscreen = !Window.Fullscreen;
+
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
 				ToggleFpsOverlay();
+#if !IOS && !BROWSER
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
+				Window.Fullscreen = !Window.Fullscreen;
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
 			{
 				CurrentRoom?.Save();
 				Exit();
 			}
+#endif
+#if EDITOR
 			if (!keyboardShortcutsBlocked && ToggleEditorPressed())
 				ToggleGame();
+#endif
 		}
 		var perfToggleChordActive = UpdatePerfToggles(keyboardShortcutsBlocked);
 
@@ -479,14 +483,17 @@ public partial class Manager : App
 		// Show Editor
 		else
 		{
+#if EDITOR
 			gameEase = Calc.Approach(gameEase, 0.0f, Time.Delta * 4.0f);
 			if (!keyboardShortcutsBlocked)
 			{
 				using (PerfStats.Time(PerfDetail.EditorNavigation))
 					UpdateEditorNavigation();
 			}
+#endif
 		}
 
+#if EDITOR
 		// Build our Sprite Batch
 		using (PerfStats.Time(PerfDetail.BatchBuild))
 		{
@@ -534,6 +541,7 @@ public partial class Manager : App
 				FpsOverlayImGui();
 			imgui.EndLayout();
 		}
+#endif
 	}
 
 
@@ -675,8 +683,10 @@ public partial class Manager : App
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
 
 		batcher.Render(Window);
+#if EDITOR
 		if (imgui != null)
 			imgui.Render();
+#endif
 	}
 
 	private void RenderPlayTransition()
@@ -691,7 +701,7 @@ public partial class Manager : App
 		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
 	}
 
-#if DEBUG && !IOS
+#if EDITOR && DEBUG && !IOS
 	private void RequestAssetReload()
 	{
 		lock (assetReloadLock)
@@ -887,12 +897,16 @@ public partial class Manager : App
 			Factory.Clear();
 			Factory.RegisterTypes();
 			Assets.RebuildRoomGeometry();
+#if EDITOR
 			ClearRoomPreviewCache();
+#endif
 			ResolveSelectedRoom();
 			if (playing)
 				game?.RefreshRoomTiles();
+#if EDITOR
 			else
 				SyncEditorGame();
+#endif
 
 			Console.WriteLine("Reloaded assets.");
 		}
@@ -960,6 +974,58 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
+	private void StartGame()
+	{
+#if EDITOR
+		CurrentRoom?.Save();
+#endif
+		if (CurrentRoom is not { } room)
+		{
+#if BROWSER
+			Console.Error.WriteLine("No room found for browser startup.");
+#endif
+			return;
+		}
+
+#if EDITOR
+		var fallbackPlayerDirection = editorRoomEntryDirection;
+		Point2? initialPlayerPosition = playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id ? remembered.Position : null;
+#else
+		Point2? fallbackPlayerDirection = null;
+		Point2? initialPlayerPosition = null;
+#endif
+
+		game?.Dispose();
+		game = new Game(
+			this,
+			room,
+			fallbackPlayerDirection: fallbackPlayerDirection,
+			spawnFallbackPlayer: true,
+			initialPlayerPosition: initialPlayerPosition);
+#if IOS || !EDITOR
+		playTransition = 1.0f;
+		playTransitionFromCenter = Vector2.Zero;
+		playTransitionFromSize = Vector2.Zero;
+		playTransitionToCenter = Vector2.Zero;
+		playTransitionToSize = Vector2.Zero;
+		gameEase = 1.0f;
+		startingPlay = false;
+		playing = true;
+		game.SnapCameraToGameplayTarget();
+#else
+		var target = game.GetGameplayCameraTarget();
+		playTransition = 0.0f;
+		playTransitionFromCenter = editorCamera;
+		playTransitionFromSize = GameViewRect.Size / editorZoom;
+		playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
+		playTransitionToSize = new Vector2(Game.Width, Game.Height);
+		startingPlay = true;
+		playing = false;
+#endif
+		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
+	}
+
+#if EDITOR
 	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize));
 
@@ -1043,6 +1109,7 @@ public partial class Manager : App
 		ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.10f, 0.30f, 0.35f, 1.0f));
 	}
 
+#if EDITOR
 	private bool ImGuiWantsKeyboard
 		=> imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
 
@@ -1053,6 +1120,7 @@ public partial class Manager : App
 		else
 			StartGame();
 	}
+#endif
 
 #if IOS
 	private bool UpdatePlayModePinchIn()
@@ -1111,42 +1179,6 @@ public partial class Manager : App
 	}
 #endif
 
-	private void StartGame()
-	{
-		CurrentRoom?.Save();
-		if (CurrentRoom is { } room)
-		{
-			game?.Dispose();
-			game = new Game(
-				this,
-				room,
-				fallbackPlayerDirection: editorRoomEntryDirection,
-				spawnFallbackPlayer: true,
-				initialPlayerPosition: playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id ? remembered.Position : null);
-#if IOS
-				playTransition = 1.0f;
-				playTransitionFromCenter = Vector2.Zero;
-				playTransitionFromSize = Vector2.Zero;
-				playTransitionToCenter = Vector2.Zero;
-				playTransitionToSize = Vector2.Zero;
-				gameEase = 1.0f;
-				startingPlay = false;
-				playing = true;
-			game.SnapCameraToGameplayTarget();
-#else
-			var target = game.GetGameplayCameraTarget();
-			playTransition = 0.0f;
-			playTransitionFromCenter = editorCamera;
-			playTransitionFromSize = GameViewRect.Size / editorZoom;
-			playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
-			playTransitionToSize = new Vector2(Game.Width, Game.Height);
-			startingPlay = true;
-			playing = false;
-#endif
-			VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
-		}
-	}
-
 	private void StopGame()
 	{
 #if IOS
@@ -1202,4 +1234,5 @@ public partial class Manager : App
 		}
 	}
 
+#endif
 }

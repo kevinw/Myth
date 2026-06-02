@@ -1,3 +1,4 @@
+#if EDITOR
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Foster.Framework;
@@ -15,7 +16,6 @@ public partial class Manager
 	static Color highlight => 0x5fcde4;
 
 	private const float AssetReloadDelay = 0.25f;
-	private const float PlayTransitionDuration = 0.25f;
 	private const float DefaultRoomPreviewResolutionScale = 0.75f;
 
 	bool editorGameDirty;
@@ -100,6 +100,41 @@ public partial class Manager
 	int fpsFrames;
 	float fpsElapsed;
 #endif
+
+	private Point2 roomCreatePosition;
+	private Point2? editorRoomEntryDirection;
+	private bool editingRoomName;
+	private bool focusRoomNameEditor;
+	private string roomNameEditor = string.Empty;
+	private string? roomNameEditingRoomId;
+	private string? pendingDeleteRoomId;
+	private readonly ImGuiRenderer imgui = null!;
+
+	/// Toolbar Space
+	private Rect ToolbarRect => new(View.X, View.Y, View.Width, ToolbarHeight);
+
+	/// Workspace, which is the full space below the Toolbar
+	private Rect WorkRect => new(View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
+
+	/// Palette View when the Editor is Open
+	private Rect PaletteOpenRect => new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
+
+	/// Edit Workspace when the Editor is Open
+	private Rect EditorOpenRect
+		=> new Rect(WorkRect.X + PaletteWidth + BoxSpacing, WorkRect.Y, WorkRect.Width - PaletteWidth - BoxSpacing, WorkRect.Height).Inflate(-EditorInset);
+
+	/// Eases between the EditView and the PlayView as the Game opens/closes
+	private Rect WorkspaceRect
+	{
+		get
+		{
+			var a = Vector2.Lerp(EditorOpenRect.TopLeft, GameOpenRect.TopLeft, Ease.Cube.InOut(gameEase));
+			var b = Vector2.Lerp(EditorOpenRect.BottomRight, GameOpenRect.BottomRight, Ease.Cube.InOut(gameEase));
+			return Rect.Between(a, b);
+		}
+	}
+
+	private Rect GameViewRect => WorkspaceRect;
 
 	private readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, Color AmbientColor, float AmbientIntensity, float LightNoise, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection);
 
@@ -196,7 +231,7 @@ public partial class Manager
 		prefabUndo = null;
 		prefabUndoSpecId = null;
 		SyncEditorGame();
-}
+	}
 
 	private bool UpdateEditorUndoRedo()
 	{
@@ -3414,7 +3449,6 @@ public partial class Manager
 		audioBankWatcher.Renamed += (_, _) => RequestAudioBankReload();
 		audioBankWatcher.EnableRaisingEvents = true;
 	}
-#endif
 
 
 	private void SelectRoom(Room room)
@@ -3532,3 +3566,5 @@ public partial class Manager
 	}
 
 }
+#endif
+#endif

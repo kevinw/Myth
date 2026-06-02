@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -39,7 +41,7 @@ VsOutput vertex_main(VsInput input)
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
-    float4 field = Texture.Sample(Sampler, input.TexCoord);
+    float4 field = Texture.Sample(Sampler, target_uv(input.TexCoord));
     int channel = int(ChannelMinMaxPadding.x + 0.5);
     float value = channel == 0 ? field.r : channel == 1 ? field.g : field.b;
     float minValue = ChannelMinMaxPadding.y;

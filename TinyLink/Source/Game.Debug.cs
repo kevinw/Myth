@@ -14,6 +14,7 @@ public partial class Game
 		TileFieldRed,
 		TileFieldGreen,
 		DitherMask,
+		Reflection,
 		Visibility
 	}
 
@@ -63,6 +64,7 @@ public partial class Game
 			DebugView.TileFieldRed => "Tile Field R: Hash",
 			DebugView.TileFieldGreen => "Tile Field G: Family",
 			DebugView.DitherMask => "Dither Mask",
+			DebugView.Reflection => "Reflection Screen",
 			DebugView.Visibility => "Visibility Polygon",
 			_ => view.ToString()
 		};

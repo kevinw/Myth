@@ -1,3 +1,4 @@
+#if EDITOR
 using System.Diagnostics;
 using System.Numerics;
 using Foster.Framework;
@@ -535,3 +536,4 @@ public class ImGuiRenderer : IDisposable
 		ImGui.DestroyContext(context);
 	}
 }
+#endif

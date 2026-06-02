@@ -71,11 +71,13 @@ public static class Assets
 		var kitGeneratedTilesets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		// load main font file
+#if !BROWSER
 		if (Font == null)
 		{
 			Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
 			Font.LineGap = 4;
 		}
+#endif
 
 		// get sprite files
 		foreach (var file in EnumerateAsepriteFiles(spritesPath))
@@ -117,7 +119,7 @@ public static class Assets
 			foreach (var (name, ase) in spriteFiles)
 			{
 				var frames = ase.RenderAllFrames();
-				for (int i = 0; i < frames.Length; i ++)
+				for (int i = 0; i < frames.Length; i++)
 				{
 					packer.Add($"{name}/{i}", frames[i]);
 					packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
@@ -135,16 +137,16 @@ public static class Assets
 				var columns = image.Width / Game.TileSize;
 				var rows = image.Height / Game.TileSize;
 
-				for (int x = 0; x < columns; x ++)
-					for (int y = 0; y < rows; y ++)
+				for (int x = 0; x < columns; x++)
+					for (int y = 0; y < rows; y++)
 						packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
 
 				var variantIndex = 0;
 				foreach (var layer in variantLayers)
 				{
 					var variant = ase.RenderFrame(0, it => it == layer);
-					for (int x = 0; x < columns; x ++)
-						for (int y = 0; y < rows; y ++)
+					for (int x = 0; x < columns; x++)
+						for (int y = 0; y < rows; y++)
 							packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", variant, new RectInt(x, y, 1, 1) * Game.TileSize);
 					using var variantBaseTile = ExtractTile(variant, new RectInt(0, 0, 1, 1) * Game.TileSize);
 					AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex);
@@ -163,13 +165,13 @@ public static class Assets
 					var columns = image.Width / Game.TileSize;
 					var rows = image.Height / Game.TileSize;
 
-					for (int x = 0; x < columns; x ++)
-					for (int y = 0; y < rows; y ++)
-					{
-						if (variantIndex == 0)
-							packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-					}
+					for (int x = 0; x < columns; x++)
+						for (int y = 0; y < rows; y++)
+						{
+							if (variantIndex == 0)
+								packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+							packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+						}
 
 					if (variantIndex == 0 && image.Width == Game.TileSize && image.Height == Game.TileSize)
 						AddSlopeSubtextures(packer, name, image);
@@ -186,13 +188,13 @@ public static class Assets
 					var columns = image.Width / Game.TileSize;
 					var rows = image.Height / Game.TileSize;
 
-					for (int x = 0; x < columns; x ++)
-					for (int y = 0; y < rows; y ++)
-					{
-						if (variantIndex == 0)
-							packer.Add($"tilesets/{name}/normal/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-						packer.Add($"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-					}
+					for (int x = 0; x < columns; x++)
+						for (int y = 0; y < rows; y++)
+						{
+							if (variantIndex == 0)
+								packer.Add($"tilesets/{name}/normal/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+							packer.Add($"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+						}
 				}
 			}
 
@@ -215,7 +217,8 @@ public static class Assets
 		var oldAtlas = Atlas;
 		var oldLightingNoise = LightingNoise;
 		Atlas = atlas;
-		LightingNoise = LoadTexture(gfx, Path.Join("Textures", "noise_tess2_seamless.png"), "LightingNoise");
+
+		LightingNoise = Assets.LoadAsepriteTexture(gfx, Path.Join("Textures", "noise_tess2_seamless.ase"), "LightingNoise");
 
 		Subtextures.Clear();
 		foreach (var (name, subtexture) in subtextures)
@@ -244,7 +247,7 @@ public static class Assets
 
 			// add frames
 			var frames = new List<Sprite.Frame>();
-			for (int i = 0; i < ase.Frames.Length; i ++)
+			for (int i = 0; i < ase.Frames.Length; i++)
 			{
 				var subtexture = subtextures[$"{name}/{i}"];
 				frames.Add(new(
@@ -261,7 +264,7 @@ public static class Assets
 				if (!string.IsNullOrEmpty(tag.Name))
 				{
 					var duration = 0.0f;
-					for (int i = tag.From; i <= tag.To && i < frames.Count; i ++)
+					for (int i = tag.From; i <= tag.To && i < frames.Count; i++)
 						duration += frames[i].Duration;
 					animations.Add(new(tag.Name, tag.From, tag.To - tag.From + 1, duration));
 				}
@@ -297,8 +300,8 @@ public static class Assets
 			}
 
 			var tiles = new List<Subtexture>();
-			for (int x = 0; x < columns; x ++)
-				for (int y = 0; y < rows; y ++)
+			for (int x = 0; x < columns; x++)
+				for (int y = 0; y < rows; y++)
 					tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
 
 			var variantLayers = GetVariantLayers(ase, GetNonDebugLayers(ase));
@@ -306,8 +309,8 @@ public static class Assets
 			for (var variantIndex = 0; variantIndex < variantLayers.Count; variantIndex++)
 			{
 				var variant = new List<Subtexture>();
-				for (int x = 0; x < columns; x ++)
-					for (int y = 0; y < rows; y ++)
+				for (int x = 0; x < columns; x++)
+					for (int y = 0; y < rows; y++)
 						variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
 				variants.Add(variant);
 			}
@@ -328,17 +331,17 @@ public static class Assets
 			}
 
 			var tiles = new List<Subtexture>();
-			for (int x = 0; x < columns; x ++)
-			for (int y = 0; y < rows; y ++)
-				tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
+			for (int x = 0; x < columns; x++)
+				for (int y = 0; y < rows; y++)
+					tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
 
 			var variants = new List<List<Subtexture>>();
 			for (var variantIndex = 0; variantIndex < images.Count; variantIndex++)
 			{
 				var variant = new List<Subtexture>();
-				for (int x = 0; x < columns; x ++)
-				for (int y = 0; y < rows; y ++)
-					variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
+				for (int x = 0; x < columns; x++)
+					for (int y = 0; y < rows; y++)
+						variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
 				variants.Add(variant);
 			}
 
@@ -349,17 +352,17 @@ public static class Assets
 			if (generatedNormalImages.TryGetValue(name, out var normals))
 			{
 				normalTiles = [];
-				for (int x = 0; x < columns; x ++)
-				for (int y = 0; y < rows; y ++)
-					normalTiles.Add(subtextures[$"tilesets/{name}/normal/{x}x{y}"]);
+				for (int x = 0; x < columns; x++)
+					for (int y = 0; y < rows; y++)
+						normalTiles.Add(subtextures[$"tilesets/{name}/normal/{x}x{y}"]);
 
 				normalVariants = [];
 				for (var variantIndex = 0; variantIndex < normals.Count; variantIndex++)
 				{
 					var variant = new List<Subtexture>();
-					for (int x = 0; x < columns; x ++)
-					for (int y = 0; y < rows; y ++)
-						variant.Add(subtextures[$"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}"]);
+					for (int x = 0; x < columns; x++)
+						for (int y = 0; y < rows; y++)
+							variant.Add(subtextures[$"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}"]);
 					normalVariants.Add(variant);
 				}
 			}
@@ -394,6 +397,20 @@ public static class Assets
 		ActorSpecs.LoadSpecs(actorsPath);
 		if (reloadRooms)
 			LoadRooms();
+	}
+
+	internal static Texture? LoadAsepriteTexture(GraphicsDevice gfx, string relativePath, string name)
+	{
+		var path = Path.Join(AssetsPath, relativePath);
+		if (!File.Exists(path))
+			return null;
+
+		var ase = new Aseprite(path);
+		if (ase.Frames.Length <= 0)
+			return null;
+
+		using var image = ase.RenderFrame(0);
+		return new Texture(gfx, image, name);
 	}
 
 	private static IEnumerable<string> EnumerateAsepriteFiles(string path)
