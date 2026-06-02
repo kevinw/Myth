@@ -20,10 +20,13 @@ public static class Assets
 
 	private const string assetsFolderName = "Assets";
 	private const string roomsFolderName = "Rooms";
+	private const string defaultWorldId = "FrogWorld";
+	private const string defaultStartRoomId = "start";
 	private const string deletedRoomsFolderName = ".deleted";
 	private static string? path = null;
 	private static string? userRoomsPath = null;
 	private static bool? bundledRoomsWritable = null;
+	private static string currentWorldId = defaultWorldId;
 
 	public static string AssetsPath
 	{
@@ -44,11 +47,37 @@ public static class Assets
 	}
 
 	public static string RoomsPath => Path.Join(AssetsPath, roomsFolderName);
+	public static string CurrentWorldId => currentWorldId;
+	public static string WorldRoomsPath => Path.Join(RoomsPath, currentWorldId);
 	public static string? UserRoomsPath => userRoomsPath;
+	public static string? UserWorldRoomsPath => userRoomsPath != null ? Path.Join(userRoomsPath, currentWorldId) : null;
 
 	public static void ConfigureUserRoomsPath(string path)
 	{
 		userRoomsPath = path;
+		bundledRoomsWritable = null;
+	}
+
+	public static IReadOnlyList<string> GetWorldIds()
+	{
+		if (!Directory.Exists(RoomsPath))
+			return Array.Empty<string>();
+
+		return Directory.EnumerateDirectories(RoomsPath)
+			.Select(Path.GetFileName)
+			.Where(it => !string.IsNullOrWhiteSpace(it))
+			.Select(it => it!)
+			.Order(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+	}
+
+	public static void SelectWorld(string worldId)
+	{
+		worldId = worldId.Trim();
+		if (string.IsNullOrEmpty(worldId))
+			worldId = defaultWorldId;
+
+		currentWorldId = worldId;
 		bundledRoomsWritable = null;
 	}
 
@@ -57,6 +86,9 @@ public static class Assets
 
 	public static void Reload(GraphicsDevice gfx)
 		=> Reload(gfx, false, dumpPackedAtlases: false);
+
+	public static void ReloadRooms()
+		=> LoadRooms();
 
 	private static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases)
 	{
@@ -818,8 +850,8 @@ public static class Assets
 
 		var deleted = LoadUserRoomTombstones();
 
-		if (Directory.Exists(RoomsPath))
-			foreach (var file in Directory.EnumerateFiles(RoomsPath, "*.json"))
+		if (Directory.Exists(WorldRoomsPath))
+			foreach (var file in Directory.EnumerateFiles(WorldRoomsPath, "*.json"))
 			{
 				var id = Path.GetFileNameWithoutExtension(file);
 				if (deleted.Contains(id))
@@ -832,13 +864,23 @@ public static class Assets
 				});
 			}
 
-		if (userRoomsPath != null && Directory.Exists(userRoomsPath))
-			foreach (var file in Directory.EnumerateFiles(userRoomsPath, "*.json"))
+		if (UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
+			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json"))
 				AddRoom(new Room(file)
 				{
 					Storage = Room.StorageKind.User,
 					SourcePath = file
 				});
+
+		if (RoomsById.Count == 0)
+			CreateDefaultStartRoom();
+	}
+
+	private static void CreateDefaultStartRoom()
+	{
+		var room = new Room(defaultStartRoomId, Point2.Zero, Room.DefaultSize);
+		AddRoom(room);
+		room.Save();
 	}
 
 	private static void AddRoom(Room room)
@@ -932,19 +974,24 @@ public static class Assets
 	}
 
 	private static string BundledRoomPath(string id)
-		=> Path.Join(RoomsPath, $"{id}.json");
+		=> Path.Join(WorldRoomsPath, $"{id}.json");
 
 	private static string UserRoomPath(string id)
 	{
 		if (userRoomsPath == null)
 			throw new InvalidOperationException("User room path has not been configured.");
 
-		return Path.Join(userRoomsPath, $"{id}.json");
+		return Path.Join(userRoomsPath, currentWorldId, $"{id}.json");
 	}
 
 	private static bool IsUserRoomPath(string path)
-		=> userRoomsPath != null &&
-			Path.GetFullPath(path).StartsWith(Path.GetFullPath(userRoomsPath), StringComparison.Ordinal);
+	{
+		if (UserWorldRoomsPath is not { } userWorldRoomsPath)
+			return false;
+
+		var relative = Path.GetRelativePath(Path.GetFullPath(userWorldRoomsPath), Path.GetFullPath(path));
+		return relative != ".." && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+	}
 
 	private static bool RoomFileExists(string id)
 	{
@@ -988,8 +1035,8 @@ public static class Assets
 
 		try
 		{
-			Directory.CreateDirectory(RoomsPath);
-			var testPath = Path.Join(RoomsPath, $".write-test-{Guid.NewGuid():N}");
+			Directory.CreateDirectory(WorldRoomsPath);
+			var testPath = Path.Join(WorldRoomsPath, $".write-test-{Guid.NewGuid():N}");
 			File.WriteAllText(testPath, string.Empty);
 			File.Delete(testPath);
 			bundledRoomsWritable = true;
@@ -1037,7 +1084,7 @@ public static class Assets
 	}
 
 	private static string? UserDeletedRoomsPath()
-		=> userRoomsPath != null ? Path.Join(userRoomsPath, deletedRoomsFolderName) : null;
+		=> userRoomsPath != null ? Path.Join(userRoomsPath, currentWorldId, deletedRoomsFolderName) : null;
 
 	public static void RebuildRoomGeometry()
 	{

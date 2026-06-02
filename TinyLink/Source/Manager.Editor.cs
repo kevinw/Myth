@@ -3372,7 +3372,10 @@ public partial class Manager
 
 		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
 			OpenFmodStudio();
+		ImGui.SameLine(0, ToolbarSpacing);
 #endif
+
+		DrawWorldSelector();
 
 		DrawCenteredRoomName(CurrentRoom);
 		DrawDeleteRoomPopup();
@@ -3380,6 +3383,55 @@ public partial class Manager
 		ImGui.End();
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar(3);
+	}
+
+	private void DrawWorldSelector()
+	{
+		var worlds = Assets.GetWorldIds();
+		if (worlds.Count == 0)
+			return;
+
+		var width = Math.Clamp(ImGui.CalcTextSize(Assets.CurrentWorldId).X + 32, 96, 180);
+		ImGui.SetNextItemWidth(width);
+		if (ImGui.BeginCombo("##WorldSelector", Assets.CurrentWorldId))
+		{
+			foreach (var world in worlds)
+			{
+				var selected = string.Equals(world, Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase);
+				if (ImGui.Selectable(world, selected))
+					SwitchWorld(world);
+				if (selected)
+					ImGui.SetItemDefaultFocus();
+			}
+
+			ImGui.EndCombo();
+		}
+		ImGui.SameLine(0, ToolbarSpacing);
+	}
+
+	private void SwitchWorld(string worldId)
+	{
+		if (string.Equals(worldId, Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase))
+			return;
+
+		if (playing || startingPlay)
+			StopGame();
+
+		CurrentRoom?.Save();
+		Assets.SelectWorld(worldId);
+		Assets.ReloadRooms();
+		Assets.RebuildRoomGeometry();
+		ClearRoomPreviewCache();
+		undo.Clear();
+		selectedRoomId = null;
+		cell = Point2.Zero;
+		roomCreatePosition = Point2.Zero;
+		editorSelectionRect = null;
+		selectedRoomActorIndex = -1;
+		pendingDeleteRoomId = null;
+		ResolveSelectedRoom();
+		FocusEditorOnCurrentRoom();
+		SyncEditorGame();
 	}
 
 

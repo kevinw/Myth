@@ -19,6 +19,12 @@ public sealed class JsonUndoManager
 	public JsonUndoScope Capture(string name, params IJsonUndoTarget[] targets)
 		=> new(this, name, targets);
 
+	public void Clear()
+	{
+		undoStack.Clear();
+		redoStack.Clear();
+	}
+
 	public void Undo()
 	{
 		if (!CanUndo)

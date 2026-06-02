@@ -349,6 +349,8 @@ public partial class Manager : App
 
 			var settings = JsonSerializer.Deserialize<WindowSettings>(File.ReadAllText(WindowSettingsPath));
 			if (settings == null) return;
+			if (!string.IsNullOrWhiteSpace(settings.WorldId))
+				Assets.SelectWorld(settings.WorldId);
 			if (settings is { Width: > 0, Height: > 0 })
 				Window.Size = new Point2(
 					Math.Max(settings.Width, MinimumRestoredWindowSize.X),
@@ -382,6 +384,7 @@ public partial class Manager : App
 				Y = position.Y,
 				Width = size.X,
 				Height = size.Y,
+				WorldId = Assets.CurrentWorldId,
 				RoomId = currentRoom?.Id ?? selectedRoomId,
 				RoomX = currentCell.X,
 				RoomY = currentCell.Y,
@@ -403,6 +406,7 @@ public partial class Manager : App
 		public int Y { get; init; }
 		public int Width { get; init; }
 		public int Height { get; init; }
+		public string? WorldId { get; init; }
 		public string? RoomId { get; init; }
 		public int RoomX { get; init; }
 		public int RoomY { get; init; }

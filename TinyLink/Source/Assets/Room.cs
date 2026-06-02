@@ -188,7 +188,7 @@ public class Room
 		return clone;
 	}
 
-	private Room(string id, Point2 position, Point2 size, string? path = null)
+	public Room(string id, Point2 position, Point2 size, string? path = null)
 	{
 		SourcePath = path;
 		JsonObject? json = null;
