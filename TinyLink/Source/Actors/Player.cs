@@ -28,6 +28,7 @@ public partial class Player : Actor
 	static float AttackFriction => 150;
 	static float HurtFriction => 200;
 	static float Gravity => 450;
+	static float WallHugGravityMultiplier => 0.25f;
 	static float JumpForce => -105;
 	static float JumpTime => 0.18f;
 	static float CoyoteJumpTime => 0.08f;
@@ -224,6 +225,8 @@ public partial class Player : Actor
 			float grav = Gravity;
 			if (State == States.Normal && MathF.Abs(Velocity.Y) < 20 && Controls.Jump.Down)
 				grav *= 0.40f;
+			if (State == States.Normal && Velocity.Y > 0 && IsWallHugging())
+				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
 
 			JumpUpSquish -= Time.Delta;
@@ -319,7 +322,7 @@ public partial class Player : Actor
 		else
 		{
 			var wallJumpDir = GetWallJumpDirection();
-			if (wallJumpDir != 0 && input == -wallJumpDir)
+			if (IsWallHugging(wallJumpDir))
 			{
 				Facing = -(Signs)wallJumpDir;
 				Play("wall_slide");
@@ -383,7 +386,8 @@ public partial class Player : Actor
 		var wallJump = GetWallJumpDirection();
 		var canCoyoteJump = CanCoyoteJump();
 		var canGroundJump = grounded && CanStandUp() || canCoyoteJump;
-		if (Controls.Jump.Pressed && (canGroundJump || wallJump != 0))
+		var canWallJump = wallJump != 0 && input != 0;
+		if (Controls.Jump.Pressed && (canGroundJump || canWallJump))
 		{
 			Controls.Jump.ConsumePress();
 			JumpUpSquish = 0;
@@ -667,6 +671,12 @@ public partial class Player : Actor
 
 		return touchingLeft ? 1 : -1;
 	}
+
+	private bool IsWallHugging()
+		=> IsWallHugging(GetWallJumpDirection());
+
+	private bool IsWallHugging(int wallJumpDirection)
+		=> wallJumpDirection != 0 && Controls.Move.IntValue.X == -wallJumpDirection;
 
 	private void UpdateFootsteps()
 	{
