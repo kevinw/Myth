@@ -8,10 +8,11 @@ namespace TinyLink;
 
 public partial class Manager
 {
-	static int PaletteColumns => 4;
+	static float BoxSpacing => 0;
+	static float BoxPadding => 4;
+	static int PaletteColumns => 5;
 	static int ToolbarSpacing => 4;
 	static float ToolbarHeight => ButtonSize + 4;
-	static float EditorInset => 0;
 	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
 	static Color highlight => 0x5fcde4;
 
@@ -41,6 +42,7 @@ public partial class Manager
 
 	char tileTypePlacing;
 	bool tilePlacing;
+	bool editingRoomGeometry;
 	Point2 tileRectPaintFrom;
 	Point2 tileRectPaintTo;
 	RectInt? proposedRoomTiles;
@@ -64,7 +66,6 @@ public partial class Manager
 	EditorSelectionSnapshot? editorSelectionSnapshot;
 	Vector2 roomActorDragOffset;
 	ResizeHandle resizeHandle;
-	bool editingRoomGeometry;
 	ResizeHandle roomGeometryHandle;
 	Point2 roomGeometryDragOffset;
 	JsonUndoScope? roomGeometryUndo;
@@ -121,7 +122,7 @@ public partial class Manager
 
 	/// Edit Workspace when the Editor is Open
 	private Rect EditorOpenRect
-		=> new Rect(WorkRect.X + PaletteWidth + BoxSpacing, WorkRect.Y, WorkRect.Width - PaletteWidth - BoxSpacing, WorkRect.Height).Inflate(-EditorInset);
+		=> new Rect(WorkRect.X + PaletteWidth + BoxSpacing, WorkRect.Y, WorkRect.Width - PaletteWidth - BoxSpacing, WorkRect.Height);
 
 	/// Eases between the EditView and the PlayView as the Game opens/closes
 	private Rect WorkspaceRect
@@ -495,7 +496,7 @@ public partial class Manager
 			ImGui.Spacing();
 			DrawDitherPaletteSection();
 			ImGui.Spacing();
-			DrawPreviewPaletteSection();
+			//DrawPreviewPaletteSection();
 
 			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
 				SelectEditorActorTool();
@@ -525,6 +526,8 @@ public partial class Manager
 		{
 			if (entry.Layer != activeTileLayer)
 				continue;
+
+			if (entry.IsSlope) continue; // skip slope tiles; we can place them with control
 
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
@@ -607,12 +610,12 @@ public partial class Manager
 			return;
 
 		var changed = false;
-		if (ImGui.Button(editingRoomGeometry ? "Done Room Geo" : "Edit Room Geo"))
+		if (ImGui.Button(editingRoomGeometry ? "Done" : "Resize"))
 		{
 			editingRoomGeometry = !editingRoomGeometry;
 			roomGeometryHandle = ResizeHandle.None;
 		}
-		ImGui.Spacing();
+		ImGui.SameLine();
 
 		if (ImGui.Button("Copy"))
 			copiedRoomSettings = CaptureRoomSettings(room);
@@ -626,6 +629,10 @@ public partial class Manager
 				changed = true;
 			}
 		}
+
+		ImGui.TextUnformatted("Notes");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.InputTextMultiline("##RoomNotesEditor", ref room.Notes, 3000, new (-1, 80));
 
 		ImGui.TextUnformatted("Backdrop");
 		var backdrop = ColorToVector3(room.BackdropColor);
@@ -723,24 +730,26 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Sun Color");
-		var sun = ColorToVector3(room.SunColor);
-		ImGui.SetNextItemWidth(-1);
-		if (ImGui.ColorEdit3("##RoomSunColor", ref sun, ImGuiColorEditFlags.NoInputs))
-		{
-			using (CaptureRoomUndo("Edit Room Sun", room))
-				room.SunColor = Vector3ToColor(sun);
-			changed = true;
-		}
+		if (sunStrength > 0) {
+			ImGui.TextUnformatted("Sun Color");
+			var sun = ColorToVector3(room.SunColor);
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.ColorEdit3("##RoomSunColor", ref sun, ImGuiColorEditFlags.NoInputs))
+			{
+				using (CaptureRoomUndo("Edit Room Sun", room))
+					room.SunColor = Vector3ToColor(sun);
+				changed = true;
+			}
 
-		ImGui.TextUnformatted("Sun Direction");
-		var sunDirection = room.SunDirection;
-		ImGui.SetNextItemWidth(-1);
-		if (ImGui.DragFloat2("##RoomSunDirection", ref sunDirection, 0.01f, -1.0f, 1.0f))
-		{
-			using (CaptureRoomUndo("Edit Room Sun", room))
-				room.SunDirection = Room.NormalizeOrDefault(sunDirection, room.SunDirection);
-			changed = true;
+			ImGui.TextUnformatted("Sun Direction");
+			var sunDirection = room.SunDirection;
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.DragFloat2("##RoomSunDirection", ref sunDirection, 0.01f, -1.0f, 1.0f))
+			{
+				using (CaptureRoomUndo("Edit Room Sun", room))
+					room.SunDirection = Room.NormalizeOrDefault(sunDirection, room.SunDirection);
+				changed = true;
+			}
 		}
 
 		if (musicAreas.Count > 0)
@@ -789,6 +798,7 @@ public partial class Manager
 		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
 	}
 
+	#if false
 	private void DrawPreviewPaletteSection()
 	{
 		if (!ImGui.CollapsingHeader("Previews"))
@@ -803,6 +813,7 @@ public partial class Manager
 			ClearRoomPreviewCache();
 		}
 	}
+	#endif
 
 	private static RoomSettings CaptureRoomSettings(Room room)
 		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
@@ -3595,7 +3606,7 @@ public partial class Manager
 		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
 		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 1);
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.55f));
 		ImGui.Begin(
 			"FpsOverlay",

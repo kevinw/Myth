@@ -53,22 +53,16 @@ public class Room
 	public static readonly Color DefaultSunColor = new(1.0f, 0.9f, 0.72f, 1.0f);
 	public static readonly Vector2 DefaultSunDirection = Vector2.Normalize(new Vector2(1, 1));
 
-	/// <summary>
 	/// Stable room identity, also used as the filename.
-	/// </summary>
 	public string Id;
 
 	public StorageKind Storage { get; internal set; } = StorageKind.Bundled;
 	public string? SourcePath { get; internal set; }
 
-	/// <summary>
 	/// Compatibility screen-grid location of the Room.
-	/// </summary>
 	public Point2 Cell => new(TileSpacePosition.X / Game.Columns, TileSpacePosition.Y / Game.Rows);
 
-	/// <summary>
 	/// Tile-space location of the room in the world.
-	/// </summary>
 	public Point2 TileSpacePosition;
 
 	/// <summary>
@@ -76,28 +70,20 @@ public class Room
 	/// </summary>
 	public Point2 Size;
 
-	/// <summary>
-	/// Grid of Tiles
-	/// </summary>
+	/// Tile grids
 	public char[,] Tiles;
 	public char[,] BackgroundTiles;
 	private Factory.Entry?[,] tileEntries;
 	private Factory.Entry?[,] backgroundTileEntries;
 	private TileFlags[,] tileFlags;
 
-	/// <summary>
 	/// Actor specs placed directly in this room.
-	/// </summary>
 	public readonly List<JsonObject> Actors = [];
 
-	/// <summary>
 	/// World-space rectangles built from adjacent movement-blocking tiles.
-	/// </summary>
 	public readonly List<RectInt> CollisionRects = [];
 
-	/// <summary>
 	/// Slope tiles keep their own geometry because collision follows the inferred surface line.
-	/// </summary>
 	public readonly List<SlopeTile> SlopeTiles = [];
 
 	private readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
@@ -109,24 +95,16 @@ public class Room
 	/// </summary>
 	public readonly List<RectInt> LightOccluders = [];
 
-	/// <summary>
 	/// World-space convex polygons for light occluders that are not rectangular.
-	/// </summary>
 	public readonly List<LightOccluderPolygon> LightOccluderPolygons = [];
 
-	/// <summary>
 	/// Cached world-space segments used by visibility-polygon shadow tests.
-	/// </summary>
 	public readonly List<VisibilityPolygon.Segment> VisibilitySegments = [];
 
-	/// <summary>
 	/// World-space rectangles built from adjacent sprite-reflecting tiles.
-	/// </summary>
 	public readonly List<RectInt> ReflectionRects = [];
 
-	/// <summary>
 	/// Optional FMOD background music Area parameter label.
-	/// </summary>
 	public string? MusicArea;
 	public Color BackdropColor = DefaultBackdropColor;
 	public Color? BackdropColor2;
@@ -138,6 +116,7 @@ public class Room
 	public Color SunColor = DefaultSunColor;
 	public float SunStrength;
 	public Vector2 SunDirection = DefaultSunDirection;
+	public string Notes = "";
 
 	/// Bounds in World Space in Pixels
 	public RectInt WorldBounds => new(TileSpacePosition.X * Game.TileSize, TileSpacePosition.Y * Game.TileSize, Size.X * Game.TileSize, Size.Y * Game.TileSize);
@@ -250,6 +229,7 @@ public class Room
 		SunColor = DefaultSunColor;
 		SunStrength = 0.0f;
 		SunDirection = DefaultSunDirection;
+		Notes = ReadString(json, "notes", "");
 		if (json.TryGetPropertyValue("sun", out var sunNode) && sunNode is JsonObject sun)
 		{
 			SunColor = ReadHexColor(sun, "color") ?? DefaultSunColor;
@@ -448,21 +428,21 @@ public class Room
 		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 		tileFlags = new TileFlags[Size.X, Size.Y];
 
-		for (var x = 0; x < Size.X; x ++)
-		for (var y = 0; y < Size.Y; y ++)
-		{
-			var oldX = TileSpacePosition.X + x - previousPosition.X;
-			var oldY = TileSpacePosition.Y + y - previousPosition.Y;
-			SetTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
-				? previousTiles[oldX, oldY]
-				: '0');
-			SetBackgroundTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
-				? previousBackgroundTiles[oldX, oldY]
-				: '0');
-			tileFlags[x, y] = oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
-				? previousTileFlags[oldX, oldY]
-				: TileFlags.None;
-		}
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				var oldX = TileSpacePosition.X + x - previousPosition.X;
+				var oldY = TileSpacePosition.Y + y - previousPosition.Y;
+				SetTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+					? previousTiles[oldX, oldY]
+					: '0');
+				SetBackgroundTileUnchecked(x, y, oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+					? previousBackgroundTiles[oldX, oldY]
+					: '0');
+				tileFlags[x, y] = oldX >= 0 && oldY >= 0 && oldX < previousSize.X && oldY < previousSize.Y
+					? previousTileFlags[oldX, oldY]
+					: TileFlags.None;
+			}
 
 		var actorOffset = previousPosition - TileSpacePosition;
 		if (actorOffset != Point2.Zero)
@@ -475,6 +455,13 @@ public class Room
 		}
 
 		RebuildGeometry();
+	}
+
+	private static string ReadString(JsonObject json, string key, string fallback)
+	{
+		if (!json.TryGetPropertyValue(key, out var node) || node == null)
+			return fallback;
+		return node.GetValue<string>();
 	}
 
 	private static Color? ReadHexColor(JsonObject json, string key)
@@ -968,7 +955,7 @@ public class Room
 
 	private void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)
 	{
-		var used = new bool[Size.X, Size.Y];
+		var used = new bool[Size.X, Size.Y]; // TODO alloc
 
 		for (var y = 0; y < Size.Y; y ++)
 		for (var x = 0; x < Size.X; x ++)
@@ -1047,6 +1034,7 @@ public class Room
 			json["reverbAuto"] = false;
 		if (Reverb != DefaultReverb || !ReverbAuto)
 			json["reverb"] = Reverb;
+
 		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
 		{
 			json["sun"] = new JsonObject

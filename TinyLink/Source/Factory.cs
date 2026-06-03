@@ -148,7 +148,7 @@ public static class Factory
 
 	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f)
 	{
-		var tileset = Assets.GetTileset(tilesetName);
+		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
 		if (tileset == null)
 			return new();
 
@@ -162,7 +162,7 @@ public static class Factory
 
 	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null, float acousticReflectivity = 1.0f)
 	{
-		var tileset = Assets.GetTileset(tilesetName);
+		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
 		if (tileset == null)
 			return new();
 
@@ -241,9 +241,6 @@ public static class Factory
 		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
 		ActorSpecs.RegisterActor<Arrow>("Arrow");
 		ActorSpecs.RegisterActor<WallBullet>("WallBullet");
-
-		// Empty Type, purely for the editor
-		Register('0', new Entry("Empty", new Subtexture(), null!));
 
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", "Brick"));

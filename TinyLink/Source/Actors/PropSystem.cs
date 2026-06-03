@@ -19,11 +19,14 @@ public class PropSystem : ActorSystem
 	{
 		base.Render(batcher);
 
+		/*
+		TODO: implement static prop rendering here.
 		foreach (var visibleRoom in Game.VisibleRooms())
 		{
 			var rect = new Rect(10, 10, 40, 20);
 			rect.Position += visibleRoom.WorldBounds.Position;
 			batcher.RectLine(rect, 2.0f, Color.AliceBlue);
 		}
+		*/
 	}
 }

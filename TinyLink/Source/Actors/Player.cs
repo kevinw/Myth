@@ -321,6 +321,7 @@ public partial class Player : Actor
 			var wallJumpDir = GetWallJumpDirection();
 			if (wallJumpDir != 0 && input == -wallJumpDir)
 			{
+				Facing = -(Signs)wallJumpDir;
 				Play("wall_slide");
 			}
 			else if (JumpUpSquish > 0 && !grounded)
@@ -399,6 +400,7 @@ public partial class Player : Actor
 			{
 				wallJumpDirection = wallJump;
 				wallJumpInputLockTimer = WallJumpInputLockTime;
+				facing = wallJumpDirection;
 				Facing = wallJumpDirection;
 				Velocity.X = wallJumpDirection * WallJumpSpeed;
 			}

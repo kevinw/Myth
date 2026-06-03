@@ -24,11 +24,8 @@ public partial class Manager : App
 	private readonly Point MinimumRestoredWindowSize = new (640, 360);
 
 	static float Scale => 2.7f;
-	static float ButtonSize => 24;
+	static float ButtonSize => 34;
 	static float ButtonSpacing => 2;
-	static float BoxPadding => 4;
-	static float BoxSpacing => 0;
-	static float ScreenPadding => 0;
 #if !EDITOR
 	static Color highlight => 0x5fcde4;
 #endif
@@ -91,7 +88,7 @@ public partial class Manager : App
 	/// Visible Space
 	/// </summary>
 	private Rect View
-		=> new Rect(0, 0, Window.WidthInPixels / Scale, Window.HeightInPixels / Scale).Inflate(-ScreenPadding);
+		=> new Rect(0, 0, Window.WidthInPixels / Scale, Window.HeightInPixels / Scale);
 
 	/// <summary>
 	/// Play Workspace when the Game is Open

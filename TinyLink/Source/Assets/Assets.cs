@@ -1198,7 +1198,13 @@ public static class Assets
 	}
 
 	public static Sprite? GetSprite(string name) => Sprites.GetValueOrDefault(name);
-	public static Tileset? GetTileset(string name) => Tilesets.GetValueOrDefault(name);
+	public static Tileset? GetTileset(string name, bool logMissing = false)
+	{
+		var tileset = Tilesets.GetValueOrDefault(name);
+		if (logMissing && tileset == null)
+			Console.WriteLine($"Error: Tileset '{name}' not found");
+		return tileset;
+	}
 	public static Room? GetRoom(Point2 cell) => Rooms.GetValueOrDefault(cell);
 	public static Room? GetRoom(string id) => RoomsById.GetValueOrDefault(id);
 
