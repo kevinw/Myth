@@ -3,7 +3,15 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-public partial class Player : Actor
+public readonly record struct PawnInput(
+	int MoveX,
+	int MoveY,
+	bool JumpPressed,
+	bool JumpDown,
+	bool DashPressed,
+	bool AllowWallJump = true);
+
+public abstract class Pawn : Actor
 {
 	public enum States
 	{
@@ -15,143 +23,74 @@ public partial class Player : Actor
 		Hurt,
 		Start
 	}
-	private readonly StateMachine<States> state = new(States.Start);
 
-	public const int MaxHealth = 4;
+	protected static float MaxGroundSpeed => 93;
+	protected static float MaxAirSpeed => 99;
+	protected static float CrawlSpeed => 28;
+	protected static float GroundAccel => 400;
+	protected static float AirAccel => 260;
+	protected static float Friction => 480;
+	protected static float Gravity => 450;
+	protected static float WallHugGravityMultiplier => 0.25f;
+	protected static float JumpForce => -105;
+	protected static float JumpTime => 0.18f;
+	protected static float CoyoteJumpTime => 0.08f;
+	protected static float WallJumpSpeed => 125;
+	protected static float WallJumpInputLockTime => 0.22f;
+	protected static float RollMinHorizontalSpeed => 45;
+	protected static float RollMinFallSpeed => 20;
+	protected static float RollSpeed => 145;
+	protected static float DownhillRollSpeed => 185;
+	protected static float RollDuration => 0.36f;
+	protected static float RollFriction => 220;
+	protected static float DownhillRollFriction => 90;
+	protected static float RollJumpForce => -82;
+	protected static float RollJumpTime => 0.11f;
+	protected static float RollJumpSpeed => 150;
+	protected static float RollJumpCarryTime => 0.28f;
+	protected static float DashSpeed => 220;
+	protected static float DashDuration => 0.15f;
+	protected static float DashCooldown => 0.20f;
+	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
+	protected static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
 
-	static float MaxGroundSpeed => 93;
-	static float MaxAirSpeed => 99;
-	static float CrawlSpeed => 28;
-	static float GroundAccel => 400;
-	static float AirAccel => 260;
-	static float Friction => 480;
-	static float AttackFriction => 150;
-	static float HurtFriction => 200;
-	static float Gravity => 450;
-	static float WallHugGravityMultiplier => 0.25f;
-	static float JumpForce => -105;
-	static float JumpTime => 0.18f;
-	static float CoyoteJumpTime => 0.08f;
-	static float WallJumpSpeed => 125;
-	static float WallJumpInputLockTime => 0.22f;
-	static float RollMinHorizontalSpeed => 45;
-	static float RollMinFallSpeed => 20;
-	static float RollSpeed => 145;
-	static float DownhillRollSpeed => 185;
-	static float RollDuration => 0.36f;
-	static float RollFriction => 220;
-	static float DownhillRollFriction => 90;
-	static float RollJumpForce => -82;
-	static float RollJumpTime => 0.11f;
-	static float RollJumpSpeed => 150;
-	static float RollJumpCarryTime => 0.28f;
-	static float DashSpeed => 220;
-	static float DashDuration => 0.15f;
-	static float DashCooldown => 0.20f;
-	static float DuckAttackCooldown => 0.4f;
-	static float AttackBlockOverlapThreshold => 0.5f;
-	static float HurtDuration => 0.5f;
-	static float DeathDuration => 1.5f;
-	static float InvincibleDuration => 1.5f;
-	static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
-	static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
+	protected readonly StateMachine<States> state = new(States.Normal);
+	protected float jumpTimer;
+	protected float coyoteJumpTimer;
+	protected int coyoteJumpY;
+	protected bool grounded;
+	protected bool ducking;
+	protected float wallJumpInputLockTimer;
+	protected int wallJumpDirection;
+	protected int dashDirection;
+	protected float dashCooldownTimer;
+	protected float dashRemainder;
+	protected float jumpForce = JumpForce;
+	protected float rollJumpCarryTimer;
+	protected PawnInput input;
+	protected float JumpUpSquish;
+	protected float RunStartTimer;
+	protected bool RunStartSkid;
 
-	public int Health = MaxHealth;
 	public States State
 	{
 		get => state.Current;
 		set => state.Change(value);
 	}
 	public bool IsGrounded => grounded;
-	public Controls Controls => Game.Controls;
 
-	private float jumpTimer;
-	private float coyoteJumpTimer;
-	private int coyoteJumpY;
-	private int footstepFrame = -1;
-	private bool grounded;
-	private bool ducking;
-	private float wallJumpInputLockTimer;
-	private int wallJumpDirection;
-	private int dashDirection;
-	private float dashCooldownTimer;
-	private float dashRemainder;
-	private float jumpForce = JumpForce;
-	private float rollJumpCarryTimer;
-	private float duckAttackCooldownTimer;
-	private bool duckAttack;
-	private bool attackBlocked;
-	private Light? light;
-	private SoundInstance? rollSound;
-	float RunStartTimer; // Used to play a "running start" anim at the beginning of a run.
-	bool RunStartSkid; // Used to know if we should "start running" with a skid (we're running the opposite direction we were facing.)
-
-	public Player()
-	{
-		Sprite = Assets.GetSprite("player");
-		Hitbox = new(StandingHitboxRect);
-		Mask = Masks.Player;
-		IFrameTime = InvincibleDuration;
-		grounded = true;
-		Play("sword");
-	}
-
-	public override void Added()
-	{
-		light = Game.Create<Light>(Position, it =>
-		{
-			it.Radius = 36;
-			it.Intensity = 0.45f;
-			it.LightColor = 0xffcfa0;
-			it.Height = 16;
-			it.FlickerFrequency = 1.5f;
-			it.FlickerIntensity = 0.02f;
-			it.DrawSprite = false;
-			it.KeepOnRoomTransition = true;
-		});
-		UpdateLightPosition();
-	}
-
-	float JumpUpSquish = 0;
-	private bool CanPlaySquishSound = false;
-
-	public override void OnCollideY()
-	{
-		bool wasGoingUp = Velocity.Y < 0;
-		base.OnCollideY();
-		if (wasGoingUp && CanPlaySquishSound && State == States.Normal)
-		{
-			AudioEvent("player/squish");
-			CanPlaySquishSound = false;
-			JumpUpSquish = 0.15f;
-		}
-	}
-
-	public override void OnCollideX()
-	{
-		base.OnCollideX();
-		if (State == States.Roll)
-		{
-			StopRollSound(false);
-			State = States.Normal;
-		}
-	}
+	public abstract PawnInput GetInput();
 
 	public override void Update()
 	{
 		var previousVelocity = Velocity;
 		base.Update();
-		UpdateLightPosition();
+		input = GetInput();
+		AfterActorUpdate(previousVelocity);
 
-		// update grounded state
 		var nowGrounded = Velocity.Y >= 0 && Grounded();
 		if (nowGrounded && !grounded)
-		{
-			Squish = new Vector2(1.5f, 0.70f);
-			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
-			CanPlaySquishSound = true;
-			TryStartRoll(previousVelocity);
-		}
+			OnLanded(previousVelocity);
 		grounded = nowGrounded;
 		if (grounded)
 		{
@@ -169,12 +108,9 @@ public partial class Player : Actor
 		}
 		if (!grounded && rollJumpCarryTimer > 0)
 			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
-		if (duckAttackCooldownTimer > 0)
-			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
 		if (dashCooldownTimer > 0)
 			dashCooldownTimer = Calc.Approach(dashCooldownTimer, 0, Time.Delta);
 
-		// state control
 		switch (State)
 		{
 			case States.Normal:
@@ -186,117 +122,99 @@ public partial class Player : Actor
 			case States.Dash:
 				DashState();
 				break;
-			case States.Attack:
-				AttackState();
-				break;
-			case States.BlinkStrike:
-				BlinkStrikeState();
-				break;
-			case States.Hurt:
-				HurtState();
-				break;
-			case States.Start:
-				StartState();
+			default:
+				CustomState();
 				break;
 		}
 
-		UpdateFootsteps();
+		AfterStateUpdate(previousVelocity);
 
-		// ducking collider(s)
-		if (ducking && State != States.Normal && State != States.Roll && !(State == States.Attack && duckAttack))
+		if (ducking && State != States.Normal && State != States.Roll && !AllowDuckingInState())
 			ducking = false;
 		if (ducking || State == States.Roll)
 			Hitbox = new(DuckingHitboxRect);
 		else
 			Hitbox = new(StandingHitboxRect);
 
-		// variable jumping
 		if (jumpTimer > 0)
 		{
 			Velocity.Y = jumpForce;
 			jumpTimer -= Time.Delta;
-			if (!Controls.Jump.Down)
+			if (!input.JumpDown)
 				jumpTimer = 0;
 		}
 
-		// gravity
 		if (!grounded && State != States.Dash)
 		{
-			float grav = Gravity;
-			if (State == States.Normal && MathF.Abs(Velocity.Y) < 20 && Controls.Jump.Down)
+			var grav = Gravity;
+			if (State == States.Normal && MathF.Abs(Velocity.Y) < 20 && input.JumpDown)
 				grav *= 0.40f;
 			if (State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
 
 			JumpUpSquish -= Time.Delta;
-			if (JumpUpSquish <= 0) JumpUpSquish = 0;
+			if (JumpUpSquish <= 0)
+				JumpUpSquish = 0;
 		}
 
-		// goto next room
-		if (Health > 0)
-		{
-			if (Position.X > Game.Bounds.Right && !Game.Transition(Point2.Right))
-			{
-				Position.X = Game.Bounds.Right;
-			}
-			else if (Position.X < Game.Bounds.Left && !Game.Transition(Point2.Left))
-			{
-				Position.X = Game.Bounds.Left;
-			}
-			else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
-			{
-				ApplyHurt(-1000);
-			}
-			else if (Position.Y < Game.Bounds.Top)
-			{
-				if (Game.Transition(Point2.Up))
-					Velocity.Y = -150;
-				else
-					Position.Y = Game.Bounds.Top;
-			}
-		}
-
-		// detect getting hit
-		if (State == States.Dash)
-		{
-			if (OverlapsFirst(Masks.Hazard) is { } hit)
-				hit.Hit(this);
-		}
-		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
-			hit.Hit(this);
-
+		AfterMovementUpdate(previousVelocity);
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
 	}
 
-	public void NormalState()
+	protected virtual void AfterActorUpdate(Vector2 previousVelocity) { }
+	protected virtual void OnLanded(Vector2 previousVelocity)
 	{
-		// update ducking state
-		if (grounded && Controls.Move.IntValue.Y > 0)
+		Squish = new Vector2(1.5f, 0.70f);
+		TryStartRoll(previousVelocity);
+	}
+	protected virtual void AfterStateUpdate(Vector2 previousVelocity) { }
+	protected virtual void AfterMovementUpdate(Vector2 previousVelocity) { }
+	protected virtual void CustomState() { }
+	protected virtual bool AllowDuckingInState() => false;
+	protected virtual bool TryStartPawnAction(int moveX) => false;
+	protected virtual void OnPawnJump() { }
+		protected virtual void OnRollStarted() { }
+		protected virtual void OnRollStopped(bool immediate) { }
+		protected virtual void UpdateRollAudioPosition() { }
+		protected virtual float GroundSpeedMultiplier => 1.0f;
+		protected virtual float AirSpeedMultiplier => 1.0f;
+
+	public override void OnCollideX()
+	{
+		base.OnCollideX();
+		if (State == States.Roll)
+		{
+			OnRollStopped(false);
+			State = States.Normal;
+		}
+	}
+
+	protected void NormalState()
+	{
+		if (grounded && input.MoveY > 0)
 			ducking = true;
 		else if (ducking)
 			ducking = grounded && !CanStandUp();
 		else
 			ducking = false;
 
-		// get input
-		var input = Controls.Move.IntValue.X;
+		var moveX = input.MoveX;
 
-		int facing = input;
-		var movementInput = input;
+		int facing = moveX;
+		var movementInput = moveX;
 		if (!grounded && wallJumpInputLockTimer > 0)
 			movementInput = wallJumpDirection;
 
-		// sprite
-		bool didRun = false;
-		bool didStartRunning = false;
+		var didRun = false;
+		var didStartRunning = false;
 		if (grounded)
 		{
 			if (ducking)
-				Play(input == 0 ? "duck" : "crawl");
-			else if (input == 0)
+				Play(moveX == 0 ? "duck" : "crawl");
+			else if (moveX == 0)
 				Play("idle");
-			else if (Velocity.X > 0 && input < 0 || Velocity.X < 0 && input > 0)
+			else if (Velocity.X > 0 && moveX < 0 || Velocity.X < 0 && moveX > 0)
 			{
 				facing *= -1;
 				Play("skid");
@@ -307,7 +225,8 @@ public partial class Player : Actor
 			{
 				RunStartTimer += Time.Delta;
 				didRun = true;
-				if (Velocity.X == 0) didStartRunning = true;
+				if (Velocity.X == 0)
+					didStartRunning = true;
 				if (RunStartTimer < 0.35f)
 				{
 					if (RunStartTimer < 0.15f && RunStartSkid)
@@ -333,14 +252,10 @@ public partial class Player : Actor
 			}
 			else
 			{
-				if (Velocity.X != 0 && input != 0 && Math.Sign(Velocity.X) != Math.Sign(input))
-				{
+				if (Velocity.X != 0 && moveX != 0 && Math.Sign(Velocity.X) != Math.Sign(moveX))
 					Play("jump_turn");
-				}
 				else
-				{
 					Play("jump");
-				}
 			}
 		}
 
@@ -350,46 +265,34 @@ public partial class Player : Actor
 			RunStartSkid = false;
 		}
 
-		// horizontal movement
-		var maxSpeed = grounded ? MaxGroundSpeed : MaxAirSpeed;
-		var lastFacing = Facing;
-		if (ducking)
-			maxSpeed = CrawlSpeed;
-		{
-			// Acceleration
-			Velocity.X += movementInput * (grounded ? GroundAccel : AirAccel) * Time.Delta;
+			var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
+			var maxSpeed = grounded ? MaxGroundSpeed * GroundSpeedMultiplier : MaxAirSpeed * AirSpeedMultiplier;
+			var lastFacing = Facing;
+			if (ducking)
+				maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
 
-			// Max Speed
+			Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
 			if (!grounded && wallJumpInputLockTimer > 0)
-				maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed);
+				maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
 			if (!grounded && rollJumpCarryTimer > 0)
-				maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed);
-			if (MathF.Abs(Velocity.X) > maxSpeed)
-				Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
-
-			// Friction
-			if (input == 0 && grounded)
-				Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
-
-			// Facing
-			if (grounded && input != 0)
-			{
-				Facing = facing;
-				if (lastFacing != Facing && didStartRunning)
-				{
-					RunStartSkid = true;
-				}
-			}
+				maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
+		if (MathF.Abs(Velocity.X) > maxSpeed)
+			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
+		if (moveX == 0 && grounded)
+			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
+		if (grounded && moveX != 0)
+		{
+			Facing = facing;
+			if (lastFacing != Facing && didStartRunning)
+				RunStartSkid = true;
 		}
 
-		// Start jumping
 		var wallJump = GetWallJumpDirection();
 		var canCoyoteJump = CanCoyoteJump();
 		var canGroundJump = grounded && CanStandUp() || canCoyoteJump;
-		var canWallJump = wallJump != 0 && input != 0;
-		if (Controls.Jump.Pressed && (canGroundJump || canWallJump))
+		var canWallJump = input.AllowWallJump && wallJump != 0 && moveX != 0;
+		if (input.JumpPressed && (canGroundJump || canWallJump))
 		{
-			Controls.Jump.ConsumePress();
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.65f, 1.4f);
 			if (canGroundJump)
@@ -397,8 +300,6 @@ public partial class Player : Actor
 				if (canCoyoteJump)
 					Position.Y = coyoteJumpY;
 				coyoteJumpTimer = 0;
-				// we used to instantly snap to MaxAirAccel here but I'm not sure that's what I want...
-				// maybe a slight speed boost up to a point would be nice. want to encourage tech.
 			}
 			else
 			{
@@ -409,69 +310,19 @@ public partial class Player : Actor
 				Velocity.X = wallJumpDirection * WallJumpSpeed;
 			}
 			StartJump(JumpForce, JumpTime);
-			AudioEvent("jump");
+			OnPawnJump();
 		}
 
-		// Begin Attack
-		if (Controls.Dash.ConsumePress() && TryStartDash(input))
-		{
+		if (input.DashPressed && TryStartDash(moveX))
 			return;
-		}
-		else if (Controls.BlinkStrike.ConsumePress())
-		{
-			blinkStrikeTarget = FindBlinkStrikeTarget();
-			if (blinkStrikeTarget != null)
-			{
-				duckAttack = false;
-				attackBlocked = false;
-				blinkStrikeResolved = false;
-				State = States.BlinkStrike;
-				Play(GetAttackAnimation(), false);
-				return;
-			}
-		}
-		else if (Controls.Attack.ConsumePress())
-		{
-			if (!grounded && input != 0)
-				Facing = input;
 
-			if (ducking && duckAttackCooldownTimer <= 0)
-			{
-				duckAttack = true;
-				attackBlocked = IsAttackBlocked(duckAttack);
-				duckAttackCooldownTimer = DuckAttackCooldown;
-				State = States.Attack;
-				if (grounded)
-					StopX();
-			}
-			else if (!ducking)
-			{
-				duckAttack = false;
-				attackBlocked = false;
-				State = States.Attack;
-				if (grounded)
-					StopX();
-			}
-		}
-		else if (Controls.Saw.ConsumePress())
-		{
-			Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), (saw) =>
-			{
-				saw.Facing = Facing;
-			});
-		}
-
-		// Force yourself to die
-		if (Controls.Die.ConsumePress())
-		{
-			ApplyHurt(-100);
-		}
+		TryStartPawnAction(moveX);
 	}
 
-	private void TryStartRoll(Vector2 impactVelocity)
+	protected void TryStartRoll(Vector2 impactVelocity)
 	{
 		if (State != States.Normal) return;
-		if (Controls.Move.IntValue.Y <= 0) return;
+		if (input.MoveY <= 0) return;
 		if (impactVelocity.Y < RollMinFallSpeed) return;
 		if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed) return;
 
@@ -481,45 +332,45 @@ public partial class Player : Actor
 		Squish = new(1.65f, 0.62f);
 		Play("roll");
 		State = States.Roll;
-		StartRollSound();
+		OnRollStarted();
 	}
 
-	private void RollState()
+	protected void RollState()
 	{
 		ducking = true;
 		Play("roll");
 
 		if (!grounded)
 		{
-			StopRollSound(false);
+			OnRollStopped(false);
 			State = States.Normal;
 			return;
 		}
 
-		Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
+		UpdateRollAudioPosition();
 		var rollingDownSlope = RollingDownSlope();
 		var targetSpeed = rollingDownSlope ? DownhillRollSpeed : MaxGroundSpeed;
 		var friction = rollingDownSlope ? DownhillRollFriction : RollFriction;
 		Velocity.X = Calc.Approach(Velocity.X, Facing * targetSpeed, friction * Time.Delta);
 
-		if (Controls.Jump.ConsumePress())
+		if (input.JumpPressed)
 		{
-			StopRollSound(false);
+			OnRollStopped(false);
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.75f, 1.25f);
 			Velocity.X = Facing * MathF.Max(MathF.Abs(Velocity.X), RollJumpSpeed);
 			rollJumpCarryTimer = RollJumpCarryTime;
 			StartJump(RollJumpForce, RollJumpTime);
 			State = States.Normal;
-			AudioEvent("jump");
+			OnPawnJump();
 			return;
 		}
 
-		if (state.Time >= RollDuration || Controls.Move.IntValue.Y <= 0)
+		if (state.Time >= RollDuration || input.MoveY <= 0)
 		{
-			StopRollSound(false);
+			OnRollStopped(false);
 			State = States.Normal;
-			ducking = grounded && Controls.Move.IntValue.Y > 0;
+			ducking = grounded && input.MoveY > 0;
 		}
 	}
 
@@ -544,7 +395,7 @@ public partial class Player : Actor
 		return true;
 	}
 
-	private void DashState()
+	protected void DashState()
 	{
 		ducking = false;
 		Play("jump");
@@ -577,7 +428,7 @@ public partial class Player : Actor
 		}
 	}
 
-	private bool RollingDownSlope()
+	protected bool RollingDownSlope()
 	{
 		if (!grounded || Velocity.LengthSquared() <= 0.001f)
 			return false;
@@ -597,33 +448,7 @@ public partial class Player : Actor
 		return Vector2.Dot(Velocity, downhill) > 1;
 	}
 
-	private void StartRollSound()
-	{
-		StopRollSound(true);
-
-		try
-		{
-			rollSound = Game.CreateAudioEvent("player/roll", Position);
-			rollSound?.Start();
-		}
-		catch (Exception e)
-		{
-			Console.WriteLine(e);
-			rollSound?.Release();
-			rollSound = null;
-		}
-	}
-
-	private void StopRollSound(bool immediate)
-	{
-		if (rollSound == null)
-			return;
-
-		rollSound.Stop(immediate);
-		rollSound.Release();
-		rollSound = null;
-	}
-	private void StartJump(float force, float duration)
+	protected void StartJump(float force, float duration)
 	{
 		jumpForce = force;
 		jumpTimer = duration;
@@ -641,7 +466,7 @@ public partial class Player : Actor
 		return canJump;
 	}
 
-	private bool CanStandUp()
+	protected bool CanStandUp()
 	{
 		var standingBounds = StandingHitboxRect + Position;
 		if (Game.OverlapsRoomCollision(standingBounds))
@@ -676,7 +501,664 @@ public partial class Player : Actor
 		=> IsWallHugging(GetWallJumpDirection());
 
 	private bool IsWallHugging(int wallJumpDirection)
-		=> wallJumpDirection != 0 && Controls.Move.IntValue.X == -wallJumpDirection;
+		=> wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
+}
+
+public class Companion : Pawn
+{
+	private static readonly Color Tint = new(0x7fb6ff);
+	private const int FollowStopDistance = 18;
+	private const int DesiredPlayerSpacing = 20;
+	private const int NavNodeReachDistance = 8;
+		private const float NavSearchDistance = 180;
+		private const float GoalNodeSearchDistance = 56;
+		private const float EnterDelay = 1.0f;
+		private const float ActiveEdgeTimeout = 1.35f;
+		private const float JumpInputHoldTime = 0.22f;
+		private RoomChange? pendingRoomChange;
+		private float enterTimer;
+		private readonly List<PlatformNavGraph.Edge> navPath = [];
+	private bool jumpHeld;
+	private PlatformNavGraph.Edge? activeEdge;
+	private float activeEdgeTimer;
+	private float activeJumpHoldTimer;
+	private bool activeJumpStarted;
+	public int? DebugNavStartNodeId { get; private set; }
+	public int? DebugNavGoalNodeId { get; private set; }
+		public int? DebugNavTargetNodeId { get; private set; }
+		public string DebugNavLabel { get; private set; } = "idle";
+		public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => navPath;
+		protected override float GroundSpeedMultiplier => 0.75f;
+		protected override float AirSpeedMultiplier => 0.80f;
+		public bool CanSay => Game.CanShowCompanionSpeech();
+
+		public Companion()
+		{
+		Sprite = Assets.GetSprite("player");
+		Hitbox = new(new RectInt(-4, -12, 8, 12));
+		Depth = -4;
+		Play("idle");
+	}
+
+	public override void Added()
+	{
+		Game.RoomChanged += OnRoomChanged;
+	}
+
+	public override void Destroyed()
+	{
+		Game.RoomChanged -= OnRoomChanged;
+	}
+
+	public override PawnInput GetInput()
+	{
+		var moveX = 0;
+		var jumpPressed = false;
+		var player = Game.GetFirst<Player>();
+		var followTarget = player != null ? DesiredFollowPosition(player) : (Vector2?)null;
+		if (!TryExecuteActiveEdge(out moveX, out jumpPressed))
+		{
+			if (player == null || !TryNavigateToPlayer(player, out moveX, out jumpPressed))
+			{
+				moveX = GetFallbackMoveX(followTarget);
+				if (player == null)
+					SetDebugNavState("no player");
+				else
+					SetDebugNavState(moveX == 0 ? "beside player" : $"fallback walk {moveX}");
+			}
+		}
+
+		if (activeJumpHoldTimer > 0)
+			jumpHeld = true;
+		else if (jumpPressed)
+			jumpHeld = true;
+		else if (grounded || Velocity.Y >= 0)
+			jumpHeld = false;
+
+		if (moveX == 0 && player != null)
+		{
+			var face = Math.Sign(player.Position.X - Position.X);
+			if (face != 0)
+				Facing = face;
+		}
+
+		return new(
+			MoveX: moveX,
+			MoveY: 0,
+			JumpPressed: jumpPressed,
+			JumpDown: jumpHeld,
+			DashPressed: false,
+			AllowWallJump: false
+		);
+	}
+
+		public override void Update()
+		{
+			if (pendingRoomChange is { } change)
+			{
+				enterTimer = Calc.Approach(enterTimer, 0, Time.Delta);
+			SetDebugNavState($"entering {enterTimer:0.0}s");
+			if (enterTimer <= 0)
+				EnterRoom(change);
+			return;
+		}
+
+		base.Update();
+	}
+
+		public override void Render(Batcher batcher)
+		{
+			RenderSpriteSubtexture(batcher, Tint);
+		}
+
+		public void Say(string text)
+			=> Game.ShowCompanionSpeech(Position + new Vector2(0, -32), text);
+
+	private bool TryNavigateToPlayer(Player player, out int moveX, out bool jumpPressed)
+	{
+		moveX = 0;
+		jumpPressed = false;
+
+		if (Game.GetPlatformNavGraph() is not { } graph)
+		{
+			SetDebugNavState("no graph");
+			return false;
+		}
+
+		var start = graph.FindNearestNode(Position, NavSearchDistance);
+		var goal = FindGoalNodeBesidePlayer(graph, player);
+		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
+		{
+			SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
+			return false;
+		}
+
+		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, navPath) || navPath.Count <= 0)
+		{
+			DebugNavStartNodeId = start.Value.Id;
+			DebugNavGoalNodeId = goal.Value.Id;
+			DebugNavTargetNodeId = null;
+			DebugNavLabel = $"no path {start.Value.Id}->{goal.Value.Id}";
+			return false;
+		}
+
+		var edge = navPath[0];
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall)
+		{
+			DebugNavStartNodeId = start.Value.Id;
+			DebugNavGoalNodeId = goal.Value.Id;
+			DebugNavTargetNodeId = edge.To;
+			StartActiveEdge(edge);
+			return TryExecuteActiveEdge(out moveX, out jumpPressed);
+		}
+
+		var from = graph.Nodes[edge.From];
+		var to = graph.Nodes[edge.To];
+		var target = to.Position;
+		switch (edge.Kind)
+		{
+			case PlatformNavGraph.EdgeKind.Walk:
+				moveX = MoveTowardNavTarget(target);
+				if (moveX == 0 && !IsNearNode(target))
+				{
+					DebugNavStartNodeId = start.Value.Id;
+					DebugNavGoalNodeId = goal.Value.Id;
+					DebugNavTargetNodeId = to.Id;
+					DebugNavLabel = $"stalled {edge.Kind} {edge.From}->{edge.To}";
+					return false;
+				}
+				break;
+
+			case PlatformNavGraph.EdgeKind.RoomExit:
+				moveX = MoveTowardNavTarget(target);
+				break;
+
+			default:
+				DebugNavLabel = $"unsupported {edge.Kind}";
+				return false;
+		}
+
+		DebugNavStartNodeId = start.Value.Id;
+		DebugNavGoalNodeId = goal.Value.Id;
+		DebugNavTargetNodeId = to.Id;
+		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}";
+		return true;
+	}
+
+	private void StartActiveEdge(PlatformNavGraph.Edge edge)
+	{
+		activeEdge = edge;
+		activeEdgeTimer = 0;
+		activeJumpHoldTimer = 0;
+		activeJumpStarted = false;
+	}
+
+	private int MoveTowardNavTarget(Vector2 target)
+	{
+		var dx = target.X - Position.X;
+		if (MathF.Abs(dx) > NavNodeReachDistance * 0.5f)
+			return Math.Sign(dx);
+		return 0;
+	}
+
+	private bool TryExecuteActiveEdge(out int moveX, out bool jumpPressed)
+	{
+		moveX = 0;
+		jumpPressed = false;
+		if (activeEdge is not { } edge || Game.GetPlatformNavGraph() is not { } graph)
+			return false;
+
+		if (edge.From < 0 || edge.From >= graph.Nodes.Count || edge.To < 0 || edge.To >= graph.Nodes.Count)
+		{
+			ClearActiveEdge("bad edge");
+			return false;
+		}
+
+		activeEdgeTimer += Time.Delta;
+		var from = graph.Nodes[edge.From];
+		var to = graph.Nodes[edge.To];
+		var target = to.Position;
+
+		if (activeEdgeTimer > ActiveEdgeTimeout)
+		{
+			ClearActiveEdge($"{edge.Kind} timeout");
+			return false;
+		}
+
+		switch (edge.Kind)
+		{
+			case PlatformNavGraph.EdgeKind.Jump:
+				if (!activeJumpStarted && Vector2.Distance(Position, from.Position) > NavNodeReachDistance * 2)
+				{
+					moveX = Math.Sign(from.Position.X - Position.X);
+					DebugNavLabel = $"{edge.Kind} approach {edge.From}->{edge.To}";
+					break;
+				}
+
+				moveX = Math.Sign(target.X - Position.X);
+				if (moveX == 0)
+					moveX = Math.Sign(target.X - from.Position.X);
+				if (!activeJumpStarted && grounded)
+				{
+					jumpPressed = true;
+					activeJumpStarted = true;
+					activeJumpHoldTimer = JumpInputHoldTime;
+				}
+				if (activeJumpStarted)
+					activeJumpHoldTimer = Calc.Approach(activeJumpHoldTimer, 0, Time.Delta);
+				if (activeJumpStarted && grounded && activeEdgeTimer > 0.12f && IsNearNode(target))
+				{
+					ClearActiveEdge($"{edge.Kind} done");
+					return false;
+				}
+				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeEdgeTimer:0.0}";
+				break;
+
+			case PlatformNavGraph.EdgeKind.Fall:
+				moveX = Math.Sign(to.Position.X - from.Position.X);
+				if (!grounded && MathF.Abs(target.X - Position.X) > NavNodeReachDistance * 0.5f)
+					moveX = Math.Sign(target.X - Position.X);
+				if (grounded && activeEdgeTimer > 0.12f && IsNearNode(target))
+				{
+					ClearActiveEdge($"{edge.Kind} done");
+					return false;
+				}
+				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeEdgeTimer:0.0}";
+				break;
+
+			default:
+				ClearActiveEdge("inactive");
+				return false;
+		}
+
+		DebugNavTargetNodeId = to.Id;
+		return true;
+	}
+
+	private bool IsNearNode(Vector2 node)
+		=> MathF.Abs(Position.X - node.X) <= NavNodeReachDistance &&
+		   MathF.Abs(Position.Y - node.Y) <= NavNodeReachDistance;
+
+	private void ClearActiveEdge(string label)
+	{
+		activeEdge = null;
+		activeEdgeTimer = 0;
+		activeJumpHoldTimer = 0;
+		activeJumpStarted = false;
+		DebugNavLabel = label;
+	}
+
+	private void SetDebugNavState(string label)
+	{
+		DebugNavStartNodeId = null;
+		DebugNavGoalNodeId = null;
+		DebugNavTargetNodeId = null;
+		navPath.Clear();
+		activeEdge = null;
+		activeEdgeTimer = 0;
+		activeJumpHoldTimer = 0;
+		activeJumpStarted = false;
+		DebugNavLabel = label;
+	}
+
+	private Vector2 DesiredFollowPosition(Player player)
+	{
+		var side = Position.X <= player.Position.X ? -1 : 1;
+		return player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
+	}
+
+	private PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player)
+	{
+		var preferredSide = Position.X <= player.Position.X ? -1 : 1;
+		var preferred = FindGoalNodeBesidePlayer(graph, player, preferredSide);
+		if (preferred.HasValue)
+			return preferred;
+
+		return FindGoalNodeBesidePlayer(graph, player, -preferredSide) ??
+			   graph.FindNearestNode(player.Position, GoalNodeSearchDistance);
+	}
+
+	private static PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, int side)
+	{
+		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
+		PlatformNavGraph.Node? best = null;
+		var bestScore = GoalNodeSearchDistance * GoalNodeSearchDistance;
+		foreach (var node in graph.Nodes)
+		{
+			if (node.Kind == PlatformNavGraph.NodeKind.RoomExit)
+				continue;
+
+			var distanceSquared = Vector2.DistanceSquared(node.Position, desired);
+			if (distanceSquared >= bestScore)
+				continue;
+
+			if (MathF.Abs(node.Position.X - player.Position.X) < DesiredPlayerSpacing * 0.5f)
+				continue;
+
+			best = node;
+			bestScore = distanceSquared;
+		}
+		return best;
+	}
+
+	private int GetFallbackMoveX(Vector2? target)
+	{
+		if (target == null)
+			return 0;
+
+		var dx = target.Value.X - Position.X;
+		return MathF.Abs(dx) > FollowStopDistance ? Math.Sign(dx) : 0;
+	}
+
+	private void OnRoomChanged(RoomChange change)
+	{
+		if (change.Kind == RoomChangeKind.InitialLoad)
+			return;
+
+		pendingRoomChange = change;
+		enterTimer = EnterDelay;
+		Visible = false;
+		CollidesWithSolids = false;
+		Velocity = Vector2.Zero;
+	}
+
+	private void EnterRoom(RoomChange change)
+	{
+		pendingRoomChange = null;
+		Position = FindEnterPosition(change);
+		Velocity = Vector2.Zero;
+		CollidesWithSolids = true;
+		Visible = true;
+		Game.TryCompanionStorylet("companion_entered");
+	}
+
+	private Point2 FindEnterPosition(RoomChange change)
+	{
+		var player = Game.GetFirst<Player>();
+		var anchor = player?.Position ?? (Point2)change.PlayerPosition;
+		var bounds = change.To.WorldBounds;
+		var direction = change.Direction;
+
+		var basePosition = anchor;
+		if (change.Kind == RoomChangeKind.EdgeTransition && direction != Point2.Zero)
+		{
+			if (direction.X > 0)
+				basePosition.X = bounds.Left + Game.TileSize;
+			else if (direction.X < 0)
+				basePosition.X = bounds.Right - Game.TileSize;
+			else if (direction.Y > 0)
+				basePosition.Y = bounds.Top + Game.TileSize * 2;
+			else if (direction.Y < 0)
+				basePosition.Y = bounds.Bottom - 1;
+		}
+
+		basePosition.X = Math.Clamp(basePosition.X, bounds.Left + Game.TileSize, bounds.Right - Game.TileSize);
+		basePosition.Y = Math.Clamp(basePosition.Y, bounds.Top + Game.TileSize * 2, bounds.Bottom - 1);
+
+		ReadOnlySpan<Point2> offsets =
+		[
+			Point2.Zero,
+			new Point2(0, -Game.TileSize),
+			new Point2(0, -Game.TileSize * 2),
+			new Point2(Game.TileSize, 0),
+			new Point2(-Game.TileSize, 0),
+			new Point2(Game.TileSize * 2, 0),
+			new Point2(-Game.TileSize * 2, 0)
+		];
+
+		foreach (var offset in offsets)
+		{
+			var position = basePosition + offset;
+			var hitbox = Hitbox.Rect + position;
+			if (!Game.OverlapsRoomCollision(hitbox))
+				return position;
+		}
+
+		return basePosition;
+	}
+}
+
+public partial class Player : Pawn
+{
+	public override PawnInput GetInput()
+	{
+		return new(
+			MoveX: Controls.Move.IntValue.X,
+			MoveY: Controls.Move.IntValue.Y,
+			JumpPressed: Controls.Jump.Pressed,
+			JumpDown: Controls.Jump.Down,
+			DashPressed: Controls.Dash.Pressed
+		);
+	}
+
+	public const int MaxHealth = 4;
+
+	static float AttackFriction => 150;
+	static float HurtFriction => 200;
+	static float DuckAttackCooldown => 0.4f;
+	static float AttackBlockOverlapThreshold => 0.5f;
+	static float HurtDuration => 0.5f;
+	static float DeathDuration => 1.5f;
+	static float InvincibleDuration => 1.5f;
+
+	public int Health = MaxHealth;
+	public Controls Controls => Game.Controls;
+
+	private int footstepFrame = -1;
+	private float duckAttackCooldownTimer;
+	private bool duckAttack;
+	private bool attackBlocked;
+	private Light? light;
+	private SoundInstance? rollSound;
+	private bool CanPlaySquishSound = false;
+
+	public Player()
+	{
+		Sprite = Assets.GetSprite("player");
+		Hitbox = new(StandingHitboxRect);
+		Mask = Masks.Player;
+		IFrameTime = InvincibleDuration;
+		grounded = true;
+		Play("sword");
+		State = States.Start;
+	}
+
+	public override void Added()
+	{
+		light = Game.Create<Light>(Position, it =>
+		{
+			it.Radius = 36;
+			it.Intensity = 0.45f;
+			it.LightColor = 0xffcfa0;
+			it.Height = 16;
+			it.FlickerFrequency = 1.5f;
+			it.FlickerIntensity = 0.02f;
+			it.DrawSprite = false;
+			it.KeepOnRoomTransition = true;
+		});
+		UpdateLightPosition();
+	}
+
+	public override void OnCollideY()
+	{
+		bool wasGoingUp = Velocity.Y < 0;
+		base.OnCollideY();
+		if (wasGoingUp && CanPlaySquishSound && State == States.Normal)
+		{
+			AudioEvent("player/squish");
+			CanPlaySquishSound = false;
+			JumpUpSquish = 0.15f;
+		}
+	}
+
+	protected override void AfterActorUpdate(Vector2 previousVelocity)
+	{
+		UpdateLightPosition();
+	}
+
+	protected override void OnLanded(Vector2 previousVelocity)
+	{
+		base.OnLanded(previousVelocity);
+		AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+		CanPlaySquishSound = true;
+	}
+
+	protected override void AfterStateUpdate(Vector2 previousVelocity)
+	{
+		UpdateFootsteps();
+		if (duckAttackCooldownTimer > 0)
+			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
+	}
+
+	protected override void AfterMovementUpdate(Vector2 previousVelocity)
+	{
+		if (Health > 0)
+		{
+			if (Position.X > Game.Bounds.Right && !Game.Transition(Point2.Right))
+			{
+				Position.X = Game.Bounds.Right;
+			}
+			else if (Position.X < Game.Bounds.Left && !Game.Transition(Point2.Left))
+			{
+				Position.X = Game.Bounds.Left;
+			}
+			else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
+			{
+				ApplyHurt(-1000);
+			}
+			else if (Position.Y < Game.Bounds.Top)
+			{
+				if (Game.Transition(Point2.Up))
+					Velocity.Y = -150;
+				else
+					Position.Y = Game.Bounds.Top;
+			}
+		}
+
+		if (State == States.Dash)
+		{
+			if (OverlapsFirst(Masks.Hazard) is { } hit)
+				hit.Hit(this);
+		}
+		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
+			hit.Hit(this);
+	}
+
+	protected override void CustomState()
+	{
+		switch (State)
+		{
+			case States.Attack:
+				AttackState();
+				break;
+			case States.BlinkStrike:
+				BlinkStrikeState();
+				break;
+			case States.Hurt:
+				HurtState();
+				break;
+			case States.Start:
+				StartState();
+				break;
+		}
+	}
+
+	protected override bool AllowDuckingInState()
+		=> State == States.Attack && duckAttack;
+
+	protected override bool TryStartPawnAction(int moveX)
+	{
+		if (Controls.BlinkStrike.ConsumePress())
+		{
+			blinkStrikeTarget = FindBlinkStrikeTarget();
+			if (blinkStrikeTarget != null)
+			{
+				duckAttack = false;
+				attackBlocked = false;
+				blinkStrikeResolved = false;
+				State = States.BlinkStrike;
+				Play(GetAttackAnimation(), false);
+				return true;
+			}
+		}
+		else if (Controls.Attack.ConsumePress())
+		{
+			if (!grounded && moveX != 0)
+				Facing = moveX;
+
+			if (ducking && duckAttackCooldownTimer <= 0)
+			{
+				duckAttack = true;
+				attackBlocked = IsAttackBlocked(duckAttack);
+				duckAttackCooldownTimer = DuckAttackCooldown;
+				State = States.Attack;
+				if (grounded)
+					StopX();
+				return true;
+			}
+			else if (!ducking)
+			{
+				duckAttack = false;
+				attackBlocked = false;
+				State = States.Attack;
+				if (grounded)
+					StopX();
+				return true;
+			}
+		}
+		else if (Controls.Saw.ConsumePress())
+		{
+			Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), saw => saw.Facing = Facing);
+			return true;
+		}
+
+		if (Controls.Die.ConsumePress())
+		{
+			ApplyHurt(-100);
+			return true;
+		}
+
+		return false;
+	}
+
+	protected override void OnPawnJump()
+		=> AudioEvent("jump");
+
+	protected override void OnRollStarted()
+		=> StartRollSound();
+
+	protected override void OnRollStopped(bool immediate)
+		=> StopRollSound(immediate);
+
+	protected override void UpdateRollAudioPosition()
+		=> Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
+
+	private void StartRollSound()
+	{
+		StopRollSound(true);
+
+		try
+		{
+			rollSound = Game.CreateAudioEvent("player/roll", Position);
+			rollSound?.Start();
+		}
+		catch (Exception e)
+		{
+			Console.WriteLine(e);
+			rollSound?.Release();
+			rollSound = null;
+		}
+	}
+
+	private void StopRollSound(bool immediate)
+	{
+		if (rollSound == null)
+			return;
+
+		rollSound.Stop(immediate);
+		rollSound.Release();
+		rollSound = null;
+	}
 
 	private void UpdateFootsteps()
 	{

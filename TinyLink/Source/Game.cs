@@ -5,6 +5,16 @@ using Foster.Framework;
 
 namespace TinyLink;
 
+public enum RoomChangeKind
+{
+	InitialLoad,
+	EdgeTransition,
+	LinkedDoor,
+	Reload
+}
+
+public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
+
 public partial class Game : IDisposable
 {
 	public const int Width = 320;
@@ -153,6 +163,7 @@ public partial class Game : IDisposable
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
 	public bool IsEditorPreview => !AudioEventsEnabled;
+	public event Action<RoomChange>? RoomChanged;
 
 	public Game(Manager manager, Point2 start, bool audioEventsEnabled = true)
 		: this(manager, Assets.GetRoom(start), audioEventsEnabled)
@@ -173,6 +184,7 @@ public partial class Game : IDisposable
 		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
 		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
+		LoadStory();
 
 		if (start != null)
 		{
@@ -202,6 +214,8 @@ public partial class Game : IDisposable
 			{
 				respawnPosition = player.Position;
 			}
+			EnsureCompanionForPlayer(repositionExisting: true);
+			RaiseRoomChanged(null, room, RoomChangeKind.InitialLoad, Point2.Zero);
 			if (AudioEventsEnabled)
 			{
 				StartMusic();
@@ -285,6 +299,7 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
 				if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
 				if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
+				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 			}
 
@@ -324,6 +339,7 @@ public partial class Game : IDisposable
 				}
 
 				UpdateCamera();
+				UpdateStory();
 
 				// screen shaking
 				if (shaking > 0)
@@ -689,9 +705,14 @@ public partial class Game : IDisposable
 					}
 				}
 			}
-		}
-		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
-		{
+			}
+			if (debugView is DebugView.None or DebugView.CollisionRects)
+			{
+				using (GraphicsDevice.DebugGroup("TinyLink/story speech"))
+					DrawStorySpeech(output);
+			}
+			if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+			{
 			using (PerfStats.Time(PerfStat.Hud))
 			using (GraphicsDevice.DebugGroup("TinyLink/hud"))
 			{
@@ -702,6 +723,10 @@ public partial class Game : IDisposable
 		{
 			using (GraphicsDevice.DebugGroup("TinyLink/visibility debug"))
 				DrawVisibilityDebug(output);
+		}
+		if (debugView == DebugView.PlatformNav)
+		{
+			GetPlatformNavGraph();
 		}
 
 		// draw screen to window
@@ -2363,6 +2388,7 @@ public partial class Game : IDisposable
 	{
 		if (room != null && nextRoom == null)
 		{
+			var fromRoom = room;
 			var exitPosition = GetFirst<Player>()?.Position ?? (Vector2)room.WorldBounds.Center;
 			if (Assets.FindAdjacentRoom(room, direction, exitPosition) is { } foundRoom)
 			{
@@ -2392,6 +2418,7 @@ public partial class Game : IDisposable
 				transitionSunDirectionTo = nextRoom.SunDirection;
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
+				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
 				ApplyMusicArea(nextRoom);
 				ApplyRoomReverb(nextRoom);
 				return true;
@@ -2415,6 +2442,7 @@ public partial class Game : IDisposable
 			return false;
 
 		ReadLinkedDoorDestination(resolvedTarget, out var localPosition, out var spawnOffset);
+		var fromRoom = room;
 		var targetRoom = target.Room.CloneRuntime();
 
 		foreach (var actor in Actors)
@@ -2437,6 +2465,7 @@ public partial class Game : IDisposable
 		ApplyRoomReverb(room);
 		linkedDoorCooldown = 0.35f;
 		roomSwappedThisFrame = true;
+		RaiseRoomChanged(fromRoom, room, RoomChangeKind.LinkedDoor, Point2.Zero);
 		PulseDitherGlitch();
 		return true;
 	}
@@ -2681,6 +2710,7 @@ public partial class Game : IDisposable
 		if (restartMusic)
 			StopMusic(true);
 
+		var fromRoom = room;
 		var reloaded = Assets.GetRoom(room.Id)?.CloneRuntime() ?? room.CloneRuntime();
 		foreach (var actor in Actors)
 			Destroy(actor);
@@ -2688,6 +2718,8 @@ public partial class Game : IDisposable
 		LoadRoom(room);
 		if (GetFirst<Player>() == null && respawnPosition is { } position)
 			Create<Player>(position);
+		EnsureCompanionForPlayer(repositionExisting: true);
+		RaiseRoomChanged(fromRoom, room, RoomChangeKind.Reload, Point2.Zero);
 
 		ApplyRoomReverb(room);
 
@@ -2851,6 +2883,62 @@ public partial class Game : IDisposable
 
 		hiddenCover.Build(forRoom);
 		hiddenCover.RevealForCurrentPlayer(immediate: true);
+		EnsureCompanionForPlayer();
+	}
+
+	private void EnsureCompanionForPlayer(bool repositionExisting = false)
+	{
+		if (GetFirst<Player>() is not { } player)
+			return;
+
+		var position = FindCompanionSpawnPosition(player);
+		if (GetFirst<Companion>() is { } companion)
+		{
+			if (repositionExisting)
+			{
+				companion.Position = position;
+				companion.Velocity = Vector2.Zero;
+				companion.Facing = player.Facing;
+			}
+			return;
+		}
+
+		Create<Companion>(position, companion =>
+		{
+			companion.Facing = player.Facing;
+			companion.KeepOnRoomTransition = true;
+		});
+	}
+
+	private Point2 FindCompanionSpawnPosition(Player player)
+	{
+		var offsets = new[]
+		{
+			new Point2(-12 * player.Facing, 0),
+			new Point2(12 * player.Facing, 0),
+			new Point2(-20 * player.Facing, 0),
+			new Point2(20 * player.Facing, 0),
+			new Point2(0, -8),
+			Point2.Zero
+		};
+
+		foreach (var offset in offsets)
+		{
+			var position = player.Position + offset;
+			var bounds = new RectInt(-4, -12, 8, 12) + position;
+			if (!OverlapsRoomCollision(bounds))
+				return position;
+		}
+
+		return player.Position;
+	}
+
+	private void RaiseRoomChanged(Room? from, Room to, RoomChangeKind kind, Point2 direction)
+	{
+		var playerPosition = GetFirst<Player>()?.Position ?? (Vector2)to.WorldBounds.Center;
+		var change = new RoomChange(from, to, kind, direction, playerPosition);
+		RoomChanged?.Invoke(change);
+		OnStoryRoomChanged(change);
 	}
 
 	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)

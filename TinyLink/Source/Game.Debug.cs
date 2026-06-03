@@ -15,12 +15,16 @@ public partial class Game
 		TileFieldGreen,
 		DitherMask,
 		Reflection,
-		Visibility
+		Visibility,
+		PlatformNav
 	}
 
 	private DebugView debugView;
 	private float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }
+	private readonly PlatformNavGraph platformNavGraph = new();
+	private Room? platformNavGraphRoom;
+	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 
 	private bool mouseLightEnabled;
 	private Vector2 mouseLightPosition;
@@ -66,6 +70,7 @@ public partial class Game
 			DebugView.DitherMask => "Dither Mask",
 			DebugView.Reflection => "Reflection Screen",
 			DebugView.Visibility => "Visibility Polygon",
+			DebugView.PlatformNav => "Platform Nav",
 			_ => view.ToString()
 		};
 
@@ -173,6 +178,34 @@ public partial class Game
 			if (!destroying.Contains(it))
 				if (it.Hitbox.Rect != new RectInt())
 					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
+	}
+
+	public PlatformNavGraph? GetPlatformNavGraph()
+	{
+		if (room == null)
+			return null;
+
+		if (platformNavGraphRoom != room)
+		{
+			platformNavGraph.Rebuild(this, room);
+			platformNavGraphRoom = room;
+		}
+
+		return platformNavGraph;
+	}
+
+	public bool TryGetCompanionDebugOverlay(out Vector2 worldPosition, out string label)
+	{
+		if (debugView == DebugView.PlatformNav && GetFirst<Companion>() is { } companion)
+		{
+			worldPosition = companion.Position + new Vector2(0, -22);
+			label = companion.DebugNavLabel;
+			return true;
+		}
+
+		worldPosition = default;
+		label = string.Empty;
+		return false;
 	}
 
 	private void UpdateMouseLightPosition(RectInt viewport)

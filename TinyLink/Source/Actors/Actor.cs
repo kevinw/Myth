@@ -382,6 +382,9 @@ public class Actor
 	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType) =>
 		RenderSpriteSubtexture(batcher, subtextureType, Color.White);
 
+	protected void RenderSpriteSubtexture(Batcher batcher, Color color) =>
+		RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+
 	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
 	{
 		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))

@@ -2012,6 +2012,8 @@ public partial class Manager
 			'2' => '1',
 			'G' => 'S',
 			'S' => 'G',
+			'T' => 'Y',
+			'Y' => 'T',
 			_ => '\0'
 		};
 		return result != '\0';
@@ -3576,6 +3578,150 @@ public partial class Manager
 		ImGui.End();
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar(2);
+	}
+
+	private void CompanionDebugOverlayImGui()
+	{
+		if (game == null || !playing || !game.TryGetCompanionDebugOverlay(out var worldPosition, out var label))
+			return;
+
+		var viewport = GameViewRect;
+		var screenPosition = GameWorldToImGui(viewport, game, worldPosition);
+		var textSize = ImGui.CalcTextSize(label) * 0.82f;
+		var padding = new Vector2(4, 2);
+		var size = textSize + padding * 2;
+		var position = new Vector2(screenPosition.X - size.X * 0.5f, screenPosition.Y - size.Y);
+		position.X = Math.Clamp(position.X, viewport.Left + 4, viewport.Right - size.X - 4);
+		position.Y = Math.Clamp(position.Y, viewport.Top + 4, viewport.Bottom - size.Y - 4);
+
+		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
+		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 1);
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.72f));
+		ImGui.Begin(
+			"CompanionDebugOverlay",
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.NoInputs |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoFocusOnAppearing |
+			ImGuiWindowFlags.NoNav);
+		ImGui.SetWindowFontScale(0.82f);
+		ImGui.TextUnformatted(label);
+		ImGui.SetWindowFontScale(1.0f);
+		ImGui.End();
+		ImGui.PopStyleColor();
+		ImGui.PopStyleVar(2);
+	}
+
+	private void PlatformNavDebugOverlayImGui()
+	{
+		if (game == null || !playing || !game.IsPlatformNavDebugVisible)
+			return;
+		var graph = game.GetPlatformNavGraph();
+		if (graph == null)
+			return;
+
+		var viewport = GameViewRect;
+		var draw = ImGui.GetForegroundDrawList();
+		draw.PushClipRect(viewport.TopLeft, viewport.BottomRight, true);
+
+		foreach (var edge in graph.Edges)
+		{
+			if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
+				continue;
+			var color = edge.Kind switch
+			{
+				PlatformNavGraph.EdgeKind.Fall => ImGuiColor(1.00f, 0.47f, 0.66f, 0.22f),
+				PlatformNavGraph.EdgeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.45f),
+				_ => ImGuiColor(0.37f, 0.80f, 0.89f, 0.18f)
+			};
+			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.RoomExit ? 1.5f : 1.0f);
+		}
+
+		if (game.GetFirst<Companion>() is { } companion)
+			DrawCompanionPlatformNavOverlay(draw, viewport, game, graph, companion);
+
+		foreach (var node in graph.Nodes)
+		{
+			var color = node.Kind switch
+			{
+				PlatformNavGraph.NodeKind.Ledge => ImGuiColor(1.00f, 0.83f, 0.48f, 0.78f),
+				PlatformNavGraph.NodeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.90f),
+				_ => ImGuiColor(0.65f, 0.94f, 0.44f, 0.62f)
+			};
+			var radius = node.Kind == PlatformNavGraph.NodeKind.RoomExit ? 3.5f : 2.0f;
+			draw.AddCircleFilled(GameWorldToImGui(viewport, game, node.Position), radius, color, 8);
+		}
+
+		draw.PopClipRect();
+	}
+
+	private void DrawCompanionPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Companion companion)
+	{
+		foreach (var edge in companion.DebugNavPath)
+		{
+			var color = edge.Kind == PlatformNavGraph.EdgeKind.Jump
+				? ImGuiColor(1.00f, 0.95f, 0.66f, 0.95f)
+				: ImGuiColor(1.00f, 1.00f, 1.00f, 0.78f);
+			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.Jump ? 2.0f : 2.5f);
+		}
+
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, companion.DebugNavStartNodeId, ImGuiColor(0.37f, 0.80f, 0.89f, 0.95f), 7.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, companion.DebugNavGoalNodeId, ImGuiColor(1.00f, 0.47f, 0.66f, 0.95f), 7.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, companion.DebugNavTargetNodeId, ImGuiColor(1.00f, 1.00f, 1.00f, 0.95f), 8.0f);
+
+		var from = GameWorldToImGui(viewport, game, companion.Position);
+		var to = GameWorldToImGui(viewport, game, companion.Position + new Vector2(0, -14));
+		draw.AddLine(from, to, ImGuiColor(1.00f, 1.00f, 1.00f, 0.55f), 1.0f);
+	}
+
+	private static void DrawPlatformNavEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.Edge edge, uint color, float thickness)
+	{
+		if (edge.From < 0 || edge.From >= graph.Nodes.Count || edge.To < 0 || edge.To >= graph.Nodes.Count)
+			return;
+
+		var from = graph.Nodes[edge.From].Position;
+		var to = graph.Nodes[edge.To].Position;
+		if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
+			DrawPlatformNavJump(draw, viewport, game, from, to, color, thickness);
+		else
+			draw.AddLine(GameWorldToImGui(viewport, game, from), GameWorldToImGui(viewport, game, to), color, thickness);
+	}
+
+	private static void DrawPlatformNavJump(ImDrawListPtr draw, Rect viewport, Game game, Vector2 from, Vector2 to, uint color, float thickness)
+	{
+		var control = new Vector2((from.X + to.X) * 0.5f, MathF.Min(from.Y, to.Y) - 24);
+		var previous = GameWorldToImGui(viewport, game, from);
+		const int segments = 12;
+		for (var i = 1; i <= segments; i++)
+		{
+			var t = i / (float)segments;
+			var a = Vector2.Lerp(from, control, t);
+			var b = Vector2.Lerp(control, to, t);
+			var point = GameWorldToImGui(viewport, game, Vector2.Lerp(a, b, t));
+			draw.AddLine(previous, point, color, thickness);
+			previous = point;
+		}
+	}
+
+	private static void DrawPlatformNavNodeRing(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, int? nodeId, uint color, float radius)
+	{
+		if (nodeId is not { } id || id < 0 || id >= graph.Nodes.Count)
+			return;
+
+		draw.AddCircle(GameWorldToImGui(viewport, game, graph.Nodes[id].Position), radius, color, 16, 2.0f);
+	}
+
+	private static uint ImGuiColor(float r, float g, float b, float a)
+		=> ImGui.ColorConvertFloat4ToU32(new Vector4(r, g, b, a));
+
+	private static Vector2 GameWorldToImGui(Rect viewport, Game game, Vector2 worldPosition)
+	{
+		var scale = MathF.Min(viewport.Width / game.Screen.Width, viewport.Height / game.Screen.Height);
+		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
+		var topLeft = viewport.Center - size / 2;
+		return topLeft + (worldPosition - game.Camera) * scale;
 	}
 
 	private void FpsOverlayImGui()
