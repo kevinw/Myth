@@ -1,10 +1,16 @@
+using System.Numerics;
+
 namespace TinyLink;
 
 public enum StoryTrigger
 {
 	None,
 	RoomEntered,
-	CompanionEntered
+	BudEntered,
+	PlayerEnteredRevealDoor,
+	PlayerHurt,
+	EnemyKilled,
+	PlayerIdle
 }
 
 public readonly record struct StoryContext(
@@ -14,9 +20,14 @@ public readonly record struct StoryContext(
 	float RoomTime,
 	int RoomVisits,
 	int RoomsSeen,
-	bool HasCompanion,
+	bool HasBud,
 	int PlayerHealth,
-	float CompanionDistance);
+	float BudDistance,
+	string? ActorType,
+	string? SourceType,
+	string? DoorId,
+	Vector2? EventPosition,
+	float? Duration);
 
 public sealed class StoryBuilder
 {
@@ -27,16 +38,16 @@ public sealed class StoryBuilder
 		this.deck = deck;
 	}
 
-	public StoryBuilder Companion(string id, Action<StoryletBuilder> configure)
+	public StoryBuilder Bud(string id, Action<StoryletBuilder> configure)
 	{
 		var builder = new StoryletBuilder(id)
-			.Speaker("companion");
+			.Speaker("bud");
 		configure(builder);
 		deck.Add(builder.Build());
 		return this;
 	}
 
-	public StoryBuilder CompanionBarks(string idPrefix, Action<StoryletGroupBuilder> configure)
+	public StoryBuilder BudBarks(string idPrefix, Action<StoryletGroupBuilder> configure)
 	{
 		var builder = new StoryletGroupBuilder();
 		configure(builder);
@@ -45,7 +56,7 @@ public sealed class StoryBuilder
 		for (var i = 0; i < lines.Count; i++)
 		{
 			var line = lines[i];
-			Companion($"{idPrefix}_{i}", storylet =>
+			Bud($"{idPrefix}_{i}", storylet =>
 			{
 				builder.Apply(storylet);
 				storylet.Say(line);
@@ -79,6 +90,33 @@ public sealed class StoryletBuilder
 
 	public StoryletBuilder On(StoryTrigger trigger)
 		=> When(ctx => ctx.Trigger == trigger);
+
+	public StoryletBuilder OnEnemyKilled(string? actorType = null)
+	{
+		On(StoryTrigger.EnemyKilled);
+		if (!string.IsNullOrWhiteSpace(actorType))
+			When(ctx => string.Equals(ctx.ActorType, actorType, StringComparison.OrdinalIgnoreCase));
+		return this;
+	}
+
+	public StoryletBuilder OnPlayerHurt(string? sourceType = null)
+	{
+		On(StoryTrigger.PlayerHurt);
+		if (!string.IsNullOrWhiteSpace(sourceType))
+			When(ctx => string.Equals(ctx.SourceType, sourceType, StringComparison.OrdinalIgnoreCase));
+		return this;
+	}
+
+	public StoryletBuilder OnRevealDoorEntered(string? doorId = null)
+	{
+		On(StoryTrigger.PlayerEnteredRevealDoor);
+		if (!string.IsNullOrWhiteSpace(doorId))
+			When(ctx => string.Equals(ctx.DoorId, doorId, StringComparison.OrdinalIgnoreCase));
+		return this;
+	}
+
+	public StoryletBuilder OnPlayerIdle(float seconds = 10.0f)
+		=> On(StoryTrigger.PlayerIdle).When(ctx => ctx.Duration >= seconds);
 
 	public StoryletBuilder InRoom(string roomId)
 		=> When(ctx => string.Equals(ctx.RoomId, roomId, StringComparison.OrdinalIgnoreCase));
@@ -135,6 +173,30 @@ public sealed class StoryletGroupBuilder
 	public StoryletGroupBuilder On(StoryTrigger trigger)
 	{
 		configurators.Add(builder => builder.On(trigger));
+		return this;
+	}
+
+	public StoryletGroupBuilder OnEnemyKilled(string? actorType = null)
+	{
+		configurators.Add(builder => builder.OnEnemyKilled(actorType));
+		return this;
+	}
+
+	public StoryletGroupBuilder OnPlayerHurt(string? sourceType = null)
+	{
+		configurators.Add(builder => builder.OnPlayerHurt(sourceType));
+		return this;
+	}
+
+	public StoryletGroupBuilder OnRevealDoorEntered(string? doorId = null)
+	{
+		configurators.Add(builder => builder.OnRevealDoorEntered(doorId));
+		return this;
+	}
+
+	public StoryletGroupBuilder OnPlayerIdle(float seconds = 10.0f)
+	{
+		configurators.Add(builder => builder.OnPlayerIdle(seconds));
 		return this;
 	}
 

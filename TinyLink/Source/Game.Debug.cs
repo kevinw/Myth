@@ -194,12 +194,12 @@ public partial class Game
 		return platformNavGraph;
 	}
 
-	public bool TryGetCompanionDebugOverlay(out Vector2 worldPosition, out string label)
+	public bool TryGetBudDebugOverlay(out Vector2 worldPosition, out string label)
 	{
-		if (debugView == DebugView.PlatformNav && GetFirst<Companion>() is { } companion)
+		if (debugView == DebugView.PlatformNav && GetFirst<Bud>() is { } bud)
 		{
-			worldPosition = companion.Position + new Vector2(0, -22);
-			label = companion.DebugNavLabel;
+			worldPosition = bud.Position + new Vector2(0, -22);
+			label = bud.DebugNavLabel;
 			return true;
 		}
 

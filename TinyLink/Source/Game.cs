@@ -214,7 +214,7 @@ public partial class Game : IDisposable
 			{
 				respawnPosition = player.Position;
 			}
-			EnsureCompanionForPlayer(repositionExisting: true);
+			EnsureBudForPlayer(repositionExisting: true);
 			RaiseRoomChanged(null, room, RoomChangeKind.InitialLoad, Point2.Zero);
 			if (AudioEventsEnabled)
 			{
@@ -2299,7 +2299,11 @@ public partial class Game : IDisposable
 	public void Destroy(Actor actor)
 	{
 		if (!destroying.Contains(actor))
+		{
+			if (actor.Mask.Has(Actor.Masks.Enemy))
+				NotifyEnemyKilledIfPlayerCaused(actor);
 			destroying.Add(actor);
+		}
 	}
 
 	public void DestroyForThisSession(Actor actor)
@@ -2718,7 +2722,7 @@ public partial class Game : IDisposable
 		LoadRoom(room);
 		if (GetFirst<Player>() == null && respawnPosition is { } position)
 			Create<Player>(position);
-		EnsureCompanionForPlayer(repositionExisting: true);
+		EnsureBudForPlayer(repositionExisting: true);
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.Reload, Point2.Zero);
 
 		ApplyRoomReverb(room);
@@ -2883,37 +2887,33 @@ public partial class Game : IDisposable
 
 		hiddenCover.Build(forRoom);
 		hiddenCover.RevealForCurrentPlayer(immediate: true);
-		EnsureCompanionForPlayer();
+		EnsureBudForPlayer();
 	}
 
-	private void EnsureCompanionForPlayer(bool repositionExisting = false)
+	private void EnsureBudForPlayer(bool repositionExisting = false)
 	{
 		if (GetFirst<Player>() is not { } player)
 			return;
 
-		var position = FindCompanionSpawnPosition(player);
-		if (GetFirst<Companion>() is { } companion)
-		{
-			if (repositionExisting)
-			{
-				companion.Position = position;
-				companion.Velocity = Vector2.Zero;
-				companion.Facing = player.Facing;
+		var position = FindBudSpawnPosition(player);
+		if (GetFirst<Bud>() is { } bud) {
+			if (repositionExisting) {
+				bud.Position = position;
+				bud.Velocity = Vector2.Zero;
+				bud.Facing = player.Facing;
 			}
 			return;
 		}
 
-		Create<Companion>(position, companion =>
-		{
-			companion.Facing = player.Facing;
-			companion.KeepOnRoomTransition = true;
+		Create<Bud>(position, bud => {
+			bud.Facing = player.Facing;
+			bud.KeepOnRoomTransition = true;
 		});
 	}
 
-	private Point2 FindCompanionSpawnPosition(Player player)
+	private Point2 FindBudSpawnPosition(Player player)
 	{
-		var offsets = new[]
-		{
+		var offsets = new[] {
 			new Point2(-12 * player.Facing, 0),
 			new Point2(12 * player.Facing, 0),
 			new Point2(-20 * player.Facing, 0),
@@ -2922,8 +2922,7 @@ public partial class Game : IDisposable
 			Point2.Zero
 		};
 
-		foreach (var offset in offsets)
-		{
+		foreach (var offset in offsets) {
 			var position = player.Position + offset;
 			var bounds = new RectInt(-4, -12, 8, 12) + position;
 			if (!OverlapsRoomCollision(bounds))

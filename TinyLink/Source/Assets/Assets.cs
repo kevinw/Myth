@@ -97,6 +97,7 @@ public static class Assets
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
 		var actorsPath = Path.Join(AssetsPath, "Actors");
 		var spriteFiles = new Dictionary<string, Aseprite>();
+		var generatedSprites = new List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();
 		var generatedTileImages = new Dictionary<string, List<Image>>();
 		var generatedNormalImages = new Dictionary<string, List<Image>>();
@@ -126,6 +127,9 @@ public static class Assets
 			if (ase.Frames.Length > 0)
 				spriteFiles.Add(name, ase);
 		}
+
+		if (!spriteFiles.ContainsKey("bud") && spriteFiles.TryGetValue("player", out var playerSprite))
+			generatedSprites.Add(("bud", playerSprite, CreateBudPlayerLayerFilter));
 
 		// get tileset files
 		foreach (var file in EnumerateAsepriteFiles(tilesetsPath))
@@ -160,6 +164,16 @@ public static class Assets
 			foreach (var (name, ase) in spriteFiles)
 			{
 				var frames = ase.RenderAllFrames();
+				for (int i = 0; i < frames.Length; i++)
+				{
+					packer.Add($"{name}/{i}", frames[i]);
+					packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+				}
+			}
+
+			foreach (var (name, ase, layerFilter) in generatedSprites)
+			{
+				var frames = ase.RenderAllFrames(layerFilter());
 				for (int i = 0; i < frames.Length; i++)
 				{
 					packer.Add($"{name}/{i}", frames[i]);
@@ -270,51 +284,9 @@ public static class Assets
 		// create sprite assets
 		var foundSprites = new HashSet<string>();
 		foreach (var (name, ase) in spriteFiles)
-		{
-			foundSprites.Add(name);
-
-			// find origin
-			Vector2 origin = Vector2.Zero;
-
-			// Aseprite files can define an origin with their first slice's pivot.
-			if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
-			{
-				origin = ase.Slices[0].Keys[0].Pivot!.Value;
-			}
-
-			if (!Sprites.TryGetValue(name, out var sprite))
-			{
-				sprite = new Sprite(name, origin);
-				Sprites.Add(name, sprite);
-			}
-
-			// add frames
-			var frames = new List<Sprite.Frame>();
-			for (int i = 0; i < ase.Frames.Length; i++)
-			{
-				var subtexture = subtextures[$"{name}/{i}"];
-				frames.Add(new(
-					subtexture,
-					new Subtexture(subtexture.Texture, subtexture.Source),
-					subtextures[$"{name}/normal/{i}"],
-					ase.Frames[i].Duration / 1000.0f));
-			}
-
-			// add animations
-			var animations = new List<Sprite.Animation>();
-			foreach (var tag in ase.Tags)
-			{
-				if (!string.IsNullOrEmpty(tag.Name))
-				{
-					var duration = 0.0f;
-					for (int i = tag.From; i <= tag.To && i < frames.Count; i++)
-						duration += frames[i].Duration;
-					animations.Add(new(tag.Name, tag.From, tag.To - tag.From + 1, duration));
-				}
-			}
-
-			sprite.Reload(origin, frames, animations);
-		}
+			ReloadSpriteAsset(foundSprites, subtextures, name, ase);
+		foreach (var (name, ase, _) in generatedSprites)
+			ReloadSpriteAsset(foundSprites, subtextures, name, ase);
 
 		foreach (var (name, sprite) in Sprites.ToArray())
 		{
@@ -830,6 +802,65 @@ public static class Assets
 
 		using var image = new Image(path);
 		return new Texture(gfx, image, name);
+	}
+
+	private static void ReloadSpriteAsset(HashSet<string> foundSprites, Dictionary<string, Subtexture> subtextures, string name, Aseprite ase)
+	{
+		foundSprites.Add(name);
+
+		var origin = Vector2.Zero;
+		if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
+			origin = ase.Slices[0].Keys[0].Pivot!.Value;
+
+		if (!Sprites.TryGetValue(name, out var sprite))
+		{
+			sprite = new Sprite(name, origin);
+			Sprites.Add(name, sprite);
+		}
+
+		var frames = new List<Sprite.Frame>();
+		for (int i = 0; i < ase.Frames.Length; i++)
+		{
+			var subtexture = subtextures[$"{name}/{i}"];
+			frames.Add(new(
+				subtexture,
+				new Subtexture(subtexture.Texture, subtexture.Source),
+				subtextures[$"{name}/normal/{i}"],
+				ase.Frames[i].Duration / 1000.0f));
+		}
+
+		var animations = new List<Sprite.Animation>();
+		foreach (var tag in ase.Tags)
+		{
+			if (string.IsNullOrEmpty(tag.Name))
+				continue;
+
+			var duration = 0.0f;
+			for (int i = tag.From; i <= tag.To && i < frames.Count; i++)
+				duration += frames[i].Duration;
+			animations.Add(new(tag.Name, tag.From, tag.To - tag.From + 1, duration));
+		}
+
+		sprite.Reload(origin, frames, animations);
+	}
+
+	private static Predicate<Aseprite.Layer> CreateBudPlayerLayerFilter()
+	{
+		var hiddenChildLevel = int.MaxValue;
+		return layer =>
+		{
+			if (layer.ChildLevel <= hiddenChildLevel)
+				hiddenChildLevel = int.MaxValue;
+
+			var layerName = NormalizeLayerName(layer.Name);
+			if (hiddenChildLevel != int.MaxValue || layerName == "sword" || layerName.StartsWith("sword", StringComparison.Ordinal))
+			{
+				hiddenChildLevel = Math.Min(hiddenChildLevel, layer.ChildLevel);
+				return false;
+			}
+
+			return true;
+		};
 	}
 
 #if !IOS

@@ -3580,9 +3580,9 @@ public partial class Manager
 		ImGui.PopStyleVar(2);
 	}
 
-	private void CompanionDebugOverlayImGui()
+	private void BudDebugOverlayImGui()
 	{
-		if (game == null || !playing || !game.TryGetCompanionDebugOverlay(out var worldPosition, out var label))
+		if (game == null || !playing || !game.TryGetBudDebugOverlay(out var worldPosition, out var label))
 			return;
 
 		var viewport = GameViewRect;
@@ -3600,7 +3600,7 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 1);
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.72f));
 		ImGui.Begin(
-			"CompanionDebugOverlay",
+			"BudDebugOverlay",
 			ImGuiWindowFlags.NoDecoration |
 			ImGuiWindowFlags.NoInputs |
 			ImGuiWindowFlags.NoSavedSettings |
@@ -3639,8 +3639,8 @@ public partial class Manager
 			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.RoomExit ? 1.5f : 1.0f);
 		}
 
-		if (game.GetFirst<Companion>() is { } companion)
-			DrawCompanionPlatformNavOverlay(draw, viewport, game, graph, companion);
+		if (game.GetFirst<Bud>() is { } bud)
+			DrawBudPlatformNavOverlay(draw, viewport, game, graph, bud);
 
 		foreach (var node in graph.Nodes)
 		{
@@ -3657,9 +3657,9 @@ public partial class Manager
 		draw.PopClipRect();
 	}
 
-	private void DrawCompanionPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Companion companion)
+	private void DrawBudPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Bud bud)
 	{
-		foreach (var edge in companion.DebugNavPath)
+		foreach (var edge in bud.DebugNavPath)
 		{
 			var color = edge.Kind == PlatformNavGraph.EdgeKind.Jump
 				? ImGuiColor(1.00f, 0.95f, 0.66f, 0.95f)
@@ -3667,12 +3667,12 @@ public partial class Manager
 			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.Jump ? 2.0f : 2.5f);
 		}
 
-		DrawPlatformNavNodeRing(draw, viewport, game, graph, companion.DebugNavStartNodeId, ImGuiColor(0.37f, 0.80f, 0.89f, 0.95f), 7.0f);
-		DrawPlatformNavNodeRing(draw, viewport, game, graph, companion.DebugNavGoalNodeId, ImGuiColor(1.00f, 0.47f, 0.66f, 0.95f), 7.0f);
-		DrawPlatformNavNodeRing(draw, viewport, game, graph, companion.DebugNavTargetNodeId, ImGuiColor(1.00f, 1.00f, 1.00f, 0.95f), 8.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavStartNodeId, ImGuiColor(0.37f, 0.80f, 0.89f, 0.95f), 7.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavGoalNodeId, ImGuiColor(1.00f, 0.47f, 0.66f, 0.95f), 7.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavTargetNodeId, ImGuiColor(1.00f, 1.00f, 1.00f, 0.95f), 8.0f);
 
-		var from = GameWorldToImGui(viewport, game, companion.Position);
-		var to = GameWorldToImGui(viewport, game, companion.Position + new Vector2(0, -14));
+		var from = GameWorldToImGui(viewport, game, bud.Position);
+		var to = GameWorldToImGui(viewport, game, bud.Position + new Vector2(0, -14));
 		draw.AddLine(from, to, ImGuiColor(1.00f, 1.00f, 1.00f, 0.55f), 1.0f);
 	}
 

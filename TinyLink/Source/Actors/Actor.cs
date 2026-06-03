@@ -322,6 +322,7 @@ public class Actor
 			{
 				if (this is Player)
 				{
+					Game.NotifyEnemyHitByPlayer(actor);
 					var hitSoundType = actor.HitSoundType;
 					if (!string.IsNullOrEmpty(hitSoundType))
 						AudioEvent("player/sword_hit", "hit_destination", hitSoundType);

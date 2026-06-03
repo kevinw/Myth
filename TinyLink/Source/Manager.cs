@@ -539,7 +539,7 @@ public partial class Manager : App
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
 			PlatformNavDebugOverlayImGui();
-			CompanionDebugOverlayImGui();
+			BudDebugOverlayImGui();
 			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 				FpsOverlayImGui();
 			imgui.EndLayout();

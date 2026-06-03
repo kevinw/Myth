@@ -184,12 +184,13 @@ public class HiddenCoverGrid : Actor
 	{
 		var playerBounds = player.Hitbox.Rect + player.Position - Position;
 		var revealedAny = false;
+		var newlyRevealedDoorIds = new List<string>();
 		foreach (var (rect, regionId) in triggers)
 		{
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f && playerBounds.Overlaps(rect))
 			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
-				MarkRegionRevealed(regionId);
+				newlyRevealedDoorIds.AddRange(MarkRegionRevealed(regionId));
 				revealedAny = true;
 			}
 		}
@@ -206,23 +207,32 @@ public class HiddenCoverGrid : Actor
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f)
 			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
-				MarkRegionRevealed(regionId);
+				newlyRevealedDoorIds.AddRange(MarkRegionRevealed(regionId));
 				revealedAny = true;
 			}
 		}
 
 		if (revealedAny && !immediate)
+		{
 			Game.PlayAudioEvent("reveal", position: player.Position);
+			foreach (var id in newlyRevealedDoorIds.Distinct(StringComparer.OrdinalIgnoreCase))
+				Game.NotifyPlayerEnteredRevealDoor(id, player.Position);
+		}
 	}
 
-	private void MarkRegionRevealed(int regionId)
+	private List<string> MarkRegionRevealed(int regionId)
 	{
 		if (regionId < 0 || regionId >= regionRevealDoorIds.Length)
-			return;
+			return [];
 
+		var result = new List<string>();
 		foreach (var id in regionRevealDoorIds[regionId])
 			if (!string.IsNullOrWhiteSpace(id))
+			{
 				revealedDoorIds.Add(id);
+				result.Add(id);
+			}
+		return result;
 	}
 
 	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
