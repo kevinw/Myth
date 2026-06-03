@@ -57,6 +57,11 @@
       "Id": "26cd2b355922a6bc",
       "From": "BlueMemoryLight",
       "Position": [120, 90]
+    },
+    {
+      "Id": "d55b9e3b8ba59435",
+      "Type": "Jumpthru",
+      "Position": [184, 80]
     }
   ]
 }
