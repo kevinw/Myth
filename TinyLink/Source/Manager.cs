@@ -21,7 +21,7 @@ public partial class Manager : App
 
 	private const string WindowSettingsFileName = "window.json";
 	private const string FmodProjectPath = "Sounds/FMOD/TinyLink.fspro";
-	private readonly Point MinimumRestoredWindowSize = new (640, 360);
+	private readonly Point MinimumRestoredWindowSize = new(640, 360);
 
 	static float Scale => 2.7f;
 	static float ButtonSize => 34;
@@ -40,13 +40,14 @@ public partial class Manager : App
 #endif
 	public bool LightingDitherEnabled = true;
 	public float LightingDitherScale = 1.0f;
-	public float LightingDitherStrength = 0.155f;
+	internal const float LightingDitherStrengthDefault = 0.155f;
+	public float LightingDitherStrength = LightingDitherStrengthDefault;
 
 	/// <summary>
 	/// The room renderer / simulation.
 	/// </summary>
-	Game? game;
-	bool playing;
+	internal Game? game;
+	internal bool playing;
 	bool startingPlay;
 #if IOS
 	private const float PlayModePinchInThreshold = 0.82f;
@@ -62,11 +63,11 @@ public partial class Manager : App
 	long fpsOverlayLastTimestamp;
 	float fpsOverlayValue;
 
-	#if DEBUG
+#if DEBUG
 	private long threadAllocatedBytes;
 	private long threadAllocatedBytesOverlayValue;
 	private long lastAllocated = -1;
-	#endif
+#endif
 
 #if EDITOR
 	int fpsOverlayMode;
@@ -147,13 +148,18 @@ public partial class Manager : App
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager(bool dumpAtlases = false, bool gym = false, bool headless = false, bool unthrottled = false, bool gymExitAfterAll = false) : base(CreateAppConfig(gym, headless, unthrottled))
+	public Manager(bool dumpAtlases = false, bool gym = false, bool headless = false, bool unthrottled = false, bool gymExitAfterAll = false, bool simple = false) : base(CreateAppConfig(gym, headless, unthrottled))
 	{
 		this.dumpAtlases = dumpAtlases;
 		this.gymMode = gym;
 		this.headless = headless;
 		this.unthrottled = unthrottled;
 		this.gymExitAfterAll = gymExitAfterAll;
+		if (simple)
+		{
+			PerfToggles.UseSimpleDefaults();
+			LightingDitherStrength = 0;
+		}
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 #if EDITOR
@@ -699,19 +705,20 @@ public partial class Manager : App
 
 		fpsOverlayFrames++;
 
-		#if DEBUG
+#if DEBUG
 		// Get total allocated bytes; track diff from last frame; accumulate these diffs and report an approximate
 		// per frame allocation size alongside FPS.
 		var bytes = GC.GetAllocatedBytesForCurrentThread();
 
-		if (lastAllocated != -1) {
+		if (lastAllocated != -1)
+		{
 			var diff = bytes - lastAllocated;
 			if (diff > 0)
 				threadAllocatedBytes += diff;
 		}
 
 		lastAllocated = bytes;
-		#endif
+#endif
 
 		var elapsed = Stopwatch.GetElapsedTime(fpsOverlayLastTimestamp, now).TotalSeconds;
 		if (elapsed < 0.25f)
@@ -719,10 +726,10 @@ public partial class Manager : App
 
 		fpsOverlayValue = (float)(fpsOverlayFrames / elapsed);
 
-		#if DEBUG
+#if DEBUG
 		threadAllocatedBytesOverlayValue = (long)((float)(threadAllocatedBytes) / fpsOverlayFrames);
 		threadAllocatedBytes = 0;
-		#endif
+#endif
 
 		PerfStats.Publish();
 		fpsOverlayFrames = 0;
@@ -1371,7 +1378,7 @@ public partial class Manager : App
 			return;
 
 		game?.Dispose();
-		game = CurrentRoom is { } room ? new Game(this, room, audioEventsEnabled: false) : null;
+		game = CurrentRoom is { } room ? new Game(this, room, audioEventsEnabled: false, spawnBud: false) : null;
 	}
 
 	private static void OpenFmodStudio()

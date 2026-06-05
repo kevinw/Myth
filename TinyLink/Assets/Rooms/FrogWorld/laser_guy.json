@@ -70,26 +70,26 @@
   ],
   "actors": [
     {
+      "Id": "5591a5340a0c9bea",
       "Type": "Floater",
-      "Position": [152, 140],
-      "Id": "5591a5340a0c9bea"
+      "Position": [152, 140]
     },
     {
+      "Id": "fbde6ede12457dad",
       "From": "StrongFireLight",
       "Position": [96, 143],
-      "FlickerIntensity": 0.02,
-      "Id": "fbde6ede12457dad"
+      "FlickerIntensity": 0.02
     },
     {
+      "Id": "0c32b548d90da209",
       "From": "StrongFireLight",
       "Position": [208, 143],
-      "FlickerIntensity": 0.02,
-      "Id": "0c32b548d90da209"
+      "FlickerIntensity": 0.02
     },
     {
+      "Id": "d0dd85cebbf835fe",
       "Type": "Door",
-      "Position": [42, 144],
-      "Id": "d0dd85cebbf835fe"
+      "Position": [42, 144]
     }
   ]
 }

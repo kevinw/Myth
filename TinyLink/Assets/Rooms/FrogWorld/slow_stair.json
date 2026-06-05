@@ -81,44 +81,44 @@
   ],
   "actors": [
     {
+      "Id": "ad3d38cd7aedf71e",
       "Type": "Light",
-      "Position": [116, 140],
-      "Id": "ad3d38cd7aedf71e"
+      "Position": [116, 140]
     },
     {
+      "Id": "898612adfaff3dcb",
       "Type": "Light",
-      "Position": [180, 172],
-      "Id": "898612adfaff3dcb"
+      "Position": [180, 172]
     },
     {
+      "Id": "7abbc00d2a4721de",
       "Type": "Light",
-      "Position": [244, 188],
-      "Id": "7abbc00d2a4721de"
+      "Position": [244, 188]
     },
     {
+      "Id": "f98da0ca83b4bc28",
       "Type": "Blob",
-      "Position": [108, 176],
-      "Id": "f98da0ca83b4bc28"
+      "Position": [108, 176]
     },
     {
+      "Id": "db6bc4608450fc53",
       "Type": "Light",
-      "Position": [52, 108],
-      "Id": "db6bc4608450fc53"
+      "Position": [52, 108]
     },
     {
+      "Id": "7e5df5ca51308fa2",
       "Type": "Jumpthru",
-      "Position": [400, 168],
-      "Id": "7e5df5ca51308fa2"
+      "Position": [400, 168]
     },
     {
+      "Id": "bf0dec7a7dcb703c",
       "Type": "Jumpthru",
-      "Position": [400, 192],
-      "Id": "bf0dec7a7dcb703c"
+      "Position": [400, 192]
     },
     {
+      "Id": "b1d02b3eacf466fb",
       "Type": "Light",
-      "Position": [308, 188],
-      "Id": "b1d02b3eacf466fb"
+      "Position": [308, 188]
     }
   ]
 }

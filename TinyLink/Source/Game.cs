@@ -60,7 +60,7 @@ public partial class Game : IDisposable
 	static float DitherGlitchRadius => 150.0f;
 	private const float ActorDitherAmount = 0.2f;
 
-	readonly Manager Manager;
+	internal readonly Manager Manager;
 	public readonly Controls Controls;
 	readonly Batcher Batcher;
 	public Target Screen { get; private set; } = null!;
@@ -158,6 +158,7 @@ public partial class Game : IDisposable
 	private bool draggingPlayer;
 	private float timeScale = 1.0f;
 	private readonly Point2? respawnPosition;
+	private readonly bool spawnBud;
 	private bool disposed;
 
 	public Vector2 Camera { get; private set; }
@@ -173,10 +174,11 @@ public partial class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true)
 	{
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled;
+		this.spawnBud = spawnBud;
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
@@ -306,6 +308,7 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
 				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
+				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 			}
 
 #if DEBUG
@@ -710,14 +713,14 @@ public partial class Game : IDisposable
 					}
 				}
 			}
-			}
-			if (debugView is DebugView.None or DebugView.CollisionRects)
-			{
-				using (GraphicsDevice.DebugGroup("TinyLink/story speech"))
-					DrawStorySpeech(output);
-			}
-			if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
-			{
+		}
+		if (debugView is DebugView.None or DebugView.CollisionRects)
+		{
+			using (GraphicsDevice.DebugGroup("TinyLink/story speech"))
+				DrawStorySpeech(output);
+		}
+		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+		{
 			using (PerfStats.Time(PerfStat.Hud))
 			using (GraphicsDevice.DebugGroup("TinyLink/hud"))
 			{
@@ -863,7 +866,7 @@ public partial class Game : IDisposable
 		Batcher.Render(target);
 		Batcher.Clear();
 
-		if (background)
+		if (background && PerfToggles.Reflections)
 			DrawSpriteReflections(target);
 	}
 
@@ -1059,7 +1062,8 @@ public partial class Game : IDisposable
 		Batcher.Render(LitScreen);
 		Batcher.Clear();
 
-		ApplyLightingNoise(LitScreen);
+		if (PerfToggles.LightingNoise)
+			ApplyLightingNoise(LitScreen);
 
 		return LitScreen;
 	}
@@ -1360,9 +1364,9 @@ public partial class Game : IDisposable
 
 		const int halfTileSize = (TileSize / 2);
 
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft,     new Rect(0, 0, halfTileSize, halfTileSize));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft,  new Rect(0, halfTileSize, halfTileSize, halfTileSize));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight,    new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
 		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
 	}
 
@@ -1634,7 +1638,7 @@ public partial class Game : IDisposable
 		Batcher.Clear();
 	}
 
-	private static readonly List<VisibilityPolygon.Hit> hits = new ();
+	private static readonly List<VisibilityPolygon.Hit> hits = new();
 	private static readonly List<VisibilityPolygon.Segment> _segments = new();
 
 	private void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
@@ -2897,12 +2901,17 @@ public partial class Game : IDisposable
 
 	private void EnsureBudForPlayer(bool repositionExisting = false)
 	{
+		if (!spawnBud)
+			return;
+
 		if (GetFirst<Player>() is not { } player)
 			return;
 
 		var position = FindBudSpawnPosition(player);
-		if (GetFirst<Bud>() is { } bud) {
-			if (repositionExisting) {
+		if (GetFirst<Bud>() is { } bud)
+		{
+			if (repositionExisting)
+			{
 				bud.Position = position;
 				bud.Velocity = Vector2.Zero;
 				bud.Facing = player.Facing;
@@ -2910,7 +2919,8 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		Create<Bud>(position, bud => {
+		Create<Bud>(position, bud =>
+		{
 			bud.Facing = player.Facing;
 			bud.KeepOnRoomTransition = true;
 		});
@@ -2927,7 +2937,8 @@ public partial class Game : IDisposable
 			Point2.Zero
 		};
 
-		foreach (var offset in offsets) {
+		foreach (var offset in offsets)
+		{
 			var position = player.Position + offset;
 			var bounds = new RectInt(-4, -12, 8, 12) + position;
 			if (!OverlapsRoomCollision(bounds))
