@@ -72,7 +72,7 @@ public partial class Manager : App
 #if EDITOR
 	int fpsOverlayMode;
 #endif
-	bool fpsOverlayVisible = true;
+	bool fpsOverlayVisible = false;
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing

@@ -9,9 +9,8 @@ public partial class Game
 			.When(ctx => ctx.RoomVisits == 1)
 			.Once()
 			.Priority(10)
-			.Say("Let's go.",
-				 "Where to?",
-			     "OK..."
+			.Say("Come on.",
+				 "OK..."
 			));
 
 		story.BudBarks("bud_room_arrival", s => s
@@ -20,8 +19,8 @@ public partial class Game
 			.Priority(1)
 			.Say(
 				"I'm here.",
-				"Wait up.",
-				"I thought you lost me."));
+				"Still me.",
+				"Smells weird in here."));
 
 		story.BudBarks("bud_reveal_door", s => s
 			.OnRevealDoorEntered()
@@ -38,7 +37,7 @@ public partial class Game
 			.Priority(2)
 			.Say(
 				"Careful.",
-				"That looked painful.",
+				"Ouch",
 				"Still with me?"));
 
 		story.BudBarks("bud_enemy_killed", s => s
@@ -47,8 +46,8 @@ public partial class Game
 			.Priority(1)
 			.Say(
 				"Nice.",
-				"That should help.",
-				"One less problem."));
+				"IS violence the answer?",
+				"Woah."));
 
 		story.BudBarks("bud_idle", s => s
 			.OnPlayerIdle(StoryIdleSeconds)
