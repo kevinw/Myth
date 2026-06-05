@@ -8,6 +8,11 @@ public class Bud : Pawn
 	private const int FollowStopDistance = 18;
 	private const int DesiredPlayerSpacing = 20;
 	private const int NavNodeReachDistance = 8;
+	private const int GroundSupportLookAhead = 6;
+	private const int GroundSupportProbeWidth = 4;
+	private const int GroundSupportCastDepth = 10;
+	private const int ImmediateGroundSupportCastDepth = 4;
+	private const float SafeLandingSearchDistance = Game.TileSize * 1.5f;
 	private const float NavSearchDistance = 180;
 	private const float GoalNodeSearchDistance = 56;
 	private const float EnterDelay = 1.0f;
@@ -15,16 +20,21 @@ public class Bud : Pawn
 	private const float JumpInputHoldTime = 0.22f;
 	private const float OpposingJumpVelocityThreshold = 24.0f;
 	private const float JumpPrepareMaxTime = 0.15f;
-	private const float DifficultJumpMinHeight = 12.0f;
-	private const float DifficultJumpMinDistance = 28.0f;
-	private const float DifficultJumpTakeoffDistance = 4.0f;
-	private const float DifficultJumpWindupMinTime = 0.25f;
-	private const float DifficultJumpWindupMaxTime = 0.75f;
-	private const float DifficultJumpWindupVelocity = 4.0f;
+	private const float PrecisionLandingBrakeMinHeight = 16.0f;
+	private const float PrecisionLandingBrakeDistance = 32.0f;
+	private const float PrecisionLandingBrakeSpeed = 45.0f;
+	private const float LandingStabilizeDistance = 32.0f;
+	private const float LandingStabilizeVerticalSpeed = 45.0f;
+	private const float LandingStabilizeMaxSpeed = 64.0f;
+	private const float LandingStabilizeMinSpeed = 12.0f;
+	private const float LandingStabilizeGain = 5.0f;
+	private const float LandingStabilizeBrakeAccel = 600.0f;
 	private const float MirrorPlayerCrawlDelay = 0.25f;
 	private const float MirrorPlayerCrawlReleaseDelay = 0.25f;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
+	private bool enteredRoom;
+	private Point2 entryPosition;
 	private readonly List<PlatformNavGraph.Edge> navPath = [];
 	private bool jumpHeld;
 	private float mirrorPlayerCrawlTimer;
@@ -36,13 +46,16 @@ public class Bud : Pawn
 	private float activeEdgeTimer;
 	private float activeJumpHoldTimer;
 	private bool activeJumpStarted;
+	private float activeJumpPlanTimer;
 	public int? DebugNavStartNodeId { get; private set; }
 	public int? DebugNavGoalNodeId { get; private set; }
 	public int? DebugNavTargetNodeId { get; private set; }
 	public string DebugNavLabel { get; private set; } = "idle";
 	public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => navPath;
-	protected override float GroundSpeedMultiplier => 0.75f;
-	protected override float AirSpeedMultiplier => 0.80f;
+	public RectInt? DebugNavProbeRect { get; private set; }
+	public bool DebugNavProbeHit { get; private set; }
+	protected override float GroundSpeedMultiplier => 1.0f;
+	protected override float AirSpeedMultiplier => 1.0f;
 	public bool CanSay => Game.CanShowBudSpeech();
 
 	public Bud()
@@ -69,17 +82,32 @@ public class Bud : Pawn
 		var moveY = 0;
 		var jumpPressed = false;
 		var player = Game.GetFirst<Player>();
-		var followTarget = player != null ? DesiredFollowPosition(player) : (Vector2?)null;
+		var gymTarget = Game.GymMode ? Game.GymTarget : null;
+		var followTarget = gymTarget != null
+			? (Vector2?)gymTarget.Position
+			: player != null ? DesiredFollowPosition(player) : null;
 		if (!TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
 		{
-			if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
+			if (gymTarget != null)
 			{
-				moveX = GetFallbackMoveX(followTarget);
+				if (!TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
+				{
+					moveX = GetFallbackMoveX(followTarget);
+					moveY = 0;
+					SetDebugNavState("gym fallback");
+				}
+			}
+			else if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
+			{
+				var navLabel = DebugNavLabel;
+				moveX = GetFallbackMoveX(followTarget, player);
 				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
+				if (grounded && moveX != 0 && !HasGroundSupportAhead(moveX))
+					moveX = 0;
 				if (player == null)
 					SetDebugNavState("no player");
 				else
-					SetDebugNavState(moveX == 0 ? "beside player" : $"fallback walk {moveX}");
+					SetDebugNavState(moveX == 0 ? (IsBesidePlayer(player) ? "beside player" : navLabel) : $"fallback walk {moveX}");
 			}
 		}
 
@@ -90,11 +118,15 @@ public class Bud : Pawn
 		else if (grounded || Velocity.Y >= 0)
 			jumpHeld = false;
 
-		if (moveX == 0 && player != null)
+		if (moveX == 0)
 		{
-			var face = Math.Sign(player.Position.X - Position.X);
-			if (face != 0)
-				Facing = face;
+			var faceTarget = gymTarget?.Position ?? player?.Position;
+			if (faceTarget != null)
+			{
+				var face = Math.Sign(faceTarget.Value.X - Position.X);
+				if (face != 0)
+					Facing = face;
+			}
 		}
 
 		return new(
@@ -119,6 +151,19 @@ public class Bud : Pawn
 		}
 
 		base.Update();
+
+		if (!enteredRoom)
+		{
+			entryPosition = Position;
+			enteredRoom = true;
+		}
+
+		if (Position.Y > Game.Bounds.Bottom + 12)
+		{
+			Game.GymBudDied = true;
+			Stop();
+			Position = entryPosition;
+		}
 	}
 
 	public override void Render(Batcher batcher)
@@ -185,6 +230,17 @@ public class Bud : Pawn
 			case PlatformNavGraph.EdgeKind.Crawl:
 				moveX = MoveTowardNavTarget(target);
 				moveY = edge.Kind == PlatformNavGraph.EdgeKind.Crawl || to.RequiresDucking || ShouldMirrorPlayerCrawl(player) ? 1 : 0;
+				if (moveX != 0 && !HasGroundSupportAhead(moveX))
+				{
+					if (TryContinueWithJumpAfterBlockedWalk(graph, edge, start.Value.Id, goal.Value.Id, out moveX, out moveY, out jumpPressed))
+						return true;
+
+					DebugNavStartNodeId = start.Value.Id;
+					DebugNavGoalNodeId = goal.Value.Id;
+					DebugNavTargetNodeId = to.Id;
+					DebugNavLabel = $"edge stop {edge.Kind} {edge.From}->{edge.To}";
+					return false;
+				}
 				if (moveX == 0 && !IsNearNode(target))
 				{
 					DebugNavStartNodeId = start.Value.Id;
@@ -212,6 +268,99 @@ public class Bud : Pawn
 		return true;
 	}
 
+	private bool TryNavigateToPosition(Vector2 target, out int moveX, out int moveY, out bool jumpPressed)
+	{
+		moveX = 0;
+		moveY = 0;
+		jumpPressed = false;
+
+		if (Game.GetPlatformNavGraph() is not { } graph)
+		{
+			SetDebugNavState("no graph");
+			return false;
+		}
+
+		var start = graph.FindNearestNode(Position, NavSearchDistance);
+		var goal = graph.FindNearestNode(target, GoalNodeSearchDistance);
+		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
+		{
+			SetDebugNavState(start.HasValue && goal.HasValue ? "at target" : "no node");
+			return false;
+		}
+
+		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, navPath) || navPath.Count <= 0)
+		{
+			DebugNavStartNodeId = start.Value.Id;
+			DebugNavGoalNodeId = goal.Value.Id;
+			DebugNavTargetNodeId = null;
+			DebugNavLabel = $"no path {start.Value.Id}->{goal.Value.Id}";
+			return false;
+		}
+
+		if (!TryGetActionableEdge(graph, out var edge))
+		{
+			DebugNavStartNodeId = start.Value.Id;
+			DebugNavGoalNodeId = goal.Value.Id;
+			DebugNavTargetNodeId = null;
+			DebugNavLabel = "edge reached";
+			return false;
+		}
+
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall)
+		{
+			DebugNavStartNodeId = start.Value.Id;
+			DebugNavGoalNodeId = goal.Value.Id;
+			DebugNavTargetNodeId = edge.To;
+			StartActiveEdge(edge);
+			return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
+		}
+
+		var to = graph.Nodes[edge.To];
+		var edgeTarget = to.Position;
+		switch (edge.Kind)
+		{
+			case PlatformNavGraph.EdgeKind.Walk:
+			case PlatformNavGraph.EdgeKind.Crawl:
+				moveX = MoveTowardNavTarget(edgeTarget);
+				moveY = edge.Kind == PlatformNavGraph.EdgeKind.Crawl || to.RequiresDucking ? 1 : 0;
+				if (moveX != 0 && !HasGroundSupportAhead(moveX))
+				{
+					if (TryContinueWithJumpAfterBlockedWalk(graph, edge, start.Value.Id, goal.Value.Id, out moveX, out moveY, out jumpPressed))
+						return true;
+
+					DebugNavStartNodeId = start.Value.Id;
+					DebugNavGoalNodeId = goal.Value.Id;
+					DebugNavTargetNodeId = to.Id;
+					DebugNavLabel = $"edge stop {edge.Kind} {edge.From}->{edge.To}";
+					return false;
+				}
+				if (moveX == 0 && !IsNearNode(edgeTarget))
+				{
+					DebugNavStartNodeId = start.Value.Id;
+					DebugNavGoalNodeId = goal.Value.Id;
+					DebugNavTargetNodeId = to.Id;
+					DebugNavLabel = $"stalled {edge.Kind} {edge.From}->{edge.To}";
+					return false;
+				}
+				break;
+
+			case PlatformNavGraph.EdgeKind.RoomExit:
+				moveX = MoveTowardNavTarget(edgeTarget);
+				moveY = 0;
+				break;
+
+			default:
+				DebugNavLabel = $"unsupported {edge.Kind}";
+				return false;
+		}
+
+		DebugNavStartNodeId = start.Value.Id;
+		DebugNavGoalNodeId = goal.Value.Id;
+		DebugNavTargetNodeId = to.Id;
+		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}";
+		return true;
+	}
+
 	private void StartActiveEdge(PlatformNavGraph.Edge edge)
 	{
 		activeEdge = edge;
@@ -220,6 +369,7 @@ public class Bud : Pawn
 		activeJumpStarted = false;
 		activeJumpPlanStarted = false;
 		activeJumpPrepareTimer = 0;
+		activeJumpPlanTimer = 0;
 	}
 
 	private bool TryGetActionableEdge(PlatformNavGraph graph, out PlatformNavGraph.Edge edge)
@@ -251,6 +401,83 @@ public class Bud : Pawn
 		return 0;
 	}
 
+	private bool TryContinueWithJumpAfterBlockedWalk(
+		PlatformNavGraph graph,
+		PlatformNavGraph.Edge blockedEdge,
+		int startNodeId,
+		int goalNodeId,
+		out int moveX,
+		out int moveY,
+		out bool jumpPressed)
+	{
+		moveX = 0;
+		moveY = 0;
+		jumpPressed = false;
+
+		var index = navPath.FindIndex(edge => edge.Equals(blockedEdge));
+		if (index < 0 || index + 1 >= navPath.Count)
+			return false;
+
+		var next = navPath[index + 1];
+		if (next.From != blockedEdge.To || next.Kind != PlatformNavGraph.EdgeKind.Jump)
+			return false;
+
+		var source = graph.Nodes[next.From].Position;
+		if (MathF.Abs(Position.X - source.X) > Game.TileSize || MathF.Abs(Position.Y - source.Y) > Game.TileSize)
+			return false;
+
+		DebugNavStartNodeId = startNodeId;
+		DebugNavGoalNodeId = goalNodeId;
+		DebugNavTargetNodeId = next.To;
+		StartActiveEdge(next);
+		DebugNavLabel = $"jump handoff {blockedEdge.From}->{blockedEdge.To}->{next.To}";
+		return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
+	}
+
+	private bool HasGroundSupportAhead(int moveX)
+	{
+		if (!grounded || moveX == 0)
+			return true;
+
+		return HasFootSupport(moveX, GroundSupportLookAhead, GroundSupportCastDepth);
+	}
+
+	private bool HasGroundSupportNextStep(int moveX)
+	{
+		if (!grounded || moveX == 0)
+			return true;
+
+		return HasFootSupport(moveX, 1, ImmediateGroundSupportCastDepth);
+	}
+
+	private bool HasFootSupport(int moveX, int lookAhead, int castDepth)
+	{
+		var bounds = Hitbox.Rect + Position;
+		var direction = Math.Sign(moveX);
+		var probeX = direction > 0
+			? bounds.Right - GroundSupportProbeWidth + lookAhead
+			: bounds.Left - lookAhead;
+		var probe = new RectInt(probeX, bounds.Bottom, GroundSupportProbeWidth, castDepth);
+		var supported = Game.OverlapsRoomCollision(probe) || OverlapsJumpthruSupport(probe);
+		DebugNavProbeRect = probe;
+		DebugNavProbeHit = supported;
+		return supported;
+	}
+
+	private bool OverlapsJumpthruSupport(RectInt probe)
+	{
+		foreach (var actor in Game.Actors)
+		{
+			if (actor == this || !actor.Mask.Has(Masks.Jumpthru))
+				continue;
+
+			if (actor.Hitbox.Shape == Hitbox.Shapes.Rect && probe.Overlaps(actor.Hitbox.Rect + actor.Position))
+				return true;
+		}
+
+		return false;
+	}
+
 	private bool TryExecuteActiveEdge(out int moveX, out int moveY, out bool jumpPressed)
 	{
 		moveX = 0;
@@ -268,7 +495,9 @@ public class Bud : Pawn
 		activeEdgeTimer += Time.Delta;
 		var from = graph.Nodes[edge.From];
 		var to = graph.Nodes[edge.To];
-		var target = to.Position;
+		var target = edge.Kind == PlatformNavGraph.EdgeKind.Jump
+			? ResolveSafeJumpLandingTarget(graph, to)
+			: to.Position;
 
 		if (activeEdgeTimer > ActiveEdgeTimeout)
 		{
@@ -286,6 +515,11 @@ public class Bud : Pawn
 			case PlatformNavGraph.EdgeKind.Crawl:
 				moveX = MoveTowardNavTarget(target);
 				moveY = 1;
+				if (moveX != 0 && !HasGroundSupportAhead(moveX))
+				{
+					ClearActiveEdge($"{edge.Kind} edge stop");
+					return false;
+				}
 				if (moveX == 0 && IsNearNode(target))
 				{
 					ClearActiveEdge($"{edge.Kind} done");
@@ -325,39 +559,28 @@ public class Bud : Pawn
 	{
 		moveX = 0;
 		jumpPressed = false;
-		var direction = Math.Sign(target.X - from.Position.X);
-		if (direction == 0)
-			direction = edge.Jump?.Direction ?? Math.Sign(target.X - Position.X);
-		if (direction == 0)
-			direction = Facing == 0 ? 1 : Facing;
+		var plan = edge.Jump ?? DefaultJumpPlan(from.Position, target);
+		var takeoffDirection = plan.Direction != 0 ? plan.Direction : Math.Sign(target.X - from.Position.X);
+		if (takeoffDirection == 0)
+			takeoffDirection = Facing == 0 ? 1 : Facing;
 
-			var difficult = IsDifficultJump(from.Position, target);
-			if (!activeJumpStarted && !CanStartJumpApproach(from.Position, difficult))
+		if (!activeJumpPlanStarted)
+		{
+			if (!CanStartJumpPlan(from.Position))
 			{
 				moveX = Math.Sign(from.Position.X - Position.X);
+				if (grounded && moveX != 0 && !HasGroundSupportAhead(moveX))
+				{
+					ClearActiveEdge("approach ledge");
+					return false;
+				}
 				DebugNavLabel = $"{edge.Kind} approach {edge.From}->{edge.To}";
 				return true;
-		}
-
-		if (!activeJumpStarted && !activeJumpPlanStarted)
-		{
-				if (grounded && difficult)
-			{
-				var needsWindup = MathF.Abs(Velocity.X) > DifficultJumpWindupVelocity ||
-					activeJumpPrepareTimer < DifficultJumpWindupMinTime;
-				if (needsWindup && activeJumpPrepareTimer < DifficultJumpWindupMaxTime)
-				{
-					moveX = 0;
-					activeJumpPrepareTimer += Time.Delta;
-					DebugNavLabel = $"{edge.Kind} windup {edge.From}->{edge.To} vx {Velocity.X:0}";
-					return true;
-				}
 			}
 
-			moveX = direction;
 			var opposingVelocity = grounded &&
-				direction != 0 &&
-				MathF.Sign(Velocity.X) == -direction &&
+				takeoffDirection != 0 &&
+				MathF.Sign(Velocity.X) == -takeoffDirection &&
 				MathF.Abs(Velocity.X) > OpposingJumpVelocityThreshold;
 			if (opposingVelocity && activeJumpPrepareTimer < JumpPrepareMaxTime)
 			{
@@ -367,55 +590,143 @@ public class Bud : Pawn
 			}
 
 			activeJumpPlanStarted = true;
+			activeJumpPlanTimer = 0;
 			activeEdgeTimer = 0;
 		}
 
-		moveX = direction;
+		activeJumpPlanTimer += Time.Delta;
+		moveX = PlannedJumpMoveX(plan, target);
+		if (moveX == 0)
+			moveX = takeoffDirection;
 
-		if (!activeJumpStarted && grounded)
-		{
-			jumpPressed = true;
-			activeJumpStarted = true;
-			activeJumpHoldTimer = JumpHoldForEdge(from.Position, target);
-		}
+		if (!activeJumpStarted && activeJumpPlanTimer >= plan.RunupTime)
+			StartPlannedJump(plan, out jumpPressed);
+		else if (!activeJumpStarted && grounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
+			StartPlannedJump(plan, out jumpPressed);
 
 		if (activeJumpStarted)
 			activeJumpHoldTimer = Calc.Approach(activeJumpHoldTimer, 0, Time.Delta);
 
-		if (activeJumpStarted && grounded && activeEdgeTimer > 0.12f && IsNearNode(target))
+		if (activeJumpStarted && !grounded)
+			moveX = AirSteerTowardLanding(plan, from.Position, target, moveX);
+		else
+		{
+			DebugNavProbeRect = null;
+			DebugNavProbeHit = false;
+		}
+
+		if (activeJumpStarted && grounded && activeJumpPlanTimer > plan.RunupTime + 0.12f &&
+			(IsNearNode(target) || MathF.Abs(Position.Y - target.Y) <= NavNodeReachDistance))
 		{
 			ClearActiveEdge($"{edge.Kind} done");
 			return false;
 		}
 
-		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeEdgeTimer:0.0}";
+		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} p {activeJumpPlanTimer:0.0}";
 		return true;
 	}
 
-	private bool CanStartJumpApproach(Vector2 source, bool difficult)
+	private static Vector2 ResolveSafeJumpLandingTarget(PlatformNavGraph graph, PlatformNavGraph.Node to)
 	{
-		if (!difficult)
-			return Vector2.Distance(Position, source) <= NavNodeReachDistance * 2;
+		if (to.Kind == PlatformNavGraph.NodeKind.Landing)
+			return to.Position;
 
-		return MathF.Abs(Position.X - source.X) <= DifficultJumpTakeoffDistance &&
-			MathF.Abs(Position.Y - source.Y) <= NavNodeReachDistance;
+		PlatformNavGraph.Node? best = null;
+		var bestDistanceSquared = SafeLandingSearchDistance * SafeLandingSearchDistance;
+		foreach (var node in graph.Nodes)
+		{
+			if (node.Kind != PlatformNavGraph.NodeKind.Landing || node.RequiresDucking)
+				continue;
+			if (MathF.Abs(node.Position.Y - to.Position.Y) > NavNodeReachDistance)
+				continue;
+
+			var distanceSquared = Vector2.DistanceSquared(node.Position, to.Position);
+			if (distanceSquared >= bestDistanceSquared)
+				continue;
+
+			best = node;
+			bestDistanceSquared = distanceSquared;
+		}
+
+		return best?.Position ?? to.Position;
 	}
 
-	private static bool IsDifficultJump(Vector2 from, Vector2 target)
+	private void StartPlannedJump(PlatformNavGraph.JumpPlan plan, out bool jumpPressed)
 	{
-		var height = MathF.Max(0, from.Y - target.Y);
-		var distance = MathF.Abs(target.X - from.X);
-		return height >= DifficultJumpMinHeight || distance >= DifficultJumpMinDistance;
+		jumpPressed = true;
+		activeJumpStarted = true;
+		activeJumpHoldTimer = Math.Clamp(plan.HoldTime, 0.055f, JumpInputHoldTime);
 	}
 
-	private static float JumpHoldForEdge(Vector2 from, Vector2 target)
+	private static PlatformNavGraph.JumpPlan DefaultJumpPlan(Vector2 from, Vector2 target)
 	{
+		var direction = Math.Sign(target.X - from.X);
+		if (direction == 0)
+			direction = 1;
 		var height = MathF.Max(0, from.Y - target.Y);
 		var distance = MathF.Abs(target.X - from.X);
 		var hold = 0.055f;
 		hold += Math.Clamp(height / 32.0f, 0, 1) * 0.105f;
 		hold += Math.Clamp((distance - 16) / 40.0f, 0, 1) * 0.035f;
-		return Math.Clamp(hold, 0.055f, JumpInputHoldTime);
+		return new(direction, 0, Math.Clamp(hold, 0.055f, JumpInputHoldTime), direction, 99.0f);
+	}
+
+	private bool CanStartJumpPlan(Vector2 source)
+		=> grounded &&
+		   MathF.Abs(Position.X - source.X) <= NavNodeReachDistance * 1.5f &&
+		   MathF.Abs(Position.Y - source.Y) <= Game.TileSize;
+
+	private int PlannedJumpMoveX(PlatformNavGraph.JumpPlan plan, Vector2 landing)
+	{
+		if (activeJumpPlanTimer < plan.SwitchTime)
+			return plan.Direction;
+
+		if (plan.AirDirection != plan.Direction)
+		{
+			var remainingDirection = Math.Sign(landing.X - Position.X);
+			if (remainingDirection == plan.Direction && MathF.Abs(landing.X - Position.X) > NavNodeReachDistance)
+				return plan.Direction;
+		}
+
+		return plan.AirDirection;
+	}
+
+	private int AirSteerTowardLanding(PlatformNavGraph.JumpPlan plan, Vector2 takeoff, Vector2 landing, int plannedMoveX)
+	{
+		var dx = landing.X - Position.X;
+		var remainingX = MathF.Abs(dx);
+		var steer = plannedMoveX;
+		var height = MathF.Max(0, takeoff.Y - landing.Y);
+		var targetDirection = Math.Sign(dx);
+		var velocityDirection = Math.Sign(Velocity.X);
+		if (height >= PrecisionLandingBrakeMinHeight &&
+			plan.AirDirection == plan.Direction &&
+			remainingX <= PrecisionLandingBrakeDistance &&
+			targetDirection != 0 &&
+			velocityDirection == targetDirection &&
+			MathF.Abs(Velocity.X) > PrecisionLandingBrakeSpeed)
+		{
+			steer = -velocityDirection;
+		}
+		else if (remainingX <= 18 || Velocity.Y > 0 && remainingX <= 28)
+			steer = Math.Sign(dx);
+
+		if (Velocity.Y >= LandingStabilizeVerticalSpeed && remainingX <= LandingStabilizeDistance)
+		{
+			var desiredVelocity = Math.Clamp(dx * LandingStabilizeGain, -LandingStabilizeMaxSpeed, LandingStabilizeMaxSpeed);
+			if (MathF.Abs(dx) <= NavNodeReachDistance)
+				desiredVelocity = 0;
+			else if (MathF.Abs(desiredVelocity) < LandingStabilizeMinSpeed)
+				desiredVelocity = MathF.Sign(desiredVelocity) * LandingStabilizeMinSpeed;
+
+			Velocity.X = Calc.Approach(Velocity.X, desiredVelocity, LandingStabilizeBrakeAccel * Time.Delta);
+			var velocityError = desiredVelocity - Velocity.X;
+			steer = MathF.Abs(velocityError) > 4.0f ? Math.Sign(velocityError) : Math.Sign(dx);
+		}
+
+		DebugNavProbeRect = null;
+		DebugNavProbeHit = false;
+		return steer;
 	}
 
 	private bool IsNearNode(Vector2 node)
@@ -466,11 +777,14 @@ public class Bud : Pawn
 		activeEdge = null;
 		activeEdgeTimer = 0;
 		activeJumpHoldTimer = 0;
-			activeJumpStarted = false;
-			activeJumpPlanStarted = false;
-			activeJumpPrepareTimer = 0;
-			DebugNavLabel = label;
-		}
+		activeJumpStarted = false;
+		activeJumpPlanStarted = false;
+		activeJumpPrepareTimer = 0;
+		activeJumpPlanTimer = 0;
+		DebugNavProbeRect = null;
+		DebugNavProbeHit = false;
+		DebugNavLabel = label;
+	}
 
 	private void SetDebugNavState(string label)
 	{
@@ -484,6 +798,9 @@ public class Bud : Pawn
 		activeJumpStarted = false;
 		activeJumpPlanStarted = false;
 		activeJumpPrepareTimer = 0;
+		activeJumpPlanTimer = 0;
+		DebugNavProbeRect = null;
+		DebugNavProbeHit = false;
 		DebugNavLabel = label;
 	}
 
@@ -492,6 +809,10 @@ public class Bud : Pawn
 		var side = Position.X <= player.Position.X ? -1 : 1;
 		return player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
 	}
+
+	private bool IsBesidePlayer(Player player)
+		=> MathF.Abs(Position.X - player.Position.X) <= FollowStopDistance &&
+		   MathF.Abs(Position.Y - player.Position.Y) <= Game.TileSize + NavNodeReachDistance;
 
 	private PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player)
 	{
@@ -527,13 +848,19 @@ public class Bud : Pawn
 		return best;
 	}
 
-	private int GetFallbackMoveX(Vector2? target)
+	private int GetFallbackMoveX(Vector2? target, Player? player = null)
 	{
 		if (target == null)
 			return 0;
 
 		var dx = target.Value.X - Position.X;
-		return MathF.Abs(dx) > FollowStopDistance ? Math.Sign(dx) : 0;
+		if (MathF.Abs(dx) > FollowStopDistance)
+			return Math.Sign(dx);
+
+		if (player != null && !IsBesidePlayer(player))
+			return Position.X <= player.Position.X ? -1 : 1;
+
+		return 0;
 	}
 
 	private void OnRoomChanged(RoomChange change)
@@ -552,6 +879,7 @@ public class Bud : Pawn
 	{
 		pendingRoomChange = null;
 		Position = FindEnterPosition(change);
+		entryPosition = Position;
 		Velocity = Vector2.Zero;
 		CollidesWithSolids = true;
 		Visible = true;

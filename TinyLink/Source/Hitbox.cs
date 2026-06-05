@@ -3,9 +3,7 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-/// <summary>
 /// Hitbox can test overlaps between Rectangles and Grids
-/// </summary>
 public readonly struct Hitbox
 {
 	public enum Shapes
@@ -40,10 +38,17 @@ public readonly struct Hitbox
 		grid = value;
 	}
 
+	public static Hitbox FromSprite(Sprite sprite) {
+		// TODO: slices?
+		var w = (int)MathF.Ceiling(sprite.Frames[0].Subtexture.Width);
+		var h = (int)MathF.Ceiling(sprite.Frames[0].Subtexture.Height);
+		return new(new RectInt(0, 0, w, h));
+	}
+
 	public bool Overlaps(in RectInt rect)
 		=> Overlaps(Point2.Zero, new Hitbox(rect));
 
-	public bool Overlaps(in Hitbox other) 
+	public bool Overlaps(in Hitbox other)
 		=> Overlaps(Point2.Zero, other);
 
 	public bool Overlaps(in Point2 offset, in Hitbox other)

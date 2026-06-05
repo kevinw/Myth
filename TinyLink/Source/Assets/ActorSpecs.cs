@@ -304,6 +304,7 @@ public static class ActorSpecs
 
 	private static void Apply(Actor actor, JsonObject spec)
 	{
+		actor.ActorId = ReadString(spec, IdKey);
 		foreach (var member in GetSerializableMembers(actor.GetType()))
 		{
 			if (!TryGetProperty(spec, member.Name, out var node) || node == null)

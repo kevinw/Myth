@@ -49,7 +49,14 @@ public partial class Game
 	private void SetDebugView(DebugView view)
 	{
 		debugView = view;
+		Manager.PlatformNavDebugVisible = view == DebugView.PlatformNav;
 		DisplayMessage($"Debug: {DebugViewName(view)}");
+	}
+
+	private void RestorePersistentDebugViews()
+	{
+		if (Manager.PlatformNavDebugVisible)
+			debugView = DebugView.PlatformNav;
 	}
 
 	public void DisplayMessage(string message, float duration = 1.25f)

@@ -30,6 +30,7 @@ public class Actor
 	[NoSerialize] public bool Visible = true;
 	[NoSerialize] public float IFrameTime = 0.50f;
 	[NoSerialize] public bool CollidesWithSolids = true;
+	[NoSerialize] public string? ActorId;
 	[NoSerialize] internal string? SessionDestroyKey;
 	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;

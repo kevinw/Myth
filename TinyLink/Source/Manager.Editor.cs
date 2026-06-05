@@ -3628,15 +3628,14 @@ public partial class Manager
 
 		foreach (var edge in graph.Edges)
 		{
-			if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
-				continue;
 			var color = edge.Kind switch
 			{
+				PlatformNavGraph.EdgeKind.Jump => ImGuiColor(1.00f, 0.95f, 0.66f, 0.28f),
 				PlatformNavGraph.EdgeKind.Fall => ImGuiColor(1.00f, 0.47f, 0.66f, 0.22f),
 				PlatformNavGraph.EdgeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.45f),
 				_ => ImGuiColor(0.37f, 0.80f, 0.89f, 0.18f)
 			};
-			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.RoomExit ? 1.5f : 1.0f);
+			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.RoomExit ? 3.0f : 2.0f);
 		}
 
 		if (game.GetFirst<Bud>() is { } bud)
@@ -3650,7 +3649,7 @@ public partial class Manager
 				PlatformNavGraph.NodeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.90f),
 				_ => ImGuiColor(0.65f, 0.94f, 0.44f, 0.62f)
 			};
-			var radius = node.Kind == PlatformNavGraph.NodeKind.RoomExit ? 3.5f : 2.0f;
+			var radius = node.Kind == PlatformNavGraph.NodeKind.RoomExit ? 7.0f : 4.0f;
 			draw.AddCircleFilled(GameWorldToImGui(viewport, game, node.Position), radius, color, 8);
 		}
 
@@ -3664,16 +3663,27 @@ public partial class Manager
 			var color = edge.Kind == PlatformNavGraph.EdgeKind.Jump
 				? ImGuiColor(1.00f, 0.95f, 0.66f, 0.95f)
 				: ImGuiColor(1.00f, 1.00f, 1.00f, 0.78f);
-			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.Jump ? 2.0f : 2.5f);
+			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.Jump ? 4.0f : 5.0f);
 		}
 
-		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavStartNodeId, ImGuiColor(0.37f, 0.80f, 0.89f, 0.95f), 7.0f);
-		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavGoalNodeId, ImGuiColor(1.00f, 0.47f, 0.66f, 0.95f), 7.0f);
-		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavTargetNodeId, ImGuiColor(1.00f, 1.00f, 1.00f, 0.95f), 8.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavStartNodeId, ImGuiColor(0.37f, 0.80f, 0.89f, 0.95f), 14.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavGoalNodeId, ImGuiColor(1.00f, 0.47f, 0.66f, 0.95f), 14.0f);
+		DrawPlatformNavNodeRing(draw, viewport, game, graph, bud.DebugNavTargetNodeId, ImGuiColor(1.00f, 1.00f, 1.00f, 0.95f), 16.0f);
 
 		var from = GameWorldToImGui(viewport, game, bud.Position);
 		var to = GameWorldToImGui(viewport, game, bud.Position + new Vector2(0, -14));
-		draw.AddLine(from, to, ImGuiColor(1.00f, 1.00f, 1.00f, 0.55f), 1.0f);
+		draw.AddLine(from, to, ImGuiColor(1.00f, 1.00f, 1.00f, 0.55f), 2.0f);
+
+		if (bud.DebugNavProbeRect is { } probe)
+		{
+			var probeColor = bud.DebugNavProbeHit
+				? ImGuiColor(0.00f, 1.00f, 0.00f, 0.50f)
+				: ImGuiColor(1.00f, 0.50f, 0.00f, 0.50f);
+			var probeTL = GameWorldToImGui(viewport, game, new Vector2(probe.X, probe.Y));
+			var probeBR = GameWorldToImGui(viewport, game, new Vector2(probe.X + probe.Width, probe.Y + probe.Height));
+			draw.AddRectFilled(probeTL, probeBR, probeColor);
+			draw.AddRect(probeTL, probeBR, ImGuiColor(1.00f, 1.00f, 1.00f, 0.80f), 0, ImDrawFlags.None, 3.0f);
+		}
 	}
 
 	private static void DrawPlatformNavEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.Edge edge, uint color, float thickness)
@@ -3710,7 +3720,7 @@ public partial class Manager
 		if (nodeId is not { } id || id < 0 || id >= graph.Nodes.Count)
 			return;
 
-		draw.AddCircle(GameWorldToImGui(viewport, game, graph.Nodes[id].Position), radius, color, 16, 2.0f);
+		draw.AddCircle(GameWorldToImGui(viewport, game, graph.Nodes[id].Position), radius, color, 16, 4.0f);
 	}
 
 	private static uint ImGuiColor(float r, float g, float b, float a)

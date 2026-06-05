@@ -114,6 +114,16 @@
       "Position": [200, 63],
       "Radius": 33.45,
       "Intensity": 0.45
+    },
+    {
+      "Id": "ae7e8b2447b7830c",
+      "Type": "Player",
+      "Position": [132, 104]
+    },
+    {
+      "Id": "270889d43489462d",
+      "Type": "Goal",
+      "Position": [292, 84]
     }
   ]
 }

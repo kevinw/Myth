@@ -61,6 +61,16 @@
       "Id": "d55b9e3b8ba59435",
       "Type": "Jumpthru",
       "Position": [184, 80]
+    },
+    {
+      "Id": "3ca9dad2357bf6b0",
+      "Type": "Player",
+      "Position": [20, 104]
+    },
+    {
+      "Id": "88fa0a823ea53e0d",
+      "Type": "Goal",
+      "Position": [275, 68]
     }
   ]
 }

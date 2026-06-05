@@ -8,6 +8,7 @@ public sealed class PlatformNavGraph
 	public enum NodeKind
 	{
 		Ground,
+		Landing,
 		Ledge,
 		RoomExit
 	}
@@ -34,7 +35,7 @@ public sealed class PlatformNavGraph
 
 	private const int SampleStep = Game.TileSize;
 	private const float SimDelta = 1.0f / 60.0f;
-	private const float SimMaxTime = 1.15f;
+	private const float SimMaxTime = 1.60f;
 	private const float SimAirAccel = 260;
 	private const float SimMaxAirSpeed = 99;
 	private const float SimGravity = 450;
@@ -56,6 +57,12 @@ public sealed class PlatformNavGraph
 		new(-1, 0.08f, 0.10f, -1, 99.0f),
 		new(1, 0.08f, 0.18f, -1, 0.32f),
 		new(-1, 0.08f, 0.18f, 1, 0.32f),
+		new(1, 0.24f, 0.18f, 1, 99.0f),
+		new(-1, 0.24f, 0.18f, -1, 99.0f),
+		new(1, 0.36f, 0.18f, 1, 99.0f),
+		new(-1, 0.36f, 0.18f, -1, 99.0f),
+		new(1, 0.48f, 0.18f, 1, 99.0f),
+		new(-1, 0.48f, 0.18f, -1, 99.0f),
 	];
 
 	public readonly List<Node> Nodes = [];
@@ -131,11 +138,19 @@ public sealed class PlatformNavGraph
 			EdgeKind.Walk => distance,
 			EdgeKind.Crawl => distance + 12,
 			EdgeKind.Fall => distance + 20,
-			EdgeKind.Jump => distance + 180,
+			EdgeKind.Jump => distance + 180 + LandingRiskCost(Nodes[edge.To]),
 			EdgeKind.RoomExit => distance + 5,
 			_ => distance
 		};
 	}
+
+	private static float LandingRiskCost(Node node)
+		=> node.Kind switch
+		{
+			NodeKind.Landing => -24,
+			NodeKind.Ledge => 48,
+			_ => 0
+		};
 
 	private static void BuildPath(int startId, int goalId, Dictionary<int, Edge> cameFrom, List<Edge> path)
 	{
@@ -168,6 +183,7 @@ public sealed class PlatformNavGraph
 			}
 		}
 
+		AddPlatformLandingNodes(game);
 		BuildWalkEdges(game);
 		BuildFallEdges(game);
 		DiscoverJumpEdges(game);
@@ -176,10 +192,54 @@ public sealed class PlatformNavGraph
 
 	private int AddNode(Point2 position, NodeKind kind, RoomExit? exit = null, bool requiresDucking = false)
 	{
+		if (nodeLookup.TryGetValue(position, out var existing))
+		{
+			var node = Nodes[existing];
+			if (kind == NodeKind.Landing && node.Kind != NodeKind.RoomExit)
+				Nodes[existing] = node with { Kind = NodeKind.Landing };
+			return existing;
+		}
+
 		var id = Nodes.Count;
 		Nodes.Add(new(id, position, kind, exit, requiresDucking));
 		nodeLookup[position] = id;
 		return id;
+	}
+
+	private void AddPlatformLandingNodes(Game game)
+	{
+		foreach (var row in Nodes
+			.Where(node => node.Kind != NodeKind.RoomExit && !node.RequiresDucking)
+			.GroupBy(node => (int)node.Position.Y))
+		{
+			var span = new List<Node>();
+			foreach (var node in row.OrderBy(node => node.Position.X))
+			{
+				if (span.Count > 0 && node.Position.X - span[^1].Position.X > SampleStep)
+				{
+					AddLandingNodeForSpan(game, span);
+					span.Clear();
+				}
+				span.Add(node);
+			}
+			AddLandingNodeForSpan(game, span);
+		}
+	}
+
+	private void AddLandingNodeForSpan(Game game, List<Node> span)
+	{
+		if (span.Count < 2)
+			return;
+
+		var left = span[0];
+		var right = span[^1];
+		var center = new Point2(
+			(int)MathF.Round((left.Position.X + right.Position.X) * 0.5f),
+			(int)MathF.Round((left.Position.Y + right.Position.Y) * 0.5f));
+		if (!TryGetStandableProbe(game, center, out var requiresDucking) || requiresDucking)
+			return;
+
+		AddNode(center, NodeKind.Landing);
 	}
 
 	private void BuildRoomExitNodes(Room room)
@@ -351,12 +411,35 @@ public sealed class PlatformNavGraph
 
 	private void BuildWalkEdges(Game game)
 	{
-		foreach (var node in Nodes)
+		for (var i = 0; i < Nodes.Count; i++)
 		{
-			if (FindWalkNeighbor(game, node, -SampleStep) is { } left)
-				Edges.Add(new(node.Id, left.Node.Id, left.Kind));
-			if (FindWalkNeighbor(game, node, SampleStep) is { } right)
-				Edges.Add(new(node.Id, right.Node.Id, right.Kind));
+			var from = Nodes[i];
+			if (from.Kind == NodeKind.RoomExit)
+				continue;
+
+			for (var j = 0; j < Nodes.Count; j++)
+			{
+				if (i == j)
+					continue;
+
+				var to = Nodes[j];
+				if (to.Kind == NodeKind.RoomExit)
+					continue;
+
+				var deltaX = MathF.Abs(to.Position.X - from.Position.X);
+				if (deltaX <= 0 || deltaX > SampleStep)
+					continue;
+
+				var deltaY = MathF.Abs(to.Position.Y - from.Position.Y);
+				if (deltaY > SampleStep)
+					continue;
+
+				var edgeKind = WalkEdgeKind(game, from, to);
+				if (!edgeKind.HasValue || HasEdge(from.Id, to.Id))
+					continue;
+
+				Edges.Add(new(from.Id, to.Id, edgeKind.Value));
+			}
 		}
 	}
 
@@ -410,7 +493,7 @@ public sealed class PlatformNavGraph
 	private static float JumpPlanCost(Node from, Node to, JumpPlan plan)
 	{
 		var targetDirection = Math.Sign(to.Position.X - from.Position.X);
-		var cost = plan.RunupTime * 100;
+		var cost = plan.RunupTime * 100 + LandingRiskCost(to);
 		if (targetDirection != 0)
 		{
 			if (plan.Direction != targetDirection)
@@ -426,22 +509,30 @@ public sealed class PlatformNavGraph
 	private Node? FindNearestLandingNode(int fromId, Vector2 landing, float maxDistance)
 	{
 		Node? nearest = null;
-		var nearestDistanceSquared = maxDistance * maxDistance;
-			foreach (var node in Nodes)
-			{
-				if (node.Id == fromId)
-					continue;
-				if (node.RequiresDucking)
-					continue;
-				if (Vector2.DistanceSquared(node.Position, Nodes[fromId].Position) < SimMinimumLandingDistance * SimMinimumLandingDistance)
-					continue;
-
-			var distanceSquared = Vector2.DistanceSquared(node.Position, landing);
-			if (distanceSquared >= nearestDistanceSquared)
+		var bestScore = maxDistance * maxDistance;
+		foreach (var node in Nodes)
+		{
+			if (node.Id == fromId)
+				continue;
+			if (node.RequiresDucking)
+				continue;
+			if (Vector2.DistanceSquared(node.Position, Nodes[fromId].Position) < SimMinimumLandingDistance * SimMinimumLandingDistance)
 				continue;
 
+			var distanceSquared = Vector2.DistanceSquared(node.Position, landing);
+			if (distanceSquared > maxDistance * maxDistance)
+				continue;
+
+			var score = distanceSquared + node.Kind switch
+			{
+				NodeKind.Landing => -36,
+				NodeKind.Ledge => 64,
+				_ => 0
+			};
+			if (score >= bestScore)
+				continue;
 			nearest = node;
-			nearestDistanceSquared = distanceSquared;
+			bestScore = score;
 		}
 		return nearest;
 	}
@@ -589,13 +680,14 @@ public sealed class PlatformNavGraph
 			if (MathF.Abs(velocity.X) > SimMaxAirSpeed)
 				velocity.X = Calc.Approach(velocity.X, MathF.Sign(velocity.X) * SimMaxAirSpeed, 2000 * SimDelta);
 
-			if (!jumpStarted && time >= plan.RunupTime && velocity.Y >= 0 && IsGrounded())
+			var shouldJump = time >= plan.RunupTime || moveX != 0 && !HasGroundSupportNextStep(moveX);
+			if (!jumpStarted && shouldJump && velocity.Y >= 0 && IsGrounded())
 			{
 				jumpTimer = MathF.Min(plan.HoldTime, SimJumpTime);
 				jumpStarted = true;
 			}
 
-			if (jumpTimer > 0 && time >= plan.RunupTime)
+			if (jumpTimer > 0)
 			{
 				velocity.Y = SimJumpForce;
 				jumpTimer -= SimDelta;
@@ -658,6 +750,9 @@ public sealed class PlatformNavGraph
 
 		private bool IsGrounded()
 			=> HasStandableSupport(game, PawnProbe + (Point2)position);
+
+		private bool HasGroundSupportNextStep(int moveX)
+			=> HasStandableSupport(game, PawnProbe + (Point2)position + new Point2(Math.Sign(moveX), 0));
 
 		private bool Overlaps(Vector2 at)
 			=> game.OverlapsRoomCollision(PawnProbe + (Point2)at);

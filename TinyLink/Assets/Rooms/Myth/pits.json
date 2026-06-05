@@ -30,7 +30,22 @@
     {
       "Id": "956107433a55c601",
       "Type": "Mosquito",
-      "Position": [108, 84]
+      "Position": [124, 20]
+    },
+    {
+      "Id": "0851fbcc16590d55",
+      "From": "BlueMemoryLight",
+      "Position": [164, 28]
+    },
+    {
+      "Id": "e6b0b01a6338a282",
+      "Type": "Player",
+      "Position": [28, 104]
+    },
+    {
+      "Id": "357f4044a1ee35ee",
+      "Type": "Goal",
+      "Position": [310, 84]
     }
   ]
 }

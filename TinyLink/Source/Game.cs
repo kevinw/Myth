@@ -124,6 +124,9 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? tileFieldStampMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
+	public bool GymBudDied;
+	public bool GymMode;
+	public Actor? GymTarget;
 	private float hitStun;
 	private float shaking;
 	private float ditherGlitch;
@@ -185,6 +188,7 @@ public partial class Game : IDisposable
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
 		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
 		LoadStory();
+		RestorePersistentDebugViews();
 
 		if (start != null)
 		{
@@ -263,6 +267,7 @@ public partial class Game : IDisposable
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
+		GymBudDied = false;
 		roomSwappedThisFrame = false;
 		CollisionRectsThisFrame.Clear();
 		UpdatePlayerHitSnapshot();

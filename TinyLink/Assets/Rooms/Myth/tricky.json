@@ -30,7 +30,27 @@
     {
       "Id": "c980f185697a5e7c",
       "From": "StrongFireLight",
-      "Position": [212, 156]
+      "Position": [228, 172],
+      "Intensity": 1.05,
+      "DrawSprite": false,
+      "Radius": 187.35,
+      "FlickerIntensity": 0.07,
+      "FlickerFrequency": 0.15
+    },
+    {
+      "Id": "aedb2e2d1d9d86dc",
+      "Type": "Player",
+      "Position": [20, 104]
+    },
+    {
+      "Id": "64b1914335b378e9",
+      "Type": "Goal",
+      "Position": [292, -4]
+    },
+    {
+      "Id": "4829731a564cfa8c",
+      "Type": "Goal",
+      "Position": [217, 37]
     }
   ]
 }

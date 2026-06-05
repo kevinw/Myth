@@ -140,15 +140,20 @@ public partial class Manager : App
 	readonly bool dumpAtlases;
 	bool musicEnabled = true;
 	bool alwaysOnTop;
+	internal bool PlatformNavDebugVisible { get; set; }
 
 	public bool MusicEnabled => musicEnabled;
 	public bool WantsVirtualGameController => playing || startingPlay;
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager(bool dumpAtlases = false) : base(CreateAppConfig())
+	public Manager(bool dumpAtlases = false, bool gym = false, bool headless = false, bool unthrottled = false, bool gymExitAfterAll = false) : base(CreateAppConfig(gym, headless, unthrottled))
 	{
 		this.dumpAtlases = dumpAtlases;
+		this.gymMode = gym;
+		this.headless = headless;
+		this.unthrottled = unthrottled;
+		this.gymExitAfterAll = gymExitAfterAll;
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 #if EDITOR
@@ -156,7 +161,7 @@ public partial class Manager : App
 #endif
 	}
 
-	private static AppConfig CreateAppConfig()
+	private static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
 	{
 #if BROWSER
 		return new AppConfig(
@@ -178,6 +183,37 @@ public partial class Manager : App
 			UpdateMode: UpdateMode.UnlockedStep(),
 			PreferredGraphicsDriver: GraphicsDriver.Metal);
 #else
+		if (headless && unthrottled)
+			return new AppConfig(
+				ApplicationName: "Myth",
+				WindowTitle: "Myth",
+				Width: 1,
+				Height: 1,
+				Resizable: false,
+				UpdateMode: UpdateMode.UnthrottledStep(60),
+				PreferredGraphicsDriver: GraphicsDriver.Headless,
+				Flags: AppFlags.Headless);
+
+		if (headless)
+			return new AppConfig(
+				ApplicationName: "Myth",
+				WindowTitle: "Myth",
+				Width: 1,
+				Height: 1,
+				Resizable: false,
+				UpdateMode: UpdateMode.FixedStep(60),
+				PreferredGraphicsDriver: GraphicsDriver.Headless,
+				Flags: AppFlags.Headless);
+
+		if (unthrottled)
+			return new AppConfig(
+				ApplicationName: "Myth",
+				WindowTitle: "Myth",
+				Width: 1280,
+				Height: 720,
+				Resizable: true,
+				UpdateMode: UpdateMode.UnthrottledStep(60));
+
 		return new AppConfig(
 			ApplicationName: "Myth",
 			WindowTitle: "Myth",
@@ -211,7 +247,32 @@ public partial class Manager : App
 #endif
 #if BROWSER
 		StartGame();
+#else
+		if (unthrottled)
+			Console.WriteLine("[Manager] unthrottled: running fixed 60fps steps as fast as possible (no wall-clock wait)");
 #endif
+
+		// Gym mode: auto-start with rooms that have a Goal actor
+		if (gymMode)
+		{
+			CollectGymRooms();
+			if (gymRuns is { Count: > 0 })
+			{
+				gymRunIndex = 0;
+				var run = gymRuns[gymRunIndex];
+				var room = run.Room;
+				cell = room.Cell;
+				selectedRoomId = null;
+				Console.WriteLine($"[Gym] found {gymRuns.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.GoalId}");
+				gymRoomStartTime = Time.Seconds;
+				StartGame(immediate: true);
+				AssignGymTarget(run);
+			}
+			else
+			{
+				Console.WriteLine("[Gym] no rooms with Goal found — gym mode idle");
+			}
+		}
 #if EDITOR && DEBUG && !IOS
 		StartAssetWatcher();
 		StartShaderWatcher();
@@ -348,16 +409,19 @@ public partial class Manager : App
 			if (settings == null) return;
 			if (!string.IsNullOrWhiteSpace(settings.WorldId))
 				Assets.SelectWorld(settings.WorldId);
-			if (settings is { Width: > 0, Height: > 0 })
-				Window.Size = new Point2(
-					Math.Max(settings.Width, MinimumRestoredWindowSize.X),
-					Math.Max(settings.Height, MinimumRestoredWindowSize.Y));
-			Window.Position = new Point2(settings.X, settings.Y);
+			if (Window != null)
+			{
+				if (settings is { Width: > 0, Height: > 0 })
+					Window.Size = new Point2(
+						Math.Max(settings.Width, MinimumRestoredWindowSize.X),
+						Math.Max(settings.Height, MinimumRestoredWindowSize.Y));
+				Window.Position = new Point2(settings.X, settings.Y);
+				Window.AlwaysOnTop = alwaysOnTop;
+			}
 			cell = new Point2(settings.RoomX, settings.RoomY);
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
 			alwaysOnTop = settings.AlwaysOnTop;
-			Window.AlwaysOnTop = alwaysOnTop;
 		}
 		catch (Exception e)
 		{
@@ -367,6 +431,9 @@ public partial class Manager : App
 
 	private void SaveWindowSettings()
 	{
+		if (Window == null)
+			return;
+
 		try
 		{
 			Directory.CreateDirectory(UserPath);
@@ -414,6 +481,45 @@ public partial class Manager : App
 	protected override void Update()
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
+
+		if (headless)
+		{
+			if (playing && game != null)
+			{
+				game.Update(true);
+				if (gymRuns != null)
+				{
+					if (game.GymBudDied)
+						AdvanceGym(success: false);
+					else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
+						&& goal.OverlapsAny(Point2.Zero, bud))
+					{
+						AdvanceGym(success: true);
+					}
+					else if (Time.Seconds - gymRoomStartTime > 20.0)
+					{
+						Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
+						AdvanceGym(success: false);
+					}
+
+					if (Time.Seconds >= nextGymLog)
+					{
+						var bud = game.GetFirst<Bud>();
+						if (bud != null)
+							Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s gst={gymRoomStartTime:F2}s bud=({bud.Position.X:F0},{bud.Position.Y:F0}) lbl={bud.DebugNavLabel}");
+						nextGymLog += 5.0;
+					}
+					if (Time.Seconds - gymRoomStartTime > 1.0 && (int)((Time.Seconds - gymRoomStartTime) * 10) % 10 == 0)
+					{
+						var bud = game.GetFirst<Bud>();
+						if (bud != null)
+							Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
+					}
+				}
+			}
+			return;
+		}
+
 #if EDITOR
 		using (PerfStats.Time(PerfDetail.DeferredRoomPreviewDisposal))
 			DisposeDeferredRoomPreviews();
@@ -480,6 +586,26 @@ public partial class Manager : App
 				using (PerfStats.Time(PerfDetail.GameUpdate))
 					game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
 			}
+
+			if (gymRuns != null && game != null)
+			{
+				if (game.GymBudDied)
+				{
+					Console.WriteLine("[Gym] Bud fell off world");
+					AdvanceGym(success: false);
+				}
+				else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
+					&& goal.OverlapsAny(Point2.Zero, bud))
+				{
+					Console.WriteLine("[Gym] Bud reached goal");
+					AdvanceGym(success: true);
+				}
+				else if (Time.Seconds - gymRoomStartTime > 20.0)
+				{
+					Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
+					AdvanceGym(success: false);
+				}
+			}
 		}
 		// Show Editor
 		else
@@ -492,6 +618,20 @@ public partial class Manager : App
 					UpdateEditorNavigation();
 			}
 #endif
+		}
+
+		if (gymRuns != null && unthrottled)
+		{
+			if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus))
+			{
+				UnthrottledStepsPerFrame = Math.Max(1, UnthrottledStepsPerFrame / 2);
+				Console.WriteLine($"[Gym] {UnthrottledStepsPerFrame} steps/frame");
+			}
+			if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
+			{
+				UnthrottledStepsPerFrame = Math.Min(5000, UnthrottledStepsPerFrame * 2);
+				Console.WriteLine($"[Gym] {UnthrottledStepsPerFrame} steps/frame");
+			}
 		}
 
 #if EDITOR
@@ -675,6 +815,9 @@ public partial class Manager : App
 
 	protected override void Render()
 	{
+		if (Window == null)
+			return;
+
 		PerfStats.Record(PerfStat.Present, GraphicsDevice.LastPresentDuration);
 		UpdateFpsOverlay();
 		using var renderPerf = PerfStats.Time(PerfStat.Render);
@@ -977,7 +1120,7 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
-	private void StartGame()
+	private void StartGame(bool immediate = false)
 	{
 #if EDITOR
 		CurrentRoom?.Save();
@@ -1005,7 +1148,7 @@ public partial class Manager : App
 			fallbackPlayerDirection: fallbackPlayerDirection,
 			spawnFallbackPlayer: true,
 			initialPlayerPosition: initialPlayerPosition);
-#if IOS || !EDITOR
+#if IOS
 		playTransition = 1.0f;
 		playTransitionFromCenter = Vector2.Zero;
 		playTransitionFromSize = Vector2.Zero;
@@ -1016,14 +1159,29 @@ public partial class Manager : App
 		playing = true;
 		game.SnapCameraToGameplayTarget();
 #else
-		var target = game.GetGameplayCameraTarget();
-		playTransition = 0.0f;
-		playTransitionFromCenter = editorCamera;
-		playTransitionFromSize = GameViewRect.Size / editorZoom;
-		playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
-		playTransitionToSize = new Vector2(Game.Width, Game.Height);
-		startingPlay = true;
-		playing = false;
+		if (immediate)
+		{
+			playTransition = 1.0f;
+			playTransitionFromCenter = Vector2.Zero;
+			playTransitionFromSize = Vector2.Zero;
+			playTransitionToCenter = Vector2.Zero;
+			playTransitionToSize = Vector2.Zero;
+			gameEase = 1.0f;
+			startingPlay = false;
+			playing = true;
+			game.SnapCameraToGameplayTarget();
+		}
+		else
+		{
+			var target = game.GetGameplayCameraTarget();
+			playTransition = 0.0f;
+			playTransitionFromCenter = editorCamera;
+			playTransitionFromSize = GameViewRect.Size / editorZoom;
+			playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
+			playTransitionToSize = new Vector2(Game.Width, Game.Height);
+			startingPlay = true;
+			playing = false;
+		}
 #endif
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 	}
@@ -1121,7 +1279,7 @@ public partial class Manager : App
 		if (playing || startingPlay)
 			StopGame();
 		else
-			StartGame();
+			StartGame(immediate: true);
 	}
 #endif
 
@@ -1198,6 +1356,11 @@ public partial class Manager : App
 		game = null;
 		startingPlay = false;
 		playing = false;
+		if (gymRuns != null)
+		{
+			gymRuns = null;
+			Console.WriteLine("[Gym] stopped (Tab)");
+		}
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 		SyncEditorGame();
 	}
