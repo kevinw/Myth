@@ -60,7 +60,7 @@ public class Bud : Pawn
 
 	public Bud()
 	{
-		Sprite = Assets.GetSprite("companion") ?? Assets.GetSprite("player");
+		Sprite = Assets.GetSprite("bud");
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = -4;
 		Play("idle");
