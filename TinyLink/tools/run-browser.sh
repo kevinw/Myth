@@ -4,6 +4,7 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 repo_dir=$(cd -- "$script_dir/.." &> /dev/null && pwd)
 foster_dir=$(cd -- "$repo_dir/../../Foster/Framework" &> /dev/null && pwd)
+default_shadercross="$repo_dir/tools/macos/shadercross"
 
 host="127.0.0.1"
 port="8082"
@@ -11,6 +12,7 @@ configuration="Debug"
 open_browser=1
 compile_shaders=1
 publish=0
+shadercross=""
 dotnet_args=()
 
 usage() {
@@ -25,6 +27,7 @@ Options:
   -c, --configuration  Build configuration. Default: Debug
   --publish            Run dotnet publish instead of dotnet build.
   --skip-shaders       Do not regenerate Foster WGSL shaders before building.
+  --shadercross PATH   Path to shadercross. Default: tools/macos/shadercross when present.
   --no-open            Do not open the browser automatically.
   -h, --help           Show this help.
 USAGE
@@ -52,6 +55,14 @@ while [[ $# -gt 0 ]]; do
 			compile_shaders=0
 			shift
 			;;
+		--shadercross)
+			if [[ $# -lt 2 ]]; then
+				usage
+				exit 2
+			fi
+			shadercross="$2"
+			shift 2
+			;;
 		--no-open)
 			open_browser=0
 			shift
@@ -75,13 +86,34 @@ done
 cd "$repo_dir"
 
 if [[ "$compile_shaders" == "1" ]]; then
-	"$foster_dir/Content/Shaders/compile.sh" web
+	if [[ -z "$shadercross" && -x "$default_shadercross" ]]; then
+		shadercross="$default_shadercross"
+	fi
+
+	shader_args=()
+	if [[ -n "$shadercross" ]]; then
+		shader_args+=(--shadercross "$shadercross")
+	fi
+
+	if [[ ${#shader_args[@]} -gt 0 ]]; then
+		"$foster_dir/Content/Shaders/compile.sh" web "${shader_args[@]}"
+	else
+		"$foster_dir/Content/Shaders/compile.sh" web
+	fi
 fi
 
 if [[ "$publish" == "1" ]]; then
-	dotnet publish TinyLink.csproj -c "$configuration" -r browser-wasm "${dotnet_args[@]}"
+	if [[ ${#dotnet_args[@]} -gt 0 ]]; then
+		dotnet publish TinyLink.csproj -c "$configuration" -r browser-wasm "${dotnet_args[@]}"
+	else
+		dotnet publish TinyLink.csproj -c "$configuration" -r browser-wasm
+	fi
 else
-	dotnet build TinyLink.csproj -c "$configuration" -r browser-wasm "${dotnet_args[@]}"
+	if [[ ${#dotnet_args[@]} -gt 0 ]]; then
+		dotnet build TinyLink.csproj -c "$configuration" -r browser-wasm "${dotnet_args[@]}"
+	else
+		dotnet build TinyLink.csproj -c "$configuration" -r browser-wasm
+	fi
 fi
 
 app_bundle="$repo_dir/bin/$configuration/net10.0/browser-wasm/AppBundle"

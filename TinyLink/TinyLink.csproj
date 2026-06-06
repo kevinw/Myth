@@ -40,7 +40,7 @@
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <ShaderPlatform>web</ShaderPlatform>
     <ShaderOutputExtension>wgsl</ShaderOutputExtension>
-    <FmodHtml5Root>$(HOME)/Downloads/fmodstudioapi20313html5</FmodHtml5Root>
+    <FmodHtml5Root>$(MSBuildProjectDirectory)/Platforms/Web/Native/FMOD</FmodHtml5Root>
   </PropertyGroup>
 
   <ItemGroup>
@@ -94,6 +94,12 @@
     <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(TinyLinkBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js')" />
     <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(TinyLinkBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm')" />
     <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(TinyLinkBrowserJsFmod)' == 'true'">
+    <Error
+      Condition="!Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js') or !Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm')"
+      Text="TinyLink browser FMOD runtime files are missing under $(FmodHtml5Root)/api/studio/lib/wasm. Expected fmodstudioP.js and fmodstudioP.wasm." />
   </Target>
 
 </Project>

@@ -1166,18 +1166,6 @@ public partial class Manager : App
 			spawnFallbackPlayer: true,
 			initialPlayerPosition: initialPlayerPosition);
 #if IOS
-		playTransition = 1.0f;
-		playTransitionFromCenter = Vector2.Zero;
-		playTransitionFromSize = Vector2.Zero;
-		playTransitionToCenter = Vector2.Zero;
-		playTransitionToSize = Vector2.Zero;
-		gameEase = 1.0f;
-		startingPlay = false;
-		playing = true;
-		game.SnapCameraToGameplayTarget();
-#else
-		if (immediate)
-		{
 			playTransition = 1.0f;
 			playTransitionFromCenter = Vector2.Zero;
 			playTransitionFromSize = Vector2.Zero;
@@ -1187,21 +1175,48 @@ public partial class Manager : App
 			startingPlay = false;
 			playing = true;
 			game.SnapCameraToGameplayTarget();
-		}
-		else
-		{
-			var target = game.GetGameplayCameraTarget();
-			playTransition = 0.0f;
-			playTransitionFromCenter = editorCamera;
-			playTransitionFromSize = GameViewRect.Size / editorZoom;
-			playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
-			playTransitionToSize = new Vector2(Game.Width, Game.Height);
-			startingPlay = true;
-			playing = false;
-		}
+#else
+			if (immediate)
+			{
+				playTransition = 1.0f;
+				playTransitionFromCenter = Vector2.Zero;
+				playTransitionFromSize = Vector2.Zero;
+				playTransitionToCenter = Vector2.Zero;
+				playTransitionToSize = Vector2.Zero;
+				gameEase = 1.0f;
+				startingPlay = false;
+				playing = true;
+				game.SnapCameraToGameplayTarget();
+			}
+#if EDITOR
+			else
+			{
+				var target = game.GetGameplayCameraTarget();
+				playTransition = 0.0f;
+				playTransitionFromCenter = editorCamera;
+				playTransitionFromSize = GameViewRect.Size / editorZoom;
+				playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
+				playTransitionToSize = new Vector2(Game.Width, Game.Height);
+				startingPlay = true;
+				playing = false;
+			}
+#else
+			else
+			{
+				playTransition = 1.0f;
+				playTransitionFromCenter = Vector2.Zero;
+				playTransitionFromSize = Vector2.Zero;
+				playTransitionToCenter = Vector2.Zero;
+				playTransitionToSize = Vector2.Zero;
+				gameEase = 1.0f;
+				startingPlay = false;
+				playing = true;
+				game.SnapCameraToGameplayTarget();
+			}
 #endif
-		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
-	}
+#endif
+			VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
+		}
 
 #if EDITOR
 	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)

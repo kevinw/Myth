@@ -59,8 +59,7 @@ partial class Manager
 		else
 			Console.Error.WriteLine("[Gym] room transition not supported in browser");
 		return;
-#endif
-
+#else
 		gymRunIndex++;
 		if (gymRunIndex >= gymRuns.Count)
 		{
@@ -81,6 +80,7 @@ partial class Manager
 		gymRoomStartTime = Time.Seconds;
 		StartGame(immediate: true);
 		AssignGymTarget(run);
+#endif
 	}
 
 	private void AssignGymTarget(GymRun run)

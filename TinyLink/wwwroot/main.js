@@ -5,6 +5,10 @@ import * as FosterBrowserFmod from "./_framework/Content/Web/foster-fmod.js";
 globalThis.FosterWebGPU = FosterWebGPU;
 globalThis.FosterBrowserFmod = FosterBrowserFmod;
 
+const isTinyLinkCleanExitStatus = (error) =>
+	error?.name === "ExitStatus" &&
+	(error.status === 0 || error.message?.includes("exit(0)"));
+
 try {
 	await FosterWebGPU.initialize("#foster-canvas");
 
@@ -35,17 +39,12 @@ try {
 	try {
 		await runMain("TinyLink", []);
 	} catch (error) {
-		if (!isCleanExitStatus(error))
+		if (!isTinyLinkCleanExitStatus(error))
 			throw error;
 	}
 } catch (error) {
 	console.error("TinyLink browser startup failed", error);
 	console.error(error?.stack ?? error);
-}
-
-function isCleanExitStatus(error) {
-	return error?.name === "ExitStatus" &&
-		(error.status === 0 || error.message?.includes("exit(0)"));
 }
 
 function prepareStartGate() {
@@ -97,28 +96,18 @@ async function preloadAssets(module, onProgress) {
 	const files = [];
 	await collectFiles("Assets/", files);
 	const preloadFiles = files.filter(shouldPreloadIntoDotnetFs);
+	const fmodBankFiles = files.filter(isFmodBankFile);
 	onProgress?.(0, preloadFiles.length);
 
 	for (let i = 0; i < preloadFiles.length; i++) {
 		const file = preloadFiles[i];
 		const bytes = new Uint8Array(await (await fetch(file)).arrayBuffer());
-		const parts = file.split("/");
-		const name = parts.pop();
-		let path = "";
-
-		for (const part of parts) {
-			path += `/${part}`;
-			try {
-				module.FS.stat(path);
-			} catch {
-				const parent = path.slice(0, path.lastIndexOf("/")) || "/";
-				module.FS_createPath(parent, part, true, true);
-			}
-		}
-
-		module.FS_createDataFile(`/${parts.join("/")}`, name, bytes, true, false, true);
+		createWasmFile(module, file, bytes);
 		onProgress?.(i + 1, preloadFiles.length);
 	}
+
+	for (const file of fmodBankFiles)
+		createWasmFile(module, file, new Uint8Array());
 
 	console.log(`Preloaded ${preloadFiles.length} TinyLink asset files into wasm FS.`);
 	return files;
@@ -163,4 +152,25 @@ function shouldPreloadIntoDotnetFs(path) {
 
 function isFmodBankFile(path) {
 	return path.startsWith("Assets/Sounds/FMOD/Build/Mobile/") && path.endsWith(".bank");
+}
+
+function createWasmFile(module, file, bytes) {
+	const parts = file.split("/");
+	const name = parts.pop();
+	ensureWasmPath(module, parts);
+	module.FS_createDataFile(`/${parts.join("/")}`, name, bytes, true, false, true);
+}
+
+function ensureWasmPath(module, parts) {
+	let path = "";
+
+	for (const part of parts) {
+		path += `/${part}`;
+		try {
+			module.FS.stat(path);
+		} catch {
+			const parent = path.slice(0, path.lastIndexOf("/")) || "/";
+			module.FS_createPath(parent, part, true, true);
+		}
+	}
 }
