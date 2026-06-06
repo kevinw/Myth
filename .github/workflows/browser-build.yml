@@ -38,12 +38,15 @@ jobs:
             ~/.dotnet/sdk-manifests
             ~/.dotnet/template-packs
             ~/.dotnet/toolResolverCache
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+            ${{ env.DOTNET_ROOT }}/toolResolverCache
           key: dotnet-browser-${{ runner.os }}-${{ hashFiles('.github/workflows/browser-build.yml', 'TinyLink/TinyLink.csproj', 'TinyLink/Source/TinyLink.Core.csproj') }}
           restore-keys: |
             dotnet-browser-${{ runner.os }}-
 
       - name: Install browser wasm workload
-        if: steps.dotnet-cache.outputs.cache-hit != 'true'
         run: dotnet workload install wasm-tools
 
       - name: Restore .NET workloads
