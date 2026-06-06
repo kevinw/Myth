@@ -9,9 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build-browser:
     name: Build browser-wasm
@@ -19,7 +16,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
@@ -27,27 +24,18 @@ jobs:
         run: git clone --depth 1 https://codeberg.org/kevinw/Foster.git ../Foster
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
-      - name: Cache .NET packages and workloads
+      - name: Cache NuGet packages
         id: dotnet-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.nuget/packages
-            ~/.dotnet/packs
-            ~/.dotnet/sdk-manifests
-            ~/.dotnet/template-packs
-            ~/.dotnet/toolResolverCache
-            ${{ env.DOTNET_ROOT }}/packs
-            ${{ env.DOTNET_ROOT }}/sdk-manifests
-            ${{ env.DOTNET_ROOT }}/template-packs
-            ${{ env.DOTNET_ROOT }}/toolResolverCache
-          key: dotnet-browser-${{ runner.os }}-${{ hashFiles('.github/workflows/browser-build.yml', 'TinyLink/TinyLink.csproj', 'TinyLink/Source/TinyLink.Core.csproj') }}
+          path: ~/.nuget/packages
+          key: nuget-browser-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
           restore-keys: |
-            dotnet-browser-${{ runner.os }}-
+            nuget-browser-${{ runner.os }}-
 
       - name: Install browser wasm workload
         run: dotnet workload install wasm-tools
@@ -62,14 +50,14 @@ jobs:
         run: dotnet build TinyLink/TinyLink.csproj -c Release -r browser-wasm --no-restore /p:TinyLinkBrowser=true /p:ShaderPlatform=
 
       - name: Upload browser app bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: myth-browser-wasm
           path: TinyLink/bin/Release/net10.0/browser-wasm/AppBundle
           if-no-files-found: error
 
       - name: Cache npm packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-wrangler
