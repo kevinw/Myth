@@ -65,7 +65,7 @@
     {
       "Id": "14f7919f67fc2fb3",
       "Type": "Light",
-      "Position": [56, 27],
+      "Position": [56, 28],
       "Intensity": 1.9,
       "Radius": 126.95,
       "FlickerFrequency": 0.1,

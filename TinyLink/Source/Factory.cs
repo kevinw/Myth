@@ -3,11 +3,6 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-internal readonly struct EntryEditorInfo
-{
-	internal readonly string SpriteFilename;
-}
-
 /// The Factory holds meta information on how to populate the Game when loading a Room.
 /// It describes tile types and editor actor palette entries.
 public static class Factory
@@ -130,10 +125,6 @@ public static class Factory
 
 	// List of all the tile types
 	public static readonly Dictionary<char, Entry> Entries = new();
-#if EDITOR
-	internal static string GetSpriteFilename(Entry entry) => EntryEditorInfos.TryGetValue(entry, out var info) ? info.SpriteFilename : null;
-	internal static readonly Dictionary<Entry, EntryEditorInfo> EntryEditorInfos = new();
-#endif
 	public static readonly List<ActorPaletteEntry> ActorPalette = [];
 
 	// Registers a new Type

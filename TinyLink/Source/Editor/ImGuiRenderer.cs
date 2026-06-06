@@ -465,7 +465,7 @@ public class ImGuiRenderer : IDisposable
 		return id;
 	}
 
-	public bool ImageButton(string id, in Subtexture subtexture, Vector2 size, bool selected = false, Vector4? selectedColor = null, bool fitAspectRatio = false)
+	public bool ImageButton(string id, in Subtexture subtexture, Vector2 size, bool selected = false, Vector4? selectedColor = null, bool fitAspectRatio = false, Vector2? imagePadding = null)
 	{
 		if (subtexture.Texture == null)
 			return ImGui.Button(id, size);
@@ -487,8 +487,9 @@ public class ImGuiRenderer : IDisposable
 			: new Vector4(0.18f, 0.18f, 0.20f, 1.0f);
 
 		draw.AddRectFilled(min, max, ImGui.ColorConvertFloat4ToU32(bg), style.FrameRounding);
-		var imageMin = min + style.FramePadding;
-		var imageMax = max - style.FramePadding;
+		var padding = imagePadding ?? style.FramePadding;
+		var imageMin = min + padding;
+		var imageMax = max - padding;
 		if (fitAspectRatio && subtexture.Width > 0 && subtexture.Height > 0)
 		{
 			var imageAvailable = imageMax - imageMin;

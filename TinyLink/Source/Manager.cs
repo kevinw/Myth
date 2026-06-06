@@ -1204,15 +1204,16 @@ public partial class Manager : App
 	}
 
 #if EDITOR
-	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false)
-		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize));
+	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
+		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize), false, imagePadding);
 
 	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false);
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio)
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio, float? imagePadding = null)
 	{
-		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
+		var padding = imagePadding.HasValue ? new Vector2(imagePadding.Value) : (Vector2?)null;
+		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio, padding);
 		var hovered = ImGui.IsItemHovered();
 
 		if (hovered && !string.IsNullOrEmpty(tooltip))

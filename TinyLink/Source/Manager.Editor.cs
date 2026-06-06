@@ -13,6 +13,7 @@ public partial class Manager
 	static int PaletteColumns => 5;
 	static int ToolbarSpacing => 4;
 	static float ToolbarHeight => ButtonSize + 4;
+	static float ToolbarButtonImagePadding => 4;
 	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
 	static Color highlight => 0x5fcde4;
 
@@ -65,6 +66,7 @@ public partial class Manager
 	Point2 editorSelectionDragOffset;
 	EditorSelectionSnapshot? editorSelectionSnapshot;
 	Vector2 roomActorDragOffset;
+	bool roomActorDragSnapsByDefault;
 	ResizeHandle resizeHandle;
 	ResizeHandle roomGeometryHandle;
 	Point2 roomGeometryDragOffset;
@@ -199,6 +201,7 @@ public partial class Manager
 			selectedRoomActorIndex = room.Actors.Count - 1;
 			draggingRoomActor = false;
 			roomActorDragOffset = Vector2.Zero;
+			roomActorDragSnapsByDefault = true;
 			resizeHandle = ResizeHandle.None;
 			editorGameDirty = true;
 		}
@@ -216,6 +219,7 @@ public partial class Manager
 
 		draggingRoomActor = false;
 		roomActorDragOffset = Vector2.Zero;
+		roomActorDragSnapsByDefault = true;
 		resizeHandle = ResizeHandle.None;
 		roomGeometryHandle = ResizeHandle.None;
 		roomGeometryUndo = null;
@@ -550,16 +554,101 @@ public partial class Manager
 
 	static void EditSprite(Factory.Entry entry)
 	{
-		if (OperatingSystem.IsMacOS()) {
-			var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-			var bin = Path.Combine(homeDir, "Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
-			var filename = Factory.GetSpriteFilename(entry);
-			if (filename == null) {
-				Console.WriteLine($"No sprite filename found for entry {entry.Name}");
-				return;
-			}
-			System.Diagnostics.Process.Start(bin, filename);
+		var filename = GetTileEntryAsepriteFilename(entry);
+		if (filename == null)
+		{
+			Console.WriteLine($"No sprite filename found for entry {entry.Name}");
+			return;
 		}
+
+		var startInfo = CreateAsepriteStartInfo(filename);
+
+		try
+		{
+			System.Diagnostics.Process.Start(startInfo);
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to open '{filename}' in Aseprite using '{startInfo.FileName}': {e.Message}");
+		}
+	}
+
+	static System.Diagnostics.ProcessStartInfo CreateAsepriteStartInfo(string filename)
+	{
+		if (OperatingSystem.IsMacOS())
+		{
+			var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			var steamAseprite = Path.Combine(homeDir, "Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
+			if (File.Exists(steamAseprite))
+				return CreateStartInfo(steamAseprite, filename);
+
+			var open = "/usr/bin/open";
+			if (File.Exists(open))
+			{
+				var startInfo = CreateStartInfo(open, "-a", "Aseprite", filename);
+				return startInfo;
+			}
+		}
+
+		return CreateStartInfo("aseprite", filename);
+	}
+
+	static System.Diagnostics.ProcessStartInfo CreateStartInfo(string executable, params string[] arguments)
+	{
+		var startInfo = new System.Diagnostics.ProcessStartInfo
+		{
+			FileName = executable,
+			UseShellExecute = false
+		};
+
+		foreach (var argument in arguments)
+			startInfo.ArgumentList.Add(argument);
+
+		return startInfo;
+	}
+
+	static string? GetTileEntryAsepriteFilename(Factory.Entry entry)
+	{
+		foreach (var tilesetName in GetTileEntryAsepriteCandidates(entry))
+		{
+			if (FindAsepriteFile(Path.Join(Assets.AssetsPath, "Tilesets"), tilesetName) is { } filename)
+				return filename;
+		}
+
+		return null;
+	}
+
+	static IEnumerable<string> GetTileEntryAsepriteCandidates(Factory.Entry entry)
+	{
+		if (!string.IsNullOrWhiteSpace(entry.TilesetName))
+		{
+			yield return entry.TilesetName;
+			yield return $"{entry.TilesetName}-kit";
+		}
+
+		if (!string.IsNullOrWhiteSpace(entry.SlopeTilesetName) && entry.SlopeTilesetName != entry.TilesetName)
+		{
+			yield return entry.SlopeTilesetName;
+			yield return $"{entry.SlopeTilesetName}-kit";
+		}
+
+		if (!string.IsNullOrWhiteSpace(entry.DualTilesetName))
+		{
+			yield return entry.DualTilesetName;
+			yield return $"{entry.DualTilesetName}-kit";
+		}
+	}
+
+	static string? FindAsepriteFile(string directory, string name)
+	{
+		foreach (var extension in new[] { ".ase", ".aseprite" })
+		{
+			var path = Path.GetFullPath(Path.Join(directory, name + extension));
+			if (File.Exists(path))
+				return path;
+		}
+
+		return null;
 	}
 
 	private void DrawTileLayerSelector()
@@ -1629,21 +1718,7 @@ public partial class Manager
 			return;
 
 		var actor = room.Actors[actorIndex];
-		var specId = ActorSpecs.ReadString(actor, "From");
-		var typeName = ActorSpecs.ReadString(actor, "Type");
-		var offset = Point2.Zero;
-		if (specId != null || typeName != null)
-		{
-			foreach (var entry in Factory.ActorPalette)
-			{
-				if ((specId != null && entry.ActorSpecId == specId) ||
-				    (typeName != null && entry.ActorTypeName == typeName && entry.ActorSpecId == null))
-				{
-					offset = entry.Offset;
-					break;
-				}
-			}
-		}
+		var offset = GetRoomActorPaletteOffset(actor);
 
 		var targetLocal = world - roomActorDragOffset - (Vector2)room.WorldBounds.TopLeft;
 		var local = snap
@@ -1651,6 +1726,35 @@ public partial class Manager
 			: (Point2)targetLocal;
 		actor["Position"] = new JsonArray(local.X, local.Y);
 		editorGameDirty = true;
+	}
+
+	private static Point2 GetRoomActorPaletteOffset(JsonObject actor)
+	{
+		var specId = ActorSpecs.ReadString(actor, "From");
+		var typeName = ActorSpecs.ReadString(actor, "Type");
+		if (specId == null && typeName == null)
+			return Point2.Zero;
+
+		foreach (var entry in Factory.ActorPalette)
+		{
+			if ((specId != null && entry.ActorSpecId == specId) ||
+			    (typeName != null && entry.ActorTypeName == typeName && entry.ActorSpecId == null))
+				return entry.Offset;
+		}
+
+		return Point2.Zero;
+	}
+
+	private static bool RoomActorPositionIsSnapped(JsonObject actor)
+	{
+		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+		return SnapRoomActorLocalPosition(position, GetRoomActorPaletteOffset(actor)) == position;
+	}
+
+	private bool RoomActorDragShouldSnap(bool keyboardBlocked)
+	{
+		var shiftDown = !keyboardBlocked && Input.Keyboard.Shift;
+		return roomActorDragSnapsByDefault ? !shiftDown : shiftDown;
 	}
 
 	private static Point2 SnapRoomActorLocalPosition(Vector2 local, Point2 offset)
@@ -2595,6 +2699,7 @@ public partial class Manager
 					draggingEditorSelection = false;
 					selectingEditorRect = false;
 					roomActorDragOffset = Vector2.Zero;
+					roomActorDragSnapsByDefault = true;
 					resizeHandle = ResizeHandle.None;
 					SyncEditorGame();
 					TweenEditorCameraToRoom(selected);
@@ -2688,6 +2793,7 @@ public partial class Manager
 				draggingRoomActor = false;
 				editorSelectionRect = null;
 				roomActorDragOffset = Vector2.Zero;
+				roomActorDragSnapsByDefault = true;
 				tilePlacing = false;
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && editorSelectionRect is { } selection && TileRectContains(selection, tileOver))
@@ -2701,6 +2807,7 @@ public partial class Manager
 				editorSelectionSnapshot = CaptureEditorSelection(editing);
 				draggingRoomActor = false;
 				roomActorDragOffset = Vector2.Zero;
+				roomActorDragSnapsByDefault = true;
 				resizeHandle = ResizeHandle.None;
 				tilePlacing = false;
 			}
@@ -2714,6 +2821,7 @@ public partial class Manager
 						editorSelectionRect = null;
 						draggingRoomActor = true;
 						roomActorDragOffset = worldMouse - (roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "Position") ?? Point2.Zero));
+						roomActorDragSnapsByDefault = RoomActorPositionIsSnapped(editing.Actors[selectedRoomActorIndex]);
 						resizeHandle = ResizeHandle.None;
 						tilePlacing = false;
 					}
@@ -2728,6 +2836,7 @@ public partial class Manager
 						editorSelectionRect = NormalizeTileRect(editorSelectionFrom, editorSelectionTo);
 						draggingRoomActor = false;
 						roomActorDragOffset = Vector2.Zero;
+						roomActorDragSnapsByDefault = true;
 						resizeHandle = ResizeHandle.None;
 						tilePlacing = false;
 					}
@@ -2739,6 +2848,7 @@ public partial class Manager
 						selectedRoomActorIndex = -1;
 						draggingRoomActor = false;
 						roomActorDragOffset = Vector2.Zero;
+						roomActorDragSnapsByDefault = true;
 						resizeHandle = ResizeHandle.None;
 						tilePlacing = false;
 					}
@@ -2756,6 +2866,7 @@ public partial class Manager
 					draggingRoomActor = false;
 					editorSelectionRect = null;
 					roomActorDragOffset = Vector2.Zero;
+					roomActorDragSnapsByDefault = true;
 					resizeHandle = ResizeHandle.None;
 					tilePlacing = false;
 					editorGameDirty = true;
@@ -2830,7 +2941,7 @@ public partial class Manager
 			else if (!worldMouseBlocked && actorSelectActive && draggingRoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				actorMoveUndo ??= CaptureRoomUndo("Move Actor", editing);
-				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, keyboardBlocked || !Input.Keyboard.Shift);
+				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, RoomActorDragShouldSnap(keyboardBlocked));
 			}
 			else if (!worldMouseBlocked && actorSelectActive && draggingEditorSelection && editorSelectionSnapshot != null && Input.Mouse.LeftDown)
 			{
@@ -2842,6 +2953,7 @@ public partial class Manager
 				editorSelectionTo = ClampTile(editing, tileOver);
 				editorSelectionRect = NormalizeTileRect(editorSelectionFrom, editorSelectionTo);
 			}
+
 			if (!Input.Mouse.LeftDown)
 			{
 				draggingRoomActor = false;
@@ -2849,6 +2961,7 @@ public partial class Manager
 				selectingEditorRect = false;
 				editorSelectionSnapshot = null;
 				roomActorDragOffset = Vector2.Zero;
+				roomActorDragSnapsByDefault = true;
 				resizeHandle = ResizeHandle.None;
 				actorMoveUndo?.Commit();
 				actorMoveUndo = null;
@@ -2865,6 +2978,7 @@ public partial class Manager
 					selectedRoomActorIndex = -1;
 					draggingRoomActor = false;
 					roomActorDragOffset = Vector2.Zero;
+					roomActorDragSnapsByDefault = true;
 					resizeHandle = ResizeHandle.None;
 					editorGameDirty = true;
 				}
@@ -3375,7 +3489,7 @@ public partial class Manager
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.08f, 0.15f, 1.0f));
 		ImGui.Begin("Toolbar", flags);
 
-		if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]"))
+		if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]", imagePadding: ToolbarButtonImagePadding))
 			StartGame();
 		ImGui.SameLine();
 
@@ -3388,7 +3502,7 @@ public partial class Manager
 		ImGui.SameLine(0, ToolbarSpacing);
 */
 
-		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled))
+		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled, ToolbarButtonImagePadding))
 		{
 			musicEnabled = !musicEnabled;
 			game?.RefreshMusic();
@@ -3396,14 +3510,14 @@ public partial class Manager
 		ImGui.SameLine();
 
 #if !IOS
-		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
+		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop, ToolbarButtonImagePadding))
 		{
 			alwaysOnTop = !alwaysOnTop;
 			window.AlwaysOnTop = alwaysOnTop;
 		}
 		ImGui.SameLine();
 
-		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio"))
+		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio", imagePadding: ToolbarButtonImagePadding))
 			OpenFmodStudio();
 		ImGui.SameLine(0, ToolbarSpacing);
 #endif
@@ -3425,6 +3539,7 @@ public partial class Manager
 			return;
 
 		var width = Math.Clamp(ImGui.CalcTextSize(Assets.CurrentWorldId).X + 32, 96, 180);
+		ImGui.SetCursorPosY((ToolbarHeight - ImGui.GetFrameHeight()) * 0.5f);
 		ImGui.SetNextItemWidth(width);
 		if (ImGui.BeginCombo("##WorldSelector", Assets.CurrentWorldId))
 		{
@@ -3485,11 +3600,13 @@ public partial class Manager
 
 	private void StartAssetWatcher()
 	{
-		assetWatcher = new FileSystemWatcher(Path.GetFullPath(Assets.AssetsPath), "*.ase")
+		assetWatcher = new FileSystemWatcher(Path.GetFullPath(Assets.AssetsPath))
 		{
 			IncludeSubdirectories = true,
 			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
 		};
+		assetWatcher.Filters.Add("*.ase");
+		assetWatcher.Filters.Add("*.aseprite");
 
 		assetWatcher.Changed += (_, _) => RequestAssetReload();
 		assetWatcher.Created += (_, _) => RequestAssetReload();
