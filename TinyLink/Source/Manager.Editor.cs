@@ -167,10 +167,7 @@ public partial class Manager
 		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
 
 
-	/// <summary>
 	/// Eases the PaletteView out/in as the Game opens/closes
-	/// </summary>
-	/// <value></value>
 	private Rect PaletteSlideRect =>
 		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
@@ -517,30 +514,51 @@ public partial class Manager
 		brush = '0';
 	}
 
-	private void DrawTilePaletteSection()
+	void DrawTilePaletteSection()
 	{
 		ImGui.TextUnformatted("Tiles");
 		DrawTileLayerSelector();
 		var index = 0;
 		foreach (var (id, entry) in Factory.Entries)
 		{
-			if (entry.Layer != activeTileLayer)
-				continue;
-
+			if (entry.Layer != activeTileLayer) continue;
 			if (entry.IsSlope) continue; // skip slope tiles; we can place them with control
 
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
 
 			var dualPreview = GetDualTilesetPreview(entry);
-			if (ImGuiSubtextureButton($"Palette_Tiles_{id}", entry.Image, entry.Name, dualPreview, selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
+
+			if (ImGuiSubtextureButton($"Palette_Tiles_{id}", entry.Image, entry.Name, dualPreview,
+				selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
 			{
 				brush = id;
 				selectedActorPaletteIndex = -1;
 				actorSelectTool = false;
 			}
 
+			if (ImGui.BeginPopupContextItem($"Palette_Tiles_{id}")) {
+				if (ImGui.Selectable("Open in Sprite Editor")) {
+					EditSprite(entry);
+				}
+				ImGui.EndPopup();
+			}
+
 			index++;
+		}
+	}
+
+	static void EditSprite(Factory.Entry entry)
+	{
+		if (OperatingSystem.IsMacOS()) {
+			var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			var bin = Path.Combine(homeDir, "Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
+			var filename = Factory.GetSpriteFilename(entry);
+			if (filename == null) {
+				Console.WriteLine($"No sprite filename found for entry {entry.Name}");
+				return;
+			}
+			System.Diagnostics.Process.Start(bin, filename);
 		}
 	}
 
@@ -798,7 +816,7 @@ public partial class Manager
 		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
 	}
 
-	#if false
+#if false
 	private void DrawPreviewPaletteSection()
 	{
 		if (!ImGui.CollapsingHeader("Previews"))
@@ -813,7 +831,7 @@ public partial class Manager
 			ClearRoomPreviewCache();
 		}
 	}
-	#endif
+#endif
 
 	private static RoomSettings CaptureRoomSettings(Room room)
 		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
