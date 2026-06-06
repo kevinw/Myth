@@ -20,6 +20,9 @@ jobs:
         with:
           lfs: true
 
+      - name: Check out Foster
+        run: git clone --depth 1 https://codeberg.org/kevinw/Foster.git ../Foster
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
