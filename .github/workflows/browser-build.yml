@@ -25,6 +25,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Install browser wasm workload
+        run: dotnet workload install wasm-tools
+
       - name: Restore .NET workloads
         run: dotnet workload restore TinyLink/TinyLink.csproj /p:TinyLinkBrowser=true
 
