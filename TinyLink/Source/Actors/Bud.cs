@@ -40,13 +40,7 @@ public class Bud : Pawn
 	private float mirrorPlayerCrawlTimer;
 	private float mirrorPlayerCrawlReleaseTimer;
 	private bool mirrorPlayerCrawl;
-	private bool activeJumpPlanStarted;
-	private float activeJumpPrepareTimer;
-	private PlatformNavGraph.Edge? activeEdge;
-	private float activeEdgeTimer;
-	private float activeJumpHoldTimer;
-	private bool activeJumpStarted;
-	private float activeJumpPlanTimer;
+	private ActiveNavEdgeState activeNavEdge;
 	public int? DebugNavStartNodeId { get; private set; }
 	public int? DebugNavGoalNodeId { get; private set; }
 	public int? DebugNavTargetNodeId { get; private set; }
@@ -111,7 +105,7 @@ public class Bud : Pawn
 			}
 		}
 
-		if (activeJumpHoldTimer > 0)
+		if (activeNavEdge.JumpHoldTimer > 0)
 			jumpHeld = true;
 		else if (jumpPressed)
 			jumpHeld = true;
@@ -362,15 +356,7 @@ public class Bud : Pawn
 	}
 
 	private void StartActiveEdge(PlatformNavGraph.Edge edge)
-	{
-		activeEdge = edge;
-		activeEdgeTimer = 0;
-		activeJumpHoldTimer = 0;
-		activeJumpStarted = false;
-		activeJumpPlanStarted = false;
-		activeJumpPrepareTimer = 0;
-		activeJumpPlanTimer = 0;
-	}
+		=> activeNavEdge = ActiveNavEdgeState.Start(edge);
 
 	private bool TryGetActionableEdge(PlatformNavGraph graph, out PlatformNavGraph.Edge edge)
 	{
@@ -483,7 +469,7 @@ public class Bud : Pawn
 		moveX = 0;
 		moveY = 0;
 		jumpPressed = false;
-		if (activeEdge is not { } edge || Game.GetPlatformNavGraph() is not { } graph)
+		if (activeNavEdge.Edge is not { } edge || Game.GetPlatformNavGraph() is not { } graph)
 			return false;
 
 		if (edge.From < 0 || edge.From >= graph.Nodes.Count || edge.To < 0 || edge.To >= graph.Nodes.Count)
@@ -492,14 +478,14 @@ public class Bud : Pawn
 			return false;
 		}
 
-		activeEdgeTimer += Time.Delta;
+		activeNavEdge.Timer += Time.Delta;
 		var from = graph.Nodes[edge.From];
 		var to = graph.Nodes[edge.To];
 		var target = edge.Kind == PlatformNavGraph.EdgeKind.Jump
 			? ResolveSafeJumpLandingTarget(graph, to)
 			: to.Position;
 
-		if (activeEdgeTimer > ActiveEdgeTimeout)
+		if (activeNavEdge.Timer > ActiveEdgeTimeout)
 		{
 			ClearActiveEdge($"{edge.Kind} timeout");
 			return false;
@@ -525,19 +511,19 @@ public class Bud : Pawn
 					ClearActiveEdge($"{edge.Kind} done");
 					return false;
 				}
-				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeEdgeTimer:0.0}";
+				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeNavEdge.Timer:0.0}";
 				break;
 
 			case PlatformNavGraph.EdgeKind.Fall:
 				moveX = Math.Sign(to.Position.X - from.Position.X);
 				if (!grounded && MathF.Abs(target.X - Position.X) > NavNodeReachDistance * 0.5f)
 					moveX = Math.Sign(target.X - Position.X);
-				if (grounded && activeEdgeTimer > 0.12f && IsNearNode(target))
+				if (grounded && activeNavEdge.Timer > 0.12f && IsNearNode(target))
 				{
 					ClearActiveEdge($"{edge.Kind} done");
 					return false;
 				}
-				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeEdgeTimer:0.0}";
+				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeNavEdge.Timer:0.0}";
 				break;
 
 			default:
@@ -564,7 +550,7 @@ public class Bud : Pawn
 		if (takeoffDirection == 0)
 			takeoffDirection = Facing == 0 ? 1 : Facing;
 
-		if (!activeJumpPlanStarted)
+		if (!activeNavEdge.JumpPlanStarted)
 		{
 			if (!CanStartJumpPlan(from.Position))
 			{
@@ -582,32 +568,32 @@ public class Bud : Pawn
 				takeoffDirection != 0 &&
 				MathF.Sign(Velocity.X) == -takeoffDirection &&
 				MathF.Abs(Velocity.X) > OpposingJumpVelocityThreshold;
-			if (opposingVelocity && activeJumpPrepareTimer < JumpPrepareMaxTime)
+			if (opposingVelocity && activeNavEdge.JumpPrepareTimer < JumpPrepareMaxTime)
 			{
-				activeJumpPrepareTimer += Time.Delta;
+				activeNavEdge.JumpPrepareTimer += Time.Delta;
 				DebugNavLabel = $"{edge.Kind} settle {edge.From}->{edge.To} vx {Velocity.X:0}";
 				return true;
 			}
 
-			activeJumpPlanStarted = true;
-			activeJumpPlanTimer = 0;
-			activeEdgeTimer = 0;
+			activeNavEdge.JumpPlanStarted = true;
+			activeNavEdge.JumpPlanTimer = 0;
+			activeNavEdge.Timer = 0;
 		}
 
-		activeJumpPlanTimer += Time.Delta;
+		activeNavEdge.JumpPlanTimer += Time.Delta;
 		moveX = PlannedJumpMoveX(plan, target);
 		if (moveX == 0)
 			moveX = takeoffDirection;
 
-		if (!activeJumpStarted && activeJumpPlanTimer >= plan.RunupTime)
+		if (!activeNavEdge.JumpStarted && activeNavEdge.JumpPlanTimer >= plan.RunupTime)
 			StartPlannedJump(plan, out jumpPressed);
-		else if (!activeJumpStarted && grounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
+		else if (!activeNavEdge.JumpStarted && grounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
 			StartPlannedJump(plan, out jumpPressed);
 
-		if (activeJumpStarted)
-			activeJumpHoldTimer = Calc.Approach(activeJumpHoldTimer, 0, Time.Delta);
+		if (activeNavEdge.JumpStarted)
+			activeNavEdge.JumpHoldTimer = Calc.Approach(activeNavEdge.JumpHoldTimer, 0, Time.Delta);
 
-		if (activeJumpStarted && !grounded)
+		if (activeNavEdge.JumpStarted && !grounded)
 			moveX = AirSteerTowardLanding(plan, from.Position, target, moveX);
 		else
 		{
@@ -615,14 +601,14 @@ public class Bud : Pawn
 			DebugNavProbeHit = false;
 		}
 
-		if (activeJumpStarted && grounded && activeJumpPlanTimer > plan.RunupTime + 0.12f &&
+		if (activeNavEdge.JumpStarted && grounded && activeNavEdge.JumpPlanTimer > plan.RunupTime + 0.12f &&
 			(IsNearNode(target) || MathF.Abs(Position.Y - target.Y) <= NavNodeReachDistance))
 		{
 			ClearActiveEdge($"{edge.Kind} done");
 			return false;
 		}
 
-		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} p {activeJumpPlanTimer:0.0}";
+		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} p {activeNavEdge.JumpPlanTimer:0.0}";
 		return true;
 	}
 
@@ -654,8 +640,8 @@ public class Bud : Pawn
 	private void StartPlannedJump(PlatformNavGraph.JumpPlan plan, out bool jumpPressed)
 	{
 		jumpPressed = true;
-		activeJumpStarted = true;
-		activeJumpHoldTimer = Math.Clamp(plan.HoldTime, 0.055f, JumpInputHoldTime);
+		activeNavEdge.JumpStarted = true;
+		activeNavEdge.JumpHoldTimer = Math.Clamp(plan.HoldTime, 0.055f, JumpInputHoldTime);
 	}
 
 	private static PlatformNavGraph.JumpPlan DefaultJumpPlan(Vector2 from, Vector2 target)
@@ -678,7 +664,7 @@ public class Bud : Pawn
 
 	private int PlannedJumpMoveX(PlatformNavGraph.JumpPlan plan, Vector2 landing)
 	{
-		if (activeJumpPlanTimer < plan.SwitchTime)
+		if (activeNavEdge.JumpPlanTimer < plan.SwitchTime)
 			return plan.Direction;
 
 		if (plan.AirDirection != plan.Direction)
@@ -774,13 +760,7 @@ public class Bud : Pawn
 
 	private void ClearActiveEdge(string label)
 	{
-		activeEdge = null;
-		activeEdgeTimer = 0;
-		activeJumpHoldTimer = 0;
-		activeJumpStarted = false;
-		activeJumpPlanStarted = false;
-		activeJumpPrepareTimer = 0;
-		activeJumpPlanTimer = 0;
+		activeNavEdge = default;
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = label;
@@ -792,13 +772,7 @@ public class Bud : Pawn
 		DebugNavGoalNodeId = null;
 		DebugNavTargetNodeId = null;
 		navPath.Clear();
-		activeEdge = null;
-		activeEdgeTimer = 0;
-		activeJumpHoldTimer = 0;
-		activeJumpStarted = false;
-		activeJumpPlanStarted = false;
-		activeJumpPrepareTimer = 0;
-		activeJumpPlanTimer = 0;
+		activeNavEdge = default;
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = label;
@@ -929,5 +903,19 @@ public class Bud : Pawn
 		}
 
 		return basePosition;
+	}
+
+	private struct ActiveNavEdgeState
+	{
+		public PlatformNavGraph.Edge? Edge;
+		public float Timer;
+		public float JumpHoldTimer;
+		public bool JumpStarted;
+		public bool JumpPlanStarted;
+		public float JumpPrepareTimer;
+		public float JumpPlanTimer;
+
+		public static ActiveNavEdgeState Start(PlatformNavGraph.Edge edge)
+			=> new() { Edge = edge };
 	}
 }

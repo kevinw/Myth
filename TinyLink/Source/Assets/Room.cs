@@ -153,13 +153,13 @@ public class Room
 			SunDirection = SunDirection
 		};
 
-		for (var x = 0; x < Size.X; x ++)
-		for (var y = 0; y < Size.Y; y ++)
-		{
-			clone.Tiles[x, y] = Tiles[x, y];
-			clone.BackgroundTiles[x, y] = BackgroundTiles[x, y];
-			clone.tileFlags[x, y] = tileFlags[x, y];
-		}
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				clone.Tiles[x, y] = Tiles[x, y];
+				clone.BackgroundTiles[x, y] = BackgroundTiles[x, y];
+				clone.tileFlags[x, y] = tileFlags[x, y];
+			}
 		foreach (var actor in Actors)
 			clone.Actors.Add(ActorSpecs.CloneObject(actor));
 
@@ -179,8 +179,8 @@ public class Room
 			json = JsonNode.Parse(File.ReadAllText(path!))?.AsObject();
 			if (json != null)
 			{
-				position = ActorSpecs.ReadPoint(json, "position") ?? position;
-				if (ActorSpecs.ReadPoint(json, "size") is { } jsonSize && jsonSize.X > 0 && jsonSize.Y > 0)
+				position = JsonUtil.ReadPoint(json, "position") ?? position;
+				if (JsonUtil.ReadPoint(json, "size") is { } jsonSize && jsonSize.X > 0 && jsonSize.Y > 0)
 					size = jsonSize;
 			}
 		}
@@ -194,12 +194,12 @@ public class Room
 		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 		tileFlags = new TileFlags[Size.X, Size.Y];
 
-		for (int x = 0; x < Size.X; x ++)
-		for (int tileY = 0; tileY < Size.Y; tileY ++)
-		{
-			SetTileUnchecked(x, tileY, '0');
-			SetBackgroundTileUnchecked(x, tileY, '0');
-		}
+		for (int x = 0; x < Size.X; x++)
+			for (int tileY = 0; tileY < Size.Y; tileY++)
+			{
+				SetTileUnchecked(x, tileY, '0');
+				SetBackgroundTileUnchecked(x, tileY, '0');
+			}
 
 		if (path == null)
 		{
@@ -216,43 +216,43 @@ public class Room
 
 	private void LoadJson(JsonObject json)
 	{
-		MusicArea = ActorSpecs.ReadString(json, "musicArea");
+		MusicArea = JsonUtil.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
 			MusicArea = null;
-		BackdropColor = ReadHexColor(json, "backdropColor") ?? DefaultBackdropColor;
-		BackdropColor2 = ReadHexColor(json, "backdropColor2");
-		AmbientColor = ReadHexColor(json, "ambientColor") ?? DefaultAmbientColor;
-		AmbientIntensity = ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
-		LightNoise = ReadFloat(json, "lightNoise", DefaultLightNoise);
-		ReverbAuto = ReadBool(json, "reverbAuto", true);
-		Reverb = Clamp01(ReadFloat(json, "reverb", DefaultReverb));
+		BackdropColor = JsonUtil.ReadColor(json, "backdropColor") ?? DefaultBackdropColor;
+		BackdropColor2 = JsonUtil.ReadColor(json, "backdropColor2");
+		AmbientColor = JsonUtil.ReadColor(json, "ambientColor") ?? DefaultAmbientColor;
+		AmbientIntensity = JsonUtil.ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
+		LightNoise = JsonUtil.ReadFloat(json, "lightNoise", DefaultLightNoise);
+		ReverbAuto = JsonUtil.ReadBool(json, "reverbAuto", true);
+		Reverb = Clamp01(JsonUtil.ReadFloat(json, "reverb", DefaultReverb));
 		SunColor = DefaultSunColor;
 		SunStrength = 0.0f;
 		SunDirection = DefaultSunDirection;
-		Notes = ReadString(json, "notes", "");
+		Notes = JsonUtil.ReadString(json, "notes", "");
 		if (json.TryGetPropertyValue("sun", out var sunNode) && sunNode is JsonObject sun)
 		{
-			SunColor = ReadHexColor(sun, "color") ?? DefaultSunColor;
-			SunStrength = Math.Max(0, ReadFloat(sun, "strength", 0.0f));
-			SunDirection = NormalizeOrDefault(ReadVector2(sun, "direction") ?? DefaultSunDirection, DefaultSunDirection);
+			SunColor = JsonUtil.ReadColor(sun, "color") ?? DefaultSunColor;
+			SunStrength = Math.Max(0, JsonUtil.ReadFloat(sun, "strength", 0.0f));
+			SunDirection = NormalizeOrDefault(JsonUtil.ReadVector2(sun, "direction") ?? DefaultSunDirection, DefaultSunDirection);
 		}
 
 		if (json.TryGetPropertyValue("tiles", out var tilesNode) && tilesNode is JsonArray rows)
 		{
-			for (var y = 0; y < rows.Count && y < Size.Y; y ++)
+			for (var y = 0; y < rows.Count && y < Size.Y; y++)
 			{
 				var row = rows[y]?.GetValue<string>() ?? "";
-				for (var x = 0; x < row.Length && x < Size.X; x ++)
+				for (var x = 0; x < row.Length && x < Size.X; x++)
 					SetTileUnchecked(x, y, row[x]);
 			}
 		}
 
 		if (json.TryGetPropertyValue("backgroundTiles", out var backgroundTilesNode) && backgroundTilesNode is JsonArray backgroundRows)
 		{
-			for (var y = 0; y < backgroundRows.Count && y < Size.Y; y ++)
+			for (var y = 0; y < backgroundRows.Count && y < Size.Y; y++)
 			{
 				var row = backgroundRows[y]?.GetValue<string>() ?? "";
-				for (var x = 0; x < row.Length && x < Size.X; x ++)
+				for (var x = 0; x < row.Length && x < Size.X; x++)
 					SetBackgroundTileUnchecked(x, y, row[x]);
 			}
 		}
@@ -260,7 +260,7 @@ public class Room
 		if (json.TryGetPropertyValue("breakable", out var breakableNode) && breakableNode is JsonArray breakableCells)
 		{
 			foreach (var node in breakableCells)
-				if (ActorSpecs.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
+				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
 					tileFlags[tile.X, tile.Y] |= TileFlags.Breakable;
 		}
 
@@ -457,63 +457,6 @@ public class Room
 		RebuildGeometry();
 	}
 
-	private static string ReadString(JsonObject json, string key, string fallback)
-	{
-		if (!json.TryGetPropertyValue(key, out var node) || node == null)
-			return fallback;
-		return node.GetValue<string>();
-	}
-
-	private static Color? ReadHexColor(JsonObject json, string key)
-	{
-		if (!json.TryGetPropertyValue(key, out var node) || node == null)
-			return null;
-
-		var text = node.GetValue<string>().TrimStart('#');
-		return uint.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var hex)
-			? text.Length <= 6 ? new Color((int)hex) : new Color(hex)
-			: null;
-	}
-
-	private static float ReadFloat(JsonObject json, string key, float fallback)
-	{
-		if (!json.TryGetPropertyValue(key, out var node) || node == null)
-			return fallback;
-
-		return float.TryParse(node.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
-			? value
-			: fallback;
-	}
-
-	private static bool ReadBool(JsonObject json, string key, bool fallback)
-	{
-		if (!json.TryGetPropertyValue(key, out var node) || node == null)
-			return fallback;
-
-		return bool.TryParse(node.ToString(), out var value) ? value : fallback;
-	}
-
-	private static Vector2? ReadVector2(JsonObject json, string key)
-	{
-		if (!json.TryGetPropertyValue(key, out var node) || node is not JsonArray { Count: >= 2 } array)
-			return null;
-		if (!TryReadFloat(array[0], out var x) || !TryReadFloat(array[1], out var y))
-			return null;
-
-		return new Vector2(x, y);
-	}
-
-	private static bool TryReadFloat(JsonNode? node, out float value)
-	{
-		if (node == null)
-		{
-			value = 0;
-			return false;
-		}
-
-		return float.TryParse(node.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
-	}
-
 	public static Vector2 NormalizeOrDefault(Vector2 direction, Vector2 fallback)
 	{
 		if (direction.LengthSquared() <= 0.0001f)
@@ -521,9 +464,6 @@ public class Room
 
 		return Vector2.Normalize(direction);
 	}
-
-	private static string ColorToHex(Color color)
-		=> $"{color.R:X2}{color.G:X2}{color.B:X2}";
 
 	private float InferReverb()
 	{
@@ -538,36 +478,36 @@ public class Room
 		var openSkyColumns = 0;
 		var ceilingRows = Math.Max(1, (int)MathF.Ceiling(Size.Y * 0.25f));
 
-		for (var y = 0; y < Size.Y; y ++)
-		for (var x = 0; x < Size.X; x ++)
-		{
-			var entry = GetTileEntry(x, y);
-			var terrain = IsTerrainJoinTile(x, y);
-			var shadow = entry is { CastsShadow: true };
-			if (terrain)
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X; x++)
 			{
-				terrainTiles ++;
-				reflectiveTerrain += entry?.AcousticReflectivity ?? 1.0f;
-			}
-			if (shadow)
-			{
-				reflectiveShadow += entry?.AcousticReflectivity ?? 1.0f;
+				var entry = GetTileEntry(x, y);
+				var terrain = IsTerrainJoinTile(x, y);
+				var shadow = entry is { CastsShadow: true };
+				if (terrain)
+				{
+					terrainTiles++;
+					reflectiveTerrain += entry?.AcousticReflectivity ?? 1.0f;
+				}
+				if (shadow)
+				{
+					reflectiveShadow += entry?.AcousticReflectivity ?? 1.0f;
+				}
+
+				if (x == 0 || y == 0 || x == Size.X - 1 || y == Size.Y - 1)
+				{
+					borderTiles++;
+					if (!terrain && !shadow)
+						openBorderTiles++;
+				}
 			}
 
-			if (x == 0 || y == 0 || x == Size.X - 1 || y == Size.Y - 1)
-			{
-				borderTiles ++;
-				if (!terrain && !shadow)
-					openBorderTiles ++;
-			}
-		}
-
-		for (var x = 0; x < Size.X; x ++)
+		for (var x = 0; x < Size.X; x++)
 		{
 			var topOpen = !IsTerrainJoinTile(x, 0) && GetTileEntry(x, 0) is not { CastsShadow: true };
 			var hasCeiling = false;
 			var ceilingReflectivity = 0.0f;
-			for (var y = 0; y < ceilingRows; y ++)
+			for (var y = 0; y < ceilingRows; y++)
 			{
 				var entry = GetTileEntry(x, y);
 				if (IsTerrainJoinTile(x, y) || entry is { CastsShadow: true })
@@ -580,11 +520,11 @@ public class Room
 
 			if (hasCeiling)
 			{
-				ceilingColumns ++;
+				ceilingColumns++;
 				reflectiveCeilingColumns += ceilingReflectivity;
 			}
 			else if (topOpen)
-				openSkyColumns ++;
+				openSkyColumns++;
 		}
 
 		var skyOpenRatio = Size.X > 0 ? openSkyColumns / (float)Size.X : 1.0f;
@@ -628,49 +568,49 @@ public class Room
 
 	private void BuildSlopeTiles()
 	{
-		for (var y = 0; y < Size.Y; y ++)
-		for (var x = 0; x < Size.X;)
-		{
-			if (!IsSlopeTile(x, y))
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X;)
 			{
-				x ++;
-				continue;
-			}
+				if (!IsSlopeTile(x, y))
+				{
+					x++;
+					continue;
+				}
 
-			var start = x;
-			var slopeChar = Tiles[x, y];
-			while (x < Size.X && Tiles[x, y] == slopeChar && IsSlopeTile(x, y))
-				x ++;
+				var start = x;
+				var slopeChar = Tiles[x, y];
+				while (x < Size.X && Tiles[x, y] == slopeChar && IsSlopeTile(x, y))
+					x++;
 
-			var runLength = x - start;
-			var (direction, fill) = InferSlopeShape(start, y, runLength);
-			for (var i = 0; i < runLength; i ++)
-			{
-				var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction, fill);
-				SlopeTiles.Add(slope);
-				slopeLookup[slope.Tile] = slope;
-				slopePolygonLookup[slope.Tile] = BuildSlopePolygon(slope);
+				var runLength = x - start;
+				var (direction, fill) = InferSlopeShape(start, y, runLength);
+				for (var i = 0; i < runLength; i++)
+				{
+					var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction, fill);
+					SlopeTiles.Add(slope);
+					slopeLookup[slope.Tile] = slope;
+					slopePolygonLookup[slope.Tile] = BuildSlopePolygon(slope);
+				}
 			}
-		}
 	}
 
 	private void BuildDualTerrainJoinMasks()
 	{
 		dualTerrainJoinMasks = new byte[Size.X + 1, Size.Y + 1];
 		for (var x = 0; x <= Size.X; x++)
-		for (var y = 0; y <= Size.Y; y++)
-		{
-			var mask = 0;
-			if (IsTerrainJoinedToDualVertex(x - 1, y - 1, x, y))
-				mask |= TileQuadrants.TopLeft;
-			if (IsTerrainJoinedToDualVertex(x - 1, y, x, y))
-				mask |= TileQuadrants.BottomLeft;
-			if (IsTerrainJoinedToDualVertex(x, y - 1, x, y))
-				mask |= TileQuadrants.TopRight;
-			if (IsTerrainJoinedToDualVertex(x, y, x, y))
-				mask |= TileQuadrants.BottomRight;
-			dualTerrainJoinMasks[x, y] = (byte)mask;
-		}
+			for (var y = 0; y <= Size.Y; y++)
+			{
+				var mask = 0;
+				if (IsTerrainJoinedToDualVertex(x - 1, y - 1, x, y))
+					mask |= TileQuadrants.TopLeft;
+				if (IsTerrainJoinedToDualVertex(x - 1, y, x, y))
+					mask |= TileQuadrants.BottomLeft;
+				if (IsTerrainJoinedToDualVertex(x, y - 1, x, y))
+					mask |= TileQuadrants.TopRight;
+				if (IsTerrainJoinedToDualVertex(x, y, x, y))
+					mask |= TileQuadrants.BottomRight;
+				dualTerrainJoinMasks[x, y] = (byte)mask;
+			}
 	}
 
 	private (SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(int startX, int y, int runLength)
@@ -780,17 +720,17 @@ public class Room
 			tileFlags = new TileFlags[Size.X, Size.Y];
 
 		for (var x = 0; x < Size.X; x++)
-		for (var y = 0; y < Size.Y; y++)
-		{
-			if (TryGetLegacyBreakableTileBase(Tiles[x, y], out var baseTile))
+			for (var y = 0; y < Size.Y; y++)
 			{
-				Tiles[x, y] = baseTile;
-				tileFlags[x, y] |= TileFlags.Breakable;
-			}
+				if (TryGetLegacyBreakableTileBase(Tiles[x, y], out var baseTile))
+				{
+					Tiles[x, y] = baseTile;
+					tileFlags[x, y] |= TileFlags.Breakable;
+				}
 
-			tileEntries[x, y] = Factory.Find(Tiles[x, y]);
-			backgroundTileEntries[x, y] = Factory.Find(BackgroundTiles[x, y]);
-		}
+				tileEntries[x, y] = Factory.Find(Tiles[x, y]);
+				backgroundTileEntries[x, y] = Factory.Find(BackgroundTiles[x, y]);
+			}
 	}
 
 	public bool IsBreakable(Point2 tile)
@@ -809,19 +749,19 @@ public class Room
 
 	private void NormalizeTileLayers()
 	{
-		for (var x = 0; x < Size.X; x ++)
-		for (var y = 0; y < Size.Y; y ++)
-		{
-			if (tileEntries[x, y] is { Layer: Factory.TileLayer.Background })
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
 			{
-				if (BackgroundTiles[x, y] == '0')
-					SetBackgroundTileUnchecked(x, y, Tiles[x, y]);
-				SetTileUnchecked(x, y, '0');
-			}
+				if (tileEntries[x, y] is { Layer: Factory.TileLayer.Background })
+				{
+					if (BackgroundTiles[x, y] == '0')
+						SetBackgroundTileUnchecked(x, y, Tiles[x, y]);
+					SetTileUnchecked(x, y, '0');
+				}
 
-			if (backgroundTileEntries[x, y] is { Layer: Factory.TileLayer.Foreground })
-				SetBackgroundTileUnchecked(x, y, '0');
-		}
+				if (backgroundTileEntries[x, y] is { Layer: Factory.TileLayer.Foreground })
+					SetBackgroundTileUnchecked(x, y, '0');
+			}
 	}
 
 	private void BuildSlopeLightOccluders()
@@ -957,35 +897,35 @@ public class Room
 	{
 		var used = new bool[Size.X, Size.Y]; // TODO alloc
 
-		for (var y = 0; y < Size.Y; y ++)
-		for (var x = 0; x < Size.X; x ++)
-		{
-			if (used[x, y] || !Matches(x, y, predicate))
-				continue;
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X; x++)
+			{
+				if (used[x, y] || !Matches(x, y, predicate))
+					continue;
 
-			var width = 1;
-			while (x + width < Size.X && !used[x + width, y] && Matches(x + width, y, predicate))
-				width ++;
+				var width = 1;
+				while (x + width < Size.X && !used[x + width, y] && Matches(x + width, y, predicate))
+					width++;
 
-			var height = 1;
-			while (y + height < Size.Y && RowMatches(x, y + height, width, used, predicate))
-				height ++;
+				var height = 1;
+				while (y + height < Size.Y && RowMatches(x, y + height, width, used, predicate))
+					height++;
 
-			for (var yy = y; yy < y + height; yy ++)
-			for (var xx = x; xx < x + width; xx ++)
-				used[xx, yy] = true;
+				for (var yy = y; yy < y + height; yy++)
+					for (var xx = x; xx < x + width; xx++)
+						used[xx, yy] = true;
 
-			output.Add(new RectInt(
-				WorldBounds.X + x * Game.TileSize,
-				WorldBounds.Y + y * Game.TileSize,
-				width * Game.TileSize,
-				height * Game.TileSize));
-		}
+				output.Add(new RectInt(
+					WorldBounds.X + x * Game.TileSize,
+					WorldBounds.Y + y * Game.TileSize,
+					width * Game.TileSize,
+					height * Game.TileSize));
+			}
 	}
 
 	private bool RowMatches(int x, int y, int width, bool[,] used, Func<Factory.Entry, bool> predicate)
 	{
-		for (var xx = x; xx < x + width; xx ++)
+		for (var xx = x; xx < x + width; xx++)
 		{
 			if (used[xx, y] || !Matches(xx, y, predicate))
 				return false;
@@ -1021,11 +961,11 @@ public class Room
 		if (!string.IsNullOrEmpty(MusicArea))
 			json["musicArea"] = MusicArea;
 		if (BackdropColor != DefaultBackdropColor)
-			json["backdropColor"] = ColorToHex(BackdropColor);
+			json["backdropColor"] = JsonUtil.ColorToHex(BackdropColor);
 		if (BackdropColor2.HasValue)
-			json["backdropColor2"] = ColorToHex(BackdropColor2.Value);
+			json["backdropColor2"] = JsonUtil.ColorToHex(BackdropColor2.Value);
 		if (AmbientColor != DefaultAmbientColor)
-			json["ambientColor"] = ColorToHex(AmbientColor);
+			json["ambientColor"] = JsonUtil.ColorToHex(AmbientColor);
 		if (AmbientIntensity != DefaultAmbientIntensity)
 			json["ambientIntensity"] = AmbientIntensity;
 		if (LightNoise != DefaultLightNoise)
@@ -1040,16 +980,16 @@ public class Room
 			json["sun"] = new JsonObject
 			{
 				["strength"] = SunStrength,
-				["color"] = ColorToHex(SunColor),
+				["color"] = JsonUtil.ColorToHex(SunColor),
 				["direction"] = new JsonArray(SunDirection.X, SunDirection.Y)
 			};
 		}
 
 		var rows = new JsonArray();
-		for (var y = 0; y < Size.Y; y ++)
+		for (var y = 0; y < Size.Y; y++)
 		{
 			var row = new StringBuilder(Size.X);
-			for (var x = 0; x < Size.X; x ++)
+			for (var x = 0; x < Size.X; x++)
 				row.Append(Tiles[x, y]);
 			rows.Add(row.ToString());
 		}
@@ -1058,10 +998,10 @@ public class Room
 		if (HasBackgroundTiles())
 		{
 			var backgroundRows = new JsonArray();
-			for (var y = 0; y < Size.Y; y ++)
+			for (var y = 0; y < Size.Y; y++)
 			{
 				var row = new StringBuilder(Size.X);
-				for (var x = 0; x < Size.X; x ++)
+				for (var x = 0; x < Size.X; x++)
 					row.Append(BackgroundTiles[x, y]);
 				backgroundRows.Add(row.ToString());
 			}
@@ -1071,10 +1011,10 @@ public class Room
 		if (HasBreakableTiles())
 		{
 			var breakable = new JsonArray();
-			for (var y = 0; y < Size.Y; y ++)
-			for (var x = 0; x < Size.X; x ++)
-				if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
-					breakable.Add(new JsonArray(x, y));
+			for (var y = 0; y < Size.Y; y++)
+				for (var x = 0; x < Size.X; x++)
+					if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
+						breakable.Add(new JsonArray(x, y));
 			json["breakable"] = breakable;
 		}
 
@@ -1095,8 +1035,8 @@ public class Room
 	public void LoadJsonState(string jsonText)
 	{
 		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
-		TileSpacePosition = ActorSpecs.ReadPoint(json, "position") ?? TileSpacePosition;
-		if (ActorSpecs.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)
+		TileSpacePosition = JsonUtil.ReadPoint(json, "position") ?? TileSpacePosition;
+		if (JsonUtil.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)
 		{
 			Size = size;
 			Tiles = new char[Size.X, Size.Y];
@@ -1106,13 +1046,13 @@ public class Room
 			tileFlags = new TileFlags[Size.X, Size.Y];
 		}
 
-		for (var x = 0; x < Size.X; x ++)
-		for (var y = 0; y < Size.Y; y ++)
-		{
-			SetTileUnchecked(x, y, '0');
-			SetBackgroundTileUnchecked(x, y, '0');
-			tileFlags[x, y] = TileFlags.None;
-		}
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				SetTileUnchecked(x, y, '0');
+				SetBackgroundTileUnchecked(x, y, '0');
+				tileFlags[x, y] = TileFlags.None;
+			}
 		Actors.Clear();
 		LoadJson(json);
 		RebuildGeometry();
@@ -1120,20 +1060,20 @@ public class Room
 
 	private bool HasBackgroundTiles()
 	{
-		for (var x = 0; x < Size.X; x ++)
-		for (var y = 0; y < Size.Y; y ++)
-			if (BackgroundTiles[x, y] != '0')
-				return true;
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+				if (BackgroundTiles[x, y] != '0')
+					return true;
 
 		return false;
 	}
 
 	private bool HasBreakableTiles()
 	{
-		for (var x = 0; x < Size.X; x ++)
-		for (var y = 0; y < Size.Y; y ++)
-			if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
-				return true;
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+				if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
+					return true;
 
 		return false;
 	}

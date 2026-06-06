@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -161,11 +160,11 @@ public static class ActorSpecs
 		foreach (var member in GetSerializableMembers(type))
 		{
 			var jsonName = member.Name;
-			var hasLocal = ContainsProperty(spec, jsonName);
+			var hasLocal = JsonUtil.ContainsProperty(spec, jsonName);
 			JsonNode? value = null;
-			if (TryGetProperty(resolved, jsonName, out var resolvedValue) && resolvedValue != null)
+			if (JsonUtil.TryGetProperty(resolved, jsonName, out var resolvedValue) && resolvedValue != null)
 				value = resolvedValue.DeepClone();
-			else if (TryGetProperty(defaults, jsonName, out var defaultValue) && defaultValue != null)
+			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var defaultValue) && defaultValue != null)
 				value = defaultValue.DeepClone();
 
 			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, hasLocal);
@@ -177,24 +176,24 @@ public static class ActorSpecs
 		if (!specs.TryGetValue(id, out var spec))
 			return;
 
-		RemoveProperty(spec, jsonName);
+		JsonUtil.RemoveProperty(spec, jsonName);
 		spec[jsonName] = value?.DeepClone();
 	}
 
 	public static void SetProperty(JsonObject spec, string jsonName, JsonNode? value)
 	{
-		RemoveProperty(spec, jsonName);
+		JsonUtil.RemoveProperty(spec, jsonName);
 		spec[jsonName] = value?.DeepClone();
 	}
 
 	public static void ResetProperty(string id, string jsonName)
 	{
 		if (specs.TryGetValue(id, out var spec))
-			RemoveProperty(spec, jsonName);
+			JsonUtil.RemoveProperty(spec, jsonName);
 	}
 
 	public static void ResetProperty(JsonObject spec, string jsonName)
-		=> RemoveProperty(spec, jsonName);
+		=> JsonUtil.RemoveProperty(spec, jsonName);
 
 	public static void SaveSpec(string id)
 	{
@@ -226,7 +225,7 @@ public static class ActorSpecs
 			string it => JsonValue.Create(it),
 			Point2 it => new JsonArray(it.X, it.Y),
 			Vector2 it => new JsonArray(it.X, it.Y),
-			Color it => JsonValue.Create($"{it.R:X2}{it.G:X2}{it.B:X2}"),
+			Color it => JsonValue.Create(JsonUtil.ColorToHex(it)),
 			Signs it => JsonValue.Create(it.ToString()),
 			Enum it => JsonValue.Create(it.ToString()),
 			_ => null
@@ -241,14 +240,14 @@ public static class ActorSpecs
 
 		CopyIfPresent(spec, output, IdKey, IdKey);
 		CopyIfPresent(spec, output, FromKey, FromKey);
-		if (ContainsProperty(spec, TypeKey))
+		if (JsonUtil.ContainsProperty(spec, TypeKey))
 			CopyIfPresent(spec, output, TypeKey, TypeKey);
 		else if (!output.ContainsKey(FromKey) && ReadString(resolved, TypeKey) is { } typeName)
 			output[TypeKey] = typeName;
 		CopyIfPresent(spec, output, PositionKey, PositionKey);
 
 		var memberNames = ReadString(resolved, TypeKey) is { } resolvedTypeName &&
-		                  actorTypes.TryGetValue(resolvedTypeName, out var resolvedType)
+						  actorTypes.TryGetValue(resolvedTypeName, out var resolvedType)
 			? GetSerializableMembers(resolvedType).ToDictionary(it => it.Name, StringComparer.OrdinalIgnoreCase)
 			: [];
 
@@ -259,7 +258,7 @@ public static class ActorSpecs
 
 			var outputKey = memberNames.TryGetValue(key, out var member) ? member.Name : key;
 
-			if (TryGetProperty(baseline, outputKey, out var baselineValue) && JsonNode.DeepEquals(value, baselineValue))
+			if (JsonUtil.TryGetProperty(baseline, outputKey, out var baselineValue) && JsonNode.DeepEquals(value, baselineValue))
 				continue;
 
 			output[outputKey] = value.DeepClone();
@@ -271,8 +270,8 @@ public static class ActorSpecs
 	private static JsonObject PruneSpecForSave(string name, JsonObject spec)
 	{
 		var output = PruneForSave(spec);
-		RemoveProperty(output, IdKey);
-		RemoveProperty(output, NameKey);
+		JsonUtil.RemoveProperty(output, IdKey);
+		JsonUtil.RemoveProperty(output, NameKey);
 		output.Insert(0, NameKey, JsonValue.Create(ReadString(spec, NameKey) ?? ReadString(spec, IdKey) ?? name));
 		return output;
 	}
@@ -295,7 +294,7 @@ public static class ActorSpecs
 
 		foreach (var (key, value) in spec)
 		{
-			RemoveProperty(merged, key);
+			JsonUtil.RemoveProperty(merged, key);
 			merged[key] = value?.DeepClone();
 		}
 
@@ -307,7 +306,7 @@ public static class ActorSpecs
 		actor.ActorId = ReadString(spec, IdKey);
 		foreach (var member in GetSerializableMembers(actor.GetType()))
 		{
-			if (!TryGetProperty(spec, member.Name, out var node) || node == null)
+			if (!JsonUtil.TryGetProperty(spec, member.Name, out var node) || node == null)
 				continue;
 
 			if (TryReadValue(node, GetMemberType(member), out var value))
@@ -352,7 +351,7 @@ public static class ActorSpecs
 
 	private static void CopyIfPresent(JsonObject source, JsonObject destination, string sourceKey, string destinationKey)
 	{
-		if (TryGetProperty(source, sourceKey, out var value) && value != null)
+		if (JsonUtil.TryGetProperty(source, sourceKey, out var value) && value != null)
 			destination[destinationKey] = value.DeepClone();
 	}
 
@@ -432,9 +431,9 @@ public static class ActorSpecs
 			else if (type == typeof(Point2))
 				value = ReadPoint(node);
 			else if (type == typeof(Vector2))
-				value = ReadVector2(node);
+				value = JsonUtil.ReadVector2(node);
 			else if (type == typeof(Color))
-				value = ReadColor(node);
+				value = JsonUtil.ReadColor(node);
 			else if (type == typeof(Signs))
 				value = ReadSigns(node);
 			else if (type.IsEnum)
@@ -452,99 +451,20 @@ public static class ActorSpecs
 	}
 
 	public static Point2? ReadPoint(JsonObject json, string key)
-		=> TryGetProperty(json, key, out var node) && node != null ? ReadPoint(node) : null;
+		=> JsonUtil.ReadPoint(json, key);
 
 	public static Point2? ReadPoint(JsonNode? node)
-	{
-		if (node is JsonArray { Count: >= 2 } array &&
-		    TryReadInt(array[0], out var x) &&
-		    TryReadInt(array[1], out var y))
-			return new Point2(x, y);
-
-		return null;
-	}
-
-	private static Vector2? ReadVector2(JsonNode node)
-	{
-		if (node is JsonArray { Count: >= 2 } array &&
-		    TryReadFloat(array[0], out var x) &&
-		    TryReadFloat(array[1], out var y))
-			return new Vector2(x, y);
-
-		return null;
-	}
-
-	private static Color? ReadColor(JsonNode node)
-	{
-		if (node is JsonValue)
-		{
-			var text = node.GetValue<string>().TrimStart('#');
-			if (uint.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var hex))
-				return text.Length <= 6 ? new Color((int)hex) : new Color(hex);
-		}
-
-		return null;
-	}
+		=> JsonUtil.ReadPoint(node);
 
 	public static Signs ReadSigns(JsonNode? node)
 	{
 		if (node == null)
 			return Signs.Positive;
-		if (TryReadInt(node, out var asInt))
+		if (JsonUtil.TryReadInt(node, out var asInt))
 			return Signs.FromInt(asInt);
 		return Signs.Parse(node.GetValue<string>());
 	}
 
-	private static bool TryReadInt(JsonNode? node, out int value)
-	{
-		value = 0;
-		return node != null && int.TryParse(node.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
-	}
-
-	private static bool TryReadFloat(JsonNode? node, out float value)
-	{
-		value = 0;
-		return node != null && float.TryParse(node.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-	}
-
 	public static string? ReadString(JsonObject json, string key)
-	{
-		if (!TryGetProperty(json, key, out var node) || node == null)
-			return null;
-
-		return node.GetValue<string>();
-	}
-
-	private static bool ContainsProperty(JsonObject json, string key)
-		=> TryGetProperty(json, key, out _);
-
-	private static bool TryGetProperty(JsonObject json, string key, out JsonNode? value)
-	{
-		if (json.TryGetPropertyValue(key, out value))
-			return true;
-
-		foreach (var property in json)
-		{
-			if (!string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-				continue;
-
-			value = property.Value;
-			return true;
-		}
-
-		value = null;
-		return false;
-	}
-
-	private static void RemoveProperty(JsonObject json, string key)
-	{
-		if (json.Remove(key))
-			return;
-
-		foreach (var property in json.ToArray())
-		{
-			if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-				json.Remove(property.Key);
-		}
-	}
+		=> JsonUtil.ReadString(json, key);
 }
