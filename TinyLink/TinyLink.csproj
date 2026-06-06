@@ -94,6 +94,7 @@
     <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(TinyLinkBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js')" />
     <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(TinyLinkBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm')" />
     <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />
+    <Exec Command="python3 tools/generate-browser-asset-manifest.py &quot;$(WasmAppDir)&quot;" />
   </Target>
 
   <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(TinyLinkBrowserJsFmod)' == 'true'">

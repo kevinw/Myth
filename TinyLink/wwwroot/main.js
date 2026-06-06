@@ -93,8 +93,7 @@ function prepareStartGate() {
 }
 
 async function preloadAssets(module, onProgress) {
-	const files = [];
-	await collectFiles("Assets/", files);
+	const files = await loadAssetManifest();
 	const preloadFiles = files.filter(shouldPreloadIntoDotnetFs);
 	const fmodBankFiles = files.filter(isFmodBankFile);
 	onProgress?.(0, preloadFiles.length);
@@ -113,37 +112,18 @@ async function preloadAssets(module, onProgress) {
 	return files;
 }
 
-async function collectFiles(path, files) {
-	const response = await fetch(path);
+async function loadAssetManifest() {
+	const response = await fetch("asset-manifest.json");
 	if (!response.ok)
-		throw new Error(`Failed to list ${path}: ${response.status}`);
+		throw new Error(`Failed to load asset manifest: ${response.status}`);
 
-	const html = await response.text();
-	const doc = new DOMParser().parseFromString(html, "text/html");
+	const files = await response.json();
+	if (!Array.isArray(files))
+		throw new Error("Asset manifest must be a JSON array.");
 
-	for (const link of doc.querySelectorAll("a[href]")) {
-		const href = link.getAttribute("href");
-		if (!href || href === "../" || href.startsWith("?"))
-			continue;
-
-		const url = new URL(href, new URL(path, location.href));
-		if (url.origin !== location.origin)
-			continue;
-
-		const relative = decodeURIComponent(url.pathname.slice(1));
-		if (relative.endsWith("/"))
-			await collectFiles(relative, files);
-		else if (shouldIncludeAsset(relative))
-			files.push(relative);
-	}
-}
-
-function shouldIncludeAsset(path) {
-	if (path.endsWith(".DS_Store"))
-		return false;
-	if (path.startsWith("Assets/Shaders/Compiled/"))
-		return path.endsWith(".wgsl");
-	return true;
+	return files
+		.filter((path) => typeof path === "string" && path.startsWith("Assets/"))
+		.sort();
 }
 
 function shouldPreloadIntoDotnetFs(path) {

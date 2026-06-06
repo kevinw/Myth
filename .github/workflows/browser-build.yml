@@ -1,0 +1,48 @@
+name: Browser Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-browser:
+    name: Build browser-wasm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore .NET workloads
+        run: dotnet workload restore TinyLink/TinyLink.csproj
+
+      - name: Restore packages
+        run: dotnet restore TinyLink/TinyLink.csproj -r browser-wasm
+
+      - name: Build browser app
+        run: dotnet build TinyLink/TinyLink.csproj -c Release -r browser-wasm --no-restore /p:ShaderPlatform=
+
+      - name: Upload browser app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: myth-browser-wasm
+          path: TinyLink/bin/Release/net10.0/browser-wasm/AppBundle
+          if-no-files-found: error
+
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler@latest pages deploy TinyLink/bin/Release/net10.0/browser-wasm/AppBundle --project-name myth-game --branch main
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
