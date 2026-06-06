@@ -3,10 +3,13 @@ using Foster.Framework;
 
 namespace TinyLink;
 
-/// <summary>
+internal readonly struct EntryEditorInfo
+{
+	internal readonly string SpriteFilename;
+}
+
 /// The Factory holds meta information on how to populate the Game when loading a Room.
 /// It describes tile types and editor actor palette entries.
-/// </summary>
 public static class Factory
 {
 	public const string DefaultSurfaceType = "Grass";
@@ -17,9 +20,7 @@ public static class Factory
 		Background
 	}
 
-	/// <summary>
 	/// Used to Place a Tile
-	/// </summary>
 	public delegate void TileFn(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual);
 
 	public readonly struct Entry
@@ -129,6 +130,10 @@ public static class Factory
 
 	// List of all the tile types
 	public static readonly Dictionary<char, Entry> Entries = new();
+#if EDITOR
+	internal static string GetSpriteFilename(Entry entry) => EntryEditorInfos.TryGetValue(entry, out var info) ? info.SpriteFilename : null;
+	internal static readonly Dictionary<Entry, EntryEditorInfo> EntryEditorInfos = new();
+#endif
 	public static readonly List<ActorPaletteEntry> ActorPalette = [];
 
 	// Registers a new Type
@@ -304,7 +309,7 @@ public static class Factory
 
 			var typeName = ActorSpecs.GetTypeName(spec);
 			if (string.Equals(typeName, "Door", StringComparison.OrdinalIgnoreCase) ||
-			    string.Equals(typeName, "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+				string.Equals(typeName, "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 				ActorPalette.Add(ActorPaletteEntry.FromActorSpec(id, "door", new Point2(4, 8)));
 		}
 	}
