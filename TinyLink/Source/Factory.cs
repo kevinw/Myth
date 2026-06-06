@@ -228,6 +228,9 @@ public static class Factory
 		ActorSpecs.RegisterActor<Burrower>("Burrower");
 		ActorSpecs.RegisterActor<Dropper>("Dropper");
 		ActorSpecs.RegisterActor<LedgePatrol>("LedgePatrol");
+		ActorSpecs.RegisterActor<Pouncer>("Pouncer");
+		ActorSpecs.RegisterActor<Shellback>("Shellback");
+		ActorSpecs.RegisterActor<Splitter>("Splitter");
 		ActorSpecs.RegisterActor<Door>("Door");
 		ActorSpecs.RegisterActor<LinkedDoor>("LinkedDoor");
 		ActorSpecs.RegisterActor<Blob>("Blob");
@@ -277,6 +280,9 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Burrower>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Dropper>("bramble", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<LedgePatrol>("blob", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Pouncer>("blob", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Shellback>("blob", new Point2(4, 8)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Splitter>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Light>("fire", new Point2(4, 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Door>("door", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<LinkedDoor>("back_door", new Point2(4, 8)));
