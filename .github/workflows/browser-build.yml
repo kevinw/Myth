@@ -26,13 +26,13 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore .NET workloads
-        run: dotnet workload restore TinyLink/TinyLink.csproj
+        run: dotnet workload restore TinyLink/TinyLink.csproj /p:TinyLinkBrowser=true
 
       - name: Restore packages
-        run: dotnet restore TinyLink/TinyLink.csproj -r browser-wasm
+        run: dotnet restore TinyLink/TinyLink.csproj -r browser-wasm /p:TinyLinkBrowser=true
 
       - name: Build browser app
-        run: dotnet build TinyLink/TinyLink.csproj -c Release -r browser-wasm --no-restore /p:ShaderPlatform=
+        run: dotnet build TinyLink/TinyLink.csproj -c Release -r browser-wasm --no-restore /p:TinyLinkBrowser=true /p:ShaderPlatform=
 
       - name: Upload browser app bundle
         uses: actions/upload-artifact@v4
