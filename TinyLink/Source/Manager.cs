@@ -1207,8 +1207,8 @@ public partial class Manager : App
 	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize), false, imagePadding);
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size)
-		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false);
+	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, float? imagePadding = null)
+		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false, imagePadding);
 
 	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio, float? imagePadding = null)
 	{

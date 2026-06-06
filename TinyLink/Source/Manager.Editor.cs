@@ -3308,7 +3308,7 @@ public partial class Manager
 		if (showDelete)
 		{
 			ImGui.SetCursorScreenPos(deletePos);
-			if (ImGuiSubtextureButton("DeleteRoom", Assets.GetSubtexture("buttons/14"), "Delete room", false, deleteSize))
+			if (ImGuiSubtextureButton("DeleteRoom", Assets.GetSubtexture("buttons/14"), "Delete room", false, deleteSize, imagePadding: ToolbarButtonImagePadding))
 			{
 				pendingDeleteRoomId = room.Id;
 				ImGui.OpenPopup("Delete Room?");
