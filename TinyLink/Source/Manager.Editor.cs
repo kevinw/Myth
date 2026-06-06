@@ -1000,7 +1000,8 @@ public partial class Manager
 		var actor = room.Actors[selectedRoomActorIndex];
 		var title = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
 		var inspectorPadding = Vector2.One * 16;
-		var inspectorPos = new Vector2(Window.WidthInPixels / imgui.Scale, Window.HeightInPixels / imgui.Scale) - inspectorPadding;
+		var window = RequiredWindow;
+		var inspectorPos = new Vector2(window.WidthInPixels / imgui.Scale, window.HeightInPixels / imgui.Scale) - inspectorPadding;
 		ImGui.SetNextWindowPos(inspectorPos, ImGuiCond.Appearing, Vector2.One);
 		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
 		var open = true;
@@ -3347,7 +3348,8 @@ public partial class Manager
 			ImGuiWindowFlags.NoBringToFrontOnFocus;
 
 		ImGui.SetNextWindowPos(Vector2.Zero, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(new Vector2(Window.WidthInPixels / imgui.Scale, ToolbarHeight), ImGuiCond.Always);
+		var window = RequiredWindow;
+		ImGui.SetNextWindowSize(new Vector2(window.WidthInPixels / imgui.Scale, ToolbarHeight), ImGuiCond.Always);
 
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, 0));
@@ -3379,7 +3381,7 @@ public partial class Manager
 		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop))
 		{
 			alwaysOnTop = !alwaysOnTop;
-			Window.AlwaysOnTop = alwaysOnTop;
+			window.AlwaysOnTop = alwaysOnTop;
 		}
 		ImGui.SameLine();
 
@@ -3457,7 +3459,8 @@ public partial class Manager
 			return;
 
 		var fps = fpsFrames / fpsElapsed;
-		Window.Title = $"Myth - {fps:0} FPS";
+		if (Window is { } window)
+			window.Title = $"Myth - {fps:0} FPS";
 		fpsFrames = 0;
 		fpsElapsed = 0;
 	}

@@ -88,8 +88,17 @@ public partial class Manager : App
 	/// <summary>
 	/// Visible Space
 	/// </summary>
+	private Window RequiredWindow =>
+		Window ?? throw new InvalidOperationException("Window is not available in headless mode.");
+
 	private Rect View
-		=> new Rect(0, 0, Window.WidthInPixels / Scale, Window.HeightInPixels / Scale);
+	{
+		get
+		{
+			var window = RequiredWindow;
+			return new Rect(0, 0, window.WidthInPixels / Scale, window.HeightInPixels / Scale);
+		}
+	}
 
 	/// <summary>
 	/// Play Workspace when the Game is Open
@@ -552,8 +561,8 @@ public partial class Manager : App
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
 				ToggleFpsOverlay();
 #if !IOS && !BROWSER
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
-				Window.Fullscreen = !Window.Fullscreen;
+			if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
+				window.Fullscreen = !window.Fullscreen;
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
 			{
 				CurrentRoom?.Save();
@@ -664,13 +673,14 @@ public partial class Manager : App
 		{
 			using var imguiLayoutPerf = PerfStats.Time(PerfDetail.ImGuiLayout);
 			imgui.BeginLayout();
+			var window = RequiredWindow;
 #if IOS
-			Window.StopTextInput();
+			window.StopTextInput();
 #else
 			if (imgui.WantsTextInput)
-				Window.StartTextInput();
+				window.StartTextInput();
 			else
-				Window.StopTextInput();
+				window.StopTextInput();
 #endif
 			if (gameEase < 1.0f && !startingPlay)
 			{

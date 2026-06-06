@@ -511,12 +511,18 @@ public partial class Game : IDisposable
 
 	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
 	{
+		if (Manager.Window is not { } window)
+			return;
+
 		EnsureRenderTargets(Width, Height);
-		RenderCurrentView(Manager.Window, viewport, showHud, scissor, applyCrt: true);
+		RenderCurrentView(window, viewport, showHud, scissor, applyCrt: true);
 	}
 
 	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true)
 	{
+		if (Manager.Window is not { } window)
+			return;
+
 		var oldCamera = Camera;
 		var oldShake = shake;
 		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
@@ -525,7 +531,7 @@ public partial class Game : IDisposable
 		EnsureRenderTargets(width, height);
 		Camera = worldView.TopLeft;
 		shake = Point2.Zero;
-		RenderCurrentView(Manager.Window, viewport, showHud, scissor, applyCrt);
+		RenderCurrentView(window, viewport, showHud, scissor, applyCrt);
 		Camera = oldCamera;
 		shake = oldShake;
 	}

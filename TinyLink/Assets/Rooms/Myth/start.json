@@ -112,8 +112,10 @@
       "Id": "1d40b931814f83e2",
       "Type": "Light",
       "Position": [200, 63],
-      "Radius": 33.45,
-      "Intensity": 0.45
+      "Radius": 61.3,
+      "Height": 26.05,
+      "FlickerFrequency": 2.25,
+      "Intensity": 1.05
     },
     {
       "Id": "ae7e8b2447b7830c",

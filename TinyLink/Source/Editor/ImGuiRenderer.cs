@@ -208,6 +208,7 @@ public class ImGuiRenderer : IDisposable
 	{
 		Debug.Assert(ImGui.GetCurrentContext() == nint.Zero);
 		ImGui.SetCurrentContext(context);
+		var window = app.Window ?? throw new InvalidOperationException("ImGui layout requires a window.");
 
 		// clear textures for the next frame
 		boundTextures.Clear();
@@ -223,7 +224,7 @@ public class ImGuiRenderer : IDisposable
 
 		// setup io
 		io.DeltaTime = app.Time.Delta;
-		io.DisplaySize = new Vector2(app.Window.WidthInPixels / Scale, app.Window.HeightInPixels / Scale);
+		io.DisplaySize = new Vector2(window.WidthInPixels / Scale, window.HeightInPixels / Scale);
 		io.DisplayFramebufferScale = Vector2.One * Scale;
 
 		io.AddMousePosEvent(MousePosition.X, MousePosition.Y);
@@ -335,6 +336,7 @@ public class ImGuiRenderer : IDisposable
 	{
 		Debug.Assert(ImGui.GetCurrentContext() == nint.Zero);
 		ImGui.SetCurrentContext(context);
+		var window = app.Window ?? throw new InvalidOperationException("ImGui rendering requires a window.");
 
 		var data = ImGui.GetDrawData();
 		if (data.NativePtr == null || data.TotalVtxCount <= 0)
@@ -384,7 +386,7 @@ public class ImGuiRenderer : IDisposable
 			mesh.SetIndices(indices.AsSpan(0, indexCount));
 		}
 
-		var size = new Point2(app.Window.WidthInPixels, app.Window.HeightInPixels);
+		var size = new Point2(window.WidthInPixels, window.HeightInPixels);
 
 		// setup ortho matrix
 		Matrix4x4 mat =
@@ -416,7 +418,7 @@ public class ImGuiRenderer : IDisposable
 				{
 					var batchIndex = cmd->UserCallback.ToInt32() - 1;
 					if (batchIndex >= 0 && batchIndex < batchersUsed.Count)
-						batchersUsed[batchIndex].Render(app.Window, viewport: null, scissor: scissor);
+						batchersUsed[batchIndex].Render(window, viewport: null, scissor: scissor);
 				}
 				else
 				{
@@ -427,7 +429,7 @@ public class ImGuiRenderer : IDisposable
 
 					material.Fragment.Samplers[0] = new(texture, new TextureSampler(TextureFilter.Nearest, TextureWrap.Clamp));
 
-					app.GraphicsDevice.Draw(new DrawCommand(app.Window, mesh, material)
+					app.GraphicsDevice.Draw(new DrawCommand(window, mesh, material)
 					{
 						BlendMode = new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.OneMinusSrcAlpha),
 						VertexOffset = (int)(cmd->VtxOffset + globalVtxOffset),
