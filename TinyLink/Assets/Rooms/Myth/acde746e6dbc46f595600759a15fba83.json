@@ -1,0 +1,79 @@
+{
+  "position": [200, 23],
+  "size": [40, 23],
+  "ambientColor": "262626",
+  "reverb": 0.796,
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTT00000000TTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTT00000000000000000000000000TTTTTTTTTTT",
+    "TTT00000000000000000000000000TTTTTTTTTTT",
+    "TTTTTTT0000000000000000000000TTTTTTTTTTT",
+    "TTTTTTT0000000000000000000000TTTTTTTTTTT",
+    "TTTTTTT0000000000000000000000TTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTT0000000000TTTTTTTTTTT",
+    "TTTTTTTTTTTTTT000000000000000TTTTTTTTTTT",
+    "TTTTTTTTTTTTTT000000000000000TTTTTTTTTTT",
+    "TTTTTTTTTTTTTT000000000000000TTTTTTTTTTT",
+    "TTTTTTTTTTTTTT000TTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTT000TTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTT000TTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTT00000000000000000000000000",
+    "TTTTTTTTTTTTTT00000000000000000000000000",
+    "TTTTTTTTTTTTTT00000000000000000000000000",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "000TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "actors": [
+    {
+      "Id": "0afc8a12e1628341",
+      "Type": "LinkedDoor",
+      "Position": [44, 64],
+      "TargetActorId": "a242c29e39016aef"
+    },
+    {
+      "Id": "0727bda60ac6fffd",
+      "Type": "Light",
+      "Position": [25, 51],
+      "Intensity": 0.75
+    },
+    {
+      "Id": "b1d2042037166823",
+      "Type": "Jumpthru",
+      "Position": [56, 64]
+    },
+    {
+      "Id": "840b572f33fbd8ae",
+      "Type": "Jumpthru",
+      "Position": [64, 64]
+    },
+    {
+      "Id": "ad99e64cb11a05da",
+      "Type": "Jumpthru",
+      "Position": [72, 64]
+    },
+    {
+      "Id": "2ba8baff83d5138e",
+      "Type": "RevealDoor",
+      "Position": [136, 96],
+      "Size": [8, 24],
+      "Direction": "Left"
+    },
+    {
+      "Id": "ab9389a29f25694e",
+      "Type": "Light",
+      "Position": [244, 156]
+    },
+    {
+      "Id": "3f4d2e698535ff39",
+      "Type": "RevealDoor",
+      "Position": [216, 144],
+      "Size": [8, 24],
+      "Direction": "Left"
+    }
+  ]
+}

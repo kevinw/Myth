@@ -1,0 +1,7 @@
+[
+  {
+    "label": "dotnet watch",
+    "command": "dotnet",
+    "args": ["watch", "run", "--non-interactive", "--no-restore"],
+  },
+]

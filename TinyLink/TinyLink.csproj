@@ -20,7 +20,6 @@
     <WasmEnableThreads Condition="'$(TinyLinkBrowserThreads)' == 'true'">true</WasmEnableThreads>
     <DefineConstants Condition="'$(TinyLinkBrowserFmod)' != 'true'">$(DefineConstants);BROWSER_NO_FMOD</DefineConstants>
     <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
-    <WasmAotExcludeAssemblies>Foster.Framework.dll</WasmAotExcludeAssemblies>
   </PropertyGroup>
 
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
