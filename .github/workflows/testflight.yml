@@ -94,6 +94,7 @@ jobs:
           profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print UUID' "$plist_path")"
           profile_name="$(/usr/libexec/PlistBuddy -c 'Print Name' "$plist_path")"
           profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$plist_path")"
+          profile_cert_sha1s="$(python3 -c 'import hashlib, plistlib, sys; profile = plistlib.load(open(sys.argv[1], "rb")); print(",".join(hashlib.sha1(cert).hexdigest().upper() for cert in profile.get("DeveloperCertificates", [])))' "$plist_path")"
           if [[ "$profile_app_id" != *".${IOS_BUNDLE_ID}" ]]; then
             echo "Provisioning profile app id '$profile_app_id' does not match '$IOS_BUNDLE_ID'." >&2
             exit 1
@@ -103,10 +104,31 @@ jobs:
           {
             echo "uuid=$profile_uuid"
             echo "name=$profile_name"
+            echo "cert-sha1s=$profile_cert_sha1s"
           } >> "$GITHUB_OUTPUT"
 
       - name: Show signing identities
         run: security find-identity -v -p codesigning
+
+      - name: Check provisioning profile matches signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile_cert_sha1s=",${{ steps.provisioning-profile.outputs.cert-sha1s }},"
+          matched=0
+          while read -r identity_sha1 identity_name; do
+            if [[ "$profile_cert_sha1s" == *",$identity_sha1,"* ]]; then
+              echo "Provisioning profile matches signing identity: $identity_name"
+              matched=1
+              break
+            fi
+          done < <(security find-identity -v -p codesigning | sed -n 's/^[[:space:]]*[0-9]*) \([A-F0-9]*\) "\(Apple Distribution: .*\)"$/\1 \2/p')
+
+          if [[ "$matched" != 1 ]]; then
+            echo "No imported Apple Distribution signing identity is included in provisioning profile '${{ steps.provisioning-profile.outputs.name }}'." >&2
+            echo "Regenerate the App Store provisioning profile and select the Apple Distribution certificate exported to APPLE_DISTRIBUTION_CERTIFICATE_BASE64." >&2
+            exit 1
+          fi
 
       - name: Publish signed IPA
         shell: bash
