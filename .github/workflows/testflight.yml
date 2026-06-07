@@ -1,0 +1,147 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
+  IOS_PROJECT: TinyLink/Platforms/iOS/TinyLinkIos/TinyLinkIos.csproj
+  IOS_BUNDLE_ID: com.kevinwatters.myth
+  IOS_CODESIGN_KEY: ${{ vars.IOS_CODESIGN_KEY || 'Apple Distribution' }}
+
+jobs:
+  testflight:
+    name: Build iOS and upload to TestFlight
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Check out Foster
+        run: git clone --depth 1 https://codeberg.org/kevinw/Foster.git ../Foster
+
+      - name: Cache .NET SDK and iOS workload
+        uses: actions/cache@v5
+        with:
+          path: .dotnet
+          key: dotnet-sdk-workloads-${{ runner.os }}-10.0.x-ios
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          workloads: ios
+
+      - name: Check Apple CI configuration
+        shell: bash
+        env:
+          APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          APPSTORE_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            APPLE_DISTRIBUTION_CERTIFICATE_BASE64 \
+            APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD \
+            APPLE_PROVISIONING_PROFILE_BASE64 \
+            APPSTORE_API_PRIVATE_KEY \
+            APPSTORE_API_KEY_ID \
+            APPSTORE_ISSUER_ID
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing GitHub secret or variable: $name" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Import Apple distribution certificate
+        uses: Apple-Actions/import-codesign-certs@v7.0.0
+        with:
+          p12-file-base64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+
+      - name: Install provisioning profile
+        id: provisioning-profile
+        shell: bash
+        env:
+          PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          profile_path="$RUNNER_TEMP/profile.mobileprovision"
+          plist_path="$RUNNER_TEMP/profile.plist"
+          printf '%s' "$PROFILE_BASE64" | base64 -D > "$profile_path"
+          security cms -D -i "$profile_path" > "$plist_path"
+          profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print UUID' "$plist_path")"
+          profile_name="$(/usr/libexec/PlistBuddy -c 'Print Name' "$plist_path")"
+          profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$plist_path")"
+          if [[ "$profile_app_id" != *".${IOS_BUNDLE_ID}" ]]; then
+            echo "Provisioning profile app id '$profile_app_id' does not match '$IOS_BUNDLE_ID'." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+          {
+            echo "uuid=$profile_uuid"
+            echo "name=$profile_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Show signing identities
+        run: security find-identity -v -p codesigning
+
+      - name: Publish signed IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish "$IOS_PROJECT" \
+            -c Release \
+            -f net10.0-ios \
+            -r ios-arm64 \
+            /p:ApplicationId="$IOS_BUNDLE_ID" \
+            /p:ApplicationTitle=Myth \
+            /p:ApplicationVersion="${{ github.run_number }}" \
+            /p:ApplicationDisplayVersion="0.1.${{ github.run_number }}" \
+            /p:ArchiveOnBuild=true \
+            /p:BuildIpa=true \
+            /p:CodesignKey="$IOS_CODESIGN_KEY" \
+            /p:CodesignProvision="${{ steps.provisioning-profile.outputs.name }}"
+
+      - name: Locate IPA
+        id: ipa
+        shell: bash
+        run: |
+          set -euo pipefail
+          ipa_path="$(find TinyLink/Platforms/iOS/TinyLinkIos/bin/Release/net10.0-ios/ios-arm64 -name '*.ipa' -print -quit)"
+          if [[ -z "$ipa_path" ]]; then
+            echo "No IPA found." >&2
+            exit 1
+          fi
+          echo "path=$ipa_path" >> "$GITHUB_OUTPUT"
+          echo "Found IPA: $ipa_path"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: myth-ios-ipa
+          path: ${{ steps.ipa.outputs.path }}
+          if-no-files-found: error
+
+      - name: Upload to TestFlight
+        uses: Apple-Actions/upload-testflight-build@v5.2.1
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          app-type: ios
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          uses-non-exempt-encryption: false

@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ApplicationTitle>TinyLink</ApplicationTitle>
-    <ApplicationId>com.kev.tinylink</ApplicationId>
+    <ApplicationTitle>Myth</ApplicationTitle>
+    <ApplicationId>com.kevinwatters.myth</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
     <MtouchLink>SdkOnly</MtouchLink>

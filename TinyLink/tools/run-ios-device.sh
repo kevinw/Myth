@@ -7,7 +7,7 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 configuration="Debug"
 runtime_id="ios-arm64"
 project_path="$repo_root/Platforms/iOS/TinyLinkIos/TinyLinkIos.csproj"
-bundle_id="com.kev.tinylink"
+bundle_id="com.kevinwatters.myth"
 device_id="${TINYLINK_IOS_DEVICE:-}"
 no_build=0
 console=0
@@ -24,7 +24,7 @@ Options:
   -d, --device <id|name>       Device identifier or name. Defaults to the only connected physical iOS device.
   -c, --configuration <name>   Build configuration. Default: Debug.
       --project <path>         iOS csproj path.
-      --bundle-id <id>         App bundle identifier. Default: com.kev.tinylink.
+      --bundle-id <id>         App bundle identifier. Default: com.kevinwatters.myth.
       --no-build               Skip dotnet build and use the existing .app.
       --console                Attach devicectl console and wait for the app to exit.
       --start-stopped          Launch suspended so a debugger can attach.
