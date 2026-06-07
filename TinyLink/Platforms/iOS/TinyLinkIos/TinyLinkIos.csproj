@@ -14,6 +14,7 @@
     <MtouchLink>SdkOnly</MtouchLink>
     <StartupObject>TinyLinkIos.Program</StartupObject>
     <PartialAppManifest>Info.plist</PartialAppManifest>
+    <AppIcon>AppIcon</AppIcon>
     <DefineConstants>$(DefineConstants);IOS</DefineConstants>
   </PropertyGroup>
 
@@ -29,6 +30,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ImageAsset Include="Assets.xcassets/**/*" />
     <BundleResource Include="../../../Assets/**/*"
                     Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**">
       <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
@@ -74,5 +76,10 @@
       <ForceLoad>true</ForceLoad>
     </NativeReference>
   </ItemGroup>
+
+  <Target Name="GenerateIosAppIcons"
+          BeforeTargets="_CompileImageAssets">
+    <Exec Command="&quot;$(MSBuildThisFileDirectory)../../../tools/generate-ios-icons.sh&quot; &quot;$(MSBuildThisFileDirectory)../../../AppIcon.png&quot; &quot;$(MSBuildThisFileDirectory)Assets.xcassets/AppIcon.appiconset&quot;" />
+  </Target>
 
 </Project>
