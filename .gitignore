@@ -10,6 +10,4 @@ FosterSamples.sln.DotSettings.user
 TinyLink/Platforms/**/xcuserdata/
 *.swp
 __pycache__
-TinyLink/Assets/Shaders/Compiled/*
-!TinyLink/Assets/Shaders/Compiled/*.wgsl
 TinyLink/tmp
