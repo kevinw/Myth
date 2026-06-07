@@ -45,7 +45,16 @@ jobs:
           if [[ -d /Applications/Xcode_26.5.0.app ]]; then
             sudo xcode-select -s /Applications/Xcode_26.5.0.app
           fi
+          developer_dir="$(xcode-select -p)"
+          macos_sdk_dir="$developer_dir/Platforms/MacOSX.platform/Developer/SDKs"
+          if [[ -d "$macos_sdk_dir" && ! -e "$macos_sdk_dir/MacOSX.sdk" ]]; then
+            macos_sdk="$(find "$macos_sdk_dir" -maxdepth 1 -name 'MacOSX*.sdk' -type d | sort -V | tail -n 1)"
+            if [[ -n "$macos_sdk" ]]; then
+              sudo ln -s "$(basename "$macos_sdk")" "$macos_sdk_dir/MacOSX.sdk"
+            fi
+          fi
           xcodebuild -version
+          xcrun --sdk macosx --find clang
 
       - name: Check Apple CI configuration
         shell: bash
