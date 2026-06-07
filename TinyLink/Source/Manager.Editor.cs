@@ -3606,6 +3606,7 @@ public partial class Manager
 		audioBankWatcher.Renamed += (_, _) => RequestAudioBankReload();
 		audioBankWatcher.EnableRaisingEvents = true;
 	}
+#endif
 
 
 	private void SelectRoom(Room room)
@@ -3833,12 +3834,21 @@ public partial class Manager
 
 		var viewport = !playing && !startingPlay ? View : GameViewRect;
 		var perf = PerfStats.Snapshot;
+#if DEBUG
 		var mainMessage = fpsOverlayMode == 0
 			? $"FPS {fpsOverlayValue:0} GC {threadAllocatedBytesOverlayValue} bytes"
 			: $"FPS {fpsOverlayValue:0}\n" +
 			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
 			  $"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +
 			  $"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}";
+#else
+		var mainMessage = fpsOverlayMode == 0
+			? $"FPS {fpsOverlayValue:0}"
+			: $"FPS {fpsOverlayValue:0}\n" +
+			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
+			  $"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +
+			  $"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}";
+#endif
 		var detailMessage = fpsOverlayMode >= 2 ? PerfStats.DetailSummary : string.Empty;
 		var mainTextSize = ImGui.CalcTextSize(mainMessage);
 		var detailTextSize = string.IsNullOrEmpty(detailMessage) ? Vector2.Zero : ImGui.CalcTextSize(detailMessage) * 0.8f;
@@ -3877,5 +3887,4 @@ public partial class Manager
 	}
 
 }
-#endif
 #endif
