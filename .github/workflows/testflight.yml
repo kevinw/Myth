@@ -15,7 +15,7 @@ env:
 jobs:
   testflight:
     name: Build iOS and upload to TestFlight
-    runs-on: macos-latest
+    runs-on: macos-26
 
     steps:
       - name: Check out repository
@@ -37,6 +37,15 @@ jobs:
         with:
           dotnet-version: 10.0.x
           workloads: ios
+
+      - name: Select Xcode 26.5
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -d /Applications/Xcode_26.5.0.app ]]; then
+            sudo xcode-select -s /Applications/Xcode_26.5.0.app
+          fi
+          xcodebuild -version
 
       - name: Check Apple CI configuration
         shell: bash
