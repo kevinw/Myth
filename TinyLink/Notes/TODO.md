@@ -4,6 +4,7 @@
 
 - a room enclosed in grass shouldn't reverb as much.
 - make Foster a submodule of this repo
+- Build a custom SDL3 iOS xcframework with unused camera and Bluetooth/HIDAPI support disabled, then replace the bundled SDL3.xcframework so App Store uploads no longer need privacy purpose strings for APIs Myth does not use.
 - resume codex work on mapping touch/pinch events to Foster events and route them through ImGui
 - Submit pitch to [BRIEFS - LOVE (2026)](https://goldextra.com/en/briefs-a-microgame-series/briefs-2026-love)
 - Consider some [pixel art ideas](https://chatgpt.com/c/6a030b73-3564-83eb-b4ca-9ab1e9e787bb)
