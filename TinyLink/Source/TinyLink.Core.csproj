@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <Compile Include="**/*.cs" Exclude="bin/**;obj/**" />
-    <ProjectReference Include="../../../Foster/Framework/Foster.Framework.csproj" Private="false" PrivateAssets="all" />
+    <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" Private="false" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(TinyLinkBrowser)' != 'true'">

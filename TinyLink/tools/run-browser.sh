@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 repo_dir=$(cd -- "$script_dir/.." &> /dev/null && pwd)
-foster_dir=$(cd -- "$repo_dir/../../Foster/Framework" &> /dev/null && pwd)
+foster_dir=$(cd -- "$repo_dir/../Foster/Framework" &> /dev/null && pwd)
 default_shadercross="$repo_dir/tools/macos/shadercross"
 python_bin="$repo_dir/.venv-browser/bin/python"
 if [[ ! -x "$python_bin" ]]; then

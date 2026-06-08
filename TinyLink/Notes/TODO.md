@@ -9,10 +9,6 @@
 - Submit pitch to [BRIEFS - LOVE (2026)](https://goldextra.com/en/briefs-a-microgame-series/briefs-2026-love)
 - Consider some [pixel art ideas](https://chatgpt.com/c/6a030b73-3564-83eb-b4ca-9ab1e9e787bb)
 
-# bugs
-
-- when changing rooms, it's possible to get stuck in a tile, because (say you're going down in a vertical tunnel holding right; your horizontal velocity can get applied before the room switch. we might need to find a way to "lerp" out of collision upon entering a room.)
-
 ## ideas
 
 - Player folds out a piano and plays it every time they need to speak to someone.

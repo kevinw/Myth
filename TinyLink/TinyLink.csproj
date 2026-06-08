@@ -70,7 +70,7 @@
   <ItemGroup>
     <Compile Include="Platforms/Desktop/Program.cs" />
     <ProjectReference Include="Source/TinyLink.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);TinyLinkBrowser=$(TinyLinkBrowser);TinyLinkBrowserFmod=$(TinyLinkBrowserFmod)" />
-    <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(TinyLinkBrowserFmodPThread);FosterBrowserJsFmod=$(TinyLinkBrowserJsFmod)" />
+    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(TinyLinkBrowserFmodPThread);FosterBrowserJsFmod=$(TinyLinkBrowserJsFmod)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
@@ -90,8 +90,8 @@
     <Copy SourceFiles="wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
-    <Copy SourceFiles="../../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
-    <Copy SourceFiles="../../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
+    <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
+    <Copy SourceFiles="../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
     <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(TinyLinkBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js')" />
     <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(TinyLinkBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm')" />
     <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />

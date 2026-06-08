@@ -1,3 +1,6 @@
 [submodule "TinyLink/Platforms/iOS/Native/cimgui-src"]
 	path = TinyLink/Platforms/iOS/Native/cimgui-src
 	url = https://github.com/cimgui/cimgui.git
+[submodule "Foster"]
+	path = Foster
+	url = ssh://git@codeberg.org/kevinw/Foster.git

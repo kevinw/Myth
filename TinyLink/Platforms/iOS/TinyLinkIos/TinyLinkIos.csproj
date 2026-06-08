@@ -39,7 +39,7 @@
       <LogicalName>Assets/Sounds/FMOD/Build/Mobile/%(Filename)%(Extension)</LogicalName>
     </BundleResource>
     <ProjectReference Include="../../../Source/TinyLink.Core.csproj" />
-    <ProjectReference Include="../../../../../Foster/Framework/Foster.Framework.csproj" />
+    <ProjectReference Include="../../../../Foster/Framework/Foster.Framework.csproj" />
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>
 
