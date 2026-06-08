@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Diagnostics;
 using Foster.Framework;
 
 namespace TinyLink;
@@ -73,6 +74,20 @@ public sealed class PlatformNavGraph
 	private readonly PriorityQueue<int, float> pathFrontier = new();
 	private readonly Dictionary<int, Edge> pathCameFrom = [];
 	private readonly Dictionary<int, float> pathCostSoFar = [];
+
+	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RoomExits, Ready }
+
+	private BuildPhase phase = BuildPhase.Idle;
+	private Game? rebuildGame;
+	private Room? rebuildRoom;
+	private RectInt sampleBounds;
+	private int sampleX;
+	private int sampleY;
+	private int nextJumpSourceId;
+	private long rebuildStartTimestamp;
+	private int rebuildFrameCount;
+
+	public bool IsReady => phase == BuildPhase.Ready;
 
 	public Node? FindNearestNode(Vector2 position, float maxDistance, bool includeRoomExits = false)
 	{
@@ -172,25 +187,111 @@ public sealed class PlatformNavGraph
 		Nodes.Clear();
 		Edges.Clear();
 		nodeLookup.Clear();
+		rebuildGame = game;
+		rebuildRoom = room;
+		sampleBounds = room.WorldBounds;
+		sampleX = sampleBounds.Left + SampleStep / 2;
+		sampleY = sampleBounds.Top + Math.Abs(DuckingPawnProbe.Top);
+		nextJumpSourceId = 0;
+		rebuildStartTimestamp = Stopwatch.GetTimestamp();
+		rebuildFrameCount = 0;
+		phase = BuildPhase.Sampling;
+	}
 
-		var bounds = room.WorldBounds;
-		for (var x = bounds.Left + SampleStep / 2; x < bounds.Right; x += SampleStep)
+	public void Tick(float budgetMs)
+	{
+		if (phase == BuildPhase.Ready || phase == BuildPhase.Idle)
+			return;
+
+		rebuildFrameCount++;
+		var start = Stopwatch.GetTimestamp();
+
+		do
 		{
-			for (var y = bounds.Top + Math.Abs(DuckingPawnProbe.Top); y < bounds.Bottom; y++)
+			switch (phase)
 			{
-				var position = new Point2(x, y);
-				if (!TryGetStandableProbe(game, position, out var requiresDucking))
+				case BuildPhase.Sampling:
+					TickSampling();
+					break;
+				case BuildPhase.AddLandingNodes:
+					AddPlatformLandingNodes(rebuildGame!);
+					phase = BuildPhase.WalkEdges;
+					break;
+				case BuildPhase.WalkEdges:
+					BuildWalkEdges(rebuildGame!);
+					phase = BuildPhase.FallEdges;
+					break;
+				case BuildPhase.FallEdges:
+					BuildFallEdges(rebuildGame!);
+					phase = BuildPhase.JumpEdges;
+					break;
+				case BuildPhase.JumpEdges:
+					TickJumpEdges();
+					break;
+				case BuildPhase.RoomExits:
+					BuildRoomExitNodes(rebuildRoom!);
+					phase = BuildPhase.Ready;
+					Console.WriteLine($"nav graph rebuild {Stopwatch.GetElapsedTime(rebuildStartTimestamp).TotalMilliseconds}ms, {rebuildFrameCount} frames");
+					break;
+			}
+		} while (phase < BuildPhase.Ready && Stopwatch.GetElapsedTime(start).TotalMilliseconds < budgetMs);
+	}
+
+	private void TickSampling()
+	{
+		while (sampleY < sampleBounds.Bottom)
+		{
+			for (var x = sampleX; x < sampleBounds.Right; x += SampleStep)
+			{
+				var position = new Point2(x, sampleY);
+				if (TryGetStandableProbe(rebuildGame!, position, out var requiresDucking))
+					AddNode(position, IsLedge(rebuildGame!, position) ? NodeKind.Ledge : NodeKind.Ground, requiresDucking: requiresDucking);
+			}
+			sampleX = sampleBounds.Left + SampleStep / 2;
+			sampleY++;
+			return;
+		}
+		phase = BuildPhase.AddLandingNodes;
+	}
+
+	private void TickJumpEdges()
+	{
+		if (nextJumpSourceId >= Nodes.Count)
+		{
+			phase = BuildPhase.RoomExits;
+			return;
+		}
+
+		for (var batch = 0; batch < 3 && nextJumpSourceId < Nodes.Count; batch++, nextJumpSourceId++)
+		{
+			var from = Nodes[nextJumpSourceId];
+			if (from.RequiresDucking)
+				continue;
+
+			var jumps = new Dictionary<int, (JumpPlan Plan, float Cost)>();
+			foreach (var plan in JumpPlans)
+			{
+				if (!TrySimulateJump(rebuildGame!, from, plan, out var landing))
 					continue;
 
-				AddNode(position, IsLedge(game, position) ? NodeKind.Ledge : NodeKind.Ground, requiresDucking: requiresDucking);
+				var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
+				if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
+					continue;
+
+				var cost = JumpPlanCost(from, to.Value, plan);
+				if (!jumps.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
+					jumps[to.Value.Id] = (plan, cost);
+			}
+
+			foreach (var (toId, jump) in jumps)
+			{
+				if (!HasEdge(from.Id, toId))
+					Edges.Add(new(from.Id, toId, EdgeKind.Jump, jump.Plan));
 			}
 		}
 
-		AddPlatformLandingNodes(game);
-		BuildWalkEdges(game);
-		BuildFallEdges(game);
-		DiscoverJumpEdges(game);
-		BuildRoomExitNodes(room);
+		if (nextJumpSourceId >= Nodes.Count)
+			phase = BuildPhase.RoomExits;
 	}
 
 	private int AddNode(Point2 position, NodeKind kind, RoomExit? exit = null, bool requiresDucking = false)
@@ -460,36 +561,6 @@ public sealed class PlatformNavGraph
 			if (!IsStandable(game, (Point2)node.Position + new Point2(SampleStep, 0)) &&
 				FindFallLanding(game, node, SampleStep) is { } rightLanding)
 				Edges.Add(new(node.Id, rightLanding.Id, EdgeKind.Fall));
-		}
-	}
-
-	private void DiscoverJumpEdges(Game game)
-	{
-		foreach (var from in Nodes)
-		{
-			if (from.RequiresDucking)
-				continue;
-
-			var jumps = new Dictionary<int, (JumpPlan Plan, float Cost)>();
-			foreach (var plan in JumpPlans)
-			{
-				if (!TrySimulateJump(game, from, plan, out var landing))
-					continue;
-
-				var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
-				if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
-					continue;
-
-				var cost = JumpPlanCost(from, to.Value, plan);
-				if (!jumps.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
-					jumps[to.Value.Id] = (plan, cost);
-			}
-
-			foreach (var (toId, jump) in jumps)
-			{
-				if (!HasEdge(from.Id, toId))
-					Edges.Add(new(from.Id, toId, EdgeKind.Jump, jump.Plan));
-			}
 		}
 	}
 

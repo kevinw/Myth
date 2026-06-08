@@ -198,7 +198,8 @@ public partial class Game
 			platformNavGraphRoom = room;
 		}
 
-		return platformNavGraph;
+		platformNavGraph.Tick(2.0f);
+		return platformNavGraph.IsReady ? platformNavGraph : null;
 	}
 
 	public bool TryGetBudDebugOverlay(out Vector2 worldPosition, out string label)
