@@ -70,6 +70,9 @@ public sealed class PlatformNavGraph
 	public IEnumerable<Node> RoomExits => Nodes.Where(node => node.Kind == NodeKind.RoomExit);
 
 	private readonly Dictionary<Point2, int> nodeLookup = [];
+	private readonly PriorityQueue<int, float> pathFrontier = new();
+	private readonly Dictionary<int, Edge> pathCameFrom = [];
+	private readonly Dictionary<int, float> pathCostSoFar = [];
 
 	public Node? FindNearestNode(Vector2 position, float maxDistance, bool includeRoomExits = false)
 	{
@@ -96,19 +99,19 @@ public sealed class PlatformNavGraph
 		if (startId == goalId)
 			return true;
 
-		var frontier = new PriorityQueue<int, float>();
-		var cameFrom = new Dictionary<int, Edge>();
-		var costSoFar = new Dictionary<int, float>();
-		frontier.Enqueue(startId, 0);
-		cameFrom[startId] = default;
-		costSoFar[startId] = 0;
+		pathFrontier.Clear();
+		pathCameFrom.Clear();
+		pathCostSoFar.Clear();
+		pathFrontier.Enqueue(startId, 0);
+		pathCameFrom[startId] = default;
+		pathCostSoFar[startId] = 0;
 
-		while (frontier.Count > 0)
+		while (pathFrontier.Count > 0)
 		{
-			var current = frontier.Dequeue();
+			var current = pathFrontier.Dequeue();
 			if (current == goalId)
 			{
-				BuildPath(startId, goalId, cameFrom, path);
+				BuildPath(startId, goalId, pathCameFrom, path);
 				return true;
 			}
 
@@ -117,13 +120,13 @@ public sealed class PlatformNavGraph
 				if (edge.From != current)
 					continue;
 
-				var nextCost = costSoFar[current] + EdgeCost(edge);
-				if (costSoFar.TryGetValue(edge.To, out var existingCost) && nextCost >= existingCost)
+				var nextCost = pathCostSoFar[current] + EdgeCost(edge);
+				if (pathCostSoFar.TryGetValue(edge.To, out var existingCost) && nextCost >= existingCost)
 					continue;
 
-				costSoFar[edge.To] = nextCost;
-				cameFrom[edge.To] = edge;
-				frontier.Enqueue(edge.To, nextCost);
+				pathCostSoFar[edge.To] = nextCost;
+				pathCameFrom[edge.To] = edge;
+				pathFrontier.Enqueue(edge.To, nextCost);
 			}
 		}
 

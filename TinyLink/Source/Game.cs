@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Text.Json.Nodes;
@@ -160,6 +161,23 @@ public partial class Game : IDisposable
 	private readonly Point2? respawnPosition;
 	private readonly bool spawnBud;
 	private bool disposed;
+#if BROWSER
+	private const float BrowserDebugStatsInterval = 0.5f;
+	private int pendingRoomTransitionGcFrames;
+	private RoomChangeKind pendingRoomTransitionGcKind;
+	private int browserDebugFramesSinceRoomTransition = -1;
+	private float browserDebugStatsElapsed;
+	private int browserDebugStatsFrames;
+	private long browserDebugStatsAllocatedBytes;
+	private long browserDebugStatsMaxFrameBytes;
+	private int browserDebugStatsLastGen0 = GC.CollectionCount(0);
+	private int browserDebugStatsLastGen1 = GC.CollectionCount(1);
+	private int browserDebugStatsLastGen2 = GC.CollectionCount(2);
+	private double browserDebugLastGcMs = -1;
+	private long browserDebugLastGcBeforeBytes;
+	private long browserDebugLastGcAfterBytes;
+	private RoomChangeKind browserDebugLastGcKind;
+#endif
 
 	public Vector2 Camera { get; private set; }
 	private Vector2 RenderCamera => (Point2)Camera - shake;
@@ -269,10 +287,16 @@ public partial class Game : IDisposable
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
+#if BROWSER
+		var browserDebugFrameStartAllocated = GC.GetAllocatedBytesForCurrentThread();
+#endif
 		GymBudDied = false;
 		roomSwappedThisFrame = false;
 		CollisionRectsThisFrame.Clear();
 		UpdatePlayerHitSnapshot();
+#if BROWSER
+		UpdateRoomTransitionGc();
+#endif
 		if (linkedDoorCooldown > 0)
 			linkedDoorCooldown = Calc.Approach(linkedDoorCooldown, 0, Time.Delta);
 		if (debugViewMessageTimer > 0)
@@ -288,7 +312,12 @@ public partial class Game : IDisposable
 
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
+		{
+#if BROWSER
+			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
+#endif
 			return;
+		}
 
 		// Run Game normally when not moving to a new room
 		if (nextRoom == null)
@@ -376,9 +405,13 @@ public partial class Game : IDisposable
 			ResolvePlayerRoomTransition(transitionDirection);
 			ApplyMusicArea(room);
 			HitStun(0.1f);
+			FinishRoomActivation(RoomChangeKind.EdgeTransition);
 		}
 
 		UpdateAudioListener();
+#if BROWSER
+		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
+#endif
 	}
 
 	private void ChangeTimeScale(int direction)
@@ -617,6 +650,157 @@ public partial class Game : IDisposable
 			cache.Dispose();
 		roomTileFieldCaches.Clear();
 	}
+
+	private void PruneInactiveRoomCaches()
+	{
+		PruneInactiveRoomNormalCaches();
+		PruneInactiveRoomTileFieldCaches();
+	}
+
+	private void FinishRoomActivation(RoomChangeKind kind)
+	{
+		RemoveDestroyedActors();
+		PruneInactiveRoomCaches();
+		PrepareBrowserRoomTransitionGc();
+		RequestRoomTransitionGc(kind);
+	}
+
+	private bool IsActiveRoomCache(Room cachedRoom)
+		=> cachedRoom == room || cachedRoom == nextRoom;
+
+	private void PruneInactiveRoomNormalCaches()
+	{
+		List<Room>? remove = null;
+		foreach (var (cachedRoom, cache) in roomNormalCaches)
+		{
+			if (IsActiveRoomCache(cachedRoom))
+				continue;
+			remove ??= [];
+			remove.Add(cachedRoom);
+			cache.Dispose();
+		}
+
+		if (remove == null)
+			return;
+		foreach (var cachedRoom in remove)
+			roomNormalCaches.Remove(cachedRoom);
+	}
+
+	private void PruneInactiveRoomTileFieldCaches()
+	{
+		List<Room>? remove = null;
+		foreach (var (cachedRoom, cache) in roomTileFieldCaches)
+		{
+			if (IsActiveRoomCache(cachedRoom))
+				continue;
+			remove ??= [];
+			remove.Add(cachedRoom);
+			cache.Dispose();
+		}
+
+		if (remove == null)
+			return;
+		foreach (var cachedRoom in remove)
+			roomTileFieldCaches.Remove(cachedRoom);
+	}
+
+#if BROWSER
+	private void PrepareBrowserRoomTransitionGc()
+	{
+		if (spawnBud && GetFirst<Bud>() != null)
+			GetPlatformNavGraph();
+	}
+
+	private void RequestRoomTransitionGc(RoomChangeKind kind)
+	{
+		pendingRoomTransitionGcKind = kind;
+		pendingRoomTransitionGcFrames = 2;
+		browserDebugFramesSinceRoomTransition = 0;
+	}
+
+	private void UpdateRoomTransitionGc()
+	{
+		if (pendingRoomTransitionGcFrames <= 0)
+			return;
+
+		pendingRoomTransitionGcFrames--;
+		if (pendingRoomTransitionGcFrames > 0)
+			return;
+
+		var before = GC.GetTotalMemory(false);
+		var gen0Before = GC.CollectionCount(0);
+		var gen1Before = GC.CollectionCount(1);
+		var gen2Before = GC.CollectionCount(2);
+		var start = Stopwatch.GetTimestamp();
+		GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
+		var elapsed = Stopwatch.GetElapsedTime(start);
+		var after = GC.GetTotalMemory(false);
+		browserDebugLastGcMs = elapsed.TotalMilliseconds;
+		browserDebugLastGcBeforeBytes = before;
+		browserDebugLastGcAfterBytes = after;
+		browserDebugLastGcKind = pendingRoomTransitionGcKind;
+		Console.WriteLine(
+			$"Room transition GC ({pendingRoomTransitionGcKind}): {elapsed.TotalMilliseconds:0.0}ms, " +
+			$"{before / 1024}KB -> {after / 1024}KB, " +
+			$"collections +{GC.CollectionCount(0) - gen0Before}/+{GC.CollectionCount(1) - gen1Before}/+{GC.CollectionCount(2) - gen2Before}");
+	}
+
+	private void UpdateBrowserDebugStats(long frameStartAllocatedBytes)
+	{
+		var allocatedNow = GC.GetAllocatedBytesForCurrentThread();
+		var frameAllocatedBytes = Math.Max(0, allocatedNow - frameStartAllocatedBytes);
+		browserDebugStatsAllocatedBytes += frameAllocatedBytes;
+		browserDebugStatsMaxFrameBytes = Math.Max(browserDebugStatsMaxFrameBytes, frameAllocatedBytes);
+		browserDebugStatsFrames++;
+		browserDebugStatsElapsed += Time.Delta;
+		if (browserDebugFramesSinceRoomTransition >= 0)
+			browserDebugFramesSinceRoomTransition++;
+
+		if (browserDebugStatsElapsed < BrowserDebugStatsInterval)
+			return;
+
+		var gen0 = GC.CollectionCount(0);
+		var gen1 = GC.CollectionCount(1);
+		var gen2 = GC.CollectionCount(2);
+		var frames = Math.Max(browserDebugStatsFrames, 1);
+		var avgAllocatedBytes = browserDebugStatsAllocatedBytes / frames;
+		var heapBytes = GC.GetTotalMemory(false);
+		var transitionText = browserDebugFramesSinceRoomTransition >= 0
+			? $"{browserDebugFramesSinceRoomTransition}f since transition"
+			: "none";
+		var gcText = browserDebugLastGcMs >= 0
+			? $"{browserDebugLastGcKind} {browserDebugLastGcMs:0.0}ms {FormatBytes(browserDebugLastGcBeforeBytes)} -> {FormatBytes(browserDebugLastGcAfterBytes)}"
+			: "none";
+
+		BrowserDebugOverlay.SetStats(
+			$"update alloc avg {FormatBytes(avgAllocatedBytes)}   max {FormatBytes(browserDebugStatsMaxFrameBytes)}   window {frames}f\n" +
+			$"managed heap {FormatBytes(heapBytes)}   gc +{gen0 - browserDebugStatsLastGen0}/+{gen1 - browserDebugStatsLastGen1}/+{gen2 - browserDebugStatsLastGen2}\n" +
+			$"last gc {gcText}   transition {transitionText}");
+
+		browserDebugStatsElapsed = 0;
+		browserDebugStatsFrames = 0;
+		browserDebugStatsAllocatedBytes = 0;
+		browserDebugStatsMaxFrameBytes = 0;
+		browserDebugStatsLastGen0 = gen0;
+		browserDebugStatsLastGen1 = gen1;
+		browserDebugStatsLastGen2 = gen2;
+	}
+
+	private static string FormatBytes(long bytes)
+	{
+		if (bytes < 1024)
+			return $"{bytes}B";
+
+		var kb = bytes / 1024.0;
+		if (kb < 1024)
+			return $"{kb:0.0}KB";
+
+		return $"{kb / 1024.0:0.0}MB";
+	}
+#else
+	private void PrepareBrowserRoomTransitionGc() {}
+	private void RequestRoomTransitionGc(RoomChangeKind kind) {}
+#endif
 
 	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
@@ -2486,6 +2670,7 @@ public partial class Game : IDisposable
 		roomSwappedThisFrame = true;
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.LinkedDoor, Point2.Zero);
 		PulseDitherGlitch();
+		FinishRoomActivation(RoomChangeKind.LinkedDoor);
 		return true;
 	}
 
@@ -2739,6 +2924,7 @@ public partial class Game : IDisposable
 			Create<Player>(position);
 		EnsureBudForPlayer(repositionExisting: true);
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.Reload, Point2.Zero);
+		FinishRoomActivation(RoomChangeKind.Reload);
 
 		ApplyRoomReverb(room);
 

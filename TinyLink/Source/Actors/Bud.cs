@@ -51,6 +51,7 @@ public class Bud : Pawn
 	protected override float GroundSpeedMultiplier => 1.0f;
 	protected override float AirSpeedMultiplier => 1.0f;
 	public bool CanSay => Game.CanShowBudSpeech();
+	private bool ShouldBuildDebugNavLabel => Game.IsPlatformNavDebugVisible;
 
 	public Bud()
 	{
@@ -101,7 +102,9 @@ public class Bud : Pawn
 				if (player == null)
 					SetDebugNavState("no player");
 				else
-					SetDebugNavState(moveX == 0 ? (IsBesidePlayer(player) ? "beside player" : navLabel) : $"fallback walk {moveX}");
+					SetDebugNavState(moveX == 0
+						? IsBesidePlayer(player) ? "beside player" : navLabel
+						: ShouldBuildDebugNavLabel ? $"fallback walk {moveX}" : "fallback walk");
 			}
 		}
 
@@ -138,7 +141,7 @@ public class Bud : Pawn
 		if (pendingRoomChange is { } change)
 		{
 			enterTimer = Calc.Approach(enterTimer, 0, Time.Delta);
-			SetDebugNavState($"entering {enterTimer:0.0}s");
+			SetDebugNavState(ShouldBuildDebugNavLabel ? $"entering {enterTimer:0.0}s" : "entering");
 			if (enterTimer <= 0)
 				EnterRoom(change);
 			return;
@@ -193,7 +196,7 @@ public class Bud : Pawn
 			DebugNavStartNodeId = start.Value.Id;
 			DebugNavGoalNodeId = goal.Value.Id;
 			DebugNavTargetNodeId = null;
-			DebugNavLabel = $"no path {start.Value.Id}->{goal.Value.Id}";
+			DebugNavLabel = ShouldBuildDebugNavLabel ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
 			return false;
 		}
 
@@ -232,7 +235,7 @@ public class Bud : Pawn
 					DebugNavStartNodeId = start.Value.Id;
 					DebugNavGoalNodeId = goal.Value.Id;
 					DebugNavTargetNodeId = to.Id;
-					DebugNavLabel = $"edge stop {edge.Kind} {edge.From}->{edge.To}";
+					DebugNavLabel = ShouldBuildDebugNavLabel ? $"edge stop {edge.Kind} {edge.From}->{edge.To}" : "edge stop";
 					return false;
 				}
 				if (moveX == 0 && !IsNearNode(target))
@@ -240,7 +243,7 @@ public class Bud : Pawn
 					DebugNavStartNodeId = start.Value.Id;
 					DebugNavGoalNodeId = goal.Value.Id;
 					DebugNavTargetNodeId = to.Id;
-					DebugNavLabel = $"stalled {edge.Kind} {edge.From}->{edge.To}";
+					DebugNavLabel = ShouldBuildDebugNavLabel ? $"stalled {edge.Kind} {edge.From}->{edge.To}" : "stalled";
 					return false;
 				}
 				break;
@@ -251,14 +254,14 @@ public class Bud : Pawn
 				break;
 
 			default:
-				DebugNavLabel = $"unsupported {edge.Kind}";
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"unsupported {edge.Kind}" : "unsupported";
 				return false;
 		}
 
 		DebugNavStartNodeId = start.Value.Id;
 		DebugNavGoalNodeId = goal.Value.Id;
 		DebugNavTargetNodeId = to.Id;
-		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}";
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}" : "following path";
 		return true;
 	}
 
@@ -287,7 +290,7 @@ public class Bud : Pawn
 			DebugNavStartNodeId = start.Value.Id;
 			DebugNavGoalNodeId = goal.Value.Id;
 			DebugNavTargetNodeId = null;
-			DebugNavLabel = $"no path {start.Value.Id}->{goal.Value.Id}";
+			DebugNavLabel = ShouldBuildDebugNavLabel ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
 			return false;
 		}
 
@@ -325,7 +328,7 @@ public class Bud : Pawn
 					DebugNavStartNodeId = start.Value.Id;
 					DebugNavGoalNodeId = goal.Value.Id;
 					DebugNavTargetNodeId = to.Id;
-					DebugNavLabel = $"edge stop {edge.Kind} {edge.From}->{edge.To}";
+					DebugNavLabel = ShouldBuildDebugNavLabel ? $"edge stop {edge.Kind} {edge.From}->{edge.To}" : "edge stop";
 					return false;
 				}
 				if (moveX == 0 && !IsNearNode(edgeTarget))
@@ -333,7 +336,7 @@ public class Bud : Pawn
 					DebugNavStartNodeId = start.Value.Id;
 					DebugNavGoalNodeId = goal.Value.Id;
 					DebugNavTargetNodeId = to.Id;
-					DebugNavLabel = $"stalled {edge.Kind} {edge.From}->{edge.To}";
+					DebugNavLabel = ShouldBuildDebugNavLabel ? $"stalled {edge.Kind} {edge.From}->{edge.To}" : "stalled";
 					return false;
 				}
 				break;
@@ -344,14 +347,14 @@ public class Bud : Pawn
 				break;
 
 			default:
-				DebugNavLabel = $"unsupported {edge.Kind}";
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"unsupported {edge.Kind}" : "unsupported";
 				return false;
 		}
 
 		DebugNavStartNodeId = start.Value.Id;
 		DebugNavGoalNodeId = goal.Value.Id;
 		DebugNavTargetNodeId = to.Id;
-		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}";
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}" : "following path";
 		return true;
 	}
 
@@ -416,7 +419,7 @@ public class Bud : Pawn
 		DebugNavGoalNodeId = goalNodeId;
 		DebugNavTargetNodeId = next.To;
 		StartActiveEdge(next);
-		DebugNavLabel = $"jump handoff {blockedEdge.From}->{blockedEdge.To}->{next.To}";
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"jump handoff {blockedEdge.From}->{blockedEdge.To}->{next.To}" : "jump handoff";
 		return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
 	}
 
@@ -487,7 +490,7 @@ public class Bud : Pawn
 
 		if (activeNavEdge.Timer > ActiveEdgeTimeout)
 		{
-			ClearActiveEdge($"{edge.Kind} timeout");
+			ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} timeout" : "timeout");
 			return false;
 		}
 
@@ -503,15 +506,15 @@ public class Bud : Pawn
 				moveY = 1;
 				if (moveX != 0 && !HasGroundSupportAhead(moveX))
 				{
-					ClearActiveEdge($"{edge.Kind} edge stop");
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} edge stop" : "edge stop");
 					return false;
 				}
 				if (moveX == 0 && IsNearNode(target))
 				{
-					ClearActiveEdge($"{edge.Kind} done");
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
 					return false;
 				}
-				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeNavEdge.Timer:0.0}";
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeNavEdge.Timer:0.0}" : "active edge";
 				break;
 
 			case PlatformNavGraph.EdgeKind.Fall:
@@ -520,10 +523,10 @@ public class Bud : Pawn
 					moveX = Math.Sign(target.X - Position.X);
 				if (grounded && activeNavEdge.Timer > 0.12f && IsNearNode(target))
 				{
-					ClearActiveEdge($"{edge.Kind} done");
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
 					return false;
 				}
-				DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} t {activeNavEdge.Timer:0.0}";
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeNavEdge.Timer:0.0}" : "active edge";
 				break;
 
 			default:
@@ -560,7 +563,7 @@ public class Bud : Pawn
 					ClearActiveEdge("approach ledge");
 					return false;
 				}
-				DebugNavLabel = $"{edge.Kind} approach {edge.From}->{edge.To}";
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} approach {edge.From}->{edge.To}" : "approach";
 				return true;
 			}
 
@@ -571,7 +574,7 @@ public class Bud : Pawn
 			if (opposingVelocity && activeNavEdge.JumpPrepareTimer < JumpPrepareMaxTime)
 			{
 				activeNavEdge.JumpPrepareTimer += Time.Delta;
-				DebugNavLabel = $"{edge.Kind} settle {edge.From}->{edge.To} vx {Velocity.X:0}";
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} settle {edge.From}->{edge.To} vx {Velocity.X:0}" : "settle";
 				return true;
 			}
 
@@ -604,11 +607,11 @@ public class Bud : Pawn
 		if (activeNavEdge.JumpStarted && grounded && activeNavEdge.JumpPlanTimer > plan.RunupTime + 0.12f &&
 			(IsNearNode(target) || MathF.Abs(Position.Y - target.Y) <= NavNodeReachDistance))
 		{
-			ClearActiveEdge($"{edge.Kind} done");
+			ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
 			return false;
 		}
 
-		DebugNavLabel = $"{edge.Kind} {edge.From}->{edge.To} p {activeNavEdge.JumpPlanTimer:0.0}";
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} p {activeNavEdge.JumpPlanTimer:0.0}" : "jump";
 		return true;
 	}
 

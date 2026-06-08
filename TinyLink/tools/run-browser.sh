@@ -5,6 +5,10 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 repo_dir=$(cd -- "$script_dir/.." &> /dev/null && pwd)
 foster_dir=$(cd -- "$repo_dir/../../Foster/Framework" &> /dev/null && pwd)
 default_shadercross="$repo_dir/tools/macos/shadercross"
+python_bin="$repo_dir/.venv-browser/bin/python"
+if [[ ! -x "$python_bin" ]]; then
+	python_bin="python3"
+fi
 
 host="127.0.0.1"
 port="8082"
@@ -125,7 +129,7 @@ fi
 url="http://$host:$port/"
 
 port_in_use() {
-	python3 - "$host" "$port" <<'PY'
+	"$python_bin" - "$host" "$port" <<'PY'
 import socket
 import sys
 
@@ -163,7 +167,7 @@ if port_in_use; then
 	exit 0
 fi
 
-python3 serve-browser.py --host "$host" --port "$port" --root "$app_bundle" &
+"$python_bin" serve-browser.py --host "$host" --port "$port" --root "$app_bundle" &
 server_pid=$!
 
 cleanup() {
@@ -171,7 +175,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-python3 - "$host" "$port" <<'PY'
+"$python_bin" - "$host" "$port" <<'PY'
 import socket
 import sys
 import time

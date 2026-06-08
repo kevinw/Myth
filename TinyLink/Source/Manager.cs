@@ -1164,7 +1164,9 @@ public partial class Manager : App
 			room,
 			fallbackPlayerDirection: fallbackPlayerDirection,
 			spawnFallbackPlayer: true,
-			initialPlayerPosition: initialPlayerPosition);
+			initialPlayerPosition: initialPlayerPosition,
+			spawnBud: true
+		);
 #if IOS
 			playTransition = 1.0f;
 			playTransitionFromCenter = Vector2.Zero;
