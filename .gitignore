@@ -11,3 +11,6 @@ TinyLink/Platforms/**/xcuserdata/
 *.swp
 __pycache__
 TinyLink/tmp
+bitmapflow-cli/target/release
+tmp/bench
+bitmapflow-cli/target

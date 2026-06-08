@@ -1,4 +1,5 @@
 
+
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Foster.Framework;
@@ -18,6 +19,18 @@ public static class Assets
 	public static readonly Dictionary<string, Subtexture> Subtextures = new();
 	public static readonly Dictionary<Point2, Room> Rooms = new();
 	public static readonly Dictionary<string, Room> RoomsById = new();
+
+	// Per-sprite inbetween frame count (0 = none)
+	private static readonly Dictionary<string, int> SpriteInbetweens = new()
+	{
+		{ "ghostfrog", 4 },
+		{ "player", 4 },
+		{ "spitter", 4 },
+		{ "mosquito", 4 },
+	};
+
+	// Expanded frame durations for sprites with inbetweens
+	private static readonly Dictionary<string, float[]> ExpandedFrameDurations = new();
 
 	private const string assetsFolderName = "Assets";
 	private const string roomsFolderName = "Rooms";
@@ -164,20 +177,48 @@ public static class Assets
 			foreach (var (name, ase) in spriteFiles)
 			{
 				var frames = ase.RenderAllFrames();
-				for (int i = 0; i < frames.Length; i++)
+				if (SpriteInbetweens.TryGetValue(name, out var ibCount) && ibCount > 0
+					&& Inbetweens.Generate(name, frames, ase, ibCount) is var exp && exp.HasValue)
 				{
-					packer.Add($"{name}/{i}", frames[i]);
-					packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+					var (expFrames, expDurations) = exp.Value;
+					ExpandedFrameDurations[name] = expDurations;
+					for (int i = 0; i < expFrames.Length; i++)
+					{
+						packer.Add($"{name}/{i}", expFrames[i]);
+						packer.Add($"{name}/normal/{i}", GenerateNormalMap(expFrames[i]));
+					}
+				}
+				else
+				{
+					for (int i = 0; i < frames.Length; i++)
+					{
+						packer.Add($"{name}/{i}", frames[i]);
+						packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+					}
 				}
 			}
 
 			foreach (var (name, ase, layerFilter) in generatedSprites)
 			{
 				var frames = ase.RenderAllFrames(layerFilter());
-				for (int i = 0; i < frames.Length; i++)
+				if (SpriteInbetweens.TryGetValue(name, out var ibCount) && ibCount > 0
+					&& Inbetweens.Generate(name, frames, ase, ibCount) is var exp && exp.HasValue)
 				{
-					packer.Add($"{name}/{i}", frames[i]);
-					packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+					var (expFrames, expDurations) = exp.Value;
+					ExpandedFrameDurations[name] = expDurations;
+					for (int i = 0; i < expFrames.Length; i++)
+					{
+						packer.Add($"{name}/{i}", expFrames[i]);
+						packer.Add($"{name}/normal/{i}", GenerateNormalMap(expFrames[i]));
+					}
+				}
+				else
+				{
+					for (int i = 0; i < frames.Length; i++)
+					{
+						packer.Add($"{name}/{i}", frames[i]);
+						packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+					}
 				}
 			}
 
@@ -818,15 +859,19 @@ public static class Assets
 			Sprites.Add(name, sprite);
 		}
 
+		// Use expanded durations if inbetweens were generated for this sprite
+		bool useExpanded = ExpandedFrameDurations.TryGetValue(name, out var expDurations);
+
 		var frames = new List<Sprite.Frame>();
-		for (int i = 0; i < ase.Frames.Length; i++)
+		int frameCount = useExpanded ? expDurations!.Length : ase.Frames.Length;
+		for (int i = 0; i < frameCount; i++)
 		{
 			var subtexture = subtextures[$"{name}/{i}"];
 			frames.Add(new(
 				subtexture,
 				new Subtexture(subtexture.Texture, subtexture.Source),
 				subtextures[$"{name}/normal/{i}"],
-				ase.Frames[i].Duration / 1000.0f));
+				useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f));
 		}
 
 		var animations = new List<Sprite.Animation>();
@@ -835,10 +880,26 @@ public static class Assets
 			if (string.IsNullOrEmpty(tag.Name))
 				continue;
 
+			// Compute animation frame range in expanded space:
+			// Original frames are at indices [tag.From * (inbetweens+1), (tag.To+1) * (inbetweens+1) - 1]
+			// if expanded. Otherwise use original indices.
+			int animFrom, animCount;
+			if (useExpanded && SpriteInbetweens.TryGetValue(name, out var ibCount) && ibCount > 0)
+			{
+				var step = ibCount + 1;
+				animFrom = tag.From * step;
+				animCount = (tag.To - tag.From + 1) * step;
+			}
+			else
+			{
+				animFrom = tag.From;
+				animCount = tag.To - tag.From + 1;
+			}
+
 			var duration = 0.0f;
-			for (int i = tag.From; i <= tag.To && i < frames.Count; i++)
+			for (int i = animFrom; i < animFrom + animCount && i < frames.Count; i++)
 				duration += frames[i].Duration;
-			animations.Add(new(tag.Name, tag.From, tag.To - tag.From + 1, duration));
+			animations.Add(new(tag.Name, animFrom, animCount, duration));
 		}
 
 		sprite.Reload(origin, frames, animations);

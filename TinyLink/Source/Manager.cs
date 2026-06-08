@@ -157,13 +157,15 @@ public partial class Manager : App
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager(bool dumpAtlases = false, bool gym = false, bool headless = false, bool unthrottled = false, bool gymExitAfterAll = false, bool simple = false) : base(CreateAppConfig(gym, headless, unthrottled))
+	public Manager(bool dumpAtlases = false, bool gym = false, bool headless = false, bool unthrottled = false, bool gymExitAfterAll = false, bool simple = false, bool bench = false, int maxFrames = int.MaxValue) : base(CreateAppConfig(gym, headless, unthrottled))
 	{
 		this.dumpAtlases = dumpAtlases;
 		this.gymMode = gym;
 		this.headless = headless;
 		this.unthrottled = unthrottled;
 		this.gymExitAfterAll = gymExitAfterAll;
+		Inbetweens.BenchMode = bench;
+		Inbetweens.MaxFrames = maxFrames;
 		if (simple)
 		{
 			PerfToggles.UseSimpleDefaults();
@@ -251,6 +253,12 @@ public partial class Manager : App
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
 #endif
 		Assets.Load(GraphicsDevice, dumpAtlases);
+		if (Inbetweens.BenchMode)
+		{
+			Console.WriteLine("[Bench] complete — exiting");
+			Exit();
+			return;
+		}
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();

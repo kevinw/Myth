@@ -25,3 +25,5 @@ TinyLink/Platforms/iOS/**/Resources/DWARF/SDL3 filter=lfs diff=lfs merge=lfs -te
 TinyLink/Platforms/iOS/Native/SDL3.xcframework/*/SDL3.framework/SDL3 filter=lfs diff=lfs merge=lfs -text
 *.ttf filter=lfs diff=lfs merge=lfs -text
 *.wasm filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.webp filter=lfs diff=lfs merge=lfs -text
