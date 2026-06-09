@@ -119,7 +119,7 @@ public class Actor
 
 				if (sprite.GetAnimation(transitionName) is { })
 				{
-					Console.WriteLine($"[Transition] {GetType().Name} \"{sprite.Name}\" playing transition: {transitionName}");
+					// Console.WriteLine($"[Transition] {GetType().Name} \"{sprite.Name}\" playing transition: {transitionName}");
 					animationName = transitionName;
 					animationTime = 0;
 					animationLooping = false;
