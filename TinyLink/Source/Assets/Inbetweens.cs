@@ -24,6 +24,27 @@ static class Inbetweens
 		return GenerateWithCSharp(name, frames, ase, count);
 	}
 
+	/// <summary>
+	/// Generates in-between frames between two specific images (a -> b).
+	/// Used for animation transitions.
+	/// </summary>
+	public static (Image[] Frames, float[] Durations) GenerateForPair(Image a, Image b, int count)
+	{
+		if (count <= 0)
+			return ([], []);
+
+		var flow = ComputeFlow(a, b);
+		var frames = new Image[count];
+		var durations = new float[count];
+		for (int i = 0; i < count; i++)
+		{
+			float t = (i + 1.0f) / (count + 1.0f);
+			frames[i] = Warp(a, flow, t);
+			durations[i] = 0.019f;
+		}
+		return (frames, durations);
+	}
+
 	private static (Image[] Frames, float[] Durations)? GenerateBench(
 		string name, Image[] frames, Aseprite ase, int count)
 	{

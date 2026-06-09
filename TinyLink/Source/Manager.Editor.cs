@@ -3474,6 +3474,10 @@ public partial class Manager
 		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio", imagePadding: ToolbarButtonImagePadding))
 			OpenFmodStudio();
 		ImGui.SameLine(0, ToolbarSpacing);
+
+		if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
+			showTransitionViewer = !showTransitionViewer;
+		ImGui.SameLine(0, ToolbarSpacing);
 #endif
 
 		DrawWorldSelector();
@@ -3884,6 +3888,64 @@ public partial class Manager
 		ImGui.End();
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar(2);
+	}
+
+	private void TransitionViewerImGui()
+	{
+		if (!showTransitionViewer)
+			return;
+
+		if (ImGui.Begin("Transition Viewer", ref showTransitionViewer, ImGuiWindowFlags.NoSavedSettings))
+		{
+			if (ImGui.BeginTable("transitions", 4, ImGuiTableFlags.BordersV | ImGuiTableFlags.BordersOuterH | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
+				new Vector2(ImGui.GetContentRegionAvail().X, 480)))
+			{
+				ImGui.TableSetupScrollFreeze(0, 1);
+				ImGui.TableSetupColumn("Sprite", ImGuiTableColumnFlags.WidthFixed, 100);
+				ImGui.TableSetupColumn("Animation", ImGuiTableColumnFlags.WidthFixed, 160);
+				ImGui.TableSetupColumn("Frames", ImGuiTableColumnFlags.WidthStretch);
+				ImGui.TableSetupColumn("Count", ImGuiTableColumnFlags.WidthFixed, 60);
+				ImGui.TableHeadersRow();
+
+				foreach (var (spriteName, sprite) in Assets.Sprites)
+				{
+					foreach (var anim in sprite.Animations)
+					{
+						if (!anim.Name.Contains("->"))
+							continue;
+
+						ImGui.TableNextRow();
+						ImGui.TableNextColumn();
+						ImGui.TextUnformatted(spriteName);
+						ImGui.TableNextColumn();
+						ImGui.TextUnformatted(anim.Name);
+						ImGui.TableNextColumn();
+
+						float previewSize = 48;
+						for (int i = 0; i < anim.FrameCount; i++)
+						{
+							if (i > 0) ImGui.SameLine(0, 2);
+							int frameIdx = anim.FrameStart + i;
+							if (frameIdx < sprite.Frames.Count)
+							{
+								var frame = sprite.Frames[frameIdx];
+								var sub = frame.VisibleSubtexture;
+								float scale = MathF.Min(previewSize / sub.Size.X, previewSize / sub.Size.Y);
+								imgui.Image(sub, sub.Size * scale);
+								if (ImGui.IsItemHovered())
+									ImGui.SetTooltip($"Frame {i}\n{frame.Duration * 1000:F0}ms");
+							}
+						}
+
+						ImGui.TableNextColumn();
+						ImGui.TextUnformatted($"{anim.FrameCount}");
+					}
+				}
+
+				ImGui.EndTable();
+			}
+		}
+		ImGui.End();
 	}
 
 }

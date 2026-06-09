@@ -73,6 +73,7 @@ public partial class Manager : App
 	int fpsOverlayMode;
 #endif
 	bool fpsOverlayVisible = false;
+	bool showTransitionViewer = false;
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -311,6 +312,7 @@ public partial class Manager : App
 	{
 #if !BROWSER
 		SaveWindowSettings();
+		SaveTransitionData();
 #endif
 		game?.Dispose();
 #if EDITOR
@@ -331,6 +333,45 @@ public partial class Manager : App
 
 		Assets.Unload();
 		Factory.Clear();
+	}
+
+	private static void SaveTransitionData()
+	{
+#if DEBUG
+		// Merge: start with the cumulative data loaded at startup (TransitionPairs),
+		// then add this session's new counts on top
+		var aggregated = new Dictionary<(string SpriteName, string From, string To), int>();
+		foreach (var (key, count) in Assets.TransitionPairs)
+			aggregated[key] = count + (aggregated.TryGetValue(key, out var e) ? e : 0);
+		foreach (var (key, count) in Actor.TransitionCounts)
+		{
+			var k = (key.SpriteName, key.From, key.To);
+			aggregated.TryGetValue(k, out var existing);
+			aggregated[k] = existing + count;
+		}
+
+		if (aggregated.Count == 0)
+			return;
+
+		// Write JSON array to Assets/anim_transitions.json
+		var jsonPath = Path.Join(Assets.AssetsPath, "anim_transitions.json");
+		using var ms = new MemoryStream();
+		using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
+		writer.WriteStartArray();
+		foreach (var (k, count) in aggregated.OrderBy(kv => kv.Key.SpriteName).ThenBy(kv => kv.Key.From).ThenBy(kv => kv.Key.To))
+		{
+			writer.WriteStartObject();
+			writer.WriteString("spriteName", k.SpriteName);
+			writer.WriteString("fromTag", k.From);
+			writer.WriteString("toTag", k.To);
+			writer.WriteNumber("count", count);
+			writer.WriteEndObject();
+		}
+		writer.WriteEndArray();
+		writer.Flush();
+		File.WriteAllBytes(jsonPath, ms.ToArray());
+		Console.WriteLine($"Saved {aggregated.Count} animation transitions to {jsonPath}");
+#endif
 	}
 
 	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
@@ -566,6 +607,12 @@ public partial class Manager : App
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 				ReloadAssets(true);
 
+			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F2))
+			{
+				Actor.TransitionsEnabled = !Actor.TransitionsEnabled;
+				game?.DisplayMessage($"Transitions {(Actor.TransitionsEnabled ? "On" : "Off")}");
+			}
+
 			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
 				ToggleFpsOverlay();
 #if !IOS && !BROWSER
@@ -706,6 +753,7 @@ public partial class Manager : App
 			BudDebugOverlayImGui();
 			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 				FpsOverlayImGui();
+			TransitionViewerImGui();
 			imgui.EndLayout();
 		}
 #endif
