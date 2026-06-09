@@ -934,7 +934,7 @@ public static class Assets
 				continue;
 
 			var p = pairs[i];
-			Console.WriteLine($"[Transition] generated {transFrames.Length} frames for {name}: {p.FromTag} -> {p.ToTag}");
+			// Console.WriteLine($"[Transition] generated {transFrames.Length} frames for {name}: {p.FromTag} -> {p.ToTag}");
 
 			string prefix = $"{name}/transition/{p.FromTag}->{p.ToTag}";
 			for (int j = 0; j < transFrames.Length; j++)
@@ -1036,7 +1036,7 @@ public static class Assets
 					duration += trans.Durations[i];
 				}
 				animations.Add(new($"{trans.FromTag}->{trans.ToTag}", transFrameStart, trans.FrameCount, duration));
-				Console.WriteLine($"[Transition] registered {trans.FrameCount}-frame animation \"{trans.FromTag}->{trans.ToTag}\" for sprite \"{name}\" (frames {transFrameStart}–{transFrameStart + trans.FrameCount - 1})");
+				// Console.WriteLine($"[Transition] registered {trans.FrameCount}-frame animation \"{trans.FromTag}->{trans.ToTag}\" for sprite \"{name}\" (frames {transFrameStart}–{transFrameStart + trans.FrameCount - 1})");
 				transFrameStart += trans.FrameCount;
 			}
 		}
