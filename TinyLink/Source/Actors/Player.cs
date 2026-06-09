@@ -26,7 +26,7 @@ public abstract class Pawn : Actor
 
 	protected static float MaxGroundSpeed => 123;
 	protected static float MaxAirSpeed => 133;
-	protected static float CrawlSpeed => 28;
+	protected static float CrawlSpeed => 38;
 	protected static float GroundAccel => 390;
 	protected static float AirAccel => 370;
 	protected static float Friction => 450;
@@ -234,6 +234,7 @@ public abstract class Pawn : Actor
 			{
 				facing *= -1;
 				Play("skid");
+				AudioEventDebounced("player/skid", 0.5f);
 				RunStartTimer = 0;
 				RunStartSkid = false;
 			}
@@ -246,7 +247,10 @@ public abstract class Pawn : Actor
 				if (RunStartTimer < 0.35f)
 				{
 					if (RunStartTimer < 0.15f && RunStartSkid)
+					{
 						Play("skid");
+						AudioEventDebounced("player/skid", 0.5f);
+					}
 					else
 						Play("run_start");
 				}
@@ -300,7 +304,9 @@ public abstract class Pawn : Actor
 		{
 			Facing = facing;
 			if (lastFacing != Facing && didStartRunning)
+			{
 				RunStartSkid = true;
+			}
 		}
 
 		var wallJump = GetWallJumpDirection();

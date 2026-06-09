@@ -146,6 +146,15 @@ public class Actor
 	public bool IsFinishedPlaying(string? name = null)
 		=> !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
 
+	private readonly Dictionary<string, float> audioEventDebounceTimes = [];
+	public void AudioEventDebounced(string name, float waitSeconds) {
+		var now = Time.SecondsF;
+		if (audioEventDebounceTimes.TryGetValue(name, out var lastTime) && now - lastTime < waitSeconds)
+			return;
+		audioEventDebounceTimes[name] = now;
+		Game.PlayAudioEvent(name, "", "", Position);
+	}
+
 	public void AudioEvent(string name)
 		=> Game.PlayAudioEvent(name, "", "", Position);
 
