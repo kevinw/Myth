@@ -377,7 +377,7 @@ public partial class Manager : App
 		writer.WriteEndArray();
 		writer.Flush();
 		File.WriteAllBytes(jsonPath, ms.ToArray());
-		Console.WriteLine($"Saved {aggregated.Count} animation transitions to {jsonPath}");
+		// Console.WriteLine($"Saved {aggregated.Count} animation transitions to {jsonPath}");
 #endif
 	}
 

@@ -14,3 +14,4 @@ TinyLink/tmp
 bitmapflow-cli/target/release
 tmp/bench
 bitmapflow-cli/target
+TinyLink/tools/nca_train/targets

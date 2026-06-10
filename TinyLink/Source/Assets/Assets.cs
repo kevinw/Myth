@@ -875,7 +875,7 @@ public static class Assets
 					TransitionPairs[(spriteName, fromTag, toTag)] = count;
 			}
 
-			Console.WriteLine($"Loaded {TransitionPairs.Count} animation transitions from anim_transitions.json");
+			// Console.WriteLine($"Loaded {TransitionPairs.Count} animation transitions from anim_transitions.json");
 		}
 		catch (Exception e)
 		{

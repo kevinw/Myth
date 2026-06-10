@@ -1,0 +1,45 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct CellState
+{
+    float c[16];
+};
+
+struct type_StructuredBuffer_CellState
+{
+    CellState _m0[1];
+};
+
+struct type_Params
+{
+    uint Width;
+    uint Height;
+};
+
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_CellState& SourceState [[buffer(1)]], texture2d<float, access::write> Output [[texture(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    do
+    {
+        bool _58;
+        if (!(gl_GlobalInvocationID.x >= Params.Width))
+        {
+            _58 = gl_GlobalInvocationID.y >= Params.Height;
+        }
+        else
+        {
+            _58 = true;
+        }
+        if (_58)
+        {
+            break;
+        }
+        float _75 = fast::clamp(SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[3], 0.0, 1.0);
+        float3 _79 = fast::clamp(float3(SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[4], SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[5], SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[6]), float3(0.0), float3(1.0));
+        Output.write(float4((fast::clamp(float3(SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[0], SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[1], SourceState._m0[(gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x].c[2]), float3(0.0), float3(1.0)) * _75) + (_79 * 0.3499999940395355224609375), fast::clamp(_75 + (precise::max(_79.x, precise::max(_79.y, _79.z)) * 0.1500000059604644775390625), 0.0, 1.0)), uint2(gl_GlobalInvocationID.xy));
+        break;
+    } while(false);
+}
+

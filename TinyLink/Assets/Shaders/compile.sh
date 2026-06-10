@@ -136,6 +136,12 @@ if [[ "$platform" == "web" || "$platform" == "wgsl" ]]; then
 		pids+=("$!")
 	done
 
+	for file in "$script_dir"/Compute/*.hlsl; do
+		[[ -e "$file" ]] || continue
+		compile "$file" compute &
+		pids+=("$!")
+	done
+
 	status=0
 	for pid in "${pids[@]}"; do
 		if ! wait "$pid"; then
@@ -150,5 +156,10 @@ else
 		fi
 		compile "$file" vertex
 		compile "$file" fragment
+	done
+
+	for file in "$script_dir"/Compute/*.hlsl; do
+		[[ -e "$file" ]] || continue
+		compile "$file" compute
 	done
 fi

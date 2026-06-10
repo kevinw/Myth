@@ -886,6 +886,10 @@ public partial class Player : Pawn
 				Hit(hit);
 
 			Game.BreakTiles(it);
+
+			foreach (var actor in Game.Actors.ToArray())
+				if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+					nca.Cut(it);
 		}
 
 		if (Grounded())
