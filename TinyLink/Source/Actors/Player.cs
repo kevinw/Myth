@@ -729,7 +729,17 @@ public partial class Player : Pawn
 		}
 		else if (Controls.Saw.ConsumePress())
 		{
-			Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), saw => saw.Facing = Facing);
+			var existingSaw = Game.GetFirst<Saw>();
+			if (existingSaw != null)
+			{
+				Position = existingSaw.Position;
+				Game.Destroy(existingSaw);
+				Game.HitStun(0.1f);
+			}
+			else
+			{
+				Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), saw => saw.Facing = Facing);
+			}
 			return true;
 		}
 
