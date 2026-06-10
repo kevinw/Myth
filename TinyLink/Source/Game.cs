@@ -2550,6 +2550,10 @@ public partial class Game : IDisposable
 		if (TryGetSurfaceTypeAtWorldPoint(new(bounds.Right - 1, y), out surfaceType))
 			return surfaceType;
 
+		// TODO: make a more generic system for landing on Actors, and let them provide a surface type.
+		var hitActor = OverlapsFirst(actor.Hitbox.Rect + actor.Position + new Point2(0, 1), Actor.Masks.Jumpthru);
+		if (hitActor != null) return "Wood";
+
 		// Edge landings can sit just beside the supporting tile, so landing audio gets a one-tile horizontal grace scan.
 		if (searchOutward && TryGetSurfaceTypeOutwardFromBottom(bounds, out surfaceType))
 			return surfaceType;

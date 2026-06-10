@@ -57,21 +57,21 @@
   ],
   "actors": [
     {
+      "Id": "40c6fe8889e2738f",
       "Type": "Light",
-      "Position": [88, 35],
-      "Id": "40c6fe8889e2738f"
+      "Position": [88, 35]
     },
     {
+      "Id": "f10c41c5b0f35193",
       "Type": "RevealDoor",
       "Position": [88, 80],
-      "Size": [8, 32],
-      "Id": "f10c41c5b0f35193"
+      "Size": [8, 32]
     },
     {
+      "Id": "9de4576e0240e9ab",
       "Type": "RevealDoor",
       "Position": [184, 88],
-      "Size": [8, 24],
-      "Id": "9de4576e0240e9ab"
+      "Size": [8, 24]
     }
   ]
 }

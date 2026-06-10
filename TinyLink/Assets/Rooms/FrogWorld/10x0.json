@@ -1,7 +1,7 @@
 {
   "position": [400, 0],
   "size": [40, 23],
-  "reverb": 0.228,
+  "reverb": 0.22,
   "tiles": [
     "0000000000000000000001111001111111111111",
     "0000000000000000000001111001111111111111",
@@ -29,42 +29,42 @@
   ],
   "actors": [
     {
+      "Id": "a7a9a265e2ac6469",
       "From": "BlueMemoryLight",
-      "Position": [100, 55],
-      "Id": "a7a9a265e2ac6469"
+      "Position": [100, 55]
     },
     {
+      "Id": "086f0804528ffa0f",
       "Type": "Spitter",
-      "Position": [172, 96],
-      "Id": "086f0804528ffa0f"
+      "Position": [172, 96]
     },
     {
+      "Id": "1817d1cc33813349",
       "Type": "HiddenWall",
       "Position": [168, 32],
-      "Size": [48, 24],
-      "Id": "1817d1cc33813349"
+      "Size": [48, 24]
     },
     {
+      "Id": "b3ee0eb7b279670a",
       "Type": "Jumpthru",
-      "Position": [200, 32],
-      "Id": "b3ee0eb7b279670a"
+      "Position": [200, 32]
     },
     {
+      "Id": "b8270e725342eade",
       "Type": "Jumpthru",
-      "Position": [208, 32],
-      "Id": "b8270e725342eade"
+      "Position": [208, 32]
     },
     {
+      "Id": "c18cfa1bb162b836",
       "Type": "HiddenWall",
       "Position": [200, 0],
-      "Size": [16, 32],
-      "Id": "c18cfa1bb162b836"
+      "Size": [16, 32]
     },
     {
+      "Id": "2dc6060252981636",
       "Type": "HiddenWall",
       "Position": [144, 136],
-      "Size": [40, 40],
-      "Id": "2dc6060252981636"
+      "Size": [40, 40]
     }
   ]
 }

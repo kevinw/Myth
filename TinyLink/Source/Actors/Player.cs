@@ -13,6 +13,8 @@ public readonly record struct PawnInput(
 
 public abstract class Pawn : Actor
 {
+	protected bool PlayerSpecificAudioEvents = false;
+
 	public enum States
 	{
 		Normal,
@@ -23,28 +25,30 @@ public abstract class Pawn : Actor
 		Hurt,
 		Start
 	}
-
-	protected static float MaxGroundSpeed => 123;
-	protected static float MaxAirSpeed => 133;
-	protected static float CrawlSpeed => 38;
-	protected static float GroundAccel => 390;
-	protected static float AirAccel => 370;
-	protected static float Friction => 450;
-	protected static float Gravity => 770;
 	protected static float FastFallMultiplier => 1.25f;
-	protected static float WallHugGravityMultiplier => 0.25f;
-	protected static float JumpForce => -187;
-	protected static float JumpTime => 0.24f;
-	protected static float CoyoteJumpTime => 0.10f;
 	protected static float JumpBufferTime => 0.08f;
+
+	protected static float MaxGroundSpeed => 93;
+	protected static float MaxAirSpeed => 100;
+	protected static float CrawlSpeed => 28;
+	protected static float GroundAccel => 400;
+	protected static float AirAccel => 310;
+	protected static float Friction => 480;
+	protected static float Gravity => 450;
+
+	protected static float WallHugGravityMultiplier => 0.25f;
+	protected static float JumpForce => -125;
+	protected static float JumpTime => 0.19f;
+	protected static float CoyoteJumpTime => 0.08f;
+
 	protected static float WallJumpSpeed => 125;
 	protected static float WallJumpInputLockTime => 0.22f;
 	protected static float RollMinHorizontalSpeed => 45;
 	protected static float RollMinFallSpeed => 20;
 	protected static float RollSpeed => 145;
 	protected static float DownhillRollSpeed => 185;
-	protected static float RollDuration => 0.37f;
-	protected static float RollFriction => 180;
+	protected static float RollDuration => 0.36f;
+	protected static float RollFriction => 220;
 	protected static float DownhillRollFriction => 90;
 	protected static float RollJumpForce => -82;
 	protected static float RollJumpTime => 0.11f;
@@ -234,7 +238,8 @@ public abstract class Pawn : Actor
 			{
 				facing *= -1;
 				Play("skid");
-				AudioEventDebounced("player/skid", 0.5f);
+				if (PlayerSpecificAudioEvents)
+					AudioEventDebounced("player/skid", 0.5f);
 				RunStartTimer = 0;
 				RunStartSkid = false;
 			}
@@ -249,7 +254,6 @@ public abstract class Pawn : Actor
 					if (RunStartTimer < 0.15f && RunStartSkid)
 					{
 						Play("skid");
-						AudioEventDebounced("player/skid", 0.5f);
 					}
 					else
 						Play("run_start");
@@ -577,6 +581,7 @@ public partial class Player : Pawn
 		grounded = true;
 		Play("sword");
 		State = States.Start;
+		PlayerSpecificAudioEvents = true;
 	}
 
 	public override void Added()

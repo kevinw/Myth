@@ -2642,9 +2642,45 @@ public partial class Manager
 		var keyboardBlocked = ImGuiWantsKeyboard;
 		var roomActivationClickConsumed = false;
 		UpdateEditorUndoRedo();
+		// Shoulder buttons cycle worlds in edit mode (same as time speed in play mode)
+		if (!worldMouseBlocked)
+		{
+			foreach (var controller in Input.Controllers)
+			{
+				if (!controller.Connected)
+					continue;
+
+				if (controller.Pressed(Buttons.LeftShoulder) || controller.Pressed(Buttons.RightShoulder))
+				{
+					var worlds = Assets.GetWorldIds();
+					if (worlds.Count > 0)
+					{
+						var currentIdx = -1;
+						for (var i = 0; i < worlds.Count; i++)
+						{
+							if (string.Equals(worlds[i], Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase))
+							{
+								currentIdx = i;
+								break;
+							}
+						}
+
+						if (currentIdx < 0)
+							currentIdx = 0;
+
+						var nextIdx = controller.Pressed(Buttons.LeftShoulder)
+							? (currentIdx - 1 + worlds.Count) % worlds.Count
+							: (currentIdx + 1) % worlds.Count;
+
+						SwitchWorld(worlds[nextIdx]);
+					}
+					break;
+				}
+			}
+		}
+
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
-
 		UpdateEditorCameraTween();
 		UpdateEditorWorldView(inner);
 		if (!editingRoomGeometry)

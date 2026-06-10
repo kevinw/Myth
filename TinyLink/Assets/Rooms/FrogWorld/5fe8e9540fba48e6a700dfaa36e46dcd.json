@@ -3,7 +3,7 @@
   "size": [40, 34],
   "ambientColor": "FFFFFF",
   "lightNoise": 0.076,
-  "reverb": 0.101,
+  "reverb": 0.085,
   "tiles": [
     "0000000000000000000000000000000000011111",
     "0000000000000000000000000000000000011111",
@@ -42,15 +42,15 @@
   ],
   "actors": [
     {
+      "Id": "ce15f228e01f4482",
       "Type": "Player",
-      "Position": [268, 160],
-      "Id": "ce15f228e01f4482"
+      "Position": [268, 160]
     },
     {
+      "Id": "b3841e7ec2b2b1f3",
       "Type": "ArrowTrap",
       "Position": [196, 164],
-      "Facing": "-",
-      "Id": "b3841e7ec2b2b1f3"
+      "Facing": "-"
     }
   ]
 }
