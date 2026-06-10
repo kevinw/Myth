@@ -10,7 +10,7 @@ namespace TinyLink;
 public class NCAParticle : Actor
 {
 	public Color Color = Color.White;
-	public float Lifetime = 0.5f;
+	public float Lifetime = 0.52f;
 
 	private static Rng rng = new();
 
@@ -45,8 +45,8 @@ public class NCAParticle : Actor
 	{
 		var t = Math.Clamp(age / Lifetime, 0.0f, 1.0f);
 		var color = Color * (1.0f - t);
-		var s = size * (1.0f - t * 0.5f);
-		batcher.Rect(new Vector2(-s / 2, -s / 2), new Vector2(s, s), color);
+		var s = size * (0.7f - t * 0.3f);
+		batcher.Rect(new Vector2(-s / 2.0f, -s / 2.0f), new Vector2(s, s), color);
 	}
 
 	public override void RenderNormals(Batcher batcher) { }

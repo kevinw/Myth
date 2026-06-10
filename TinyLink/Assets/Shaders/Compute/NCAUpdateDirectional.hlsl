@@ -165,7 +165,6 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     for (int j = 0; j < HIDDEN_N; j++)
     {
         float sum = Weights[B0_OFFSET + j];
-        [unroll]
         for (int i = 0; i < PERCEPT_N; i++)
             sum += perception[i] * Weights[W0_OFFSET + i * HIDDEN_N + j];
         hidden[j] = max(sum, 0.0);
@@ -177,7 +176,6 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     for (int k = 0; k < CHANNEL_N; k++)
     {
         float sum = Weights[B1_OFFSET + k];
-        [unroll]
         for (int j = 0; j < HIDDEN_N; j++)
             sum += hidden[j] * Weights[W1_OFFSET + j * CHANNEL_N + k];
         delta[k] = sum;

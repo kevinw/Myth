@@ -9,6 +9,9 @@ struct CellState
 };
 
 StructuredBuffer<CellState> SourceState : register(t0, space0);
+#if BROWSER
+[[vk::image_format("rgba8")]]
+#endif
 RWTexture2D<float4> Output : register(u0, space1);
 
 cbuffer Params : register(b0, space2)

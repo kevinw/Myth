@@ -8,8 +8,7 @@ namespace TinyLink;
 /// <summary>
 /// Renders a Growing Neural Cellular Automata simulation
 /// (https://distill.pub/2020/growing-ca/) on a per-pixel grid using
-/// compute shaders. Not supported in the browser (WebGPU) build, where
-/// it simply renders nothing.
+/// compute shaders.
 /// </summary>
 public class NeuralCellularActor : Actor
 {
@@ -97,10 +96,6 @@ public class NeuralCellularActor : Actor
 		base.Added();
 
 		graphicsDevice = Game.Manager.GraphicsDevice;
-
-		// The browser/WebGPU backend does not support compute shaders.
-		if (graphicsDevice.Driver == GraphicsDriver.WebGPU)
-			return;
 
 		var ext = graphicsDevice.Driver.GetShaderExtension();
 		var shaderDir = Path.Join(Assets.AssetsPath, "Shaders", "Compiled");
