@@ -48,6 +48,7 @@ public partial class Manager : App
 	/// </summary>
 	internal Game? game;
 	internal bool playing;
+	bool playOnStartup;
 	bool startingPlay;
 #if IOS
 	private const float PlayModePinchInThreshold = 0.82f;
@@ -158,17 +159,17 @@ public partial class Manager : App
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager(bool dumpAtlases = false, bool gym = false, bool headless = false, bool unthrottled = false, bool gymExitAfterAll = false, bool simple = false, bool bench = false, int maxFrames = int.MaxValue) : base(CreateAppConfig(gym, headless, unthrottled))
+	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled))
 	{
-		this.dumpAtlases = dumpAtlases;
-		this.gymMode = gym;
-		this.headless = headless;
-		this.unthrottled = unthrottled;
-		this.gymExitAfterAll = gymExitAfterAll;
-		Inbetweens.BenchMode = bench;
-		Inbetweens.MaxFrames = maxFrames;
-		if (simple)
-		{
+		dumpAtlases = args.dumpAtlases;
+		gymMode = args.gym;
+		headless = args.headless;
+		unthrottled = args.unthrottled;
+		gymExitAfterAll = args.gymExitAfterAll;
+		Inbetweens.BenchMode = args.bench;
+		Inbetweens.MaxFrames = args.maxFrames;
+		playOnStartup = args.play;
+		if (args.simple) {
 			PerfToggles.UseSimpleDefaults();
 			LightingDitherStrength = 0;
 		}
@@ -269,9 +270,14 @@ public partial class Manager : App
 #else
 		LoadAudioBanks();
 #endif
+
 #if BROWSER
+		playOnStartup = true; // may also be set by --play on desktop
+#endif
+
+	if (playOnStartup)
 		StartGame();
-#else
+#if !BROWSER
 		if (unthrottled)
 			Console.WriteLine("[Manager] unthrottled: running fixed 60fps steps as fast as possible (no wall-clock wait)");
 #endif
@@ -304,6 +310,7 @@ public partial class Manager : App
 #endif
 
 #if EDITOR
+	if (!playOnStartup)
 		SyncEditorGame();
 #endif
 	}
@@ -542,45 +549,49 @@ public partial class Manager : App
 		public bool AlwaysOnTop { get; init; }
 	}
 
+	private void HeadlessUpdate()
+	{
+		if (!playing) return;
+		if (game == null) return;
+
+		game.Update(true);
+		if (gymRuns == null) return;
+
+		if (game.GymBudDied)
+			AdvanceGym(success: false);
+		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
+			&& goal.OverlapsAny(Point2.Zero, bud))
+		{
+			AdvanceGym(success: true);
+		}
+		else if (Time.Seconds - gymRoomStartTime > 20.0)
+		{
+			Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
+			AdvanceGym(success: false);
+		}
+
+		if (Time.Seconds >= nextGymLog)
+		{
+			var bud = game.GetFirst<Bud>();
+			if (bud != null)
+				Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s gst={gymRoomStartTime:F2}s bud=({bud.Position.X:F0},{bud.Position.Y:F0}) lbl={bud.DebugNavLabel}");
+			nextGymLog += 5.0;
+		}
+		if (Time.Seconds - gymRoomStartTime > 1.0 && (int)((Time.Seconds - gymRoomStartTime) * 10) % 10 == 0)
+		{
+			var bud = game.GetFirst<Bud>();
+			if (bud != null)
+				Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
+		}
+	}
+
 	protected override void Update()
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
 
 		if (headless)
 		{
-			if (playing && game != null)
-			{
-				game.Update(true);
-				if (gymRuns != null)
-				{
-					if (game.GymBudDied)
-						AdvanceGym(success: false);
-					else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
-						&& goal.OverlapsAny(Point2.Zero, bud))
-					{
-						AdvanceGym(success: true);
-					}
-					else if (Time.Seconds - gymRoomStartTime > 20.0)
-					{
-						Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
-						AdvanceGym(success: false);
-					}
-
-					if (Time.Seconds >= nextGymLog)
-					{
-						var bud = game.GetFirst<Bud>();
-						if (bud != null)
-							Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s gst={gymRoomStartTime:F2}s bud=({bud.Position.X:F0},{bud.Position.Y:F0}) lbl={bud.DebugNavLabel}");
-						nextGymLog += 5.0;
-					}
-					if (Time.Seconds - gymRoomStartTime > 1.0 && (int)((Time.Seconds - gymRoomStartTime) * 10) % 10 == 0)
-					{
-						var bud = game.GetFirst<Bud>();
-						if (bud != null)
-							Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
-					}
-				}
-			}
+			HeadlessUpdate();
 			return;
 		}
 
@@ -711,9 +722,6 @@ public partial class Manager : App
 			batcher.Clear();
 			batcher.PushMatrix(Matrix3x2.CreateScale(Scale));
 
-			// draw editor/game box
-			// Box(WorkspaceRect);
-
 			// draw editor stuff if it's open
 			if (gameEase < 1.0f && !startingPlay)
 			{
@@ -812,16 +820,11 @@ public partial class Manager : App
 	{
 		if (!keyboardShortcutsBlocked)
 		{
-			if (Input.Keyboard.Pressed(Keys.F6))
-				ToggleLighting();
-			if (Input.Keyboard.Pressed(Keys.F7))
-				ToggleDitherAndTileField();
-			if (Input.Keyboard.Pressed(Keys.F8))
-				ToggleNormalBuffer();
-			if (Input.Keyboard.Pressed(Keys.F9))
-				TogglePostEffects();
-			if (Input.Keyboard.Pressed(Keys.F10))
-				ToggleEmissive();
+			if (Input.Keyboard.Pressed(Keys.F6)) ToggleLighting();
+			if (Input.Keyboard.Pressed(Keys.F7)) ToggleDitherAndTileField();
+			if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
+			if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
+			if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
 		}
 
 		var chordActive = false;
@@ -831,14 +834,10 @@ public partial class Manager : App
 				continue;
 
 			chordActive = true;
-			if (controller.Pressed(Buttons.South))
-				ToggleLighting();
-			if (controller.Pressed(Buttons.East))
-				ToggleDitherAndTileField();
-			if (controller.Pressed(Buttons.West))
-				ToggleNormalBuffer();
-			if (controller.Pressed(Buttons.North))
-				TogglePostEffects();
+			if (controller.Pressed(Buttons.South)) ToggleLighting();
+			if (controller.Pressed(Buttons.East)) ToggleDitherAndTileField();
+			if (controller.Pressed(Buttons.West)) ToggleNormalBuffer();
+			if (controller.Pressed(Buttons.North)) TogglePostEffects();
 		}
 
 		return chordActive;
@@ -1033,9 +1032,7 @@ public partial class Manager : App
 	private void CompileAndReloadShaders()
 	{
 		if (OperatingSystem.IsWindows())
-		{
 			throw new Exception("TODO: implement compiling shaders on windows with something like compile.sh");
-		}
 
 		var script = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders", "compile.sh"));
 		if (!File.Exists(script))
@@ -1234,18 +1231,18 @@ public partial class Manager : App
 			playing = true;
 			game.SnapCameraToGameplayTarget();
 #else
-			if (immediate)
-			{
-				playTransition = 1.0f;
-				playTransitionFromCenter = Vector2.Zero;
-				playTransitionFromSize = Vector2.Zero;
-				playTransitionToCenter = Vector2.Zero;
-				playTransitionToSize = Vector2.Zero;
-				gameEase = 1.0f;
-				startingPlay = false;
-				playing = true;
-				game.SnapCameraToGameplayTarget();
-			}
+		if (immediate)
+		{
+			playTransition = 1.0f;
+			playTransitionFromCenter = Vector2.Zero;
+			playTransitionFromSize = Vector2.Zero;
+			playTransitionToCenter = Vector2.Zero;
+			playTransitionToSize = Vector2.Zero;
+			gameEase = 1.0f;
+			startingPlay = false;
+			playing = true;
+			game.SnapCameraToGameplayTarget();
+		}
 #if EDITOR
 			else
 			{
@@ -1259,22 +1256,22 @@ public partial class Manager : App
 				playing = false;
 			}
 #else
-			else
-			{
-				playTransition = 1.0f;
-				playTransitionFromCenter = Vector2.Zero;
-				playTransitionFromSize = Vector2.Zero;
-				playTransitionToCenter = Vector2.Zero;
-				playTransitionToSize = Vector2.Zero;
-				gameEase = 1.0f;
-				startingPlay = false;
-				playing = true;
-				game.SnapCameraToGameplayTarget();
-			}
-#endif
-#endif
-			VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
+		else
+		{
+			playTransition = 1.0f;
+			playTransitionFromCenter = Vector2.Zero;
+			playTransitionFromSize = Vector2.Zero;
+			playTransitionToCenter = Vector2.Zero;
+			playTransitionToSize = Vector2.Zero;
+			gameEase = 1.0f;
+			startingPlay = false;
+			playing = true;
+			game.SnapCameraToGameplayTarget();
 		}
+#endif
+#endif
+		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
+	}
 
 #if EDITOR
 	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
@@ -1465,6 +1462,7 @@ public partial class Manager : App
 		game = CurrentRoom is { } room ? new Game(this, room, audioEventsEnabled: false, spawnBud: false) : null;
 	}
 
+#if !IOS && !BROWSER
 	private static void OpenFmodStudio()
 	{
 		var projectPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, FmodProjectPath));
@@ -1490,6 +1488,7 @@ public partial class Manager : App
 			Console.Error.WriteLine($"Failed to open FMOD Studio: {e}");
 		}
 	}
+#endif
 
 #endif
 }
