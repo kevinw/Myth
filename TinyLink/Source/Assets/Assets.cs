@@ -134,17 +134,17 @@ public static class Assets
 
 		// load main font file
 #if !BROWSER
-			if (Font == null)
-			{
-				Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
-				Font.LineGap = 4;
-			}
-			if (SpeechFont == null)
-			{
-				SpeechFont = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "m3x6.ttf"), 16, premultiplyAlpha: true, pixelPerfect: true);
-				SpeechFont.LineGap = 0;
-			}
-	#endif
+		if (Font == null)
+		{
+			Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
+			Font.LineGap = 4;
+		}
+		if (SpeechFont == null)
+		{
+			SpeechFont = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "m3x6.ttf"), 16, premultiplyAlpha: true, pixelPerfect: true);
+			SpeechFont.LineGap = 0;
+		}
+#endif
 
 		// get sprite files
 		foreach (var file in EnumerateAsepriteFiles(spritesPath))
@@ -608,14 +608,14 @@ public static class Assets
 		var tiles = new List<Image>();
 		var columns = bounds.Width / Game.TileSize;
 		var rows = bounds.Height / Game.TileSize;
-		for (var y = 0; y < rows; y ++)
-		for (var x = 0; x < columns; x ++)
-		{
-			var rect = bounds.Position + new Point2(x, y) * Game.TileSize;
-			var tileRect = new RectInt(rect.X, rect.Y, Game.TileSize, Game.TileSize);
-			if (HasOpaquePixel(source, tileRect))
-				tiles.Add(ExtractTile(source, tileRect));
-		}
+		for (var y = 0; y < rows; y++)
+			for (var x = 0; x < columns; x++)
+			{
+				var rect = bounds.Position + new Point2(x, y) * Game.TileSize;
+				var tileRect = new RectInt(rect.X, rect.Y, Game.TileSize, Game.TileSize);
+				if (HasOpaquePixel(source, tileRect))
+					tiles.Add(ExtractTile(source, tileRect));
+			}
 
 		if (required && tiles.Count <= 0)
 			throw new InvalidOperationException($"Dual tileset kit '{kitName}' slice '{slice.Name}' does not contain any non-empty {Game.TileSize}x{Game.TileSize} tile.");
@@ -624,10 +624,10 @@ public static class Assets
 
 	private static bool HasOpaquePixel(Image image, RectInt rect)
 	{
-		for (var y = rect.Y; y < rect.Bottom; y ++)
-		for (var x = rect.X; x < rect.Right; x ++)
-			if (image[x, y].A > 0)
-				return true;
+		for (var y = rect.Y; y < rect.Bottom; y++)
+			for (var x = rect.X; x < rect.Right; x++)
+				if (image[x, y].A > 0)
+					return true;
 		return false;
 	}
 
@@ -745,38 +745,38 @@ public static class Assets
 		const float bend = 1.25f;
 
 		for (var y = 0; y < Game.TileSize; y++)
-		for (var x = 0; x < Game.TileSize; x++)
-		{
-			var alpha = AlphaAt(alphaMask, source.X + x, source.Y + y);
-			if (alpha <= 0)
-				continue;
+			for (var x = 0; x < Game.TileSize; x++)
+			{
+				var alpha = AlphaAt(alphaMask, source.X + x, source.Y + y);
+				if (alpha <= 0)
+					continue;
 
-			var sx =
-				AlphaAtClampedToSource(alphaMask, source, x - 1, y - 1) +
-				AlphaAtClampedToSource(alphaMask, source, x - 1, y) * 2 +
-				AlphaAtClampedToSource(alphaMask, source, x - 1, y + 1) -
-				AlphaAtClampedToSource(alphaMask, source, x + 1, y - 1) -
-				AlphaAtClampedToSource(alphaMask, source, x + 1, y) * 2 -
-				AlphaAtClampedToSource(alphaMask, source, x + 1, y + 1);
-			var sy =
-				AlphaAtClampedToSource(alphaMask, source, x - 1, y - 1) +
-				AlphaAtClampedToSource(alphaMask, source, x, y - 1) * 2 +
-				AlphaAtClampedToSource(alphaMask, source, x + 1, y - 1) -
-				AlphaAtClampedToSource(alphaMask, source, x - 1, y + 1) -
-				AlphaAtClampedToSource(alphaMask, source, x, y + 1) * 2 -
-				AlphaAtClampedToSource(alphaMask, source, x + 1, y + 1);
+				var sx =
+					AlphaAtClampedToSource(alphaMask, source, x - 1, y - 1) +
+					AlphaAtClampedToSource(alphaMask, source, x - 1, y) * 2 +
+					AlphaAtClampedToSource(alphaMask, source, x - 1, y + 1) -
+					AlphaAtClampedToSource(alphaMask, source, x + 1, y - 1) -
+					AlphaAtClampedToSource(alphaMask, source, x + 1, y) * 2 -
+					AlphaAtClampedToSource(alphaMask, source, x + 1, y + 1);
+				var sy =
+					AlphaAtClampedToSource(alphaMask, source, x - 1, y - 1) +
+					AlphaAtClampedToSource(alphaMask, source, x, y - 1) * 2 +
+					AlphaAtClampedToSource(alphaMask, source, x + 1, y - 1) -
+					AlphaAtClampedToSource(alphaMask, source, x - 1, y + 1) -
+					AlphaAtClampedToSource(alphaMask, source, x, y + 1) * 2 -
+					AlphaAtClampedToSource(alphaMask, source, x + 1, y + 1);
 
-			var strength = Math.Clamp(MathF.Sqrt(sx * sx + sy * sy) * 0.5f, 0, 1) * alpha;
-			if (strength <= 0)
-				continue;
+				var strength = Math.Clamp(MathF.Sqrt(sx * sx + sy * sy) * 0.5f, 0, 1) * alpha;
+				if (strength <= 0)
+					continue;
 
-			var normal = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
-			output[destination.X + x, destination.Y + y] = new Color(
-				normal.X * 0.5f + 0.5f,
-				normal.Y * 0.5f + 0.5f,
-				normal.Z * 0.5f + 0.5f,
-				strength);
-		}
+				var normal = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
+				output[destination.X + x, destination.Y + y] = new Color(
+					normal.X * 0.5f + 0.5f,
+					normal.Y * 0.5f + 0.5f,
+					normal.Z * 0.5f + 0.5f,
+					strength);
+			}
 	}
 
 	private static float AlphaAtClampedToSource(Image image, RectInt source, int x, int y)
@@ -793,35 +793,35 @@ public static class Assets
 		const int edgeWidth = 2;
 
 		for (var y = 0; y < Game.TileSize; y++)
-		for (var x = 0; x < Game.TileSize; x++)
-		{
-			var alpha = alphaMask[source.X + x, source.Y + y].A;
-			if (alpha == 0)
-				continue;
+			for (var x = 0; x < Game.TileSize; x++)
+			{
+				var alpha = alphaMask[source.X + x, source.Y + y].A;
+				if (alpha == 0)
+					continue;
 
-			var color = fill[x, y];
-			if (edge != null && IsMaskEdge(alphaMask, source, x, y, edgeWidth))
-				color = edge[x, y];
+				var color = fill[x, y];
+				if (edge != null && IsMaskEdge(alphaMask, source, x, y, edgeWidth))
+					color = edge[x, y];
 
-			color.A = (byte)(color.A * alpha / 255);
-			output[destination.X + x, destination.Y + y] = color;
-		}
+				color.A = (byte)(color.A * alpha / 255);
+				output[destination.X + x, destination.Y + y] = color;
+			}
 	}
 
 	private static bool IsMaskEdge(Image mask, RectInt source, int x, int y, int width)
 	{
 		for (var oy = -width; oy <= width; oy++)
-		for (var ox = -width; ox <= width; ox++)
-		{
-			if (Math.Abs(ox) + Math.Abs(oy) > width)
-				continue;
-			var sampleX = source.X + x + ox;
-			var sampleY = source.Y + y + oy;
-			if (sampleX < source.X || sampleY < source.Y || sampleX >= source.Right || sampleY >= source.Bottom)
-				continue;
-			if (mask[sampleX, sampleY].A == 0)
-				return true;
-		}
+			for (var ox = -width; ox <= width; ox++)
+			{
+				if (Math.Abs(ox) + Math.Abs(oy) > width)
+					continue;
+				var sampleX = source.X + x + ox;
+				var sampleY = source.Y + y + oy;
+				if (sampleX < source.X || sampleY < source.Y || sampleX >= source.Right || sampleY >= source.Bottom)
+					continue;
+				if (mask[sampleX, sampleY].A == 0)
+					return true;
+			}
 		return false;
 	}
 
@@ -1092,12 +1092,15 @@ public static class Assets
 
 #endif
 
+	internal static bool UseUserRooms = false;
+
 	private static void LoadRooms()
 	{
 		Rooms.Clear();
 		RoomsById.Clear();
 
-		var deleted = LoadUserRoomTombstones();
+
+		var deleted = UseUserRooms ? LoadUserRoomTombstones() : [];
 
 		if (Directory.Exists(WorldRoomsPath))
 			foreach (var file in Directory.EnumerateFiles(WorldRoomsPath, "*.json"))
@@ -1113,7 +1116,7 @@ public static class Assets
 				});
 			}
 
-		if (UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
+		if (UseUserRooms && UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
 			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json"))
 				AddRoom(new Room(file)
 				{
@@ -1346,22 +1349,22 @@ public static class Assets
 		var normal = new Image(source.Width, source.Height);
 		const float bend = 1.25f;
 
-		for (var y = 0; y < source.Height; y ++)
-		for (var x = 0; x < source.Width; x ++)
-		{
-			var alpha = AlphaAt(source, x, y);
-			if (alpha <= 0)
-				continue;
+		for (var y = 0; y < source.Height; y++)
+			for (var x = 0; x < source.Width; x++)
+			{
+				var alpha = AlphaAt(source, x, y);
+				if (alpha <= 0)
+					continue;
 
-			var sx = AlphaAt(source, x - 1, y) - AlphaAt(source, x + 1, y);
-			var sy = AlphaAt(source, x, y - 1) - AlphaAt(source, x, y + 1);
-			var n = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
-			normal[x, y] = new Color(
-				n.X * 0.5f + 0.5f,
-				n.Y * 0.5f + 0.5f,
-				n.Z * 0.5f + 0.5f,
-				alpha);
-		}
+				var sx = AlphaAt(source, x - 1, y) - AlphaAt(source, x + 1, y);
+				var sy = AlphaAt(source, x, y - 1) - AlphaAt(source, x, y + 1);
+				var n = Vector3.Normalize(new Vector3(sx * bend, sy * bend, 1));
+				normal[x, y] = new Color(
+					n.X * 0.5f + 0.5f,
+					n.Y * 0.5f + 0.5f,
+					n.Z * 0.5f + 0.5f,
+					alpha);
+			}
 
 		return normal;
 	}
@@ -1369,9 +1372,9 @@ public static class Assets
 	private static Image ExtractTile(Image source, RectInt sourceRect)
 	{
 		var output = new Image(sourceRect.Width, sourceRect.Height);
-		for (var y = 0; y < sourceRect.Height; y ++)
-		for (var x = 0; x < sourceRect.Width; x ++)
-			output[x, y] = source[sourceRect.X + x, sourceRect.Y + y];
+		for (var y = 0; y < sourceRect.Height; y++)
+			for (var x = 0; x < sourceRect.Width; x++)
+				output[x, y] = source[sourceRect.X + x, sourceRect.Y + y];
 		return output;
 	}
 
@@ -1379,19 +1382,19 @@ public static class Assets
 	{
 		var output = new Image(source.Width, source.Height);
 
-		for (var y = 0; y < source.Height; y ++)
-		for (var x = 0; x < source.Width; x ++)
-		{
-			if (!IsSlopeMaskSolid(x, y, direction, fill, runLength, runIndex))
+		for (var y = 0; y < source.Height; y++)
+			for (var x = 0; x < source.Width; x++)
 			{
-				output[x, y] = Color.Transparent;
-				continue;
-			}
+				if (!IsSlopeMaskSolid(x, y, direction, fill, runLength, runIndex))
+				{
+					output[x, y] = Color.Transparent;
+					continue;
+				}
 
-			output[x, y] = edge != null && IsSlopeMaskEdge(x, y, direction, fill, runLength, runIndex)
-				? edge[x, y]
-				: source[x, y];
-		}
+				output[x, y] = edge != null && IsSlopeMaskEdge(x, y, direction, fill, runLength, runIndex)
+					? edge[x, y]
+					: source[x, y];
+			}
 
 		return output;
 	}
@@ -1416,45 +1419,45 @@ public static class Assets
 	{
 		const int edgeWidth = 2;
 		for (var oy = -edgeWidth; oy <= edgeWidth; oy++)
-		for (var ox = -edgeWidth; ox <= edgeWidth; ox++)
-		{
-			if (Math.Abs(ox) + Math.Abs(oy) > edgeWidth)
-				continue;
+			for (var ox = -edgeWidth; ox <= edgeWidth; ox++)
+			{
+				if (Math.Abs(ox) + Math.Abs(oy) > edgeWidth)
+					continue;
 
-			var sampleX = x + ox;
-			var sampleY = y + oy;
-			if (sampleX < 0 || sampleY < 0 || sampleX >= Game.TileSize || sampleY >= Game.TileSize)
-				continue;
+				var sampleX = x + ox;
+				var sampleY = y + oy;
+				if (sampleX < 0 || sampleY < 0 || sampleX >= Game.TileSize || sampleY >= Game.TileSize)
+					continue;
 
-			if (!IsSlopeMaskSolid(sampleX, sampleY, direction, fill, runLength, runIndex))
-				return true;
-		}
+				if (!IsSlopeMaskSolid(sampleX, sampleY, direction, fill, runLength, runIndex))
+					return true;
+			}
 
 		return false;
 	}
 
 	private static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, Image? edge = null)
 	{
-		for (var run = 1; run <= MaxSlopeRun; run ++)
-		for (var index = 0; index < run; index ++)
-		{
-			packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index, edge));
-			packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index, edge));
-			packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index, edge));
-			packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index, edge));
-		}
+		for (var run = 1; run <= MaxSlopeRun; run++)
+			for (var index = 0; index < run; index++)
+			{
+				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index, edge));
+				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index, edge));
+				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index, edge));
+				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index, edge));
+			}
 	}
 
 	private static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, int variantIndex, Image? edge = null)
 	{
-		for (var run = 1; run <= MaxSlopeRun; run ++)
-		for (var index = 0; index < run; index ++)
-		{
-			packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index, edge));
-			packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index, edge));
-			packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index, edge));
-			packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index, edge));
-		}
+		for (var run = 1; run <= MaxSlopeRun; run++)
+			for (var index = 0; index < run; index++)
+			{
+				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index, edge));
+				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index, edge));
+				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index, edge));
+				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index, edge));
+			}
 	}
 
 	private static float AlphaAt(Image image, int x, int y)
@@ -1470,11 +1473,11 @@ public static class Assets
 		Atlas?.Dispose();
 		Atlas = null;
 		LightingNoise?.Dispose();
-			LightingNoise = null;
-			Font = null;
-			SpeechFont = null;
+		LightingNoise = null;
+		Font = null;
+		SpeechFont = null;
 
-			Sprites.Clear();
+		Sprites.Clear();
 		Tilesets.Clear();
 		Subtextures.Clear();
 		Rooms.Clear();
@@ -1500,9 +1503,9 @@ public static class Assets
 			return null;
 
 		foreach (var room in RoomsById.Values)
-		foreach (var actor in room.Actors)
-			if (string.Equals(ActorSpecs.ReadString(actor, "Id"), id, StringComparison.OrdinalIgnoreCase))
-				return (room, actor);
+			foreach (var actor in room.Actors)
+				if (string.Equals(ActorSpecs.ReadString(actor, "Id"), id, StringComparison.OrdinalIgnoreCase))
+					return (room, actor);
 
 		return null;
 	}
