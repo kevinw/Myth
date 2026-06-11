@@ -1,6 +1,7 @@
 
 
 using System.Numerics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Foster.Framework;
 
@@ -28,6 +29,13 @@ public static class Assets
 		{ "spitter", 4 },
 		{ "mosquito", 4 },
 	};
+
+	// Transition pairs loaded from anim_transitions.json: (spriteName, fromTag, toTag) -> count
+	public static readonly Dictionary<(string SpriteName, string FromTag, string ToTag), int> TransitionPairs = new();
+
+	// Populated during the pack loop, consumed in ReloadSpriteAsset
+	public record struct GeneratedTransition(string FromTag, string ToTag, int FrameCount, float[] Durations);
+	public static readonly Dictionary<string, List<GeneratedTransition>> GeneratedTransitions = new();
 
 	// Expanded frame durations for sprites with inbetweens
 	private static readonly Dictionary<string, float[]> ExpandedFrameDurations = new();
@@ -118,6 +126,10 @@ public static class Assets
 		var generatedSlopeEdgeImages = new Dictionary<string, List<Image>>();
 		var kitGeneratedTilesets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+		Actor.TransitionCounts.Clear();
+		GeneratedTransitions.Clear();
+		LoadTransitionData();
+
 		// load main font file
 #if !BROWSER
 		if (Font == null)
@@ -196,6 +208,8 @@ public static class Assets
 						packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
 					}
 				}
+
+				GenerateTransitionFrames(name, ase, frames, ibCount, packer);
 			}
 
 			foreach (var (name, ase, layerFilter) in generatedSprites)
@@ -835,6 +849,107 @@ public static class Assets
 		(TileQuadrants.All, new(2, 1)),
 	];
 
+	private static void LoadTransitionData()
+	{
+		TransitionPairs.Clear();
+
+		var path = Path.Join(AssetsPath, "anim_transitions.json");
+		if (!File.Exists(path))
+			return;
+
+		try
+		{
+			using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
+			var root = doc.RootElement;
+			if (root.ValueKind != JsonValueKind.Array)
+				return;
+
+			foreach (var item in root.EnumerateArray())
+			{
+				var spriteName = item.GetProperty("spriteName").GetString();
+				var fromTag = item.GetProperty("fromTag").GetString();
+				var toTag = item.GetProperty("toTag").GetString();
+				var count = item.GetProperty("count").GetInt32();
+
+				if (spriteName != null && fromTag != null && toTag != null && count > 0)
+					TransitionPairs[(spriteName, fromTag, toTag)] = count;
+			}
+
+			// Console.WriteLine($"Loaded {TransitionPairs.Count} animation transitions from anim_transitions.json");
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load anim_transitions.json: {e.Message}");
+		}
+	}
+
+	private static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, int ibCount, Packer packer)
+	{
+		var ownTransitions = TransitionPairs
+			.Where(kv => kv.Key.SpriteName == name && kv.Value > 0)
+			.ToList();
+
+		if (ownTransitions.Count == 0)
+			return;
+
+		// Resolve tag indices for all pairs (sequential, quick)
+		var pairs = new List<(string FromTag, string ToTag, int FromIdx, int ToIdx)>();
+		foreach (var (key, _) in ownTransitions)
+		{
+			Aseprite.Tag? fromTag = null, toTag = null;
+			foreach (var tag in ase.Tags)
+			{
+				if (tag.Name == key.FromTag) fromTag = tag;
+				if (tag.Name == key.ToTag) toTag = tag;
+			}
+			if (fromTag == null || toTag == null)
+				continue;
+
+			int fromLastIdx = fromTag.Value.To;
+			int toFirstIdx = toTag.Value.From;
+
+			if (fromLastIdx >= frames.Length || toFirstIdx >= frames.Length)
+				continue;
+
+			pairs.Add((key.FromTag, key.ToTag, fromLastIdx, toFirstIdx));
+		}
+
+		if (pairs.Count == 0)
+			return;
+
+		// Generate all in-betweens in parallel (ComputeFlow / Warp are pure, thread-safe)
+		var transCount = 5;
+		var results = new (Image[] Frames, float[] Durations)?[pairs.Count];
+		Parallel.For(0, pairs.Count, i =>
+		{
+			var p = pairs[i];
+			results[i] = Inbetweens.GenerateForPair(frames[p.FromIdx], frames[p.ToIdx], transCount);
+		});
+
+		// Pack results sequentially (packer.Add is not thread-safe)
+		var transitions = new List<GeneratedTransition>();
+		for (int i = 0; i < pairs.Count; i++)
+		{
+			if (results[i] is not (var transFrames, var transDurations))
+				continue;
+
+			var p = pairs[i];
+			// Console.WriteLine($"[Transition] generated {transFrames.Length} frames for {name}: {p.FromTag} -> {p.ToTag}");
+
+			string prefix = $"{name}/transition/{p.FromTag}->{p.ToTag}";
+			for (int j = 0; j < transFrames.Length; j++)
+			{
+				packer.Add($"{prefix}/{j}", transFrames[j]);
+				packer.Add($"{prefix}/normal/{j}", GenerateNormalMap(transFrames[j]));
+			}
+
+			transitions.Add(new(p.FromTag, p.ToTag, transFrames.Length, transDurations));
+		}
+
+		if (transitions.Count > 0)
+			GeneratedTransitions[name] = transitions;
+	}
+
 	private static Texture? LoadTexture(GraphicsDevice gfx, string relativePath, string name)
 	{
 		var path = Path.Join(AssetsPath, relativePath);
@@ -900,6 +1015,30 @@ public static class Assets
 			for (int i = animFrom; i < animFrom + animCount && i < frames.Count; i++)
 				duration += frames[i].Duration;
 			animations.Add(new(tag.Name, animFrom, animCount, duration));
+		}
+
+		// Add transition animations
+		if (GeneratedTransitions.TryGetValue(name, out var transitions))
+		{
+			int transFrameStart = frames.Count;
+			foreach (var trans in transitions)
+			{
+				float duration = 0;
+				for (int i = 0; i < trans.FrameCount; i++)
+				{
+					int idx = transFrameStart + i;
+					var subtexture = subtextures[$"{name}/transition/{trans.FromTag}->{trans.ToTag}/{i}"];
+					frames.Add(new(
+						subtexture,
+						new Subtexture(subtexture.Texture, subtexture.Source),
+						subtextures[$"{name}/transition/{trans.FromTag}->{trans.ToTag}/normal/{i}"],
+						trans.Durations[i]));
+					duration += trans.Durations[i];
+				}
+				animations.Add(new($"{trans.FromTag}->{trans.ToTag}", transFrameStart, trans.FrameCount, duration));
+				// Console.WriteLine($"[Transition] registered {trans.FrameCount}-frame animation \"{trans.FromTag}->{trans.ToTag}\" for sprite \"{name}\" (frames {transFrameStart}–{transFrameStart + trans.FrameCount - 1})");
+				transFrameStart += trans.FrameCount;
+			}
 		}
 
 		sprite.Reload(origin, frames, animations);

@@ -1,0 +1,1140 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
+struct CellState
+{
+    float c[16];
+};
+
+struct type_StructuredBuffer_CellState
+{
+    CellState _m0[1];
+};
+
+struct type_StructuredBuffer_float
+{
+    float _m0[1];
+};
+
+struct type_RWStructuredBuffer_CellState
+{
+    CellState _m0[1];
+};
+
+struct type_Params
+{
+    uint Width;
+    uint Height;
+    uint Seed;
+    float FireRate;
+};
+
+constant spvUnsafeArray<float, 3> _78 = spvUnsafeArray<float, 3>({ -0.125, 0.0, 0.125 });
+constant spvUnsafeArray<float, 3> _79 = spvUnsafeArray<float, 3>({ -0.25, 0.0, 0.25 });
+constant spvUnsafeArray<spvUnsafeArray<float, 3>, 3> _80 = spvUnsafeArray<spvUnsafeArray<float, 3>, 3>({ spvUnsafeArray<float, 3>({ -0.125, 0.0, 0.125 }), spvUnsafeArray<float, 3>({ -0.25, 0.0, 0.25 }), spvUnsafeArray<float, 3>({ -0.125, 0.0, 0.125 }) });
+constant spvUnsafeArray<float, 3> _81 = spvUnsafeArray<float, 3>({ -0.125, -0.25, -0.125 });
+constant spvUnsafeArray<float, 3> _82 = spvUnsafeArray<float, 3>({ 0.0, 0.0, 0.0 });
+constant spvUnsafeArray<float, 3> _83 = spvUnsafeArray<float, 3>({ 0.125, 0.25, 0.125 });
+constant spvUnsafeArray<spvUnsafeArray<float, 3>, 3> _84 = spvUnsafeArray<spvUnsafeArray<float, 3>, 3>({ spvUnsafeArray<float, 3>({ -0.125, -0.25, -0.125 }), spvUnsafeArray<float, 3>({ 0.0, 0.0, 0.0 }), spvUnsafeArray<float, 3>({ 0.125, 0.25, 0.125 }) });
+constant spvUnsafeArray<float, 16> _141 = spvUnsafeArray<float, 16>({ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], device type_StructuredBuffer_CellState& SourceState [[buffer(1)]], device type_StructuredBuffer_float& Weights [[buffer(2)]], device type_RWStructuredBuffer_CellState& DestState [[buffer(3)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    do
+    {
+        bool _170;
+        if (!(gl_GlobalInvocationID.x >= Params.Width))
+        {
+            _170 = gl_GlobalInvocationID.y >= Params.Height;
+        }
+        else
+        {
+            _170 = true;
+        }
+        if (_170)
+        {
+            break;
+        }
+        int _173 = int(gl_GlobalInvocationID.x);
+        int _176 = int(gl_GlobalInvocationID.y);
+        int2 _177 = int2(_173, _176);
+        uint _179 = (gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x;
+        int2 _180 = _177 + int2(-1);
+        float _217;
+        do
+        {
+            int _183 = _180.x;
+            bool _190;
+            if (!(_183 < 0))
+            {
+                _190 = _180.y < 0;
+            }
+            else
+            {
+                _190 = true;
+            }
+            bool _196;
+            if (!_190)
+            {
+                _196 = _183 >= int(Params.Width);
+            }
+            else
+            {
+                _196 = true;
+            }
+            bool _205;
+            if (!_196)
+            {
+                _205 = _180.y >= int(Params.Height);
+            }
+            else
+            {
+                _205 = true;
+            }
+            if (_205)
+            {
+                _217 = 0.0;
+                break;
+            }
+            _217 = SourceState._m0[(uint(_180.y) * Params.Width) + uint(_183)].c[3];
+            break;
+        } while(false);
+        int2 _219 = _177 + int2(0, -1);
+        float _256;
+        do
+        {
+            int _222 = _219.x;
+            bool _229;
+            if (!(_222 < 0))
+            {
+                _229 = _219.y < 0;
+            }
+            else
+            {
+                _229 = true;
+            }
+            bool _235;
+            if (!_229)
+            {
+                _235 = _222 >= int(Params.Width);
+            }
+            else
+            {
+                _235 = true;
+            }
+            bool _244;
+            if (!_235)
+            {
+                _244 = _219.y >= int(Params.Height);
+            }
+            else
+            {
+                _244 = true;
+            }
+            if (_244)
+            {
+                _256 = 0.0;
+                break;
+            }
+            _256 = SourceState._m0[(uint(_219.y) * Params.Width) + uint(_222)].c[3];
+            break;
+        } while(false);
+        int2 _258 = _177 + int2(1, -1);
+        float _295;
+        do
+        {
+            int _261 = _258.x;
+            bool _268;
+            if (!(_261 < 0))
+            {
+                _268 = _258.y < 0;
+            }
+            else
+            {
+                _268 = true;
+            }
+            bool _274;
+            if (!_268)
+            {
+                _274 = _261 >= int(Params.Width);
+            }
+            else
+            {
+                _274 = true;
+            }
+            bool _283;
+            if (!_274)
+            {
+                _283 = _258.y >= int(Params.Height);
+            }
+            else
+            {
+                _283 = true;
+            }
+            if (_283)
+            {
+                _295 = 0.0;
+                break;
+            }
+            _295 = SourceState._m0[(uint(_258.y) * Params.Width) + uint(_261)].c[3];
+            break;
+        } while(false);
+        int2 _297 = _177 + int2(-1, 0);
+        float _334;
+        do
+        {
+            int _300 = _297.x;
+            bool _307;
+            if (!(_300 < 0))
+            {
+                _307 = _297.y < 0;
+            }
+            else
+            {
+                _307 = true;
+            }
+            bool _313;
+            if (!_307)
+            {
+                _313 = _300 >= int(Params.Width);
+            }
+            else
+            {
+                _313 = true;
+            }
+            bool _322;
+            if (!_313)
+            {
+                _322 = _297.y >= int(Params.Height);
+            }
+            else
+            {
+                _322 = true;
+            }
+            if (_322)
+            {
+                _334 = 0.0;
+                break;
+            }
+            _334 = SourceState._m0[(uint(_297.y) * Params.Width) + uint(_300)].c[3];
+            break;
+        } while(false);
+        bool _339;
+        float _368;
+        do
+        {
+            _339 = !(_173 < 0);
+            bool _343;
+            if (_339)
+            {
+                _343 = _176 < 0;
+            }
+            else
+            {
+                _343 = true;
+            }
+            bool _349;
+            if (!_343)
+            {
+                _349 = _173 >= int(Params.Width);
+            }
+            else
+            {
+                _349 = true;
+            }
+            bool _357;
+            if (!_349)
+            {
+                _357 = _176 >= int(Params.Height);
+            }
+            else
+            {
+                _357 = true;
+            }
+            if (_357)
+            {
+                _368 = 0.0;
+                break;
+            }
+            _368 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[3];
+            break;
+        } while(false);
+        int2 _370 = _177 + int2(1, 0);
+        float _407;
+        do
+        {
+            int _373 = _370.x;
+            bool _380;
+            if (!(_373 < 0))
+            {
+                _380 = _370.y < 0;
+            }
+            else
+            {
+                _380 = true;
+            }
+            bool _386;
+            if (!_380)
+            {
+                _386 = _373 >= int(Params.Width);
+            }
+            else
+            {
+                _386 = true;
+            }
+            bool _395;
+            if (!_386)
+            {
+                _395 = _370.y >= int(Params.Height);
+            }
+            else
+            {
+                _395 = true;
+            }
+            if (_395)
+            {
+                _407 = 0.0;
+                break;
+            }
+            _407 = SourceState._m0[(uint(_370.y) * Params.Width) + uint(_373)].c[3];
+            break;
+        } while(false);
+        int2 _409 = _177 + int2(-1, 1);
+        float _446;
+        do
+        {
+            int _412 = _409.x;
+            bool _419;
+            if (!(_412 < 0))
+            {
+                _419 = _409.y < 0;
+            }
+            else
+            {
+                _419 = true;
+            }
+            bool _425;
+            if (!_419)
+            {
+                _425 = _412 >= int(Params.Width);
+            }
+            else
+            {
+                _425 = true;
+            }
+            bool _434;
+            if (!_425)
+            {
+                _434 = _409.y >= int(Params.Height);
+            }
+            else
+            {
+                _434 = true;
+            }
+            if (_434)
+            {
+                _446 = 0.0;
+                break;
+            }
+            _446 = SourceState._m0[(uint(_409.y) * Params.Width) + uint(_412)].c[3];
+            break;
+        } while(false);
+        int2 _448 = _177 + int2(0, 1);
+        float _485;
+        do
+        {
+            int _451 = _448.x;
+            bool _458;
+            if (!(_451 < 0))
+            {
+                _458 = _448.y < 0;
+            }
+            else
+            {
+                _458 = true;
+            }
+            bool _464;
+            if (!_458)
+            {
+                _464 = _451 >= int(Params.Width);
+            }
+            else
+            {
+                _464 = true;
+            }
+            bool _473;
+            if (!_464)
+            {
+                _473 = _448.y >= int(Params.Height);
+            }
+            else
+            {
+                _473 = true;
+            }
+            if (_473)
+            {
+                _485 = 0.0;
+                break;
+            }
+            _485 = SourceState._m0[(uint(_448.y) * Params.Width) + uint(_451)].c[3];
+            break;
+        } while(false);
+        int2 _487 = _177 + int2(1);
+        float _524;
+        do
+        {
+            int _490 = _487.x;
+            bool _497;
+            if (!(_490 < 0))
+            {
+                _497 = _487.y < 0;
+            }
+            else
+            {
+                _497 = true;
+            }
+            bool _503;
+            if (!_497)
+            {
+                _503 = _490 >= int(Params.Width);
+            }
+            else
+            {
+                _503 = true;
+            }
+            bool _512;
+            if (!_503)
+            {
+                _512 = _487.y >= int(Params.Height);
+            }
+            else
+            {
+                _512 = true;
+            }
+            if (_512)
+            {
+                _524 = 0.0;
+                break;
+            }
+            _524 = SourceState._m0[(uint(_487.y) * Params.Width) + uint(_490)].c[3];
+            break;
+        } while(false);
+        if (!(precise::max(precise::max(precise::max(precise::max(precise::max(precise::max(precise::max(precise::max(precise::max(-1.0, _217), _256), _295), _334), _368), _407), _446), _485), _524) > 0.100000001490116119384765625))
+        {
+            DestState._m0[_179] = CellState{ { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } };
+            break;
+        }
+        float _576;
+        float _577;
+        float _578;
+        float _579;
+        float _580;
+        float _581;
+        float _582;
+        float _583;
+        float _584;
+        float _585;
+        float _586;
+        float _587;
+        float _588;
+        float _589;
+        float _590;
+        float _591;
+        do
+        {
+            bool _536;
+            if (_339)
+            {
+                _536 = _176 < 0;
+            }
+            else
+            {
+                _536 = true;
+            }
+            bool _542;
+            if (!_536)
+            {
+                _542 = _173 >= int(Params.Width);
+            }
+            else
+            {
+                _542 = true;
+            }
+            bool _550;
+            if (!_542)
+            {
+                _550 = _176 >= int(Params.Height);
+            }
+            else
+            {
+                _550 = true;
+            }
+            if (_550)
+            {
+                _576 = 0.0;
+                _577 = 0.0;
+                _578 = 0.0;
+                _579 = 0.0;
+                _580 = 0.0;
+                _581 = 0.0;
+                _582 = 0.0;
+                _583 = 0.0;
+                _584 = 0.0;
+                _585 = 0.0;
+                _586 = 0.0;
+                _587 = 0.0;
+                _588 = 0.0;
+                _589 = 0.0;
+                _590 = 0.0;
+                _591 = 0.0;
+                break;
+            }
+            _576 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[0];
+            _577 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[1];
+            _578 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[2];
+            _579 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[3];
+            _580 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[4];
+            _581 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[5];
+            _582 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[6];
+            _583 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[7];
+            _584 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[8];
+            _585 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[9];
+            _586 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[10];
+            _587 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[11];
+            _588 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[12];
+            _589 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[13];
+            _590 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[14];
+            _591 = SourceState._m0[(uint(_176) * Params.Width) + uint(_173)].c[15];
+            break;
+        } while(false);
+        float _593;
+        float _596;
+        float _598;
+        float _600;
+        float _602;
+        float _604;
+        float _606;
+        float _608;
+        float _610;
+        float _612;
+        float _614;
+        float _616;
+        float _618;
+        float _620;
+        float _622;
+        float _624;
+        float _626;
+        float _628;
+        float _630;
+        float _632;
+        float _634;
+        float _636;
+        float _638;
+        float _640;
+        float _642;
+        float _644;
+        float _646;
+        float _648;
+        float _650;
+        float _652;
+        float _654;
+        float _656;
+        _593 = 0.0;
+        _596 = 0.0;
+        _598 = 0.0;
+        _600 = 0.0;
+        _602 = 0.0;
+        _604 = 0.0;
+        _606 = 0.0;
+        _608 = 0.0;
+        _610 = 0.0;
+        _612 = 0.0;
+        _614 = 0.0;
+        _616 = 0.0;
+        _618 = 0.0;
+        _620 = 0.0;
+        _622 = 0.0;
+        _624 = 0.0;
+        _626 = 0.0;
+        _628 = 0.0;
+        _630 = 0.0;
+        _632 = 0.0;
+        _634 = 0.0;
+        _636 = 0.0;
+        _638 = 0.0;
+        _640 = 0.0;
+        _642 = 0.0;
+        _644 = 0.0;
+        _646 = 0.0;
+        _648 = 0.0;
+        _650 = 0.0;
+        _652 = 0.0;
+        _654 = 0.0;
+        _656 = 0.0;
+        float _594;
+        float _597;
+        float _599;
+        float _601;
+        float _603;
+        float _605;
+        float _607;
+        float _609;
+        float _611;
+        float _613;
+        float _615;
+        float _617;
+        float _619;
+        float _621;
+        float _623;
+        float _625;
+        float _627;
+        float _629;
+        float _631;
+        float _633;
+        float _635;
+        float _637;
+        float _639;
+        float _641;
+        float _643;
+        float _645;
+        float _647;
+        float _649;
+        float _651;
+        float _653;
+        float _655;
+        float _657;
+        for (int _658 = -1; _658 <= 1; _593 = _594, _596 = _597, _598 = _599, _600 = _601, _602 = _603, _604 = _605, _606 = _607, _608 = _609, _610 = _611, _612 = _613, _614 = _615, _616 = _617, _618 = _619, _620 = _621, _622 = _623, _624 = _625, _626 = _627, _628 = _629, _630 = _631, _632 = _633, _634 = _635, _636 = _637, _638 = _639, _640 = _641, _642 = _643, _644 = _645, _646 = _647, _648 = _649, _650 = _651, _652 = _653, _654 = _655, _656 = _657, _658++)
+        {
+            _594 = _593;
+            _597 = _596;
+            _599 = _598;
+            _601 = _600;
+            _603 = _602;
+            _605 = _604;
+            _607 = _606;
+            _609 = _608;
+            _611 = _610;
+            _613 = _612;
+            _615 = _614;
+            _617 = _616;
+            _619 = _618;
+            _621 = _620;
+            _623 = _622;
+            _625 = _624;
+            _627 = _626;
+            _629 = _628;
+            _631 = _630;
+            _633 = _632;
+            _635 = _634;
+            _637 = _636;
+            _639 = _638;
+            _641 = _640;
+            _643 = _642;
+            _645 = _644;
+            _647 = _646;
+            _649 = _648;
+            _651 = _650;
+            _653 = _652;
+            _655 = _654;
+            _657 = _656;
+            int _698;
+            float _664;
+            float _666;
+            float _667;
+            float _668;
+            float _669;
+            float _670;
+            float _671;
+            float _672;
+            float _673;
+            float _674;
+            float _675;
+            float _676;
+            float _677;
+            float _678;
+            float _679;
+            float _680;
+            float _681;
+            float _682;
+            float _683;
+            float _684;
+            float _685;
+            float _686;
+            float _687;
+            float _688;
+            float _689;
+            float _690;
+            float _691;
+            float _692;
+            float _693;
+            float _694;
+            float _695;
+            float _696;
+            for (int _697 = -1; _697 <= 1; _594 = _664, _597 = _666, _599 = _667, _601 = _668, _603 = _669, _605 = _670, _607 = _671, _609 = _672, _611 = _673, _613 = _674, _615 = _675, _617 = _676, _619 = _677, _621 = _678, _623 = _679, _625 = _680, _627 = _681, _629 = _682, _631 = _683, _633 = _684, _635 = _685, _637 = _686, _639 = _687, _641 = _688, _643 = _689, _645 = _690, _647 = _691, _649 = _692, _651 = _693, _653 = _694, _655 = _695, _657 = _696, _697 = _698)
+            {
+                int _702 = _658 + 1;
+                _698 = _697 + 1;
+                bool _711;
+                if (_80[_702][_698] == 0.0)
+                {
+                    _711 = _84[_702][_698] == 0.0;
+                }
+                else
+                {
+                    _711 = false;
+                }
+                if (_711)
+                {
+                    _664 = _594;
+                    _666 = _597;
+                    _667 = _599;
+                    _668 = _601;
+                    _669 = _603;
+                    _670 = _605;
+                    _671 = _607;
+                    _672 = _609;
+                    _673 = _611;
+                    _674 = _613;
+                    _675 = _615;
+                    _676 = _617;
+                    _677 = _619;
+                    _678 = _621;
+                    _679 = _623;
+                    _680 = _625;
+                    _681 = _627;
+                    _682 = _629;
+                    _683 = _631;
+                    _684 = _633;
+                    _685 = _635;
+                    _686 = _637;
+                    _687 = _639;
+                    _688 = _641;
+                    _689 = _643;
+                    _690 = _645;
+                    _691 = _647;
+                    _692 = _649;
+                    _693 = _651;
+                    _694 = _653;
+                    _695 = _655;
+                    _696 = _657;
+                    continue;
+                }
+                int2 _715 = _177 + int2(_697, _658);
+                float _767;
+                float _768;
+                float _769;
+                float _770;
+                float _771;
+                float _772;
+                float _773;
+                float _774;
+                float _775;
+                float _776;
+                float _777;
+                float _778;
+                float _779;
+                float _780;
+                float _781;
+                float _782;
+                do
+                {
+                    int _718 = _715.x;
+                    bool _725;
+                    if (!(_718 < 0))
+                    {
+                        _725 = _715.y < 0;
+                    }
+                    else
+                    {
+                        _725 = true;
+                    }
+                    bool _731;
+                    if (!_725)
+                    {
+                        _731 = _718 >= int(Params.Width);
+                    }
+                    else
+                    {
+                        _731 = true;
+                    }
+                    bool _740;
+                    if (!_731)
+                    {
+                        _740 = _715.y >= int(Params.Height);
+                    }
+                    else
+                    {
+                        _740 = true;
+                    }
+                    if (_740)
+                    {
+                        _767 = 0.0;
+                        _768 = 0.0;
+                        _769 = 0.0;
+                        _770 = 0.0;
+                        _771 = 0.0;
+                        _772 = 0.0;
+                        _773 = 0.0;
+                        _774 = 0.0;
+                        _775 = 0.0;
+                        _776 = 0.0;
+                        _777 = 0.0;
+                        _778 = 0.0;
+                        _779 = 0.0;
+                        _780 = 0.0;
+                        _781 = 0.0;
+                        _782 = 0.0;
+                        break;
+                    }
+                    _767 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[0];
+                    _768 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[1];
+                    _769 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[2];
+                    _770 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[3];
+                    _771 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[4];
+                    _772 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[5];
+                    _773 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[6];
+                    _774 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[7];
+                    _775 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[8];
+                    _776 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[9];
+                    _777 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[10];
+                    _778 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[11];
+                    _779 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[12];
+                    _780 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[13];
+                    _781 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[14];
+                    _782 = SourceState._m0[(uint(_715.y) * Params.Width) + uint(_718)].c[15];
+                    break;
+                } while(false);
+                _664 = _594 + (_84[_702][_698] * _782);
+                _666 = _597 + (_80[_702][_698] * _782);
+                _667 = _599 + (_84[_702][_698] * _781);
+                _668 = _601 + (_80[_702][_698] * _781);
+                _669 = _603 + (_84[_702][_698] * _780);
+                _670 = _605 + (_80[_702][_698] * _780);
+                _671 = _607 + (_84[_702][_698] * _779);
+                _672 = _609 + (_80[_702][_698] * _779);
+                _673 = _611 + (_84[_702][_698] * _778);
+                _674 = _613 + (_80[_702][_698] * _778);
+                _675 = _615 + (_84[_702][_698] * _777);
+                _676 = _617 + (_80[_702][_698] * _777);
+                _677 = _619 + (_84[_702][_698] * _776);
+                _678 = _621 + (_80[_702][_698] * _776);
+                _679 = _623 + (_84[_702][_698] * _775);
+                _680 = _625 + (_80[_702][_698] * _775);
+                _681 = _627 + (_84[_702][_698] * _774);
+                _682 = _629 + (_80[_702][_698] * _774);
+                _683 = _631 + (_84[_702][_698] * _773);
+                _684 = _633 + (_80[_702][_698] * _773);
+                _685 = _635 + (_84[_702][_698] * _772);
+                _686 = _637 + (_80[_702][_698] * _772);
+                _687 = _639 + (_84[_702][_698] * _771);
+                _688 = _641 + (_80[_702][_698] * _771);
+                _689 = _643 + (_84[_702][_698] * _770);
+                _690 = _645 + (_80[_702][_698] * _770);
+                _691 = _647 + (_84[_702][_698] * _769);
+                _692 = _649 + (_80[_702][_698] * _769);
+                _693 = _651 + (_84[_702][_698] * _768);
+                _694 = _653 + (_80[_702][_698] * _768);
+                _695 = _655 + (_84[_702][_698] * _767);
+                _696 = _657 + (_80[_702][_698] * _767);
+            }
+        }
+        spvUnsafeArray<float, 48> _152;
+        _152[0] = _576;
+        _152[1] = _656;
+        _152[2] = _654;
+        _152[3] = _577;
+        _152[4] = _652;
+        _152[5] = _650;
+        _152[6] = _578;
+        _152[7] = _648;
+        _152[8] = _646;
+        _152[9] = _579;
+        _152[10] = _644;
+        _152[11] = _642;
+        _152[12] = _580;
+        _152[13] = _640;
+        _152[14] = _638;
+        _152[15] = _581;
+        _152[16] = _636;
+        _152[17] = _634;
+        _152[18] = _582;
+        _152[19] = _632;
+        _152[20] = _630;
+        _152[21] = _583;
+        _152[22] = _628;
+        _152[23] = _626;
+        _152[24] = _584;
+        _152[25] = _624;
+        _152[26] = _622;
+        _152[27] = _585;
+        _152[28] = _620;
+        _152[29] = _618;
+        _152[30] = _586;
+        _152[31] = _616;
+        _152[32] = _614;
+        _152[33] = _587;
+        _152[34] = _612;
+        _152[35] = _610;
+        _152[36] = _588;
+        _152[37] = _608;
+        _152[38] = _606;
+        _152[39] = _589;
+        _152[40] = _604;
+        _152[41] = _602;
+        _152[42] = _590;
+        _152[43] = _600;
+        _152[44] = _598;
+        _152[45] = _591;
+        _152[46] = _596;
+        _152[47] = _593;
+        int _896;
+        _896 = 0;
+        spvUnsafeArray<float, 128> _153;
+        for (; _896 < 128; _896++)
+        {
+            float _907;
+            _907 = Weights._m0[uint(6144 + _896)];
+            for (int _910 = 0; _910 < 48; )
+            {
+                _907 += (_152[_910] * Weights._m0[uint((_910 * 128) + _896)]);
+                _910++;
+                continue;
+            }
+            _153[_896] = precise::max(_907, 0.0);
+        }
+        int _925;
+        _925 = 0;
+        spvUnsafeArray<float, 16> _154;
+        for (; _925 < 16; _925++)
+        {
+            float _936;
+            _936 = Weights._m0[uint(8320 + _925)];
+            for (int _939 = 0; _939 < 128; )
+            {
+                _936 += (_153[_939] * Weights._m0[uint((6272 + (_939 * 16)) + _925)]);
+                _939++;
+                continue;
+            }
+            _154[_925] = _936;
+        }
+        uint _957 = (gl_GlobalInvocationID.x * 374761393u) + (gl_GlobalInvocationID.y * 668265263u);
+        uint _959 = _957 + (Params.Seed * 2654435761u);
+        uint _962 = (_959 ^ (_959 >> 13u)) * 1274126177u;
+        bool _970 = (float((_962 ^ (_962 >> 16u)) & 16777215u) * 5.9604644775390625e-08) <= Params.FireRate;
+        float _976;
+        if (_970)
+        {
+            _976 = _154[0];
+        }
+        else
+        {
+            _976 = 0.0;
+        }
+        float _983;
+        if (_970)
+        {
+            _983 = _154[1];
+        }
+        else
+        {
+            _983 = 0.0;
+        }
+        float _990;
+        if (_970)
+        {
+            _990 = _154[2];
+        }
+        else
+        {
+            _990 = 0.0;
+        }
+        float _997;
+        if (_970)
+        {
+            _997 = _154[3];
+        }
+        else
+        {
+            _997 = 0.0;
+        }
+        float _1004;
+        if (_970)
+        {
+            _1004 = _154[4];
+        }
+        else
+        {
+            _1004 = 0.0;
+        }
+        float _1011;
+        if (_970)
+        {
+            _1011 = _154[5];
+        }
+        else
+        {
+            _1011 = 0.0;
+        }
+        float _1018;
+        if (_970)
+        {
+            _1018 = _154[6];
+        }
+        else
+        {
+            _1018 = 0.0;
+        }
+        float _1025;
+        if (_970)
+        {
+            _1025 = _154[7];
+        }
+        else
+        {
+            _1025 = 0.0;
+        }
+        float _1032;
+        if (_970)
+        {
+            _1032 = _154[8];
+        }
+        else
+        {
+            _1032 = 0.0;
+        }
+        float _1039;
+        if (_970)
+        {
+            _1039 = _154[9];
+        }
+        else
+        {
+            _1039 = 0.0;
+        }
+        float _1046;
+        if (_970)
+        {
+            _1046 = _154[10];
+        }
+        else
+        {
+            _1046 = 0.0;
+        }
+        float _1053;
+        if (_970)
+        {
+            _1053 = _154[11];
+        }
+        else
+        {
+            _1053 = 0.0;
+        }
+        float _1060;
+        if (_970)
+        {
+            _1060 = _154[12];
+        }
+        else
+        {
+            _1060 = 0.0;
+        }
+        float _1067;
+        if (_970)
+        {
+            _1067 = _154[13];
+        }
+        else
+        {
+            _1067 = 0.0;
+        }
+        float _1074;
+        if (_970)
+        {
+            _1074 = _154[14];
+        }
+        else
+        {
+            _1074 = 0.0;
+        }
+        float _1081;
+        if (_970)
+        {
+            _1081 = _154[15];
+        }
+        else
+        {
+            _1081 = 0.0;
+        }
+        uint _1085 = _957 + ((Params.Seed + 1388u) * 2654435761u);
+        uint _1088 = (_1085 ^ (_1085 >> 13u)) * 1274126177u;
+        uint _1099 = _957 + ((Params.Seed + 1485u) * 2654435761u);
+        uint _1102 = (_1099 ^ (_1099 >> 13u)) * 1274126177u;
+        uint _1113 = _957 + ((Params.Seed + 1582u) * 2654435761u);
+        uint _1116 = (_1113 ^ (_1113 >> 13u)) * 1274126177u;
+        uint _1127 = _957 + ((Params.Seed + 1679u) * 2654435761u);
+        uint _1130 = (_1127 ^ (_1127 >> 13u)) * 1274126177u;
+        uint _1141 = _957 + ((Params.Seed + 1776u) * 2654435761u);
+        uint _1144 = (_1141 ^ (_1141 >> 13u)) * 1274126177u;
+        uint _1155 = _957 + ((Params.Seed + 1873u) * 2654435761u);
+        uint _1158 = (_1155 ^ (_1155 >> 13u)) * 1274126177u;
+        uint _1169 = _957 + ((Params.Seed + 1970u) * 2654435761u);
+        uint _1172 = (_1169 ^ (_1169 >> 13u)) * 1274126177u;
+        uint _1183 = _957 + ((Params.Seed + 2067u) * 2654435761u);
+        uint _1186 = (_1183 ^ (_1183 >> 13u)) * 1274126177u;
+        uint _1197 = _957 + ((Params.Seed + 2164u) * 2654435761u);
+        uint _1200 = (_1197 ^ (_1197 >> 13u)) * 1274126177u;
+        uint _1211 = _957 + ((Params.Seed + 2261u) * 2654435761u);
+        uint _1214 = (_1211 ^ (_1211 >> 13u)) * 1274126177u;
+        uint _1225 = _957 + ((Params.Seed + 2358u) * 2654435761u);
+        uint _1228 = (_1225 ^ (_1225 >> 13u)) * 1274126177u;
+        uint _1239 = _957 + ((Params.Seed + 2455u) * 2654435761u);
+        uint _1242 = (_1239 ^ (_1239 >> 13u)) * 1274126177u;
+        spvUnsafeArray<float, 16> _1252 = spvUnsafeArray<float, 16>({ _576 + _976, _577 + _983, _578 + _990, _579 + _997, (_580 + _1004) + (((float((_1088 ^ (_1088 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_581 + _1011) + (((float((_1102 ^ (_1102 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_582 + _1018) + (((float((_1116 ^ (_1116 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_583 + _1025) + (((float((_1130 ^ (_1130 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_584 + _1032) + (((float((_1144 ^ (_1144 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_585 + _1039) + (((float((_1158 ^ (_1158 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_586 + _1046) + (((float((_1172 ^ (_1172 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_587 + _1053) + (((float((_1186 ^ (_1186 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_588 + _1060) + (((float((_1200 ^ (_1200 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_589 + _1067) + (((float((_1214 ^ (_1214 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_590 + _1074) + (((float((_1228 ^ (_1228 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625), (_591 + _1081) + (((float((_1242 ^ (_1242 >> 16u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * 0.00999999977648258209228515625) });
+        DestState._m0[_179] = CellState{ { _1252[0], _1252[1], _1252[2], _1252[3], _1252[4], _1252[5], _1252[6], _1252[7], _1252[8], _1252[9], _1252[10], _1252[11], _1252[12], _1252[13], _1252[14], _1252[15] } };
+        break;
+    } while(false);
+}
+

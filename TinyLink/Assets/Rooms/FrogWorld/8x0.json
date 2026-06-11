@@ -28,54 +28,54 @@
   ],
   "actors": [
     {
+      "Id": "78aa78cb24fb6c3e",
       "Type": "Mosquito",
-      "Position": [60, 36],
-      "Id": "78aa78cb24fb6c3e"
+      "Position": [60, 36]
     },
     {
+      "Id": "d2ac1a62995d424f",
       "Type": "Mosquito",
-      "Position": [252, 44],
-      "Id": "d2ac1a62995d424f"
+      "Position": [252, 44]
     },
     {
+      "Id": "5df260c7b85b5c58",
       "Type": "Mosquito",
-      "Position": [92, 68],
-      "Id": "5df260c7b85b5c58"
+      "Position": [92, 68]
     },
     {
+      "Id": "3303453f7b269622",
       "Type": "Mosquito",
-      "Position": [236, 92],
-      "Id": "3303453f7b269622"
+      "Position": [236, 92]
     },
     {
+      "Id": "aae8fd23c0e33ac9",
       "Type": "Player",
-      "Position": [52, 144],
-      "Id": "aae8fd23c0e33ac9"
+      "Position": [52, 144]
     },
     {
+      "Id": "699ecaf48d3ef152",
       "Type": "Jumpthru",
-      "Position": [64, 144],
-      "Id": "699ecaf48d3ef152"
+      "Position": [64, 144]
     },
     {
+      "Id": "6c65551bae5510d5",
       "Type": "Jumpthru",
-      "Position": [72, 144],
-      "Id": "6c65551bae5510d5"
+      "Position": [72, 144]
     },
     {
+      "Id": "36bc818e7c7aef57",
       "Type": "Jumpthru",
-      "Position": [80, 144],
-      "Id": "36bc818e7c7aef57"
+      "Position": [80, 144]
     },
     {
+      "Id": "fa2192f948fd1fba",
       "Type": "Jumpthru",
-      "Position": [88, 144],
-      "Id": "fa2192f948fd1fba"
+      "Position": [88, 144]
     },
     {
+      "Id": "95b39f97eb35a541",
       "From": "BlueMemoryLight",
-      "Position": [156, 68],
-      "Id": "95b39f97eb35a541"
+      "Position": [156, 68]
     }
   ]
 }

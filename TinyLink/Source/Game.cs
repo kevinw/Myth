@@ -18,6 +18,10 @@ public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kin
 
 public partial class Game : IDisposable
 {
+	private static string? pendingHotReloadMessage;
+
+	internal static void NotifyHotReload(string message)
+		=> pendingHotReloadMessage = message;
 	public const int Width = 320;
 	public const int Height = 180;
 	public const int Columns = Width / TileSize;
@@ -304,6 +308,11 @@ public partial class Game : IDisposable
 			debugViewMessageTimer -= Time.Delta;
 			if (debugViewMessageTimer <= 0)
 				DebugViewMessage = null;
+		}
+		if (pendingHotReloadMessage is { } msg)
+		{
+			pendingHotReloadMessage = null;
+			DisplayMessage(msg, 2.0f);
 		}
 		var glitchSpeed = ditherGlitchTarget > ditherGlitch ? DitherGlitchAttackSpeed : DitherGlitchDecaySpeed;
 		ditherGlitch = Calc.Approach(ditherGlitch, ditherGlitchTarget, Time.Delta * glitchSpeed);
@@ -2540,6 +2549,10 @@ public partial class Game : IDisposable
 			return surfaceType;
 		if (TryGetSurfaceTypeAtWorldPoint(new(bounds.Right - 1, y), out surfaceType))
 			return surfaceType;
+
+		// TODO: make a more generic system for landing on Actors, and let them provide a surface type.
+		var hitActor = OverlapsFirst(actor.Hitbox.Rect + actor.Position + new Point2(0, 1), Actor.Masks.Jumpthru);
+		if (hitActor != null) return "Wood";
 
 		// Edge landings can sit just beside the supporting tile, so landing audio gets a one-tile horizontal grace scan.
 		if (searchOutward && TryGetSurfaceTypeOutwardFromBottom(bounds, out surfaceType))

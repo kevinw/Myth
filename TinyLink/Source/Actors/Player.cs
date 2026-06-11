@@ -13,6 +13,8 @@ public readonly record struct PawnInput(
 
 public abstract class Pawn : Actor
 {
+	protected bool PlayerSpecificAudioEvents = false;
+
 	public enum States
 	{
 		Normal,
@@ -23,18 +25,22 @@ public abstract class Pawn : Actor
 		Hurt,
 		Start
 	}
+	protected static float FastFallMultiplier => 1.25f;
+	protected static float JumpBufferTime => 0.08f;
 
 	protected static float MaxGroundSpeed => 93;
-	protected static float MaxAirSpeed => 99;
+	protected static float MaxAirSpeed => 100;
 	protected static float CrawlSpeed => 28;
 	protected static float GroundAccel => 400;
-	protected static float AirAccel => 260;
+	protected static float AirAccel => 310;
 	protected static float Friction => 480;
 	protected static float Gravity => 450;
+
 	protected static float WallHugGravityMultiplier => 0.25f;
-	protected static float JumpForce => -105;
-	protected static float JumpTime => 0.18f;
+	protected static float JumpForce => -125;
+	protected static float JumpTime => 0.19f;
 	protected static float CoyoteJumpTime => 0.08f;
+
 	protected static float WallJumpSpeed => 125;
 	protected static float WallJumpInputLockTime => 0.22f;
 	protected static float RollMinHorizontalSpeed => 45;
@@ -58,6 +64,7 @@ public abstract class Pawn : Actor
 	protected float jumpTimer;
 	protected float coyoteJumpTimer;
 	protected int coyoteJumpY;
+	protected float jumpBufferTimer;
 	protected bool grounded;
 	protected bool ducking;
 	protected float wallJumpInputLockTimer;
@@ -87,6 +94,8 @@ public abstract class Pawn : Actor
 		var previousVelocity = Velocity;
 		base.Update();
 		input = GetInput();
+		if (input.JumpPressed)
+			jumpBufferTimer = JumpBufferTime;
 		AfterActorUpdate(previousVelocity);
 
 		var nowGrounded = Velocity.Y >= 0 && Grounded();
@@ -111,6 +120,8 @@ public abstract class Pawn : Actor
 			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
 		if (dashCooldownTimer > 0)
 			dashCooldownTimer = Calc.Approach(dashCooldownTimer, 0, Time.Delta);
+		if (jumpBufferTimer > 0)
+			jumpBufferTimer = Calc.Approach(jumpBufferTimer, 0, Time.Delta);
 
 		switch (State)
 		{
@@ -139,17 +150,24 @@ public abstract class Pawn : Actor
 
 		if (jumpTimer > 0)
 		{
-			Velocity.Y = jumpForce;
-			jumpTimer -= Time.Delta;
 			if (!input.JumpDown)
+			{
+				// releasing jump button before jump timer expires (cutting jump short) -- we want to reduce your velocity so you fall faster.
+				//
 				jumpTimer = 0;
+				Velocity.Y *= 0.5f;
+			}
+			 else
+				jumpTimer -= Time.Delta;
 		}
 
 		if (!grounded && State != States.Dash)
 		{
 			var grav = Gravity;
-			if (State == States.Normal && MathF.Abs(Velocity.Y) < 20 && input.JumpDown)
-				grav *= 0.40f;
+			if (jumpTimer > 0)
+				grav *= 0.35f;
+			else if (Velocity.Y > 0)
+				grav *= FastFallMultiplier;
 			if (State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
@@ -177,6 +195,7 @@ public abstract class Pawn : Actor
 	protected virtual void OnPawnJump() { }
 		protected virtual void OnRollStarted() { }
 		protected virtual void OnRollStopped(bool immediate) { }
+		protected virtual bool TryRollCancel() => false;
 		protected virtual void UpdateRollAudioPosition() { }
 		protected virtual float GroundSpeedMultiplier => 1.0f;
 		protected virtual float AirSpeedMultiplier => 1.0f;
@@ -219,6 +238,8 @@ public abstract class Pawn : Actor
 			{
 				facing *= -1;
 				Play("skid");
+				if (PlayerSpecificAudioEvents)
+					AudioEventDebounced("player/skid", 0.5f);
 				RunStartTimer = 0;
 				RunStartSkid = false;
 			}
@@ -231,7 +252,9 @@ public abstract class Pawn : Actor
 				if (RunStartTimer < 0.35f)
 				{
 					if (RunStartTimer < 0.15f && RunStartSkid)
+					{
 						Play("skid");
+					}
 					else
 						Play("run_start");
 				}
@@ -285,15 +308,21 @@ public abstract class Pawn : Actor
 		{
 			Facing = facing;
 			if (lastFacing != Facing && didStartRunning)
+			{
 				RunStartSkid = true;
+			}
 		}
 
 		var wallJump = GetWallJumpDirection();
 		var canCoyoteJump = CanCoyoteJump();
 		var canGroundJump = grounded && CanStandUp() || canCoyoteJump;
 		var canWallJump = input.AllowWallJump && wallJump != 0 && moveX != 0;
-		if (input.JumpPressed && (canGroundJump || canWallJump))
+		var jumpPressed = input.JumpPressed;
+		if (!jumpPressed && canGroundJump && jumpBufferTimer > 0)
+			jumpPressed = true;
+		if (jumpPressed && (canGroundJump || canWallJump))
 		{
+			jumpBufferTimer = 0;
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.65f, 1.4f);
 			if (canGroundJump)
@@ -366,6 +395,9 @@ public abstract class Pawn : Actor
 			OnPawnJump();
 			return;
 		}
+
+		if (TryRollCancel())
+			return;
 
 		if (state.Time >= RollDuration || input.MoveY <= 0)
 		{
@@ -453,6 +485,7 @@ public abstract class Pawn : Actor
 	{
 		jumpForce = force;
 		jumpTimer = duration;
+		Velocity.Y = force;
 	}
 
 	private bool CanCoyoteJump()
@@ -548,6 +581,7 @@ public partial class Player : Pawn
 		grounded = true;
 		Play("sword");
 		State = States.Start;
+		PlayerSpecificAudioEvents = true;
 	}
 
 	public override void Added()
@@ -695,7 +729,17 @@ public partial class Player : Pawn
 		}
 		else if (Controls.Saw.ConsumePress())
 		{
-			Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), saw => saw.Facing = Facing);
+			var existingSaw = Game.GetFirst<Saw>();
+			if (existingSaw != null)
+			{
+				Position = existingSaw.Position;
+				Game.Destroy(existingSaw);
+				Game.HitStun(0.1f);
+			}
+			else
+			{
+				Game.Create<Saw>(Position - new Point2(-5 * Facing, 10), saw => saw.Facing = Facing);
+			}
 			return true;
 		}
 
@@ -710,6 +754,22 @@ public partial class Player : Pawn
 
 	protected override void OnPawnJump()
 		=> AudioEvent("jump");
+
+	protected override bool TryRollCancel()
+	{
+		if (Controls.Attack.ConsumePress() && duckAttackCooldownTimer <= 0)
+		{
+			duckAttack = true;
+			attackBlocked = IsAttackBlocked(duckAttack);
+			duckAttackCooldownTimer = DuckAttackCooldown;
+			OnRollStopped(false);
+			Squish = new(0.65f, 1.4f);
+			State = States.Attack;
+			Velocity.X *= 0.5f;
+			return true;
+		}
+		return false;
+	}
 
 	protected override void OnRollStarted()
 		=> StartRollSound();
@@ -749,7 +809,7 @@ public partial class Player : Pawn
 
 	private void UpdateFootsteps()
 	{
-		if (State != States.Normal || !grounded || !IsPlaying("run") || !IsPlaying("run_start"))
+		if (State != States.Normal || !grounded || !IsPlaying("run") && !IsPlaying("run_start"))
 		{
 			footstepFrame = -1;
 			return;
@@ -763,7 +823,7 @@ public partial class Player : Pawn
 
 		var animation = Animation;
 		var localFrame = frame - animation.FrameStart;
-		if (localFrame >= 0 && localFrame % 2 == 0)
+		if (localFrame >= 0 && localFrame % 6 == 0)
 		{
 			AudioEvent("footstep", "Type", Game.GetSurfaceTypeBelow(this));
 		}
@@ -826,6 +886,10 @@ public partial class Player : Pawn
 				Hit(hit);
 
 			Game.BreakTiles(it);
+
+			foreach (var actor in Game.Actors.ToArray())
+				if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+					nca.Cut(it);
 		}
 
 		if (Grounded())

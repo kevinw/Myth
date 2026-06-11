@@ -241,6 +241,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
 		ActorSpecs.RegisterActor<Arrow>("Arrow");
 		ActorSpecs.RegisterActor<WallBullet>("WallBullet");
+		ActorSpecs.RegisterActor<NeuralCellularActor>("NeuralCellularActor");
 
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", "Brick"));

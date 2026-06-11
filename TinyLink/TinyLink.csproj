@@ -46,14 +46,16 @@
   <ItemGroup>
     <ShaderInputs Include="Assets/Shaders/*.hlsl" Exclude="Assets/Shaders/Common.hlsl" />
     <ShaderDependencies Include="Assets/Shaders/Common.hlsl" />
+    <ComputeShaderInputs Include="Assets/Shaders/Compute/*.hlsl" />
     <ShaderOutputs Include="@(ShaderInputs->'Assets/Shaders/Compiled/%(Filename).vertex.$(ShaderOutputExtension)')" />
     <ShaderOutputs Include="@(ShaderInputs->'Assets/Shaders/Compiled/%(Filename).fragment.$(ShaderOutputExtension)')" />
+    <ShaderOutputs Include="@(ComputeShaderInputs->'Assets/Shaders/Compiled/%(Filename).compute.$(ShaderOutputExtension)')" />
   </ItemGroup>
 
   <Target
     Name="CompileShaders"
     BeforeTargets="BeforeBuild"
-    Inputs="@(ShaderInputs);@(ShaderDependencies);Assets/Shaders/compile.sh"
+    Inputs="@(ShaderInputs);@(ShaderDependencies);@(ComputeShaderInputs);Assets/Shaders/compile.sh"
     Outputs="@(ShaderOutputs)"
     Condition="'$(ShaderPlatform)' != ''">
     <Exec Command="Assets/Shaders/compile.sh $(ShaderPlatform)" />

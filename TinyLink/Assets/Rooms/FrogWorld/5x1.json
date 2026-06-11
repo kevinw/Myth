@@ -29,34 +29,34 @@
   ],
   "actors": [
     {
+      "Id": "f72cc950644978ed",
       "Type": "Mosquito",
-      "Position": [212, 76],
-      "Id": "f72cc950644978ed"
+      "Position": [212, 76]
     },
     {
+      "Id": "3e6808a093274c7d",
       "Type": "Light",
-      "Position": [136, 84],
-      "Id": "3e6808a093274c7d"
+      "Position": [136, 84]
     },
     {
+      "Id": "fcad7cf011e61ef7",
       "Type": "Light",
-      "Position": [184, 84],
-      "Id": "fcad7cf011e61ef7"
+      "Position": [184, 84]
     },
     {
+      "Id": "61426cdf2afd0eda",
       "Type": "Mosquito",
-      "Position": [204, 92],
-      "Id": "61426cdf2afd0eda"
+      "Position": [204, 92]
     },
     {
+      "Id": "133344b8d6bcba83",
       "From": "LockedDoor",
-      "Position": [252, 96],
-      "Id": "133344b8d6bcba83"
+      "Position": [252, 96]
     },
     {
+      "Id": "c9f8213b55d882cf",
       "Type": "Player",
-      "Position": [52, 96],
-      "Id": "c9f8213b55d882cf"
+      "Position": [52, 96]
     }
   ]
 }

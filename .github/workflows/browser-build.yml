@@ -23,8 +23,8 @@ jobs:
         with:
           lfs: true
 
-      - name: Check out Foster
-        run: git clone --depth 1 https://codeberg.org/kevinw/Foster.git ../Foster
+      - name: Update submodules
+        run: git submodule update --init --recursive
 
       - name: Cache .NET SDK and workloads
         uses: actions/cache@v5

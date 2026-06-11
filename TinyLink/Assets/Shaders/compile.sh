@@ -120,6 +120,9 @@ compile_wgsl() {
 
 	wgsl_spv="$out_dir/$filename.wgsl.${BASHPID:-$$}.${RANDOM}.spv"
 	dxc -spirv -T "$profile" -E "${stage}_main" -I "$script_dir" -D BROWSER=1 -fvk-s-shift 100 2 "$input" -Fo "$wgsl_spv"
+	if [[ "$stage" == "compute" ]]; then
+		python3 "$script_dir/fix_storage_image_access.py" "$wgsl_spv" "$wgsl_spv"
+	fi
 	naga --entry-point "${stage}_main" "$wgsl_spv" "$out_dir/$filename.wgsl"
 	rm -f "$wgsl_spv"
 }
@@ -133,6 +136,12 @@ if [[ "$platform" == "web" || "$platform" == "wgsl" ]]; then
 		compile "$file" vertex &
 		pids+=("$!")
 		compile "$file" fragment &
+		pids+=("$!")
+	done
+
+	for file in "$script_dir"/Compute/*.hlsl; do
+		[[ -e "$file" ]] || continue
+		compile "$file" compute &
 		pids+=("$!")
 	done
 
@@ -150,5 +159,10 @@ else
 		fi
 		compile "$file" vertex
 		compile "$file" fragment
+	done
+
+	for file in "$script_dir"/Compute/*.hlsl; do
+		[[ -e "$file" ]] || continue
+		compile "$file" compute
 	done
 fi

@@ -231,7 +231,8 @@ public sealed class PlatformNavGraph
 				case BuildPhase.RoomExits:
 					BuildRoomExitNodes(rebuildRoom!);
 					phase = BuildPhase.Ready;
-					Console.WriteLine($"nav graph rebuild {Stopwatch.GetElapsedTime(rebuildStartTimestamp).TotalMilliseconds}ms, {rebuildFrameCount} frames");
+					if (rebuildFrameCount > 100) // TODO
+						Console.WriteLine($"nav graph rebuild {Stopwatch.GetElapsedTime(rebuildStartTimestamp).TotalMilliseconds}ms, {rebuildFrameCount} frames");
 					break;
 			}
 		} while (phase < BuildPhase.Ready && Stopwatch.GetElapsedTime(start).TotalMilliseconds < budgetMs);

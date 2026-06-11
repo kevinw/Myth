@@ -29,24 +29,24 @@
   ],
   "actors": [
     {
+      "Id": "25b9cf104c2206c5",
       "From": "StrongFireLight",
-      "Position": [152, 40],
-      "Id": "25b9cf104c2206c5"
+      "Position": [152, 40]
     },
     {
+      "Id": "130df633c2853d38",
       "Type": "RevealDoor",
       "Position": [168, 104],
       "Size": [8, 32],
       "Facing": "-",
-      "Direction": "Left",
-      "Id": "130df633c2853d38"
+      "Direction": "Left"
     },
     {
+      "Id": "a85f7928225b986a",
       "Type": "RevealDoor",
       "Position": [128, 104],
       "Size": [8, 32],
-      "Facing": "-",
-      "Id": "a85f7928225b986a"
+      "Facing": "-"
     }
   ]
 }

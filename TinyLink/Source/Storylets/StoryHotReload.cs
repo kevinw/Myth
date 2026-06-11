@@ -10,12 +10,20 @@ internal static class StoryHotReload
 	{
 		if (TouchesStory(updatedTypes))
 			Game.RequestStoryReload();
+		NotifyGameOfHotReload(updatedTypes);
 	}
 
 	public static void UpdateApplication(Type[]? updatedTypes)
 	{
 		if (TouchesStory(updatedTypes))
 			Game.RequestStoryReload();
+		NotifyGameOfHotReload(updatedTypes);
+	}
+
+	private static void NotifyGameOfHotReload(Type[]? updatedTypes)
+	{
+		if (updatedTypes is { Length: > 0 })
+			Game.NotifyHotReload("Applied edits");
 	}
 
 	private static bool TouchesStory(Type[]? updatedTypes)

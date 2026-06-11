@@ -61,6 +61,38 @@
       "Text": "welcome"
     },
     {
+      "Id": "a1b2c3d4e5f60718",
+      "Type": "NeuralCellularActor",
+      "Position": [24, 32]
+    },
+    {
+      "Id": "a1b2c3d4e5f60719",
+      "Type": "NeuralCellularActor",
+      "Position": [120, 64],
+      "GridWidth": 32,
+      "GridHeight": 32,
+      "WeightsFile": "heart_weights.bin",
+      "DirectionAware": true
+    },
+    {
+      "Id": "a1b2c3d4e5f6071a",
+      "Type": "NeuralCellularActor",
+      "Position": [183, 65],
+      "GridWidth": 32,
+      "GridHeight": 32,
+      "WeightsFile": "blob_weights.bin",
+      "DirectionAware": true
+    },
+    {
+      "Id": "a1b2c3d4e5f6071b",
+      "Type": "NeuralCellularActor",
+      "Position": [240, 40],
+      "GridWidth": 40,
+      "GridHeight": 40,
+      "WeightsFile": "floater_weights.bin",
+      "DirectionAware": true
+    },
+    {
       "Id": "308faaddc4f343ca",
       "Type": "Jumpthru",
       "Position": [56, 88]

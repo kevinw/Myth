@@ -60,19 +60,19 @@
   ],
   "actors": [
     {
+      "Id": "5f70dc905c4d1227",
       "Type": "Light",
-      "Position": [196, 92],
-      "Id": "5f70dc905c4d1227"
+      "Position": [196, 92]
     },
     {
+      "Id": "8ceaba387c9758c7",
       "Type": "Light",
-      "Position": [28, 44],
-      "Id": "8ceaba387c9758c7"
+      "Position": [28, 44]
     },
     {
+      "Id": "c3c2abbed29046ba",
       "Type": "Bramble",
-      "Position": [44, 80],
-      "Id": "c3c2abbed29046ba"
+      "Position": [44, 80]
     }
   ]
 }
