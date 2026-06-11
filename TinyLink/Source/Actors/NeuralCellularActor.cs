@@ -40,6 +40,35 @@ public class NeuralCellularActor : Actor
 	{
 		public uint Width;
 		public uint Height;
+		public float RippleDisplacement;
+		public float RippleTint;
+	}
+
+	// Layout-only: never written from C#, only used to size/zero-fill the
+	// GPU-side ripple buffers, so the fields are never directly assigned.
+#pragma warning disable CS0649
+	struct RippleState
+	{
+		public float H, V;
+	}
+#pragma warning restore CS0649
+
+	struct RippleUpdateParams
+	{
+		public uint Width;
+		public uint Height;
+		public float Speed;
+		public float Damping;
+	}
+
+	struct RippleHitParams
+	{
+		public uint Width;
+		public uint Height;
+		public float HitX;
+		public float HitY;
+		public float HitRadius;
+		public float HitStrength;
 	}
 
 	struct CutParams
@@ -70,17 +99,46 @@ public class NeuralCellularActor : Actor
 	/// </summary>
 	public bool DirectionAware = false;
 
+	/// <summary>
+	/// Wave speed for the ripple displacement field's discrete wave equation.
+	/// Higher values propagate hit impulses outward faster.
+	/// </summary>
+	public float RippleWaveSpeed = 0.7f;
+
+	/// <summary>
+	/// Per-step decay applied to the ripple field (1.0 = no decay). Controls
+	/// how quickly a ripple fades out after a hit.
+	/// </summary>
+	public float RippleDamping = 0.97f;
+
+	/// <summary>
+	/// Scales how far rendered cells are pushed by the local ripple
+	/// gradient, in cells.
+	/// </summary>
+	public float RippleDisplacement = 3.9f;
+
+	/// <summary>
+	/// Scales how strongly the ripple wave's amplitude flashes the rendered
+	/// cells toward white.
+	/// </summary>
+	public float RippleTintStrength = 0.8f;
+
 	private static Rng rng = new();
 
 	private GraphicsDevice graphicsDevice = null!;
 	private ComputeStorageBuffer<CellState>? bufferA;
 	private ComputeStorageBuffer<CellState>? bufferB;
+	private ComputeStorageBuffer<RippleState>? rippleA;
+	private ComputeStorageBuffer<RippleState>? rippleB;
 	private StorageBuffer<float>? weights;
 	private Texture? presentTexture;
 	private Shader? updateShader;
 	private Shader? presentShader;
 	private Shader? cutShader;
+	private Shader? rippleUpdateShader;
+	private Shader? rippleHitShader;
 	private bool currentIsB;
+	private bool rippleIsB;
 	private float stepAccumulator;
 	private uint seed = 1;
 	private bool supported;
@@ -103,8 +161,11 @@ public class NeuralCellularActor : Actor
 		var updatePath = Path.Join(shaderDir, $"{updateName}.compute.{ext}");
 		var presentPath = Path.Join(shaderDir, $"NCAPresent.compute.{ext}");
 		var cutPath = Path.Join(shaderDir, $"NCACut.compute.{ext}");
+		var rippleUpdatePath = Path.Join(shaderDir, $"RippleUpdate.compute.{ext}");
+		var rippleHitPath = Path.Join(shaderDir, $"RippleHit.compute.{ext}");
 
-		if (!File.Exists(updatePath) || !File.Exists(presentPath) || !File.Exists(cutPath))
+		if (!File.Exists(updatePath) || !File.Exists(presentPath) || !File.Exists(cutPath)
+			|| !File.Exists(rippleUpdatePath) || !File.Exists(rippleHitPath))
 			return;
 
 		updateShader = new Shader(
@@ -125,7 +186,7 @@ public class NeuralCellularActor : Actor
 			ShaderStage.Compute,
 			File.ReadAllBytes(presentPath),
 			uniformBufferCount: 1,
-			readOnlyStorageBufferCount: 1,
+			readOnlyStorageBufferCount: 2,
 			readWriteStorageTextureCount: 1,
 			threadCountX: 8,
 			threadCountY: 8,
@@ -146,8 +207,36 @@ public class NeuralCellularActor : Actor
 			entryPoint: "compute_main",
 			name: "NCACut");
 
+		rippleUpdateShader = new Shader(
+			graphicsDevice,
+			ShaderStage.Compute,
+			File.ReadAllBytes(rippleUpdatePath),
+			uniformBufferCount: 1,
+			readOnlyStorageBufferCount: 1,
+			readWriteStorageBufferCount: 1,
+			threadCountX: 8,
+			threadCountY: 8,
+			threadCountZ: 1,
+			entryPoint: "compute_main",
+			name: "RippleUpdate");
+
+		rippleHitShader = new Shader(
+			graphicsDevice,
+			ShaderStage.Compute,
+			File.ReadAllBytes(rippleHitPath),
+			uniformBufferCount: 1,
+			readOnlyStorageBufferCount: 1,
+			readWriteStorageBufferCount: 1,
+			threadCountX: 8,
+			threadCountY: 8,
+			threadCountZ: 1,
+			entryPoint: "compute_main",
+			name: "RippleHit");
+
 		bufferA = new ComputeStorageBuffer<CellState>(graphicsDevice, "NCAStateA");
 		bufferB = new ComputeStorageBuffer<CellState>(graphicsDevice, "NCAStateB");
+		rippleA = new ComputeStorageBuffer<RippleState>(graphicsDevice, "NCARippleA");
+		rippleB = new ComputeStorageBuffer<RippleState>(graphicsDevice, "NCARippleB");
 		weights = new StorageBuffer<float>(graphicsDevice, "NCAWeights");
 		presentTexture = new Texture(graphicsDevice, GridWidth, GridHeight, TextureFormat.Color, TextureFlags.ComputeWrite, "NCAPresent");
 
@@ -155,6 +244,7 @@ public class NeuralCellularActor : Actor
 
 		LoadWeights();
 		SeedGrid();
+		SeedRipple();
 
 		supported = true;
 
@@ -184,6 +274,13 @@ public class NeuralCellularActor : Actor
 
 		bufferA!.Upload(cells);
 		bufferB!.Upload(cells);
+	}
+
+	private void SeedRipple()
+	{
+		var cells = new RippleState[GridWidth * GridHeight];
+		rippleA!.Upload(cells);
+		rippleB!.Upload(cells);
 	}
 
 	public override void Update()
@@ -246,8 +343,75 @@ public class NeuralCellularActor : Actor
 
 		currentIsB = !currentIsB;
 
+		StepRipple();
+
 		Present();
 		RefreshCellCache();
+	}
+
+	private void StepRipple()
+	{
+		var src = rippleIsB ? rippleB! : rippleA!;
+		var dst = rippleIsB ? rippleA! : rippleB!;
+
+		var rippleUniforms = new UniformBuffer();
+		rippleUniforms.Set(new RippleUpdateParams
+		{
+			Width = (uint)GridWidth,
+			Height = (uint)GridHeight,
+			Speed = RippleWaveSpeed,
+			Damping = RippleDamping,
+		});
+
+		new ComputeCommand(rippleUpdateShader!)
+		{
+			ReadOnlyStorageBuffers = [src],
+			ReadWriteStorageBuffers = [dst],
+			UniformBuffers = [rippleUniforms],
+			GroupCountX = (GridWidth + 7) / 8,
+			GroupCountY = (GridHeight + 7) / 8,
+			GroupCountZ = 1,
+		}.Submit(graphicsDevice);
+
+		rippleIsB = !rippleIsB;
+	}
+
+	/// <summary>
+	/// Injects an impulse into the ripple displacement field at the given
+	/// world-space position, e.g. from a player attack. The impulse
+	/// propagates outward as a decaying ring, visually pushing and flashing
+	/// the cells it passes through.
+	/// </summary>
+	public void Hit(Vector2 worldPos, float strength = 1.0f, float radius = 6.0f)
+	{
+		if (!supported)
+			return;
+
+		var src = rippleIsB ? rippleB! : rippleA!;
+		var dst = rippleIsB ? rippleA! : rippleB!;
+
+		var hitUniforms = new UniformBuffer();
+		hitUniforms.Set(new RippleHitParams
+		{
+			Width = (uint)GridWidth,
+			Height = (uint)GridHeight,
+			HitX = worldPos.X - Position.X,
+			HitY = worldPos.Y - Position.Y,
+			HitRadius = radius,
+			HitStrength = strength,
+		});
+
+		new ComputeCommand(rippleHitShader!)
+		{
+			ReadOnlyStorageBuffers = [src],
+			ReadWriteStorageBuffers = [dst],
+			UniformBuffers = [hitUniforms],
+			GroupCountX = (GridWidth + 7) / 8,
+			GroupCountY = (GridHeight + 7) / 8,
+			GroupCountZ = 1,
+		}.Submit(graphicsDevice);
+
+		rippleIsB = !rippleIsB;
 	}
 
 	/// <summary>
@@ -391,17 +555,20 @@ public class NeuralCellularActor : Actor
 	private void Present()
 	{
 		var src = currentIsB ? bufferB! : bufferA!;
+		var ripple = rippleIsB ? rippleB! : rippleA!;
 
 		var presentUniforms = new UniformBuffer();
 		presentUniforms.Set(new PresentParams
 		{
 			Width = (uint)GridWidth,
 			Height = (uint)GridHeight,
+			RippleDisplacement = RippleDisplacement,
+			RippleTint = RippleTintStrength,
 		});
 
 		new ComputeCommand(presentShader!)
 		{
-			ReadOnlyStorageBuffers = [src],
+			ReadOnlyStorageBuffers = [src, ripple],
 			ReadWriteStorageTextures = [presentTexture!],
 			UniformBuffers = [presentUniforms],
 			GroupCountX = (GridWidth + 7) / 8,
@@ -427,10 +594,14 @@ public class NeuralCellularActor : Actor
 
 		bufferA?.Dispose();
 		bufferB?.Dispose();
+		rippleA?.Dispose();
+		rippleB?.Dispose();
 		weights?.Dispose();
 		presentTexture?.Dispose();
 		updateShader?.Dispose();
 		presentShader?.Dispose();
 		cutShader?.Dispose();
+		rippleUpdateShader?.Dispose();
+		rippleHitShader?.Dispose();
 	}
 }

@@ -9,6 +9,9 @@ public static class Factory
 {
 	public const string DefaultSurfaceType = "Grass";
 
+	/// Background tile type that marks a region for NCALayer to grow fungus into.
+	public const char FungusTile = 'f';
+
 	public enum TileLayer
 	{
 		Foreground,
@@ -260,6 +263,9 @@ public static class Factory
 		Register('m', AsTile("myth-back", false, "Background", name: "Myth Back", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('u', AsTile("myth-runes", false, "Background", name: "Myth Runes", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('v', AsTile("myth-vines", false, "Grass", name: "Myth Vines", layer: TileLayer.Background, acousticReflectivity: 0.20f));
+		Register(FungusTile, new Entry("Fungus", Assets.GetTileset("myth-vines")?.Tiles[0] ?? new Subtexture(),
+			(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) => { },
+			"Fungus", layer: TileLayer.Background, acousticReflectivity: 0.20f));
 
 		RegisterActorPaletteEntries();
 		RegisterActorSpecPaletteEntries();

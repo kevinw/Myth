@@ -663,6 +663,11 @@ public partial class Player : Pawn
 		}
 		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
+
+		var footPosition = new Vector2(Position.X, Position.Y);
+		foreach (var actor in Game.Actors)
+			if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Contains(footPosition))
+				fungus.OnPlayerStep(footPosition);
 	}
 
 	protected override void CustomState()
@@ -888,8 +893,18 @@ public partial class Player : Pawn
 			Game.BreakTiles(it);
 
 			foreach (var actor in Game.Actors.ToArray())
+			{
 				if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+				{
 					nca.Cut(it);
+					nca.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
+				}
+				else if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+				{
+					fungus.Cut(it);
+					fungus.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
+				}
+			}
 		}
 
 		if (Grounded())

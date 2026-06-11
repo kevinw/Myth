@@ -1,0 +1,252 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct RippleState
+{
+    float H;
+    float V;
+};
+
+struct type_StructuredBuffer_RippleState
+{
+    RippleState _m0[1];
+};
+
+struct type_RWStructuredBuffer_RippleState
+{
+    RippleState _m0[1];
+};
+
+struct type_Params
+{
+    uint Width;
+    uint Height;
+    float Speed;
+    float Damping;
+    uint OriginX;
+    uint OriginY;
+};
+
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], device type_StructuredBuffer_RippleState& SourceState [[buffer(1)]], device type_RWStructuredBuffer_RippleState& DestState [[buffer(2)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    do
+    {
+        int _50 = int(Params.OriginX + gl_GlobalInvocationID.x);
+        int _56 = int(Params.OriginY + gl_GlobalInvocationID.y);
+        int2 _57 = int2(_50, _56);
+        int _60 = int(Params.Width);
+        bool _61 = _50 >= _60;
+        bool _69;
+        if (!_61)
+        {
+            _69 = _56 >= int(Params.Height);
+        }
+        else
+        {
+            _69 = true;
+        }
+        if (_69)
+        {
+            break;
+        }
+        uint _75 = (uint(_56) * Params.Width) + uint(_50);
+        float _100;
+        float _101;
+        do
+        {
+            bool _83;
+            if (!(_50 < 0))
+            {
+                _83 = _56 < 0;
+            }
+            else
+            {
+                _83 = true;
+            }
+            bool _93;
+            if (!((!_83) ? _61 : true))
+            {
+                _93 = _56 >= int(Params.Height);
+            }
+            else
+            {
+                _93 = true;
+            }
+            if (_93)
+            {
+                _100 = 0.0;
+                _101 = 0.0;
+                break;
+            }
+            _100 = SourceState._m0[_75].H;
+            _101 = SourceState._m0[_75].V;
+            break;
+        } while(false);
+        int2 _102 = _57 + int2(-1, 0);
+        float _136;
+        do
+        {
+            int _105 = _102.x;
+            bool _112;
+            if (!(_105 < 0))
+            {
+                _112 = _102.y < 0;
+            }
+            else
+            {
+                _112 = true;
+            }
+            bool _117;
+            if (!_112)
+            {
+                _117 = _105 >= _60;
+            }
+            else
+            {
+                _117 = true;
+            }
+            bool _126;
+            if (!_117)
+            {
+                _126 = _102.y >= int(Params.Height);
+            }
+            else
+            {
+                _126 = true;
+            }
+            if (_126)
+            {
+                _136 = 0.0;
+                break;
+            }
+            _136 = SourceState._m0[(uint(_102.y) * Params.Width) + uint(_105)].H;
+            break;
+        } while(false);
+        int2 _137 = _57 + int2(1, 0);
+        float _171;
+        do
+        {
+            int _140 = _137.x;
+            bool _147;
+            if (!(_140 < 0))
+            {
+                _147 = _137.y < 0;
+            }
+            else
+            {
+                _147 = true;
+            }
+            bool _152;
+            if (!_147)
+            {
+                _152 = _140 >= _60;
+            }
+            else
+            {
+                _152 = true;
+            }
+            bool _161;
+            if (!_152)
+            {
+                _161 = _137.y >= int(Params.Height);
+            }
+            else
+            {
+                _161 = true;
+            }
+            if (_161)
+            {
+                _171 = 0.0;
+                break;
+            }
+            _171 = SourceState._m0[(uint(_137.y) * Params.Width) + uint(_140)].H;
+            break;
+        } while(false);
+        int2 _173 = _57 + int2(0, -1);
+        float _207;
+        do
+        {
+            int _176 = _173.x;
+            bool _183;
+            if (!(_176 < 0))
+            {
+                _183 = _173.y < 0;
+            }
+            else
+            {
+                _183 = true;
+            }
+            bool _188;
+            if (!_183)
+            {
+                _188 = _176 >= _60;
+            }
+            else
+            {
+                _188 = true;
+            }
+            bool _197;
+            if (!_188)
+            {
+                _197 = _173.y >= int(Params.Height);
+            }
+            else
+            {
+                _197 = true;
+            }
+            if (_197)
+            {
+                _207 = 0.0;
+                break;
+            }
+            _207 = SourceState._m0[(uint(_173.y) * Params.Width) + uint(_176)].H;
+            break;
+        } while(false);
+        int2 _209 = _57 + int2(0, 1);
+        float _243;
+        do
+        {
+            int _212 = _209.x;
+            bool _219;
+            if (!(_212 < 0))
+            {
+                _219 = _209.y < 0;
+            }
+            else
+            {
+                _219 = true;
+            }
+            bool _224;
+            if (!_219)
+            {
+                _224 = _212 >= _60;
+            }
+            else
+            {
+                _224 = true;
+            }
+            bool _233;
+            if (!_224)
+            {
+                _233 = _209.y >= int(Params.Height);
+            }
+            else
+            {
+                _233 = true;
+            }
+            if (_233)
+            {
+                _243 = 0.0;
+                break;
+            }
+            _243 = SourceState._m0[(uint(_209.y) * Params.Width) + uint(_212)].H;
+            break;
+        } while(false);
+        float _254 = (_101 + ((Params.Speed * Params.Speed) * ((((_136 + _171) + _207) + _243) - (4.0 * _100)))) * Params.Damping;
+        DestState._m0[_75] = RippleState{ _100 + _254, _254 };
+        break;
+    } while(false);
+}
+

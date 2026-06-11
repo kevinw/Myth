@@ -134,17 +134,17 @@ function prepareStartGate() {
 
 	button.disabled = true;
 	button.textContent = "Loading...";
-	if (progress instanceof HTMLProgressElement)
-		progress.value = 0;
+	progress.value = 0;
 
 	let ready = false;
 	const wait = new Promise((resolve) => {
 		const start = () => {
-			if (!ready)
-				return;
+		  button.textContent = "Starting..."
+      button.disabled = true;
+			if (!ready) return;
 
 			gate.hidden = true;
-			resolve();
+      setTimeout(resolve, 10);
 		};
 
 		button.addEventListener("click", start, { once: true });
@@ -152,15 +152,13 @@ function prepareStartGate() {
 
 	return {
 		progress: (value) => {
-			if (progress instanceof HTMLProgressElement)
-				progress.value = Math.max(0, Math.min(1, value));
+			progress.value = Math.max(0, Math.min(1, value));
 		},
 		ready: () => {
 			ready = true;
 			button.disabled = false;
 			button.textContent = "Start";
-			if (progress instanceof HTMLProgressElement)
-				progress.value = 1;
+			progress.value = 1;
 		},
 		wait: () => wait,
 	};

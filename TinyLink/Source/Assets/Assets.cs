@@ -30,6 +30,8 @@ public static class Assets
 		{ "mosquito", 4 },
 	};
 
+	public static string ANIM_TRANSITIONS_JSON_FILENAME => Path.Join(AssetsPath, "anim_transitions.json");
+
 	// Transition pairs loaded from anim_transitions.json: (spriteName, fromTag, toTag) -> count
 	public static readonly Dictionary<(string SpriteName, string FromTag, string ToTag), int> TransitionPairs = new();
 
@@ -853,7 +855,7 @@ public static class Assets
 	{
 		TransitionPairs.Clear();
 
-		var path = Path.Join(AssetsPath, "anim_transitions.json");
+		var path = ANIM_TRANSITIONS_JSON_FILENAME;
 		if (!File.Exists(path))
 			return;
 
@@ -879,7 +881,7 @@ public static class Assets
 		}
 		catch (Exception e)
 		{
-			Console.Error.WriteLine($"Failed to load anim_transitions.json: {e.Message}");
+			Console.Error.WriteLine($"Failed to load {ANIM_TRANSITIONS_JSON_FILENAME}: {e.Message}");
 		}
 	}
 

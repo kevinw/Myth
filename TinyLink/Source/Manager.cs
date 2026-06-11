@@ -50,6 +50,14 @@ public partial class Manager : App
 	internal bool playing;
 	bool playOnStartup;
 	bool startingPlay;
+
+	// Automated screenshot capture (see StartArgs / --screenshot).
+	readonly string? screenshotPath;
+	readonly int screenshotFrame;
+	readonly int screenshotInterval;
+	readonly int screenshotCount;
+	int screenshotsTaken;
+	int playingFrame;
 #if IOS
 	private const float PlayModePinchInThreshold = 0.82f;
 	private float playModePinchStartDistance;
@@ -169,6 +177,10 @@ public partial class Manager : App
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.MaxFrames = args.maxFrames;
 		playOnStartup = args.play;
+		screenshotPath = args.screenshotPath;
+		screenshotFrame = args.screenshotFrame;
+		screenshotInterval = args.screenshotInterval;
+		screenshotCount = args.screenshotCount;
 		if (args.simple) {
 			PerfToggles.UseSimpleDefaults();
 			LightingDitherStrength = 0;
@@ -360,29 +372,26 @@ public partial class Manager : App
 		if (aggregated.Count == 0)
 			return;
 
-		// Write JSON array to Assets/anim_transitions.json
-		var jsonPath = Path.Join(Assets.AssetsPath, "anim_transitions.json");
+		// Write JSON array containing aggregated transition counts
 		using var ms = new MemoryStream();
 		using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
 		writer.WriteStartArray();
-		foreach (var (k, count) in aggregated.OrderBy(kv => kv.Key.SpriteName).ThenBy(kv => kv.Key.From).ThenBy(kv => kv.Key.To))
-		{
+		foreach (var (k, count) in aggregated.OrderBy(kv => kv.Key.SpriteName).ThenBy(kv => kv.Key.From).ThenBy(kv => kv.Key.To)) {
 			writer.WriteStartObject();
 			writer.WriteString("spriteName", k.SpriteName);
 			writer.WriteString("fromTag", k.From);
 			writer.WriteString("toTag", k.To);
-			writer.WriteNumber("count", count);
+			writer.WriteNumber("count", MathF.Min(count, 50));
 			writer.WriteEndObject();
 		}
 		writer.WriteEndArray();
 		writer.Flush();
-		File.WriteAllBytes(jsonPath, ms.ToArray());
+		File.WriteAllBytes(Assets.ANIM_TRANSITIONS_JSON_FILENAME, ms.ToArray());
 		// Console.WriteLine($"Saved {aggregated.Count} animation transitions to {jsonPath}");
 #endif
 	}
 
 	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
-
 
 	private void LoadAudioBanks()
 	{
@@ -901,10 +910,76 @@ public partial class Manager : App
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
 
 		batcher.Render(Window);
+
+		if (screenshotPath != null && playing)
+			UpdateScreenshotCapture();
 #if EDITOR
 		if (imgui != null)
 			imgui.Render();
 #endif
+	}
+
+	// Drives automated --screenshot capture: waits screenshotFrame frames after
+	// play begins, then captures Game.Screen every screenshotInterval frames,
+	// screenshotCount times, and exits.
+	private void UpdateScreenshotCapture()
+	{
+		playingFrame++;
+
+		var nextCaptureFrame = screenshotFrame + screenshotsTaken * screenshotInterval;
+		if (playingFrame < nextCaptureFrame)
+			return;
+
+		CaptureScreenshot(ScreenshotPathFor(screenshotsTaken));
+		screenshotsTaken++;
+
+		if (screenshotsTaken >= screenshotCount)
+			Exit();
+	}
+
+	private string ScreenshotPathFor(int index)
+	{
+		var path = screenshotPath!;
+		if (screenshotCount <= 1)
+			return path;
+
+		var dir = Path.GetDirectoryName(path) ?? string.Empty;
+		var name = Path.GetFileNameWithoutExtension(path);
+		var ext = Path.GetExtension(path);
+		return Path.Join(dir, $"{name}_{index}{ext}");
+	}
+
+	private void CaptureScreenshot(string path)
+	{
+		if (game == null)
+			return;
+
+		try
+		{
+			var w = Game.Width;
+			var h = Game.Height;
+
+			// Composite the current gameplay view into a fresh target (Game.Screen
+			// is internal scratch); applyCrt is skipped for a clean pixel image.
+			using var target = new Target(GraphicsDevice, w, h, "ScreenshotCapture");
+			var worldView = new Rect(game.Camera, new Vector2(w, h));
+			game.RenderWorldToTarget(target, worldView, showHud: false);
+
+			var pixels = new Color[w * h];
+			target.Attachments[0].GetData<Color>(pixels);
+
+			var image = new Image(w, h, pixels);
+			var full = Path.GetFullPath(path);
+			var dir = Path.GetDirectoryName(full);
+			if (!string.IsNullOrEmpty(dir))
+				Directory.CreateDirectory(dir);
+			image.WritePng(full);
+			Console.WriteLine($"[Screenshot] wrote {full} ({w}x{h}) at frame {playingFrame}");
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"[Screenshot] failed: {e}");
+		}
 	}
 
 	private void RenderPlayTransition()

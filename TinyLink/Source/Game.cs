@@ -3102,6 +3102,60 @@ public partial class Game : IDisposable
 		hiddenCover.Build(forRoom);
 		hiddenCover.RevealForCurrentPlayer(immediate: true);
 		EnsureBudForPlayer();
+
+		SpawnFungusLayer(forRoom);
+	}
+
+	/// <summary>
+	/// Scans the room's background tiles for Factory.FungusTile and, if any
+	/// are painted, spawns a single FungalGrowthActor covering their bounding
+	/// box - growth is further constrained to the painted tiles via its mask.
+	/// </summary>
+	private void SpawnFungusLayer(Room forRoom)
+	{
+		var minX = int.MaxValue;
+		var minY = int.MaxValue;
+		var maxX = int.MinValue;
+		var maxY = int.MinValue;
+
+		for (var x = 0; x < forRoom.Size.X; x++)
+			for (var y = 0; y < forRoom.Size.Y; y++)
+			{
+				if (forRoom.BackgroundTiles[x, y] != Factory.FungusTile)
+					continue;
+
+				minX = Math.Min(minX, x);
+				maxX = Math.Max(maxX, x);
+				minY = Math.Min(minY, y);
+				maxY = Math.Max(maxY, y);
+			}
+
+		if (maxX < minX || maxY < minY)
+			return;
+
+		var tileWidth = maxX - minX + 1;
+		var tileHeight = maxY - minY + 1;
+		var width = tileWidth * TileSize;
+		var height = tileHeight * TileSize;
+
+		var mask = new float[width * height];
+		for (var ty = 0; ty < tileHeight; ty++)
+			for (var tx = 0; tx < tileWidth; tx++)
+			{
+				var growable = forRoom.BackgroundTiles[minX + tx, minY + ty] == Factory.FungusTile ? 1.0f : 0.0f;
+				for (var py = 0; py < TileSize; py++)
+					for (var px = 0; px < TileSize; px++)
+						mask[(ty * TileSize + py) * width + (tx * TileSize + px)] = growable;
+			}
+
+		var position = forRoom.WorldBounds.TopLeft + new Point2(minX * TileSize, minY * TileSize);
+
+		Create<FungalGrowthActor>(position, layer =>
+		{
+			layer.RegionWidth = width;
+			layer.RegionHeight = height;
+			layer.GrowthMask = mask;
+		});
 	}
 
 	private void EnsureBudForPlayer(bool repositionExisting = false)
