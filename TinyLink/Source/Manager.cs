@@ -127,8 +127,9 @@ public partial class Manager : App
 
 		var size = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) * scale;
 		var topLeft = (Vector2)viewport.Center - size / 2;
+		var renderCenter = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) / 2;
 		var local = (Input.Mouse.Position - topLeft) / scale;
-		return gameInstance.Camera + local;
+		return gameInstance.Camera + renderCenter + (local - renderCenter) / gameInstance.FbZoom;
 	}
 
 	/// <summary>

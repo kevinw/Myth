@@ -43,6 +43,12 @@ public class Controls(Input input)
 			.Add(Buttons.North)
 	);
 
+	public readonly VirtualAction Zoom = new(input, "Zoom",
+		new ActionBindingSet()
+			.Add(Keys.X)
+			.Add(Buttons.LeftShoulder)
+	);
+
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
 	);

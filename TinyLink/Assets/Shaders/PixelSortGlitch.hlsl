@@ -97,7 +97,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 tile_field = TileFieldTexture.SampleLevel(TileFieldSampler, screen, 0.0);
     float family = tile_field.g;
     float variant = tile_field.r;
-    float2 world_pixel = camera + screen_pixel(input.position);
+    float zoom = TimePadding.w > 0.0 ? TimePadding.w : 1.0;
+    float2 world_pixel = camera + screen_pixel(input.position) / zoom;
     float2 tile = floor(world_pixel / 8.0);
     float frame = floor(time * 7.0);
     float dirty = hash_float(tile + frame + variant * 31.0);

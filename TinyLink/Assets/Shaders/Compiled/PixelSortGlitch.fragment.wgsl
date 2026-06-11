@@ -20,17 +20,17 @@ var<private> global: vec4<f32>;
 var<private> out_u002e_var_u002e_SV_Target0_: vec4<f32>;
 
 fn fragment_main_1() {
-    var phi_281_: vec2<f32>;
-    var phi_315_: f32;
-    var phi_318_: vec3<f32>;
-    var phi_320_: i32;
-    var phi_332_: bool;
-    var phi_361_: bool;
-    var phi_366_: bool;
-    var phi_316_: f32;
-    var phi_319_: vec3<f32>;
+    var phi_287_: vec2<f32>;
+    var phi_321_: f32;
+    var phi_324_: vec3<f32>;
+    var phi_326_: i32;
+    var phi_338_: bool;
+    var phi_365_: bool;
+    var phi_370_: bool;
+    var phi_322_: f32;
+    var phi_325_: vec3<f32>;
     var local: vec3<f32>;
-    var phi_420_: vec4<f32>;
+    var phi_422_: vec4<f32>;
 
     let _e85 = in_u002e_var_u002e_TEXCOORD0_1;
     let _e86 = in_u002e_var_u002e_TEXCOORD1_1;
@@ -49,107 +49,108 @@ fn fragment_main_1() {
             let _e115 = textureSampleLevel(Texture, Sampler, _e114, 0f);
             let _e116 = (_e115 * _e86);
             if (_e97 <= 0.001f) {
-                phi_420_ = _e116;
+                phi_422_ = _e116;
                 break;
             }
             let _e118 = textureSampleLevel(TileFieldTexture, TileFieldSampler, _e114, 0f);
-            let _e122 = (_e90.zw + _e87.xy);
-            let _e124 = floor((_e122 * vec2<f32>(0.125f, 0.125f)));
-            let _e126 = floor((_e106 * 7f));
-            let _e127 = vec2(_e126);
-            let _e149 = fract((sin(dot(floor(((floor((_e122 * vec2<f32>(0.0625f, 0.0625f))) + vec2((_e126 * 3f))) + vec2((_e118.y * 19f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f));
-            let _e181 = ((mix(42f, (_e102 * 1.75f), smoothstep(0f, 0.75f, _e97)) * mix(0.7f, 1.45f, fract((sin(dot(floor(((floor((_e122 * vec2<f32>(0.035714287f, 0.035714287f))) + vec2((_e126 * 1.7f))) + vec2((_e118.y * 47f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))) + ((fract((sin(dot(floor(((_e124 + vec2((_e126 * 0.5f))) + vec2((_e118.y * 71f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * 30f));
-            let _e185 = normalize(normalize(_e107.yz));
-            let _e190 = (_e122 - _e98.yz);
-            let _e193 = (dot(_e190, _e185) / max(_e181, 1f));
-            let _e196 = (dot(_e190, vec2<f32>(-(_e185.y), _e185.x)) / max(max((_e181 * mix(0.28f, 0.46f, _e149)), 10f), 1f));
-            let _e226 = clamp((((_e97 * smoothstep(0.22f, 1f, _e97)) * 0.3f) + (((_e97 * (pow(smoothstep(0f, 0.95f, clamp((1f - sqrt(((_e193 * _e193) + (_e196 * _e196)))), 0f, 1f)), 0.58f) * mix(0.42f, 1f, fract((sin(dot(floor((floor((_e122 * vec2<f32>(0.05f, 0.05f))) + vec2((_e126 * 2f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f))))) * mix(0.28f, 0.9f, fract((sin(dot(floor(((_e124 + _e127) + vec2((_e118.x * 31f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))) * mix(0.45f, 1f, _e149))), 0f, 1f);
-            if (_e226 <= 0.002f) {
-                phi_420_ = _e116;
+            let _e123 = FragmentUniformBlock.TimePadding[3i];
+            let _e129 = (_e90.zw + (_e87.xy / vec2(select(1f, _e123, (_e123 > 0f)))));
+            let _e131 = floor((_e129 * vec2<f32>(0.125f, 0.125f)));
+            let _e133 = floor((_e106 * 7f));
+            let _e134 = vec2(_e133);
+            let _e156 = fract((sin(dot(floor(((floor((_e129 * vec2<f32>(0.0625f, 0.0625f))) + vec2((_e133 * 3f))) + vec2((_e118.y * 19f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f));
+            let _e188 = ((mix(42f, (_e102 * 1.75f), smoothstep(0f, 0.75f, _e97)) * mix(0.7f, 1.45f, fract((sin(dot(floor(((floor((_e129 * vec2<f32>(0.035714287f, 0.035714287f))) + vec2((_e133 * 1.7f))) + vec2((_e118.y * 47f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))) + ((fract((sin(dot(floor(((_e131 + vec2((_e133 * 0.5f))) + vec2((_e118.y * 71f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * 30f));
+            let _e192 = normalize(normalize(_e107.yz));
+            let _e197 = (_e129 - _e98.yz);
+            let _e200 = (dot(_e197, _e192) / max(_e188, 1f));
+            let _e203 = (dot(_e197, vec2<f32>(-(_e192.y), _e192.x)) / max(max((_e188 * mix(0.28f, 0.46f, _e156)), 10f), 1f));
+            let _e233 = clamp((((_e97 * smoothstep(0.22f, 1f, _e97)) * 0.3f) + (((_e97 * (pow(smoothstep(0f, 0.95f, clamp((1f - sqrt(((_e200 * _e200) + (_e203 * _e203)))), 0f, 1f)), 0.58f) * mix(0.42f, 1f, fract((sin(dot(floor((floor((_e129 * vec2<f32>(0.05f, 0.05f))) + vec2((_e133 * 2f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f))))) * mix(0.28f, 0.9f, fract((sin(dot(floor(((_e131 + _e134) + vec2((_e118.x * 31f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))) * mix(0.45f, 1f, _e156))), 0f, 1f);
+            if (_e233 <= 0.002f) {
+                phi_422_ = _e116;
                 break;
             }
             switch bitcast<i32>(0u) {
                 default: {
                     if (_e118.y < 0.125f) {
-                        phi_281_ = normalize(vec2<f32>(1f, -1f));
+                        phi_287_ = normalize(vec2<f32>(1f, -1f));
                         break;
                     }
                     if (_e118.y < 0.375f) {
-                        phi_281_ = vec2<f32>(0f, 1f);
+                        phi_287_ = vec2<f32>(0f, 1f);
                         break;
                     }
                     if (_e118.y < 0.625f) {
-                        phi_281_ = normalize(vec2<f32>(1f, 1f));
+                        phi_287_ = normalize(vec2<f32>(1f, 1f));
                         break;
                     }
                     if (_e118.y < 0.875f) {
-                        phi_281_ = vec2<f32>(1f, 0f);
+                        phi_287_ = vec2<f32>(1f, 0f);
                         break;
                     }
-                    phi_281_ = normalize(select(vec2<f32>(1f, -1f), vec2<f32>(-1f, 1f), vec2((_e118.x < 0.5f))));
+                    phi_287_ = normalize(select(vec2<f32>(1f, -1f), vec2<f32>(-1f, 1f), vec2((_e118.x < 0.5f))));
                     break;
                 }
             }
-            let _e240 = phi_281_;
-            let _e270 = step(0.5f, fract((sin(dot(floor(((_e124 + vec2((_e118.y * 43f))) + vec2((_e126 * 0.25f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)));
-            let _e271 = _e116.xyz;
-            phi_315_ = dot(_e271, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
-            phi_318_ = _e271;
-            phi_320_ = -18i;
+            let _e247 = phi_287_;
+            let _e277 = step(0.5f, fract((sin(dot(floor(((_e131 + vec2((_e118.y * 43f))) + vec2((_e133 * 0.25f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)));
+            let _e278 = _e116.xyz;
+            phi_321_ = dot(_e278, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
+            phi_324_ = _e278;
+            phi_326_ = -18i;
             loop {
-                let _e274 = phi_315_;
-                let _e276 = phi_318_;
-                let _e278 = phi_320_;
-                local = _e276;
-                if (_e278 <= 18i) {
-                    let _e280 = f32(_e278);
-                    phi_332_ = true;
-                    if !((abs(_e280) > floor(mix(2f, 18f, clamp((_e226 * mix(0.75f, 1.35f, fract((sin(dot(floor(vec2<f32>(floor((_e122.y * 0.33333334f)), (_e126 + floor((_e122.x * 0.025f))))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))), 0f, 1f))))) {
-                        phi_332_ = (_e278 == 0i);
+                let _e281 = phi_321_;
+                let _e283 = phi_324_;
+                let _e285 = phi_326_;
+                local = _e283;
+                if (_e285 <= 18i) {
+                    let _e287 = f32(_e285);
+                    phi_338_ = true;
+                    if !((abs(_e287) > floor(mix(2f, 18f, clamp((_e233 * mix(0.75f, 1.35f, fract((sin(dot(floor(vec2<f32>(floor((_e129.y * 0.33333334f)), (_e133 + floor((_e129.x * 0.025f))))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))), 0f, 1f))))) {
+                        phi_338_ = (_e285 == 0i);
                     }
-                    let _e286 = phi_332_;
-                    if _e286 {
-                        phi_316_ = _e274;
-                        phi_319_ = _e276;
+                    let _e293 = phi_338_;
+                    if _e293 {
+                        phi_322_ = _e281;
+                        phi_325_ = _e283;
                         continue;
                     }
-                    let _e303 = textureSampleLevel(Texture, Sampler, (_e114 + ((_e240 * (_e280 + (((fract((sin(dot(floor(((_e124 + vec2((_e280 * 17f))) + _e127)), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * _e226) * 3f))) / _e91)), 0f);
-                    let _e304 = _e303.xyz;
-                    let _e305 = dot(_e304, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
-                    phi_361_ = false;
-                    if (_e270 > 0.5f) {
-                        phi_361_ = (_e305 > _e274);
+                    let _e310 = textureSampleLevel(Texture, Sampler, (_e114 + ((_e247 * (_e287 + (((fract((sin(dot(floor(((_e131 + vec2((_e287 * 17f))) + _e134)), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * _e233) * 3f))) / _e91)), 0f);
+                    let _e311 = _e310.xyz;
+                    let _e312 = dot(_e311, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
+                    phi_365_ = false;
+                    if (_e277 > 0.5f) {
+                        phi_365_ = (_e312 > _e281);
                     }
-                    let _e309 = phi_361_;
-                    phi_366_ = false;
-                    if (_e270 <= 0.5f) {
-                        phi_366_ = (_e305 < _e274);
+                    let _e316 = phi_365_;
+                    phi_370_ = false;
+                    if (_e277 <= 0.5f) {
+                        phi_370_ = (_e312 < _e281);
                     }
-                    let _e313 = phi_366_;
-                    let _e315 = select(true, _e313, !(_e309));
-                    phi_316_ = select(_e274, _e305, _e315);
-                    phi_319_ = select(_e276, _e304, vec3(_e315));
+                    let _e320 = phi_370_;
+                    let _e322 = select(true, _e320, !(_e316));
+                    phi_322_ = select(_e281, _e312, _e322);
+                    phi_325_ = select(_e283, _e311, vec3(_e322));
                     continue;
                 } else {
                     break;
                 }
                 continuing {
-                    let _e320 = phi_316_;
-                    let _e322 = phi_319_;
-                    phi_315_ = _e320;
-                    phi_318_ = _e322;
-                    phi_320_ = (_e278 + 1i);
+                    let _e327 = phi_322_;
+                    let _e329 = phi_325_;
+                    phi_321_ = _e327;
+                    phi_324_ = _e329;
+                    phi_326_ = (_e285 + 1i);
                 }
             }
-            let _e356 = textureSampleLevel(Texture, Sampler, (_e114 + (((_e240.yx * vec2<f32>(-1f, 1f)) * (((fract((sin(dot(floor((floor((_e122 * vec2<f32>(0.041666668f, 0.041666668f))) + vec2((_e126 * 5f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * _e226) * 7f)) / _e91)), 0f);
-            let _e362 = local;
-            let _e365 = mix(_e271, mix(_e362, _e356.xyz, vec3(clamp((_e226 * 0.38f), 0f, 1f))), vec3((clamp((_e226 * 1.35f), 0f, 1f) * mix(0.78f, 1f, fract((sin(dot(floor(vec2<f32>(floor((_e122.y * 0.5f)), (_e126 + (_e118.y * 23f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f))))));
-            phi_420_ = vec4<f32>(_e365.x, _e365.y, _e365.z, _e116.w);
+            let _e363 = textureSampleLevel(Texture, Sampler, (_e114 + (((_e247.yx * vec2<f32>(-1f, 1f)) * (((fract((sin(dot(floor((floor((_e129 * vec2<f32>(0.041666668f, 0.041666668f))) + vec2((_e133 * 5f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * _e233) * 7f)) / _e91)), 0f);
+            let _e369 = local;
+            let _e372 = mix(_e278, mix(_e369, _e363.xyz, vec3(clamp((_e233 * 0.38f), 0f, 1f))), vec3((clamp((_e233 * 1.35f), 0f, 1f) * mix(0.78f, 1f, fract((sin(dot(floor(vec2<f32>(floor((_e129.y * 0.5f)), (_e133 + (_e118.y * 23f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f))))));
+            phi_422_ = vec4<f32>(_e372.x, _e372.y, _e372.z, _e116.w);
             break;
         }
     }
-    let _e372 = phi_420_;
-    out_u002e_var_u002e_SV_Target0_ = _e372;
+    let _e379 = phi_422_;
+    out_u002e_var_u002e_SV_Target0_ = _e379;
     return;
 }
 

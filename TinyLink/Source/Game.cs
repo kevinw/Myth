@@ -185,6 +185,14 @@ public partial class Game : IDisposable
 
 	public Vector2 Camera { get; private set; }
 	private Vector2 RenderCamera => (Point2)Camera - shake;
+	private float zoomLevel = 1.0f;
+	public float ZoomLevel => zoomLevel;
+	private float ZoomedWidth => Width / zoomLevel;
+	private float ZoomedHeight => Height / zoomLevel;
+	private float fbZoom = 1.0f;
+	public float FbZoom => fbZoom;
+	private float FbZoomedWidth => Width / fbZoom;
+	private float FbZoomedHeight => Height / fbZoom;
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
@@ -444,10 +452,20 @@ public partial class Game : IDisposable
 		DisplayMessage($"Time x{timeScale:0.##}");
 	}
 
+	private void PushWorldMatrix()
+		=> Batcher.PushMatrix(
+			Matrix3x2.CreateTranslation(-(Point2)Camera + shake) *
+			Matrix3x2.CreateScale(zoomLevel));
+
 	private void UpdateCamera()
 	{
 		if (room == null || nextRoom != null || draggingPlayer)
 			return;
+
+		var fbZoomTarget = Controls.Zoom.Down ? 2.0f : 1.0f;
+		fbZoom += (fbZoomTarget - fbZoom) * (1 - MathF.Exp(-Time.Delta * 12f));
+		if (MathF.Abs(fbZoom - fbZoomTarget) < 0.005f)
+			fbZoom = fbZoomTarget;
 
 		Camera = GetGameplayCameraTarget();
 	}
@@ -521,7 +539,9 @@ public partial class Game : IDisposable
 		if (room == null || GetFirst<Player>() is not { } player)
 			return Camera;
 
-		return ClampCameraToRoom(player.Position - new Vector2(Width, Height) / 2);
+		var unclamped = player.Position - new Vector2(Width, Height) / 2;
+		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		return ClampCameraToRoomFb(unclamped, padding);
 	}
 
 	public void SnapCameraToGameplayTarget()
@@ -535,11 +555,24 @@ public partial class Game : IDisposable
 		return ClampCameraToRoom(target, room.WorldBounds);
 	}
 
-	private static Vector2 ClampCameraToRoom(Vector2 target, RectInt bounds)
+	private Vector2 ClampCameraToRoom(Vector2 target, RectInt bounds)
 	{
 		return new Vector2(
-			ClampCameraAxis(target.X, bounds.Left, bounds.Right, Width),
-			ClampCameraAxis(target.Y, bounds.Top, bounds.Bottom, Height));
+			ClampCameraAxis(target.X, bounds.Left, bounds.Right, ZoomedWidth),
+			ClampCameraAxis(target.Y, bounds.Top, bounds.Bottom, ZoomedHeight));
+	}
+
+	private Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding)
+	{
+		if (room == null) return target;
+		return ClampCameraToRoomFb(target, padding, room.WorldBounds);
+	}
+
+	private Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding, RectInt bounds)
+	{
+		return new Vector2(
+			ClampCameraAxis(target.X + padding.X, bounds.Left, bounds.Right, FbZoomedWidth) - padding.X,
+			ClampCameraAxis(target.Y + padding.Y, bounds.Top, bounds.Bottom, FbZoomedHeight) - padding.Y);
 	}
 
 	private static float ClampCameraAxis(float value, float min, float max, float viewportSize)
@@ -969,7 +1002,7 @@ public partial class Game : IDisposable
 			var flipTargetTextures = Batcher.FlipTargetTextures;
 			Batcher.FlipTargetTextures = false;
 #endif
-			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
+			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale * fbZoom, 0, Color.White);
 #if BROWSER
 			Batcher.FlipTargetTextures = flipTargetTextures;
 #endif
@@ -1043,7 +1076,7 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		Batcher.PushMatrix(-(Point2)Camera + shake);
+		PushWorldMatrix();
 
 		// draw actors
 		foreach (var actor in rendering)
@@ -1106,7 +1139,7 @@ public partial class Game : IDisposable
 	private void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
-		Batcher.PushMatrix(-(Point2)Camera + shake);
+		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -1136,7 +1169,7 @@ public partial class Game : IDisposable
 				continue;
 
 			var surfaceTop = ReflectionSurfaceTop(rect);
-			Batcher.PushMatrix(-(Point2)Camera + shake);
+			PushWorldMatrix();
 			foreach (var actor in rendering)
 			{
 				if (!actor.Visible || !actor.CastsReflection)
@@ -1161,10 +1194,10 @@ public partial class Game : IDisposable
 	private RectInt GetReflectionScissor(RectInt rect)
 	{
 		var screenRect = new RectInt(
-			rect.X - (int)Camera.X + shake.X,
-			rect.Y - (int)Camera.Y + shake.Y,
-			rect.Width,
-			rect.Height);
+			(int)MathF.Round((rect.X - Camera.X + shake.X) * zoomLevel),
+			(int)MathF.Round((rect.Y - Camera.Y + shake.Y) * zoomLevel),
+			(int)MathF.Round(rect.Width * zoomLevel),
+			(int)MathF.Round(rect.Height * zoomLevel));
 		return screenRect.GetIntersection(ReflectionScreen.Bounds);
 	}
 
@@ -1273,15 +1306,17 @@ public partial class Game : IDisposable
 			return;
 
 		var renderCamera = RenderCamera;
+		Batcher.PushMatrix(Matrix3x2.CreateScale(zoomLevel));
 		Batcher.PushBlend(BlendMode.Multiply);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat, TextureWrap.Repeat));
 		Batcher.Image(
 			Assets.LightingNoise,
-			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, target.Width, target.Height),
+			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, ZoomedWidth, ZoomedHeight),
 			Vector2.Zero,
 			Color.White * CurrentLightNoise());
 		Batcher.PopSampler();
 		Batcher.PopBlend();
+		Batcher.PopMatrix();
 		Batcher.Render(target);
 		Batcher.Clear();
 	}
@@ -1307,7 +1342,7 @@ public partial class Game : IDisposable
 			Time.SecondsF,
 			ditherGlitchAxis.X,
 			ditherGlitchAxis.Y,
-			0
+			zoomLevel
 		]);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -1344,7 +1379,7 @@ public partial class Game : IDisposable
 			Time.SecondsF,
 			ditherGlitchAxis.X,
 			ditherGlitchAxis.Y,
-			0,
+			zoomLevel,
 			0
 		]);
 
@@ -1367,7 +1402,7 @@ public partial class Game : IDisposable
 			nextRoomTileFieldCache = GetRoomTileFieldCache(nextRoom);
 
 		TileField.Clear(Color.Transparent);
-		Batcher.PushMatrix(-(Point2)Camera + shake);
+		PushWorldMatrix();
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		if (currentRoomTileFieldCache != null)
 			DrawCachedRoomTileField(currentRoomTileFieldCache);
@@ -1429,7 +1464,7 @@ public partial class Game : IDisposable
 	private void DrawDitherMask()
 	{
 		DitherMask.Clear(Color.White);
-		Batcher.PushMatrix(-(Point2)Camera + shake);
+		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
 			if (!actor.Visible)
@@ -1758,7 +1793,7 @@ public partial class Game : IDisposable
 
 		if (includeShadows)
 		{
-			Batcher.PushMatrix(-(Point2)Camera + shake);
+			PushWorldMatrix();
 			Batcher.PushBlend(ShadowBlend);
 			DrawSunShadows(direction);
 			Batcher.PopBlend();
@@ -1785,7 +1820,7 @@ public partial class Game : IDisposable
 
 		if (normalLightMaterial != null)
 		{
-			var screenPosition = position - RenderCamera;
+			var screenPosition = (position - RenderCamera) * zoomLevel;
 			var lightColorValue = (Vector4)lightColor;
 			normalLightMaterial.Material.Fragment.SetUniformBuffer([
 				NormalBuffer.Width,
@@ -1794,8 +1829,8 @@ public partial class Game : IDisposable
 				0,
 				screenPosition.X,
 				screenPosition.Y,
-				radius,
-				height,
+				radius * zoomLevel,
+				height * zoomLevel,
 				lightColorValue.X,
 				lightColorValue.Y,
 				lightColorValue.Z,
@@ -1818,7 +1853,7 @@ public partial class Game : IDisposable
 		}
 		else
 		{
-			Batcher.PushMatrix(-(Point2)Camera + shake);
+			PushWorldMatrix();
 			var color = ScaleColor(lightColor, intensity);
 			Batcher.Circle(position, radius, 32, color, Color.Transparent);
 			Batcher.PopMatrix();
@@ -1826,7 +1861,7 @@ public partial class Game : IDisposable
 
 		if (includeShadows && !drewVisibilityClippedLight)
 		{
-			Batcher.PushMatrix(-(Point2)Camera + shake);
+			PushWorldMatrix();
 			Batcher.PushBlend(ShadowBlend);
 			DrawLightShadows(position, radius);
 			Batcher.PopBlend();
@@ -1851,13 +1886,13 @@ public partial class Game : IDisposable
 		}
 
 		var renderCamera = RenderCamera;
-		var screenLight = lightPosition - renderCamera;
+		var screenLight = (lightPosition - renderCamera) * zoomLevel;
 		var texture = NormalBuffer.Attachments[0];
 		var textureSize = new Vector2(NormalBuffer.Width, NormalBuffer.Height);
 		for (var i = 0; i < hits.Count; i++)
 		{
-			var a = hits[i].Point - renderCamera;
-			var b = hits[(i + 1) % hits.Count].Point - renderCamera;
+			var a = (hits[i].Point - renderCamera) * zoomLevel;
+			var b = (hits[(i + 1) % hits.Count].Point - renderCamera) * zoomLevel;
 			Batcher.Triangle(
 				texture,
 				screenLight,
@@ -2161,7 +2196,7 @@ public partial class Game : IDisposable
 				nextRoomNormalCache = GetRoomNormalCache(nextRoom);
 		}
 
-		Batcher.PushMatrix(-(Point2)Camera + shake);
+		PushWorldMatrix();
 
 		if (ShowForegroundLayer)
 		{
@@ -2615,7 +2650,8 @@ public partial class Game : IDisposable
 						Destroy(it);
 
 				transitionCameraFrom = Camera;
-				transitionCameraTo = ClampCameraToRoom(exitPosition - new Vector2(Width, Height) / 2, nextRoom.WorldBounds);
+				var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+				transitionCameraTo = ClampCameraToRoomFb(exitPosition - new Vector2(Width, Height) / 2, fbPad, nextRoom.WorldBounds);
 				transitionBackdropColorFrom = room.BackdropColor;
 				transitionBackdropColorTo = nextRoom.BackdropColor;
 				transitionBackdropColor2From = room.BackdropColor2 ?? room.BackdropColor;
@@ -2676,7 +2712,8 @@ public partial class Game : IDisposable
 		var targetPosition = room.WorldBounds.TopLeft + localPosition + spawnOffset;
 		player.Position = targetPosition;
 		player.Velocity = Vector2.Zero;
-		Camera = ClampCameraToRoom(player.Position - new Vector2(Width, Height) / 2);
+		var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		Camera = ClampCameraToRoomFb(player.Position - new Vector2(Width, Height) / 2, fbPad);
 		ApplyMusicArea(room);
 		ApplyRoomReverb(room);
 		linkedDoorCooldown = 0.35f;

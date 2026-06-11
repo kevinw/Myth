@@ -288,7 +288,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
     float4 emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
-    float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position);
+    float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
+    float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position) / zoom;
     light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
