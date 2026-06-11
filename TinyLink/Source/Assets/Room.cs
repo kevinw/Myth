@@ -122,12 +122,12 @@ public class Room
 	public RectInt WorldBounds => new(TileSpacePosition.X * Game.TileSize, TileSpacePosition.Y * Game.TileSize, Size.X * Game.TileSize, Size.Y * Game.TileSize);
 
 	public Room(Point2 cell)
-		: this(Guid.NewGuid().ToString("N"), new Point2(cell.X * Game.Columns, cell.Y * Game.Rows), DefaultSize)
+		: this(Assets.GenerateRandomRoomId(), new Point2(cell.X * Game.Columns, cell.Y * Game.Rows), DefaultSize)
 	{
 	}
 
 	public Room(Point2 position, Point2 size)
-		: this(Guid.NewGuid().ToString("N"), position, size)
+		: this(Assets.GenerateRandomRoomId(), position, size)
 	{
 	}
 

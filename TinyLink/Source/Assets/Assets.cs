@@ -21,6 +21,26 @@ public static class Assets
 	public static readonly Dictionary<Point2, Room> Rooms = new();
 	public static readonly Dictionary<string, Room> RoomsById = new();
 
+	internal static string GenerateRandomRoomId()
+	{
+		while (true)
+		{
+			var dictWord1 = WordDictionary.GetRandomWord();
+			var dictWord2 = WordDictionary.GetRandomWord();
+			if (dictWord1 == null || dictWord2 == null)
+			{
+				break;
+			}
+
+			var candidate = $"{dictWord1}_{dictWord2}".Trim();
+			if (!RoomsById.ContainsKey(candidate))
+				return candidate;
+		}
+
+		return Guid.NewGuid().ToString("N");
+	}
+
+
 	// Per-sprite inbetween frame count (0 = none)
 	private static readonly Dictionary<string, int> SpriteInbetweens = new()
 	{
@@ -1098,7 +1118,6 @@ public static class Assets
 	{
 		Rooms.Clear();
 		RoomsById.Clear();
-
 
 		var deleted = UseUserRooms ? LoadUserRoomTombstones() : [];
 

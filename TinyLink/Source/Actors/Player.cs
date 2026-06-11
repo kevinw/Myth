@@ -157,7 +157,7 @@ public abstract class Pawn : Actor
 				jumpTimer = 0;
 				Velocity.Y *= 0.5f;
 			}
-			 else
+			else
 				jumpTimer -= Time.Delta;
 		}
 
@@ -193,12 +193,12 @@ public abstract class Pawn : Actor
 	protected virtual bool AllowDuckingInState() => false;
 	protected virtual bool TryStartPawnAction(int moveX) => false;
 	protected virtual void OnPawnJump() { }
-		protected virtual void OnRollStarted() { }
-		protected virtual void OnRollStopped(bool immediate) { }
-		protected virtual bool TryRollCancel() => false;
-		protected virtual void UpdateRollAudioPosition() { }
-		protected virtual float GroundSpeedMultiplier => 1.0f;
-		protected virtual float AirSpeedMultiplier => 1.0f;
+	protected virtual void OnRollStarted() { }
+	protected virtual void OnRollStopped(bool immediate) { }
+	protected virtual bool TryRollCancel() => false;
+	protected virtual void UpdateRollAudioPosition() { }
+	protected virtual float GroundSpeedMultiplier => 1.0f;
+	protected virtual float AirSpeedMultiplier => 1.0f;
 
 	public override void OnCollideX()
 	{
@@ -252,9 +252,7 @@ public abstract class Pawn : Actor
 				if (RunStartTimer < 0.35f)
 				{
 					if (RunStartTimer < 0.15f && RunStartSkid)
-					{
 						Play("skid");
-					}
 					else
 						Play("run_start");
 				}
@@ -289,17 +287,17 @@ public abstract class Pawn : Actor
 			RunStartSkid = false;
 		}
 
-			var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
-			var maxSpeed = grounded ? MaxGroundSpeed * GroundSpeedMultiplier : MaxAirSpeed * AirSpeedMultiplier;
-			var lastFacing = Facing;
-			if (ducking)
-				maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
+		var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
+		var maxSpeed = grounded ? MaxGroundSpeed * GroundSpeedMultiplier : MaxAirSpeed * AirSpeedMultiplier;
+		var lastFacing = Facing;
+		if (ducking)
+			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
 
-			Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
-			if (!grounded && wallJumpInputLockTimer > 0)
-				maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
-			if (!grounded && rollJumpCarryTimer > 0)
-				maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
+		Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
+		if (!grounded && wallJumpInputLockTimer > 0)
+			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
+		if (!grounded && rollJumpCarryTimer > 0)
+			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
 		if (MathF.Abs(Velocity.X) > maxSpeed)
 			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
 		if (moveX == 0 && grounded)
