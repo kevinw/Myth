@@ -2,7 +2,7 @@ using Foster.Framework;
 using System.Numerics;
 namespace TinyLink;
 
-public class Bud : NavPawn
+public class Bud : Pawn
 {
 	private static readonly Color Tint = new(0x7fb6ff);
 	private const int FollowStopDistance = 18;
@@ -10,6 +10,7 @@ public class Bud : NavPawn
 	private const float EnterDelay = 1.0f;
 	private const float MirrorPlayerCrawlDelay = 0.25f;
 	private const float MirrorPlayerCrawlReleaseDelay = 0.25f;
+	private readonly Navigator nav;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
 	private bool enteredRoom;
@@ -21,8 +22,18 @@ public class Bud : NavPawn
 	protected override float AirSpeedMultiplier => 1.0f;
 	public bool CanSay => Game.CanShowBudSpeech();
 
+	// Forwarded for editor nav debug visualization
+	public int? DebugNavStartNodeId => nav.DebugNavStartNodeId;
+	public int? DebugNavGoalNodeId => nav.DebugNavGoalNodeId;
+	public int? DebugNavTargetNodeId => nav.DebugNavTargetNodeId;
+	public string DebugNavLabel => nav.DebugNavLabel;
+	public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => nav.DebugNavPath;
+	public RectInt? DebugNavProbeRect => nav.DebugNavProbeRect;
+	public bool DebugNavProbeHit => nav.DebugNavProbeHit;
+
 	public Bud()
 	{
+		nav = new(this);
 		Sprite = Assets.GetSprite("bud");
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = -4;
@@ -49,34 +60,34 @@ public class Bud : NavPawn
 		var followTarget = gymTarget != null
 			? (Vector2?)gymTarget.Position
 			: player != null ? DesiredFollowPosition(player) : null;
-		if (!TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
+		if (!nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
 		{
 			if (gymTarget != null)
 			{
-				if (!TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
+				if (!nav.TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
 				{
 					moveX = GetFallbackMoveX(followTarget);
 					moveY = 0;
-					SetDebugNavState("gym fallback");
+					nav.SetDebugNavState("gym fallback");
 				}
 			}
 			else if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
 			{
-				var navLabel = DebugNavLabel;
+				var navLabel = nav.DebugNavLabel;
 				moveX = GetFallbackMoveX(followTarget, player);
 				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
-				if (grounded && moveX != 0 && !HasGroundSupportAhead(moveX))
+				if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
 					moveX = 0;
 				if (player == null)
-					SetDebugNavState("no player");
+					nav.SetDebugNavState("no player");
 				else
-					SetDebugNavState(moveX == 0
+					nav.SetDebugNavState(moveX == 0
 						? IsBesidePlayer(player) ? "beside player" : navLabel
-						: ShouldBuildDebugNavLabel ? $"fallback walk {moveX}" : "fallback walk");
+						: Game.IsPlatformNavDebugVisible ? $"fallback walk {moveX}" : "fallback walk");
 			}
 		}
 
-		UpdateJumpHeld(jumpPressed);
+		nav.UpdateJumpHeld(jumpPressed);
 
 		if (moveX == 0)
 		{
@@ -93,7 +104,7 @@ public class Bud : NavPawn
 			MoveX: moveX,
 			MoveY: moveY,
 			JumpPressed: jumpPressed,
-			JumpDown: jumpHeld,
+			JumpDown: nav.JumpHeld,
 			DashPressed: false,
 			AllowWallJump: false
 		);
@@ -104,7 +115,7 @@ public class Bud : NavPawn
 		if (pendingRoomChange is { } change)
 		{
 			enterTimer = Calc.Approach(enterTimer, 0, Time.Delta);
-			SetDebugNavState(ShouldBuildDebugNavLabel ? $"entering {enterTimer:0.0}s" : "entering");
+			nav.SetDebugNavState(Game.IsPlatformNavDebugVisible ? $"entering {enterTimer:0.0}s" : "entering");
 			if (enterTimer <= 0)
 				EnterRoom(change);
 			return;
@@ -142,43 +153,43 @@ public class Bud : NavPawn
 
 		if (Game.GetPlatformNavGraph() is not { } graph)
 		{
-			SetDebugNavState("no graph");
+			nav.SetDebugNavState("no graph");
 			return false;
 		}
 
-		var start = graph.FindNearestNode(Position, NavSearchDistance);
+		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
 		var goal = FindGoalNodeBesidePlayer(graph, player);
 		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
 		{
-			SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
+			nav.SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
 			return false;
 		}
 
-		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, navPath) || navPath.Count <= 0)
+		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, nav.NavPath) || nav.NavPath.Count <= 0)
 		{
-			DebugNavStartNodeId = start.Value.Id;
-			DebugNavGoalNodeId = goal.Value.Id;
-			DebugNavTargetNodeId = null;
-			DebugNavLabel = ShouldBuildDebugNavLabel ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
+			nav.DebugNavStartNodeId = start.Value.Id;
+			nav.DebugNavGoalNodeId = goal.Value.Id;
+			nav.DebugNavTargetNodeId = null;
+			nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
 			return false;
 		}
 
-		if (!TryGetActionableEdge(graph, out var edge))
+		if (!nav.TryGetActionableEdge(graph, out var edge))
 		{
-			DebugNavStartNodeId = start.Value.Id;
-			DebugNavGoalNodeId = goal.Value.Id;
-			DebugNavTargetNodeId = null;
-			DebugNavLabel = "edge reached";
+			nav.DebugNavStartNodeId = start.Value.Id;
+			nav.DebugNavGoalNodeId = goal.Value.Id;
+			nav.DebugNavTargetNodeId = null;
+			nav.DebugNavLabel = "edge reached";
 			return false;
 		}
 
 		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall)
 		{
-			DebugNavStartNodeId = start.Value.Id;
-			DebugNavGoalNodeId = goal.Value.Id;
-			DebugNavTargetNodeId = edge.To;
-			StartActiveEdge(edge);
-			return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
+			nav.DebugNavStartNodeId = start.Value.Id;
+			nav.DebugNavGoalNodeId = goal.Value.Id;
+			nav.DebugNavTargetNodeId = edge.To;
+			nav.StartActiveEdge(edge);
+			return nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
 		}
 
 		var from = graph.Nodes[edge.From];
@@ -188,43 +199,43 @@ public class Bud : NavPawn
 		{
 			case PlatformNavGraph.EdgeKind.Walk:
 			case PlatformNavGraph.EdgeKind.Crawl:
-				moveX = MoveTowardNavTarget(target);
+				moveX = nav.MoveTowardNavTarget(target);
 				moveY = edge.Kind == PlatformNavGraph.EdgeKind.Crawl || to.RequiresDucking || ShouldMirrorPlayerCrawl(player) ? 1 : 0;
-				if (moveX != 0 && !HasGroundSupportAhead(moveX))
+				if (moveX != 0 && !nav.HasGroundSupportAhead(moveX))
 				{
-					if (TryContinueWithJumpAfterBlockedWalk(graph, edge, start.Value.Id, goal.Value.Id, out moveX, out moveY, out jumpPressed))
+					if (nav.TryContinueWithJumpAfterBlockedWalk(graph, edge, start.Value.Id, goal.Value.Id, out moveX, out moveY, out jumpPressed))
 						return true;
 
-					DebugNavStartNodeId = start.Value.Id;
-					DebugNavGoalNodeId = goal.Value.Id;
-					DebugNavTargetNodeId = to.Id;
-					DebugNavLabel = ShouldBuildDebugNavLabel ? $"edge stop {edge.Kind} {edge.From}->{edge.To}" : "edge stop";
+					nav.DebugNavStartNodeId = start.Value.Id;
+					nav.DebugNavGoalNodeId = goal.Value.Id;
+					nav.DebugNavTargetNodeId = to.Id;
+					nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"edge stop {edge.Kind} {edge.From}->{edge.To}" : "edge stop";
 					return false;
 				}
-				if (moveX == 0 && !IsNearNode(target))
+				if (moveX == 0 && !nav.IsNearNode(target))
 				{
-					DebugNavStartNodeId = start.Value.Id;
-					DebugNavGoalNodeId = goal.Value.Id;
-					DebugNavTargetNodeId = to.Id;
-					DebugNavLabel = ShouldBuildDebugNavLabel ? $"stalled {edge.Kind} {edge.From}->{edge.To}" : "stalled";
+					nav.DebugNavStartNodeId = start.Value.Id;
+					nav.DebugNavGoalNodeId = goal.Value.Id;
+					nav.DebugNavTargetNodeId = to.Id;
+					nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"stalled {edge.Kind} {edge.From}->{edge.To}" : "stalled";
 					return false;
 				}
 				break;
 
 			case PlatformNavGraph.EdgeKind.RoomExit:
-				moveX = MoveTowardNavTarget(target);
+				moveX = nav.MoveTowardNavTarget(target);
 				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
 				break;
 
 			default:
-				DebugNavLabel = ShouldBuildDebugNavLabel ? $"unsupported {edge.Kind}" : "unsupported";
+				nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"unsupported {edge.Kind}" : "unsupported";
 				return false;
 		}
 
-		DebugNavStartNodeId = start.Value.Id;
-		DebugNavGoalNodeId = goal.Value.Id;
-		DebugNavTargetNodeId = to.Id;
-		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}" : "following path";
+		nav.DebugNavStartNodeId = start.Value.Id;
+		nav.DebugNavGoalNodeId = goal.Value.Id;
+		nav.DebugNavTargetNodeId = to.Id;
+		nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"{edge.Kind} {edge.From}->{edge.To} len {nav.NavPath.Count}" : "following path";
 		return true;
 	}
 
@@ -273,7 +284,7 @@ public class Bud : NavPawn
 
 	private bool IsBesidePlayer(Player player)
 		=> MathF.Abs(Position.X - player.Position.X) <= FollowStopDistance &&
-		   MathF.Abs(Position.Y - player.Position.Y) <= Game.TileSize + NavNodeReachDistance;
+		   MathF.Abs(Position.Y - player.Position.Y) <= Game.TileSize + Navigator.NavNodeReachDistance;
 
 	private PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player)
 	{
@@ -283,14 +294,14 @@ public class Bud : NavPawn
 			return preferred;
 
 		return FindGoalNodeBesidePlayer(graph, player, -preferredSide) ??
-			   graph.FindNearestNode(player.Position, GoalNodeSearchDistance);
+			   graph.FindNearestNode(player.Position, Navigator.GoalNodeSearchDistance);
 	}
 
 	private static PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, int side)
 	{
 		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
 		PlatformNavGraph.Node? best = null;
-		var bestScore = GoalNodeSearchDistance * GoalNodeSearchDistance;
+		var bestScore = Navigator.GoalNodeSearchDistance * Navigator.GoalNodeSearchDistance;
 		foreach (var node in graph.Nodes)
 		{
 			if (node.Kind == PlatformNavGraph.NodeKind.RoomExit)
