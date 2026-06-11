@@ -240,6 +240,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
 		ActorSpecs.RegisterActor<TitleText>("TitleText");
 		ActorSpecs.RegisterActor<Peter>("Peter");
+		ActorSpecs.RegisterActor<Boss>("Boss");
 		ActorSpecs.RegisterActor<Goal>("Goal");
 		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
 		ActorSpecs.RegisterActor<Arrow>("Arrow");
@@ -297,6 +298,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<TitleText>("heart", new Point2(4, 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Peter>("peter", new Point2(4, 4)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<Boss>("bud", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<ArrowTrap>("arrow_trap", new Point2(4, 4)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Goal>("goal"));
 	}
