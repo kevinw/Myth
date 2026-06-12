@@ -39,27 +39,18 @@
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <ShaderPlatform>web</ShaderPlatform>
-    <ShaderOutputExtension>wgsl</ShaderOutputExtension>
     <FmodHtml5Root>$(MSBuildProjectDirectory)/Platforms/Web/Native/FMOD</FmodHtml5Root>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ShaderInputs Include="Assets/Shaders/*.hlsl" Exclude="Assets/Shaders/Common.hlsl" />
-    <ShaderDependencies Include="Assets/Shaders/Common.hlsl" />
-    <ComputeShaderInputs Include="Assets/Shaders/Compute/*.hlsl" />
-    <ShaderOutputs Include="@(ShaderInputs->'Assets/Shaders/Compiled/%(Filename).vertex.$(ShaderOutputExtension)')" />
-    <ShaderOutputs Include="@(ShaderInputs->'Assets/Shaders/Compiled/%(Filename).fragment.$(ShaderOutputExtension)')" />
-    <ShaderOutputs Include="@(ComputeShaderInputs->'Assets/Shaders/Compiled/%(Filename).compute.$(ShaderOutputExtension)')" />
-  </ItemGroup>
+  <!-- Shader compilation -->
+  <PropertyGroup>
+    <ShaderSourceDir>$(MSBuildProjectDirectory)/Assets/Shaders</ShaderSourceDir>
+  </PropertyGroup>
 
-  <Target
-    Name="CompileShaders"
-    BeforeTargets="BeforeBuild"
-    Inputs="@(ShaderInputs);@(ShaderDependencies);@(ComputeShaderInputs);Assets/Shaders/compile.sh"
-    Outputs="@(ShaderOutputs)"
-    Condition="'$(ShaderPlatform)' != ''">
-    <Exec Command="Assets/Shaders/compile.sh $(ShaderPlatform)" />
-  </Target>
+  <Import Project="msbuild/ShaderCompilation.targets" />
+
+  <!-- Hook shader compilation into the build -->
+  <Target Name="_CompileShadersBeforeBuild" BeforeTargets="BeforeBuild" DependsOnTargets="CompileShaders" />
   
   <ItemGroup>
     <Compile Remove="Source/**" />

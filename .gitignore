@@ -16,3 +16,4 @@ tmp/bench
 bitmapflow-cli/target
 .DS_Store
 TinyLink/tools/nca_train/targets
+tools/windows/

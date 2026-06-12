@@ -159,7 +159,7 @@
     "spriteName": "bud",
     "fromTag": "run",
     "toTag": "wall_slide",
-    "count": 20
+    "count": 21
   },
   {
     "spriteName": "bud",
@@ -435,7 +435,7 @@
     "spriteName": "player",
     "fromTag": "hurt",
     "toTag": "run_start",
-    "count": 5
+    "count": 6
   },
   {
     "spriteName": "player",
@@ -525,7 +525,7 @@
     "spriteName": "player",
     "fromTag": "jump",
     "toTag": "hurt",
-    "count": 16
+    "count": 17
   },
   {
     "spriteName": "player",
@@ -537,7 +537,7 @@
     "spriteName": "player",
     "fromTag": "jump",
     "toTag": "jump_squish",
-    "count": 35
+    "count": 36
   },
   {
     "spriteName": "player",
@@ -579,7 +579,7 @@
     "spriteName": "player",
     "fromTag": "jump_squish",
     "toTag": "jump",
-    "count": 25
+    "count": 26
   },
   {
     "spriteName": "player",
@@ -849,7 +849,7 @@
     "spriteName": "player",
     "fromTag": "skid",
     "toTag": "jump_turn",
-    "count": 45
+    "count": 46
   },
   {
     "spriteName": "player",

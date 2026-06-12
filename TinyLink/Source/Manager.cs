@@ -1107,31 +1107,51 @@ public partial class Manager : App
 
 	private void CompileAndReloadShaders()
 	{
-		if (OperatingSystem.IsWindows())
-			throw new Exception("TODO: implement compiling shaders on windows with something like compile.sh");
+		// Use MSBuild to compile shaders (works on all platforms)
+		var projectDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+		var csproj = Path.Combine(projectDir, "TinyLink.csproj");
 
-		var script = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders", "compile.sh"));
-		if (!File.Exists(script))
+		// Fallback for development: find project file by walking up
+		if (!File.Exists(csproj))
 		{
-			Console.Error.WriteLine($"Shader compile script not found at '{script}'.");
+			var dir = new DirectoryInfo(AppContext.BaseDirectory);
+			while (dir != null)
+			{
+				var candidate = Path.Combine(dir.FullName, "TinyLink.csproj");
+				if (File.Exists(candidate))
+				{
+					csproj = candidate;
+					projectDir = dir.FullName;
+					break;
+				}
+				dir = dir.Parent;
+			}
+		}
+
+		if (!File.Exists(csproj))
+		{
+			Console.Error.WriteLine($"Project file not found. Cannot compile shaders.");
 			return;
 		}
 
 		try
 		{
-			var compile = new ProcessStartInfo(script)
+			var compile = new ProcessStartInfo("dotnet")
 			{
 				UseShellExecute = false,
 				RedirectStandardOutput = true,
 				RedirectStandardError = true,
-				WorkingDirectory = Path.GetDirectoryName(script) ?? Environment.CurrentDirectory
+				WorkingDirectory = projectDir
 			};
-			compile.ArgumentList.Add(CurrentShaderPlatform());
+			compile.ArgumentList.Add("build");
+			compile.ArgumentList.Add("-t:CompileShaders");
+			compile.ArgumentList.Add($"/p:ShaderPlatform={CurrentShaderPlatform()}");
+			compile.ArgumentList.Add("-v:m"); // Minimal verbosity
 
 			using var process = Process.Start(compile);
 			if (process == null)
 			{
-				Console.Error.WriteLine("Failed to start shader compiler.");
+				Console.Error.WriteLine("Failed to start shader compiler (dotnet build).");
 				return;
 			}
 

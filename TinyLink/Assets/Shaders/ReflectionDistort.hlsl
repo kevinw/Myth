@@ -42,6 +42,9 @@ VsOutput vertex_main(VsInput input)
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
+    // Prevent optimizer from removing input.Type - D3D12 requires matching signatures
+    if (input.Type.x < -1000) discard;
+
     float2 textureSize = TextureSizeTimeAmplitude.xy;
     float time = TextureSizeTimeAmplitude.z;
     float amplitude = TextureSizeTimeAmplitude.w;

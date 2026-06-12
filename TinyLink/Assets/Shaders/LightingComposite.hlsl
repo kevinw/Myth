@@ -282,6 +282,9 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, 
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
+    // Prevent optimizer from removing input.type - D3D12 requires matching signatures
+    if (input.type.x < -1000) discard;
+
     float2 sample = target_uv(input.tex_coord);
     float4 scene = Texture.Sample(Sampler, sample) * input.color;
     float4 light = LightTexture.Sample(LightSampler, sample);
