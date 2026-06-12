@@ -105,7 +105,7 @@
     "spriteName": "bud",
     "fromTag": "jump",
     "toTag": "skid",
-    "count": 38
+    "count": 39
   },
   {
     "spriteName": "bud",
@@ -537,7 +537,7 @@
     "spriteName": "player",
     "fromTag": "jump",
     "toTag": "hurt",
-    "count": 19
+    "count": 20
   },
   {
     "spriteName": "player",
@@ -717,7 +717,7 @@
     "spriteName": "player",
     "fromTag": "roll",
     "toTag": "jump_turn",
-    "count": 14
+    "count": 15
   },
   {
     "spriteName": "player",
@@ -873,7 +873,7 @@
     "spriteName": "player",
     "fromTag": "skid",
     "toTag": "jump_turn",
-    "count": 46
+    "count": 47
   },
   {
     "spriteName": "player",

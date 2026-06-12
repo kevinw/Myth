@@ -18,25 +18,40 @@ struct fragment_main_out
 struct fragment_main_in
 {
     float2 in_var_TEXCOORD0 [[user(locn0)]];
+    float4 in_var_TEXCOORD1 [[user(locn1)]];
+    float4 in_var_TEXCOORD4 [[user(locn2)]];
 };
 
 fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Texture [[texture(0)]], sampler Sampler [[sampler(0)]], float4 gl_FragCoord [[position]])
 {
     fragment_main_out out = {};
-    float2 _52 = FragmentUniformBlock.LightPositionRadiusHeight.xy - gl_FragCoord.xy;
-    bool _56 = float(FragmentUniformBlock.LightPositionRadiusHeight.z < 0.0) > 0.5;
-    float _63;
-    if (_56)
+    bool _58;
+    if (in.in_var_TEXCOORD1.x < (-1000.0))
     {
-        _63 = 1.0;
+        _58 = in.in_var_TEXCOORD4.x < (-1000.0);
     }
     else
     {
-        _63 = fast::clamp(1.0 - (length(_52) / FragmentUniformBlock.LightPositionRadiusHeight.z), 0.0, 1.0);
+        _58 = false;
     }
-    float _64 = _63 * _63;
-    float4 _68 = Texture.sample(Sampler, in.in_var_TEXCOORD0);
-    out.out_var_SV_Target0 = float4(fast::clamp(((FragmentUniformBlock.LightColorIntensity.xyz * FragmentUniformBlock.LightColorIntensity.w) * _64) * mix(1.0, 0.119999997317790985107421875 + (fast::clamp(dot(fast::normalize((_68.xyz * 2.0) - float3(1.0)), select(fast::normalize(float3(_52, FragmentUniformBlock.LightPositionRadiusHeight.w)), fast::normalize(float3(-FragmentUniformBlock.LightPositionRadiusHeight.xy, FragmentUniformBlock.LightPositionRadiusHeight.w)), bool3(_56))), 0.0, 1.0) * 2.150000095367431640625), _68.w), float3(0.0), float3(1.0)), _64);
+    if (_58)
+    {
+        discard_fragment();
+    }
+    float2 _69 = FragmentUniformBlock.LightPositionRadiusHeight.xy - gl_FragCoord.xy;
+    bool _73 = float(FragmentUniformBlock.LightPositionRadiusHeight.z < 0.0) > 0.5;
+    float _80;
+    if (_73)
+    {
+        _80 = 1.0;
+    }
+    else
+    {
+        _80 = fast::clamp(1.0 - (length(_69) / FragmentUniformBlock.LightPositionRadiusHeight.z), 0.0, 1.0);
+    }
+    float _81 = _80 * _80;
+    float4 _85 = Texture.sample(Sampler, in.in_var_TEXCOORD0);
+    out.out_var_SV_Target0 = float4(fast::clamp(((FragmentUniformBlock.LightColorIntensity.xyz * FragmentUniformBlock.LightColorIntensity.w) * _81) * mix(1.0, 0.119999997317790985107421875 + (fast::clamp(dot(fast::normalize((_85.xyz * 2.0) - float3(1.0)), select(fast::normalize(float3(_69, FragmentUniformBlock.LightPositionRadiusHeight.w)), fast::normalize(float3(-FragmentUniformBlock.LightPositionRadiusHeight.xy, FragmentUniformBlock.LightPositionRadiusHeight.w)), bool3(_73))), 0.0, 1.0) * 2.150000095367431640625), _85.w), float3(0.0), float3(1.0)), _81);
     return out;
 }
 

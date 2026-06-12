@@ -18,14 +18,19 @@ struct fragment_main_in
 {
     float2 in_var_TEXCOORD0 [[user(locn0)]];
     float4 in_var_TEXCOORD1 [[user(locn1)]];
+    float4 in_var_TEXCOORD4 [[user(locn2)]];
 };
 
 fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Texture [[texture(0)]], sampler Sampler [[sampler(0)]], float4 gl_FragCoord [[position]])
 {
     fragment_main_out out = {};
-    float _54 = gl_FragCoord.y * FragmentUniformBlock.FrequencySpeedPadding.x;
-    float _55 = FragmentUniformBlock.TextureSizeTimeAmplitude.z * FragmentUniformBlock.FrequencySpeedPadding.y;
-    out.out_var_SV_Target0 = Texture.sample(Sampler, ((floor((in.in_var_TEXCOORD0 + float2(((sin(_54 + _55) * FragmentUniformBlock.TextureSizeTimeAmplitude.w) + ((sin((_54 * 2.099999904632568359375) + (_55 * 1.7000000476837158203125)) * FragmentUniformBlock.TextureSizeTimeAmplitude.w) * 0.3499999940395355224609375)) / FragmentUniformBlock.TextureSizeTimeAmplitude.x, 0.0)) * FragmentUniformBlock.TextureSizeTimeAmplitude.xy) + float2(0.5)) / FragmentUniformBlock.TextureSizeTimeAmplitude.xy)) * in.in_var_TEXCOORD1;
+    if (in.in_var_TEXCOORD4.x < (-1000.0))
+    {
+        discard_fragment();
+    }
+    float _63 = gl_FragCoord.y * FragmentUniformBlock.FrequencySpeedPadding.x;
+    float _64 = FragmentUniformBlock.TextureSizeTimeAmplitude.z * FragmentUniformBlock.FrequencySpeedPadding.y;
+    out.out_var_SV_Target0 = Texture.sample(Sampler, ((floor((in.in_var_TEXCOORD0 + float2(((sin(_63 + _64) * FragmentUniformBlock.TextureSizeTimeAmplitude.w) + ((sin((_63 * 2.099999904632568359375) + (_64 * 1.7000000476837158203125)) * FragmentUniformBlock.TextureSizeTimeAmplitude.w) * 0.3499999940395355224609375)) / FragmentUniformBlock.TextureSizeTimeAmplitude.x, 0.0)) * FragmentUniformBlock.TextureSizeTimeAmplitude.xy) + float2(0.5)) / FragmentUniformBlock.TextureSizeTimeAmplitude.xy)) * in.in_var_TEXCOORD1;
     return out;
 }
 
