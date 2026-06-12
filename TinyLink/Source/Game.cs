@@ -3189,10 +3189,25 @@ public partial class Game : IDisposable
 
 		Create<FungalGrowthActor>(position, layer =>
 		{
+			layer.RandomSeed = GetStringHash(room.Id);
 			layer.RegionWidth = width;
 			layer.RegionHeight = height;
 			layer.GrowthMask = mask;
 		});
+	}
+
+	static UInt64 GetStringHash(string text)
+	{
+		string s1 = text.Substring(0, text.Length / 2);
+		string s2 = text.Substring(text.Length / 2);
+
+		var MS4B = BitConverter.GetBytes(s1.GetHashCode());
+		var LS4B = BitConverter.GetBytes(s2.GetHashCode());
+		UInt64 hash = (UInt64)MS4B[0] << 56 | (UInt64)MS4B[1] << 48 |
+		              (UInt64)MS4B[2] << 40 | (UInt64)MS4B[3] << 32 |
+		              (UInt64)LS4B[0] << 24 | (UInt64)LS4B[1] << 16 |
+		              (UInt64)LS4B[2] << 8  | (UInt64)LS4B[3] ;
+		return hash;
 	}
 
 	private void EnsureBudForPlayer(bool repositionExisting = false)

@@ -21,6 +21,8 @@ public class FungalGrowthActor : Actor
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
 
+	internal ulong RandomSeed;
+
 	/// <summary>Pixel size of the region. Set by the caller before Added() runs.</summary>
 	public int RegionWidth = 8;
 	public int RegionHeight = 8;
@@ -50,7 +52,7 @@ public class FungalGrowthActor : Actor
 	public int AgeCap = 48;
 
 	/// <summary>Simulation ticks run at load so the room opens with established fungus.</summary>
-	public int WarmupSteps = 80;
+	public int WarmupSteps = 800;
 
 	/// <summary>Chance per frame, while the player overlaps the region, of dropping spores.</summary>
 	public float SeedChance = 0.25f;
@@ -87,7 +89,7 @@ public class FungalGrowthActor : Actor
 	private static readonly int[] N8X = [-1, 0, 1, -1, 1, -1, 0, 1];
 	private static readonly int[] N8Y = [-1, -1, -1, 0, 0, 1, 1, 1];
 
-	private static Rng rng = new();
+	private Rng rng;
 
 	private GraphicsDevice graphicsDevice = null!;
 	private Texture? texture;
@@ -104,12 +106,14 @@ public class FungalGrowthActor : Actor
 	private bool dirty;
 	private bool glowActive;
 
+
+
 	public override void Added()
 	{
+		if (ActorId == null)
+			ActorId = ActorSpecs.GenerateActorId();
+		rng = new Rng(RandomSeed);
 		base.Added();
-
-		// Background dressing: render behind the player and other actors.
-		Depth = 100;
 
 		graphicsDevice = Game.Manager.GraphicsDevice;
 
