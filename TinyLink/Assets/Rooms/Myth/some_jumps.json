@@ -71,6 +71,11 @@
       "Id": "88fa0a823ea53e0d",
       "Type": "Goal",
       "Position": [275, 68]
+    },
+    {
+      "Id": "411d2534b367895c",
+      "Type": "Spitter",
+      "Position": [180, 56]
     }
   ]
 }

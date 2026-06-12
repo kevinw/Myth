@@ -64,7 +64,7 @@ public static class Assets
 
 	private const string assetsFolderName = "Assets";
 	private const string roomsFolderName = "Rooms";
-	private const string defaultWorldId = "FrogWorld";
+	private const string defaultWorldId = "Myth";
 	private const string defaultStartRoomId = "start";
 	private const string deletedRoomsFolderName = ".deleted";
 	private static string? path = null;
