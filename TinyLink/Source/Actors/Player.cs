@@ -516,7 +516,7 @@ public abstract class Pawn : Actor
 		return true;
 	}
 
-	private int GetWallJumpDirection()
+	protected int GetWallJumpDirection()
 	{
 		if (grounded)
 			return 0;
