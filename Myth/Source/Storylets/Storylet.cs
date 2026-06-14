@@ -10,6 +10,13 @@ public sealed class Storylet
 	public object? Priority { get; set; }
 	public int? FixedPriority { get; set; }
 	public int Redraw { get; set; } = RedrawAlways;
+
+	// Probability in [0,1] that this storylet is eligible on a given draw. Storylets sharing
+	// a ChanceGroupId roll once per draw and pass/fail together (so a multi-line bark set
+	// plays as a unit at the given chance, rather than each line rolling independently).
+	public double Chance { get; set; } = 1.0;
+	public string? ChanceGroupId { get; set; }
+
 	public Dictionary<string, object?> Content { get; set; } = [];
 	public Dictionary<string, Dictionary<string, object?>> Outcomes { get; set; } = [];
 	public Func<StoryContext, bool>? Predicate { get; set; }
@@ -75,10 +82,21 @@ public sealed class StoryDeck
 	public List<Storylet> Draw(int count = -1, Func<Storylet, bool>? filter = null)
 	{
 		var buckets = new SortedDictionary<int, List<Storylet>>(Comparer<int>.Create((a, b) => b.CompareTo(a)));
+		var groupRolls = new Dictionary<string, bool>();
 		foreach (var storylet in storylets.Values)
 		{
 				if (!storylet.CanDraw(currentPlay) || filter != null && !filter(storylet) || !storylet.CheckCondition(Context, TypedContext))
 					continue;
+
+				// Roll chance once per draw, shared by all storylets in the same chance group.
+				if (storylet.Chance < 1.0)
+				{
+					var key = storylet.ChanceGroupId ?? storylet.Id;
+					if (!groupRolls.TryGetValue(key, out var passed))
+						groupRolls[key] = passed = random.NextDouble() < storylet.Chance;
+					if (!passed)
+						continue;
+				}
 
 			var priority = storylet.CurrentPriority(Context, UseSpecificity);
 			if (!buckets.TryGetValue(priority, out var bucket))

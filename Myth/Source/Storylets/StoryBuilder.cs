@@ -59,6 +59,10 @@ public sealed class StoryBuilder
 			Bud($"{idPrefix}_{i}", storylet =>
 			{
 				builder.Apply(storylet);
+				// Share one chance roll across every line in the set (keyed by the prefix),
+				// so the whole bark set plays at the given probability rather than per-line.
+				if (builder.ChanceValue is { } chance)
+					storylet.Chance(chance, idPrefix);
 				storylet.Say(line);
 			});
 		}
@@ -157,6 +161,13 @@ public sealed class StoryletBuilder
 		return this;
 	}
 
+	public StoryletBuilder Chance(double chance, string? groupId = null)
+	{
+		storylet.Chance = chance;
+		storylet.ChanceGroupId = groupId;
+		return this;
+	}
+
 	public Storylet Build()
 	{
 		storylet.Predicate = predicate;
@@ -239,6 +250,14 @@ public sealed class StoryletGroupBuilder
 	public StoryletGroupBuilder Priority(int priority)
 	{
 		configurators.Add(builder => builder.Priority(priority));
+		return this;
+	}
+
+	public double? ChanceValue { get; private set; }
+
+	public StoryletGroupBuilder Chance(double chance)
+	{
+		ChanceValue = chance;
 		return this;
 	}
 

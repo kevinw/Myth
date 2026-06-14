@@ -358,37 +358,35 @@ public partial class Manager : App
 	private static void SaveTransitionData()
 	{
 #if DEBUG
-		// Merge: start with the cumulative data loaded at startup (TransitionPairs),
-		// then add this session's new counts on top
-		var aggregated = new Dictionary<(string SpriteName, string From, string To), int>();
-		foreach (var (key, count) in Assets.TransitionPairs)
-			aggregated[key] = count + (aggregated.TryGetValue(key, out var e) ? e : 0);
-		foreach (var (key, count) in Actor.TransitionCounts)
-		{
-			var k = (key.SpriteName, key.From, key.To);
-			aggregated.TryGetValue(k, out var existing);
-			aggregated[k] = existing + count;
-		}
+		// Membership-only union: the set of transitions we've ever observed (loaded at
+		// startup) plus any new ones seen this session. Counts are intentionally not
+		// persisted — only set membership drives baking, and keeping the file a stable
+		// sorted set means it only changes when a genuinely new transition appears,
+		// instead of churning every play session.
+		var keys = new SortedSet<(string SpriteName, string From, string To)>();
+		foreach (var key in Assets.TransitionPairs.Keys)
+			keys.Add(key);
+		foreach (var key in Actor.TransitionCounts.Keys)
+			keys.Add((key.SpriteName, key.From, key.To));
 
-		if (aggregated.Count == 0)
+		if (keys.Count == 0)
 			return;
 
-		// Write JSON array containing aggregated transition counts
+		// Write JSON array of observed transitions (sorted, no count)
 		using var ms = new MemoryStream();
 		using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
 		writer.WriteStartArray();
-		foreach (var (k, count) in aggregated.OrderBy(kv => kv.Key.SpriteName).ThenBy(kv => kv.Key.From).ThenBy(kv => kv.Key.To)) {
+		foreach (var k in keys) {
 			writer.WriteStartObject();
 			writer.WriteString("spriteName", k.SpriteName);
 			writer.WriteString("fromTag", k.From);
 			writer.WriteString("toTag", k.To);
-			writer.WriteNumber("count", MathF.Min(count, 50));
 			writer.WriteEndObject();
 		}
 		writer.WriteEndArray();
 		writer.Flush();
 		File.WriteAllBytes(Assets.ANIM_TRANSITIONS_JSON_FILENAME, ms.ToArray());
-		// Console.WriteLine($"Saved {aggregated.Count} animation transitions to {jsonPath}");
+		// Console.WriteLine($"Saved {keys.Count} animation transitions to {jsonPath}");
 #endif
 	}
 

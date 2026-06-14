@@ -2,997 +2,841 @@
   {
     "spriteName": "blob",
     "fromTag": "idle",
-    "toTag": "jump",
-    "count": 2
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "crawl",
-    "toTag": "duck",
-    "count": 50
+    "toTag": "duck"
   },
   {
     "spriteName": "bud",
     "fromTag": "crawl",
-    "toTag": "idle",
-    "count": 1
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "crawl",
-    "toTag": "jump",
-    "count": 3
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "crawl",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "crawl",
-    "toTag": "skid",
-    "count": 45
+    "toTag": "skid"
   },
   {
     "spriteName": "bud",
     "fromTag": "duck",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "bud",
     "fromTag": "duck",
-    "toTag": "idle",
-    "count": 22
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "duck",
-    "toTag": "run_start",
-    "count": 5
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "idle",
-    "toTag": "crawl",
-    "count": 6
+    "toTag": "crawl"
   },
   {
     "spriteName": "bud",
     "fromTag": "idle",
-    "toTag": "duck",
-    "count": 37
+    "toTag": "duck"
   },
   {
     "spriteName": "bud",
     "fromTag": "idle",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "idle",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "idle",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump",
-    "toTag": "jump_turn",
-    "count": 50
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump",
-    "toTag": "skid",
-    "count": 41
+    "toTag": "skid"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump",
-    "toTag": "wall_slide",
-    "count": 50
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump_turn",
-    "toTag": "idle",
-    "count": 1
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump_turn",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump_turn",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump_turn",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "bud",
     "fromTag": "jump_turn",
-    "toTag": "wall_slide",
-    "count": 50
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "bud",
     "fromTag": "run",
-    "toTag": "crawl",
-    "count": 30
+    "toTag": "crawl"
   },
   {
     "spriteName": "bud",
     "fromTag": "run",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "run",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "run",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "bud",
     "fromTag": "run",
-    "toTag": "wall_slide",
-    "count": 25
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "duck",
-    "count": 1
+    "toTag": "duck"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "run",
-    "count": 50
+    "toTag": "run"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "bud",
     "fromTag": "run_start",
-    "toTag": "wall_slide",
-    "count": 34
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "duck",
-    "count": 6
+    "toTag": "duck"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "jump",
-    "count": 38
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "jump_turn",
-    "count": 50
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "run",
-    "count": 1
+    "toTag": "run"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "skid",
-    "toTag": "wall_slide",
-    "count": 24
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "bud",
     "fromTag": "sword",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "bud",
     "fromTag": "wall_slide",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
     "fromTag": "wall_slide",
-    "toTag": "jump_turn",
-    "count": 43
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "bud",
     "fromTag": "wall_slide",
-    "toTag": "run_start",
-    "count": 7
+    "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "wall_slide",
-    "toTag": "skid",
-    "count": 1
+    "toTag": "skid"
   },
   {
     "spriteName": "bullet",
     "fromTag": "idle",
-    "toTag": "dissolve",
-    "count": 6
+    "toTag": "dissolve"
   },
   {
     "spriteName": "player",
     "fromTag": "attack",
-    "toTag": "attack_block",
-    "count": 17
+    "toTag": "attack_block"
   },
   {
     "spriteName": "player",
     "fromTag": "attack",
-    "toTag": "hurt",
-    "count": 11
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "attack",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "attack_block",
-    "toTag": "idle",
-    "count": 17
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "duck",
-    "count": 50
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "duck_attack",
-    "count": 15
+    "toTag": "duck_attack"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "duck_attack_block",
-    "count": 2
+    "toTag": "duck_attack_block"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "idle",
-    "count": 3
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "jump_turn",
-    "count": 6
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "skid",
-    "count": 36
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
-    "toTag": "wall_slide",
-    "count": 8
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "duck_attack",
-    "count": 26
+    "toTag": "duck_attack"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "duck_attack_block",
-    "count": 4
+    "toTag": "duck_attack_block"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "duck",
-    "toTag": "skid",
-    "count": 15
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "duck_attack",
-    "toTag": "duck",
-    "count": 44
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck_attack",
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "duck_attack_block",
-    "toTag": "duck",
-    "count": 6
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "hurt",
-    "toTag": "crawl",
-    "count": 2
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "hurt",
-    "toTag": "duck",
-    "count": 1
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "hurt",
-    "toTag": "idle",
-    "count": 10
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "hurt",
-    "toTag": "jump",
-    "count": 5
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "hurt",
-    "toTag": "run_start",
-    "count": 14
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "hurt",
-    "toTag": "skid",
-    "count": 1
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "attack",
-    "count": 50
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "crawl",
-    "count": 45
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "duck",
-    "count": 50
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "hurt",
-    "count": 5
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "jump_squish",
-    "count": 1
+    "toTag": "jump_squish"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "jump_turn",
-    "count": 10
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "run",
-    "count": 8
+    "toTag": "run"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "idle",
-    "toTag": "wall_slide",
-    "count": 6
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "attack",
-    "count": 50
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "crawl",
-    "count": 23
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "duck",
-    "count": 49
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "hurt",
-    "count": 22
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "jump_squish",
-    "count": 41
+    "toTag": "jump_squish"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "jump_turn",
-    "count": 50
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "roll",
-    "count": 50
+    "toTag": "roll"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "skid",
-    "count": 6
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "jump",
-    "toTag": "wall_slide",
-    "count": 50
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
-    "toTag": "idle",
-    "count": 3
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
-    "toTag": "jump",
-    "count": 30
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
-    "toTag": "jump_turn",
-    "count": 12
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
-    "toTag": "run_start",
-    "count": 2
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
-    "toTag": "skid",
-    "count": 2
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
-    "toTag": "wall_slide",
-    "count": 2
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "attack",
-    "count": 15
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "crawl",
-    "count": 16
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "hurt",
-    "count": 6
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "idle",
-    "count": 4
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "jump_squish",
-    "count": 5
+    "toTag": "jump_squish"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "roll",
-    "count": 28
+    "toTag": "roll"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "run_start",
-    "count": 9
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "jump_turn",
-    "toTag": "wall_slide",
-    "count": 4
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "duck",
-    "count": 50
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "duck_attack",
-    "count": 3
+    "toTag": "duck_attack"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "hurt",
-    "count": 1
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "idle",
-    "count": 19
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "jump_turn",
-    "count": 15
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
-    "toTag": "skid",
-    "count": 34
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "attack",
-    "count": 17
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "crawl",
-    "count": 46
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "duck",
-    "count": 8
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "hurt",
-    "count": 1
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "skid",
-    "count": 22
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "run",
-    "toTag": "wall_slide",
-    "count": 7
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "attack",
-    "count": 22
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "duck",
-    "count": 23
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "hurt",
-    "count": 1
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "jump_squish",
-    "count": 4
+    "toTag": "jump_squish"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "run",
-    "count": 50
+    "toTag": "run"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "skid",
-    "count": 50
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
     "fromTag": "run_start",
-    "toTag": "wall_slide",
-    "count": 50
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "attack",
-    "count": 6
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "crawl",
-    "count": 50
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "duck",
-    "count": 8
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "hurt",
-    "count": 2
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "jump_turn",
-    "count": 50
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "skid",
-    "toTag": "wall_slide",
-    "count": 6
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
     "fromTag": "sword",
-    "toTag": "crawl",
-    "count": 4
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "sword",
-    "toTag": "duck",
-    "count": 3
+    "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "sword",
-    "toTag": "hurt",
-    "count": 5
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "sword",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   },
   {
     "spriteName": "player",
     "fromTag": "sword",
-    "toTag": "run_start",
-    "count": 50
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "attack",
-    "count": 3
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "crawl",
-    "count": 9
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "hurt",
-    "count": 2
+    "toTag": "hurt"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "jump",
-    "count": 50
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "jump_turn",
-    "count": 50
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "roll",
-    "count": 2
+    "toTag": "roll"
   },
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
-    "toTag": "run_start",
-    "count": 41
+    "toTag": "run_start"
   },
   {
     "spriteName": "spitter",
     "fromTag": "idle",
-    "toTag": "shoot",
-    "count": 50
+    "toTag": "shoot"
   },
   {
     "spriteName": "spitter",
     "fromTag": "shoot",
-    "toTag": "idle",
-    "count": 50
+    "toTag": "idle"
   }
 ]

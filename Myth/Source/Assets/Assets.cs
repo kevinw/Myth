@@ -52,7 +52,8 @@ public static class Assets
 
 	public static string ANIM_TRANSITIONS_JSON_FILENAME => Path.Join(AssetsPath, "anim_transitions.json");
 
-	// Transition pairs loaded from anim_transitions.json: (spriteName, fromTag, toTag) -> count
+	// Observed transitions loaded from anim_transitions.json. Only set membership matters;
+	// the int value is a presence marker (always 1) kept so existing `> 0` checks still work.
 	public static readonly Dictionary<(string SpriteName, string FromTag, string ToTag), int> TransitionPairs = new();
 
 	// Populated during the pack loop, consumed in ReloadSpriteAsset
@@ -891,10 +892,10 @@ public static class Assets
 				var spriteName = item.GetProperty("spriteName").GetString();
 				var fromTag = item.GetProperty("fromTag").GetString();
 				var toTag = item.GetProperty("toTag").GetString();
-				var count = item.GetProperty("count").GetInt32();
 
-				if (spriteName != null && fromTag != null && toTag != null && count > 0)
-					TransitionPairs[(spriteName, fromTag, toTag)] = count;
+				// "count" is no longer written; tolerate it in older files by ignoring it.
+				if (spriteName != null && fromTag != null && toTag != null)
+					TransitionPairs[(spriteName, fromTag, toTag)] = 1;
 			}
 
 			// Console.WriteLine($"Loaded {TransitionPairs.Count} animation transitions from anim_transitions.json");

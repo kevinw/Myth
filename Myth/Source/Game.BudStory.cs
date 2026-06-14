@@ -42,11 +42,12 @@ public partial class Game
 
 		story.BudBarks("bud_enemy_killed", s => s
 			.OnEnemyKilled()
+			.Chance(0.2)
 			.Redraw(5)
 			.Priority(1)
 			.Say(
 				"Nice.",
-				"IS violence the answer?",
+				"Hmm.",
 				"Woah."));
 
 		story.BudBarks("bud_idle", s => s
