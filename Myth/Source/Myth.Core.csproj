@@ -21,12 +21,15 @@
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' or '$(MythBrowser)' == 'true'">
     <DefineConstants>$(DefineConstants);BROWSER</DefineConstants>
+    <MythBrowserFmod Condition="'$(MythBrowserFmod)' == ''">true</MythBrowserFmod>
+    <MythBrowserJsFmod Condition="'$(MythBrowserJsFmod)' == ''">true</MythBrowserJsFmod>
+    <MythBrowserFmodPThread Condition="'$(MythBrowserFmodPThread)' == ''">false</MythBrowserFmodPThread>
     <DefineConstants Condition="'$(MythBrowserFmod)' != 'true'">$(DefineConstants);BROWSER_NO_FMOD</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="**/*.cs" Exclude="bin/**;obj/**" />
-    <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" Private="false" PrivateAssets="all" />
+    <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" Private="false" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythBrowser)' != 'true'">

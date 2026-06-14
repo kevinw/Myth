@@ -27,7 +27,7 @@ var<storage> SourceState: type_u002e_StructuredBuffer_u002e_CellState;
 @group(0) @binding(1) 
 var<storage> Ripple: type_u002e_StructuredBuffer_u002e_RippleState;
 @group(1) @binding(0) 
-var Output: texture_storage_2d<rgba8unorm,write>;
+var Output: texture_storage_2d<rgba8unorm,read_write>;
 @group(2) @binding(0) 
 var<uniform> Params: type_u002e_Params;
 var<private> global: vec3<u32>;

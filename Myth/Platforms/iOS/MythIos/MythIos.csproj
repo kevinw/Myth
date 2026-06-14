@@ -66,12 +66,12 @@
     <LinkerArgument Include="AVFAudio" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'ios-arm64' and Exists('../Native/FMOD/core/lib/libfmod_iphoneos.a')">
-    <NativeReference Include="../Native/FMOD/studio/lib/libfmodstudio_iphoneos.a">
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'ios-arm64' and Exists('../../../../Foster/Framework/Internal/Native/ios/libfmod_iphoneos.a')">
+    <NativeReference Include="../../../../Foster/Framework/Internal/Native/ios/libfmodstudio_iphoneos.a">
       <Kind>Static</Kind>
       <ForceLoad>true</ForceLoad>
     </NativeReference>
-    <NativeReference Include="../Native/FMOD/core/lib/libfmod_iphoneos.a">
+    <NativeReference Include="../../../../Foster/Framework/Internal/Native/ios/libfmod_iphoneos.a">
       <Kind>Static</Kind>
       <ForceLoad>true</ForceLoad>
     </NativeReference>

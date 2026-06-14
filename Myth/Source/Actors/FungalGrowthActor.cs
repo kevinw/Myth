@@ -423,26 +423,12 @@ public class FungalGrowthActor : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		if (texture == null)
-			return;
-		if (dirty)
-			Rebuild();
+		if (texture == null) return;
+		if (dirty) Rebuild();
 		batcher.Image(texture, Vector2.Zero, Color.White);
 	}
 
-	// Bioluminescent glow: draw the fungus into the emissive layer too, so it
-	// reads against the dark cave walls instead of blending in.
-	public override void RenderEmissive(Batcher batcher)
-	{
-		if (texture == null)
-			return;
-		if (dirty)
-			Rebuild();
-		batcher.Image(texture, Vector2.Zero, Color.White * EmissiveStrength);
-	}
-
-	public override Rect GetVisualBounds()
-		=> new(Position.X, Position.Y, RegionWidth, RegionHeight);
+	public override Rect GetVisualBounds() => new(Position.X, Position.Y, RegionWidth, RegionHeight);
 
 	public override void Destroyed()
 	{
