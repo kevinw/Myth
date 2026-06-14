@@ -271,6 +271,26 @@
   },
   {
     "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "jump_squish"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "player",
     "fromTag": "crawl",
     "toTag": "duck"
   },
@@ -462,6 +482,11 @@
   {
     "spriteName": "player",
     "fromTag": "jump",
+    "toTag": "burrow"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
     "toTag": "crawl"
   },
   {
@@ -512,6 +537,11 @@
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
+    "toTag": "burrow"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_squish",
     "toTag": "idle"
   },
   {
@@ -543,6 +573,11 @@
     "spriteName": "player",
     "fromTag": "jump_turn",
     "toTag": "attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_turn",
+    "toTag": "burrow"
   },
   {
     "spriteName": "player",
@@ -708,6 +743,11 @@
     "spriteName": "player",
     "fromTag": "run_start",
     "toTag": "jump_squish"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",

@@ -594,7 +594,7 @@ public partial class Player : Pawn
 	{
 		light = Game.Create<Light>(Position, it =>
 		{
-			it.Radius = 36;
+			it.Radius = 37.5f;
 			it.Intensity = 0.45f;
 			it.LightColor = 0xffcfa0;
 			it.Height = 16;
@@ -708,8 +708,7 @@ public partial class Player : Pawn
 		}
 	}
 
-	private void TryStartBurrow()
-	{
+	void TryStartBurrow() {
 		var follower = new SurfaceFollower(this) { TowardSurface = Vector2.UnitY };
 		if (!follower.Attach(BurrowAttachProbe))
 			return;
@@ -718,6 +717,15 @@ public partial class Player : Pawn
 		Velocity = Vector2.Zero;
 		burrowTimer = BurrowDuration;
 		State = States.Burrow;
+		UpdateBurrowShift();
+	}
+
+	void UpdateBurrowShift() {
+		if (burrowFollower != null && State == States.Burrow) {
+			Shift = burrowFollower.TowardSurface * BurrowSubmergeDepth;
+		} else {
+			Shift = new();
+		}
 	}
 
 	private void BurrowState()
@@ -725,6 +733,7 @@ public partial class Player : Pawn
 		if (burrowFollower == null)
 		{
 			State = States.Normal;
+			UpdateBurrowShift();
 			return;
 		}
 
@@ -735,6 +744,7 @@ public partial class Player : Pawn
 		var intent = new Vector2(input.MoveX, input.MoveY);
 		var dir = Math.Sign(Vector2.Dot(intent, burrowFollower.Tangent));
 		burrowFollower.Follow(dir, BurrowSpeed * Time.Delta);
+		Play("burrow");
 
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);
@@ -755,10 +765,10 @@ public partial class Player : Pawn
 		State = States.Normal;
 		AudioEvent("jump");
 		burrowFollower = null;
+		UpdateBurrowShift();
 	}
 
-	protected override bool AllowDuckingInState()
-		=> State == States.Attack && duckAttack;
+	protected override bool AllowDuckingInState() => State == States.Attack && duckAttack;
 
 	protected override bool TryStartPawnAction(int moveX)
 	{
@@ -825,8 +835,7 @@ public partial class Player : Pawn
 		return false;
 	}
 
-	protected override void OnPawnJump()
-		=> AudioEvent("jump");
+	protected override void OnPawnJump() => AudioEvent("jump");
 
 	protected override bool TryRollCancel()
 	{
@@ -1109,22 +1118,11 @@ public partial class Player : Pawn
 
 	public override void Render(Batcher batcher)
 	{
-		if (State == States.Burrow && burrowFollower != null)
-		{
-			// Shift the sprite "into" the surface so the player looks submerged.
-			var offset = burrowFollower.TowardSurface * BurrowSubmergeDepth;
-			batcher.PushMatrix(new Vector2(offset.X, offset.Y));
-			RenderSpriteSubtexture(batcher, Color.White * 0.3f);
-			batcher.PopMatrix();
-		}
-		else
-		{
-			base.Render(batcher);
-		}
+		base.Render(batcher);
 		RenderBlink(batcher);
 	}
 
-	private void UpdateLightPosition()
+	void UpdateLightPosition()
 	{
 		if (light != null)
 			light.Position = Position + new Point2(0, -6);

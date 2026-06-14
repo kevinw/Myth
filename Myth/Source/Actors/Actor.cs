@@ -81,6 +81,7 @@ public class Actor
 	private string? animationName;
 	private float animationTime = 0;
 	private bool animationLooping = true;
+	private bool targetAnimationLooping = true;
 	private float hitCooldown = 0;
 
 	/// <summary>
@@ -123,6 +124,7 @@ public class Actor
 					animationName = transitionName;
 					animationTime = 0;
 					animationLooping = false;
+					targetAnimationLooping = looping;
 					return;
 				}
 			}
@@ -140,11 +142,17 @@ public class Actor
 	public bool IsPlaying(string name)
 		=> Animation.Name == name;
 
+	public bool Verbose = false;
+
 	/// <summary>
 	/// Checks if an animation is finished playing.
 	/// </summary>
-	public bool IsFinishedPlaying(string? name = null)
-		=> !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
+	public bool IsFinishedPlaying(string? name = null) {
+		if (Verbose) {
+			Console.WriteLine($"IsFinishedPlaying: animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping} name={name}");
+		}
+		return !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
+	}
 
 	private readonly Dictionary<string, float> audioEventDebounceTimes = [];
 	public void AudioEventDebounced(string name, float waitSeconds) {
@@ -431,7 +439,10 @@ public class Actor
 			var target = animationName.Split("->")[1];
 			animationName = target;
 			animationTime = 0;
-			animationLooping = true;
+			animationLooping = targetAnimationLooping;
+			if (Verbose) {
+				Console.WriteLine($"Landed on target animation: animationName={animationName} animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping}");
+			}
 		}
 	}
 
