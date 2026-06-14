@@ -2,6 +2,6 @@
   {
     "label": "dotnet watch",
     "command": "dotnet watch run --non-interactive",
-    "cwd": "$ZED_MAIN_GIT_WORKTREE/TinyLink"
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth"
   }
 ]

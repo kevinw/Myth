@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    Myth Shader Compilation - imports Foster's shader compilation targets
+  -->
+
+  <PropertyGroup>
+    <ShaderSourceDir>$(MSBuildThisFileDirectory)../Assets/Shaders</ShaderSourceDir>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)../../Foster/msbuild/ShaderCompilation.targets" />
+
+</Project>

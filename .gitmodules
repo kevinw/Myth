@@ -1,5 +1,5 @@
-[submodule "TinyLink/Platforms/iOS/Native/cimgui-src"]
-	path = TinyLink/Platforms/iOS/Native/cimgui-src
+[submodule "Myth/Platforms/iOS/Native/cimgui-src"]
+	path = Myth/Platforms/iOS/Native/cimgui-src
 	url = https://github.com/cimgui/cimgui.git
 [submodule "Foster"]
 	path = Foster

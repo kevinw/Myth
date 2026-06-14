@@ -3,17 +3,20 @@ obj/
 .vs
 .vscode
 imgui.ini
-TinyLink/Assets/Sounds/Ableton/Sound Effects Project/Icon
+Myth/Assets/Sounds/Ableton/Sound Effects Project/Icon
 
 FosterSamples.sln.DotSettings.user
 .idea/
-TinyLink/Platforms/**/xcuserdata/
+Myth/Platforms/**/xcuserdata/
 *.swp
 __pycache__
-TinyLink/tmp
+Myth/tmp
 bitmapflow-cli/target/release
 tmp/bench
 bitmapflow-cli/target
 .DS_Store
-TinyLink/tools/nca_train/targets
+Myth/tools/nca_train/targets
 tools/windows/
+Myth/Assets/Sounds/Myth/.cache
+Myth/Assets/Sounds/Myth/.unsaved
+Myth/Assets/Sounds/Myth/.user

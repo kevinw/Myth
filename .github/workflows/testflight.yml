@@ -8,7 +8,7 @@ permissions:
 
 env:
   DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-  IOS_PROJECT: TinyLink/Platforms/iOS/TinyLinkIos/TinyLinkIos.csproj
+  IOS_PROJECT: Myth/Platforms/iOS/MythIos/MythIos.csproj
   IOS_BUNDLE_ID: com.kevinwatters.myth
   IOS_CODESIGN_KEY: ${{ vars.IOS_CODESIGN_KEY || 'Apple Distribution' }}
 
@@ -167,7 +167,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ipa_path="$(find TinyLink/Platforms/iOS/TinyLinkIos/bin/Release/net10.0-ios/ios-arm64 -name '*.ipa' -print -quit)"
+          ipa_path="$(find Myth/Platforms/iOS/MythIos/bin/Release/net10.0-ios/ios-arm64 -name '*.ipa' -print -quit)"
           if [[ -z "$ipa_path" ]]; then
             echo "No IPA found." >&2
             exit 1

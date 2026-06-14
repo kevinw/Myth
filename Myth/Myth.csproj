@@ -1,0 +1,100 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <DefineConstants>$(DefineConstants);BROWSER</DefineConstants>
+    <MythBrowser>true</MythBrowser>
+    <WasmEmitSymbolMap Condition="'$(Configuration)' == 'Release' and '$(WasmEmitSymbolMap)' == ''">false</WasmEmitSymbolMap>
+    <MythBrowserFmod Condition="'$(MythBrowserFmod)' == ''">true</MythBrowserFmod>
+    <MythBrowserJsFmod Condition="'$(MythBrowserJsFmod)' == ''">true</MythBrowserJsFmod>
+    <MythBrowserThreads Condition="'$(MythBrowserThreads)' == ''">false</MythBrowserThreads>
+    <MythBrowserFmodPThread Condition="'$(MythBrowserFmodPThread)' == ''">false</MythBrowserFmodPThread>
+    <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
+    <DefineConstants Condition="'$(MythBrowserFmod)' != 'true'">$(DefineConstants);BROWSER_NO_FMOD</DefineConstants>
+    <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <ShaderPlatform>mac</ShaderPlatform>
+    <ShaderOutputExtension>msl</ShaderOutputExtension>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <ShaderPlatform>windows</ShaderPlatform>
+    <ShaderOutputExtension>dxil</ShaderOutputExtension>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <ShaderPlatform>linux</ShaderPlatform>
+    <ShaderOutputExtension>spv</ShaderOutputExtension>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <ShaderPlatform>web</ShaderPlatform>
+    <FmodHtml5Root>$(MSBuildProjectDirectory)/Platforms/Web/Native/FMOD</FmodHtml5Root>
+  </PropertyGroup>
+
+  <!-- Shader compilation -->
+  <PropertyGroup>
+    <ShaderSourceDir>$(MSBuildProjectDirectory)/Assets/Shaders</ShaderSourceDir>
+  </PropertyGroup>
+
+  <Import Project="msbuild/ShaderCompilation.targets" />
+
+  <!-- Hook shader compilation into the build -->
+  <Target Name="_CompileShadersBeforeBuild" BeforeTargets="BeforeBuild" DependsOnTargets="CompileShaders" />
+  
+  <ItemGroup>
+    <Compile Remove="Source/**" />
+    <Compile Remove="Platforms/**" />
+    <Compile Remove="tools/**" />
+    <EmbeddedResource Remove="Platforms/**" />
+    <None Remove="Platforms/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Platforms/Desktop/Program.cs" />
+    <ProjectReference Include="Source/Myth.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);MythBrowser=$(MythBrowser);MythBrowserFmod=$(MythBrowserFmod)" />
+    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <Content Include="wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**" />
+    <Content Include="Assets/Shaders/Compiled/*.wgsl" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
+    <NativeFileReference Include="$(FmodHtml5Root)/api/studio/lib/w32/fmodstudio_wasm.a" Condition="'$(MythBrowserFmod)' == 'true' and '$(MythBrowserJsFmod)' != 'true' and '$(MythBrowserFmodPThread)' != 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/w32/fmodstudio_wasm.a')" />
+    <NativeFileReference Include="$(FmodHtml5Root)/api/studio/lib/w32/fmodstudio_bindings.a" Condition="'$(MythBrowserFmod)' == 'true' and '$(MythBrowserJsFmod)' != 'true' and '$(MythBrowserFmodPThread)' != 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/w32/fmodstudio_bindings.a')" />
+    <NativeFileReference Include="$(FmodHtml5Root)/api/studio/lib/w32/fmodstudioP_wasm.a" Condition="'$(MythBrowserFmod)' == 'true' and '$(MythBrowserJsFmod)' != 'true' and '$(MythBrowserFmodPThread)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/w32/fmodstudioP_wasm.a')" />
+    <NativeFileReference Include="$(FmodHtml5Root)/api/studio/lib/w32/fmodstudioP_bindings.a" Condition="'$(MythBrowserFmod)' == 'true' and '$(MythBrowserJsFmod)' != 'true' and '$(MythBrowserFmodPThread)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/w32/fmodstudioP_bindings.a')" />
+  </ItemGroup>
+
+  <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
+    <MakeDir Directories="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true'" />
+    <Copy SourceFiles="wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
+    <Copy SourceFiles="../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
+    <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js')" />
+    <Copy SourceFiles="$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm')" />
+    <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />
+    <Exec Command="python3 tools/generate-browser-asset-manifest.py &quot;$(WasmAppDir)&quot;" />
+  </Target>
+
+  <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserJsFmod)' == 'true'">
+    <Error
+      Condition="!Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.js') or !Exists('$(FmodHtml5Root)/api/studio/lib/wasm/fmodstudioP.wasm')"
+      Text="Myth browser FMOD runtime files are missing under $(FmodHtml5Root)/api/studio/lib/wasm. Expected fmodstudioP.js and fmodstudioP.wasm." />
+  </Target>
+
+</Project>

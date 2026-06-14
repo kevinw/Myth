@@ -3,7 +3,7 @@
 
 using Foster.Framework.Images;
 
-var ase = new Aseprite("../TinyLink/Assets/Sprites/floater.ase");
+var ase = new Aseprite("../Myth/Assets/Sprites/floater.ase");
 Console.WriteLine($"Frames: {ase.Frames.Count}, Size: {ase.Width}x{ase.Height}");
 
 // Render first 3 frames
