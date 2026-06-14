@@ -812,6 +812,11 @@
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "wall_slide",
     "toTag": "jump"
   },
   {

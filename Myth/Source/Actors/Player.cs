@@ -23,7 +23,8 @@ public abstract class Pawn : Actor
 		Attack,
 		BlinkStrike,
 		Hurt,
-		Start
+		Start,
+		Burrow
 	}
 	protected static float FastFallMultiplier => 1.25f;
 	protected static float JumpBufferTime => 0.08f;
@@ -161,7 +162,7 @@ public abstract class Pawn : Actor
 				jumpTimer -= Time.Delta;
 		}
 
-		if (!grounded && State != States.Dash)
+		if (!grounded && State != States.Dash && State != States.Burrow)
 		{
 			var grav = Gravity;
 			if (jumpTimer > 0)
@@ -558,6 +559,13 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
+	static float BurrowDuration => 0.8f;
+	static float BurrowSpeed => 90f;
+	const int BurrowSubmergeDepth = 4;
+	const int BurrowAttachProbe = 8;
+
+	private float burrowTimer;
+	private SurfaceFollower? burrowFollower;
 
 	public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
@@ -617,6 +625,12 @@ public partial class Player : Pawn
 
 	protected override void OnLanded(Vector2 previousVelocity)
 	{
+		if (input.JumpDown)
+		{
+			TryStartBurrow();
+			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+			return;
+		}
 		base.OnLanded(previousVelocity);
 		AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
 		CanPlaySquishSound = true;
@@ -654,7 +668,11 @@ public partial class Player : Pawn
 			}
 		}
 
-		if (State == States.Dash)
+		if (State == States.Burrow)
+		{
+			// invulnerable while underground
+		}
+		else if (State == States.Dash)
 		{
 			if (OverlapsFirst(Masks.Hazard) is { } hit)
 				hit.Hit(this);
@@ -684,7 +702,59 @@ public partial class Player : Pawn
 			case States.Start:
 				StartState();
 				break;
+			case States.Burrow:
+				BurrowState();
+				break;
 		}
+	}
+
+	private void TryStartBurrow()
+	{
+		var follower = new SurfaceFollower(this) { TowardSurface = Vector2.UnitY };
+		if (!follower.Attach(BurrowAttachProbe))
+			return;
+
+		burrowFollower = follower;
+		Velocity = Vector2.Zero;
+		burrowTimer = BurrowDuration;
+		State = States.Burrow;
+	}
+
+	private void BurrowState()
+	{
+		if (burrowFollower == null)
+		{
+			State = States.Normal;
+			return;
+		}
+
+		Velocity = Vector2.Zero;
+
+		// Project input intent onto the current surface tangent. The sign of the
+		// dot product tells us whether to walk along the tangent forward or back.
+		var intent = new Vector2(input.MoveX, input.MoveY);
+		var dir = Math.Sign(Vector2.Dot(intent, burrowFollower.Tangent));
+		burrowFollower.Follow(dir, BurrowSpeed * Time.Delta);
+
+		if (input.MoveX != 0)
+			Facing = Math.Sign(input.MoveX);
+
+		burrowTimer -= Time.Delta;
+		if (burrowTimer <= 0 || !input.JumpDown)
+			PopOutOfBurrow();
+	}
+
+	private void PopOutOfBurrow()
+	{
+		// Launch away from whatever surface we were riding.
+		var exitDir = burrowFollower?.TowardSurface ?? Vector2.UnitY;
+		var popMagnitude = MathF.Abs(JumpForce);
+		Velocity = -exitDir * popMagnitude;
+		jumpTimer = JumpTime;
+		Squish = new Vector2(0.65f, 1.4f);
+		State = States.Normal;
+		AudioEvent("jump");
+		burrowFollower = null;
 	}
 
 	protected override bool AllowDuckingInState()
@@ -1039,7 +1109,18 @@ public partial class Player : Pawn
 
 	public override void Render(Batcher batcher)
 	{
-		base.Render(batcher);
+		if (State == States.Burrow && burrowFollower != null)
+		{
+			// Shift the sprite "into" the surface so the player looks submerged.
+			var offset = burrowFollower.TowardSurface * BurrowSubmergeDepth;
+			batcher.PushMatrix(new Vector2(offset.X, offset.Y));
+			RenderSpriteSubtexture(batcher, Color.White * 0.3f);
+			batcher.PopMatrix();
+		}
+		else
+		{
+			base.Render(batcher);
+		}
 		RenderBlink(batcher);
 	}
 
