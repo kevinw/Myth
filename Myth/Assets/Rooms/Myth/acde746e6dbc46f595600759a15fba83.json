@@ -74,6 +74,11 @@
       "Position": [216, 144],
       "Size": [8, 24],
       "Direction": "Left"
+    },
+    {
+      "Id": "9ad70104c1bde6a4",
+      "Type": "Jumpthru",
+      "Position": [48, 64]
     }
   ]
 }
