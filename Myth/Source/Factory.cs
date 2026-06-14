@@ -18,6 +18,13 @@ public static class Factory
 		Background
 	}
 
+	public enum ReflectionMode
+	{
+		None,
+		Flat,
+		Distorted
+	}
+
 	/// Used to Place a Tile
 	public delegate void TileFn(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual);
 
@@ -31,7 +38,9 @@ public static class Factory
 		public readonly string? SurfaceType;
 		public readonly bool BlocksMovement;
 		public readonly bool CastsShadow;
-		public readonly bool ReflectsSprites;
+		public readonly ReflectionMode Reflection;
+		public readonly float ReflectionOpacity;
+		public readonly bool ReflectsSprites => Reflection != ReflectionMode.None;
 		public readonly bool Destructible;
 		public readonly bool IsSlope;
 		public readonly string? TilesetName;
@@ -40,7 +49,7 @@ public static class Factory
 		public readonly TileLayer Layer;
 		public readonly float AcousticReflectivity;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, bool reflectsSprites = false, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f)
 		{
 			Name = name;
 			Image = image;
@@ -48,7 +57,8 @@ public static class Factory
 			SurfaceType = surfaceType;
 			BlocksMovement = blocksMovement;
 			CastsShadow = castsShadow;
-			ReflectsSprites = reflectsSprites;
+			Reflection = reflection;
+			ReflectionOpacity = reflectionOpacity;
 			Destructible = destructible;
 			IsSlope = isSlope;
 			TilesetName = tilesetName;
@@ -145,7 +155,7 @@ public static class Factory
 		return null;
 	}
 
-	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, bool reflectsSprites = false, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f)
+	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f)
 	{
 		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
 		if (tileset == null)
@@ -155,8 +165,8 @@ public static class Factory
 		{
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
-			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng), reflectsSprites && !isFg ? 0.55f : 1.0f);
-		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflectsSprites: reflectsSprites, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
+			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng), reflection != ReflectionMode.None && !isFg ? 0.55f : 1.0f);
+		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
 	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null, float acousticReflectivity = 1.0f)
@@ -197,7 +207,7 @@ public static class Factory
 		}
 	}
 
-	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null, float acousticReflectivity = 1.0f)
+	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null, float acousticReflectivity = 1.0f, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
@@ -210,7 +220,7 @@ public static class Factory
 				fg.Set(tile.X, tile.Y, new());
 			else
 				bg.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
+		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
 	// Registers the Default types built into the game.
@@ -252,12 +262,13 @@ public static class Factory
 		Register('2', AsSlopeTile("castle", "Brick", "Castle Slope"));
 		Register('G', AsDualTile("grass", "grass-dual", "Grass", acousticReflectivity: 0.15f));
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope", acousticReflectivity: 0.15f));
+		Register('M', AsDualTile("metal", "metal-dual", "Brick", reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f));
 		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
 		Register('Y', AsSlopeTile("stone", "Brick", "Stone Slope"));
 		Register('g', AsTile("plants", false, "Grass", acousticReflectivity: 0.20f));
 		Register('i', AsTile("gates", isFg: false, surfaceType: "Brick", acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
-		Register('w', AsTile("water", false, "Water", reflectsSprites: true, acousticReflectivity: 0.55f));
+		Register('w', AsTile("water", false, "Water", reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f));
 		Register('#', Assets.GetTileset("back-dual") != null
 			? AsDualTile("back", "back-dual", "Background", TileLayer.Background)
 			: AsTile("back", false, layer: TileLayer.Background));

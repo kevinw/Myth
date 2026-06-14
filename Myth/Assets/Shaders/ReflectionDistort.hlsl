@@ -8,11 +8,14 @@ cbuffer VertexUniformBlock : register(b0, space1)
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
     float4 TextureSizeTimeAmplitude;
-    float4 FrequencySpeedPadding;
+    float4 FrequencySpeedFlatOnlyPad;
 };
 
 Texture2D Texture : register(t0, space2);
 SamplerState Sampler : register(s0, space2);
+
+Texture2D DistortMask : register(t1, space2);
+SamplerState DistortMaskSampler : register(s1, space2);
 
 struct VsInput
 {
@@ -48,16 +51,21 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float2 textureSize = TextureSizeTimeAmplitude.xy;
     float time = TextureSizeTimeAmplitude.z;
     float amplitude = TextureSizeTimeAmplitude.w;
-    float frequency = FrequencySpeedPadding.x;
-    float speed = FrequencySpeedPadding.y;
+    float frequency = FrequencySpeedFlatOnlyPad.x;
+    float speed = FrequencySpeedFlatOnlyPad.y;
+    float flatOnly = FrequencySpeedFlatOnlyPad.z;
+
+    float distort = DistortMask.Sample(DistortMaskSampler, target_uv(input.TexCoord)).r;
 
     float2 pixel = screen_pixel(input.Position);
     float wave = sin(pixel.y * frequency + time * speed) * amplitude;
     wave += sin(pixel.y * frequency * 2.1 + time * speed * 1.7) * amplitude * 0.35;
 
-    float2 uv = target_uv(input.TexCoord) + float2(wave / textureSize.x, 0.0);
-    // Snap distorted samples to texel centers so the reflection keeps a pixel-art edge.
-    uv = (floor(uv * textureSize) + 0.5) / textureSize;
+    // Snap both UVs to texel centers for pixel-art edges, then lerp by mask.
+    float2 baseUv = (floor(target_uv(input.TexCoord) * textureSize) + 0.5) / textureSize;
+    float2 waveUv = (floor((target_uv(input.TexCoord) + float2(wave / textureSize.x, 0.0)) * textureSize) + 0.5) / textureSize;
+    float2 uv = lerp(baseUv, waveUv, distort);
     float4 color = Texture.Sample(Sampler, uv) * input.Color;
+    color.a *= lerp(1.0, 1.0 - distort, flatOnly);
     return color;
 }

@@ -58,7 +58,7 @@ public partial class Game : IDisposable
 		new(1, 1),
 		new(2, 1),
 	];
-	private const float ReflectionOpacity = 0.5f;
+
 	private const float CameraSlackEpsilon = TileSize;
 	static float DitherGlitchAttackSpeed => 15.0f;
 	static float DitherGlitchDecaySpeed => 1.35f;
@@ -85,6 +85,7 @@ public partial class Game : IDisposable
 	Target TileField { get; set; } = null!;
 	Target DitherMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
+	Target ReflectionMask { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
@@ -215,7 +216,7 @@ public partial class Game : IDisposable
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 5, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
-		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 1, uniformBufferCount: 1);
+		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1);
 		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
 		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
 		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
@@ -650,6 +651,7 @@ public partial class Game : IDisposable
 		TileField = CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField");
 		DitherMask = CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
+		ReflectionMask = new Target(GraphicsDevice, width, height, name: "ReflectionMask");
 	}
 
 	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
@@ -677,6 +679,7 @@ public partial class Game : IDisposable
 		TileField?.Dispose();
 		DitherMask?.Dispose();
 		ReflectionScreen?.Dispose();
+		ReflectionMask?.Dispose();
 	}
 
 	private void DisposeRoomNormalCaches()
@@ -854,6 +857,9 @@ public partial class Game : IDisposable
 				DrawWorldLayer(BackgroundScreen, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
 				DrawWorldLayer(ForegroundScreen, background: false);
+			if (PerfToggles.Reflections)
+				using (GraphicsDevice.DebugGroup("Myth/flat reflections"))
+					CompositeFlatReflections(ForegroundScreen);
 		}
 		if (PerfToggles.Emissive)
 		{
@@ -1164,22 +1170,22 @@ public partial class Game : IDisposable
 		ReflectionScreen.Clear(Color.Transparent);
 		foreach (var rect in room.ReflectionRects)
 		{
-			var scissor = GetReflectionScissor(rect);
+			var scissor = GetReflectionScissor(rect.Bounds);
 			if (scissor.Width <= 0 || scissor.Height <= 0)
 				continue;
 
-			var surfaceTop = ReflectionSurfaceTop(rect);
+			var surfaceTop = ReflectionSurfaceTop(rect.Bounds);
 			PushWorldMatrix();
 			foreach (var actor in rendering)
 			{
 				if (!actor.Visible || !actor.CastsReflection)
 					continue;
-				if (!ActorCanReflectIn(actor, rect))
+				if (!ActorCanReflectIn(actor, rect.Bounds))
 					continue;
 
 				Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, surfaceTop)));
 				Batcher.PushMatrix(actor.Position);
-				actor.RenderReflection(Batcher, Color.White * ReflectionOpacity);
+				actor.RenderReflection(Batcher, Color.White * rect.Opacity);
 				Batcher.PopMatrix();
 				Batcher.PopMatrix();
 			}
@@ -1187,6 +1193,17 @@ public partial class Game : IDisposable
 			Batcher.Render(ReflectionScreen, scissor: scissor);
 			Batcher.Clear();
 		}
+
+		ReflectionMask.Clear(Color.Transparent);
+		foreach (var rect in room.ReflectionRects)
+		{
+			if (!rect.Distorted) continue;
+			var scissor = GetReflectionScissor(rect.Bounds);
+			if (scissor.Width <= 0 || scissor.Height <= 0) continue;
+			Batcher.Rect(new Rect(scissor.X, scissor.Y, scissor.Width, scissor.Height), Color.White);
+		}
+		Batcher.Render(ReflectionMask);
+		Batcher.Clear();
 
 		CompositeReflections(target);
 	}
@@ -1201,7 +1218,16 @@ public partial class Game : IDisposable
 		return screenRect.GetIntersection(ReflectionScreen.Bounds);
 	}
 
-	private void CompositeReflections(Target target)
+	private void CompositeReflections(Target target) => BlitReflections(target, flatOnly: 0.0f);
+
+	private void CompositeFlatReflections(Target target)
+	{
+		if (room == null || !room.ReflectionRects.Any(r => !r.Distorted))
+			return;
+		BlitReflections(target, flatOnly: 1.0f);
+	}
+
+	private void BlitReflections(Target target, float flatOnly)
 	{
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		if (reflectionDistortMaterial != null)
@@ -1213,9 +1239,10 @@ public partial class Game : IDisposable
 				1.4f,
 				0.10f,
 				2.2f,
-				0,
+				flatOnly,
 				0
 			]);
+			reflectionDistortMaterial.Material.Fragment.Samplers[1] = new(ReflectionMask, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			Batcher.PushMaterial(reflectionDistortMaterial.Material);
 		}
 		Batcher.Image(ReflectionScreen, ReflectionScreen.Bounds.Center, ReflectionScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
@@ -1232,7 +1259,7 @@ public partial class Game : IDisposable
 			return rect.Top;
 
 		var rects = room.ReflectionRects;
-		var start = rects.IndexOf(rect);
+		var start = rects.FindIndex(r => r.Bounds == rect);
 		if (start < 0)
 			return rect.Top;
 
@@ -1244,12 +1271,12 @@ public partial class Game : IDisposable
 		var top = rect.Top;
 		while (pending.Count > 0)
 		{
-			var current = rects[pending.Pop()];
+			var current = rects[pending.Pop()].Bounds;
 			top = Math.Min(top, current.Top);
 
 			for (var i = 0; i < rects.Count; i++)
 			{
-				if (visited[i] || !ReflectionRectsTouch(current, rects[i]))
+				if (visited[i] || !ReflectionRectsTouch(current, rects[i].Bounds))
 					continue;
 
 				visited[i] = true;

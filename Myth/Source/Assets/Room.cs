@@ -101,8 +101,15 @@ public class Room
 	/// Cached world-space segments used by visibility-polygon shadow tests.
 	public readonly List<VisibilityPolygon.Segment> VisibilitySegments = [];
 
+	public readonly struct ReflectionRect(RectInt bounds, float opacity, bool distorted)
+	{
+		public readonly RectInt Bounds = bounds;
+		public readonly float Opacity = opacity;
+		public readonly bool Distorted = distorted;
+	}
+
 	/// World-space rectangles built from adjacent sprite-reflecting tiles.
-	public readonly List<RectInt> ReflectionRects = [];
+	public readonly List<ReflectionRect> ReflectionRects = [];
 
 	/// Optional FMOD background music Area parameter label.
 	public string? MusicArea;
@@ -344,7 +351,7 @@ public class Room
 		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
 		BuildSlopeLightOccluders();
 		BuildVisibilitySegments();
-		BuildRects(ReflectionRects, static entry => entry.ReflectsSprites);
+		BuildReflectionRects();
 
 		if (ReverbAuto)
 			Reverb = InferReverb();
@@ -921,6 +928,24 @@ public class Room
 					width * Game.TileSize,
 					height * Game.TileSize));
 			}
+	}
+
+	static readonly List<RectInt> tempBounds = [];
+	private void BuildReflectionRects()
+	{
+		foreach (Factory.ReflectionMode mode in new[] { Factory.ReflectionMode.Flat, Factory.ReflectionMode.Distorted })
+		{
+			tempBounds.Clear();
+			BuildRects(tempBounds, entry => entry.Reflection == mode);
+			bool distorted = mode == Factory.ReflectionMode.Distorted;
+			foreach (var bounds in tempBounds)
+			{
+				var tileX = (bounds.X - WorldBounds.X) / Game.TileSize;
+				var tileY = (bounds.Y - WorldBounds.Y) / Game.TileSize;
+				var opacity = GetTileEntry(tileX, tileY)?.ReflectionOpacity ?? (distorted ? 0.5f : 0.7f);
+				ReflectionRects.Add(new(bounds, opacity, distorted));
+			}
+		}
 	}
 
 	private bool RowMatches(int x, int y, int width, bool[,] used, Func<Factory.Entry, bool> predicate)
