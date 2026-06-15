@@ -3,7 +3,6 @@
   "size": [40, 23],
   "ambientColor": "DBD7D7",
   "lightNoise": 0.365,
-  "reverb": 0.026,
   "sun": {
     "strength": 0.235,
     "color": "FFE5B7",

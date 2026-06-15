@@ -2,7 +2,7 @@
   "position": [280, -69],
   "size": [40, 23],
   "ambientColor": "ECFFD8",
-  "reverb": 0.461,
+  "reverb": 0.162,
   "tiles": [
     "00000000000000000GGGGGGGGGGGGGGGGGGGGGGG",
     "00000000000000000GGGGGGGGGGGGGGGGGGGGGGG",
@@ -30,9 +30,9 @@
   ],
   "actors": [
     {
+      "Id": "a0433510a2985237",
       "Type": "Spitter",
-      "Position": [112, 40],
-      "Id": "a0433510a2985237"
+      "Position": [112, 40]
     }
   ]
 }

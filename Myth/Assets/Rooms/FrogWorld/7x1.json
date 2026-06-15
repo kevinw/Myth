@@ -2,7 +2,7 @@
   "position": [280, 23],
   "size": [40, 23],
   "ambientColor": "494951",
-  "reverb": 0.799,
+  "reverb": 0.72,
   "tiles": [
     "1111111111111111111111111111111111111111",
     "1111111111111111111111111111111111111111",
@@ -30,39 +30,39 @@
   ],
   "actors": [
     {
+      "Id": "0b2e09ad4987e1fd",
       "Type": "Spitter",
-      "Position": [252, 72],
-      "Id": "0b2e09ad4987e1fd"
+      "Position": [252, 72]
     },
     {
+      "Id": "2e867eaf76744690",
       "Type": "Bramble",
-      "Position": [212, 88],
-      "Id": "2e867eaf76744690"
+      "Position": [212, 88]
     },
     {
+      "Id": "00ff6aafd4ee41fb",
       "Type": "Bramble",
-      "Position": [220, 88],
-      "Id": "00ff6aafd4ee41fb"
+      "Position": [220, 88]
     },
     {
+      "Id": "407a416ef7c5120f",
       "Type": "Player",
-      "Position": [52, 96],
-      "Id": "407a416ef7c5120f"
+      "Position": [52, 96]
     },
     {
+      "Id": "2accb0a49f48d308",
       "Type": "Bramble",
-      "Position": [100, 96],
-      "Id": "2accb0a49f48d308"
+      "Position": [100, 96]
     },
     {
+      "Id": "6c16bea2872aaf56",
       "Type": "Bramble",
-      "Position": [108, 96],
-      "Id": "6c16bea2872aaf56"
+      "Position": [108, 96]
     },
     {
+      "Id": "a671c14852183d95",
       "Type": "Blob",
-      "Position": [188, 96],
-      "Id": "a671c14852183d95"
+      "Position": [188, 96]
     }
   ]
 }

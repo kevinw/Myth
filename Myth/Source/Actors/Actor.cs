@@ -560,4 +560,13 @@ public class Actor
 			}
 		}
 	}
+
+	protected void StopAndReleaseSound(ref SoundInstance? sound, bool immediate = false)
+	{
+		if (sound == null) return;
+
+		sound.Stop(immediate: immediate);
+		sound.Dispose();
+		sound = null;
+	}
 }

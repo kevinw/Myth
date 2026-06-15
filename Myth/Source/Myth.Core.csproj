@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX')) and '$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythBrowser)' != 'true'">net10.0;net10.0-ios</TargetFrameworks>
-    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('OSX')) or '$(RuntimeIdentifier)' == 'browser-wasm' or '$(MythBrowser)' == 'true'">net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX')) and '$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythBrowser)' != 'true' and '$(MythDesktopOnly)' != 'true'">net10.0;net10.0-ios</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('OSX')) or '$(RuntimeIdentifier)' == 'browser-wasm' or '$(MythBrowser)' == 'true' or '$(MythDesktopOnly)' == 'true'">net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

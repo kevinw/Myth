@@ -40,7 +40,6 @@ public class Bullet : Actor
 				actor.SpriteName = "bullet";
 				actor.AnimationName = "dissolve";
 				actor.Velocity = Velocity * 0.25f;
-				actor.Verbose = true;
 			});
 		}
 

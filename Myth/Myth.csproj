@@ -61,7 +61,10 @@
 
   <ItemGroup>
     <Compile Include="Platforms/Desktop/Program.cs" />
-    <ProjectReference Include="Source/Myth.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);MythBrowser=$(MythBrowser);MythBrowserFmod=$(MythBrowserFmod);MythBrowserFmodPThread=$(MythBrowserFmodPThread);MythBrowserJsFmod=$(MythBrowserJsFmod)" />
+    <!-- MythDesktopOnly: the desktop/browser exe never needs Myth.Core's net10.0-ios TFM,
+         so drop it here to cut restore/eval work in the dev loop. The iOS app references
+         Myth.Core directly (without this flag), so it still builds net10.0-ios. -->
+    <ProjectReference Include="Source/Myth.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);MythBrowser=$(MythBrowser);MythBrowserFmod=$(MythBrowserFmod);MythBrowserFmodPThread=$(MythBrowserFmodPThread);MythBrowserJsFmod=$(MythBrowserJsFmod);MythDesktopOnly=true" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">

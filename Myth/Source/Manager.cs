@@ -15,7 +15,7 @@ namespace Myth;
 /// </summary>
 public partial class Manager : App
 {
-	public const string DefaultMusicArea = "Calm";
+	public const string DefaultMusicArea = "Resting";
 	public const string BackgroundMusicAreaParameter = "Area";
 	public const string RoomReverbParameter = "RoomReverb";
 

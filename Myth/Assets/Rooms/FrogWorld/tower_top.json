@@ -30,30 +30,30 @@
   ],
   "actors": [
     {
+      "Id": "53d6671b69b430b7",
       "Type": "Jumpthru",
-      "Position": [240, 168],
-      "Id": "53d6671b69b430b7"
+      "Position": [240, 168]
     },
     {
+      "Id": "5a2691d55d1b9f14",
       "Type": "Mosquito",
-      "Position": [116, 68],
-      "Id": "5a2691d55d1b9f14"
+      "Position": [116, 68]
     },
     {
+      "Id": "344df5975d806a11",
       "From": "BlueMemoryLight",
-      "Position": [214, 39],
-      "Id": "344df5975d806a11"
+      "Position": [214, 39]
     },
     {
+      "Id": "d4420a5d6023c7e4",
       "Type": "Jumpthru",
-      "Position": [240, 144],
-      "Id": "d4420a5d6023c7e4"
+      "Position": [240, 144]
     },
     {
+      "Id": "82107f8003870130",
       "Type": "HiddenWall",
       "Position": [264, 88],
-      "Size": [32, 32],
-      "Id": "82107f8003870130"
+      "Size": [32, 32]
     }
   ]
 }

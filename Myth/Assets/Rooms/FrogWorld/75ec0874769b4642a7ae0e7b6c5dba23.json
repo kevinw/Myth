@@ -31,11 +31,11 @@
   ],
   "actors": [
     {
+      "Id": "f5671f52eb2d8c0f",
       "Type": "TitleText",
       "Position": [140, 68],
       "Text": "something",
-      "RevealSpeed": 14.9,
-      "Id": "f5671f52eb2d8c0f"
+      "RevealSpeed": 14.9
     }
   ]
 }

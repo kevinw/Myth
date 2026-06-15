@@ -369,7 +369,7 @@ public partial class Manager
 	{
 		var bounds = room.WorldBounds;
 		var view = GameViewRect;
-		camera = RectCenter(bounds);
+		camera = bounds.Center;
 		zoom = Math.Clamp(Math.Min(view.Width / bounds.Width, view.Height / bounds.Height), 0.15f, 8.0f);
 	}
 
@@ -2600,7 +2600,8 @@ public partial class Manager
 
 	private void DrawBreakableTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
 	{
-		var color = new Color(1.0f, 0.82f, 0.24f, 0.9f);
+		var color = new Color(1.0f, 0.82f, 0.24f, 0.2f);
+		var tileSize = Game.TileSize - lineWeight * 4;
 		for (var x = 0; x < room.Size.X; x++)
 			for (var y = 0; y < room.Size.Y; y++)
 			{
@@ -2610,26 +2611,17 @@ public partial class Manager
 
 				var rect = new Rect(
 					roomTopLeft.X + x * Game.TileSize + lineWeight * 2,
-					roomTopLeft.Y + y * Game.TileSize + lineWeight * 2,
-					Game.TileSize - lineWeight * 4,
-					Game.TileSize - lineWeight * 4);
-				batcher.RectLine(rect, lineWeight, color);
+					roomTopLeft.Y + y * Game.TileSize + lineWeight * 2, tileSize, tileSize);
+				batcher.RectDashed(rect, lineWeight, color, 1, 5.5f);
 			}
 	}
 
-	private static Vector2 RectCenter(RectInt rect)
-		=> new(rect.X + rect.Width * 0.5f, rect.Y + rect.Height * 0.5f);
-
 	private static Point2? GetEditorEntryDirection(Room from, Room to)
 	{
-		if (to.TileSpacePosition.X >= from.TileSpacePosition.X + from.Size.X)
-			return Point2.Right;
-		if (to.TileSpacePosition.X + to.Size.X <= from.TileSpacePosition.X)
-			return Point2.Left;
-		if (to.TileSpacePosition.Y >= from.TileSpacePosition.Y + from.Size.Y)
-			return Point2.Down;
-		if (to.TileSpacePosition.Y + to.Size.Y <= from.TileSpacePosition.Y)
-			return Point2.Up;
+		if (to.TileSpacePosition.X >= from.TileSpacePosition.X + from.Size.X) return Point2.Right;
+		if (to.TileSpacePosition.X + to.Size.X <= from.TileSpacePosition.X)   return Point2.Left;
+		if (to.TileSpacePosition.Y >= from.TileSpacePosition.Y + from.Size.Y) return Point2.Down;
+		if (to.TileSpacePosition.Y + to.Size.Y <= from.TileSpacePosition.Y)   return Point2.Up;
 		return null;
 	}
 

@@ -60,6 +60,10 @@ public abstract class Pawn : Actor
 	protected static float DashCooldown => 0.20f;
 	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
 	protected static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
+	// While burrowing the player is effectively a point that rides the surface, so the
+	// follower probes with a tiny 2x2 footprint: the burrow center sits on the surface
+	// (not a hitbox-width away) and never snags on a nearby ceiling/wall.
+	protected static RectInt BurrowHitboxRect => new(-1, -1, 2, 2);
 
 	protected readonly StateMachine<States> state = new(States.Normal);
 	protected float jumpTimer;
@@ -99,7 +103,9 @@ public abstract class Pawn : Actor
 			jumpBufferTimer = JumpBufferTime;
 		AfterActorUpdate(previousVelocity);
 
-		var nowGrounded = Velocity.Y >= 0 && Grounded();
+		// While burrowing the player rides the surface as a point; skip the normal
+		// grounded/landing machinery so it doesn't re-trigger landings mid-burrow.
+		var nowGrounded = State != States.Burrow && Velocity.Y >= 0 && Grounded();
 		if (nowGrounded && !grounded)
 			OnLanded(previousVelocity);
 		grounded = nowGrounded;
@@ -144,7 +150,9 @@ public abstract class Pawn : Actor
 
 		if (ducking && State != States.Normal && State != States.Roll && !AllowDuckingInState())
 			ducking = false;
-		if (ducking || State == States.Roll)
+		if (State == States.Burrow)
+			Hitbox = new(BurrowHitboxRect);
+		else if (ducking || State == States.Roll)
 			Hitbox = new(DuckingHitboxRect);
 		else
 			Hitbox = new(StandingHitboxRect);
@@ -559,13 +567,31 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
-	static float BurrowDuration => 0.8f;
-	static float BurrowSpeed => 90f;
+	static float BurrowDuration => 1.5f;
+	static float BurrowSpeed => 220f;
 	const int BurrowSubmergeDepth = 4;
 	const int BurrowAttachProbe = 8;
+	const float BurrowGlowArc = 15f;       // contour length traced in each direction (~30px total)
+	static float BurrowGlowWeight => 1.5f;
+	const int BurrowGlowColor = 0xffcfa0;  // matches the player light
+	const float BurrowEnterSquishTime = 0.12f; // sprite stays visible this long to play the squash-in
+	const float BurrowSquashNormal = 0.45f;    // peak compression into the surface at the end of the window
+	const float BurrowSquashTangent = 1.6f;    // peak spread along the surface at the end of the window
+	const float BurrowExitGrace = 0.1f;        // suppress the landing squish briefly so the pop squish survives
+	const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
 
-	private float burrowTimer;
-	private SurfaceFollower? burrowFollower;
+	private float burrowTimer = 0;
+	private float burrowEnterTimer;
+	private float burrowExitTimer;
+	private Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
+	private bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
+	private bool burrowInputActive;             // was a direction held last frame; distinguishes a fresh press
+	private Vector2 burrowForwardIntent;        // world input that points along the orbit; disambiguates presses on walls
+	private Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
+	private Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
+	private float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
+	private readonly List<Vector2> burrowGlow = [];
+	private Vector2 burrowGlowAnchor;
 
 	public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
@@ -576,6 +602,7 @@ public partial class Player : Pawn
 	private bool attackBlocked;
 	private Light? light;
 	private SoundInstance? rollSound;
+	private SoundInstance? burrowSound;
 	private bool CanPlaySquishSound = false;
 
 	public Player()
@@ -627,8 +654,16 @@ public partial class Player : Pawn
 	{
 		if (input.JumpDown)
 		{
-			TryStartBurrow();
+			TryStartBurrow(previousVelocity);
 			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+			return;
+		}
+		// A horizontal wall-pop lands grounded immediately; keep the pop squish
+		// rather than stamping the flat landing squish over it.
+		if (burrowExitTimer > 0)
+		{
+			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+			CanPlaySquishSound = true;
 			return;
 		}
 		base.OnLanded(previousVelocity);
@@ -641,6 +676,12 @@ public partial class Player : Pawn
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
+		if (burrowExitTimer > 0)
+			burrowExitTimer = Calc.Approach(burrowExitTimer, 0, Time.Delta);
+		if (burrowTimer < 0) {
+			burrowTimer += Time.Delta;
+			if (burrowTimer > 0) burrowTimer = 0;
+		}
 	}
 
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
@@ -680,6 +721,12 @@ public partial class Player : Pawn
 		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
 
+		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
+		// burrow inside a slope/wall), nudge to the nearest free spot. The follower
+		// keeps us off surfaces during burrow, so skip it there.
+		if (State != States.Burrow)
+			TryUnstick(burrowExitTimer > 0 ? burrowExitOutward : new Vector2(0, -1));
+
 		var footPosition = new Vector2(Position.X, Position.Y);
 		foreach (var actor in Game.Actors)
 			if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Contains(footPosition))
@@ -706,44 +753,144 @@ public partial class Player : Pawn
 				BurrowState();
 				break;
 		}
+
 	}
 
-	void TryStartBurrow() {
-		var follower = new SurfaceFollower(this) { TowardSurface = Vector2.UnitY };
-		if (!follower.Attach(BurrowAttachProbe))
-			return;
+	void TryStartBurrow(Vector2 previousVelocity)
+	{
+		if (burrowTimer < 0) return; // the ability is still cooling down
+		if (State != States.Normal) return;
 
-		burrowFollower = follower;
+		Hitbox = new(BurrowHitboxRect);
+		burrowToward = Vector2.UnitY;
+		if (!Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
+		{
+			Hitbox = new(StandingHitboxRect); // no surface in reach; we're staying in Normal
+			return;
+		}
+
 		Velocity = Vector2.Zero;
 		burrowTimer = BurrowDuration;
+		burrowEnterTimer = BurrowEnterSquishTime;
+		burrowMoveRemainder = 0;
+		burrowInputActive = false; // first press establishes the orbit direction
+		burrowForwardIntent = Vector2.Zero;
+		// Initialize the walk state: heading = +tangent, solid on the right (matches +tangent).
+		burrowSolidLeft = false;
+		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
 		State = States.Burrow;
 		UpdateBurrowShift();
+		UpdateBurrowGlow();
+
+		StopAndReleaseSound(ref burrowSound);
+		burrowSound = Game.CreateAudioEvent("player/burrow", Position);
+		burrowSound?.Start();
+
+		burrowStartCount += 1;
+		Game.DisplayMessage($"Burrow start count: {burrowStartCount}");
 	}
 
-	void UpdateBurrowShift() {
-		if (burrowFollower != null && State == States.Burrow) {
-			Shift = burrowFollower.TowardSurface * BurrowSubmergeDepth;
-		} else {
-			Shift = new();
-		}
+	int burrowStartCount;
+
+	// Screen-axis squish aligned to a surface normal: `normalScale` is applied along
+	// the TowardSurface axis, `tangentScale` along the surface. Slopes fall back to
+	// whichever axis the normal leans toward (Squish can't rotate).
+	static Vector2 SurfaceSquish(Vector2 toward, float normalScale, float tangentScale)
+	{
+		return new Vector2(tangentScale, normalScale);
+
+		//return MathF.Abs(toward.Y) >= MathF.Abs(toward.X)
+			//? new Vector2(tangentScale, normalScale)
+			//: new Vector2(normalScale, tangentScale);
 	}
+
+	// True once the entry squish has finished and the player is fully submerged.
+	private bool BurrowHidesSprite => State == States.Burrow && burrowEnterTimer <= 0;
+
+	// Rebuild the glow polyline by tracing the boundary from the burrow's own walk state,
+	// so the line is always centered on the burrow point (no re-seed mis-anchoring at corners).
+	void UpdateBurrowGlow()
+	{
+		burrowGlow.Clear();
+		if (State != States.Burrow)
+			return;
+
+		var arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime);
+		if (arcLength <= 0)
+			return;
+
+		burrowGlowAnchor = Position;
+		Game.TraceSurfaceFromState(Position, burrowHeading, burrowSolidLeft, arcLength, burrowGlow);
+	}
+
+	void UpdateBurrowShift()
+		=> Shift = State == States.Burrow ? burrowToward * BurrowSubmergeDepth : new();
+
+	static float BurrowCooldown => 0.25f;
 
 	private void BurrowState()
 	{
-		if (burrowFollower == null)
-		{
-			State = States.Normal;
-			UpdateBurrowShift();
-			return;
-		}
-
 		Velocity = Vector2.Zero;
 
-		// Project input intent onto the current surface tangent. The sign of the
-		// dot product tells us whether to walk along the tangent forward or back.
+		// Ramp the squash UP toward peak as the entry window elapses, overriding the
+		// base per-frame decay so it intensifies right up until the sprite vanishes.
+		if (burrowEnterTimer > 0)
+		{
+			burrowEnterTimer = Calc.Approach(burrowEnterTimer, 0, Time.Delta);
+			var t = 1f - burrowEnterTimer / BurrowEnterSquishTime;
+			var peak = SurfaceSquish(burrowToward, BurrowSquashNormal, BurrowSquashTangent);
+			Squish = Vector2.Lerp(Vector2.One, peak, t);
+		}
+
+		// Resolve travel from the world input. The orbit direction (handedness) is only
+		// (re)decided on a FRESH press — after release or at burrow start: if the input
+		// clearly opposes the current heading we flip, otherwise we keep it. While a
+		// direction is held continuously we never reverse, so the burrow orbits around and
+		// around a shape (the heading auto-rotates around corners). Releasing resets, so
+		// the next press can pick the opposite orbit.
 		var intent = new Vector2(input.MoveX, input.MoveY);
-		var dir = Math.Sign(Vector2.Dot(intent, burrowFollower.Tangent));
-		burrowFollower.Follow(dir, BurrowSpeed * Time.Delta);
+		var move = intent != Vector2.Zero;
+		if (move && !burrowInputActive)
+		{
+			// Fresh press decides the orbit direction. If the input has a clear component
+			// along the surface (heading), use its sign. If it's orthogonal to the heading
+			// (e.g. pressing left/right on a vertical wall), fall back to the remembered
+			// "forward" input, so right keeps meaning down and left means up on that wall.
+			var proj = Vector2.Dot(intent, (Vector2)burrowHeading);
+			var reverse = proj < -BurrowTangentDeadzone
+				|| (MathF.Abs(proj) <= BurrowTangentDeadzone && Vector2.Dot(intent, burrowForwardIntent) < 0);
+			if (reverse)
+			{
+				burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y); // reverse travel
+				burrowSolidLeft = !burrowSolidLeft;
+			}
+			burrowForwardIntent = intent; // the pressed input now points along the orbit
+		}
+		burrowInputActive = move;
+
+		if (move)
+		{
+			burrowMoveRemainder += BurrowSpeed * Time.Delta;
+			var pixels = (int)burrowMoveRemainder;
+			burrowMoveRemainder -= pixels;
+			if (pixels > 0)
+			{
+				var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
+				burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
+				if (Game.ShowBurrowDebug && moved < pixels)
+					Console.WriteLine($"[burrow] heading={burrowHeading} solidLeft={burrowSolidLeft} toward={burrowToward} pos={Position} pixels={pixels} moved={moved}\n{Game.DebugSolidGrid(Position, 5)}");
+				if (moved == 0)
+				{
+					PopOutOfBurrow(); // dead end (room edge)
+					return;
+				}
+			}
+		}
+		else
+			burrowMoveRemainder = 0;
+
+		UpdateBurrowShift();
+		UpdateBurrowGlow();
 		Play("burrow");
 
 		if (input.MoveX != 0)
@@ -757,15 +904,71 @@ public partial class Player : Pawn
 	private void PopOutOfBurrow()
 	{
 		// Launch away from whatever surface we were riding.
-		var exitDir = burrowFollower?.TowardSurface ?? Vector2.UnitY;
+		var exitDir = burrowToward;
 		var popMagnitude = MathF.Abs(JumpForce);
 		Velocity = -exitDir * popMagnitude;
 		jumpTimer = JumpTime;
-		Squish = new Vector2(0.65f, 1.4f);
+		Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
 		State = States.Normal;
 		AudioEvent("jump");
-		burrowFollower = null;
+		burrowEnterTimer = 0;
+		burrowExitTimer = BurrowExitGrace;
+		burrowExitOutward = -exitDir; // away from the surface; bias the unstick nudge this way
+		burrowGlow.Clear();
+		burrowTimer = -BurrowCooldown;
 		UpdateBurrowShift();
+		StopAndReleaseSound(ref burrowSound);
+
+		popOutCount += 1;
+		Game.DisplayMessage($"Pop out count: {popOutCount}");
+
+	}
+
+	int popOutCount = 0;
+
+	const int UnstickMaxRadius = 16;
+
+	// If the current hitbox is embedded in solid, snap to the nearest free offset,
+	// biased toward `preferredDir`. Cheap no-op (one overlap test) when not embedded.
+	void TryUnstick(Vector2 preferredDir)
+	{
+		if (!OverlapsAny(Masks.Solid))
+			return;
+
+		if (preferredDir.LengthSquared() > 0.0001f)
+			preferredDir = Vector2.Normalize(preferredDir);
+
+		for (var r = 1; r <= UnstickMaxRadius; r++)
+		{
+			var bestScore = float.MaxValue;
+			var best = Point2.Zero;
+			var found = false;
+			for (var oy = -r; oy <= r; oy++)
+				for (var ox = -r; ox <= r; ox++)
+				{
+					if (Math.Max(Math.Abs(ox), Math.Abs(oy)) != r)
+						continue; // only the current ring
+					var off = new Point2(ox, oy);
+					if (OverlapsAny(off, Masks.Solid))
+						continue; // not free here
+
+					var dist = MathF.Sqrt(ox * ox + oy * oy);
+					var align = Vector2.Dot(Vector2.Normalize(new Vector2(ox, oy)), preferredDir);
+					var score = dist - align; // nearer and better-aligned wins
+					if (score < bestScore)
+					{
+						bestScore = score;
+						best = off;
+						found = true;
+					}
+				}
+
+			if (found)
+			{
+				Position += best;
+				return;
+			}
+		}
 	}
 
 	protected override bool AllowDuckingInState() => State == States.Attack && duckAttack;
@@ -853,11 +1056,9 @@ public partial class Player : Pawn
 		return false;
 	}
 
-	protected override void OnRollStarted()
-		=> StartRollSound();
+	protected override void OnRollStarted() => StartRollSound();
 
-	protected override void OnRollStopped(bool immediate)
-		=> StopRollSound(immediate);
+	protected override void OnRollStopped(bool immediate) => StopRollSound(immediate);
 
 	protected override void UpdateRollAudioPosition()
 		=> Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
@@ -879,15 +1080,7 @@ public partial class Player : Pawn
 		}
 	}
 
-	private void StopRollSound(bool immediate)
-	{
-		if (rollSound == null)
-			return;
-
-		rollSound.Stop(immediate);
-		rollSound.Release();
-		rollSound = null;
-	}
+	private void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
 
 	private void UpdateFootsteps()
 	{
@@ -1118,8 +1311,50 @@ public partial class Player : Pawn
 
 	public override void Render(Batcher batcher)
 	{
-		base.Render(batcher);
+		// While submerged the player is represented only by the surface glow; the
+		// sprite stays visible briefly on entry to play the squash-in.
+		if (!BurrowHidesSprite)
+			base.Render(batcher);
 		RenderBlink(batcher);
+	}
+
+	public override void RenderNormals(Batcher batcher)
+	{
+		if (!BurrowHidesSprite)
+			base.RenderNormals(batcher);
+	}
+
+	public override void RenderShadow(Batcher batcher, Color color)
+	{
+		if (!BurrowHidesSprite)
+			base.RenderShadow(batcher, color);
+	}
+
+	public override void RenderReflection(Batcher batcher, Color color)
+	{
+		if (!BurrowHidesSprite)
+			base.RenderReflection(batcher, color);
+	}
+
+	public override void RenderEmissive(Batcher batcher)
+	{
+		base.RenderEmissive(batcher);
+		if (State != States.Burrow || burrowGlow.Count < 2)
+			return;
+
+		// The traced points lie exactly on the solid/air boundary; draw them directly.
+		// The emissive pass pre-pushes a matrix at our Position, so draw in local space.
+		Vector2 origin = Position;
+		for (var i = 0; i + 1 < burrowGlow.Count; i++)
+			batcher.Line(burrowGlow[i] - origin, burrowGlow[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(burrowGlow[i]), BurrowGlowColorAt(burrowGlow[i + 1]));
+	}
+
+	// Glow fades from full at the anchor (player's surface point) to nothing at the ends.
+	private Color BurrowGlowColorAt(Vector2 worldPoint)
+	{
+		var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
+		var alpha = Math.Clamp(1f - dist / BurrowGlowArc, 0f, 1f);
+		return new Color(BurrowGlowColor, alpha);
 	}
 
 	void UpdateLightPosition()

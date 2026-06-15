@@ -29,7 +29,44 @@ public partial class Game
 	private bool mouseLightEnabled;
 	private Vector2 mouseLightPosition;
 
+	// Independent overlay (not part of the exclusive DebugView): draws the point the
+	// burrow surface-follower rides, as a 2px rectangle. Toggled with B.
+	private bool showBurrowCenter;
+
 	public List<RectInt> CollisionRectsThisFrame = new();
+
+	private void ToggleBurrowCenter()
+	{
+		showBurrowCenter = !showBurrowCenter;
+		DisplayMessage($"Debug: Burrow Center {(showBurrowCenter ? "On" : "Off")}");
+	}
+
+	private void DrawBurrowCenter()
+	{
+		if (GetFirst<Player>() is not { State: Pawn.States.Burrow } player)
+			return;
+
+		Batcher.Rect(player.Position.X - 1, player.Position.Y - 1, 2, 2, 0x00ffff);
+	}
+
+	public bool ShowBurrowDebug => showBurrowCenter;
+
+	// Dump a `radius`-cell solid/air map around `center` (world pixel coords) for diagnosing
+	// where the boundary walk stalls. '#' solid, '.' air, 'X' the center cell.
+	public string DebugSolidGrid(Point2 center, int radius)
+	{
+		var sb = new System.Text.StringBuilder();
+		for (var dy = -radius; dy <= radius; dy++)
+		{
+			for (var dx = -radius; dx <= radius; dx++)
+			{
+				var cell = new Point2(center.X + dx, center.Y + dy);
+				sb.Append(dx == 0 && dy == 0 ? 'X' : SolidPixel(cell) ? '#' : '.');
+			}
+			sb.Append('\n');
+		}
+		return sb.ToString();
+	}
 
 	private void ToggleDebugView(DebugView toggle)
 	{

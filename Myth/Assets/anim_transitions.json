@@ -257,6 +257,11 @@
   {
     "spriteName": "player",
     "fromTag": "attack",
+    "toTag": "burrow"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "attack",
     "toTag": "hurt"
   },
   {
@@ -267,6 +272,21 @@
   {
     "spriteName": "player",
     "fromTag": "attack_block",
+    "toTag": "hurt"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "attack_block",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "hurt"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
     "toTag": "idle"
   },
   {
@@ -287,7 +307,17 @@
   {
     "spriteName": "player",
     "fromTag": "burrow",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
     "toTag": "skid"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "wall_slide"
   },
   {
     "spriteName": "player",
@@ -842,6 +872,11 @@
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
+    "toTag": "burrow"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "wall_slide",
     "toTag": "crawl"
   },
   {
@@ -862,6 +897,11 @@
   {
     "spriteName": "player",
     "fromTag": "wall_slide",
+    "toTag": "jump_squish"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "wall_slide",
     "toTag": "jump_turn"
   },
   {
@@ -873,6 +913,11 @@
     "spriteName": "player",
     "fromTag": "wall_slide",
     "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "wall_slide",
+    "toTag": "skid"
   },
   {
     "spriteName": "spitter",
