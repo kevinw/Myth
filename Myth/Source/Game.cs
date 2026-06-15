@@ -471,7 +471,14 @@ public partial class Game : IDisposable
 	private void UpdateCamera()
 	{
 		if (room == null || nextRoom != null || draggingPlayer)
+		{
+			// The camera is under transition/drag control; drop the easing state so normal
+			// control resumes cleanly clamped to the new room rather than gliding from a stale
+			// (old-room) target.
+			previousCameraTarget = null;
+			cameraError = Vector2.Zero;
 			return;
+		}
 
 		var fbZoomTarget = Controls.Zoom.Down ? 2.0f : 1.0f;
 		fbZoom += (fbZoomTarget - fbZoom) * (1 - MathF.Exp(-Time.Delta * 12f));
@@ -498,7 +505,11 @@ public partial class Game : IDisposable
 		if (cameraError.LengthSquared() < 0.25f)
 			cameraError = Vector2.Zero;
 
-		Camera = target + cameraError;
+		// The room edge is the hard outer limit: re-clamp after adding the easing offset so the
+		// camera can never show outside the room (easing overflow falls into the dead/blocker
+		// space, never past a room edge).
+		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		Camera = ClampCameraToRoomFb(target + cameraError, padding);
 		previousCameraTarget = target;
 		previousPlayerPosition = player;
 	}
