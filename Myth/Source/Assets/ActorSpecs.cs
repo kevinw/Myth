@@ -16,7 +16,9 @@ public static class ActorSpecs
 	private const string IdKey = "Id";
 	private const string NameKey = "Name";
 	private const string PositionKey = "Position";
-	private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+	// NewLine = "\n" keeps serialized JSON LF on every platform (the indented writer would
+	// otherwise emit CRLF on Windows), so room/spec files don't churn whitespace diffs.
+	private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, NewLine = "\n" };
 
 	private static readonly Dictionary<string, JsonObject> specs = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, string> specPaths = new(StringComparer.OrdinalIgnoreCase);

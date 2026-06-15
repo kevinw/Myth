@@ -78,6 +78,7 @@ public abstract class Pawn : Actor
 	protected float dashCooldownTimer;
 	protected float dashRemainder;
 	protected float jumpForce = JumpForce;
+	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
 	protected float rollJumpCarryTimer;
 	protected PawnInput input;
 	protected float JumpUpSquish;
@@ -159,7 +160,7 @@ public abstract class Pawn : Actor
 
 		if (jumpTimer > 0)
 		{
-			if (!input.JumpDown)
+			if (!input.JumpDown && !jumpCutImmune)
 			{
 				// releasing jump button before jump timer expires (cutting jump short) -- we want to reduce your velocity so you fall faster.
 				//
@@ -492,6 +493,7 @@ public abstract class Pawn : Actor
 	{
 		jumpForce = force;
 		jumpTimer = duration;
+		jumpCutImmune = false; // normal jumps can be cut short by releasing
 		Velocity.Y = force;
 	}
 
@@ -567,8 +569,15 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
-	static float BurrowDuration => 1.5f;
-	static float BurrowSpeed => 220f;
+	static float BurrowDuration => 1.0f;
+	static float BurrowMaxSpeed => 150f;
+	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
+	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
+	static float BurrowClimbSpeedMultiplier => 0.5f; // straight-up wall climb is half speed; 45° lands in between
+	// The burrow pop is meant to read as stronger than a full held jump: a bigger launch
+	// velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
+	static float BurrowPopForce => JumpForce * 0.80f;
+	static float BurrowPopTime => JumpTime * 0.9f;
 	const int BurrowSubmergeDepth = 4;
 	const int BurrowAttachProbe = 8;
 	const float BurrowGlowArc = 15f;       // contour length traced in each direction (~30px total)
@@ -590,6 +599,7 @@ public partial class Player : Pawn
 	private Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
 	private Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
 	private float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
+	private float burrowSpeed;                  // current travel speed; eases via accel/friction
 	private readonly List<Vector2> burrowGlow = [];
 	private Vector2 burrowGlowAnchor;
 
@@ -778,6 +788,19 @@ public partial class Player : Pawn
 		// Initialize the walk state: heading = +tangent, solid on the right (matches +tangent).
 		burrowSolidLeft = false;
 		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
+
+		// Carry the landing's horizontal momentum into the burrow. Head the way we were
+		// moving (reversing heading + handedness keeps the normal pointing into the solid),
+		// and seed the speed with the incoming horizontal velocity so a fast run/roll dives
+		// straight into a fast burrow instead of starting from a standstill.
+		if (previousVelocity.X != 0 && burrowHeading.X != 0
+			&& Math.Sign(previousVelocity.X) != Math.Sign(burrowHeading.X))
+		{
+			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
+			burrowSolidLeft = !burrowSolidLeft;
+		}
+		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), BurrowMaxSpeed);
+
 		State = States.Burrow;
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
@@ -868,26 +891,37 @@ public partial class Player : Pawn
 		}
 		burrowInputActive = move;
 
-		if (move)
+		// Speed eases in and out (accel + friction) rather than snapping, and climbing slows
+		// you down: a straight-up wall heading runs at BurrowClimbSpeedMultiplier, while a 45°
+		// slope lands in between on its own (the cardinal walker alternates up/flat steps).
+		// Descending counts as flat, so you keep momentum going down.
+		var climb = MathF.Max(0, -burrowHeading.Y);
+		var targetSpeed = move ? BurrowMaxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
+		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
+		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
+
+		burrowMoveRemainder += burrowSpeed * Time.Delta;
+		var pixels = (int)burrowMoveRemainder;
+		burrowMoveRemainder -= pixels;
+		if (pixels > 0)
 		{
-			burrowMoveRemainder += BurrowSpeed * Time.Delta;
-			var pixels = (int)burrowMoveRemainder;
-			burrowMoveRemainder -= pixels;
-			if (pixels > 0)
+			var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
+			burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
+			if (Game.ShowBurrowDebug && moved < pixels)
+				Console.WriteLine($"[burrow] heading={burrowHeading} solidLeft={burrowSolidLeft} toward={burrowToward} pos={Position} pixels={pixels} moved={moved}\n{Game.DebugSolidGrid(Position, 5)}");
+			if (moved == 0)
 			{
-				var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
-				burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
-				if (Game.ShowBurrowDebug && moved < pixels)
-					Console.WriteLine($"[burrow] heading={burrowHeading} solidLeft={burrowSolidLeft} toward={burrowToward} pos={Position} pixels={pixels} moved={moved}\n{Game.DebugSolidGrid(Position, 5)}");
-				if (moved == 0)
+				// A dead end (room edge): pop out if the player is driving into it, otherwise
+				// we just coasted there on friction — kill the glide and stay put.
+				if (move)
 				{
-					PopOutOfBurrow(); // dead end (room edge)
+					PopOutOfBurrow();
 					return;
 				}
+				burrowSpeed = 0;
+				burrowMoveRemainder = 0;
 			}
 		}
-		else
-			burrowMoveRemainder = 0;
 
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
@@ -905,9 +939,10 @@ public partial class Player : Pawn
 	{
 		// Launch away from whatever surface we were riding.
 		var exitDir = burrowToward;
-		var popMagnitude = MathF.Abs(JumpForce);
+		var popMagnitude = MathF.Abs(BurrowPopForce);
 		Velocity = -exitDir * popMagnitude;
-		jumpTimer = JumpTime;
+		jumpTimer = BurrowPopTime;
+		jumpCutImmune = true; // the pop keeps its full float even when jump is released
 		Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
 		State = States.Normal;
 		AudioEvent("jump");

@@ -28,3 +28,14 @@ Myth/Platforms/iOS/Native/SDL3.xcframework/*/SDL3.framework/SDL3 filter=lfs diff
 *.gif filter=lfs diff=lfs merge=lfs -text
 *.webp filter=lfs diff=lfs merge=lfs -text
 *.bin filter=lfs diff=lfs merge=lfs -text
+
+# Text formats the tools regenerate: pin to LF so they don't churn CRLF/LF diffs
+# across Windows/macOS. The serializer also emits LF (see ActorSpecs.JsonOptions).
+*.json text eol=lf
+
+# The macOS .framework slice is a versioned bundle whose top-level SDL3 is a *symlink*
+# into Versions/A/SDL3 (the real binary, LFS-tracked separately). The broad
+# "*/SDL3.framework/SDL3" LFS glob above catches it, and on Windows (core.symlinks=false)
+# git materializes the symlink as a text file, so the LFS clean filter rewrites it into a
+# pointer and it shows as perpetually modified. Un-set LFS for that symlink path.
+Myth/Platforms/iOS/Native/SDL3.xcframework/macos-arm64_x86_64/SDL3.framework/SDL3 -filter -diff -merge -text
