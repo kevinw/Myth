@@ -62,6 +62,25 @@ public partial class Game
 		}
 	}
 
+	// Set a numeric FMOD parameter on a live instance. Guarded + logged-once so callers
+	// can drive parameters that may not be authored in the event yet (FMOD throws on an
+	// unknown parameter) without spamming or crashing.
+	public void SetAudioEventParameter(SoundInstance? instance, string name, float value)
+	{
+		if (instance == null || !Audio.Initialized)
+			return;
+
+		try
+		{
+			instance.SetParameter(name, value);
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add($"param:{name}"))
+				Console.Error.WriteLine($"Failed to set FMOD parameter '{name}': {e}");
+		}
+	}
+
 	public void SetAudioEventPosition(SoundInstance? instance, Vector2 position, Vector2? relativeTo = null)
 	{
 		if (instance == null || !Audio.Initialized)

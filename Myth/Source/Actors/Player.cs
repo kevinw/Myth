@@ -238,6 +238,7 @@ public abstract class Pawn : Actor
 
 		var didRun = false;
 		var didStartRunning = false;
+		string? jumpAnim = null;
 		if (grounded)
 		{
 			if (ducking)
@@ -280,16 +281,17 @@ public abstract class Pawn : Actor
 			}
 			else if (JumpUpSquish > 0 && !grounded)
 			{
-				Play("jump_squish");
+				jumpAnim = "jump_squish";
 			}
 			else
 			{
 				if (Velocity.X != 0 && moveX != 0 && Math.Sign(Velocity.X) != Math.Sign(moveX))
-					Play("jump_turn");
+					jumpAnim = "jump_turn";
 				else
-					Play("jump");
+					jumpAnim = "jump";
 			}
 		}
+
 
 		if (!didRun)
 		{
@@ -351,11 +353,39 @@ public abstract class Pawn : Actor
 			OnPawnJump();
 		}
 
+		// Dive plays while holding jump and falling toward the ground (the burrow approach).
+		// Use JumpDown (held), not jumpPressed — jumpPressed is only true the single frame
+		// the button goes down, which is what made the dive flicker on for one frame then
+		// revert to the jump anim. Falling is Velocity.Y > 0 here (gravity adds to Y).
+		// Gate on CanBurrow() so the pose only shows when a burrow can actually result
+		// (not during the cooldown or before we've re-grounded).
+		bool jumpAnimLooping = true;
+		if (!grounded && input.JumpDown && Velocity.Y > -30 && CanBurrow())
+		{
+			jumpAnim = "dive";
+			jumpAnimLooping = false;
+		}
+
+		if (jumpAnim != null)
+		{
+			Play(jumpAnim, looping: jumpAnimLooping);
+		}
+
 		if (input.DashPressed && TryStartDash(moveX))
 			return;
 
 		TryStartPawnAction(moveX);
 	}
+
+	protected float burrowTimer = 0;
+	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
+	protected bool CanBurrow() {
+		if (burrowNeedsGrounding) return false;
+		if (burrowTimer < 0) return false; // the ability is still cooling down
+		if (State != States.Normal) return false;
+		return true;
+	}
+
 
 	protected void TryStartRoll(Vector2 impactVelocity)
 	{
@@ -589,7 +619,6 @@ public partial class Player : Pawn
 	const float BurrowExitGrace = 0.1f;        // suppress the landing squish briefly so the pop squish survives
 	const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
 
-	private float burrowTimer = 0;
 	private float burrowEnterTimer;
 	private float burrowExitTimer;
 	private Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
@@ -662,7 +691,7 @@ public partial class Player : Pawn
 
 	protected override void OnLanded(Vector2 previousVelocity)
 	{
-		if (input.JumpDown)
+		if (input.JumpDown && !burrowNeedsGrounding)
 		{
 			TryStartBurrow(previousVelocity);
 			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
@@ -683,6 +712,8 @@ public partial class Player : Pawn
 
 	protected override void AfterStateUpdate(Vector2 previousVelocity)
 	{
+		if (burrowNeedsGrounding && grounded)
+			burrowNeedsGrounding = false;
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
@@ -768,8 +799,7 @@ public partial class Player : Pawn
 
 	void TryStartBurrow(Vector2 previousVelocity)
 	{
-		if (burrowTimer < 0) return; // the ability is still cooling down
-		if (State != States.Normal) return;
+		if (!CanBurrow()) return;
 
 		Hitbox = new(BurrowHitboxRect);
 		burrowToward = Vector2.UnitY;
@@ -808,9 +838,9 @@ public partial class Player : Pawn
 		StopAndReleaseSound(ref burrowSound);
 		burrowSound = Game.CreateAudioEvent("player/burrow", Position);
 		burrowSound?.Start();
+		UpdateBurrowAudio();
 
 		burrowStartCount += 1;
-		Game.DisplayMessage($"Burrow start count: {burrowStartCount}");
 	}
 
 	int burrowStartCount;
@@ -925,6 +955,7 @@ public partial class Player : Pawn
 
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
+		UpdateBurrowAudio();
 		Play("burrow");
 
 		if (input.MoveX != 0)
@@ -951,11 +982,12 @@ public partial class Player : Pawn
 		burrowExitOutward = -exitDir; // away from the surface; bias the unstick nudge this way
 		burrowGlow.Clear();
 		burrowTimer = -BurrowCooldown;
+		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
 
 		popOutCount += 1;
-		Game.DisplayMessage($"Pop out count: {popOutCount}");
+		// Game.DisplayMessage($"Pop out count: {popOutCount}");
 
 	}
 
@@ -1116,6 +1148,24 @@ public partial class Player : Pawn
 	}
 
 	private void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
+
+	// Drive the burrow loop from the motion every frame so it can breathe instead of
+	// playing a flat tone. Keep the event centered on the listener as we travel (mirrors
+	// the roll sound) — otherwise it stays pinned to the entry point and pans away — and
+	// expose Speed/Climb so the FMOD event can swell/brighten with glide speed and add
+	// tension while scaling a wall. The parameters are no-ops until authored in Studio.
+	private void UpdateBurrowAudio()
+	{
+		if (burrowSound == null)
+			return;
+
+		Game.SetAudioEventPosition(burrowSound, Position, Game.GetFirst(Masks.Player)?.Position);
+
+		var speed01 = BurrowMaxSpeed > 0 ? burrowSpeed / BurrowMaxSpeed : 0f;
+		var climb = MathF.Max(0, -burrowHeading.Y);
+		Game.SetAudioEventParameter(burrowSound, "Speed", speed01);
+		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
+	}
 
 	private void UpdateFootsteps()
 	{

@@ -33,8 +33,8 @@ public class Controls(Input input)
 
 	public readonly VirtualAction Dash = new(input, "Dash",
 		new ActionBindingSet()
-			.Add(Keys.F)
-			.Add(Axes.RightTrigger, 1, 0.25f)
+			//.Add(Keys.F)
+			//.Add(Axes.RightTrigger, 1, 0.25f)
 	);
 
 	public readonly VirtualAction Saw = new(input, "Saw",
@@ -46,7 +46,7 @@ public class Controls(Input input)
 	public readonly VirtualAction Zoom = new(input, "Zoom",
 		new ActionBindingSet()
 			.Add(Keys.X)
-			.Add(Buttons.LeftShoulder)
+			.Add(Buttons.LeftStick)
 	);
 
 	public readonly VirtualAction Die = new(input, "Die",

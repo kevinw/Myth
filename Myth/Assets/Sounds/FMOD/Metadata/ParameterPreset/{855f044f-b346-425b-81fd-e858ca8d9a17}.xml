@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{855f044f-b346-425b-81fd-e858ca8d9a17}">
+		<property name="name">
+			<value>Climb</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{2422703b-0ff9-4986-9033-dd3b013be263}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{2422703b-0ff9-4986-9033-dd3b013be263}">
+		<property name="initialValue">
+			<value>0</value>
+		</property>
+	</object>
+</objects>
