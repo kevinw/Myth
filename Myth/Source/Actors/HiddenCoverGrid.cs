@@ -185,12 +185,14 @@ public class HiddenCoverGrid : Actor
 		var playerBounds = player.Hitbox.Rect + player.Position - Position;
 		var revealedAny = false;
 		var newlyRevealedDoorIds = new List<string>();
+		var newlyRevealedRegions = new HashSet<int>();
 		foreach (var (rect, regionId) in triggers)
 		{
 			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f && playerBounds.Overlaps(rect))
 			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
 				newlyRevealedDoorIds.AddRange(MarkRegionRevealed(regionId));
+				newlyRevealedRegions.Add(regionId);
 				revealedAny = true;
 			}
 		}
@@ -208,6 +210,7 @@ public class HiddenCoverGrid : Actor
 			{
 				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
 				newlyRevealedDoorIds.AddRange(MarkRegionRevealed(regionId));
+				newlyRevealedRegions.Add(regionId);
 				revealedAny = true;
 			}
 		}
@@ -217,7 +220,38 @@ public class HiddenCoverGrid : Actor
 			Game.PlayAudioEvent("reveal", position: player.Position);
 			foreach (var id in newlyRevealedDoorIds.Distinct(StringComparer.OrdinalIgnoreCase))
 				Game.NotifyPlayerEnteredRevealDoor(id, player.Position);
+			// A revealed area that overlaps a camera blocker opens the camera there too.
+			foreach (var regionId in newlyRevealedRegions)
+				if (RegionWorldBounds(regionId) is { Width: > 0 } area)
+					Game.RevealCameraBlockersOverlapping(area);
 		}
+	}
+
+	// World-space bounding rect of a region's covered tiles (empty if the region has none).
+	private RectInt RegionWorldBounds(int regionId)
+	{
+		var minX = int.MaxValue;
+		var minY = int.MaxValue;
+		var maxX = int.MinValue;
+		var maxY = int.MinValue;
+		for (var y = 0; y < size.Y; y ++)
+		for (var x = 0; x < size.X; x ++)
+			if (coverRegions[x, y] == regionId)
+			{
+				minX = Math.Min(minX, x);
+				minY = Math.Min(minY, y);
+				maxX = Math.Max(maxX, x);
+				maxY = Math.Max(maxY, y);
+			}
+
+		if (minX > maxX)
+			return new RectInt();
+
+		return new RectInt(
+			Position.X + minX * Game.TileSize,
+			Position.Y + minY * Game.TileSize,
+			(maxX - minX + 1) * Game.TileSize,
+			(maxY - minY + 1) * Game.TileSize);
 	}
 
 	private List<string> MarkRegionRevealed(int regionId)

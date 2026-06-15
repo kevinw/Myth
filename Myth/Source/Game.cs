@@ -186,6 +186,15 @@ public partial class Game : IDisposable
 
 	public Vector2 Camera { get; private set; }
 	private Vector2 RenderCamera => (Point2)Camera - shake;
+	// The camera hard-follows the player, except a discontinuity in the clamp target (a blocker
+	// cap toggling as you cross a bite's span, or a blocker revealing) is absorbed into a
+	// decaying error so the view glides over the jump instead of snapping.
+	private Vector2 cameraError;
+	private Vector2? previousCameraTarget;
+	private Vector2 previousPlayerPosition;
+	private static float CameraEaseRate => 10f;
+	private const float CameraEaseTriggerEpsilon = 2f;
+	private readonly List<RectInt> cameraBlockerBuffer = [];
 	private float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
 	private float ZoomedWidth => Width / zoomLevel;
@@ -469,7 +478,47 @@ public partial class Game : IDisposable
 		if (MathF.Abs(fbZoom - fbZoomTarget) < 0.005f)
 			fbZoom = fbZoomTarget;
 
-		Camera = GetGameplayCameraTarget();
+		var target = GetGameplayCameraTarget();
+		var player = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
+
+		// A static clamp moves the target at most as far as the player moved on each axis, so
+		// any excess this frame is a discontinuity (a cap toggling / a reveal). Fold that excess
+		// into the error and let it decay, gliding the view across the jump.
+		if (previousCameraTarget is { } prev)
+		{
+			var targetDelta = target - prev;
+			var playerDelta = player - previousPlayerPosition;
+			if (MathF.Abs(targetDelta.X) - MathF.Abs(playerDelta.X) > CameraEaseTriggerEpsilon)
+				cameraError.X -= targetDelta.X - playerDelta.X;
+			if (MathF.Abs(targetDelta.Y) - MathF.Abs(playerDelta.Y) > CameraEaseTriggerEpsilon)
+				cameraError.Y -= targetDelta.Y - playerDelta.Y;
+		}
+
+		cameraError *= MathF.Exp(-Time.Delta * CameraEaseRate);
+		if (cameraError.LengthSquared() < 0.25f)
+			cameraError = Vector2.Zero;
+
+		Camera = target + cameraError;
+		previousCameraTarget = target;
+		previousPlayerPosition = player;
+	}
+
+	// Deactivate any active camera blocker whose rect the just-revealed area overlaps, so a
+	// RevealDoor opening also opens the camera over the secret it uncovered.
+	public void RevealCameraBlockersOverlapping(RectInt worldArea)
+	{
+		foreach (var actor in Actors)
+			if (actor is CameraBlocker { Active: true } blocker && blocker.WorldRect.Overlaps(worldArea))
+				blocker.Deactivate();
+	}
+
+	private List<RectInt> ActiveCameraBlockers()
+	{
+		cameraBlockerBuffer.Clear();
+		foreach (var actor in Actors)
+			if (actor is CameraBlocker { Active: true } blocker)
+				cameraBlockerBuffer.Add(blocker.WorldRect);
+		return cameraBlockerBuffer;
 	}
 
 	private void UpdatePlayerMouseDrag()
@@ -543,11 +592,63 @@ public partial class Game : IDisposable
 
 		var unclamped = player.Position - new Vector2(Width, Height) / 2;
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		return ClampCameraToRoomFb(unclamped, padding);
+
+		var blockers = ActiveCameraBlockers();
+		if (blockers.Count == 0)
+			return ClampCameraToRoomFb(unclamped, padding);
+
+		// Clamp the zoomed view (Camera + padding) against the room minus the active blockers,
+		// then convert back to the Camera top-left.
+		var viewSize = new Vector2(FbZoomedWidth, FbZoomedHeight);
+		return ClampViewToRoomAndBlockers(unclamped + padding, viewSize, player.Position, blockers) - padding;
+	}
+
+	// Confine the zoomed view to the room with edge-anchored "bites" removed. A bite caps the
+	// view on an axis only while the *player* is within the bite's span on the perpendicular
+	// axis. That way a bite only ever hides its own interior -- which the player can't stand in
+	// (entering deactivates it) -- so it can never trap the camera away from the player in a
+	// narrow arm beside it, regardless of orientation or exact arm width.
+	private Vector2 ClampViewToRoomAndBlockers(Vector2 viewPos, Vector2 viewSize, Vector2 player, List<RectInt> blockers)
+	{
+		if (room == null)
+			return viewPos;
+
+		var bounds = room.WorldBounds;
+		var minX = (float)bounds.Left;
+		var maxX = bounds.Right - viewSize.X;
+		var minY = (float)bounds.Top;
+		var maxY = bounds.Bottom - viewSize.Y;
+
+		foreach (var b in blockers)
+		{
+			// Player beside the bite (within its Y span) -> cap horizontally toward it.
+			if (player.Y >= b.Top && player.Y < b.Bottom)
+			{
+				if (b.Left <= bounds.Left) minX = MathF.Max(minX, b.Right);
+				if (b.Right >= bounds.Right) maxX = MathF.Min(maxX, b.Left - viewSize.X);
+			}
+			// Player above/below the bite (within its X span) -> cap vertically toward it.
+			if (player.X >= b.Left && player.X < b.Right)
+			{
+				if (b.Top <= bounds.Top) minY = MathF.Max(minY, b.Bottom);
+				if (b.Bottom >= bounds.Bottom) maxY = MathF.Min(maxY, b.Top - viewSize.Y);
+			}
+		}
+
+		// If a bite leaves the arm narrower than the view on an axis, center on it (the
+		// "locked" feel) -- mirrors ClampCameraAxis's room-smaller-than-viewport case.
+		viewPos.X = minX <= maxX ? Math.Clamp(viewPos.X, minX, maxX) : (minX + maxX) * 0.5f;
+		viewPos.Y = minY <= maxY ? Math.Clamp(viewPos.Y, minY, maxY) : (minY + maxY) * 0.5f;
+		return viewPos;
 	}
 
 	public void SnapCameraToGameplayTarget()
-		=> Camera = GetGameplayCameraTarget();
+	{
+		cameraError = Vector2.Zero;
+		Camera = GetGameplayCameraTarget();
+		previousCameraTarget = Camera;
+		previousPlayerPosition = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
+	}
 
 	private Vector2 ClampCameraToRoom(Vector2 target)
 	{

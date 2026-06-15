@@ -1416,14 +1416,9 @@ public partial class Manager
 		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var position = room.WorldBounds.TopLeft + local;
 		var resolved = ActorSpecs.Resolve(actor);
-		if (ActorSpecs.ReadString(resolved, "Type") == "HiddenWall")
+		if (ResizableRoomRectTypes.TryGetValue(ActorSpecs.ReadString(resolved, "Type") ?? "", out var defaultSize))
 		{
-			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? HiddenWall.DefaultSize;
-			return new RectInt(position.X, position.Y, size.X, size.Y);
-		}
-		if (ActorSpecs.ReadString(resolved, "Type") == "RevealDoor")
-		{
-			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? RevealDoor.DefaultSize;
+			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? defaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
 
@@ -1442,16 +1437,21 @@ public partial class Manager
 	private static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
 
-	private static bool IsResizableRoomRectActor(JsonObject actor)
+	// Actor types that author as a tile-snapped room rect, sharing the resize-handle UI.
+	// Maps type name -> default size for a freshly placed instance.
+	private static readonly Dictionary<string, Point2> ResizableRoomRectTypes = new()
 	{
-		var type = ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type");
-		return type is "HiddenWall" or "RevealDoor";
-	}
+		["HiddenWall"] = HiddenWall.DefaultSize,
+		["RevealDoor"] = RevealDoor.DefaultSize,
+		["CameraBlocker"] = CameraBlocker.DefaultSize,
+	};
+
+	private static bool IsResizableRoomRectActor(JsonObject actor)
+		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "");
 
 	private static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor"
-			? RevealDoor.DefaultSize
-			: HiddenWall.DefaultSize;
+		=> ResizableRoomRectTypes.GetValueOrDefault(
+			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", HiddenWall.DefaultSize);
 
 	private static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
 	{
@@ -1476,6 +1476,32 @@ public partial class Manager
 				return i;
 
 		return -1;
+	}
+
+	// A subtle screen-sized grid for orientation when zoomed far enough out to see several
+	// gameplay screens at once. It's a fixed world grid anchored at the origin (a line passes
+	// through 0,0), spaced one gameplay screen apart -- independent of any room's size or
+	// position.
+	private void DrawEditorScreenGrid(Rect visibleWorld)
+	{
+		const float minScreensVisible = 3f;
+		float screenW = Game.Width;
+		float screenH = Game.Height;
+		if (MathF.Max(visibleWorld.Width / screenW, visibleWorld.Height / screenH) < minScreensVisible)
+			return;
+
+		var weight = 1.0f / editorZoom;
+		var color = Color.Gray * 0.22f;
+
+		var left = visibleWorld.X;
+		var top = visibleWorld.Y;
+		var right = visibleWorld.X + visibleWorld.Width;
+		var bottom = visibleWorld.Y + visibleWorld.Height;
+
+		for (var x = MathF.Floor(left / screenW) * screenW; x <= right; x += screenW)
+			batcher.Line(new Vector2(x, top), new Vector2(x, bottom), weight, color);
+		for (var y = MathF.Floor(top / screenH) * screenH; y <= bottom; y += screenH)
+			batcher.Line(new Vector2(left, y), new Vector2(right, y), weight, color);
 	}
 
 	private void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
@@ -2688,6 +2714,7 @@ public partial class Manager
 			inner.Size / editorZoom);
 		batcher.PushMatrix(worldMatrix);
 		DrawEditorRooms(visibleWorld);
+		DrawEditorScreenGrid(visibleWorld);
 
 		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
 		if (UpdateLinkedDoorTargetPicker(inner, visibleWorld, worldMouseBlocked, keyboardBlocked))
