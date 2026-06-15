@@ -5,6 +5,11 @@
     "toTag": "jump"
   },
   {
+    "spriteName": "blob",
+    "fromTag": "jump",
+    "toTag": "idle"
+  },
+  {
     "spriteName": "bud",
     "fromTag": "crawl",
     "toTag": "duck"
@@ -451,6 +456,11 @@
   },
   {
     "spriteName": "player",
+    "fromTag": "hurt",
+    "toTag": "wall_slide"
+  },
+  {
+    "spriteName": "player",
     "fromTag": "idle",
     "toTag": "attack"
   },
@@ -563,6 +573,11 @@
     "spriteName": "player",
     "fromTag": "jump",
     "toTag": "wall_slide"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_squish",
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
