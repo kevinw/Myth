@@ -45,6 +45,62 @@ static class Inbetweens
 		return (frames, durations);
 	}
 
+	/// <summary>
+	/// Expands a frame timeline by inserting in-between frames after selected
+	/// original frames. <paramref name="spec"/>[i] says how many in-betweens to
+	/// insert after original frame i and which frame they warp toward (Target);
+	/// a Count of 0 passes frame i through unchanged. Returns the expanded
+	/// frames, their durations (seconds), and a map from each original frame
+	/// index to its position in the expanded timeline.
+	/// </summary>
+	public static (Image[] Frames, float[] Durations, int[] OrigToExpanded) GenerateExpanded(
+		Image[] frames, float[] durationsSec, (int Count, int Target)[] spec)
+	{
+		int n = frames.Length;
+
+		// Compute flow only for pairs that actually need in-betweens (the
+		// expensive step; warps are cheap by comparison).
+		var flows = new Vector2[n][,];
+		Parallel.For(0, n, i =>
+		{
+			if (spec[i].Count > 0)
+				flows[i] = ComputeFlow(frames[i], frames[spec[i].Target]);
+		});
+
+		var outFrames = new List<Image>(n);
+		var outDurations = new List<float>(n);
+		var map = new int[n];
+
+		for (int i = 0; i < n; i++)
+		{
+			map[i] = outFrames.Count;
+
+			int c = spec[i].Count;
+			if (c <= 0)
+			{
+				outFrames.Add(frames[i]);
+				outDurations.Add(durationsSec[i]);
+				continue;
+			}
+
+			// Split this frame's duration across itself + its in-betweens so the
+			// animation plays back at the same wall-clock speed.
+			float sub = durationsSec[i] / (c + 1);
+			outFrames.Add(frames[i]);
+			outDurations.Add(sub);
+
+			var flow = flows[i];
+			for (int j = 1; j <= c; j++)
+			{
+				float t = j / (float)(c + 1);
+				outFrames.Add(Warp(frames[i], flow, t));
+				outDurations.Add(sub);
+			}
+		}
+
+		return (outFrames.ToArray(), outDurations.ToArray(), map);
+	}
+
 	private static (Image[] Frames, float[] Durations)? GenerateBench(
 		string name, Image[] frames, Aseprite ase, int count)
 	{

@@ -41,14 +41,17 @@ public static class Assets
 	}
 
 
-	// Per-sprite inbetween frame count (0 = none)
-	private static readonly Dictionary<string, int> SpriteInbetweens = new()
-	{
-		{ "ghostfrog", 4 },
-		{ "player", 4 },
-		{ "spitter", 4 },
-		{ "mosquito", 4 },
-	};
+	// Within-animation in-betweens whitelist: (sprite, tag) -> frame count.
+	// A tag of "*" applies to every tag of that sprite. Loaded from
+	// inbetweens.json; empty means no within-animation in-betweens are baked.
+	private static readonly Dictionary<(string Sprite, string Tag), int> InbetweenAnimations = new();
+
+	// Transition in-betweens whitelist: (sprite, from, to) -> frame count.
+	// This is the source of truth for baking transitions. anim_transitions.json
+	// / Actor.TransitionCounts remain discovery-only (candidates to promote here).
+	private static readonly Dictionary<(string Sprite, string From, string To), int> InbetweenTransitions = new();
+
+	public static string INBETWEENS_JSON_FILENAME => Path.Join(AssetsPath, "inbetweens.json");
 
 	public static string ANIM_TRANSITIONS_JSON_FILENAME => Path.Join(AssetsPath, "anim_transitions.json");
 
@@ -62,6 +65,11 @@ public static class Assets
 
 	// Expanded frame durations for sprites with inbetweens
 	private static readonly Dictionary<string, float[]> ExpandedFrameDurations = new();
+
+	// Maps original frame index -> index in the expanded (in-betweened) timeline,
+	// for sprites that had within-animation in-betweens baked. Replaces the old
+	// uniform "tag.From * (count + 1)" math now that counts vary per tag.
+	private static readonly Dictionary<string, int[]> ExpandedFrameMap = new();
 
 	private const string assetsFolderName = "Assets";
 	private const string roomsFolderName = "Rooms";
@@ -151,7 +159,10 @@ public static class Assets
 
 		Actor.TransitionCounts.Clear();
 		GeneratedTransitions.Clear();
+		ExpandedFrameDurations.Clear();
+		ExpandedFrameMap.Clear();
 		LoadTransitionData();
+		LoadInbetweenConfig();
 
 		// load main font file
 #if !BROWSER
@@ -212,51 +223,13 @@ public static class Assets
 			foreach (var (name, ase) in spriteFiles)
 			{
 				var frames = ase.RenderAllFrames();
-				if (SpriteInbetweens.TryGetValue(name, out var ibCount) && ibCount > 0
-					&& Inbetweens.Generate(name, frames, ase, ibCount) is var exp && exp.HasValue)
-				{
-					var (expFrames, expDurations) = exp.Value;
-					ExpandedFrameDurations[name] = expDurations;
-					for (int i = 0; i < expFrames.Length; i++)
-					{
-						packer.Add($"{name}/{i}", expFrames[i]);
-						packer.Add($"{name}/normal/{i}", GenerateNormalMap(expFrames[i]));
-					}
-				}
-				else
-				{
-					for (int i = 0; i < frames.Length; i++)
-					{
-						packer.Add($"{name}/{i}", frames[i]);
-						packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
-					}
-				}
-
-				GenerateTransitionFrames(name, ase, frames, ibCount, packer);
+				PackSpriteFrames(name, ase, frames, packer);
 			}
 
 			foreach (var (name, ase, layerFilter) in generatedSprites)
 			{
 				var frames = ase.RenderAllFrames(layerFilter());
-				if (SpriteInbetweens.TryGetValue(name, out var ibCount) && ibCount > 0
-					&& Inbetweens.Generate(name, frames, ase, ibCount) is var exp && exp.HasValue)
-				{
-					var (expFrames, expDurations) = exp.Value;
-					ExpandedFrameDurations[name] = expDurations;
-					for (int i = 0; i < expFrames.Length; i++)
-					{
-						packer.Add($"{name}/{i}", expFrames[i]);
-						packer.Add($"{name}/normal/{i}", GenerateNormalMap(expFrames[i]));
-					}
-				}
-				else
-				{
-					for (int i = 0; i < frames.Length; i++)
-					{
-						packer.Add($"{name}/{i}", frames[i]);
-						packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
-					}
-				}
+				PackSpriteFrames(name, ase, frames, packer);
 			}
 
 			foreach (var (name, ase) in tilesetFiles)
@@ -906,24 +879,141 @@ public static class Assets
 		}
 	}
 
-	private static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, int ibCount, Packer packer)
+	// Loads the in-betweens whitelist (within-animation + transitions) from
+	// inbetweens.json. This is the source of truth for what gets baked.
+	private static void LoadInbetweenConfig()
 	{
-		var ownTransitions = TransitionPairs
-			.Where(kv => kv.Key.SpriteName == name && kv.Value > 0)
+		InbetweenAnimations.Clear();
+		InbetweenTransitions.Clear();
+
+		var path = INBETWEENS_JSON_FILENAME;
+		if (!File.Exists(path))
+			return;
+
+		try
+		{
+			using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
+			var root = doc.RootElement;
+
+			if (root.TryGetProperty("animations", out var anims) && anims.ValueKind == JsonValueKind.Array)
+			{
+				foreach (var item in anims.EnumerateArray())
+				{
+					var sprite = item.TryGetProperty("sprite", out var s) ? s.GetString() : null;
+					var tag = item.TryGetProperty("tag", out var t) ? t.GetString() : "*";
+					int count = item.TryGetProperty("count", out var c) ? c.GetInt32() : 0;
+					if (sprite != null && tag != null && count > 0)
+						InbetweenAnimations[(sprite, tag)] = count;
+				}
+			}
+
+			if (root.TryGetProperty("transitions", out var trans) && trans.ValueKind == JsonValueKind.Array)
+			{
+				foreach (var item in trans.EnumerateArray())
+				{
+					var sprite = item.TryGetProperty("sprite", out var s) ? s.GetString() : null;
+					var from = item.TryGetProperty("from", out var f) ? f.GetString() : null;
+					var to = item.TryGetProperty("to", out var tt) ? tt.GetString() : null;
+					int count = item.TryGetProperty("count", out var c) ? c.GetInt32() : 0;
+					if (sprite != null && from != null && to != null && count > 0)
+						InbetweenTransitions[(sprite, from, to)] = count;
+				}
+			}
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load {path}: {e.Message}");
+		}
+	}
+
+	// Expands the frames of one sprite (inserting whitelisted within-animation
+	// in-betweens) and packs them, then bakes any whitelisted transitions.
+	private static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Packer packer)
+	{
+		if (TryBuildInbetweenSpec(name, ase, frames.Length, out var spec, out var durationsSec))
+		{
+			var (expFrames, expDurations, map) = Inbetweens.GenerateExpanded(frames, durationsSec, spec);
+			ExpandedFrameDurations[name] = expDurations;
+			ExpandedFrameMap[name] = map;
+			for (int i = 0; i < expFrames.Length; i++)
+			{
+				packer.Add($"{name}/{i}", expFrames[i]);
+				packer.Add($"{name}/normal/{i}", GenerateNormalMap(expFrames[i]));
+			}
+		}
+		else
+		{
+			for (int i = 0; i < frames.Length; i++)
+			{
+				packer.Add($"{name}/{i}", frames[i]);
+				packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+			}
+		}
+
+		GenerateTransitionFrames(name, ase, frames, packer);
+	}
+
+	// Builds the per-frame in-between spec for a sprite from the InbetweenAnimations
+	// whitelist. spec[i] = (count, target) describes in-betweens inserted after
+	// original frame i. Returns false (and leaves the sprite unexpanded) when no
+	// tag of this sprite is whitelisted.
+	private static bool TryBuildInbetweenSpec(
+		string name, Aseprite ase, int frameCount,
+		out (int Count, int Target)[] spec, out float[] durationsSec)
+	{
+		spec = new (int Count, int Target)[frameCount];
+		durationsSec = new float[frameCount];
+		for (int i = 0; i < frameCount; i++)
+			durationsSec[i] = ase.Frames[i].Duration / 1000f;
+
+		int wildcard = InbetweenAnimations.TryGetValue((name, "*"), out var w) ? w : 0;
+		bool any = false;
+
+		foreach (var tag in ase.Tags)
+		{
+			if (string.IsNullOrEmpty(tag.Name))
+				continue;
+
+			int count = InbetweenAnimations.TryGetValue((name, tag.Name), out var c) ? c : wildcard;
+			if (count <= 0)
+				continue;
+
+			// In-betweens between each consecutive pair within the tag.
+			for (int i = tag.From; i < tag.To && i + 1 < frameCount; i++)
+			{
+				spec[i] = (count, i + 1);
+				any = true;
+			}
+
+			// Looping tags also morph the last frame back to the first.
+			if (tag.Repeat == 0 && tag.To > tag.From && tag.To < frameCount)
+			{
+				spec[tag.To] = (count, tag.From);
+				any = true;
+			}
+		}
+
+		return any;
+	}
+
+	private static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Packer packer)
+	{
+		var ownTransitions = InbetweenTransitions
+			.Where(kv => kv.Key.Sprite == name && kv.Value > 0)
 			.ToList();
 
 		if (ownTransitions.Count == 0)
 			return;
 
 		// Resolve tag indices for all pairs (sequential, quick)
-		var pairs = new List<(string FromTag, string ToTag, int FromIdx, int ToIdx)>();
-		foreach (var (key, _) in ownTransitions)
+		var pairs = new List<(string FromTag, string ToTag, int FromIdx, int ToIdx, int Count)>();
+		foreach (var (key, count) in ownTransitions)
 		{
 			Aseprite.Tag? fromTag = null, toTag = null;
 			foreach (var tag in ase.Tags)
 			{
-				if (tag.Name == key.FromTag) fromTag = tag;
-				if (tag.Name == key.ToTag) toTag = tag;
+				if (tag.Name == key.From) fromTag = tag;
+				if (tag.Name == key.To) toTag = tag;
 			}
 			if (fromTag == null || toTag == null)
 				continue;
@@ -934,19 +1024,18 @@ public static class Assets
 			if (fromLastIdx >= frames.Length || toFirstIdx >= frames.Length)
 				continue;
 
-			pairs.Add((key.FromTag, key.ToTag, fromLastIdx, toFirstIdx));
+			pairs.Add((key.From, key.To, fromLastIdx, toFirstIdx, count));
 		}
 
 		if (pairs.Count == 0)
 			return;
 
 		// Generate all in-betweens in parallel (ComputeFlow / Warp are pure, thread-safe)
-		var transCount = 5;
 		var results = new (Image[] Frames, float[] Durations)?[pairs.Count];
 		Parallel.For(0, pairs.Count, i =>
 		{
 			var p = pairs[i];
-			results[i] = Inbetweens.GenerateForPair(frames[p.FromIdx], frames[p.ToIdx], transCount);
+			results[i] = Inbetweens.GenerateForPair(frames[p.FromIdx], frames[p.ToIdx], p.Count);
 		});
 
 		// Pack results sequentially (packer.Add is not thread-safe)
@@ -1018,15 +1107,15 @@ public static class Assets
 			if (string.IsNullOrEmpty(tag.Name))
 				continue;
 
-			// Compute animation frame range in expanded space:
-			// Original frames are at indices [tag.From * (inbetweens+1), (tag.To+1) * (inbetweens+1) - 1]
-			// if expanded. Otherwise use original indices.
+			// Compute animation frame range in expanded space. Counts vary per
+			// tag, so map original tag bounds through the expansion offset map;
+			// the range runs up to where the next original frame landed.
 			int animFrom, animCount;
-			if (useExpanded && SpriteInbetweens.TryGetValue(name, out var ibCount) && ibCount > 0)
+			if (useExpanded && ExpandedFrameMap.TryGetValue(name, out var map))
 			{
-				var step = ibCount + 1;
-				animFrom = tag.From * step;
-				animCount = (tag.To - tag.From + 1) * step;
+				animFrom = map[tag.From];
+				int animEnd = tag.To + 1 < map.Length ? map[tag.To + 1] : frameCount;
+				animCount = animEnd - animFrom;
 			}
 			else
 			{

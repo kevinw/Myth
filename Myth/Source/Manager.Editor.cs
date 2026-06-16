@@ -3620,6 +3620,7 @@ public partial class Manager
 		};
 		assetWatcher.Filters.Add("*.ase");
 		assetWatcher.Filters.Add("*.aseprite");
+		assetWatcher.Filters.Add("inbetweens.json");
 
 		assetWatcher.Changed += (_, _) => RequestAssetReload();
 		assetWatcher.Created += (_, _) => RequestAssetReload();
