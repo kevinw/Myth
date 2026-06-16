@@ -11,6 +11,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherSettings;
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
+    float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
 };
 
 Texture2D Texture : register(t0, space2);
@@ -27,6 +28,12 @@ SamplerState DitherMaskSampler : register(s3, space2);
 
 Texture2D EmissiveTexture : register(t4, space2);
 SamplerState EmissiveSampler : register(s4, space2);
+
+Texture2D AoTexture : register(t5, space2);
+SamplerState AoSampler : register(s5, space2);
+
+Texture2D BackgroundCoverageTexture : register(t6, space2);
+SamplerState BackgroundCoverageSampler : register(s6, space2);
 
 struct VsInput
 {
@@ -287,12 +294,28 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float2 sample = target_uv(input.tex_coord);
     float4 scene = Texture.Sample(Sampler, sample) * input.color;
+
     float4 light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
     float4 emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position) / zoom;
+
+    // Ambient occlusion: darken the light where blurred foreground coverage
+    // overhangs background tiles. Applied to the light buffer before the dither
+    // quantizer so the occlusion breaks up into the same dither patterns as the
+    // rest of the lighting, with AoSettings.w as a floor so it never fully vanishes.
+    if (AoSettings.x > 0.0)
+    {
+        float2 ao_uv = sample + AoSettings.yz / TextureSizeCamera.xy;
+        float occlusion = saturate(AoTexture.Sample(AoSampler, ao_uv).r * AoSettings.x);
+        // Gate by background tile coverage so the backdrop (which has no tiles)
+        // is never darkened - AO only lands on actual background tiles.
+        float coverage = BackgroundCoverageTexture.Sample(BackgroundCoverageSampler, sample).a;
+        light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
+    }
+
     light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;

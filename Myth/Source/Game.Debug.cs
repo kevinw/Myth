@@ -271,6 +271,7 @@ public partial class Game
 		reflectionDistortMaterial?.Reload();
 		tileFieldDebugMaterial?.Reload();
 		pixelSortGlitchMaterial?.Reload();
+		blurMaterial?.Reload();
 	}
 #endif
 }

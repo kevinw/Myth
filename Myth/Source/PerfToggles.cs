@@ -10,6 +10,7 @@ public static class PerfToggles
 	public static bool Crt = true;
 	public static bool Reflections = true;
 	public static bool LightingNoise = true;
+	public static bool AmbientOcclusion = true;
 
 	public static void UseSimpleDefaults()
 	{
@@ -21,6 +22,7 @@ public static class PerfToggles
 		Crt = false;
 		Reflections = false;
 		LightingNoise = false;
+		AmbientOcclusion = false;
 	}
 
 	public static void RevealOne(Game game, bool reveal)

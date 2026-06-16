@@ -43,6 +43,12 @@ public partial class Manager : App
 	internal const float LightingDitherStrengthDefault = 0.155f;
 	public float LightingDitherStrength = LightingDitherStrengthDefault;
 
+	// Ambient occlusion: background tiles darken beneath foreground overhangs.
+	public float AmbientOcclusionStrength = 1.0f;
+	public float AmbientOcclusionBlur = 8.0f;
+	public Vector2 AmbientOcclusionOffset = new(0, -3);
+	public float AmbientOcclusionMinVisibility = 0.35f;
+
 	/// <summary>
 	/// The room renderer / simulation.
 	/// </summary>

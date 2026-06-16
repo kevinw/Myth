@@ -25,7 +25,7 @@ struct fragment_main_in
 fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Texture [[texture(0)]], texture2d<float> TileFieldTexture [[texture(1)]], sampler Sampler [[sampler(0)]], sampler TileFieldSampler [[sampler(1)]], float4 gl_FragCoord [[position]])
 {
     fragment_main_out out = {};
-    float4 _427;
+    float4 _431;
     do
     {
         if (in.in_var_TEXCOORD4.x < (-1000.0))
@@ -36,7 +36,7 @@ fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], const
         float4 _147 = Texture.sample(Sampler, in.in_var_TEXCOORD0, level(0.0)) * in.in_var_TEXCOORD1;
         if (_132 <= 0.001000000047497451305389404296875)
         {
-            _427 = _147;
+            _431 = _147;
             break;
         }
         float4 _154 = TileFieldTexture.sample(TileFieldSampler, in.in_var_TEXCOORD0, level(0.0));
@@ -55,7 +55,7 @@ fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], const
         float _268 = fast::clamp(((_132 * smoothstep(0.2199999988079071044921875, 1.0, _132)) * 0.300000011920928955078125) + (((_132 * (powr(smoothstep(0.0, 0.949999988079071044921875, fast::clamp(1.0 - sqrt((_235 * _235) + (_238 * _238)), 0.0, 1.0)), 0.579999983310699462890625) * mix(0.4199999868869781494140625, 1.0, fract(sin(dot(floor(floor(_164 * float2(0.0500000007450580596923828125)) + float2(_168 * 2.0)), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875)))) * mix(0.2800000011920928955078125, 0.89999997615814208984375, fract(sin(dot(floor((_166 + _169) + float2(_156 * 31.0)), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875))) * mix(0.449999988079071044921875, 1.0, _191)), 0.0, 1.0);
         if (_268 <= 0.00200000009499490261077880859375)
         {
-            _427 = _147;
+            _431 = _147;
             break;
         }
         float2 _292;
@@ -113,35 +113,35 @@ fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], const
                 _330 = _329;
                 continue;
             }
-            float3 _364 = Texture.sample(Sampler, (in.in_var_TEXCOORD0 + ((_292 * (_336 + (((fract(sin(dot(floor((_166 + float2(_336 * 17.0)) + _169), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875) - 0.5) * _268) * 3.0))) / FragmentUniformBlock.TextureSizeCamera.xy)), level(0.0)).xyz;
-            float _365 = dot(_364, float3(0.2125999927520751953125, 0.715200006961822509765625, 0.072200000286102294921875));
-            bool _370;
+            float3 _366 = Texture.sample(Sampler, (in.in_var_TEXCOORD0 + ((_292 * (_336 + (((fract(sin(dot(floor((_166 + float2(_336 * 17.0)) + _169), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875) - 0.5) * _268) * 3.0))) / FragmentUniformBlock.TextureSizeCamera.xy)), level(0.0)).xyz;
+            float _367 = dot(_366, float3(0.2125999927520751953125, 0.715200006961822509765625, 0.072200000286102294921875));
+            bool _372;
             if (_322 > 0.5)
             {
-                _370 = _365 > _326;
+                _372 = _367 > _326;
             }
             else
             {
-                _370 = false;
+                _372 = false;
             }
-            bool _375;
+            bool _377;
             if (_322 <= 0.5)
             {
-                _375 = _365 < _326;
+                _377 = _367 < _326;
             }
             else
             {
-                _375 = false;
+                _377 = false;
             }
-            bool _377 = (!_370) ? _375 : true;
-            _327 = _377 ? _365 : _326;
-            _330 = select(_329, _364, bool3(_377));
+            bool _379 = (!_372) ? _377 : true;
+            _327 = _379 ? _367 : _326;
+            _330 = select(_329, _366, bool3(_379));
         }
-        float3 _421 = mix(_323, mix(_329, Texture.sample(Sampler, (in.in_var_TEXCOORD0 + (((_292.yx * float2(-1.0, 1.0)) * (((fract(sin(dot(floor(floor(_164 * float2(0.0416666679084300994873046875)) + float2(_168 * 5.0)), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875) - 0.5) * _268) * 7.0)) / FragmentUniformBlock.TextureSizeCamera.xy)), level(0.0)).xyz, float3(fast::clamp(_268 * 0.37999999523162841796875, 0.0, 1.0))), float3(fast::clamp(_268 * 1.35000002384185791015625, 0.0, 1.0) * mix(0.7799999713897705078125, 1.0, fract(sin(dot(floor(float2(floor(_293 * 0.5), _168 + (_155 * 23.0))), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875))));
-        _427 = float4(_421, _147.w);
+        float3 _425 = mix(_323, mix(_329, Texture.sample(Sampler, (in.in_var_TEXCOORD0 + (((_292.yx * float2(-1.0, 1.0)) * (((fract(sin(dot(floor(floor(_164 * float2(0.0416666679084300994873046875)) + float2(_168 * 5.0)), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875) - 0.5) * _268) * 7.0)) / FragmentUniformBlock.TextureSizeCamera.xy)), level(0.0)).xyz, float3(fast::clamp(_268 * 0.37999999523162841796875, 0.0, 1.0))), float3(fast::clamp(_268 * 1.35000002384185791015625, 0.0, 1.0) * mix(0.7799999713897705078125, 1.0, fract(sin(dot(floor(float2(floor(_293 * 0.5), _168 + (_155 * 23.0))), float2(127.09999847412109375, 311.70001220703125))) * 43758.546875))));
+        _431 = float4(_425, _147.w);
         break;
     } while(false);
-    out.out_var_SV_Target0 = _427;
+    out.out_var_SV_Target0 = _431;
     return out;
 }
 

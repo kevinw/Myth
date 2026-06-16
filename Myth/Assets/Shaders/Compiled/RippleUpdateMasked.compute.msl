@@ -29,7 +29,7 @@ struct type_Params
     uint OriginY;
 };
 
-kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_RippleState& SourceState [[buffer(1)]], device type_RWStructuredBuffer_RippleState& DestState [[buffer(2)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], device type_StructuredBuffer_RippleState& SourceState [[buffer(1)]], device type_RWStructuredBuffer_RippleState& DestState [[buffer(2)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     do
     {

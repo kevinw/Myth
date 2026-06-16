@@ -451,6 +451,7 @@ public partial class Manager
 			DrawRoomPaletteSection();
 			ImGui.Spacing();
 			DrawDitherPaletteSection();
+			DrawAmbientOcclusionSection();
 			ImGui.Spacing();
 			//DrawPreviewPaletteSection();
 
@@ -861,6 +862,30 @@ public partial class Manager
 		ImGui.TextUnformatted("Strength");
 		ImGui.SetNextItemWidth(-1);
 		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
+	}
+
+	private void DrawAmbientOcclusionSection()
+	{
+		if (!ImGui.CollapsingHeader("Ambient Occlusion"))
+			return;
+
+		ImGui.Checkbox("Enabled", ref PerfToggles.AmbientOcclusion);
+
+		ImGui.TextUnformatted("Strength");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##AmbientOcclusionStrength", ref AmbientOcclusionStrength, 0.0f, 4.0f);
+
+		ImGui.TextUnformatted("Blur");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##AmbientOcclusionBlur", ref AmbientOcclusionBlur, 0.0f, 32.0f);
+
+		ImGui.TextUnformatted("Offset (px)");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat2("##AmbientOcclusionOffset", ref AmbientOcclusionOffset, -16.0f, 16.0f);
+
+		ImGui.TextUnformatted("Min Visibility");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
 	}
 
 #if false

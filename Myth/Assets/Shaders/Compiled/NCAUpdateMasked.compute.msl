@@ -83,7 +83,7 @@ constant spvUnsafeArray<float, 3> _85 = spvUnsafeArray<float, 3>({ 0.125, 0.25, 
 constant spvUnsafeArray<spvUnsafeArray<float, 3>, 3> _86 = spvUnsafeArray<spvUnsafeArray<float, 3>, 3>({ spvUnsafeArray<float, 3>({ -0.125, -0.25, -0.125 }), spvUnsafeArray<float, 3>({ 0.0, 0.0, 0.0 }), spvUnsafeArray<float, 3>({ 0.125, 0.25, 0.125 }) });
 constant spvUnsafeArray<float, 16> _142 = spvUnsafeArray<float, 16>({ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
 
-kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_CellState& SourceState [[buffer(1)]], const device type_StructuredBuffer_float& Weights [[buffer(2)]], const device type_StructuredBuffer_float& Mask [[buffer(3)]], device type_RWStructuredBuffer_CellState& DestState [[buffer(4)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], device type_StructuredBuffer_CellState& SourceState [[buffer(1)]], device type_StructuredBuffer_float& Weights [[buffer(2)]], device type_StructuredBuffer_float& Mask [[buffer(3)]], device type_RWStructuredBuffer_CellState& DestState [[buffer(4)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     do
     {

@@ -86,6 +86,9 @@ public partial class Game : IDisposable
 	Target DitherMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	Target ReflectionMask { get; set; } = null!;
+	Target AoMask { get; set; } = null!;
+	Target AoBlurScratch { get; set; } = null!;
+	Target BackgroundCoverage { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
@@ -130,6 +133,7 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? tileFieldStampMaterial;
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
+	private readonly ReloadableMaterial? blurMaterial;
 	public bool GymBudDied;
 	public bool GymMode;
 	public Actor? GymTarget;
@@ -223,7 +227,8 @@ public partial class Game : IDisposable
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
-		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 5, uniformBufferCount: 1);
+		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 7, uniformBufferCount: 1);
+		blurMaterial = CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1);
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1);
 		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
@@ -304,6 +309,7 @@ public partial class Game : IDisposable
 		tileFieldStampMaterial?.Dispose();
 		tileFieldDebugMaterial?.Dispose();
 		pixelSortGlitchMaterial?.Dispose();
+		blurMaterial?.Dispose();
 		Batcher.Dispose();
 	}
 
@@ -765,6 +771,9 @@ public partial class Game : IDisposable
 		DitherMask = CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask");
 		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
 		ReflectionMask = new Target(GraphicsDevice, width, height, name: "ReflectionMask");
+		AoMask = CreateRenderTarget(width, height, TextureFormat.R8, "AoMask");
+		AoBlurScratch = CreateRenderTarget(width, height, TextureFormat.R8, "AoBlurScratch");
+		BackgroundCoverage = new Target(GraphicsDevice, width, height, name: "BackgroundCoverage");
 	}
 
 	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
@@ -793,6 +802,9 @@ public partial class Game : IDisposable
 		DitherMask?.Dispose();
 		ReflectionScreen?.Dispose();
 		ReflectionMask?.Dispose();
+		AoMask?.Dispose();
+		AoBlurScratch?.Dispose();
+		BackgroundCoverage?.Dispose();
 	}
 
 	private void DisposeRoomNormalCaches()
@@ -1425,8 +1437,20 @@ public partial class Game : IDisposable
 		DrawLightMask(BackgroundLightMask, includeShadows: true);
 		DrawLightMask(ForegroundLightMask, includeShadows: false);
 
-		CompositeLayer(BackgroundScreen, BackgroundLightMask, BackgroundEmissive, LitBackground);
-		CompositeLayer(ForegroundScreen, ForegroundLightMask, ForegroundEmissive, LitForeground);
+		var aoStrength = 0.0f;
+		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/ambient occlusion mask"))
+			{
+				DrawBackgroundCoverage();
+				BuildAoMask();
+			}
+			aoStrength = Manager.AmbientOcclusionStrength;
+		}
+
+		// AO darkens only the background, where it sits beneath the foreground overhang.
+		CompositeLayer(BackgroundScreen, BackgroundLightMask, BackgroundEmissive, LitBackground, aoStrength);
+		CompositeLayer(ForegroundScreen, ForegroundLightMask, ForegroundEmissive, LitForeground, aoStrength: 0.0f);
 
 		LitScreen.Clear(Color.Transparent);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -1497,15 +1521,18 @@ public partial class Game : IDisposable
 		return GlitchScreen;
 	}
 
-	private void CompositeLayer(Target color, Target light, Target emissive, Target output)
+	private void CompositeLayer(Target color, Target light, Target emissive, Target output, float aoStrength = 0.0f)
 	{
 		output.Clear(Color.Transparent);
 		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(emissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
+		var aoOffset = Manager.AmbientOcclusionOffset;
 		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
 			output.Width,
 			output.Height,
@@ -1522,7 +1549,11 @@ public partial class Game : IDisposable
 			ditherGlitchAxis.X,
 			ditherGlitchAxis.Y,
 			zoomLevel,
-			0
+			0,
+			aoStrength,
+			aoOffset.X,
+			aoOffset.Y,
+			Manager.AmbientOcclusionMinVisibility
 		]);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -1531,6 +1562,73 @@ public partial class Game : IDisposable
 		Batcher.PopMaterial();
 		Batcher.PopSampler();
 		Batcher.Render(output);
+		Batcher.Clear();
+	}
+
+	// Renders background tiles (without the backdrop fill) so their alpha marks
+	// where real tiles exist. The AO composite gates on this so the backdrop is
+	// never darkened where no background tiles are present.
+	private void DrawBackgroundCoverage()
+	{
+		BackgroundCoverage.Clear(Color.Transparent);
+		if (!ShowBackgroundLayer)
+		{
+			Batcher.Render(BackgroundCoverage);
+			Batcher.Clear();
+			return;
+		}
+
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible || !IsBackgroundActor(actor))
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.Render(Batcher);
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(BackgroundCoverage);
+		Batcher.Clear();
+	}
+
+	// Blurs the foreground coverage (ForegroundScreen alpha) into AoMask using a
+	// separable two-pass Gaussian. The result is the soft occluder field the
+	// background composite samples to darken tiles beneath foreground overhangs.
+	private void BuildAoMask()
+	{
+		var radius = Manager.AmbientOcclusionBlur;
+		RunBlurPass(ForegroundScreen, AoBlurScratch, new Vector2(1, 0), radius, sourceAlpha: true);
+		RunBlurPass(AoBlurScratch, AoMask, new Vector2(0, 1), radius, sourceAlpha: false);
+	}
+
+	private void RunBlurPass(Target source, Target destination, Vector2 direction, float radius, bool sourceAlpha)
+	{
+		destination.Clear(Color.Transparent);
+		blurMaterial!.Material.Fragment.SetUniformBuffer([
+			direction.X,
+			direction.Y,
+			radius,
+			0,
+			1.0f / source.Width,
+			1.0f / source.Height,
+			0,
+			0,
+			// ChannelMask: extract foreground coverage from alpha on the first
+			// pass, then the single-channel scratch value (red) on the second.
+			sourceAlpha ? 0.0f : 1.0f,
+			0,
+			0,
+			sourceAlpha ? 1.0f : 0.0f
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(blurMaterial.Material);
+		Batcher.Image(source, source.Bounds.Center, source.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(destination);
 		Batcher.Clear();
 	}
 

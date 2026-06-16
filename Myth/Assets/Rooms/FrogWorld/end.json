@@ -28,95 +28,95 @@
   ],
   "actors": [
     {
+      "Id": "adb87c724742b29f",
       "Type": "TitleText",
       "Position": [172, 68],
-      "Text": "is this the end?",
-      "Id": "adb87c724742b29f"
+      "Text": "is this the end?"
     },
     {
+      "Id": "17cf83cd253a1e31",
       "Type": "Player",
-      "Position": [76, 128],
-      "Id": "17cf83cd253a1e31"
+      "Position": [76, 128]
     },
     {
+      "Id": "b3b09e3a3c113423",
       "Type": "Jumpthru",
-      "Position": [96, 128],
-      "Id": "b3b09e3a3c113423"
+      "Position": [96, 128]
     },
     {
+      "Id": "4330ce202737797c",
       "Type": "Jumpthru",
-      "Position": [104, 128],
-      "Id": "4330ce202737797c"
+      "Position": [104, 128]
     },
     {
+      "Id": "032e440b6fd90a9e",
       "Type": "Jumpthru",
-      "Position": [112, 128],
-      "Id": "032e440b6fd90a9e"
+      "Position": [112, 128]
     },
     {
+      "Id": "bbaa91204bdc86b9",
       "Type": "Jumpthru",
-      "Position": [152, 128],
-      "Id": "bbaa91204bdc86b9"
+      "Position": [152, 128]
     },
     {
+      "Id": "fe10b2a20534abcd",
       "Type": "Jumpthru",
-      "Position": [160, 128],
-      "Id": "fe10b2a20534abcd"
+      "Position": [160, 128]
     },
     {
+      "Id": "669868208f50448c",
       "Type": "Jumpthru",
-      "Position": [168, 128],
-      "Id": "669868208f50448c"
+      "Position": [168, 128]
     },
     {
+      "Id": "74515fa741b3ba43",
       "Type": "Jumpthru",
-      "Position": [176, 128],
-      "Id": "74515fa741b3ba43"
+      "Position": [176, 128]
     },
     {
+      "Id": "49d9e3e084a44b6a",
       "Type": "Jumpthru",
-      "Position": [184, 128],
-      "Id": "49d9e3e084a44b6a"
+      "Position": [184, 128]
     },
     {
+      "Id": "bee668958da0d106",
       "Type": "Jumpthru",
-      "Position": [192, 128],
-      "Id": "bee668958da0d106"
+      "Position": [192, 128]
     },
     {
+      "Id": "3196f71ad8194040",
       "Type": "Jumpthru",
-      "Position": [200, 128],
-      "Id": "3196f71ad8194040"
+      "Position": [200, 128]
     },
     {
+      "Id": "50b66178c27ae604",
       "Type": "Jumpthru",
-      "Position": [208, 128],
-      "Id": "50b66178c27ae604"
+      "Position": [208, 128]
     },
     {
+      "Id": "46b36e4ad7fd7b53",
       "Type": "Jumpthru",
-      "Position": [216, 128],
-      "Id": "46b36e4ad7fd7b53"
+      "Position": [216, 128]
     },
     {
+      "Id": "d08f7caab9468a22",
       "Type": "Jumpthru",
-      "Position": [224, 128],
-      "Id": "d08f7caab9468a22"
+      "Position": [224, 128]
     },
     {
+      "Id": "7988fe3bb0b926cf",
       "Type": "Jumpthru",
-      "Position": [232, 128],
-      "Id": "7988fe3bb0b926cf"
+      "Position": [232, 128]
     },
     {
+      "Id": "eb35ebcfc07d24a1",
       "Type": "Jumpthru",
-      "Position": [240, 128],
-      "Id": "eb35ebcfc07d24a1"
+      "Position": [240, 128]
     },
     {
+      "Id": "278df01832e1a170",
       "From": "StrongFireLight",
-      "Position": [236, 36],
-      "Id": "278df01832e1a170"
+      "Position": [236, 36]
     }
   ]
 }
