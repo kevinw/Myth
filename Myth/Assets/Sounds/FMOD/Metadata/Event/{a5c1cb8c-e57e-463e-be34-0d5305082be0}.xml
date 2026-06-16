@@ -5,7 +5,7 @@
 			<value>skid</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{b5437a16-2446-4fe7-9a2c-1b6076b255af}</destination>
@@ -100,6 +100,7 @@
 	<object class="MixerBusEffectChain" id="{346b90b2-9510-4fc3-bbb5-8686d8f68920}">
 		<relationship name="effects">
 			<destination>{5e3f350e-eed2-41bc-9306-f3251bce5752}</destination>
+			<destination>{3deb7599-294e-462a-a0b3-c03fe7c9f409}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{786da6da-e0cf-4fce-a4aa-6790f55e15a1}" />
@@ -128,4 +129,5 @@
 	</object>
 	<object class="MixerBusFader" id="{ea3250df-e2b4-4dd3-83e8-fd35d52aaf3e}" />
 	<object class="MixerBusFader" id="{5e3f350e-eed2-41bc-9306-f3251bce5752}" />
+	<object class="SpatialiserEffect" id="{3deb7599-294e-462a-a0b3-c03fe7c9f409}" />
 </objects>

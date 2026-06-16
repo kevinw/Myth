@@ -166,23 +166,25 @@ public partial class Game : IDisposable
 	private readonly Point2? respawnPosition;
 	private readonly bool spawnBud;
 	private bool disposed;
-#if BROWSER
 	private const float BrowserDebugStatsInterval = 0.5f;
 	private int pendingRoomTransitionGcFrames;
 	private RoomChangeKind pendingRoomTransitionGcKind;
-	private int browserDebugFramesSinceRoomTransition = -1;
+
+	#if BROWSER
 	private float browserDebugStatsElapsed;
 	private int browserDebugStatsFrames;
 	private long browserDebugStatsAllocatedBytes;
 	private long browserDebugStatsMaxFrameBytes;
-	private int browserDebugStatsLastGen0 = GC.CollectionCount(0);
-	private int browserDebugStatsLastGen1 = GC.CollectionCount(1);
-	private int browserDebugStatsLastGen2 = GC.CollectionCount(2);
+	int browserDebugStatsLastGen0 = GC.CollectionCount(0);
+	int browserDebugStatsLastGen1 = GC.CollectionCount(1);
+	int browserDebugStatsLastGen2 = GC.CollectionCount(2);
+	int debugFramesSinceRoomTransition = -1;
+	#endif
+
 	private double browserDebugLastGcMs = -1;
 	private long browserDebugLastGcBeforeBytes;
 	private long browserDebugLastGcAfterBytes;
 	private RoomChangeKind browserDebugLastGcKind;
-#endif
 
 	public Vector2 Camera { get; private set; }
 	private Vector2 RenderCamera => (Point2)Camera - shake;
@@ -309,16 +311,15 @@ public partial class Game : IDisposable
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
-#if BROWSER
+		#if BROWSER
 		var browserDebugFrameStartAllocated = GC.GetAllocatedBytesForCurrentThread();
-#endif
+		#endif
+
 		GymBudDied = false;
 		roomSwappedThisFrame = false;
 		CollisionRectsThisFrame.Clear();
 		UpdatePlayerHitSnapshot();
-#if BROWSER
 		UpdateRoomTransitionGc();
-#endif
 		if (linkedDoorCooldown > 0)
 			linkedDoorCooldown = Calc.Approach(linkedDoorCooldown, 0, Time.Delta);
 		if (debugViewMessageTimer > 0)
@@ -437,9 +438,9 @@ public partial class Game : IDisposable
 		}
 
 		UpdateAudioListener();
-#if BROWSER
+		#if BROWSER
 		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
-#endif
+		#endif
 	}
 
 	private void ChangeTimeScale(int direction)
@@ -819,7 +820,7 @@ public partial class Game : IDisposable
 	{
 		RemoveDestroyedActors();
 		PruneInactiveRoomCaches();
-		PrepareBrowserRoomTransitionGc();
+		PrepareRoomTransitionGc();
 		RequestRoomTransitionGc(kind);
 	}
 
@@ -862,21 +863,25 @@ public partial class Game : IDisposable
 			roomTileFieldCaches.Remove(cachedRoom);
 	}
 
-#if BROWSER
-	private void PrepareBrowserRoomTransitionGc()
+	void PrepareRoomTransitionGc()
 	{
+		// TODO: make this an event which Actors or Systems can subscribe to
 		if (spawnBud && GetFirst<Bud>() != null)
+		{
 			GetPlatformNavGraph();
+		}
 	}
 
 	private void RequestRoomTransitionGc(RoomChangeKind kind)
 	{
 		pendingRoomTransitionGcKind = kind;
-		pendingRoomTransitionGcFrames = 2;
-		browserDebugFramesSinceRoomTransition = 0;
+		pendingRoomTransitionGcFrames = 1;
+		#if BROWSER
+		debugFramesSinceRoomTransition = 0;
+		#endif
 	}
 
-	private void UpdateRoomTransitionGc()
+	void UpdateRoomTransitionGc()
 	{
 		if (pendingRoomTransitionGcFrames <= 0)
 			return;
@@ -897,13 +902,17 @@ public partial class Game : IDisposable
 		browserDebugLastGcBeforeBytes = before;
 		browserDebugLastGcAfterBytes = after;
 		browserDebugLastGcKind = pendingRoomTransitionGcKind;
-		Console.WriteLine(
-			$"Room transition GC ({pendingRoomTransitionGcKind}): {elapsed.TotalMilliseconds:0.0}ms, " +
-			$"{before / 1024}KB -> {after / 1024}KB, " +
-			$"collections +{GC.CollectionCount(0) - gen0Before}/+{GC.CollectionCount(1) - gen1Before}/+{GC.CollectionCount(2) - gen2Before}");
+		if (OperatingSystem.IsBrowser())
+		{
+			Console.WriteLine(
+				$"Room transition GC ({pendingRoomTransitionGcKind}): {elapsed.TotalMilliseconds:0.0}ms, " +
+				$"{before / 1024}KB -> {after / 1024}KB, " +
+				$"collections +{GC.CollectionCount(0) - gen0Before}/+{GC.CollectionCount(1) - gen1Before}/+{GC.CollectionCount(2) - gen2Before}");
+		}
 	}
 
-	private void UpdateBrowserDebugStats(long frameStartAllocatedBytes)
+	#if BROWSER
+	void UpdateBrowserDebugStats(long frameStartAllocatedBytes)
 	{
 		var allocatedNow = GC.GetAllocatedBytesForCurrentThread();
 		var frameAllocatedBytes = Math.Max(0, allocatedNow - frameStartAllocatedBytes);
@@ -911,8 +920,8 @@ public partial class Game : IDisposable
 		browserDebugStatsMaxFrameBytes = Math.Max(browserDebugStatsMaxFrameBytes, frameAllocatedBytes);
 		browserDebugStatsFrames++;
 		browserDebugStatsElapsed += Time.Delta;
-		if (browserDebugFramesSinceRoomTransition >= 0)
-			browserDebugFramesSinceRoomTransition++;
+		if (debugFramesSinceRoomTransition >= 0)
+			debugFramesSinceRoomTransition++;
 
 		if (browserDebugStatsElapsed < BrowserDebugStatsInterval)
 			return;
@@ -923,8 +932,8 @@ public partial class Game : IDisposable
 		var frames = Math.Max(browserDebugStatsFrames, 1);
 		var avgAllocatedBytes = browserDebugStatsAllocatedBytes / frames;
 		var heapBytes = GC.GetTotalMemory(false);
-		var transitionText = browserDebugFramesSinceRoomTransition >= 0
-			? $"{browserDebugFramesSinceRoomTransition}f since transition"
+		var transitionText = debugFramesSinceRoomTransition >= 0
+			? $"{debugFramesSinceRoomTransition}f since transition"
 			: "none";
 		var gcText = browserDebugLastGcMs >= 0
 			? $"{browserDebugLastGcKind} {browserDebugLastGcMs:0.0}ms {FormatBytes(browserDebugLastGcBeforeBytes)} -> {FormatBytes(browserDebugLastGcAfterBytes)}"
@@ -943,6 +952,7 @@ public partial class Game : IDisposable
 		browserDebugStatsLastGen1 = gen1;
 		browserDebugStatsLastGen2 = gen2;
 	}
+	#endif
 
 	private static string FormatBytes(long bytes)
 	{
@@ -955,10 +965,6 @@ public partial class Game : IDisposable
 
 		return $"{kb / 1024.0:0.0}MB";
 	}
-#else
-	private void PrepareBrowserRoomTransitionGc() {}
-	private void RequestRoomTransitionGc(RoomChangeKind kind) {}
-#endif
 
 	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{

@@ -9,7 +9,7 @@
 			<value>sword_block</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{b5437a16-2446-4fe7-9a2c-1b6076b255af}</destination>
@@ -143,9 +143,11 @@
 	<object class="MixerBusEffectChain" id="{da22d859-6420-4e46-8856-c6ce83a895ac}">
 		<relationship name="effects">
 			<destination>{db42d86e-3b9e-47d5-9ac4-eb622f6c988c}</destination>
+			<destination>{c9feb345-7bab-4727-b724-ea1cef0ed193}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{ea12bf4f-2090-420a-808b-17cac6319404}" />
 	<object class="MixerBusFader" id="{ee300764-8f73-4ee3-bb6e-4a865dbaf2b4}" />
 	<object class="MixerBusFader" id="{db42d86e-3b9e-47d5-9ac4-eb622f6c988c}" />
+	<object class="SpatialiserEffect" id="{c9feb345-7bab-4727-b724-ea1cef0ed193}" />
 </objects>

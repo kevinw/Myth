@@ -23,7 +23,8 @@ public partial class Manager : App
 	private const string FmodProjectPath = "Sounds/FMOD/Myth.fspro";
 	private readonly Point MinimumRestoredWindowSize = new(640, 360);
 
-	static float Scale => 2.7f;
+	static float uiScale = 2.7f;
+	static float Scale => uiScale;
 	static float ButtonSize => 34;
 	static float ButtonSpacing => 2;
 #if !EDITOR
@@ -182,10 +183,17 @@ public partial class Manager : App
 		screenshotFrame = args.screenshotFrame;
 		screenshotInterval = args.screenshotInterval;
 		screenshotCount = args.screenshotCount;
-		if (args.simple) {
+		if (args.simple)
+		{
 			PerfToggles.UseSimpleDefaults();
 			LightingDitherStrength = 0;
 		}
+
+		uiScale = 2.7f;
+		if (OperatingSystem.IsWindows()) {
+			uiScale = 1.5f;
+		}
+
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 #if EDITOR
