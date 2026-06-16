@@ -1,6 +1,6 @@
 struct type_u002e_FragmentUniformBlock {
     TextureSizeTimeAmplitude: vec4<f32>,
-    FrequencySpeedPadding: vec4<f32>,
+    FrequencySpeedFlatOnlyPad: vec4<f32>,
 }
 
 @group(3) @binding(0) 
@@ -9,6 +9,10 @@ var<uniform> FragmentUniformBlock: type_u002e_FragmentUniformBlock;
 var Texture: texture_2d<f32>;
 @group(2) @binding(100) 
 var Sampler: sampler;
+@group(2) @binding(1) 
+var DistortMask: texture_2d<f32>;
+@group(2) @binding(101) 
+var DistortMaskSampler: sampler;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec2<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec4<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD4_1: vec4<f32>;
@@ -16,23 +20,27 @@ var<private> global: vec4<f32>;
 var<private> out_u002e_var_u002e_SV_Target0_: vec4<f32>;
 
 fn fragment_main_1() {
-    let _e20 = in_u002e_var_u002e_TEXCOORD0_1;
-    let _e21 = in_u002e_var_u002e_TEXCOORD1_1;
-    let _e22 = in_u002e_var_u002e_TEXCOORD4_1;
-    let _e23 = global;
-    if (_e22.x < -1000f) {
+    let _e22 = in_u002e_var_u002e_TEXCOORD0_1;
+    let _e23 = in_u002e_var_u002e_TEXCOORD1_1;
+    let _e24 = in_u002e_var_u002e_TEXCOORD4_1;
+    let _e25 = global;
+    if (_e24.x < -1000f) {
         discard;
     }
-    let _e27 = FragmentUniformBlock.TextureSizeTimeAmplitude;
-    let _e28 = _e27.xy;
-    let _e31 = FragmentUniformBlock.TextureSizeTimeAmplitude[2i];
-    let _e34 = FragmentUniformBlock.TextureSizeTimeAmplitude[3i];
-    let _e37 = FragmentUniformBlock.FrequencySpeedPadding[0i];
-    let _e40 = FragmentUniformBlock.FrequencySpeedPadding[1i];
-    let _e42 = (_e23.y * _e37);
-    let _e43 = (_e31 * _e40);
-    let _e67 = textureSample(Texture, Sampler, ((floor(((vec2<f32>(_e20.x, (1f - _e20.y)) + vec2<f32>((((sin((_e42 + _e43)) * _e34) + ((sin(((_e42 * 2.1f) + (_e43 * 1.7f))) * _e34) * 0.35f)) / _e27.x), 0f)) * _e28)) + vec2<f32>(0.5f, 0.5f)) / _e28));
-    out_u002e_var_u002e_SV_Target0_ = (_e67 * _e21);
+    let _e29 = FragmentUniformBlock.TextureSizeTimeAmplitude;
+    let _e30 = _e29.xy;
+    let _e33 = FragmentUniformBlock.TextureSizeTimeAmplitude[2i];
+    let _e36 = FragmentUniformBlock.TextureSizeTimeAmplitude[3i];
+    let _e39 = FragmentUniformBlock.FrequencySpeedFlatOnlyPad[0i];
+    let _e42 = FragmentUniformBlock.FrequencySpeedFlatOnlyPad[1i];
+    let _e45 = FragmentUniformBlock.FrequencySpeedFlatOnlyPad[2i];
+    let _e50 = vec2<f32>(_e22.x, (1f - _e22.y));
+    let _e51 = textureSample(DistortMask, DistortMaskSampler, _e50);
+    let _e54 = (_e25.y * _e39);
+    let _e55 = (_e33 * _e42);
+    let _e80 = textureSample(Texture, Sampler, mix(((floor((_e50 * _e30)) + vec2<f32>(0.5f, 0.5f)) / _e30), ((floor(((_e50 + vec2<f32>((((sin((_e54 + _e55)) * _e36) + ((sin(((_e54 * 2.1f) + (_e55 * 1.7f))) * _e36) * 0.35f)) / _e29.x), 0f)) * _e30)) + vec2<f32>(0.5f, 0.5f)) / _e30), vec2(_e51.x)));
+    let _e81 = (_e80 * _e23);
+    out_u002e_var_u002e_SV_Target0_ = vec4<f32>(_e81.x, _e81.y, _e81.z, (_e81.w * mix(1f, (1f - _e51.x), _e45)));
     return;
 }
 

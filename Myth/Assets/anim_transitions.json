@@ -47,6 +47,16 @@
   {
     "spriteName": "bud",
     "fromTag": "dive",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "dive",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "dive",
     "toTag": "wall_slide"
   },
   {
@@ -290,6 +300,16 @@
     "toTag": "dissolve"
   },
   {
+    "spriteName": "floater",
+    "fromTag": "idle",
+    "toTag": "shoot"
+  },
+  {
+    "spriteName": "floater",
+    "fromTag": "shoot",
+    "toTag": "idle"
+  },
+  {
     "spriteName": "player",
     "fromTag": "attack",
     "toTag": "attack_block"
@@ -308,6 +328,11 @@
     "spriteName": "player",
     "fromTag": "attack",
     "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "attack",
+    "toTag": "jump"
   },
   {
     "spriteName": "player",
@@ -432,6 +457,11 @@
   {
     "spriteName": "player",
     "fromTag": "dive",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
     "toTag": "hurt"
   },
   {
@@ -453,6 +483,11 @@
     "spriteName": "player",
     "fromTag": "dive",
     "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
+    "toTag": "roll"
   },
   {
     "spriteName": "player",
@@ -498,6 +533,11 @@
     "spriteName": "player",
     "fromTag": "duck",
     "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "jump_turn"
   },
   {
     "spriteName": "player",
@@ -532,6 +572,11 @@
   {
     "spriteName": "player",
     "fromTag": "hurt",
+    "toTag": "dive"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "hurt",
     "toTag": "duck"
   },
   {
@@ -568,6 +613,11 @@
     "spriteName": "player",
     "fromTag": "idle",
     "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "dive"
   },
   {
     "spriteName": "player",
@@ -692,6 +742,11 @@
   {
     "spriteName": "player",
     "fromTag": "jump_squish",
+    "toTag": "dive"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_squish",
     "toTag": "idle"
   },
   {
@@ -848,6 +903,11 @@
     "spriteName": "player",
     "fromTag": "run",
     "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run",
+    "toTag": "dive"
   },
   {
     "spriteName": "player",

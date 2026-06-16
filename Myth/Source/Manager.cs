@@ -50,6 +50,10 @@ public partial class Manager : App
 	public Vector2 AmbientOcclusionOffset = new(0, -3);
 	public float AmbientOcclusionMinVisibility = 0.35f;
 
+	// Soft shadows: per-light shadow edges soften with distance from the light.
+	public float SoftShadowPenumbra = 6.0f;
+	public float SoftShadowMinSoftness = 0.0f;
+
 	/// <summary>
 	/// The room renderer / simulation.
 	/// </summary>
@@ -260,13 +264,17 @@ public partial class Manager : App
 				Resizable: true,
 				UpdateMode: UpdateMode.UnthrottledStep(60));
 
+		// Opt-in GPU validation: set MYTH_GPU_DEBUG=1 to enable SDL_gpu's debug layer
+		// (pairs with Metal validation env vars to catch buffer overruns / hazards).
+		var gpuDebug = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MYTH_GPU_DEBUG"));
 		return new AppConfig(
 			ApplicationName: "Myth",
 			WindowTitle: "Myth",
 			Width: 1280,
 			Height: 720,
 			Resizable: true,
-			UpdateMode: UpdateMode.UnlockedStep());
+			UpdateMode: UpdateMode.UnlockedStep(),
+			Flags: gpuDebug ? AppFlags.GraphicsDebugging : AppFlags.None);
 #endif
 	}
 
@@ -720,6 +728,12 @@ public partial class Manager : App
 				using (PerfStats.Time(PerfDetail.EditorNavigation))
 					UpdateEditorNavigation();
 			}
+			// Preview only the selected particle emitter live in the editor.
+			string? selectedEmitterId = null;
+			if (CurrentRoom is { } previewRoom && selectedRoomActorIndex >= 0 && selectedRoomActorIndex < previewRoom.Actors.Count)
+				selectedEmitterId = ActorSpecs.GetActorId(previewRoom.Actors[selectedRoomActorIndex]);
+			game?.PreviewParticlesInEditor(Time.Delta, selectedEmitterId);
+			UpdateParticleEffectAutosave();
 #endif
 		}
 

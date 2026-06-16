@@ -87,6 +87,11 @@
       "Radius": 142.4,
       "LightColor": "A88C4B",
       "Intensity": 1.5
+    },
+    {
+      "Id": "6f57201d26457f52",
+      "Type": "ParticleEmitter",
+      "Position": [156, 20]
     }
   ]
 }

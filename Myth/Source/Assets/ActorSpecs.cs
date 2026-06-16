@@ -133,6 +133,9 @@ public static class ActorSpecs
 			AssignNewActorId(actor);
 	}
 
+	public static string? GetActorId(JsonObject actor)
+		=> ReadString(actor, IdKey);
+
 	public static string ToJsonString(JsonObject json)
 		=> CompactPointArrays(json.ToJsonString(JsonOptions));
 

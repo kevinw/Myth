@@ -461,6 +461,7 @@ public static class Assets
 		oldLightingNoise?.Dispose();
 
 		ActorSpecs.LoadSpecs(actorsPath);
+		ParticleEffectAssets.Load();
 		if (reloadRooms)
 			LoadRooms();
 	}

@@ -142,6 +142,32 @@ public partial class Manager
 	private JsonUndoScope CapturePrefabUndo(string name, string specId)
 		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
 
+	private JsonUndoScope CaptureParticleEffectUndo(string effectName)
+		=> undo.Capture("Edit Particle Effect", new ParticleEffectUndoTarget(effectName));
+
+	// Debounced autosave for the particle effect asset edited in the inspector.
+	private string? particleAutosaveName;
+	private float particleAutosaveTimer;
+	private const float ParticleAutosaveDelay = 0.6f;
+
+	private void MarkParticleEffectDirty(string name)
+	{
+		particleAutosaveName = name;
+		particleAutosaveTimer = ParticleAutosaveDelay;
+	}
+
+	private void UpdateParticleEffectAutosave()
+	{
+		if (particleAutosaveName is not { } name)
+			return;
+		particleAutosaveTimer -= Time.Delta;
+		if (particleAutosaveTimer <= 0)
+		{
+			ParticleEffectAssets.Save(name);
+			particleAutosaveName = null;
+		}
+	}
+
 
 	/// Eases the PaletteView out/in as the Game opens/closes
 	private Rect PaletteSlideRect =>
@@ -300,6 +326,22 @@ public partial class Manager
 		public void ApplyJson(string json) => ActorSpecs.ApplySpecJson(specId, json);
 	}
 
+	private sealed class ParticleEffectUndoTarget(string name) : IJsonUndoTarget
+	{
+		public string UndoId => $"particle-effect:{name}";
+		public string CaptureJson() => ParticleEffectAssets.Get(name).ToJson().ToJsonString();
+		public void ApplyJson(string json)
+		{
+			// Mutate the shared asset in place so emitters keep their reference,
+			// then persist so disk matches the undone/redone state.
+			if (System.Text.Json.Nodes.JsonNode.Parse(json) is System.Text.Json.Nodes.JsonObject obj)
+			{
+				ParticleEffectAssets.Get(name).Load(obj);
+				ParticleEffectAssets.Save(name);
+			}
+		}
+	}
+
 	private enum ResizeHandle
 	{
 		None,
@@ -452,6 +494,7 @@ public partial class Manager
 			ImGui.Spacing();
 			DrawDitherPaletteSection();
 			DrawAmbientOcclusionSection();
+			DrawSoftShadowSection();
 			ImGui.Spacing();
 			//DrawPreviewPaletteSection();
 
@@ -888,6 +931,155 @@ public partial class Manager
 		ImGui.SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
 	}
 
+	private void DrawSoftShadowSection()
+	{
+		if (!ImGui.CollapsingHeader("Soft Shadows"))
+			return;
+
+		ImGui.Checkbox("Enabled", ref PerfToggles.SoftShadows);
+
+		ImGui.TextUnformatted("Penumbra (px)");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##SoftShadowPenumbra", ref SoftShadowPenumbra, 0.0f, 24.0f);
+
+		ImGui.TextUnformatted("Min Softness");
+		ImGui.SetNextItemWidth(-1);
+		ImGui.SliderFloat("##SoftShadowMinSoftness", ref SoftShadowMinSoftness, 0.0f, 1.0f);
+	}
+
+	// Draws the editable fields of a shared particle effect asset inside the
+	// actor inspector. Each change is captured for undo (like actor properties)
+	// and triggers a debounced autosave.
+	private void DrawParticleEffectBox(JsonObject actor)
+	{
+		if (game?.Particles is not { Supported: true })
+			return;
+
+		// EffectName is stripped from the JSON when it equals the default, so fall
+		// back to the actor's baseline value (what the runtime actually uses).
+		var name = ActorSpecs.ReadString(actor, "EffectName")
+			?? ActorSpecs.GetEditableProperties(actor).FirstOrDefault(p => p.JsonName == "EffectName").Value?.GetValue<string>();
+		if (name == null || !ParticleEffectAssets.Exists(name))
+			return;
+
+		var e = ParticleEffectAssets.Get(name);
+
+		ImGui.SeparatorText("Particle Asset");
+		ImGui.TextDisabled($"shared '{name}' — autosaves");
+		ImGui.Indent();
+
+		FxShape("Shape", name, ref e.Shape);
+		FxInt("Count", name, ref e.BurstCount, 1, ParticleSystem.Capacity);
+		if (e.Shape == ParticleEmitterShape.Circle)
+			FxFloat("Radius", name, ref e.EmitterRadius, 0.0f, 64.0f);
+		if (e.Shape == ParticleEmitterShape.Cone)
+		{
+			FxFloat("Direction", name, ref e.DirectionDegrees, -180.0f, 180.0f);
+			FxFloat("Spread", name, ref e.SpreadDegrees, 0.0f, 360.0f);
+		}
+		FxMode("Mode", name, ref e.Mode);
+		if (e.Mode == ParticleEmissionMode.Continuous)
+			FxFloat("Rate", name, ref e.EmissionRate, 0.0f, 400.0f);
+
+		ImGui.SeparatorText("Dynamics");
+		FxRange("Speed", name, ref e.SpeedMin, ref e.SpeedMax, 1.0f, 0.0f, 600.0f);
+		FxRange("Life", name, ref e.LifeMin, ref e.LifeMax, 0.02f, 0.05f, 8.0f);
+		FxFloat("Gravity", name, ref e.Gravity, -200.0f, 200.0f);
+		FxFloat("Drag", name, ref e.Drag, 0.0f, 4.0f);
+		FxFloat("Noise Amount", name, ref e.NoiseAmount, 0.0f, 200.0f);
+		FxFloat("Noise Scale", name, ref e.NoiseScale, 0.005f, 0.3f);
+
+		ImGui.SeparatorText("Appearance");
+		FxFloat("Size Start", name, ref e.SizeStart, 0.0f, 16.0f);
+		FxFloat("Size End", name, ref e.SizeEnd, 0.0f, 16.0f);
+		FxCheckbox("Additive", name, ref e.Additive);
+		FxColor("Birth", name, ref e.ColorBirth);
+		FxColor("Mid", name, ref e.ColorMid);
+		FxColor("Death", name, ref e.ColorEnd);
+
+		ImGui.SeparatorText("Collision");
+		FxCollision("Collision", name, ref e.Collision);
+		if (e.Collision == ParticleCollisionMode.Bounce)
+			FxFloat("Bounciness", name, ref e.Bounciness, 0.0f, 1.0f);
+
+		ImGui.Unindent();
+	}
+
+	private void FxFloat(string label, string name, ref float field, float min, float max)
+	{
+		var v = field;
+		if (!ImGui.SliderFloat(label, ref v, min, max))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = v;
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxInt(string label, string name, ref int field, int min, int max)
+	{
+		var v = field;
+		if (!ImGui.SliderInt(label, ref v, min, max))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = v;
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxRange(string label, string name, ref float a, ref float b, float speed, float min, float max)
+	{
+		float x = a, y = b;
+		if (!ImGui.DragFloatRange2(label, ref x, ref y, speed, min, max))
+			return;
+		using (CaptureParticleEffectUndo(name)) { a = x; b = y; }
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxCheckbox(string label, string name, ref bool field)
+	{
+		var v = field;
+		if (!ImGui.Checkbox(label, ref v))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = v;
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxColor(string label, string name, ref Color field)
+	{
+		var v = (Vector4)field;
+		if (!ImGui.ColorEdit4(label, ref v, ImGuiColorEditFlags.AlphaBar))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = new Color(v);
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxShape(string label, string name, ref ParticleEmitterShape field)
+	{
+		var v = (int)field;
+		ImGui.SetNextItemWidth(-1);
+		if (!ImGui.Combo($"##{label}", ref v, "Point\0Circle\0Cone\0"))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = (ParticleEmitterShape)v;
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxMode(string label, string name, ref ParticleEmissionMode field)
+	{
+		var v = (int)field;
+		ImGui.SetNextItemWidth(-1);
+		if (!ImGui.Combo($"##{label}", ref v, "Continuous\0Burst\0"))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = (ParticleEmissionMode)v;
+		MarkParticleEffectDirty(name);
+	}
+
+	private void FxCollision(string label, string name, ref ParticleCollisionMode field)
+	{
+		var v = (int)field;
+		ImGui.SetNextItemWidth(-1);
+		if (!ImGui.Combo($"##{label}", ref v, "None\0Kill\0Settle\0Bounce\0"))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = (ParticleCollisionMode)v;
+		MarkParticleEffectDirty(name);
+	}
+
 #if false
 	private void DrawPreviewPaletteSection()
 	{
@@ -1134,6 +1326,12 @@ public partial class Manager
 			SyncEditorGame();
 		}
 
+		// Edit the shared effect asset directly. This mutates the live asset (not
+		// the room), so it doesn't trigger SyncEditorGame - the selected emitter
+		// reflects changes immediately, and edits autosave + are undoable.
+		if (IsParticleEmitterActor(actor))
+			DrawParticleEffectBox(actor);
+
 		ImGui.End();
 	}
 
@@ -1141,6 +1339,9 @@ public partial class Manager
 	{
 		if (property.Name == nameof(LinkedDoor.TargetActorId) && IsLinkedDoorActor(actor))
 			return DrawLinkedDoorTargetProperty(room, actor, property);
+
+		if (property.Name == nameof(ParticleEmitter.EffectName) && IsParticleEmitterActor(actor))
+			return DrawParticleEffectNameProperty(room, actor, property);
 
 		var changed = false;
 		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
@@ -1260,6 +1461,33 @@ public partial class Manager
 	}
 
 	private static string FacingTooltip(Signs value) => "Click to face the other direction.";
+
+	private static bool IsParticleEmitterActor(JsonObject actor)
+		=> string.Equals(ActorSpecs.ReadString(actor, "Type"), "ParticleEmitter", StringComparison.OrdinalIgnoreCase);
+
+	private bool DrawParticleEffectNameProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		var changed = false;
+		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
+		ImGui.PushID("Value");
+
+		var current = property.Value?.GetValue<string>() ?? string.Empty;
+		ImGui.SetNextItemWidth(controlWidth);
+		if (ImGui.BeginCombo("##Value", current))
+		{
+			foreach (var name in ParticleEffectAssets.Names)
+				if (ImGui.Selectable(name, name == current))
+				{
+					using (CaptureRoomUndo("Edit Actor Property", room))
+						ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(name));
+					changed = true;
+				}
+			ImGui.EndCombo();
+		}
+
+		ImGui.PopID();
+		return changed;
+	}
 
 	private bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
@@ -2458,7 +2686,7 @@ public partial class Manager
 
 		var previewSize = GetRoomPreviewPixelSize(room);
 		var target = new Target(GraphicsDevice, previewSize.X, previewSize.Y, name: $"RoomPreview/{room.Id}");
-		using var previewGame = new Game(this, room, audioEventsEnabled: false, spawnBud: false);
+		using var previewGame = new Game(this, room, audioEventsEnabled: false, spawnBud: false, enableParticles: false);
 		previewGame.ShowForegroundLayer = editorShowForegroundLayer;
 		previewGame.ShowBackgroundLayer = editorShowBackgroundLayer;
 		previewGame.RenderWorldToTarget(target, new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height));
@@ -2956,10 +3184,14 @@ public partial class Manager
 				using (CaptureRoomUndo("Place Actor", editing))
 				{
 					var position = (Point2)(roomTopLeft + tileOver * Game.TileSize + actorEntry.Offset);
+					var before = editing.Actors.Count;
 					if (actorEntry.ActorSpecId != null)
 						editing.AddActorSpec(actorEntry.ActorSpecId, position);
 					else if (actorEntry.ActorTypeName != null)
 						editing.AddActorType(actorEntry.ActorTypeName, position);
+					// Select the just-placed actor so its inspector opens immediately.
+					if (editing.Actors.Count == before + 1)
+						selectedRoomActorIndex = editing.Actors.Count - 1;
 					CancelTilePaint();
 					editorGameDirty = true;
 				}

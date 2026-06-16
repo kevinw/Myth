@@ -98,6 +98,11 @@
       "Type": "RevealDoor",
       "Position": [24, 104],
       "Direction": "Left"
+    },
+    {
+      "Id": "a7c35e67303b1746",
+      "Type": "ParticleEmitter",
+      "Position": [276, 60]
     }
   ]
 }

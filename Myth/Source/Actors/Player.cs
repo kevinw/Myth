@@ -603,6 +603,7 @@ public partial class Player : Pawn
 	static float BurrowMaxSpeed => 150f;
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
+	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
 	static float BurrowClimbSpeedMultiplier => 0.5f; // straight-up wall climb is half speed; 45° lands in between
 	// The burrow pop is meant to read as stronger than a full held jump: a bigger launch
 	// velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
@@ -623,14 +624,18 @@ public partial class Player : Pawn
 	private float burrowExitTimer;
 	private Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
 	private bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
-	private bool burrowInputActive;             // was a direction held last frame; distinguishes a fresh press
-	private Vector2 burrowForwardIntent;        // world input that points along the orbit; disambiguates presses on walls
+	private Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
+	private bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
+	private bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
 	private Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
 	private Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
 	private float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
 	private float burrowSpeed;                  // current travel speed; eases via accel/friction
 	private readonly List<Vector2> burrowGlow = [];
 	private Vector2 burrowGlowAnchor;
+	private int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
+	private float burrowSparkAccumulator;
+	private const float BurrowSparkRate = 160f; // sparks/sec at full burrow speed
 
 	public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
@@ -670,6 +675,9 @@ public partial class Player : Pawn
 			it.KeepOnRoomTransition = true;
 		});
 		UpdateLightPosition();
+
+		if (Game.Particles is { Supported: true } particles)
+			burrowSparkEffect = particles.AcquireEffect("sparks");
 	}
 
 	public override void OnCollideY()
@@ -813,8 +821,9 @@ public partial class Player : Pawn
 		burrowTimer = BurrowDuration;
 		burrowEnterTimer = BurrowEnterSquishTime;
 		burrowMoveRemainder = 0;
-		burrowInputActive = false; // first press establishes the orbit direction
-		burrowForwardIntent = Vector2.Zero;
+		burrowLastIntent = Vector2.Zero; // a tangential press establishes the orbit
+		burrowOrbiting = false;
+		burrowReverseQueued = false;
 		// Initialize the walk state: heading = +tangent, solid on the right (matches +tangent).
 		burrowSolidLeft = false;
 		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
@@ -895,40 +904,52 @@ public partial class Player : Pawn
 			Squish = Vector2.Lerp(Vector2.One, peak, t);
 		}
 
-		// Resolve travel from the world input. The orbit direction (handedness) is only
-		// (re)decided on a FRESH press — after release or at burrow start: if the input
-		// clearly opposes the current heading we flip, otherwise we keep it. While a
-		// direction is held continuously we never reverse, so the burrow orbits around and
-		// around a shape (the heading auto-rotates around corners). Releasing resets, so
-		// the next press can pick the opposite orbit.
+		// Resolve travel from the world input. Movement is a latched "orbit" that you
+		// can only start (or redirect) by pressing ALONG the surface (tangential to the
+		// heading). A purely perpendicular input (up/down on a horizontal floor, or
+		// left/right on a wall) does nothing. Re-evaluation happens whenever the pressed
+		// direction CHANGES — including slamming the opposite direction with no zero gap
+		// (right -> left) — not just after a release. While a direction is held the
+		// intent is constant, so the heading auto-rotates around corners (hold one way to
+		// loop a whole shape) and the perpendicular input you were holding when you turned
+		// a corner keeps carrying you. Releasing drops the latch.
 		var intent = new Vector2(input.MoveX, input.MoveY);
-		var move = intent != Vector2.Zero;
-		if (move && !burrowInputActive)
+		var pressed = intent != Vector2.Zero;
+		var changed = intent != burrowLastIntent;
+		var proj = Vector2.Dot(intent, (Vector2)burrowHeading);
+		var tangential = MathF.Abs(proj) > BurrowTangentDeadzone;
+
+		if (!pressed)
+			burrowOrbiting = false;
+		else if (changed && tangential)
 		{
-			// Fresh press decides the orbit direction. If the input has a clear component
-			// along the surface (heading), use its sign. If it's orthogonal to the heading
-			// (e.g. pressing left/right on a vertical wall), fall back to the remembered
-			// "forward" input, so right keeps meaning down and left means up on that wall.
-			var proj = Vector2.Dot(intent, (Vector2)burrowHeading);
-			var reverse = proj < -BurrowTangentDeadzone
-				|| (MathF.Abs(proj) <= BurrowTangentDeadzone && Vector2.Dot(intent, burrowForwardIntent) < 0);
-			if (reverse)
-			{
-				burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y); // reverse travel
-				burrowSolidLeft = !burrowSolidLeft;
-			}
-			burrowForwardIntent = intent; // the pressed input now points along the orbit
+			// Pressing opposite the heading queues a reversal (brakes first, below);
+			// pressing forward cancels any pending reversal.
+			burrowReverseQueued = proj < 0;
+			burrowOrbiting = true;
 		}
-		burrowInputActive = move;
+		burrowLastIntent = intent;
+
+		var move = burrowOrbiting;
 
 		// Speed eases in and out (accel + friction) rather than snapping, and climbing slows
 		// you down: a straight-up wall heading runs at BurrowClimbSpeedMultiplier, while a 45°
 		// slope lands in between on its own (the cardinal walker alternates up/flat steps).
-		// Descending counts as flat, so you keep momentum going down.
+		// Descending counts as flat, so you keep momentum going down. A queued reversal
+		// targets zero speed (friction) so a direction switch decelerates before flipping.
 		var climb = MathF.Max(0, -burrowHeading.Y);
-		var targetSpeed = move ? BurrowMaxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
+		var targetSpeed = move && !burrowReverseQueued ? BurrowMaxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
 		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
 		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
+
+		// Once braked nearly to a stop, perform the queued reversal and accelerate the
+		// other way next frame.
+		if (burrowReverseQueued && burrowSpeed <= BurrowReverseFlipSpeed)
+		{
+			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
+			burrowSolidLeft = !burrowSolidLeft;
+			burrowReverseQueued = false;
+		}
 
 		burrowMoveRemainder += burrowSpeed * Time.Delta;
 		var pixels = (int)burrowMoveRemainder;
@@ -956,6 +977,7 @@ public partial class Player : Pawn
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
+		EmitBurrowSparks();
 		Play("burrow");
 
 		if (input.MoveX != 0)
@@ -968,10 +990,21 @@ public partial class Player : Pawn
 
 	private void PopOutOfBurrow()
 	{
-		// Launch away from whatever surface we were riding.
+		// Launch away from whatever surface we were riding, plus carry the burrow's
+		// tangential glide momentum (so popping out of a fast rightward burrow keeps
+		// that rightward speed).
 		var exitDir = burrowToward;
 		var popMagnitude = MathF.Abs(BurrowPopForce);
-		Velocity = -exitDir * popMagnitude;
+		var travel = burrowHeading != Point2.Zero
+			? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
+			: Vector2.Zero;
+		Velocity = -exitDir * popMagnitude + travel;
+		// Burrow glide can exceed normal air speed; let the carried horizontal
+		// momentum persist briefly (then normal air clamping reins it in) instead of
+		// being snapped to MaxAirSpeed immediately. Reuses the roll-jump carry, whose
+		// cap (RollJumpSpeed) matches BurrowMaxSpeed.
+		if (MathF.Abs(travel.X) > MaxAirSpeed)
+			rollJumpCarryTimer = RollJumpCarryTime;
 		jumpTimer = BurrowPopTime;
 		jumpCutImmune = true; // the pop keeps its full float even when jump is released
 		Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
@@ -1165,6 +1198,30 @@ public partial class Player : Pawn
 		var climb = MathF.Max(0, -burrowHeading.Y);
 		Game.SetAudioEventParameter(burrowSound, "Speed", speed01);
 		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
+	}
+
+	// Spray sparks out of the surface at the burrow point, scaled by glide speed.
+	private void EmitBurrowSparks()
+	{
+		if (burrowSparkEffect < 0 || Game.Particles is not { } particles)
+			return;
+
+		var speed01 = BurrowMaxSpeed > 0 ? burrowSpeed / BurrowMaxSpeed : 0f;
+		if (speed01 <= 0.05f)
+			return;
+
+		burrowSparkAccumulator += BurrowSparkRate * speed01 * Time.Delta;
+		var count = (int)burrowSparkAccumulator;
+		burrowSparkAccumulator -= count;
+		if (count <= 0)
+			return;
+
+		// Aim out of the solid (burrowToward points into it); fall back to straight up.
+		var outward = -burrowToward;
+		outward = outward.LengthSquared() > 0.0001f ? Vector2.Normalize(outward) : new Vector2(0, -1);
+		var origin = (Vector2)Position + outward * 1.5f;
+		var direction = MathF.Atan2(outward.Y, outward.X);
+		particles.Emit(burrowSparkEffect, origin, count, direction, 0.4f + 0.6f * speed01);
 	}
 
 	private void UpdateFootsteps()
@@ -1457,5 +1514,9 @@ public partial class Player : Pawn
 			Game.Destroy(light);
 			light = null;
 		}
+
+		if (burrowSparkEffect >= 0 && Game.Particles is { } particles)
+			particles.ReleaseEffect(burrowSparkEffect);
+		burrowSparkEffect = -1;
 	}
 }

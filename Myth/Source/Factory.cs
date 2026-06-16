@@ -257,6 +257,7 @@ public static class Factory
 		ActorSpecs.RegisterActor<Arrow>("Arrow");
 		ActorSpecs.RegisterActor<WallBullet>("WallBullet");
 		ActorSpecs.RegisterActor<NeuralCellularActor>("NeuralCellularActor");
+		ActorSpecs.RegisterActor<ParticleEmitter>("ParticleEmitter");
 
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", "Brick"));
@@ -305,6 +306,7 @@ public static class Factory
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Shellback>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Splitter>("blob", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Light>("fire", new Point2(4, 4)));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<ParticleEmitter>("fire", new Point2(4, 4), editorBounds: new RectInt(-4, -4, 8, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Door>("door", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<LinkedDoor>("back_door", new Point2(4, 8)));
 		ActorPalette.Add(ActorPaletteEntry.FromActor<Blob>("blob", new Point2(4, 8)));

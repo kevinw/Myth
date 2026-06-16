@@ -89,6 +89,7 @@ public partial class Game : IDisposable
 	Target AoMask { get; set; } = null!;
 	Target AoBlurScratch { get; set; } = null!;
 	Target BackgroundCoverage { get; set; } = null!;
+	Target SoftShadowScratch { get; set; } = null!;
 	public readonly List<Actor> Actors = [];
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
@@ -134,6 +135,59 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? tileFieldDebugMaterial;
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	private readonly ReloadableMaterial? blurMaterial;
+	private readonly ReloadableMaterial? softShadowMaterial;
+	private readonly ParticleSystem? particleSystem;
+	private float particleBurstTimer;
+	public ParticleSystem? Particles => particleSystem;
+
+	/// <summary>World-space center of the current view (for test bursts).</summary>
+	public Vector2 ViewCenterWorld => RenderCamera + new Vector2(Width, Height) / 2f / zoomLevel;
+
+	private int previewEffectSlot = -1;
+	private string? previewEffectName;
+
+	/// <summary>Selects which effect asset the tuning window previews/bursts.</summary>
+	public void SetPreviewEffect(string name)
+	{
+		if (particleSystem is not { Supported: true } || name == previewEffectName)
+			return;
+		if (previewEffectSlot >= 0)
+			particleSystem.ReleaseEffect(previewEffectSlot);
+		previewEffectName = name;
+		previewEffectSlot = particleSystem.AcquireEffect(name);
+	}
+
+	/// <summary>Emits the tuning-window's selected effect at the view center.</summary>
+	public void BurstTestEffect()
+	{
+		if (previewEffectSlot >= 0 && previewEffectName != null)
+			particleSystem?.Emit(previewEffectSlot, ViewCenterWorld, ParticleEffectAssets.Get(previewEffectName).BurstCount);
+	}
+
+	/// <summary>
+	/// Editor-only preview: actor Update does not run in edit mode. Only the
+	/// selected emitter emits; the sim still advances so existing particles age
+	/// out when nothing is selected.
+	/// </summary>
+	public void PreviewParticlesInEditor(float dt, string? selectedActorId)
+	{
+		if (particleSystem is not { Supported: true })
+			return;
+		if (selectedActorId != null)
+			foreach (var actor in Actors)
+				if (actor is ParticleEmitter emitter && emitter.ActorId == selectedActorId)
+					emitter.EmitStep(dt);
+		StepParticles(dt);
+	}
+
+	// Advances the particle sim, sampling collision from last frame's foreground
+	// coverage (1-frame stale, fine for collision).
+	private void StepParticles(float dt)
+	{
+		if (particleSystem is not { Supported: true })
+			return;
+		particleSystem.Update(dt, ForegroundScreen.Attachments[0], RenderCamera, zoomLevel);
+	}
 	public bool GymBudDied;
 	public bool GymMode;
 	public Actor? GymTarget;
@@ -220,7 +274,7 @@ public partial class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true)
 	{
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled;
@@ -231,6 +285,11 @@ public partial class Game : IDisposable
 		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 7, uniformBufferCount: 1);
 		blurMaterial = CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1);
+		softShadowMaterial = CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1);
+		// Transient preview/thumbnail games skip particles: they render and dispose
+		// in one synchronous call, which would free the GPU draw resources while the
+		// submitted particle draw is still in flight (corruption).
+		particleSystem = enableParticles ? new ParticleSystem(GraphicsDevice) : null;
 		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
 		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1);
 		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
@@ -312,6 +371,8 @@ public partial class Game : IDisposable
 		tileFieldDebugMaterial?.Dispose();
 		pixelSortGlitchMaterial?.Dispose();
 		blurMaterial?.Dispose();
+		softShadowMaterial?.Dispose();
+		particleSystem?.Dispose();
 		Batcher.Dispose();
 	}
 
@@ -343,6 +404,26 @@ public partial class Game : IDisposable
 		ditherGlitch = Calc.Approach(ditherGlitch, ditherGlitchTarget, Time.Delta * glitchSpeed);
 		if (ditherGlitchTarget > 0 && ditherGlitch >= ditherGlitchTarget)
 			ditherGlitchTarget = 0;
+
+		// Particle system (step 1): drive the GPU sim, and auto-burst at the
+		// screen center so there's something to look at. 'J' fires a burst too.
+		if (PerfToggles.Particles && particleSystem is { Supported: true })
+		{
+			// Emitter actors enqueue emission in their own Update; this consumes
+			// the queue and advances the GPU sim.
+			StepParticles(Time.Delta);
+			if (allowKeyboardShortcuts && Input.Keyboard.Pressed(Keys.J))
+				BurstTestEffect();
+			if (particleSystem.AutoBurst)
+			{
+				particleBurstTimer -= Time.Delta;
+				if (particleBurstTimer <= 0)
+				{
+					particleBurstTimer = 0.25f;
+					BurstTestEffect();
+				}
+			}
+		}
 
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
@@ -775,6 +856,7 @@ public partial class Game : IDisposable
 		AoMask = CreateRenderTarget(width, height, TextureFormat.R8, "AoMask");
 		AoBlurScratch = CreateRenderTarget(width, height, TextureFormat.R8, "AoBlurScratch");
 		BackgroundCoverage = new Target(GraphicsDevice, width, height, name: "BackgroundCoverage");
+		SoftShadowScratch = new Target(GraphicsDevice, width, height, name: "SoftShadowScratch");
 	}
 
 	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
@@ -806,6 +888,7 @@ public partial class Game : IDisposable
 		AoMask?.Dispose();
 		AoBlurScratch?.Dispose();
 		BackgroundCoverage?.Dispose();
+		SoftShadowScratch?.Dispose();
 	}
 
 	private void DisposeRoomNormalCaches()
@@ -1082,6 +1165,11 @@ public partial class Game : IDisposable
 					}
 				}
 			}
+		}
+		if (PerfToggles.Particles && particleSystem is { Supported: true })
+		{
+			using (GraphicsDevice.DebugGroup("Myth/particles"))
+				particleSystem.Render(output, RenderCamera, zoomLevel);
 		}
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
@@ -2048,6 +2136,9 @@ public partial class Game : IDisposable
 
 		Batcher.Render(SingleLightMask);
 		Batcher.Clear();
+
+		if (includeShadows && SoftShadowsEnabled)
+			SoftenSingleLightMask(Vector2.Zero, 0, uniform: true);
 	}
 
 	private void DrawSingleLightMask(Light light, bool includeShadows)
@@ -2116,6 +2207,12 @@ public partial class Game : IDisposable
 
 		Batcher.Render(SingleLightMask);
 		Batcher.Clear();
+
+		if (includeShadows && SoftShadowsEnabled)
+		{
+			var screenPosition = (position - RenderCamera) * zoomLevel;
+			SoftenSingleLightMask(screenPosition, radius * zoomLevel, uniform: false);
+		}
 	}
 
 	private static readonly List<VisibilityPolygon.Hit> hits = new();
@@ -2149,6 +2246,47 @@ public partial class Game : IDisposable
 				b / textureSize,
 				Color.White);
 		}
+	}
+
+	private bool SoftShadowsEnabled
+		=> PerfToggles.SoftShadows && softShadowMaterial != null && Manager.SoftShadowPenumbra > 0.01f;
+
+	// Softens the just-rendered per-light SingleLightMask with a separable
+	// variable-radius blur before it is accumulated. The blur widens with
+	// distance from the light, so shadows stay crisp near their caster and
+	// soften further away. The sun blurs uniformly (uniform: true).
+	private void SoftenSingleLightMask(Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
+	{
+		var maxPenumbra = Manager.SoftShadowPenumbra;
+		RunSoftShadowPass(SingleLightMask, SoftShadowScratch, new Vector2(1, 0), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
+		RunSoftShadowPass(SoftShadowScratch, SingleLightMask, new Vector2(0, 1), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
+	}
+
+	private void RunSoftShadowPass(Target source, Target destination, Vector2 direction, float maxPenumbra, Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
+	{
+		destination.Clear(Color.Transparent);
+		softShadowMaterial!.Material.Fragment.SetUniformBuffer([
+			direction.X,
+			direction.Y,
+			maxPenumbra,
+			uniform ? 1.0f : 0.0f,
+			lightScreenPosition.X,
+			lightScreenPosition.Y,
+			lightRadiusPixels,
+			Manager.SoftShadowMinSoftness,
+			1.0f / source.Width,
+			1.0f / source.Height,
+			0,
+			0
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(softShadowMaterial.Material);
+		Batcher.Image(source, source.Bounds.Center, source.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(destination);
+		Batcher.Clear();
 	}
 
 	private void AddSingleLightMask(Target lightMask)

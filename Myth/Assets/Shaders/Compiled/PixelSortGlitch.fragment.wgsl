@@ -26,12 +26,12 @@ fn fragment_main_1() {
     var phi_331_: vec3<f32>;
     var phi_333_: i32;
     var phi_345_: bool;
-    var phi_372_: bool;
-    var phi_377_: bool;
+    var phi_374_: bool;
+    var phi_379_: bool;
     var phi_329_: f32;
     var phi_332_: vec3<f32>;
     var local: vec3<f32>;
-    var phi_429_: vec4<f32>;
+    var phi_433_: vec4<f32>;
 
     let _e87 = in_u002e_var_u002e_TEXCOORD0_1;
     let _e88 = in_u002e_var_u002e_TEXCOORD1_1;
@@ -54,7 +54,7 @@ fn fragment_main_1() {
             let _e120 = textureSampleLevel(Texture, Sampler, _e119, 0f);
             let _e121 = (_e120 * _e88);
             if (_e102 <= 0.001f) {
-                phi_429_ = _e121;
+                phi_433_ = _e121;
                 break;
             }
             let _e123 = textureSampleLevel(TileFieldTexture, TileFieldSampler, _e119, 0f);
@@ -71,7 +71,7 @@ fn fragment_main_1() {
             let _e208 = (dot(_e202, vec2<f32>(-(_e197.y), _e197.x)) / max(max((_e193 * mix(0.28f, 0.46f, _e161)), 10f), 1f));
             let _e238 = clamp((((_e102 * smoothstep(0.22f, 1f, _e102)) * 0.3f) + (((_e102 * (pow(smoothstep(0f, 0.95f, clamp((1f - sqrt(((_e205 * _e205) + (_e208 * _e208)))), 0f, 1f)), 0.58f) * mix(0.42f, 1f, fract((sin(dot(floor((floor((_e134 * vec2<f32>(0.05f, 0.05f))) + vec2((_e138 * 2f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f))))) * mix(0.28f, 0.9f, fract((sin(dot(floor(((_e136 + _e139) + vec2((_e123.x * 31f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))) * mix(0.45f, 1f, _e161))), 0f, 1f);
             if (_e238 <= 0.002f) {
-                phi_429_ = _e121;
+                phi_433_ = _e121;
                 break;
             }
             switch bitcast<i32>(0u) {
@@ -122,16 +122,16 @@ fn fragment_main_1() {
                     let _e315 = textureSampleLevel(Texture, Sampler, (_e119 + ((_e252 * (_e292 + (((fract((sin(dot(floor(((_e136 + vec2((_e292 * 17f))) + _e139)), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * _e238) * 3f))) / _e96)), 0f);
                     let _e316 = _e315.xyz;
                     let _e317 = dot(_e316, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
-                    phi_372_ = false;
+                    phi_374_ = false;
                     if (_e282 > 0.5f) {
-                        phi_372_ = (_e317 > _e286);
+                        phi_374_ = (_e317 > _e286);
                     }
-                    let _e321 = phi_372_;
-                    phi_377_ = false;
+                    let _e321 = phi_374_;
+                    phi_379_ = false;
                     if (_e282 <= 0.5f) {
-                        phi_377_ = (_e317 < _e286);
+                        phi_379_ = (_e317 < _e286);
                     }
-                    let _e325 = phi_377_;
+                    let _e325 = phi_379_;
                     let _e327 = select(true, _e325, !(_e321));
                     phi_329_ = select(_e286, _e317, _e327);
                     phi_332_ = select(_e288, _e316, vec3(_e327));
@@ -150,11 +150,11 @@ fn fragment_main_1() {
             let _e368 = textureSampleLevel(Texture, Sampler, (_e119 + (((_e252.yx * vec2<f32>(-1f, 1f)) * (((fract((sin(dot(floor((floor((_e134 * vec2<f32>(0.041666668f, 0.041666668f))) + vec2((_e138 * 5f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)) - 0.5f) * _e238) * 7f)) / _e96)), 0f);
             let _e374 = local;
             let _e377 = mix(_e283, mix(_e374, _e368.xyz, vec3(clamp((_e238 * 0.38f), 0f, 1f))), vec3((clamp((_e238 * 1.35f), 0f, 1f) * mix(0.78f, 1f, fract((sin(dot(floor(vec2<f32>(floor((_e134.y * 0.5f)), (_e138 + (_e123.y * 23f)))), vec2<f32>(127.1f, 311.7f))) * 43758.547f))))));
-            phi_429_ = vec4<f32>(_e377.x, _e377.y, _e377.z, _e121.w);
+            phi_433_ = vec4<f32>(_e377.x, _e377.y, _e377.z, _e121.w);
             break;
         }
     }
-    let _e384 = phi_429_;
+    let _e384 = phi_433_;
     out_u002e_var_u002e_SV_Target0_ = _e384;
     return;
 }

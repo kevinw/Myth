@@ -57,6 +57,12 @@
       "Id": "c9f8213b55d882cf",
       "Type": "Player",
       "Position": [52, 96]
+    },
+    {
+      "Id": "ad469cf84822191e",
+      "Type": "ParticleEmitter",
+      "Position": [184, 78],
+      "EffectName": "smoke"
     }
   ]
 }
