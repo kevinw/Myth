@@ -599,7 +599,7 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
-	static float BurrowDuration => 1.0f;
+	static float BurrowDuration => 1.8f;
 	static float BurrowMaxSpeed => 150f;
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
