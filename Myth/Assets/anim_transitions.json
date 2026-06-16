@@ -310,6 +310,21 @@
     "toTag": "idle"
   },
   {
+    "spriteName": "ghostfrog",
+    "fromTag": "attack",
+    "toTag": "run"
+  },
+  {
+    "spriteName": "ghostfrog",
+    "fromTag": "run",
+    "toTag": "attack"
+  },
+  {
+    "spriteName": "ghostfrog",
+    "fromTag": "sword",
+    "toTag": "run"
+  },
+  {
     "spriteName": "player",
     "fromTag": "attack",
     "toTag": "attack_block"

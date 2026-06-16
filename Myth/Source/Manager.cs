@@ -299,6 +299,7 @@ public partial class Manager : App
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
+		SpriteSdf.Generate(GraphicsDevice); // build the player's silhouette SDF atlas
 #if BROWSER_NO_FMOD
 		musicAreas.Clear();
 		musicAreas.Add(DefaultMusicArea);
@@ -374,6 +375,7 @@ public partial class Manager : App
 #endif
 
 		Assets.Unload();
+		SpriteSdf.Unload();
 		Factory.Clear();
 	}
 

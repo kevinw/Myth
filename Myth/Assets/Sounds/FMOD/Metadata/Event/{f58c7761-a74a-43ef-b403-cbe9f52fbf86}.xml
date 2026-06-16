@@ -132,16 +132,47 @@
 	<object class="MixerBusFader" id="{13091515-05d4-4edb-88ab-d369698fb4f1}" />
 	<object class="ThreeEQEffect" id="{db3f406b-2051-44b8-9b6c-1f8635feb566}">
 		<property name="lowGain">
-			<value>-37</value>
+			<value>-19</value>
 		</property>
 		<property name="midGain">
 			<value>-9</value>
 		</property>
 		<property name="highGain">
-			<value>-26</value>
+			<value>-18.5</value>
 		</property>
 	</object>
 	<object class="MixerBusFader" id="{c581628b-e598-4243-8bff-686fdc8799d5}" />
-	<object class="FlangerEffect" id="{91b844bd-6b49-4770-a882-31b20e648ac9}" />
-	<object class="SpatialiserEffect" id="{c08b1d9b-d915-47ce-a5a5-7dac3a628dfd}" />
+	<object class="FlangerEffect" id="{91b844bd-6b49-4770-a882-31b20e648ac9}">
+		<property name="rate">
+			<value>0.74000001</value>
+		</property>
+		<relationship name="modulators">
+			<destination>{fed05a57-ae98-41d1-9d38-00918628dd50}</destination>
+		</relationship>
+	</object>
+	<object class="SpatialiserEffect" id="{c08b1d9b-d915-47ce-a5a5-7dac3a628dfd}">
+		<property name="distanceRolloffType">
+			<value>2</value>
+		</property>
+		<property name="soundSize">
+			<value>0.150000006</value>
+		</property>
+	</object>
+	<object class="LFOModulator" id="{fed05a57-ae98-41d1-9d38-00918628dd50}">
+		<property name="nameOfPropertyBeingModulated">
+			<value>rate</value>
+		</property>
+		<property name="shape">
+			<value>5</value>
+		</property>
+		<property name="rate">
+			<value>0.100000001</value>
+		</property>
+		<property name="depth">
+			<value>40.5</value>
+		</property>
+		<property name="direction">
+			<value>-38</value>
+		</property>
+	</object>
 </objects>

@@ -189,7 +189,6 @@
 		<property name="start">
 			<value>2</value>
 		</property>
-		<property name="name" />
 		<relationship name="event">
 			<destination>{ec9b0802-eb5c-44b2-bcfc-15feb7cc4929}</destination>
 		</relationship>
@@ -209,6 +208,9 @@
 		</relationship>
 	</object>
 	<object class="EventSound" id="{1002f8e8-004d-4695-aebf-d41f6069f8df}">
+		<property name="isCutoff">
+			<value>true</value>
+		</property>
 		<property name="start">
 			<value>3</value>
 		</property>

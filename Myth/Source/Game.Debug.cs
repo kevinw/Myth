@@ -273,6 +273,7 @@ public partial class Game
 		pixelSortGlitchMaterial?.Reload();
 		blurMaterial?.Reload();
 		softShadowMaterial?.Reload();
+		sdfAuraMaterial?.Reload();
 	}
 #endif
 }

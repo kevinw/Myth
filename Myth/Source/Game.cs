@@ -136,9 +136,36 @@ public partial class Game : IDisposable
 	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	private readonly ReloadableMaterial? blurMaterial;
 	private readonly ReloadableMaterial? softShadowMaterial;
+	private readonly ReloadableMaterial? sdfAuraMaterial;
+	private const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
 	private readonly ParticleSystem? particleSystem;
 	private float particleBurstTimer;
 	public ParticleSystem? Particles => particleSystem;
+
+	/// <summary>
+	/// Draws an animated rainbow SDF aura. The SDF subtexture (exterior distance,
+	/// padded by <see cref="SpriteSdf.Margin"/>) is drawn so its <paramref name="origin"/>
+	/// (in the padded image's pixels) maps to <paramref name="position"/> — mirror the
+	/// caller's sprite draw (matrix + origin) so the aura flips/squishes with it.
+	/// </summary>
+	public void RenderSdfAura(Batcher batcher, Subtexture sdf, Vector2 position, Vector2 origin)
+	{
+		if (sdfAuraMaterial == null)
+			return;
+
+		sdfAuraMaterial.Material.Fragment.SetUniformBuffer([
+			Time.SecondsF * SdfAuraScrollSpeed, // x: scrolled time
+			20f,                                // y: max aura distance (px)
+			2f,                                 // z: stripe width (px)
+			255f,                               // w: stored-distance scale (R8 -> px)
+		]);
+
+		batcher.PushMaterial(sdfAuraMaterial.Material);
+		batcher.PushBlend(new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One));
+		batcher.Image(sdf, position, origin, Vector2.One, 0f, Color.White);
+		batcher.PopBlend();
+		batcher.PopMaterial();
+	}
 
 	/// <summary>World-space center of the current view (for test bursts).</summary>
 	public Vector2 ViewCenterWorld => RenderCamera + new Vector2(Width, Height) / 2f / zoomLevel;
@@ -286,6 +313,7 @@ public partial class Game : IDisposable
 		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 7, uniformBufferCount: 1);
 		blurMaterial = CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1);
 		softShadowMaterial = CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1);
+		sdfAuraMaterial = CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1);
 		// Transient preview/thumbnail games skip particles: they render and dispose
 		// in one synchronous call, which would free the GPU draw resources while the
 		// submitted particle draw is still in flight (corruption).
@@ -372,6 +400,7 @@ public partial class Game : IDisposable
 		pixelSortGlitchMaterial?.Dispose();
 		blurMaterial?.Dispose();
 		softShadowMaterial?.Dispose();
+		sdfAuraMaterial?.Dispose();
 		particleSystem?.Dispose();
 		Batcher.Dispose();
 	}
