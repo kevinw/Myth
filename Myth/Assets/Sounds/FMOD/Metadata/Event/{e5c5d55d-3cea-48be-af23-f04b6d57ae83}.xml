@@ -5,7 +5,7 @@
 			<value>squish</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{b5437a16-2446-4fe7-9a2c-1b6076b255af}</destination>
@@ -101,6 +101,7 @@
 			<destination>{64891bea-f1f4-4816-8adc-52a98cbb6093}</destination>
 			<destination>{3085e2eb-5a39-4405-82d1-2cba8f227a18}</destination>
 			<destination>{ab82746f-1886-4c86-a40c-a8dd7a7c308d}</destination>
+			<destination>{adc5939b-c53d-43e0-85e7-e2745e3b509d}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{ce0d80d5-4aef-425f-9615-d0df63c02dca}" />
@@ -139,4 +140,5 @@
 		</property>
 	</object>
 	<object class="MixerBusFader" id="{ab82746f-1886-4c86-a40c-a8dd7a7c308d}" />
+	<object class="SpatialiserEffect" id="{adc5939b-c53d-43e0-85e7-e2745e3b509d}" />
 </objects>

@@ -1,0 +1,8 @@
+{
+  "_comment": "Whitelist for baked in-between frames. 'animations' expands frames within an animation; tag '*' means every tag of that sprite. 'transitions' bakes in-betweens between two animations (anim_transitions.json is discovery-only).",
+  "animations": [
+    { "sprite": "spitter", "tag": "*", "count": 4 },
+    { "sprite": "mosquito", "tag": "*", "count": 4 }
+  ],
+  "transitions": []
+}

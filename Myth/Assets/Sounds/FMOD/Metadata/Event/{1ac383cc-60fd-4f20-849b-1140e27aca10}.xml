@@ -5,7 +5,7 @@
 			<value>roll</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{b5437a16-2446-4fe7-9a2c-1b6076b255af}</destination>
@@ -100,9 +100,11 @@
 	<object class="MixerBusEffectChain" id="{862662ae-aadc-4dfb-82b7-ea695c3e987d}">
 		<relationship name="effects">
 			<destination>{35f6538c-54c1-483e-8f0e-6b46067d40b9}</destination>
+			<destination>{78502127-b5e5-4f28-badb-3725b629de2c}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{a9696963-ff73-4ad3-bd20-1cb77beddbc4}" />
 	<object class="MixerBusFader" id="{ef9feeac-0472-4f6f-8ed6-57d5472b37d8}" />
 	<object class="MixerBusFader" id="{35f6538c-54c1-483e-8f0e-6b46067d40b9}" />
+	<object class="SpatialiserEffect" id="{78502127-b5e5-4f28-badb-3725b629de2c}" />
 </objects>

@@ -5,7 +5,7 @@
 			<value>burrow</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{b5437a16-2446-4fe7-9a2c-1b6076b255af}</destination>
@@ -277,6 +277,7 @@
 		<relationship name="effects">
 			<destination>{26efc124-c982-4267-a42c-00f835efc011}</destination>
 			<destination>{050dd9b2-5019-4d99-b052-be65b59e0ba9}</destination>
+			<destination>{6eceddc0-a5be-4cc2-9fa4-6427a1848fd7}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{7588109b-816b-4781-978e-26467e6641f9}" />
@@ -370,6 +371,7 @@
 		</property>
 	</object>
 	<object class="MixerBusFader" id="{050dd9b2-5019-4d99-b052-be65b59e0ba9}" />
+	<object class="SpatialiserEffect" id="{6eceddc0-a5be-4cc2-9fa4-6427a1848fd7}" />
 	<object class="AutomationPoint" id="{3917046f-534e-4927-b1a8-a06b8f6e4ff9}">
 		<property name="position">
 			<value>0</value>

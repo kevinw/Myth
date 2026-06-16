@@ -5,7 +5,7 @@
 			<value>sword_hit</value>
 		</property>
 		<property name="outputFormat">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{b5437a16-2446-4fe7-9a2c-1b6076b255af}</destination>
@@ -128,6 +128,7 @@
 	<object class="MixerBusEffectChain" id="{ddf62de0-8eb2-4fca-bbca-55dfc661143c}">
 		<relationship name="effects">
 			<destination>{14ab460a-30af-4af1-995e-33fd078e564a}</destination>
+			<destination>{93b72c11-4ede-4864-a8db-47e1750dcfac}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{febd51fa-7d79-4db9-8534-a129f381da76}" />
@@ -157,4 +158,5 @@
 	</object>
 	<object class="MixerBusFader" id="{a22b20cf-440f-4022-9bc6-51efe176c014}" />
 	<object class="MixerBusFader" id="{14ab460a-30af-4af1-995e-33fd078e564a}" />
+	<object class="SpatialiserEffect" id="{93b72c11-4ede-4864-a8db-47e1750dcfac}" />
 </objects>
