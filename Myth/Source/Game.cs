@@ -90,6 +90,11 @@ public partial class Game : IDisposable
 	Target AoBlurScratch { get; set; } = null!;
 	Target BackgroundCoverage { get; set; } = null!;
 	Target SoftShadowScratch { get; set; } = null!;
+
+	// Every render target created in EnsureRenderTargets, in creation order, for the
+	// debug render-target overlay (toggled with G). Populated via Track().
+	private readonly List<Target> debugTargets = new();
+	public IReadOnlyList<Target> DebugTargets => debugTargets;
 	public readonly List<Actor> Actors = [];
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
@@ -257,7 +262,7 @@ public partial class Game : IDisposable
 	private int pendingRoomTransitionGcFrames;
 	private RoomChangeKind pendingRoomTransitionGcKind;
 
-	#if BROWSER
+#if BROWSER
 	private float browserDebugStatsElapsed;
 	private int browserDebugStatsFrames;
 	private long browserDebugStatsAllocatedBytes;
@@ -266,7 +271,7 @@ public partial class Game : IDisposable
 	int browserDebugStatsLastGen1 = GC.CollectionCount(1);
 	int browserDebugStatsLastGen2 = GC.CollectionCount(2);
 	int debugFramesSinceRoomTransition = -1;
-	#endif
+#endif
 
 	private double browserDebugLastGcMs = -1;
 	private long browserDebugLastGcBeforeBytes;
@@ -409,9 +414,9 @@ public partial class Game : IDisposable
 
 	public void Update(bool allowKeyboardShortcuts = true)
 	{
-		#if BROWSER
+#if BROWSER
 		var browserDebugFrameStartAllocated = GC.GetAllocatedBytesForCurrentThread();
-		#endif
+#endif
 
 		GymBudDied = false;
 		roomSwappedThisFrame = false;
@@ -482,6 +487,7 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
 				if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
 				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
+				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
 				if (Input.Keyboard.Pressed(Keys.B)) ToggleBurrowCenter();
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
@@ -556,9 +562,9 @@ public partial class Game : IDisposable
 		}
 
 		UpdateAudioListener();
-		#if BROWSER
+#if BROWSER
 		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
-		#endif
+#endif
 	}
 
 	private void ChangeTimeScale(int direction)
@@ -865,29 +871,36 @@ public partial class Game : IDisposable
 			return;
 
 		DisposeRenderTargets();
+		debugTargets.Clear();
 
-		Screen = new Target(GraphicsDevice, width, height, name: "GameScreen");
-		BackgroundScreen = new Target(GraphicsDevice, width, height, name: "BackgroundScreen");
-		ForegroundScreen = new Target(GraphicsDevice, width, height, name: "ForegroundScreen");
-		BackgroundEmissive = new Target(GraphicsDevice, width, height, name: "BackgroundEmissive");
-		ForegroundEmissive = new Target(GraphicsDevice, width, height, name: "ForegroundEmissive");
-		LightMask = new Target(GraphicsDevice, width, height, name: "LightMask");
-		BackgroundLightMask = new Target(GraphicsDevice, width, height, name: "BackgroundLightMask");
-		ForegroundLightMask = new Target(GraphicsDevice, width, height, name: "ForegroundLightMask");
-		SingleLightMask = new Target(GraphicsDevice, width, height, name: "SingleLightMask");
-		LitBackground = new Target(GraphicsDevice, width, height, name: "LitBackground");
-		LitForeground = new Target(GraphicsDevice, width, height, name: "LitForeground");
-		LitScreen = new Target(GraphicsDevice, width, height, name: "LitScreen");
-		GlitchScreen = new Target(GraphicsDevice, width, height, name: "GlitchScreen");
-		NormalBuffer = new Target(GraphicsDevice, width, height, name: "NormalBuffer");
-		TileField = CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField");
-		DitherMask = CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask");
-		ReflectionScreen = new Target(GraphicsDevice, width, height, name: "ReflectionScreen");
-		ReflectionMask = new Target(GraphicsDevice, width, height, name: "ReflectionMask");
-		AoMask = CreateRenderTarget(width, height, TextureFormat.R8, "AoMask");
-		AoBlurScratch = CreateRenderTarget(width, height, TextureFormat.R8, "AoBlurScratch");
-		BackgroundCoverage = new Target(GraphicsDevice, width, height, name: "BackgroundCoverage");
-		SoftShadowScratch = new Target(GraphicsDevice, width, height, name: "SoftShadowScratch");
+		Screen = Track(new Target(GraphicsDevice, width, height, name: "GameScreen"));
+		BackgroundScreen = Track(new Target(GraphicsDevice, width, height, name: "BackgroundScreen"));
+		ForegroundScreen = Track(new Target(GraphicsDevice, width, height, name: "ForegroundScreen"));
+		BackgroundEmissive = Track(new Target(GraphicsDevice, width, height, name: "BackgroundEmissive"));
+		ForegroundEmissive = Track(new Target(GraphicsDevice, width, height, name: "ForegroundEmissive"));
+		LightMask = Track(new Target(GraphicsDevice, width, height, name: "LightMask"));
+		BackgroundLightMask = Track(new Target(GraphicsDevice, width, height, name: "BackgroundLightMask"));
+		ForegroundLightMask = Track(new Target(GraphicsDevice, width, height, name: "ForegroundLightMask"));
+		SingleLightMask = Track(new Target(GraphicsDevice, width, height, name: "SingleLightMask"));
+		LitBackground = Track(new Target(GraphicsDevice, width, height, name: "LitBackground"));
+		LitForeground = Track(new Target(GraphicsDevice, width, height, name: "LitForeground"));
+		LitScreen = Track(new Target(GraphicsDevice, width, height, name: "LitScreen"));
+		GlitchScreen = Track(new Target(GraphicsDevice, width, height, name: "GlitchScreen"));
+		NormalBuffer = Track(new Target(GraphicsDevice, width, height, name: "NormalBuffer"));
+		TileField = Track(CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField"));
+		DitherMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask"));
+		ReflectionScreen = Track(new Target(GraphicsDevice, width, height, name: "ReflectionScreen"));
+		ReflectionMask = Track(new Target(GraphicsDevice, width, height, name: "ReflectionMask"));
+		AoMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoMask"));
+		AoBlurScratch = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoBlurScratch"));
+		BackgroundCoverage = Track(new Target(GraphicsDevice, width, height, name: "BackgroundCoverage"));
+		SoftShadowScratch = Track(new Target(GraphicsDevice, width, height, name: "SoftShadowScratch"));
+	}
+
+	private Target Track(Target target)
+	{
+		debugTargets.Add(target);
+		return target;
 	}
 
 	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
@@ -1002,9 +1015,9 @@ public partial class Game : IDisposable
 	{
 		pendingRoomTransitionGcKind = kind;
 		pendingRoomTransitionGcFrames = 1;
-		#if BROWSER
+#if BROWSER
 		debugFramesSinceRoomTransition = 0;
-		#endif
+#endif
 	}
 
 	void UpdateRoomTransitionGc()
@@ -1037,7 +1050,7 @@ public partial class Game : IDisposable
 		}
 	}
 
-	#if BROWSER
+#if BROWSER
 	void UpdateBrowserDebugStats(long frameStartAllocatedBytes)
 	{
 		var allocatedNow = GC.GetAllocatedBytesForCurrentThread();
@@ -1078,7 +1091,7 @@ public partial class Game : IDisposable
 		browserDebugStatsLastGen1 = gen1;
 		browserDebugStatsLastGen2 = gen2;
 	}
-	#endif
+#endif
 
 	private static string FormatBytes(long bytes)
 	{
@@ -2954,14 +2967,13 @@ public partial class Game : IDisposable
 		return null;
 	}
 
+
 	public void Destroy(Actor actor)
 	{
-		if (!destroying.Contains(actor))
-		{
-			if (actor.Mask.Has(Actor.Masks.Enemy))
-				NotifyEnemyKilledIfPlayerCaused(actor);
-			destroying.Add(actor);
-		}
+		if (destroying.Contains(actor)) return;
+		if (actor.Mask.Has(Actor.Masks.Enemy))
+			NotifyEnemyKilledIfPlayerCaused(actor);
+		destroying.Add(actor);
 	}
 
 	public void DestroyForThisSession(Actor actor)
@@ -3619,9 +3631,9 @@ public partial class Game : IDisposable
 		var MS4B = BitConverter.GetBytes(s1.GetHashCode());
 		var LS4B = BitConverter.GetBytes(s2.GetHashCode());
 		UInt64 hash = (UInt64)MS4B[0] << 56 | (UInt64)MS4B[1] << 48 |
-		              (UInt64)MS4B[2] << 40 | (UInt64)MS4B[3] << 32 |
-		              (UInt64)LS4B[0] << 24 | (UInt64)LS4B[1] << 16 |
-		              (UInt64)LS4B[2] << 8  | (UInt64)LS4B[3] ;
+					  (UInt64)MS4B[2] << 40 | (UInt64)MS4B[3] << 32 |
+					  (UInt64)LS4B[0] << 24 | (UInt64)LS4B[1] << 16 |
+					  (UInt64)LS4B[2] << 8 | (UInt64)LS4B[3];
 		return hash;
 	}
 

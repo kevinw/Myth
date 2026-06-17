@@ -85,7 +85,7 @@ struct type_Params
 
 constant float _97 = {};
 
-kernel void compute_main(constant type_Params& Params [[buffer(0)]], device type_StructuredBuffer_Particle& Src [[buffer(1)]], device type_StructuredBuffer_EffectParams& Effects [[buffer(2)]], device type_StructuredBuffer_EmitParams& Emits [[buffer(3)]], device type_RWStructuredBuffer_Particle& Dst [[buffer(4)]], texture2d<float> SolidMask [[texture(0)]], sampler SolidSampler [[sampler(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_Particle& Src [[buffer(1)]], const device type_StructuredBuffer_EffectParams& Effects [[buffer(2)]], const device type_StructuredBuffer_EmitParams& Emits [[buffer(3)]], device type_RWStructuredBuffer_Particle& Dst [[buffer(4)]], texture2d<float> SolidMask [[texture(0)]], sampler SolidSampler [[sampler(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     do
     {

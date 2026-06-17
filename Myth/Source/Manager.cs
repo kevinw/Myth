@@ -800,6 +800,7 @@ public partial class Manager : App
 				DebugViewMessageImGui();
 			PlatformNavDebugOverlayImGui();
 			BudDebugOverlayImGui();
+			RenderTargetOverlayImGui();
 			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 				FpsOverlayImGui();
 			TransitionViewerImGui();
