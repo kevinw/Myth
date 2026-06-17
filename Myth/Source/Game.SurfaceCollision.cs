@@ -180,8 +180,8 @@ public partial class Game
 	public bool OverlapsSolid(Actor actor, in RectInt bounds)
 	{
 		if (OverlapsRoomCollision(bounds))
-		if (OverlapsRoomCollision(bounds))
-			return true;
+			if (OverlapsRoomCollision(bounds))
+				return true;
 
 		foreach (var other in Actors)
 		{
@@ -205,7 +205,7 @@ public partial class Game
 		var steps = MathF.Ceiling(distance);
 		var previousOffset = Point2.Zero;
 
-		for (var i = 0; i <= steps; i ++)
+		for (var i = 0; i <= steps; i++)
 		{
 			var offset = Round(direction * i);
 			if (offset == previousOffset && i > 0)

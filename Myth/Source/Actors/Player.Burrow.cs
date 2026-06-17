@@ -119,7 +119,7 @@ public partial class Player : Pawn
 			// already exited; drawing the leftover line
 			var factor = burrowGlowExitTimer / BurrowGlowExitTime;
 			arcLength = BurrowGlowArc * factor;
-			Console.WriteLine($"factor: {factor} arcLength: {arcLength}");
+			// Console.WriteLine($"factor: {factor} arcLength: {arcLength}");
 		}
 		else
 			return;

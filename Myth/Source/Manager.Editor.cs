@@ -2899,13 +2899,14 @@ public partial class Manager
 	private static Point2? GetEditorEntryDirection(Room from, Room to)
 	{
 		if (to.TileSpacePosition.X >= from.TileSpacePosition.X + from.Size.X) return Point2.Right;
-		if (to.TileSpacePosition.X + to.Size.X <= from.TileSpacePosition.X)   return Point2.Left;
+		if (to.TileSpacePosition.X + to.Size.X <= from.TileSpacePosition.X) return Point2.Left;
 		if (to.TileSpacePosition.Y >= from.TileSpacePosition.Y + from.Size.Y) return Point2.Down;
-		if (to.TileSpacePosition.Y + to.Size.Y <= from.TileSpacePosition.Y)   return Point2.Up;
+		if (to.TileSpacePosition.Y + to.Size.Y <= from.TileSpacePosition.Y) return Point2.Up;
 		return null;
 	}
 
-	private void Editor()
+
+	void Editor()
 	{
 		using var perf = PerfStats.Time(PerfDetail.EditorWorld);
 		var inner = GameViewRect;
@@ -2917,38 +2918,15 @@ public partial class Manager
 		// Shoulder buttons cycle worlds in edit mode (same as time speed in play mode)
 		if (!worldMouseBlocked)
 		{
-			foreach (var controller in Input.Controllers)
+			int worldSwitch = 0;
+			foreach (var controller in Input.Controllers) if (controller.Connected)
 			{
-				if (!controller.Connected)
-					continue;
-
-				if (controller.Pressed(Buttons.LeftShoulder) || controller.Pressed(Buttons.RightShoulder))
-				{
-					var worlds = Assets.GetWorldIds();
-					if (worlds.Count > 0)
-					{
-						var currentIdx = -1;
-						for (var i = 0; i < worlds.Count; i++)
-						{
-							if (string.Equals(worlds[i], Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase))
-							{
-								currentIdx = i;
-								break;
-							}
-						}
-
-						if (currentIdx < 0)
-							currentIdx = 0;
-
-						var nextIdx = controller.Pressed(Buttons.LeftShoulder)
-							? (currentIdx - 1 + worlds.Count) % worlds.Count
-							: (currentIdx + 1) % worlds.Count;
-
-						SwitchWorld(worlds[nextIdx]);
-					}
-					break;
-				}
+				if (controller.Pressed(Buttons.LeftShoulder)) worldSwitch -= 1;
+				if (controller.Pressed(Buttons.RightShoulder)) worldSwitch += 1;
 			}
+
+			if (worldSwitch != 0)
+				SwitchWorld(worldSwitch);
 		}
 
 		if (!editorViewInitialized)
@@ -3828,7 +3806,32 @@ public partial class Manager
 		ImGui.SameLine(0, ToolbarSpacing);
 	}
 
-	private void SwitchWorld(string worldId)
+	void SwitchWorld(int worldSwitch)
+	{
+		var worlds = Assets.GetWorldIds();
+		if (worlds.Count == 0) return;
+
+		var currentIdx = -1;
+		for (var i = 0; i < worlds.Count; i++)
+		{
+			if (string.Equals(worlds[i], Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase))
+			{
+				currentIdx = i;
+				break;
+			}
+		}
+
+		if (currentIdx < 0)
+			currentIdx = 0;
+
+		var nextIdx = worldSwitch < 0
+			? (currentIdx - 1 + worlds.Count) % worlds.Count
+			: (currentIdx + 1) % worlds.Count;
+
+		SwitchWorld(worlds[nextIdx]);
+	}
+
+	void SwitchWorld(string worldId)
 	{
 		if (string.Equals(worldId, Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase))
 			return;
@@ -3869,7 +3872,7 @@ public partial class Manager
 		fpsElapsed = 0;
 	}
 
-	private void StartAssetWatcher()
+	void StartAssetWatcher()
 	{
 		assetWatcher = new FileSystemWatcher(Path.GetFullPath(Assets.AssetsPath))
 		{
@@ -3887,7 +3890,7 @@ public partial class Manager
 		assetWatcher.EnableRaisingEvents = true;
 	}
 
-	private void StartShaderWatcher()
+	void StartShaderWatcher()
 	{
 		var shadersPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders"));
 		if (!Directory.Exists(shadersPath))
