@@ -104,6 +104,10 @@ async function runSmoke(webSocketDebuggerUrl) {
 	const ws = new WebSocket(webSocketDebuggerUrl);
 	const pending = new Map();
 	const events = [];
+	// Error-severity events (console.error, uncaught exceptions, error-level log
+	// entries — this is where WebGPU uncaptured/validation errors surface). These
+	// fail the smoke unconditionally; `events` is only context for the report.
+	const consoleErrors = [];
 	let id = 0;
 
 	ws.onmessage = event => {
@@ -115,11 +119,20 @@ async function runSmoke(webSocketDebuggerUrl) {
 		}
 
 		if (message.method === "Runtime.consoleAPICalled") {
-			events.push(message.params.args.map(arg => arg.value ?? arg.description ?? "").join(" "));
+			const text = message.params.args.map(arg => arg.value ?? arg.description ?? "").join(" ");
+			events.push(text);
+			if (message.params.type === "error" || message.params.type === "assert")
+				consoleErrors.push(`console.${message.params.type}: ${text}`);
 		} else if (message.method === "Runtime.exceptionThrown") {
-			events.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
+			const details = message.params.exceptionDetails;
+			const text = details.exception?.description ?? details.text;
+			events.push(text);
+			consoleErrors.push(`uncaught exception: ${text}`);
 		} else if (message.method === "Log.entryAdded") {
-			events.push(message.params.entry.text);
+			const entry = message.params.entry;
+			events.push(entry.text);
+			if (entry.level === "error")
+				consoleErrors.push(`${entry.source}: ${entry.text}`);
 		}
 	};
 
@@ -188,11 +201,11 @@ async function runSmoke(webSocketDebuggerUrl) {
 		})()
 	})`);
 	let savedScreenshotPath = "";
-	if (screenshotPath && errorsFromState(events, timedOut, state).length === 0)
+	if (screenshotPath && errorsFromState(events, consoleErrors, timedOut, state).length === 0)
 		savedScreenshotPath = await captureScreenshot(send, screenshotPath);
 
 	ws.close();
-	const errors = errorsFromState(events, timedOut, state);
+	const errors = errorsFromState(events, consoleErrors, timedOut, state);
 	if (errors.length > 0)
 		state.events = events.slice(-20);
 
@@ -284,10 +297,15 @@ async function findFreePort() {
 	return port;
 }
 
-function errorsFromState(events, timedOut, state) {
-	const errors = events.filter(event =>
-		/MONO_WASM|Assertion at|Myth browser startup failed|Unhandled Promise Rejection|Invalid UTF-8|program exited/.test(event) &&
-		!/favicon\\.ico/.test(event));
+function errorsFromState(events, consoleErrors, timedOut, state) {
+	// Any error-severity console/exception/log event fails the smoke (this is how
+	// WebGPU validation errors get caught), plus the legacy fatal-string patterns.
+	const errors = [
+		...consoleErrors.filter(event => !/favicon\.ico/.test(event)),
+		...events.filter(event =>
+			/MONO_WASM|Assertion at|Myth browser startup failed|Unhandled Promise Rejection|Invalid UTF-8|program exited/.test(event) &&
+			!/favicon\.ico/.test(event)),
+	];
 	if (timedOut)
 		errors.push("start ready timeout");
 	if (state.gateHidden !== true)

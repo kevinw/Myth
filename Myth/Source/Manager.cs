@@ -479,8 +479,10 @@ public partial class Manager : App
 		var labels = Audio.GetEventParameterLabels(BackgroundMusicEventPath, BackgroundMusicAreaParameter);
 		if (labels.Length <= 0)
 		{
+			// Expected on the web FMOD bridge (it can't query labels); we fall back
+			// to the default area, so this is a warning, not an error.
 			musicAreas.Add(DefaultMusicArea);
-			Console.Error.WriteLine($"Could not discover FMOD labels for '{BackgroundMusicAreaParameter}' on background music event.");
+			Console.WriteLine($"Warning: could not discover FMOD labels for '{BackgroundMusicAreaParameter}' on background music event; using default area.");
 			return;
 		}
 

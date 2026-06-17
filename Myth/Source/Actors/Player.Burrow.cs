@@ -267,21 +267,21 @@ public partial class Player : Pawn
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
+
+		// emit a final burst up and opposite the direction of leaving
 		if (Game.Particles is { } particles)
 		{
 			float direction = MathF.Atan2(Velocity.X, Velocity.Y);
 			// public void Emit(int effectIndex, Vector2 worldPosition, int count, float directionRadians, float speedScale = 1.0f)
 			particles.Emit(burrowSparkEffect, burrowGlowAnchor + burrowExitOutward * 2.0f, 20, direction + MathF.PI / 2.0f, 2.5f);
 		}
+		UpdateBurrowGlow();
 	}
 
 	void UpdateBurrowAlways()
 	{
 		if (burrowGlowExitTimer > 0)
-		{
-			// called here also so we update
-			UpdateBurrowGlow();
-		}
+			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
 		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);
 	}
 

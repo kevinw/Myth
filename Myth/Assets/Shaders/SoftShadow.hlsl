@@ -53,7 +53,11 @@ float4 fragment_main(VsOutput input) : SV_Target0
     if (input.type.x < -1000) discard;
 
     float2 uv = input.tex_coord;
-    float4 center = Texture.Sample(Sampler, target_uv(uv));
+    // Use SampleLevel (explicit LOD 0) rather than Sample throughout: the later
+    // taps live under data-dependent control flow (the radius early-out / blur
+    // loop), and WGSL forbids implicit-derivative sampling there. This is a
+    // full-screen pass over a non-mipmapped target, so LOD 0 is exact.
+    float4 center = Texture.SampleLevel(Sampler, target_uv(uv), 0.0);
 
     float softness;
     if (BlurParams.w < 0.5)
@@ -83,8 +87,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     {
         float t = (float(i) / float(SOFT_SHADOW_TAPS)) * radius;
         float w = exp(-(t * t) / two_sigma_sq);
-        sum += (Texture.Sample(Sampler, target_uv(uv + step * t)).rgb +
-                Texture.Sample(Sampler, target_uv(uv - step * t)).rgb) * w;
+        sum += (Texture.SampleLevel(Sampler, target_uv(uv + step * t), 0.0).rgb +
+                Texture.SampleLevel(Sampler, target_uv(uv - step * t), 0.0).rgb) * w;
         weight_sum += 2.0 * w;
     }
 
