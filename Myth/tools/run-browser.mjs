@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { createReadStream, statSync, existsSync } from "node:fs";
 import { join, extname, resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createConnection } from "node:net";
 import { platform } from "node:os";
 
@@ -23,6 +23,7 @@ Options:
   --port PORT          Port for the dev server (default: 8082)
   -c, --configuration  Build configuration (default: Debug)
   --publish            Run dotnet publish instead of dotnet build
+  --watch              Keep running dotnet watch and notify the browser after successful rebuilds
   --no-open            Do not open the browser automatically
   -h, --help           Show this help
 `);
@@ -33,6 +34,7 @@ let port = 8082;
 let configuration = "Debug";
 let publish = false;
 let openBrowser = true;
+let watch = false;
 const dotnetArgs = [];
 
 const argv = process.argv.slice(2);
@@ -52,6 +54,9 @@ outer: while (i < argv.length) {
     case "--publish":
       publish = true;
       break;
+    case "--watch":
+      watch = true;
+      break;
     case "--no-open":
       openBrowser = false;
       break;
@@ -70,8 +75,7 @@ outer: while (i < argv.length) {
   i++;
 }
 
-// Build / publish
-{
+function buildOnce() {
   const cmd = publish ? "publish" : "build";
   const result = spawnSync(
     "dotnet",
@@ -88,6 +92,8 @@ outer: while (i < argv.length) {
   );
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+
+buildOnce();
 
 const appBundle = resolve(
   repoDir,
@@ -169,8 +175,33 @@ function serveFile(filePath, res) {
   return true;
 }
 
+const reloadClients = new Set();
+
+function handleReloadEvents(req, res) {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    ...devHeaders,
+  });
+  res.write(": connected\n\n");
+  reloadClients.add(res);
+  req.on("close", () => reloadClients.delete(res));
+}
+
+function broadcastReloadAvailable() {
+  const data = JSON.stringify({ builtAt: Date.now() });
+  for (const res of reloadClients)
+    res.write(`event: built\ndata: ${data}\n\n`);
+}
+
 function handleRequest(req, res) {
   const pathname = new URL(req.url ?? "/", `http://${host}`).pathname;
+  if (pathname === "/__myth/events") {
+    handleReloadEvents(req, res);
+    return;
+  }
+
   const filePath = resolve(join(appBundle, pathname));
   if (!filePath.startsWith(appBundle + sep) && filePath !== appBundle) {
     res.writeHead(403, devHeaders);
@@ -181,6 +212,54 @@ function handleRequest(req, res) {
     res.writeHead(404, devHeaders);
     res.end("Not found");
   }
+}
+
+let watchProcess = null;
+
+function startWatch() {
+  const cmd = publish ? "publish" : "build";
+  const args = [
+    "watch",
+    cmd,
+    "Myth.csproj",
+    "-c",
+    configuration,
+    "-r",
+    "browser-wasm",
+    ...dotnetArgs,
+  ];
+
+  console.log(`Starting dotnet ${args.join(" ")}`);
+  watchProcess = spawn("dotnet", args, { cwd: repoDir, stdio: ["ignore", "pipe", "pipe"] });
+  let skippedInitialSuccess = false;
+
+  const handleOutput = (chunk, stream) => {
+    const text = chunk.toString();
+    stream.write(text);
+    if (!/Build\s+succeeded/i.test(stripAnsi(text)))
+      return;
+
+    if (!skippedInitialSuccess) {
+      skippedInitialSuccess = true;
+      return;
+    }
+
+    broadcastReloadAvailable();
+  };
+
+  watchProcess.stdout.on("data", (chunk) => handleOutput(chunk, process.stdout));
+  watchProcess.stderr.on("data", (chunk) => handleOutput(chunk, process.stderr));
+  watchProcess.on("exit", (code, signal) => {
+    watchProcess = null;
+    if (signal)
+      console.log(`dotnet watch exited from ${signal}`);
+    else if (code !== 0)
+      console.error(`dotnet watch exited with code ${code}`);
+  });
+}
+
+function stripAnsi(text) {
+  return text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
 }
 
 if (await isPortInUse()) {
@@ -197,9 +276,12 @@ server.listen(port, host, () => {
   console.log(`Serving ${appBundle}`);
   console.log(url);
   openUrl();
+  if (watch)
+    startWatch();
 });
 
 process.on("SIGINT", () => {
+  watchProcess?.kill("SIGINT");
   server.close();
   process.exit(0);
 });

@@ -158,9 +158,6 @@ fn vertex_main(
 
 	private PosTexColVertex[] vertices = [];
 	private ushort[] indices = [];
-#if BROWSER
-	private int debugLogFrame;
-#endif
 
 	/// <summary>
 	/// UI Scaling
@@ -381,18 +378,6 @@ fn vertex_main(
 		var window = app.Window ?? throw new InvalidOperationException("ImGui rendering requires a window.");
 
 		var data = ImGui.GetDrawData();
-#if BROWSER
-		if (debugLogFrame++ % 60 == 0)
-		{
-			var io = ImGui.GetIO();
-			Console.WriteLine(
-				$"[imgui] vtx={(data.NativePtr != null ? data.TotalVtxCount : -1)} " +
-				$"cmdLists={(data.NativePtr != null ? data.CmdListsCount : -1)} " +
-				$"display={io.DisplaySize.X}x{io.DisplaySize.Y} " +
-				$"window={window.WidthInPixels}x{window.HeightInPixels} " +
-				$"fbScale={io.DisplayFramebufferScale.X}");
-		}
-#endif
 		if (data.NativePtr == null || data.TotalVtxCount <= 0)
 		{
 			ImGui.SetCurrentContext(nint.Zero);

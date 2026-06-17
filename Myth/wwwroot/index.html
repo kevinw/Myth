@@ -32,86 +32,26 @@
 			height: 100%;
 		}
 
-		#debug-toggle {
+		#reload-button {
 			position: absolute;
 			top: 8px;
-			right: 8px;
 			z-index: 2;
-			width: 28px;
 			height: 28px;
 			border: 1px solid rgba(236, 226, 203, 0.55);
 			background: rgba(10, 12, 16, 0.72);
 			color: #f2ead7;
-			font: 16px system-ui, sans-serif;
 			line-height: 1;
 			cursor: pointer;
 		}
 
-		#debug-overlay {
-			position: absolute;
-			top: 44px;
+		#reload-button {
 			right: 8px;
-			bottom: 8px;
-			z-index: 2;
-			display: grid;
-			grid-template-rows: auto auto 1fr;
-			width: min(520px, calc(100% - 16px));
-			border: 1px solid rgba(236, 226, 203, 0.38);
-			background: rgba(8, 10, 14, 0.88);
-			color: #f3ecd7;
-			font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-			box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
+			padding: 0 10px;
+			font: 700 12px system-ui, sans-serif;
 		}
 
-		#debug-overlay[hidden] {
+		#reload-button[hidden] {
 			display: none;
-		}
-
-		#debug-bar {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 12px;
-			padding: 7px 9px;
-			border-bottom: 1px solid rgba(236, 226, 203, 0.18);
-			background: rgba(255, 255, 255, 0.04);
-		}
-
-		#debug-clear {
-			border: 1px solid rgba(236, 226, 203, 0.35);
-			background: rgba(255, 255, 255, 0.08);
-			color: inherit;
-			font: inherit;
-			padding: 3px 8px;
-			cursor: pointer;
-		}
-
-		#debug-stats {
-			min-height: 44px;
-			padding: 8px 9px;
-			border-bottom: 1px solid rgba(236, 226, 203, 0.18);
-			color: #bfe7ff;
-			white-space: pre-wrap;
-			overflow-wrap: anywhere;
-		}
-
-		#debug-log {
-			overflow: auto;
-			padding: 8px 9px;
-			white-space: pre-wrap;
-			overflow-wrap: anywhere;
-		}
-
-		.debug-line {
-			margin: 0 0 5px;
-		}
-
-		.debug-warn {
-			color: #ffd37a;
-		}
-
-		.debug-error {
-			color: #ff8a8a;
 		}
 
 		#start-gate {
@@ -157,15 +97,7 @@
 <body>
 	<div id="game-shell">
 		<canvas id="foster-canvas" width="1280" height="720"></canvas>
-		<button id="debug-toggle" type="button" aria-label="Toggle debug overlay" aria-pressed="false">⚙</button>
-		<div id="debug-overlay" hidden>
-			<div id="debug-bar">
-				<span>Console</span>
-				<button id="debug-clear" type="button">Clear</button>
-			</div>
-			<div id="debug-stats"></div>
-			<div id="debug-log" aria-live="polite"></div>
-		</div>
+		<button id="reload-button" type="button" hidden>Reload</button>
 	</div>
 	<div id="start-gate">
 		<div id="start-panel">

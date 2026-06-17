@@ -1,4 +1,4 @@
-prepareDebugOverlay();
+prepareReloadPrompt();
 const [{ dotnet }, FosterWebGPU, FosterBrowserFmod] = await Promise.all([
   import("./_framework/dotnet.js"),
   import("./_framework/Content/Web/foster-webgpu.js"),
@@ -50,77 +50,20 @@ try {
   console.error(error?.stack ?? error);
 }
 
-function prepareDebugOverlay() {
-  const storageKey = "Myth.debugOverlayOpen";
-  const overlay = document.querySelector("#debug-overlay");
-  const toggle = document.querySelector("#debug-toggle");
-  const stats = document.querySelector("#debug-stats");
-  const log = document.querySelector("#debug-log");
-  const clear = document.querySelector("#debug-clear");
-  const maxLines = 400;
-  if (
-    !(overlay instanceof HTMLElement) ||
-    !(toggle instanceof HTMLButtonElement) ||
-    !(log instanceof HTMLElement)
-  )
-    return { append: () => {} };
+function prepareReloadPrompt() {
+  const button = document.querySelector("#reload-button");
+  if (!(button instanceof HTMLButtonElement) || !("EventSource" in window))
+    return;
 
-  const setOpen = (open) => {
-    overlay.hidden = !open;
-    toggle.setAttribute("aria-pressed", open ? "true" : "false");
-    localStorage.setItem(storageKey, open ? "1" : "0");
-  };
+  button.addEventListener("click", () => location.reload());
 
-  setOpen(localStorage.getItem(storageKey) === "1");
-  toggle.addEventListener("click", () => setOpen(overlay.hidden));
-  clear?.addEventListener("click", () => log.replaceChildren());
-
-  const append = (level, values) => {
-    const line = document.createElement("div");
-    line.className = `debug-line debug-${level}`;
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${values.map(formatConsoleValue).join(" ")}`;
-    log.appendChild(line);
-
-    while (log.childElementCount > maxLines) log.firstElementChild?.remove();
-    log.scrollTop = log.scrollHeight;
-  };
-
-  for (const level of ["debug", "log", "info", "warn", "error"]) {
-    const original = console[level]?.bind(console);
-    if (!original) continue;
-
-    console[level] = (...values) => {
-      original(...values);
-      append(level, values);
-    };
-  }
-
-  window.addEventListener("error", (event) =>
-    append("error", [event.message, event.filename, event.lineno]),
-  );
-  window.addEventListener("unhandledrejection", (event) =>
-    append("error", ["Unhandled promise rejection", event.reason]),
-  );
-
-  globalThis.MythDebugOverlay = {
-    setStats: (text) => {
-      if (stats instanceof HTMLElement) stats.textContent = text ?? "";
-    },
-  };
-
-  return { append };
-}
-
-function formatConsoleValue(value) {
-  if (value instanceof Error) return value.stack ?? value.message;
-  if (typeof value == "string") return value;
-  if (value == null || typeof value != "object") return String(value);
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
+  const events = new EventSource("/__myth/events");
+  events.addEventListener("built", () => {
+    button.hidden = false;
+  });
+  events.addEventListener("error", () => {
+    button.hidden = true;
+  });
 }
 
 function prepareStartGate() {

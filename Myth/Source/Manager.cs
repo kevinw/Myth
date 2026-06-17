@@ -173,7 +173,11 @@ public partial class Manager : App
 	readonly Lock assetReloadLock = new();
 	readonly List<string> musicAreas = [];
 	readonly bool dumpAtlases;
+#if BROWSER
+	bool musicEnabled;
+#else
 	bool musicEnabled = true;
+#endif
 	bool alwaysOnTop;
 	internal bool PlatformNavDebugVisible { get; set; }
 

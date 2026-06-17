@@ -12,7 +12,9 @@ public partial class Manager
 {
 	// Open with the demo window up by default so the imgui-on-web integration is visible.
 	bool browserImguiOpen = true;
-	bool browserImguiShowDemo = true;
+	bool browserImguiShowDemo = false;
+	static float BrowserToolbarButtonSize => 24;
+	static float BrowserToolbarPadding => 4;
 
 	void InitBrowserImGui()
 	{
@@ -33,8 +35,9 @@ public partial class Manager
 
 		gui.BeginLayout();
 
-		DrawDebugImGuiTriangle();
+		DrawBrowserToolbar(gui);
 
+		/*
 		if (ImGui.Begin("Debug"))
 		{
 			// igText is variadic (traps the wasm P/Invoke interp); use TextUnformatted.
@@ -42,21 +45,50 @@ public partial class Manager
 			ImGui.Checkbox("ImGui Demo", ref browserImguiShowDemo);
 		}
 		ImGui.End();
+		*/
+
 		if (browserImguiShowDemo)
 			ImGui.ShowDemoWindow(ref browserImguiShowDemo);
 		gui.EndLayout();
 	}
 
-	void DrawDebugImGuiTriangle()
+	void DrawBrowserToolbar(ImGuiRenderer gui)
 	{
-		var drawList = ImGui.GetForegroundDrawList();
-		var io = ImGui.GetIO();
-		var center = io.DisplaySize * 0.5f;
-		drawList.AddTriangleFilled(
-			center + new Vector2(0, -150),
-			center + new Vector2(150, 120),
-			center + new Vector2(-150, 120),
-			0xff0000ff);
+		//
+		// disabled for now, toggling music in browser causes a crash.
+		//
+
+		/*
+		var window = RequiredWindow;
+		var size = new Vector2(BrowserToolbarButtonSize + BrowserToolbarPadding * 2);
+		var pos = new Vector2(window.WidthInPixels / gui.Scale - size.X - BrowserToolbarPadding, BrowserToolbarPadding);
+		var flags =
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.NoMove |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoScrollbar |
+			ImGuiWindowFlags.NoScrollWithMouse |
+			ImGuiWindowFlags.NoBringToFrontOnFocus;
+
+		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
+		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BrowserToolbarPadding));
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0));
+
+		ImGui.Begin("BrowserToolbar", flags);
+		ImGui.BeginDisabled();
+		var icon = Assets.GetSubtexture("buttons/10");
+		gui.ImageButton("BrowserMusic", icon, new Vector2(BrowserToolbarButtonSize), false, imagePadding: new Vector2(3));
+		ImGui.EndDisabled();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Browser music toggle is disabled for now");
+		ImGui.End();
+
+		ImGui.PopStyleColor();
+		ImGui.PopStyleVar(3);
+		*/
 	}
 
 	void RenderBrowserImGui()
