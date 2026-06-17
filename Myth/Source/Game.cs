@@ -142,27 +142,29 @@ public partial class Game : IDisposable
 	private float particleBurstTimer;
 	public ParticleSystem? Particles => particleSystem;
 
+	public float SdfAuraScrollTime => Time.SecondsF * SdfAuraScrollSpeed;
+
 	/// <summary>
-	/// Draws an animated rainbow SDF aura. The SDF subtexture (exterior distance,
-	/// padded by <see cref="SpriteSdf.Margin"/>) is drawn so its <paramref name="origin"/>
-	/// (in the padded image's pixels) maps to <paramref name="position"/> — mirror the
-	/// caller's sprite draw (matrix + origin) so the aura flips/squishes with it.
+	/// Draws the combined SDF aura over a quad (corners <paramref name="p0"/>..<paramref name="p3"/>
+	/// in the caller's local space), with the shader uniforms describing the two
+	/// silhouettes. The SDF atlas is the sampled texture.
 	/// </summary>
-	public void RenderSdfAura(Batcher batcher, Subtexture sdf, Vector2 position, Vector2 origin)
+	public void RenderSdfAura(Batcher batcher, Span<float> uniforms, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
 	{
-		if (sdfAuraMaterial == null)
+		if (sdfAuraMaterial == null || SpriteSdf.Atlas is not { } atlas)
 			return;
 
-		sdfAuraMaterial.Material.Fragment.SetUniformBuffer([
-			Time.SecondsF * SdfAuraScrollSpeed, // x: scrolled time
-			20f,                                // y: max aura distance (px)
-			2f,                                 // z: stripe width (px)
-			255f,                               // w: stored-distance scale (R8 -> px)
-		]);
+		// Fill in the world camera (RTopLeft.zw) and zoom (A1.z) so the dither grid
+		// is evaluated in world-pixel space (matching the lighting dither).
+		var camera = RenderCamera;
+		uniforms[6] = camera.X;
+		uniforms[7] = camera.Y;
+		uniforms[30] = zoomLevel;
 
+		sdfAuraMaterial.Material.Fragment.SetUniformBuffer(uniforms);
 		batcher.PushMaterial(sdfAuraMaterial.Material);
 		batcher.PushBlend(new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One));
-		batcher.Image(sdf, position, origin, Vector2.One, 0f, Color.White);
+		batcher.Quad(atlas, p0, p1, p2, p3, new(0, 0), new(1, 0), new(1, 1), new(0, 1), Color.White);
 		batcher.PopBlend();
 		batcher.PopMaterial();
 	}

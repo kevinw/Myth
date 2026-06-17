@@ -51,7 +51,7 @@ public partial class Manager : App
 	public float AmbientOcclusionMinVisibility = 0.35f;
 
 	// Soft shadows: per-light shadow edges soften with distance from the light.
-	public float SoftShadowPenumbra = 6.0f;
+	public float SoftShadowPenumbra = 2.3f;
 	public float SoftShadowMinSoftness = 0.0f;
 
 	/// <summary>
@@ -299,7 +299,7 @@ public partial class Manager : App
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
-		SpriteSdf.Generate(GraphicsDevice); // build the player's silhouette SDF atlas
+		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
 #if BROWSER_NO_FMOD
 		musicAreas.Clear();
 		musicAreas.Add(DefaultMusicArea);
@@ -626,6 +626,9 @@ public partial class Manager : App
 			HeadlessUpdate();
 			return;
 		}
+
+		// Finishes the player SDF atlas once its async GPU readback lands (immediate on desktop, deferred on WebGPU).
+		SpriteSdf.Update();
 
 #if EDITOR
 		using (PerfStats.Time(PerfDetail.DeferredRoomPreviewDisposal))

@@ -722,6 +722,7 @@ public partial class Player : Pawn
 	{
 		if (burrowNeedsGrounding && grounded)
 			burrowNeedsGrounding = false;
+		UpdateAura(Time.Delta);
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
@@ -1457,14 +1458,7 @@ public partial class Player : Pawn
 		// sprite stays visible briefly on entry to play the squash-in.
 		if (!BurrowHidesSprite)
 		{
-			// Test: animated rainbow SDF aura behind the player sprite. Mirror the
-			// sprite's draw (flip/squish matrix + origin) so the aura tracks Facing.
-			if (Sprite is { } sprite && SpriteSdf.PlayerFrame(AnimationFrameIndex) is { } sdf)
-			{
-				batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
-				Game.RenderSdfAura(batcher, sdf, Shift, sprite.Origin + new Vector2(SpriteSdf.Margin));
-				batcher.PopMatrix();
-			}
+			RenderAura(batcher); // rainbow merge aura when both ducking (behind the sprite)
 			base.Render(batcher);
 		}
 		RenderBlink(batcher);

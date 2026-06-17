@@ -8,6 +8,7 @@ namespace Myth;
 
 public partial class Manager
 {
+	static Vector2 ButtonSizeV = new(ButtonSize, ButtonSize);
 	static float BoxSpacing => 0;
 	static float BoxPadding => 4;
 	static int PaletteColumns => 5;
@@ -483,7 +484,7 @@ public partial class Manager
 
 		if (ImGui.Begin("Palette", flags))
 		{
-			if (ImGuiTextButton("Select", new Vector2(ButtonSize * 2 + ButtonSpacing, ButtonSize), actorSelectTool))
+			if (ImGuiSubtextureButton("##Select", Assets.GetSubtexture("buttons/16"), null, actorSelectTool, ButtonSizeV, true))
 				SelectEditorActorTool();
 			ImGui.Spacing();
 			DrawTilePaletteSection();

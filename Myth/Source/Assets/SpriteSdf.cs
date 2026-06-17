@@ -9,38 +9,104 @@ namespace Myth;
 /// pixels, 0 inside the silhouette) to the nearest opaque pixel, padded by
 /// <see cref="Margin"/> so an outward aura up to that distance can be drawn.
 ///
-/// Currently generated for the player only, at startup (see Manager.Startup).
+/// Generated for a small set of named sprites at startup (see Manager.Startup).
 /// </summary>
 public static class SpriteSdf
 {
 	public const int Margin = 24;       // px of distance field kept around the silhouette
 	private const int AlphaThreshold = 127;
 
-	private static Texture? atlas;
-	private static readonly List<Subtexture> playerFrames = [];
+	// Sprites we build SDFs for.
+	private static readonly string[] SpriteNames = ["player", "bud"];
 
-	public static Subtexture? PlayerFrame(int index)
-		=> index >= 0 && index < playerFrames.Count ? playerFrames[index] : null;
+	private static Texture? atlas;
+	private static readonly Dictionary<string, List<Subtexture>> framesByName = new();
+
+	public static Texture? Atlas => atlas;
+	public static Vector2 AtlasSize => atlas != null ? new Vector2(atlas.Width, atlas.Height) : Vector2.One;
+
+	public static Subtexture? Frame(string sprite, int index)
+		=> framesByName.TryGetValue(sprite, out var frames) && index >= 0 && index < frames.Count
+			? frames[index]
+			: null;
+
+	// The color atlas is read back from the GPU asynchronously, because WebGPU
+	// cannot read texture data back synchronously on the browser main thread.
+	// Generate() kicks off the request; Update() polls until the pixels arrive
+	// (immediately on desktop, a frame or two later in the browser) and then
+	// builds the SDF atlas. Until then Frame() returns null and the aura
+	// simply isn't drawn.
+	private static GraphicsDevice? pendingGfx;
+	private static TextureDownload<Color> pendingDownload;
+	private static Color[]? pendingPixels;
+	private static List<(string Name, Subtexture[] Frames)>? pendingSprites;
+	private static int pendingAtlasWidth;
+	private static int pendingAtlasHeight;
 
 	public static void Generate(GraphicsDevice gfx)
 	{
 		atlas?.Dispose();
 		atlas = null;
-		playerFrames.Clear();
+		framesByName.Clear();
+		pendingPixels = null;
+		pendingSprites = null;
 
-		if (Assets.GetSprite("player") is not { } player || player.Frames.Count == 0)
-			return;
 		if (Assets.Atlas is not { } colorAtlas)
 			return;
 
-		var aw = colorAtlas.Width;
-		var ah = colorAtlas.Height;
-		var atlasPixels = new Color[aw * ah];
-		colorAtlas.GetData<Color>(atlasPixels);
+		var sprites = new List<(string, Subtexture[])>();
+		foreach (var name in SpriteNames)
+		{
+			if (Assets.GetSprite(name) is not { } sprite || sprite.Frames.Count == 0)
+				continue;
+			var frames = new Subtexture[sprite.Frames.Count];
+			for (var i = 0; i < frames.Length; i++)
+				frames[i] = sprite.Frames[i].Subtexture;
+			sprites.Add((name, frames));
+		}
+		if (sprites.Count == 0)
+			return;
+
+		pendingGfx = gfx;
+		pendingAtlasWidth = colorAtlas.Width;
+		pendingAtlasHeight = colorAtlas.Height;
+		pendingPixels = new Color[pendingAtlasWidth * pendingAtlasHeight];
+		pendingSprites = sprites;
+
+		// Reuse the same download slot across reloads so we don't leak staging buffers.
+		pendingDownload = colorAtlas.RequestDownload<Color>(pendingDownload);
+
+		// Desktop backends complete the readback synchronously, so this finishes
+		// the build now; WebGPU returns false here and finishes in a later Update.
+		TryFinishDownload();
+	}
+
+	/// <summary>
+	/// Polls the in-flight atlas readback and builds the SDF atlas once the
+	/// pixels are available. No-op when there's no pending download.
+	/// </summary>
+	public static void Update()
+	{
+		if (pendingPixels != null)
+			TryFinishDownload();
+	}
+
+	private static void TryFinishDownload()
+	{
+		if (pendingPixels is not { } atlasPixels || pendingSprites is not { } sprites || pendingGfx is not { } gfx)
+			return;
+		if (!pendingDownload.TryRead(atlasPixels))
+			return; // GPU copy not ready yet; try again next frame
+
+		var aw = pendingAtlasWidth;
+		var ah = pendingAtlasHeight;
+		pendingPixels = null;
+		pendingSprites = null;
 
 		var packer = new Packer { Trim = false, Padding = 2 };
-		for (var i = 0; i < player.Frames.Count; i++)
-			packer.Add($"player_sdf_{i}", BuildFrameSdf(atlasPixels, aw, ah, player.Frames[i].Subtexture));
+		foreach (var (name, frames) in sprites)
+			for (var i = 0; i < frames.Length; i++)
+				packer.Add($"{name}_sdf_{i}", BuildFrameSdf(atlasPixels, aw, ah, frames[i]));
 
 		var output = packer.Pack();
 		if (output.Pages.Count == 0)
@@ -51,9 +117,15 @@ public static class SpriteSdf
 		foreach (var entry in output.Entries)
 			byName[entry.Name] = new Subtexture(atlas, entry.Source, entry.Frame);
 
-		for (var i = 0; i < player.Frames.Count; i++)
-			if (byName.TryGetValue($"player_sdf_{i}", out var sub))
-				playerFrames.Add(sub);
+		framesByName.Clear();
+		foreach (var (name, frames) in sprites)
+		{
+			var list = new List<Subtexture>(frames.Length);
+			for (var i = 0; i < frames.Length; i++)
+				if (byName.TryGetValue($"{name}_sdf_{i}", out var sub))
+					list.Add(sub);
+			framesByName[name] = list;
+		}
 	}
 
 	// Builds a padded SDF image for one frame: the trimmed silhouette is placed in
@@ -192,6 +264,8 @@ public static class SpriteSdf
 	{
 		atlas?.Dispose();
 		atlas = null;
-		playerFrames.Clear();
+		framesByName.Clear();
+		pendingPixels = null;
+		pendingSprites = null;
 	}
 }
