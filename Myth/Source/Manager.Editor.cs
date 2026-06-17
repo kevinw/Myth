@@ -4011,37 +4011,6 @@ public partial class Manager
 		return $"{target.Name}\n{formats}\n{target.Width}×{target.Height}";
 	}
 
-	private void DebugViewMessageImGui()
-	{
-		if (game?.DebugViewMessage is not { } message)
-			return;
-
-		var viewport = GameViewRect;
-		var textSize = ImGui.CalcTextSize(message);
-		var padding = new Vector2(10, 6);
-		var size = textSize + padding * 2;
-		var position = new Vector2(
-			viewport.CenterX - size.X * 0.5f,
-			viewport.Bottom - size.Y - 8);
-
-		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.78f));
-		ImGui.Begin(
-			"DebugViewMessage",
-			ImGuiWindowFlags.NoDecoration |
-			ImGuiWindowFlags.NoInputs |
-			ImGuiWindowFlags.NoSavedSettings |
-			ImGuiWindowFlags.NoFocusOnAppearing |
-			ImGuiWindowFlags.NoNav);
-		ImGui.TextUnformatted(message);
-		ImGui.End();
-		ImGui.PopStyleColor();
-		ImGui.PopStyleVar(2);
-	}
-
 	private void BudDebugOverlayImGui()
 	{
 		if (game == null || !playing || !game.TryGetBudDebugOverlay(out var worldPosition, out var label))

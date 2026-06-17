@@ -1,4 +1,3 @@
-#if IMGUI
 using System.Diagnostics;
 using System.Numerics;
 using Foster.Framework;
@@ -581,4 +580,3 @@ fn vertex_main(
 		ImGui.DestroyContext(context);
 	}
 }
-#endif // IMGUI

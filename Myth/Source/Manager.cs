@@ -3,9 +3,7 @@ using System.Drawing;
 using System.Numerics;
 using System.Text.Json;
 using Foster.Framework;
-#if IMGUI
 using ImGuiNET;
-#endif
 using Color = Foster.Framework.Color;
 
 namespace Myth;
@@ -15,9 +13,7 @@ namespace Myth;
 /// </summary>
 public partial class Manager : App
 {
-#if IMGUI
 	readonly ImGuiRenderer imgui = null!;
-#endif
 
 	public const string DefaultMusicArea = "Resting";
 	public const string BackgroundMusicAreaParameter = "Area";
@@ -216,10 +212,8 @@ public partial class Manager : App
 		controls = new(Input);
 #if EDITOR
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
-#elif BROWSER && IMGUI
+#elif BROWSER
 		imgui = new(this) { Scale = 1.0f };
-#elif IMGUI
-		imgui = new(this);
 #endif
 	}
 
@@ -353,10 +347,13 @@ public partial class Manager : App
 				Console.WriteLine("[Gym] no rooms with Goal found — gym mode idle");
 			}
 		}
-#if EDITOR && DEBUG && !IOS
-		StartAssetWatcher();
-		StartShaderWatcher();
-		StartAudioBankWatcher();
+#if EDITOR && DEBUG && !IOS && !BROWSER
+		if (!OperatingSystem.IsBrowser())
+		{
+			StartAssetWatcher();
+			StartShaderWatcher();
+			StartAudioBankWatcher();
+		}
 #endif
 
 #if EDITOR
@@ -657,24 +654,20 @@ public partial class Manager : App
 		UpdateAudioBankReload();
 #endif
 
-#if EDITOR
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
-#else
-		var keyboardShortcutsBlocked = false;
-#endif
 
 		// Misc. Hotkeys
 		using (PerfStats.Time(PerfDetail.Hotkeys))
 		if (!keyboardShortcutsBlocked) {
 
-			if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
-				ReloadAssets(true);
+			//if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
+				//ReloadAssets(true);
 
-			if (Input.Keyboard.Pressed(Keys.F2))
-			{
-				Actor.TransitionsEnabled = !Actor.TransitionsEnabled;
-				game?.DisplayMessage($"Transitions {(Actor.TransitionsEnabled ? "On" : "Off")}");
-			}
+			//if (Input.Keyboard.Pressed(Keys.F2))
+			//{
+				//Actor.TransitionsEnabled = !Actor.TransitionsEnabled;
+				//game?.DisplayMessage($"Transitions {(Actor.TransitionsEnabled ? "On" : "Off")}");
+				//}
 
 			if (Input.Keyboard.Pressed(Keys.F5))
 				ToggleFpsOverlay();
@@ -790,6 +783,7 @@ public partial class Manager : App
 			// draw to screen
 			batcher.PopMatrix();
 		}
+#endif
 
 		if (imgui != null)
 		{
@@ -799,11 +793,15 @@ public partial class Manager : App
 #if IOS
 			window.StopTextInput();
 #else
-			if (imgui.WantsTextInput)
-				window.StartTextInput();
-			else
-				window.StopTextInput();
+			if (!OperatingSystem.IsBrowser())
+			{
+				if (imgui.WantsTextInput)
+					window.StartTextInput();
+				else
+					window.StopTextInput();
+			}
 #endif
+#if EDITOR
 			if (gameEase < 1.0f && !startingPlay)
 			{
 				using (PerfStats.Time(PerfDetail.PaletteImGui))
@@ -814,20 +812,19 @@ public partial class Manager : App
 				using (PerfStats.Time(PerfDetail.ToolbarImGui))
 					ToolbarImGui();
 			}
+#endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
+#if EDITOR
 			PlatformNavDebugOverlayImGui();
 			BudDebugOverlayImGui();
 			RenderTargetOverlayImGui();
 			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 				FpsOverlayImGui();
 			TransitionViewerImGui();
+#endif
 			imgui.EndLayout();
 		}
-#endif
-#if BROWSER && IMGUI
-		UpdateBrowserImGui();
-#endif
 	}
 
 
@@ -881,15 +878,15 @@ public partial class Manager : App
 
 	bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
 	{
-		if (!keyboardShortcutsBlocked)
-		{
-			if (Input.Keyboard.Pressed(Keys.F6)) ToggleLighting();
-			if (Input.Keyboard.Pressed(Keys.F7)) ToggleDitherAndTileField();
-			if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
-			if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
-			if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
-			if (Input.Keyboard.Pressed(Keys.B))   ToggleBurrowParticles();
-		}
+		//if (!keyboardShortcutsBlocked)
+		//{
+			//if (Input.Keyboard.Pressed(Keys.F6)) ToggleLighting();
+			//if (Input.Keyboard.Pressed(Keys.F7)) ToggleDitherAndTileField();
+			//if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
+			//if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
+			//if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
+			//if (Input.Keyboard.Pressed(Keys.B))   ToggleBurrowParticles();
+			//}
 
 		var chordActive = false;
 		foreach (var controller in Input.Controllers)
@@ -974,13 +971,8 @@ public partial class Manager : App
 
 		if (screenshotPath != null && playing)
 			UpdateScreenshotCapture();
-#if EDITOR
 		if (imgui != null)
 			imgui.Render();
-#endif
-#if BROWSER && IMGUI
-		RenderBrowserImGui();
-#endif
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after
@@ -1432,6 +1424,41 @@ public partial class Manager : App
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 	}
 
+	void DebugViewMessageImGui()
+	{
+		if (game?.DebugViewMessage is not { } message || message == "")
+			return;
+
+		var viewport = ImGui.GetMainViewport().Size;
+		var textSize = ImGui.CalcTextSize(message);
+		var padding = new Vector2(10, 6);
+		var size = textSize + padding * 2;
+		var CenterX = viewport.X * 0.5f;
+		var Bottom = viewport.Y;
+		var position = new Vector2(
+			CenterX - size.X * 0.5f,
+			Bottom - size.Y - 8);
+
+		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
+		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.78f));
+		ImGui.Begin(
+			"DebugViewMessage",
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.NoInputs |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoFocusOnAppearing |
+			ImGuiWindowFlags.NoNav);
+		ImGui.TextUnformatted(message);
+		ImGui.End();
+		ImGui.PopStyleColor();
+		ImGui.PopStyleVar(2);
+	}
+
+	bool ImGuiWantsKeyboard => imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
+
 #if EDITOR
 	bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize), false, imagePadding);
@@ -1516,11 +1543,7 @@ public partial class Manager : App
 		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.54f, 0.62f, 1.0f));
 		ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.10f, 0.30f, 0.35f, 1.0f));
 	}
-
 #if EDITOR
-	bool ImGuiWantsKeyboard
-		=> imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
-
 	void ToggleGame()
 	{
 		if (playing || startingPlay)

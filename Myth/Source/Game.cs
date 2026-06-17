@@ -448,8 +448,6 @@ public partial class Game : IDisposable
 			// Emitter actors enqueue emission in their own Update; this consumes
 			// the queue and advances the GPU sim.
 			StepParticles(Time.Delta);
-			if (allowKeyboardShortcuts && Input.Keyboard.Pressed(Keys.J))
-				BurstTestEffect();
 			if (particleSystem.AutoBurst)
 			{
 				particleBurstTimer -= Time.Delta;
@@ -479,16 +477,18 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.R))
 					ReloadRoom();
 
-				if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
-				if (Input.Keyboard.Pressed(Keys.K)) ToggleDebugView(DebugView.Reflection);
-				if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
-				if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
-				if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
-				if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
-				if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
-				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
+#if !BROWSER
+				//if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
+				//if (Input.Keyboard.Pressed(Keys.K)) ToggleDebugView(DebugView.Reflection);
+				//if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
+				//if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
+				//if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
+				//if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
+				//if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
+				//if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
+#endif
 				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 			}
 
