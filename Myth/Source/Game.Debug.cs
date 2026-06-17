@@ -29,10 +29,6 @@ public partial class Game
 	private bool mouseLightEnabled;
 	private Vector2 mouseLightPosition;
 
-	// Independent overlay (not part of the exclusive DebugView): draws the point the
-	// burrow surface-follower rides, as a 2px rectangle. Toggled with B.
-	private bool showBurrowCenter;
-
 	public List<RectInt> CollisionRectsThisFrame = new();
 
 	// Render-target inspector overlay, drawn by Manager as an ImGui window at full
@@ -44,22 +40,6 @@ public partial class Game
 		ShowRenderTargetOverlay = !ShowRenderTargetOverlay;
 		DisplayMessage($"Debug: Render Targets {(ShowRenderTargetOverlay ? "On" : "Off")}");
 	}
-
-	private void ToggleBurrowCenter()
-	{
-		showBurrowCenter = !showBurrowCenter;
-		DisplayMessage($"Debug: Burrow Center {(showBurrowCenter ? "On" : "Off")}");
-	}
-
-	private void DrawBurrowCenter()
-	{
-		if (GetFirst<Player>() is not { State: Pawn.States.Burrow } player)
-			return;
-
-		Batcher.Rect(player.Position.X - 1, player.Position.Y - 1, 2, 2, 0x00ffff);
-	}
-
-	public bool ShowBurrowDebug => showBurrowCenter;
 
 	// Dump a `radius`-cell solid/air map around `center` (world pixel coords) for diagnosing
 	// where the boundary walk stalls. '#' solid, '.' air, 'X' the center cell.

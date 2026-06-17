@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Numerics;
 using System.Text.Json;
 using Foster.Framework;
-#if EDITOR
+#if IMGUI
 using ImGuiNET;
 #endif
 using Color = Foster.Framework.Color;
@@ -15,13 +15,17 @@ namespace Myth;
 /// </summary>
 public partial class Manager : App
 {
+#if IMGUI
+	readonly ImGuiRenderer imgui = null!;
+#endif
+
 	public const string DefaultMusicArea = "Resting";
 	public const string BackgroundMusicAreaParameter = "Area";
 	public const string RoomReverbParameter = "RoomReverb";
 
-	private const string WindowSettingsFileName = "window.json";
-	private const string FmodProjectPath = "Sounds/FMOD/Myth.fspro";
-	private readonly Point MinimumRestoredWindowSize = new(640, 360);
+	const string WindowSettingsFileName = "window.json";
+	const string FmodProjectPath = "Sounds/FMOD/Myth.fspro";
+	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
 	static float uiScale = 2.7f;
 	static float Scale => uiScale;
@@ -34,10 +38,10 @@ public partial class Manager : App
 	/// <summary>
 	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
 	/// </summary>
-	private Point2 cell = new(0, 0);
-	private string? selectedRoomId;
+	Point2 cell = new(0, 0);
+	string? selectedRoomId;
 #if EDITOR
-	private (string RoomId, Point2 Position)? playtestPlayerPosition;
+	(string RoomId, Point2 Position)? playtestPlayerPosition;
 #endif
 	public bool LightingDitherEnabled = true;
 	public float LightingDitherScale = 1.0f;
@@ -70,10 +74,10 @@ public partial class Manager : App
 	int screenshotsTaken;
 	int playingFrame;
 #if IOS
-	private const float PlayModePinchInThreshold = 0.82f;
-	private float playModePinchStartDistance;
+	const float PlayModePinchInThreshold = 0.82f;
+	float playModePinchStartDistance;
 #endif
-	private const float PlayTransitionDuration = 0.25f;
+	const float PlayTransitionDuration = 0.25f;
 	float playTransition;
 	Vector2 playTransitionFromCenter;
 	Vector2 playTransitionFromSize;
@@ -84,9 +88,9 @@ public partial class Manager : App
 	float fpsOverlayValue;
 
 #if DEBUG
-	private long threadAllocatedBytes;
-	private long threadAllocatedBytesOverlayValue;
-	private long lastAllocated = -1;
+	long threadAllocatedBytes;
+	long threadAllocatedBytesOverlayValue;
+	long lastAllocated = -1;
 #endif
 
 #if EDITOR
@@ -103,16 +107,15 @@ public partial class Manager : App
 	/// <summary>
 	/// Sprite Batcher for general Editor visuals
 	/// </summary>
-	private readonly Batcher batcher;
-	private readonly Controls controls;
+	readonly Batcher batcher;
+	readonly Controls controls;
 
 	/// <summary>
 	/// Visible Space
 	/// </summary>
-	private Window RequiredWindow =>
-		Window ?? throw new InvalidOperationException("Window is not available in headless mode.");
+	Window RequiredWindow => Window ?? throw new InvalidOperationException("Window is not available in headless mode.");
 
-	private Rect View
+	Rect View
 	{
 		get
 		{
@@ -124,11 +127,11 @@ public partial class Manager : App
 	/// <summary>
 	/// Play Workspace when the Game is Open
 	/// </summary>
-	private Rect GameOpenRect => View;
+	Rect GameOpenRect => View;
 
 
 #if !EDITOR
-	private Rect GameViewRect => GameOpenRect;
+	Rect GameViewRect => GameOpenRect;
 #endif
 
 	public Vector2 GameMouseWorld(Game gameInstance)
@@ -146,17 +149,17 @@ public partial class Manager : App
 	/// <summary>
 	/// Mouse Cursor relative to Scale
 	/// </summary>
-	private Vector2 Cursor => Input.Mouse.Position / Scale;
+	Vector2 Cursor => Input.Mouse.Position / Scale;
 
 	/// <summary>
 	/// Line Weight for outlines, relative to Scale
 	/// </summary>
-	private float LineWeight => (1.0f / Scale) * 4;
+	float LineWeight => (1.0f / Scale) * 4;
 
 	/// <summary>
 	/// Tries to get the Existing Room
 	/// </summary>
-	private Room? CurrentRoom
+	Room? CurrentRoom
 	{
 		get
 		{
@@ -200,7 +203,8 @@ public partial class Manager : App
 		}
 
 		uiScale = 2.7f;
-		if (OperatingSystem.IsWindows()) {
+		if (OperatingSystem.IsWindows())
+		{
 			uiScale = 1.5f;
 		}
 
@@ -208,10 +212,16 @@ public partial class Manager : App
 		controls = new(Input);
 #if EDITOR
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
+#elif BROWSER && IMGUI
+		imgui = new(this) { Scale = 1.0f };
+#elif IMGUI
+		imgui = new(this);
 #endif
 	}
 
-	private static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
+
+
+	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
 	{
 #if BROWSER
 		return new AppConfig(
@@ -379,7 +389,7 @@ public partial class Manager : App
 		Factory.Clear();
 	}
 
-	private static void SaveTransitionData()
+	static void SaveTransitionData()
 	{
 #if DEBUG
 		// Membership-only union: the set of transitions we've ever observed (loaded at
@@ -414,9 +424,9 @@ public partial class Manager : App
 #endif
 	}
 
-	private string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
+	string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
 
-	private void LoadAudioBanks()
+	void LoadAudioBanks()
 	{
 		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
 		if (!Directory.Exists(fmodPath))
@@ -461,7 +471,7 @@ public partial class Manager : App
 		}
 	}
 
-	private static string AudioBankRoot(string fmodPath)
+	static string AudioBankRoot(string fmodPath)
 	{
 		var buildPath = Path.Join(fmodPath, "Build");
 #if IOS || BROWSER
@@ -472,7 +482,7 @@ public partial class Manager : App
 		return Directory.Exists(platformPath) ? platformPath : fmodPath;
 	}
 
-	private void LoadMusicAreas()
+	void LoadMusicAreas()
 	{
 		musicAreas.Clear();
 
@@ -491,7 +501,7 @@ public partial class Manager : App
 			musicAreas.Insert(0, DefaultMusicArea);
 	}
 
-	private static int BankLoadOrder(string path)
+	static int BankLoadOrder(string path)
 	{
 		var name = Path.GetFileName(path);
 		return name switch
@@ -503,7 +513,7 @@ public partial class Manager : App
 		};
 	}
 
-	private void LoadWindowSettings()
+	void LoadWindowSettings()
 	{
 		try
 		{
@@ -534,7 +544,7 @@ public partial class Manager : App
 		}
 	}
 
-	private void SaveWindowSettings()
+	void SaveWindowSettings()
 	{
 		if (Window == null)
 			return;
@@ -569,7 +579,7 @@ public partial class Manager : App
 		}
 	}
 
-	private sealed class WindowSettings
+	sealed class WindowSettings
 	{
 		public int X { get; init; }
 		public int Y { get; init; }
@@ -583,7 +593,7 @@ public partial class Manager : App
 		public bool AlwaysOnTop { get; init; }
 	}
 
-	private void HeadlessUpdate()
+	void HeadlessUpdate()
 	{
 		if (!playing) return;
 		if (game == null) return;
@@ -651,32 +661,34 @@ public partial class Manager : App
 
 		// Misc. Hotkeys
 		using (PerfStats.Time(PerfDetail.Hotkeys))
-		{
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
+		if (!keyboardShortcutsBlocked) {
+
+			if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 				ReloadAssets(true);
 
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F2))
+			if (Input.Keyboard.Pressed(Keys.F2))
 			{
 				Actor.TransitionsEnabled = !Actor.TransitionsEnabled;
 				game?.DisplayMessage($"Transitions {(Actor.TransitionsEnabled ? "On" : "Off")}");
 			}
 
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F5))
+			if (Input.Keyboard.Pressed(Keys.F5))
 				ToggleFpsOverlay();
 #if !IOS && !BROWSER
 			if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
 				window.Fullscreen = !window.Fullscreen;
-			if (!keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.Escape))
+			if (Input.Keyboard.Pressed(Keys.Escape))
 			{
 				CurrentRoom?.Save();
 				Exit();
 			}
 #endif
 #if EDITOR
-			if (!keyboardShortcutsBlocked && ToggleEditorPressed())
+			if (ToggleEditorPressed())
 				ToggleGame();
 #endif
 		}
+
 		var perfToggleChordActive = UpdatePerfToggles(keyboardShortcutsBlocked);
 
 		// Run Game
@@ -809,10 +821,13 @@ public partial class Manager : App
 			imgui.EndLayout();
 		}
 #endif
+#if BROWSER && IMGUI
+		UpdateBrowserImGui();
+#endif
 	}
 
 
-	private void UpdateFpsOverlay()
+	void UpdateFpsOverlay()
 	{
 		var now = Stopwatch.GetTimestamp();
 		if (fpsOverlayLastTimestamp == 0)
@@ -854,13 +869,13 @@ public partial class Manager : App
 		fpsOverlayLastTimestamp = now;
 	}
 
-	private void ToggleFpsOverlay()
+	void ToggleFpsOverlay()
 	{
 		fpsOverlayVisible = !fpsOverlayVisible;
 		game?.DisplayMessage($"FPS Overlay {(fpsOverlayVisible ? "On" : "Off")}");
 	}
 
-	private bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
+	bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
 	{
 		if (!keyboardShortcutsBlocked)
 		{
@@ -869,6 +884,7 @@ public partial class Manager : App
 			if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
 			if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
 			if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
+			if (Input.Keyboard.Pressed(Keys.B))   ToggleBurrowParticles();
 		}
 
 		var chordActive = false;
@@ -887,34 +903,34 @@ public partial class Manager : App
 		return chordActive;
 	}
 
-	private static bool PerfModifierDown(ControllerState controller)
+	static bool PerfModifierDown(ControllerState controller)
 		=> !controller.IsGamepad && controller.Down(4);
 
-	private void ToggleLighting()
+	void ToggleLighting()
 	{
 		PerfToggles.Lighting = !PerfToggles.Lighting;
 		ShowPerfToggleMessage("Lighting", PerfToggles.Lighting);
 	}
 
-	private void ToggleDitherAndTileField()
+	void ToggleDitherAndTileField()
 	{
 		PerfToggles.DitherAndTileField = !PerfToggles.DitherAndTileField;
 		ShowPerfToggleMessage("Dither + Tile Field", PerfToggles.DitherAndTileField);
 	}
 
-	private void ToggleNormalBuffer()
+	void ToggleNormalBuffer()
 	{
 		PerfToggles.NormalBuffer = !PerfToggles.NormalBuffer;
 		ShowPerfToggleMessage("Normal Buffer", PerfToggles.NormalBuffer);
 	}
 
-	private void ToggleEmissive()
+	void ToggleEmissive()
 	{
 		PerfToggles.Emissive = !PerfToggles.Emissive;
 		ShowPerfToggleMessage("Emissive", PerfToggles.Emissive);
 	}
 
-	private void TogglePostEffects()
+	void TogglePostEffects()
 	{
 		var enabled = !(PerfToggles.Glitch || PerfToggles.Crt);
 		PerfToggles.Glitch = enabled;
@@ -922,7 +938,13 @@ public partial class Manager : App
 		ShowPerfToggleMessage("Post Effects", enabled);
 	}
 
-	private void ShowPerfToggleMessage(string name, bool enabled)
+	void ToggleBurrowParticles()
+	{
+		PerfToggles.BurrowParticles = !PerfToggles.BurrowParticles;
+		ShowPerfToggleMessage("Burrow Particles", PerfToggles.BurrowParticles);
+	}
+
+	void ShowPerfToggleMessage(string name, bool enabled)
 	{
 		var message = $"Perf: {name} {(enabled ? "On" : "Off")}";
 		Console.WriteLine($"{message} ({PerfToggles.Summary})");
@@ -952,12 +974,15 @@ public partial class Manager : App
 		if (imgui != null)
 			imgui.Render();
 #endif
+#if BROWSER && IMGUI
+		RenderBrowserImGui();
+#endif
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after
 	// play begins, then captures Game.Screen every screenshotInterval frames,
 	// screenshotCount times, and exits.
-	private void UpdateScreenshotCapture()
+	void UpdateScreenshotCapture()
 	{
 		playingFrame++;
 
@@ -972,7 +997,7 @@ public partial class Manager : App
 			Exit();
 	}
 
-	private string ScreenshotPathFor(int index)
+	string ScreenshotPathFor(int index)
 	{
 		var path = screenshotPath!;
 		if (screenshotCount <= 1)
@@ -984,7 +1009,7 @@ public partial class Manager : App
 		return Path.Join(dir, $"{name}_{index}{ext}");
 	}
 
-	private void CaptureScreenshot(string path)
+	void CaptureScreenshot(string path)
 	{
 		if (game == null)
 			return;
@@ -1017,7 +1042,7 @@ public partial class Manager : App
 		}
 	}
 
-	private void RenderPlayTransition()
+	void RenderPlayTransition()
 	{
 		if (game == null)
 			return;
@@ -1030,7 +1055,7 @@ public partial class Manager : App
 	}
 
 #if EDITOR && DEBUG && !IOS
-	private void RequestAssetReload()
+	void RequestAssetReload()
 	{
 		lock (assetReloadLock)
 		{
@@ -1040,7 +1065,7 @@ public partial class Manager : App
 	}
 
 
-	private void UpdateAssetReload()
+	void UpdateAssetReload()
 	{
 		var reload = false;
 
@@ -1062,7 +1087,7 @@ public partial class Manager : App
 	}
 
 
-	private void RequestShaderReload()
+	void RequestShaderReload()
 	{
 		lock (shaderReloadLock)
 		{
@@ -1071,7 +1096,7 @@ public partial class Manager : App
 		}
 	}
 
-	private void UpdateShaderReload()
+	void UpdateShaderReload()
 	{
 		var reload = false;
 
@@ -1092,7 +1117,7 @@ public partial class Manager : App
 			CompileAndReloadShaders();
 	}
 
-	private void RequestAudioBankReload()
+	void RequestAudioBankReload()
 	{
 		lock (audioBankReloadLock)
 		{
@@ -1101,7 +1126,7 @@ public partial class Manager : App
 		}
 	}
 
-	private void UpdateAudioBankReload()
+	void UpdateAudioBankReload()
 	{
 		var reload = false;
 
@@ -1122,7 +1147,7 @@ public partial class Manager : App
 			ReloadAudioBanks();
 	}
 
-	private void ReloadAudioBanks()
+	void ReloadAudioBanks()
 	{
 		try
 		{
@@ -1139,7 +1164,7 @@ public partial class Manager : App
 		}
 	}
 
-	private void CompileAndReloadShaders()
+	void CompileAndReloadShaders()
 	{
 		// Use MSBuild to compile shaders (works on all platforms)
 		var projectDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
@@ -1216,7 +1241,7 @@ public partial class Manager : App
 		}
 	}
 
-	private static string CurrentShaderPlatform()
+	static string CurrentShaderPlatform()
 	{
 		if (OperatingSystem.IsMacOS()) return "mac";
 		if (OperatingSystem.IsWindows()) return "windows";
@@ -1226,7 +1251,7 @@ public partial class Manager : App
 	}
 #endif
 
-	private void ReloadAssets(bool reloadRooms)
+	void ReloadAssets(bool reloadRooms)
 	{
 		try
 		{
@@ -1266,7 +1291,7 @@ public partial class Manager : App
 	/// <summary>
 	/// Draws a box outline (for palette / workspace)
 	/// </summary>
-	private void Box(Rect box)
+	void Box(Rect box)
 	{
 		batcher.Rect(box, 0x000000);
 		batcher.RectLine(box, LineWeight, 0xffffff);
@@ -1275,7 +1300,7 @@ public partial class Manager : App
 	/// <summary>
 	/// Draws a Pressable button with an icon and tooltip
 	/// </summary>
-	private bool Button(Rect button, Subtexture subtexture, string text, bool selected = false)
+	bool Button(Rect button, Subtexture subtexture, string text, bool selected = false)
 	{
 		var hovering = button.Contains(Cursor);
 
@@ -1307,7 +1332,7 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
-	private bool TextButton(Rect button, string text, bool selected = false)
+	bool TextButton(Rect button, string text, bool selected = false)
 	{
 		var hovering = button.Contains(Cursor);
 
@@ -1320,7 +1345,7 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
-	private void StartGame(bool immediate = false)
+	void StartGame(bool immediate = false)
 	{
 #if EDITOR
 		CurrentRoom?.Save();
@@ -1404,13 +1429,13 @@ public partial class Manager : App
 	}
 
 #if EDITOR
-	private bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
+	bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize), false, imagePadding);
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, float? imagePadding = null)
+	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false, imagePadding);
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio, float? imagePadding = null)
+	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio, float? imagePadding = null)
 	{
 		var padding = imagePadding.HasValue ? new Vector2(imagePadding.Value) : (Vector2?)null;
 		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio, padding);
@@ -1422,7 +1447,7 @@ public partial class Manager : App
 		return pressed;
 	}
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Subtexture tooltipImage, bool selected, Vector2 size, bool fitAspectRatio = false)
+	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Subtexture tooltipImage, bool selected, Vector2 size, bool fitAspectRatio = false)
 	{
 		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
 		if (ImGui.IsItemHovered() && (!string.IsNullOrEmpty(tooltip) || tooltipImage.Texture != null))
@@ -1438,7 +1463,7 @@ public partial class Manager : App
 		return pressed;
 	}
 
-	private bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size, bool fitAspectRatio = false)
+	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size, bool fitAspectRatio = false)
 	{
 		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
 		if (ImGui.IsItemHovered() && (!string.IsNullOrEmpty(tooltip) || tooltipTileset != null))
@@ -1454,7 +1479,7 @@ public partial class Manager : App
 		return pressed;
 	}
 
-	private void DrawImGuiTilesetPreview(Tileset tileset)
+	void DrawImGuiTilesetPreview(Tileset tileset)
 	{
 		var tileSize = new Vector2(Game.TileSize * MathF.Max(2, Scale));
 		for (var y = 0; y < tileset.Rows; y++)
@@ -1468,7 +1493,7 @@ public partial class Manager : App
 		}
 	}
 
-	private static bool ImGuiTextButton(string label, Vector2 size, bool selected)
+	static bool ImGuiTextButton(string label, Vector2 size, bool selected)
 	{
 		if (selected)
 			PushSelectedImGuiButtonStyle();
@@ -1481,7 +1506,7 @@ public partial class Manager : App
 		return pressed;
 	}
 
-	private static void PushSelectedImGuiButtonStyle()
+	static void PushSelectedImGuiButtonStyle()
 	{
 		ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.14f, 0.39f, 0.45f, 1.0f));
 		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.54f, 0.62f, 1.0f));
@@ -1489,10 +1514,10 @@ public partial class Manager : App
 	}
 
 #if EDITOR
-	private bool ImGuiWantsKeyboard
+	bool ImGuiWantsKeyboard
 		=> imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
 
-	private void ToggleGame()
+	void ToggleGame()
 	{
 		if (playing || startingPlay)
 			StopGame();
@@ -1502,7 +1527,7 @@ public partial class Manager : App
 #endif
 
 #if IOS
-	private bool UpdatePlayModePinchIn()
+	bool UpdatePlayModePinchIn()
 	{
 		if (!TryGetTwoFingerDistance(Input.Touch, out var distance))
 		{
@@ -1527,7 +1552,7 @@ public partial class Manager : App
 		return true;
 	}
 
-	private static bool TryGetTwoFingerDistance(TouchState touch, out float distance)
+	static bool TryGetTwoFingerDistance(TouchState touch, out float distance)
 	{
 		TouchState.Finger? first = null;
 		TouchState.Finger? second = null;
@@ -1558,7 +1583,7 @@ public partial class Manager : App
 	}
 #endif
 
-	private void StopGame()
+	void StopGame()
 	{
 #if IOS
 		playModePinchStartDistance = 0.0f;
@@ -1583,7 +1608,7 @@ public partial class Manager : App
 		SyncEditorGame();
 	}
 
-	private void SyncEditorGame()
+	void SyncEditorGame()
 	{
 		if (playing || startingPlay)
 			return;
@@ -1593,7 +1618,7 @@ public partial class Manager : App
 	}
 
 #if !IOS && !BROWSER
-	private static void OpenFmodStudio()
+	static void OpenFmodStudio()
 	{
 		var projectPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, FmodProjectPath));
 		if (!File.Exists(projectPath))

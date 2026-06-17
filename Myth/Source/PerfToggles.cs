@@ -13,6 +13,7 @@ public static class PerfToggles
 	public static bool AmbientOcclusion = true;
 	public static bool SoftShadows = true;
 	public static bool Particles = true;
+	public static bool BurrowParticles = true;
 
 	public static void UseSimpleDefaults() // for launching the game without any fancy graphics; useful for testing other sprite based visuals etc
 	{
@@ -26,10 +27,14 @@ public static class PerfToggles
 		LightingNoise = false;
 		AmbientOcclusion = false;
 		SoftShadows = false;
+		BurrowParticles = false;
 	}
 
 	public static void RevealOne(Game game, bool reveal)
 	{
+		//
+		// TODO: do a bit of metaprogramming + field attributes above to avoid hardcoding here...
+		//
 		Func<string>[] toggles = [
 			() => {
 				if (Crt != reveal) {
@@ -98,7 +103,7 @@ public static class PerfToggles
 
 
 		];
-		if (!reveal) toggles = toggles.Reverse().ToArray();
+		if (!reveal) toggles = [.. toggles.Reverse()];
 		foreach (var fn in toggles)
 		{
 			var result = fn();

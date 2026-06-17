@@ -16,7 +16,14 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythBrowser)' != 'true'">
-    <DefineConstants>$(DefineConstants);EDITOR</DefineConstants>
+    <DefineConstants>$(DefineConstants);EDITOR;IMGUI</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Dear ImGui is available in the browser when the prebuilt cimgui wasm archive
+       exists (built by tools/build-cimgui-web.sh). -->
+  <PropertyGroup Condition="('$(RuntimeIdentifier)' == 'browser-wasm' or '$(MythBrowser)' == 'true') and Exists('../Platforms/Web/Native/cimgui.a')">
+    <MythBrowserImGui>true</MythBrowserImGui>
+    <DefineConstants>$(DefineConstants);IMGUI</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' or '$(MythBrowser)' == 'true'">
@@ -32,8 +39,15 @@
     <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" Private="false" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
   </ItemGroup>
 
+  <!-- ImGui.NET provides the managed bindings on every platform. On desktop it also
+       carries the native cimgui; in the browser we link our own wasm build instead. -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythBrowser)' != 'true'">
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+  </ItemGroup>
+
+  <!-- Managed bindings only; the native cimgui wasm archive is linked by the app project (Myth.csproj). -->
+  <ItemGroup Condition="'$(MythBrowserImGui)' == 'true'">
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" ExcludeAssets="native" />
   </ItemGroup>
 
 </Project>

@@ -17,7 +17,7 @@ var<private> out_u002e_var_u002e_SV_Target0_: vec4<f32>;
 
 fn fragment_main_1() {
     var phi_86_: f32;
-    var phi_265_: vec4<f32>;
+    var phi_288_: vec4<f32>;
 
     let _e24 = in_u002e_var_u002e_TEXCOORD0_1;
     let _e25 = in_u002e_var_u002e_TEXCOORD1_1;
@@ -42,13 +42,14 @@ fn fragment_main_1() {
             let _e64 = FragmentUniformBlock.BlurParams[2i];
             let _e65 = (max(_e57, _e60) * _e64);
             if (_e65 < 0.5f) {
-                phi_265_ = (_e35 * _e25);
+                phi_288_ = (_e35 * _e25);
                 break;
             }
             let _e68 = FragmentUniformBlock.BlurParams;
             let _e71 = FragmentUniformBlock.TexelSize;
             let _e73 = (_e68.xy * _e71.xy);
-            let _e75 = max((_e65 * 0.5f), 0.0001f);
+            let _e74 = (_e65 * 0.5f);
+            let _e75 = max(_e74, 0.0001f);
             let _e77 = ((2f * _e75) * _e75);
             let _e79 = (0.16666667f * _e65);
             let _e83 = exp((-((_e79 * _e79)) / _e77));
@@ -64,40 +65,39 @@ fn fragment_main_1() {
             let _e118 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e112.x, (1f - _e112.y)), 0f);
             let _e120 = (_e24 - _e111);
             let _e126 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e120.x, (1f - _e120.y)), 0f);
-            let _e133 = (0.5f * _e65);
-            let _e137 = exp((-((_e133 * _e133)) / _e77));
-            let _e138 = (_e73 * _e133);
-            let _e139 = (_e24 + _e138);
-            let _e145 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e139.x, (1f - _e139.y)), 0f);
-            let _e147 = (_e24 - _e138);
-            let _e153 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e147.x, (1f - _e147.y)), 0f);
-            let _e160 = (0.6666667f * _e65);
-            let _e164 = exp((-((_e160 * _e160)) / _e77));
-            let _e165 = (_e73 * _e160);
-            let _e166 = (_e24 + _e165);
-            let _e172 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e166.x, (1f - _e166.y)), 0f);
-            let _e174 = (_e24 - _e165);
-            let _e180 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e174.x, (1f - _e174.y)), 0f);
-            let _e187 = (0.8333333f * _e65);
-            let _e191 = exp((-((_e187 * _e187)) / _e77));
-            let _e192 = (_e73 * _e187);
-            let _e193 = (_e24 + _e192);
-            let _e199 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e193.x, (1f - _e193.y)), 0f);
-            let _e201 = (_e24 - _e192);
-            let _e207 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e201.x, (1f - _e201.y)), 0f);
-            let _e217 = exp((-((_e65 * _e65)) / _e77));
-            let _e218 = (_e73 * _e65);
-            let _e219 = (_e24 + _e218);
-            let _e225 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e219.x, (1f - _e219.y)), 0f);
-            let _e227 = (_e24 - _e218);
-            let _e233 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e227.x, (1f - _e227.y)), 0f);
-            let _e241 = (((((((_e35.xyz + ((_e91.xyz + _e99.xyz) * _e83)) + ((_e118.xyz + _e126.xyz) * _e110)) + ((_e145.xyz + _e153.xyz) * _e137)) + ((_e172.xyz + _e180.xyz) * _e164)) + ((_e199.xyz + _e207.xyz) * _e191)) + ((_e225.xyz + _e233.xyz) * _e217)) / vec3(((((((1f + (2f * _e83)) + (2f * _e110)) + (2f * _e137)) + (2f * _e164)) + (2f * _e191)) + (2f * _e217))));
-            phi_265_ = (vec4<f32>(_e241.x, _e241.y, _e241.z, _e35.w) * _e25);
+            let _e136 = exp((-((_e74 * _e74)) / _e77));
+            let _e137 = (_e73 * _e74);
+            let _e138 = (_e24 + _e137);
+            let _e144 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e138.x, (1f - _e138.y)), 0f);
+            let _e146 = (_e24 - _e137);
+            let _e152 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e146.x, (1f - _e146.y)), 0f);
+            let _e159 = (0.6666667f * _e65);
+            let _e163 = exp((-((_e159 * _e159)) / _e77));
+            let _e164 = (_e73 * _e159);
+            let _e165 = (_e24 + _e164);
+            let _e171 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e165.x, (1f - _e165.y)), 0f);
+            let _e173 = (_e24 - _e164);
+            let _e179 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e173.x, (1f - _e173.y)), 0f);
+            let _e186 = (0.8333333f * _e65);
+            let _e190 = exp((-((_e186 * _e186)) / _e77));
+            let _e191 = (_e73 * _e186);
+            let _e192 = (_e24 + _e191);
+            let _e198 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e192.x, (1f - _e192.y)), 0f);
+            let _e200 = (_e24 - _e191);
+            let _e206 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e200.x, (1f - _e200.y)), 0f);
+            let _e216 = exp((-((_e65 * _e65)) / _e77));
+            let _e217 = (_e73 * _e65);
+            let _e218 = (_e24 + _e217);
+            let _e224 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e218.x, (1f - _e218.y)), 0f);
+            let _e226 = (_e24 - _e217);
+            let _e232 = textureSampleLevel(Texture, Sampler, vec2<f32>(_e226.x, (1f - _e226.y)), 0f);
+            let _e240 = (((((((_e35.xyz + ((_e91.xyz + _e99.xyz) * _e83)) + ((_e118.xyz + _e126.xyz) * _e110)) + ((_e144.xyz + _e152.xyz) * _e136)) + ((_e171.xyz + _e179.xyz) * _e163)) + ((_e198.xyz + _e206.xyz) * _e190)) + ((_e224.xyz + _e232.xyz) * _e216)) / vec3(((((((1f + (2f * _e83)) + (2f * _e110)) + (2f * _e136)) + (2f * _e163)) + (2f * _e190)) + (2f * _e216))));
+            phi_288_ = (vec4<f32>(_e240.x, _e240.y, _e240.z, _e35.w) * _e25);
             break;
         }
     }
-    let _e249 = phi_265_;
-    out_u002e_var_u002e_SV_Target0_ = _e249;
+    let _e248 = phi_288_;
+    out_u002e_var_u002e_SV_Target0_ = _e248;
     return;
 }
 

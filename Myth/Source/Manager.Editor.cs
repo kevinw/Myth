@@ -100,7 +100,6 @@ public partial class Manager
 	private string roomNameEditor = string.Empty;
 	private string? roomNameEditingRoomId;
 	private string? pendingDeleteRoomId;
-	private readonly ImGuiRenderer imgui = null!;
 
 	/// Toolbar Space
 	private Rect ToolbarRect => new(View.X, View.Y, View.Width, ToolbarHeight);

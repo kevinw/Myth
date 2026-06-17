@@ -207,8 +207,6 @@ public partial class Player : Pawn
 		{
 			var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
 			burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
-			if (Game.ShowBurrowDebug && moved < pixels)
-				Console.WriteLine($"[burrow] heading={burrowHeading} solidLeft={burrowSolidLeft} toward={burrowToward} pos={Position} pixels={pixels} moved={moved}\n{Game.DebugSolidGrid(Position, 5)}");
 			if (moved == 0)
 			{
 				// A dead end (room edge): pop out if the player is driving into it, otherwise
@@ -329,6 +327,8 @@ public partial class Player : Pawn
 
 	void RenderBurrowLine(Batcher batcher)
 	{
+		if (!PerfToggles.BurrowParticles) return;
+
 		var shouldRender = (State == States.Burrow || burrowGlowExitTimer > 0) && glowPoints.Count >= 2;
 
 		float start = glowPoints.ElementAtOrDefault(0).X;

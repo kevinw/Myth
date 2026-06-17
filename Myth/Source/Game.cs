@@ -488,7 +488,6 @@ public partial class Game : IDisposable
 				if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
 				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
-				if (Input.Keyboard.Pressed(Keys.B)) ToggleBurrowCenter();
 				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 			}
@@ -1362,8 +1361,6 @@ public partial class Game : IDisposable
 
 		if (!background && debugView == DebugView.CollisionRects)
 			DrawCollisionRects(); // TODO: don't do this in post-processing context
-		if (!background && showBurrowCenter)
-			DrawBurrowCenter();
 
 		Batcher.PopMatrix();
 		Batcher.Render(target);

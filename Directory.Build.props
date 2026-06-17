@@ -1,0 +1,15 @@
+<Project>
+  <!-- Keep desktop/browser/iOS restore/build state separate. The shared default obj/
+       lets each flavor overwrite project.assets.json and other generated files, which
+       breaks no-restore loops when switching targets. -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BaseIntermediateOutputPath)' == ''">
+    <_FosterGamesIntermediateFlavor Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_FosterGamesIntermediateFlavor>
+    <_FosterGamesIntermediateFlavor Condition="'$(_FosterGamesIntermediateFlavor)' == '' and '$(MythBrowser)' == 'true'">browser-wasm</_FosterGamesIntermediateFlavor>
+    <_FosterGamesIntermediateFlavor Condition="'$(_FosterGamesIntermediateFlavor)' == ''">desktop</_FosterGamesIntermediateFlavor>
+    <BaseIntermediateOutputPath>obj/$(_FosterGamesIntermediateFlavor)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

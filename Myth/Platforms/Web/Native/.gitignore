@@ -1,0 +1,4 @@
+# Build inputs/outputs for tools/build-cimgui-web.sh. The prebuilt cimgui.a is committed
+# so building the browser app needs no emscripten/clone; the source and build dirs are not.
+cimgui-src/
+cimgui-build/

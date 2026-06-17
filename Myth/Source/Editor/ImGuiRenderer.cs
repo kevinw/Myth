@@ -1,4 +1,4 @@
-#if EDITOR
+#if IMGUI
 using System.Diagnostics;
 using System.Numerics;
 using Foster.Framework;
@@ -8,6 +8,36 @@ namespace Myth;
 
 public class ImGuiRenderer : IDisposable
 {
+#if BROWSER
+	const string BrowserVertexShader = """
+struct UniformBlockType {
+	Matrix: mat4x4<f32>,
+}
+
+struct VertexOutput {
+	@location(0) TexCoord: vec2<f32>,
+	@location(1) Color: vec4<f32>,
+	@builtin(position) Position: vec4<f32>,
+}
+
+@group(1) @binding(0)
+var<uniform> UniformBlock: UniformBlockType;
+
+@vertex
+fn vertex_main(
+	@location(0) position: vec2<f32>,
+	@location(1) texCoord: vec2<f32>,
+	@location(2) color: vec4<f32>
+) -> VertexOutput {
+	var output: VertexOutput;
+	output.TexCoord = texCoord;
+	output.Color = color;
+	output.Position = vec4<f32>(position.x, position.y, 0.0, 1.0) * transpose(UniformBlock.Matrix);
+	return output;
+}
+""";
+#endif
+
 	private readonly App app;
 	private readonly IntPtr context;
 	private readonly Mesh<PosTexColVertex, ushort> mesh;
@@ -128,6 +158,9 @@ public class ImGuiRenderer : IDisposable
 
 	private PosTexColVertex[] vertices = [];
 	private ushort[] indices = [];
+#if BROWSER
+	private int debugLogFrame;
+#endif
 
 	/// <summary>
 	/// UI Scaling
@@ -195,6 +228,15 @@ public class ImGuiRenderer : IDisposable
 		// create drawing resources
 		mesh = new Mesh<PosTexColVertex, ushort>(app.GraphicsDevice);
 		material = app.GraphicsDevice.Defaults.TexturedMaterial.Clone();
+#if BROWSER
+		material.Vertex.Shader = new Shader(
+			app.GraphicsDevice,
+			ShaderStage.Vertex,
+			System.Text.Encoding.UTF8.GetBytes(BrowserVertexShader),
+			uniformBufferCount: 1,
+			entryPoint: "vertex_main",
+			name: "ImGuiVertex");
+#endif
 		ImGui.SetCurrentContext(nint.Zero);
 	}
 
@@ -339,6 +381,18 @@ public class ImGuiRenderer : IDisposable
 		var window = app.Window ?? throw new InvalidOperationException("ImGui rendering requires a window.");
 
 		var data = ImGui.GetDrawData();
+#if BROWSER
+		if (debugLogFrame++ % 60 == 0)
+		{
+			var io = ImGui.GetIO();
+			Console.WriteLine(
+				$"[imgui] vtx={(data.NativePtr != null ? data.TotalVtxCount : -1)} " +
+				$"cmdLists={(data.NativePtr != null ? data.CmdListsCount : -1)} " +
+				$"display={io.DisplaySize.X}x{io.DisplaySize.Y} " +
+				$"window={window.WidthInPixels}x{window.HeightInPixels} " +
+				$"fbScale={io.DisplayFramebufferScale.X}");
+		}
+#endif
 		if (data.NativePtr == null || data.TotalVtxCount <= 0)
 		{
 			ImGui.SetCurrentContext(nint.Zero);
@@ -388,10 +442,11 @@ public class ImGuiRenderer : IDisposable
 
 		var size = new Point2(window.WidthInPixels, window.HeightInPixels);
 
-		// setup ortho matrix
+		// setup ortho matrix. Match Foster's Batcher (near 0, far float.MaxValue): imgui
+		// verts sit at z=0, and a near plane > 0 clips them away on WebGPU.
 		Matrix4x4 mat =
 			Matrix4x4.CreateScale(data.FramebufferScale.X, data.FramebufferScale.Y, 1.0f) *
-			Matrix4x4.CreateOrthographicOffCenter(0, size.X, size.Y, 0, 0.1f, 1000.0f);
+			Matrix4x4.CreateOrthographicOffCenter(0, size.X, size.Y, 0, 0, float.MaxValue);
 		material.Vertex.SetUniformBuffer(mat);
 
 		// draw imgui buffers to the screen
@@ -435,6 +490,8 @@ public class ImGuiRenderer : IDisposable
 						VertexOffset = (int)(cmd->VtxOffset + globalVtxOffset),
 						IndexOffset = (int)(cmd->IdxOffset + globalIdxOffset),
 						IndexCount = (int)cmd->ElemCount,
+						DepthTestEnabled = false,
+						DepthWriteEnabled = false,
 						Scissor = scissor
 					});
 				}
@@ -539,4 +596,4 @@ public class ImGuiRenderer : IDisposable
 		ImGui.DestroyContext(context);
 	}
 }
-#endif
+#endif // IMGUI

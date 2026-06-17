@@ -2,3 +2,4 @@ Profiles/
 AtlasDumps/
 artifacts/browser-smoke/
 chrome/
+node_modules/

@@ -22,6 +22,22 @@
     <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
   </PropertyGroup>
 
+  <!-- Dear ImGui for the browser: link the prebuilt cimgui wasm archive into the
+       runtime (built by tools/build-cimgui-web.sh). Linking native code forces a
+       native relink of dotnet.native.wasm. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and Exists('Platforms/Web/Native/cimgui.a')">
+    <MythBrowserImGui>true</MythBrowserImGui>
+    <WasmBuildNative>true</WasmBuildNative>
+    <!-- The web cimgui archive is pinned to ImGui.NET's native ABI. ImGui.NET still
+         P/Invokes a few functions this cimgui build does not export; they are never
+         called here, so leave them unresolved instead of failing the static link. -->
+    <WasmAllowUndefinedSymbols>true</WasmAllowUndefinedSymbols>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MythBrowserImGui)' == 'true'">
+    <NativeFileReference Include="Platforms/Web/Native/cimgui.a" />
+  </ItemGroup>
+
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
     <ShaderPlatform>mac</ShaderPlatform>
     <ShaderOutputExtension>msl</ShaderOutputExtension>

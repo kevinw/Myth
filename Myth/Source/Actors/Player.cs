@@ -131,6 +131,7 @@ public abstract class Pawn : Actor
 		if (jumpBufferTimer > 0)
 			jumpBufferTimer = Calc.Approach(jumpBufferTimer, 0, Time.Delta);
 
+		wallSliding = false;
 		switch (State)
 		{
 			case States.Normal:
@@ -220,6 +221,8 @@ public abstract class Pawn : Actor
 		}
 	}
 
+	bool wallSliding = false;
+
 	protected void NormalState()
 	{
 		if (grounded && input.MoveY > 0)
@@ -278,6 +281,7 @@ public abstract class Pawn : Actor
 			{
 				Facing = -(Signs)wallJumpDir;
 				Play("wall_slide");
+				wallSliding = true;
 			}
 			else if (JumpUpSquish > 0 && !grounded)
 			{
@@ -360,7 +364,7 @@ public abstract class Pawn : Actor
 		// Gate on CanBurrow() so the pose only shows when a burrow can actually result
 		// (not during the cooldown or before we've re-grounded).
 		bool jumpAnimLooping = true;
-		if (!grounded && input.JumpDown && Velocity.Y > -30 && CanBurrow())
+		if (!grounded && input.JumpDown && Velocity.Y > -30 && CanBurrow() && !wallSliding)
 		{
 			jumpAnim = "dive";
 			jumpAnimLooping = false;
@@ -381,6 +385,7 @@ public abstract class Pawn : Actor
 	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
 	protected bool CanBurrow()
 	{
+		if (wallSliding) return false;
 		if (burrowNeedsGrounding) return false;
 		if (burrowTimer < 0) return false; // the ability is still cooling down
 		if (State != States.Normal) return false;

@@ -76,17 +76,15 @@ public class Actor
 	[NoSerialize]
 	public int AnimationFrameIndex => sprite?.GetFrameIndexAt(Animation, animationTime, animationLooping) ?? -1;
 
-	private Vector2 remainder;
-	private Sprite? sprite;
-	private string? animationName;
-	private float animationTime = 0;
-	private bool animationLooping = true;
-	private bool targetAnimationLooping = true;
-	private float hitCooldown = 0;
+	Vector2 remainder;
+	Sprite? sprite;
+	string? animationName;
+	float animationTime = 0;
+	bool animationLooping = true;
+	bool targetAnimationLooping = true;
+	float hitCooldown = 0;
 
-	/// <summary>
 	/// Plays an Animation from our current Sprite, if it exists
-	/// </summary>
 	public void Play(string name, bool looping = true, bool restart = false)
 	{
 		if (sprite != null && sprite.GetAnimation(name) is { } && (restart || animationName != name))
@@ -136,17 +134,13 @@ public class Actor
 		animationLooping = looping;
 	}
 
-	/// <summary>
 	/// Checks if an animation is playing
-	/// </summary>
 	public bool IsPlaying(string name)
 		=> Animation.Name == name;
 
 	public bool Verbose = false;
 
-	/// <summary>
 	/// Checks if an animation is finished playing.
-	/// </summary>
 	public bool IsFinishedPlaying(string? name = null) {
 		if (Verbose) {
 			Console.WriteLine($"IsFinishedPlaying: animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping} name={name}");
@@ -154,7 +148,7 @@ public class Actor
 		return !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
 	}
 
-	private readonly Dictionary<string, float> audioEventDebounceTimes = [];
+	readonly Dictionary<string, float> audioEventDebounceTimes = [];
 	public void AudioEventDebounced(string name, float waitSeconds) {
 		var now = Time.SecondsF;
 		if (audioEventDebounceTimes.TryGetValue(name, out var lastTime) && now - lastTime < waitSeconds)
