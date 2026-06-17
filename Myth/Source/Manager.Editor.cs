@@ -3959,6 +3959,55 @@ public partial class Manager
 	}
 
 
+	// Grid of every render target (toggled in-game with G), drawn at full window
+	// resolution. Hover a tile for its name, color format, and resolution.
+	private void RenderTargetOverlayImGui()
+	{
+		if (game is not { ShowRenderTargetOverlay: true } g || imgui == null)
+			return;
+
+		var targets = g.DebugTargets;
+		if (targets.Count == 0)
+			return;
+
+		ImGui.SetNextWindowSize(new Vector2(760, 560), ImGuiCond.FirstUseEver);
+		var open = true;
+		if (ImGui.Begin("Render Targets", ref open, ImGuiWindowFlags.NoSavedSettings))
+		{
+			const float CellWidth = 200f;
+			const float Spacing = 8f;
+			var avail = ImGui.GetContentRegionAvail().X;
+			var columns = Math.Max(1, (int)((avail + Spacing) / (CellWidth + Spacing)));
+
+			for (var i = 0; i < targets.Count; i++)
+			{
+				var target = targets[i];
+				var aspect = target.Height > 0 ? target.Width / (float)target.Height : 1f;
+				var cellHeight = aspect > 0 ? CellWidth / aspect : CellWidth;
+
+				ImGui.BeginGroup();
+				imgui.Image(new Subtexture(target), new Vector2(CellWidth, cellHeight));
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip(RenderTargetInfo(target));
+				ImGui.TextUnformatted(target.Name);
+				ImGui.EndGroup();
+
+				if ((i + 1) % columns != 0 && i + 1 < targets.Count)
+					ImGui.SameLine(0, Spacing);
+			}
+		}
+		ImGui.End();
+
+		if (!open)
+			g.ShowRenderTargetOverlay = false;
+	}
+
+	private static string RenderTargetInfo(Target target)
+	{
+		var formats = string.Join(", ", target.Attachments.Select(a => a.Format));
+		return $"{target.Name}\n{formats}\n{target.Width}×{target.Height}";
+	}
+
 	private void DebugViewMessageImGui()
 	{
 		if (game?.DebugViewMessage is not { } message)

@@ -35,6 +35,16 @@ public partial class Game
 
 	public List<RectInt> CollisionRectsThisFrame = new();
 
+	// Render-target inspector overlay, drawn by Manager as an ImGui window at full
+	// window resolution. Toggled with G.
+	public bool ShowRenderTargetOverlay { get; set; }
+
+	private void ToggleRenderTargetOverlay()
+	{
+		ShowRenderTargetOverlay = !ShowRenderTargetOverlay;
+		DisplayMessage($"Debug: Render Targets {(ShowRenderTargetOverlay ? "On" : "Off")}");
+	}
+
 	private void ToggleBurrowCenter()
 	{
 		showBurrowCenter = !showBurrowCenter;

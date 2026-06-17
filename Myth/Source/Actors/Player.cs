@@ -379,7 +379,8 @@ public abstract class Pawn : Actor
 
 	protected float burrowTimer = 0;
 	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
-	protected bool CanBurrow() {
+	protected bool CanBurrow()
+	{
 		if (burrowNeedsGrounding) return false;
 		if (burrowTimer < 0) return false; // the ability is still cooling down
 		if (State != States.Normal) return false;
@@ -599,43 +600,6 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
-	static float BurrowDuration => 1.8f;
-	static float BurrowMaxSpeed => 150f;
-	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
-	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
-	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
-	static float BurrowClimbSpeedMultiplier => 0.5f; // straight-up wall climb is half speed; 45° lands in between
-	// The burrow pop is meant to read as stronger than a full held jump: a bigger launch
-	// velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
-	static float BurrowPopForce => JumpForce * 0.80f;
-	static float BurrowPopTime => JumpTime * 0.9f;
-	const int BurrowSubmergeDepth = 4;
-	const int BurrowAttachProbe = 8;
-	const float BurrowGlowArc = 15f;       // contour length traced in each direction (~30px total)
-	static float BurrowGlowWeight => 1.5f;
-	const int BurrowGlowColor = 0xffcfa0;  // matches the player light
-	const float BurrowEnterSquishTime = 0.12f; // sprite stays visible this long to play the squash-in
-	const float BurrowSquashNormal = 0.45f;    // peak compression into the surface at the end of the window
-	const float BurrowSquashTangent = 1.6f;    // peak spread along the surface at the end of the window
-	const float BurrowExitGrace = 0.1f;        // suppress the landing squish briefly so the pop squish survives
-	const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
-
-	private float burrowEnterTimer;
-	private float burrowExitTimer;
-	private Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
-	private bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
-	private Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
-	private bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
-	private bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
-	private Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
-	private Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
-	private float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
-	private float burrowSpeed;                  // current travel speed; eases via accel/friction
-	private readonly List<Vector2> burrowGlow = [];
-	private Vector2 burrowGlowAnchor;
-	private int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
-	private float burrowSparkAccumulator;
-	private const float BurrowSparkRate = 160f; // sparks/sec at full burrow speed
 
 	public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
@@ -646,7 +610,6 @@ public partial class Player : Pawn
 	private bool attackBlocked;
 	private Light? light;
 	private SoundInstance? rollSound;
-	private SoundInstance? burrowSound;
 	private bool CanPlaySquishSound = false;
 
 	public Player()
@@ -727,7 +690,8 @@ public partial class Player : Pawn
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
 		if (burrowExitTimer > 0)
 			burrowExitTimer = Calc.Approach(burrowExitTimer, 0, Time.Delta);
-		if (burrowTimer < 0) {
+		if (burrowTimer < 0)
+		{
 			burrowTimer += Time.Delta;
 			if (burrowTimer > 0) burrowTimer = 0;
 		}
@@ -804,227 +768,6 @@ public partial class Player : Pawn
 		}
 
 	}
-
-	void TryStartBurrow(Vector2 previousVelocity)
-	{
-		if (!CanBurrow()) return;
-
-		Hitbox = new(BurrowHitboxRect);
-		burrowToward = Vector2.UnitY;
-		if (!Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
-		{
-			Hitbox = new(StandingHitboxRect); // no surface in reach; we're staying in Normal
-			return;
-		}
-
-		Velocity = Vector2.Zero;
-		burrowTimer = BurrowDuration;
-		burrowEnterTimer = BurrowEnterSquishTime;
-		burrowMoveRemainder = 0;
-		burrowLastIntent = Vector2.Zero; // a tangential press establishes the orbit
-		burrowOrbiting = false;
-		burrowReverseQueued = false;
-		// Initialize the walk state: heading = +tangent, solid on the right (matches +tangent).
-		burrowSolidLeft = false;
-		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
-
-		// Carry the landing's horizontal momentum into the burrow. Head the way we were
-		// moving (reversing heading + handedness keeps the normal pointing into the solid),
-		// and seed the speed with the incoming horizontal velocity so a fast run/roll dives
-		// straight into a fast burrow instead of starting from a standstill.
-		if (previousVelocity.X != 0 && burrowHeading.X != 0
-			&& Math.Sign(previousVelocity.X) != Math.Sign(burrowHeading.X))
-		{
-			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
-			burrowSolidLeft = !burrowSolidLeft;
-		}
-		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), BurrowMaxSpeed);
-
-		State = States.Burrow;
-		UpdateBurrowShift();
-		UpdateBurrowGlow();
-
-		StopAndReleaseSound(ref burrowSound);
-		burrowSound = Game.CreateAudioEvent("player/burrow", Position);
-		burrowSound?.Start();
-		UpdateBurrowAudio();
-
-		burrowStartCount += 1;
-	}
-
-	int burrowStartCount;
-
-	// Screen-axis squish aligned to a surface normal: `normalScale` is applied along
-	// the TowardSurface axis, `tangentScale` along the surface. Slopes fall back to
-	// whichever axis the normal leans toward (Squish can't rotate).
-	static Vector2 SurfaceSquish(Vector2 toward, float normalScale, float tangentScale)
-	{
-		return new Vector2(tangentScale, normalScale);
-
-		//return MathF.Abs(toward.Y) >= MathF.Abs(toward.X)
-			//? new Vector2(tangentScale, normalScale)
-			//: new Vector2(normalScale, tangentScale);
-	}
-
-	// True once the entry squish has finished and the player is fully submerged.
-	private bool BurrowHidesSprite => State == States.Burrow && burrowEnterTimer <= 0;
-
-	// Rebuild the glow polyline by tracing the boundary from the burrow's own walk state,
-	// so the line is always centered on the burrow point (no re-seed mis-anchoring at corners).
-	void UpdateBurrowGlow()
-	{
-		burrowGlow.Clear();
-		if (State != States.Burrow)
-			return;
-
-		var arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime);
-		if (arcLength <= 0)
-			return;
-
-		burrowGlowAnchor = Position;
-		Game.TraceSurfaceFromState(Position, burrowHeading, burrowSolidLeft, arcLength, burrowGlow);
-	}
-
-	void UpdateBurrowShift()
-		=> Shift = State == States.Burrow ? burrowToward * BurrowSubmergeDepth : new();
-
-	static float BurrowCooldown => 0.25f;
-
-	private void BurrowState()
-	{
-		Velocity = Vector2.Zero;
-
-		// Ramp the squash UP toward peak as the entry window elapses, overriding the
-		// base per-frame decay so it intensifies right up until the sprite vanishes.
-		if (burrowEnterTimer > 0)
-		{
-			burrowEnterTimer = Calc.Approach(burrowEnterTimer, 0, Time.Delta);
-			var t = 1f - burrowEnterTimer / BurrowEnterSquishTime;
-			var peak = SurfaceSquish(burrowToward, BurrowSquashNormal, BurrowSquashTangent);
-			Squish = Vector2.Lerp(Vector2.One, peak, t);
-		}
-
-		// Resolve travel from the world input. Movement is a latched "orbit" that you
-		// can only start (or redirect) by pressing ALONG the surface (tangential to the
-		// heading). A purely perpendicular input (up/down on a horizontal floor, or
-		// left/right on a wall) does nothing. Re-evaluation happens whenever the pressed
-		// direction CHANGES — including slamming the opposite direction with no zero gap
-		// (right -> left) — not just after a release. While a direction is held the
-		// intent is constant, so the heading auto-rotates around corners (hold one way to
-		// loop a whole shape) and the perpendicular input you were holding when you turned
-		// a corner keeps carrying you. Releasing drops the latch.
-		var intent = new Vector2(input.MoveX, input.MoveY);
-		var pressed = intent != Vector2.Zero;
-		var changed = intent != burrowLastIntent;
-		var proj = Vector2.Dot(intent, (Vector2)burrowHeading);
-		var tangential = MathF.Abs(proj) > BurrowTangentDeadzone;
-
-		if (!pressed)
-			burrowOrbiting = false;
-		else if (changed && tangential)
-		{
-			// Pressing opposite the heading queues a reversal (brakes first, below);
-			// pressing forward cancels any pending reversal.
-			burrowReverseQueued = proj < 0;
-			burrowOrbiting = true;
-		}
-		burrowLastIntent = intent;
-
-		var move = burrowOrbiting;
-
-		// Speed eases in and out (accel + friction) rather than snapping, and climbing slows
-		// you down: a straight-up wall heading runs at BurrowClimbSpeedMultiplier, while a 45°
-		// slope lands in between on its own (the cardinal walker alternates up/flat steps).
-		// Descending counts as flat, so you keep momentum going down. A queued reversal
-		// targets zero speed (friction) so a direction switch decelerates before flipping.
-		var climb = MathF.Max(0, -burrowHeading.Y);
-		var targetSpeed = move && !burrowReverseQueued ? BurrowMaxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
-		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
-		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
-
-		// Once braked nearly to a stop, perform the queued reversal and accelerate the
-		// other way next frame.
-		if (burrowReverseQueued && burrowSpeed <= BurrowReverseFlipSpeed)
-		{
-			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
-			burrowSolidLeft = !burrowSolidLeft;
-			burrowReverseQueued = false;
-		}
-
-		burrowMoveRemainder += burrowSpeed * Time.Delta;
-		var pixels = (int)burrowMoveRemainder;
-		burrowMoveRemainder -= pixels;
-		if (pixels > 0)
-		{
-			var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
-			burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
-			if (Game.ShowBurrowDebug && moved < pixels)
-				Console.WriteLine($"[burrow] heading={burrowHeading} solidLeft={burrowSolidLeft} toward={burrowToward} pos={Position} pixels={pixels} moved={moved}\n{Game.DebugSolidGrid(Position, 5)}");
-			if (moved == 0)
-			{
-				// A dead end (room edge): pop out if the player is driving into it, otherwise
-				// we just coasted there on friction — kill the glide and stay put.
-				if (move)
-				{
-					PopOutOfBurrow();
-					return;
-				}
-				burrowSpeed = 0;
-				burrowMoveRemainder = 0;
-			}
-		}
-
-		UpdateBurrowShift();
-		UpdateBurrowGlow();
-		UpdateBurrowAudio();
-		EmitBurrowSparks();
-		Play("burrow");
-
-		if (input.MoveX != 0)
-			Facing = Math.Sign(input.MoveX);
-
-		burrowTimer -= Time.Delta;
-		if (burrowTimer <= 0 || !input.JumpDown)
-			PopOutOfBurrow();
-	}
-
-	private void PopOutOfBurrow()
-	{
-		// Launch away from whatever surface we were riding, plus carry the burrow's
-		// tangential glide momentum (so popping out of a fast rightward burrow keeps
-		// that rightward speed).
-		var exitDir = burrowToward;
-		var popMagnitude = MathF.Abs(BurrowPopForce);
-		var travel = burrowHeading != Point2.Zero
-			? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
-			: Vector2.Zero;
-		Velocity = -exitDir * popMagnitude + travel;
-		// Burrow glide can exceed normal air speed; let the carried horizontal
-		// momentum persist briefly (then normal air clamping reins it in) instead of
-		// being snapped to MaxAirSpeed immediately. Reuses the roll-jump carry, whose
-		// cap (RollJumpSpeed) matches BurrowMaxSpeed.
-		if (MathF.Abs(travel.X) > MaxAirSpeed)
-			rollJumpCarryTimer = RollJumpCarryTime;
-		jumpTimer = BurrowPopTime;
-		jumpCutImmune = true; // the pop keeps its full float even when jump is released
-		Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
-		State = States.Normal;
-		AudioEvent("jump");
-		burrowEnterTimer = 0;
-		burrowExitTimer = BurrowExitGrace;
-		burrowExitOutward = -exitDir; // away from the surface; bias the unstick nudge this way
-		burrowGlow.Clear();
-		burrowTimer = -BurrowCooldown;
-		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
-		UpdateBurrowShift();
-		StopAndReleaseSound(ref burrowSound);
-
-		popOutCount += 1;
-		// Game.DisplayMessage($"Pop out count: {popOutCount}");
-
-	}
-
-	int popOutCount = 0;
 
 	const int UnstickMaxRadius = 16;
 
@@ -1182,48 +925,6 @@ public partial class Player : Pawn
 
 	private void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
 
-	// Drive the burrow loop from the motion every frame so it can breathe instead of
-	// playing a flat tone. Keep the event centered on the listener as we travel (mirrors
-	// the roll sound) — otherwise it stays pinned to the entry point and pans away — and
-	// expose Speed/Climb so the FMOD event can swell/brighten with glide speed and add
-	// tension while scaling a wall. The parameters are no-ops until authored in Studio.
-	private void UpdateBurrowAudio()
-	{
-		if (burrowSound == null)
-			return;
-
-		Game.SetAudioEventPosition(burrowSound, Position, Game.GetFirst(Masks.Player)?.Position);
-
-		var speed01 = BurrowMaxSpeed > 0 ? burrowSpeed / BurrowMaxSpeed : 0f;
-		var climb = MathF.Max(0, -burrowHeading.Y);
-		Game.SetAudioEventParameter(burrowSound, "Speed", speed01);
-		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
-	}
-
-	// Spray sparks out of the surface at the burrow point, scaled by glide speed.
-	private void EmitBurrowSparks()
-	{
-		if (burrowSparkEffect < 0 || Game.Particles is not { } particles)
-			return;
-
-		var speed01 = BurrowMaxSpeed > 0 ? burrowSpeed / BurrowMaxSpeed : 0f;
-		if (speed01 <= 0.05f)
-			return;
-
-		burrowSparkAccumulator += BurrowSparkRate * speed01 * Time.Delta;
-		var count = (int)burrowSparkAccumulator;
-		burrowSparkAccumulator -= count;
-		if (count <= 0)
-			return;
-
-		// Aim out of the solid (burrowToward points into it); fall back to straight up.
-		var outward = -burrowToward;
-		outward = outward.LengthSquared() > 0.0001f ? Vector2.Normalize(outward) : new Vector2(0, -1);
-		var origin = (Vector2)Position + outward * 1.5f;
-		var direction = MathF.Atan2(outward.Y, outward.X);
-		particles.Emit(burrowSparkEffect, origin, count, direction, 0.4f + 0.6f * speed01);
-	}
-
 	private void UpdateFootsteps()
 	{
 		if (State != States.Normal || !grounded || !IsPlaying("run") && !IsPlaying("run_start"))
@@ -1359,9 +1060,7 @@ public partial class Player : Pawn
 	private string GetAttackAnimation()
 	{
 		if (duckAttack)
-		{
 			return attackBlocked ? "duck_attack_block" : "duck_attack";
-		}
 
 		return attackBlocked ? "attack_block" : "attack";
 	}
@@ -1481,42 +1180,22 @@ public partial class Player : Pawn
 	public override void RenderEmissive(Batcher batcher)
 	{
 		base.RenderEmissive(batcher);
-		if (State != States.Burrow || burrowGlow.Count < 2)
-			return;
-
-		// The traced points lie exactly on the solid/air boundary; draw them directly.
-		// The emissive pass pre-pushes a matrix at our Position, so draw in local space.
-		Vector2 origin = Position;
-		for (var i = 0; i + 1 < burrowGlow.Count; i++)
-			batcher.Line(burrowGlow[i] - origin, burrowGlow[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(burrowGlow[i]), BurrowGlowColorAt(burrowGlow[i + 1]));
-	}
-
-	// Glow fades from full at the anchor (player's surface point) to nothing at the ends.
-	private Color BurrowGlowColorAt(Vector2 worldPoint)
-	{
-		var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
-		var alpha = Math.Clamp(1f - dist / BurrowGlowArc, 0f, 1f);
-		return new Color(BurrowGlowColor, alpha);
+		RenderBurrowLine(batcher);
 	}
 
 	void UpdateLightPosition()
 	{
-		if (light != null)
-			light.Position = Position + new Point2(0, -6);
+		light?.Position = Position + new Point2(0, -6);
 	}
 
 	public override void Destroyed()
 	{
 		StopRollSound(true);
-
 		if (light != null)
 		{
 			Game.Destroy(light);
 			light = null;
 		}
-
-		if (burrowSparkEffect >= 0 && Game.Particles is { } particles)
-			particles.ReleaseEffect(burrowSparkEffect);
-		burrowSparkEffect = -1;
+		ReleaseBurrowParticles();
 	}
 }
