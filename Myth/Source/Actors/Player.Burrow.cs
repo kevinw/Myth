@@ -6,9 +6,6 @@ namespace Myth;
 // Burrow-specific loigc
 public partial class Player : Pawn
 {
-	int burrowStartCount;
-	int popOutCount = 0;
-
 	static float BurrowDuration => 1.8f;
 	static float BurrowMaxSpeed => 150f;
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
@@ -30,23 +27,26 @@ public partial class Player : Pawn
 	const float BurrowExitGrace = 0.1f;        // suppress the landing squish briefly so the pop squish survives
 	const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
 
-	private float burrowEnterTimer;
-	private float burrowExitTimer;
-	private Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
-	private bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
-	private Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
-	private bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
-	private bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
-	private Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
-	private Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
-	private float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
-	private float burrowSpeed;                  // current travel speed; eases via accel/friction
-	private readonly List<Vector2> burrowGlow = [];
-	private Vector2 burrowGlowAnchor;
-	private int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
-	private float burrowSparkAccumulator;
-	private const float BurrowSparkRate = 160f; // sparks/sec at full burrow speed
-	private SoundInstance? burrowSound;
+	float burrowEnterTimer;
+	float burrowExitTimer;
+	Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
+	bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
+	Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
+	bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
+	bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
+	Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
+	Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
+	float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
+	float burrowSpeed;                  // current travel speed; eases via accel/friction
+	readonly List<Vector2> glowPoints = [];
+	Point2 burrowGlowAnchor;
+	int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
+	float burrowSparkAccumulator;
+	const float BurrowSparkRate = 160f; // sparks/sec at full burrow speed
+	SoundInstance? burrowSound;
+
+	float burrowGlowExitTimer; // current visual burrow glow exit timer
+	static float BurrowGlowExitTime => 0.13f; // how long to render the line after you pop out of burrowing
 
 	void TryStartBurrow(Vector2 previousVelocity)
 	{
@@ -91,8 +91,6 @@ public partial class Player : Pawn
 		burrowSound = Game.CreateAudioEvent("player/burrow", Position);
 		burrowSound?.Start();
 		UpdateBurrowAudio();
-
-		burrowStartCount += 1;
 	}
 
 	// Screen-axis squish aligned to a surface normal: `normalScale` is applied along
@@ -110,16 +108,30 @@ public partial class Player : Pawn
 	// so the line is always centered on the burrow point (no re-seed mis-anchoring at corners).
 	void UpdateBurrowGlow()
 	{
-		burrowGlow.Clear();
-		if (State != States.Burrow)
+		glowPoints.Clear();
+		float arcLength;
+
+		if (State == States.Burrow) // currently burrowing
+			arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime);
+		else if (burrowGlowExitTimer > 0)
+		{
+
+			// already exited; drawing the leftover line
+			var factor = burrowGlowExitTimer / BurrowGlowExitTime;
+			arcLength = BurrowGlowArc * factor;
+			Console.WriteLine($"factor: {factor} arcLength: {arcLength}");
+		}
+		else
 			return;
 
-		var arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime);
 		if (arcLength <= 0)
 			return;
 
-		burrowGlowAnchor = Position;
-		Game.TraceSurfaceFromState(Position, burrowHeading, burrowSolidLeft, arcLength, burrowGlow);
+		if (State == States.Burrow)
+		{
+			burrowGlowAnchor = Position;
+		}
+		Game.TraceSurfaceFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, arcLength, glowPoints);
 	}
 
 	void UpdateBurrowShift()
@@ -250,17 +262,28 @@ public partial class Player : Pawn
 		burrowEnterTimer = 0;
 		burrowExitTimer = BurrowExitGrace;
 		burrowExitOutward = -exitDir; // away from the surface; bias the unstick nudge this way
-		burrowGlow.Clear();
 		burrowTimer = -BurrowCooldown;
+		burrowGlowExitTimer = BurrowGlowExitTime;
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
-
-		popOutCount += 1;
-		// Game.DisplayMessage($"Pop out count: {popOutCount}");
-
+		if (Game.Particles is { } particles)
+		{
+			float direction = MathF.Atan2(Velocity.X, Velocity.Y);
+			// public void Emit(int effectIndex, Vector2 worldPosition, int count, float directionRadians, float speedScale = 1.0f)
+			particles.Emit(burrowSparkEffect, burrowGlowAnchor + burrowExitOutward * 2.0f, 20, direction + MathF.PI / 2.0f, 2.5f);
+		}
 	}
 
+	void UpdateBurrowAlways()
+	{
+		if (burrowGlowExitTimer > 0)
+		{
+			// called here also so we update
+			UpdateBurrowGlow();
+		}
+		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);
+	}
 
 	// Drive the burrow loop from the motion every frame so it can breathe instead of
 	// playing a flat tone. Keep the event centered on the listener as we travel (mirrors
@@ -306,23 +329,30 @@ public partial class Player : Pawn
 
 	void RenderBurrowLine(Batcher batcher)
 	{
-		if (State != States.Burrow || burrowGlow.Count < 2)
+		var shouldRender = (State == States.Burrow || burrowGlowExitTimer > 0) && glowPoints.Count >= 2;
+
+		float start = glowPoints.ElementAtOrDefault(0).X;
+		float end = glowPoints.ElementAtOrDefault(glowPoints.Count - 1).X;
+		// Console.WriteLine($"{start} to {end} ({glowPoints.Count}) - {shouldRender}");
+		if (!shouldRender)
 			return;
+
+		Color BurrowGlowColorAt(Vector2 worldPoint)
+		{
+			// Glow fades from full at the anchor (player's surface point) to nothing at the ends.
+			var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
+			var alpha = Math.Clamp(1f - dist / BurrowGlowArc, 0f, 1f);
+			return new Color(BurrowGlowColor, alpha);
+		}
 
 		// The traced points lie exactly on the solid/air boundary; draw them directly.
 		// The emissive pass pre-pushes a matrix at our Position, so draw in local space.
 		Vector2 origin = Position;
-		for (var i = 0; i + 1 < burrowGlow.Count; i++)
-			batcher.Line(burrowGlow[i] - origin, burrowGlow[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(burrowGlow[i]), BurrowGlowColorAt(burrowGlow[i + 1]));
+		for (var i = 0; i + 1 < glowPoints.Count; i++)
+			batcher.Line(glowPoints[i] - origin, glowPoints[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(glowPoints[i]), BurrowGlowColorAt(glowPoints[i + 1]));
+
 	}
 
-	// Glow fades from full at the anchor (player's surface point) to nothing at the ends.
-	private Color BurrowGlowColorAt(Vector2 worldPoint)
-	{
-		var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
-		var alpha = Math.Clamp(1f - dist / BurrowGlowArc, 0f, 1f);
-		return new Color(BurrowGlowColor, alpha);
-	}
 
 	void ReleaseBurrowParticles()
 	{

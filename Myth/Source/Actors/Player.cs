@@ -740,10 +740,14 @@ public partial class Player : Pawn
 		if (State != States.Burrow)
 			TryUnstick(burrowExitTimer > 0 ? burrowExitOutward : new Vector2(0, -1));
 
+		// TODO: invert this maybe, it probably belongs in FungalGrowthActor with some
+		// centralized / efficient "sensor" logic
 		var footPosition = new Vector2(Position.X, Position.Y);
 		foreach (var actor in Game.Actors)
 			if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Contains(footPosition))
 				fungus.OnPlayerStep(footPosition);
+
+		UpdateBurrowAlways();
 	}
 
 	protected override void CustomState()
