@@ -10,6 +10,9 @@ public struct StartArgs
 	public bool simple;
 	public bool bench;
 	public bool play; // if true, play immediately on startup even in desktop/editor-capable environments
+	public bool buildAssetPack;
+	public bool useAssetPack;
+	public string? assetPackPath;
 	public int maxFrames = int.MaxValue;
 
 	// Automated screenshot capture (desktop). When screenshotPath is set the
@@ -23,21 +26,26 @@ public struct StartArgs
 	public StartArgs(string[] args)
 	{
 		maxFrames = int.MaxValue;
-		for (int i = 0; i < args.Length - 1; i++)
+		for (int i = 0; i < args.Length; i++)
 		{
-			if (args[i] == "--max-frames" && int.TryParse(args[i + 1], out var mf))
+			var next = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal) ? args[i + 1] : null;
+			if (args[i] == "--max-frames" && next != null && int.TryParse(next, out var mf))
 				maxFrames = mf;
-			else if (args[i] == "--screenshot")
-				screenshotPath = args[i + 1];
-			else if (args[i] == "--screenshot-frame" && int.TryParse(args[i + 1], out var sf))
+			else if (args[i] == "--screenshot" && next != null)
+				screenshotPath = next;
+			else if (args[i] == "--screenshot-frame" && next != null && int.TryParse(next, out var sf))
 				screenshotFrame = sf;
-			else if (args[i] == "--screenshot-interval" && int.TryParse(args[i + 1], out var si))
+			else if (args[i] == "--screenshot-interval" && next != null && int.TryParse(next, out var si))
 				screenshotInterval = si;
-			else if (args[i] == "--screenshot-count" && int.TryParse(args[i + 1], out var sc))
+			else if (args[i] == "--screenshot-count" && next != null && int.TryParse(next, out var sc))
 				screenshotCount = sc;
+			else if ((args[i] == "--build-asset-pack" || args[i] == "--asset-pack") && next != null)
+				assetPackPath = next;
 		}
 
 		dumpAtlases = args.Contains("--dump-atlases");
+		buildAssetPack = args.Contains("--build-asset-pack");
+		useAssetPack = args.Contains("--asset-pack");
 		gym = args.Contains("--gym");
 		headless = args.Contains("--headless");
 		unthrottled = args.Contains("--unthrottled");

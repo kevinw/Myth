@@ -18,8 +18,10 @@
     <MythBrowserThreads Condition="'$(MythBrowserThreads)' == ''">false</MythBrowserThreads>
     <MythBrowserFmodPThread Condition="'$(MythBrowserFmodPThread)' == ''">false</MythBrowserFmodPThread>
     <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <DefineConstants Condition="'$(MythBrowserFmod)' != 'true'">$(DefineConstants);BROWSER_NO_FMOD</DefineConstants>
     <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
+    <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sprites/**;Assets/Tilesets/**;Assets/Textures/**;Assets/Fonts/**;Assets/inbetweens.json;Assets/anim_transitions.json</MythBrowserRawVisualAssetExcludes>
   </PropertyGroup>
 
   <!-- Dear ImGui for the browser: link the prebuilt cimgui wasm archive into the
@@ -85,7 +87,7 @@
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <Content Include="wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**" />
+    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
     <Content Include="Assets/Shaders/Compiled/*.wgsl" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

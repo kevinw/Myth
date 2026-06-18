@@ -15,7 +15,7 @@ public partial class Manager : App
 {
 	readonly ImGuiRenderer imgui = null!;
 
-	public const string DefaultMusicArea = "Resting";
+	public const string DefaultMusicArea = "Calm";
 	public const string BackgroundMusicAreaParameter = "Area";
 	public const string RoomReverbParameter = "RoomReverb";
 
@@ -169,6 +169,9 @@ public partial class Manager : App
 	readonly Lock assetReloadLock = new();
 	readonly List<string> musicAreas = [];
 	readonly bool dumpAtlases;
+	readonly bool buildAssetPack;
+	readonly bool useAssetPack;
+	readonly string? assetPackPath;
 #if BROWSER
 	bool musicEnabled;
 #else
@@ -189,6 +192,9 @@ public partial class Manager : App
 		headless = args.headless;
 		unthrottled = args.unthrottled;
 		gymExitAfterAll = args.gymExitAfterAll;
+		buildAssetPack = args.buildAssetPack;
+		useAssetPack = args.useAssetPack;
+		assetPackPath = args.assetPackPath;
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.MaxFrames = args.maxFrames;
 		playOnStartup = args.play;
@@ -296,6 +302,18 @@ public partial class Manager : App
 
 #if !BROWSER
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
+#endif
+		if (buildAssetPack)
+		{
+			Assets.BuildVisualAssetPack(GraphicsDevice, assetPackPath, dumpAtlases);
+			Exit();
+			return;
+		}
+
+#if BROWSER
+		Assets.ConfigureVisualAssetPack(assetPackPath, true);
+#else
+		Assets.ConfigureVisualAssetPack(assetPackPath, useAssetPack);
 #endif
 		Assets.Load(GraphicsDevice, dumpAtlases);
 		if (Inbetweens.BenchMode)

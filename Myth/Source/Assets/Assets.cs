@@ -1,5 +1,5 @@
 
-
+using System.Text;
 using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -73,11 +73,17 @@ public static class Assets
 
 	private const string assetsFolderName = "Assets";
 	private const string roomsFolderName = "Rooms";
+	private const string packedVisualsFolderName = "Packed/Visuals";
+	private const string packedVisualsManifestName = "manifest.bin";
+	private const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
+	private const int visualAssetPackVersion = 2;
 	private const string defaultWorldId = "Myth";
 	private const string defaultStartRoomId = "start";
 	private const string deletedRoomsFolderName = ".deleted";
 	private static string? path = null;
 	private static string? userRoomsPath = null;
+	private static string? visualAssetPackPath = null;
+	private static bool useVisualAssetPack = false;
 	private static bool? bundledRoomsWritable = null;
 	private static string currentWorldId = defaultWorldId;
 
@@ -100,6 +106,7 @@ public static class Assets
 	}
 
 	public static string RoomsPath => Path.Join(AssetsPath, roomsFolderName);
+	public static string DefaultVisualAssetPackPath => Path.Join(AssetsPath, packedVisualsFolderName);
 	public static string CurrentWorldId => currentWorldId;
 	public static string WorldRoomsPath => Path.Join(RoomsPath, currentWorldId);
 	public static string? UserRoomsPath => userRoomsPath;
@@ -109,6 +116,12 @@ public static class Assets
 	{
 		userRoomsPath = path;
 		bundledRoomsWritable = null;
+	}
+
+	public static void ConfigureVisualAssetPack(string? path, bool enabled)
+	{
+		visualAssetPackPath = string.IsNullOrWhiteSpace(path) ? null : path;
+		useVisualAssetPack = enabled;
 	}
 
 	public static IReadOnlyList<string> GetWorldIds()
@@ -135,16 +148,22 @@ public static class Assets
 	}
 
 	public static void Load(GraphicsDevice gfx, bool dumpPackedAtlases = false)
-		=> Reload(gfx, true, dumpPackedAtlases);
+		=> Reload(gfx, true, dumpPackedAtlases, buildPackPath: null);
 
 	public static void Reload(GraphicsDevice gfx)
-		=> Reload(gfx, false, dumpPackedAtlases: false);
+		=> Reload(gfx, false, dumpPackedAtlases: false, buildPackPath: null);
+
+	public static void BuildVisualAssetPack(GraphicsDevice gfx, string? path = null, bool dumpPackedAtlases = false)
+		=> Reload(gfx, reloadRooms: false, dumpPackedAtlases, buildPackPath: path ?? DefaultVisualAssetPackPath);
 
 	public static void ReloadRooms()
 		=> LoadRooms();
 
-	private static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases)
+	private static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases, string? buildPackPath)
 	{
+		if (buildPackPath == null && (useVisualAssetPack || OperatingSystem.IsBrowser()) && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
+			return;
+
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
 		var actorsPath = Path.Join(AssetsPath, "Actors");
@@ -166,16 +185,7 @@ public static class Assets
 
 		// load main font file
 #if !BROWSER
-		if (Font == null)
-		{
-			Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
-			Font.LineGap = 4;
-		}
-		if (SpeechFont == null)
-		{
-			SpeechFont = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "m3x6.ttf"), 16, premultiplyAlpha: true, pixelPerfect: true);
-			SpeechFont.LineGap = 0;
-		}
+		EnsureFonts(gfx);
 #endif
 
 		// get sprite files
@@ -457,6 +467,9 @@ public static class Assets
 			foreach (var image in images)
 				image.Dispose();
 
+		if (buildPackPath != null)
+			WriteVisualAssetPack(buildPackPath, output);
+
 		oldAtlas?.Dispose();
 		oldLightingNoise?.Dispose();
 
@@ -464,6 +477,673 @@ public static class Assets
 		ParticleEffectAssets.Load();
 		if (reloadRooms)
 			LoadRooms();
+	}
+
+	private static bool TryLoadVisualAssetPack(GraphicsDevice gfx, string directory, bool reloadRooms)
+	{
+		var manifestPath = Path.Join(directory, packedVisualsManifestName);
+		if (!File.Exists(manifestPath))
+			return false;
+
+		using var manifestStream = File.OpenRead(manifestPath);
+		var manifest = ReadVisualAssetPackManifest(manifestStream, manifestPath);
+
+#if !BROWSER
+		EnsureFonts(gfx);
+#endif
+
+		var oldAtlas = Atlas;
+		var oldLightingNoise = LightingNoise;
+		using var atlasImage = new Image(Path.Join(directory, manifest.Atlas));
+		Atlas = new Texture(gfx, atlasImage, name: "Atlas");
+		LightingNoise = null;
+		if (!string.IsNullOrEmpty(manifest.LightingNoise))
+		{
+			var lightingPath = Path.Join(directory, manifest.LightingNoise);
+			if (File.Exists(lightingPath))
+			{
+				using var lighting = new Image(lightingPath);
+				LightingNoise = new Texture(gfx, lighting, name: "LightingNoise");
+			}
+		}
+
+		Subtextures.Clear();
+		foreach (var packed in manifest.Subtextures)
+			Subtextures[packed.Name] = packed.ToSubtexture(Atlas);
+
+		Sprites.Clear();
+		foreach (var packed in manifest.Sprites)
+		{
+			var sprite = new Sprite(packed.Name, packed.Origin.ToVector2());
+			var frames = new List<Sprite.Frame>(packed.Frames.Count);
+			foreach (var frame in packed.Frames)
+				frames.Add(new(
+					frame.Subtexture.ToSubtexture(Atlas),
+					frame.VisibleSubtexture.ToSubtexture(Atlas),
+					frame.NormalSubtexture.ToSubtexture(Atlas),
+					frame.Duration));
+
+			var animations = new List<Sprite.Animation>(packed.Animations.Count);
+			foreach (var animation in packed.Animations)
+				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
+
+			sprite.Reload(packed.Origin.ToVector2(), frames, animations);
+			Sprites.Add(packed.Name, sprite);
+		}
+
+		Tilesets.Clear();
+		foreach (var packed in manifest.Tilesets)
+		{
+			var tileset = new Tileset(packed.Name, packed.Columns, packed.Rows);
+			tileset.Reload(
+				packed.Columns,
+				packed.Rows,
+				LoadSubtextures(packed.Tiles, Atlas),
+				LoadSubtextureGroups(packed.Variants, Atlas),
+				LoadSubtextures(packed.NormalTiles, Atlas),
+				LoadSubtextureGroups(packed.NormalVariants, Atlas),
+				LoadOccluders(packed.OccluderTiles),
+				LoadOccluderGroups(packed.OccluderVariants));
+			Tilesets.Add(packed.Name, tileset);
+		}
+
+		oldAtlas?.Dispose();
+		oldLightingNoise?.Dispose();
+
+		ActorSpecs.LoadSpecs(Path.Join(AssetsPath, "Actors"));
+		ParticleEffectAssets.Load();
+		if (reloadRooms)
+			LoadRooms();
+
+		Console.WriteLine($"Loaded visual asset pack: {manifestPath}");
+		return true;
+	}
+
+	private static void WriteVisualAssetPack(string directory, Packer.Output output)
+	{
+		if (output.Pages.Count != 1)
+			throw new InvalidOperationException($"Visual asset pack expects one atlas page, got {output.Pages.Count}.");
+
+		Directory.CreateDirectory(directory);
+		File.Delete(Path.Join(directory, "manifest.json"));
+		File.Delete(Path.Join(directory, "atlas.png"));
+		File.Delete(Path.Join(directory, "lighting-noise.png"));
+		const string atlasFile = "atlas.qoi";
+		const string lightingNoiseFile = "lighting-noise.qoi";
+		output.Pages[0].WriteQoi(Path.Join(directory, atlasFile));
+
+		string? lightingNoise = null;
+		var noisePath = Path.Join(AssetsPath, "Textures", "noise_tess2_seamless.ase");
+		if (File.Exists(noisePath))
+		{
+			var ase = new Aseprite(noisePath);
+			if (ase.Frames.Length > 0)
+			{
+				using var image = ase.RenderFrame(0);
+				image.WriteQoi(Path.Join(directory, lightingNoiseFile));
+				lightingNoise = lightingNoiseFile;
+			}
+		}
+
+		var manifest = new VisualAssetPackManifest
+		{
+			Atlas = atlasFile,
+			LightingNoise = lightingNoise
+		};
+
+		foreach (var (name, subtexture) in Subtextures)
+			manifest.Subtextures.Add(PackedNamedSubtexture.From(name, subtexture));
+
+		foreach (var (_, sprite) in Sprites)
+		{
+			var packed = new PackedSprite
+			{
+				Name = sprite.Name,
+				Origin = PackedVector.From(sprite.Origin)
+			};
+
+			foreach (var frame in sprite.Frames)
+				packed.Frames.Add(new()
+				{
+					Subtexture = PackedSubtexture.From(frame.Subtexture),
+					VisibleSubtexture = PackedSubtexture.From(frame.VisibleSubtexture),
+					NormalSubtexture = PackedSubtexture.From(frame.NormalSubtexture),
+					Duration = frame.Duration
+				});
+
+			foreach (var animation in sprite.Animations)
+				packed.Animations.Add(new()
+				{
+					Name = animation.Name,
+					FrameStart = animation.FrameStart,
+					FrameCount = animation.FrameCount,
+					Duration = animation.Duration
+				});
+
+			manifest.Sprites.Add(packed);
+		}
+
+		foreach (var (_, tileset) in Tilesets)
+			manifest.Tilesets.Add(PackedTileset.From(tileset));
+
+		var manifestPath = Path.Join(directory, packedVisualsManifestName);
+		WriteVisualAssetPackManifest(manifestPath, manifest);
+		Console.WriteLine($"Wrote visual asset pack: {manifestPath}");
+	}
+
+	private static void WriteVisualAssetPackManifest(string path, VisualAssetPackManifest manifest)
+	{
+		using var stream = File.Create(path);
+		using var writer = new BinaryWriter(stream, Encoding.UTF8);
+		writer.Write(visualAssetPackMagic);
+		writer.Write(visualAssetPackVersion);
+		writer.Write(manifest.Atlas);
+		writer.Write(manifest.LightingNoise != null);
+		if (manifest.LightingNoise != null)
+			writer.Write(manifest.LightingNoise);
+
+		WriteCount(writer, manifest.Subtextures.Count, "subtextures");
+		foreach (var subtexture in manifest.Subtextures)
+		{
+			writer.Write(subtexture.Name);
+			WritePackedSourceRect(writer, subtexture.Source);
+			WritePackedFrameRect(writer, subtexture.Frame);
+		}
+
+		WriteCount(writer, manifest.Sprites.Count, "sprites");
+		foreach (var sprite in manifest.Sprites)
+		{
+			writer.Write(sprite.Name);
+			WritePackedVector(writer, sprite.Origin);
+
+			WriteCount(writer, sprite.Frames.Count, $"{sprite.Name} frames");
+			foreach (var frame in sprite.Frames)
+			{
+				WritePackedSubtexture(writer, frame.Subtexture);
+				WritePackedSubtexture(writer, frame.VisibleSubtexture);
+				WritePackedSubtexture(writer, frame.NormalSubtexture);
+				writer.Write(frame.Duration);
+			}
+
+			WriteCount(writer, sprite.Animations.Count, $"{sprite.Name} animations");
+			foreach (var animation in sprite.Animations)
+			{
+				writer.Write(animation.Name);
+				writer.Write(animation.FrameStart);
+				writer.Write(animation.FrameCount);
+				writer.Write(animation.Duration);
+			}
+		}
+
+		WriteCount(writer, manifest.Tilesets.Count, "tilesets");
+		foreach (var tileset in manifest.Tilesets)
+		{
+			writer.Write(tileset.Name);
+			writer.Write(tileset.Columns);
+			writer.Write(tileset.Rows);
+			WritePackedSubtextures(writer, tileset.Tiles, $"{tileset.Name} tiles");
+			WritePackedSubtextureGroups(writer, tileset.Variants, $"{tileset.Name} variants");
+			WritePackedSubtextures(writer, tileset.NormalTiles, $"{tileset.Name} normal tiles");
+			WritePackedSubtextureGroups(writer, tileset.NormalVariants, $"{tileset.Name} normal variants");
+			WritePackedOccluders(writer, tileset.OccluderTiles, $"{tileset.Name} occluders");
+			WritePackedOccluderGroups(writer, tileset.OccluderVariants, $"{tileset.Name} occluder variants");
+		}
+	}
+
+	private static VisualAssetPackManifest ReadVisualAssetPackManifest(Stream stream, string path)
+	{
+		using var reader = new BinaryReader(stream, Encoding.UTF8);
+		var magic = reader.ReadUInt32();
+		var version = reader.ReadInt32();
+		if (magic != visualAssetPackMagic || version != visualAssetPackVersion)
+			throw new InvalidOperationException($"Unsupported visual asset pack manifest: {path}");
+
+		var manifest = new VisualAssetPackManifest
+		{
+			Atlas = reader.ReadString(),
+			LightingNoise = reader.ReadBoolean() ? reader.ReadString() : null
+		};
+
+		var subtextureCount = ReadCount(reader, "subtextures");
+		for (var i = 0; i < subtextureCount; i++)
+			manifest.Subtextures.Add(new()
+			{
+				Name = reader.ReadString(),
+				Source = ReadPackedSourceRect(reader),
+				Frame = ReadPackedFrameRect(reader)
+			});
+
+		var spriteCount = ReadCount(reader, "sprites");
+		for (var i = 0; i < spriteCount; i++)
+		{
+			var sprite = new PackedSprite
+			{
+				Name = reader.ReadString(),
+				Origin = ReadPackedVector(reader)
+			};
+
+			var frameCount = ReadCount(reader, $"{sprite.Name} frames");
+			for (var frameIndex = 0; frameIndex < frameCount; frameIndex++)
+				sprite.Frames.Add(new()
+				{
+					Subtexture = ReadPackedSubtexture(reader),
+					VisibleSubtexture = ReadPackedSubtexture(reader),
+					NormalSubtexture = ReadPackedSubtexture(reader),
+					Duration = reader.ReadSingle()
+				});
+
+			var animationCount = ReadCount(reader, $"{sprite.Name} animations");
+			for (var animationIndex = 0; animationIndex < animationCount; animationIndex++)
+				sprite.Animations.Add(new()
+				{
+					Name = reader.ReadString(),
+					FrameStart = reader.ReadInt32(),
+					FrameCount = reader.ReadInt32(),
+					Duration = reader.ReadSingle()
+				});
+
+			manifest.Sprites.Add(sprite);
+		}
+
+		var tilesetCount = ReadCount(reader, "tilesets");
+		for (var i = 0; i < tilesetCount; i++)
+		{
+			var tileset = new PackedTileset
+			{
+				Name = reader.ReadString(),
+				Columns = reader.ReadInt32(),
+				Rows = reader.ReadInt32(),
+				Tiles = ReadPackedSubtextures(reader, "tiles"),
+				Variants = ReadPackedSubtextureGroups(reader, "variants"),
+				NormalTiles = ReadPackedSubtextures(reader, "normal tiles"),
+				NormalVariants = ReadPackedSubtextureGroups(reader, "normal variants"),
+				OccluderTiles = ReadPackedOccluders(reader, "occluders"),
+				OccluderVariants = ReadPackedOccluderGroups(reader, "occluder variants")
+			};
+			manifest.Tilesets.Add(tileset);
+		}
+
+		return manifest;
+	}
+
+	private static void WritePackedSubtexture(BinaryWriter writer, PackedSubtexture subtexture)
+	{
+		WritePackedSourceRect(writer, subtexture.Source);
+		WritePackedFrameRect(writer, subtexture.Frame);
+	}
+
+	private static PackedSubtexture ReadPackedSubtexture(BinaryReader reader)
+		=> new() { Source = ReadPackedSourceRect(reader), Frame = ReadPackedFrameRect(reader) };
+
+	private static void WritePackedSubtextures(BinaryWriter writer, List<PackedSubtexture> subtextures, string name)
+	{
+		WriteCount(writer, subtextures.Count, name);
+		foreach (var subtexture in subtextures)
+			WritePackedSubtexture(writer, subtexture);
+	}
+
+	private static List<PackedSubtexture> ReadPackedSubtextures(BinaryReader reader, string name)
+	{
+		var count = ReadCount(reader, name);
+		var result = new List<PackedSubtexture>(count);
+		for (var i = 0; i < count; i++)
+			result.Add(ReadPackedSubtexture(reader));
+		return result;
+	}
+
+	private static void WritePackedSubtextureGroups(BinaryWriter writer, List<List<PackedSubtexture>> groups, string name)
+	{
+		WriteCount(writer, groups.Count, name);
+		foreach (var group in groups)
+			WritePackedSubtextures(writer, group, name);
+	}
+
+	private static List<List<PackedSubtexture>> ReadPackedSubtextureGroups(BinaryReader reader, string name)
+	{
+		var count = ReadCount(reader, name);
+		var result = new List<List<PackedSubtexture>>(count);
+		for (var i = 0; i < count; i++)
+			result.Add(ReadPackedSubtextures(reader, name));
+		return result;
+	}
+
+	private static void WritePackedOccluders(BinaryWriter writer, List<List<PackedOccluderSegment>> occluders, string name)
+	{
+		WriteCount(writer, occluders.Count, name);
+		foreach (var tile in occluders)
+		{
+			WriteCount(writer, tile.Count, name);
+			foreach (var segment in tile)
+			{
+				WritePackedVector(writer, segment.A);
+				WritePackedVector(writer, segment.B);
+			}
+		}
+	}
+
+	private static List<List<PackedOccluderSegment>> ReadPackedOccluders(BinaryReader reader, string name)
+	{
+		var count = ReadCount(reader, name);
+		var result = new List<List<PackedOccluderSegment>>(count);
+		for (var i = 0; i < count; i++)
+		{
+			var segmentCount = ReadCount(reader, name);
+			var tile = new List<PackedOccluderSegment>(segmentCount);
+			for (var segmentIndex = 0; segmentIndex < segmentCount; segmentIndex++)
+				tile.Add(new() { A = ReadPackedVector(reader), B = ReadPackedVector(reader) });
+			result.Add(tile);
+		}
+		return result;
+	}
+
+	private static void WritePackedOccluderGroups(BinaryWriter writer, List<List<List<PackedOccluderSegment>>> groups, string name)
+	{
+		WriteCount(writer, groups.Count, name);
+		foreach (var group in groups)
+			WritePackedOccluders(writer, group, name);
+	}
+
+	private static List<List<List<PackedOccluderSegment>>> ReadPackedOccluderGroups(BinaryReader reader, string name)
+	{
+		var count = ReadCount(reader, name);
+		var result = new List<List<List<PackedOccluderSegment>>>(count);
+		for (var i = 0; i < count; i++)
+			result.Add(ReadPackedOccluders(reader, name));
+		return result;
+	}
+
+	private static void WritePackedSourceRect(BinaryWriter writer, PackedRect rect)
+	{
+		writer.Write(PackU16(rect.X, "source rect x"));
+		writer.Write(PackU16(rect.Y, "source rect y"));
+		writer.Write(PackU16(rect.W, "source rect w"));
+		writer.Write(PackU16(rect.H, "source rect h"));
+	}
+
+	private static PackedRect ReadPackedSourceRect(BinaryReader reader)
+		=> new()
+		{
+			X = reader.ReadUInt16(),
+			Y = reader.ReadUInt16(),
+			W = reader.ReadUInt16(),
+			H = reader.ReadUInt16()
+		};
+
+	private static void WritePackedFrameRect(BinaryWriter writer, PackedRect rect)
+	{
+		writer.Write(PackI16(rect.X, "frame rect x"));
+		writer.Write(PackI16(rect.Y, "frame rect y"));
+		writer.Write(PackU16(rect.W, "frame rect w"));
+		writer.Write(PackU16(rect.H, "frame rect h"));
+	}
+
+	private static PackedRect ReadPackedFrameRect(BinaryReader reader)
+		=> new()
+		{
+			X = reader.ReadInt16(),
+			Y = reader.ReadInt16(),
+			W = reader.ReadUInt16(),
+			H = reader.ReadUInt16()
+		};
+
+	private static void WritePackedVector(BinaryWriter writer, PackedVector vector)
+	{
+		writer.Write(vector.X);
+		writer.Write(vector.Y);
+	}
+
+	private static PackedVector ReadPackedVector(BinaryReader reader)
+		=> new() { X = reader.ReadSingle(), Y = reader.ReadSingle() };
+
+	private static void WriteCount(BinaryWriter writer, int count, string name)
+	{
+		if (count > ushort.MaxValue)
+			throw new InvalidOperationException($"Visual asset pack has too many {name}: {count}");
+		writer.Write((ushort)count);
+	}
+
+	private static int ReadCount(BinaryReader reader, string name)
+	{
+		var count = reader.ReadUInt16();
+		return count;
+	}
+
+	private static ushort PackU16(float value, string name)
+	{
+		var rounded = MathF.Round(value);
+		if (!float.IsFinite(value) || MathF.Abs(value - rounded) > 0.001f || rounded < 0 || rounded > ushort.MaxValue)
+			throw new InvalidOperationException($"Visual asset pack {name} does not fit ushort pixel coordinates: {value}");
+		return (ushort)rounded;
+	}
+
+	private static short PackI16(float value, string name)
+	{
+		var rounded = MathF.Round(value);
+		if (!float.IsFinite(value) || MathF.Abs(value - rounded) > 0.001f || rounded < short.MinValue || rounded > short.MaxValue)
+			throw new InvalidOperationException($"Visual asset pack {name} does not fit short pixel coordinates: {value}");
+		return (short)rounded;
+	}
+
+	private static void EnsureFonts(GraphicsDevice gfx)
+	{
+		if (Font == null)
+		{
+			Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
+			Font.LineGap = 4;
+		}
+		if (SpeechFont == null)
+		{
+			SpeechFont = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "m3x6.ttf"), 16, premultiplyAlpha: true, pixelPerfect: true);
+			SpeechFont.LineGap = 0;
+		}
+	}
+
+	private static List<Subtexture> LoadSubtextures(List<PackedSubtexture> packed, Texture atlas)
+	{
+		var result = new List<Subtexture>(packed.Count);
+		foreach (var item in packed)
+			result.Add(item.ToSubtexture(atlas));
+		return result;
+	}
+
+	private static List<List<Subtexture>> LoadSubtextureGroups(List<List<PackedSubtexture>> packed, Texture atlas)
+	{
+		var result = new List<List<Subtexture>>(packed.Count);
+		foreach (var group in packed)
+			result.Add(LoadSubtextures(group, atlas));
+		return result;
+	}
+
+	private static List<Tileset.OccluderSegment[]> LoadOccluders(List<List<PackedOccluderSegment>> packed)
+	{
+		var result = new List<Tileset.OccluderSegment[]>(packed.Count);
+		foreach (var tile in packed)
+		{
+			var segments = new Tileset.OccluderSegment[tile.Count];
+			for (var i = 0; i < tile.Count; i++)
+				segments[i] = tile[i].ToSegment();
+			result.Add(segments);
+		}
+		return result;
+	}
+
+	private static List<List<Tileset.OccluderSegment[]>> LoadOccluderGroups(List<List<List<PackedOccluderSegment>>> packed)
+	{
+		var result = new List<List<Tileset.OccluderSegment[]>>(packed.Count);
+		foreach (var group in packed)
+			result.Add(LoadOccluders(group));
+		return result;
+	}
+
+	private sealed class VisualAssetPackManifest
+	{
+		public string Atlas { get; set; } = "atlas.png";
+		public string? LightingNoise { get; set; }
+		public List<PackedNamedSubtexture> Subtextures { get; set; } = [];
+		public List<PackedSprite> Sprites { get; set; } = [];
+		public List<PackedTileset> Tilesets { get; set; } = [];
+	}
+
+	private sealed class PackedNamedSubtexture : PackedSubtexture
+	{
+		public string Name { get; set; } = "";
+
+		public static PackedNamedSubtexture From(string name, Subtexture subtexture)
+		{
+			var packed = new PackedNamedSubtexture { Name = name };
+			packed.Set(subtexture);
+			return packed;
+		}
+	}
+
+	private class PackedSubtexture
+	{
+		public PackedRect Source { get; set; } = new();
+		public PackedRect Frame { get; set; } = new();
+
+		public static PackedSubtexture From(Subtexture subtexture)
+		{
+			var packed = new PackedSubtexture();
+			packed.Set(subtexture);
+			return packed;
+		}
+
+		protected void Set(Subtexture subtexture)
+		{
+			Source = PackedRect.From(subtexture.Source);
+			Frame = PackedRect.From(subtexture.Frame);
+		}
+
+		public Subtexture ToSubtexture(Texture atlas)
+			=> new(atlas, Source.ToRect(), Frame.ToRect());
+	}
+
+	private sealed class PackedSprite
+	{
+		public string Name { get; set; } = "";
+		public PackedVector Origin { get; set; } = new();
+		public List<PackedSpriteFrame> Frames { get; set; } = [];
+		public List<PackedSpriteAnimation> Animations { get; set; } = [];
+	}
+
+	private sealed class PackedSpriteFrame
+	{
+		public PackedSubtexture Subtexture { get; set; } = new();
+		public PackedSubtexture VisibleSubtexture { get; set; } = new();
+		public PackedSubtexture NormalSubtexture { get; set; } = new();
+		public float Duration { get; set; }
+	}
+
+	private sealed class PackedSpriteAnimation
+	{
+		public string Name { get; set; } = "";
+		public int FrameStart { get; set; }
+		public int FrameCount { get; set; }
+		public float Duration { get; set; }
+	}
+
+	private sealed class PackedTileset
+	{
+		public string Name { get; set; } = "";
+		public int Columns { get; set; }
+		public int Rows { get; set; }
+		public List<PackedSubtexture> Tiles { get; set; } = [];
+		public List<List<PackedSubtexture>> Variants { get; set; } = [];
+		public List<PackedSubtexture> NormalTiles { get; set; } = [];
+		public List<List<PackedSubtexture>> NormalVariants { get; set; } = [];
+		public List<List<PackedOccluderSegment>> OccluderTiles { get; set; } = [];
+		public List<List<List<PackedOccluderSegment>>> OccluderVariants { get; set; } = [];
+
+		public static PackedTileset From(Tileset tileset)
+		{
+			return new()
+			{
+				Name = tileset.Name,
+				Columns = tileset.Columns,
+				Rows = tileset.Rows,
+				Tiles = PackSubtextures(tileset.Tiles),
+				Variants = PackSubtextureGroups(tileset.Variants),
+				NormalTiles = PackSubtextures(tileset.NormalTiles),
+				NormalVariants = PackSubtextureGroups(tileset.NormalVariants),
+				OccluderTiles = PackOccluders(tileset.OccluderTiles),
+				OccluderVariants = PackOccluderGroups(tileset.OccluderVariants)
+			};
+		}
+	}
+
+	private sealed class PackedRect
+	{
+		public float X { get; set; }
+		public float Y { get; set; }
+		public float W { get; set; }
+		public float H { get; set; }
+
+		public static PackedRect From(Rect rect)
+			=> new() { X = rect.X, Y = rect.Y, W = rect.Width, H = rect.Height };
+
+		public Rect ToRect()
+			=> new(X, Y, W, H);
+	}
+
+	private sealed class PackedVector
+	{
+		public float X { get; set; }
+		public float Y { get; set; }
+
+		public static PackedVector From(Vector2 vector)
+			=> new() { X = vector.X, Y = vector.Y };
+
+		public Vector2 ToVector2()
+			=> new(X, Y);
+	}
+
+	private sealed class PackedOccluderSegment
+	{
+		public PackedVector A { get; set; } = new();
+		public PackedVector B { get; set; } = new();
+
+		public static PackedOccluderSegment From(Tileset.OccluderSegment segment)
+			=> new() { A = PackedVector.From(segment.A), B = PackedVector.From(segment.B) };
+
+		public Tileset.OccluderSegment ToSegment()
+			=> new(A.ToVector2(), B.ToVector2());
+	}
+
+	private static List<PackedSubtexture> PackSubtextures(List<Subtexture> subtextures)
+	{
+		var result = new List<PackedSubtexture>(subtextures.Count);
+		foreach (var subtexture in subtextures)
+			result.Add(PackedSubtexture.From(subtexture));
+		return result;
+	}
+
+	private static List<List<PackedSubtexture>> PackSubtextureGroups(List<List<Subtexture>> groups)
+	{
+		var result = new List<List<PackedSubtexture>>(groups.Count);
+		foreach (var group in groups)
+			result.Add(PackSubtextures(group));
+		return result;
+	}
+
+	private static List<List<PackedOccluderSegment>> PackOccluders(List<Tileset.OccluderSegment[]> occluders)
+	{
+		var result = new List<List<PackedOccluderSegment>>(occluders.Count);
+		foreach (var tile in occluders)
+		{
+			var packed = new List<PackedOccluderSegment>(tile.Length);
+			foreach (var segment in tile)
+				packed.Add(PackedOccluderSegment.From(segment));
+			result.Add(packed);
+		}
+		return result;
+	}
+
+	private static List<List<List<PackedOccluderSegment>>> PackOccluderGroups(List<List<Tileset.OccluderSegment[]>> groups)
+	{
+		var result = new List<List<List<PackedOccluderSegment>>>(groups.Count);
+		foreach (var group in groups)
+			result.Add(PackOccluders(group));
+		return result;
 	}
 
 	internal static Texture? LoadAsepriteTexture(GraphicsDevice gfx, string relativePath, string name)

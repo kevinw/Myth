@@ -1,2 +1,0 @@
-./tools/run-browser.sh -c Release --publish -- -p:RunAOTCompilation=true
-

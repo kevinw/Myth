@@ -11,6 +11,7 @@ import { platform } from "node:os";
 const isWindows = platform() === "win32";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoDir = resolve(scriptDir, "..");
+const browserDotnetScript = join(scriptDir, "browser-dotnet.mjs");
 
 function usage() {
   process.stdout
@@ -78,14 +79,13 @@ outer: while (i < argv.length) {
 function buildOnce() {
   const cmd = publish ? "publish" : "build";
   const result = spawnSync(
-    "dotnet",
+    "node",
     [
+      browserDotnetScript,
       cmd,
-      "Myth.csproj",
       "-c",
       configuration,
-      "-r",
-      "browser-wasm",
+      "--",
       ...dotnetArgs,
     ],
     { stdio: "inherit", cwd: repoDir },

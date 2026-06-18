@@ -38,11 +38,8 @@ jobs:
           dotnet-version: 10.0.x
           workloads: wasm-tools
 
-      - name: Restore packages
-        run: dotnet restore Myth/Myth.csproj -r browser-wasm /p:MythBrowser=true
-
-      - name: Build browser app
-        run: dotnet build Myth/Myth.csproj -c Release -r browser-wasm --no-restore /p:MythBrowser=true /p:ShaderPlatform=
+      - name: Publish browser app
+        run: node Myth/tools/browser-dotnet.mjs publish -c Release
 
       - name: Upload browser app bundle
         uses: actions/upload-artifact@v7

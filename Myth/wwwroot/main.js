@@ -112,7 +112,10 @@ function prepareStartGate() {
 
 async function preloadAssets(module, onProgress) {
   const files = await loadAssetManifest();
-  const preloadFiles = files.filter(shouldPreloadIntoDotnetFs);
+  const hasVisualAssetPack = files.includes("Assets/Packed/Visuals/manifest.bin");
+  const preloadFiles = files.filter((file) =>
+    shouldPreloadIntoDotnetFs(file, hasVisualAssetPack),
+  );
   const fmodBankFiles = files.filter(isFmodBankFile);
   onProgress?.(0, preloadFiles.length);
 
@@ -146,8 +149,19 @@ async function loadAssetManifest() {
     .sort();
 }
 
-function shouldPreloadIntoDotnetFs(path) {
-  return !isFmodBankFile(path);
+function shouldPreloadIntoDotnetFs(path, hasVisualAssetPack) {
+  if (isFmodBankFile(path)) return false;
+
+  if (hasVisualAssetPack) {
+    if (path.startsWith("Assets/Sprites/")) return false;
+    if (path.startsWith("Assets/Tilesets/")) return false;
+    if (path.startsWith("Assets/Textures/")) return false;
+    if (path.startsWith("Assets/Fonts/")) return false;
+    if (path === "Assets/inbetweens.json") return false;
+    if (path === "Assets/anim_transitions.json") return false;
+  }
+
+  return true;
 }
 
 function isFmodBankFile(path) {

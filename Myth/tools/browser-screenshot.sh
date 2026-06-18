@@ -86,9 +86,9 @@ log_file="$log_dir/run-browser.log"
 url="http://$host:$port/"
 
 if [[ ${#run_browser_args[@]} -gt 0 ]]; then
-	"$script_dir/run-browser.sh" --host "$host" --port "$port" -c "$configuration" --no-open "${run_browser_args[@]}" > "$log_file" 2>&1 &
+	node "$script_dir/run-browser.mjs" --host "$host" --port "$port" -c "$configuration" --no-open "${run_browser_args[@]}" > "$log_file" 2>&1 &
 else
-	"$script_dir/run-browser.sh" --host "$host" --port "$port" -c "$configuration" --no-open > "$log_file" 2>&1 &
+	node "$script_dir/run-browser.mjs" --host "$host" --port "$port" -c "$configuration" --no-open > "$log_file" 2>&1 &
 fi
 server_pid=$!
 
