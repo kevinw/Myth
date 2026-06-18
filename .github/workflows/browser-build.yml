@@ -21,10 +21,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          lfs: true
+          lfs: false
+          submodules: false
 
-      - name: Update submodules
-        run: git submodule update --init --recursive
+      # Fetch only the LFS objects + submodule the browser build needs. Skips
+      # ~137 MB of iOS-only binaries (xcframeworks, iOS FMOD libs), dev-only
+      # Production assets, and the iOS cimgui-src submodule.
+      - name: Fetch browser LFS + Foster submodule
+        run: |
+          set -euo pipefail
+          git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production"
+          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster
+          git -C Foster lfs pull --exclude="Framework/Internal/Native/ios,Framework/Internal/Native/win-x64,Framework/Internal/Native/osx,tools/macos"
 
       - name: Cache .NET SDK and workloads
         id: cache-dotnet
