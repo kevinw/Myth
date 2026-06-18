@@ -1,7 +1,327 @@
 [
   {
+    "spriteName": "blob",
+    "fromTag": "idle",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "blob",
+    "fromTag": "jump",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "crawl",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "crawl",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "crawl",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "duck",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "duck",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "idle",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "idle",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "idle",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run_start",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run_start",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run_start",
+    "toTag": "run"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run_start",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "skid",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "skid",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "skid",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "skid",
+    "toTag": "run_start"
+  },
+  {
     "spriteName": "bud",
     "fromTag": "sword",
     "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "attack",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "burrow",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "crawl",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "crawl",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "crawl",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
+    "toTag": "burrow"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "dive",
+    "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "duck_attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "duck_attack",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "dive"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "jump_squish"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "roll"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_squish",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_turn",
+    "toTag": "dive"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_turn",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump_turn",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "roll",
+    "toTag": "duck"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "roll",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "run"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "skid",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "sword",
+    "toTag": "run_start"
   }
 ]

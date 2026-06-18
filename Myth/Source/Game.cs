@@ -487,7 +487,6 @@ public partial class Game : IDisposable
 				//if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
 				//if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
-				if (Input.Keyboard.Pressed(Keys.M)) mouseLightEnabled = !mouseLightEnabled;
 #endif
 				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 			}
@@ -2055,11 +2054,6 @@ public partial class Game : IDisposable
 			});
 		}
 
-		if (mouseLightEnabled)
-		{
-			DrawSingleLightMask(mouseLightPosition, 48, 2.0f, 12, 0xffd37a, includeShadows);
-			AddSingleLightMask(lightMask);
-		}
 	}
 
 	private Color CurrentAmbientColor()

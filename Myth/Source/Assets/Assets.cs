@@ -59,7 +59,7 @@ public static class Assets
 	// the int value is a presence marker (always 1) kept so existing `> 0` checks still work.
 	public static readonly Dictionary<(string SpriteName, string FromTag, string ToTag), int> TransitionPairs = new();
 
-	// Populated during the pack loop, consumed in ReloadSpriteAsset
+	// Populated during the visual bake and serialized into sprite animations.
 	public record struct GeneratedTransition(string FromTag, string ToTag, int FrameCount, float[] Durations);
 	public static readonly Dictionary<string, List<GeneratedTransition>> GeneratedTransitions = new();
 
@@ -153,8 +153,18 @@ public static class Assets
 	public static void Reload(GraphicsDevice gfx)
 		=> Reload(gfx, false, dumpPackedAtlases: false, buildPackPath: null);
 
+	public static void BuildVisualAssetPack(string? path = null, bool dumpPackedAtlases = false)
+	{
+		using var bake = BakeVisualAssets();
+#if !IOS
+		if (dumpPackedAtlases)
+			DumpPackedAtlasPages(bake.Output);
+#endif
+		WriteVisualAssetPack(path ?? DefaultVisualAssetPackPath, bake);
+	}
+
 	public static void BuildVisualAssetPack(GraphicsDevice gfx, string? path = null, bool dumpPackedAtlases = false)
-		=> Reload(gfx, reloadRooms: false, dumpPackedAtlases, buildPackPath: path ?? DefaultVisualAssetPackPath);
+		=> BuildVisualAssetPack(path, dumpPackedAtlases);
 
 	public static void ReloadRooms()
 		=> LoadRooms();
@@ -164,9 +174,38 @@ public static class Assets
 		if (buildPackPath == null && (useVisualAssetPack || OperatingSystem.IsBrowser()) && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
 			return;
 
+		var actorsPath = Path.Join(AssetsPath, "Actors");
+		using var bake = BakeVisualAssets();
+		var output = bake.Output;
+
+		// load main font file
+#if !BROWSER
+		EnsureFonts(gfx);
+#endif
+
+#if !IOS
+		if (dumpPackedAtlases)
+			DumpPackedAtlasPages(output);
+#endif
+
+		// create texture file
+		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
+		var lightingNoise = Assets.LoadAsepriteTexture(gfx, Path.Join("Textures", "noise_tess2_seamless.ase"), "LightingNoise");
+		LoadVisualAssetPackManifest(atlas, lightingNoise, BuildVisualAssetPackManifest(bake, "", null));
+
+		if (buildPackPath != null)
+			WriteVisualAssetPack(buildPackPath, bake);
+
+		ActorSpecs.LoadSpecs(actorsPath);
+		ParticleEffectAssets.Load();
+		if (reloadRooms)
+			LoadRooms();
+	}
+
+	private static VisualAssetBake BakeVisualAssets()
+	{
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
-		var actorsPath = Path.Join(AssetsPath, "Actors");
 		var spriteFiles = new Dictionary<string, Aseprite>();
 		var generatedSprites = new List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();
@@ -183,12 +222,6 @@ public static class Assets
 		LoadTransitionData();
 		LoadInbetweenConfig();
 
-		// load main font file
-#if !BROWSER
-		EnsureFonts(gfx);
-#endif
-
-		// get sprite files
 		foreach (var file in EnumerateAsepriteFiles(spritesPath))
 		{
 			var name = Path.ChangeExtension(Path.GetRelativePath(spritesPath, file), null);
@@ -200,7 +233,6 @@ public static class Assets
 		if (!spriteFiles.ContainsKey("bud") && spriteFiles.TryGetValue("player", out var playerSprite))
 			generatedSprites.Add(("bud", playerSprite, CreateBudPlayerLayerFilter));
 
-		// get tileset files
 		foreach (var file in EnumerateAsepriteFiles(tilesetsPath))
 		{
 			var name = Path.ChangeExtension(Path.GetRelativePath(tilesetsPath, file), null);
@@ -225,258 +257,96 @@ public static class Assets
 			kitGeneratedTilesets.Add(dualName);
 		}
 
-		// pack all the sprites & tilesets
-		Packer.Output output;
-		{
-			var packer = new Packer();
+		var packer = new Packer();
 
-			foreach (var (name, ase) in spriteFiles)
-			{
-				var frames = ase.RenderAllFrames();
-				PackSpriteFrames(name, ase, frames, packer);
-			}
-
-			foreach (var (name, ase, layerFilter) in generatedSprites)
-			{
-				var frames = ase.RenderAllFrames(layerFilter());
-				PackSpriteFrames(name, ase, frames, packer);
-			}
-
-			foreach (var (name, ase) in tilesetFiles)
-			{
-				if (name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase) || kitGeneratedTilesets.Contains(name))
-					continue;
-
-				var nonDebugLayers = GetNonDebugLayers(ase);
-				var variantLayers = GetVariantLayers(ase, nonDebugLayers);
-				var image = ase.RenderFrame(0, nonDebugLayers.Contains);
-				var columns = image.Width / Game.TileSize;
-				var rows = image.Height / Game.TileSize;
-
-				for (int x = 0; x < columns; x++)
-					for (int y = 0; y < rows; y++)
-						packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-
-				var variantIndex = 0;
-				foreach (var layer in variantLayers)
-				{
-					var variant = ase.RenderFrame(0, it => it == layer);
-					for (int x = 0; x < columns; x++)
-						for (int y = 0; y < rows; y++)
-							packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", variant, new RectInt(x, y, 1, 1) * Game.TileSize);
-					using var variantBaseTile = ExtractTile(variant, new RectInt(0, 0, 1, 1) * Game.TileSize);
-					AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex);
-					variantIndex++;
-				}
-
-				using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
-				AddSlopeSubtextures(packer, name, baseTile);
-			}
-
-			foreach (var (name, variants) in generatedTileImages)
-			{
-				for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
-				{
-					var image = variants[variantIndex];
-					var columns = image.Width / Game.TileSize;
-					var rows = image.Height / Game.TileSize;
-
-					for (int x = 0; x < columns; x++)
-						for (int y = 0; y < rows; y++)
-						{
-							if (variantIndex == 0)
-								packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-							packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-						}
-
-					var slopeEdges = generatedSlopeEdgeImages.GetValueOrDefault(name);
-					var slopeEdge = slopeEdges != null && variantIndex < slopeEdges.Count ? slopeEdges[variantIndex] : null;
-					if (variantIndex == 0 && image.Width == Game.TileSize && image.Height == Game.TileSize)
-						AddSlopeSubtextures(packer, name, image, slopeEdge);
-					if (image.Width == Game.TileSize && image.Height == Game.TileSize)
-						AddSlopeSubtextures(packer, name, image, variantIndex, slopeEdge);
-				}
-			}
-
-			foreach (var (name, variants) in generatedNormalImages)
-			{
-				for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
-				{
-					var image = variants[variantIndex];
-					var columns = image.Width / Game.TileSize;
-					var rows = image.Height / Game.TileSize;
-
-					for (int x = 0; x < columns; x++)
-						for (int y = 0; y < rows; y++)
-						{
-							if (variantIndex == 0)
-								packer.Add($"tilesets/{name}/normal/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-							packer.Add($"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
-						}
-				}
-			}
-
-			output = packer.Pack();
-		}
-
-#if !IOS
-		if (dumpPackedAtlases)
-			DumpPackedAtlasPages(output);
-#endif
-
-		// create texture file
-		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
-
-		// create subtextures
-		var subtextures = new Dictionary<string, Subtexture>();
-		foreach (var it in output.Entries)
-			subtextures.Add(it.Name, new Subtexture(atlas, it.Source, it.Frame));
-
-		var oldAtlas = Atlas;
-		var oldLightingNoise = LightingNoise;
-		Atlas = atlas;
-
-		LightingNoise = Assets.LoadAsepriteTexture(gfx, Path.Join("Textures", "noise_tess2_seamless.ase"), "LightingNoise");
-
-		Subtextures.Clear();
-		foreach (var (name, subtexture) in subtextures)
-			Subtextures.Add(name, subtexture);
-
-		// create sprite assets
-		var foundSprites = new HashSet<string>();
 		foreach (var (name, ase) in spriteFiles)
-			ReloadSpriteAsset(foundSprites, subtextures, name, ase);
-		foreach (var (name, ase, _) in generatedSprites)
-			ReloadSpriteAsset(foundSprites, subtextures, name, ase);
-
-		foreach (var (name, sprite) in Sprites.ToArray())
 		{
-			if (foundSprites.Contains(name))
-				continue;
-
-			sprite.Reload(Vector2.Zero, [], []);
-			Sprites.Remove(name);
+			var frames = ase.RenderAllFrames();
+			PackSpriteFrames(name, ase, frames, packer);
 		}
 
-		// create tileset assets
-		var foundTilesets = new HashSet<string>();
+		foreach (var (name, ase, layerFilter) in generatedSprites)
+		{
+			var frames = ase.RenderAllFrames(layerFilter());
+			PackSpriteFrames(name, ase, frames, packer);
+		}
+
 		foreach (var (name, ase) in tilesetFiles)
 		{
 			if (name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase) || kitGeneratedTilesets.Contains(name))
 				continue;
 
-			foundTilesets.Add(name);
+			var nonDebugLayers = GetNonDebugLayers(ase);
+			var variantLayers = GetVariantLayers(ase, nonDebugLayers);
+			var image = ase.RenderFrame(0, nonDebugLayers.Contains);
+			var columns = image.Width / Game.TileSize;
+			var rows = image.Height / Game.TileSize;
 
-			var columns = ase.Width / Game.TileSize;
-			var rows = ase.Height / Game.TileSize;
-			if (!Tilesets.TryGetValue(name, out var tileset))
-			{
-				tileset = new Tileset(name, columns, rows);
-				Tilesets.Add(name, tileset);
-			}
-
-			var tiles = new List<Subtexture>();
 			for (int x = 0; x < columns; x++)
 				for (int y = 0; y < rows; y++)
-					tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
+					packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
 
-			var variantLayers = GetVariantLayers(ase, GetNonDebugLayers(ase));
-			var variants = new List<List<Subtexture>>();
-			for (var variantIndex = 0; variantIndex < variantLayers.Count; variantIndex++)
+			var variantIndex = 0;
+			foreach (var layer in variantLayers)
 			{
-				var variant = new List<Subtexture>();
+				var variant = ase.RenderFrame(0, it => it == layer);
 				for (int x = 0; x < columns; x++)
 					for (int y = 0; y < rows; y++)
-						variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
-				variants.Add(variant);
+						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", variant, new RectInt(x, y, 1, 1) * Game.TileSize);
+				using var variantBaseTile = ExtractTile(variant, new RectInt(0, 0, 1, 1) * Game.TileSize);
+				AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex);
+				variantIndex++;
 			}
 
-			tileset.Reload(columns, rows, tiles, variants);
+			using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
+			AddSlopeSubtextures(packer, name, baseTile);
 		}
 
-		foreach (var (name, images) in generatedTileImages)
+		foreach (var (name, variants) in generatedTileImages)
 		{
-			foundTilesets.Add(name);
-
-			var columns = images[0].Width / Game.TileSize;
-			var rows = images[0].Height / Game.TileSize;
-			if (!Tilesets.TryGetValue(name, out var tileset))
+			for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
 			{
-				tileset = new Tileset(name, columns, rows);
-				Tilesets.Add(name, tileset);
-			}
+				var image = variants[variantIndex];
+				var columns = image.Width / Game.TileSize;
+				var rows = image.Height / Game.TileSize;
 
-			var tiles = new List<Subtexture>();
-			for (int x = 0; x < columns; x++)
-				for (int y = 0; y < rows; y++)
-					tiles.Add(subtextures[$"tilesets/{name}{x}x{y}"]);
-
-			var variants = new List<List<Subtexture>>();
-			for (var variantIndex = 0; variantIndex < images.Count; variantIndex++)
-			{
-				var variant = new List<Subtexture>();
 				for (int x = 0; x < columns; x++)
 					for (int y = 0; y < rows; y++)
-						variant.Add(subtextures[$"tilesets/{name}/variants/{variantIndex}/{x}x{y}"]);
-				variants.Add(variant);
-			}
+					{
+						if (variantIndex == 0)
+							packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+					}
 
-			List<Subtexture>? normalTiles = null;
-			List<List<Subtexture>>? normalVariants = null;
-			List<Tileset.OccluderSegment[]>? occluderTiles = null;
-			List<List<Tileset.OccluderSegment[]>>? occluderVariants = null;
-			if (generatedNormalImages.TryGetValue(name, out var normals))
-			{
-				normalTiles = [];
-				for (int x = 0; x < columns; x++)
-					for (int y = 0; y < rows; y++)
-						normalTiles.Add(subtextures[$"tilesets/{name}/normal/{x}x{y}"]);
-
-				normalVariants = [];
-				for (var variantIndex = 0; variantIndex < normals.Count; variantIndex++)
-				{
-					var variant = new List<Subtexture>();
-					for (int x = 0; x < columns; x++)
-						for (int y = 0; y < rows; y++)
-							variant.Add(subtextures[$"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}"]);
-					normalVariants.Add(variant);
-				}
+				var slopeEdges = generatedSlopeEdgeImages.GetValueOrDefault(name);
+				var slopeEdge = slopeEdges != null && variantIndex < slopeEdges.Count ? slopeEdges[variantIndex] : null;
+				if (variantIndex == 0 && image.Width == Game.TileSize && image.Height == Game.TileSize)
+					AddSlopeSubtextures(packer, name, image, slopeEdge);
+				if (image.Width == Game.TileSize && image.Height == Game.TileSize)
+					AddSlopeSubtextures(packer, name, image, variantIndex, slopeEdge);
 			}
-			if (generatedOccluders.TryGetValue(name, out var occluders))
-			{
-				occluderTiles = occluders[0];
-				occluderVariants = occluders;
-			}
-
-			tileset.Reload(columns, rows, tiles, variants, normalTiles, normalVariants, occluderTiles, occluderVariants);
 		}
 
-		foreach (var (name, tileset) in Tilesets.ToArray())
+		foreach (var (name, variants) in generatedNormalImages)
 		{
-			if (foundTilesets.Contains(name))
-				continue;
+			for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
+			{
+				var image = variants[variantIndex];
+				var columns = image.Width / Game.TileSize;
+				var rows = image.Height / Game.TileSize;
 
-			tileset.Reload(0, 0, []);
-			Tilesets.Remove(name);
+				for (int x = 0; x < columns; x++)
+					for (int y = 0; y < rows; y++)
+					{
+						if (variantIndex == 0)
+							packer.Add($"tilesets/{name}/normal/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+						packer.Add($"tilesets/{name}/normal/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+					}
+			}
 		}
 
-		foreach (var images in generatedTileImages.Values)
-			foreach (var image in images)
-				image.Dispose();
-		foreach (var images in generatedNormalImages.Values)
-			foreach (var image in images)
-				image.Dispose();
-
-		if (buildPackPath != null)
-			WriteVisualAssetPack(buildPackPath, output);
-
-		oldAtlas?.Dispose();
-		oldLightingNoise?.Dispose();
-
-		ActorSpecs.LoadSpecs(actorsPath);
-		ParticleEffectAssets.Load();
-		if (reloadRooms)
-			LoadRooms();
+		var output = packer.Pack();
+		return new(output, spriteFiles, generatedSprites, tilesetFiles, generatedTileImages, generatedNormalImages, generatedOccluders, kitGeneratedTilesets);
 	}
 
 	private static bool TryLoadVisualAssetPack(GraphicsDevice gfx, string directory, bool reloadRooms)
@@ -492,63 +362,20 @@ public static class Assets
 		EnsureFonts(gfx);
 #endif
 
-		var oldAtlas = Atlas;
-		var oldLightingNoise = LightingNoise;
 		using var atlasImage = new Image(Path.Join(directory, manifest.Atlas));
-		Atlas = new Texture(gfx, atlasImage, name: "Atlas");
-		LightingNoise = null;
+		var atlas = new Texture(gfx, atlasImage, name: "Atlas");
+		Texture? lightingNoise = null;
 		if (!string.IsNullOrEmpty(manifest.LightingNoise))
 		{
 			var lightingPath = Path.Join(directory, manifest.LightingNoise);
 			if (File.Exists(lightingPath))
 			{
 				using var lighting = new Image(lightingPath);
-				LightingNoise = new Texture(gfx, lighting, name: "LightingNoise");
+				lightingNoise = new Texture(gfx, lighting, name: "LightingNoise");
 			}
 		}
 
-		Subtextures.Clear();
-		foreach (var packed in manifest.Subtextures)
-			Subtextures[packed.Name] = packed.ToSubtexture(Atlas);
-
-		Sprites.Clear();
-		foreach (var packed in manifest.Sprites)
-		{
-			var sprite = new Sprite(packed.Name, packed.Origin.ToVector2());
-			var frames = new List<Sprite.Frame>(packed.Frames.Count);
-			foreach (var frame in packed.Frames)
-				frames.Add(new(
-					frame.Subtexture.ToSubtexture(Atlas),
-					frame.VisibleSubtexture.ToSubtexture(Atlas),
-					frame.NormalSubtexture.ToSubtexture(Atlas),
-					frame.Duration));
-
-			var animations = new List<Sprite.Animation>(packed.Animations.Count);
-			foreach (var animation in packed.Animations)
-				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
-
-			sprite.Reload(packed.Origin.ToVector2(), frames, animations);
-			Sprites.Add(packed.Name, sprite);
-		}
-
-		Tilesets.Clear();
-		foreach (var packed in manifest.Tilesets)
-		{
-			var tileset = new Tileset(packed.Name, packed.Columns, packed.Rows);
-			tileset.Reload(
-				packed.Columns,
-				packed.Rows,
-				LoadSubtextures(packed.Tiles, Atlas),
-				LoadSubtextureGroups(packed.Variants, Atlas),
-				LoadSubtextures(packed.NormalTiles, Atlas),
-				LoadSubtextureGroups(packed.NormalVariants, Atlas),
-				LoadOccluders(packed.OccluderTiles),
-				LoadOccluderGroups(packed.OccluderVariants));
-			Tilesets.Add(packed.Name, tileset);
-		}
-
-		oldAtlas?.Dispose();
-		oldLightingNoise?.Dispose();
+		LoadVisualAssetPackManifest(atlas, lightingNoise, manifest);
 
 		ActorSpecs.LoadSpecs(Path.Join(AssetsPath, "Actors"));
 		ParticleEffectAssets.Load();
@@ -559,8 +386,9 @@ public static class Assets
 		return true;
 	}
 
-	private static void WriteVisualAssetPack(string directory, Packer.Output output)
+	private static void WriteVisualAssetPack(string directory, VisualAssetBake bake)
 	{
+		var output = bake.Output;
 		if (output.Pages.Count != 1)
 			throw new InvalidOperationException($"Visual asset pack expects one atlas page, got {output.Pages.Count}.");
 
@@ -585,50 +413,245 @@ public static class Assets
 			}
 		}
 
+		var manifestPath = Path.Join(directory, packedVisualsManifestName);
+		WriteVisualAssetPackManifest(manifestPath, BuildVisualAssetPackManifest(bake, atlasFile, lightingNoise));
+		Console.WriteLine($"Wrote visual asset pack: {manifestPath}");
+	}
+
+	private static VisualAssetPackManifest BuildVisualAssetPackManifest(VisualAssetBake bake, string atlas, string? lightingNoise)
+	{
 		var manifest = new VisualAssetPackManifest
 		{
-			Atlas = atlasFile,
+			Atlas = atlas,
 			LightingNoise = lightingNoise
 		};
 
-		foreach (var (name, subtexture) in Subtextures)
+		foreach (var (name, subtexture) in bake.Subtextures)
 			manifest.Subtextures.Add(PackedNamedSubtexture.From(name, subtexture));
 
-		foreach (var (_, sprite) in Sprites)
+		foreach (var (name, ase) in bake.SpriteFiles)
+			manifest.Sprites.Add(BuildPackedSpriteAsset(bake, name, ase));
+		foreach (var (name, ase, _) in bake.GeneratedSprites)
+			manifest.Sprites.Add(BuildPackedSpriteAsset(bake, name, ase));
+
+		foreach (var (name, ase) in bake.TilesetFiles)
 		{
-			var packed = new PackedSprite
+			if (name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase) || bake.KitGeneratedTilesets.Contains(name))
+				continue;
+			manifest.Tilesets.Add(BuildPackedTilesetAsset(bake, name, ase));
+		}
+		foreach (var (name, images) in bake.GeneratedTileImages)
+			manifest.Tilesets.Add(BuildPackedGeneratedTilesetAsset(bake, name, images));
+
+		return manifest;
+	}
+
+	private static void LoadVisualAssetPackManifest(Texture atlas, Texture? lightingNoise, VisualAssetPackManifest manifest)
+	{
+		var oldAtlas = Atlas;
+		var oldLightingNoise = LightingNoise;
+		Atlas = atlas;
+		LightingNoise = lightingNoise;
+
+		Subtextures.Clear();
+		foreach (var packed in manifest.Subtextures)
+			Subtextures[packed.Name] = packed.ToSubtexture(atlas);
+
+		var foundSprites = new HashSet<string>();
+		foreach (var packed in manifest.Sprites)
+		{
+			foundSprites.Add(packed.Name);
+			if (!Sprites.TryGetValue(packed.Name, out var sprite))
 			{
-				Name = sprite.Name,
-				Origin = PackedVector.From(sprite.Origin)
-			};
+				sprite = new Sprite(packed.Name, packed.Origin.ToVector2());
+				Sprites.Add(packed.Name, sprite);
+			}
 
-			foreach (var frame in sprite.Frames)
-				packed.Frames.Add(new()
-				{
-					Subtexture = PackedSubtexture.From(frame.Subtexture),
-					VisibleSubtexture = PackedSubtexture.From(frame.VisibleSubtexture),
-					NormalSubtexture = PackedSubtexture.From(frame.NormalSubtexture),
-					Duration = frame.Duration
-				});
+			var frames = new List<Sprite.Frame>(packed.Frames.Count);
+			foreach (var frame in packed.Frames)
+				frames.Add(new(
+					frame.Subtexture.ToSubtexture(atlas),
+					frame.VisibleSubtexture.ToSubtexture(atlas),
+					frame.NormalSubtexture.ToSubtexture(atlas),
+					frame.Duration));
 
-			foreach (var animation in sprite.Animations)
-				packed.Animations.Add(new()
-				{
-					Name = animation.Name,
-					FrameStart = animation.FrameStart,
-					FrameCount = animation.FrameCount,
-					Duration = animation.Duration
-				});
+			var animations = new List<Sprite.Animation>(packed.Animations.Count);
+			foreach (var animation in packed.Animations)
+				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
 
-			manifest.Sprites.Add(packed);
+			sprite.Reload(packed.Origin.ToVector2(), frames, animations);
 		}
 
-		foreach (var (_, tileset) in Tilesets)
-			manifest.Tilesets.Add(PackedTileset.From(tileset));
+		foreach (var (name, sprite) in Sprites.ToArray())
+		{
+			if (foundSprites.Contains(name))
+				continue;
+			sprite.Reload(Vector2.Zero, [], []);
+			Sprites.Remove(name);
+		}
 
-		var manifestPath = Path.Join(directory, packedVisualsManifestName);
-		WriteVisualAssetPackManifest(manifestPath, manifest);
-		Console.WriteLine($"Wrote visual asset pack: {manifestPath}");
+		var foundTilesets = new HashSet<string>();
+		foreach (var packed in manifest.Tilesets)
+		{
+			foundTilesets.Add(packed.Name);
+			if (!Tilesets.TryGetValue(packed.Name, out var tileset))
+			{
+				tileset = new Tileset(packed.Name, packed.Columns, packed.Rows);
+				Tilesets.Add(packed.Name, tileset);
+			}
+
+			tileset.Reload(
+				packed.Columns,
+				packed.Rows,
+				LoadSubtextures(packed.Tiles, atlas),
+				LoadSubtextureGroups(packed.Variants, atlas),
+				LoadSubtextures(packed.NormalTiles, atlas),
+				LoadSubtextureGroups(packed.NormalVariants, atlas),
+				LoadOccluders(packed.OccluderTiles),
+				LoadOccluderGroups(packed.OccluderVariants));
+		}
+
+		foreach (var (name, tileset) in Tilesets.ToArray())
+		{
+			if (foundTilesets.Contains(name))
+				continue;
+			tileset.Reload(0, 0, []);
+			Tilesets.Remove(name);
+		}
+
+		oldAtlas?.Dispose();
+		oldLightingNoise?.Dispose();
+	}
+
+	private static PackedSprite BuildPackedSpriteAsset(VisualAssetBake bake, string name, Aseprite ase)
+	{
+		var origin = Vector2.Zero;
+		if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
+			origin = ase.Slices[0].Keys[0].Pivot!.Value;
+
+		var packed = new PackedSprite
+		{
+			Name = name,
+			Origin = PackedVector.From(origin)
+		};
+
+		var useExpanded = ExpandedFrameDurations.TryGetValue(name, out var expDurations);
+		var frameCount = useExpanded ? expDurations!.Length : ase.Frames.Length;
+		for (var i = 0; i < frameCount; i++)
+			packed.Frames.Add(new()
+			{
+				Subtexture = bake.Subtexture($"{name}/{i}"),
+				VisibleSubtexture = PackedSubtexture.VisibleFrom(bake.Subtexture($"{name}/{i}")),
+				NormalSubtexture = bake.Subtexture($"{name}/normal/{i}"),
+				Duration = useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f
+			});
+
+		foreach (var tag in ase.Tags)
+		{
+			if (string.IsNullOrEmpty(tag.Name))
+				continue;
+
+			int animFrom, animCount;
+			if (useExpanded && ExpandedFrameMap.TryGetValue(name, out var map))
+			{
+				animFrom = map[tag.From];
+				var animEnd = tag.To + 1 < map.Length ? map[tag.To + 1] : frameCount;
+				animCount = animEnd - animFrom;
+			}
+			else
+			{
+				animFrom = tag.From;
+				animCount = tag.To - tag.From + 1;
+			}
+
+			var duration = 0.0f;
+			for (var i = animFrom; i < animFrom + animCount && i < packed.Frames.Count; i++)
+				duration += packed.Frames[i].Duration;
+			packed.Animations.Add(new() { Name = tag.Name, FrameStart = animFrom, FrameCount = animCount, Duration = duration });
+		}
+
+		if (GeneratedTransitions.TryGetValue(name, out var transitions))
+		{
+			var transFrameStart = packed.Frames.Count;
+			foreach (var trans in transitions)
+			{
+				float duration = 0;
+				for (var i = 0; i < trans.FrameCount; i++)
+				{
+					var subtexture = bake.Subtexture($"{name}/transition/{trans.FromTag}->{trans.ToTag}/{i}");
+					packed.Frames.Add(new()
+					{
+						Subtexture = subtexture,
+						VisibleSubtexture = PackedSubtexture.VisibleFrom(subtexture),
+						NormalSubtexture = bake.Subtexture($"{name}/transition/{trans.FromTag}->{trans.ToTag}/normal/{i}"),
+						Duration = trans.Durations[i]
+					});
+					duration += trans.Durations[i];
+				}
+				packed.Animations.Add(new() { Name = $"{trans.FromTag}->{trans.ToTag}", FrameStart = transFrameStart, FrameCount = trans.FrameCount, Duration = duration });
+				transFrameStart += trans.FrameCount;
+			}
+		}
+
+		return packed;
+	}
+
+	private static PackedTileset BuildPackedTilesetAsset(VisualAssetBake bake, string name, Aseprite ase)
+	{
+		var columns = ase.Width / Game.TileSize;
+		var rows = ase.Height / Game.TileSize;
+		var variantLayers = GetVariantLayers(ase, GetNonDebugLayers(ase));
+		var packed = new PackedTileset
+		{
+			Name = name,
+			Columns = columns,
+			Rows = rows,
+			Tiles = PackTileSubtextures(bake, $"tilesets/{name}", columns, rows)
+		};
+
+		for (var variantIndex = 0; variantIndex < variantLayers.Count; variantIndex++)
+			packed.Variants.Add(PackTileSubtextures(bake, $"tilesets/{name}/variants/{variantIndex}/", columns, rows));
+		return packed;
+	}
+
+	private static PackedTileset BuildPackedGeneratedTilesetAsset(VisualAssetBake bake, string name, List<Image> images)
+	{
+		var columns = images[0].Width / Game.TileSize;
+		var rows = images[0].Height / Game.TileSize;
+		var packed = new PackedTileset
+		{
+			Name = name,
+			Columns = columns,
+			Rows = rows,
+			Tiles = PackTileSubtextures(bake, $"tilesets/{name}", columns, rows)
+		};
+
+		for (var variantIndex = 0; variantIndex < images.Count; variantIndex++)
+			packed.Variants.Add(PackTileSubtextures(bake, $"tilesets/{name}/variants/{variantIndex}/", columns, rows));
+
+		if (bake.GeneratedNormalImages.TryGetValue(name, out var normals))
+		{
+			packed.NormalTiles = PackTileSubtextures(bake, $"tilesets/{name}/normal/", columns, rows);
+			for (var variantIndex = 0; variantIndex < normals.Count; variantIndex++)
+				packed.NormalVariants.Add(PackTileSubtextures(bake, $"tilesets/{name}/normal/variants/{variantIndex}/", columns, rows));
+		}
+
+		if (bake.GeneratedOccluders.TryGetValue(name, out var occluders))
+		{
+			packed.OccluderTiles = PackOccluders(occluders[0]);
+			packed.OccluderVariants = PackOccluderGroups(occluders);
+		}
+
+		return packed;
+	}
+
+	private static List<PackedSubtexture> PackTileSubtextures(VisualAssetBake bake, string prefix, int columns, int rows)
+	{
+		var result = new List<PackedSubtexture>(columns * rows);
+		for (var x = 0; x < columns; x++)
+			for (var y = 0; y < rows; y++)
+				result.Add(bake.Subtexture($"{prefix}{x}x{y}"));
+		return result;
 	}
 
 	private static void WriteVisualAssetPackManifest(string path, VisualAssetPackManifest manifest)
@@ -984,16 +1007,61 @@ public static class Assets
 		public List<PackedTileset> Tilesets { get; set; } = [];
 	}
 
+	private sealed class VisualAssetBake : IDisposable
+	{
+		public Packer.Output Output { get; }
+		public Dictionary<string, Aseprite> SpriteFiles { get; }
+		public List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)> GeneratedSprites { get; }
+		public Dictionary<string, Aseprite> TilesetFiles { get; }
+		public Dictionary<string, List<Image>> GeneratedTileImages { get; }
+		public Dictionary<string, List<Image>> GeneratedNormalImages { get; }
+		public Dictionary<string, List<List<Tileset.OccluderSegment[]>>> GeneratedOccluders { get; }
+		public HashSet<string> KitGeneratedTilesets { get; }
+		public Dictionary<string, PackedSubtexture> Subtextures { get; } = [];
+
+		public VisualAssetBake(
+			Packer.Output output,
+			Dictionary<string, Aseprite> spriteFiles,
+			List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)> generatedSprites,
+			Dictionary<string, Aseprite> tilesetFiles,
+			Dictionary<string, List<Image>> generatedTileImages,
+			Dictionary<string, List<Image>> generatedNormalImages,
+			Dictionary<string, List<List<Tileset.OccluderSegment[]>>> generatedOccluders,
+			HashSet<string> kitGeneratedTilesets)
+		{
+			Output = output;
+			SpriteFiles = spriteFiles;
+			GeneratedSprites = generatedSprites;
+			TilesetFiles = tilesetFiles;
+			GeneratedTileImages = generatedTileImages;
+			GeneratedNormalImages = generatedNormalImages;
+			GeneratedOccluders = generatedOccluders;
+			KitGeneratedTilesets = kitGeneratedTilesets;
+
+			foreach (var entry in output.Entries)
+				Subtextures[entry.Name] = PackedSubtexture.From(entry.Source, entry.Frame);
+		}
+
+		public PackedSubtexture Subtexture(string name)
+			=> Subtextures[name];
+
+		public void Dispose()
+		{
+			foreach (var images in GeneratedTileImages.Values)
+				foreach (var image in images)
+					image.Dispose();
+			foreach (var images in GeneratedNormalImages.Values)
+				foreach (var image in images)
+					image.Dispose();
+		}
+	}
+
 	private sealed class PackedNamedSubtexture : PackedSubtexture
 	{
 		public string Name { get; set; } = "";
 
-		public static PackedNamedSubtexture From(string name, Subtexture subtexture)
-		{
-			var packed = new PackedNamedSubtexture { Name = name };
-			packed.Set(subtexture);
-			return packed;
-		}
+		public static PackedNamedSubtexture From(string name, PackedSubtexture subtexture)
+			=> new() { Name = name, Source = subtexture.Source, Frame = subtexture.Frame };
 	}
 
 	private class PackedSubtexture
@@ -1001,18 +1069,15 @@ public static class Assets
 		public PackedRect Source { get; set; } = new();
 		public PackedRect Frame { get; set; } = new();
 
-		public static PackedSubtexture From(Subtexture subtexture)
-		{
-			var packed = new PackedSubtexture();
-			packed.Set(subtexture);
-			return packed;
-		}
+		public static PackedSubtexture From(Rect source, Rect frame)
+			=> new() { Source = PackedRect.From(source), Frame = PackedRect.From(frame) };
 
-		protected void Set(Subtexture subtexture)
-		{
-			Source = PackedRect.From(subtexture.Source);
-			Frame = PackedRect.From(subtexture.Frame);
-		}
+		public static PackedSubtexture VisibleFrom(PackedSubtexture subtexture)
+			=> new()
+			{
+				Source = subtexture.Source,
+				Frame = new() { X = 0, Y = 0, W = subtexture.Source.W, H = subtexture.Source.H }
+			};
 
 		public Subtexture ToSubtexture(Texture atlas)
 			=> new(atlas, Source.ToRect(), Frame.ToRect());
@@ -1053,22 +1118,6 @@ public static class Assets
 		public List<List<PackedSubtexture>> NormalVariants { get; set; } = [];
 		public List<List<PackedOccluderSegment>> OccluderTiles { get; set; } = [];
 		public List<List<List<PackedOccluderSegment>>> OccluderVariants { get; set; } = [];
-
-		public static PackedTileset From(Tileset tileset)
-		{
-			return new()
-			{
-				Name = tileset.Name,
-				Columns = tileset.Columns,
-				Rows = tileset.Rows,
-				Tiles = PackSubtextures(tileset.Tiles),
-				Variants = PackSubtextureGroups(tileset.Variants),
-				NormalTiles = PackSubtextures(tileset.NormalTiles),
-				NormalVariants = PackSubtextureGroups(tileset.NormalVariants),
-				OccluderTiles = PackOccluders(tileset.OccluderTiles),
-				OccluderVariants = PackOccluderGroups(tileset.OccluderVariants)
-			};
-		}
 	}
 
 	private sealed class PackedRect
@@ -1107,22 +1156,6 @@ public static class Assets
 
 		public Tileset.OccluderSegment ToSegment()
 			=> new(A.ToVector2(), B.ToVector2());
-	}
-
-	private static List<PackedSubtexture> PackSubtextures(List<Subtexture> subtextures)
-	{
-		var result = new List<PackedSubtexture>(subtextures.Count);
-		foreach (var subtexture in subtextures)
-			result.Add(PackedSubtexture.From(subtexture));
-		return result;
-	}
-
-	private static List<List<PackedSubtexture>> PackSubtextureGroups(List<List<Subtexture>> groups)
-	{
-		var result = new List<List<PackedSubtexture>>(groups.Count);
-		foreach (var group in groups)
-			result.Add(PackSubtextures(group));
-		return result;
 	}
 
 	private static List<List<PackedOccluderSegment>> PackOccluders(List<Tileset.OccluderSegment[]> occluders)
@@ -1751,90 +1784,6 @@ public static class Assets
 
 		using var image = new Image(path);
 		return new Texture(gfx, image, name);
-	}
-
-	private static void ReloadSpriteAsset(HashSet<string> foundSprites, Dictionary<string, Subtexture> subtextures, string name, Aseprite ase)
-	{
-		foundSprites.Add(name);
-
-		var origin = Vector2.Zero;
-		if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
-			origin = ase.Slices[0].Keys[0].Pivot!.Value;
-
-		if (!Sprites.TryGetValue(name, out var sprite))
-		{
-			sprite = new Sprite(name, origin);
-			Sprites.Add(name, sprite);
-		}
-
-		// Use expanded durations if inbetweens were generated for this sprite
-		bool useExpanded = ExpandedFrameDurations.TryGetValue(name, out var expDurations);
-
-		var frames = new List<Sprite.Frame>();
-		int frameCount = useExpanded ? expDurations!.Length : ase.Frames.Length;
-		for (int i = 0; i < frameCount; i++)
-		{
-			var subtexture = subtextures[$"{name}/{i}"];
-			frames.Add(new(
-				subtexture,
-				new Subtexture(subtexture.Texture, subtexture.Source),
-				subtextures[$"{name}/normal/{i}"],
-				useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f));
-		}
-
-		var animations = new List<Sprite.Animation>();
-		foreach (var tag in ase.Tags)
-		{
-			if (string.IsNullOrEmpty(tag.Name))
-				continue;
-
-			// Compute animation frame range in expanded space. Counts vary per
-			// tag, so map original tag bounds through the expansion offset map;
-			// the range runs up to where the next original frame landed.
-			int animFrom, animCount;
-			if (useExpanded && ExpandedFrameMap.TryGetValue(name, out var map))
-			{
-				animFrom = map[tag.From];
-				int animEnd = tag.To + 1 < map.Length ? map[tag.To + 1] : frameCount;
-				animCount = animEnd - animFrom;
-			}
-			else
-			{
-				animFrom = tag.From;
-				animCount = tag.To - tag.From + 1;
-			}
-
-			var duration = 0.0f;
-			for (int i = animFrom; i < animFrom + animCount && i < frames.Count; i++)
-				duration += frames[i].Duration;
-			animations.Add(new(tag.Name, animFrom, animCount, duration));
-		}
-
-		// Add transition animations
-		if (GeneratedTransitions.TryGetValue(name, out var transitions))
-		{
-			int transFrameStart = frames.Count;
-			foreach (var trans in transitions)
-			{
-				float duration = 0;
-				for (int i = 0; i < trans.FrameCount; i++)
-				{
-					int idx = transFrameStart + i;
-					var subtexture = subtextures[$"{name}/transition/{trans.FromTag}->{trans.ToTag}/{i}"];
-					frames.Add(new(
-						subtexture,
-						new Subtexture(subtexture.Texture, subtexture.Source),
-						subtextures[$"{name}/transition/{trans.FromTag}->{trans.ToTag}/normal/{i}"],
-						trans.Durations[i]));
-					duration += trans.Durations[i];
-				}
-				animations.Add(new($"{trans.FromTag}->{trans.ToTag}", transFrameStart, trans.FrameCount, duration));
-				// Console.WriteLine($"[Transition] registered {trans.FrameCount}-frame animation \"{trans.FromTag}->{trans.ToTag}\" for sprite \"{name}\" (frames {transFrameStart}–{transFrameStart + trans.FrameCount - 1})");
-				transFrameStart += trans.FrameCount;
-			}
-		}
-
-		sprite.Reload(origin, frames, animations);
 	}
 
 	private static Predicate<Aseprite.Layer> CreateBudPlayerLayerFilter()

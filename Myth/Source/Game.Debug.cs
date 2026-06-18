@@ -26,9 +26,6 @@ public partial class Game
 	private Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 
-	private bool mouseLightEnabled;
-	private Vector2 mouseLightPosition;
-
 	public List<RectInt> CollisionRectsThisFrame = new();
 
 	// Render-target inspector overlay, drawn by Manager as an ImGui window at full
@@ -150,13 +147,6 @@ public partial class Game
 
 	private bool TryGetVisibilityDebugLight(out Vector2 lightPosition, out float radius)
 	{
-		if (mouseLightEnabled)
-		{
-			lightPosition = mouseLightPosition;
-			radius = 48;
-			return true;
-		}
-
 		if (GetFirst<Player>() is { } player)
 		{
 			lightPosition = player.GetVisualBounds().Center;
@@ -245,11 +235,6 @@ public partial class Game
 
 	private void UpdateMouseLightPosition(RectInt viewport)
 	{
-		var scale = Calc.Min(viewport.Width / (float)Screen.Width, viewport.Height / (float)Screen.Height);
-		var size = new Vector2(Screen.Width, Screen.Height) * scale;
-		var topLeft = (Vector2)viewport.Center - size / 2;
-		var local = (Input.Mouse.Position - topLeft) / scale;
-		mouseLightPosition = RenderCamera + local;
 	}
 
 #if DEBUG
