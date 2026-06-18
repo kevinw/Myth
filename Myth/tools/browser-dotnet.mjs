@@ -72,7 +72,7 @@ switch (command) {
       "browser-wasm",
       `/p:Configuration=${configuration}`,
       "/p:MythBrowser=true",
-      "/p:ShaderPlatform=",
+      "/p:ShaderPlatform=web",
       ...(aot ? ["/p:RunAOTCompilation=true", "/p:MythBrowserAot=true"] : []),
       ...dotnetArgs,
     ];
@@ -95,7 +95,7 @@ switch (command) {
       "browser-wasm",
       ...(noRestore ? ["--no-restore"] : []),
       "/p:MythBrowser=true",
-      "/p:ShaderPlatform=",
+      "/p:ShaderPlatform=web",
       ...(aot ? ["/p:RunAOTCompilation=true", "/p:MythBrowserAot=true"] : []),
       ...dotnetArgs,
     ];

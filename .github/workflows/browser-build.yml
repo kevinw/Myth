@@ -38,6 +38,37 @@ jobs:
           dotnet-version: 10.0.x
           workloads: wasm-tools
 
+      # Web shaders compile HLSL -> SPIRV (dxc) -> WGSL (naga). The native
+      # asset-pack build instead uses the bundled Foster/tools/linux/shadercross.
+      - name: Install dxc (HLSL -> SPIRV)
+        run: |
+          set -euo pipefail
+          dxc_url="https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/linux_dxc_2026_02_20.x86_64.tar.gz"
+          dxc_dir="$RUNNER_TEMP/dxc"
+          mkdir -p "$dxc_dir"
+          curl -fsSL "$dxc_url" | tar xz -C "$dxc_dir"
+          echo "$dxc_dir/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$dxc_dir/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Cache naga-cli
+        id: cache-naga
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/naga
+          key: naga-cli-29.0.3-${{ runner.os }}
+
+      - name: Install naga-cli (SPIRV -> WGSL)
+        if: steps.cache-naga.outputs.cache-hit != 'true'
+        run: cargo install naga-cli --version 29.0.3 --locked
+
+      # Git can't preserve mtimes, so MSBuild's incremental check can't tell when a
+      # committed .wgsl/.spv is stale relative to its .hlsl. Delete them so every CI
+      # run recompiles from source and the deployed shaders are always up to date.
+      - name: Clean compiled shaders (force fresh compilation)
+        run: |
+          find Myth/Assets/Shaders Foster/Framework/Content/Shaders \
+            -path '*/Compiled/*' \( -name '*.wgsl' -o -name '*.spv' \) -delete -print
+
       - name: Build visual asset pack
         working-directory: Myth
         run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals
