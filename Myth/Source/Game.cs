@@ -3153,6 +3153,14 @@ public partial class Game : IDisposable
 		if (room == null || direction == Point2.Zero || GetFirst<Player>() is not { } player)
 			return;
 
+		// A burrow that crossed the edge stays burrowed: re-anchor it to the continuing surface
+		// rather than the normal push-out-of-collision placement.
+		if (player.State == Player.States.Burrow)
+		{
+			player.ResolveBurrowRoomTransition();
+			return;
+		}
+
 		if (!OverlapsRoomCollision(player, Point2.Zero))
 			return;
 

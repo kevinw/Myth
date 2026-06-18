@@ -41,14 +41,19 @@ public partial class Game
 		if (n == Point2.Zero || room == null)
 			return false;
 
+		// Jumpthru only counts as solid here when probing downward (n points down), so the
+		// player can attach to the top of a one-way platform but not its sides/underside.
+		var nn = n; // local copy: a local function can't capture the `out` parameter
+		bool Seed(Point2 cell) => SolidPixel(cell) || (nn.Y > 0 && JumpthruSolid(cell));
+
 		var c = CellAt(nearPoint);
 		var guard = 0;
-		while (SolidPixel(c) && guard++ < maxReach)
+		while (Seed(c) && guard++ < maxReach)
 			c -= n;
 		guard = 0;
-		while (!SolidPixel(c + n) && guard++ < maxReach)
+		while (!Seed(c + n) && guard++ < maxReach)
 			c += n;
-		if (!SolidPixel(c + n))
+		if (!Seed(c + n))
 			return false;
 
 		faceCenter = new Vector2(c.X + 0.5f, c.Y + 0.5f) + (Vector2)n * 0.5f;
@@ -140,11 +145,25 @@ public partial class Game
 	{
 		var left = CellAt((Vector2)v + (Vector2)d * 0.5f + new Vector2(d.Y, -d.X) * 0.5f);
 		var right = CellAt((Vector2)v + (Vector2)d * 0.5f + new Vector2(-d.Y, d.X) * 0.5f);
-		// A walkable edge has solid on the expected side AND its air side inside the room,
-		// so the walk never rides the outer faces of the room's perimeter tiles.
-		return solidLeft
-			? SolidPixel(left) && !SolidPixel(right) && InRoom(right)
-			: SolidPixel(right) && !SolidPixel(left) && InRoom(left);
+		var solidCell = solidLeft ? left : right;
+		var airCell = solidLeft ? right : left;
+
+		// A walkable edge has its air side empty AND inside the room, so the walk never
+		// rides the outer faces of the room's perimeter tiles. A jumpthru on the air side
+		// also counts as "not air" so a jumpthru continuing a floor doesn't read as a
+		// convex corner — otherwise the walk dives down a solid's face at the seam instead
+		// of stepping straight onto the jumpthru top.
+		if (SolidPixel(airCell) || JumpthruSolid(airCell) || !InRoom(airCell))
+			return false;
+
+		// Real solids are walkable on any face.
+		if (SolidPixel(solidCell))
+			return true;
+
+		// Jumpthru platforms are one-way, so only their TOP face is burrowable: the air
+		// cell must sit directly above the jumpthru cell. This lets the player ride along
+		// the top of a jumpthru run without wrapping under it or around its ends.
+		return JumpthruSolid(solidCell) && airCell == solidCell + new Point2(0, -1);
 	}
 
 	private bool InRoom(Point2 cell)
@@ -172,6 +191,33 @@ public partial class Game
 		}
 
 		return false;
+	}
+
+	// A jumpthru (one-way platform) cell — same rect test as SolidPixel but for the
+	// Jumpthru mask. The burrow boundary walk uses this to ride the *top* of jumpthru runs.
+	private bool JumpthruSolid(Point2 cell)
+	{
+		var point = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+		foreach (var other in Actors)
+		{
+			if (other is Grid || !other.Mask.Has(Actor.Masks.Jumpthru) || other.Hitbox.Shape != Hitbox.Shapes.Rect)
+				continue;
+
+			var rect = other.Hitbox.Rect + other.Position;
+			if (point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom)
+				return true;
+		}
+
+		return false;
+	}
+
+	/// True when the burrow surface just inside `toward` from `position` is a jumpthru
+	/// (one-way platform) rather than real solid. Lets the player ride on top of thin
+	/// jumpthru runs (no submerge) instead of sinking through them.
+	public bool SurfaceIsJumpthru(Point2 position, Vector2 toward)
+	{
+		var cell = CellAt((Vector2)position + toward * 0.5f);
+		return !SolidPixel(cell) && JumpthruSolid(cell);
 	}
 
 	private static Point2 CellAt(Vector2 p) => new((int)MathF.Floor(p.X), (int)MathF.Floor(p.Y));

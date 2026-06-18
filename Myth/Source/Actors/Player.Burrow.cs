@@ -17,6 +17,7 @@ public partial class Player : Pawn
 	static float BurrowPopForce => JumpForce * 0.80f;
 	static float BurrowPopTime => JumpTime * 0.9f;
 	const int BurrowSubmergeDepth = 4;
+	const int BurrowJumpthruSubmergeDepth = 0; // thin one-way platforms: ride on top, don't sink through
 	const int BurrowAttachProbe = 8;
 	const float BurrowGlowArc = 15f;       // contour length traced in each direction (~30px total)
 	static float BurrowGlowWeight => 1.5f;
@@ -38,6 +39,7 @@ public partial class Player : Pawn
 	Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
 	float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
 	float burrowSpeed;                  // current travel speed; eases via accel/friction
+	bool burrowOnJumpthru;              // current surface is a one-way platform (ride on top, no submerge)
 	readonly List<Vector2> glowPoints = [];
 	Point2 burrowGlowAnchor;
 	int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
@@ -84,6 +86,7 @@ public partial class Player : Pawn
 		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), BurrowMaxSpeed);
 
 		State = States.Burrow;
+		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
 
@@ -91,6 +94,7 @@ public partial class Player : Pawn
 		burrowSound = Game.CreateAudioEvent("player/burrow", Position);
 		burrowSound?.Start();
 		UpdateBurrowAudio();
+		AudioEvent("player/burrow_start");
 	}
 
 	// Screen-axis squish aligned to a surface normal: `normalScale` is applied along
@@ -102,7 +106,7 @@ public partial class Player : Pawn
 	}
 
 	// True once the entry squish has finished and the player is fully submerged.
-	private bool BurrowHidesSprite => State == States.Burrow && burrowEnterTimer <= 0;
+	private bool BurrowHidesSprite => State == States.Burrow && burrowEnterTimer <= 0 && !burrowOnJumpthru;
 
 	// Rebuild the glow polyline by tracing the boundary from the burrow's own walk state,
 	// so the line is always centered on the burrow point (no re-seed mis-anchoring at corners).
@@ -135,7 +139,10 @@ public partial class Player : Pawn
 	}
 
 	void UpdateBurrowShift()
-		=> Shift = State == States.Burrow ? burrowToward * BurrowSubmergeDepth : new();
+	{
+		var depth = burrowOnJumpthru ? BurrowJumpthruSubmergeDepth : BurrowSubmergeDepth;
+		Shift = State == States.Burrow ? burrowToward * depth : new();
+	}
 
 	static float BurrowCooldown => 0.25f;
 
@@ -209,10 +216,15 @@ public partial class Player : Pawn
 			burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
 			if (moved == 0)
 			{
-				// A dead end (room edge): pop out if the player is driving into it, otherwise
-				// we just coasted there on friction — kill the glide and stay put.
+				// A dead end. If we're driving into it and the surface exits the room into an
+				// adjacent one, transition and keep burrowing on the far side. The world is laid
+				// out in contiguous coordinates, so the surface continues across the shared edge.
+				// Otherwise (no adjacent room) pop out; if we merely coasted here on friction,
+				// kill the glide and stay put.
 				if (move)
 				{
+					if (Game.Transition(burrowHeading))
+						return; // stay burrowed; resumed by ResolveBurrowRoomTransition after the swap
 					PopOutOfBurrow();
 					return;
 				}
@@ -221,6 +233,7 @@ public partial class Player : Pawn
 			}
 		}
 
+		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
@@ -235,6 +248,7 @@ public partial class Player : Pawn
 			PopOutOfBurrow();
 	}
 
+	// StopBurrow stop a burrow
 	private void PopOutOfBurrow()
 	{
 		// Launch away from whatever surface we were riding, plus carry the burrow's
@@ -271,9 +285,38 @@ public partial class Player : Pawn
 		{
 			float direction = MathF.Atan2(Velocity.X, Velocity.Y);
 			// public void Emit(int effectIndex, Vector2 worldPosition, int count, float directionRadians, float speedScale = 1.0f)
-			particles.Emit(burrowSparkEffect, burrowGlowAnchor + burrowExitOutward * 2.0f, 20, direction + MathF.PI / 2.0f, 2.5f);
+			particles.Emit(burrowSparkEffect, burrowGlowAnchor - exitDir * 2.0f - Vector2.Normalize((Vector2)burrowHeading) * 3.0f, 20, direction + MathF.PI / 2.0f, 2.5f);
 		}
 		UpdateBurrowGlow();
+		AudioEvent("player/burrow_end");
+	}
+
+	// Called by Game right after a room swap that began mid-burrow (see BurrowState's dead-end
+	// handling). Rooms are contiguous in world space, so the surface continues at our current
+	// position — re-anchor to it and keep gliding with the same heading/handedness/speed instead
+	// of running the normal push-out-of-collision placement (which would shove us off the line).
+	public void ResolveBurrowRoomTransition()
+	{
+		if (State != States.Burrow)
+			return;
+
+		// Step one pixel into the new room along the heading before re-snapping. Room bounds
+		// are half-open ([Left, Right)/[Top, Bottom)), so when exiting the left/top edge our
+		// position lands exactly on the next room's exclusive Right/Bottom edge, where it reads
+		// as out-of-room and the snap would fail (this is why left/up transitions popped out).
+		Position += burrowHeading;
+
+		if (Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
+		{
+			burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
+			UpdateBurrowShift();
+			UpdateBurrowGlow();
+		}
+		else
+		{
+			// The surface didn't continue in the new room — pop out where we arrived.
+			PopOutOfBurrow();
+		}
 	}
 
 	void UpdateBurrowAlways()

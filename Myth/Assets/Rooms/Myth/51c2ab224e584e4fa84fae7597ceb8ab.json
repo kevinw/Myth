@@ -77,5 +77,13 @@
     "TTTGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGTTT",
     "TTTGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGTTT",
     "TTTGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGTTT"
+  ],
+  "actors": [
+    {
+      "Id": "d8a177754edbf37f",
+      "Type": "LinkedDoor",
+      "Position": [116, 560],
+      "TargetActorId": "e7a9605e80486d68"
+    }
   ]
 }
