@@ -38,6 +38,10 @@ jobs:
           dotnet-version: 10.0.x
           workloads: wasm-tools
 
+      - name: Build visual asset pack
+        working-directory: Myth
+        run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals
+
       - name: Publish browser app
         run: node Myth/tools/browser-dotnet.mjs publish -c Release
 
