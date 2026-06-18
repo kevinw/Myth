@@ -19,6 +19,12 @@ function isMythCleanExitStatus(error) {
   );
 }
 
+function isMobileBrowser() {
+  if (navigator.userAgentData?.mobile === true) return true;
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return true;
+  return navigator.maxTouchPoints > 1 && /MacIntel|iPad/i.test(navigator.platform);
+}
+
 try {
   await FosterWebGPU.initialize("#foster-canvas");
 
@@ -29,6 +35,7 @@ try {
   setModuleImports("FosterBrowserFmod", FosterBrowserFmod);
   setModuleImports("MythOverlay", {
     setVirtualControllerVisible: VirtualGamepad.setVirtualControllerVisible,
+    isMobileBrowser,
   });
   const startGate = prepareStartGate();
   startGate.progress(0.05);

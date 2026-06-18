@@ -47,17 +47,10 @@ public static class Assets
 	private static readonly Dictionary<(string Sprite, string Tag), int> InbetweenAnimations = new();
 
 	// Transition in-betweens whitelist: (sprite, from, to) -> frame count.
-	// This is the source of truth for baking transitions. anim_transitions.json
-	// / Actor.TransitionCounts remain discovery-only (candidates to promote here).
+	// This is the source of truth for baking transitions.
 	private static readonly Dictionary<(string Sprite, string From, string To), int> InbetweenTransitions = new();
 
 	public static string INBETWEENS_JSON_FILENAME => Path.Join(AssetsPath, "inbetweens.json");
-
-	public static string ANIM_TRANSITIONS_JSON_FILENAME => Path.Join(AssetsPath, "anim_transitions.json");
-
-	// Observed transitions loaded from anim_transitions.json. Only set membership matters;
-	// the int value is a presence marker (always 1) kept so existing `> 0` checks still work.
-	public static readonly Dictionary<(string SpriteName, string FromTag, string ToTag), int> TransitionPairs = new();
 
 	// Populated during the visual bake and serialized into sprite animations.
 	public record struct GeneratedTransition(string FromTag, string ToTag, int FrameCount, float[] Durations);
@@ -215,11 +208,9 @@ public static class Assets
 		var generatedSlopeEdgeImages = new Dictionary<string, List<Image>>();
 		var kitGeneratedTilesets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-		Actor.TransitionCounts.Clear();
 		GeneratedTransitions.Clear();
 		ExpandedFrameDurations.Clear();
 		ExpandedFrameMap.Clear();
-		LoadTransitionData();
 		LoadInbetweenConfig();
 
 		foreach (var file in EnumerateAsepriteFiles(spritesPath))
@@ -1558,40 +1549,6 @@ public static class Assets
 		(TileQuadrants.BottomLeft | TileQuadrants.TopRight | TileQuadrants.BottomRight, new(1, 1)),
 		(TileQuadrants.All, new(2, 1)),
 	];
-
-	private static void LoadTransitionData()
-	{
-		TransitionPairs.Clear();
-
-		var path = ANIM_TRANSITIONS_JSON_FILENAME;
-		if (!File.Exists(path))
-			return;
-
-		try
-		{
-			using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
-			var root = doc.RootElement;
-			if (root.ValueKind != JsonValueKind.Array)
-				return;
-
-			foreach (var item in root.EnumerateArray())
-			{
-				var spriteName = item.GetProperty("spriteName").GetString();
-				var fromTag = item.GetProperty("fromTag").GetString();
-				var toTag = item.GetProperty("toTag").GetString();
-
-				// "count" is no longer written; tolerate it in older files by ignoring it.
-				if (spriteName != null && fromTag != null && toTag != null)
-					TransitionPairs[(spriteName, fromTag, toTag)] = 1;
-			}
-
-			// Console.WriteLine($"Loaded {TransitionPairs.Count} animation transitions from anim_transitions.json");
-		}
-		catch (Exception e)
-		{
-			Console.Error.WriteLine($"Failed to load {ANIM_TRANSITIONS_JSON_FILENAME}: {e.Message}");
-		}
-	}
 
 	// Loads the in-betweens whitelist (within-animation + transitions) from
 	// inbetweens.json. This is the source of truth for what gets baked.

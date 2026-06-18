@@ -6,9 +6,6 @@ namespace Myth;
 
 public class Actor
 {
-	public readonly record struct TransitionKey(string ActorType, string SpriteName, string From, string To);
-
-	public static readonly Dictionary<TransitionKey, int> TransitionCounts = [];
 	public static bool TransitionsEnabled = true;
 
 	[Flags]
@@ -95,17 +92,6 @@ public class Actor
 				var target = animationName.Split("->")[1];
 				if (target == name)
 					return;
-			}
-
-			if (!restart && animationName != null)
-			{
-				var baseFrom = animationName;
-				if (baseFrom.Contains("->"))
-					baseFrom = baseFrom.Split("->")[1];
-
-				if (baseFrom != name)
-					TransitionCounts[new(GetType().Name, sprite.Name, baseFrom, name)] =
-						TransitionCounts.TryGetValue(new(GetType().Name, sprite.Name, baseFrom, name), out var c) ? c + 1 : 1;
 			}
 
 			// Check for a pre-generated transition animation
@@ -519,41 +505,6 @@ public class Actor
 	/// Called when the Actor was destroyed
 	/// </summary>
 	public virtual void Destroyed() { }
-
-	/// <summary>
-	/// Dumps transition usage data collected since startup to the given TextWriter.
-	/// </summary>
-	public static void DumpTransitionUsage(TextWriter writer)
-	{
-		if (TransitionCounts.Count == 0)
-		{
-			writer.WriteLine("No transitions recorded.");
-			return;
-		}
-
-		// Group by sprite then actor type for a clean report
-		var bySprite = TransitionCounts
-			.GroupBy(kv => kv.Key.SpriteName)
-			.OrderBy(g => g.Key);
-
-		foreach (var spriteGroup in bySprite)
-		{
-			writer.WriteLine($"sprite: {spriteGroup.Key}");
-
-			var byActor = spriteGroup
-				.GroupBy(kv => kv.Key.ActorType)
-				.OrderBy(g => g.Key);
-
-			foreach (var actorGroup in byActor)
-			{
-				writer.WriteLine($"  {actorGroup.Key}:");
-				foreach (var kv in actorGroup.OrderByDescending(kv => kv.Value))
-				{
-					writer.WriteLine($"    {kv.Key.From} -> {kv.Key.To}: {kv.Value}");
-				}
-			}
-		}
-	}
 
 	protected void StopAndReleaseSound(ref SoundInstance? sound, bool immediate = false)
 	{

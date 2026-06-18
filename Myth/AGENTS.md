@@ -1,6 +1,6 @@
 - This is a 2D C# platformer game.
 - It uses ../Foster, an SDL backed 2D game framework. It builds to Desktop (default), iOS, and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for the device/browser builds.
-- Try, within reason, not to allocate every frame, e.g., use a static reusable scratch List you .Clear() instead. Don't use LINQ.
+- Try, within reason, not to allocate every frame, e.g., use a static reusable scratch List you .Clear() instead. Don't use LINQ in per-frame code.
 - Omit C#'s XML documentation tags like <summary></summary>.
 - Omit "private" keyword since it is implicit in C#.
 - For simple gameplay-esque values, instead of a field like `const float TweakableValue = 9f;` prefer `static float TweakableValue => 9f;` -- we use dotnet watch to do live gamedev and for values we want to dial in and tweak, the getter allows us to change the value without recompiling.

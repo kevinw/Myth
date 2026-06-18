@@ -17,7 +17,7 @@
   "SizeStart": 1.5,
   "SizeEnd": 0.3,
   "Additive": true,
-  "Collision": "Settle",
+  "Collision": "Bounce",
   "Bounciness": 0.4,
   "ColorBirth": "686447",
   "ColorMid": "301907",

@@ -84,6 +84,7 @@ public partial class Game : IDisposable
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
 	Target DitherMask { get; set; } = null!;
+	Target ParticleSolidMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	Target ReflectionMask { get; set; } = null!;
 	Target AoMask { get; set; } = null!;
@@ -220,7 +221,8 @@ public partial class Game : IDisposable
 	{
 		if (particleSystem is not { Supported: true })
 			return;
-		particleSystem.Update(dt, ForegroundScreen.Attachments[0], RenderCamera, zoomLevel);
+		DrawParticleSolidMask();
+		particleSystem.Update(dt, ParticleSolidMask.Attachments[0], RenderCamera, zoomLevel);
 	}
 	public bool GymBudDied;
 	public bool GymMode;
@@ -887,6 +889,7 @@ public partial class Game : IDisposable
 		NormalBuffer = Track(new Target(GraphicsDevice, width, height, name: "NormalBuffer"));
 		TileField = Track(CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField"));
 		DitherMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask"));
+		ParticleSolidMask = Track(new Target(GraphicsDevice, width, height, name: "ParticleSolidMask"));
 		ReflectionScreen = Track(new Target(GraphicsDevice, width, height, name: "ReflectionScreen"));
 		ReflectionMask = Track(new Target(GraphicsDevice, width, height, name: "ReflectionMask"));
 		AoMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoMask"));
@@ -925,6 +928,7 @@ public partial class Game : IDisposable
 		NormalBuffer?.Dispose();
 		TileField?.Dispose();
 		DitherMask?.Dispose();
+		ParticleSolidMask?.Dispose();
 		ReflectionScreen?.Dispose();
 		ReflectionMask?.Dispose();
 		AoMask?.Dispose();
@@ -1859,6 +1863,48 @@ public partial class Game : IDisposable
 
 	private static float DitherAmountForActor(Actor actor)
 		=> actor.Mask.Has(Actor.Masks.Player | Actor.Masks.Enemy) ? ActorDitherAmount : 1.0f;
+
+	private void DrawParticleSolidMask()
+	{
+		ParticleSolidMask.Clear(Color.Transparent);
+		if (room == null)
+			return;
+
+		PushWorldMatrix();
+		foreach (var rect in room.CollisionRects)
+			Batcher.Rect(rect, Color.White);
+		foreach (var slope in room.SlopeTiles)
+		{
+			var polygon = room.GetSlopePolygon(slope);
+			if (polygon.Length < 3)
+				continue;
+			for (var i = 1; i + 1 < polygon.Length; i++)
+				Batcher.Triangle(polygon[0], polygon[i], polygon[i + 1], Color.White);
+		}
+		foreach (var actor in Actors)
+		{
+			if (!ParticleCollidesWith(actor))
+				continue;
+			if (actor.Mask.Has(Actor.Masks.Jumpthru))
+			{
+				Batcher.Rect(actor.Hitbox.Rect + actor.Position, Color.White);
+				continue;
+			}
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderShadow(Batcher, Color.White);
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(ParticleSolidMask);
+		Batcher.Clear();
+	}
+
+	private static bool ParticleCollidesWith(Actor actor)
+	{
+		if (!actor.Visible || actor is Grid || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
+			return false;
+		return actor is Pawn and not Player || actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru | Actor.Masks.Enemy | Actor.Masks.Hazard);
+	}
 
 	private void DrawRoomTileField(Room renderRoom)
 	{

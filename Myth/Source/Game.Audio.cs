@@ -233,19 +233,29 @@ public partial class Game
 
 	private void ApplyRoomReverb(Room forRoom)
 	{
-		if (!AudioEventsEnabled || !Audio.Initialized || roomReverb == forRoom.Reverb)
+		var reverb = EffectiveRoomReverb(forRoom);
+		if (!AudioEventsEnabled || !Audio.Initialized || roomReverb == reverb)
 			return;
 
 		try
 		{
-			Audio.SetParameter(Manager.RoomReverbParameter, forRoom.Reverb, true);
-			roomReverb = forRoom.Reverb;
+			Audio.SetParameter(Manager.RoomReverbParameter, reverb, true);
+			roomReverb = reverb;
 		}
 		catch (Exception e)
 		{
 			if (audioFailures.Add(Manager.RoomReverbParameter))
-				Console.Error.WriteLine($"Failed to set room reverb '{forRoom.Reverb:0.###}': {e}");
+				Console.Error.WriteLine($"Failed to set room reverb '{reverb:0.###}': {e}");
 		}
+	}
+
+	private static float EffectiveRoomReverb(Room forRoom)
+	{
+#if BROWSER
+		return BrowserPlatform.IsMobileBrowser() ? 0.0f : forRoom.Reverb;
+#else
+		return forRoom.Reverb;
+#endif
 	}
 
 	public void TriggerPlayerHitSnapshot()

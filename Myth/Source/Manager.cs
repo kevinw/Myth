@@ -384,7 +384,6 @@ public partial class Manager : App
 	{
 #if !BROWSER
 		SaveWindowSettings();
-		SaveTransitionData();
 #endif
 		game?.Dispose();
 #if EDITOR
@@ -406,41 +405,6 @@ public partial class Manager : App
 		Assets.Unload();
 		SpriteSdf.Unload();
 		Factory.Clear();
-	}
-
-	static void SaveTransitionData()
-	{
-#if DEBUG
-		// Membership-only union: the set of transitions we've ever observed (loaded at
-		// startup) plus any new ones seen this session. Counts are intentionally not
-		// persisted — only set membership drives baking, and keeping the file a stable
-		// sorted set means it only changes when a genuinely new transition appears,
-		// instead of churning every play session.
-		var keys = new SortedSet<(string SpriteName, string From, string To)>();
-		foreach (var key in Assets.TransitionPairs.Keys)
-			keys.Add(key);
-		foreach (var key in Actor.TransitionCounts.Keys)
-			keys.Add((key.SpriteName, key.From, key.To));
-
-		if (keys.Count == 0)
-			return;
-
-		// Write JSON array of observed transitions (sorted, no count)
-		using var ms = new MemoryStream();
-		using var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true });
-		writer.WriteStartArray();
-		foreach (var k in keys) {
-			writer.WriteStartObject();
-			writer.WriteString("spriteName", k.SpriteName);
-			writer.WriteString("fromTag", k.From);
-			writer.WriteString("toTag", k.To);
-			writer.WriteEndObject();
-		}
-		writer.WriteEndArray();
-		writer.Flush();
-		File.WriteAllBytes(Assets.ANIM_TRANSITIONS_JSON_FILENAME, ms.ToArray());
-		// Console.WriteLine($"Saved {keys.Count} animation transitions to {jsonPath}");
-#endif
 	}
 
 	string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);

@@ -27,6 +27,7 @@ public partial class Manager
 	float editorZoom = 1.0f;
 	float editorZoomTarget = 1.0f;
 	float roomPreviewResolutionScale = DefaultRoomPreviewResolutionScale;
+	float renderTargetPreviewWidth = 200f;
 	private const bool AutoSelectRoomByCamera = true;
 	Vector2 editorCameraTweenFrom;
 	Vector2 editorCameraTweenTo;
@@ -3977,25 +3978,38 @@ public partial class Manager
 		var open = true;
 		if (ImGui.Begin("Render Targets", ref open, ImGuiWindowFlags.NoSavedSettings))
 		{
-			const float CellWidth = 200f;
 			const float Spacing = 8f;
-			var avail = ImGui.GetContentRegionAvail().X;
-			var columns = Math.Max(1, (int)((avail + Spacing) / (CellWidth + Spacing)));
+			if (ImGui.Button("-", new Vector2(24, 0)))
+				renderTargetPreviewWidth = Math.Max(80f, renderTargetPreviewWidth - 40f);
+			ImGui.SameLine();
+			if (ImGui.Button("+", new Vector2(24, 0)))
+				renderTargetPreviewWidth = Math.Min(640f, renderTargetPreviewWidth + 40f);
+			ImGui.SameLine();
+			ImGui.TextUnformatted($"{renderTargetPreviewWidth:0}px");
+			ImGui.Separator();
 
+			var avail = ImGui.GetContentRegionAvail().X;
+			var columns = Math.Max(1, (int)((avail + Spacing) / (renderTargetPreviewWidth + Spacing)));
+
+			var visible = 0;
 			for (var i = 0; i < targets.Count; i++)
 			{
 				var target = targets[i];
+				if (target.Name == "GameScreen")
+					continue;
+
 				var aspect = target.Height > 0 ? target.Width / (float)target.Height : 1f;
-				var cellHeight = aspect > 0 ? CellWidth / aspect : CellWidth;
+				var cellHeight = aspect > 0 ? renderTargetPreviewWidth / aspect : renderTargetPreviewWidth;
 
 				ImGui.BeginGroup();
-				imgui.Image(new Subtexture(target), new Vector2(CellWidth, cellHeight));
+				imgui.Image(new Subtexture(target), new Vector2(renderTargetPreviewWidth, cellHeight));
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip(RenderTargetInfo(target));
 				ImGui.TextUnformatted(target.Name);
 				ImGui.EndGroup();
 
-				if ((i + 1) % columns != 0 && i + 1 < targets.Count)
+				visible++;
+				if (visible % columns != 0)
 					ImGui.SameLine(0, Spacing);
 			}
 		}
@@ -4007,7 +4021,9 @@ public partial class Manager
 
 	private static string RenderTargetInfo(Target target)
 	{
-		var formats = string.Join(", ", target.Attachments.Select(a => a.Format));
+		var formats = "";
+		for (var i = 0; i < target.Attachments.Length; i++)
+			formats += (i > 0 ? ", " : "") + target.Attachments[i].Format;
 		return $"{target.Name}\n{formats}\n{target.Width}×{target.Height}";
 	}
 

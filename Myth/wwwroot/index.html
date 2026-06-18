@@ -72,14 +72,36 @@
 		#start-gate {
 			position: fixed;
 			inset: 0;
-			display: grid;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 			place-items: center;
 			background: var(--backdrop);
 			z-index: 1;
+			padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+			box-sizing: border-box;
 		}
 
 		#start-gate[hidden] {
 			display: none;
+		}
+
+		#start-panel {
+			display: grid;
+			justify-items: center;
+			gap: 18px;
+			width: min(520px, 100%);
+			transform: translateY(-2vh);
+		}
+
+		#start-hint {
+			margin: 0;
+			max-width: 42ch;
+			color: rgba(245, 233, 200, 0.86);
+			font: 700 clamp(13px, 1.8vw, 18px) / 1.45 var(--mono);
+			text-align: center;
+			text-wrap: balance;
+			text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
 		}
 
 		/* The Start button doubles as the loading bar: a fill grows left-to-right
@@ -102,6 +124,22 @@
 		#start-button:disabled {
 			cursor: wait;
 		}
+
+		@media (max-height: 460px) {
+			#start-panel {
+				gap: 12px;
+				transform: none;
+			}
+
+			#start-hint {
+				font-size: 12px;
+				line-height: 1.35;
+			}
+
+			#start-button {
+				padding: 12px 22px;
+			}
+		}
 	</style>
 </head>
 <body>
@@ -110,14 +148,9 @@
 		<button id="reload-button" type="button" hidden>Reload</button>
 	</div>
 	<div id="start-gate">
-	    <div style="text-align: center;">
-			<div style="text-align: left; width: 400px; color: #efefef;">
-			<p>Controls: Gamepad, or:</p>
-			<p>A: Jump, X: Attack.</p>
-			<p>Hold jump when hitting the ground to become one-dimensional.</p>
-			<p>One-dimensional beings climb walls and move faster along surfaces.</p>
-            </div>
-    		<button id="start-button" type="button" disabled>Loading...</button>
+		<div id="start-panel">
+			<p id="start-hint">Hold jump when hitting the ground to become one-dimensional.<br>One-dimensional beings climb walls and move faster along surfaces.</p>
+			<button id="start-button" type="button" disabled>Loading...</button>
 		</div>
 	</div>
 	<script type="module" src="main.js"></script>
