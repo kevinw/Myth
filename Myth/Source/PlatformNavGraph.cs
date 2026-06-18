@@ -46,6 +46,8 @@ public sealed class PlatformNavGraph
 	private const int SimMinimumLandingDistance = Game.TileSize * 2;
 	private static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
 	private static readonly RectInt DuckingPawnProbe = new(-4, -6, 8, 6);
+	private static readonly Point2[] RoomExitDirections = [Point2.Left, Point2.Right, Point2.Up, Point2.Down];
+	private static readonly Comparison<Node> CompareNodeX = static (a, b) => a.Position.X.CompareTo(b.Position.X);
 	private static readonly JumpPlan[] JumpPlans =
 	[
 		new(1, 0.00f, 0.18f, 1, 99.0f),
@@ -68,9 +70,20 @@ public sealed class PlatformNavGraph
 
 	public readonly List<Node> Nodes = [];
 	public readonly List<Edge> Edges = [];
-	public IEnumerable<Node> RoomExits => Nodes.Where(node => node.Kind == NodeKind.RoomExit);
+	public IEnumerable<Node> RoomExits
+	{
+		get
+		{
+			foreach (var node in Nodes)
+				if (node.Kind == NodeKind.RoomExit)
+					yield return node;
+		}
+	}
 
 	private readonly Dictionary<Point2, int> nodeLookup = [];
+	private readonly HashSet<(int From, int To)> edgeLookup = [];
+	private readonly Dictionary<int, List<Node>> landingRows = [];
+	private readonly Dictionary<int, (JumpPlan Plan, float Cost)> jumpCandidates = [];
 	private readonly PriorityQueue<int, float> pathFrontier = new();
 	private readonly Dictionary<int, Edge> pathCameFrom = [];
 	private readonly Dictionary<int, float> pathCostSoFar = [];
@@ -187,6 +200,7 @@ public sealed class PlatformNavGraph
 		Nodes.Clear();
 		Edges.Clear();
 		nodeLookup.Clear();
+		edgeLookup.Clear();
 		rebuildGame = game;
 		rebuildRoom = room;
 		sampleBounds = room.WorldBounds;
@@ -269,7 +283,7 @@ public sealed class PlatformNavGraph
 			if (from.RequiresDucking)
 				continue;
 
-			var jumps = new Dictionary<int, (JumpPlan Plan, float Cost)>();
+			jumpCandidates.Clear();
 			foreach (var plan in JumpPlans)
 			{
 				if (!TrySimulateJump(rebuildGame!, from, plan, out var landing))
@@ -280,15 +294,12 @@ public sealed class PlatformNavGraph
 					continue;
 
 				var cost = JumpPlanCost(from, to.Value, plan);
-				if (!jumps.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
-					jumps[to.Value.Id] = (plan, cost);
+				if (!jumpCandidates.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
+					jumpCandidates[to.Value.Id] = (plan, cost);
 			}
 
-			foreach (var (toId, jump) in jumps)
-			{
-				if (!HasEdge(from.Id, toId))
-					Edges.Add(new(from.Id, toId, EdgeKind.Jump, jump.Plan));
-			}
+			foreach (var (toId, jump) in jumpCandidates)
+				AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan);
 		}
 
 		if (nextJumpSourceId >= Nodes.Count)
@@ -313,31 +324,55 @@ public sealed class PlatformNavGraph
 
 	private void AddPlatformLandingNodes(Game game)
 	{
-		foreach (var row in Nodes
-			.Where(node => node.Kind != NodeKind.RoomExit && !node.RequiresDucking)
-			.GroupBy(node => (int)node.Position.Y))
+		foreach (var row in landingRows.Values)
+			row.Clear();
+
+		var nodeCount = Nodes.Count;
+		for (var i = 0; i < nodeCount; i++)
 		{
-			var span = new List<Node>();
-			foreach (var node in row.OrderBy(node => node.Position.X))
+			var node = Nodes[i];
+			if (node.Kind == NodeKind.RoomExit || node.RequiresDucking)
+				continue;
+
+			var y = (int)node.Position.Y;
+			if (!landingRows.TryGetValue(y, out var row))
 			{
-				if (span.Count > 0 && node.Position.X - span[^1].Position.X > SampleStep)
-				{
-					AddLandingNodeForSpan(game, span);
-					span.Clear();
-				}
-				span.Add(node);
+				row = [];
+				landingRows[y] = row;
 			}
-			AddLandingNodeForSpan(game, span);
+			row.Add(node);
+		}
+
+		foreach (var row in landingRows.Values)
+		{
+			if (row.Count <= 0)
+				continue;
+
+			row.Sort(CompareNodeX);
+			var left = row[0];
+			var right = left;
+			var count = 1;
+			for (var i = 1; i < row.Count; i++)
+			{
+				var node = row[i];
+				if (node.Position.X - right.Position.X > SampleStep)
+				{
+					AddLandingNodeForSpan(game, left, right, count);
+					left = node;
+					count = 0;
+				}
+				right = node;
+				count++;
+			}
+			AddLandingNodeForSpan(game, left, right, count);
 		}
 	}
 
-	private void AddLandingNodeForSpan(Game game, List<Node> span)
+	private void AddLandingNodeForSpan(Game game, Node left, Node right, int count)
 	{
-		if (span.Count < 2)
+		if (count < 2)
 			return;
 
-		var left = span[0];
-		var right = span[^1];
 		var center = new Point2(
 			(int)MathF.Round((left.Position.X + right.Position.X) * 0.5f),
 			(int)MathF.Round((left.Position.Y + right.Position.Y) * 0.5f));
@@ -349,28 +384,21 @@ public sealed class PlatformNavGraph
 
 	private void BuildRoomExitNodes(Room room)
 	{
-		var navigationNodes = Nodes.ToArray();
-		BuildEdgeExitNodes(room, navigationNodes);
-		BuildLinkedDoorExitNodes(room, navigationNodes);
+		var navigationNodeCount = Nodes.Count;
+		BuildEdgeExitNodes(room, navigationNodeCount);
+		BuildLinkedDoorExitNodes(room, navigationNodeCount);
 	}
 
-	private void BuildEdgeExitNodes(Room room, Node[] navigationNodes)
+	private void BuildEdgeExitNodes(Room room, int navigationNodeCount)
 	{
 		var bounds = room.WorldBounds;
-		var directions = new[]
+		for (var i = 0; i < navigationNodeCount; i++)
 		{
-			Point2.Left,
-			Point2.Right,
-			Point2.Up,
-			Point2.Down
-		};
-
-		foreach (var from in navigationNodes)
-		{
+			var from = Nodes[i];
 			if (from.Kind == NodeKind.RoomExit)
 				continue;
 
-			foreach (var direction in directions)
+			foreach (var direction in RoomExitDirections)
 			{
 				if (!IsNearRoomEdge(bounds, from.Position, direction))
 					continue;
@@ -380,13 +408,13 @@ public sealed class PlatformNavGraph
 
 				var exitPosition = RoomEdgeExitPosition(bounds, from.Position, direction);
 				var exitId = AddNode(exitPosition, NodeKind.RoomExit, new RoomExit(RoomExitKind.Edge, targetRoom.Id, null, direction));
-				Edges.Add(new(from.Id, exitId, EdgeKind.RoomExit));
-				Edges.Add(new(exitId, from.Id, EdgeKind.RoomExit));
+				AddEdge(from.Id, exitId, EdgeKind.RoomExit);
+				AddEdge(exitId, from.Id, EdgeKind.RoomExit);
 			}
 		}
 	}
 
-	private void BuildLinkedDoorExitNodes(Room room, Node[] navigationNodes)
+	private void BuildLinkedDoorExitNodes(Room room, int navigationNodeCount)
 	{
 		foreach (var actor in room.Actors)
 		{
@@ -402,11 +430,11 @@ public sealed class PlatformNavGraph
 			var position = room.WorldBounds.TopLeft + localPosition;
 			var targetRoomId = Assets.FindActorById(targetActorId) is { } target ? target.Room.Id : null;
 			var exitId = AddNode(position, NodeKind.RoomExit, new RoomExit(RoomExitKind.LinkedDoor, targetRoomId, targetActorId, Point2.Zero));
-			if (FindNearestNavigationNode(navigationNodes, position, SampleStep * 6) is not { } nearest)
+			if (FindNearestNavigationNode(navigationNodeCount, position, SampleStep * 6) is not { } nearest)
 				continue;
 
-			Edges.Add(new(nearest.Id, exitId, EdgeKind.RoomExit));
-			Edges.Add(new(exitId, nearest.Id, EdgeKind.RoomExit));
+			AddEdge(nearest.Id, exitId, EdgeKind.RoomExit);
+			AddEdge(exitId, nearest.Id, EdgeKind.RoomExit);
 		}
 	}
 
@@ -438,12 +466,13 @@ public sealed class PlatformNavGraph
 		return (Point2)position;
 	}
 
-	private static Node? FindNearestNavigationNode(Node[] nodes, Vector2 position, float maxDistance)
+	private Node? FindNearestNavigationNode(int nodeCount, Vector2 position, float maxDistance)
 	{
 		Node? nearest = null;
 		var nearestDistanceSquared = maxDistance * maxDistance;
-		foreach (var node in nodes)
+		for (var i = 0; i < nodeCount; i++)
 		{
+			var node = Nodes[i];
 			if (node.Kind == NodeKind.RoomExit)
 				continue;
 
@@ -543,7 +572,7 @@ public sealed class PlatformNavGraph
 				if (!edgeKind.HasValue || HasEdge(from.Id, to.Id))
 					continue;
 
-				Edges.Add(new(from.Id, to.Id, edgeKind.Value));
+				AddEdge(from.Id, to.Id, edgeKind.Value);
 			}
 		}
 	}
@@ -557,11 +586,11 @@ public sealed class PlatformNavGraph
 
 			if (!IsStandable(game, (Point2)node.Position + new Point2(-SampleStep, 0)) &&
 				FindFallLanding(game, node, -SampleStep) is { } leftLanding)
-				Edges.Add(new(node.Id, leftLanding.Id, EdgeKind.Fall));
+				AddEdge(node.Id, leftLanding.Id, EdgeKind.Fall);
 
 			if (!IsStandable(game, (Point2)node.Position + new Point2(SampleStep, 0)) &&
 				FindFallLanding(game, node, SampleStep) is { } rightLanding)
-				Edges.Add(new(node.Id, rightLanding.Id, EdgeKind.Fall));
+				AddEdge(node.Id, rightLanding.Id, EdgeKind.Fall);
 		}
 	}
 
@@ -639,7 +668,15 @@ public sealed class PlatformNavGraph
 	}
 
 	private bool HasEdge(int from, int to)
-		=> Edges.Any(edge => edge.From == from && edge.To == to);
+		=> edgeLookup.Contains((from, to));
+
+	private bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null)
+	{
+		if (!edgeLookup.Add((from, to)))
+			return false;
+		Edges.Add(new(from, to, kind, jump));
+		return true;
+	}
 
 	private Node? FindFallLanding(Game game, Node from, int offsetX)
 	{
@@ -701,7 +738,7 @@ public sealed class PlatformNavGraph
 		return sim.Run(out landing);
 	}
 
-	private sealed class JumpSimulation
+	private struct JumpSimulation
 	{
 		private readonly Game game;
 		private readonly Vector2 from;

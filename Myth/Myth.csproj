@@ -27,7 +27,7 @@
   <!-- Dear ImGui for the browser: link the prebuilt cimgui wasm archive into the
        runtime (built by tools/build-cimgui-web.sh). Linking native code forces a
        native relink of dotnet.native.wasm. -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and Exists('Platforms/Web/Native/cimgui.a')">
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserImGui)' != 'false' and Exists('Platforms/Web/Native/cimgui.a')">
     <MythBrowserImGui>true</MythBrowserImGui>
     <WasmBuildNative>true</WasmBuildNative>
     <!-- The web cimgui archive is pinned to ImGui.NET's native ABI. ImGui.NET still
@@ -38,6 +38,12 @@
 
   <ItemGroup Condition="'$(MythBrowserImGui)' == 'true'">
     <NativeFileReference Include="Platforms/Web/Native/cimgui.a" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserAot)' == 'true'">
+    <!-- dotnet 10.0.8's wasm AOT compiler currently asserts on Foster.Framework.
+         Keep Foster interpreted while still AOT'ing Myth/Myth.Core for gameplay hot paths. -->
+    <_AOT_InternalForceInterpretAssemblies Include="Foster.Framework.dll" />
   </ItemGroup>
 
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">

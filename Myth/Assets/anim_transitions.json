@@ -26,6 +26,16 @@
   },
   {
     "spriteName": "bud",
+    "fromTag": "dive",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "dive",
+    "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "bud",
     "fromTag": "duck",
     "toTag": "crawl"
   },
@@ -42,6 +52,11 @@
   {
     "spriteName": "bud",
     "fromTag": "idle",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "idle",
     "toTag": "run_start"
   },
   {
@@ -51,6 +66,46 @@
   },
   {
     "spriteName": "bud",
+    "fromTag": "jump",
+    "toTag": "dive"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump",
+    "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump",
+    "toTag": "wall_slide"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump_turn",
+    "toTag": "dive"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump_turn",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "jump_turn",
+    "toTag": "skid"
+  },
+  {
+    "spriteName": "bud",
     "fromTag": "run",
     "toTag": "crawl"
   },
@@ -58,6 +113,11 @@
     "spriteName": "bud",
     "fromTag": "run",
     "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run",
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
@@ -73,6 +133,11 @@
     "spriteName": "bud",
     "fromTag": "run_start",
     "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "run_start",
+    "toTag": "jump"
   },
   {
     "spriteName": "bud",
@@ -86,6 +151,11 @@
   },
   {
     "spriteName": "bud",
+    "fromTag": "run_start",
+    "toTag": "wall_slide"
+  },
+  {
+    "spriteName": "bud",
     "fromTag": "skid",
     "toTag": "crawl"
   },
@@ -102,12 +172,32 @@
   {
     "spriteName": "bud",
     "fromTag": "skid",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "skid",
+    "toTag": "jump_turn"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "skid",
     "toTag": "run_start"
   },
   {
     "spriteName": "bud",
     "fromTag": "sword",
     "toTag": "idle"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "wall_slide",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "bud",
+    "fromTag": "wall_slide",
+    "toTag": "run_start"
   },
   {
     "spriteName": "player",
@@ -127,12 +217,27 @@
   {
     "spriteName": "player",
     "fromTag": "crawl",
+    "toTag": "duck_attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "crawl",
+    "toTag": "idle"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "crawl",
     "toTag": "jump"
   },
   {
     "spriteName": "player",
     "fromTag": "crawl",
     "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "crawl",
+    "toTag": "skid"
   },
   {
     "spriteName": "player",
@@ -181,6 +286,11 @@
   },
   {
     "spriteName": "player",
+    "fromTag": "duck",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
     "fromTag": "duck_attack",
     "toTag": "duck"
   },
@@ -188,6 +298,11 @@
     "spriteName": "player",
     "fromTag": "idle",
     "toTag": "attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "idle",
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
@@ -213,6 +328,11 @@
     "spriteName": "player",
     "fromTag": "jump",
     "toTag": "attack"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
@@ -251,6 +371,11 @@
   },
   {
     "spriteName": "player",
+    "fromTag": "jump",
+    "toTag": "wall_slide"
+  },
+  {
+    "spriteName": "player",
     "fromTag": "jump_squish",
     "toTag": "jump"
   },
@@ -272,12 +397,32 @@
   {
     "spriteName": "player",
     "fromTag": "roll",
+    "toTag": "crawl"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "roll",
     "toTag": "duck"
   },
   {
     "spriteName": "player",
     "fromTag": "roll",
     "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "roll",
+    "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "roll",
+    "toTag": "wall_slide"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run",
+    "toTag": "crawl"
   },
   {
     "spriteName": "player",
@@ -288,6 +433,11 @@
     "spriteName": "player",
     "fromTag": "run",
     "toTag": "jump"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "run_start",
+    "toTag": "attack"
   },
   {
     "spriteName": "player",
@@ -323,5 +473,20 @@
     "spriteName": "player",
     "fromTag": "sword",
     "toTag": "run_start"
+  },
+  {
+    "spriteName": "player",
+    "fromTag": "wall_slide",
+    "toTag": "jump"
+  },
+  {
+    "spriteName": "spitter",
+    "fromTag": "idle",
+    "toTag": "shoot"
+  },
+  {
+    "spriteName": "spitter",
+    "fromTag": "shoot",
+    "toTag": "idle"
   }
 ]

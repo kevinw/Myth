@@ -16,19 +16,21 @@ Shared browser-wasm dotnet commands used by local tools and CI.
 
 Options:
   -c, --configuration  Build configuration. Default: Debug
+  --aot                Enable .NET WebAssembly AOT compilation
   --no-restore         Pass --no-restore to build/publish
   -h, --help           Show this help
 `);
 }
 
 const argv = process.argv.slice(2);
-if (argv.length < 1) {
+if (argv.length < 1 || argv[0] === "-h" || argv[0] === "--help") {
   usage();
-  process.exit(1);
+  process.exit(argv.length < 1 ? 1 : 0);
 }
 
 const command = argv.shift();
 let configuration = "Debug";
+let aot = false;
 let noRestore = false;
 const dotnetArgs = [];
 
@@ -41,6 +43,9 @@ outer: while (i < argv.length) {
       break;
     case "--no-restore":
       noRestore = true;
+      break;
+    case "--aot":
+      aot = true;
       break;
     case "-h":
     case "--help":
@@ -68,6 +73,7 @@ switch (command) {
       `/p:Configuration=${configuration}`,
       "/p:MythBrowser=true",
       "/p:ShaderPlatform=",
+      ...(aot ? ["/p:RunAOTCompilation=true", "/p:MythBrowserAot=true"] : []),
       ...dotnetArgs,
     ];
     break;
@@ -90,6 +96,7 @@ switch (command) {
       ...(noRestore ? ["--no-restore"] : []),
       "/p:MythBrowser=true",
       "/p:ShaderPlatform=",
+      ...(aot ? ["/p:RunAOTCompilation=true", "/p:MythBrowserAot=true"] : []),
       ...dotnetArgs,
     ];
     break;

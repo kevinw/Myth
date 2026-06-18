@@ -24,6 +24,7 @@ Options:
   --port PORT          Port for the dev server (default: 8082)
   -c, --configuration  Build configuration (default: Debug)
   --publish            Run dotnet publish instead of dotnet build
+  --aot                Enable .NET WebAssembly AOT compilation
   --watch              Keep running dotnet watch and notify the browser after successful rebuilds
   --no-open            Do not open the browser automatically
   -h, --help           Show this help
@@ -34,6 +35,7 @@ let host = "127.0.0.1";
 let port = 8082;
 let configuration = "Debug";
 let publish = false;
+let aot = false;
 let openBrowser = true;
 let watch = false;
 const dotnetArgs = [];
@@ -54,6 +56,9 @@ outer: while (i < argv.length) {
       break;
     case "--publish":
       publish = true;
+      break;
+    case "--aot":
+      aot = true;
       break;
     case "--watch":
       watch = true;
@@ -85,6 +90,7 @@ function buildOnce() {
       cmd,
       "-c",
       configuration,
+      ...(aot ? ["--aot"] : []),
       "--",
       ...dotnetArgs,
     ],
@@ -226,6 +232,7 @@ function startWatch() {
     configuration,
     "-r",
     "browser-wasm",
+    ...(aot ? ["/p:RunAOTCompilation=true", "/p:MythBrowserAot=true"] : []),
     ...dotnetArgs,
   ];
 
