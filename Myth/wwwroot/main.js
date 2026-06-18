@@ -1,12 +1,16 @@
 prepareReloadPrompt();
-const [{ dotnet }, FosterWebGPU, FosterBrowserFmod] = await Promise.all([
+const [{ dotnet }, FosterWebGPU, FosterBrowserFmod, VirtualGamepad] = await Promise.all([
   import("./_framework/dotnet.js"),
   import("./_framework/Content/Web/foster-webgpu.js"),
   import("./_framework/Content/Web/foster-fmod.js"),
+  import("./virtual-gamepad.js"),
 ]);
 
 globalThis.FosterWebGPU = FosterWebGPU;
 globalThis.FosterBrowserFmod = FosterBrowserFmod;
+
+// On-screen touch controller (web analog of the iOS GCVirtualController).
+VirtualGamepad.initialize();
 
 function isMythCleanExitStatus(error) {
   return (
@@ -23,6 +27,9 @@ try {
 
   setModuleImports("FosterWebGPU", FosterWebGPU);
   setModuleImports("FosterBrowserFmod", FosterBrowserFmod);
+  setModuleImports("MythOverlay", {
+    setVirtualControllerVisible: VirtualGamepad.setVirtualControllerVisible,
+  });
   const startGate = prepareStartGate();
   startGate.progress(0.05);
   const assetFiles = await preloadAssets(runtime.Module, (loaded, total) => {

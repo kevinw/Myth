@@ -39,8 +39,8 @@ public class Controls(Input input)
 
 	public readonly VirtualAction Saw = new(input, "Saw",
 		new ActionBindingSet()
-			.Add(Keys.Z)
-			.Add(Buttons.North)
+			//.Add(Keys.Z)
+			//.Add(Buttons.North)
 	);
 
 	public readonly VirtualAction Zoom = new(input, "Zoom",
