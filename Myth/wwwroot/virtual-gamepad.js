@@ -115,7 +115,7 @@ export function setVirtualControllerVisible(visible) {
 // --- DOM / rendering -----------------------------------------------------
 let knobEl = null;
 let stickBaseEl = null;
-const STICK_RADIUS = 56; // px travel radius for the knob
+const STICK_RADIUS = 45; // px travel radius for the knob (stick scaled to 80%)
 
 function resetKnob() {
 	if (knobEl) knobEl.style.transform = "translate(-50%, -50%)";
@@ -126,26 +126,38 @@ function buildDom() {
 	style.textContent = `
 		#myth-vpad { position: fixed; inset: 0; z-index: 5; display: none;
 			pointer-events: none; touch-action: none;
-			--pad: max(18px, env(safe-area-inset-bottom)); }
+			--stick: 112px; --knob: 51px;
+			--btn: 46px;       /* visible button circle */
+			--hit: 51px;       /* (larger) touch area around it */
+			--cluster: 143px;  /* button diamond box; taller so circles don't overlap */
+			--pad: max(18px, env(safe-area-inset-bottom));
+			--mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; }
 		#myth-vpad .ctl { position: absolute; pointer-events: auto; touch-action: none;
-			user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+			user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+			-webkit-touch-callout: none; }
 		#myth-vpad .stick-base { left: max(24px, env(safe-area-inset-left)); bottom: var(--pad);
-			width: 140px; height: 140px; border-radius: 50%;
+			width: var(--stick); height: var(--stick); border-radius: 50%;
 			background: rgba(20, 14, 34, 0.35); border: 2px solid rgba(236, 226, 203, 0.35); }
 		#myth-vpad .stick-knob { position: absolute; left: 50%; top: 50%;
-			width: 64px; height: 64px; border-radius: 50%; transform: translate(-50%, -50%);
+			width: var(--knob); height: var(--knob); border-radius: 50%; transform: translate(-50%, -50%);
 			background: rgba(224, 211, 167, 0.55); border: 2px solid rgba(236, 226, 203, 0.7); }
+		/* Each button is a large transparent hit area (.btn) holding a smaller
+		   visible circle (.cap), so the pushable radius exceeds the visual one. */
 		#myth-vpad .buttons { right: max(24px, env(safe-area-inset-right)); bottom: var(--pad);
-			width: 168px; height: 168px; pointer-events: none; }
-		#myth-vpad .btn { position: absolute; width: 64px; height: 64px; border-radius: 50%;
+			width: var(--cluster); height: var(--cluster); pointer-events: none; }
+		#myth-vpad .btn { position: absolute; width: var(--hit); height: var(--hit);
 			pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none;
-			display: grid; place-items: center; font: 700 22px system-ui, sans-serif;
+			-webkit-touch-callout: none; background: transparent; border: 0;
+			display: grid; place-items: center; }
+		#myth-vpad .btn .cap { width: var(--btn); height: var(--btn); border-radius: 50%;
+			display: grid; place-items: center;
+			font-weight: 700; font-size: calc(var(--btn) * 0.45); font-family: var(--mono);
 			color: #f5e9c8; background: rgba(47, 33, 63, 0.55); border: 2px solid rgba(224, 211, 167, 0.6); }
-		#myth-vpad .btn.active { background: rgba(224, 211, 167, 0.75); color: #150e22; }
-		#myth-vpad .btn.south { left: 52px; bottom: 0; }
-		#myth-vpad .btn.east  { right: 0; bottom: 52px; }
-		#myth-vpad .btn.west  { left: 0; bottom: 52px; }
-		#myth-vpad .btn.north { left: 52px; bottom: 104px; }
+		#myth-vpad .btn.active .cap { background: rgba(224, 211, 167, 0.75); color: #150e22; }
+		#myth-vpad .btn.north { top: 0; left: 50%; transform: translateX(-50%); }
+		#myth-vpad .btn.south { bottom: 0; left: 50%; transform: translateX(-50%); }
+		#myth-vpad .btn.west  { left: 0; top: 50%; transform: translateY(-50%); }
+		#myth-vpad .btn.east  { right: 0; top: 50%; transform: translateY(-50%); }
 	`;
 	document.head.appendChild(style);
 
@@ -165,7 +177,10 @@ function buildDom() {
 	for (const [label, cls, idx] of [["Y", "north", 3], ["X", "west", 2], ["B", "east", 1], ["A", "south", 0]]) {
 		const el = document.createElement("div");
 		el.className = `btn ${cls}`;
-		el.textContent = label;
+		const cap = document.createElement("div");
+		cap.className = "cap";
+		cap.textContent = label;
+		el.appendChild(cap);
 		bindButton(el, idx);
 		buttons.appendChild(el);
 	}

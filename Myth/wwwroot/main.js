@@ -76,7 +76,6 @@ function prepareReloadPrompt() {
 function prepareStartGate() {
   const gate = document.querySelector("#start-gate");
   const button = document.querySelector("#start-button");
-  const progress = document.querySelector("#start-progress");
   if (!(gate instanceof HTMLElement) || !(button instanceof HTMLButtonElement))
     return {
       progress: () => {},
@@ -84,9 +83,12 @@ function prepareStartGate() {
       wait: () => Promise.resolve(),
     };
 
+  const setFill = (value) =>
+    button.style.setProperty("--p", `${Math.max(0, Math.min(1, value)) * 100}%`);
+
   button.disabled = true;
   button.textContent = "Loading...";
-  progress.value = 0;
+  setFill(0);
 
   let ready = false;
   const wait = new Promise((resolve) => {
@@ -104,14 +106,12 @@ function prepareStartGate() {
   });
 
   return {
-    progress: (value) => {
-      progress.value = Math.max(0, Math.min(1, value));
-    },
+    progress: setFill,
     ready: () => {
       ready = true;
       button.disabled = false;
       button.textContent = "Start";
-      progress.value = 1;
+      setFill(1);
     },
     wait: () => wait,
   };
