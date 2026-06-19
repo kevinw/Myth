@@ -4023,6 +4023,9 @@ public partial class Manager
 		if (game.GetFirst<Bud>() is { } bud)
 			DrawBudPlatformNavOverlay(draw, viewport, game, graph, bud);
 
+		foreach (var span in graph.SurfaceSpans)
+			DrawPlatformNavSurfaceSpan(draw, viewport, game, span);
+
 		foreach (var node in graph.Nodes)
 		{
 			var color = node.Kind switch
@@ -4040,6 +4043,9 @@ public partial class Manager
 
 	private void DrawBudPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Bud bud)
 	{
+		foreach (var edge in bud.DebugSurfaceNavPath)
+			DrawPlatformNavSurfaceEdge(draw, viewport, game, graph, edge, ImGuiColor(0.20f, 0.92f, 1.00f, 0.62f), 5.0f);
+
 		foreach (var edge in bud.DebugNavPath)
 		{
 			var color = edge.Kind == PlatformNavGraph.EdgeKind.Jump
@@ -4095,6 +4101,41 @@ public partial class Manager
 			draw.AddLine(previous, point, color, thickness);
 			previous = point;
 		}
+	}
+
+	private static void DrawPlatformNavSurfaceSpan(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph.SurfaceSpan span)
+	{
+		const int yOffset = -5;
+		const int singletonHalfWidth = 5;
+		var left = span.Left;
+		var right = span.Right;
+		if (left == right)
+		{
+			left -= singletonHalfWidth;
+			right += singletonHalfWidth;
+		}
+
+		var color = span.RequiresDucking
+			? ImGuiColor(0.95f, 0.66f, 1.00f, 0.82f)
+			: ImGuiColor(0.18f, 1.00f, 0.82f, 0.82f);
+		var from = GameWorldToImGui(viewport, game, new Vector2(left, span.Y + yOffset));
+		var to = GameWorldToImGui(viewport, game, new Vector2(right, span.Y + yOffset));
+		draw.AddLine(from, to, color, 3.0f);
+	}
+
+	private static void DrawPlatformNavSurfaceEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.SurfaceEdge edge, uint color, float thickness)
+	{
+		if (edge.From < 0 || edge.From >= graph.SurfaceSpans.Count || edge.To < 0 || edge.To >= graph.SurfaceSpans.Count)
+			return;
+
+		var fromSpan = graph.SurfaceSpans[edge.From];
+		var toSpan = graph.SurfaceSpans[edge.To];
+		var from = new Vector2((edge.FromLeft + edge.FromRight) * 0.5f, fromSpan.Y - 9);
+		var to = new Vector2((edge.ToLeft + edge.ToRight) * 0.5f, toSpan.Y - 9);
+		if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
+			DrawPlatformNavJump(draw, viewport, game, from, to, color, thickness);
+		else
+			draw.AddLine(GameWorldToImGui(viewport, game, from), GameWorldToImGui(viewport, game, to), color, thickness);
 	}
 
 	private static void DrawPlatformNavNodeRing(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, int? nodeId, uint color, float radius)

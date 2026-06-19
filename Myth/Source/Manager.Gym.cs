@@ -9,6 +9,10 @@ partial class Manager
 	readonly bool gymMode;
 	readonly bool headless;
 	readonly bool unthrottled;
+	// Unthrottled runs have no fixed wall-clock per frame, so a time-budgeted nav-graph
+	// rebuild finishes on a different game frame each run (non-deterministic gym results).
+	// Callers use this to build the graph in one shot instead.
+	internal bool Unthrottled => unthrottled;
 	readonly bool gymExitAfterAll;
 	List<GymRun>? gymRuns;
 	int gymRunIndex;
@@ -24,6 +28,11 @@ partial class Manager
 		gymRuns = [];
 		foreach (var room in Assets.Rooms.Values)
 		{
+			// With --play-room, restrict the gym to that one room's goals (and loop
+			// through just those); otherwise gather goals from every room as before.
+			if (playRoomId != null && !string.Equals(room.Id, playRoomId, StringComparison.OrdinalIgnoreCase))
+				continue;
+
 			foreach (var actor in room.Actors)
 			{
 				if (!string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), "Goal", StringComparison.OrdinalIgnoreCase))

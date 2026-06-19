@@ -31,17 +31,33 @@ public sealed class PlatformNavGraph
 
 	public readonly record struct RoomExit(RoomExitKind Kind, string? TargetRoomId, string? TargetActorId, Point2 Direction);
 	public readonly record struct Node(int Id, Vector2 Position, NodeKind Kind, RoomExit? Exit = null, bool RequiresDucking = false);
-	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime);
+	public readonly record struct SurfaceSpan(int Id, int Y, int Left, int Right, bool RequiresDucking, int NodeCount);
+	public readonly record struct SurfacePoint(int SpanId, Vector2 Position, float DistanceSquared);
+	public readonly record struct SurfaceEdge(int From, int To, EdgeKind Kind, int FromLeft, int FromRight, int ToLeft, int ToRight, JumpPlan? Jump = null, int NodeEdgeCount = 0);
+	// WallJump: if set, the jump is taken toward Direction, and the first time the
+	// pawn hits a wall mid-air it kicks off it (away from the wall) with a fresh jump,
+	// then steers in AirDirection. Lets the planner route through a wall kick where a
+	// single jump can't make the gap/height (e.g. under a low ceiling).
+	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime, bool WallJump = false);
 	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null);
 
 	const int SampleStep = Game.TileSize;
 	const float SimDelta = 1.0f / 60.0f;
 	const float SimMaxTime = 1.60f;
-	const float SimAirAccel = 260;
-	const float SimMaxAirSpeed = 99;
+	// These mirror the real Pawn constants in Player.cs so the simulated jump arc
+	// matches what the runtime executor actually achieves. Keep them in sync: a sim
+	// that is more optimistic than reality produces jump edges Bud cannot execute.
+	const float SimGroundAccel = 400;
+	const float SimMaxGroundSpeed = 93;
+	const float SimAirAccel = 310;
+	const float SimMaxAirSpeed = 100;
 	const float SimGravity = 450;
-	const float SimJumpForce = -105;
-	const float SimJumpTime = 0.18f;
+	const float SimFastFallMultiplier = 1.25f;
+	const float SimJumpGravityMultiplier = 0.35f;
+	const float SimJumpForce = -125;
+	const float SimJumpTime = 0.19f;
+	const float SimWallJumpSpeed = 125;
+	const float SimWallJumpInputLockTime = 0.22f;
 	const int SimLandingTolerance = 12;
 	const int SimMinimumLandingDistance = Game.TileSize * 2;
 	static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
@@ -50,8 +66,6 @@ public sealed class PlatformNavGraph
 	static readonly Comparison<Node> CompareNodeX = static (a, b) => a.Position.X.CompareTo(b.Position.X);
 	static readonly JumpPlan[] JumpPlans =
 	[
-		new(1, 0.00f, 0.18f, 1, 99.0f),
-		new(-1, 0.00f, 0.18f, -1, 99.0f),
 		new(1, 0.08f, 0.18f, 1, 99.0f),
 		new(-1, 0.08f, 0.18f, -1, 99.0f),
 		new(1, 0.14f, 0.18f, 1, 99.0f),
@@ -66,10 +80,16 @@ public sealed class PlatformNavGraph
 		new(-1, 0.36f, 0.18f, -1, 99.0f),
 		new(1, 0.48f, 0.18f, 1, 99.0f),
 		new(-1, 0.48f, 0.18f, -1, 99.0f),
+		// Wall kicks: jump toward a wall, kick off it the opposite way. The landing
+		// ends up on the Direction-side after the kick reverses horizontal travel.
+		new(1, 0.08f, 0.18f, -1, 99.0f, WallJump: true),
+		new(-1, 0.08f, 0.18f, 1, 99.0f, WallJump: true),
 	];
 
 	public readonly List<Node> Nodes = [];
 	public readonly List<Edge> Edges = [];
+	public readonly List<SurfaceSpan> SurfaceSpans = [];
+	public readonly List<SurfaceEdge> SurfaceEdges = [];
 	public IEnumerable<Node> RoomExits
 	{
 		get
@@ -83,10 +103,17 @@ public sealed class PlatformNavGraph
 	readonly Dictionary<Point2, int> nodeLookup = [];
 	readonly HashSet<(int From, int To)> edgeLookup = [];
 	readonly Dictionary<int, List<Node>> landingRows = [];
-	readonly Dictionary<int, (JumpPlan Plan, float Cost)> jumpCandidates = [];
+	readonly Dictionary<int, List<int>> landingCandidateRows = [];
+	readonly Dictionary<int, List<int>> surfaceRows = [];
+	readonly List<int> nodeSurfaceSpanIds = [];
+	readonly Dictionary<SurfaceEdgeKey, SurfaceEdgeAccumulator> surfaceEdgeLookup = [];
+	readonly Dictionary<int, (JumpPlan Plan, float Cost, int PlanIndex)> jumpCandidates = [];
 	readonly PriorityQueue<int, float> pathFrontier = new();
 	readonly Dictionary<int, Edge> pathCameFrom = [];
 	readonly Dictionary<int, float> pathCostSoFar = [];
+	readonly PriorityQueue<int, float> surfacePathFrontier = new();
+	readonly Dictionary<int, SurfaceEdge> surfacePathCameFrom = [];
+	readonly Dictionary<int, float> surfacePathCostSoFar = [];
 
 	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RoomExits, Ready }
 
@@ -99,6 +126,48 @@ public sealed class PlatformNavGraph
 	int nextJumpSourceId;
 	long rebuildStartTimestamp;
 	int rebuildFrameCount;
+
+	// jumpthru actors in the room, snapshotted once per Tick so HasStandableSupport
+	// doesn't re-scan (and mask-filter) every actor on each of its ~100k calls.
+	static readonly List<Actor> jumpthruActors = [];
+
+	// --- profiling instrumentation (temporary) ---
+	static long collisionQueries;
+	static long supportChecks;
+	static long simsRun, simSteps, simMoveSubsteps, simLanded, simStalled, simTimedOut, landingSearchIterations;
+	static long jumpSimTicks, landingSearchTicks;
+
+	// per-plan coverage: where each JumpPlan lands and how often it wins an edge,
+	// so we can see which plans own unique reach vs. overlap before trimming.
+	struct PlanStat { public int Landed, Kept; public float MinReach, MaxReach, SumReach, MinDy, MaxDy; }
+	static readonly PlanStat[] planStats = new PlanStat[JumpPlans.Length];
+	readonly double[] phaseElapsedMs = new double[(int)BuildPhase.Ready + 1];
+	readonly long[] phaseCollisionCounts = new long[(int)BuildPhase.Ready + 1];
+
+	readonly record struct SurfaceEdgeKey(int From, int To, EdgeKind Kind, bool HasJump, JumpPlan Jump);
+
+	struct SurfaceEdgeAccumulator
+	{
+		public int FromLeft, FromRight, ToLeft, ToRight, Count;
+
+		public SurfaceEdgeAccumulator(Node from, Node to)
+		{
+			FromLeft = FromRight = (int)from.Position.X;
+			ToLeft = ToRight = (int)to.Position.X;
+			Count = 1;
+		}
+
+		public void Add(Node from, Node to)
+		{
+			var fromX = (int)from.Position.X;
+			var toX = (int)to.Position.X;
+			if (fromX < FromLeft) FromLeft = fromX;
+			if (fromX > FromRight) FromRight = fromX;
+			if (toX < ToLeft) ToLeft = toX;
+			if (toX > ToRight) ToRight = toX;
+			Count++;
+		}
+	}
 
 	public bool IsReady => phase == BuildPhase.Ready;
 
@@ -121,7 +190,42 @@ public sealed class PlatformNavGraph
 		return nearest;
 	}
 
-	public bool TryFindPath(int startId, int goalId, List<Edge> path)
+	public void FindNearestNodes(Vector2 position, float maxDistance, List<Node> results, bool includeRoomExits = false)
+	{
+		results.Clear();
+		var maxDistanceSquared = maxDistance * maxDistance;
+		foreach (var node in Nodes)
+		{
+			if (!includeRoomExits && node.Kind == NodeKind.RoomExit)
+				continue;
+
+			if (Vector2.DistanceSquared(position, node.Position) >= maxDistanceSquared)
+				continue;
+
+			results.Add(node);
+		}
+		results.Sort((a, b) => Vector2.DistanceSquared(position, a.Position).CompareTo(Vector2.DistanceSquared(position, b.Position)));
+	}
+
+	public SurfacePoint? FindNearestSurface(Vector2 position, float maxDistance)
+	{
+		SurfacePoint? nearest = null;
+		var nearestDistanceSquared = maxDistance * maxDistance;
+		foreach (var span in SurfaceSpans)
+		{
+			var x = Math.Clamp(position.X, span.Left, span.Right);
+			var point = new Vector2(x, span.Y);
+			var distanceSquared = Vector2.DistanceSquared(position, point);
+			if (distanceSquared >= nearestDistanceSquared)
+				continue;
+
+			nearest = new SurfacePoint(span.Id, point, distanceSquared);
+			nearestDistanceSquared = distanceSquared;
+		}
+		return nearest;
+	}
+
+	public bool TryFindPath(int startId, int goalId, List<Edge> path, IReadOnlySet<(int From, int To)>? blockedEdges = null)
 	{
 		path.Clear();
 		if (startId == goalId)
@@ -147,6 +251,8 @@ public sealed class PlatformNavGraph
 			{
 				if (edge.From != current)
 					continue;
+				if (blockedEdges != null && blockedEdges.Contains((edge.From, edge.To)))
+					continue;
 
 				var nextCost = pathCostSoFar[current] + EdgeCost(edge);
 				if (pathCostSoFar.TryGetValue(edge.To, out var existingCost) && nextCost >= existingCost)
@@ -161,15 +267,81 @@ public sealed class PlatformNavGraph
 		return false;
 	}
 
+	public bool TryFindSurfacePath(int startNodeId, int goalNodeId, List<SurfaceEdge> path)
+	{
+		path.Clear();
+		var startId = NodeSurfaceSpanId(startNodeId);
+		var goalId = NodeSurfaceSpanId(goalNodeId);
+		if (startId < 0 || goalId < 0)
+			return false;
+		if (startId == goalId)
+			return true;
+
+		surfacePathFrontier.Clear();
+		surfacePathCameFrom.Clear();
+		surfacePathCostSoFar.Clear();
+		surfacePathFrontier.Enqueue(startId, 0);
+		surfacePathCameFrom[startId] = default;
+		surfacePathCostSoFar[startId] = 0;
+
+		while (surfacePathFrontier.Count > 0)
+		{
+			var current = surfacePathFrontier.Dequeue();
+			if (current == goalId)
+			{
+				BuildSurfacePath(startId, goalId, surfacePathCameFrom, path);
+				return true;
+			}
+
+			foreach (var edge in SurfaceEdges)
+			{
+				if (edge.From != current)
+					continue;
+
+				var nextCost = surfacePathCostSoFar[current] + SurfaceEdgeCost(edge);
+				if (surfacePathCostSoFar.TryGetValue(edge.To, out var existingCost) && nextCost >= existingCost)
+					continue;
+
+				surfacePathCostSoFar[edge.To] = nextCost;
+				surfacePathCameFrom[edge.To] = edge;
+				surfacePathFrontier.Enqueue(edge.To, nextCost);
+			}
+		}
+
+		return false;
+	}
+
 	float EdgeCost(Edge edge)
 	{
 		var distance = Vector2.Distance(Nodes[edge.From].Position, Nodes[edge.To].Position);
+		// A wall kick is a delicate two-part move the runtime executes far less reliably
+		// than a plain jump. Make A* route around it unless it is the only connection
+		// (e.g. a 32px climb no single jump can reach).
+		var wallJumpSurcharge = edge.Jump is { WallJump: true } ? 400 : 0;
 		return edge.Kind switch
 		{
 			EdgeKind.Walk => distance,
 			EdgeKind.Crawl => distance + 12,
 			EdgeKind.Fall => distance + 20,
-			EdgeKind.Jump => distance + 180 + LandingRiskCost(Nodes[edge.To]),
+			EdgeKind.Jump => distance + 180 + wallJumpSurcharge + LandingRiskCost(Nodes[edge.To]),
+			EdgeKind.RoomExit => distance + 5,
+			_ => distance
+		};
+	}
+
+	float SurfaceEdgeCost(SurfaceEdge edge)
+	{
+		var from = SurfaceSpans[edge.From];
+		var to = SurfaceSpans[edge.To];
+		var fromX = (edge.FromLeft + edge.FromRight) * 0.5f;
+		var toX = (edge.ToLeft + edge.ToRight) * 0.5f;
+		var distance = Vector2.Distance(new Vector2(fromX, from.Y), new Vector2(toX, to.Y));
+		return edge.Kind switch
+		{
+			EdgeKind.Walk => MathF.Max(1, distance),
+			EdgeKind.Crawl => MathF.Max(1, distance) + 12,
+			EdgeKind.Fall => distance + 20,
+			EdgeKind.Jump => distance + 180,
 			EdgeKind.RoomExit => distance + 5,
 			_ => distance
 		};
@@ -195,12 +367,28 @@ public sealed class PlatformNavGraph
 		path.Reverse();
 	}
 
+	static void BuildSurfacePath(int startId, int goalId, Dictionary<int, SurfaceEdge> cameFrom, List<SurfaceEdge> path)
+	{
+		var current = goalId;
+		while (current != startId)
+		{
+			var edge = cameFrom[current];
+			path.Add(edge);
+			current = edge.From;
+		}
+		path.Reverse();
+	}
+
 	public void Rebuild(Game game, Room room)
 	{
 		Nodes.Clear();
 		Edges.Clear();
+		SurfaceSpans.Clear();
+		SurfaceEdges.Clear();
 		nodeLookup.Clear();
 		edgeLookup.Clear();
+		surfaceEdgeLookup.Clear();
+		nodeSurfaceSpanIds.Clear();
 		rebuildGame = game;
 		rebuildRoom = room;
 		sampleBounds = room.WorldBounds;
@@ -209,6 +397,14 @@ public sealed class PlatformNavGraph
 		nextJumpSourceId = 0;
 		rebuildStartTimestamp = Stopwatch.GetTimestamp();
 		rebuildFrameCount = 0;
+		collisionQueries = 0;
+		supportChecks = 0;
+		simsRun = simSteps = simMoveSubsteps = simLanded = simStalled = simTimedOut = landingSearchIterations = 0;
+		jumpSimTicks = landingSearchTicks = 0;
+		for (var i = 0; i < planStats.Length; i++)
+			planStats[i] = new PlanStat { MinReach = float.MaxValue, MaxReach = float.MinValue, MinDy = float.MaxValue, MaxDy = float.MinValue };
+		Array.Clear(phaseElapsedMs);
+		Array.Clear(phaseCollisionCounts);
 		phase = BuildPhase.Sampling;
 	}
 
@@ -220,8 +416,19 @@ public sealed class PlatformNavGraph
 		rebuildFrameCount++;
 		var start = Stopwatch.GetTimestamp();
 
+		// refresh the jumpthru-actor snapshot for this frame (actors are static
+		// within a frame, so this matches reading game.Actors live per call)
+		jumpthruActors.Clear();
+		foreach (var actor in rebuildGame!.Actors)
+			if (actor.Mask.Has(Actor.Masks.Jumpthru))
+				jumpthruActors.Add(actor);
+
 		do
 		{
+			var active = phase;
+			var iterStart = Stopwatch.GetTimestamp();
+			var collisionsBefore = collisionQueries;
+
 			switch (phase)
 			{
 				case BuildPhase.Sampling:
@@ -245,12 +452,225 @@ public sealed class PlatformNavGraph
 				case BuildPhase.RoomExits:
 					BuildRoomExitNodes(rebuildRoom!);
 					phase = BuildPhase.Ready;
-					if (rebuildFrameCount > 100) // TODO
-						Console.WriteLine($"nav graph rebuild {Stopwatch.GetElapsedTime(rebuildStartTimestamp).TotalMilliseconds}ms, {rebuildFrameCount} frames");
 					break;
 			}
+
+			phaseElapsedMs[(int)active] += Stopwatch.GetElapsedTime(iterStart).TotalMilliseconds;
+			phaseCollisionCounts[(int)active] += collisionQueries - collisionsBefore;
 		} while (phase < BuildPhase.Ready && Stopwatch.GetElapsedTime(start).TotalMilliseconds < budgetMs);
+
+		if (phase == BuildPhase.Ready)
+		{
+			BuildSurfaceEdges();
+			LogRebuildStats();
+		}
 	}
+
+	void LogRebuildStats()
+	{
+		var totalMs = Stopwatch.GetElapsedTime(rebuildStartTimestamp).TotalMilliseconds;
+		var rects = rebuildRoom?.CollisionRects.Count ?? 0;
+		var slopes = rebuildRoom?.SlopeTiles.Count ?? 0;
+		var actors = rebuildGame?.Actors.Count ?? 0;
+		Console.WriteLine($"[NavGraph] rebuild {totalMs:0.0}ms over {rebuildFrameCount} frames, {Nodes.Count} nodes, {Edges.Count} edges, {collisionQueries} collisions, {supportChecks} support checks (room: {rects} rects, {slopes} slopes, {actors} actors)");
+		for (var i = 0; i <= (int)BuildPhase.Ready; i++)
+			if (phaseElapsedMs[i] > 0)
+				Console.WriteLine($"  {(BuildPhase)i,-16} {phaseElapsedMs[i],7:0.0}ms  {phaseCollisionCounts[i],9} collisions");
+
+		var simMs = jumpSimTicks * 1000.0 / Stopwatch.Frequency;
+		var landingMs = landingSearchTicks * 1000.0 / Stopwatch.Frequency;
+		Console.WriteLine($"  jump sim: {simsRun} sims ({simLanded} landed, {simStalled} stalled, {simTimedOut} timed out), {simSteps} steps, {simMoveSubsteps} move-substeps, {landingSearchIterations} landing-search iters");
+		Console.WriteLine($"  jump time: TrySimulateJump {simMs:0.0}ms, FindNearestLandingNode {landingMs:0.0}ms");
+
+		// Per-plan coverage map: reach = horizontal distance, dy = vertical offset
+		// of landings. kept = edges this plan won after dedup.
+		for (var k = 0; k < planStats.Length; k++)
+		{
+			ref var stat = ref planStats[k];
+			var p = JumpPlans[k];
+			var sw = p.SwitchTime < 2 ? $"{p.SwitchTime:0.00}" : "  - ";
+			var reachStr = stat.Landed > 0 ? $"{stat.MinReach,3:0}..{stat.MaxReach,3:0}" : "   -   ";
+			var dyStr = stat.Landed > 0 ? $"{stat.MinDy,4:0}..{stat.MaxDy,3:0}" : "   -   ";
+			Console.WriteLine($"  plan[{k,2}] dir {p.Direction,2} air {p.AirDirection,2} runup {p.RunupTime:0.00} hold {p.HoldTime:0.00} switch {sw}: landed {stat.Landed,3}, kept {stat.Kept,3}, reach {reachStr}, dy {dyStr}");
+		}
+
+		LogGraphSummary();
+	}
+
+	// Order-independent fingerprint of the built graph. Counts/sums don't care
+	// about node or edge ordering (which an optimization may shuffle), but they
+	// flag real topology changes so we can diff before/after a refactor.
+	void LogGraphSummary()
+	{
+		Span<int> nodeKinds = stackalloc int[4];
+		Span<int> edgeKinds = stackalloc int[5];
+		foreach (var node in Nodes)
+			nodeKinds[(int)node.Kind]++;
+
+		var totalLength = 0.0;
+		foreach (var edge in Edges)
+		{
+			edgeKinds[(int)edge.Kind]++;
+			totalLength += Vector2.Distance(Nodes[edge.From].Position, Nodes[edge.To].Position);
+		}
+
+		// weakly-connected components via union-find (edges treated undirected)
+		var parent = new int[Nodes.Count];
+		var degree = new int[Nodes.Count];
+		for (var i = 0; i < parent.Length; i++)
+			parent[i] = i;
+
+		int Find(int x)
+		{
+			while (parent[x] != x)
+				x = parent[x] = parent[parent[x]];
+			return x;
+		}
+
+		foreach (var edge in Edges)
+		{
+			degree[edge.From]++;
+			degree[edge.To]++;
+			parent[Find(edge.From)] = Find(edge.To);
+		}
+
+		int components = 0, isolated = 0;
+		for (var i = 0; i < parent.Length; i++)
+		{
+			if (Find(i) == i)
+				components++;
+			if (degree[i] == 0)
+				isolated++;
+		}
+
+		var avgOutDegree = Nodes.Count > 0 ? Edges.Count / (float)Nodes.Count : 0;
+		Console.WriteLine($"  nodes: Ground {nodeKinds[(int)NodeKind.Ground]}, Landing {nodeKinds[(int)NodeKind.Landing]}, Ledge {nodeKinds[(int)NodeKind.Ledge]}, RoomExit {nodeKinds[(int)NodeKind.RoomExit]}");
+		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}");
+		Console.WriteLine($"  components {components}, isolated {isolated}, total edge length {totalLength:0}, avg out-degree {avgOutDegree:0.00}");
+		if (components > 1)
+			LogComponentBounds(parent);
+		LogSurfaceSummary(edgeKinds);
+
+	}
+
+	void LogComponentBounds(int[] parent)
+	{
+		var origin = rebuildRoom?.WorldBounds.TopLeft ?? Point2.Zero;
+		var bounds = new Dictionary<int, (int Count, float MinX, float MinY, float MaxX, float MaxY)>();
+
+		int Find(int x)
+		{
+			while (parent[x] != x)
+				x = parent[x];
+			return x;
+		}
+
+		for (var i = 0; i < Nodes.Count; i++)
+		{
+			var root = Find(i);
+			var p = Nodes[i].Position - (Vector2)origin;
+			if (!bounds.TryGetValue(root, out var b))
+				b = (0, p.X, p.Y, p.X, p.Y);
+			b.Count++;
+			if (p.X < b.MinX) b.MinX = p.X;
+			if (p.Y < b.MinY) b.MinY = p.Y;
+			if (p.X > b.MaxX) b.MaxX = p.X;
+			if (p.Y > b.MaxY) b.MaxY = p.Y;
+			bounds[root] = b;
+		}
+
+		foreach (var (_, b) in bounds)
+			Console.WriteLine($"    component: {b.Count} nodes, local ({b.MinX:0},{b.MinY:0})..({b.MaxX:0},{b.MaxY:0})");
+	}
+
+	void LogSurfaceSummary(ReadOnlySpan<int> edgeKinds)
+	{
+		var duckingSpans = 0;
+		var singletonSpans = 0;
+		var totalNodesOnSpans = 0;
+		foreach (var span in SurfaceSpans)
+		{
+			if (span.RequiresDucking)
+				duckingSpans++;
+			if (span.NodeCount == 1)
+				singletonSpans++;
+			totalNodesOnSpans += span.NodeCount;
+		}
+
+		var walkPairs = new HashSet<(int From, int To)>();
+		var crawlPairs = new HashSet<(int From, int To)>();
+		var fallPairs = new HashSet<(int From, int To)>();
+		var jumpPairs = new HashSet<(int From, int To)>();
+		var jumpPlanPairs = new HashSet<(int From, int To, JumpPlan Plan)>();
+		var jumpEdgesPerPair = new Dictionary<(int From, int To), int>();
+		var unmappedEdges = 0;
+
+		foreach (var edge in Edges)
+		{
+			if (edge.Kind == EdgeKind.RoomExit)
+				continue;
+
+			var fromSpan = NodeSurfaceSpanId(edge.From);
+			var toSpan = NodeSurfaceSpanId(edge.To);
+			if (fromSpan < 0 || toSpan < 0)
+			{
+				unmappedEdges++;
+				continue;
+			}
+
+			var pair = (fromSpan, toSpan);
+			switch (edge.Kind)
+			{
+				case EdgeKind.Walk:
+					walkPairs.Add(pair);
+					break;
+				case EdgeKind.Crawl:
+					crawlPairs.Add(pair);
+					break;
+				case EdgeKind.Fall:
+					fallPairs.Add(pair);
+					break;
+				case EdgeKind.Jump:
+					jumpPairs.Add(pair);
+					if (edge.Jump.HasValue)
+						jumpPlanPairs.Add((fromSpan, toSpan, edge.Jump.Value));
+					jumpEdgesPerPair[pair] = jumpEdgesPerPair.TryGetValue(pair, out var count) ? count + 1 : 1;
+					break;
+			}
+		}
+
+		var maxJumpEdgesPerPair = 0;
+		var multiJumpPairs = 0;
+		foreach (var count in jumpEdgesPerPair.Values)
+		{
+			if (count > 1)
+				multiJumpPairs++;
+			if (count > maxJumpEdgesPerPair)
+				maxJumpEdgesPerPair = count;
+		}
+
+		Span<int> surfaceEdgeKinds = stackalloc int[5];
+		var jumpSurfaceNodeEdges = 0;
+		foreach (var edge in SurfaceEdges)
+		{
+			surfaceEdgeKinds[(int)edge.Kind]++;
+			if (edge.Kind == EdgeKind.Jump)
+				jumpSurfaceNodeEdges += edge.NodeEdgeCount;
+		}
+
+		var avgNodesPerSpan = SurfaceSpans.Count > 0 ? totalNodesOnSpans / (float)SurfaceSpans.Count : 0;
+		var avgJumpNodesPerSurfaceEdge = surfaceEdgeKinds[(int)EdgeKind.Jump] > 0 ? jumpSurfaceNodeEdges / (float)surfaceEdgeKinds[(int)EdgeKind.Jump] : 0;
+		Console.WriteLine($"  surfaces: {SurfaceSpans.Count} spans ({duckingSpans} ducking, {singletonSpans} singleton), avg {avgNodesPerSpan:0.0} nodes/span");
+		Console.WriteLine($"  surface edge collapse: Walk {edgeKinds[(int)EdgeKind.Walk]}->{walkPairs.Count}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}->{crawlPairs.Count}, Fall {edgeKinds[(int)EdgeKind.Fall]}->{fallPairs.Count}, Jump {edgeKinds[(int)EdgeKind.Jump]}->{jumpPairs.Count} span pairs / {jumpPlanPairs.Count} plan pairs");
+		Console.WriteLine($"  surface interval edges: Walk {surfaceEdgeKinds[(int)EdgeKind.Walk]}, Crawl {surfaceEdgeKinds[(int)EdgeKind.Crawl]}, Fall {surfaceEdgeKinds[(int)EdgeKind.Fall]}, Jump {surfaceEdgeKinds[(int)EdgeKind.Jump]} (avg {avgJumpNodesPerSurfaceEdge:0.0} point jump edges)");
+		if (jumpPairs.Count > 0)
+			Console.WriteLine($"  jump interval pressure: {multiJumpPairs}/{jumpPairs.Count} span pairs have multiple point edges, max {maxJumpEdgesPerPair}");
+		if (unmappedEdges > 0)
+			Console.WriteLine($"  surface unmapped nav edges: {unmappedEdges}");
+	}
+
+	int NodeSurfaceSpanId(int nodeId)
+		=> nodeId >= 0 && nodeId < nodeSurfaceSpanIds.Count ? nodeSurfaceSpanIds[nodeId] : -1;
 
 	void TickSampling()
 	{
@@ -277,29 +697,49 @@ public sealed class PlatformNavGraph
 			return;
 		}
 
-		for (var batch = 0; batch < 3 && nextJumpSourceId < Nodes.Count; batch++, nextJumpSourceId++)
-		{
-			var from = Nodes[nextJumpSourceId];
-			if (from.RequiresDucking)
-				continue;
+		// Process a single source node per call so the caller's per-iteration
+		// budget check runs between nodes (each node simulates 16 jump plans,
+		// enough to overflow the frame budget if batched).
+		var from = Nodes[nextJumpSourceId];
+		nextJumpSourceId++;
 
+		if (!from.RequiresDucking)
+		{
 			jumpCandidates.Clear();
-			foreach (var plan in JumpPlans)
+			for (var pi = 0; pi < JumpPlans.Length; pi++)
 			{
-				if (!TrySimulateJump(rebuildGame!, from, plan, out var landing))
+				var plan = JumpPlans[pi];
+				var t0 = Stopwatch.GetTimestamp();
+				var simulated = TrySimulateJump(rebuildGame!, from, plan, out var landing);
+				jumpSimTicks += Stopwatch.GetTimestamp() - t0;
+				if (!simulated)
 					continue;
 
+				// record where this plan reaches (its coverage in the height x distance map)
+				var reach = MathF.Abs(landing.X - from.Position.X);
+				var dy = landing.Y - from.Position.Y;
+				ref var st = ref planStats[pi];
+				st.Landed++;
+				st.SumReach += reach;
+				if (reach < st.MinReach) st.MinReach = reach;
+				if (reach > st.MaxReach) st.MaxReach = reach;
+				if (dy < st.MinDy) st.MinDy = dy;
+				if (dy > st.MaxDy) st.MaxDy = dy;
+
+				var t1 = Stopwatch.GetTimestamp();
 				var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
+				landingSearchTicks += Stopwatch.GetTimestamp() - t1;
 				if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
 					continue;
 
 				var cost = JumpPlanCost(from, to.Value, plan);
 				if (!jumpCandidates.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
-					jumpCandidates[to.Value.Id] = (plan, cost);
+					jumpCandidates[to.Value.Id] = (plan, cost, pi);
 			}
 
 			foreach (var (toId, jump) in jumpCandidates)
-				AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan);
+				if (AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan))
+					planStats[jump.PlanIndex].Kept++;
 		}
 
 		if (nextJumpSourceId >= Nodes.Count)
@@ -365,6 +805,142 @@ public sealed class PlatformNavGraph
 				count++;
 			}
 			AddLandingNodeForSpan(game, left, right, count);
+		}
+
+		BuildLandingCandidateRows();
+		BuildSurfaceSpans();
+	}
+
+	void BuildLandingCandidateRows()
+	{
+		foreach (var row in landingCandidateRows.Values)
+			row.Clear();
+
+		for (var i = 0; i < Nodes.Count; i++)
+		{
+			var node = Nodes[i];
+			if (node.Kind == NodeKind.RoomExit || node.RequiresDucking)
+				continue;
+
+			var y = (int)node.Position.Y;
+			if (!landingCandidateRows.TryGetValue(y, out var row))
+			{
+				row = [];
+				landingCandidateRows[y] = row;
+			}
+			row.Add(i);
+		}
+	}
+
+	void BuildSurfaceSpans()
+	{
+		SurfaceSpans.Clear();
+		nodeSurfaceSpanIds.Clear();
+		for (var i = 0; i < Nodes.Count; i++)
+			nodeSurfaceSpanIds.Add(-1);
+
+		foreach (var row in surfaceRows.Values)
+			row.Clear();
+
+		for (var i = 0; i < Nodes.Count; i++)
+		{
+			var node = Nodes[i];
+			if (node.Kind == NodeKind.RoomExit)
+				continue;
+
+			var y = (int)node.Position.Y;
+			if (!surfaceRows.TryGetValue(y, out var row))
+			{
+				row = [];
+				surfaceRows[y] = row;
+			}
+			row.Add(i);
+		}
+
+		foreach (var row in surfaceRows.Values)
+		{
+			if (row.Count <= 0)
+				continue;
+
+			row.Sort((a, b) => Nodes[a].Position.X.CompareTo(Nodes[b].Position.X));
+			var startIndex = 0;
+			var endIndex = 0;
+			var requiresDucking = Nodes[row[0]].RequiresDucking;
+
+			for (var i = 1; i < row.Count; i++)
+			{
+				var nodeId = row[i];
+				var node = Nodes[nodeId];
+				var previous = Nodes[row[endIndex]];
+				if (node.Position.X - previous.Position.X > SampleStep || node.RequiresDucking != requiresDucking)
+				{
+					AddSurfaceSpan(row, startIndex, endIndex, requiresDucking);
+					startIndex = i;
+					requiresDucking = node.RequiresDucking;
+				}
+				endIndex = i;
+			}
+			AddSurfaceSpan(row, startIndex, endIndex, requiresDucking);
+		}
+	}
+
+	void AddSurfaceSpan(List<int> row, int startIndex, int endIndex, bool requiresDucking)
+	{
+		var firstNodeId = row[startIndex];
+		var lastNodeId = row[endIndex];
+		var first = Nodes[firstNodeId];
+		var last = Nodes[lastNodeId];
+		var id = SurfaceSpans.Count;
+		SurfaceSpans.Add(new(
+			id,
+			(int)first.Position.Y,
+			(int)first.Position.X,
+			(int)last.Position.X,
+			requiresDucking,
+			endIndex - startIndex + 1));
+
+		for (var i = startIndex; i <= endIndex; i++)
+			nodeSurfaceSpanIds[row[i]] = id;
+	}
+
+	void BuildSurfaceEdges()
+	{
+		SurfaceEdges.Clear();
+		surfaceEdgeLookup.Clear();
+
+		foreach (var edge in Edges)
+		{
+			if (edge.Kind == EdgeKind.RoomExit)
+				continue;
+
+			var fromSpan = NodeSurfaceSpanId(edge.From);
+			var toSpan = NodeSurfaceSpanId(edge.To);
+			if (fromSpan < 0 || toSpan < 0)
+				continue;
+
+			var jump = edge.Jump ?? default;
+			var key = new SurfaceEdgeKey(fromSpan, toSpan, edge.Kind, edge.Jump.HasValue, jump);
+			var from = Nodes[edge.From];
+			var to = Nodes[edge.To];
+			if (surfaceEdgeLookup.TryGetValue(key, out var accumulator))
+				accumulator.Add(from, to);
+			else
+				accumulator = new SurfaceEdgeAccumulator(from, to);
+			surfaceEdgeLookup[key] = accumulator;
+		}
+
+		foreach (var (key, accumulator) in surfaceEdgeLookup)
+		{
+			SurfaceEdges.Add(new(
+				key.From,
+				key.To,
+				key.Kind,
+				accumulator.FromLeft,
+				accumulator.FromRight,
+				accumulator.ToLeft,
+				accumulator.ToRight,
+				key.HasJump ? key.Jump : null,
+				accumulator.Count));
 		}
 	}
 
@@ -486,6 +1062,12 @@ public sealed class PlatformNavGraph
 		return nearest;
 	}
 
+	static bool OverlapsCollision(Game game, RectInt bounds)
+	{
+		collisionQueries++;
+		return game.OverlapsRoomCollision(bounds);
+	}
+
 	static bool IsStandable(Game game, Point2 position)
 	{
 		return TryGetStandableProbe(game, position, out _);
@@ -512,19 +1094,17 @@ public sealed class PlatformNavGraph
 	static bool IsStandableWithProbe(Game game, Point2 position, RectInt probe)
 	{
 		var bounds = probe + position;
-		return !game.OverlapsRoomCollision(bounds) && HasStandableSupport(game, bounds);
+		return !OverlapsCollision(game, bounds) && HasStandableSupport(game, bounds);
 	}
 
 	static bool HasStandableSupport(Game game, RectInt bounds)
 	{
-		if (game.OverlapsRoomCollision(bounds + Point2.Down))
+		supportChecks++;
+		if (OverlapsCollision(game, bounds + Point2.Down))
 			return true;
 
-		foreach (var actor in game.Actors)
+		foreach (var actor in jumpthruActors)
 		{
-			if (!actor.Mask.Has(Actor.Masks.Jumpthru))
-				continue;
-
 			var local = bounds - actor.Position;
 			if (actor.Hitbox.Overlaps(local))
 				continue;
@@ -598,6 +1178,10 @@ public sealed class PlatformNavGraph
 	{
 		var targetDirection = Math.Sign(to.Position.X - from.Position.X);
 		var cost = plan.RunupTime * 100 + LandingRiskCost(to);
+		// A wall kick is a delicate two-part move; prefer any plain jump that reaches the
+		// same node, so it's only chosen where a single jump can't make it.
+		if (plan.WallJump)
+			cost += 70;
 		if (targetDirection != 0)
 		{
 			if (plan.Direction != targetDirection)
@@ -614,29 +1198,41 @@ public sealed class PlatformNavGraph
 	{
 		Node? nearest = null;
 		var bestScore = maxDistance * maxDistance;
-		foreach (var node in Nodes)
+		var minY = (int)MathF.Floor(landing.Y - maxDistance);
+		var maxY = (int)MathF.Ceiling(landing.Y + maxDistance);
+		for (var y = minY; y <= maxY; y++)
 		{
-			if (node.Id == fromId)
-				continue;
-			if (node.RequiresDucking)
-				continue;
-			if (Vector2.DistanceSquared(node.Position, Nodes[fromId].Position) < SimMinimumLandingDistance * SimMinimumLandingDistance)
+			if (!landingCandidateRows.TryGetValue(y, out var row))
 				continue;
 
-			var distanceSquared = Vector2.DistanceSquared(node.Position, landing);
-			if (distanceSquared > maxDistance * maxDistance)
-				continue;
-
-			var score = distanceSquared + node.Kind switch
+			foreach (var nodeId in row)
 			{
-				NodeKind.Landing => -36,
-				NodeKind.Ledge => 64,
-				_ => 0
-			};
-			if (score >= bestScore)
-				continue;
-			nearest = node;
-			bestScore = score;
+				landingSearchIterations++;
+				if (nodeId == fromId)
+					continue;
+
+				var node = Nodes[nodeId];
+				var source = Nodes[fromId];
+				var isUpwardLanding = node.Position.Y < source.Position.Y;
+				if (!isUpwardLanding &&
+					Vector2.DistanceSquared(node.Position, source.Position) < SimMinimumLandingDistance * SimMinimumLandingDistance)
+					continue;
+
+				var distanceSquared = Vector2.DistanceSquared(node.Position, landing);
+				if (distanceSquared > maxDistance * maxDistance)
+					continue;
+
+				var score = distanceSquared + node.Kind switch
+				{
+					NodeKind.Landing => -36,
+					NodeKind.Ledge => 64,
+					_ => 0
+				};
+				if (score >= bestScore)
+					continue;
+				nearest = node;
+				bestScore = score;
+			}
 		}
 		return nearest;
 	}
@@ -713,7 +1309,7 @@ public sealed class PlatformNavGraph
 		{
 			var t = i / (float)steps;
 			var position = (Point2)Vector2.Lerp(from, to, t);
-			if (game.OverlapsRoomCollision(probe + position))
+			if (OverlapsCollision(game, probe + position))
 				return false;
 		}
 		return true;
@@ -721,11 +1317,11 @@ public sealed class PlatformNavGraph
 
 	static bool FallProbeClear(Game game, Point2 from, Point2 to)
 	{
-		if (game.OverlapsRoomCollision(PawnProbe + from))
+		if (OverlapsCollision(game, PawnProbe + from))
 			return false;
 
 		for (var y = from.Y + 1; y < to.Y; y += 2)
-			if (game.OverlapsRoomCollision(PawnProbe + new Point2(from.X, y)))
+			if (OverlapsCollision(game, PawnProbe + new Point2(from.X, y)))
 				return false;
 
 		return true;
@@ -742,12 +1338,15 @@ public sealed class PlatformNavGraph
 		readonly Game game;
 		readonly Vector2 from;
 		readonly JumpPlan plan;
-		Vector2 position;
+		Point2 position;
 		Vector2 velocity;
 		Vector2 remainder;
 		float jumpTimer;
 		bool leftStart;
 		bool jumpStarted;
+		bool wallJumped;
+		int wallJumpDir;
+		float wallJumpLockTimer;
 		int horizontalCollisionFrames;
 
 		public JumpSimulation(Game game, Vector2 from, JumpPlan plan)
@@ -755,59 +1354,97 @@ public sealed class PlatformNavGraph
 			this.game = game;
 			this.from = from;
 			this.plan = plan;
-			position = from;
+			position = (Point2)from;
 		}
 
 		public bool Run(out Vector2 landing)
 		{
+			simsRun++;
 			for (var time = 0.0f; time < SimMaxTime; time += SimDelta)
 			{
+				simSteps++;
 				Step(time);
 
-				if (Vector2.DistanceSquared(position, from) > 9)
+				if (Vector2.DistanceSquared((Vector2)position, from) > 9)
 					leftStart = true;
 
-				if (leftStart && IsGrounded())
+				// can only land while moving downward, so skip the (expensive)
+				// grounded check during the ascent
+				if (leftStart && velocity.Y >= 0 && IsGrounded())
 				{
+					simLanded++;
 					landing = position;
 					return true;
 				}
 
 				if (horizontalCollisionFrames > 20 && velocity.Y < 0)
 				{
+					simStalled++;
 					landing = default;
 					return false;
 				}
 			}
 
+			simTimedOut++;
 			landing = default;
 			return false;
 		}
 
 		void Step(float time)
 		{
-			var moveX = MoveXAt(time);
-			velocity.X += moveX * SimAirAccel * SimDelta;
-			if (MathF.Abs(velocity.X) > SimMaxAirSpeed)
-				velocity.X = Calc.Approach(velocity.X, MathF.Sign(velocity.X) * SimMaxAirSpeed, 2000 * SimDelta);
-
-			var shouldJump = time >= plan.RunupTime || moveX != 0 && !HasGroundSupportNextStep(moveX);
-			if (!jumpStarted && shouldJump && velocity.Y >= 0 && IsGrounded())
+			// Ground vs air movement, matching Player.NormalState: on the runup Bud
+			// accelerates at the ground rate, then at the (different) air rate once
+			// airborne. Using the air rate for the runup made the simulated takeoff
+			// off narrow pillars diverge from reality.
+			var onGround = !jumpStarted && IsGrounded();
+			int moveX;
+			float maxSpeed;
+			if (wallJumpLockTimer > 0)
 			{
-				jumpTimer = MathF.Min(plan.HoldTime, SimJumpTime);
-				jumpStarted = true;
+				// After a wall kick the runtime locks horizontal input away from the wall
+				// (Player.wallJumpInputLockTimer) at the higher wall-jump speed cap.
+				wallJumpLockTimer -= SimDelta;
+				moveX = wallJumpDir;
+				maxSpeed = MathF.Max(SimMaxAirSpeed, SimWallJumpSpeed);
+			}
+			else
+			{
+				moveX = MoveXAt(time);
+				maxSpeed = onGround ? SimMaxGroundSpeed : SimMaxAirSpeed;
+			}
+			var accel = onGround ? SimGroundAccel : SimAirAccel;
+			velocity.X += moveX * accel * SimDelta;
+			if (MathF.Abs(velocity.X) > maxSpeed)
+				velocity.X = Calc.Approach(velocity.X, MathF.Sign(velocity.X) * maxSpeed, 2000 * SimDelta);
+
+			if (!jumpStarted && velocity.Y >= 0)
+			{
+				var shouldJump = time >= plan.RunupTime || moveX != 0 && !HasGroundSupportNextStep(moveX);
+				if (shouldJump && IsGrounded())
+				{
+					// StartJump: set the jump velocity once, then let gravity decay it.
+					// The runtime latches the jump button held through the whole ascent
+					// (see Navigator.UpdateJumpHeld), so model the full jump-time hold.
+					velocity.Y = SimJumpForce;
+					jumpTimer = SimJumpTime;
+					jumpStarted = true;
+				}
 			}
 
-			if (jumpTimer > 0)
+			// Gravity, matching Player.Update: reduced while the jump is held, fast-fall
+			// while descending. Only applies once airborne (jumped or walked off a ledge).
+			if (jumpStarted || !IsGrounded())
 			{
-				velocity.Y = SimJumpForce;
-				jumpTimer -= SimDelta;
+				var grav = SimGravity;
+				if (jumpTimer > 0)
+				{
+					grav *= SimJumpGravityMultiplier;
+					jumpTimer -= SimDelta;
+				}
+				else if (velocity.Y > 0)
+					grav *= SimFastFallMultiplier;
+				velocity.Y += grav * SimDelta;
 			}
-
-			var grav = SimGravity;
-			if (MathF.Abs(velocity.Y) < 20 && jumpTimer > 0)
-				grav *= 0.40f;
-			velocity.Y += grav * SimDelta;
 
 			Move(velocity * SimDelta);
 		}
@@ -832,8 +1469,30 @@ public sealed class PlatformNavGraph
 			while (move.X != 0)
 			{
 				var sign = Math.Sign(move.X);
-				if (Overlaps(position + new Vector2(sign, 0)))
+				if (Math.Abs(move.X) > 1 && !Overlaps(SweptBounds(new Point2(move.X, 0))))
 				{
+					position.X += move.X;
+					simMoveSubsteps++;
+					move.X = 0;
+					break;
+				}
+
+				simMoveSubsteps++;
+				if (Overlaps(position + new Point2(sign, 0)))
+				{
+					// Kick off the wall the first time we hit one mid-air (Player wall jump:
+					// launch away at WallJumpSpeed with a fresh jump, lock input away).
+					if (plan.WallJump && !wallJumped && jumpStarted)
+					{
+						wallJumped = true;
+						wallJumpDir = -sign;
+						wallJumpLockTimer = SimWallJumpInputLockTime;
+						velocity.X = wallJumpDir * SimWallJumpSpeed;
+						velocity.Y = SimJumpForce;
+						jumpTimer = SimJumpTime;
+						remainder = Vector2.Zero;
+						break;
+					}
 					velocity.X = 0;
 					remainder.X = 0;
 					horizontalCollisionFrames++;
@@ -847,7 +1506,16 @@ public sealed class PlatformNavGraph
 			while (move.Y != 0)
 			{
 				var sign = Math.Sign(move.Y);
-				if (Overlaps(position + new Vector2(0, sign)))
+				if (sign < 0 && Math.Abs(move.Y) > 1 && !Overlaps(SweptBounds(new Point2(0, move.Y))))
+				{
+					position.Y += move.Y;
+					simMoveSubsteps++;
+					move.Y = 0;
+					break;
+				}
+
+				simMoveSubsteps++;
+				if (sign > 0 && IsGrounded() || Overlaps(position + new Point2(0, sign)))
 				{
 					velocity.Y = 0;
 					remainder.Y = 0;
@@ -859,8 +1527,22 @@ public sealed class PlatformNavGraph
 			}
 		}
 
-		readonly bool IsGrounded() => HasStandableSupport(game, PawnProbe + (Point2)position);
-		readonly bool HasGroundSupportNextStep(int moveX) => HasStandableSupport(game, PawnProbe + (Point2)position + new Point2(Math.Sign(moveX), 0));
-		readonly bool Overlaps(Vector2 at) => game.OverlapsRoomCollision(PawnProbe + (Point2)at);
+		readonly RectInt SweptBounds(Point2 move)
+		{
+			var start = PawnProbe + position;
+			var end = PawnProbe + position + move;
+			var left = Math.Min(start.Left, end.Left);
+			var top = Math.Min(start.Top, end.Top);
+			var right = Math.Max(start.Right, end.Right);
+			var bottom = Math.Max(start.Bottom, end.Bottom);
+			return new RectInt(left, top, right - left, bottom - top);
+		}
+
+		readonly bool IsGrounded() => HasStandableSupport(PawnProbe + position);
+		readonly bool HasGroundSupportNextStep(int moveX) => HasStandableSupport(PawnProbe + position + new Point2(Math.Sign(moveX), 0));
+		readonly bool Overlaps(Point2 at) => OverlapsCollision(game, PawnProbe + at);
+		readonly bool Overlaps(RectInt bounds) => OverlapsCollision(game, bounds);
+
+		readonly bool HasStandableSupport(RectInt bounds) => PlatformNavGraph.HasStandableSupport(game, bounds);
 	}
 }

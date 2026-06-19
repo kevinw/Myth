@@ -30,19 +30,29 @@ public sealed class Navigator(Pawn owner)
 	private const float LandingStabilizeMinSpeed = 12.0f;
 	private const float LandingStabilizeGain = 5.0f;
 	private const float LandingStabilizeBrakeAccel = 600.0f;
+	private const float BlockedPathTargetResetDistance = 16.0f;
+	private const float DirectGoalJumpMaxHorizontalDistance = 64.0f;
+	private const float DirectGoalJumpMaxVerticalDistance = 72.0f;
+	private const float DirectGoalJumpMinVerticalDistance = 12.0f;
 
 	private readonly List<PlatformNavGraph.Edge> navPath = [];
 	public List<PlatformNavGraph.Edge> NavPath => navPath;
+	private readonly List<PlatformNavGraph.SurfaceEdge> surfaceNavPath = [];
+	private readonly List<PlatformNavGraph.Node> goalCandidates = [];
+	private readonly HashSet<(int From, int To)> blockedPathEdges = [];
+	private Vector2? blockedPathTarget;
 	private EdgeState activeEdge;
+	private bool activeEdgeBlocksPath;
 
 	// Owner shortcuts
 	private Game Game => owner.Game;
 	private Vector2 Position => owner.Position;
 	private bool IsGrounded => owner.IsGrounded;
-	private bool ShouldBuildDebugNavLabel => owner.Game.IsPlatformNavDebugVisible;
+	private bool ShouldBuildDebugNavLabel => owner.Game.IsPlatformNavDebugVisible || owner.Game.GymMode;
 
 	// Public state Bud/Boss read to build PawnInput
 	public bool JumpHeld { get; private set; }
+	public bool ActiveEdgeAllowsWallJump => activeEdge.Edge is { Jump: { WallJump: true } };
 
 	// Debug state — settable so Bud's custom nav logic can update it directly
 	public int? DebugNavStartNodeId { get; set; }
@@ -50,6 +60,7 @@ public sealed class Navigator(Pawn owner)
 	public int? DebugNavTargetNodeId { get; set; }
 	public string DebugNavLabel { get; set; } = "idle";
 	public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => navPath;
+	public IReadOnlyList<PlatformNavGraph.SurfaceEdge> DebugSurfaceNavPath => surfaceNavPath;
 	public RectInt? DebugNavProbeRect { get; set; }
 	public bool DebugNavProbeHit { get; set; }
 
@@ -75,22 +86,54 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		var start = graph.FindNearestNode(Position, NavSearchDistance);
-		var goal = graph.FindNearestNode(target, GoalNodeSearchDistance);
-		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
+		ResetBlockedPathEdgesForTarget(target);
+
+		if (TryDirectGoalJump(target, out moveX, out jumpPressed))
 		{
-			SetDebugNavState(start.HasValue && goal.HasValue ? "at target" : "no node");
+			moveY = 0;
+			return true;
+		}
+
+		if (TryNavigateSameSurface(graph, target, false, out moveX, out moveY))
+			return true;
+
+		var start = graph.FindNearestNode(Position, NavSearchDistance);
+		graph.FindNearestNodes(target, GoalNodeSearchDistance, goalCandidates);
+		if (!start.HasValue || goalCandidates.Count <= 0)
+		{
+			SetDebugNavState("no node");
+			return false;
+		}
+		if (goalCandidates.Count == 1 && goalCandidates[0].Id == start.Value.Id)
+		{
+			SetDebugNavState("at target");
 			return false;
 		}
 
-		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, navPath) || navPath.Count <= 0)
+		PlatformNavGraph.Node? goal = null;
+		foreach (var candidate in goalCandidates)
 		{
+			if (candidate.Id == start.Value.Id)
+				continue;
+
+			if (!graph.TryFindPath(start.Value.Id, candidate.Id, navPath, blockedPathEdges) || navPath.Count <= 0)
+				continue;
+
+			goal = candidate;
+			break;
+		}
+
+		if (!goal.HasValue)
+		{
+			surfaceNavPath.Clear();
 			DebugNavStartNodeId = start.Value.Id;
-			DebugNavGoalNodeId = goal.Value.Id;
+			DebugNavGoalNodeId = goalCandidates[0].Id;
 			DebugNavTargetNodeId = null;
-			DebugNavLabel = ShouldBuildDebugNavLabel ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
+			DebugNavLabel = ShouldBuildDebugNavLabel ? $"no path {start.Value.Id}->{goalCandidates[0].Id}" : "no path";
 			return false;
 		}
+
+		UpdateDebugSurfacePath(graph, start.Value.Id, goal.Value.Id);
 
 		if (!TryGetActionableEdge(graph, out var edge))
 		{
@@ -106,7 +149,7 @@ public sealed class Navigator(Pawn owner)
 			DebugNavStartNodeId = start.Value.Id;
 			DebugNavGoalNodeId = goal.Value.Id;
 			DebugNavTargetNodeId = edge.To;
-			StartActiveEdge(edge);
+			StartActiveEdge(edge, blockPathOnTimeout: true);
 			return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
 		}
 
@@ -155,6 +198,38 @@ public sealed class Navigator(Pawn owner)
 		return true;
 	}
 
+	public bool TryNavigateSameSurface(PlatformNavGraph graph, Vector2 target, bool forceDucking, out int moveX, out int moveY)
+	{
+		moveX = 0;
+		moveY = 0;
+
+		var start = graph.FindNearestSurface(Position, NavSearchDistance);
+		var goal = graph.FindNearestSurface(target, GoalNodeSearchDistance);
+		if (!start.HasValue || !goal.HasValue || start.Value.SpanId != goal.Value.SpanId)
+			return false;
+
+		var span = graph.SurfaceSpans[start.Value.SpanId];
+		moveX = MoveTowardNavTarget(goal.Value.Position);
+		moveY = forceDucking || span.RequiresDucking ? 1 : 0;
+		if (moveX == 0)
+			return false;
+
+		if (!HasGroundSupportAhead(moveX))
+			return false;
+
+		navPath.Clear();
+		surfaceNavPath.Clear();
+		activeEdge = default;
+		activeEdgeBlocksPath = false;
+		DebugNavStartNodeId = null;
+		DebugNavGoalNodeId = null;
+		DebugNavTargetNodeId = null;
+		DebugNavProbeRect = null;
+		DebugNavProbeHit = false;
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"surface walk {span.Id}" : "following surface";
+		return true;
+	}
+
 	public bool TryExecuteActiveEdge(out int moveX, out int moveY, out bool jumpPressed)
 	{
 		moveX = 0;
@@ -178,7 +253,9 @@ public sealed class Navigator(Pawn owner)
 
 		if (activeEdge.Timer > ActiveEdgeTimeout)
 		{
-			ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} timeout" : "timeout");
+			if (activeEdgeBlocksPath)
+				blockedPathEdges.Add((edge.From, edge.To));
+			ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} timeout {edge.From}->{edge.To}" : "timeout");
 			return false;
 		}
 
@@ -187,6 +264,12 @@ public sealed class Navigator(Pawn owner)
 			case PlatformNavGraph.EdgeKind.Jump:
 				if (!TryExecuteJumpEdge(edge, from, to, target, out moveX, out jumpPressed))
 					return false;
+				// If we're hopping up onto a spot that has to be ducked into,
+				// tuck as we arrive (descending or grounded) so Bud fits under the
+				// ceiling and is already crawling instead of easing off the jump and
+				// sliding back off the ledge before the crawl edge takes over.
+				if (to.RequiresDucking && (IsGrounded || owner.Velocity.Y >= 0))
+					moveY = 1;
 				break;
 
 			case PlatformNavGraph.EdgeKind.Crawl:
@@ -244,13 +327,33 @@ public sealed class Navigator(Pawn owner)
 		return false;
 	}
 
-	public void StartActiveEdge(PlatformNavGraph.Edge edge) => activeEdge = EdgeState.Start(edge);
+	public void StartActiveEdge(PlatformNavGraph.Edge edge, bool blockPathOnTimeout = false)
+	{
+		activeEdge = EdgeState.Start(edge);
+		activeEdgeBlocksPath = blockPathOnTimeout;
+	}
+	public void UpdateDebugSurfacePath(PlatformNavGraph graph, int startNodeId, int goalNodeId)
+	{
+		surfaceNavPath.Clear();
+		if (ShouldBuildDebugNavLabel)
+			graph.TryFindSurfacePath(startNodeId, goalNodeId, surfaceNavPath);
+	}
+
+	public void ClearDebugSurfacePath() => surfaceNavPath.Clear();
+
 	public void ClearActiveEdge(string label)
 	{
 		activeEdge = default;
+		activeEdgeBlocksPath = false;
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = label;
+	}
+
+	public void ClearBlockedPathEdges()
+	{
+		blockedPathEdges.Clear();
+		blockedPathTarget = null;
 	}
 
 	public void SetDebugNavState(string label)
@@ -259,10 +362,80 @@ public sealed class Navigator(Pawn owner)
 		DebugNavGoalNodeId = null;
 		DebugNavTargetNodeId = null;
 		navPath.Clear();
+		surfaceNavPath.Clear();
 		activeEdge = default;
+		activeEdgeBlocksPath = false;
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = label;
+	}
+
+	private void ResetBlockedPathEdgesForTarget(Vector2 target)
+	{
+		if (blockedPathTarget.HasValue &&
+			Vector2.DistanceSquared(blockedPathTarget.Value, target) <= BlockedPathTargetResetDistance * BlockedPathTargetResetDistance)
+			return;
+
+		blockedPathEdges.Clear();
+		blockedPathTarget = target;
+	}
+
+	private bool TryDirectGoalJump(Vector2 target, out int moveX, out bool jumpPressed)
+	{
+		moveX = 0;
+		jumpPressed = false;
+
+		var dx = target.X - Position.X;
+		var dy = Position.Y - target.Y;
+		if (dy < DirectGoalJumpMinVerticalDistance ||
+			dy > DirectGoalJumpMaxVerticalDistance ||
+			MathF.Abs(dx) > DirectGoalJumpMaxHorizontalDistance)
+			return false;
+
+		// A direct hop only works with a clear path to the goal. Thin (1-tile)
+		// walls sitting between Bud and the target must count here, or Bud will
+		// keep bumping the wall thinking he can jump up to touch the goal.
+		if (IsLineToTargetBlocked(target))
+			return false;
+
+		moveX = MathF.Abs(dx) > NavNodeReachDistance * 0.5f ? Math.Sign(dx) : 0;
+		if (IsGrounded)
+			jumpPressed = true;
+
+		navPath.Clear();
+		surfaceNavPath.Clear();
+		activeEdge = default;
+		activeEdgeBlocksPath = false;
+		DebugNavStartNodeId = null;
+		DebugNavGoalNodeId = null;
+		DebugNavTargetNodeId = null;
+		DebugNavProbeRect = null;
+		DebugNavProbeHit = false;
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"direct goal jump {moveX}" : "direct goal jump";
+		return true;
+	}
+
+	// Samples the straight line from Bud to the target for solid room collision,
+	// skipping the ends so Bud's own footing and the target tile don't count.
+	// Steps finely enough (≤ half a tile) that a thin 1-tile wall still registers.
+	private bool IsLineToTargetBlocked(Vector2 target)
+	{
+		var delta = target - Position;
+		var distance = delta.Length();
+		if (distance <= NavNodeReachDistance)
+			return false;
+
+		var dir = delta / distance;
+		const float step = Game.TileSize * 0.5f;
+		const int probeHalf = 2;
+		for (var d = (float)NavNodeReachDistance; d <= distance - NavNodeReachDistance * 0.5f; d += step)
+		{
+			var p = Position + dir * d;
+			var probe = new RectInt((int)p.X - probeHalf, (int)p.Y - probeHalf, probeHalf * 2, probeHalf * 2);
+			if (Game.OverlapsRoomCollision(probe))
+				return true;
+		}
+		return false;
 	}
 
 	public int MoveTowardNavTarget(Vector2 target)
@@ -343,7 +516,7 @@ public sealed class Navigator(Pawn owner)
 		DebugNavStartNodeId = startNodeId;
 		DebugNavGoalNodeId = goalNodeId;
 		DebugNavTargetNodeId = next.To;
-		StartActiveEdge(next);
+		StartActiveEdge(next, blockPathOnTimeout: true);
 		DebugNavLabel = ShouldBuildDebugNavLabel ? $"jump handoff {blockedEdge.From}->{blockedEdge.To}->{next.To}" : "jump handoff";
 		return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
 	}
@@ -359,8 +532,9 @@ public sealed class Navigator(Pawn owner)
 		moveX = 0;
 		jumpPressed = false;
 		var plan = edge.Jump ?? DefaultJumpPlan(from.Position, target);
-		var takeoffDirection = plan.Direction != 0 ? plan.Direction : Math.Sign(target.X - from.Position.X);
-		if (takeoffDirection == 0)
+		var hasPlannedHorizontal = plan.Direction != 0 || plan.AirDirection != 0;
+		var takeoffDirection = plan.Direction != 0 ? plan.Direction : hasPlannedHorizontal ? Math.Sign(target.X - from.Position.X) : 0;
+		if (hasPlannedHorizontal && takeoffDirection == 0)
 			takeoffDirection = owner.Facing == 0 ? 1 : owner.Facing;
 
 		if (!activeEdge.JumpPlanStarted)
@@ -395,7 +569,7 @@ public sealed class Navigator(Pawn owner)
 
 		activeEdge.JumpPlanTimer += owner.Time.Delta;
 		moveX = PlannedJumpMoveX(plan, target);
-		if (moveX == 0)
+		if (moveX == 0 && hasPlannedHorizontal)
 			moveX = takeoffDirection;
 
 		if (!activeEdge.JumpStarted && activeEdge.JumpPlanTimer >= plan.RunupTime)
@@ -407,7 +581,20 @@ public sealed class Navigator(Pawn owner)
 			activeEdge.JumpHoldTimer = Calc.Approach(activeEdge.JumpHoldTimer, 0, owner.Time.Delta);
 
 		if (activeEdge.JumpStarted && !IsGrounded)
-			moveX = AirSteerTowardLanding(plan, from.Position, target, moveX);
+		{
+			if (plan.WallJump && !activeEdge.WallKicked)
+			{
+				// Steer into the wall and keep the jump pressed so the wall kick fires
+				// the instant Bud touches it. The runtime input-lock then carries him
+				// away; once we see the kick, switch to steering toward the landing.
+				moveX = plan.Direction;
+				jumpPressed = true;
+				if (owner.IsWallJumpLocked)
+					activeEdge.WallKicked = true;
+			}
+			else
+				moveX = AirSteerTowardLanding(plan, from.Position, target, to.Kind, moveX);
+		}
 		else
 		{
 			DebugNavProbeRect = null;
@@ -415,7 +602,7 @@ public sealed class Navigator(Pawn owner)
 		}
 
 		if (activeEdge.JumpStarted && IsGrounded && activeEdge.JumpPlanTimer > plan.RunupTime + 0.12f &&
-			(IsNearNode(target) || MathF.Abs(Position.Y - target.Y) <= NavNodeReachDistance))
+			IsNearNode(target))
 		{
 			ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
 			return false;
@@ -484,7 +671,12 @@ public sealed class Navigator(Pawn owner)
 		return plan.AirDirection;
 	}
 
-	private int AirSteerTowardLanding(PlatformNavGraph.JumpPlan plan, Vector2 takeoff, Vector2 landing, int plannedMoveX)
+	private int AirSteerTowardLanding(
+		PlatformNavGraph.JumpPlan plan,
+		Vector2 takeoff,
+		Vector2 landing,
+		PlatformNavGraph.NodeKind targetKind,
+		int plannedMoveX)
 	{
 		var dx = landing.X - Position.X;
 		var remainingX = MathF.Abs(dx);
@@ -492,7 +684,8 @@ public sealed class Navigator(Pawn owner)
 		var height = MathF.Max(0, takeoff.Y - landing.Y);
 		var targetDirection = Math.Sign(dx);
 		var velocityDirection = Math.Sign(owner.Velocity.X);
-		if (height >= PrecisionLandingBrakeMinHeight &&
+		if (targetKind != PlatformNavGraph.NodeKind.Ledge &&
+			height >= PrecisionLandingBrakeMinHeight &&
 			plan.AirDirection == plan.Direction &&
 			remainingX <= PrecisionLandingBrakeDistance &&
 			targetDirection != 0 &&
@@ -504,7 +697,9 @@ public sealed class Navigator(Pawn owner)
 		else if (remainingX <= 18 || owner.Velocity.Y > 0 && remainingX <= 28)
 			steer = Math.Sign(dx);
 
-		if (owner.Velocity.Y >= LandingStabilizeVerticalSpeed && remainingX <= LandingStabilizeDistance)
+		if (targetKind != PlatformNavGraph.NodeKind.Ledge &&
+			owner.Velocity.Y >= LandingStabilizeVerticalSpeed &&
+			remainingX <= LandingStabilizeDistance)
 		{
 			var desiredVelocity = Math.Clamp(dx * LandingStabilizeGain, -LandingStabilizeMaxSpeed, LandingStabilizeMaxSpeed);
 			if (MathF.Abs(dx) <= NavNodeReachDistance)
@@ -531,6 +726,7 @@ public sealed class Navigator(Pawn owner)
 		public bool JumpPlanStarted;
 		public float JumpPrepareTimer;
 		public float JumpPlanTimer;
+		public bool WallKicked;
 
 		public static EdgeState Start(PlatformNavGraph.Edge edge) => new() { Edge = edge };
 	}

@@ -84,6 +84,10 @@ public class Room
 	/// World-space rectangles built from adjacent movement-blocking tiles.
 	public readonly List<RectInt> CollisionRects = [];
 
+	/// Per-tile solid mask (BlocksMovement and not a slope), row-major Size.X*Size.Y.
+	/// Mirrors <see cref="CollisionRects"/> for O(tiles-covered) collision queries.
+	public bool[] SolidTiles = [];
+
 	/// Slope tiles keep their own geometry because collision follows the inferred surface line.
 	public readonly List<SlopeTile> SlopeTiles = [];
 
@@ -349,6 +353,7 @@ public class Room
 		BuildSlopeTiles();
 		BuildDualTerrainJoinMasks();
 		BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope);
+		BuildSolidTileMask();
 		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
 		BuildSlopeLightOccluders();
 		BuildVisibilitySegments();
@@ -899,6 +904,21 @@ public class Room
 			return false;
 
 		return dot <= Vector2.Dot(ab, ab) + 0.001f;
+	}
+
+	// Same predicate as the CollisionRects build, but kept as a flat per-tile
+	// mask so collision queries can index directly instead of scanning rects.
+	private void BuildSolidTileMask()
+	{
+		var count = Size.X * Size.Y;
+		if (SolidTiles.Length != count)
+			SolidTiles = new bool[count];
+		else
+			Array.Clear(SolidTiles);
+
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X; x++)
+				SolidTiles[y * Size.X + x] = Matches(x, y, static entry => entry.BlocksMovement && !entry.IsSlope);
 	}
 
 	private void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)

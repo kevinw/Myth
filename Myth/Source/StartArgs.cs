@@ -16,6 +16,11 @@ public struct StartArgs
 	public string? assetPackPath;
 	public int maxFrames = int.MaxValue;
 
+	// Exit after this many game seconds (for automated/profiling runs).
+	public float maxTimeSeconds = float.PositiveInfinity;
+	// Start play immediately in this room (by Room.Id) on startup.
+	public string? playRoomId;
+
 	// Automated screenshot capture (desktop). When screenshotPath is set the
 	// game plays immediately, captures Game.Screen at screenshotFrame and every
 	// screenshotInterval frames after, screenshotCount times, then exits.
@@ -42,6 +47,10 @@ public struct StartArgs
 				screenshotCount = sc;
 			else if ((args[i] == "--build-asset-pack" || args[i] == "--asset-pack") && next != null)
 				assetPackPath = next;
+			else if (args[i] == "--max-time" && next != null && float.TryParse(next, out var mt))
+				maxTimeSeconds = mt;
+			else if (args[i] == "--play-room" && next != null)
+				playRoomId = next;
 		}
 
 		dumpAtlases = args.Contains("--dump-atlases");
@@ -53,6 +62,6 @@ public struct StartArgs
 		gymExitAfterAll = args.Contains("--gym-exit-after-all");
 		simple = args.Contains("--simple");
 		bench = args.Contains("--bench");
-		play = args.Contains("--play") || screenshotPath != null;
+		play = args.Contains("--play") || screenshotPath != null || playRoomId != null;
 	}
 }

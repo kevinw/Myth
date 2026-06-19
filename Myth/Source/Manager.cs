@@ -169,6 +169,8 @@ public partial class Manager : App
 	readonly Lock assetReloadLock = new();
 	readonly List<string> musicAreas = [];
 	readonly bool dumpAtlases;
+	readonly float maxTimeSeconds;
+	readonly string? playRoomId;
 	readonly bool buildAssetPack;
 	readonly bool useAssetPack;
 	readonly string? assetPackPath;
@@ -199,6 +201,8 @@ public partial class Manager : App
 		assetPackPath = args.assetPackPath;
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.MaxFrames = args.maxFrames;
+		maxTimeSeconds = args.maxTimeSeconds;
+		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
 		screenshotPath = args.screenshotPath;
 		screenshotFrame = args.screenshotFrame;
@@ -324,6 +328,8 @@ public partial class Manager : App
 			Exit();
 			return;
 		}
+		if (playRoomId != null)
+			selectedRoomId = playRoomId;
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
@@ -336,7 +342,7 @@ public partial class Manager : App
 #endif
 
 		if (playOnStartup)
-			StartGame();
+			StartGame(immediate: playRoomId != null);
 #if !BROWSER
 		if (unthrottled)
 			Console.WriteLine("[Manager] unthrottled: running fixed 60fps steps as fast as possible (no wall-clock wait)");
@@ -616,6 +622,12 @@ public partial class Manager : App
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
 
+		if (Time.Seconds >= maxTimeSeconds)
+		{
+			Exit();
+			return;
+		}
+
 		if (headless)
 		{
 			HeadlessUpdate();
@@ -862,15 +874,12 @@ public partial class Manager : App
 
 	bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
 	{
-		//if (!keyboardShortcutsBlocked)
-		//{
-		//if (Input.Keyboard.Pressed(Keys.F6)) ToggleLighting();
-		//if (Input.Keyboard.Pressed(Keys.F7)) ToggleDitherAndTileField();
-		//if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
-		//if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
-		//if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
-		//if (Input.Keyboard.Pressed(Keys.B))   ToggleBurrowParticles();
-		//}
+#if !BROWSER && !IOS
+		if (!keyboardShortcutsBlocked)
+		{
+			if (Input.Keyboard.Pressed(Keys.B)) ToggleBurrowParticles();
+		}
+#endif
 
 		var chordActive = false;
 		foreach (var controller in Input.Controllers)

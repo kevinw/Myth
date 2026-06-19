@@ -28,6 +28,7 @@ public class Bud : Pawn
 	public int? DebugNavTargetNodeId => nav.DebugNavTargetNodeId;
 	public string DebugNavLabel => nav.DebugNavLabel;
 	public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => nav.DebugNavPath;
+	public IReadOnlyList<PlatformNavGraph.SurfaceEdge> DebugSurfaceNavPath => nav.DebugSurfaceNavPath;
 	public RectInt? DebugNavProbeRect => nav.DebugNavProbeRect;
 	public bool DebugNavProbeHit => nav.DebugNavProbeHit;
 
@@ -66,9 +67,12 @@ public class Bud : Pawn
 			{
 				if (!nav.TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
 				{
+					var navLabel = nav.DebugNavLabel;
 					moveX = GetFallbackMoveX(followTarget);
 					moveY = 0;
-					nav.SetDebugNavState("gym fallback");
+					nav.SetDebugNavState(moveX == 0
+						? navLabel
+						: Game.IsPlatformNavDebugVisible ? $"gym fallback {moveX}" : "gym fallback");
 				}
 			}
 			else if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
@@ -106,7 +110,7 @@ public class Bud : Pawn
 			JumpPressed: jumpPressed,
 			JumpDown: nav.JumpHeld,
 			DashPressed: false,
-			AllowWallJump: false
+			AllowWallJump: nav.ActiveEdgeAllowsWallJump
 		);
 	}
 
@@ -157,6 +161,12 @@ public class Bud : Pawn
 			return false;
 		}
 
+		var preferredSide = Position.X <= player.Position.X ? -1 : 1;
+		if (TryNavigateSameSurfaceBesidePlayer(graph, player, preferredSide, out moveX, out moveY))
+			return true;
+		if (TryNavigateSameSurfaceBesidePlayer(graph, player, -preferredSide, out moveX, out moveY))
+			return true;
+
 		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
 		var goal = FindGoalNodeBesidePlayer(graph, player);
 		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
@@ -167,12 +177,14 @@ public class Bud : Pawn
 
 		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, nav.NavPath) || nav.NavPath.Count <= 0)
 		{
+			nav.ClearDebugSurfacePath();
 			nav.DebugNavStartNodeId = start.Value.Id;
 			nav.DebugNavGoalNodeId = goal.Value.Id;
 			nav.DebugNavTargetNodeId = null;
 			nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
 			return false;
 		}
+		nav.UpdateDebugSurfacePath(graph, start.Value.Id, goal.Value.Id);
 
 		if (!nav.TryGetActionableEdge(graph, out var edge))
 		{
@@ -239,6 +251,18 @@ public class Bud : Pawn
 		return true;
 	}
 
+	private bool TryNavigateSameSurfaceBesidePlayer(PlatformNavGraph graph, Player player, int side, out int moveX, out int moveY)
+	{
+		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
+		if (MathF.Abs(desired.X - player.Position.X) < DesiredPlayerSpacing * 0.5f)
+		{
+			moveX = 0;
+			moveY = 0;
+			return false;
+		}
+		return nav.TryNavigateSameSurface(graph, desired, ShouldMirrorPlayerCrawl(player), out moveX, out moveY);
+	}
+
 	private bool ShouldMirrorPlayerCrawl(Player? player)
 	{
 		if (player == null || !grounded || !player.IsGrounded || !player.IsDucking)
@@ -286,15 +310,30 @@ public class Bud : Pawn
 		=> MathF.Abs(Position.X - player.Position.X) <= FollowStopDistance &&
 		   MathF.Abs(Position.Y - player.Position.Y) <= Game.TileSize + Navigator.NavNodeReachDistance;
 
+	private readonly List<PlatformNavGraph.Node> goalCandidates = [];
+
 	private PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player)
 	{
-		var preferredSide = Position.X <= player.Position.X ? -1 : 1;
-		var preferred = FindGoalNodeBesidePlayer(graph, player, preferredSide);
-		if (preferred.HasValue)
-			return preferred;
+		// Head for the nearest node Bud can actually path to, not just the nearest node:
+		// otherwise, standing in a slot, he'd pick a closer-looking node across a thin
+		// wall (which is only reachable the long way around) instead of the platform
+		// right next to the player.
+		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
+		if (start.HasValue)
+		{
+			graph.FindNearestNodes(player.Position, Navigator.GoalNodeSearchDistance, goalCandidates);
+			foreach (var node in goalCandidates) // nearest-first
+			{
+				if (node.Id == start.Value.Id || graph.TryFindPath(start.Value.Id, node.Id, nav.NavPath))
+					return node;
+			}
+		}
 
-		return FindGoalNodeBesidePlayer(graph, player, -preferredSide) ??
-			   graph.FindNearestNode(player.Position, Navigator.GoalNodeSearchDistance);
+		// Nothing reachable found: fall back to the beside-the-player heuristic.
+		var preferredSide = Position.X <= player.Position.X ? -1 : 1;
+		return FindGoalNodeBesidePlayer(graph, player, preferredSide)
+			?? FindGoalNodeBesidePlayer(graph, player, -preferredSide)
+			?? graph.FindNearestNode(player.Position, Navigator.GoalNodeSearchDistance);
 	}
 
 	private static PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, int side)
@@ -345,6 +384,7 @@ public class Bud : Pawn
 		Visible = false;
 		CollidesWithSolids = false;
 		Velocity = Vector2.Zero;
+		nav.ClearBlockedPathEdges();
 	}
 
 	private void EnterRoom(RoomChange change)

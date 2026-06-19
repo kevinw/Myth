@@ -318,20 +318,21 @@ public partial class Game : IDisposable
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
-		crtMaterial = CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1);
-		lightingCompositeMaterial = CreateFragmentMaterial("LightingComposite", samplerCount: 7, uniformBufferCount: 1);
-		blurMaterial = CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1);
-		softShadowMaterial = CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1);
-		sdfAuraMaterial = CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1);
+		var loadVisualShaders = GraphicsDevice.Driver != GraphicsDriver.Headless;
+		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
+		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 7, uniformBufferCount: 1) : null;
+		blurMaterial = loadVisualShaders ? CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1) : null;
+		softShadowMaterial = loadVisualShaders ? CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1) : null;
+		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
 		// Transient preview/thumbnail games skip particles: they render and dispose
 		// in one synchronous call, which would free the GPU draw resources while the
 		// submitted particle draw is still in flight (corruption).
 		particleSystem = enableParticles ? new ParticleSystem(GraphicsDevice) : null;
-		normalLightMaterial = CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1);
-		reflectionDistortMaterial = CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1);
-		tileFieldStampMaterial = CreateFragmentMaterial("TileFieldStamp", samplerCount: 1);
-		tileFieldDebugMaterial = CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1);
-		pixelSortGlitchMaterial = CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1);
+		normalLightMaterial = loadVisualShaders ? CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1) : null;
+		reflectionDistortMaterial = loadVisualShaders ? CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1) : null;
+		tileFieldStampMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldStamp", samplerCount: 1) : null;
+		tileFieldDebugMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1) : null;
+		pixelSortGlitchMaterial = loadVisualShaders ? CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1) : null;
 		LoadStory();
 		RestorePersistentDebugViews();
 
@@ -487,7 +488,7 @@ public partial class Game : IDisposable
 				//if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
 				//if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
 				//if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
-				//if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
+				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay(); // fails with a wasm exception in BROWSER
 #endif
 				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
@@ -3288,16 +3289,43 @@ public partial class Game : IDisposable
 		if (room == null)
 			return false;
 
-		foreach (var rect in room.CollisionRects)
-		{
-			if (bounds.Overlaps(rect))
-				return true;
-		}
+		// Collision is tile-aligned, so only the tiles the bounds cover can matter.
+		// Walk that tile range once, testing the precomputed solid mask (equivalent
+		// to scanning CollisionRects, since rects are unions of solid tiles) and any
+		// slope occupying a covered tile (equivalent to scanning SlopeTiles, since a
+		// slope only matters where its tile is covered). Geometry not built yet -> no
+		// mask -> no collision (matches empty CollisionRects/SlopeTiles).
+		var solid = room.SolidTiles;
+		if (solid.Length == 0)
+			return false;
 
-		foreach (var slope in room.SlopeTiles)
+		var origin = room.WorldBounds.TopLeft;
+		int sizeX = room.Size.X, sizeY = room.Size.Y;
+
+		// world bounds -> inclusive tile range (Right/Bottom are exclusive).
+		// Coordinates here are >= origin in the in-room case; clamping covers
+		// bounds that spill outside the room.
+		int tx0 = (bounds.Left - origin.X) / TileSize;
+		int tx1 = (bounds.Right - 1 - origin.X) / TileSize;
+		int ty0 = (bounds.Top - origin.Y) / TileSize;
+		int ty1 = (bounds.Bottom - 1 - origin.Y) / TileSize;
+		if (tx0 < 0) tx0 = 0;
+		if (ty0 < 0) ty0 = 0;
+		if (tx1 >= sizeX) tx1 = sizeX - 1;
+		if (ty1 >= sizeY) ty1 = sizeY - 1;
+
+		var hasSlopes = room.SlopeTiles.Count > 0;
+		for (var ty = ty0; ty <= ty1; ty++)
 		{
-			if (OverlapsSlope(bounds, room, slope))
-				return true;
+			var rowBase = ty * sizeX;
+			for (var tx = tx0; tx <= tx1; tx++)
+			{
+				if (solid[rowBase + tx])
+					return true;
+
+				if (hasSlopes && room.TryGetSlopeTile(new Point2(tx, ty), out var slope) && OverlapsSlope(bounds, room, slope))
+					return true;
+			}
 		}
 
 		return false;

@@ -92,6 +92,7 @@ public abstract class Pawn : Actor
 	}
 	public bool IsGrounded => grounded;
 	public bool IsDucking => ducking;
+	public bool IsWallJumpLocked => wallJumpInputLockTimer > 0;
 
 	public abstract PawnInput GetInput();
 

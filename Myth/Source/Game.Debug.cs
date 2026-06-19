@@ -215,7 +215,10 @@ public partial class Game
 			platformNavGraphRoom = room;
 		}
 
-		platformNavGraph.Tick(2.0f);
+		// Unthrottled (gym) runs build the whole graph in one tick so it becomes ready on
+		// a deterministic frame; interactive play keeps the small per-frame budget so the
+		// rebuild doesn't hitch.
+		platformNavGraph.Tick(Manager.Unthrottled ? float.MaxValue : 2.0f);
 		return platformNavGraph.IsReady ? platformNavGraph : null;
 	}
 
