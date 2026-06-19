@@ -26,7 +26,7 @@ public partial class Game
 	private Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 
-	public List<RectInt> CollisionRectsThisFrame = new();
+	public List<RectInt> CollisionRectsThisFrame = [];
 
 	// Render-target inspector overlay, drawn by Manager as an ImGui window at full
 	// window resolution. Toggled with G.
@@ -193,7 +193,7 @@ public partial class Game
 		foreach (var slope in room.SlopeTiles)
 		{
 			var polygon = room.GetSlopePolygon(slope);
-			for (var i = 0; i < polygon.Length; i ++)
+			for (var i = 0; i < polygon.Length; i++)
 				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Length], 1, Color.Red);
 		}
 		foreach (var rect in CollisionRectsThisFrame)

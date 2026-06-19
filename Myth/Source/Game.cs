@@ -488,7 +488,7 @@ public partial class Game : IDisposable
 				//if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
 				//if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
 				//if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
-				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
+				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay(); // fails with a wasm exception in BROWSER
 #endif
 				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 			}

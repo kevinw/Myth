@@ -34,21 +34,21 @@ public sealed class PlatformNavGraph
 	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime);
 	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null);
 
-	private const int SampleStep = Game.TileSize;
-	private const float SimDelta = 1.0f / 60.0f;
-	private const float SimMaxTime = 1.60f;
-	private const float SimAirAccel = 260;
-	private const float SimMaxAirSpeed = 99;
-	private const float SimGravity = 450;
-	private const float SimJumpForce = -105;
-	private const float SimJumpTime = 0.18f;
-	private const int SimLandingTolerance = 12;
-	private const int SimMinimumLandingDistance = Game.TileSize * 2;
-	private static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
-	private static readonly RectInt DuckingPawnProbe = new(-4, -6, 8, 6);
-	private static readonly Point2[] RoomExitDirections = [Point2.Left, Point2.Right, Point2.Up, Point2.Down];
-	private static readonly Comparison<Node> CompareNodeX = static (a, b) => a.Position.X.CompareTo(b.Position.X);
-	private static readonly JumpPlan[] JumpPlans =
+	const int SampleStep = Game.TileSize;
+	const float SimDelta = 1.0f / 60.0f;
+	const float SimMaxTime = 1.60f;
+	const float SimAirAccel = 260;
+	const float SimMaxAirSpeed = 99;
+	const float SimGravity = 450;
+	const float SimJumpForce = -105;
+	const float SimJumpTime = 0.18f;
+	const int SimLandingTolerance = 12;
+	const int SimMinimumLandingDistance = Game.TileSize * 2;
+	static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
+	static readonly RectInt DuckingPawnProbe = new(-4, -6, 8, 6);
+	static readonly Point2[] RoomExitDirections = [Point2.Left, Point2.Right, Point2.Up, Point2.Down];
+	static readonly Comparison<Node> CompareNodeX = static (a, b) => a.Position.X.CompareTo(b.Position.X);
+	static readonly JumpPlan[] JumpPlans =
 	[
 		new(1, 0.00f, 0.18f, 1, 99.0f),
 		new(-1, 0.00f, 0.18f, -1, 99.0f),
@@ -80,25 +80,25 @@ public sealed class PlatformNavGraph
 		}
 	}
 
-	private readonly Dictionary<Point2, int> nodeLookup = [];
-	private readonly HashSet<(int From, int To)> edgeLookup = [];
-	private readonly Dictionary<int, List<Node>> landingRows = [];
-	private readonly Dictionary<int, (JumpPlan Plan, float Cost)> jumpCandidates = [];
-	private readonly PriorityQueue<int, float> pathFrontier = new();
-	private readonly Dictionary<int, Edge> pathCameFrom = [];
-	private readonly Dictionary<int, float> pathCostSoFar = [];
+	readonly Dictionary<Point2, int> nodeLookup = [];
+	readonly HashSet<(int From, int To)> edgeLookup = [];
+	readonly Dictionary<int, List<Node>> landingRows = [];
+	readonly Dictionary<int, (JumpPlan Plan, float Cost)> jumpCandidates = [];
+	readonly PriorityQueue<int, float> pathFrontier = new();
+	readonly Dictionary<int, Edge> pathCameFrom = [];
+	readonly Dictionary<int, float> pathCostSoFar = [];
 
 	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RoomExits, Ready }
 
-	private BuildPhase phase = BuildPhase.Idle;
-	private Game? rebuildGame;
-	private Room? rebuildRoom;
-	private RectInt sampleBounds;
-	private int sampleX;
-	private int sampleY;
-	private int nextJumpSourceId;
-	private long rebuildStartTimestamp;
-	private int rebuildFrameCount;
+	BuildPhase phase = BuildPhase.Idle;
+	Game? rebuildGame;
+	Room? rebuildRoom;
+	RectInt sampleBounds;
+	int sampleX;
+	int sampleY;
+	int nextJumpSourceId;
+	long rebuildStartTimestamp;
+	int rebuildFrameCount;
 
 	public bool IsReady => phase == BuildPhase.Ready;
 
@@ -161,7 +161,7 @@ public sealed class PlatformNavGraph
 		return false;
 	}
 
-	private float EdgeCost(Edge edge)
+	float EdgeCost(Edge edge)
 	{
 		var distance = Vector2.Distance(Nodes[edge.From].Position, Nodes[edge.To].Position);
 		return edge.Kind switch
@@ -175,7 +175,7 @@ public sealed class PlatformNavGraph
 		};
 	}
 
-	private static float LandingRiskCost(Node node)
+	static float LandingRiskCost(Node node)
 		=> node.Kind switch
 		{
 			NodeKind.Landing => -24,
@@ -183,7 +183,7 @@ public sealed class PlatformNavGraph
 			_ => 0
 		};
 
-	private static void BuildPath(int startId, int goalId, Dictionary<int, Edge> cameFrom, List<Edge> path)
+	static void BuildPath(int startId, int goalId, Dictionary<int, Edge> cameFrom, List<Edge> path)
 	{
 		var current = goalId;
 		while (current != startId)
@@ -252,7 +252,7 @@ public sealed class PlatformNavGraph
 		} while (phase < BuildPhase.Ready && Stopwatch.GetElapsedTime(start).TotalMilliseconds < budgetMs);
 	}
 
-	private void TickSampling()
+	void TickSampling()
 	{
 		while (sampleY < sampleBounds.Bottom)
 		{
@@ -269,7 +269,7 @@ public sealed class PlatformNavGraph
 		phase = BuildPhase.AddLandingNodes;
 	}
 
-	private void TickJumpEdges()
+	void TickJumpEdges()
 	{
 		if (nextJumpSourceId >= Nodes.Count)
 		{
@@ -306,7 +306,7 @@ public sealed class PlatformNavGraph
 			phase = BuildPhase.RoomExits;
 	}
 
-	private int AddNode(Point2 position, NodeKind kind, RoomExit? exit = null, bool requiresDucking = false)
+	int AddNode(Point2 position, NodeKind kind, RoomExit? exit = null, bool requiresDucking = false)
 	{
 		if (nodeLookup.TryGetValue(position, out var existing))
 		{
@@ -322,7 +322,7 @@ public sealed class PlatformNavGraph
 		return id;
 	}
 
-	private void AddPlatformLandingNodes(Game game)
+	void AddPlatformLandingNodes(Game game)
 	{
 		foreach (var row in landingRows.Values)
 			row.Clear();
@@ -368,7 +368,7 @@ public sealed class PlatformNavGraph
 		}
 	}
 
-	private void AddLandingNodeForSpan(Game game, Node left, Node right, int count)
+	void AddLandingNodeForSpan(Game game, Node left, Node right, int count)
 	{
 		if (count < 2)
 			return;
@@ -382,14 +382,14 @@ public sealed class PlatformNavGraph
 		AddNode(center, NodeKind.Landing);
 	}
 
-	private void BuildRoomExitNodes(Room room)
+	void BuildRoomExitNodes(Room room)
 	{
 		var navigationNodeCount = Nodes.Count;
 		BuildEdgeExitNodes(room, navigationNodeCount);
 		BuildLinkedDoorExitNodes(room, navigationNodeCount);
 	}
 
-	private void BuildEdgeExitNodes(Room room, int navigationNodeCount)
+	void BuildEdgeExitNodes(Room room, int navigationNodeCount)
 	{
 		var bounds = room.WorldBounds;
 		for (var i = 0; i < navigationNodeCount; i++)
@@ -414,7 +414,7 @@ public sealed class PlatformNavGraph
 		}
 	}
 
-	private void BuildLinkedDoorExitNodes(Room room, int navigationNodeCount)
+	void BuildLinkedDoorExitNodes(Room room, int navigationNodeCount)
 	{
 		foreach (var actor in room.Actors)
 		{
@@ -438,7 +438,7 @@ public sealed class PlatformNavGraph
 		}
 	}
 
-	private static bool IsNearRoomEdge(RectInt bounds, Vector2 position, Point2 direction)
+	static bool IsNearRoomEdge(RectInt bounds, Vector2 position, Point2 direction)
 	{
 		if (direction.X > 0)
 			return position.X >= bounds.Right - SampleStep;
@@ -452,7 +452,7 @@ public sealed class PlatformNavGraph
 		return false;
 	}
 
-	private static Point2 RoomEdgeExitPosition(RectInt bounds, Vector2 position, Point2 direction)
+	static Point2 RoomEdgeExitPosition(RectInt bounds, Vector2 position, Point2 direction)
 	{
 		if (direction.X > 0)
 			return new Point2(bounds.Right + 1, (int)position.Y);
@@ -466,7 +466,7 @@ public sealed class PlatformNavGraph
 		return (Point2)position;
 	}
 
-	private Node? FindNearestNavigationNode(int nodeCount, Vector2 position, float maxDistance)
+	Node? FindNearestNavigationNode(int nodeCount, Vector2 position, float maxDistance)
 	{
 		Node? nearest = null;
 		var nearestDistanceSquared = maxDistance * maxDistance;
@@ -486,12 +486,12 @@ public sealed class PlatformNavGraph
 		return nearest;
 	}
 
-	private static bool IsStandable(Game game, Point2 position)
+	static bool IsStandable(Game game, Point2 position)
 	{
 		return TryGetStandableProbe(game, position, out _);
 	}
 
-	private static bool TryGetStandableProbe(Game game, Point2 position, out bool requiresDucking)
+	static bool TryGetStandableProbe(Game game, Point2 position, out bool requiresDucking)
 	{
 		if (IsStandableWithProbe(game, position, PawnProbe))
 		{
@@ -509,13 +509,13 @@ public sealed class PlatformNavGraph
 		return false;
 	}
 
-	private static bool IsStandableWithProbe(Game game, Point2 position, RectInt probe)
+	static bool IsStandableWithProbe(Game game, Point2 position, RectInt probe)
 	{
 		var bounds = probe + position;
 		return !game.OverlapsRoomCollision(bounds) && HasStandableSupport(game, bounds);
 	}
 
-	private static bool HasStandableSupport(Game game, RectInt bounds)
+	static bool HasStandableSupport(Game game, RectInt bounds)
 	{
 		if (game.OverlapsRoomCollision(bounds + Point2.Down))
 			return true;
@@ -536,14 +536,14 @@ public sealed class PlatformNavGraph
 		return false;
 	}
 
-	private static bool IsLedge(Game game, Point2 position)
+	static bool IsLedge(Game game, Point2 position)
 	{
 		var left = position + new Point2(-SampleStep, 0);
 		var right = position + new Point2(SampleStep, 0);
 		return !IsStandable(game, left) || !IsStandable(game, right);
 	}
 
-	private void BuildWalkEdges(Game game)
+	void BuildWalkEdges(Game game)
 	{
 		for (var i = 0; i < Nodes.Count; i++)
 		{
@@ -577,7 +577,7 @@ public sealed class PlatformNavGraph
 		}
 	}
 
-	private void BuildFallEdges(Game game)
+	void BuildFallEdges(Game game)
 	{
 		foreach (var node in Nodes)
 		{
@@ -594,7 +594,7 @@ public sealed class PlatformNavGraph
 		}
 	}
 
-	private static float JumpPlanCost(Node from, Node to, JumpPlan plan)
+	static float JumpPlanCost(Node from, Node to, JumpPlan plan)
 	{
 		var targetDirection = Math.Sign(to.Position.X - from.Position.X);
 		var cost = plan.RunupTime * 100 + LandingRiskCost(to);
@@ -610,7 +610,7 @@ public sealed class PlatformNavGraph
 		return cost;
 	}
 
-	private Node? FindNearestLandingNode(int fromId, Vector2 landing, float maxDistance)
+	Node? FindNearestLandingNode(int fromId, Vector2 landing, float maxDistance)
 	{
 		Node? nearest = null;
 		var bestScore = maxDistance * maxDistance;
@@ -641,7 +641,7 @@ public sealed class PlatformNavGraph
 		return nearest;
 	}
 
-	private (Node Node, EdgeKind Kind)? FindWalkNeighbor(Game game, Node from, int offsetX)
+	(Node Node, EdgeKind Kind)? FindWalkNeighbor(Game game, Node from, int offsetX)
 	{
 		Node? best = null;
 		EdgeKind bestKind = EdgeKind.Walk;
@@ -667,10 +667,9 @@ public sealed class PlatformNavGraph
 		return best.HasValue ? (best.Value, bestKind) : null;
 	}
 
-	private bool HasEdge(int from, int to)
-		=> edgeLookup.Contains((from, to));
+	bool HasEdge(int from, int to) => edgeLookup.Contains((from, to));
 
-	private bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null)
+	bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null)
 	{
 		if (!edgeLookup.Add((from, to)))
 			return false;
@@ -678,7 +677,7 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	private Node? FindFallLanding(Game game, Node from, int offsetX)
+	Node? FindFallLanding(Game game, Node from, int offsetX)
 	{
 		Node? best = null;
 		var start = (Point2)from.Position + new Point2(offsetX, 0);
@@ -698,7 +697,7 @@ public sealed class PlatformNavGraph
 		return best;
 	}
 
-	private static EdgeKind? WalkEdgeKind(Game game, Node from, Node to)
+	static EdgeKind? WalkEdgeKind(Game game, Node from, Node to)
 	{
 		if (!from.RequiresDucking && !to.RequiresDucking && WalkProbeClear(game, from.Position, to.Position, PawnProbe))
 			return EdgeKind.Walk;
@@ -707,7 +706,7 @@ public sealed class PlatformNavGraph
 		return null;
 	}
 
-	private static bool WalkProbeClear(Game game, Vector2 from, Vector2 to, RectInt probe)
+	static bool WalkProbeClear(Game game, Vector2 from, Vector2 to, RectInt probe)
 	{
 		var steps = Math.Max(1, (int)MathF.Ceiling(Vector2.Distance(from, to) / 2.0f));
 		for (var i = 1; i <= steps; i++)
@@ -720,7 +719,7 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	private static bool FallProbeClear(Game game, Point2 from, Point2 to)
+	static bool FallProbeClear(Game game, Point2 from, Point2 to)
 	{
 		if (game.OverlapsRoomCollision(PawnProbe + from))
 			return false;
@@ -732,24 +731,24 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	private static bool TrySimulateJump(Game game, Node from, JumpPlan plan, out Vector2 landing)
+	static bool TrySimulateJump(Game game, Node from, JumpPlan plan, out Vector2 landing)
 	{
 		var sim = new JumpSimulation(game, from.Position, plan);
 		return sim.Run(out landing);
 	}
 
-	private struct JumpSimulation
+	struct JumpSimulation
 	{
-		private readonly Game game;
-		private readonly Vector2 from;
-		private readonly JumpPlan plan;
-		private Vector2 position;
-		private Vector2 velocity;
-		private Vector2 remainder;
-		private float jumpTimer;
-		private bool leftStart;
-		private bool jumpStarted;
-		private int horizontalCollisionFrames;
+		readonly Game game;
+		readonly Vector2 from;
+		readonly JumpPlan plan;
+		Vector2 position;
+		Vector2 velocity;
+		Vector2 remainder;
+		float jumpTimer;
+		bool leftStart;
+		bool jumpStarted;
+		int horizontalCollisionFrames;
 
 		public JumpSimulation(Game game, Vector2 from, JumpPlan plan)
 		{
@@ -785,7 +784,7 @@ public sealed class PlatformNavGraph
 			return false;
 		}
 
-		private void Step(float time)
+		void Step(float time)
 		{
 			var moveX = MoveXAt(time);
 			velocity.X += moveX * SimAirAccel * SimDelta;
@@ -813,7 +812,7 @@ public sealed class PlatformNavGraph
 			Move(velocity * SimDelta);
 		}
 
-		private int MoveXAt(float time)
+		readonly int MoveXAt(float time)
 		{
 			if (time < plan.RunupTime)
 				return plan.Direction;
@@ -824,7 +823,7 @@ public sealed class PlatformNavGraph
 			return plan.Direction;
 		}
 
-		private void Move(Vector2 value)
+		void Move(Vector2 value)
 		{
 			remainder += value;
 			var move = (Point2)remainder;
@@ -860,13 +859,8 @@ public sealed class PlatformNavGraph
 			}
 		}
 
-		private bool IsGrounded()
-			=> HasStandableSupport(game, PawnProbe + (Point2)position);
-
-		private bool HasGroundSupportNextStep(int moveX)
-			=> HasStandableSupport(game, PawnProbe + (Point2)position + new Point2(Math.Sign(moveX), 0));
-
-		private bool Overlaps(Vector2 at)
-			=> game.OverlapsRoomCollision(PawnProbe + (Point2)at);
+		readonly bool IsGrounded() => HasStandableSupport(game, PawnProbe + (Point2)position);
+		readonly bool HasGroundSupportNextStep(int moveX) => HasStandableSupport(game, PawnProbe + (Point2)position + new Point2(Math.Sign(moveX), 0));
+		readonly bool Overlaps(Vector2 at) => game.OverlapsRoomCollision(PawnProbe + (Point2)at);
 	}
 }

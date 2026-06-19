@@ -188,7 +188,6 @@ public partial class Manager : App
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled))
 	{
-		Console.WriteLine($"Manager: audio={args.audio}");
 		AudioEnabled = args.audio;
 		dumpAtlases = args.dumpAtlases;
 		gymMode = args.gym;
@@ -799,10 +798,11 @@ public partial class Manager : App
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
+
+			RenderTargetOverlayImGui();
 #if EDITOR
 			PlatformNavDebugOverlayImGui();
 			BudDebugOverlayImGui();
-			RenderTargetOverlayImGui();
 			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 				FpsOverlayImGui();
 			TransitionViewerImGui();
