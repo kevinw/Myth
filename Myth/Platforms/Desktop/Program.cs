@@ -10,6 +10,10 @@ if (startArgs.buildAssetPack)
 	return;
 }
 
+#if BROWSER
+startArgs.audio = !MythWebOverlay.GetAudioDisabled();
+#endif
+
 var manager = new Manager(startArgs);
 
 #if BROWSER
@@ -31,5 +35,7 @@ internal static partial class MythWebOverlay
 	[System.Runtime.Versioning.SupportedOSPlatform("browser")]
 	[JSImport("setVirtualControllerVisible", "MythOverlay")]
 	internal static partial void SetVirtualControllerVisible(bool visible);
+	[JSImport("getAudioDisabled", "MythOverlay")]
+	internal static partial bool GetAudioDisabled();
 }
 #endif

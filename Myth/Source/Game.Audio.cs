@@ -26,6 +26,8 @@ public partial class Game
 
 	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
 	{
+		if (!Manager.AudioEnabled) return;
+
 		try
 		{
 			using var instance = CreateAudioEvent(path, position);

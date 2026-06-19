@@ -1,10 +1,11 @@
 prepareReloadPrompt();
-const [{ dotnet }, FosterWebGPU, FosterBrowserFmod, VirtualGamepad] = await Promise.all([
-  import("./_framework/dotnet.js"),
-  import("./_framework/Content/Web/foster-webgpu.js"),
-  import("./_framework/Content/Web/foster-fmod.js"),
-  import("./virtual-gamepad.js"),
-]);
+const [{ dotnet }, FosterWebGPU, FosterBrowserFmod, VirtualGamepad] =
+  await Promise.all([
+    import("./_framework/dotnet.js"),
+    import("./_framework/Content/Web/foster-webgpu.js"),
+    import("./_framework/Content/Web/foster-fmod.js"),
+    import("./virtual-gamepad.js"),
+  ]);
 
 globalThis.FosterWebGPU = FosterWebGPU;
 globalThis.FosterBrowserFmod = FosterBrowserFmod;
@@ -22,19 +23,41 @@ function isMythCleanExitStatus(error) {
 function isMobileBrowser() {
   if (navigator.userAgentData?.mobile === true) return true;
   if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return true;
-  return navigator.maxTouchPoints > 1 && /MacIntel|iPad/i.test(navigator.platform);
+  return (
+    navigator.maxTouchPoints > 1 && /MacIntel|iPad/i.test(navigator.platform)
+  );
 }
 
 try {
   await FosterWebGPU.initialize("#foster-canvas");
 
-  const runtime = await dotnet.withDiagnosticTracing(false).create();
+  const searchParams = new URLSearchParams(location.search);
+
+  const debug = searchParams.get("debug") === "1";
+  const webAudioDisabled = searchParams.get("audio") === "0";
+
+  const dotnetConfig = debug
+    ? {
+        environmentVariables: {
+          MONO_LOG_LEVEL: "debug", //enable Mono VM detailed logging by
+          MONO_LOG_MASK: "all", // categories, could be also gc,aot,type,...
+        },
+      }
+    : {};
+
+  let runtime = await dotnet
+    .withDiagnosticTracing(debug)
+    .withDebugging(debug ? 1 : 0)
+    .withConfig(dotnetConfig)
+    .create();
+
   const { setModuleImports, runMain } = runtime;
 
   setModuleImports("FosterWebGPU", FosterWebGPU);
   setModuleImports("FosterBrowserFmod", FosterBrowserFmod);
   setModuleImports("MythOverlay", {
     setVirtualControllerVisible: VirtualGamepad.setVirtualControllerVisible,
+    getAudioDisabled: () => webAudioDisabled,
     isMobileBrowser,
   });
   const startGate = prepareStartGate();
@@ -91,7 +114,10 @@ function prepareStartGate() {
     };
 
   const setFill = (value) =>
-    button.style.setProperty("--p", `${Math.max(0, Math.min(1, value)) * 100}%`);
+    button.style.setProperty(
+      "--p",
+      `${Math.max(0, Math.min(1, value)) * 100}%`,
+    );
 
   button.disabled = true;
   button.textContent = "Loading...";
@@ -126,7 +152,9 @@ function prepareStartGate() {
 
 async function preloadAssets(module, onProgress) {
   const files = await loadAssetManifest();
-  const hasVisualAssetPack = files.includes("Assets/Packed/Visuals/manifest.bin");
+  const hasVisualAssetPack = files.includes(
+    "Assets/Packed/Visuals/manifest.bin",
+  );
   const preloadFiles = files.filter((file) =>
     shouldPreloadIntoDotnetFs(file, hasVisualAssetPack),
   );

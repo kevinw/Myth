@@ -91,9 +91,9 @@ public partial class Manager : App
 
 #if EDITOR
 	int fpsOverlayMode;
+	bool showTransitionViewer = false;
 #endif
 	bool fpsOverlayVisible = false;
-	bool showTransitionViewer = false;
 
 	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
@@ -182,11 +182,14 @@ public partial class Manager : App
 
 	public bool MusicEnabled => musicEnabled;
 	public bool WantsVirtualGameController => playing || startingPlay;
+	public bool AudioEnabled = true;
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled))
 	{
+		Console.WriteLine($"Manager: audio={args.audio}");
+		AudioEnabled = args.audio;
 		dumpAtlases = args.dumpAtlases;
 		gymMode = args.gym;
 		headless = args.headless;
@@ -326,19 +329,15 @@ public partial class Manager : App
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
 		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
-#if BROWSER_NO_FMOD
-		musicAreas.Clear();
-		musicAreas.Add(DefaultMusicArea);
-#else
-		LoadAudioBanks();
-#endif
+		if (AudioEnabled)
+			LoadAudioBanks();
 
 #if BROWSER
 		playOnStartup = true; // may also be set by --play on desktop
 #endif
 
-	if (playOnStartup)
-		StartGame();
+		if (playOnStartup)
+			StartGame();
 #if !BROWSER
 		if (unthrottled)
 			Console.WriteLine("[Manager] unthrottled: running fixed 60fps steps as fast as possible (no wall-clock wait)");
@@ -370,13 +369,14 @@ public partial class Manager : App
 		{
 			StartAssetWatcher();
 			StartShaderWatcher();
-			StartAudioBankWatcher();
+			if (AudioEnabled)
+				StartAudioBankWatcher();
 		}
 #endif
 
 #if EDITOR
-	if (!playOnStartup)
-		SyncEditorGame();
+		if (!playOnStartup)
+			SyncEditorGame();
 #endif
 	}
 
@@ -411,6 +411,7 @@ public partial class Manager : App
 
 	void LoadAudioBanks()
 	{
+		if (!AudioEnabled) return;
 		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
 		if (!Directory.Exists(fmodPath))
 		{
@@ -640,19 +641,20 @@ public partial class Manager : App
 
 		// Misc. Hotkeys
 		using (PerfStats.Time(PerfDetail.Hotkeys))
-		if (!keyboardShortcutsBlocked) {
+			if (!keyboardShortcutsBlocked)
+			{
 
-			//if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
+				//if (Input.Keyboard.Pressed(Keys.F1) && !playing && !startingPlay)
 				//ReloadAssets(true);
 
-			//if (Input.Keyboard.Pressed(Keys.F2))
-			//{
+				//if (Input.Keyboard.Pressed(Keys.F2))
+				//{
 				//Actor.TransitionsEnabled = !Actor.TransitionsEnabled;
 				//game?.DisplayMessage($"Transitions {(Actor.TransitionsEnabled ? "On" : "Off")}");
 				//}
 
-			if (Input.Keyboard.Pressed(Keys.F5))
-				ToggleFpsOverlay();
+				if (Input.Keyboard.Pressed(Keys.F5))
+					ToggleFpsOverlay();
 #if !IOS && !BROWSER
 			if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
 				window.Fullscreen = !window.Fullscreen;
@@ -663,10 +665,10 @@ public partial class Manager : App
 			}
 #endif
 #if EDITOR
-			if (ToggleEditorPressed())
-				ToggleGame();
+				if (ToggleEditorPressed())
+					ToggleGame();
 #endif
-		}
+			}
 
 		var perfToggleChordActive = UpdatePerfToggles(keyboardShortcutsBlocked);
 
@@ -862,13 +864,13 @@ public partial class Manager : App
 	{
 		//if (!keyboardShortcutsBlocked)
 		//{
-			//if (Input.Keyboard.Pressed(Keys.F6)) ToggleLighting();
-			//if (Input.Keyboard.Pressed(Keys.F7)) ToggleDitherAndTileField();
-			//if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
-			//if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
-			//if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
-			//if (Input.Keyboard.Pressed(Keys.B))   ToggleBurrowParticles();
-			//}
+		//if (Input.Keyboard.Pressed(Keys.F6)) ToggleLighting();
+		//if (Input.Keyboard.Pressed(Keys.F7)) ToggleDitherAndTileField();
+		//if (Input.Keyboard.Pressed(Keys.F8)) ToggleNormalBuffer();
+		//if (Input.Keyboard.Pressed(Keys.F9)) TogglePostEffects();
+		//if (Input.Keyboard.Pressed(Keys.F10)) ToggleEmissive();
+		//if (Input.Keyboard.Pressed(Keys.B))   ToggleBurrowParticles();
+		//}
 
 		var chordActive = false;
 		foreach (var controller in Input.Controllers)
@@ -1354,15 +1356,15 @@ public partial class Manager : App
 			spawnBud: true
 		);
 #if IOS
-			playTransition = 1.0f;
-			playTransitionFromCenter = Vector2.Zero;
-			playTransitionFromSize = Vector2.Zero;
-			playTransitionToCenter = Vector2.Zero;
-			playTransitionToSize = Vector2.Zero;
-			gameEase = 1.0f;
-			startingPlay = false;
-			playing = true;
-			game.SnapCameraToGameplayTarget();
+		playTransition = 1.0f;
+		playTransitionFromCenter = Vector2.Zero;
+		playTransitionFromSize = Vector2.Zero;
+		playTransitionToCenter = Vector2.Zero;
+		playTransitionToSize = Vector2.Zero;
+		gameEase = 1.0f;
+		startingPlay = false;
+		playing = true;
+		game.SnapCameraToGameplayTarget();
 #else
 		if (immediate)
 		{

@@ -313,7 +313,7 @@ public partial class Game : IDisposable
 	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true)
 	{
 		Manager = manager;
-		AudioEventsEnabled = audioEventsEnabled;
+		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		this.spawnBud = spawnBud;
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
 		EnsureRenderTargets(Width, Height);

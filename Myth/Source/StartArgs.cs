@@ -4,6 +4,7 @@ public struct StartArgs
 {
 	public bool dumpAtlases;
 	public bool gym;
+	public bool audio = true;
 	public bool headless;
 	public bool unthrottled;
 	public bool gymExitAfterAll;

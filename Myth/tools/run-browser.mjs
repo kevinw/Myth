@@ -160,6 +160,7 @@ const devHeaders = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
   "Cross-Origin-Resource-Policy": "same-origin",
+  "Timing-Allow-Origin": "*",
 };
 
 function serveFile(filePath, res) {
@@ -197,8 +198,7 @@ function handleReloadEvents(req, res) {
 
 function broadcastReloadAvailable() {
   const data = JSON.stringify({ builtAt: Date.now() });
-  for (const res of reloadClients)
-    res.write(`event: built\ndata: ${data}\n\n`);
+  for (const res of reloadClients) res.write(`event: built\ndata: ${data}\n\n`);
 }
 
 function handleRequest(req, res) {
@@ -237,14 +237,16 @@ function startWatch() {
   ];
 
   console.log(`Starting dotnet ${args.join(" ")}`);
-  watchProcess = spawn("dotnet", args, { cwd: repoDir, stdio: ["ignore", "pipe", "pipe"] });
+  watchProcess = spawn("dotnet", args, {
+    cwd: repoDir,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   let skippedInitialSuccess = false;
 
   const handleOutput = (chunk, stream) => {
     const text = chunk.toString();
     stream.write(text);
-    if (!/Build\s+succeeded/i.test(stripAnsi(text)))
-      return;
+    if (!/Build\s+succeeded/i.test(stripAnsi(text))) return;
 
     if (!skippedInitialSuccess) {
       skippedInitialSuccess = true;
@@ -254,14 +256,16 @@ function startWatch() {
     broadcastReloadAvailable();
   };
 
-  watchProcess.stdout.on("data", (chunk) => handleOutput(chunk, process.stdout));
-  watchProcess.stderr.on("data", (chunk) => handleOutput(chunk, process.stderr));
+  watchProcess.stdout.on("data", (chunk) =>
+    handleOutput(chunk, process.stdout),
+  );
+  watchProcess.stderr.on("data", (chunk) =>
+    handleOutput(chunk, process.stderr),
+  );
   watchProcess.on("exit", (code, signal) => {
     watchProcess = null;
-    if (signal)
-      console.log(`dotnet watch exited from ${signal}`);
-    else if (code !== 0)
-      console.error(`dotnet watch exited with code ${code}`);
+    if (signal) console.log(`dotnet watch exited from ${signal}`);
+    else if (code !== 0) console.error(`dotnet watch exited with code ${code}`);
   });
 }
 
@@ -283,8 +287,7 @@ server.listen(port, host, () => {
   console.log(`Serving ${appBundle}`);
   console.log(url);
   openUrl();
-  if (watch)
-    startWatch();
+  if (watch) startWatch();
 });
 
 process.on("SIGINT", () => {

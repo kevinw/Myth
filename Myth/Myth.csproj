@@ -19,7 +19,6 @@
     <MythBrowserFmodPThread Condition="'$(MythBrowserFmodPThread)' == ''">false</MythBrowserFmodPThread>
     <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <DefineConstants Condition="'$(MythBrowserFmod)' != 'true'">$(DefineConstants);BROWSER_NO_FMOD</DefineConstants>
     <WasmMainJSPath>Platforms/Web/wwwroot/main.js</WasmMainJSPath>
     <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sprites/**;Assets/Tilesets/**;Assets/Textures/**;Assets/Fonts/**;Assets/inbetweens.json;Assets/anim_transitions.json</MythBrowserRawVisualAssetExcludes>
   </PropertyGroup>
@@ -74,7 +73,7 @@
 
   <!-- Hook shader compilation into the build -->
   <Target Name="_CompileShadersBeforeBuild" BeforeTargets="BeforeBuild" DependsOnTargets="CompileShaders" />
-  
+
   <ItemGroup>
     <Compile Remove="Source/**" />
     <Compile Remove="Platforms/**" />
