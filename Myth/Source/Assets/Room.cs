@@ -18,7 +18,8 @@ public class Room
 	public enum TileFlags
 	{
 		None = 0,
-		Breakable = 1 << 0
+		Breakable = 1 << 0,
+		BreakOnStand = 1 << 1
 	}
 
 	public enum SlopeDirection

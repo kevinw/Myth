@@ -20,7 +20,7 @@
     <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
     <InvariantGlobalization>true</InvariantGlobalization>
     <DefineConstants Condition="'$(MythBrowserFmod)' != 'true'">$(DefineConstants);BROWSER_NO_FMOD</DefineConstants>
-    <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
+    <WasmMainJSPath>Platforms/Web/wwwroot/main.js</WasmMainJSPath>
     <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sprites/**;Assets/Tilesets/**;Assets/Textures/**;Assets/Fonts/**;Assets/inbetweens.json;Assets/anim_transitions.json</MythBrowserRawVisualAssetExcludes>
   </PropertyGroup>
 
@@ -92,7 +92,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
-    <Content Include="wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Platforms/Web/wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
     <Content Include="Assets/Shaders/Compiled/*.wgsl" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
@@ -101,10 +101,10 @@
   <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true'" />
-    <Copy SourceFiles="wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
-    <Copy SourceFiles="wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
-    <Copy SourceFiles="wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />
-    <Copy SourceFiles="wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/FMOD/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.js')" />
