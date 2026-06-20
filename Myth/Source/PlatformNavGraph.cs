@@ -73,10 +73,6 @@ public sealed class PlatformNavGraph
 		new(-1, 0.08f, 0.18f, 1, 0.32f),
 		new(1, 0.24f, 0.18f, 1, 99.0f),
 		new(-1, 0.24f, 0.18f, -1, 99.0f),
-		new(1, 0.36f, 0.18f, 1, 99.0f),
-		new(-1, 0.36f, 0.18f, -1, 99.0f),
-		new(1, 0.48f, 0.18f, 1, 99.0f),
-		new(-1, 0.48f, 0.18f, -1, 99.0f),
 		// Wall kicks: jump toward a wall, kick off it, then try both post-kick
 		// steering directions. Some ledges need Bud to keep pressing into the landing
 		// after the forced kick-away input lock expires.
@@ -142,7 +138,7 @@ public sealed class PlatformNavGraph
 	// --- profiling instrumentation (temporary) ---
 	static long collisionQueries;
 	static long supportChecks;
-	static long simsRun, simSteps, simLanded, simStalled, simTimedOut, landingSearchIterations;
+	static long simsRun, simSteps, simLanded, simStalled, simTimedOut, simOutOfBounds, landingSearchIterations;
 	static long jumpSimTicks, landingSearchTicks;
 
 	// per-plan coverage: where each JumpPlan lands and how often it wins an edge,
@@ -409,7 +405,7 @@ public sealed class PlatformNavGraph
 		rebuildFrameCount = 0;
 		collisionQueries = 0;
 		supportChecks = 0;
-		simsRun = simSteps = simLanded = simStalled = simTimedOut = landingSearchIterations = 0;
+		simsRun = simSteps = simLanded = simStalled = simTimedOut = simOutOfBounds = landingSearchIterations = 0;
 		jumpSimTicks = landingSearchTicks = 0;
 		for (var i = 0; i < planStats.Length; i++)
 			planStats[i] = new PlanStat { MinReach = float.MaxValue, MaxReach = float.MinValue, MinDy = float.MaxValue, MaxDy = float.MinValue };
@@ -489,7 +485,7 @@ public sealed class PlatformNavGraph
 
 		var simMs = jumpSimTicks * 1000.0 / Stopwatch.Frequency;
 		var landingMs = landingSearchTicks * 1000.0 / Stopwatch.Frequency;
-		Console.WriteLine($"  jump sim: {simsRun} sims ({simLanded} landed, {simStalled} stalled, {simTimedOut} timed out), {simSteps} pawn updates, {landingSearchIterations} landing-search iters");
+		Console.WriteLine($"  jump sim: {simsRun} sims ({simLanded} landed, {simStalled} stalled, {simOutOfBounds} out of bounds, {simTimedOut} timed out), {simSteps} pawn updates, {landingSearchIterations} landing-search iters");
 		Console.WriteLine($"  jump time: TrySimulateJump {simMs:0.0}ms, FindNearestLandingNode {landingMs:0.0}ms");
 
 		// Per-plan coverage map: reach = horizontal distance, dy = vertical offset
@@ -1447,6 +1443,20 @@ public sealed class PlatformNavGraph
 					simLanded++;
 					landing = Position;
 					return true;
+				}
+
+				// Once the pawn has dropped below the floor or flown clear of the side
+				// walls it can never be within landing tolerance of any node, so end the
+				// sim now instead of arcing out the rest of the time budget. This is the
+				// dominant cause of timeouts in open/pit rooms and removes no edges (no
+				// reachable landing exists out there).
+				if (Position.Y > game.Bounds.Bottom + Game.TileSize ||
+					Position.X < game.Bounds.Left - Game.TileSize * 2 ||
+					Position.X > game.Bounds.Right + Game.TileSize * 2)
+				{
+					simOutOfBounds++;
+					landing = default;
+					return false;
 				}
 
 				if (Position.X == lastX && jump.Started && !IsGrounded && Velocity.Y < 0)

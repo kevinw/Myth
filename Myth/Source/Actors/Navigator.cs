@@ -769,8 +769,8 @@ public sealed class Navigator(Pawn owner)
 		jumpPressed = true;
 		JumpPlanExecution.StartJump(ref activeEdge.Jump, plan);
 		activeEdge.Phase = ActiveEdgePhase.Airborne;
-		if (activeEdge.Edge is { } edge)
-			Game.NavTrace?.EdgeEvent(Game, "jumpTakeoff", edge, ("plan", JumpPlanTrace(plan)), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
+		if (Game.NavTrace != null && activeEdge.Edge is { } edge)
+			Game.NavTrace.EdgeEvent(Game, "jumpTakeoff", edge, ("plan", JumpPlanTrace(plan)), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 	}
 
 	private static PlatformNavGraph.JumpPlan DefaultJumpPlan(Vector2 from, Vector2 target)

@@ -71,6 +71,13 @@ public abstract class Pawn : Actor
 	protected int coyoteJumpY;
 	protected float jumpBufferTimer;
 	protected bool grounded;
+	// GetWallJumpDirection runs two solid-overlap probes and is called up to 3x per
+	// Update (gravity wall-hug, NormalState wall-slide, jump handling). Position is
+	// fixed for the whole Update after Move() runs, and each pawn only queries it from
+	// a single phase (Player after grounded is set, Boss during GetInput), so the
+	// result is invariant within a frame. Cache it, invalidated once per Update.
+	int wallJumpDirectionCache;
+	bool wallJumpDirectionCached;
 	protected bool ducking;
 	protected float wallJumpInputLockTimer;
 	protected int wallJumpDirection;
@@ -100,6 +107,7 @@ public abstract class Pawn : Actor
 	{
 		var previousVelocity = Velocity;
 		base.Update();
+		wallJumpDirectionCached = false;
 		input = GetInput();
 		if (input.JumpPressed)
 			jumpBufferTimer = JumpBufferTime;
@@ -565,6 +573,16 @@ public abstract class Pawn : Actor
 	}
 
 	protected int GetWallJumpDirection()
+	{
+		if (wallJumpDirectionCached)
+			return wallJumpDirectionCache;
+
+		wallJumpDirectionCached = true;
+		wallJumpDirectionCache = ComputeWallJumpDirection();
+		return wallJumpDirectionCache;
+	}
+
+	int ComputeWallJumpDirection()
 	{
 		if (grounded)
 			return 0;
