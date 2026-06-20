@@ -303,7 +303,29 @@ public partial class Game : IDisposable
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
 	public bool IsEditorPreview => !AudioEventsEnabled;
+	public bool AudioMuted { get; set; }
+	public bool Simulating { get; private set; }
+	public NavTrace? NavTrace { get; set; }
 	public event Action<RoomChange>? RoomChanged;
+
+	public SimulationScope BeginSimulation()
+		=> new(this);
+
+	public readonly struct SimulationScope : IDisposable
+	{
+		private readonly Game game;
+		private readonly bool previous;
+
+		internal SimulationScope(Game game)
+		{
+			this.game = game;
+			previous = game.Simulating;
+			game.Simulating = true;
+		}
+
+		public void Dispose()
+			=> game.Simulating = previous;
+	}
 
 	public Game(Manager manager, Point2 start, bool audioEventsEnabled = true)
 		: this(manager, Assets.GetRoom(start), audioEventsEnabled)

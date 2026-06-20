@@ -4,6 +4,8 @@ namespace Myth;
 
 public class Goal : Actor
 {
+	public string Name = "";
+
 	public Goal()
 	{
 		Sprite = Assets.GetSprite("goal");

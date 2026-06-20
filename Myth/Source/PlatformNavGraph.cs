@@ -44,20 +44,6 @@ public sealed class PlatformNavGraph
 	const int SampleStep = Game.TileSize;
 	const float SimDelta = 1.0f / 60.0f;
 	const float SimMaxTime = 1.60f;
-	// These mirror the real Pawn constants in Player.cs so the simulated jump arc
-	// matches what the runtime executor actually achieves. Keep them in sync: a sim
-	// that is more optimistic than reality produces jump edges Bud cannot execute.
-	const float SimGroundAccel = 400;
-	const float SimMaxGroundSpeed = 93;
-	const float SimAirAccel = 310;
-	const float SimMaxAirSpeed = 100;
-	const float SimGravity = 450;
-	const float SimFastFallMultiplier = 1.25f;
-	const float SimJumpGravityMultiplier = 0.35f;
-	const float SimJumpForce = -125;
-	const float SimJumpTime = 0.19f;
-	const float SimWallJumpSpeed = 125;
-	const float SimWallJumpInputLockTime = 0.22f;
 	const int SimLandingTolerance = 12;
 	const int SimMinimumLandingDistance = Game.TileSize * 2;
 	static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
@@ -66,8 +52,18 @@ public sealed class PlatformNavGraph
 	static readonly Comparison<Node> CompareNodeX = static (a, b) => a.Position.X.CompareTo(b.Position.X);
 	static readonly JumpPlan[] JumpPlans =
 	[
+		new(1, 0.00f, 0.18f, 1, 99.0f),
+		new(-1, 0.00f, 0.18f, -1, 99.0f),
+		new(1, 0.00f, 0.20f, 1, 99.0f),
+		new(-1, 0.00f, 0.20f, -1, 99.0f),
+		new(1, 0.00f, 0.055f, 1, 99.0f),
+		new(-1, 0.00f, 0.055f, -1, 99.0f),
+		new(1, 0.00f, 0.10f, 1, 99.0f),
+		new(-1, 0.00f, 0.10f, -1, 99.0f),
 		new(1, 0.08f, 0.18f, 1, 99.0f),
 		new(-1, 0.08f, 0.18f, -1, 99.0f),
+		new(1, 0.08f, 0.20f, 1, 99.0f),
+		new(-1, 0.08f, 0.20f, -1, 99.0f),
 		new(1, 0.14f, 0.18f, 1, 99.0f),
 		new(-1, 0.14f, 0.18f, -1, 99.0f),
 		new(1, 0.08f, 0.10f, 1, 99.0f),
@@ -80,10 +76,13 @@ public sealed class PlatformNavGraph
 		new(-1, 0.36f, 0.18f, -1, 99.0f),
 		new(1, 0.48f, 0.18f, 1, 99.0f),
 		new(-1, 0.48f, 0.18f, -1, 99.0f),
-		// Wall kicks: jump toward a wall, kick off it the opposite way. The landing
-		// ends up on the Direction-side after the kick reverses horizontal travel.
+		// Wall kicks: jump toward a wall, kick off it, then try both post-kick
+		// steering directions. Some ledges need Bud to keep pressing into the landing
+		// after the forced kick-away input lock expires.
 		new(1, 0.08f, 0.18f, -1, 99.0f, WallJump: true),
 		new(-1, 0.08f, 0.18f, 1, 99.0f, WallJump: true),
+		new(1, 0.08f, 0.18f, 1, 99.0f, WallJump: true),
+		new(-1, 0.08f, 0.18f, -1, 99.0f, WallJump: true),
 	];
 
 	public readonly List<Node> Nodes = [];
@@ -134,7 +133,7 @@ public sealed class PlatformNavGraph
 	// --- profiling instrumentation (temporary) ---
 	static long collisionQueries;
 	static long supportChecks;
-	static long simsRun, simSteps, simMoveSubsteps, simLanded, simStalled, simTimedOut, landingSearchIterations;
+	static long simsRun, simSteps, simLanded, simStalled, simTimedOut, landingSearchIterations;
 	static long jumpSimTicks, landingSearchTicks;
 
 	// per-plan coverage: where each JumpPlan lands and how often it wins an edge,
@@ -318,12 +317,13 @@ public sealed class PlatformNavGraph
 		// than a plain jump. Make A* route around it unless it is the only connection
 		// (e.g. a 32px climb no single jump can reach).
 		var wallJumpSurcharge = edge.Jump is { WallJump: true } ? 400 : 0;
+		var maxHoldSurcharge = edge.Jump is { HoldTime: >= 0.20f } ? 90 : 0;
 		return edge.Kind switch
 		{
 			EdgeKind.Walk => distance,
 			EdgeKind.Crawl => distance + 12,
 			EdgeKind.Fall => distance + 20,
-			EdgeKind.Jump => distance + 180 + wallJumpSurcharge + LandingRiskCost(Nodes[edge.To]),
+			EdgeKind.Jump => distance + 180 + wallJumpSurcharge + maxHoldSurcharge + LandingRiskCost(Nodes[edge.To]),
 			EdgeKind.RoomExit => distance + 5,
 			_ => distance
 		};
@@ -399,7 +399,7 @@ public sealed class PlatformNavGraph
 		rebuildFrameCount = 0;
 		collisionQueries = 0;
 		supportChecks = 0;
-		simsRun = simSteps = simMoveSubsteps = simLanded = simStalled = simTimedOut = landingSearchIterations = 0;
+		simsRun = simSteps = simLanded = simStalled = simTimedOut = landingSearchIterations = 0;
 		jumpSimTicks = landingSearchTicks = 0;
 		for (var i = 0; i < planStats.Length; i++)
 			planStats[i] = new PlanStat { MinReach = float.MaxValue, MaxReach = float.MinValue, MinDy = float.MaxValue, MaxDy = float.MinValue };
@@ -479,7 +479,7 @@ public sealed class PlatformNavGraph
 
 		var simMs = jumpSimTicks * 1000.0 / Stopwatch.Frequency;
 		var landingMs = landingSearchTicks * 1000.0 / Stopwatch.Frequency;
-		Console.WriteLine($"  jump sim: {simsRun} sims ({simLanded} landed, {simStalled} stalled, {simTimedOut} timed out), {simSteps} steps, {simMoveSubsteps} move-substeps, {landingSearchIterations} landing-search iters");
+		Console.WriteLine($"  jump sim: {simsRun} sims ({simLanded} landed, {simStalled} stalled, {simTimedOut} timed out), {simSteps} pawn updates, {landingSearchIterations} landing-search iters");
 		Console.WriteLine($"  jump time: TrySimulateJump {simMs:0.0}ms, FindNearestLandingNode {landingMs:0.0}ms");
 
 		// Per-plan coverage map: reach = horizontal distance, dy = vertical offset
@@ -550,7 +550,6 @@ public sealed class PlatformNavGraph
 		if (components > 1)
 			LogComponentBounds(parent);
 		LogSurfaceSummary(edgeKinds);
-
 	}
 
 	void LogComponentBounds(int[] parent)
@@ -698,8 +697,8 @@ public sealed class PlatformNavGraph
 		}
 
 		// Process a single source node per call so the caller's per-iteration
-		// budget check runs between nodes (each node simulates 16 jump plans,
-		// enough to overflow the frame budget if batched).
+		// budget check runs between nodes. A full node's jump plans are enough
+		// to overflow the frame budget if batched.
 		var from = Nodes[nextJumpSourceId];
 		nextJumpSourceId++;
 
@@ -1178,6 +1177,9 @@ public sealed class PlatformNavGraph
 	{
 		var targetDirection = Math.Sign(to.Position.X - from.Position.X);
 		var cost = plan.RunupTime * 100 + LandingRiskCost(to);
+		var height = MathF.Max(0, from.Position.Y - to.Position.Y);
+		if (height > 0)
+			cost -= plan.HoldTime * 30;
 		// A wall kick is a delicate two-part move; prefer any plain jump that reaches the
 		// same node, so it's only chosen where a single jump can't make it.
 		if (plan.WallJump)
@@ -1329,55 +1331,109 @@ public sealed class PlatformNavGraph
 
 	static bool TrySimulateJump(Game game, Node from, JumpPlan plan, out Vector2 landing)
 	{
-		var sim = new JumpSimulation(game, from.Position, plan);
+		using var _ = game.BeginSimulation();
+		var sim = new JumpSimulationPawn(game, from.Position, plan);
 		return sim.Run(out landing);
 	}
 
-	struct JumpSimulation
+	sealed class JumpSimulationPawn : Pawn
 	{
 		readonly Game game;
 		readonly Vector2 from;
 		readonly JumpPlan plan;
-		Point2 position;
-		Vector2 velocity;
-		Vector2 remainder;
-		float jumpTimer;
+		float elapsed;
+		float jumpPressedElapsed;
 		bool leftStart;
 		bool jumpStarted;
 		bool wallJumped;
-		int wallJumpDir;
-		float wallJumpLockTimer;
-		int horizontalCollisionFrames;
+		int lastX;
+		int stalledFrames;
 
-		public JumpSimulation(Game game, Vector2 from, JumpPlan plan)
+		public JumpSimulationPawn(Game game, Vector2 from, JumpPlan plan)
 		{
 			this.game = game;
 			this.from = from;
 			this.plan = plan;
-			position = (Point2)from;
+			Game = game;
+			Position = (Point2)from;
+			Hitbox = new(PawnProbe);
+			Facing = plan.Direction == 0 ? Signs.Positive : (Signs)plan.Direction;
+			grounded = Grounded();
+			lastX = Position.X;
+		}
+
+		public override PawnInput GetInput()
+		{
+			var moveX = MoveXAt(elapsed);
+			var jumpPressed = false;
+			var jumpDown = jumpStarted && elapsed - jumpPressedElapsed <= plan.HoldTime;
+
+			if (!jumpStarted && elapsed >= plan.RunupTime)
+			{
+				jumpStarted = true;
+				jumpPressedElapsed = elapsed;
+				jumpPressed = true;
+				jumpDown = true;
+			}
+			else if (!jumpStarted && IsGrounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
+			{
+				jumpStarted = true;
+				jumpPressedElapsed = elapsed;
+				jumpPressed = true;
+				jumpDown = true;
+			}
+
+			if (jumpStarted && !IsGrounded && plan.WallJump && !wallJumped)
+			{
+				moveX = plan.Direction;
+				jumpPressed = true;
+				jumpDown = true;
+				if (IsWallJumpLocked)
+				{
+					wallJumped = true;
+					jumpPressedElapsed = elapsed;
+				}
+			}
+
+			return new(
+				MoveX: moveX,
+				MoveY: 0,
+				JumpPressed: jumpPressed,
+				JumpDown: jumpDown,
+				DashPressed: false,
+				AllowWallJump: plan.WallJump
+			);
 		}
 
 		public bool Run(out Vector2 landing)
 		{
 			simsRun++;
-			for (var time = 0.0f; time < SimMaxTime; time += SimDelta)
+			var dt = game.Time.Delta;
+			if (dt <= 0)
+				dt = SimDelta;
+
+			for (elapsed = 0.0f; elapsed < SimMaxTime; elapsed += dt)
 			{
 				simSteps++;
-				Step(time);
+				Update();
 
-				if (Vector2.DistanceSquared((Vector2)position, from) > 9)
+				if (Vector2.DistanceSquared((Vector2)Position, from) > 9)
 					leftStart = true;
 
-				// can only land while moving downward, so skip the (expensive)
-				// grounded check during the ascent
-				if (leftStart && velocity.Y >= 0 && IsGrounded())
+				if (leftStart && Velocity.Y >= 0 && IsGrounded)
 				{
 					simLanded++;
-					landing = position;
+					landing = Position;
 					return true;
 				}
 
-				if (horizontalCollisionFrames > 20 && velocity.Y < 0)
+				if (Position.X == lastX && jumpStarted && !IsGrounded && Velocity.Y < 0)
+					stalledFrames++;
+				else
+					stalledFrames = 0;
+				lastX = Position.X;
+
+				if (stalledFrames > 20)
 				{
 					simStalled++;
 					landing = default;
@@ -1390,67 +1446,11 @@ public sealed class PlatformNavGraph
 			return false;
 		}
 
-		void Step(float time)
+		int MoveXAt(float time)
 		{
-			// Ground vs air movement, matching Player.NormalState: on the runup Bud
-			// accelerates at the ground rate, then at the (different) air rate once
-			// airborne. Using the air rate for the runup made the simulated takeoff
-			// off narrow pillars diverge from reality.
-			var onGround = !jumpStarted && IsGrounded();
-			int moveX;
-			float maxSpeed;
-			if (wallJumpLockTimer > 0)
-			{
-				// After a wall kick the runtime locks horizontal input away from the wall
-				// (Player.wallJumpInputLockTimer) at the higher wall-jump speed cap.
-				wallJumpLockTimer -= SimDelta;
-				moveX = wallJumpDir;
-				maxSpeed = MathF.Max(SimMaxAirSpeed, SimWallJumpSpeed);
-			}
-			else
-			{
-				moveX = MoveXAt(time);
-				maxSpeed = onGround ? SimMaxGroundSpeed : SimMaxAirSpeed;
-			}
-			var accel = onGround ? SimGroundAccel : SimAirAccel;
-			velocity.X += moveX * accel * SimDelta;
-			if (MathF.Abs(velocity.X) > maxSpeed)
-				velocity.X = Calc.Approach(velocity.X, MathF.Sign(velocity.X) * maxSpeed, 2000 * SimDelta);
+			if (plan.WallJump && wallJumped)
+				return plan.AirDirection;
 
-			if (!jumpStarted && velocity.Y >= 0)
-			{
-				var shouldJump = time >= plan.RunupTime || moveX != 0 && !HasGroundSupportNextStep(moveX);
-				if (shouldJump && IsGrounded())
-				{
-					// StartJump: set the jump velocity once, then let gravity decay it.
-					// The runtime latches the jump button held through the whole ascent
-					// (see Navigator.UpdateJumpHeld), so model the full jump-time hold.
-					velocity.Y = SimJumpForce;
-					jumpTimer = SimJumpTime;
-					jumpStarted = true;
-				}
-			}
-
-			// Gravity, matching Player.Update: reduced while the jump is held, fast-fall
-			// while descending. Only applies once airborne (jumped or walked off a ledge).
-			if (jumpStarted || !IsGrounded())
-			{
-				var grav = SimGravity;
-				if (jumpTimer > 0)
-				{
-					grav *= SimJumpGravityMultiplier;
-					jumpTimer -= SimDelta;
-				}
-				else if (velocity.Y > 0)
-					grav *= SimFastFallMultiplier;
-				velocity.Y += grav * SimDelta;
-			}
-
-			Move(velocity * SimDelta);
-		}
-
-		readonly int MoveXAt(float time)
-		{
 			if (time < plan.RunupTime)
 				return plan.Direction;
 
@@ -1460,89 +1460,7 @@ public sealed class PlatformNavGraph
 			return plan.Direction;
 		}
 
-		void Move(Vector2 value)
-		{
-			remainder += value;
-			var move = (Point2)remainder;
-			remainder -= move;
-
-			while (move.X != 0)
-			{
-				var sign = Math.Sign(move.X);
-				if (Math.Abs(move.X) > 1 && !Overlaps(SweptBounds(new Point2(move.X, 0))))
-				{
-					position.X += move.X;
-					simMoveSubsteps++;
-					move.X = 0;
-					break;
-				}
-
-				simMoveSubsteps++;
-				if (Overlaps(position + new Point2(sign, 0)))
-				{
-					// Kick off the wall the first time we hit one mid-air (Player wall jump:
-					// launch away at WallJumpSpeed with a fresh jump, lock input away).
-					if (plan.WallJump && !wallJumped && jumpStarted)
-					{
-						wallJumped = true;
-						wallJumpDir = -sign;
-						wallJumpLockTimer = SimWallJumpInputLockTime;
-						velocity.X = wallJumpDir * SimWallJumpSpeed;
-						velocity.Y = SimJumpForce;
-						jumpTimer = SimJumpTime;
-						remainder = Vector2.Zero;
-						break;
-					}
-					velocity.X = 0;
-					remainder.X = 0;
-					horizontalCollisionFrames++;
-					break;
-				}
-
-				position.X += sign;
-				move.X -= sign;
-			}
-
-			while (move.Y != 0)
-			{
-				var sign = Math.Sign(move.Y);
-				if (sign < 0 && Math.Abs(move.Y) > 1 && !Overlaps(SweptBounds(new Point2(0, move.Y))))
-				{
-					position.Y += move.Y;
-					simMoveSubsteps++;
-					move.Y = 0;
-					break;
-				}
-
-				simMoveSubsteps++;
-				if (sign > 0 && IsGrounded() || Overlaps(position + new Point2(0, sign)))
-				{
-					velocity.Y = 0;
-					remainder.Y = 0;
-					break;
-				}
-
-				position.Y += sign;
-				move.Y -= sign;
-			}
-		}
-
-		readonly RectInt SweptBounds(Point2 move)
-		{
-			var start = PawnProbe + position;
-			var end = PawnProbe + position + move;
-			var left = Math.Min(start.Left, end.Left);
-			var top = Math.Min(start.Top, end.Top);
-			var right = Math.Max(start.Right, end.Right);
-			var bottom = Math.Max(start.Bottom, end.Bottom);
-			return new RectInt(left, top, right - left, bottom - top);
-		}
-
-		readonly bool IsGrounded() => HasStandableSupport(PawnProbe + position);
-		readonly bool HasGroundSupportNextStep(int moveX) => HasStandableSupport(PawnProbe + position + new Point2(Math.Sign(moveX), 0));
-		readonly bool Overlaps(Point2 at) => OverlapsCollision(game, PawnProbe + at);
-		readonly bool Overlaps(RectInt bounds) => OverlapsCollision(game, bounds);
-
-		readonly bool HasStandableSupport(RectInt bounds) => PlatformNavGraph.HasStandableSupport(game, bounds);
+		bool HasGroundSupportNextStep(int moveX)
+			=> PlatformNavGraph.HasStandableSupport(game, PawnProbe + Position + new Point2(Math.Sign(moveX), 0));
 	}
 }

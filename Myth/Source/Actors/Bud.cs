@@ -68,11 +68,22 @@ public class Bud : Pawn
 				if (!nav.TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
 				{
 					var navLabel = nav.DebugNavLabel;
-					moveX = GetFallbackMoveX(followTarget);
-					moveY = 0;
-					nav.SetDebugNavState(moveX == 0
-						? navLabel
-						: Game.IsPlatformNavDebugVisible ? $"gym fallback {moveX}" : "gym fallback");
+					if (navLabel == "no graph")
+					{
+						moveX = 0;
+						moveY = 0;
+						nav.SetDebugNavState(navLabel);
+					}
+					else
+					{
+						moveX = GetFallbackMoveX(followTarget);
+						moveY = 0;
+						if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
+							moveX = 0;
+						nav.SetDebugNavState(moveX == 0
+							? navLabel
+							: Game.IsPlatformNavDebugVisible ? $"gym fallback {moveX}" : "gym fallback");
+					}
 				}
 			}
 			else if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
@@ -136,9 +147,12 @@ public class Bud : Pawn
 		if (Position.Y > Game.Bounds.Bottom + 12)
 		{
 			Game.GymBudDied = true;
+			Game.NavTrace?.Event(Game, "budFell", ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(Velocity)));
 			Stop();
 			Position = entryPosition;
 		}
+
+		Game.NavTrace?.Frame(Game, this);
 	}
 
 	public override void Render(Batcher batcher)

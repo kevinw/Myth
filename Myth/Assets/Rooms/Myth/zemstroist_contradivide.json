@@ -53,7 +53,8 @@
     {
       "Id": "e1a8b147ba59be77",
       "Type": "Goal",
-      "Position": [51, 12]
+      "Position": [51, 12],
+      "Name": "bonk_crouch_climb"
     },
     {
       "Id": "0d47f2e4057db4f4",
@@ -78,12 +79,14 @@
     {
       "Id": "1f04a66a2677417d",
       "Type": "Goal",
-      "Position": [168, 16]
+      "Position": [168, 16],
+      "Name": "narrow_jumps"
     },
     {
       "Id": "83bac72815b39100",
       "Type": "Goal",
-      "Position": [171, 108]
+      "Position": [171, 108],
+      "Name": "needs_wall_jump"
     }
   ]
 }

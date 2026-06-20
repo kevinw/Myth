@@ -26,6 +26,7 @@ public partial class Game
 
 	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
 	{
+		if (Simulating || AudioMuted) return;
 		if (!Manager.AudioEnabled) return;
 
 		try
@@ -47,6 +48,8 @@ public partial class Game
 
 	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null)
 	{
+		if (Simulating || AudioMuted)
+			return null;
 		if (!AudioEventsEnabled || !Audio.Initialized)
 			return null;
 
@@ -69,6 +72,8 @@ public partial class Game
 	// unknown parameter) without spamming or crashing.
 	public void SetAudioEventParameter(SoundInstance? instance, string name, float value)
 	{
+		if (Simulating || AudioMuted)
+			return;
 		if (instance == null || !Audio.Initialized)
 			return;
 
@@ -85,6 +90,8 @@ public partial class Game
 
 	public void SetAudioEventPosition(SoundInstance? instance, Vector2 position, Vector2? relativeTo = null)
 	{
+		if (Simulating || AudioMuted)
+			return;
 		if (instance == null || !Audio.Initialized)
 			return;
 

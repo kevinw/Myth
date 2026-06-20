@@ -181,6 +181,7 @@ public partial class Manager : App
 #endif
 	bool alwaysOnTop;
 	internal bool PlatformNavDebugVisible { get; set; }
+	readonly NavTrace? navTrace;
 
 	public bool MusicEnabled => musicEnabled;
 	public bool WantsVirtualGameController => playing || startingPlay;
@@ -196,6 +197,8 @@ public partial class Manager : App
 		headless = args.headless;
 		unthrottled = args.unthrottled;
 		gymExitAfterAll = args.gymExitAfterAll;
+		foreach (var goalId in args.gymGoalIds)
+			gymGoalIds.Add(goalId);
 		buildAssetPack = args.buildAssetPack;
 		useAssetPack = args.useAssetPack;
 		assetPackPath = args.assetPackPath;
@@ -208,6 +211,15 @@ public partial class Manager : App
 		screenshotFrame = args.screenshotFrame;
 		screenshotInterval = args.screenshotInterval;
 		screenshotCount = args.screenshotCount;
+		navTrace = NavTrace.Create(new(
+			args.traceNav,
+			args.traceJsonPath,
+			args.traceRoomId,
+			args.traceGoalId,
+			args.traceEdgeFrom,
+			args.traceEdgeTo,
+			args.traceNavFrames
+		));
 		if (args.simple)
 		{
 			PerfToggles.UseSimpleDefaults();
@@ -359,7 +371,7 @@ public partial class Manager : App
 				var room = run.Room;
 				cell = room.Cell;
 				selectedRoomId = null;
-				Console.WriteLine($"[Gym] found {gymRuns.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.GoalId}");
+				Console.WriteLine($"[Gym] found {gymRuns.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
 				gymRoomStartTime = Time.Seconds;
 				StartGame(immediate: true);
 				AssignGymTarget(run);
@@ -391,6 +403,7 @@ public partial class Manager : App
 		SaveWindowSettings();
 #endif
 		game?.Dispose();
+		navTrace?.Dispose();
 #if EDITOR
 		ClearRoomPreviewCache(deferDisposal: false);
 		DisposeDeferredRoomPreviews();
@@ -1364,6 +1377,9 @@ public partial class Manager : App
 			initialPlayerPosition: initialPlayerPosition,
 			spawnBud: true
 		);
+		game.AudioMuted = gymMode || headless;
+		game.NavTrace = navTrace;
+		game.NavTrace?.Event(game, "gameStart");
 #if IOS
 		playTransition = 1.0f;
 		playTransitionFromCenter = Vector2.Zero;
@@ -1622,6 +1638,7 @@ public partial class Manager : App
 		if (gymRuns != null)
 		{
 			gymRuns = null;
+			game?.DisplayMessage("Gym stopped");
 			Console.WriteLine("[Gym] stopped (Tab)");
 		}
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);

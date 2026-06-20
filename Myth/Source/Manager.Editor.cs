@@ -4012,6 +4012,7 @@ public partial class Manager
 		{
 			var color = edge.Kind switch
 			{
+				PlatformNavGraph.EdgeKind.Jump when edge.Jump is { WallJump: true } => ImGuiColor(1.00f, 0.42f, 0.96f, 0.36f),
 				PlatformNavGraph.EdgeKind.Jump => ImGuiColor(1.00f, 0.95f, 0.66f, 0.28f),
 				PlatformNavGraph.EdgeKind.Fall => ImGuiColor(1.00f, 0.47f, 0.66f, 0.22f),
 				PlatformNavGraph.EdgeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.45f),
@@ -4048,9 +4049,12 @@ public partial class Manager
 
 		foreach (var edge in bud.DebugNavPath)
 		{
-			var color = edge.Kind == PlatformNavGraph.EdgeKind.Jump
-				? ImGuiColor(1.00f, 0.95f, 0.66f, 0.95f)
-				: ImGuiColor(1.00f, 1.00f, 1.00f, 0.78f);
+			var color = edge.Kind switch
+			{
+				PlatformNavGraph.EdgeKind.Jump when edge.Jump is { WallJump: true } => ImGuiColor(1.00f, 0.42f, 0.96f, 0.98f),
+				PlatformNavGraph.EdgeKind.Jump => ImGuiColor(1.00f, 0.95f, 0.66f, 0.95f),
+				_ => ImGuiColor(1.00f, 1.00f, 1.00f, 0.78f)
+			};
 			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.Jump ? 4.0f : 5.0f);
 		}
 
@@ -4082,12 +4086,12 @@ public partial class Manager
 		var from = graph.Nodes[edge.From].Position;
 		var to = graph.Nodes[edge.To].Position;
 		if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
-			DrawPlatformNavJump(draw, viewport, game, from, to, color, thickness);
+			DrawPlatformNavJump(draw, viewport, game, from, to, color, thickness, edge.Jump is { WallJump: true });
 		else
 			draw.AddLine(GameWorldToImGui(viewport, game, from), GameWorldToImGui(viewport, game, to), color, thickness);
 	}
 
-	private static void DrawPlatformNavJump(ImDrawListPtr draw, Rect viewport, Game game, Vector2 from, Vector2 to, uint color, float thickness)
+	private static void DrawPlatformNavJump(ImDrawListPtr draw, Rect viewport, Game game, Vector2 from, Vector2 to, uint color, float thickness, bool wallJump = false)
 	{
 		var control = new Vector2((from.X + to.X) * 0.5f, MathF.Min(from.Y, to.Y) - 24);
 		var previous = GameWorldToImGui(viewport, game, from);
@@ -4100,6 +4104,13 @@ public partial class Manager
 			var point = GameWorldToImGui(viewport, game, Vector2.Lerp(a, b, t));
 			draw.AddLine(previous, point, color, thickness);
 			previous = point;
+		}
+
+		if (wallJump)
+		{
+			var wallMarker = GameWorldToImGui(viewport, game, control);
+			draw.AddCircleFilled(wallMarker, thickness + 2.0f, color, 8);
+			draw.AddCircle(wallMarker, thickness + 4.0f, ImGuiColor(1.00f, 1.00f, 1.00f, 0.65f), 8, 1.5f);
 		}
 	}
 
@@ -4116,8 +4127,8 @@ public partial class Manager
 		}
 
 		var color = span.RequiresDucking
-			? ImGuiColor(0.95f, 0.66f, 1.00f, 0.82f)
-			: ImGuiColor(0.18f, 1.00f, 0.82f, 0.82f);
+			? ImGuiColor(0.95f, 0.66f, 1.00f, 0.35f)
+			: ImGuiColor(0.18f, 1.00f, 0.82f, 0.35f);
 		var from = GameWorldToImGui(viewport, game, new Vector2(left, span.Y + yOffset));
 		var to = GameWorldToImGui(viewport, game, new Vector2(right, span.Y + yOffset));
 		draw.AddLine(from, to, color, 3.0f);
@@ -4133,7 +4144,7 @@ public partial class Manager
 		var from = new Vector2((edge.FromLeft + edge.FromRight) * 0.5f, fromSpan.Y - 9);
 		var to = new Vector2((edge.ToLeft + edge.ToRight) * 0.5f, toSpan.Y - 9);
 		if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
-			DrawPlatformNavJump(draw, viewport, game, from, to, color, thickness);
+			DrawPlatformNavJump(draw, viewport, game, from, to, edge.Jump is { WallJump: true } ? ImGuiColor(1.00f, 0.42f, 0.96f, 0.78f) : color, thickness, edge.Jump is { WallJump: true });
 		else
 			draw.AddLine(GameWorldToImGui(viewport, game, from), GameWorldToImGui(viewport, game, to), color, thickness);
 	}
