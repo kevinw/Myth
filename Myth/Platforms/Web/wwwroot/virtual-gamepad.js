@@ -124,8 +124,9 @@ function resetKnob() {
 function buildDom() {
 	const style = document.createElement("style");
 	style.textContent = `
-		#myth-vpad { position: fixed; inset: 0; z-index: 5; display: none;
-			pointer-events: none; touch-action: none;
+		#myth-vpad { inset: 0; z-index: 5; display: none;
+			pointer-events: none;
+			touch-action: manipulation;
 			--stick: 112px; --knob: 51px;
 			--btn: 46px;       /* visible button circle */
 			--hit: 51px;       /* (larger) touch area around it */
@@ -150,6 +151,7 @@ function buildDom() {
 			-webkit-touch-callout: none; background: transparent; border: 0;
 			display: grid; place-items: center; }
 		#myth-vpad .btn .cap { width: var(--btn); height: var(--btn); border-radius: 50%;
+			pointer-events: none; /* decorative only; touches hit .btn (touch-action:none) */
 			display: grid; place-items: center;
 			font-weight: 700; font-size: calc(var(--btn) * 0.45); font-family: var(--mono);
 			color: #f5e9c8; background: rgba(47, 33, 63, 0.55); border: 2px solid rgba(224, 211, 167, 0.6); }
@@ -163,6 +165,14 @@ function buildDom() {
 
 	root = document.createElement("div");
 	root.id = "myth-vpad";
+
+	// iOS Safari pops the text-selection magnifier ("loupe") on double-tap-and-hold
+	// even with user-select/touch-callout: none. That gesture lives on the touch
+	// layer, so preventing the default on POINTER events (as the button handlers do)
+	// doesn't stop it — only a non-passive touchstart preventDefault does. Scope it
+	// to the overlay so the start button's click elsewhere is unaffected. Pointer
+	// events (the actual gamepad input) still fire; only the loupe/zoom is cancelled.
+	root.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
 	stickBaseEl = document.createElement("div");
 	stickBaseEl.className = "ctl stick-base";
@@ -191,7 +201,7 @@ function buildDom() {
 
 function bindButton(el, index) {
 	const press = (e) => { e.preventDefault(); el.classList.add("active"); setButton(index, true); el.setPointerCapture?.(e.pointerId); };
-	const release = (e) => { el.classList.remove("active"); setButton(index, false); };
+  const release = (e) => { e.preventDefault();  el.classList.remove("active"); setButton(index, false); };
 	el.addEventListener("pointerdown", press);
 	el.addEventListener("pointerup", release);
 	el.addEventListener("pointercancel", release);
@@ -222,7 +232,24 @@ function bindStick() {
 	stickBaseEl.addEventListener("lostpointercapture", end);
 }
 
+// iOS Safari ignores user-scalable=no and is unreliable about touch-action
+// suppressing *double-tap* zoom, so rapidly tapping a control (e.g. double
+// jump) zooms the page into the buttons. Cancel it by preventing the default on
+// a second touchend within the double-tap window. Single taps are untouched, so
+// the start button's click still works, and pointer events (gamepad input) are
+// unaffected — only the synthesized zoom/click is suppressed.
+function installDoubleTapZoomGuard() {
+	let lastTouchEnd = 0;
+	document.addEventListener("touchend", (e) => {
+		const now = Date.now();
+		if (now - lastTouchEnd <= 300)
+			e.preventDefault();
+		lastTouchEnd = now;
+	}, { passive: false });
+}
+
 export function initialize() {
+	installDoubleTapZoomGuard();
 	installGamepadHook();
 	buildDom();
 	bindStick();
