@@ -37,6 +37,17 @@ const touchCapable = () =>
 // state) so it can be tested with a mouse. Real-gamepad auto-hide still applies.
 const forceShow = new URLSearchParams(location.search).get("vpad") === "1";
 
+// Virtual button layout. "two" (default): A (primary, larger) + X on a diagonal,
+// both bigger since they occupy more space. "four": the classic Y/X/B/A diamond —
+// kept for possible future use, selectable via ?vpadmode=four.
+// Entries: [label, css class, standard gamepad button index].
+const buttonMode =
+	new URLSearchParams(location.search).get("vpadmode") === "four" ? "four" : "two";
+const BUTTON_LAYOUTS = {
+	four: [["Y", "north", 3], ["X", "west", 2], ["B", "east", 1], ["A", "south", 0]],
+	two: [["A", "two-a", 0], ["X", "two-x", 2]],
+};
+
 // --- navigator.getGamepads() override ------------------------------------
 let originalGetGamepads = null;
 
@@ -131,6 +142,10 @@ function buildDom() {
 			--btn: 46px;       /* visible button circle */
 			--hit: 51px;       /* (larger) touch area around it */
 			--cluster: 143px;  /* button diamond box; taller so circles don't overlap */
+			/* Two-button mode (A + X): bigger since they occupy more space; A > X. */
+			--btn-a: 76px;  --hit-a: 86px;
+			--btn-x: 52px;  --hit-x: 62px;
+			--cluster2: 134px; /* diagonal box: A bottom-right, X top-left, no overlap */
 			--pad: max(18px, env(safe-area-inset-bottom));
 			--mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; }
 		#myth-vpad .ctl { position: absolute; pointer-events: auto; touch-action: none;
@@ -160,6 +175,12 @@ function buildDom() {
 		#myth-vpad .btn.south { bottom: 0; left: 50%; transform: translateX(-50%); }
 		#myth-vpad .btn.west  { left: 0; top: 50%; transform: translateY(-50%); }
 		#myth-vpad .btn.east  { right: 0; top: 50%; transform: translateY(-50%); }
+		/* Two-button mode: A (primary, larger) bottom-right, X (smaller) top-left — a diagonal. */
+		#myth-vpad .buttons.two { width: var(--cluster2); height: var(--cluster2); }
+		#myth-vpad .btn.two-a { right: 0; bottom: 0; width: var(--hit-a); height: var(--hit-a); }
+		#myth-vpad .btn.two-a .cap { width: var(--btn-a); height: var(--btn-a); font-size: calc(var(--btn-a) * 0.45); }
+		#myth-vpad .btn.two-x { left: 0; top: 0; width: var(--hit-x); height: var(--hit-x); }
+		#myth-vpad .btn.two-x .cap { width: var(--btn-x); height: var(--btn-x); font-size: calc(var(--btn-x) * 0.45); }
 	`;
 	document.head.appendChild(style);
 
@@ -182,9 +203,8 @@ function buildDom() {
 	root.appendChild(stickBaseEl);
 
 	const buttons = document.createElement("div");
-	buttons.className = "ctl buttons";
-	// label, css class, standard button index
-	for (const [label, cls, idx] of [["Y", "north", 3], ["X", "west", 2], ["B", "east", 1], ["A", "south", 0]]) {
+	buttons.className = `ctl buttons ${buttonMode}`;
+	for (const [label, cls, idx] of BUTTON_LAYOUTS[buttonMode]) {
 		const el = document.createElement("div");
 		el.className = `btn ${cls}`;
 		const cap = document.createElement("div");

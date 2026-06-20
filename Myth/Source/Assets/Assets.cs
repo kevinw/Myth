@@ -349,9 +349,7 @@ public static class Assets
 		using var manifestStream = File.OpenRead(manifestPath);
 		var manifest = ReadVisualAssetPackManifest(manifestStream, manifestPath);
 
-#if !BROWSER
 		EnsureFonts(gfx);
-#endif
 
 		using var atlasImage = new Image(Path.Join(directory, manifest.Atlas));
 		var atlas = new Texture(gfx, atlasImage, name: "Atlas");

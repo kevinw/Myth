@@ -20,7 +20,9 @@
     <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
     <InvariantGlobalization>true</InvariantGlobalization>
     <WasmMainJSPath>Platforms/Web/wwwroot/main.js</WasmMainJSPath>
-    <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sprites/**;Assets/Tilesets/**;Assets/Textures/**;Assets/Fonts/**;Assets/inbetweens.json;Assets/anim_transitions.json</MythBrowserRawVisualAssetExcludes>
+    <!-- Fonts are NOT in the visual pack — EnsureFonts rasterizes the TTFs at runtime
+         (Assets.Font/SpeechFont, and ImGui's Myna). Keep them in the browser bundle. -->
+    <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sprites/**;Assets/Tilesets/**;Assets/Textures/**;Assets/inbetweens.json;Assets/anim_transitions.json</MythBrowserRawVisualAssetExcludes>
   </PropertyGroup>
 
   <!-- Dear ImGui for the browser: link the prebuilt cimgui wasm archive into the
@@ -113,6 +115,7 @@
     <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/loading-player.webp" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />

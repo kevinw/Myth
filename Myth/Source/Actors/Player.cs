@@ -23,7 +23,6 @@ public abstract class Pawn : Actor
 		Attack,
 		BlinkStrike,
 		Hurt,
-		Start,
 		Burrow
 	}
 	protected static float FastFallMultiplier => 1.25f;
@@ -644,7 +643,7 @@ public partial class Player : Pawn
 		IFrameTime = InvincibleDuration;
 		grounded = true;
 		Play("sword");
-		State = States.Start;
+		State = States.Normal;
 		PlayerSpecificAudioEvents = true;
 	}
 
@@ -787,9 +786,6 @@ public partial class Player : Pawn
 				break;
 			case States.Hurt:
 				HurtState();
-				break;
-			case States.Start:
-				StartState();
 				break;
 			case States.Burrow:
 				BurrowState();

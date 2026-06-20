@@ -98,6 +98,21 @@
 			transform: translateY(-2vh);
 		}
 
+		/* Running-player silhouette (tools/export-loading-silhouette.py). The webp is
+		   white-on-transparent and used as a mask, so background-color is the tint —
+		   change it freely. A bob keeps it lively even where animated masks don't play
+		   (iOS Safari renders the mask's first frame only). */
+		#loading-bud {
+			width: 90px; height: 96px;
+			background: #e0d3a7;
+			-webkit-mask: url(loading-player.webp) center / contain no-repeat;
+			        mask: url(loading-player.webp) center / contain no-repeat;
+			image-rendering: pixelated;
+			animation: bud-bob 0.5s ease-in-out infinite alternate;
+		}
+
+		@keyframes bud-bob { to { transform: translateY(-2px); } }
+
 		#start-hint {
 			margin: 0;
 			max-width: 42ch;
@@ -153,6 +168,7 @@
 	</div>
 	<div id="start-gate">
 		<div id="start-panel">
+			<div id="loading-bud" aria-hidden="true"></div>
 			<p id="start-hint">Hold jump when landing: become 1D.</p><p id="start-hint">Keep holding to climb walls and move faster along surfaces.</p>
 			<button id="start-button" type="button" disabled>Loading...</button>
 		</div>

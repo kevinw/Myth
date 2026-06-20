@@ -198,7 +198,8 @@ function shouldPreloadIntoDotnetFs(path, hasVisualAssetPack) {
     if (path.startsWith("Assets/Sprites/")) return false;
     if (path.startsWith("Assets/Tilesets/")) return false;
     if (path.startsWith("Assets/Textures/")) return false;
-    if (path.startsWith("Assets/Fonts/")) return false;
+    // Fonts (dogica/m3x6, and Myna for ImGui) are rasterized from these TTFs at
+    // runtime via SpriteFont/Font, so they must stay in the wasm FS — don't exclude.
     if (path === "Assets/inbetweens.json") return false;
     if (path === "Assets/anim_transitions.json") return false;
   }
