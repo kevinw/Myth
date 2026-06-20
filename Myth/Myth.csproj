@@ -39,9 +39,19 @@
     <NativeFileReference Include="Platforms/Web/Native/cimgui.a" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserAot)' == 'true'">
-    <!-- dotnet 10.0.8's wasm AOT compiler currently asserts on Foster.Framework.
-         Keep Foster interpreted while still AOT'ing Myth/Myth.Core for gameplay hot paths. -->
+  <!-- Browser-wasm AOT. mono-aot-cross used to crash compiling Foster.Framework with an
+       SGen GC assert (sgen-alloc.c:409 `*p == NULL`); we traced it to the array-typed
+       [UnmanagedCallConv(CallConvs=[...])] custom attribute on SDL3.cs's LibraryImports,
+       and our Foster fork strips it (safe: cdecl is already the default unmanaged calling
+       convention on every target Foster ships — wasm/x64/arm64; only win-x86, which Foster
+       does not build, would differ). Foster now AOTs cleanly, so we AOT it by DEFAULT:
+       uniform AOT also avoids the AOT<->interpreter "function signature mismatch" the old
+       mixed-mode build hit at runtime. Set MythBrowserAotFoster=false to fall back to
+       interpreting Foster. See memory wasm-aot-foster-blocker and upstream-mono-aot-sgen-crash.md. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserAot)' == 'true' and '$(MythBrowserAotFoster)' == ''">
+    <MythBrowserAotFoster>true</MythBrowserAotFoster>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserAot)' == 'true' and '$(MythBrowserAotFoster)' != 'true'">
     <_AOT_InternalForceInterpretAssemblies Include="Foster.Framework.dll" />
   </ItemGroup>
 

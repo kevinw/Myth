@@ -91,8 +91,11 @@ jobs:
         working-directory: Myth
         run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals
 
-      - name: Publish browser app
-        run: node Myth/tools/browser-dotnet.mjs publish -c Release
+      # --aot: full WebAssembly AOT for snappier runtime perf. Requires the Foster
+      # fork's SDL3.cs UnmanagedCallConv strip (committed) or mono-aot-cross SGen-asserts.
+      # The wasm-tools workload already provides the AOT cross-compiler + emscripten packs.
+      - name: Publish browser app (AOT)
+        run: node Myth/tools/browser-dotnet.mjs publish -c Release --aot
 
       - name: Upload browser app bundle
         uses: actions/upload-artifact@v7
