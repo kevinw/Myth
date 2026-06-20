@@ -39,8 +39,12 @@
 		#game-shell {
 			position: relative;
 			aspect-ratio: 16 / 9;
-			width: min(100vw, calc(100vh * 16 / 9));
-			height: min(100vh, calc(100vw * 9 / 16));
+			/* Dynamic viewport units (dvw/dvh) track the *currently visible* viewport,
+			   so the 16:9 box shrinks to fit the space left when iOS Safari's URL bar
+			   is showing (esp. in landscape). Plain vh is the large viewport and ignores
+			   the bar, which clipped the game vertically. */
+			width: min(100dvw, calc(100dvh * 16 / 9));
+			height: min(100dvh, calc(100dvw * 9 / 16));
 		}
 
 		canvas {
