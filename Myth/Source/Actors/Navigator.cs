@@ -18,7 +18,6 @@ public sealed class Navigator(Pawn owner)
 	private const int ImmediateGroundSupportCastDepth = 4;
 	private const float SafeLandingSearchDistance = Game.TileSize * 1.5f;
 	private const float ActiveEdgeTimeout = 1.35f;
-	private const float JumpInputHoldTime = 0.22f;
 	private const float OpposingJumpVelocityThreshold = 8.0f;
 	private const float JumpPrepareMaxTime = 0.15f;
 	private const float PrecisionLandingBrakeMinHeight = 16.0f;
@@ -70,7 +69,7 @@ public sealed class Navigator(Pawn owner)
 
 	public void UpdateJumpHeld(bool jumpPressed)
 	{
-		if (activeEdge.JumpHoldTimer > 0)
+		if (activeEdge.Jump.HoldTimer > 0)
 			JumpHeld = true;
 		else if (jumpPressed)
 			JumpHeld = true;
@@ -281,7 +280,7 @@ public sealed class Navigator(Pawn owner)
 			? ResolveSafeJumpLandingTarget(graph, to)
 			: to.Position;
 
-		if (activeEdge.Timer > ActiveEdgeTimeout)
+		if (activeEdge.Timer > ActiveEdgeTimeoutFor(edge))
 		{
 			Game.NavTrace?.EdgeEvent(Game, "edgeTimeout", edge, ("timer", activeEdge.Timer), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 			if (activeEdgeBlocksPath)
@@ -654,52 +653,47 @@ public sealed class Navigator(Pawn owner)
 
 			activeEdge.Phase = ActiveEdgePhase.Runup;
 			activeEdge.JumpPlanStarted = true;
-			activeEdge.JumpPlanTimer = 0;
+			activeEdge.Jump.Timer = 0;
 			activeEdge.Timer = 0;
 			Game.NavTrace?.EdgeEvent(Game, "jumpPlanStart", edge, ("plan", JumpPlanTrace(plan)), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 		}
 
-		activeEdge.JumpPlanTimer += owner.Time.Delta;
+		JumpPlanExecution.Advance(ref activeEdge.Jump, owner.Time.Delta);
 		moveX = PlannedJumpMoveX(plan, target);
 		if (moveX == 0 && hasPlannedHorizontal)
 			moveX = takeoffDirection;
 
-		if (!activeEdge.JumpStarted && activeEdge.JumpPlanTimer >= plan.RunupTime)
+		if (JumpPlanExecution.ShouldStartJump(plan, activeEdge.Jump))
 			StartPlannedJump(plan, out jumpPressed);
-		else if (!activeEdge.JumpStarted && IsGrounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
+		else if (!activeEdge.Jump.Started && IsGrounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
 			StartPlannedJump(plan, out jumpPressed);
 
-		if (activeEdge.JumpStarted && !jumpPressed)
-			activeEdge.JumpHoldTimer = Calc.Approach(activeEdge.JumpHoldTimer, 0, owner.Time.Delta);
+		JumpPlanExecution.DecayHold(ref activeEdge.Jump, owner.Time.Delta, jumpPressed);
 
-		if (activeEdge.JumpStarted && !IsGrounded)
+		if (activeEdge.Jump.Started && !IsGrounded)
 		{
 			activeEdge.Phase = ActiveEdgePhase.Airborne;
-			if (plan.WallJump && !activeEdge.WallKicked)
+			JumpPlanExecution.SyncWallKickLock(ref activeEdge.Jump, plan, owner.IsWallJumpLocked, Math.Sign(owner.Velocity.X));
+			if (JumpPlanExecution.NeedsWallKickInput(plan, activeEdge.Jump, IsGrounded, owner.IsWallJumpLocked))
 			{
 				// Steer into the wall and keep the jump pressed so the wall kick fires
 				// the instant Bud touches it. The runtime input-lock then carries him
 				// away; once we see the kick, switch to steering toward the landing.
-				moveX = plan.Direction;
+				moveX = JumpPlanExecution.WallApproachDirection(plan, activeEdge.Jump);
 				jumpPressed = true;
-				if (owner.IsWallJumpLocked)
-				{
-					activeEdge.WallKicked = true;
-					activeEdge.JumpHoldTimer = Math.Clamp(plan.HoldTime, 0.055f, JumpInputHoldTime);
-				}
 			}
 			else
 				moveX = AirSteerTowardLanding(plan, from.Position, target, to.Kind, moveX);
 		}
 		else
 		{
-			if (activeEdge.JumpStarted)
+			if (activeEdge.Jump.Started)
 				activeEdge.Phase = ActiveEdgePhase.Landing;
 			DebugNavProbeRect = null;
 			DebugNavProbeHit = false;
 		}
 
-		if (activeEdge.JumpStarted && IsGrounded && activeEdge.JumpPlanTimer > plan.RunupTime + 0.12f)
+		if (activeEdge.Jump.Started && IsGrounded && activeEdge.Jump.Timer > plan.RunupTime + 0.12f)
 		{
 			var landingDx = target.X - Position.X;
 			var landingDy = MathF.Abs(target.Y - Position.Y);
@@ -724,7 +718,7 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} p {activeEdge.JumpPlanTimer:0.0}" : "jump";
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} p {activeEdge.Jump.Timer:0.0}" : "jump";
 		return true;
 	}
 
@@ -739,6 +733,13 @@ public sealed class Navigator(Pawn owner)
 			owner.Velocity.X = Calc.Approach(owner.Velocity.X, 0, TakeoffApproachBrakeAccel * owner.Time.Delta);
 		else if (!HasGroundSupportNextStep(velocityDirection))
 			owner.Velocity.X = 0;
+	}
+
+	private static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge)
+	{
+		if (edge.Jump is not { } plan || plan.MaxWallKicks <= 1)
+			return ActiveEdgeTimeout;
+		return MathF.Max(ActiveEdgeTimeout, 0.55f + plan.MaxWallKicks * 0.45f);
 	}
 
 	private static Vector2 ResolveSafeJumpLandingTarget(PlatformNavGraph graph, PlatformNavGraph.Node to)
@@ -766,9 +767,8 @@ public sealed class Navigator(Pawn owner)
 	private void StartPlannedJump(PlatformNavGraph.JumpPlan plan, out bool jumpPressed)
 	{
 		jumpPressed = true;
-		activeEdge.JumpStarted = true;
+		JumpPlanExecution.StartJump(ref activeEdge.Jump, plan);
 		activeEdge.Phase = ActiveEdgePhase.Airborne;
-		activeEdge.JumpHoldTimer = Math.Clamp(plan.HoldTime, 0.055f, JumpInputHoldTime);
 		if (activeEdge.Edge is { } edge)
 			Game.NavTrace?.EdgeEvent(Game, "jumpTakeoff", edge, ("plan", JumpPlanTrace(plan)), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 	}
@@ -782,7 +782,7 @@ public sealed class Navigator(Pawn owner)
 		var hold = 0.055f;
 		hold += Math.Clamp(height / 32.0f, 0, 1) * 0.105f;
 		hold += Math.Clamp((distance - 16) / 40.0f, 0, 1) * 0.035f;
-		return new(direction, 0, Math.Clamp(hold, 0.055f, JumpInputHoldTime), direction, 99.0f);
+		return new(direction, 0, Math.Clamp(hold, 0.055f, JumpPlanExecution.MaxJumpHoldTime), direction, 99.0f);
 	}
 
 	private bool CanStartJumpPlan(Vector2 source)
@@ -792,15 +792,16 @@ public sealed class Navigator(Pawn owner)
 
 	private int PlannedJumpMoveX(PlatformNavGraph.JumpPlan plan, Vector2 landing)
 	{
-		if (activeEdge.JumpPlanTimer < plan.SwitchTime)
-			return plan.Direction;
+		var moveX = JumpPlanExecution.MoveX(plan, activeEdge.Jump);
+		if (moveX == plan.Direction)
+			return moveX;
 		if (plan.AirDirection != plan.Direction)
 		{
 			var remainingDirection = Math.Sign(landing.X - Position.X);
 			if (remainingDirection == plan.Direction && MathF.Abs(landing.X - Position.X) > NavNodeReachDistance)
 				return plan.Direction;
 		}
-		return plan.AirDirection;
+		return moveX;
 	}
 
 	private int AirSteerTowardLanding(
@@ -865,7 +866,8 @@ public sealed class Navigator(Pawn owner)
 			["hold"] = plan.HoldTime,
 			["airDirection"] = plan.AirDirection,
 			["switch"] = plan.SwitchTime,
-			["wall"] = plan.WallJump
+			["wall"] = plan.WallJump,
+			["maxWallKicks"] = plan.MaxWallKicks
 		};
 
 	private enum ActiveEdgePhase
@@ -883,12 +885,9 @@ public sealed class Navigator(Pawn owner)
 		public PlatformNavGraph.Edge? Edge;
 		public ActiveEdgePhase Phase;
 		public float Timer;
-		public float JumpHoldTimer;
-		public bool JumpStarted;
+		public JumpPlanExecution.State Jump;
 		public bool JumpPlanStarted;
 		public float JumpPrepareTimer;
-		public float JumpPlanTimer;
-		public bool WallKicked;
 
 		public static EdgeState Start(PlatformNavGraph.Edge edge)
 			=> new()
