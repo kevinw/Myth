@@ -55,6 +55,12 @@ public sealed class PlatformNavGraph
 	[
 		new(1, 0.00f, 0.18f, 1, 99.0f),
 		new(-1, 0.00f, 0.18f, -1, 99.0f),
+		// Pure-vertical hops (no horizontal input): the only way to land on a narrow
+		// platform directly overhead. A sideways jump arcs off the platform before it
+		// can descend onto it, so taller (≥24px) straight-up gaps in a jumpthru stack
+		// need these. Mirrors the real player move of just pressing jump with no steer.
+		new(0, 0.00f, 0.20f, 0, 99.0f),
+		new(0, 0.00f, 0.18f, 0, 99.0f),
 		new(1, 0.00f, 0.20f, 1, 99.0f),
 		new(-1, 0.00f, 0.20f, -1, 99.0f),
 		new(1, 0.00f, 0.055f, 1, 99.0f),
@@ -227,6 +233,18 @@ public sealed class PlatformNavGraph
 			nearestDistanceSquared = distanceSquared;
 		}
 		return nearest;
+	}
+
+	// True if `position` sits on the same surface span as `nodeId`. A jump succeeds when
+	// Bud lands anywhere on the target's platform, not just within a few px of the node
+	// point — landing 10px along a wide platform still reaches it.
+	public bool IsPositionOnNodeSurface(Vector2 position, int nodeId, float maxDistance = Game.TileSize * 1.5f)
+	{
+		var span = NodeSurfaceSpanId(nodeId);
+		if (span < 0)
+			return false;
+		var surface = FindNearestSurface(position, maxDistance);
+		return surface.HasValue && surface.Value.SpanId == span;
 	}
 
 	public bool TryFindPath(int startId, int goalId, List<Edge> path, IReadOnlySet<(int From, int To)>? blockedEdges = null)
@@ -746,8 +764,12 @@ public sealed class PlatformNavGraph
 			}
 
 			foreach (var (toId, jump) in jumpCandidates)
+			{
+				if (CullPitFallJumps && !ValidateJumpWithController(from, Nodes[toId], jump.Plan))
+					continue;
 				if (AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan))
 					planStats[jump.PlanIndex].Kept++;
+			}
 		}
 
 		if (nextJumpSourceId >= Nodes.Count)
@@ -1345,6 +1367,111 @@ public sealed class PlatformNavGraph
 		return sim.Run(out landing);
 	}
 
+	// Run the actual runtime controller (Navigator) over a simulated pawn entering at a
+	// distance-appropriate speed (what Bud realistically arrives with — a short hop approached
+	// slowly, a long jump fast; a fixed full-speed entry would mis-position short hops). Returns
+	// false only if the controller drops into a pit — the one outcome that's unambiguously
+	// unmakeable and safe to cull. Off-target-but-on-a-platform landings are kept.
+	const float ValidationNominalAirtime = 0.5f;
+	const float ValidationMaxEntrySpeed = 100.0f;
+
+	// Cull jump edges where the runtime controller (the real Navigator, run over a sim pawn —
+	// the unified build/runtime executor) drops Bud into a pit. Conservative on purpose: a
+	// full "must land exactly" gate over-prunes the regular jumps wall-kick wells rely on, but
+	// an edge that demonstrably falls into a pit is one the runtime can't make either, so it's
+	// always safe to remove. Flip LogCulls to see each culled edge and why.
+	internal static bool CullPitFallJumps = false;
+	internal static bool LogCulls = false;
+
+	bool ValidateJumpWithController(Node from, Node to, JumpPlan plan)
+	{
+		// Wall-kick chains are sequential, wall-contact-timed moves the single-shot validator
+		// can't reproduce from a cold spawn (it has no run-up to set up the kick rhythm). They
+		// climb wells where no plain jump reaches, so trust the ballistic discovery and the
+		// runtime's dedicated wall-kick path for them; gate only plain ballistic arcs.
+		if (plan.WallJump)
+			return true;
+
+		using var _ = rebuildGame!.BeginSimulation();
+		var entryVx = Math.Clamp((to.Position.X - from.Position.X) / ValidationNominalAirtime, -ValidationMaxEntrySpeed, ValidationMaxEntrySpeed);
+		var pawn = new JumpValidationPawn(rebuildGame!, this, from, to, plan, entryVx);
+		pawn.Run();
+		var keep = !pawn.FellInPit;
+		if (!keep && LogCulls)
+		{
+			var off = pawn.LastPosition - to.Position;
+			var toSpan = NodeSurfaceSpanId(to.Id);
+			var landSpan = FindNearestSurface(pawn.LastPosition, Game.TileSize * 1.5f)?.SpanId ?? -1;
+			Console.WriteLine($"[Cull] {from.Id}@({from.Position.X:0},{from.Position.Y:0})->{to.Id}@({to.Position.X:0},{to.Position.Y:0}) dx={to.Position.X - from.Position.X:0} dy={from.Position.Y - to.Position.Y:0} plan(d{plan.Direction},h{plan.HoldTime:0.00},a{plan.AirDirection},wj{(plan.WallJump ? 1 : 0)}) end=({pawn.LastPosition.X:0},{pawn.LastPosition.Y:0}) off=({off.X:0},{off.Y:0}) toSpan={toSpan} landSpan={landSpan} {pawn.Outcome}");
+		}
+		return keep;
+	}
+
+	// Drives the real Navigator over a throwaway pawn so the build validates exactly what
+	// the runtime will do. Same physics (Pawn.Update), same controller, same wall-kick path.
+	sealed class JumpValidationPawn : Pawn
+	{
+		readonly Game game;
+		readonly Navigator nav;
+		float elapsed;
+		public Vector2 LastPosition;
+		public string Outcome = "?";
+		public bool FellInPit;
+
+		public JumpValidationPawn(Game game, PlatformNavGraph graph, Node from, Node to, JumpPlan plan, float entryVx)
+		{
+			this.game = game;
+			Game = game;
+			Position = (Point2)from.Position;
+			Hitbox = new(PawnProbe);
+			Facing = plan.Direction == 0 ? Signs.Positive : (Signs)plan.Direction;
+			Velocity = new Vector2(entryVx, 0);
+			grounded = Grounded();
+			nav = new Navigator(this) { GraphOverride = graph, SuppressDebug = true };
+			nav.StartActiveEdge(new Edge(from.Id, to.Id, EdgeKind.Jump, plan));
+		}
+
+		public override PawnInput GetInput()
+		{
+			nav.TryExecuteActiveEdge(out var moveX, out var moveY, out var jumpPressed);
+			nav.UpdateJumpHeld(jumpPressed);
+			return new(moveX, moveY, jumpPressed, nav.JumpHeld, false, nav.ActiveEdgeAllowsWallJump);
+		}
+
+		public bool Run()
+		{
+			var dt = game.Time.Delta;
+			if (dt <= 0)
+				dt = SimDelta;
+
+			for (elapsed = 0.0f; elapsed < SimChainMaxTime; elapsed += dt)
+			{
+				Update();
+				LastPosition = Position;
+				if (nav.LastEdgeRunState != Navigator.EdgeRunState.Active)
+				{
+					Outcome = nav.LastEdgeRunState.ToString();
+					return nav.LastEdgeRunState == Navigator.EdgeRunState.Landed;
+				}
+
+				if (Position.Y > game.Bounds.Bottom + Game.TileSize)
+				{
+					Outcome = "pit";
+					FellInPit = true;
+					return false;
+				}
+				if (Position.X < game.Bounds.Left - Game.TileSize * 2 ||
+					Position.X > game.Bounds.Right + Game.TileSize * 2)
+				{
+					Outcome = "oob";
+					return false;
+				}
+			}
+			Outcome = "timeout";
+			return false;
+		}
+	}
+
 	static bool CanAttemptChainedWallJump(Game game, Vector2 from)
 		=> HasNearbyWallForChain(game, from, -1) && HasNearbyWallForChain(game, from, 1);
 
@@ -1459,7 +1586,12 @@ public sealed class PlatformNavGraph
 					return false;
 				}
 
-				if (Position.X == lastX && jump.Started && !IsGrounded && Velocity.Y < 0)
+				// Detect a pawn wedged against a wall/ceiling (not making horizontal
+				// progress while still rising). A pure-vertical plan legitimately keeps
+				// X fixed the whole way up, so exclude it or it false-positives and the
+				// tall straight-up hop never completes.
+				var horizontalPlan = plan.Direction != 0 || plan.AirDirection != 0;
+				if (horizontalPlan && Position.X == lastX && jump.Started && !IsGrounded && Velocity.Y < 0)
 					stalledFrames++;
 				else
 					stalledFrames = 0;

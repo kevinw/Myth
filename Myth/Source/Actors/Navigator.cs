@@ -36,6 +36,10 @@ public sealed class Navigator(Pawn owner)
 	const float DirectGoalJumpMaxVerticalDistance = 56.0f;
 	const float DirectGoalJumpMinVerticalDistance = 12.0f;
 	const float JumpLandingDoneDistance = 2.0f;
+	// Nominal time a jump spends airborne, used to convert "horizontal distance to the
+	// landing" into a target takeoff speed. Matches a typical single hop (~0.5s up-and-down).
+	const float NominalJumpAirtime = 0.5f;
+	const float MaxAirSpeedApprox = 100.0f;
 
 	readonly List<PlatformNavGraph.Edge> navPath = [];
 	public List<PlatformNavGraph.Edge> NavPath => navPath;
@@ -51,11 +55,26 @@ public sealed class Navigator(Pawn owner)
 	Game Game => owner.Game;
 	Vector2 Position => owner.Position;
 	bool IsGrounded => owner.IsGrounded;
-	bool ShouldBuildDebugNavLabel => owner.Game.IsPlatformNavDebugVisible || owner.Game.GymMode;
+	bool ShouldBuildDebugNavLabel => !SuppressDebug && (owner.Game.IsPlatformNavDebugVisible || owner.Game.GymMode);
+
+	// Set on the throwaway Navigator the nav-graph build drives during edge validation:
+	// skips the per-frame debug-label/trace formatting (pure overhead off-screen).
+	public bool SuppressDebug { get; set; }
 
 	// Public state Bud/Boss read to build PawnInput
 	public bool JumpHeld { get; private set; }
 	public bool ActiveEdgeAllowsWallJump => activeEdge.Edge is { Jump: { WallJump: true } };
+
+	// Terminal result of the most recently run active edge. The nav-graph build drives
+	// a Navigator over a simulated pawn to validate jump edges, then reads this to decide
+	// whether the runtime controller could actually land the edge. Active = still running.
+	public enum EdgeRunState { Active, Landed, Missed }
+	public EdgeRunState LastEdgeRunState { get; private set; }
+
+	// When set, the active-edge executor reads node positions from this graph instead of
+	// the Game's live graph. The build uses it to run the controller against the graph
+	// currently being constructed (which isn't yet installed on the Game).
+	public PlatformNavGraph? GraphOverride { get; set; }
 
 	// Debug state — settable so Bud's custom nav logic can update it directly
 	public int? DebugNavStartNodeId { get; set; }
@@ -264,7 +283,7 @@ public sealed class Navigator(Pawn owner)
 		moveX = 0;
 		moveY = 0;
 		jumpPressed = false;
-		if (activeEdge.Edge is not { } edge || Game.GetPlatformNavGraph() is not { } graph)
+		if (activeEdge.Edge is not { } edge || (GraphOverride ?? Game.GetPlatformNavGraph()) is not { } graph)
 			return false;
 
 		if (edge.From < 0 || edge.From >= graph.Nodes.Count || edge.To < 0 || edge.To >= graph.Nodes.Count)
@@ -292,7 +311,7 @@ public sealed class Navigator(Pawn owner)
 		switch (edge.Kind)
 		{
 			case PlatformNavGraph.EdgeKind.Jump:
-				if (!TryExecuteJumpEdge(edge, from, to, target, out moveX, out jumpPressed))
+				if (!TryExecuteJumpEdge(graph, edge, from, to, target, out moveX, out jumpPressed))
 					return false;
 				// If we're hopping up onto a spot that has to be ducked into,
 				// tuck as we arrive (descending or grounded) so Bud fits under the
@@ -312,7 +331,7 @@ public sealed class Navigator(Pawn owner)
 				}
 				if (moveX == 0 && IsNearNode(target))
 				{
-					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
 					return false;
 				}
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeEdge.Timer:0.0}" : "active edge";
@@ -324,7 +343,7 @@ public sealed class Navigator(Pawn owner)
 					moveX = Math.Sign(target.X - Position.X);
 				if (IsGrounded && activeEdge.Timer > 0.12f && IsNearNode(target))
 				{
-					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
 					return false;
 				}
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeEdge.Timer:0.0}" : "active edge";
@@ -361,6 +380,7 @@ public sealed class Navigator(Pawn owner)
 	{
 		activeEdge = EdgeState.Start(edge);
 		activeEdgeBlocksPath = blockPathOnTimeout;
+		LastEdgeRunState = EdgeRunState.Active;
 		lastTraceStateKey = null;
 		Game.NavTrace?.EdgeEvent(Game, "edgeStart", edge, ("blockPathOnTimeout", blockPathOnTimeout), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 	}
@@ -373,12 +393,13 @@ public sealed class Navigator(Pawn owner)
 
 	public void ClearDebugSurfacePath() => surfaceNavPath.Clear();
 
-	public void ClearActiveEdge(string label)
+	public void ClearActiveEdge(string label, EdgeRunState outcome = EdgeRunState.Missed)
 	{
 		if (activeEdge.Edge is { } edge)
 			Game.NavTrace?.EdgeEvent(Game, "edgeClear", edge, ("label", label), ("timer", activeEdge.Timer), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 		activeEdge = default;
 		activeEdgeBlocksPath = false;
+		LastEdgeRunState = outcome;
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = label;
@@ -599,6 +620,7 @@ public sealed class Navigator(Pawn owner)
 	}
 
 	bool TryExecuteJumpEdge(
+		PlatformNavGraph graph,
 		PlatformNavGraph.Edge edge,
 		PlatformNavGraph.Node from,
 		PlatformNavGraph.Node to,
@@ -639,6 +661,24 @@ public sealed class Navigator(Pawn owner)
 				return true;
 			}
 
+			// A near-vertical hop onto a narrow platform directly overhead must leave the
+			// ground with almost no horizontal speed, or the drift carries Bud off the
+			// platform. Brake to a near-stop before committing (a plan with no horizontal
+			// intent and a target nearly straight up is a vertical hop). Validated the
+			// same way at build time, so an edge only survives if this braking succeeds.
+			var precisionVertical = !hasPlannedHorizontal &&
+				MathF.Abs(target.X - from.Position.X) <= NavNodeReachDistance;
+			if (precisionVertical && IsGrounded &&
+				MathF.Abs(owner.Velocity.X) > OpposingJumpVelocityThreshold &&
+				activeEdge.JumpPrepareTimer < JumpPrepareMaxTime)
+			{
+				activeEdge.Phase = ActiveEdgePhase.Settle;
+				activeEdge.JumpPrepareTimer += owner.Time.Delta;
+				owner.Velocity.X = Calc.Approach(owner.Velocity.X, 0, TakeoffApproachBrakeAccel * owner.Time.Delta);
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} settle-v {edge.From}->{edge.To} vx {owner.Velocity.X:0}" : "settle";
+				return true;
+			}
+
 			var opposingVelocity = IsGrounded &&
 				takeoffDirection != 0 &&
 				MathF.Sign(owner.Velocity.X) == -takeoffDirection &&
@@ -668,6 +708,19 @@ public sealed class Navigator(Pawn owner)
 		else if (!activeEdge.Jump.Started && IsGrounded && moveX != 0 && !HasGroundSupportNextStep(moveX))
 			StartPlannedJump(plan, out jumpPressed);
 
+		// Regulate takeoff speed to the jump distance: a short hop taken at full run speed
+		// flies clean past a narrow platform (or into the gap beyond it). At the instant we
+		// leave the ground, brake any horizontal speed that exceeds what's needed to cover
+		// the remaining horizontal distance over a nominal airtime. Only brakes excess in the
+		// travel direction — never fights a long jump that needs the speed, never a wall kick.
+		if (jumpPressed && !plan.WallJump)
+		{
+			var launchDx = target.X - Position.X;
+			var desiredVx = Math.Clamp(launchDx / NominalJumpAirtime, -MaxAirSpeedApprox, MaxAirSpeedApprox);
+			if (Math.Sign(owner.Velocity.X) == Math.Sign(launchDx) && MathF.Abs(owner.Velocity.X) > MathF.Abs(desiredVx))
+				owner.Velocity.X = desiredVx;
+		}
+
 		JumpPlanExecution.DecayHold(ref activeEdge.Jump, owner.Time.Delta, jumpPressed);
 
 		if (activeEdge.Jump.Started && !IsGrounded)
@@ -695,21 +748,12 @@ public sealed class Navigator(Pawn owner)
 
 		if (activeEdge.Jump.Started && IsGrounded && activeEdge.Jump.Timer > plan.RunupTime + 0.12f)
 		{
-			var landingDx = target.X - Position.X;
-			var landingDy = MathF.Abs(target.Y - Position.Y);
-			if (MathF.Abs(landingDx) <= JumpLandingDoneDistance && landingDy <= NavNodeReachDistance)
-				ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
-			else if (MathF.Abs(landingDx) <= NavNodeReachDistance && landingDy <= NavNodeReachDistance)
-			{
-				moveX = Math.Sign(landingDx);
-				if (moveX != 0 && HasGroundSupportAhead(moveX))
-				{
-					activeEdge.Phase = ActiveEdgePhase.Settle;
-					DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} settle landing {edge.From}->{edge.To}" : "settle";
-					return true;
-				}
-				ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done");
-			}
+			// Success = grounded anywhere on the target node's platform. The jump arc lands
+			// where it lands (often mid-platform, not on the exact node point); fighting
+			// landing momentum to reach the precise node just wastes the edge timeout and
+			// fails edges Bud actually completed. The next path edge handles fine positioning.
+			if (graph.IsPositionOnNodeSurface(Position, edge.To))
+				ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
 			else
 			{
 				Game.NavTrace?.EdgeEvent(Game, "edgeMiss", edge, ("timer", activeEdge.Timer), ("pos", NavTrace.Vec(Position)), ("target", NavTrace.Vec(target)), ("vel", NavTrace.Vec(owner.Velocity)));
