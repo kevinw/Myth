@@ -377,14 +377,23 @@ public partial class Game : IDisposable
 				}
 				respawnPosition = position;
 			}
-			else if (spawnFallbackPlayer && GetFirst<Player>() == null)
+			else if (spawnFallbackPlayer && GetFirst<PlayerStart>() == null)
 			{
 				respawnPosition = FindFallbackPlayerPosition(room, fallbackPlayerDirection);
 				Create<Player>(respawnPosition);
 			}
-			else if (GetFirst<Player>() is { } player)
+			else if (GetFirst<PlayerStart>() is { } playerStart)
 			{
-				respawnPosition = player.Position;
+				if (GetFirst<Player>() is { } player)
+				{
+					player.Position = playerStart.Position;
+					respawnPosition = player.Position;
+				}
+				else
+				{
+					respawnPosition = playerStart.Position;
+					Create<Player>(respawnPosition);
+				}
 			}
 			EnsureBudForPlayer(repositionExisting: true);
 			RaiseRoomChanged(null, room, RoomChangeKind.InitialLoad, Point2.Zero);

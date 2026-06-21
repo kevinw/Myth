@@ -127,15 +127,18 @@ public class Actor
 	public bool Verbose = false;
 
 	/// Checks if an animation is finished playing.
-	public bool IsFinishedPlaying(string? name = null) {
-		if (Verbose) {
+	public bool IsFinishedPlaying(string? name = null)
+	{
+		if (Verbose)
+		{
 			Console.WriteLine($"IsFinishedPlaying: animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping} name={name}");
 		}
 		return !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
 	}
 
 	readonly Dictionary<string, float> audioEventDebounceTimes = [];
-	public void AudioEventDebounced(string name, float waitSeconds) {
+	public void AudioEventDebounced(string name, float waitSeconds)
+	{
 		var now = Time.SecondsF;
 		if (audioEventDebounceTimes.TryGetValue(name, out var lastTime) && now - lastTime < waitSeconds)
 			return;
@@ -420,7 +423,8 @@ public class Actor
 			animationName = target;
 			animationTime = 0;
 			animationLooping = targetAnimationLooping;
-			if (Verbose) {
+			if (Verbose)
+			{
 				Console.WriteLine($"Landed on target animation: animationName={animationName} animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping}");
 			}
 		}
@@ -468,7 +472,6 @@ public class Actor
 	}
 
 	public virtual void RenderEmissive(Batcher batcher) { }
-
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
 	public virtual void RenderNormals(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Normals);
 	public virtual void RenderShadow(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);

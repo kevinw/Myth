@@ -69,7 +69,7 @@
     },
     {
       "Id": "b14bfbd2784b0aa1",
-      "Type": "Player",
+      "Type": "PlayerStart",
       "Position": [180, 88]
     }
   ]

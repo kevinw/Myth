@@ -126,7 +126,7 @@
     },
     {
       "Id": "d216c3e4e38496a5",
-      "Type": "Player",
+      "Type": "PlayerStart",
       "Position": [68, 136]
     }
   ]

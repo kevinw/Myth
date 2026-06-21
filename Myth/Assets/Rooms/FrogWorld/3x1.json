@@ -64,7 +64,7 @@
   "actors": [
     {
       "Id": "4b440037daaa575e",
-      "Type": "Player",
+      "Type": "PlayerStart",
       "Position": [228, 40]
     },
     {

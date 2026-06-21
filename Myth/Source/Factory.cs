@@ -94,10 +94,7 @@ public static class Factory
 
 		public static ActorPaletteEntry FromActor<T>(string spriteName, Point2? offset = null, RectInt? editorBounds = null) where T : Actor
 		{
-			var sprite = Assets.GetSprite(spriteName);
-			if (sprite == null)
-				throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
-
+			var sprite = Assets.GetSprite(spriteName) ?? throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
 			var typeName = typeof(T).Name;
 			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, null, editorBounds);
 		}
@@ -106,10 +103,8 @@ public static class Factory
 		{
 			var spec = ActorSpecs.Get(specId);
 			var sprite = Assets.GetSprite(spriteName);
-			if (spec == null)
-				throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing actor spec.");
-			if (sprite == null)
-				throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing sprite '{spriteName}'.");
+			if (spec == null) throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing actor spec.");
+			if (sprite == null) throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing sprite '{spriteName}'.");
 
 			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), ActorSpecs.GetTypeName(spec), specId, editorBounds);
 		}
@@ -228,6 +223,7 @@ public static class Factory
 	{
 		ActorSpecs.ClearActorTypes();
 		ActorSpecs.RegisterActor<Player>("Player");
+		ActorSpecs.RegisterActor<PlayerStart>("PlayerStart");
 		ActorSpecs.RegisterActor<Light>("Light");
 		ActorSpecs.RegisterActor<HiddenWall>("HiddenWall");
 		ActorSpecs.RegisterActor<RevealDoor>("RevealDoor");
@@ -288,34 +284,36 @@ public static class Factory
 
 	private static void RegisterActorPaletteEntries()
 	{
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Jumpthru>("jumpthru"));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Player>("player", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<HiddenWall>("door", editorBounds: new RectInt(0, 0, HiddenWall.DefaultSize.X, HiddenWall.DefaultSize.Y)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<RevealDoor>("door", editorBounds: new RectInt(0, 0, RevealDoor.DefaultSize.X, RevealDoor.DefaultSize.Y)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<CameraBlocker>("door", editorBounds: new RectInt(0, 0, CameraBlocker.DefaultSize.X, CameraBlocker.DefaultSize.Y)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Bramble>("bramble", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Spitter>("spitter", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<WallSpitter>("spitter", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Mosquito>("mosquito", new Point2(4, 4)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Floater>("floater", new Point2(4, 4)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Watcher>("spitter", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Burrower>("blob", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Dropper>("bramble", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<LedgePatrol>("blob", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Pouncer>("blob", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Shellback>("blob", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Splitter>("blob", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Light>("fire", new Point2(4, 4)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<ParticleEmitter>("fire", new Point2(4, 4), editorBounds: new RectInt(-4, -4, 8, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Door>("door", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<LinkedDoor>("back_door", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Blob>("blob", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<TitleText>("heart", new Point2(4, 4)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Peter>("peter", new Point2(4, 4)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Boss>("bud", new Point2(4, 8)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<ArrowTrap>("arrow_trap", new Point2(4, 4)));
-		ActorPalette.Add(ActorPaletteEntry.FromActor<Goal>("goal"));
+		ActorPalette.AddRange([
+			ActorPaletteEntry.FromActor<Jumpthru>("jumpthru"),
+			ActorPaletteEntry.FromActor<PlayerStart>("player_start", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<HiddenWall>("door", editorBounds: new RectInt(0, 0, HiddenWall.DefaultSize.X, HiddenWall.DefaultSize.Y)),
+			ActorPaletteEntry.FromActor<RevealDoor>("door", editorBounds: new RectInt(0, 0, RevealDoor.DefaultSize.X, RevealDoor.DefaultSize.Y)),
+			ActorPaletteEntry.FromActor<CameraBlocker>("door", editorBounds: new RectInt(0, 0, CameraBlocker.DefaultSize.X, CameraBlocker.DefaultSize.Y)),
+			ActorPaletteEntry.FromActor<Bramble>("bramble", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Spitter>("spitter", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<WallSpitter>("spitter", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Mosquito>("mosquito", new Point2(4, 4)),
+			ActorPaletteEntry.FromActor<Floater>("floater", new Point2(4, 4)),
+			ActorPaletteEntry.FromActor<Watcher>("spitter", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Burrower>("blob", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Dropper>("bramble", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<LedgePatrol>("blob", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Pouncer>("blob", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Shellback>("blob", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Splitter>("blob", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Light>("fire", new Point2(4, 4)),
+			ActorPaletteEntry.FromActor<ParticleEmitter>("fire", new Point2(4, 4), editorBounds: new RectInt(-4, -4, 8, 8)),
+			ActorPaletteEntry.FromActor<Door>("door", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<LinkedDoor>("back_door", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<Blob>("blob", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<TitleText>("heart", new Point2(4, 4)),
+			ActorPaletteEntry.FromActor<Peter>("peter", new Point2(4, 4)),
+			ActorPaletteEntry.FromActor<Boss>("bud", new Point2(4, 8)),
+			ActorPaletteEntry.FromActor<ArrowTrap>("arrow_trap", new Point2(4, 4)),
+			ActorPaletteEntry.FromActor<Goal>("goal"),
+		]);
 	}
 
 	private static void RegisterActorSpecPaletteEntries()

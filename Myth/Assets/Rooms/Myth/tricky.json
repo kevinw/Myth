@@ -64,7 +64,7 @@
     },
     {
       "Id": "aedb2e2d1d9d86dc",
-      "Type": "Player",
+      "Type": "PlayerStart",
       "Position": [20, 104]
     },
     {
@@ -98,6 +98,11 @@
       "Id": "c7d3202edfa3f308",
       "Type": "Jumpthru",
       "Position": [56, 136]
+    },
+    {
+      "Id": "c74c7460f8f78a90",
+      "Type": "PlayerStart",
+      "Position": [120, 96]
     }
   ]
 }

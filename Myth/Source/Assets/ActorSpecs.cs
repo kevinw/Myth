@@ -106,8 +106,8 @@ public static class ActorSpecs
 		var typeName = ReadString(resolved, TypeKey);
 		if (string.IsNullOrWhiteSpace(typeName) || !actorTypes.TryGetValue(typeName, out var type))
 		{
-			Console.Error.WriteLine($"Actor type '{typeName}' not registered.");
-			return null;
+			// todo: in release build, make this a log?
+			throw new Exception($"Actor type '{typeName}' not registered.");
 		}
 
 		var actorPosition = position ?? ReadPoint(resolved, PositionKey) ?? Point2.Zero;
