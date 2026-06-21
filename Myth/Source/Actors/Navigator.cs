@@ -12,34 +12,41 @@ public sealed class Navigator(Pawn owner)
 	public const int NavNodeReachDistance = 8;
 	public const float NavSearchDistance = 180;
 	public const float GoalNodeSearchDistance = 56;
-	const int GroundSupportLookAhead = 6;
-	const int GroundSupportProbeWidth = 4;
-	const int GroundSupportCastDepth = 10;
-	const int ImmediateGroundSupportCastDepth = 4;
-	const float SafeLandingSearchDistance = Game.TileSize * 1.5f;
-	const float ActiveEdgeTimeout = 1.35f;
-	const float OpposingJumpVelocityThreshold = 8.0f;
-	const float JumpPrepareMaxTime = 0.15f;
-	const float PrecisionLandingBrakeMinHeight = 16.0f;
-	const float PrecisionLandingBrakeDistance = 32.0f;
-	const float PrecisionLandingBrakeSpeed = 45.0f;
-	const float LandingStabilizeDistance = 32.0f;
-	const float LandingStabilizeVerticalSpeed = 45.0f;
-	const float LandingStabilizeMaxSpeed = 64.0f;
-	const float LandingStabilizeMinSpeed = 12.0f;
-	const float LandingStabilizeGain = 5.0f;
-	const float LandingStabilizeBrakeAccel = 600.0f;
-	const float TakeoffApproachBrakeDistance = 10.0f;
-	const float TakeoffApproachBrakeAccel = 1600.0f;
-	const float BlockedPathTargetResetDistance = 16.0f;
-	const float DirectGoalJumpMaxHorizontalDistance = 64.0f;
-	const float DirectGoalJumpMaxVerticalDistance = 56.0f;
-	const float DirectGoalJumpMinVerticalDistance = 12.0f;
-	const float JumpLandingDoneDistance = 2.0f;
+	static int GroundSupportLookAhead => 6;
+	static int GroundSupportProbeWidth => 4;
+	static int GroundSupportCastDepth => 10;
+	static int ImmediateGroundSupportCastDepth => 4;
+	static float SafeLandingSearchDistance => Game.TileSize * 1.5f;
+	static float ActiveEdgeTimeout => 1.35f;
+	static float OpposingJumpVelocityThreshold => 8.0f;
+	static float JumpPrepareMaxTime => 0.15f;
+	static float PrecisionLandingBrakeMinHeight => 16.0f;
+	static float PrecisionLandingBrakeDistance => 32.0f;
+	static float PrecisionLandingBrakeSpeed => 45.0f;
+	static float LandingStabilizeDistance => 32.0f;
+	static float LandingStabilizeVerticalSpeed => 45.0f;
+	static float LandingStabilizeMaxSpeed => 64.0f;
+	static float LandingStabilizeMinSpeed => 12.0f;
+	static float LandingStabilizeGain => 5.0f;
+	static float LandingStabilizeBrakeAccel => 600.0f;
+	static float TakeoffApproachBrakeDistance => 10.0f;
+	static float TakeoffApproachBrakeAccel => 1600.0f;
+	static float BlockedPathTargetResetDistance => 16.0f;
+	static float DirectGoalJumpMaxHorizontalDistance => 64.0f;
+	static float DirectGoalJumpMaxVerticalDistance => 56.0f;
+	static float DirectGoalJumpMinVerticalDistance => 12.0f;
+	static float JumpLandingDoneDistance => 2.0f;
 	// Nominal time a jump spends airborne, used to convert "horizontal distance to the
 	// landing" into a target takeoff speed. Matches a typical single hop (~0.5s up-and-down).
-	const float NominalJumpAirtime = 0.5f;
-	const float MaxAirSpeedApprox = 100.0f;
+	static float NominalJumpAirtime => 0.5f;
+	static float MaxAirSpeedApprox => 100.0f;
+	// Pawn ground friction (Pawn.Friction) and half-width, used to estimate how far Bud
+	// slides after landing so he doesn't overshoot a narrow platform's far edge into a pit.
+	static float GroundFrictionApprox => 480.0f;
+	static float PawnHalfWidth => 4.0f;
+	// Landing brake only engages when ground is within this many px below Bud's feet
+	// (i.e. the final descent onto a platform), so it never fires while arcing over a gap.
+	static int LandingBrakeGroundProbeDepth => 14;
 
 	readonly List<PlatformNavGraph.Edge> navPath = [];
 	public List<PlatformNavGraph.Edge> NavPath => navPath;
@@ -560,6 +567,15 @@ public sealed class Navigator(Pawn owner)
 		return HasFootSupport(moveX, 1, ImmediateGroundSupportCastDepth);
 	}
 
+	// Standable ground (solid or jumpthru) directly beneath Bud's feet within `depth` px.
+	// Used to confine landing braking to the final descent onto a platform, never mid-gap.
+	bool HasGroundWithin(int depth)
+	{
+		var bounds = owner.Hitbox.Rect + owner.Position;
+		var probe = new RectInt(bounds.Left, bounds.Bottom, bounds.Width, depth);
+		return Game.OverlapsRoomCollision(probe) || OverlapsJumpthruSupport(probe);
+	}
+
 	bool HasFootSupport(int moveX, int lookAhead, int castDepth)
 	{
 		var bounds = owner.Hitbox.Rect + owner.Position;
@@ -736,7 +752,11 @@ public sealed class Navigator(Pawn owner)
 				jumpPressed = true;
 			}
 			else
+			{
 				moveX = AirSteerTowardLanding(plan, from.Position, target, to.Kind, moveX);
+				if (to.Kind != PlatformNavGraph.NodeKind.Ledge)
+					BrakeForLandingFarEdge(graph, edge);
+			}
 		}
 		else
 		{
@@ -764,6 +784,50 @@ public sealed class Navigator(Pawn owner)
 
 		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} p {activeEdge.Jump.Timer:0.0}" : "jump";
 		return true;
+	}
+
+	// Cap horizontal speed while descending so Bud's post-landing friction slide can't
+	// carry him off the FAR edge of the destination platform into a pit. The allowable
+	// slide is the room from Bud's current X to that far edge (in the travel direction),
+	// less a half-pawn margin; on a wide platform that's large and this is a no-op, on a
+	// narrow one it brakes to fit. Only ever reduces toward-edge speed — never adds speed,
+	// never fights a jump that still needs to reach the platform (margin is large when short).
+	void BrakeForLandingFarEdge(PlatformNavGraph graph, PlatformNavGraph.Edge edge)
+	{
+		if (owner.Velocity.Y < 0)
+			return;
+		var vx = owner.Velocity.X;
+		var travel = Math.Sign(vx);
+		if (travel == 0)
+			return;
+
+		// Only brake when there's standable ground right beneath Bud. Otherwise he's still
+		// arcing over a gap (e.g. a missed speculative jump that the arc would carry back
+		// onto a platform) — killing his momentum there would drop him straight into the pit.
+		if (!HasGroundWithin(LandingBrakeGroundProbeDepth))
+			return;
+
+		if (!graph.TryGetNodeSurfaceSpan(edge.To, out var span))
+			return;
+
+		// Don't touch speed until Bud is actually over the platform: while still short
+		// of the near edge he needs every bit of his horizontal speed to reach it, and
+		// braking here would drop him into the gap.
+		var nearEdge = travel > 0 ? span.Left : span.Right;
+		if ((nearEdge - Position.X) * travel > 0)
+			return;
+
+		var farEdge = travel > 0 ? span.Right : span.Left;
+		var margin = (farEdge - Position.X) * travel - PawnHalfWidth;
+		if (margin <= 0)
+		{
+			owner.Velocity.X = 0;
+			return;
+		}
+
+		var maxSpeed = MathF.Sqrt(2f * GroundFrictionApprox * margin);
+		if (MathF.Abs(vx) > maxSpeed)
+			owner.Velocity.X = travel * maxSpeed;
 	}
 
 	void BrakeForTakeoffApproach(float dx)

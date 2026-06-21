@@ -259,6 +259,9 @@ public partial class Game : IDisposable
 	private float timeScale = 1.0f;
 	private readonly Point2? respawnPosition;
 	private readonly bool spawnBud;
+	// In the gym, Bud is the character under test, so it spawns exactly at the player
+	// start (the PlayerStart marker) rather than at an offset follow position.
+	private readonly bool spawnBudAtPlayer;
 	private bool disposed;
 	private const float BrowserDebugStatsInterval = 0.5f;
 	private int pendingRoomTransitionGcFrames;
@@ -332,11 +335,12 @@ public partial class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false)
 	{
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		this.spawnBud = spawnBud;
+		this.spawnBudAtPlayer = spawnBudAtPlayer;
 		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
 		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
@@ -395,7 +399,7 @@ public partial class Game : IDisposable
 					Create<Player>(respawnPosition);
 				}
 			}
-			EnsureBudForPlayer(repositionExisting: true);
+			EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
 			RaiseRoomChanged(null, room, RoomChangeKind.InitialLoad, Point2.Zero);
 			if (AudioEventsEnabled)
 			{
@@ -3741,7 +3745,7 @@ public partial class Game : IDisposable
 		return hash;
 	}
 
-	private void EnsureBudForPlayer(bool repositionExisting = false)
+	private void EnsureBudForPlayer(bool repositionExisting = false, bool atPlayerPosition = false)
 	{
 		if (!spawnBud)
 			return;
@@ -3749,7 +3753,7 @@ public partial class Game : IDisposable
 		if (GetFirst<Player>() is not { } player)
 			return;
 
-		var position = FindBudSpawnPosition(player);
+		Point2 position = atPlayerPosition ? player.Position : FindBudSpawnPosition(player);
 		if (GetFirst<Bud>() is { } bud)
 		{
 			if (repositionExisting)

@@ -49,20 +49,25 @@ public abstract class Pawn : Actor
 		Hurt,
 		Burrow
 	}
-	protected static float FastFallMultiplier => 1.25f;
+	public static float FastFallMultiplier => 1.25f;
 	protected static float JumpBufferTime => 0.08f;
 
-	protected static float MaxGroundSpeed => 93;
-	protected static float MaxAirSpeed => 100;
+	public static float MaxGroundSpeed => 93;
+	public static float MaxAirSpeed => 100;
 	protected static float CrawlSpeed => 28;
 	protected static float GroundAccel => 400;
-	protected static float AirAccel => 310;
-	protected static float Friction => 480;
-	protected static float Gravity => 450;
+	public static float AirAccel => 310;
+	public static float Friction => 480;
+	public static float Gravity => 450;
 
 	protected static float WallHugGravityMultiplier => 0.25f;
-	protected static float JumpForce => -125;
-	protected static float JumpTime => 0.19f;
+	public static float JumpForce => -125;
+	public static float JumpTime => 0.19f;
+	// Gravity is scaled by this while the jump button is held (floatier ascent), and
+	// vertical velocity is multiplied by JumpCutMultiplier when the jump is released early.
+	// Centralized here so the jump-arc sweep (JumpPhysics) reads the same numbers as Update.
+	public const float JumpHoldGravityMultiplier = 0.35f;
+	public const float JumpCutMultiplier = 0.5f;
 	protected static float CoyoteJumpTime => 0.08f;
 
 	protected static float WallJumpSpeed => 125;
@@ -198,7 +203,7 @@ public abstract class Pawn : Actor
 				// releasing jump button before jump timer expires (cutting jump short) -- we want to reduce your velocity so you fall faster.
 				//
 				jumpTimer = 0;
-				Velocity.Y *= 0.5f;
+				Velocity.Y *= JumpCutMultiplier;
 			}
 			else
 				jumpTimer -= Time.Delta;
@@ -208,7 +213,7 @@ public abstract class Pawn : Actor
 		{
 			var grav = Gravity;
 			if (jumpTimer > 0)
-				grav *= 0.35f;
+				grav *= JumpHoldGravityMultiplier;
 			else if (Velocity.Y > 0)
 				grav *= FastFallMultiplier;
 			if (State == States.Normal && Velocity.Y > 0 && IsWallHugging())

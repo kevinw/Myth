@@ -4,13 +4,15 @@ using Foster.Framework;
 
 namespace Myth;
 
-sealed record GymGoalResult(string Room, string Goal, int Trials, int Successes, double Rate, double AvgSuccessTime);
-
-sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLocalPosition)
+// A single gym attempt: reach GoalLocalPosition starting from StartLocalPosition
+// (a PlayerStart marker). StartLocalPosition is null when the room has no marker,
+// in which case the default player spawn is used.
+sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLocalPosition, Point2? StartLocalPosition, string? StartLabel)
 {
 	public string DisplayId => string.IsNullOrWhiteSpace(GoalId) ? GoalName ?? $"{GoalLocalPosition.X},{GoalLocalPosition.Y}" : GoalId;
+	public string StartDisplay => StartLabel ?? "default";
 }
-sealed record GymResult(string Room, string Goal, double SimTime, bool Success, string Reason);
+sealed record GymResult(string Room, string Goal, string Start, double SimTime, bool Success, string Reason);
 
 
 internal struct Gym
@@ -38,17 +40,38 @@ internal struct Gym
 			if (playRoomId != null && !string.Equals(room.Id, playRoomId, StringComparison.OrdinalIgnoreCase))
 				continue;
 
+			var goals = new List<(string Id, string? Name, Point2 Position)>();
+			var starts = new List<(Point2 Position, string Label)>();
 			foreach (var actor in room.Actors)
 			{
-				if (!string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), "Goal", StringComparison.OrdinalIgnoreCase))
-					continue;
-
-				var goalId = ActorSpecs.ReadString(actor, "Id");
-				var goalName = ActorSpecs.ReadString(actor, "Name");
+				var type = ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type");
 				var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
-				var runGoalId = string.IsNullOrWhiteSpace(goalId) ? $"{position.X},{position.Y}" : goalId;
+				if (string.Equals(type, "Goal", StringComparison.OrdinalIgnoreCase))
+				{
+					var goalId = ActorSpecs.ReadString(actor, "Id");
+					var goalName = ActorSpecs.ReadString(actor, "Name");
+					var runGoalId = string.IsNullOrWhiteSpace(goalId) ? $"{position.X},{position.Y}" : goalId;
+					goals.Add((runGoalId, goalName, position));
+				}
+				else if (string.Equals(type, "PlayerStart", StringComparison.OrdinalIgnoreCase))
+				{
+					starts.Add((position, $"{position.X},{position.Y}"));
+				}
+			}
 
-				runs.Add(new(room, runGoalId, goalName, position));
+			if (goals.Count == 0)
+				continue;
+
+			// Try each goal from each PlayerStart marker (so N goals × M starts =
+			// N×M runs). A room with no marker falls back to a single run per goal
+			// at the default player spawn (null start).
+			foreach (var goal in goals)
+			{
+				if (starts.Count == 0)
+					runs.Add(new(room, goal.Id, goal.Name, goal.Position, null, null));
+				else
+					foreach (var start in starts)
+						runs.Add(new(room, goal.Id, goal.Name, goal.Position, start.Position, start.Label));
 			}
 		}
 
@@ -136,7 +159,18 @@ partial class Manager
 	const double GymNoPathTimeout = 5.0;
 	double gymNoPathStartTime = -1;
 
+	// World position the player (and thus Bud) should spawn at for the current gym
+	// run, taken from the run's PlayerStart marker. Null means use the default spawn.
+	Point2? gymStartOverride;
+
 	static float GymSingleGoalTimeout = 30.0f; // TODO: we should probably make this based on the number of nodes from start to end for when we have bigger/mazier rooms and goal paths
+
+	// The looping tune mode (plain --gym, no --gym-cli): the gym cycles the rooms forever so
+	// hot-reloaded tuning values get re-read each pass. Logs one compact line per trial and a
+	// pass/fail tally per cycle instead of the per-event chatter the one-shot --gym-cli prints.
+	bool GymLoop => gymMode && !gym.exitAfterAll;
+	int gymCyclePass;
+	int gymCycleTotal;
 
 	void GymTick()
 	{
@@ -144,17 +178,17 @@ partial class Manager
 
 		if (game.GymBudDied)
 		{
-			Console.WriteLine("[Gym] Bud fell off world");
+			if (!GymLoop) Console.WriteLine("[Gym] Bud fell off world");
 			AdvanceGym(success: false);
 		}
 		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud && goal.OverlapsAny(Point2.Zero, bud))
 		{
-			Console.WriteLine("[Gym] Bud reached goal");
+			if (!GymLoop) Console.WriteLine("[Gym] Bud reached goal");
 			AdvanceGym(success: true);
 		}
 		else if (Time.Seconds - gym.roomStartTime > GymSingleGoalTimeout)
 		{
-			Console.WriteLine($"[Gym] timeout ({Time.Seconds - gym.roomStartTime:F1}s), advancing");
+			if (!GymLoop) Console.WriteLine($"[Gym] timeout ({Time.Seconds - gym.roomStartTime:F1}s), advancing");
 			AdvanceGym(success: false);
 		}
 		else
@@ -170,11 +204,17 @@ partial class Manager
 
 		var current = gym.runs[gym.runIndex];
 		var simTime = Time.Seconds - gym.roomStartTime;
+		var reason = success ? "goal" : game?.GymBudDied == true ? "fell" : "timeout";
 		if (gym.exitAfterAll)
 		{
 			gym.results ??= [];
-			gym.results.Add(new GymResult(current.Room.Id, current.DisplayId, simTime, success,
-				success ? "goal" : game?.GymBudDied == true ? "fell" : "timeout"));
+			gym.results.Add(new GymResult(current.Room.Id, current.DisplayId, current.StartDisplay, simTime, success, reason));
+		}
+		if (GymLoop)
+		{
+			gymCycleTotal++;
+			if (success) gymCyclePass++;
+			Console.WriteLine($"  {(success ? "GOAL" : reason.ToUpperInvariant()),-7} {current.Room.Id}:{current.DisplayId}@{current.StartDisplay} {simTime:0.00}s");
 		}
 
 #if BROWSER
@@ -196,18 +236,19 @@ partial class Manager
 				Exit();
 				return;
 			}
+			if (GymLoop)
+			{
+				Console.WriteLine($"[Gym] cycle {gymCyclePass}/{gymCycleTotal} passed");
+				gymCyclePass = 0;
+				gymCycleTotal = 0;
+			}
 			gym.runIndex = 0;
 		}
 
 		var run = gym.runs[gym.runIndex];
-		var room = run.Room;
-		cell = room.Cell;
-		selectedRoomId = null;
-		Console.WriteLine($"[Gym] {current.Room.Cell.X},{current.Room.Cell.Y}:{current.DisplayId} → {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
-		gym.roomStartTime = Time.Seconds;
-		gymNoPathStartTime = -1;
-		StartGame(immediate: true);
-		AssignGymTarget(run);
+		if (!GymLoop)
+			Console.WriteLine($"[Gym] {current.Room.Cell.X},{current.Room.Cell.Y}:{current.DisplayId}@{current.StartDisplay} → {run.Room.Cell.X},{run.Room.Cell.Y}:{run.DisplayId}@{run.StartDisplay}");
+		StartGymRun(run);
 #endif
 	}
 
@@ -236,9 +277,25 @@ partial class Manager
 		if (stuck <= GymNoPathTimeout)
 			return false;
 
-		Console.WriteLine($"[Gym] no path for {stuck:F1}s, advancing");
+		if (!GymLoop) Console.WriteLine($"[Gym] no path for {stuck:F1}s, advancing");
 		AdvanceGym(success: false);
 		return true;
+	}
+
+	// Begin a gym run: load its room, position the player at the run's PlayerStart
+	// marker (if any), and aim Bud at the goal.
+	private void StartGymRun(GymRun run)
+	{
+		var room = run.Room;
+		cell = room.Cell;
+		selectedRoomId = null;
+		gym.roomStartTime = Time.Seconds;
+		gymNoPathStartTime = -1;
+		gymStartOverride = run.StartLocalPosition is { } startLocal
+			? room.WorldBounds.TopLeft + startLocal
+			: null;
+		StartGame(immediate: true);
+		AssignGymTarget(run);
 	}
 
 	private void AssignGymTarget(GymRun run)

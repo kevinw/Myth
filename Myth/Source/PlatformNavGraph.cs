@@ -500,9 +500,14 @@ public sealed class PlatformNavGraph
 		if (phase == BuildPhase.Ready)
 		{
 			BuildSurfaceEdges();
-			LogRebuildStats();
+			if (VerboseBuildLog)
+				LogRebuildStats();
 		}
 	}
+
+	// Per-rebuild stats/plan/graph dump. Off during the gym tune loop (the graph rebuilds
+	// every trial there and the dump would bury the per-trial result lines).
+	public static bool VerboseBuildLog = true;
 
 	void LogRebuildStats()
 	{

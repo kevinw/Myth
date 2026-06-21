@@ -374,16 +374,14 @@ public partial class Manager : App
 				return;
 			}
 
+			// The looping tune mode rebuilds the graph every trial; silence the per-build
+			// dump so the per-trial result lines stay readable. The one-shot --gym-cli keeps it.
+			PlatformNavGraph.VerboseBuildLog = gym.exitAfterAll;
+
 			gym.runIndex = 0;
 			var run = gym.runs![gym.runIndex];
-			var room = run.Room;
-			cell = room.Cell;
-			selectedRoomId = null;
-			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
-			gym.roomStartTime = Time.Seconds;
-			gymNoPathStartTime = -1;
-			StartGame(immediate: true);
-			AssignGymTarget(run);
+			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {run.Room.Cell.X},{run.Room.Cell.Y}:{run.DisplayId}@{run.StartDisplay}");
+			StartGymRun(run);
 		}
 #if EDITOR && DEBUG && !IOS && !BROWSER
 		if (!OperatingSystem.IsBrowser())
@@ -607,6 +605,9 @@ public partial class Manager : App
 
 		if (gym.runs == null) return;
 		GymTick();
+		// Per-frame state tracing is useful when diagnosing one goal under --gym-cli, but it
+		// buries the per-trial result lines in the looping tune mode, so skip it there.
+		if (GymLoop) return;
 		if (Time.Seconds >= gym.nextLog)
 		{
 			var bud = game.GetFirst<Bud>();
@@ -1340,6 +1341,11 @@ public partial class Manager : App
 		Point2? initialPlayerPosition = null;
 #endif
 
+		// In the gym, a run may pin the player to a specific PlayerStart marker so we
+		// can attempt each goal from each start. This wins over any remembered/editor position.
+		if (gymStartOverride is { } gymStart)
+			initialPlayerPosition = gymStart;
+
 		game?.Dispose();
 		game = new Game(
 			this,
@@ -1347,7 +1353,8 @@ public partial class Manager : App
 			fallbackPlayerDirection: fallbackPlayerDirection,
 			spawnFallbackPlayer: true,
 			initialPlayerPosition: initialPlayerPosition,
-			spawnBud: true
+			spawnBud: true,
+			spawnBudAtPlayer: gymMode
 		)
 		{
 			AudioMuted = gymMode || headless,
