@@ -150,7 +150,7 @@ public partial class Manager : App
 	/// <summary>
 	/// Line Weight for outlines, relative to Scale
 	/// </summary>
-	float LineWeight => (1.0f / Scale) * 4;
+	float LineWeight => 1.0f / Scale * 4;
 
 	/// <summary>
 	/// Tries to get the Existing Room
@@ -196,9 +196,12 @@ public partial class Manager : App
 		gymMode = args.gym;
 		headless = args.headless;
 		unthrottled = args.unthrottled;
-		gymExitAfterAll = args.gymExitAfterAll;
+		gym = new()
+		{
+			exitAfterAll = args.gymExitAfterAll
+		};
 		foreach (var goalId in args.gymGoalIds)
-			gymGoalIds.Add(goalId);
+			gym.goalIds.Add(goalId);
 		buildAssetPack = args.buildAssetPack;
 		useAssetPack = args.useAssetPack;
 		assetPackPath = args.assetPackPath;
@@ -363,24 +366,24 @@ public partial class Manager : App
 		// Gym mode: auto-start with rooms that have a Goal actor
 		if (gymMode)
 		{
-			CollectGymRooms();
-			if (gymRuns is { Count: > 0 })
+			if (!gym.CollectGymRooms(playRoomId))
 			{
-				gymRunIndex = 0;
-				var run = gymRuns[gymRunIndex];
-				var room = run.Room;
-				cell = room.Cell;
-				selectedRoomId = null;
-				Console.WriteLine($"[Gym] found {gymRuns.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
-				gymRoomStartTime = Time.Seconds;
-				gymNoPathStartTime = -1;
-				StartGame(immediate: true);
-				AssignGymTarget(run);
+				Console.WriteLine("[Gym] no rooms with Goal found — exiting");
+				Environment.ExitCode = 1;
+				Exit();
+				return;
 			}
-			else
-			{
-				Console.WriteLine("[Gym] no rooms with Goal found — gym mode idle");
-			}
+
+			gym.runIndex = 0;
+			var run = gym.runs![gym.runIndex];
+			var room = run.Room;
+			cell = room.Cell;
+			selectedRoomId = null;
+			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
+			gym.roomStartTime = Time.Seconds;
+			gymNoPathStartTime = -1;
+			StartGame(immediate: true);
+			AssignGymTarget(run);
 		}
 #if EDITOR && DEBUG && !IOS && !BROWSER
 		if (!OperatingSystem.IsBrowser())
@@ -409,8 +412,7 @@ public partial class Manager : App
 		ClearRoomPreviewCache(deferDisposal: false);
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
-		if (imgui != null)
-			imgui.Dispose();
+		imgui?.Dispose();
 #if DEBUG && !IOS
 		assetWatcher?.Dispose();
 		assetWatcher = null;
@@ -603,22 +605,20 @@ public partial class Manager : App
 
 		game.Update(true);
 
-		if (gymRuns == null) return;
-
+		if (gym.runs == null) return;
 		GymTick();
-
-		if (Time.Seconds >= nextGymLog)
+		if (Time.Seconds >= gym.nextLog)
 		{
 			var bud = game.GetFirst<Bud>();
 			if (bud != null)
-				Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s gst={gymRoomStartTime:F2}s bud=({bud.Position.X:F0},{bud.Position.Y:F0}) lbl={bud.DebugNavLabel}");
-			nextGymLog += 5.0;
+				Console.WriteLine($"[Gym] t={Time.Seconds - gym.roomStartTime:F2}s gst={gym.roomStartTime:F2}s bud=({bud.Position.X:F0},{bud.Position.Y:F0}) lbl={bud.DebugNavLabel}");
+			gym.nextLog += 5.0;
 		}
-		if (Time.Seconds - gymRoomStartTime > 1.0 && (int)((Time.Seconds - gymRoomStartTime) * 10) % 10 == 0)
+		if (Time.Seconds - gym.roomStartTime > 1.0 && (int)((Time.Seconds - gym.roomStartTime) * 10) % 10 == 0)
 		{
 			var bud = game.GetFirst<Bud>();
 			if (bud != null)
-				Console.WriteLine($"[Gym] t={Time.Seconds - gymRoomStartTime:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
+				Console.WriteLine($"[Gym] t={Time.Seconds - gym.roomStartTime:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
 		}
 	}
 
@@ -734,7 +734,7 @@ public partial class Manager : App
 #endif
 		}
 
-		if (gymRuns != null && unthrottled)
+		if (gym.runs != null && unthrottled)
 		{
 			if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus))
 			{
@@ -843,7 +843,7 @@ public partial class Manager : App
 		fpsOverlayValue = (float)(fpsOverlayFrames / elapsed);
 
 #if DEBUG
-		threadAllocatedBytesOverlayValue = (long)((float)(threadAllocatedBytes) / fpsOverlayFrames);
+		threadAllocatedBytesOverlayValue = (long)((float)threadAllocatedBytes / fpsOverlayFrames);
 		threadAllocatedBytes = 0;
 #endif
 
@@ -950,8 +950,7 @@ public partial class Manager : App
 
 		if (screenshotPath != null && playing)
 			UpdateScreenshotCapture();
-		if (imgui != null)
-			imgui.Render();
+		imgui?.Render();
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after
@@ -1349,9 +1348,11 @@ public partial class Manager : App
 			spawnFallbackPlayer: true,
 			initialPlayerPosition: initialPlayerPosition,
 			spawnBud: true
-		);
-		game.AudioMuted = gymMode || headless;
-		game.NavTrace = navTrace;
+		)
+		{
+			AudioMuted = gymMode || headless,
+			NavTrace = navTrace
+		};
 		game.NavTrace?.Event(game, "gameStart");
 #if IOS
 		playTransition = 1.0f;
@@ -1608,9 +1609,9 @@ public partial class Manager : App
 		game = null;
 		startingPlay = false;
 		playing = false;
-		if (gymRuns != null)
+		if (gym.runs != null)
 		{
-			gymRuns = null;
+			gym.runs = null;
 			game?.DisplayMessage("Gym stopped");
 			Console.WriteLine("[Gym] stopped (Tab)");
 		}

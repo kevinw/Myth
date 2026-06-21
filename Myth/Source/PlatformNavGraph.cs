@@ -235,6 +235,20 @@ public sealed class PlatformNavGraph
 		return nearest;
 	}
 
+	// The surface span a node sits on (its platform extent), for sampling a random pixel
+	// along it. False for nodes not mapped to a span (e.g. RoomExits).
+	public bool TryGetNodeSurfaceSpan(int nodeId, out SurfaceSpan span)
+	{
+		var id = NodeSurfaceSpanId(nodeId);
+		if (id < 0)
+		{
+			span = default;
+			return false;
+		}
+		span = SurfaceSpans[id];
+		return true;
+	}
+
 	// True if `position` sits on the same surface span as `nodeId`. A jump succeeds when
 	// Bud lands anywhere on the target's platform, not just within a few px of the node
 	// point — landing 10px along a wide platform still reaches it.

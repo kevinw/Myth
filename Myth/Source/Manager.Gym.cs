@@ -4,62 +4,31 @@ using Foster.Framework;
 
 namespace Myth;
 
-partial class Manager
+sealed record GymGoalResult(string Room, string Goal, int Trials, int Successes, double Rate, double AvgSuccessTime);
+
+sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLocalPosition)
 {
-	readonly bool gymMode;
-	readonly bool headless;
-	readonly bool unthrottled;
-	// Unthrottled runs have no fixed wall-clock per frame, so a time-budgeted nav-graph
-	// rebuild finishes on a different game frame each run (non-deterministic gym results).
-	// Callers use this to build the graph in one shot instead.
-	internal bool Unthrottled => unthrottled;
-	readonly bool gymExitAfterAll;
-	readonly HashSet<string> gymGoalIds = new(StringComparer.OrdinalIgnoreCase);
-	List<GymRun>? gymRuns;
-	int gymRunIndex;
-	double gymRoomStartTime;
-	double nextGymLog;
-	List<GymResult>? gymResults;
+	public string DisplayId => string.IsNullOrWhiteSpace(GoalId) ? GoalName ?? $"{GoalLocalPosition.X},{GoalLocalPosition.Y}" : GoalId;
+}
+sealed record GymResult(string Room, string Goal, double SimTime, bool Success, string Reason);
 
-	// Fail a run early if Bud reports "no path" continuously for this long (virtual
-	// seconds): he's stuck with nowhere to go, so there's no point waiting out the
-	// full room timeout. -1 means we aren't currently in a no-path stretch.
-	const double GymNoPathTimeout = 5.0;
-	double gymNoPathStartTime = -1;
 
-	sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLocalPosition)
+internal struct Gym
+{
+	public Gym()
 	{
-		public string DisplayId => string.IsNullOrWhiteSpace(GoalId) ? GoalName ?? $"{GoalLocalPosition.X},{GoalLocalPosition.Y}" : GoalId;
-	}
-	sealed record GymResult(string Room, string Goal, double SimTime, bool Success, string Reason);
 
-	void GymTick()
-	{
-		if (gymRuns == null || game == null) return;
-
-		if (game.GymBudDied)
-		{
-			Console.WriteLine("[Gym] Bud fell off world");
-			AdvanceGym(success: false);
-		}
-		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
-			&& goal.OverlapsAny(Point2.Zero, bud))
-		{
-			Console.WriteLine("[Gym] Bud reached goal");
-			AdvanceGym(success: true);
-		}
-		else if (Time.Seconds - gymRoomStartTime > 20.0)
-		{
-			Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
-			AdvanceGym(success: false);
-		}
-		else
-		{
-			CheckGymNoPathTimeout();
-		}
 	}
 
-	void CollectGymRooms()
+	internal bool exitAfterAll;
+	internal List<GymRun>? runs;
+	internal int runIndex;
+	internal double roomStartTime;
+	internal double nextLog;
+	internal List<GymResult>? results;
+	internal HashSet<string> goalIds = new(StringComparer.OrdinalIgnoreCase);
+
+	internal bool CollectGymRooms(string? playRoomId = null)
 	{
 		var runs = new List<GymRun>();
 		foreach (var room in Assets.Rooms.Values)
@@ -83,24 +52,22 @@ partial class Manager
 			}
 		}
 
-		gymRuns = gymGoalIds.Count > 0 ? FilterGymRuns(runs) : runs;
+		this.runs = goalIds.Count > 0 ? FilterGymRuns(runs) : runs;
+		return this.runs.Count > 0;
 	}
 
-	private List<GymRun> FilterGymRuns(List<GymRun> runs)
+
+	readonly private List<GymRun> FilterGymRuns(List<GymRun> runs)
 	{
 		var selected = new List<GymRun>();
 		var missing = new List<string>();
-		foreach (var selector in gymGoalIds)
+		foreach (var selector in goalIds)
 		{
-			var matches = runs
-				.Where(run => string.Equals(run.GoalId, selector, StringComparison.OrdinalIgnoreCase))
-				.ToList();
+			var matches = runs.Where(run => string.Equals(run.GoalId, selector, StringComparison.OrdinalIgnoreCase)).ToList();
+
 			if (matches.Count <= 0)
 			{
-				matches = runs
-					.Where(run => !string.IsNullOrWhiteSpace(run.GoalName) &&
-						string.Equals(run.GoalName, selector, StringComparison.OrdinalIgnoreCase))
-					.ToList();
+				matches = [.. runs.Where(run => !string.IsNullOrWhiteSpace(run.GoalName) && string.Equals(run.GoalName, selector, StringComparison.OrdinalIgnoreCase))];
 			}
 
 			if (matches.Count <= 0)
@@ -124,48 +91,120 @@ partial class Manager
 		return selected;
 	}
 
-	private void AdvanceGym(bool success = false)
+
+	readonly internal void PrintGymResults()
 	{
-		if (gymRuns is not { Count: > 0 })
+		if (results is not { Count: > 0 })
 			return;
 
-		var current = gymRuns[gymRunIndex];
-		var simTime = Time.Seconds - gymRoomStartTime;
-		if (gymExitAfterAll)
+		int successCount = 0;
+		double totalTime = 0;
+		foreach (var r in results)
 		{
-			gymResults ??= [];
-			gymResults.Add(new GymResult(current.Room.Id, current.DisplayId, simTime, success,
+			if (r.Success) successCount++;
+			totalTime += r.SimTime;
+			Console.WriteLine(JsonSerializer.Serialize(r));
+		}
+		Console.WriteLine(JsonSerializer.Serialize(new
+		{
+			summary = new
+			{
+				rooms = results.Count,
+				success = successCount,
+				fail = results.Count - successCount,
+				totalTime
+			}
+		}));
+	}
+}
+
+partial class Manager
+{
+	readonly bool gymMode;
+	readonly bool headless;
+	readonly bool unthrottled;
+
+	// Unthrottled runs have no fixed wall-clock per frame, so a time-budgeted nav-graph
+	// rebuild finishes on a different game frame each run (non-deterministic gym results).
+	// Callers use this to build the graph in one shot instead.
+	internal bool Unthrottled => unthrottled;
+
+	Gym gym;
+
+	// Fail a run early if Bud reports "no path" continuously for this long (virtual seconds): he's stuck with nowhere to go, so there's no point waiting out the
+	// full room timeout. -1 means we aren't currently in a no-path stretch.
+	const double GymNoPathTimeout = 5.0;
+	double gymNoPathStartTime = -1;
+
+	static float GymSingleGoalTimeout = 30.0f; // TODO: we should probably make this based on the number of nodes from start to end for when we have bigger/mazier rooms and goal paths
+
+	void GymTick()
+	{
+		if (gym.runs == null || game == null) return;
+
+		if (game.GymBudDied)
+		{
+			Console.WriteLine("[Gym] Bud fell off world");
+			AdvanceGym(success: false);
+		}
+		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud && goal.OverlapsAny(Point2.Zero, bud))
+		{
+			Console.WriteLine("[Gym] Bud reached goal");
+			AdvanceGym(success: true);
+		}
+		else if (Time.Seconds - gym.roomStartTime > GymSingleGoalTimeout)
+		{
+			Console.WriteLine($"[Gym] timeout ({Time.Seconds - gym.roomStartTime:F1}s), advancing");
+			AdvanceGym(success: false);
+		}
+		else
+		{
+			CheckGymNoPathTimeout();
+		}
+	}
+
+	private void AdvanceGym(bool success = false)
+	{
+		if (gym.runs is not { Count: > 0 })
+			return;
+
+		var current = gym.runs[gym.runIndex];
+		var simTime = Time.Seconds - gym.roomStartTime;
+		if (gym.exitAfterAll)
+		{
+			gym.results ??= [];
+			gym.results.Add(new GymResult(current.Room.Id, current.DisplayId, simTime, success,
 				success ? "goal" : game?.GymBudDied == true ? "fell" : "timeout"));
 		}
 
 #if BROWSER
-		if (gymExitAfterAll)
+		if (gym.exitAfterAll)
 		{
-			PrintGymResults();
+			gym.PrintGymResults();
 			Exit();
 		}
 		else
 			Console.Error.WriteLine("[Gym] room transition not supported in browser");
 		return;
 #else
-		gymRunIndex++;
-		if (gymRunIndex >= gymRuns.Count)
+		gym.runIndex++;
+		if (gym.runIndex >= gym.runs.Count)
 		{
-			if (gymExitAfterAll)
+			if (gym.exitAfterAll)
 			{
-				PrintGymResults();
+				gym.PrintGymResults();
 				Exit();
 				return;
 			}
-			gymRunIndex = 0;
+			gym.runIndex = 0;
 		}
 
-		var run = gymRuns[gymRunIndex];
+		var run = gym.runs[gym.runIndex];
 		var room = run.Room;
 		cell = room.Cell;
 		selectedRoomId = null;
 		Console.WriteLine($"[Gym] {current.Room.Cell.X},{current.Room.Cell.Y}:{current.DisplayId} → {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
-		gymRoomStartTime = Time.Seconds;
+		gym.roomStartTime = Time.Seconds;
 		gymNoPathStartTime = -1;
 		StartGame(immediate: true);
 		AssignGymTarget(run);
@@ -227,28 +266,4 @@ partial class Manager
 			game.NavTrace?.Event(game, "gymTarget", ("target", NavTrace.Vec(fallbackGoal.Position)));
 	}
 
-	private void PrintGymResults()
-	{
-		if (gymResults is not { Count: > 0 })
-			return;
-
-		int successCount = 0;
-		double totalTime = 0;
-		foreach (var r in gymResults)
-		{
-			if (r.Success) successCount++;
-			totalTime += r.SimTime;
-			Console.WriteLine(JsonSerializer.Serialize(r));
-		}
-		Console.WriteLine(JsonSerializer.Serialize(new
-		{
-			summary = new
-			{
-				rooms = gymResults.Count,
-				success = successCount,
-				fail = gymResults.Count - successCount,
-				totalTime
-			}
-		}));
-	}
 }

@@ -1,5 +1,6 @@
 # TODO
 
+- think about trying to turn a real 3D complex space (a castle blueprint) into a series of layers connected by doors
 - a room enclosed in grass shouldn't reverb as much.
 - resume codex work on mapping touch/pinch events to Foster events and route them through ImGui
 - Consider some [pixel art ideas](https://chatgpt.com/c/6a030b73-3564-83eb-b4ca-9ab1e9e787bb)
