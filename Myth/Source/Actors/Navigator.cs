@@ -47,6 +47,10 @@ public sealed class Navigator(Pawn owner)
 	static float MaxGroundSpeedApprox => 93.0f;
 	static float RunupSpeedPerReachPx => 0.7f;
 	static float RunupForwardMax => 12.0f;
+	// Engage runup only when the takeoff node has less than this much surface ahead of it
+	// before the edge (a cramped lip the plan's runup can't build speed on). Nodes with more
+	// room are left untouched so their landings don't shift and cascade into later jumps.
+	static float RunupRunwayThreshold => 10.0f;
 	// Pawn ground friction (Pawn.Friction) and half-width, used to estimate how far Bud
 	// slides after landing so he doesn't overshoot a narrow platform's far edge into a pit.
 	static float GroundFrictionApprox => 480.0f;
@@ -687,21 +691,26 @@ public sealed class Navigator(Pawn owner)
 			// Forward runup for long jumps: a far jump taken flat-footed from the lip of a
 			// cramped node lands short and clips the wall below the target. Roll forward toward
 			// the takeoff edge (bounded, never backward) to launch with speed a few px closer.
-			// Stops at the surface edge, once up to speed, or after RunupForwardMax px.
+			// Only engages when the takeoff node is CRAMPED — little surface ahead before the
+			// edge, so the plan's own runup can't build speed. A node with room is left alone,
+			// or rolling it forward would shift its landing and cascade into the next jump.
 			var runupReach = MathF.Abs(target.X - from.Position.X);
 			if (hasPlannedHorizontal && !plan.WallJump && takeoffDirection != 0 &&
-				runupReach > RunupRequiredReach && IsGrounded)
+				runupReach > RunupRequiredReach && IsGrounded &&
+				graph.TryGetNodeSurfaceSpan(edge.From, out var srcSpan))
 			{
+				var frontEdge = takeoffDirection > 0 ? srcSpan.Right : srcSpan.Left;
+				var runway = (frontEdge - Position.X) * takeoffDirection;
 				var forwardSpeed = owner.Velocity.X * takeoffDirection;
 				var targetSpeed = MathF.Min(MaxGroundSpeedApprox, runupReach * RunupSpeedPerReachPx);
-				if (forwardSpeed < targetSpeed &&
+				if (runway < RunupRunwayThreshold && forwardSpeed < targetSpeed &&
 					activeEdge.RunupForward < RunupForwardMax &&
 					HasGroundSupportNextStep(takeoffDirection))
 				{
 					activeEdge.RunupForward += MathF.Abs(owner.Velocity.X) * owner.Time.Delta;
 					moveX = takeoffDirection;
 					activeEdge.Phase = ActiveEdgePhase.Runup;
-					DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} runup {edge.From}->{edge.To} vx {forwardSpeed:0}/{targetSpeed:0}" : "runup";
+					DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} runup {edge.From}->{edge.To} rw {runway:0} vx {forwardSpeed:0}/{targetSpeed:0}" : "runup";
 					return true;
 				}
 			}
