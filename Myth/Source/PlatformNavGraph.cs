@@ -540,6 +540,20 @@ public sealed class PlatformNavGraph
 		LogGraphSummary();
 	}
 
+	// Debug: list nodes within `radius` of a point with their kind and outgoing edges.
+	public void DumpNodesNear(Vector2 pos, float radius)
+	{
+		Console.WriteLine($"[NavGraph] nodes near ({pos.X:0},{pos.Y:0}) r{radius:0}:");
+		foreach (var node in Nodes)
+		{
+			if (Vector2.Distance(node.Position, pos) > radius)
+				continue;
+			var outs = string.Join(", ", Edges.Where(e => e.From == node.Id).Select(e => $"{e.Kind}->{e.To}"));
+			var ins = string.Join(", ", Edges.Where(e => e.To == node.Id).Select(e => $"{e.Kind}<-{e.From}"));
+			Console.WriteLine($"  node {node.Id} {node.Kind} ({node.Position.X:0},{node.Position.Y:0}) out[{outs}] in[{ins}]");
+		}
+	}
+
 	// Order-independent fingerprint of the built graph. Counts/sums don't care
 	// about node or edge ordering (which an optimization may shuffle), but they
 	// flag real topology changes so we can diff before/after a refactor.

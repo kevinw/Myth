@@ -40,6 +40,13 @@ public sealed class Navigator(Pawn owner)
 	// landing" into a target takeoff speed. Matches a typical single hop (~0.5s up-and-down).
 	static float NominalJumpAirtime => 0.5f;
 	static float MaxAirSpeedApprox => 100.0f;
+	// Forward runup: long jumps (reach beyond this) want real launch speed. Bud rolls forward
+	// up to RunupForwardMax px toward the takeoff lip to build it — bounded so it never turns
+	// a mid-surface takeoff into a big displacement, and never backs up off a ledge.
+	static float RunupRequiredReach => 44.0f;
+	static float MaxGroundSpeedApprox => 93.0f;
+	static float RunupSpeedPerReachPx => 0.7f;
+	static float RunupForwardMax => 12.0f;
 	// Pawn ground friction (Pawn.Friction) and half-width, used to estimate how far Bud
 	// slides after landing so he doesn't overshoot a narrow platform's far edge into a pit.
 	static float GroundFrictionApprox => 480.0f;
@@ -677,6 +684,28 @@ public sealed class Navigator(Pawn owner)
 				return true;
 			}
 
+			// Forward runup for long jumps: a far jump taken flat-footed from the lip of a
+			// cramped node lands short and clips the wall below the target. Roll forward toward
+			// the takeoff edge (bounded, never backward) to launch with speed a few px closer.
+			// Stops at the surface edge, once up to speed, or after RunupForwardMax px.
+			var runupReach = MathF.Abs(target.X - from.Position.X);
+			if (hasPlannedHorizontal && !plan.WallJump && takeoffDirection != 0 &&
+				runupReach > RunupRequiredReach && IsGrounded)
+			{
+				var forwardSpeed = owner.Velocity.X * takeoffDirection;
+				var targetSpeed = MathF.Min(MaxGroundSpeedApprox, runupReach * RunupSpeedPerReachPx);
+				if (forwardSpeed < targetSpeed &&
+					activeEdge.RunupForward < RunupForwardMax &&
+					HasGroundSupportNextStep(takeoffDirection))
+				{
+					activeEdge.RunupForward += MathF.Abs(owner.Velocity.X) * owner.Time.Delta;
+					moveX = takeoffDirection;
+					activeEdge.Phase = ActiveEdgePhase.Runup;
+					DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} runup {edge.From}->{edge.To} vx {forwardSpeed:0}/{targetSpeed:0}" : "runup";
+					return true;
+				}
+			}
+
 			// A near-vertical hop onto a narrow platform directly overhead must leave the
 			// ground with almost no horizontal speed, or the drift carries Bud off the
 			// platform. Brake to a near-stop before committing (a plan with no horizontal
@@ -996,6 +1025,10 @@ public sealed class Navigator(Pawn owner)
 		public JumpPlanExecution.State Jump;
 		public bool JumpPlanStarted;
 		public float JumpPrepareTimer;
+		// Distance Bud has rolled forward toward the takeoff edge to build launch speed for a
+		// long jump (bounded; no backing up). Lets him leave from the lip of a cramped node
+		// with speed instead of leaping flat-footed and clipping the wall below the target.
+		public float RunupForward;
 
 		public static EdgeState Start(PlatformNavGraph.Edge edge)
 			=> new()
