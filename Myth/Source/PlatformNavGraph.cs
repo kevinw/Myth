@@ -38,7 +38,11 @@ public sealed class PlatformNavGraph
 	// pawn hits a wall mid-air it kicks off it (away from the wall) with a fresh jump,
 	// then steers in AirDirection. Lets the planner route through a wall kick where a
 	// single jump can't make the gap/height (e.g. under a low ceiling).
-	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime, bool WallJump = false, int MaxWallKicks = 1);
+	// Descend: enter the maneuver by FALLING instead of an up-jump — the pawn drifts toward a
+	// wall (Direction), wall-hugs down, then fires a single wall kick off it (WallJump) toward
+	// AirDirection. Used to drop into a shaft and kick into a pocket under an overhang, which no
+	// upward jump arc can reach.
+	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime, bool WallJump = false, int MaxWallKicks = 1, bool Descend = false);
 	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null);
 
 	const int SampleStep = Game.TileSize;
@@ -1529,6 +1533,7 @@ public sealed class PlatformNavGraph
 		readonly JumpPlan plan;
 		float elapsed;
 		bool leftStart;
+		bool leftGround;
 		JumpPlanExecution.State jump;
 		int lastX;
 		int stalledFrames;
@@ -1552,7 +1557,13 @@ public sealed class PlatformNavGraph
 			var moveX = JumpPlanExecution.MoveX(plan, jump);
 			var jumpPressed = false;
 
-			if (JumpPlanExecution.ShouldStartJump(plan, jump))
+			if (plan.Descend)
+			{
+				// Don't jump up — fall into the wall-hug. Mark Started so the wall-kick logic
+				// below engages; the actual kick only fires once we're hugging the wall.
+				jump.Started = true;
+			}
+			else if (JumpPlanExecution.ShouldStartJump(plan, jump))
 			{
 				JumpPlanExecution.StartJump(ref jump, plan);
 				jumpPressed = true;
@@ -1566,7 +1577,12 @@ public sealed class PlatformNavGraph
 			JumpPlanExecution.DecayHold(ref jump, game.Time.Delta <= 0 ? SimDelta : game.Time.Delta, jumpPressed);
 
 			JumpPlanExecution.SyncWallKickLock(ref jump, plan, IsWallJumpLocked, Math.Sign(Velocity.X));
-			if (JumpPlanExecution.NeedsWallKickInput(plan, jump, IsGrounded, IsWallJumpLocked))
+			// For a descent, slide down the wall for RunupTime first (steer into it, no kick),
+			// then fire the single kick — so we launch from the right height, not on first touch.
+			var kickReady = !plan.Descend || elapsed >= plan.RunupTime;
+			if (plan.Descend && !kickReady)
+				moveX = plan.Direction; // keep hugging the wall while sliding
+			else if (JumpPlanExecution.NeedsWallKickInput(plan, jump, IsGrounded, IsWallJumpLocked))
 			{
 				moveX = JumpPlanExecution.WallApproachDirection(plan, jump);
 				jumpPressed = true;
@@ -1597,8 +1613,13 @@ public sealed class PlatformNavGraph
 
 				if (Vector2.DistanceSquared((Vector2)Position, from) > 9)
 					leftStart = true;
+				if (!IsGrounded)
+					leftGround = true;
 
-				if (leftStart && Velocity.Y >= 0 && IsGrounded)
+				// Require the pawn to have actually left the ground before accepting a landing.
+				// A descent walks along its start surface before falling; without this the landing
+				// check fires on the first few px of grounded movement, before the maneuver begins.
+				if (leftStart && leftGround && Velocity.Y >= 0 && IsGrounded)
 				{
 					simLanded++;
 					landing = Position;
