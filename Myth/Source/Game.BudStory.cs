@@ -20,24 +20,23 @@ public partial class Game
 			.Say(
 				"I'm here.",
 				"Still me.",
-				"Smells weird in here."));
+				"Smells weird in here.",
+				"What's that?"
+			));
 
 		story.BudBarks("bud_reveal_door", s => s
 			.OnRevealDoorEntered()
 			.Redraw(3)
 			.Priority(2)
 			.Say(
-				"That was hidden.",
-				"I wonder who covered that up.",
-				"Good eye."));
+				"Oh."));
 
 		story.BudBarks("bud_player_hurt", s => s
 			.OnPlayerHurt()
 			.Redraw(4)
 			.Priority(2)
 			.Say(
-				"Careful.",
-				"Ouch",
+				"Ouch!",
 				"Still with me?"));
 
 		story.BudBarks("bud_enemy_killed", s => s
@@ -48,7 +47,9 @@ public partial class Game
 			.Say(
 				"Nice.",
 				"Hmm.",
-				"Woah."));
+				"Woah.",
+				"Hm..."
+			));
 
 		story.BudBarks("bud_idle", s => s
 			.OnPlayerIdle(StoryIdleSeconds)

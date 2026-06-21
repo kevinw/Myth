@@ -237,6 +237,16 @@
       "Type": "LinkedDoor",
       "Position": [68, 336],
       "TargetActorId": "e7a9605e80486d68"
+    },
+    {
+      "Id": "6b87ae0ec7c49167",
+      "Type": "Player",
+      "Position": [460, 336]
+    },
+    {
+      "Id": "a6b8d9add406c450",
+      "Type": "Goal",
+      "Position": [461, 165]
     }
   ]
 }

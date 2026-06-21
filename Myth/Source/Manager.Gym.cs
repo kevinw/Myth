@@ -21,13 +21,45 @@ partial class Manager
 	double nextGymLog;
 	List<GymResult>? gymResults;
 
-	private sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLocalPosition)
+	// Fail a run early if Bud reports "no path" continuously for this long (virtual
+	// seconds): he's stuck with nowhere to go, so there's no point waiting out the
+	// full room timeout. -1 means we aren't currently in a no-path stretch.
+	const double GymNoPathTimeout = 5.0;
+	double gymNoPathStartTime = -1;
+
+	sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLocalPosition)
 	{
 		public string DisplayId => string.IsNullOrWhiteSpace(GoalId) ? GoalName ?? $"{GoalLocalPosition.X},{GoalLocalPosition.Y}" : GoalId;
 	}
-	private sealed record GymResult(string Room, string Goal, double SimTime, bool Success, string Reason);
+	sealed record GymResult(string Room, string Goal, double SimTime, bool Success, string Reason);
 
-	private void CollectGymRooms()
+	void GymTick()
+	{
+		if (gymRuns == null || game == null) return;
+
+		if (game.GymBudDied)
+		{
+			Console.WriteLine("[Gym] Bud fell off world");
+			AdvanceGym(success: false);
+		}
+		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
+			&& goal.OverlapsAny(Point2.Zero, bud))
+		{
+			Console.WriteLine("[Gym] Bud reached goal");
+			AdvanceGym(success: true);
+		}
+		else if (Time.Seconds - gymRoomStartTime > 20.0)
+		{
+			Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
+			AdvanceGym(success: false);
+		}
+		else
+		{
+			CheckGymNoPathTimeout();
+		}
+	}
+
+	void CollectGymRooms()
 	{
 		var runs = new List<GymRun>();
 		foreach (var room in Assets.Rooms.Values)
@@ -134,9 +166,40 @@ partial class Manager
 		selectedRoomId = null;
 		Console.WriteLine($"[Gym] {current.Room.Cell.X},{current.Room.Cell.Y}:{current.DisplayId} → {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
 		gymRoomStartTime = Time.Seconds;
+		gymNoPathStartTime = -1;
 		StartGame(immediate: true);
 		AssignGymTarget(run);
 #endif
+	}
+
+	// Returns true if the current run was advanced (failed) because Bud has been
+	// reporting "no path" for longer than GymNoPathTimeout. Call only after the
+	// death/goal/room-timeout checks so we don't advance twice in one frame.
+	private bool CheckGymNoPathTimeout()
+	{
+		if (game?.GetFirst<Bud>() is not { } bud)
+			return false;
+
+		var noPath = bud.DebugNavLabel is { } label && label.StartsWith("no path", StringComparison.Ordinal);
+		if (!noPath)
+		{
+			gymNoPathStartTime = -1;
+			return false;
+		}
+
+		if (gymNoPathStartTime < 0)
+		{
+			gymNoPathStartTime = Time.Seconds;
+			return false;
+		}
+
+		var stuck = Time.Seconds - gymNoPathStartTime;
+		if (stuck <= GymNoPathTimeout)
+			return false;
+
+		Console.WriteLine($"[Gym] no path for {stuck:F1}s, advancing");
+		AdvanceGym(success: false);
+		return true;
 	}
 
 	private void AssignGymTarget(GymRun run)

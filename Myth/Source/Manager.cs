@@ -373,6 +373,7 @@ public partial class Manager : App
 				selectedRoomId = null;
 				Console.WriteLine($"[Gym] found {gymRuns.Count} goal run(s), starting {room.Cell.X},{room.Cell.Y}:{run.DisplayId}");
 				gymRoomStartTime = Time.Seconds;
+				gymNoPathStartTime = -1;
 				StartGame(immediate: true);
 				AssignGymTarget(run);
 			}
@@ -601,20 +602,10 @@ public partial class Manager : App
 		if (game == null) return;
 
 		game.Update(true);
+
 		if (gymRuns == null) return;
 
-		if (game.GymBudDied)
-			AdvanceGym(success: false);
-		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
-			&& goal.OverlapsAny(Point2.Zero, bud))
-		{
-			AdvanceGym(success: true);
-		}
-		else if (Time.Seconds - gymRoomStartTime > 20.0)
-		{
-			Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
-			AdvanceGym(success: false);
-		}
+		GymTick();
 
 		if (Time.Seconds >= nextGymLog)
 		{
@@ -722,25 +713,7 @@ public partial class Manager : App
 					game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
 			}
 
-			if (gymRuns != null && game != null)
-			{
-				if (game.GymBudDied)
-				{
-					Console.WriteLine("[Gym] Bud fell off world");
-					AdvanceGym(success: false);
-				}
-				else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud
-					&& goal.OverlapsAny(Point2.Zero, bud))
-				{
-					Console.WriteLine("[Gym] Bud reached goal");
-					AdvanceGym(success: true);
-				}
-				else if (Time.Seconds - gymRoomStartTime > 20.0)
-				{
-					Console.WriteLine($"[Gym] timeout ({Time.Seconds - gymRoomStartTime:F1}s), advancing");
-					AdvanceGym(success: false);
-				}
-			}
+			GymTick();
 		}
 		// Show Editor
 		else

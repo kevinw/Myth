@@ -12,46 +12,46 @@ public sealed class Navigator(Pawn owner)
 	public const int NavNodeReachDistance = 8;
 	public const float NavSearchDistance = 180;
 	public const float GoalNodeSearchDistance = 56;
-	private const int GroundSupportLookAhead = 6;
-	private const int GroundSupportProbeWidth = 4;
-	private const int GroundSupportCastDepth = 10;
-	private const int ImmediateGroundSupportCastDepth = 4;
-	private const float SafeLandingSearchDistance = Game.TileSize * 1.5f;
-	private const float ActiveEdgeTimeout = 1.35f;
-	private const float OpposingJumpVelocityThreshold = 8.0f;
-	private const float JumpPrepareMaxTime = 0.15f;
-	private const float PrecisionLandingBrakeMinHeight = 16.0f;
-	private const float PrecisionLandingBrakeDistance = 32.0f;
-	private const float PrecisionLandingBrakeSpeed = 45.0f;
-	private const float LandingStabilizeDistance = 32.0f;
-	private const float LandingStabilizeVerticalSpeed = 45.0f;
-	private const float LandingStabilizeMaxSpeed = 64.0f;
-	private const float LandingStabilizeMinSpeed = 12.0f;
-	private const float LandingStabilizeGain = 5.0f;
-	private const float LandingStabilizeBrakeAccel = 600.0f;
-	private const float TakeoffApproachBrakeDistance = 10.0f;
-	private const float TakeoffApproachBrakeAccel = 1600.0f;
-	private const float BlockedPathTargetResetDistance = 16.0f;
-	private const float DirectGoalJumpMaxHorizontalDistance = 64.0f;
-	private const float DirectGoalJumpMaxVerticalDistance = 56.0f;
-	private const float DirectGoalJumpMinVerticalDistance = 12.0f;
-	private const float JumpLandingDoneDistance = 2.0f;
+	const int GroundSupportLookAhead = 6;
+	const int GroundSupportProbeWidth = 4;
+	const int GroundSupportCastDepth = 10;
+	const int ImmediateGroundSupportCastDepth = 4;
+	const float SafeLandingSearchDistance = Game.TileSize * 1.5f;
+	const float ActiveEdgeTimeout = 1.35f;
+	const float OpposingJumpVelocityThreshold = 8.0f;
+	const float JumpPrepareMaxTime = 0.15f;
+	const float PrecisionLandingBrakeMinHeight = 16.0f;
+	const float PrecisionLandingBrakeDistance = 32.0f;
+	const float PrecisionLandingBrakeSpeed = 45.0f;
+	const float LandingStabilizeDistance = 32.0f;
+	const float LandingStabilizeVerticalSpeed = 45.0f;
+	const float LandingStabilizeMaxSpeed = 64.0f;
+	const float LandingStabilizeMinSpeed = 12.0f;
+	const float LandingStabilizeGain = 5.0f;
+	const float LandingStabilizeBrakeAccel = 600.0f;
+	const float TakeoffApproachBrakeDistance = 10.0f;
+	const float TakeoffApproachBrakeAccel = 1600.0f;
+	const float BlockedPathTargetResetDistance = 16.0f;
+	const float DirectGoalJumpMaxHorizontalDistance = 64.0f;
+	const float DirectGoalJumpMaxVerticalDistance = 56.0f;
+	const float DirectGoalJumpMinVerticalDistance = 12.0f;
+	const float JumpLandingDoneDistance = 2.0f;
 
-	private readonly List<PlatformNavGraph.Edge> navPath = [];
+	readonly List<PlatformNavGraph.Edge> navPath = [];
 	public List<PlatformNavGraph.Edge> NavPath => navPath;
-	private readonly List<PlatformNavGraph.SurfaceEdge> surfaceNavPath = [];
-	private readonly List<PlatformNavGraph.Node> goalCandidates = [];
-	private readonly HashSet<(int From, int To)> blockedPathEdges = [];
-	private Vector2? blockedPathTarget;
-	private EdgeState activeEdge;
-	private bool activeEdgeBlocksPath;
-	private string? lastTraceStateKey;
+	readonly List<PlatformNavGraph.SurfaceEdge> surfaceNavPath = [];
+	readonly List<PlatformNavGraph.Node> goalCandidates = [];
+	readonly HashSet<(int From, int To)> blockedPathEdges = [];
+	Vector2? blockedPathTarget;
+	EdgeState activeEdge;
+	bool activeEdgeBlocksPath;
+	string? lastTraceStateKey;
 
 	// Owner shortcuts
-	private Game Game => owner.Game;
-	private Vector2 Position => owner.Position;
-	private bool IsGrounded => owner.IsGrounded;
-	private bool ShouldBuildDebugNavLabel => owner.Game.IsPlatformNavDebugVisible || owner.Game.GymMode;
+	Game Game => owner.Game;
+	Vector2 Position => owner.Position;
+	bool IsGrounded => owner.IsGrounded;
+	bool ShouldBuildDebugNavLabel => owner.Game.IsPlatformNavDebugVisible || owner.Game.GymMode;
 
 	// Public state Bud/Boss read to build PawnInput
 	public bool JumpHeld { get; private set; }
@@ -404,7 +404,7 @@ public sealed class Navigator(Pawn owner)
 		DebugNavLabel = label;
 	}
 
-	private void ResetBlockedPathEdgesForTarget(Vector2 target)
+	void ResetBlockedPathEdgesForTarget(Vector2 target)
 	{
 		if (blockedPathTarget.HasValue &&
 			Vector2.DistanceSquared(blockedPathTarget.Value, target) <= BlockedPathTargetResetDistance * BlockedPathTargetResetDistance)
@@ -414,7 +414,7 @@ public sealed class Navigator(Pawn owner)
 		blockedPathTarget = target;
 	}
 
-	private bool TryDirectGoalJump(Vector2 target, out int moveX, out bool jumpPressed)
+	bool TryDirectGoalJump(Vector2 target, out int moveX, out bool jumpPressed)
 	{
 		moveX = 0;
 		jumpPressed = false;
@@ -472,7 +472,7 @@ public sealed class Navigator(Pawn owner)
 		return false;
 	}
 
-	private bool TryFindDirectJumpLaunchPath(PlatformNavGraph graph, int startId, Vector2 target, out PlatformNavGraph.Node goal)
+	bool TryFindDirectJumpLaunchPath(PlatformNavGraph graph, int startId, Vector2 target, out PlatformNavGraph.Node goal)
 	{
 		PlatformNavGraph.Node? best = null;
 		var bestScore = float.MaxValue;
@@ -505,7 +505,7 @@ public sealed class Navigator(Pawn owner)
 		return true;
 	}
 
-	private bool CanDirectJumpFrom(Vector2 from, Vector2 target)
+	bool CanDirectJumpFrom(Vector2 from, Vector2 target)
 	{
 		var dx = target.X - from.X;
 		var dy = from.Y - target.Y;
@@ -539,7 +539,7 @@ public sealed class Navigator(Pawn owner)
 		return HasFootSupport(moveX, 1, ImmediateGroundSupportCastDepth);
 	}
 
-	private bool HasFootSupport(int moveX, int lookAhead, int castDepth)
+	bool HasFootSupport(int moveX, int lookAhead, int castDepth)
 	{
 		var bounds = owner.Hitbox.Rect + owner.Position;
 		var direction = Math.Sign(moveX);
@@ -553,7 +553,7 @@ public sealed class Navigator(Pawn owner)
 		return supported;
 	}
 
-	private bool OverlapsJumpthruSupport(RectInt probe)
+	bool OverlapsJumpthruSupport(RectInt probe)
 	{
 		foreach (var actor in Game.Actors)
 		{
@@ -598,7 +598,7 @@ public sealed class Navigator(Pawn owner)
 		return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
 	}
 
-	private bool TryExecuteJumpEdge(
+	bool TryExecuteJumpEdge(
 		PlatformNavGraph.Edge edge,
 		PlatformNavGraph.Node from,
 		PlatformNavGraph.Node to,
@@ -722,7 +722,7 @@ public sealed class Navigator(Pawn owner)
 		return true;
 	}
 
-	private void BrakeForTakeoffApproach(float dx)
+	void BrakeForTakeoffApproach(float dx)
 	{
 		if (MathF.Abs(dx) > TakeoffApproachBrakeDistance || owner.Velocity.X == 0)
 			return;
@@ -735,14 +735,14 @@ public sealed class Navigator(Pawn owner)
 			owner.Velocity.X = 0;
 	}
 
-	private static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge)
+	static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge)
 	{
 		if (edge.Jump is not { } plan || plan.MaxWallKicks <= 1)
 			return ActiveEdgeTimeout;
 		return MathF.Max(ActiveEdgeTimeout, 0.55f + plan.MaxWallKicks * 0.45f);
 	}
 
-	private static Vector2 ResolveSafeJumpLandingTarget(PlatformNavGraph graph, PlatformNavGraph.Node to)
+	static Vector2 ResolveSafeJumpLandingTarget(PlatformNavGraph graph, PlatformNavGraph.Node to)
 	{
 		if (to.Kind == PlatformNavGraph.NodeKind.Landing)
 			return to.Position;
@@ -764,7 +764,7 @@ public sealed class Navigator(Pawn owner)
 		return best?.Position ?? to.Position;
 	}
 
-	private void StartPlannedJump(PlatformNavGraph.JumpPlan plan, out bool jumpPressed)
+	void StartPlannedJump(PlatformNavGraph.JumpPlan plan, out bool jumpPressed)
 	{
 		jumpPressed = true;
 		JumpPlanExecution.StartJump(ref activeEdge.Jump, plan);
@@ -773,7 +773,7 @@ public sealed class Navigator(Pawn owner)
 			Game.NavTrace.EdgeEvent(Game, "jumpTakeoff", edge, ("plan", JumpPlanTrace(plan)), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 	}
 
-	private static PlatformNavGraph.JumpPlan DefaultJumpPlan(Vector2 from, Vector2 target)
+	static PlatformNavGraph.JumpPlan DefaultJumpPlan(Vector2 from, Vector2 target)
 	{
 		var direction = Math.Sign(target.X - from.X);
 		if (direction == 0) direction = 1;
@@ -785,12 +785,12 @@ public sealed class Navigator(Pawn owner)
 		return new(direction, 0, Math.Clamp(hold, 0.055f, JumpPlanExecution.MaxJumpHoldTime), direction, 99.0f);
 	}
 
-	private bool CanStartJumpPlan(Vector2 source)
+	bool CanStartJumpPlan(Vector2 source)
 		=> IsGrounded &&
 		   MathF.Abs(Position.X - source.X) <= NavNodeReachDistance * 0.25f &&
 		   MathF.Abs(Position.Y - source.Y) <= Game.TileSize;
 
-	private int PlannedJumpMoveX(PlatformNavGraph.JumpPlan plan, Vector2 landing)
+	int PlannedJumpMoveX(PlatformNavGraph.JumpPlan plan, Vector2 landing)
 	{
 		var moveX = JumpPlanExecution.MoveX(plan, activeEdge.Jump);
 		if (moveX == plan.Direction)
@@ -804,7 +804,7 @@ public sealed class Navigator(Pawn owner)
 		return moveX;
 	}
 
-	private int AirSteerTowardLanding(
+	int AirSteerTowardLanding(
 		PlatformNavGraph.JumpPlan plan,
 		Vector2 takeoff,
 		Vector2 landing,
