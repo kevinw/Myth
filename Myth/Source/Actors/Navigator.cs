@@ -51,6 +51,9 @@ public sealed class Navigator(Pawn owner)
 	// before the edge (a cramped lip the plan's runup can't build speed on). Nodes with more
 	// room are left untouched so their landings don't shift and cascade into later jumps.
 	static float RunupRunwayThreshold => 10.0f;
+	// A jump whose target is no higher than this above the takeoff counts as level/descending
+	// and needs launch speed (it can't trade height for a shorter horizontal return).
+	static float LevelJumpTolerance => 4.0f;
 	// Pawn ground friction (Pawn.Friction) and half-width, used to estimate how far Bud
 	// slides after landing so he doesn't overshoot a narrow platform's far edge into a pit.
 	static float GroundFrictionApprox => 480.0f;
@@ -703,7 +706,12 @@ public sealed class Navigator(Pawn owner)
 				var runway = (frontEdge - Position.X) * takeoffDirection;
 				var forwardSpeed = owner.Velocity.X * takeoffDirection;
 				var targetSpeed = MathF.Min(MaxGroundSpeedApprox, runupReach * RunupSpeedPerReachPx);
-				if (runway < RunupRunwayThreshold && forwardSpeed < targetSpeed &&
+				// Need real speed when the takeoff is cramped (plan can't build it), OR when the
+				// jump is long and level/descending — a climbing jump lands higher and returns to
+				// level sooner, so it needs less horizontal; a level one must stay aloft the whole
+				// arc and undershoots without speed. Climbing jumps with room are left alone.
+				var levelOrFalling = target.Y >= from.Position.Y - LevelJumpTolerance;
+				if ((runway < RunupRunwayThreshold || levelOrFalling) && forwardSpeed < targetSpeed &&
 					activeEdge.RunupForward < RunupForwardMax &&
 					HasGroundSupportNextStep(takeoffDirection))
 				{
