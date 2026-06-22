@@ -61,6 +61,9 @@ public sealed class Navigator(Pawn owner)
 	// Landing brake only engages when ground is within this many px below Bud's feet
 	// (i.e. the final descent onto a platform), so it never fires while arcing over a gap.
 	static int LandingBrakeGroundProbeDepth => 14;
+	// A descent kicks off the wall once it has slid to within this many px above the landing
+	// node's level — low enough that the kick arc threads under the overhang into the pocket.
+	static float DescentKickHeight => 0.0f;
 
 	readonly List<PlatformNavGraph.Edge> navPath = [];
 	public List<PlatformNavGraph.Edge> NavPath => navPath;
@@ -109,7 +112,12 @@ public sealed class Navigator(Pawn owner)
 
 	public void UpdateJumpHeld(bool jumpPressed)
 	{
-		if (activeEdge.Jump.HoldTimer > 0)
+		// A descent's kick off the wall must be a short tap, not a held jump: cut it the frame
+		// after it fires so the arc stays flat and threads under the overhang into the pocket.
+		// (A normal jump holds through the rise for height — that's the default below.)
+		if (activeEdge.Edge is { Jump.Descend: true } && activeEdge.Jump.WallKickCount > 0)
+			JumpHeld = false;
+		else if (activeEdge.Jump.HoldTimer > 0)
 			JumpHeld = true;
 		else if (jumpPressed)
 			JumpHeld = true;
@@ -757,6 +765,10 @@ public sealed class Navigator(Pawn owner)
 			activeEdge.JumpPlanStarted = true;
 			activeEdge.Jump.Timer = 0;
 			activeEdge.Timer = 0;
+			// A descent enters the maneuver by falling, not jumping: mark Started so the wall-kick
+			// logic engages, but never press jump up. The pawn walks off toward the wall and slides.
+			if (plan.Descend)
+				activeEdge.Jump.Started = true;
 			Game.NavTrace?.EdgeEvent(Game, "jumpPlanStart", edge, ("plan", JumpPlanTrace(plan)), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 		}
 
@@ -789,7 +801,14 @@ public sealed class Navigator(Pawn owner)
 		{
 			activeEdge.Phase = ActiveEdgePhase.Airborne;
 			JumpPlanExecution.SyncWallKickLock(ref activeEdge.Jump, plan, owner.IsWallJumpLocked, Math.Sign(owner.Velocity.X));
-			if (JumpPlanExecution.NeedsWallKickInput(plan, activeEdge.Jump, IsGrounded, owner.IsWallJumpLocked))
+			// A descent hugs the wall and slides DOWN to the landing's level before kicking, so it
+			// launches low enough to thread under the overhang. Gating on depth (not time) is
+			// robust to how fast Bud arrived at the node. Until deep enough, hold into the wall.
+			if (plan.Descend && activeEdge.Jump.WallKickCount == 0 && Position.Y < target.Y - DescentKickHeight)
+			{
+				moveX = plan.Direction;
+			}
+			else if (JumpPlanExecution.NeedsWallKickInput(plan, activeEdge.Jump, IsGrounded, owner.IsWallJumpLocked))
 			{
 				// Steer into the wall and keep the jump pressed so the wall kick fires
 				// the instant Bud touches it. The runtime input-lock then carries him
@@ -812,7 +831,10 @@ public sealed class Navigator(Pawn owner)
 			DebugNavProbeHit = false;
 		}
 
-		if (activeEdge.Jump.Started && IsGrounded && activeEdge.Jump.Timer > plan.RunupTime + 0.12f)
+		// A descent is grounded at its start node with Started already set, so don't treat that
+		// as a landing — only accept one after it has kicked off the wall (WallKickCount > 0).
+		var descentNotYetKicked = plan.Descend && activeEdge.Jump.WallKickCount == 0;
+		if (activeEdge.Jump.Started && IsGrounded && !descentNotYetKicked && activeEdge.Jump.Timer > plan.RunupTime + 0.12f)
 		{
 			// Success = grounded anywhere on the target node's platform. The jump arc lands
 			// where it lands (often mid-platform, not on the exact node point); fighting
@@ -891,7 +913,13 @@ public sealed class Navigator(Pawn owner)
 
 	static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge)
 	{
-		if (edge.Jump is not { } plan || plan.MaxWallKicks <= 1)
+		if (edge.Jump is not { } plan)
+			return ActiveEdgeTimeout;
+		// A descent walks to the edge, slides for RunupTime, kicks, and lands — give it the
+		// slide time plus room for the fall and arc.
+		if (plan.Descend)
+			return MathF.Max(ActiveEdgeTimeout, plan.RunupTime + 1.4f);
+		if (plan.MaxWallKicks <= 1)
 			return ActiveEdgeTimeout;
 		return MathF.Max(ActiveEdgeTimeout, 0.55f + plan.MaxWallKicks * 0.45f);
 	}

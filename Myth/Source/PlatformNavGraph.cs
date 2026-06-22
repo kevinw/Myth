@@ -100,6 +100,19 @@ public sealed class PlatformNavGraph
 		new(-1, 0.08f, 0.18f, 0, 99.0f, WallJump: true, MaxWallKicks: 6),
 	];
 
+	// Descent maneuvers: walk off a ledge toward a wall, hug-slide down for SlideTime, then one
+	// kick off it (away from the wall). Discovers routes into pockets under overhangs that no
+	// upward jump arc can reach. Direction = toward the wall; AirDirection = kick (away) side.
+	static readonly JumpPlan[] DescentPlans = BuildDescentPlans();
+	static JumpPlan[] BuildDescentPlans()
+	{
+		var plans = new List<JumpPlan>();
+		foreach (var dir in new[] { -1, 1 })
+			foreach (var slide in new[] { 0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 0.9f, 1.0f, 1.1f })
+				plans.Add(new JumpPlan(dir, slide, 0.055f, -dir, 99.0f, WallJump: true, MaxWallKicks: 1, Descend: true));
+		return [.. plans];
+	}
+
 	public readonly List<Node> Nodes = [];
 	public readonly List<Edge> Edges = [];
 	public readonly List<SurfaceSpan> SurfaceSpans = [];
@@ -122,6 +135,12 @@ public sealed class PlatformNavGraph
 	readonly List<int> nodeSurfaceSpanIds = [];
 	readonly Dictionary<SurfaceEdgeKey, SurfaceEdgeAccumulator> surfaceEdgeLookup = [];
 	readonly Dictionary<int, (JumpPlan Plan, float Cost, int PlanIndex)> jumpCandidates = [];
+	readonly Dictionary<int, (JumpPlan Plan, float Slide)> descentCandidates = [];
+
+	// Discover descent-and-kick edges (drop into a shaft, wall-slide, kick into an under-overhang
+	// pocket). Off until the runtime can execute them. The maneuver's the same wall-kick the
+	// climb uses, entered by falling — see JumpPlan.Descend.
+	internal static bool EmitDescentEdges = true;
 	readonly PriorityQueue<int, float> pathFrontier = new();
 	readonly Dictionary<int, Edge> pathCameFrom = [];
 	readonly Dictionary<int, float> pathCostSoFar = [];
@@ -806,6 +825,25 @@ public sealed class PlatformNavGraph
 					continue;
 				if (AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan))
 					planStats[jump.PlanIndex].Kept++;
+			}
+
+			// Descent-and-kick edges: only from ledges (platform edges, where Bud can drop into
+			// an adjacent shaft). Per landing node, keep the shortest slide that reaches it.
+			if (EmitDescentEdges && from.Kind == NodeKind.Ledge)
+			{
+				descentCandidates.Clear();
+				foreach (var plan in DescentPlans)
+				{
+					if (!TrySimulateJump(rebuildGame!, from, plan, out var landing))
+						continue;
+					var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
+					if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
+						continue;
+					if (!descentCandidates.TryGetValue(to.Value.Id, out var existing) || plan.RunupTime < existing.Slide)
+						descentCandidates[to.Value.Id] = (plan, plan.RunupTime);
+				}
+				foreach (var (toId, c) in descentCandidates)
+					AddEdge(from.Id, toId, EdgeKind.Jump, c.Plan);
 			}
 		}
 
