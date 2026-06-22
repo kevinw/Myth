@@ -300,8 +300,97 @@ public partial class Game : IDisposable
 	private float ZoomedHeight => Height / zoomLevel;
 	private float fbZoom = 1.0f;
 	public float FbZoom => fbZoom;
-	private float FbZoomedWidth => Width / fbZoom;
-	private float FbZoomedHeight => Height / fbZoom;
+	// The camera frames this "visible" view and clamps it to the room. It shrinks for the 2x
+	// magnify (fbZoom) and, in 4:3 crop mode, narrows horizontally to the cropped width so the
+	// player stays inside the actually-visible region rather than the full (partly cropped) frame.
+	private float FbZoomedWidth => AspectCropActive ? VisibleCropWidth : Width / fbZoom;
+	private float FbZoomedHeight => AspectCropActive ? Height : Height / fbZoom;
+
+	// The game renders at a fixed 16:9 (Width:Height). When presenting into a narrower 4:3
+	// region (desktop --aspect-four-three, or a portrait mobile-browser canvas) we crop the
+	// sides ("cover" fit) to reclaim vertical space. aspectUncrop in [0,1] lerps the present
+	// scale from cover (0, cropped) to contain (1, full 16:9 letterboxed) while Zoom is held.
+	private const float OutputAspect = (float)Width / Height;
+	private float aspectUncrop = 0f;
+	public float AspectUncrop => aspectUncrop;
+	// True when the live presentation is narrower than the native 16:9 frame, so cropping applies.
+	public bool AspectCropActive
+	{
+		get
+		{
+			if (Manager.AspectFourThree)
+				return true;
+#if BROWSER
+			if (Manager.Window is { } w && w.HeightInPixels > 0)
+				return (float)w.WidthInPixels / w.HeightInPixels < OutputAspect - 0.01f;
+#endif
+			return false;
+		}
+	}
+
+	// Aspect of the region the game is presented into (4:3 on desktop --aspect-four-three, the
+	// live canvas aspect on web). Drives both the side-crop and the camera's visible width.
+	private float PresentAspect
+	{
+		get
+		{
+			if (Manager.AspectFourThree)
+				return 4f / 3f;
+#if BROWSER
+			if (Manager.Window is { } w && w.HeightInPixels > 0)
+				return (float)w.WidthInPixels / w.HeightInPixels;
+#endif
+			return OutputAspect;
+		}
+	}
+
+	// Horizontal slice of the 16:9 frame actually visible after the side-crop, in frame pixels.
+	// Full crop (aspectUncrop 0) -> the 4:3 center; held (aspectUncrop 1) -> the full width.
+	// Mirrors the composite's cover->contain scale so the camera frames exactly what's drawn.
+	private float VisibleCropWidth
+	{
+		get
+		{
+			var r = MathF.Min(PresentAspect / OutputAspect, 1f);
+			return Width * r / (1 + (r - 1) * aspectUncrop);
+		}
+	}
+
+	// The window region the game is presented into. On desktop --aspect-four-three the window
+	// stays wide, so carve a centered 4:3 rect (pillarboxed). Otherwise (including a portrait
+	// mobile-browser canvas that is already ~4:3) present into the whole viewport.
+	private RectInt PresentRect(in RectInt viewport)
+	{
+		if (Manager.AspectFourThree)
+		{
+			var s = Calc.Min(viewport.Width / 4f, viewport.Height / 3f);
+			var w = (int)(4 * s);
+			var h = (int)(3 * s);
+			var c = viewport.Center;
+			return new RectInt(c.X - w / 2, c.Y - h / 2, w, h);
+		}
+		return viewport;
+	}
+
+	// Total pixel scale the composite uses to draw the screen into the given viewport.
+	private float PresentScale(in RectInt present, float outputWidth, float outputHeight)
+	{
+		var contain = Calc.Min(present.Width / outputWidth, present.Height / outputHeight);
+		if (!AspectCropActive)
+			return contain * fbZoom;
+		var cover = Calc.Max(present.Width / outputWidth, present.Height / outputHeight);
+		return cover + (contain - cover) * aspectUncrop;
+	}
+
+	// Inverse of the final composite: map a window-space point to a world position, honoring the
+	// present rect, fbZoom, and 4:3 cover-crop so touch/mouse picking lines up with what's drawn.
+	public Vector2 WindowToWorld(Vector2 windowPoint, in RectInt viewport)
+	{
+		var present = PresentRect(viewport);
+		var scale = PresentScale(present, Screen.Width, Screen.Height);
+		var screenPixel = (windowPoint - (Vector2)present.Center) / scale + new Vector2(Screen.Width, Screen.Height) / 2;
+		return Camera + screenPixel;
+	}
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
@@ -641,10 +730,18 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		var fbZoomTarget = Controls.Zoom.Down ? 2.0f : 1.0f;
+		// In 4:3 crop mode the Zoom control un-crops (reveals the cut-off sides) instead of the
+		// usual 2x magnify, so the two never fight: suppress fbZoom whenever cropping is active.
+		var cropActive = AspectCropActive;
+		var fbZoomTarget = !cropActive && Controls.Zoom.Down ? 2.0f : 1.0f;
 		fbZoom += (fbZoomTarget - fbZoom) * (1 - MathF.Exp(-Time.Delta * 12f));
 		if (MathF.Abs(fbZoom - fbZoomTarget) < 0.005f)
 			fbZoom = fbZoomTarget;
+
+		var uncropTarget = cropActive && Controls.Zoom.Down ? 1.0f : 0.0f;
+		aspectUncrop += (uncropTarget - aspectUncrop) * (1 - MathF.Exp(-Time.Delta * 12f));
+		if (MathF.Abs(aspectUncrop - uncropTarget) < 0.005f)
+			aspectUncrop = uncropTarget;
 
 		var target = GetGameplayCameraTarget();
 		var player = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
@@ -1282,9 +1379,16 @@ public partial class Game : IDisposable
 		using (PerfStats.Time(PerfStat.FinalComposite))
 		using (GraphicsDevice.DebugGroup(useCrt ? "Myth/final composite crt" : "Myth/final composite"))
 		{
-			var size = viewport.Size;
-			var center = viewport.Center;
-			var scale = Calc.Min(size.X / (float)output.Width, size.Y / (float)output.Height);
+			// Present into a 4:3 region when cropping (desktop pillarbox / portrait canvas),
+			// cover-fitting the 16:9 frame so its sides are cropped; aspectUncrop lerps back to a
+			// contained (full, letterboxed) frame while Zoom is held. The cover-scaled frame
+			// overflows the present region, so clip it to never bleed past the pillarbox bars.
+			var present = PresentRect(viewport);
+			var center = present.Center;
+			var scale = PresentScale(present, output.Width, output.Height);
+			var clip = AspectCropActive
+				? (scissor.HasValue ? scissor.Value.GetIntersection(present) : present)
+				: scissor;
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
@@ -1309,14 +1413,14 @@ public partial class Game : IDisposable
 			var flipTargetTextures = Batcher.FlipTargetTextures;
 			Batcher.FlipTargetTextures = false;
 #endif
-			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale * fbZoom, 0, Color.White);
+			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
 #if BROWSER
 			Batcher.FlipTargetTextures = flipTargetTextures;
 #endif
 			if (useCrt)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
-			Batcher.Render(destination, scissor: scissor);
+			Batcher.Render(destination, scissor: clip);
 			Batcher.Clear();
 		}
 	}

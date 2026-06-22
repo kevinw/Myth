@@ -104,6 +104,47 @@ function setStick(x, y) {
 	bump();
 }
 
+// --- play-area press-and-hold zoom --------------------------------------
+// In portrait the game crops its 16:9 frame to 4:3 (see index.html / main.js).
+// Pressing and holding anywhere on the play area (not on the stick/buttons)
+// un-crops back to the full frame; releasing snaps it back. Driven by dispatching
+// a synthetic "KeyX" (the Controls.Zoom binding, Keys.X) so it works with any
+// pointer -- desktop mouse in a narrow window *and* mobile touch -- without
+// depending on the virtual gamepad being injected (it isn't on non-touch desktop).
+// main.js toggles this on only while portrait.
+const ZOOM_KEY_CODE = "KeyX"; // Controls.Zoom binds Keys.X; Foster reads window key events
+let playAreaZoomEnabled = false;
+let zoomPointerId = null;
+
+function setZoomKey(down) {
+	window.dispatchEvent(new KeyboardEvent(down ? "keydown" : "keyup", { code: ZOOM_KEY_CODE }));
+}
+
+export function setPlayAreaZoomEnabled(on) {
+	playAreaZoomEnabled = !!on;
+	if (!on && zoomPointerId !== null) { zoomPointerId = null; setZoomKey(false); }
+}
+
+function isOverlayControl(target) {
+	return target instanceof Element && !!target.closest?.("#myth-vpad .ctl, #myth-vpad .btn");
+}
+
+function installPlayAreaZoom() {
+	window.addEventListener("pointerdown", (e) => {
+		if (!playAreaZoomEnabled || zoomPointerId !== null) return;
+		if (isOverlayControl(e.target)) return; // leave stick/button touches alone
+		zoomPointerId = e.pointerId;
+		setZoomKey(true);
+	});
+	const release = (e) => {
+		if (e.pointerId !== zoomPointerId) return;
+		zoomPointerId = null;
+		setZoomKey(false);
+	};
+	window.addEventListener("pointerup", release);
+	window.addEventListener("pointercancel", release);
+}
+
 // --- visibility ----------------------------------------------------------
 function reevaluate() {
 	const show = (forceShow || (wantsController && touchCapable())) && !realPadsPresent();
@@ -273,6 +314,7 @@ export function initialize() {
 	installGamepadHook();
 	buildDom();
 	bindStick();
+	installPlayAreaZoom();
 	// Hide/show the overlay when real controllers come and go.
 	window.addEventListener("gamepadconnected", (e) => { if (!e.gamepad?.__mythVirtual) reevaluate(); });
 	window.addEventListener("gamepaddisconnected", (e) => { if (!e.gamepad?.__mythVirtual) reevaluate(); });
