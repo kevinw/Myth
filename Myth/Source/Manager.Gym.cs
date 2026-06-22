@@ -30,6 +30,8 @@ internal struct Gym
 	internal List<GymResult>? results;
 	internal HashSet<string> goalIds = new(StringComparer.OrdinalIgnoreCase);
 
+	internal GymRun? CurrentRun => runIndex < (runs?.Count ?? 0) ? runs[runIndex] : null;
+
 	internal bool CollectGymRooms(string? playRoomId = null)
 	{
 		var runs = new List<GymRun>();
@@ -151,6 +153,14 @@ partial class Manager
 	// rebuild finishes on a different game frame each run (non-deterministic gym results).
 	// Callers use this to build the graph in one shot instead.
 	internal bool Unthrottled => unthrottled;
+
+	internal string? CurrentRunGoalId()
+	{
+		if (!playing) return null;
+		if (gymMode && gym.CurrentRun is { } run) return run.GoalId;
+		return null;
+	}
+
 
 	Gym gym;
 

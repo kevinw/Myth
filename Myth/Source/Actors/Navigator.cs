@@ -35,7 +35,6 @@ public sealed class Navigator(Pawn owner)
 	static float DirectGoalJumpMaxHorizontalDistance => 64.0f;
 	static float DirectGoalJumpMaxVerticalDistance => 56.0f;
 	static float DirectGoalJumpMinVerticalDistance => 12.0f;
-	static float JumpLandingDoneDistance => 2.0f;
 	// Nominal time a jump spends airborne, used to convert "horizontal distance to the
 	// landing" into a target takeoff speed. Matches a typical single hop (~0.5s up-and-down).
 	static float NominalJumpAirtime => 0.5f;
@@ -185,9 +184,7 @@ public sealed class Navigator(Pawn owner)
 			else
 			{
 				surfaceNavPath.Clear();
-				DebugNavStartNodeId = start.Value.Id;
-				DebugNavGoalNodeId = goalCandidates[0].Id;
-				DebugNavTargetNodeId = null;
+				UpdateDebugNav(start.Value.Id, goalCandidates[0].Id, null);
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"no path {start.Value.Id}->{goalCandidates[0].Id}" : "no path";
 				TraceState(
 					$"no-path:{start.Value.Id}:{goalCandidates[0].Id}:{(int)target.X}:{(int)target.Y}",
@@ -213,9 +210,7 @@ public sealed class Navigator(Pawn owner)
 
 		if (!TryGetActionableEdge(graph, out var edge))
 		{
-			DebugNavStartNodeId = start.Value.Id;
-			DebugNavGoalNodeId = goal.Value.Id;
-			DebugNavTargetNodeId = null;
+			UpdateDebugNav(start.Value.Id, goal.Value.Id, null);
 			DebugNavLabel = "edge reached";
 			TraceState($"edge-reached:{start.Value.Id}:{goal.Value.Id}", "edgeReached", ("startNode", start.Value.Id), ("goalNode", goal.Value.Id));
 			return false;
@@ -223,9 +218,7 @@ public sealed class Navigator(Pawn owner)
 
 		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall)
 		{
-			DebugNavStartNodeId = start.Value.Id;
-			DebugNavGoalNodeId = goal.Value.Id;
-			DebugNavTargetNodeId = edge.To;
+			UpdateDebugNav(start.Value.Id, goal.Value.Id, edge.To);
 			StartActiveEdge(edge, blockPathOnTimeout: true);
 			return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
 		}
@@ -242,17 +235,13 @@ public sealed class Navigator(Pawn owner)
 				{
 					if (TryContinueWithJumpAfterBlockedWalk(graph, edge, start.Value.Id, goal.Value.Id, out moveX, out moveY, out jumpPressed))
 						return true;
-					DebugNavStartNodeId = start.Value.Id;
-					DebugNavGoalNodeId = goal.Value.Id;
-					DebugNavTargetNodeId = to.Id;
+					UpdateDebugNav(start.Value.Id, goal.Value.Id, to.Id);
 					DebugNavLabel = ShouldBuildDebugNavLabel ? $"edge stop {edge.Kind} {edge.From}->{edge.To}" : "edge stop";
 					return false;
 				}
 				if (moveX == 0 && !IsNearNode(edgeTarget))
 				{
-					DebugNavStartNodeId = start.Value.Id;
-					DebugNavGoalNodeId = goal.Value.Id;
-					DebugNavTargetNodeId = to.Id;
+					UpdateDebugNav(start.Value.Id, goal.Value.Id, to.Id);
 					DebugNavLabel = ShouldBuildDebugNavLabel ? $"stalled {edge.Kind} {edge.From}->{edge.To}" : "stalled";
 					return false;
 				}
@@ -268,9 +257,7 @@ public sealed class Navigator(Pawn owner)
 				return false;
 		}
 
-		DebugNavStartNodeId = start.Value.Id;
-		DebugNavGoalNodeId = goal.Value.Id;
-		DebugNavTargetNodeId = to.Id;
+		UpdateDebugNav(start.Value.Id, goal.Value.Id, to.Id);
 		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} len {navPath.Count}" : "following path";
 		return true;
 	}
@@ -298,9 +285,7 @@ public sealed class Navigator(Pawn owner)
 		surfaceNavPath.Clear();
 		activeEdge = default;
 		activeEdgeBlocksPath = false;
-		DebugNavStartNodeId = null;
-		DebugNavGoalNodeId = null;
-		DebugNavTargetNodeId = null;
+		UpdateDebugNav(null, null, null);
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = ShouldBuildDebugNavLabel ? $"surface walk {span.Id}" : "following surface";
@@ -442,9 +427,7 @@ public sealed class Navigator(Pawn owner)
 
 	public void SetDebugNavState(string label)
 	{
-		DebugNavStartNodeId = null;
-		DebugNavGoalNodeId = null;
-		DebugNavTargetNodeId = null;
+		UpdateDebugNav(null, null, null);
 		navPath.Clear();
 		surfaceNavPath.Clear();
 		activeEdge = default;
@@ -490,9 +473,7 @@ public sealed class Navigator(Pawn owner)
 		surfaceNavPath.Clear();
 		activeEdge = default;
 		activeEdgeBlocksPath = false;
-		DebugNavStartNodeId = null;
-		DebugNavGoalNodeId = null;
-		DebugNavTargetNodeId = null;
+		UpdateDebugNav(null, null, null);
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
 		DebugNavLabel = ShouldBuildDebugNavLabel ? $"direct goal jump {moveX}" : "direct goal jump";
@@ -649,12 +630,17 @@ public sealed class Navigator(Pawn owner)
 		if (MathF.Abs(Position.X - source.X) > Game.TileSize || MathF.Abs(Position.Y - source.Y) > Game.TileSize)
 			return false;
 
-		DebugNavStartNodeId = startNodeId;
-		DebugNavGoalNodeId = goalNodeId;
-		DebugNavTargetNodeId = next.To;
+		UpdateDebugNav(startNodeId, goalNodeId, next.To);
 		StartActiveEdge(next, blockPathOnTimeout: true);
 		DebugNavLabel = ShouldBuildDebugNavLabel ? $"jump handoff {blockedEdge.From}->{blockedEdge.To}->{next.To}" : "jump handoff";
 		return TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
+	}
+
+	void UpdateDebugNav(int? start, int? goal, int? target)
+	{
+		DebugNavStartNodeId = start;
+		DebugNavGoalNodeId = goal;
+		DebugNavTargetNodeId = target;
 	}
 
 	bool TryExecuteJumpEdge(

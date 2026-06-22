@@ -16,14 +16,18 @@ public class Goal : Actor
 		Mask = Masks.None;
 		Depth = -100;
 	}
+
+	bool ShouldRender => Game.Manager.CurrentRunGoalId() == ActorId;
+
 	public override void Render(Batcher batcher)
 	{
-		if (Game.Manager.playing) return;
+		if (!ShouldRender) return;
 		base.Render(batcher);
 	}
+
 	public override void RenderNormals(Batcher batcher)
 	{
-		if (Game.Manager.playing) return;
+		if (!ShouldRender) return;
 		base.RenderNormals(batcher);
 	}
 }
