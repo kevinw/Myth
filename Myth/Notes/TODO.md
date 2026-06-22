@@ -1,5 +1,6 @@
 # TODO
 
+- move the Program.cs out of 'Desktop' since it's also for the browser
 - think about trying to turn a real 3D complex space (a castle blueprint) into a series of layers connected by doors
 - a room enclosed in grass shouldn't reverb as much.
 - resume codex work on mapping touch/pinch events to Foster events and route them through ImGui
