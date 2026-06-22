@@ -523,14 +523,16 @@ public sealed class PlatformNavGraph
 		if (phase == BuildPhase.Ready)
 		{
 			BuildSurfaceEdges();
-			if (VerboseBuildLog)
+			if (VerboseBuildLog && NavGraphLogging())
 				LogRebuildStats();
 		}
 	}
 
 	// Per-rebuild stats/plan/graph dump. Off during the gym tune loop (the graph rebuilds
 	// every trial there and the dump would bury the per-trial result lines).
-	public static bool VerboseBuildLog = true;
+	internal static bool VerboseBuildLog = true;
+
+	static bool NavGraphLogging() => Environment.GetEnvironmentVariable("LOG_NAV_GRAPH") == "1";
 
 	void LogRebuildStats()
 	{
@@ -737,15 +739,17 @@ public sealed class PlatformNavGraph
 				jumpSurfaceNodeEdges += edge.NodeEdgeCount;
 		}
 
-		var avgNodesPerSpan = SurfaceSpans.Count > 0 ? totalNodesOnSpans / (float)SurfaceSpans.Count : 0;
-		var avgJumpNodesPerSurfaceEdge = surfaceEdgeKinds[(int)EdgeKind.Jump] > 0 ? jumpSurfaceNodeEdges / (float)surfaceEdgeKinds[(int)EdgeKind.Jump] : 0;
-		Console.WriteLine($"  surfaces: {SurfaceSpans.Count} spans ({duckingSpans} ducking, {singletonSpans} singleton), avg {avgNodesPerSpan:0.0} nodes/span");
-		Console.WriteLine($"  surface edge collapse: Walk {edgeKinds[(int)EdgeKind.Walk]}->{walkPairs.Count}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}->{crawlPairs.Count}, Fall {edgeKinds[(int)EdgeKind.Fall]}->{fallPairs.Count}, Jump {edgeKinds[(int)EdgeKind.Jump]}->{jumpPairs.Count} span pairs / {jumpPlanPairs.Count} plan pairs");
-		Console.WriteLine($"  surface interval edges: Walk {surfaceEdgeKinds[(int)EdgeKind.Walk]}, Crawl {surfaceEdgeKinds[(int)EdgeKind.Crawl]}, Fall {surfaceEdgeKinds[(int)EdgeKind.Fall]}, Jump {surfaceEdgeKinds[(int)EdgeKind.Jump]} (avg {avgJumpNodesPerSurfaceEdge:0.0} point jump edges)");
-		if (jumpPairs.Count > 0)
-			Console.WriteLine($"  jump interval pressure: {multiJumpPairs}/{jumpPairs.Count} span pairs have multiple point edges, max {maxJumpEdgesPerPair}");
-		if (unmappedEdges > 0)
-			Console.WriteLine($"  surface unmapped nav edges: {unmappedEdges}");
+		if (NavGraphLogging()) {
+			var avgNodesPerSpan = SurfaceSpans.Count > 0 ? totalNodesOnSpans / (float)SurfaceSpans.Count : 0;
+			var avgJumpNodesPerSurfaceEdge = surfaceEdgeKinds[(int)EdgeKind.Jump] > 0 ? jumpSurfaceNodeEdges / (float)surfaceEdgeKinds[(int)EdgeKind.Jump] : 0;
+			Console.WriteLine($"  surfaces: {SurfaceSpans.Count} spans ({duckingSpans} ducking, {singletonSpans} singleton), avg {avgNodesPerSpan:0.0} nodes/span");
+			Console.WriteLine($"  surface edge collapse: Walk {edgeKinds[(int)EdgeKind.Walk]}->{walkPairs.Count}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}->{crawlPairs.Count}, Fall {edgeKinds[(int)EdgeKind.Fall]}->{fallPairs.Count}, Jump {edgeKinds[(int)EdgeKind.Jump]}->{jumpPairs.Count} span pairs / {jumpPlanPairs.Count} plan pairs");
+			Console.WriteLine($"  surface interval edges: Walk {surfaceEdgeKinds[(int)EdgeKind.Walk]}, Crawl {surfaceEdgeKinds[(int)EdgeKind.Crawl]}, Fall {surfaceEdgeKinds[(int)EdgeKind.Fall]}, Jump {surfaceEdgeKinds[(int)EdgeKind.Jump]} (avg {avgJumpNodesPerSurfaceEdge:0.0} point jump edges)");
+			if (jumpPairs.Count > 0)
+				Console.WriteLine($"  jump interval pressure: {multiJumpPairs}/{jumpPairs.Count} span pairs have multiple point edges, max {maxJumpEdgesPerPair}");
+			if (unmappedEdges > 0)
+				Console.WriteLine($"  surface unmapped nav edges: {unmappedEdges}");
+		}
 	}
 
 	int NodeSurfaceSpanId(int nodeId)

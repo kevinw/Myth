@@ -161,6 +161,11 @@
       "Id": "7d2ccea18a1a8fd2",
       "Type": "Jumpthru",
       "Position": [64, 56]
+    },
+    {
+      "Id": "556480a75eae6675",
+      "Type": "LinkedDoor",
+      "Position": [200, 104]
     }
   ]
 }

@@ -443,14 +443,10 @@ public partial class Manager
 	private void UpdateEditorNavigation()
 	{
 		var direction = Point2.Zero;
-		if (controls.Move.PressedUp)
-			direction = Point2.Up;
-		if (controls.Move.PressedDown)
-			direction = Point2.Down;
-		if (controls.Move.PressedLeft)
-			direction = Point2.Left;
-		if (controls.Move.PressedRight)
-			direction = Point2.Right;
+		if (controls.Move.PressedUp)    direction += Point2.Up;
+		if (controls.Move.PressedDown)  direction += Point2.Down;
+		if (controls.Move.PressedLeft)  direction += Point2.Left;
+		if (controls.Move.PressedRight) direction += Point2.Right;
 
 		if (direction != Point2.Zero)
 		{
@@ -718,6 +714,9 @@ public partial class Manager
 			return;
 
 		var changed = false;
+		if (editingRoomGeometry) {
+			ImGui.TextUnformatted($"{room.Size.X} x {room.Size.Y}");
+		}
 		if (ImGui.Button(editingRoomGeometry ? "Done" : "Resize"))
 		{
 			editingRoomGeometry = !editingRoomGeometry;
@@ -1737,7 +1736,7 @@ public partial class Manager
 	// position.
 	private void DrawEditorScreenGrid(Rect visibleWorld)
 	{
-		const float minScreensVisible = 3f;
+		const float minScreensVisible = 1f;
 		float screenW = Game.Width;
 		float screenH = Game.Height;
 		if (MathF.Max(visibleWorld.Width / screenW, visibleWorld.Height / screenH) < minScreensVisible)
@@ -1815,14 +1814,10 @@ public partial class Manager
 				var right = left + Game.TileSize;
 				var bottom = top + Game.TileSize;
 
-				if (!Filled(x, y - 1))
-					batcher.LineDashed(new Vector2(left, top), new Vector2(right, top), width, color, dash, 0);
-				if (!Filled(x, y + 1))
-					batcher.LineDashed(new Vector2(right, bottom), new Vector2(left, bottom), width, color, dash, 0);
-				if (!Filled(x - 1, y))
-					batcher.LineDashed(new Vector2(left, bottom), new Vector2(left, top), width, color, dash, 0);
-				if (!Filled(x + 1, y))
-					batcher.LineDashed(new Vector2(right, top), new Vector2(right, bottom), width, color, dash, 0);
+				if (!Filled(x, y - 1)) batcher.LineDashed(new Vector2(left, top), new Vector2(right, top), width, color, dash, 0);
+				if (!Filled(x, y + 1)) batcher.LineDashed(new Vector2(right, bottom), new Vector2(left, bottom), width, color, dash, 0);
+				if (!Filled(x - 1, y)) batcher.LineDashed(new Vector2(left, bottom), new Vector2(left, top), width, color, dash, 0);
+				if (!Filled(x + 1, y)) batcher.LineDashed(new Vector2(right, top), new Vector2(right, bottom), width, color, dash, 0);
 			}
 
 		bool Filled(int x, int y)
@@ -3288,6 +3283,7 @@ public partial class Manager
 
 			if (proposedRoomTiles is { } proposal)
 			{
+				// Draw "proposed" adjacent room; click it to add a new room there.
 				var proposalBounds = TileRectToWorldRect(proposal);
 				batcher.Rect(proposalBounds, Color.Gray * 0.35f);
 				batcher.RectLine(proposalBounds, gridWeight * 2, Color.Gray);
@@ -3513,14 +3509,11 @@ public partial class Manager
 	}
 
 
-	/// <summary>
 	/// Shifts to display a new room
-	/// </summary>
-	private void ShiftRoom(Point2 direction)
+	void ShiftRoom(Point2 direction)
 	{
 		var current = CurrentRoom;
-		if (current == null)
-			return;
+		if (current == null) return;
 
 		var exitPosition = EditorExitPosition(current, direction);
 		if (Assets.FindAdjacentRoom(current, direction, exitPosition) is not { } adjacent)
@@ -3536,15 +3529,10 @@ public partial class Manager
 	private static Vector2 EditorExitPosition(Room room, Point2 direction)
 	{
 		var bounds = room.WorldBounds;
-		if (direction.X > 0)
-			return new Vector2(bounds.Right, bounds.CenterY);
-		if (direction.X < 0)
-			return new Vector2(bounds.Left - 1, bounds.CenterY);
-		if (direction.Y > 0)
-			return new Vector2(bounds.CenterX, bounds.Bottom);
-		if (direction.Y < 0)
-			return new Vector2(bounds.CenterX, bounds.Top - 1);
-
+		if (direction.X > 0) return new (bounds.Right, bounds.CenterY);
+		if (direction.X < 0) return new (bounds.Left - 1, bounds.CenterY);
+		if (direction.Y > 0) return new (bounds.CenterX, bounds.Bottom);
+		if (direction.Y < 0) return new (bounds.CenterX, bounds.Top - 1);
 		return bounds.Center;
 	}
 
@@ -3765,8 +3753,8 @@ public partial class Manager
 			OpenFmodStudio();
 		ImGui.SameLine(0, ToolbarSpacing);
 
-		if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
-			showTransitionViewer = !showTransitionViewer;
+		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
+			//showTransitionViewer = !showTransitionViewer;
 		ImGui.SameLine(0, ToolbarSpacing);
 #endif
 
