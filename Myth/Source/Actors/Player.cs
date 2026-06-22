@@ -750,30 +750,34 @@ public partial class Player : Pawn
 		}
 	}
 
+	void ClampPositionToRoomOrTransitionRooms()
+	{
+		if (Health <= 0) return;
+
+		if (Position.X > Game.Bounds.Right && !Game.Transition(Point2.Right))
+		{
+			Position.X = Game.Bounds.Right;
+		}
+		else if (Position.X < Game.Bounds.Left && !Game.Transition(Point2.Left))
+		{
+			Position.X = Game.Bounds.Left;
+		}
+		else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
+		{
+			ApplyHurt(-1000);
+		}
+		else if (Position.Y < Game.Bounds.Top)
+		{
+			if (Game.Transition(Point2.Up))
+				Velocity.Y = -150;
+			else
+				Position.Y = Game.Bounds.Top;
+		}
+	}
+
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
 	{
-		if (Health > 0)
-		{
-			if (Position.X > Game.Bounds.Right && !Game.Transition(Point2.Right))
-			{
-				Position.X = Game.Bounds.Right;
-			}
-			else if (Position.X < Game.Bounds.Left && !Game.Transition(Point2.Left))
-			{
-				Position.X = Game.Bounds.Left;
-			}
-			else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
-			{
-				ApplyHurt(-1000);
-			}
-			else if (Position.Y < Game.Bounds.Top)
-			{
-				if (Game.Transition(Point2.Up))
-					Velocity.Y = -150;
-				else
-					Position.Y = Game.Bounds.Top;
-			}
-		}
+		ClampPositionToRoomOrTransitionRooms();
 
 		if (State == States.Burrow)
 		{
@@ -1098,6 +1102,9 @@ public partial class Player : Pawn
 
 	private bool IsAttackBlocked(bool duckingAttack)
 	{
+		//
+		// TODO: make this false if we would have hit a breakable block or enemy
+		//
 		var hitbox = GetAttackHitbox(duckingAttack);
 		if (Facing == Signs.Negative)
 			hitbox.X = -(hitbox.X + hitbox.Width);

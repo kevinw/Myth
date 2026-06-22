@@ -60,7 +60,9 @@
     {
       "Id": "0851fbcc16590d55",
       "From": "BlueMemoryLight",
-      "Position": [164, 28]
+      "Position": [164, 28],
+      "Radius": 200,
+      "Intensity": 0.85
     },
     {
       "Id": "e6b0b01a6338a282",
