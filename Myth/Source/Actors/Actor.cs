@@ -155,7 +155,13 @@ public class Actor
 	public bool OverlapsAny(Masks mask) => OverlapsAny(Point2.Zero, mask);
 
 	/// Checks to see if we overlap any actors of the given mask
-	public bool OverlapsAny(Point2 offset, Masks mask) => OverlapsFirst(offset, mask) != null;
+	public bool OverlapsAny(Point2 offset, Masks mask)
+	{
+		if (mask.Has(Masks.Solid) && Game.OverlapsRoomCollision(this, offset))
+			return true;
+
+		return OverlapsFirst(offset, mask) != null;
+	}
 
 	/// Checks to see if we overlap the given actor
 	public bool OverlapsAny(Point2 offset, Actor other) => Hitbox.Overlaps(Position + offset - other.Position, other.Hitbox);
