@@ -796,6 +796,8 @@ public partial class Manager : App
 			string? selectedEmitterId = null;
 			if (CurrentRoom is { } previewRoom && selectedRoomActorIndex >= 0 && selectedRoomActorIndex < previewRoom.Actors.Count)
 				selectedEmitterId = ActorSpecs.GetActorId(previewRoom.Actors[selectedRoomActorIndex]);
+			// Particles animate the active-room preview, so it must re-render each frame while one is selected.
+			activeRoomPreviewAnimating = selectedEmitterId != null;
 			game?.PreviewParticlesInEditor(Time.Delta, selectedEmitterId);
 			UpdateParticleEffectAutosave();
 #endif

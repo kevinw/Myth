@@ -74,6 +74,13 @@ public partial class Manager
 	int nextRoomPreviewVersion = 1;
 	Target? activeRoomPreviewTarget;
 	string? activeRoomPreviewId;
+	// Cache state for the active room preview: it is only re-rendered when one of these
+	// changed, instead of every frame (the full lighting/visibility render was the editor's
+	// dominant cost). See GetActiveRoomPreview.
+	int activeRoomPreviewVersion = -1;
+	bool activeRoomPreviewShowForeground;
+	bool activeRoomPreviewShowBackground;
+	bool activeRoomPreviewAnimating;
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
 	RoomSettings? copiedRoomSettings;
 
@@ -969,7 +976,7 @@ public partial class Manager
 		var e = ParticleEffectAssets.Get(name);
 
 		ImGui.SeparatorText("Particle Asset");
-		ImGui.TextDisabled($"shared '{name}' — autosaves");
+		ImGui.TextDisabled($"shared '{name}' - autosaves");
 		ImGui.Indent();
 
 		FxShape("Shape", name, ref e.Shape);
@@ -2609,6 +2616,7 @@ public partial class Manager
 	{
 		using var perf = PerfStats.Time(PerfDetail.ActiveRoomPreview);
 		var bounds = room.WorldBounds;
+		var recreated = false;
 		if (activeRoomPreviewTarget == null ||
 			activeRoomPreviewId != room.Id ||
 			activeRoomPreviewTarget.Width != bounds.Width ||
@@ -2617,15 +2625,31 @@ public partial class Manager
 			DisposeRoomPreview(activeRoomPreviewTarget, defer: false);
 			activeRoomPreviewTarget = new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"ActiveRoomPreview/{room.Id}");
 			activeRoomPreviewId = room.Id;
+			recreated = true;
 		}
 
-		if (game != null)
+		// Re-render only when the image could have changed: a room edit (version bump, the
+		// same signal cached previews use, set by MarkRoomPreviewDirty/InvalidateRoomPreview),
+		// a layer-visibility toggle, the target was recreated (room/size change), or a
+		// particle emitter is animating live. Otherwise reuse last frame's render â€” the full
+		// lighting/visibility pass was the editor's dominant per-frame cost.
+		var version = GetRoomPreviewVersion(room);
+		var needsRender = game != null && (recreated
+			|| activeRoomPreviewVersion != version
+			|| activeRoomPreviewShowForeground != editorShowForegroundLayer
+			|| activeRoomPreviewShowBackground != editorShowBackgroundLayer
+			|| activeRoomPreviewAnimating);
+
+		if (needsRender)
 		{
-			game.ShowForegroundLayer = editorShowForegroundLayer;
+			game!.ShowForegroundLayer = editorShowForegroundLayer;
 			game.ShowBackgroundLayer = editorShowBackgroundLayer;
 			game.RenderWorldToTarget(activeRoomPreviewTarget, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 			game.ShowForegroundLayer = true;
 			game.ShowBackgroundLayer = true;
+			activeRoomPreviewVersion = version;
+			activeRoomPreviewShowForeground = editorShowForegroundLayer;
+			activeRoomPreviewShowBackground = editorShowBackgroundLayer;
 		}
 		return activeRoomPreviewTarget.Attachments[0];
 	}
