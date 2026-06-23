@@ -1805,11 +1805,16 @@ public sealed partial class GameView
 
 	private sealed class ReloadableMaterial : IDisposable
 	{
+		// Fragment shaders are precompiled, room- and game-independent programs, so compile
+		// each one once per process and share it across every Game/GameView. Rebuilding a
+		// Game (e.g. an editor room change) reuses the cached shaders instead of re-reading
+		// and re-creating ~10 of them. Keyed by name (single GraphicsDevice per process).
+		private static readonly Dictionary<string, Shader> SharedShaders = [];
+
 		private readonly GraphicsDevice graphicsDevice;
 		private readonly string name;
 		private readonly int samplerCount;
 		private readonly int uniformBufferCount;
-		private Shader fragmentShader;
 
 		public Material Material { get; }
 
@@ -1819,22 +1824,21 @@ public sealed partial class GameView
 			this.name = name;
 			this.samplerCount = samplerCount;
 			this.uniformBufferCount = uniformBufferCount;
-			fragmentShader = CreateShader();
-			Material = new Material(vertexShader: null, fragmentShader: fragmentShader);
+			Material = new Material(vertexShader: null, fragmentShader: GetOrCreateShader());
 		}
 
-		public void Dispose()
-			=> fragmentShader.Dispose();
+		// Shaders are process-lifetime and shared, so disposing a material does not dispose
+		// its shader (other live materials may reference it; recreating a Game reuses it).
+		public void Dispose() { }
 
 #if DEBUG
 		public void Reload()
 		{
 			try
 			{
-				var next = CreateShader();
+				var next = CompileShader();
 				Material.Fragment.Shader = next;
-				fragmentShader.Dispose();
-				fragmentShader = next;
+				SharedShaders[name] = next; // newly built Games pick up the reloaded shader
 				Console.WriteLine($"Reloaded {name} shader.");
 			}
 			catch (Exception e)
@@ -1844,7 +1848,16 @@ public sealed partial class GameView
 		}
 #endif
 
-		private Shader CreateShader()
+		private Shader GetOrCreateShader()
+		{
+			if (SharedShaders.TryGetValue(name, out var cached))
+				return cached;
+			var shader = CompileShader();
+			SharedShaders[name] = shader;
+			return shader;
+		}
+
+		private Shader CompileShader()
 		{
 			var ext = graphicsDevice.Driver.GetShaderExtension();
 			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"{name}.fragment.{ext}");
