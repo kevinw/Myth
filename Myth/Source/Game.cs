@@ -31,7 +31,35 @@ public partial class Game : IDisposable
 	private const float CameraSlackEpsilon = TileSize;
 
 	internal readonly Manager Manager;
-	public GameView View { get; }
+	public GameView? View { get; }
+
+	// Rendering facade: external callers (Manager, actors) reach the view through Game.
+	// Forwards to View, or no-ops/defaults when headless (View == null).
+	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null) => View?.Render(viewport, showHud, scissor);
+	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true) => View?.RenderWorldView(viewport, worldView, showHud, scissor, applyCrt);
+	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false) => View?.RenderWorldToTarget(target, worldView, showHud);
+	public void RenderSdfAura(Batcher batcher, Span<float> uniforms, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3) => View?.RenderSdfAura(batcher, uniforms, p0, p1, p2, p3);
+	public void PreviewParticlesInEditor(float dt, string? selectedActorId) => View?.PreviewParticlesInEditor(dt, selectedActorId);
+	public void SetPreviewEffect(string name) => View?.SetPreviewEffect(name);
+	public void BurstTestEffect() => View?.BurstTestEffect();
+	public ParticleSystem? Particles => View?.Particles;
+	public IReadOnlyList<Target> DebugTargets => View?.DebugTargets ?? [];
+	public float SdfAuraScrollTime => View?.SdfAuraScrollTime ?? 0f;
+	public Vector2 ViewCenterWorld => View?.ViewCenterWorld ?? default;
+	public Target Screen => View!.Screen;
+	public bool ShowForegroundLayer
+	{
+		get => View?.ShowForegroundLayer ?? true;
+		set { if (View != null) View.ShowForegroundLayer = value; }
+	}
+	public bool ShowBackgroundLayer
+	{
+		get => View?.ShowBackgroundLayer ?? true;
+		set { if (View != null) View.ShowBackgroundLayer = value; }
+	}
+#if DEBUG
+	public void ReloadShaders() => View?.ReloadShaders();
+#endif
 	public readonly Controls Controls;
 
 	public readonly List<Actor> Actors = [];
@@ -40,39 +68,48 @@ public partial class Game : IDisposable
 	GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
 	public Time Time => Manager.Time.MultiplyDelta(timeScale);
 
-	private Room? room;
-	private Room? nextRoom;
-	private float nextRoomEase;
+	internal Room? room;
+	internal Room? nextRoom;
+	// Transition animation params: written by sim during room transitions, read by
+	// GameView's lerping (Current*Color/Intensity). Exposed internal + forwarded on View.
+	internal float nextRoomEase;
 	private Point2 transitionDirection;
 	private Vector2 transitionCameraFrom;
 	private Vector2 transitionCameraTo;
-	private Color transitionBackdropColorFrom;
-	private Color transitionBackdropColorTo;
-	private Color transitionBackdropColor2From;
-	private Color transitionBackdropColor2To;
-	private Color transitionAmbientColorFrom;
-	private Color transitionAmbientColorTo;
-	private float transitionAmbientIntensityFrom;
-	private float transitionAmbientIntensityTo;
-	private float transitionLightNoiseFrom;
-	private float transitionLightNoiseTo;
-	private Color transitionSunColorFrom;
-	private Color transitionSunColorTo;
-	private float transitionSunStrengthFrom;
-	private float transitionSunStrengthTo;
-	private Vector2 transitionSunDirectionFrom;
-	private Vector2 transitionSunDirectionTo;
+	internal Color transitionBackdropColorFrom;
+	internal Color transitionBackdropColorTo;
+	internal Color transitionBackdropColor2From;
+	internal Color transitionBackdropColor2To;
+	internal Color transitionAmbientColorFrom;
+	internal Color transitionAmbientColorTo;
+	internal float transitionAmbientIntensityFrom;
+	internal float transitionAmbientIntensityTo;
+	internal float transitionLightNoiseFrom;
+	internal float transitionLightNoiseTo;
+	internal Color transitionSunColorFrom;
+	internal Color transitionSunColorTo;
+	internal float transitionSunStrengthFrom;
+	internal float transitionSunStrengthTo;
+	internal Vector2 transitionSunDirectionFrom;
+	internal Vector2 transitionSunDirectionTo;
 	private float linkedDoorCooldown;
 	private bool roomSwappedThisFrame;
-	private readonly List<Actor> destroying = [];
-	private readonly List<Actor> rendering = [];
-	private readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
-	private readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
+	internal readonly List<Actor> destroying = [];
 	private readonly HashSet<string> sessionDestroyedActors = [];
 
 	public bool GymBudDied;
 	public bool GymMode;
 	public Actor? GymTarget;
+	static float DitherGlitchAttackSpeed => 15.0f;
+	static float DitherGlitchDecaySpeed => 1.35f;
+	// Visual feedback state, but sim-owned: decayed each frame in Update and set by the
+	// HitStun/Shake/PulseDitherGlitch APIs; GameView only reads it (via forwarding).
+	internal float hitStun;
+	internal float shaking;
+	internal float ditherGlitch;
+	internal float ditherGlitchTarget;
+	internal Vector2 ditherGlitchAxis = Vector2.UnitX;
+	internal Point2 shake;
 	internal Rng rng = new();
 
 
@@ -104,8 +141,8 @@ public partial class Game : IDisposable
 	private long browserDebugLastGcAfterBytes;
 	private RoomChangeKind browserDebugLastGcKind;
 
-	public Vector2 Camera { get; private set; }
-	private Vector2 RenderCamera => (Point2)Camera - shake;
+	public Vector2 Camera { get; internal set; }
+	internal Vector2 RenderCamera => (Point2)Camera - shake;
 	// The camera hard-follows the player, except a discontinuity in the clamp target (a blocker
 	// cap toggling as you cross a bite's span, or a blocker revealing) is absorbed into a
 	// decaying error so the view glides over the jump instead of snapping.
@@ -115,14 +152,14 @@ public partial class Game : IDisposable
 	private static float CameraEaseRate => 10f;
 	private const float CameraEaseTriggerEpsilon = 2f;
 	private readonly List<RectInt> cameraBlockerBuffer = [];
-	private float zoomLevel = 1.0f;
+	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
-	private float ZoomedWidth => Width / zoomLevel;
-	private float ZoomedHeight => Height / zoomLevel;
-	private float fbZoom = 1.0f;
+	internal float ZoomedWidth => Width / zoomLevel;
+	internal float ZoomedHeight => Height / zoomLevel;
+	internal float fbZoom = 1.0f;
 	public float FbZoom => fbZoom;
-	private float FbZoomedWidth => Width / fbZoom;
-	private float FbZoomedHeight => Height / fbZoom;
+	internal float FbZoomedWidth => Width / fbZoom;
+	internal float FbZoomedHeight => Height / fbZoom;
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
@@ -159,28 +196,13 @@ public partial class Game : IDisposable
 	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false)
 	{
 		Manager = manager;
-		View = new GameView(this);
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		this.spawnBud = spawnBud;
 		this.spawnBudAtPlayer = spawnBudAtPlayer;
-		Batcher = new(manager.GraphicsDevice, name: "GameBatcher");
-		EnsureRenderTargets(Width, Height);
 		Controls = new(manager.Input);
-		var loadVisualShaders = GraphicsDevice.Driver != GraphicsDriver.Headless;
-		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
-		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 7, uniformBufferCount: 1) : null;
-		blurMaterial = loadVisualShaders ? CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1) : null;
-		softShadowMaterial = loadVisualShaders ? CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1) : null;
-		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
-		// Transient preview/thumbnail games skip particles: they render and dispose
-		// in one synchronous call, which would free the GPU draw resources while the
-		// submitted particle draw is still in flight (corruption).
-		particleSystem = enableParticles ? new ParticleSystem(GraphicsDevice) : null;
-		normalLightMaterial = loadVisualShaders ? CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1) : null;
-		reflectionDistortMaterial = loadVisualShaders ? CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1) : null;
-		tileFieldStampMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldStamp", samplerCount: 1) : null;
-		tileFieldDebugMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1) : null;
-		pixelSortGlitchMaterial = loadVisualShaders ? CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1) : null;
+		// All GPU/render state lives in GameView. A headless Game (e.g. a future
+		// nav-graph worker) can be constructed with no view.
+		View = new GameView(this, enableParticles);
 		LoadStory();
 		RestorePersistentDebugViews();
 
@@ -254,22 +276,7 @@ public partial class Game : IDisposable
 
 		Actors.Clear();
 		destroying.Clear();
-		rendering.Clear();
-		DisposeRenderTargets();
-		DisposeRoomNormalCaches();
-		DisposeRoomTileFieldCaches();
-		crtMaterial?.Dispose();
-		lightingCompositeMaterial?.Dispose();
-		normalLightMaterial?.Dispose();
-		reflectionDistortMaterial?.Dispose();
-		tileFieldStampMaterial?.Dispose();
-		tileFieldDebugMaterial?.Dispose();
-		pixelSortGlitchMaterial?.Dispose();
-		blurMaterial?.Dispose();
-		softShadowMaterial?.Dispose();
-		sdfAuraMaterial?.Dispose();
-		particleSystem?.Dispose();
-		Batcher.Dispose();
+		View?.Dispose();
 	}
 
 	public void Update(bool allowKeyboardShortcuts = true)
@@ -301,23 +308,8 @@ public partial class Game : IDisposable
 		if (ditherGlitchTarget > 0 && ditherGlitch >= ditherGlitchTarget)
 			ditherGlitchTarget = 0;
 
-		// Particle system (step 1): drive the GPU sim, and auto-burst at the
-		// screen center so there's something to look at. 'J' fires a burst too.
-		if (PerfToggles.Particles && particleSystem is { Supported: true })
-		{
-			// Emitter actors enqueue emission in their own Update; this consumes
-			// the queue and advances the GPU sim.
-			StepParticles(Time.Delta);
-			if (particleSystem.AutoBurst)
-			{
-				particleBurstTimer -= Time.Delta;
-				if (particleBurstTimer <= 0)
-				{
-					particleBurstTimer = 0.25f;
-					BurstTestEffect();
-				}
-			}
-		}
+		// Particle system (step 1): drive the GPU sim (view-side; no-op when headless).
+		View?.UpdateParticles(Time.Delta);
 
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
@@ -445,11 +437,6 @@ public partial class Game : IDisposable
 		timeScale = scales[index];
 		DisplayMessage($"Time x{timeScale:0.##}");
 	}
-
-	private void PushWorldMatrix()
-		=> Batcher.PushMatrix(
-			Matrix3x2.CreateTranslation(-(Point2)Camera + shake) *
-			Matrix3x2.CreateScale(zoomLevel));
 
 	private void UpdateCamera()
 	{
@@ -684,48 +671,9 @@ public partial class Game : IDisposable
 	private void FinishRoomActivation(RoomChangeKind kind)
 	{
 		RemoveDestroyedActors();
-		PruneInactiveRoomCaches();
+		View?.PruneInactiveRoomCaches();
 		PrepareRoomTransitionGc();
 		RequestRoomTransitionGc(kind);
-	}
-
-	private bool IsActiveRoomCache(Room cachedRoom)
-		=> cachedRoom == room || cachedRoom == nextRoom;
-
-	private void PruneInactiveRoomNormalCaches()
-	{
-		List<Room>? remove = null;
-		foreach (var (cachedRoom, cache) in roomNormalCaches)
-		{
-			if (IsActiveRoomCache(cachedRoom))
-				continue;
-			remove ??= [];
-			remove.Add(cachedRoom);
-			cache.Dispose();
-		}
-
-		if (remove == null)
-			return;
-		foreach (var cachedRoom in remove)
-			roomNormalCaches.Remove(cachedRoom);
-	}
-
-	private void PruneInactiveRoomTileFieldCaches()
-	{
-		List<Room>? remove = null;
-		foreach (var (cachedRoom, cache) in roomTileFieldCaches)
-		{
-			if (IsActiveRoomCache(cachedRoom))
-				continue;
-			remove ??= [];
-			remove.Add(cachedRoom);
-			cache.Dispose();
-		}
-
-		if (remove == null)
-			return;
-		foreach (var cachedRoom in remove)
-			roomTileFieldCaches.Remove(cachedRoom);
 	}
 
 	void PrepareRoomTransitionGc()
@@ -1234,7 +1182,7 @@ public partial class Game : IDisposable
 			if (point.X < tileBounds.Left || point.X >= tileBounds.Right || point.Y < tileBounds.Top || point.Y >= tileBounds.Bottom)
 				continue;
 
-			if (PointInPolygon(point, room.GetSlopePolygon(slope)))
+			if (GameView.PointInPolygon(point, room.GetSlopePolygon(slope)))
 				return includeBreakableTiles || !IsBreakableRoomCollisionPoint(point);
 		}
 
@@ -1272,7 +1220,7 @@ public partial class Game : IDisposable
 		for (var y = top; y < bottom; y++)
 			for (var x = left; x < right; x++)
 			{
-				if (PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
+				if (GameView.PointInPolygon(new Vector2(x + 0.5f, y + 0.5f), polygon))
 					return true;
 			}
 
@@ -1316,8 +1264,8 @@ public partial class Game : IDisposable
 		if (brokeAny)
 		{
 			RefreshRoomTiles();
-			MarkRoomNormalCacheDirty(room);
-			MarkRoomTileFieldCacheDirty(room);
+			View?.MarkRoomNormalCacheDirty(room);
+			View?.MarkRoomTileFieldCacheDirty(room);
 			foreach (var surfaceType in tileTypesBroken)
 			{
 				PlayAudioEvent("tile_break", "Type", surfaceType, position: hitbox.Center);
@@ -1427,8 +1375,8 @@ public partial class Game : IDisposable
 		if (bgDual != null)
 			BuildDualTiles(room, bgDual, Factory.TileLayer.Background);
 		BuildDualTiles(room, fgDual, Factory.TileLayer.Foreground);
-		MarkRoomNormalCacheDirty(room);
-		MarkRoomTileFieldCacheDirty(room);
+		View?.MarkRoomNormalCacheDirty(room);
+		View?.MarkRoomTileFieldCacheDirty(room);
 	}
 
 	void BuildDualTiles(Room forRoom, DualGrid dual, Factory.TileLayer layer)
@@ -1672,9 +1620,6 @@ public partial class Game : IDisposable
 			ditherGlitchAxis = Vector2.Normalize(value);
 		ditherGlitchTarget = 1.0f;
 	}
-
-	private Vector2 PlayerDitherGlitchPosition()
-		=> GetFirst<Player>()?.Position ?? Camera + new Vector2(Width, Height) * 0.5f;
 
 	internal void DestroyEnemy(Actor actor)
 	{

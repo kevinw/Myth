@@ -3,14 +3,22 @@ using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Foster.Framework;
+using DebugView = Myth.Game.DebugView;
 
 namespace Myth;
 
-// Presentation layer carved out of Game (rendering pipeline, lighting, shadows,
-// normals, tile-field, reflections). Slated to become class GameView; kept as a
-// partial of Game for now so the move stays behavior-preserving. See memory: game-gameview-split.
-public partial class Game
+// Presentation layer for Game: rendering pipeline, lighting, shadows, normals,
+// tile-field, reflections, particles, post. Sim state lives on Game and is reached
+// through `game`. See memory: game-gameview-split.
+public sealed partial class GameView
 {
+	// Game's screen-space consts, re-aliased so render code reads them unqualified.
+	const int Width = Game.Width;
+	const int Height = Game.Height;
+	const int TileSize = Game.TileSize;
+	const int Columns = Game.Columns;
+	const int Rows = Game.Rows;
+
 	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		PrepareRenderingList();
@@ -141,7 +149,7 @@ public partial class Game
 		}
 		if (debugView == DebugView.PlatformNav)
 		{
-			GetPlatformNavGraph();
+			game.GetPlatformNavGraph();
 		}
 
 		// draw screen to window
@@ -285,7 +293,7 @@ public partial class Game
 
 	private void DrawPlayerHud(Target target)
 	{
-		if (GetFirst<Player>() is { } player)
+		if (game.GetFirst<Player>() is { } player)
 		{
 			Point2 pos = new(0, target.Height - 16);
 			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
@@ -718,7 +726,7 @@ public partial class Game
 		return cache;
 	}
 
-	private void MarkRoomTileFieldCacheDirty(Room renderRoom)
+	internal void MarkRoomTileFieldCacheDirty(Room renderRoom)
 	{
 		if (roomTileFieldCaches.TryGetValue(renderRoom, out var cache))
 			cache.Dirty = true;
@@ -1617,7 +1625,7 @@ public partial class Game
 		return cache;
 	}
 
-	private void MarkRoomNormalCacheDirty(Room renderRoom)
+	internal void MarkRoomNormalCacheDirty(Room renderRoom)
 	{
 		if (roomNormalCaches.TryGetValue(renderRoom, out var cache))
 			cache.Dirty = true;
@@ -1742,7 +1750,7 @@ public partial class Game
 			}
 	}
 
-	private static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
+	internal static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
 	{
 		var inside = false;
 		for (var i = 0; i < polygon.Length; i++)
@@ -1992,10 +2000,52 @@ public partial class Game
 		roomTileFieldCaches.Clear();
 	}
 
-	private void PruneInactiveRoomCaches()
+	private readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
+	private readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
+
+	internal void PruneInactiveRoomCaches()
 	{
 		PruneInactiveRoomNormalCaches();
 		PruneInactiveRoomTileFieldCaches();
+	}
+
+	private bool IsActiveRoomCache(Room cachedRoom)
+		=> cachedRoom == room || cachedRoom == nextRoom;
+
+	private void PruneInactiveRoomNormalCaches()
+	{
+		List<Room>? remove = null;
+		foreach (var (cachedRoom, cache) in roomNormalCaches)
+		{
+			if (IsActiveRoomCache(cachedRoom))
+				continue;
+			remove ??= [];
+			remove.Add(cachedRoom);
+			cache.Dispose();
+		}
+
+		if (remove == null)
+			return;
+		foreach (var cachedRoom in remove)
+			roomNormalCaches.Remove(cachedRoom);
+	}
+
+	private void PruneInactiveRoomTileFieldCaches()
+	{
+		List<Room>? remove = null;
+		foreach (var (cachedRoom, cache) in roomTileFieldCaches)
+		{
+			if (IsActiveRoomCache(cachedRoom))
+				continue;
+			remove ??= [];
+			remove.Add(cachedRoom);
+			cache.Dispose();
+		}
+
+		if (remove == null)
+			return;
+		foreach (var cachedRoom in remove)
+			roomTileFieldCaches.Remove(cachedRoom);
 	}
 
 	public float SdfAuraScrollTime => Time.SecondsF * SdfAuraScrollSpeed;
@@ -2107,8 +2157,6 @@ public partial class Game
 		new(1, 1),
 		new(2, 1),
 	];
-	static float DitherGlitchAttackSpeed => 15.0f;
-	static float DitherGlitchDecaySpeed => 1.35f;
 	static float DitherGlitchRadius => 150.0f;
 	private const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
@@ -2155,12 +2203,6 @@ public partial class Game
 	private readonly ParticleSystem? particleSystem;
 	private float particleBurstTimer;
 	public ParticleSystem? Particles => particleSystem;
-	private float hitStun;
-	private float shaking;
-	private float ditherGlitch;
-	private float ditherGlitchTarget;
-	private Vector2 ditherGlitchAxis = Vector2.UnitX;
-	private Point2 shake;
 	private sealed class RoomNormalCache(Room room, Target target) : IDisposable
 	{
 		public readonly Room Room = room;

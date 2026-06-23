@@ -5,7 +5,7 @@ namespace Myth;
 
 public partial class Game
 {
-	private sealed class StorySpeechBubble(Vector2 position, string text, float duration)
+	internal sealed class StorySpeechBubble(Vector2 position, string text, float duration)
 	{
 		public readonly Vector2 Position = position;
 		public readonly string Text = text;
@@ -26,7 +26,7 @@ public partial class Game
 	private static int storyReloadVersion;
 	private StoryDeck? budStorylets;
 	private readonly Dictionary<string, int> storyRoomVisits = [];
-	private readonly List<StorySpeechBubble> storySpeechBubbles = [];
+	internal readonly List<StorySpeechBubble> storySpeechBubbles = [];
 	private readonly HashSet<Actor> storyPlayerHitEnemies = [];
 	private float storyRoomTime;
 	private float storyIdleTime;
@@ -144,45 +144,6 @@ public partial class Game
 		storySpeechBubbles.Add(new(ClampStorySpeechPosition(position, text), text, duration));
 	}
 
-	private void DrawStorySpeech(Target target)
-	{
-		if (storySpeechBubbles.Count == 0)
-			return;
-
-		var font = Assets.SpeechFont ?? Assets.Font;
-		if (font == null)
-			return;
-
-		foreach (var bubble in storySpeechBubbles)
-			DrawStorySpeechBubble(font, bubble);
-
-		Batcher.Render(target);
-		Batcher.Clear();
-	}
-
-	private void DrawStorySpeechBubble(SpriteFont font, StorySpeechBubble bubble)
-	{
-		var layout = MeasureStorySpeech(font, bubble.Text);
-		if (layout.Lines.Count == 0)
-			return;
-
-		var anchor = (Point2)(bubble.Position - RenderCamera);
-		var box = new Rect(
-			anchor.X - layout.Width - layout.Padding.X,
-			anchor.Y - layout.Lines.Count * layout.LineHeight - layout.Padding.Y,
-			layout.Width + layout.Padding.X * 2,
-			layout.Lines.Count * layout.LineHeight + layout.Padding.Y * 2);
-
-		for (var i = 0; i < layout.Lines.Count; i++)
-		{
-			var lineWidth = MathF.Ceiling(font.WidthOf(layout.Lines[i]));
-			var at = new Point2(
-				(int)MathF.Round(box.Left + layout.Padding.X + (layout.Width - lineWidth) * 0.5f),
-				(int)MathF.Round(box.Top + layout.Padding.Y + i * layout.LineHeight));
-			Batcher.Text(font, layout.Lines[i], at, font.Size, Color.White);
-		}
-	}
-
 	private Vector2 ClampStorySpeechPosition(Vector2 position, string text)
 	{
 		var font = Assets.SpeechFont ?? Assets.Font;
@@ -203,7 +164,7 @@ public partial class Game
 			Math.Clamp(position.Y, minY, maxY));
 	}
 
-	private static StorySpeechLayout MeasureStorySpeech(SpriteFont font, string text)
+	internal static StorySpeechLayout MeasureStorySpeech(SpriteFont font, string text)
 	{
 		var lines = WrapStorySpeech(font, text, StorySpeechMaxWidth);
 		var lineHeight = MathF.Ceiling(font.LineHeight) + 1;
@@ -213,7 +174,7 @@ public partial class Game
 		return new(lines, width, lineHeight, new Vector2(6, 5));
 	}
 
-	private readonly record struct StorySpeechLayout(List<string> Lines, float Width, float LineHeight, Vector2 Padding);
+	internal readonly record struct StorySpeechLayout(List<string> Lines, float Width, float LineHeight, Vector2 Padding);
 
 	private static List<string> WrapStorySpeech(SpriteFont font, string text, float maxWidth)
 	{
