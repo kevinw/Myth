@@ -7,6 +7,8 @@
 // A sampled texture occupies t0 in space0, so the storage buffers follow at
 // t1/t2/t3.
 
+#include "Common.hlsl"
+
 struct Particle
 {
     float2 pos;
@@ -122,7 +124,7 @@ float2 curl(float2 p)
 // Off-screen reads as empty so particles don't collide outside the view.
 float solid_at(float2 worldPos)
 {
-    float2 uv = (worldPos - float2(CameraX, CameraY)) * Zoom / float2(TargetW, TargetH);
+    float2 uv = target_uv((worldPos - float2(CameraX, CameraY)) * Zoom / float2(TargetW, TargetH));
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
         return 0.0;
     return SolidMask.SampleLevel(SolidSampler, uv, 0.0).a;

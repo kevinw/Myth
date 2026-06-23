@@ -11,4 +11,4 @@ if (startArgs.buildAssetPack)
 var manager = new Manager(startArgs);
 PlatformSpecific.ManagerSetup(manager);
 manager.Run();
-manager.Dispose();
+PlatformSpecific.ManagerCleanup(manager);

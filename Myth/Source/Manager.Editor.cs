@@ -150,6 +150,25 @@ public partial class Manager
 	private float particleAutosaveTimer;
 	private const float ParticleAutosaveDelay = 0.6f;
 
+	internal void EditorUI()
+	{
+		if (gameEase < 1.0f && !startingPlay)
+		{
+			using (PerfStats.Time(PerfDetail.PaletteImGui))
+				PaletteImGui();
+		}
+		if (!playing && !startingPlay)
+		{
+			using (PerfStats.Time(PerfDetail.ToolbarImGui))
+				ToolbarImGui();
+		}
+		PlatformNavDebugOverlayImGui();
+		BudDebugOverlayImGui();
+		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
+			FpsOverlayImGui();
+		TransitionViewerImGui();
+	}
+
 	private void MarkParticleEffectDirty(string name)
 	{
 		particleAutosaveName = name;

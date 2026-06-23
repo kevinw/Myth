@@ -26,11 +26,14 @@ public static partial class PlatformSpecific
 		manager.VirtualGameControllerVisibilityChanged += SetVirtualControllerVisible;
 	}
 
+	public static void ManagerCleanup(Manager _) {}
+
 }
 #else
 public static class PlatformSpecific
 {
 	public static void AdjustStartArgsFromEnvironment(ref StartArgs _) { }
 	public static void ManagerSetup(Manager _) { }
+	public static void ManagerCleanup(Manager manager) { manager.Dispose(); }
 }
 #endif

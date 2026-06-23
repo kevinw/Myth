@@ -19,11 +19,11 @@ public partial class Game
 		PlatformNav
 	}
 
-	private DebugView debugView;
-	private float debugViewMessageTimer;
+	DebugView debugView;
+	float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }
-	private readonly PlatformNavGraph platformNavGraph = new();
-	private Room? platformNavGraphRoom;
+	readonly PlatformNavGraph platformNavGraph = new();
+	Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 
 	public List<RectInt> CollisionRectsThisFrame = [];
@@ -32,7 +32,7 @@ public partial class Game
 	// window resolution. Toggled with G.
 	public bool ShowRenderTargetOverlay { get; set; }
 
-	private void ToggleRenderTargetOverlay()
+	void ToggleRenderTargetOverlay()
 	{
 		ShowRenderTargetOverlay = !ShowRenderTargetOverlay;
 		DisplayMessage($"Debug: Render Targets {(ShowRenderTargetOverlay ? "On" : "Off")}");
@@ -55,12 +55,12 @@ public partial class Game
 		return sb.ToString();
 	}
 
-	private void ToggleDebugView(DebugView toggle)
+	void ToggleDebugView(DebugView toggle)
 	{
 		SetDebugView(debugView == toggle ? DebugView.None : toggle);
 	}
 
-	private void CycleTileFieldDebugView()
+	void CycleTileFieldDebugView()
 	{
 		SetDebugView(debugView switch
 		{
@@ -70,14 +70,14 @@ public partial class Game
 		});
 	}
 
-	private void SetDebugView(DebugView view)
+	void SetDebugView(DebugView view)
 	{
 		debugView = view;
 		Manager.PlatformNavDebugVisible = view == DebugView.PlatformNav;
 		DisplayMessage($"Debug: {DebugViewName(view)}");
 	}
 
-	private void RestorePersistentDebugViews()
+	void RestorePersistentDebugViews()
 	{
 		if (Manager.PlatformNavDebugVisible)
 			debugView = DebugView.PlatformNav;
@@ -89,7 +89,7 @@ public partial class Game
 		debugViewMessageTimer = duration;
 	}
 
-	private static string DebugViewName(DebugView view)
+	static string DebugViewName(DebugView view)
 		=> view switch
 		{
 			DebugView.None => "Off",

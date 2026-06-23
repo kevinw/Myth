@@ -284,7 +284,7 @@ public sealed class ParticleSystem : IDisposable
 	/// </summary>
 	public void Update(float dt, Texture? solidMask, Vector2 camera, float zoom)
 	{
-		if (!supported)
+		if (!supported || updateShader == null)
 			return;
 
 		BuildEffectData();
@@ -313,7 +313,7 @@ public sealed class ParticleSystem : IDisposable
 			TargetH = solidMask?.Height ?? 1,
 		});
 
-		new ComputeCommand(updateShader!)
+		new ComputeCommand(updateShader)
 		{
 			Samplers = [new(solidMask, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp))],
 			ReadOnlyStorageBuffers = [src, effectsBuffer, emitsBuffer],

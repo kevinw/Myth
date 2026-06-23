@@ -749,6 +749,8 @@ public partial class Manager : App
 			}
 		}
 
+		imgui?.BeginLayout();
+
 #if EDITOR
 		// Build our Sprite Batch
 		using (PerfStats.Time(PerfDetail.BatchBuild))
@@ -770,44 +772,26 @@ public partial class Manager : App
 		if (imgui != null)
 		{
 			using var imguiLayoutPerf = PerfStats.Time(PerfDetail.ImGuiLayout);
-			imgui.BeginLayout();
 			var window = RequiredWindow;
 #if IOS
 			window.StopTextInput();
 #else
 			if (!OperatingSystem.IsBrowser())
 			{
-				if (imgui.WantsTextInput)
-					window.StartTextInput();
-				else
-					window.StopTextInput();
+				if (imgui.WantsTextInput) window.StartTextInput();
+				else window.StopTextInput();
 			}
 #endif
 #if EDITOR
-			if (gameEase < 1.0f && !startingPlay)
-			{
-				using (PerfStats.Time(PerfDetail.PaletteImGui))
-					PaletteImGui();
-			}
-			if (!playing && !startingPlay)
-			{
-				using (PerfStats.Time(PerfDetail.ToolbarImGui))
-					ToolbarImGui();
-			}
+			EditorUI();
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
 
 			RenderTargetOverlayImGui();
-#if EDITOR
-			PlatformNavDebugOverlayImGui();
-			BudDebugOverlayImGui();
-			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
-				FpsOverlayImGui();
-			TransitionViewerImGui();
-#endif
-			imgui.EndLayout();
 		}
+
+		imgui?.EndLayout();
 	}
 
 
