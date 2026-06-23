@@ -1863,4 +1863,215 @@ public partial class Game
 		value.W = Math.Clamp(value.W * scale, 0, 1);
 		return value;
 	}
+
+	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
+	{
+		if (Manager.Window is not { } window)
+			return;
+
+		EnsureRenderTargets(Width, Height);
+		RenderCurrentView(window, viewport, showHud, scissor, applyCrt: true);
+	}
+
+	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true)
+	{
+		if (Manager.Window is not { } window)
+			return;
+
+		var oldCamera = Camera;
+		var oldShake = shake;
+		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
+		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height));
+
+		EnsureRenderTargets(width, height);
+		Camera = worldView.TopLeft;
+		shake = Point2.Zero;
+		RenderCurrentView(window, viewport, showHud, scissor, applyCrt);
+		Camera = oldCamera;
+		shake = oldShake;
+	}
+
+	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false)
+	{
+		var oldCamera = Camera;
+		var oldShake = shake;
+		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
+		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height));
+
+		EnsureRenderTargets(width, height);
+		Camera = worldView.TopLeft;
+		shake = Point2.Zero;
+		RenderCurrentView(target, target.Bounds, showHud, scissor: null, applyCrt: false);
+		Camera = oldCamera;
+		shake = oldShake;
+	}
+
+	private void EnsureRenderTargets(int width, int height)
+	{
+		if (Screen != null && Screen.Width == width && Screen.Height == height)
+			return;
+
+		DisposeRenderTargets();
+		debugTargets.Clear();
+
+		Screen = Track(new Target(GraphicsDevice, width, height, name: "GameScreen"));
+		BackgroundScreen = Track(new Target(GraphicsDevice, width, height, name: "BackgroundScreen"));
+		ForegroundScreen = Track(new Target(GraphicsDevice, width, height, name: "ForegroundScreen"));
+		BackgroundEmissive = Track(new Target(GraphicsDevice, width, height, name: "BackgroundEmissive"));
+		ForegroundEmissive = Track(new Target(GraphicsDevice, width, height, name: "ForegroundEmissive"));
+		LightMask = Track(new Target(GraphicsDevice, width, height, name: "LightMask"));
+		BackgroundLightMask = Track(new Target(GraphicsDevice, width, height, name: "BackgroundLightMask"));
+		ForegroundLightMask = Track(new Target(GraphicsDevice, width, height, name: "ForegroundLightMask"));
+		SingleLightMask = Track(new Target(GraphicsDevice, width, height, name: "SingleLightMask"));
+		LitBackground = Track(new Target(GraphicsDevice, width, height, name: "LitBackground"));
+		LitForeground = Track(new Target(GraphicsDevice, width, height, name: "LitForeground"));
+		LitScreen = Track(new Target(GraphicsDevice, width, height, name: "LitScreen"));
+		GlitchScreen = Track(new Target(GraphicsDevice, width, height, name: "GlitchScreen"));
+		NormalBuffer = Track(new Target(GraphicsDevice, width, height, name: "NormalBuffer"));
+		TileField = Track(CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField"));
+		DitherMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask"));
+		ParticleSolidMask = Track(new Target(GraphicsDevice, width, height, name: "ParticleSolidMask"));
+		ReflectionScreen = Track(new Target(GraphicsDevice, width, height, name: "ReflectionScreen"));
+		ReflectionMask = Track(new Target(GraphicsDevice, width, height, name: "ReflectionMask"));
+		AoMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoMask"));
+		AoBlurScratch = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoBlurScratch"));
+		BackgroundCoverage = Track(new Target(GraphicsDevice, width, height, name: "BackgroundCoverage"));
+		SoftShadowScratch = Track(new Target(GraphicsDevice, width, height, name: "SoftShadowScratch"));
+	}
+
+	private Target Track(Target target)
+	{
+		debugTargets.Add(target);
+		return target;
+	}
+
+	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
+	{
+		ReadOnlySpan<TextureFormat> attachments = [format];
+		return new Target(GraphicsDevice, width, height, attachments, name: name);
+	}
+
+	private void DisposeRenderTargets()
+	{
+		Screen?.Dispose();
+		BackgroundScreen?.Dispose();
+		ForegroundScreen?.Dispose();
+		BackgroundEmissive?.Dispose();
+		ForegroundEmissive?.Dispose();
+		LightMask?.Dispose();
+		BackgroundLightMask?.Dispose();
+		ForegroundLightMask?.Dispose();
+		SingleLightMask?.Dispose();
+		LitBackground?.Dispose();
+		LitForeground?.Dispose();
+		LitScreen?.Dispose();
+		GlitchScreen?.Dispose();
+		NormalBuffer?.Dispose();
+		TileField?.Dispose();
+		DitherMask?.Dispose();
+		ParticleSolidMask?.Dispose();
+		ReflectionScreen?.Dispose();
+		ReflectionMask?.Dispose();
+		AoMask?.Dispose();
+		AoBlurScratch?.Dispose();
+		BackgroundCoverage?.Dispose();
+		SoftShadowScratch?.Dispose();
+	}
+
+	private void DisposeRoomNormalCaches()
+	{
+		foreach (var cache in roomNormalCaches.Values)
+			cache.Dispose();
+		roomNormalCaches.Clear();
+	}
+
+	private void DisposeRoomTileFieldCaches()
+	{
+		foreach (var cache in roomTileFieldCaches.Values)
+			cache.Dispose();
+		roomTileFieldCaches.Clear();
+	}
+
+	private void PruneInactiveRoomCaches()
+	{
+		PruneInactiveRoomNormalCaches();
+		PruneInactiveRoomTileFieldCaches();
+	}
+
+	public float SdfAuraScrollTime => Time.SecondsF * SdfAuraScrollSpeed;
+
+	/// <summary>
+	/// Draws the combined SDF aura over a quad (corners <paramref name="p0"/>..<paramref name="p3"/>
+	/// in the caller's local space), with the shader uniforms describing the two
+	/// silhouettes. The SDF atlas is the sampled texture.
+	/// </summary>
+	public void RenderSdfAura(Batcher batcher, Span<float> uniforms, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
+	{
+		if (sdfAuraMaterial == null || SpriteSdf.Atlas is not { } atlas)
+			return;
+
+		// Fill in the world camera (RTopLeft.zw) and zoom (A1.z) so the dither grid
+		// is evaluated in world-pixel space (matching the lighting dither).
+		var camera = RenderCamera;
+		uniforms[6] = camera.X;
+		uniforms[7] = camera.Y;
+		uniforms[30] = zoomLevel;
+
+		sdfAuraMaterial.Material.Fragment.SetUniformBuffer(uniforms);
+		batcher.PushMaterial(sdfAuraMaterial.Material);
+		batcher.PushBlend(new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One));
+		batcher.Quad(atlas, p0, p1, p2, p3, new(0, 0), new(1, 0), new(1, 1), new(0, 1), Color.White);
+		batcher.PopBlend();
+		batcher.PopMaterial();
+	}
+
+	/// <summary>World-space center of the current view (for test bursts).</summary>
+	public Vector2 ViewCenterWorld => RenderCamera + new Vector2(Width, Height) / 2f / zoomLevel;
+
+	private int previewEffectSlot = -1;
+	private string? previewEffectName;
+
+	/// <summary>Selects which effect asset the tuning window previews/bursts.</summary>
+	public void SetPreviewEffect(string name)
+	{
+		if (particleSystem is not { Supported: true } || name == previewEffectName)
+			return;
+		if (previewEffectSlot >= 0)
+			particleSystem.ReleaseEffect(previewEffectSlot);
+		previewEffectName = name;
+		previewEffectSlot = particleSystem.AcquireEffect(name);
+	}
+
+	/// <summary>Emits the tuning-window's selected effect at the view center.</summary>
+	public void BurstTestEffect()
+	{
+		if (previewEffectSlot >= 0 && previewEffectName != null)
+			particleSystem?.Emit(previewEffectSlot, ViewCenterWorld, ParticleEffectAssets.Get(previewEffectName).BurstCount);
+	}
+
+	/// <summary>
+	/// Editor-only preview: actor Update does not run in edit mode. Only the
+	/// selected emitter emits; the sim still advances so existing particles age
+	/// out when nothing is selected.
+	/// </summary>
+	public void PreviewParticlesInEditor(float dt, string? selectedActorId)
+	{
+		if (particleSystem is not { Supported: true })
+			return;
+		if (selectedActorId != null)
+			foreach (var actor in Actors)
+				if (actor is ParticleEmitter emitter && emitter.ActorId == selectedActorId)
+					emitter.EmitStep(dt);
+		StepParticles(dt);
+	}
+
+	// Advances the particle sim, sampling collision from last frame's foreground
+	// coverage (1-frame stale, fine for collision).
+	private void StepParticles(float dt)
+	{
+		if (particleSystem is not { Supported: true })
+			return;
+		DrawParticleSolidMask();
+		particleSystem.Update(dt, ParticleSolidMask.Attachments[0], RenderCamera, zoomLevel);
+	}
 }
