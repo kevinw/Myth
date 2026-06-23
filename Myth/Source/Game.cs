@@ -201,9 +201,11 @@ public partial class Game : IDisposable
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		this.spawnBud = spawnBud;
 		this.spawnBudAtPlayer = spawnBudAtPlayer;
-		// All GPU/render state lives in GameView. A headless Game (e.g. a future
-		// nav-graph worker) can be constructed with no view.
-		View = new GameView(this, enableParticles);
+		// All GPU/render state lives in GameView. A headless Game (the gym, or a
+		// nav-graph worker) has no view and allocates no render targets/materials.
+		View = manager.GraphicsDevice.Driver == GraphicsDriver.Headless
+			? null
+			: new GameView(this, enableParticles);
 		LoadStory();
 		RestorePersistentDebugViews();
 
