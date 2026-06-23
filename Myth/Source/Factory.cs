@@ -246,7 +246,6 @@ public static class Factory
 		ActorSpecs.RegisterActor<Blob>("Blob");
 		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
 		ActorSpecs.RegisterActor<TitleText>("TitleText");
-		ActorSpecs.RegisterActor<Peter>("Peter");
 		ActorSpecs.RegisterActor<Boss>("Boss");
 		ActorSpecs.RegisterActor<Goal>("Goal");
 		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
@@ -309,7 +308,6 @@ public static class Factory
 			ActorPaletteEntry.FromActor<Blob>("blob", new (4, 8)),
 			ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new (4, 8)),
 			ActorPaletteEntry.FromActor<TitleText>("heart", new (4, 4)),
-			ActorPaletteEntry.FromActor<Peter>("peter", new (4, 4)),
 			ActorPaletteEntry.FromActor<Boss>("bud", new (4, 8)),
 			ActorPaletteEntry.FromActor<ArrowTrap>("arrow_trap", new (4, 4)),
 			ActorPaletteEntry.FromActor<Goal>("goal"),
