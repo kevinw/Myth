@@ -1933,31 +1933,30 @@ public sealed partial class GameView
 			return;
 
 		DisposeRenderTargets();
-		debugTargets.Clear();
 
-		Screen = Track(new Target(GraphicsDevice, width, height, name: "GameScreen"));
-		BackgroundScreen = Track(new Target(GraphicsDevice, width, height, name: "BackgroundScreen"));
-		ForegroundScreen = Track(new Target(GraphicsDevice, width, height, name: "ForegroundScreen"));
-		BackgroundEmissive = Track(new Target(GraphicsDevice, width, height, name: "BackgroundEmissive"));
-		ForegroundEmissive = Track(new Target(GraphicsDevice, width, height, name: "ForegroundEmissive"));
-		LightMask = Track(new Target(GraphicsDevice, width, height, name: "LightMask"));
-		BackgroundLightMask = Track(new Target(GraphicsDevice, width, height, name: "BackgroundLightMask"));
-		ForegroundLightMask = Track(new Target(GraphicsDevice, width, height, name: "ForegroundLightMask"));
-		SingleLightMask = Track(new Target(GraphicsDevice, width, height, name: "SingleLightMask"));
-		LitBackground = Track(new Target(GraphicsDevice, width, height, name: "LitBackground"));
-		LitForeground = Track(new Target(GraphicsDevice, width, height, name: "LitForeground"));
-		LitScreen = Track(new Target(GraphicsDevice, width, height, name: "LitScreen"));
-		GlitchScreen = Track(new Target(GraphicsDevice, width, height, name: "GlitchScreen"));
-		NormalBuffer = Track(new Target(GraphicsDevice, width, height, name: "NormalBuffer"));
-		TileField = Track(CreateRenderTarget(width, height, TextureFormat.R8G8, "TileField"));
-		DitherMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "DitherMask"));
-		ParticleSolidMask = Track(new Target(GraphicsDevice, width, height, name: "ParticleSolidMask"));
-		ReflectionScreen = Track(new Target(GraphicsDevice, width, height, name: "ReflectionScreen"));
-		ReflectionMask = Track(new Target(GraphicsDevice, width, height, name: "ReflectionMask"));
-		AoMask = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoMask"));
-		AoBlurScratch = Track(CreateRenderTarget(width, height, TextureFormat.R8, "AoBlurScratch"));
-		BackgroundCoverage = Track(new Target(GraphicsDevice, width, height, name: "BackgroundCoverage"));
-		SoftShadowScratch = Track(new Target(GraphicsDevice, width, height, name: "SoftShadowScratch"));
+		Screen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GameScreen"));
+		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
+		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
+		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
+		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
+		LightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LightMask"));
+		BackgroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundLightMask"));
+		ForegroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundLightMask"));
+		SingleLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SingleLightMask"));
+		LitBackground = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitBackground"));
+		LitForeground = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitForeground"));
+		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
+		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
+		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
+		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
+		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
+		ParticleSolidMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ParticleSolidMask"));
+		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
+		ReflectionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionMask"));
+		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoMask"));
+		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoBlurScratch"));
+		BackgroundCoverage = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundCoverage"));
+		SoftShadowScratch = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SoftShadowScratch"));
 	}
 
 	private Target Track(Target target)
@@ -1966,37 +1965,22 @@ public sealed partial class GameView
 		return target;
 	}
 
+
+	// Used by the per-room normal/tile-field caches (not the pooled main render targets).
 	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
 	{
 		ReadOnlySpan<TextureFormat> attachments = [format];
 		return new Target(GraphicsDevice, width, height, attachments, name: name);
 	}
 
+	// debugTargets holds exactly the render targets created by EnsureRenderTargets, so
+	// return them all to the pool for reuse. Clearing the list makes a repeat call a no-op
+	// (no double-return) and the property fields are always reassigned before next use.
 	private void DisposeRenderTargets()
 	{
-		Screen?.Dispose();
-		BackgroundScreen?.Dispose();
-		ForegroundScreen?.Dispose();
-		BackgroundEmissive?.Dispose();
-		ForegroundEmissive?.Dispose();
-		LightMask?.Dispose();
-		BackgroundLightMask?.Dispose();
-		ForegroundLightMask?.Dispose();
-		SingleLightMask?.Dispose();
-		LitBackground?.Dispose();
-		LitForeground?.Dispose();
-		LitScreen?.Dispose();
-		GlitchScreen?.Dispose();
-		NormalBuffer?.Dispose();
-		TileField?.Dispose();
-		DitherMask?.Dispose();
-		ParticleSolidMask?.Dispose();
-		ReflectionScreen?.Dispose();
-		ReflectionMask?.Dispose();
-		AoMask?.Dispose();
-		AoBlurScratch?.Dispose();
-		BackgroundCoverage?.Dispose();
-		SoftShadowScratch?.Dispose();
+		foreach (var target in debugTargets)
+			RenderTargetPool.Return(target);
+		debugTargets.Clear();
 	}
 
 	private void DisposeRoomNormalCaches()
