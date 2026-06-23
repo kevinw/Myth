@@ -105,21 +105,41 @@ public partial class Game
 			_ => view.ToString()
 		};
 
+	// Hold the per-frame nav build off while a room camera slide is animating (and briefly
+	// after, while it settles) so the budgeted build doesn't compete with the slide and
+	// hitch it. Set by Manager from the editor camera tween; gameplay transitions are
+	// detected from nextRoom + this settle timer.
+	internal bool navBuildSuppressedByHost;
+	private const float NavBuildSettleSeconds = 0.3f;
+	private float navBuildSettleTimer;
+
 	public PlatformNavGraph? GetPlatformNavGraph()
 	{
 		if (room == null)
 			return null;
 
+		// Unthrottled (gym) builds the whole graph in one tick so it becomes ready on a
+		// deterministic frame, and never defers — its determinism must not depend on
+		// camera/slide state.
+		var unthrottled = Manager.Unthrottled;
+
 		if (platformNavGraphRoom != room)
 		{
 			platformNavGraph.Rebuild(this, room);
 			platformNavGraphRoom = room;
+			navBuildSettleTimer = unthrottled ? 0f : NavBuildSettleSeconds;
 		}
 
-		// Unthrottled (gym) runs build the whole graph in one tick so it becomes ready on
-		// a deterministic frame; interactive play keeps the small per-frame budget so the
-		// rebuild doesn't hitch.
-		platformNavGraph.Tick(Manager.Unthrottled ? float.MaxValue : 2.0f);
+		// While a room transition is sliding or the post-slide camera is still settling,
+		// skip the budgeted build (return the existing graph, or null if none yet).
+		if (!unthrottled && (nextRoom != null || navBuildSuppressedByHost || navBuildSettleTimer > 0f))
+		{
+			if (nextRoom == null && !navBuildSuppressedByHost && navBuildSettleTimer > 0f)
+				navBuildSettleTimer = MathF.Max(0f, navBuildSettleTimer - Time.Delta);
+			return platformNavGraph.IsReady ? platformNavGraph : null;
+		}
+
+		platformNavGraph.Tick(unthrottled ? float.MaxValue : 2.0f);
 		return platformNavGraph.IsReady ? platformNavGraph : null;
 	}
 
