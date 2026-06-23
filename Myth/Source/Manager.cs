@@ -596,12 +596,70 @@ public partial class Manager : App
 		public bool AlwaysOnTop { get; init; }
 	}
 
+	// Debug/dev keyboard + controller shortcuts. Host concern: Manager reads input and
+	// drives the sim through its public API (moved out of Game.Update for Phase 2).
+	void HandleGameDebugShortcuts(Game g)
+	{
+		if (!g.AcceptsLiveInput)
+			return;
+
+		if (Input.Keyboard.Pressed(Keys.R))
+			g.ReloadRoom();
+#if !BROWSER
+		if (Input.Keyboard.Pressed(Keys.P)) g.ToggleDebugView(Game.DebugView.PlatformNav);
+		if (Input.Keyboard.Pressed(Keys.G)) g.ToggleRenderTargetOverlay();
+#endif
+		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(g, !Input.Keyboard.Shift);
+#if DEBUG
+		if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) g.ChangeTimeScale(-1);
+		if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) g.ChangeTimeScale(1);
+		foreach (var controller in Input.Controllers)
+		{
+			if (!controller.Connected)
+				continue;
+			if (controller.Pressed(Buttons.LeftShoulder)) g.ChangeTimeScale(-1);
+			if (controller.Pressed(Buttons.RightShoulder)) g.ChangeTimeScale(1);
+		}
+#endif
+	}
+
+#if DEBUG
+	// Editor mouse-drag of the player: host input, drives sim state directly.
+	void UpdatePlayerMouseDrag(Game g)
+	{
+		if (!g.AcceptsLiveInput || g.GetFirst<Player>() is not { } player)
+		{
+			g.draggingPlayer = false;
+			return;
+		}
+
+		if (Input.Mouse.LeftPressed)
+		{
+			var mouse = GameMouseWorld(g);
+			if (player.GetVisualBounds().Inflate(8).Contains(mouse))
+				g.draggingPlayer = true;
+		}
+
+		if (!Input.Mouse.LeftDown)
+		{
+			g.draggingPlayer = false;
+			return;
+		}
+
+		if (!g.draggingPlayer)
+			return;
+
+		player.Position = (Point2)GameMouseWorld(g);
+		player.Velocity = Vector2.Zero;
+	}
+#endif
+
 	void HeadlessUpdate()
 	{
 		if (!playing) return;
 		if (game == null) return;
 
-		game.Update(true);
+		game.Update(controls);
 
 		if (gym.runs == null) return;
 		GymTick();
@@ -710,8 +768,16 @@ public partial class Manager : App
 			if (!UpdatePlayModePinchIn())
 #endif
 			{
-				using (PerfStats.Time(PerfDetail.GameUpdate))
-					game?.Update(!keyboardShortcutsBlocked && !perfToggleChordActive);
+				if (game is { } g)
+				{
+#if DEBUG
+					UpdatePlayerMouseDrag(g);
+#endif
+					if (!keyboardShortcutsBlocked && !perfToggleChordActive)
+						HandleGameDebugShortcuts(g);
+					using (PerfStats.Time(PerfDetail.GameUpdate))
+						g.Update(controls);
+				}
 			}
 
 			GymTick();

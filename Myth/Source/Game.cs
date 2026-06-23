@@ -60,12 +60,11 @@ public partial class Game : IDisposable
 #if DEBUG
 	public void ReloadShaders() => View?.ReloadShaders();
 #endif
-	public readonly Controls Controls;
+	// Set each frame by Manager via Update(controls); the sim reads only this, never the device.
+	public Controls Controls { get; private set; } = null!;
 
 	public readonly List<Actor> Actors = [];
 
-	Input Input => Manager.Input;
-	GraphicsDevice GraphicsDevice => Manager.GraphicsDevice;
 	public Time Time => Manager.Time.MultiplyDelta(timeScale);
 
 	internal Room? room;
@@ -113,7 +112,10 @@ public partial class Game : IDisposable
 	internal Rng rng = new();
 
 
-	private bool draggingPlayer;
+	internal bool draggingPlayer;
+	// True when the sim is in a room and not mid-transition: when Manager applies live
+	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
+	internal bool AcceptsLiveInput => room != null && nextRoom == null;
 	private float timeScale = 1.0f;
 	private readonly Point2? respawnPosition;
 	private readonly bool spawnBud;
@@ -199,7 +201,6 @@ public partial class Game : IDisposable
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		this.spawnBud = spawnBud;
 		this.spawnBudAtPlayer = spawnBudAtPlayer;
-		Controls = new(manager.Input);
 		// All GPU/render state lives in GameView. A headless Game (e.g. a future
 		// nav-graph worker) can be constructed with no view.
 		View = new GameView(this, enableParticles);
@@ -279,8 +280,11 @@ public partial class Game : IDisposable
 		View?.Dispose();
 	}
 
-	public void Update(bool allowKeyboardShortcuts = true)
+	// Manager owns input and feeds the per-frame controls in; the sim never reads the
+	// live device. A headless Game receives Controls bound to a headless Input (no input).
+	public void Update(Controls controls)
 	{
+		Controls = controls;
 #if BROWSER
 		var browserDebugFrameStartAllocated = GC.GetAllocatedBytesForCurrentThread();
 #endif
@@ -323,46 +327,8 @@ public partial class Game : IDisposable
 		// Run Game normally when not moving to a new room
 		if (nextRoom == null)
 		{
-			if (allowKeyboardShortcuts)
-			{
-				// Reload Room Debug
-				if (Input.Keyboard.Pressed(Keys.R))
-					ReloadRoom();
-
-#if !BROWSER
-				//if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
-				//if (Input.Keyboard.Pressed(Keys.K)) ToggleDebugView(DebugView.Reflection);
-				//if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugView(DebugView.LightMask);
-				//if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
-				//if (Input.Keyboard.Pressed(Keys.T)) CycleTileFieldDebugView();
-				//if (Input.Keyboard.Pressed(Keys.M)) ToggleDebugView(DebugView.DitherMask);
-				//if (Input.Keyboard.Pressed(Keys.V)) ToggleDebugView(DebugView.Visibility);
-				if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
-				if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay(); // fails with a wasm exception in BROWSER
-#endif
-				if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
-			}
-
-#if DEBUG
-			UpdatePlayerMouseDrag();
-			if (allowKeyboardShortcuts)
-			{
-				if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus))
-					ChangeTimeScale(-1);
-				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus))
-					ChangeTimeScale(1);
-
-				foreach (var controller in Input.Controllers)
-				{
-					if (!controller.Connected)
-						continue;
-					if (controller.Pressed(Buttons.LeftShoulder))
-						ChangeTimeScale(-1);
-					if (controller.Pressed(Buttons.RightShoulder))
-						ChangeTimeScale(1);
-				}
-			}
-#endif
+			// Debug shortcuts and editor mouse-drag are host concerns; Manager reads input
+			// and drives them (see Manager.HandleGameDebugShortcuts / UpdatePlayerMouseDrag).
 
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
@@ -417,7 +383,7 @@ public partial class Game : IDisposable
 #endif
 	}
 
-	private void ChangeTimeScale(int direction)
+	internal void ChangeTimeScale(int direction)
 	{
 		ReadOnlySpan<float> scales = [0.05f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f];
 
@@ -500,34 +466,6 @@ public partial class Game : IDisposable
 			if (actor is CameraBlocker { Active: true } blocker)
 				cameraBlockerBuffer.Add(blocker.WorldRect);
 		return cameraBlockerBuffer;
-	}
-
-	private void UpdatePlayerMouseDrag()
-	{
-		if (GetFirst<Player>() is not { } player)
-		{
-			draggingPlayer = false;
-			return;
-		}
-
-		if (Input.Mouse.LeftPressed)
-		{
-			var mouse = Manager.GameMouseWorld(this);
-			if (player.GetVisualBounds().Inflate(8).Contains(mouse))
-				draggingPlayer = true;
-		}
-
-		if (!Input.Mouse.LeftDown)
-		{
-			draggingPlayer = false;
-			return;
-		}
-
-		if (!draggingPlayer)
-			return;
-
-		player.Position = (Point2)Manager.GameMouseWorld(this);
-		player.Velocity = Vector2.Zero;
 	}
 
 	private Point2 FindFallbackPlayerPosition(Room forRoom, Point2? direction)

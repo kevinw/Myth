@@ -32,7 +32,7 @@ public partial class Game
 	// window resolution. Toggled with G.
 	public bool ShowRenderTargetOverlay { get; set; }
 
-	private void ToggleRenderTargetOverlay()
+	internal void ToggleRenderTargetOverlay()
 	{
 		ShowRenderTargetOverlay = !ShowRenderTargetOverlay;
 		DisplayMessage($"Debug: Render Targets {(ShowRenderTargetOverlay ? "On" : "Off")}");
@@ -55,7 +55,7 @@ public partial class Game
 		return sb.ToString();
 	}
 
-	private void ToggleDebugView(DebugView toggle)
+	internal void ToggleDebugView(DebugView toggle)
 	{
 		SetDebugView(debugView == toggle ? DebugView.None : toggle);
 	}
