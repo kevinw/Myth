@@ -12,6 +12,7 @@ public readonly record struct PawnInput(
 	bool AllowWallJump = true);
 
 // A marker for where the player should start in a room, if they are first spawned there.
+[GameActor(Sprite = "player_start")]
 public class PlayerStart : Actor
 {
 	public PlayerStart()
@@ -630,6 +631,7 @@ public abstract class Pawn : Actor
 		=> wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
 }
 
+[GameActor(HideFromPalette = true)]
 public partial class Player : Pawn
 {
 	public override PawnInput GetInput()

@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "arrow_trap", Tags = ActorTag.Hazard)]
 public class ArrowTrap : Actor
 {
 	private bool didFire;

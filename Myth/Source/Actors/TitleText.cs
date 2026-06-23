@@ -8,6 +8,7 @@ using Color = Foster.Framework.Color;
 /// <summary>
 /// Shows text placed as actor metadata.
 /// </summary>
+[GameActor(Sprite = "heart")]
 public class TitleText : Actor
 {
 	private float stateDuration = 0;

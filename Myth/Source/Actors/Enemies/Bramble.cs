@@ -2,13 +2,13 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Tags = ActorTag.Enemy | ActorTag.Hazard)]
 public class Bramble : Actor
 {
 	public Bramble()
 	{
 		Hitbox = new(new RectInt(-4, -8, 8, 8));
 		Mask = Masks.Hazard;
-		Sprite = Assets.GetSprite("bramble");
 		Play("idle");
 	}
 

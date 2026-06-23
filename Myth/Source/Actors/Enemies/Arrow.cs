@@ -3,13 +3,13 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(HideFromPalette = true)]
 public class Arrow : Actor
 {
 	public Arrow()
 	{
 		Hitbox = new(new RectInt(-4, -4, 8, 8));
 		Mask = Masks.Enemy;
-		Sprite = Assets.GetSprite("arrow");
 		Depth = -5;
 	}
 

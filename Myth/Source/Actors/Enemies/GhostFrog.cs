@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Tags = ActorTag.Enemy)]
 public class GhostFrog : Actor
 {
 	private enum States
@@ -37,7 +38,6 @@ public class GhostFrog : Actor
 
 	public GhostFrog()
 	{
-		Sprite = Assets.GetSprite("ghostfrog");
 		Depth = -5;
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Mask = Masks.Enemy;

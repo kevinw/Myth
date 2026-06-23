@@ -3,6 +3,7 @@ using System.Numerics;
 namespace Myth;
 using Foster.Framework;
 
+[GameActor(Tags = ActorTag.Enemy | ActorTag.Flying)]
 public class Floater : Actor
 {
 	public float LaserWarmup = 0.2f;
@@ -38,7 +39,6 @@ public class Floater : Actor
 		Hitbox = new(new RectInt(-5, -5, 10, 10));
 		CollidesWithSolids = false;
 		Mask = Masks.Enemy;
-		Sprite = Assets.GetSprite("floater");
 		Depth = -5;
 		Play("idle");
 		ChangeDir();

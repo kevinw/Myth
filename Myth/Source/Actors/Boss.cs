@@ -3,6 +3,7 @@ using System.Numerics;
 
 namespace Myth;
 
+[GameActor(Sprite = "bud", Tags = ActorTag.Enemy | ActorTag.Boss)]
 public class Boss : Pawn
 {
 	private static readonly Color Tint = new(0xff7f7f);

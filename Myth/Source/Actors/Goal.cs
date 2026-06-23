@@ -2,13 +2,13 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor]
 public class Goal : Actor
 {
 	public string Name = "";
 
 	public Goal()
 	{
-		Sprite = Assets.GetSprite("goal");
 		if (Sprite != null && Sprite.Frames.Count > 0)
 		{
 			Hitbox = Hitbox.FromSprite(Sprite);

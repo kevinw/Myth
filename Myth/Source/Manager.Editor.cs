@@ -46,6 +46,7 @@ public partial class Manager
 	RectInt? proposedRoomTiles;
 	string? selectedActorSpecId;
 	int selectedActorPaletteIndex = -1;
+	ActorTag actorPaletteFilter = ActorTag.None; // None = show all
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
@@ -306,6 +307,7 @@ public partial class Manager
 				["showForegroundLayer"] = manager.editorShowForegroundLayer,
 				["showBackgroundLayer"] = manager.editorShowBackgroundLayer,
 				["actorPaletteIndex"] = manager.selectedActorPaletteIndex,
+				["actorPaletteFilter"] = (int)manager.actorPaletteFilter,
 				["prefabId"] = manager.selectedActorSpecId,
 				["prefabInspectorOpen"] = manager.actorSpecInspectorOpen,
 				["entryDirection"] = manager.editorRoomEntryDirection is { } direction ? new JsonArray(direction.X, direction.Y) : null
@@ -329,6 +331,7 @@ public partial class Manager
 			manager.editorShowForegroundLayer = JsonUtil.ReadBool(json, "showForegroundLayer", true);
 			manager.editorShowBackgroundLayer = JsonUtil.ReadBool(json, "showBackgroundLayer", true);
 			manager.selectedActorPaletteIndex = JsonUtil.ReadInt(json, "actorPaletteIndex", -1);
+			manager.actorPaletteFilter = (ActorTag)JsonUtil.ReadInt(json, "actorPaletteFilter", 0);
 			manager.selectedActorSpecId = JsonUtil.ReadString(json, "prefabId");
 			manager.actorSpecInspectorOpen = JsonUtil.ReadBool(json, "prefabInspectorOpen");
 			manager.editorRoomEntryDirection = JsonUtil.ReadPoint(json, "entryDirection");
@@ -591,7 +594,7 @@ public partial class Manager
 		if (OperatingSystem.IsMacOS())
 		{
 			var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-			var steamAseprite = Path.Combine(homeDir, "Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
+			var steamAseprite = Path.Combine(homeDir, "Library/Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
 			if (File.Exists(steamAseprite))
 				return CreateStartInfo(steamAseprite, filename);
 
@@ -696,11 +699,14 @@ public partial class Manager
 	void DrawActorPaletteSection()
 	{
 		ImGui.TextUnformatted("Actors");
+		DrawActorTagFilter();
 		var index = 0;
 		for (var i = 0; i < Factory.ActorPalette.Count; i++)
 		{
 			var entry = Factory.ActorPalette[i];
 			if (entry.Image.Texture == null)
+				continue;
+			if (actorPaletteFilter != ActorTag.None && (entry.Tags & actorPaletteFilter) == 0)
 				continue;
 
 			if (index > 0 && index % PaletteColumns != 0)
@@ -719,6 +725,59 @@ public partial class Manager
 
 			index++;
 		}
+	}
+
+	void DrawActorTagFilter()
+	{
+		// Only offer filters for tags some palette entry actually uses.
+		var available = ActorTag.None;
+		foreach (var entry in Factory.ActorPalette)
+			available |= entry.Tags;
+		if (available == ActorTag.None)
+			return;
+
+		var visibleMaxX = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3)); // the palette zeroes FramePadding; give tags a bit back
+		ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
+
+		DrawTagButton("All", actorPaletteFilter == ActorTag.None, () => actorPaletteFilter = ActorTag.None, visibleMaxX, firstInRow: true);
+		foreach (ActorTag tag in Enum.GetValues<ActorTag>())
+		{
+			if (tag == ActorTag.None || (available & tag) == 0)
+				continue;
+			var t = tag;
+			DrawTagButton(tag.ToString(), (actorPaletteFilter & t) != 0, () => ToggleActorTagFilter(t), visibleMaxX, firstInRow: false);
+		}
+
+		ImGui.PopStyleVar(2);
+	}
+
+	void ToggleActorTagFilter(ActorTag tag)
+	{
+		var io = ImGui.GetIO();
+		if (io.KeyShift || io.KeyCtrl || io.KeySuper) // additive: add/remove this tag
+			actorPaletteFilter ^= tag;
+		else // exclusive: this tag only; click again to clear
+			actorPaletteFilter = actorPaletteFilter == tag ? ActorTag.None : tag;
+	}
+
+	static void DrawTagButton(string label, bool active, Action onClick, float visibleMaxX, bool firstInRow)
+	{
+		var style = ImGui.GetStyle();
+		if (!firstInRow)
+		{
+			// Canonical ImGui button-wrap: stay on the row only while the next button fits.
+			var width = ImGui.CalcTextSize(label).X + style.FramePadding.X * 2;
+			if (ImGui.GetItemRectMax().X + style.ItemSpacing.X + width < visibleMaxX)
+				ImGui.SameLine();
+		}
+
+		if (active)
+			ImGui.PushStyleColor(ImGuiCol.Button, style.Colors[(int)ImGuiCol.ButtonActive]);
+		if (ImGui.Button($"{label}##ActorTag"))
+			onClick();
+		if (active)
+			ImGui.PopStyleColor();
 	}
 
 	void DrawRoomPaletteSection()

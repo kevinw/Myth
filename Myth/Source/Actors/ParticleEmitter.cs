@@ -9,6 +9,7 @@ namespace Myth;
 /// position; continuous effects stream, burst effects fire once. Previews when
 /// selected in the editor.
 /// </summary>
+[GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System)]
 public class ParticleEmitter : Actor
 {
 	public string EffectName = "sparks";

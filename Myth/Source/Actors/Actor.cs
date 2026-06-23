@@ -81,6 +81,11 @@ public class Actor
 	bool targetAnimationLooping = true;
 	float hitCooldown = 0;
 
+	// Convention: an actor's sprite defaults to one named after its class (case-insensitive),
+	// so Mosquito uses mosquito.ase automatically. Assigning Sprite in a subclass ctor overrides
+	// this and marks a deliberate exception (e.g. the blob-family enemies reusing "blob").
+	public Actor() => Sprite = Assets.GetSprite(GetType().Name);
+
 	/// Plays an Animation from our current Sprite, if it exists
 	public void Play(string name, bool looping = true, bool restart = false)
 	{

@@ -2,6 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, Tags = ActorTag.Light)]
 public class Light : Actor
 {
 	public float Radius = 48;

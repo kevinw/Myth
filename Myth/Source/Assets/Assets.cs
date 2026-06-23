@@ -15,7 +15,7 @@ public static class Assets
 	public static SpriteFont? SpeechFont { get; private set; }
 	public static Texture? Atlas { get; private set; }
 	public static Texture? LightingNoise { get; private set; }
-	public static readonly Dictionary<string, Sprite> Sprites = new();
+	public static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
 	public static readonly Dictionary<string, Tileset> Tilesets = new();
 	public static readonly Dictionary<string, Subtexture> Subtextures = new();
 	public static readonly Dictionary<Point2, Room> Rooms = new();
