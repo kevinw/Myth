@@ -2,6 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "door", BoundsW = Game.TileSize, BoundsH = Game.TileSize * 2, Tags = ActorTag.Door)]
 public class RevealDoor : Actor
 {
 	public enum RevealDirection

@@ -388,7 +388,7 @@ fn vertex_main(
 			// calculate total size
 			var vertexCount = 0;
 			var indexCount = 0;
-			for (int i = 0; i < data.CmdListsCount; i ++)
+			for (int i = 0; i < data.CmdListsCount; i++)
 			{
 				vertexCount += data.CmdLists[i].VtxBuffer.Size;
 				indexCount += data.CmdLists[i].IdxBuffer.Size;
@@ -402,13 +402,13 @@ fn vertex_main(
 
 			// copy data to arrays
 			vertexCount = indexCount = 0;
-			for (int i = 0; i < data.CmdListsCount; i ++)
+			for (int i = 0; i < data.CmdListsCount; i++)
 			{
 				var list = data.CmdLists[i];
 				var vertexSrc = new Span<ImDrawVert>((void*)list.VtxBuffer.Data, list.VtxBuffer.Size);
 				var indexSrc = new Span<ushort>((void*)list.IdxBuffer.Data, list.IdxBuffer.Size);
 
-				for (var v = 0; v < vertexSrc.Length; v ++)
+				for (var v = 0; v < vertexSrc.Length; v++)
 					vertices[vertexCount + v] = new PosTexColVertex(
 						vertexSrc[v].pos,
 						vertexSrc[v].uv,
@@ -550,7 +550,7 @@ fn vertex_main(
 		return pressed;
 	}
 
-	public void Image(in Subtexture subtexture, Vector2 size)
+	public void Image(in Subtexture subtexture, Vector2 size, bool flipY = false)
 	{
 		if (subtexture.Texture == null)
 			return;
@@ -566,12 +566,21 @@ fn vertex_main(
 		var imageMin = min + subtexture.DrawCoords[0] * scale;
 		var imageMax = min + subtexture.DrawCoords[2] * scale;
 
+		var uv_min = subtexture.TexCoords[0];
+		var uv_max = subtexture.TexCoords[2];
+
+		if (flipY)
+		{
+			uv_min.Y = 1.0f - uv_min.Y;
+			uv_max.Y = 1.0f - uv_max.Y;
+		}
+
 		draw.AddImage(
 			GetTextureID(subtexture.Texture),
 			imageMin,
 			imageMax,
-			subtexture.TexCoords[0],
-			subtexture.TexCoords[2]);
+			uv_min,
+			uv_max);
 	}
 
 	public void Dispose()

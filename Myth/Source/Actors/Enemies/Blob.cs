@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Tags = ActorTag.Enemy)]
 public class Blob : Actor
 {
 	public int Health = 3;
@@ -11,7 +12,6 @@ public class Blob : Actor
 
 	public Blob()
 	{
-		Sprite = Assets.GetSprite("blob");
 		Hitbox = new(new RectInt(-4, -8, 8, 8));
 		Mask = Masks.Enemy;
 		Depth = -5;

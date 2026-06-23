@@ -15,7 +15,7 @@ public static class Assets
 	public static SpriteFont? SpeechFont { get; private set; }
 	public static Texture? Atlas { get; private set; }
 	public static Texture? LightingNoise { get; private set; }
-	public static readonly Dictionary<string, Sprite> Sprites = new();
+	public static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
 	public static readonly Dictionary<string, Tileset> Tilesets = new();
 	public static readonly Dictionary<string, Subtexture> Subtextures = new();
 	public static readonly Dictionary<Point2, Room> Rooms = new();
@@ -44,11 +44,11 @@ public static class Assets
 	// Within-animation in-betweens whitelist: (sprite, tag) -> frame count.
 	// A tag of "*" applies to every tag of that sprite. Loaded from
 	// inbetweens.json; empty means no within-animation in-betweens are baked.
-	private static readonly Dictionary<(string Sprite, string Tag), int> InbetweenAnimations = new();
+	static readonly Dictionary<(string Sprite, string Tag), int> InbetweenAnimations = new();
 
 	// Transition in-betweens whitelist: (sprite, from, to) -> frame count.
 	// This is the source of truth for baking transitions.
-	private static readonly Dictionary<(string Sprite, string From, string To), int> InbetweenTransitions = new();
+	static readonly Dictionary<(string Sprite, string From, string To), int> InbetweenTransitions = new();
 
 	public static string INBETWEENS_JSON_FILENAME => Path.Join(AssetsPath, "inbetweens.json");
 
@@ -57,28 +57,28 @@ public static class Assets
 	public static readonly Dictionary<string, List<GeneratedTransition>> GeneratedTransitions = new();
 
 	// Expanded frame durations for sprites with inbetweens
-	private static readonly Dictionary<string, float[]> ExpandedFrameDurations = new();
+	static readonly Dictionary<string, float[]> ExpandedFrameDurations = new();
 
 	// Maps original frame index -> index in the expanded (in-betweened) timeline,
 	// for sprites that had within-animation in-betweens baked. Replaces the old
 	// uniform "tag.From * (count + 1)" math now that counts vary per tag.
-	private static readonly Dictionary<string, int[]> ExpandedFrameMap = new();
+	static readonly Dictionary<string, int[]> ExpandedFrameMap = new();
 
-	private const string assetsFolderName = "Assets";
-	private const string roomsFolderName = "Rooms";
-	private const string packedVisualsFolderName = "Packed/Visuals";
-	private const string packedVisualsManifestName = "manifest.bin";
-	private const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	private const int visualAssetPackVersion = 2;
-	private const string defaultWorldId = "Myth";
-	private const string defaultStartRoomId = "start";
-	private const string deletedRoomsFolderName = ".deleted";
-	private static string? path = null;
-	private static string? userRoomsPath = null;
-	private static string? visualAssetPackPath = null;
-	private static bool useVisualAssetPack = false;
-	private static bool? bundledRoomsWritable = null;
-	private static string currentWorldId = defaultWorldId;
+	const string assetsFolderName = "Assets";
+	const string roomsFolderName = "Rooms";
+	const string packedVisualsFolderName = "Packed/Visuals";
+	const string packedVisualsManifestName = "manifest.bin";
+	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
+	const int visualAssetPackVersion = 2;
+	const string defaultWorldId = "Myth";
+	const string defaultStartRoomId = "start";
+	const string deletedRoomsFolderName = ".deleted";
+	static string? path = null;
+	static string? userRoomsPath = null;
+	static string? visualAssetPackPath = null;
+	static bool useVisualAssetPack = false;
+	static bool? bundledRoomsWritable = null;
+	static string currentWorldId = defaultWorldId;
 
 	public static string AssetsPath
 	{
@@ -162,7 +162,7 @@ public static class Assets
 	public static void ReloadRooms()
 		=> LoadRooms();
 
-	private static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases, string? buildPackPath)
+	static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases, string? buildPackPath)
 	{
 		if (buildPackPath == null && (useVisualAssetPack || OperatingSystem.IsBrowser()) && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
 			return;
@@ -195,7 +195,7 @@ public static class Assets
 			LoadRooms();
 	}
 
-	private static VisualAssetBake BakeVisualAssets()
+	static VisualAssetBake BakeVisualAssets()
 	{
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
@@ -340,7 +340,7 @@ public static class Assets
 		return new(output, spriteFiles, generatedSprites, tilesetFiles, generatedTileImages, generatedNormalImages, generatedOccluders, kitGeneratedTilesets);
 	}
 
-	private static bool TryLoadVisualAssetPack(GraphicsDevice gfx, string directory, bool reloadRooms)
+	static bool TryLoadVisualAssetPack(GraphicsDevice gfx, string directory, bool reloadRooms)
 	{
 		var manifestPath = Path.Join(directory, packedVisualsManifestName);
 		if (!File.Exists(manifestPath))
@@ -375,7 +375,7 @@ public static class Assets
 		return true;
 	}
 
-	private static void WriteVisualAssetPack(string directory, VisualAssetBake bake)
+	static void WriteVisualAssetPack(string directory, VisualAssetBake bake)
 	{
 		var output = bake.Output;
 		if (output.Pages.Count != 1)
@@ -407,7 +407,7 @@ public static class Assets
 		Console.WriteLine($"Wrote visual asset pack: {manifestPath}");
 	}
 
-	private static VisualAssetPackManifest BuildVisualAssetPackManifest(VisualAssetBake bake, string atlas, string? lightingNoise)
+	static VisualAssetPackManifest BuildVisualAssetPackManifest(VisualAssetBake bake, string atlas, string? lightingNoise)
 	{
 		var manifest = new VisualAssetPackManifest
 		{
@@ -435,7 +435,7 @@ public static class Assets
 		return manifest;
 	}
 
-	private static void LoadVisualAssetPackManifest(Texture atlas, Texture? lightingNoise, VisualAssetPackManifest manifest)
+	static void LoadVisualAssetPackManifest(Texture atlas, Texture? lightingNoise, VisualAssetPackManifest manifest)
 	{
 		var oldAtlas = Atlas;
 		var oldLightingNoise = LightingNoise;
@@ -512,7 +512,7 @@ public static class Assets
 		oldLightingNoise?.Dispose();
 	}
 
-	private static PackedSprite BuildPackedSpriteAsset(VisualAssetBake bake, string name, Aseprite ase)
+	static PackedSprite BuildPackedSpriteAsset(VisualAssetBake bake, string name, Aseprite ase)
 	{
 		var origin = Vector2.Zero;
 		if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
@@ -585,7 +585,7 @@ public static class Assets
 		return packed;
 	}
 
-	private static PackedTileset BuildPackedTilesetAsset(VisualAssetBake bake, string name, Aseprite ase)
+	static PackedTileset BuildPackedTilesetAsset(VisualAssetBake bake, string name, Aseprite ase)
 	{
 		var columns = ase.Width / Game.TileSize;
 		var rows = ase.Height / Game.TileSize;
@@ -603,7 +603,7 @@ public static class Assets
 		return packed;
 	}
 
-	private static PackedTileset BuildPackedGeneratedTilesetAsset(VisualAssetBake bake, string name, List<Image> images)
+	static PackedTileset BuildPackedGeneratedTilesetAsset(VisualAssetBake bake, string name, List<Image> images)
 	{
 		var columns = images[0].Width / Game.TileSize;
 		var rows = images[0].Height / Game.TileSize;
@@ -634,7 +634,7 @@ public static class Assets
 		return packed;
 	}
 
-	private static List<PackedSubtexture> PackTileSubtextures(VisualAssetBake bake, string prefix, int columns, int rows)
+	static List<PackedSubtexture> PackTileSubtextures(VisualAssetBake bake, string prefix, int columns, int rows)
 	{
 		var result = new List<PackedSubtexture>(columns * rows);
 		for (var x = 0; x < columns; x++)
@@ -643,7 +643,7 @@ public static class Assets
 		return result;
 	}
 
-	private static void WriteVisualAssetPackManifest(string path, VisualAssetPackManifest manifest)
+	static void WriteVisualAssetPackManifest(string path, VisualAssetPackManifest manifest)
 	{
 		using var stream = File.Create(path);
 		using var writer = new BinaryWriter(stream, Encoding.UTF8);
@@ -702,7 +702,7 @@ public static class Assets
 		}
 	}
 
-	private static VisualAssetPackManifest ReadVisualAssetPackManifest(Stream stream, string path)
+	static VisualAssetPackManifest ReadVisualAssetPackManifest(Stream stream, string path)
 	{
 		using var reader = new BinaryReader(stream, Encoding.UTF8);
 		var magic = reader.ReadUInt32();
@@ -778,23 +778,23 @@ public static class Assets
 		return manifest;
 	}
 
-	private static void WritePackedSubtexture(BinaryWriter writer, PackedSubtexture subtexture)
+	static void WritePackedSubtexture(BinaryWriter writer, PackedSubtexture subtexture)
 	{
 		WritePackedSourceRect(writer, subtexture.Source);
 		WritePackedFrameRect(writer, subtexture.Frame);
 	}
 
-	private static PackedSubtexture ReadPackedSubtexture(BinaryReader reader)
+	static PackedSubtexture ReadPackedSubtexture(BinaryReader reader)
 		=> new() { Source = ReadPackedSourceRect(reader), Frame = ReadPackedFrameRect(reader) };
 
-	private static void WritePackedSubtextures(BinaryWriter writer, List<PackedSubtexture> subtextures, string name)
+	static void WritePackedSubtextures(BinaryWriter writer, List<PackedSubtexture> subtextures, string name)
 	{
 		WriteCount(writer, subtextures.Count, name);
 		foreach (var subtexture in subtextures)
 			WritePackedSubtexture(writer, subtexture);
 	}
 
-	private static List<PackedSubtexture> ReadPackedSubtextures(BinaryReader reader, string name)
+	static List<PackedSubtexture> ReadPackedSubtextures(BinaryReader reader, string name)
 	{
 		var count = ReadCount(reader, name);
 		var result = new List<PackedSubtexture>(count);
@@ -803,14 +803,14 @@ public static class Assets
 		return result;
 	}
 
-	private static void WritePackedSubtextureGroups(BinaryWriter writer, List<List<PackedSubtexture>> groups, string name)
+	static void WritePackedSubtextureGroups(BinaryWriter writer, List<List<PackedSubtexture>> groups, string name)
 	{
 		WriteCount(writer, groups.Count, name);
 		foreach (var group in groups)
 			WritePackedSubtextures(writer, group, name);
 	}
 
-	private static List<List<PackedSubtexture>> ReadPackedSubtextureGroups(BinaryReader reader, string name)
+	static List<List<PackedSubtexture>> ReadPackedSubtextureGroups(BinaryReader reader, string name)
 	{
 		var count = ReadCount(reader, name);
 		var result = new List<List<PackedSubtexture>>(count);
@@ -819,7 +819,7 @@ public static class Assets
 		return result;
 	}
 
-	private static void WritePackedOccluders(BinaryWriter writer, List<List<PackedOccluderSegment>> occluders, string name)
+	static void WritePackedOccluders(BinaryWriter writer, List<List<PackedOccluderSegment>> occluders, string name)
 	{
 		WriteCount(writer, occluders.Count, name);
 		foreach (var tile in occluders)
@@ -833,7 +833,7 @@ public static class Assets
 		}
 	}
 
-	private static List<List<PackedOccluderSegment>> ReadPackedOccluders(BinaryReader reader, string name)
+	static List<List<PackedOccluderSegment>> ReadPackedOccluders(BinaryReader reader, string name)
 	{
 		var count = ReadCount(reader, name);
 		var result = new List<List<PackedOccluderSegment>>(count);
@@ -848,14 +848,14 @@ public static class Assets
 		return result;
 	}
 
-	private static void WritePackedOccluderGroups(BinaryWriter writer, List<List<List<PackedOccluderSegment>>> groups, string name)
+	static void WritePackedOccluderGroups(BinaryWriter writer, List<List<List<PackedOccluderSegment>>> groups, string name)
 	{
 		WriteCount(writer, groups.Count, name);
 		foreach (var group in groups)
 			WritePackedOccluders(writer, group, name);
 	}
 
-	private static List<List<List<PackedOccluderSegment>>> ReadPackedOccluderGroups(BinaryReader reader, string name)
+	static List<List<List<PackedOccluderSegment>>> ReadPackedOccluderGroups(BinaryReader reader, string name)
 	{
 		var count = ReadCount(reader, name);
 		var result = new List<List<List<PackedOccluderSegment>>>(count);
@@ -864,7 +864,7 @@ public static class Assets
 		return result;
 	}
 
-	private static void WritePackedSourceRect(BinaryWriter writer, PackedRect rect)
+	static void WritePackedSourceRect(BinaryWriter writer, PackedRect rect)
 	{
 		writer.Write(PackU16(rect.X, "source rect x"));
 		writer.Write(PackU16(rect.Y, "source rect y"));
@@ -872,7 +872,7 @@ public static class Assets
 		writer.Write(PackU16(rect.H, "source rect h"));
 	}
 
-	private static PackedRect ReadPackedSourceRect(BinaryReader reader)
+	static PackedRect ReadPackedSourceRect(BinaryReader reader)
 		=> new()
 		{
 			X = reader.ReadUInt16(),
@@ -881,7 +881,7 @@ public static class Assets
 			H = reader.ReadUInt16()
 		};
 
-	private static void WritePackedFrameRect(BinaryWriter writer, PackedRect rect)
+	static void WritePackedFrameRect(BinaryWriter writer, PackedRect rect)
 	{
 		writer.Write(PackI16(rect.X, "frame rect x"));
 		writer.Write(PackI16(rect.Y, "frame rect y"));
@@ -889,7 +889,7 @@ public static class Assets
 		writer.Write(PackU16(rect.H, "frame rect h"));
 	}
 
-	private static PackedRect ReadPackedFrameRect(BinaryReader reader)
+	static PackedRect ReadPackedFrameRect(BinaryReader reader)
 		=> new()
 		{
 			X = reader.ReadInt16(),
@@ -898,29 +898,29 @@ public static class Assets
 			H = reader.ReadUInt16()
 		};
 
-	private static void WritePackedVector(BinaryWriter writer, PackedVector vector)
+	static void WritePackedVector(BinaryWriter writer, PackedVector vector)
 	{
 		writer.Write(vector.X);
 		writer.Write(vector.Y);
 	}
 
-	private static PackedVector ReadPackedVector(BinaryReader reader)
+	static PackedVector ReadPackedVector(BinaryReader reader)
 		=> new() { X = reader.ReadSingle(), Y = reader.ReadSingle() };
 
-	private static void WriteCount(BinaryWriter writer, int count, string name)
+	static void WriteCount(BinaryWriter writer, int count, string name)
 	{
 		if (count > ushort.MaxValue)
 			throw new InvalidOperationException($"Visual asset pack has too many {name}: {count}");
 		writer.Write((ushort)count);
 	}
 
-	private static int ReadCount(BinaryReader reader, string name)
+	static int ReadCount(BinaryReader reader, string name)
 	{
 		var count = reader.ReadUInt16();
 		return count;
 	}
 
-	private static ushort PackU16(float value, string name)
+	static ushort PackU16(float value, string name)
 	{
 		var rounded = MathF.Round(value);
 		if (!float.IsFinite(value) || MathF.Abs(value - rounded) > 0.001f || rounded < 0 || rounded > ushort.MaxValue)
@@ -928,7 +928,7 @@ public static class Assets
 		return (ushort)rounded;
 	}
 
-	private static short PackI16(float value, string name)
+	static short PackI16(float value, string name)
 	{
 		var rounded = MathF.Round(value);
 		if (!float.IsFinite(value) || MathF.Abs(value - rounded) > 0.001f || rounded < short.MinValue || rounded > short.MaxValue)
@@ -936,7 +936,7 @@ public static class Assets
 		return (short)rounded;
 	}
 
-	private static void EnsureFonts(GraphicsDevice gfx)
+	static void EnsureFonts(GraphicsDevice gfx)
 	{
 		if (Font == null)
 		{
@@ -950,7 +950,7 @@ public static class Assets
 		}
 	}
 
-	private static List<Subtexture> LoadSubtextures(List<PackedSubtexture> packed, Texture atlas)
+	static List<Subtexture> LoadSubtextures(List<PackedSubtexture> packed, Texture atlas)
 	{
 		var result = new List<Subtexture>(packed.Count);
 		foreach (var item in packed)
@@ -958,7 +958,7 @@ public static class Assets
 		return result;
 	}
 
-	private static List<List<Subtexture>> LoadSubtextureGroups(List<List<PackedSubtexture>> packed, Texture atlas)
+	static List<List<Subtexture>> LoadSubtextureGroups(List<List<PackedSubtexture>> packed, Texture atlas)
 	{
 		var result = new List<List<Subtexture>>(packed.Count);
 		foreach (var group in packed)
@@ -966,7 +966,7 @@ public static class Assets
 		return result;
 	}
 
-	private static List<Tileset.OccluderSegment[]> LoadOccluders(List<List<PackedOccluderSegment>> packed)
+	static List<Tileset.OccluderSegment[]> LoadOccluders(List<List<PackedOccluderSegment>> packed)
 	{
 		var result = new List<Tileset.OccluderSegment[]>(packed.Count);
 		foreach (var tile in packed)
@@ -979,7 +979,7 @@ public static class Assets
 		return result;
 	}
 
-	private static List<List<Tileset.OccluderSegment[]>> LoadOccluderGroups(List<List<List<PackedOccluderSegment>>> packed)
+	static List<List<Tileset.OccluderSegment[]>> LoadOccluderGroups(List<List<List<PackedOccluderSegment>>> packed)
 	{
 		var result = new List<List<Tileset.OccluderSegment[]>>(packed.Count);
 		foreach (var group in packed)
@@ -987,7 +987,7 @@ public static class Assets
 		return result;
 	}
 
-	private sealed class VisualAssetPackManifest
+	sealed class VisualAssetPackManifest
 	{
 		public string Atlas { get; set; } = "atlas.png";
 		public string? LightingNoise { get; set; }
@@ -996,7 +996,7 @@ public static class Assets
 		public List<PackedTileset> Tilesets { get; set; } = [];
 	}
 
-	private sealed class VisualAssetBake : IDisposable
+	sealed class VisualAssetBake : IDisposable
 	{
 		public Packer.Output Output { get; }
 		public Dictionary<string, Aseprite> SpriteFiles { get; }
@@ -1045,7 +1045,7 @@ public static class Assets
 		}
 	}
 
-	private sealed class PackedNamedSubtexture : PackedSubtexture
+	sealed class PackedNamedSubtexture : PackedSubtexture
 	{
 		public string Name { get; set; } = "";
 
@@ -1053,7 +1053,7 @@ public static class Assets
 			=> new() { Name = name, Source = subtexture.Source, Frame = subtexture.Frame };
 	}
 
-	private class PackedSubtexture
+	class PackedSubtexture
 	{
 		public PackedRect Source { get; set; } = new();
 		public PackedRect Frame { get; set; } = new();
@@ -1072,7 +1072,7 @@ public static class Assets
 			=> new(atlas, Source.ToRect(), Frame.ToRect());
 	}
 
-	private sealed class PackedSprite
+	sealed class PackedSprite
 	{
 		public string Name { get; set; } = "";
 		public PackedVector Origin { get; set; } = new();
@@ -1080,7 +1080,7 @@ public static class Assets
 		public List<PackedSpriteAnimation> Animations { get; set; } = [];
 	}
 
-	private sealed class PackedSpriteFrame
+	sealed class PackedSpriteFrame
 	{
 		public PackedSubtexture Subtexture { get; set; } = new();
 		public PackedSubtexture VisibleSubtexture { get; set; } = new();
@@ -1088,7 +1088,7 @@ public static class Assets
 		public float Duration { get; set; }
 	}
 
-	private sealed class PackedSpriteAnimation
+	sealed class PackedSpriteAnimation
 	{
 		public string Name { get; set; } = "";
 		public int FrameStart { get; set; }
@@ -1096,7 +1096,7 @@ public static class Assets
 		public float Duration { get; set; }
 	}
 
-	private sealed class PackedTileset
+	sealed class PackedTileset
 	{
 		public string Name { get; set; } = "";
 		public int Columns { get; set; }
@@ -1109,7 +1109,7 @@ public static class Assets
 		public List<List<List<PackedOccluderSegment>>> OccluderVariants { get; set; } = [];
 	}
 
-	private sealed class PackedRect
+	sealed class PackedRect
 	{
 		public float X { get; set; }
 		public float Y { get; set; }
@@ -1123,7 +1123,7 @@ public static class Assets
 			=> new(X, Y, W, H);
 	}
 
-	private sealed class PackedVector
+	sealed class PackedVector
 	{
 		public float X { get; set; }
 		public float Y { get; set; }
@@ -1135,7 +1135,7 @@ public static class Assets
 			=> new(X, Y);
 	}
 
-	private sealed class PackedOccluderSegment
+	sealed class PackedOccluderSegment
 	{
 		public PackedVector A { get; set; } = new();
 		public PackedVector B { get; set; } = new();
@@ -1147,7 +1147,7 @@ public static class Assets
 			=> new(A.ToVector2(), B.ToVector2());
 	}
 
-	private static List<List<PackedOccluderSegment>> PackOccluders(List<Tileset.OccluderSegment[]> occluders)
+	static List<List<PackedOccluderSegment>> PackOccluders(List<Tileset.OccluderSegment[]> occluders)
 	{
 		var result = new List<List<PackedOccluderSegment>>(occluders.Count);
 		foreach (var tile in occluders)
@@ -1160,7 +1160,7 @@ public static class Assets
 		return result;
 	}
 
-	private static List<List<List<PackedOccluderSegment>>> PackOccluderGroups(List<List<Tileset.OccluderSegment[]>> groups)
+	static List<List<List<PackedOccluderSegment>>> PackOccluderGroups(List<List<Tileset.OccluderSegment[]>> groups)
 	{
 		var result = new List<List<List<PackedOccluderSegment>>>(groups.Count);
 		foreach (var group in groups)
@@ -1182,7 +1182,7 @@ public static class Assets
 		return new Texture(gfx, image, name);
 	}
 
-	private static IEnumerable<string> EnumerateAsepriteFiles(string path)
+	static IEnumerable<string> EnumerateAsepriteFiles(string path)
 	{
 		if (!Directory.Exists(path))
 			yield break;
@@ -1193,10 +1193,10 @@ public static class Assets
 			yield return file;
 	}
 
-	private static bool IsDebugLayer(Aseprite.Layer layer)
+	static bool IsDebugLayer(Aseprite.Layer layer)
 		=> layer.Name?.Contains("debug", StringComparison.OrdinalIgnoreCase) == true;
 
-	private static HashSet<Aseprite.Layer> GetNonDebugLayers(Aseprite ase)
+	static HashSet<Aseprite.Layer> GetNonDebugLayers(Aseprite ase)
 	{
 		var result = new HashSet<Aseprite.Layer>();
 		var debugChildLevel = int.MaxValue;
@@ -1217,12 +1217,12 @@ public static class Assets
 		return result;
 	}
 
-	private static List<Aseprite.Layer> GetVariantLayers(Aseprite ase, HashSet<Aseprite.Layer> nonDebugLayers)
+	static List<Aseprite.Layer> GetVariantLayers(Aseprite ase, HashSet<Aseprite.Layer> nonDebugLayers)
 		=> ase.Layers
 			.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)
 			.ToList();
 
-	private static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		baseName = kitName[..^"-kit".Length];
 		baseTiles = [];
@@ -1273,10 +1273,10 @@ public static class Assets
 			edge.Dispose();
 	}
 
-	private static string NormalizeLayerName(string? name)
+	static string NormalizeLayerName(string? name)
 		=> (name ?? "").Trim().Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
 
-	private static Dictionary<string, Aseprite.Slice> GetKitSlices(Aseprite ase)
+	static Dictionary<string, Aseprite.Slice> GetKitSlices(Aseprite ase)
 	{
 		var result = new Dictionary<string, Aseprite.Slice>(StringComparer.OrdinalIgnoreCase);
 		foreach (var slice in ase.Slices)
@@ -1289,14 +1289,14 @@ public static class Assets
 		return result;
 	}
 
-	private static RectInt GetSliceBounds(Aseprite.Slice slice)
+	static RectInt GetSliceBounds(Aseprite.Slice slice)
 	{
 		if (slice.Keys.Length <= 0)
 			throw new InvalidOperationException($"Aseprite slice '{slice.Name}' has no keys.");
 		return slice.Keys[0].Bounds;
 	}
 
-	private static List<Image> ExtractSliceTiles(Image source, Aseprite.Slice slice, string kitName, bool required)
+	static List<Image> ExtractSliceTiles(Image source, Aseprite.Slice slice, string kitName, bool required)
 	{
 		var bounds = GetSliceBounds(slice);
 		if (bounds.Width % Game.TileSize != 0 || bounds.Height % Game.TileSize != 0)
@@ -1319,7 +1319,7 @@ public static class Assets
 		return tiles;
 	}
 
-	private static bool HasOpaquePixel(Image image, RectInt rect)
+	static bool HasOpaquePixel(Image image, RectInt rect)
 	{
 		for (var y = rect.Y; y < rect.Bottom; y++)
 			for (var x = rect.X; x < rect.Right; x++)
@@ -1328,7 +1328,7 @@ public static class Assets
 		return false;
 	}
 
-	private static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edge)
+	static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edge)
 	{
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
@@ -1340,7 +1340,7 @@ public static class Assets
 		return output;
 	}
 
-	private static Image GenerateDualTilesetNormalVariant(Image mask)
+	static Image GenerateDualTilesetNormalVariant(Image mask)
 	{
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
@@ -1352,7 +1352,7 @@ public static class Assets
 		return output;
 	}
 
-	private static List<Tileset.OccluderSegment[]> GenerateDualTilesetOccluderVariant(Image mask)
+	static List<Tileset.OccluderSegment[]> GenerateDualTilesetOccluderVariant(Image mask)
 	{
 		var result = new Tileset.OccluderSegment[Game.TileSize * 2][];
 		for (var i = 0; i < result.Length; i++)
@@ -1368,7 +1368,7 @@ public static class Assets
 		return result.ToList();
 	}
 
-	private static Tileset.OccluderSegment[] GenerateMaskOccluderSegments(Image mask, RectInt source)
+	static Tileset.OccluderSegment[] GenerateMaskOccluderSegments(Image mask, RectInt source)
 	{
 		var segments = new List<Tileset.OccluderSegment>();
 
@@ -1387,7 +1387,7 @@ public static class Assets
 		return segments.ToArray();
 	}
 
-	private static void MergeHorizontalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int y, bool top)
+	static void MergeHorizontalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int y, bool top)
 	{
 		var start = -1;
 		for (var x = 0; x <= Game.TileSize; x++)
@@ -1407,7 +1407,7 @@ public static class Assets
 		}
 	}
 
-	private static void MergeVerticalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int x, bool left)
+	static void MergeVerticalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int x, bool left)
 	{
 		var start = -1;
 		for (var y = 0; y <= Game.TileSize; y++)
@@ -1427,7 +1427,7 @@ public static class Assets
 		}
 	}
 
-	private static bool IsMaskSolid(Image mask, RectInt source, int x, int y)
+	static bool IsMaskSolid(Image mask, RectInt source, int x, int y)
 	{
 		if (x < 0 || y < 0 || x >= Game.TileSize || y >= Game.TileSize)
 			return false;
@@ -1435,7 +1435,7 @@ public static class Assets
 		return mask[source.X + x, source.Y + y].A > 0;
 	}
 
-	private static void GenerateDualNormalTile(Image output, RectInt source, int mask, Image alphaMask)
+	static void GenerateDualNormalTile(Image output, RectInt source, int mask, Image alphaMask)
 	{
 		var tile = MaskToDualTile(mask);
 		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
@@ -1476,14 +1476,14 @@ public static class Assets
 			}
 	}
 
-	private static float AlphaAtClampedToSource(Image image, RectInt source, int x, int y)
+	static float AlphaAtClampedToSource(Image image, RectInt source, int x, int y)
 	{
 		x = Math.Clamp(x, 0, source.Width - 1);
 		y = Math.Clamp(y, 0, source.Height - 1);
 		return AlphaAt(image, source.X + x, source.Y + y);
 	}
 
-	private static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edge)
+	static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edge)
 	{
 		var tile = MaskToDualTile(mask);
 		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
@@ -1505,7 +1505,7 @@ public static class Assets
 			}
 	}
 
-	private static bool IsMaskEdge(Image mask, RectInt source, int x, int y, int width)
+	static bool IsMaskEdge(Image mask, RectInt source, int x, int y, int width)
 	{
 		for (var oy = -width; oy <= width; oy++)
 			for (var ox = -width; ox <= width; ox++)
@@ -1522,13 +1522,13 @@ public static class Assets
 		return false;
 	}
 
-	private static Point2 MaskToDualTile(int mask)
+	static Point2 MaskToDualTile(int mask)
 	{
 		var index = Array.FindIndex(DualMaskToTile, it => it.Mask == mask);
 		return index >= 0 ? DualMaskToTile[index].Tile : Point2.Zero;
 	}
 
-	private static readonly (int Mask, Point2 Tile)[] DualMaskToTile =
+	static readonly (int Mask, Point2 Tile)[] DualMaskToTile =
 	[
 		(0, new(0, 3)),
 		(TileQuadrants.TopLeft, new(3, 3)),
@@ -1550,7 +1550,7 @@ public static class Assets
 
 	// Loads the in-betweens whitelist (within-animation + transitions) from
 	// inbetweens.json. This is the source of truth for what gets baked.
-	private static void LoadInbetweenConfig()
+	static void LoadInbetweenConfig()
 	{
 		InbetweenAnimations.Clear();
 		InbetweenTransitions.Clear();
@@ -1597,7 +1597,7 @@ public static class Assets
 
 	// Expands the frames of one sprite (inserting whitelisted within-animation
 	// in-betweens) and packs them, then bakes any whitelisted transitions.
-	private static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Packer packer)
+	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Packer packer)
 	{
 		if (TryBuildInbetweenSpec(name, ase, frames.Length, out var spec, out var durationsSec))
 		{
@@ -1626,7 +1626,7 @@ public static class Assets
 	// whitelist. spec[i] = (count, target) describes in-betweens inserted after
 	// original frame i. Returns false (and leaves the sprite unexpanded) when no
 	// tag of this sprite is whitelisted.
-	private static bool TryBuildInbetweenSpec(
+	static bool TryBuildInbetweenSpec(
 		string name, Aseprite ase, int frameCount,
 		out (int Count, int Target)[] spec, out float[] durationsSec)
 	{
@@ -1665,7 +1665,7 @@ public static class Assets
 		return any;
 	}
 
-	private static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Packer packer)
+	static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Packer packer)
 	{
 		var ownTransitions = InbetweenTransitions
 			.Where(kv => kv.Key.Sprite == name && kv.Value > 0)
@@ -1731,17 +1731,7 @@ public static class Assets
 			GeneratedTransitions[name] = transitions;
 	}
 
-	private static Texture? LoadTexture(GraphicsDevice gfx, string relativePath, string name)
-	{
-		var path = Path.Join(AssetsPath, relativePath);
-		if (!File.Exists(path))
-			return null;
-
-		using var image = new Image(path);
-		return new Texture(gfx, image, name);
-	}
-
-	private static Predicate<Aseprite.Layer> CreateBudPlayerLayerFilter()
+	static Predicate<Aseprite.Layer> CreateBudPlayerLayerFilter()
 	{
 		var hiddenChildLevel = int.MaxValue;
 		return layer =>
@@ -1761,7 +1751,7 @@ public static class Assets
 	}
 
 #if !IOS
-	private static void DumpPackedAtlasPages(Packer.Output output)
+	static void DumpPackedAtlasPages(Packer.Output output)
 	{
 		try
 		{
@@ -1789,7 +1779,7 @@ public static class Assets
 
 	internal static bool UseUserRooms = false;
 
-	private static void LoadRooms()
+	static void LoadRooms()
 	{
 		Rooms.Clear();
 		RoomsById.Clear();
@@ -1822,14 +1812,14 @@ public static class Assets
 			CreateDefaultStartRoom();
 	}
 
-	private static void CreateDefaultStartRoom()
+	static void CreateDefaultStartRoom()
 	{
 		var room = new Room(defaultStartRoomId, Point2.Zero, Room.DefaultSize);
 		AddRoom(room);
 		room.Save();
 	}
 
-	private static void AddRoom(Room room)
+	static void AddRoom(Room room)
 	{
 		if (RoomsById.TryGetValue(room.Id, out var existing) &&
 			Rooms.TryGetValue(existing.Cell, out var byOldCell) &&
@@ -1907,7 +1897,7 @@ public static class Assets
 		return true;
 	}
 
-	private static string GetRoomSavePath(Room room)
+	static string GetRoomSavePath(Room room)
 	{
 		if (room.Storage == Room.StorageKind.User)
 			return UserRoomPath(room.Id);
@@ -1919,10 +1909,10 @@ public static class Assets
 		return UserRoomPath(room.Id);
 	}
 
-	private static string BundledRoomPath(string id)
+	static string BundledRoomPath(string id)
 		=> Path.Join(WorldRoomsPath, $"{id}.json");
 
-	private static string UserRoomPath(string id)
+	static string UserRoomPath(string id)
 	{
 		if (userRoomsPath == null)
 			throw new InvalidOperationException("User room path has not been configured.");
@@ -1930,7 +1920,7 @@ public static class Assets
 		return Path.Join(userRoomsPath, currentWorldId, $"{id}.json");
 	}
 
-	private static bool IsUserRoomPath(string path)
+	static bool IsUserRoomPath(string path)
 	{
 		if (UserWorldRoomsPath is not { } userWorldRoomsPath)
 			return false;
@@ -1939,7 +1929,7 @@ public static class Assets
 		return relative != ".." && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
 	}
 
-	private static bool RoomFileExists(string id)
+	static bool RoomFileExists(string id)
 	{
 		if (File.Exists(BundledRoomPath(id)))
 			return true;
@@ -1948,7 +1938,7 @@ public static class Assets
 		return false;
 	}
 
-	private static void DeleteRoomFile(string? path, string id)
+	static void DeleteRoomFile(string? path, string id)
 	{
 		if (path == null || !File.Exists(path))
 			return;
@@ -1959,7 +1949,7 @@ public static class Assets
 			WriteUserRoomTombstone(id);
 	}
 
-	private static bool CanDeleteFile(string path)
+	static bool CanDeleteFile(string path)
 	{
 		try
 		{
@@ -1974,7 +1964,7 @@ public static class Assets
 		}
 	}
 
-	private static bool CanWriteBundledRooms()
+	static bool CanWriteBundledRooms()
 	{
 		if (bundledRoomsWritable is { } cached)
 			return cached;
@@ -1995,7 +1985,7 @@ public static class Assets
 		return bundledRoomsWritable.Value;
 	}
 
-	private static HashSet<string> LoadUserRoomTombstones()
+	static HashSet<string> LoadUserRoomTombstones()
 	{
 		var deleted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		var path = UserDeletedRoomsPath();
@@ -2008,7 +1998,7 @@ public static class Assets
 		return deleted;
 	}
 
-	private static void WriteUserRoomTombstone(string id)
+	static void WriteUserRoomTombstone(string id)
 	{
 		var path = UserDeletedRoomsPath();
 		if (path == null)
@@ -2018,7 +2008,7 @@ public static class Assets
 		File.WriteAllText(Path.Join(path, id), string.Empty);
 	}
 
-	private static void ClearUserRoomTombstone(string id)
+	static void ClearUserRoomTombstone(string id)
 	{
 		var path = UserDeletedRoomsPath();
 		if (path == null)
@@ -2029,7 +2019,7 @@ public static class Assets
 			File.Delete(file);
 	}
 
-	private static string? UserDeletedRoomsPath()
+	static string? UserDeletedRoomsPath()
 		=> userRoomsPath != null ? Path.Join(userRoomsPath, currentWorldId, deletedRoomsFolderName) : null;
 
 	public static void RebuildRoomGeometry()
@@ -2038,7 +2028,7 @@ public static class Assets
 			room.RebuildGeometry();
 	}
 
-	private static Image GenerateNormalMap(Image source)
+	static Image GenerateNormalMap(Image source)
 	{
 		var normal = new Image(source.Width, source.Height);
 		const float bend = 1.25f;
@@ -2063,7 +2053,7 @@ public static class Assets
 		return normal;
 	}
 
-	private static Image ExtractTile(Image source, RectInt sourceRect)
+	static Image ExtractTile(Image source, RectInt sourceRect)
 	{
 		var output = new Image(sourceRect.Width, sourceRect.Height);
 		for (var y = 0; y < sourceRect.Height; y++)
@@ -2072,7 +2062,7 @@ public static class Assets
 		return output;
 	}
 
-	private static Image GenerateSlopeTile(Image source, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex, Image? edge = null)
+	static Image GenerateSlopeTile(Image source, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex, Image? edge = null)
 	{
 		var output = new Image(source.Width, source.Height);
 
@@ -2093,7 +2083,7 @@ public static class Assets
 		return output;
 	}
 
-	private static bool IsSlopeMaskSolid(int x, int y, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+	static bool IsSlopeMaskSolid(int x, int y, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 	{
 		if (x < 0 || y < 0 || x >= Game.TileSize || y >= Game.TileSize)
 			return false;
@@ -2109,7 +2099,7 @@ public static class Assets
 			: y + 0.5f <= surface;
 	}
 
-	private static bool IsSlopeMaskEdge(int x, int y, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+	static bool IsSlopeMaskEdge(int x, int y, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 	{
 		const int edgeWidth = 2;
 		for (var oy = -edgeWidth; oy <= edgeWidth; oy++)
@@ -2130,7 +2120,7 @@ public static class Assets
 		return false;
 	}
 
-	private static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, Image? edge = null)
+	static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, Image? edge = null)
 	{
 		for (var run = 1; run <= MaxSlopeRun; run++)
 			for (var index = 0; index < run; index++)
@@ -2142,7 +2132,7 @@ public static class Assets
 			}
 	}
 
-	private static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, int variantIndex, Image? edge = null)
+	static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, int variantIndex, Image? edge = null)
 	{
 		for (var run = 1; run <= MaxSlopeRun; run++)
 			for (var index = 0; index < run; index++)
@@ -2154,7 +2144,7 @@ public static class Assets
 			}
 	}
 
-	private static float AlphaAt(Image image, int x, int y)
+	static float AlphaAt(Image image, int x, int y)
 	{
 		if (x < 0 || y < 0 || x >= image.Width || y >= image.Height)
 			return 0;
@@ -2230,24 +2220,19 @@ public static class Assets
 		return best;
 	}
 
-	private static bool TouchesExitEdge(RectInt from, RectInt to, Point2 direction, Vector2 exitPosition)
+	static bool TouchesExitEdge(RectInt from, RectInt to, Point2 direction, Vector2 exitPosition)
 	{
-		if (direction.X > 0)
-			return to.Left == from.Right && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
-		if (direction.X < 0)
-			return to.Right == from.Left && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
-		if (direction.Y > 0)
-			return to.Top == from.Bottom && ContainsAxis(to.Left, to.Right, exitPosition.X);
-		if (direction.Y < 0)
-			return to.Bottom == from.Top && ContainsAxis(to.Left, to.Right, exitPosition.X);
-
+		if (direction.X > 0) return to.Left == from.Right && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
+		if (direction.X < 0) return to.Right == from.Left && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
+		if (direction.Y > 0) return to.Top == from.Bottom && ContainsAxis(to.Left, to.Right, exitPosition.X);
+		if (direction.Y < 0) return to.Bottom == from.Top && ContainsAxis(to.Left, to.Right, exitPosition.X);
 		return false;
 	}
 
-	private static bool ContainsAxis(float min, float max, float value)
+	static bool ContainsAxis(float min, float max, float value)
 		=> value >= min && value < max;
 
-	private static float TransitionAxisDistance(RectInt bounds, Point2 direction, Vector2 exitPosition)
+	static float TransitionAxisDistance(RectInt bounds, Point2 direction, Vector2 exitPosition)
 	{
 		if (direction.X != 0)
 			return MathF.Abs(bounds.CenterY - exitPosition.Y);
@@ -2283,10 +2268,10 @@ public static class Assets
 		return GetSubtexture(SlopeSubtextureName(tilesetName, direction, fill, clampedRun, clampedIndex));
 	}
 
-	private static string SlopeSubtextureName(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+	static string SlopeSubtextureName(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 		=> $"slopes/{tilesetName}/{direction}/{fill}/{runLength}/{runIndex}";
 
-	private static string SlopeVariantSubtextureName(string tilesetName, int variantIndex, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+	static string SlopeVariantSubtextureName(string tilesetName, int variantIndex, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 		=> $"slopes/{tilesetName}/variants/{variantIndex}/{direction}/{fill}/{runLength}/{runIndex}";
 
 }

@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using System.Reflection;
 using Foster.Framework;
 
 namespace Myth;
@@ -79,8 +81,9 @@ public static class Factory
 		public readonly RectInt DefaultEditorBounds;
 		public readonly string? ActorTypeName;
 		public readonly string? ActorSpecId;
+		public readonly ActorTag Tags;
 
-		private ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null)
+		private ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null, ActorTag tags = ActorTag.None)
 		{
 			Name = name;
 			Image = image;
@@ -90,13 +93,14 @@ public static class Factory
 			ActorTypeName = actorTypeName;
 			ActorSpecId = actorSpecId;
 			EditorBounds = editorBounds;
+			Tags = tags;
 		}
 
-		public static ActorPaletteEntry FromActor<T>(string spriteName, Point2? offset = null, RectInt? editorBounds = null) where T : Actor
+		public static ActorPaletteEntry FromActor<T>(string spriteName, Point2? offset = null, RectInt? editorBounds = null, ActorTag tags = ActorTag.None) where T : Actor
 		{
 			var sprite = Assets.GetSprite(spriteName) ?? throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
 			var typeName = typeof(T).Name;
-			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, null, editorBounds);
+			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, null, editorBounds, tags);
 		}
 
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
@@ -106,7 +110,8 @@ public static class Factory
 			if (spec == null) throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing actor spec.");
 			if (sprite == null) throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing sprite '{spriteName}'.");
 
-			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), ActorSpecs.GetTypeName(spec), specId, editorBounds);
+			var typeName = ActorSpecs.GetTypeName(spec);
+			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, specId, editorBounds, TagsForType(typeName));
 		}
 
 		private static RectInt GetDefaultEditorBounds(Sprite sprite)
@@ -134,6 +139,13 @@ public static class Factory
 	// List of all the tile types
 	public static readonly Dictionary<char, Entry> Entries = new();
 	public static readonly List<ActorPaletteEntry> ActorPalette = [];
+
+	// Tags declared on each [GameActor], keyed by registered type name, so spec/prefab
+	// palette entries can inherit their underlying type's tags.
+	static readonly Dictionary<string, ActorTag> actorTags = new(StringComparer.OrdinalIgnoreCase);
+
+	public static ActorTag TagsForType(string? typeName)
+		=> typeName != null && actorTags.TryGetValue(typeName, out var tags) ? tags : ActorTag.None;
 
 	// Registers a new Type
 	public static void Register(char id, in Entry entry)
@@ -218,42 +230,59 @@ public static class Factory
 		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
+	// Registers a single [GameActor] type: its spec type-name mapping, plus a palette
+	// entry when the attribute carries a Sprite. The source generator calls this for every
+	// [GameActor] via GeneratedActors.RegisterAll().
+	public static void Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] T>() where T : Actor
+	{
+		var attr = typeof(T).GetCustomAttribute<GameActorAttribute>();
+		var name = attr?.Name ?? typeof(T).Name;
+		ActorSpecs.RegisterActor<T>(name);
+		actorTags[name] = attr?.Tags ?? ActorTag.None;
+
+		if (attr is { HideFromPalette: true })
+			return;
+
+		// Palette icon defaults to a sprite named after the class. An explicit name that
+		// doesn't resolve is a typo (surface it); a missing conventional sprite just means
+		// the actor isn't placeable, so skip it quietly.
+		var iconName = attr?.Sprite ?? typeof(T).Name;
+		var sprite = Assets.GetSprite(iconName);
+		if (sprite == null)
+		{
+			if (attr?.Sprite != null)
+				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' references missing sprite '{iconName}'.");
+			return;
+		}
+
+		// Tile-placement offset: an explicit attribute offset wins; resizable region actors
+		// snap to the tile corner; otherwise derive it from the sprite's pivot.
+		var offset = attr is { } a && (a.OffsetX != 0 || a.OffsetY != 0) ? a.Offset
+			: attr?.EditorBounds != null ? Point2.Zero
+			: DeriveTileOffset(sprite);
+
+		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None));
+	}
+
+	// Where the sprite's pivot should land within a clicked tile: centered horizontally, and
+	// sitting on the tile bottom when the pivot is in the sprite's lower half (a grounded
+	// actor's feet) or centered otherwise (flying/decorative). No pivot => the tile corner.
+	static Point2 DeriveTileOffset(Sprite sprite)
+	{
+		if (sprite.Origin == Vector2.Zero || sprite.Frames.Count == 0)
+			return Point2.Zero;
+
+		var cellHeight = sprite.Frames[0].Subtexture.Height;
+		var grounded = cellHeight > 0 && sprite.Origin.Y / cellHeight > 0.55f;
+		return new Point2(Game.TileSize / 2, grounded ? Game.TileSize : Game.TileSize / 2);
+	}
+
 	// Registers the Default types built into the game.
 	public static void RegisterTypes()
 	{
 		ActorSpecs.ClearActorTypes();
-		ActorSpecs.RegisterActor<Player>("Player");
-		ActorSpecs.RegisterActor<PlayerStart>("PlayerStart");
-		ActorSpecs.RegisterActor<Light>("Light");
-		ActorSpecs.RegisterActor<HiddenWall>("HiddenWall");
-		ActorSpecs.RegisterActor<RevealDoor>("RevealDoor");
-		ActorSpecs.RegisterActor<CameraBlocker>("CameraBlocker");
-		ActorSpecs.RegisterActor<Jumpthru>("Jumpthru");
-		ActorSpecs.RegisterActor<Bramble>("Bramble");
-		ActorSpecs.RegisterActor<Spitter>("Spitter");
-		ActorSpecs.RegisterActor<WallSpitter>("WallSpitter");
-		ActorSpecs.RegisterActor<Mosquito>("Mosquito");
-		ActorSpecs.RegisterActor<Floater>("Floater");
-		ActorSpecs.RegisterActor<Watcher>("Watcher");
-		ActorSpecs.RegisterActor<Burrower>("Burrower");
-		ActorSpecs.RegisterActor<Dropper>("Dropper");
-		ActorSpecs.RegisterActor<LedgePatrol>("LedgePatrol");
-		ActorSpecs.RegisterActor<Pouncer>("Pouncer");
-		ActorSpecs.RegisterActor<Shellback>("Shellback");
-		ActorSpecs.RegisterActor<Splitter>("Splitter");
-		ActorSpecs.RegisterActor<Door>("Door");
-		ActorSpecs.RegisterActor<LinkedDoor>("LinkedDoor");
-		ActorSpecs.RegisterActor<Blob>("Blob");
-		ActorSpecs.RegisterActor<GhostFrog>("GhostFrog");
-		ActorSpecs.RegisterActor<TitleText>("TitleText");
-		ActorSpecs.RegisterActor<Peter>("Peter");
-		ActorSpecs.RegisterActor<Boss>("Boss");
-		ActorSpecs.RegisterActor<Goal>("Goal");
-		ActorSpecs.RegisterActor<ArrowTrap>("ArrowTrap");
-		ActorSpecs.RegisterActor<Arrow>("Arrow");
-		ActorSpecs.RegisterActor<WallBullet>("WallBullet");
-		ActorSpecs.RegisterActor<NeuralCellularActor>("NeuralCellularActor");
-		ActorSpecs.RegisterActor<ParticleEmitter>("ParticleEmitter");
+		actorTags.Clear();
+		GeneratedActors.RegisterAll();
 
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", "Brick"));
@@ -277,43 +306,8 @@ public static class Factory
 			(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) => { },
 			"Fungus", layer: TileLayer.Background, acousticReflectivity: 0.20f));
 
-		RegisterActorPaletteEntries();
 		RegisterActorSpecPaletteEntries();
 
-	}
-
-	private static void RegisterActorPaletteEntries()
-	{
-		ActorPalette.AddRange([
-			ActorPaletteEntry.FromActor<Jumpthru>("jumpthru"),
-			ActorPaletteEntry.FromActor<PlayerStart>("player_start", new (4, 8)),
-			ActorPaletteEntry.FromActor<HiddenWall>("door", editorBounds: new RectInt(0, 0, HiddenWall.DefaultSize.X, HiddenWall.DefaultSize.Y)),
-			ActorPaletteEntry.FromActor<RevealDoor>("door", editorBounds: new RectInt(0, 0, RevealDoor.DefaultSize.X, RevealDoor.DefaultSize.Y)),
-			ActorPaletteEntry.FromActor<CameraBlocker>("door", editorBounds: new RectInt(0, 0, CameraBlocker.DefaultSize.X, CameraBlocker.DefaultSize.Y)),
-			ActorPaletteEntry.FromActor<Bramble>("bramble", new (4, 8)),
-			ActorPaletteEntry.FromActor<Spitter>("spitter", new (4, 8)),
-			ActorPaletteEntry.FromActor<WallSpitter>("spitter", new (4, 8)),
-			ActorPaletteEntry.FromActor<Mosquito>("mosquito", new (4, 4)),
-			ActorPaletteEntry.FromActor<Floater>("floater", new (4, 4)),
-			ActorPaletteEntry.FromActor<Watcher>("spitter", new (4, 8)),
-			ActorPaletteEntry.FromActor<Burrower>("blob", new (4, 8)),
-			ActorPaletteEntry.FromActor<Dropper>("bramble", new (4, 8)),
-			ActorPaletteEntry.FromActor<LedgePatrol>("blob", new (4, 8)),
-			ActorPaletteEntry.FromActor<Pouncer>("blob", new (4, 8)),
-			ActorPaletteEntry.FromActor<Shellback>("blob", new (4, 8)),
-			ActorPaletteEntry.FromActor<Splitter>("blob", new (4, 8)),
-			ActorPaletteEntry.FromActor<Light>("fire", new (4, 4)),
-			ActorPaletteEntry.FromActor<ParticleEmitter>("fire", new (4, 4), editorBounds: new RectInt(-4, -4, 8, 8)),
-			ActorPaletteEntry.FromActor<Door>("door", new (4, 8)),
-			ActorPaletteEntry.FromActor<LinkedDoor>("back_door", new (4, 8)),
-			ActorPaletteEntry.FromActor<Blob>("blob", new (4, 8)),
-			ActorPaletteEntry.FromActor<GhostFrog>("ghostfrog", new (4, 8)),
-			ActorPaletteEntry.FromActor<TitleText>("heart", new (4, 4)),
-			ActorPaletteEntry.FromActor<Peter>("peter", new (4, 4)),
-			ActorPaletteEntry.FromActor<Boss>("bud", new (4, 8)),
-			ActorPaletteEntry.FromActor<ArrowTrap>("arrow_trap", new (4, 4)),
-			ActorPaletteEntry.FromActor<Goal>("goal"),
-		]);
 	}
 
 	private static void RegisterActorSpecPaletteEntries()

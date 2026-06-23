@@ -81,6 +81,11 @@ public class Actor
 	bool targetAnimationLooping = true;
 	float hitCooldown = 0;
 
+	// Convention: an actor's sprite defaults to one named after its class (case-insensitive),
+	// so Mosquito uses mosquito.ase automatically. Assigning Sprite in a subclass ctor overrides
+	// this and marks a deliberate exception (e.g. the blob-family enemies reusing "blob").
+	public Actor() => Sprite = Assets.GetSprite(GetType().Name);
+
 	/// Plays an Animation from our current Sprite, if it exists
 	public void Play(string name, bool looping = true, bool restart = false)
 	{
@@ -121,8 +126,7 @@ public class Actor
 	}
 
 	/// Checks if an animation is playing
-	public bool IsPlaying(string name)
-		=> Animation.Name == name;
+	public bool IsPlaying(string name) => Animation.Name == name;
 
 	public bool Verbose = false;
 
@@ -152,41 +156,25 @@ public class Actor
 	public void AudioEvent(string name, string parameterName, string parameterLabel)
 		=> Game.PlayAudioEvent(name, parameterName, parameterLabel, Position);
 
-	/// <summary>
 	/// Checks to see if we overlap any actors of the given mask
-	/// </summary>
-	public bool OverlapsAny(Masks mask)
-		=> OverlapsAny(Point2.Zero, mask);
+	public bool OverlapsAny(Masks mask) => OverlapsAny(Point2.Zero, mask);
 
-	/// <summary>
 	/// Checks to see if we overlap any actors of the given mask
-	/// </summary>
 	public bool OverlapsAny(Point2 offset, Masks mask)
 	{
 		if (mask.Has(Masks.Solid) && Game.OverlapsRoomCollision(this, offset))
 			return true;
 
-		foreach (var other in Game.Actors)
-		{
-			if (other is Grid && other.Mask.Has(Masks.Solid))
-				continue;
-
-			if (other != this && other.Mask.Has(mask) && OverlapsAny(offset, other))
-				return true;
-		}
-
-		return false;
+		return OverlapsFirst(offset, mask) != null;
 	}
 
-	/// <summary>
 	/// Checks to see if we overlap the given actor
-	/// </summary>
-	public bool OverlapsAny(Point2 offset, Actor other)
-		=> Hitbox.Overlaps(Position + offset - other.Position, other.Hitbox);
+	public bool OverlapsAny(Point2 offset, Actor other) => Hitbox.Overlaps(Position + offset - other.Position, other.Hitbox);
 
-	/// <summary>
 	/// Finds the first overlapping actor of the given mask
-	/// </summary>
+	public Actor? OverlapsFirst(Masks mask) => OverlapsFirst(Point2.Zero, mask);
+
+	/// Finds the first overlapping actor of the given mask
 	public Actor? OverlapsFirst(Point2 offset, Masks mask)
 	{
 		foreach (var other in Game.Actors)
@@ -201,15 +189,7 @@ public class Actor
 		return null;
 	}
 
-	/// <summary>
-	/// Finds the first overlapping actor of the given mask
-	/// </summary>
-	public Actor? OverlapsFirst(Masks mask)
-		=> OverlapsFirst(Point2.Zero, mask);
-
-	/// <summary>
 	/// Checks if we're on the Ground
-	/// </summary>
 	public bool Grounded()
 	{
 		if (Game.OverlapsRoomCollision(this, Point2.Down))
@@ -235,9 +215,7 @@ public class Actor
 		return false;
 	}
 
-	/// <summary>
 	/// Moves a single Pixel
-	/// </summary>
 	public bool MovePixel(Point2 sign)
 	{
 		sign.X = Math.Sign(sign.X);
@@ -256,9 +234,7 @@ public class Actor
 		return true;
 	}
 
-	/// <summary>
 	/// Moves a floating value, which increments an accumulator and only moves in pixel values
-	/// </summary>
 	public void Move(Vector2 value)
 	{
 		remainder += value;
@@ -325,37 +301,29 @@ public class Actor
 		return true;
 	}
 
-	/// <summary>
 	/// Stops all velocity
-	/// </summary>
 	public void Stop()
 	{
 		Velocity = Vector2.Zero;
 		remainder = Vector2.Zero;
 	}
 
-	/// <summary>
 	/// Stops X Velocity
-	/// </summary>
 	public void StopX()
 	{
 		Velocity.X = 0;
 		remainder.X = 0;
 	}
 
-	/// <summary>
 	/// Stops Y Velocity
-	/// </summary>
 	public void StopY()
 	{
 		Velocity.Y = 0;
 		remainder.Y = 0;
 	}
 
-	/// <summary>
 	/// Tries to Hit another Actor.
 	/// What a "Hit" is, is up to the Actors
-	/// </summary>
 	public bool Hit(Actor actor)
 	{
 		if (actor.hitCooldown <= 0)
@@ -379,34 +347,22 @@ public class Actor
 		return false;
 	}
 
-	/// <summary>
 	/// Called when the Actor is added to the Game
-	/// </summary>
 	public virtual void Added() { }
 
-	/// <summary>
 	/// What to do when we collide with a wall while moving horizontally
-	/// </summary>
 	public virtual void OnCollideX() => StopX();
 
-	/// <summary>
 	/// What to do when we collide with a wall while moving vertically
-	/// </summary>
 	public virtual void OnCollideY() => StopY();
 
-	/// <summary>
 	/// Called when we were hit by another actor
-	/// </summary>
 	public virtual void OnWasHit(Actor by) { }
 
-	/// <summary>
 	/// Called when we perform a hit on another actor
-	/// </summary>
 	public virtual void OnPerformHit(Actor hitting) { }
 
-	/// <summary>
 	/// Called ones per frame, updates our Sprite and Timer
-	/// </summary>
 	public virtual void Update()
 	{
 		if (Velocity != Vector2.Zero)
@@ -504,9 +460,7 @@ public class Actor
 		return new Rect(left, top, MathF.Max(x0, x1) - left, MathF.Max(y0, y1) - top);
 	}
 
-	/// <summary>
 	/// Called when the Actor was destroyed
-	/// </summary>
 	public virtual void Destroyed() { }
 
 	protected void StopAndReleaseSound(ref SoundInstance? sound, bool immediate = false)

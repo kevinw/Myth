@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "blob", Tags = ActorTag.Enemy)]
 public class LedgePatrol : Actor
 {
 	private enum States

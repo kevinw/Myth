@@ -18,6 +18,7 @@ public partial class Manager
 		if (targets.Count == 0)
 			return;
 
+
 		ImGui.SetNextWindowSize(new Vector2(760, 560), ImGuiCond.FirstUseEver);
 		var open = true;
 		if (ImGui.Begin("Render Targets", ref open, ImGuiWindowFlags.NoSavedSettings))
@@ -45,10 +46,19 @@ public partial class Manager
 				var aspect = target.Height > 0 ? target.Width / (float)target.Height : 1f;
 				var cellHeight = aspect > 0 ? renderTargetPreviewWidth / aspect : renderTargetPreviewWidth;
 
+				var renderTargetSubtexture = new Subtexture(target);
+#if BROWSER
+				const bool flipY = true;
+#else
+				const bool flipY = false;
+#endif
+
 				ImGui.BeginGroup();
-				imgui.Image(new Subtexture(target), new Vector2(renderTargetPreviewWidth, cellHeight));
+				imgui.Image(renderTargetSubtexture, new Vector2(renderTargetPreviewWidth, cellHeight), flipY: flipY);
+#if !BROWSER
 				if (ImGui.IsItemHovered())
 					ImGui.SetTooltip(RenderTargetInfo(target));
+#endif
 				ImGui.TextUnformatted(target.Name);
 				ImGui.EndGroup();
 

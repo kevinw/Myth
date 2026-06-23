@@ -20,10 +20,10 @@ public partial class Game
 	}
 
 	internal DebugView debugView;
-	private float debugViewMessageTimer;
+	float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }
-	private readonly PlatformNavGraph platformNavGraph = new();
-	private Room? platformNavGraphRoom;
+	readonly PlatformNavGraph platformNavGraph = new();
+	Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 
 	public List<RectInt> CollisionRectsThisFrame = [];
@@ -60,7 +60,7 @@ public partial class Game
 		SetDebugView(debugView == toggle ? DebugView.None : toggle);
 	}
 
-	private void CycleTileFieldDebugView()
+	void CycleTileFieldDebugView()
 	{
 		SetDebugView(debugView switch
 		{
@@ -70,14 +70,14 @@ public partial class Game
 		});
 	}
 
-	private void SetDebugView(DebugView view)
+	void SetDebugView(DebugView view)
 	{
 		debugView = view;
 		Manager.PlatformNavDebugVisible = view == DebugView.PlatformNav;
 		DisplayMessage($"Debug: {DebugViewName(view)}");
 	}
 
-	private void RestorePersistentDebugViews()
+	void RestorePersistentDebugViews()
 	{
 		if (Manager.PlatformNavDebugVisible)
 			debugView = DebugView.PlatformNav;
@@ -89,7 +89,7 @@ public partial class Game
 		debugViewMessageTimer = duration;
 	}
 
-	private static string DebugViewName(DebugView view)
+	static string DebugViewName(DebugView view)
 		=> view switch
 		{
 			DebugView.None => "Off",

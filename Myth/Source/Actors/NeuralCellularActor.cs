@@ -10,6 +10,7 @@ namespace Myth;
 /// (https://distill.pub/2020/growing-ca/) on a per-pixel grid using
 /// compute shaders.
 /// </summary>
+[GameActor(HideFromPalette = true)]
 public class NeuralCellularActor : Actor
 {
 	[StructLayout(LayoutKind.Sequential)]

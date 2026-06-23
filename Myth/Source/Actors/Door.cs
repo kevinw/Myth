@@ -2,6 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Tags = ActorTag.Door)]
 public class Door : Actor
 {
 	public bool StartsVisible;
@@ -9,7 +10,6 @@ public class Door : Actor
 
 	public Door()
 	{
-		Sprite = Assets.GetSprite("door");
 		Depth = -1;
 		Visible = false;
 		Play("idle");

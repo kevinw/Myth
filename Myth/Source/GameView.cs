@@ -51,11 +51,8 @@ public sealed partial class GameView : IDisposable
 	float ditherGlitch => game.ditherGlitch;
 	Vector2 ditherGlitchAxis => game.ditherGlitchAxis;
 	Point2 shake { get => game.shake; set => game.shake = value; }
-	float fbZoom => game.fbZoom;
 	float ZoomedWidth => Width / zoomLevel;
 	float ZoomedHeight => Height / zoomLevel;
-	float FbZoomedWidth => Width / fbZoom;
-	float FbZoomedHeight => Height / fbZoom;
 	Game.DebugView debugView => game.debugView;
 	// Transition animation params: sim writes during room transitions, view lerps.
 	float nextRoomEase => game.nextRoomEase;

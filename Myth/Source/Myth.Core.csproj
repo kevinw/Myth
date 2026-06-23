@@ -37,6 +37,8 @@
   <ItemGroup>
     <Compile Include="**/*.cs" Exclude="bin/**;obj/**" />
     <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" Private="false" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
+    <!-- Build-time only: emits GeneratedActors.RegisterAll() from [GameActor]. -->
+    <ProjectReference Include="../tools/Myth.SourceGen/Myth.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!-- ImGui.NET provides the managed bindings on every platform. On desktop it also

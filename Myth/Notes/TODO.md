@@ -1,5 +1,6 @@
 # TODO
 
+- fix render target flipping on browser
 - move the Program.cs out of 'Desktop' since it's also for the browser
 - think about trying to turn a real 3D complex space (a castle blueprint) into a series of layers connected by doors
 - a room enclosed in grass shouldn't reverb as much.

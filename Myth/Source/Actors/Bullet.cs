@@ -13,7 +13,6 @@ public class Bullet : Actor
 	{
 		Hitbox = new(new RectInt(-4, -4, 8, 8));
 		Mask = Masks.Enemy;
-		Sprite = Assets.GetSprite("bullet");
 		Depth = -5;
 		Play("idle");
 	}

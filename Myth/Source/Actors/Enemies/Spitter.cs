@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Tags = ActorTag.Enemy)]
 public class Spitter : Actor
 {
 	private float timer = 0;
@@ -11,7 +12,6 @@ public class Spitter : Actor
 	{
 		Hitbox = new(new RectInt(-6, -12, 12, 12));
 		Mask = Masks.Enemy;
-		Sprite = Assets.GetSprite("spitter");
 		Depth = -5;
 		timer = 1.0f;
 		Play("idle");

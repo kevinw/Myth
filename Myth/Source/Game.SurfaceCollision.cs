@@ -7,8 +7,8 @@ public readonly record struct SurfaceHit(Vector2 Point, Vector2 Normal, float Di
 
 public partial class Game
 {
-	private static readonly List<Vector2> surfaceTraceForward = [];
-	private static readonly List<Vector2> surfaceTraceBack = [];
+	static readonly List<Vector2> surfaceTraceForward = [];
+	static readonly List<Vector2> surfaceTraceBack = [];
 
 	/// Trace the contour as a world-space polyline from an existing walk state (boundary
 	/// `vertex` + `heading` + handedness), walking `maxArcPerSide` pixels forward and
@@ -31,7 +31,7 @@ public partial class Game
 	// Find the solid/air face nearest `nearPoint` along `towardSolid`. Returns the
 	// dominant-axis normal `n` (into solid), the `faceCorner` (the -tangent end of the
 	// shared face, a grid vertex), and the `faceCenter` (the surface point under nearPoint).
-	private bool SeedBoundaryFace(Vector2 nearPoint, Vector2 towardSolid, int maxReach, out Point2 n, out Point2 faceCorner, out Vector2 faceCenter)
+	bool SeedBoundaryFace(Vector2 nearPoint, Vector2 towardSolid, int maxReach, out Point2 n, out Point2 faceCorner, out Vector2 faceCenter)
 	{
 		faceCorner = default;
 		faceCenter = nearPoint;
@@ -107,7 +107,7 @@ public partial class Game
 	public Vector2 SurfaceNormal(Point2 heading, bool solidLeft)
 		=> (Vector2)(solidLeft ? new Point2(heading.Y, -heading.X) : new Point2(-heading.Y, heading.X));
 
-	private void WalkBoundary(Point2 startVertex, Point2 heading, bool solidLeft, float maxArc, List<Vector2> outPoints)
+	void WalkBoundary(Point2 startVertex, Point2 heading, bool solidLeft, float maxArc, List<Vector2> outPoints)
 	{
 		var v = startVertex;
 		var d = heading;
@@ -127,7 +127,7 @@ public partial class Game
 
 	// Left-hand rule: prefer turning toward the solid, then straight, then away. No
 	// reverse — at a genuine dead end (e.g. the room edge) we stop rather than fold back.
-	private Point2 PickBoundaryDir(Point2 v, Point2 heading, bool solidLeft)
+	Point2 PickBoundaryDir(Point2 v, Point2 heading, bool solidLeft)
 	{
 		var left = new Point2(heading.Y, -heading.X);
 		var right = new Point2(-heading.Y, heading.X);
@@ -141,7 +141,7 @@ public partial class Game
 		return Point2.Zero;
 	}
 
-	private bool BoundaryEdgeValid(Point2 v, Point2 d, bool solidLeft)
+	bool BoundaryEdgeValid(Point2 v, Point2 d, bool solidLeft)
 	{
 		var left = CellAt((Vector2)v + (Vector2)d * 0.5f + new Vector2(d.Y, -d.X) * 0.5f);
 		var right = CellAt((Vector2)v + (Vector2)d * 0.5f + new Vector2(-d.Y, d.X) * 0.5f);
@@ -166,15 +166,9 @@ public partial class Game
 		return JumpthruSolid(solidCell) && airCell == solidCell + new Point2(0, -1);
 	}
 
-	private bool InRoom(Point2 cell)
-	{
-		if (room == null)
-			return false;
-		var b = room.WorldBounds;
-		return cell.X >= b.Left && cell.X < b.Right && cell.Y >= b.Top && cell.Y < b.Bottom;
-	}
+	bool InRoom(Point2 cell) => room?.WorldBounds.Contains(cell) ?? false;
 
-	private bool SolidPixel(Point2 cell)
+	bool SolidPixel(Point2 cell)
 	{
 		var point = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
 		if (RoomCollisionContains(point))
@@ -195,7 +189,7 @@ public partial class Game
 
 	// A jumpthru (one-way platform) cell — same rect test as SolidPixel but for the
 	// Jumpthru mask. The burrow boundary walk uses this to ride the *top* of jumpthru runs.
-	private bool JumpthruSolid(Point2 cell)
+	bool JumpthruSolid(Point2 cell)
 	{
 		var point = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
 		foreach (var other in Actors)
@@ -220,14 +214,13 @@ public partial class Game
 		return !SolidPixel(cell) && JumpthruSolid(cell);
 	}
 
-	private static Point2 CellAt(Vector2 p) => new((int)MathF.Floor(p.X), (int)MathF.Floor(p.Y));
-	private static Point2 RoundV(Vector2 p) => new((int)MathF.Round(p.X), (int)MathF.Round(p.Y));
+	static Point2 CellAt(Vector2 p) => new((int)MathF.Floor(p.X), (int)MathF.Floor(p.Y));
+	static Point2 RoundV(Vector2 p) => new((int)MathF.Round(p.X), (int)MathF.Round(p.Y));
 
 	public bool OverlapsSolid(Actor actor, in RectInt bounds)
 	{
 		if (OverlapsRoomCollision(bounds))
-			if (OverlapsRoomCollision(bounds))
-				return true;
+			return true;
 
 		foreach (var other in Actors)
 		{
@@ -266,7 +259,7 @@ public partial class Game
 		return false;
 	}
 
-	private bool TryGetSurfaceAt(Actor actor, in RectInt bounds, Vector2 searchDirection, Point2 offset, float distance, out SurfaceHit hit)
+	bool TryGetSurfaceAt(Actor actor, in RectInt bounds, Vector2 searchDirection, Point2 offset, float distance, out SurfaceHit hit)
 	{
 		if (room != null)
 		{
@@ -310,14 +303,14 @@ public partial class Game
 		return false;
 	}
 
-	private static Vector2 SlopeNormal(Vector2 left, Vector2 right, Room.SlopeFill fill)
+	static Vector2 SlopeNormal(Vector2 left, Vector2 right, Room.SlopeFill fill)
 	{
 		var tangent = Vector2.Normalize(right - left);
 		var normal = new Vector2(tangent.Y, -tangent.X);
 		return fill == Room.SlopeFill.BelowLine ? normal : -normal;
 	}
 
-	private static Vector2 AxisNormal(Vector2 searchDirection)
+	static Vector2 AxisNormal(Vector2 searchDirection)
 	{
 		if (MathF.Abs(searchDirection.X) > MathF.Abs(searchDirection.Y))
 			return new Vector2(-MathF.Sign(searchDirection.X), 0);
@@ -325,7 +318,7 @@ public partial class Game
 		return new Vector2(0, -MathF.Sign(searchDirection.Y));
 	}
 
-	private static Vector2 SurfacePoint(RectInt bounds, Vector2 normal)
+	static Vector2 SurfacePoint(RectInt bounds, Vector2 normal)
 	{
 		var center = (Vector2)bounds.Center;
 		return new Vector2(
@@ -333,7 +326,7 @@ public partial class Game
 			normal.Y < 0 ? bounds.Top : normal.Y > 0 ? bounds.Bottom : center.Y);
 	}
 
-	private static Vector2 SlopeCorrection(RectInt bounds, Vector2 surfacePoint, Vector2 normal)
+	static Vector2 SlopeCorrection(RectInt bounds, Vector2 surfacePoint, Vector2 normal)
 	{
 		var center = bounds.CenterF;
 		var radius = SupportRadius(bounds, normal);
@@ -341,7 +334,7 @@ public partial class Game
 		return normal * (radius - distance);
 	}
 
-	private static float SupportRadius(RectInt bounds, Vector2 normal)
+	static float SupportRadius(RectInt bounds, Vector2 normal)
 	{
 		var center = bounds.CenterF;
 		return MathF.Max(
@@ -353,6 +346,5 @@ public partial class Game
 				MathF.Abs(Vector2.Dot((Vector2)bounds.BottomRight - center, normal))));
 	}
 
-	private static Point2 Round(Vector2 value)
-		=> new((int)MathF.Round(value.X), (int)MathF.Round(value.Y));
+	static Point2 Round(Vector2 value) => new((int)MathF.Round(value.X), (int)MathF.Round(value.Y));
 }

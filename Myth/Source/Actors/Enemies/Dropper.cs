@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "bramble", Tags = ActorTag.Enemy)]
 public class Dropper : Actor
 {
 	private enum States

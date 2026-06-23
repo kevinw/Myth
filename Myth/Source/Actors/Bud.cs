@@ -35,7 +35,6 @@ public class Bud : Pawn
 	public Bud()
 	{
 		nav = new(this);
-		Sprite = Assets.GetSprite("bud");
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = -4;
 		Play("idle");

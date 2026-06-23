@@ -158,9 +158,16 @@ public sealed partial class GameView
 		using (PerfStats.Time(PerfStat.FinalComposite))
 		using (GraphicsDevice.DebugGroup(useCrt ? "Myth/final composite crt" : "Myth/final composite"))
 		{
-			var size = viewport.Size;
-			var center = viewport.Center;
-			var scale = Calc.Min(size.X / (float)output.Width, size.Y / (float)output.Height);
+			// Present into a 4:3 region when cropping (desktop pillarbox / portrait canvas),
+			// cover-fitting the 16:9 frame so its sides are cropped; aspectUncrop lerps back to a
+			// contained (full, letterboxed) frame while Zoom is held. The cover-scaled frame
+			// overflows the present region, so clip it to never bleed past the pillarbox bars.
+			var present = game.PresentRect(viewport);
+			var center = present.Center;
+			var scale = game.PresentScale(present, output.Width, output.Height);
+			var clip = game.AspectCropActive
+				? (scissor.HasValue ? scissor.Value.GetIntersection(present) : present)
+				: scissor;
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
@@ -185,14 +192,14 @@ public sealed partial class GameView
 			var flipTargetTextures = Batcher.FlipTargetTextures;
 			Batcher.FlipTargetTextures = false;
 #endif
-			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale * fbZoom, 0, Color.White);
+			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
 #if BROWSER
 			Batcher.FlipTargetTextures = flipTargetTextures;
 #endif
 			if (useCrt)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
-			Batcher.Render(destination, scissor: scissor);
+			Batcher.Render(destination, scissor: clip);
 			Batcher.Clear();
 		}
 	}

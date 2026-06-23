@@ -2,6 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Tags = ActorTag.Enemy | ActorTag.Flying)]
 public class Mosquito : Actor
 {
 	int Health = 2;
@@ -9,7 +10,6 @@ public class Mosquito : Actor
 
 	public Mosquito()
 	{
-		Sprite = Assets.GetSprite("mosquito");
 		Hitbox = new(new RectInt(-5, -5, 10, 10));
 		Mask = Masks.Enemy;
 		Depth = -5;

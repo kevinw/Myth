@@ -12,6 +12,9 @@ public struct StartArgs
 	public bool traceNavFrames;
 	public bool simple;
 	public bool bench;
+	// Force the 4:3 portrait-style presentation on desktop for testing (--aspect-four-three):
+	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
+	public bool aspectFourThree;
 	public bool play; // if true, play immediately on startup even in desktop/editor-capable environments
 	public bool buildAssetPack;
 	public bool useAssetPack;
@@ -83,6 +86,7 @@ public struct StartArgs
 		traceNavFrames = args.Contains("--trace-nav-frames");
 		simple = args.Contains("--simple");
 		bench = args.Contains("--bench");
+		aspectFourThree = args.Contains("--aspect-four-three");
 		play = args.Contains("--play") || screenshotPath != null || playRoomId != null;
 	}
 

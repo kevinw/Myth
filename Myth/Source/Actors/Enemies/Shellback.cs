@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "blob", Tags = ActorTag.Enemy)]
 public class Shellback : Actor
 {
 	private enum States

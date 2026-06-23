@@ -8,9 +8,7 @@ using Color = Foster.Framework.Color;
 
 namespace Myth;
 
-/// <summary>
 /// Runs the Game and, when the game is not running, displays a tile-based Level Editor (see Manager.Editor.cs)
-/// </summary>
 public partial class Manager : App
 {
 	readonly ImGuiRenderer imgui = null!;
@@ -31,9 +29,7 @@ public partial class Manager : App
 	static Color highlight => 0x5fcde4;
 #endif
 
-	/// <summary>
 	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
-	/// </summary>
 	Point2 cell = new(0, 0);
 	string? selectedRoomId;
 #if EDITOR
@@ -54,9 +50,7 @@ public partial class Manager : App
 	public float SoftShadowPenumbra = 2.3f;
 	public float SoftShadowMinSoftness = 0.0f;
 
-	/// <summary>
 	/// The room renderer / simulation.
-	/// </summary>
 	internal Game? game;
 	internal bool playing;
 	bool playOnStartup;
@@ -95,20 +89,14 @@ public partial class Manager : App
 #endif
 	bool fpsOverlayVisible = false;
 
-	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
-	/// </summary>
 	float gameEase = 1.0f;
 
-	/// <summary>
 	/// Sprite Batcher for general Editor visuals
-	/// </summary>
 	readonly Batcher batcher;
 	readonly Controls controls;
 
-	/// <summary>
 	/// Visible Space
-	/// </summary>
 	Window RequiredWindow => Window ?? throw new InvalidOperationException("Window is not available in headless mode.");
 
 	Rect View
@@ -120,9 +108,7 @@ public partial class Manager : App
 		}
 	}
 
-	/// <summary>
 	/// Play Workspace when the Game is Open
-	/// </summary>
 	Rect GameOpenRect => View;
 
 
@@ -133,28 +119,16 @@ public partial class Manager : App
 	public Vector2 GameMouseWorld(Game gameInstance)
 	{
 		var viewport = (RectInt)(GameViewRect * Scale);
-		var scale = Calc.Min(viewport.Width / (float)gameInstance.Screen.Width, viewport.Height / (float)gameInstance.Screen.Height);
-
-		var size = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) * scale;
-		var topLeft = (Vector2)viewport.Center - size / 2;
-		var renderCenter = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) / 2;
-		var local = (Input.Mouse.Position - topLeft) / scale;
-		return gameInstance.Camera + renderCenter + (local - renderCenter) / gameInstance.FbZoom;
+		return gameInstance.WindowToWorld(Input.Mouse.Position, viewport);
 	}
 
-	/// <summary>
 	/// Mouse Cursor relative to Scale
-	/// </summary>
 	Vector2 Cursor => Input.Mouse.Position / Scale;
 
-	/// <summary>
 	/// Line Weight for outlines, relative to Scale
-	/// </summary>
 	float LineWeight => 1.0f / Scale * 4;
 
-	/// <summary>
 	/// Tries to get the Existing Room
-	/// </summary>
 	Room? CurrentRoom
 	{
 		get
@@ -185,6 +159,8 @@ public partial class Manager : App
 
 	public bool MusicEnabled => musicEnabled;
 	public bool WantsVirtualGameController => playing || startingPlay;
+	// When set (desktop --aspect-four-three), force the 4:3 portrait-style cropped presentation.
+	public bool AspectFourThree { get; set; }
 	public bool AudioEnabled = true;
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
@@ -196,6 +172,7 @@ public partial class Manager : App
 		gymMode = args.gym;
 		headless = args.headless;
 		unthrottled = args.unthrottled;
+		AspectFourThree = args.aspectFourThree;
 		gym = new()
 		{
 			exitAfterAll = args.gymExitAfterAll
@@ -817,6 +794,8 @@ public partial class Manager : App
 			}
 		}
 
+		imgui?.BeginLayout();
+
 #if EDITOR
 		// Build our Sprite Batch
 		using (PerfStats.Time(PerfDetail.BatchBuild))
@@ -838,44 +817,26 @@ public partial class Manager : App
 		if (imgui != null)
 		{
 			using var imguiLayoutPerf = PerfStats.Time(PerfDetail.ImGuiLayout);
-			imgui.BeginLayout();
 			var window = RequiredWindow;
 #if IOS
 			window.StopTextInput();
 #else
 			if (!OperatingSystem.IsBrowser())
 			{
-				if (imgui.WantsTextInput)
-					window.StartTextInput();
-				else
-					window.StopTextInput();
+				if (imgui.WantsTextInput) window.StartTextInput();
+				else window.StopTextInput();
 			}
 #endif
 #if EDITOR
-			if (gameEase < 1.0f && !startingPlay)
-			{
-				using (PerfStats.Time(PerfDetail.PaletteImGui))
-					PaletteImGui();
-			}
-			if (!playing && !startingPlay)
-			{
-				using (PerfStats.Time(PerfDetail.ToolbarImGui))
-					ToolbarImGui();
-			}
+			EditorUI();
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
 
 			RenderTargetOverlayImGui();
-#if EDITOR
-			PlatformNavDebugOverlayImGui();
-			BudDebugOverlayImGui();
-			using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
-				FpsOverlayImGui();
-			TransitionViewerImGui();
-#endif
-			imgui.EndLayout();
 		}
+
+		imgui?.EndLayout();
 	}
 
 
@@ -1331,18 +1292,14 @@ public partial class Manager : App
 	}
 
 
-	/// <summary>
 	/// Draws a box outline (for palette / workspace)
-	/// </summary>
 	void Box(Rect box)
 	{
 		batcher.Rect(box, 0x000000);
 		batcher.RectLine(box, LineWeight, 0xffffff);
 	}
 
-	/// <summary>
 	/// Draws a Pressable button with an icon and tooltip
-	/// </summary>
 	bool Button(Rect button, Subtexture subtexture, string text, bool selected = false)
 	{
 		var hovering = button.Contains(Cursor);

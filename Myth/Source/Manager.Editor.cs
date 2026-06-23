@@ -18,8 +18,8 @@ public partial class Manager
 	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
 	static Color highlight => 0x5fcde4;
 
-	private const float AssetReloadDelay = 0.25f;
-	private const float DefaultRoomPreviewResolutionScale = 0.75f;
+	const float AssetReloadDelay = 0.25f;
+	const float DefaultRoomPreviewResolutionScale = 0.75f;
 
 	bool editorGameDirty;
 	bool editorViewInitialized;
@@ -27,20 +27,17 @@ public partial class Manager
 	float editorZoom = 1.0f;
 	float editorZoomTarget = 1.0f;
 	float roomPreviewResolutionScale = DefaultRoomPreviewResolutionScale;
-	private const bool AutoSelectRoomByCamera = true;
+	const bool AutoSelectRoomByCamera = true;
 	Vector2 editorCameraTweenFrom;
 	Vector2 editorCameraTweenTo;
 	float editorZoomTweenFrom;
 	float editorZoomTweenTo;
 	float editorCameraTween = 1.0f;
 
-	/// <summary>
-	/// The current Type we're painting in the Editor
-	/// </summary>
-	private char brush = '0';
-	private Factory.TileLayer activeTileLayer = Factory.TileLayer.Foreground;
-	private bool editorShowForegroundLayer = true;
-	private bool editorShowBackgroundLayer = true;
+	char brush = '0'; // The current Type we're painting in the Editor
+	Factory.TileLayer activeTileLayer = Factory.TileLayer.Foreground;
+	bool editorShowForegroundLayer = true;
+	bool editorShowBackgroundLayer = true;
 
 	char tileTypePlacing;
 	bool editingRoomGeometry;
@@ -49,6 +46,7 @@ public partial class Manager
 	RectInt? proposedRoomTiles;
 	string? selectedActorSpecId;
 	int selectedActorPaletteIndex = -1;
+	ActorTag actorPaletteFilter = ActorTag.None; // None = show all
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
@@ -100,29 +98,29 @@ public partial class Manager
 	float fpsElapsed;
 #endif
 
-	private Point2 roomCreatePosition;
-	private Point2? editorRoomEntryDirection;
-	private bool editingRoomName;
-	private bool focusRoomNameEditor;
-	private string roomNameEditor = string.Empty;
-	private string? roomNameEditingRoomId;
-	private string? pendingDeleteRoomId;
+	Point2 roomCreatePosition;
+	Point2? editorRoomEntryDirection;
+	bool editingRoomName;
+	bool focusRoomNameEditor;
+	string roomNameEditor = string.Empty;
+	string? roomNameEditingRoomId;
+	string? pendingDeleteRoomId;
 
 	/// Toolbar Space
-	private Rect ToolbarRect => new(View.X, View.Y, View.Width, ToolbarHeight);
+	Rect ToolbarRect => new(View.X, View.Y, View.Width, ToolbarHeight);
 
 	/// Workspace, which is the full space below the Toolbar
-	private Rect WorkRect => new(View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
+	Rect WorkRect => new(View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
 
 	/// Palette View when the Editor is Open
-	private Rect PaletteOpenRect => new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
+	Rect PaletteOpenRect => new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
 
 	/// Edit Workspace when the Editor is Open
-	private Rect EditorOpenRect
+	Rect EditorOpenRect
 		=> new Rect(WorkRect.X + PaletteWidth + BoxSpacing, WorkRect.Y, WorkRect.Width - PaletteWidth - BoxSpacing, WorkRect.Height);
 
 	/// Eases between the EditView and the PlayView as the Game opens/closes
-	private Rect WorkspaceRect
+	Rect WorkspaceRect
 	{
 		get
 		{
@@ -132,38 +130,57 @@ public partial class Manager
 		}
 	}
 
-	private Rect GameViewRect => WorkspaceRect;
+	Rect GameViewRect => WorkspaceRect;
 
-	private IJsonUndoTarget CurrentRoomUndoTarget(Room room)
+	IJsonUndoTarget CurrentRoomUndoTarget(Room room)
 		=> new RoomUndoTarget(room);
 
-	private IJsonUndoTarget EditorSelectionUndoTarget()
+	IJsonUndoTarget EditorSelectionUndoTarget()
 		=> new EditorSelectionTarget(this);
 
-	private JsonUndoScope CaptureRoomUndo(string name, Room room)
+	JsonUndoScope CaptureRoomUndo(string name, Room room)
 		=> undo.Capture(name, CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
 
-	private JsonUndoScope CaptureSelectionUndo(string name)
+	JsonUndoScope CaptureSelectionUndo(string name)
 		=> undo.Capture(name, EditorSelectionUndoTarget());
 
-	private JsonUndoScope CapturePrefabUndo(string name, string specId)
+	JsonUndoScope CapturePrefabUndo(string name, string specId)
 		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
 
-	private JsonUndoScope CaptureParticleEffectUndo(string effectName)
+	JsonUndoScope CaptureParticleEffectUndo(string effectName)
 		=> undo.Capture("Edit Particle Effect", new ParticleEffectUndoTarget(effectName));
 
 	// Debounced autosave for the particle effect asset edited in the inspector.
-	private string? particleAutosaveName;
-	private float particleAutosaveTimer;
-	private const float ParticleAutosaveDelay = 0.6f;
+	string? particleAutosaveName;
+	float particleAutosaveTimer;
+	const float ParticleAutosaveDelay = 0.6f;
 
-	private void MarkParticleEffectDirty(string name)
+	internal void EditorUI()
+	{
+		if (gameEase < 1.0f && !startingPlay)
+		{
+			using (PerfStats.Time(PerfDetail.PaletteImGui))
+				PaletteImGui();
+		}
+		if (!playing && !startingPlay)
+		{
+			using (PerfStats.Time(PerfDetail.ToolbarImGui))
+				ToolbarImGui();
+		}
+		PlatformNavDebugOverlayImGui();
+		BudDebugOverlayImGui();
+		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
+			FpsOverlayImGui();
+		TransitionViewerImGui();
+	}
+
+	void MarkParticleEffectDirty(string name)
 	{
 		particleAutosaveName = name;
 		particleAutosaveTimer = ParticleAutosaveDelay;
 	}
 
-	private void UpdateParticleEffectAutosave()
+	void UpdateParticleEffectAutosave()
 	{
 		if (particleAutosaveName is not { } name)
 			return;
@@ -177,23 +194,23 @@ public partial class Manager
 
 
 	/// Eases the PaletteView out/in as the Game opens/closes
-	private Rect PaletteSlideRect =>
+	Rect PaletteSlideRect =>
 		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
 
-	private void UndoEditor()
+	void UndoEditor()
 	{
 		undo.Undo();
 		AfterUndoRedo();
 	}
 
-	private void RedoEditor()
+	void RedoEditor()
 	{
 		undo.Redo();
 		AfterUndoRedo();
 	}
 
-	private void DuplicateSelectedActor()
+	void DuplicateSelectedActor()
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return;
@@ -211,7 +228,7 @@ public partial class Manager
 		}
 	}
 
-	private void AfterUndoRedo()
+	void AfterUndoRedo()
 	{
 		if (CurrentRoom is { } room)
 		{
@@ -232,7 +249,7 @@ public partial class Manager
 		SyncEditorGame();
 	}
 
-	private bool UpdateEditorUndoRedo()
+	bool UpdateEditorUndoRedo()
 	{
 		if (ImGuiWantsKeyboard)
 			return false;
@@ -269,7 +286,7 @@ public partial class Manager
 		return false;
 	}
 
-	private sealed class RoomUndoTarget(Room room) : IJsonUndoTarget
+	sealed class RoomUndoTarget(Room room) : IJsonUndoTarget
 	{
 		public string UndoId => $"room:{room.Id}";
 		public string CaptureJson() => room.ToJsonString();
@@ -281,7 +298,7 @@ public partial class Manager
 		}
 	}
 
-	private sealed class EditorSelectionTarget(Manager manager) : IJsonUndoTarget
+	sealed class EditorSelectionTarget(Manager manager) : IJsonUndoTarget
 	{
 		public string UndoId => "editor-selection";
 
@@ -297,6 +314,7 @@ public partial class Manager
 				["showForegroundLayer"] = manager.editorShowForegroundLayer,
 				["showBackgroundLayer"] = manager.editorShowBackgroundLayer,
 				["actorPaletteIndex"] = manager.selectedActorPaletteIndex,
+				["actorPaletteFilter"] = (int)manager.actorPaletteFilter,
 				["prefabId"] = manager.selectedActorSpecId,
 				["prefabInspectorOpen"] = manager.actorSpecInspectorOpen,
 				["entryDirection"] = manager.editorRoomEntryDirection is { } direction ? new JsonArray(direction.X, direction.Y) : null
@@ -320,20 +338,21 @@ public partial class Manager
 			manager.editorShowForegroundLayer = JsonUtil.ReadBool(json, "showForegroundLayer", true);
 			manager.editorShowBackgroundLayer = JsonUtil.ReadBool(json, "showBackgroundLayer", true);
 			manager.selectedActorPaletteIndex = JsonUtil.ReadInt(json, "actorPaletteIndex", -1);
+			manager.actorPaletteFilter = (ActorTag)JsonUtil.ReadInt(json, "actorPaletteFilter", 0);
 			manager.selectedActorSpecId = JsonUtil.ReadString(json, "prefabId");
 			manager.actorSpecInspectorOpen = JsonUtil.ReadBool(json, "prefabInspectorOpen");
 			manager.editorRoomEntryDirection = JsonUtil.ReadPoint(json, "entryDirection");
 		}
 	}
 
-	private sealed class ActorSpecUndoTarget(string specId) : IJsonUndoTarget
+	sealed class ActorSpecUndoTarget(string specId) : IJsonUndoTarget
 	{
 		public string UndoId => $"actor-spec:{specId}";
 		public string CaptureJson() => ActorSpecs.CaptureSpecJson(specId);
 		public void ApplyJson(string json) => ActorSpecs.ApplySpecJson(specId, json);
 	}
 
-	private sealed class ParticleEffectUndoTarget(string name) : IJsonUndoTarget
+	sealed class ParticleEffectUndoTarget(string name) : IJsonUndoTarget
 	{
 		public string UndoId => $"particle-effect:{name}";
 		public string CaptureJson() => ParticleEffectAssets.Get(name).ToJson().ToJsonString();
@@ -349,7 +368,7 @@ public partial class Manager
 		}
 	}
 
-	private enum ResizeHandle
+	enum ResizeHandle
 	{
 		None,
 		Left,
@@ -362,7 +381,7 @@ public partial class Manager
 		BottomRight
 	}
 
-	private void SetHiddenWallResizeCursor(ResizeHandle handle)
+	void SetHiddenWallResizeCursor(ResizeHandle handle)
 	{
 		if (handle == ResizeHandle.None)
 		{
@@ -387,14 +406,14 @@ public partial class Manager
 		SetMouseCursor(cursor);
 	}
 
-	private void DisposeEditorCursors()
+	void DisposeEditorCursors()
 	{
 		foreach (var cursor in editorCursors.Values)
 			cursor.Dispose();
 		editorCursors.Clear();
 	}
 
-	private void FocusEditorOnCurrentRoom()
+	void FocusEditorOnCurrentRoom()
 	{
 		if (CurrentRoom is not { } room)
 			return;
@@ -405,7 +424,7 @@ public partial class Manager
 		editorViewInitialized = true;
 	}
 
-	private void TweenEditorCameraToRoom(Room room)
+	void TweenEditorCameraToRoom(Room room)
 	{
 		GetEditorRoomFocus(room, out editorCameraTweenTo, out editorZoomTweenTo);
 		editorCameraTweenFrom = editorCamera;
@@ -414,7 +433,7 @@ public partial class Manager
 		editorViewInitialized = true;
 	}
 
-	private void GetEditorRoomFocus(Room room, out Vector2 camera, out float zoom)
+	void GetEditorRoomFocus(Room room, out Vector2 camera, out float zoom)
 	{
 		var bounds = room.WorldBounds;
 		var view = GameViewRect;
@@ -422,7 +441,7 @@ public partial class Manager
 		zoom = Math.Clamp(Math.Min(view.Width / bounds.Width, view.Height / bounds.Height), 0.15f, 8.0f);
 	}
 
-	private void UpdateEditorCameraTween()
+	void UpdateEditorCameraTween()
 	{
 		// Don't let the editor preview build its nav graph mid-slide (see GetPlatformNavGraph).
 		if (game != null)
@@ -438,7 +457,7 @@ public partial class Manager
 		editorZoomTarget = editorZoom;
 	}
 
-	private void MatchEditorCameraToGame()
+	void MatchEditorCameraToGame()
 	{
 		if (game == null)
 			return;
@@ -451,17 +470,13 @@ public partial class Manager
 		editorViewInitialized = true;
 	}
 
-	private void UpdateEditorNavigation()
+	void UpdateEditorNavigation()
 	{
 		var direction = Point2.Zero;
-		if (controls.Move.PressedUp)
-			direction = Point2.Up;
-		if (controls.Move.PressedDown)
-			direction = Point2.Down;
-		if (controls.Move.PressedLeft)
-			direction = Point2.Left;
-		if (controls.Move.PressedRight)
-			direction = Point2.Right;
+		if (controls.Move.PressedUp) direction += Point2.Up;
+		if (controls.Move.PressedDown) direction += Point2.Down;
+		if (controls.Move.PressedLeft) direction += Point2.Left;
+		if (controls.Move.PressedRight) direction += Point2.Right;
 
 		if (direction != Point2.Zero)
 		{
@@ -471,7 +486,7 @@ public partial class Manager
 		}
 	}
 
-	private void PaletteImGui()
+	void PaletteImGui()
 	{
 		var rect = PaletteSlideRect;
 		var flags =
@@ -522,7 +537,7 @@ public partial class Manager
 		DrawEditorSelectionOptions();
 	}
 
-	private void SelectEditorActorTool()
+	void SelectEditorActorTool()
 	{
 		actorSelectTool = true;
 		brush = '0';
@@ -590,7 +605,7 @@ public partial class Manager
 		if (OperatingSystem.IsMacOS())
 		{
 			var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-			var steamAseprite = Path.Combine(homeDir, "Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
+			var steamAseprite = Path.Combine(homeDir, "Library/Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite");
 			if (File.Exists(steamAseprite))
 				return CreateStartInfo(steamAseprite, filename);
 
@@ -663,7 +678,7 @@ public partial class Manager
 		return null;
 	}
 
-	private void DrawTileLayerSelector()
+	void DrawTileLayerSelector()
 	{
 		if (ImGui.SmallButton("O ##ShowBG"))
 			editorShowBackgroundLayer = !editorShowBackgroundLayer;
@@ -678,7 +693,7 @@ public partial class Manager
 			SelectTileLayer(Factory.TileLayer.Foreground);
 	}
 
-	private void SelectTileLayer(Factory.TileLayer layer)
+	void SelectTileLayer(Factory.TileLayer layer)
 	{
 		activeTileLayer = layer;
 		if (Factory.Find(brush) is { } entry && entry.Layer == activeTileLayer)
@@ -689,17 +704,20 @@ public partial class Manager
 		actorSelectTool = false;
 	}
 
-	private static Tileset? GetDualTilesetPreview(Factory.Entry entry)
+	static Tileset? GetDualTilesetPreview(Factory.Entry entry)
 		=> entry.DualTilesetName != null ? Assets.GetTileset(entry.DualTilesetName) : null;
 
-	private void DrawActorPaletteSection()
+	void DrawActorPaletteSection()
 	{
 		ImGui.TextUnformatted("Actors");
+		DrawActorTagFilter();
 		var index = 0;
 		for (var i = 0; i < Factory.ActorPalette.Count; i++)
 		{
 			var entry = Factory.ActorPalette[i];
 			if (entry.Image.Texture == null)
+				continue;
+			if (actorPaletteFilter != ActorTag.None && (entry.Tags & actorPaletteFilter) == 0)
 				continue;
 
 			if (index > 0 && index % PaletteColumns != 0)
@@ -720,7 +738,60 @@ public partial class Manager
 		}
 	}
 
-	private void DrawRoomPaletteSection()
+	void DrawActorTagFilter()
+	{
+		// Only offer filters for tags some palette entry actually uses.
+		var available = ActorTag.None;
+		foreach (var entry in Factory.ActorPalette)
+			available |= entry.Tags;
+		if (available == ActorTag.None)
+			return;
+
+		var visibleMaxX = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3)); // the palette zeroes FramePadding; give tags a bit back
+		ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
+
+		DrawTagButton("All", actorPaletteFilter == ActorTag.None, () => actorPaletteFilter = ActorTag.None, visibleMaxX, firstInRow: true);
+		foreach (ActorTag tag in Enum.GetValues<ActorTag>())
+		{
+			if (tag == ActorTag.None || (available & tag) == 0)
+				continue;
+			var t = tag;
+			DrawTagButton(tag.ToString(), (actorPaletteFilter & t) != 0, () => ToggleActorTagFilter(t), visibleMaxX, firstInRow: false);
+		}
+
+		ImGui.PopStyleVar(2);
+	}
+
+	void ToggleActorTagFilter(ActorTag tag)
+	{
+		var io = ImGui.GetIO();
+		if (io.KeyShift || io.KeyCtrl || io.KeySuper) // additive: add/remove this tag
+			actorPaletteFilter ^= tag;
+		else // exclusive: this tag only; click again to clear
+			actorPaletteFilter = actorPaletteFilter == tag ? ActorTag.None : tag;
+	}
+
+	static void DrawTagButton(string label, bool active, Action onClick, float visibleMaxX, bool firstInRow)
+	{
+		var style = ImGui.GetStyle();
+		if (!firstInRow)
+		{
+			// Canonical ImGui button-wrap: stay on the row only while the next button fits.
+			var width = ImGui.CalcTextSize(label).X + style.FramePadding.X * 2;
+			if (ImGui.GetItemRectMax().X + style.ItemSpacing.X + width < visibleMaxX)
+				ImGui.SameLine();
+		}
+
+		if (active)
+			ImGui.PushStyleColor(ImGuiCol.Button, style.Colors[(int)ImGuiCol.ButtonActive]);
+		if (ImGui.Button($"{label}##ActorTag"))
+			onClick();
+		if (active)
+			ImGui.PopStyleColor();
+	}
+
+	void DrawRoomPaletteSection()
 	{
 		if (CurrentRoom is not { } room)
 			return;
@@ -729,6 +800,10 @@ public partial class Manager
 			return;
 
 		var changed = false;
+		if (editingRoomGeometry)
+		{
+			ImGui.TextUnformatted($"{room.Size.X} x {room.Size.Y}");
+		}
 		if (ImGui.Button(editingRoomGeometry ? "Done" : "Resize"))
 		{
 			editingRoomGeometry = !editingRoomGeometry;
@@ -902,7 +977,7 @@ public partial class Manager
 		}
 	}
 
-	private void DrawDitherPaletteSection()
+	void DrawDitherPaletteSection()
 	{
 		if (!ImGui.CollapsingHeader("Dither"))
 			return;
@@ -918,7 +993,7 @@ public partial class Manager
 		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
 	}
 
-	private void DrawAmbientOcclusionSection()
+	void DrawAmbientOcclusionSection()
 	{
 		if (!ImGui.CollapsingHeader("Ambient Occlusion"))
 			return;
@@ -942,7 +1017,7 @@ public partial class Manager
 		ImGui.SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
 	}
 
-	private void DrawSoftShadowSection()
+	void DrawSoftShadowSection()
 	{
 		if (!ImGui.CollapsingHeader("Soft Shadows"))
 			return;
@@ -961,7 +1036,7 @@ public partial class Manager
 	// Draws the editable fields of a shared particle effect asset inside the
 	// actor inspector. Each change is captured for undo (like actor properties)
 	// and triggers a debounced autosave.
-	private void DrawParticleEffectBox(JsonObject actor)
+	void DrawParticleEffectBox(JsonObject actor)
 	{
 		if (game?.Particles is not { Supported: true })
 			return;
@@ -1016,7 +1091,7 @@ public partial class Manager
 		ImGui.Unindent();
 	}
 
-	private void FxFloat(string label, string name, ref float field, float min, float max)
+	void FxFloat(string label, string name, ref float field, float min, float max)
 	{
 		var v = field;
 		if (!ImGui.SliderFloat(label, ref v, min, max))
@@ -1025,7 +1100,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxInt(string label, string name, ref int field, int min, int max)
+	void FxInt(string label, string name, ref int field, int min, int max)
 	{
 		var v = field;
 		if (!ImGui.SliderInt(label, ref v, min, max))
@@ -1034,7 +1109,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxRange(string label, string name, ref float a, ref float b, float speed, float min, float max)
+	void FxRange(string label, string name, ref float a, ref float b, float speed, float min, float max)
 	{
 		float x = a, y = b;
 		if (!ImGui.DragFloatRange2(label, ref x, ref y, speed, min, max))
@@ -1043,7 +1118,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxCheckbox(string label, string name, ref bool field)
+	void FxCheckbox(string label, string name, ref bool field)
 	{
 		var v = field;
 		if (!ImGui.Checkbox(label, ref v))
@@ -1052,7 +1127,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxColor(string label, string name, ref Color field)
+	void FxColor(string label, string name, ref Color field)
 	{
 		var v = (Vector4)field;
 		if (!ImGui.ColorEdit4(label, ref v, ImGuiColorEditFlags.AlphaBar))
@@ -1061,7 +1136,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxShape(string label, string name, ref ParticleEmitterShape field)
+	void FxShape(string label, string name, ref ParticleEmitterShape field)
 	{
 		var v = (int)field;
 		ImGui.SetNextItemWidth(-1);
@@ -1071,7 +1146,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxMode(string label, string name, ref ParticleEmissionMode field)
+	void FxMode(string label, string name, ref ParticleEmissionMode field)
 	{
 		var v = (int)field;
 		ImGui.SetNextItemWidth(-1);
@@ -1081,7 +1156,7 @@ public partial class Manager
 		MarkParticleEffectDirty(name);
 	}
 
-	private void FxCollision(string label, string name, ref ParticleCollisionMode field)
+	void FxCollision(string label, string name, ref ParticleCollisionMode field)
 	{
 		var v = (int)field;
 		ImGui.SetNextItemWidth(-1);
@@ -1092,7 +1167,7 @@ public partial class Manager
 	}
 
 #if false
-	private void DrawPreviewPaletteSection()
+	void DrawPreviewPaletteSection()
 	{
 		if (!ImGui.CollapsingHeader("Previews"))
 			return;
@@ -1108,10 +1183,10 @@ public partial class Manager
 	}
 #endif
 
-	private static RoomSettings CaptureRoomSettings(Room room)
+	static RoomSettings CaptureRoomSettings(Room room)
 		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
 
-	private static void ApplyRoomSettings(Room room, RoomSettings settings)
+	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
 		room.MusicArea = settings.MusicArea;
 		room.BackdropColor = settings.BackdropColor;
@@ -1128,7 +1203,7 @@ public partial class Manager
 			room.RebuildGeometry();
 	}
 
-	private void ActorSpecInspectorImGui()
+	void ActorSpecInspectorImGui()
 	{
 		if (!actorSpecInspectorOpen || selectedActorSpecId == null)
 			return;
@@ -1162,7 +1237,7 @@ public partial class Manager
 		ImGui.End();
 	}
 
-	private bool DrawActorSpecProperty(string specId, ActorSpecs.EditableProperty property)
+	bool DrawActorSpecProperty(string specId, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
 		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
@@ -1285,7 +1360,7 @@ public partial class Manager
 		return changed;
 	}
 
-	private void ActorInstanceInspectorImGui()
+	void ActorInstanceInspectorImGui()
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return;
@@ -1346,7 +1421,7 @@ public partial class Manager
 		ImGui.End();
 	}
 
-	private bool DrawActorInstanceProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	bool DrawActorInstanceProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		if (property.Name == nameof(LinkedDoor.TargetActorId) && IsLinkedDoorActor(actor))
 			return DrawLinkedDoorTargetProperty(room, actor, property);
@@ -1471,12 +1546,12 @@ public partial class Manager
 		return changed;
 	}
 
-	private static string FacingTooltip(Signs value) => "Click to face the other direction.";
+	static string FacingTooltip(Signs value) => "Click to face the other direction.";
 
-	private static bool IsParticleEmitterActor(JsonObject actor)
+	static bool IsParticleEmitterActor(JsonObject actor)
 		=> string.Equals(ActorSpecs.ReadString(actor, "Type"), "ParticleEmitter", StringComparison.OrdinalIgnoreCase);
 
-	private bool DrawParticleEffectNameProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	bool DrawParticleEffectNameProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
 		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
@@ -1500,7 +1575,7 @@ public partial class Manager
 		return changed;
 	}
 
-	private bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
 		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
@@ -1562,7 +1637,7 @@ public partial class Manager
 		return changed;
 	}
 
-	private static bool DrawEnumCombo(Type type, ref string value)
+	static bool DrawEnumCombo(Type type, ref string value)
 	{
 		var changed = false;
 		if (ImGui.BeginCombo("##Value", value))
@@ -1583,10 +1658,10 @@ public partial class Manager
 		return changed;
 	}
 
-	private static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
+	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && property.JsonName == "tileType";
 
-	private bool DrawHiddenWallTileTypeButtons(string value, Action<string> setValue)
+	bool DrawHiddenWallTileTypeButtons(string value, Action<string> setValue)
 	{
 		var current = NormalizeHiddenWallTileType(value);
 		var changed = false;
@@ -1598,7 +1673,7 @@ public partial class Manager
 		return changed;
 	}
 
-	private bool DrawHiddenWallTileTypeButton(string tileType, string label, string current, Action<string> setValue)
+	bool DrawHiddenWallTileTypeButton(string tileType, string label, string current, Action<string> setValue)
 	{
 		var image = Assets.GetTileset(tileType)?.Tiles.FirstOrDefault() ?? new Subtexture();
 		if (!ImGuiSubtextureButton(tileType, image, label, current == tileType, new Vector2(ButtonSize, ButtonSize)))
@@ -1609,10 +1684,10 @@ public partial class Manager
 		return current != tileType;
 	}
 
-	private static string NormalizeHiddenWallTileType(string value)
+	static string NormalizeHiddenWallTileType(string value)
 		=> value == "grass" ? "grass" : "castle";
 
-	private static float BeginInspectorPropertyRow(string label, bool hasResetButton)
+	static float BeginInspectorPropertyRow(string label, bool hasResetButton)
 	{
 		var available = ImGui.GetContentRegionAvail().X;
 		var labelWidth = MathF.Min(92, MathF.Max(56, available * 0.38f));
@@ -1628,7 +1703,7 @@ public partial class Manager
 		return controlWidth;
 	}
 
-	private void BeginPrefabUndo(string specId)
+	void BeginPrefabUndo(string specId)
 	{
 		if (prefabUndoSpecId == specId && prefabUndo != null)
 			return;
@@ -1638,14 +1713,14 @@ public partial class Manager
 		prefabUndo = CapturePrefabUndo("Edit Prefab", specId);
 	}
 
-	private void CommitPrefabUndo()
+	void CommitPrefabUndo()
 	{
 		prefabUndo?.Commit();
 		prefabUndo = null;
 		prefabUndoSpecId = null;
 	}
 
-	private static Vector3 HexToVector3(string hex)
+	static Vector3 HexToVector3(string hex)
 	{
 		hex = hex.TrimStart('#');
 		if (hex.Length < 6 || !uint.TryParse(hex[..6], System.Globalization.NumberStyles.HexNumber, null, out var value))
@@ -1657,7 +1732,7 @@ public partial class Manager
 			(value & 0xff) / 255.0f);
 	}
 
-	private static string Vector3ToHex(Vector3 value)
+	static string Vector3ToHex(Vector3 value)
 	{
 		var r = (int)(Math.Clamp(value.X, 0, 1) * 255);
 		var g = (int)(Math.Clamp(value.Y, 0, 1) * 255);
@@ -1665,17 +1740,17 @@ public partial class Manager
 		return $"{r:X2}{g:X2}{b:X2}";
 	}
 
-	private static Vector3 ColorToVector3(Color color)
+	static Vector3 ColorToVector3(Color color)
 		=> new(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f);
 
-	private static Color Vector3ToColor(Vector3 value)
+	static Color Vector3ToColor(Vector3 value)
 		=> new(
 			Math.Clamp(value.X, 0, 1),
 			Math.Clamp(value.Y, 0, 1),
 			Math.Clamp(value.Z, 0, 1),
 			1.0f);
 
-	private static RectInt RoomActorBounds(Room room, JsonObject actor)
+	static RectInt RoomActorBounds(Room room, JsonObject actor)
 	{
 		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var position = room.WorldBounds.TopLeft + local;
@@ -1692,32 +1767,32 @@ public partial class Manager
 		return new RectInt(position.X - 4, position.Y - 4, 8, 8);
 	}
 
-	private static bool IsHiddenWallActor(JsonObject actor)
+	static bool IsHiddenWallActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "HiddenWall";
 
-	private static bool IsRevealDoorActor(JsonObject actor)
+	static bool IsRevealDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor";
 
-	private static bool IsLinkedDoorActor(JsonObject actor)
+	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
 
 	// Actor types that author as a tile-snapped room rect, sharing the resize-handle UI.
 	// Maps type name -> default size for a freshly placed instance.
-	private static readonly Dictionary<string, Point2> ResizableRoomRectTypes = new()
+	static readonly Dictionary<string, Point2> ResizableRoomRectTypes = new()
 	{
 		["HiddenWall"] = HiddenWall.DefaultSize,
 		["RevealDoor"] = RevealDoor.DefaultSize,
 		["CameraBlocker"] = CameraBlocker.DefaultSize,
 	};
 
-	private static bool IsResizableRoomRectActor(JsonObject actor)
+	static bool IsResizableRoomRectActor(JsonObject actor)
 		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "");
 
-	private static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
+	static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
 		=> ResizableRoomRectTypes.GetValueOrDefault(
 			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", HiddenWall.DefaultSize);
 
-	private static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
+	static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
 	{
 		var specId = ActorSpecs.ReadString(actor, "From");
 		var typeName = ActorSpecs.ReadString(actor, "Type");
@@ -1733,7 +1808,7 @@ public partial class Manager
 		return null;
 	}
 
-	private int HitTestRoomActor(Room room, Vector2 world)
+	int HitTestRoomActor(Room room, Vector2 world)
 	{
 		for (var i = room.Actors.Count - 1; i >= 0; i--)
 			if (RoomActorBounds(room, room.Actors[i]).Contains(world))
@@ -1746,9 +1821,9 @@ public partial class Manager
 	// gameplay screens at once. It's a fixed world grid anchored at the origin (a line passes
 	// through 0,0), spaced one gameplay screen apart -- independent of any room's size or
 	// position.
-	private void DrawEditorScreenGrid(Rect visibleWorld)
+	void DrawEditorScreenGrid(Rect visibleWorld)
 	{
-		const float minScreensVisible = 3f;
+		const float minScreensVisible = 1f;
 		float screenW = Game.Width;
 		float screenH = Game.Height;
 		if (MathF.Max(visibleWorld.Width / screenW, visibleWorld.Height / screenH) < minScreensVisible)
@@ -1768,7 +1843,7 @@ public partial class Manager
 			batcher.Line(new Vector2(left, y), new Vector2(right, y), weight, color);
 	}
 
-	private void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
+	void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
 	{
 		DrawRevealDoorAreaPreview(room, lineWeight, hoveredIndex);
 
@@ -1791,7 +1866,7 @@ public partial class Manager
 		}
 	}
 
-	private void DrawRevealDoorAreaPreview(Room room, float lineWeight, int hoveredIndex)
+	void DrawRevealDoorAreaPreview(Room room, float lineWeight, int hoveredIndex)
 	{
 		var show = selectedRoomActorIndex >= 0 &&
 				   selectedRoomActorIndex < room.Actors.Count &&
@@ -1826,21 +1901,17 @@ public partial class Manager
 				var right = left + Game.TileSize;
 				var bottom = top + Game.TileSize;
 
-				if (!Filled(x, y - 1))
-					batcher.LineDashed(new Vector2(left, top), new Vector2(right, top), width, color, dash, 0);
-				if (!Filled(x, y + 1))
-					batcher.LineDashed(new Vector2(right, bottom), new Vector2(left, bottom), width, color, dash, 0);
-				if (!Filled(x - 1, y))
-					batcher.LineDashed(new Vector2(left, bottom), new Vector2(left, top), width, color, dash, 0);
-				if (!Filled(x + 1, y))
-					batcher.LineDashed(new Vector2(right, top), new Vector2(right, bottom), width, color, dash, 0);
+				if (!Filled(x, y - 1)) batcher.LineDashed(new Vector2(left, top), new Vector2(right, top), width, color, dash, 0);
+				if (!Filled(x, y + 1)) batcher.LineDashed(new Vector2(right, bottom), new Vector2(left, bottom), width, color, dash, 0);
+				if (!Filled(x - 1, y)) batcher.LineDashed(new Vector2(left, bottom), new Vector2(left, top), width, color, dash, 0);
+				if (!Filled(x + 1, y)) batcher.LineDashed(new Vector2(right, top), new Vector2(right, bottom), width, color, dash, 0);
 			}
 
 		bool Filled(int x, int y)
 			=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && filled[x, y];
 	}
 
-	private void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight)
+	void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight)
 	{
 		var size = HiddenWallHandleSize(lineWeight);
 		foreach (var handle in Enum.GetValues<ResizeHandle>())
@@ -1855,7 +1926,7 @@ public partial class Manager
 		}
 	}
 
-	private void DrawRoomGeometryHandles(Room room, float lineWeight)
+	void DrawRoomGeometryHandles(Room room, float lineWeight)
 	{
 		var bounds = room.WorldBounds;
 		var color = DragKind == EditorDragKind.RoomGeometry ? Color.White : highlight;
@@ -1874,7 +1945,7 @@ public partial class Manager
 		}
 	}
 
-	private ResizeHandle HitTestHiddenWallResizeHandle(Room room, Vector2 world, float lineWeight)
+	ResizeHandle HitTestHiddenWallResizeHandle(Room room, Vector2 world, float lineWeight)
 	{
 		if (selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return ResizeHandle.None;
@@ -1904,7 +1975,7 @@ public partial class Manager
 		return ResizeHandle.None;
 	}
 
-	private ResizeHandle HitTestRoomGeometryHandle(Room room, Vector2 world, float lineWeight)
+	ResizeHandle HitTestRoomGeometryHandle(Room room, Vector2 world, float lineWeight)
 	{
 		var bounds = room.WorldBounds;
 		var size = HiddenWallHandleSize(lineWeight);
@@ -1927,10 +1998,10 @@ public partial class Manager
 		return ResizeHandle.None;
 	}
 
-	private static float HiddenWallHandleSize(float lineWeight)
+	static float HiddenWallHandleSize(float lineWeight)
 		=> MathF.Max(4, lineWeight * 8);
 
-	private static Rect HiddenWallHandleRect(RectInt bounds, ResizeHandle handle, float size)
+	static Rect HiddenWallHandleRect(RectInt bounds, ResizeHandle handle, float size)
 	{
 		var half = size * 0.5f;
 		var x = handle switch
@@ -1948,7 +2019,7 @@ public partial class Manager
 		return new Rect(x - half, y - half, size, size);
 	}
 
-	private void DrawPlaytestPlayerMarker(Room room)
+	void DrawPlaytestPlayerMarker(Room room)
 	{
 		if (playtestPlayerPosition is not { } remembered || remembered.RoomId != room.Id)
 			return;
@@ -1960,7 +2031,7 @@ public partial class Manager
 		batcher.Image(sprite.Frames[0].Subtexture, remembered.Position, sprite.Origin, Vector2.One, 0, Color.White * 0.25f);
 	}
 
-	private void MoveRoomActorTo(Room room, int actorIndex, Vector2 world, bool snap)
+	void MoveRoomActorTo(Room room, int actorIndex, Vector2 world, bool snap)
 	{
 		if (actorIndex < 0 || actorIndex >= room.Actors.Count)
 			return;
@@ -1976,7 +2047,7 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	private static Point2 GetRoomActorPaletteOffset(JsonObject actor)
+	static Point2 GetRoomActorPaletteOffset(JsonObject actor)
 	{
 		var specId = ActorSpecs.ReadString(actor, "From");
 		var typeName = ActorSpecs.ReadString(actor, "Type");
@@ -1993,34 +2064,34 @@ public partial class Manager
 		return Point2.Zero;
 	}
 
-	private static bool RoomActorPositionIsSnapped(JsonObject actor)
+	static bool RoomActorPositionIsSnapped(JsonObject actor)
 	{
 		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		return SnapRoomActorLocalPosition(position, GetRoomActorPaletteOffset(actor)) == position;
 	}
 
-	private bool RoomActorDragShouldSnap(bool keyboardBlocked)
+	bool RoomActorDragShouldSnap(bool keyboardBlocked)
 	{
 		var shiftDown = !keyboardBlocked && Input.Keyboard.Shift;
 		return editorDrag.ActorSnapsByDefault ? !shiftDown : shiftDown;
 	}
 
-	private EditorDragKind DragKind => editorDrag.Kind;
-	private bool TilePlacing => DragKind == EditorDragKind.TilePaint;
+	EditorDragKind DragKind => editorDrag.Kind;
+	bool TilePlacing => DragKind == EditorDragKind.TilePaint;
 
-	private void ClearEditorDragState()
+	void ClearEditorDragState()
 	{
 		editorDrag = EditorDragState.None;
 	}
 
-	private void CancelTilePaint()
+	void CancelTilePaint()
 	{
 		if (DragKind == EditorDragKind.TilePaint)
 			ClearEditorDragState();
 		tileTypePlacing = brush;
 	}
 
-	private void CommitEditorDragState()
+	void CommitEditorDragState()
 	{
 		ClearEditorDragState();
 		actorMoveUndo?.Commit();
@@ -2029,7 +2100,7 @@ public partial class Manager
 		roomGeometryUndo = null;
 	}
 
-	private static Point2 SnapRoomActorLocalPosition(Vector2 local, Point2 offset)
+	static Point2 SnapRoomActorLocalPosition(Vector2 local, Point2 offset)
 	{
 		var adjusted = local - (Vector2)offset;
 		return new Point2(
@@ -2037,7 +2108,7 @@ public partial class Manager
 			(int)MathF.Floor(adjusted.Y / Game.TileSize) * Game.TileSize + offset.Y);
 	}
 
-	private void ResizeHiddenWallActor(Room room, int actorIndex, ResizeHandle handle, Vector2 world, Point2 tile, bool snap)
+	void ResizeHiddenWallActor(Room room, int actorIndex, ResizeHandle handle, Vector2 world, Point2 tile, bool snap)
 	{
 		if (actorIndex < 0 || actorIndex >= room.Actors.Count || handle == ResizeHandle.None)
 			return;
@@ -2117,7 +2188,7 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	private void ApplyRoomGeometryDrag(Room room, Vector2 world)
+	void ApplyRoomGeometryDrag(Room room, Vector2 world)
 	{
 		var mouseTile = WorldToRoomGeometryTile(world);
 		var current = new RectInt(room.TileSpacePosition, room.Size);
@@ -2143,12 +2214,12 @@ public partial class Manager
 		InvalidateRoomPreview(room);
 	}
 
-	private static Point2 WorldToRoomGeometryTile(Vector2 world)
+	static Point2 WorldToRoomGeometryTile(Vector2 world)
 		=> new(
 			(int)MathF.Floor(world.X / Game.TileSize),
 			(int)MathF.Floor(world.Y / Game.TileSize));
 
-	private static RectInt ResizeRoomGeometryBounds(RectInt bounds, ResizeHandle handle, Point2 mouseTile)
+	static RectInt ResizeRoomGeometryBounds(RectInt bounds, ResizeHandle handle, Point2 mouseTile)
 	{
 		var left = bounds.Left;
 		var top = bounds.Top;
@@ -2167,7 +2238,7 @@ public partial class Manager
 		return new RectInt(left, top, right - left, bottom - top);
 	}
 
-	private static bool RoomGeometryOverlaps(Room editing, RectInt candidate)
+	static bool RoomGeometryOverlaps(Room editing, RectInt candidate)
 	{
 		foreach (var room in Assets.RoomsById.Values)
 		{
@@ -2180,28 +2251,28 @@ public partial class Manager
 		return false;
 	}
 
-	private static void MoveRoomGeometry(Room room, Point2 position)
+	static void MoveRoomGeometry(Room room, Point2 position)
 	{
 		var oldCell = room.Cell;
 		room.MoveTo(position);
 		UpdateRoomCellIndex(room, oldCell);
 	}
 
-	private static void ResizeRoomGeometry(Room room, RectInt bounds)
+	static void ResizeRoomGeometry(Room room, RectInt bounds)
 	{
 		var oldCell = room.Cell;
 		room.ResizeTo(bounds);
 		UpdateRoomCellIndex(room, oldCell);
 	}
 
-	private static void UpdateRoomCellIndex(Room room, Point2 oldCell)
+	static void UpdateRoomCellIndex(Room room, Point2 oldCell)
 	{
 		if (Assets.Rooms.TryGetValue(oldCell, out var indexed) && indexed == room)
 			Assets.Rooms.Remove(oldCell);
 		Assets.Rooms[room.Cell] = room;
 	}
 
-	private void StampTiles(Room room, Point2 origin, int shift, int size, char tile)
+	void StampTiles(Room room, Point2 origin, int shift, int size, char tile)
 	{
 		for (var x = shift; x < shift + size; x++)
 			for (var y = shift; y < shift + size; y++)
@@ -2215,7 +2286,7 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	private static RectInt NormalizeTileRect(Point2 a, Point2 b)
+	static RectInt NormalizeTileRect(Point2 a, Point2 b)
 	{
 		var left = Math.Min(a.X, b.X);
 		var top = Math.Min(a.Y, b.Y);
@@ -2224,7 +2295,7 @@ public partial class Manager
 		return new RectInt(left, top, right - left + 1, bottom - top + 1);
 	}
 
-	private static RectInt ClampTileRect(RectInt rect, Room room)
+	static RectInt ClampTileRect(RectInt rect, Room room)
 	{
 		var left = Math.Clamp(rect.Left, 0, room.Size.X);
 		var top = Math.Clamp(rect.Top, 0, room.Size.Y);
@@ -2233,20 +2304,20 @@ public partial class Manager
 		return new RectInt(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
 	}
 
-	private static Point2 ClampTile(Room room, Point2 tile)
+	static Point2 ClampTile(Room room, Point2 tile)
 		=> new(Math.Clamp(tile.X, 0, Math.Max(0, room.Size.X - 1)), Math.Clamp(tile.Y, 0, Math.Max(0, room.Size.Y - 1)));
 
-	private static bool TileRectContains(RectInt rect, Point2 tile)
+	static bool TileRectContains(RectInt rect, Point2 tile)
 		=> tile.X >= rect.Left && tile.X < rect.Right && tile.Y >= rect.Top && tile.Y < rect.Bottom;
 
-	private static bool TileRectOverlaps(RectInt a, RectInt b)
+	static bool TileRectOverlaps(RectInt a, RectInt b)
 		=> a.Width > 0 && a.Height > 0 && b.Width > 0 && b.Height > 0 &&
 		   a.Left < b.Right && a.Right > b.Left && a.Top < b.Bottom && a.Bottom > b.Top;
 
-	private static Rect TileRectToRoomWorldRect(Room room, RectInt rect)
+	static Rect TileRectToRoomWorldRect(Room room, RectInt rect)
 		=> (new Rect(rect.X, rect.Y, rect.Width, rect.Height) * Game.TileSize) + (Vector2)room.WorldBounds.TopLeft;
 
-	private static RectInt WorldRectToRoomTileRect(Room room, Rect world)
+	static RectInt WorldRectToRoomTileRect(Room room, Rect world)
 	{
 		var roomTopLeft = (Vector2)room.WorldBounds.TopLeft;
 		var local = new Rect(world.X - roomTopLeft.X, world.Y - roomTopLeft.Y, world.Width, world.Height);
@@ -2257,7 +2328,7 @@ public partial class Manager
 		return ClampTileRect(new RectInt(left, top, right - left, bottom - top), room);
 	}
 
-	private void ApplyTileRect(Room room, RectInt rect, Factory.TileLayer layer, char tile)
+	void ApplyTileRect(Room room, RectInt rect, Factory.TileLayer layer, char tile)
 	{
 		rect = ClampTileRect(rect, room);
 		for (var y = rect.Top; y < rect.Bottom; y++)
@@ -2273,7 +2344,7 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	private EditorSelectionSnapshot CaptureEditorSelection(Room room)
+	EditorSelectionSnapshot CaptureEditorSelection(Room room)
 	{
 		var rect = ClampTileRect(editorSelectionRect ?? new RectInt(), room);
 		var snapshot = new EditorSelectionSnapshot
@@ -2306,7 +2377,7 @@ public partial class Manager
 		return snapshot;
 	}
 
-	private static char[,] CaptureTiles(char[,] source, RectInt rect)
+	static char[,] CaptureTiles(char[,] source, RectInt rect)
 	{
 		var result = new char[rect.Width, rect.Height];
 		for (var y = 0; y < rect.Height; y++)
@@ -2315,7 +2386,7 @@ public partial class Manager
 		return result;
 	}
 
-	private void ApplyEditorSelectionSnapshot(Room room, EditorSelectionSnapshot snapshot, Point2 offset, bool duplicate)
+	void ApplyEditorSelectionSnapshot(Room room, EditorSelectionSnapshot snapshot, Point2 offset, bool duplicate)
 	{
 		room.LoadJsonState(snapshot.RoomJson);
 		var destination = ClampSelectionDestination(room, snapshot.Rect, offset);
@@ -2355,7 +2426,7 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	private void ClearEditorSelectionSource(Room room, EditorSelectionSnapshot snapshot)
+	void ClearEditorSelectionSource(Room room, EditorSelectionSnapshot snapshot)
 	{
 		if (snapshot.BackgroundTiles != null)
 			ClearTiles(room, snapshot.Rect, Factory.TileLayer.Background);
@@ -2363,7 +2434,7 @@ public partial class Manager
 			ClearTiles(room, snapshot.Rect, Factory.TileLayer.Foreground);
 	}
 
-	private static RectInt ClampSelectionDestination(Room room, RectInt source, Point2 offset)
+	static RectInt ClampSelectionDestination(Room room, RectInt source, Point2 offset)
 	{
 		var maxX = Math.Max(0, room.Size.X - source.Width);
 		var maxY = Math.Max(0, room.Size.Y - source.Height);
@@ -2372,7 +2443,7 @@ public partial class Manager
 		return new RectInt(x, y, source.Width, source.Height);
 	}
 
-	private void WriteTiles(Room room, char[,] tiles, Point2 destination, Factory.TileLayer layer)
+	void WriteTiles(Room room, char[,] tiles, Point2 destination, Factory.TileLayer layer)
 	{
 		var width = tiles.GetLength(0);
 		var height = tiles.GetLength(1);
@@ -2387,7 +2458,7 @@ public partial class Manager
 			}
 	}
 
-	private void ClearTiles(Room room, RectInt rect, Factory.TileLayer layer)
+	void ClearTiles(Room room, RectInt rect, Factory.TileLayer layer)
 	{
 		for (var y = rect.Top; y < rect.Bottom; y++)
 			for (var x = rect.Left; x < rect.Right; x++)
@@ -2399,7 +2470,7 @@ public partial class Manager
 			}
 	}
 
-	private static bool TryGetSlopeToggle(char tile, out char result)
+	static bool TryGetSlopeToggle(char tile, out char result)
 	{
 		result = tile switch
 		{
@@ -2414,7 +2485,7 @@ public partial class Manager
 		return result != '\0';
 	}
 
-	private static Subtexture GetPreviewTileImage(Room room, Point2 tile, char previewTile, Factory.Entry entry)
+	static Subtexture GetPreviewTileImage(Room room, Point2 tile, char previewTile, Factory.Entry entry)
 	{
 		if (!entry.IsSlope || entry.SlopeTilesetName == null)
 			return entry.Image;
@@ -2431,7 +2502,7 @@ public partial class Manager
 		return image.Texture != null ? image : entry.Image;
 	}
 
-	private void UpdateEditorWorldView(Rect inner)
+	void UpdateEditorWorldView(Rect inner)
 	{
 		var cursor = Cursor;
 		if (UpdateEditorTouchView(inner))
@@ -2461,7 +2532,7 @@ public partial class Manager
 		UpdateEditorZoomSmoothing(canInteract ? cursor : inner.Center, inner);
 	}
 
-	private bool UpdateEditorTouchView(Rect inner)
+	bool UpdateEditorTouchView(Rect inner)
 	{
 		var touch = Input.Touch;
 		if (touch.DownCount < 2)
@@ -2490,13 +2561,13 @@ public partial class Manager
 		return true;
 	}
 
-	private bool SingleTouchInEditorWorld(Rect inner)
+	bool SingleTouchInEditorWorld(Rect inner)
 	{
 		var touch = Input.Touch;
 		return touch.DownCount == 1 && inner.Contains(touch.Center / Scale);
 	}
 
-	private static float TouchDistanceScale(TouchState touch)
+	static float TouchDistanceScale(TouchState touch)
 	{
 		TouchState.Finger? first = null;
 		TouchState.Finger? second = null;
@@ -2522,7 +2593,7 @@ public partial class Manager
 		return previous > 0.001f ? current / previous : 1.0f;
 	}
 
-	private void UpdateEditorZoomSmoothing(Vector2 screenAnchor, Rect inner)
+	void UpdateEditorZoomSmoothing(Vector2 screenAnchor, Rect inner)
 	{
 		if (MathF.Abs(editorZoomTarget - editorZoom) <= 0.0001f)
 		{
@@ -2535,10 +2606,10 @@ public partial class Manager
 		editorCamera = before - (screenAnchor - inner.Center) / editorZoom;
 	}
 
-	private Vector2 ScreenToEditorWorld(Vector2 screen, Rect inner)
+	Vector2 ScreenToEditorWorld(Vector2 screen, Rect inner)
 		=> editorCamera + (screen - inner.Center) / editorZoom;
 
-	private void UpdateAutoSelectedRoomFromEditorCamera(Rect inner)
+	void UpdateAutoSelectedRoomFromEditorCamera(Rect inner)
 	{
 		if (!AutoSelectRoomByCamera || editorCameraTween < 1.0f)
 			return;
@@ -2574,7 +2645,7 @@ public partial class Manager
 		SyncEditorGame();
 	}
 
-	private void DrawEditorRooms(Rect visibleWorld)
+	void DrawEditorRooms(Rect visibleWorld)
 	{
 		using var perf = PerfStats.Time(PerfDetail.DrawEditorRooms);
 		BuildQueuedRoomPreview();
@@ -2594,14 +2665,14 @@ public partial class Manager
 		}
 	}
 
-	private void DrawEditorRoomBackdrop(Room room, RectInt bounds)
+	void DrawEditorRoomBackdrop(Room room, RectInt bounds)
 	{
 		var top = room.BackdropColor;
 		var bottom = room.BackdropColor2 ?? top;
 		batcher.Rect(bounds, top, top, bottom, bottom);
 	}
 
-	private void DrawEditorRoomPreview(Texture preview, RectInt bounds)
+	void DrawEditorRoomPreview(Texture preview, RectInt bounds)
 	{
 		var scale = new Vector2(
 			bounds.Width / (float)Math.Max(1, preview.Width),
@@ -2609,10 +2680,10 @@ public partial class Manager
 		batcher.Image(preview, bounds.TopLeft, Vector2.Zero, scale, 0, Color.White);
 	}
 
-	private Texture? GetEditorRoomTexture(Room room)
+	Texture? GetEditorRoomTexture(Room room)
 		=> room == CurrentRoom && game != null ? GetActiveRoomPreview(room) : GetRoomPreview(room);
 
-	private Texture GetActiveRoomPreview(Room room)
+	Texture GetActiveRoomPreview(Room room)
 	{
 		using var perf = PerfStats.Time(PerfDetail.ActiveRoomPreview);
 		var bounds = room.WorldBounds;
@@ -2654,7 +2725,7 @@ public partial class Manager
 		return activeRoomPreviewTarget.Attachments[0];
 	}
 
-	private Texture? GetRoomPreview(Room room)
+	Texture? GetRoomPreview(Room room)
 	{
 		EditorRoomPreview? entry;
 		var version = GetRoomPreviewVersion(room);
@@ -2671,7 +2742,7 @@ public partial class Manager
 		return null;
 	}
 
-	private void BuildQueuedRoomPreview()
+	void BuildQueuedRoomPreview()
 	{
 		while (roomPreviewBuildQueue.Count > 0)
 		{
@@ -2689,7 +2760,7 @@ public partial class Manager
 		}
 	}
 
-	private bool IsRoomPreviewCurrent(Room room, EditorRoomPreview entry, int version)
+	bool IsRoomPreviewCurrent(Room room, EditorRoomPreview entry, int version)
 	{
 		var previewSize = GetRoomPreviewPixelSize(room);
 		return
@@ -2700,13 +2771,13 @@ public partial class Manager
 			entry.Target.Height == previewSize.Y;
 	}
 
-	private void EnqueueRoomPreview(Room room)
+	void EnqueueRoomPreview(Room room)
 	{
 		if (queuedRoomPreviewIds.Add(room.Id))
 			roomPreviewBuildQueue.Enqueue(room.Id);
 	}
 
-	private void BuildRoomPreview(Room room, int version)
+	void BuildRoomPreview(Room room, int version)
 	{
 		using var perf = PerfStats.Time(PerfDetail.RoomPreviewBuild);
 		if (roomPreviewCache.Remove(room.Id, out var entry))
@@ -2721,7 +2792,7 @@ public partial class Manager
 		roomPreviewCache[room.Id] = new EditorRoomPreview(version, editorShowForegroundLayer, editorShowBackgroundLayer, target);
 	}
 
-	private Point2 GetRoomPreviewPixelSize(Room room)
+	Point2 GetRoomPreviewPixelSize(Room room)
 	{
 		var bounds = room.WorldBounds;
 		var scale = Math.Clamp(roomPreviewResolutionScale, 0.05f, 1.0f);
@@ -2730,7 +2801,7 @@ public partial class Manager
 			Math.Max(1, (int)MathF.Ceiling(bounds.Height * scale)));
 	}
 
-	private void ClearRoomPreviewCache(bool deferDisposal = true)
+	void ClearRoomPreviewCache(bool deferDisposal = true)
 	{
 		foreach (var preview in roomPreviewCache.Values)
 			DisposeRoomPreview(preview, deferDisposal);
@@ -2744,7 +2815,7 @@ public partial class Manager
 		activeRoomPreviewId = null;
 	}
 
-	private int GetRoomPreviewVersion(Room room)
+	int GetRoomPreviewVersion(Room room)
 	{
 		if (!roomPreviewVersions.TryGetValue(room.Id, out var version))
 		{
@@ -2754,14 +2825,14 @@ public partial class Manager
 		return version;
 	}
 
-	private void MarkRoomPreviewDirty(Room room, bool deferDisposal = true)
+	void MarkRoomPreviewDirty(Room room, bool deferDisposal = true)
 	{
 		roomPreviewVersions[room.Id] = nextRoomPreviewVersion++;
 		if (roomPreviewCache.Remove(room.Id, out var preview))
 			DisposeRoomPreview(preview, deferDisposal);
 	}
 
-	private void InvalidateRoomPreview(Room room, bool deferDisposal = true, bool bumpVersion = true)
+	void InvalidateRoomPreview(Room room, bool deferDisposal = true, bool bumpVersion = true)
 	{
 		if (bumpVersion)
 			roomPreviewVersions[room.Id] = nextRoomPreviewVersion++;
@@ -2777,7 +2848,7 @@ public partial class Manager
 		}
 	}
 
-	private void DisposeRoomPreview(IDisposable? disposable, bool defer)
+	void DisposeRoomPreview(IDisposable? disposable, bool defer)
 	{
 		if (disposable == null)
 			return;
@@ -2788,14 +2859,14 @@ public partial class Manager
 			disposable.Dispose();
 	}
 
-	private void DisposeDeferredRoomPreviews()
+	void DisposeDeferredRoomPreviews()
 	{
 		foreach (var disposable in deferredRoomPreviewDisposals)
 			disposable.Dispose();
 		deferredRoomPreviewDisposals.Clear();
 	}
 
-	private sealed class EditorRoomPreview(int version, bool showForegroundLayer, bool showBackgroundLayer, Target target) : IDisposable
+	sealed class EditorRoomPreview(int version, bool showForegroundLayer, bool showBackgroundLayer, Target target) : IDisposable
 	{
 		public readonly int Version = version;
 		public readonly bool ShowForegroundLayer = showForegroundLayer;
@@ -2807,7 +2878,7 @@ public partial class Manager
 			=> Target.Dispose();
 	}
 
-	private Room? GetRoomAtWorld(Vector2 world)
+	Room? GetRoomAtWorld(Vector2 world)
 	{
 		foreach (var room in Assets.RoomsById.Values)
 			if (room.WorldBounds.Contains(world))
@@ -2816,7 +2887,7 @@ public partial class Manager
 		return null;
 	}
 
-	private bool UpdateLinkedDoorTargetPicker(Rect inner, Rect visibleWorld, bool worldMouseBlocked, bool keyboardBlocked)
+	bool UpdateLinkedDoorTargetPicker(Rect inner, Rect visibleWorld, bool worldMouseBlocked, bool keyboardBlocked)
 	{
 		if (pickingLinkedDoorTargetForActorId == null)
 			return false;
@@ -2849,7 +2920,7 @@ public partial class Manager
 		return true;
 	}
 
-	private void DrawLinkedDoorTargetPickerOverlay(Rect visibleWorld)
+	void DrawLinkedDoorTargetPickerOverlay(Rect visibleWorld)
 	{
 		var lineWeight = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
 		foreach (var room in Assets.RoomsById.Values)
@@ -2871,7 +2942,7 @@ public partial class Manager
 		}
 	}
 
-	private static (Room Room, JsonObject Actor)? FindLinkedDoorAtWorld(Vector2 world, string excludeId)
+	static (Room Room, JsonObject Actor)? FindLinkedDoorAtWorld(Vector2 world, string excludeId)
 	{
 		foreach (var room in Assets.RoomsById.Values)
 		{
@@ -2893,7 +2964,7 @@ public partial class Manager
 		return null;
 	}
 
-	private void DrawEditorEyedropperCursor(Rect tileRect, float lineWeight)
+	void DrawEditorEyedropperCursor(Rect tileRect, float lineWeight)
 	{
 		var width = lineWeight * 2;
 		batcher.RectLine(tileRect, width, highlight);
@@ -2905,7 +2976,7 @@ public partial class Manager
 		batcher.Rect(new Rect(end - Vector2.One * width * 0.75f, Vector2.One * width * 1.5f), Color.White);
 	}
 
-	private void DrawBreakableTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
+	void DrawBreakableTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
 	{
 		var color = new Color(1.0f, 0.82f, 0.24f, 0.2f);
 		var tileSize = Game.TileSize - lineWeight * 4;
@@ -2923,7 +2994,7 @@ public partial class Manager
 			}
 	}
 
-	private static Point2? GetEditorEntryDirection(Room from, Room to)
+	static Point2? GetEditorEntryDirection(Room from, Room to)
 	{
 		if (to.TileSpacePosition.X >= from.TileSpacePosition.X + from.Size.X) return Point2.Right;
 		if (to.TileSpacePosition.X + to.Size.X <= from.TileSpacePosition.X) return Point2.Left;
@@ -3316,6 +3387,7 @@ public partial class Manager
 
 			if (proposedRoomTiles is { } proposal)
 			{
+				// Draw "proposed" adjacent room; click it to add a new room there.
 				var proposalBounds = TileRectToWorldRect(proposal);
 				batcher.Rect(proposalBounds, Color.Gray * 0.35f);
 				batcher.RectLine(proposalBounds, gridWeight * 2, Color.Gray);
@@ -3363,7 +3435,7 @@ public partial class Manager
 		}
 	}
 
-	private bool HasAdjacentEditorRoom(Point2 direction)
+	bool HasAdjacentEditorRoom(Point2 direction)
 	{
 		if (CurrentRoom is not { } room)
 			return Assets.GetRoom(cell + direction) != null;
@@ -3371,7 +3443,7 @@ public partial class Manager
 		return Assets.FindAdjacentRoom(room, direction, EditorExitPosition(room, direction)) != null;
 	}
 
-	private void DrawEditorSelectionOptions()
+	void DrawEditorSelectionOptions()
 	{
 		if (DragKind != EditorDragKind.SelectionRect && editorSelectionRect == null)
 			return;
@@ -3397,7 +3469,7 @@ public partial class Manager
 		ImGui.PopStyleVar(2);
 	}
 
-	private RectInt? GetProposedRoomTiles(Room source, Vector2 worldMouse)
+	RectInt? GetProposedRoomTiles(Room source, Vector2 worldMouse)
 	{
 		var sourceTiles = new RectInt(source.TileSpacePosition, source.Size);
 		var mouseTile = new Point2(
@@ -3431,7 +3503,7 @@ public partial class Manager
 		return null;
 	}
 
-	private RectInt? FitProposedRoom(RectInt source, Point2 direction, int mouseAxis)
+	RectInt? FitProposedRoom(RectInt source, Point2 direction, int mouseAxis)
 	{
 		var vertical = direction.X != 0;
 		var depth = vertical ? Room.DefaultSize.X : Room.DefaultSize.Y;
@@ -3487,10 +3559,10 @@ public partial class Manager
 		};
 	}
 
-	private static Rect TileRectToWorldRect(RectInt tiles)
+	static Rect TileRectToWorldRect(RectInt tiles)
 		=> new(tiles.X * Game.TileSize, tiles.Y * Game.TileSize, tiles.Width * Game.TileSize, tiles.Height * Game.TileSize);
 
-	private void CreateRoom(Point2 position, Point2 size)
+	void CreateRoom(Point2 position, Point2 size)
 	{
 		var sourceSettings = CurrentRoom is { } source ? CaptureRoomSettings(source) : (RoomSettings?)null;
 		CurrentRoom?.Save();
@@ -3507,7 +3579,7 @@ public partial class Manager
 		TweenEditorCameraToRoom(it);
 	}
 
-	private static void MirrorAdjacentRoomBorders(Room room)
+	static void MirrorAdjacentRoomBorders(Room room)
 	{
 		for (var x = 0; x < room.Size.X; x++)
 		{
@@ -3524,7 +3596,7 @@ public partial class Manager
 		room.RebuildGeometry();
 	}
 
-	private static char SampleAdjacentRoomTile(Room exclude, Point2 worldTile)
+	static char SampleAdjacentRoomTile(Room exclude, Point2 worldTile)
 	{
 		foreach (var room in Assets.RoomsById.Values)
 		{
@@ -3541,14 +3613,11 @@ public partial class Manager
 	}
 
 
-	/// <summary>
 	/// Shifts to display a new room
-	/// </summary>
-	private void ShiftRoom(Point2 direction)
+	void ShiftRoom(Point2 direction)
 	{
 		var current = CurrentRoom;
-		if (current == null)
-			return;
+		if (current == null) return;
 
 		var exitPosition = EditorExitPosition(current, direction);
 		if (Assets.FindAdjacentRoom(current, direction, exitPosition) is not { } adjacent)
@@ -3561,22 +3630,17 @@ public partial class Manager
 		TweenEditorCameraToRoom(adjacent);
 	}
 
-	private static Vector2 EditorExitPosition(Room room, Point2 direction)
+	static Vector2 EditorExitPosition(Room room, Point2 direction)
 	{
 		var bounds = room.WorldBounds;
-		if (direction.X > 0)
-			return new Vector2(bounds.Right, bounds.CenterY);
-		if (direction.X < 0)
-			return new Vector2(bounds.Left - 1, bounds.CenterY);
-		if (direction.Y > 0)
-			return new Vector2(bounds.CenterX, bounds.Bottom);
-		if (direction.Y < 0)
-			return new Vector2(bounds.CenterX, bounds.Top - 1);
-
+		if (direction.X > 0) return new(bounds.Right, bounds.CenterY);
+		if (direction.X < 0) return new(bounds.Left - 1, bounds.CenterY);
+		if (direction.Y > 0) return new(bounds.CenterX, bounds.Bottom);
+		if (direction.Y < 0) return new(bounds.CenterX, bounds.Top - 1);
 		return bounds.Center;
 	}
 
-	private void DrawCenteredRoomName(Room? room)
+	void DrawCenteredRoomName(Room? room)
 	{
 		if (room == null)
 		{
@@ -3634,7 +3698,7 @@ public partial class Manager
 		}
 	}
 
-	private void BeginRoomRename(Room room)
+	void BeginRoomRename(Room room)
 	{
 		editingRoomName = true;
 		focusRoomNameEditor = true;
@@ -3642,7 +3706,7 @@ public partial class Manager
 		roomNameEditingRoomId = room.Id;
 	}
 
-	private void CancelRoomRename()
+	void CancelRoomRename()
 	{
 		editingRoomName = false;
 		focusRoomNameEditor = false;
@@ -3650,7 +3714,7 @@ public partial class Manager
 		roomNameEditingRoomId = null;
 	}
 
-	private void CommitRoomRename(Room room)
+	void CommitRoomRename(Room room)
 	{
 		var next = roomNameEditor.Trim();
 		if (!Assets.CanRenameRoom(room, next))
@@ -3666,7 +3730,7 @@ public partial class Manager
 		CancelRoomRename();
 	}
 
-	private void DrawDeleteRoomPopup()
+	void DrawDeleteRoomPopup()
 	{
 		var open = true;
 		if (!ImGui.BeginPopupModal("Delete Room?", ref open, ImGuiWindowFlags.AlwaysAutoResize))
@@ -3693,7 +3757,7 @@ public partial class Manager
 		ImGui.EndPopup();
 	}
 
-	private void DeleteRoom(Room room)
+	void DeleteRoom(Room room)
 	{
 		if (CurrentRoom == room)
 			CurrentRoom?.Save();
@@ -3708,7 +3772,7 @@ public partial class Manager
 		SyncEditorGame();
 	}
 
-	private static void DrawCenteredToolbarText(string text, bool canDoubleClick = false)
+	static void DrawCenteredToolbarText(string text, bool canDoubleClick = false)
 	{
 		var size = ImGui.CalcTextSize(text);
 		var windowPos = ImGui.GetWindowPos();
@@ -3724,7 +3788,7 @@ public partial class Manager
 		ImGui.GetWindowDrawList().AddText(pos, ImGui.GetColorU32(ImGuiCol.Text), text);
 	}
 
-	private bool ToggleEditorPressed()
+	bool ToggleEditorPressed()
 	{
 		if (Input.Keyboard.Pressed(Keys.Tab))
 			return true;
@@ -3741,7 +3805,7 @@ public partial class Manager
 		return false;
 	}
 
-	private void ToolbarImGui()
+	void ToolbarImGui()
 	{
 		var flags =
 			ImGuiWindowFlags.NoDecoration |
@@ -3793,8 +3857,8 @@ public partial class Manager
 			OpenFmodStudio();
 		ImGui.SameLine(0, ToolbarSpacing);
 
-		if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
-			showTransitionViewer = !showTransitionViewer;
+		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
+			//showTransitionViewer = !showTransitionViewer;
 		ImGui.SameLine(0, ToolbarSpacing);
 #endif
 
@@ -3808,7 +3872,7 @@ public partial class Manager
 		ImGui.PopStyleVar(3);
 	}
 
-	private void DrawWorldSelector()
+	void DrawWorldSelector()
 	{
 		var worlds = Assets.GetWorldIds();
 		if (worlds.Count == 0)
@@ -3885,7 +3949,7 @@ public partial class Manager
 
 
 #if DEBUG && !IOS
-	private void UpdateWindowTitleFps()
+	void UpdateWindowTitleFps()
 	{
 		fpsFrames++;
 		fpsElapsed += Time.Delta;
@@ -3936,7 +4000,7 @@ public partial class Manager
 		shaderWatcher.EnableRaisingEvents = true;
 	}
 
-	private void StartAudioBankWatcher()
+	void StartAudioBankWatcher()
 	{
 		var fmodPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Sounds", "FMOD"));
 		if (!Directory.Exists(fmodPath))
@@ -3957,14 +4021,14 @@ public partial class Manager
 #endif
 
 
-	private void SelectRoom(Room room)
+	void SelectRoom(Room room)
 	{
 		selectedRoomId = room.Id;
 		cell = room.Cell;
 		roomCreatePosition = room.TileSpacePosition;
 	}
 
-	private void ResolveSelectedRoom()
+	void ResolveSelectedRoom()
 	{
 		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
 		{
@@ -3990,7 +4054,7 @@ public partial class Manager
 	}
 
 
-	private void BudDebugOverlayImGui()
+	void BudDebugOverlayImGui()
 	{
 		if (game == null || !playing || !game.TryGetBudDebugOverlay(out var worldPosition, out var label))
 			return;
@@ -4024,7 +4088,7 @@ public partial class Manager
 		ImGui.PopStyleVar(2);
 	}
 
-	private void PlatformNavDebugOverlayImGui()
+	void PlatformNavDebugOverlayImGui()
 	{
 		if (game == null || !playing || !game.IsPlatformNavDebugVisible)
 			return;
@@ -4070,7 +4134,7 @@ public partial class Manager
 		draw.PopClipRect();
 	}
 
-	private void DrawBudPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Bud bud)
+	void DrawBudPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Bud bud)
 	{
 		foreach (var edge in bud.DebugSurfaceNavPath)
 			DrawPlatformNavSurfaceEdge(draw, viewport, game, graph, edge, ImGuiColor(0.20f, 0.92f, 1.00f, 0.62f), 5.0f);
@@ -4106,7 +4170,7 @@ public partial class Manager
 		}
 	}
 
-	private static void DrawPlatformNavEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.Edge edge, uint color, float thickness)
+	static void DrawPlatformNavEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.Edge edge, uint color, float thickness)
 	{
 		if (edge.From < 0 || edge.From >= graph.Nodes.Count || edge.To < 0 || edge.To >= graph.Nodes.Count)
 			return;
@@ -4119,7 +4183,7 @@ public partial class Manager
 			draw.AddLine(GameWorldToImGui(viewport, game, from), GameWorldToImGui(viewport, game, to), color, thickness);
 	}
 
-	private static void DrawPlatformNavJump(ImDrawListPtr draw, Rect viewport, Game game, Vector2 from, Vector2 to, uint color, float thickness, bool wallJump = false)
+	static void DrawPlatformNavJump(ImDrawListPtr draw, Rect viewport, Game game, Vector2 from, Vector2 to, uint color, float thickness, bool wallJump = false)
 	{
 		var control = new Vector2((from.X + to.X) * 0.5f, MathF.Min(from.Y, to.Y) - 24);
 		var previous = GameWorldToImGui(viewport, game, from);
@@ -4142,7 +4206,7 @@ public partial class Manager
 		}
 	}
 
-	private static void DrawPlatformNavSurfaceSpan(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph.SurfaceSpan span)
+	static void DrawPlatformNavSurfaceSpan(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph.SurfaceSpan span)
 	{
 		const int yOffset = -5;
 		const int singletonHalfWidth = 5;
@@ -4162,7 +4226,7 @@ public partial class Manager
 		draw.AddLine(from, to, color, 3.0f);
 	}
 
-	private static void DrawPlatformNavSurfaceEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.SurfaceEdge edge, uint color, float thickness)
+	static void DrawPlatformNavSurfaceEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.SurfaceEdge edge, uint color, float thickness)
 	{
 		if (edge.From < 0 || edge.From >= graph.SurfaceSpans.Count || edge.To < 0 || edge.To >= graph.SurfaceSpans.Count)
 			return;
@@ -4177,7 +4241,7 @@ public partial class Manager
 			draw.AddLine(GameWorldToImGui(viewport, game, from), GameWorldToImGui(viewport, game, to), color, thickness);
 	}
 
-	private static void DrawPlatformNavNodeRing(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, int? nodeId, uint color, float radius)
+	static void DrawPlatformNavNodeRing(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, int? nodeId, uint color, float radius)
 	{
 		if (nodeId is not { } id || id < 0 || id >= graph.Nodes.Count)
 			return;
@@ -4185,10 +4249,10 @@ public partial class Manager
 		draw.AddCircle(GameWorldToImGui(viewport, game, graph.Nodes[id].Position), radius, color, 16, 4.0f);
 	}
 
-	private static uint ImGuiColor(float r, float g, float b, float a)
+	static uint ImGuiColor(float r, float g, float b, float a)
 		=> ImGui.ColorConvertFloat4ToU32(new Vector4(r, g, b, a));
 
-	private static Vector2 GameWorldToImGui(Rect viewport, Game game, Vector2 worldPosition)
+	static Vector2 GameWorldToImGui(Rect viewport, Game game, Vector2 worldPosition)
 	{
 		var scale = MathF.Min(viewport.Width / game.Screen.Width, viewport.Height / game.Screen.Height);
 		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
@@ -4196,7 +4260,7 @@ public partial class Manager
 		return topLeft + (worldPosition - game.Camera) * scale;
 	}
 
-	private void FpsOverlayImGui()
+	void FpsOverlayImGui()
 	{
 		if (!fpsOverlayVisible || fpsOverlayValue <= 0)
 			return;
@@ -4255,7 +4319,7 @@ public partial class Manager
 		ImGui.PopStyleVar(2);
 	}
 
-	private void TransitionViewerImGui()
+	void TransitionViewerImGui()
 	{
 		if (!showTransitionViewer)
 			return;

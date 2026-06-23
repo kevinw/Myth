@@ -20,6 +20,41 @@ function isMythCleanExitStatus(error) {
   );
 }
 
+// Keep the canvas backing buffer's aspect matched to the CSS shell box (see index.html):
+// 4:3 in portrait so the game cover-crops its 16:9 frame to reclaim vertical space, 16:9 in
+// landscape, and correct at every size in between (so the frame is never squished). The
+// managed side reads the (now narrower) swapchain size and crops the sides automatically; in
+// portrait we also let a play-area press-and-hold un-crop.
+//
+// This runs on every animation frame rather than only on resize/orientation events because
+// the managed Window constructor calls ResizeCanvas once at startup (to its 16:9 config size).
+// We compare against the *actual* canvas size (getCanvasWidth/Height), not our own bookkeeping,
+// so that managed override is detected and corrected on the next frame — otherwise a fresh
+// portrait load stays squished (16:9 buffer stretched into the 4:3 box) until a resize event.
+// Height is fixed (BASE_HEIGHT) and width is derived from the box aspect, so the internal
+// resolution stays constant and we only touch the canvas when it actually diverges.
+function setupCanvasAspectSync(FosterWebGPU, VirtualGamepad) {
+  const BASE_HEIGHT = 720;
+  const shell = document.querySelector("#game-shell");
+  let appliedPortrait = null;
+
+  const sync = () => {
+    const rect = shell?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      const w = Math.max(1, Math.round(BASE_HEIGHT * (rect.width / rect.height)));
+      if (FosterWebGPU.getCanvasWidth() !== w || FosterWebGPU.getCanvasHeight() !== BASE_HEIGHT)
+        FosterWebGPU.resizeCanvas(w, BASE_HEIGHT); // resets the drawing buffer; only when diverged
+    }
+    const portrait = window.matchMedia("(orientation: portrait)").matches;
+    if (portrait !== appliedPortrait) {
+      appliedPortrait = portrait;
+      VirtualGamepad.setPlayAreaZoomEnabled?.(portrait);
+    }
+    requestAnimationFrame(sync);
+  };
+  requestAnimationFrame(sync);
+}
+
 function isMobileBrowser() {
   if (navigator.userAgentData?.mobile === true) return true;
   if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return true;
@@ -30,6 +65,7 @@ function isMobileBrowser() {
 
 try {
   await FosterWebGPU.initialize("#foster-canvas");
+  setupCanvasAspectSync(FosterWebGPU, VirtualGamepad);
 
   const searchParams = new URLSearchParams(location.search);
 

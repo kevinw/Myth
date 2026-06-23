@@ -18,7 +18,7 @@ public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kin
 
 public partial class Game : IDisposable
 {
-	private static string? pendingHotReloadMessage;
+	static string? pendingHotReloadMessage;
 
 	internal static void NotifyHotReload(string message)
 		=> pendingHotReloadMessage = message;
@@ -121,27 +121,27 @@ public partial class Game : IDisposable
 	private readonly bool spawnBud;
 	// In the gym, Bud is the character under test, so it spawns exactly at the player
 	// start (the PlayerStart marker) rather than at an offset follow position.
-	private readonly bool spawnBudAtPlayer;
-	private bool disposed;
-	private const float BrowserDebugStatsInterval = 0.5f;
-	private int pendingRoomTransitionGcFrames;
-	private RoomChangeKind pendingRoomTransitionGcKind;
+	readonly bool spawnBudAtPlayer;
+	bool disposed;
+	const float BrowserDebugStatsInterval = 0.5f;
+	int pendingRoomTransitionGcFrames;
+	RoomChangeKind pendingRoomTransitionGcKind;
 
 #if BROWSER
-	private float browserDebugStatsElapsed;
-	private int browserDebugStatsFrames;
-	private long browserDebugStatsAllocatedBytes;
-	private long browserDebugStatsMaxFrameBytes;
+	float browserDebugStatsElapsed;
+	int browserDebugStatsFrames;
+	long browserDebugStatsAllocatedBytes;
+	long browserDebugStatsMaxFrameBytes;
 	int browserDebugStatsLastGen0 = GC.CollectionCount(0);
 	int browserDebugStatsLastGen1 = GC.CollectionCount(1);
 	int browserDebugStatsLastGen2 = GC.CollectionCount(2);
 	int debugFramesSinceRoomTransition = -1;
 #endif
 
-	private double browserDebugLastGcMs = -1;
-	private long browserDebugLastGcBeforeBytes;
-	private long browserDebugLastGcAfterBytes;
-	private RoomChangeKind browserDebugLastGcKind;
+	double browserDebugLastGcMs = -1;
+	long browserDebugLastGcBeforeBytes;
+	long browserDebugLastGcAfterBytes;
+	RoomChangeKind browserDebugLastGcKind;
 
 	public Vector2 Camera { get; internal set; }
 	internal Vector2 RenderCamera => (Point2)Camera - shake;
@@ -160,8 +160,99 @@ public partial class Game : IDisposable
 	internal float ZoomedHeight => Height / zoomLevel;
 	internal float fbZoom = 1.0f;
 	public float FbZoom => fbZoom;
-	internal float FbZoomedWidth => Width / fbZoom;
-	internal float FbZoomedHeight => Height / fbZoom;
+	// The camera frames this "visible" view and clamps it to the room. It shrinks for the 2x
+	// magnify (fbZoom) and, in 4:3 crop mode, narrows horizontally to the cropped width so the
+	// player stays inside the actually-visible region rather than the full (partly cropped) frame.
+	internal float FbZoomedWidth => AspectCropActive ? VisibleCropWidth : Width / fbZoom;
+	internal float FbZoomedHeight => AspectCropActive ? Height : Height / fbZoom;
+
+	// The game renders at a fixed 16:9 (Width:Height). When presenting into a narrower 4:3
+	// region (desktop --aspect-four-three, or a portrait mobile-browser canvas) we crop the
+	// sides ("cover" fit) to reclaim vertical space. aspectUncrop in [0,1] lerps the present
+	// scale from cover (0, cropped) to contain (1, full 16:9 letterboxed) while Zoom is held.
+	private const float OutputAspect = (float)Width / Height;
+	private float aspectUncrop = 0f;
+	public float AspectUncrop => aspectUncrop;
+	// True when the live presentation is narrower than the native 16:9 frame, so cropping applies.
+	public bool AspectCropActive
+	{
+		get
+		{
+			if (Manager.AspectFourThree)
+				return true;
+#if BROWSER
+			if (Manager.Window is { } w && w.HeightInPixels > 0)
+				return (float)w.WidthInPixels / w.HeightInPixels < OutputAspect - 0.01f;
+#endif
+			return false;
+		}
+	}
+
+	// Aspect of the region the game is presented into (4:3 on desktop --aspect-four-three, the
+	// live canvas aspect on web). Drives both the side-crop and the camera's visible width.
+	private float PresentAspect
+	{
+		get
+		{
+			if (Manager.AspectFourThree)
+				return 4f / 3f;
+#if BROWSER
+			if (Manager.Window is { } w && w.HeightInPixels > 0)
+				return (float)w.WidthInPixels / w.HeightInPixels;
+#endif
+			return OutputAspect;
+		}
+	}
+
+	// Horizontal slice of the 16:9 frame actually visible after the side-crop, in frame pixels.
+	// Full crop (aspectUncrop 0) -> the 4:3 center; held (aspectUncrop 1) -> the full width.
+	// Mirrors the composite's cover->contain scale so the camera frames exactly what's drawn.
+	private float VisibleCropWidth
+	{
+		get
+		{
+			var r = MathF.Min(PresentAspect / OutputAspect, 1f);
+			return Width * r / (1 + (r - 1) * aspectUncrop);
+		}
+	}
+
+	// The window region the game is presented into. On desktop --aspect-four-three the window
+	// stays wide, so carve a centered 4:3 rect (pillarboxed). Otherwise (including a portrait
+	// mobile-browser canvas that is already ~4:3) present into the whole viewport. Read by
+	// GameView's final composite as well, so it is internal rather than private.
+	internal RectInt PresentRect(in RectInt viewport)
+	{
+		if (Manager.AspectFourThree)
+		{
+			var s = Calc.Min(viewport.Width / 4f, viewport.Height / 3f);
+			var w = (int)(4 * s);
+			var h = (int)(3 * s);
+			var c = viewport.Center;
+			return new RectInt(c.X - w / 2, c.Y - h / 2, w, h);
+		}
+		return viewport;
+	}
+
+	// Total pixel scale the composite uses to draw the screen into the given viewport.
+	internal float PresentScale(in RectInt present, float outputWidth, float outputHeight)
+	{
+		var contain = Calc.Min(present.Width / outputWidth, present.Height / outputHeight);
+		if (!AspectCropActive)
+			return contain * fbZoom;
+		var cover = Calc.Max(present.Width / outputWidth, present.Height / outputHeight);
+		return cover + (contain - cover) * aspectUncrop;
+	}
+
+	// Inverse of the final composite: map a window-space point to a world position, honoring the
+	// present rect, fbZoom, and 4:3 cover-crop so touch/mouse picking lines up with what's drawn.
+	public Vector2 WindowToWorld(Vector2 windowPoint, in RectInt viewport)
+	{
+		var present = PresentRect(viewport);
+		var scale = PresentScale(present, Screen.Width, Screen.Height);
+		var screenPixel = (windowPoint - (Vector2)present.Center) / scale + new Vector2(Screen.Width, Screen.Height) / 2;
+		return Camera + screenPixel;
+	}
+
 	public RectInt Bounds => room?.WorldBounds ?? new();
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
@@ -176,8 +267,8 @@ public partial class Game : IDisposable
 
 	public readonly struct SimulationScope : IDisposable
 	{
-		private readonly Game game;
-		private readonly bool previous;
+		readonly Game game;
+		readonly bool previous;
 
 		internal SimulationScope(Game game)
 		{
@@ -418,10 +509,18 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		var fbZoomTarget = Controls.Zoom.Down ? 2.0f : 1.0f;
+		// In 4:3 crop mode the Zoom control un-crops (reveals the cut-off sides) instead of the
+		// usual 2x magnify, so the two never fight: suppress fbZoom whenever cropping is active.
+		var cropActive = AspectCropActive;
+		var fbZoomTarget = !cropActive && Controls.Zoom.Down ? 2.0f : 1.0f;
 		fbZoom += (fbZoomTarget - fbZoom) * (1 - MathF.Exp(-Time.Delta * 12f));
 		if (MathF.Abs(fbZoom - fbZoomTarget) < 0.005f)
 			fbZoom = fbZoomTarget;
+
+		var uncropTarget = cropActive && Controls.Zoom.Down ? 1.0f : 0.0f;
+		aspectUncrop += (uncropTarget - aspectUncrop) * (1 - MathF.Exp(-Time.Delta * 12f));
+		if (MathF.Abs(aspectUncrop - uncropTarget) < 0.005f)
+			aspectUncrop = uncropTarget;
 
 		var target = GetGameplayCameraTarget();
 		var player = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
@@ -461,7 +560,7 @@ public partial class Game : IDisposable
 				blocker.Deactivate();
 	}
 
-	private List<RectInt> ActiveCameraBlockers()
+	List<RectInt> ActiveCameraBlockers()
 	{
 		cameraBlockerBuffer.Clear();
 		foreach (var actor in Actors)
@@ -500,10 +599,10 @@ public partial class Game : IDisposable
 		return best;
 	}
 
-	private static bool IsTileWalkable(Room room, int x, int y)
+	static bool IsTileWalkable(Room room, int x, int y)
 		=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && !IsTileSolid(room, x, y);
 
-	private static bool IsTileSolid(Room room, int x, int y)
+	static bool IsTileSolid(Room room, int x, int y)
 		=> room.GetEntry(new Point2(x, y)) is { BlocksMovement: true };
 
 	public Vector2 GetGameplayCameraTarget()
@@ -529,7 +628,7 @@ public partial class Game : IDisposable
 	// axis. That way a bite only ever hides its own interior -- which the player can't stand in
 	// (entering deactivates it) -- so it can never trap the camera away from the player in a
 	// narrow arm beside it, regardless of orientation or exact arm width.
-	private Vector2 ClampViewToRoomAndBlockers(Vector2 viewPos, Vector2 viewSize, Vector2 player, List<RectInt> blockers)
+	Vector2 ClampViewToRoomAndBlockers(Vector2 viewPos, Vector2 viewSize, Vector2 player, List<RectInt> blockers)
 	{
 		if (room == null)
 			return viewPos;
@@ -571,7 +670,7 @@ public partial class Game : IDisposable
 		previousPlayerPosition = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
 	}
 
-	private Vector2 ClampCameraToRoom(Vector2 target)
+	Vector2 ClampCameraToRoom(Vector2 target)
 	{
 		if (room == null)
 			return target;
@@ -579,27 +678,27 @@ public partial class Game : IDisposable
 		return ClampCameraToRoom(target, room.WorldBounds);
 	}
 
-	private Vector2 ClampCameraToRoom(Vector2 target, RectInt bounds)
+	Vector2 ClampCameraToRoom(Vector2 target, RectInt bounds)
 	{
 		return new Vector2(
 			ClampCameraAxis(target.X, bounds.Left, bounds.Right, ZoomedWidth),
 			ClampCameraAxis(target.Y, bounds.Top, bounds.Bottom, ZoomedHeight));
 	}
 
-	private Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding)
+	Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding)
 	{
 		if (room == null) return target;
 		return ClampCameraToRoomFb(target, padding, room.WorldBounds);
 	}
 
-	private Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding, RectInt bounds)
+	Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding, RectInt bounds)
 	{
 		return new Vector2(
 			ClampCameraAxis(target.X + padding.X, bounds.Left, bounds.Right, FbZoomedWidth) - padding.X,
 			ClampCameraAxis(target.Y + padding.Y, bounds.Top, bounds.Bottom, FbZoomedHeight) - padding.Y);
 	}
 
-	private static float ClampCameraAxis(float value, float min, float max, float viewportSize)
+	static float ClampCameraAxis(float value, float min, float max, float viewportSize)
 	{
 		var roomSize = max - min;
 		if (roomSize <= viewportSize + CameraSlackEpsilon)
@@ -625,7 +724,7 @@ public partial class Game : IDisposable
 		}
 	}
 
-	private void RequestRoomTransitionGc(RoomChangeKind kind)
+	void RequestRoomTransitionGc(RoomChangeKind kind)
 	{
 		pendingRoomTransitionGcKind = kind;
 		pendingRoomTransitionGcFrames = 1;
@@ -707,7 +806,7 @@ public partial class Game : IDisposable
 	}
 #endif
 
-	private static string FormatBytes(long bytes)
+	static string FormatBytes(long bytes)
 	{
 		if (bytes < 1024)
 			return $"{bytes}B";
@@ -779,7 +878,7 @@ public partial class Game : IDisposable
 		Destroy(actor);
 	}
 
-	private void RemoveDestroyedActors()
+	void RemoveDestroyedActors()
 	{
 		for (var i = 0; i < destroying.Count; i++)
 		{
@@ -819,7 +918,7 @@ public partial class Game : IDisposable
 		return Factory.DefaultSurfaceType;
 	}
 
-	private bool TryGetSurfaceTypeAtWorldPoint(Point2 point, out string surfaceType)
+	bool TryGetSurfaceTypeAtWorldPoint(Point2 point, out string surfaceType)
 	{
 		surfaceType = Factory.DefaultSurfaceType;
 		if (room == null)
@@ -842,7 +941,7 @@ public partial class Game : IDisposable
 		return false;
 	}
 
-	private bool TryGetSurfaceTypeOutwardFromBottom(RectInt bounds, out string surfaceType)
+	bool TryGetSurfaceTypeOutwardFromBottom(RectInt bounds, out string surfaceType)
 	{
 		var centerX = bounds.Center.X;
 		var y = bounds.Bottom;
@@ -947,13 +1046,13 @@ public partial class Game : IDisposable
 		return true;
 	}
 
-	private static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)
+	static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)
 	{
 		localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
 		spawnOffset = ActorSpecs.ReadPoint(resolved, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
 	}
 
-	private void ResolvePlayerRoomTransition(Point2 direction)
+	void ResolvePlayerRoomTransition(Point2 direction)
 	{
 		if (room == null || direction == Point2.Zero || GetFirst<Player>() is not { } player)
 			return;
@@ -998,7 +1097,7 @@ public partial class Game : IDisposable
 		player.Position = original;
 	}
 
-	private bool TryPlacePlayerAfterTransition(Player player, Point2 original, Point2 forward, Point2 perpendicular, int perpendicularDistance, int maxForwardDistance)
+	bool TryPlacePlayerAfterTransition(Player player, Point2 original, Point2 forward, Point2 perpendicular, int perpendicularDistance, int maxForwardDistance)
 	{
 		for (var forwardDistance = 0; forwardDistance <= maxForwardDistance; forwardDistance++)
 		{
@@ -1107,7 +1206,7 @@ public partial class Game : IDisposable
 		return solidPixels / (float)(bounds.Width * bounds.Height);
 	}
 
-	private bool RoomCollisionContains(Vector2 point, bool includeBreakableTiles = true)
+	bool RoomCollisionContains(Vector2 point, bool includeBreakableTiles = true)
 	{
 		if (room == null)
 			return false;
@@ -1131,7 +1230,7 @@ public partial class Game : IDisposable
 		return false;
 	}
 
-	private bool IsBreakableRoomCollisionPoint(Vector2 point)
+	bool IsBreakableRoomCollisionPoint(Vector2 point)
 	{
 		if (room == null)
 			return false;
@@ -1147,7 +1246,7 @@ public partial class Game : IDisposable
 		return room.IsBreakable(tile) || Factory.Find(room.Tiles[tile.X, tile.Y]) is { Destructible: true };
 	}
 
-	private static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
+	static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
 	{
 		var tileBounds = slope.WorldBounds(room);
 		if (!bounds.Overlaps(tileBounds))
@@ -1404,12 +1503,10 @@ public partial class Game : IDisposable
 		SpawnFungusLayer(forRoom);
 	}
 
-	/// <summary>
 	/// Scans the room's background tiles for Factory.FungusTile and, if any
 	/// are painted, spawns a single FungalGrowthActor covering their bounding
 	/// box - growth is further constrained to the painted tiles via its mask.
-	/// </summary>
-	private void SpawnFungusLayer(Room forRoom)
+	void SpawnFungusLayer(Room forRoom)
 	{
 		var minX = int.MaxValue;
 		var minY = int.MaxValue;
@@ -1474,7 +1571,7 @@ public partial class Game : IDisposable
 		return hash;
 	}
 
-	private void EnsureBudForPlayer(bool repositionExisting = false, bool atPlayerPosition = false)
+	void EnsureBudForPlayer(bool repositionExisting = false, bool atPlayerPosition = false)
 	{
 		if (!spawnBud)
 			return;
@@ -1501,7 +1598,7 @@ public partial class Game : IDisposable
 		});
 	}
 
-	private Point2 FindBudSpawnPosition(Player player)
+	Point2 FindBudSpawnPosition(Player player)
 	{
 		var offsets = new[] {
 			new Point2(-12 * player.Facing, 0),
@@ -1523,7 +1620,7 @@ public partial class Game : IDisposable
 		return player.Position;
 	}
 
-	private void RaiseRoomChanged(Room? from, Room to, RoomChangeKind kind, Point2 direction)
+	void RaiseRoomChanged(Room? from, Room to, RoomChangeKind kind, Point2 direction)
 	{
 		var playerPosition = GetFirst<Player>()?.Position ?? (Vector2)to.WorldBounds.Center;
 		var change = new RoomChange(from, to, kind, direction, playerPosition);
@@ -1531,7 +1628,7 @@ public partial class Game : IDisposable
 		OnStoryRoomChanged(change);
 	}
 
-	private static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)
+	static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)
 	{
 		var id = ActorSpecs.ReadString(actor, "Id");
 		if (!string.IsNullOrWhiteSpace(id))
@@ -1541,7 +1638,7 @@ public partial class Game : IDisposable
 		return $"{room.Id}:{source}:{localPosition.X},{localPosition.Y}";
 	}
 
-	private static void PopulateHiddenWalls(Room room, HiddenWallGrid hiddenWalls)
+	static void PopulateHiddenWalls(Room room, HiddenWallGrid hiddenWalls)
 	{
 		foreach (var actor in room.Actors)
 		{

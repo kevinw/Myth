@@ -8,7 +8,6 @@ public class Saw : WallFollowerActor
 	{
 		Hitbox = new(new RectInt(-2, -2, 4, 4));
 		Mask = Masks.None;
-		Sprite = Assets.GetSprite("saw");
 		Depth = -5;
 		CollidesWithSolids = false;
 	}

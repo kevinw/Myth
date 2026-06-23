@@ -2,6 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(HideFromPalette = true)]
 public class WallBullet : WallFollowerActor
 {
 	public bool dissolves = false;

@@ -3,6 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
+[GameActor(Sprite = "spitter", Tags = ActorTag.Enemy)]
 public class WallSpitter : WallFollowerActor
 {
 	public int Health = 2;
