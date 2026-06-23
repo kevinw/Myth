@@ -47,6 +47,18 @@
 			height: min(100dvh, calc(100dvw * 9 / 16));
 		}
 
+		/* Portrait (mobile browser): switch the shell to 4:3 so it reclaims vertical
+		   space — taller than the 16:9 strip. main.js resizes the canvas backing buffer
+		   to a matching 4:3 ratio, and the game cover-crops its 16:9 frame to fill it
+		   (hold the play area to un-crop back to the full frame). */
+		@media (orientation: portrait) {
+			#game-shell {
+				aspect-ratio: 4 / 3;
+				width: min(100dvw, calc(100dvh * 4 / 3));
+				height: min(100dvh, calc(100dvw * 3 / 4));
+			}
+		}
+
 		canvas {
 			display: block;
 			width: 100%;

@@ -2232,15 +2232,10 @@ public static class Assets
 
 	private static bool TouchesExitEdge(RectInt from, RectInt to, Point2 direction, Vector2 exitPosition)
 	{
-		if (direction.X > 0)
-			return to.Left == from.Right && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
-		if (direction.X < 0)
-			return to.Right == from.Left && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
-		if (direction.Y > 0)
-			return to.Top == from.Bottom && ContainsAxis(to.Left, to.Right, exitPosition.X);
-		if (direction.Y < 0)
-			return to.Bottom == from.Top && ContainsAxis(to.Left, to.Right, exitPosition.X);
-
+		if (direction.X > 0) return to.Left == from.Right && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
+		if (direction.X < 0) return to.Right == from.Left && ContainsAxis(to.Top, to.Bottom, exitPosition.Y);
+		if (direction.Y > 0) return to.Top == from.Bottom && ContainsAxis(to.Left, to.Right, exitPosition.X);
+		if (direction.Y < 0) return to.Bottom == from.Top && ContainsAxis(to.Left, to.Right, exitPosition.X);
 		return false;
 	}
 

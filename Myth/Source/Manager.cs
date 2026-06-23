@@ -133,13 +133,7 @@ public partial class Manager : App
 	public Vector2 GameMouseWorld(Game gameInstance)
 	{
 		var viewport = (RectInt)(GameViewRect * Scale);
-		var scale = Calc.Min(viewport.Width / (float)gameInstance.Screen.Width, viewport.Height / (float)gameInstance.Screen.Height);
-
-		var size = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) * scale;
-		var topLeft = (Vector2)viewport.Center - size / 2;
-		var renderCenter = new Vector2(gameInstance.Screen.Width, gameInstance.Screen.Height) / 2;
-		var local = (Input.Mouse.Position - topLeft) / scale;
-		return gameInstance.Camera + renderCenter + (local - renderCenter) / gameInstance.FbZoom;
+		return gameInstance.WindowToWorld(Input.Mouse.Position, viewport);
 	}
 
 	/// <summary>
@@ -185,6 +179,8 @@ public partial class Manager : App
 
 	public bool MusicEnabled => musicEnabled;
 	public bool WantsVirtualGameController => playing || startingPlay;
+	// When set (desktop --aspect-four-three), force the 4:3 portrait-style cropped presentation.
+	public bool AspectFourThree { get; set; }
 	public bool AudioEnabled = true;
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
@@ -196,6 +192,7 @@ public partial class Manager : App
 		gymMode = args.gym;
 		headless = args.headless;
 		unthrottled = args.unthrottled;
+		AspectFourThree = args.aspectFourThree;
 		gym = new()
 		{
 			exitAfterAll = args.gymExitAfterAll

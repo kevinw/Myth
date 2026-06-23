@@ -30,7 +30,7 @@ internal struct Gym
 	internal List<GymResult>? results;
 	internal HashSet<string> goalIds = new(StringComparer.OrdinalIgnoreCase);
 
-	internal GymRun? CurrentRun => runIndex < (runs?.Count ?? 0) ? runs[runIndex] : null;
+	readonly internal GymRun? CurrentRun => runs != null && runIndex < runs.Count ? runs[runIndex] : null;
 
 	internal bool CollectGymRooms(string? playRoomId = null)
 	{
