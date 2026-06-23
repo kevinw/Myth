@@ -350,14 +350,24 @@ public class Room
 		VisibilitySegments.Clear();
 		ReflectionRects.Clear();
 
+		// Slopes first: the passes below only read the slope lookups (never mutate them).
 		BuildSlopeTiles();
-		BuildDualTerrainJoinMasks();
-		BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope);
-		BuildSolidTileMask();
-		BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
-		BuildSlopeLightOccluders();
+
+		// These passes each read only the prebuilt tile/slope caches and write a distinct
+		// output collection, so they run concurrently on desktop/iOS (serial on wasm).
+		Par.Invoke(
+			BuildDualTerrainJoinMasks,
+			() => BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope),
+			BuildSolidTileMask,
+			() =>
+			{
+				BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
+				BuildSlopeLightOccluders();
+			},
+			BuildReflectionRects);
+
+		// Reads LightOccluders + LightOccluderPolygons produced by the parallel phase.
 		BuildVisibilitySegments();
-		BuildReflectionRects();
 
 		if (ReverbAuto)
 			Reverb = InferReverb();
@@ -951,20 +961,24 @@ public class Room
 			}
 	}
 
-	static readonly List<RectInt> tempBounds = [];
+	// Per-thread scratch: BuildReflectionRects can run on a worker thread during the
+	// parallel RebuildGeometry phase, and a shared static would race if two rooms rebuilt
+	// at once.
+	[ThreadStatic] static List<RectInt>? tempBounds;
 	private void BuildReflectionRects()
 	{
+		var bounds = tempBounds ??= [];
 		foreach (Factory.ReflectionMode mode in new[] { Factory.ReflectionMode.Flat, Factory.ReflectionMode.Distorted })
 		{
-			tempBounds.Clear();
-			BuildRects(tempBounds, entry => entry.Reflection == mode);
+			bounds.Clear();
+			BuildRects(bounds, entry => entry.Reflection == mode);
 			bool distorted = mode == Factory.ReflectionMode.Distorted;
-			foreach (var bounds in tempBounds)
+			foreach (var rect in bounds)
 			{
-				var tileX = (bounds.X - WorldBounds.X) / Game.TileSize;
-				var tileY = (bounds.Y - WorldBounds.Y) / Game.TileSize;
+				var tileX = (rect.X - WorldBounds.X) / Game.TileSize;
+				var tileY = (rect.Y - WorldBounds.Y) / Game.TileSize;
 				var opacity = GetTileEntry(tileX, tileY)?.ReflectionOpacity ?? (distorted ? 0.5f : 0.7f);
-				ReflectionRects.Add(new(bounds, opacity, distorted));
+				ReflectionRects.Add(new(rect, opacity, distorted));
 			}
 		}
 	}

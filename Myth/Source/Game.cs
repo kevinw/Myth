@@ -1437,7 +1437,9 @@ public partial class Game : IDisposable
 		var height = tileHeight * TileSize;
 
 		var mask = new float[width * height];
-		for (var ty = 0; ty < tileHeight; ty++)
+		// Each ty writes a disjoint band of rows in the local mask, so it parallelizes cleanly.
+		Par.For(0, tileHeight, ty =>
+		{
 			for (var tx = 0; tx < tileWidth; tx++)
 			{
 				var growable = forRoom.BackgroundTiles[minX + tx, minY + ty] == Factory.FungusTile ? 1.0f : 0.0f;
@@ -1445,6 +1447,7 @@ public partial class Game : IDisposable
 					for (var px = 0; px < TileSize; px++)
 						mask[(ty * TileSize + py) * width + (tx * TileSize + px)] = growable;
 			}
+		});
 
 		var position = forRoom.WorldBounds.TopLeft + new Point2(minX * TileSize, minY * TileSize);
 
