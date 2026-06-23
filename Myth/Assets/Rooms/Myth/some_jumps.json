@@ -55,7 +55,8 @@
     {
       "Id": "26cd2b355922a6bc",
       "From": "BlueMemoryLight",
-      "Position": [120, 90]
+      "Position": [120, 90],
+      "SpriteName": "fire"
     },
     {
       "Id": "d55b9e3b8ba59435",
