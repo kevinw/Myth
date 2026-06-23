@@ -129,10 +129,21 @@ function isOverlayControl(target) {
 	return target instanceof Element && !!target.closest?.("#myth-vpad .ctl, #myth-vpad .btn");
 }
 
+// Only presses on the game window itself zoom -- not the backdrop below it (where the
+// virtual controls sit in portrait). The canvas fills the 4:3 shell, so its rect is the
+// game window.
+function isInGameWindow(canvas, e) {
+	if (!canvas) return false;
+	const r = canvas.getBoundingClientRect();
+	return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+}
+
 function installPlayAreaZoom() {
+	const canvas = document.querySelector("#foster-canvas");
 	window.addEventListener("pointerdown", (e) => {
 		if (!playAreaZoomEnabled || zoomPointerId !== null) return;
-		if (isOverlayControl(e.target)) return; // leave stick/button touches alone
+		if (!isInGameWindow(canvas, e)) return; // ignore presses outside the 4:3 game window
+		if (isOverlayControl(e.target)) return; // and the stick/button touches over it
 		zoomPointerId = e.pointerId;
 		setZoomKey(true);
 	});
