@@ -7,7 +7,7 @@ public class DualGrid : Actor
 {
 	const int halfTileSize = Game.TileSize / 2;
 
-	private static readonly Point2[] MaskToTile =
+	internal static readonly Point2[] MaskToTile =
 	[
 		new(0, 3),
 		new(3, 3),
@@ -35,45 +35,45 @@ public class DualGrid : Actor
 	public void Build(Room room, char tileType, Tileset tileset, Factory.TileLayer layer)
 	{
 		Layer = layer;
-		for (var x = 0; x <= room.Size.X; x ++)
-		for (var y = 0; y <= room.Size.Y; y ++)
-		{
-			var materialMask = 0;
-			if (room.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
-				materialMask |= TileQuadrants.TopLeft;
-			if (room.IsDualMaterialFilled(tileType, layer, x - 1, y))
-				materialMask |= TileQuadrants.BottomLeft;
-			if (room.IsDualMaterialFilled(tileType, layer, x, y - 1))
-				materialMask |= TileQuadrants.TopRight;
-			if (room.IsDualMaterialFilled(tileType, layer, x, y))
-				materialMask |= TileQuadrants.BottomRight;
+		for (var x = 0; x <= room.Size.X; x++)
+			for (var y = 0; y <= room.Size.Y; y++)
+			{
+				var materialMask = 0;
+				if (room.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
+					materialMask |= TileQuadrants.TopLeft;
+				if (room.IsDualMaterialFilled(tileType, layer, x - 1, y))
+					materialMask |= TileQuadrants.BottomLeft;
+				if (room.IsDualMaterialFilled(tileType, layer, x, y - 1))
+					materialMask |= TileQuadrants.TopRight;
+				if (room.IsDualMaterialFilled(tileType, layer, x, y))
+					materialMask |= TileQuadrants.BottomRight;
 
-			if (materialMask == 0)
-				continue;
+				if (materialMask == 0)
+					continue;
 
-			var mask = layer == Factory.TileLayer.Foreground
-				? room.GetDualTerrainJoinMask(x, y)
-				: materialMask;
-			if (mask == 0)
-				continue;
+				var mask = layer == Factory.TileLayer.Foreground
+					? room.GetDualTerrainJoinMask(x, y)
+					: materialMask;
+				if (mask == 0)
+					continue;
 
-			var tile = MaskToTile[mask];
-			var seed = StableVariantSeed(room, tileType, x, y);
-			var subtexture = tileset.GetVariantTile(tile.X, tile.Y, seed);
-			if (subtexture.Texture == null)
-				continue;
-			var normal = tileset.GetVariantNormalTile(tile.X, tile.Y, seed);
-			var occluders = tileset.GetVariantOccluders(tile.X, tile.Y, seed);
-			var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
+				var tile = MaskToTile[mask];
+				var seed = StableVariantSeed(room, tileType, x, y);
+				var subtexture = tileset.GetVariantTile(tile.X, tile.Y, seed);
+				if (subtexture.Texture == null)
+					continue;
+				var normal = tileset.GetVariantNormalTile(tile.X, tile.Y, seed);
+				var occluders = tileset.GetVariantOccluders(tile.X, tile.Y, seed);
+				var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
 
-			drawCommands.Add(new DrawCommand(
-				subtexture,
-				normal,
-				position,
-				materialMask));
+				drawCommands.Add(new DrawCommand(
+					subtexture,
+					normal,
+					position,
+					materialMask));
 
-			AppendWorldVisibilitySegments(position, materialMask, occluders);
-		}
+				AppendWorldVisibilitySegments(position, materialMask, occluders);
+			}
 
 		MergeAxisAlignedVisibilitySegments();
 	}

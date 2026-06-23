@@ -39,25 +39,6 @@ public partial class Game : IDisposable
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendMask.Red | BlendMask.Green, Color.White);
-	static readonly Point2[] DualMaskToTile =
-	[
-		new(0, 3),
-		new(3, 3),
-		new(0, 0),
-		new(3, 2),
-		new(0, 2),
-		new(1, 2),
-		new(2, 3),
-		new(3, 1),
-		new(1, 3),
-		new(0, 1),
-		new(3, 0),
-		new(2, 0),
-		new(1, 0),
-		new(2, 2),
-		new(1, 1),
-		new(2, 1),
-	];
 
 	const float CameraSlackEpsilon = TileSize;
 	static float DitherGlitchAttackSpeed => 15.0f;
@@ -150,11 +131,9 @@ public partial class Game : IDisposable
 
 	public float SdfAuraScrollTime => Time.SecondsF * SdfAuraScrollSpeed;
 
-	/// <summary>
 	/// Draws the combined SDF aura over a quad (corners <paramref name="p0"/>..<paramref name="p3"/>
 	/// in the caller's local space), with the shader uniforms describing the two
 	/// silhouettes. The SDF atlas is the sampled texture.
-	/// </summary>
 	public void RenderSdfAura(Batcher batcher, Span<float> uniforms, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
 	{
 		if (sdfAuraMaterial == null || SpriteSdf.Atlas is not { } atlas)
@@ -175,13 +154,13 @@ public partial class Game : IDisposable
 		batcher.PopMaterial();
 	}
 
-	/// <summary>World-space center of the current view (for test bursts).</summary>
+	/// World-space center of the current view (for test bursts).
 	public Vector2 ViewCenterWorld => RenderCamera + new Vector2(Width, Height) / 2f / zoomLevel;
 
 	int previewEffectSlot = -1;
 	string? previewEffectName;
 
-	/// <summary>Selects which effect asset the tuning window previews/bursts.</summary>
+	/// Selects which effect asset the tuning window previews/bursts.
 	public void SetPreviewEffect(string name)
 	{
 		if (particleSystem is not { Supported: true } || name == previewEffectName)
@@ -192,7 +171,7 @@ public partial class Game : IDisposable
 		previewEffectSlot = particleSystem.AcquireEffect(name);
 	}
 
-	/// <summary>Emits the tuning-window's selected effect at the view center.</summary>
+	/// Emits the tuning-window's selected effect at the view center.
 	public void BurstTestEffect()
 	{
 		if (previewEffectSlot >= 0 && previewEffectName != null)
@@ -2132,7 +2111,7 @@ public partial class Game : IDisposable
 					if (joinMask == 0)
 						continue;
 
-					var dualTile = DualMaskToTile[joinMask];
+					var dualTile = DualGrid.MaskToTile[joinMask];
 					var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
 					var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
 					if (image.Texture == null)
@@ -3781,11 +3760,9 @@ public partial class Game : IDisposable
 		SpawnFungusLayer(forRoom);
 	}
 
-	/// <summary>
 	/// Scans the room's background tiles for Factory.FungusTile and, if any
 	/// are painted, spawns a single FungalGrowthActor covering their bounding
 	/// box - growth is further constrained to the painted tiles via its mask.
-	/// </summary>
 	void SpawnFungusLayer(Room forRoom)
 	{
 		var minX = int.MaxValue;

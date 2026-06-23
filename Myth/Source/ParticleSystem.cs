@@ -4,14 +4,12 @@ using Foster.Framework;
 
 namespace Myth;
 
-/// <summary>
 /// GPU-driven particle system. Particles live in a ping-pong
 /// <see cref="ComputeStorageBuffer{T}"/>, are advanced by a compute shader, and
 /// drawn with one instanced quad per particle reading the same buffer in the
 /// vertex stage (no CPU readback). Many independent effects coexist: each
 /// particle carries an effect index into a per-effect params buffer + color LUT,
 /// and emission is GPU-side via a per-frame emit queue.
-/// </summary>
 public sealed class ParticleSystem : IDisposable
 {
 	public const int Capacity = 16384;
@@ -177,10 +175,8 @@ public sealed class ParticleSystem : IDisposable
 		}
 	}
 
-	/// <summary>
 	/// Acquires a GPU slot for the named effect asset, sharing one slot across
 	/// all users of the same name (ref-counted). Returns -1 if the pool is full.
-	/// </summary>
 	public int AcquireEffect(string name)
 	{
 		if (!supported)
@@ -220,7 +216,7 @@ public sealed class ParticleSystem : IDisposable
 		}
 	}
 
-	/// <summary>Queues a burst of the given effect at a world position.</summary>
+	/// Queues a burst of the given effect at a world position.
 	public void Emit(int effectIndex, Vector2 worldPosition, int count)
 	{
 		if (GetEffect(effectIndex, count) is not { } effect)
@@ -231,10 +227,8 @@ public sealed class ParticleSystem : IDisposable
 			effect.SpeedMin, effect.SpeedMax);
 	}
 
-	/// <summary>
 	/// Queues a directional cone burst, overriding the effect's aim and scaling
 	/// its speed (e.g. emitting along motion). Used by code-driven emitters.
-	/// </summary>
 	public void Emit(int effectIndex, Vector2 worldPosition, int count, float directionRadians, float speedScale = 1.0f)
 	{
 		if (GetEffect(effectIndex, count) is not { } effect)
@@ -277,11 +271,9 @@ public sealed class ParticleSystem : IDisposable
 		emitCursor = (emitCursor + count) % Capacity;
 	}
 
-	/// <summary>
 	/// Advances the sim. <paramref name="solidMask"/> is the world-collision
 	/// texture (foreground coverage in its alpha); <paramref name="camera"/> and
 	/// <paramref name="zoom"/> map world positions into it.
-	/// </summary>
 	public void Update(float dt, Texture? solidMask, Vector2 camera, float zoom)
 	{
 		if (!supported || updateShader == null)

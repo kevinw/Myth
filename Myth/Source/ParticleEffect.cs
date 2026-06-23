@@ -25,11 +25,9 @@ public enum ParticleCollisionMode
 	Bounce,
 }
 
-/// <summary>
 /// A named, authorable particle effect asset: emitter shape, dynamics, and
 /// size/color over lifetime. Loaded/saved as JSON by <see cref="ParticleEffectAssets"/>;
 /// <c>ParticleEmitter</c> actors reference one by name.
-/// </summary>
 public sealed class ParticleEffect
 {
 	// Emitter
@@ -65,7 +63,7 @@ public sealed class ParticleEffect
 	public Color ColorMid = new(1.0f, 0.5f, 0.15f, 1.0f);
 	public Color ColorEnd = new(0.3f, 0.05f, 0.05f, 0.0f);
 
-	/// <summary>Samples the birth -> mid -> death gradient at t in [0, 1].</summary>
+	/// Samples the birth -> mid -> death gradient at t in [0, 1].
 	public Color EvaluateColor(float t)
 	{
 		t = Math.Clamp(t, 0.0f, 1.0f);
@@ -74,7 +72,7 @@ public sealed class ParticleEffect
 			: new Color(Vector4.Lerp(ColorMid, ColorEnd, (t - 0.5f) * 2.0f));
 	}
 
-	/// <summary>Hash of the data that affects the baked color LUT.</summary>
+	/// Hash of the data that affects the baked color LUT.
 	public int ColorHash()
 		=> HashCode.Combine(ColorBirth.RGBA, ColorMid.RGBA, ColorEnd.RGBA);
 
@@ -112,10 +110,8 @@ public sealed class ParticleEffect
 		return e;
 	}
 
-	/// <summary>
 	/// Overwrites this instance's fields from JSON in place. Used so undo/redo
 	/// restores the shared asset object that emitters already reference.
-	/// </summary>
 	public void Load(JsonObject json)
 	{
 		EmitterRadius = JsonUtil.ReadFloat(json, "EmitterRadius", EmitterRadius);

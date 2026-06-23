@@ -8,9 +8,7 @@ using Color = Foster.Framework.Color;
 
 namespace Myth;
 
-/// <summary>
 /// Runs the Game and, when the game is not running, displays a tile-based Level Editor (see Manager.Editor.cs)
-/// </summary>
 public partial class Manager : App
 {
 	readonly ImGuiRenderer imgui = null!;
@@ -31,9 +29,7 @@ public partial class Manager : App
 	static Color highlight => 0x5fcde4;
 #endif
 
-	/// <summary>
 	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
-	/// </summary>
 	Point2 cell = new(0, 0);
 	string? selectedRoomId;
 #if EDITOR
@@ -54,9 +50,7 @@ public partial class Manager : App
 	public float SoftShadowPenumbra = 2.3f;
 	public float SoftShadowMinSoftness = 0.0f;
 
-	/// <summary>
 	/// The room renderer / simulation.
-	/// </summary>
 	internal Game? game;
 	internal bool playing;
 	bool playOnStartup;
@@ -95,20 +89,14 @@ public partial class Manager : App
 #endif
 	bool fpsOverlayVisible = false;
 
-	/// <summary>
 	/// Eases in/out as the Game starts/stops playing
-	/// </summary>
 	float gameEase = 1.0f;
 
-	/// <summary>
 	/// Sprite Batcher for general Editor visuals
-	/// </summary>
 	readonly Batcher batcher;
 	readonly Controls controls;
 
-	/// <summary>
 	/// Visible Space
-	/// </summary>
 	Window RequiredWindow => Window ?? throw new InvalidOperationException("Window is not available in headless mode.");
 
 	Rect View
@@ -120,9 +108,7 @@ public partial class Manager : App
 		}
 	}
 
-	/// <summary>
 	/// Play Workspace when the Game is Open
-	/// </summary>
 	Rect GameOpenRect => View;
 
 
@@ -136,19 +122,13 @@ public partial class Manager : App
 		return gameInstance.WindowToWorld(Input.Mouse.Position, viewport);
 	}
 
-	/// <summary>
 	/// Mouse Cursor relative to Scale
-	/// </summary>
 	Vector2 Cursor => Input.Mouse.Position / Scale;
 
-	/// <summary>
 	/// Line Weight for outlines, relative to Scale
-	/// </summary>
 	float LineWeight => 1.0f / Scale * 4;
 
-	/// <summary>
 	/// Tries to get the Existing Room
-	/// </summary>
 	Room? CurrentRoom
 	{
 		get
@@ -1244,18 +1224,14 @@ public partial class Manager : App
 	}
 
 
-	/// <summary>
 	/// Draws a box outline (for palette / workspace)
-	/// </summary>
 	void Box(Rect box)
 	{
 		batcher.Rect(box, 0x000000);
 		batcher.RectLine(box, LineWeight, 0xffffff);
 	}
 
-	/// <summary>
 	/// Draws a Pressable button with an icon and tooltip
-	/// </summary>
 	bool Button(Rect button, Subtexture subtexture, string text, bool selected = false)
 	{
 		var hovering = button.Contains(Cursor);
