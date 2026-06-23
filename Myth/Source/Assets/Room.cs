@@ -1,6 +1,8 @@
 
+using System.Buffers;
 using System.Numerics;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Foster.Framework;
 
@@ -1007,89 +1009,166 @@ public class Room
 		if (ReverbAuto)
 			Reverb = InferReverb();
 
-		Assets.SaveRoom(this, ToJsonString());
+		var buffer = new ArrayBufferWriter<byte>();
+		WriteJson(buffer);
+		Assets.SaveRoom(this, buffer.WrittenSpan);
 	}
 
 	public string ToJsonString()
 	{
-		var json = new JsonObject
-		{
-			["position"] = new JsonArray(TileSpacePosition.X, TileSpacePosition.Y),
-			["size"] = new JsonArray(Size.X, Size.Y)
-		};
+		var buffer = new ArrayBufferWriter<byte>();
+		WriteJson(buffer);
+		return Encoding.UTF8.GetString(buffer.WrittenSpan);
+	}
+
+	// Serializes directly with Utf8JsonWriter instead of building a JsonObject DOM and
+	// regex-compacting the result: no intermediate node tree, no per-row StringBuilder/
+	// string, no whole-document regex pass. Two-int point arrays are written inline
+	// ([x, y]) via WriteRawValue so the on-disk format is unchanged.
+	private void WriteJson(IBufferWriter<byte> output)
+	{
+		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true, NewLine = "\n" });
+		writer.WriteStartObject();
+
+		WriteIntPairProperty(writer, "position", TileSpacePosition.X, TileSpacePosition.Y);
+		WriteIntPairProperty(writer, "size", Size.X, Size.Y);
 
 		if (!string.IsNullOrEmpty(MusicArea))
-			json["musicArea"] = MusicArea;
+			writer.WriteString("musicArea", MusicArea);
 		if (BackdropColor != DefaultBackdropColor)
-			json["backdropColor"] = JsonUtil.ColorToHex(BackdropColor);
+			writer.WriteString("backdropColor", JsonUtil.ColorToHex(BackdropColor));
 		if (BackdropColor2.HasValue)
-			json["backdropColor2"] = JsonUtil.ColorToHex(BackdropColor2.Value);
+			writer.WriteString("backdropColor2", JsonUtil.ColorToHex(BackdropColor2.Value));
 		if (AmbientColor != DefaultAmbientColor)
-			json["ambientColor"] = JsonUtil.ColorToHex(AmbientColor);
+			writer.WriteString("ambientColor", JsonUtil.ColorToHex(AmbientColor));
 		if (AmbientIntensity != DefaultAmbientIntensity)
-			json["ambientIntensity"] = AmbientIntensity;
+			writer.WriteNumber("ambientIntensity", AmbientIntensity);
 		if (LightNoise != DefaultLightNoise)
-			json["lightNoise"] = LightNoise;
+			writer.WriteNumber("lightNoise", LightNoise);
 		if (!ReverbAuto)
-			json["reverbAuto"] = false;
+			writer.WriteBoolean("reverbAuto", false);
 		if (Reverb != DefaultReverb || !ReverbAuto)
-			json["reverb"] = Reverb;
+			writer.WriteNumber("reverb", Reverb);
 
 		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
 		{
-			json["sun"] = new JsonObject
-			{
-				["strength"] = SunStrength,
-				["color"] = JsonUtil.ColorToHex(SunColor),
-				["direction"] = new JsonArray(SunDirection.X, SunDirection.Y)
-			};
+			writer.WriteStartObject("sun");
+			writer.WriteNumber("strength", SunStrength);
+			writer.WriteString("color", JsonUtil.ColorToHex(SunColor));
+			writer.WriteStartArray("direction");
+			writer.WriteNumberValue(SunDirection.X);
+			writer.WriteNumberValue(SunDirection.Y);
+			writer.WriteEndArray();
+			writer.WriteEndObject();
 		}
 
-		var rows = new JsonArray();
+		var rowBuffer = new char[Size.X];
+
+		writer.WriteStartArray("tiles");
 		for (var y = 0; y < Size.Y; y++)
 		{
-			var row = new StringBuilder(Size.X);
 			for (var x = 0; x < Size.X; x++)
-				row.Append(Tiles[x, y]);
-			rows.Add(row.ToString());
+				rowBuffer[x] = Tiles[x, y];
+			writer.WriteStringValue(rowBuffer);
 		}
-		json["tiles"] = rows;
+		writer.WriteEndArray();
 
 		if (HasBackgroundTiles())
 		{
-			var backgroundRows = new JsonArray();
+			writer.WriteStartArray("backgroundTiles");
 			for (var y = 0; y < Size.Y; y++)
 			{
-				var row = new StringBuilder(Size.X);
 				for (var x = 0; x < Size.X; x++)
-					row.Append(BackgroundTiles[x, y]);
-				backgroundRows.Add(row.ToString());
+					rowBuffer[x] = BackgroundTiles[x, y];
+				writer.WriteStringValue(rowBuffer);
 			}
-			json["backgroundTiles"] = backgroundRows;
+			writer.WriteEndArray();
 		}
 
 		if (HasBreakableTiles())
 		{
-			var breakable = new JsonArray();
+			writer.WriteStartArray("breakable");
 			for (var y = 0; y < Size.Y; y++)
 				for (var x = 0; x < Size.X; x++)
 					if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
-						breakable.Add(new JsonArray(x, y));
-			json["breakable"] = breakable;
+						WriteIntPairValue(writer, x, y);
+			writer.WriteEndArray();
 		}
 
 		if (Actors.Count > 0)
 		{
-			var actors = new JsonArray();
+			writer.WriteStartArray("actors");
 			foreach (var actor in Actors)
 			{
 				ActorSpecs.EnsureActorId(actor);
-				actors.Add(ActorSpecs.PruneForSave(actor));
+				WriteActorNode(writer, ActorSpecs.PruneForSave(actor));
 			}
-			json["actors"] = actors;
+			writer.WriteEndArray();
 		}
 
-		return ActorSpecs.ToJsonString(json);
+		writer.WriteEndObject();
+	}
+
+	private static void WriteIntPairProperty(Utf8JsonWriter writer, string name, int x, int y)
+	{
+		writer.WritePropertyName(name);
+		WriteIntPairValue(writer, x, y);
+	}
+
+	// Writes [x, y] inline even under indented formatting (WriteRawValue is not re-indented),
+	// matching the previous regex-compacted output without allocating a string per point.
+	private static void WriteIntPairValue(Utf8JsonWriter writer, int x, int y)
+	{
+		Span<char> buffer = stackalloc char[32];
+		var length = 0;
+		buffer[length++] = '[';
+		x.TryFormat(buffer[length..], out var written); length += written;
+		buffer[length++] = ',';
+		buffer[length++] = ' ';
+		y.TryFormat(buffer[length..], out written); length += written;
+		buffer[length++] = ']';
+		writer.WriteRawValue(buffer[..length], skipInputValidation: true);
+	}
+
+	// Writes a pruned actor node, keeping the same inline-point convention for any
+	// two-int arrays (e.g. Position) it contains, and deferring everything else to the node.
+	private static void WriteActorNode(Utf8JsonWriter writer, JsonNode? node)
+	{
+		switch (node)
+		{
+			case JsonObject obj:
+				writer.WriteStartObject();
+				foreach (var (key, value) in obj)
+				{
+					writer.WritePropertyName(key);
+					WriteActorNode(writer, value);
+				}
+				writer.WriteEndObject();
+				break;
+			case JsonArray array when IsIntPair(array, out var x, out var y):
+				WriteIntPairValue(writer, x, y);
+				break;
+			case JsonArray array:
+				writer.WriteStartArray();
+				foreach (var item in array)
+					WriteActorNode(writer, item);
+				writer.WriteEndArray();
+				break;
+			case null:
+				writer.WriteNullValue();
+				break;
+			default:
+				node.WriteTo(writer);
+				break;
+		}
+	}
+
+	private static bool IsIntPair(JsonArray array, out int x, out int y)
+	{
+		x = y = 0;
+		return array.Count == 2
+			&& array[0] is JsonValue a && a.TryGetValue(out x)
+			&& array[1] is JsonValue b && b.TryGetValue(out y);
 	}
 
 	public void LoadJsonState(string jsonText)

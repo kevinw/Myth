@@ -1830,11 +1830,11 @@ public static class Assets
 		RoomsById[room.Id] = room;
 	}
 
-	public static void SaveRoom(Room room, string json)
+	public static void SaveRoom(Room room, ReadOnlySpan<byte> json)
 	{
 		var path = GetRoomSavePath(room);
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-		File.WriteAllText(path, json);
+		File.WriteAllBytes(path, json);
 		room.Storage = IsUserRoomPath(path) ? Room.StorageKind.User : Room.StorageKind.Bundled;
 		room.SourcePath = path;
 		if (room.Storage == Room.StorageKind.User)

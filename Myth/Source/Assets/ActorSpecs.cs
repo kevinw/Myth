@@ -115,7 +115,7 @@ public static class ActorSpecs
 	}
 
 	public static JsonObject CloneObject(JsonObject source)
-		=> JsonNode.Parse(source.ToJsonString())?.AsObject() ?? [];
+		=> source.DeepClone().AsObject();
 
 	public static string GenerateActorId()
 	{
