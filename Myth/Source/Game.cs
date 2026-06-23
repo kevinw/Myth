@@ -1043,10 +1043,12 @@ public partial class Game : IDisposable
 	}
 
 	public bool OverlapsRoomCollision(in RectInt bounds)
-	{
-		if (room == null)
-			return false;
+		=> room != null && OverlapsRoomCollision(room, bounds);
 
+	// Pure room-geometry collision: depends only on the room's tile data, so it is safe
+	// to call off the main thread (e.g. the nav-graph worker build via NavWorld).
+	internal static bool OverlapsRoomCollision(Room room, in RectInt bounds)
+	{
 		// Collision is tile-aligned, so only the tiles the bounds cover can matter.
 		// Walk that tile range once, testing the precomputed solid mask (equivalent
 		// to scanning CollisionRects, since rects are unions of solid tiles) and any
