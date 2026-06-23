@@ -2074,4 +2074,110 @@ public partial class Game
 		DrawParticleSolidMask();
 		particleSystem.Update(dt, ParticleSolidMask.Attachments[0], RenderCamera, zoomLevel);
 	}
+
+	// --- view state moved from Game.cs (fields/consts/caches) ---
+	private const int ActorShadowSteps = 8;
+	private const float ActorShadowStrength = 0.5f;
+	private const float ActorShadowMinLength = 4.0f;
+	private const float ActorShadowMaxLength = 28.0f;
+	private static readonly BlendMode ShadowBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.RGB, Color.White);
+	private static readonly BlendMode TileFieldStampBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
+		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
+		BlendMask.Red | BlendMask.Green, Color.White);
+	private static readonly Point2[] DualMaskToTile =
+	[
+		new(0, 3),
+		new(3, 3),
+		new(0, 0),
+		new(3, 2),
+		new(0, 2),
+		new(1, 2),
+		new(2, 3),
+		new(3, 1),
+		new(1, 3),
+		new(0, 1),
+		new(3, 0),
+		new(2, 0),
+		new(1, 0),
+		new(2, 2),
+		new(1, 1),
+		new(2, 1),
+	];
+	static float DitherGlitchAttackSpeed => 15.0f;
+	static float DitherGlitchDecaySpeed => 1.35f;
+	static float DitherGlitchRadius => 150.0f;
+	private const float ActorDitherAmount = 0.2f;
+	readonly Batcher Batcher;
+	public Target Screen { get; private set; } = null!;
+	Target BackgroundScreen { get; set; } = null!;
+	Target ForegroundScreen { get; set; } = null!;
+	Target BackgroundEmissive { get; set; } = null!;
+	Target ForegroundEmissive { get; set; } = null!;
+	Target LightMask { get; set; } = null!;
+	Target BackgroundLightMask { get; set; } = null!;
+	Target ForegroundLightMask { get; set; } = null!;
+	Target SingleLightMask { get; set; } = null!;
+	Target LitBackground { get; set; } = null!;
+	Target LitForeground { get; set; } = null!;
+	Target LitScreen { get; set; } = null!;
+	Target GlitchScreen { get; set; } = null!;
+	Target NormalBuffer { get; set; } = null!;
+	Target TileField { get; set; } = null!;
+	Target DitherMask { get; set; } = null!;
+	Target ParticleSolidMask { get; set; } = null!;
+	Target ReflectionScreen { get; set; } = null!;
+	Target ReflectionMask { get; set; } = null!;
+	Target AoMask { get; set; } = null!;
+	Target AoBlurScratch { get; set; } = null!;
+	Target BackgroundCoverage { get; set; } = null!;
+	Target SoftShadowScratch { get; set; } = null!;
+	// Every render target created in EnsureRenderTargets, in creation order, for the
+	// debug render-target overlay (toggled with G). Populated via Track().
+	private readonly List<Target> debugTargets = new();
+	public IReadOnlyList<Target> DebugTargets => debugTargets;
+	public bool ShowForegroundLayer { get; set; } = true;
+	public bool ShowBackgroundLayer { get; set; } = true;
+	private readonly ReloadableMaterial? crtMaterial;
+	private readonly ReloadableMaterial? lightingCompositeMaterial;
+	private readonly ReloadableMaterial? normalLightMaterial;
+	private readonly ReloadableMaterial? reflectionDistortMaterial;
+	private readonly ReloadableMaterial? tileFieldStampMaterial;
+	private readonly ReloadableMaterial? tileFieldDebugMaterial;
+	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
+	private readonly ReloadableMaterial? blurMaterial;
+	private readonly ReloadableMaterial? softShadowMaterial;
+	private readonly ReloadableMaterial? sdfAuraMaterial;
+	private const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
+	private readonly ParticleSystem? particleSystem;
+	private float particleBurstTimer;
+	public ParticleSystem? Particles => particleSystem;
+	private float hitStun;
+	private float shaking;
+	private float ditherGlitch;
+	private float ditherGlitchTarget;
+	private Vector2 ditherGlitchAxis = Vector2.UnitX;
+	private Point2 shake;
+	private sealed class RoomNormalCache(Room room, Target target) : IDisposable
+	{
+		public readonly Room Room = room;
+		public readonly Target Target = target;
+		public bool Dirty = true;
+
+		public void Dispose()
+			=> Target.Dispose();
+	}
+
+	private sealed class RoomTileFieldCache(Room room, Target target) : IDisposable
+	{
+		public readonly Room Room = room;
+		public readonly Target Target = target;
+		public bool Dirty = true;
+
+		public void Dispose()
+			=> Target.Dispose();
+	}
 }
