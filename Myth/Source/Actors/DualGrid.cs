@@ -29,6 +29,18 @@ public class DualGrid : Actor
 
 	private readonly List<DrawCommand> drawCommands = [];
 	private readonly List<VisibilityPolygon.Segment> visibilitySegments = [];
+
+	// Reused across Build() calls so RebuildGeometry (which fires per editor edit)
+	// doesn't churn the GC. Cleared and refilled each merge instead of reallocated.
+	private readonly List<VisibilityPolygon.Segment> mergeScratch = [];
+	private readonly List<SegmentRun> horizontalRuns = [];
+	private readonly List<SegmentRun> verticalRuns = [];
+
+	private static readonly Comparison<SegmentRun> CompareRuns = static (a, b) =>
+	{
+		var axis = a.Axis.CompareTo(b.Axis);
+		return axis != 0 ? axis : a.Start.CompareTo(b.Start);
+	};
 	public Factory.TileLayer Layer { get; set; } = Factory.TileLayer.Foreground;
 	public override bool CastsReflection => false;
 
@@ -176,61 +188,43 @@ public class DualGrid : Actor
 		if (visibilitySegments.Count <= 1)
 			return;
 
-		var merged = new List<VisibilityPolygon.Segment>(visibilitySegments.Count);
-		MergeHorizontalVisibilitySegments(merged);
-		MergeVerticalVisibilitySegments(merged);
+		mergeScratch.Clear();
+		horizontalRuns.Clear();
+		verticalRuns.Clear();
 
 		foreach (var segment in visibilitySegments)
-			if (!IsAxisAligned(segment))
-				merged.Add(segment);
+		{
+			if (NearlyEqual(segment.A.Y, segment.B.Y))
+				horizontalRuns.Add(new(
+					Quantize(segment.A.Y),
+					MathF.Min(segment.A.X, segment.B.X),
+					MathF.Max(segment.A.X, segment.B.X)));
+			else if (NearlyEqual(segment.A.X, segment.B.X))
+				verticalRuns.Add(new(
+					Quantize(segment.A.X),
+					MathF.Min(segment.A.Y, segment.B.Y),
+					MathF.Max(segment.A.Y, segment.B.Y)));
+			else
+				mergeScratch.Add(segment);
+		}
+
+		horizontalRuns.Sort(CompareRuns);
+		verticalRuns.Sort(CompareRuns);
+
+		MergeRuns(horizontalRuns, mergeScratch, horizontal: true);
+		MergeRuns(verticalRuns, mergeScratch, horizontal: false);
 
 		visibilitySegments.Clear();
-		visibilitySegments.AddRange(merged);
+		visibilitySegments.AddRange(mergeScratch);
 	}
 
-	private void MergeHorizontalVisibilitySegments(List<VisibilityPolygon.Segment> merged)
+	private static void MergeRuns(List<SegmentRun> runs, List<VisibilityPolygon.Segment> merged, bool horizontal)
 	{
-		var horizontal = visibilitySegments
-			.Where(static it => NearlyEqual(it.A.Y, it.B.Y))
-			.Select(static it =>
-			{
-				var y = Quantize(it.A.Y);
-				var left = MathF.Min(it.A.X, it.B.X);
-				var right = MathF.Max(it.A.X, it.B.X);
-				return new SegmentRun(y, left, right);
-			})
-			.OrderBy(static it => it.Axis)
-			.ThenBy(static it => it.Start)
-			.ToArray();
-
-		MergeRuns(horizontal, merged, static run => new(new Vector2(run.Start, run.Axis), new Vector2(run.End, run.Axis)));
-	}
-
-	private void MergeVerticalVisibilitySegments(List<VisibilityPolygon.Segment> merged)
-	{
-		var vertical = visibilitySegments
-			.Where(static it => NearlyEqual(it.A.X, it.B.X))
-			.Select(static it =>
-			{
-				var x = Quantize(it.A.X);
-				var top = MathF.Min(it.A.Y, it.B.Y);
-				var bottom = MathF.Max(it.A.Y, it.B.Y);
-				return new SegmentRun(x, top, bottom);
-			})
-			.OrderBy(static it => it.Axis)
-			.ThenBy(static it => it.Start)
-			.ToArray();
-
-		MergeRuns(vertical, merged, static run => new(new Vector2(run.Axis, run.Start), new Vector2(run.Axis, run.End)));
-	}
-
-	private static void MergeRuns(SegmentRun[] runs, List<VisibilityPolygon.Segment> merged, Func<SegmentRun, VisibilityPolygon.Segment> createSegment)
-	{
-		if (runs.Length == 0)
+		if (runs.Count == 0)
 			return;
 
 		var current = runs[0];
-		for (var i = 1; i < runs.Length; i++)
+		for (var i = 1; i < runs.Count; i++)
 		{
 			var next = runs[i];
 			if (NearlyEqual(current.Axis, next.Axis) && next.Start <= current.End + 0.001f)
@@ -240,16 +234,18 @@ public class DualGrid : Actor
 			}
 
 			if (current.End > current.Start)
-				merged.Add(createSegment(current));
+				merged.Add(CreateSegment(current, horizontal));
 			current = next;
 		}
 
 		if (current.End > current.Start)
-			merged.Add(createSegment(current));
+			merged.Add(CreateSegment(current, horizontal));
 	}
 
-	private static bool IsAxisAligned(VisibilityPolygon.Segment segment)
-		=> NearlyEqual(segment.A.X, segment.B.X) || NearlyEqual(segment.A.Y, segment.B.Y);
+	private static VisibilityPolygon.Segment CreateSegment(SegmentRun run, bool horizontal)
+		=> horizontal
+			? new(new Vector2(run.Start, run.Axis), new Vector2(run.End, run.Axis))
+			: new(new Vector2(run.Axis, run.Start), new Vector2(run.Axis, run.End));
 
 	private static bool NearlyEqual(float a, float b)
 		=> MathF.Abs(a - b) <= 0.001f;

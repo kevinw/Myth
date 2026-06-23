@@ -795,9 +795,9 @@ public sealed partial class GameView
 		foreach (var slope in room.SlopeTiles)
 		{
 			var polygon = room.GetSlopePolygon(slope);
-			if (polygon.Length < 3)
+			if (polygon.Count < 3)
 				continue;
-			for (var i = 1; i + 1 < polygon.Length; i++)
+			for (var i = 1; i + 1 < polygon.Count; i++)
 				Batcher.Triangle(polygon[0], polygon[i], polygon[i + 1], Color.White);
 		}
 		foreach (var actor in Actors)
@@ -995,6 +995,13 @@ public sealed partial class GameView
 		return hash;
 	}
 
+	// State for drawLightMaskLightAction so the delegate can be cached once instead
+	// of reallocating a closure per actor per frame (DrawLightMask runs twice a frame,
+	// and ForEachLight is called for every actor).
+	private Target? lightMaskTarget;
+	private bool lightMaskIncludeShadows;
+	private Action<Vector2, float, float, float, Color>? drawLightMaskLightAction;
+
 	private void DrawLightMask(Target lightMask, bool includeShadows)
 	{
 		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
@@ -1004,6 +1011,14 @@ public sealed partial class GameView
 			AddSingleLightMask(lightMask);
 		}
 
+		lightMaskTarget = lightMask;
+		lightMaskIncludeShadows = includeShadows;
+		drawLightMaskLightAction ??= (position, radius, intensity, height, lightColor) =>
+		{
+			DrawSingleLightMask(position, radius, intensity, height, lightColor, lightMaskIncludeShadows);
+			AddSingleLightMask(lightMaskTarget!);
+		};
+
 		foreach (var actor in Actors)
 		{
 			if (actor is Light light)
@@ -1012,11 +1027,7 @@ public sealed partial class GameView
 				AddSingleLightMask(lightMask);
 			}
 
-			actor.ForEachLight((position, radius, intensity, height, lightColor) =>
-			{
-				DrawSingleLightMask(position, radius, intensity, height, lightColor, includeShadows);
-				AddSingleLightMask(lightMask);
-			});
+			actor.ForEachLight(drawLightMaskLightAction);
 		}
 
 	}
@@ -1312,20 +1323,42 @@ public sealed partial class GameView
 			if (actor is not HiddenWallGrid hiddenWalls)
 				continue;
 
-			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+			hiddenWalls.ForEachVisibleCell((self: this, lightPosition, radius), static (s, rect, _, _) =>
 			{
-				if (CircleOverlapsRect(lightPosition, radius, rect))
-					DrawShadowVolume(lightPosition, radius, rect);
+				if (CircleOverlapsRect(s.lightPosition, s.radius, rect))
+					s.self.DrawShadowVolume(s.lightPosition, s.radius, rect);
 			});
 		}
 
 		DrawActorSpriteShadows(lightPosition, radius);
 	}
 
-	internal IEnumerable<Room> VisibleRooms()
+	// Struct enumerable (value-type GetEnumerator) so `foreach (… in VisibleRooms())`
+	// in per-light/per-frame paths doesn't heap-allocate an iterator each call.
+	internal VisibleRoomsEnumerable VisibleRooms() => new(room, nextRoom);
+
+	internal readonly struct VisibleRoomsEnumerable(Room? room, Room? nextRoom)
 	{
-		if (room != null) yield return room;
-		if (nextRoom != null && nextRoom != room) yield return nextRoom;
+		public Enumerator GetEnumerator() => new(room, nextRoom);
+
+		public struct Enumerator(Room? room, Room? nextRoom)
+		{
+			private int index = -1;
+			public Room Current { get; private set; } = null!;
+
+			public bool MoveNext()
+			{
+				while (++index < 2)
+				{
+					var candidate = index == 0 ? room : nextRoom;
+					if (candidate == null || (index == 1 && candidate == room))
+						continue;
+					Current = candidate;
+					return true;
+				}
+				return false;
+			}
+		}
 	}
 
 	private void DrawSunShadows(Vector2 direction)
@@ -1348,7 +1381,8 @@ public sealed partial class GameView
 
 		foreach (var actor in Actors)
 			if (actor is HiddenWallGrid hiddenWalls)
-				hiddenWalls.ForEachVisibleCell((rect, _, _) => DrawSunShadowVolume(direction, distance, rect));
+				hiddenWalls.ForEachVisibleCell((self: this, direction, distance), static (s, rect, _, _) =>
+					s.self.DrawSunShadowVolume(s.direction, s.distance, rect));
 	}
 
 	private readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
@@ -1509,8 +1543,8 @@ public sealed partial class GameView
 
 			if (actor is HiddenWallGrid hiddenWalls)
 			{
-				hiddenWalls.ForEachVisibleCell((rect, _, _) =>
-					AddRectVisibilitySegments(segments, rect, lightPosition, radius));
+				hiddenWalls.ForEachVisibleCell((segments, lightPosition, radius), static (s, rect, _, _) =>
+					AddRectVisibilitySegments(s.segments, rect, s.lightPosition, s.radius));
 			}
 		}
 	}

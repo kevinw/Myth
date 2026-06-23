@@ -455,6 +455,16 @@ public partial class Manager
 		editorCamera = Vector2.Lerp(editorCameraTweenFrom, editorCameraTweenTo, t);
 		editorZoom = float.Lerp(editorZoomTweenFrom, editorZoomTweenTo, t);
 		editorZoomTarget = editorZoom;
+
+#if DEBUG
+		if (editorCameraTween >= 1.0f)
+		{
+			var bytesAfterTween = GC.GetAllocatedBytesForCurrentThread();
+			var bytesAllocated = bytesAfterTween - gcBytesBeforeEditorTween;
+			if (bytesAllocated > 0)
+				Console.WriteLine($"Editor tween: GC allocated {bytesAllocated} bytes");
+		}
+#endif
 	}
 
 	void MatchEditorCameraToGame()
@@ -3612,12 +3622,17 @@ public partial class Manager
 		return '0';
 	}
 
+	long gcBytesBeforeEditorTween;
 
 	/// Shifts to display a new room
 	void ShiftRoom(Point2 direction)
 	{
 		var current = CurrentRoom;
 		if (current == null) return;
+
+#if DEBUG
+		gcBytesBeforeEditorTween = GC.GetAllocatedBytesForCurrentThread();
+#endif
 
 		var exitPosition = EditorExitPosition(current, direction);
 		if (Assets.FindAdjacentRoom(current, direction, exitPosition) is not { } adjacent)
@@ -4268,8 +4283,16 @@ public partial class Manager
 		var viewport = !playing && !startingPlay ? View : GameViewRect;
 		var perf = PerfStats.Snapshot;
 #if DEBUG
+		var gcMs = gcTotalPauseDuration.TotalMilliseconds;
+		string gcPauseDurationStr;
+		if (gcMs > 1000) {
+			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalSeconds:0}s";
+		} else {
+			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalMilliseconds:0}ms";
+		}
+
 		var mainMessage = fpsOverlayMode == 0
-			? $"FPS {fpsOverlayValue:0} GC {threadAllocatedBytesOverlayValue} bytes"
+			? $"FPS {fpsOverlayValue:0} GC {threadAllocatedBytesOverlayValue} bytes ({gcPauseDurationStr})"
 			: $"FPS {fpsOverlayValue:0}\n" +
 			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
 			  $"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +

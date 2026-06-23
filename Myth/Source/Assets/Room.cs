@@ -43,7 +43,7 @@ public class Room
 			Game.TileSize);
 	}
 
-	public readonly record struct LightOccluderPolygon(Point2[] Points, RectInt Bounds);
+	public readonly record struct LightOccluderPolygon(StackList8<Point2> Points, RectInt Bounds);
 
 	public static readonly Point2 DefaultSize = new(Game.Columns, Game.Rows);
 	public static readonly Color DefaultBackdropColor = new(0x150e22);
@@ -92,7 +92,7 @@ public class Room
 	public readonly List<SlopeTile> SlopeTiles = [];
 
 	private readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
-	private readonly Dictionary<Point2, Point2[]> slopePolygonLookup = [];
+	private readonly Dictionary<Point2, StackList8<Point2>> slopePolygonLookup = [];
 	private byte[,] dualTerrainJoinMasks = new byte[0, 0];
 
 	/// <summary>
@@ -811,15 +811,15 @@ public class Room
 
 		foreach (var polygon in LightOccluderPolygons)
 		{
-			for (var i = 0; i < polygon.Points.Length; i++)
-				AddVisibilitySegment(polygon.Points[i], polygon.Points[(i + 1) % polygon.Points.Length]);
+			for (var i = 0; i < polygon.Points.Count; i++)
+				AddVisibilitySegment(polygon.Points[i], polygon.Points[(i + 1) % polygon.Points.Count]);
 		}
 	}
 
 	private void AddVisibilitySegment(Vector2 a, Vector2 b)
 		=> VisibilitySegments.Add(new(a, b));
 
-	public Point2[] GetSlopePolygon(SlopeTile slope)
+	public StackList8<Point2> GetSlopePolygon(SlopeTile slope)
 		=> slopePolygonLookup.TryGetValue(slope.Tile, out var polygon) ? polygon : BuildSlopePolygon(slope);
 
 	public void GetSlopeSurface(SlopeTile slope, out Vector2 left, out Vector2 right)
@@ -831,7 +831,7 @@ public class Room
 		right = new Vector2(rect.Right, rect.Top + rightHeight);
 	}
 
-	private Point2[] BuildSlopePolygon(SlopeTile slope)
+	private StackList8<Point2> BuildSlopePolygon(SlopeTile slope)
 	{
 		var rect = slope.WorldBounds(this);
 		var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
@@ -859,7 +859,7 @@ public class Room
 			points.Add(leftSurface);
 		}
 
-		return points.ToArray();
+		return points;
 	}
 
 	private static int SlopeSurfaceHeight(SlopeTile slope, int runEdgeIndex)
@@ -870,10 +870,10 @@ public class Room
 		return (slope.RunLength - runEdgeIndex) * Game.TileSize / slope.RunLength;
 	}
 
-	private static bool PointInPolygon(Vector2 point, Point2[] polygon)
+	private static bool PointInPolygon(Vector2 point, StackList8<Point2> polygon)
 	{
 		var inside = false;
-		for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+		for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
 		{
 			var a = (Vector2)polygon[i];
 			var b = (Vector2)polygon[j];
@@ -888,9 +888,9 @@ public class Room
 		return inside;
 	}
 
-	private static bool PointInPolygonInclusive(Vector2 point, Point2[] polygon)
+	private static bool PointInPolygonInclusive(Vector2 point, StackList8<Point2> polygon)
 	{
-		for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+		for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
 		{
 			if (PointOnSegment(point, polygon[j], polygon[i]))
 				return true;

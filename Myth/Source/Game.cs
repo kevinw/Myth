@@ -257,6 +257,7 @@ public partial class Game : IDisposable
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
 	public bool IsEditorPreview => !AudioEventsEnabled;
+	internal bool Disposed => disposed;
 	public bool AudioMuted { get; set; }
 	public bool Simulating { get; private set; }
 	public NavTrace? NavTrace { get; set; }
@@ -1344,6 +1345,41 @@ public partial class Game : IDisposable
 		}
 	}
 
+	// Swaps the editor preview to a different room while reusing this Game and its
+	// GameView, instead of the old dispose + `new Game` path that reallocated the
+	// entire GameView (render targets + materials, ~750KB) on every switch. Mirrors
+	// the constructor's editor-preview activation, preceded by an actor teardown;
+	// FinishRoomActivation flushes the destroyed actors and prunes the previous
+	// room's GPU caches so nothing accumulates across switches.
+	public void SwitchEditorRoom(Room target)
+	{
+		var fromRoom = room;
+		foreach (var actor in Actors)
+			Destroy(actor);
+
+		room = target.CloneRuntime();
+		Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
+		UpdateAudioListener();
+		LoadRoom(room);
+
+		// respawnPosition is gameplay-only (readonly, set in the ctor) and unused by
+		// the non-playing editor preview, so we just place the player for display.
+		if (GetFirst<PlayerStart>() is { } playerStart)
+		{
+			if (GetFirst<Player>() is { } player)
+				player.Position = playerStart.Position;
+			else
+				Create<Player>(playerStart.Position);
+		}
+		EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
+		RaiseRoomChanged(fromRoom, room, RoomChangeKind.InitialLoad, Point2.Zero);
+
+		var props = Create<PropSystem>();
+		props.KeepOnRoomTransition = true;
+
+		FinishRoomActivation(RoomChangeKind.Reload);
+	}
+
 	public void RefreshRoomTiles()
 	{
 		if (room == null)
@@ -1423,13 +1459,13 @@ public partial class Game : IDisposable
 	void BuildDualTiles(Room forRoom, DualGrid dual, Factory.TileLayer layer)
 	{
 		dual.Clear();
-		var dualEntries = Factory.Entries
-			.Where(it => it.Value.DualTilesetName != null && it.Value.Layer == layer)
-			.ToArray();
-
-		foreach (var (tileType, entry) in dualEntries)
+		// Iterate the dictionary directly (struct enumerator) instead of a capturing
+		// Where(...).ToArray(); this runs twice per LoadRoom (bg + fg).
+		foreach (var (tileType, entry) in Factory.Entries)
 		{
-			if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } dualTileset)
+			if (entry.DualTilesetName == null || entry.Layer != layer)
+				continue;
+			if (Assets.GetTileset(entry.DualTilesetName) is not { } dualTileset)
 				continue;
 
 			dual.Build(forRoom, tileType, dualTileset, layer);

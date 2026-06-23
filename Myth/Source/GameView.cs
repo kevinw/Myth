@@ -187,8 +187,8 @@ public sealed partial class GameView : IDisposable
 		foreach (var slope in room.SlopeTiles)
 		{
 			var polygon = room.GetSlopePolygon(slope);
-			for (var i = 0; i < polygon.Length; i++)
-				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Length], 1, Color.Red);
+			for (var i = 0; i < polygon.Count; i++)
+				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Count], 1, Color.Red);
 		}
 		foreach (var rect in game.CollisionRectsThisFrame)
 			Batcher.RectLine(rect, 1, Color.Red);

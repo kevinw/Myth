@@ -80,6 +80,7 @@ public partial class Manager : App
 #if DEBUG
 	long threadAllocatedBytes;
 	long threadAllocatedBytesOverlayValue;
+	TimeSpan gcTotalPauseDuration;
 	long lastAllocated = -1;
 #endif
 
@@ -875,6 +876,7 @@ public partial class Manager : App
 #if DEBUG
 		threadAllocatedBytesOverlayValue = (long)((float)threadAllocatedBytes / fpsOverlayFrames);
 		threadAllocatedBytes = 0;
+		gcTotalPauseDuration = GC.GetTotalPauseDuration();
 #endif
 
 		PerfStats.Publish();
@@ -1656,8 +1658,24 @@ public partial class Manager : App
 		if (playing || startingPlay)
 			return;
 
+		if (CurrentRoom is not { } room)
+		{
+			game?.Dispose();
+			game = null;
+			return;
+		}
+
+		// Reuse a live editor-preview Game so its GameView (render targets/materials)
+		// isn't reallocated on every room switch or edit; only rebuild from scratch
+		// when there's no reusable preview (e.g. just exited play).
+		if (game is { IsEditorPreview: true, Disposed: false })
+		{
+			game.SwitchEditorRoom(room);
+			return;
+		}
+
 		game?.Dispose();
-		game = CurrentRoom is { } room ? new Game(this, room, audioEventsEnabled: false, spawnBud: false) : null;
+		game = new Game(this, room, audioEventsEnabled: false, spawnBud: false);
 	}
 
 #if !IOS && !BROWSER

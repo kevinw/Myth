@@ -123,4 +123,23 @@ public class HiddenWallGrid : Actor
 				tilemap[x, y]);
 		}
 	}
+
+	// State-passing overload: callers pass a value-type state plus a static (capture-free,
+	// compiler-cached) callback, so hot per-light/per-frame loops don't allocate a fresh
+	// closure + delegate per cell-walk.
+	public void ForEachVisibleCell<TState>(TState state, Action<TState, RectInt, float, Subtexture> action)
+	{
+		for (var y = 0; y < size.Y; y ++)
+		for (var x = 0; x < size.X; x ++)
+		{
+			if (!hidden[x, y] || alpha[x, y] <= 0.01f)
+				continue;
+
+			action(
+				state,
+				new RectInt(Position.X + x * Game.TileSize, Position.Y + y * Game.TileSize, Game.TileSize, Game.TileSize),
+				alpha[x, y],
+				tilemap[x, y]);
+		}
+	}
 }
