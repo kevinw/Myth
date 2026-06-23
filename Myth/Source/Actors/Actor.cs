@@ -121,8 +121,7 @@ public class Actor
 	}
 
 	/// Checks if an animation is playing
-	public bool IsPlaying(string name)
-		=> Animation.Name == name;
+	public bool IsPlaying(string name) => Animation.Name == name;
 
 	public bool Verbose = false;
 
@@ -153,30 +152,16 @@ public class Actor
 		=> Game.PlayAudioEvent(name, parameterName, parameterLabel, Position);
 
 	/// Checks to see if we overlap any actors of the given mask
-	public bool OverlapsAny(Masks mask)
-		=> OverlapsAny(Point2.Zero, mask);
+	public bool OverlapsAny(Masks mask) => OverlapsAny(Point2.Zero, mask);
 
 	/// Checks to see if we overlap any actors of the given mask
-	public bool OverlapsAny(Point2 offset, Masks mask)
-	{
-		if (mask.Has(Masks.Solid) && Game.OverlapsRoomCollision(this, offset))
-			return true;
-
-		foreach (var other in Game.Actors)
-		{
-			if (other is Grid && other.Mask.Has(Masks.Solid))
-				continue;
-
-			if (other != this && other.Mask.Has(mask) && OverlapsAny(offset, other))
-				return true;
-		}
-
-		return false;
-	}
+	public bool OverlapsAny(Point2 offset, Masks mask) => OverlapsFirst(offset, mask) != null;
 
 	/// Checks to see if we overlap the given actor
-	public bool OverlapsAny(Point2 offset, Actor other)
-		=> Hitbox.Overlaps(Position + offset - other.Position, other.Hitbox);
+	public bool OverlapsAny(Point2 offset, Actor other) => Hitbox.Overlaps(Position + offset - other.Position, other.Hitbox);
+
+	/// Finds the first overlapping actor of the given mask
+	public Actor? OverlapsFirst(Masks mask) => OverlapsFirst(Point2.Zero, mask);
 
 	/// Finds the first overlapping actor of the given mask
 	public Actor? OverlapsFirst(Point2 offset, Masks mask)
@@ -192,10 +177,6 @@ public class Actor
 
 		return null;
 	}
-
-	/// Finds the first overlapping actor of the given mask
-	public Actor? OverlapsFirst(Masks mask)
-		=> OverlapsFirst(Point2.Zero, mask);
 
 	/// Checks if we're on the Ground
 	public bool Grounded()
