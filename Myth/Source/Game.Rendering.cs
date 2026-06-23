@@ -1,0 +1,1866 @@
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
+using System.Text.Json.Nodes;
+using Foster.Framework;
+
+namespace Myth;
+
+// Presentation layer carved out of Game (rendering pipeline, lighting, shadows,
+// normals, tile-field, reflections). Slated to become class GameView; kept as a
+// partial of Game for now so the move stays behavior-preserving. See memory: game-gameview-split.
+public partial class Game
+{
+	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
+	{
+		PrepareRenderingList();
+
+		using (PerfStats.Time(PerfStat.World))
+		{
+			using (GraphicsDevice.DebugGroup("Myth/background world"))
+				DrawWorldLayer(BackgroundScreen, background: true);
+			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
+				DrawWorldLayer(ForegroundScreen, background: false);
+			if (PerfToggles.Reflections)
+				using (GraphicsDevice.DebugGroup("Myth/flat reflections"))
+					CompositeFlatReflections(ForegroundScreen);
+		}
+		if (PerfToggles.Emissive)
+		{
+			using (PerfStats.Time(PerfStat.Emissive))
+			{
+				using (GraphicsDevice.DebugGroup("Myth/background emissive"))
+					DrawEmissiveLayer(BackgroundEmissive, background: true);
+				using (GraphicsDevice.DebugGroup("Myth/foreground emissive"))
+					DrawEmissiveLayer(ForegroundEmissive, background: false);
+			}
+		}
+		else
+		{
+			BackgroundEmissive.Clear(Color.Transparent);
+			ForegroundEmissive.Clear(Color.Transparent);
+		}
+
+		UpdateMouseLightPosition(viewport);
+		if (PerfToggles.NormalBuffer)
+		{
+			using (PerfStats.Time(PerfStat.Normal))
+			using (GraphicsDevice.DebugGroup("Myth/normal buffer"))
+			{
+				DrawNormalBuffer();
+			}
+		}
+		else
+		{
+			NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
+		}
+		if (PerfToggles.DitherAndTileField)
+		{
+			using (PerfStats.Time(PerfStat.TileDither))
+			{
+				using (GraphicsDevice.DebugGroup("Myth/tile field"))
+					DrawTileField();
+				using (GraphicsDevice.DebugGroup("Myth/dither mask"))
+					DrawDitherMask();
+			}
+		}
+		else
+		{
+			TileField.Clear(Color.Transparent);
+			DitherMask.Clear(Color.White);
+		}
+
+		Target output;
+		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/tile field debug"))
+				output = DrawTileFieldDebug();
+		}
+		else if (debugView == DebugView.DitherMask)
+		{
+			output = DitherMask;
+		}
+		else
+		{
+			if (PerfToggles.Lighting)
+			{
+				using (PerfStats.Time(PerfStat.Lighting))
+				using (GraphicsDevice.DebugGroup("Myth/lighting"))
+				{
+					output = ApplyLighting();
+				}
+			}
+			else
+			{
+				using (PerfStats.Time(PerfStat.Lighting))
+				using (GraphicsDevice.DebugGroup("Myth/raw world composite"))
+				{
+					output = CompositeRawWorld();
+				}
+			}
+			if (debugView == DebugView.LightMask)
+				output = BackgroundLightMask;
+			else if (debugView == DebugView.NormalBuffer)
+				output = NormalBuffer;
+			else if (debugView == DebugView.Reflection)
+				output = ReflectionScreen;
+			else if (debugView == DebugView.None)
+			{
+				if (PerfToggles.Glitch)
+				{
+					using (PerfStats.Time(PerfStat.Post))
+					using (GraphicsDevice.DebugGroup("Myth/pixel sort glitch"))
+					{
+						output = ApplyPixelSortGlitch(output);
+					}
+				}
+			}
+		}
+		if (PerfToggles.Particles && particleSystem is { Supported: true })
+		{
+			using (GraphicsDevice.DebugGroup("Myth/particles"))
+				particleSystem.Render(output, RenderCamera, zoomLevel);
+		}
+		if (debugView is DebugView.None or DebugView.CollisionRects)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/story speech"))
+				DrawStorySpeech(output);
+		}
+		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+		{
+			using (PerfStats.Time(PerfStat.Hud))
+			using (GraphicsDevice.DebugGroup("Myth/hud"))
+			{
+				DrawPlayerHud(output);
+			}
+		}
+		if (debugView == DebugView.Visibility)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/visibility debug"))
+				DrawVisibilityDebug(output);
+		}
+		if (debugView == DebugView.PlatformNav)
+		{
+			GetPlatformNavGraph();
+		}
+
+		// draw screen to window
+		var crt = applyCrt && PerfToggles.Crt ? crtMaterial : null;
+		var useCrt = crt != null;
+		using (PerfStats.Time(PerfStat.FinalComposite))
+		using (GraphicsDevice.DebugGroup(useCrt ? "Myth/final composite crt" : "Myth/final composite"))
+		{
+			var size = viewport.Size;
+			var center = viewport.Center;
+			var scale = Calc.Min(size.X / (float)output.Width, size.Y / (float)output.Height);
+
+			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+			if (useCrt)
+			{
+				var CrtTime = Time.SecondsF * 0.2f;
+				const float BloomAmount = 0.09f;
+				const float ScanlineAmount = 0.22f;
+				const float VignetteAmount = 0.06f;
+				const float RgbOffset = 0.35f;
+				crt!.Material.Fragment.SetUniformBuffer([
+					Screen.Width,
+					Screen.Height,
+					CrtTime,
+					BloomAmount,
+					ScanlineAmount,
+					VignetteAmount,
+					RgbOffset,
+				]);
+				Batcher.PushMaterial(crt.Material);
+			}
+#if BROWSER
+			var flipTargetTextures = Batcher.FlipTargetTextures;
+			Batcher.FlipTargetTextures = false;
+#endif
+			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale * fbZoom, 0, Color.White);
+#if BROWSER
+			Batcher.FlipTargetTextures = flipTargetTextures;
+#endif
+			if (useCrt)
+				Batcher.PopMaterial();
+			Batcher.PopSampler();
+			Batcher.Render(destination, scissor: scissor);
+			Batcher.Clear();
+		}
+	}
+
+	private Target CompositeRawWorld()
+	{
+		Screen.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.Image(ForegroundScreen, ForegroundScreen.Bounds.Center, ForegroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.Render(Screen);
+		Batcher.Clear();
+		return Screen;
+	}
+
+	private void PrepareRenderingList()
+	{
+		rendering.Clear();
+		rendering.AddRange(Actors);
+		rendering.Sort((a, b) => b.Depth - a.Depth);
+	}
+
+	private Target DrawTileFieldDebug()
+	{
+		Screen.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		if (tileFieldDebugMaterial != null)
+		{
+			tileFieldDebugMaterial.Material.Fragment.SetUniformBuffer([
+				TileFieldDebugChannel(),
+				0,
+				1,
+				0
+			]);
+			Batcher.PushMaterial(tileFieldDebugMaterial.Material);
+		}
+		Batcher.Image(TileField, TileField.Bounds.Center, TileField.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		if (tileFieldDebugMaterial != null)
+			Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(Screen);
+		Batcher.Clear();
+		return Screen;
+	}
+
+	private int TileFieldDebugChannel()
+		=> debugView switch
+		{
+			DebugView.TileFieldGreen => 1,
+			_ => 0
+		};
+
+	private void DrawWorldLayer(Target target, bool background)
+	{
+		target.Clear(Color.Transparent);
+		if (background)
+			DrawBackdrop(target);
+
+		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
+		{
+			Batcher.Render(target);
+			Batcher.Clear();
+			return;
+		}
+
+		PushWorldMatrix();
+
+		// draw actors
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+			if (IsBackgroundActor(actor) != background)
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.Render(Batcher);
+			Batcher.PopMatrix();
+		}
+
+		if (!background && debugView == DebugView.CollisionRects)
+			DrawCollisionRects(); // TODO: don't do this in post-processing context
+
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+
+		if (background && PerfToggles.Reflections)
+			DrawSpriteReflections(target);
+	}
+
+	private void DrawBackdrop(Target target)
+	{
+		var (top, bottom) = CurrentBackdropColors();
+		Batcher.Rect(new Rect(0, 0, target.Width, target.Height), top, top, bottom, bottom);
+	}
+
+	private void DrawPlayerHud(Target target)
+	{
+		if (GetFirst<Player>() is { } player)
+		{
+			Point2 pos = new(0, target.Height - 16);
+			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
+
+			for (var i = 0; i < Player.MaxHealth; i++)
+			{
+				Batcher.Image(
+					player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1"), pos,
+					Color.White);
+				pos.X += 12;
+			}
+		}
+
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	private static bool IsBackgroundActor(Actor actor)
+		=> actor switch
+		{
+			Grid grid => grid.Layer == Factory.TileLayer.Background,
+			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
+			_ => false
+		};
+
+	private void DrawEmissiveLayer(Target target, bool background)
+	{
+		target.Clear(Color.Transparent);
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+			if (IsBackgroundActor(actor) != background)
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderEmissive(Batcher);
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	private void DrawSpriteReflections(Target target)
+	{
+		if (room == null)
+			return;
+
+		ReflectionScreen.Clear(Color.Transparent);
+		foreach (var rect in room.ReflectionRects)
+		{
+			var scissor = GetReflectionScissor(rect.Bounds);
+			if (scissor.Width <= 0 || scissor.Height <= 0)
+				continue;
+
+			var surfaceTop = ReflectionSurfaceTop(rect.Bounds);
+			PushWorldMatrix();
+			foreach (var actor in rendering)
+			{
+				if (!actor.Visible || !actor.CastsReflection)
+					continue;
+				if (!ActorCanReflectIn(actor, rect.Bounds))
+					continue;
+
+				Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, surfaceTop)));
+				Batcher.PushMatrix(actor.Position);
+				actor.RenderReflection(Batcher, Color.White * rect.Opacity);
+				Batcher.PopMatrix();
+				Batcher.PopMatrix();
+			}
+			Batcher.PopMatrix();
+			Batcher.Render(ReflectionScreen, scissor: scissor);
+			Batcher.Clear();
+		}
+
+		ReflectionMask.Clear(Color.Transparent);
+		foreach (var rect in room.ReflectionRects)
+		{
+			if (!rect.Distorted) continue;
+			var scissor = GetReflectionScissor(rect.Bounds);
+			if (scissor.Width <= 0 || scissor.Height <= 0) continue;
+			Batcher.Rect(new Rect(scissor.X, scissor.Y, scissor.Width, scissor.Height), Color.White);
+		}
+		Batcher.Render(ReflectionMask);
+		Batcher.Clear();
+
+		CompositeReflections(target);
+	}
+
+	private RectInt GetReflectionScissor(RectInt rect)
+	{
+		var screenRect = new RectInt(
+			(int)MathF.Round((rect.X - Camera.X + shake.X) * zoomLevel),
+			(int)MathF.Round((rect.Y - Camera.Y + shake.Y) * zoomLevel),
+			(int)MathF.Round(rect.Width * zoomLevel),
+			(int)MathF.Round(rect.Height * zoomLevel));
+		return screenRect.GetIntersection(ReflectionScreen.Bounds);
+	}
+
+	private void CompositeReflections(Target target) => BlitReflections(target, flatOnly: 0.0f);
+
+	private void CompositeFlatReflections(Target target)
+	{
+		if (room == null || !room.ReflectionRects.Any(r => !r.Distorted))
+			return;
+		BlitReflections(target, flatOnly: 1.0f);
+	}
+
+	private void BlitReflections(Target target, float flatOnly)
+	{
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		if (reflectionDistortMaterial != null)
+		{
+			reflectionDistortMaterial.Material.Fragment.SetUniformBuffer([
+				ReflectionScreen.Width,
+				ReflectionScreen.Height,
+				Time.SecondsF,
+				1.4f,
+				0.10f,
+				2.2f,
+				flatOnly,
+				0
+			]);
+			reflectionDistortMaterial.Material.Fragment.Samplers[1] = new(ReflectionMask, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+			Batcher.PushMaterial(reflectionDistortMaterial.Material);
+		}
+		Batcher.Image(ReflectionScreen, ReflectionScreen.Bounds.Center, ReflectionScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		if (reflectionDistortMaterial != null)
+			Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	private int ReflectionSurfaceTop(RectInt rect)
+	{
+		if (room == null)
+			return rect.Top;
+
+		var rects = room.ReflectionRects;
+		var start = rects.FindIndex(r => r.Bounds == rect);
+		if (start < 0)
+			return rect.Top;
+
+		var visited = new bool[rects.Count];
+		var pending = new Stack<int>();
+		pending.Push(start);
+		visited[start] = true;
+
+		var top = rect.Top;
+		while (pending.Count > 0)
+		{
+			var current = rects[pending.Pop()].Bounds;
+			top = Math.Min(top, current.Top);
+
+			for (var i = 0; i < rects.Count; i++)
+			{
+				if (visited[i] || !ReflectionRectsTouch(current, rects[i].Bounds))
+					continue;
+
+				visited[i] = true;
+				pending.Push(i);
+			}
+		}
+
+		return top;
+	}
+
+	private static bool ReflectionRectsTouch(RectInt a, RectInt b)
+		=> a.Left <= b.Right &&
+		   a.Right >= b.Left &&
+		   a.Top <= b.Bottom &&
+		   a.Bottom >= b.Top;
+
+	private static bool ActorCanReflectIn(Actor actor, RectInt rect)
+	{
+		var bounds = actor.GetVisualBounds().Inflate(4);
+		if (bounds.Right <= rect.Left || bounds.Left >= rect.Right)
+			return false;
+
+		return bounds.Bottom >= rect.Top - 64 && bounds.Top <= rect.Bottom + 64;
+	}
+
+	private Target ApplyLighting()
+	{
+		if (lightingCompositeMaterial == null)
+			return ForegroundScreen;
+
+		DrawLightMask(BackgroundLightMask, includeShadows: true);
+		DrawLightMask(ForegroundLightMask, includeShadows: false);
+
+		var aoStrength = 0.0f;
+		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/ambient occlusion mask"))
+			{
+				DrawBackgroundCoverage();
+				BuildAoMask();
+			}
+			aoStrength = Manager.AmbientOcclusionStrength;
+		}
+
+		// AO darkens only the background, where it sits beneath the foreground overhang.
+		CompositeLayer(BackgroundScreen, BackgroundLightMask, BackgroundEmissive, LitBackground, aoStrength);
+		CompositeLayer(ForegroundScreen, ForegroundLightMask, ForegroundEmissive, LitForeground, aoStrength: 0.0f);
+
+		LitScreen.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(LitBackground, LitBackground.Bounds.Center, LitBackground.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.Image(LitForeground, LitForeground.Bounds.Center, LitForeground.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.Render(LitScreen);
+		Batcher.Clear();
+
+		if (PerfToggles.LightingNoise)
+			ApplyLightingNoise(LitScreen);
+
+		return LitScreen;
+	}
+
+	private void ApplyLightingNoise(Target target)
+	{
+		if (Assets.LightingNoise == null)
+			return;
+
+		var renderCamera = RenderCamera;
+		Batcher.PushMatrix(Matrix3x2.CreateScale(zoomLevel));
+		Batcher.PushBlend(BlendMode.Multiply);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat, TextureWrap.Repeat));
+		Batcher.Image(
+			Assets.LightingNoise,
+			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, ZoomedWidth, ZoomedHeight),
+			Vector2.Zero,
+			Color.White * CurrentLightNoise());
+		Batcher.PopSampler();
+		Batcher.PopBlend();
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	private Target ApplyPixelSortGlitch(Target input)
+	{
+		if (pixelSortGlitchMaterial == null || ditherGlitch <= 0.001f)
+			return input;
+
+		GlitchScreen.Clear(Color.Transparent);
+		pixelSortGlitchMaterial.Material.Fragment.Samplers[1] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var glitchPosition = PlayerDitherGlitchPosition();
+		var renderCamera = RenderCamera;
+		pixelSortGlitchMaterial.Material.Fragment.SetUniformBuffer([
+			input.Width,
+			input.Height,
+			renderCamera.X,
+			renderCamera.Y,
+			ditherGlitch,
+			glitchPosition.X,
+			glitchPosition.Y,
+			DitherGlitchRadius,
+			Time.SecondsF,
+			ditherGlitchAxis.X,
+			ditherGlitchAxis.Y,
+			zoomLevel
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(pixelSortGlitchMaterial.Material);
+		Batcher.Image(input, input.Bounds.Center, input.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(GlitchScreen);
+		Batcher.Clear();
+		return GlitchScreen;
+	}
+
+	private void CompositeLayer(Target color, Target light, Target emissive, Target output, float aoStrength = 0.0f)
+	{
+		output.Clear(Color.Transparent);
+		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(emissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var glitchPosition = PlayerDitherGlitchPosition();
+		var renderCamera = RenderCamera;
+		var aoOffset = Manager.AmbientOcclusionOffset;
+		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
+			output.Width,
+			output.Height,
+			renderCamera.X,
+			renderCamera.Y,
+			Manager.LightingDitherEnabled ? 1.0f : 0.0f,
+			Manager.LightingDitherScale,
+			Manager.LightingDitherStrength,
+			ditherGlitch,
+			glitchPosition.X,
+			glitchPosition.Y,
+			DitherGlitchRadius,
+			Time.SecondsF,
+			ditherGlitchAxis.X,
+			ditherGlitchAxis.Y,
+			zoomLevel,
+			0,
+			aoStrength,
+			aoOffset.X,
+			aoOffset.Y,
+			Manager.AmbientOcclusionMinVisibility
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(lightingCompositeMaterial.Material);
+		Batcher.Image(color, color.Bounds.Center, color.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(output);
+		Batcher.Clear();
+	}
+
+	// Renders background tiles (without the backdrop fill) so their alpha marks
+	// where real tiles exist. The AO composite gates on this so the backdrop is
+	// never darkened where no background tiles are present.
+	private void DrawBackgroundCoverage()
+	{
+		BackgroundCoverage.Clear(Color.Transparent);
+		if (!ShowBackgroundLayer)
+		{
+			Batcher.Render(BackgroundCoverage);
+			Batcher.Clear();
+			return;
+		}
+
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible || !IsBackgroundActor(actor))
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.Render(Batcher);
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(BackgroundCoverage);
+		Batcher.Clear();
+	}
+
+	// Blurs the foreground coverage (ForegroundScreen alpha) into AoMask using a
+	// separable two-pass Gaussian. The result is the soft occluder field the
+	// background composite samples to darken tiles beneath foreground overhangs.
+	private void BuildAoMask()
+	{
+		var radius = Manager.AmbientOcclusionBlur;
+		RunBlurPass(ForegroundScreen, AoBlurScratch, new Vector2(1, 0), radius, sourceAlpha: true);
+		RunBlurPass(AoBlurScratch, AoMask, new Vector2(0, 1), radius, sourceAlpha: false);
+	}
+
+	private void RunBlurPass(Target source, Target destination, Vector2 direction, float radius, bool sourceAlpha)
+	{
+		destination.Clear(Color.Transparent);
+		blurMaterial!.Material.Fragment.SetUniformBuffer([
+			direction.X,
+			direction.Y,
+			radius,
+			0,
+			1.0f / source.Width,
+			1.0f / source.Height,
+			0,
+			0,
+			// ChannelMask: extract foreground coverage from alpha on the first
+			// pass, then the single-channel scratch value (red) on the second.
+			sourceAlpha ? 0.0f : 1.0f,
+			0,
+			0,
+			sourceAlpha ? 1.0f : 0.0f
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(blurMaterial.Material);
+		Batcher.Image(source, source.Bounds.Center, source.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(destination);
+		Batcher.Clear();
+	}
+
+	private void DrawTileField()
+	{
+		RoomTileFieldCache? currentRoomTileFieldCache = null;
+		RoomTileFieldCache? nextRoomTileFieldCache = null;
+		if (room != null)
+			currentRoomTileFieldCache = GetRoomTileFieldCache(room);
+		if (nextRoom != null && nextRoom != room)
+			nextRoomTileFieldCache = GetRoomTileFieldCache(nextRoom);
+
+		TileField.Clear(Color.Transparent);
+		PushWorldMatrix();
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		if (currentRoomTileFieldCache != null)
+			DrawCachedRoomTileField(currentRoomTileFieldCache);
+		if (nextRoomTileFieldCache != null)
+			DrawCachedRoomTileField(nextRoomTileFieldCache);
+		Batcher.PopSampler();
+		Batcher.PopMatrix();
+		Batcher.Render(TileField);
+		Batcher.Clear();
+	}
+
+	private void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
+		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
+
+	private RoomTileFieldCache GetRoomTileFieldCache(Room renderRoom)
+	{
+		var bounds = renderRoom.WorldBounds;
+		if (!roomTileFieldCaches.TryGetValue(renderRoom, out var cache) ||
+			cache.Target.Width != bounds.Width ||
+			cache.Target.Height != bounds.Height ||
+			cache.Target.Attachments[0].Format != TextureFormat.R8G8)
+		{
+			cache?.Dispose();
+			cache = new(renderRoom, CreateRenderTarget(bounds.Width, bounds.Height, TextureFormat.R8G8, $"RoomTileField:{renderRoom.Id}"));
+			roomTileFieldCaches[renderRoom] = cache;
+		}
+
+		if (cache.Dirty)
+			RebuildRoomTileFieldCache(cache);
+
+		return cache;
+	}
+
+	private void MarkRoomTileFieldCacheDirty(Room renderRoom)
+	{
+		if (roomTileFieldCaches.TryGetValue(renderRoom, out var cache))
+			cache.Dirty = true;
+	}
+
+	private void RebuildRoomTileFieldCache(RoomTileFieldCache cache)
+	{
+		var renderRoom = cache.Room;
+		var target = cache.Target;
+		var previousMatrix = Batcher.Matrix;
+		Batcher.Matrix = Matrix3x2.CreateTranslation(-renderRoom.WorldBounds.TopLeft);
+
+		target.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushBlend(TileFieldStampBlend);
+		DrawRoomTileField(renderRoom);
+		Batcher.PopBlend();
+		Batcher.PopSampler();
+		Batcher.Render(target);
+		Batcher.Clear();
+		Batcher.Matrix = previousMatrix;
+		cache.Dirty = false;
+	}
+
+	private void DrawDitherMask()
+	{
+		DitherMask.Clear(Color.White);
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+
+			var amount = DitherAmountForActor(actor);
+			if (amount >= 0.999f)
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderShadow(Batcher, new Color(amount, amount, amount, 1.0f));
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(DitherMask);
+		Batcher.Clear();
+	}
+
+	private static float DitherAmountForActor(Actor actor)
+		=> actor.Mask.Has(Actor.Masks.Player | Actor.Masks.Enemy) ? ActorDitherAmount : 1.0f;
+
+	private void DrawParticleSolidMask()
+	{
+		ParticleSolidMask.Clear(Color.Transparent);
+		if (room == null)
+			return;
+
+		PushWorldMatrix();
+		foreach (var rect in room.CollisionRects)
+			Batcher.Rect(rect, Color.White);
+		foreach (var slope in room.SlopeTiles)
+		{
+			var polygon = room.GetSlopePolygon(slope);
+			if (polygon.Length < 3)
+				continue;
+			for (var i = 1; i + 1 < polygon.Length; i++)
+				Batcher.Triangle(polygon[0], polygon[i], polygon[i + 1], Color.White);
+		}
+		foreach (var actor in Actors)
+		{
+			if (!ParticleCollidesWith(actor))
+				continue;
+			if (actor.Mask.Has(Actor.Masks.Jumpthru))
+			{
+				Batcher.Rect(actor.Hitbox.Rect + actor.Position, Color.White);
+				continue;
+			}
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderShadow(Batcher, Color.White);
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(ParticleSolidMask);
+		Batcher.Clear();
+	}
+
+	private static bool ParticleCollidesWith(Actor actor)
+	{
+		if (!actor.Visible || actor is Grid || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
+			return false;
+		return actor is Pawn and not Player || actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru | Actor.Masks.Enemy | Actor.Masks.Hazard);
+	}
+
+	private void DrawRoomTileField(Room renderRoom)
+	{
+		DrawRoomTileFieldBaseline(renderRoom);
+		if (tileFieldStampMaterial != null)
+			Batcher.PushMaterial(tileFieldStampMaterial.Material);
+		DrawRoomVisualTileField(renderRoom);
+		DrawRoomDualTileField(renderRoom, Factory.TileLayer.Foreground);
+		if (tileFieldStampMaterial != null)
+			Batcher.PopMaterial();
+	}
+
+	private void DrawRoomTileFieldBaseline(Room renderRoom)
+	{
+		var baselineTile = tileFieldStampMaterial == null ? (char?)null : '0';
+		var drawRect = new Rect(0, 0, TileSize, TileSize);
+		for (var y = 0; y < renderRoom.Size.Y; y++)
+			for (var x = 0; x < renderRoom.Size.X; x++)
+			{
+				var worldTile = renderRoom.TileSpacePosition + new Point2(x, y);
+				drawRect.Position = renderRoom.WorldBounds.Position + new Point2(x, y) * TileSize;
+				Batcher.Rect(drawRect, TileFieldColor(baselineTile ?? renderRoom.Tiles[x, y], worldTile));
+			}
+	}
+
+	private void DrawRoomVisualTileField(Room renderRoom)
+	{
+		for (var y = 0; y < renderRoom.Size.Y; y++)
+			for (var x = 0; x < renderRoom.Size.X; x++)
+			{
+				var tile = renderRoom.Tiles[x, y];
+				if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground, DualTilesetName: null } entry)
+					continue;
+
+				var image = entry.Image;
+				if (entry is { IsSlope: true, SlopeTilesetName: not null } && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+				{
+					var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
+					image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
+				}
+				else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
+				{
+					Rng localRng = new(x + y * renderRoom.Size.X);
+					image = tileset.GetRandomTile(ref localRng);
+				}
+
+				if (image.Texture == null)
+					continue;
+
+				var worldTile = renderRoom.TileSpacePosition + new Point2(x, y);
+				Batcher.Image(
+					image,
+					new Vector2(renderRoom.WorldBounds.X + x * TileSize, renderRoom.WorldBounds.Y + y * TileSize),
+					TileFieldColor(tile, worldTile));
+			}
+	}
+
+	private void DrawRoomDualTileField(Room renderRoom, Factory.TileLayer layer)
+	{
+		foreach (var (tileType, entry) in Factory.Entries)
+		{
+			if (entry.Layer != layer ||
+				entry.DualTilesetName == null ||
+				Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
+				continue;
+
+			for (var y = 0; y <= renderRoom.Size.Y; y++)
+				for (var x = 0; x <= renderRoom.Size.X; x++)
+				{
+					var materialMask = 0;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
+						materialMask |= TileQuadrants.TopLeft;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y))
+						materialMask |= TileQuadrants.BottomLeft;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y - 1))
+						materialMask |= TileQuadrants.TopRight;
+					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y))
+						materialMask |= TileQuadrants.BottomRight;
+
+					if (materialMask == 0)
+						continue;
+
+					var joinMask = layer == Factory.TileLayer.Foreground
+						? renderRoom.GetDualTerrainJoinMask(x, y)
+						: materialMask;
+					if (joinMask == 0)
+						continue;
+
+					var dualTile = DualMaskToTile[joinMask];
+					var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
+					var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
+					if (image.Texture == null)
+						continue;
+
+					var position = new Vector2(
+						renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
+						renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
+					var color = TileFieldColor(tileType, renderRoom.TileSpacePosition + new Point2(x, y));
+					DrawDualTileFieldQuadrants(image, position, materialMask, color);
+				}
+		}
+	}
+
+	private void DrawDualTileFieldQuadrants(Subtexture image, Vector2 position, int materialMask, Color color)
+	{
+		if (materialMask == TileQuadrants.All)
+		{
+			Batcher.Image(image, position, color);
+			return;
+		}
+
+		const int halfTileSize = (TileSize / 2);
+
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
+		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
+	}
+
+	private void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
+	{
+		if ((materialMask & mask) == 0)
+			return;
+
+		Batcher.Image(image, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
+	}
+
+	private static int StableDualVariantSeed(Room room, char tileType, int x, int y)
+	{
+		unchecked
+		{
+			var worldTile = room.WorldBounds.TopLeft / TileSize + new Point2(x, y);
+			var hash = (uint)worldTile.X * 0x8da6b343u;
+			hash ^= (uint)worldTile.Y * 0xd8163841u;
+			hash ^= tileType * 0xcb1ab31fu;
+			hash ^= hash >> 16;
+			hash *= 0x7feb352du;
+			hash ^= hash >> 15;
+			hash *= 0x846ca68bu;
+			hash ^= hash >> 16;
+			return (int)hash;
+		}
+	}
+
+	private static Color TileFieldColor(char tile, Point2 worldTile)
+	{
+		var hash = TileFieldHash(tile, worldTile);
+		var variant = (hash & 255) / 255.0f;
+		var family = TileFieldFamily(tile);
+		return new Color(variant, family, 0.0f, 1.0f);
+	}
+
+	private static float TileFieldFamily(char tile)
+		=> tile switch
+		{
+			'0' => 0.00f,
+			'1' or '2' or 'x' => 0.25f,
+			'G' or 'S' or 'X' or 'g' => 0.50f,
+			'w' => 0.75f,
+			_ => 1.00f
+		};
+
+	private static uint TileFieldHash(char tile, Point2 worldTile)
+	{
+		var hash = 2166136261u;
+		hash = (hash ^ (uint)worldTile.X) * 16777619u;
+		hash = (hash ^ (uint)worldTile.Y) * 16777619u;
+		hash = (hash ^ tile) * 16777619u;
+		return hash;
+	}
+
+	private void DrawLightMask(Target lightMask, bool includeShadows)
+	{
+		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
+		if (CurrentSunStrength() > SunStrengthEpsilon)
+		{
+			DrawSunLightMask(includeShadows);
+			AddSingleLightMask(lightMask);
+		}
+
+		foreach (var actor in Actors)
+		{
+			if (actor is Light light)
+			{
+				DrawSingleLightMask(light, includeShadows);
+				AddSingleLightMask(lightMask);
+			}
+
+			actor.ForEachLight((position, radius, intensity, height, lightColor) =>
+			{
+				DrawSingleLightMask(position, radius, intensity, height, lightColor, includeShadows);
+				AddSingleLightMask(lightMask);
+			});
+		}
+
+	}
+
+	private Color CurrentAmbientColor()
+	{
+		if (nextRoom == null)
+			return room?.AmbientColor ?? Room.DefaultAmbientColor;
+
+		return LerpColor(transitionAmbientColorFrom, transitionAmbientColorTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private (Color Top, Color Bottom) CurrentBackdropColors()
+	{
+		if (nextRoom == null)
+		{
+			var top = room?.BackdropColor ?? Room.DefaultBackdropColor;
+			return (top, room?.BackdropColor2 ?? top);
+		}
+
+		var amount = Ease.Cube.InOut(nextRoomEase);
+		return (
+			LerpColor(transitionBackdropColorFrom, transitionBackdropColorTo, amount),
+			LerpColor(transitionBackdropColor2From, transitionBackdropColor2To, amount));
+	}
+
+	private float CurrentAmbientIntensity()
+	{
+		if (nextRoom == null)
+			return room?.AmbientIntensity ?? Room.DefaultAmbientIntensity;
+
+		return float.Lerp(transitionAmbientIntensityFrom, transitionAmbientIntensityTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private float CurrentLightNoise()
+	{
+		if (nextRoom == null)
+			return room?.LightNoise ?? Room.DefaultLightNoise;
+
+		return float.Lerp(transitionLightNoiseFrom, transitionLightNoiseTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private Color CurrentSunColor()
+	{
+		if (nextRoom == null)
+			return room?.SunColor ?? Room.DefaultSunColor;
+
+		return LerpColor(transitionSunColorFrom, transitionSunColorTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private float CurrentSunStrength()
+	{
+		if (nextRoom == null)
+			return room?.SunStrength ?? 0.0f;
+
+		return float.Lerp(transitionSunStrengthFrom, transitionSunStrengthTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	private Vector2 CurrentSunDirection()
+	{
+		if (nextRoom == null)
+			return room?.SunDirection ?? Room.DefaultSunDirection;
+
+		var direction = Vector2.Lerp(transitionSunDirectionFrom, transitionSunDirectionTo, Ease.Cube.InOut(nextRoomEase));
+		return Room.NormalizeOrDefault(direction, Room.DefaultSunDirection);
+	}
+
+	private static Color LerpColor(Color from, Color to, float amount)
+		=> new(Vector4.Lerp(from, to, amount));
+
+	private const float SunStrengthEpsilon = 0.001f;
+
+	private void DrawSunLightMask(bool includeShadows)
+	{
+		SingleLightMask.Clear(Color.Transparent);
+		var strength = CurrentSunStrength();
+
+		var direction = CurrentSunDirection();
+		var lightColor = CurrentSunColor();
+		if (normalLightMaterial != null)
+		{
+			var lightColorValue = (Vector4)lightColor;
+			normalLightMaterial.Material.Fragment.SetUniformBuffer([
+				NormalBuffer.Width,
+				NormalBuffer.Height,
+				0,
+				0,
+				direction.X,
+				direction.Y,
+				-1.0f,
+				1.0f,
+				lightColorValue.X,
+				lightColorValue.Y,
+				lightColorValue.Z,
+				strength
+			]);
+
+			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+			Batcher.PushMaterial(normalLightMaterial.Material);
+			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			Batcher.PopMaterial();
+			Batcher.PopSampler();
+		}
+		else
+		{
+			Batcher.Rect(new Rect(0, 0, SingleLightMask.Width, SingleLightMask.Height), ScaleColor(lightColor, strength));
+		}
+
+		if (includeShadows)
+		{
+			PushWorldMatrix();
+			Batcher.PushBlend(ShadowBlend);
+			DrawSunShadows(direction);
+			Batcher.PopBlend();
+			Batcher.PopMatrix();
+		}
+
+		Batcher.Render(SingleLightMask);
+		Batcher.Clear();
+
+		if (includeShadows && SoftShadowsEnabled)
+			SoftenSingleLightMask(Vector2.Zero, 0, uniform: true);
+	}
+
+	private void DrawSingleLightMask(Light light, bool includeShadows)
+		=> DrawSingleLightMask(
+			light.Position,
+			light.Radius * light.FlickerScale,
+			light.Intensity * light.FlickerScale,
+			light.Height,
+			light.LightColor,
+			includeShadows);
+
+	private void DrawSingleLightMask(Vector2 position, float radius, float intensity, float height, Color lightColor, bool includeShadows)
+	{
+		SingleLightMask.Clear(Color.Transparent);
+		var drewVisibilityClippedLight = false;
+
+		if (normalLightMaterial != null)
+		{
+			var screenPosition = (position - RenderCamera) * zoomLevel;
+			var lightColorValue = (Vector4)lightColor;
+			normalLightMaterial.Material.Fragment.SetUniformBuffer([
+				NormalBuffer.Width,
+				NormalBuffer.Height,
+				0,
+				0,
+				screenPosition.X,
+				screenPosition.Y,
+				radius * zoomLevel,
+				height * zoomLevel,
+				lightColorValue.X,
+				lightColorValue.Y,
+				lightColorValue.Z,
+				intensity
+			]);
+
+			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+			Batcher.PushMaterial(normalLightMaterial.Material);
+			if (includeShadows)
+			{
+				DrawVisibilityClippedNormalLight(position, radius);
+				drewVisibilityClippedLight = true;
+			}
+			else
+			{
+				Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			}
+			Batcher.PopMaterial();
+			Batcher.PopSampler();
+		}
+		else
+		{
+			PushWorldMatrix();
+			var color = ScaleColor(lightColor, intensity);
+			Batcher.Circle(position, radius, 32, color, Color.Transparent);
+			Batcher.PopMatrix();
+		}
+
+		if (includeShadows && !drewVisibilityClippedLight)
+		{
+			PushWorldMatrix();
+			Batcher.PushBlend(ShadowBlend);
+			DrawLightShadows(position, radius);
+			Batcher.PopBlend();
+			Batcher.PopMatrix();
+		}
+
+		Batcher.Render(SingleLightMask);
+		Batcher.Clear();
+
+		if (includeShadows && SoftShadowsEnabled)
+		{
+			var screenPosition = (position - RenderCamera) * zoomLevel;
+			SoftenSingleLightMask(screenPosition, radius * zoomLevel, uniform: false);
+		}
+	}
+
+	private static readonly List<VisibilityPolygon.Hit> hits = new();
+	private static readonly List<VisibilityPolygon.Segment> _segments = new();
+
+	private void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
+	{
+		GatherVisibilitySegments(lightPosition, radius, _segments);
+		VisibilityPolygon.Compute(lightPosition, radius, _segments, hits);
+		if (hits.Count < 3)
+		{
+			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			return;
+		}
+
+		var renderCamera = RenderCamera;
+		var screenLight = (lightPosition - renderCamera) * zoomLevel;
+		var texture = NormalBuffer.Attachments[0];
+		var textureSize = new Vector2(NormalBuffer.Width, NormalBuffer.Height);
+		for (var i = 0; i < hits.Count; i++)
+		{
+			var a = (hits[i].Point - renderCamera) * zoomLevel;
+			var b = (hits[(i + 1) % hits.Count].Point - renderCamera) * zoomLevel;
+			Batcher.Triangle(
+				texture,
+				screenLight,
+				a,
+				b,
+				screenLight / textureSize,
+				a / textureSize,
+				b / textureSize,
+				Color.White);
+		}
+	}
+
+	private bool SoftShadowsEnabled
+		=> PerfToggles.SoftShadows && softShadowMaterial != null && Manager.SoftShadowPenumbra > 0.01f;
+
+	// Softens the just-rendered per-light SingleLightMask with a separable
+	// variable-radius blur before it is accumulated. The blur widens with
+	// distance from the light, so shadows stay crisp near their caster and
+	// soften further away. The sun blurs uniformly (uniform: true).
+	private void SoftenSingleLightMask(Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
+	{
+		var maxPenumbra = Manager.SoftShadowPenumbra;
+		RunSoftShadowPass(SingleLightMask, SoftShadowScratch, new Vector2(1, 0), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
+		RunSoftShadowPass(SoftShadowScratch, SingleLightMask, new Vector2(0, 1), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
+	}
+
+	private void RunSoftShadowPass(Target source, Target destination, Vector2 direction, float maxPenumbra, Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
+	{
+		destination.Clear(Color.Transparent);
+		softShadowMaterial!.Material.Fragment.SetUniformBuffer([
+			direction.X,
+			direction.Y,
+			maxPenumbra,
+			uniform ? 1.0f : 0.0f,
+			lightScreenPosition.X,
+			lightScreenPosition.Y,
+			lightRadiusPixels,
+			Manager.SoftShadowMinSoftness,
+			1.0f / source.Width,
+			1.0f / source.Height,
+			0,
+			0
+		]);
+
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(softShadowMaterial.Material);
+		Batcher.Image(source, source.Bounds.Center, source.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(destination);
+		Batcher.Clear();
+	}
+
+	private void AddSingleLightMask(Target lightMask)
+	{
+		Batcher.PushBlend(new(BlendOp.Add, BlendFactor.One, BlendFactor.One));
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(SingleLightMask, SingleLightMask.Bounds.Center, SingleLightMask.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.PopBlend();
+		Batcher.Render(lightMask);
+		Batcher.Clear();
+	}
+
+	private void DrawLightShadows(Vector2 lightPosition, float radius)
+	{
+		if (room != null)
+			DrawRoomLightShadows(room, lightPosition, radius);
+		if (nextRoom != null && nextRoom != room)
+			DrawRoomLightShadows(nextRoom, lightPosition, radius);
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not HiddenWallGrid hiddenWalls)
+				continue;
+
+			hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+			{
+				if (CircleOverlapsRect(lightPosition, radius, rect))
+					DrawShadowVolume(lightPosition, radius, rect);
+			});
+		}
+
+		DrawActorSpriteShadows(lightPosition, radius);
+	}
+
+	internal IEnumerable<Room> VisibleRooms()
+	{
+		if (room != null) yield return room;
+		if (nextRoom != null && nextRoom != room) yield return nextRoom;
+	}
+
+	private void DrawSunShadows(Vector2 direction)
+	{
+		var distance = SunShadowDistance();
+		foreach (var visibleRoom in VisibleRooms())
+			DrawRoomSunShadows(visibleRoom, direction, distance);
+
+		foreach (var actor in Actors)
+		{
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.AppendAllVisibilitySegments(sunSegmentBuffer);
+			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
+				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
+		}
+
+		foreach (var segment in sunSegmentBuffer)
+			DrawSunShadowSegment(segment, direction, distance);
+		sunSegmentBuffer.Clear();
+
+		foreach (var actor in Actors)
+			if (actor is HiddenWallGrid hiddenWalls)
+				hiddenWalls.ForEachVisibleCell((rect, _, _) => DrawSunShadowVolume(direction, distance, rect));
+	}
+
+	private readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
+
+	private float SunShadowDistance()
+		=> MathF.Sqrt(NormalBuffer.Width * NormalBuffer.Width + NormalBuffer.Height * NormalBuffer.Height) + TileSize * MathF.Max(Columns, Rows) * 2;
+
+	private void DrawRoomSunShadows(Room renderRoom, Vector2 direction, float distance)
+	{
+		foreach (var rect in renderRoom.LightOccluders)
+			DrawSunShadowVolume(direction, distance, rect);
+
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			DrawSunShadowVolume(direction, distance, polygon.Points);
+	}
+
+	private void DrawSunShadowVolume(Vector2 direction, float distance, RectInt rect)
+	{
+		Span<Point2> corners =
+		[
+			rect.TopLeft,
+			rect.TopRight,
+			rect.BottomRight,
+			rect.BottomLeft
+		];
+		DrawSunShadowVolume(direction, distance, corners);
+	}
+
+	private void DrawSunShadowVolume(Vector2 direction, float distance, ReadOnlySpan<Point2> points)
+	{
+		for (var i = 0; i < points.Length; i++)
+		{
+			var a = (Vector2)points[i];
+			var b = (Vector2)points[(i + 1) % points.Length];
+			if (!IsSunShadowCastingEdge(a, b, direction))
+				continue;
+
+			DrawSunShadowSegment(new(a, b), direction, distance);
+		}
+	}
+
+	private static bool IsSunShadowCastingEdge(Vector2 a, Vector2 b, Vector2 direction)
+	{
+		var edge = b - a;
+		var outward = new Vector2(edge.Y, -edge.X);
+		return Vector2.Dot(outward, direction) > 0.001f;
+	}
+
+	private void DrawSunShadowSegment(VisibilityPolygon.Segment segment, Vector2 direction, float distance)
+	{
+		var offset = direction * distance;
+		Batcher.Quad(segment.A, segment.B, segment.B + offset, segment.A + offset, Color.Black);
+	}
+
+	private void DrawRoomLightShadows(Room renderRoom, Vector2 lightPosition, float radius)
+	{
+		foreach (var rect in renderRoom.LightOccluders)
+			if (CircleOverlapsRect(lightPosition, radius, rect))
+				DrawShadowVolume(lightPosition, radius, rect);
+
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			if (CircleOverlapsRect(lightPosition, radius, polygon.Bounds))
+				DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
+	}
+
+	private void DrawActorSpriteShadows(Vector2 lightPosition, float radius)
+	{
+		foreach (var actor in Actors)
+		{
+			if (!actor.Visible || !actor.CastsSpriteShadow)
+				continue;
+			if (actor is Grid or DualGrid)
+				continue;
+
+			var toActor = actor.Position - lightPosition;
+			var distanceSquared = toActor.LengthSquared();
+			if (distanceSquared <= 0.0001f || distanceSquared > radius * radius)
+				continue;
+
+			var distance = MathF.Sqrt(distanceSquared);
+			var direction = toActor / distance;
+			var reach = 1.0f - distance / radius;
+			var shadowLength = ActorShadowMinLength + (ActorShadowMaxLength - ActorShadowMinLength) * reach;
+
+			for (var i = 1; i <= ActorShadowSteps; i++)
+			{
+				var t = i / (float)ActorShadowSteps;
+				var offset = direction * shadowLength * t;
+				var alpha = ActorShadowStrength * 0.25f * (1.0f - t * 0.75f);
+
+				Batcher.PushMatrix(actor.Position + offset);
+				actor.RenderShadow(Batcher, Color.Black * alpha);
+				Batcher.PopMatrix();
+			}
+		}
+	}
+
+	private void DrawShadowVolume(Vector2 lightPosition, float radius, RectInt rect)
+	{
+		Span<Point2> corners =
+		[
+			rect.TopLeft,
+			rect.TopRight,
+			rect.BottomRight,
+			rect.BottomLeft
+		];
+		DrawShadowVolume(lightPosition, radius, corners, rect);
+	}
+
+	private void DrawShadowVolume(Vector2 lightPosition, float radius, ReadOnlySpan<Point2> points, RectInt bounds)
+	{
+		if (bounds.Contains(lightPosition))
+			return;
+
+		var bestA = (Vector2)points[0];
+		var bestB = (Vector2)points[1];
+		var bestSpan = -1.0f;
+
+		for (var i = 0; i < points.Length; i++)
+			for (var j = i + 1; j < points.Length; j++)
+			{
+				var pointA = (Vector2)points[i];
+				var pointB = (Vector2)points[j];
+				var a = DirectionFromLight(lightPosition, pointA);
+				var b = DirectionFromLight(lightPosition, pointB);
+				var span = 1 - Vector2.Dot(a, b);
+				if (span > bestSpan)
+				{
+					bestSpan = span;
+					bestA = pointA;
+					bestB = pointB;
+				}
+			}
+
+		var aFar = ProjectToLightRadius(lightPosition, radius, bestA);
+		var bFar = ProjectToLightRadius(lightPosition, radius, bestB);
+		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
+	}
+
+	private void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
+	{
+		segments.Clear();
+		foreach (var visibleRoom in VisibleRooms())
+			AddRoomVisibilitySegments(segments, visibleRoom, lightPosition, radius);
+
+		foreach (var actor in Actors)
+		{
+			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
+			{
+				dualGrid.AppendVisibilitySegments(segments, lightPosition, radius);
+				continue;
+			}
+			if (actor is HiddenCoverGrid hiddenCover)
+			{
+				hiddenCover.AppendVisibilitySegments(segments, lightPosition, radius);
+				continue;
+			}
+
+			if (actor is HiddenWallGrid hiddenWalls)
+			{
+				hiddenWalls.ForEachVisibleCell((rect, _, _) =>
+					AddRectVisibilitySegments(segments, rect, lightPosition, radius));
+			}
+		}
+	}
+
+	private static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
+	{
+		if (!CircleOverlapsRect(lightPosition, radius, renderRoom.WorldBounds))
+			return;
+
+		foreach (var segment in renderRoom.VisibilitySegments)
+			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+				segments.Add(segment);
+	}
+
+	private static void AddRectVisibilitySegments(List<VisibilityPolygon.Segment> segments, RectInt rect, Vector2 lightPosition, float radius)
+	{
+		AddVisibilitySegment(segments, rect.TopLeft, rect.TopRight, lightPosition, radius);
+		AddVisibilitySegment(segments, rect.TopRight, rect.BottomRight, lightPosition, radius);
+		AddVisibilitySegment(segments, rect.BottomRight, rect.BottomLeft, lightPosition, radius);
+		AddVisibilitySegment(segments, rect.BottomLeft, rect.TopLeft, lightPosition, radius);
+	}
+
+	private static void AddVisibilitySegment(List<VisibilityPolygon.Segment> segments, Vector2 a, Vector2 b, Vector2 lightPosition, float radius)
+	{
+		var segment = new VisibilityPolygon.Segment(a, b);
+		if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+			segments.Add(segment);
+	}
+
+	private static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
+	{
+		var direction = point - lightPosition;
+		var distance = direction.Length();
+		if (distance <= 0.0001f)
+			return point;
+
+		return lightPosition + direction / distance * radius;
+	}
+
+	private static Vector2 DirectionFromLight(Vector2 lightPosition, Vector2 point)
+	{
+		var direction = point - lightPosition;
+		if (direction.LengthSquared() <= 0.0001f)
+			return Vector2.Zero;
+
+		return Vector2.Normalize(direction);
+	}
+
+	private static bool CircleOverlapsRect(Vector2 center, float radius, RectInt rect)
+	{
+		var x = Math.Clamp(center.X, rect.Left, rect.Right);
+		var y = Math.Clamp(center.Y, rect.Top, rect.Bottom);
+		var closest = new Vector2(x, y);
+		return Vector2.DistanceSquared(center, closest) <= radius * radius;
+	}
+
+	private void DrawNormalBuffer()
+	{
+		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
+		RoomNormalCache? currentRoomNormalCache = null;
+		RoomNormalCache? nextRoomNormalCache = null;
+		if (ShowForegroundLayer)
+		{
+			if (room != null)
+				currentRoomNormalCache = GetRoomNormalCache(room);
+			if (nextRoom != null && nextRoom != room)
+				nextRoomNormalCache = GetRoomNormalCache(nextRoom);
+		}
+
+		PushWorldMatrix();
+
+		if (ShowForegroundLayer)
+		{
+			if (currentRoomNormalCache != null)
+				DrawCachedRoomNormals(currentRoomNormalCache);
+			if (nextRoomNormalCache != null)
+				DrawCachedRoomNormals(nextRoomNormalCache);
+		}
+
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible)
+				continue;
+			if ((IsBackgroundActor(actor) && !ShowBackgroundLayer) || (!IsBackgroundActor(actor) && !ShowForegroundLayer))
+				continue;
+			if (actor is DualGrid { Layer: Factory.TileLayer.Background })
+				continue;
+
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderNormals(Batcher);
+			Batcher.PopMatrix();
+		}
+
+		Batcher.PopMatrix();
+		Batcher.Render(NormalBuffer);
+		Batcher.Clear();
+	}
+
+	private void DrawCachedRoomNormals(RoomNormalCache cache)
+	{
+		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
+	}
+
+	private RoomNormalCache GetRoomNormalCache(Room renderRoom)
+	{
+		var bounds = renderRoom.WorldBounds;
+		if (!roomNormalCaches.TryGetValue(renderRoom, out var cache) ||
+			cache.Target.Width != bounds.Width ||
+			cache.Target.Height != bounds.Height)
+		{
+			cache?.Dispose();
+			cache = new(renderRoom, new Target(GraphicsDevice, bounds.Width, bounds.Height, name: $"RoomNormals:{renderRoom.Id}"));
+			roomNormalCaches[renderRoom] = cache;
+		}
+
+		if (cache.Dirty)
+			RebuildRoomNormalCache(cache);
+
+		return cache;
+	}
+
+	private void MarkRoomNormalCacheDirty(Room renderRoom)
+	{
+		if (roomNormalCaches.TryGetValue(renderRoom, out var cache))
+			cache.Dirty = true;
+	}
+
+	private void RebuildRoomNormalCache(RoomNormalCache cache)
+	{
+		var renderRoom = cache.Room;
+		var target = cache.Target;
+		var mask = new bool[target.Width, target.Height];
+		var suppressMask = new bool[target.Width, target.Height];
+		var origin = renderRoom.WorldBounds.TopLeft;
+
+		FillRoomNormalMask(mask, renderRoom, origin);
+		SuppressBakedDualRoomNormals(suppressMask, renderRoom);
+
+		var previousMatrix = Batcher.Matrix;
+		Batcher.Matrix = Matrix3x2.Identity;
+		target.Clear(Color.Transparent);
+		for (var y = 0; y < target.Height; y++)
+		{
+			var runStart = -1;
+			var runColor = Color.Transparent;
+
+			for (var x = 0; x < target.Width; x++)
+			{
+				var color = RoomNormalColor(mask, suppressMask, x, y);
+				if (color.A > 0 && runStart >= 0 && color == runColor)
+					continue;
+
+				if (runStart >= 0)
+					Batcher.Rect(new Rect(runStart, y, x - runStart, 1), runColor);
+
+				if (color.A > 0)
+				{
+					runStart = x;
+					runColor = color;
+				}
+				else
+				{
+					runStart = -1;
+				}
+			}
+
+			if (runStart >= 0)
+				Batcher.Rect(new Rect(runStart, y, target.Width - runStart, 1), runColor);
+		}
+		Batcher.Render(target);
+		Batcher.Clear();
+		Batcher.Matrix = previousMatrix;
+		cache.Dirty = false;
+	}
+
+	private static Color RoomNormalColor(bool[,] mask, bool[,] suppressMask, int x, int y)
+	{
+		if (!RoomNormalSolid(mask, x, y))
+			return Color.Transparent;
+
+		var sx = SolidValue(mask, x - 1, y) - SolidValue(mask, x + 1, y);
+		var sy = SolidValue(mask, x, y - 1) - SolidValue(mask, x, y + 1);
+		if (sx == 0 && sy == 0)
+			return Color.Transparent;
+		if (RoomNormalSuppressed(suppressMask, x, y))
+			return Color.Transparent;
+
+		return EncodeNormal(new Vector3(sx, sy, 1), 1);
+	}
+
+	private void FillRoomNormalMask(bool[,] mask, Room renderRoom, Point2 origin)
+	{
+		foreach (var rect in renderRoom.CollisionRects)
+			FillRoomNormalMask(mask, rect, origin);
+		foreach (var polygon in renderRoom.LightOccluderPolygons)
+			FillRoomNormalMask(mask, polygon, origin);
+	}
+
+	private static void SuppressBakedDualRoomNormals(bool[,] suppressMask, Room renderRoom)
+	{
+		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
+			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
+			{
+				if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
+					Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
+					continue;
+
+				var left = Math.Clamp(tileX * Game.TileSize, 0, suppressMask.GetLength(0));
+				var right = Math.Clamp((tileX + 1) * Game.TileSize, 0, suppressMask.GetLength(0));
+				var top = Math.Clamp(tileY * Game.TileSize, 0, suppressMask.GetLength(1));
+				var bottom = Math.Clamp((tileY + 1) * Game.TileSize, 0, suppressMask.GetLength(1));
+
+				for (var y = top; y < bottom; y++)
+					for (var x = left; x < right; x++)
+						suppressMask[x, y] = true;
+			}
+	}
+
+	private static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
+	{
+		var left = Math.Clamp(rect.Left - origin.X, 0, mask.GetLength(0));
+		var right = Math.Clamp(rect.Right - origin.X, 0, mask.GetLength(0));
+		var top = Math.Clamp(rect.Top - origin.Y, 0, mask.GetLength(1));
+		var bottom = Math.Clamp(rect.Bottom - origin.Y, 0, mask.GetLength(1));
+
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+				mask[x, y] = true;
+	}
+
+	private static void FillRoomNormalMask(bool[,] mask, Room.LightOccluderPolygon polygon, Point2 origin)
+	{
+		var left = Math.Clamp(polygon.Bounds.Left - origin.X, 0, mask.GetLength(0));
+		var right = Math.Clamp(polygon.Bounds.Right - origin.X, 0, mask.GetLength(0));
+		var top = Math.Clamp(polygon.Bounds.Top - origin.Y, 0, mask.GetLength(1));
+		var bottom = Math.Clamp(polygon.Bounds.Bottom - origin.Y, 0, mask.GetLength(1));
+
+		for (var y = top; y < bottom; y++)
+			for (var x = left; x < right; x++)
+			{
+				var worldPoint = new Vector2(origin.X + x + 0.5f, origin.Y + y + 0.5f);
+				if (PointInPolygon(worldPoint, polygon.Points))
+					mask[x, y] = true;
+			}
+	}
+
+	private static bool PointInPolygon(Vector2 point, ReadOnlySpan<Point2> polygon)
+	{
+		var inside = false;
+		for (var i = 0; i < polygon.Length; i++)
+		{
+			var a = (Vector2)polygon[i];
+			var b = (Vector2)polygon[(i + polygon.Length - 1) % polygon.Length];
+			if ((a.Y > point.Y) != (b.Y > point.Y) &&
+				point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+				inside = !inside;
+		}
+
+		return inside;
+	}
+
+	private static bool RoomNormalSolid(bool[,] mask, int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= mask.GetLength(0) || y >= mask.GetLength(1))
+			return false;
+
+		return mask[x, y];
+	}
+
+	private static bool RoomNormalSuppressed(bool[,] suppressMask, int x, int y)
+	{
+		if (x < 0 || y < 0 || x >= suppressMask.GetLength(0) || y >= suppressMask.GetLength(1))
+			return false;
+
+		return suppressMask[x, y];
+	}
+
+	private static float SolidValue(bool[,] mask, int x, int y)
+		=> RoomNormalSolid(mask, x, y) ? 1 : 0;
+
+	private static Color EncodeNormal(Vector3 normal, float strength)
+	{
+		normal = Vector3.Normalize(normal) * 0.5f + Vector3.One * 0.5f;
+		return new Color(normal.X, normal.Y, normal.Z, strength);
+	}
+
+	private ReloadableMaterial? CreateFragmentMaterial(string name, int samplerCount, int uniformBufferCount = 0)
+	{
+		try
+		{
+			return new ReloadableMaterial(GraphicsDevice, name, samplerCount, uniformBufferCount);
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load {name} shader: {e}");
+			return null;
+		}
+	}
+
+	private sealed class ReloadableMaterial : IDisposable
+	{
+		private readonly GraphicsDevice graphicsDevice;
+		private readonly string name;
+		private readonly int samplerCount;
+		private readonly int uniformBufferCount;
+		private Shader fragmentShader;
+
+		public Material Material { get; }
+
+		public ReloadableMaterial(GraphicsDevice graphicsDevice, string name, int samplerCount, int uniformBufferCount)
+		{
+			this.graphicsDevice = graphicsDevice;
+			this.name = name;
+			this.samplerCount = samplerCount;
+			this.uniformBufferCount = uniformBufferCount;
+			fragmentShader = CreateShader();
+			Material = new Material(vertexShader: null, fragmentShader: fragmentShader);
+		}
+
+		public void Dispose()
+			=> fragmentShader.Dispose();
+
+#if DEBUG
+		public void Reload()
+		{
+			try
+			{
+				var next = CreateShader();
+				Material.Fragment.Shader = next;
+				fragmentShader.Dispose();
+				fragmentShader = next;
+				Console.WriteLine($"Reloaded {name} shader.");
+			}
+			catch (Exception e)
+			{
+				Console.Error.WriteLine($"Failed to reload {name} shader: {e}");
+			}
+		}
+#endif
+
+		private Shader CreateShader()
+		{
+			var ext = graphicsDevice.Driver.GetShaderExtension();
+			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"{name}.fragment.{ext}");
+			if (!File.Exists(path))
+				throw new FileNotFoundException($"{name} shader not found at '{Path.GetFullPath(path)}'.", path);
+
+			return new Shader(
+				graphicsDevice,
+				ShaderStage.Fragment,
+				File.ReadAllBytes(path),
+				samplerCount: samplerCount,
+				uniformBufferCount: uniformBufferCount,
+				entryPoint: "fragment_main",
+				name: $"{name}Fragment");
+		}
+	}
+
+	private static Color ScaleColor(Color color, float scale)
+	{
+		var value = (Vector4)color;
+		value.X = Math.Clamp(value.X * scale, 0, 1);
+		value.Y = Math.Clamp(value.Y * scale, 0, 1);
+		value.Z = Math.Clamp(value.Z * scale, 0, 1);
+		value.W = Math.Clamp(value.W * scale, 0, 1);
+		return value;
+	}
+}
