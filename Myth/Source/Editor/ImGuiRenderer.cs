@@ -506,7 +506,7 @@ fn vertex_main(
 		return id;
 	}
 
-	public bool ImageButton(string id, in Subtexture subtexture, Vector2 size, bool selected = false, Vector4? selectedColor = null, bool fitAspectRatio = false, Vector2? imagePadding = null)
+	public bool ImageButton(ReadOnlySpan<char> id, in Subtexture subtexture, Vector2 size, bool selected = false, Vector4? selectedColor = null, bool fitAspectRatio = false, Vector2? imagePadding = null)
 	{
 		if (subtexture.Texture == null)
 			return ImGui.Button(id, size);

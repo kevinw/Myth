@@ -1,4 +1,5 @@
 #if EDITOR
+using LinkDotNet.StringBuilder; // Namespace of the package
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Foster.Framework;
@@ -558,8 +559,13 @@ public partial class Manager
 		ImGui.TextUnformatted("Tiles");
 		DrawTileLayerSelector();
 		var index = 0;
+		ValueStringBuilder vsb = new(stackalloc char[30]);
 		foreach (var (id, entry) in Factory.Entries)
 		{
+			vsb.Clear();
+			vsb.Append("Palette_Tiles_");
+			vsb.Append(id);
+
 			if (entry.Layer != activeTileLayer) continue;
 			if (entry.IsSlope) continue; // skip slope tiles; we can place them with control
 
@@ -568,7 +574,7 @@ public partial class Manager
 
 			var dualPreview = GetDualTilesetPreview(entry);
 
-			if (ImGuiSubtextureButton($"Palette_Tiles_{id}", entry.Image, entry.Name, dualPreview,
+			if (ImGuiSubtextureButton(vsb.AsSpan(), entry.Image, entry.Name, dualPreview,
 				selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
 			{
 				brush = id;
@@ -576,7 +582,7 @@ public partial class Manager
 				actorSelectTool = false;
 			}
 
-			if (ImGui.BeginPopupContextItem($"Palette_Tiles_{id}"))
+			if (ImGui.BeginPopupContextItem(vsb.AsSpan()))
 			{
 				if (ImGui.Selectable("Open in Sprite Editor"))
 				{
@@ -722,6 +728,7 @@ public partial class Manager
 		ImGui.TextUnformatted("Actors");
 		DrawActorTagFilter();
 		var index = 0;
+		var vsb = new ValueStringBuilder(stackalloc char[30]);
 		for (var i = 0; i < Factory.ActorPalette.Count; i++)
 		{
 			var entry = Factory.ActorPalette[i];
@@ -733,7 +740,10 @@ public partial class Manager
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
 
-			if (ImGuiSubtextureButton($"Palette_Actors_{i}", entry.Image, entry.Name, selectedActorPaletteIndex == i, new Vector2(ButtonSize, ButtonSize), true))
+			vsb.Clear();
+			vsb.Append("Palette_Actors_");
+			vsb.Append(i);
+			if (ImGuiSubtextureButton(vsb.AsSpan(), entry.Image, entry.Name, selectedActorPaletteIndex == i, new Vector2(ButtonSize, ButtonSize), true))
 			{
 				selectedActorPaletteIndex = i;
 				actorSelectTool = false;
@@ -795,7 +805,12 @@ public partial class Manager
 
 		if (active)
 			ImGui.PushStyleColor(ImGuiCol.Button, style.Colors[(int)ImGuiCol.ButtonActive]);
-		if (ImGui.Button($"{label}##ActorTag"))
+
+		var vsb = new ValueStringBuilder(stackalloc char[30]);
+		vsb.Append(label);
+		vsb.Append("##ActorTag");
+
+		if (ImGui.Button(vsb.AsSpan()))
 			onClick();
 		if (active)
 			ImGui.PopStyleColor();
@@ -812,7 +827,12 @@ public partial class Manager
 		var changed = false;
 		if (editingRoomGeometry)
 		{
-			ImGui.TextUnformatted($"{room.Size.X} x {room.Size.Y}");
+			var vsb = new ValueStringBuilder(stackalloc char[30]);
+			vsb.Append(room.Size.X);
+			vsb.Append(" x ");
+			vsb.Append(room.Size.Y);
+			vsb.Append(vsb.AsSpan());
+			ImGui.TextUnformatted(vsb.AsSpan());
 		}
 		if (ImGui.Button(editingRoomGeometry ? "Done" : "Resize"))
 		{
@@ -3787,7 +3807,7 @@ public partial class Manager
 		SyncEditorGame();
 	}
 
-	static void DrawCenteredToolbarText(string text, bool canDoubleClick = false)
+	static void DrawCenteredToolbarText(ReadOnlySpan<char> text, bool canDoubleClick = false)
 	{
 		var size = ImGui.CalcTextSize(text);
 		var windowPos = ImGui.GetWindowPos();

@@ -35,7 +35,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="**/*.cs" Exclude="bin/**;obj/**" />
+    <Compile Include="**/*.cs" Exclude="bin/**;obj/**;External/StringBuilder/tests/**" />
     <ProjectReference Include="../../Foster/Framework/Foster.Framework.csproj" Private="false" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
     <!-- Build-time only: emits GeneratedActors.RegisterAll() from [GameActor]. -->
     <ProjectReference Include="../tools/Myth.SourceGen/Myth.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

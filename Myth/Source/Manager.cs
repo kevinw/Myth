@@ -1477,13 +1477,13 @@ public partial class Manager : App
 	bool ImGuiWantsKeyboard => imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
 
 #if EDITOR
-	bool ImGuiIconButton(string id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
+	bool ImGuiIconButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize), false, imagePadding);
 
-	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, float? imagePadding = null)
+	bool ImGuiSubtextureButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected, Vector2 size, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false, imagePadding);
 
-	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio, float? imagePadding = null)
+	bool ImGuiSubtextureButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected, Vector2 size, bool fitAspectRatio, float? imagePadding = null)
 	{
 		var padding = imagePadding.HasValue ? new Vector2(imagePadding.Value) : (Vector2?)null;
 		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio, padding);
@@ -1511,7 +1511,7 @@ public partial class Manager : App
 		return pressed;
 	}
 
-	bool ImGuiSubtextureButton(string id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size, bool fitAspectRatio = false)
+	bool ImGuiSubtextureButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size, bool fitAspectRatio = false)
 	{
 		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
 		if (ImGui.IsItemHovered() && (!string.IsNullOrEmpty(tooltip) || tooltipTileset != null))
@@ -1541,7 +1541,7 @@ public partial class Manager : App
 		}
 	}
 
-	static bool ImGuiTextButton(string label, Vector2 size, bool selected)
+	static bool ImGuiTextButton(ReadOnlySpan<char> label, Vector2 size, bool selected)
 	{
 		if (selected)
 			PushSelectedImGuiButtonStyle();
