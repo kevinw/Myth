@@ -198,10 +198,6 @@ public sealed partial class GameView : IDisposable
 					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
 	}
 
-	private void UpdateMouseLightPosition(RectInt viewport)
-	{
-	}
-
 	private void DrawStorySpeech(Target target)
 	{
 		if (game.storySpeechBubbles.Count == 0)

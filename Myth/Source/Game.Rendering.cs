@@ -19,7 +19,7 @@ public sealed partial class GameView
 	const int Columns = Game.Columns;
 	const int Rows = Game.Rows;
 
-	private void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
+	void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		PrepareRenderingList();
 
@@ -49,7 +49,6 @@ public sealed partial class GameView
 			ForegroundEmissive.Clear(Color.Transparent);
 		}
 
-		UpdateMouseLightPosition(viewport);
 		if (PerfToggles.NormalBuffer)
 		{
 			using (PerfStats.Time(PerfStat.Normal))
@@ -204,7 +203,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private Target CompositeRawWorld()
+	Target CompositeRawWorld()
 	{
 		Screen.Clear(Color.Transparent);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -216,14 +215,14 @@ public sealed partial class GameView
 		return Screen;
 	}
 
-	private void PrepareRenderingList()
+	void PrepareRenderingList()
 	{
 		rendering.Clear();
 		rendering.AddRange(Actors);
 		rendering.Sort((a, b) => b.Depth - a.Depth);
 	}
 
-	private Target DrawTileFieldDebug()
+	Target DrawTileFieldDebug()
 	{
 		Screen.Clear(Color.Transparent);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -246,14 +245,14 @@ public sealed partial class GameView
 		return Screen;
 	}
 
-	private int TileFieldDebugChannel()
+	int TileFieldDebugChannel()
 		=> debugView switch
 		{
 			DebugView.TileFieldGreen => 1,
 			_ => 0
 		};
 
-	private void DrawWorldLayer(Target target, bool background)
+	void DrawWorldLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
 		if (background)
@@ -292,13 +291,13 @@ public sealed partial class GameView
 			DrawSpriteReflections(target);
 	}
 
-	private void DrawBackdrop(Target target)
+	void DrawBackdrop(Target target)
 	{
 		var (top, bottom) = CurrentBackdropColors();
 		Batcher.Rect(new Rect(0, 0, target.Width, target.Height), top, top, bottom, bottom);
 	}
 
-	private void DrawPlayerHud(Target target)
+	void DrawPlayerHud(Target target)
 	{
 		if (game.GetFirst<Player>() is { } player)
 		{
@@ -318,7 +317,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private static bool IsBackgroundActor(Actor actor)
+	static bool IsBackgroundActor(Actor actor)
 		=> actor switch
 		{
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
@@ -326,7 +325,7 @@ public sealed partial class GameView
 			_ => false
 		};
 
-	private void DrawEmissiveLayer(Target target, bool background)
+	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
 		PushWorldMatrix();
@@ -346,7 +345,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private void DrawSpriteReflections(Target target)
+	void DrawSpriteReflections(Target target)
 	{
 		if (room == null)
 			return;
@@ -392,7 +391,7 @@ public sealed partial class GameView
 		CompositeReflections(target);
 	}
 
-	private RectInt GetReflectionScissor(RectInt rect)
+	RectInt GetReflectionScissor(RectInt rect)
 	{
 		var screenRect = new RectInt(
 			(int)MathF.Round((rect.X - Camera.X + shake.X) * zoomLevel),
@@ -402,16 +401,16 @@ public sealed partial class GameView
 		return screenRect.GetIntersection(ReflectionScreen.Bounds);
 	}
 
-	private void CompositeReflections(Target target) => BlitReflections(target, flatOnly: 0.0f);
+	void CompositeReflections(Target target) => BlitReflections(target, flatOnly: 0.0f);
 
-	private void CompositeFlatReflections(Target target)
+	void CompositeFlatReflections(Target target)
 	{
 		if (room == null || !room.ReflectionRects.Any(r => !r.Distorted))
 			return;
 		BlitReflections(target, flatOnly: 1.0f);
 	}
 
-	private void BlitReflections(Target target, float flatOnly)
+	void BlitReflections(Target target, float flatOnly)
 	{
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		if (reflectionDistortMaterial != null)
@@ -437,7 +436,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private int ReflectionSurfaceTop(RectInt rect)
+	int ReflectionSurfaceTop(RectInt rect)
 	{
 		if (room == null)
 			return rect.Top;
@@ -471,13 +470,13 @@ public sealed partial class GameView
 		return top;
 	}
 
-	private static bool ReflectionRectsTouch(RectInt a, RectInt b)
+	static bool ReflectionRectsTouch(RectInt a, RectInt b)
 		=> a.Left <= b.Right &&
 		   a.Right >= b.Left &&
 		   a.Top <= b.Bottom &&
 		   a.Bottom >= b.Top;
 
-	private static bool ActorCanReflectIn(Actor actor, RectInt rect)
+	static bool ActorCanReflectIn(Actor actor, RectInt rect)
 	{
 		var bounds = actor.GetVisualBounds().Inflate(4);
 		if (bounds.Right <= rect.Left || bounds.Left >= rect.Right)
@@ -486,7 +485,7 @@ public sealed partial class GameView
 		return bounds.Bottom >= rect.Top - 64 && bounds.Top <= rect.Bottom + 64;
 	}
 
-	private Target ApplyLighting()
+	Target ApplyLighting()
 	{
 		if (lightingCompositeMaterial == null)
 			return ForegroundScreen;
@@ -523,7 +522,7 @@ public sealed partial class GameView
 		return LitScreen;
 	}
 
-	private void ApplyLightingNoise(Target target)
+	void ApplyLightingNoise(Target target)
 	{
 		if (Assets.LightingNoise == null)
 			return;
@@ -544,7 +543,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private Target ApplyPixelSortGlitch(Target input)
+	Target ApplyPixelSortGlitch(Target input)
 	{
 		if (pixelSortGlitchMaterial == null || ditherGlitch <= 0.001f)
 			return input;
@@ -578,7 +577,7 @@ public sealed partial class GameView
 		return GlitchScreen;
 	}
 
-	private void CompositeLayer(Target color, Target light, Target emissive, Target output, float aoStrength = 0.0f)
+	void CompositeLayer(Target color, Target light, Target emissive, Target output, float aoStrength = 0.0f)
 	{
 		output.Clear(Color.Transparent);
 		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
@@ -625,7 +624,7 @@ public sealed partial class GameView
 	// Renders background tiles (without the backdrop fill) so their alpha marks
 	// where real tiles exist. The AO composite gates on this so the backdrop is
 	// never darkened where no background tiles are present.
-	private void DrawBackgroundCoverage()
+	void DrawBackgroundCoverage()
 	{
 		BackgroundCoverage.Clear(Color.Transparent);
 		if (!ShowBackgroundLayer)
@@ -653,14 +652,14 @@ public sealed partial class GameView
 	// Blurs the foreground coverage (ForegroundScreen alpha) into AoMask using a
 	// separable two-pass Gaussian. The result is the soft occluder field the
 	// background composite samples to darken tiles beneath foreground overhangs.
-	private void BuildAoMask()
+	void BuildAoMask()
 	{
 		var radius = Manager.AmbientOcclusionBlur;
 		RunBlurPass(ForegroundScreen, AoBlurScratch, new Vector2(1, 0), radius, sourceAlpha: true);
 		RunBlurPass(AoBlurScratch, AoMask, new Vector2(0, 1), radius, sourceAlpha: false);
 	}
 
-	private void RunBlurPass(Target source, Target destination, Vector2 direction, float radius, bool sourceAlpha)
+	void RunBlurPass(Target source, Target destination, Vector2 direction, float radius, bool sourceAlpha)
 	{
 		destination.Clear(Color.Transparent);
 		blurMaterial!.Material.Fragment.SetUniformBuffer([
@@ -689,7 +688,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private void DrawTileField()
+	void DrawTileField()
 	{
 		RoomTileFieldCache? currentRoomTileFieldCache = null;
 		RoomTileFieldCache? nextRoomTileFieldCache = null;
@@ -711,10 +710,10 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
+	void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
 		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
 
-	private RoomTileFieldCache GetRoomTileFieldCache(Room renderRoom)
+	RoomTileFieldCache GetRoomTileFieldCache(Room renderRoom)
 	{
 		var bounds = renderRoom.WorldBounds;
 		if (!roomTileFieldCaches.TryGetValue(renderRoom, out var cache) ||
@@ -739,7 +738,7 @@ public sealed partial class GameView
 			cache.Dirty = true;
 	}
 
-	private void RebuildRoomTileFieldCache(RoomTileFieldCache cache)
+	void RebuildRoomTileFieldCache(RoomTileFieldCache cache)
 	{
 		var renderRoom = cache.Room;
 		var target = cache.Target;
@@ -758,7 +757,7 @@ public sealed partial class GameView
 		cache.Dirty = false;
 	}
 
-	private void DrawDitherMask()
+	void DrawDitherMask()
 	{
 		DitherMask.Clear(Color.White);
 		PushWorldMatrix();
@@ -780,10 +779,10 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private static float DitherAmountForActor(Actor actor)
+	static float DitherAmountForActor(Actor actor)
 		=> actor.Mask.Has(Actor.Masks.Player | Actor.Masks.Enemy) ? ActorDitherAmount : 1.0f;
 
-	private void DrawParticleSolidMask()
+	void DrawParticleSolidMask()
 	{
 		ParticleSolidMask.Clear(Color.Transparent);
 		if (room == null)
@@ -818,14 +817,14 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private static bool ParticleCollidesWith(Actor actor)
+	static bool ParticleCollidesWith(Actor actor)
 	{
 		if (!actor.Visible || actor is Grid || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
 			return false;
 		return actor is Pawn and not Player || actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru | Actor.Masks.Enemy | Actor.Masks.Hazard);
 	}
 
-	private void DrawRoomTileField(Room renderRoom)
+	void DrawRoomTileField(Room renderRoom)
 	{
 		DrawRoomTileFieldBaseline(renderRoom);
 		if (tileFieldStampMaterial != null)
@@ -836,7 +835,7 @@ public sealed partial class GameView
 			Batcher.PopMaterial();
 	}
 
-	private void DrawRoomTileFieldBaseline(Room renderRoom)
+	void DrawRoomTileFieldBaseline(Room renderRoom)
 	{
 		var baselineTile = tileFieldStampMaterial == null ? (char?)null : '0';
 		var drawRect = new Rect(0, 0, TileSize, TileSize);
@@ -849,7 +848,7 @@ public sealed partial class GameView
 			}
 	}
 
-	private void DrawRoomVisualTileField(Room renderRoom)
+	void DrawRoomVisualTileField(Room renderRoom)
 	{
 		for (var y = 0; y < renderRoom.Size.Y; y++)
 			for (var x = 0; x < renderRoom.Size.X; x++)
@@ -881,7 +880,7 @@ public sealed partial class GameView
 			}
 	}
 
-	private void DrawRoomDualTileField(Room renderRoom, Factory.TileLayer layer)
+	void DrawRoomDualTileField(Room renderRoom, Factory.TileLayer layer)
 	{
 		foreach (var (tileType, entry) in Factory.Entries)
 		{
@@ -912,7 +911,7 @@ public sealed partial class GameView
 					if (joinMask == 0)
 						continue;
 
-					var dualTile = DualMaskToTile[joinMask];
+					var dualTile = DualGrid.MaskToTile[joinMask];
 					var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
 					var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
 					if (image.Texture == null)
@@ -927,7 +926,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private void DrawDualTileFieldQuadrants(Subtexture image, Vector2 position, int materialMask, Color color)
+	void DrawDualTileFieldQuadrants(Subtexture image, Vector2 position, int materialMask, Color color)
 	{
 		if (materialMask == TileQuadrants.All)
 		{
@@ -943,7 +942,7 @@ public sealed partial class GameView
 		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
 	}
 
-	private void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
+	void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
 	{
 		if ((materialMask & mask) == 0)
 			return;
@@ -951,7 +950,7 @@ public sealed partial class GameView
 		Batcher.Image(image, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
 	}
 
-	private static int StableDualVariantSeed(Room room, char tileType, int x, int y)
+	static int StableDualVariantSeed(Room room, char tileType, int x, int y)
 	{
 		unchecked
 		{
@@ -968,7 +967,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private static Color TileFieldColor(char tile, Point2 worldTile)
+	static Color TileFieldColor(char tile, Point2 worldTile)
 	{
 		var hash = TileFieldHash(tile, worldTile);
 		var variant = (hash & 255) / 255.0f;
@@ -976,7 +975,7 @@ public sealed partial class GameView
 		return new Color(variant, family, 0.0f, 1.0f);
 	}
 
-	private static float TileFieldFamily(char tile)
+	static float TileFieldFamily(char tile)
 		=> tile switch
 		{
 			'0' => 0.00f,
@@ -986,7 +985,7 @@ public sealed partial class GameView
 			_ => 1.00f
 		};
 
-	private static uint TileFieldHash(char tile, Point2 worldTile)
+	static uint TileFieldHash(char tile, Point2 worldTile)
 	{
 		var hash = 2166136261u;
 		hash = (hash ^ (uint)worldTile.X) * 16777619u;
@@ -998,11 +997,11 @@ public sealed partial class GameView
 	// State for drawLightMaskLightAction so the delegate can be cached once instead
 	// of reallocating a closure per actor per frame (DrawLightMask runs twice a frame,
 	// and ForEachLight is called for every actor).
-	private Target? lightMaskTarget;
-	private bool lightMaskIncludeShadows;
-	private Action<Vector2, float, float, float, Color>? drawLightMaskLightAction;
+	Target? lightMaskTarget;
+	bool lightMaskIncludeShadows;
+	Action<Vector2, float, float, float, Color>? drawLightMaskLightAction;
 
-	private void DrawLightMask(Target lightMask, bool includeShadows)
+	void DrawLightMask(Target lightMask, bool includeShadows)
 	{
 		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 		if (CurrentSunStrength() > SunStrengthEpsilon)
@@ -1032,7 +1031,7 @@ public sealed partial class GameView
 
 	}
 
-	private Color CurrentAmbientColor()
+	Color CurrentAmbientColor()
 	{
 		if (nextRoom == null)
 			return room?.AmbientColor ?? Room.DefaultAmbientColor;
@@ -1040,7 +1039,7 @@ public sealed partial class GameView
 		return LerpColor(transitionAmbientColorFrom, transitionAmbientColorTo, Ease.Cube.InOut(nextRoomEase));
 	}
 
-	private (Color Top, Color Bottom) CurrentBackdropColors()
+	(Color Top, Color Bottom) CurrentBackdropColors()
 	{
 		if (nextRoom == null)
 		{
@@ -1054,7 +1053,7 @@ public sealed partial class GameView
 			LerpColor(transitionBackdropColor2From, transitionBackdropColor2To, amount));
 	}
 
-	private float CurrentAmbientIntensity()
+	float CurrentAmbientIntensity()
 	{
 		if (nextRoom == null)
 			return room?.AmbientIntensity ?? Room.DefaultAmbientIntensity;
@@ -1062,7 +1061,7 @@ public sealed partial class GameView
 		return float.Lerp(transitionAmbientIntensityFrom, transitionAmbientIntensityTo, Ease.Cube.InOut(nextRoomEase));
 	}
 
-	private float CurrentLightNoise()
+	float CurrentLightNoise()
 	{
 		if (nextRoom == null)
 			return room?.LightNoise ?? Room.DefaultLightNoise;
@@ -1070,7 +1069,7 @@ public sealed partial class GameView
 		return float.Lerp(transitionLightNoiseFrom, transitionLightNoiseTo, Ease.Cube.InOut(nextRoomEase));
 	}
 
-	private Color CurrentSunColor()
+	Color CurrentSunColor()
 	{
 		if (nextRoom == null)
 			return room?.SunColor ?? Room.DefaultSunColor;
@@ -1078,7 +1077,7 @@ public sealed partial class GameView
 		return LerpColor(transitionSunColorFrom, transitionSunColorTo, Ease.Cube.InOut(nextRoomEase));
 	}
 
-	private float CurrentSunStrength()
+	float CurrentSunStrength()
 	{
 		if (nextRoom == null)
 			return room?.SunStrength ?? 0.0f;
@@ -1086,7 +1085,7 @@ public sealed partial class GameView
 		return float.Lerp(transitionSunStrengthFrom, transitionSunStrengthTo, Ease.Cube.InOut(nextRoomEase));
 	}
 
-	private Vector2 CurrentSunDirection()
+	Vector2 CurrentSunDirection()
 	{
 		if (nextRoom == null)
 			return room?.SunDirection ?? Room.DefaultSunDirection;
@@ -1095,12 +1094,12 @@ public sealed partial class GameView
 		return Room.NormalizeOrDefault(direction, Room.DefaultSunDirection);
 	}
 
-	private static Color LerpColor(Color from, Color to, float amount)
+	static Color LerpColor(Color from, Color to, float amount)
 		=> new(Vector4.Lerp(from, to, amount));
 
-	private const float SunStrengthEpsilon = 0.001f;
+	const float SunStrengthEpsilon = 0.001f;
 
-	private void DrawSunLightMask(bool includeShadows)
+	void DrawSunLightMask(bool includeShadows)
 	{
 		SingleLightMask.Clear(Color.Transparent);
 		var strength = CurrentSunStrength();
@@ -1152,7 +1151,7 @@ public sealed partial class GameView
 			SoftenSingleLightMask(Vector2.Zero, 0, uniform: true);
 	}
 
-	private void DrawSingleLightMask(Light light, bool includeShadows)
+	void DrawSingleLightMask(Light light, bool includeShadows)
 		=> DrawSingleLightMask(
 			light.Position,
 			light.Radius * light.FlickerScale,
@@ -1161,7 +1160,7 @@ public sealed partial class GameView
 			light.LightColor,
 			includeShadows);
 
-	private void DrawSingleLightMask(Vector2 position, float radius, float intensity, float height, Color lightColor, bool includeShadows)
+	void DrawSingleLightMask(Vector2 position, float radius, float intensity, float height, Color lightColor, bool includeShadows)
 	{
 		SingleLightMask.Clear(Color.Transparent);
 		var drewVisibilityClippedLight = false;
@@ -1226,10 +1225,10 @@ public sealed partial class GameView
 		}
 	}
 
-	private static readonly List<VisibilityPolygon.Hit> hits = new();
-	private static readonly List<VisibilityPolygon.Segment> _segments = new();
+	static readonly List<VisibilityPolygon.Hit> hits = new();
+	static readonly List<VisibilityPolygon.Segment> _segments = new();
 
-	private void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
+	void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
 	{
 		GatherVisibilitySegments(lightPosition, radius, _segments);
 		VisibilityPolygon.Compute(lightPosition, radius, _segments, hits);
@@ -1259,21 +1258,21 @@ public sealed partial class GameView
 		}
 	}
 
-	private bool SoftShadowsEnabled
+	bool SoftShadowsEnabled
 		=> PerfToggles.SoftShadows && softShadowMaterial != null && Manager.SoftShadowPenumbra > 0.01f;
 
 	// Softens the just-rendered per-light SingleLightMask with a separable
 	// variable-radius blur before it is accumulated. The blur widens with
 	// distance from the light, so shadows stay crisp near their caster and
 	// soften further away. The sun blurs uniformly (uniform: true).
-	private void SoftenSingleLightMask(Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
+	void SoftenSingleLightMask(Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
 	{
 		var maxPenumbra = Manager.SoftShadowPenumbra;
 		RunSoftShadowPass(SingleLightMask, SoftShadowScratch, new Vector2(1, 0), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
 		RunSoftShadowPass(SoftShadowScratch, SingleLightMask, new Vector2(0, 1), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
 	}
 
-	private void RunSoftShadowPass(Target source, Target destination, Vector2 direction, float maxPenumbra, Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
+	void RunSoftShadowPass(Target source, Target destination, Vector2 direction, float maxPenumbra, Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
 	{
 		destination.Clear(Color.Transparent);
 		softShadowMaterial!.Material.Fragment.SetUniformBuffer([
@@ -1300,7 +1299,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private void AddSingleLightMask(Target lightMask)
+	void AddSingleLightMask(Target lightMask)
 	{
 		Batcher.PushBlend(new(BlendOp.Add, BlendFactor.One, BlendFactor.One));
 		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
@@ -1311,7 +1310,7 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private void DrawLightShadows(Vector2 lightPosition, float radius)
+	void DrawLightShadows(Vector2 lightPosition, float radius)
 	{
 		if (room != null)
 			DrawRoomLightShadows(room, lightPosition, radius);
@@ -1343,7 +1342,7 @@ public sealed partial class GameView
 
 		public struct Enumerator(Room? room, Room? nextRoom)
 		{
-			private int index = -1;
+			int index = -1;
 			public Room Current { get; private set; } = null!;
 
 			public bool MoveNext()
@@ -1361,7 +1360,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private void DrawSunShadows(Vector2 direction)
+	void DrawSunShadows(Vector2 direction)
 	{
 		var distance = SunShadowDistance();
 		foreach (var visibleRoom in VisibleRooms())
@@ -1385,12 +1384,12 @@ public sealed partial class GameView
 					s.self.DrawSunShadowVolume(s.direction, s.distance, rect));
 	}
 
-	private readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
+	readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
 
-	private float SunShadowDistance()
+	float SunShadowDistance()
 		=> MathF.Sqrt(NormalBuffer.Width * NormalBuffer.Width + NormalBuffer.Height * NormalBuffer.Height) + TileSize * MathF.Max(Columns, Rows) * 2;
 
-	private void DrawRoomSunShadows(Room renderRoom, Vector2 direction, float distance)
+	void DrawRoomSunShadows(Room renderRoom, Vector2 direction, float distance)
 	{
 		foreach (var rect in renderRoom.LightOccluders)
 			DrawSunShadowVolume(direction, distance, rect);
@@ -1399,7 +1398,7 @@ public sealed partial class GameView
 			DrawSunShadowVolume(direction, distance, polygon.Points);
 	}
 
-	private void DrawSunShadowVolume(Vector2 direction, float distance, RectInt rect)
+	void DrawSunShadowVolume(Vector2 direction, float distance, RectInt rect)
 	{
 		Span<Point2> corners =
 		[
@@ -1411,7 +1410,7 @@ public sealed partial class GameView
 		DrawSunShadowVolume(direction, distance, corners);
 	}
 
-	private void DrawSunShadowVolume(Vector2 direction, float distance, ReadOnlySpan<Point2> points)
+	void DrawSunShadowVolume(Vector2 direction, float distance, ReadOnlySpan<Point2> points)
 	{
 		for (var i = 0; i < points.Length; i++)
 		{
@@ -1424,20 +1423,20 @@ public sealed partial class GameView
 		}
 	}
 
-	private static bool IsSunShadowCastingEdge(Vector2 a, Vector2 b, Vector2 direction)
+	static bool IsSunShadowCastingEdge(Vector2 a, Vector2 b, Vector2 direction)
 	{
 		var edge = b - a;
 		var outward = new Vector2(edge.Y, -edge.X);
 		return Vector2.Dot(outward, direction) > 0.001f;
 	}
 
-	private void DrawSunShadowSegment(VisibilityPolygon.Segment segment, Vector2 direction, float distance)
+	void DrawSunShadowSegment(VisibilityPolygon.Segment segment, Vector2 direction, float distance)
 	{
 		var offset = direction * distance;
 		Batcher.Quad(segment.A, segment.B, segment.B + offset, segment.A + offset, Color.Black);
 	}
 
-	private void DrawRoomLightShadows(Room renderRoom, Vector2 lightPosition, float radius)
+	void DrawRoomLightShadows(Room renderRoom, Vector2 lightPosition, float radius)
 	{
 		foreach (var rect in renderRoom.LightOccluders)
 			if (CircleOverlapsRect(lightPosition, radius, rect))
@@ -1448,7 +1447,7 @@ public sealed partial class GameView
 				DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
 	}
 
-	private void DrawActorSpriteShadows(Vector2 lightPosition, float radius)
+	void DrawActorSpriteShadows(Vector2 lightPosition, float radius)
 	{
 		foreach (var actor in Actors)
 		{
@@ -1480,7 +1479,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private void DrawShadowVolume(Vector2 lightPosition, float radius, RectInt rect)
+	void DrawShadowVolume(Vector2 lightPosition, float radius, RectInt rect)
 	{
 		Span<Point2> corners =
 		[
@@ -1492,7 +1491,7 @@ public sealed partial class GameView
 		DrawShadowVolume(lightPosition, radius, corners, rect);
 	}
 
-	private void DrawShadowVolume(Vector2 lightPosition, float radius, ReadOnlySpan<Point2> points, RectInt bounds)
+	void DrawShadowVolume(Vector2 lightPosition, float radius, ReadOnlySpan<Point2> points, RectInt bounds)
 	{
 		if (bounds.Contains(lightPosition))
 			return;
@@ -1522,7 +1521,7 @@ public sealed partial class GameView
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
 	}
 
-	private void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
+	void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
 	{
 		segments.Clear();
 		foreach (var visibleRoom in VisibleRooms())
@@ -1549,7 +1548,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
+	static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
 	{
 		if (!CircleOverlapsRect(lightPosition, radius, renderRoom.WorldBounds))
 			return;
@@ -1559,7 +1558,7 @@ public sealed partial class GameView
 				segments.Add(segment);
 	}
 
-	private static void AddRectVisibilitySegments(List<VisibilityPolygon.Segment> segments, RectInt rect, Vector2 lightPosition, float radius)
+	static void AddRectVisibilitySegments(List<VisibilityPolygon.Segment> segments, RectInt rect, Vector2 lightPosition, float radius)
 	{
 		AddVisibilitySegment(segments, rect.TopLeft, rect.TopRight, lightPosition, radius);
 		AddVisibilitySegment(segments, rect.TopRight, rect.BottomRight, lightPosition, radius);
@@ -1567,14 +1566,14 @@ public sealed partial class GameView
 		AddVisibilitySegment(segments, rect.BottomLeft, rect.TopLeft, lightPosition, radius);
 	}
 
-	private static void AddVisibilitySegment(List<VisibilityPolygon.Segment> segments, Vector2 a, Vector2 b, Vector2 lightPosition, float radius)
+	static void AddVisibilitySegment(List<VisibilityPolygon.Segment> segments, Vector2 a, Vector2 b, Vector2 lightPosition, float radius)
 	{
 		var segment = new VisibilityPolygon.Segment(a, b);
 		if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
 			segments.Add(segment);
 	}
 
-	private static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
+	static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
 	{
 		var direction = point - lightPosition;
 		var distance = direction.Length();
@@ -1584,7 +1583,7 @@ public sealed partial class GameView
 		return lightPosition + direction / distance * radius;
 	}
 
-	private static Vector2 DirectionFromLight(Vector2 lightPosition, Vector2 point)
+	static Vector2 DirectionFromLight(Vector2 lightPosition, Vector2 point)
 	{
 		var direction = point - lightPosition;
 		if (direction.LengthSquared() <= 0.0001f)
@@ -1593,7 +1592,7 @@ public sealed partial class GameView
 		return Vector2.Normalize(direction);
 	}
 
-	private static bool CircleOverlapsRect(Vector2 center, float radius, RectInt rect)
+	static bool CircleOverlapsRect(Vector2 center, float radius, RectInt rect)
 	{
 		var x = Math.Clamp(center.X, rect.Left, rect.Right);
 		var y = Math.Clamp(center.Y, rect.Top, rect.Bottom);
@@ -1601,7 +1600,7 @@ public sealed partial class GameView
 		return Vector2.DistanceSquared(center, closest) <= radius * radius;
 	}
 
-	private void DrawNormalBuffer()
+	void DrawNormalBuffer()
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
 		RoomNormalCache? currentRoomNormalCache = null;
@@ -1643,12 +1642,12 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	private void DrawCachedRoomNormals(RoomNormalCache cache)
+	void DrawCachedRoomNormals(RoomNormalCache cache)
 	{
 		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
 	}
 
-	private RoomNormalCache GetRoomNormalCache(Room renderRoom)
+	RoomNormalCache GetRoomNormalCache(Room renderRoom)
 	{
 		var bounds = renderRoom.WorldBounds;
 		if (!roomNormalCaches.TryGetValue(renderRoom, out var cache) ||
@@ -1672,7 +1671,7 @@ public sealed partial class GameView
 			cache.Dirty = true;
 	}
 
-	private void RebuildRoomNormalCache(RoomNormalCache cache)
+	void RebuildRoomNormalCache(RoomNormalCache cache)
 	{
 		var renderRoom = cache.Room;
 		var target = cache.Target;
@@ -1720,7 +1719,7 @@ public sealed partial class GameView
 		cache.Dirty = false;
 	}
 
-	private static Color RoomNormalColor(bool[,] mask, bool[,] suppressMask, int x, int y)
+	static Color RoomNormalColor(bool[,] mask, bool[,] suppressMask, int x, int y)
 	{
 		if (!RoomNormalSolid(mask, x, y))
 			return Color.Transparent;
@@ -1735,7 +1734,7 @@ public sealed partial class GameView
 		return EncodeNormal(new Vector3(sx, sy, 1), 1);
 	}
 
-	private void FillRoomNormalMask(bool[,] mask, Room renderRoom, Point2 origin)
+	void FillRoomNormalMask(bool[,] mask, Room renderRoom, Point2 origin)
 	{
 		foreach (var rect in renderRoom.CollisionRects)
 			FillRoomNormalMask(mask, rect, origin);
@@ -1743,7 +1742,7 @@ public sealed partial class GameView
 			FillRoomNormalMask(mask, polygon, origin);
 	}
 
-	private static void SuppressBakedDualRoomNormals(bool[,] suppressMask, Room renderRoom)
+	static void SuppressBakedDualRoomNormals(bool[,] suppressMask, Room renderRoom)
 	{
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
 			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
@@ -1763,7 +1762,7 @@ public sealed partial class GameView
 			}
 	}
 
-	private static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
+	static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
 	{
 		var left = Math.Clamp(rect.Left - origin.X, 0, mask.GetLength(0));
 		var right = Math.Clamp(rect.Right - origin.X, 0, mask.GetLength(0));
@@ -1775,7 +1774,7 @@ public sealed partial class GameView
 				mask[x, y] = true;
 	}
 
-	private static void FillRoomNormalMask(bool[,] mask, Room.LightOccluderPolygon polygon, Point2 origin)
+	static void FillRoomNormalMask(bool[,] mask, Room.LightOccluderPolygon polygon, Point2 origin)
 	{
 		var left = Math.Clamp(polygon.Bounds.Left - origin.X, 0, mask.GetLength(0));
 		var right = Math.Clamp(polygon.Bounds.Right - origin.X, 0, mask.GetLength(0));
@@ -1806,7 +1805,7 @@ public sealed partial class GameView
 		return inside;
 	}
 
-	private static bool RoomNormalSolid(bool[,] mask, int x, int y)
+	static bool RoomNormalSolid(bool[,] mask, int x, int y)
 	{
 		if (x < 0 || y < 0 || x >= mask.GetLength(0) || y >= mask.GetLength(1))
 			return false;
@@ -1814,7 +1813,7 @@ public sealed partial class GameView
 		return mask[x, y];
 	}
 
-	private static bool RoomNormalSuppressed(bool[,] suppressMask, int x, int y)
+	static bool RoomNormalSuppressed(bool[,] suppressMask, int x, int y)
 	{
 		if (x < 0 || y < 0 || x >= suppressMask.GetLength(0) || y >= suppressMask.GetLength(1))
 			return false;
@@ -1822,16 +1821,16 @@ public sealed partial class GameView
 		return suppressMask[x, y];
 	}
 
-	private static float SolidValue(bool[,] mask, int x, int y)
+	static float SolidValue(bool[,] mask, int x, int y)
 		=> RoomNormalSolid(mask, x, y) ? 1 : 0;
 
-	private static Color EncodeNormal(Vector3 normal, float strength)
+	static Color EncodeNormal(Vector3 normal, float strength)
 	{
 		normal = Vector3.Normalize(normal) * 0.5f + Vector3.One * 0.5f;
 		return new Color(normal.X, normal.Y, normal.Z, strength);
 	}
 
-	private ReloadableMaterial? CreateFragmentMaterial(string name, int samplerCount, int uniformBufferCount = 0)
+	ReloadableMaterial? CreateFragmentMaterial(string name, int samplerCount, int uniformBufferCount = 0)
 	{
 		try
 		{
@@ -1844,18 +1843,18 @@ public sealed partial class GameView
 		}
 	}
 
-	private sealed class ReloadableMaterial : IDisposable
+	sealed class ReloadableMaterial : IDisposable
 	{
 		// Fragment shaders are precompiled, room- and game-independent programs, so compile
 		// each one once per process and share it across every Game/GameView. Rebuilding a
 		// Game (e.g. an editor room change) reuses the cached shaders instead of re-reading
 		// and re-creating ~10 of them. Keyed by name (single GraphicsDevice per process).
-		private static readonly Dictionary<string, Shader> SharedShaders = [];
+		static readonly Dictionary<string, Shader> SharedShaders = [];
 
-		private readonly GraphicsDevice graphicsDevice;
-		private readonly string name;
-		private readonly int samplerCount;
-		private readonly int uniformBufferCount;
+		readonly GraphicsDevice graphicsDevice;
+		readonly string name;
+		readonly int samplerCount;
+		readonly int uniformBufferCount;
 
 		public Material Material { get; }
 
@@ -1889,7 +1888,7 @@ public sealed partial class GameView
 		}
 #endif
 
-		private Shader GetOrCreateShader()
+		Shader GetOrCreateShader()
 		{
 			if (SharedShaders.TryGetValue(name, out var cached))
 				return cached;
@@ -1898,7 +1897,7 @@ public sealed partial class GameView
 			return shader;
 		}
 
-		private Shader CompileShader()
+		Shader CompileShader()
 		{
 			var ext = graphicsDevice.Driver.GetShaderExtension();
 			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"{name}.fragment.{ext}");
@@ -1916,7 +1915,7 @@ public sealed partial class GameView
 		}
 	}
 
-	private static Color ScaleColor(Color color, float scale)
+	static Color ScaleColor(Color color, float scale)
 	{
 		var value = (Vector4)color;
 		value.X = Math.Clamp(value.X * scale, 0, 1);
@@ -1968,7 +1967,7 @@ public sealed partial class GameView
 		shake = oldShake;
 	}
 
-	private void EnsureRenderTargets(int width, int height)
+	void EnsureRenderTargets(int width, int height)
 	{
 		if (Screen != null && Screen.Width == width && Screen.Height == height)
 			return;
@@ -2000,7 +1999,7 @@ public sealed partial class GameView
 		SoftShadowScratch = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SoftShadowScratch"));
 	}
 
-	private Target Track(Target target)
+	Target Track(Target target)
 	{
 		debugTargets.Add(target);
 		return target;
@@ -2008,7 +2007,7 @@ public sealed partial class GameView
 
 
 	// Used by the per-room normal/tile-field caches (not the pooled main render targets).
-	private Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
+	Target CreateRenderTarget(int width, int height, TextureFormat format, string name)
 	{
 		ReadOnlySpan<TextureFormat> attachments = [format];
 		return new Target(GraphicsDevice, width, height, attachments, name: name);
@@ -2017,29 +2016,29 @@ public sealed partial class GameView
 	// debugTargets holds exactly the render targets created by EnsureRenderTargets, so
 	// return them all to the pool for reuse. Clearing the list makes a repeat call a no-op
 	// (no double-return) and the property fields are always reassigned before next use.
-	private void DisposeRenderTargets()
+	void DisposeRenderTargets()
 	{
 		foreach (var target in debugTargets)
 			RenderTargetPool.Return(target);
 		debugTargets.Clear();
 	}
 
-	private void DisposeRoomNormalCaches()
+	void DisposeRoomNormalCaches()
 	{
 		foreach (var cache in roomNormalCaches.Values)
 			cache.Dispose();
 		roomNormalCaches.Clear();
 	}
 
-	private void DisposeRoomTileFieldCaches()
+	void DisposeRoomTileFieldCaches()
 	{
 		foreach (var cache in roomTileFieldCaches.Values)
 			cache.Dispose();
 		roomTileFieldCaches.Clear();
 	}
 
-	private readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
-	private readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
+	readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
+	readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
 
 	internal void PruneInactiveRoomCaches()
 	{
@@ -2047,10 +2046,10 @@ public sealed partial class GameView
 		PruneInactiveRoomTileFieldCaches();
 	}
 
-	private bool IsActiveRoomCache(Room cachedRoom)
+	bool IsActiveRoomCache(Room cachedRoom)
 		=> cachedRoom == room || cachedRoom == nextRoom;
 
-	private void PruneInactiveRoomNormalCaches()
+	void PruneInactiveRoomNormalCaches()
 	{
 		List<Room>? remove = null;
 		foreach (var (cachedRoom, cache) in roomNormalCaches)
@@ -2068,7 +2067,7 @@ public sealed partial class GameView
 			roomNormalCaches.Remove(cachedRoom);
 	}
 
-	private void PruneInactiveRoomTileFieldCaches()
+	void PruneInactiveRoomTileFieldCaches()
 	{
 		List<Room>? remove = null;
 		foreach (var (cachedRoom, cache) in roomTileFieldCaches)
@@ -2116,8 +2115,8 @@ public sealed partial class GameView
 	/// <summary>World-space center of the current view (for test bursts).</summary>
 	public Vector2 ViewCenterWorld => RenderCamera + new Vector2(Width, Height) / 2f / zoomLevel;
 
-	private int previewEffectSlot = -1;
-	private string? previewEffectName;
+	int previewEffectSlot = -1;
+	string? previewEffectName;
 
 	/// <summary>Selects which effect asset the tuning window previews/bursts.</summary>
 	public void SetPreviewEffect(string name)
@@ -2155,7 +2154,7 @@ public sealed partial class GameView
 
 	// Advances the particle sim, sampling collision from last frame's foreground
 	// coverage (1-frame stale, fine for collision).
-	private void StepParticles(float dt)
+	void StepParticles(float dt)
 	{
 		if (particleSystem is not { Supported: true })
 			return;
@@ -2164,41 +2163,24 @@ public sealed partial class GameView
 	}
 
 	// --- view state moved from Game.cs (fields/consts/caches) ---
-	private const int ActorShadowSteps = 8;
-	private const float ActorShadowStrength = 0.5f;
-	private const float ActorShadowMinLength = 4.0f;
-	private const float ActorShadowMaxLength = 28.0f;
-	private static readonly BlendMode ShadowBlend = new(
+	const int ActorShadowSteps = 8;
+	const float ActorShadowStrength = 0.5f;
+	const float ActorShadowMinLength = 4.0f;
+	const float ActorShadowMaxLength = 28.0f;
+	static readonly BlendMode ShadowBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendMask.RGB, Color.White);
-	private static readonly BlendMode TileFieldStampBlend = new(
+	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendMask.Red | BlendMask.Green, Color.White);
-	private static readonly Point2[] DualMaskToTile =
-	[
-		new(0, 3),
-		new(3, 3),
-		new(0, 0),
-		new(3, 2),
-		new(0, 2),
-		new(1, 2),
-		new(2, 3),
-		new(3, 1),
-		new(1, 3),
-		new(0, 1),
-		new(3, 0),
-		new(2, 0),
-		new(1, 0),
-		new(2, 2),
-		new(1, 1),
-		new(2, 1),
-	];
+
 	static float DitherGlitchRadius => 150.0f;
-	private const float ActorDitherAmount = 0.2f;
+	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
 	public Target Screen { get; private set; } = null!;
+
 	Target BackgroundScreen { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
@@ -2221,27 +2203,29 @@ public sealed partial class GameView
 	Target AoBlurScratch { get; set; } = null!;
 	Target BackgroundCoverage { get; set; } = null!;
 	Target SoftShadowScratch { get; set; } = null!;
+
 	// Every render target created in EnsureRenderTargets, in creation order, for the
 	// debug render-target overlay (toggled with G). Populated via Track().
-	private readonly List<Target> debugTargets = new();
+	readonly List<Target> debugTargets = [];
+
 	public IReadOnlyList<Target> DebugTargets => debugTargets;
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
-	private readonly ReloadableMaterial? crtMaterial;
-	private readonly ReloadableMaterial? lightingCompositeMaterial;
-	private readonly ReloadableMaterial? normalLightMaterial;
-	private readonly ReloadableMaterial? reflectionDistortMaterial;
-	private readonly ReloadableMaterial? tileFieldStampMaterial;
-	private readonly ReloadableMaterial? tileFieldDebugMaterial;
-	private readonly ReloadableMaterial? pixelSortGlitchMaterial;
-	private readonly ReloadableMaterial? blurMaterial;
-	private readonly ReloadableMaterial? softShadowMaterial;
-	private readonly ReloadableMaterial? sdfAuraMaterial;
-	private const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
-	private readonly ParticleSystem? particleSystem;
-	private float particleBurstTimer;
+	readonly ReloadableMaterial? crtMaterial;
+	readonly ReloadableMaterial? lightingCompositeMaterial;
+	readonly ReloadableMaterial? normalLightMaterial;
+	readonly ReloadableMaterial? reflectionDistortMaterial;
+	readonly ReloadableMaterial? tileFieldStampMaterial;
+	readonly ReloadableMaterial? tileFieldDebugMaterial;
+	readonly ReloadableMaterial? pixelSortGlitchMaterial;
+	readonly ReloadableMaterial? blurMaterial;
+	readonly ReloadableMaterial? softShadowMaterial;
+	readonly ReloadableMaterial? sdfAuraMaterial;
+	const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
+	readonly ParticleSystem? particleSystem;
+	float particleBurstTimer;
 	public ParticleSystem? Particles => particleSystem;
-	private sealed class RoomNormalCache(Room room, Target target) : IDisposable
+	sealed class RoomNormalCache(Room room, Target target) : IDisposable
 	{
 		public readonly Room Room = room;
 		public readonly Target Target = target;
@@ -2251,7 +2235,7 @@ public sealed partial class GameView
 			=> Target.Dispose();
 	}
 
-	private sealed class RoomTileFieldCache(Room room, Target target) : IDisposable
+	sealed class RoomTileFieldCache(Room room, Target target) : IDisposable
 	{
 		public readonly Room Room = room;
 		public readonly Target Target = target;
