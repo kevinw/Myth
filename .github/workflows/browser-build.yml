@@ -33,7 +33,7 @@ jobs:
           git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production"
           GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster
           git -C Foster lfs pull --exclude="Framework/Internal/Native/ios,Framework/Internal/Native/win-x64,Framework/Internal/Native/osx,tools/macos"
-          git submodule update --remote Myth/Source/External/StringBuilder
+          git submodule update --init --remote Myth/Source/External/StringBuilder
 
       - name: Cache .NET SDK and workloads
         id: cache-dotnet
