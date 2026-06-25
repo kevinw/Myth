@@ -229,14 +229,15 @@ public sealed class ParticleSystem : IDisposable
 
 	/// Queues a directional cone burst, overriding the effect's aim and scaling
 	/// its speed (e.g. emitting along motion). Used by code-driven emitters.
-	public void Emit(int effectIndex, Vector2 worldPosition, int count, float directionRadians, float speedScale = 1.0f)
+	public void Emit(int effectIndex, Vector2 worldPosition, int count, float directionRadians, float speedScale = 1.0f, float spreadRadians = float.NaN)
 	{
 		if (GetEffect(effectIndex, count) is not { } effect)
 			return;
 		QueueEmit(effectIndex, effect, worldPosition, count,
 			(uint)ParticleEmitterShape.Cone,
 			directionRadians,
-			effect.SpeedMin * speedScale, effect.SpeedMax * speedScale);
+			effect.SpeedMin * speedScale, effect.SpeedMax * speedScale,
+			spreadRadians: spreadRadians);
 	}
 
 	private ParticleEffect? GetEffect(int effectIndex, int count)
@@ -248,7 +249,7 @@ public sealed class ParticleSystem : IDisposable
 		return effects[effectIndex];
 	}
 
-	private void QueueEmit(int effectIndex, ParticleEffect effect, Vector2 worldPosition, int count, uint shape, float dirRadians, float speedMin, float speedMax)
+	void QueueEmit(int effectIndex, ParticleEffect effect, Vector2 worldPosition, int count, uint shape, float dirRadians, float speedMin, float speedMax, float spreadRadians = float.NaN)
 	{
 		count = Math.Min(count, Capacity);
 		pendingEmits.Add(new EmitParams
@@ -262,7 +263,7 @@ public sealed class ParticleSystem : IDisposable
 			Shape = shape,
 			Radius = effect.EmitterRadius,
 			DirAngle = dirRadians,
-			Spread = effect.SpreadDegrees * (MathF.PI / 180.0f),
+			Spread = float.IsNaN(spreadRadians) ? effect.SpreadDegrees * (MathF.PI / 180.0f) : spreadRadians,
 			SpeedMin = speedMin,
 			SpeedMax = speedMax,
 			LifeMin = effect.LifeMin,

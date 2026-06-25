@@ -299,7 +299,12 @@ public partial class Player : Pawn
 		if (Game.Particles is { } particles)
 		{
 			float direction = MathF.Atan2(Velocity.X, Velocity.Y);
-			particles.Emit(burrowSparkEffect, burrowGlowAnchor - exitDir * 2.0f - Vector2.Normalize((Vector2)burrowHeading) * 3.0f, 20, direction + MathF.PI / 2.0f, 2.5f);
+			particles.Emit(burrowSparkEffect,
+				worldPosition: burrowGlowAnchor - exitDir * 2.0f - Vector2.Normalize((Vector2)burrowHeading) * 3.0f,
+				count: 20,
+				directionRadians: direction + MathF.PI / 2.0f,
+				speedScale: 2.5f,
+				spreadRadians: 19.0f * Calc.DegToRad);
 		}
 		UpdateBurrowGlow();
 		AudioEvent("player/burrow_end");
