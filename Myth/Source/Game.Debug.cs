@@ -120,6 +120,7 @@ public partial class Game
 
 	public void DisplayMessage(string message, float duration = 1.25f)
 	{
+		Console.WriteLine(message);
 		DebugViewMessage = message;
 		debugViewMessageTimer = duration;
 	}
