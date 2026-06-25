@@ -158,6 +158,11 @@
       "Id": "f386d1f023627932",
       "Type": "Jumpthru",
       "Position": [240, 160]
+    },
+    {
+      "Id": "59fc0d701d25ffe6",
+      "Type": "MovingPlatform",
+      "Position": [189, 116]
     }
   ]
 }

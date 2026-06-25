@@ -147,6 +147,20 @@ public partial class Player : Pawn
 
 	static float BurrowCooldown => 0.25f;
 
+	// Is the burrow point against the room boundary in the direction we're driving? Only then
+	// can the surface plausibly continue in the adjacent room. Room bounds are half-open
+	// [Left, Right) / [Top, Bottom); a small tolerance covers the surface ending a pixel shy.
+	const int BurrowRoomEdgeTolerance = 2;
+	bool BurrowAtRoomEdge()
+	{
+		var bounds = Game.Bounds;
+		if (burrowHeading.X > 0) return Position.X >= bounds.Right - BurrowRoomEdgeTolerance;
+		if (burrowHeading.X < 0) return Position.X <= bounds.Left + BurrowRoomEdgeTolerance;
+		if (burrowHeading.Y > 0) return Position.Y >= bounds.Bottom - BurrowRoomEdgeTolerance;
+		if (burrowHeading.Y < 0) return Position.Y <= bounds.Top + BurrowRoomEdgeTolerance;
+		return false;
+	}
+
 	private void BurrowState()
 	{
 		Velocity = Vector2.Zero;
@@ -224,7 +238,11 @@ public partial class Player : Pawn
 				// kill the glide and stay put.
 				if (move)
 				{
-					if (Game.Transition(burrowHeading))
+					// Only a surface that ran off the room edge can continue in a neighbor. A
+					// dead-end away from the edge (e.g. the end of a one-way jumpthru sitting
+					// mid-room) has nowhere to go, so pop out instead of letting Transition
+					// teleport us into the adjacent screen — it only checks the perpendicular axis.
+					if (BurrowAtRoomEdge() && Game.Transition(burrowHeading))
 						return; // stay burrowed; resumed by ResolveBurrowRoomTransition after the swap
 					PopOutOfBurrow();
 					return;

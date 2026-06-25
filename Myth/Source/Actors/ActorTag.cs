@@ -14,4 +14,5 @@ public enum ActorTag
 	Boss       = 1 << 5,
 	System     = 1 << 6,
 	Flying     = 1 << 7,
+	Obstacle   = 1 << 8,
 }
