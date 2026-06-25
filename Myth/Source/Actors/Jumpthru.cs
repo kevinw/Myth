@@ -2,7 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor]
+[GameActor(Anchor = SpriteAnchor.TopLeft)]
 public class Jumpthru : Actor
 {
 	public Jumpthru()

@@ -19,6 +19,41 @@ public partial class Game
 		PlatformNav
 	}
 
+	// Debug/dev keyboard + controller shortcuts. Host concern: Manager reads input and
+	// drives the sim through its public API (moved out of Game.Update for Phase 2).
+	internal void HandleGameDebugShortcuts(Input Input)
+	{
+		if (!AcceptsLiveInput)
+			return;
+
+		if (Input.Keyboard.Pressed(Keys.R))
+			ReloadRoom();
+
+#if !BROWSER
+		// TODO: use an ingame console instead?
+		if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
+		if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
+		if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
+#endif
+
+		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
+#if DEBUG
+
+		int timeScaleChange = 0;
+
+		if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) timeScaleChange = -1;
+		if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) timeScaleChange = 1;
+		foreach (var controller in Input.Controllers) if (controller.Connected) {
+			if (controller.Pressed(Buttons.LeftShoulder)) timeScaleChange = -1;
+			if (controller.Pressed(Buttons.RightShoulder)) timeScaleChange = 1;
+		}
+
+		if (timeScaleChange != 0) {
+			ChangeTimeScale(timeScaleChange);
+		}
+#endif
+	}
+
 	internal DebugView debugView;
 	float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }

@@ -824,7 +824,8 @@ public partial class Game : IDisposable
 		var instance = new T
 		{
 			Game = this,
-			Position = position ?? Point2.Zero
+			Position = position ?? Point2.Zero,
+			Anchor = Factory.AnchorForType(typeof(T).Name)
 		};
 		init?.Invoke(instance);
 		instance.Added();
@@ -841,6 +842,7 @@ public partial class Game : IDisposable
 		var instance = (Actor)(Activator.CreateInstance(type) ?? throw new InvalidOperationException($"Failed to create actor '{type.Name}'."));
 		instance.Game = this;
 		instance.Position = position ?? Point2.Zero;
+		instance.Anchor = Factory.AnchorForType(type.Name);
 		init?.Invoke(instance);
 		instance.Added();
 		Actors.Add(instance);

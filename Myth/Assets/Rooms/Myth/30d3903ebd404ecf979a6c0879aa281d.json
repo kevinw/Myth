@@ -76,6 +76,12 @@
       "Id": "0d3b8cb6ad6e5eb5",
       "From": "BlueMemoryLight",
       "Position": [148, 92]
+    },
+    {
+      "Id": "479b6bad41bdaef8",
+      "Type": "ParticleEmitter",
+      "Position": [212, 116],
+      "EffectName": "smoke"
     }
   ]
 }

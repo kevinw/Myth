@@ -96,11 +96,12 @@ public static class Factory
 			Tags = tags;
 		}
 
-		public static ActorPaletteEntry FromActor<T>(string spriteName, Point2? offset = null, RectInt? editorBounds = null, ActorTag tags = ActorTag.None) where T : Actor
+		public static ActorPaletteEntry FromActor<T>(string spriteName, Point2? offset = null, RectInt? editorBounds = null, ActorTag tags = ActorTag.None, SpriteAnchor anchor = SpriteAnchor.Auto) where T : Actor
 		{
 			var sprite = Assets.GetSprite(spriteName) ?? throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
 			var typeName = typeof(T).Name;
-			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, null, editorBounds, tags);
+			var origin = sprite.ResolveOrigin(anchor);
+			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, null, editorBounds, tags);
 		}
 
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
@@ -111,17 +112,18 @@ public static class Factory
 			if (sprite == null) throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing sprite '{spriteName}'.");
 
 			var typeName = ActorSpecs.GetTypeName(spec);
-			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, sprite.Origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite), typeName, specId, editorBounds, TagsForType(typeName));
+			var origin = sprite.ResolveOrigin(AnchorForType(typeName));
+			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, specId, editorBounds, TagsForType(typeName));
 		}
 
-		private static RectInt GetDefaultEditorBounds(Sprite sprite)
+		private static RectInt GetDefaultEditorBounds(Sprite sprite, Vector2 origin)
 		{
 			if (sprite.Frames.Count <= 0)
 				return new RectInt(-4, -4, 8, 8);
 
 			var frame = sprite.Frames[0].Subtexture;
-			var left = -sprite.Origin.X - frame.Frame.X;
-			var top = -sprite.Origin.Y - frame.Frame.Y;
+			var left = -origin.X - frame.Frame.X;
+			var top = -origin.Y - frame.Frame.Y;
 			var right = left + frame.Source.Width;
 			var bottom = top + frame.Source.Height;
 
@@ -144,8 +146,15 @@ public static class Factory
 	// palette entries can inherit their underlying type's tags.
 	static readonly Dictionary<string, ActorTag> actorTags = new(StringComparer.OrdinalIgnoreCase);
 
+	// Declared SpriteAnchor for each [GameActor], so palette boxes and spawned instances
+	// resolve the same origin. Keyed by registered type name.
+	static readonly Dictionary<string, SpriteAnchor> actorAnchors = new(StringComparer.OrdinalIgnoreCase);
+
 	public static ActorTag TagsForType(string? typeName)
 		=> typeName != null && actorTags.TryGetValue(typeName, out var tags) ? tags : ActorTag.None;
+
+	public static SpriteAnchor AnchorForType(string? typeName)
+		=> typeName != null && actorAnchors.TryGetValue(typeName, out var anchor) ? anchor : SpriteAnchor.Auto;
 
 	// Registers a new Type
 	public static void Register(char id, in Entry entry)
@@ -239,6 +248,8 @@ public static class Factory
 		var name = attr?.Name ?? typeof(T).Name;
 		ActorSpecs.RegisterActor<T>(name);
 		actorTags[name] = attr?.Tags ?? ActorTag.None;
+		var anchor = attr?.Anchor ?? SpriteAnchor.Auto;
+		actorAnchors[name] = anchor;
 
 		if (attr is { HideFromPalette: true })
 			return;
@@ -256,24 +267,28 @@ public static class Factory
 		}
 
 		// Tile-placement offset: an explicit attribute offset wins; resizable region actors
-		// snap to the tile corner; otherwise derive it from the sprite's pivot.
+		// snap to the tile corner; otherwise derive it from the resolved origin.
 		var offset = attr is { } a && (a.OffsetX != 0 || a.OffsetY != 0) ? a.Offset
 			: attr?.EditorBounds != null ? Point2.Zero
-			: DeriveTileOffset(sprite);
+			: DeriveTileOffset(sprite, anchor);
 
-		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None));
+		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None, anchor));
 	}
 
-	// Where the sprite's pivot should land within a clicked tile: centered horizontally, and
-	// sitting on the tile bottom when the pivot is in the sprite's lower half (a grounded
-	// actor's feet) or centered otherwise (flying/decorative). No pivot => the tile corner.
-	static Point2 DeriveTileOffset(Sprite sprite)
+	// Where the resolved origin should land within a clicked tile: centered horizontally, and
+	// sitting on the tile bottom when the origin is in the sprite's lower half (a grounded
+	// actor's feet) or centered otherwise (flying/decorative). No origin => the tile corner.
+	static Point2 DeriveTileOffset(Sprite sprite, SpriteAnchor anchor)
 	{
-		if (sprite.Origin == Vector2.Zero || sprite.Frames.Count == 0)
+		if (sprite.Frames.Count == 0)
+			return Point2.Zero;
+
+		var origin = sprite.ResolveOrigin(anchor);
+		if (origin == Vector2.Zero)
 			return Point2.Zero;
 
 		var cellHeight = sprite.Frames[0].Subtexture.Height;
-		var grounded = cellHeight > 0 && sprite.Origin.Y / cellHeight > 0.55f;
+		var grounded = cellHeight > 0 && origin.Y / cellHeight > 0.55f;
 		return new Point2(Game.TileSize / 2, grounded ? Game.TileSize : Game.TileSize / 2);
 	}
 

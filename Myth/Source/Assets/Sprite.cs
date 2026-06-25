@@ -4,17 +4,72 @@ using Foster.Framework;
 
 namespace Myth;
 
+// Where an actor's Position sits within its sprite. This single anchor drives the sprite
+// draw origin, the horizontal flip pivot, the editor's draggable box, and Hitbox.FromSprite,
+// so they always agree.
+public enum SpriteAnchor
+{
+	// Use the sprite's slice pivot if it has one, otherwise fall back to BottomCenter.
+	// This is the default: artists who set a pivot get exactly that "contact point", and
+	// pivot-less sprites still ground sensibly without any annotation.
+	Auto,
+
+	Pivot, 	      // Force the sprite's baked slice pivot (origin as authored), even if it's (0,0).
+	BottomCenter, // Centered horizontally, sitting on the bottom of the visible pixels. Grounded enemies/objects.
+	Center,       // Centered horizontally and vertically. Flying/decorative actors (lights, projectiles).
+	TopLeft,      // Top-left of the visible pixels.
+}
+
 public class Sprite(string name, Vector2 origin)
 {
-	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, float Duration);
+	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, float Duration, string? UserData = null);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
 
 	public string Name { get; } = name;
 	public Vector2 Origin { get; private set; } = origin;
 	public readonly List<Frame> Frames = new();
 	public readonly List<Animation> Animations = new();
+	// Named Aseprite slices: a slice is one region that spans the whole animation (we take its
+	// first key's canvas-space bounds). Origin lookups use the pivot slice; these are for
+	// gameplay regions like an attack hitbox. See SliceByName.
+	public readonly Dictionary<string, RectInt> Slices = new(StringComparer.OrdinalIgnoreCase);
 
-	public void Reload(Vector2 origin, List<Frame> frames, List<Animation> animations)
+	// Bounds of a named slice in sprite-local (canvas) pixels, or null. Use Hitbox.FromSlice
+	// to turn it into an origin-relative, facing-aware hitbox.
+	public RectInt? SliceByName(string name) => Slices.TryGetValue(name, out var rect) ? rect : null;
+
+	// The cel userdata label authored on a frame (e.g. "impact"), or null. Pair with
+	// AnimationFrameIndex to react on the exact frame an artist tagged.
+	public string? FrameUserData(int frameIndex)
+		=> frameIndex >= 0 && frameIndex < Frames.Count ? Frames[frameIndex].UserData : null;
+
+	// Resolves the draw/flip/hitbox origin for the given anchor, in sprite-local pixels (the
+	// same space as Origin). Anything other than Pivot is derived from the first frame's
+	// visible (trimmed) pixels so it tracks the actual art, not the padded frame.
+	public Vector2 ResolveOrigin(SpriteAnchor anchor)
+	{
+		if (anchor == SpriteAnchor.Pivot || Frames.Count == 0)
+			return Origin;
+
+		if (anchor == SpriteAnchor.Auto)
+			return Origin != Vector2.Zero ? Origin : ResolveOrigin(SpriteAnchor.BottomCenter);
+
+		var sub = Frames[0].Subtexture;
+		float left = -sub.Frame.X;
+		float top = -sub.Frame.Y;
+		float w = sub.Source.Width;
+		float h = sub.Source.Height;
+
+		return anchor switch
+		{
+			SpriteAnchor.TopLeft => new Vector2(left, top),
+			SpriteAnchor.Center => new Vector2(left + w / 2f, top + h / 2f),
+			SpriteAnchor.BottomCenter => new Vector2(left + w / 2f, top + h),
+			_ => Origin,
+		};
+	}
+
+	public void Reload(Vector2 origin, List<Frame> frames, List<Animation> animations, IReadOnlyDictionary<string, RectInt>? slices = null)
 	{
 		Origin = origin;
 
@@ -23,6 +78,11 @@ public class Sprite(string name, Vector2 origin)
 
 		Animations.Clear();
 		Animations.AddRange(animations);
+
+		Slices.Clear();
+		if (slices != null)
+			foreach (var (name, rect) in slices)
+				Slices[name] = rect;
 	}
 
 	public Frame GetFrameAt(in Animation animation, float time, bool loop)

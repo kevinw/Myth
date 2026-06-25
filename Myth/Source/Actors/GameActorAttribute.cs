@@ -16,6 +16,7 @@ public sealed class GameActorAttribute : Attribute
 	public int BoundsX, BoundsY, BoundsW, BoundsH; // explicit editor bounds; W/H == 0 => auto from sprite
 	public ActorTag Tags;
 	public bool HideFromPalette; // code-only actors (spawned in code, not placed in the editor)
+	public SpriteAnchor Anchor = SpriteAnchor.Auto; // where Position sits within the sprite
 
 	public Point2 Offset => new(OffsetX, OffsetY);
 	public RectInt? EditorBounds => BoundsW > 0 && BoundsH > 0 ? new RectInt(BoundsX, BoundsY, BoundsW, BoundsH) : null;

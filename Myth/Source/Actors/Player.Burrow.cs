@@ -16,6 +16,7 @@ public partial class Player : Pawn
 													 // velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
 	static float BurrowPopForce => JumpForce * 0.80f;
 	static float BurrowPopTime => JumpTime * 0.9f;
+	static float BurrowWallSlideLaunch => JumpForce * 1.2f; // strong upward velocity when a wall climb pops into a slide
 	const int BurrowSubmergeDepth = 4;
 	const int BurrowJumpthruSubmergeDepth = 0; // thin one-way platforms: ride on top, don't sink through
 	const int BurrowAttachProbe = 8;
@@ -251,24 +252,38 @@ public partial class Player : Pawn
 	// StopBurrow stop a burrow
 	private void PopOutOfBurrow()
 	{
-		// Launch away from whatever surface we were riding, plus carry the burrow's
-		// tangential glide momentum (so popping out of a fast rightward burrow keeps
-		// that rightward speed).
 		var exitDir = burrowToward;
-		var popMagnitude = MathF.Abs(BurrowPopForce);
-		var travel = burrowHeading != Point2.Zero
-			? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
-			: Vector2.Zero;
-		Velocity = -exitDir * popMagnitude + travel;
-		// Burrow glide can exceed normal air speed; let the carried horizontal
-		// momentum persist briefly (then normal air clamping reins it in) instead of
-		// being snapped to MaxAirSpeed immediately. Reuses the roll-jump carry, whose
-		// cap (RollJumpSpeed) matches BurrowMaxSpeed.
-		if (MathF.Abs(travel.X) > MaxAirSpeed)
-			rollJumpCarryTimer = RollJumpCarryTime;
+
+		// Climbing straight up a vertical wall pops into a wall slide instead of launching
+		// off it: drop the outward push, keep hugging the wall, and carry strong upward
+		// velocity. Feels better and sets up wall-jump / re-burrow chaining off the launch.
+		if (MathF.Abs(burrowToward.X) > MathF.Abs(burrowToward.Y) && burrowHeading.Y < 0)
+		{
+			Velocity = new Vector2(0, BurrowWallSlideLaunch);
+			Facing = Math.Sign(burrowToward.X); // face into the wall so the slide reads
+			Squish = SurfaceSquish(exitDir, normalScale: 0.7f, tangentScale: 1.3f);
+		}
+		else
+		{
+			// Launch away from whatever surface we were riding, plus carry the burrow's
+			// tangential glide momentum (so popping out of a fast rightward burrow keeps
+			// that rightward speed).
+			var popMagnitude = MathF.Abs(BurrowPopForce);
+			var travel = burrowHeading != Point2.Zero
+				? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
+				: Vector2.Zero;
+			Velocity = -exitDir * popMagnitude + travel;
+			// Burrow glide can exceed normal air speed; let the carried horizontal
+			// momentum persist briefly (then normal air clamping reins it in) instead of
+			// being snapped to MaxAirSpeed immediately. Reuses the roll-jump carry, whose
+			// cap (RollJumpSpeed) matches BurrowMaxSpeed.
+			if (MathF.Abs(travel.X) > MaxAirSpeed)
+				rollJumpCarryTimer = RollJumpCarryTime;
+			Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
+		}
+
 		jumpTimer = BurrowPopTime;
 		jumpCutImmune = true; // the pop keeps its full float even when jump is released
-		Squish = SurfaceSquish(exitDir, normalScale: 1.4f, tangentScale: 0.65f);
 		State = States.Normal;
 		AudioEvent("jump");
 		burrowEnterTimer = 0;

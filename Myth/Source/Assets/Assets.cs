@@ -16,10 +16,10 @@ public static class Assets
 	public static Texture? Atlas { get; private set; }
 	public static Texture? LightingNoise { get; private set; }
 	public static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
-	public static readonly Dictionary<string, Tileset> Tilesets = new();
-	public static readonly Dictionary<string, Subtexture> Subtextures = new();
-	public static readonly Dictionary<Point2, Room> Rooms = new();
-	public static readonly Dictionary<string, Room> RoomsById = new();
+	public static readonly Dictionary<string, Tileset> Tilesets = [];
+	public static readonly Dictionary<string, Subtexture> Subtextures = [];
+	public static readonly Dictionary<Point2, Room> Rooms = [];
+	public static readonly Dictionary<string, Room> RoomsById = [];
 
 	internal static string GenerateRandomRoomId()
 	{
@@ -69,7 +69,7 @@ public static class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 2;
+	const int visualAssetPackVersion = 4; // v4: per-frame cel userdata + named slices
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
 	const string deletedRoomsFolderName = ".deleted";
@@ -462,13 +462,14 @@ public static class Assets
 					frame.Subtexture.ToSubtexture(atlas),
 					frame.VisibleSubtexture.ToSubtexture(atlas),
 					frame.NormalSubtexture.ToSubtexture(atlas),
-					frame.Duration));
+					frame.Duration,
+					frame.UserData));
 
 			var animations = new List<Sprite.Animation>(packed.Animations.Count);
 			foreach (var animation in packed.Animations)
 				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
 
-			sprite.Reload(packed.Origin.ToVector2(), frames, animations);
+			sprite.Reload(packed.Origin.ToVector2(), frames, animations, packed.Slices);
 		}
 
 		foreach (var (name, sprite) in Sprites.ToArray())
@@ -514,9 +515,17 @@ public static class Assets
 
 	static PackedSprite BuildPackedSpriteAsset(VisualAssetBake bake, string name, Aseprite ase)
 	{
+		// Origin is the pivot of the first slice that has one (slice order isn't guaranteed, so
+		// don't assume Slices[0] — an unrelated slice like attack_hitbox could sort first).
+		// Aseprite stores a slice's pivot relative to its own bounds, so add the bounds offset
+		// to land in frame/canvas space (pivot (15,40) in a slice at (9,2) => origin (24,42)).
 		var origin = Vector2.Zero;
-		if (ase.Slices.Count > 0 && ase.Slices[0].Keys.Length > 0 && ase.Slices[0].Keys[0].Pivot.HasValue)
-			origin = ase.Slices[0].Keys[0].Pivot!.Value;
+		foreach (var slice in ase.Slices)
+			if (slice.Keys.FirstOrDefault() is { Pivot: { } pivot } key)
+			{
+				origin = key.Bounds.Position + pivot;
+				break;
+			}
 
 		var packed = new PackedSprite
 		{
@@ -524,15 +533,37 @@ public static class Assets
 			Origin = PackedVector.From(origin)
 		};
 
+		// Named slices, keyed by name, first key's canvas-space bounds (e.g. an attack hitbox).
+		foreach (var slice in ase.Slices)
+			if (slice.Keys.Length > 0)
+				packed.Slices[slice.Name] = slice.Keys[0].Bounds;
+
 		var useExpanded = ExpandedFrameDurations.TryGetValue(name, out var expDurations);
 		var frameCount = useExpanded ? expDurations!.Length : ase.Frames.Length;
+
+		// Per-frame cel userdata (the "impact"-style tags). For expanded sprites the userdata
+		// only belongs to the original keyframes (interpolated in-betweens carry none), so map
+		// each source frame to its expanded start index; otherwise it's 1:1.
+		var frameUserData = new string?[frameCount];
+		if (useExpanded && ExpandedFrameMap.TryGetValue(name, out var expMap))
+		{
+			for (var src = 0; src < expMap.Length && src < ase.Frames.Length; src++)
+				frameUserData[expMap[src]] = CelUserData(ase.Frames[src]);
+		}
+		else
+		{
+			for (var i = 0; i < frameCount && i < ase.Frames.Length; i++)
+				frameUserData[i] = CelUserData(ase.Frames[i]);
+		}
+
 		for (var i = 0; i < frameCount; i++)
 			packed.Frames.Add(new()
 			{
 				Subtexture = bake.Subtexture($"{name}/{i}"),
 				VisibleSubtexture = PackedSubtexture.VisibleFrom(bake.Subtexture($"{name}/{i}")),
 				NormalSubtexture = bake.Subtexture($"{name}/normal/{i}"),
-				Duration = useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f
+				Duration = useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f,
+				UserData = frameUserData[i]
 			});
 
 		foreach (var tag in ase.Tags)
@@ -553,10 +584,25 @@ public static class Assets
 				animCount = tag.To - tag.From + 1;
 			}
 
-			var duration = 0.0f;
+			var totalAnimDuration = 0.0f;
 			for (var i = animFrom; i < animFrom + animCount && i < packed.Frames.Count; i++)
-				duration += packed.Frames[i].Duration;
-			packed.Animations.Add(new() { Name = tag.Name, FrameStart = animFrom, FrameCount = animCount, Duration = duration });
+				totalAnimDuration += packed.Frames[i].Duration;
+			packed.Animations.Add(new() { Name = tag.Name, FrameStart = animFrom, FrameCount = animCount, Duration = totalAnimDuration });
+		}
+
+		// If there are no tags, add a default "idle" animation from all frames.
+		if (ase.Tags.Length == 0 && ase.Frames.Length > 0)
+		{
+			float totalAnimDuration = 0;
+			for (var i = 0; i < ase.Frames.Length; i++)
+				totalAnimDuration += packed.Frames[i].Duration;
+
+			packed.Animations.Add(new() {
+				Name = DEFAULT_ANIM_NAME,
+				FrameStart = 0,
+				FrameCount = ase.Frames.Length,
+				Duration = totalAnimDuration,
+			});
 		}
 
 		if (GeneratedTransitions.TryGetValue(name, out var transitions))
@@ -583,6 +629,18 @@ public static class Assets
 		}
 
 		return packed;
+	}
+
+	internal const string DEFAULT_ANIM_NAME = "idle";
+
+	// First non-empty cel userdata text on a frame (artists tag a cel on the layer they're
+	// working in, so any layer's cel can carry the label).
+	static string? CelUserData(Aseprite.Frame frame)
+	{
+		foreach (var cel in frame.Cels)
+			if (!string.IsNullOrEmpty(cel.UserData.Text))
+				return cel.UserData.Text;
+		return null;
 	}
 
 	static PackedTileset BuildPackedTilesetAsset(VisualAssetBake bake, string name, Aseprite ase)
@@ -675,6 +733,7 @@ public static class Assets
 				WritePackedSubtexture(writer, frame.VisibleSubtexture);
 				WritePackedSubtexture(writer, frame.NormalSubtexture);
 				writer.Write(frame.Duration);
+				writer.Write(frame.UserData ?? "");
 			}
 
 			WriteCount(writer, sprite.Animations.Count, $"{sprite.Name} animations");
@@ -684,6 +743,16 @@ public static class Assets
 				writer.Write(animation.FrameStart);
 				writer.Write(animation.FrameCount);
 				writer.Write(animation.Duration);
+			}
+
+			WriteCount(writer, sprite.Slices.Count, $"{sprite.Name} slices");
+			foreach (var (sliceName, bounds) in sprite.Slices)
+			{
+				writer.Write(sliceName);
+				writer.Write(bounds.X);
+				writer.Write(bounds.Y);
+				writer.Write(bounds.Width);
+				writer.Write(bounds.Height);
 			}
 		}
 
@@ -741,7 +810,8 @@ public static class Assets
 					Subtexture = ReadPackedSubtexture(reader),
 					VisibleSubtexture = ReadPackedSubtexture(reader),
 					NormalSubtexture = ReadPackedSubtexture(reader),
-					Duration = reader.ReadSingle()
+					Duration = reader.ReadSingle(),
+					UserData = reader.ReadString() is { Length: > 0 } text ? text : null
 				});
 
 			var animationCount = ReadCount(reader, $"{sprite.Name} animations");
@@ -753,6 +823,10 @@ public static class Assets
 					FrameCount = reader.ReadInt32(),
 					Duration = reader.ReadSingle()
 				});
+
+			var sliceCount = ReadCount(reader, $"{sprite.Name} slices");
+			for (var sliceIndex = 0; sliceIndex < sliceCount; sliceIndex++)
+				sprite.Slices[reader.ReadString()] = new RectInt(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32());
 
 			manifest.Sprites.Add(sprite);
 		}
@@ -1078,6 +1152,7 @@ public static class Assets
 		public PackedVector Origin { get; set; } = new();
 		public List<PackedSpriteFrame> Frames { get; set; } = [];
 		public List<PackedSpriteAnimation> Animations { get; set; } = [];
+		public Dictionary<string, RectInt> Slices { get; set; } = [];
 	}
 
 	sealed class PackedSpriteFrame
@@ -1086,6 +1161,7 @@ public static class Assets
 		public PackedSubtexture VisibleSubtexture { get; set; } = new();
 		public PackedSubtexture NormalSubtexture { get; set; } = new();
 		public float Duration { get; set; }
+		public string? UserData { get; set; }
 	}
 
 	sealed class PackedSpriteAnimation

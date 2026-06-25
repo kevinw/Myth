@@ -25,6 +25,11 @@ public class Actor
 	[NoSerialize] public Hitbox Hitbox;
 	[NoSerialize] public Masks Mask = Masks.None;
 	public Signs Facing = Signs.Positive;
+	[NoSerialize] public SpriteAnchor Anchor = SpriteAnchor.Auto;
+
+	// The resolved draw/flip/hitbox origin for this actor's sprite + anchor, in sprite-local
+	// pixels. Render, GetVisualBounds and Hitbox.FromSprite all key off this so they agree.
+	public Vector2 Origin => sprite?.ResolveOrigin(Anchor) ?? Vector2.Zero;
 	[NoSerialize] public Vector2 Squish = Vector2.One;
 	[NoSerialize] public Vector2 Shift = Vector2.Zero;
 	[NoSerialize] public int Depth = 0;
@@ -39,7 +44,6 @@ public class Actor
 	public virtual bool CastsReflection => sprite != null;
 	public virtual string HitSoundType => "flesh";
 
-	[NoSerialize]
 	public Time Time => Game.Time;
 
 	[NoSerialize]
@@ -57,7 +61,6 @@ public class Actor
 		}
 	}
 
-	[NoSerialize]
 	public Sprite.Animation Animation
 	{
 		get
@@ -68,9 +71,7 @@ public class Actor
 			return sprite.GetAnimation(animationName) ?? sprite.Animations[0];
 		}
 	}
-	[NoSerialize]
 	public float AnimationTime => animationTime;
-	[NoSerialize]
 	public int AnimationFrameIndex => sprite?.GetFrameIndexAt(Animation, animationTime, animationLooping) ?? -1;
 
 	Vector2 remainder;
@@ -86,9 +87,16 @@ public class Actor
 	// this and marks a deliberate exception (e.g. the blob-family enemies reusing "blob").
 	public Actor() => Sprite = Assets.GetSprite(GetType().Name);
 
+	public AnimState PlayOnce(string name, bool restart = false) {
+		return Play(name, looping: false, restart: restart);
+	}
+
 	/// Plays an Animation from our current Sprite, if it exists
-	public void Play(string name, bool looping = true, bool restart = false)
+	public AnimState Play(string name = "", bool looping = true, bool restart = false)
 	{
+		if (name == "")
+			name = sprite?.Animations.FirstOrDefault().Name ?? "";
+
 		if (sprite != null && sprite.GetAnimation(name) is { } && (restart || animationName != name))
 		{
 			// If already in a transition to this target, let it play out
@@ -96,7 +104,7 @@ public class Actor
 			{
 				var target = animationName.Split("->")[1];
 				if (target == name)
-					return;
+					return AnimState.Playing;
 			}
 
 			// Check for a pre-generated transition animation
@@ -114,7 +122,7 @@ public class Actor
 					animationTime = 0;
 					animationLooping = false;
 					targetAnimationLooping = looping;
-					return;
+					return AnimState.Playing;
 				}
 			}
 
@@ -123,7 +131,11 @@ public class Actor
 		}
 
 		animationLooping = looping;
+
+		return IsFinishedPlaying(name) ? AnimState.Finished : AnimState.Playing;
 	}
+
+	public enum AnimState { Playing, Finished }
 
 	/// Checks if an animation is playing
 	public bool IsPlaying(string name) => Animation.Name == name;
@@ -348,7 +360,10 @@ public class Actor
 	}
 
 	/// Called when the Actor is added to the Game
-	public virtual void Added() { }
+	public virtual void Added() {
+		// Console.WriteLine($"Actor added: {this}");
+		Play();
+	}
 
 	/// What to do when we collide with a wall while moving horizontally
 	public virtual void OnCollideX() => StopX();
@@ -369,6 +384,12 @@ public class Actor
 			Move(Velocity * Time.Delta);
 		Squish = Calc.Approach(Squish, Vector2.One, Time.Delta * 4.0f);
 		hitCooldown = Calc.Approach(hitCooldown, 0, Time.Delta);
+
+		// Snapshot before advancing so we can tell which frames we cross this Update (the
+		// playhead can step over short frames whole when Time.Delta is large).
+		var prevFrame = AnimationFrameIndex;
+		var prevAnim = animationName;
+
 		animationTime += Time.Delta;
 		Timer += Time.Delta;
 
@@ -384,7 +405,69 @@ public class Actor
 				Console.WriteLine($"Landed on target animation: animationName={animationName} animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping}");
 			}
 		}
+
+		UpdateEnteredFrames(prevFrame, prevAnim);
 	}
+
+	// The contiguous range of frames newly entered during the last Update's time advance
+	// (inclusive, absolute indices into Frames; framesEnteredFrom < 0 means none). Drives
+	// AnimationEntered / AnimationTraversed.
+	int framesEnteredFrom = -1;
+	int framesEnteredTo = -1;
+
+	void UpdateEnteredFrames(int prevFrame, string? prevAnim)
+	{
+		framesEnteredFrom = framesEnteredTo = -1;
+		if (sprite == null)
+			return;
+
+		var cur = AnimationFrameIndex;
+		if (cur < 0)
+			return;
+
+		if (prevAnim != animationName || prevFrame < 0)
+		{
+			// Fresh animation (switched, transition-landed, or first play): everything from its
+			// start up to the current frame counts as newly entered this Update.
+			framesEnteredFrom = Animation.FrameStart;
+			framesEnteredTo = cur;
+		}
+		else if (cur > prevFrame)
+		{
+			framesEnteredFrom = prevFrame + 1;
+			framesEnteredTo = cur;
+		}
+		else if (cur < prevFrame)
+		{
+			// Wrapped past the end of a looping animation; treat the new loop's frames up to
+			// cur as entered (a tag in the wrapped-off tail is an exotic case we don't track).
+			framesEnteredFrom = Animation.FrameStart;
+			framesEnteredTo = cur;
+		}
+		// cur == prevFrame: still on the same frame, nothing newly entered.
+	}
+
+	bool AnyFrameTagged(int from, int to, string userData)
+	{
+		if (from < 0 || sprite == null)
+			return false;
+		for (var i = from; i <= to && i < sprite.Frames.Count; i++)
+			if (sprite.Frames[i].UserData == userData)
+				return true;
+		return false;
+	}
+
+	// Edge-triggered: true only on the Update playback crosses INTO a frame tagged `userData`,
+	// firing exactly once per entry even when a large Time.Delta skips intervening frames. Use
+	// for one-shots (a hit, a sound, a screen shake) — no manual latch needed.
+	public bool AnimationEntered(string userData) => AnyFrameTagged(framesEnteredFrom, framesEnteredTo, userData);
+
+	// Level + skip-safe: true while the playhead is on (or this Update passed through) a frame
+	// tagged `userData`, so it stays true for the tagged frame's whole duration. Use for active
+	// windows like an attack hitbox.
+	public bool AnimationTraversed(string userData)
+		=> AnimationEntered(userData)
+		|| (sprite is { } s && AnimationFrameIndex is var cur && cur >= 0 && cur < s.Frames.Count && s.Frames[cur].UserData == userData);
 
 	enum SubtextureType
 	{
@@ -423,7 +506,7 @@ public class Actor
 		}
 
 		batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
-		batcher.Image(subtexture, Shift, sprite.Origin, Vector2.One, 0, color);
+		batcher.Image(subtexture, Shift, Origin, Vector2.One, 0, color);
 		batcher.PopMatrix();
 	}
 
@@ -443,8 +526,9 @@ public class Actor
 
 		var animation = Animation;
 		var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
-		var localLeft = Shift.X - sprite.Origin.X;
-		var localTop = Shift.Y - sprite.Origin.Y;
+		var origin = Origin;
+		var localLeft = Shift.X - origin.X;
+		var localTop = Shift.Y - origin.Y;
 		var localRight = localLeft + frame.Subtexture.Width;
 		var localBottom = localTop + frame.Subtexture.Height;
 		var scaleX = (int)Facing * Squish.X;

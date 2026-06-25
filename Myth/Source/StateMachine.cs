@@ -1,6 +1,7 @@
+using Foster.Framework;
 namespace Myth;
 
-public sealed class StateMachine<T>(T initial)
+public sealed class StateMachine<T>(T initial = default)
 	where T : struct, Enum
 {
 	public T Current { get; private set; } = initial;
@@ -22,15 +23,16 @@ public sealed class StateMachine<T>(T initial)
 		return true;
 	}
 
-	public void Update(float delta)
+	public T Update(float delta)
 	{
 		if (JustChanged)
 		{
 			JustChanged = false;
-			return;
+			return Current;
 		}
 
 		PreviousTime = Time;
 		Time += delta;
+		return Current;
 	}
 }

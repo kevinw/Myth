@@ -42,6 +42,12 @@
       "Id": "d228f2b601c5f15b",
       "Type": "LinkedDoor",
       "Position": [44, 96]
+    },
+    {
+      "Id": "a12072b5cd2c19fd",
+      "Type": "ParticleEmitter",
+      "Position": [140, 92],
+      "EffectName": "snow"
     }
   ]
 }

@@ -38,18 +38,65 @@ public readonly struct Hitbox
 		grid = value;
 	}
 
-	public static Hitbox FromSprite(Sprite sprite) {
-		// TODO: slices?
-		var w = (int)MathF.Ceiling(sprite.Frames[0].Subtexture.Width);
-		var h = (int)MathF.Ceiling(sprite.Frames[0].Subtexture.Height);
-		return new(new RectInt(0, 0, w, h));
+	// Builds a hitbox from a sprite's visible (trimmed) pixels, expressed relative to the
+	// resolved anchor origin so it lines up with the rendered sprite and the editor box.
+	// `inset` shrinks the box on all sides for forgiving gameplay collisions.
+	public static Hitbox FromSprite(Sprite? sprite, int inset = 0) {
+		if (sprite == null) return HitboxForNullSprite();
+		return FromSprite(sprite, sprite.ResolveOrigin(SpriteAnchor.Auto), inset);
 	}
 
-	public bool Overlaps(in RectInt rect)
-		=> Overlaps(Point2.Zero, new Hitbox(rect));
+	public static Hitbox FromSprite(Sprite? sprite, SpriteAnchor anchor, int inset = 0) {
+		if (sprite == null) return HitboxForNullSprite();
+		return FromSprite(sprite, sprite.ResolveOrigin(anchor), inset);
+	}
 
-	public bool Overlaps(in Hitbox other)
-		=> Overlaps(Point2.Zero, other);
+	static Hitbox HitboxForNullSprite() {
+#if DEBUG
+		Console.WriteLine("Error: Hitbox.FromSprite given null sprite");
+#endif
+		return new(new RectInt(0, 0, 0, 0));
+	}
+
+	public static Hitbox FromSprite(Sprite sprite, Vector2 origin, int inset = 0)
+	{
+		if (sprite.Frames.Count == 0)
+			return new(new RectInt(0, 0, 0, 0));
+
+		// Visible (trimmed) pixels, shifted so the anchor origin sits at (0,0). Floor the
+		// top-left and ceil the bottom-right so the integer rect always contains the art.
+		var sub = sprite.Frames[0].Subtexture;
+		var topLeftF = -origin - sub.Frame.TopLeft;
+		var topLeft = topLeftF.FloorToPoint2();
+		var bottomRight = (topLeftF + sub.Source.Size).CeilingToPoint2();
+		return new(RectInt.Between(topLeft, bottomRight).Inflate(-inset));
+	}
+
+	public static Hitbox FromSlice(Actor sprite, string name) {
+		if (sprite.Sprite == null)
+			return HitboxForNullSprite();
+		return FromSlice(sprite.Sprite, name, sprite.Origin, sprite.Facing);
+	}
+
+	// Hitbox from a named slice's canvas-space bounds, made origin-relative and mirrored to
+	// face `facing` (slices are authored one way, so an attack reaches the wrong side otherwise).
+	public static Hitbox FromSlice(Sprite? sprite, string name, Vector2 origin, Signs facing)
+	{
+		if (sprite?.SliceByName(name) is not { } r)
+			return HitboxForNullSprite();
+
+		var left = r.X - origin.X;
+		if (facing == Signs.Negative)
+			left = -left - r.Width; // reflect the rect across the origin's X axis
+		var top = r.Y - origin.Y;
+		var topLeft = new Vector2(left, top).FloorToPoint2();
+		var bottomRight = new Vector2(left + r.Width, top + r.Height).CeilingToPoint2();
+		return new(RectInt.Between(topLeft, bottomRight));
+	}
+
+	public bool Overlaps(in RectInt rect) => Overlaps(Point2.Zero, new Hitbox(rect));
+
+	public bool Overlaps(in Hitbox other) => Overlaps(Point2.Zero, other);
 
 	public bool Overlaps(in Point2 offset, in Hitbox other)
 	{

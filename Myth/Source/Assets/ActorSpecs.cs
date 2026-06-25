@@ -380,6 +380,8 @@ public static class ActorSpecs
 
 		foreach (var property in type.GetProperties(flags))
 		{
+			// Get-only properties (computed getters like Actor.Origin) have no setter, so they're
+			// skipped here automatically — no [NoSerialize] needed on them.
 			if (!property.CanRead || !property.CanWrite || property.GetIndexParameters().Length > 0 || property.GetCustomAttribute<NoSerializeAttribute>() != null)
 				continue;
 			if (IsSupportedType(property.PropertyType))
