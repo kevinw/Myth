@@ -134,6 +134,8 @@ public abstract class Pawn : Actor
 
 	public override void Update()
 	{
+		if (Game.Rewinding) return;
+
 		var previousVelocity = Velocity;
 		base.Update();
 		wallJumpDirectionCached = false;
@@ -231,7 +233,6 @@ public abstract class Pawn : Actor
 	}
 
 	protected virtual void AfterActorUpdate(Vector2 previousVelocity) { }
-	int counter;
 	protected virtual void OnLanded(Vector2 previousVelocity)
 	{
 		Squish = new Vector2(1.5f, 0.70f);

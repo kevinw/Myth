@@ -12,7 +12,6 @@ public enum PerfStat
 	TileDither,
 	Lighting,
 	Post,
-	Hud,
 	FinalComposite,
 	Present
 }
@@ -47,7 +46,6 @@ public readonly record struct PerfSnapshot(
 	float TileDither,
 	float Lighting,
 	float Post,
-	float Hud,
 	float FinalComposite,
 	float Present
 );
@@ -116,7 +114,6 @@ public static class PerfStats
 			Average(PerfStat.TileDither),
 			Average(PerfStat.Lighting),
 			Average(PerfStat.Post),
-			Average(PerfStat.Hud),
 			Average(PerfStat.FinalComposite),
 			Average(PerfStat.Present));
 		DetailSummary = BuildDetailSummary();

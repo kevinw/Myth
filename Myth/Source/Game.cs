@@ -18,6 +18,8 @@ public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kin
 
 public partial class Game : IDisposable
 {
+
+
 	static string? pendingHotReloadMessage;
 
 	internal static void NotifyHotReload(string message)
@@ -153,7 +155,6 @@ public partial class Game : IDisposable
 	private Vector2 previousPlayerPosition;
 	private static float CameraEaseRate => 10f;
 	private const float CameraEaseTriggerEpsilon = 2f;
-	private readonly List<RectInt> cameraBlockerBuffer = [];
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
 	internal float ZoomedWidth => Width / zoomLevel;
@@ -289,6 +290,7 @@ public partial class Game : IDisposable
 
 	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false)
 	{
+		rewinder = new(this);
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		this.spawnBud = spawnBud;
@@ -406,8 +408,6 @@ public partial class Game : IDisposable
 		if (ditherGlitchTarget > 0 && ditherGlitch >= ditherGlitchTarget)
 			ditherGlitchTarget = 0;
 
-		// Particle system (step 1): drive the GPU sim (view-side; no-op when headless).
-		View?.UpdateParticles(Time.Delta);
 
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
@@ -427,29 +427,15 @@ public partial class Game : IDisposable
 			// only run normal updates if no hitStun
 			if (hitStun <= 0)
 			{
-				// Remove Destroyed Actors
+				PreUpdateSystems();
 				RemoveDestroyedActors();
-
-				// Update Actors
 				for (var i = 0; i < Actors.Count; i++)
 				{
 					Actors[i].Update();
 					if (roomSwappedThisFrame)
 						break;
 				}
-
-				UpdateCamera();
-				UpdateStory();
-
-				// screen shaking
-				if (shaking > 0)
-				{
-					shaking -= Time.Delta;
-					if (Time.OnInterval(0.05f))
-						shake = new(rng.Sign(), rng.Sign());
-				}
-				else
-					shake = Point2.Zero;
+				PostUpdateSystems();
 			}
 			else
 				hitStun -= Time.Delta;
@@ -475,6 +461,25 @@ public partial class Game : IDisposable
 #if BROWSER
 		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
 #endif
+	}
+
+	void PreUpdateSystems() {
+		View?.UpdateParticles(Time.Delta);
+	}
+
+	void PostUpdateSystems() {
+		UpdateCamera();
+		UpdateStory();
+		rewinder.UpdateDebugPlayerRewind();
+		// screen shaking
+		if (shaking > 0)
+		{
+			shaking -= Time.Delta;
+			if (Time.OnInterval(0.05f))
+				shake = new(rng.Sign(), rng.Sign());
+		}
+		else
+			shake = Point2.Zero;
 	}
 
 	internal void ChangeTimeScale(int direction)
@@ -561,6 +566,7 @@ public partial class Game : IDisposable
 				blocker.Deactivate();
 	}
 
+	readonly List<RectInt> cameraBlockerBuffer = [];
 	List<RectInt> ActiveCameraBlockers()
 	{
 		cameraBlockerBuffer.Clear();

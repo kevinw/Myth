@@ -56,6 +56,8 @@ public partial class Game
 #endif
 	}
 
+	internal PlayerRewinder rewinder;
+	internal bool Rewinding => rewinder.Rewinding != 0;
 	internal DebugView debugView;
 	float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }

@@ -130,16 +130,7 @@ public sealed partial class GameView
 		}
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
-			using (GraphicsDevice.DebugGroup("Myth/story speech"))
-				DrawStorySpeech(output);
-		}
-		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
-		{
-			using (PerfStats.Time(PerfStat.Hud))
-			using (GraphicsDevice.DebugGroup("Myth/hud"))
-			{
-				DrawPlayerHud(output);
-			}
+			DrawOverlayElements(output, showHud: showHud);
 		}
 		if (debugView == DebugView.Visibility)
 		{
@@ -213,6 +204,23 @@ public sealed partial class GameView
 		Batcher.Render(Screen);
 		Batcher.Clear();
 		return Screen;
+	}
+
+	void DrawOverlayElements(Target output, bool showHud) {
+		using (GraphicsDevice.DebugGroup("Myth/story speech"))
+			DrawStorySpeech(output);
+
+		if (showHud) DrawPlayerHud(output);
+
+		// Show << Rewinding text when rewinding the player position.
+		if (game.Rewinding && Time.BetweenInterval(0.25)) {
+			var font = Assets.Font;
+			if (font != null) {
+				Batcher.Text(font, "<< Rewinding", new (20, 20), font.Size, Color.White);
+				Batcher.Render(output); // TODO: why
+				Batcher.Clear();
+			}
+		}
 	}
 
 	void PrepareRenderingList()
