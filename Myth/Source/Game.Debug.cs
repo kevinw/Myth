@@ -43,12 +43,14 @@ public partial class Game
 
 		if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) timeScaleChange = -1;
 		if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) timeScaleChange = 1;
-		foreach (var controller in Input.Controllers) if (controller.Connected) {
+		foreach (var controller in Input.Controllers) if (controller.Connected)
+		{
 			if (controller.Pressed(Buttons.LeftShoulder)) timeScaleChange = -1;
 			if (controller.Pressed(Buttons.RightShoulder)) timeScaleChange = 1;
 		}
 
-		if (timeScaleChange != 0) {
+		if (timeScaleChange != 0)
+		{
 			ChangeTimeScale(timeScaleChange);
 		}
 #endif
@@ -118,9 +120,9 @@ public partial class Game
 			debugView = DebugView.PlatformNav;
 	}
 
-	public void DisplayMessage(string message, float duration = 1.25f)
+	public void DisplayMessage(string message, float duration = 1.25f, bool print = true)
 	{
-		Console.WriteLine(message);
+		if (print) Console.WriteLine(message);
 		DebugViewMessage = message;
 		debugViewMessageTimer = duration;
 	}
