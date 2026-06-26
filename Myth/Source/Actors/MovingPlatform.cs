@@ -3,17 +3,20 @@ using System.Numerics;
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "editor_moving_platform", Anchor = SpriteAnchor.TopLeft)]
-class MovingPlatform: Actor {
-
-	int direction = 1;
-	float waitTimer = 0;
-	float moveRemainder;                 // sub-pixel travel accumulator (we move in whole pixels)
-	readonly List<Actor> riders = [];    // reusable scratch: actors standing on top this frame
+class MovingPlatform : Actor
+{
 
 	public Point2 Size = new(48, 24);
-	public float WaitTime = 0.856f;
+	public float WaitTime = WAIT_TIME;
+	const float WAIT_TIME = 0.856f;
 	public float Speed = 30f;
 	public int TravelDistance = 80;
+
+	int direction = 1;
+	float waitTimer = WAIT_TIME;
+	float moveRemainder;               // sub-pixel travel accumulator (we move in whole pixels)
+	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
+	Point2 originalPosition;
 
 	public MovingPlatform()
 	{
@@ -22,22 +25,24 @@ class MovingPlatform: Actor {
 		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 	}
 
-	Point2 originalPosition;
-
-	public override void Added() {
+	public override void Added()
+	{
 		base.Added();
 		originalPosition = Position;
 	}
 
-	public override void Update() {
-		if (waitTimer > 0) {
+	public override void Update()
+	{
+		if (waitTimer > 0)
+		{
 			waitTimer -= Time.Delta;
-			if (waitTimer <= 0)
-				direction = -direction;
 			return;
 		}
+
 		if (direction == 0)
+		{
 			return;
+		}
 
 		// Accumulate fractional travel and move in whole pixels, clamped to the patrol range so
 		// the platform and its riders never drift apart by rounding.
@@ -57,20 +62,19 @@ class MovingPlatform: Actor {
 		{
 			waitTimer = WaitTime;
 			moveRemainder = 0;
+			direction = -direction;
 		}
 	}
 
 	// Move the platform by a whole-pixel delta, carrying actors riding on top and pushing any
-	// caught in its path — the standard moving-solid pattern. While moving actors we go
-	// intangible (Mask cleared) so a carried rider isn't "grounded" on us (lets it follow us
-	// down) and a pushed actor only collides with real walls (so it can squish, not snag on us).
+	// caught in its path. While moving actors we go intangible (Mask cleared) so a carried rider
+	//  isn't "grounded" on us (lets it follow us down) and a pushed actor only collides with
+	// real walls (so it can squish, not snag on us).
 	void MoveSolid(Point2 step)
 	{
 		riders.Clear();
-		foreach (var actor in Game.Actors)
+		foreach (var actor in Game.Actors) if (IsCarryable(actor))
 		{
-			if (!IsCarryable(actor))
-				continue;
 			// Riding = standing on top, or — while airborne — hugging a side face (a wall-slide).
 			// Carrying side huggers keeps the player glued as we move, so wall-slide contact
 			// doesn't flicker open 1px at a time (which toggles the slow-slide gravity and makes
@@ -85,10 +89,8 @@ class MovingPlatform: Actor {
 
 		Position += step;
 
-		foreach (var actor in Game.Actors)
+		foreach (var actor in Game.Actors) if (IsCarryable(actor))
 		{
-			if (!IsCarryable(actor))
-				continue;
 			// Overlapping after the move => we ran into it: push. Otherwise, if it was riding on
 			// top, carry it. Both move by the same delta with the actor's own collision, so they
 			// scrape to a stop against walls instead of clipping through.
@@ -114,8 +116,9 @@ class MovingPlatform: Actor {
 
 	bool IsCarryable(Actor actor) => actor != this && actor is not Grid && !actor.Mask.Has(Masks.Solid);
 
-	public override void Render(Batcher batcher) {
-		batcher.Rect(new (0, 0, Size.X, Size.Y), Color.FloralWhite);
+	public override void Render(Batcher batcher)
+	{
+		batcher.Rect(new(0, 0, Size.X, Size.Y), Color.FloralWhite);
 	}
 
 }
