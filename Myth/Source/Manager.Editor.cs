@@ -372,14 +372,8 @@ public partial class Manager
 	enum ResizeHandle
 	{
 		None,
-		Left,
-		Right,
-		Top,
-		Bottom,
-		TopLeft,
-		TopRight,
-		BottomLeft,
-		BottomRight
+		Left, Right, Top, Bottom,
+		TopLeft, TopRight, BottomLeft, BottomRight
 	}
 
 	void SetHiddenWallResizeCursor(ResizeHandle handle)
@@ -481,8 +475,22 @@ public partial class Manager
 		editorViewInitialized = true;
 	}
 
+	const float BASE_EDITOR_CAM_MOVE_MULTIPLIER = 0.7f;
+	const float EDITOR_CAM_MOVE_MULTIPLIER_SPEED_UP = 1.2f;
+	float editorCameraMoveMultiplier = BASE_EDITOR_CAM_MOVE_MULTIPLIER;
+
 	void UpdateEditorNavigation()
 	{
+		// Keyboard Shift + WASD moves the camera around incrementally.
+		if (Input.Keyboard.Shift && controls.Move.Value != Point2.Zero)
+		{
+			editorCameraMoveMultiplier += Time.Delta * EDITOR_CAM_MOVE_MULTIPLIER_SPEED_UP;
+			editorCamera += controls.Move.Value * Time.Delta * 700.0f / editorZoom * (editorCameraMoveMultiplier);
+			return;
+		}
+
+		// Otherwise, we jump to adjacent rooms.
+		editorCameraMoveMultiplier = BASE_EDITOR_CAM_MOVE_MULTIPLIER;
 		var direction = Point2.Zero;
 		if (controls.Move.PressedUp) direction += Point2.Up;
 		if (controls.Move.PressedDown) direction += Point2.Down;
@@ -3893,7 +3901,7 @@ public partial class Manager
 		ImGui.SameLine(0, ToolbarSpacing);
 
 		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
-			//showTransitionViewer = !showTransitionViewer;
+		//showTransitionViewer = !showTransitionViewer;
 		ImGui.SameLine(0, ToolbarSpacing);
 #endif
 
@@ -4305,9 +4313,12 @@ public partial class Manager
 #if DEBUG
 		var gcMs = gcTotalPauseDuration.TotalMilliseconds;
 		string gcPauseDurationStr;
-		if (gcMs > 1000) {
+		if (gcMs > 1000)
+		{
 			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalSeconds:0}s";
-		} else {
+		}
+		else
+		{
 			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalMilliseconds:0}ms";
 		}
 
