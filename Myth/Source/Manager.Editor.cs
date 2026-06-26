@@ -3135,7 +3135,7 @@ public partial class Manager
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, width, height).Contains(localMouse);
-			proposedRoomTiles = editingRoomGeometry || worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
+			proposedRoomTiles = editorDrag.Kind != EditorDragKind.None || editingRoomGeometry || worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
 			if (selectedRoomActorIndex >= editing.Actors.Count)
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
