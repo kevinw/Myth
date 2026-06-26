@@ -1,5 +1,8 @@
 # TODO
 
+- top priority: redraw the damn sword.
+  - or git rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
+
 ## Editor
 - simple "rewind" button for rewinding player position
 - mirror in X for slopes

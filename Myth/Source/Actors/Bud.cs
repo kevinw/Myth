@@ -159,8 +159,8 @@ public class Bud : Pawn
 		RenderSpriteSubtexture(batcher, Tint);
 	}
 
-	public void Say(string text)
-		=> Game.ShowBudSpeech(Position + new Vector2(0, -32), text);
+	public void Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
+		=> Game.ShowBudSpeech(Position + new Vector2(0, -32), text, emotion);
 
 	private bool TryNavigateToPlayer(Player player, out int moveX, out int moveY, out bool jumpPressed)
 	{

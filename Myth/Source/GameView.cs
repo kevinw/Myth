@@ -227,13 +227,22 @@ public sealed partial class GameView : IDisposable
 			layout.Width + layout.Padding.X * 2,
 			layout.Lines.Count * layout.LineHeight + layout.Padding.Y * 2);
 
+		// Reveal characters over the canonical (whitespace-normalized) text: lines join
+		// back into it with one space each, so a per-line budget with a -1 per join is exact.
+		var remaining = bubble.VisibleLength;
 		for (var i = 0; i < layout.Lines.Count; i++)
 		{
-			var lineWidth = MathF.Ceiling(font.WidthOf(layout.Lines[i]));
+			var full = layout.Lines[i];
+			var shown = remaining >= full.Length ? full : full[..Math.Max(0, remaining)];
+			var lineWidth = MathF.Ceiling(font.WidthOf(full));
 			var at = new Point2(
 				(int)MathF.Round(box.Left + layout.Padding.X + (layout.Width - lineWidth) * 0.5f),
 				(int)MathF.Round(box.Top + layout.Padding.Y + i * layout.LineHeight));
-			Batcher.Text(font, layout.Lines[i], at, font.Size, Color.White);
+			if (shown.Length > 0)
+				Batcher.Text(font, shown, at, font.Size, Color.White);
+			remaining -= full.Length + 1; // +1 for the space that joined this line to the next
+			if (remaining <= 0)
+				break;
 		}
 	}
 

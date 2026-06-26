@@ -38,3 +38,6 @@ Myth/Platforms/iOS/Native/SDL3.xcframework/*/SDL3.framework/SDL3 filter=lfs diff
 # pointer and it shows as perpetually modified. Un-set LFS for that symlink path.
 Myth/Platforms/iOS/Native/SDL3.xcframework/macos-arm64_x86_64/SDL3.framework/SDL3 -filter -diff -merge -text
 *.mp4 filter=lfs diff=lfs merge=lfs -text
+*.aup3-wal filter=lfs diff=lfs merge=lfs -text
+*.aup3-shm filter=lfs diff=lfs merge=lfs -text
+*.aup3 filter=lfs diff=lfs merge=lfs -text

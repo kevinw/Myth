@@ -1,6 +1,7 @@
 #if EDITOR
 using LinkDotNet.StringBuilder; // Namespace of the package
 using System.Numerics;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using Foster.Framework;
 using ImGuiNET;
@@ -1814,14 +1815,28 @@ public partial class Manager
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
 
-	// Actor types that author as a tile-snapped room rect, sharing the resize-handle UI.
-	// Maps type name -> default size for a freshly placed instance.
-	static readonly Dictionary<string, Point2> ResizableRoomRectTypes = new()
+	// Actor types that author as a tile-snapped room rect, sharing the resize-handle UI: every
+	// actor implementing IResizable, mapped to the default size of a freshly placed instance (its
+	// public static DefaultSize). Built once from the actor type registry, so a new resizable
+	// actor just implements IResizable -- no edits here.
+	static Dictionary<string, Point2>? resizableRoomRectTypes;
+	static Dictionary<string, Point2> ResizableRoomRectTypes
+		=> resizableRoomRectTypes ??= BuildResizableRoomRectTypes();
+
+	static Dictionary<string, Point2> BuildResizableRoomRectTypes()
 	{
-		["HiddenWall"] = HiddenWall.DefaultSize,
-		["RevealDoor"] = RevealDoor.DefaultSize,
-		["CameraBlocker"] = CameraBlocker.DefaultSize,
-	};
+		var result = new Dictionary<string, Point2>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (name, type) in ActorSpecs.ActorTypes)
+		{
+			if (!typeof(IResizable).IsAssignableFrom(type))
+				continue;
+
+			var field = type.GetField(nameof(HiddenWall.DefaultSize), BindingFlags.Public | BindingFlags.Static)
+				?? throw new InvalidOperationException($"Resizable actor '{type.Name}' is missing a public static {nameof(HiddenWall.DefaultSize)} field.");
+			result[name] = (Point2)field.GetValue(null)!;
+		}
+		return result;
+	}
 
 	static bool IsResizableRoomRectActor(JsonObject actor)
 		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "");
@@ -2036,8 +2051,7 @@ public partial class Manager
 		return ResizeHandle.None;
 	}
 
-	static float HiddenWallHandleSize(float lineWeight)
-		=> MathF.Max(4, lineWeight * 8);
+	static float HiddenWallHandleSize(float lineWeight) => MathF.Max(3, lineWeight * 8);
 
 	static Rect HiddenWallHandleRect(RectInt bounds, ResizeHandle handle, float size)
 	{

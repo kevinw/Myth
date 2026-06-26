@@ -3,7 +3,7 @@ using Foster.Framework;
 namespace Myth;
 
 [GameActor(Sprite = "door", BoundsW = Game.TileSize, BoundsH = Game.TileSize * 2, Tags = ActorTag.Door)]
-public class RevealDoor : Actor
+public class RevealDoor : Actor, IResizable
 {
 	public enum RevealDirection
 	{
@@ -15,7 +15,7 @@ public class RevealDoor : Actor
 
 	public static readonly Point2 DefaultSize = new(Game.TileSize, Game.TileSize * 2);
 
-	public Point2 Size = DefaultSize;
+	public Point2 Size { get; set; } = DefaultSize;
 	public RevealDirection Direction = RevealDirection.Right;
 	public string TileType = "";
 

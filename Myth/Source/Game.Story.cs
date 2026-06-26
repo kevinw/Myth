@@ -1,16 +1,24 @@
 using System.Numerics;
 using Foster.Framework;
+using OutLoud;
 
 namespace Myth;
 
 public partial class Game
 {
-	internal sealed class StorySpeechBubble(Vector2 position, string text, float duration)
+	internal sealed class StorySpeechBubble(Vector2 position, string text, float duration, Utterance utterance, ISyllableSink sink)
 	{
 		public readonly Vector2 Position = position;
 		public readonly string Text = text;
 		public readonly float Duration = duration;
 		public float Age;
+		public int VisibleLength;
+
+		public void Tick(float dt)
+		{
+			Age += dt;
+			VisibleLength = utterance.Advance(Age, sink);
+		}
 	}
 
 	private readonly record struct StoryEventContext(
@@ -40,6 +48,7 @@ public partial class Game
 	private void LoadStory()
 	{
 		loadedStoryReloadVersion = storyReloadVersion;
+		LoadVoice();
 		budStorylets = new StoryDeck { UseSpecificity = true };
 		BuildStory(new StoryBuilder(budStorylets));
 
@@ -71,7 +80,7 @@ public partial class Game
 		for (var i = storySpeechBubbles.Count - 1; i >= 0; i--)
 		{
 			var bubble = storySpeechBubbles[i];
-			bubble.Age += Time.Delta;
+			bubble.Tick(Time.Delta);
 			if (bubble.Age >= bubble.Duration)
 				storySpeechBubbles.RemoveAt(i);
 		}
@@ -110,7 +119,7 @@ public partial class Game
 			return;
 
 		if (storylet.Content.TryGetValue("text", out var text) && text is string line && !string.IsNullOrWhiteSpace(line))
-			bud.Say(line);
+			bud.Say(line, StoryEmotion(storylet));
 	}
 
 	internal void NotifyPlayerEnteredRevealDoor(string doorId, Vector2 position)
@@ -138,11 +147,19 @@ public partial class Game
 	internal bool CanShowBudSpeech()
 		=> storySpeechBubbles.Count == 0;
 
-	internal void ShowBudSpeech(Vector2 position, string text)
+	internal void ShowBudSpeech(Vector2 position, string text, Emotion emotion = Emotion.Neutral, string? voice = null)
 	{
-		var duration = Math.Clamp(1.3f + text.Length * 0.045f, 1.8f, 4.5f);
-		storySpeechBubbles.Add(new(ClampStorySpeechPosition(position, text), text, duration));
+		text = NormalizeSpeech(text);
+		var utterance = Utterance.Build(text, emotion, BudVoiceProfile, GermanFor(text));
+		var duration = utterance.RevealSeconds + Math.Clamp(text.Length * 0.04f, 1.2f, 3f);
+		var anchor = ClampStorySpeechPosition(position, text);
+		storySpeechBubbles.Add(new(anchor, text, duration, utterance, CreateVoiceSink(anchor, voice ?? BudVoiceName)));
 	}
+
+	// Canonical form so the reveal index, wrap layout, utterance, and German lookup key all
+	// measure the same string (see DrawStorySpeechBubble).
+	internal static string NormalizeSpeech(string text)
+		=> string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
 	private Vector2 ClampStorySpeechPosition(Vector2 position, string text)
 	{
@@ -309,6 +326,11 @@ public partial class Game
 
 	private static string? StoryActorType(Actor? actor)
 		=> actor?.GetType().Name;
+
+	private static Emotion StoryEmotion(Storylet storylet)
+		=> storylet.Content.TryGetValue("emotion", out var v) && v is string s && Enum.TryParse<Emotion>(s, true, out var e)
+			? e
+			: Emotion.Neutral;
 
 	private static bool IsBudStorylet(Storylet storylet)
 		=> storylet.Content.TryGetValue("speaker", out var speaker) &&

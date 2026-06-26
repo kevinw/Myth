@@ -1,11 +1,113 @@
 using System.Numerics;
+using System.Text.Json;
 using Foster.Framework;
+using OutLoud;
 
 namespace Myth;
 
 public partial class Game
 {
 	public const float AudioPixelsPerUnit = 72;
+
+	// Each voice is its own FMOD event event:/voice/<name>; speakers pick one. The syllable
+	// inventory (labels/vowels in manifest.json) is shared across voices.
+	public static string BudVoiceName => "Kev";
+	// Loaded from Assets/Voice/ by LoadVoice(): per-clip vowel tags, syllable label names
+	// (for the FMOD labeled "syllable" parameter), and the English->German cache.
+	Vowel[]? voiceClipVowels;
+	string[]? voiceClipNames;
+	Dictionary<string, string>? voiceGerman;
+
+	// Falls back to 32 / random-clip babble until the bake (manifest.json) exists.
+	public int VoiceSyllableCount => voiceClipVowels?.Length ?? 32;
+	// Bud is a small companion -> higher, slightly quicker voice. Pitch in semitones.
+	public VoiceProfile BudVoiceProfile => new(VoiceSyllableCount, BasePitch: 4f, PitchVariance: 2f, CharsPerSecond: 26f, ClipVowels: voiceClipVowels);
+
+	// German translation of an (already whitespace-normalized) line, for vowel-melody colouring.
+	public string? GermanFor(string normalizedEnglish)
+		=> voiceGerman != null && voiceGerman.TryGetValue(normalizedEnglish, out var g) ? g : null;
+
+	void LoadVoice()
+	{
+		voiceClipVowels = null;
+		voiceClipNames = null;
+		voiceGerman = null;
+		try
+		{
+			var manifest = Path.Join(Assets.AssetsPath, "Voice", "manifest.json");
+			if (File.Exists(manifest))
+			{
+				using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
+				if (doc.RootElement.TryGetProperty("vowels", out var arr))
+				{
+					var vowels = new List<Vowel>();
+					foreach (var e in arr.EnumerateArray())
+						if (ParseVowel(e.GetString()) is { } v)
+							vowels.Add(v);
+					voiceClipVowels = [.. vowels];
+				}
+				if (doc.RootElement.TryGetProperty("names", out var nameArr))
+				{
+					var names = new List<string>();
+					foreach (var e in nameArr.EnumerateArray())
+						if (e.GetString() is { } name)
+							names.Add(name);
+					voiceClipNames = [.. names];
+				}
+			}
+
+			var de = Path.Join(Assets.AssetsPath, "Voice", "voice-de.json");
+			if (File.Exists(de) && JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(de)) is { } map)
+			{
+				voiceGerman = new(map.Count);
+				foreach (var (k, v) in map)
+					voiceGerman[NormalizeSpeech(k)] = v;
+			}
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load voice assets: {e}");
+		}
+	}
+
+	static Vowel? ParseVowel(string? s) => s switch
+	{
+		"a" => Vowel.A, "e" => Vowel.E, "i" => Vowel.I, "o" => Vowel.O, "u" => Vowel.U, _ => null
+	};
+
+	// Captures a speaker's voice + position so OutLoud can stay engine-agnostic; one per spoken line.
+	sealed class VoiceSink(Game game, Vector2 position, string voice) : ISyllableSink
+	{
+		public void Play(int syllable, float pitch, float gain) => game.PlayVoiceSyllable(voice, syllable, pitch, gain, position);
+	}
+
+	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
+
+	void PlayVoiceSyllable(string voice, int syllable, float pitch, float gain, Vector2 position)
+	{
+		if (Simulating || AudioMuted || !AudioEventsEnabled || !Audio.Initialized)
+			return;
+
+		var path = $"voice/{voice}";
+		try
+		{
+			using var instance = Audio.CreateEvent($"event:/{path}");
+			// Labeled "syllable" parameter ("ba", "scho", …) so clips are legible in FMOD;
+			// fall back to the raw index if names weren't baked.
+			if (voiceClipNames is { } names && syllable >= 0 && syllable < names.Length)
+				instance.SetParameterLabel("syllable", names[syllable], true);
+			else
+				instance.SetParameter("syllable", syllable);
+			instance.SetParameter("pitch", pitch);
+			SetAudioEventPosition(instance, position);
+			instance.Start();
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add(path))
+				Console.Error.WriteLine($"Failed to play voice syllable: {e}");
+		}
+	}
 
 	Audio Audio => Manager.Audio;
 	public bool AudioEventsEnabled { get; }

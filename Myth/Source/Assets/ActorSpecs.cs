@@ -26,6 +26,10 @@ public static class ActorSpecs
 	private static readonly Dictionary<Type, string> actorNames = new();
 
 	public static IEnumerable<(string Id, JsonObject Spec)> Specs => specs.Select(it => (it.Key, it.Value));
+
+	// Registered actor type-name -> CLR type. The editor uses this to discover capabilities
+	// (e.g. IResizable) without hardcoding type lists.
+	public static IEnumerable<KeyValuePair<string, Type>> ActorTypes => actorTypes;
 	public readonly record struct EditableProperty(string Name, string JsonName, Type Type, JsonNode? Value, bool HasLocalValue);
 
 	public static void ClearSpecs()

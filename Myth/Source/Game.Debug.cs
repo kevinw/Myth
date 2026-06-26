@@ -38,6 +38,8 @@ public partial class Game
 
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 #if DEBUG
+		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
+		if (Input.Keyboard.Pressed(Keys.V)) SpeakVoiceTest();
 
 		int timeScaleChange = 0;
 
@@ -55,6 +57,28 @@ public partial class Game
 		}
 #endif
 	}
+
+#if DEBUG
+	int voiceTestIndex;
+	// English subtitles; the voice plays back as computerized German syllables.
+	static readonly (string Text, OutLoud.Emotion Emotion)[] VoiceTestLines =
+	[
+		("Hey, can you hear me?", OutLoud.Emotion.Neutral),
+		("Look out, something's waiting up ahead!", OutLoud.Emotion.Excited),
+		("I've gotten so tired.", OutLoud.Emotion.Sad),
+		("Too bad, that could have gone better.", OutLoud.Emotion.Disappointed),
+		("So, where do we go next?", OutLoud.Emotion.Neutral),
+	];
+
+	void SpeakVoiceTest()
+	{
+		if (GetFirst<Bud>() is not { } bud)
+			return;
+		storySpeechBubbles.Clear(); // bypass the one-bubble gate so we can cycle quickly
+		var line = VoiceTestLines[voiceTestIndex++ % VoiceTestLines.Length];
+		bud.Say(line.Text, line.Emotion);
+	}
+#endif
 
 	internal PlayerRewinder rewinder;
 	internal bool Rewinding => rewinder.Rewinding;

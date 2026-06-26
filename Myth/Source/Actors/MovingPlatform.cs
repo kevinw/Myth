@@ -3,10 +3,11 @@ using System.Numerics;
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "editor_moving_platform", Anchor = SpriteAnchor.TopLeft)]
-class MovingPlatform : Actor
+class MovingPlatform : Actor, IResizable
 {
+	public static readonly Point2 DefaultSize = new(48, 24);
 
-	public Point2 Size = new(48, 24);
+	public Point2 Size { get; set; } = DefaultSize;
 	public float WaitTime = WAIT_TIME;
 	const float WAIT_TIME = 0.856f;
 	public float Speed = 30f;
@@ -22,12 +23,14 @@ class MovingPlatform : Actor
 	{
 		Mask = Masks.Solid;
 		CollidesWithSolids = true;
-		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 	}
 
 	public override void Added()
 	{
 		base.Added();
+		// Size is applied from the spec before Added (editor resizes write it), so build the
+		// hitbox here to match the authored footprint rather than the construction-time default.
+		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 		originalPosition = Position;
 	}
 

@@ -48,6 +48,12 @@
       "Type": "ParticleEmitter",
       "Position": [140, 92],
       "EffectName": "snow"
+    },
+    {
+      "Id": "7b903a0b584635ba",
+      "Type": "MovingPlatform",
+      "Position": [88, 64],
+      "Size": [32, 32]
     }
   ]
 }
