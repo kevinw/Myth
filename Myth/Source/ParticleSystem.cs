@@ -14,15 +14,15 @@ public sealed class ParticleSystem : IDisposable
 {
 	public const int Capacity = 16384;
 	public const int MaxEffects = 16;
-	private const int MaxEmitsPerFrame = 64;
-	private const int LutWidth = 64;
-	private const int ThreadGroupSize = 64;
+	const int MaxEmitsPerFrame = 64;
+	const int LutWidth = 64;
+	const int ThreadGroupSize = 64;
 
 	// NOTE: keep this a multiple of 8 bytes. The matching HLSL/MSL struct has
 	// float2 members, so Metal rounds its StructuredBuffer stride up to 8-byte
 	// alignment; the C# size must match or the GPU reads past the buffer.
 	[StructLayout(LayoutKind.Sequential)]
-	private struct Particle
+	struct Particle
 	{
 		public float PosX, PosY;
 		public float VelX, VelY;
@@ -35,14 +35,14 @@ public sealed class ParticleSystem : IDisposable
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	private struct EffectParams
+	struct EffectParams
 	{
 		public float Gravity, Drag, NoiseAmount, NoiseScale;
 		public float SizeStart, SizeEnd, CollisionMode, Bounciness;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	private struct EmitParams
+	struct EmitParams
 	{
 		public uint Start, Count, Seed, Effect;
 		public float OriginX, OriginY;
@@ -53,7 +53,7 @@ public sealed class ParticleSystem : IDisposable
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	private struct UpdateParams
+	struct UpdateParams
 	{
 		public uint Count;
 		public float Dt;
@@ -70,7 +70,7 @@ public sealed class ParticleSystem : IDisposable
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	private struct VertexParams
+	struct VertexParams
 	{
 		public Vector2 TargetSize;
 		public Vector2 Camera;
@@ -79,33 +79,33 @@ public sealed class ParticleSystem : IDisposable
 		public float Pad0, Pad1;
 	}
 
-	private readonly GraphicsDevice graphicsDevice;
-	private readonly bool supported;
-	private Shader? updateShader;
-	private Shader? vertexShader;
-	private Shader? fragmentShader;
-	private Material? material;
-	private Mesh<PosTexColVertex, ushort>? mesh;
-	private ComputeStorageBuffer<Particle>? bufferA;
-	private ComputeStorageBuffer<Particle>? bufferB;
-	private bool currentIsB;
-	private StorageBuffer<EffectParams>? effectsBuffer;
-	private StorageBuffer<EmitParams>? emitsBuffer;
-	private Texture? colorLut;
-	private int colorLutHash = -1;
+	readonly GraphicsDevice graphicsDevice;
+	readonly bool supported;
+	Shader? updateShader;
+	Shader? vertexShader;
+	Shader? fragmentShader;
+	Material? material;
+	Mesh<PosTexColVertex, ushort>? mesh;
+	ComputeStorageBuffer<Particle>? bufferA;
+	ComputeStorageBuffer<Particle>? bufferB;
+	bool currentIsB;
+	StorageBuffer<EffectParams>? effectsBuffer;
+	StorageBuffer<EmitParams>? emitsBuffer;
+	Texture? colorLut;
+	int colorLutHash = -1;
 
-	private readonly ParticleEffect?[] effects = new ParticleEffect?[MaxEffects];
-	private readonly EffectParams[] effectData = new EffectParams[MaxEffects];
-	private readonly Dictionary<string, int> slotByName = new(StringComparer.OrdinalIgnoreCase);
-	private readonly int[] slotRefCount = new int[MaxEffects];
-	private readonly List<EmitParams> pendingEmits = [];
-	private int emitCursor;
-	private float time;
-	private readonly Rng rng = new(1234);
+	readonly ParticleEffect?[] effects = new ParticleEffect?[MaxEffects];
+	readonly EffectParams[] effectData = new EffectParams[MaxEffects];
+	readonly Dictionary<string, int> slotByName = new(StringComparer.OrdinalIgnoreCase);
+	readonly int[] slotRefCount = new int[MaxEffects];
+	readonly List<EmitParams> pendingEmits = [];
+	int emitCursor;
+	float time;
+	readonly Rng rng = new(1234);
 
 	public bool AutoBurst;
 
-	private ComputeStorageBuffer<Particle> Current => currentIsB ? bufferB! : bufferA!;
+	ComputeStorageBuffer<Particle> Current => currentIsB ? bufferB! : bufferA!;
 
 	public bool Supported => supported;
 
@@ -240,7 +240,7 @@ public sealed class ParticleSystem : IDisposable
 			spreadRadians: spreadRadians);
 	}
 
-	private ParticleEffect? GetEffect(int effectIndex, int count)
+	ParticleEffect? GetEffect(int effectIndex, int count)
 	{
 		if (!supported || count <= 0 || effectIndex < 0 || effectIndex >= MaxEffects)
 			return null;
@@ -345,7 +345,7 @@ public sealed class ParticleSystem : IDisposable
 
 	// Refreshes the per-effect GPU params each frame (cheap) and re-bakes the
 	// color LUT only when a gradient changes.
-	private void BuildEffectData()
+	void BuildEffectData()
 	{
 		for (var i = 0; i < MaxEffects; i++)
 		{

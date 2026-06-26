@@ -3,12 +3,13 @@ namespace Myth;
 
 internal struct PlayerRewinder(Game game) {
 	RingBuffer<(double, Point2)> playerPositions = new(1000);
-	internal float Rewinding = 0;
+	internal bool Rewinding => rewindingHeld != 0;
+	float rewindingHeld = 0;
 	double RewindFromTime = 0;
 	float RewindSpeedup;
 
 	void StopRewind() {
-		Rewinding = 0;
+		rewindingHeld = 0;
 		RewindFromTime = 0;
 		RewindSpeedup = 0;
 	}
@@ -20,7 +21,7 @@ internal struct PlayerRewinder(Game game) {
 		var timeDelta = game.Time.Delta;
 
 		if (game.Controls.Rewind.Value != 0 && playerPositions.Count > 0) {
-			Rewinding += timeDelta * RewindSpeedup;
+			rewindingHeld += timeDelta * RewindSpeedup;
 			RewindSpeedup += timeDelta;
 			if (RewindFromTime == 0) {
 				RewindFromTime = now;
@@ -29,12 +30,12 @@ internal struct PlayerRewinder(Game game) {
 			StopRewind();
 		}
 
-		if (Rewinding > 0) {
-			// Rewinding: go backwards until we're out of positions.
+		if (rewindingHeld > 0) {
+			// rewindingHeld: go backwards until we're out of positions.
 			if (playerPositions.Count == 0) {
 				StopRewind();
 			} else {
-				var targetTime = RewindFromTime - Rewinding;
+				var targetTime = RewindFromTime - rewindingHeld;
 				var (lastTime, lastPos) = playerPositions[playerPositions.Count - 1];
 				if (targetTime <= lastTime) {
 					player.Position = lastPos;

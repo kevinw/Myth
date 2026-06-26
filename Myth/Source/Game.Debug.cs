@@ -57,7 +57,7 @@ public partial class Game
 	}
 
 	internal PlayerRewinder rewinder;
-	internal bool Rewinding => rewinder.Rewinding != 0;
+	internal bool Rewinding => rewinder.Rewinding;
 	internal DebugView debugView;
 	float debugViewMessageTimer;
 	public string? DebugViewMessage { get; private set; }
@@ -150,8 +150,8 @@ public partial class Game
 	// hitch it. Set by Manager from the editor camera tween; gameplay transitions are
 	// detected from nextRoom + this settle timer.
 	internal bool navBuildSuppressedByHost;
-	private const float NavBuildSettleSeconds = 0.3f;
-	private float navBuildSettleTimer;
+	const float NavBuildSettleSeconds = 0.3f;
+	float navBuildSettleTimer;
 
 	public PlatformNavGraph? GetPlatformNavGraph()
 	{
