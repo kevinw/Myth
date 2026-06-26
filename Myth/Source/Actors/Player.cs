@@ -231,6 +231,7 @@ public abstract class Pawn : Actor
 	}
 
 	protected virtual void AfterActorUpdate(Vector2 previousVelocity) { }
+	int counter;
 	protected virtual void OnLanded(Vector2 previousVelocity)
 	{
 		Squish = new Vector2(1.5f, 0.70f);
@@ -243,7 +244,9 @@ public abstract class Pawn : Actor
 	protected virtual bool TryStartPawnAction(int moveX) => false;
 	protected virtual void OnPawnJump() { }
 	protected virtual void OnRollStarted() { }
-	protected virtual void OnRollStopped(bool immediate) { }
+	protected virtual void OnRollStopped(bool immediate)
+	{
+	}
 	protected virtual bool TryRollCancel() => false;
 	protected virtual void UpdateRollAudioPosition() { }
 	protected virtual float GroundSpeedMultiplier => 1.0f;
@@ -342,10 +345,22 @@ public abstract class Pawn : Actor
 		}
 
 		var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
-		var maxSpeed = grounded ? MaxGroundSpeed * GroundSpeedMultiplier : MaxAirSpeed * AirSpeedMultiplier;
-		var lastFacing = Facing;
-		if (ducking)
+		float maxSpeed;
+		if (grounded)
+		{
+			maxSpeed = MaxGroundSpeed * GroundSpeedMultiplier;
+		}
+		else if (ducking)
+		{
 			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
+		}
+		else
+		{
+			maxSpeed = MaxAirSpeed * AirSpeedMultiplier;
+		}
+
+
+		var lastFacing = Facing;
 
 		Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
 		if (!grounded && wallJumpInputLockTimer > 0)
@@ -431,20 +446,44 @@ public abstract class Pawn : Actor
 	}
 
 
-	protected void TryStartRoll(Vector2 impactVelocity)
+	protected bool TryStartRoll(Vector2 impactVelocity)
 	{
-		if (State != States.Normal) return;
-		if (input.MoveY <= 0) return;
-		if (impactVelocity.Y < RollMinFallSpeed) return;
-		if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed) return;
+		if (State != States.Normal) return false;
+		if (input.MoveY <= 0) return false; // must be holding "downwards" to roll
 
-		Facing = Math.Sign(impactVelocity.X);
-		Velocity = new(Facing * RollSpeed, 0);
+		bool onSlope = GetSlopeUnderneath(out var normal);
+		if (onSlope)
+		{
+			// starting a roll on a slope is "easy" and automatically
+			// sends you in the direction of the slope
+			Facing = Math.Sign(normal.X);
+			Vector2 newVelocity = new(Facing * RollSpeed, 0);
+			Velocity = Vector2.Lerp(Velocity, newVelocity, Math.Abs(normal.X * 1.7f));
+		}
+		else
+		{
+			// on flat ground, starting a roll requires some height and
+			// some horizontal velocity
+			if (impactVelocity.Y < RollMinFallSpeed) return false;
+			if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed) return false;
+			Facing = Math.Sign(impactVelocity.X);
+			Velocity = new(Facing * RollSpeed, 0);
+		}
+
 		ducking = true;
 		Squish = new(1.65f, 0.62f);
 		Play("roll");
 		State = States.Roll;
 		OnRollStarted();
+		return true;
+	}
+
+	(float, float) TargetRollSpeedAndFriction()
+	{
+		var rollingDownSlope = RollingDownSlope();
+		var targetSpeed = rollingDownSlope ? DownhillRollSpeed : MaxGroundSpeed;
+		var friction = rollingDownSlope ? Calc.Clamp(DownhillRollFriction, 0, float.PositiveInfinity) : RollFriction;
+		return (targetSpeed, friction);
 	}
 
 	protected void RollState()
@@ -460,9 +499,13 @@ public abstract class Pawn : Actor
 		}
 
 		UpdateRollAudioPosition();
-		var rollingDownSlope = RollingDownSlope();
-		var targetSpeed = rollingDownSlope ? DownhillRollSpeed : MaxGroundSpeed;
-		var friction = rollingDownSlope ? DownhillRollFriction : RollFriction;
+		var (targetSpeed, friction) = TargetRollSpeedAndFriction();
+
+		// NOTE: this Velocity set is suspect, because in Update() it gets set with a different maxSpeed anyways.
+		// probably needs some kind of unification, or some other way for pieces of code to adjust a max speed,
+		// which then gets set in one place.
+		//
+		// once we have that, it would be fun to gradually increase speed as you roll down many slopes without stopping
 		Velocity.X = Calc.Approach(Velocity.X, Facing * targetSpeed, friction * Time.Delta);
 
 		if (input.JumpPressed)
@@ -543,16 +586,25 @@ public abstract class Pawn : Actor
 		}
 	}
 
+	bool GetSlopeUnderneath(out Vector2 normal)
+	{
+		normal = Vector2.Zero;
+		var bounds = Hitbox.Rect + Position;
+		if (!Game.TryFindSurface(this, bounds, Vector2.UnitY, 2, out var hit) || !hit.Slope.HasValue)
+			return false;
+
+		normal = hit.Normal;
+		return true;
+	}
+
 	protected bool RollingDownSlope()
 	{
 		if (!grounded || Velocity.LengthSquared() <= 0.001f)
 			return false;
 
-		var bounds = Hitbox.Rect + Position;
-		if (!Game.TryFindSurface(this, bounds, Vector2.UnitY, 2, out var hit) || !hit.Slope.HasValue)
+		if (!GetSlopeUnderneath(out var normal))
 			return false;
 
-		var normal = hit.Normal;
 		if (normal.Y >= -0.001f)
 			return false;
 
@@ -961,7 +1013,12 @@ public partial class Player : Pawn
 
 	protected override void OnRollStarted() => StartRollSound();
 
-	protected override void OnRollStopped(bool immediate) => StopRollSound(immediate);
+	protected override void OnRollStopped(bool immediate)
+	{
+		base.OnRollStopped(immediate);
+		StopRollSound(immediate);
+	}
+
 
 	protected override void UpdateRollAudioPosition()
 		=> Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
