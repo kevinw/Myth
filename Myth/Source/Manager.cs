@@ -219,73 +219,52 @@ public partial class Manager : App
 #endif
 	}
 
-
-
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
 	{
+		const string applicationName = "Myth";
+		const string windowTitle = "Myth";
+		Point2 windowSize = new(1280, 720);
+		GraphicsDriver graphicsDriver = GraphicsDriver.None; // no preference
+		bool resizable = true;
+		bool fullscreen = false;
+		var updateMode = UpdateMode.UnlockedStep();
+		AppFlags appFlags = AppFlags.None;
 #if BROWSER
-		return new AppConfig(
-			ApplicationName: "Myth",
-			WindowTitle: "Myth",
-			Width: 1280,
-			Height: 720,
-			Resizable: true,
-			UpdateMode: UpdateMode.UnlockedStep(),
-			PreferredGraphicsDriver: GraphicsDriver.WebGPU);
+		graphicsDriver = GraphicsDriver.WebGPU;
 #elif IOS
-		return new AppConfig(
-			ApplicationName: "Myth",
-			WindowTitle: "Myth",
-			Width: 1280,
-			Height: 720,
-			Fullscreen: true,
-			Resizable: false,
-			UpdateMode: UpdateMode.UnlockedStep(),
-			PreferredGraphicsDriver: GraphicsDriver.Metal);
-#else
-		if (headless && unthrottled)
-			return new AppConfig(
-				ApplicationName: "Myth",
-				WindowTitle: "Myth",
-				Width: 1,
-				Height: 1,
-				Resizable: false,
-				UpdateMode: UpdateMode.UnthrottledStep(60),
-				PreferredGraphicsDriver: GraphicsDriver.Headless,
-				Flags: AppFlags.Headless);
-
-		if (headless)
-			return new AppConfig(
-				ApplicationName: "Myth",
-				WindowTitle: "Myth",
-				Width: 1,
-				Height: 1,
-				Resizable: false,
-				UpdateMode: UpdateMode.FixedStep(60),
-				PreferredGraphicsDriver: GraphicsDriver.Headless,
-				Flags: AppFlags.Headless);
-
-		if (unthrottled)
-			return new AppConfig(
-				ApplicationName: "Myth",
-				WindowTitle: "Myth",
-				Width: 1280,
-				Height: 720,
-				Resizable: true,
-				UpdateMode: UpdateMode.UnthrottledStep(60));
+		graphicsDriver = GraphicsDriver.Metal;
+		fullscreen = true;
+		resizable = false;
+#endif
+		if (headless) {
+			graphicsDriver = GraphicsDriver.Headless;
+			windowSize = new(1, 1);
+			resizable = false;
+			updateMode = UpdateMode.FixedStep(60);
+			appFlags |= AppFlags.Headless;
+		}
+		if (unthrottled) {
+			updateMode = UpdateMode.UnthrottledStep(60);
+		}
 
 		// Opt-in GPU validation: set MYTH_GPU_DEBUG=1 to enable SDL_gpu's debug layer
 		// (pairs with Metal validation env vars to catch buffer overruns / hazards).
 		var gpuDebug = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MYTH_GPU_DEBUG"));
+		if (gpuDebug) {
+			appFlags |= AppFlags.GraphicsDebugging;
+		}
+
 		return new AppConfig(
-			ApplicationName: "Myth",
-			WindowTitle: "Myth",
-			Width: 1280,
-			Height: 720,
-			Resizable: true,
-			UpdateMode: UpdateMode.UnlockedStep(),
-			Flags: gpuDebug ? AppFlags.GraphicsDebugging : AppFlags.None);
-#endif
+			ApplicationName: applicationName,
+			WindowTitle: windowTitle,
+			Width: windowSize.X,
+			Height: windowSize.Y,
+			Fullscreen: fullscreen,
+			Resizable: resizable,
+			UpdateMode: updateMode,
+			PreferredGraphicsDriver: graphicsDriver,
+			Flags: appFlags
+		);
 	}
 
 	protected override void Startup()
