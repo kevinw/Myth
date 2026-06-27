@@ -64,12 +64,6 @@
       "Position": [172, 96]
     },
     {
-      "Id": "1817d1cc33813349",
-      "Type": "HiddenWall",
-      "Position": [168, 32],
-      "Size": [48, 24]
-    },
-    {
       "Id": "b3ee0eb7b279670a",
       "Type": "Jumpthru",
       "Position": [200, 32]
@@ -80,16 +74,17 @@
       "Position": [208, 32]
     },
     {
-      "Id": "c18cfa1bb162b836",
-      "Type": "HiddenWall",
-      "Position": [200, 0],
-      "Size": [16, 32]
+      "Id": "018e38f4f8caae64",
+      "Type": "RevealDoor",
+      "Position": [168, 32],
+      "Size": [8, 24]
     },
     {
-      "Id": "2dc6060252981636",
-      "Type": "HiddenWall",
-      "Position": [144, 136],
-      "Size": [40, 40]
+      "Id": "ca34a8253056a07f",
+      "Type": "RevealDoor",
+      "Position": [176, 136],
+      "Direction": "Left",
+      "Size": [8, 40]
     }
   ]
 }

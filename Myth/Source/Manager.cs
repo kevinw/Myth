@@ -638,6 +638,9 @@ public partial class Manager : App
 		UpdateAudioBankReload();
 #endif
 
+#if EDITOR
+		UpdateCommandConsoleToggle();
+#endif
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
 
 		// Misc. Hotkeys
@@ -703,7 +706,10 @@ public partial class Manager : App
 					if (!keyboardShortcutsBlocked && !perfToggleChordActive)
 						g.HandleGameDebugShortcuts(Input);
 					using (PerfStats.Time(PerfDetail.GameUpdate))
-						g.Update(controls);
+#if EDITOR
+						if (!commandConsoleOpen)
+#endif
+							g.Update(controls);
 				}
 			}
 
@@ -779,6 +785,7 @@ public partial class Manager : App
 #endif
 #if EDITOR
 			EditorUI();
+			DrawCommandConsole();
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
@@ -1420,7 +1427,11 @@ public partial class Manager : App
 		ImGui.PopStyleVar(2);
 	}
 
-	bool ImGuiWantsKeyboard => imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput);
+	bool ImGuiWantsKeyboard => imgui != null && (imgui.WantsKeyboardInput || imgui.WantsTextInput)
+#if EDITOR
+		|| commandConsoleOpen
+#endif
+		;
 
 #if EDITOR
 	bool ImGuiIconButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)

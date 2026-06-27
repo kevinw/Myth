@@ -1067,7 +1067,7 @@ public sealed partial class GameView
 
 		foreach (var actor in Actors)
 		{
-			if (actor is Light light)
+			if (actor is Light light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
 			{
 				DrawSingleLightMask(light, includeShadows);
 				AddSingleLightMask(lightMask);
@@ -1076,6 +1076,14 @@ public sealed partial class GameView
 			actor.ForEachLight(drawLightMaskLightAction);
 		}
 
+	}
+
+	bool LightIsCovered(Vector2 position)
+	{
+		foreach (var actor in Actors)
+			if (actor is HiddenCoverGrid hiddenCover && hiddenCover.Covers(position))
+				return true;
+		return false;
 	}
 
 	Color CurrentAmbientColor()

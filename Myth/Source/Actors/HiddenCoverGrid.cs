@@ -43,7 +43,7 @@ public class HiddenCoverGrid : Actor
 
 	public HiddenCoverGrid()
 	{
-		Depth = 4;
+		Depth = -1000;
 		CollidesWithSolids = false;
 	}
 
@@ -53,16 +53,11 @@ public class HiddenCoverGrid : Actor
 	public void SetRenderOpacityScale(float value)
 		=> renderOpacityScale = Math.Clamp(value, 0.0f, 1.0f);
 
-	public static List<Point2> ComputePreviewCoverTiles(Room room)
+	public bool Covers(Vector2 worldPosition)
 	{
-		var grid = new HiddenCoverGrid();
-		grid.Build(room);
-		var tiles = new List<Point2>();
-		for (var y = 0; y < grid.size.Y; y ++)
-		for (var x = 0; x < grid.size.X; x ++)
-			if (grid.coverTiles[x, y] != '0')
-				tiles.Add(new Point2(x, y));
-		return tiles;
+		var tile = ((worldPosition - Position) / Game.TileSize).FloorToPoint2();
+		return tile.X >= 0 && tile.Y >= 0 && tile.X < size.X && tile.Y < size.Y &&
+			RegionVisible(coverRegions[tile.X, tile.Y]);
 	}
 
 	public void Build(Room room)

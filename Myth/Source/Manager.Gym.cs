@@ -67,13 +67,13 @@ internal struct Gym
 			// Try each goal from each PlayerStart marker (so N goals × M starts =
 			// N×M runs). A room with no marker falls back to a single run per goal
 			// at the default player spawn (null start).
-			foreach (var goal in goals)
+			foreach (var (Id, Name, Position) in goals)
 			{
 				if (starts.Count == 0)
-					runs.Add(new(room, goal.Id, goal.Name, goal.Position, null, null));
+					runs.Add(new(room, Id, Name, Position, null, null));
 				else
 					foreach (var start in starts)
-						runs.Add(new(room, goal.Id, goal.Name, goal.Position, start.Position, start.Label));
+						runs.Add(new(room, Id, Name, Position, start.Position, start.Label));
 			}
 		}
 

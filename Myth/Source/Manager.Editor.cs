@@ -1997,8 +1997,6 @@ public partial class Manager
 
 	void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
 	{
-		DrawRevealDoorAreaPreview(room, lineWeight, hoveredIndex);
-
 		for (var i = 0; i < room.Actors.Count; i++)
 		{
 			var selected = i == selectedRoomActorIndex;
@@ -2018,49 +2016,37 @@ public partial class Manager
 		}
 	}
 
-	void DrawRevealDoorAreaPreview(Room room, float lineWeight, int hoveredIndex)
+	void DrawRevealDoorMarkers(Room room, float lineWeight)
 	{
-		var show = selectedRoomActorIndex >= 0 &&
-				   selectedRoomActorIndex < room.Actors.Count &&
-				   IsRevealDoorActor(room.Actors[selectedRoomActorIndex]);
-		show |= hoveredIndex >= 0 &&
-				hoveredIndex < room.Actors.Count &&
-				IsRevealDoorActor(room.Actors[hoveredIndex]);
-		if (!show)
-			return;
+		foreach (var actor in room.Actors)
+			if (IsRevealDoorActor(actor))
+				DrawRevealDoorMarker(room, actor, lineWeight);
+	}
 
-		var cells = HiddenCoverGrid.ComputePreviewCoverTiles(room);
-		if (cells.Count <= 0)
-			return;
+	void DrawRevealDoorMarker(Room room, JsonObject actor, float lineWeight)
+	{
+		var bounds = RoomActorBounds(room, actor);
+		var direction = Enum.TryParse<RevealDoor.RevealDirection>(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Direction"), true, out var parsed)
+			? parsed
+			: RevealDoor.RevealDirection.Right;
+		var arrow = direction switch
+		{
+			RevealDoor.RevealDirection.Left => -Vector2.UnitX,
+			RevealDoor.RevealDirection.Up => -Vector2.UnitY,
+			RevealDoor.RevealDirection.Down => Vector2.UnitY,
+			_ => Vector2.UnitX,
+		};
+		var perpendicular = new Vector2(-arrow.Y, arrow.X);
+		var center = (Vector2)bounds.Center;
+		var length = MathF.Min(bounds.Width, bounds.Height) * 0.35f;
+		var tip = center + arrow * length;
+		var baseCenter = center + arrow * length * 0.15f;
+		var color = new Color(0xff5ca8);
 
-		var filled = new bool[room.Size.X, room.Size.Y];
-		foreach (var c in cells)
-			filled[c.X, c.Y] = true;
-
-		var color = highlight * 0.9f;
-		var width = MathF.Max(1, lineWeight * 2);
-		var dash = MathF.Max(2, Game.TileSize * 0.25f);
-		var origin = (Vector2)room.WorldBounds.TopLeft;
-
-		for (var y = 0; y < room.Size.Y; y++)
-			for (var x = 0; x < room.Size.X; x++)
-			{
-				if (!filled[x, y])
-					continue;
-
-				var left = origin.X + x * Game.TileSize;
-				var top = origin.Y + y * Game.TileSize;
-				var right = left + Game.TileSize;
-				var bottom = top + Game.TileSize;
-
-				if (!Filled(x, y - 1)) batcher.LineDashed(new Vector2(left, top), new Vector2(right, top), width, color, dash, 0);
-				if (!Filled(x, y + 1)) batcher.LineDashed(new Vector2(right, bottom), new Vector2(left, bottom), width, color, dash, 0);
-				if (!Filled(x - 1, y)) batcher.LineDashed(new Vector2(left, bottom), new Vector2(left, top), width, color, dash, 0);
-				if (!Filled(x + 1, y)) batcher.LineDashed(new Vector2(right, top), new Vector2(right, bottom), width, color, dash, 0);
-			}
-
-		bool Filled(int x, int y)
-			=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && filled[x, y];
+		batcher.Rect(bounds, color * 0.35f);
+		batcher.RectLine(bounds, lineWeight * 2, color);
+		batcher.Line(center - arrow * length * 0.65f, baseCenter, lineWeight * 2, Color.White);
+		batcher.Triangle(tip, baseCenter + perpendicular * length * 0.45f, baseCenter - perpendicular * length * 0.45f, Color.White);
 	}
 
 	void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight, ResizeAxes axes)
@@ -3624,6 +3610,7 @@ public partial class Manager
 			if (editingRoomGeometry)
 				DrawRoomGeometryHandles(editing, gridWeight);
 			DrawPlaytestPlayerMarker(editing);
+			DrawRevealDoorMarkers(editing, gridWeight);
 			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 

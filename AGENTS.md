@@ -1,5 +1,5 @@
-- This is a 2D C# platformer game.
-- It uses ../Foster, an SDL backed 2D game framework. It builds to Desktop (default), iOS, and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for the device/browser builds.
+- We're working on a 2D C# platformer game in Myth/.
+- It uses Foster/, an SDL backed 2D game framework. It builds to Desktop (default), iOS, and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for the device/browser builds.
 - Try, within reason, not to allocate every frame, e.g., use a static reusable scratch List you .Clear() instead. Don't use LINQ in per-frame code.
 - Omit C#'s XML documentation tags like <summary></summary>.
 - Omit "private" keyword since it is implicit in C#.
@@ -10,5 +10,5 @@
     - No boilerplate nobody asked for.
     - Deletion over addition. Boring over clever. Fewest files possible.
     - Documentation is good but we only need it if the code isn't self-documenting (which in itself is a goal: good naming, etc.)
-    - Not lazy about: error handling that prevents data loss, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested.
+    - Not lazy about: error handling that prevents data loss, anything explicitly requested.
     - If, during a session, you spot an obvious pattern which could make the pattern more robust or smaller or cleaner, please suggest it to the user.

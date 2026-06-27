@@ -901,7 +901,7 @@ public partial class Game : IDisposable
 	{
 		foreach (var actor in Actors)
 			if (actor is HiddenCoverGrid hiddenCover)
-				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 1.0f : 0.10f : 1.0f);
+				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 0.5f : 0.0f : 1.0f);
 	}
 
 	public string GetSurfaceTypeBelow(Actor actor, bool searchOutward = false)
