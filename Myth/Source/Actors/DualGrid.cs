@@ -124,28 +124,111 @@ public class DualGrid : Actor
 		foreach (var command in drawCommands)
 		{
 			var tile = getTile(command);
-			if (tile.Texture == null)
-				continue;
-
-			if (command.MaterialMask == TileQuadrants.All)
-			{
-				batcher.Image(tile, command.Position, Color.White);
-				continue;
-			}
-
-			DrawQuadrant(batcher, command, tile, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
+			if (tile.Texture != null)
+				DrawTile(batcher, tile, command.Position, command.MaterialMask, Color.White);
 		}
 	}
 
-	private static void DrawQuadrant(Batcher batcher, DrawCommand command, Subtexture tile, int mask, Rect clip)
+	// Draw one dual-grid tile at a local position, clipping to only the quadrants its materialMask
+	// fills (so a boundary tile's transition art lines up with the filled cells).
+	static void DrawTile(Batcher batcher, Subtexture tile, Vector2 position, int materialMask, Color color)
 	{
-		if ((command.MaterialMask & mask) == 0)
+		if (materialMask == TileQuadrants.All)
+		{
+			batcher.Image(tile, position, color);
+			return;
+		}
+
+		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize), color);
+		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize), color);
+		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize), color);
+		DrawQuadrant(batcher, tile, position, materialMask, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize), color);
+	}
+
+	static void DrawQuadrant(Batcher batcher, Subtexture tile, Vector2 position, int materialMask, int quadrant, Rect clip, Color color)
+	{
+		if ((materialMask & quadrant) == 0)
 			return;
 
-		batcher.Image(tile, clip, command.Position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White);
+		batcher.Image(tile, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
+	}
+
+	// Render a solid cols x rows tile rectangle skinned with a dual tileset, in local space (origin at
+	// 0,0). The fixed-shape version of the room marching above, for actors that want a tile-skinned
+	// solid (e.g. MovingPlatform) without a Room behind them. Tiles sit at the -0.5 vertex offset, so
+	// the material lines up with the full rectangle rather than insetting half a tile.
+	internal static void RenderRect(Batcher batcher, Tileset tileset, int cols, int rows, bool normals, Color color)
+	{
+		foreach (var vertex in new RectVertices(cols, rows))
+		{
+			var cell = MaskToTile[vertex.Mask];
+			var tile = normals ? tileset.GetVariantNormalTile(cell.X, cell.Y, 0) : tileset.GetVariantTile(cell.X, cell.Y, 0);
+			if (tile.Texture == null)
+				continue;
+
+			DrawTile(batcher, tile, VertexPosition(vertex), vertex.Mask, color);
+		}
+	}
+
+	// World-space occluder segments for the same rectangle, traced from the tileset's per-tile
+	// occluders so a shadow follows the (rounded) art -- the moving counterpart of the room occluders.
+	internal static void AppendRectOccluders(List<VisibilityPolygon.Segment> segments, Tileset tileset, int cols, int rows, Vector2 origin)
+	{
+		foreach (var vertex in new RectVertices(cols, rows))
+		{
+			var cell = MaskToTile[vertex.Mask];
+			var command = origin + VertexPosition(vertex);
+			foreach (var local in tileset.GetVariantOccluders(cell.X, cell.Y, 0))
+				if (OwnsOccluderSegment(vertex.Mask, local))
+					segments.Add(new(command + local.A, command + local.B));
+		}
+	}
+
+	static Vector2 VertexPosition(RectVertex vertex)
+		=> new((vertex.X - 0.5f) * Game.TileSize, (vertex.Y - 0.5f) * Game.TileSize);
+
+	readonly record struct RectVertex(int X, int Y, int Mask);
+
+	// Marching-squares vertices of a solid cols x rows tile rectangle. Yields each boundary/interior
+	// vertex with its dual-grid corner mask (which of the 4 surrounding cells are inside), skipping
+	// fully-empty corners. Struct enumerator so the per-frame render/occluder walks don't allocate.
+	readonly struct RectVertices(int cols, int rows)
+	{
+		public Enumerator GetEnumerator() => new(cols, rows);
+
+		public struct Enumerator(int cols, int rows)
+		{
+			int vx = -1;
+			int vy;
+			public RectVertex Current { get; private set; }
+
+			public bool MoveNext()
+			{
+				while (true)
+				{
+					if (++vx > cols)
+					{
+						vx = 0;
+						vy++;
+					}
+					if (vy > rows)
+						return false;
+
+					var mask = 0;
+					if (Inside(vx - 1, vy - 1)) mask |= TileQuadrants.TopLeft;
+					if (Inside(vx - 1, vy)) mask |= TileQuadrants.BottomLeft;
+					if (Inside(vx, vy - 1)) mask |= TileQuadrants.TopRight;
+					if (Inside(vx, vy)) mask |= TileQuadrants.BottomRight;
+					if (mask == 0)
+						continue;
+
+					Current = new RectVertex(vx, vy, mask);
+					return true;
+				}
+			}
+
+			bool Inside(int x, int y) => x >= 0 && y >= 0 && x < cols && y < rows;
+		}
 	}
 
 	public void AppendVisibilitySegments(List<VisibilityPolygon.Segment> segments, Vector2 lightPosition, float radius)

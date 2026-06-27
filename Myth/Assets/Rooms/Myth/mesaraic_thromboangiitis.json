@@ -58,7 +58,8 @@
       "Id": "8d8092ad7396d8ef",
       "Type": "MovingPlatform",
       "Position": [72, 120],
-      "TravelDistance": 183
+      "TravelDistance": 183,
+      "Material": "stone-dual"
     },
     {
       "Id": "78606cf2b8e010a8",
@@ -78,7 +79,7 @@
     {
       "Id": "4cda444cf51299bc",
       "Type": "Light",
-      "Position": [110, 92],
+      "Position": [111, 84],
       "Radius": 54.6,
       "Intensity": 0.95
     },

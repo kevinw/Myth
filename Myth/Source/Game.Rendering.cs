@@ -295,8 +295,13 @@ public sealed partial class GameView
 		Batcher.Render(target);
 		Batcher.Clear();
 
-		if (background && PerfToggles.Reflections)
-			DrawSpriteReflections(target);
+		if (PerfToggles.Reflections)
+		{
+			if (background)
+				DrawSpriteReflections(target);
+			else
+				DrawPlatformSurfaceReflections(target);
+		}
 	}
 
 	void DrawBackdrop(Target target)
@@ -360,30 +365,7 @@ public sealed partial class GameView
 
 		ReflectionScreen.Clear(Color.Transparent);
 		foreach (var rect in room.ReflectionRects)
-		{
-			var scissor = GetReflectionScissor(rect.Bounds);
-			if (scissor.Width <= 0 || scissor.Height <= 0)
-				continue;
-
-			var surfaceTop = ReflectionSurfaceTop(rect.Bounds);
-			PushWorldMatrix();
-			foreach (var actor in rendering)
-			{
-				if (!actor.Visible || !actor.CastsReflection)
-					continue;
-				if (!ActorCanReflectIn(actor, rect.Bounds))
-					continue;
-
-				Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, surfaceTop)));
-				Batcher.PushMatrix(actor.Position);
-				actor.RenderReflection(Batcher, Color.White * rect.Opacity);
-				Batcher.PopMatrix();
-				Batcher.PopMatrix();
-			}
-			Batcher.PopMatrix();
-			Batcher.Render(ReflectionScreen, scissor: scissor);
-			Batcher.Clear();
-		}
+			DrawReflectedActors(rect.Bounds, ReflectionSurfaceTop(rect.Bounds), rect.Opacity, skip: null);
 
 		ReflectionMask.Clear(Color.Transparent);
 		foreach (var rect in room.ReflectionRects)
@@ -396,6 +378,56 @@ public sealed partial class GameView
 		Batcher.Render(ReflectionMask);
 		Batcher.Clear();
 
+		CompositeReflections(target);
+	}
+
+	// Mirror every reflection-casting actor across a surface's top edge into ReflectionScreen,
+	// clipped to the surface bounds. Shared by room reflection rects and reflective platforms.
+	void DrawReflectedActors(RectInt bounds, int surfaceTop, float opacity, Actor? skip)
+	{
+		var scissor = GetReflectionScissor(bounds);
+		if (scissor.Width <= 0 || scissor.Height <= 0)
+			return;
+
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible || !actor.CastsReflection || actor == skip)
+				continue;
+			if (!ActorCanReflectIn(actor, bounds))
+				continue;
+
+			Batcher.PushMatrix(Matrix3x2.CreateScale(1, -1, new Vector2(actor.Position.X, surfaceTop)));
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderReflection(Batcher, Color.White * opacity);
+			Batcher.PopMatrix();
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(ReflectionScreen, scissor: scissor);
+		Batcher.Clear();
+	}
+
+	// Reflective moving platforms are foreground actors and move, so they can't be baked into the
+	// room's (background) reflection rects; mirror sprites onto their surface here, in the foreground
+	// pass, so the reflection lands over the platform's own skin.
+	void DrawPlatformSurfaceReflections(Target target)
+	{
+		var any = false;
+		ReflectionScreen.Clear(Color.Transparent);
+		foreach (var actor in rendering)
+			if (actor is MovingPlatform { Visible: true } platform && platform.ReflectsSurface)
+			{
+				DrawReflectedActors(platform.SurfaceReflectionBounds, platform.Position.Y, MovingPlatform.SurfaceReflectionOpacity, skip: platform);
+				any = true;
+			}
+
+		if (!any)
+			return;
+
+		// Platforms are flat (never distorted); clear the mask the room pass left so the distort
+		// shader composites their reflection without picking up stale distorted regions.
+		ReflectionMask.Clear(Color.Transparent);
 		CompositeReflections(target);
 	}
 
@@ -1012,6 +1044,13 @@ public sealed partial class GameView
 	void DrawLightMask(Target lightMask, bool includeShadows)
 	{
 		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
+
+		// Dynamic occluders move, so they can't bake into a room's static occluder lists; gather
+		// them once here (they're the same for every light this frame) and let the sun, point and
+		// fallback shadow passes share the result.
+		if (includeShadows)
+			GatherDynamicOccluders();
+
 		if (CurrentSunStrength() > SunStrengthEpsilon)
 		{
 			DrawSunLightMask(includeShadows);
@@ -1381,6 +1420,7 @@ public sealed partial class GameView
 			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
 		}
+		sunSegmentBuffer.AddRange(dynamicOccluderSegments);
 
 		foreach (var segment in sunSegmentBuffer)
 			DrawSunShadowSegment(segment, direction, distance);
@@ -1393,6 +1433,19 @@ public sealed partial class GameView
 	}
 
 	readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
+
+	// Per-frame silhouette segments of IShapeOccluder actors (moving platforms, etc.), gathered once
+	// in DrawLightMask and consumed by the visibility + sun passes -- the same segment currency tiles
+	// and DualGrid use, so a platform's shadow traces its own (rounded) art, not a bounding box.
+	readonly List<VisibilityPolygon.Segment> dynamicOccluderSegments = [];
+
+	void GatherDynamicOccluders()
+	{
+		dynamicOccluderSegments.Clear();
+		foreach (var actor in Actors)
+			if (actor is IShapeOccluder { CastsShadow: true } occluder)
+				occluder.AppendOccluderSegments(dynamicOccluderSegments);
+	}
 
 	float SunShadowDistance()
 		=> MathF.Sqrt(NormalBuffer.Width * NormalBuffer.Width + NormalBuffer.Height * NormalBuffer.Height) + TileSize * MathF.Max(Columns, Rows) * 2;
@@ -1554,6 +1607,10 @@ public sealed partial class GameView
 					AddRectVisibilitySegments(s.segments, rect, s.lightPosition, s.radius));
 			}
 		}
+
+		foreach (var segment in dynamicOccluderSegments)
+			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+				segments.Add(segment);
 	}
 
 	static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)

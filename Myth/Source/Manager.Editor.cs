@@ -1313,6 +1313,16 @@ public partial class Manager
 			}))
 				changed = true;
 		}
+		else if (IsMovingPlatformMaterialProperty(property))
+		{
+			var value = property.Value?.GetValue<string>() ?? "metal-dual";
+			if (DrawMovingPlatformMaterialButtons(value, next =>
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(next));
+			}))
+				changed = true;
+		}
 		else if (property.Type == typeof(string))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
@@ -1497,6 +1507,16 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<string>() ?? "castle";
 			if (DrawHiddenWallTileTypeButtons(value, next =>
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(next));
+			}))
+				changed = true;
+		}
+		else if (IsMovingPlatformMaterialProperty(property))
+		{
+			var value = property.Value?.GetValue<string>() ?? "metal-dual";
+			if (DrawMovingPlatformMaterialButtons(value, next =>
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(next));
@@ -1698,7 +1718,7 @@ public partial class Manager
 	}
 
 	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && property.JsonName == "tileType";
+		=> property.Type == typeof(string) && string.Equals(property.JsonName, "TileType", StringComparison.OrdinalIgnoreCase);
 
 	bool DrawHiddenWallTileTypeButtons(string value, Action<string> setValue)
 	{
@@ -1725,6 +1745,36 @@ public partial class Manager
 
 	static string NormalizeHiddenWallTileType(string value)
 		=> value == "grass" ? "grass" : "castle";
+
+	// Dual tilesets a MovingPlatform can be skinned with (each has generated color + normal tiles).
+	static readonly (string Tileset, string Label)[] PlatformMaterials =
+	[
+		("metal-dual", "Metal"),
+		("castle-dual", "Castle"),
+		("stone-dual", "Stone"),
+	];
+
+	static bool IsMovingPlatformMaterialProperty(ActorSpecs.EditableProperty property)
+		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
+
+	bool DrawMovingPlatformMaterialButtons(string value, Action<string> setValue)
+	{
+		var changed = false;
+		for (var i = 0; i < PlatformMaterials.Length; i++)
+		{
+			var (tileset, label) = PlatformMaterials[i];
+			if (i > 0)
+				ImGui.SameLine();
+
+			var image = Assets.GetTileset(tileset)?.Tiles.FirstOrDefault() ?? new Subtexture();
+			if (ImGuiSubtextureButton(tileset, image, label, value == tileset, new Vector2(ButtonSize, ButtonSize)) && value != tileset)
+			{
+				setValue(tileset);
+				changed = true;
+			}
+		}
+		return changed;
+	}
 
 	static float BeginInspectorPropertyRow(string label, bool hasResetButton)
 	{

@@ -3,11 +3,15 @@ using System.Numerics;
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "editor_moving_platform", Anchor = SpriteAnchor.TopLeft)]
-class MovingPlatform : Actor, IResizable
+class MovingPlatform : Actor, IResizable, IShapeOccluder
 {
-	public static readonly Point2 DefaultSize = new(48, 24);
+	public static readonly Point2 DefaultSize = new(48, 32);
 
 	public Point2 Size { get; set; } = DefaultSize;
+
+	// Dual (marching-squares) tileset the platform is skinned with -- supplies color + normals so it
+	// lights and reflects like solid tiles. Editor-pickable; see Manager.Editor material picker.
+	public string Material = "metal-dual";
 	public float WaitTime = WAIT_TIME;
 	const float WAIT_TIME = 0.856f;
 	public float Speed = 30f;
@@ -119,9 +123,45 @@ class MovingPlatform : Actor, IResizable
 
 	bool IsCarryable(Actor actor) => actor != this && actor is not Grid && !actor.Mask.Has(Masks.Solid);
 
-	public override void Render(Batcher batcher)
+	// Occlude light like the dual tiles it's skinned with: DualGrid traces occluder segments from the
+	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
+	public bool CastsShadow => true;
+
+	public void AppendOccluderSegments(List<VisibilityPolygon.Segment> segments)
 	{
-		batcher.Rect(new(0, 0, Size.X, Size.Y), Color.FloralWhite);
+		if (Assets.GetTileset(Material) is { } tileset)
+			DualGrid.AppendRectOccluders(segments, tileset, TileColumns, TileRows, new Vector2(Position.X, Position.Y));
+		else
+			OccluderShape.FromRect(new RectInt(Position.X, Position.Y, Size.X, Size.Y)).AppendSegments(segments);
 	}
+
+	public override void Render(Batcher batcher) => RenderMaterial(batcher, normals: false, Color.White);
+	public override void RenderNormals(Batcher batcher) => RenderMaterial(batcher, normals: true, Color.White);
+
+	public override bool CastsReflection => true;
+	public override void RenderReflection(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+
+	// Spriteless, so the sprite-based default is a zero rect; report the real footprint so
+	// reflection culling (and any other visual-bounds consumer) sees the whole platform.
+	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);
+
+	// When skinned with a reflective material the top face mirrors sprites like a metal floor would.
+	// See Game.Rendering DrawPlatformSurfaceReflections.
+	public const float SurfaceReflectionOpacity = 0.7f; // matches the metal tile's reflectionOpacity
+	public bool ReflectsSurface => Material == "metal-dual";
+	public RectInt SurfaceReflectionBounds => new(Position.X, Position.Y, Size.X, Size.Y);
+
+	// Skin the platform with its dual tileset (DualGrid renders the cols x rows blob); fall back to a
+	// flat fill if the material is missing.
+	void RenderMaterial(Batcher batcher, bool normals, Color color)
+	{
+		if (Assets.GetTileset(Material) is { } tileset)
+			DualGrid.RenderRect(batcher, tileset, TileColumns, TileRows, normals, color);
+		else
+			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
+	}
+
+	int TileColumns => Math.Max(1, Size.X / Game.TileSize);
+	int TileRows => Math.Max(1, Size.Y / Game.TileSize);
 
 }
