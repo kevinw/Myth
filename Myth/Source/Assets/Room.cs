@@ -308,6 +308,21 @@ public class Room
 		}
 	}
 
+	public void SetTile(Factory.TileLayer layer, Point2 tile, char ch, bool rebuildGeometry = true)
+	{
+		switch (layer)
+		{
+			case Factory.TileLayer.Foreground:
+				SetForeground(tile, ch, rebuildGeometry);
+				break;
+			case Factory.TileLayer.Background:
+				SetBackground(tile, ch, rebuildGeometry);
+				break;
+			default:
+				throw new NotImplementedException();
+		}
+	}
+
 	public void AddActorSpec(string specId, Point2 worldPosition)
 	{
 		var localPosition = worldPosition - WorldBounds.TopLeft;
