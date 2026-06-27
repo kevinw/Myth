@@ -1,7 +1,30 @@
 # TODO
 
-- top priority: redraw the damn sword.
-  - or git rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
+- top priority: redraw the damn sword. or get rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
+- dpad too small
+- diagonal up shouldn't trigger the door
+- wall jump too difficult (go back to "just jump"?)
+- mobile web: switching away and coming back kills audio
+- mobile web:  instead of tap to zoom out, respect pinch in and out
+- save checkpoints
+- bug:  dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
+- potato head shouldn't take your life
+- pick a non LLM-brained color palette for the web ui
+- try a tiny haptic when you press virtual controller buttons
+- crawl speed is too fast now
+- sdf rainbow needs a 5 second idle timer
+- breakable pots with coins (or pixels? like mina?)
+- try a big low color image in the background of the boss room
+- boss room red light looks bad
+- try leading the camera a bit ahead
+- watch some videos about hiding secrets
+- what would be fun to earn in a secret? levelling up your health. your burrow time (yes).
+- the best secret is a whole new area and set of challenges.
+- small particles when you jump
+- hud not showing in zoomed in view
+- copy rooms I made from frog world over
+- try even a bit closer than 4:3
+- how do famous paintings break up gradients
 
 ## Editor
 
