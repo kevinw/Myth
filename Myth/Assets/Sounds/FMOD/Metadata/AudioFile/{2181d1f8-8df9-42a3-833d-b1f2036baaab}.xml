@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{2181d1f8-8df9-42a3-833d-b1f2036baaab}">
+		<property name="assetPath">
+			<value>Voice/Kev/scho.ogg</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>0.57999999999999996</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{0c477f3c-ca46-455a-aecc-567ce41f5eab}</destination>
+		</relationship>
+	</object>
+</objects>

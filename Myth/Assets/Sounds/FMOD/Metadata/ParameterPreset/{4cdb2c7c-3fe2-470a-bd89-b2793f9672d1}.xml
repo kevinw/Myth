@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{4cdb2c7c-3fe2-470a-bd89-b2793f9672d1}">
+		<property name="name">
+			<value>syllable</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{e75546bf-1cf6-4211-a5b6-c84bbcf4b272}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{e75546bf-1cf6-4211-a5b6-c84bbcf4b272}">
+		<property name="parameterType">
+			<value>2</value>
+		</property>
+		<property name="maximum">
+			<value>31</value>
+		</property>
+		<property name="enumerationLabels">
+			<value>ba</value>
+			<value>be</value>
+			<value>bi</value>
+			<value>bo</value>
+			<value>bu</value>
+			<value>da</value>
+			<value>de</value>
+			<value>di</value>
+			<value>do</value>
+			<value>du</value>
+			<value>la</value>
+			<value>le</value>
+			<value>li</value>
+			<value>lo</value>
+			<value>lu</value>
+			<value>ma</value>
+			<value>me</value>
+			<value>mi</value>
+			<value>mo</value>
+			<value>mu</value>
+			<value>na</value>
+			<value>ne</value>
+			<value>ni</value>
+			<value>no</value>
+			<value>re</value>
+			<value>scha</value>
+			<value>sche</value>
+			<value>schi</value>
+			<value>scho</value>
+			<value>schu</value>
+			<value>ti</value>
+		</property>
+	</object>
+</objects>
