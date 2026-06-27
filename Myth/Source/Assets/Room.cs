@@ -68,17 +68,15 @@ public class Room
 	/// Tile-space location of the room in the world.
 	public Point2 TileSpacePosition;
 
-	/// <summary>
 	/// Tile-space size of the room.
-	/// </summary>
 	public Point2 Size;
 
 	/// Tile grids
 	public char[,] Tiles;
 	public char[,] BackgroundTiles;
-	private Factory.Entry?[,] tileEntries;
-	private Factory.Entry?[,] backgroundTileEntries;
-	private TileFlags[,] tileFlags;
+	Factory.Entry?[,] tileEntries;
+	Factory.Entry?[,] backgroundTileEntries;
+	TileFlags[,] tileFlags;
 
 	/// Actor specs placed directly in this room.
 	public readonly List<JsonObject> Actors = [];
@@ -93,9 +91,9 @@ public class Room
 	/// Slope tiles keep their own geometry because collision follows the inferred surface line.
 	public readonly List<SlopeTile> SlopeTiles = [];
 
-	private readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
-	private readonly Dictionary<Point2, StackList8<Point2>> slopePolygonLookup = [];
-	private byte[,] dualTerrainJoinMasks = new byte[0, 0];
+	readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
+	readonly Dictionary<Point2, StackList8<Point2>> slopePolygonLookup = [];
+	byte[,] dualTerrainJoinMasks = new byte[0, 0];
 
 	/// <summary>
 	/// World-space rectangles built from adjacent light-occluding tiles.
@@ -228,7 +226,7 @@ public class Room
 		}
 	}
 
-	private void LoadJson(JsonObject json)
+	void LoadJson(JsonObject json)
 	{
 		MusicArea = JsonUtil.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
@@ -288,7 +286,9 @@ public class Room
 		}
 	}
 
-	public void Set(Point2 tile, char ch, bool rebuildGeometry = true)
+	public void Set(Point2 tile, char ch, bool rebuildGeometry = true) => SetForeground(tile, ch, rebuildGeometry);
+
+	public void SetForeground(Point2 tile, char ch, bool rebuildGeometry = true)
 	{
 		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
 		{
@@ -390,7 +390,7 @@ public class Room
 			Reverb = InferReverb();
 	}
 
-	private static bool HasBakedDualOccluders(Factory.Entry entry)
+	static bool HasBakedDualOccluders(Factory.Entry entry)
 	{
 		if (entry.DualTilesetName == null || Assets.GetTileset(entry.DualTilesetName) is not { } tileset)
 			return false;
@@ -409,7 +409,7 @@ public class Room
 		return dualTerrainJoinMasks[vertexX, vertexY];
 	}
 
-	private bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
+	bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
 	{
 		if (!ContainsTile(tileX, tileY))
 			return IsOffscreenFullBlockJoinTile(tileX, tileY);
@@ -433,7 +433,7 @@ public class Room
 		return PointInPolygonInclusive(sample, polygon);
 	}
 
-	private bool IsOffscreenFullBlockJoinTile(int tileX, int tileY)
+	bool IsOffscreenFullBlockJoinTile(int tileX, int tileY)
 	{
 		if (Size.X <= 0 || Size.Y <= 0)
 			return false;
@@ -505,7 +505,7 @@ public class Room
 		return Vector2.Normalize(direction);
 	}
 
-	private float InferReverb()
+	float InferReverb()
 	{
 		var totalTiles = Math.Max(1, Size.X * Size.Y);
 		var terrainTiles = 0;
@@ -595,7 +595,7 @@ public class Room
 		return MathF.Round(Clamp01(score), 3);
 	}
 
-	private static float InverseLerp(float from, float to, float value)
+	static float InverseLerp(float from, float to, float value)
 	{
 		if (MathF.Abs(to - from) <= 0.0001f)
 			return value >= to ? 1.0f : 0.0f;
@@ -603,10 +603,10 @@ public class Room
 		return Clamp01((value - from) / (to - from));
 	}
 
-	private static float Clamp01(float value)
+	static float Clamp01(float value)
 		=> Math.Clamp(value, 0.0f, 1.0f);
 
-	private void BuildSlopeTiles()
+	void BuildSlopeTiles()
 	{
 		for (var y = 0; y < Size.Y; y++)
 			for (var x = 0; x < Size.X;)
@@ -634,7 +634,7 @@ public class Room
 			}
 	}
 
-	private void BuildDualTerrainJoinMasks()
+	void BuildDualTerrainJoinMasks()
 	{
 		dualTerrainJoinMasks = new byte[Size.X + 1, Size.Y + 1];
 		for (var x = 0; x <= Size.X; x++)
@@ -653,7 +653,7 @@ public class Room
 			}
 	}
 
-	private (SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(int startX, int y, int runLength)
+	(SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(int startX, int y, int runLength)
 	{
 		var leftHigh = IsTerrainJoinTile(startX - 1, y);
 		var leftLow = IsTerrainJoinTile(startX - 1, y + 1);
@@ -686,10 +686,10 @@ public class Room
 		return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 	}
 
-	private bool IsSlopeTile(int x, int y)
+	bool IsSlopeTile(int x, int y)
 		=> GetTileEntry(x, y) is { IsSlope: true };
 
-	private bool IsFullBlockTile(int x, int y)
+	bool IsFullBlockTile(int x, int y)
 		=> GetTileEntry(x, y) is { BlocksMovement: true, IsSlope: false };
 
 	public bool IsDualMaterialFilled(char tileType, Factory.TileLayer layer, int x, int y)
@@ -702,10 +702,10 @@ public class Room
 		return (layer == Factory.TileLayer.Foreground ? Tiles[x, y] : BackgroundTiles[x, y]) == tileType;
 	}
 
-	private bool IsTerrainJoinTile(int x, int y)
+	bool IsTerrainJoinTile(int x, int y)
 		=> IsFullBlockTile(x, y) || IsSlopeTile(x, y);
 
-	private Factory.Entry? GetTileEntry(int x, int y)
+	Factory.Entry? GetTileEntry(int x, int y)
 		=> ContainsTile(x, y) ? tileEntries[x, y] : null;
 
 	public Factory.Entry? GetEntry(Point2 tile)
@@ -714,10 +714,10 @@ public class Room
 	public Factory.Entry? GetBackgroundEntry(Point2 tile)
 		=> ContainsTile(tile.X, tile.Y) ? backgroundTileEntries[tile.X, tile.Y] : null;
 
-	private bool ContainsTile(int x, int y)
+	bool ContainsTile(int x, int y)
 		=> x >= 0 && y >= 0 && x < Size.X && y < Size.Y;
 
-	private void SetTileUnchecked(int x, int y, char tile)
+	void SetTileUnchecked(int x, int y, char tile)
 	{
 		if (TryGetLegacyBreakableTileBase(tile, out var baseTile))
 		{
@@ -733,7 +733,7 @@ public class Room
 		tileEntries[x, y] = Factory.Find(tile);
 	}
 
-	private static bool TryGetLegacyBreakableTileBase(char tile, out char baseTile)
+	static bool TryGetLegacyBreakableTileBase(char tile, out char baseTile)
 	{
 		baseTile = tile switch
 		{
@@ -744,13 +744,13 @@ public class Room
 		return baseTile != '\0';
 	}
 
-	private void SetBackgroundTileUnchecked(int x, int y, char tile)
+	void SetBackgroundTileUnchecked(int x, int y, char tile)
 	{
 		BackgroundTiles[x, y] = tile;
 		backgroundTileEntries[x, y] = Factory.Find(tile);
 	}
 
-	private void RebuildTileEntryCache()
+	void RebuildTileEntryCache()
 	{
 		if (tileEntries.GetLength(0) != Size.X || tileEntries.GetLength(1) != Size.Y)
 			tileEntries = new Factory.Entry?[Size.X, Size.Y];
@@ -787,7 +787,7 @@ public class Room
 			tileFlags[tile.X, tile.Y] &= ~TileFlags.Breakable;
 	}
 
-	private void NormalizeTileLayers()
+	void NormalizeTileLayers()
 	{
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
@@ -804,13 +804,13 @@ public class Room
 			}
 	}
 
-	private void BuildSlopeLightOccluders()
+	void BuildSlopeLightOccluders()
 	{
 		foreach (var slope in SlopeTiles)
 			LightOccluderPolygons.Add(new(GetSlopePolygon(slope), slope.WorldBounds(this)));
 	}
 
-	private void BuildVisibilitySegments()
+	void BuildVisibilitySegments()
 	{
 		var bounds = WorldBounds;
 		AddVisibilitySegment(bounds.TopLeft, bounds.TopRight);
@@ -833,7 +833,7 @@ public class Room
 		}
 	}
 
-	private void AddVisibilitySegment(Vector2 a, Vector2 b)
+	void AddVisibilitySegment(Vector2 a, Vector2 b)
 		=> VisibilitySegments.Add(new(a, b));
 
 	public StackList8<Point2> GetSlopePolygon(SlopeTile slope)
@@ -848,7 +848,7 @@ public class Room
 		right = new Vector2(rect.Right, rect.Top + rightHeight);
 	}
 
-	private StackList8<Point2> BuildSlopePolygon(SlopeTile slope)
+	StackList8<Point2> BuildSlopePolygon(SlopeTile slope)
 	{
 		var rect = slope.WorldBounds(this);
 		var leftHeight = SlopeSurfaceHeight(slope, slope.RunIndex);
@@ -879,7 +879,7 @@ public class Room
 		return points;
 	}
 
-	private static int SlopeSurfaceHeight(SlopeTile slope, int runEdgeIndex)
+	static int SlopeSurfaceHeight(SlopeTile slope, int runEdgeIndex)
 	{
 		if (slope.Direction == SlopeDirection.DownRight)
 			return runEdgeIndex * Game.TileSize / slope.RunLength;
@@ -887,7 +887,7 @@ public class Room
 		return (slope.RunLength - runEdgeIndex) * Game.TileSize / slope.RunLength;
 	}
 
-	private static bool PointInPolygon(Vector2 point, StackList8<Point2> polygon)
+	static bool PointInPolygon(Vector2 point, StackList8<Point2> polygon)
 	{
 		var inside = false;
 		for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
@@ -905,7 +905,7 @@ public class Room
 		return inside;
 	}
 
-	private static bool PointInPolygonInclusive(Vector2 point, StackList8<Point2> polygon)
+	static bool PointInPolygonInclusive(Vector2 point, StackList8<Point2> polygon)
 	{
 		for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
 		{
@@ -916,7 +916,7 @@ public class Room
 		return PointInPolygon(point, polygon);
 	}
 
-	private static bool PointOnSegment(Vector2 point, Point2 segmentStart, Point2 segmentEnd)
+	static bool PointOnSegment(Vector2 point, Point2 segmentStart, Point2 segmentEnd)
 	{
 		var a = (Vector2)segmentStart;
 		var b = (Vector2)segmentEnd;
@@ -935,7 +935,7 @@ public class Room
 
 	// Same predicate as the CollisionRects build, but kept as a flat per-tile
 	// mask so collision queries can index directly instead of scanning rects.
-	private void BuildSolidTileMask()
+	void BuildSolidTileMask()
 	{
 		var count = Size.X * Size.Y;
 		if (SolidTiles.Length != count)
@@ -948,7 +948,7 @@ public class Room
 				SolidTiles[y * Size.X + x] = Matches(x, y, static entry => entry.BlocksMovement && !entry.IsSlope);
 	}
 
-	private void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)
+	void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)
 	{
 		var used = new bool[Size.X, Size.Y]; // TODO alloc
 
@@ -982,7 +982,7 @@ public class Room
 	// parallel RebuildGeometry phase, and a shared static would race if two rooms rebuilt
 	// at once.
 	[ThreadStatic] static List<RectInt>? tempBounds;
-	private void BuildReflectionRects()
+	void BuildReflectionRects()
 	{
 		var bounds = tempBounds ??= [];
 		foreach (Factory.ReflectionMode mode in new[] { Factory.ReflectionMode.Flat, Factory.ReflectionMode.Distorted })
@@ -1000,7 +1000,7 @@ public class Room
 		}
 	}
 
-	private bool RowMatches(int x, int y, int width, bool[,] used, Func<Factory.Entry, bool> predicate)
+	bool RowMatches(int x, int y, int width, bool[,] used, Func<Factory.Entry, bool> predicate)
 	{
 		for (var xx = x; xx < x + width; xx++)
 		{
@@ -1011,7 +1011,7 @@ public class Room
 		return true;
 	}
 
-	private bool Matches(int x, int y, Func<Factory.Entry, bool> predicate)
+	bool Matches(int x, int y, Func<Factory.Entry, bool> predicate)
 	{
 		if (GetTileEntry(x, y) is not { } entry)
 			return false;
@@ -1040,7 +1040,7 @@ public class Room
 	// regex-compacting the result: no intermediate node tree, no per-row StringBuilder/
 	// string, no whole-document regex pass. Two-int point arrays are written inline
 	// ([x, y]) via WriteRawValue so the on-disk format is unchanged.
-	private void WriteJson(IBufferWriter<byte> output)
+	void WriteJson(IBufferWriter<byte> output)
 	{
 		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true, NewLine = "\n" });
 		writer.WriteStartObject();
@@ -1124,7 +1124,7 @@ public class Room
 		writer.WriteEndObject();
 	}
 
-	private static void WriteIntPairProperty(Utf8JsonWriter writer, string name, int x, int y)
+	static void WriteIntPairProperty(Utf8JsonWriter writer, string name, int x, int y)
 	{
 		writer.WritePropertyName(name);
 		WriteIntPairValue(writer, x, y);
@@ -1132,7 +1132,7 @@ public class Room
 
 	// Writes [x, y] inline even under indented formatting (WriteRawValue is not re-indented),
 	// matching the previous regex-compacted output without allocating a string per point.
-	private static void WriteIntPairValue(Utf8JsonWriter writer, int x, int y)
+	static void WriteIntPairValue(Utf8JsonWriter writer, int x, int y)
 	{
 		Span<char> buffer = stackalloc char[32];
 		var length = 0;
@@ -1147,7 +1147,7 @@ public class Room
 
 	// Writes a pruned actor node, keeping the same inline-point convention for any
 	// two-int arrays (e.g. Position) it contains, and deferring everything else to the node.
-	private static void WriteActorNode(Utf8JsonWriter writer, JsonNode? node)
+	static void WriteActorNode(Utf8JsonWriter writer, JsonNode? node)
 	{
 		switch (node)
 		{
@@ -1178,7 +1178,7 @@ public class Room
 		}
 	}
 
-	private static bool IsIntPair(JsonArray array, out int x, out int y)
+	static bool IsIntPair(JsonArray array, out int x, out int y)
 	{
 		x = y = 0;
 		return array.Count == 2
@@ -1222,7 +1222,7 @@ public class Room
 		return false;
 	}
 
-	private bool HasBreakableTiles()
+	bool HasBreakableTiles()
 	{
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)

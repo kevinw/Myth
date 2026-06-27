@@ -5,9 +5,9 @@ namespace Myth;
 
 public class Grid : Actor
 {
-	private bool[,] grid = new bool[Game.Columns, Game.Rows];
-	private Subtexture[,] tilemap = new Subtexture[Game.Columns, Game.Rows];
-	private float[,] alpha = NewAlphaMap(Game.Columns, Game.Rows);
+	bool[,] grid = new bool[Game.Columns, Game.Rows];
+	Subtexture[,] tilemap = new Subtexture[Game.Columns, Game.Rows];
+	float[,] alpha = NewAlphaMap(Game.Columns, Game.Rows);
 	public Factory.TileLayer Layer { get; set; } = Factory.TileLayer.Foreground;
 
 	public Grid()
@@ -42,15 +42,15 @@ public class Grid : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		for (int x = 0; x < grid.GetLength(0); x ++)
-		for (int y = 0; y < grid.GetLength(1); y ++)
-		{
-			if (grid[x, y])
-				batcher.Image(tilemap[x, y], new Vector2(x, y) * Game.TileSize, Color.White * alpha[x, y]);
-		}
+		for (int x = 0; x < grid.GetLength(0); x++)
+			for (int y = 0; y < grid.GetLength(1); y++)
+			{
+				if (grid[x, y])
+					batcher.Image(tilemap[x, y], new Vector2(x, y) * Game.TileSize, Color.White * alpha[x, y]);
+			}
 	}
 
-	private void EnsureSize(int width, int height)
+	void EnsureSize(int width, int height)
 	{
 		if (width <= grid.GetLength(0) && height <= grid.GetLength(1))
 			return;
@@ -61,13 +61,13 @@ public class Grid : Actor
 		var nextTilemap = new Subtexture[newWidth, newHeight];
 		var nextAlpha = NewAlphaMap(newWidth, newHeight);
 
-		for (var x = 0; x < grid.GetLength(0); x ++)
-		for (var y = 0; y < grid.GetLength(1); y ++)
-		{
-			nextGrid[x, y] = grid[x, y];
-			nextTilemap[x, y] = tilemap[x, y];
-			nextAlpha[x, y] = alpha[x, y];
-		}
+		for (var x = 0; x < grid.GetLength(0); x++)
+			for (var y = 0; y < grid.GetLength(1); y++)
+			{
+				nextGrid[x, y] = grid[x, y];
+				nextTilemap[x, y] = tilemap[x, y];
+				nextAlpha[x, y] = alpha[x, y];
+			}
 
 		grid = nextGrid;
 		tilemap = nextTilemap;
@@ -75,17 +75,19 @@ public class Grid : Actor
 		Hitbox = new(grid);
 	}
 
-	private static float[,] NewAlphaMap(int width, int height)
+	static float[,] NewAlphaMap(int width, int height)
 	{
 		var result = new float[width, height];
 		FillAlpha(result);
 		return result;
 	}
 
-	private static void FillAlpha(float[,] target)
+	static void FillAlpha(float[,] target)
 	{
 		for (var x = 0; x < target.GetLength(0); x++)
-		for (var y = 0; y < target.GetLength(1); y++)
-			target[x, y] = 1.0f;
+			for (var y = 0; y < target.GetLength(1); y++)
+				target[x, y] = 1.0f;
 	}
+
+
 }
