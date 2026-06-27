@@ -10,7 +10,6 @@
 - srgb to linear, all shaders in linear, then final pass linear to srgb
 - absolutely improve player respawn behaviour when editing
 - think harder about a better way to do slopes in the editor; maybe draw a rectangle and you get the slope across it!
-- going to play mode cancels room resize
 - vector art collection -> stampable tile patterns
 - wall jump slide sound
 - moving platform: easing functions

@@ -1323,6 +1323,7 @@ public partial class Manager : App
 	void StartGame(bool immediate = false)
 	{
 #if EDITOR
+		ClearEditorStateForEnteringPlayMode();
 		CurrentRoom?.Save();
 #endif
 		if (CurrentRoom is not { } room)

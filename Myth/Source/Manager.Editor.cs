@@ -200,6 +200,9 @@ public partial class Manager
 	Rect PaletteSlideRect =>
 		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
+	void ClearEditorStateForEnteringPlayMode() {
+		editingRoomGeometry = false;
+	}
 
 	void UndoEditor()
 	{
