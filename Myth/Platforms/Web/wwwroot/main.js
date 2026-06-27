@@ -197,12 +197,26 @@ async function preloadAssets(module, onProgress) {
   const fmodBankFiles = files.filter(isFmodBankFile);
   onProgress?.(0, preloadFiles.length);
 
-  for (let i = 0; i < preloadFiles.length; i++) {
-    const file = preloadFiles[i];
-    const bytes = new Uint8Array(await (await fetch(file)).arrayBuffer());
-    createWasmFile(module, file, bytes);
-    onProgress?.(i + 1, preloadFiles.length);
-  }
+  // Fetch in parallel with a bounded pool: the loop is fetch-bound, so running
+  // several at once is much faster, but unbounded would flood the connection
+  // pool and hold every file's bytes in memory at once. Each worker pulls the
+  // next index, fetches, and writes it straight into the wasm FS (createWasmFile
+  // is synchronous, so the FS-path creation never interleaves). done is a shared
+  // counter so progress stays monotonic regardless of completion order.
+  const CONCURRENCY = 25;
+  let next = 0;
+  let done = 0;
+  const worker = async () => {
+    while (next < preloadFiles.length) {
+      const file = preloadFiles[next++];
+      const bytes = new Uint8Array(await (await fetch(file)).arrayBuffer());
+      createWasmFile(module, file, bytes);
+      onProgress?.(++done, preloadFiles.length);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, preloadFiles.length) }, worker),
+  );
 
   for (const file of fmodBankFiles)
     createWasmFile(module, file, new Uint8Array());
