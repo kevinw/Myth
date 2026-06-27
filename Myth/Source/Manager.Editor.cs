@@ -43,6 +43,7 @@ public partial class Manager
 
 	char tileTypePlacing;
 	bool editingRoomGeometry;
+	bool slopePaint; // when set, a tile-rect drag lays a slope staircase instead of a solid block
 	Point2 tileRectPaintFrom;
 	Point2 tileRectPaintTo;
 	RectInt? proposedRoomTiles;
@@ -559,6 +560,35 @@ public partial class Manager
 		ActorSpecInspectorImGui();
 		ActorInstanceInspectorImGui();
 		DrawEditorSelectionOptions();
+		DrawSlopePaintOption();
+	}
+
+	void DrawSlopePaintOption()
+	{
+		if (!SlopePaintAvailable)
+		{
+			slopePaint = false;
+			return;
+		}
+
+		var flags =
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.AlwaysAutoResize |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoMove |
+			ImGuiWindowFlags.NoFocusOnAppearing;
+
+		var pos = new Vector2(PaletteSlideRect.Right + 10, ToolbarHeight + 10);
+		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.04f, 0.05f, 0.82f));
+		ImGui.Begin("Tile Paint Options", flags);
+		ImGui.Checkbox("Slopes", ref slopePaint);
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Drag a rectangle to lay a slope staircase.\nDirection follows the drag (down = floor, up = underhang).");
+		ImGui.End();
+		ImGui.PopStyleColor();
+		ImGui.PopStyleVar();
 	}
 
 	void SelectEditorActorTool()
@@ -1848,9 +1878,9 @@ public partial class Manager
 		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var position = room.WorldBounds.TopLeft + local;
 		var resolved = ActorSpecs.Resolve(actor);
-		if (ResizableRoomRectTypes.TryGetValue(ActorSpecs.ReadString(resolved, "Type") ?? "", out var defaultSize))
+		if (ResizableRoomRectTypes.TryGetValue(ActorSpecs.ReadString(resolved, "Type") ?? "", out var info))
 		{
-			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? defaultSize;
+			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? info.DefaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
 
@@ -1873,21 +1903,25 @@ public partial class Manager
 	// actor implementing IResizable, mapped to the default size of a freshly placed instance (its
 	// public static DefaultSize). Built once from the actor type registry, so a new resizable
 	// actor just implements IResizable -- no edits here.
-	static Dictionary<string, Point2>? resizableRoomRectTypes;
-	static Dictionary<string, Point2> ResizableRoomRectTypes
+	readonly record struct ResizableInfo(Point2 DefaultSize, ResizeAxes Axes);
+
+	static Dictionary<string, ResizableInfo>? resizableRoomRectTypes;
+	static Dictionary<string, ResizableInfo> ResizableRoomRectTypes
 		=> resizableRoomRectTypes ??= BuildResizableRoomRectTypes();
 
-	static Dictionary<string, Point2> BuildResizableRoomRectTypes()
+	static Dictionary<string, ResizableInfo> BuildResizableRoomRectTypes()
 	{
-		var result = new Dictionary<string, Point2>(StringComparer.OrdinalIgnoreCase);
+		var result = new Dictionary<string, ResizableInfo>(StringComparer.OrdinalIgnoreCase);
 		foreach (var (name, type) in ActorSpecs.ActorTypes)
 		{
 			if (!typeof(IResizable).IsAssignableFrom(type))
 				continue;
 
-			var field = type.GetField(nameof(HiddenWall.DefaultSize), BindingFlags.Public | BindingFlags.Static)
+			var sizeField = type.GetField(nameof(HiddenWall.DefaultSize), BindingFlags.Public | BindingFlags.Static)
 				?? throw new InvalidOperationException($"Resizable actor '{type.Name}' is missing a public static {nameof(HiddenWall.DefaultSize)} field.");
-			result[name] = (Point2)field.GetValue(null)!;
+			var axesField = type.GetField(nameof(Jumpthru.ResizableAxes), BindingFlags.Public | BindingFlags.Static);
+			var axes = axesField != null ? (ResizeAxes)axesField.GetValue(null)! : ResizeAxes.Both;
+			result[name] = new ResizableInfo((Point2)sizeField.GetValue(null)!, axes);
 		}
 		return result;
 	}
@@ -1895,9 +1929,20 @@ public partial class Manager
 	static bool IsResizableRoomRectActor(JsonObject actor)
 		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "");
 
-	static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
+	static ResizableInfo ResizableRoomRectInfo(JsonObject actor)
 		=> ResizableRoomRectTypes.GetValueOrDefault(
-			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", HiddenWall.DefaultSize);
+			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", new ResizableInfo(HiddenWall.DefaultSize, ResizeAxes.Both));
+
+	static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
+		=> ResizableRoomRectInfo(actor).DefaultSize;
+
+	static bool ResizeHandleAllowed(ResizeHandle handle, ResizeAxes axes)
+		=> axes switch
+		{
+			ResizeAxes.X => handle is ResizeHandle.Left or ResizeHandle.Right,
+			ResizeAxes.Y => handle is ResizeHandle.Top or ResizeHandle.Bottom,
+			_ => true,
+		};
 
 	static Factory.ActorPaletteEntry? FindRoomActorEntry(JsonObject actor)
 	{
@@ -1969,7 +2014,7 @@ public partial class Manager
 			batcher.RectLine(bounds.Inflate(lineWeight * 2), lineWeight * 2, color);
 
 			if (selected && IsResizableRoomRectActor(room.Actors[i]))
-				DrawHiddenWallResizeHandles(bounds, lineWeight);
+				DrawHiddenWallResizeHandles(bounds, lineWeight, ResizableRoomRectInfo(room.Actors[i]).Axes);
 		}
 	}
 
@@ -2018,12 +2063,12 @@ public partial class Manager
 			=> x >= 0 && y >= 0 && x < room.Size.X && y < room.Size.Y && filled[x, y];
 	}
 
-	void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight)
+	void DrawHiddenWallResizeHandles(RectInt bounds, float lineWeight, ResizeAxes axes)
 	{
 		var size = HiddenWallHandleSize(lineWeight);
 		foreach (var handle in Enum.GetValues<ResizeHandle>())
 		{
-			if (handle == ResizeHandle.None)
+			if (handle == ResizeHandle.None || !ResizeHandleAllowed(handle, axes))
 				continue;
 
 			var rect = HiddenWallHandleRect(bounds, handle, size);
@@ -2061,6 +2106,7 @@ public partial class Manager
 		if (!IsResizableRoomRectActor(actor))
 			return ResizeHandle.None;
 
+		var axes = ResizableRoomRectInfo(actor).Axes;
 		var bounds = RoomActorBounds(room, actor);
 		var size = HiddenWallHandleSize(lineWeight);
 		foreach (var handle in new[]
@@ -2075,7 +2121,7 @@ public partial class Manager
 					 ResizeHandle.Bottom
 				 })
 		{
-			if (HiddenWallHandleRect(bounds, handle, size).Contains(world))
+			if (ResizeHandleAllowed(handle, axes) && HiddenWallHandleRect(bounds, handle, size).Contains(world))
 				return handle;
 		}
 
@@ -2442,6 +2488,71 @@ public partial class Manager
 			{
 				room.SetTile(layer, new Point2(x, y), tile, rebuildGeometry: false);
 			}
+
+		room.RebuildGeometry();
+		editorGameDirty = true;
+	}
+
+	// Solid terrain tiles that have a slope counterpart, and vice versa, so slope painting can
+	// derive both the diagonal (slope) char and the fill (solid) char from whichever is the brush.
+	static bool TryGetSlopePair(char brush, out char solid, out char slope)
+	{
+		switch (brush)
+		{
+			case '1': case '2': solid = '1'; slope = '2'; return true;
+			case 'G': case 'S': solid = 'G'; slope = 'S'; return true;
+			case 'T': case 'Y': solid = 'T'; slope = 'Y'; return true;
+			default: solid = slope = '\0'; return false;
+		}
+	}
+
+	// Slope painting is a foreground-terrain affordance: only offered when the active brush is a
+	// solid terrain tile that has a slope counterpart and we're editing the foreground layer.
+	bool SlopePaintAvailable
+		=> activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && selectedActorPaletteIndex < 0 && TryGetSlopePair(brush, out _, out _);
+
+	// Fill the dragged rectangle with a slope staircase whose descent matches the drag direction:
+	// down-right/left = a floor ramp (solid below), up-right/left = an underhang (solid above). The
+	// run length per step follows the rectangle's width:height, and the engine infers each run's
+	// facing from the surroundings we lay down (see Room.InferSlopeShape). `from`/`to` are the raw
+	// (direction-preserving) drag endpoints.
+	void ApplySlopeRect(Room room, Point2 from, Point2 to, char solid, char slope)
+	{
+		var rect = ClampTileRect(NormalizeTileRect(from, to), room);
+		var w = rect.Width;
+		var h = rect.Height;
+		if (w <= 0 || h <= 0)
+			return;
+
+		var toRight = to.X >= from.X;
+		var underhang = to.Y < from.Y;
+		var layer = Factory.TileLayer.Foreground;
+
+		for (var x = 0; x < w; x++)
+		{
+			// 0 at the high (uphill) end, growing toward the low end; the run length per 1-tile
+			// step is w/h, so the ramp spans the rectangle corner to corner.
+			var fromHigh = toRight ? x : w - 1 - x;
+			var step = Math.Min(h - 1, fromHigh * h / w);
+			var surfaceRow = underhang ? h - 1 - step : step;
+			var col = rect.Left + x;
+
+			room.SetTile(layer, new Point2(col, rect.Top + surfaceRow), slope, rebuildGeometry: false);
+
+			// Body fill: solid below the surface for a floor, above it for an underhang.
+			if (underhang)
+				for (var y = 0; y < surfaceRow; y++)
+					room.SetTile(layer, new Point2(col, rect.Top + y), solid, rebuildGeometry: false);
+			else
+				for (var y = surfaceRow + 1; y < h; y++)
+					room.SetTile(layer, new Point2(col, rect.Top + y), solid, rebuildGeometry: false);
+		}
+
+		// Cap the high corner with solid so the topmost run has a solid neighbour on its high side --
+		// otherwise InferSlopeShape's DownRight fallback mis-faces an isolated leftward/underhang ramp.
+		var highCol = rect.Left + (toRight ? 0 : w - 1);
+		var highRow = rect.Top + (underhang ? h - 1 : 0);
+		room.SetTile(layer, new Point2(highCol, highRow), solid, rebuildGeometry: false);
 
 		room.RebuildGeometry();
 		editorGameDirty = true;
@@ -3454,13 +3565,38 @@ public partial class Manager
 					var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
 					batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
 					if (tileTypePlacing != '0')
-						for (var y = previewTileRect.Top; y < previewTileRect.Bottom; y++)
-							for (var x = previewTileRect.Left; x < previewTileRect.Right; x++)
+					{
+						if (slopePaint && SlopePaintAvailable && TilePlacing)
+						{
+							// The inferred slope subtextures need a geometry rebuild per cell, so just
+							// outline the triangle we'll fill -- its hypotenuse is the ramp surface.
+							var clampedEnd = ClampTile(editing, tileOver);
+							var toRight = clampedEnd.X >= tileRectPaintFrom.X;
+							var underhang = clampedEnd.Y < tileRectPaintFrom.Y;
+
+							Vector2 Corner(int tx, int ty) => roomTopLeft + new Vector2(tx * Game.TileSize, ty * Game.TileSize);
+							var tl = Corner(previewTileRect.Left, previewTileRect.Top);
+							var tr = Corner(previewTileRect.Right, previewTileRect.Top);
+							var bl = Corner(previewTileRect.Left, previewTileRect.Bottom);
+							var br = Corner(previewTileRect.Right, previewTileRect.Bottom);
+							var (a, b, c) = (toRight, underhang) switch
 							{
-								var tile = new Point2(x, y);
-								var image = GetPreviewTileImage(editing, tile, tileTypePlacing, placing);
-								batcher.Image(image, roomTopLeft + tile * Game.TileSize + placing.Offset, placing.Origin, Vector2.One, 0, Color.White);
-							}
+								(true, false) => (tl, bl, br),  // down-right floor
+								(false, false) => (tr, br, bl), // down-left floor
+								(true, true) => (tl, tr, bl),   // up-right underhang
+								(false, true) => (tl, tr, br),  // up-left underhang
+							};
+							batcher.Triangle(a, b, c, highlight * 0.45f);
+						}
+						else
+							for (var y = previewTileRect.Top; y < previewTileRect.Bottom; y++)
+								for (var x = previewTileRect.Left; x < previewTileRect.Right; x++)
+								{
+									var tile = new Point2(x, y);
+									var image = GetPreviewTileImage(editing, tile, tileTypePlacing, placing);
+									batcher.Image(image, roomTopLeft + tile * Game.TileSize + placing.Offset, placing.Origin, Vector2.One, 0, Color.White);
+								}
+					}
 				}
 			}
 
@@ -3512,7 +3648,12 @@ public partial class Manager
 		if (!Input.Mouse.LeftDown && !Input.Mouse.RightDown)
 		{
 			if (TilePlacing && CurrentRoom is { } room)
-				ApplyTileRect(room, NormalizeTileRect(tileRectPaintFrom, tileRectPaintTo), activeTileLayer, tileTypePlacing);
+			{
+				if (slopePaint && tileTypePlacing != '0' && SlopePaintAvailable && TryGetSlopePair(tileTypePlacing, out var slopeSolid, out var slopeChar))
+					ApplySlopeRect(room, tileRectPaintFrom, tileRectPaintTo, slopeSolid, slopeChar);
+				else
+					ApplyTileRect(room, NormalizeTileRect(tileRectPaintFrom, tileRectPaintTo), activeTileLayer, tileTypePlacing);
+			}
 			tileTypePlacing = brush;
 			if (TilePlacing)
 				ClearEditorDragState();
@@ -3571,9 +3712,86 @@ public partial class Manager
 		ImGui.Checkbox("BG Tiles", ref selectionIncludeBackgroundTiles);
 		ImGui.Checkbox("FG Tiles", ref selectionIncludeForegroundTiles);
 		ImGui.Checkbox("Actors", ref selectionIncludeActors);
+
+		if (editorSelectionRect != null)
+		{
+			ImGui.Separator();
+			if (ImGui.Button("Flip X"))
+				FlipSelection(horizontal: true);
+			ImGui.SameLine();
+			if (ImGui.Button("Flip Y"))
+				FlipSelection(horizontal: false);
+		}
+
 		ImGui.End();
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar(2);
+	}
+
+	// Mirror the current selection in place (respecting the BG/FG/Actors checkboxes), reusing the
+	// move/duplicate snapshot path: capture, flip the captured tiles + actor positions, write back at
+	// the same rect. Slope/dual tiles re-infer their facing from the mirrored surroundings on rebuild.
+	void FlipSelection(bool horizontal)
+	{
+		if (CurrentRoom is not { } room || editorSelectionRect == null)
+			return;
+
+		using (CaptureRoomUndo(horizontal ? "Flip Selection X" : "Flip Selection Y", room))
+		{
+			var snapshot = CaptureEditorSelection(room);
+			MirrorSnapshot(room, snapshot, horizontal);
+			ApplyEditorSelectionSnapshot(room, snapshot, Point2.Zero, duplicate: false);
+		}
+
+		MarkRoomPreviewDirty(room);
+		SyncEditorGame();
+	}
+
+	void MirrorSnapshot(Room room, EditorSelectionSnapshot snapshot, bool horizontal)
+	{
+		if (snapshot.ForegroundTiles != null)
+			MirrorTiles(snapshot.ForegroundTiles, horizontal);
+		if (snapshot.BackgroundTiles != null)
+			MirrorTiles(snapshot.BackgroundTiles, horizontal);
+
+		if (!snapshot.IncludeActors)
+			return;
+
+		// Mirror each actor's bounding box across the selection's centre line, preserving the actor's
+		// own position-to-bounds offset so off-centre anchors land correctly.
+		var rect = snapshot.Rect;
+		var minPx = (horizontal ? rect.Left : rect.Top) * Game.TileSize;
+		var maxPx = (horizontal ? rect.Right : rect.Bottom) * Game.TileSize;
+		var origin = horizontal ? room.WorldBounds.X : room.WorldBounds.Y;
+
+		for (var i = 0; i < snapshot.Actors.Count; i++)
+		{
+			var (index, actor, position) = snapshot.Actors[i];
+			var bounds = RoomActorBounds(room, actor);
+			var lo = (horizontal ? bounds.Left : bounds.Top) - origin;
+			var hi = (horizontal ? bounds.Right : bounds.Bottom) - origin;
+			var coord = horizontal ? position.X : position.Y;
+			var mirrored = minPx + maxPx - lo - hi + coord;
+			snapshot.Actors[i] = (index, actor, horizontal ? new Point2(mirrored, position.Y) : new Point2(position.X, mirrored));
+		}
+	}
+
+	static void MirrorTiles(char[,] tiles, bool horizontal)
+	{
+		var w = tiles.GetLength(0);
+		var h = tiles.GetLength(1);
+		if (horizontal)
+		{
+			for (var y = 0; y < h; y++)
+				for (var x = 0; x < w / 2; x++)
+					(tiles[x, y], tiles[w - 1 - x, y]) = (tiles[w - 1 - x, y], tiles[x, y]);
+		}
+		else
+		{
+			for (var x = 0; x < w; x++)
+				for (var y = 0; y < h / 2; y++)
+					(tiles[x, y], tiles[x, h - 1 - y]) = (tiles[x, h - 1 - y], tiles[x, y]);
+		}
 	}
 
 	RectInt? GetProposedRoomTiles(Room source, Vector2 worldMouse)

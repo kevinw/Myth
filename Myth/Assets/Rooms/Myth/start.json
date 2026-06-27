@@ -59,54 +59,10 @@
       "Position": [97, 47]
     },
     {
-      "Id": "4312a54e02069066",
-      "Type": "Jumpthru",
-      "Position": [216, 104]
-    },
-    {
-      "Id": "33c493030017f336",
-      "Type": "Jumpthru",
-      "Position": [224, 104]
-    },
-    {
-      "Id": "30645ff455015663",
-      "Type": "Jumpthru",
-      "Position": [224, 104]
-    },
-    {
-      "Id": "1e6a7dafd68edbe5",
-      "Type": "Jumpthru",
-      "Position": [232, 104]
-    },
-    {
-      "Id": "2dd7aa0ac5cf54fe",
-      "Type": "Jumpthru",
-      "Position": [240, 104]
-    },
-    {
       "Id": "915ac1bee41e797d",
       "Type": "Jumpthru",
-      "Position": [152, 104]
-    },
-    {
-      "Id": "8d8a0ee9ee9d889a",
-      "Type": "Jumpthru",
-      "Position": [160, 104]
-    },
-    {
-      "Id": "4fdf55bba93bace8",
-      "Type": "Jumpthru",
-      "Position": [160, 104]
-    },
-    {
-      "Id": "da85f0bec38c6fa5",
-      "Type": "Jumpthru",
-      "Position": [168, 104]
-    },
-    {
-      "Id": "9a65020c5ef5ecba",
-      "Type": "Jumpthru",
-      "Position": [176, 104]
+      "Position": [144, 104],
+      "Size": [48, 8]
     },
     {
       "Id": "1d40b931814f83e2",
@@ -128,39 +84,16 @@
       "Position": [292, 84]
     },
     {
-      "Id": "8072c4447aa14dac",
-      "Type": "Jumpthru",
-      "Position": [144, 104]
-    },
-    {
-      "Id": "696ada04b95155a9",
-      "Type": "Jumpthru",
-      "Position": [184, 104]
-    },
-    {
-      "Id": "6b9584b600fa7751",
-      "Type": "Jumpthru",
-      "Position": [208, 104]
-    },
-    {
-      "Id": "8e09422eb3df05eb",
-      "Type": "Jumpthru",
-      "Position": [248, 104]
-    },
-    {
-      "Id": "3eeb8d740a9cfdc5",
-      "Type": "Jumpthru",
-      "Position": [80, 56]
-    },
-    {
       "Id": "1d65e5f856b077de",
       "Type": "Jumpthru",
-      "Position": [72, 56]
+      "Position": [64, 56],
+      "Size": [28, 8]
     },
     {
       "Id": "7d2ccea18a1a8fd2",
       "Type": "Jumpthru",
-      "Position": [64, 56]
+      "Position": [208, 104],
+      "Size": [48, 8]
     }
   ]
 }

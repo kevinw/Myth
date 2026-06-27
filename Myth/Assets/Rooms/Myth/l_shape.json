@@ -118,7 +118,8 @@
     {
       "Id": "c0d3f9eebf42811b",
       "Type": "Jumpthru",
-      "Position": [472, 304]
+      "Position": [472, 304],
+      "Size": [48, 8]
     },
     {
       "Id": "ad4f6362430d7bee",

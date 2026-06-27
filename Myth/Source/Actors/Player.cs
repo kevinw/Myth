@@ -418,7 +418,7 @@ public abstract class Pawn : Actor
 		// Gate on CanBurrow() so the pose only shows when a burrow can actually result
 		// (not during the cooldown or before we've re-grounded).
 		bool jumpAnimLooping = true;
-		if (!grounded && input.JumpDown && Velocity.Y > -30 && CanBurrow() && !wallSliding)
+		if (!grounded && input.JumpDown && Velocity.Y > 15 && CanBurrow() && !wallSliding)
 		{
 			jumpAnim = "dive";
 			jumpAnimLooping = false;

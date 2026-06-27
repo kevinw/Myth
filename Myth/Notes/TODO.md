@@ -9,10 +9,8 @@
 - oklab for background (and any) gradient https://www.shadertoy.com/view/ttcyRS
 - srgb to linear, all shaders in linear, then final pass linear to srgb
 - absolutely improve player respawn behaviour when editing
-- think harder about a better way to do slopes in the editor; maybe draw a rectangle and you get the slope across it!
 - vector art collection -> stampable tile patterns
 - wall jump slide sound
-- 9 slice from Dual Grid for moving platforms
 - subtle light overlay for any room exit leading to another room
 - add coins/crystals/doodads for hiding in secret areas
 - an MP hiding in the dual grid, activated by something
@@ -40,7 +38,7 @@
 - up jump near bud gets a boost
 - trying to put out all the torches in a room, but bugs are trying to light them
 - a room where Bud gets stuck; you hear him from the other room, or talk on a radio
-- limit two wall jumps? stamina meetger?
+- limit two wall jumps? stamina meter?
 - boss rush storylets: like Hades, each time you face off against one, you get new dialog. but winning doesn't mean they won't come back and that you are "punished" with less dialog; maybe they come back stronger!
 
 ## iOS
