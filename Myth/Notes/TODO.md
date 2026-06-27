@@ -4,18 +4,14 @@
   - or git rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
 
 ## Editor
-- simple "rewind" button for rewinding player position
 - mirror in X for slopes
-- resiable MP
 
-- holding down when landing on a slope even without vertical movement starts a roll
+- oklab for background (and any) gradient https://www.shadertoy.com/view/ttcyRS
+- srgb to linear, all shaders in linear, then final pass linear to srgb
 - absolutely improve player respawn behaviour when editing
 - think harder about a better way to do slopes in the editor; maybe draw a rectangle and you get the slope across it!
-- make dragging empty space in the editor not erase other tiles (toggable)
-- going to play mode cancels room resize
 - vector art collection -> stampable tile patterns
 - wall jump slide sound
-- moving platform: easing functions
 - 9 slice from Dual Grid for moving platforms
 - subtle light overlay for any room exit leading to another room
 - add coins/crystals/doodads for hiding in secret areas

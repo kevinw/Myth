@@ -54,6 +54,7 @@ public partial class Manager
 	int selectedRoomActorIndex = -1;
 	bool selectionIncludeBackgroundTiles = true;
 	bool selectionIncludeForegroundTiles = true;
+	SnapshotFlags selectionSnapshotFlags = SnapshotFlags.None;
 	bool selectionIncludeActors = true;
 	RectInt? editorSelectionRect;
 	Point2 editorSelectionFrom;
@@ -199,6 +200,9 @@ public partial class Manager
 	Rect PaletteSlideRect =>
 		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
+	void ClearEditorStateForEnteringPlayMode() {
+		editingRoomGeometry = false;
+	}
 
 	void UndoEditor()
 	{
@@ -2436,10 +2440,7 @@ public partial class Manager
 		for (var y = rect.Top; y < rect.Bottom; y++)
 			for (var x = rect.Left; x < rect.Right; x++)
 			{
-				if (layer == Factory.TileLayer.Background)
-					room.SetBackground(new Point2(x, y), tile, rebuildGeometry: false);
-				else
-					room.Set(new Point2(x, y), tile, rebuildGeometry: false);
+				room.SetTile(layer, new Point2(x, y), tile, rebuildGeometry: false);
 			}
 
 		room.RebuildGeometry();
@@ -2488,6 +2489,13 @@ public partial class Manager
 		return result;
 	}
 
+	[Flags]
+	enum SnapshotFlags
+	{
+		None = 0,
+		IncludeEmptyTiles = 1 << 0,
+	}
+
 	void ApplyEditorSelectionSnapshot(Room room, EditorSelectionSnapshot snapshot, Point2 offset, bool duplicate)
 	{
 		room.LoadJsonState(snapshot.RoomJson);
@@ -2497,10 +2505,10 @@ public partial class Manager
 		if (!duplicate)
 			ClearEditorSelectionSource(room, snapshot);
 
-		if (snapshot.BackgroundTiles != null)
-			WriteTiles(room, snapshot.BackgroundTiles, destination.Position, Factory.TileLayer.Background);
-		if (snapshot.ForegroundTiles != null)
-			WriteTiles(room, snapshot.ForegroundTiles, destination.Position, Factory.TileLayer.Foreground);
+		// Write tiles
+		bool writeEmpty = (selectionSnapshotFlags & SnapshotFlags.IncludeEmptyTiles) != 0;
+		if (snapshot.BackgroundTiles != null) WriteTiles(room, snapshot.BackgroundTiles, destination.Position, Factory.TileLayer.Background, writeEmpty: writeEmpty);
+		if (snapshot.ForegroundTiles != null) WriteTiles(room, snapshot.ForegroundTiles, destination.Position, Factory.TileLayer.Foreground, writeEmpty: writeEmpty);
 
 		if (snapshot.IncludeActors)
 		{
@@ -2545,7 +2553,7 @@ public partial class Manager
 		return new RectInt(x, y, source.Width, source.Height);
 	}
 
-	void WriteTiles(Room room, char[,] tiles, Point2 destination, Factory.TileLayer layer)
+	void WriteTiles(Room room, char[,] tiles, Point2 destination, Factory.TileLayer layer, bool writeEmpty = true)
 	{
 		var width = tiles.GetLength(0);
 		var height = tiles.GetLength(1);
@@ -2553,10 +2561,9 @@ public partial class Manager
 			for (var x = 0; x < width; x++)
 			{
 				var tile = destination + new Point2(x, y);
-				if (layer == Factory.TileLayer.Background)
-					room.SetBackground(tile, tiles[x, y], rebuildGeometry: false);
-				else
-					room.Set(tile, tiles[x, y], rebuildGeometry: false);
+				if (!writeEmpty && tiles[x, y] == '0')
+					continue;
+				room.SetTile(layer, tile, tiles[x, y], rebuildGeometry: false);
 			}
 	}
 
@@ -2565,10 +2572,7 @@ public partial class Manager
 		for (var y = rect.Top; y < rect.Bottom; y++)
 			for (var x = rect.Left; x < rect.Right; x++)
 			{
-				if (layer == Factory.TileLayer.Background)
-					room.SetBackground(new Point2(x, y), '0', rebuildGeometry: false);
-				else
-					room.Set(new Point2(x, y), '0', rebuildGeometry: false);
+				room.SetTile(layer, new Point2(x, y), '0', rebuildGeometry: false);
 			}
 	}
 
@@ -3563,6 +3567,7 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 3));
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.04f, 0.05f, 0.82f));
 		ImGui.Begin("Selection Options", flags);
+		ImGuiExt.CheckboxFlags("Empty Tiles", ref selectionSnapshotFlags, SnapshotFlags.IncludeEmptyTiles);
 		ImGui.Checkbox("BG Tiles", ref selectionIncludeBackgroundTiles);
 		ImGui.Checkbox("FG Tiles", ref selectionIncludeForegroundTiles);
 		ImGui.Checkbox("Actors", ref selectionIncludeActors);

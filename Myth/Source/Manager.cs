@@ -69,10 +69,7 @@ public partial class Manager : App
 #endif
 	const float PlayTransitionDuration = 0.25f;
 	float playTransition;
-	Vector2 playTransitionFromCenter;
-	Vector2 playTransitionFromSize;
-	Vector2 playTransitionToCenter;
-	Vector2 playTransitionToSize;
+	Rect playTransitionFrom, playTransitionTo;
 	int fpsOverlayFrames;
 	long fpsOverlayLastTimestamp;
 	float fpsOverlayValue;
@@ -222,73 +219,52 @@ public partial class Manager : App
 #endif
 	}
 
-
-
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
 	{
+		const string applicationName = "Myth";
+		const string windowTitle = "Myth";
+		Point2 windowSize = new(1280, 720);
+		GraphicsDriver graphicsDriver = GraphicsDriver.None; // no preference
+		bool resizable = true;
+		bool fullscreen = false;
+		var updateMode = UpdateMode.UnlockedStep();
+		AppFlags appFlags = AppFlags.None;
 #if BROWSER
-		return new AppConfig(
-			ApplicationName: "Myth",
-			WindowTitle: "Myth",
-			Width: 1280,
-			Height: 720,
-			Resizable: true,
-			UpdateMode: UpdateMode.UnlockedStep(),
-			PreferredGraphicsDriver: GraphicsDriver.WebGPU);
+		graphicsDriver = GraphicsDriver.WebGPU;
 #elif IOS
-		return new AppConfig(
-			ApplicationName: "Myth",
-			WindowTitle: "Myth",
-			Width: 1280,
-			Height: 720,
-			Fullscreen: true,
-			Resizable: false,
-			UpdateMode: UpdateMode.UnlockedStep(),
-			PreferredGraphicsDriver: GraphicsDriver.Metal);
-#else
-		if (headless && unthrottled)
-			return new AppConfig(
-				ApplicationName: "Myth",
-				WindowTitle: "Myth",
-				Width: 1,
-				Height: 1,
-				Resizable: false,
-				UpdateMode: UpdateMode.UnthrottledStep(60),
-				PreferredGraphicsDriver: GraphicsDriver.Headless,
-				Flags: AppFlags.Headless);
-
-		if (headless)
-			return new AppConfig(
-				ApplicationName: "Myth",
-				WindowTitle: "Myth",
-				Width: 1,
-				Height: 1,
-				Resizable: false,
-				UpdateMode: UpdateMode.FixedStep(60),
-				PreferredGraphicsDriver: GraphicsDriver.Headless,
-				Flags: AppFlags.Headless);
-
-		if (unthrottled)
-			return new AppConfig(
-				ApplicationName: "Myth",
-				WindowTitle: "Myth",
-				Width: 1280,
-				Height: 720,
-				Resizable: true,
-				UpdateMode: UpdateMode.UnthrottledStep(60));
+		graphicsDriver = GraphicsDriver.Metal;
+		fullscreen = true;
+		resizable = false;
+#endif
+		if (headless) {
+			graphicsDriver = GraphicsDriver.Headless;
+			windowSize = new(1, 1);
+			resizable = false;
+			updateMode = UpdateMode.FixedStep(60);
+			appFlags |= AppFlags.Headless;
+		}
+		if (unthrottled) {
+			updateMode = UpdateMode.UnthrottledStep(60);
+		}
 
 		// Opt-in GPU validation: set MYTH_GPU_DEBUG=1 to enable SDL_gpu's debug layer
 		// (pairs with Metal validation env vars to catch buffer overruns / hazards).
 		var gpuDebug = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MYTH_GPU_DEBUG"));
+		if (gpuDebug) {
+			appFlags |= AppFlags.GraphicsDebugging;
+		}
+
 		return new AppConfig(
-			ApplicationName: "Myth",
-			WindowTitle: "Myth",
-			Width: 1280,
-			Height: 720,
-			Resizable: true,
-			UpdateMode: UpdateMode.UnlockedStep(),
-			Flags: gpuDebug ? AppFlags.GraphicsDebugging : AppFlags.None);
-#endif
+			ApplicationName: applicationName,
+			WindowTitle: windowTitle,
+			Width: windowSize.X,
+			Height: windowSize.Y,
+			Fullscreen: fullscreen,
+			Resizable: resizable,
+			UpdateMode: updateMode,
+			PreferredGraphicsDriver: graphicsDriver,
+			Flags: appFlags
+		);
 	}
 
 	protected override void Startup()
@@ -1027,10 +1003,12 @@ public partial class Manager : App
 			return;
 
 		var t = Ease.Cube.InOut(Math.Clamp(playTransition, 0.0f, 1.0f));
-		var center = Vector2.Lerp(playTransitionFromCenter, playTransitionToCenter, t);
-		var size = Vector2.Lerp(playTransitionFromSize, playTransitionToSize, t);
-		var worldView = new Rect(center - size / 2, size);
-		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
+
+		var center2 = Vector2.Lerp(playTransitionFrom.Center, playTransitionTo.Center, t);
+		var size2 = Vector2.Lerp(playTransitionFrom.Size, playTransitionTo.Size, t);
+		var worldView2 = new Rect(center2 - size2 / 2, size2);
+
+		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView2, showHud: false);
 	}
 
 #if EDITOR && DEBUG && !IOS
@@ -1323,6 +1301,7 @@ public partial class Manager : App
 	void StartGame(bool immediate = false)
 	{
 #if EDITOR
+		ClearEditorStateForEnteringPlayMode();
 		CurrentRoom?.Save();
 #endif
 		if (CurrentRoom is not { } room)
@@ -1375,10 +1354,8 @@ public partial class Manager : App
 		if (immediate)
 		{
 			playTransition = 1.0f;
-			playTransitionFromCenter = Vector2.Zero;
-			playTransitionFromSize = Vector2.Zero;
-			playTransitionToCenter = Vector2.Zero;
-			playTransitionToSize = Vector2.Zero;
+			playTransitionFrom = new();
+			playTransitionTo = new();
 			gameEase = 1.0f;
 			startingPlay = false;
 			playing = true;
@@ -1389,10 +1366,8 @@ public partial class Manager : App
 			{
 				var target = game.GetGameplayCameraTarget();
 				playTransition = 0.0f;
-				playTransitionFromCenter = editorCamera;
-				playTransitionFromSize = GameViewRect.Size / editorZoom;
-				playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
-				playTransitionToSize = new Vector2(Game.Width, Game.Height);
+				playTransitionFrom = Rect.CenteredAt(editorCamera, GameViewRect.Size / editorZoom);
+				playTransitionTo = Rect.CenteredAt(target + new Vector2(Game.Width, Game.Height) / 2, new (Game.Width, Game.Height));
 				startingPlay = true;
 				playing = false;
 			}
@@ -1400,10 +1375,8 @@ public partial class Manager : App
 		else
 		{
 			playTransition = 1.0f;
-			playTransitionFromCenter = Vector2.Zero;
-			playTransitionFromSize = Vector2.Zero;
-			playTransitionToCenter = Vector2.Zero;
-			playTransitionToSize = Vector2.Zero;
+			playTransitionFrom = new();
+			playTransitionTo = new();
 			gameEase = 1.0f;
 			startingPlay = false;
 			playing = true;
