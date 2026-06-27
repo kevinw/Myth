@@ -1398,15 +1398,9 @@ public partial class Game : IDisposable
 		Grid? fg = null;
 		DualGrid? bgDual = null;
 		DualGrid? fgDual = null;
-		HiddenWallGrid? hiddenWalls = null;
 		HiddenCoverGrid? hiddenCover = null;
 		foreach (var actor in Actors)
 		{
-			if (actor is HiddenWallGrid hiddenWallGrid)
-			{
-				hiddenWalls = hiddenWallGrid;
-				continue;
-			}
 			if (actor is HiddenCoverGrid hiddenCoverGrid)
 			{
 				hiddenCover = hiddenCoverGrid;
@@ -1441,7 +1435,6 @@ public partial class Game : IDisposable
 		fg.Resize(room.Size);
 		bgDual?.Clear();
 		fgDual.Clear();
-		hiddenWalls?.Resize(room.Size);
 
 		for (var x = 0; x < room.Size.X; x++)
 			for (var y = 0; y < room.Size.Y; y++)
@@ -1453,8 +1446,6 @@ public partial class Game : IDisposable
 					entry.Tile?.Invoke(tile, room, fg, fgVisual, bg, fgDual);
 			}
 
-		if (hiddenWalls != null)
-			PopulateHiddenWalls(room, hiddenWalls);
 		hiddenCover?.Build(room);
 
 		if (bgDual != null)
@@ -1508,7 +1499,6 @@ public partial class Game : IDisposable
 		fg.Mask = Actor.Masks.Solid;
 		fg.Depth = 5;
 
-		var hiddenWalls = Create<HiddenWallGrid>(offset, it => it.Resize(forRoom.Size));
 		var hiddenCover = Create<HiddenCoverGrid>(offset);
 
 		// loop over room grid placing objects
@@ -1522,7 +1512,6 @@ public partial class Game : IDisposable
 					entry.Tile?.Invoke(tile, forRoom, fg, fgVisual, bg, fgDual);
 			}
 
-		PopulateHiddenWalls(forRoom, hiddenWalls);
 		BuildDualTiles(forRoom, bgDual, Factory.TileLayer.Background);
 		BuildDualTiles(forRoom, fgDual, Factory.TileLayer.Foreground);
 
@@ -1680,21 +1669,6 @@ public partial class Game : IDisposable
 
 		var source = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
 		return $"{room.Id}:{source}:{localPosition.X},{localPosition.Y}";
-	}
-
-	static void PopulateHiddenWalls(Room room, HiddenWallGrid hiddenWalls)
-	{
-		foreach (var actor in room.Actors)
-		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (ActorSpecs.ReadString(resolved, "Type") != "HiddenWall")
-				continue;
-
-			var localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
-			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? HiddenWall.DefaultSize;
-			var tileType = ActorSpecs.ReadString(resolved, "TileType") ?? "castle";
-			hiddenWalls.AddRect(localPosition, size, tileType);
-		}
 	}
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);

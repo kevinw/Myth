@@ -59,6 +59,11 @@
       "Id": "f4e2313a66462018",
       "Type": "Blob",
       "Position": [196, 144]
+    },
+    {
+      "Id": "60a3d8ff6bf0a526",
+      "Type": "MovingPlatform",
+      "Position": [44, 116]
     }
   ]
 }

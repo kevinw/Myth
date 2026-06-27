@@ -1917,8 +1917,8 @@ public partial class Manager
 			if (!typeof(IResizable).IsAssignableFrom(type))
 				continue;
 
-			var sizeField = type.GetField(nameof(HiddenWall.DefaultSize), BindingFlags.Public | BindingFlags.Static)
-				?? throw new InvalidOperationException($"Resizable actor '{type.Name}' is missing a public static {nameof(HiddenWall.DefaultSize)} field.");
+			var sizeField = type.GetField("DefaultSize", BindingFlags.Public | BindingFlags.Static)
+				?? throw new InvalidOperationException($"Resizable actor '{type.Name}' is missing a public static \"DefaultSize\" field.");
 			var axesField = type.GetField(nameof(Jumpthru.ResizableAxes), BindingFlags.Public | BindingFlags.Static);
 			var axes = axesField != null ? (ResizeAxes)axesField.GetValue(null)! : ResizeAxes.Both;
 			result[name] = new ResizableInfo((Point2)sizeField.GetValue(null)!, axes);
@@ -1931,7 +1931,7 @@ public partial class Manager
 
 	static ResizableInfo ResizableRoomRectInfo(JsonObject actor)
 		=> ResizableRoomRectTypes.GetValueOrDefault(
-			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", new ResizableInfo(HiddenWall.DefaultSize, ResizeAxes.Both));
+			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", new ResizableInfo( new(Game.TileSize * 2, Game.TileSize * 2), ResizeAxes.Both));
 
 	static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
 		=> ResizableRoomRectInfo(actor).DefaultSize;

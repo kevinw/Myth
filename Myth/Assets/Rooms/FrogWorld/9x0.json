@@ -113,13 +113,6 @@
       "Position": [236, 44]
     },
     {
-      "Id": "63a077035e9fda6f",
-      "Type": "HiddenWall",
-      "Position": [120, 128],
-      "Size": [32, 56],
-      "TileType": "grass"
-    },
-    {
       "Id": "bd431bc545f3cc07",
       "Type": "Jumpthru",
       "Position": [120, 128]
@@ -163,6 +156,13 @@
       "Id": "46f985d33527ebc1",
       "Type": "Jumpthru",
       "Position": [128, 176]
+    },
+    {
+      "Id": "930dce30bca33ab1",
+      "Type": "RevealDoor",
+      "Position": [120, 128],
+      "Size": [32, 8],
+      "Direction": "Down"
     }
   ]
 }
