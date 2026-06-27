@@ -69,10 +69,7 @@ public partial class Manager : App
 #endif
 	const float PlayTransitionDuration = 0.25f;
 	float playTransition;
-	Vector2 playTransitionFromCenter;
-	Vector2 playTransitionFromSize;
-	Vector2 playTransitionToCenter;
-	Vector2 playTransitionToSize;
+	Rect playTransitionFrom, playTransitionTo;
 	int fpsOverlayFrames;
 	long fpsOverlayLastTimestamp;
 	float fpsOverlayValue;
@@ -1027,10 +1024,12 @@ public partial class Manager : App
 			return;
 
 		var t = Ease.Cube.InOut(Math.Clamp(playTransition, 0.0f, 1.0f));
-		var center = Vector2.Lerp(playTransitionFromCenter, playTransitionToCenter, t);
-		var size = Vector2.Lerp(playTransitionFromSize, playTransitionToSize, t);
-		var worldView = new Rect(center - size / 2, size);
-		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView, showHud: false);
+
+		var center2 = Vector2.Lerp(playTransitionFrom.Center, playTransitionTo.Center, t);
+		var size2 = Vector2.Lerp(playTransitionFrom.Size, playTransitionTo.Size, t);
+		var worldView2 = new Rect(center2 - size2 / 2, size2);
+
+		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView2, showHud: false);
 	}
 
 #if EDITOR && DEBUG && !IOS
@@ -1376,10 +1375,8 @@ public partial class Manager : App
 		if (immediate)
 		{
 			playTransition = 1.0f;
-			playTransitionFromCenter = Vector2.Zero;
-			playTransitionFromSize = Vector2.Zero;
-			playTransitionToCenter = Vector2.Zero;
-			playTransitionToSize = Vector2.Zero;
+			playTransitionFrom = new();
+			playTransitionTo = new();
 			gameEase = 1.0f;
 			startingPlay = false;
 			playing = true;
@@ -1390,10 +1387,8 @@ public partial class Manager : App
 			{
 				var target = game.GetGameplayCameraTarget();
 				playTransition = 0.0f;
-				playTransitionFromCenter = editorCamera;
-				playTransitionFromSize = GameViewRect.Size / editorZoom;
-				playTransitionToCenter = target + new Vector2(Game.Width, Game.Height) / 2;
-				playTransitionToSize = new Vector2(Game.Width, Game.Height);
+				playTransitionFrom = Rect.CenteredAt(editorCamera, GameViewRect.Size / editorZoom);
+				playTransitionTo = Rect.CenteredAt(target + new Vector2(Game.Width, Game.Height) / 2, new (Game.Width, Game.Height));
 				startingPlay = true;
 				playing = false;
 			}
@@ -1401,10 +1396,8 @@ public partial class Manager : App
 		else
 		{
 			playTransition = 1.0f;
-			playTransitionFromCenter = Vector2.Zero;
-			playTransitionFromSize = Vector2.Zero;
-			playTransitionToCenter = Vector2.Zero;
-			playTransitionToSize = Vector2.Zero;
+			playTransitionFrom = new();
+			playTransitionTo = new();
 			gameEase = 1.0f;
 			startingPlay = false;
 			playing = true;
