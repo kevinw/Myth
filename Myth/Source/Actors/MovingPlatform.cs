@@ -11,7 +11,10 @@ class MovingPlatform : Actor, IResizable
 	public float WaitTime = WAIT_TIME;
 	const float WAIT_TIME = 0.856f;
 	public float Speed = 30f;
+	public float StartFriction = 8f;
+	float currentSpeed = 0;
 	public int TravelDistance = 80;
+
 
 	int direction = 1;
 	float waitTimer = WAIT_TIME;
@@ -49,7 +52,8 @@ class MovingPlatform : Actor, IResizable
 
 		// Accumulate fractional travel and move in whole pixels, clamped to the patrol range so
 		// the platform and its riders never drift apart by rounding.
-		moveRemainder += direction * Speed * Time.Delta;
+		currentSpeed = Calc.Approach(currentSpeed, Speed, StartFriction * Time.Delta);
+		moveRemainder += direction * currentSpeed * Time.Delta;
 		var step = (int)moveRemainder;
 		moveRemainder -= step;
 
@@ -66,6 +70,7 @@ class MovingPlatform : Actor, IResizable
 			waitTimer = WaitTime;
 			moveRemainder = 0;
 			direction = -direction;
+			currentSpeed = 0;
 		}
 	}
 

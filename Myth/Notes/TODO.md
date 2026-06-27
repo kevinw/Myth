@@ -12,7 +12,6 @@
 - think harder about a better way to do slopes in the editor; maybe draw a rectangle and you get the slope across it!
 - vector art collection -> stampable tile patterns
 - wall jump slide sound
-- moving platform: easing functions
 - 9 slice from Dual Grid for moving platforms
 - subtle light overlay for any room exit leading to another room
 - add coins/crystals/doodads for hiding in secret areas
