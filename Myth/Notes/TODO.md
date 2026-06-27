@@ -4,7 +4,6 @@
   - or git rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
 
 ## Editor
-- mirror in X for slopes
 
 - oklab for background (and any) gradient https://www.shadertoy.com/view/ttcyRS
 - srgb to linear, all shaders in linear, then final pass linear to srgb
@@ -16,11 +15,8 @@
 - an MP hiding in the dual grid, activated by something
 - water physics
 - LayerOverride (save-game wide toggle for any entity value)
-- try a virtual dpad on mobile browser
 - groups of blocks get a reflection direction
 - create decals for breakable walls
-- redraw the jumpthru
-- make jumpthru resizable in the editor
 - move the Program.cs out of 'Desktop' since it's also for the browser
 - think about trying to turn a real 3D complex space (a castle blueprint) into a series of layers connected by doors
 - a room enclosed in grass shouldn't reverb as much.

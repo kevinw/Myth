@@ -1,6 +1,6 @@
 // On-screen touch controller for the browser build — the web analog of the iOS
 // GCVirtualController (see Platforms/iOS/MythIos/Program.cs). It renders a left
-// analog stick + A/B/X/Y face buttons and exposes itself to the game by merging
+// analog stick + D-pad + A/B/X/Y face buttons and exposes itself to the game by merging
 // a synthetic "standard" Gamepad into navigator.getGamepads(). Foster's browser
 // input provider already polls navigator.getGamepads() every frame, so no engine
 // or gameplay changes are needed — the existing Controls.cs bindings just work.
@@ -36,6 +36,7 @@ const touchCapable = () =>
 // Dev bypass: ?vpad=1 force-shows the overlay on desktop (ignores touch + play
 // state) so it can be tested with a mouse. Real-gamepad auto-hide still applies.
 const forceShow = new URLSearchParams(location.search).get("vpad") === "1";
+const SHOW_STICK = false;
 
 // Virtual button layout. "two" (default): A (primary, larger) + X on a diagonal,
 // both bigger since they occupy more space. "four": the classic Y/X/B/A diamond —
@@ -168,6 +169,7 @@ function resetState() {
 	setStick(0, 0);
 	for (let i = 0; i < BUTTON_COUNT; i++) setButton(i, false);
 	resetKnob();
+	resetDpad();
 }
 
 export function setVirtualControllerVisible(visible) {
@@ -178,6 +180,8 @@ export function setVirtualControllerVisible(visible) {
 // --- DOM / rendering -----------------------------------------------------
 let knobEl = null;
 let stickBaseEl = null;
+let dpadEl = null;
+const dpadKeys = new Map();
 const STICK_RADIUS = 45; // px travel radius for the knob (stick scaled to 80%)
 
 function resetKnob() {
@@ -190,7 +194,7 @@ function buildDom() {
 		#myth-vpad { inset: 0; z-index: 5; display: none;
 			pointer-events: none;
 			touch-action: manipulation;
-			--stick: 112px; --knob: 51px;
+			--stick: 112px; --knob: 51px; --dpad: 112px;
 			--btn: 46px;       /* visible button circle */
 			--hit: 51px;       /* (larger) touch area around it */
 			--cluster: 143px;  /* button diamond box; taller so circles don't overlap */
@@ -209,6 +213,19 @@ function buildDom() {
 		#myth-vpad .stick-knob { position: absolute; left: 50%; top: 50%;
 			width: var(--knob); height: var(--knob); border-radius: 50%; transform: translate(-50%, -50%);
 			background: rgba(224, 211, 167, 0.55); border: 2px solid rgba(236, 226, 203, 0.7); }
+		#myth-vpad .dpad { left: max(24px, env(safe-area-inset-left)); bottom: var(--pad);
+			width: var(--dpad); height: var(--dpad); }
+		#myth-vpad.with-stick .dpad { bottom: calc(var(--pad) + var(--stick) + 14px); }
+		#myth-vpad .dpad-key, #myth-vpad .dpad-center { position: absolute; width: 38%; height: 38%;
+			display: grid; place-items: center; box-sizing: border-box; pointer-events: none;
+			color: #f5e9c8; background: rgba(47, 33, 63, 0.55); border: 2px solid rgba(224, 211, 167, 0.55);
+			font: 700 calc(var(--dpad) * 0.22) var(--mono); }
+		#myth-vpad .dpad-key.active { color: #150e22; background: rgba(224, 211, 167, 0.75); }
+		#myth-vpad .dpad-key.up { left: 31%; top: 0; border-radius: 10px 10px 0 0; border-bottom: 0; }
+		#myth-vpad .dpad-key.down { left: 31%; bottom: 0; border-radius: 0 0 10px 10px; border-top: 0; }
+		#myth-vpad .dpad-key.left { left: 0; top: 31%; border-radius: 10px 0 0 10px; border-right: 0; }
+		#myth-vpad .dpad-key.right { right: 0; top: 31%; border-radius: 0 10px 10px 0; border-left: 0; }
+		#myth-vpad .dpad-center { left: 31%; top: 31%; border: 0; }
 		/* Each button is a large transparent hit area (.btn) holding a smaller
 		   visible circle (.cap), so the pushable radius exceeds the visual one. */
 		#myth-vpad .buttons { right: max(24px, env(safe-area-inset-right)); bottom: var(--pad);
@@ -238,6 +255,7 @@ function buildDom() {
 
 	root = document.createElement("div");
 	root.id = "myth-vpad";
+	root.classList.toggle("with-stick", SHOW_STICK);
 
 	// iOS Safari pops the text-selection magnifier ("loupe") on double-tap-and-hold
 	// even with user-select/touch-callout: none. That gesture lives on the touch
@@ -247,12 +265,28 @@ function buildDom() {
 	// events (the actual gamepad input) still fire; only the loupe/zoom is cancelled.
 	root.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
-	stickBaseEl = document.createElement("div");
-	stickBaseEl.className = "ctl stick-base";
-	knobEl = document.createElement("div");
-	knobEl.className = "stick-knob";
-	stickBaseEl.appendChild(knobEl);
-	root.appendChild(stickBaseEl);
+	if (SHOW_STICK) {
+		stickBaseEl = document.createElement("div");
+		stickBaseEl.className = "ctl stick-base";
+		knobEl = document.createElement("div");
+		knobEl.className = "stick-knob";
+		stickBaseEl.appendChild(knobEl);
+		root.appendChild(stickBaseEl);
+	}
+
+	dpadEl = document.createElement("div");
+	dpadEl.className = "ctl dpad";
+	for (const [direction, label] of [["up", "▲"], ["down", "▼"], ["left", "◀"], ["right", "▶"]]) {
+		const key = document.createElement("div");
+		key.className = `dpad-key ${direction}`;
+		key.textContent = label;
+		dpadKeys.set(direction, key);
+		dpadEl.appendChild(key);
+	}
+	const dpadCenter = document.createElement("div");
+	dpadCenter.className = "dpad-center";
+	dpadEl.appendChild(dpadCenter);
+	root.appendChild(dpadEl);
 
 	const buttons = document.createElement("div");
 	buttons.className = `ctl buttons ${buttonMode}`;
@@ -304,6 +338,44 @@ function bindStick() {
 	stickBaseEl.addEventListener("lostpointercapture", end);
 }
 
+function setDpad(up, down, left, right) {
+	setDpadDirection("up", 12, up);
+	setDpadDirection("down", 13, down);
+	setDpadDirection("left", 14, left);
+	setDpadDirection("right", 15, right);
+}
+
+function setDpadDirection(direction, index, active) {
+	dpadKeys.get(direction)?.classList.toggle("active", active);
+	setButton(index, active);
+}
+
+function resetDpad() {
+	setDpad(false, false, false, false);
+}
+
+function bindDpad() {
+	let activeId = null;
+	const update = (e) => {
+		const rect = dpadEl.getBoundingClientRect();
+		const x = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+		const y = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+		const threshold = 0.22;
+		setDpad(y < -threshold, y > threshold, x < -threshold, x > threshold);
+	};
+	dpadEl.addEventListener("pointerdown", (e) => {
+		e.preventDefault();
+		activeId = e.pointerId;
+		dpadEl.setPointerCapture?.(e.pointerId);
+		update(e);
+	});
+	dpadEl.addEventListener("pointermove", (e) => { if (e.pointerId === activeId) update(e); });
+	const end = (e) => { if (e.pointerId !== activeId) return; activeId = null; resetDpad(); };
+	dpadEl.addEventListener("pointerup", end);
+	dpadEl.addEventListener("pointercancel", end);
+	dpadEl.addEventListener("lostpointercapture", end);
+}
+
 // iOS Safari ignores user-scalable=no and is unreliable about touch-action
 // suppressing *double-tap* zoom, so rapidly tapping a control (e.g. double
 // jump) zooms the page into the buttons. Cancel it by preventing the default on
@@ -324,7 +396,8 @@ export function initialize() {
 	installDoubleTapZoomGuard();
 	installGamepadHook();
 	buildDom();
-	bindStick();
+	if (SHOW_STICK) bindStick();
+	bindDpad();
 	installPlayAreaZoom();
 	// Hide/show the overlay when real controllers come and go.
 	window.addEventListener("gamepadconnected", (e) => { if (!e.gamepad?.__mythVirtual) reevaluate(); });
