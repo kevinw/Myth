@@ -1,25 +1,16 @@
 # TODO
 
-- top priority: redraw the damn sword. or get rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
 - wall jump too difficult (go back to "just jump"?)
-- mobile web:  instead of tap to zoom out, respect pinch in and out
+- mobile web:  instead of tap to zoom out, respect pinch in and out to adjust zoom level
 - save checkpoints
-- bug:  dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
+- bug: dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
 - pick a non LLM-brained color palette for the web ui
 - try a tiny haptic when you press virtual controller buttons
 - breakable pots with coins (or pixels? like mina?)
 - try a big low color image in the background of the boss room
 - boss room red light looks bad
-- watch some videos about hiding secrets
-- what would be fun to earn in a secret? levelling up your health. your burrow time (yes).
-- the best secret is a whole new area and set of challenges.
-- hud not showing in zoomed in view
 - copy rooms I made from frog world over
-- try even a bit closer than 4:3
 - how do famous paintings break up gradients
-
-## Editor
-
 - oklab for background (and any) gradient https://www.shadertoy.com/view/ttcyRS
 - srgb to linear, all shaders in linear, then final pass linear to srgb
 - absolutely improve player respawn behaviour when editing
@@ -40,6 +31,9 @@
 
 ## ideas
 
+- watch some videos about hiding secrets
+- what would be fun to earn in a secret? levelling up your health. your burrow time (yes).
+- the best secret is a whole new area and set of challenges.
 - burrow in water: become a line in any direction
 - roll on surface of water, become a skipping stone
 - roll into vertical wall: fast wall climb

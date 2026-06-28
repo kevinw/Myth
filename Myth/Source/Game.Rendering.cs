@@ -130,7 +130,7 @@ public sealed partial class GameView
 		}
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
-			DrawOverlayElements(output, showHud: showHud);
+			DrawOverlayElements(output);
 		}
 		if (debugView == DebugView.Visibility)
 		{
@@ -192,6 +192,9 @@ public sealed partial class GameView
 			Batcher.Render(destination, scissor: clip);
 			Batcher.Clear();
 		}
+
+		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+			DrawPlayerHud(destination, viewport, scissor);
 	}
 
 	Target CompositeRawWorld()
@@ -206,11 +209,9 @@ public sealed partial class GameView
 		return Screen;
 	}
 
-	void DrawOverlayElements(Target output, bool showHud) {
+	void DrawOverlayElements(Target output) {
 		using (GraphicsDevice.DebugGroup("Myth/story speech"))
 			DrawStorySpeech(output);
-
-		if (showHud) DrawPlayerHud(output);
 
 		// Show << Rewinding text when rewinding the player position.
 		if (game.Rewinding && Time.BetweenInterval(0.25)) {
@@ -310,11 +311,19 @@ public sealed partial class GameView
 		Batcher.Rect(new Rect(0, 0, target.Width, target.Height), top, top, bottom, bottom);
 	}
 
-	void DrawPlayerHud(Target target)
+	void DrawPlayerHud(IDrawableTarget target, in RectInt viewport, RectInt? scissor)
 	{
+		var scale = viewport.Height / (float)Height;
+		Batcher.PushMatrix(
+			Matrix3x2.CreateScale(scale) *
+			Matrix3x2.CreateTranslation(viewport.Left, viewport.Bottom - Height * scale));
 		if (game.GetFirst<Player>() is { } player)
 		{
-			Point2 pos = new(0, target.Height - 16);
+#if BROWSER
+			Point2 pos = new(0, 0);
+#else
+			Point2 pos = new(0, Height - 16);
+#endif
 			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
 
 			for (var i = 0; i < Player.MaxHealth; i++)
@@ -325,8 +334,9 @@ public sealed partial class GameView
 				pos.X += 12;
 			}
 		}
+		Batcher.PopMatrix();
 
-		Batcher.Render(target);
+		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
 		Batcher.Clear();
 	}
 
