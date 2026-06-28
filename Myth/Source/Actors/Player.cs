@@ -351,14 +351,15 @@ public abstract class Pawn : Actor
 		{
 			maxSpeed = MaxGroundSpeed * GroundSpeedMultiplier;
 		}
-		else if (ducking)
-		{
-			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
-		}
 		else
 		{
 			maxSpeed = MaxAirSpeed * AirSpeedMultiplier;
 		}
+		if (ducking)
+		{
+			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
+		}
+
 
 
 		var lastFacing = Facing;

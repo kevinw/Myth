@@ -9,7 +9,6 @@
 - bug:  dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
 - pick a non LLM-brained color palette for the web ui
 - try a tiny haptic when you press virtual controller buttons
-- crawl speed is too fast now
 - sdf rainbow needs a 5 second idle timer
 - breakable pots with coins (or pixels? like mina?)
 - try a big low color image in the background of the boss room
