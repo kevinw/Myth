@@ -38,8 +38,8 @@
     "00000000000000000000ff0f0000000000000000",
     "000000000000000000000fff0000000000000000",
     "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000",
+    "00000000000000#000000000#000000000000000",
+    "00000000000000#000000000#000000000000000",
     "000000000000000#########0000000000000000",
     "000000000000000#########0000000000000000",
     "000000000000000#########0000000000000000",
@@ -56,72 +56,8 @@
     {
       "Id": "a1299e2cc194ed32",
       "Type": "Jumpthru",
-      "Position": [8, 152]
-    },
-    {
-      "Id": "66fe8fd19b7c15e3",
-      "Type": "Jumpthru",
-      "Position": [16, 152]
-    },
-    {
-      "Id": "ef76bd941deab3d1",
-      "Type": "Jumpthru",
-      "Position": [24, 152]
-    },
-    {
-      "Id": "5694f33b74ddbfc3",
-      "Type": "Jumpthru",
-      "Position": [32, 152]
-    },
-    {
-      "Id": "2e3d238a21c12dfe",
-      "Type": "Jumpthru",
-      "Position": [40, 152]
-    },
-    {
-      "Id": "90b92747fbfcabd2",
-      "Type": "Jumpthru",
-      "Position": [48, 152]
-    },
-    {
-      "Id": "d9021eafc7b68a69",
-      "Type": "Jumpthru",
-      "Position": [56, 152]
-    },
-    {
-      "Id": "0077cd627e478ebe",
-      "Type": "Jumpthru",
-      "Position": [64, 152]
-    },
-    {
-      "Id": "7f689a00d6e4cbd2",
-      "Type": "Jumpthru",
-      "Position": [72, 152]
-    },
-    {
-      "Id": "7b62f1213996639b",
-      "Type": "Jumpthru",
-      "Position": [80, 152]
-    },
-    {
-      "Id": "19838cffa03bf7bf",
-      "Type": "Jumpthru",
-      "Position": [88, 152]
-    },
-    {
-      "Id": "bd2377441f0fa2d4",
-      "Type": "Jumpthru",
-      "Position": [96, 152]
-    },
-    {
-      "Id": "2cacbf5c2871a2d2",
-      "Type": "Jumpthru",
-      "Position": [104, 152]
-    },
-    {
-      "Id": "05b567cf56fda2fd",
-      "Type": "Jumpthru",
-      "Position": [112, 152]
+      "Position": [7, 152],
+      "Size": [114, 8]
     },
     {
       "Id": "dd58944c2d59f551",
@@ -141,22 +77,14 @@
     {
       "Id": "297f0752d61fda4a",
       "Type": "Jumpthru",
-      "Position": [112, 136]
-    },
-    {
-      "Id": "778645286ce9290c",
-      "Type": "Jumpthru",
-      "Position": [192, 136]
+      "Position": [112, 136],
+      "Size": [16, 8]
     },
     {
       "Id": "fd504c4a09108238",
       "Type": "Jumpthru",
-      "Position": [184, 136]
-    },
-    {
-      "Id": "55fcfed2a82070f4",
-      "Type": "Jumpthru",
-      "Position": [120, 136]
+      "Position": [184, 136],
+      "Size": [16, 8]
     }
   ]
 }

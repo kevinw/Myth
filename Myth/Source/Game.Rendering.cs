@@ -392,7 +392,13 @@ public sealed partial class GameView
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
+			var decal = PushPropDecalMaterial(actor);
+			Batcher.PushBlend(EmissiveOccluderBlend);
+			actor.RenderEmissiveOccluder(Batcher);
+			Batcher.PopBlend();
 			actor.RenderEmissive(Batcher);
+			if (decal)
+				Batcher.PopMaterial();
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
@@ -2299,6 +2305,7 @@ public sealed partial class GameView
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendMask.RGB, Color.White);
+	static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
 	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,

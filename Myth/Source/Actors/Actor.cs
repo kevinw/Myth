@@ -476,7 +476,8 @@ public class Actor
 	enum SubtextureType
 	{
 		Color,
-		Normals
+		Normals,
+		Emissive
 	}
 
 	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType) =>
@@ -505,6 +506,9 @@ public class Actor
 			case SubtextureType.Normals:
 				subtexture = frame.NormalSubtexture;
 				break;
+			case SubtextureType.Emissive:
+				subtexture = frame.EmissiveSubtexture;
+				break;
 			default:
 				return;
 		}
@@ -514,7 +518,8 @@ public class Actor
 		batcher.PopMatrix();
 	}
 
-	public virtual void RenderEmissive(Batcher batcher) { }
+	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
+	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
 	public virtual void RenderNormals(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Normals);
 	public virtual void RenderShadow(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);

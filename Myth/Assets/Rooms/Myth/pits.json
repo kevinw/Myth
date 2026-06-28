@@ -74,6 +74,12 @@
       "Id": "357f4044a1ee35ee",
       "Type": "Goal",
       "Position": [310, 84]
+    },
+    {
+      "Id": "0752a791690d122c",
+      "Type": "Prop",
+      "Position": [100, 80],
+      "SpriteName": "server"
     }
   ]
 }

@@ -69,7 +69,7 @@ public static class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 4; // v4: per-frame cel userdata + named slices
+	const int visualAssetPackVersion = 5; // v5: optional per-frame emissive sprite subtextures
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
 	const string deletedRoomsFolderName = ".deleted";
@@ -252,14 +252,14 @@ public static class Assets
 
 		foreach (var (name, ase) in spriteFiles)
 		{
-			var (frames, normals, heights) = RenderSpriteFrames(ase, name == "player" ? CreateSwordlessPlayerLayerFilter() : null);
-			PackSpriteFrames(name, ase, frames, normals, heights, packer);
+			var (frames, normals, heights, emissives) = RenderSpriteFrames(ase, name == "player" ? CreateSwordlessPlayerLayerFilter() : null);
+			PackSpriteFrames(name, ase, frames, normals, heights, emissives, packer);
 		}
 
 		foreach (var (name, ase, layerFilter) in generatedSprites)
 		{
-			var (frames, normals, heights) = RenderSpriteFrames(ase, layerFilter());
-			PackSpriteFrames(name, ase, frames, normals, heights, packer);
+			var (frames, normals, heights, emissives) = RenderSpriteFrames(ase, layerFilter());
+			PackSpriteFrames(name, ase, frames, normals, heights, emissives, packer);
 		}
 
 		foreach (var (name, ase) in tilesetFiles)
@@ -470,6 +470,7 @@ public static class Assets
 					frame.Subtexture.ToSubtexture(atlas),
 					frame.VisibleSubtexture.ToSubtexture(atlas),
 					frame.NormalSubtexture.ToSubtexture(atlas),
+					frame.EmissiveSubtexture.ToSubtexture(atlas),
 					frame.Duration,
 					frame.UserData));
 
@@ -570,6 +571,7 @@ public static class Assets
 				Subtexture = bake.Subtexture($"{name}/{i}"),
 				VisibleSubtexture = PackedSubtexture.VisibleFrom(bake.Subtexture($"{name}/{i}")),
 				NormalSubtexture = bake.Subtexture($"{name}/normal/{i}"),
+				EmissiveSubtexture = bake.SubtextureOrDefault($"{name}/emissive/{i}"),
 				Duration = useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f,
 				UserData = frameUserData[i]
 			});
@@ -627,6 +629,7 @@ public static class Assets
 						Subtexture = subtexture,
 						VisibleSubtexture = PackedSubtexture.VisibleFrom(subtexture),
 						NormalSubtexture = bake.Subtexture($"{name}/transition/{trans.FromTag}->{trans.ToTag}/normal/{i}"),
+						EmissiveSubtexture = bake.SubtextureOrDefault($"{name}/transition/{trans.FromTag}->{trans.ToTag}/emissive/{i}"),
 						Duration = trans.Durations[i]
 					});
 					duration += trans.Durations[i];
@@ -745,6 +748,7 @@ public static class Assets
 				WritePackedSubtexture(writer, frame.Subtexture);
 				WritePackedSubtexture(writer, frame.VisibleSubtexture);
 				WritePackedSubtexture(writer, frame.NormalSubtexture);
+				WritePackedSubtexture(writer, frame.EmissiveSubtexture);
 				writer.Write(frame.Duration);
 				writer.Write(frame.UserData ?? "");
 			}
@@ -823,6 +827,7 @@ public static class Assets
 					Subtexture = ReadPackedSubtexture(reader),
 					VisibleSubtexture = ReadPackedSubtexture(reader),
 					NormalSubtexture = ReadPackedSubtexture(reader),
+					EmissiveSubtexture = ReadPackedSubtexture(reader),
 					Duration = reader.ReadSingle(),
 					UserData = reader.ReadString() is { Length: > 0 } text ? text : null
 				});
@@ -1121,6 +1126,9 @@ public static class Assets
 		public PackedSubtexture Subtexture(string name)
 			=> Subtextures[name];
 
+		public PackedSubtexture SubtextureOrDefault(string name)
+			=> Subtextures.GetValueOrDefault(name) ?? new();
+
 		public void Dispose()
 		{
 			foreach (var images in GeneratedTileImages.Values)
@@ -1156,7 +1164,7 @@ public static class Assets
 			};
 
 		public Subtexture ToSubtexture(Texture atlas)
-			=> new(atlas, Source.ToRect(), Frame.ToRect());
+			=> Source.W > 0 && Source.H > 0 ? new(atlas, Source.ToRect(), Frame.ToRect()) : new();
 	}
 
 	sealed class PackedSprite
@@ -1173,6 +1181,7 @@ public static class Assets
 		public PackedSubtexture Subtexture { get; set; } = new();
 		public PackedSubtexture VisibleSubtexture { get; set; } = new();
 		public PackedSubtexture NormalSubtexture { get; set; } = new();
+		public PackedSubtexture EmissiveSubtexture { get; set; } = new();
 		public float Duration { get; set; }
 		public string? UserData { get; set; }
 	}
@@ -1759,15 +1768,17 @@ public static class Assets
 		}
 	}
 
-	static (Image[] Frames, Image[]? Normals, Image[]? Heights) RenderSpriteFrames(Aseprite ase, Predicate<Aseprite.Layer>? colorFilter)
+	static (Image[] Frames, Image[]? Normals, Image[]? Heights, Image[]? Emissives) RenderSpriteFrames(Aseprite ase, Predicate<Aseprite.Layer>? colorFilter)
 	{
 		var normalLayers = GetLayerBranch(ase, "normals");
 		var heightLayers = GetLayerBranch(ase, "height");
+		var emissiveLayers = GetLayerBranch(ase, "emissive");
 		var frames = ase.RenderAllFrames(layer =>
-			(colorFilter?.Invoke(layer) ?? true) && !normalLayers.Contains(layer) && !heightLayers.Contains(layer));
+			(colorFilter?.Invoke(layer) ?? true) && !normalLayers.Contains(layer) && !heightLayers.Contains(layer) && !emissiveLayers.Contains(layer));
 		var normals = normalLayers.Count > 0 ? RenderLayerFrames(ase, normalLayers) : null;
 		var heights = normals == null && heightLayers.Count > 0 ? RenderLayerFrames(ase, heightLayers) : null;
-		return (frames, normals, heights);
+		var emissives = emissiveLayers.Count > 0 ? RenderLayerFrames(ase, emissiveLayers) : null;
+		return (frames, normals, heights, emissives);
 	}
 
 	static Image[] RenderLayerFrames(Aseprite ase, HashSet<Aseprite.Layer> layers)
@@ -1815,13 +1826,14 @@ public static class Assets
 
 	// Expands the frames of one sprite (inserting whitelisted within-animation
 	// in-betweens) and packs them, then bakes any whitelisted transitions.
-	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Packer packer)
+	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Image[]? emissives, Packer packer)
 	{
 		if (TryBuildInbetweenSpec(name, ase, frames.Length, out var spec, out var durationsSec))
 		{
 			var (expFrames, expDurations, map) = Inbetweens.GenerateExpanded(frames, durationsSec, spec);
 			var expNormals = normals != null ? Inbetweens.GenerateExpanded(normals, durationsSec, spec).Frames : null;
 			var expHeights = heights != null ? Inbetweens.GenerateExpanded(heights, durationsSec, spec).Frames : null;
+			var expEmissives = emissives != null ? Inbetweens.GenerateExpanded(emissives, durationsSec, spec).Frames : null;
 			ExpandedFrameDurations[name] = expDurations;
 			ExpandedFrameMap[name] = map;
 			for (int i = 0; i < expFrames.Length; i++)
@@ -1829,6 +1841,8 @@ public static class Assets
 				packer.Add($"{name}/{i}", expFrames[i]);
 				packer.Add($"{name}/normal/{i}", expNormals?[i] ??
 					(expHeights != null ? GenerateNormalMap(expHeights[i], expFrames[i]) : GenerateNormalMap(expFrames[i])));
+				if (expEmissives != null)
+					packer.Add($"{name}/emissive/{i}", expEmissives[i]);
 			}
 		}
 		else
@@ -1838,10 +1852,12 @@ public static class Assets
 				packer.Add($"{name}/{i}", frames[i]);
 				packer.Add($"{name}/normal/{i}", normals?[i] ??
 					(heights != null ? GenerateNormalMap(heights[i], frames[i]) : GenerateNormalMap(frames[i])));
+				if (emissives != null)
+					packer.Add($"{name}/emissive/{i}", emissives[i]);
 			}
 		}
 
-		GenerateTransitionFrames(name, ase, frames, normals, heights, packer);
+		GenerateTransitionFrames(name, ase, frames, normals, heights, emissives, packer);
 	}
 
 	// Builds the per-frame in-between spec for a sprite from the InbetweenAnimations
@@ -1887,7 +1903,7 @@ public static class Assets
 		return any;
 	}
 
-	static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Packer packer)
+	static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Image[]? emissives, Packer packer)
 	{
 		var ownTransitions = InbetweenTransitions
 			.Where(kv => kv.Key.Sprite == name && kv.Value > 0)
@@ -1925,6 +1941,7 @@ public static class Assets
 		var results = new (Image[] Frames, float[] Durations)?[pairs.Count];
 		var normalResults = normals != null ? new Image[pairs.Count][] : null;
 		var heightResults = heights != null ? new Image[pairs.Count][] : null;
+		var emissiveResults = emissives != null ? new Image[pairs.Count][] : null;
 		Parallel.For(0, pairs.Count, i =>
 		{
 			var p = pairs[i];
@@ -1933,6 +1950,8 @@ public static class Assets
 				normalResults[i] = Inbetweens.GenerateForPair(normals![p.FromIdx], normals[p.ToIdx], p.Count).Frames;
 			if (heightResults != null)
 				heightResults[i] = Inbetweens.GenerateForPair(heights![p.FromIdx], heights[p.ToIdx], p.Count).Frames;
+			if (emissiveResults != null)
+				emissiveResults[i] = Inbetweens.GenerateForPair(emissives![p.FromIdx], emissives[p.ToIdx], p.Count).Frames;
 		});
 
 		// Pack results sequentially (packer.Add is not thread-safe)
@@ -1951,6 +1970,8 @@ public static class Assets
 				packer.Add($"{prefix}/{j}", transFrames[j]);
 				packer.Add($"{prefix}/normal/{j}", normalResults?[i][j] ??
 					(heightResults != null ? GenerateNormalMap(heightResults[i][j], transFrames[j]) : GenerateNormalMap(transFrames[j])));
+				if (emissiveResults != null)
+					packer.Add($"{prefix}/emissive/{j}", emissiveResults[i][j]);
 			}
 
 			transitions.Add(new(p.FromTag, p.ToTag, transFrames.Length, transDurations));

@@ -85,6 +85,8 @@ public partial class Manager
 	bool activeRoomPreviewAnimating;
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
 	RoomSettings? copiedRoomSettings;
+	JsonObject? actorClipboard;
+	bool actorClipboardPreservesId;
 
 #if DEBUG && !IOS
 	FileSystemWatcher? assetWatcher;
@@ -235,6 +237,47 @@ public partial class Manager
 		}
 	}
 
+	void CopySelectedActor(bool cut)
+	{
+		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
+			return;
+
+		actorClipboard = ActorSpecs.CloneObject(room.Actors[selectedRoomActorIndex]);
+		actorClipboardPreservesId = cut;
+		if (!cut)
+			return;
+
+		using (CaptureRoomUndo("Cut Actor", room))
+		{
+			room.Actors.RemoveAt(selectedRoomActorIndex);
+			selectedRoomActorIndex = -1;
+			ClearEditorDragState();
+			editorSelectionRect = null;
+			editorGameDirty = true;
+		}
+	}
+
+	void PasteActor()
+	{
+		if (CurrentRoom is not { } room || actorClipboard == null)
+			return;
+
+		using (CaptureRoomUndo("Paste Actor", room))
+		{
+			var actor = ActorSpecs.CloneObject(actorClipboard);
+			var id = ActorSpecs.GetActorId(actor);
+			if (!actorClipboardPreservesId || string.IsNullOrWhiteSpace(id) || Assets.FindActorById(id) != null)
+				ActorSpecs.AssignNewActorId(actor);
+			room.Actors.Add(actor);
+			selectedRoomActorIndex = room.Actors.Count - 1;
+			actorSelectTool = true;
+			selectedActorPaletteIndex = -1;
+			ClearEditorDragState();
+			editorSelectionRect = null;
+			editorGameDirty = true;
+		}
+	}
+
 	void AfterUndoRedo()
 	{
 		if (CurrentRoom is { } room)
@@ -256,7 +299,7 @@ public partial class Manager
 		SyncEditorGame();
 	}
 
-	bool UpdateEditorUndoRedo()
+	bool UpdateEditorShortcuts()
 	{
 		if (ImGuiWantsKeyboard)
 			return false;
@@ -268,6 +311,24 @@ public partial class Manager
 			Input.Keyboard.Down(Keys.RightOS);
 		if (!modifier)
 			return false;
+
+		if (Input.Keyboard.Pressed(Keys.C))
+		{
+			CopySelectedActor(cut: false);
+			return true;
+		}
+
+		if (Input.Keyboard.Pressed(Keys.X))
+		{
+			CopySelectedActor(cut: true);
+			return true;
+		}
+
+		if (Input.Keyboard.Pressed(Keys.V))
+		{
+			PasteActor();
+			return true;
+		}
 
 		if (Input.Keyboard.Pressed(Keys.D))
 		{
@@ -3293,7 +3354,7 @@ public partial class Manager
 		var worldMouseBlocked = imgui.WantsMouseInput && !SingleTouchInEditorWorld(inner);
 		var keyboardBlocked = ImGuiWantsKeyboard;
 		var roomActivationClickConsumed = false;
-		UpdateEditorUndoRedo();
+		UpdateEditorShortcuts();
 		// Shoulder buttons cycle worlds in edit mode (same as time speed in play mode)
 		if (!worldMouseBlocked)
 		{

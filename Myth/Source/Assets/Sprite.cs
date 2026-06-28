@@ -22,7 +22,7 @@ public enum SpriteAnchor
 
 public class Sprite(string name, Vector2 origin)
 {
-	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, float Duration, string? UserData = null);
+	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, Subtexture EmissiveSubtexture, float Duration, string? UserData = null);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
 
 	public string Name { get; } = name;

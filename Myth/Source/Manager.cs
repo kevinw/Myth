@@ -1229,6 +1229,11 @@ public partial class Manager : App
 	}
 #endif
 
+	[ConsoleCommand("reload_assets")]
+	void ReloadAssetsCommand(string _) {
+		ReloadAssets(false);
+	}
+
 	void ReloadAssets(bool reloadRooms)
 	{
 		try

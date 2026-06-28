@@ -50,4 +50,10 @@ public class Light : Actor
 			base.RenderNormals(batcher);
 	}
 
+	public override void RenderEmissive(Batcher batcher)
+	{
+		if (DrawSprite)
+			base.RenderEmissive(batcher);
+	}
+
 }
