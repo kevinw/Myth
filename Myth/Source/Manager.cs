@@ -236,21 +236,24 @@ public partial class Manager : App
 		fullscreen = true;
 		resizable = false;
 #endif
-		if (headless) {
+		if (headless)
+		{
 			graphicsDriver = GraphicsDriver.Headless;
 			windowSize = new(1, 1);
 			resizable = false;
 			updateMode = UpdateMode.FixedStep(60);
 			appFlags |= AppFlags.Headless;
 		}
-		if (unthrottled) {
+		if (unthrottled)
+		{
 			updateMode = UpdateMode.UnthrottledStep(60);
 		}
 
 		// Opt-in GPU validation: set MYTH_GPU_DEBUG=1 to enable SDL_gpu's debug layer
 		// (pairs with Metal validation env vars to catch buffer overruns / hazards).
 		var gpuDebug = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MYTH_GPU_DEBUG"));
-		if (gpuDebug) {
+		if (gpuDebug)
+		{
 			appFlags |= AppFlags.GraphicsDebugging;
 		}
 
@@ -660,13 +663,13 @@ public partial class Manager : App
 				if (Input.Keyboard.Pressed(Keys.F5))
 					ToggleFpsOverlay();
 #if !IOS && !BROWSER
-			if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
-				window.Fullscreen = !window.Fullscreen;
-			if (Input.Keyboard.Pressed(Keys.Escape))
-			{
-				CurrentRoom?.Save();
-				Exit();
-			}
+				if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
+					window.Fullscreen = !window.Fullscreen;
+				if (Input.Keyboard.Pressed(Keys.Escape))
+				{
+					CurrentRoom?.Save();
+					Exit();
+				}
 #endif
 #if EDITOR
 				if (ToggleEditorPressed())
@@ -1369,15 +1372,15 @@ public partial class Manager : App
 			game.SnapCameraToGameplayTarget();
 		}
 #if EDITOR
-			else
-			{
-				var target = game.GetGameplayCameraTarget();
-				playTransition = 0.0f;
-				playTransitionFrom = Rect.CenteredAt(editorCamera, GameViewRect.Size / editorZoom);
-				playTransitionTo = Rect.CenteredAt(target + new Vector2(Game.Width, Game.Height) / 2, new (Game.Width, Game.Height));
-				startingPlay = true;
-				playing = false;
-			}
+		else
+		{
+			var target = game.GetGameplayCameraTarget();
+			playTransition = 0.0f;
+			playTransitionFrom = Rect.CenteredAt(editorCamera, GameViewRect.Size / editorZoom);
+			playTransitionTo = Rect.CenteredAt(target + new Vector2(Game.Width, Game.Height) / 2, new(Game.Width, Game.Height));
+			startingPlay = true;
+			playing = false;
+		}
 #else
 		else
 		{

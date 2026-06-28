@@ -116,6 +116,9 @@ public partial class Game : IDisposable
 
 #if DEBUG
 	internal bool draggingPlayer;
+	internal bool DraggingPlayer => draggingPlayer;
+#else
+	internal bool DraggingPlayer => false;
 #endif
 	// True when the sim is in a room and not mid-transition: when Manager applies live
 	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
@@ -509,7 +512,7 @@ public partial class Game : IDisposable
 
 	private void UpdateCamera()
 	{
-		if (room == null || nextRoom != null || draggingPlayer)
+		if (room == null || nextRoom != null || DraggingPlayer)
 		{
 			// The camera is under transition/drag control; drop the easing state so normal
 			// control resumes cleanly clamped to the new room rather than gliding from a stale
