@@ -217,5 +217,11 @@ public partial class Manager
 
 	[ConsoleCommand("quit")]
 	void Quit(string _) => Exit();
+
+	[ConsoleCommand("reload_assets")]
+	void ReloadAssetsCommand(string _) {
+		ReloadAssets(false);
+	}
+
 }
 #endif

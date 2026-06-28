@@ -1229,11 +1229,6 @@ public partial class Manager : App
 	}
 #endif
 
-	[ConsoleCommand("reload_assets")]
-	void ReloadAssetsCommand(string _) {
-		ReloadAssets(false);
-	}
-
 	void ReloadAssets(bool reloadRooms)
 	{
 		try
@@ -1368,10 +1363,8 @@ public partial class Manager : App
 		game.NavTrace?.Event(game, "gameStart");
 #if IOS
 		playTransition = 1.0f;
-		playTransitionFromCenter = Vector2.Zero;
-		playTransitionFromSize = Vector2.Zero;
-		playTransitionToCenter = Vector2.Zero;
-		playTransitionToSize = Vector2.Zero;
+		playTransitionFrom = new();
+		playTransitionTo = new();
 		gameEase = 1.0f;
 		startingPlay = false;
 		playing = true;

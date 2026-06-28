@@ -98,7 +98,7 @@ public partial class Game
 	internal void ToggleRenderTargetOverlay()
 	{
 		ShowRenderTargetOverlay = !ShowRenderTargetOverlay;
-		DisplayMessage($"Debug: Render Targets {(ShowRenderTargetOverlay ? "On" : "Off")}");
+		DisplayMessage($"Debug: Graphics Inspector {(ShowRenderTargetOverlay ? "On" : "Off")}");
 	}
 
 	// Dump a `radius`-cell solid/air map around `center` (world pixel coords) for diagnosing
