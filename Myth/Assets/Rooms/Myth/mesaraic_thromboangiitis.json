@@ -1,5 +1,5 @@
 {
-  "position": [280, 67],
+  "position": [280, 23],
   "size": [40, 23],
   "ambientColor": "868686",
   "reverb": 0.206,
@@ -64,17 +64,20 @@
     {
       "Id": "78606cf2b8e010a8",
       "Type": "Jumpthru",
-      "Position": [256, 104]
+      "Position": [254, 104],
+      "Size": [10, 8]
     },
     {
       "Id": "ebec8aa52db60d1f",
       "Type": "Jumpthru",
-      "Position": [256, 80]
+      "Position": [254, 80],
+      "Size": [10, 8]
     },
     {
       "Id": "dc0734abdc9d4745",
       "Type": "Jumpthru",
-      "Position": [256, 56]
+      "Position": [254, 56],
+      "Size": [10, 8]
     },
     {
       "Id": "4cda444cf51299bc",
