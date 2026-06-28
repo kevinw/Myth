@@ -38,6 +38,16 @@ public class PlayerStart : Actor
 
 public abstract class Pawn : Actor
 {
+	int jumpParticlesEffect = -1;
+
+	override public void Added()
+	{
+		base.Added();
+
+		if (Game.Particles is { Supported: true } particles)
+			jumpParticlesEffect = particles.AcquireEffect("jump");
+	}
+
 	protected bool PlayerSpecificAudioEvents = false;
 
 	public enum States
@@ -384,7 +394,9 @@ public abstract class Pawn : Actor
 
 		var wallJump = GetWallJumpDirection();
 		var canCoyoteJump = CanCoyoteJump();
-		var canGroundJump = grounded && CanStandUp() || canCoyoteJump;
+		var canGroundJump = grounded && CanStandUp();
+		var wasGroundedJump = canGroundJump;
+		canGroundJump |= canCoyoteJump;
 		var canWallJump = input.AllowWallJump && wallJump != 0 && moveX != 0;
 		var jumpPressed = input.JumpPressed;
 		if (!jumpPressed && canGroundJump && jumpBufferTimer > 0)
@@ -399,6 +411,15 @@ public abstract class Pawn : Actor
 				if (canCoyoteJump)
 					Position.Y = coyoteJumpY;
 				coyoteJumpTimer = 0;
+
+				if (wasGroundedJump)
+					if (Game.Particles is { Supported: true } particles)
+						particles.Emit(jumpParticlesEffect,
+							worldPosition: Position,
+							count: 8,
+							directionRadians: MathF.PI / 2.0f,
+							speedScale: 2.5f,
+							spreadRadians: 59.0f * Calc.DegToRad);
 			}
 			else
 			{
@@ -734,6 +755,8 @@ public partial class Player : Pawn
 
 	public override void Added()
 	{
+		base.Added();
+
 		light = Game.Create<Light>(Position, it =>
 		{
 			it.Radius = 37.5f;

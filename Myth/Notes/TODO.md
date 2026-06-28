@@ -15,7 +15,6 @@
 - watch some videos about hiding secrets
 - what would be fun to earn in a secret? levelling up your health. your burrow time (yes).
 - the best secret is a whole new area and set of challenges.
-- small particles when you jump
 - hud not showing in zoomed in view
 - copy rooms I made from frog world over
 - try even a bit closer than 4:3
