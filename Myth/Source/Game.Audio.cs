@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Foster.Framework;
 using OutLoud;
 
@@ -57,7 +58,9 @@ public partial class Game
 			}
 
 			var de = Path.Join(Assets.AssetsPath, "Voice", "voice-de.json");
-			if (File.Exists(de) && JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(de)) is { } map)
+			// Source-generated (not reflection) so it works in the trimmed/AOT browser
+			// build, where reflection-based JSON is disabled. See VoiceJsonContext below.
+			if (File.Exists(de) && JsonSerializer.Deserialize(File.ReadAllText(de), VoiceJsonContext.Default.DictionaryStringString) is { } map)
 			{
 				voiceGerman = new(map.Count);
 				foreach (var (k, v) in map)
@@ -426,3 +429,9 @@ public partial class Game
 		}
 	}
 }
+
+// Source-generated metadata for voice-de.json (English -> German line cache). Lets
+// LoadVoice() deserialize without reflection, which is disabled in the trimmed/AOT
+// browser build.
+[JsonSerializable(typeof(Dictionary<string, string>))]
+internal partial class VoiceJsonContext : JsonSerializerContext;

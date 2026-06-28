@@ -2,7 +2,6 @@
 
 - top priority: redraw the damn sword. or get rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
 - wall jump too difficult (go back to "just jump"?)
-- mobile web: switching away and coming back kills audio
 - mobile web:  instead of tap to zoom out, respect pinch in and out
 - save checkpoints
 - bug:  dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
