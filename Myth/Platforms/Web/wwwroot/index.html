@@ -1,190 +1,224 @@
 <!doctype html>
 <html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-	<link rel="icon" href="data:,">
-	<title>Myth</title>
-	<style>
-		:root {
-			/* matches Room.DefaultBackdropColor (0x150e22) so the letterbox bars
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        />
+        <link rel="icon" href="data:," />
+        <title>Myth</title>
+        <style>
+            :root {
+                /* matches Room.DefaultBackdropColor (0x150e22) so the letterbox bars
 			   blend with the game's default backdrop */
-			--backdrop: #150e22;
-			--mono: ui-monospace, "SF Mono", "Cascadia Code", "Source Code Pro", Menlo, Consolas, "Liberation Mono", monospace;
-		}
+                --backdrop: #150e22;
 
-		/* Game-canvas defaults: no tap highlight, no text selection or callouts,
+                /* Loading/overlay palette. The *-rgb pairs mirror their hex twin as a "r, g, b" triplet for use inside rgba(). */
+                --accent: #e0d3a7; /* parchment gold: bud tint, button border, loading-bar fill */
+                --accent-rgb: 224, 211, 167;
+                --text: #f5e9c8; /* cream: button + hint + reload text */
+                --text-rgb: 245, 233, 200;
+                --panel: #2f213f; /* start-button (overlay panel) base */
+                --shade-rgb:
+                    10, 12, 16; /* near-black backing for the reload button */
+
+                --mono:
+                    ui-monospace, "SF Mono", "Cascadia Code", "Source Code Pro",
+                    Menlo, Consolas, "Liberation Mono", monospace;
+            }
+
+            /* Game-canvas defaults: no tap highlight, no text selection or callouts,
 		   no double-tap/pinch zoom, no scroll/overscroll bounce. */
-		* { -webkit-tap-highlight-color: transparent; }
+            * {
+                -webkit-tap-highlight-color: transparent;
+            }
 
-		html, body {
-			margin: 0;
-			width: 100%;
-			height: 100%;
-			overflow: hidden;
-			background: var(--backdrop);
-			user-select: none;
-			-webkit-user-select: none;
-			-webkit-touch-callout: none;
-			touch-action: none;
-			overscroll-behavior: none;
-			font-family: var(--mono);
-		}
+            html,
+            body {
+                margin: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: var(--backdrop);
+                user-select: none;
+                -webkit-user-select: none;
+                -webkit-touch-callout: none;
+                touch-action: none;
+                overscroll-behavior: none;
+                font-family: var(--mono);
+            }
 
-		body {
-			display: grid;
-			place-items: center;
-		}
+            body {
+                display: grid;
+                place-items: center;
+            }
 
-		#game-shell {
-			position: relative;
-			aspect-ratio: 16 / 9;
-			/* Dynamic viewport units (dvw/dvh) track the *currently visible* viewport,
+            #game-shell {
+                position: relative;
+                aspect-ratio: 16 / 9;
+                /* Dynamic viewport units (dvw/dvh) track the *currently visible* viewport,
 			   so the 16:9 box shrinks to fit the space left when iOS Safari's URL bar
 			   is showing (esp. in landscape). Plain vh is the large viewport and ignores
 			   the bar, which clipped the game vertically. */
-			width: min(100dvw, calc(100dvh * 16 / 9));
-			height: min(100dvh, calc(100dvw * 9 / 16));
-		}
+                width: min(100dvw, calc(100dvh * 16 / 9));
+                height: min(100dvh, calc(100dvw * 9 / 16));
+            }
 
-		/* Portrait (mobile browser): switch the shell to 4:3 so it reclaims vertical
+            /* Portrait (mobile browser): switch the shell to 4:3 so it reclaims vertical
 		   space — taller than the 16:9 strip. main.js resizes the canvas backing buffer
 		   to a matching 4:3 ratio, and the game cover-crops its 16:9 frame to fill it
 		   (hold the play area to un-crop back to the full frame). */
-		@media (orientation: portrait) {
-			#game-shell {
-				aspect-ratio: 4 / 3;
-				width: min(100dvw, calc(100dvh * 4 / 3));
-				height: min(100dvh, calc(100dvw * 3 / 4));
-			}
-		}
+            @media (orientation: portrait) {
+                #game-shell {
+                    aspect-ratio: 4 / 3;
+                    width: min(100dvw, calc(100dvh * 4 / 3));
+                    height: min(100dvh, calc(100dvw * 3 / 4));
+                }
+            }
 
-		canvas {
-			display: block;
-			width: 100%;
-			height: 100%;
-			touch-action: none;
-		}
+            canvas {
+                display: block;
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+            }
 
-		#reload-button {
-			position: absolute;
-			top: 8px;
-			right: 8px;
-			z-index: 2;
-			height: 28px;
-			padding: 0 10px;
-			border: 1px solid rgba(236, 226, 203, 0.55);
-			background: rgba(10, 12, 16, 0.72);
-			color: #f2ead7;
-			line-height: 1;
-			cursor: pointer;
-			font: 700 12px var(--mono);
-		}
+            #reload-button {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                z-index: 2;
+                height: 28px;
+                padding: 0 10px;
+                border: 1px solid rgba(var(--text-rgb), 0.55);
+                background: rgba(var(--shade-rgb), 0.72);
+                color: var(--text);
+                line-height: 1;
+                cursor: pointer;
+                font: 700 12px var(--mono);
+            }
 
-		#reload-button[hidden] {
-			display: none;
-		}
+            #reload-button[hidden] {
+                display: none;
+            }
 
-		#start-gate {
-			position: fixed;
-			inset: 0;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			place-items: center;
-			background: var(--backdrop);
-			z-index: 1;
-			padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-			box-sizing: border-box;
-		}
+            #start-gate {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                place-items: center;
+                background: var(--backdrop);
+                z-index: 1;
+                padding: max(20px, env(safe-area-inset-top))
+                    max(18px, env(safe-area-inset-right))
+                    max(20px, env(safe-area-inset-bottom))
+                    max(18px, env(safe-area-inset-left));
+                box-sizing: border-box;
+            }
 
-		#start-gate[hidden] {
-			display: none;
-		}
+            #start-gate[hidden] {
+                display: none;
+            }
 
-		#start-panel {
-			display: grid;
-			justify-items: center;
-			gap: 18px;
-			width: min(520px, 100%);
-			transform: translateY(-2vh);
-		}
+            #start-panel {
+                display: grid;
+                justify-items: center;
+                gap: 18px;
+                width: min(520px, 100%);
+                transform: translateY(-2vh);
+            }
 
-		/* Running-player silhouette (tools/export-loading-silhouette.py). The webp is
+            /* Running-player silhouette (tools/export-loading-silhouette.py). The webp is
 		   white-on-transparent and used as a mask, so background-color is the tint —
 		   change it freely. A bob keeps it lively even where animated masks don't play
 		   (iOS Safari renders the mask's first frame only). */
-		#loading-bud {
-			width: 90px; height: 96px;
-			background: #e0d3a7;
-			-webkit-mask: url(loading-player.webp) center / contain no-repeat;
-			        mask: url(loading-player.webp) center / contain no-repeat;
-			image-rendering: pixelated;
-			animation: bud-bob 0.5s ease-in-out infinite alternate;
-		}
+            #loading-bud {
+                width: 90px;
+                height: 96px;
+                background: var(--accent);
+                -webkit-mask: url(loading-player.webp) center / contain
+                    no-repeat;
+                mask: url(loading-player.webp) center / contain no-repeat;
+                image-rendering: pixelated;
+                animation: bud-bob 0.5s ease-in-out infinite alternate;
+            }
 
-		@keyframes bud-bob { to { transform: translateY(-2px); } }
+            @keyframes bud-bob {
+                to {
+                    transform: translateY(-2px);
+                }
+            }
 
-		#start-hint {
-			margin: 0;
-			max-width: 42ch;
-			color: rgba(245, 233, 200, 0.86);
-			font: 700 clamp(13px, 1.8vw, 18px) / 1.45 var(--mono);
-			text-align: center;
-			text-wrap: balance;
-			text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
-		}
+            #start-hint {
+                margin: 0;
+                max-width: 42ch;
+                color: rgba(var(--text-rgb), 0.86);
+                font: 700 clamp(13px, 1.8vw, 18px) / 1.45 var(--mono);
+                text-align: center;
+                text-wrap: balance;
+                text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+            }
 
-		/* The Start button doubles as the loading bar: a fill grows left-to-right
+            /* The Start button doubles as the loading bar: a fill grows left-to-right
 		   from 0% to 100% via the --p custom property set in main.js. */
-		#start-button {
-			width: min(260px, calc(100vw - 48px));
-			border: 1px solid #e0d3a7;
-			color: #f5e9c8;
-			font: 700 18px var(--mono);
-			padding: 16px 28px;
-			cursor: pointer;
-			background-color: #2f213f;
-			background-image: linear-gradient(to right,
-				rgba(224, 211, 167, 0.40) var(--p, 0%),
-				rgba(224, 211, 167, 0) var(--p, 0%));
-			background-repeat: no-repeat;
-			transition: background-image 0.1s linear;
-		}
+            #start-button {
+                width: min(260px, calc(100vw - 48px));
+                border: 1px solid var(--accent);
+                color: var(--text);
+                font: 700 18px var(--mono);
+                padding: 16px 28px;
+                cursor: pointer;
+                background-color: var(--panel);
+                background-image: linear-gradient(
+                    to right,
+                    rgba(var(--accent-rgb), 0.4) var(--p, 0%),
+                    rgba(var(--accent-rgb), 0) var(--p, 0%)
+                );
+                background-repeat: no-repeat;
+                transition: background-image 0.1s linear;
+            }
 
-		#start-button:disabled {
-			cursor: wait;
-		}
+            #start-button:disabled {
+                cursor: wait;
+            }
 
-		@media (max-height: 460px) {
-			#start-panel {
-				gap: 12px;
-				transform: none;
-			}
+            @media (max-height: 460px) {
+                #start-panel {
+                    gap: 12px;
+                    transform: none;
+                }
 
-			#start-hint {
-				font-size: 12px;
-				line-height: 1.35;
-			}
+                #start-hint {
+                    font-size: 12px;
+                    line-height: 1.35;
+                }
 
-			#start-button {
-				padding: 12px 22px;
-			}
-		}
-	</style>
-</head>
-<body>
-	<div id="game-shell">
-		<canvas id="foster-canvas" width="1280" height="720"></canvas>
-		<button id="reload-button" type="button" hidden>Reload</button>
-	</div>
-	<div id="start-gate">
-		<div id="start-panel">
-			<div id="loading-bud" aria-hidden="true"></div>
-			<p id="start-hint">Hold jump when landing: become 1D.</p><p id="start-hint">Keep holding to climb walls and move faster along surfaces.</p>
-			<button id="start-button" type="button" disabled>Loading...</button>
-		</div>
-	</div>
-	<script type="module" src="main.js"></script>
-</body>
+                #start-button {
+                    padding: 12px 22px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="game-shell">
+            <canvas id="foster-canvas" width="1280" height="720"></canvas>
+            <button id="reload-button" type="button" hidden>Reload</button>
+        </div>
+        <div id="start-gate">
+            <div id="start-panel">
+                <div id="loading-bud" aria-hidden="true"></div>
+                <p id="start-hint">Hold jump when landing: become 1D.</p>
+                <p id="start-hint">
+                    Keep holding to climb walls and move faster along surfaces.
+                </p>
+                <button id="start-button" type="button" disabled>
+                    Loading...
+                </button>
+            </div>
+        </div>
+        <script type="module" src="main.js"></script>
+    </body>
 </html>
