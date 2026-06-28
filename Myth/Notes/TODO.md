@@ -12,7 +12,6 @@
 - breakable pots with coins (or pixels? like mina?)
 - try a big low color image in the background of the boss room
 - boss room red light looks bad
-- try leading the camera a bit ahead
 - watch some videos about hiding secrets
 - what would be fun to earn in a secret? levelling up your health. your burrow time (yes).
 - the best secret is a whole new area and set of challenges.
