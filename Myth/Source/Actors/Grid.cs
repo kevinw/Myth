@@ -7,6 +7,7 @@ public class Grid : Actor
 {
 	bool[,] grid = new bool[Game.Columns, Game.Rows];
 	Subtexture[,] tilemap = new Subtexture[Game.Columns, Game.Rows];
+	Subtexture[,] normalmap = new Subtexture[Game.Columns, Game.Rows];
 	float[,] alpha = NewAlphaMap(Game.Columns, Game.Rows);
 	public Factory.TileLayer Layer { get; set; } = Factory.TileLayer.Foreground;
 
@@ -17,10 +18,11 @@ public class Grid : Actor
 
 	public override bool CastsReflection => false;
 
-	public void Set(int x, int y, Subtexture subtexture, float opacity = 1.0f)
+	public void Set(int x, int y, Subtexture subtexture, float opacity = 1.0f, Subtexture normal = default)
 	{
 		EnsureSize(x + 1, y + 1);
 		tilemap[x, y] = subtexture;
+		normalmap[x, y] = normal;
 		grid[x, y] = true;
 		alpha[x, y] = opacity;
 	}
@@ -28,6 +30,7 @@ public class Grid : Actor
 	public void Clear()
 	{
 		Array.Clear(tilemap);
+		Array.Clear(normalmap);
 		Array.Clear(grid);
 		FillAlpha(alpha);
 	}
@@ -36,6 +39,7 @@ public class Grid : Actor
 	{
 		grid = new bool[size.X, size.Y];
 		tilemap = new Subtexture[size.X, size.Y];
+		normalmap = new Subtexture[size.X, size.Y];
 		alpha = NewAlphaMap(size.X, size.Y);
 		Hitbox = new(grid);
 	}
@@ -50,6 +54,14 @@ public class Grid : Actor
 			}
 	}
 
+	public override void RenderNormals(Batcher batcher)
+	{
+		for (var x = 0; x < grid.GetLength(0); x++)
+			for (var y = 0; y < grid.GetLength(1); y++)
+				if (grid[x, y] && normalmap[x, y].Texture != null)
+					batcher.Image(normalmap[x, y], new Vector2(x, y) * Game.TileSize, new Color(1, 1, 1, alpha[x, y]));
+	}
+
 	void EnsureSize(int width, int height)
 	{
 		if (width <= grid.GetLength(0) && height <= grid.GetLength(1))
@@ -59,6 +71,7 @@ public class Grid : Actor
 		var newHeight = Math.Max(height, grid.GetLength(1));
 		var nextGrid = new bool[newWidth, newHeight];
 		var nextTilemap = new Subtexture[newWidth, newHeight];
+		var nextNormalmap = new Subtexture[newWidth, newHeight];
 		var nextAlpha = NewAlphaMap(newWidth, newHeight);
 
 		for (var x = 0; x < grid.GetLength(0); x++)
@@ -66,11 +79,13 @@ public class Grid : Actor
 			{
 				nextGrid[x, y] = grid[x, y];
 				nextTilemap[x, y] = tilemap[x, y];
+				nextNormalmap[x, y] = normalmap[x, y];
 				nextAlpha[x, y] = alpha[x, y];
 			}
 
 		grid = nextGrid;
 		tilemap = nextTilemap;
+		normalmap = nextNormalmap;
 		alpha = nextAlpha;
 		Hitbox = new(grid);
 	}

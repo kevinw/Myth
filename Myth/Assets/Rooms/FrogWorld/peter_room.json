@@ -59,8 +59,8 @@
       "Id": "2c745bb65befbc7f",
       "Type": "Light",
       "Position": [140, 44],
-      "Intensity": 1.2,
-      "Radius": 81.4
+      "Radius": 81.4,
+      "Intensity": 0.85
     },
     {
       "Id": "cdc12362289410cf",

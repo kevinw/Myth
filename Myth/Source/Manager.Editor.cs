@@ -1389,6 +1389,16 @@ public partial class Manager
 			}))
 				changed = true;
 		}
+		else if (property.Name == nameof(Prop.SpriteName) && ActorSpecs.Get(specId) is { } spec && IsPropActor(spec))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawSpriteCombo(ref value))
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
 		else if (property.Type == typeof(string))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
@@ -1589,6 +1599,16 @@ public partial class Manager
 			}))
 				changed = true;
 		}
+		else if (property.Name == nameof(Prop.SpriteName) && IsPropActor(actor))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawSpriteCombo(ref value))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
 		else if (property.Type == typeof(string))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
@@ -1783,6 +1803,27 @@ public partial class Manager
 		return changed;
 	}
 
+	static bool DrawSpriteCombo(ref string value)
+	{
+		var changed = false;
+		if (ImGui.BeginCombo("##Value", value))
+		{
+			foreach (var name in Assets.Sprites.Keys)
+			{
+				var selected = string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
+				if (ImGui.Selectable(name, selected))
+				{
+					value = name;
+					changed = true;
+				}
+				if (selected)
+					ImGui.SetItemDefaultFocus();
+			}
+			ImGui.EndCombo();
+		}
+		return changed;
+	}
+
 	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "TileType", StringComparison.OrdinalIgnoreCase);
 
@@ -1915,6 +1956,8 @@ public partial class Manager
 			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? info.DefaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
+		if (IsPropActor(actor) && Assets.GetSprite(ActorSpecs.ReadString(resolved, nameof(Prop.SpriteName)) ?? "") is { } sprite)
+			return Factory.ActorPaletteEntry.GetDefaultEditorBounds(sprite, sprite.ResolveOrigin(SpriteAnchor.TopLeft)) + position;
 
 		if (FindRoomActorEntry(actor) is { } entry)
 			return (entry.EditorBounds ?? entry.DefaultEditorBounds) + position;
@@ -1927,6 +1970,9 @@ public partial class Manager
 
 	static bool IsRevealDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor";
+
+	static bool IsPropActor(JsonObject actor)
+		=> string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), nameof(Prop), StringComparison.OrdinalIgnoreCase);
 
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";

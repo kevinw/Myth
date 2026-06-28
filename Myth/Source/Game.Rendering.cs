@@ -22,6 +22,11 @@ public sealed partial class GameView
 	void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		PrepareRenderingList();
+		if (HasDecalProps())
+		{
+			DrawParticleSolidMask();
+			DrawBackgroundCoverage();
+		}
 
 		using (PerfStats.Time(PerfStat.World))
 		{
@@ -285,7 +290,10 @@ public sealed partial class GameView
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
+			var decal = PushPropDecalMaterial(actor);
 			actor.Render(Batcher);
+			if (decal)
+				Batcher.PopMaterial();
 			Batcher.PopMatrix();
 		}
 
@@ -345,8 +353,32 @@ public sealed partial class GameView
 		{
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
+			Prop prop => prop.Layer == Factory.TileLayer.Background,
 			_ => false
 		};
+
+	bool HasDecalProps()
+	{
+		foreach (var actor in rendering)
+			if (actor is Prop { Decal: true, Visible: true })
+				return true;
+		return false;
+	}
+
+	bool PushPropDecalMaterial(Actor actor)
+	{
+		if (actor is not Prop { Decal: true } prop)
+			return false;
+		var background = prop.Layer == Factory.TileLayer.Background;
+		var coverage = background ? BackgroundCoverage : ParticleSolidMask;
+		var material = background ? backgroundDecalMaskMaterial : foregroundDecalMaskMaterial;
+		if (material == null)
+			return false;
+		material.Material.Fragment.SetUniformBuffer([coverage.Width, coverage.Height, 0, 0]);
+		material.Material.Fragment.Samplers[1] = new(coverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		Batcher.PushMaterial(material.Material);
+		return true;
+	}
 
 	void DrawEmissiveLayer(Target target, bool background)
 	{
@@ -687,7 +719,7 @@ public sealed partial class GameView
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
-			if (!actor.Visible || !IsBackgroundActor(actor))
+			if (!actor.Visible || !IsBackgroundActor(actor) || actor is not Grid and not DualGrid)
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
@@ -1697,6 +1729,16 @@ public sealed partial class GameView
 		}
 
 		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (actor is not Grid || !actor.Visible)
+				continue;
+			if ((IsBackgroundActor(actor) && !ShowBackgroundLayer) || (!IsBackgroundActor(actor) && !ShowForegroundLayer))
+				continue;
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderNormals(Batcher);
+			Batcher.PopMatrix();
+		}
 
 		if (ShowForegroundLayer)
 		{
@@ -1708,7 +1750,7 @@ public sealed partial class GameView
 
 		foreach (var actor in rendering)
 		{
-			if (!actor.Visible)
+			if (!actor.Visible || actor is Grid)
 				continue;
 			if ((IsBackgroundActor(actor) && !ShowBackgroundLayer) || (!IsBackgroundActor(actor) && !ShowForegroundLayer))
 				continue;
@@ -1716,7 +1758,10 @@ public sealed partial class GameView
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
+			var decal = PushPropDecalMaterial(actor);
 			actor.RenderNormals(Batcher);
+			if (decal)
+				Batcher.PopMaterial();
 			Batcher.PopMatrix();
 		}
 
@@ -2304,6 +2349,8 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? blurMaterial;
 	readonly ReloadableMaterial? softShadowMaterial;
 	readonly ReloadableMaterial? sdfAuraMaterial;
+	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
+	readonly ReloadableMaterial? foregroundDecalMaskMaterial;
 	const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
 	readonly ParticleSystem? particleSystem;
 	float particleBurstTimer;

@@ -56,7 +56,10 @@
     {
       "Id": "6aa30cf3668a43c1",
       "Type": "Light",
-      "Position": [97, 47]
+      "Position": [97, 47],
+      "Intensity": 0.75,
+      "Height": 37.8,
+      "FlickerFrequency": 0.65
     },
     {
       "Id": "915ac1bee41e797d",
@@ -71,7 +74,7 @@
       "Radius": 61.3,
       "Height": 26.05,
       "FlickerFrequency": 2.25,
-      "Intensity": 1.05
+      "Intensity": 0.8
     },
     {
       "Id": "ae7e8b2447b7830c",

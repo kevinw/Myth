@@ -116,7 +116,7 @@ public static class Factory
 			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, specId, editorBounds, TagsForType(typeName));
 		}
 
-		private static RectInt GetDefaultEditorBounds(Sprite sprite, Vector2 origin)
+		public static RectInt GetDefaultEditorBounds(Sprite sprite, Vector2 origin)
 		{
 			if (sprite.Frames.Count <= 0)
 				return new RectInt(-4, -4, 8, 8);
@@ -139,7 +139,7 @@ public static class Factory
 	}
 
 	// List of all the tile types
-	public static readonly Dictionary<char, Entry> Entries = new();
+	public static readonly Dictionary<char, Entry> Entries = [];
 	public static readonly List<ActorPaletteEntry> ActorPalette = [];
 
 	// Tags declared on each [GameActor], keyed by registered type name, so spec/prefab
@@ -181,7 +181,8 @@ public static class Factory
 		{
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
-			target.Set(tile.X, tile.Y, tileset.GetRandomTile(ref rng), reflection != ReflectionMode.None && !isFg ? 0.55f : 1.0f);
+			var image = tileset.GetRandomTile(ref rng, out var normal);
+			target.Set(tile.X, tile.Y, image, reflection != ReflectionMode.None && !isFg ? 0.55f : 1.0f, normal);
 		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 

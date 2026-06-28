@@ -355,8 +355,6 @@ public partial class Game : IDisposable
 				ApplyRoomReverb(room);
 			}
 
-			var props = Create<PropSystem>();
-			props.KeepOnRoomTransition = true;
 		}
 	}
 
@@ -1422,9 +1420,6 @@ public partial class Game : IDisposable
 		}
 		EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.InitialLoad, Point2.Zero);
-
-		var props = Create<PropSystem>();
-		props.KeepOnRoomTransition = true;
 
 		FinishRoomActivation(RoomChangeKind.Reload);
 	}

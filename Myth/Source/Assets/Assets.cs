@@ -252,14 +252,14 @@ public static class Assets
 
 		foreach (var (name, ase) in spriteFiles)
 		{
-			var frames = name == "player" ? ase.RenderAllFrames(CreateSwordlessPlayerLayerFilter()) : ase.RenderAllFrames();
-			PackSpriteFrames(name, ase, frames, packer);
+			var (frames, normals, heights) = RenderSpriteFrames(ase, name == "player" ? CreateSwordlessPlayerLayerFilter() : null);
+			PackSpriteFrames(name, ase, frames, normals, heights, packer);
 		}
 
 		foreach (var (name, ase, layerFilter) in generatedSprites)
 		{
-			var frames = ase.RenderAllFrames(layerFilter());
-			PackSpriteFrames(name, ase, frames, packer);
+			var (frames, normals, heights) = RenderSpriteFrames(ase, layerFilter());
+			PackSpriteFrames(name, ase, frames, normals, heights, packer);
 		}
 
 		foreach (var (name, ase) in tilesetFiles)
@@ -268,14 +268,22 @@ public static class Assets
 				continue;
 
 			var nonDebugLayers = GetNonDebugLayers(ase);
+			var heightLayers = GetLayerBranch(ase, "height");
+			nonDebugLayers.ExceptWith(heightLayers);
 			var variantLayers = GetVariantLayers(ase, nonDebugLayers);
 			var image = ase.RenderFrame(0, nonDebugLayers.Contains);
+			var height = heightLayers.Count > 0 ? RenderLayerFrame(ase, heightLayers, 0) : null;
 			var columns = image.Width / Game.TileSize;
 			var rows = image.Height / Game.TileSize;
+			var normal = height != null ? GenerateTilesetHeightNormals(name, height, image, columns, rows) : null;
 
 			for (int x = 0; x < columns; x++)
 				for (int y = 0; y < rows; y++)
+				{
 					packer.Add($"tilesets/{name}{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
+					if (normal != null)
+						packer.Add($"tilesets/{name}/normal/{x}x{y}", normal, new RectInt(x, y, 1, 1) * Game.TileSize);
+				}
 
 			var variantIndex = 0;
 			foreach (var layer in variantLayers)
@@ -647,7 +655,10 @@ public static class Assets
 	{
 		var columns = ase.Width / Game.TileSize;
 		var rows = ase.Height / Game.TileSize;
-		var variantLayers = GetVariantLayers(ase, GetNonDebugLayers(ase));
+		var heightLayers = GetLayerBranch(ase, "height");
+		var colorLayers = GetNonDebugLayers(ase);
+		colorLayers.ExceptWith(heightLayers);
+		var variantLayers = GetVariantLayers(ase, colorLayers);
 		var packed = new PackedTileset
 		{
 			Name = name,
@@ -658,6 +669,8 @@ public static class Assets
 
 		for (var variantIndex = 0; variantIndex < variantLayers.Count; variantIndex++)
 			packed.Variants.Add(PackTileSubtextures(bake, $"tilesets/{name}/variants/{variantIndex}/", columns, rows));
+		if (heightLayers.Count > 0)
+			packed.NormalTiles = PackTileSubtextures(bake, $"tilesets/{name}/normal/", columns, rows);
 		return packed;
 	}
 
@@ -1319,9 +1332,13 @@ public static class Assets
 		if (maskBounds.Size != new Point2(Game.TileSize * 4, Game.TileSize * 4))
 			throw new InvalidOperationException($"Dual tileset kit '{kitName}' mask slice must be exactly {Game.TileSize * 4}x{Game.TileSize * 4} pixels.");
 
-		using var rendered = ase.RenderFrame(0, GetNonDebugLayers(ase).Contains);
+		var nonDebugLayers = GetNonDebugLayers(ase);
+		var heightLayers = GetLayerBranch(ase, "height");
+		using var rendered = ase.RenderFrame(0, layer => nonDebugLayers.Contains(layer) && !heightLayers.Contains(layer));
+		using var renderedHeight = heightLayers.Count > 0 ? RenderLayerFrame(ase, heightLayers, 0) : null;
 		using var mask = ExtractTile(rendered, maskBounds);
 		var fills = ExtractSliceTiles(rendered, fillSlice, kitName, required: true);
+		var heights = renderedHeight != null ? ExtractMatchingSliceTiles(renderedHeight, rendered, fillSlice, kitName, "height") : [];
 		var edges = edgeSlice != null
 			? ExtractSliceTiles(rendered, edgeSlice, kitName, required: false)
 			: [];
@@ -1339,7 +1356,7 @@ public static class Assets
 					baseSlopeEdges.Add(ExtractTile(edges[i % edges.Count], edges[i % edges.Count].Bounds));
 			}
 			dualVariants.Add(GenerateDualTilesetVariant(fill, mask, edges.Count > 0 ? edges[i % edges.Count] : null));
-			dualNormals.Add(GenerateDualTilesetNormalVariant(mask));
+			dualNormals.Add(GenerateDualTilesetNormalVariant(mask, heights.Count > 0 ? heights[i] : null));
 			dualOccluders.Add(GenerateDualTilesetOccluderVariant(mask));
 		}
 
@@ -1347,6 +1364,8 @@ public static class Assets
 			fill.Dispose();
 		foreach (var edge in edges)
 			edge.Dispose();
+		foreach (var height in heights)
+			height.Dispose();
 	}
 
 	static string NormalizeLayerName(string? name)
@@ -1395,6 +1414,25 @@ public static class Assets
 		return tiles;
 	}
 
+	static List<Image> ExtractMatchingSliceTiles(Image source, Image reference, Aseprite.Slice slice, string kitName, string layerName)
+	{
+		var bounds = GetSliceBounds(slice);
+		var tiles = new List<Image>();
+		var columns = bounds.Width / Game.TileSize;
+		var rows = bounds.Height / Game.TileSize;
+		for (var y = 0; y < rows; y++)
+			for (var x = 0; x < columns; x++)
+			{
+				var tileRect = new RectInt(bounds.Position + new Point2(x, y) * Game.TileSize, new Point2(Game.TileSize, Game.TileSize));
+				var occupied = HasOpaquePixel(source, tileRect);
+				if (occupied != HasOpaquePixel(reference, tileRect))
+					throw new InvalidOperationException($"Dual tileset kit '{kitName}' {layerName} layer must match its fill cells; cell {x},{y} differs.");
+				if (occupied)
+					tiles.Add(ExtractTile(source, tileRect));
+			}
+		return tiles;
+	}
+
 	static bool HasOpaquePixel(Image image, RectInt rect)
 	{
 		for (var y = rect.Y; y < rect.Bottom; y++)
@@ -1402,6 +1440,35 @@ public static class Assets
 				if (image[x, y].A > 0)
 					return true;
 		return false;
+	}
+
+	static Image GenerateTilesetHeightNormals(string name, Image height, Image color, int columns, int rows)
+	{
+		var output = new Image(color.Width, color.Height);
+		for (var tileX = 0; tileX < columns; tileX++)
+			for (var tileY = 0; tileY < rows; tileY++)
+			{
+				var tile = new RectInt(tileX, tileY, 1, 1) * Game.TileSize;
+				if (HasOpaquePixel(height, tile) != HasOpaquePixel(color, tile))
+					throw new InvalidOperationException($"Tileset '{name}' height layer must match its color cells; cell {tileX},{tileY} differs.");
+
+				for (var y = 0; y < Game.TileSize; y++)
+					for (var x = 0; x < Game.TileSize; x++)
+					{
+						var heightAlpha = AlphaAt(height, tile.X + x, tile.Y + y);
+						var colorAlpha = AlphaAt(color, tile.X + x, tile.Y + y);
+						if (heightAlpha <= 0 || colorAlpha <= 0)
+							continue;
+
+						var normal = NormalFromHeight(height, tile, x, y, wrap: true);
+						output[tile.X + x, tile.Y + y] = new Color(
+							normal.X * 0.5f + 0.5f,
+							normal.Y * 0.5f + 0.5f,
+							normal.Z * 0.5f + 0.5f,
+							heightAlpha * colorAlpha);
+					}
+			}
+		return output;
 	}
 
 	static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edge)
@@ -1416,13 +1483,15 @@ public static class Assets
 		return output;
 	}
 
-	static Image GenerateDualTilesetNormalVariant(Image mask)
+	static Image GenerateDualTilesetNormalVariant(Image mask, Image? height)
 	{
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
 		{
 			var tile = MaskToDualTile(tileMask);
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
+			if (height != null)
+				GenerateDualHeightNormalTile(output, source, mask, height);
 			GenerateDualNormalTile(output, source, tileMask, mask);
 		}
 		return output;
@@ -1509,6 +1578,25 @@ public static class Assets
 			return false;
 
 		return mask[source.X + x, source.Y + y].A > 0;
+	}
+
+	static void GenerateDualHeightNormalTile(Image output, RectInt source, Image alphaMask, Image height)
+	{
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
+			{
+				var maskAlpha = AlphaAt(alphaMask, source.X + x, source.Y + y);
+				var heightAlpha = AlphaAt(height, x, y);
+				if (maskAlpha <= 0 || heightAlpha <= 0)
+					continue;
+
+				var normal = NormalFromHeight(height, height.Bounds, x, y, wrap: true);
+				output[source.X + x, source.Y + y] = new Color(
+					normal.X * 0.5f + 0.5f,
+					normal.Y * 0.5f + 0.5f,
+					normal.Z * 0.5f + 0.5f,
+					maskAlpha * heightAlpha);
+			}
 	}
 
 	static void GenerateDualNormalTile(Image output, RectInt source, int mask, Image alphaMask)
@@ -1671,19 +1759,76 @@ public static class Assets
 		}
 	}
 
+	static (Image[] Frames, Image[]? Normals, Image[]? Heights) RenderSpriteFrames(Aseprite ase, Predicate<Aseprite.Layer>? colorFilter)
+	{
+		var normalLayers = GetLayerBranch(ase, "normals");
+		var heightLayers = GetLayerBranch(ase, "height");
+		var frames = ase.RenderAllFrames(layer =>
+			(colorFilter?.Invoke(layer) ?? true) && !normalLayers.Contains(layer) && !heightLayers.Contains(layer));
+		var normals = normalLayers.Count > 0 ? RenderLayerFrames(ase, normalLayers) : null;
+		var heights = normals == null && heightLayers.Count > 0 ? RenderLayerFrames(ase, heightLayers) : null;
+		return (frames, normals, heights);
+	}
+
+	static Image[] RenderLayerFrames(Aseprite ase, HashSet<Aseprite.Layer> layers)
+		=> RenderLayersVisible(layers, () => ase.RenderAllFrames(layers.Contains));
+
+	static Image RenderLayerFrame(Aseprite ase, HashSet<Aseprite.Layer> layers, int frame)
+		=> RenderLayersVisible(layers, () => ase.RenderFrame(frame, layers.Contains));
+
+	static T RenderLayersVisible<T>(HashSet<Aseprite.Layer> layers, Func<T> render)
+	{
+		var flags = new Aseprite.LayerFlags[layers.Count];
+		var index = 0;
+		foreach (var layer in layers)
+		{
+			flags[index++] = layer.Flags;
+			layer.Flags |= Aseprite.LayerFlags.Visible;
+		}
+		try
+		{
+			return render();
+		}
+		finally
+		{
+			index = 0;
+			foreach (var layer in layers)
+				layer.Flags = flags[index++];
+		}
+	}
+
+	static HashSet<Aseprite.Layer> GetLayerBranch(Aseprite ase, string branchName)
+	{
+		var result = new HashSet<Aseprite.Layer>();
+		var branchLevel = int.MaxValue;
+		foreach (var layer in ase.Layers)
+		{
+			if (layer.ChildLevel <= branchLevel)
+				branchLevel = int.MaxValue;
+			if (NormalizeLayerName(layer.Name) == branchName)
+				branchLevel = layer.ChildLevel;
+			if (branchLevel != int.MaxValue)
+				result.Add(layer);
+		}
+		return result;
+	}
+
 	// Expands the frames of one sprite (inserting whitelisted within-animation
 	// in-betweens) and packs them, then bakes any whitelisted transitions.
-	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Packer packer)
+	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Packer packer)
 	{
 		if (TryBuildInbetweenSpec(name, ase, frames.Length, out var spec, out var durationsSec))
 		{
 			var (expFrames, expDurations, map) = Inbetweens.GenerateExpanded(frames, durationsSec, spec);
+			var expNormals = normals != null ? Inbetweens.GenerateExpanded(normals, durationsSec, spec).Frames : null;
+			var expHeights = heights != null ? Inbetweens.GenerateExpanded(heights, durationsSec, spec).Frames : null;
 			ExpandedFrameDurations[name] = expDurations;
 			ExpandedFrameMap[name] = map;
 			for (int i = 0; i < expFrames.Length; i++)
 			{
 				packer.Add($"{name}/{i}", expFrames[i]);
-				packer.Add($"{name}/normal/{i}", GenerateNormalMap(expFrames[i]));
+				packer.Add($"{name}/normal/{i}", expNormals?[i] ??
+					(expHeights != null ? GenerateNormalMap(expHeights[i], expFrames[i]) : GenerateNormalMap(expFrames[i])));
 			}
 		}
 		else
@@ -1691,11 +1836,12 @@ public static class Assets
 			for (int i = 0; i < frames.Length; i++)
 			{
 				packer.Add($"{name}/{i}", frames[i]);
-				packer.Add($"{name}/normal/{i}", GenerateNormalMap(frames[i]));
+				packer.Add($"{name}/normal/{i}", normals?[i] ??
+					(heights != null ? GenerateNormalMap(heights[i], frames[i]) : GenerateNormalMap(frames[i])));
 			}
 		}
 
-		GenerateTransitionFrames(name, ase, frames, packer);
+		GenerateTransitionFrames(name, ase, frames, normals, heights, packer);
 	}
 
 	// Builds the per-frame in-between spec for a sprite from the InbetweenAnimations
@@ -1741,7 +1887,7 @@ public static class Assets
 		return any;
 	}
 
-	static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Packer packer)
+	static void GenerateTransitionFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Packer packer)
 	{
 		var ownTransitions = InbetweenTransitions
 			.Where(kv => kv.Key.Sprite == name && kv.Value > 0)
@@ -1777,10 +1923,16 @@ public static class Assets
 
 		// Generate all in-betweens in parallel (ComputeFlow / Warp are pure, thread-safe)
 		var results = new (Image[] Frames, float[] Durations)?[pairs.Count];
+		var normalResults = normals != null ? new Image[pairs.Count][] : null;
+		var heightResults = heights != null ? new Image[pairs.Count][] : null;
 		Parallel.For(0, pairs.Count, i =>
 		{
 			var p = pairs[i];
 			results[i] = Inbetweens.GenerateForPair(frames[p.FromIdx], frames[p.ToIdx], p.Count);
+			if (normalResults != null)
+				normalResults[i] = Inbetweens.GenerateForPair(normals![p.FromIdx], normals[p.ToIdx], p.Count).Frames;
+			if (heightResults != null)
+				heightResults[i] = Inbetweens.GenerateForPair(heights![p.FromIdx], heights[p.ToIdx], p.Count).Frames;
 		});
 
 		// Pack results sequentially (packer.Add is not thread-safe)
@@ -1797,7 +1949,8 @@ public static class Assets
 			for (int j = 0; j < transFrames.Length; j++)
 			{
 				packer.Add($"{prefix}/{j}", transFrames[j]);
-				packer.Add($"{prefix}/normal/{j}", GenerateNormalMap(transFrames[j]));
+				packer.Add($"{prefix}/normal/{j}", normalResults?[i][j] ??
+					(heightResults != null ? GenerateNormalMap(heightResults[i][j], transFrames[j]) : GenerateNormalMap(transFrames[j])));
 			}
 
 			transitions.Add(new(p.FromTag, p.ToTag, transFrames.Length, transDurations));
@@ -2127,6 +2280,56 @@ public static class Assets
 			}
 
 		return normal;
+	}
+
+	static float HeightNormalStrength => 1.25f;
+
+	static Image GenerateNormalMap(Image height, Image source)
+	{
+		var normal = new Image(source.Width, source.Height);
+		for (var y = 0; y < source.Height; y++)
+			for (var x = 0; x < source.Width; x++)
+			{
+				var alpha = AlphaAt(source, x, y);
+				if (alpha <= 0)
+					continue;
+
+				var n = NormalFromHeight(height, height.Bounds, x, y, wrap: false);
+				normal[x, y] = new Color(
+					n.X * 0.5f + 0.5f,
+					n.Y * 0.5f + 0.5f,
+					n.Z * 0.5f + 0.5f,
+					alpha);
+			}
+		return normal;
+	}
+
+	static Vector3 NormalFromHeight(Image image, RectInt bounds, int x, int y, bool wrap)
+	{
+		var topLeft = HeightAt(image, bounds, x - 1, y - 1, wrap);
+		var top = HeightAt(image, bounds, x, y - 1, wrap);
+		var topRight = HeightAt(image, bounds, x + 1, y - 1, wrap);
+		var left = HeightAt(image, bounds, x - 1, y, wrap);
+		var right = HeightAt(image, bounds, x + 1, y, wrap);
+		var bottomLeft = HeightAt(image, bounds, x - 1, y + 1, wrap);
+		var bottom = HeightAt(image, bounds, x, y + 1, wrap);
+		var bottomRight = HeightAt(image, bounds, x + 1, y + 1, wrap);
+		var sx = topLeft + 2 * left + bottomLeft - topRight - 2 * right - bottomRight;
+		var sy = topLeft + 2 * top + topRight - bottomLeft - 2 * bottom - bottomRight;
+		return Vector3.Normalize(new Vector3(sx, sy, 4 / HeightNormalStrength));
+	}
+
+	static float HeightAt(Image image, RectInt bounds, int x, int y, bool wrap)
+	{
+		if (wrap)
+		{
+			x = (x + bounds.Width) % bounds.Width;
+			y = (y + bounds.Height) % bounds.Height;
+		}
+		else if (x < 0 || y < 0 || x >= bounds.Width || y >= bounds.Height)
+			return 0;
+		var color = image[bounds.X + x, bounds.Y + y];
+		return (color.R * 0.2126f + color.G * 0.7152f + color.B * 0.0722f) * color.A / (255 * 255);
 	}
 
 	static Image ExtractTile(Image source, RectInt sourceRect)

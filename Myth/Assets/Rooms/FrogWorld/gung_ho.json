@@ -68,7 +68,7 @@
     {
       "Id": "a1b2c3d4e5f60719",
       "Type": "NeuralCellularActor",
-      "Position": [120, 64],
+      "Position": [136, 79],
       "GridWidth": 32,
       "GridHeight": 32,
       "WeightsFile": "heart_weights.bin",
@@ -95,7 +95,8 @@
     {
       "Id": "308faaddc4f343ca",
       "Type": "Jumpthru",
-      "Position": [56, 88]
+      "Position": [55, 88],
+      "Size": [9, 8]
     },
     {
       "Id": "6cac27634452af32",
@@ -108,14 +109,10 @@
       "Position": [252, 104]
     },
     {
-      "Id": "abdc13b1d3222d1f",
-      "Type": "Jumpthru",
-      "Position": [56, 104]
-    },
-    {
       "Id": "d654e5d761127cc4",
       "Type": "Jumpthru",
-      "Position": [64, 104]
+      "Position": [54, 104],
+      "Size": [18, 8]
     },
     {
       "Id": "1ddd3605f9c779cc",

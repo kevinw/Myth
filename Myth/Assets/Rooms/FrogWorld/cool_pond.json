@@ -75,6 +75,13 @@
       "Type": "ParticleEmitter",
       "Position": [156, 52],
       "EffectName": "snow"
+    },
+    {
+      "Id": "676e9520aafcefd7",
+      "Type": "Prop",
+      "Position": [92, 108],
+      "SpriteName": "foster",
+      "Layer": "Background"
     }
   ]
 }

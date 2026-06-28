@@ -49,6 +49,12 @@
       "Id": "aaaf96a21646b2ca",
       "Type": "PlayerStart",
       "Position": [252, 176]
+    },
+    {
+      "Id": "2943ab796a345a08",
+      "Type": "Prop",
+      "Position": [292, 60],
+      "SpriteName": "bud"
     }
   ]
 }
