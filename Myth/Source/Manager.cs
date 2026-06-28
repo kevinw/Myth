@@ -630,6 +630,10 @@ public partial class Manager : App
 		// Finishes the player SDF atlas once its async GPU readback lands (immediate on desktop, deferred on WebGPU).
 		SpriteSdf.Update();
 
+#if BROWSER
+		UpdateAudioInterruptionRecovery();
+#endif
+
 #if EDITOR
 		using (PerfStats.Time(PerfDetail.DeferredRoomPreviewDisposal))
 			DisposeDeferredRoomPreviews();
