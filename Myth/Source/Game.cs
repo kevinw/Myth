@@ -1679,11 +1679,11 @@ public partial class Game : IDisposable
 
 	public void Shake(float time) => shaking = MathF.Max(shaking, time);
 
-	public void PulseDitherGlitch(Vector2? axis = null)
+	public void PulseDitherGlitch(Vector2? axis = null, float amount = 1.0f)
 	{
 		if (axis is { } value && value.LengthSquared() > 0.001f)
 			ditherGlitchAxis = Vector2.Normalize(value);
-		ditherGlitchTarget = 1.0f;
+		ditherGlitchTarget = amount;
 	}
 
 	internal void DestroyEnemy(Actor actor)

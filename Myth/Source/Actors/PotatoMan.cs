@@ -3,7 +3,8 @@ namespace Myth;
 using Foster.Framework;
 
 [GameActor(Tags = ActorTag.Enemy)]
-class PotatoMan : Actor {
+class PotatoMan : Actor
+{
 	enum State { Idle, ReadyingAttack, Attacking }
 	readonly StateMachine<State> state = new();
 
@@ -15,14 +16,19 @@ class PotatoMan : Actor {
 
 	public override void OnWasHit(Actor by)
 	{
-		if (state.Current == State.Idle && by is Player) {
+		if (state.Current == State.Idle && by is Player)
+		{
 			state.Change(State.ReadyingAttack);
 		}
 	}
 
-	public override void Update() {
+	internal override int DamageValue => 0;
+
+	public override void Update()
+	{
 		base.Update();
-		switch (state.Update(Time.Delta)) {
+		switch (state.Update(Time.Delta))
+		{
 			case State.Idle:
 				Play("idle");
 				break;

@@ -1215,14 +1215,15 @@ public partial class Player : Pawn
 
 	public override void OnWasHit(Actor by)
 	{
-		ApplyHurt(fromActor: by);
+		int healthDelta = -by.DamageValue;
+		ApplyHurt(healthDelta, fromActor: by);
 	}
 
 	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null)
 	{
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
-		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor));
+		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor), amount: healthDelta == 0 ? 0.7f : 1.0f);
 		if (healthDelta < 0 && Health > 0)
 			Game.NotifyPlayerHurt(fromActor, Position);
 

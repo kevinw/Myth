@@ -44,6 +44,8 @@ public class Actor
 	public virtual bool CastsReflection => sprite != null;
 	public virtual string HitSoundType => "flesh";
 
+	internal virtual int DamageValue => 1;
+
 	public Time Time => Game.Time;
 
 	[NoSerialize]
@@ -87,7 +89,8 @@ public class Actor
 	// this and marks a deliberate exception (e.g. the blob-family enemies reusing "blob").
 	public Actor() => Sprite = Assets.GetSprite(GetType().Name);
 
-	public AnimState PlayOnce(string name, bool restart = false) {
+	public AnimState PlayOnce(string name, bool restart = false)
+	{
 		return Play(name, looping: false, restart: restart);
 	}
 
@@ -360,7 +363,8 @@ public class Actor
 	}
 
 	/// Called when the Actor is added to the Game
-	public virtual void Added() {
+	public virtual void Added()
+	{
 		// Console.WriteLine($"Actor added: {this}");
 		Play();
 	}
