@@ -40,10 +40,9 @@ public class LinkedDoor : Actor
 		showInteract = true;
 		interactTime += Time.Delta;
 
-		if (Game.Controls.Move.IntValue.Y >= 0)
-			return;
-
-		Game.TransitionToLinkedDoor(TargetActorId);
+		var moveInt = Game.Controls.Move.IntValue;
+		if (moveInt.Y < 0 && moveInt.X == 0)
+			Game.TransitionToLinkedDoor(TargetActorId);
 	}
 
 	public override void RenderEmissive(Batcher batcher)

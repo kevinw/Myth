@@ -1,7 +1,6 @@
 # TODO
 
 - top priority: redraw the damn sword. or get rid of it and try rendering something procedural. it's the main thing holding me back from sharing!
-- diagonal up shouldn't trigger the door
 - wall jump too difficult (go back to "just jump"?)
 - mobile web: switching away and coming back kills audio
 - mobile web:  instead of tap to zoom out, respect pinch in and out
