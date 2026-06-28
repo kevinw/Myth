@@ -26,6 +26,10 @@ struct EffectParams
     float sizeEnd;
     float collisionMode;
     float bounciness;
+    float style;
+    float pad0;
+    float pad1;
+    float pad2;
 };
 
 // In SDL_gpu's vertex resource model, sampled textures precede storage buffers
@@ -55,6 +59,8 @@ struct VsInput
 struct VsOutput
 {
     float4 color : TEXCOORD0;
+	float2 texCoord : TEXCOORD1;
+	float style : TEXCOORD2;
     float4 position : SV_Position;
 };
 
@@ -78,10 +84,20 @@ VsOutput vertex_main(VsInput input, uint instance : SV_InstanceID)
     float row = (p.effect + 0.5) / MaxEffects;
     float4 col = ColorLut.SampleLevel(ColorLutSampler, float2(life_frac, row), 0.0);
     output.color = float4(col.rgb, col.a * alive);
+	output.texCoord = input.tex_coord;
+	output.style = fx.style;
     return output;
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
+	if (input.style > 0.5)
+	{
+		float radialDistance = length(input.texCoord - 0.5) * 2.0;
+		float aura = 1.0 - smoothstep(0.35, 1.0, radialDistance);
+		float core = 1.0 - smoothstep(0.0, 0.38, radialDistance);
+		float3 color = lerp(input.color.rgb, 1.0, core * 0.85);
+		return float4(color, input.color.a * max(aura * 0.45, core));
+	}
     return input.color;
 }

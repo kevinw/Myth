@@ -31,6 +31,10 @@ struct EffectParams
     float sizeEnd;
     float collisionMode; // 0 = none, 1 = kill, 2 = settle, 3 = bounce
     float bounciness;
+    float style;
+	float pad0;
+	float pad1;
+    float pad2;
 };
 
 struct EmitParams
@@ -41,7 +45,7 @@ struct EmitParams
     uint effect;
     float originX;
     float originY;
-    uint shape;       // 0 = point, 1 = circle, 2 = cone
+    uint shape;       // 0 = point, 1 = circle, 2 = cone, 3 = line
     float radius;
     float dirAngle;   // radians
     float spread;     // radians
@@ -49,8 +53,8 @@ struct EmitParams
     float speedMax;
     float lifeMin;
     float lifeMax;
-    float pad0;
-    float pad1;
+	float baseVelocityX;
+	float baseVelocityY;
 };
 
 // World collision is sampled from the foreground coverage mask (its alpha).
@@ -165,6 +169,13 @@ void compute_main(uint3 id : SV_DispatchThreadID)
             float da = hash1(i * 29u + em.seed + 5u) * 6.2831853;
             origin += float2(cos(da), sin(da)) * r;
         }
+		else if (em.shape == 3u)
+		{
+			float2 along = float2(cos(em.dirAngle), sin(em.dirAngle));
+			float2 across = float2(-along.y, along.x);
+			origin += along * (hash1(i * 23u + em.seed + 4u) * em.radius);
+			origin += across * ((hash1(i * 29u + em.seed + 5u) - 0.5) * em.spread);
+		}
 
         float angle;
         if (em.shape == 2u)
@@ -176,7 +187,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
         Particle np;
         np.pos = origin;
-        np.vel = float2(cos(angle), sin(angle)) * speed;
+		np.vel = float2(cos(angle), sin(angle)) * speed + float2(em.baseVelocityX, em.baseVelocityY);
         np.age = 0.0;
         np.lifetime = lerp(em.lifeMin, em.lifeMax, hash1(i * 17u + em.seed + 2u));
         np.seed = hash1(i * 19u + em.seed + 3u) * 1000.0;

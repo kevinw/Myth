@@ -30,6 +30,10 @@ struct EffectParams
     float sizeEnd;
     float collisionMode;
     float bounciness;
+    float style;
+    float pad0;
+    float pad1;
+    float pad2;
 };
 
 struct type_StructuredBuffer_EffectParams
@@ -53,8 +57,8 @@ struct EmitParams
     float speedMax;
     float lifeMin;
     float lifeMax;
-    float pad0;
-    float pad1;
+    float baseVelocityX;
+    float baseVelocityY;
 };
 
 struct type_StructuredBuffer_EmitParams
@@ -83,7 +87,7 @@ struct type_Params
     float Pad2;
 };
 
-constant float _97 = {};
+constant float _98 = {};
 
 kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_Particle& Src [[buffer(1)]], const device type_StructuredBuffer_EffectParams& Effects [[buffer(2)]], const device type_StructuredBuffer_EmitParams& Emits [[buffer(3)]], device type_RWStructuredBuffer_Particle& Dst [[buffer(4)]], texture2d<float> SolidMask [[texture(0)]], sampler SolidSampler [[sampler(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
@@ -93,415 +97,432 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
         {
             break;
         }
-        bool _294;
-        uint _121 = 0u;
+        bool _330;
+        uint _118 = 0u;
         for (;;)
         {
-            if (_121 < Params.EmitCount)
+            if (_118 < Params.EmitCount)
             {
-                if ((((gl_GlobalInvocationID.x + Params.Count) - Emits._m0[_121].start) % Params.Count) >= Emits._m0[_121].count)
+                if ((((gl_GlobalInvocationID.x + Params.Count) - Emits._m0[_118].start) % Params.Count) >= Emits._m0[_118].count)
                 {
-                    _121++;
+                    _118++;
                     continue;
                 }
-                float2 _162 = float2(Emits._m0[_121].originX, Emits._m0[_121].originY);
-                float2 _203;
-                if (Emits._m0[_121].shape == 1u)
+                float2 _149 = float2(Emits._m0[_118].originX, Emits._m0[_118].originY);
+                float2 _237;
+                if (Emits._m0[_118].shape == 1u)
                 {
-                    uint _168 = ((gl_GlobalInvocationID.x * 23u) + Emits._m0[_121].seed) + 4u;
-                    uint _172 = ((_168 ^ 61u) ^ (_168 >> 16u)) * 9u;
-                    uint _175 = (_172 ^ (_172 >> 4u)) * 668265261u;
-                    uint _185 = ((gl_GlobalInvocationID.x * 29u) + Emits._m0[_121].seed) + 5u;
-                    uint _189 = ((_185 ^ 61u) ^ (_185 >> 16u)) * 9u;
-                    uint _192 = (_189 ^ (_189 >> 4u)) * 668265261u;
-                    float _197 = float((_192 ^ (_192 >> 15u)) & 16777215u) * 3.7450703871400037314742803573608e-07;
-                    _203 = _162 + (float2(cos(_197), sin(_197)) * (sqrt(float((_175 ^ (_175 >> 15u)) & 16777215u) * 5.9604644775390625e-08) * Emits._m0[_121].radius));
+                    uint _156 = ((gl_GlobalInvocationID.x * 23u) + Emits._m0[_118].seed) + 4u;
+                    uint _160 = ((_156 ^ 61u) ^ (_156 >> 16u)) * 9u;
+                    uint _163 = (_160 ^ (_160 >> 4u)) * 668265261u;
+                    uint _173 = ((gl_GlobalInvocationID.x * 29u) + Emits._m0[_118].seed) + 5u;
+                    uint _177 = ((_173 ^ 61u) ^ (_173 >> 16u)) * 9u;
+                    uint _180 = (_177 ^ (_177 >> 4u)) * 668265261u;
+                    float _185 = float((_180 ^ (_180 >> 15u)) & 16777215u) * 3.7450703871400037314742803573608e-07;
+                    _237 = _149 + (float2(cos(_185), sin(_185)) * (sqrt(float((_163 ^ (_163 >> 15u)) & 16777215u) * 5.9604644775390625e-08) * Emits._m0[_118].radius));
                 }
                 else
                 {
-                    _203 = _162;
+                    float2 _236;
+                    if (Emits._m0[_118].shape == 3u)
+                    {
+                        float _194 = cos(Emits._m0[_118].dirAngle);
+                        float _195 = sin(Emits._m0[_118].dirAngle);
+                        uint _201 = ((gl_GlobalInvocationID.x * 23u) + Emits._m0[_118].seed) + 4u;
+                        uint _205 = ((_201 ^ 61u) ^ (_201 >> 16u)) * 9u;
+                        uint _208 = (_205 ^ (_205 >> 4u)) * 668265261u;
+                        uint _219 = ((gl_GlobalInvocationID.x * 29u) + Emits._m0[_118].seed) + 5u;
+                        uint _223 = ((_219 ^ 61u) ^ (_219 >> 16u)) * 9u;
+                        uint _226 = (_223 ^ (_223 >> 4u)) * 668265261u;
+                        _236 = (_149 + (float2(_194, _195) * ((float((_208 ^ (_208 >> 15u)) & 16777215u) * 5.9604644775390625e-08) * Emits._m0[_118].radius))) + (float2(-_195, _194) * (((float((_226 ^ (_226 >> 15u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * Emits._m0[_118].spread));
+                    }
+                    else
+                    {
+                        _236 = _149;
+                    }
+                    _237 = _236;
                 }
-                float _239;
-                if (Emits._m0[_121].shape == 2u)
+                float _273;
+                if (Emits._m0[_118].shape == 2u)
                 {
-                    uint _209 = (gl_GlobalInvocationID.x * 7u) + Emits._m0[_121].seed;
-                    uint _213 = ((_209 ^ 61u) ^ (_209 >> 16u)) * 9u;
-                    uint _216 = (_213 ^ (_213 >> 4u)) * 668265261u;
-                    _239 = Emits._m0[_121].dirAngle + (((float((_216 ^ (_216 >> 15u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * Emits._m0[_121].spread);
+                    uint _243 = (gl_GlobalInvocationID.x * 7u) + Emits._m0[_118].seed;
+                    uint _247 = ((_243 ^ 61u) ^ (_243 >> 16u)) * 9u;
+                    uint _250 = (_247 ^ (_247 >> 4u)) * 668265261u;
+                    _273 = Emits._m0[_118].dirAngle + (((float((_250 ^ (_250 >> 15u)) & 16777215u) * 5.9604644775390625e-08) - 0.5) * Emits._m0[_118].spread);
                 }
                 else
                 {
-                    uint _226 = (gl_GlobalInvocationID.x * 7u) + Emits._m0[_121].seed;
-                    uint _230 = ((_226 ^ 61u) ^ (_226 >> 16u)) * 9u;
-                    uint _233 = (_230 ^ (_230 >> 4u)) * 668265261u;
-                    _239 = float((_233 ^ (_233 >> 15u)) & 16777215u) * 3.7450703871400037314742803573608e-07;
+                    uint _260 = (gl_GlobalInvocationID.x * 7u) + Emits._m0[_118].seed;
+                    uint _264 = ((_260 ^ 61u) ^ (_260 >> 16u)) * 9u;
+                    uint _267 = (_264 ^ (_264 >> 4u)) * 668265261u;
+                    _273 = float((_267 ^ (_267 >> 15u)) & 16777215u) * 3.7450703871400037314742803573608e-07;
                 }
-                uint _242 = ((gl_GlobalInvocationID.x * 13u) + Emits._m0[_121].seed) + 1u;
-                uint _246 = ((_242 ^ 61u) ^ (_242 >> 16u)) * 9u;
-                uint _249 = (_246 ^ (_246 >> 4u)) * 668265261u;
-                uint _262 = ((gl_GlobalInvocationID.x * 17u) + Emits._m0[_121].seed) + 2u;
-                uint _266 = ((_262 ^ 61u) ^ (_262 >> 16u)) * 9u;
-                uint _269 = (_266 ^ (_266 >> 4u)) * 668265261u;
-                uint _278 = ((gl_GlobalInvocationID.x * 19u) + Emits._m0[_121].seed) + 3u;
-                uint _282 = ((_278 ^ 61u) ^ (_278 >> 16u)) * 9u;
-                uint _285 = (_282 ^ (_282 >> 4u)) * 668265261u;
-                Dst._m0[gl_GlobalInvocationID.x] = Particle{ _203, float2(cos(_239), sin(_239)) * mix(Emits._m0[_121].speedMin, Emits._m0[_121].speedMax, float((_249 ^ (_249 >> 15u)) & 16777215u) * 5.9604644775390625e-08), 0.0, mix(Emits._m0[_121].lifeMin, Emits._m0[_121].lifeMax, float((_269 ^ (_269 >> 15u)) & 16777215u) * 5.9604644775390625e-08), float((_285 ^ (_285 >> 15u)) & 16777215u) * 5.9604644775390625e-05, float(Emits._m0[_121].effect), 0.0, _97 };
-                _294 = true;
+                uint _276 = ((gl_GlobalInvocationID.x * 13u) + Emits._m0[_118].seed) + 1u;
+                uint _280 = ((_276 ^ 61u) ^ (_276 >> 16u)) * 9u;
+                uint _283 = (_280 ^ (_280 >> 4u)) * 668265261u;
+                uint _298 = ((gl_GlobalInvocationID.x * 17u) + Emits._m0[_118].seed) + 2u;
+                uint _302 = ((_298 ^ 61u) ^ (_298 >> 16u)) * 9u;
+                uint _305 = (_302 ^ (_302 >> 4u)) * 668265261u;
+                uint _314 = ((gl_GlobalInvocationID.x * 19u) + Emits._m0[_118].seed) + 3u;
+                uint _318 = ((_314 ^ 61u) ^ (_314 >> 16u)) * 9u;
+                uint _321 = (_318 ^ (_318 >> 4u)) * 668265261u;
+                Dst._m0[gl_GlobalInvocationID.x] = Particle{ _237, (float2(cos(_273), sin(_273)) * mix(Emits._m0[_118].speedMin, Emits._m0[_118].speedMax, float((_283 ^ (_283 >> 15u)) & 16777215u) * 5.9604644775390625e-08)) + float2(Emits._m0[_118].baseVelocityX, Emits._m0[_118].baseVelocityY), 0.0, mix(Emits._m0[_118].lifeMin, Emits._m0[_118].lifeMax, float((_305 ^ (_305 >> 15u)) & 16777215u) * 5.9604644775390625e-08), float((_321 ^ (_321 >> 15u)) & 16777215u) * 5.9604644775390625e-05, float(Emits._m0[_118].effect), 0.0, _98 };
+                _330 = true;
                 break;
             }
             else
             {
-                _294 = false;
+                _330 = false;
                 break;
             }
         }
-        if (_294)
+        if (_330)
         {
             break;
         }
-        Particle _297 = Src._m0[gl_GlobalInvocationID.x];
-        if (_297.lifetime <= 0.0)
+        Particle _333 = Src._m0[gl_GlobalInvocationID.x];
+        if (_333.lifetime <= 0.0)
         {
-            Dst._m0[gl_GlobalInvocationID.x] = _297;
+            Dst._m0[gl_GlobalInvocationID.x] = _333;
             break;
         }
-        float _312 = _297.age + Params.Dt;
-        if (_312 >= _297.lifetime)
+        float _348 = _333.age + Params.Dt;
+        if (_348 >= _333.lifetime)
         {
-            Dst._m0[gl_GlobalInvocationID.x] = Particle{ _297.pos, _297.vel, _312, 0.0, _297.seed, _297.effect, _297.flags, _297.pad };
+            Dst._m0[gl_GlobalInvocationID.x] = Particle{ _333.pos, _333.vel, _348, 0.0, _333.seed, _333.effect, _333.flags, _333.pad };
             break;
         }
-        if (_297.flags >= 0.5)
+        if (_333.flags >= 0.5)
         {
-            Dst._m0[gl_GlobalInvocationID.x] = Particle{ _297.pos, _297.vel, _312, _297.lifetime, _297.seed, _297.effect, _297.flags, _297.pad };
+            Dst._m0[gl_GlobalInvocationID.x] = Particle{ _333.pos, _333.vel, _348, _333.lifetime, _333.seed, _333.effect, _333.flags, _333.pad };
             break;
         }
-        uint _324 = uint(_297.effect + 0.5);
-        uint _338 = uint(Effects._m0[_324].collisionMode + 0.5);
-        float2 _346 = ((_297.pos * Effects._m0[_324].noiseScale) + float2(Params.Time * 0.5)) + float2(_297.seed);
-        float2 _347 = _346 + float2(0.0, 0.100000001490116119384765625);
-        float2 _348 = floor(_347);
-        float2 _349 = fract(_347);
-        float2 _353 = (_349 * _349) * (float2(3.0) - (_349 * 2.0));
-        float2 _355 = fract(_348 * float2(123.339996337890625, 345.45001220703125));
-        float2 _359 = _355 + float2(dot(_355, _355 + float2(34.345001220703125)));
-        float2 _366 = fract((_348 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _370 = _366 + float2(dot(_366, _366 + float2(34.345001220703125)));
-        float2 _377 = fract((_348 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _381 = _377 + float2(dot(_377, _377 + float2(34.345001220703125)));
-        float2 _388 = fract((_348 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _392 = _388 + float2(dot(_388, _388 + float2(34.345001220703125)));
-        float _397 = _353.x;
-        float2 _402 = _346 - float2(0.0, 0.100000001490116119384765625);
-        float2 _403 = floor(_402);
-        float2 _404 = fract(_402);
-        float2 _408 = (_404 * _404) * (float2(3.0) - (_404 * 2.0));
-        float2 _410 = fract(_403 * float2(123.339996337890625, 345.45001220703125));
-        float2 _414 = _410 + float2(dot(_410, _410 + float2(34.345001220703125)));
-        float2 _421 = fract((_403 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _425 = _421 + float2(dot(_421, _421 + float2(34.345001220703125)));
-        float2 _432 = fract((_403 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _436 = _432 + float2(dot(_432, _432 + float2(34.345001220703125)));
-        float2 _443 = fract((_403 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _447 = _443 + float2(dot(_443, _443 + float2(34.345001220703125)));
-        float _452 = _408.x;
-        float2 _457 = _346 + float2(0.100000001490116119384765625, 0.0);
-        float2 _458 = floor(_457);
-        float2 _459 = fract(_457);
-        float2 _463 = (_459 * _459) * (float2(3.0) - (_459 * 2.0));
-        float2 _465 = fract(_458 * float2(123.339996337890625, 345.45001220703125));
-        float2 _469 = _465 + float2(dot(_465, _465 + float2(34.345001220703125)));
-        float2 _476 = fract((_458 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _480 = _476 + float2(dot(_476, _476 + float2(34.345001220703125)));
-        float2 _487 = fract((_458 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _491 = _487 + float2(dot(_487, _487 + float2(34.345001220703125)));
-        float2 _498 = fract((_458 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _502 = _498 + float2(dot(_498, _498 + float2(34.345001220703125)));
-        float _507 = _463.x;
-        float2 _512 = _346 - float2(0.100000001490116119384765625, 0.0);
-        float2 _513 = floor(_512);
-        float2 _514 = fract(_512);
-        float2 _518 = (_514 * _514) * (float2(3.0) - (_514 * 2.0));
-        float2 _520 = fract(_513 * float2(123.339996337890625, 345.45001220703125));
-        float2 _524 = _520 + float2(dot(_520, _520 + float2(34.345001220703125)));
-        float2 _531 = fract((_513 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _535 = _531 + float2(dot(_531, _531 + float2(34.345001220703125)));
-        float2 _542 = fract((_513 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _546 = _542 + float2(dot(_542, _542 + float2(34.345001220703125)));
-        float2 _553 = fract((_513 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
-        float2 _557 = _553 + float2(dot(_553, _553 + float2(34.345001220703125)));
-        float _562 = _518.x;
-        float2 _572 = float2((mix(mix(fract(_359.x * _359.y), fract(_370.x * _370.y), _397), mix(fract(_381.x * _381.y), fract(_392.x * _392.y), _397), _353.y) - mix(mix(fract(_414.x * _414.y), fract(_425.x * _425.y), _452), mix(fract(_436.x * _436.y), fract(_447.x * _447.y), _452), _408.y)) * 5.0, (mix(mix(fract(_469.x * _469.y), fract(_480.x * _480.y), _507), mix(fract(_491.x * _491.y), fract(_502.x * _502.y), _507), _463.y) - mix(mix(fract(_524.x * _524.y), fract(_535.x * _535.y), _562), mix(fract(_546.x * _546.y), fract(_557.x * _557.y), _562), _518.y)) * (-5.0)) * Effects._m0[_324].noiseAmount;
-        float2 _574 = _297.vel + (_572 * Params.Dt);
-        _574.y = _574.y + (Effects._m0[_324].gravity * Params.Dt);
-        float2 _582 = _574 * fast::clamp(1.0 - (Effects._m0[_324].drag * Params.Dt), 0.0, 1.0);
-        float2 _584 = _297.pos + (_582 * Params.Dt);
-        bool _633;
-        if (_338 > 0u)
+        uint _360 = uint(_333.effect + 0.5);
+        uint _374 = uint(Effects._m0[_360].collisionMode + 0.5);
+        float2 _382 = ((_333.pos * Effects._m0[_360].noiseScale) + float2(Params.Time * 0.5)) + float2(_333.seed);
+        float2 _383 = _382 + float2(0.0, 0.100000001490116119384765625);
+        float2 _384 = floor(_383);
+        float2 _385 = fract(_383);
+        float2 _389 = (_385 * _385) * (float2(3.0) - (_385 * 2.0));
+        float2 _391 = fract(_384 * float2(123.339996337890625, 345.45001220703125));
+        float2 _395 = _391 + float2(dot(_391, _391 + float2(34.345001220703125)));
+        float2 _402 = fract((_384 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _406 = _402 + float2(dot(_402, _402 + float2(34.345001220703125)));
+        float2 _413 = fract((_384 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _417 = _413 + float2(dot(_413, _413 + float2(34.345001220703125)));
+        float2 _424 = fract((_384 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _428 = _424 + float2(dot(_424, _424 + float2(34.345001220703125)));
+        float _433 = _389.x;
+        float2 _438 = _382 - float2(0.0, 0.100000001490116119384765625);
+        float2 _439 = floor(_438);
+        float2 _440 = fract(_438);
+        float2 _444 = (_440 * _440) * (float2(3.0) - (_440 * 2.0));
+        float2 _446 = fract(_439 * float2(123.339996337890625, 345.45001220703125));
+        float2 _450 = _446 + float2(dot(_446, _446 + float2(34.345001220703125)));
+        float2 _457 = fract((_439 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _461 = _457 + float2(dot(_457, _457 + float2(34.345001220703125)));
+        float2 _468 = fract((_439 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _472 = _468 + float2(dot(_468, _468 + float2(34.345001220703125)));
+        float2 _479 = fract((_439 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _483 = _479 + float2(dot(_479, _479 + float2(34.345001220703125)));
+        float _488 = _444.x;
+        float2 _493 = _382 + float2(0.100000001490116119384765625, 0.0);
+        float2 _494 = floor(_493);
+        float2 _495 = fract(_493);
+        float2 _499 = (_495 * _495) * (float2(3.0) - (_495 * 2.0));
+        float2 _501 = fract(_494 * float2(123.339996337890625, 345.45001220703125));
+        float2 _505 = _501 + float2(dot(_501, _501 + float2(34.345001220703125)));
+        float2 _512 = fract((_494 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _516 = _512 + float2(dot(_512, _512 + float2(34.345001220703125)));
+        float2 _523 = fract((_494 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _527 = _523 + float2(dot(_523, _523 + float2(34.345001220703125)));
+        float2 _534 = fract((_494 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _538 = _534 + float2(dot(_534, _534 + float2(34.345001220703125)));
+        float _543 = _499.x;
+        float2 _548 = _382 - float2(0.100000001490116119384765625, 0.0);
+        float2 _549 = floor(_548);
+        float2 _550 = fract(_548);
+        float2 _554 = (_550 * _550) * (float2(3.0) - (_550 * 2.0));
+        float2 _556 = fract(_549 * float2(123.339996337890625, 345.45001220703125));
+        float2 _560 = _556 + float2(dot(_556, _556 + float2(34.345001220703125)));
+        float2 _567 = fract((_549 + float2(1.0, 0.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _571 = _567 + float2(dot(_567, _567 + float2(34.345001220703125)));
+        float2 _578 = fract((_549 + float2(0.0, 1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _582 = _578 + float2(dot(_578, _578 + float2(34.345001220703125)));
+        float2 _589 = fract((_549 + float2(1.0)) * float2(123.339996337890625, 345.45001220703125));
+        float2 _593 = _589 + float2(dot(_589, _589 + float2(34.345001220703125)));
+        float _598 = _554.x;
+        float2 _608 = float2((mix(mix(fract(_395.x * _395.y), fract(_406.x * _406.y), _433), mix(fract(_417.x * _417.y), fract(_428.x * _428.y), _433), _389.y) - mix(mix(fract(_450.x * _450.y), fract(_461.x * _461.y), _488), mix(fract(_472.x * _472.y), fract(_483.x * _483.y), _488), _444.y)) * 5.0, (mix(mix(fract(_505.x * _505.y), fract(_516.x * _516.y), _543), mix(fract(_527.x * _527.y), fract(_538.x * _538.y), _543), _499.y) - mix(mix(fract(_560.x * _560.y), fract(_571.x * _571.y), _598), mix(fract(_582.x * _582.y), fract(_593.x * _593.y), _598), _554.y)) * (-5.0)) * Effects._m0[_360].noiseAmount;
+        float2 _610 = _333.vel + (_608 * Params.Dt);
+        _610.y = _610.y + (Effects._m0[_360].gravity * Params.Dt);
+        float2 _618 = _610 * fast::clamp(1.0 - (Effects._m0[_360].drag * Params.Dt), 0.0, 1.0);
+        float2 _620 = _333.pos + (_618 * Params.Dt);
+        bool _669;
+        if (_374 > 0u)
         {
-            float _631;
+            float _667;
             do
             {
-                float2 _604 = ((_584 - float2(Params.CameraX, Params.CameraY)) * Params.Zoom) / float2(Params.TargetW, Params.TargetH);
-                float _605 = _604.x;
-                bool _611;
-                if (!(_605 < 0.0))
+                float2 _640 = ((_620 - float2(Params.CameraX, Params.CameraY)) * Params.Zoom) / float2(Params.TargetW, Params.TargetH);
+                float _641 = _640.x;
+                bool _647;
+                if (!(_641 < 0.0))
                 {
-                    _611 = _605 > 1.0;
+                    _647 = _641 > 1.0;
                 }
                 else
                 {
-                    _611 = true;
+                    _647 = true;
                 }
-                bool _617;
-                if (!_611)
+                bool _653;
+                if (!_647)
                 {
-                    _617 = _604.y < 0.0;
-                }
-                else
-                {
-                    _617 = true;
-                }
-                bool _623;
-                if (!_617)
-                {
-                    _623 = _604.y > 1.0;
+                    _653 = _640.y < 0.0;
                 }
                 else
                 {
-                    _623 = true;
+                    _653 = true;
                 }
-                if (_623)
+                bool _659;
+                if (!_653)
                 {
-                    _631 = 0.0;
+                    _659 = _640.y > 1.0;
+                }
+                else
+                {
+                    _659 = true;
+                }
+                if (_659)
+                {
+                    _667 = 0.0;
                     break;
                 }
-                _631 = SolidMask.sample(SolidSampler, _604, level(0.0)).w;
+                _667 = SolidMask.sample(SolidSampler, _640, level(0.0)).w;
                 break;
             } while(false);
-            _633 = _631 > 0.5;
+            _669 = _667 > 0.5;
         }
         else
         {
-            _633 = false;
+            _669 = false;
         }
-        float2 _808;
-        float _809;
-        float _810;
-        if (_633)
+        float2 _844;
+        float _845;
+        float _846;
+        if (_669)
         {
-            bool _637 = _338 == 1u;
-            float2 _805;
-            float _806;
-            if (_637)
+            bool _673 = _374 == 1u;
+            float2 _841;
+            float _842;
+            if (_673)
             {
-                _805 = _582;
-                _806 = _297.flags;
+                _841 = _618;
+                _842 = _333.flags;
             }
             else
             {
-                bool _641 = _338 == 2u;
-                float2 _803;
-                if (_641)
+                bool _677 = _374 == 2u;
+                float2 _839;
+                if (_677)
                 {
-                    _803 = float2(0.0);
+                    _839 = float2(0.0);
                 }
                 else
                 {
-                    float2 _800;
+                    float2 _836;
                     do
                     {
-                        float2 _654;
-                        float _657;
-                        float2 _663;
-                        float _691;
+                        float2 _690;
+                        float _693;
+                        float2 _699;
+                        float _727;
                         do
                         {
-                            _654 = float2(Params.CameraX, Params.CameraY);
-                            _657 = Params.Zoom;
-                            _663 = float2(Params.TargetW, Params.TargetH);
-                            float2 _664 = (((_584 - float2(2.0, 0.0)) - _654) * _657) / _663;
-                            float _665 = _664.x;
-                            bool _671;
-                            if (!(_665 < 0.0))
+                            _690 = float2(Params.CameraX, Params.CameraY);
+                            _693 = Params.Zoom;
+                            _699 = float2(Params.TargetW, Params.TargetH);
+                            float2 _700 = (((_620 - float2(2.0, 0.0)) - _690) * _693) / _699;
+                            float _701 = _700.x;
+                            bool _707;
+                            if (!(_701 < 0.0))
                             {
-                                _671 = _665 > 1.0;
+                                _707 = _701 > 1.0;
                             }
                             else
                             {
-                                _671 = true;
+                                _707 = true;
                             }
-                            bool _677;
-                            if (!_671)
+                            bool _713;
+                            if (!_707)
                             {
-                                _677 = _664.y < 0.0;
-                            }
-                            else
-                            {
-                                _677 = true;
-                            }
-                            bool _683;
-                            if (!_677)
-                            {
-                                _683 = _664.y > 1.0;
+                                _713 = _700.y < 0.0;
                             }
                             else
                             {
-                                _683 = true;
+                                _713 = true;
                             }
-                            if (_683)
+                            bool _719;
+                            if (!_713)
                             {
-                                _691 = 0.0;
+                                _719 = _700.y > 1.0;
+                            }
+                            else
+                            {
+                                _719 = true;
+                            }
+                            if (_719)
+                            {
+                                _727 = 0.0;
                                 break;
                             }
-                            _691 = SolidMask.sample(SolidSampler, _664, level(0.0)).w;
+                            _727 = SolidMask.sample(SolidSampler, _700, level(0.0)).w;
                             break;
                         } while(false);
-                        float _724;
+                        float _760;
                         do
                         {
-                            float2 _697 = (((_584 + float2(2.0, 0.0)) - _654) * _657) / _663;
-                            float _698 = _697.x;
-                            bool _704;
-                            if (!(_698 < 0.0))
+                            float2 _733 = (((_620 + float2(2.0, 0.0)) - _690) * _693) / _699;
+                            float _734 = _733.x;
+                            bool _740;
+                            if (!(_734 < 0.0))
                             {
-                                _704 = _698 > 1.0;
+                                _740 = _734 > 1.0;
                             }
                             else
                             {
-                                _704 = true;
+                                _740 = true;
                             }
-                            bool _710;
-                            if (!_704)
+                            bool _746;
+                            if (!_740)
                             {
-                                _710 = _697.y < 0.0;
-                            }
-                            else
-                            {
-                                _710 = true;
-                            }
-                            bool _716;
-                            if (!_710)
-                            {
-                                _716 = _697.y > 1.0;
+                                _746 = _733.y < 0.0;
                             }
                             else
                             {
-                                _716 = true;
+                                _746 = true;
                             }
-                            if (_716)
+                            bool _752;
+                            if (!_746)
                             {
-                                _724 = 0.0;
+                                _752 = _733.y > 1.0;
+                            }
+                            else
+                            {
+                                _752 = true;
+                            }
+                            if (_752)
+                            {
+                                _760 = 0.0;
                                 break;
                             }
-                            _724 = SolidMask.sample(SolidSampler, _697, level(0.0)).w;
+                            _760 = SolidMask.sample(SolidSampler, _733, level(0.0)).w;
                             break;
                         } while(false);
-                        float _757;
+                        float _793;
                         do
                         {
-                            float2 _730 = (((_584 - float2(0.0, 2.0)) - _654) * _657) / _663;
-                            float _731 = _730.x;
-                            bool _737;
-                            if (!(_731 < 0.0))
+                            float2 _766 = (((_620 - float2(0.0, 2.0)) - _690) * _693) / _699;
+                            float _767 = _766.x;
+                            bool _773;
+                            if (!(_767 < 0.0))
                             {
-                                _737 = _731 > 1.0;
+                                _773 = _767 > 1.0;
                             }
                             else
                             {
-                                _737 = true;
+                                _773 = true;
                             }
-                            bool _743;
-                            if (!_737)
+                            bool _779;
+                            if (!_773)
                             {
-                                _743 = _730.y < 0.0;
-                            }
-                            else
-                            {
-                                _743 = true;
-                            }
-                            bool _749;
-                            if (!_743)
-                            {
-                                _749 = _730.y > 1.0;
+                                _779 = _766.y < 0.0;
                             }
                             else
                             {
-                                _749 = true;
+                                _779 = true;
                             }
-                            if (_749)
+                            bool _785;
+                            if (!_779)
                             {
-                                _757 = 0.0;
+                                _785 = _766.y > 1.0;
+                            }
+                            else
+                            {
+                                _785 = true;
+                            }
+                            if (_785)
+                            {
+                                _793 = 0.0;
                                 break;
                             }
-                            _757 = SolidMask.sample(SolidSampler, _730, level(0.0)).w;
+                            _793 = SolidMask.sample(SolidSampler, _766, level(0.0)).w;
                             break;
                         } while(false);
-                        float _790;
+                        float _826;
                         do
                         {
-                            float2 _763 = (((_584 + float2(0.0, 2.0)) - _654) * _657) / _663;
-                            float _764 = _763.x;
-                            bool _770;
-                            if (!(_764 < 0.0))
+                            float2 _799 = (((_620 + float2(0.0, 2.0)) - _690) * _693) / _699;
+                            float _800 = _799.x;
+                            bool _806;
+                            if (!(_800 < 0.0))
                             {
-                                _770 = _764 > 1.0;
+                                _806 = _800 > 1.0;
                             }
                             else
                             {
-                                _770 = true;
+                                _806 = true;
                             }
-                            bool _776;
-                            if (!_770)
+                            bool _812;
+                            if (!_806)
                             {
-                                _776 = _763.y < 0.0;
-                            }
-                            else
-                            {
-                                _776 = true;
-                            }
-                            bool _782;
-                            if (!_776)
-                            {
-                                _782 = _763.y > 1.0;
+                                _812 = _799.y < 0.0;
                             }
                             else
                             {
-                                _782 = true;
+                                _812 = true;
                             }
-                            if (_782)
+                            bool _818;
+                            if (!_812)
                             {
-                                _790 = 0.0;
+                                _818 = _799.y > 1.0;
+                            }
+                            else
+                            {
+                                _818 = true;
+                            }
+                            if (_818)
+                            {
+                                _826 = 0.0;
                                 break;
                             }
-                            _790 = SolidMask.sample(SolidSampler, _763, level(0.0)).w;
+                            _826 = SolidMask.sample(SolidSampler, _799, level(0.0)).w;
                             break;
                         } while(false);
-                        float2 _793 = float2(_724 - _691, _790 - _757);
-                        if (dot(_793, _793) < 9.9999999747524270787835121154785e-07)
+                        float2 _829 = float2(_760 - _727, _826 - _793);
+                        if (dot(_829, _829) < 9.9999999747524270787835121154785e-07)
                         {
-                            _800 = float2(0.0, -1.0);
+                            _836 = float2(0.0, -1.0);
                             break;
                         }
-                        _800 = -fast::normalize(_793);
+                        _836 = -fast::normalize(_829);
                         break;
                     } while(false);
-                    _803 = reflect(_582, _800) * Effects._m0[_324].bounciness;
+                    _839 = reflect(_618, _836) * Effects._m0[_360].bounciness;
                 }
-                _805 = _803;
-                _806 = _641 ? 1.0 : _297.flags;
+                _841 = _839;
+                _842 = _677 ? 1.0 : _333.flags;
             }
-            _808 = _805;
-            _809 = _637 ? 0.0 : _297.lifetime;
-            _810 = _806;
+            _844 = _841;
+            _845 = _673 ? 0.0 : _333.lifetime;
+            _846 = _842;
         }
         else
         {
-            _808 = _582;
-            _809 = _297.lifetime;
-            _810 = _297.flags;
+            _844 = _618;
+            _845 = _333.lifetime;
+            _846 = _333.flags;
         }
-        Dst._m0[gl_GlobalInvocationID.x] = Particle{ select(_584, _297.pos, bool2(_633)), _808, _312, _809, _297.seed, _297.effect, _810, _297.pad };
+        Dst._m0[gl_GlobalInvocationID.x] = Particle{ select(_620, _333.pos, bool2(_669)), _844, _348, _845, _333.seed, _333.effect, _846, _333.pad };
         break;
     } while(false);
 }

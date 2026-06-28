@@ -1126,6 +1126,8 @@ public partial class Manager
 		ImGui.SeparatorText("Particle Asset");
 		ImGui.TextDisabled($"shared '{name}' - autosaves");
 		ImGui.Indent();
+		if (ImGui.Button("Test Burst", new Vector2(-1, 0)))
+			TestParticleBurst(actor);
 
 		FxShape("Shape", name, ref e.Shape);
 		FxInt("Count", name, ref e.BurstCount, 1, ParticleSystem.Capacity);
@@ -1135,6 +1137,12 @@ public partial class Manager
 		{
 			FxFloat("Direction", name, ref e.DirectionDegrees, -180.0f, 180.0f);
 			FxFloat("Spread", name, ref e.SpreadDegrees, 0.0f, 360.0f);
+		}
+		if (e.Shape == ParticleEmitterShape.Line)
+		{
+			FxFloat("Length", name, ref e.EmitterRadius, 0.0f, 128.0f);
+			FxFloat("Direction", name, ref e.DirectionDegrees, -180.0f, 180.0f);
+			FxFloat("Thickness", name, ref e.SpreadDegrees, 0.0f, 32.0f);
 		}
 		FxMode("Mode", name, ref e.Mode);
 		if (e.Mode == ParticleEmissionMode.Continuous)
@@ -1152,6 +1160,7 @@ public partial class Manager
 		FxFloat("Size Start", name, ref e.SizeStart, 0.0f, 16.0f);
 		FxFloat("Size End", name, ref e.SizeEnd, 0.0f, 16.0f);
 		FxCheckbox("Additive", name, ref e.Additive);
+		FxStyle("Style", name, ref e.Style);
 		FxColor("Birth", name, ref e.ColorBirth);
 		FxColor("Mid", name, ref e.ColorMid);
 		FxColor("Death", name, ref e.ColorEnd);
@@ -1162,6 +1171,19 @@ public partial class Manager
 			FxFloat("Bounciness", name, ref e.Bounciness, 0.0f, 1.0f);
 
 		ImGui.Unindent();
+	}
+
+	void TestParticleBurst(JsonObject actor)
+	{
+		var id = ActorSpecs.GetActorId(actor);
+		if (game == null || id == null)
+			return;
+		foreach (var instance in game.Actors)
+			if (instance is ParticleEmitter emitter && emitter.ActorId == id)
+			{
+				emitter.TestBurst();
+				return;
+			}
 	}
 
 	void FxFloat(string label, string name, ref float field, float min, float max)
@@ -1213,9 +1235,19 @@ public partial class Manager
 	{
 		var v = (int)field;
 		ImGui.SetNextItemWidth(-1);
-		if (!ImGui.Combo($"##{label}", ref v, "Point\0Circle\0Cone\0"))
+		if (!ImGui.Combo($"##{label}", ref v, "Point\0Circle\0Cone\0Line\0"))
 			return;
 		using (CaptureParticleEffectUndo(name)) field = (ParticleEmitterShape)v;
+		MarkParticleEffectDirty(name);
+	}
+
+	void FxStyle(string label, string name, ref ParticleRenderStyle field)
+	{
+		var v = (int)field;
+		ImGui.SetNextItemWidth(-1);
+		if (!ImGui.Combo($"##{label}", ref v, "Square\0Plasma\0"))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = (ParticleRenderStyle)v;
 		MarkParticleEffectDirty(name);
 	}
 

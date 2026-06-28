@@ -77,6 +77,12 @@ public class ParticleEmitter : Actor
 			system.Emit(effectIndex, Position, count);
 	}
 
+	public void TestBurst()
+	{
+		if (effectIndex >= 0 && Game.Particles is { } system)
+			system.Emit(effectIndex, Position, ParticleEffectAssets.Get(EffectName).BurstCount);
+	}
+
 	// The particles are the visual; the actor itself draws nothing in-world
 	// (the editor draws its own selection handles from the actor bounds).
 	public override void Render(Batcher batcher) { }

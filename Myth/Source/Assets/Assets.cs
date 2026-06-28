@@ -222,7 +222,7 @@ public static class Assets
 		}
 
 		if (!spriteFiles.ContainsKey("bud") && spriteFiles.TryGetValue("player", out var playerSprite))
-			generatedSprites.Add(("bud", playerSprite, CreateBudPlayerLayerFilter));
+			generatedSprites.Add(("bud", playerSprite, CreateSwordlessPlayerLayerFilter));
 
 		foreach (var file in EnumerateAsepriteFiles(tilesetsPath))
 		{
@@ -252,7 +252,7 @@ public static class Assets
 
 		foreach (var (name, ase) in spriteFiles)
 		{
-			var frames = ase.RenderAllFrames();
+			var frames = name == "player" ? ase.RenderAllFrames(CreateSwordlessPlayerLayerFilter()) : ase.RenderAllFrames();
 			PackSpriteFrames(name, ase, frames, packer);
 		}
 
@@ -1807,7 +1807,7 @@ public static class Assets
 			GeneratedTransitions[name] = transitions;
 	}
 
-	static Predicate<Aseprite.Layer> CreateBudPlayerLayerFilter()
+	static Predicate<Aseprite.Layer> CreateSwordlessPlayerLayerFilter()
 	{
 		var hiddenChildLevel = int.MaxValue;
 		return layer =>

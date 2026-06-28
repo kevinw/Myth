@@ -130,6 +130,12 @@
       "FlickerIntensity": 0.02,
       "Radius": 86.05,
       "Intensity": 1.05
+    },
+    {
+      "Id": "990651d7308764c8",
+      "Type": "ParticleEmitter",
+      "Position": [164, 36],
+      "EffectName": "plasma_strike"
     }
   ]
 }

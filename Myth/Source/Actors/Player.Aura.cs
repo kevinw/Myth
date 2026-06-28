@@ -20,7 +20,7 @@ public partial class Player
 
 
 	private bool AuraActive =>
-		Velocity.RoundToPoint2() == Point2.Zero && IsDucking && Game.GetFirst<Bud>() is { } bud && bud.IsDucking;
+		Velocity.RoundToPoint2() == Point2.Zero && state.Current == States.Normal && IsDucking && Game.GetFirst<Bud>() is { } bud && bud.IsDucking;
 
 	public void UpdateAura(float dt)
 	{

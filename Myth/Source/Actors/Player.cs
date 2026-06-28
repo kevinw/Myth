@@ -555,7 +555,7 @@ public abstract class Pawn : Actor
 		}
 	}
 
-	private bool TryStartDash(int input)
+	bool TryStartDash(int input)
 	{
 		if (dashCooldownTimer > 0)
 			return false;
@@ -587,7 +587,7 @@ public abstract class Pawn : Actor
 			State = States.Normal;
 	}
 
-	private void MoveDash(float value)
+	void MoveDash(float value)
 	{
 		dashRemainder += value;
 		var move = (int)dashRemainder;
@@ -646,7 +646,7 @@ public abstract class Pawn : Actor
 		Velocity.Y = force;
 	}
 
-	private bool CanCoyoteJump()
+	bool CanCoyoteJump()
 	{
 		if (grounded || coyoteJumpTimer <= 0)
 			return false;
@@ -699,10 +699,10 @@ public abstract class Pawn : Actor
 		return touchingLeft ? 1 : -1;
 	}
 
-	private bool IsWallHugging()
+	bool IsWallHugging()
 		=> IsWallHugging(GetWallJumpDirection());
 
-	private bool IsWallHugging(int wallJumpDirection)
+	bool IsWallHugging(int wallJumpDirection)
 		=> wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
 }
 
@@ -733,13 +733,14 @@ public partial class Player : Pawn
 	public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
 
-	private int footstepFrame = -1;
-	private float duckAttackCooldownTimer;
-	private bool duckAttack;
-	private bool attackBlocked;
-	private Light? light;
-	private SoundInstance? rollSound;
-	private bool CanPlaySquishSound = false;
+	int footstepFrame = -1;
+	float duckAttackCooldownTimer;
+	bool duckAttack;
+	bool attackBlocked;
+	int plasmaStrikeEffect = -1;
+	Light? light;
+	SoundInstance? rollSound;
+	bool CanPlaySquishSound = false;
 
 	public Player()
 	{
@@ -771,7 +772,10 @@ public partial class Player : Pawn
 		UpdateLightPosition();
 
 		if (Game.Particles is { Supported: true } particles)
+		{
 			burrowSparkEffect = particles.AcquireEffect("sparks");
+			plasmaStrikeEffect = particles.AcquireEffect("plasma_strike");
+		}
 	}
 
 	public override void OnCollideY()
@@ -1048,7 +1052,7 @@ public partial class Player : Pawn
 	protected override void UpdateRollAudioPosition()
 		=> Game.SetAudioEventPosition(rollSound, Position, Game.GetFirst(Masks.Player)?.Position);
 
-	private void StartRollSound()
+	void StartRollSound()
 	{
 		StopRollSound(true);
 
@@ -1065,9 +1069,9 @@ public partial class Player : Pawn
 		}
 	}
 
-	private void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
+	void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
 
-	private void UpdateFootsteps()
+	void UpdateFootsteps()
 	{
 		if (State != States.Normal || !grounded || !IsPlaying("run") && !IsPlaying("run_start"))
 		{
@@ -1098,6 +1102,9 @@ public partial class Player : Pawn
 
 		RectInt? hitbox = null;
 
+		const float ATTACK_WINDUP = 0.09f;
+		const float ATTACK_DURATION = 0.41f;
+
 		if (attackBlocked)
 		{
 			if (state.PreviousTime <= 0)
@@ -1108,17 +1115,20 @@ public partial class Player : Pawn
 		else if (duckAttack)
 		{
 			if (state.PreviousTime <= 0)
+			{
 				AudioEvent("sword_crouched");
+				EmitPlasmaStrike(duckingAttack: true);
+			}
 			if (state.Time < Animation.Duration)
 				hitbox = GetAttackHitbox(duckAttack);
 		}
-		else if (state.Time < 0.2f)
+		else if (state.Time < ATTACK_WINDUP)
 		{
 			hitbox = new(-16, -12, 17, 8);
 		}
-		else if (state.Time < 0.50f)
+		else if (state.Time < ATTACK_DURATION)
 		{
-			if (state.PreviousTime < 0.2f)
+			if (state.PreviousTime < ATTACK_WINDUP)
 			{
 				attackBlocked = IsAttackBlocked(duckAttack);
 				if (attackBlocked)
@@ -1129,6 +1139,7 @@ public partial class Player : Pawn
 				else
 				{
 					AudioEvent("sword");
+					EmitPlasmaStrike(duckingAttack: false);
 				}
 			}
 			if (!attackBlocked)
@@ -1184,7 +1195,7 @@ public partial class Player : Pawn
 		}
 	}
 
-	private bool IsAttackBlocked(bool duckingAttack)
+	bool IsAttackBlocked(bool duckingAttack)
 	{
 		//
 		// TODO: make this false if we would have hit a breakable block or enemy
@@ -1197,12 +1208,26 @@ public partial class Player : Pawn
 		return Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold;
 	}
 
-	private RectInt GetAttackHitbox(bool duckingAttack)
+	static RectInt GetAttackHitbox(bool duckingAttack)
 		=> duckingAttack
 			? new RectInt(3, -6, 13, 6)
-			: new RectInt(8, -9, 16, 9);
+			: new RectInt(8, -9, 19, 9);
 
-	private string GetAttackAnimation()
+	void EmitPlasmaStrike(bool duckingAttack)
+	{
+		var direction = Facing == Signs.Positive ? Vector2.UnitX : -Vector2.UnitX;
+		var y = duckingAttack ? -3 : -4;
+		var startOffsetX = duckingAttack ? 5 : 12;
+		var lineLength = duckingAttack ? 7 : 12f;
+		Game.Particles?.EmitLine(plasmaStrikeEffect, Position + direction * startOffsetX + new Vector2(0, y), direction, lineLength: lineLength, baseVelocity: new Vector2(20.0f * Facing, 0) + new Vector2(Velocity.X, Velocity.Y * 0.9f));
+	}
+
+	void EmitPlasmaStrike(Vector2 from, Vector2 to)
+	{
+		Game.Particles?.EmitLineBetween(plasmaStrikeEffect, from, to);
+	}
+
+	string GetAttackAnimation()
 	{
 		if (duckAttack)
 			return attackBlocked ? "duck_attack_block" : "duck_attack";
@@ -1243,7 +1268,7 @@ public partial class Player : Pawn
 		ApplyHurt(healthDelta, fromActor: by);
 	}
 
-	private void ApplyHurt(int healthDelta = -1, Actor? fromActor = null)
+	void ApplyHurt(int healthDelta = -1, Actor? fromActor = null)
 	{
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
@@ -1281,7 +1306,7 @@ public partial class Player : Pawn
 		}
 	}
 
-	private Vector2 HurtGlitchAxis(Actor? fromActor)
+	Vector2 HurtGlitchAxis(Actor? fromActor)
 	{
 		if (fromActor != null)
 		{
@@ -1346,5 +1371,8 @@ public partial class Player : Pawn
 			light = null;
 		}
 		ReleaseBurrowParticles();
+		if (plasmaStrikeEffect >= 0 && Game.Particles is { } particles)
+			particles.ReleaseEffect(plasmaStrikeEffect);
+		plasmaStrikeEffect = -1;
 	}
 }

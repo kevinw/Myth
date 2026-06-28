@@ -49,6 +49,7 @@ public partial class Game : IDisposable
 	public float SdfAuraScrollTime => View?.SdfAuraScrollTime ?? 0f;
 	public Vector2 ViewCenterWorld => View?.ViewCenterWorld ?? default;
 	public Target Screen => View!.Screen;
+	internal bool BudAIEnabled = true;
 	public bool ShowForegroundLayer
 	{
 		get => View?.ShowForegroundLayer ?? true;

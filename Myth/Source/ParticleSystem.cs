@@ -39,6 +39,7 @@ public sealed class ParticleSystem : IDisposable
 	{
 		public float Gravity, Drag, NoiseAmount, NoiseScale;
 		public float SizeStart, SizeEnd, CollisionMode, Bounciness;
+		public float Style, Pad0, Pad1, Pad2;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -49,7 +50,7 @@ public sealed class ParticleSystem : IDisposable
 		public uint Shape;
 		public float Radius, DirAngle, Spread;
 		public float SpeedMin, SpeedMax, LifeMin, LifeMax;
-		public float Pad0, Pad1;
+		public float BaseVelocityX, BaseVelocityY;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -94,7 +95,7 @@ public sealed class ParticleSystem : IDisposable
 	Texture? colorLut;
 	int colorLutHash = -1;
 
-	readonly ParticleEffect?[] effects = new ParticleEffect?[MaxEffects];
+	readonly string?[] effectNames = new string?[MaxEffects];
 	readonly EffectParams[] effectData = new EffectParams[MaxEffects];
 	readonly Dictionary<string, int> slotByName = new(StringComparer.OrdinalIgnoreCase);
 	readonly int[] slotRefCount = new int[MaxEffects];
@@ -188,9 +189,9 @@ public sealed class ParticleSystem : IDisposable
 		}
 		for (var i = 0; i < MaxEffects; i++)
 		{
-			if (effects[i] == null)
+			if (effectNames[i] == null)
 			{
-				effects[i] = ParticleEffectAssets.Get(name);
+				effectNames[i] = name;
 				slotByName[name] = i;
 				slotRefCount[i] = 1;
 				return i;
@@ -205,15 +206,9 @@ public sealed class ParticleSystem : IDisposable
 			return;
 		if (--slotRefCount[slot] > 0)
 			return;
-		effects[slot] = null;
-		foreach (var (name, index) in slotByName)
-		{
-			if (index == slot)
-			{
-				slotByName.Remove(name);
-				break;
-			}
-		}
+		if (effectNames[slot] is { } name)
+			slotByName.Remove(name);
+		effectNames[slot] = null;
 	}
 
 	/// Queues a burst of the given effect at a world position.
@@ -240,16 +235,40 @@ public sealed class ParticleSystem : IDisposable
 			spreadRadians: spreadRadians);
 	}
 
+	public void EmitLine(int effectIndex, Vector2 origin, Vector2 direction, float lineLength = -1f, Vector2 baseVelocity = default)
+	{
+		if (GetEffect(effectIndex, 1) is not { } effect)
+			return;
+		QueueEmit(effectIndex, effect, origin, effect.BurstCount,
+			(uint)ParticleEmitterShape.Line,
+			MathF.Atan2(direction.Y, direction.X),
+			effect.SpeedMin, effect.SpeedMax,
+			radius: lineLength == -1f ? effect.EmitterRadius : lineLength, spreadRadians: effect.SpreadDegrees, baseVelocity: baseVelocity);
+	}
+
+	public void EmitLineBetween(int effectIndex, Vector2 from, Vector2 to)
+	{
+		if (GetEffect(effectIndex, 1) is not { } effect)
+			return;
+		var delta = to - from;
+		var count = Math.Max(1, (int)MathF.Round(effect.BurstCount * delta.Length() / MathF.Max(1, effect.EmitterRadius)));
+		QueueEmit(effectIndex, effect, from, count,
+			(uint)ParticleEmitterShape.Line,
+			MathF.Atan2(delta.Y, delta.X),
+			effect.SpeedMin, effect.SpeedMax,
+			radius: delta.Length(), spreadRadians: effect.SpreadDegrees);
+	}
+
 	ParticleEffect? GetEffect(int effectIndex, int count)
 	{
 		if (!supported || count <= 0 || effectIndex < 0 || effectIndex >= MaxEffects)
 			return null;
 		if (pendingEmits.Count >= MaxEmitsPerFrame)
 			return null;
-		return effects[effectIndex];
+		return effectNames[effectIndex] is { } name ? ParticleEffectAssets.Get(name) : null;
 	}
 
-	void QueueEmit(int effectIndex, ParticleEffect effect, Vector2 worldPosition, int count, uint shape, float dirRadians, float speedMin, float speedMax, float spreadRadians = float.NaN)
+	void QueueEmit(int effectIndex, ParticleEffect effect, Vector2 worldPosition, int count, uint shape, float dirRadians, float speedMin, float speedMax, float radius = float.NaN, float spreadRadians = float.NaN, Vector2 baseVelocity = default)
 	{
 		count = Math.Min(count, Capacity);
 		pendingEmits.Add(new EmitParams
@@ -261,13 +280,17 @@ public sealed class ParticleSystem : IDisposable
 			OriginX = worldPosition.X,
 			OriginY = worldPosition.Y,
 			Shape = shape,
-			Radius = effect.EmitterRadius,
+			Radius = float.IsNaN(radius) ? effect.EmitterRadius : radius,
 			DirAngle = dirRadians,
-			Spread = float.IsNaN(spreadRadians) ? effect.SpreadDegrees * (MathF.PI / 180.0f) : spreadRadians,
+			Spread = float.IsNaN(spreadRadians)
+				? effect.Shape == ParticleEmitterShape.Line ? effect.SpreadDegrees : effect.SpreadDegrees * (MathF.PI / 180.0f)
+				: spreadRadians,
 			SpeedMin = speedMin,
 			SpeedMax = speedMax,
 			LifeMin = effect.LifeMin,
 			LifeMax = effect.LifeMax,
+			BaseVelocityX = baseVelocity.X,
+			BaseVelocityY = baseVelocity.Y,
 		});
 		emitCursor = (emitCursor + count) % Capacity;
 	}
@@ -349,8 +372,9 @@ public sealed class ParticleSystem : IDisposable
 	{
 		for (var i = 0; i < MaxEffects; i++)
 		{
-			if (effects[i] is { } e)
+			if (effectNames[i] is { } name)
 			{
+				var e = ParticleEffectAssets.Get(name);
 				effectData[i] = new EffectParams
 				{
 					Gravity = e.Gravity,
@@ -361,6 +385,7 @@ public sealed class ParticleSystem : IDisposable
 					SizeEnd = e.SizeEnd,
 					CollisionMode = (float)e.Collision,
 					Bounciness = e.Bounciness,
+					Style = (float)e.Style,
 				};
 			}
 			else
@@ -372,7 +397,7 @@ public sealed class ParticleSystem : IDisposable
 
 		var hash = 17;
 		for (var i = 0; i < MaxEffects; i++)
-			hash = HashCode.Combine(hash, effects[i]?.ColorHash() ?? 0);
+			hash = HashCode.Combine(hash, effectNames[i] is { } name ? ParticleEffectAssets.Get(name).ColorHash() : 0);
 		if (hash == colorLutHash)
 			return;
 		colorLutHash = hash;
@@ -380,8 +405,9 @@ public sealed class ParticleSystem : IDisposable
 		Span<Color> texels = stackalloc Color[LutWidth * MaxEffects];
 		for (var i = 0; i < MaxEffects; i++)
 		{
-			if (effects[i] is not { } e)
+			if (effectNames[i] is not { } name)
 				continue;
+			var e = ParticleEffectAssets.Get(name);
 			for (var x = 0; x < LutWidth; x++)
 				texels[i * LutWidth + x] = e.EvaluateColor(x / (float)(LutWidth - 1));
 		}

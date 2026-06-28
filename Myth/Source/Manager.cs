@@ -858,7 +858,7 @@ public partial class Manager : App
 #if !BROWSER && !IOS
 		if (!keyboardShortcutsBlocked)
 		{
-			if (Input.Keyboard.Pressed(Keys.B)) ToggleBurrowParticles();
+			if (Input.Keyboard.Pressed(Keys.B)) ToggleBudAI();
 		}
 #endif
 
@@ -880,6 +880,14 @@ public partial class Manager : App
 
 	static bool PerfModifierDown(ControllerState controller)
 		=> !controller.IsGamepad && controller.Down(4);
+
+	internal bool BudAIEnabled = true;
+	void ToggleBudAI() {
+		if (game != null) {
+			game.BudAIEnabled = !game.BudAIEnabled;
+			game.DisplayMessage(game.BudAIEnabled ? "Bud AI Enabled" : "Bud AI Disabled");
+		}
+	}
 
 	void ToggleLighting()
 	{
@@ -922,7 +930,6 @@ public partial class Manager : App
 	void ShowPerfToggleMessage(string name, bool enabled)
 	{
 		var message = $"Perf: {name} {(enabled ? "On" : "Off")}";
-		Console.WriteLine($"{message} ({PerfToggles.Summary})");
 		game?.DisplayMessage(message);
 	}
 

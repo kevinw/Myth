@@ -85,6 +85,7 @@ public partial class Player
 		var from = Position + new Point2(0, -6);
 		var to = target.Position + target.Hitbox.Rect.Center;
 		Game.CollisionRectsThisFrame.Add(LineBounds(from, to));
+		EmitPlasmaStrike(from, to);
 		Position = placement.Value;
 		Facing = target.Position.X >= Position.X ? Signs.Positive : Signs.Negative;
 		Hit(target);

@@ -52,6 +52,8 @@ public class Bud : Pawn
 
 	public override PawnInput GetInput()
 	{
+		if (!Game.BudAIEnabled) return new();
+
 		var moveX = 0;
 		var moveY = 0;
 		var jumpPressed = false;

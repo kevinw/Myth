@@ -9,6 +9,13 @@ public enum ParticleEmitterShape
 	Point,
 	Circle,
 	Cone,
+	Line,
+}
+
+public enum ParticleRenderStyle
+{
+	Square,
+	Plasma,
 }
 
 public enum ParticleEmissionMode
@@ -53,6 +60,7 @@ public sealed class ParticleEffect
 	public float SizeStart = 2.0f;
 	public float SizeEnd = 0.5f;
 	public bool Additive = true;
+	public ParticleRenderStyle Style;
 
 	// Collision (against the foreground solid mask)
 	public ParticleCollisionMode Collision = ParticleCollisionMode.None;
@@ -96,6 +104,7 @@ public sealed class ParticleEffect
 		["SizeStart"] = SizeStart,
 		["SizeEnd"] = SizeEnd,
 		["Additive"] = Additive,
+		["Style"] = Style.ToString(),
 		["Collision"] = Collision.ToString(),
 		["Bounciness"] = Bounciness,
 		["ColorBirth"] = JsonUtil.ColorToHex(ColorBirth),
@@ -137,6 +146,8 @@ public sealed class ParticleEffect
 			Mode = mode;
 		if (Enum.TryParse<ParticleCollisionMode>(JsonUtil.ReadString(json, "Collision"), out var collision))
 			Collision = collision;
+		if (Enum.TryParse<ParticleRenderStyle>(JsonUtil.ReadString(json, "Style"), out var style))
+			Style = style;
 		if (JsonUtil.ReadColor(json, "ColorBirth") is { } cb) ColorBirth = cb;
 		if (JsonUtil.ReadColor(json, "ColorMid") is { } cm) ColorMid = cm;
 		if (JsonUtil.ReadColor(json, "ColorEnd") is { } ce) ColorEnd = ce;

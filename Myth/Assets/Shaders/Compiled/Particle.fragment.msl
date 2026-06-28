@@ -11,12 +11,27 @@ struct fragment_main_out
 struct fragment_main_in
 {
     float4 in_var_TEXCOORD0 [[user(locn0)]];
+    float2 in_var_TEXCOORD1 [[user(locn1)]];
+    float in_var_TEXCOORD2 [[user(locn2)]];
 };
 
 fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]])
 {
     fragment_main_out out = {};
-    out.out_var_SV_Target0 = in.in_var_TEXCOORD0;
+    float4 _61;
+    do
+    {
+        if (in.in_var_TEXCOORD2 > 0.5)
+        {
+            float _43 = length(in.in_var_TEXCOORD1 - float2(0.5)) * 2.0;
+            float _47 = 1.0 - smoothstep(0.0, 0.37999999523162841796875, _43);
+            _61 = float4(mix(in.in_var_TEXCOORD0.xyz, float3(1.0), float3(_47 * 0.85000002384185791015625)), in.in_var_TEXCOORD0.w * precise::max((1.0 - smoothstep(0.3499999940395355224609375, 1.0, _43)) * 0.449999988079071044921875, _47));
+            break;
+        }
+        _61 = in.in_var_TEXCOORD0;
+        break;
+    } while(false);
+    out.out_var_SV_Target0 = _61;
     return out;
 }
 
