@@ -114,7 +114,9 @@ public partial class Game : IDisposable
 	internal Rng rng = new();
 
 
+#if DEBUG
 	internal bool draggingPlayer;
+#endif
 	// True when the sim is in a room and not mid-transition: when Manager applies live
 	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
 	internal bool AcceptsLiveInput => room != null && nextRoom == null;
@@ -463,11 +465,13 @@ public partial class Game : IDisposable
 #endif
 	}
 
-	void PreUpdateSystems() {
+	void PreUpdateSystems()
+	{
 		View?.UpdateParticles(Time.Delta);
 	}
 
-	void PostUpdateSystems() {
+	void PostUpdateSystems()
+	{
 		UpdateCamera();
 		UpdateStory();
 		rewinder.UpdateDebugPlayerRewind();

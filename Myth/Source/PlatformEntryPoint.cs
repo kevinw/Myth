@@ -5,11 +5,9 @@ using System.Runtime.InteropServices.JavaScript;
 
 public static partial class PlatformSpecific
 {
-	[System.Runtime.Versioning.SupportedOSPlatform("browser")]
 	[JSImport("setVirtualControllerVisible", "MythOverlay")]
 	internal static partial void SetVirtualControllerVisible(bool visible);
 
-	[System.Runtime.Versioning.SupportedOSPlatform("browser")]
 	[JSImport("getAudioDisabled", "MythOverlay")]
 	internal static partial bool GetAudioDisabled();
 

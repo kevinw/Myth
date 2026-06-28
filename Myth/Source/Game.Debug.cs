@@ -173,7 +173,11 @@ public partial class Game
 	// after, while it settles) so the budgeted build doesn't compete with the slide and
 	// hitch it. Set by Manager from the editor camera tween; gameplay transitions are
 	// detected from nextRoom + this settle timer.
+#if EDITOR
 	internal bool navBuildSuppressedByHost;
+#else
+	internal const bool navBuildSuppressedByHost = false;
+#endif
 	const float NavBuildSettleSeconds = 0.3f;
 	float navBuildSettleTimer;
 
