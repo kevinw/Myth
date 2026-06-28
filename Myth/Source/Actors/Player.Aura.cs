@@ -13,19 +13,23 @@ public partial class Player
 	static float AuraStripe => 2.5f;      // rainbow band width (px)
 	static float AuraDistScale => 255f; // R8 -> px
 	static float AuraK => 10f;          // smooth-min blob roundness / bridge thickness
-	static float AuraEnterTime => 0.8f;
+	static float AuraEnterTime => 1.9f;
 
 	float auraAmount; // eased 0..1
 	float auraEnterTimer;
 
 
-	private bool AuraActive => IsDucking && Game.GetFirst<Bud>() is { } bud && bud.IsDucking;
+	private bool AuraActive =>
+		Velocity.RoundToPoint2() == Point2.Zero && IsDucking && Game.GetFirst<Bud>() is { } bud && bud.IsDucking;
 
 	public void UpdateAura(float dt)
 	{
-		if (AuraActive) {
+		if (AuraActive)
+		{
 			auraEnterTimer += Time.Delta;
-		} else {
+		}
+		else
+		{
 			auraEnterTimer = 0;
 		}
 
