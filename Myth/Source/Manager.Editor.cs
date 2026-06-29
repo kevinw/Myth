@@ -36,6 +36,14 @@ public partial class Manager
 	float editorZoomTweenTo;
 	float editorCameraTween = 1.0f;
 
+	// Seconds left where wheel events are treated as a trackpad two-finger swipe (pan) rather than a
+	// mouse wheel (zoom). A trackpad sends precise/fractional deltas; we latch on those so the stray
+	// whole-number crossing mid-swipe doesn't blip a zoom. See UpdateEditorWorldView.
+	float trackpadScrollLatch;
+	static float TrackpadScrollLatchTime => 0.5f;
+	// World pixels panned per unit of (small, ~0.1-0.4) trackpad wheel delta, before the zoom divide.
+	static float EditorTrackpadPanSpeed => 20f;
+
 	char brush = '0'; // The current Type we're painting in the Editor
 	Factory.TileLayer activeTileLayer = Factory.TileLayer.Foreground;
 	bool editorShowForegroundLayer = true;
@@ -87,6 +95,8 @@ public partial class Manager
 	RoomSettings? copiedRoomSettings;
 	JsonObject? actorClipboard;
 	bool actorClipboardPreservesId;
+	// Whole-room clipboard (serialized room state), distinct from copiedRoomSettings which is settings-only.
+	string? roomClipboardJson;
 
 #if DEBUG && !IOS
 	FileSystemWatcher? assetWatcher;
@@ -149,6 +159,10 @@ public partial class Manager
 
 	JsonUndoScope CaptureSelectionUndo(string name)
 		=> undo.Capture(name, EditorSelectionUndoTarget());
+
+	// Pairs room existence with the editor selection so undo restores both the room and what was selected.
+	JsonUndoScope CaptureRoomExistenceUndo(string name, Room room)
+		=> undo.Capture(name, new RoomExistenceUndoTarget(this, room), EditorSelectionUndoTarget());
 
 	JsonUndoScope CapturePrefabUndo(string name, string specId)
 		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
@@ -313,28 +327,58 @@ public partial class Manager
 		if (!modifier)
 			return false;
 
-		if (Input.Keyboard.Pressed(Keys.C))
+		// In room-edit mode the clipboard operates on whole rooms; otherwise on the selected actor.
+		if (editingRoomGeometry)
 		{
-			CopySelectedActor(cut: false);
-			return true;
-		}
+			if (Input.Keyboard.Pressed(Keys.C))
+			{
+				CopyCurrentRoom();
+				return true;
+			}
 
-		if (Input.Keyboard.Pressed(Keys.X))
-		{
-			CopySelectedActor(cut: true);
-			return true;
-		}
+			if (Input.Keyboard.Pressed(Keys.X))
+			{
+				CutCurrentRoom();
+				return true;
+			}
 
-		if (Input.Keyboard.Pressed(Keys.V))
-		{
-			PasteActor();
-			return true;
-		}
+			if (Input.Keyboard.Pressed(Keys.V))
+			{
+				PasteRoomAtCursor();
+				return true;
+			}
 
-		if (Input.Keyboard.Pressed(Keys.D))
+			if (Input.Keyboard.Pressed(Keys.D))
+			{
+				DuplicateCurrentRoom();
+				return true;
+			}
+		}
+		else
 		{
-			DuplicateSelectedActor();
-			return true;
+			if (Input.Keyboard.Pressed(Keys.C))
+			{
+				CopySelectedActor(cut: false);
+				return true;
+			}
+
+			if (Input.Keyboard.Pressed(Keys.X))
+			{
+				CopySelectedActor(cut: true);
+				return true;
+			}
+
+			if (Input.Keyboard.Pressed(Keys.V))
+			{
+				PasteActor();
+				return true;
+			}
+
+			if (Input.Keyboard.Pressed(Keys.D))
+			{
+				DuplicateSelectedActor();
+				return true;
+			}
 		}
 
 		if (Input.Keyboard.Pressed(Keys.Z))
@@ -433,6 +477,32 @@ public partial class Manager
 			{
 				ParticleEffectAssets.Get(name).Load(obj);
 				ParticleEffectAssets.Save(name);
+			}
+		}
+	}
+
+	// Undo target for a whole room's *existence*, so create/paste/duplicate/delete are all undoable
+	// through one mechanism. CaptureJson returns the room's serialized state while it's in the world,
+	// or "" once removed; ApplyJson recreates the room (restoring tiles/actors/settings from that
+	// state) or removes it. The Room object is kept alive by this target across the undo/redo cycle,
+	// so an undone deletion re-adds the very same instance.
+	sealed class RoomExistenceUndoTarget(Manager manager, Room room) : IJsonUndoTarget
+	{
+		public string UndoId => $"room-exists:{room.Id}";
+
+		public string CaptureJson()
+			=> Assets.RoomsById.TryGetValue(room.Id, out var existing) && existing == room
+				? room.ToJsonString()
+				: "";
+
+		public void ApplyJson(string json)
+		{
+			if (json.Length == 0)
+				manager.RemoveRoomFromWorld(room);
+			else
+			{
+				room.LoadJsonState(json);
+				manager.AddRoomToWorld(room);
 			}
 		}
 	}
@@ -931,28 +1001,25 @@ public partial class Manager
 			return;
 
 		var changed = false;
-		if (editingRoomGeometry)
+		// Room geometry is edited directly in the world now: zoom out until the room is small on
+		// screen to enter room-edit mode (move/resize handles, drag, copy/paste). No button needed.
 		{
-			var vsb = new ValueStringBuilder(stackalloc char[30]);
+			var vsb = new ValueStringBuilder(stackalloc char[40]);
+			vsb.Append("Size ");
 			vsb.Append(room.Size.X);
 			vsb.Append(" x ");
 			vsb.Append(room.Size.Y);
-			vsb.Append(vsb.AsSpan());
 			ImGui.TextUnformatted(vsb.AsSpan());
 		}
-		if (ImGui.Button(editingRoomGeometry ? "Done" : "Resize"))
-		{
-			editingRoomGeometry = !editingRoomGeometry;
-			ClearEditorDragState();
-		}
-		ImGui.SameLine();
 
-		if (ImGui.Button("Copy"))
+		// These copy/paste only the room's *settings* (backdrop/ambient/etc.) onto the current room.
+		// Whole-room copy/paste is the world-level Ctrl+C/V in room-edit mode.
+		if (ImGui.Button("Copy Settings"))
 			copiedRoomSettings = CaptureRoomSettings(room);
 		if (copiedRoomSettings is { } settings)
 		{
 			ImGui.SameLine();
-			if (ImGui.Button("Paste"))
+			if (ImGui.Button("Paste Settings"))
 			{
 				using (CaptureRoomUndo("Paste Room Settings", room))
 					ApplyRoomSettings(room, settings);
@@ -2120,15 +2187,22 @@ public partial class Manager
 		return -1;
 	}
 
+	// The lattice rooms tile on: one gameplay screen wide, one tile taller (Rows = Height/TileSize + 1).
+	// New rooms snap to this, the orientation grid is spaced by it, and room moves snap to it by default.
+	static Point2 RoomLatticeTiles => new(Game.Columns, Game.Rows);
+	static Point2 RoomLatticeSize => new(Game.Columns * Game.TileSize, Game.Rows * Game.TileSize);
+
 	// A subtle screen-sized grid for orientation when zoomed far enough out to see several
 	// gameplay screens at once. It's a fixed world grid anchored at the origin (a line passes
-	// through 0,0), spaced one gameplay screen apart -- independent of any room's size or
-	// position.
+	// through 0,0), spaced one room-cell apart -- independent of any room's size or position.
+	// We space by the room lattice (Columns x Rows tiles), not raw screen pixels: Rows is
+	// Height/TileSize + 1, so a default room is one tile taller than the screen and tiles on a
+	// 320x184 lattice. Spacing the grid by 320x180 would drift 4px/row out of alignment.
 	void DrawEditorScreenGrid(Rect visibleWorld)
 	{
 		const float minScreensVisible = 1f;
-		float screenW = Game.Width;
-		float screenH = Game.Height;
+		float screenW = RoomLatticeSize.X;
+		float screenH = RoomLatticeSize.Y;
 		if (MathF.Max(visibleWorld.Width / screenW, visibleWorld.Height / screenH) < minScreensVisible)
 			return;
 
@@ -2481,9 +2555,18 @@ public partial class Manager
 	{
 		var mouseTile = WorldToRoomGeometryTile(world);
 		var current = new RectInt(room.TileSpacePosition, room.Size);
-		var candidate = editorDrag.RoomGeometryHandle == ResizeHandle.None
-			? new RectInt(mouseTile - editorDrag.RoomGeometryOffset, room.Size)
-			: ResizeRoomGeometryBounds(current, editorDrag.RoomGeometryHandle, mouseTile);
+		RectInt candidate;
+		if (editorDrag.RoomGeometryHandle == ResizeHandle.None)
+		{
+			// Moving: snap the top-left to the room lattice (whole-screen steps) by default, since
+			// most rooms are screen-sized and want to line up; hold Shift for free per-tile dragging.
+			var position = mouseTile - editorDrag.RoomGeometryOffset;
+			if (!Input.Keyboard.Shift)
+				position = SnapToRoomLattice(position);
+			candidate = new RectInt(position, room.Size);
+		}
+		else
+			candidate = ResizeRoomGeometryBounds(current, editorDrag.RoomGeometryHandle, mouseTile);
 
 		if (candidate.Width <= 0 || candidate.Height <= 0 || RoomGeometryOverlaps(room, candidate))
 			return;
@@ -2507,6 +2590,15 @@ public partial class Manager
 		=> new(
 			(int)MathF.Floor(world.X / Game.TileSize),
 			(int)MathF.Floor(world.Y / Game.TileSize));
+
+	// Round a tile position to the nearest room-lattice cell, so screen-sized rooms line up edge-to-edge.
+	static Point2 SnapToRoomLattice(Point2 tile)
+	{
+		var lattice = RoomLatticeTiles;
+		return new(
+			(int)MathF.Round((float)tile.X / lattice.X) * lattice.X,
+			(int)MathF.Round((float)tile.Y / lattice.Y) * lattice.Y);
+	}
 
 	static RectInt ResizeRoomGeometryBounds(RectInt bounds, ResizeHandle handle, Point2 mouseTile)
 	{
@@ -2559,6 +2651,115 @@ public partial class Manager
 		if (Assets.Rooms.TryGetValue(oldCell, out var indexed) && indexed == room)
 			Assets.Rooms.Remove(oldCell);
 		Assets.Rooms[room.Cell] = room;
+	}
+
+	static bool RoomGeometryOverlaps(Point2 position, Point2 size, Room? exclude)
+	{
+		var candidate = new RectInt(position, size);
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (room == exclude)
+				continue;
+			if (candidate.Overlaps(new RectInt(room.TileSpacePosition, room.Size)))
+				return true;
+		}
+
+		return false;
+	}
+
+	// Nearest free room-lattice cell to a desired tile, spiralling outward a lattice step at a time so
+	// a pasted/duplicated room lands next to where it was asked for without overlapping existing rooms.
+	Point2 FindFreeRoomCell(Point2 desiredTile, Point2 size)
+	{
+		var start = SnapToRoomLattice(desiredTile);
+		var lattice = RoomLatticeTiles;
+		for (var radius = 0; radius < 64; radius++)
+			for (var dy = -radius; dy <= radius; dy++)
+				for (var dx = -radius; dx <= radius; dx++)
+				{
+					if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius)
+						continue;
+					var pos = start + new Point2(dx * lattice.X, dy * lattice.Y);
+					if (!RoomGeometryOverlaps(pos, size, null))
+						return pos;
+				}
+
+		return start;
+	}
+
+	// Insert a room into the world (id + cell indexes), persist it, and refresh its preview/editor game.
+	// The counterpart to RemoveRoomFromWorld; both are driven by RoomExistenceUndoTarget for undo/redo.
+	void AddRoomToWorld(Room room)
+	{
+		Assets.RoomsById[room.Id] = room;
+		UpdateRoomCellIndex(room, room.Cell);
+		room.Save();
+		InvalidateRoomPreview(room);
+		editorGameDirty = true;
+		SyncEditorGame();
+	}
+
+	void RemoveRoomFromWorld(Room room)
+	{
+		if (CurrentRoom == room)
+			room.Save();
+
+		Assets.DeleteRoom(room);
+		if (selectedRoomId == room.Id)
+			selectedRoomId = null;
+		if (playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id)
+			playtestPlayerPosition = null;
+		InvalidateRoomPreview(room);
+		ResolveSelectedRoom();
+		editorGameDirty = true;
+		SyncEditorGame();
+	}
+
+	void CopyCurrentRoom()
+	{
+		if (CurrentRoom is { } room)
+			roomClipboardJson = room.ToJsonString();
+	}
+
+	void CutCurrentRoom()
+	{
+		if (CurrentRoom is { } room)
+		{
+			roomClipboardJson = room.ToJsonString();
+			DeleteRoom(room);
+		}
+	}
+
+	void PasteRoomAtCursor()
+	{
+		if (roomClipboardJson is { } json)
+			PasteRoomFromJson(json, WorldToRoomGeometryTile(ScreenToEditorWorld(Cursor, GameViewRect)));
+	}
+
+	void DuplicateCurrentRoom()
+	{
+		if (CurrentRoom is { } room)
+			PasteRoomFromJson(room.ToJsonString(), room.TileSpacePosition + new Point2(room.Size.X, 0));
+	}
+
+	// Create a new room from serialized state and drop it at the nearest free lattice cell to desiredTile.
+	void PasteRoomFromJson(string json, Point2 desiredTile)
+	{
+		CurrentRoom?.Save();
+
+		var it = new Room(Assets.GenerateRandomRoomId(), desiredTile, Room.DefaultSize);
+		it.LoadJsonState(json);                       // pulls in size/tiles/actors/settings (and the source position)
+		it.MoveTo(FindFreeRoomCell(desiredTile, it.Size));
+
+		using (CaptureRoomExistenceUndo("Paste Room", it))
+		{
+			AddRoomToWorld(it);
+			SelectRoom(it);
+			selectedRoomActorIndex = -1;
+			editorRoomEntryDirection = null;
+			SyncEditorGame();
+		}
+		// No camera tween: paste/duplicate happen while zoomed out arranging rooms, so we keep the view put.
 	}
 
 	void StampTiles(Room room, Point2 origin, int shift, int size, char tile)
@@ -2864,6 +3065,7 @@ public partial class Manager
 
 		var canInteract = !imgui.WantsMouseInput && inner.Contains(cursor);
 
+		// Middle-mouse drag pans.
 		if (canInteract && Input.Mouse.MiddleDown)
 		{
 			editorCameraTween = 1.0f;
@@ -2871,20 +3073,62 @@ public partial class Manager
 			editorCamera -= Input.Mouse.Delta / Scale / editorZoom;
 		}
 
-		if (canInteract)
+		// Trackpad pinch zooms, anchored at the cursor. Pinch events fire independent of finger count
+		// (no FINGER events on the macOS trackpad), so the multi-finger touch path above never handles
+		// them on desktop -- we apply them here. PinchScale is the per-event incremental factor (~1.0x),
+		// reset to 1.0 each frame; begin/end carry 0, which the guard skips.
+		if (canInteract && Input.Touch.DownCount < 2 && Input.Touch.PinchDown)
 		{
-			var wheel = Input.Mouse.Wheel;
-			var useHorizontalWheel = MathF.Abs(wheel.X) > MathF.Abs(wheel.Y);
-			var wheelAmount = useHorizontalWheel ? 0 : wheel.Y;
-			if (wheelAmount != 0)
+			var scale = Input.Touch.PinchScale;
+			if (scale > 0 && MathF.Abs(scale - 1.0f) > 0.0001f)
 			{
 				editorCameraTween = 1.0f;
-				editorZoomTarget = Math.Clamp(editorZoomTarget * MathF.Pow(1.15f, wheelAmount), 0.15f, 8.0f);
+				var before = ScreenToEditorWorld(cursor, inner);
+				editorZoomTarget = Math.Clamp(editorZoomTarget * scale, 0.15f, 8.0f);
+				editorZoom = editorZoomTarget;
+				editorCamera = before - (cursor - inner.Center) / editorZoom;
 			}
 		}
 
+		// Wheel: a trackpad two-finger swipe arrives as precise (fractional / horizontal) deltas -> pan;
+		// a notched mouse wheel arrives as whole-number vertical ticks -> zoom. Latch trackpad mode so an
+		// integer crossing mid-swipe stays a pan. Skip while pinching so an incidental scroll doesn't jitter.
+		if (canInteract && !Input.Touch.PinchDown)
+		{
+			var wheel = Input.Mouse.Wheel;
+			if (wheel != Vector2.Zero)
+			{
+				if (IsPreciseScroll(wheel))
+					trackpadScrollLatch = TrackpadScrollLatchTime;
+
+				if (trackpadScrollLatch > 0)
+				{
+					wheel.X *= -1f;
+
+					// SDL reports natural (flipped) direction, so move the camera opposite the swipe to
+					// keep content under the fingers. Divide by zoom for consistent screen-space speed.
+					editorCameraTween = 1.0f;
+					editorZoomTarget = editorZoom;
+					editorCamera -= wheel * EditorTrackpadPanSpeed / editorZoom;
+				}
+				else if (wheel.Y != 0)
+				{
+					editorCameraTween = 1.0f;
+					editorZoomTarget = Math.Clamp(editorZoomTarget * MathF.Pow(1.15f, wheel.Y), 0.15f, 8.0f);
+				}
+			}
+		}
+
+		if (trackpadScrollLatch > 0)
+			trackpadScrollLatch -= Time.Delta;
+
 		UpdateEditorZoomSmoothing(canInteract ? cursor : inner.Center, inner);
 	}
+
+	// A trackpad swipe sends precise deltas: fractional vertical, or any horizontal component (a notched
+	// mouse wheel only ever sends whole-number vertical ticks).
+	static bool IsPreciseScroll(Vector2 wheel)
+		=> wheel.X != 0 || wheel.Y != MathF.Truncate(wheel.Y);
 
 	bool UpdateEditorTouchView(Rect inner)
 	{
@@ -2997,6 +3241,38 @@ public partial class Manager
 		selectedRoomActorIndex = -1;
 		editorRoomEntryDirection = null;
 		SyncEditorGame();
+	}
+
+	// Room-edit mode is implicit: it turns on once the current room shrinks below ~60% of the editor
+	// view (you've zoomed out to arrange rooms) and off once it grows back past ~66% (you've zoomed
+	// back in to edit tiles). The hysteresis band keeps it from flickering right at the threshold.
+	static float RoomEditEnterFraction => 0.6f;
+	static float RoomEditExitFraction => 0.66f;
+
+	void UpdateRoomEditModeFromZoom(Rect inner)
+	{
+		if (CurrentRoom is not { } room || inner.Width <= 0 || inner.Height <= 0)
+		{
+			editingRoomGeometry = false;
+			return;
+		}
+
+		var bounds = room.WorldBounds;
+		var fraction = MathF.Max(bounds.Width * editorZoom / inner.Width, bounds.Height * editorZoom / inner.Height);
+
+		if (editingRoomGeometry)
+		{
+			if (fraction > RoomEditExitFraction)
+			{
+				editingRoomGeometry = false;
+				CommitEditorDragState();
+			}
+		}
+		else if (fraction < RoomEditEnterFraction)
+		{
+			editingRoomGeometry = true;
+			ClearEditorDragState();
+		}
 	}
 
 	void DrawEditorRooms(Rect visibleWorld)
@@ -3385,6 +3661,7 @@ public partial class Manager
 			FocusEditorOnCurrentRoom();
 		UpdateEditorCameraTween();
 		UpdateEditorWorldView(inner);
+		UpdateRoomEditModeFromZoom(inner);
 		if (!editingRoomGeometry)
 			UpdateAutoSelectedRoomFromEditorCamera(inner);
 
@@ -3404,22 +3681,41 @@ public partial class Manager
 		if (UpdateLinkedDoorTargetPicker(inner, visibleWorld, worldMouseBlocked, keyboardBlocked))
 			worldMouseBlocked = true;
 
-		if (!editingRoomGeometry && !worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
+		// Room picking. A single click selects the room under the cursor (room-edit mode only, so it
+		// doesn't fight tile painting when zoomed in); a double click anywhere on a room zooms to it
+		// (which zooms in past the threshold and leaves room-edit mode). The old single-click-to-zoom
+		// is gone -- selecting and zooming are now distinct gestures.
+		if (!worldMouseBlocked && inner.Contains(Cursor) && !eyedropper)
 		{
-			var worldMouse = ScreenToEditorWorld(Cursor, inner);
-			if (GetRoomAtWorld(worldMouse) is { } selected && selected != CurrentRoom)
+			var doubleClick = ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left);
+			if ((editingRoomGeometry && Input.Mouse.LeftPressed) || doubleClick)
 			{
-				using (CaptureSelectionUndo("Select Room"))
+				var worldMouse = ScreenToEditorWorld(Cursor, inner);
+				if (GetRoomAtWorld(worldMouse) is { } selected)
 				{
-					if (CurrentRoom is { } previous)
-						editorRoomEntryDirection = GetEditorEntryDirection(previous, selected);
-					CurrentRoom?.Save();
-					SelectRoom(selected);
-					selectedRoomActorIndex = -1;
-					ClearEditorDragState();
-					SyncEditorGame();
-					TweenEditorCameraToRoom(selected);
-					roomActivationClickConsumed = true;
+					var switching = selected != CurrentRoom;
+					// Double-click zooms when switching rooms or arranging (room-edit mode); double-clicking
+					// the current room while zoomed in does nothing, so it can't disrupt tile editing.
+					var zoomTo = doubleClick && (switching || editingRoomGeometry);
+					if (switching || zoomTo)
+					{
+						using (CaptureSelectionUndo("Select Room"))
+						{
+							if (switching)
+							{
+								if (CurrentRoom is { } previous)
+									editorRoomEntryDirection = GetEditorEntryDirection(previous, selected);
+								CurrentRoom?.Save();
+								SelectRoom(selected);
+								selectedRoomActorIndex = -1;
+								ClearEditorDragState();
+								SyncEditorGame();
+							}
+							if (zoomTo)
+								TweenEditorCameraToRoom(selected);
+							roomActivationClickConsumed = true;
+						}
+					}
 				}
 			}
 		}
@@ -4034,11 +4330,14 @@ public partial class Manager
 		if (sourceSettings is { } settings)
 			ApplyRoomSettings(it, settings);
 		MirrorAdjacentRoomBorders(it);
-		Assets.Rooms[it.Cell] = it;
-		Assets.RoomsById[it.Id] = it;
-		SelectRoom(it);
-		it.Save();
-		SyncEditorGame();
+
+		using (CaptureRoomExistenceUndo("Create Room", it))
+		{
+			AddRoomToWorld(it);
+			SelectRoom(it);
+			SyncEditorGame();
+		}
+
 		TweenEditorCameraToRoom(it);
 	}
 
@@ -4227,17 +4526,8 @@ public partial class Manager
 
 	void DeleteRoom(Room room)
 	{
-		if (CurrentRoom == room)
-			CurrentRoom?.Save();
-
-		Assets.DeleteRoom(room);
-		if (selectedRoomId == room.Id)
-			selectedRoomId = null;
-		if (playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id)
-			playtestPlayerPosition = null;
-		InvalidateRoomPreview(room);
-		ResolveSelectedRoom();
-		SyncEditorGame();
+		using (CaptureRoomExistenceUndo("Delete Room", room))
+			RemoveRoomFromWorld(room);
 	}
 
 	static void DrawCenteredToolbarText(ReadOnlySpan<char> text, bool canDoubleClick = false)
