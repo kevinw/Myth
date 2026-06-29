@@ -173,6 +173,24 @@ public class DualGrid : Actor
 		}
 	}
 
+	// TileField stamp of the same rectangle: same coverage tiles as RenderRect, but each cell gets
+	// its own field color (the stamp shader keeps only the source alpha and writes our vertex color).
+	// colorForTile receives the cell's anchored world tile so the red/variant channel varies per tile
+	// like room dual-grid stone, instead of one flat color across the whole platform.
+	internal static void RenderRectTileField(Batcher batcher, Tileset tileset, int cols, int rows, Point2 variantTileOrigin, char tileType, Func<Point2, Color> colorForTile)
+	{
+		foreach (var vertex in new RectVertices(cols, rows))
+		{
+			var cell = MaskToTile[vertex.Mask];
+			var worldTile = variantTileOrigin + new Point2(vertex.X, vertex.Y);
+			var tile = tileset.GetVariantTile(cell.X, cell.Y, StableVariantSeed(worldTile, tileType));
+			if (tile.Texture == null)
+				continue;
+
+			DrawTile(batcher, tile, VertexPosition(vertex), vertex.Mask, colorForTile(worldTile));
+		}
+	}
+
 	// World-space occluder segments for the same rectangle, traced from the tileset's per-tile
 	// occluders so a shadow follows the (rounded) art -- the moving counterpart of the room occluders.
 	internal static void AppendRectOccluders(List<VisibilityPolygon.Segment> segments, Tileset tileset, int cols, int rows, Vector2 origin, Point2 variantTileOrigin, char tileType)

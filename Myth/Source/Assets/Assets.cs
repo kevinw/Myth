@@ -607,7 +607,8 @@ public static class Assets
 			for (var i = 0; i < ase.Frames.Length; i++)
 				totalAnimDuration += packed.Frames[i].Duration;
 
-			packed.Animations.Add(new() {
+			packed.Animations.Add(new()
+			{
 				Name = DEFAULT_ANIM_NAME,
 				FrameStart = 0,
 				FrameCount = ase.Frames.Length,
@@ -2498,26 +2499,33 @@ public static class Assets
 	{
 		var bounds = room.WorldBounds;
 		Room? best = null;
-		var bestDistance = float.MaxValue;
+		var bestArea = 0;
 
-		foreach (var candidate in RoomsById.Values)
+		var adjacentBounds = bounds + direction * bounds.Size;
+
+		var attempts = 10;
+		while (attempts > 0)
 		{
-			if (candidate == room)
-				continue;
-
-			var candidateBounds = candidate.WorldBounds;
-			if (!TouchesExitEdge(bounds, candidateBounds, direction, exitPosition))
-				continue;
-
-			var distance = TransitionAxisDistance(candidateBounds, direction, exitPosition);
-			if (distance < bestDistance)
+			foreach (var candidate in RoomsById.Values) if (candidate != room)
 			{
-				best = candidate;
-				bestDistance = distance;
+				var candidateBounds = candidate.WorldBounds;
+				var intersection = candidateBounds.GetIntersection(adjacentBounds);
+				var area = intersection.Area;
+				if (area > bestArea)
+				{
+					best = candidate;
+					bestArea = area;
+				}
 			}
+
+			if (best != null) return best;
+
+			attempts -= 1;
+			adjacentBounds.Position += (Point2)(direction * bounds.Size * 0.5f);
+			adjacentBounds.Inflate(Math.Min(adjacentBounds.Width, adjacentBounds.Height) * 0.5f);
 		}
 
-		return best;
+		return null;
 	}
 
 	static bool TouchesExitEdge(RectInt from, RectInt to, Point2 direction, Vector2 exitPosition)

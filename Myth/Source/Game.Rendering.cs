@@ -817,6 +817,12 @@ public sealed partial class GameView
 	void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
 		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
 
+	// State for tileFieldStampColor so the per-vertex callback can be cached once instead of
+	// reallocating a closure per platform per frame.
+	char tileFieldStampTile;
+	int tileFieldStampAnchor;
+	Func<Point2, Color>? tileFieldStampColor;
+
 	void DrawMovingPlatformTileFields()
 	{
 		if (!ShowForegroundLayer || tileFieldStampMaterial == null)
@@ -825,6 +831,9 @@ public sealed partial class GameView
 		var anchor = 1;
 		Batcher.PushBlend(TileFieldStampBlend);
 		Batcher.PushMaterial(tileFieldStampMaterial.Material);
+		// Cached delegate + mutable state (per-platform tile/anchor) so the per-vertex color callback
+		// doesn't allocate a closure each frame; see drawLightMaskLightAction for the same idiom.
+		tileFieldStampColor ??= worldTile => TileFieldColor(tileFieldStampTile, worldTile, tileFieldStampAnchor);
 		foreach (var actor in rendering)
 		{
 			if (actor is not MovingPlatform { Visible: true } platform)
@@ -839,8 +848,10 @@ public sealed partial class GameView
 				ditherAnchorOffsets[at + 1] = offset.Y;
 			}
 
+			tileFieldStampTile = platform.MaterialTile;
+			tileFieldStampAnchor = anchorId;
 			Batcher.PushMatrix(platform.Position);
-			platform.RenderTileField(Batcher, TileFieldColor(platform.MaterialTile, platform.VariantTileOrigin, anchorId));
+			platform.RenderTileField(Batcher, tileFieldStampColor);
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMaterial();

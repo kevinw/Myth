@@ -152,22 +152,8 @@
     {
       "Id": "2122c4790938b3f7",
       "Type": "Jumpthru",
-      "Position": [32, 456]
-    },
-    {
-      "Id": "3477477d9a2a95f1",
-      "Type": "Jumpthru",
-      "Position": [24, 456]
-    },
-    {
-      "Id": "151382c88039aa7e",
-      "Type": "Jumpthru",
-      "Position": [40, 456]
-    },
-    {
-      "Id": "51079efd7ef6789d",
-      "Type": "Jumpthru",
-      "Position": [48, 456]
+      "Position": [30, 456],
+      "Size": [26, 8]
     },
     {
       "Id": "ed6f6f3d3b4c8f26",

@@ -81,22 +81,26 @@
     {
       "Id": "c1d39331910f6d27",
       "Type": "Jumpthru",
-      "Position": [16, 88]
+      "Position": [14, 88],
+      "Size": [10, 8]
     },
     {
       "Id": "4b1124aa86816fd0",
       "Type": "Jumpthru",
-      "Position": [16, 64]
+      "Position": [14, 64],
+      "Size": [10, 8]
     },
     {
       "Id": "5c033048019a26c0",
       "Type": "Jumpthru",
-      "Position": [24, 120]
+      "Position": [24, 120],
+      "Size": [10, 8]
     },
     {
       "Id": "0488f2d510992ef1",
       "Type": "Jumpthru",
-      "Position": [24, 104]
+      "Position": [24, 104],
+      "Size": [10, 8]
     }
   ]
 }

@@ -142,7 +142,16 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	public override void Render(Batcher batcher) => RenderMaterial(batcher, normals: false, Color.White);
 	public override void RenderNormals(Batcher batcher) => RenderMaterial(batcher, normals: true, Color.White);
-	internal void RenderTileField(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+	// Stamp the platform into the TileField with per-tile field colors (so its dither variation matches
+	// neighboring stone) rather than one flat color. colorForTile maps a cell's anchored world tile to
+	// its field color; falls back to a flat fill when the material is missing.
+	internal void RenderTileField(Batcher batcher, Func<Point2, Color> colorForTile)
+	{
+		if (Assets.GetTileset(Material) is { } tileset)
+			DualGrid.RenderRectTileField(batcher, tileset, TileColumns, TileRows, VariantTileOrigin, MaterialTile, colorForTile);
+		else
+			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), colorForTile(VariantTileOrigin));
+	}
 	internal Point2 DitherAnchorPosition => originalPosition;
 	internal Vector2 DitherAnchorOffset => originalPosition - Position;
 	internal Point2 VariantTileOrigin => originalPosition / Game.TileSize;
