@@ -28,6 +28,7 @@ public sealed partial class GameView : IDisposable
 		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
 		backgroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;
 		foregroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;
+		coverageMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("CoverageMask", samplerCount: 1) : null;
 		// Transient preview/thumbnail games skip particles: they render and dispose
 		// in one synchronous call, which would free the GPU draw resources while the
 		// submitted particle draw is still in flight (corruption).
@@ -262,6 +263,7 @@ public sealed partial class GameView : IDisposable
 		sdfAuraMaterial?.Reload();
 		backgroundDecalMaskMaterial?.Reload();
 		foregroundDecalMaskMaterial?.Reload();
+		coverageMaskMaterial?.Reload();
 	}
 #endif
 
@@ -283,6 +285,7 @@ public sealed partial class GameView : IDisposable
 		sdfAuraMaterial?.Dispose();
 		backgroundDecalMaskMaterial?.Dispose();
 		foregroundDecalMaskMaterial?.Dispose();
+		coverageMaskMaterial?.Dispose();
 		particleSystem?.Dispose();
 		Batcher.Dispose();
 	}

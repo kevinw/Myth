@@ -319,7 +319,7 @@ fn compute_main_1() {
                             break;
                         }
                         let _e635 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e615.x, _e617), 0f);
-                        phi_669_ = _e635.w;
+                        phi_669_ = _e635.x;
                         break;
                     }
                 }
@@ -379,7 +379,7 @@ fn compute_main_1() {
                                             break;
                                         }
                                         let _e681 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e661.x, _e663), 0f);
-                                        phi_730_ = _e681.w;
+                                        phi_730_ = _e681.x;
                                         break;
                                     }
                                 }
@@ -411,7 +411,7 @@ fn compute_main_1() {
                                             break;
                                         }
                                         let _e715 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e695.x, _e697), 0f);
-                                        phi_764_ = _e715.w;
+                                        phi_764_ = _e715.x;
                                         break;
                                     }
                                 }
@@ -443,7 +443,7 @@ fn compute_main_1() {
                                             break;
                                         }
                                         let _e749 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e729.x, _e731), 0f);
-                                        phi_798_ = _e749.w;
+                                        phi_798_ = _e749.x;
                                         break;
                                     }
                                 }
@@ -475,7 +475,7 @@ fn compute_main_1() {
                                             break;
                                         }
                                         let _e783 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e763.x, _e765), 0f);
-                                        phi_832_ = _e783.w;
+                                        phi_832_ = _e783.x;
                                         break;
                                     }
                                 }

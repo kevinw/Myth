@@ -131,7 +131,7 @@ float solid_at(float2 worldPos)
     float2 uv = target_uv((worldPos - float2(CameraX, CameraY)) * Zoom / float2(TargetW, TargetH));
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
         return 0.0;
-    return SolidMask.SampleLevel(SolidSampler, uv, 0.0).a;
+    return SolidMask.SampleLevel(SolidSampler, uv, 0.0).r;
 }
 
 float2 solid_normal(float2 worldPos)

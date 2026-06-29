@@ -106,7 +106,7 @@ fn fragment_main_1() {
         let _e130 = textureSample(AoTexture, AoSampler, (_e99 + (_e125.yz / _e114.xy)));
         let _e134 = textureSample(BackgroundCoverageTexture, BackgroundCoverageSampler, _e99);
         let _e138 = FragmentUniformBlock.AoSettings[3i];
-        let _e142 = (_e102.xyz * mix(1f, _e138, (clamp((_e130.x * _e123), 0f, 1f) * _e134.w)));
+        let _e142 = (_e102.xyz * mix(1f, _e138, (clamp((_e130.x * _e123), 0f, 1f) * _e134.x)));
         phi_189_ = vec4<f32>(_e142.x, _e142.y, _e142.z, _e102.w);
     }
     let _e149 = phi_189_;

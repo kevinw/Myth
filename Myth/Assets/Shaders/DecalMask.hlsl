@@ -53,6 +53,6 @@ float4 fragment_main(VsOutput input) : SV_Target0
 #if BROWSER
     pixel.y = CoverageSize.y - pixel.y;
 #endif
-    float coverage = Coverage.Sample(CoverageSampler, target_uv(pixel / CoverageSize.xy)).a;
+    float coverage = Coverage.Sample(CoverageSampler, target_uv(pixel / CoverageSize.xy)).r;
     return color * coverage;
 }

@@ -715,6 +715,8 @@ public sealed partial class GameView
 	void DrawBackgroundCoverage()
 	{
 		BackgroundCoverage.Clear(Color.Transparent);
+		if (coverageMaskMaterial == null)
+			return;
 		if (!ShowBackgroundLayer)
 		{
 			Batcher.Render(BackgroundCoverage);
@@ -722,6 +724,7 @@ public sealed partial class GameView
 			return;
 		}
 
+		Batcher.PushMaterial(coverageMaskMaterial.Material);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -733,6 +736,7 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
+		Batcher.PopMaterial();
 		Batcher.Render(BackgroundCoverage);
 		Batcher.Clear();
 	}
@@ -873,9 +877,10 @@ public sealed partial class GameView
 	void DrawParticleSolidMask()
 	{
 		ParticleSolidMask.Clear(Color.Transparent);
-		if (room == null)
+		if (room == null || coverageMaskMaterial == null)
 			return;
 
+		Batcher.PushMaterial(coverageMaskMaterial.Material);
 		PushWorldMatrix();
 		foreach (var rect in room.CollisionRects)
 			Batcher.Rect(rect, Color.White);
@@ -901,6 +906,7 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
+		Batcher.PopMaterial();
 		Batcher.Render(ParticleSolidMask);
 		Batcher.Clear();
 	}
@@ -2113,7 +2119,6 @@ public sealed partial class GameView
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
-		LightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LightMask"));
 		BackgroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundLightMask"));
 		SingleLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SingleLightMask"));
@@ -2124,12 +2129,12 @@ public sealed partial class GameView
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
 		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
-		ParticleSolidMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ParticleSolidMask"));
+		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
-		ReflectionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionMask"));
+		ReflectionMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ReflectionMask"));
 		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoMask"));
 		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoBlurScratch"));
-		BackgroundCoverage = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundCoverage"));
+		BackgroundCoverage = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "BackgroundCoverage"));
 		SoftShadowScratch = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SoftShadowScratch"));
 	}
 
@@ -2320,7 +2325,6 @@ public sealed partial class GameView
 	Target ForegroundScreen { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
 	Target ForegroundEmissive { get; set; } = null!;
-	Target LightMask { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SingleLightMask { get; set; } = null!;
@@ -2358,6 +2362,7 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
 	readonly ReloadableMaterial? foregroundDecalMaskMaterial;
+	readonly ReloadableMaterial? coverageMaskMaterial;
 	const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
 	readonly ParticleSystem? particleSystem;
 	float particleBurstTimer;

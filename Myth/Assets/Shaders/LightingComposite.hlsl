@@ -312,7 +312,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
         float occlusion = saturate(AoTexture.Sample(AoSampler, ao_uv).r * AoSettings.x);
         // Gate by background tile coverage so the backdrop (which has no tiles)
         // is never darkened - AO only lands on actual background tiles.
-        float coverage = BackgroundCoverageTexture.Sample(BackgroundCoverageSampler, sample).a;
+        float coverage = BackgroundCoverageTexture.Sample(BackgroundCoverageSampler, sample).r;
         light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
     }
 

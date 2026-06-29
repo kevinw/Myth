@@ -29,7 +29,7 @@ fn fragment_main_1() {
     let _e39 = FragmentUniformBlock.CoverageSize;
     let _e41 = (vec2<f32>(_e29.x, (_e33 - _e16.y)) / _e39.xy);
     let _e47 = textureSample(Coverage, CoverageSampler, vec2<f32>(_e41.x, (1f - _e41.y)));
-    out_u002e_var_u002e_SV_Target0_ = (((((_e17 * _e15.x) * _e14) + (_e14 * (_e15.y * _e17.w))) + (_e14 * _e15.z)) * _e47.w);
+    out_u002e_var_u002e_SV_Target0_ = (((((_e17 * _e15.x) * _e14) + (_e14 * (_e15.y * _e17.w))) + (_e14 * _e15.z)) * _e47.x);
     return;
 }
 

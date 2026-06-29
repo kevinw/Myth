@@ -297,7 +297,7 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
                     _667 = 0.0;
                     break;
                 }
-                _667 = SolidMask.sample(SolidSampler, _640, level(0.0)).w;
+                _667 = SolidMask.sample(SolidSampler, _640, level(0.0)).x;
                 break;
             } while(false);
             _669 = _667 > 0.5;
@@ -375,7 +375,7 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
                                 _727 = 0.0;
                                 break;
                             }
-                            _727 = SolidMask.sample(SolidSampler, _700, level(0.0)).w;
+                            _727 = SolidMask.sample(SolidSampler, _700, level(0.0)).x;
                             break;
                         } while(false);
                         float _760;
@@ -415,7 +415,7 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
                                 _760 = 0.0;
                                 break;
                             }
-                            _760 = SolidMask.sample(SolidSampler, _733, level(0.0)).w;
+                            _760 = SolidMask.sample(SolidSampler, _733, level(0.0)).x;
                             break;
                         } while(false);
                         float _793;
@@ -455,7 +455,7 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
                                 _793 = 0.0;
                                 break;
                             }
-                            _793 = SolidMask.sample(SolidSampler, _766, level(0.0)).w;
+                            _793 = SolidMask.sample(SolidSampler, _766, level(0.0)).x;
                             break;
                         } while(false);
                         float _826;
@@ -495,7 +495,7 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
                                 _826 = 0.0;
                                 break;
                             }
-                            _826 = SolidMask.sample(SolidSampler, _799, level(0.0)).w;
+                            _826 = SolidMask.sample(SolidSampler, _799, level(0.0)).x;
                             break;
                         } while(false);
                         float2 _829 = float2(_760 - _727, _826 - _793);
