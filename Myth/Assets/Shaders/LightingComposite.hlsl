@@ -35,6 +35,15 @@ SamplerState AoSampler : register(s5, space2);
 Texture2D BackgroundCoverageTexture : register(t6, space2);
 SamplerState BackgroundCoverageSampler : register(s6, space2);
 
+Texture2D ForegroundTexture : register(t7, space2);
+SamplerState ForegroundSampler : register(s7, space2);
+
+Texture2D ForegroundLightTexture : register(t8, space2);
+SamplerState ForegroundLightSampler : register(s8, space2);
+
+Texture2D ForegroundEmissiveTexture : register(t9, space2);
+SamplerState ForegroundEmissiveSampler : register(s9, space2);
+
 struct VsInput
 {
     float2 position : TEXCOORD0;
@@ -287,18 +296,27 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, 
 #endif
 }
 
+float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float4 tile_field, float dither_mask)
+{
+    light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
+    float brightness = max(max(scene.r, scene.g), scene.b);
+    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
+    float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
+    color = lerp(color, emissive.rgb, emissive.a);
+    return float4(saturate(color), scene.a);
+}
+
 float4 fragment_main(VsOutput input) : SV_Target0
 {
     // Prevent optimizer from removing input.type - D3D12 requires matching signatures
     if (input.type.x < -1000) discard;
 
     float2 sample = target_uv(input.tex_coord);
-    float4 scene = Texture.Sample(Sampler, sample) * input.color;
-
-    float4 light = LightTexture.Sample(LightSampler, sample);
+    float4 background_scene = Texture.Sample(Sampler, sample) * input.color;
+    float4 background_light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
-    float4 emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
+    float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position) / zoom;
 
@@ -313,13 +331,16 @@ float4 fragment_main(VsOutput input) : SV_Target0
         // Gate by background tile coverage so the backdrop (which has no tiles)
         // is never darkened - AO only lands on actual background tiles.
         float coverage = BackgroundCoverageTexture.Sample(BackgroundCoverageSampler, sample).r;
-        light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
+        background_light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
     }
 
-    light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
-    float brightness = max(max(scene.r, scene.g), scene.b);
-    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
-    float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
-    color = lerp(color, emissive.rgb, emissive.a);
-    return float4(saturate(color), scene.a);
+    float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel, tile_field, dither_mask);
+    float4 foreground = light_scene(
+        ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
+        ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
+        ForegroundEmissiveTexture.Sample(ForegroundEmissiveSampler, sample),
+        world_pixel,
+        tile_field,
+        dither_mask);
+    return saturate(foreground + background * (1.0 - foreground.a));
 }

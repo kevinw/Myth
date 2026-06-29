@@ -22,11 +22,13 @@ public sealed partial class GameView
 	void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		PrepareRenderingList();
-		if (HasDecalProps())
-		{
+		GetDecalLayers(out var hasBackgroundDecals, out var hasForegroundDecals);
+		var buildAo = debugView is not DebugView.TileFieldRed and not DebugView.TileFieldGreen and not DebugView.DitherMask &&
+			PerfToggles.Lighting && lightingCompositeMaterial != null && PerfToggles.AmbientOcclusion && blurMaterial != null;
+		if (hasForegroundDecals)
 			DrawParticleSolidMask();
+		if (hasBackgroundDecals || buildAo)
 			DrawBackgroundCoverage();
-		}
 
 		using (PerfStats.Time(PerfStat.World))
 		{
@@ -357,12 +359,21 @@ public sealed partial class GameView
 			_ => false
 		};
 
-	bool HasDecalProps()
+	void GetDecalLayers(out bool background, out bool foreground)
 	{
+		background = false;
+		foreground = false;
 		foreach (var actor in rendering)
-			if (actor is Prop { Decal: true, Visible: true })
-				return true;
-		return false;
+		{
+			if (actor is not Prop { Decal: true, Visible: true } prop)
+				continue;
+			if (prop.Layer == Factory.TileLayer.Background)
+				background = true;
+			else
+				foreground = true;
+			if (background && foreground)
+				return;
+		}
 	}
 
 	bool PushPropDecalMaterial(Actor actor)
@@ -585,24 +596,11 @@ public sealed partial class GameView
 		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
 		{
 			using (GraphicsDevice.DebugGroup("Myth/ambient occlusion mask"))
-			{
-				DrawBackgroundCoverage();
 				BuildAoMask();
-			}
 			aoStrength = Manager.AmbientOcclusionStrength;
 		}
 
-		// AO darkens only the background, where it sits beneath the foreground overhang.
-		CompositeLayer(BackgroundScreen, BackgroundLightMask, BackgroundEmissive, LitBackground, aoStrength);
-		CompositeLayer(ForegroundScreen, ForegroundLightMask, ForegroundEmissive, LitForeground, aoStrength: 0.0f);
-
-		LitScreen.Clear(Color.Transparent);
-		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-		Batcher.Image(LitBackground, LitBackground.Bounds.Center, LitBackground.Bounds.Size / 2, Vector2.One, 0, Color.White);
-		Batcher.Image(LitForeground, LitForeground.Bounds.Center, LitForeground.Bounds.Size / 2, Vector2.One, 0, Color.White);
-		Batcher.PopSampler();
-		Batcher.Render(LitScreen);
-		Batcher.Clear();
+		CompositeLighting(aoStrength);
 
 		if (PerfToggles.LightingNoise)
 			ApplyLightingNoise(LitScreen);
@@ -665,21 +663,24 @@ public sealed partial class GameView
 		return GlitchScreen;
 	}
 
-	void CompositeLayer(Target color, Target light, Target emissive, Target output, float aoStrength = 0.0f)
+	void CompositeLighting(float aoStrength)
 	{
-		output.Clear(Color.Transparent);
-		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(light, new(TextureFilter.Linear, TextureWrap.Clamp));
+		LitScreen.Clear(Color.Transparent);
+		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(emissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[7] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
 		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
-			output.Width,
-			output.Height,
+			LitScreen.Width,
+			LitScreen.Height,
 			renderCamera.X,
 			renderCamera.Y,
 			Manager.LightingDitherEnabled ? 1.0f : 0.0f,
@@ -702,10 +703,10 @@ public sealed partial class GameView
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.PushMaterial(lightingCompositeMaterial.Material);
-		Batcher.Image(color, color.Bounds.Center, color.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopMaterial();
 		Batcher.PopSampler();
-		Batcher.Render(output);
+		Batcher.Render(LitScreen);
 		Batcher.Clear();
 	}
 
@@ -2122,8 +2123,6 @@ public sealed partial class GameView
 		BackgroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundLightMask"));
 		SingleLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SingleLightMask"));
-		LitBackground = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitBackground"));
-		LitForeground = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitForeground"));
 		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
@@ -2328,8 +2327,6 @@ public sealed partial class GameView
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SingleLightMask { get; set; } = null!;
-	Target LitBackground { get; set; } = null!;
-	Target LitForeground { get; set; } = null!;
 	Target LitScreen { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
