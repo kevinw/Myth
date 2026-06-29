@@ -10,6 +10,13 @@ namespace Myth;
 
 public partial class Manager
 {
+	enum EditorScrollMode
+	{
+		Auto,
+		Mouse,
+		Trackpad
+	}
+
 	static Vector2 ButtonSizeV = new(ButtonSize, ButtonSize);
 	static float BoxSpacing => 0;
 	static float BoxPadding => 4;
@@ -40,6 +47,8 @@ public partial class Manager
 	// mouse wheel (zoom). A trackpad sends precise/fractional deltas; we latch on those so the stray
 	// whole-number crossing mid-swipe doesn't blip a zoom. See UpdateEditorWorldView.
 	float trackpadScrollLatch;
+	EditorScrollMode editorScrollMode;
+	bool preferencesOpen;
 	static float TrackpadScrollLatchTime => 0.5f;
 	// World pixels panned per unit of (small, ~0.1-0.4) trackpad wheel delta, before the zoom divide.
 	static float EditorTrackpadPanSpeed => 20f;
@@ -192,6 +201,7 @@ public partial class Manager
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();
 		TransitionViewerImGui();
+		PreferencesImGui();
 	}
 
 	void MarkParticleEffectDirty(string name)
@@ -316,6 +326,11 @@ public partial class Manager
 
 	bool UpdateEditorShortcuts()
 	{
+		if (OperatingSystem.IsMacOS() && Input.Keyboard.CtrlOrCommand && Input.Keyboard.Pressed(Keys.Comma))
+		{
+			preferencesOpen = true;
+			return true;
+		}
 		if (ImGuiWantsKeyboard)
 			return false;
 
@@ -3098,10 +3113,11 @@ public partial class Manager
 			var wheel = Input.Mouse.Wheel;
 			if (wheel != Vector2.Zero)
 			{
-				if (IsPreciseScroll(wheel))
+				if (editorScrollMode == EditorScrollMode.Auto && IsPreciseScroll(wheel))
 					trackpadScrollLatch = TrackpadScrollLatchTime;
 
-				if (trackpadScrollLatch > 0)
+				if (editorScrollMode == EditorScrollMode.Trackpad ||
+					editorScrollMode == EditorScrollMode.Auto && trackpadScrollLatch > 0)
 				{
 					wheel.X *= -1f;
 
@@ -4602,6 +4618,9 @@ public partial class Manager
 			game?.RefreshMusic();
 		}
 		ImGui.SameLine();
+		if (ImGuiIconButton("Preferences", Assets.GetSubtexture("buttons/17"), OperatingSystem.IsMacOS() ? "Preferences [Command+,]" : "Preferences", imagePadding: ToolbarButtonImagePadding))
+			preferencesOpen = true;
+		ImGui.SameLine();
 
 #if !IOS
 		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop, ToolbarButtonImagePadding))
@@ -4629,6 +4648,44 @@ public partial class Manager
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar(3);
 	}
+
+	void PreferencesImGui()
+	{
+		if (!preferencesOpen)
+			return;
+
+		ImGui.SetNextWindowSize(new Vector2(280, 0), ImGuiCond.FirstUseEver);
+		if (!ImGui.Begin("Preferences", ref preferencesOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse))
+		{
+			ImGui.End();
+			return;
+		}
+
+		ImGui.SetNextItemWidth(150);
+		if (ImGui.BeginCombo("Scroll input", EditorScrollModeName(editorScrollMode)))
+		{
+			for (var i = 0; i <= (int)EditorScrollMode.Trackpad; i++)
+			{
+				var mode = (EditorScrollMode)i;
+				if (ImGui.Selectable(EditorScrollModeName(mode), mode == editorScrollMode))
+				{
+					editorScrollMode = mode;
+					trackpadScrollLatch = 0;
+					SaveWindowSettings();
+				}
+			}
+			ImGui.EndCombo();
+		}
+
+		ImGui.End();
+	}
+
+	static string EditorScrollModeName(EditorScrollMode mode) => mode switch
+	{
+		EditorScrollMode.Mouse => "Mouse",
+		EditorScrollMode.Trackpad => "Trackpad",
+		_ => "Auto"
+	};
 
 	void DrawWorldSelector()
 	{

@@ -499,6 +499,10 @@ public partial class Manager : App
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
 			alwaysOnTop = settings.AlwaysOnTop;
+#if EDITOR
+			if (settings.EditorScrollMode is >= EditorScrollMode.Auto and <= EditorScrollMode.Trackpad)
+				editorScrollMode = settings.EditorScrollMode;
+#endif
 		}
 		catch (Exception e)
 		{
@@ -530,7 +534,10 @@ public partial class Manager : App
 				RoomX = currentCell.X,
 				RoomY = currentCell.Y,
 				MusicEnabled = musicEnabled,
-				AlwaysOnTop = alwaysOnTop
+				AlwaysOnTop = alwaysOnTop,
+#if EDITOR
+				EditorScrollMode = editorScrollMode
+#endif
 			};
 
 			File.WriteAllText(WindowSettingsPath, JsonSerializer.Serialize(settings));
@@ -553,6 +560,9 @@ public partial class Manager : App
 		public int RoomY { get; init; }
 		public bool MusicEnabled { get; init; } = true;
 		public bool AlwaysOnTop { get; init; }
+#if EDITOR
+		public EditorScrollMode EditorScrollMode { get; init; }
+#endif
 	}
 
 #if DEBUG
