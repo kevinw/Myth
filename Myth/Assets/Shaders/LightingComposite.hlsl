@@ -1,5 +1,17 @@
 #include "Common.hlsl"
 
+#define MAX_DITHER_ANCHORS 32
+
+float tile_field_family(float4 field)
+{
+    return floor(floor(field.g * 255.0 + 0.5) / 32.0);
+}
+
+int tile_field_anchor(float4 field)
+{
+    return int(fmod(floor(field.g * 255.0 + 0.5), 32.0));
+}
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -12,6 +24,8 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
+    float4 NormalDitherSettings; // x = slope boost, y = quantization levels
+    float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
 Texture2D Texture : register(t0, space2);
@@ -43,6 +57,9 @@ SamplerState ForegroundLightSampler : register(s8, space2);
 
 Texture2D ForegroundEmissiveTexture : register(t9, space2);
 SamplerState ForegroundEmissiveSampler : register(s9, space2);
+
+Texture2D NormalTexture : register(t10, space2);
+SamplerState NormalSampler : register(s10, space2);
 
 struct VsInput
 {
@@ -223,7 +240,7 @@ float pattern_for_family(float family, float variant)
 
 float2 glitch_dither_position(float2 position, float4 tile_field)
 {
-    float family = floor(tile_field.g * 4.0 + 0.5);
+    float family = tile_field_family(tile_field);
     float variant = floor(tile_field.r * 255.0 + 0.5);
     float family_scale = family == 2.0 ? 2.0 : family == 3.0 ? 3.0 : 1.0;
     float variant_scale = 1.0 + fmod(variant, 3.0) * 0.08;
@@ -253,31 +270,31 @@ float ellipse_distance(float2 position, float2 origin, float2 axis, float long_r
     return sqrt(along * along + across * across);
 }
 
-float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, float dither_mask)
+float3 dither_light_intensity(float3 light, float2 world_position, float2 pattern_position, float4 tile_field, float dither_mask, float normal_slope)
 {
-    if (DitherSettings.x <= 0.0)
+    if (DitherSettings.x <= 0.0 && NormalDitherSettings.x <= 0.0 && NormalDitherSettings.y <= 1.0)
         return light;
 
     float intensity = max(max(light.r, light.g), light.b);
     if (intensity <= 0.0001)
         return light;
 
-    float family = floor(tile_field.g * 4.0 + 0.5);
+    float family = tile_field_family(tile_field);
     float variant = floor(tile_field.r * 255.0 + 0.5);
     float amount = DitherSettings.w * DitherSettings.w * (3.0 - 2.0 * DitherSettings.w);
     float long_radius = lerp(24.0, DitherGlitch.z * 1.45, amount);
     float short_radius = long_radius * 0.38;
-    float ellipse = ellipse_distance(position, DitherGlitch.xy, DitherGlitchAxis.xy, long_radius, short_radius);
+    float ellipse = ellipse_distance(world_position, DitherGlitch.xy, DitherGlitchAxis.xy, long_radius, short_radius);
     float proximity = smoothstep(1.0, 0.25, ellipse);
     float global_glitch = amount * smoothstep(0.60, 1.0, amount) * 0.18;
     float local_glitch = amount * proximity * 0.82 + global_glitch;
 
     float dirty_frame = floor(DitherGlitch.w * 9.0);
-    float2 dirty_block = floor(position / 16.0);
+    float2 dirty_block = floor(pattern_position / 16.0);
     float dirty = hash_threshold(dirty_block.x * 17.0 + dirty_block.y * 31.0 + dirty_frame * 13.0 + variant * 0.23);
     float glitch_hash = hash_threshold(variant * 19.19 + dirty_block.x * 7.13 + dirty_block.y * 3.71 + dirty_frame * 5.17);
     float2 glitch_offset = float2(dirty - 0.5, glitch_hash - 0.5) * local_glitch * 9.0;
-    float2 dither_position = glitch_dither_position(position + glitch_offset, tile_field);
+    float2 dither_position = glitch_dither_position(pattern_position + glitch_offset, tile_field);
     float pattern = local_glitch > 0.65 ? floor(glitch_hash * 11.0) : pattern_for_family(family, variant);
     float threshold = threshold_for_pattern(dither_position, pattern);
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
@@ -287,7 +304,18 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, 
 #if 1
     // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
     float scale = dithered_intensity / intensity;
-    return light * lerp(1.0, scale, saturate(DitherSettings.z * dither_mask));
+    float strength = saturate((DitherSettings.x > 0.0 ? DitherSettings.z * dither_mask : 0.0) + normal_slope * NormalDitherSettings.x);
+    float3 result = light * lerp(1.0, scale, strength);
+
+    if (NormalDitherSettings.y > 1.0 && normal_slope > 0.0)
+    {
+        float result_intensity = max(max(result.r, result.g), result.b);
+        float steps = NormalDitherSettings.y - 1.0;
+        float quantized = floor(saturate(result_intensity) * steps + threshold) / steps;
+        result *= lerp(1.0, quantized / max(result_intensity, 0.0001), normal_slope);
+    }
+
+    return result;
 #else
     // This looks worse because it has less interesting behaviour in dark solid areas, but is more "physically plausible" lighting wise...
     float strength = saturate(DitherSettings.z * dither_mask);
@@ -296,9 +324,9 @@ float3 dither_light_intensity(float3 light, float2 position, float4 tile_field, 
 #endif
 }
 
-float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float4 tile_field, float dither_mask)
+float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel, float4 tile_field, float dither_mask, float normal_slope)
 {
-    light.rgb = dither_light_intensity(light.rgb, world_pixel, tile_field, dither_mask);
+    light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
@@ -317,8 +345,11 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
+    float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
+    float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position) / zoom;
+    float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
 
     // Ambient occlusion: darken the light where blurred foreground coverage
     // overhangs background tiles. Applied to the light buffer before the dither
@@ -334,13 +365,15 @@ float4 fragment_main(VsOutput input) : SV_Target0
         background_light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
     }
 
-    float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel, tile_field, dither_mask);
+    float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
         ForegroundEmissiveTexture.Sample(ForegroundEmissiveSampler, sample),
         world_pixel,
+        pattern_pixel,
         tile_field,
-        dither_mask);
+        dither_mask,
+        normal_slope);
     return saturate(foreground + background * (1.0 - foreground.a));
 }

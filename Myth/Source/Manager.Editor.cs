@@ -203,7 +203,8 @@ public partial class Manager
 	Rect PaletteSlideRect =>
 		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
-	void ClearEditorStateForEnteringPlayMode() {
+	void ClearEditorStateForEnteringPlayMode()
+	{
 		editingRoomGeometry = false;
 	}
 
@@ -607,6 +608,7 @@ public partial class Manager
 			DrawDitherPaletteSection();
 			DrawAmbientOcclusionSection();
 			DrawSoftShadowSection();
+			DrawNormalDitherSection();
 			ImGui.Spacing();
 			//DrawPreviewPaletteSection();
 
@@ -1156,15 +1158,25 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Soft Shadows"))
 			return;
 
-		ImGui.Checkbox("Enabled", ref PerfToggles.SoftShadows);
+		editorGameDirty |= ImGui.Checkbox("Enabled", ref PerfToggles.SoftShadows);
 
 		ImGui.TextUnformatted("Penumbra (px)");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##SoftShadowPenumbra", ref SoftShadowPenumbra, 0.0f, 24.0f);
+		editorGameDirty |= ImGui.SliderFloat("##SoftShadowPenumbra", ref SoftShadowPenumbra, 0.0f, 24.0f);
 
 		ImGui.TextUnformatted("Min Softness");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##SoftShadowMinSoftness", ref SoftShadowMinSoftness, 0.0f, 1.0f);
+		editorGameDirty |= ImGui.SliderFloat("##SoftShadowMinSoftness", ref SoftShadowMinSoftness, 0.0f, 1.0f);
+	}
+
+	void DrawNormalDitherSection()
+	{
+		if (!ImGui.CollapsingHeader("Normal Dither")) return;
+
+		ImGui.TextUnformatted("Slope Boost");
+		ImGui.SetNextItemWidth(-1);
+		editorGameDirty |= ImGui.SliderFloat("##NormalDitherSlopeBoost", ref NormalDitherSlopeBoost, 0.0f, 1.0f);
+		editorGameDirty |= ImGui.Checkbox("Level Quantization", ref NormalDitherQuantization);
 	}
 
 	// Draws the editable fields of a shared particle effect asset inside the
@@ -2070,7 +2082,7 @@ public partial class Manager
 
 	static ResizableInfo ResizableRoomRectInfo(JsonObject actor)
 		=> ResizableRoomRectTypes.GetValueOrDefault(
-			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", new ResizableInfo( new(Game.TileSize * 2, Game.TileSize * 2), ResizeAxes.Both));
+			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", new ResizableInfo(new(Game.TileSize * 2, Game.TileSize * 2), ResizeAxes.Both));
 
 	static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
 		=> ResizableRoomRectInfo(actor).DefaultSize;

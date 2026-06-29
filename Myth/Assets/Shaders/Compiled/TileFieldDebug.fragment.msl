@@ -22,28 +22,28 @@ struct fragment_main_in
 fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Texture [[texture(0)]], sampler Sampler [[sampler(0)]])
 {
     fragment_main_out out = {};
-    float4 _40 = Texture.sample(Sampler, in.in_var_TEXCOORD0);
-    int _44 = int(FragmentUniformBlock.ChannelMinMaxPadding.x + 0.5);
-    float _57;
-    if (_44 == 0)
+    float4 _43 = Texture.sample(Sampler, in.in_var_TEXCOORD0);
+    int _47 = int(FragmentUniformBlock.ChannelMinMaxPadding.x + 0.5);
+    float _66;
+    if (_47 == 0)
     {
-        _57 = _40.x;
+        _66 = _43.x;
     }
     else
     {
-        float _56;
-        if (_44 == 1)
+        float _65;
+        if (_47 == 1)
         {
-            _56 = _40.y;
+            _65 = floor(floor((_43.y * 255.0) + 0.5) * 0.03125) * 0.25;
         }
         else
         {
-            _56 = _40.z;
+            _65 = _43.z;
         }
-        _57 = _56;
+        _66 = _65;
     }
-    float _66 = fast::clamp((_57 - FragmentUniformBlock.ChannelMinMaxPadding.y) / precise::max(FragmentUniformBlock.ChannelMinMaxPadding.z - FragmentUniformBlock.ChannelMinMaxPadding.y, 9.9999997473787516355514526367188e-05), 0.0, 1.0);
-    out.out_var_SV_Target0 = float4(_66, _66, _66, _40.w) * in.in_var_TEXCOORD1;
+    float _75 = fast::clamp((_66 - FragmentUniformBlock.ChannelMinMaxPadding.y) / precise::max(FragmentUniformBlock.ChannelMinMaxPadding.z - FragmentUniformBlock.ChannelMinMaxPadding.y, 9.9999997473787516355514526367188e-05), 0.0, 1.0);
+    out.out_var_SV_Target0 = float4(_75, _75, _75, _43.w) * in.in_var_TEXCOORD1;
     return out;
 }
 

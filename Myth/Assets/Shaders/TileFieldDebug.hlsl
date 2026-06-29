@@ -1,5 +1,10 @@
 #include "Common.hlsl"
 
+float tile_field_family(float4 field)
+{
+    return floor(floor(field.g * 255.0 + 0.5) / 32.0);
+}
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -43,7 +48,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
 {
     float4 field = Texture.Sample(Sampler, target_uv(input.TexCoord));
     int channel = int(ChannelMinMaxPadding.x + 0.5);
-    float value = channel == 0 ? field.r : channel == 1 ? field.g : field.b;
+    float value = channel == 0 ? field.r : channel == 1 ? tile_field_family(field) / 4.0 : field.b;
     float minValue = ChannelMinMaxPadding.y;
     float maxValue = ChannelMinMaxPadding.z;
     value = saturate((value - minValue) / max(maxValue - minValue, 0.0001));

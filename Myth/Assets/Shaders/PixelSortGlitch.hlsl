@@ -1,5 +1,17 @@
 #include "Common.hlsl"
 
+#define MAX_DITHER_ANCHORS 32
+
+float tile_field_family(float4 field)
+{
+    return floor(floor(field.g * 255.0 + 0.5) / 32.0);
+}
+
+int tile_field_anchor(float4 field)
+{
+    return int(fmod(floor(field.g * 255.0 + 0.5), 32.0));
+}
+
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -10,6 +22,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 TextureSizeCamera;
     float4 GlitchSettings;
     float4 TimePadding;
+    float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
 Texture2D Texture : register(t0, space2);
@@ -98,15 +111,16 @@ float4 fragment_main(VsOutput input) : SV_Target0
         return original;
 
     float4 tile_field = TileFieldTexture.SampleLevel(TileFieldSampler, screen, 0.0);
-    float family = tile_field.g;
+    float family = tile_field_family(tile_field) / 4.0;
     float variant = tile_field.r;
     float zoom = TimePadding.w > 0.0 ? TimePadding.w : 1.0;
     float2 world_pixel = camera + screen_pixel(input.position) / zoom;
-    float2 tile = floor(world_pixel / 8.0);
+    float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
+    float2 tile = floor(pattern_pixel / 8.0);
     float frame = floor(time * 7.0);
     float dirty = hash_float(tile + frame + variant * 31.0);
-    float block = hash_float(floor(world_pixel / 16.0) + frame * 3.0 + family * 19.0);
-    float edge_noise = hash_float(floor(world_pixel / 28.0) + frame * 1.7 + family * 47.0);
+    float block = hash_float(floor(pattern_pixel / 16.0) + frame * 3.0 + family * 19.0);
+    float edge_noise = hash_float(floor(pattern_pixel / 28.0) + frame * 1.7 + family * 47.0);
     float fine_edge_noise = hash_float(tile + frame * 0.5 + family * 71.0);
     float active_radius = lerp(42.0, max_radius * 1.75, smoothstep(0.0, 0.75, amount));
     float long_radius = active_radius * lerp(0.70, 1.45, edge_noise) + (fine_edge_noise - 0.5) * 30.0;
@@ -114,7 +128,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float ellipse = ellipse_distance(world_pixel, origin, hit_axis, long_radius, short_radius);
     float radial = saturate(1.0 - ellipse);
     float proximity = pow(smoothstep(0.0, 0.95, radial), 0.58);
-    proximity *= lerp(0.42, 1.0, hash_float(floor(world_pixel / 20.0) + frame * 2.0));
+    proximity *= lerp(0.42, 1.0, hash_float(floor(pattern_pixel / 20.0) + frame * 2.0));
     float global = amount * smoothstep(0.22, 1.0, amount) * 0.30;
     float local = saturate(global + amount * proximity * lerp(0.28, 0.90, dirty) * lerp(0.45, 1.0, block));
 
@@ -122,7 +136,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
         return original;
 
     float2 direction = family_direction(family, variant);
-    float band = hash_float(float2(floor(world_pixel.y / 3.0), frame + floor(world_pixel.x / 40.0)));
+    float band = hash_float(float2(floor(pattern_pixel.y / 3.0), frame + floor(pattern_pixel.x / 40.0)));
     float span = floor(lerp(2.0, 18.0, saturate(local * lerp(0.75, 1.35, band))));
     float seek_high = step(0.5, hash_float(tile + family * 43.0 + frame * 0.25));
     float best_luma = luminance(original.rgb);
@@ -150,11 +164,11 @@ float4 fragment_main(VsOutput input) : SV_Target0
     }
 
     float blend = saturate(local * 1.35);
-    float scan = hash_float(float2(floor(world_pixel.y / 2.0), frame + family * 23.0));
+    float scan = hash_float(float2(floor(pattern_pixel.y / 2.0), frame + family * 23.0));
     blend *= lerp(0.78, 1.0, scan);
 
     float2 tear_direction = direction.yx * float2(-1.0, 1.0);
-    float tear_amount = (hash_float(floor(world_pixel / 24.0) + frame * 5.0) - 0.5) * local * 7.0;
+    float tear_amount = (hash_float(floor(pattern_pixel / 24.0) + frame * 5.0) - 0.5) * local * 7.0;
     float3 torn_color = Texture.SampleLevel(Sampler, screen + tear_direction * tear_amount / texture_size, 0.0).rgb;
     float3 sorted_color = lerp(best_color, torn_color, saturate(local * 0.38));
     return float4(lerp(original.rgb, sorted_color, blend), original.a);

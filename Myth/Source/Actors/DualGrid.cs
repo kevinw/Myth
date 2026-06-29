@@ -97,10 +97,12 @@ public class DualGrid : Actor
 	}
 
 	private static int StableVariantSeed(Room room, char tileType, int x, int y)
+		=> StableVariantSeed(room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y), tileType);
+
+	internal static int StableVariantSeed(Point2 worldTile, char tileType)
 	{
 		unchecked
 		{
-			var worldTile = room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y);
 			var hash = (uint)worldTile.X * 0x8da6b343u;
 			hash ^= (uint)worldTile.Y * 0xd8163841u;
 			hash ^= tileType * 0xcb1ab31fu;
@@ -157,12 +159,13 @@ public class DualGrid : Actor
 	// 0,0). The fixed-shape version of the room marching above, for actors that want a tile-skinned
 	// solid (e.g. MovingPlatform) without a Room behind them. Tiles sit at the -0.5 vertex offset, so
 	// the material lines up with the full rectangle rather than insetting half a tile.
-	internal static void RenderRect(Batcher batcher, Tileset tileset, int cols, int rows, bool normals, Color color)
+	internal static void RenderRect(Batcher batcher, Tileset tileset, int cols, int rows, bool normals, Color color, Point2 variantTileOrigin, char tileType)
 	{
 		foreach (var vertex in new RectVertices(cols, rows))
 		{
 			var cell = MaskToTile[vertex.Mask];
-			var tile = normals ? tileset.GetVariantNormalTile(cell.X, cell.Y, 0) : tileset.GetVariantTile(cell.X, cell.Y, 0);
+			var seed = StableVariantSeed(variantTileOrigin + new Point2(vertex.X, vertex.Y), tileType);
+			var tile = normals ? tileset.GetVariantNormalTile(cell.X, cell.Y, seed) : tileset.GetVariantTile(cell.X, cell.Y, seed);
 			if (tile.Texture == null)
 				continue;
 
@@ -172,13 +175,14 @@ public class DualGrid : Actor
 
 	// World-space occluder segments for the same rectangle, traced from the tileset's per-tile
 	// occluders so a shadow follows the (rounded) art -- the moving counterpart of the room occluders.
-	internal static void AppendRectOccluders(List<VisibilityPolygon.Segment> segments, Tileset tileset, int cols, int rows, Vector2 origin)
+	internal static void AppendRectOccluders(List<VisibilityPolygon.Segment> segments, Tileset tileset, int cols, int rows, Vector2 origin, Point2 variantTileOrigin, char tileType)
 	{
 		foreach (var vertex in new RectVertices(cols, rows))
 		{
 			var cell = MaskToTile[vertex.Mask];
 			var command = origin + VertexPosition(vertex);
-			foreach (var local in tileset.GetVariantOccluders(cell.X, cell.Y, 0))
+			var seed = StableVariantSeed(variantTileOrigin + new Point2(vertex.X, vertex.Y), tileType);
+			foreach (var local in tileset.GetVariantOccluders(cell.X, cell.Y, seed))
 				if (OwnsOccluderSegment(vertex.Mask, local))
 					segments.Add(new(command + local.A, command + local.B));
 		}

@@ -638,20 +638,22 @@ public sealed partial class GameView
 		pixelSortGlitchMaterial.Material.Fragment.Samplers[1] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
-		pixelSortGlitchMaterial.Material.Fragment.SetUniformBuffer([
-			input.Width,
-			input.Height,
-			renderCamera.X,
-			renderCamera.Y,
-			ditherGlitch,
-			glitchPosition.X,
-			glitchPosition.Y,
-			DitherGlitchRadius,
-			Time.SecondsF,
-			ditherGlitchAxis.X,
-			ditherGlitchAxis.Y,
-			zoomLevel
-		]);
+		Span<float> uniforms = stackalloc float[12 + DitherAnchorFloatCount];
+		var i = 0;
+		uniforms[i++] = input.Width;
+		uniforms[i++] = input.Height;
+		uniforms[i++] = renderCamera.X;
+		uniforms[i++] = renderCamera.Y;
+		uniforms[i++] = ditherGlitch;
+		uniforms[i++] = glitchPosition.X;
+		uniforms[i++] = glitchPosition.Y;
+		uniforms[i++] = DitherGlitchRadius;
+		uniforms[i++] = Time.SecondsF;
+		uniforms[i++] = ditherGlitchAxis.X;
+		uniforms[i++] = ditherGlitchAxis.Y;
+		uniforms[i++] = zoomLevel;
+		ditherAnchorOffsets.CopyTo(uniforms[i..]);
+		pixelSortGlitchMaterial.Material.Fragment.SetUniformBuffer(uniforms);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.PushMaterial(pixelSortGlitchMaterial.Material);
@@ -675,31 +677,38 @@ public sealed partial class GameView
 		lightingCompositeMaterial.Material.Fragment.Samplers[7] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		lightingCompositeMaterial.Material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		lightingCompositeMaterial.Material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
-		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer([
-			LitScreen.Width,
-			LitScreen.Height,
-			renderCamera.X,
-			renderCamera.Y,
-			Manager.LightingDitherEnabled ? 1.0f : 0.0f,
-			Manager.LightingDitherScale,
-			Manager.LightingDitherStrength,
-			ditherGlitch,
-			glitchPosition.X,
-			glitchPosition.Y,
-			DitherGlitchRadius,
-			Time.SecondsF,
-			ditherGlitchAxis.X,
-			ditherGlitchAxis.Y,
-			zoomLevel,
-			0,
-			aoStrength,
-			aoOffset.X,
-			aoOffset.Y,
-			Manager.AmbientOcclusionMinVisibility
-		]);
+		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
+		var i = 0;
+		uniforms[i++] = LitScreen.Width;
+		uniforms[i++] = LitScreen.Height;
+		uniforms[i++] = renderCamera.X;
+		uniforms[i++] = renderCamera.Y;
+		uniforms[i++] = Manager.LightingDitherEnabled ? 1.0f : 0.0f;
+		uniforms[i++] = Manager.LightingDitherScale;
+		uniforms[i++] = Manager.LightingDitherStrength;
+		uniforms[i++] = ditherGlitch;
+		uniforms[i++] = glitchPosition.X;
+		uniforms[i++] = glitchPosition.Y;
+		uniforms[i++] = DitherGlitchRadius;
+		uniforms[i++] = Time.SecondsF;
+		uniforms[i++] = ditherGlitchAxis.X;
+		uniforms[i++] = ditherGlitchAxis.Y;
+		uniforms[i++] = zoomLevel;
+		uniforms[i++] = 0;
+		uniforms[i++] = aoStrength;
+		uniforms[i++] = aoOffset.X;
+		uniforms[i++] = aoOffset.Y;
+		uniforms[i++] = Manager.AmbientOcclusionMinVisibility;
+		uniforms[i++] = Manager.NormalDitherSlopeBoost;
+		uniforms[i++] = Manager.NormalDitherQuantization ? NormalDitherLevels : 0;
+		uniforms[i++] = 0;
+		uniforms[i++] = 0;
+		ditherAnchorOffsets.CopyTo(uniforms[i..]);
+		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer(uniforms);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.PushMaterial(lightingCompositeMaterial.Material);
@@ -783,6 +792,7 @@ public sealed partial class GameView
 
 	void DrawTileField()
 	{
+		Array.Clear(ditherAnchorOffsets);
 		RoomTileFieldCache? currentRoomTileFieldCache = null;
 		RoomTileFieldCache? nextRoomTileFieldCache = null;
 		if (room != null)
@@ -797,6 +807,7 @@ public sealed partial class GameView
 			DrawCachedRoomTileField(currentRoomTileFieldCache);
 		if (nextRoomTileFieldCache != null)
 			DrawCachedRoomTileField(nextRoomTileFieldCache);
+		DrawMovingPlatformTileFields();
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
@@ -805,6 +816,36 @@ public sealed partial class GameView
 
 	void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
 		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
+
+	void DrawMovingPlatformTileFields()
+	{
+		if (!ShowForegroundLayer || tileFieldStampMaterial == null)
+			return;
+
+		var anchor = 1;
+		Batcher.PushBlend(TileFieldStampBlend);
+		Batcher.PushMaterial(tileFieldStampMaterial.Material);
+		foreach (var actor in rendering)
+		{
+			if (actor is not MovingPlatform { Visible: true } platform)
+				continue;
+
+			var anchorId = anchor < MaxDitherAnchors ? anchor++ : 0;
+			if (anchorId > 0)
+			{
+				var offset = platform.DitherAnchorOffset;
+				var at = anchorId * 4;
+				ditherAnchorOffsets[at] = offset.X;
+				ditherAnchorOffsets[at + 1] = offset.Y;
+			}
+
+			Batcher.PushMatrix(platform.Position);
+			platform.RenderTileField(Batcher, TileFieldColor(platform.MaterialTile, platform.VariantTileOrigin, anchorId));
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMaterial();
+		Batcher.PopBlend();
+	}
 
 	RoomTileFieldCache GetRoomTileFieldCache(Room renderRoom)
 	{
@@ -1062,22 +1103,22 @@ public sealed partial class GameView
 		}
 	}
 
-	static Color TileFieldColor(char tile, Point2 worldTile)
+	static Color TileFieldColor(char tile, Point2 worldTile, int anchor = 0)
 	{
 		var hash = TileFieldHash(tile, worldTile);
 		var variant = (hash & 255) / 255.0f;
 		var family = TileFieldFamily(tile);
-		return new Color(variant, family, 0.0f, 1.0f);
+		return new Color(variant, ((family << 5) | anchor) / 255.0f, 0.0f, 1.0f);
 	}
 
-	static float TileFieldFamily(char tile)
+	static int TileFieldFamily(char tile)
 		=> tile switch
 		{
-			'0' => 0.00f,
-			'1' or '2' or 'x' => 0.25f,
-			'G' or 'S' or 'X' or 'g' => 0.50f,
-			'w' => 0.75f,
-			_ => 1.00f
+			'0' => 0,
+			'1' or '2' or 'x' => 1,
+			'G' or 'S' or 'X' or 'g' => 2,
+			'w' => 3,
+			_ => 4
 		};
 
 	static uint TileFieldHash(char tile, Point2 worldTile)
@@ -2316,8 +2357,12 @@ public sealed partial class GameView
 		BlendMask.Red | BlendMask.Green, Color.White);
 
 	static float DitherGlitchRadius => 150.0f;
+	static float NormalDitherLevels => 4.0f;
+	const int MaxDitherAnchors = 32;
+	const int DitherAnchorFloatCount = MaxDitherAnchors * 4;
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
+	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
 	public Target Screen { get; private set; } = null!;
 
 	Target BackgroundScreen { get; set; } = null!;

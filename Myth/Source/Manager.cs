@@ -39,6 +39,8 @@ public partial class Manager : App
 	public float LightingDitherScale = 1.0f;
 	internal const float LightingDitherStrengthDefault = 0.155f;
 	public float LightingDitherStrength = LightingDitherStrengthDefault;
+	public float NormalDitherSlopeBoost = 0.3f;
+	public bool NormalDitherQuantization = true;
 
 	// Ambient occlusion: background tiles darken beneath foreground overhangs.
 	public float AmbientOcclusionStrength = 1.0f;

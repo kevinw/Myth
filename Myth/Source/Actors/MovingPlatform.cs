@@ -135,13 +135,32 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	public void AppendOccluderSegments(List<VisibilityPolygon.Segment> segments)
 	{
 		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.AppendRectOccluders(segments, tileset, TileColumns, TileRows, new Vector2(Position.X, Position.Y));
+			DualGrid.AppendRectOccluders(segments, tileset, TileColumns, TileRows, new Vector2(Position.X, Position.Y), VariantTileOrigin, MaterialTile);
 		else
 			OccluderShape.FromRect(new RectInt(Position.X, Position.Y, Size.X, Size.Y)).AppendSegments(segments);
 	}
 
 	public override void Render(Batcher batcher) => RenderMaterial(batcher, normals: false, Color.White);
 	public override void RenderNormals(Batcher batcher) => RenderMaterial(batcher, normals: true, Color.White);
+	internal void RenderTileField(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+	internal Point2 DitherAnchorPosition => originalPosition;
+	internal Vector2 DitherAnchorOffset => originalPosition - Position;
+	internal Point2 VariantTileOrigin => originalPosition / Game.TileSize;
+	internal char MaterialTile
+	{
+		get
+		{
+			var found = false;
+			var result = '0';
+			foreach (var (tile, entry) in Factory.Entries)
+				if (entry.DualTilesetName == Material && (!found || tile < result))
+				{
+					found = true;
+					result = tile;
+				}
+			return result;
+		}
+	}
 
 	public override bool CastsReflection => true;
 	public override void RenderReflection(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
@@ -161,7 +180,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	void RenderMaterial(Batcher batcher, bool normals, Color color)
 	{
 		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.RenderRect(batcher, tileset, TileColumns, TileRows, normals, color);
+			DualGrid.RenderRect(batcher, tileset, TileColumns, TileRows, normals, color, VariantTileOrigin, MaterialTile);
 		else
 			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
 	}
