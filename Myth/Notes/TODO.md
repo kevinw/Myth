@@ -1,5 +1,6 @@
 # TODO
 
+- make rim_light a uniform; investigate less harsh ways of lighting things
 - a player frame for "holding down before a roll"
 - wall jump too difficult (go back to "just jump"?)
 - mobile web:  instead of tap to zoom out, respect pinch in and out to adjust zoom level
