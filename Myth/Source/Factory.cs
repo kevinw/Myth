@@ -307,21 +307,21 @@ public static class Factory
 		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope", acousticReflectivity: 0.15f));
 		Register('M', AsDualTile("metal", "metal-dual", "Brick", reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f));
 		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
+		Register('P', AsDualTile("dirt", "dirt-dual", "Grass", acousticReflectivity: 0.15f));
+		Register('J', AsSlopeTile("dirt", "Brick", "Dirt Slope", acousticReflectivity: 0.15f));
 		Register('Y', AsSlopeTile("stone", "Brick", "Stone Slope"));
 		Register('g', AsTile("plants", false, "Grass", acousticReflectivity: 0.20f));
 		Register('i', AsTile("gates", isFg: false, surfaceType: "Brick", acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
 		Register('w', AsTile("water", false, "Water", reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f));
-		Register('#', Assets.GetTileset("back-dual") != null
-			? AsDualTile("back", "back-dual", "Background", TileLayer.Background)
-			: AsTile("back", false, layer: TileLayer.Background));
+		Register('#', AsTile("back", false, layer: TileLayer.Background));
+		Register('-', AsTile("back-right", false, layer: TileLayer.Background));
+		Register(')', AsTile("back-ne", false, layer: TileLayer.Background));
+		Register('(', AsTile("back-nw", false, layer: TileLayer.Background));
 		Register('m', AsTile("myth-back", false, "Background", name: "Myth Back", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('u', AsTile("myth-runes", false, "Background", name: "Myth Runes", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('v', AsTile("myth-vines", false, "Grass", name: "Myth Vines", layer: TileLayer.Background, acousticReflectivity: 0.20f));
-		Register(FungusTile, new Entry("Fungus", Assets.GetTileset("myth-vines")?.Tiles[0] ?? new Subtexture(),
-			(Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) => { },
-			"Fungus", layer: TileLayer.Background, acousticReflectivity: 0.20f));
-
+		Register(FungusTile, new Entry("Fungus", Assets.GetTileset("myth-vines")?.Tiles[0] ?? new Subtexture(), (tile, room, fg, fgVisual, bg, dual) => { }, "Fungus", layer: TileLayer.Background, acousticReflectivity: 0.20f));
 		RegisterActorSpecPaletteEntries();
 
 	}

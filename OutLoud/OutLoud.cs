@@ -114,7 +114,7 @@ public sealed class Utterance
 		}
 
 		ApplyIntonation(list, EndsWithQuestion(text));
-		return new Utterance(text, revealAt, list.ToArray());
+		return new Utterance(text, revealAt, [.. list]);
 	}
 
 	static List<int>[]? BuildBuckets(Vowel[]? clipVowels)
