@@ -1010,7 +1010,7 @@ public partial class Game : IDisposable
 		{
 			var fromRoom = room;
 			var exitPosition = GetFirst<Player>()?.Position ?? (Vector2)room.WorldBounds.Center;
-			if (Assets.FindAdjacentRoom(room, direction, exitPosition) is { } foundRoom)
+			if (Assets.FindAdjacentRoomPlayMode(room, direction, exitPosition) is { } foundRoom)
 			{
 				nextRoom = foundRoom.CloneRuntime();
 				transitionDirection = new Point2(Math.Sign(direction.X), Math.Sign(direction.Y));

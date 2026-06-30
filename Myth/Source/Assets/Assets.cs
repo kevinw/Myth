@@ -2701,6 +2701,32 @@ public static class Assets
 		return null;
 	}
 
+	public static Room? FindAdjacentRoomPlayMode(Room room, Point2 direction, Vector2 exitPosition)
+	{
+		var bounds = room.WorldBounds;
+		Room? best = null;
+		var bestDistance = float.MaxValue;
+
+		foreach (var candidate in RoomsById.Values)
+		{
+			if (candidate == room)
+				continue;
+
+			var candidateBounds = candidate.WorldBounds;
+			if (!TouchesExitEdge(bounds, candidateBounds, direction, exitPosition))
+				continue;
+
+			var distance = TransitionAxisDistance(candidateBounds, direction, exitPosition);
+			if (distance < bestDistance)
+			{
+				best = candidate;
+				bestDistance = distance;
+			}
+		}
+
+		return best;
+	}
+
 	public static Room? FindAdjacentRoom(Room room, Point2 direction, Vector2 exitPosition)
 	{
 		var bounds = room.WorldBounds;
