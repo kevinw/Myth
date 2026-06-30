@@ -150,6 +150,10 @@
                 justify-content: space-between;
             }
 
+            #feedback-actions {
+                flex-wrap: wrap;
+            }
+
             #feedback-title {
                 margin: 0;
                 font-size: 18px;
@@ -205,6 +209,17 @@
 
             #feedback-status[data-error] {
                 color: #f0a0a0;
+            }
+
+            #feedback-email {
+                margin-left: auto;
+                color: rgba(var(--text-rgb), 0.75);
+                font-size: 12px;
+                white-space: nowrap;
+            }
+
+            #feedback-email a {
+                color: var(--accent);
             }
 
             .feedback-honeypot {
@@ -341,6 +356,7 @@
                 <div id="feedback-actions">
                     <button id="feedback-submit" type="submit">Send anonymous feedback</button>
                     <span id="feedback-status" role="status" aria-live="polite"></span>
+                    <span id="feedback-email">or, <a href="mailto:kevinwatters@gmail.com">email</a></span>
                 </div>
             </form>
         </dialog>
