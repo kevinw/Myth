@@ -1,7 +1,12 @@
 [
   {
     "label": "simple",
-    "command": "dotnet watch run --no-restore -- --simple",
+    "command": "dotnet watch run -c Release --no-restore -- --simple",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+  },
+  {
+    "label": "gym",
+    "command": "dotnet watch run -c Release --no-restore -- --gym",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
