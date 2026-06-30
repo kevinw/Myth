@@ -31,14 +31,14 @@
   ],
   "actors": [
     {
+      "Id": "dd08a51630567d4f",
       "Type": "PlayerStart",
-      "Position": [148, 80],
-      "Id": "dd08a51630567d4f"
+      "Position": [148, 80]
     },
     {
+      "Id": "06e5c66584236b26",
       "Type": "Light",
-      "Position": [164, 36],
-      "Id": "06e5c66584236b26"
+      "Position": [164, 36]
     }
   ]
 }
