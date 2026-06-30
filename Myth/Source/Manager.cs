@@ -661,6 +661,8 @@ public partial class Manager : App
 		UpdateCommandConsoleToggle();
 #endif
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
+		if (!keyboardShortcutsBlocked && playing && GymLoop && Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter))
+			AdvanceGym(failureReason: "manual");
 
 		// Misc. Hotkeys
 		using (PerfStats.Time(PerfDetail.Hotkeys))

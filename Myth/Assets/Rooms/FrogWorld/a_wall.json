@@ -98,6 +98,11 @@
       "Id": "b80bb7b4b0fbe7dd",
       "Type": "Jumpthru",
       "Position": [240, 16]
+    },
+    {
+      "Id": "8ba7e0c2ac41b650",
+      "Type": "Goal",
+      "Position": [232, 16]
     }
   ]
 }

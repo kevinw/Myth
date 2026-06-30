@@ -88,6 +88,11 @@
       "Type": "ParticleEmitter",
       "Position": [184, 78],
       "EffectName": "smoke"
+    },
+    {
+      "Id": "3cf0ed31fa73e9f8",
+      "Type": "Goal",
+      "Position": [232, 72]
     }
   ]
 }

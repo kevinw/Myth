@@ -68,6 +68,16 @@
       "Type": "Spitter",
       "Position": [68, 88],
       "Facing": "-"
+    },
+    {
+      "Id": "c34f467df836bc4d",
+      "Type": "PlayerStart",
+      "Position": [308, 144]
+    },
+    {
+      "Id": "500a5a950e1db30b",
+      "Type": "Goal",
+      "Position": [16, 64]
     }
   ]
 }

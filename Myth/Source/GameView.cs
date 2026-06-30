@@ -22,6 +22,7 @@ public sealed partial class GameView : IDisposable
 		EnsureRenderTargets(Width, Height);
 		var loadVisualShaders = gd.Driver != GraphicsDriver.Headless;
 		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
+		atlasWanderMaterial = loadVisualShaders ? CreateFragmentMaterial("AtlasWander", samplerCount: 1, uniformBufferCount: 1) : null;
 		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 11, uniformBufferCount: 1) : null;
 		blurMaterial = loadVisualShaders ? CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1) : null;
 		softShadowMaterial = loadVisualShaders ? CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1) : null;
@@ -253,6 +254,7 @@ public sealed partial class GameView : IDisposable
 	public void ReloadShaders()
 	{
 		crtMaterial?.Reload();
+		atlasWanderMaterial?.Reload();
 		lightingCompositeMaterial?.Reload();
 		normalLightMaterial?.Reload();
 		reflectionDistortMaterial?.Reload();
@@ -274,6 +276,7 @@ public sealed partial class GameView : IDisposable
 		DisposeRoomNormalCaches();
 		DisposeRoomTileFieldCaches();
 		crtMaterial?.Dispose();
+		atlasWanderMaterial?.Dispose();
 		lightingCompositeMaterial?.Dispose();
 		normalLightMaterial?.Dispose();
 		reflectionDistortMaterial?.Dispose();

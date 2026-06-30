@@ -154,6 +154,12 @@
       "Id": "5d0ffdd27abb300b",
       "Type": "Jumpthru",
       "Position": [104, 448]
+    },
+    {
+      "Id": "461595114bd16d22",
+      "Type": "ParticleEmitter",
+      "Position": [132, 44],
+      "EffectName": "snow"
     }
   ]
 }

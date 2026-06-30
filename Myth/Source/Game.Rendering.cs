@@ -21,6 +21,13 @@ public sealed partial class GameView
 
 	void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
+		if (game.AtlasWander)
+		{
+			atlasWanderElapsed += Time.Delta;
+			var ramp = Calc.ClampedMap(atlasWanderElapsed, 0, AtlasWanderRampDuration);
+			ramp *= ramp * (3.0f - 2.0f * ramp);
+			atlasWanderOffset += AtlasWanderSpeed * Calc.Lerp(AtlasWanderInitialSpeed, 1, ramp) * Time.Delta;
+		}
 		PrepareRenderingList();
 		GetDecalLayers(out var hasBackgroundDecals, out var hasForegroundDecals);
 		var buildAo = debugView is not DebugView.TileFieldRed and not DebugView.TileFieldGreen and not DebugView.DitherMask &&
@@ -284,6 +291,7 @@ public sealed partial class GameView
 		}
 
 		PushWorldMatrix();
+		var atlasWander = PushAtlasWanderMaterial();
 
 		// draw actors
 		foreach (var actor in rendering)
@@ -294,7 +302,7 @@ public sealed partial class GameView
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
-			var decal = PushPropDecalMaterial(actor);
+			var decal = !atlasWander && PushPropDecalMaterial(actor);
 			actor.Render(Batcher);
 			if (decal)
 				Batcher.PopMaterial();
@@ -304,6 +312,8 @@ public sealed partial class GameView
 		if (!background && debugView == DebugView.CollisionRects)
 			DrawCollisionRects(); // TODO: don't do this in post-processing context
 
+		if (atlasWander)
+			Batcher.PopMaterial();
 		Batcher.PopMatrix();
 		Batcher.Render(target);
 		Batcher.Clear();
@@ -315,6 +325,26 @@ public sealed partial class GameView
 			else
 				DrawPlatformSurfaceReflections(target);
 		}
+	}
+
+	bool PushAtlasWanderMaterial()
+	{
+		if (!game.AtlasWander || atlasWanderMaterial == null || Assets.Atlas is not { } atlas)
+			return false;
+		atlasWanderMaterial.Material.Fragment.SetUniformBuffer([
+			atlas.Width,
+			atlas.Height,
+			atlasWanderOffset.X,
+			atlasWanderOffset.Y,
+		]);
+		Batcher.PushMaterial(atlasWanderMaterial.Material);
+		return true;
+	}
+
+	internal void ResetAtlasWander()
+	{
+		atlasWanderOffset = Vector2.Zero;
+		atlasWanderElapsed = 0;
 	}
 
 	void DrawBackdrop(Target target)
@@ -329,6 +359,7 @@ public sealed partial class GameView
 		Batcher.PushMatrix(
 			Matrix3x2.CreateScale(scale) *
 			Matrix3x2.CreateTranslation(viewport.Left, viewport.Bottom - Height * scale));
+		var atlasWander = PushAtlasWanderMaterial();
 		if (game.GetFirst<Player>() is { } player)
 		{
 #if BROWSER
@@ -346,6 +377,8 @@ public sealed partial class GameView
 				pos.X += 12;
 			}
 		}
+		if (atlasWander)
+			Batcher.PopMaterial();
 		Batcher.PopMatrix();
 
 		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
@@ -2373,6 +2406,9 @@ public sealed partial class GameView
 
 	static float DitherGlitchRadius => 150.0f;
 	static float NormalDitherLevels => 4.0f;
+	static Vector2 AtlasWanderSpeed => new(13.0f, 7.0f);
+	static float AtlasWanderInitialSpeed => 0.1f;
+	static float AtlasWanderRampDuration => 10.0f;
 	const int MaxDitherAnchors = 32;
 	const int DitherAnchorFloatCount = MaxDitherAnchors * 4;
 	const float ActorDitherAmount = 0.2f;
@@ -2408,6 +2444,7 @@ public sealed partial class GameView
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
 	readonly ReloadableMaterial? crtMaterial;
+	readonly ReloadableMaterial? atlasWanderMaterial;
 	readonly ReloadableMaterial? lightingCompositeMaterial;
 	readonly ReloadableMaterial? normalLightMaterial;
 	readonly ReloadableMaterial? reflectionDistortMaterial;
@@ -2420,6 +2457,8 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
 	readonly ReloadableMaterial? foregroundDecalMaskMaterial;
 	readonly ReloadableMaterial? coverageMaskMaterial;
+	Vector2 atlasWanderOffset;
+	float atlasWanderElapsed;
 	const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
 	readonly ParticleSystem? particleSystem;
 	float particleBurstTimer;

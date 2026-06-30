@@ -37,11 +37,13 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 #endif
 		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
+		if (Input.Keyboard.Pressed(Keys.J)) ToggleAtlasWander();
 
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 #if DEBUG
 		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
 		if (Input.Keyboard.Pressed(Keys.V) && VoiceEnabled) SpeakVoiceTest();
+#endif
 
 		int timeScaleChange = 0;
 
@@ -57,7 +59,6 @@ public partial class Game
 		{
 			ChangeTimeScale(timeScaleChange);
 		}
-#endif
 	}
 
 	internal int CrtShader { get; private set; }
@@ -66,6 +67,16 @@ public partial class Game
 	{
 		CrtShader = (CrtShader + 1) % 2;
 		DisplayMessage($"CRT: {(CrtShader == 0 ? "Myth" : "GDV Mini Ultra Trinitron")}");
+	}
+
+	internal bool AtlasWander { get; private set; }
+
+	void ToggleAtlasWander()
+	{
+		AtlasWander = !AtlasWander;
+		if (!AtlasWander)
+			View?.ResetAtlasWander();
+		DisplayMessage($"Atlas Wander: {(AtlasWander ? "On" : "Off")}");
 	}
 
 #if DEBUG

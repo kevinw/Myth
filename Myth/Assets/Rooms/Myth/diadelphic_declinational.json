@@ -190,6 +190,12 @@
       "Id": "61b0c76453efe6ec",
       "Type": "Light",
       "Position": [228, 124]
+    },
+    {
+      "Id": "ed56f97b704eeb32",
+      "Type": "ParticleEmitter",
+      "Position": [244, 44],
+      "EffectName": "snow"
     }
   ]
 }

@@ -2423,11 +2423,14 @@ public partial class Manager
 	{
 		var specId = ActorSpecs.ReadString(actor, "From");
 		var typeName = ActorSpecs.ReadString(actor, "Type");
+		var propSpriteName = typeName == nameof(Prop) ? ActorSpecs.ReadString(actor, nameof(Prop.SpriteName)) : null;
 		if (specId == null && typeName == null)
 			return Point2.Zero;
 
 		foreach (var entry in Factory.ActorPalette)
 		{
+			if (propSpriteName != null && string.Equals(entry.PropSpriteName, propSpriteName, StringComparison.OrdinalIgnoreCase))
+				return entry.Offset;
 			if ((specId != null && entry.ActorSpecId == specId) ||
 				(typeName != null && entry.ActorTypeName == typeName && entry.ActorSpecId == null))
 				return entry.Offset;
@@ -3791,6 +3794,9 @@ public partial class Manager
 				? Factory.ActorPalette[selectedActorPaletteIndex]
 				: null;
 			var brushIsActor = actorBrush != null;
+			var actorBrushPosition = brushIsActor && !keyboardBlocked && Input.Keyboard.Shift
+				? (Point2)worldMouse
+				: (Point2)(roomTopLeft + tileOver * Game.TileSize + (actorBrush?.Offset ?? Point2.Zero));
 			var ctrlClick =
 				Input.Mouse.LeftPressed &&
 				(Input.Keyboard.Down(Keys.LeftControl) || Input.Keyboard.Down(Keys.RightControl));
@@ -3920,9 +3926,14 @@ public partial class Manager
 			{
 				using (CaptureRoomUndo("Place Actor", editing))
 				{
-					var position = (Point2)(roomTopLeft + tileOver * Game.TileSize + actorEntry.Offset);
+					var position = actorBrushPosition;
 					var before = editing.Actors.Count;
-					if (actorEntry.ActorSpecId != null)
+					if (actorEntry.PropSpriteName is { } propSpriteName)
+					{
+						editing.AddActorType(nameof(Prop), position);
+						editing.Actors[^1][nameof(Prop.SpriteName)] = propSpriteName;
+					}
+					else if (actorEntry.ActorSpecId != null)
 						editing.AddActorSpec(actorEntry.ActorSpecId, position);
 					else if (actorEntry.ActorTypeName != null)
 						editing.AddActorType(actorEntry.ActorTypeName, position);
@@ -3998,8 +4009,7 @@ public partial class Manager
 				}
 				else if (actorBrush is { } actorPreview)
 				{
-					var position = roomTopLeft + tileOver * Game.TileSize + actorPreview.Offset;
-					batcher.Image(actorPreview.Image, position, actorPreview.Origin, Vector2.One, 0, Color.White);
+					batcher.Image(actorPreview.PreviewImage, actorBrushPosition, actorPreview.Origin, Vector2.One, 0, Color.White);
 				}
 				else if (brushEntry is { } placing)
 				{
@@ -4996,7 +5006,7 @@ public partial class Manager
 	{
 		var control = new Vector2((from.X + to.X) * 0.5f, MathF.Min(from.Y, to.Y) - 24);
 		var previous = GameWorldToImGui(viewport, game, from);
-		const int segments = 12;
+		const int segments = 6;
 		for (var i = 1; i <= segments; i++)
 		{
 			var t = i / (float)segments;
@@ -5055,7 +5065,7 @@ public partial class Manager
 		if (nodeId is not { } id || id < 0 || id >= graph.Nodes.Count)
 			return;
 
-		draw.AddCircle(GameWorldToImGui(viewport, game, graph.Nodes[id].Position), radius, color, 16, 4.0f);
+		draw.AddCircle(GameWorldToImGui(viewport, game, graph.Nodes[id].Position), radius, color, 10, 4.0f);
 	}
 
 	static uint ImGuiColor(float r, float g, float b, float a)

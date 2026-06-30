@@ -207,14 +207,14 @@ partial class Manager
 		}
 	}
 
-	private void AdvanceGym(bool success = false)
+	void AdvanceGym(bool success = false, string? failureReason = null)
 	{
 		if (gym.runs is not { Count: > 0 })
 			return;
 
 		var current = gym.runs[gym.runIndex];
 		var simTime = Time.Seconds - gym.roomStartTime;
-		var reason = success ? "goal" : game?.GymBudDied == true ? "fell" : "timeout";
+		var reason = success ? "goal" : failureReason ?? (game?.GymBudDied == true ? "fell" : "timeout");
 		if (gym.exitAfterAll)
 		{
 			gym.results ??= [];

@@ -216,7 +216,7 @@ public static class Assets
 
 		foreach (var file in EnumerateAsepriteFiles(spritesPath))
 		{
-			var name = Path.ChangeExtension(Path.GetRelativePath(spritesPath, file), null);
+			var name = Path.ChangeExtension(Path.GetRelativePath(spritesPath, file), null)!.Replace(Path.DirectorySeparatorChar, '/');
 			var ase = new Aseprite(file);
 			if (ase.Frames.Length > 0)
 				spriteFiles.Add(name, ase);
@@ -227,7 +227,7 @@ public static class Assets
 
 		foreach (var file in EnumerateAsepriteFiles(tilesetsPath))
 		{
-			var name = Path.ChangeExtension(Path.GetRelativePath(tilesetsPath, file), null);
+			var name = Path.ChangeExtension(Path.GetRelativePath(tilesetsPath, file), null)!.Replace(Path.DirectorySeparatorChar, '/');
 			var ase = new Aseprite(file);
 			if (ase.Frames.Length > 0)
 				tilesetFiles.Add(name, ase);

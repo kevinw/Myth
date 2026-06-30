@@ -71,6 +71,16 @@
       "Id": "c3c2abbed29046ba",
       "Type": "Bramble",
       "Position": [44, 80]
+    },
+    {
+      "Id": "4644c2766de3a65c",
+      "Type": "Goal",
+      "Position": [88, 88]
+    },
+    {
+      "Id": "9a65cabe76ddade3",
+      "Type": "PlayerStart",
+      "Position": [268, 56]
     }
   ]
 }

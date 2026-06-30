@@ -111,7 +111,7 @@
       "Id": "6082e32cbe2fb92d",
       "Type": "Prop",
       "Position": [208, 96],
-      "SpriteName": "server"
+      "SpriteName": "Props/server"
     }
   ]
 }

@@ -10,6 +10,7 @@ namespace Myth;
 public static class Factory
 {
 	public const string DefaultSurfaceType = "Grass";
+	const string PropSpritePrefix = "Props/";
 
 	/// Background tile type that marks a region for NCALayer to grow fungus into.
 	public const char FungusTile = 'f';
@@ -75,23 +76,27 @@ public static class Factory
 	{
 		public readonly string Name;
 		public readonly Subtexture Image;
+		public readonly Subtexture PreviewImage;
 		public readonly Vector2 Origin;
 		public readonly Point2 Offset;
 		public readonly RectInt? EditorBounds;
 		public readonly RectInt DefaultEditorBounds;
 		public readonly string? ActorTypeName;
 		public readonly string? ActorSpecId;
+		public readonly string? PropSpriteName;
 		public readonly ActorTag Tags;
 
-		private ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null, ActorTag tags = ActorTag.None)
+		ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null, ActorTag tags = ActorTag.None, string? propSpriteName = null, Subtexture previewImage = default)
 		{
 			Name = name;
 			Image = image;
+			PreviewImage = previewImage.Texture != null ? previewImage : image;
 			Origin = origin;
 			Offset = offset;
 			DefaultEditorBounds = defaultEditorBounds;
 			ActorTypeName = actorTypeName;
 			ActorSpecId = actorSpecId;
+			PropSpriteName = propSpriteName;
 			EditorBounds = editorBounds;
 			Tags = tags;
 		}
@@ -101,7 +106,7 @@ public static class Factory
 			var sprite = Assets.GetSprite(spriteName) ?? throw new InvalidOperationException($"Actor palette entry '{typeof(T).Name}' references missing sprite '{spriteName}'.");
 			var typeName = typeof(T).Name;
 			var origin = sprite.ResolveOrigin(anchor);
-			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, null, editorBounds, tags);
+			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, null, editorBounds, tags, previewImage: sprite.Frames[0].Subtexture);
 		}
 
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
@@ -113,7 +118,14 @@ public static class Factory
 
 			var typeName = ActorSpecs.GetTypeName(spec);
 			var origin = sprite.ResolveOrigin(AnchorForType(typeName));
-			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, specId, editorBounds, TagsForType(typeName));
+			return new ActorPaletteEntry(specId, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, specId, editorBounds, TagsForType(typeName), previewImage: sprite.Frames[0].Subtexture);
+		}
+
+		public static ActorPaletteEntry FromProp(string spriteName)
+		{
+			var sprite = Assets.GetSprite(spriteName) ?? throw new InvalidOperationException($"Prop palette entry references missing sprite '{spriteName}'.");
+			var origin = sprite.ResolveOrigin(SpriteAnchor.TopLeft);
+			return new ActorPaletteEntry(spriteName[PropSpritePrefix.Length..], sprite.Frames[0].VisibleSubtexture, origin, Point2.Zero, GetDefaultEditorBounds(sprite, origin), nameof(Prop), null, tags: ActorTag.Decoration, propSpriteName: spriteName, previewImage: sprite.Frames[0].Subtexture);
 		}
 
 		public static RectInt GetDefaultEditorBounds(Sprite sprite, Vector2 origin)
@@ -322,6 +334,8 @@ public static class Factory
 		Register('u', AsTile("myth-runes", false, "Background", name: "Myth Runes", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('v', AsTile("myth-vines", false, "Grass", name: "Myth Vines", layer: TileLayer.Background, acousticReflectivity: 0.20f));
 		Register(FungusTile, new Entry("Fungus", Assets.GetTileset("myth-vines")?.Tiles[0] ?? new Subtexture(), (tile, room, fg, fgVisual, bg, dual) => { }, "Fungus", layer: TileLayer.Background, acousticReflectivity: 0.20f));
+		foreach (var spriteName in Assets.Sprites.Keys.Where(it => it.StartsWith(PropSpritePrefix, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
+			ActorPalette.Add(ActorPaletteEntry.FromProp(spriteName));
 		RegisterActorSpecPaletteEntries();
 
 	}

@@ -74,7 +74,19 @@
       "Id": "0752a791690d122c",
       "Type": "Prop",
       "Position": [100, 80],
-      "SpriteName": "server"
+      "SpriteName": "Props/server"
+    },
+    {
+      "Id": "40e62f7604a798ed",
+      "Type": "Prop",
+      "Position": [122, 80],
+      "SpriteName": "Props/server"
+    },
+    {
+      "Id": "a45a3c4581de4f9f",
+      "Type": "Prop",
+      "Position": [184, 80],
+      "SpriteName": "Props/server"
     }
   ]
 }
