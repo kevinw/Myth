@@ -3,19 +3,6 @@ using Foster.Framework;
 
 namespace Myth;
 
-/// <summary>
-/// Procedural pixel-art fungus that creeps across a designer-painted
-/// background region (see Factory.FungusTile). Growth is diffusion-limited
-/// aggregation (DLA): "spore" walkers random-walk through the region and
-/// stick on contact with existing fungus, building branching tendrils out
-/// from wherever the fungus was seeded. The player walking over the region
-/// drops new spores along their path; attacks cut it back and it regrows.
-/// Coverage is capped so it stays tendrilly rather than filling to a mat.
-///
-/// Entirely CPU-side: a per-pixel age grid is mapped through a small fungal
-/// colour ramp with ordered (Bayer) dithering and uploaded to a texture each
-/// frame. No neural net, no compute shaders, no trained weights.
-/// </summary>
 public class FungalGrowthActor : Actor
 {
 	public override bool CastsSpriteShadow => false;
@@ -23,44 +10,42 @@ public class FungalGrowthActor : Actor
 
 	internal ulong RandomSeed;
 
-	/// <summary>Pixel size of the region. Set by the caller before Added() runs.</summary>
+	/// Pixel size of the region. Set by the caller before Added() runs.
 	public int RegionWidth = 8;
 	public int RegionHeight = 8;
 
-	/// <summary>
 	/// Per-pixel growth mask (RegionWidth*RegionHeight, row-major). >= 0.5 = the
 	/// fungus may live here, otherwise it never does. Set before Added() runs.
-	/// </summary>
 	public float[]? GrowthMask;
 
-	/// <summary>Simulation ticks per second (spore launches + maturation).</summary>
+	/// Simulation ticks per second (spore launches + maturation).
 	public float StepsPerSecond = 20.0f;
 
-	/// <summary>Spore walkers launched each simulation tick.</summary>
+	/// Spore walkers launched each simulation tick.
 	public int WalkersPerTick = 10;
 
-	/// <summary>Max random-walk steps before a spore that never touched fungus is discarded.</summary>
+	/// Max random-walk steps before a spore that never touched fungus is discarded.
 	public int MaxWalkSteps = 140;
 
-	/// <summary>Fraction of the growable area at which ambient spread stops (keeps it tendrilly).</summary>
+	/// Fraction of the growable area at which ambient spread stops (keeps it tendrilly).
 	public float MaxCoverage = 0.32f;
 
-	/// <summary>How strongly the fungus glows in the emissive (bloom) layer.</summary>
+	/// How strongly the fungus glows in the emissive (bloom) layer.
 	public float EmissiveStrength = 0.85f;
 
-	/// <summary>Age (in ticks) at which a cell is considered fully mature (darkest).</summary>
+	/// Age (in ticks) at which a cell is considered fully mature (darkest).
 	public int AgeCap = 48;
 
-	/// <summary>Simulation ticks run at load so the room opens with established fungus.</summary>
+	/// Simulation ticks run at load so the room opens with established fungus.
 	public int WarmupSteps = 800;
 
-	/// <summary>Chance per frame, while the player overlaps the region, of dropping spores.</summary>
+	/// Chance per frame, while the player overlaps the region, of dropping spores.
 	public float SeedChance = 0.25f;
 	public int SeedCount = 2;
 	public float SeedJitterMin = 1.0f;
 	public float SeedJitterMax = 5.0f;
 
-	/// <summary>How fast the "disturbed" brightening from a hit fades (per second).</summary>
+	/// How fast the "disturbed" brightening from a hit fades (per second).
 	public float GlowDecay = 2.2f;
 
 	// Fungal colour ramp, fresh tip -> mature core. Cells dither between
@@ -271,11 +256,11 @@ public class FungalGrowthActor : Actor
 		return false;
 	}
 
-	/// <summary>
+	///
 	/// Briefly brightens the fungus around a world-space point (e.g. the player
 	/// brushing past or an impact), fading over ~half a second. A subtle
 	/// shimmer, not a displacement - no watery wobble.
-	/// </summary>
+	///
 	public void Hit(Vector2 worldPos, float strength = 0.6f, float radius = 5.0f)
 	{
 		var cx = worldPos.X - Position.X;
@@ -319,7 +304,7 @@ public class FungalGrowthActor : Actor
 		dirty = true;
 	}
 
-	/// <summary>Kills all fungus overlapping the given world-space rectangle; it regrows over time.</summary>
+	/// Kills all fungus overlapping the given world-space rectangle; it regrows over time.
 	public void Cut(RectInt worldRect)
 	{
 		var x0 = Math.Max(0, worldRect.X - Position.X);
@@ -351,10 +336,10 @@ public class FungalGrowthActor : Actor
 		stuck = stuckCells.Count;
 	}
 
-	/// <summary>
+	///
 	/// Called every frame the player overlaps the region: drops fresh spores
 	/// along their path (new growth nuclei) and brightens nearby fungus.
-	/// </summary>
+	///
 	public void OnPlayerStep(Vector2 footWorldPos)
 	{
 		Hit(footWorldPos, strength: 0.35f, radius: 4.0f);
