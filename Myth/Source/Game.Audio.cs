@@ -75,7 +75,12 @@ public partial class Game
 
 	static Vowel? ParseVowel(string? s) => s switch
 	{
-		"a" => Vowel.A, "e" => Vowel.E, "i" => Vowel.I, "o" => Vowel.O, "u" => Vowel.U, _ => null
+		"a" => Vowel.A,
+		"e" => Vowel.E,
+		"i" => Vowel.I,
+		"o" => Vowel.O,
+		"u" => Vowel.U,
+		_ => null
 	};
 
 	// Captures a speaker's voice + position so OutLoud can stay engine-agnostic; one per spoken line.
@@ -86,9 +91,11 @@ public partial class Game
 
 	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
 
+	static bool VoiceEnabled = false;
+
 	void PlayVoiceSyllable(string voice, int syllable, float pitch, float gain, Vector2 position)
 	{
-		if (Simulating || AudioMuted || !AudioEventsEnabled || !Audio.Initialized)
+		if (Simulating || AudioMuted || !AudioEventsEnabled || !Audio.Initialized || !VoiceEnabled)
 			return;
 
 		var path = $"voice/{voice}";
