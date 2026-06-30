@@ -156,7 +156,7 @@ public partial class Game
 			debugView = DebugView.PlatformNav;
 	}
 
-	public void DisplayMessage(string message, float duration = 1.25f, bool print = true)
+	public void DisplayMessage(string message, float duration = 1.85f, bool print = true)
 	{
 		if (print) Console.WriteLine(message);
 		DebugViewMessage = message;

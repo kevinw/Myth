@@ -2,7 +2,7 @@ namespace Myth;
 
 public static class PerfToggles
 {
-	public static bool HeadSlide = true;
+	public static bool HeadSlide = false;
 	public static bool HatPhysics = true;
 	public static bool Lighting = true;
 	public static bool DitherAndTileField = true;

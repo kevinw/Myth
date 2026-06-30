@@ -149,6 +149,7 @@ public partial class Game
 
 	internal void ShowBudSpeech(Vector2 position, string text, Emotion emotion = Emotion.Neutral, string? voice = null)
 	{
+		if (!Game.VoiceEnabled) return;
 		text = NormalizeSpeech(text);
 		var utterance = Utterance.Build(text, emotion, BudVoiceProfile, GermanFor(text));
 		var duration = utterance.RevealSeconds + Math.Clamp(text.Length * 0.04f, 1.2f, 3f);

@@ -39,8 +39,8 @@ public partial class Manager : App
 	public float LightingDitherScale = 1.0f;
 	internal const float LightingDitherStrengthDefault = 0.155f;
 	public float LightingDitherStrength = LightingDitherStrengthDefault;
-	public float NormalDitherSlopeBoost = 0.21f;
-	public bool NormalDitherQuantization = true;
+	public float NormalDitherSlopeBoost = 0.0f;
+	public bool NormalDitherQuantization = false;
 
 	// Ambient occlusion: background tiles darken beneath foreground overhangs.
 	public float AmbientOcclusionStrength = 1.0f;
@@ -1411,20 +1411,37 @@ public partial class Manager : App
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 	}
 
+	enum DebugViewMessagePosition
+	{
+		TopCenter,
+		BottomCenter
+	}
+
 	void DebugViewMessageImGui()
 	{
 		if (game?.DebugViewMessage is not { } message || message == "")
 			return;
 
+		const float FONT_SCALE = 1.5f;
+
 		var viewport = ImGui.GetMainViewport().Size;
-		var textSize = ImGui.CalcTextSize(message);
+		var textSize = ImGui.CalcTextSize(message) * FONT_SCALE;
 		var padding = new Vector2(10, 6);
 		var size = textSize + padding * 2;
 		var CenterX = viewport.X * 0.5f;
 		var Bottom = viewport.Y;
-		var position = new Vector2(
-			CenterX - size.X * 0.5f,
-			Bottom - size.Y - 8);
+
+		DebugViewMessagePosition area = DebugViewMessagePosition.TopCenter;
+		Vector2 position = new();
+		switch (area)
+		{
+			case DebugViewMessagePosition.TopCenter:
+				position = new Vector2(CenterX - size.X * 0.5f, 8);
+				break;
+			case DebugViewMessagePosition.BottomCenter:
+				position = new Vector2(CenterX - size.X * 0.5f, Bottom - size.Y - 8);
+				break;
+		}
 
 		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
 		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
@@ -1438,7 +1455,9 @@ public partial class Manager : App
 			ImGuiWindowFlags.NoSavedSettings |
 			ImGuiWindowFlags.NoFocusOnAppearing |
 			ImGuiWindowFlags.NoNav);
+		ImGui.SetWindowFontScale(FONT_SCALE);
 		ImGui.TextUnformatted(message);
+		ImGui.SetWindowFontScale(1.0f);
 		ImGui.End();
 		ImGui.PopStyleColor();
 		ImGui.PopStyleVar(2);
@@ -1624,6 +1643,7 @@ public partial class Manager : App
 			Console.WriteLine("[Gym] stopped (Tab)");
 		}
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
+		editorGameDirty = true;
 		SyncEditorGame();
 	}
 

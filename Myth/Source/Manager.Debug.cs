@@ -5,7 +5,7 @@ namespace Myth;
 
 public partial class Manager
 {
-	float renderTargetPreviewWidth = 200f;
+	float renderTargetPreviewWidth = 400f;
 	float atlasZoom = 1f;
 	bool atlasFit = true;
 	int selectedAtlas;

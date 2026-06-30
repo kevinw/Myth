@@ -14,7 +14,7 @@ public enum SpriteAnchor
 	// pivot-less sprites still ground sensibly without any annotation.
 	Auto,
 
-	Pivot, 	      // Force the sprite's baked slice pivot (origin as authored), even if it's (0,0).
+	Pivot,        // Force the sprite's baked slice pivot (origin as authored), even if it's (0,0).
 	BottomCenter, // Centered horizontally, sitting on the bottom of the visible pixels. Grounded enemies/objects.
 	Center,       // Centered horizontally and vertically. Flying/decorative actors (lights, projectiles).
 	TopLeft,      // Top-left of the visible pixels.
@@ -75,6 +75,10 @@ public class Sprite(string name, Vector2 origin)
 		float w = sub.Source.Width;
 		float h = sub.Source.Height;
 
+		// TODO: figure out how to round correctly here.
+		if (left != Math.Floor(left) || top != Math.Floor(top))
+			Console.WriteLine($"WARNING: Sprite '{Name}' origin is not integer-aligned: left={left}, top={top}");
+
 		return anchor switch
 		{
 			SpriteAnchor.TopLeft => new Vector2(left, top),
@@ -126,7 +130,7 @@ public class Sprite(string name, Vector2 origin)
 		if (animation.Duration > 0)
 			time %= animation.Duration;
 
-		for (int i = animation.FrameStart; i < animation.FrameStart + animation.FrameCount && i < Frames.Count; i ++)
+		for (int i = animation.FrameStart; i < animation.FrameStart + animation.FrameCount && i < Frames.Count; i++)
 		{
 			time -= Frames[i].Duration;
 			if (time <= 0)
@@ -138,7 +142,7 @@ public class Sprite(string name, Vector2 origin)
 	public void AddAnimation(string name, int frameStart, int frameCount)
 	{
 		float duration = 0;
-		for (int i = frameStart; i < frameStart + frameCount; i ++)
+		for (int i = frameStart; i < frameStart + frameCount; i++)
 			duration += Frames[i].Duration;
 		Animations.Add(new(name, frameStart, frameCount, duration));
 	}

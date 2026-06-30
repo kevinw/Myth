@@ -732,7 +732,7 @@ public partial class Player : Pawn
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
 	static Vector2 HatSpring => new(130f, 100f);
-	static Vector2 HatDamping => new (32f, 12f);
+	static Vector2 HatDamping => new(32f, 12f);
 	static float HatMotionResponse => 0.22f;
 	static float HatMaxOffset => 3f;
 	static float HatAngularSpring => 80f;
@@ -1421,16 +1421,29 @@ public partial class Player : Pawn
 
 	void RenderHat(Batcher batcher, Subtexture subtexture, Color color)
 	{
-		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0 ||
-			Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
+		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0 || Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
 			return;
 
+		var hatSpriteOrigin = hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter);
 		var socketPosition = socket.Position + new Vector2(1f, 2f);
 		var playerScale = new Vector2((int)Facing * Squish.X, Squish.Y);
-		var position = (Shift + socketPosition - Origin) * playerScale + (PerfToggles.HatPhysics ? hatOffset : new());
-		var normal = socket.Normal * playerScale;
-		var rotation = MathF.Atan2(normal.Y, normal.X) - MathF.PI * 0.5f + (PerfToggles.HatPhysics ? hatAngle : new());
-		batcher.Image(subtexture, position, hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter), new Vector2((int)Facing, 1), rotation, color);
+		var rootPosition = (Shift + socketPosition - Origin) * playerScale;
+
+		Vector2 position, normal;
+		float rotation;
+		if (PerfToggles.HatPhysics)
+		{
+			position = rootPosition + (PerfToggles.HatPhysics ? hatOffset : new());
+			normal = socket.Normal * playerScale;
+			rotation = MathF.Atan2(normal.Y, normal.X) - MathF.PI * 0.5f + (PerfToggles.HatPhysics ? hatAngle : new());
+		}
+		else
+		{
+			position = rootPosition;
+			normal = new(0, 1);
+			rotation = 0;
+		}
+		batcher.Image(subtexture, position, hatSpriteOrigin, new Vector2((int)Facing, 1), rotation, color);
 	}
 
 	void UpdateLightPosition()
