@@ -1,4 +1,5 @@
 prepareReloadPrompt();
+prepareFeedback();
 const [{ dotnet }, FosterWebGPU, FosterBrowserFmod, VirtualGamepad] =
   await Promise.all([
     import("./_framework/dotnet.js"),
@@ -136,6 +137,85 @@ function prepareReloadPrompt() {
   });
   events.addEventListener("error", () => {
     button.hidden = true;
+  });
+}
+
+function prepareFeedback() {
+  const openButton = document.querySelector("#feedback-button");
+  const dialog = document.querySelector("#feedback-dialog");
+  const form = document.querySelector("#feedback-form");
+  const closeButton = document.querySelector("#feedback-close");
+  const message = document.querySelector("#feedback-message");
+  const submitButton = document.querySelector("#feedback-submit");
+  const status = document.querySelector("#feedback-status");
+  if (
+    !(openButton instanceof HTMLButtonElement) ||
+    !(dialog instanceof HTMLDialogElement) ||
+    !(form instanceof HTMLFormElement) ||
+    !(closeButton instanceof HTMLButtonElement) ||
+    !(message instanceof HTMLTextAreaElement) ||
+    !(submitButton instanceof HTMLButtonElement) ||
+    !(status instanceof HTMLElement)
+  )
+    return;
+
+  let statusTimer;
+  const setStatus = (text, error = false) => {
+    clearTimeout(statusTimer);
+    status.textContent = text;
+    status.toggleAttribute("data-error", error);
+  };
+
+  openButton.addEventListener("click", () => {
+    dialog.showModal();
+    message.focus();
+  });
+  closeButton.addEventListener("click", () => dialog.close());
+
+  // Registered before Foster initializes, so keyboard events used to edit the
+  // textarea do not also reach SDL's window-level game input listeners.
+  const stopGameKeyboardInput = (event) => {
+    if (dialog.open) event.stopImmediatePropagation();
+  };
+  window.addEventListener("keydown", stopGameKeyboardInput);
+  window.addEventListener("keyup", stopGameKeyboardInput);
+
+  message.addEventListener("input", () => {
+    if (status.textContent === "Sent!") setStatus("");
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const feedback = message.value.trim();
+    if (!feedback) {
+      message.focus();
+      return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Sending…";
+    setStatus("");
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: feedback,
+          website: new FormData(form).get("website"),
+        }),
+      });
+      if (!response.ok) throw new Error(`Feedback request failed: ${response.status}`);
+
+      message.value = "";
+      setStatus("Sent!");
+      statusTimer = setTimeout(() => setStatus(""), 3000);
+    } catch (error) {
+      console.error("Failed to send feedback", error);
+      setStatus("Couldn't send — try again.", true);
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Send anonymous feedback";
+    }
   });
 }
 

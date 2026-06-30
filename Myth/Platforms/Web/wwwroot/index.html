@@ -103,6 +103,118 @@
                 display: none;
             }
 
+            #feedback-button {
+                position: fixed;
+                top: max(8px, env(safe-area-inset-top));
+                left: max(8px, env(safe-area-inset-left));
+                z-index: 2;
+                height: 28px;
+                padding: 0 10px;
+                border: 1px solid rgba(var(--text-rgb), 0.55);
+                background: rgba(var(--shade-rgb), 0.72);
+                color: var(--text);
+                cursor: pointer;
+                font: 700 12px var(--mono);
+            }
+
+            #feedback-dialog {
+                width: min(560px, calc(100% - 32px));
+                padding: 0;
+                border: 1px solid var(--accent);
+                background: var(--panel);
+                color: var(--text);
+                box-shadow: 0 18px 70px rgba(0, 0, 0, 0.65);
+                user-select: text;
+                -webkit-user-select: text;
+                touch-action: auto;
+            }
+
+            #feedback-dialog::backdrop {
+                background: rgba(var(--shade-rgb), 0.78);
+            }
+
+            #feedback-form {
+                display: grid;
+                gap: 16px;
+                padding: 20px;
+            }
+
+            #feedback-header,
+            #feedback-actions {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            #feedback-header {
+                justify-content: space-between;
+            }
+
+            #feedback-title {
+                margin: 0;
+                font-size: 18px;
+            }
+
+            #feedback-close {
+                border: 0;
+                background: transparent;
+                color: var(--text);
+                cursor: pointer;
+                font: 700 22px var(--mono);
+            }
+
+            #feedback-message {
+                box-sizing: border-box;
+                width: 100%;
+                min-height: 190px;
+                resize: vertical;
+                padding: 12px;
+                border: 1px solid rgba(var(--text-rgb), 0.45);
+                border-radius: 0;
+                background: rgba(var(--shade-rgb), 0.52);
+                color: var(--text);
+                font: 14px / 1.5 var(--mono);
+                user-select: text;
+                -webkit-user-select: text;
+                touch-action: auto;
+            }
+
+            #feedback-message:focus {
+                outline: 1px solid var(--accent);
+            }
+
+            #feedback-submit {
+                min-height: 36px;
+                padding: 0 14px;
+                border: 1px solid var(--accent);
+                background: rgba(var(--accent-rgb), 0.18);
+                color: var(--text);
+                cursor: pointer;
+                font: 700 12px var(--mono);
+            }
+
+            #feedback-submit:disabled {
+                opacity: 0.45;
+                cursor: wait;
+            }
+
+            #feedback-status {
+                color: var(--accent);
+                font-size: 13px;
+            }
+
+            #feedback-status[data-error] {
+                color: #f0a0a0;
+            }
+
+            .feedback-honeypot {
+                position: absolute;
+                left: -10000px;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+            }
+
             #start-gate {
                 position: fixed;
                 inset: 0;
@@ -207,6 +319,31 @@
             <canvas id="foster-canvas" width="1280" height="720"></canvas>
             <button id="reload-button" type="button" hidden>Reload</button>
         </div>
+        <button id="feedback-button" type="button">Feedback</button>
+        <dialog id="feedback-dialog" aria-labelledby="feedback-title">
+            <form id="feedback-form">
+                <div id="feedback-header">
+                    <h2 id="feedback-title">Anonymous feedback</h2>
+                    <button id="feedback-close" type="button" aria-label="Close">×</button>
+                </div>
+                <textarea
+                    id="feedback-message"
+                    name="message"
+                    maxlength="8000"
+                    placeholder="What did you notice? What should change?"
+                    aria-label="Feedback"
+                    required
+                ></textarea>
+                <label class="feedback-honeypot" aria-hidden="true">
+                    Website
+                    <input name="website" tabindex="-1" autocomplete="off" />
+                </label>
+                <div id="feedback-actions">
+                    <button id="feedback-submit" type="submit">Send anonymous feedback</button>
+                    <span id="feedback-status" role="status" aria-live="polite"></span>
+                </div>
+            </form>
+        </dialog>
         <div id="start-gate">
             <div id="start-panel">
                 <div id="loading-bud" aria-hidden="true"></div>

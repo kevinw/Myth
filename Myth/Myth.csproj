@@ -117,6 +117,7 @@
     <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/loading-player.webp" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/_routes.json" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/FMOD/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.js')" />

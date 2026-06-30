@@ -5,6 +5,8 @@ namespace Myth;
 [GameActor(Sprite = "editor_prop", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration)]
 public class Prop : Actor
 {
+	static Rng rng = new();
+
 	public string SpriteName = "fire";
 	public Factory.TileLayer Layer;
 	public bool Decal;
@@ -24,5 +26,6 @@ public class Prop : Actor
 		Sprite = Assets.GetSprite(SpriteName);
 		Depth = Layer == Factory.TileLayer.Background ? 8 : 4;
 		Play();
+		SetAnimationTime(rng.Float(Animation.Duration));
 	}
 }

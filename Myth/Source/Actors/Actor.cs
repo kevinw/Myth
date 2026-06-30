@@ -75,6 +75,7 @@ public class Actor
 	}
 	public float AnimationTime => animationTime;
 	public int AnimationFrameIndex => sprite?.GetFrameIndexAt(Animation, animationTime, animationLooping) ?? -1;
+	protected void SetAnimationTime(float time) => animationTime = time;
 
 	Vector2 remainder;
 	Sprite? sprite;
