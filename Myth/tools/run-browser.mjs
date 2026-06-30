@@ -17,7 +17,7 @@ function usage() {
   process.stdout
     .write(`Usage: node tools/run-browser.mjs [options] [-- dotnet-args...]
 
-Builds or publishes Myth for browser-wasm, starts the local dev server, and opens the browser.
+Builds the visual asset pack, builds or publishes Myth for browser-wasm, starts the local dev server, and opens the browser.
 
 Options:
   --host HOST          Host for the dev server (default: 127.0.0.1)
@@ -99,6 +99,25 @@ function buildOnce() {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+function buildAssets() {
+  const result = spawnSync(
+    "dotnet",
+    [
+      "run",
+      "--project",
+      "Myth.csproj",
+      "-c",
+      configuration,
+      "--",
+      "--build-asset-pack",
+      "Assets/Packed/Visuals",
+    ],
+    { stdio: "inherit", cwd: repoDir },
+  );
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+buildAssets();
 buildOnce();
 
 const appBundle = resolve(
