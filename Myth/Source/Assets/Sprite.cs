@@ -24,6 +24,7 @@ public class Sprite(string name, Vector2 origin)
 {
 	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, Subtexture EmissiveSubtexture, float Duration, string? UserData = null);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
+	public readonly record struct Socket(Vector2 Position, Vector2 Normal);
 
 	public string Name { get; } = name;
 	public Vector2 Origin { get; private set; } = origin;
@@ -33,10 +34,24 @@ public class Sprite(string name, Vector2 origin)
 	// first key's canvas-space bounds). Origin lookups use the pivot slice; these are for
 	// gameplay regions like an attack hitbox. See SliceByName.
 	public readonly Dictionary<string, RectInt> Slices = new(StringComparer.OrdinalIgnoreCase);
+	// Per-frame attachment poses authored by *_socket layers in Aseprite.
+	public readonly Dictionary<string, Socket[]> Sockets = new(StringComparer.OrdinalIgnoreCase);
 
 	// Bounds of a named slice in sprite-local (canvas) pixels, or null. Use Hitbox.FromSlice
 	// to turn it into an origin-relative, facing-aware hitbox.
 	public RectInt? SliceByName(string name) => Slices.TryGetValue(name, out var rect) ? rect : null;
+
+	public bool TryGetSocket(string name, int frameIndex, out Socket socket)
+	{
+		if (Sockets.TryGetValue(name, out var frames) && frameIndex >= 0 && frameIndex < frames.Length)
+		{
+			socket = frames[frameIndex];
+			return true;
+		}
+
+		socket = default;
+		return false;
+	}
 
 	// The cel userdata label authored on a frame (e.g. "impact"), or null. Pair with
 	// AnimationFrameIndex to react on the exact frame an artist tagged.
@@ -69,7 +84,8 @@ public class Sprite(string name, Vector2 origin)
 		};
 	}
 
-	public void Reload(Vector2 origin, List<Frame> frames, List<Animation> animations, IReadOnlyDictionary<string, RectInt>? slices = null)
+	public void Reload(Vector2 origin, List<Frame> frames, List<Animation> animations,
+		IReadOnlyDictionary<string, RectInt>? slices = null, IReadOnlyDictionary<string, Socket[]>? sockets = null)
 	{
 		Origin = origin;
 
@@ -83,6 +99,11 @@ public class Sprite(string name, Vector2 origin)
 		if (slices != null)
 			foreach (var (name, rect) in slices)
 				Slices[name] = rect;
+
+		Sockets.Clear();
+		if (sockets != null)
+			foreach (var (name, poses) in sockets)
+				Sockets[name] = poses;
 	}
 
 	public Frame GetFrameAt(in Animation animation, float time, bool loop)

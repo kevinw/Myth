@@ -488,7 +488,7 @@ public class Actor
 
 	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
 	{
-		if (hitCooldown > 0 && Time.BetweenInterval(0.05f))
+		if (SpriteBlinkHidden)
 			return;
 
 		if (sprite == null || sprite.Frames.Count <= 0)
@@ -517,6 +517,8 @@ public class Actor
 		batcher.Image(subtexture, Shift, Origin, Vector2.One, 0, color);
 		batcher.PopMatrix();
 	}
+
+	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 
 	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
 	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);

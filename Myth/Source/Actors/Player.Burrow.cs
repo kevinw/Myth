@@ -107,7 +107,14 @@ public partial class Player : Pawn
 	}
 
 	// True once the entry squish has finished and the player is fully submerged.
-	private bool BurrowHidesSprite => State == States.Burrow && burrowEnterTimer <= 0;
+	private bool BurrowHidesSprite
+	{
+		get
+		{
+			if (PerfToggles.HeadSlide) return false;
+			return State == States.Burrow && burrowEnterTimer <= 0;
+		}
+	}
 
 	// Rebuild the glow polyline by tracing the boundary from the burrow's own walk state,
 	// so the line is always centered on the burrow point (no re-seed mis-anchoring at corners).
@@ -141,6 +148,7 @@ public partial class Player : Pawn
 
 	void UpdateBurrowShift()
 	{
+		if (PerfToggles.HeadSlide) return;
 		var depth = burrowOnJumpthru ? BurrowJumpthruSubmergeDepth : BurrowSubmergeDepth;
 		Shift = State == States.Burrow ? burrowToward * depth : new();
 	}
@@ -257,7 +265,7 @@ public partial class Player : Pawn
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
 		EmitBurrowSparks();
-		Play("burrow");
+		if (!PerfToggles.HeadSlide) Play("burrow");
 
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);

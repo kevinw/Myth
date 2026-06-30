@@ -52,7 +52,7 @@ public class Bud : Pawn
 
 	public override PawnInput GetInput()
 	{
-		if (!Game.BudAIEnabled) return new();
+		if (!PerfToggles.BudAIEnabled) return new();
 
 		var moveX = 0;
 		var moveY = 0;

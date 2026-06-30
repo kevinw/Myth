@@ -29,6 +29,8 @@ public class PlayerStart : Actor
 
 	public override void RenderReflection(Batcher batcher, Color color) { }
 
+	public override void RenderNormals(Batcher _) { }
+
 	public override void RenderEmissive(Batcher batcher)
 	{
 		if (!Game.Manager.playing)
@@ -729,6 +731,15 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
+	static Vector2 HatSpring => new(130f, 100f);
+	static Vector2 HatDamping => new (32f, 12f);
+	static float HatMotionResponse => 0.22f;
+	static float HatMaxOffset => 3f;
+	static float HatAngularSpring => 80f;
+	static float HatAngularDamping => 12f;
+	static float HatAngularMotionResponse => 0.035f;
+	static float HatMaxAngle => 30f * Calc.DegToRad;
+	static float HatMaxVelocityDelta => 250f;
 
 	public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
@@ -741,10 +752,16 @@ public partial class Player : Pawn
 	Light? light;
 	SoundInstance? rollSound;
 	bool CanPlaySquishSound = false;
+	readonly Sprite? hatSprite;
+	Vector2 hatOffset;
+	Vector2 hatOffsetVelocity;
+	float hatAngle;
+	float hatAngularVelocity;
 
 	public Player()
 	{
 		Sprite = Assets.GetSprite("player");
+		hatSprite = Assets.GetSprite("hat");
 		Hitbox = new(StandingHitboxRect);
 		Mask = Masks.Player;
 		IFrameTime = InvincibleDuration;
@@ -888,6 +905,37 @@ public partial class Player : Pawn
 				fungus.OnPlayerStep(footPosition);
 
 		UpdateBurrowAlways();
+		UpdateHat(previousVelocity);
+	}
+
+	void UpdateHat(Vector2 previousVelocity)
+	{
+		var velocityDelta = Vector2.Clamp(Velocity - previousVelocity, new(-HatMaxVelocityDelta), new(HatMaxVelocityDelta));
+		hatOffsetVelocity -= velocityDelta * HatMotionResponse;
+		hatAngularVelocity -= velocityDelta.X * HatAngularMotionResponse;
+
+		var dt = Math.Min(Time.Delta, 1f / 30f);
+		hatOffsetVelocity.X += -hatOffset.X * HatSpring.X * dt;
+		hatOffsetVelocity.Y += -hatOffset.Y * HatSpring.Y * dt;
+		hatOffsetVelocity.X *= MathF.Exp(-HatDamping.X * dt);
+		hatOffsetVelocity.Y *= MathF.Exp(-HatDamping.Y * dt);
+		hatOffset += hatOffsetVelocity * dt;
+		hatAngularVelocity += -hatAngle * HatAngularSpring * dt;
+		hatAngularVelocity *= MathF.Exp(-HatAngularDamping * dt);
+		hatAngle += hatAngularVelocity * dt;
+
+		if (hatOffset.LengthSquared() > HatMaxOffset * HatMaxOffset)
+		{
+			var outward = Vector2.Normalize(hatOffset);
+			hatOffset = outward * HatMaxOffset;
+			hatOffsetVelocity -= outward * MathF.Max(0, Vector2.Dot(hatOffsetVelocity, outward));
+		}
+		if (MathF.Abs(hatAngle) > HatMaxAngle)
+		{
+			hatAngle = Math.Clamp(hatAngle, -HatMaxAngle, HatMaxAngle);
+			if (MathF.Sign(hatAngularVelocity) == MathF.Sign(hatAngle))
+				hatAngularVelocity = 0;
+		}
 	}
 
 	protected override void CustomState()
@@ -1329,6 +1377,7 @@ public partial class Player : Pawn
 		{
 			RenderAura(batcher); // rainbow merge aura when both ducking (behind the sprite)
 			base.Render(batcher);
+			RenderHat(batcher, hatSprite?.Frames[0].Subtexture ?? default, Color.White);
 		}
 		RenderBlink(batcher);
 	}
@@ -1336,25 +1385,52 @@ public partial class Player : Pawn
 	public override void RenderNormals(Batcher batcher)
 	{
 		if (!BurrowHidesSprite)
+		{
 			base.RenderNormals(batcher);
+			RenderHat(batcher, hatSprite?.Frames[0].NormalSubtexture ?? default, Color.White);
+		}
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color)
 	{
 		if (!BurrowHidesSprite)
+		{
 			base.RenderShadow(batcher, color);
+			RenderHat(batcher, hatSprite?.Frames[0].Subtexture ?? default, color);
+		}
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color)
 	{
 		if (!BurrowHidesSprite)
+		{
 			base.RenderReflection(batcher, color);
+			RenderHat(batcher, hatSprite?.Frames[0].Subtexture ?? default, color);
+		}
 	}
 
 	public override void RenderEmissive(Batcher batcher)
 	{
-		base.RenderEmissive(batcher);
+		if (!BurrowHidesSprite)
+		{
+			base.RenderEmissive(batcher);
+			RenderHat(batcher, hatSprite?.Frames[0].Subtexture ?? default, Color.White);
+		}
 		RenderBurrowLine(batcher);
+	}
+
+	void RenderHat(Batcher batcher, Subtexture subtexture, Color color)
+	{
+		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0 ||
+			Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
+			return;
+
+		var socketPosition = socket.Position + new Vector2(1f, 2f);
+		var playerScale = new Vector2((int)Facing * Squish.X, Squish.Y);
+		var position = (Shift + socketPosition - Origin) * playerScale + (PerfToggles.HatPhysics ? hatOffset : new());
+		var normal = socket.Normal * playerScale;
+		var rotation = MathF.Atan2(normal.Y, normal.X) - MathF.PI * 0.5f + (PerfToggles.HatPhysics ? hatAngle : new());
+		batcher.Image(subtexture, position, hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter), new Vector2((int)Facing, 1), rotation, color);
 	}
 
 	void UpdateLightPosition()

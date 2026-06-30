@@ -1,7 +1,5 @@
 #include "Common.hlsl"
 
-#define OLD_CRT
-
 cbuffer VertexUniformBlock : register(b0, space1)
 {
     float4x4 Matrix;
@@ -10,12 +8,11 @@ cbuffer VertexUniformBlock : register(b0, space1)
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
     float2 TextureSize;
-    float Time;
+    float2 OutputSize;
     float BloomAmount;
-    float ScanlineAmount;
     float VignetteAmount;
     float RgbOffset;
-    // float Curvature;
+    float CrtShader;
 };
 
 Texture2D Texture : register(t0, space2);
@@ -52,40 +49,114 @@ float3 sample_color(float2 uv)
     return Texture.Sample(Sampler, texture_uv(saturate(uv))).rgb;
 }
 
-float3 sample_crt_color(float2 uv, float2 texel)
+// Ported from crt-gdv-mini-ultra-trinitron.glsl by hhirtz/mpv-retro-shaders.
+// The generated mpv shader exposes these as constants; this port keeps its defaults.
+float3 gdv_sample(float2 uv)
 {
-    float2 rgb = float2(RgbOffset, 0.0) * texel;
-    float3 color;
-    color.r = sample_color(uv + rgb).r;
-    color.g = sample_color(uv).g;
-    color.b = sample_color(uv - rgb).b;
-    return color;
+    return pow(sample_color(uv), 2.2);
 }
 
-float crt_cell_mask(float2 uv)
+float gdv_scanline(float distance, float luma)
 {
-    float2 source_pixel = uv * TextureSize;
-    float2 cell = frac(source_pixel);
-    float2 centered = cell - 0.5;
-
-    float rounded = 1.0 - smoothstep(0.54, 0.92, length(centered / float2(0.58, 0.46)));
-    float horizontal_gap = 1.0 - smoothstep(0.40, 0.50, abs(centered.y));
-    float vertical_gap = 1.0 - smoothstep(0.44, 0.50, abs(centered.x));
-    float phosphor = 0.92 + 0.08 * cos((floor(source_pixel.x * 3.0) / 3.0) * 6.2831853);
-
-    return saturate(rounded * 0.72 + horizontal_gap * vertical_gap * phosphor * 0.28);
+    return exp2(-10.0 * pow(distance, lerp(1.5, 2.0, luma)));
 }
 
-float crt_row_mask(float2 uv)
+float3 gdv_mask(float2 position, float luma)
 {
-    float y = frac(uv.y * TextureSize.y);
-    float row_distance = abs(y - 0.5);
-    float beam = 1.0 - smoothstep(0.18, 0.50, row_distance);
-    return lerp(0.30, 1.10, beam);
+    position = floor(position);
+    float3 mask = 0.0;
+    if (frac(position.x / 3.0) > 0.333)
+        mask = 1.0;
+    return lerp(mask, 1.0, luma * 0.4);
+}
+
+float2 gdv_warp(float2 uv)
+{
+    float2 position = uv * 2.0 - 1.0;
+    position *= float2(1.0, 1.0 + position.x * position.x * 0.05);
+    return position * 0.5 + 0.5;
+}
+
+float3 gdv_glow(float2 uv, float2 texel)
+{
+    float3 glow = gdv_sample(uv) * 3.0;
+    glow += (gdv_sample(uv + texel * float2(-1.0,  0.0))
+          +  gdv_sample(uv + texel * float2( 1.0,  0.0))
+          +  gdv_sample(uv + texel * float2(-1.0, -1.0))
+          +  gdv_sample(uv + texel * float2( 1.0,  1.0))
+          +  gdv_sample(uv + texel * float2(-1.0,  1.0))
+          +  gdv_sample(uv + texel * float2( 1.0, -1.0))
+          +  gdv_sample(uv + texel * float2( 0.0, -1.0))
+          +  gdv_sample(uv + texel * float2( 0.0,  1.0))) * 2.5;
+    glow += (gdv_sample(uv + texel * float2(-2.0,  0.0))
+          +  gdv_sample(uv + texel * float2( 2.0,  0.0))
+          +  gdv_sample(uv + texel * float2(-2.0, -1.0))
+          +  gdv_sample(uv + texel * float2(-1.0, -2.0))
+          +  gdv_sample(uv + texel * float2( 1.0,  2.0))
+          +  gdv_sample(uv + texel * float2( 2.0,  1.0))
+          +  gdv_sample(uv + texel * float2(-2.0,  1.0))
+          +  gdv_sample(uv + texel * float2(-1.0,  2.0))
+          +  gdv_sample(uv + texel * float2( 1.0, -2.0))
+          +  gdv_sample(uv + texel * float2( 2.0, -1.0))
+          +  gdv_sample(uv + texel * float2( 0.0, -2.0))
+          +  gdv_sample(uv + texel * float2( 0.0,  2.0))) * 1.5;
+    return glow / 45.0 * 0.35;
+}
+
+float3 gdv_saturation(float3 color)
+{
+    float3 weights = float3(0.3, 0.6, 0.1);
+    if (length(color) * 0.5775 < 0.5)
+        weights *= weights * 2.0;
+    return lerp(dot(color, weights), color, 1.2);
+}
+
+float3 gdv_color(float2 texCoord)
+{
+    float2 uv = texCoord * 1.0001;
+    float2 position = gdv_warp(uv);
+    float2 texel = 1.0 / TextureSize;
+    float2 sourcePosition = position * TextureSize;
+    float2 fraction = frac(sourcePosition);
+    float2 center = floor(sourcePosition) * texel + texel * 0.5;
+
+    float3 upperLeft = gdv_sample(center);
+    float3 upperRight = gdv_sample(center + float2(texel.x, 0.0));
+    float3 lowerLeft = gdv_sample(center + float2(0.0, texel.y));
+    float3 lowerRight = gdv_sample(center + texel);
+    float leftWeight = pow(1.0 - fraction.x, 2.5);
+    float rightWeight = pow(fraction.x, 2.5);
+    float3 upper = (upperRight * rightWeight + upperLeft * leftWeight) / (leftWeight + rightWeight);
+    float3 lower = (lowerRight * rightWeight + lowerLeft * leftWeight) / (leftWeight + rightWeight);
+    float upperLuma = dot(upper, float3(0.3, 0.6, 0.1));
+    float lowerLuma = dot(lower, float3(0.3, 0.6, 0.1));
+
+    upper = 2.0 * pow(upper, 2.8) - pow(upper, 3.6);
+    lower = 2.0 * pow(lower, 2.8) - pow(lower, 3.6);
+    upper *= gdv_mask(uv * OutputSize, upperLuma);
+    lower *= gdv_mask(uv * OutputSize, lowerLuma);
+
+    float3 color = upper * gdv_scanline(fraction.y, upperLuma)
+                 + lower * gdv_scanline(1.0 - fraction.y, lowerLuma);
+    if (TextureSize.y >= 400.0)
+        color = (upper + lower) * 0.5;
+
+    color = pow(min(color, 1.0), 1.0 / 2.2);
+    float luma = dot(color, float3(0.3, 0.6, 0.1));
+    color += gdv_glow(center, texel);
+    color *= lerp(1.0, 1.2, luma);
+    color = gdv_saturation(color);
+
+    float2 vignettePosition = uv * (1.0 - uv);
+    color *= min(pow(vignettePosition.x * vignettePosition.y * 45.0, 0.15), 1.0);
+    return pow(saturate(color), 1.0 / 2.2);
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
+    if (CrtShader >= 0.5)
+        return float4(gdv_color(input.TexCoord), 1.0) * input.Color;
+
     float2 uv = input.TexCoord;
     float2 centered = uv * 2.0 - 1.0;
 
@@ -93,23 +164,12 @@ float4 fragment_main(VsOutput input) : SV_Target0
     // uv += centered * radius * Curvature;
 
     float2 texel = 1.0 / TextureSize;
-#ifdef OLD_CRT
     float2 rgb = float2(RgbOffset, 0.0) * texel;
 
     float3 color;
     color.r = sample_color(uv + rgb).r;
     color.g = sample_color(uv).g;
     color.b = sample_color(uv - rgb).b;
-#else
-
-    float3 color = sample_crt_color(uv, texel);
-    float3 vertical_beam = color * 0.58;
-    vertical_beam += sample_crt_color(uv + texel * float2(0.0,  0.45), texel) * 0.18;
-    vertical_beam += sample_crt_color(uv + texel * float2(0.0, -0.45), texel) * 0.18;
-    vertical_beam += sample_crt_color(uv + texel * float2(0.0,  1.00), texel) * 0.03;
-    vertical_beam += sample_crt_color(uv + texel * float2(0.0, -1.00), texel) * 0.03;
-    color = lerp(color, vertical_beam, ScanlineAmount);
-#endif
 
     float3 glow = 0.0;
     glow += sample_color(uv + texel * float2( 1.0,  0.0));
@@ -124,14 +184,6 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float brightness = max(max(glow.r, glow.g), glow.b);
     color += glow * smoothstep(0.35, 1.0, brightness) * BloomAmount;
-
-#ifdef OLD_CRT
-#else
-    float cell = crt_cell_mask(uv);
-    float row = pow(crt_row_mask(uv), 2.0);
-    color *= lerp(1.0, row * lerp(0.88, 1.03, cell), ScanlineAmount);
-#endif
-
 
     float vignette = smoothstep(1.25, 0.35, radius);
     color *= lerp(1.0, vignette, VignetteAmount);

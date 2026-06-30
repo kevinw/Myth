@@ -53,11 +53,6 @@
   ],
   "actors": [
     {
-      "Id": "956107433a55c601",
-      "Type": "Mosquito",
-      "Position": [124, 20]
-    },
-    {
       "Id": "0851fbcc16590d55",
       "From": "BlueMemoryLight",
       "Position": [164, 28],

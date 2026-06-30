@@ -39,7 +39,7 @@ public partial class Manager : App
 	public float LightingDitherScale = 1.0f;
 	internal const float LightingDitherStrengthDefault = 0.155f;
 	public float LightingDitherStrength = LightingDitherStrengthDefault;
-	public float NormalDitherSlopeBoost = 0.3f;
+	public float NormalDitherSlopeBoost = 0.21f;
 	public bool NormalDitherQuantization = true;
 
 	// Ambient occlusion: background tiles darken beneath foreground overhangs.
@@ -893,12 +893,9 @@ public partial class Manager : App
 	static bool PerfModifierDown(ControllerState controller)
 		=> !controller.IsGamepad && controller.Down(4);
 
-	internal bool BudAIEnabled = true;
 	void ToggleBudAI() {
-		if (game != null) {
-			game.BudAIEnabled = !game.BudAIEnabled;
-			game.DisplayMessage(game.BudAIEnabled ? "Bud AI Enabled" : "Bud AI Disabled");
-		}
+		PerfToggles.BudAIEnabled = !PerfToggles.BudAIEnabled;
+		ShowPerfToggleMessage("BudAIEnabled", PerfToggles.BudAIEnabled);
 	}
 
 	void ToggleLighting()
