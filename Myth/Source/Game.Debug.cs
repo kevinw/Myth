@@ -35,11 +35,10 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
 		if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
 		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
-#endif
 		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
 		if (Input.Keyboard.Pressed(Keys.J)) ToggleAtlasWander();
-
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
+#endif
 #if DEBUG
 		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
 		if (Input.Keyboard.Pressed(Keys.V) && VoiceEnabled) SpeakVoiceTest();
