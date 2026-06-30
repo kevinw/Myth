@@ -293,11 +293,17 @@ public partial class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false, (SoundInstance? Music, string? Area)? carryMusic = null)
 	{
 		rewinder = new(this);
 		Manager = manager;
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
+		// A previous Game (the prior gym run) may hand off its still-playing
+		// background music so it continues seamlessly across the dispose/recreate.
+		// Adopting it before StartMusic() means StartMusic no-ops (music != null)
+		// and ApplyMusicArea just retargets the live event to this room's area.
+		if (carryMusic is { Music: { } carried })
+			AdoptMusic(carried, carryMusic.Value.Area);
 		this.spawnBud = spawnBud;
 		this.spawnBudAtPlayer = spawnBudAtPlayer;
 		// All GPU/render state lives in GameView. A headless Game (the gym, or a
@@ -395,12 +401,6 @@ public partial class Game : IDisposable
 		UpdateRoomTransitionGc();
 		if (linkedDoorCooldown > 0)
 			linkedDoorCooldown = Calc.Approach(linkedDoorCooldown, 0, Time.Delta);
-		if (debugViewMessageTimer > 0)
-		{
-			debugViewMessageTimer -= Time.Delta;
-			if (debugViewMessageTimer <= 0)
-				DebugViewMessage = null;
-		}
 		if (pendingHotReloadMessage is { } msg)
 		{
 			pendingHotReloadMessage = null;

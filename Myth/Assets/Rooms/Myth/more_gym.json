@@ -111,6 +111,12 @@
       "Id": "49215abbb752735f",
       "Type": "PlayerStart",
       "Position": [172, 104]
+    },
+    {
+      "Id": "f44a3f66775f3df4",
+      "Type": "ParticleEmitter",
+      "Position": [204, 68],
+      "EffectName": "snow"
     }
   ]
 }

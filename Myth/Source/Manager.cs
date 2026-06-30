@@ -153,6 +153,13 @@ public partial class Manager : App
 #else
 	bool musicEnabled = true;
 #endif
+	// M cycles the music: position 0 = room-driven (no override), 1..N = force
+	// musicAreas[pos-1] and ignore room areas, N+1 = off. Lets us drive the music
+	// area live during a presentation instead of relying on room transitions.
+	int musicCyclePos;
+	// When non-null, ApplyMusicArea forces this area instead of the room's.
+	public string? MusicAreaOverride =>
+		musicCyclePos >= 1 && musicCyclePos <= musicAreas.Count ? musicAreas[musicCyclePos - 1] : null;
 	bool alwaysOnTop;
 	internal bool PlatformNavDebugVisible { get; set; }
 	readonly NavTrace? navTrace;
@@ -639,6 +646,13 @@ public partial class Manager : App
 			return;
 		}
 
+		if (debugViewMessageTimer > 0)
+		{
+			debugViewMessageTimer -= Time.Delta;
+			if (debugViewMessageTimer <= 0)
+				DebugViewMessage = null;
+		}
+
 		// Finishes the player SDF atlas once its async GPU readback lands (immediate on desktop, deferred on WebGPU).
 		SpriteSdf.Update();
 
@@ -875,6 +889,7 @@ public partial class Manager : App
 		if (!keyboardShortcutsBlocked)
 		{
 			if (Input.Keyboard.Pressed(Keys.B)) ToggleBudAI();
+			if (Input.Keyboard.Pressed(Keys.M)) CycleMusic();
 		}
 #endif
 
@@ -901,6 +916,46 @@ public partial class Manager : App
 	{
 		PerfToggles.BudAIEnabled = !PerfToggles.BudAIEnabled;
 		ShowPerfToggleMessage("BudAIEnabled", PerfToggles.BudAIEnabled);
+	}
+
+	// Transient on-screen status message (debug toggles, music cycle, etc.). Stored on
+	// the Manager rather than the Game so it survives Game recreation (e.g. a message
+	// shown as a gym run ends persists into the next run).
+	public string? DebugViewMessage { get; private set; }
+	float debugViewMessageTimer;
+
+	public void DisplayMessage(string message, float duration = 1.85f, bool print = true)
+	{
+		if (print) Console.WriteLine(message);
+		DebugViewMessage = message;
+		debugViewMessageTimer = duration;
+	}
+
+	// Cycle the background music for live/presentation control: room-driven -> each
+	// available FMOD area (override, ignoring room areas) -> off -> back to room-driven.
+	void CycleMusic()
+	{
+		musicCyclePos = (musicCyclePos + 1) % (musicAreas.Count + 2);
+
+		string label;
+		if (musicCyclePos == 0)
+		{
+			musicEnabled = true;
+			label = "Room";
+		}
+		else if (musicCyclePos <= musicAreas.Count)
+		{
+			musicEnabled = true;
+			label = musicAreas[musicCyclePos - 1];
+		}
+		else
+		{
+			musicEnabled = false;
+			label = "Off";
+		}
+
+		game?.RefreshMusic();
+		game?.DisplayMessage($"Music: {label}");
 	}
 
 	void ToggleLighting()
@@ -1360,6 +1415,9 @@ public partial class Manager : App
 		if (gymStartOverride is { } gymStart)
 			initialPlayerPosition = gymStart;
 
+		// In the gym, carry the live background music across the dispose/recreate so it
+		// keeps playing seamlessly between runs instead of restarting on each goal.
+		var carriedMusic = gymMode ? game?.DetachMusic() : null;
 		game?.Dispose();
 		game = new Game(
 			this,
@@ -1368,7 +1426,8 @@ public partial class Manager : App
 			spawnFallbackPlayer: true,
 			initialPlayerPosition: initialPlayerPosition,
 			spawnBud: true,
-			spawnBudAtPlayer: gymMode
+			spawnBudAtPlayer: gymMode,
+			carryMusic: carriedMusic
 		)
 		{
 			AudioMuted = gymMode || headless,
@@ -1428,7 +1487,7 @@ public partial class Manager : App
 
 	void DebugViewMessageImGui()
 	{
-		if (game?.DebugViewMessage is not { } message || message == "")
+		if (DebugViewMessage is not { } message || message == "")
 			return;
 
 		const float FONT_SCALE = 1.5f;

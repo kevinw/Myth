@@ -254,6 +254,25 @@ public partial class Game
 	}
 
 
+	// Hand off the live background-music instance without stopping it, so a freshly
+	// recreated Game (the next gym run) can keep it playing with no gap. Nulls our
+	// own references so Dispose()'s StopMusic() no-ops instead of releasing it.
+	public (SoundInstance? Music, string? Area) DetachMusic()
+	{
+		var carried = (music, musicArea);
+		music = null;
+		musicArea = null;
+		return carried;
+	}
+
+	// Take ownership of a music instance handed off from a previous Game (see
+	// DetachMusic). Skips StartMusic so there's no stop/start gap.
+	public void AdoptMusic(SoundInstance carried, string? area)
+	{
+		music = carried;
+		musicArea = area;
+	}
+
 	public void RefreshMusic()
 	{
 		if (!Manager.MusicEnabled)
@@ -333,22 +352,28 @@ public partial class Game
 			return;
 		}
 
-		if (string.IsNullOrEmpty(forRoom.MusicArea))
+		// A live override (M-cycle) forces its area and ignores the room's. With no
+		// override, fall back to the room's area, or the default for rooms that don't
+		// set one (so cycling back to "Room" restores the default instead of sticking
+		// on the last override).
+		var area = Manager.MusicAreaOverride
+			?? (string.IsNullOrEmpty(forRoom.MusicArea) ? Manager.DefaultMusicArea : forRoom.MusicArea);
+		if (string.IsNullOrEmpty(area))
 			return;
 
 		StartMusic();
-		if (music == null || musicArea == forRoom.MusicArea)
+		if (music == null || musicArea == area)
 			return;
 
 		try
 		{
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, forRoom.MusicArea, true);
-			musicArea = forRoom.MusicArea;
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, area, true);
+			musicArea = area;
 		}
 		catch (Exception e)
 		{
-			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{forRoom.MusicArea}"))
-				Console.Error.WriteLine($"Failed to set background music area '{forRoom.MusicArea}': {e}");
+			if (audioFailures.Add($"{Manager.BackgroundMusicAreaParameter}:{area}"))
+				Console.Error.WriteLine($"Failed to set background music area '{area}': {e}");
 		}
 	}
 

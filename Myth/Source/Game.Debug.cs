@@ -103,8 +103,6 @@ public partial class Game
 	internal PlayerRewinder rewinder;
 	internal bool Rewinding => rewinder.Rewinding;
 	internal DebugView debugView;
-	float debugViewMessageTimer;
-	public string? DebugViewMessage { get; private set; }
 	readonly PlatformNavGraph platformNavGraph = new();
 	Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
@@ -166,12 +164,9 @@ public partial class Game
 			debugView = DebugView.PlatformNav;
 	}
 
+	// Forwards to the Manager, which owns the message so it survives Game recreation.
 	public void DisplayMessage(string message, float duration = 1.85f, bool print = true)
-	{
-		if (print) Console.WriteLine(message);
-		DebugViewMessage = message;
-		debugViewMessageTimer = duration;
-	}
+		=> Manager.DisplayMessage(message, duration, print);
 
 	static string DebugViewName(DebugView view)
 		=> view switch
