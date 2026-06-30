@@ -169,19 +169,18 @@ public sealed partial class GameView
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
 			{
-				var CrtTime = Time.SecondsF * 0.2f;
 				const float BloomAmount = 0.09f;
-				const float ScanlineAmount = 0.22f;
 				const float VignetteAmount = 0.06f;
 				const float RgbOffset = 0.35f;
 				crt!.Material.Fragment.SetUniformBuffer([
-					Screen.Width,
-					Screen.Height,
-					CrtTime,
+					output.Width,
+					output.Height,
+					output.Width * scale,
+					output.Height * scale,
 					BloomAmount,
-					ScanlineAmount,
 					VignetteAmount,
 					RgbOffset,
+					game.CrtShader,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
@@ -667,17 +666,19 @@ public sealed partial class GameView
 
 	void CompositeLighting(float aoStrength)
 	{
+		var material = lightingCompositeMaterial!.Material;
+
 		LitScreen.Clear(Color.Transparent);
-		lightingCompositeMaterial!.Material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[4] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[7] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		lightingCompositeMaterial.Material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[4] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[7] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
@@ -708,10 +709,10 @@ public sealed partial class GameView
 		uniforms[i++] = 0;
 		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
-		lightingCompositeMaterial.Material.Fragment.SetUniformBuffer(uniforms);
+		material.Fragment.SetUniformBuffer(uniforms);
 
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-		Batcher.PushMaterial(lightingCompositeMaterial.Material);
+		Batcher.PushMaterial(material);
 		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopMaterial();
 		Batcher.PopSampler();

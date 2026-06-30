@@ -34,7 +34,9 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 		if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
 		if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
+		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 #endif
+		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
 
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 #if DEBUG
@@ -56,6 +58,14 @@ public partial class Game
 			ChangeTimeScale(timeScaleChange);
 		}
 #endif
+	}
+
+	internal int CrtShader { get; private set; }
+
+	void CycleCrtShader()
+	{
+		CrtShader = (CrtShader + 1) % 2;
+		DisplayMessage($"CRT: {(CrtShader == 0 ? "Myth" : "GDV Mini Ultra Trinitron")}");
 	}
 
 #if DEBUG

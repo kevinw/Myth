@@ -693,7 +693,6 @@ public partial class Manager
 			DrawDitherPaletteSection();
 			DrawAmbientOcclusionSection();
 			DrawSoftShadowSection();
-			DrawNormalDitherSection();
 			ImGui.Spacing();
 			//DrawPreviewPaletteSection();
 
@@ -1200,15 +1199,20 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Dither"))
 			return;
 
-		ImGui.Checkbox("Enabled", ref LightingDitherEnabled);
+		editorGameDirty |= ImGui.Checkbox("Enabled", ref LightingDitherEnabled);
 
 		ImGui.TextUnformatted("Scale");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##LightingDitherScale", ref LightingDitherScale, 1.0f, 8.0f);
+		editorGameDirty |= ImGui.SliderFloat("##LightingDitherScale", ref LightingDitherScale, 1.0f, 8.0f);
 
 		ImGui.TextUnformatted("Strength");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
+		editorGameDirty |= ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
+
+		ImGui.TextUnformatted("Slope Boost");
+		ImGui.SetNextItemWidth(-1);
+		editorGameDirty |= ImGui.SliderFloat("##NormalDitherSlopeBoost", ref NormalDitherSlopeBoost, 0.0f, 1.0f);
+		editorGameDirty |= ImGui.Checkbox("Level Quantization", ref NormalDitherQuantization);
 	}
 
 	void DrawAmbientOcclusionSection()
@@ -1216,23 +1220,23 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Ambient Occlusion"))
 			return;
 
-		ImGui.Checkbox("Enabled", ref PerfToggles.AmbientOcclusion);
+		editorGameDirty |= ImGui.Checkbox("Enabled##AO", ref PerfToggles.AmbientOcclusion);
 
 		ImGui.TextUnformatted("Strength");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##AmbientOcclusionStrength", ref AmbientOcclusionStrength, 0.0f, 4.0f);
+		editorGameDirty |= ImGui.SliderFloat("##AmbientOcclusionStrength", ref AmbientOcclusionStrength, 0.0f, 4.0f);
 
 		ImGui.TextUnformatted("Blur");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##AmbientOcclusionBlur", ref AmbientOcclusionBlur, 0.0f, 32.0f);
+		editorGameDirty |= ImGui.SliderFloat("##AmbientOcclusionBlur", ref AmbientOcclusionBlur, 0.0f, 32.0f);
 
 		ImGui.TextUnformatted("Offset (px)");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat2("##AmbientOcclusionOffset", ref AmbientOcclusionOffset, -16.0f, 16.0f);
+		editorGameDirty |= ImGui.SliderFloat2("##AmbientOcclusionOffset", ref AmbientOcclusionOffset, -16.0f, 16.0f);
 
 		ImGui.TextUnformatted("Min Visibility");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
+		editorGameDirty |= ImGui.SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
 	}
 
 	void DrawSoftShadowSection()
@@ -1240,7 +1244,7 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Soft Shadows"))
 			return;
 
-		editorGameDirty |= ImGui.Checkbox("Enabled", ref PerfToggles.SoftShadows);
+		editorGameDirty |= ImGui.Checkbox("Enabled##SS", ref PerfToggles.SoftShadows);
 
 		ImGui.TextUnformatted("Penumbra (px)");
 		ImGui.SetNextItemWidth(-1);
@@ -1249,16 +1253,6 @@ public partial class Manager
 		ImGui.TextUnformatted("Min Softness");
 		ImGui.SetNextItemWidth(-1);
 		editorGameDirty |= ImGui.SliderFloat("##SoftShadowMinSoftness", ref SoftShadowMinSoftness, 0.0f, 1.0f);
-	}
-
-	void DrawNormalDitherSection()
-	{
-		if (!ImGui.CollapsingHeader("Normal Dither")) return;
-
-		ImGui.TextUnformatted("Slope Boost");
-		ImGui.SetNextItemWidth(-1);
-		editorGameDirty |= ImGui.SliderFloat("##NormalDitherSlopeBoost", ref NormalDitherSlopeBoost, 0.0f, 1.0f);
-		editorGameDirty |= ImGui.Checkbox("Level Quantization", ref NormalDitherQuantization);
 	}
 
 	// Draws the editable fields of a shared particle effect asset inside the

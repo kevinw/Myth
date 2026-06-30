@@ -2,6 +2,8 @@ namespace Myth;
 
 public static class PerfToggles
 {
+	public static bool HeadSlide = true;
+	public static bool HatPhysics = true;
 	public static bool Lighting = true;
 	public static bool DitherAndTileField = true;
 	public static bool NormalBuffer = true;
@@ -14,9 +16,11 @@ public static class PerfToggles
 	public static bool SoftShadows = true;
 	public static bool Particles = true;
 	public static bool BurrowParticles = true;
+	public static bool BudAIEnabled = true;
 
 	public static void UseSimpleDefaults() // for launching the game without any fancy graphics; useful for testing other sprite based visuals etc
 	{
+		HatPhysics = false;
 		Lighting = false;
 		DitherAndTileField = false;
 		NormalBuffer = false;
@@ -28,6 +32,7 @@ public static class PerfToggles
 		AmbientOcclusion = false;
 		SoftShadows = false;
 		BurrowParticles = false;
+		BudAIEnabled = false;
 	}
 
 	public static void RevealOne(Game game, bool reveal)
@@ -36,6 +41,13 @@ public static class PerfToggles
 		// TODO: do a bit of metaprogramming + field attributes above to avoid hardcoding here...
 		//
 		Func<string>[] toggles = [
+			() => {
+				if (HatPhysics != reveal) {
+					HatPhysics = reveal;
+					return "HatPhysics";
+				}
+				return "";
+			},
 			() => {
 				if (Crt != reveal) {
 					Crt = reveal;
@@ -75,6 +87,13 @@ public static class PerfToggles
 				if (NormalBuffer != reveal) {
 					NormalBuffer = reveal;
 					return "NormalBuffer";
+				}
+				return "";
+			},
+			() => {
+				if (AmbientOcclusion != reveal) {
+					AmbientOcclusion = reveal;
+					return "AmbientOcclusion";
 				}
 				return "";
 			},

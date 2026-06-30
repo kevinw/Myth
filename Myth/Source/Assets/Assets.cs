@@ -69,7 +69,8 @@ public static class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 5; // v5: optional per-frame emissive sprite subtextures
+	const int visualAssetPackVersion = 6; // v6: per-frame sprite attachment sockets
+	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
 	const string deletedRoomsFolderName = ".deleted";
@@ -478,7 +479,16 @@ public static class Assets
 			foreach (var animation in packed.Animations)
 				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
 
-			sprite.Reload(packed.Origin.ToVector2(), frames, animations, packed.Slices);
+			var sockets = new Dictionary<string, Sprite.Socket[]>(StringComparer.OrdinalIgnoreCase);
+			foreach (var (socketName, packedPoses) in packed.Sockets)
+			{
+				var poses = new Sprite.Socket[packedPoses.Count];
+				for (var i = 0; i < poses.Length; i++)
+					poses[i] = new(packedPoses[i].Position.ToVector2(), packedPoses[i].Normal.ToVector2());
+				sockets[socketName] = poses;
+			}
+
+			sprite.Reload(packed.Origin.ToVector2(), frames, animations, packed.Slices, sockets);
 		}
 
 		foreach (var (name, sprite) in Sprites.ToArray())
@@ -640,6 +650,16 @@ public static class Assets
 			}
 		}
 
+		foreach (var (socketName, poses) in BuildSocketPoses(name, ase))
+		{
+			if (poses.Length != packed.Frames.Count)
+				throw new InvalidOperationException($"Sprite '{name}' socket '{socketName}' has {poses.Length} poses for {packed.Frames.Count} frames");
+			var packedPoses = new List<PackedSocketPose>(poses.Length);
+			foreach (var pose in poses)
+				packedPoses.Add(new() { Position = PackedVector.From(pose.Position), Normal = PackedVector.From(pose.Normal) });
+			packed.Sockets[socketName] = packedPoses;
+		}
+
 		return packed;
 	}
 
@@ -772,6 +792,18 @@ public static class Assets
 				writer.Write(bounds.Width);
 				writer.Write(bounds.Height);
 			}
+
+			WriteCount(writer, sprite.Sockets.Count, $"{sprite.Name} sockets");
+			foreach (var (socketName, poses) in sprite.Sockets)
+			{
+				writer.Write(socketName);
+				WriteCount(writer, poses.Count, $"{sprite.Name} {socketName} socket poses");
+				foreach (var pose in poses)
+				{
+					WritePackedVector(writer, pose.Position);
+					WritePackedVector(writer, pose.Normal);
+				}
+			}
 		}
 
 		WriteCount(writer, manifest.Tilesets.Count, "tilesets");
@@ -846,6 +878,17 @@ public static class Assets
 			var sliceCount = ReadCount(reader, $"{sprite.Name} slices");
 			for (var sliceIndex = 0; sliceIndex < sliceCount; sliceIndex++)
 				sprite.Slices[reader.ReadString()] = new RectInt(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32());
+
+			var socketCount = ReadCount(reader, $"{sprite.Name} sockets");
+			for (var socketIndex = 0; socketIndex < socketCount; socketIndex++)
+			{
+				var socketName = reader.ReadString();
+				var poseCount = ReadCount(reader, $"{sprite.Name} {socketName} socket poses");
+				var poses = new List<PackedSocketPose>(poseCount);
+				for (var poseIndex = 0; poseIndex < poseCount; poseIndex++)
+					poses.Add(new() { Position = ReadPackedVector(reader), Normal = ReadPackedVector(reader) });
+				sprite.Sockets[socketName] = poses;
+			}
 
 			manifest.Sprites.Add(sprite);
 		}
@@ -1175,6 +1218,13 @@ public static class Assets
 		public List<PackedSpriteFrame> Frames { get; set; } = [];
 		public List<PackedSpriteAnimation> Animations { get; set; } = [];
 		public Dictionary<string, RectInt> Slices { get; set; } = [];
+		public Dictionary<string, List<PackedSocketPose>> Sockets { get; set; } = [];
+	}
+
+	sealed class PackedSocketPose
+	{
+		public PackedVector Position { get; set; } = new();
+		public PackedVector Normal { get; set; } = new();
 	}
 
 	sealed class PackedSpriteFrame
@@ -1380,6 +1430,158 @@ public static class Assets
 
 	static string NormalizeLayerName(string? name)
 		=> (name ?? "").Trim().Replace(" ", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
+
+	static HashSet<Aseprite.Layer> GetSocketLayers(Aseprite ase)
+	{
+		var result = new HashSet<Aseprite.Layer>();
+		foreach (var layer in ase.Layers)
+		{
+			var name = NormalizeLayerName(layer.Name);
+			if (!name.EndsWith(socketLayerSuffix, StringComparison.Ordinal))
+				continue;
+			if (layer.Type != Aseprite.LayerType.Normal)
+				throw new InvalidOperationException($"Socket layer '{layer.Name}' must be an image layer");
+			if (name.Length == socketLayerSuffix.Length)
+				throw new InvalidOperationException($"Socket layer '{layer.Name}' has no socket name before '{socketLayerSuffix}'");
+			result.Add(layer);
+		}
+		return result;
+	}
+
+	static Dictionary<string, Sprite.Socket[]> BuildSocketPoses(string spriteName, Aseprite ase)
+	{
+		var result = new Dictionary<string, Sprite.Socket[]>(StringComparer.OrdinalIgnoreCase);
+		foreach (var layer in GetSocketLayers(ase))
+		{
+			var layerName = NormalizeLayerName(layer.Name);
+			var socketName = layerName[..^socketLayerSuffix.Length];
+			if (result.ContainsKey(socketName))
+				throw SocketError(spriteName, layer, -1, $"duplicate socket name '{socketName}'");
+
+			var source = ReadSourceSocketPoses(spriteName, ase, layer);
+			var poses = new List<Sprite.Socket>();
+			if (ExpandedFrameDurations.ContainsKey(spriteName) &&
+				TryBuildInbetweenSpec(spriteName, ase, source.Length, out var spec, out _))
+			{
+				for (var i = 0; i < source.Length; i++)
+				{
+					poses.Add(source[i]);
+					for (var j = 1; j <= spec[i].Count; j++)
+						poses.Add(LerpSocket(source[i], source[spec[i].Target], j / (float)(spec[i].Count + 1)));
+				}
+			}
+			else
+				poses.AddRange(source);
+
+			if (GeneratedTransitions.TryGetValue(spriteName, out var transitions))
+				foreach (var transition in transitions)
+				{
+					var from = FindTag(ase, transition.FromTag);
+					var to = FindTag(ase, transition.ToTag);
+					if (from == null || to == null)
+						throw SocketError(spriteName, layer, -1, $"can't resolve generated transition {transition.FromTag}->{transition.ToTag}");
+					for (var i = 0; i < transition.FrameCount; i++)
+						poses.Add(LerpSocket(source[from.Value.To], source[to.Value.From], (i + 1f) / (transition.FrameCount + 1f)));
+				}
+
+			result[socketName] = poses.ToArray();
+		}
+		return result;
+	}
+
+	static Sprite.Socket[] ReadSourceSocketPoses(string spriteName, Aseprite ase, Aseprite.Layer layer)
+	{
+		if (layer.Opacity != byte.MaxValue)
+			throw SocketError(spriteName, layer, -1, "layer opacity must be 255");
+
+		var result = new Sprite.Socket[ase.Frames.Length];
+		var previous = default(Sprite.Socket);
+		var hasPrevious = false;
+		Span<Point2> positions = stackalloc Point2[2];
+		Span<Color> colors = stackalloc Color[2];
+		for (var frameIndex = 0; frameIndex < ase.Frames.Length; frameIndex++)
+		{
+			Aseprite.Cel? cel = null;
+			foreach (var candidate in ase.Frames[frameIndex].Cels)
+				if (candidate.Layer == layer)
+				{
+					cel = candidate;
+					break;
+				}
+
+			var markerCount = 0;
+			if (cel != null)
+			{
+				if (cel.Opacity != byte.MaxValue)
+					throw SocketError(spriteName, layer, frameIndex, "cel opacity must be 255");
+				for (var pixelIndex = 0; pixelIndex < cel.Image.PixelCount; pixelIndex++)
+				{
+					var color = cel.Image[pixelIndex];
+					if (color.A == 0)
+						continue;
+					if (color.A != byte.MaxValue)
+						throw SocketError(spriteName, layer, frameIndex, "marker pixels must be fully opaque");
+					if (markerCount >= 2)
+						throw SocketError(spriteName, layer, frameIndex, "expected at most two marker pixels");
+					positions[markerCount] = cel.Pos + new Point2(pixelIndex % cel.Image.Width, pixelIndex / cel.Image.Width);
+					colors[markerCount++] = color;
+				}
+			}
+
+			if (markerCount == 0)
+			{
+				if (!hasPrevious)
+					throw SocketError(spriteName, layer, frameIndex, "the first frame must define a socket marker");
+				result[frameIndex] = previous;
+				continue;
+			}
+
+			if (markerCount == 1)
+				previous = new(positions[0], Vector2.UnitY);
+			else
+			{
+				if (colors[0].RGBA == colors[1].RGBA)
+					throw SocketError(spriteName, layer, frameIndex, "the two marker pixels must have different colors");
+
+				var luminance0 = SocketMarkerLuminance(colors[0]);
+				var luminance1 = SocketMarkerLuminance(colors[1]);
+				if (luminance0 == luminance1)
+					throw SocketError(spriteName, layer, frameIndex, "the two marker colors have equal luminance");
+
+				var dark = luminance0 < luminance1 ? 0 : 1;
+				var light = 1 - dark;
+				previous = new(positions[dark], Vector2.Normalize(positions[light] - positions[dark]));
+			}
+
+			hasPrevious = true;
+			result[frameIndex] = previous;
+		}
+
+		return result;
+	}
+
+	static int SocketMarkerLuminance(Color color)
+		=> color.R * 2126 + color.G * 7152 + color.B * 722;
+
+	static Sprite.Socket LerpSocket(Sprite.Socket from, Sprite.Socket to, float t)
+	{
+		var fromAngle = MathF.Atan2(from.Normal.Y, from.Normal.X);
+		var toAngle = MathF.Atan2(to.Normal.Y, to.Normal.X);
+		var delta = MathF.Atan2(MathF.Sin(toAngle - fromAngle), MathF.Cos(toAngle - fromAngle));
+		var angle = fromAngle + delta * t;
+		return new(Vector2.Lerp(from.Position, to.Position, t), new Vector2(MathF.Cos(angle), MathF.Sin(angle)));
+	}
+
+	static Aseprite.Tag? FindTag(Aseprite ase, string name)
+	{
+		foreach (var tag in ase.Tags)
+			if (tag.Name == name)
+				return tag;
+		return null;
+	}
+
+	static InvalidOperationException SocketError(string spriteName, Aseprite.Layer layer, int frame, string message)
+		=> new($"Sprite '{spriteName}' socket layer '{layer.Name}'{(frame >= 0 ? $" frame {frame}" : "")}: {message}");
 
 	static Dictionary<string, Aseprite.Slice> GetKitSlices(Aseprite ase)
 	{
@@ -1771,11 +1973,15 @@ public static class Assets
 
 	static (Image[] Frames, Image[]? Normals, Image[]? Heights, Image[]? Emissives) RenderSpriteFrames(Aseprite ase, Predicate<Aseprite.Layer>? colorFilter)
 	{
+		var socketLayers = GetSocketLayers(ase);
 		var normalLayers = GetLayerBranch(ase, "normals");
 		var heightLayers = GetLayerBranch(ase, "height");
 		var emissiveLayers = GetLayerBranch(ase, "emissive");
+		normalLayers.ExceptWith(socketLayers);
+		heightLayers.ExceptWith(socketLayers);
+		emissiveLayers.ExceptWith(socketLayers);
 		var frames = ase.RenderAllFrames(layer =>
-			(colorFilter?.Invoke(layer) ?? true) && !normalLayers.Contains(layer) && !heightLayers.Contains(layer) && !emissiveLayers.Contains(layer));
+			(colorFilter?.Invoke(layer) ?? true) && !socketLayers.Contains(layer) && !normalLayers.Contains(layer) && !heightLayers.Contains(layer) && !emissiveLayers.Contains(layer));
 		var normals = normalLayers.Count > 0 ? RenderLayerFrames(ase, normalLayers) : null;
 		var heights = normals == null && heightLayers.Count > 0 ? RenderLayerFrames(ase, heightLayers) : null;
 		var emissives = emissiveLayers.Count > 0 ? RenderLayerFrames(ase, emissiveLayers) : null;
