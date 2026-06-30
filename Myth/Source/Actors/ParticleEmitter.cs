@@ -9,7 +9,7 @@ namespace Myth;
 /// position; continuous effects stream, burst effects fire once. Previews when
 /// selected in the editor.
 /// </summary>
-[GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System)]
+[GameActor(Sprite = "editor_particles", OffsetX = 4, OffsetY = 4, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System)]
 public class ParticleEmitter : Actor
 {
 	public string EffectName = "sparks";
@@ -87,7 +87,15 @@ public class ParticleEmitter : Actor
 	// (the editor draws its own selection handles from the actor bounds).
 	public override void Render(Batcher batcher) { }
 	public override void RenderNormals(Batcher batcher) { }
-	public override void RenderEmissive(Batcher batcher) { }
+	public override void RenderEmissive(Batcher batcher)
+	{
+		if (!Game.Manager.playing)
+		{
+			if (Assets.GetSprite("editor_particles")?.Frames[0].Subtexture is { } tex)
+				batcher.Image(tex, new());
+		}
+
+	}
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 }

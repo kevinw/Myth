@@ -188,5 +188,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float vignette = smoothstep(1.25, 0.35, radius);
     color *= lerp(1.0, vignette, VignetteAmount);
 
+    float scanline = 0.5 + 0.5 * cos((uv.y * TextureSize.y) * 3.14159265 * 2.0);
+    color *= 1.0 - scanline * 0.1;
+
     return float4(saturate(color), 1.0) * input.Color;
 }

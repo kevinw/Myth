@@ -31,96 +31,47 @@ public static class PerfToggles
 		LightingNoise = false;
 		AmbientOcclusion = false;
 		SoftShadows = false;
-		BurrowParticles = false;
 		BudAIEnabled = false;
 	}
 
 	public static void RevealOne(Game game, bool reveal)
 	{
+		string Set(ref bool value, string name)
+		{
+			if (value == reveal)
+				return "";
+
+			value = reveal;
+			return name;
+		}
+
 		//
 		// TODO: do a bit of metaprogramming + field attributes above to avoid hardcoding here...
 		//
 		Func<string>[] toggles = [
-			() => {
-				if (HatPhysics != reveal) {
-					HatPhysics = reveal;
-					return "HatPhysics";
-				}
-				return "";
-			},
-			() => {
-				if (Crt != reveal) {
-					Crt = reveal;
-					return "Crt";
-				}
-				return "";
-			},
-			() => {
-				if (Reflections != reveal) {
-					Reflections = reveal;
-					return "Reflections";
-				}
-				return "";
-			},
-			() => {
-				if (Lighting != reveal) {
-					Lighting = reveal;
-					return "Lighting";
-				}
-				return "";
-			},
-			() => {
-				if (Emissive != reveal) {
-					Emissive = reveal;
-					return "Emissive";
-				}
-				return "";
-			},
-			() => {
-				if (LightingNoise != reveal) {
-					LightingNoise = reveal;
-					return "LightingNoise";
-				}
-				return "";
-			},
-			() => {
-				if (NormalBuffer != reveal) {
-					NormalBuffer = reveal;
-					return "NormalBuffer";
-				}
-				return "";
-			},
-			() => {
-				if (AmbientOcclusion != reveal) {
-					AmbientOcclusion = reveal;
-					return "AmbientOcclusion";
-				}
-				return "";
-			},
+			() => Set(ref HatPhysics, nameof(HatPhysics)),
+			() => Set(ref Crt, nameof(Crt)),
+			() => Set(ref Reflections, nameof(Reflections)),
+			() => Set(ref Lighting, nameof(Lighting)),
+			() => Set(ref Emissive, nameof(Emissive)),
+			() => Set(ref LightingNoise, nameof(LightingNoise)),
+			() => Set(ref NormalBuffer, nameof(NormalBuffer)),
+			() => Set(ref AmbientOcclusion, nameof(AmbientOcclusion)),
 			() => {
 				if (reveal) {
 					if (game.Manager.LightingDitherStrength != Manager.LightingDitherStrengthDefault) {
-						game.Manager.LightingDitherStrength = reveal ? 0.155f : Manager.LightingDitherStrengthDefault;
-						return "LightingDitherStrength";
+						game.Manager.LightingDitherStrength = Manager.LightingDitherStrengthDefault;
+						return nameof(game.Manager.LightingDitherStrength);
 					}
 				} else {
 					if (game.Manager.LightingDitherStrength != 0) {
 						game.Manager.LightingDitherStrength = 0;
-						return "LightingDitherStrength";
+						return nameof(game.Manager.LightingDitherStrength);
 					}
 				}
 				return "";
 			},
-			() => {
-				if (DitherAndTileField != reveal) {
-					DitherAndTileField = reveal;
-					return "DitherAndTileField";
-				}
-				return "";
-			},
-
-
-
+			() => Set(ref DitherAndTileField, nameof(DitherAndTileField)),
 		];
 		if (!reveal) toggles = [.. toggles.Reverse()];
 		foreach (var fn in toggles)

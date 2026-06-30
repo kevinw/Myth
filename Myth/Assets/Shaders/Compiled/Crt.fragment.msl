@@ -27,61 +27,61 @@ struct fragment_main_in
 fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Texture [[texture(0)]], sampler Sampler [[sampler(0)]])
 {
     fragment_main_out out = {};
-    float4 _531;
+    float4 _545;
     do
     {
         if (FragmentUniformBlock.CrtShader >= 0.5)
         {
-            float2 _115 = in.in_var_TEXCOORD0 * 1.00010001659393310546875;
-            float2 _117 = (_115 * 2.0) - float2(1.0);
-            float _118 = _117.x;
-            float2 _128 = float2(1.0) / FragmentUniformBlock.TextureSize;
-            float2 _129 = (((_117 * float2(1.0, 1.0 + ((_118 * _118) * 0.0500000007450580596923828125))) * 0.5) + float2(0.5)) * FragmentUniformBlock.TextureSize;
-            float2 _130 = fract(_129);
-            float2 _134 = (floor(_129) * _128) + (_128 * 0.5);
-            float2 _137 = fast::clamp(_134, float2(0.0), float2(1.0));
-            float4 _139 = Texture.sample(Sampler, _137);
-            float4 _147 = Texture.sample(Sampler, fast::clamp(_134 + float2(_128.x, 0.0), float2(0.0), float2(1.0)));
-            float4 _155 = Texture.sample(Sampler, fast::clamp(_134 + float2(0.0, _128.y), float2(0.0), float2(1.0)));
-            float2 _159 = fast::clamp(_134 + _128, float2(0.0), float2(1.0));
-            float4 _161 = Texture.sample(Sampler, _159);
-            float _164 = _130.x;
-            float _166 = powr(1.0 - _164, 2.5);
-            float _167 = powr(_164, 2.5);
-            float3 _172 = float3(_166 + _167);
-            float3 _173 = ((powr(_147.xyz, float3(2.2000000476837158203125)) * _167) + (powr(_139.xyz, float3(2.2000000476837158203125)) * _166)) / _172;
-            float3 _177 = ((powr(_161.xyz, float3(2.2000000476837158203125)) * _167) + (powr(_155.xyz, float3(2.2000000476837158203125)) * _166)) / _172;
-            float _178 = dot(_173, float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625));
-            float _179 = dot(_177, float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625));
-            float3 _197 = float3(bool3(fract(floor(_115 * FragmentUniformBlock.OutputSize).x * 0.3333333432674407958984375) > 0.333000004291534423828125));
-            float3 _201 = ((powr(_173, float3(2.7999999523162841796875)) * 2.0) - powr(_173, float3(3.599999904632568359375))) * mix(_197, float3(1.0), float3(_178 * 0.4000000059604644775390625));
-            float3 _205 = ((powr(_177, float3(2.7999999523162841796875)) * 2.0) - powr(_177, float3(3.599999904632568359375))) * mix(_197, float3(1.0), float3(_179 * 0.4000000059604644775390625));
-            float _206 = _130.y;
-            float3 _226;
+            float2 _117 = in.in_var_TEXCOORD0 * 1.00010001659393310546875;
+            float2 _119 = (_117 * 2.0) - float2(1.0);
+            float _120 = _119.x;
+            float2 _130 = float2(1.0) / FragmentUniformBlock.TextureSize;
+            float2 _131 = (((_119 * float2(1.0, 1.0 + ((_120 * _120) * 0.0500000007450580596923828125))) * 0.5) + float2(0.5)) * FragmentUniformBlock.TextureSize;
+            float2 _132 = fract(_131);
+            float2 _136 = (floor(_131) * _130) + (_130 * 0.5);
+            float2 _139 = fast::clamp(_136, float2(0.0), float2(1.0));
+            float4 _141 = Texture.sample(Sampler, _139);
+            float4 _149 = Texture.sample(Sampler, fast::clamp(_136 + float2(_130.x, 0.0), float2(0.0), float2(1.0)));
+            float4 _157 = Texture.sample(Sampler, fast::clamp(_136 + float2(0.0, _130.y), float2(0.0), float2(1.0)));
+            float2 _161 = fast::clamp(_136 + _130, float2(0.0), float2(1.0));
+            float4 _163 = Texture.sample(Sampler, _161);
+            float _166 = _132.x;
+            float _168 = powr(1.0 - _166, 2.5);
+            float _169 = powr(_166, 2.5);
+            float3 _174 = float3(_168 + _169);
+            float3 _175 = ((powr(_149.xyz, float3(2.2000000476837158203125)) * _169) + (powr(_141.xyz, float3(2.2000000476837158203125)) * _168)) / _174;
+            float3 _179 = ((powr(_163.xyz, float3(2.2000000476837158203125)) * _169) + (powr(_157.xyz, float3(2.2000000476837158203125)) * _168)) / _174;
+            float _180 = dot(_175, float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625));
+            float _181 = dot(_179, float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625));
+            float3 _199 = float3(bool3(fract(floor(_117 * FragmentUniformBlock.OutputSize).x * 0.3333333432674407958984375) > 0.333000004291534423828125));
+            float3 _203 = ((powr(_175, float3(2.7999999523162841796875)) * 2.0) - powr(_175, float3(3.599999904632568359375))) * mix(_199, float3(1.0), float3(_180 * 0.4000000059604644775390625));
+            float3 _207 = ((powr(_179, float3(2.7999999523162841796875)) * 2.0) - powr(_179, float3(3.599999904632568359375))) * mix(_199, float3(1.0), float3(_181 * 0.4000000059604644775390625));
+            float _208 = _132.y;
+            float3 _228;
             if (FragmentUniformBlock.TextureSize.y >= 400.0)
             {
-                _226 = (_201 + _205) * 0.5;
+                _228 = (_203 + _207) * 0.5;
             }
             else
             {
-                _226 = (_201 * exp2((-10.0) * powr(_206, mix(1.5, 2.0, _178)))) + (_205 * exp2((-10.0) * powr(1.0 - _206, mix(1.5, 2.0, _179))));
+                _228 = (_203 * exp2((-10.0) * powr(_208, mix(1.5, 2.0, _180)))) + (_207 * exp2((-10.0) * powr(1.0 - _208, mix(1.5, 2.0, _181))));
             }
-            float3 _228 = powr(precise::min(_226, float3(1.0)), float3(0.4545454680919647216796875));
-            float3 _375 = ((((((((powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-2.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125)) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(2.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-2.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-1.0, -2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(1.0, 2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(2.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-2.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-1.0, 2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(1.0, -2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(2.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125));
-            float3 _394 = (((powr(Texture.sample(Sampler, _137).xyz, float3(2.2000000476837158203125)) * 3.0) + ((((((((powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125)) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, _159).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(-1.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(1.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(0.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(0.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) * 2.5)) + (((_375 + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(0.0, -2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_134 + (float2(0.0, 2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) * 1.5)) * float3(0.02222222276031970977783203125);
-            float3 _398 = (_228 + (_394 * 0.3499999940395355224609375)) * mix(1.0, 1.2000000476837158203125, dot(_228, float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625)));
-            float2 _408 = _115 * (float2(1.0) - _115);
-            _531 = float4(powr(fast::clamp(mix(float3(dot(_398, select(float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625), float3(0.180000007152557373046875, 0.7200000286102294921875, 0.02000000141561031341552734375), bool3((length(_398) * 0.57749998569488525390625) < 0.5)))), _398, float3(1.2000000476837158203125)) * precise::min(powr((_408.x * _408.y) * 45.0, 0.1500000059604644775390625), 1.0), float3(0.0), float3(1.0)), float3(0.4545454680919647216796875)), 1.0) * in.in_var_TEXCOORD1;
+            float3 _230 = powr(precise::min(_228, float3(1.0)), float3(0.4545454680919647216796875));
+            float3 _377 = ((((((((powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-2.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125)) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(2.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-2.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-1.0, -2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(1.0, 2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(2.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-2.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-1.0, 2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(1.0, -2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(2.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125));
+            float3 _396 = (((powr(Texture.sample(Sampler, _139).xyz, float3(2.2000000476837158203125)) * 3.0) + ((((((((powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125)) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, _161).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(-1.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(1.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(0.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(0.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) * 2.5)) + (((_377 + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(0.0, -2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) + powr(Texture.sample(Sampler, fast::clamp(_136 + (float2(0.0, 2.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz, float3(2.2000000476837158203125))) * 1.5)) * float3(0.02222222276031970977783203125);
+            float3 _400 = (_230 + (_396 * 0.3499999940395355224609375)) * mix(1.0, 1.2000000476837158203125, dot(_230, float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625)));
+            float2 _410 = _117 * (float2(1.0) - _117);
+            _545 = float4(powr(fast::clamp(mix(float3(dot(_400, select(float3(0.300000011920928955078125, 0.60000002384185791015625, 0.100000001490116119384765625), float3(0.180000007152557373046875, 0.7200000286102294921875, 0.02000000141561031341552734375), bool3((length(_400) * 0.57749998569488525390625) < 0.5)))), _400, float3(1.2000000476837158203125)) * precise::min(powr((_410.x * _410.y) * 45.0, 0.1500000059604644775390625), 1.0), float3(0.0), float3(1.0)), float3(0.4545454680919647216796875)), 1.0) * in.in_var_TEXCOORD1;
             break;
         }
-        float2 _424 = (in.in_var_TEXCOORD0 * 2.0) - float2(1.0);
-        float2 _428 = float2(1.0) / FragmentUniformBlock.TextureSize;
-        float2 _432 = float2(FragmentUniformBlock.RgbOffset, 0.0) * _428;
-        float3 _508 = (((((((Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz + Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(-1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz) + Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(0.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz) + Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(0.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + _428, float2(0.0), float2(1.0))).xyz * 0.5)) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(-1.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz * 0.5)) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(1.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz * 0.5)) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(-1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz * 0.5)) * float3(0.22222222387790679931640625);
-        _531 = float4(fast::clamp((float3(Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + _432, float2(0.0), float2(1.0))).x, Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0, float2(0.0), float2(1.0))).y, Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 - _432, float2(0.0), float2(1.0))).z) + ((_508 * smoothstep(0.3499999940395355224609375, 1.0, precise::max(precise::max(_508.x, _508.y), _508.z))) * FragmentUniformBlock.BloomAmount)) * mix(1.0, smoothstep(1.25, 0.3499999940395355224609375, dot(_424, _424)), FragmentUniformBlock.VignetteAmount), float3(0.0), float3(1.0)), 1.0) * in.in_var_TEXCOORD1;
+        float2 _426 = (in.in_var_TEXCOORD0 * 2.0) - float2(1.0);
+        float2 _430 = float2(1.0) / FragmentUniformBlock.TextureSize;
+        float2 _434 = float2(FragmentUniformBlock.RgbOffset, 0.0) * _430;
+        float3 _510 = (((((((Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz + Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(-1.0, 0.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz) + Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(0.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz) + Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(0.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + _430, float2(0.0), float2(1.0))).xyz * 0.5)) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(-1.0, 1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz * 0.5)) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(1.0, -1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz * 0.5)) + (Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + (float2(-1.0) / FragmentUniformBlock.TextureSize), float2(0.0), float2(1.0))).xyz * 0.5)) * float3(0.22222222387790679931640625);
+        _545 = float4(fast::clamp(((float3(Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 + _434, float2(0.0), float2(1.0))).x, Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0, float2(0.0), float2(1.0))).y, Texture.sample(Sampler, fast::clamp(in.in_var_TEXCOORD0 - _434, float2(0.0), float2(1.0))).z) + ((_510 * smoothstep(0.3499999940395355224609375, 1.0, precise::max(precise::max(_510.x, _510.y), _510.z))) * FragmentUniformBlock.BloomAmount)) * mix(1.0, smoothstep(1.25, 0.3499999940395355224609375, dot(_426, _426)), FragmentUniformBlock.VignetteAmount)) * (1.0 - ((0.5 + (0.5 * cos((in.in_var_TEXCOORD0.y * FragmentUniformBlock.TextureSize.y) * 6.283185482025146484375))) * 0.100000001490116119384765625)), float3(0.0), float3(1.0)), 1.0) * in.in_var_TEXCOORD1;
         break;
     } while(false);
-    out.out_var_SV_Target0 = _531;
+    out.out_var_SV_Target0 = _545;
     return out;
 }
 

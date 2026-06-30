@@ -408,7 +408,9 @@ public partial class Player : Pawn
 		// Aim out of the solid (burrowToward points into it); fall back to straight up.
 		var outward = -burrowToward;
 		outward = outward.LengthSquared() > 0.0001f ? Vector2.Normalize(outward) : new Vector2(0, -1);
-		var origin = (Vector2)Position + outward * 1.5f;
+		var origin = (Vector2)Position + outward * 1.0f;
+		if (outward.X != 0 && outward.Y == 0)
+			origin = (Vector2)Position;
 		var direction = MathF.Atan2(outward.Y, outward.X);
 		particles.Emit(burrowSparkEffect, origin, count, direction, 0.4f + 0.6f * speed01);
 	}
