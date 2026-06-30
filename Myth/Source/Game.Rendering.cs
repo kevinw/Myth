@@ -215,15 +215,18 @@ public sealed partial class GameView
 		return Screen;
 	}
 
-	void DrawOverlayElements(Target output) {
+	void DrawOverlayElements(Target output)
+	{
 		using (GraphicsDevice.DebugGroup("Myth/story speech"))
 			DrawStorySpeech(output);
 
 		// Show << Rewinding text when rewinding the player position.
-		if (game.Rewinding && Time.BetweenInterval(0.25)) {
+		if (game.Rewinding && Time.BetweenInterval(0.25))
+		{
 			var font = Assets.Font;
-			if (font != null) {
-				Batcher.Text(font, "<< Rewinding", new (20, 20), font.Size, Color.White);
+			if (font != null)
+			{
+				Batcher.Text(font, "<< Rewinding", new(20, 20), font.Size, Color.White);
 				Batcher.Render(output); // TODO: why
 				Batcher.Clear();
 			}

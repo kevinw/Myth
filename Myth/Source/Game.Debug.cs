@@ -41,7 +41,7 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 #if DEBUG
 		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
-		if (Input.Keyboard.Pressed(Keys.V)) SpeakVoiceTest();
+		if (Input.Keyboard.Pressed(Keys.V) && VoiceEnabled) SpeakVoiceTest();
 
 		int timeScaleChange = 0;
 

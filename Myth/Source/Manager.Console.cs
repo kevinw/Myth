@@ -49,7 +49,7 @@ public partial class Manager
 
 	void UpdateCommandConsoleToggle()
 	{
-		if (!Input.Keyboard.Pressed(Keys.F1))
+		if (!Input.Keyboard.Pressed(Keys.Tilde))
 			return;
 		commandConsoleOpen = !commandConsoleOpen;
 		focusCommandConsole = commandConsoleOpen;
@@ -219,9 +219,16 @@ public partial class Manager
 	void Quit(string _) => Exit();
 
 	[ConsoleCommand("reload_assets")]
-	void ReloadAssetsCommand(string _) {
+	void ReloadAssetsCommand(string _)
+	{
 		ReloadAssets(false);
 	}
 
+	[ConsoleCommand("head_slide")]
+	void ToggleHatSlide(string _)
+	{
+		PerfToggles.HeadSlide = !PerfToggles.HeadSlide;
+		game?.DisplayMessage($"Head slide: {PerfToggles.HeadSlide}");
+	}
 }
 #endif

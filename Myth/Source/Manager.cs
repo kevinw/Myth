@@ -681,11 +681,6 @@ public partial class Manager : App
 #if !IOS && !BROWSER
 				if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
 					window.Fullscreen = !window.Fullscreen;
-				if (Input.Keyboard.Pressed(Keys.Escape))
-				{
-					CurrentRoom?.Save();
-					Exit();
-				}
 #endif
 #if EDITOR
 				if (ToggleEditorPressed())
@@ -893,7 +888,8 @@ public partial class Manager : App
 	static bool PerfModifierDown(ControllerState controller)
 		=> !controller.IsGamepad && controller.Down(4);
 
-	void ToggleBudAI() {
+	void ToggleBudAI()
+	{
 		PerfToggles.BudAIEnabled = !PerfToggles.BudAIEnabled;
 		ShowPerfToggleMessage("BudAIEnabled", PerfToggles.BudAIEnabled);
 	}

@@ -5,7 +5,7 @@ public class Controls(Input input)
 {
 	public readonly VirtualAction Rewind = new(input, "Rewind",
 		new ActionBindingSet()
-			.Add(Keys.Tilde)
+			.Add(Keys.Backslash)
 	);
 
 	public readonly VirtualStick Move = new(input, "Move",
