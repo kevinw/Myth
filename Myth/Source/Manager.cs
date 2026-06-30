@@ -738,6 +738,8 @@ public partial class Manager : App
 			gameEase = Calc.Approach(gameEase, 0.0f, Time.Delta * 4.0f);
 			if (!keyboardShortcutsBlocked)
 			{
+				if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) ChangeEditorUiScale(-0.1f);
+				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) ChangeEditorUiScale(0.1f);
 				using (PerfStats.Time(PerfDetail.EditorNavigation))
 					UpdateEditorNavigation();
 			}
@@ -811,6 +813,11 @@ public partial class Manager : App
 
 		imgui?.EndLayout();
 	}
+
+#if EDITOR
+	void ChangeEditorUiScale(float amount)
+		=> imgui.Scale = uiScale = Math.Clamp(uiScale + amount, 0.5f, 4.0f);
+#endif
 
 
 	void UpdateFpsOverlay()

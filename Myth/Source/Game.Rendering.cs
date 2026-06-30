@@ -206,7 +206,7 @@ public sealed partial class GameView
 			Batcher.Clear();
 		}
 
-		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+		if (false && showHud && debugView is DebugView.None or DebugView.CollisionRects)
 			DrawPlayerHud(destination, viewport, scissor);
 	}
 
