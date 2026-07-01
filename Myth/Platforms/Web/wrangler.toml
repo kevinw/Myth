@@ -7,13 +7,7 @@ binding = "FEEDBACK_DB"
 database_name = "myth-feedback"
 database_id = "54338262-e979-4384-8bd3-25f757b8e18e"
 
-# Email Routing must be enabled on the domain used by FEEDBACK_FROM, and
-# destination_address must be a verified destination address in that account.
-[[send_email]]
-name = "FEEDBACK_EMAIL"
-destination_address = "kevinwatters@gmail.com"
-
 [vars]
-# From-address must be on a domain in this Cloudflare account with Email Routing.
+# Also set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_EMAIL_API_TOKEN as Pages secrets.
 FEEDBACK_FROM = "feedback@tiny-walk.com"
 FEEDBACK_TO = "kevinwatters@gmail.com"

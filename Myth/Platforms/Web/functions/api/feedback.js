@@ -1,5 +1,3 @@
-import { EmailMessage } from "cloudflare:email";
-
 const MaxMessageLength = 8000;
 const MaxRequestLength = 12000;
 
@@ -41,25 +39,31 @@ export async function onRequestPost({ request, env, ctx }) {
 }
 
 async function sendNotification(env, message, buildSha) {
-	if (!env.FEEDBACK_EMAIL || !env.FEEDBACK_FROM || !env.FEEDBACK_TO) return;
+	if (
+		!env.CLOUDFLARE_ACCOUNT_ID ||
+		!env.CLOUDFLARE_EMAIL_API_TOKEN ||
+		!env.FEEDBACK_FROM ||
+		!env.FEEDBACK_TO
+	)
+		return;
 
-	const raw = [
-		`From: Myth Feedback <${env.FEEDBACK_FROM}>`,
-		`To: <${env.FEEDBACK_TO}>`,
-		"Subject: New Myth feedback",
-		`Message-ID: <${crypto.randomUUID()}@myth-game>`,
-		`Date: ${new Date().toUTCString()}`,
-		"MIME-Version: 1.0",
-		'Content-Type: text/plain; charset="utf-8"',
-		"",
-		message,
-		"",
-		`— build ${buildSha ?? "unknown"}`,
-	].join("\r\n");
-
-	await env.FEEDBACK_EMAIL.send(
-		new EmailMessage(env.FEEDBACK_FROM, env.FEEDBACK_TO, raw),
+	const response = await fetch(
+		`https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/email/sending/send`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${env.CLOUDFLARE_EMAIL_API_TOKEN}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				to: env.FEEDBACK_TO,
+				from: { address: env.FEEDBACK_FROM, name: "Myth Feedback" },
+				subject: "New Myth feedback",
+				text: `${message}\n\n— build ${buildSha ?? "unknown"}`,
+			}),
+		},
 	);
+	if (!response.ok) throw new Error(`Cloudflare Email API returned ${response.status}`);
 }
 
 function json(body, status = 200) {
