@@ -141,6 +141,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	}
 
 	public override void Render(Batcher batcher) => RenderMaterial(batcher, normals: false, Color.White);
+	// Spriteless, so the Actor default RenderShadow (which stamps the sprite silhouette into the
+	// particle-collision coverage mask) draws nothing and particles pass straight through. Stamp the
+	// dual-tile art instead: the CoverageMask shader keys off texture alpha, so the mask picks up the
+	// rounded blob corners rather than a bare rectangle.
+	public override void RenderShadow(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
 	public override void RenderNormals(Batcher batcher) => RenderMaterial(batcher, normals: true, Color.White);
 	// Stamp the platform into the TileField with per-tile field colors (so its dither variation matches
 	// neighboring stone) rather than one flat color. colorForTile maps a cell's anchored world tile to
