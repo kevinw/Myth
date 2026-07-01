@@ -988,6 +988,12 @@ public partial class Game : IDisposable
 		return false;
 	}
 
+	// True when the given world point falls inside a water tile. Water is a non-solid
+	// tile (Factory 'w'); pawns sample their torso here to drive swim physics.
+	public bool IsWaterAt(Point2 worldPoint)
+		=> TryGetSurfaceTypeAtWorldPoint(worldPoint, out var surfaceType)
+			&& surfaceType == Factory.WaterSurfaceType;
+
 	bool TryGetSurfaceTypeOutwardFromBottom(RectInt bounds, out string surfaceType)
 	{
 		var centerX = bounds.Center.X;

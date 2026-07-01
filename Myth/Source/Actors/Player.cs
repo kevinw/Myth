@@ -73,6 +73,18 @@ public abstract class Pawn : Actor
 	public static float Friction => 480;
 	public static float Gravity => 450;
 
+	// Water: while the torso is submerged, gravity is scaled down and downward speed is
+	// capped at MaxSinkSpeed (damped so a fast plunge eases into the sink instead of
+	// snapping). Jump becomes a repeatable upward stroke; burrowing is disabled.
+	public static float WaterGravityMultiplier => 0.3f;
+	public static float WaterMaxSinkSpeed => 40f;
+	public static float WaterSinkDamping => 200f;
+	public static float WaterSwimStroke => -70f;
+	// Horizontal water resistance: lower top speed, plus a drag that bleeds off speed when
+	// no direction is held (even airborne, unlike the grounded-only dry friction).
+	public static float WaterHorizontalSpeedMultiplier => 0.6f;
+	public static float WaterHorizontalDrag => 300f;
+
 	protected static float WallHugGravityMultiplier => 0.25f;
 	public static float JumpForce => -125;
 	public static float JumpTime => 0.19f;
@@ -112,6 +124,8 @@ public abstract class Pawn : Actor
 	protected int coyoteJumpY;
 	protected float jumpBufferTimer;
 	protected bool grounded;
+	protected bool inWater;
+	protected bool atWaterSurface; // torso submerged but head is above the waterline
 	// GetWallJumpDirection runs two solid-overlap probes and is called up to 3x per
 	// Update (gravity wall-hug, NormalState wall-slide, jump handling). Position is
 	// fixed for the whole Update after Move() runs, and each pawn only queries it from
@@ -183,6 +197,11 @@ public abstract class Pawn : Actor
 		if (jumpBufferTimer > 0)
 			jumpBufferTimer = Calc.Approach(jumpBufferTimer, 0, Time.Delta);
 
+		var waterBounds = Hitbox.Rect + Position;
+		waterBounds = waterBounds.Inflate(3);
+		inWater = Game.IsWaterAt(waterBounds.Center);
+		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
+
 		wallSliding = false;
 		switch (State)
 		{
@@ -227,13 +246,17 @@ public abstract class Pawn : Actor
 		if (!grounded && State != States.Dash && State != States.Burrow)
 		{
 			var grav = Gravity;
-			if (jumpTimer > 0)
+			if (inWater)
+				grav *= WaterGravityMultiplier;
+			else if (jumpTimer > 0)
 				grav *= JumpHoldGravityMultiplier;
 			else if (Velocity.Y > 0)
 				grav *= FastFallMultiplier;
-			if (State == States.Normal && Velocity.Y > 0 && IsWallHugging())
+			if (!inWater && State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
+			if (inWater && Velocity.Y > WaterMaxSinkSpeed)
+				Velocity.Y = Calc.Approach(Velocity.Y, WaterMaxSinkSpeed, WaterSinkDamping * Time.Delta);
 
 			JumpUpSquish -= Time.Delta;
 			if (JumpUpSquish <= 0)
@@ -331,7 +354,7 @@ public abstract class Pawn : Actor
 		else
 		{
 			var wallJumpDir = GetWallJumpDirection();
-			if (IsWallHugging(wallJumpDir))
+			if (!inWater && IsWallHugging(wallJumpDir))
 			{
 				Facing = -(Signs)wallJumpDir;
 				Play("wall_slide");
@@ -371,6 +394,10 @@ public abstract class Pawn : Actor
 		{
 			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
 		}
+		if (inWater)
+		{
+			maxSpeed *= WaterHorizontalSpeedMultiplier;
+		}
 
 
 
@@ -385,6 +412,8 @@ public abstract class Pawn : Actor
 			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
 		if (moveX == 0 && grounded)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
+		else if (moveX == 0 && inWater)
+			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
 		if (grounded && moveX != 0)
 		{
 			Facing = facing;
@@ -392,6 +421,34 @@ public abstract class Pawn : Actor
 			{
 				RunStartSkid = true;
 			}
+		}
+		// Underwater you swim-turn: face the input direction even while airborne, unlike
+		// the usual air control that keeps your facing through a mid-air direction change.
+		else if (inWater && moveX != 0)
+		{
+			Facing = facing;
+		}
+
+		// Underwater, jump is a repeatable swim stroke: each press sets a capped upward
+		// velocity (Min so chained strokes hold the ascent rather than accelerating), with
+		// no ground/coyote requirement. At the surface (head above the waterline) it instead
+		// becomes a full-strength jump so you can hop clean out of the water. Ground and wall
+		// jumps are suppressed while submerged.
+		if (inWater && input.JumpPressed)
+		{
+			jumpBufferTimer = 0;
+			JumpUpSquish = 0;
+			if (atWaterSurface)
+			{
+				Squish = new Vector2(0.65f, 1.4f);
+				StartJump(JumpForce, JumpTime);
+			}
+			else
+			{
+				Squish = new Vector2(0.8f, 1.2f);
+				Velocity.Y = MathF.Min(Velocity.Y, WaterSwimStroke);
+			}
+			OnPawnJump();
 		}
 
 		var wallJump = GetWallJumpDirection();
@@ -403,7 +460,7 @@ public abstract class Pawn : Actor
 		var jumpPressed = input.JumpPressed;
 		if (!jumpPressed && canGroundJump && jumpBufferTimer > 0)
 			jumpPressed = true;
-		if (jumpPressed && (canGroundJump || canWallJump))
+		if (!inWater && jumpPressed && (canGroundJump || canWallJump))
 		{
 			jumpBufferTimer = 0;
 			JumpUpSquish = 0;
@@ -463,6 +520,7 @@ public abstract class Pawn : Actor
 	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
 	protected bool CanBurrow()
 	{
+		if (inWater) return false;
 		if (wallSliding) return false;
 		if (burrowNeedsGrounding) return false;
 		if (burrowTimer < 0) return false; // the ability is still cooling down

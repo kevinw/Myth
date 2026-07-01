@@ -10,6 +10,7 @@ namespace Myth;
 public static class Factory
 {
 	public const string DefaultSurfaceType = "Grass";
+	public const string WaterSurfaceType = "Water";
 	const string PropSpritePrefix = "Props/";
 
 	/// Background tile type that marks a region for NCALayer to grow fungus into.
@@ -325,7 +326,7 @@ public static class Factory
 		Register('g', AsTile("plants", false, "Grass", acousticReflectivity: 0.20f));
 		Register('i', AsTile("gates", isFg: false, surfaceType: "Brick", acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
-		Register('w', AsTile("water", false, "Water", reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f));
+		Register('w', AsTile("water", false, WaterSurfaceType, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f));
 		Register('#', AsTile("back", false, layer: TileLayer.Background));
 		Register('-', AsTile("back-right", false, layer: TileLayer.Background));
 		Register(')', AsTile("back-ne", false, layer: TileLayer.Background));
