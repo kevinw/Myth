@@ -247,8 +247,15 @@ public sealed class PlatformNavGraph
 
 			results.Add(node);
 		}
-		results.Sort((a, b) => NodeDistanceSquared(a, position).CompareTo(NodeDistanceSquared(b, position)));
+		// Sort via a cached comparer reading a field, so the per-call closure (this runs every
+		// nav frame) doesn't allocate a fresh delegate capturing `position`.
+		nodeSortPosition = position;
+		nodeSortComparison ??= (a, b) => NodeDistanceSquared(a, nodeSortPosition).CompareTo(NodeDistanceSquared(b, nodeSortPosition));
+		results.Sort(nodeSortComparison);
 	}
+
+	Vector2 nodeSortPosition;
+	Comparison<Node>? nodeSortComparison;
 
 	// A swim node covers a whole water volume, so measure distance to its area (0 when the
 	// point is inside it) rather than to its center. Lets a pawn in the water resolve to

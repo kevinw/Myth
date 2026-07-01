@@ -47,8 +47,10 @@ public class AirBubble : Actor
 			if (IsFinishedPlaying("pop"))
 				Game.Destroy(this);
 		}
+		else if (!Game.IsWaterAt(Position))
+			Pop(); // broke the surface (or drifted out of the water)
 		else if (Position.Y < Game.Bounds.Top)
-			Game.Destroy(this); // rose out the top without hitting anything
+			Game.Destroy(this); // safety: rose out the top while still in water
 	}
 
 	void Pop()
@@ -62,5 +64,10 @@ public class AirBubble : Actor
 	public override void OnCollideX() => Pop();
 	public override void OnCollideY() => Pop();
 
+	// A bubble is just its little sprite: skip the shadow/reflection/normal/emissive passes
+	// (it shouldn't cast a shadow or reflect anyway, and each pass is per-frame render work).
 	public override void RenderNormals(Batcher batcher) { }
+	public override void RenderShadow(Batcher batcher, Color color) { }
+	public override void RenderReflection(Batcher batcher, Color color) { }
+	public override void RenderEmissive(Batcher batcher) { }
 }
