@@ -1,7 +1,9 @@
+import { EmailMessage } from "cloudflare:email";
+
 const MaxMessageLength = 8000;
 const MaxRequestLength = 12000;
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, ctx }) {
 	if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
 		return json({ error: "Expected JSON" }, 415);
 
@@ -29,7 +31,35 @@ export async function onRequestPost({ request, env }) {
 		.bind(message, buildSha)
 		.run();
 
+	ctx.waitUntil(
+		sendNotification(env, message, buildSha).catch((err) =>
+			console.error("feedback email failed:", err),
+		),
+	);
+
 	return json({ ok: true });
+}
+
+async function sendNotification(env, message, buildSha) {
+	if (!env.FEEDBACK_EMAIL || !env.FEEDBACK_FROM || !env.FEEDBACK_TO) return;
+
+	const raw = [
+		`From: Myth Feedback <${env.FEEDBACK_FROM}>`,
+		`To: <${env.FEEDBACK_TO}>`,
+		"Subject: New Myth feedback",
+		`Message-ID: <${crypto.randomUUID()}@myth-game>`,
+		`Date: ${new Date().toUTCString()}`,
+		"MIME-Version: 1.0",
+		'Content-Type: text/plain; charset="utf-8"',
+		"",
+		message,
+		"",
+		`— build ${buildSha ?? "unknown"}`,
+	].join("\r\n");
+
+	await env.FEEDBACK_EMAIL.send(
+		new EmailMessage(env.FEEDBACK_FROM, env.FEEDBACK_TO, raw),
+	);
 }
 
 function json(body, status = 200) {
