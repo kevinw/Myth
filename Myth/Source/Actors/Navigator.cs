@@ -255,9 +255,7 @@ public sealed class Navigator(Pawn owner)
 				break;
 
 			case PlatformNavGraph.EdgeKind.Swim:
-				(moveX, moveY, jumpPressed) = to.Kind == PlatformNavGraph.NodeKind.Swim
-					? SwimSteer(graph.Nodes[edge.From], to) // toward the portal, or into water from land
-					: SwimHopOutToward(graph.Nodes[edge.From], to.Position); // exit: rise, hop out, air-steer to land
+				(moveX, moveY, jumpPressed) = ExecuteSwimEdge(graph, edge);
 				break;
 
 			default:
@@ -568,6 +566,17 @@ public sealed class Navigator(Pawn owner)
 	// Swim toward the target area: steer horizontally to the nearest point inside it (which
 	// sits on the shared portal face when the area is adjacent), and stroke up (jump) when
 	// that point is above. Sinking downward needs no input — gravity handles it.
+	// Drive a Swim edge: toward the portal (or into water from a land rim) for an area target,
+	// or a surface-hop out onto a land target. Shared by both the follow and goal-seek paths.
+	public (int MoveX, int MoveY, bool JumpPressed) ExecuteSwimEdge(PlatformNavGraph graph, PlatformNavGraph.Edge edge)
+	{
+		var from = graph.Nodes[edge.From];
+		var to = graph.Nodes[edge.To];
+		return to.Kind == PlatformNavGraph.NodeKind.Swim
+			? SwimSteer(from, to)
+			: SwimHopOutToward(from, to.Position);
+	}
+
 	(int MoveX, int MoveY, bool JumpPressed) SwimSteer(PlatformNavGraph.Node from, PlatformNavGraph.Node to)
 	{
 		if (to.Area is not { } toRect)

@@ -84,6 +84,7 @@ public abstract class Pawn : Actor
 	// no direction is held (even airborne, unlike the grounded-only dry friction).
 	public static float WaterHorizontalSpeedMultiplier => 0.6f;
 	public static float WaterHorizontalDrag => 300f;
+	public static float WaterRollSpeedMultiplier => 0.55f;
 
 	protected static float WallHugGravityMultiplier => 0.25f;
 	public static float JumpForce => -125;
@@ -542,7 +543,7 @@ public abstract class Pawn : Actor
 			// starting a roll on a slope is "easy" and automatically
 			// sends you in the direction of the slope
 			Facing = Math.Sign(normal.X);
-			Vector2 newVelocity = new(Facing * RollSpeed, 0);
+			Vector2 newVelocity = new(Facing * RollSpeed * RollSpeedScale, 0);
 			Velocity = Vector2.Lerp(Velocity, newVelocity, Math.Abs(normal.X * 1.7f));
 		}
 		else
@@ -552,7 +553,7 @@ public abstract class Pawn : Actor
 			if (impactVelocity.Y < RollMinFallSpeed) return false;
 			if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed) return false;
 			Facing = Math.Sign(impactVelocity.X);
-			Velocity = new(Facing * RollSpeed, 0);
+			Velocity = new(Facing * RollSpeed * RollSpeedScale, 0);
 		}
 
 		ducking = true;
@@ -563,10 +564,12 @@ public abstract class Pawn : Actor
 		return true;
 	}
 
+	float RollSpeedScale => inWater ? WaterRollSpeedMultiplier : 1f;
+
 	(float, float) TargetRollSpeedAndFriction()
 	{
 		var rollingDownSlope = RollingDownSlope();
-		var targetSpeed = rollingDownSlope ? DownhillRollSpeed : MaxGroundSpeed;
+		var targetSpeed = (rollingDownSlope ? DownhillRollSpeed : MaxGroundSpeed) * RollSpeedScale;
 		var friction = rollingDownSlope ? Calc.Clamp(DownhillRollFriction, 0, float.PositiveInfinity) : RollFriction;
 		return (targetSpeed, friction);
 	}

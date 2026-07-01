@@ -170,6 +170,11 @@ public class Bud : Pawn
 		moveY = 0;
 		jumpPressed = false;
 
+		// Following through water needs the swim-capable navigation; the beside-player,
+		// same-surface logic below is land-only. Head straight for the player instead.
+		if (InWater || player.InWater)
+			return nav.TryNavigateToPosition(player.Position, out moveX, out moveY, out jumpPressed);
+
 		if (Game.GetPlatformNavGraph() is not { } graph)
 		{
 			nav.SetDebugNavState("no graph");
@@ -252,6 +257,10 @@ public class Bud : Pawn
 			case PlatformNavGraph.EdgeKind.RoomExit:
 				moveX = nav.MoveTowardNavTarget(target);
 				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
+				break;
+
+			case PlatformNavGraph.EdgeKind.Swim:
+				(moveX, moveY, jumpPressed) = nav.ExecuteSwimEdge(graph, edge);
 				break;
 
 			default:

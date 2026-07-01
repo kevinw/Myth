@@ -410,6 +410,10 @@ public sealed class PlatformNavGraph
 			EdgeKind.Fall => distance + 20,
 			EdgeKind.Jump => distance + 180 + wallJumpSurcharge + chainWallJumpSurcharge + maxHoldSurcharge + LandingRiskCost(Nodes[edge.To]),
 			EdgeKind.RoomExit => distance + 5,
+			// Swimming is a normal option but not preferred: a per-edge surcharge makes a dry
+			// walk/jump win a jumpable gap, while a real crossing (no land route) still routes
+			// through the water since it's the only path.
+			EdgeKind.Swim => distance + 120,
 			_ => distance
 		};
 	}
@@ -954,7 +958,7 @@ public sealed class PlatformNavGraph
 			{
 				if (node.Kind is NodeKind.Swim or NodeKind.RoomExit)
 					continue;
-				if (CanEnterWater(node, area))
+				if (CanEnterWater(game, room, node, area))
 					AddEdge(node.Id, swimId, EdgeKind.Swim);
 				if (CanExitWater(game, room, area, node))
 					AddEdge(swimId, node.Id, EdgeKind.Swim);
@@ -978,34 +982,38 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	// A land node at/just above the water rim, horizontally over or beside the area, so the
-	// pawn can step off and sink in.
-	static bool CanEnterWater(Node node, RectInt area)
+	// The area's top is an actual air-water surface at this x — open air just above it. If solid
+	// caps the water there, land beside it is walled off from the water (no drop-in, and an
+	// "exit" would be a hop into rock); if more water sits above, it's an interior boundary
+	// between stacked areas, not a place the pawn can break the surface.
+	static bool SwimSurfaceOpen(Game game, Room room, RectInt area, float worldX)
+	{
+		var probeX = Math.Clamp((int)worldX, area.Left + 2, area.Right - 2);
+		if (OverlapsCollision(game, new RectInt(probeX - 2, area.Top - Game.TileSize, 4, Game.TileSize)))
+			return false;
+		return !IsWaterTileAtWorld(room, new Point2(probeX, area.Top - Game.TileSize / 2));
+	}
+
+	// A land node at/just above the water rim, over or beside an open surface, so the pawn can
+	// step off and sink in.
+	static bool CanEnterWater(Game game, Room room, Node node, RectInt area)
 	{
 		var x = node.Position.X;
 		var y = node.Position.Y;
 		return x >= area.Left - Game.TileSize && x <= area.Right + Game.TileSize
-			&& y <= area.Top + 4 && y >= area.Top - SwimEnterDropMax;
+			&& y <= area.Top + 4 && y >= area.Top - SwimEnterDropMax
+			&& SwimSurfaceOpen(game, room, area, x);
 	}
 
-	// A land node above the water within hop-out reach, at a spot where the area's top is an
-	// actual air-water surface. If solid caps the water there it's a hop into rock; if more
-	// water sits above, that's an interior boundary between stacked areas, not a place the pawn
-	// can surface and climb out.
+	// A land node at/above an open water surface within hop-out reach. Rim nodes sit at the
+	// waterline (climb out sideways) up to a hop above.
 	static bool CanExitWater(Game game, Room room, RectInt area, Node node)
 	{
 		var x = node.Position.X;
 		var y = node.Position.Y;
-		// Rim nodes sit at the waterline (same level as the surface) — you climb out sideways —
-		// up to a hop above, so allow from just below the surface to SwimExitHopMax above.
-		if (!(x >= area.Left - Game.TileSize && x <= area.Right + Game.TileSize
-			&& y <= area.Top + 2 && area.Top - y <= SwimExitHopMax))
-			return false;
-
-		var probeX = Math.Clamp((int)x, area.Left + 2, area.Right - 2);
-		if (OverlapsCollision(game, new RectInt(probeX - 2, area.Top - Game.TileSize, 4, Game.TileSize)))
-			return false;
-		return !IsWaterTileAtWorld(room, new Point2(probeX, area.Top - Game.TileSize / 2));
+		return x >= area.Left - Game.TileSize && x <= area.Right + Game.TileSize
+			&& y <= area.Top + 2 && area.Top - y <= SwimExitHopMax
+			&& SwimSurfaceOpen(game, room, area, x);
 	}
 
 	static bool IsWaterTileAtWorld(Room room, Point2 world)
