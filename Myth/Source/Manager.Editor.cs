@@ -70,6 +70,12 @@ public partial class Manager
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
+	// Click-to-cycle picking: repeated clicks at the same screen spot walk down the stack of
+	// overlapping actors so hidden ones are reachable. Scratch + last-click state drive it.
+	readonly List<int> actorPickScratch = [];
+	Vector2 lastActorPickCursor;
+	bool hasLastActorPick;
+	const float ActorPickCycleThreshold = 4f; // UI pixels: clicks within this cycle, farther clicks reset
 	bool selectionIncludeBackgroundTiles = true;
 	bool selectionIncludeForegroundTiles = true;
 	SnapshotFlags selectionSnapshotFlags = SnapshotFlags.None;
@@ -2196,6 +2202,43 @@ public partial class Manager
 		return -1;
 	}
 
+	// Fills `into` with every actor whose bounds contain `world`, topmost first (higher indices
+	// render on top), so click-to-cycle can walk the whole overlapping stack.
+	void HitTestRoomActors(Room room, Vector2 world, List<int> into)
+	{
+		into.Clear();
+		for (var i = room.Actors.Count - 1; i >= 0; i--)
+			if (RoomActorBounds(room, room.Actors[i]).Contains(world))
+				into.Add(i);
+	}
+
+	// Which actor a left-click selects. A click at a fresh spot picks the topmost actor under the
+	// cursor; clicking the same spot again advances to the next actor below the current selection
+	// (wrapping), so actors hidden behind overlapping ones can still be reached.
+	int PickRoomActorForClick(Room room, Vector2 world)
+	{
+		HitTestRoomActors(room, world, actorPickScratch);
+		if (actorPickScratch.Count == 0)
+		{
+			hasLastActorPick = false;
+			return -1;
+		}
+
+		var sameSpot = hasLastActorPick &&
+			Vector2.DistanceSquared(Cursor, lastActorPickCursor) <= ActorPickCycleThreshold * ActorPickCycleThreshold;
+		var pick = actorPickScratch[0];
+		if (sameSpot)
+		{
+			var current = actorPickScratch.IndexOf(selectedRoomActorIndex);
+			if (current >= 0)
+				pick = actorPickScratch[(current + 1) % actorPickScratch.Count];
+		}
+
+		lastActorPickCursor = Cursor;
+		hasLastActorPick = true;
+		return pick;
+	}
+
 	// The lattice rooms tile on: one gameplay screen wide, one tile taller (Rows = Height/TileSize + 1).
 	// New rooms snap to this, the orientation grid is spaced by it, and room moves snap to it by default.
 	static Point2 RoomLatticeTiles => new(Game.Columns, Game.Rows);
@@ -3843,7 +3886,7 @@ public partial class Manager
 				{
 					using (CaptureSelectionUndo("Select Actor"))
 					{
-						selectedRoomActorIndex = hoveredActorIndex;
+						selectedRoomActorIndex = PickRoomActorForClick(editing, worldMouse);
 						ClearEditorDragState();
 						editorSelectionRect = null;
 						editorDrag.Kind = EditorDragKind.RoomActor;
