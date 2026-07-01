@@ -225,7 +225,7 @@ public partial class Player : Pawn
 		// other way next frame.
 		if (burrowReverseQueued && burrowSpeed <= BurrowReverseFlipSpeed)
 		{
-			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
+			burrowHeading = new(-burrowHeading.X, -burrowHeading.Y);
 			burrowSolidLeft = !burrowSolidLeft;
 			burrowReverseQueued = false;
 		}

@@ -1,6 +1,5 @@
 # TODO
 
-- popping out of burrow under a 1 tile tall ledge makes you pop up through it
 - make rim_light a uniform; investigate less harsh ways of lighting things
 - a player frame for "holding down before a roll"
 - wall jump too difficult (go back to "just jump"?)

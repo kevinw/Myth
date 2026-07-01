@@ -53,7 +53,8 @@
       "Id": "7b903a0b584635ba",
       "Type": "MovingPlatform",
       "Position": [88, 64],
-      "Size": [32, 32]
+      "Size": [32, 32],
+      "TravelDistance": 50
     }
   ]
 }
