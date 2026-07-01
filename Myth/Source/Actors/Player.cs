@@ -78,6 +78,7 @@ public abstract class Pawn : Actor
 	// snapping). Jump becomes a repeatable upward stroke; burrowing is disabled.
 	public static float WaterGravityMultiplier => 0.3f;
 	public static float WaterMaxSinkSpeed => 40f;
+	public static float WaterFastSinkMultiplier => 1.5f; // holding down sinks 50% faster
 	public static float WaterSinkDamping => 200f;
 	public static float WaterSwimStroke => -70f;
 	// Horizontal water resistance: lower top speed, plus a drag that bleeds off speed when
@@ -260,8 +261,9 @@ public abstract class Pawn : Actor
 			if (!inWater && State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
-			if (inWater && Velocity.Y > WaterMaxSinkSpeed)
-				Velocity.Y = Calc.Approach(Velocity.Y, WaterMaxSinkSpeed, WaterSinkDamping * Time.Delta);
+			var maxSink = input.MoveY > 0 ? WaterMaxSinkSpeed * WaterFastSinkMultiplier : WaterMaxSinkSpeed;
+			if (inWater && Velocity.Y > maxSink)
+				Velocity.Y = Calc.Approach(Velocity.Y, maxSink, WaterSinkDamping * Time.Delta);
 
 			JumpUpSquish -= Time.Delta;
 			if (JumpUpSquish <= 0)
