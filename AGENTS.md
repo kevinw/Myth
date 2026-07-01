@@ -5,6 +5,7 @@
 - Omit "private" keyword since it is implicit in C#.
 - For simple gameplay-esque values, instead of a field like `const float TweakableValue = 9f;` prefer `static float TweakableValue => 9f;` -- we use dotnet watch to do live gamedev and for values we want to dial in and tweak, the getter allows us to change the value without recompiling.
 - Prefer "vector arithmetic" style over per-component math: operate on whole Point2/Vector2/Rect/RectInt values with operators and their built-in methods (e.g. `(-origin - frame.TopLeft).FloorToPoint2()`, `RectInt.Between(a, b)`, `rect.Inflate(-inset)`) instead of hand-rolling `.X`/`.Y` and `MathF` calls. Before writing such code, grok what the base Point2/Vector2/Rect/RectInt structs in ../Foster already provide -- the method you want usually exists.
+- When I ask directly for a commit, it's fine to commit straight to main (no need to branch first).
 - You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
     - Can this be one line? Make it one line.
     - No boilerplate nobody asked for.
