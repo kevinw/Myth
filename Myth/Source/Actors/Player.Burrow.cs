@@ -280,6 +280,20 @@ public partial class Player : Pawn
 	{
 		var exitDir = burrowToward;
 
+		// This is a bit of a hard coded hack: if we're exiting downwards,
+		// move the hitbox down so that its top is at the edge of the surface we
+		// are exiting from.
+		if (exitDir.Y < 0)
+		{
+			Position = (Point2)(new Vector2(Position.X, Position.Y + StandingHitboxRect.Height));
+
+			// Additional hack: if there's not room, try a crouch.
+			if (Game.OverlapsRoomCollision(this, Point2.Zero))
+			{
+				ducking = true;
+			}
+		}
+
 		// Climbing straight up a vertical wall pops into a wall slide instead of launching
 		// off it: drop the outward push, keep hugging the wall, and carry strong upward
 		// velocity. Feels better and sets up wall-jump / re-burrow chaining off the launch.
