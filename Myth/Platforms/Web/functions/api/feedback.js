@@ -1,7 +1,7 @@
 const MaxMessageLength = 8000;
 const MaxRequestLength = 12000;
 
-export async function onRequestPost({ request, env, ctx }) {
+export async function onRequestPost({ request, env, waitUntil }) {
 	if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
 		return json({ error: "Expected JSON" }, 415);
 
@@ -29,7 +29,7 @@ export async function onRequestPost({ request, env, ctx }) {
 		.bind(message, buildSha)
 		.run();
 
-	ctx.waitUntil(
+	waitUntil(
 		sendNotification(env, message, buildSha).catch((err) =>
 			console.error("feedback email failed:", err),
 		),
