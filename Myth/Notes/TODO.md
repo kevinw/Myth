@@ -20,7 +20,6 @@
 - subtle light overlay for any room exit leading to another room
 - add coins/crystals/doodads for hiding in secret areas
 - an MP hiding in the dual grid, activated by something
-- water physics
 - LayerOverride (save-game wide toggle for any entity value)
 - groups of blocks get a reflection direction
 - create decals for breakable walls

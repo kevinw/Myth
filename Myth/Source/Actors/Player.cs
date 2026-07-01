@@ -127,6 +127,7 @@ public abstract class Pawn : Actor
 	protected bool grounded;
 	protected bool inWater;
 	protected bool atWaterSurface; // torso submerged but head is above the waterline
+	float airBubbleTimer;
 	// GetWallJumpDirection runs two solid-overlap probes and is called up to 3x per
 	// Update (gravity wall-hug, NormalState wall-slide, jump handling). Position is
 	// fixed for the whole Update after Move() runs, and each pawn only queries it from
@@ -204,6 +205,7 @@ public abstract class Pawn : Actor
 		waterBounds = waterBounds.Inflate(8);
 		inWater = Game.IsWaterAt(waterBounds.Center);
 		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
+		UpdateAirBubbles();
 
 		wallSliding = false;
 		switch (State)
@@ -769,6 +771,27 @@ public abstract class Pawn : Actor
 
 	bool IsWallHugging(int wallJumpDirection)
 		=> wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
+
+	static float AirBubbleIntervalMin => 0.5f;
+	static float AirBubbleIntervalMax => 1.8f;
+
+	void UpdateAirBubbles()
+	{
+		// The nav-graph build steps throwaway pawns through Pawn.Update; don't spawn real
+		// bubbles into the room during that simulation.
+		if (!inWater || Game.Simulating)
+			return;
+
+		airBubbleTimer -= Time.Delta;
+		if (airBubbleTimer > 0)
+			return;
+		airBubbleTimer = AirBubbleIntervalMin + Random.Shared.NextSingle() * (AirBubbleIntervalMax - AirBubbleIntervalMin);
+
+		var bounds = Hitbox.Rect + Position;
+		var spawn = new Point2(bounds.Center.X + Random.Shared.Next(-2, 3), bounds.Top + 2);
+		if (Game.IsWaterAt(spawn))
+			Game.Create<AirBubble>(spawn);
+	}
 }
 
 [GameActor(HideFromPalette = true)]
@@ -1492,21 +1515,31 @@ public partial class Player : Pawn
 		var playerScale = new Vector2((int)Facing * Squish.X, Squish.Y);
 		var rootPosition = (Shift + socketPosition - Origin) * playerScale;
 
-		Vector2 position, normal;
+		Vector2 position;
 		float rotation;
 		if (PerfToggles.HatPhysics)
 		{
 			position = rootPosition + (PerfToggles.HatPhysics ? hatOffset : new());
-			normal = socket.Normal * playerScale;
+			var normal = socket.Normal * playerScale;
 			rotation = MathF.Atan2(normal.Y, normal.X) - MathF.PI * 0.5f + (PerfToggles.HatPhysics ? hatAngle : new());
 		}
 		else
 		{
 			position = rootPosition;
-			normal = new(0, 1);
 			rotation = 0;
 		}
-		batcher.Image(subtexture, position, hatSpriteOrigin, new Vector2((int)Facing, 1), rotation, color);
+
+		var hatFacing = Facing;
+		// a few animation frames are facing Facing but the head is turned the other way
+		if (Animation.Name is "jump_turn" or "skid")
+		{
+			hatFacing = -hatFacing;
+			position.X -= Facing; // visual tweak
+		}
+
+		// TODO: represent visually somehoe in the hat when you cannot burrow here by checking CanBurrow() and changing the color etc?
+
+		batcher.Image(subtexture, position, hatSpriteOrigin, new Vector2((int)hatFacing, 1), rotation, color);
 	}
 
 	void UpdateLightPosition()
