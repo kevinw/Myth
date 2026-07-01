@@ -146,11 +146,13 @@ public sealed class Navigator(Pawn owner)
 			return true;
 		}
 
-		if (TryNavigateSameSurface(graph, target, false, out moveX, out moveY))
+		// Same-surface walking is for dry land; while submerged it would snap Bud to a nearby
+		// standable ledge and stall him bobbing there instead of following the swim path.
+		if (!owner.InWater && TryNavigateSameSurface(graph, target, false, out moveX, out moveY))
 			return true;
 
-		var start = graph.FindNearestNode(Position, NavSearchDistance);
-		graph.FindNearestNodes(target, GoalNodeSearchDistance, goalCandidates);
+		var start = graph.FindNearestNode(Position, NavSearchDistance, includeSwim: true);
+		graph.FindNearestNodes(target, GoalNodeSearchDistance, goalCandidates, includeSwim: true);
 		if (!start.HasValue || goalCandidates.Count <= 0)
 		{
 			SetDebugNavState("no node");
@@ -250,6 +252,12 @@ public sealed class Navigator(Pawn owner)
 			case PlatformNavGraph.EdgeKind.RoomExit:
 				moveX = MoveTowardNavTarget(edgeTarget);
 				moveY = 0;
+				break;
+
+			case PlatformNavGraph.EdgeKind.Swim:
+				(moveX, moveY, jumpPressed) = to.Kind == PlatformNavGraph.NodeKind.Swim
+					? SwimSteer(graph.Nodes[edge.From], to) // toward the portal, or into water from land
+					: SwimHopOutToward(graph.Nodes[edge.From], to.Position); // exit: rise, hop out, air-steer to land
 				break;
 
 			default:
@@ -466,7 +474,10 @@ public sealed class Navigator(Pawn owner)
 			return false;
 
 		moveX = MathF.Abs(dx) > NavNodeReachDistance * 0.5f ? Math.Sign(dx) : 0;
-		if (IsGrounded)
+		// In water, pressing jump strokes upward while submerged and becomes a full launch at
+		// the surface, so a goal within hop range above the water is reached by holding jump
+		// as Bud rises to the surface and hops out through it.
+		if (IsGrounded || owner.InWater)
 			jumpPressed = true;
 
 		navPath.Clear();
@@ -552,6 +563,97 @@ public sealed class Navigator(Pawn owner)
 		if (MathF.Abs(dx) > NavNodeReachDistance * 0.5f)
 			return Math.Sign(dx);
 		return 0;
+	}
+
+	// Swim toward the target area: steer horizontally to the nearest point inside it (which
+	// sits on the shared portal face when the area is adjacent), and stroke up (jump) when
+	// that point is above. Sinking downward needs no input — gravity handles it.
+	(int MoveX, int MoveY, bool JumpPressed) SwimSteer(PlatformNavGraph.Node from, PlatformNavGraph.Node to)
+	{
+		if (to.Area is not { } toRect)
+			return (0, 0, false);
+
+		Vector2 target;
+		if (from.Area is { } fromRect)
+		{
+			// Head for the actual opening between the two areas, nudged just past it straight
+			// through the shared face (perpendicular only — a diagonal nudge toward the far
+			// area's center adds a false vertical pull that sends Bud jumping into the ceiling
+			// beside a side-by-side portal instead of swimming across through it).
+			var portal = SwimPortalMidpoint(fromRect, toRect);
+			target =
+				fromRect.Right == toRect.Left ? portal + new Vector2(NavNodeReachDistance, 0) :
+				toRect.Right == fromRect.Left ? portal - new Vector2(NavNodeReachDistance, 0) :
+				fromRect.Bottom == toRect.Top ? portal + new Vector2(0, NavNodeReachDistance) :
+				portal - new Vector2(0, NavNodeReachDistance);
+		}
+		else
+		{
+			// Entering from a land node: aim a bit inside the area so the arrival deadzone
+			// doesn't stop Bud on the rim before he drops in.
+			var insetX = Math.Min(NavNodeReachDistance, toRect.Width / 2);
+			var insetY = Math.Min(NavNodeReachDistance, toRect.Height / 2);
+			target = new Vector2(
+				Math.Clamp(Position.X, toRect.Left + insetX, toRect.Right - insetX),
+				Math.Clamp(Position.Y, toRect.Top + insetY, toRect.Bottom - insetY));
+		}
+
+		var moveX = MathF.Abs(target.X - Position.X) > NavNodeReachDistance * 0.5f ? Math.Sign(target.X - Position.X) : 0;
+
+		// A one-tile-tall water passage won't admit the standing body; duck to crawl through
+		// it. Ducking and stroking upward conflict (crawling is a low, grounded move).
+		var moveY = NeedsCrawl(moveX) ? 1 : 0;
+
+		// Only stroke upward once lined up under the target: stroking while still moving across
+		// drives Bud diagonally into the ceiling beside the opening instead of up through it.
+		var aligned = MathF.Abs(target.X - Position.X) <= NavNodeReachDistance;
+		var jump = moveY == 0 && aligned && target.Y < Position.Y - NavNodeReachDistance * 0.5f;
+		return (moveX, moveY, jump);
+	}
+
+	static Vector2 SwimPortalMidpoint(RectInt a, RectInt b)
+	{
+		// Vertical shared face (areas side by side): midpoint runs down the touching edge.
+		if (a.Right == b.Left || b.Right == a.Left)
+		{
+			var x = a.Right == b.Left ? a.Right : a.Left;
+			var top = Math.Max(a.Top, b.Top);
+			var bottom = Math.Min(a.Bottom, b.Bottom);
+			return new Vector2(x, (top + bottom) * 0.5f);
+		}
+		// Horizontal shared face (stacked): midpoint runs along the touching edge.
+		var y = a.Bottom == b.Top ? a.Bottom : a.Top;
+		var left = Math.Max(a.Left, b.Left);
+		var right = Math.Min(a.Right, b.Right);
+		return new Vector2((left + right) * 0.5f, y);
+	}
+
+	// Exit the water onto a land node above. While submerged, keep stroking to rise to the
+	// surface (the stroke becomes a full launch there) while drifting under the reachable part
+	// of the area; the land node often sits over a wall the submerged body can't cross, so the
+	// hop's air control does the sideways reach. Once airborne, steer at the real node.
+	(int MoveX, int MoveY, bool JumpPressed) SwimHopOutToward(PlatformNavGraph.Node from, Vector2 target)
+	{
+		var aimX = owner.InWater && from.Area is { } rect
+			? Math.Clamp(target.X, rect.Left, rect.Right)
+			: target.X;
+		var dx = aimX - Position.X;
+		var moveX = MathF.Abs(dx) > NavNodeReachDistance * 0.5f ? Math.Sign(dx) : 0;
+		var moveY = NeedsCrawl(moveX) ? 1 : 0;
+		var jump = moveY == 0 && owner.InWater;
+		return (moveX, moveY, jump);
+	}
+
+	// True when a low ceiling (solid where the standing body's head would be) sits at or just
+	// ahead of Bud, so he must duck to fit through the gap.
+	bool NeedsCrawl(int moveX)
+	{
+		// Probe the standing head region from where Bud is out to a bit ahead in his travel
+		// direction, so a ceiling he's already under (or about to be) triggers the duck.
+		var lookAhead = moveX * 6;
+		var headProbe = new RectInt(-4 + Math.Min(0, lookAhead), -12, 8 + Math.Abs(lookAhead), 6)
+			+ new Point2((int)Position.X, (int)Position.Y);
+		return Game.OverlapsRoomCollision(headProbe);
 	}
 
 	public bool IsNearNode(Vector2 node)

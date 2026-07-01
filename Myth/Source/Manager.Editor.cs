@@ -4970,6 +4970,7 @@ public partial class Manager
 				PlatformNavGraph.EdgeKind.Jump => ImGuiColor(1.00f, 0.95f, 0.66f, 0.28f),
 				PlatformNavGraph.EdgeKind.Fall => ImGuiColor(1.00f, 0.47f, 0.66f, 0.22f),
 				PlatformNavGraph.EdgeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.45f),
+				PlatformNavGraph.EdgeKind.Swim => ImGuiColor(0.30f, 0.62f, 1.00f, 0.55f),
 				_ => ImGuiColor(0.37f, 0.80f, 0.89f, 0.18f)
 			};
 			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.RoomExit ? 3.0f : 2.0f);
@@ -4987,8 +4988,18 @@ public partial class Manager
 			{
 				PlatformNavGraph.NodeKind.Ledge => ImGuiColor(1.00f, 0.83f, 0.48f, 0.78f),
 				PlatformNavGraph.NodeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.90f),
+				PlatformNavGraph.NodeKind.Swim => ImGuiColor(0.30f, 0.62f, 1.00f, 0.85f),
 				_ => ImGuiColor(0.65f, 0.94f, 0.44f, 0.62f)
 			};
+			// A swim node is a volume, not a point: outline its water area so it reads
+			// as the swimmable region rather than a stray dot in mid-air.
+			if (node.Kind == PlatformNavGraph.NodeKind.Swim && node.Area is { } area)
+			{
+				var tl = GameWorldToImGui(viewport, game, new Vector2(area.X, area.Y));
+				var br = GameWorldToImGui(viewport, game, new Vector2(area.X + area.Width, area.Y + area.Height));
+				draw.AddRectFilled(tl, br, ImGuiColor(0.30f, 0.62f, 1.00f, 0.16f));
+				draw.AddRect(tl, br, color, 0, ImDrawFlags.None, 2.0f);
+			}
 			var radius = node.Kind == PlatformNavGraph.NodeKind.RoomExit ? 7.0f : 4.0f;
 			draw.AddCircleFilled(GameWorldToImGui(viewport, game, node.Position), radius, color, 8);
 		}

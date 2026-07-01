@@ -11,7 +11,10 @@ public sealed class PlatformNavGraph
 		Ground,
 		Landing,
 		Ledge,
-		RoomExit
+		RoomExit,
+		// A volume of water the pawn can swim through, not a standable point. Its bounds
+		// live in Node.Area; Position is the area center. Reached/left via Swim edges.
+		Swim
 	}
 
 	public enum EdgeKind
@@ -20,7 +23,10 @@ public sealed class PlatformNavGraph
 		Crawl,
 		Fall,
 		Jump,
-		RoomExit
+		RoomExit,
+		// Traversal involving water: portals between adjacent swim areas, entering water
+		// from a standable node, or a surface hop-out onto a standable node above.
+		Swim
 	}
 
 	public enum RoomExitKind
@@ -30,7 +36,7 @@ public sealed class PlatformNavGraph
 	}
 
 	public readonly record struct RoomExit(RoomExitKind Kind, string? TargetRoomId, string? TargetActorId, Point2 Direction);
-	public readonly record struct Node(int Id, Vector2 Position, NodeKind Kind, RoomExit? Exit = null, bool RequiresDucking = false);
+	public readonly record struct Node(int Id, Vector2 Position, NodeKind Kind, RoomExit? Exit = null, bool RequiresDucking = false, RectInt? Area = null);
 	public readonly record struct SurfaceSpan(int Id, int Y, int Left, int Right, bool RequiresDucking, int NodeCount);
 	public readonly record struct SurfacePoint(int SpanId, Vector2 Position, float DistanceSquared);
 	public readonly record struct SurfaceEdge(int From, int To, EdgeKind Kind, int FromLeft, int FromRight, int ToLeft, int ToRight, JumpPlan? Jump = null, int NodeEdgeCount = 0);
@@ -148,7 +154,7 @@ public sealed class PlatformNavGraph
 	readonly Dictionary<int, SurfaceEdge> surfacePathCameFrom = [];
 	readonly Dictionary<int, float> surfacePathCostSoFar = [];
 
-	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RoomExits, Ready }
+	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, WaterNodes, RoomExits, Ready }
 
 	BuildPhase phase = BuildPhase.Idle;
 	Game? rebuildGame;
@@ -204,7 +210,7 @@ public sealed class PlatformNavGraph
 
 	public bool IsReady => phase == BuildPhase.Ready;
 
-	public Node? FindNearestNode(Vector2 position, float maxDistance, bool includeRoomExits = false)
+	public Node? FindNearestNode(Vector2 position, float maxDistance, bool includeRoomExits = false, bool includeSwim = false)
 	{
 		Node? nearest = null;
 		var nearestDistanceSquared = maxDistance * maxDistance;
@@ -212,8 +218,10 @@ public sealed class PlatformNavGraph
 		{
 			if (!includeRoomExits && node.Kind == NodeKind.RoomExit)
 				continue;
+			if (!includeSwim && node.Kind == NodeKind.Swim)
+				continue;
 
-			var distanceSquared = Vector2.DistanceSquared(position, node.Position);
+			var distanceSquared = NodeDistanceSquared(node, position);
 			if (distanceSquared >= nearestDistanceSquared)
 				continue;
 
@@ -223,7 +231,7 @@ public sealed class PlatformNavGraph
 		return nearest;
 	}
 
-	public void FindNearestNodes(Vector2 position, float maxDistance, List<Node> results, bool includeRoomExits = false)
+	public void FindNearestNodes(Vector2 position, float maxDistance, List<Node> results, bool includeRoomExits = false, bool includeSwim = false)
 	{
 		results.Clear();
 		var maxDistanceSquared = maxDistance * maxDistance;
@@ -231,13 +239,29 @@ public sealed class PlatformNavGraph
 		{
 			if (!includeRoomExits && node.Kind == NodeKind.RoomExit)
 				continue;
+			if (!includeSwim && node.Kind == NodeKind.Swim)
+				continue;
 
-			if (Vector2.DistanceSquared(position, node.Position) >= maxDistanceSquared)
+			if (NodeDistanceSquared(node, position) >= maxDistanceSquared)
 				continue;
 
 			results.Add(node);
 		}
-		results.Sort((a, b) => Vector2.DistanceSquared(position, a.Position).CompareTo(Vector2.DistanceSquared(position, b.Position)));
+		results.Sort((a, b) => NodeDistanceSquared(a, position).CompareTo(NodeDistanceSquared(b, position)));
+	}
+
+	// A swim node covers a whole water volume, so measure distance to its area (0 when the
+	// point is inside it) rather than to its center. Lets a pawn in the water resolve to
+	// its containing area, and a target above/in water resolve to the area beneath it.
+	static float NodeDistanceSquared(Node node, Vector2 position)
+	{
+		if (node.Kind == NodeKind.Swim && node.Area is { } area)
+		{
+			var dx = MathF.Max(MathF.Max(area.Left - position.X, position.X - area.Right), 0);
+			var dy = MathF.Max(MathF.Max(area.Top - position.Y, position.Y - area.Bottom), 0);
+			return dx * dx + dy * dy;
+		}
+		return Vector2.DistanceSquared(position, node.Position);
 	}
 
 	public SurfacePoint? FindNearestSurface(Vector2 position, float maxDistance)
@@ -510,6 +534,10 @@ public sealed class PlatformNavGraph
 				case BuildPhase.JumpEdges:
 					TickJumpEdges();
 					break;
+				case BuildPhase.WaterNodes:
+					BuildWaterAreaNodes(rebuildGame!, rebuildRoom!);
+					phase = BuildPhase.RoomExits;
+					break;
 				case BuildPhase.RoomExits:
 					BuildRoomExitNodes(rebuildRoom!);
 					phase = BuildPhase.Ready;
@@ -584,8 +612,8 @@ public sealed class PlatformNavGraph
 	// flag real topology changes so we can diff before/after a refactor.
 	void LogGraphSummary()
 	{
-		Span<int> nodeKinds = stackalloc int[4];
-		Span<int> edgeKinds = stackalloc int[5];
+		Span<int> nodeKinds = stackalloc int[5];
+		Span<int> edgeKinds = stackalloc int[6];
 		foreach (var node in Nodes)
 			nodeKinds[(int)node.Kind]++;
 
@@ -626,8 +654,8 @@ public sealed class PlatformNavGraph
 		}
 
 		var avgOutDegree = Nodes.Count > 0 ? Edges.Count / (float)Nodes.Count : 0;
-		Console.WriteLine($"  nodes: Ground {nodeKinds[(int)NodeKind.Ground]}, Landing {nodeKinds[(int)NodeKind.Landing]}, Ledge {nodeKinds[(int)NodeKind.Ledge]}, RoomExit {nodeKinds[(int)NodeKind.RoomExit]}");
-		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}");
+		Console.WriteLine($"  nodes: Ground {nodeKinds[(int)NodeKind.Ground]}, Landing {nodeKinds[(int)NodeKind.Landing]}, Ledge {nodeKinds[(int)NodeKind.Ledge]}, RoomExit {nodeKinds[(int)NodeKind.RoomExit]}, Swim {nodeKinds[(int)NodeKind.Swim]}");
+		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}, Swim {edgeKinds[(int)EdgeKind.Swim]}");
 		Console.WriteLine($"  components {components}, isolated {isolated}, total edge length {totalLength:0}, avg out-degree {avgOutDegree:0.00}");
 		if (components > 1)
 			LogComponentBounds(parent);
@@ -763,7 +791,14 @@ public sealed class PlatformNavGraph
 			{
 				var position = new Point2(x, sampleY);
 				if (TryGetStandableProbe(rebuildGame!, position, out var requiresDucking))
+				{
+					// Skip footing that's underwater: standing there is really swimming, and
+					// the dry-land Walk/Jump edges built from it would be physically wrong.
+					// The swim-area nodes cover the water; footing at/above the surface stays.
+					if (IsWaterTileAtWorld(rebuildRoom!, position + new Point2(0, -Game.TileSize / 2)))
+						continue;
 					AddNode(position, IsLedge(rebuildGame!, position) ? NodeKind.Ledge : NodeKind.Ground, requiresDucking: requiresDucking);
+				}
 			}
 			sampleX = sampleBounds.Left + SampleStep / 2;
 			sampleY++;
@@ -776,7 +811,7 @@ public sealed class PlatformNavGraph
 	{
 		if (nextJumpSourceId >= Nodes.Count)
 		{
-			phase = BuildPhase.RoomExits;
+			phase = BuildPhase.WaterNodes;
 			return;
 		}
 
@@ -852,7 +887,7 @@ public sealed class PlatformNavGraph
 		}
 
 		if (nextJumpSourceId >= Nodes.Count)
-			phase = BuildPhase.RoomExits;
+			phase = BuildPhase.WaterNodes;
 	}
 
 	int AddNode(Point2 position, NodeKind kind, RoomExit? exit = null, bool requiresDucking = false)
@@ -869,6 +904,196 @@ public sealed class PlatformNavGraph
 		Nodes.Add(new(id, position, kind, exit, requiresDucking));
 		nodeLookup[position] = id;
 		return id;
+	}
+
+	readonly List<int> swimNodeIds = [];
+
+	// Minimum length of the open face two swim areas must share to be joined by a portal
+	// (so a pawn can actually fit through the gap between the obstacles that split them).
+	static int SwimPortalMinSpan => Game.TileSize;
+	// How far above a water surface a standable node can sit and still be dropped in from
+	// (enter) or hopped out onto (exit). Exit tracks the pawn's surface-hop reach.
+	static int SwimEnterDropMax => 2 * Game.TileSize;
+	static int SwimExitHopMax => 40;
+
+	int AddSwimNode(RectInt area)
+	{
+		var id = Nodes.Count;
+		var center = new Vector2(area.X + area.Width / 2f, area.Y + area.Height / 2f);
+		Nodes.Add(new Node(id, center, NodeKind.Swim, Area: area));
+		swimNodeIds.Add(id);
+		return id;
+	}
+
+	// Portal edges between swim areas that share a wide-enough open face. Areas from the
+	// same connected pool touch face-to-face where the greedy decomposition split them;
+	// areas separated by solid obstacles don't touch, so they stay unconnected.
+	void BuildWaterEdges(Game game, Room room)
+	{
+		for (var i = 0; i < swimNodeIds.Count; i++)
+			for (var j = i + 1; j < swimNodeIds.Count; j++)
+			{
+				if (Nodes[swimNodeIds[i]].Area is not { } a || Nodes[swimNodeIds[j]].Area is not { } b)
+					continue;
+				if (!SwimAreaTraversable(game, a) || !SwimAreaTraversable(game, b))
+					continue;
+				if (!SwimAreasConnected(a, b))
+					continue;
+				AddEdge(swimNodeIds[i], swimNodeIds[j], EdgeKind.Swim);
+				AddEdge(swimNodeIds[j], swimNodeIds[i], EdgeKind.Swim);
+			}
+
+		// Bridge the swim maze to the standable graph: a land node at a water rim can be
+		// dropped/stepped into (enter), and one just above the surface can be hopped out
+		// onto (exit). Without these the swim areas stay their own island.
+		foreach (var swimId in swimNodeIds)
+		{
+			if (Nodes[swimId].Area is not { } area || !SwimAreaTraversable(game, area))
+				continue;
+			foreach (var node in Nodes)
+			{
+				if (node.Kind is NodeKind.Swim or NodeKind.RoomExit)
+					continue;
+				if (CanEnterWater(node, area))
+					AddEdge(node.Id, swimId, EdgeKind.Swim);
+				if (CanExitWater(game, room, area, node))
+					AddEdge(swimId, node.Id, EdgeKind.Swim);
+			}
+		}
+
+	}
+
+	// A one-tile-tall water area is only passable as a crawl tunnel, which needs solid floor
+	// to duck-walk on. Floorless one-tile gaps (open water above and below) can't be swum
+	// through standing nor crawled, so they aren't real passages — leave them unconnected.
+	static bool SwimAreaTraversable(Game game, RectInt area)
+	{
+		if (area.Height > Game.TileSize)
+			return true;
+		// Crawlable only with a continuous solid floor under the whole span; a single gap
+		// below means open water there, so it's a floorless squeeze rather than a tunnel.
+		for (var x = area.Left; x < area.Right; x += Game.TileSize)
+			if (!OverlapsCollision(game, new RectInt(x + 1, area.Bottom, Game.TileSize - 2, 2)))
+				return false;
+		return true;
+	}
+
+	// A land node at/just above the water rim, horizontally over or beside the area, so the
+	// pawn can step off and sink in.
+	static bool CanEnterWater(Node node, RectInt area)
+	{
+		var x = node.Position.X;
+		var y = node.Position.Y;
+		return x >= area.Left - Game.TileSize && x <= area.Right + Game.TileSize
+			&& y <= area.Top + 4 && y >= area.Top - SwimEnterDropMax;
+	}
+
+	// A land node above the water within hop-out reach, at a spot where the area's top is an
+	// actual air-water surface. If solid caps the water there it's a hop into rock; if more
+	// water sits above, that's an interior boundary between stacked areas, not a place the pawn
+	// can surface and climb out.
+	static bool CanExitWater(Game game, Room room, RectInt area, Node node)
+	{
+		var x = node.Position.X;
+		var y = node.Position.Y;
+		// Rim nodes sit at the waterline (same level as the surface) — you climb out sideways —
+		// up to a hop above, so allow from just below the surface to SwimExitHopMax above.
+		if (!(x >= area.Left - Game.TileSize && x <= area.Right + Game.TileSize
+			&& y <= area.Top + 2 && area.Top - y <= SwimExitHopMax))
+			return false;
+
+		var probeX = Math.Clamp((int)x, area.Left + 2, area.Right - 2);
+		if (OverlapsCollision(game, new RectInt(probeX - 2, area.Top - Game.TileSize, 4, Game.TileSize)))
+			return false;
+		return !IsWaterTileAtWorld(room, new Point2(probeX, area.Top - Game.TileSize / 2));
+	}
+
+	static bool IsWaterTileAtWorld(Room room, Point2 world)
+	{
+		var local = world - room.WorldBounds.TopLeft;
+		var tile = new Point2(
+			(int)MathF.Floor(local.X / (float)Game.TileSize),
+			(int)MathF.Floor(local.Y / (float)Game.TileSize));
+		var entry = room.GetEntry(tile) ?? room.GetBackgroundEntry(tile);
+		return entry is { SurfaceType: Factory.WaterSurfaceType };
+	}
+
+	static bool SwimAreasConnected(RectInt a, RectInt b)
+	{
+		// Side-by-side: touch along a vertical face, overlap measured in Y.
+		if (a.Right == b.Left || b.Right == a.Left)
+			return Math.Min(a.Bottom, b.Bottom) - Math.Max(a.Top, b.Top) >= SwimPortalMinSpan;
+		// Stacked: touch along a horizontal face, overlap measured in X.
+		if (a.Bottom == b.Top || b.Bottom == a.Top)
+			return Math.Min(a.Right, b.Right) - Math.Max(a.Left, b.Left) >= SwimPortalMinSpan;
+		return false;
+	}
+
+	// Turn the room's water tiles into a small set of rectangular swim-area nodes. Greedy
+	// maximal-rectangle decomposition (grow right across the row, then down while the full
+	// width stays water) so an open pool collapses to a handful of areas, not one per tile.
+	void BuildWaterAreaNodes(Game game, Room room)
+	{
+		var w = room.Size.X;
+		var h = room.Size.Y;
+		if (w <= 0 || h <= 0)
+			return;
+
+		swimNodeIds.Clear();
+		var top = room.WorldBounds.TopLeft;
+		var water = new bool[w, h];
+		var used = new bool[w, h];
+		var any = false;
+		for (var y = 0; y < h; y++)
+			for (var x = 0; x < w; x++)
+			{
+				var tile = new Point2(x, y);
+				var entry = room.GetEntry(tile) ?? room.GetBackgroundEntry(tile);
+				if (entry is { SurfaceType: Factory.WaterSurfaceType })
+				{
+					water[x, y] = true;
+					any = true;
+				}
+			}
+		if (NavGraphLogging())
+			Console.WriteLine($"[NavGraph] water tiles: {(any ? "found" : "none")} in {room.Id}");
+		if (!any)
+			return;
+
+		for (var y = 0; y < h; y++)
+			for (var x = 0; x < w; x++)
+			{
+				if (!water[x, y] || used[x, y])
+					continue;
+
+				var x2 = x;
+				while (x2 + 1 < w && water[x2 + 1, y] && !used[x2 + 1, y])
+					x2++;
+
+				var y2 = y;
+				while (y2 + 1 < h && RowIsFreeWater(water, used, x, x2, y2 + 1))
+					y2++;
+
+				for (var yi = y; yi <= y2; yi++)
+					for (var xi = x; xi <= x2; xi++)
+						used[xi, yi] = true;
+
+				AddSwimNode(new RectInt(
+					top.X + x * Game.TileSize,
+					top.Y + y * Game.TileSize,
+					(x2 - x + 1) * Game.TileSize,
+					(y2 - y + 1) * Game.TileSize));
+			}
+
+		BuildWaterEdges(game, room);
+	}
+
+	static bool RowIsFreeWater(bool[,] water, bool[,] used, int x0, int x1, int y)
+	{
+		for (var x = x0; x <= x1; x++)
+			if (!water[x, y] || used[x, y])
+				return false;
+		return true;
 	}
 
 	void AddPlatformLandingNodes(Game game)

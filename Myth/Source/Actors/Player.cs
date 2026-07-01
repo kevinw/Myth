@@ -153,6 +153,8 @@ public abstract class Pawn : Actor
 		set => state.Change(value);
 	}
 	public bool IsGrounded => grounded;
+	public bool InWater => inWater;
+	public bool AtWaterSurface => atWaterSurface;
 	public bool IsDucking => ducking;
 	public bool IsWallJumpLocked => wallJumpInputLockTimer > 0;
 
@@ -198,7 +200,7 @@ public abstract class Pawn : Actor
 			jumpBufferTimer = Calc.Approach(jumpBufferTimer, 0, Time.Delta);
 
 		var waterBounds = Hitbox.Rect + Position;
-		waterBounds = waterBounds.Inflate(3);
+		waterBounds = waterBounds.Inflate(8);
 		inWater = Game.IsWaterAt(waterBounds.Center);
 		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
 
