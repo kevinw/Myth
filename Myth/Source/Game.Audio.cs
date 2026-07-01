@@ -91,7 +91,11 @@ public partial class Game
 
 	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
 
+	#if !BROWSER
 	static bool VoiceEnabled = true;
+	#else
+	static bool VoiceEnabled = false;
+	#endif
 
 	void PlayVoiceSyllable(string voice, int syllable, float pitch, float gain, Vector2 position)
 	{
