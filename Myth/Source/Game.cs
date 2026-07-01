@@ -30,7 +30,7 @@ public partial class Game : IDisposable
 	public const int Rows = Height / TileSize + 1;
 	public const int TileSize = 8;
 
-	private const float CameraSlackEpsilon = TileSize;
+	const float CameraSlackEpsilon = TileSize;
 
 	internal readonly Manager Manager;
 	public GameView? View { get; }
@@ -74,9 +74,9 @@ public partial class Game : IDisposable
 	// Transition animation params: written by sim during room transitions, read by
 	// GameView's lerping (Current*Color/Intensity). Exposed internal + forwarded on View.
 	internal float nextRoomEase;
-	private Point2 transitionDirection;
-	private Vector2 transitionCameraFrom;
-	private Vector2 transitionCameraTo;
+	Point2 transitionDirection;
+	Vector2 transitionCameraFrom;
+	Vector2 transitionCameraTo;
 	internal Color transitionBackdropColorFrom;
 	internal Color transitionBackdropColorTo;
 	internal Color transitionBackdropColor2From;
@@ -93,10 +93,10 @@ public partial class Game : IDisposable
 	internal float transitionSunStrengthTo;
 	internal Vector2 transitionSunDirectionFrom;
 	internal Vector2 transitionSunDirectionTo;
-	private float linkedDoorCooldown;
-	private bool roomSwappedThisFrame;
+	float linkedDoorCooldown;
+	bool roomSwappedThisFrame;
 	internal readonly List<Actor> destroying = [];
-	private readonly HashSet<string> sessionDestroyedActors = [];
+	readonly HashSet<string> sessionDestroyedActors = [];
 
 	public bool GymBudDied;
 	public bool GymMode;
@@ -123,9 +123,9 @@ public partial class Game : IDisposable
 	// True when the sim is in a room and not mid-transition: when Manager applies live
 	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
 	internal bool AcceptsLiveInput => room != null && nextRoom == null;
-	private float timeScale = 1.0f;
-	private readonly Point2? respawnPosition;
-	private readonly bool spawnBud;
+	float timeScale = 1.0f;
+	readonly Point2? respawnPosition;
+	readonly bool spawnBud;
 	// In the gym, Bud is the character under test, so it spawns exactly at the player
 	// start (the PlayerStart marker) rather than at an offset follow position.
 	readonly bool spawnBudAtPlayer;
@@ -155,11 +155,11 @@ public partial class Game : IDisposable
 	// The camera hard-follows the player, except a discontinuity in the clamp target (a blocker
 	// cap toggling as you cross a bite's span, or a blocker revealing) is absorbed into a
 	// decaying error so the view glides over the jump instead of snapping.
-	private Vector2 cameraError;
-	private Vector2? previousCameraTarget;
-	private Vector2 previousPlayerPosition;
-	private static float CameraEaseRate => 10f;
-	private const float CameraEaseTriggerEpsilon = 2f;
+	Vector2 cameraError;
+	Vector2? previousCameraTarget;
+	Vector2 previousPlayerPosition;
+	static float CameraEaseRate => 10f;
+	const float CameraEaseTriggerEpsilon = 2f;
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
 	internal float ZoomedWidth => Width / zoomLevel;
@@ -176,8 +176,8 @@ public partial class Game : IDisposable
 	// region (desktop --aspect-four-three, or a portrait mobile-browser canvas) we crop the
 	// sides ("cover" fit) to reclaim vertical space. aspectUncrop in [0,1] lerps the present
 	// scale from cover (0, cropped) to contain (1, full 16:9 letterboxed) while Zoom is held.
-	private const float OutputAspect = (float)Width / Height;
-	private float aspectUncrop = 0f;
+	const float OutputAspect = (float)Width / Height;
+	float aspectUncrop = 0f;
 	public float AspectUncrop => aspectUncrop;
 	// True when the live presentation is narrower than the native 16:9 frame, so cropping applies.
 	public bool AspectCropActive
@@ -196,7 +196,7 @@ public partial class Game : IDisposable
 
 	// Aspect of the region the game is presented into (4:3 on desktop --aspect-four-three, the
 	// live canvas aspect on web). Drives both the side-crop and the camera's visible width.
-	private float PresentAspect
+	float PresentAspect
 	{
 		get
 		{
@@ -213,7 +213,7 @@ public partial class Game : IDisposable
 	// Horizontal slice of the 16:9 frame actually visible after the side-crop, in frame pixels.
 	// Full crop (aspectUncrop 0) -> the 4:3 center; held (aspectUncrop 1) -> the full width.
 	// Mirrors the composite's cover->contain scale so the camera frames exactly what's drawn.
-	private float VisibleCropWidth
+	float VisibleCropWidth
 	{
 		get
 		{
@@ -508,7 +508,7 @@ public partial class Game : IDisposable
 		DisplayMessage($"Time x{timeScale:0.##}");
 	}
 
-	private void UpdateCamera()
+	void UpdateCamera()
 	{
 		if (room == null || nextRoom != null || DraggingPlayer)
 		{
@@ -583,7 +583,7 @@ public partial class Game : IDisposable
 		return cameraBlockerBuffer;
 	}
 
-	private Point2 FindFallbackPlayerPosition(Room forRoom, Point2? direction)
+	Point2 FindFallbackPlayerPosition(Room forRoom, Point2? direction)
 	{
 		var fromLeft = direction?.X > 0;
 		var fromRight = direction?.X < 0;
@@ -752,7 +752,7 @@ public partial class Game : IDisposable
 		return Math.Clamp(value, min, max - viewportSize);
 	}
 
-	private void FinishRoomActivation(RoomChangeKind kind)
+	void FinishRoomActivation(RoomChangeKind kind)
 	{
 		RemoveDestroyedActors();
 		View?.PruneInactiveRoomCaches();
