@@ -46,10 +46,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     // Prevent optimizer from removing unused inputs - D3D12 requires matching signatures
     if (input.Color.x < -1000 && input.Type.x < -1000) discard;
 
-    float2 pixel = screen_pixel(input.Position);
-#if BROWSER
-    pixel.y = TextureSize.y - pixel.y;
-#endif
+    float2 pixel = screen_pixel(input.Position, TextureSize.y);
     float2 lightPosition = LightPositionRadiusHeight.xy;
     float radius = LightPositionRadiusHeight.z;
     float height = LightPositionRadiusHeight.w;

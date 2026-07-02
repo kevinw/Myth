@@ -49,10 +49,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
         input.Type.y * sampled.a * input.Color +
         input.Type.z * input.Color;
 
-    float2 pixel = screen_pixel(input.Position);
-#if BROWSER
-    pixel.y = CoverageSize.y - pixel.y;
-#endif
+    float2 pixel = screen_pixel(input.Position, CoverageSize.y);
     float coverage = Coverage.Sample(CoverageSampler, target_uv(pixel / CoverageSize.xy)).r;
     return color * coverage;
 }

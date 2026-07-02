@@ -114,7 +114,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float family = tile_field_family(tile_field) / 4.0;
     float variant = tile_field.r;
     float zoom = TimePadding.w > 0.0 ? TimePadding.w : 1.0;
-    float2 world_pixel = camera + screen_pixel(input.position) / zoom;
+    float2 world_pixel = screen_to_world(input.position, texture_size, camera, zoom);
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
     float2 tile = floor(pattern_pixel / 8.0);
     float frame = floor(time * 7.0);

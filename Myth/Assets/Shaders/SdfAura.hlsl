@@ -102,7 +102,11 @@ float4 fragment_main(VsOutput input) : SV_Target0
     // ordered Bayer threshold (world-pixel, static) so the fade/ease dissolve as
     // a stipple instead of a smooth alpha ramp; the solid core stays solid.
     float coverage = saturate((A0.y - d) / 3.0) * A1.y;
-    float2 worldPixel = RTopLeft.zw + screen_pixel(input.position) / A1.z;
+    // NOTE: this world-pixel stipple is currently degenerate — the aura passes A1.z (zoom) as 0
+    // (see Player.Aura), so the divide blows up and the dither cutoff never fires. Left as a raw
+    // device pixel (no browser flip, unlike screen_pixel) to preserve exact behavior. TODO: pass a
+    // real zoom + target height from Player.Aura and switch to screen_to_world to re-enable it.
+    float2 worldPixel = RTopLeft.zw + input.position.xy / A1.z;
     if (coverage < bayer4(worldPixel))
         discard;
 

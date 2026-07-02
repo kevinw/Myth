@@ -348,7 +348,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
-    float2 world_pixel = TextureSizeCamera.zw + screen_pixel(input.position) / zoom;
+    float2 world_pixel = screen_to_world(input.position, TextureSizeCamera.xy, TextureSizeCamera.zw, zoom);
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
 
     // Ambient occlusion: darken the light where blurred foreground coverage

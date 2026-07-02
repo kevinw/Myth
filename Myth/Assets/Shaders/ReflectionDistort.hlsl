@@ -57,7 +57,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float distort = DistortMask.Sample(DistortMaskSampler, target_uv(input.TexCoord)).r;
 
-    float2 pixel = screen_pixel(input.Position);
+    float2 pixel = screen_pixel(input.Position, textureSize.y);
     float wave = sin(pixel.y * frequency + time * speed) * amplitude;
     wave += sin(pixel.y * frequency * 2.1 + time * speed * 1.7) * amplitude * 0.35;
 
