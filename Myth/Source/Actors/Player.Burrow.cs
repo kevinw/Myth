@@ -14,7 +14,7 @@ public partial class Player : Pawn
 	static float BurrowClimbSpeedMultiplier => 0.5f; // straight-up wall climb is half speed; 45° lands in between
 													 // The burrow pop is meant to read as stronger than a full held jump: a bigger launch
 													 // velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
-	static float BurrowPopForce => JumpForce * 0.80f;
+	static float BurrowPopForce => JumpForce * 1.18f;
 	static float BurrowPopTime => JumpTime * 0.9f;
 	static float BurrowWallSlideLaunch => JumpForce * 1.2f; // strong upward velocity when a wall climb pops into a slide
 	const int BurrowSubmergeDepth = 4;
@@ -313,7 +313,12 @@ public partial class Player : Pawn
 			var travel = burrowHeading != Point2.Zero
 				? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
 				: Vector2.Zero;
+
+			// "Cancel" a big popup jump by holding Down on the Dpad
 			Velocity = -exitDir * popMagnitude + travel;
+			if (Velocity.Y < 50 && Controls.Move.IntValue.Y == 1)
+				Velocity.Y *= 0.5f;
+
 			// Burrow glide can exceed normal air speed; let the carried horizontal
 			// momentum persist briefly (then normal air clamping reins it in) instead of
 			// being snapped to MaxAirSpeed immediately. Reuses the roll-jump carry, whose
