@@ -1699,6 +1699,15 @@ public partial class Game : IDisposable
 		var playerPosition = GetFirst<Player>()?.Position ?? (Vector2)to.WorldBounds.Center;
 		var change = new RoomChange(from, to, kind, direction, playerPosition);
 		RoomChanged?.Invoke(change);
+		if (kind == RoomChangeKind.EdgeTransition && !Simulating)
+		{
+			string RoomChangeDirection = "";
+			if (direction.X > 0) RoomChangeDirection = "GoingRight";
+			else if (direction.X < 0) RoomChangeDirection = "GoingLeft";
+			else if (direction.Y > 0) RoomChangeDirection = "GoingDown";
+			else if (direction.Y < 0) RoomChangeDirection = "GoingUp";
+			PlayAudioEvent("room_change", "RoomChangeDirection", RoomChangeDirection);
+		}
 		OnStoryRoomChanged(change);
 	}
 
