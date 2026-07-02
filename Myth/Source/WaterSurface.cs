@@ -19,26 +19,26 @@ public sealed class WaterSurface
 	const int SamplesPerTile = (int)(Game.TileSize / SampleSpacing);
 
 	// Wave tuning. These are feel-knobs; expect to tweak once it's on screen.
-	const float Spread = 42f;      // neighbor tension coupling (wave propagation speed)
-	const float SpringK = 12f;     // restoring pull toward the flat rest line
-	const float Damping = 1.6f;    // exponential velocity damping (per second)
-	const float MaxHeight = 5f;    // clamp on displacement so a big plunge can't tear it
-	const int SplashKernel = 3;    // samples each side of the crossing point that get kicked
-	const float SplashVelPerSpeed = 0.45f; // crossing speed -> injected velocity magnitude
-	const float MaxSplashVel = 90f;
+	static float Spread => 700f;      // neighbor tension coupling (wave propagation speed)
+	static float SpringK => 50f;     // restoring pull toward the flat rest line
+	static float Damping => 0.5f;    // exponential velocity damping (per second)
+	static float MaxHeight => 5.5f;    // clamp on displacement so a big plunge can't tear it
+	static int SplashKernel => 5;    // samples each side of the crossing point that get kicked
+	static float SplashVelPerSpeed => 0.65f; // crossing speed -> injected velocity magnitude
+	static float MaxSplashVel => 90f;
 
 	// Ambient idle motion, added at render time only (kept out of the sim so still water
 	// keeps drifting instead of decaying dead-flat).
-	const float AmbientAmplitude = 0.5f;
-	const float AmbientWavelength = 22f;
-	const float AmbientSpeed = 11f;
+	static float AmbientAmplitude => 0.0005f;
+	static float AmbientWavelength => 22f;
+	static float AmbientSpeed => 11f;
 
 	// Flat, uniform tint (straight alpha). Deliberately no vertical gradient: a depth-based
 	// "lighting" gradient didn't match the scene's real lights and produced harsh vertical
 	// seams on exposed shafts. One color for the whole body, exposed or capped; the only
 	// bright accent is the thin foam line riding the animated surface.
 	static readonly Color BodyColor = new(0.09f, 0.28f, 0.52f, 0.5f);
-	static readonly Color FoamColor = new(0.55f, 0.85f, 1.0f, 0.5f);
+	static readonly Color FoamColor = new(0.35f, 0.65f, 0.9f, 0.5f);
 
 	public readonly int Left;        // world X of sample 0
 	public readonly float SurfaceY;  // rest world Y of the top edge
