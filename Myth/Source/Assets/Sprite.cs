@@ -75,15 +75,15 @@ public class Sprite(string name, Vector2 origin)
 		float w = sub.Source.Width;
 		float h = sub.Source.Height;
 
-		// TODO: figure out how to round correctly here.
-		if (left != Math.Floor(left) || top != Math.Floor(top))
-			Console.WriteLine($"WARNING: Sprite '{Name}' origin is not integer-aligned: left={left}, top={top}");
-
+		// Snap derived anchors to the pixel grid. An odd width/height puts the true center on a
+		// half-pixel, and drawing there smears the sprite across texel boundaries; round to the
+		// nearest whole pixel so it stays crisp (landing up to half a pixel off exact-center is
+		// fine — off the grid isn't). Even dimensions already land on integers and are unchanged.
 		return anchor switch
 		{
 			SpriteAnchor.TopLeft => new Vector2(left, top),
-			SpriteAnchor.Center => new Vector2(left + w / 2f, top + h / 2f),
-			SpriteAnchor.BottomCenter => new Vector2(left + w / 2f, top + h),
+			SpriteAnchor.Center => new Vector2(MathF.Round(left + w / 2f), MathF.Round(top + h / 2f)),
+			SpriteAnchor.BottomCenter => new Vector2(MathF.Round(left + w / 2f), top + h),
 			_ => Origin,
 		};
 	}

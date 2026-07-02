@@ -17,6 +17,7 @@ public class Actor
 		Player = 1 << 2,
 		Enemy = 1 << 3,
 		Hazard = 1 << 4,
+		Destructible = 1 << 5,
 	}
 
 	[NoSerialize] public Game Game = null!;
@@ -196,6 +197,11 @@ public class Actor
 		foreach (var other in Game.Actors)
 		{
 			if (other is Grid && other.Mask.Has(Masks.Solid))
+				continue;
+
+			// An actor being destroyed this frame no longer blocks: its removal is deferred to the
+			// next frame (see Game.RemoveDestroyedActors), but it's already logically gone.
+			if (Game.destroying.Contains(other))
 				continue;
 
 			if (other != this && other.Mask.Has(mask) && OverlapsAny(offset, other))

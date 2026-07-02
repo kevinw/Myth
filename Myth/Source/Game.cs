@@ -98,6 +98,14 @@ public partial class Game : IDisposable
 	internal readonly List<Actor> destroying = [];
 	readonly HashSet<string> sessionDestroyedActors = [];
 
+	// Playthrough-durable pickup counts, keyed by PickupKind. Lives on the Game so it survives
+	// room transitions and the player's death/respawn (both reuse this instance); it resets only
+	// when a fresh Game is created to start play. Indexed by (int)kind.
+	readonly int[] pickupCounts = new int[Enum.GetValues<PickupKind>().Length];
+	public int PickupCount(PickupKind kind) => pickupCounts[(int)kind];
+	public void AddPickup(PickupKind kind, int amount = 1)
+		=> pickupCounts[(int)kind] = Math.Max(0, pickupCounts[(int)kind] + amount);
+
 	public bool GymBudDied;
 	public bool GymMode;
 	public Actor? GymTarget;

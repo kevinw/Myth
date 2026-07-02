@@ -1,5 +1,9 @@
 # TODO
 
+- attenuate landing sound by y velocity
+- when falling right, if you're holding down and left, don't start a roll. likewise with falling left  and holding down/right
+- max fall speed when wall sliding lower
+- burrow leap coyote time: if you burrow right, and "miss" the jump by letting your burrow point go down the corner, still get launched up as if you had timed it right.
 - rolling down a 45degree slope needs to "stick" more
 - make Bud's "fallback_walk" more interesting. maybe we walks slowly. investigates different points.
 - make rim_light a uniform; investigate less harsh ways of lighting things

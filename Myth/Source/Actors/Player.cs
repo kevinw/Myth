@@ -1349,7 +1349,7 @@ public partial class Player : Pawn
 			it += Position;
 
 			Game.CollisionRectsThisFrame.Add(it);
-			if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard) is { } hit)
+			if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible) is { } hit)
 				Hit(hit);
 
 			Game.BreakTiles(it);

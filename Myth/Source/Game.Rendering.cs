@@ -210,6 +210,9 @@ public sealed partial class GameView
 
 		if (false && showHud && debugView is DebugView.None or DebugView.CollisionRects)
 			DrawPlayerHud(destination, viewport, scissor);
+
+		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+			DrawCurrencyHud(destination, viewport, scissor);
 	}
 
 	Target CompositeRawWorld()
@@ -414,6 +417,58 @@ public sealed partial class GameView
 			Batcher.PopMaterial();
 		Batcher.PopMatrix();
 
+		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
+		Batcher.Clear();
+	}
+
+	// Top-left readout of the playthrough-durable Mycelon count: the pickup's icon (falls back to
+	// the airbubble sprite until mycelon.ase exists) followed by the number. It eases down from
+	// above the top edge whenever the count changes (a pickup or spend), holds briefly, then eases
+	// back up to hide — a transient notification rather than a permanent gauge.
+	float currencyReveal;                     // 0 = fully hidden above the top edge, 1 = fully revealed
+	float currencyHold;                       // seconds left to stay revealed after the last count change
+	int currencyLastCount;                    // last count seen, to detect pickups/spends
+	static float CurrencyRevealSpeed => 3.5f; // reveal/hide eases over ~0.3s
+	static float CurrencyHoldTime => 2f;      // stay revealed this long after a change, then ease back up
+
+	void DrawCurrencyHud(IDrawableTarget target, in RectInt viewport, RectInt? scissor)
+	{
+		var count = game.PickupCount(PickupKind.Mycelon);
+		if (count != currencyLastCount)
+		{
+			currencyHold = CurrencyHoldTime; // a pickup (or spend) re-reveals and restarts the timer
+			currencyLastCount = count;
+		}
+		currencyHold = Calc.Approach(currencyHold, 0, Time.Delta);
+
+		currencyReveal = Calc.Approach(currencyReveal, currencyHold > 0 ? 1f : 0f, CurrencyRevealSpeed * Time.Delta);
+		if (currencyReveal <= 0.001f)
+			return;
+
+		// Smoothstep the linear progress into an ease, then drive a vertical slide (starting above
+		// the top edge, where the viewport scissor clips it) plus a matching fade.
+		var ease = currencyReveal * currencyReveal * (3f - 2f * currencyReveal);
+		var y = Calc.Lerp(-16f, 4f, ease);
+		var tint = Color.White * ease;
+
+		var scale = viewport.Height / (float)Height;
+		Batcher.PushMatrix(
+			Matrix3x2.CreateScale(scale) *
+			Matrix3x2.CreateTranslation(viewport.Left, viewport.Top));
+
+		var x = 4f;
+		var icon = Assets.GetSprite("mycelon") ?? Assets.GetSprite("airbubble");
+		if (icon is { Frames.Count: > 0 })
+		{
+			var sub = icon.Frames[0].Subtexture;
+			Batcher.Image(sub, new Vector2(x, y), Vector2.Zero, Vector2.One, 0, tint);
+			x += sub.Width + 3;
+		}
+
+		var font = Assets.Font;
+		Batcher.Text(font, count.ToString(), new Vector2(x, y), font.Size, tint);
+
+		Batcher.PopMatrix();
 		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
 		Batcher.Clear();
 	}

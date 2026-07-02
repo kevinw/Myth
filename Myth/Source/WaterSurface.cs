@@ -26,6 +26,8 @@ public sealed class WaterSurface
 	static int SplashKernel => 5;    // samples each side of the crossing point that get kicked
 	static float SplashVelPerSpeed => 0.65f; // crossing speed -> injected velocity magnitude
 	static float MaxSplashVel => 90f;
+	static int SpongeSamples => 8;     // width of the edge absorption layer, in samples (~1 tile)
+	static float SpongeStrength => 10f; // extra per-second attenuation at the very edge, easing to 0 inward
 
 	// Ambient idle motion, added at render time only (kept out of the sim so still water
 	// keeps drifting instead of decaying dead-flat).
@@ -102,12 +104,18 @@ public sealed class WaterSurface
 			velocity[i] += (tension * Spread - height[i] * SpringK) * dt;
 		}
 
-		// Damp and integrate.
+		// Damp and integrate. Near the ends a "sponge" layer adds extra attenuation that eases
+		// to zero inward, so waves are absorbed into the boundary instead of reflecting back and
+		// piling into a tall crest against the wall. The same factor pulls height toward the rest
+		// line, so the surface smoothly meets the edge flat (no hard pinch).
 		var damp = MathF.Exp(-Damping * dt);
 		for (var i = 0; i < n; i++)
 		{
-			velocity[i] *= damp;
-			height[i] = Math.Clamp(height[i] + velocity[i] * dt, -MaxHeight, MaxHeight);
+			var edge = Math.Min(i, n - 1 - i);
+			var s = edge < SpongeSamples ? 1f - edge / (float)SpongeSamples : 0f;
+			var atten = s > 0f ? MathF.Exp(-SpongeStrength * s * dt) : 1f;
+			velocity[i] *= damp * atten;
+			height[i] = Math.Clamp((height[i] + velocity[i] * dt) * atten, -MaxHeight, MaxHeight);
 		}
 	}
 
