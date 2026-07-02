@@ -466,7 +466,10 @@ public sealed partial class GameView
 		}
 
 		var font = Assets.Font;
-		Batcher.Text(font, count.ToString(), new Vector2(x, y), font.Size, tint);
+		if (font != null)
+		{
+			Batcher.Text(font, count.ToString(), new Vector2(x, y), font.Size, tint);
+		}
 
 		Batcher.PopMatrix();
 		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
