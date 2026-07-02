@@ -1356,22 +1356,32 @@ public partial class Player : Pawn
 			it += Position;
 
 			Game.CollisionRectsThisFrame.Add(it);
-			if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible) is { } hit)
-				Hit(hit);
-
-			Game.BreakTiles(it);
-
-			foreach (var actor in Game.Actors.ToArray())
+			if (!attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
 			{
-				if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+				attackBlocked = true;
+				Play(GetAttackAnimation(), false);
+				AudioEvent("player/sword_block");
+			}
+
+			if (!attackBlocked)
+			{
+				if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible) is { } hit)
+					Hit(hit);
+
+				Game.BreakTiles(it);
+
+				foreach (var actor in Game.Actors.ToArray())
 				{
-					nca.Cut(it);
-					nca.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
-				}
-				else if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
-				{
-					fungus.Cut(it);
-					fungus.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
+					if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+					{
+						nca.Cut(it);
+						nca.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
+					}
+					else if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
+					{
+						fungus.Cut(it);
+						fungus.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
+					}
 				}
 			}
 		}
@@ -1407,8 +1417,20 @@ public partial class Player : Pawn
 		if (Facing == Signs.Negative)
 			hitbox.X = -(hitbox.X + hitbox.Width);
 		hitbox += Position;
+		return IsAttackBlocked(hitbox);
+	}
 
-		return Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold;
+	bool IsAttackBlocked(in RectInt hitbox)
+	{
+		if (Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold)
+			return true;
+
+		var attackPath = hitbox.Conflate(Position);
+		foreach (var actor in Game.Actors)
+			if (actor != this && !Game.destroying.Contains(actor) && actor.BlocksAttack(this, attackPath))
+				return true;
+
+		return false;
 	}
 
 	static RectInt GetAttackHitbox(bool duckingAttack)

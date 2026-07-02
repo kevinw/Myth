@@ -1,5 +1,7 @@
 # TODO
 
+- walking up a 45 degree slope looks weird because x velocity is not adjusted
+- death is weird, you can fall through jumpthrus into water; maybe simplify
 - attenuate landing sound by y velocity
 - store fall height in burrow; pop out with that height
 - rolling down a 45degree slope needs to "stick" more

@@ -175,18 +175,18 @@ public partial class Game
 	// each named value needs its own parameter, hence the arity overloads.
 	public void Show<T>(T value,
 		[CallerArgumentExpression(nameof(value))] string expr = "")
-		=> DisplayMessage($"{expr}: {value}");
+		=> DisplayMessage($"{expr}: {value}", print: false);
 
 	public void Show<T1, T2>(T1 a, T2 b,
 		[CallerArgumentExpression(nameof(a))] string exprA = "",
 		[CallerArgumentExpression(nameof(b))] string exprB = "")
-		=> DisplayMessage($"{exprA}: {a}   {exprB}: {b}");
+		=> DisplayMessage($"{exprA}: {a}   {exprB}: {b}", print: false);
 
 	public void Show<T1, T2, T3>(T1 a, T2 b, T3 c,
 		[CallerArgumentExpression(nameof(a))] string exprA = "",
 		[CallerArgumentExpression(nameof(b))] string exprB = "",
 		[CallerArgumentExpression(nameof(c))] string exprC = "")
-		=> DisplayMessage($"{exprA}: {a}   {exprB}: {b}   {exprC}: {c}");
+		=> DisplayMessage($"{exprA}: {a}   {exprB}: {b}   {exprC}: {c}", print: false);
 
 	static string DebugViewName(DebugView view)
 		=> view switch

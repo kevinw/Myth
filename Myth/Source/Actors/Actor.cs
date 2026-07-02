@@ -388,6 +388,8 @@ public class Actor
 	/// Called when we perform a hit on another actor
 	public virtual void OnPerformHit(Actor hitting) { }
 
+	public virtual bool BlocksAttack(Actor attacker, in RectInt attackPath) => false;
+
 	/// Called ones per frame, updates our Sprite and Timer
 	public virtual void Update()
 	{

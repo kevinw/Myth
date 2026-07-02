@@ -98,6 +98,12 @@
       "Type": "Jumpthru",
       "Position": [208, 104],
       "Size": [48, 8]
+    },
+    {
+      "Id": "c0233b662745c712",
+      "Type": "ShieldKnight",
+      "Position": [252, 104],
+      "Facing": "-"
     }
   ]
 }
