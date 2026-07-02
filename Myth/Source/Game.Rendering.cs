@@ -491,8 +491,10 @@ public sealed partial class GameView
 			return;
 
 		ReflectionScreen.Clear(Color.Transparent);
-		foreach (var rect in room.ReflectionRects)
-			DrawReflectedActors(rect.Bounds, ReflectionSurfaceTop(rect.Bounds), rect.Opacity, skip: null);
+		EnsureReflectionSurfaceTops();
+		var reflectionRects = room.ReflectionRects;
+		for (var i = 0; i < reflectionRects.Count; i++)
+			DrawReflectedActors(reflectionRects[i].Bounds, reflectionSurfaceTops[i], reflectionRects[i].Opacity, skip: null);
 
 		ReflectionMask.Clear(Color.Transparent);
 		foreach (var rect in room.ReflectionRects)
@@ -570,9 +572,18 @@ public sealed partial class GameView
 
 	void CompositeReflections(Target target) => BlitReflections(target, flatOnly: 0.0f);
 
+	// foreach over the List's struct enumerator, not LINQ .Any (which boxes an enumerator each frame).
+	bool HasFlatReflectionRect()
+	{
+		foreach (var r in room!.ReflectionRects)
+			if (!r.Distorted)
+				return true;
+		return false;
+	}
+
 	void CompositeFlatReflections(Target target)
 	{
-		if (room == null || !room.ReflectionRects.Any(r => !r.Distorted))
+		if (room == null || !HasFlatReflectionRect())
 			return;
 		BlitReflections(target, flatOnly: 1.0f);
 	}
@@ -603,34 +614,51 @@ public sealed partial class GameView
 		Batcher.Clear();
 	}
 
-	int ReflectionSurfaceTop(RectInt rect)
+	// Each reflection rect's surface top (the min top of its touching group) depends only on
+	// the static rect geometry, so it's cached per room and recomputed only when the rect list
+	// changes — the old per-frame-per-rect flood-fill allocated a bool[], a Stack, and a closure
+	// on every rect every frame, which dominated allocation in water-heavy rooms.
+	Room? reflectionSurfaceTopsRoom;
+	readonly List<int> reflectionSurfaceTops = [];
+	readonly Stack<int> reflectionFloodPending = new();
+	bool[] reflectionFloodVisited = [];
+
+	void EnsureReflectionSurfaceTops()
 	{
-		if (room == null)
-			return rect.Top;
+		var rects = room!.ReflectionRects;
+		if (reflectionSurfaceTopsRoom == room && reflectionSurfaceTops.Count == rects.Count)
+			return;
 
-		var rects = room.ReflectionRects;
-		var start = rects.FindIndex(r => r.Bounds == rect);
-		if (start < 0)
-			return rect.Top;
+		if (reflectionFloodVisited.Length < rects.Count)
+			reflectionFloodVisited = new bool[rects.Count];
 
-		var visited = new bool[rects.Count];
-		var pending = new Stack<int>();
-		pending.Push(start);
-		visited[start] = true;
+		reflectionSurfaceTops.Clear();
+		for (var i = 0; i < rects.Count; i++)
+			reflectionSurfaceTops.Add(ComputeReflectionSurfaceTop(i));
+		reflectionSurfaceTopsRoom = room;
+	}
 
-		var top = rect.Top;
-		while (pending.Count > 0)
+	int ComputeReflectionSurfaceTop(int start)
+	{
+		var rects = room!.ReflectionRects;
+		Array.Clear(reflectionFloodVisited, 0, rects.Count);
+		reflectionFloodPending.Clear();
+		reflectionFloodPending.Push(start);
+		reflectionFloodVisited[start] = true;
+
+		var top = rects[start].Bounds.Top;
+		while (reflectionFloodPending.Count > 0)
 		{
-			var current = rects[pending.Pop()].Bounds;
+			var current = rects[reflectionFloodPending.Pop()].Bounds;
 			top = Math.Min(top, current.Top);
 
 			for (var i = 0; i < rects.Count; i++)
 			{
-				if (visited[i] || !ReflectionRectsTouch(current, rects[i].Bounds))
+				if (reflectionFloodVisited[i] || !ReflectionRectsTouch(current, rects[i].Bounds))
 					continue;
 
-				visited[i] = true;
-				pending.Push(i);
+				reflectionFloodVisited[i] = true;
+				reflectionFloodPending.Push(i);
 			}
 		}
 

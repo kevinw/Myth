@@ -920,8 +920,8 @@ public partial class Player : Pawn
 		light = Game.Create<Light>(Position, it =>
 		{
 			it.Radius = 37.5f;
-			it.Intensity = 0.45f;
-			it.LightColor = 0xffcfa0;
+			it.Intensity = BaseLightIntensity;
+			it.LightColor = BaseLightColor;
 			it.Height = 16;
 			it.FlickerFrequency = 1.5f;
 			it.FlickerIntensity = 0.02f;
@@ -1604,9 +1604,26 @@ public partial class Player : Pawn
 		batcher.Image(subtexture, position, hatSpriteOrigin, new Vector2((int)hatFacing, 1), rotation, color);
 	}
 
+	// Player light: normally a soft warm glow; while burrowing it swells brighter and shifts
+	// color, lerping in and out so entering/leaving the ground eases rather than snaps.
+	static float BaseLightIntensity => 0.45f;
+	static float BurrowLightIntensity => 0.85f;
+	static Color BaseLightColor => 0xffcfa0;
+	static Color BurrowLightColor => 0xb98cff;
+	static float BurrowLightBlendRate => 6f;
+	float burrowLightBlend;
+
 	void UpdateLightPosition()
 	{
-		light?.Position = Position + new Point2(0, -6);
+		if (light == null)
+			return;
+
+		light.Position = Position + new Point2(0, -6);
+
+		var target = State == States.Burrow ? 1f : 0f;
+		burrowLightBlend = Calc.Approach(burrowLightBlend, target, BurrowLightBlendRate * Time.Delta);
+		light.Intensity = BaseLightIntensity + (BurrowLightIntensity - BaseLightIntensity) * burrowLightBlend;
+		light.LightColor = Color.Lerp(BaseLightColor, BurrowLightColor, burrowLightBlend);
 	}
 
 	public override void Destroyed()
