@@ -34,13 +34,12 @@ fn fragment_main_1() {
     let _e39 = FragmentUniformBlock.FrequencySpeedFlatOnlyPad[0i];
     let _e42 = FragmentUniformBlock.FrequencySpeedFlatOnlyPad[1i];
     let _e45 = FragmentUniformBlock.FrequencySpeedFlatOnlyPad[2i];
-    let _e50 = vec2<f32>(_e22.x, (1f - _e22.y));
-    let _e51 = textureSample(DistortMask, DistortMaskSampler, _e50);
-    let _e56 = ((_e29.y - _e25.y) * _e39);
-    let _e57 = (_e33 * _e42);
-    let _e82 = textureSample(Texture, Sampler, mix(((floor((_e50 * _e30)) + vec2<f32>(0.5f, 0.5f)) / _e30), ((floor(((_e50 + vec2<f32>((((sin((_e56 + _e57)) * _e36) + ((sin(((_e56 * 2.1f) + (_e57 * 1.7f))) * _e36) * 0.35f)) / _e29.x), 0f)) * _e30)) + vec2<f32>(0.5f, 0.5f)) / _e30), vec2(_e51.x)));
-    let _e83 = (_e82 * _e23);
-    out_u002e_var_u002e_SV_Target0_ = vec4<f32>(_e83.x, _e83.y, _e83.z, (_e83.w * mix(1f, (1f - _e51.x), _e45)));
+    let _e46 = textureSample(DistortMask, DistortMaskSampler, _e22);
+    let _e49 = (_e25.y * _e39);
+    let _e50 = (_e33 * _e42);
+    let _e75 = textureSample(Texture, Sampler, mix(((floor((_e22 * _e30)) + vec2<f32>(0.5f, 0.5f)) / _e30), ((floor(((_e22 + vec2<f32>((((sin((_e49 + _e50)) * _e36) + ((sin(((_e49 * 2.1f) + (_e50 * 1.7f))) * _e36) * 0.35f)) / _e29.x), 0f)) * _e30)) + vec2<f32>(0.5f, 0.5f)) / _e30), vec2(_e46.x)));
+    let _e76 = (_e75 * _e23);
+    out_u002e_var_u002e_SV_Target0_ = vec4<f32>(_e76.x, _e76.y, _e76.z, (_e76.w * mix(1f, (1f - _e46.x), _e45)));
     return;
 }
 

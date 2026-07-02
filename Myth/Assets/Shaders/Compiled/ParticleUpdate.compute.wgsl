@@ -96,43 +96,43 @@ fn compute_main_1() {
     var phi_237_: vec2<f32>;
     var phi_273_: f32;
     var phi_330_: bool;
-    var phi_651_: bool;
-    var phi_656_: bool;
-    var phi_661_: bool;
-    var phi_669_: f32;
-    var phi_671_: bool;
-    var phi_712_: bool;
-    var phi_717_: bool;
-    var phi_722_: bool;
-    var phi_730_: f32;
+    var phi_648_: bool;
+    var phi_654_: bool;
+    var phi_660_: bool;
+    var phi_668_: f32;
+    var phi_670_: bool;
+    var phi_708_: bool;
+    var phi_714_: bool;
+    var phi_720_: bool;
+    var phi_728_: f32;
     var local: vec2<f32>;
     var local_1: f32;
     var local_2: vec2<f32>;
-    var phi_746_: bool;
-    var phi_751_: bool;
-    var phi_756_: bool;
-    var phi_764_: f32;
+    var phi_741_: bool;
+    var phi_747_: bool;
+    var phi_753_: bool;
+    var phi_761_: f32;
     var local_3: vec2<f32>;
     var local_4: f32;
     var local_5: vec2<f32>;
+    var phi_774_: bool;
     var phi_780_: bool;
-    var phi_785_: bool;
-    var phi_790_: bool;
-    var phi_798_: f32;
+    var phi_786_: bool;
+    var phi_794_: f32;
     var local_6: vec2<f32>;
     var local_7: f32;
     var local_8: vec2<f32>;
-    var phi_814_: bool;
+    var phi_807_: bool;
+    var phi_813_: bool;
     var phi_819_: bool;
-    var phi_824_: bool;
-    var phi_832_: f32;
+    var phi_827_: f32;
+    var phi_837_: vec2<f32>;
+    var phi_840_: vec2<f32>;
     var phi_842_: vec2<f32>;
+    var phi_843_: f32;
     var phi_845_: vec2<f32>;
-    var phi_847_: vec2<f32>;
-    var phi_848_: f32;
-    var phi_850_: vec2<f32>;
-    var phi_851_: f32;
-    var phi_852_: f32;
+    var phi_846_: f32;
+    var phi_847_: f32;
 
     let _e67 = global;
     switch bitcast<i32>(0u) {
@@ -288,7 +288,7 @@ fn compute_main_1() {
             let _e586 = (_e310.vel + ((vec2<f32>(((mix(mix(fract((_e371.x * _e371.y)), fract((_e382.x * _e382.y)), _e365.x), mix(fract((_e393.x * _e393.y)), fract((_e404.x * _e404.y)), _e365.x), _e365.y) - mix(mix(fract((_e426.x * _e426.y)), fract((_e437.x * _e437.y)), _e420.x), mix(fract((_e448.x * _e448.y)), fract((_e459.x * _e459.y)), _e420.x), _e420.y)) * 5f), ((mix(mix(fract((_e481.x * _e481.y)), fract((_e492.x * _e492.y)), _e475.x), mix(fract((_e503.x * _e503.y)), fract((_e514.x * _e514.y)), _e475.x), _e475.y) - mix(mix(fract((_e536.x * _e536.y)), fract((_e547.x * _e547.y)), _e530.x), mix(fract((_e558.x * _e558.y)), fract((_e569.x * _e569.y)), _e530.x), _e530.y)) * -5f)) * _e342) * _e323));
             let _e596 = (vec2<f32>(_e586.x, (_e586.y + (_e338 * _e323))) * clamp((1f - (_e340 * _e323)), 0f, 1f));
             let _e598 = (_e310.pos + (_e596 * _e323));
-            phi_671_ = false;
+            phi_670_ = false;
             if (_e350 > 0u) {
                 switch bitcast<i32>(0u) {
                     default: {
@@ -298,218 +298,213 @@ fn compute_main_1() {
                         let _e611 = Params.TargetW;
                         let _e613 = Params.TargetH;
                         let _e615 = (((_e598 - vec2<f32>(_e602, _e604)) * _e608) / vec2<f32>(_e611, _e613));
-                        let _e617 = (1f - _e615.y);
-                        phi_651_ = true;
+                        phi_648_ = true;
                         if !((_e615.x < 0f)) {
-                            phi_651_ = (_e615.x > 1f);
+                            phi_648_ = (_e615.x > 1f);
                         }
-                        let _e626 = phi_651_;
-                        phi_656_ = true;
+                        let _e621 = phi_648_;
+                        phi_654_ = true;
+                        if !(_e621) {
+                            phi_654_ = (_e615.y < 0f);
+                        }
+                        let _e626 = phi_654_;
+                        phi_660_ = true;
                         if !(_e626) {
-                            phi_656_ = (_e617 < 0f);
+                            phi_660_ = (_e615.y > 1f);
                         }
-                        let _e630 = phi_656_;
-                        phi_661_ = true;
-                        if !(_e630) {
-                            phi_661_ = (_e617 > 1f);
-                        }
-                        let _e634 = phi_661_;
-                        if _e634 {
-                            phi_669_ = 0f;
+                        let _e631 = phi_660_;
+                        if _e631 {
+                            phi_668_ = 0f;
                             break;
                         }
-                        let _e635 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e615.x, _e617), 0f);
-                        phi_669_ = _e635.x;
+                        let _e632 = textureSampleLevel(SolidMask, SolidSampler, _e615, 0f);
+                        phi_668_ = _e632.x;
                         break;
                     }
                 }
-                let _e638 = phi_669_;
-                phi_671_ = (_e638 > 0.5f);
+                let _e635 = phi_668_;
+                phi_670_ = (_e635 > 0.5f);
             }
-            let _e641 = phi_671_;
-            if _e641 {
-                let _e642 = (_e350 == 1u);
-                if _e642 {
-                    phi_847_ = _e596;
-                    phi_848_ = _e310.flags;
+            let _e638 = phi_670_;
+            if _e638 {
+                let _e639 = (_e350 == 1u);
+                if _e639 {
+                    phi_842_ = _e596;
+                    phi_843_ = _e310.flags;
                 } else {
-                    let _e643 = (_e350 == 2u);
-                    if _e643 {
-                        phi_845_ = vec2<f32>(0f, 0f);
+                    let _e640 = (_e350 == 2u);
+                    if _e640 {
+                        phi_840_ = vec2<f32>(0f, 0f);
                     } else {
                         switch bitcast<i32>(0u) {
                             default: {
                                 switch bitcast<i32>(0u) {
                                     default: {
-                                        let _e648 = Params.CameraX;
-                                        let _e650 = Params.CameraY;
-                                        let _e651 = vec2<f32>(_e648, _e650);
-                                        let _e654 = Params.Zoom;
-                                        let _e657 = Params.TargetW;
-                                        let _e659 = Params.TargetH;
-                                        let _e660 = vec2<f32>(_e657, _e659);
-                                        let _e661 = ((((_e598 - vec2<f32>(2f, 0f)) - _e651) * _e654) / _e660);
-                                        let _e663 = (1f - _e661.y);
-                                        phi_712_ = true;
-                                        local = _e651;
-                                        local_1 = _e654;
-                                        local_2 = _e660;
-                                        local_3 = _e651;
-                                        local_4 = _e654;
-                                        local_5 = _e660;
-                                        local_6 = _e651;
-                                        local_7 = _e654;
-                                        local_8 = _e660;
-                                        if !((_e661.x < 0f)) {
-                                            phi_712_ = (_e661.x > 1f);
+                                        let _e645 = Params.CameraX;
+                                        let _e647 = Params.CameraY;
+                                        let _e648 = vec2<f32>(_e645, _e647);
+                                        let _e651 = Params.Zoom;
+                                        let _e654 = Params.TargetW;
+                                        let _e656 = Params.TargetH;
+                                        let _e657 = vec2<f32>(_e654, _e656);
+                                        let _e658 = ((((_e598 - vec2<f32>(2f, 0f)) - _e648) * _e651) / _e657);
+                                        phi_708_ = true;
+                                        local = _e648;
+                                        local_1 = _e651;
+                                        local_2 = _e657;
+                                        local_3 = _e648;
+                                        local_4 = _e651;
+                                        local_5 = _e657;
+                                        local_6 = _e648;
+                                        local_7 = _e651;
+                                        local_8 = _e657;
+                                        if !((_e658.x < 0f)) {
+                                            phi_708_ = (_e658.x > 1f);
                                         }
-                                        let _e672 = phi_712_;
-                                        phi_717_ = true;
-                                        if !(_e672) {
-                                            phi_717_ = (_e663 < 0f);
+                                        let _e664 = phi_708_;
+                                        phi_714_ = true;
+                                        if !(_e664) {
+                                            phi_714_ = (_e658.y < 0f);
                                         }
-                                        let _e676 = phi_717_;
-                                        phi_722_ = true;
-                                        if !(_e676) {
-                                            phi_722_ = (_e663 > 1f);
+                                        let _e669 = phi_714_;
+                                        phi_720_ = true;
+                                        if !(_e669) {
+                                            phi_720_ = (_e658.y > 1f);
                                         }
-                                        let _e680 = phi_722_;
-                                        if _e680 {
-                                            phi_730_ = 0f;
+                                        let _e674 = phi_720_;
+                                        if _e674 {
+                                            phi_728_ = 0f;
                                             break;
                                         }
-                                        let _e681 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e661.x, _e663), 0f);
-                                        phi_730_ = _e681.x;
+                                        let _e675 = textureSampleLevel(SolidMask, SolidSampler, _e658, 0f);
+                                        phi_728_ = _e675.x;
                                         break;
                                     }
                                 }
-                                let _e684 = phi_730_;
+                                let _e678 = phi_728_;
                                 switch bitcast<i32>(0u) {
                                     default: {
-                                        let _e688 = local;
-                                        let _e691 = local_1;
-                                        let _e694 = local_2;
-                                        let _e695 = ((((_e598 + vec2<f32>(2f, 0f)) - _e688) * _e691) / _e694);
-                                        let _e697 = (1f - _e695.y);
-                                        phi_746_ = true;
-                                        if !((_e695.x < 0f)) {
-                                            phi_746_ = (_e695.x > 1f);
+                                        let _e682 = local;
+                                        let _e685 = local_1;
+                                        let _e688 = local_2;
+                                        let _e689 = ((((_e598 + vec2<f32>(2f, 0f)) - _e682) * _e685) / _e688);
+                                        phi_741_ = true;
+                                        if !((_e689.x < 0f)) {
+                                            phi_741_ = (_e689.x > 1f);
                                         }
-                                        let _e706 = phi_746_;
-                                        phi_751_ = true;
-                                        if !(_e706) {
-                                            phi_751_ = (_e697 < 0f);
+                                        let _e695 = phi_741_;
+                                        phi_747_ = true;
+                                        if !(_e695) {
+                                            phi_747_ = (_e689.y < 0f);
                                         }
-                                        let _e710 = phi_751_;
-                                        phi_756_ = true;
-                                        if !(_e710) {
-                                            phi_756_ = (_e697 > 1f);
+                                        let _e700 = phi_747_;
+                                        phi_753_ = true;
+                                        if !(_e700) {
+                                            phi_753_ = (_e689.y > 1f);
                                         }
-                                        let _e714 = phi_756_;
-                                        if _e714 {
-                                            phi_764_ = 0f;
+                                        let _e705 = phi_753_;
+                                        if _e705 {
+                                            phi_761_ = 0f;
                                             break;
                                         }
-                                        let _e715 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e695.x, _e697), 0f);
-                                        phi_764_ = _e715.x;
+                                        let _e706 = textureSampleLevel(SolidMask, SolidSampler, _e689, 0f);
+                                        phi_761_ = _e706.x;
                                         break;
                                     }
                                 }
-                                let _e718 = phi_764_;
+                                let _e709 = phi_761_;
                                 switch bitcast<i32>(0u) {
                                     default: {
-                                        let _e722 = local_3;
-                                        let _e725 = local_4;
-                                        let _e728 = local_5;
-                                        let _e729 = ((((_e598 - vec2<f32>(0f, 2f)) - _e722) * _e725) / _e728);
-                                        let _e731 = (1f - _e729.y);
+                                        let _e713 = local_3;
+                                        let _e716 = local_4;
+                                        let _e719 = local_5;
+                                        let _e720 = ((((_e598 - vec2<f32>(0f, 2f)) - _e713) * _e716) / _e719);
+                                        phi_774_ = true;
+                                        if !((_e720.x < 0f)) {
+                                            phi_774_ = (_e720.x > 1f);
+                                        }
+                                        let _e726 = phi_774_;
                                         phi_780_ = true;
-                                        if !((_e729.x < 0f)) {
-                                            phi_780_ = (_e729.x > 1f);
+                                        if !(_e726) {
+                                            phi_780_ = (_e720.y < 0f);
                                         }
-                                        let _e740 = phi_780_;
-                                        phi_785_ = true;
-                                        if !(_e740) {
-                                            phi_785_ = (_e731 < 0f);
+                                        let _e731 = phi_780_;
+                                        phi_786_ = true;
+                                        if !(_e731) {
+                                            phi_786_ = (_e720.y > 1f);
                                         }
-                                        let _e744 = phi_785_;
-                                        phi_790_ = true;
-                                        if !(_e744) {
-                                            phi_790_ = (_e731 > 1f);
-                                        }
-                                        let _e748 = phi_790_;
-                                        if _e748 {
-                                            phi_798_ = 0f;
+                                        let _e736 = phi_786_;
+                                        if _e736 {
+                                            phi_794_ = 0f;
                                             break;
                                         }
-                                        let _e749 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e729.x, _e731), 0f);
-                                        phi_798_ = _e749.x;
+                                        let _e737 = textureSampleLevel(SolidMask, SolidSampler, _e720, 0f);
+                                        phi_794_ = _e737.x;
                                         break;
                                     }
                                 }
-                                let _e752 = phi_798_;
+                                let _e740 = phi_794_;
                                 switch bitcast<i32>(0u) {
                                     default: {
-                                        let _e756 = local_6;
-                                        let _e759 = local_7;
-                                        let _e762 = local_8;
-                                        let _e763 = ((((_e598 + vec2<f32>(0f, 2f)) - _e756) * _e759) / _e762);
-                                        let _e765 = (1f - _e763.y);
-                                        phi_814_ = true;
-                                        if !((_e763.x < 0f)) {
-                                            phi_814_ = (_e763.x > 1f);
+                                        let _e744 = local_6;
+                                        let _e747 = local_7;
+                                        let _e750 = local_8;
+                                        let _e751 = ((((_e598 + vec2<f32>(0f, 2f)) - _e744) * _e747) / _e750);
+                                        phi_807_ = true;
+                                        if !((_e751.x < 0f)) {
+                                            phi_807_ = (_e751.x > 1f);
                                         }
-                                        let _e774 = phi_814_;
+                                        let _e757 = phi_807_;
+                                        phi_813_ = true;
+                                        if !(_e757) {
+                                            phi_813_ = (_e751.y < 0f);
+                                        }
+                                        let _e762 = phi_813_;
                                         phi_819_ = true;
-                                        if !(_e774) {
-                                            phi_819_ = (_e765 < 0f);
+                                        if !(_e762) {
+                                            phi_819_ = (_e751.y > 1f);
                                         }
-                                        let _e778 = phi_819_;
-                                        phi_824_ = true;
-                                        if !(_e778) {
-                                            phi_824_ = (_e765 > 1f);
-                                        }
-                                        let _e782 = phi_824_;
-                                        if _e782 {
-                                            phi_832_ = 0f;
+                                        let _e767 = phi_819_;
+                                        if _e767 {
+                                            phi_827_ = 0f;
                                             break;
                                         }
-                                        let _e783 = textureSampleLevel(SolidMask, SolidSampler, vec2<f32>(_e763.x, _e765), 0f);
-                                        phi_832_ = _e783.x;
+                                        let _e768 = textureSampleLevel(SolidMask, SolidSampler, _e751, 0f);
+                                        phi_827_ = _e768.x;
                                         break;
                                     }
                                 }
-                                let _e786 = phi_832_;
-                                let _e789 = vec2<f32>((_e718 - _e684), (_e786 - _e752));
-                                if (dot(_e789, _e789) < 0.000001f) {
-                                    phi_842_ = vec2<f32>(0f, -1f);
+                                let _e771 = phi_827_;
+                                let _e774 = vec2<f32>((_e709 - _e678), (_e771 - _e740));
+                                if (dot(_e774, _e774) < 0.000001f) {
+                                    phi_837_ = vec2<f32>(0f, -1f);
                                     break;
                                 }
-                                phi_842_ = -(normalize(_e789));
+                                phi_837_ = -(normalize(_e774));
                                 break;
                             }
                         }
-                        let _e795 = phi_842_;
-                        phi_845_ = (reflect(_e596, _e795) * _e348);
+                        let _e780 = phi_837_;
+                        phi_840_ = (reflect(_e596, _e780) * _e348);
                     }
-                    let _e799 = phi_845_;
-                    phi_847_ = _e799;
-                    phi_848_ = select(_e310.flags, 1f, _e643);
+                    let _e784 = phi_840_;
+                    phi_842_ = _e784;
+                    phi_843_ = select(_e310.flags, 1f, _e640);
                 }
-                let _e802 = phi_847_;
-                let _e804 = phi_848_;
-                phi_850_ = _e802;
-                phi_851_ = select(_e310.lifetime, 0f, _e642);
-                phi_852_ = _e804;
+                let _e787 = phi_842_;
+                let _e789 = phi_843_;
+                phi_845_ = _e787;
+                phi_846_ = select(_e310.lifetime, 0f, _e639);
+                phi_847_ = _e789;
             } else {
-                phi_850_ = _e596;
-                phi_851_ = _e310.lifetime;
-                phi_852_ = _e310.flags;
+                phi_845_ = _e596;
+                phi_846_ = _e310.lifetime;
+                phi_847_ = _e310.flags;
             }
-            let _e807 = phi_850_;
-            let _e809 = phi_851_;
-            let _e811 = phi_852_;
-            Dst.member[_e67.x] = Particle(select(_e598, _e310.pos, vec2(_e641)), _e807, _e324, _e809, _e310.seed, _e310.effect, _e811, _e310.pad);
+            let _e792 = phi_845_;
+            let _e794 = phi_846_;
+            let _e796 = phi_847_;
+            Dst.member[_e67.x] = Particle(select(_e598, _e310.pos, vec2(_e638)), _e792, _e324, _e794, _e310.seed, _e310.effect, _e796, _e310.pad);
             break;
         }
     }

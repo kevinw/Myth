@@ -193,14 +193,7 @@ public sealed partial class GameView
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
-#if BROWSER
-			var flipTargetTextures = Batcher.FlipTargetTextures;
-			Batcher.FlipTargetTextures = false;
-#endif
 			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
-#if BROWSER
-			Batcher.FlipTargetTextures = flipTargetTextures;
-#endif
 			if (useCrt)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();

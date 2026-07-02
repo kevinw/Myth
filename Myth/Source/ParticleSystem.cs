@@ -73,11 +73,9 @@ public sealed class ParticleSystem : IDisposable
 	[StructLayout(LayoutKind.Sequential)]
 	struct VertexParams
 	{
-		public Vector2 TargetSize;
-		public Vector2 Camera;
-		public float Zoom;
+		public Matrix4x4 Matrix;
 		public float MaxEffectsF;
-		public float Pad0, Pad1;
+		public float Pad0, Pad1, Pad2;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
@@ -351,9 +349,9 @@ public sealed class ParticleSystem : IDisposable
 
 		material!.Vertex.SetUniformBuffer(new VertexParams
 		{
-			TargetSize = new Vector2(target.Width, target.Height),
-			Camera = camera,
-			Zoom = zoom,
+			Matrix = Matrix4x4.CreateTranslation(-camera.X, -camera.Y, 0) *
+				Matrix4x4.CreateScale(zoom, zoom, 1) *
+				Batcher.CreateProjectionMatrix(target.Bounds.Size),
 			MaxEffectsF = MaxEffects,
 		});
 		material.Vertex.Samplers[0] = new(colorLut, new TextureSampler(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));

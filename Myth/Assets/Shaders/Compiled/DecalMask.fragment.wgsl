@@ -19,16 +19,14 @@ var<private> global: vec4<f32>;
 var<private> out_u002e_var_u002e_SV_Target0_: vec4<f32>;
 
 fn fragment_main_1() {
-    let _e13 = in_u002e_var_u002e_TEXCOORD0_1;
-    let _e14 = in_u002e_var_u002e_TEXCOORD1_1;
-    let _e15 = in_u002e_var_u002e_TEXCOORD4_1;
-    let _e16 = global;
-    let _e17 = textureSample(Texture, Sampler, _e13);
-    let _e32 = FragmentUniformBlock.CoverageSize[1i];
-    let _e37 = FragmentUniformBlock.CoverageSize;
-    let _e39 = (vec2<f32>(_e16.x, (_e32 - _e16.y)) / _e37.xy);
-    let _e45 = textureSample(Coverage, CoverageSampler, vec2<f32>(_e39.x, (1f - _e39.y)));
-    out_u002e_var_u002e_SV_Target0_ = (((((_e17 * _e15.x) * _e14) + (_e14 * (_e15.y * _e17.w))) + (_e14 * _e15.z)) * _e45.x);
+    let _e11 = in_u002e_var_u002e_TEXCOORD0_1;
+    let _e12 = in_u002e_var_u002e_TEXCOORD1_1;
+    let _e13 = in_u002e_var_u002e_TEXCOORD4_1;
+    let _e14 = global;
+    let _e15 = textureSample(Texture, Sampler, _e11);
+    let _e29 = FragmentUniformBlock.CoverageSize;
+    let _e32 = textureSample(Coverage, CoverageSampler, (_e14.xy / _e29.xy));
+    out_u002e_var_u002e_SV_Target0_ = (((((_e15 * _e13.x) * _e12) + (_e12 * (_e13.y * _e15.w))) + (_e12 * _e13.z)) * _e32.x);
     return;
 }
 

@@ -24,4 +24,9 @@
     "command": "dotnet run --no-restore",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
+  {
+    "label": "open in browser",
+    "command": "./tools/run-browser.mjs",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+  },
 ]

@@ -41,12 +41,11 @@ StructuredBuffer<EffectParams> Effects : register(t2, space0);
 
 cbuffer VertexParams : register(b0, space1)
 {
-    float2 TargetSize;  // render target size in pixels
-    float2 Camera;      // world-space camera top-left (RenderCamera)
-    float Zoom;
+    float4x4 Matrix;
     float MaxEffects;   // LUT height (effect rows)
     float _pad0;
     float _pad1;
+    float _pad2;
 };
 
 struct VsInput
@@ -75,10 +74,7 @@ VsOutput vertex_main(VsInput input, uint instance : SV_InstanceID)
 
     float size = lerp(fx.sizeStart, fx.sizeEnd, life_frac) * alive; // dead -> 0
     float2 world = p.pos + input.position * size;
-    float2 screen = (world - Camera) * Zoom;
-    float2 clip = screen / TargetSize * 2.0 - 1.0;
-    clip.y = -clip.y;
-    output.position = float4(clip, 0.0, 1.0);
+    output.position = mul(Matrix, float4(world, 0.0, 1.0));
 
     // Color from the per-effect LUT row. Vertex stage must use SampleLevel.
     float row = (p.effect + 0.5) / MaxEffects;

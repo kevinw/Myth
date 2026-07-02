@@ -1,13 +1,9 @@
-// Content-space fragment pixel. WebGPU stores render targets y-flipped vs native, so the flip
-// happens here once — callers pass the target height and never reason about orientation (this
-// mirrors target_uv, which owns the same flip for texture sampling).
+// Content-space fragment pixel. The target_height param is retained for call-site compatibility
+// but no longer used: the browser flip was removed (there is no hardware target inversion; the
+// old flips were self-inflicted — see Notes/BROWSER_TARGET_FLIP.md).
 float2 screen_pixel(float4 position, float target_height)
 {
-#if BROWSER
-    return float2(position.x, target_height - position.y);
-#else
     return position.xy;
-#endif
 }
 
 // Screen fragment -> world pixel: camera top-left + content-space pixel scaled by inverse zoom.
@@ -25,8 +21,7 @@ float2 texture_uv(float2 uv)
 
 float2 target_uv(float2 uv)
 {
-#if BROWSER
-    uv.y = 1.0 - uv.y;
-#endif
+    // Flip removed: render targets are no longer sampled y-flipped on browser.
+    // See Notes/BROWSER_TARGET_FLIP.md.
     return uv;
 }

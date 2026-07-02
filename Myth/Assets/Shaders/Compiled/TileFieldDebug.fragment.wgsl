@@ -13,30 +13,30 @@ var<private> in_u002e_var_u002e_TEXCOORD1_1: vec4<f32>;
 var<private> out_u002e_var_u002e_SV_Target0_: vec4<f32>;
 
 fn fragment_main_1() {
-    var phi_68_: f32;
-    var phi_69_: f32;
+    var phi_65_: f32;
+    var phi_66_: f32;
 
     let _e16 = in_u002e_var_u002e_TEXCOORD0_1;
     let _e17 = in_u002e_var_u002e_TEXCOORD1_1;
-    let _e23 = textureSample(Texture, Sampler, vec2<f32>(_e16.x, (1f - _e16.y)));
-    let _e26 = FragmentUniformBlock.ChannelMinMaxPadding[0i];
-    let _e28 = i32((_e26 + 0.5f));
-    if (_e28 == 0i) {
-        phi_69_ = _e23.x;
+    let _e18 = textureSample(Texture, Sampler, _e16);
+    let _e21 = FragmentUniformBlock.ChannelMinMaxPadding[0i];
+    let _e23 = i32((_e21 + 0.5f));
+    if (_e23 == 0i) {
+        phi_66_ = _e18.x;
     } else {
-        if (_e28 == 1i) {
-            phi_68_ = (floor((floor(((_e23.y * 255f) + 0.5f)) * 0.03125f)) * 0.25f);
+        if (_e23 == 1i) {
+            phi_65_ = (floor((floor(((_e18.y * 255f) + 0.5f)) * 0.03125f)) * 0.25f);
         } else {
-            phi_68_ = _e23.z;
+            phi_65_ = _e18.z;
         }
-        let _e41 = phi_68_;
-        phi_69_ = _e41;
+        let _e36 = phi_65_;
+        phi_66_ = _e36;
     }
-    let _e43 = phi_69_;
-    let _e46 = FragmentUniformBlock.ChannelMinMaxPadding[1i];
-    let _e49 = FragmentUniformBlock.ChannelMinMaxPadding[2i];
-    let _e54 = clamp(((_e43 - _e46) / max((_e49 - _e46), 0.0001f)), 0f, 1f);
-    out_u002e_var_u002e_SV_Target0_ = (vec4<f32>(_e54, _e54, _e54, _e23.w) * _e17);
+    let _e38 = phi_66_;
+    let _e41 = FragmentUniformBlock.ChannelMinMaxPadding[1i];
+    let _e44 = FragmentUniformBlock.ChannelMinMaxPadding[2i];
+    let _e49 = clamp(((_e38 - _e41) / max((_e44 - _e41), 0.0001f)), 0f, 1f);
+    out_u002e_var_u002e_SV_Target0_ = (vec4<f32>(_e49, _e49, _e49, _e18.w) * _e17);
     return;
 }
 

@@ -33,12 +33,11 @@ struct type_u002e_StructuredBuffer_u002e_EffectParams {
 }
 
 struct type_u002e_VertexParams {
-    TargetSize: vec2<f32>,
-    Camera: vec2<f32>,
-    Zoom: f32,
+    Matrix: mat4x4<f32>,
     MaxEffects: f32,
     _pad0_: f32,
     _pad1_: f32,
+    _pad2_: f32,
 }
 
 struct VertexOutput {
@@ -67,37 +66,35 @@ var<private> out_u002e_var_u002e_TEXCOORD2_: f32;
 var<private> global_1: vec4<f32> = vec4<f32>(0f, 0f, 0f, 1f);
 
 fn vertex_main_1() {
-    var phi_91_: f32;
+    var phi_89_: f32;
 
-    let _e27 = in_u002e_var_u002e_TEXCOORD0_1;
-    let _e28 = in_u002e_var_u002e_TEXCOORD1_1;
-    let _e29 = global;
-    let _e33 = Particles.member[_e29].pos;
-    let _e35 = Particles.member[_e29].age;
-    let _e37 = Particles.member[_e29].lifetime;
-    let _e39 = Particles.member[_e29].effect;
-    let _e40 = (_e39 + 0.5f);
-    let _e45 = Effects.member[u32(_e40)].sizeStart;
-    let _e47 = Effects.member[u32(_e40)].sizeEnd;
-    let _e49 = Effects.member[u32(_e40)].style;
-    let _e50 = (_e37 > 0f);
-    let _e51 = select(0f, 1f, _e50);
-    if _e50 {
-        phi_91_ = clamp((_e35 / _e37), 0f, 1f);
+    let _e23 = in_u002e_var_u002e_TEXCOORD0_1;
+    let _e24 = in_u002e_var_u002e_TEXCOORD1_1;
+    let _e25 = global;
+    let _e29 = Particles.member[_e25].pos;
+    let _e31 = Particles.member[_e25].age;
+    let _e33 = Particles.member[_e25].lifetime;
+    let _e35 = Particles.member[_e25].effect;
+    let _e36 = (_e35 + 0.5f);
+    let _e41 = Effects.member[u32(_e36)].sizeStart;
+    let _e43 = Effects.member[u32(_e36)].sizeEnd;
+    let _e45 = Effects.member[u32(_e36)].style;
+    let _e46 = (_e33 > 0f);
+    let _e47 = select(0f, 1f, _e46);
+    if _e46 {
+        phi_89_ = clamp((_e31 / _e33), 0f, 1f);
     } else {
-        phi_91_ = 1f;
+        phi_89_ = 1f;
     }
-    let _e55 = phi_91_;
-    let _e61 = VertexParams.Camera;
-    let _e64 = VertexParams.Zoom;
-    let _e67 = VertexParams.TargetSize;
-    let _e70 = ((((((_e33 + (_e27 * (mix(_e45, _e47, _e55) * _e51))) - _e61) * _e64) / _e67) * 2f) - vec2<f32>(1f, 1f));
-    let _e76 = VertexParams.MaxEffects;
-    let _e79 = textureSampleLevel(ColorLut, ColorLutSampler, vec2<f32>(_e55, (_e40 / _e76)), 0f);
-    out_u002e_var_u002e_TEXCOORD0_ = vec4<f32>(_e79.x, _e79.y, _e79.z, (_e79.w * _e51));
-    out_u002e_var_u002e_TEXCOORD1_ = _e28;
-    out_u002e_var_u002e_TEXCOORD2_ = _e49;
-    global_1 = vec4<f32>(_e70.x, -(_e70.y), 0f, 1f);
+    let _e51 = phi_89_;
+    let _e55 = (_e29 + (_e23 * (mix(_e41, _e43, _e51) * _e47)));
+    let _e57 = VertexParams.Matrix;
+    let _e64 = VertexParams.MaxEffects;
+    let _e67 = textureSampleLevel(ColorLut, ColorLutSampler, vec2<f32>(_e51, (_e36 / _e64)), 0f);
+    out_u002e_var_u002e_TEXCOORD0_ = vec4<f32>(_e67.x, _e67.y, _e67.z, (_e67.w * _e47));
+    out_u002e_var_u002e_TEXCOORD1_ = _e24;
+    out_u002e_var_u002e_TEXCOORD2_ = _e45;
+    global_1 = (vec4<f32>(_e55.x, _e55.y, 0f, 1f) * transpose(_e57));
     return;
 }
 
