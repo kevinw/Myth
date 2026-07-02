@@ -22,7 +22,8 @@ public partial class Player : Pawn
 	const int BurrowAttachProbe = 8;
 	const float BurrowGlowArc = 15f;       // contour length traced in each direction (~30px total)
 	static float BurrowGlowWeight => 1.5f;
-	const int BurrowGlowColor = 0xffcfa0;  // matches the player light
+	static float BurrowGlowCycleSpeed => 0.6f; // rainbow hue cycles per second
+	static float BurrowGlowHueScale => 0.03f;  // hue shift per world px along the line
 	const float BurrowEnterSquishTime = 0.12f; // sprite stays visible this long to play the squash-in
 	const float BurrowSquashNormal = 0.45f;    // peak compression into the surface at the end of the window
 	const float BurrowSquashTangent = 1.6f;    // peak spread along the surface at the end of the window
@@ -443,10 +444,12 @@ public partial class Player : Pawn
 
 		Color BurrowGlowColorAt(Vector2 worldPoint)
 		{
-			// Glow fades from full at the anchor (player's surface point) to nothing at the ends.
+			// Glow fades from full at the anchor (player's surface point) to nothing at the ends;
+			// its hue cycles along the line and scrolls over time for a rainbow shimmer.
 			var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
 			var alpha = Math.Clamp(1f - dist / BurrowGlowArc, 0f, 1f);
-			return new Color(BurrowGlowColor, alpha);
+			var hue = dist * BurrowGlowHueScale - Time.SecondsF * BurrowGlowCycleSpeed;
+			return new Color(HueRgb(hue - MathF.Floor(hue)), alpha);
 		}
 
 		// The traced points lie exactly on the solid/air boundary; draw them directly.
@@ -455,6 +458,23 @@ public partial class Player : Pawn
 		for (var i = 0; i + 1 < glowPoints.Count; i++)
 			batcher.Line(glowPoints[i] - origin, glowPoints[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(glowPoints[i]), BurrowGlowColorAt(glowPoints[i + 1]));
 
+	}
+
+	// Packed 0xRRGGBB for a fully-saturated hue in [0,1); paired with an alpha at the call site.
+	static int HueRgb(float hue)
+	{
+		var h = hue * 6f;
+		var x = 1f - MathF.Abs(h % 2f - 1f);
+		var (r, g, b) = h switch
+		{
+			< 1f => (1f, x, 0f),
+			< 2f => (x, 1f, 0f),
+			< 3f => (0f, 1f, x),
+			< 4f => (0f, x, 1f),
+			< 5f => (x, 0f, 1f),
+			_ => (1f, 0f, x),
+		};
+		return ((int)(r * 255) << 16) | ((int)(g * 255) << 8) | (int)(b * 255);
 	}
 
 
