@@ -60,6 +60,11 @@ public partial class Player : Pawn
 	float burrowPulseTimer;       // counts down after each interval boundary; flashes the line brighter
 	float burrowSpreadScale = 1f; // eased multiplier on the glow arc length; shrinks as intervals elapse
 
+	float burrowLeapCoyote;               // time left to still pop UP after rounding a downward corner
+	Vector2 burrowLeapExitDir;            // remembered outward dir (from riding a top surface) for that leap
+	float burrowLeapTravelX;              // remembered horizontal glide so the coyote leap keeps its arc
+	static float BurrowLeapCoyoteTime => 0.12f;
+
 	void TryStartBurrow(Vector2 previousVelocity)
 	{
 		if (!CanBurrow()) return;
@@ -77,6 +82,7 @@ public partial class Player : Pawn
 		burrowIntervalIndex = 0;
 		burrowPulseTimer = BurrowPulseTime; // flash the first interval's start too (the line igniting)
 		burrowSpreadScale = 1f;
+		burrowLeapCoyote = 0;
 		burrowEnterTimer = BurrowEnterSquishTime;
 		burrowMoveRemainder = 0;
 		burrowLastIntent = Vector2.Zero; // a tangential press establishes the orbit
@@ -178,6 +184,22 @@ public partial class Player : Pawn
 		var t = BurrowIntervals > 1 ? 1f - burrowIntervalIndex / (float)(BurrowIntervals - 1) : 1f;
 		var targetSpread = Calc.Lerp(BurrowMinSpread, 1f, t);
 		burrowSpreadScale = Calc.Approach(burrowSpreadScale, targetSpread, BurrowSpreadEaseRate * Time.Delta);
+	}
+
+	// Burrow-leap coyote: while riding a surface whose pop would fling you upward (normal points
+	// down into the solid, i.e. you're on its top), remember it for a brief window — so burrowing
+	// off the lip and gliding down the far side of a corner still leaps you up as if you'd popped
+	// at the top instead of getting the sideways pop off the vertical face.
+	void UpdateBurrowLeapCoyote()
+	{
+		if (burrowToward.Y > 0.5f)
+		{
+			burrowLeapCoyote = BurrowLeapCoyoteTime;
+			burrowLeapExitDir = burrowToward;
+			burrowLeapTravelX = burrowHeading.X != 0 ? Math.Sign(burrowHeading.X) * burrowSpeed : 0f;
+		}
+		else
+			burrowLeapCoyote = Calc.Approach(burrowLeapCoyote, 0, Time.Delta);
 	}
 
 	void UpdateBurrowShift()
@@ -295,6 +317,7 @@ public partial class Player : Pawn
 		}
 
 		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
+		UpdateBurrowLeapCoyote();
 		UpdateBurrowShift();
 		UpdateBurrowIntervals();
 		UpdateBurrowGlow();
@@ -314,6 +337,13 @@ public partial class Player : Pawn
 	private void PopOutOfBurrow()
 	{
 		var exitDir = burrowToward;
+
+		// Burrow-leap coyote: if we just rounded off a top surface (down a corner) within the
+		// window, pop upward as if we were still on top instead of getting the sideways pop off
+		// the vertical face (see UpdateBurrowLeapCoyote).
+		var leapCoyote = burrowLeapCoyote > 0 && exitDir.Y <= 0.5f;
+		if (leapCoyote)
+			exitDir = burrowLeapExitDir;
 
 		// This is a bit of a hard coded hack: if we're exiting downwards,
 		// move the hitbox down so that its top is at the edge of the surface we
@@ -347,6 +377,8 @@ public partial class Player : Pawn
 			var travel = burrowHeading != Point2.Zero
 				? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
 				: Vector2.Zero;
+			if (leapCoyote)
+				travel = new Vector2(burrowLeapTravelX, 0); // recover the pre-corner horizontal arc, drop the downward glide
 
 			// "Cancel" a big popup jump by holding Down on the Dpad
 			Velocity = -exitDir * popMagnitude + travel;

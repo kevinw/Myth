@@ -96,6 +96,8 @@ public abstract class Pawn : Actor
 	public static float WaterRollSpeedMultiplier => 0.55f;
 
 	protected static float WallHugGravityMultiplier => 0.25f;
+	protected static float WallSlideMaxFallSpeed => 80f;  // capped, slower descent while wall sliding
+	protected static float WallSlideFallDamping => 320f;  // eases a fast fall down to the slide cap
 	public static float JumpForce => -125;
 	public static float JumpTime => 0.19f;
 	// Gravity is scaled by this while the jump button is held (floatier ascent), and
@@ -287,6 +289,8 @@ public abstract class Pawn : Actor
 			var maxSink = input.MoveY > 0 ? WaterMaxSinkSpeed * WaterFastSinkMultiplier : WaterMaxSinkSpeed;
 			if (inWater && Velocity.Y > maxSink)
 				Velocity.Y = Calc.Approach(Velocity.Y, maxSink, WaterSinkDamping * Time.Delta);
+			if (!inWater && State == States.Normal && Velocity.Y > WallSlideMaxFallSpeed && IsWallHugging())
+				Velocity.Y = Calc.Approach(Velocity.Y, WallSlideMaxFallSpeed, WallSlideFallDamping * Time.Delta);
 
 			JumpUpSquish -= Time.Delta;
 			if (JumpUpSquish <= 0)
@@ -579,6 +583,9 @@ public abstract class Pawn : Actor
 			// some horizontal velocity
 			if (impactVelocity.Y < RollMinFallSpeed) return false;
 			if (MathF.Abs(impactVelocity.X) < RollMinHorizontalSpeed) return false;
+			// Holding into the fall's opposite direction reads as braking/reversing, not tucking
+			// into a roll: falling right + holding left (or falling left + holding right) skips it.
+			if (input.MoveX != 0 && Math.Sign(input.MoveX) != Math.Sign(impactVelocity.X)) return false;
 			Facing = Math.Sign(impactVelocity.X);
 			Velocity = new(Facing * RollSpeed * RollSpeedScale, 0);
 		}
