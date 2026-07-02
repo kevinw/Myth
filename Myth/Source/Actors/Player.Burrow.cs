@@ -6,12 +6,12 @@ namespace Myth;
 // Burrow-specific logic
 public partial class Player : Pawn
 {
-	static float BurrowDuration => 1.8f;
+	static float BurrowDuration => 1.133f;
 	static float BurrowMaxSpeed => 150f;
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
-	static float BurrowClimbSpeedMultiplier => 0.5f; // straight-up wall climb is half speed; 45° lands in between
+	static float BurrowClimbSpeedMultiplier => 0.59f; // straight-up wall climb is half speed; 45° lands in between
 													 // The burrow pop is meant to read as stronger than a full held jump: a bigger launch
 													 // velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
 	static float BurrowPopForce => JumpForce * 1.18f;
@@ -24,6 +24,10 @@ public partial class Player : Pawn
 	static float BurrowGlowWeight => 1.5f;
 	static float BurrowGlowCycleSpeed => 0.6f; // rainbow hue cycles per second
 	static float BurrowGlowHueScale => 0.03f;  // hue shift per world px along the line
+	static int BurrowIntervals => 4;           // burrow time is split into this many countdown intervals
+	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
+	static float BurrowMinSpread => 0.4f;      // arc shrinks to this fraction of full by the final interval
+	static float BurrowSpreadEaseRate => 1.4f; // per-second ease of the arc toward the current interval's spread
 	const float BurrowEnterSquishTime = 0.12f; // sprite stays visible this long to play the squash-in
 	const float BurrowSquashNormal = 0.45f;    // peak compression into the surface at the end of the window
 	const float BurrowSquashTangent = 1.6f;    // peak spread along the surface at the end of the window
@@ -52,6 +56,10 @@ public partial class Player : Pawn
 	float burrowGlowExitTimer; // current visual burrow glow exit timer
 	static float BurrowGlowExitTime => 0.13f; // how long to render the line after you pop out of burrowing
 
+	int burrowIntervalIndex;      // which countdown interval we're in (0-based); a change fires a pulse + tick
+	float burrowPulseTimer;       // counts down after each interval boundary; flashes the line brighter
+	float burrowSpreadScale = 1f; // eased multiplier on the glow arc length; shrinks as intervals elapse
+
 	void TryStartBurrow(Vector2 previousVelocity)
 	{
 		if (!CanBurrow()) return;
@@ -66,6 +74,9 @@ public partial class Player : Pawn
 
 		Velocity = Vector2.Zero;
 		burrowTimer = BurrowDuration;
+		burrowIntervalIndex = 0;
+		burrowPulseTimer = BurrowPulseTime; // flash the first interval's start too (the line igniting)
+		burrowSpreadScale = 1f;
 		burrowEnterTimer = BurrowEnterSquishTime;
 		burrowMoveRemainder = 0;
 		burrowLastIntent = Vector2.Zero; // a tangential press establishes the orbit
@@ -125,7 +136,7 @@ public partial class Player : Pawn
 		float arcLength;
 
 		if (State == States.Burrow) // currently burrowing
-			arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime);
+			arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime) * burrowSpreadScale;
 		else if (burrowGlowExitTimer > 0)
 		{
 
@@ -145,6 +156,28 @@ public partial class Player : Pawn
 			burrowGlowAnchor = Position;
 		}
 		Game.TraceSurfaceFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, arcLength, glowPoints);
+	}
+
+	// Split the burrow's lifetime into BurrowIntervals countdown steps. Crossing into a new
+	// interval flashes the line (burrowPulseTimer) and fires a tick the player can hear, and
+	// steps the line's target spread down — so the arc tightens under the player as the
+	// automatic pop-out nears, making the remaining time readable at a glance.
+	void UpdateBurrowIntervals()
+	{
+		var intervalLength = BurrowDuration / BurrowIntervals;
+		var elapsed = BurrowDuration - burrowTimer;
+		var interval = Math.Clamp((int)(elapsed / intervalLength), 0, BurrowIntervals - 1);
+		if (interval != burrowIntervalIndex)
+		{
+			burrowIntervalIndex = interval;
+			burrowPulseTimer = BurrowPulseTime;
+			AudioEvent("player/burrow_tick");
+		}
+
+		// Full spread at the first interval, BurrowMinSpread at the last; ease toward it.
+		var t = BurrowIntervals > 1 ? 1f - burrowIntervalIndex / (float)(BurrowIntervals - 1) : 1f;
+		var targetSpread = Calc.Lerp(BurrowMinSpread, 1f, t);
+		burrowSpreadScale = Calc.Approach(burrowSpreadScale, targetSpread, BurrowSpreadEaseRate * Time.Delta);
 	}
 
 	void UpdateBurrowShift()
@@ -263,6 +296,7 @@ public partial class Player : Pawn
 
 		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
 		UpdateBurrowShift();
+		UpdateBurrowIntervals();
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
 		EmitBurrowSparks();
@@ -389,6 +423,7 @@ public partial class Player : Pawn
 		if (burrowGlowExitTimer > 0)
 			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
 		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);
+		burrowPulseTimer = Calc.Approach(burrowPulseTimer, 0, Time.Delta);
 	}
 
 	// Drive the burrow loop from the motion every frame so it can breathe instead of
@@ -447,14 +482,33 @@ public partial class Player : Pawn
 		if (!shouldRender)
 			return;
 
+		// Farthest traced point sets the fade length, so the glow always fades to nothing at
+		// the current (possibly shortened) line ends rather than at the full-arc distance.
+		float halfLen = 0f;
+		foreach (var p in glowPoints)
+			halfLen = MathF.Max(halfLen, Vector2.Distance(p, burrowGlowAnchor));
+		if (halfLen < 0.001f) halfLen = BurrowGlowArc;
+
 		Color BurrowGlowColorAt(Vector2 worldPoint)
 		{
 			// Glow fades from full at the anchor (player's surface point) to nothing at the ends;
 			// its hue cycles along the line and scrolls over time for a rainbow shimmer.
 			var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
-			var alpha = Math.Clamp(1f - dist / BurrowGlowArc, 0f, 1f);
+			var alpha = Math.Clamp(1f - dist / halfLen, 0f, 1f);
 			var hue = dist * BurrowGlowHueScale - Time.SecondsF * BurrowGlowCycleSpeed;
-			return new Color(HueRgb(hue - MathF.Floor(hue)), alpha);
+			var color = new Color(HueRgb(hue - MathF.Floor(hue)), alpha);
+
+			// At each interval boundary flash the whole line brighter/whiter, easing out.
+			if (burrowPulseTimer > 0)
+			{
+				var pulse = burrowPulseTimer / BurrowPulseTime;
+				pulse *= pulse; // ease-out flash
+				var flash = new Color(1f, 1f, 1f, MathF.Min(1f, alpha + (1f - alpha) * 0.6f));
+
+				pulse *= 0.5f;
+				color = Color.Lerp(color, flash, pulse);
+			}
+			return color;
 		}
 
 		// The traced points lie exactly on the solid/air boundary; draw them directly.

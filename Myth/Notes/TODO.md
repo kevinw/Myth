@@ -1,5 +1,7 @@
 # TODO
 
+- rolling down a 45degree slope needs to "stick" more
+- make Bud's "fallback_walk" more interesting. maybe we walks slowly. investigates different points.
 - make rim_light a uniform; investigate less harsh ways of lighting things
 - a player frame for "holding down before a roll"
 - wall jump too difficult (go back to "just jump"?)
