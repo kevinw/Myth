@@ -81,6 +81,10 @@ public abstract class Pawn : Actor
 	public static float WaterFastSinkMultiplier => 1.5f; // holding down sinks 50% faster
 	public static float WaterSinkDamping => 200f;
 	public static float WaterSwimStroke => -70f;
+	// The frame you break the surface, velocity is multiplied by this once to simulate
+	// surface tension grabbing you as you plunge in (a sharper slowdown than the ongoing
+	// water drag/sink cap that follow on later frames).
+	public static float WaterSurfaceTensionMultiplier => 0.55f;
 	// Horizontal water resistance: lower top speed, plus a drag that bleeds off speed when
 	// no direction is held (even airborne, unlike the grounded-only dry friction).
 	public static float WaterHorizontalSpeedMultiplier => 0.6f;
@@ -127,6 +131,7 @@ public abstract class Pawn : Actor
 	protected float jumpBufferTimer;
 	protected bool grounded;
 	protected bool inWater;
+	bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
 	protected bool atWaterSurface; // torso submerged but head is above the waterline
 	float airBubbleTimer;
 	// GetWallJumpDirection runs two solid-overlap probes and is called up to 3x per
@@ -206,6 +211,14 @@ public abstract class Pawn : Actor
 		waterBounds = waterBounds.Inflate(8);
 		inWater = Game.IsWaterAt(waterBounds.Center);
 		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
+		// First frame breaking the surface: surface tension gives an extra one-time slowdown
+		// on top of the steady drag/sink handled below.
+		if (inWater && !wasInWater)
+		{
+			Velocity *= WaterSurfaceTensionMultiplier;
+			AudioEventDebounced("player/splash", 0.2f);
+		}
+		wasInWater = inWater;
 		UpdateAirBubbles();
 
 		wallSliding = false;
@@ -1158,7 +1171,13 @@ public partial class Player : Pawn
 		return false;
 	}
 
-	protected override void OnPawnJump() => AudioEvent("jump");
+	protected override void OnPawnJump()
+	{
+		if (InWater)
+			AudioEvent("player/swim");
+		else
+			AudioEvent("jump");
+	}
 
 	protected override bool TryRollCancel()
 	{
