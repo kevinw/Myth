@@ -184,7 +184,7 @@ public static class Factory
 		return null;
 	}
 
-	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f)
+	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f, bool drawsVisual = true)
 	{
 		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
 		if (tileset == null)
@@ -192,6 +192,11 @@ public static class Factory
 
 		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
+			// Water draws nothing into the tile field; WaterSurface renders it dynamically
+			// instead. The surface type / reflection registration below still apply, so swim
+			// physics and reflections are unaffected.
+			if (!drawsVisual)
+				return;
 			Rng rng = new(tile.X + tile.Y * room.Size.X);
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
 			var image = tileset.GetRandomTile(ref rng, out var normal);
@@ -326,7 +331,7 @@ public static class Factory
 		Register('g', AsTile("plants", false, "Grass", acousticReflectivity: 0.20f));
 		Register('i', AsTile("gates", isFg: false, surfaceType: "Brick", acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
-		Register('w', AsTile("water", false, WaterSurfaceType, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f));
+		Register('w', AsTile("water", false, WaterSurfaceType, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f, drawsVisual: false));
 		Register('#', AsTile("back", false, layer: TileLayer.Background));
 		Register('-', AsTile("back-right", false, layer: TileLayer.Background));
 		Register(')', AsTile("back-ne", false, layer: TileLayer.Background));

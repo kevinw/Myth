@@ -116,6 +116,13 @@ public class Room
 	/// World-space rectangles built from adjacent sprite-reflecting tiles.
 	public readonly List<ReflectionRect> ReflectionRects = [];
 
+	/// Exposed water-surface runs with their wave sim, one per contiguous top edge.
+	public readonly List<WaterSurface> WaterSurfaces = [];
+
+	/// World-space rects of water tiles with no free surface (capped by solid above, or
+	/// pockets under ledges). These get a flat tint only — the wave sim lives in WaterSurfaces.
+	public readonly List<RectInt> CappedWaterRects = [];
+
 	/// Optional FMOD background music Area parameter label.
 	public string? MusicArea;
 	public Color BackdropColor = DefaultBackdropColor;
@@ -366,6 +373,8 @@ public class Room
 		LightOccluderPolygons.Clear();
 		VisibilitySegments.Clear();
 		ReflectionRects.Clear();
+		WaterSurfaces.Clear();
+		CappedWaterRects.Clear();
 
 		// Slopes first: the passes below only read the slope lookups (never mutate them).
 		BuildSlopeTiles();
@@ -381,7 +390,9 @@ public class Room
 				BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
 				BuildSlopeLightOccluders();
 			},
-			BuildReflectionRects);
+			BuildReflectionRects,
+			BuildWaterSurfaces,
+			BuildCappedWaterRects);
 
 		// Reads LightOccluders + LightOccluderPolygons produced by the parallel phase.
 		BuildVisibilitySegments();
@@ -996,6 +1007,84 @@ public class Room
 				var tileY = (rect.Y - WorldBounds.Y) / Game.TileSize;
 				var opacity = GetTileEntry(tileX, tileY)?.ReflectionOpacity ?? (distorted ? 0.5f : 0.7f);
 				ReflectionRects.Add(new(rect, opacity, distorted));
+			}
+		}
+	}
+
+	bool IsWaterTile(int x, int y)
+		=> GetTileEntry(x, y) is { SurfaceType: Factory.WaterSurfaceType };
+
+	// A free surface exists only where water meets open air above: the tile above must be
+	// neither water nor a solid tile (water under a ledge/overhang is capped, not a
+	// surface). Out-of-bounds above the top room row reads as air, so top-row water counts.
+	bool IsExposedWaterSurface(int x, int y)
+		=> IsWaterTile(x, y)
+			&& !IsWaterTile(x, y - 1)
+			&& GetTileEntry(x, y - 1) is not { BlocksMovement: true };
+
+	// Contiguous exposed surface cells in a row become one WaterSurface, each column
+	// carrying its own floor depth so irregular pools fill correctly.
+	void BuildWaterSurfaces()
+	{
+		var bottoms = waterBottomsScratch ??= [];
+		for (var y = 0; y < Size.Y; y++)
+		{
+			var x = 0;
+			while (x < Size.X)
+			{
+				if (!IsExposedWaterSurface(x, y))
+				{
+					x++;
+					continue;
+				}
+
+				var startX = x;
+				bottoms.Clear();
+				while (x < Size.X && IsExposedWaterSurface(x, y))
+				{
+					var floor = y;
+					while (floor + 1 < Size.Y && IsWaterTile(x, floor + 1))
+						floor++;
+					bottoms.Add(WorldBounds.Y + (floor + 1) * Game.TileSize);
+					x++;
+				}
+
+				WaterSurfaces.Add(new WaterSurface(
+					WorldBounds.X + startX * Game.TileSize,
+					WorldBounds.Y + y * Game.TileSize,
+					System.Runtime.InteropServices.CollectionsMarshal.AsSpan(bottoms)));
+			}
+		}
+	}
+
+	[ThreadStatic] static List<float>? waterBottomsScratch;
+
+	// Every maximal vertical water run whose top is NOT an exposed surface (solid above, or
+	// a pocket under a ledge) becomes a flat-tint rect. This is the exact complement of the
+	// exposed runs that WaterSurfaces fill, so together they tint every water tile once.
+	void BuildCappedWaterRects()
+	{
+		for (var x = 0; x < Size.X; x++)
+		{
+			var y = 0;
+			while (y < Size.Y)
+			{
+				if (!IsWaterTile(x, y))
+				{
+					y++;
+					continue;
+				}
+
+				var top = y;
+				while (y < Size.Y && IsWaterTile(x, y))
+					y++;
+
+				if (!IsExposedWaterSurface(x, top))
+					CappedWaterRects.Add(new RectInt(
+						WorldBounds.X + x * Game.TileSize,
+						WorldBounds.Y + top * Game.TileSize,
+						Game.TileSize,
+						(y - top) * Game.TileSize));
 			}
 		}
 	}

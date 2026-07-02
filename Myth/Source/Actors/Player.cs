@@ -41,13 +41,17 @@ public class PlayerStart : Actor
 public abstract class Pawn : Actor
 {
 	int jumpParticlesEffect = -1;
+	int splashParticlesEffect = -1;
 
 	override public void Added()
 	{
 		base.Added();
 
 		if (Game.Particles is { Supported: true } particles)
+		{
 			jumpParticlesEffect = particles.AcquireEffect("jump");
+			splashParticlesEffect = particles.AcquireEffect("splash");
+		}
 	}
 
 	protected bool PlayerSpecificAudioEvents = false;
@@ -211,11 +215,17 @@ public abstract class Pawn : Actor
 		waterBounds = waterBounds.Inflate(8);
 		inWater = Game.IsWaterAt(waterBounds.Center);
 		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
-		// First frame breaking the surface: surface tension gives an extra one-time slowdown
-		// on top of the steady drag/sink handled below.
+		// Crossing the surface (either direction) kicks it into a splash + droplets scaled by
+		// the crossing speed. On entry, surface tension also gives an extra one-time slowdown.
 		if (inWater && !wasInWater)
 		{
+			OnCrossedWaterSurface(Velocity.Y, exiting: false); // downward plunge -> dip
 			Velocity *= WaterSurfaceTensionMultiplier;
+			AudioEventDebounced("player/splash", 0.2f);
+		}
+		else if (!inWater && wasInWater)
+		{
+			OnCrossedWaterSurface(-Velocity.Y, exiting: true); // upward exit -> crown
 			AudioEventDebounced("player/splash", 0.2f);
 		}
 		wasInWater = inWater;
@@ -786,6 +796,37 @@ public abstract class Pawn : Actor
 
 	bool IsWallHugging(int wallJumpDirection)
 		=> wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
+
+	// Splash droplet burst tuning (the surface ripple itself is scaled in WaterSurface).
+	const float SplashDropletSpeedRef = 60f; // plunge speed that maps to ~1x droplet speed
+
+	// Fired the frame the torso crosses the waterline (entering or leaving). crossingSpeed is
+	// the speed into the surface (downward on entry, upward on exit), so a faster crossing
+	// splashes harder; a slow drift over the line barely disturbs it. On exit the wave impulse
+	// flips to push the surface up into a crown instead of dipping it.
+	void OnCrossedWaterSurface(float crossingSpeed, bool exiting)
+	{
+		// The nav-graph build steps throwaway pawns through Pawn.Update; don't splash the
+		// real room during that simulation.
+		if (Game.Simulating)
+			return;
+
+		var strength = MathF.Max(0f, crossingSpeed);
+		Game.SplashWater(Position.X, exiting ? -strength : strength);
+
+		if (splashParticlesEffect >= 0 && Game.Particles is { Supported: true } particles)
+		{
+			// Emit at the waterline (segment surface Y) rather than the submerged torso.
+			var surfaceY = Game.WaterSurfaceAtX(Position.X)?.SurfaceY ?? (Hitbox.Rect + Position).Top;
+			var count = (int)Calc.Clamp(6f + strength * 0.25f, 6f, 28f);
+			particles.Emit(splashParticlesEffect,
+				worldPosition: new Vector2(Position.X, surfaceY),
+				count: count,
+				directionRadians: -MathF.PI / 2f, // up
+				speedScale: Calc.Clamp(strength / SplashDropletSpeedRef, 0.6f, 2.2f),
+				spreadRadians: 70f * Calc.DegToRad);
+		}
+	}
 
 	static float AirBubbleIntervalMin => 0.5f;
 	static float AirBubbleIntervalMax => 1.8f;
