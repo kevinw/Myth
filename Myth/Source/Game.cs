@@ -473,6 +473,7 @@ public partial class Game : IDisposable
 
 	void PostUpdateSystems()
 	{
+		UpdateWaterSurfaces();
 		UpdateCamera();
 		UpdateStory();
 		rewinder.UpdateDebugPlayerRewind();
@@ -993,6 +994,39 @@ public partial class Game : IDisposable
 	public bool IsWaterAt(Point2 worldPoint)
 		=> TryGetSurfaceTypeAtWorldPoint(worldPoint, out var surfaceType)
 			&& surfaceType == Factory.WaterSurfaceType;
+
+	// Kicks the water surface under worldX (if any) into a splash. impulseSpeed is signed:
+	// positive dips the surface down (plunging in), negative bulges it up (bursting out).
+	public void SplashWater(float worldX, float impulseSpeed)
+	{
+		if (room == null)
+			return;
+		foreach (var surface in room.WaterSurfaces)
+			if (surface.ContainsX(worldX))
+			{
+				surface.Splash(worldX, impulseSpeed);
+				return;
+			}
+	}
+
+	// Returns the exposed water surface whose horizontal span contains worldX, or null.
+	public WaterSurface? WaterSurfaceAtX(float worldX)
+	{
+		if (room == null)
+			return null;
+		foreach (var surface in room.WaterSurfaces)
+			if (surface.ContainsX(worldX))
+				return surface;
+		return null;
+	}
+
+	void UpdateWaterSurfaces()
+	{
+		if (room == null)
+			return;
+		foreach (var surface in room.WaterSurfaces)
+			surface.Update(Time.Delta);
+	}
 
 	bool TryGetSurfaceTypeOutwardFromBottom(RectInt bounds, out string surfaceType)
 	{

@@ -43,6 +43,8 @@ public sealed partial class GameView
 				DrawWorldLayer(BackgroundScreen, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
 				DrawWorldLayer(ForegroundScreen, background: false);
+			using (GraphicsDevice.DebugGroup("Myth/water"))
+				DrawWaterBodies(ForegroundScreen);
 			if (PerfToggles.Reflections)
 				using (GraphicsDevice.DebugGroup("Myth/flat reflections"))
 					CompositeFlatReflections(ForegroundScreen);
@@ -325,6 +327,37 @@ public sealed partial class GameView
 			else
 				DrawPlatformSurfaceReflections(target);
 		}
+	}
+
+	// Draws the dynamic water bodies (the static 'w' tile visual is suppressed in Factory).
+	// Surfaces store absolute world coords, so the world matrix places both the current and
+	// (mid-transition) next room correctly; the wave sim itself ticks in Game.PostUpdateSystems.
+	void DrawWaterBodies(Target target)
+	{
+		if (!HasWaterBody(room) && !HasWaterBody(nextRoom))
+			return;
+
+		PushWorldMatrix();
+		DrawRoomWaterBody(room);
+		DrawRoomWaterBody(nextRoom);
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	static bool HasWaterBody(Room? r)
+		=> r != null && (r.WaterSurfaces.Count > 0 || r.CappedWaterRects.Count > 0);
+
+	void DrawRoomWaterBody(Room? r)
+	{
+		if (r == null)
+			return;
+		// Flat tint for capped water first, then the animated exposed surfaces + foam on top.
+		foreach (var rect in r.CappedWaterRects)
+			WaterSurface.RenderCappedBody(Batcher, rect);
+		var time = Time.SecondsF;
+		foreach (var surface in r.WaterSurfaces)
+			surface.Render(Batcher, time);
 	}
 
 	bool PushAtlasWanderMaterial()
