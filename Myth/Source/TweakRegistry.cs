@@ -30,7 +30,7 @@ static class TweakRegistry
 		public string ShortFile => Path.GetFileName(File);
 	}
 
-	static readonly Dictionary<(string, int), Entry> entries = new();
+	static readonly Dictionary<(string, int), Entry> entries = [];
 
 	public static bool Open = true;
 
@@ -62,8 +62,16 @@ static class TweakRegistry
 		var key = (file, line);
 		if (!entries.TryGetValue(key, out var e))
 		{
-			e = new Entry { File = file, Line = line, Expr = expr, IsInt = isInt, Default = value, Value = value };
-			e.Context = ResolveContext(file, line);
+			e = new Entry
+			{
+				File = file,
+				Line = line,
+				Expr = expr,
+				IsInt = isInt,
+				Default = value,
+				Value = value,
+				Context = ResolveContext(file, line)
+			};
 			ApplyRange(e, value, isInt, min, max);
 			entries[key] = e;
 		}
@@ -119,7 +127,11 @@ static class TweakRegistry
 	{
 		string[] lines;
 		try { lines = File.ReadAllLines(file); }
-		catch { return ""; }
+		catch
+		{
+			Console.WriteLine("ResolveContext: Error reading file: " + file);
+			return "";
+		}
 		if (line < 1 || line > lines.Length)
 			return "";
 		for (var i = line - 1; i >= Math.Max(0, line - 40); i--)
@@ -191,7 +203,11 @@ static class TweakRegistry
 		{
 			string[] lines;
 			try { lines = File.ReadAllLines(file); }
-			catch { continue; }
+			catch
+			{
+				Console.WriteLine("ScanDiff: Error reading file: " + file);
+				continue;
+			}
 
 			foreach (var (start, end) in list)
 				for (var ln = start; ln <= end && ln <= lines.Length; ln++)
