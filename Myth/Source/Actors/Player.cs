@@ -1179,7 +1179,6 @@ public partial class Player : Pawn
 			if (ducking && duckAttackCooldownTimer <= 0)
 			{
 				duckAttack = true;
-				attackBlocked = IsAttackBlocked(duckAttack);
 				duckAttackCooldownTimer = DuckAttackCooldown;
 				State = States.Attack;
 				if (grounded)
@@ -1276,6 +1275,9 @@ public partial class Player : Pawn
 
 	void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
 
+	static float ATTACK_WINDUP => 0.09f;
+	static float ATTACK_DURATION => 0.41f;
+
 	void UpdateFootsteps()
 	{
 		if (State != States.Normal || !grounded || !IsPlaying("run") && !IsPlaying("run_start"))
@@ -1301,90 +1303,25 @@ public partial class Player : Pawn
 	public void AttackState()
 	{
 		if (duckAttack)
+		{
 			ducking = true;
+		}
 
 		Play(GetAttackAnimation(), false);
 
-		RectInt? hitbox = null;
-
-		const float ATTACK_WINDUP = 0.09f;
-		const float ATTACK_DURATION = 0.41f;
-
-		if (attackBlocked)
+		if (state.JustCrossedTime(ATTACK_WINDUP))
 		{
-			if (state.PreviousTime <= 0)
+			var hitbox = GetAttackHitbox(duckAttack);
+			attackBlocked = AttackThisFrame(hitbox);
+			if (attackBlocked)
 			{
-				AudioEvent("player/sword_block");
-			}
-		}
-		else if (duckAttack)
-		{
-			if (state.PreviousTime <= 0)
-			{
-				AudioEvent("sword_crouched");
-				EmitPlasmaStrike(duckingAttack: true);
-			}
-			if (state.Time < Animation.Duration)
-				hitbox = GetAttackHitbox(duckAttack);
-		}
-		else if (state.Time < ATTACK_WINDUP)
-		{
-			hitbox = new(-16, -12, 17, 8);
-		}
-		else if (state.Time < ATTACK_DURATION)
-		{
-			if (state.PreviousTime < ATTACK_WINDUP)
-			{
-				attackBlocked = IsAttackBlocked(duckAttack);
-				if (attackBlocked)
-				{
-					Play(GetAttackAnimation(), false);
-					AudioEvent("player/sword_block");
-				}
-				else
-				{
-					AudioEvent("sword");
-					EmitPlasmaStrike(duckingAttack: false);
-				}
-			}
-			if (!attackBlocked)
-				hitbox = GetAttackHitbox(duckAttack);
-		}
-
-		if (hitbox is { } it)
-		{
-			if (Facing == Signs.Negative)
-				it.X = -(it.X + it.Width);
-			it += Position;
-
-			Game.CollisionRectsThisFrame.Add(it);
-			if (!attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
-			{
-				attackBlocked = true;
 				Play(GetAttackAnimation(), false);
 				AudioEvent("player/sword_block");
 			}
-
-			if (!attackBlocked)
+			else
 			{
-				if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible) is { } hit)
-					Hit(hit);
-
-				Game.BreakTiles(it);
-
-				foreach (var actor in Game.Actors.ToArray())
-				{
-					if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
-					{
-						nca.Cut(it);
-						nca.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
-					}
-					else if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
-					{
-						fungus.Cut(it);
-						fungus.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
-					}
-				}
+				AudioEvent(duckAttack ? "sword_crouched" : "sword");
+				EmitPlasmaStrike(duckingAttack: duckAttack);
 			}
 		}
 
@@ -1394,6 +1331,7 @@ public partial class Player : Pawn
 		var attackFinished = attackBlocked
 			? IsFinishedPlaying(GetAttackAnimation())
 			: state.Time >= Animation.Duration;
+
 		if (attackFinished)
 		{
 			attackBlocked = false;
@@ -1410,7 +1348,49 @@ public partial class Player : Pawn
 		}
 	}
 
-	bool IsAttackBlocked(bool duckingAttack)
+	bool AttackThisFrame(RectInt it)
+	{
+		if (Facing == Signs.Negative)
+			it.X = -(it.X + it.Width);
+
+		it += Position;
+
+		Game.CollisionRectsThisFrame.Add(it);
+
+		var blockedByShield = IsAttackBlocked(it, checkOnlyForStrongActorBlock: true);
+		if (blockedByShield)
+		{
+			attackBlocked = true;
+		}
+
+		var hitSomething = false;
+		if (!blockedByShield)
+		{
+			var hit = Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible);
+			if (hit != null)
+			{
+				Hit(hit);
+				hitSomething = true;
+			}
+		}
+
+		if (!hitSomething && !attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
+		{
+			attackBlocked = true;
+			Play(GetAttackAnimation(), false);
+			AudioEvent("player/sword_block");
+		}
+
+		if (!attackBlocked)
+		{
+			Game.BreakTiles(it);
+			Game.HitVisualActors(it);
+		}
+
+		return attackBlocked;
+	}
+
+	bool IsAttackBlocked(bool duckingAttack, bool checkOnlyForStrongActorBlock = false)
 	{
 		//
 		// TODO: make this false if we would have hit a breakable block or enemy
@@ -1419,18 +1399,26 @@ public partial class Player : Pawn
 		if (Facing == Signs.Negative)
 			hitbox.X = -(hitbox.X + hitbox.Width);
 		hitbox += Position;
-		return IsAttackBlocked(hitbox);
+		return IsAttackBlocked(hitbox, checkOnlyForStrongActorBlock);
 	}
 
-	bool IsAttackBlocked(in RectInt hitbox)
+	bool IsAttackBlocked(in RectInt hitbox, bool checkOnlyForStrongActorBlock = false)
 	{
-		if (Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold)
-			return true;
-
 		var attackPath = hitbox.Conflate(Position);
 		foreach (var actor in Game.Actors)
-			if (actor != this && !Game.destroying.Contains(actor) && actor.BlocksAttack(this, attackPath))
-				return true;
+		{
+			if (actor != this && !Game.destroying.Contains(actor))
+			{
+				if (actor.BlocksAttack(this, attackPath))
+					return true;
+			}
+		}
+
+		if (checkOnlyForStrongActorBlock)
+			return false;
+
+		if (Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold)
+			return true;
 
 		return false;
 	}

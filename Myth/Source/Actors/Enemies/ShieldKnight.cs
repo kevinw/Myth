@@ -13,7 +13,6 @@ public class ShieldKnight : Actor
 	}
 
 	int health = 2;
-	States state = States.Patrol;
 	static RectInt ShieldHitbox => new(4, -18, 2, 18);
 
 	public ShieldKnight()
@@ -30,11 +29,13 @@ public class ShieldKnight : Actor
 
 	float turnTimer = 2.0f;
 
-	public override void Update() {
+	public override void Update()
+	{
 		base.Update();
 
 		var player = Game.GetFirst<Player>();
-		if (player == null) {
+		if (player == null)
+		{
 			Play("idle");
 			return;
 		}
@@ -72,8 +73,9 @@ public class ShieldKnight : Actor
 		if (health <= 0) return;
 
 		health--;
-		if (health <= 0) {
-			for (int y = 0; y < 2; y ++)
+		if (health <= 0)
+		{
+			for (int y = 0; y < 2; y++)
 				Game.Create<Pop>(Position + new Point2(0, -8 + y * 12));
 			Game.HitStun(0.3f);
 			Game.Destroy(this);

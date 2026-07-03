@@ -10,6 +10,8 @@ public sealed class StateMachine<T>(T initial = default)
 	public float PreviousTime { get; private set; }
 	bool JustChanged;
 
+	public bool JustCrossedTime(float threshold) => PreviousTime < threshold && Time >= threshold;
+
 	public bool Change(T next)
 	{
 		if (EqualityComparer<T>.Default.Equals(Current, next))

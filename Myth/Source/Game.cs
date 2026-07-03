@@ -1411,6 +1411,13 @@ public partial class Game : IDisposable
 		return brokeAny;
 	}
 
+	public void HitVisualActors(RectInt hitbox)
+	{
+		foreach (var actor in Actors)
+			if (actor is IHitByHitbox { } hittable)
+				hittable.HitByHitbox(hitbox);
+	}
+
 	public void ReloadRoom(bool restartMusic = false)
 	{
 		if (room == null) return;

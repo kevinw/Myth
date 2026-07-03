@@ -5,14 +5,30 @@ using Foster.Framework;
 
 namespace Myth;
 
+public interface IHitByHitbox
+{
+	public void HitByHitbox(RectInt rectInt);
+
+}
+
 /// <summary>
 /// Renders a Growing Neural Cellular Automata simulation
 /// (https://distill.pub/2020/growing-ca/) on a per-pixel grid using
 /// compute shaders.
 /// </summary>
 [GameActor(HideFromPalette = true)]
-public class NeuralCellularActor : Actor
+public class NeuralCellularActor : Actor, IHitByHitbox
 {
+	public void HitByHitbox(RectInt rectInt)
+	{
+		Rect rect = new(rectInt.X, rectInt.Y, rectInt.Width, rectInt.Height);
+		if (GetVisualBounds().Overlaps(rect))
+		{
+			Cut(rectInt);
+			Hit(rectInt.Center);
+		}
+	}
+
 	[StructLayout(LayoutKind.Sequential)]
 	struct CellState
 	{
@@ -269,8 +285,19 @@ public class NeuralCellularActor : Actor
 		// Seed cell: alpha + all hidden channels = 1, RGB = 0.
 		cells[cy * GridWidth + cx] = new CellState
 		{
-			C3 = 1, C4 = 1, C5 = 1, C6 = 1, C7 = 1, C8 = 1, C9 = 1, C10 = 1,
-			C11 = 1, C12 = 1, C13 = 1, C14 = 1, C15 = 1,
+			C3 = 1,
+			C4 = 1,
+			C5 = 1,
+			C6 = 1,
+			C7 = 1,
+			C8 = 1,
+			C9 = 1,
+			C10 = 1,
+			C11 = 1,
+			C12 = 1,
+			C13 = 1,
+			C14 = 1,
+			C15 = 1,
 		};
 
 		bufferA!.Upload(cells);
@@ -528,11 +555,11 @@ public class NeuralCellularActor : Actor
 		// entirely instead of spawning particles over empty space.
 		var colors = new List<Color>();
 		for (var y = y0; y < y1; y++)
-		for (var x = x0; x < x1; x++)
-		{
-			if (CellColor(cellCache[y * GridWidth + x]) is { } color)
-				colors.Add(color);
-		}
+			for (var x = x0; x < x1; x++)
+			{
+				if (CellColor(cellCache[y * GridWidth + x]) is { } color)
+					colors.Add(color);
+			}
 
 		if (colors.Count == 0)
 			return;
