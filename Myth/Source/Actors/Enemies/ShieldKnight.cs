@@ -14,6 +14,7 @@ public class ShieldKnight : Actor
 
 	int health = 2;
 	static RectInt ShieldHitbox => new(4, -18, 2, 18);
+	static float WalkSpeed => 14f.T();
 	static float Gravity => 360f;
 
 	public ShieldKnight()
@@ -53,7 +54,7 @@ public class ShieldKnight : Actor
 		}
 		else
 		{
-			Velocity.X = Facing * 10;
+			Velocity.X = Facing * WalkSpeed;
 			var facingPlayer = Math.Sign(Position.X - player.Position.X);
 			if (facingPlayer == Facing)
 			{

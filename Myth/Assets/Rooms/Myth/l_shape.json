@@ -253,6 +253,12 @@
       "Id": "ede7fefbafd5e27e",
       "Type": "Chest",
       "Position": [42, 224]
+    },
+    {
+      "Id": "c0233b662745c712",
+      "Type": "ShieldKnight",
+      "Position": [500, 336],
+      "Facing": "-"
     }
   ]
 }
