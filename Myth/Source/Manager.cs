@@ -675,6 +675,14 @@ public partial class Manager : App
 		UpdateCommandConsoleToggle();
 #endif
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
+
+#if DEBUG
+		// Toggle the Tweaks panel from anywhere — edit or play — except while actively typing into a
+		// text field (so T reaches the search box). Runs before the play/edit branch so both modes see it.
+		if (imgui is { WantsTextInput: false } && Input.Keyboard.Pressed(Keys.T))
+			TweakRegistry.Open = !TweakRegistry.Open;
+#endif
+
 		if (!keyboardShortcutsBlocked && playing && GymLoop && Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter))
 			AdvanceGym(failureReason: "manual");
 

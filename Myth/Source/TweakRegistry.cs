@@ -254,7 +254,9 @@ static class TweakRegistry
 		if (!Open)
 			return;
 
-		if (!ImGui.Begin("Tweaks", ref Open))
+		// NoFocusOnAppearing: opening the panel (incl. via the T hotkey) must not steal keyboard focus,
+		// which is what would otherwise nav-focus the first item (the search box) and swallow keystrokes.
+		if (!ImGui.Begin("Tweaks", ref Open, ImGuiWindowFlags.NoFocusOnAppearing))
 		{
 			ImGui.End();
 			return;
