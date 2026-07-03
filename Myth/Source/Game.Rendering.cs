@@ -1543,26 +1543,39 @@ public sealed partial class GameView
 	static readonly List<VisibilityPolygon.Hit> _hits = new();
 	static readonly List<VisibilityPolygon.Segment> _segments = new();
 
-	readonly Dictionary<(Point2, int), List<VisibilityPolygon.Hit>> _visibilityCache = [];
+	// Cached visibility polygons for static lights, computed from static room geometry ONLY. A
+	// static light over unchanging geometry has an unchanging visibility polygon, so we compute it
+	// once and reuse it every frame (cleared on room / room-geometry change). Dynamic occluders
+	// (moving platforms) are deliberately excluded from the cache — see DrawVisibilityClippedNormalLight.
+	readonly Dictionary<(Point2, int), List<VisibilityPolygon.Hit>> _staticVisibilityCache = [];
 
-	List<VisibilityPolygon.Hit> GetHits(Vector2 lightPosition, float radius) {
-		GatherVisibilitySegments(lightPosition, radius, _segments);
-		VisibilityPolygon.Compute(lightPosition, radius, _segments, _hits);
+	List<VisibilityPolygon.Hit> GetHits(Vector2 lightPosition, float radius, bool includeDynamicOccluders) {
+		GatherVisibilitySegments(lightPosition, radius, _segments, includeDynamicOccluders);
+		VisibilityPolygon.Compute(lightPosition, radius, _segments, _hits, VisibilityPolygon.BoundaryRaysForRadius(radius));
 		return _hits;
 	}
 
 	void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius, bool lightIsStatic)
 	{
-		var key = ((Point2)lightPosition, (int)MathF.Floor(radius));
 		List<VisibilityPolygon.Hit> hits;
 
-		// for static lights, we cache the hits to avoid recomputing them each frame
-		if (lightIsStatic && _visibilityCache.TryGetValue(key, out var cachedHits)) {
+		// A static light over static geometry has a fixed visibility polygon we can cache. But a
+		// moving platform (dynamic occluder) in range must still cast a live shadow, so when one
+		// overlaps the light we recompute the full polygon this frame and bypass the cache. Lights
+		// with no platform nearby — the common case — keep serving from the cache.
+		if (lightIsStatic && !AnyDynamicOccluderOverlaps(lightPosition, radius))
+		{
+			var key = ((Point2)lightPosition, (int)MathF.Floor(radius));
+			if (!_staticVisibilityCache.TryGetValue(key, out var cachedHits))
+			{
+				cachedHits = [.. GetHits(lightPosition, radius, includeDynamicOccluders: false)];
+				_staticVisibilityCache[key] = cachedHits;
+			}
 			hits = cachedHits;
-		} else {
-			hits = GetHits(lightPosition, radius);
-			if (lightIsStatic)
-				_visibilityCache[key] = [.. hits];
+		}
+		else
+		{
+			hits = GetHits(lightPosition, radius, includeDynamicOccluders: true);
 		}
 
 		if (hits.Count < 3)
@@ -1868,7 +1881,17 @@ public sealed partial class GameView
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
 	}
 
-	void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments)
+	// True if any dynamic occluder (moving platform, etc.) has a silhouette edge inside the light's
+	// circle. Gates whether a static light must recompute its polygon this frame instead of caching.
+	bool AnyDynamicOccluderOverlaps(Vector2 lightPosition, float radius)
+	{
+		foreach (var segment in dynamicOccluderSegments)
+			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+				return true;
+		return false;
+	}
+
+	void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments, bool includeDynamicOccluders = true)
 	{
 		segments.Clear();
 		foreach (var visibleRoom in VisibleRooms())
@@ -1894,9 +1917,10 @@ public sealed partial class GameView
 			}
 		}
 
-		foreach (var segment in dynamicOccluderSegments)
-			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-				segments.Add(segment);
+		if (includeDynamicOccluders)
+			foreach (var segment in dynamicOccluderSegments)
+				if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+					segments.Add(segment);
 	}
 
 	static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)

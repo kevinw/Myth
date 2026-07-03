@@ -33,6 +33,10 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		CollidesWithSolids = true;
 	}
 
+	public override void Destroyed() {
+		StopAndReleaseSound(ref moveSound, false);
+	}
+
 	public override void Added()
 	{
 		base.Added();

@@ -7,7 +7,22 @@ public static class VisibilityPolygon
 {
 	private const float RayAngleEpsilon = 0.0005f;
 	private const float IntersectionEpsilon = 0.0001f;
-	private const int BoundaryRayCount = 96;
+
+	// Boundary rays evenly tessellate the light's unoccluded rim (the part that reaches full radius
+	// without hitting a segment). They set only how *round* the free arc looks — never silhouette
+	// accuracy, which the per-endpoint rays own. Each ray costs O(segments), so a flat max is wasteful
+	// for the small lights that dominate the scene. The count to still look round scales with on-screen
+	// radius via the sagitta R(1 - cos(pi/N)); sqrt(radius) tracks that with a floor that keeps a
+	// lone (segment-free) light convincingly circular rather than a polygon. See BoundaryRaysForRadius.
+	public const int MaxBoundaryRays = 96;
+	private const int MinBoundaryRays = 16;
+	private const float BoundaryRaysPerSqrtRadius = 4f;
+
+	public static int BoundaryRaysForRadius(float radius)
+		=> Math.Clamp(
+			(int)MathF.Round(BoundaryRaysPerSqrtRadius * MathF.Sqrt(MathF.Max(radius, 0f))),
+			MinBoundaryRays,
+			MaxBoundaryRays);
 
 	public readonly record struct Segment(Vector2 A, Vector2 B)
 	{
@@ -18,13 +33,13 @@ public static class VisibilityPolygon
 
 	private static readonly List<RayCandidate> candidates = new List<RayCandidate>();
 
-	public static List<Hit> Compute(Vector2 origin, float radius, IReadOnlyList<Segment> segments, List<Hit> hits)
+	public static List<Hit> Compute(Vector2 origin, float radius, IReadOnlyList<Segment> segments, List<Hit> hits, int boundaryRayCount = MaxBoundaryRays)
 	{
 		candidates.Clear();
-		candidates.EnsureCapacity(segments.Count * 6);
+		candidates.EnsureCapacity(segments.Count * 6 + boundaryRayCount);
 
-		for (var i = 0; i < BoundaryRayCount; i++)
-			candidates.Add(new(i / (float)BoundaryRayCount * MathF.Tau));
+		for (var i = 0; i < boundaryRayCount; i++)
+			candidates.Add(new(i / (float)boundaryRayCount * MathF.Tau));
 
 		for (var i = 0; i < segments.Count; i++)
 		{

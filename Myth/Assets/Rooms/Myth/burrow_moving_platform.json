@@ -1,7 +1,7 @@
 {
   "position": [280, 46],
   "size": [40, 23],
-  "ambientColor": "868686",
+  "ambientColor": "757474",
   "reverb": 0.206,
   "tiles": [
     "T0000000000000TTTT0000000000TTTTTTTTTTTT",
@@ -83,15 +83,15 @@
       "Id": "4cda444cf51299bc",
       "Type": "Light",
       "Position": [111, 84],
-      "Radius": 54.6,
-      "Intensity": 0.95
+      "Intensity": 0.95,
+      "Radius": 61.8
     },
     {
       "Id": "bd6f70b6921103d5",
       "Type": "Light",
       "Position": [222, 84],
-      "Radius": 84.45,
-      "Intensity": 0.95
+      "Intensity": 0.95,
+      "Radius": 111.1
     }
   ]
 }

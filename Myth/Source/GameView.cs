@@ -111,12 +111,12 @@ public sealed partial class GameView : IDisposable
 
 	void OnRoomChanged(RoomChange change)
 	{
-		_visibilityCache.Clear();
+		_staticVisibilityCache.Clear();
 	}
 
 	void OnRoomGeoChanged(RoomGeoChange room) {
 		if (room.Room == game.room) {
-			_visibilityCache.Clear();
+			_staticVisibilityCache.Clear();
 		}
 	}
 
@@ -126,7 +126,7 @@ public sealed partial class GameView : IDisposable
 			return;
 
 		GatherVisibilitySegments(lightPosition, radius, debugSegments);
-		VisibilityPolygon.Compute(lightPosition, radius, debugSegments, debugHits);
+		VisibilityPolygon.Compute(lightPosition, radius, debugSegments, debugHits, VisibilityPolygon.BoundaryRaysForRadius(radius));
 
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 		Batcher.Circle(lightPosition, radius, 64, Color.Transparent, new Color(0x5fcde4, 0.35f));
