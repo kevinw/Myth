@@ -1015,7 +1015,7 @@ public partial class Player : Pawn
 		}
 		else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
 		{
-			ApplyHurt(-1000);
+			FallOffCliff();
 		}
 		else if (Position.Y < Game.Bounds.Top)
 		{
@@ -1024,6 +1024,79 @@ public partial class Player : Pawn
 			else
 				Position.Y = Game.Bounds.Top;
 		}
+	}
+
+	static int CliffFallDamage => 1;
+	// How far to pull the respawn in from the room-entry edge, and how far up/down to hunt
+	// for footing as we step inward (a step follows a ≤45° slope by ~1px per pixel).
+	static int RespawnInset => 16; // ~2 tiles
+	static int RespawnFootingSearch => 6;
+
+	// Falling off the bottom of the room is no longer instant death: take a normal hit and
+	// respawn just inside the room from where we entered. If the hit happens to be fatal,
+	// ApplyHurt runs the usual death/reload, so we leave the position alone in that case.
+	void FallOffCliff()
+	{
+		Position = InsetRespawnPoint();
+		Stop();
+		ApplyHurt(-CliffFallDamage);
+		if (Health > 0)
+		{
+			Stop(); // cancel the hurt knockback so we don't get flung back off the ledge
+			GrantIFrames(); // brief invincibility so we don't get re-hit on the way back in
+		}
+	}
+
+	// Walks inward from the room-entry point (toward room center) along the ground, one
+	// pixel at a time, stopping at the last spot with fully-supported footing before a gap
+	// or wall. Falls back to the raw entry point if it isn't itself on footing.
+	Point2 InsetRespawnPoint()
+	{
+		var entry = Game.RoomEntryPosition;
+		var inwardX = Math.Sign(Game.Bounds.Center.X - entry.X);
+		if (inwardX == 0)
+			inwardX = 1;
+
+		if (!TrySnapToFooting(entry, out var best))
+			return entry;
+
+		var y = best.Y;
+		for (var i = 1; i <= RespawnInset; i++)
+		{
+			if (!TrySnapToFooting(new Point2(entry.X + inwardX * i, y), out var landed))
+				break; // a gap or wall ahead — stay on the last good footing
+			best = landed;
+			y = landed.Y;
+		}
+		return best;
+	}
+
+	// Scans a short vertical window around `from` for a standing spot that's clear of solids
+	// and has both bottom corners of the footprint on the ground; topmost match wins.
+	bool TrySnapToFooting(Point2 from, out Point2 result)
+	{
+		for (var dy = -RespawnFootingSearch; dy <= RespawnFootingSearch; dy++)
+		{
+			var p = new Point2(from.X, from.Y + dy);
+			if (HasSupportedFooting(p))
+			{
+				result = p;
+				return true;
+			}
+		}
+		result = from;
+		return false;
+	}
+
+	bool HasSupportedFooting(Point2 pos)
+	{
+		var box = StandingHitboxRect + pos;
+		if (Game.OverlapsRoomCollision(box))
+			return false; // standing space is blocked
+
+		var groundY = box.Bottom; // first pixel row below the feet
+		return Game.OverlapsRoomCollision(new RectInt(box.Left, groundY, 1, 1))
+			&& Game.OverlapsRoomCollision(new RectInt(box.Right - 1, groundY, 1, 1));
 	}
 
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)

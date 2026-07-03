@@ -363,6 +363,11 @@ public class Actor
 		remainder.Y = 0;
 	}
 
+	/// Grants invincibility frames (damage immunity + the hit blink) for `duration`
+	/// seconds, defaulting to IFrameTime. Same cooldown Hit() sets, so it gates the same
+	/// damage checks — use it for hurt sources that bypass Hit(), like a respawn.
+	protected void GrantIFrames(float? duration = null) => hitCooldown = duration ?? IFrameTime;
+
 	/// Tries to Hit another Actor.
 	/// What a "Hit" is, is up to the Actors
 	public bool Hit(Actor actor)
