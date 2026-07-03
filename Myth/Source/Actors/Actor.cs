@@ -256,12 +256,20 @@ public class Actor
 		return true;
 	}
 
+	// A single step-up/step-down is a (±1, ∓1) diagonal covering √2 px along the slope, but the
+	// X loop only debits 1 px of horizontal budget for it. Charging the √2-1 shortfall keeps the
+	// actor's along-slope speed equal to its flat-ground speed instead of √2× too fast.
+	const float Sqrt2 = 1.4142135f;
+
 	/// Moves a floating value, which increments an accumulator and only moves in pixel values
 	public void Move(Vector2 value)
 	{
 		remainder += value;
 		Point2 move = (Point2)remainder;
 		remainder -= move;
+
+		var xdir = Math.Sign(move.X);
+		var stepDebt = 0f; // sub-pixel horizontal budget owed by diagonal steps this frame
 
 		while (move.X != 0)
 		{
@@ -270,21 +278,32 @@ public class Actor
 			if (!MovePixel(Point2.UnitX * sign))
 			{
 				if (TryStepUp(sign))
-				{
 					move.X -= sign;
-					continue;
+				else
+				{
+					OnCollideX();
+					break;
 				}
-
-				OnCollideX();
-				break;
+				stepDebt += Sqrt2 - 1;
 			}
 			else
 			{
 				move.X -= sign;
-				if (wasGrounded)
-					TryStepDown();
+				if (wasGrounded && TryStepDown())
+					stepDebt += Sqrt2 - 1;
+			}
+
+			// Charge whole pixels of accrued diagonal cost against the remaining budget.
+			while (stepDebt >= 1 && move.X != 0)
+			{
+				stepDebt -= 1;
+				move.X -= Math.Sign(move.X);
 			}
 		}
+
+		// Carry the leftover sub-pixel diagonal cost so slope speed stays accurate over frames.
+		if (stepDebt != 0 && xdir != 0)
+			remainder.X -= xdir * stepDebt;
 
 		while (move.Y != 0)
 		{
