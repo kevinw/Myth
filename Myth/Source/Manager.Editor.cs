@@ -340,6 +340,10 @@ public partial class Manager
 		if (ImGuiWantsKeyboard)
 			return false;
 
+		if (Input.Keyboard.Pressed(Keys.Escape)) {
+			SelectEditorActorTool();
+		}
+
 		var modifier =
 			Input.Keyboard.Down(Keys.LeftControl) ||
 			Input.Keyboard.Down(Keys.RightControl) ||

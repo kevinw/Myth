@@ -15,6 +15,7 @@ public class ShieldKnight : Actor
 	int health = 2;
 	States state = States.Patrol;
 	static RectInt ShieldHitbox => new(4, -18, 2, 18);
+	static float Gravity => 360f;
 
 	public ShieldKnight()
 	{
@@ -60,6 +61,8 @@ public class ShieldKnight : Actor
 				Velocity.X = 0;
 			}
 		}
+
+		Velocity.Y += Gravity * Time.Delta;
 
 	}
 
