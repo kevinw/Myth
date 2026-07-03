@@ -15,6 +15,7 @@ public enum RoomChangeKind
 }
 
 public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
+public readonly record struct RoomGeoChange(Room Room);
 
 public partial class Game : IDisposable
 {
@@ -283,6 +284,7 @@ public partial class Game : IDisposable
 	public bool Simulating { get; private set; }
 	public NavTrace? NavTrace { get; set; }
 	public event Action<RoomChange>? RoomChanged;
+	public event Action<RoomGeoChange>? RoomGeoChanged;
 
 	public SimulationScope BeginSimulation()
 		=> new(this);
@@ -1133,6 +1135,7 @@ public partial class Game : IDisposable
 				Destroy(actor);
 			}
 
+		room?.RoomGeoChanged -= RoomGeoChanged;
 		room = targetRoom;
 		nextRoom = null;
 		transitionDirection = Point2.Zero;
@@ -1441,7 +1444,10 @@ public partial class Game : IDisposable
 		var reloaded = Assets.GetRoom(room.Id)?.CloneRuntime() ?? room.CloneRuntime();
 		foreach (var actor in Actors)
 			Destroy(actor);
+
+		room.RoomGeoChanged -= RoomGeoChanged;
 		room = reloaded;
+
 		LoadRoom(room);
 		if (GetFirst<Player>() == null && respawnPosition is { } position)
 			Create<Player>(position);
@@ -1471,6 +1477,7 @@ public partial class Game : IDisposable
 			Destroy(actor);
 
 		room = target.CloneRuntime();
+		room.RoomGeoChanged += RoomGeoChanged;
 		Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
 		UpdateAudioListener();
 		LoadRoom(room);
@@ -1575,6 +1582,8 @@ public partial class Game : IDisposable
 
 	public void LoadRoom(Room forRoom)
 	{
+		forRoom.RoomGeoChanged += RoomGeoChanged;
+
 		// Geometry is already built: every caller passes a freshly CloneRuntime()'d room,
 		// and CloneRuntime() ends with RebuildGeometry(). Rebuilding here ran the full
 		// slope/collision/occluder/visibility/reflection build a second time per load.

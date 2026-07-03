@@ -399,6 +399,8 @@ public class Room
 
 		if (ReverbAuto)
 			Reverb = InferReverb();
+
+		RoomGeoChanged?.Invoke(new (this));
 	}
 
 	static bool HasBakedDualOccluders(Factory.Entry entry)
@@ -1300,6 +1302,8 @@ public class Room
 		LoadJson(json);
 		RebuildGeometry();
 	}
+
+	public event Action<RoomGeoChange>? RoomGeoChanged;
 
 	private bool HasBackgroundTiles()
 	{

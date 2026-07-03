@@ -1555,15 +1555,14 @@ public sealed partial class GameView
 	{
 		var key = ((Point2)lightPosition, (int)MathF.Floor(radius));
 		List<VisibilityPolygon.Hit> hits;
+
+		// for static lights, we cache the hits to avoid recomputing them each frame
 		if (lightIsStatic && _visibilityCache.TryGetValue(key, out var cachedHits)) {
 			hits = cachedHits;
 		} else {
 			hits = GetHits(lightPosition, radius);
 			if (lightIsStatic)
-			{
 				_visibilityCache[key] = [.. hits];
-				Console.WriteLine($"{Time.Frame} storing {key} - {hits.Count} hits");
-			}
 		}
 
 		if (hits.Count < 3)
