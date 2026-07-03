@@ -29,11 +29,14 @@ public class Jumpthru : Actor, IResizable
 
 	public override void Render(Batcher batcher) => RenderTiled(batcher, normals: false);
 	public override void RenderNormals(Batcher batcher) => RenderTiled(batcher, normals: true);
+	public override void RenderReflection(Batcher batcher, Color color) => RenderTiled(batcher, normals: true, color: color);
+
+	public override bool CastsReflection => true;
 
 	// Repeat the one-tile sprite across the authored width, clipping the final tile so widths that
 	// aren't a whole number of tiles still tile seamlessly (the atlas-friendly stand-in for a
 	// wrapping sampler -- a Repeat sampler would bleed into neighbouring atlas sprites).
-	void RenderTiled(Batcher batcher, bool normals)
+	void RenderTiled(Batcher batcher, bool normals, Color? color = null)
 	{
 		if (Sprite is not { Frames.Count: > 0 } sprite)
 			return;
@@ -52,7 +55,7 @@ public class Jumpthru : Actor, IResizable
 		for (var x = 0; x < Size.X; x += step)
 		{
 			var width = Math.Min(step, Size.X - x);
-			batcher.Image(tile, new Rect(0, 0, width, height), new Vector2(x, 0), Vector2.Zero, Vector2.One, 0, Color.White);
+			batcher.Image(tile, new Rect(0, 0, width, height), new Vector2(x, 0), Vector2.Zero, Vector2.One, 0, color ?? Color.White);
 		}
 	}
 }
