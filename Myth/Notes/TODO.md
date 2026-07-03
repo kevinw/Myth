@@ -1,5 +1,10 @@
 # TODO
 
+- falling off a cliff should just damage you and start you at the beginning of the room.
+- pickup sound
+- chest destruction needs to be durable
+- killing the knight should be durable
+- better revealdoor sound
 - death is weird, you can fall through jumpthrus into water; maybe simplify
 - attenuate landing sound by y velocity
 - store fall height in burrow; pop out with that height
@@ -12,7 +17,6 @@
 - save checkpoints
 - bug: dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
 - pick a non LLM-brained color palette for the web ui
-- breakable pots with coins (or pixels? like mina?)
 - try a big low color image in the background of the boss room
 - boss room red light looks bad
 - copy rooms I made from frog world over

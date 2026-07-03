@@ -79,6 +79,11 @@
       "Id": "1eb1a5da67153219",
       "Type": "LedgePatrol",
       "Position": [108, 72]
+    },
+    {
+      "Id": "77e68683410d8932",
+      "Type": "Chest",
+      "Position": [236, 168]
     }
   ]
 }
