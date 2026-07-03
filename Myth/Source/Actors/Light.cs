@@ -15,11 +15,16 @@ public class Light : Actor
 	readonly float FlickerRandomOffset = 0;
 	public bool DrawSprite = true;
 
-	public float FlickerScale => 1 + MathF.Sin(Timer * FlickerFrequency * MathF.Tau + FlickerRandomOffset) * FlickerIntensity;
+	public float FlickerScale => 1 + CurrentFlicker * FlickerIntensity;
+	public float FlickerScaleMax => 1 + FlickerIntensity;
+	float CurrentFlicker => MathF.Sin(Timer * FlickerFrequency * MathF.Tau + FlickerRandomOffset);
+
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => DrawSprite;
 
-	static Rng rng = new Rng();
+	static Rng rng = new();
+
+	public bool IsStatic = true; // doesn't move
 
 	public Light()
 	{

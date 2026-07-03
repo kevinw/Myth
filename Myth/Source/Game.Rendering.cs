@@ -1317,7 +1317,7 @@ public sealed partial class GameView
 		lightMaskIncludeShadows = includeShadows;
 		drawLightMaskLightAction ??= (position, radius, intensity, height, lightColor) =>
 		{
-			DrawSingleLightMask(position, radius, intensity, height, lightColor, lightMaskIncludeShadows);
+			DrawSingleLightMask(position, radius, intensity, height, lightColor, lightMaskIncludeShadows, lightIsStatic: false);
 			AddSingleLightMask(lightMaskTarget!);
 		};
 
@@ -1465,13 +1465,17 @@ public sealed partial class GameView
 	void DrawSingleLightMask(Light light, bool includeShadows)
 		=> DrawSingleLightMask(
 			light.Position,
-			light.Radius * light.FlickerScale,
-			light.Intensity * light.FlickerScale,
+			light.Radius * light.FlickerScaleMax,
+			light.Intensity * light.FlickerScaleMax,
 			light.Height,
 			light.LightColor,
-			includeShadows);
+			includeShadows: includeShadows,
+			lightIsStatic: light.IsStatic
+		);
 
-	void DrawSingleLightMask(Vector2 position, float radius, float intensity, float height, Color lightColor, bool includeShadows)
+	void DrawSingleLightMask(
+		Vector2 position, float radius, float intensity, float height,
+		Color lightColor, bool includeShadows, bool lightIsStatic)
 	{
 		SingleLightMask.Clear(Color.Transparent);
 		var drewVisibilityClippedLight = false;
@@ -1499,7 +1503,7 @@ public sealed partial class GameView
 			Batcher.PushMaterial(normalLightMaterial.Material);
 			if (includeShadows)
 			{
-				DrawVisibilityClippedNormalLight(position, radius);
+				DrawVisibilityClippedNormalLight(position, radius, lightIsStatic: lightIsStatic);
 				drewVisibilityClippedLight = true;
 			}
 			else
@@ -1536,13 +1540,32 @@ public sealed partial class GameView
 		}
 	}
 
-	static readonly List<VisibilityPolygon.Hit> hits = new();
+	static readonly List<VisibilityPolygon.Hit> _hits = new();
 	static readonly List<VisibilityPolygon.Segment> _segments = new();
 
-	void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius)
-	{
+	readonly Dictionary<(Point2, int), List<VisibilityPolygon.Hit>> _visibilityCache = [];
+
+	List<VisibilityPolygon.Hit> GetHits(Vector2 lightPosition, float radius) {
 		GatherVisibilitySegments(lightPosition, radius, _segments);
-		VisibilityPolygon.Compute(lightPosition, radius, _segments, hits);
+		VisibilityPolygon.Compute(lightPosition, radius, _segments, _hits);
+		return _hits;
+	}
+
+	void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius, bool lightIsStatic)
+	{
+		var key = ((Point2)lightPosition, (int)MathF.Floor(radius));
+		List<VisibilityPolygon.Hit> hits;
+		if (lightIsStatic && _visibilityCache.TryGetValue(key, out var cachedHits)) {
+			hits = cachedHits;
+		} else {
+			hits = GetHits(lightPosition, radius);
+			if (lightIsStatic)
+			{
+				_visibilityCache[key] = [.. hits];
+				Console.WriteLine($"{Time.Frame} storing {key} - {hits.Count} hits");
+			}
+		}
+
 		if (hits.Count < 3)
 		{
 			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);

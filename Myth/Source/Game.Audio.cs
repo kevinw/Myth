@@ -92,7 +92,7 @@ public partial class Game
 	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
 
 	#if !BROWSER
-	static bool VoiceEnabled = true;
+	static bool VoiceEnabled = false;
 	#else
 	static bool VoiceEnabled = false;
 	#endif
@@ -140,16 +140,37 @@ public partial class Game
 
 	public readonly record struct MusicReloadState(bool WasPlaying, int TimelinePosition, string? Area);
 
-	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
+	bool NoAudio => Simulating || AudioMuted || !Manager.AudioEnabled;
+
+	public void PlayAudioEvent(string path, string parameterName, float parameterFloat, Vector2? position = null)
 	{
-		if (Simulating || AudioMuted) return;
-		if (!Manager.AudioEnabled) return;
+		if (NoAudio) return;
 
 		try
 		{
 			using var instance = CreateAudioEvent(path, position);
-			if (instance == null)
-				return;
+			if (instance == null) return;
+
+			if (parameterName != "")
+				instance.SetParameter(parameterName, parameterFloat, true);
+
+			instance.Start();
+		}
+		catch (Exception e)
+		{
+			Console.WriteLine(e);
+		}
+
+	}
+
+	public void PlayAudioEvent(string path, string parameterName = "", string parameterLabel = "", Vector2? position = null)
+	{
+		if (NoAudio) return;
+
+		try
+		{
+			using var instance = CreateAudioEvent(path, position);
+			if (instance == null) return;
 
 			if (parameterName != "" || parameterLabel != "")
 				instance.SetParameterLabel(parameterName, parameterLabel, true);

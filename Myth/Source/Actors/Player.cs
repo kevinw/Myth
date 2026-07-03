@@ -928,6 +928,7 @@ public partial class Player : Pawn
 
 		light = Game.Create<Light>(Position, it =>
 		{
+			it.IsStatic = false;
 			it.Radius = 37.5f;
 			it.Intensity = BaseLightIntensity;
 			it.LightColor = BaseLightColor;

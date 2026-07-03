@@ -39,6 +39,8 @@ public sealed partial class GameView : IDisposable
 		tileFieldStampMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldStamp", samplerCount: 1) : null;
 		tileFieldDebugMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1) : null;
 		pixelSortGlitchMaterial = loadVisualShaders ? CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1) : null;
+
+		game.RoomChanged += OnRoomChange;
 	}
 
 	// --- thin read-only views onto sim state, so render code reads it unqualified ---
@@ -103,10 +105,14 @@ public sealed partial class GameView : IDisposable
 		}
 	}
 
-	private static readonly List<VisibilityPolygon.Hit> debugHits = new();
-	private static readonly List<VisibilityPolygon.Segment> debugSegments = new();
+	static readonly List<VisibilityPolygon.Hit> debugHits = [];
+	static readonly List<VisibilityPolygon.Segment> debugSegments = [];
 
-	private void DrawVisibilityDebug(Target target)
+	void OnRoomChange(RoomChange change) {
+		_visibilityCache.Clear();
+	}
+
+	void DrawVisibilityDebug(Target target)
 	{
 		if (!TryGetVisibilityDebugLight(out var lightPosition, out var radius))
 			return;
@@ -271,6 +277,7 @@ public sealed partial class GameView : IDisposable
 
 	public void Dispose()
 	{
+		game.RoomChanged -= OnRoomChange;
 		rendering.Clear();
 		DisposeRenderTargets();
 		DisposeRoomNormalCaches();

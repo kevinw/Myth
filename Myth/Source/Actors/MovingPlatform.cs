@@ -5,6 +5,7 @@ namespace Myth;
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "editor_moving_platform", Anchor = SpriteAnchor.TopLeft)]
 class MovingPlatform : Actor, IResizable, IShapeOccluder
 {
+	SoundInstance? moveSound;
 	public static readonly Point2 DefaultSize = new(48, 32);
 
 	public Point2 Size { get; set; } = DefaultSize;
@@ -46,6 +47,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		if (waitTimer > 0)
 		{
 			waitTimer -= Time.Delta;
+			if (waitTimer <= 0) {
+				moveSound?.Stop();
+				moveSound = Game.CreateAudioEvent("moving_stone", Position);
+				moveSound?.Start();
+			}
 			return;
 		}
 
@@ -61,6 +67,10 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		var step = (int)moveRemainder;
 		moveRemainder -= step;
 
+		if (moveSound!= null) {
+			Game.SetAudioEventPosition(moveSound, Position);
+		}
+
 		var min = originalPosition.X;
 		var max = originalPosition.X + TravelDistance;
 		step = Math.Clamp(Position.X + step, min, max) - Position.X;
@@ -75,6 +85,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			moveRemainder = 0;
 			direction = -direction;
 			currentSpeed = 0;
+			StopAndReleaseSound(ref moveSound, false);
 		}
 	}
 

@@ -24,7 +24,7 @@ public partial class Player : Pawn
 	static float BurrowGlowWeight => 1.5f;
 	static float BurrowGlowCycleSpeed => 0.6f; // rainbow hue cycles per second
 	static float BurrowGlowHueScale => 0.03f;  // hue shift per world px along the line
-	static int BurrowIntervals => 4;           // burrow time is split into this many countdown intervals
+	static int BurrowIntervals => 3;           // burrow time is split into this many countdown intervals
 	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
 	static float BurrowMinSpread => 0.4f;      // arc shrinks to this fraction of full by the final interval
 	static float BurrowSpreadEaseRate => 1.4f; // per-second ease of the arc toward the current interval's spread
@@ -177,7 +177,7 @@ public partial class Player : Pawn
 		{
 			burrowIntervalIndex = interval;
 			burrowPulseTimer = BurrowPulseTime;
-			AudioEvent("player/burrow_tick");
+			AudioEvent("player/burrow_tick", "Interval", (float)burrowIntervalIndex);
 		}
 
 		// Full spread at the first interval, BurrowMinSpread at the last; ease toward it.
@@ -329,8 +329,12 @@ public partial class Player : Pawn
 			Facing = Math.Sign(input.MoveX);
 
 		burrowTimer -= Time.Delta;
-		if (burrowTimer <= 0 || !input.JumpDown)
-			PopOutOfBurrow();
+		if (burrowTimer <= 0 || !input.JumpDown) {
+			if (burrowTimer <= 0) {
+				AudioEvent("player/burrow_tick", "Interval", (float)BurrowIntervals);
+			}
+		PopOutOfBurrow();
+		}
 	}
 
 	// StopBurrow stop a burrow
