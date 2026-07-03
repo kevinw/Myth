@@ -69,38 +69,38 @@ public abstract class Pawn : Actor
 	public static float FastFallMultiplier => 1.25f;
 	protected static float JumpBufferTime => 0.08f;
 
-	public static float MaxGroundSpeed => 93;
-	public static float MaxAirSpeed => 100;
-	protected static float CrawlSpeed => 28;
-	protected static float GroundAccel => 400;
-	public static float AirAccel => 310;
-	public static float Friction => 480;
-	public static float Gravity => 450;
-	public static float TerminalVelocity => 500;
+	public static float MaxGroundSpeed => 93.T();
+	public static float MaxAirSpeed => 100.T();
+	protected static float CrawlSpeed => 28.T();
+	protected static float GroundAccel => 400.T();
+	public static float AirAccel => 310.T();
+	public static float Friction => 480.T();
+	public static float Gravity => 450.T();
+	public static float TerminalVelocity => 500.T();
 
 	// Water: while the torso is submerged, gravity is scaled down and downward speed is
 	// capped at MaxSinkSpeed (damped so a fast plunge eases into the sink instead of
 	// snapping). Jump becomes a repeatable upward stroke; burrowing is disabled.
-	public static float WaterGravityMultiplier => 0.3f;
-	public static float WaterMaxSinkSpeed => 40f;
-	public static float WaterFastSinkMultiplier => 1.5f; // holding down sinks 50% faster
-	public static float WaterSinkDamping => 200f;
-	public static float WaterSwimStroke => -70f;
+	public static float WaterGravityMultiplier => 0.3f.T();
+	public static float WaterMaxSinkSpeed => 40f.T();
+	public static float WaterFastSinkMultiplier => 1.5f.T(); // holding down sinks 50% faster
+	public static float WaterSinkDamping => 200f.T();
+	public static float WaterSwimStroke => -70f.T();
 	// The frame you break the surface, velocity is multiplied by this once to simulate
 	// surface tension grabbing you as you plunge in (a sharper slowdown than the ongoing
 	// water drag/sink cap that follow on later frames).
-	public static float WaterSurfaceTensionMultiplier => 0.55f;
+	public static float WaterSurfaceTensionMultiplier => 0.55f.T();
 	// Horizontal water resistance: lower top speed, plus a drag that bleeds off speed when
 	// no direction is held (even airborne, unlike the grounded-only dry friction).
-	public static float WaterHorizontalSpeedMultiplier => 0.6f;
-	public static float WaterHorizontalDrag => 300f;
-	public static float WaterRollSpeedMultiplier => 0.55f;
+	public static float WaterHorizontalSpeedMultiplier => 0.6f.T();
+	public static float WaterHorizontalDrag => 300f.T();
+	public static float WaterRollSpeedMultiplier => 0.55f.T();
 
-	protected static float WallHugGravityMultiplier => 0.25f;
-	protected static float WallSlideMaxFallSpeed => 80f;  // capped, slower descent while wall sliding
-	protected static float WallSlideFallDamping => 320f;  // eases a fast fall down to the slide cap
-	public static float JumpForce => -125;
-	public static float JumpTime => 0.19f;
+	protected static float WallHugGravityMultiplier => 0.25f.T();
+	protected static float WallSlideMaxFallSpeed => 80f.T();  // capped, slower descent while wall sliding
+	protected static float WallSlideFallDamping => 320f.T();  // eases a fast fall down to the slide cap
+	public static float JumpForce => -125.T();
+	public static float JumpTime => 0.19f.T();
 	// Gravity is scaled by this while the jump button is held (floatier ascent), and
 	// vertical velocity is multiplied by JumpCutMultiplier when the jump is released early.
 	// Centralized here so the jump-arc sweep (JumpPhysics) reads the same numbers as Update.

@@ -208,6 +208,9 @@ public partial class Manager
 			FpsOverlayImGui();
 		TransitionViewerImGui();
 		PreferencesImGui();
+#if DEBUG
+		TweakRegistry.DrawPanel();
+#endif
 	}
 
 	void MarkParticleEffectDirty(string name)
