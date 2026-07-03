@@ -133,6 +133,10 @@ public partial class Game : IDisposable
 	internal bool AcceptsLiveInput => room != null && nextRoom == null;
 	float timeScale = 1.0f;
 	readonly Point2? respawnPosition;
+	// Where the player entered the *current* room. Unlike respawnPosition (readonly, the
+	// initial room's spawn), this is refreshed on every room activation — including edge
+	// transitions, which reuse this Game instance — so it always points at the way back in.
+	Point2 roomEntryPosition;
 	readonly bool spawnBud;
 	// In the gym, Bud is the character under test, so it spawns exactly at the player
 	// start (the PlayerStart marker) rather than at an offset follow position.
@@ -268,6 +272,9 @@ public partial class Game : IDisposable
 	}
 
 	public RectInt Bounds => room?.WorldBounds ?? new();
+	// The point the player entered the current room from — the respawn spot after a
+	// non-fatal fall off the bottom of the room. See roomEntryPosition.
+	public Point2 RoomEntryPosition => roomEntryPosition;
 	public Point2 Cell => room?.Cell ?? Point2.Zero;
 	public Room? CurrentRoom => room;
 	public bool IsEditorPreview => !AudioEventsEnabled;
@@ -360,6 +367,8 @@ public partial class Game : IDisposable
 				}
 			}
 			EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
+			if (GetFirst<Player>() is { } initialPlayer)
+				roomEntryPosition = initialPlayer.Position;
 			RaiseRoomChanged(null, room, RoomChangeKind.InitialLoad, Point2.Zero);
 			if (AudioEventsEnabled)
 			{
@@ -763,6 +772,9 @@ public partial class Game : IDisposable
 
 	void FinishRoomActivation(RoomChangeKind kind)
 	{
+		// The player has been placed into the (new) room by now, so this is the way back in.
+		if (GetFirst<Player>() is { } player)
+			roomEntryPosition = player.Position;
 		RemoveDestroyedActors();
 		View?.PruneInactiveRoomCaches();
 		PrepareRoomTransitionGc();
@@ -1409,6 +1421,13 @@ public partial class Game : IDisposable
 		}
 
 		return brokeAny;
+	}
+
+	public void HitVisualActors(RectInt hitbox)
+	{
+		foreach (var actor in Actors)
+			if (actor is IHitByHitbox { } hittable)
+				hittable.HitByHitbox(hitbox);
 	}
 
 	public void ReloadRoom(bool restartMusic = false)

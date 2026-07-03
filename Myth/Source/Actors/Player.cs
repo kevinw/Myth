@@ -76,6 +76,7 @@ public abstract class Pawn : Actor
 	public static float AirAccel => 310;
 	public static float Friction => 480;
 	public static float Gravity => 450;
+	public static float TerminalVelocity => 500;
 
 	// Water: while the torso is submerged, gravity is scaled down and downward speed is
 	// capped at MaxSinkSpeed (damped so a fast plunge eases into the sink instead of
@@ -286,6 +287,7 @@ public abstract class Pawn : Actor
 			if (!inWater && State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
+			if (Velocity.Y > TerminalVelocity) Velocity.Y = TerminalVelocity;
 			var maxSink = input.MoveY > 0 ? WaterMaxSinkSpeed * WaterFastSinkMultiplier : WaterMaxSinkSpeed;
 			if (inWater && Velocity.Y > maxSink)
 				Velocity.Y = Calc.Approach(Velocity.Y, maxSink, WaterSinkDamping * Time.Delta);
@@ -1013,7 +1015,7 @@ public partial class Player : Pawn
 		}
 		else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
 		{
-			ApplyHurt(-1000);
+			FallOffCliff();
 		}
 		else if (Position.Y < Game.Bounds.Top)
 		{
@@ -1022,6 +1024,79 @@ public partial class Player : Pawn
 			else
 				Position.Y = Game.Bounds.Top;
 		}
+	}
+
+	static int CliffFallDamage => 1;
+	// How far to pull the respawn in from the room-entry edge, and how far up/down to hunt
+	// for footing as we step inward (a step follows a ≤45° slope by ~1px per pixel).
+	static int RespawnInset => 16; // ~2 tiles
+	static int RespawnFootingSearch => 6;
+
+	// Falling off the bottom of the room is no longer instant death: take a normal hit and
+	// respawn just inside the room from where we entered. If the hit happens to be fatal,
+	// ApplyHurt runs the usual death/reload, so we leave the position alone in that case.
+	void FallOffCliff()
+	{
+		Position = InsetRespawnPoint();
+		Stop();
+		ApplyHurt(-CliffFallDamage);
+		if (Health > 0)
+		{
+			Stop(); // cancel the hurt knockback so we don't get flung back off the ledge
+			GrantIFrames(); // brief invincibility so we don't get re-hit on the way back in
+		}
+	}
+
+	// Walks inward from the room-entry point (toward room center) along the ground, one
+	// pixel at a time, stopping at the last spot with fully-supported footing before a gap
+	// or wall. Falls back to the raw entry point if it isn't itself on footing.
+	Point2 InsetRespawnPoint()
+	{
+		var entry = Game.RoomEntryPosition;
+		var inwardX = Math.Sign(Game.Bounds.Center.X - entry.X);
+		if (inwardX == 0)
+			inwardX = 1;
+
+		if (!TrySnapToFooting(entry, out var best))
+			return entry;
+
+		var y = best.Y;
+		for (var i = 1; i <= RespawnInset; i++)
+		{
+			if (!TrySnapToFooting(new Point2(entry.X + inwardX * i, y), out var landed))
+				break; // a gap or wall ahead — stay on the last good footing
+			best = landed;
+			y = landed.Y;
+		}
+		return best;
+	}
+
+	// Scans a short vertical window around `from` for a standing spot that's clear of solids
+	// and has both bottom corners of the footprint on the ground; topmost match wins.
+	bool TrySnapToFooting(Point2 from, out Point2 result)
+	{
+		for (var dy = -RespawnFootingSearch; dy <= RespawnFootingSearch; dy++)
+		{
+			var p = new Point2(from.X, from.Y + dy);
+			if (HasSupportedFooting(p))
+			{
+				result = p;
+				return true;
+			}
+		}
+		result = from;
+		return false;
+	}
+
+	bool HasSupportedFooting(Point2 pos)
+	{
+		var box = StandingHitboxRect + pos;
+		if (Game.OverlapsRoomCollision(box))
+			return false; // standing space is blocked
+
+		var groundY = box.Bottom; // first pixel row below the feet
+		return Game.OverlapsRoomCollision(new RectInt(box.Left, groundY, 1, 1))
+			&& Game.OverlapsRoomCollision(new RectInt(box.Right - 1, groundY, 1, 1));
 	}
 
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
@@ -1177,7 +1252,6 @@ public partial class Player : Pawn
 			if (ducking && duckAttackCooldownTimer <= 0)
 			{
 				duckAttack = true;
-				attackBlocked = IsAttackBlocked(duckAttack);
 				duckAttackCooldownTimer = DuckAttackCooldown;
 				State = States.Attack;
 				if (grounded)
@@ -1274,6 +1348,9 @@ public partial class Player : Pawn
 
 	void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
 
+	static float ATTACK_WINDUP => 0.09f;
+	static float ATTACK_DURATION => 0.41f;
+
 	void UpdateFootsteps()
 	{
 		if (State != States.Normal || !grounded || !IsPlaying("run") && !IsPlaying("run_start"))
@@ -1299,90 +1376,25 @@ public partial class Player : Pawn
 	public void AttackState()
 	{
 		if (duckAttack)
+		{
 			ducking = true;
+		}
 
 		Play(GetAttackAnimation(), false);
 
-		RectInt? hitbox = null;
-
-		const float ATTACK_WINDUP = 0.09f;
-		const float ATTACK_DURATION = 0.41f;
-
-		if (attackBlocked)
+		if (state.JustCrossedTime(ATTACK_WINDUP))
 		{
-			if (state.PreviousTime <= 0)
+			var hitbox = GetAttackHitbox(duckAttack);
+			attackBlocked = AttackThisFrame(hitbox);
+			if (attackBlocked)
 			{
-				AudioEvent("player/sword_block");
-			}
-		}
-		else if (duckAttack)
-		{
-			if (state.PreviousTime <= 0)
-			{
-				AudioEvent("sword_crouched");
-				EmitPlasmaStrike(duckingAttack: true);
-			}
-			if (state.Time < Animation.Duration)
-				hitbox = GetAttackHitbox(duckAttack);
-		}
-		else if (state.Time < ATTACK_WINDUP)
-		{
-			hitbox = new(-16, -12, 17, 8);
-		}
-		else if (state.Time < ATTACK_DURATION)
-		{
-			if (state.PreviousTime < ATTACK_WINDUP)
-			{
-				attackBlocked = IsAttackBlocked(duckAttack);
-				if (attackBlocked)
-				{
-					Play(GetAttackAnimation(), false);
-					AudioEvent("player/sword_block");
-				}
-				else
-				{
-					AudioEvent("sword");
-					EmitPlasmaStrike(duckingAttack: false);
-				}
-			}
-			if (!attackBlocked)
-				hitbox = GetAttackHitbox(duckAttack);
-		}
-
-		if (hitbox is { } it)
-		{
-			if (Facing == Signs.Negative)
-				it.X = -(it.X + it.Width);
-			it += Position;
-
-			Game.CollisionRectsThisFrame.Add(it);
-			if (!attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
-			{
-				attackBlocked = true;
 				Play(GetAttackAnimation(), false);
 				AudioEvent("player/sword_block");
 			}
-
-			if (!attackBlocked)
+			else
 			{
-				if (Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible) is { } hit)
-					Hit(hit);
-
-				Game.BreakTiles(it);
-
-				foreach (var actor in Game.Actors.ToArray())
-				{
-					if (actor is NeuralCellularActor nca && nca.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
-					{
-						nca.Cut(it);
-						nca.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
-					}
-					else if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Overlaps(new Rect(it.X, it.Y, it.Width, it.Height)))
-					{
-						fungus.Cut(it);
-						fungus.Hit(new Vector2(it.X + it.Width / 2.0f, it.Y + it.Height / 2.0f));
-					}
-				}
+				AudioEvent(duckAttack ? "sword_crouched" : "sword");
+				EmitPlasmaStrike(duckingAttack: duckAttack);
 			}
 		}
 
@@ -1392,6 +1404,7 @@ public partial class Player : Pawn
 		var attackFinished = attackBlocked
 			? IsFinishedPlaying(GetAttackAnimation())
 			: state.Time >= Animation.Duration;
+
 		if (attackFinished)
 		{
 			attackBlocked = false;
@@ -1408,7 +1421,49 @@ public partial class Player : Pawn
 		}
 	}
 
-	bool IsAttackBlocked(bool duckingAttack)
+	bool AttackThisFrame(RectInt it)
+	{
+		if (Facing == Signs.Negative)
+			it.X = -(it.X + it.Width);
+
+		it += Position;
+
+		Game.CollisionRectsThisFrame.Add(it);
+
+		var blockedByShield = IsAttackBlocked(it, checkOnlyForStrongActorBlock: true);
+		if (blockedByShield)
+		{
+			attackBlocked = true;
+		}
+
+		var hitSomething = false;
+		if (!blockedByShield)
+		{
+			var hit = Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible);
+			if (hit != null)
+			{
+				Hit(hit);
+				hitSomething = true;
+			}
+		}
+
+		if (!hitSomething && !attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
+		{
+			attackBlocked = true;
+			Play(GetAttackAnimation(), false);
+			AudioEvent("player/sword_block");
+		}
+
+		if (!attackBlocked)
+		{
+			Game.BreakTiles(it);
+			Game.HitVisualActors(it);
+		}
+
+		return attackBlocked;
+	}
+
+	bool IsAttackBlocked(bool duckingAttack, bool checkOnlyForStrongActorBlock = false)
 	{
 		//
 		// TODO: make this false if we would have hit a breakable block or enemy
@@ -1417,18 +1472,26 @@ public partial class Player : Pawn
 		if (Facing == Signs.Negative)
 			hitbox.X = -(hitbox.X + hitbox.Width);
 		hitbox += Position;
-		return IsAttackBlocked(hitbox);
+		return IsAttackBlocked(hitbox, checkOnlyForStrongActorBlock);
 	}
 
-	bool IsAttackBlocked(in RectInt hitbox)
+	bool IsAttackBlocked(in RectInt hitbox, bool checkOnlyForStrongActorBlock = false)
 	{
-		if (Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold)
-			return true;
-
 		var attackPath = hitbox.Conflate(Position);
 		foreach (var actor in Game.Actors)
-			if (actor != this && !Game.destroying.Contains(actor) && actor.BlocksAttack(this, attackPath))
-				return true;
+		{
+			if (actor != this && !Game.destroying.Contains(actor))
+			{
+				if (actor.BlocksAttack(this, attackPath))
+					return true;
+			}
+		}
+
+		if (checkOnlyForStrongActorBlock)
+			return false;
+
+		if (Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold)
+			return true;
 
 		return false;
 	}

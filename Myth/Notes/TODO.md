@@ -1,10 +1,13 @@
 # TODO
 
-- walking up a 45 degree slope looks weird because x velocity is not adjusted
-- death is weird, you can fall through jumpthrus into water; maybe simplify
-- attenuate landing sound by y velocity
-- store fall height in burrow; pop out with that height
-- rolling down a 45degree slope needs to "stick" more
+- Pickup sound
+- Chest destruction needs to be durable
+- Killing the knight should be durable
+- Better revealdoor sound
+- Death is weird, you can fall through jumpthrus into water; maybe simplify
+- Attenuate landing sound by y velocity
+- Store fall height in burrow; pop out with that height
+- Rolling down a 45degree slope needs to "stick" more
 - make Bud's "fallback_walk" more interesting. maybe we walks slowly. investigates different points.
 - make rim_light a uniform; investigate less harsh ways of lighting things
 - a player frame for "holding down before a roll"
@@ -13,7 +16,6 @@
 - save checkpoints
 - bug: dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)
 - pick a non LLM-brained color palette for the web ui
-- breakable pots with coins (or pixels? like mina?)
 - try a big low color image in the background of the boss room
 - boss room red light looks bad
 - copy rooms I made from frog world over
