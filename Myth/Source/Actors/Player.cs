@@ -76,6 +76,7 @@ public abstract class Pawn : Actor
 	public static float AirAccel => 310;
 	public static float Friction => 480;
 	public static float Gravity => 450;
+	public static float TerminalVelocity => 500;
 
 	// Water: while the torso is submerged, gravity is scaled down and downward speed is
 	// capped at MaxSinkSpeed (damped so a fast plunge eases into the sink instead of
@@ -286,6 +287,7 @@ public abstract class Pawn : Actor
 			if (!inWater && State == States.Normal && Velocity.Y > 0 && IsWallHugging())
 				grav *= WallHugGravityMultiplier;
 			Velocity.Y += grav * Time.Delta;
+			if (Velocity.Y > TerminalVelocity) Velocity.Y = TerminalVelocity;
 			var maxSink = input.MoveY > 0 ? WaterMaxSinkSpeed * WaterFastSinkMultiplier : WaterMaxSinkSpeed;
 			if (inWater && Velocity.Y > maxSink)
 				Velocity.Y = Calc.Approach(Velocity.Y, maxSink, WaterSinkDamping * Time.Delta);
