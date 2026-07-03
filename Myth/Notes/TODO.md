@@ -1,12 +1,13 @@
 # TODO
 
+- split _visibilityCache into static and dynamic; MovingPlatform should still cast dynamic shadows
 - Pickup sound
 - Chest destruction needs to be durable
 - Killing the knight should be durable
 - Better revealdoor sound
 - Death is weird, you can fall through jumpthrus into water; maybe simplify
 - Attenuate landing sound by y velocity
-- Store fall height in burrow; pop out with that height
+- idea to try: Store fall height in burrow; pop out with that height
 - Rolling down a 45degree slope needs to "stick" more
 - make Bud's "fallback_walk" more interesting. maybe we walks slowly. investigates different points.
 - make rim_light a uniform; investigate less harsh ways of lighting things
