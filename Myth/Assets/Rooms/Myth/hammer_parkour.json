@@ -73,12 +73,6 @@
       "Position": [280, 152]
     },
     {
-      "Id": "b19d04d7cecaf74e",
-      "Type": "ParticleEmitter",
-      "Position": [140, 180],
-      "EffectName": "fountain"
-    },
-    {
       "Id": "c1d39331910f6d27",
       "Type": "Jumpthru",
       "Position": [14, 88],

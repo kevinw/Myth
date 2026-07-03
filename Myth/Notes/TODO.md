@@ -1,7 +1,7 @@
 # TODO
 
+- draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 - split _visibilityCache into static and dynamic; MovingPlatform should still cast dynamic shadows
-- Pickup sound
 - Chest destruction needs to be durable
 - Killing the knight should be durable
 - Better revealdoor sound
