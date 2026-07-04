@@ -210,6 +210,7 @@ public partial class Player : Pawn
 	}
 
 	static float BurrowCooldown => 0.25f;
+	static float ShortBurrowDampenTime => 0.25f; // burrows briefer than this pop softly, as if holding Down
 
 	// Is the burrow point against the room boundary in the direction we're driving? Only then
 	// can the surface plausibly continue in the adjacent room. Room bounds are half-open
@@ -384,9 +385,12 @@ public partial class Player : Pawn
 			if (leapCoyote)
 				travel = new Vector2(burrowLeapTravelX, 0); // recover the pre-corner horizontal arc, drop the downward glide
 
-			// "Cancel" a big popup jump by holding Down on the Dpad
+			// "Cancel" a big popup jump by holding Down on the Dpad. A very short burrow
+			// (a quick tap in and out) gets the same soft pop regardless of input — it
+			// clearly wasn't a committed launch, so don't fling the player.
 			Velocity = -exitDir * popMagnitude + travel;
-			if (Velocity.Y < 50 && Controls.Move.IntValue.Y == 1)
+			var shortBurrow = BurrowDuration - burrowTimer < ShortBurrowDampenTime;
+			if (Velocity.Y < 50 && (shortBurrow || Controls.Move.IntValue.Y == 1))
 				Velocity.Y *= 0.5f;
 
 			// Burrow glide can exceed normal air speed; let the carried horizontal
