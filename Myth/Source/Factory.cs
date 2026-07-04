@@ -339,7 +339,9 @@ public static class Factory
 		Register('m', AsTile("myth-back", false, "Background", name: "Myth Back", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('u', AsTile("myth-runes", false, "Background", name: "Myth Runes", layer: TileLayer.Background, acousticReflectivity: 0.35f));
 		Register('v', AsTile("myth-vines", false, "Grass", name: "Myth Vines", layer: TileLayer.Background, acousticReflectivity: 0.20f));
-		Register(FungusTile, new Entry("Fungus", Assets.GetTileset("myth-vines")?.Tiles[0] ?? new Subtexture(), (tile, room, fg, fgVisual, bg, dual) => { }, "Fungus", layer: TileLayer.Background, acousticReflectivity: 0.20f));
+		// Fungus is now a per-tile region flag (TileFlags.Fungal, toggled with 'G'
+		// in the editor), not a paintable tile. FungusTile remains only so old
+		// rooms migrate on load (see Room.MigrateLegacyFungusTiles).
 		foreach (var spriteName in Assets.Sprites.Keys.Where(it => it.StartsWith(PropSpritePrefix, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
 			ActorPalette.Add(ActorPaletteEntry.FromProp(spriteName));
 		RegisterActorSpecPaletteEntries();

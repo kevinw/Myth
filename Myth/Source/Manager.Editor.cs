@@ -32,6 +32,7 @@ public partial class Manager
 
 	bool editorGameDirty;
 	bool editorViewInitialized;
+	bool showFungalMarkers;
 	Vector2 editorCamera;
 	float editorZoom = 1.0f;
 	float editorZoomTarget = 1.0f;
@@ -3690,6 +3691,24 @@ public partial class Manager
 			}
 	}
 
+	void DrawFungalTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
+	{
+		var color = new Color(0.40f, 0.90f, 0.42f, 0.35f);
+		var tileSize = Game.TileSize - lineWeight * 4;
+		for (var x = 0; x < room.Size.X; x++)
+			for (var y = 0; y < room.Size.Y; y++)
+			{
+				var tile = new Point2(x, y);
+				if (!room.IsFungal(tile))
+					continue;
+
+				var rect = new Rect(
+					roomTopLeft.X + x * Game.TileSize + lineWeight * 2,
+					roomTopLeft.Y + y * Game.TileSize + lineWeight * 2, tileSize, tileSize);
+				batcher.RectDashed(rect, lineWeight, color, 1, 5.5f);
+			}
+	}
+
 	static Point2? GetEditorEntryDirection(Room from, Room to)
 	{
 		if (to.TileSpacePosition.X >= from.TileSpacePosition.X + from.Size.X) return Point2.Right;
@@ -3839,6 +3858,8 @@ public partial class Manager
 			for (int y = 1; y < editing.Size.Y; y++)
 				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize), roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, (y - 1) % 4 == 0 ? gridColorHeavy : gridColor);
 			DrawBreakableTileMarkers(editing, roomTopLeft, gridWeight);
+			if (showFungalMarkers)
+				DrawFungalTileMarkers(editing, roomTopLeft, gridWeight);
 
 			var brushEntry = Factory.Find(brush);
 			if (brushEntry is { } foundBrushEntry && foundBrushEntry.Layer != activeTileLayer)
@@ -3973,6 +3994,18 @@ public partial class Manager
 						editing.SetBreakable(tileOver, !editing.IsBreakable(tileOver));
 						editorGameDirty = true;
 					}
+				}
+			}
+			else if (!keyboardBlocked && Input.Keyboard.Shift && Input.Keyboard.Pressed(Keys.G))
+			{
+				showFungalMarkers = !showFungalMarkers;
+			}
+			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && !keyboardBlocked && !Input.Keyboard.Shift && Input.Keyboard.Pressed(Keys.G))
+			{
+				using (CaptureRoomUndo("Toggle Fungal Tile", editing))
+				{
+					editing.SetFungal(tileOver, !editing.IsFungal(tileOver));
+					editorGameDirty = true;
 				}
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && Input.Mouse.LeftPressed && actorBrush is { } actorEntry)

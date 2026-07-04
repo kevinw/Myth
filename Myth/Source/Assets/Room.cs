@@ -21,7 +21,8 @@ public class Room
 	{
 		None = 0,
 		Breakable = 1 << 0,
-		BreakOnStand = 1 << 1
+		BreakOnStand = 1 << 1,
+		Fungal = 1 << 2
 	}
 
 	public enum SlopeDirection
@@ -282,6 +283,15 @@ public class Room
 				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
 					tileFlags[tile.X, tile.Y] |= TileFlags.Breakable;
 		}
+
+		if (json.TryGetPropertyValue("fungal", out var fungalNode) && fungalNode is JsonArray fungalCells)
+		{
+			foreach (var node in fungalCells)
+				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
+					tileFlags[tile.X, tile.Y] |= TileFlags.Fungal;
+		}
+
+		MigrateLegacyFungusTiles();
 
 		NormalizeTileLayers();
 
@@ -800,6 +810,35 @@ public class Room
 			tileFlags[tile.X, tile.Y] &= ~TileFlags.Breakable;
 	}
 
+	public bool IsFungal(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Fungal) != 0;
+
+	public void SetFungal(Point2 tile, bool fungal)
+	{
+		if (!ContainsTile(tile.X, tile.Y))
+			return;
+
+		if (fungal)
+			tileFlags[tile.X, tile.Y] |= TileFlags.Fungal;
+		else
+			tileFlags[tile.X, tile.Y] &= ~TileFlags.Fungal;
+	}
+
+	// Fungus used to be a dedicated background tile ('f'). It is now a per-tile
+	// region flag; convert any legacy painted tiles so old rooms keep their
+	// fungus and re-save into the new format. The old tile rendered nothing, so
+	// clearing it back to empty is lossless.
+	void MigrateLegacyFungusTiles()
+	{
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+				if (BackgroundTiles[x, y] == Factory.FungusTile)
+				{
+					tileFlags[x, y] |= TileFlags.Fungal;
+					SetBackgroundTileUnchecked(x, y, '0');
+				}
+	}
+
 	void NormalizeTileLayers()
 	{
 		for (var x = 0; x < Size.X; x++)
@@ -1201,6 +1240,16 @@ public class Room
 			writer.WriteEndArray();
 		}
 
+		if (HasFungalTiles())
+		{
+			writer.WriteStartArray("fungal");
+			for (var y = 0; y < Size.Y; y++)
+				for (var x = 0; x < Size.X; x++)
+					if ((tileFlags[x, y] & TileFlags.Fungal) != 0)
+						WriteIntPairValue(writer, x, y);
+			writer.WriteEndArray();
+		}
+
 		if (Actors.Count > 0)
 		{
 			writer.WriteStartArray("actors");
@@ -1320,6 +1369,16 @@ public class Room
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
 				if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
+					return true;
+
+		return false;
+	}
+
+	bool HasFungalTiles()
+	{
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+				if ((tileFlags[x, y] & TileFlags.Fungal) != 0)
 					return true;
 
 		return false;
