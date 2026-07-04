@@ -107,6 +107,10 @@ public partial class Game : IDisposable
 	public void AddPickup(PickupKind kind, int amount = 1)
 		=> pickupCounts[(int)kind] = Math.Max(0, pickupCounts[(int)kind] + amount);
 
+	// Playthrough-durable like pickupCounts: exploration tracking plus the pause-map overlay.
+	public readonly Minimap Minimap = new();
+	public bool MinimapOpen => Minimap.Open;
+
 	public bool GymBudDied;
 	public bool GymMode;
 	public Actor? GymTarget;
@@ -440,6 +444,27 @@ public partial class Game : IDisposable
 			return;
 		}
 
+		// The map only shows what the camera has actually framed, so credit the visible span
+		// every normal-play frame (skipping the mid-transition camera lerp).
+		if (nextRoom == null && !Simulating)
+			Minimap.NoteCameraView(room, VisibleCameraTileBounds());
+
+		// Escape / gamepad Start toggles the map overlay; the sim pauses underneath while it's up.
+		if (nextRoom == null && Controls.Map.ConsumePress())
+		{
+			Minimap.Open = !Minimap.Open;
+			if (Minimap.Open)
+				Minimap.Rebuild(room);
+		}
+		if (Minimap.Open)
+		{
+			UpdateAudioListener();
+#if BROWSER
+			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
+#endif
+			return;
+		}
+
 		// Run Game normally when not moving to a new room
 		if (nextRoom == null)
 		{
@@ -526,6 +551,14 @@ public partial class Game : IDisposable
 		index = Math.Clamp(index + direction, 0, scales.Length - 1);
 		timeScale = scales[index];
 		DisplayMessage($"Time x{timeScale:0.##}");
+	}
+
+	// The world-tile span the camera currently frames, honoring fbZoom / 4:3 crop.
+	RectInt VisibleCameraTileBounds()
+	{
+		var pad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		var view = new Rect(Camera + pad, new Vector2(FbZoomedWidth, FbZoomedHeight));
+		return RectInt.Between((view.TopLeft / TileSize).FloorToPoint2(), (view.BottomRight / TileSize).CeilingToPoint2());
 	}
 
 	void UpdateCamera()
@@ -1796,6 +1829,8 @@ public partial class Game : IDisposable
 
 	void RaiseRoomChanged(Room? from, Room to, RoomChangeKind kind, Point2 direction)
 	{
+		if (!Simulating)
+			Minimap.NoteRoomChange(from, to, kind);
 		var playerPosition = GetFirst<Player>()?.Position ?? (Vector2)to.WorldBounds.Center;
 		var change = new RoomChange(from, to, kind, direction, playerPosition);
 		RoomChanged?.Invoke(change);

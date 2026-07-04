@@ -52,6 +52,12 @@ public class Controls(Input input)
 			.Add(Buttons.LeftStick)
 	);
 
+	public readonly VirtualAction Map = new(input, "Map",
+		new ActionBindingSet()
+			.Add(Keys.Escape)
+			.Add(Buttons.Start)
+	);
+
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
 	);

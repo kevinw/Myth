@@ -205,7 +205,11 @@ public sealed partial class GameView
 			DrawPlayerHud(destination, viewport, scissor);
 
 		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+		{
+			if (game.MinimapOpen)
+				DrawMinimap(destination, viewport, scissor);
 			DrawCurrencyHud(destination, viewport, scissor);
+		}
 	}
 
 	Target CompositeRawWorld()
@@ -434,7 +438,8 @@ public sealed partial class GameView
 		}
 		currencyHold = Calc.Approach(currencyHold, 0, Time.Delta);
 
-		currencyReveal = Calc.Approach(currencyReveal, currencyHold > 0 ? 1f : 0f, CurrencyRevealSpeed * Time.Delta);
+		// The map overlay doubles as a status screen, so the count stays revealed while it's up.
+		currencyReveal = Calc.Approach(currencyReveal, currencyHold > 0 || game.MinimapOpen ? 1f : 0f, CurrencyRevealSpeed * Time.Delta);
 		if (currencyReveal <= 0.001f)
 			return;
 

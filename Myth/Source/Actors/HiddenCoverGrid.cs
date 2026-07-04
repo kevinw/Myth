@@ -84,10 +84,10 @@ public class HiddenCoverGrid : Actor
 		if (doors.Count <= 0)
 			return;
 
-		var doorBlockers = BuildDoorBlockers(doors);
-		var air = BuildAirGrid(room, doorBlockers);
-		var airRegions = BuildAirRegions(air);
-		var hiddenRegions = MapDoorsToRegions(room, doors, airRegions);
+		var doorBlockers = BuildDoorBlockers(size, doors);
+		var air = BuildAirGrid(size, room, doorBlockers);
+		var airRegions = BuildAirRegions(size, air);
+		var hiddenRegions = MapDoorsToRegions(size, room, doors, airRegions);
 		if (hiddenRegions.Count <= 0)
 			return;
 
@@ -259,9 +259,29 @@ public class HiddenCoverGrid : Actor
 			if (!string.IsNullOrWhiteSpace(id))
 			{
 				revealedDoorIds.Add(id);
+				Game.Minimap.NoteDoorRevealed(id);
 				result.Add(id);
 			}
 		return result;
+	}
+
+	/// Tiles of every hidden region none of whose reveal doors has been revealed yet, so the
+	/// minimap can keep drawing them filled-in until the player discovers them.
+	public static void ForEachUnrevealedHiddenTile(Room room, Func<string, bool> doorRevealed, Action<Point2> emit)
+	{
+		var size = room.Size;
+		if (size.X <= 0 || size.Y <= 0)
+			return;
+
+		var doors = ReadRevealDoors(room);
+		if (doors.Count <= 0)
+			return;
+
+		var airRegions = BuildAirRegions(size, BuildAirGrid(size, room, BuildDoorBlockers(size, doors)));
+		foreach (var spec in MapDoorsToRegions(size, room, doors, airRegions).Values)
+			if (!spec.RevealDoorIds.Any(doorRevealed))
+				foreach (var tile in spec.Tiles)
+					emit(tile);
 	}
 
 	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
@@ -319,12 +339,12 @@ public class HiddenCoverGrid : Actor
 			: RevealDoor.RevealDirection.Right;
 	}
 
-	private bool[,] BuildDoorBlockers(List<RevealDoorSpec> doors)
+	private static bool[,] BuildDoorBlockers(Point2 size, List<RevealDoorSpec> doors)
 	{
 		var blockers = new bool[size.X, size.Y];
 		foreach (var door in doors)
 		{
-			var bounds = TileBounds(door.Rect);
+			var bounds = TileBounds(size, door.Rect);
 			for (var y = bounds.Top; y < bounds.Bottom; y ++)
 			for (var x = bounds.Left; x < bounds.Right; x ++)
 				blockers[x, y] = true;
@@ -332,7 +352,7 @@ public class HiddenCoverGrid : Actor
 		return blockers;
 	}
 
-	private bool[,] BuildAirGrid(Room room, bool[,] blockers)
+	private static bool[,] BuildAirGrid(Point2 size, Room room, bool[,] blockers)
 	{
 		var air = new bool[size.X, size.Y];
 		for (var y = 0; y < size.Y; y ++)
@@ -345,7 +365,7 @@ public class HiddenCoverGrid : Actor
 		return air;
 	}
 
-	private int[,] BuildAirRegions(bool[,] air)
+	private static int[,] BuildAirRegions(Point2 size, bool[,] air)
 	{
 		var regions = new int[size.X, size.Y];
 		for (var y = 0; y < size.Y; y ++)
@@ -386,12 +406,12 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private Dictionary<int, HiddenRegionSpec> MapDoorsToRegions(Room room, List<RevealDoorSpec> doors, int[,] airRegions)
+	private static Dictionary<int, HiddenRegionSpec> MapDoorsToRegions(Point2 size, Room room, List<RevealDoorSpec> doors, int[,] airRegions)
 	{
 		var hiddenRegions = new Dictionary<int, HiddenRegionSpec>();
 		foreach (var door in doors)
 		{
-			var seed = DoorSeedTile(door);
+			var seed = DoorSeedTile(size, door);
 			if (seed.X < 0 || seed.Y < 0 || seed.X >= size.X || seed.Y >= size.Y)
 				continue;
 
@@ -413,7 +433,7 @@ public class HiddenCoverGrid : Actor
 				spec.RevealDoorIds.Add(door.Id);
 			spec.TileType = string.IsNullOrWhiteSpace(door.TileType) ? spec.TileType : door.TileType;
 			spec.Triggers.Add(door.Rect);
-			var doorBounds = TileBounds(door.Rect);
+			var doorBounds = TileBounds(size, door.Rect);
 			for (var y = doorBounds.Top; y < doorBounds.Bottom; y ++)
 			for (var x = doorBounds.Left; x < doorBounds.Right; x ++)
 				spec.Tiles.Add(new Point2(x, y));
@@ -422,9 +442,9 @@ public class HiddenCoverGrid : Actor
 		return hiddenRegions;
 	}
 
-	private Point2 DoorSeedTile(RevealDoorSpec door)
+	private static Point2 DoorSeedTile(Point2 size, RevealDoorSpec door)
 	{
-		var bounds = TileBounds(door.Rect);
+		var bounds = TileBounds(size, door.Rect);
 		return door.Direction switch
 		{
 			RevealDoor.RevealDirection.Left => new Point2(bounds.Left - 1, (bounds.Top + bounds.Bottom - 1) / 2),
@@ -435,7 +455,7 @@ public class HiddenCoverGrid : Actor
 		};
 	}
 
-	private RectInt TileBounds(RectInt rect)
+	private static RectInt TileBounds(Point2 size, RectInt rect)
 	{
 		var left = Math.Clamp((int)MathF.Floor(rect.Left / (float)Game.TileSize), 0, size.X);
 		var top = Math.Clamp((int)MathF.Floor(rect.Top / (float)Game.TileSize), 0, size.Y);
