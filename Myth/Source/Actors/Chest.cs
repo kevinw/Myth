@@ -35,6 +35,6 @@ public class Chest : Actor
 		}
 
 		Game.HitStun(0.22f);
-		Game.Destroy(this);
+		Game.DestroyForThisSession(this);
 	}
 }

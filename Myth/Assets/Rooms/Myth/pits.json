@@ -89,6 +89,11 @@
       "Type": "Prop",
       "Position": [184, 80],
       "SpriteName": "Props/server"
+    },
+    {
+      "Id": "2d54f0fe86388a20",
+      "Type": "ShieldKnight",
+      "Position": [116, 104]
     }
   ]
 }

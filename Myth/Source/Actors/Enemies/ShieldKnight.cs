@@ -82,7 +82,7 @@ public class ShieldKnight : Actor
 			for (int y = 0; y < 2; y++)
 				Game.Create<Pop>(Position + new Point2(0, -8 + y * 12));
 			Game.HitStun(0.3f);
-			Game.Destroy(this);
+			Game.DestroyForThisSession(this);
 		}
 	}
 }
