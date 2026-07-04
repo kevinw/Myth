@@ -90,14 +90,20 @@
     {
       "Id": "1d65e5f856b077de",
       "Type": "Jumpthru",
-      "Position": [64, 56],
-      "Size": [28, 8]
+      "Position": [80, 56],
+      "Size": [12, 8]
     },
     {
       "Id": "7d2ccea18a1a8fd2",
       "Type": "Jumpthru",
       "Position": [208, 104],
       "Size": [48, 8]
+    },
+    {
+      "Id": "c0233b662745c712",
+      "Type": "ShieldKnight",
+      "Position": [252, 104],
+      "Facing": "-"
     }
   ]
 }
