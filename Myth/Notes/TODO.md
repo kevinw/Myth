@@ -1,8 +1,11 @@
 # TODO
 
+- if the git diff contains only markdown, don't run the browser workflow?
+- ScanDiff: Error reading file: /Users/kev/src/Myth/Foster
+- git diff checker on bg thread
+- wall jump in one tile wide well doesn't work
+- use 16:10 screen fully on tall rooms. make letterboxing fully based on the room size
 - draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
-- Chest destruction needs to be durable
-- Killing the knight should be durable
 - Better revealdoor sound
 - Death is weird, you can fall through jumpthrus into water; maybe simplify
 - Attenuate landing sound by y velocity

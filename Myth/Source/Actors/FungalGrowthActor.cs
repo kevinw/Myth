@@ -12,6 +12,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		{
 			Cut(rectInt);
 			Hit(rectInt.Center);
+			BroadcastSympathy(rectInt.Center);
 		}
 	}
 	public override bool CastsSpriteShadow => false;
@@ -46,7 +47,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	public int AgeCap = 48;
 
 	/// Simulation ticks run at load so the room opens with established fungus.
-	public int WarmupSteps = 800;
+	internal static int WarmupSteps => 1200;
 
 	/// Chance per frame, while the player overlaps the region, of dropping spores.
 	public float SeedChance = 0.25f;
@@ -56,6 +57,14 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 
 	/// How fast the "disturbed" brightening from a hit fades (per second).
 	public float GlowDecay = 2.2f;
+
+	/// Peak strength of the sympathetic shimmer other islands feel when this one
+	/// is struck (at zero distance; falls off linearly to SympatheticRadius).
+	public float SympatheticStrength = 0.18f;
+
+	/// World distance beyond which a struck island produces no sympathetic glow,
+	/// keeping the response local-dominant rather than a flat screen-wide flash.
+	public float SympatheticRadius = 140.0f;
 
 	// Fungal colour ramp, fresh tip -> mature core. Cells dither between
 	// adjacent entries by age, giving a classic pixel-art shaded look.
@@ -94,7 +103,16 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	private readonly List<int> stuckCells = []; // indices of live cells, for spawning walkers nearby
 
 	private int stuck;                 // live fungus cell count
-	private int coverageCap;           // stuck count at which ambient growth halts
+
+	// Growth budget is tracked per authored tile (TileSize x TileSize) rather
+	// than once per island, so a dense blob can't starve a thin painted run:
+	// every painted tile fills to ~MaxCoverage of its own growable cells.
+	private int tileSpan;              // == Game.TileSize
+	private int tilesX;                // authored-tile columns across the region
+	private int[] tileGrowable = [];   // growable cells per tile
+	private int[] tileCap = [];        // stuck target per tile (MaxCoverage of its cells)
+	private int[] tileStuck = [];      // current stuck cells per tile
+	private int underCapTiles;         // tiles still below their cap (0 => growth halts)
 
 	private float stepAccumulator;
 	private bool dirty;
@@ -117,16 +135,32 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		pixels = new Color[count];
 		growable = new bool[count];
 
-		var growableCount = 0;
+		tileSpan = Game.TileSize;
+		tilesX = (RegionWidth + tileSpan - 1) / tileSpan;
+		var tilesY = (RegionHeight + tileSpan - 1) / tileSpan;
+		var tileCount = tilesX * tilesY;
+		tileGrowable = new int[tileCount];
+		tileCap = new int[tileCount];
+		tileStuck = new int[tileCount];
+
 		for (var i = 0; i < count; i++)
 		{
 			growable[i] = GrowthMask == null || GrowthMask[i] >= 0.5f;
 			if (growable[i])
-				growableCount++;
+				tileGrowable[TileOf(i)]++;
 		}
-		coverageCap = (int)(growableCount * MaxCoverage);
 
-		SeedNuclei(Math.Max(3, growableCount / 400));
+		underCapTiles = 0;
+		for (var t = 0; t < tileCount; t++)
+		{
+			// At least 1 so even a sliver tile keeps its seed; MaxCoverage of its
+			// cells otherwise, which preserves the tendrilly within-tile density.
+			tileCap[t] = tileGrowable[t] > 0 ? Math.Max(1, (int)(tileGrowable[t] * MaxCoverage)) : 0;
+			if (tileCap[t] > 0)
+				underCapTiles++;
+		}
+
+		SeedNuclei();
 
 		for (var i = 0; i < WarmupSteps; i++)
 			Step();
@@ -136,20 +170,30 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		Rebuild();
 	}
 
-	// Scatter a few mature nuclei for the DLA to branch from.
-	private void SeedNuclei(int nuclei)
+	// Seed one mature nucleus in every authored tile that has growable cells, so
+	// a painted run is always occupied and each tile has its own origin for the
+	// DLA to branch from (rather than a handful of random island-wide seeds).
+	private void SeedNuclei()
 	{
-		for (var n = 0; n < nuclei; n++)
-			for (var attempt = 0; attempt < 32; attempt++)
-			{
-				var x = rng.Int(RegionWidth);
-				var y = rng.Int(RegionHeight);
-				var i = y * RegionWidth + x;
-				if (!growable[i] || age[i] != 0)
-					continue;
-				Stick(x, y, (byte)rng.Int(AgeCap / 2, AgeCap));
-				break;
-			}
+		for (var ty = 0; ty < RegionHeight; ty += tileSpan)
+			for (var tx = 0; tx < RegionWidth; tx += tileSpan)
+				for (var attempt = 0; attempt < 24; attempt++)
+				{
+					var x = tx + rng.Int(Math.Min(tileSpan, RegionWidth - tx));
+					var y = ty + rng.Int(Math.Min(tileSpan, RegionHeight - ty));
+					var i = y * RegionWidth + x;
+					if (!growable[i] || age[i] != 0)
+						continue;
+					Stick(x, y, (byte)rng.Int(AgeCap / 2, AgeCap));
+					break;
+				}
+	}
+
+	private int TileOf(int cellIndex)
+	{
+		var x = cellIndex % RegionWidth;
+		var y = cellIndex / RegionWidth;
+		return (y / tileSpan) * tilesX + (x / tileSpan);
 	}
 
 	private void Stick(int x, int y, byte startAge)
@@ -158,6 +202,12 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		age[i] = startAge;
 		stuckCells.Add(i);
 		stuck++;
+
+		var t = TileOf(i);
+		tileStuck[t]++;
+		if (tileStuck[t] == tileCap[t])   // just reached this tile's cap
+			underCapTiles--;
+
 		dirty = true;
 	}
 
@@ -180,9 +230,9 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	private void Step()
 	{
 		MatureCells();
-		if (stuck == 0 || stuck >= coverageCap)
+		if (stuck == 0 || underCapTiles == 0)
 			return;
-		for (var w = 0; w < WalkersPerTick && stuck < coverageCap; w++)
+		for (var w = 0; w < WalkersPerTick && underCapTiles > 0; w++)
 			LaunchSpore();
 	}
 
@@ -206,7 +256,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		if (stuckCells.Count == 0)
 			return;
 
-		var anchor = stuckCells[rng.Int(stuckCells.Count)];
+		var anchor = PickAnchorUnderCap();
 		var ax = anchor % RegionWidth;
 		var ay = anchor / RegionWidth;
 
@@ -235,7 +285,11 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		{
 			if (HasFungus4(x, y))
 			{
-				Stick(x, y, 1);
+				// Don't pile onto a tile that has already reached its density; the
+				// discarded walker leaves the budget for under-filled tiles.
+				var t = TileOf(y * RegionWidth + x);
+				if (tileStuck[t] < tileCap[t])
+					Stick(x, y, 1);
 				return;
 			}
 
@@ -249,6 +303,20 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 			x = nx;
 			y = ny;
 		}
+	}
+
+	// Prefer an anchor whose tile still has capacity, so walkers flow toward
+	// under-filled painted tiles (thin runs) instead of the densest blob.
+	private int PickAnchorUnderCap()
+	{
+		for (var attempt = 0; attempt < 8; attempt++)
+		{
+			var cand = stuckCells[rng.Int(stuckCells.Count)];
+			var t = TileOf(cand);
+			if (tileStuck[t] < tileCap[t])
+				return cand;
+		}
+		return stuckCells[rng.Int(stuckCells.Count)];
 	}
 
 	private bool HasFungus4(int x, int y)
@@ -298,6 +366,55 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		dirty = true;
 	}
 
+	// A hit here makes every fungus island shimmer in sympathy, strongest at the
+	// impact and fading with distance so the response reads as local, not global.
+	// The struck island is included, so its untouched reaches also glow faintly.
+	private void BroadcastSympathy(Vector2 hitWorld)
+	{
+		foreach (var actor in Game.Actors)
+		{
+			if (actor is not FungalGrowthActor island)
+				continue;
+
+			var dist = DistanceToBounds(island.GetVisualBounds(), hitWorld);
+			if (dist >= SympatheticRadius)
+				continue;
+
+			var strength = SympatheticStrength * (1.0f - dist / SympatheticRadius);
+			island.SympatheticPulse(strength);
+		}
+	}
+
+	private static float DistanceToBounds(Rect bounds, Vector2 p)
+	{
+		var dx = MathF.Max(MathF.Max(bounds.X - p.X, p.X - (bounds.X + bounds.Width)), 0.0f);
+		var dy = MathF.Max(MathF.Max(bounds.Y - p.Y, p.Y - (bounds.Y + bounds.Height)), 0.0f);
+		return MathF.Sqrt(dx * dx + dy * dy);
+	}
+
+	/// Uniformly brightens every live cell of this island by `strength` (clamped),
+	/// producing a whole-island shimmer without touching the growth simulation.
+	public void SympatheticPulse(float strength)
+	{
+		if (strength <= 0.0f)
+			return;
+
+		var any = false;
+		for (var i = 0; i < age.Length; i++)
+		{
+			if (age[i] == 0)
+				continue;
+			glow[i] = MathF.Min(1.0f, glow[i] + strength);
+			any = true;
+		}
+
+		if (any)
+		{
+			glowActive = true;
+			dirty = true;
+		}
+	}
+
 	private void DecayGlow()
 	{
 		var step = GlowDecay * Time.Delta;
@@ -335,14 +452,24 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		dirty = true;
 	}
 
-	// Rescan the grid to rebuild the live-cell list + count after a cut.
+	// Rescan the grid to rebuild the live-cell list + per-tile counts after a cut,
+	// reopening any tiles a cut dropped back below their cap so they regrow.
 	private void RebuildStuckList()
 	{
 		stuckCells.Clear();
+		Array.Clear(tileStuck);
 		for (var i = 0; i < age.Length; i++)
 			if (age[i] != 0)
+			{
 				stuckCells.Add(i);
+				tileStuck[TileOf(i)]++;
+			}
 		stuck = stuckCells.Count;
+
+		underCapTiles = 0;
+		for (var t = 0; t < tileCap.Length; t++)
+			if (tileStuck[t] < tileCap[t])
+				underCapTiles++;
 	}
 
 	///

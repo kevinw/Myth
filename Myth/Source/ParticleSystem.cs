@@ -293,6 +293,8 @@ public sealed class ParticleSystem : IDisposable
 		emitCursor = (emitCursor + count) % Capacity;
 	}
 
+	readonly UniformBuffer uniforms = new();
+
 	/// Advances the sim. <paramref name="solidMask"/> is the world-collision
 	/// texture (foreground coverage in its alpha); <paramref name="camera"/> and
 	/// <paramref name="zoom"/> map world positions into it.
@@ -313,7 +315,6 @@ public sealed class ParticleSystem : IDisposable
 		var src = Current;
 		var dst = currentIsB ? bufferA! : bufferB!;
 
-		var uniforms = new UniformBuffer();
 		uniforms.Set(new UpdateParams
 		{
 			Count = Capacity,

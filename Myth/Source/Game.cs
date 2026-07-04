@@ -1647,54 +1647,84 @@ public partial class Game : IDisposable
 		SpawnFungusLayer(forRoom);
 	}
 
-	/// Scans the room's background tiles for Factory.FungusTile and, if any
-	/// are painted, spawns a single FungalGrowthActor covering their bounding
-	/// box - growth is further constrained to the painted tiles via its mask.
+	/// Finds each connected island of Fungal-flagged tiles and spawns one
+	/// FungalGrowthActor per island, tightly bounded to that island's tiles.
+	/// Islands are independent: each is seeded from its own (room, min-tile)
+	/// key, so painting one island never reshuffles another's growth.
 	void SpawnFungusLayer(Room forRoom)
 	{
-		var minX = int.MaxValue;
-		var minY = int.MaxValue;
-		var maxX = int.MinValue;
-		var maxY = int.MinValue;
+		var sizeX = forRoom.Size.X;
+		var sizeY = forRoom.Size.Y;
+		var visited = new bool[sizeX, sizeY];
+		var frontier = new Stack<Point2>();
 
-		for (var x = 0; x < forRoom.Size.X; x++)
-			for (var y = 0; y < forRoom.Size.Y; y++)
+		for (var sx = 0; sx < sizeX; sx++)
+			for (var sy = 0; sy < sizeY; sy++)
 			{
-				if (forRoom.BackgroundTiles[x, y] != Factory.FungusTile)
+				if (visited[sx, sy] || !forRoom.IsFungal(new Point2(sx, sy)))
 					continue;
 
-				minX = Math.Min(minX, x);
-				maxX = Math.Max(maxX, x);
-				minY = Math.Min(minY, y);
-				maxY = Math.Max(maxY, y);
+				// Flood-fill this island (4-connected), tracking its tile bbox.
+				var minX = sx;
+				var minY = sy;
+				var maxX = sx;
+				var maxY = sy;
+
+				var island = new List<Point2>();
+				visited[sx, sy] = true;
+				frontier.Push(new Point2(sx, sy));
+				while (frontier.Count > 0)
+				{
+					var t = frontier.Pop();
+					island.Add(t);
+					minX = Math.Min(minX, t.X);
+					maxX = Math.Max(maxX, t.X);
+					minY = Math.Min(minY, t.Y);
+					maxY = Math.Max(maxY, t.Y);
+
+					for (var d = 0; d < 4; d++)
+					{
+						var nx = t.X + FloodDX[d];
+						var ny = t.Y + FloodDY[d];
+						if (nx < 0 || ny < 0 || nx >= sizeX || ny >= sizeY)
+							continue;
+						if (visited[nx, ny] || !forRoom.IsFungal(new Point2(nx, ny)))
+							continue;
+						visited[nx, ny] = true;
+						frontier.Push(new Point2(nx, ny));
+					}
+				}
+
+				SpawnFungusIsland(forRoom, island, minX, minY, maxX, maxY);
 			}
+	}
 
-		if (maxX < minX || maxY < minY)
-			return;
+	static readonly int[] FloodDX = [1, -1, 0, 0];
+	static readonly int[] FloodDY = [0, 0, 1, -1];
 
+	void SpawnFungusIsland(Room forRoom, List<Point2> island, int minX, int minY, int maxX, int maxY)
+	{
 		var tileWidth = maxX - minX + 1;
 		var tileHeight = maxY - minY + 1;
 		var width = tileWidth * TileSize;
 		var height = tileHeight * TileSize;
 
 		var mask = new float[width * height];
-		// Each ty writes a disjoint band of rows in the local mask, so it parallelizes cleanly.
-		Par.For(0, tileHeight, ty =>
+		foreach (var tile in island)
 		{
-			for (var tx = 0; tx < tileWidth; tx++)
-			{
-				var growable = forRoom.BackgroundTiles[minX + tx, minY + ty] == Factory.FungusTile ? 1.0f : 0.0f;
-				for (var py = 0; py < TileSize; py++)
-					for (var px = 0; px < TileSize; px++)
-						mask[(ty * TileSize + py) * width + (tx * TileSize + px)] = growable;
-			}
-		});
+			var tx = tile.X - minX;
+			var ty = tile.Y - minY;
+			for (var py = 0; py < TileSize; py++)
+				for (var px = 0; px < TileSize; px++)
+					mask[(ty * TileSize + py) * width + (tx * TileSize + px)] = 1.0f;
+		}
 
 		var position = forRoom.WorldBounds.TopLeft + new Point2(minX * TileSize, minY * TileSize);
 
 		Create<FungalGrowthActor>(position, layer =>
 		{
-			layer.RandomSeed = GetStringHash(forRoom.Id);
+			// Seed from the island's min tile so unrelated islands stay stable.
+			layer.RandomSeed = GetStringHash($"{forRoom.Id}:{minX},{minY}");
 			layer.RegionWidth = width;
 			layer.RegionHeight = height;
 			layer.GrowthMask = mask;
