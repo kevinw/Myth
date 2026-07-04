@@ -343,7 +343,8 @@ public partial class Manager
 		if (ImGuiWantsKeyboard)
 			return false;
 
-		if (Input.Keyboard.Pressed(Keys.Escape)) {
+		if (Input.Keyboard.Pressed(Keys.Escape))
+		{
 			SelectEditorActorTool();
 		}
 
@@ -618,13 +619,15 @@ public partial class Manager
 		editorZoomTarget = editorZoom;
 
 #if DEBUG
+#if SHOW_EDITOR_ALLOCS
 		if (editorCameraTween >= 1.0f)
 		{
 			var bytesAfterTween = GC.GetAllocatedBytesForCurrentThread();
 			var bytesAllocated = bytesAfterTween - gcBytesBeforeEditorTween;
 			if (bytesAllocated > 0)
-				Console.WriteLine($"Editor tween: GC allocated {bytesAllocated} bytes");
+				[Console.WriteLine($"Editor tween: GC allocated {bytesAllocated} bytes");
 		}
+#endif
 #endif
 	}
 
@@ -4453,7 +4456,9 @@ public partial class Manager
 		if (current == null) return;
 
 #if DEBUG
+#if SHOW_EDITOR_ALLOCS
 		gcBytesBeforeEditorTween = GC.GetAllocatedBytesForCurrentThread();
+#endif
 #endif
 
 		var exitPosition = EditorExitPosition(current, direction);

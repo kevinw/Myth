@@ -1,5 +1,8 @@
 # TODO
 
+- fungus needs to not grow everywhere
+- fungus needs a more stable "island local" seed
+- use 16:10 screen fully on tall rooms. make letterboxing fully based on the room size
 - draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 - Chest destruction needs to be durable
 - Killing the knight should be durable

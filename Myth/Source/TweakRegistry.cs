@@ -32,7 +32,7 @@ static class TweakRegistry
 
 	static readonly Dictionary<(string, int), Entry> entries = [];
 
-	public static bool Open = true;
+	public static bool Open = false;
 
 	// --- resolution (called from Tweak.T on the hot path) ---
 
