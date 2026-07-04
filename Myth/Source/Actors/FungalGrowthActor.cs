@@ -47,7 +47,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	public int AgeCap = 48;
 
 	/// Simulation ticks run at load so the room opens with established fungus.
-	static int WarmupSteps => 1200;
+	internal static int WarmupSteps => 1200;
 
 	/// Chance per frame, while the player overlaps the region, of dropping spores.
 	public float SeedChance = 0.25f;

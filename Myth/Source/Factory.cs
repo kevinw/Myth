@@ -318,18 +318,27 @@ public static class Factory
 		actorTags.Clear();
 		GeneratedActors.RegisterAll();
 
+		string GRASS_SURF = "Grass";
+		string BRICK_SURF = "Brick";
+
 		// Add Tile Types
-		Register('1', AsDualTile("castle", "castle-dual", "Brick"));
-		Register('2', AsSlopeTile("castle", "Brick", "Castle Slope"));
-		Register('G', AsDualTile("grass", "grass-dual", "Grass", acousticReflectivity: 0.15f));
-		Register('S', AsSlopeTile("grass", "Grass", "Grass Slope", acousticReflectivity: 0.15f));
-		Register('M', AsDualTile("metal", "metal-dual", "Brick", reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f));
-		Register('T', AsDualTile("stone", "stone-dual", "Brick"));
-		Register('P', AsDualTile("dirt", "dirt-dual", "Grass", acousticReflectivity: 0.15f));
-		Register('J', AsSlopeTile("dirt", "Brick", "Dirt Slope", acousticReflectivity: 0.15f));
-		Register('Y', AsSlopeTile("stone", "Brick", "Stone Slope"));
-		Register('g', AsTile("plants", false, "Grass", acousticReflectivity: 0.20f));
-		Register('i', AsTile("gates", isFg: false, surfaceType: "Brick", acousticReflectivity: 0.05f));
+		Register('1', AsDualTile("castle", "castle-dual", BRICK_SURF));
+		Register('2', AsSlopeTile("castle", BRICK_SURF, "Castle Slope"));
+		Register('G', AsDualTile("grass", "grass-dual", GRASS_SURF, acousticReflectivity: 0.15f));
+		Register('S', AsSlopeTile("grass", GRASS_SURF, "Grass Slope", acousticReflectivity: 0.15f));
+		Register('M', AsDualTile("metal", "metal-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f));
+
+
+		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF));
+		Register('Y', AsSlopeTile("stone", BRICK_SURF, "Stone Slope"));
+
+		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SURF));
+		Register('$', AsSlopeTile("crosshatch", BRICK_SURF, "Crosshatch Slope"));
+
+		Register('P', AsDualTile("dirt", "dirt-dual", GRASS_SURF, acousticReflectivity: 0.15f));
+		Register('J', AsSlopeTile("dirt", GRASS_SURF, "Dirt Slope", acousticReflectivity: 0.15f));
+		Register('g', AsTile("plants", false, GRASS_SURF, acousticReflectivity: 0.20f));
+		Register('i', AsTile("gates", isFg: false, surfaceType: BRICK_SURF, acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
 		Register('w', AsTile("water", false, WaterSurfaceType, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f, drawsVisual: false));
 		Register('#', AsTile("back", false, layer: TileLayer.Background));

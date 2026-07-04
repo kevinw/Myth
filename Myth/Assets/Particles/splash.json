@@ -3,11 +3,11 @@
   "EmitterRadius": 3,
   "DirectionDegrees": -90,
   "SpreadDegrees": 70,
-  "BurstCount": 64,
+  "BurstCount": 48,
   "Mode": "Burst",
   "EmissionRate": 120,
   "SpeedMin": 25,
-  "SpeedMax": 85,
+  "SpeedMax": 64,
   "LifeMin": 0.3,
   "LifeMax": 0.65,
   "Gravity": 200,
@@ -17,10 +17,10 @@
   "SizeStart": 1.4,
   "SizeEnd": 0.4,
   "Additive": false,
+  "Style": "Square",
   "Collision": "None",
   "Bounciness": 0.3,
-  "Style": "Square",
-  "ColorBirth": "eaffffff",
-  "ColorMid": "9fdfffff",
-  "ColorEnd": "6fbfe600"
+  "ColorBirth": "B4BFFD",
+  "ColorMid": "5D9BB7",
+  "ColorEnd": "1D5672"
 }
