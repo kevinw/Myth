@@ -1,7 +1,10 @@
 # TODO
 
+- ScanDiff: Error reading file: /Users/kev/src/Myth/Foster
+- git diff checker on bg thread
 - fungus needs to not grow everywhere
 - fungus needs a more stable "island local" seed
+- wall jump in one tile wide well doesn't work
 - use 16:10 screen fully on tall rooms. make letterboxing fully based on the room size
 - draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 - Chest destruction needs to be durable
