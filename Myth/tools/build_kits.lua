@@ -1,7 +1,8 @@
 -- Builds the procedural dual-tileset kits (ruin, ice, ember) in the same format
 -- as the hand-made stone/castle/dirt kits:
 --   fill slice (0,0 32x8): four 8x8 interior variants
---   edge slice (0,8 32x8): four 8x8 rim tiles (noise)
+--   edge slice (0,8 32x8): four 8x8 rim tiles (noise; used for sides + slopes)
+--   edge-top slice (0,16 32x8) / edge-bottom slice (0,24 32x8): directional rims
 --   mask slice (32,0 32x32): dual-grid silhouette, copied from stone-kit
 --   invisible 'height' layer mirroring fill geometry (luminance = height)
 --
@@ -23,10 +24,14 @@ local LO = rgba(0, 0, 0)       -- height: recessed
 
 -- Fill variants are 8x8 ASCII, keyed into kit.colors / kit.heights.
 -- Edge tiles are weighted noise: { {color, cumulativeThreshold}, ... }.
+-- edgeData / maskData become user data on the edge / mask slices; the game's kit
+-- loader reads "width=N" or "width=A-B" (rim thickness, per-variant cycle) from the
+-- edge slice and "wobble=0..1" (per-variant silhouette jitter) from the mask slice.
 local kits = {
   {
     name = "ruin",
     seed = 0x2F6E2B1,
+    maskData = "wobble=0.85", -- ancient and crumbly
     colors = {
       a = rgba(50, 60, 57),    -- dark grey-green block body
       b = rgba(75, 105, 47),   -- moss in the seams
@@ -38,6 +43,18 @@ local kits = {
       { rgba(105, 106, 106), 0.80 }, -- grey stone
       { rgba(75, 105, 47), 0.92 },   -- dark moss fleck
       { rgba(153, 229, 80), 1.00 },  -- bright moss glint
+    },
+    edgeTop = {
+      { rgba(75, 105, 47), 0.40 },   -- moss cap
+      { rgba(106, 190, 48), 0.75 },  -- living green
+      { rgba(153, 229, 80), 0.90 },  -- sunlit blades
+      { rgba(143, 151, 74), 1.00 },  -- dry khaki patches
+    },
+    edgeBottom = {
+      { rgba(69, 40, 60), 0.40 },    -- damp shadow
+      { rgba(50, 60, 57), 0.78 },    -- cold stone
+      { rgba(82, 75, 36), 0.94 },    -- old peat
+      { rgba(143, 86, 59), 1.00 },   -- root flecks
     },
     -- Horizontal seams on rows 1 and 5 in every variant so courses line up
     -- across neighboring tiles; vertical joints vary per variant.
@@ -87,6 +104,7 @@ local kits = {
   {
     name = "ice",
     seed = 0x51CEB19,
+    edgeData = "width=1", -- thin frost line
     colors = {
       a = rgba(48, 96, 130),   -- deep glacial blue
       b = rgba(63, 63, 116),   -- facet shear line
@@ -98,6 +116,17 @@ local kits = {
       { rgba(95, 205, 228), 0.80 },  -- cyan ice
       { rgba(48, 96, 130), 0.92 },   -- deep blue pocket
       { rgba(255, 255, 255), 1.00 }, -- white sparkle
+    },
+    edgeTop = {
+      { rgba(255, 255, 255), 0.45 }, -- fresh snowpack
+      { rgba(203, 219, 252), 0.85 }, -- packed frost
+      { rgba(95, 205, 228), 1.00 },  -- glassy melt
+    },
+    edgeBottom = {
+      { rgba(63, 63, 116), 0.45 },   -- deep freeze shadow
+      { rgba(48, 96, 130), 0.85 },   -- old blue ice
+      { rgba(95, 205, 228), 0.96 },  -- icicle glint
+      { rgba(203, 219, 252), 1.00 }, -- pale drip
     },
     -- All variants share the same diagonal phase ((x+y)%4==1) so the shear
     -- lines run unbroken across tile boundaries; variants differ in chips.
@@ -147,6 +176,7 @@ local kits = {
   {
     name = "ember",
     seed = 0xE3B0C44,
+    edgeData = "width=2-3", -- molten crust thickens in places
     colors = {
       a = rgba(34, 32, 52),    -- volcanic glass
       m = rgba(69, 40, 60),    -- cooled mottling
@@ -159,6 +189,18 @@ local kits = {
       { rgba(69, 40, 60), 0.83 },   -- dark maroon
       { rgba(172, 50, 50), 0.93 },  -- ember fleck
       { rgba(223, 113, 38), 1.00 }, -- hot fleck
+    },
+    edgeTop = {
+      { rgba(89, 86, 82), 0.45 },    -- cooled ash crust
+      { rgba(105, 106, 106), 0.80 }, -- grey cinder
+      { rgba(69, 40, 60), 0.94 },    -- scorched maroon
+      { rgba(172, 50, 50), 1.00 },   -- surviving ember
+    },
+    edgeBottom = {
+      { rgba(223, 113, 38), 0.40 },  -- molten drip
+      { rgba(172, 50, 50), 0.80 },   -- glowing crust
+      { rgba(251, 242, 54), 0.90 },  -- white-hot bead
+      { rgba(69, 40, 60), 1.00 },    -- cooling clot
     },
     -- Cracks stay clear of tile borders so random variants never produce
     -- severed glowing veins at seams.
@@ -219,12 +261,12 @@ for _, kit in ipairs(kits) do
     seed = (seed * 1103515245 + 12345) % 2147483648
     return seed / 2147483648
   end
-  local function edgePixel()
+  local function noisePixel(weights)
     local r = rand()
-    for _, entry in ipairs(kit.edge) do
+    for _, entry in ipairs(weights) do
       if r < entry[2] then return entry[1] end
     end
-    return kit.edge[#kit.edge][1]
+    return weights[#weights][1]
   end
 
   local spr = Sprite(64, 32, ColorMode.RGB)
@@ -242,9 +284,14 @@ for _, kit in ipairs(kits) do
       end
     end
   end
-  for x = 0, 31 do
-    for y = 8, 15 do
-      art:putPixel(x, y, edgePixel())
+  local edgeRows = { { 8, kit.edge }, { 16, kit.edgeTop }, { 24, kit.edgeBottom } }
+  for _, row in ipairs(edgeRows) do
+    if row[2] then
+      for x = 0, 31 do
+        for y = row[1], row[1] + 7 do
+          art:putPixel(x, y, noisePixel(row[2]))
+        end
+      end
     end
   end
   spr:newCel(artLayer, 1, art, Point(0, 0))
@@ -269,13 +316,16 @@ for _, kit in ipairs(kits) do
   maskLayer.name = "mask"
   spr:newCel(maskLayer, 1, stoneMaskCel.image:clone(), stoneMaskCel.position)
 
-  local function addSlice(name, x, y, w, h)
+  local function addSlice(name, x, y, w, h, data)
     local slice = spr:newSlice(Rectangle(x, y, w, h))
     slice.name = name
+    if data then slice.data = data end
   end
   addSlice("fill", 0, 0, 32, 8)
-  addSlice("edge", 0, 8, 32, 8)
-  addSlice("mask", 32, 0, 32, 32)
+  addSlice("edge", 0, 8, 32, 8, kit.edgeData)
+  if kit.edgeTop then addSlice("edge-top", 0, 16, 32, 8) end
+  if kit.edgeBottom then addSlice("edge-bottom", 0, 24, 32, 8) end
+  addSlice("mask", 32, 0, 32, 32, kit.maskData)
 
   local outPath = outDir .. "/" .. kit.name .. "-kit.ase"
   spr:saveAs(outPath)

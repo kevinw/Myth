@@ -1406,6 +1406,17 @@ public static class Assets
 		if (edges.Count == 0 && edgeSlice != null)
 			throw new InvalidOperationException($"Dual tileset kit '{kitName}' edge slice does not contain any non-empty {Game.TileSize}x{Game.TileSize} tile.");
 
+		// Optional directional rims: pixels on up-facing contours use edge-top, down-facing
+		// use edge-bottom, the rest edge-side; anything missing falls back to the plain edge.
+		var edgeTops = ExtractOptionalEdgeSlice(rendered, slices, "edgetop", kitName);
+		var edgeSides = ExtractOptionalEdgeSlice(rendered, slices, "edgeside", kitName);
+		var edgeBottoms = ExtractOptionalEdgeSlice(rendered, slices, "edgebottom", kitName);
+
+		var (edgeWidthMin, edgeWidthMax) = ParseEdgeWidthRange(kitName, edgeSlice);
+		var wobble = ParseMaskWobble(kitName, maskSlice);
+
+		static Image? Pick(List<Image> tiles, int i) => tiles.Count > 0 ? tiles[i % tiles.Count] : null;
+
 		for (var i = 0; i < fills.Count; i++)
 		{
 			var fill = fills[i];
@@ -1415,9 +1426,17 @@ public static class Assets
 				if (edges.Count > 0)
 					baseSlopeEdges.Add(ExtractTile(edges[i % edges.Count], edges[i % edges.Count].Bounds));
 			}
-			dualVariants.Add(GenerateDualTilesetVariant(fill, mask, edges.Count > 0 ? edges[i % edges.Count] : null));
-			dualNormals.Add(GenerateDualTilesetNormalVariant(mask, heights.Count > 0 ? heights[i] : null));
-			dualOccluders.Add(GenerateDualTilesetOccluderVariant(mask));
+			// Variant 0 keeps the authored silhouette; later variants get a jittered copy so
+			// the terrain contour doesn't repeat. Color, normals and occluders all derive from
+			// the same variant mask, so lighting bevels and shadows follow the wobble.
+			var variantMask = i > 0 && wobble > 0 ? WobbleMask(mask, i, wobble) : mask;
+			var edgeWidth = edgeWidthMin + i % (edgeWidthMax - edgeWidthMin + 1);
+			var side = Pick(edgeSides, i) ?? Pick(edges, i);
+			dualVariants.Add(GenerateDualTilesetVariant(fill, variantMask, Pick(edgeTops, i) ?? side, side, Pick(edgeBottoms, i) ?? side, edgeWidth));
+			dualNormals.Add(GenerateDualTilesetNormalVariant(variantMask, heights.Count > 0 ? heights[i] : null));
+			dualOccluders.Add(GenerateDualTilesetOccluderVariant(variantMask));
+			if (variantMask != mask)
+				variantMask.Dispose();
 		}
 
 		foreach (var fill in fills)
@@ -1426,6 +1445,22 @@ public static class Assets
 			edge.Dispose();
 		foreach (var height in heights)
 			height.Dispose();
+		foreach (var tile in edgeTops)
+			tile.Dispose();
+		foreach (var tile in edgeSides)
+			tile.Dispose();
+		foreach (var tile in edgeBottoms)
+			tile.Dispose();
+	}
+
+	static List<Image> ExtractOptionalEdgeSlice(Image rendered, Dictionary<string, Aseprite.Slice> slices, string key, string kitName)
+	{
+		if (!slices.TryGetValue(key, out var slice))
+			return [];
+		var tiles = ExtractSliceTiles(rendered, slice, kitName, required: false);
+		if (tiles.Count == 0)
+			throw new InvalidOperationException($"Dual tileset kit '{kitName}' slice '{slice.Name}' does not contain any non-empty {Game.TileSize}x{Game.TileSize} tile.");
+		return tiles;
 	}
 
 	static string NormalizeLayerName(string? name)
@@ -1683,14 +1718,129 @@ public static class Assets
 		return output;
 	}
 
-	static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edge)
+	// Kit parameters are authored as user data text on the kit's slices (key=value pairs,
+	// e.g. "width=1-3" on the edge slice, "wobble=0.8" on the mask slice).
+	static Dictionary<string, string> ParseKitSliceParams(Aseprite.Slice? slice)
+	{
+		var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		var text = slice?.UserData.Text;
+		if (string.IsNullOrWhiteSpace(text))
+			return result;
+		foreach (var token in text.Split([' ', ',', ';'], StringSplitOptions.RemoveEmptyEntries))
+		{
+			var eq = token.IndexOf('=');
+			if (eq > 0)
+				result[token[..eq].Trim()] = token[(eq + 1)..].Trim();
+		}
+		return result;
+	}
+
+	// Edge band thickness in pixels: "width=N", or "width=A-B" to cycle the range across
+	// variants so some chunks of terrain read chunkier than others.
+	static (int Min, int Max) ParseEdgeWidthRange(string kitName, Aseprite.Slice? slice)
+	{
+		const int DefaultEdgeWidth = 2;
+		if (!ParseKitSliceParams(slice).TryGetValue("width", out var value))
+			return (DefaultEdgeWidth, DefaultEdgeWidth);
+
+		var dash = value.IndexOf('-');
+		if (dash > 0 && int.TryParse(value[..dash], out var lo) && int.TryParse(value[(dash + 1)..], out var hi) && lo >= 0 && hi >= lo)
+			return (lo, hi);
+		if (int.TryParse(value, out var width) && width >= 0)
+			return (width, width);
+		throw new InvalidOperationException($"Dual tileset kit '{kitName}' edge slice has invalid width '{value}' (expected \"N\" or \"A-B\").");
+	}
+
+	// Silhouette jitter strength, 0..1: "wobble=0" keeps every variant on the authored mask.
+	static float ParseMaskWobble(string kitName, Aseprite.Slice slice)
+	{
+		const float DefaultMaskWobble = 0.6f;
+		if (!ParseKitSliceParams(slice).TryGetValue("wobble", out var value))
+			return DefaultMaskWobble;
+		if (float.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var wobble) && wobble >= 0)
+			return Math.Clamp(wobble, 0f, 1f);
+		throw new InvalidOperationException($"Dual tileset kit '{kitName}' mask slice has invalid wobble '{value}' (expected 0..1).");
+	}
+
+	// Per-variant silhouette jitter: nudges the mask contour in or out by one pixel using
+	// smooth per-variant noise. Cell-border pixels never change (seams between neighboring
+	// dual tiles must keep lining up), and only contour-adjacent pixels may flip, so the
+	// silhouette never drifts more than 1px from the authored mask/collision.
+	static Image WobbleMask(Image mask, int variant, float strength)
+	{
+		var result = new Image(mask.Width, mask.Height);
+		var threshold = 1f - Math.Clamp(strength, 0f, 1f) * 0.8f;
+		var solidColor = new Color(255, 0, 0, 255);
+
+		for (var cellY = 0; cellY < 4; cellY++)
+			for (var cellX = 0; cellX < 4; cellX++)
+			{
+				var cell = new RectInt(cellX, cellY, 1, 1) * Game.TileSize;
+				for (var y = 0; y < Game.TileSize; y++)
+					for (var x = 0; x < Game.TileSize; x++)
+					{
+						var color = mask[cell.X + x, cell.Y + y];
+						var solid = color.A > 0;
+						var interior = x > 0 && y > 0 && x < Game.TileSize - 1 && y < Game.TileSize - 1;
+						if (interior && OnMaskContour(mask, cell, x, y, solid))
+						{
+							var noise = WobbleNoise(cell.X + x, cell.Y + y, variant);
+							if (solid ? noise < -threshold : noise > threshold)
+							{
+								solid = !solid;
+								color = solidColor;
+							}
+						}
+						if (solid)
+							result[cell.X + x, cell.Y + y] = color;
+					}
+			}
+		return result;
+	}
+
+	// True when any 4-neighbor within the cell is on the other side of the silhouette.
+	// Callers only pass interior pixels, so the neighbors never leave the cell.
+	static bool OnMaskContour(Image mask, RectInt cell, int x, int y, bool solid)
+		=> (mask[cell.X + x - 1, cell.Y + y].A > 0) != solid ||
+			(mask[cell.X + x + 1, cell.Y + y].A > 0) != solid ||
+			(mask[cell.X + x, cell.Y + y - 1].A > 0) != solid ||
+			(mask[cell.X + x, cell.Y + y + 1].A > 0) != solid;
+
+	// Bilinear value noise in [-1, 1] with ~3px features, deterministic per variant, so the
+	// contour shifts in short runs instead of per-pixel dither.
+	static float WobbleNoise(int x, int y, int variant)
+	{
+		const float scale = 1f / 3f;
+		var fx = x * scale;
+		var fy = y * scale;
+		var x0 = (int)MathF.Floor(fx);
+		var y0 = (int)MathF.Floor(fy);
+		var tx = fx - x0;
+		var ty = fy - y0;
+		var top = WobbleHash(x0, y0, variant) + (WobbleHash(x0 + 1, y0, variant) - WobbleHash(x0, y0, variant)) * tx;
+		var bottom = WobbleHash(x0, y0 + 1, variant) + (WobbleHash(x0 + 1, y0 + 1, variant) - WobbleHash(x0, y0 + 1, variant)) * tx;
+		return (top + (bottom - top) * ty) * 2f - 1f;
+	}
+
+	static float WobbleHash(int x, int y, int variant)
+	{
+		unchecked
+		{
+			var hash = (uint)(x * 374761393 + y * 668265263 + variant * 2246822519);
+			hash = (hash ^ (hash >> 13)) * 1274126177u;
+			hash ^= hash >> 16;
+			return (hash & 0xFFFFFF) / (float)0x1000000;
+		}
+	}
+
+	static Image GenerateDualTilesetVariant(Image fill, Image mask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth)
 	{
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
 		{
 			var tile = MaskToDualTile(tileMask);
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
-			GenerateDualTile(output, source, fill, tileMask, mask, edge);
+			GenerateDualTile(output, source, fill, tileMask, mask, edgeTop, edgeSide, edgeBottom, edgeWidth);
 		}
 		return output;
 	}
@@ -1859,11 +2009,11 @@ public static class Assets
 		return AlphaAt(image, source.X + x, source.Y + y);
 	}
 
-	static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edge)
+	static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth)
 	{
 		var tile = MaskToDualTile(mask);
 		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
-		const int edgeWidth = 2;
+		var hasEdge = edgeTop != null || edgeSide != null || edgeBottom != null;
 
 		for (var y = 0; y < Game.TileSize; y++)
 			for (var x = 0; x < Game.TileSize; x++)
@@ -1873,29 +2023,59 @@ public static class Assets
 					continue;
 
 				var color = fill[x, y];
-				if (edge != null && IsMaskEdge(alphaMask, source, x, y, edgeWidth))
-					color = edge[x, y];
+				if (hasEdge && edgeWidth > 0)
+				{
+					var chosen = ClassifyMaskEdge(alphaMask, source, x, y, edgeWidth) switch
+					{
+						EdgeDirection.Top => edgeTop ?? edgeSide,
+						EdgeDirection.Bottom => edgeBottom ?? edgeSide,
+						EdgeDirection.Side => edgeSide,
+						_ => null,
+					};
+					if (chosen != null)
+						color = chosen[x, y];
+				}
 
 				color.A = (byte)(color.A * alpha / 255);
 				output[destination.X + x, destination.Y + y] = color;
 			}
 	}
 
-	static bool IsMaskEdge(Image mask, RectInt source, int x, int y, int width)
+	enum EdgeDirection { None, Top, Side, Bottom }
+
+	// Rim membership + orientation in one pass: a pixel is rim when open air lies within
+	// `width` (Manhattan) of it inside this cell, and its facing is the distance-weighted
+	// average direction of that air, so pixels a couple deep under a top surface still
+	// classify as Top. Out-of-cell samples count as solid, same as the old rim test: the
+	// silhouette continues into the neighboring dual tile there.
+	static EdgeDirection ClassifyMaskEdge(Image mask, RectInt source, int x, int y, int width)
 	{
+		var vx = 0f;
+		var vy = 0f;
+		var found = false;
 		for (var oy = -width; oy <= width; oy++)
 			for (var ox = -width; ox <= width; ox++)
 			{
-				if (Math.Abs(ox) + Math.Abs(oy) > width)
+				var distance = Math.Abs(ox) + Math.Abs(oy);
+				if (distance == 0 || distance > width)
 					continue;
 				var sampleX = source.X + x + ox;
 				var sampleY = source.Y + y + oy;
 				if (sampleX < source.X || sampleY < source.Y || sampleX >= source.Right || sampleY >= source.Bottom)
 					continue;
-				if (mask[sampleX, sampleY].A == 0)
-					return true;
+				if (mask[sampleX, sampleY].A != 0)
+					continue;
+				found = true;
+				var weight = 1f / distance;
+				vx += ox * weight;
+				vy += oy * weight;
 			}
-		return false;
+
+		if (!found)
+			return EdgeDirection.None;
+		if (MathF.Abs(vy) >= MathF.Abs(vx))
+			return vy < 0 ? EdgeDirection.Top : vy > 0 ? EdgeDirection.Bottom : EdgeDirection.Side;
+		return EdgeDirection.Side;
 	}
 
 	static Point2 MaskToDualTile(int mask)
