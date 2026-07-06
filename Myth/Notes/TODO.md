@@ -1,5 +1,16 @@
 # TODO
 
+- a main menu
+- a save state
+  - durable chests
+  - explored rooms
+  - save spots/warps
+
+- a section at the beggining where you learn
+  - to jump
+  - to roll (a closing door?)
+  - to burrow up a wall
+
 - build Detect; use it for ShieldKnight. make him (and other actors?) understand ledges.
 - if the git diff contains only markdown, don't run the browser workflow?
 - ScanDiff: Error reading file: /Users/kev/src/Myth/Foster

@@ -210,7 +210,7 @@ public partial class Player : Pawn
 	}
 
 	static float BurrowCooldown => 0.25f;
-	static float ShortBurrowDampenTime => 0.25f; // burrows briefer than this pop softly, as if holding Down
+	static float ShortBurrowDampenTime => 0.09f; // burrows briefer than this pop softly, as if holding Down
 
 	// Is the burrow point against the room boundary in the direction we're driving? Only then
 	// can the surface plausibly continue in the adjacent room. Room bounds are half-open
