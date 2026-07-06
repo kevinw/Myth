@@ -155,6 +155,10 @@ public static class Factory
 	public static readonly Dictionary<char, Entry> Entries = [];
 	public static readonly List<ActorPaletteEntry> ActorPalette = [];
 
+	// Entry names are the stable identity of a tile type (room legends map file chars to
+	// them); chars are session-local handles assigned at registration.
+	static readonly Dictionary<string, char> charsByEntryName = new(StringComparer.OrdinalIgnoreCase);
+
 	// Tags declared on each [GameActor], keyed by registered type name, so spec/prefab
 	// palette entries can inherit their underlying type's tags.
 	static readonly Dictionary<string, ActorTag> actorTags = new(StringComparer.OrdinalIgnoreCase);
@@ -173,6 +177,8 @@ public static class Factory
 	public static void Register(char id, in Entry entry)
 	{
 		Entries[id] = entry;
+		if (!string.IsNullOrEmpty(entry.Name))
+			charsByEntryName[entry.Name] = id;
 	}
 
 	// Finds a given Type entry by its character ID
@@ -182,6 +188,33 @@ public static class Factory
 			return entry;
 
 		return null;
+	}
+
+	/// The session char for a tile type name (see room legends), or null if unregistered.
+	public static char? CharForName(string name)
+		=> charsByEntryName.TryGetValue(name, out var id) ? id : null;
+
+	/// Picks a free char for a tile type: its preferred char if available, else the first
+	/// letter of its name (upper then lower), else the first free char in a fixed alphabet.
+	/// '0' means empty and 'f' is the legacy fungus tile; neither is ever assigned.
+	static char AssignChar(char preferred, string name)
+	{
+		const string reserved = "0f";
+		static bool Free(char c) => !reserved.Contains(c) && !Entries.ContainsKey(c);
+
+		if (preferred != '\0' && Free(preferred))
+			return preferred;
+		if (name.Length > 0 && char.IsAsciiLetter(name[0]))
+		{
+			if (Free(char.ToUpperInvariant(name[0])))
+				return char.ToUpperInvariant(name[0]);
+			if (Free(char.ToLowerInvariant(name[0])))
+				return char.ToLowerInvariant(name[0]);
+		}
+		foreach (var c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz123456789!?*+=@&")
+			if (Free(c))
+				return c;
+		throw new InvalidOperationException($"No free tile chars left registering '{name}'.");
 	}
 
 	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f, bool drawsVisual = true)
@@ -332,15 +365,6 @@ public static class Factory
 		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF));
 		Register('Y', AsSlopeTile("stone", BRICK_SURF, "Stone Slope"));
 
-		Register('R', AsDualTile("ruin", "ruin-dual", BRICK_SURF));
-		Register('Z', AsSlopeTile("ruin", BRICK_SURF, "Ruin Slope"));
-
-		Register('I', AsDualTile("ice", "ice-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.4f, acousticReflectivity: 0.9f));
-		Register('X', AsSlopeTile("ice", BRICK_SURF, "Ice Slope", acousticReflectivity: 0.9f));
-
-		Register('E', AsDualTile("ember", "ember-dual", BRICK_SURF));
-		Register('F', AsSlopeTile("ember", BRICK_SURF, "Ember Slope"));
-
 		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SURF));
 		Register('$', AsSlopeTile("crosshatch", BRICK_SURF, "Crosshatch Slope"));
 
@@ -360,10 +384,26 @@ public static class Factory
 		// Fungus is now a per-tile region flag (TileFlags.Fungal, toggled with 'G'
 		// in the editor), not a paintable tile. FungusTile remains only so old
 		// rooms migrate on load (see Room.MigrateLegacyFungusTiles).
+		RegisterTileKits();
 		foreach (var spriteName in Assets.Sprites.Keys.Where(it => it.StartsWith(PropSpritePrefix, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
 			ActorPalette.Add(ActorPaletteEntry.FromProp(spriteName));
 		RegisterActorSpecPaletteEntries();
 
+	}
+
+	// Tile types declared by JSON kit specs (Assets/Tilesets/*.kit.json). The spec carries
+	// the registration data, so a new tileset needs no code change; chars are assigned at
+	// registration and room files stay stable through their legends.
+	static void RegisterTileKits()
+	{
+		foreach (var spec in TileKits.Specs)
+		{
+			Register(AssignChar(spec.PreferredChar, spec.Name),
+				AsDualTile(spec.Name, spec.DualName, spec.Surface, reflection: spec.Reflection, reflectionOpacity: spec.ReflectionOpacity, acousticReflectivity: spec.AcousticReflectivity));
+			if (spec.HasEdges)
+				Register(AssignChar(spec.SlopePreferredChar, spec.SlopeEntryName),
+					AsSlopeTile(spec.Name, spec.Surface, spec.SlopeEntryName, acousticReflectivity: spec.AcousticReflectivity));
+		}
 	}
 
 	private static void RegisterActorSpecPaletteEntries()
@@ -386,6 +426,7 @@ public static class Factory
 	public static void Clear()
 	{
 		Entries.Clear();
+		charsByEntryName.Clear();
 		ActorPalette.Clear();
 	}
 

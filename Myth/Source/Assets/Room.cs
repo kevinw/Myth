@@ -257,6 +257,14 @@ public class Room
 			SunDirection = NormalizeOrDefault(JsonUtil.ReadVector2(sun, "direction") ?? DefaultSunDirection, DefaultSunDirection);
 		}
 
+		if (json.TryGetPropertyValue("legend", out var legendNode) && legendNode is JsonObject legend)
+		{
+			pendingLegend = [];
+			foreach (var (key, value) in legend)
+				if (key.Length == 1 && value?.GetValue<string>() is { Length: > 0 } name)
+					pendingLegend[key[0]] = name;
+		}
+
 		if (json.TryGetPropertyValue("tiles", out var tilesNode) && tilesNode is JsonArray rows)
 		{
 			for (var y = 0; y < rows.Count && y < Size.Y; y++)
@@ -276,6 +284,11 @@ public class Room
 					SetBackgroundTileUnchecked(x, y, row[x]);
 			}
 		}
+
+		// If tile registration has happened, resolve the legend now so the flag/normalize
+		// steps below see canonical chars. During initial asset load the Factory is still
+		// empty; RebuildGeometry retries once registration has run.
+		ApplyLegend();
 
 		if (json.TryGetPropertyValue("breakable", out var breakableNode) && breakableNode is JsonArray breakableCells)
 		{
@@ -301,6 +314,47 @@ public class Room
 				if (node is JsonObject actor)
 					Actors.Add(ActorSpecs.CloneObject(actor));
 		}
+	}
+
+	// A room file's "legend" maps its chars to tile type names (Factory entry names), so
+	// files stay valid however chars get reassigned. Parsed at load, then resolved to the
+	// session's canonical chars once the Factory is populated. Rooms without a legend read
+	// their chars as canonical directly (pre-legend files).
+	Dictionary<char, string>? pendingLegend;
+
+	void ApplyLegend()
+	{
+		if (pendingLegend == null || Factory.Entries.Count == 0)
+			return;
+
+		var remap = new Dictionary<char, char>();
+		foreach (var (fileChar, name) in pendingLegend)
+		{
+			if (fileChar == '0')
+				continue;
+			if (Factory.CharForName(name) is { } canonical)
+			{
+				if (canonical != fileChar)
+					remap[fileChar] = canonical;
+			}
+			else
+				Console.WriteLine($"Error: Room '{Id}' legend references unknown tile type '{name}'; keeping '{fileChar}'");
+		}
+		pendingLegend = null;
+		if (remap.Count == 0)
+			return;
+
+		// Write the grids directly: SetTileUnchecked would reset per-tile flags, which are
+		// already loaded by now. The entry cache is rebuilt from the remapped chars.
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				if (remap.TryGetValue(Tiles[x, y], out var tile))
+					Tiles[x, y] = tile;
+				if (remap.TryGetValue(BackgroundTiles[x, y], out var background))
+					BackgroundTiles[x, y] = background;
+			}
+		RebuildTileEntryCache();
 	}
 
 	public void Set(Point2 tile, char ch, bool rebuildGeometry = true) => SetForeground(tile, ch, rebuildGeometry);
@@ -374,6 +428,7 @@ public class Room
 
 	public void RebuildGeometry()
 	{
+		ApplyLegend();
 		RebuildTileEntryCache();
 		CollisionRects.Clear();
 		SlopeTiles.Clear();
@@ -1170,6 +1225,41 @@ public class Room
 	// regex-compacting the result: no intermediate node tree, no per-row StringBuilder/
 	// string, no whole-document regex pass. Two-int point arrays are written inline
 	// ([x, y]) via WriteRawValue so the on-disk format is unchanged.
+	// Every registered char used by this room's grids, mapped to its tile type name, so the
+	// file survives chars being reassigned. Unregistered chars are passed through raw.
+	void WriteLegend(Utf8JsonWriter writer)
+	{
+		if (Factory.Entries.Count == 0)
+			return;
+
+		var used = new SortedSet<char>();
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				if (Tiles[x, y] != '0')
+					used.Add(Tiles[x, y]);
+				if (BackgroundTiles[x, y] != '0')
+					used.Add(BackgroundTiles[x, y]);
+			}
+
+		Span<char> key = stackalloc char[1];
+		var started = false;
+		foreach (var tile in used)
+		{
+			if (Factory.Find(tile) is not { Name.Length: > 0 } entry)
+				continue;
+			if (!started)
+			{
+				writer.WriteStartObject("legend");
+				started = true;
+			}
+			key[0] = tile;
+			writer.WriteString(key, entry.Name);
+		}
+		if (started)
+			writer.WriteEndObject();
+	}
+
 	void WriteJson(IBufferWriter<byte> output)
 	{
 		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true, NewLine = "\n" });
@@ -1206,6 +1296,8 @@ public class Room
 			writer.WriteEndArray();
 			writer.WriteEndObject();
 		}
+
+		WriteLegend(writer);
 
 		var rowBuffer = new char[Size.X];
 

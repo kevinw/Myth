@@ -4,6 +4,15 @@
   "backdropColor2": "001C02",
   "ambientColor": "BBBBBB",
   "reverb": 0.798,
+  "legend": {
+    "#": "back",
+    "1": "castle",
+    "2": "Castle Slope",
+    "M": "metal",
+    "P": "dirt",
+    "T": "stone",
+    "m": "Myth Back"
+  },
   "tiles": [
     "1111111111111111111111111111111111111111111TTTTTTTTTTTTTTTTT00TTTT00000TTTTT0011",
     "11111111111111111111111111111111111111111110000000000000000000000000000000000011",

@@ -1,7 +1,22 @@
 {
-  "position": [-80, 0],
+  "position": [-120, 0],
   "size": [40, 23],
   "ambientColor": "8F8F8F",
+  "legend": {
+    "#": "back",
+    "(": "back-nw",
+    ")": "back-ne",
+    "G": "grass",
+    "P": "dirt",
+    "S": "Grass Slope",
+    "T": "stone",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines",
+    "w": "water"
+  },
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",

@@ -13,7 +13,7 @@ public partial class Manager : App
 {
 	readonly ImGuiRenderer imgui = null!;
 
-	public const string DefaultMusicArea = "Calm";
+	public const string DefaultMusicArea = "Silence";
 	public const string BackgroundMusicAreaParameter = "Area";
 	public const string RoomReverbParameter = "RoomReverb";
 
@@ -148,11 +148,7 @@ public partial class Manager : App
 	readonly bool buildAssetPack;
 	readonly bool useAssetPack;
 	readonly string? assetPackPath;
-#if BROWSER
-	bool musicEnabled;
-#else
 	bool musicEnabled = true;
-#endif
 	// M cycles the music: position 0 = room-driven (no override), 1..N = force
 	// musicAreas[pos-1] and ignore room areas, N+1 = off. Lets us drive the music
 	// area live during a presentation instead of relying on room transitions.

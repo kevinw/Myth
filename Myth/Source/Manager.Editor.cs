@@ -209,6 +209,11 @@ public partial class Manager
 			FpsOverlayImGui();
 		TransitionViewerImGui();
 		PreferencesImGui();
+		if (!playing && !startingPlay)
+		{
+			TileKitEditorImGui();
+			MusicRegionsImGui();
+		}
 #if DEBUG
 		TweakRegistry.DrawPanel();
 #endif
@@ -1184,24 +1189,36 @@ public partial class Manager
 		if (musicAreas.Count > 0)
 		{
 			ImGui.TextUnformatted("Music");
-			var area = room.MusicArea ?? DefaultMusicArea;
+			ImGui.PushID("Music");
+			// null = auto: inherit from the containing music region, or the default. Any
+			// selected area (including the default) is an explicit per-room override.
+			var autoLabel = $"Auto ({MusicRegions.ResolveRegion(room)?.Area ?? DefaultMusicArea})";
 			ImGui.SetNextItemWidth(-1);
-			if (ImGui.BeginCombo("##RoomMusicArea", area))
+			if (ImGui.BeginCombo("##RoomMusicArea", room.MusicArea ?? autoLabel))
 			{
+				if (ImGui.Selectable(autoLabel, room.MusicArea == null))
+				{
+					using (CaptureRoomUndo("Edit Room Music", room))
+						room.MusicArea = null;
+					changed = true;
+				}
 				foreach (var musicArea in musicAreas)
 				{
-					var selected = area == musicArea;
+					var selected = room.MusicArea == musicArea;
+					ImGui.PushID(musicArea ?? "");
 					if (ImGui.Selectable(musicArea, selected))
 					{
 						using (CaptureRoomUndo("Edit Room Music", room))
-							room.MusicArea = musicArea == DefaultMusicArea ? null : musicArea;
+							room.MusicArea = musicArea;
 						changed = true;
 					}
 					if (selected)
 						ImGui.SetItemDefaultFocus();
+					ImGui.PopID();
 				}
 				ImGui.EndCombo();
 			}
+			ImGui.PopID();
 		}
 
 		if (changed)
@@ -3131,6 +3148,10 @@ public partial class Manager
 
 		var canInteract = !imgui.WantsMouseInput && inner.Contains(cursor);
 
+		// While the music-region draw mode is armed or dragging, it owns the mouse.
+		if (UpdateMusicRegionDrawing(canInteract, cursor, inner))
+			return;
+
 		// Middle-mouse drag pans.
 		if (canInteract && Input.Mouse.MiddleDown)
 		{
@@ -3760,6 +3781,7 @@ public partial class Manager
 			inner.Size / editorZoom);
 		batcher.PushMatrix(worldMatrix);
 		DrawEditorRooms(visibleWorld);
+		DrawMusicRegionsOverlay(visibleWorld);
 		DrawEditorScreenGrid(visibleWorld);
 
 		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
@@ -4704,7 +4726,7 @@ public partial class Manager
 				ImGui.SameLine(0, ToolbarSpacing);
 		*/
 
-		if (ImGuiIconButton("Music", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled, ToolbarButtonImagePadding))
+		if (ImGuiIconButton("Music Areas", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled, ToolbarButtonImagePadding))
 		{
 			musicEnabled = !musicEnabled;
 			game?.RefreshMusic();
@@ -4724,6 +4746,14 @@ public partial class Manager
 
 		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio", imagePadding: ToolbarButtonImagePadding))
 			OpenFmodStudio();
+		ImGui.SameLine();
+
+		if (ImGuiTextButton("Tile Kits", new Vector2(70, ButtonSize), tileKitEditorOpen))
+			tileKitEditorOpen = !tileKitEditorOpen;
+		ImGui.SameLine();
+
+		if (ImGuiTextButton("Music", new Vector2(55, ButtonSize), musicRegionsOpen))
+			musicRegionsOpen = !musicRegionsOpen;
 		ImGui.SameLine(0, ToolbarSpacing);
 
 		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))

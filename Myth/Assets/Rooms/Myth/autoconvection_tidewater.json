@@ -3,6 +3,11 @@
   "size": [40, 23],
   "ambientColor": "868686",
   "reverb": 0.804,
+  "legend": {
+    "#": "back",
+    "T": "stone",
+    "i": "gates"
+  },
   "tiles": [
     "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
     "T00000000000000000000000000000000000000T",

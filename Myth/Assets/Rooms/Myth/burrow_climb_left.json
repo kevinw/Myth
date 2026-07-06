@@ -11,6 +11,16 @@
       0.9965437
     ]
   },
+  "legend": {
+    "#": "back",
+    "-": "back-right",
+    "G": "grass",
+    "P": "dirt",
+    "T": "stone",
+    "Y": "Stone Slope",
+    "g": "plants",
+    "m": "Myth Back"
+  },
   "tiles": [
     "TTTTTTTTTTTTTTTTTTT00000000000000000000T",
     "TYYYYYYY0000000000000000000000000000000T",

@@ -165,6 +165,10 @@ public static class Assets
 
 	static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases, string? buildPackPath)
 	{
+		// Kit specs load on both paths: the visual-asset-pack path skips image generation
+		// (the baked tilesets are in the pack) but Factory still registers from the specs.
+		TileKits.LoadSpecs(Path.Join(AssetsPath, "Tilesets"));
+
 		if (buildPackPath == null && (useVisualAssetPack || OperatingSystem.IsBrowser()) && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
 			return;
 
@@ -200,6 +204,10 @@ public static class Assets
 	{
 		var spritesPath = Path.Join(AssetsPath, "Sprites");
 		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
+
+		// The bake can be reached without Reload (BuildVisualAssetPack), and generating the
+		// kit tilesets needs the specs; reloading them here is cheap and idempotent.
+		TileKits.LoadSpecs(tilesetsPath);
 		var spriteFiles = new Dictionary<string, Aseprite>();
 		var generatedSprites = new List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();
@@ -247,6 +255,24 @@ public static class Assets
 				generatedSlopeEdgeImages[baseName] = baseSlopeEdges;
 			kitGeneratedTilesets.Add(baseName);
 			kitGeneratedTilesets.Add(dualName);
+		}
+
+		foreach (var spec in TileKits.Specs)
+		{
+			if (tilesetFiles.ContainsKey(spec.Name) || kitGeneratedTilesets.Contains(spec.Name))
+				throw new InvalidOperationException($"Tile kit '{spec.Name}' collides with an existing tileset of the same name.");
+			if (!tilesetFiles.TryGetValue(spec.MaskKit, out var maskKit))
+				throw new InvalidOperationException($"Tile kit '{spec.Name}' references missing mask kit '{spec.MaskKit}'.");
+
+			GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var dualVariants, out var dualNormals, out var dualOccluders);
+			generatedTileImages[spec.Name] = baseTiles;
+			generatedTileImages[spec.DualName] = dualVariants;
+			generatedNormalImages[spec.DualName] = dualNormals;
+			generatedOccluders[spec.DualName] = dualOccluders;
+			if (baseSlopeEdges.Count > 0)
+				generatedSlopeEdgeImages[spec.Name] = baseSlopeEdges;
+			kitGeneratedTilesets.Add(spec.Name);
+			kitGeneratedTilesets.Add(spec.DualName);
 		}
 
 		var packer = new Packer();
@@ -1412,9 +1438,47 @@ public static class Assets
 		var edgeSides = ExtractOptionalEdgeSlice(rendered, slices, "edgeside", kitName);
 		var edgeBottoms = ExtractOptionalEdgeSlice(rendered, slices, "edgebottom", kitName);
 
-		var (edgeWidthMin, edgeWidthMax) = ParseEdgeWidthRange(kitName, edgeSlice);
+		var edgeWidth = ParseEdgeWidthRange(kitName, edgeSlice);
 		var wobble = ParseMaskWobble(kitName, maskSlice);
 
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+	}
+
+	/// Generates the tileset outputs for a JSON kit spec: images come from the spec's
+	/// palette/patterns/noise instead of an .ase, and the silhouette mask is borrowed from
+	/// the referenced .ase kit. Everything downstream is shared with the .ase path.
+	static void GenerateDualTilesetFromSpec(TileKitSpec spec, Aseprite maskKit, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	{
+		baseTiles = [];
+		baseSlopeEdges = [];
+		dualVariants = [];
+		dualNormals = [];
+		dualOccluders = [];
+
+		var slices = GetKitSlices(maskKit);
+		if (!slices.TryGetValue("mask", out var maskSlice))
+			throw new InvalidOperationException($"Tile kit '{spec.Name}' mask kit '{spec.MaskKit}' has no 'mask' slice.");
+		var maskBounds = GetSliceBounds(maskSlice);
+		if (maskBounds.Size != new Point2(Game.TileSize * 4, Game.TileSize * 4))
+			throw new InvalidOperationException($"Tile kit '{spec.Name}' mask kit '{spec.MaskKit}' mask slice must be exactly {Game.TileSize * 4}x{Game.TileSize * 4} pixels.");
+
+		var nonDebugLayers = GetNonDebugLayers(maskKit);
+		var heightLayers = GetLayerBranch(maskKit, "height");
+		using var rendered = maskKit.RenderFrame(0, layer => nonDebugLayers.Contains(layer) && !heightLayers.Contains(layer));
+		using var mask = ExtractTile(rendered, maskBounds);
+
+		var fills = TileKits.RasterizeFills(spec);
+		var heights = TileKits.RasterizeHeights(spec);
+		var (edges, edgeTops, edgeBottoms) = TileKits.RasterizeEdges(spec);
+		var edgeWidth = ParseEdgeWidthValue(spec.Name, spec.EdgeWidth);
+
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+	}
+
+	// Shared dual-tileset generation. Takes ownership of every image list (disposed here);
+	// the mask stays owned by the caller.
+	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	{
 		static Image? Pick(List<Image> tiles, int i) => tiles.Count > 0 ? tiles[i % tiles.Count] : null;
 
 		for (var i = 0; i < fills.Count; i++)
@@ -1430,7 +1494,7 @@ public static class Assets
 			// the terrain contour doesn't repeat. Color, normals and occluders all derive from
 			// the same variant mask, so lighting bevels and shadows follow the wobble.
 			var variantMask = i > 0 && wobble > 0 ? WobbleMask(mask, i, wobble) : mask;
-			var edgeWidth = edgeWidthMin + i % (edgeWidthMax - edgeWidthMin + 1);
+			var edgeWidth = edgeWidthRange.Min + i % (edgeWidthRange.Max - edgeWidthRange.Min + 1);
 			var side = Pick(edgeSides, i) ?? Pick(edges, i);
 			dualVariants.Add(GenerateDualTilesetVariant(fill, variantMask, Pick(edgeTops, i) ?? side, side, Pick(edgeBottoms, i) ?? side, edgeWidth));
 			dualNormals.Add(GenerateDualTilesetNormalVariant(variantMask, heights.Count > 0 ? heights[i] : null));
@@ -1439,18 +1503,62 @@ public static class Assets
 				variantMask.Dispose();
 		}
 
-		foreach (var fill in fills)
-			fill.Dispose();
-		foreach (var edge in edges)
-			edge.Dispose();
-		foreach (var height in heights)
-			height.Dispose();
-		foreach (var tile in edgeTops)
-			tile.Dispose();
-		foreach (var tile in edgeSides)
-			tile.Dispose();
-		foreach (var tile in edgeBottoms)
-			tile.Dispose();
+		foreach (var list in (List<Image>[])[fills, edges, heights, edgeTops, edgeSides, edgeBottoms])
+			foreach (var image in list)
+				image.Dispose();
+	}
+
+	/// Editor tile-creator preview: bakes the spec in memory and composes it onto a small
+	/// demo terrain ('#' rows mark solid tiles), picking variants per dual cell the way the
+	/// in-game renderer does. Never touches the atlas; the caller owns the returned image.
+	public static Image GenerateTileKitPreviewImage(TileKitSpec spec, string[] solidMap)
+	{
+		var maskKit = new Aseprite(Path.Join(AssetsPath, "Tilesets", $"{spec.MaskKit}.ase"));
+		GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var dualVariants, out var dualNormals, out _);
+
+		var rows = solidMap.Length;
+		var columns = solidMap.Max(row => row.Length);
+		bool Solid(int x, int y) => y >= 0 && y < rows && x >= 0 && x < solidMap[y].Length && solidMap[y][x] == '#';
+
+		// Dual cells sit on tile corners: cell (x,y) reads the four tiles around it and is
+		// drawn half a tile up-left; the preview folds that offset into the image origin.
+		var output = new Image((columns + 1) * Game.TileSize, (rows + 1) * Game.TileSize);
+		for (var y = 0; y <= rows; y++)
+			for (var x = 0; x <= columns; x++)
+			{
+				var mask = 0;
+				if (Solid(x - 1, y - 1)) mask |= TileQuadrants.TopLeft;
+				if (Solid(x - 1, y)) mask |= TileQuadrants.BottomLeft;
+				if (Solid(x, y - 1)) mask |= TileQuadrants.TopRight;
+				if (Solid(x, y)) mask |= TileQuadrants.BottomRight;
+				if (mask == 0)
+					continue;
+
+				var tile = MaskToDualTile(mask);
+				var variant = dualVariants[PreviewVariantIndex(x, y, dualVariants.Count)];
+				for (var py = 0; py < Game.TileSize; py++)
+					for (var px = 0; px < Game.TileSize; px++)
+					{
+						var color = variant[tile.X * Game.TileSize + px, tile.Y * Game.TileSize + py];
+						if (color.A > 0)
+							output[x * Game.TileSize + px, y * Game.TileSize + py] = color;
+					}
+			}
+
+		foreach (var list in (List<Image>[])[baseTiles, baseSlopeEdges, dualVariants, dualNormals])
+			foreach (var image in list)
+				image.Dispose();
+		return output;
+	}
+
+	static int PreviewVariantIndex(int x, int y, int count)
+	{
+		unchecked
+		{
+			var hash = (uint)(x * 374761393 + y * 668265263);
+			hash = (hash ^ (hash >> 13)) * 1274126177u;
+			return (int)(hash % (uint)count);
+		}
 	}
 
 	static List<Image> ExtractOptionalEdgeSlice(Image rendered, Dictionary<string, Aseprite.Slice> slices, string key, string kitName)
@@ -1742,13 +1850,21 @@ public static class Assets
 		const int DefaultEdgeWidth = 2;
 		if (!ParseKitSliceParams(slice).TryGetValue("width", out var value))
 			return (DefaultEdgeWidth, DefaultEdgeWidth);
+		return ParseEdgeWidthValue(kitName, value);
+	}
 
+	/// Editor helper: the (min, max) rim width a kit's edgeWidth string describes.
+	public static (int Min, int Max) EdgeWidthRangeForEditor(string kitName, string value)
+		=> ParseEdgeWidthValue(kitName, value);
+
+	static (int Min, int Max) ParseEdgeWidthValue(string kitName, string value)
+	{
 		var dash = value.IndexOf('-');
 		if (dash > 0 && int.TryParse(value[..dash], out var lo) && int.TryParse(value[(dash + 1)..], out var hi) && lo >= 0 && hi >= lo)
 			return (lo, hi);
 		if (int.TryParse(value, out var width) && width >= 0)
 			return (width, width);
-		throw new InvalidOperationException($"Dual tileset kit '{kitName}' edge slice has invalid width '{value}' (expected \"N\" or \"A-B\").");
+		throw new InvalidOperationException($"Dual tileset kit '{kitName}' has invalid edge width '{value}' (expected \"N\" or \"A-B\").");
 	}
 
 	// Silhouette jitter strength, 0..1: "wobble=0" keeps every variant on the authored mask.
@@ -2420,6 +2536,7 @@ public static class Assets
 	{
 		Rooms.Clear();
 		RoomsById.Clear();
+		MusicRegions.Load();
 
 		var deleted = UseUserRooms ? LoadUserRoomTombstones() : [];
 

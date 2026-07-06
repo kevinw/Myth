@@ -378,11 +378,12 @@ public partial class Game
 		}
 
 		// A live override (M-cycle) forces its area and ignores the room's. With no
-		// override, fall back to the room's area, or the default for rooms that don't
-		// set one (so cycling back to "Room" restores the default instead of sticking
-		// on the last override).
+		// override, the room's own area wins, then the smallest music region containing
+		// the room, then the default (so cycling back to "Room" restores the resolved
+		// area instead of sticking on the last override).
 		var area = Manager.MusicAreaOverride
-			?? (string.IsNullOrEmpty(forRoom.MusicArea) ? Manager.DefaultMusicArea : forRoom.MusicArea);
+			?? MusicRegions.Resolve(forRoom)
+			?? Manager.DefaultMusicArea;
 		if (string.IsNullOrEmpty(area))
 			return;
 

@@ -1,6 +1,18 @@
 {
   "position": [40, 0],
   "size": [40, 23],
+  "legend": {
+    "#": "back",
+    "%": "crosshatch",
+    "-": "back-right",
+    "P": "dirt",
+    "T": "stone",
+    "Y": "Stone Slope",
+    "g": "plants",
+    "i": "gates",
+    "m": "Myth Back",
+    "w": "water"
+  },
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",

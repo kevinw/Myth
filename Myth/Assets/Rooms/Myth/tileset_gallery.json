@@ -1,8 +1,19 @@
 {
-  "position": [-80, -46],
+  "position": [-160, -46],
   "size": [40, 23],
   "ambientColor": "909090",
   "lightNoise": 0.2,
+  "legend": {
+    "%": "crosshatch",
+    "1": "castle",
+    "E": "ember",
+    "G": "grass",
+    "I": "ice",
+    "M": "metal",
+    "P": "dirt",
+    "R": "ruin",
+    "T": "stone"
+  },
   "tiles": [
     "T00000000000000000000000000000000000000T",
     "T00000000000000000000000000000000000000T",

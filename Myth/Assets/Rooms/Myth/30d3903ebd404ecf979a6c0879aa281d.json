@@ -2,6 +2,10 @@
   "position": [120, -23],
   "size": [40, 23],
   "reverb": 0.104,
+  "legend": {
+    "#": "back",
+    "T": "stone"
+  },
   "tiles": [
     "0000000000000TTTTTTTT000TTTTT00000000000",
     "0000000000000TTTTTTTT000TTTTT00000000000",

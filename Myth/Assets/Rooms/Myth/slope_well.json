@@ -3,6 +3,13 @@
   "size": [40, 68],
   "ambientColor": "8D8D8D",
   "reverb": 0.801,
+  "legend": {
+    "#": "back",
+    "-": "back-right",
+    "T": "stone",
+    "Y": "Stone Slope",
+    "m": "Myth Back"
+  },
   "tiles": [
     "T000000000000TTTTTTTTTTTTTTTTTTTTTTTTTTT",
     "T000000000000000000000000000TTTTTTTTTTTT",

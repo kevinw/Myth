@@ -1,6 +1,15 @@
 {
   "position": [120, 0],
   "size": [40, 23],
+  "legend": {
+    "#": "back",
+    "(": "back-nw",
+    "G": "grass",
+    "S": "Grass Slope",
+    "T": "stone",
+    "Y": "Stone Slope",
+    "m": "Myth Back"
+  },
   "tiles": [
     "00000000000000000000000000000000000000TT",
     "00000000000000000000000000000000000000TT",

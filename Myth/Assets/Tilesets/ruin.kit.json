@@ -1,0 +1,67 @@
+{
+  "surface": "Brick",
+  "char": "R",
+  "slopeChar": "Z",
+  "mask": "stone-kit",
+  "seed": 49816241,
+  "edgeWidth": "2",
+  "wobble": 0.85,
+  "palette": {
+    "a": "323C39",
+    "b": "4B692F",
+    "c": "222034"
+  },
+  "heights": { "a": 0.67, "b": 0, "c": 0 },
+  "fills": [
+    ["aabaaaaa",
+     "bbabbbbb",
+     "aaaaabaa",
+     "aaaaabaa",
+     "aaaaabaa",
+     "bbbbbabb",
+     "aabaaaaa",
+     "aabaaaaa"],
+    ["aaaaabaa",
+     "bbbbbabb",
+     "abaaaaaa",
+     "abaaccaa",
+     "abaaccaa",
+     "babbbbbb",
+     "aaaaabaa",
+     "aaaaabaa"],
+    ["aaaabaaa",
+     "bbbbabbb",
+     "aabaaaaa",
+     "aabaaaaa",
+     "aabaaaaa",
+     "bbabbbbb",
+     "aaaaaaba",
+     "aaaaaaba"],
+    ["abaaaaab",
+     "babbbbba",
+     "aaaabaaa",
+     "acaabaaa",
+     "aaaabaaa",
+     "bbbbabbb",
+     "aaabaaaa",
+     "aaabaaaa"]
+  ],
+  "edge": [
+    ["8F974A", 42],
+    ["696A6A", 38],
+    ["4B692F", 12],
+    ["99E550", 8]
+  ],
+  "edgeTop": [
+    ["4B692F", 40],
+    ["6ABE30", 35],
+    ["99E550", 15],
+    ["8F974A", 10]
+  ],
+  "edgeBottom": [
+    ["45283C", 40],
+    ["323C39", 38],
+    ["524B24", 16],
+    ["8F563B", 6]
+  ]
+}

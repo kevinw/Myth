@@ -2,6 +2,11 @@
   "position": [56, -23],
   "size": [40, 23],
   "ambientColor": "727272",
+  "legend": {
+    "#": "back",
+    "T": "stone",
+    "Y": "Stone Slope"
+  },
   "tiles": [
     "000000000000000000000000000000TTTTTTTTTT",
     "000000000000000000000000000000TTTTTTT000",
