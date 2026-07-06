@@ -147,6 +147,8 @@ public sealed partial class GameView
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
 			DrawOverlayElements(output);
+			if (showHud)
+				DrawMinimap(output);
 		}
 		if (debugView == DebugView.Visibility)
 		{
@@ -205,11 +207,7 @@ public sealed partial class GameView
 			DrawPlayerHud(destination, viewport, scissor);
 
 		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
-		{
-			if (game.MinimapOpen)
-				DrawMinimap(destination, viewport, scissor);
 			DrawCurrencyHud(destination, viewport, scissor);
-		}
 	}
 
 	Target CompositeRawWorld()
