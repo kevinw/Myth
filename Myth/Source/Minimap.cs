@@ -215,42 +215,61 @@ public class Minimap
 
 public sealed partial class GameView
 {
-	static float MinimapTileScale => 0.5f;       // screen pixels per world tile
-	static float MinimapPlayerWidth => 4f;     // mini player sprite width in screen pixels
+	static float MinimapTileScale => 0.5f;    // game pixels per world tile when fully revealed
+	static float MinimapPlayerWidth => 4f;    // mini player sprite width in game pixels
 	static float MinimapDim => 0.8f;          // how dark the game dims behind the map
+	static float MinimapRevealSpeed => 3.5f;  // full open (zoom, then centering) over ~0.3s
+	static float MinimapZoomPhase => 0.6f;    // reveal fraction spent zooming before the center lerp starts
 	static Color MinimapRoomFill => new(0x241a3e);
 	static Color MinimapWall => new(0x8b81b5);
 
-	void DrawMinimap(IDrawableTarget target, in RectInt viewport, RectInt? scissor)
-	{
-		var scale = viewport.Height / (float)Height;
-		Batcher.PushMatrix(
-			Matrix3x2.CreateScale(scale) *
-			Matrix3x2.CreateTranslation(viewport.Left, viewport.Top));
-		Batcher.Rect(new Rect(0, 0, Width, Height), Color.Black * MinimapDim);
+	float minimapReveal; // 0 = closed, 1 = fully open; drives fade and the camera zoom-out
 
-		var s = MinimapTileScale;
+	// Drawn into the 320x180 output target before the final composite, so the map shares the
+	// game's pixel grid (and CRT). Opening zooms out from the live camera view: at reveal 0 the
+	// map transform matches the world render exactly (TileSize px per tile, camera-anchored),
+	// easing to map scale while the player glides to screen center; closing reverses the zoom.
+	void DrawMinimap(Target output)
+	{
+		minimapReveal = Calc.Approach(minimapReveal, game.MinimapOpen ? 1f : 0f, MinimapRevealSpeed * Time.Delta);
+		if (minimapReveal <= 0.001f)
+			return;
+
+		// Two phases: zoom out first (anchored where you are on screen), then lerp the map to
+		// center. Closing plays them in reverse — slide back over the player, then dive in.
+		var zoomEase = Smoothstep(Calc.ClampedMap(minimapReveal, 0, MinimapZoomPhase));
+		var centerEase = Smoothstep(Calc.ClampedMap(minimapReveal, MinimapZoomPhase, 1));
+		var ease = zoomEase;
 		var player = game.GetFirst<Player>();
-		var focus = (Vector2)(player?.Position ?? game.CurrentRoom?.WorldBounds.Center ?? Point2.Zero) / TileSize;
-		Vector2 origin = (new Vector2(Width, Height) / 2 - focus * s).FloorToPoint2();
+		var focusWorld = (Vector2)(player?.Position ?? game.CurrentRoom?.WorldBounds.Center ?? Point2.Zero);
+		var focus = focusWorld / TileSize;
+
+		// Scale lerps in log space so the zoom-out feels even from 8px per tile down to map scale.
+		var s = MathF.Exp(Calc.Lerp(MathF.Log(TileSize), MathF.Log(MinimapTileScale), zoomEase));
+		var focusScreen = Vector2.Lerp(focusWorld - RenderCamera, new Vector2(Width, Height) / 2, centerEase);
+		var origin = focusScreen - focus * s;
+		if (minimapReveal >= 1)
+			origin = origin.FloorToPoint2();
+
+		Batcher.Rect(new Rect(0, 0, Width, Height), Color.Black * (MinimapDim * ease));
 
 		// Only the camera-seen part of each room is drawn; the rest stays dark until explored.
 		foreach (var mapRoom in game.Minimap.Rooms)
-			Batcher.Rect(new Rect(origin + (Vector2)(mapRoom.TileBounds.Position + mapRoom.SeenRect.Position) * s, (Vector2)mapRoom.SeenRect.Size * s), MinimapRoomFill);
+			Batcher.Rect(new Rect(origin + (Vector2)(mapRoom.TileBounds.Position + mapRoom.SeenRect.Position) * s, (Vector2)mapRoom.SeenRect.Size * s), MinimapRoomFill * ease);
 
 		foreach (var mapRoom in game.Minimap.Rooms)
 		{
 			var basePosition = origin + (Vector2)mapRoom.TileBounds.Position * s;
 			foreach (var run in mapRoom.SolidRuns)
-				Batcher.Rect(new Rect(basePosition + (Vector2)run.Position * s, (Vector2)run.Size * s), MinimapWall);
+				Batcher.Rect(new Rect(basePosition + (Vector2)run.Position * s, (Vector2)run.Size * s), MinimapWall * ease);
 			foreach (var polygon in mapRoom.SlopePolygons)
 				for (var i = 1; i + 1 < polygon.Count; i++)
-					Batcher.Triangle(basePosition + polygon[0] * s, basePosition + polygon[i] * s, basePosition + polygon[i + 1] * s, MinimapWall);
+					Batcher.Triangle(basePosition + polygon[0] * s, basePosition + polygon[i] * s, basePosition + polygon[i + 1] * s, MinimapWall * ease);
 		}
 
 		// More-to-explore ticks pulse gently: a thin line outside a border opening or along an
 		// unseen camera frontier, or a dot on a linked door whose destination hasn't been seen.
-		var pulse = Color.White * (0.25f + 0.15f * MathF.Sin(Time.SecondsF * 4f));
+		var pulse = Color.White * ((0.25f + 0.15f * MathF.Sin(Time.SecondsF * 4f)) * ease);
 		foreach (var mapRoom in game.Minimap.Rooms)
 			foreach (var exit in mapRoom.Markers)
 			{
@@ -264,17 +283,19 @@ public sealed partial class GameView
 				Batcher.Rect(rect, pulse);
 			}
 
-		// You-are-here: the player's sprite, miniaturized and blinking (visible longer than hidden).
-		if (player is { Sprite: { Frames.Count: > 0 } sprite } && Time.BetweenInterval(0.2, 0.6, 0))
+		// You-are-here: the player's sprite shrinking with the zoom (full size over the real
+		// player at reveal 0), blinking once the map is at rest.
+		if (player is { Sprite: { Frames.Count: > 0 } sprite } && (minimapReveal < 1 || Time.BetweenInterval(0.2, 0.6, 0)))
 		{
 			var frame = sprite.GetFrameAt(player.Animation, player.AnimationTime, true);
-			var miniScale = MinimapPlayerWidth / Math.Max(1, frame.Subtexture.Width);
+			var miniScale = MathF.Exp(Calc.Lerp(0, MathF.Log(MinimapPlayerWidth / Math.Max(1, frame.Subtexture.Width)), ease));
 			Batcher.Image(frame.Subtexture, origin + focus * s, player.Origin,
 				new Vector2((int)player.Facing, 1) * miniScale, 0, Color.White);
 		}
 
-		Batcher.PopMatrix();
-		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
+		Batcher.Render(output);
 		Batcher.Clear();
 	}
+
+	static float Smoothstep(float t) => t * t * (3f - 2f * t);
 }
