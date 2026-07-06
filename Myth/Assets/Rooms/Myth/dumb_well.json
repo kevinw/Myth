@@ -67,8 +67,8 @@
     "TTTwwwwwwwwwwwwwwwwwwTTTwwwwwwTTTwwwwTTT",
     "TTTwwwwwwwwwwwwwwwwwwTTTwwwwwwTTTwwwwTTT",
     "TTTwwwwwwwwwwwwwwwwwwTTTwwTTwwTTTwwwwTTT",
-    "TTTwwwwwwww%%%%%%wwwwTTTwwTTwwTTTTwwwTTT",
-    "TTTwwwwwwww%%%%%%wwwwTTTwwTTwwTTTTwwwTTT",
+    "TTTwwwwwwww%%GG%%wwwwTTTwwTTwwTTTTwwwTTT",
+    "TTTwwwwwwww%%%G%%wwwwTTTwwTTwwTTTTwwwTTT",
     "TTTwwwwwwww%%%%%%wwwwTTTwwTTwwTTTTwwwTTT",
     "TTTwwwwwwww%%%%%%wwwwTTTwwTTwwwTTTwwwTTT",
     "TTTwwwwwwwwwwwwwwwwwwTTTwwTTwwwwwwwwwTTT",
@@ -152,6 +152,8 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000"
+  ],
+  "fungal": [[11, 63],[12, 63],[15, 63],[16, 63],[11, 64],[12, 64],[15, 64]
   ],
   "actors": [
     {
