@@ -1,5 +1,6 @@
 # TODO
 
+- a "wildlife" system which draws flies, hoppers, more
 - a main menu
 - a save state
   - durable chests

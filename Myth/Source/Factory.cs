@@ -332,6 +332,15 @@ public static class Factory
 		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF));
 		Register('Y', AsSlopeTile("stone", BRICK_SURF, "Stone Slope"));
 
+		Register('R', AsDualTile("ruin", "ruin-dual", BRICK_SURF));
+		Register('Z', AsSlopeTile("ruin", BRICK_SURF, "Ruin Slope"));
+
+		Register('I', AsDualTile("ice", "ice-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.4f, acousticReflectivity: 0.9f));
+		Register('X', AsSlopeTile("ice", BRICK_SURF, "Ice Slope", acousticReflectivity: 0.9f));
+
+		Register('E', AsDualTile("ember", "ember-dual", BRICK_SURF));
+		Register('F', AsSlopeTile("ember", BRICK_SURF, "Ember Slope"));
+
 		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SURF));
 		Register('$', AsSlopeTile("crosshatch", BRICK_SURF, "Crosshatch Slope"));
 

@@ -241,7 +241,7 @@ public sealed partial class GameView
 		var centerEase = Smoothstep(Calc.ClampedMap(minimapReveal, MinimapZoomPhase, 1));
 		var ease = zoomEase;
 		var player = game.GetFirst<Player>();
-		var focusWorld = (Vector2)(player?.Position ?? game.CurrentRoom?.WorldBounds.Center ?? Point2.Zero);
+		var focusWorld = (Vector2)(game.CurrentRoom?.WorldBounds.Center ?? Point2.Zero);
 		var focus = focusWorld / TileSize;
 
 		// Scale lerps in log space so the zoom-out feels even from 8px per tile down to map scale.
