@@ -3148,8 +3148,8 @@ public partial class Manager
 
 		var canInteract = !imgui.WantsMouseInput && inner.Contains(cursor);
 
-		// While the music-region draw mode is armed or dragging, it owns the mouse.
-		if (UpdateMusicRegionDrawing(canInteract, cursor, inner))
+		// Music-region drawing/resizing owns the mouse while the regions window is engaged.
+		if (UpdateMusicRegionInteraction(canInteract, cursor, inner))
 			return;
 
 		// Middle-mouse drag pans.

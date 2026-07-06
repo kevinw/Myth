@@ -11,13 +11,20 @@ namespace Myth;
 // Save persists to the per-world regions file.
 public partial class Manager
 {
-	bool musicRegionsOpen;
+	bool musicRegionsOpen = true; // TEMP-SCREENSHOT
 	bool musicRegionsDirty;
 	bool musicRegionDrawArm;
-	int musicRegionSelected = -1;
+	int musicRegionSelected = 1; // TEMP-SCREENSHOT
 	Point2? musicRegionDragStart;
 	RectInt musicRegionDragRect;
 	string musicRegionLastArea = DefaultMusicArea;
+
+	// Selected-region manipulation: resize via the shared editor handles, move by body drag.
+	ResizeHandle musicRegionHoverHandle;
+	ResizeHandle musicRegionResize;
+	bool musicRegionMove;
+	Point2 musicRegionGrabOffset;
+	RectInt musicRegionDragOriginal;
 
 	static readonly Color[] MusicRegionPalette =
 	[
@@ -143,6 +150,166 @@ public partial class Manager
 		ImGui.End();
 	}
 
+	// World-view interaction while the window is open: drawing a new rect owns the mouse
+	// outright; otherwise the selected region can be resized by its handles or moved by
+	// dragging its body, and clicking any region body selects it. Clicks that hit nothing
+	// fall through to the normal editor tools.
+	bool UpdateMusicRegionInteraction(bool canInteract, Vector2 cursor, Rect inner)
+	{
+		if (UpdateMusicRegionDrawing(canInteract, cursor, inner))
+			return true;
+		if (!musicRegionsOpen)
+			return false;
+
+		var world = ScreenToEditorWorld(cursor, inner);
+		var tile = new Point2(
+			(int)MathF.Floor(world.X / Game.TileSize),
+			(int)MathF.Floor(world.Y / Game.TileSize));
+		var line = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
+		var selected = musicRegionSelected >= 0 && musicRegionSelected < MusicRegions.Regions.Count
+			? MusicRegions.Regions[musicRegionSelected]
+			: null;
+
+		// An active drag owns the mouse until release; Escape restores the grabbed rect.
+		if (selected != null && (musicRegionResize != ResizeHandle.None || musicRegionMove))
+		{
+			if (Input.Keyboard.Pressed(Keys.Escape))
+			{
+				if (selected.Rect != musicRegionDragOriginal)
+				{
+					selected.Rect = musicRegionDragOriginal;
+					MarkMusicRegionsEdited();
+				}
+				musicRegionResize = ResizeHandle.None;
+				musicRegionMove = false;
+				return true;
+			}
+
+			if (musicRegionResize != ResizeHandle.None)
+				ApplyMusicRegionResize(selected, musicRegionResize, tile);
+			else
+			{
+				var position = tile - musicRegionGrabOffset;
+				if (position != new Point2(selected.Rect.X, selected.Rect.Y))
+				{
+					selected.Rect = new RectInt(position.X, position.Y, selected.Rect.Width, selected.Rect.Height);
+					MarkMusicRegionsEdited();
+				}
+			}
+
+			if (!Input.Mouse.LeftDown)
+			{
+				musicRegionResize = ResizeHandle.None;
+				musicRegionMove = false;
+			}
+			return true;
+		}
+
+		if (!canInteract)
+			return false;
+
+		// Handle hover/press on the selected region's resize handles.
+		var hover = ResizeHandle.None;
+		if (selected != null)
+		{
+			var bounds = selected.Rect * Game.TileSize;
+			var size = HiddenWallHandleSize(line);
+			foreach (var handle in Enum.GetValues<ResizeHandle>())
+				if (handle != ResizeHandle.None && HiddenWallHandleRect(bounds, handle, size).Contains(world))
+				{
+					hover = handle;
+					break;
+				}
+		}
+		if (hover != musicRegionHoverHandle)
+		{
+			musicRegionHoverHandle = hover;
+			SetHiddenWallResizeCursor(hover);
+		}
+
+		if (Input.Mouse.LeftPressed)
+		{
+			if (hover != ResizeHandle.None && selected != null)
+			{
+				musicRegionResize = hover;
+				musicRegionDragOriginal = selected.Rect;
+				return true;
+			}
+
+			var hit = HitTestMusicRegionBody(world);
+			if (hit >= 0)
+			{
+				if (hit == musicRegionSelected && selected != null)
+				{
+					musicRegionMove = true;
+					musicRegionGrabOffset = tile - new Point2(selected.Rect.X, selected.Rect.Y);
+					musicRegionDragOriginal = selected.Rect;
+				}
+				else
+					musicRegionSelected = hit;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// Smallest region under the cursor wins the click, so nested regions stay reachable.
+	int HitTestMusicRegionBody(Vector2 world)
+	{
+		var best = -1;
+		var bestArea = long.MaxValue;
+		for (var i = 0; i < MusicRegions.Regions.Count; i++)
+		{
+			var region = MusicRegions.Regions[i];
+			var bounds = region.Rect * Game.TileSize;
+			if (!new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height).Contains(world))
+				continue;
+			if (region.TileArea < bestArea)
+			{
+				best = i;
+				bestArea = region.TileArea;
+			}
+		}
+		return best;
+	}
+
+	// Dragged edges track the cursor tile; opposite edges stay fixed, and the rect never
+	// collapses below one tile.
+	void ApplyMusicRegionResize(MusicRegion region, ResizeHandle handle, Point2 tile)
+	{
+		var left = region.Rect.X;
+		var top = region.Rect.Y;
+		var right = region.Rect.X + region.Rect.Width;
+		var bottom = region.Rect.Y + region.Rect.Height;
+
+		switch (handle)
+		{
+			case ResizeHandle.Left or ResizeHandle.TopLeft or ResizeHandle.BottomLeft:
+				left = Math.Min(tile.X, right - 1);
+				break;
+			case ResizeHandle.Right or ResizeHandle.TopRight or ResizeHandle.BottomRight:
+				right = Math.Max(tile.X + 1, left + 1);
+				break;
+		}
+		switch (handle)
+		{
+			case ResizeHandle.Top or ResizeHandle.TopLeft or ResizeHandle.TopRight:
+				top = Math.Min(tile.Y, bottom - 1);
+				break;
+			case ResizeHandle.Bottom or ResizeHandle.BottomLeft or ResizeHandle.BottomRight:
+				bottom = Math.Max(tile.Y + 1, top + 1);
+				break;
+		}
+
+		var rect = new RectInt(left, top, right - left, bottom - top);
+		if (rect != region.Rect)
+		{
+			region.Rect = rect;
+			MarkMusicRegionsEdited();
+		}
+	}
+
 	// One-shot rect drawing in the world view. Returns true while it owns the mouse (armed
 	// or dragging) so normal editor tools don't also react; pan/zoom above still ran.
 	bool UpdateMusicRegionDrawing(bool canInteract, Vector2 cursor, Rect inner)
@@ -215,6 +382,20 @@ public partial class Manager
 			batcher.RectLine(rect, musicRegionSelected == i ? line * 2 : line, musicRegionSelected == i ? Color.White : color);
 			if (Assets.Font != null)
 				batcher.Text(Assets.Font, region.Area, new Vector2(rect.X, rect.Y) + new Vector2(4, 4) / editorZoom, Vector2.One / MathF.Max(editorZoom, 0.25f), color);
+
+			if (musicRegionSelected == i)
+			{
+				var size = HiddenWallHandleSize(line);
+				foreach (var handle in Enum.GetValues<ResizeHandle>())
+				{
+					if (handle == ResizeHandle.None)
+						continue;
+					var handleRect = HiddenWallHandleRect(rect, handle, size);
+					var active = musicRegionResize == handle || musicRegionResize == ResizeHandle.None && musicRegionHoverHandle == handle;
+					batcher.Rect(handleRect, Color.Black * 0.75f);
+					batcher.RectLine(handleRect, line * 2, active ? Color.White : highlight);
+				}
+			}
 		}
 
 		if (musicRegionDragStart != null)
