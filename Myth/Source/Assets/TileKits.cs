@@ -34,19 +34,56 @@ public sealed class TileKitSpec
 	public bool HasEdges => Edge.Count > 0;
 }
 
+/// The Factory-facing subset of a kit spec: everything registration needs and nothing the
+/// image bake needs. In dev it derives from the JSON specs; in pack mode it is read from
+/// the visual asset pack manifest, so a pack is self-describing and can never skew against
+/// separately-shipped spec files.
+public sealed record TileKitRegistration(
+	string Name,
+	char PreferredChar,
+	char SlopePreferredChar,
+	string Surface,
+	Factory.ReflectionMode Reflection,
+	float ReflectionOpacity,
+	float AcousticReflectivity,
+	bool HasSlope)
+{
+	public string DualName => $"{Name}-dual";
+	public string SlopeEntryName => $"{char.ToUpperInvariant(Name[0])}{Name[1..]} Slope";
+
+	public static TileKitRegistration From(TileKitSpec spec)
+		=> new(spec.Name, spec.PreferredChar, spec.SlopePreferredChar, spec.Surface,
+			spec.Reflection, spec.ReflectionOpacity, spec.AcousticReflectivity, spec.HasEdges);
+}
+
 public static class TileKits
 {
 	public const string Extension = ".kit.json";
 
 	public static readonly List<TileKitSpec> Specs = [];
 
+	// What Factory.RegisterTileKits consumes. Follows Specs when they load from disk; the
+	// visual-asset-pack path replaces it with the manifest's copy (see SetRegistrations).
+	public static readonly List<TileKitRegistration> Registrations = [];
+
 	public static void LoadSpecs(string tilesetsPath)
 	{
 		Specs.Clear();
+		Registrations.Clear();
 		if (!Directory.Exists(tilesetsPath))
 			return;
 		foreach (var file in Directory.EnumerateFiles(tilesetsPath, $"*{Extension}").Order(StringComparer.OrdinalIgnoreCase))
 			Specs.Add(Parse(file));
+		foreach (var spec in Specs)
+			Registrations.Add(TileKitRegistration.From(spec));
+	}
+
+	/// Pack mode: registration data comes from the pack manifest (baked together with the
+	/// images), overriding anything LoadSpecs may have found on disk.
+	public static void SetRegistrations(IEnumerable<TileKitRegistration> registrations)
+	{
+		Registrations.Clear();
+		Registrations.AddRange(registrations);
 	}
 
 	static TileKitSpec Parse(string path)
@@ -137,7 +174,7 @@ public static class TileKits
 	}
 
 	public static string SpecPath(string name)
-		=> Path.Join(Assets.AssetsPath, "Tilesets", name + Extension);
+		=> Path.Join(Assets.SourcesPath, "Tilesets", name + Extension);
 
 	public static TileKitSpec Clone(TileKitSpec spec)
 	{

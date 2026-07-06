@@ -12,4 +12,4 @@ fi
 
 "$ASEPRITE" -b \
 	--script "$ROOT/tools/generate-myth-bg-tilesets.lua" \
-	--script-param "out-dir=$ROOT/Assets/Tilesets"
+	--script-param "out-dir=$ROOT/Assets/Sources/Tilesets"

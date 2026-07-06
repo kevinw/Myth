@@ -268,12 +268,7 @@ function prepareStartGate() {
 
 async function preloadAssets(module, onProgress) {
   const files = await loadAssetManifest();
-  const hasVisualAssetPack = files.includes(
-    "Assets/Packed/Visuals/manifest.bin",
-  );
-  const preloadFiles = files.filter((file) =>
-    shouldPreloadIntoDotnetFs(file, hasVisualAssetPack),
-  );
+  const preloadFiles = files.filter(shouldPreloadIntoDotnetFs);
   const fmodBankFiles = files.filter(isFmodBankFile);
   onProgress?.(0, preloadFiles.length);
 
@@ -321,23 +316,12 @@ async function loadAssetManifest() {
     .sort();
 }
 
-function shouldPreloadIntoDotnetFs(path, hasVisualAssetPack) {
-  if (isFmodBankFile(path)) return false;
-
-  if (hasVisualAssetPack) {
-    if (path.startsWith("Assets/Sprites/")) return false;
-    // Tile kit specs stay: the pack carries their baked images, but tile
-    // registration (chars, surfaces, reflection) reads the specs at startup.
-    if (path.startsWith("Assets/Tilesets/") && !path.endsWith(".kit.json"))
-      return false;
-    if (path.startsWith("Assets/Textures/")) return false;
-    // Fonts (dogica/m3x6, and Myna for ImGui) are rasterized from these TTFs at
-    // runtime via SpriteFont/Font, so they must stay in the wasm FS — don't exclude.
-    if (path === "Assets/inbetweens.json") return false;
-    if (path === "Assets/anim_transitions.json") return false;
-  }
-
-  return true;
+// The bundle is filtered at build time (csproj Content excludes decide what ships), so
+// everything the manifest lists belongs in the wasm FS. The one exception is FMOD banks:
+// the FMOD JS bridge streams those itself, and they only get empty placeholder files so
+// path checks succeed.
+function shouldPreloadIntoDotnetFs(path) {
+  return !isFmodBankFile(path);
 }
 
 function isFmodBankFile(path) {

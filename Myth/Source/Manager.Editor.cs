@@ -866,7 +866,7 @@ public partial class Manager
 	{
 		foreach (var tilesetName in GetTileEntryAsepriteCandidates(entry))
 		{
-			if (FindAsepriteFile(Path.Join(Assets.AssetsPath, "Tilesets"), tilesetName) is { } filename)
+			if (FindAsepriteFile(Path.Join(Assets.SourcesPath, "Tilesets"), tilesetName) is { } filename)
 				return filename;
 		}
 
@@ -4910,6 +4910,7 @@ public partial class Manager
 		assetWatcher.Filters.Add("*.ase");
 		assetWatcher.Filters.Add("*.aseprite");
 		assetWatcher.Filters.Add("inbetweens.json");
+		assetWatcher.Filters.Add("*.kit.json");
 
 		assetWatcher.Changed += (_, _) => RequestAssetReload();
 		assetWatcher.Created += (_, _) => RequestAssetReload();

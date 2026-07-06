@@ -50,7 +50,7 @@ public static class Assets
 	// This is the source of truth for baking transitions.
 	static readonly Dictionary<(string Sprite, string From, string To), int> InbetweenTransitions = new();
 
-	public static string INBETWEENS_JSON_FILENAME => Path.Join(AssetsPath, "inbetweens.json");
+	public static string INBETWEENS_JSON_FILENAME => Path.Join(SourcesPath, "inbetweens.json");
 
 	// Populated during the visual bake and serialized into sprite animations.
 	public record struct GeneratedTransition(string FromTag, string ToTag, int FrameCount, float[] Durations);
@@ -69,7 +69,7 @@ public static class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 6; // v6: per-frame sprite attachment sockets
+	const int visualAssetPackVersion = 7; // v7: tile kit registrations (self-describing pack)
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
@@ -100,6 +100,9 @@ public static class Assets
 	}
 
 	public static string RoomsPath => Path.Join(AssetsPath, roomsFolderName);
+	// Authoring inputs (.ase sources, kit specs, bake config). Read at runtime in dev and
+	// by the pack bake; excluded wholesale from web bundles, where the pack replaces them.
+	public static string SourcesPath => Path.Join(AssetsPath, "Sources");
 	public static string DefaultVisualAssetPackPath => Path.Join(AssetsPath, packedVisualsFolderName);
 	public static string CurrentWorldId => currentWorldId;
 	public static string WorldRoomsPath => Path.Join(RoomsPath, currentWorldId);
@@ -167,7 +170,7 @@ public static class Assets
 	{
 		// Kit specs load on both paths: the visual-asset-pack path skips image generation
 		// (the baked tilesets are in the pack) but Factory still registers from the specs.
-		TileKits.LoadSpecs(Path.Join(AssetsPath, "Tilesets"));
+		TileKits.LoadSpecs(Path.Join(SourcesPath, "Tilesets"));
 
 		if (buildPackPath == null && (useVisualAssetPack || OperatingSystem.IsBrowser()) && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
 			return;
@@ -188,7 +191,7 @@ public static class Assets
 
 		// create texture file
 		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
-		var lightingNoise = Assets.LoadAsepriteTexture(gfx, Path.Join("Textures", "noise_tess2_seamless.ase"), "LightingNoise");
+		var lightingNoise = Assets.LoadAsepriteTexture(gfx, Path.Join("Sources", "Textures", "noise_tess2_seamless.ase"), "LightingNoise");
 		LoadVisualAssetPackManifest(atlas, lightingNoise, BuildVisualAssetPackManifest(bake, "", null));
 
 		if (buildPackPath != null)
@@ -202,8 +205,8 @@ public static class Assets
 
 	static VisualAssetBake BakeVisualAssets()
 	{
-		var spritesPath = Path.Join(AssetsPath, "Sprites");
-		var tilesetsPath = Path.Join(AssetsPath, "Tilesets");
+		var spritesPath = Path.Join(SourcesPath, "Sprites");
+		var tilesetsPath = Path.Join(SourcesPath, "Tilesets");
 
 		// The bake can be reached without Reload (BuildVisualAssetPack), and generating the
 		// kit tilesets needs the specs; reloading them here is cheap and idempotent.
@@ -400,6 +403,9 @@ public static class Assets
 		}
 
 		LoadVisualAssetPackManifest(atlas, lightingNoise, manifest);
+		// Registration data ships inside the pack (baked with the images), so pack mode
+		// never depends on spec files being present or current.
+		TileKits.SetRegistrations(manifest.TileKits);
 
 		ActorSpecs.LoadSpecs(Path.Join(AssetsPath, "Actors"));
 		ParticleEffectAssets.Load();
@@ -425,7 +431,7 @@ public static class Assets
 		output.Pages[0].WriteQoi(Path.Join(directory, atlasFile));
 
 		string? lightingNoise = null;
-		var noisePath = Path.Join(AssetsPath, "Textures", "noise_tess2_seamless.ase");
+		var noisePath = Path.Join(SourcesPath, "Textures", "noise_tess2_seamless.ase");
 		if (File.Exists(noisePath))
 		{
 			var ase = new Aseprite(noisePath);
@@ -449,6 +455,7 @@ public static class Assets
 			Atlas = atlas,
 			LightingNoise = lightingNoise
 		};
+		manifest.TileKits.AddRange(TileKits.Registrations);
 
 		foreach (var (name, subtexture) in bake.Subtextures)
 			manifest.Subtextures.Add(PackedNamedSubtexture.From(name, subtexture));
@@ -845,6 +852,19 @@ public static class Assets
 			WritePackedOccluders(writer, tileset.OccluderTiles, $"{tileset.Name} occluders");
 			WritePackedOccluderGroups(writer, tileset.OccluderVariants, $"{tileset.Name} occluder variants");
 		}
+
+		WriteCount(writer, manifest.TileKits.Count, "tile kits");
+		foreach (var kit in manifest.TileKits)
+		{
+			writer.Write(kit.Name);
+			writer.Write((int)kit.PreferredChar);
+			writer.Write((int)kit.SlopePreferredChar);
+			writer.Write(kit.Surface);
+			writer.Write((int)kit.Reflection);
+			writer.Write(kit.ReflectionOpacity);
+			writer.Write(kit.AcousticReflectivity);
+			writer.Write(kit.HasSlope);
+		}
 	}
 
 	static VisualAssetPackManifest ReadVisualAssetPackManifest(Stream stream, string path)
@@ -936,6 +956,18 @@ public static class Assets
 			};
 			manifest.Tilesets.Add(tileset);
 		}
+
+		var tileKitCount = ReadCount(reader, "tile kits");
+		for (var i = 0; i < tileKitCount; i++)
+			manifest.TileKits.Add(new(
+				Name: reader.ReadString(),
+				PreferredChar: (char)reader.ReadInt32(),
+				SlopePreferredChar: (char)reader.ReadInt32(),
+				Surface: reader.ReadString(),
+				Reflection: (Factory.ReflectionMode)reader.ReadInt32(),
+				ReflectionOpacity: reader.ReadSingle(),
+				AcousticReflectivity: reader.ReadSingle(),
+				HasSlope: reader.ReadBoolean()));
 
 		return manifest;
 	}
@@ -1156,6 +1188,7 @@ public static class Assets
 		public List<PackedNamedSubtexture> Subtextures { get; set; } = [];
 		public List<PackedSprite> Sprites { get; set; } = [];
 		public List<PackedTileset> Tilesets { get; set; } = [];
+		public List<TileKitRegistration> TileKits { get; set; } = [];
 	}
 
 	sealed class VisualAssetBake : IDisposable
@@ -1513,7 +1546,7 @@ public static class Assets
 	/// in-game renderer does. Never touches the atlas; the caller owns the returned image.
 	public static Image GenerateTileKitPreviewImage(TileKitSpec spec, string[] solidMap)
 	{
-		var maskKit = new Aseprite(Path.Join(AssetsPath, "Tilesets", $"{spec.MaskKit}.ase"));
+		var maskKit = new Aseprite(Path.Join(SourcesPath, "Tilesets", $"{spec.MaskKit}.ase"));
 		GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var dualVariants, out var dualNormals, out _);
 
 		var rows = solidMap.Length;

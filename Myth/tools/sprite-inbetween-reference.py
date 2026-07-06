@@ -900,7 +900,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate inbetween algorithms against hand-authored animated sprite frames.")
     parser.add_argument("--refs", type=Path, default=Path("Production/Reference Sprites"))
     parser.add_argument("--include-aseprites", action="store_true", help="also include .ase/.aseprite files from --aseprite-dir")
-    parser.add_argument("--aseprite-dir", type=Path, default=Path("Assets/Sprites"))
+    parser.add_argument("--aseprite-dir", type=Path, default=Path("Assets/Sources/Sprites"))
     parser.add_argument("--aseprite-bin", type=str, default=None)
     parser.add_argument("--out", type=Path, default=Path("tmp/reference-inbetweens"))
     parser.add_argument("--html", type=Path, default=None, help="optional HTML table report path")

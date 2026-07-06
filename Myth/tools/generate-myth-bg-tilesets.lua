@@ -1,4 +1,4 @@
-local out_dir = app.params["out-dir"] or "Assets/Tilesets"
+local out_dir = app.params["out-dir"] or "Assets/Sources/Tilesets"
 
 local function join_path(a, b)
   return a .. "/" .. b

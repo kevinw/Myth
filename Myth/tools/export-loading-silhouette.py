@@ -4,7 +4,7 @@ browser loading screen. The output is white-on-transparent so it can be shown as
 a white glyph directly, or — better — used as a CSS `mask-image` on a tinted box
 to recolor it to anything (see the snippet printed at the end).
 
-The player sprite (Assets/Sprites/player.ase) has no animation tags, so the run
+The player sprite (Assets/Sources/Sprites/player.ase) has no animation tags, so the run
 frames are selected by index here. Tweak the CONFIG block below — run with
 `--contact-sheet` first to see numbered frames and pick the right ones.
 
@@ -41,7 +41,7 @@ SEQUENCE = [
 ]
 
 PROJECT = Path(__file__).resolve().parent.parent          # Myth/
-SRC_ASE = PROJECT / "Assets/Sprites/player.ase"
+SRC_ASE = PROJECT / "Assets/Sources/Sprites/player.ase"
 OUTPUT = PROJECT / "Platforms/Web/wwwroot/loading-player.webp"
 SEQUENCE_OUTPUT = PROJECT / "Platforms/Web/wwwroot/loading-player-skid.webp"
 ASEPRITE = os.environ.get(

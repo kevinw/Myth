@@ -391,18 +391,19 @@ public static class Factory
 
 	}
 
-	// Tile types declared by JSON kit specs (Assets/Tilesets/*.kit.json). The spec carries
-	// the registration data, so a new tileset needs no code change; chars are assigned at
-	// registration and room files stay stable through their legends.
+	// Tile types declared by JSON kit specs. The registration data comes from the specs in
+	// dev and from the visual asset pack manifest in pack mode (TileKits.Registrations), so
+	// a new tileset needs no code change; chars are assigned at registration and room files
+	// stay stable through their legends.
 	static void RegisterTileKits()
 	{
-		foreach (var spec in TileKits.Specs)
+		foreach (var kit in TileKits.Registrations)
 		{
-			Register(AssignChar(spec.PreferredChar, spec.Name),
-				AsDualTile(spec.Name, spec.DualName, spec.Surface, reflection: spec.Reflection, reflectionOpacity: spec.ReflectionOpacity, acousticReflectivity: spec.AcousticReflectivity));
-			if (spec.HasEdges)
-				Register(AssignChar(spec.SlopePreferredChar, spec.SlopeEntryName),
-					AsSlopeTile(spec.Name, spec.Surface, spec.SlopeEntryName, acousticReflectivity: spec.AcousticReflectivity));
+			Register(AssignChar(kit.PreferredChar, kit.Name),
+				AsDualTile(kit.Name, kit.DualName, kit.Surface, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity));
+			if (kit.HasSlope)
+				Register(AssignChar(kit.SlopePreferredChar, kit.SlopeEntryName),
+					AsSlopeTile(kit.Name, kit.Surface, kit.SlopeEntryName, acousticReflectivity: kit.AcousticReflectivity));
 		}
 	}
 

@@ -11,10 +11,10 @@ namespace Myth;
 // Save persists to the per-world regions file.
 public partial class Manager
 {
-	bool musicRegionsOpen = true; // TEMP-SCREENSHOT
+	bool musicRegionsOpen;
 	bool musicRegionsDirty;
 	bool musicRegionDrawArm;
-	int musicRegionSelected = 1; // TEMP-SCREENSHOT
+	int musicRegionSelected = -1;
 	Point2? musicRegionDragStart;
 	RectInt musicRegionDragRect;
 	string musicRegionLastArea = DefaultMusicArea;

@@ -1,5 +1,6 @@
 # TODO
 
+- entering a room from the top or bottom edge probably shouldn't make a "fresh player start"
 - a "wildlife" system which draws flies, hoppers, fish and more. they aren't more than 3x3 pixels, and render as a bit transparent. it's "ambient" wildlife.
 - a main menu
 - a save state
