@@ -95,12 +95,6 @@
       "Type": "RevealDoor",
       "Position": [32, 96],
       "Direction": "Left"
-    },
-    {
-      "Id": "1954bb589e5dbd6c",
-      "Type": "ParticleEmitter",
-      "Position": [172, 116],
-      "EffectName": "splash"
     }
   ]
 }
