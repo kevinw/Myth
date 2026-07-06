@@ -326,7 +326,10 @@ function shouldPreloadIntoDotnetFs(path, hasVisualAssetPack) {
 
   if (hasVisualAssetPack) {
     if (path.startsWith("Assets/Sprites/")) return false;
-    if (path.startsWith("Assets/Tilesets/")) return false;
+    // Tile kit specs stay: the pack carries their baked images, but tile
+    // registration (chars, surfaces, reflection) reads the specs at startup.
+    if (path.startsWith("Assets/Tilesets/") && !path.endsWith(".kit.json"))
+      return false;
     if (path.startsWith("Assets/Textures/")) return false;
     // Fonts (dogica/m3x6, and Myna for ImGui) are rasterized from these TTFs at
     // runtime via SpriteFont/Font, so they must stay in the wasm FS — don't exclude.
