@@ -29,6 +29,8 @@ public partial class Manager
 		Quit
 	}
 
+	Game? previewGame;
+
 	GameMenuPage gameMenuPage;
 	GameMenuPage gameMenuReturnPage;
 	int gameMenuSelection;
@@ -38,7 +40,7 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	static float MenuButtonWidth => 116f;
+	static float MenuButtonWidth => 110f;
 	static float MenuButtonHeight => 18f;
 	static float MenuButtonGap => 3f;
 	static float MenuPanelWidth => 174f;
@@ -65,6 +67,9 @@ public partial class Manager
 
 	void CloseGameMenu()
 	{
+		previewGame?.Dispose();
+		previewGame = null;
+
 		gameMenuPage = GameMenuPage.Closed;
 		gameMenuSelection = 0;
 		confirmRestart = false;
@@ -296,8 +301,23 @@ public partial class Manager
 		if (!GameMenuOpen || Window == null)
 			return;
 
+		if (game == null) {
+			if (CurrentRoom is { } room) {
+				// use a temporary game to render the room preview behind
+				if (previewGame == null) {
+					previewGame = new Game(this, room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
+					previewGame.Simulating = true;
+					Input.Clear();
+					previewGame.Update(new Controls(Input));
+				}
+
+				previewGame?.Render((RectInt)(GameViewRect * Scale), showHud: false);
+			}
+		}
+
+
 		batcher.PushMatrix(MenuMatrix);
-		var bgColor = Color.FromHexStringRGBA("0x160b18aa");
+		var bgColor = Color.FromHexStringRGBA("0x160b1888");
 		batcher.Rect(MenuBounds, bgColor);
 		DrawGameMenuPanel();
 		batcher.PopMatrix();

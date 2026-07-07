@@ -1,9 +1,11 @@
 # TODO
 
 - more big rooms
+- separate "editingRoomId" and "playRoomId" and put them in editor.json and save.json
 - study silksong map
 - connected hubs and spokes?
 - an enemy who gets knocked around when you hit it, their air friction decreases and then comes back
+- remove "fullscreen" menu from browser
 
 pre-friend build
 - save spot warp

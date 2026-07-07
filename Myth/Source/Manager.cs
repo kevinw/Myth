@@ -1068,6 +1068,8 @@ public partial class Manager : App
 			RenderPlayTransition();
 		else if (playing)
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
+		else
+			game?.Render((RectInt)(GameViewRect * Scale), showHud: false);
 		DrawGameMenu();
 
 		batcher.Render(Window);

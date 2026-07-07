@@ -23,7 +23,7 @@ public class PlayerStart : Actor
 
 	public override void RenderEmissive(Batcher batcher)
 	{
-		if (!Game.Manager.playing)
+		if (Game.Editing)
 			base.Render(batcher);
 	}
 }

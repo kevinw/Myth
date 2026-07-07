@@ -35,6 +35,7 @@ public partial class Game : IDisposable
 
 	internal readonly Manager Manager;
 	public GameView? View { get; }
+	internal bool Editing => Manager.game == this && !Manager.playing;
 
 	// Rendering facade: external callers (Manager, actors) reach the view through Game.
 	// Forwards to View, or no-ops/defaults when headless (View == null).
@@ -284,7 +285,7 @@ public partial class Game : IDisposable
 	public bool IsEditorPreview => !AudioEventsEnabled;
 	internal bool Disposed => disposed;
 	public bool AudioMuted { get; set; }
-	public bool Simulating { get; private set; }
+	public bool Simulating { get; set; }
 	public NavTrace? NavTrace { get; set; }
 	public event Action<RoomChange>? RoomChanged;
 	public event Action<RoomGeoChange>? RoomGeoChanged;
@@ -335,8 +336,7 @@ public partial class Game : IDisposable
 			game.Simulating = true;
 		}
 
-		public void Dispose()
-			=> game.Simulating = previous;
+		public void Dispose() => game.Simulating = previous;
 	}
 
 	public Game(Manager manager, Point2 start, bool audioEventsEnabled = true)
@@ -540,7 +540,7 @@ public partial class Game : IDisposable
 			FinishRoomActivation(RoomChangeKind.EdgeTransition);
 		}
 
-		UpdateAudioListener();
+		if (!Simulating) UpdateAudioListener();
 #if BROWSER
 		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
 #endif
