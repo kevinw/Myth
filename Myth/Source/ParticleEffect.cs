@@ -1,5 +1,7 @@
 using System.Numerics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Foster.Framework;
 
 namespace Myth;
@@ -86,80 +88,12 @@ public sealed class ParticleEffect
 		=> HashCode.Combine(ColorBirth.RGBA, ColorMid.RGBA, ColorEnd.RGBA);
 
 	public JsonObject ToJson()
-		=> new()
-		{
-			["Shape"] = Shape.ToString(),
-			["EmitterRadius"] = EmitterRadius,
-			["DirectionDegrees"] = DirectionDegrees,
-			["SpreadDegrees"] = SpreadDegrees,
-			["BurstCount"] = BurstCount,
-			["Mode"] = Mode.ToString(),
-			["EmissionRate"] = EmissionRate,
-			["Prewarm"] = Prewarm,
-			["SpeedMin"] = SpeedMin,
-			["SpeedMax"] = SpeedMax,
-			["LifeMin"] = LifeMin,
-			["LifeMax"] = LifeMax,
-			["Gravity"] = Gravity,
-			["Drag"] = Drag,
-			["NoiseAmount"] = NoiseAmount,
-			["NoiseScale"] = NoiseScale,
-			["SizeStart"] = SizeStart,
-			["SizeEnd"] = SizeEnd,
-			["Additive"] = Additive,
-			["Style"] = Style.ToString(),
-			["Collision"] = Collision.ToString(),
-			["Bounciness"] = Bounciness,
-			["ColorBirth"] = JsonUtil.ColorToHex(ColorBirth),
-			["ColorMid"] = JsonUtil.ColorToHex(ColorMid),
-			["ColorEnd"] = JsonUtil.ColorToHex(ColorEnd),
-		};
+		=> JsonSerializer.SerializeToNode(this, ParticleEffectJsonContext.Default.ParticleEffect)?.AsObject() ?? [];
 
 	public static ParticleEffect FromJson(JsonObject json)
-	{
-		var effect = new ParticleEffect();
-		if (JsonUtil.ReadString(json, "Shape") is { } shape)
-			effect.Shape = shape switch
-			{
-				"Point" => ParticleEmitterShape.Point,
-				"Circle" => ParticleEmitterShape.Circle,
-				"Cone" => ParticleEmitterShape.Cone,
-				"Line" => ParticleEmitterShape.Line,
-				_ => effect.Shape,
-			};
-		effect.EmitterRadius = JsonUtil.ReadFloat(json, "EmitterRadius", effect.EmitterRadius);
-		effect.DirectionDegrees = JsonUtil.ReadFloat(json, "DirectionDegrees", effect.DirectionDegrees);
-		effect.SpreadDegrees = JsonUtil.ReadFloat(json, "SpreadDegrees", effect.SpreadDegrees);
-		effect.BurstCount = JsonUtil.ReadInt(json, "BurstCount", effect.BurstCount);
-		if (JsonUtil.ReadString(json, "Mode") is { } mode)
-			effect.Mode = mode == "Burst" ? ParticleEmissionMode.Burst : effect.Mode;
-		effect.EmissionRate = JsonUtil.ReadFloat(json, "EmissionRate", effect.EmissionRate);
-		effect.Prewarm = JsonUtil.ReadBool(json, "Prewarm", effect.Prewarm);
-		effect.SpeedMin = JsonUtil.ReadFloat(json, "SpeedMin", effect.SpeedMin);
-		effect.SpeedMax = JsonUtil.ReadFloat(json, "SpeedMax", effect.SpeedMax);
-		effect.LifeMin = JsonUtil.ReadFloat(json, "LifeMin", effect.LifeMin);
-		effect.LifeMax = JsonUtil.ReadFloat(json, "LifeMax", effect.LifeMax);
-		effect.Gravity = JsonUtil.ReadFloat(json, "Gravity", effect.Gravity);
-		effect.Drag = JsonUtil.ReadFloat(json, "Drag", effect.Drag);
-		effect.NoiseAmount = JsonUtil.ReadFloat(json, "NoiseAmount", effect.NoiseAmount);
-		effect.NoiseScale = JsonUtil.ReadFloat(json, "NoiseScale", effect.NoiseScale);
-		effect.SizeStart = JsonUtil.ReadFloat(json, "SizeStart", effect.SizeStart);
-		effect.SizeEnd = JsonUtil.ReadFloat(json, "SizeEnd", effect.SizeEnd);
-		effect.Additive = JsonUtil.ReadBool(json, "Additive", effect.Additive);
-		if (JsonUtil.ReadString(json, "Style") is { } style)
-			effect.Style = style == "Plasma" ? ParticleRenderStyle.Plasma : effect.Style;
-		if (JsonUtil.ReadString(json, "Collision") is { } collision)
-			effect.Collision = collision switch
-			{
-				"Kill" => ParticleCollisionMode.Kill,
-				"Settle" => ParticleCollisionMode.Settle,
-				"Bounce" => ParticleCollisionMode.Bounce,
-				_ => effect.Collision,
-			};
-		effect.Bounciness = JsonUtil.ReadFloat(json, "Bounciness", effect.Bounciness);
-		effect.ColorBirth = JsonUtil.ReadColor(json, "ColorBirth") ?? effect.ColorBirth;
-		effect.ColorMid = JsonUtil.ReadColor(json, "ColorMid") ?? effect.ColorMid;
-		effect.ColorEnd = JsonUtil.ReadColor(json, "ColorEnd") ?? effect.ColorEnd;
-		return effect;
-	}
+		=> json.Deserialize(ParticleEffectJsonContext.Default.ParticleEffect) ?? new();
 }
+
+[JsonSourceGenerationOptions(IncludeFields = true, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(ParticleEffect))]
+internal partial class ParticleEffectJsonContext : JsonSerializerContext;
