@@ -58,6 +58,12 @@ public static class ParticleEffectAssets
 
 	public static bool Exists(string? name) => name != null && effects.ContainsKey(name);
 
+	public static void Set(string name, ParticleEffect effect)
+	{
+		effects[name] = effect;
+		paths.TryAdd(name, Path.Join(FolderPath, $"{name}.json"));
+	}
+
 	public static void Save(string name)
 	{
 		if (!effects.TryGetValue(name, out var effect))

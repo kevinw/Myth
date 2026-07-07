@@ -506,11 +506,9 @@ public partial class Manager
 		public string CaptureJson() => ParticleEffectAssets.Get(name).ToJson().ToJsonString();
 		public void ApplyJson(string json)
 		{
-			// Mutate the shared asset in place so emitters keep their reference,
-			// then persist so disk matches the undone/redone state.
 			if (System.Text.Json.Nodes.JsonNode.Parse(json) is System.Text.Json.Nodes.JsonObject obj)
 			{
-				ParticleEffectAssets.Get(name).Load(obj);
+				ParticleEffectAssets.Set(name, ParticleEffect.FromJson(obj));
 				ParticleEffectAssets.Save(name);
 			}
 		}
@@ -1328,6 +1326,7 @@ public partial class Manager
 			FxFloat("Thickness", name, ref e.SpreadDegrees, 0.0f, 32.0f);
 		}
 		FxMode("Mode", name, ref e.Mode);
+		FxCheckbox("Prewarm", name, ref e.Prewarm);
 		if (e.Mode == ParticleEmissionMode.Continuous)
 			FxFloat("Rate", name, ref e.EmissionRate, 0.0f, 400.0f);
 

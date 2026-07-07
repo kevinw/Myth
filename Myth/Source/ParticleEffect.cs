@@ -1,5 +1,7 @@
 using System.Numerics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Foster.Framework;
 
 namespace Myth;
@@ -45,6 +47,7 @@ public sealed class ParticleEffect
 	public int BurstCount = 256;
 	public ParticleEmissionMode Mode = ParticleEmissionMode.Continuous;
 	public float EmissionRate = 120.0f; // particles/sec (Continuous)
+	public bool Prewarm;
 
 	// Dynamics
 	public float SpeedMin = 20.0f;
@@ -84,72 +87,13 @@ public sealed class ParticleEffect
 	public int ColorHash()
 		=> HashCode.Combine(ColorBirth.RGBA, ColorMid.RGBA, ColorEnd.RGBA);
 
-	public JsonObject ToJson() => new()
-	{
-		["Shape"] = Shape.ToString(),
-		["EmitterRadius"] = EmitterRadius,
-		["DirectionDegrees"] = DirectionDegrees,
-		["SpreadDegrees"] = SpreadDegrees,
-		["BurstCount"] = BurstCount,
-		["Mode"] = Mode.ToString(),
-		["EmissionRate"] = EmissionRate,
-		["SpeedMin"] = SpeedMin,
-		["SpeedMax"] = SpeedMax,
-		["LifeMin"] = LifeMin,
-		["LifeMax"] = LifeMax,
-		["Gravity"] = Gravity,
-		["Drag"] = Drag,
-		["NoiseAmount"] = NoiseAmount,
-		["NoiseScale"] = NoiseScale,
-		["SizeStart"] = SizeStart,
-		["SizeEnd"] = SizeEnd,
-		["Additive"] = Additive,
-		["Style"] = Style.ToString(),
-		["Collision"] = Collision.ToString(),
-		["Bounciness"] = Bounciness,
-		["ColorBirth"] = JsonUtil.ColorToHex(ColorBirth),
-		["ColorMid"] = JsonUtil.ColorToHex(ColorMid),
-		["ColorEnd"] = JsonUtil.ColorToHex(ColorEnd),
-	};
+	public JsonObject ToJson()
+		=> JsonSerializer.SerializeToNode(this, ParticleEffectJsonContext.Default.ParticleEffect)?.AsObject() ?? [];
 
 	public static ParticleEffect FromJson(JsonObject json)
-	{
-		var e = new ParticleEffect();
-		e.Load(json);
-		return e;
-	}
-
-	/// Overwrites this instance's fields from JSON in place. Used so undo/redo
-	/// restores the shared asset object that emitters already reference.
-	public void Load(JsonObject json)
-	{
-		EmitterRadius = JsonUtil.ReadFloat(json, "EmitterRadius", EmitterRadius);
-		DirectionDegrees = JsonUtil.ReadFloat(json, "DirectionDegrees", DirectionDegrees);
-		SpreadDegrees = JsonUtil.ReadFloat(json, "SpreadDegrees", SpreadDegrees);
-		BurstCount = JsonUtil.ReadInt(json, "BurstCount", BurstCount);
-		EmissionRate = JsonUtil.ReadFloat(json, "EmissionRate", EmissionRate);
-		SpeedMin = JsonUtil.ReadFloat(json, "SpeedMin", SpeedMin);
-		SpeedMax = JsonUtil.ReadFloat(json, "SpeedMax", SpeedMax);
-		LifeMin = JsonUtil.ReadFloat(json, "LifeMin", LifeMin);
-		LifeMax = JsonUtil.ReadFloat(json, "LifeMax", LifeMax);
-		Gravity = JsonUtil.ReadFloat(json, "Gravity", Gravity);
-		Drag = JsonUtil.ReadFloat(json, "Drag", Drag);
-		NoiseAmount = JsonUtil.ReadFloat(json, "NoiseAmount", NoiseAmount);
-		NoiseScale = JsonUtil.ReadFloat(json, "NoiseScale", NoiseScale);
-		SizeStart = JsonUtil.ReadFloat(json, "SizeStart", SizeStart);
-		SizeEnd = JsonUtil.ReadFloat(json, "SizeEnd", SizeEnd);
-		Additive = JsonUtil.ReadBool(json, "Additive", Additive);
-		Bounciness = JsonUtil.ReadFloat(json, "Bounciness", Bounciness);
-		if (Enum.TryParse<ParticleEmitterShape>(JsonUtil.ReadString(json, "Shape"), out var shape))
-			Shape = shape;
-		if (Enum.TryParse<ParticleEmissionMode>(JsonUtil.ReadString(json, "Mode"), out var mode))
-			Mode = mode;
-		if (Enum.TryParse<ParticleCollisionMode>(JsonUtil.ReadString(json, "Collision"), out var collision))
-			Collision = collision;
-		if (Enum.TryParse<ParticleRenderStyle>(JsonUtil.ReadString(json, "Style"), out var style))
-			Style = style;
-		if (JsonUtil.ReadColor(json, "ColorBirth") is { } cb) ColorBirth = cb;
-		if (JsonUtil.ReadColor(json, "ColorMid") is { } cm) ColorMid = cm;
-		if (JsonUtil.ReadColor(json, "ColorEnd") is { } ce) ColorEnd = ce;
-	}
+		=> json.Deserialize(ParticleEffectJsonContext.Default.ParticleEffect) ?? new();
 }
+
+[JsonSourceGenerationOptions(IncludeFields = true, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(ParticleEffect))]
+internal partial class ParticleEffectJsonContext : JsonSerializerContext;

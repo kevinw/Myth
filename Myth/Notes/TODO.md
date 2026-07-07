@@ -3,8 +3,6 @@
 pre-friend build
 - publish build: get stuck in wall after dying in Bud room.
 - publish: default fullscreen
-- menu
-- a snow variant for "pollen"
 - turn around needs particles
 - a save state
   - durable chests
@@ -17,7 +15,6 @@ pre-friend build
 - wall slide sounds
 - entering a room from the top or bottom edge probably shouldn't make a "fresh player start"
 - a "wildlife" system which draws flies, hoppers, fish and more. they aren't more than 3x3 pixels, and render as a bit transparent. it's "ambient" wildlife.
-- a main menu
 
 - a section at the beggining where you learn
   - to jump

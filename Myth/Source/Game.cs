@@ -492,6 +492,7 @@ public partial class Game : IDisposable
 		// Lerp the Camera to the new Room
 		else if (nextRoomEase < 1.0f)
 		{
+			View?.UpdateParticles(Time.Delta);
 			Camera = Vector2.Lerp(transitionCameraFrom, transitionCameraTo, Ease.Cube.InOut(nextRoomEase));
 			nextRoomEase = Calc.Approach(nextRoomEase, 1.0f, Time.Delta * 4.0f);
 		}

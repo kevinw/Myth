@@ -297,7 +297,7 @@ public partial class Manager
 			return;
 
 		batcher.PushMatrix(MenuMatrix);
-		var bgColor = Color.FromHexStringRGBA("0x160b1899");
+		var bgColor = Color.FromHexStringRGBA("0x160b18aa");
 		batcher.Rect(MenuBounds, bgColor);
 		DrawGameMenuPanel();
 		batcher.PopMatrix();
@@ -341,7 +341,7 @@ public partial class Manager
 		var panel = Rect.CenteredAt(MenuBounds.Center, new Vector2(MenuPanelWidth, panelHeight));
 
 		//batcher.Rect(panel, Color.Black * 0.78f);
-		batcher.RectLine(panel, 2, Color.Lerp(0x8b81b5, Color.Coral, Time.SineWave(0, 1, 10f)));
+		//batcher.RectLine(panel, 2, Color.Lerp(0x8b81b5, Color.Coral, Time.SineWave(0, 1, 10f)));
 
 		var font = Assets.Font;
 		if (font == null) return;

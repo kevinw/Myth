@@ -31,7 +31,10 @@ public class ParticleEmitter : Actor
 	public override void Added()
 	{
 		if (Game.Particles is { Supported: true } system)
+		{
 			effectIndex = system.AcquireEffect(EffectName);
+			Prewarm(system);
+		}
 	}
 
 	public override void Destroyed()
@@ -75,6 +78,27 @@ public class ParticleEmitter : Actor
 
 		if (count > 0)
 			system.Emit(effectIndex, Position, count);
+	}
+
+	void Prewarm(ParticleSystem system)
+	{
+		if (effectIndex < 0)
+			return;
+
+		var effect = ParticleEffectAssets.Get(EffectName);
+		if (!effect.Prewarm)
+			return;
+
+		if (effect.Mode == ParticleEmissionMode.Burst)
+		{
+			system.Emit(effectIndex, Position, effect.BurstCount);
+			burstFired = true;
+		}
+		else
+		{
+			system.Emit(effectIndex, Position, (int)MathF.Ceiling(effect.EmissionRate * effect.LifeMax));
+			emitAccumulator = 0;
+		}
 	}
 
 	public void TestBurst()
