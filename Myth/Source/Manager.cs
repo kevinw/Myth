@@ -231,8 +231,8 @@ public partial class Manager : App
 
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
 	{
-		const string applicationName = "Myth";
-		const string windowTitle = "Myth";
+		const string applicationName = "Mycelon";
+		const string windowTitle = "Mycelon";
 		Point2 windowSize = new(1280, 720);
 		GraphicsDriver graphicsDriver = GraphicsDriver.None; // no preference
 		bool resizable = true;

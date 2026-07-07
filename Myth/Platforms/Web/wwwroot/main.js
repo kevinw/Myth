@@ -124,6 +124,9 @@ try {
 }
 
 function prepareReloadPrompt() {
+  const is_localhost = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
+  if (!is_localhost) return;
+
   const button = document.querySelector("#reload-button");
   if (!(button instanceof HTMLButtonElement) || !("EventSource" in window))
     return;
