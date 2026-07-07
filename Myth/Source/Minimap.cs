@@ -19,6 +19,7 @@ public class Minimap
 	public bool Open;
 	public Vector2 Pan;
 	public readonly List<MapRoom> Rooms = [];
+	public Action? Changed;
 	readonly HashSet<string> visitedRoomIds = [];
 	readonly HashSet<(string, string)> takenExits = [];
 	readonly HashSet<string> revealedDoorIds = [];
@@ -28,9 +29,11 @@ public class Minimap
 
 	public void NoteRoomChange(Room? from, Room to, RoomChangeKind kind)
 	{
-		visitedRoomIds.Add(to.Id);
+		var changed = visitedRoomIds.Add(to.Id);
 		if (from != null && kind is RoomChangeKind.EdgeTransition or RoomChangeKind.LinkedDoor)
-			takenExits.Add(ExitKey(from.Id, to.Id));
+			changed |= takenExits.Add(ExitKey(from.Id, to.Id));
+		if (changed)
+			Changed?.Invoke();
 	}
 
 	public void NoteDoorRevealed(string doorId)
@@ -45,7 +48,11 @@ public class Minimap
 			.GetIntersection(new RectInt(room.Size));
 		if (local.Width <= 0 || local.Height <= 0)
 			return;
-		seenTiles[room.Id] = seenTiles.TryGetValue(room.Id, out var seen) ? seen.Conflate(local) : local;
+		var next = seenTiles.TryGetValue(room.Id, out var seen) ? seen.Conflate(local) : local;
+		if (seenTiles.TryGetValue(room.Id, out seen) && seen == next)
+			return;
+		seenTiles[room.Id] = next;
+		Changed?.Invoke();
 	}
 
 	static (string, string) ExitKey(string a, string b)
@@ -62,6 +69,50 @@ public class Minimap
 	}
 
 	static float MinimapPanSpeed => 92f;
+
+	public MinimapState CaptureState()
+	{
+		var state = new MinimapState();
+		state.VisitedRoomIds.AddRange(visitedRoomIds);
+		state.VisitedRoomIds.Sort(StringComparer.Ordinal);
+		foreach (var (a, b) in takenExits)
+			state.TakenExits.Add(new(a, b));
+		state.TakenExits.Sort((a, b) =>
+		{
+			var cmp = string.CompareOrdinal(a.A, b.A);
+			return cmp != 0 ? cmp : string.CompareOrdinal(a.B, b.B);
+		});
+		foreach (var (id, rect) in seenTiles)
+			state.SeenTiles[id] = rect;
+		return state;
+	}
+
+	public void ApplyState(MinimapState state)
+	{
+		visitedRoomIds.Clear();
+		takenExits.Clear();
+		revealedDoorIds.Clear();
+		seenTiles.Clear();
+		Rooms.Clear();
+
+		foreach (var id in state.VisitedRoomIds)
+			if (!string.IsNullOrWhiteSpace(id))
+				visitedRoomIds.Add(id);
+		foreach (var exit in state.TakenExits)
+			if (!string.IsNullOrWhiteSpace(exit.A) && !string.IsNullOrWhiteSpace(exit.B))
+				takenExits.Add(ExitKey(exit.A, exit.B));
+		foreach (var (id, rect) in state.SeenTiles)
+			if (!string.IsNullOrWhiteSpace(id) && rect.Width > 0 && rect.Height > 0)
+				seenTiles[id] = rect;
+	}
+
+	public void ApplyRevealedDoors(IEnumerable<string> doorIds)
+	{
+		revealedDoorIds.Clear();
+		foreach (var id in doorIds)
+			if (!string.IsNullOrWhiteSpace(id))
+				revealedDoorIds.Add(id);
+	}
 
 	public void Rebuild(Room currentRoom)
 	{

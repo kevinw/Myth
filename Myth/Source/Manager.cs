@@ -57,6 +57,11 @@ public partial class Manager : App
 	bool playOnStartup;
 	readonly bool skipStartupMenu;
 	bool startingPlay;
+	SaveState saveState = new();
+	bool saveDirty;
+	bool saveFlushScheduled;
+	float saveTimer;
+	static float SaveDebounceDelay => 0.75f;
 
 	// Automated screenshot capture (see StartArgs / --screenshot).
 	readonly string? screenshotPath;
@@ -307,8 +312,11 @@ public partial class Manager : App
 			Exit();
 			return;
 		}
+		saveState = SaveStateStore.Load(this);
 		if (playRoomId != null)
 			selectedRoomId = playRoomId;
+		else if (saveState.LastGrounded is { } respawn && Assets.GetRoom(respawn.RoomId) != null)
+			selectedRoomId = respawn.RoomId;
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
@@ -370,6 +378,7 @@ public partial class Manager : App
 
 	protected override void Shutdown()
 	{
+		FlushSaveState();
 #if !BROWSER
 		SaveWindowSettings();
 #endif
@@ -824,6 +833,8 @@ public partial class Manager : App
 				Console.WriteLine($"[Gym] {UnthrottledStepsPerFrame} steps/frame");
 			}
 		}
+
+		UpdateSaveStateAutosave();
 
 		imgui?.BeginLayout();
 
@@ -1407,8 +1418,44 @@ public partial class Manager : App
 
 	void EraseSaveGame()
 	{
+		saveState = new();
+		saveDirty = false;
+		saveFlushScheduled = false;
+		saveTimer = 0;
 		selectedRoomId = "start";
-		game?.EraseSaveGame();
+		game?.UseSaveState(saveState);
+		SaveStateStore.Delete(this);
+	}
+
+	internal void MarkSaveDirty()
+	{
+		saveDirty = true;
+		saveFlushScheduled = true;
+		saveTimer = SaveDebounceDelay;
+	}
+
+	internal void MarkSaveDirtyWithoutAutosave()
+		=> saveDirty = true;
+
+	void UpdateSaveStateAutosave()
+	{
+		if (!saveDirty || !saveFlushScheduled)
+			return;
+		saveTimer -= Time.Delta;
+		if (saveTimer <= 0)
+			FlushSaveState();
+	}
+
+	internal void FlushSaveState()
+	{
+		if (!saveDirty)
+			return;
+		if (game is { } g)
+			g.Save.Map = g.Minimap.CaptureState();
+		SaveStateStore.Save(this, saveState);
+		saveDirty = false;
+		saveFlushScheduled = false;
+		saveTimer = 0;
 	}
 
 	void StartGame(bool immediate = false)
@@ -1435,6 +1482,8 @@ public partial class Manager : App
 		// can attempt each goal from each start. This wins over any remembered/editor position.
 		if (gymStartOverride is { } gymStart)
 			initialPlayerPosition = gymStart;
+		else if (initialPlayerPosition == null && playRoomId == null && saveState.LastGrounded is { } respawn && respawn.RoomId == room.Id)
+			initialPlayerPosition = respawn.Position;
 
 		// In the gym, carry the live background music across the dispose/recreate so it
 		// keeps playing seamlessly between runs instead of restarting on each goal.
@@ -1448,7 +1497,8 @@ public partial class Manager : App
 			initialPlayerPosition: initialPlayerPosition,
 			spawnBud: true,
 			spawnBudAtPlayer: gymMode,
-			carryMusic: carriedMusic
+			carryMusic: carriedMusic,
+			save: saveState
 		)
 		{
 			AudioMuted = gymMode || headless,

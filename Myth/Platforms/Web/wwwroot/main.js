@@ -89,6 +89,9 @@ try {
     setVirtualControllerVisible: VirtualGamepad.setVirtualControllerVisible,
     getAudioDisabled: () => webAudioDisabled,
     isMobileBrowser,
+    loadSaveState: () => localStorage.getItem("myth.save.v1"),
+    saveSaveState: (json) => localStorage.setItem("myth.save.v1", json),
+    deleteSaveState: () => localStorage.removeItem("myth.save.v1"),
   });
   const startGate = prepareStartGate();
   startGate.progress(0.05);

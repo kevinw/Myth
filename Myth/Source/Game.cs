@@ -16,7 +16,6 @@ public enum RoomChangeKind
 
 public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
 public readonly record struct RoomGeoChange(Room Room);
-readonly record struct SafeGroundedRespawn(string RoomId, Point2 Position);
 
 public partial class Game : IDisposable
 {
@@ -98,21 +97,17 @@ public partial class Game : IDisposable
 	float linkedDoorCooldown;
 	bool roomSwappedThisFrame;
 	internal readonly List<Actor> destroying = [];
-	readonly HashSet<string> sessionDestroyedActors = [];
 
-	internal void EraseSaveGame() {
-		sessionDestroyedActors.Clear();
+	// Playthrough-durable state. Manager owns saving it; Game owns mutating it while playing.
+	public SaveState Save { get; private set; } = new();
+	public int PickupCount(PickupKind kind) => Save.Pickups.TryGetValue(kind, out var count) ? count : 0;
+	public void AddPickup(PickupKind kind, int amount = 1)
+	{
+		Save.Pickups[kind] = Math.Max(0, PickupCount(kind) + amount);
+		MarkSaveDirty();
 	}
 
-	// Playthrough-durable pickup counts, keyed by PickupKind. Lives on the Game so it survives
-	// room transitions and the player's death/respawn (both reuse this instance); it resets only
-	// when a fresh Game is created to start play. Indexed by (int)kind.
-	readonly int[] pickupCounts = new int[Enum.GetValues<PickupKind>().Length];
-	public int PickupCount(PickupKind kind) => pickupCounts[(int)kind];
-	public void AddPickup(PickupKind kind, int amount = 1)
-		=> pickupCounts[(int)kind] = Math.Max(0, pickupCounts[(int)kind] + amount);
-
-	// Playthrough-durable like pickupCounts: exploration tracking plus the pause-map overlay.
+	// Playthrough-durable like Save.Pickups: exploration tracking plus the pause-map overlay.
 	public readonly Minimap Minimap = new();
 	public bool MinimapOpen => Minimap.Open;
 
@@ -148,7 +143,6 @@ public partial class Game : IDisposable
 	// transitions, which reuse this Game instance — so it always points at the way back in.
 	Point2 roomEntryPosition;
 	Point2 roomEntryDirection;
-	SafeGroundedRespawn? safeGroundedRespawn;
 	readonly bool spawnBud;
 	// In the gym, Bud is the character under test, so it spawns exactly at the player
 	// start (the PlayerStart marker) rather than at an offset follow position.
@@ -298,6 +292,37 @@ public partial class Game : IDisposable
 	public SimulationScope BeginSimulation()
 		=> new(this);
 
+	internal void UseSaveState(SaveState save)
+	{
+		Save = save;
+		Minimap.ApplyState(Save.Map);
+		Minimap.ApplyRevealedDoors(Save.RevealedDoors);
+		Minimap.Changed = () => MarkSaveDirty();
+	}
+
+	void MarkSaveDirty(bool autosave = true, bool captureMap = true)
+	{
+		if (captureMap)
+			Save.Map = Minimap.CaptureState();
+		if (autosave)
+			Manager.MarkSaveDirty();
+		else
+			Manager.MarkSaveDirtyWithoutAutosave();
+	}
+
+	public bool IsRevealDoorRevealed(string doorId)
+		=> Save.RevealedDoors.Contains(doorId);
+
+	public void RevealDoor(string doorId)
+	{
+		if (string.IsNullOrWhiteSpace(doorId))
+			return;
+		var changed = Save.RevealedDoors.Add(doorId);
+		Minimap.NoteDoorRevealed(doorId);
+		if (changed)
+			MarkSaveDirty();
+	}
+
 	public readonly struct SimulationScope : IDisposable
 	{
 		readonly Game game;
@@ -319,10 +344,11 @@ public partial class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false, (SoundInstance? Music, string? Area)? carryMusic = null)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false, (SoundInstance? Music, string? Area)? carryMusic = null, SaveState? save = null)
 	{
 		rewinder = new(this);
 		Manager = manager;
+		UseSaveState(save ?? new());
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		// A previous Game (the prior gym run) may hand off its still-playing
 		// background music so it continues seamlessly across the dispose/recreate.
@@ -831,15 +857,47 @@ public partial class Game : IDisposable
 	{
 		if (room == null || nextRoom != null || Simulating)
 			return;
-		safeGroundedRespawn = new SafeGroundedRespawn(room.Id, position);
+		var respawn = new RespawnState(room.Id, position);
+		if (Save.LastGrounded == respawn)
+			return;
+		Save.LastGrounded = respawn;
+		MarkSaveDirty(autosave: false, captureMap: false);
 	}
 
 	public bool TryRespawnPlayerAtSafeGroundedRespawn(Player player)
 	{
-		if (room == null || roomEntryDirection.Y == 0 || safeGroundedRespawn is not { } respawn)
+		if (room == null || roomEntryDirection.Y == 0 || Save.LastGrounded is not { } respawn)
 			return false;
 
-		if (room.Id == respawn.RoomId)
+		RespawnPlayerAt(player, respawn, reloadRoom: false);
+		return true;
+	}
+
+	public void RespawnPlayerAtLastGrounded(bool restartMusic = false)
+	{
+		if (restartMusic)
+			StopMusic(true);
+
+		if (GetFirst<Player>() is { } player && Save.LastGrounded is { } respawn && RespawnPlayerAt(player, respawn, reloadRoom: true))
+		{
+			player.Health = Player.MaxHealth;
+			player.State = Player.States.Normal;
+			player.Stop();
+			EnsureBudForPlayer(repositionExisting: true);
+			if (restartMusic)
+				MusicWasRestarted();
+			return;
+		}
+
+		ReloadRoom(restartMusic);
+	}
+
+	bool RespawnPlayerAt(Player player, RespawnState respawn, bool reloadRoom)
+	{
+		if (room == null)
+			return false;
+
+		if (!reloadRoom && room.Id == respawn.RoomId)
 		{
 			player.Position = respawn.Position;
 			return true;
@@ -1039,7 +1097,20 @@ public partial class Game : IDisposable
 	public void DestroyForThisSession(Actor actor)
 	{
 		if (!string.IsNullOrEmpty(actor.SessionDestroyKey))
-			sessionDestroyedActors.Add(actor.SessionDestroyKey);
+		{
+			Save.Session.DestroyedActors.Add(actor.SessionDestroyKey);
+			MarkSaveDirty();
+		}
+		Destroy(actor);
+	}
+
+	public void DestroyPersistently(Actor actor)
+	{
+		if (!string.IsNullOrEmpty(actor.SessionDestroyKey))
+		{
+			Save.PersistentDestroyedActors.Add(actor.SessionDestroyKey);
+			MarkSaveDirty();
+		}
 		Destroy(actor);
 	}
 
@@ -1711,7 +1782,7 @@ public partial class Game : IDisposable
 
 			var localPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 			var sessionDestroyKey = SessionDestroyKey(forRoom, actor, localPosition);
-			if (sessionDestroyedActors.Contains(sessionDestroyKey))
+			if (Save.PersistentDestroyedActors.Contains(sessionDestroyKey) || Save.Session.DestroyedActors.Contains(sessionDestroyKey))
 				continue;
 
 			if (ActorSpecs.Create(this, actor, offset + localPosition) is { } created)
@@ -1889,6 +1960,8 @@ public partial class Game : IDisposable
 			PlayAudioEvent("room_change", "RoomChangeDirection", RoomChangeDirection);
 		}
 		OnStoryRoomChanged(change);
+		if (!Simulating)
+			Manager.FlushSaveState();
 	}
 
 	static string SessionDestroyKey(Room room, JsonObject actor, Point2 localPosition)

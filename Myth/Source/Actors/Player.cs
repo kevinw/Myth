@@ -1535,7 +1535,7 @@ public partial class Player : Pawn
 
 		if (state.Time >= DeathDuration && Health <= 0)
 		{
-			Game.ReloadRoom(restartMusic: true);
+			Game.RespawnPlayerAtLastGrounded(restartMusic: true);
 		}
 	}
 

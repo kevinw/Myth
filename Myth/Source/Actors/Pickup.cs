@@ -4,8 +4,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-// The collectible types the player can gather. The inventory is keyed by this enum (see
-// Game.pickupCounts), so a new pickup is: add a value here, give it a sprite named below, and
+// The collectible types the player can gather. The inventory is keyed by this enum in SaveState,
+// so a new pickup is: add a value here, give it a sprite named below, and
 // drop it somewhere. Mycelon is the common currency — a bio-digital spore harvested in the
 // overgrown fungal datacenter.
 public enum PickupKind

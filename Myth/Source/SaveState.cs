@@ -1,0 +1,41 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Foster.Framework;
+
+namespace Myth;
+
+public sealed class SaveState
+{
+	public int Version = 1;
+	public HashSet<string> PersistentDestroyedActors = [];
+	public HashSet<string> RevealedDoors = [];
+	public Dictionary<PickupKind, int> Pickups = [];
+	public MinimapState Map = new();
+	public RespawnState? LastGrounded;
+	public SessionState Session = new();
+
+	public string ToJsonString()
+		=> JsonSerializer.Serialize(this, SaveStateJsonContext.Default.SaveState);
+
+	public static SaveState FromJsonString(string json)
+		=> JsonSerializer.Deserialize(json, SaveStateJsonContext.Default.SaveState) ?? new();
+}
+
+public sealed class SessionState
+{
+	public HashSet<string> DestroyedActors = [];
+}
+
+public sealed class MinimapState
+{
+	public List<string> VisitedRoomIds = [];
+	public List<MinimapExitState> TakenExits = [];
+	public Dictionary<string, RectInt> SeenTiles = [];
+}
+
+public readonly record struct MinimapExitState(string A, string B);
+public readonly record struct RespawnState(string RoomId, Point2 Position);
+
+[JsonSourceGenerationOptions(IncludeFields = true, UseStringEnumConverter = true, WriteIndented = true)]
+[JsonSerializable(typeof(SaveState))]
+internal partial class SaveStateJsonContext : JsonSerializerContext;

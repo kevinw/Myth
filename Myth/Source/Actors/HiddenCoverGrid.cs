@@ -76,6 +76,10 @@ public class HiddenCoverGrid : Actor
 		}
 		regionAlpha = [];
 		regionRevealDoorIds = [];
+		revealedDoorIds.Clear();
+		foreach (var id in Game.Save.RevealedDoors)
+			if (!string.IsNullOrWhiteSpace(id))
+				revealedDoorIds.Add(id);
 
 		if (size.X <= 0 || size.Y <= 0)
 			return;
@@ -258,9 +262,9 @@ public class HiddenCoverGrid : Actor
 		foreach (var id in regionRevealDoorIds[regionId])
 			if (!string.IsNullOrWhiteSpace(id))
 			{
-				revealedDoorIds.Add(id);
-				Game.Minimap.NoteDoorRevealed(id);
-				result.Add(id);
+				if (revealedDoorIds.Add(id))
+					result.Add(id);
+				Game.RevealDoor(id);
 			}
 		return result;
 	}
