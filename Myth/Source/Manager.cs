@@ -536,7 +536,13 @@ public partial class Manager : App
 	static WindowSettings? GetWindowSettingsFromJSON() {
 		if (!File.Exists(WindowSettingsPath))
 			return null;
-		return JsonSerializer.Deserialize(File.ReadAllText(WindowSettingsPath), WindowSettingsJsonContext.Default.WindowSettings);
+
+		try {
+			return JsonSerializer.Deserialize(File.ReadAllText(WindowSettingsPath), WindowSettingsJsonContext.Default.WindowSettings);
+		} catch (Exception e) {
+			Console.WriteLine($"Failed to load window settings: {e}");
+			return null;
+		}
 	}
 
 	void LoadWindowSettings()
