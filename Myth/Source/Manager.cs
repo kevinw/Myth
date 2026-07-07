@@ -30,8 +30,6 @@ public partial class Manager : App
 	static Color highlight => 0x5fcde4;
 #endif
 
-	/// The current Room Cell we're viewing, used as a compatibility cursor for old room navigation.
-	Point2 cell = new(0, 0);
 	string? selectedRoomId;
 #if EDITOR
 	(string RoomId, Point2 Position)? playtestPlayerPosition;
@@ -57,6 +55,7 @@ public partial class Manager : App
 	internal Game? game;
 	internal bool playing;
 	bool playOnStartup;
+	readonly bool skipStartupMenu;
 	bool startingPlay;
 
 	// Automated screenshot capture (see StartArgs / --screenshot).
@@ -137,7 +136,7 @@ public partial class Manager : App
 			if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
 				return byId;
 
-			return Assets.GetRoom(cell);
+			return null;
 		}
 	}
 
@@ -161,10 +160,17 @@ public partial class Manager : App
 	internal bool PlatformNavDebugVisible { get; set; }
 	readonly NavTrace? navTrace;
 
-	public bool MusicEnabled => musicEnabled;
+	public bool MusicEnabled {
+		get => musicEnabled;
+		set {
+			musicEnabled = value;
+			if (value)
+				game?.MusicWasRestarted();
+			else
+				game?.StopMusic(true);
+		}
+	}
 	public bool WantsVirtualGameController => playing || startingPlay;
-	// When set (desktop --aspect-four-three), force the 4:3 portrait-style cropped presentation.
-	public bool AspectFourThree { get; set; }
 	public bool AudioEnabled = true;
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
@@ -176,7 +182,6 @@ public partial class Manager : App
 		gymMode = args.gym;
 		headless = args.headless;
 		unthrottled = args.unthrottled;
-		AspectFourThree = args.aspectFourThree;
 		gym = new()
 		{
 			exitAfterAll = args.gymExitAfterAll
@@ -191,6 +196,7 @@ public partial class Manager : App
 		maxTimeSeconds = args.maxTimeSeconds;
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
+		skipStartupMenu = args.play || args.gym || args.headless;
 		screenshotPath = args.screenshotPath;
 		screenshotFrame = args.screenshotFrame;
 		screenshotInterval = args.screenshotInterval;
@@ -276,6 +282,8 @@ public partial class Manager : App
 		);
 	}
 
+	bool hasStartedGame;
+
 	protected override void Startup()
 	{
 #if !BROWSER
@@ -316,7 +324,10 @@ public partial class Manager : App
 			LoadAudioBanks();
 
 #if BROWSER || !EDITOR
-		playOnStartup = true; // editor-less builds (browser, shipped desktop) boot straight into play
+		if (!skipStartupMenu)
+			ShowTitleMenu();
+		else
+			playOnStartup = true; // explicit play/test runs still boot straight into play
 #endif
 
 
@@ -345,20 +356,20 @@ public partial class Manager : App
 
 			gym.runIndex = 0;
 			var run = gym.runs![gym.runIndex];
-			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {run.Room.Cell.X},{run.Room.Cell.Y}:{run.DisplayId}@{run.StartDisplay}");
+			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {run.DisplayId}@{run.StartDisplay}");
 			StartGymRun(run);
 		}
-#if EDITOR && DEBUG && !IOS && !BROWSER
-		if (!OperatingSystem.IsBrowser())
-		{
-			StartAssetWatcher();
-			StartShaderWatcher();
-			if (AudioEnabled)
-				StartAudioBankWatcher();
-		}
-#endif
 
 #if EDITOR
+
+// Watch development assets
+#if DEBUG && !IOS && !BROWSER
+		StartAssetWatcher();
+		StartShaderWatcher();
+		if (AudioEnabled)
+			StartAudioBankWatcher();
+#endif
+
 		if (!playOnStartup)
 			SyncEditorGame();
 #endif
@@ -401,20 +412,11 @@ public partial class Manager : App
 		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
 		{
 			selectedRoomId = byId.Id;
-			cell = byId.Cell;
-			return;
-		}
-
-		if (Assets.GetRoom(cell) is { } byCell)
-		{
-			selectedRoomId = byCell.Id;
-			cell = byCell.Cell;
 			return;
 		}
 
 		var first = Assets.GetRoom(Point2.Zero) ?? Assets.RoomsById.Values.FirstOrDefault();
 		selectedRoomId = first?.Id;
-		cell = first?.Cell ?? Point2.Zero;
 	}
 #endif
 
@@ -518,6 +520,7 @@ public partial class Manager : App
 	{
 		try
 		{
+			Console.WriteLine("WindowSettingsPath: " + WindowSettingsPath);
 			if (!File.Exists(WindowSettingsPath))
 				return;
 
@@ -534,7 +537,7 @@ public partial class Manager : App
 				Window.Position = new Point2(settings.X, settings.Y);
 				Window.AlwaysOnTop = alwaysOnTop;
 			}
-			cell = new Point2(settings.RoomX, settings.RoomY);
+			hasStartedGame = settings.RoomId != null;
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
 			alwaysOnTop = settings.AlwaysOnTop;
@@ -561,7 +564,6 @@ public partial class Manager : App
 			var position = Window.Position;
 			var size = Window.Size;
 			var currentRoom = game?.CurrentRoom ?? CurrentRoom;
-			var currentCell = currentRoom?.Cell ?? cell;
 			var settings = new WindowSettings
 			{
 				X = position.X,
@@ -570,8 +572,6 @@ public partial class Manager : App
 				Height = size.Y,
 				WorldId = Assets.CurrentWorldId,
 				RoomId = currentRoom?.Id ?? selectedRoomId,
-				RoomX = currentCell.X,
-				RoomY = currentCell.Y,
 				MusicEnabled = musicEnabled,
 				AlwaysOnTop = alwaysOnTop,
 #if EDITOR
@@ -587,8 +587,6 @@ public partial class Manager : App
 		}
 	}
 
-	// Source-generated (not reflection) so it works under NativeAOT and the trimmed
-	// browser build, where reflection-based JSON is disabled.
 	sealed class WindowSettings
 	{
 		public int X { get; init; }
@@ -720,7 +718,12 @@ public partial class Manager : App
 			TweakRegistry.Open = !TweakRegistry.Open;
 #endif
 
-		if (!keyboardShortcutsBlocked && playing && GymLoop && Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter))
+		if (!keyboardShortcutsBlocked)
+			UpdateGameMenuInput();
+
+		var gameMenuPausesGame = GameMenuPausesGame;
+
+		if (!keyboardShortcutsBlocked && playing && !gameMenuPausesGame && GymLoop && Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter))
 			AdvanceGym(failureReason: "manual");
 
 		// Misc. Hotkeys
@@ -744,12 +747,12 @@ public partial class Manager : App
 					window.Fullscreen = !window.Fullscreen;
 #endif
 #if EDITOR
-				if (ToggleEditorPressed())
+				if (!gameMenuPausesGame && ToggleEditorPressed())
 					ToggleGame();
 #endif
 			}
 
-		var perfToggleChordActive = UpdatePerfToggles(keyboardShortcutsBlocked);
+		var perfToggleChordActive = gameMenuPausesGame ? false : UpdatePerfToggles(keyboardShortcutsBlocked);
 
 		// Run Game
 		if (startingPlay)
@@ -769,26 +772,29 @@ public partial class Manager : App
 		{
 			SetMouseCursor(null);
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
-#if IOS
-			if (!UpdatePlayModePinchIn())
-#endif
+			if (!gameMenuPausesGame)
 			{
-				if (game is { } g)
+#if IOS
+				if (!UpdatePlayModePinchIn())
+#endif
 				{
+					if (game is { } g)
+					{
 #if DEBUG
-					UpdatePlayerMouseDrag(g);
+						UpdatePlayerMouseDrag(g);
 #endif
-					if (!keyboardShortcutsBlocked && !perfToggleChordActive)
-						g.HandleGameDebugShortcuts(Input);
-					using (PerfStats.Time(PerfDetail.GameUpdate))
+						if (!keyboardShortcutsBlocked && !perfToggleChordActive)
+							g.HandleGameDebugShortcuts(Input);
+						using (PerfStats.Time(PerfDetail.GameUpdate))
 #if EDITOR
-						if (!commandConsoleOpen)
+							if (!commandConsoleOpen)
 #endif
-							g.Update(controls);
+								g.Update(controls);
+					}
 				}
-			}
 
-			GymTick();
+				GymTick();
+			}
 		}
 		// Show Editor
 		else
@@ -1061,8 +1067,10 @@ public partial class Manager : App
 			RenderPlayTransition();
 		else if (playing)
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
+		DrawGameMenu();
 
 		batcher.Render(Window);
+		batcher.Clear();
 
 		if (screenshotPath != null && playing)
 			UpdateScreenshotCapture();
@@ -1433,6 +1441,11 @@ public partial class Manager : App
 		return hovering && Input.Mouse.LeftPressed;
 	}
 
+	void EraseSaveGame()
+	{
+		selectedRoomId = "start";
+	}
+
 	void StartGame(bool immediate = false)
 	{
 #if EDITOR
@@ -1441,9 +1454,7 @@ public partial class Manager : App
 #endif
 		if (CurrentRoom is not { } room)
 		{
-#if BROWSER
-			Console.Error.WriteLine("No room found for browser startup.");
-#endif
+			Console.Error.WriteLine("No room found for startup.");
 			return;
 		}
 

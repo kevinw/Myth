@@ -1,4 +1,3 @@
-#if EDITOR
 using System.Reflection;
 using Foster.Framework;
 using ImGuiNET;
@@ -171,18 +170,24 @@ public partial class Manager
 			throw new InvalidOperationException($"Room not found: {target}");
 
 		var wasPlaying = playing || startingPlay;
+		#if EDITOR
 		if (!string.Equals(destination.World, Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase))
 			SwitchWorld(destination.World);
+		#endif
 		if (Assets.GetRoom(destination.Room) is not { } room)
 			throw new InvalidOperationException($"Room not found: {destination.Value}");
 
+			#if EDITOR
 		SelectRoom(room);
+		#endif
 		if (wasPlaying)
 			StartGame(immediate: true);
 		else
 		{
+			#if EDITOR
 			SyncEditorGame();
 			TweenEditorCameraToRoom(room);
+			#endif
 		}
 	}
 
@@ -231,4 +236,3 @@ public partial class Manager
 		game?.DisplayMessage($"Head slide: {PerfToggles.HeadSlide}");
 	}
 }
-#endif

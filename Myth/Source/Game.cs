@@ -201,8 +201,6 @@ public partial class Game : IDisposable
 	{
 		get
 		{
-			if (Manager.AspectFourThree)
-				return true;
 #if BROWSER
 			if (Manager.Window is { } w && w.HeightInPixels > 0)
 				return (float)w.WidthInPixels / w.HeightInPixels < OutputAspect - 0.01f;
@@ -217,8 +215,6 @@ public partial class Game : IDisposable
 	{
 		get
 		{
-			if (Manager.AspectFourThree)
-				return 4f / 3f;
 #if BROWSER
 			if (Manager.Window is { } w && w.HeightInPixels > 0)
 				return (float)w.WidthInPixels / w.HeightInPixels;
@@ -245,6 +241,7 @@ public partial class Game : IDisposable
 	// GameView's final composite as well, so it is internal rather than private.
 	internal RectInt PresentRect(in RectInt viewport)
 	{
+		/*
 		if (Manager.AspectFourThree)
 		{
 			var s = Calc.Min(viewport.Width / 4f, viewport.Height / 3f);
@@ -253,6 +250,7 @@ public partial class Game : IDisposable
 			var c = viewport.Center;
 			return new RectInt(c.X - w / 2, c.Y - h / 2, w, h);
 		}
+		*/
 		return viewport;
 	}
 
@@ -454,10 +452,14 @@ public partial class Game : IDisposable
 		{
 			Minimap.Open = !Minimap.Open;
 			if (Minimap.Open)
+			{
+				Minimap.ResetView();
 				Minimap.Rebuild(room);
+			}
 		}
 		if (Minimap.Open)
 		{
+			Minimap.UpdateView(Controls.Move.Value, Time.Delta);
 			UpdateAudioListener();
 #if BROWSER
 			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
@@ -1488,12 +1490,17 @@ public partial class Game : IDisposable
 		RaiseRoomChanged(fromRoom, room, RoomChangeKind.Reload, Point2.Zero);
 		FinishRoomActivation(RoomChangeKind.Reload);
 
-		ApplyRoomReverb(room);
 
 		if (restartMusic)
+			MusicWasRestarted();
+	}
+
+	internal void MusicWasRestarted() {
+		StartMusic();
+		if (room != null)
 		{
-			StartMusic();
 			ApplyMusicArea(room);
+			ApplyRoomReverb(room);
 		}
 	}
 

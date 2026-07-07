@@ -17,6 +17,7 @@ public class Minimap
 	public readonly record struct MapRoom(RectInt TileBounds, RectInt SeenRect, List<RectInt> SolidRuns, List<StackList8<Vector2>> SlopePolygons, List<ExitMarker> Markers);
 
 	public bool Open;
+	public Vector2 Pan;
 	public readonly List<MapRoom> Rooms = [];
 	readonly HashSet<string> visitedRoomIds = [];
 	readonly HashSet<(string, string)> takenExits = [];
@@ -49,6 +50,18 @@ public class Minimap
 
 	static (string, string) ExitKey(string a, string b)
 		=> string.CompareOrdinal(a, b) <= 0 ? (a, b) : (b, a);
+
+	public void ResetView()
+		=> Pan = Vector2.Zero;
+
+	public void UpdateView(Vector2 move, float dt)
+	{
+		if (move.LengthSquared() > 1)
+			move = Vector2.Normalize(move);
+		Pan += move * MinimapPanSpeed * dt;
+	}
+
+	static float MinimapPanSpeed => 92f;
 
 	public void Rebuild(Room currentRoom)
 	{
@@ -215,7 +228,7 @@ public class Minimap
 
 public sealed partial class GameView
 {
-	static float MinimapTileScale => 0.5f;    // game pixels per world tile when fully revealed
+	static float MinimapTileScale => 1f;      // game pixels per world tile when fully revealed
 	static float MinimapPlayerWidth => 4f;    // mini player sprite width in game pixels
 	static float MinimapDim => 0.8f;          // how dark the game dims behind the map
 	static float MinimapRevealSpeed => 3.5f;  // full open (zoom, then centering) over ~0.3s
@@ -245,9 +258,9 @@ public sealed partial class GameView
 		var focus = focusWorld / TileSize;
 
 		// Scale lerps in log space so the zoom-out feels even from 8px per tile down to map scale.
-		var s = MathF.Exp(Calc.Lerp(MathF.Log(TileSize), MathF.Log(MinimapTileScale), zoomEase));
+		var s = MathF.Max(1f, MathF.Exp(Calc.Lerp(MathF.Log(TileSize), MathF.Log(MinimapTileScale), zoomEase)));
 		var focusScreen = Vector2.Lerp(focusWorld - RenderCamera, new Vector2(Width, Height) / 2, centerEase);
-		var origin = focusScreen - focus * s;
+		var origin = focusScreen - focus * s + game.Minimap.Pan;
 		if (minimapReveal >= 1)
 			origin = origin.FloorToPoint2();
 

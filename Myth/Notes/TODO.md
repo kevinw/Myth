@@ -1,19 +1,23 @@
 # TODO
 
-- after roll under a 1-tile tall tunnel, you stand stuck in the wall
+pre-friend build
+- publish build: get stuck in wall after dying in Bud room.
 - publish: default fullscreen
-- ./tools/run-browser.mjs doens't start the game at "start"
 - menu
 - a snow variant for "pollen"
-- wall slide sounds
 - turn around needs particles
-- entering a room from the top or bottom edge probably shouldn't make a "fresh player start"
-- a "wildlife" system which draws flies, hoppers, fish and more. they aren't more than 3x3 pixels, and render as a bit transparent. it's "ambient" wildlife.
-- a main menu
 - a save state
   - durable chests
   - explored rooms
   - save spots/warps
+
+- have local notarize-publish process upload to cloudflare storage under a date-git-hash folder
+- after roll under a 1-tile tall tunnel, you stand stuck in the wall
+- ./tools/run-browser.mjs doens't start the game at "start"
+- wall slide sounds
+- entering a room from the top or bottom edge probably shouldn't make a "fresh player start"
+- a "wildlife" system which draws flies, hoppers, fish and more. they aren't more than 3x3 pixels, and render as a bit transparent. it's "ambient" wildlife.
+- a main menu
 
 - a section at the beggining where you learn
   - to jump

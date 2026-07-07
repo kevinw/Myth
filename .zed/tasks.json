@@ -29,4 +29,9 @@
     "command": "./tools/run-browser.mjs",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
+  {
+    "label": "dotnet watch (MythShip)",
+    "command": "dotnet watch run --non-interactive --no-restore --property:MythTestShip=true",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+  }
 ]

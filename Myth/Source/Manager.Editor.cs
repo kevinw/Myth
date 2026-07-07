@@ -2663,7 +2663,6 @@ public partial class Manager
 			ResizeRoomGeometry(room, candidate);
 
 		selectedRoomId = room.Id;
-		cell = room.Cell;
 		roomCreatePosition = room.TileSpacePosition;
 		editorGameDirty = true;
 		InvalidateRoomPreview(room);
@@ -3744,7 +3743,6 @@ public partial class Manager
 	{
 		using var perf = PerfStats.Time(PerfDetail.EditorWorld);
 		var inner = GameViewRect;
-		var lastCell = cell;
 		var worldMouseBlocked = imgui.WantsMouseInput && !SingleTouchInEditorWorld(inner);
 		var keyboardBlocked = ImGuiWantsKeyboard;
 		var roomActivationClickConsumed = false;
@@ -4052,7 +4050,7 @@ public partial class Manager
 					editorGameDirty = true;
 				}
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && lastCell == cell && overGame && !brushIsActor && brushEntry != null && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
+			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && !brushIsActor && brushEntry != null && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
 				tilePaintUndo?.Commit();
 				tilePaintUndo = CaptureRoomUndo("Paint Tiles", editing);
@@ -4247,7 +4245,7 @@ public partial class Manager
 	bool HasAdjacentEditorRoom(Point2 direction)
 	{
 		if (CurrentRoom is not { } room)
-			return Assets.GetRoom(cell + direction) != null;
+			return false;
 
 		return Assets.FindAdjacentRoom(room, direction, EditorExitPosition(room, direction)) != null;
 	}
@@ -4541,7 +4539,7 @@ public partial class Manager
 	{
 		if (room == null)
 		{
-			DrawCenteredToolbarText($"Room {cell.X} x {cell.Y}");
+			DrawCenteredToolbarText($"null Room");
 			return;
 		}
 
@@ -4676,22 +4674,7 @@ public partial class Manager
 		ImGui.GetWindowDrawList().AddText(pos, ImGui.GetColorU32(ImGuiCol.Text), text);
 	}
 
-	bool ToggleEditorPressed()
-	{
-		if (Input.Keyboard.Pressed(Keys.Tab))
-			return true;
-
-		foreach (var controller in Input.Controllers)
-		{
-			if (controller.Connected)
-			{
-				if (controller.Pressed(Buttons.RightStick))
-					return true;
-			}
-		}
-
-		return false;
-	}
+	bool ToggleEditorPressed() => Input.Keyboard.Pressed(Keys.Tab) || Input.AnyControllerButtonPressed(Buttons.RightStick);
 
 	void ToolbarImGui()
 	{
@@ -4865,7 +4848,6 @@ public partial class Manager
 		ClearRoomPreviewCache();
 		undo.Clear();
 		selectedRoomId = null;
-		cell = Point2.Zero;
 		roomCreatePosition = Point2.Zero;
 		editorSelectionRect = null;
 		selectedRoomActorIndex = -1;
@@ -4953,7 +4935,6 @@ public partial class Manager
 	void SelectRoom(Room room)
 	{
 		selectedRoomId = room.Id;
-		cell = room.Cell;
 		roomCreatePosition = room.TileSpacePosition;
 	}
 
@@ -4965,12 +4946,6 @@ public partial class Manager
 			return;
 		}
 
-		if (Assets.GetRoom(cell) is { } byCell)
-		{
-			SelectRoom(byCell);
-			return;
-		}
-
 		if (Assets.GetRoom(Point2.Zero) is { } origin)
 		{
 			SelectRoom(origin);
@@ -4978,7 +4953,6 @@ public partial class Manager
 		}
 
 		selectedRoomId = null;
-		cell = Point2.Zero;
 		roomCreatePosition = Point2.Zero;
 	}
 

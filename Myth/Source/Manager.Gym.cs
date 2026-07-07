@@ -257,7 +257,7 @@ partial class Manager
 
 		var run = gym.runs[gym.runIndex];
 		if (!GymLoop)
-			Console.WriteLine($"[Gym] {current.Room.Cell.X},{current.Room.Cell.Y}:{current.DisplayId}@{current.StartDisplay} → {run.Room.Cell.X},{run.Room.Cell.Y}:{run.DisplayId}@{run.StartDisplay}");
+			Console.WriteLine($"[Gym] {current.DisplayId}@{current.StartDisplay} → {run.DisplayId}@{run.StartDisplay}");
 		StartGymRun(run);
 #endif
 	}
@@ -297,7 +297,6 @@ partial class Manager
 	private void StartGymRun(GymRun run)
 	{
 		var room = run.Room;
-		cell = room.Cell;
 		selectedRoomId = null;
 		gym.roomStartTime = Time.Seconds;
 		gymNoPathStartTime = -1;
