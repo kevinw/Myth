@@ -16,8 +16,11 @@
     <DefineConstants>$(DefineConstants);IOS</DefineConstants>
   </PropertyGroup>
 
+  <!-- MythShip strips the editor from a published game build; ImGui stays available
+       (potential in-game UI), so only EDITOR is dropped. -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythBrowser)' != 'true'">
-    <DefineConstants>$(DefineConstants);EDITOR;IMGUI</DefineConstants>
+    <DefineConstants Condition="'$(MythShip)' != 'true'">$(DefineConstants);EDITOR;IMGUI</DefineConstants>
+    <DefineConstants Condition="'$(MythShip)' == 'true'">$(DefineConstants);IMGUI</DefineConstants>
   </PropertyGroup>
 
   <!-- Dear ImGui is available in the browser when the prebuilt cimgui wasm archive

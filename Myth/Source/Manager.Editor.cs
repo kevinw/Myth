@@ -4717,15 +4717,6 @@ public partial class Manager
 			StartGame();
 		ImGui.SameLine();
 
-		/*
-				if (ImGuiIconButton("SmallBrush", Assets.GetSubtexture("buttons/7"), "Smaller Brush", brushSize <= 1))
-					brushSize = Math.Max(1, brushSize - 1);
-				ImGui.SameLine();
-				if (ImGuiIconButton("BigBrush", Assets.GetSubtexture("buttons/8"), "Larger Brush", brushSize > 1))
-					brushSize = Math.Min(10, brushSize + 1);
-				ImGui.SameLine(0, ToolbarSpacing);
-		*/
-
 		if (ImGuiIconButton("Music Areas", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled, ToolbarButtonImagePadding))
 		{
 			musicEnabled = !musicEnabled;

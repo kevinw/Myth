@@ -26,11 +26,12 @@ jobs:
 
       # Fetch only the LFS objects + submodule the browser build needs. Skips
       # ~137 MB of iOS-only binaries (xcframeworks, iOS FMOD libs), dev-only
-      # Production assets, and the iOS cimgui-src submodule.
+      # Production assets, audio authoring sources (the browser ships built Mobile
+      # banks, which live outside Sources), and the iOS cimgui-src submodule.
       - name: Fetch browser LFS + Foster submodule
         run: |
           set -euo pipefail
-          git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production"
+          git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production,Myth/Assets/Sources/Sounds"
           GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster
           git -C Foster lfs pull --exclude="Framework/Internal/Native/ios,Framework/Internal/Native/win-x64,Framework/Internal/Native/osx,tools/macos"
           git submodule update --init --remote Myth/Source/External/StringBuilder

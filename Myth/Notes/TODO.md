@@ -1,5 +1,12 @@
 # TODO
 
+- after roll under a 1-tile tall tunnel, you stand stuck in the wall
+- publish: default fullscreen
+- ./tools/run-browser.mjs doens't start the game at "start"
+- menu
+- a snow variant for "pollen"
+- wall slide sounds
+- turn around needs particles
 - entering a room from the top or bottom edge probably shouldn't make a "fresh player start"
 - a "wildlife" system which draws flies, hoppers, fish and more. they aren't more than 3x3 pixels, and render as a bit transparent. it's "ambient" wildlife.
 - a main menu

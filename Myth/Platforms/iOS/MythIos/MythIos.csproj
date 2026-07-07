@@ -32,7 +32,7 @@
   <ItemGroup>
     <ImageAsset Include="Assets.xcassets/**/*" />
     <BundleResource Include="../../../Assets/**/*"
-                    Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**">
+                    Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**;../../../Assets/Sources/Sounds/**">
       <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </BundleResource>
     <BundleResource Include="../../../Assets/Sounds/FMOD/Build/Mobile/*.bank">

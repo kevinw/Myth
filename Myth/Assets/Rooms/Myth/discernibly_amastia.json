@@ -2,6 +2,15 @@
   "position": [240, 0],
   "size": [40, 23],
   "reverb": 0.325,
+  "legend": {
+    "#": "back",
+    "G": "grass",
+    "P": "dirt",
+    "S": "Grass Slope",
+    "T": "stone",
+    "g": "plants",
+    "i": "gates"
+  },
   "tiles": [
     "0000000000000GGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "0000000000000GGGGGGGGGGGGGGGGGGGGGGGGGGG",

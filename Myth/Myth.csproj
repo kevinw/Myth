@@ -3,6 +3,33 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- Shipped desktop builds (tools/publish-desktop.mjs): play-only NativeAOT. Set here
+       rather than on the publish command line so the property doesn't leak into projects
+       that don't support AOT (Myth.SourceGen targets netstandard). -->
+  <PropertyGroup Condition="'$(MythShip)' == 'true' and '$(RuntimeIdentifier)' != 'browser-wasm'">
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <StripSymbols>true</StripSymbols>
+  </PropertyGroup>
+
+  <!-- Homebrew's dotnet ships a non-portable (source-build) ILC pack that links system
+       OpenSSL and Brotli the way Linux distros do; macOS provides neither as linkable
+       libraries. The game uses no TLS and no Brotli, so drop the flags — dead_strip means
+       the archive members that would need them are never pulled in. (Official Microsoft
+       SDKs don't add these on macOS at all.) -->
+  <Target Name="MythStripNonPortableSystemLibs" AfterTargets="SetupOSSpecificProps" Condition="'$(PublishAot)' == 'true' and $([MSBuild]::IsOSPlatform('OSX'))">
+    <ItemGroup>
+      <LinkerArg Remove="-lssl" />
+      <LinkerArg Remove="-lcrypto" />
+      <LinkerArg Remove="-lbrotlienc" />
+      <LinkerArg Remove="-lbrotlidec" />
+      <LinkerArg Remove="-lbrotlicommon" />
+    </ItemGroup>
+  </Target>
+
+  <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -102,7 +129,7 @@
     <!-- MythDesktopOnly: the desktop/browser exe never needs Myth.Core's net10.0-ios TFM,
          so drop it here to cut restore/eval work in the dev loop. The iOS app references
          Myth.Core directly (without this flag), so it still builds net10.0-ios. -->
-    <ProjectReference Include="Source/Myth.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);MythBrowser=$(MythBrowser);MythBrowserFmod=$(MythBrowserFmod);MythBrowserFmodPThread=$(MythBrowserFmodPThread);MythBrowserJsFmod=$(MythBrowserJsFmod);MythDesktopOnly=true" />
+    <ProjectReference Include="Source/Myth.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);MythBrowser=$(MythBrowser);MythBrowserFmod=$(MythBrowserFmod);MythBrowserFmodPThread=$(MythBrowserFmodPThread);MythBrowserJsFmod=$(MythBrowserJsFmod);MythShip=$(MythShip);MythDesktopOnly=true" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">

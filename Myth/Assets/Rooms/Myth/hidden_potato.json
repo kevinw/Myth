@@ -1,7 +1,15 @@
 {
   "position": [160, -23],
   "size": [40, 23],
-  "reverb": 0.529,
+  "reverb": 0.527,
+  "legend": {
+    "#": "back",
+    "P": "dirt",
+    "T": "stone",
+    "g": "plants",
+    "i": "gates",
+    "r": "rocks"
+  },
   "tiles": [
     "00000000000000TTTTTTTTTTTTTTTTTTTTTTTTTT",
     "00000000000000000000000000000000000000TT",
@@ -24,8 +32,8 @@
     "TTTTTTTTTTTT00000000000000000000000000TT",
     "TTTTTTTTTTTTT0000000000000000000000000TT",
     "TTTTTTTTTTTTT000000gg0iii00r00r00i0000TT",
-    "TTTTTTTTTTTTTTTTTTTTTTTPPPTTTTTTTTTTTTTT",
-    "TTTTTTTTTTTTTTTTTTTTTPTTPTTTTTTTTTTTTTTT"
+    "TTTTTTTTTTTTTTTTTTTTTTTPPPTTTTTTTTTTT0TT",
+    "TTTTTTTTTTTTTTTTTTTTTPTTPTTTTTTTTTTTT0TT"
   ],
   "backgroundTiles": [
     "0000000000000000000000000000000000000000",
@@ -61,8 +69,7 @@
     {
       "Id": "6febad46088bc4bb",
       "Type": "PotatoMan",
-      "Position": [290, 170],
-      "Facing": "-"
+      "Position": [114, 169]
     },
     {
       "Id": "82f28551dc2d71d5",

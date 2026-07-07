@@ -85,18 +85,33 @@ public static class Assets
 	{
 		get
 		{
-			// during development we search up from the build directory to find the Assets folder
-			// (instead of copying all the Assets to the build directory).
-			if (path == null)
-			{
-				var up = "";
-				while (!Directory.Exists(Path.Join(up, assetsFolderName)) && up.Length < 10)
-					up = Path.Join(up, "..");
-				path = Path.Join(up, assetsFolderName);
-			}
-
-			return path ?? throw new Exception("Unable to find Assets path");
+			// During development we search up from the working directory to find the Assets
+			// folder (instead of copying all the Assets to the build directory). A bundled
+			// app (Myth.app launched from Finder) starts with cwd=/, so fall back to probing
+			// up from the executable's directory, where the bundle carries Assets.
+			path ??= FindAssetsFrom(Environment.CurrentDirectory)
+				?? FindAssetsFrom(AppContext.BaseDirectory)
+				?? throw new Exception("Unable to find Assets path");
+			return path;
 		}
+	}
+
+	static string? FindAssetsFrom(string start)
+	{
+		var directory = Path.GetFullPath(start);
+		for (var depth = 0; depth < 10 && directory != null; depth++)
+		{
+			var candidate = Path.Join(directory, assetsFolderName);
+			if (Directory.Exists(candidate))
+				return candidate;
+			// macOS bundle layout: the executable lives in Contents/MacOS while data must
+			// sit in Contents/Resources (codesign rejects non-code under MacOS).
+			var resources = Path.Join(directory, "Resources", assetsFolderName);
+			if (Directory.Exists(resources))
+				return resources;
+			directory = Path.GetDirectoryName(directory);
+		}
+		return null;
 	}
 
 	public static string RoomsPath => Path.Join(AssetsPath, roomsFolderName);
@@ -172,7 +187,10 @@ public static class Assets
 		// (the baked tilesets are in the pack) but Factory still registers from the specs.
 		TileKits.LoadSpecs(Path.Join(SourcesPath, "Tilesets"));
 
-		if (buildPackPath == null && (useVisualAssetPack || OperatingSystem.IsBrowser()) && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
+		// Shipped bundles carry the pack and no Assets/Sources (like the browser), so a
+		// missing sources tree implies pack mode without needing a command-line flag.
+		var packOnly = useVisualAssetPack || OperatingSystem.IsBrowser() || !Directory.Exists(SourcesPath);
+		if (buildPackPath == null && packOnly && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
 			return;
 
 		var actorsPath = Path.Join(AssetsPath, "Actors");

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Foster.Framework;
 using ImGuiNET;
 using Color = Foster.Framework.Color;
@@ -18,7 +19,7 @@ public partial class Manager : App
 	public const string RoomReverbParameter = "RoomReverb";
 
 	const string WindowSettingsFileName = "window.json";
-	const string FmodProjectPath = "Sounds/FMOD/Myth.fspro";
+	const string FmodProjectPath = "Sources/Sounds/FMOD/Myth.fspro";
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
 	static float uiScale = 2.7f;
@@ -314,9 +315,11 @@ public partial class Manager : App
 		if (AudioEnabled)
 			LoadAudioBanks();
 
-#if BROWSER
-		playOnStartup = true; // may also be set by --play on desktop
+#if BROWSER || !EDITOR
+		playOnStartup = true; // editor-less builds (browser, shipped desktop) boot straight into play
 #endif
+
+
 
 		if (playOnStartup)
 			StartGame(immediate: playRoomId != null);
@@ -390,9 +393,42 @@ public partial class Manager : App
 
 	string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
 
+#if !EDITOR
+	// Editor-less builds (browser, shipped desktop): pick the room to start play in
+	// without any editor selection UI. The editor variant lives in Manager.Editor.cs.
+	private void ResolveSelectedRoom()
+	{
+		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
+		{
+			selectedRoomId = byId.Id;
+			cell = byId.Cell;
+			return;
+		}
+
+		if (Assets.GetRoom(cell) is { } byCell)
+		{
+			selectedRoomId = byCell.Id;
+			cell = byCell.Cell;
+			return;
+		}
+
+		var first = Assets.GetRoom(Point2.Zero) ?? Assets.RoomsById.Values.FirstOrDefault();
+		selectedRoomId = first?.Id;
+		cell = first?.Cell ?? Point2.Zero;
+	}
+#endif
+
 	void LoadAudioBanks()
 	{
 		if (!AudioEnabled) return;
+		// The FMOD project lives in Assets/Sources (authoring) but must build its banks
+		// into Assets/Sounds/FMOD/Build (runtime, shipped). If banks ever appear on the
+		// Sources side, the project's builtBanksOutputDirectory got reset — say so loudly
+		// instead of playing stale audio.
+		var misplacedBuild = Path.Join(Assets.SourcesPath, "Sounds", "FMOD", "Build");
+		if (Directory.Exists(misplacedBuild))
+			Console.Error.WriteLine($"Warning: FMOD banks found at '{misplacedBuild}' — the FMOD project should build to Assets/Sounds/FMOD/Build (check builtBanksOutputDirectory in FMOD Studio's preferences).");
+
 		var fmodPath = Path.Join(Assets.AssetsPath, "Sounds", "FMOD");
 		if (!Directory.Exists(fmodPath))
 		{
@@ -485,7 +521,7 @@ public partial class Manager : App
 			if (!File.Exists(WindowSettingsPath))
 				return;
 
-			var settings = JsonSerializer.Deserialize<WindowSettings>(File.ReadAllText(WindowSettingsPath));
+			var settings = JsonSerializer.Deserialize(File.ReadAllText(WindowSettingsPath), WindowSettingsJsonContext.Default.WindowSettings);
 			if (settings == null) return;
 			if (!string.IsNullOrWhiteSpace(settings.WorldId))
 				Assets.SelectWorld(settings.WorldId);
@@ -543,7 +579,7 @@ public partial class Manager : App
 #endif
 			};
 
-			File.WriteAllText(WindowSettingsPath, JsonSerializer.Serialize(settings));
+			File.WriteAllText(WindowSettingsPath, JsonSerializer.Serialize(settings, WindowSettingsJsonContext.Default.WindowSettings));
 		}
 		catch (Exception e)
 		{
@@ -551,6 +587,8 @@ public partial class Manager : App
 		}
 	}
 
+	// Source-generated (not reflection) so it works under NativeAOT and the trimmed
+	// browser build, where reflection-based JSON is disabled.
 	sealed class WindowSettings
 	{
 		public int X { get; init; }
@@ -567,6 +605,9 @@ public partial class Manager : App
 		public EditorScrollMode EditorScrollMode { get; init; }
 #endif
 	}
+
+	[JsonSerializable(typeof(WindowSettings))]
+	partial class WindowSettingsJsonContext : JsonSerializerContext;
 
 #if DEBUG
 	// Editor mouse-drag of the player: host input, drives sim state directly.
