@@ -173,7 +173,13 @@ public partial class Manager : App
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
-	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled))
+	public static Manager Create(StartArgs args) {
+		var settings = GetWindowSettingsFromJSON();
+		args.fullscreen = settings?.Fullscreen;
+		return new(args);
+	}
+
+	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled, fullscreen: args.fullscreen))
 	{
 		AudioEnabled = args.audio;
 		dumpAtlases = args.dumpAtlases;
@@ -229,15 +235,22 @@ public partial class Manager : App
 #endif
 	}
 
-	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false)
+	const string APPLICATION_NAME = "Mycelon";
+
+	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false, bool? fullscreen = null)
 	{
-		const string applicationName = "Mycelon";
 		const string windowTitle = "Mycelon";
 		Point2 windowSize = new(1280, 720);
 		GraphicsDriver graphicsDriver = GraphicsDriver.None; // no preference
 		bool resizable = true;
-		bool fullscreen = false;
 		var updateMode = UpdateMode.UnlockedStep();
+		if (fullscreen == null) {
+#if DEBUG
+			fullscreen = false;
+#elif !BROWSER
+			fullscreen = true;
+#endif
+		}
 		AppFlags appFlags = AppFlags.None;
 #if BROWSER
 		graphicsDriver = GraphicsDriver.WebGPU;
@@ -267,12 +280,14 @@ public partial class Manager : App
 			appFlags |= AppFlags.GraphicsDebugging;
 		}
 
+		Console.WriteLine($"new AppConfig fullscreen={fullscreen}");
+
 		return new AppConfig(
-			ApplicationName: applicationName,
+			ApplicationName: APPLICATION_NAME,
 			WindowTitle: windowTitle,
 			Width: windowSize.X,
 			Height: windowSize.Y,
-			Fullscreen: fullscreen,
+			Fullscreen: fullscreen ?? false,
 			Resizable: resizable,
 			UpdateMode: updateMode,
 			PreferredGraphicsDriver: graphicsDriver,
@@ -404,12 +419,12 @@ public partial class Manager : App
 		Factory.Clear();
 	}
 
-	string WindowSettingsPath => Path.Join(UserPath, WindowSettingsFileName);
+	static string WindowSettingsPath => Path.Join(UserPathForApplicationName(APPLICATION_NAME), WindowSettingsFileName);
 
 #if !EDITOR
 	// Editor-less builds (browser, shipped desktop): pick the room to start play in
 	// without any editor selection UI. The editor variant lives in Manager.Editor.cs.
-	private void ResolveSelectedRoom()
+	void ResolveSelectedRoom()
 	{
 		if (selectedRoomId != null && Assets.GetRoom(selectedRoomId) is { } byId)
 		{
@@ -417,7 +432,7 @@ public partial class Manager : App
 			return;
 		}
 
-		var first = Assets.RoomsById["start"]  ?? Assets.GetRoom(Point2.Zero) ?? Assets.RoomsById.Values.FirstOrDefault();
+		var first = Assets.RoomsById["start"] ?? Assets.GetRoom(Point2.Zero) ?? Assets.RoomsById.Values.FirstOrDefault();
 		selectedRoomId = first?.Id;
 	}
 #endif
@@ -518,14 +533,18 @@ public partial class Manager : App
 		};
 	}
 
+	static WindowSettings? GetWindowSettingsFromJSON() {
+		if (!File.Exists(WindowSettingsPath))
+			return null;
+		return JsonSerializer.Deserialize(File.ReadAllText(WindowSettingsPath), WindowSettingsJsonContext.Default.WindowSettings);
+	}
+
 	void LoadWindowSettings()
 	{
 		try
 		{
-			if (!File.Exists(WindowSettingsPath))
-				return;
 
-			var settings = JsonSerializer.Deserialize(File.ReadAllText(WindowSettingsPath), WindowSettingsJsonContext.Default.WindowSettings);
+			var settings = GetWindowSettingsFromJSON();
 			if (settings == null) return;
 			if (!string.IsNullOrWhiteSpace(settings.WorldId))
 				Assets.SelectWorld(settings.WorldId);
@@ -565,12 +584,12 @@ public partial class Manager : App
 			var position = Window.Position;
 			var size = Window.Size;
 			var currentRoom = game?.CurrentRoom ?? CurrentRoom;
-			var settings = new WindowSettings
-			{
+			var settings = new WindowSettings {
 				X = position.X,
 				Y = position.Y,
 				Width = size.X,
 				Height = size.Y,
+				Fullscreen = Window.Fullscreen,
 				WorldId = Assets.CurrentWorldId,
 				RoomId = currentRoom?.Id ?? selectedRoomId,
 				MusicEnabled = musicEnabled,
@@ -594,6 +613,7 @@ public partial class Manager : App
 		public int Y { get; init; }
 		public int Width { get; init; }
 		public int Height { get; init; }
+		public bool Fullscreen { get; init; }
 		public string? WorldId { get; init; }
 		public string? RoomId { get; init; }
 		public int RoomX { get; init; }

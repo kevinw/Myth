@@ -12,6 +12,7 @@ public struct StartArgs
 	public bool traceNavFrames;
 	public bool simple;
 	public bool bench;
+	public bool? fullscreen;
 	// Force the 4:3 portrait-style presentation on desktop for testing (--aspect-four-three):
 	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
 	public bool aspectFourThree;

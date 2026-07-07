@@ -1025,6 +1025,7 @@ public partial class Player : Pawn
 	// ApplyHurt runs the usual death/reload, so we leave the position alone in that case.
 	void FallOffCliff()
 	{
+		Game.HitStun(0.4f);
 		if (!Game.TryRespawnPlayerAtSafeGroundedRespawn(this))
 			Position = InsetRespawnPoint();
 		Stop();

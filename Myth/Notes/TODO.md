@@ -6,11 +6,7 @@
 - an enemy who gets knocked around when you hit it, their air friction decreases and then comes back
 
 pre-friend build
-- publish: default fullscreen
-- hide J bug behind menu option
-- any others
 - save spot warp
-
 
 - have local notarize-publish process upload to cloudflare storage under a date-git-hash folder
 - after roll under a 1-tile tall tunnel, you stand stuck in the wall

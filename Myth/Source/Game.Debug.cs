@@ -30,7 +30,7 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.R))
 			ReloadRoom();
 
-#if !BROWSER
+#if !BROWSER && DEBUG
 		// TODO: use an ingame console instead?
 		if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 		if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();

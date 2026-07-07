@@ -11,7 +11,7 @@ if (startArgs.buildAssetPack)
 	return;
 }
 
-var manager = new Manager(startArgs);
+var manager = Manager.Create(startArgs);
 PlatformSpecific.ManagerSetup(manager);
 manager.Run();
 PlatformSpecific.ManagerCleanup(manager);
