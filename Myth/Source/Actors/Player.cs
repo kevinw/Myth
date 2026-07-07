@@ -310,6 +310,7 @@ public abstract class Pawn : Actor
 	}
 
 	bool wallSliding = false;
+	double lastSkidParticlesTime;
 
 	protected void NormalState()
 	{
@@ -344,6 +345,13 @@ public abstract class Pawn : Actor
 					AudioEventDebounced("player/skid", 0.5f);
 				RunStartTimer = 0;
 				RunStartSkid = false;
+
+				var now = Time.Seconds;
+				if (now - lastSkidParticlesTime > 0.5f)
+				{
+					EmitJumpParticles(Position + new Vector2(facing * 8.0f, 0));
+					lastSkidParticlesTime = now;
+				}
 			}
 			else
 			{
@@ -431,6 +439,7 @@ public abstract class Pawn : Actor
 			if (lastFacing != Facing && didStartRunning)
 			{
 				RunStartSkid = true;
+				EmitJumpParticles(Position);
 			}
 		}
 		// Underwater you swim-turn: face the input direction even while airborne, unlike
@@ -481,15 +490,8 @@ public abstract class Pawn : Actor
 				if (canCoyoteJump)
 					Position.Y = coyoteJumpY;
 				coyoteJumpTimer = 0;
-
 				if (wasGroundedJump)
-					if (Game.Particles is { Supported: true } particles)
-						particles.Emit(jumpParticlesEffect,
-							worldPosition: Position,
-							count: 8,
-							directionRadians: MathF.PI / 2.0f,
-							speedScale: 2.5f,
-							spreadRadians: 59.0f * Calc.DegToRad);
+					EmitJumpParticles(Position);
 			}
 			else
 			{
@@ -525,6 +527,16 @@ public abstract class Pawn : Actor
 			return;
 
 		TryStartPawnAction(moveX);
+	}
+
+	void EmitJumpParticles(Vector2 position) {
+		if (Game.Particles is { Supported: true } particles)
+			particles.Emit(jumpParticlesEffect,
+				worldPosition: position,
+				count: 8,
+				directionRadians: MathF.PI / 2.0f,
+				speedScale: 2.5f,
+				spreadRadians: 59.0f * Calc.DegToRad);
 	}
 
 	protected float burrowTimer = 0;
