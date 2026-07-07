@@ -4499,7 +4499,9 @@ public partial class Manager
 		return '0';
 	}
 
+	#if SHOW_EDITOR_ALLOCS
 	long gcBytesBeforeEditorTween;
+	#endif
 
 	/// Shifts to display a new room
 	void ShiftRoom(Point2 direction)
@@ -5192,22 +5194,27 @@ public partial class Manager
 			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalMilliseconds:0}ms";
 		}
 
-		var mainMessage = fpsOverlayMode == 0
-			? $"FPS {fpsOverlayValue:0} GC {threadAllocatedBytesOverlayValue} bytes ({gcPauseDurationStr})"
-			: $"FPS {fpsOverlayValue:0}\n" +
+		var vsb = new ValueStringBuilder(stackalloc char[1024]);
+		vsb.Append("FPS ");
+		if (fpsOverlayMode == 0) {
+			vsb.Append((int)MathF.Round(fpsOverlayValue));
+			#if DEBUG
+			vsb.Append(" GC ");
+			vsb.Append(threadAllocatedBytesOverlayValue);
+			vsb.Append(" bytes (");
+			vsb.Append(gcPauseDurationStr);
+			vsb.Append(")");
+			#endif
+		} else {
+			vsb.Append($"FPS {fpsOverlayValue:0}\n" +
 			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
 			  $"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +
-			  $"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}";
-#else
-		var mainMessage = fpsOverlayMode == 0
-			? $"FPS {fpsOverlayValue:0}"
-			: $"FPS {fpsOverlayValue:0}\n" +
-			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
-			  $"Wld {perf.World:0.0}  Lit {perf.Lighting:0.0}  Fin {perf.FinalComposite:0.0}\n" +
-			  $"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}";
+			  $"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}");
+		}
+
 #endif
 		var detailMessage = fpsOverlayMode >= 2 ? PerfStats.DetailSummary : string.Empty;
-		var mainTextSize = ImGui.CalcTextSize(mainMessage);
+		var mainTextSize = ImGui.CalcTextSize(vsb.AsSpan());
 		var detailTextSize = string.IsNullOrEmpty(detailMessage) ? Vector2.Zero : ImGui.CalcTextSize(detailMessage) * 0.8f;
 		var padding = new Vector2(6, 3);
 		var textSize = new Vector2(
@@ -5229,7 +5236,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoSavedSettings |
 			ImGuiWindowFlags.NoFocusOnAppearing |
 			ImGuiWindowFlags.NoNav);
-		ImGui.TextUnformatted(mainMessage);
+		ImGui.TextUnformatted(vsb.AsSpan());
 		if (!string.IsNullOrEmpty(detailMessage))
 		{
 			ImGui.SetWindowFontScale(0.8f);

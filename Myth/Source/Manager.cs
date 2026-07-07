@@ -149,13 +149,6 @@ public partial class Manager : App
 	readonly bool useAssetPack;
 	readonly string? assetPackPath;
 	bool musicEnabled = true;
-	// M cycles the music: position 0 = room-driven (no override), 1..N = force
-	// musicAreas[pos-1] and ignore room areas, N+1 = off. Lets us drive the music
-	// area live during a presentation instead of relying on room transitions.
-	int musicCyclePos;
-	// When non-null, ApplyMusicArea forces this area instead of the room's.
-	public string? MusicAreaOverride =>
-		musicCyclePos >= 1 && musicCyclePos <= musicAreas.Count ? musicAreas[musicCyclePos - 1] : null;
 	bool alwaysOnTop;
 	internal bool PlatformNavDebugVisible { get; set; }
 	readonly NavTrace? navTrace;
@@ -415,7 +408,7 @@ public partial class Manager : App
 			return;
 		}
 
-		var first = Assets.GetRoom(Point2.Zero) ?? Assets.RoomsById.Values.FirstOrDefault();
+		var first = Assets.RoomsById["start"]  ?? Assets.GetRoom(Point2.Zero) ?? Assets.RoomsById.Values.FirstOrDefault();
 		selectedRoomId = first?.Id;
 	}
 #endif
@@ -520,7 +513,6 @@ public partial class Manager : App
 	{
 		try
 		{
-			Console.WriteLine("WindowSettingsPath: " + WindowSettingsPath);
 			if (!File.Exists(WindowSettingsPath))
 				return;
 
@@ -940,7 +932,6 @@ public partial class Manager : App
 		if (!keyboardShortcutsBlocked)
 		{
 			if (Input.Keyboard.Pressed(Keys.B)) ToggleBudAI();
-			if (Input.Keyboard.Pressed(Keys.M)) CycleMusic();
 		}
 #endif
 
@@ -980,33 +971,6 @@ public partial class Manager : App
 		if (print) Console.WriteLine(message);
 		DebugViewMessage = message;
 		debugViewMessageTimer = duration;
-	}
-
-	// Cycle the background music for live/presentation control: room-driven -> each
-	// available FMOD area (override, ignoring room areas) -> off -> back to room-driven.
-	void CycleMusic()
-	{
-		musicCyclePos = (musicCyclePos + 1) % (musicAreas.Count + 2);
-
-		string label;
-		if (musicCyclePos == 0)
-		{
-			musicEnabled = true;
-			label = "Room";
-		}
-		else if (musicCyclePos <= musicAreas.Count)
-		{
-			musicEnabled = true;
-			label = musicAreas[musicCyclePos - 1];
-		}
-		else
-		{
-			musicEnabled = false;
-			label = "Off";
-		}
-
-		game?.RefreshMusic();
-		game?.DisplayMessage($"Music: {label}");
 	}
 
 	void ToggleLighting()
@@ -1444,6 +1408,7 @@ public partial class Manager : App
 	void EraseSaveGame()
 	{
 		selectedRoomId = "start";
+		game?.EraseSaveGame();
 	}
 
 	void StartGame(bool immediate = false)

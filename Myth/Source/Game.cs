@@ -16,6 +16,7 @@ public enum RoomChangeKind
 
 public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
 public readonly record struct RoomGeoChange(Room Room);
+readonly record struct SafeGroundedRespawn(string RoomId, Point2 Position);
 
 public partial class Game : IDisposable
 {
@@ -99,6 +100,10 @@ public partial class Game : IDisposable
 	internal readonly List<Actor> destroying = [];
 	readonly HashSet<string> sessionDestroyedActors = [];
 
+	internal void EraseSaveGame() {
+		sessionDestroyedActors.Clear();
+	}
+
 	// Playthrough-durable pickup counts, keyed by PickupKind. Lives on the Game so it survives
 	// room transitions and the player's death/respawn (both reuse this instance); it resets only
 	// when a fresh Game is created to start play. Indexed by (int)kind.
@@ -142,6 +147,8 @@ public partial class Game : IDisposable
 	// initial room's spawn), this is refreshed on every room activation — including edge
 	// transitions, which reuse this Game instance — so it always points at the way back in.
 	Point2 roomEntryPosition;
+	Point2 roomEntryDirection;
+	SafeGroundedRespawn? safeGroundedRespawn;
 	readonly bool spawnBud;
 	// In the gym, Bud is the character under test, so it spawns exactly at the player
 	// start (the PlayerStart marker) rather than at an offset follow position.
@@ -813,10 +820,62 @@ public partial class Game : IDisposable
 		// The player has been placed into the (new) room by now, so this is the way back in.
 		if (GetFirst<Player>() is { } player)
 			roomEntryPosition = player.Position;
+		roomEntryDirection = kind == RoomChangeKind.EdgeTransition ? transitionDirection : Point2.Zero;
 		RemoveDestroyedActors();
 		View?.PruneInactiveRoomCaches();
 		PrepareRoomTransitionGc();
 		RequestRoomTransitionGc(kind);
+	}
+
+	public void NoteSafeGroundedRespawn(Point2 position)
+	{
+		if (room == null || nextRoom != null || Simulating)
+			return;
+		safeGroundedRespawn = new SafeGroundedRespawn(room.Id, position);
+	}
+
+	public bool TryRespawnPlayerAtSafeGroundedRespawn(Player player)
+	{
+		if (room == null || roomEntryDirection.Y == 0 || safeGroundedRespawn is not { } respawn)
+			return false;
+
+		if (room.Id == respawn.RoomId)
+		{
+			player.Position = respawn.Position;
+			return true;
+		}
+
+		if (Assets.GetRoom(respawn.RoomId) is not { } target)
+			return false;
+
+		ActivateRoomImmediately(target.CloneRuntime(), player, respawn.Position, RoomChangeKind.Reload, Point2.Zero);
+		return true;
+	}
+
+	void ActivateRoomImmediately(Room targetRoom, Player player, Point2 playerPosition, RoomChangeKind kind, Point2 direction)
+	{
+		var fromRoom = room;
+		foreach (var actor in Actors)
+			if (actor is not Player && !actor.KeepOnRoomTransition)
+			{
+				actor.Visible = false;
+				Destroy(actor);
+			}
+
+		room?.RoomGeoChanged -= RoomGeoChanged;
+		room = targetRoom;
+		nextRoom = null;
+		transitionDirection = direction;
+		LoadRoom(room);
+		player.Position = playerPosition;
+		player.Velocity = Vector2.Zero;
+		var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		Camera = ClampCameraToRoomFb(player.Position - new Vector2(Width, Height) / 2, fbPad);
+		ApplyMusicArea(room);
+		ApplyRoomReverb(room);
+		roomSwappedThisFrame = true;
+		RaiseRoomChanged(fromRoom, room, kind, direction);
+		FinishRoomActivation(kind);
 	}
 
 	void PrepareRoomTransitionGc()
@@ -1161,34 +1220,12 @@ public partial class Game : IDisposable
 			return false;
 
 		ReadLinkedDoorDestination(resolvedTarget, out var localPosition, out var spawnOffset);
-		var fromRoom = room;
 		var targetRoom = target.Room.CloneRuntime();
+		var targetPosition = targetRoom.WorldBounds.TopLeft + localPosition + spawnOffset;
 
-		foreach (var actor in Actors)
-			if (actor is not Player && !actor.KeepOnRoomTransition)
-			{
-				actor.Visible = false;
-				Destroy(actor);
-			}
-
-		room?.RoomGeoChanged -= RoomGeoChanged;
-		room = targetRoom;
-		nextRoom = null;
-		transitionDirection = Point2.Zero;
-		LoadRoom(room);
-
-		var targetPosition = room.WorldBounds.TopLeft + localPosition + spawnOffset;
-		player.Position = targetPosition;
-		player.Velocity = Vector2.Zero;
-		var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		Camera = ClampCameraToRoomFb(player.Position - new Vector2(Width, Height) / 2, fbPad);
-		ApplyMusicArea(room);
-		ApplyRoomReverb(room);
+		ActivateRoomImmediately(targetRoom, player, targetPosition, RoomChangeKind.LinkedDoor, Point2.Zero);
 		linkedDoorCooldown = 0.35f;
-		roomSwappedThisFrame = true;
-		RaiseRoomChanged(fromRoom, room, RoomChangeKind.LinkedDoor, Point2.Zero);
 		PulseDitherGlitch();
-		FinishRoomActivation(RoomChangeKind.LinkedDoor);
 		return true;
 	}
 

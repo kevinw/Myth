@@ -307,7 +307,9 @@ public partial class Game
 		}
 
 		if (room == null)
+		{
 			return;
+		}
 
 		StartMusic();
 		ApplyMusicArea(room);
@@ -332,7 +334,7 @@ public partial class Game
 		{
 			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
 			var area = state.Area ?? Manager.DefaultMusicArea;
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, area, true);
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, area);
 			music.SetTimelinePosition(state.TimelinePosition);
 			music.Start();
 			musicArea = area;
@@ -356,8 +358,6 @@ public partial class Game
 		try
 		{
 			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, Manager.DefaultMusicArea, true);
-			musicArea = Manager.DefaultMusicArea;
 			music.Start();
 		}
 		catch (Exception e)
@@ -369,7 +369,7 @@ public partial class Game
 		}
 	}
 
-	private void ApplyMusicArea(Room forRoom)
+	void ApplyMusicArea(Room forRoom)
 	{
 		if (!Manager.MusicEnabled)
 		{
@@ -377,23 +377,22 @@ public partial class Game
 			return;
 		}
 
-		// A live override (M-cycle) forces its area and ignores the room's. With no
-		// override, the room's own area wins, then the smallest music region containing
-		// the room, then the default (so cycling back to "Room" restores the resolved
-		// area instead of sticking on the last override).
-		var area = Manager.MusicAreaOverride
-			?? MusicRegions.Resolve(forRoom)
-			?? Manager.DefaultMusicArea;
+		var prevMusicArea = musicArea;
+		var area = MusicRegions.Resolve(forRoom) ?? Manager.DefaultMusicArea;
 		if (string.IsNullOrEmpty(area))
 			return;
 
 		StartMusic();
-		if (music == null || musicArea == area)
+		if (music == null)
+		{
 			return;
+		}
 
 		try
 		{
-			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, area, true);
+			music.SetParameterLabel(Manager.BackgroundMusicAreaParameter, area);
+			if (prevMusicArea == "Silence") // HACK: Start() on an empty fmod timeline previously, means we need to call start here. there's probably a better way to check "isplaying" or something here...
+				music.Start();
 			musicArea = area;
 		}
 		catch (Exception e)

@@ -1013,7 +1013,8 @@ public partial class Player : Pawn
 	// ApplyHurt runs the usual death/reload, so we leave the position alone in that case.
 	void FallOffCliff()
 	{
-		Position = InsetRespawnPoint();
+		if (!Game.TryRespawnPlayerAtSafeGroundedRespawn(this))
+			Position = InsetRespawnPoint();
 		Stop();
 		ApplyHurt(-CliffFallDamage);
 		if (Health > 0)
@@ -1075,8 +1076,14 @@ public partial class Player : Pawn
 			&& Game.OverlapsRoomCollision(new RectInt(box.Right - 1, groundY, 1, 1));
 	}
 
+	bool IsSafeGroundedRespawn()
+		=> Health > 0 && grounded && State != States.Burrow && OverlapsFirst(Point2.Down, Masks.Solid) is not MovingPlatform;
+
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
 	{
+		if (IsSafeGroundedRespawn())
+			Game.NoteSafeGroundedRespawn(Position);
+
 		ClampPositionToRoomOrTransitionRooms();
 
 		if (State == States.Burrow)

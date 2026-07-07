@@ -1,6 +1,7 @@
 {
   "position": [400, 46],
   "size": [40, 23],
+  "musicArea": "Intense",
   "backdropColor": "400000",
   "ambientColor": "8D8A8A",
   "reverb": 0.871,
