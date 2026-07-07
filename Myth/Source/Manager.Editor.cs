@@ -5182,29 +5182,28 @@ public partial class Manager
 
 		var viewport = !playing && !startingPlay ? View : GameViewRect;
 		var perf = PerfStats.Snapshot;
-#if DEBUG
-		var gcMs = gcTotalPauseDuration.TotalMilliseconds;
-		string gcPauseDurationStr;
-		if (gcMs > 1000)
-		{
-			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalSeconds:0}s";
-		}
-		else
-		{
-			gcPauseDurationStr = $"{gcTotalPauseDuration.TotalMilliseconds:0}ms";
-		}
 
-		var vsb = new ValueStringBuilder(stackalloc char[1024]);
+		var vsb = new ValueStringBuilder(stackalloc char[2048]);
 		vsb.Append("FPS ");
 		if (fpsOverlayMode == 0) {
 			vsb.Append((int)MathF.Round(fpsOverlayValue));
-			#if DEBUG
+#if DEBUG
+			var gcMs = gcTotalPauseDuration.TotalMilliseconds;
+
 			vsb.Append(" GC ");
 			vsb.Append(threadAllocatedBytesOverlayValue);
 			vsb.Append(" bytes (");
-			vsb.Append(gcPauseDurationStr);
+			if (gcMs > 1000)
+			{
+				vsb.Append((int)Math.Round(gcTotalPauseDuration.TotalSeconds));
+				vsb.Append("s");
+			}
+			else {
+				vsb.Append((int)Math.Round(gcTotalPauseDuration.TotalMilliseconds));
+				vsb.Append("ms");
+			}
 			vsb.Append(")");
-			#endif
+#endif
 		} else {
 			vsb.Append($"FPS {fpsOverlayValue:0}\n" +
 			  $"Upd {perf.Update:0.0}  Rnd {perf.Render:0.0}  Prs {perf.Present:0.0}\n" +
@@ -5212,7 +5211,6 @@ public partial class Manager
 			  $"Nrm {perf.Normal:0.0}  T+D {perf.TileDither:0.0}  Pst {perf.Post:0.0}");
 		}
 
-#endif
 		var detailMessage = fpsOverlayMode >= 2 ? PerfStats.DetailSummary : string.Empty;
 		var mainTextSize = ImGui.CalcTextSize(vsb.AsSpan());
 		var detailTextSize = string.IsNullOrEmpty(detailMessage) ? Vector2.Zero : ImGui.CalcTextSize(detailMessage) * 0.8f;

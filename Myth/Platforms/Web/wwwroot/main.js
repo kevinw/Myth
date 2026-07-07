@@ -14,13 +14,6 @@ globalThis.FosterBrowserFmod = FosterBrowserFmod;
 // On-screen touch controller (web analog of the iOS GCVirtualController).
 VirtualGamepad.initialize();
 
-function isMythCleanExitStatus(error) {
-  return (
-    error?.name === "ExitStatus" &&
-    (error.status === 0 || error.message?.includes("exit(0)"))
-  );
-}
-
 // Keep the canvas backing buffer's aspect matched to the CSS shell box (see index.html):
 // 4:3 in portrait so the game cover-crops its 16:9 frame to reclaim vertical space, 16:9 in
 // landscape, and correct at every size in between (so the frame is never squished). The
@@ -117,7 +110,10 @@ try {
   try {
     await runMain("Myth", []);
   } catch (error) {
-    if (!isMythCleanExitStatus(error)) throw error;
+    const cleanExit =
+      error?.name === "ExitStatus" &&
+      (error.status === 0 || error.message?.includes("exit(0)"));
+    if (!cleanExit) throw error;
   }
 } catch (error) {
   console.error("Myth browser startup failed", error);
