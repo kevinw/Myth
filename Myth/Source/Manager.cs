@@ -1110,9 +1110,9 @@ public partial class Manager : App
 		return Path.Join(dir, $"{name}_{index}{ext}");
 	}
 
-	Target CaptureScreenshot(Game game) {
-		var w = Game.Width;
-		var h = Game.Height;
+	Target CaptureScreenshot(Game game, int width = -1, int height = -1) {
+		var w = width < 0 ? Game.Width : width;
+		var h = height < 0 ? Game.Height : height;
 
 		// Composite the current gameplay view into a fresh target (Game.Screen
 		// is internal scratch); applyCrt is skipped for a clean pixel image.

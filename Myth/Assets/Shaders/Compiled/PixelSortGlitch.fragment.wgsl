@@ -106,13 +106,13 @@ fn fragment_main_1() {
             let _e295 = _e120.xyz;
             phi_342_ = dot(_e295, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
             phi_345_ = _e295;
-            phi_347_ = -18i;
+            phi_347_ = -9i;
             loop {
                 let _e298 = phi_342_;
                 let _e300 = phi_345_;
                 let _e302 = phi_347_;
                 local = _e300;
-                if (_e302 <= 18i) {
+                if (_e302 <= 9i) {
                     let _e304 = f32(_e302);
                     phi_359_ = true;
                     if !((abs(_e304) > floor(mix(2f, 18f, clamp((_e250 * mix(0.75f, 1.35f, fract((sin(dot(floor(vec2<f32>(floor((_e146.y * 0.33333334f)), (_e150 + floor((_e146.x * 0.025f))))), vec2<f32>(127.1f, 311.7f))) * 43758.547f)))), 0f, 1f))))) {

@@ -302,13 +302,15 @@ public partial class Manager
 	Target? previewTarget = null;
 
 	void InitializePreviewGameForRendering(Room room) {
+		if (Window == null) return;
+
 		previewGame = new(this, start: room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
 		previewGame.Simulating = true;
 		Input.Clear();
 		previewGame.Update(new Controls(Input));
 		previewGame?.ditherGlitch = 0.9f;
 		previewGame?.ditherGlitchAxis = new(1f, 0);
-		previewTarget = CaptureScreenshot(previewGame!);
+		previewTarget = CaptureScreenshot(previewGame!, Window.Width, Window.Height);
 	}
 
 

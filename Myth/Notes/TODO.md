@@ -1,5 +1,8 @@
 # TODO
 
+pre-friend build
+- save spot warp
+
 - more big rooms
 - separate "editingRoomId" and "playRoomId" and put them in editor.json and save.json
 - study silksong map
@@ -7,8 +10,6 @@
 - an enemy who gets knocked around when you hit it, their air friction decreases and then comes back
 - remove "fullscreen" menu from browser
 
-pre-friend build
-- save spot warp
 
 - have local notarize-publish process upload to cloudflare storage under a date-git-hash folder
 - after roll under a 1-tile tall tunnel, you stand stuck in the wall
