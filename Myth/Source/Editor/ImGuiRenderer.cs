@@ -201,6 +201,9 @@ fn vertex_main(
 		{
 			io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard | ImGuiConfigFlags.NavEnableGamepad;
 			io.BackendFlags |= ImGuiBackendFlags.HasGamepad;
+			// Keep the nav selection cursor always drawn: this is a controller-first menu,
+			// so there should never be a "focused but not highlighted" state.
+			io.ConfigNavCursorVisibleAlways = true;
 		}
 
 		// load ImGui Font

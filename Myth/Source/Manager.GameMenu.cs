@@ -14,32 +14,24 @@ public partial class Manager
 		Options
 	}
 
-	enum GameMenuCommand
-	{
-		Resume,
-		Start,
-		Map,
-		Restart,
-		ConfirmRestart,
-		Options,
-		Music,
-		Fullscreen,
-		Back,
-		Editor,
-		Title,
-		Quit
-	}
-
 	Game? previewGame;
 
 	GameMenuPage gameMenuPage;
 	GameMenuPage gameMenuReturnPage;
-	int gameMenuSelection;
 	bool confirmRestart = false;
 
-	// When true, the next ImGui menu build forces keyboard/gamepad nav focus onto
-	// gameMenuSelection (set when a page is shown so focus lands sensibly).
+	// Set when a page is shown; makes the next build reset the focused-slot tracker so
+	// the auto-focus of the first item doesn't fire the move cue. (The focus itself is
+	// handled by SetItemDefaultFocus on each page's freshly-appearing window.)
 	bool menuFocusDirty;
+
+	// Per-build button bookkeeping: index of the button currently being emitted, the
+	// total emitted last build (drives the title/hint layout), the slot ImGui reports
+	// focused (for the move cue), and whether a button fired this build.
+	int menuButtonIndex;
+	int menuItemCount;
+	int menuFocusedIndex = -1;
+	bool menuActivated;
 
 	// Whether BuildGameMenu produced draw data this frame; gates menuImgui.Render()
 	// so a just-closed menu doesn't get re-flushed from stale draw data.
@@ -57,7 +49,6 @@ public partial class Manager
 	{
 		gameMenuPage = GameMenuPage.Title;
 		gameMenuReturnPage = GameMenuPage.Title;
-		gameMenuSelection = 0;
 		menuFocusDirty = true;
 		playOnStartup = false;
 		playing = false;
@@ -70,7 +61,6 @@ public partial class Manager
 		MenuAudioEvent("menu/show");
 		gameMenuPage = GameMenuPage.Pause;
 		gameMenuReturnPage = GameMenuPage.Pause;
-		gameMenuSelection = 0;
 		menuFocusDirty = true;
 		confirmRestart = false;
 	}
@@ -84,15 +74,20 @@ public partial class Manager
 		previewTarget = null;
 
 		gameMenuPage = GameMenuPage.Closed;
-		gameMenuSelection = 0;
 		confirmRestart = false;
+	}
+
+	void ShowGameMenuPage(GameMenuPage page)
+	{
+		gameMenuPage = page;
+		menuFocusDirty = true;
 	}
 
 	void MenuAudioEvent(string path) => Audio.CreateEvent($"event:/{path}")?.Start();
 
 	// Input-phase handling that is NOT navigation: opening the pause menu, and the
-	// back/close gesture. Movement and activation are owned by ImGui nav (see
-	// BuildGameMenu), so they are intentionally absent here.
+	// back/close gesture. Movement and activation are owned by ImGui nav (see the
+	// per-page methods below), so they are intentionally absent here.
 	void UpdateGameMenuInput()
 	{
 		if (!GameMenuOpen)
@@ -117,145 +112,152 @@ public partial class Manager
 
 	bool ControllerPressed(Buttons button) => Input.AnyControllerButtonPressed(button);
 
-	void ShowGameMenuPage(GameMenuPage page)
+	// ---------------------------------------------------------------------------
+	// Menus, immediate-mode: each page is just a list of buttons. Adding, removing,
+	// reordering, or platform-gating an item is a one-line edit right here.
+	// ---------------------------------------------------------------------------
+
+	void TitleMenu()
 	{
-		gameMenuPage = page;
-		gameMenuSelection = Math.Clamp(gameMenuSelection, 0, GameMenuItemCount(page) - 1);
-		menuFocusDirty = true;
+		if (MenuButton(hasStartedGame ? "continue" : "start", "menu/show"))
+			StartFromMenu();
+		if (MenuButton("options"))
+			OpenOptionsPage();
+#if !BROWSER
+		if (MenuButton("quit", "menu/back"))
+			Exit();
+#endif
 	}
 
-	static int GameMenuItemCount(GameMenuPage page)
-		=> page switch
+	void PauseMenu()
+	{
+		if (MenuButton("resume", "menu/show"))
+			CloseGameMenu();
+		if (MenuButton("map"))
+			OpenMapFromMenu();
+		if (MenuButton("options"))
+			OpenOptionsPage();
+#if EDITOR
+		if (MenuButton("editor", "menu/back"))
 		{
-			GameMenuPage.Title => TitleMenuItemCount,
-			GameMenuPage.Pause => PauseMenuItemCount,
-			GameMenuPage.Options => OptionsMenuItemCount,
-			_ => 0
-		};
+			CloseGameMenu();
+			StopGame();
+		}
+#elif BROWSER
+		if (MenuButton("title", "menu/back"))
+			ReturnToTitleFromMenu();
+#else
+		if (MenuButton("quit", "menu/back"))
+			Exit();
+#endif
+	}
+
+	void OptionsMenu()
+	{
+		if (MenuButton(musicEnabled ? "music on" : "music off"))
+			MusicEnabled = !MusicEnabled;
+#if !IOS && !BROWSER
+		if (MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
+			window.Fullscreen = !window.Fullscreen;
+#endif
+		if (MenuButton(confirmRestart ? "you sure?" : "erase game"))
+			EraseGameStep();
+		if (MenuButton("back", "menu/back"))
+			ShowGameMenuPage(gameMenuReturnPage);
+	}
+
+	void StartFromMenu()
+	{
+		CloseGameMenu();
+		StartGame(immediate: true);
+	}
+
+	void OpenOptionsPage()
+	{
+		gameMenuReturnPage = gameMenuPage;
+		ShowGameMenuPage(GameMenuPage.Options);
+	}
+
+	void OpenMapFromMenu()
+	{
+		if (game?.CurrentRoom is { } room)
+		{
+			game.Minimap.Open = true;
+			game.Minimap.Rebuild(room);
+		}
+		CloseGameMenu();
+	}
+
+	// "erase game" is a two-step confirm: the first press arms it (the label becomes
+	// "you sure?"), the second erases the save and restarts.
+	void EraseGameStep()
+	{
+		if (confirmRestart)
+		{
+			CloseGameMenu();
+			EraseSaveGame();
+			StartGame(immediate: true);
+		}
+		else
+		{
+			confirmRestart = true;
+		}
+	}
 
 #if BROWSER
-	const int TitleMenuItemCount = 2;
-#else
-	const int TitleMenuItemCount = 3;
-#endif
-
-#if EDITOR
-	const int PauseMenuItemCount = 5;
-#else
-	const int PauseMenuItemCount = 5;
-#endif
-
-#if IOS || BROWSER
-	const int OptionsMenuItemCount = 2;
-#else
-	const int OptionsMenuItemCount = 3;
-#endif
-
-	GameMenuCommand GameMenuCommandAt(GameMenuPage page, int index)
+	void ReturnToTitleFromMenu()
 	{
-		return page switch
-		{
-			GameMenuPage.Title => index switch
-			{
-				0 => GameMenuCommand.Start,
-				1 => GameMenuCommand.Options,
-				_ => GameMenuCommand.Quit
-			},
-			GameMenuPage.Pause => index switch
-			{
-				0 => GameMenuCommand.Resume,
-				1 => GameMenuCommand.Map,
-				2 => confirmRestart ? GameMenuCommand.ConfirmRestart : GameMenuCommand.Restart,
-				3 => GameMenuCommand.Options,
-#if EDITOR
-				_ => GameMenuCommand.Editor
-#elif BROWSER
-				_ => GameMenuCommand.Title
-#else
-				_ => GameMenuCommand.Quit
-#endif
-			},
-			GameMenuPage.Options => index switch
-			{
-				0 => GameMenuCommand.Music,
-				1 => GameMenuCommand.Fullscreen,
-				_ => GameMenuCommand.Back
-			},
-			_ => GameMenuCommand.Resume
-		};
+		game?.Dispose();
+		game = null;
+		ShowTitleMenu();
+		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 	}
+#endif
 
-	void ActivateGameMenuCommandWithAudio(GameMenuCommand command)
+	// Emits one menu button and returns true when it's activated (click or nav). Plays
+	// the move cue when nav focus lands on it, and `sound` when it fires.
+	bool MenuButton(string label, string sound = "menu/proceed")
 	{
-		if (command is GameMenuCommand.Resume or GameMenuCommand.Start)
-			MenuAudioEvent("menu/show");
-		else if (command is GameMenuCommand.Back or GameMenuCommand.Title or GameMenuCommand.Quit)
-			MenuAudioEvent("menu/back");
-		else
-			MenuAudioEvent("menu/proceed");
+		// Use ### so the id is the slot index only: a button whose label toggles
+		// ("music on"/"music off", "fullscreen"/"windowed") keeps a stable id and so
+		// keeps nav focus, letting you re-toggle it with repeated South presses.
+		var pressed = ImGui.Button($"{label}###{menuButtonIndex}", new Vector2(MenuButtonWidth, MenuButtonHeight));
 
-		ActivateGameMenuCommand(command);
-	}
+		// The first item is the default nav focus when a page's window appears (each
+		// page uses a distinct window id, so switching pages re-triggers this).
+		if (menuButtonIndex == 0)
+			ImGui.SetItemDefaultFocus();
 
-	void ActivateGameMenuCommand(GameMenuCommand command)
-	{
-		switch (command)
+		// Draw our own selection outline, tight around the button. ImGui's built-in nav
+		// cursor (suppressed via a transparent NavCursor color) expands the rect several
+		// pixels and spills into the next button's gap. The full-screen clip lets the
+		// 1px outset draw past the window edge on the first/last buttons (WindowPadding
+		// is 0, so those edges sit on the window bounds and would otherwise be clipped).
+		if (ImGui.IsItemFocused())
 		{
-			case GameMenuCommand.Resume:
-				CloseGameMenu();
-				break;
-			case GameMenuCommand.Start:
-				CloseGameMenu();
-				StartGame(immediate: true);
-				break;
-			case GameMenuCommand.Map:
-				if (game?.CurrentRoom is { } room)
-				{
-					game.Minimap.Open = true;
-					game.Minimap.Rebuild(room);
-				}
-				CloseGameMenu();
-				break;
-			case GameMenuCommand.Restart:
-				confirmRestart = true;
-				break;
-			case GameMenuCommand.ConfirmRestart:
-				CloseGameMenu();
-				EraseSaveGame();
-				StartGame(immediate: true);
-				break;
-			case GameMenuCommand.Options:
-				gameMenuReturnPage = gameMenuPage;
-				ShowGameMenuPage(GameMenuPage.Options);
-				break;
-			case GameMenuCommand.Music:
-				MusicEnabled = !MusicEnabled;
-				break;
-			case GameMenuCommand.Fullscreen:
-#if !IOS && !BROWSER
-				if (Window is { } window)
-					window.Fullscreen = !window.Fullscreen;
-#endif
-				break;
-			case GameMenuCommand.Back:
-				ShowGameMenuPage(gameMenuReturnPage);
-				break;
-			case GameMenuCommand.Editor:
-#if EDITOR
-				CloseGameMenu();
-				StopGame();
-#endif
-				break;
-			case GameMenuCommand.Title:
-				game?.Dispose();
-				game = null;
-				ShowTitleMenu();
-				VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
-				break;
-			case GameMenuCommand.Quit:
-				Exit();
-				break;
+			var min = ImGui.GetItemRectMin() - Vector2.One;
+			var max = ImGui.GetItemRectMax() + Vector2.One;
+			var draw = ImGui.GetWindowDrawList();
+			draw.PushClipRectFullScreen();
+			draw.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ImColor(0x5fcde4)), 0f, ImDrawFlags.None, 1f);
+			draw.PopClipRect();
 		}
+
+		if (ImGui.IsItemFocused() && menuFocusedIndex != menuButtonIndex)
+		{
+			if (menuFocusedIndex >= 0)
+				MenuAudioEvent("menu/select");
+			menuFocusedIndex = menuButtonIndex;
+		}
+
+		menuButtonIndex++;
+
+		if (pressed)
+		{
+			MenuAudioEvent(sound);
+			menuActivated = true;
+		}
+		return pressed;
 	}
 
 	Target? previewTarget = null;
@@ -273,10 +275,17 @@ public partial class Manager
 		previewTarget = CaptureScreenshot(pg, Window.Width, Window.Height);
 	}
 
-	// Layout phase (runs in Manager.Update, before the editor's ImGui layout).
-	// Builds the menu's ImGui window in menuImgui's own context. The window is
-	// scaled so 1 ImGui unit == 1 game pixel on screen, aligning the buttons with
-	// the batcher-drawn title (DrawGameMenu, game space via MenuMatrix).
+	const ImGuiWindowFlags MenuWindowFlags =
+		ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
+		ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
+		ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBackground |
+		ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoCollapse |
+		ImGuiWindowFlags.AlwaysAutoResize;
+
+	// Layout phase (runs in Manager.Update, before the editor's ImGui layout). Builds
+	// the menu's ImGui window in menuImgui's own context, scaled so 1 ImGui unit == 1
+	// game pixel on screen and centered so it aligns with the batcher-drawn title
+	// (DrawGameMenu, game space via MenuMatrix). The window auto-sizes to its buttons.
 	void BuildGameMenu()
 	{
 		menuLayoutBuiltThisFrame = false;
@@ -295,14 +304,47 @@ public partial class Manager
 		menuImgui.Scale = presentScale;
 		var origin = MenuPresentOffset / presentScale; // game-space (0,0) in ImGui coords
 
-		var itemCount = GameMenuItemCount(gameMenuPage);
-		var listStart = GameMenuListStart(itemCount);
-		var windowPos = origin + listStart;
-		var windowSize = new Vector2(MenuButtonWidth, itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap);
+		if (menuFocusDirty)
+			menuFocusedIndex = -1;
 
 		menuImgui.BeginLayout();
+		PushMenuStyle();
 
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+		// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
+		var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7);
+		ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+
+		menuButtonIndex = 0;
+		menuActivated = false;
+
+		// Distinct id per page so switching pages makes the window "appear", which is
+		// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
+		ImGui.Begin($"##gamemenu_{gameMenuPage}", MenuWindowFlags);
+		switch (gameMenuPage)
+		{
+			case GameMenuPage.Title: TitleMenu(); break;
+			case GameMenuPage.Pause: PauseMenu(); break;
+			case GameMenuPage.Options: OptionsMenu(); break;
+		}
+		ImGui.End();
+
+		menuItemCount = menuButtonIndex; // how many buttons the page emitted, for the title layout
+
+		PopMenuStyle();
+		menuFocusDirty = false;
+		menuImgui.EndLayout();
+
+		// A button that closed the menu (resume / start / quit) should not linger for a
+		// frame; keep flushing only while the menu is still open.
+		menuLayoutBuiltThisFrame = menuActivated ? GameMenuOpen : true;
+	}
+
+	void PushMenuStyle()
+	{
+		// A couple px of window padding so each button's frame border (and the focus
+		// outline) has room inside the window's clip rect instead of being cut off on
+		// the outer edges.
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, MenuButtonGap));
 		ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
 		ImGui.PushStyleColor(ImGuiCol.Button, ImColor(0x1b102e));
@@ -310,63 +352,18 @@ public partial class Manager
 		ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImColor(0x323c39));
 		ImGui.PushStyleColor(ImGuiCol.Border, ImColor(0x5b5274));
 		ImGui.PushStyleColor(ImGuiCol.Text, ImColor(0xc0cbdc));
-		ImGui.PushStyleColor(ImGuiCol.NavCursor, ImColor(0x5fcde4));
-
-		ImGui.SetNextWindowPos(windowPos);
-		ImGui.SetNextWindowSize(windowSize);
-
-		const ImGuiWindowFlags flags =
-			ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
-			ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
-			ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBackground |
-			ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoCollapse;
-
-		GameMenuCommand? activated = null;
-		ImGui.Begin("##gamemenu", flags);
-		for (var i = 0; i < itemCount; i++)
-		{
-			var command = GameMenuCommandAt(gameMenuPage, i);
-
-			if (menuFocusDirty && i == gameMenuSelection)
-				ImGui.SetKeyboardFocusHere();
-
-			if (ImGui.Button($"{GameMenuLabel(command)}##{i}", new Vector2(MenuButtonWidth, MenuButtonHeight)))
-			{
-				gameMenuSelection = i;
-				activated = command;
-			}
-
-			// Play the move cue when nav focus lands on a new item.
-			if (ImGui.IsItemFocused() && gameMenuSelection != i)
-			{
-				gameMenuSelection = i;
-				MenuAudioEvent("menu/select");
-			}
-		}
-		ImGui.End();
-
-		ImGui.PopStyleColor(6);
-		ImGui.PopStyleVar(3);
-
-		menuFocusDirty = false;
-		menuImgui.EndLayout();
-
-		// Activation may close the menu / start the game; do it after the ImGui
-		// frame is finished. Skip flushing this frame's draw data if it closed,
-		// so the menu doesn't linger for a frame.
-		if (activated is { } cmd)
-		{
-			ActivateGameMenuCommandWithAudio(cmd);
-			menuLayoutBuiltThisFrame = GameMenuOpen;
-		}
-		else
-		{
-			menuLayoutBuiltThisFrame = true;
-		}
+		// Suppress ImGui's built-in nav cursor; MenuButton draws a tighter one.
+		ImGui.PushStyleColor(ImGuiCol.NavCursor, new Vector4(0, 0, 0, 0));
 	}
 
-	// Render phase: the preview background, dark scrim, and animated title. The
-	// button list itself is ImGui (built in BuildGameMenu, flushed by menuImgui).
+	void PopMenuStyle()
+	{
+		ImGui.PopStyleColor(6);
+		ImGui.PopStyleVar(3);
+	}
+
+	// Render phase: the preview background, dark scrim, and animated title. The button
+	// list itself is ImGui (built in BuildGameMenu, flushed by menuImgui).
 	void DrawGameMenu()
 	{
 		if (!GameMenuOpen || Window == null)
@@ -382,7 +379,7 @@ public partial class Manager
 
 	void DrawGameMenuTitle()
 	{
-		var itemCount = GameMenuItemCount(gameMenuPage);
+		var itemCount = menuItemCount;
 		var panelHeight = 76f + itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap;
 		var panel = Rect.CenteredAt(MenuBounds.Center, new Vector2(MenuPanelWidth, panelHeight));
 
@@ -435,30 +432,6 @@ public partial class Manager
 	Matrix3x2 MenuMatrix
 		=> Matrix3x2.CreateScale(MenuPresentScale) * Matrix3x2.CreateTranslation(MenuPresentOffset);
 
-	Vector2 GameMenuListStart(int itemCount)
-	{
-		var totalHeight = itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap;
-		return new Vector2(MenuBounds.Center.X - MenuButtonWidth * 0.5f, MenuBounds.Center.Y - totalHeight * 0.5f + 7f);
-	}
-
-	string GameMenuLabel(GameMenuCommand command)
-		=> command switch
-		{
-			GameMenuCommand.Resume => "resume",
-			GameMenuCommand.Start => hasStartedGame ? "continue" : "start",
-			GameMenuCommand.Map => "map",
-			GameMenuCommand.Restart => "erase game",
-			GameMenuCommand.ConfirmRestart => "you sure?",
-			GameMenuCommand.Options => "options",
-			GameMenuCommand.Music => musicEnabled ? "music on" : "music off",
-			GameMenuCommand.Fullscreen => Window?.Fullscreen == true ? "windowed" : "fullscreen",
-			GameMenuCommand.Back => "back",
-			GameMenuCommand.Editor => "editor",
-			GameMenuCommand.Title => "title",
-			GameMenuCommand.Quit => "quit",
-			_ => ""
-		};
-
 	void DrawCenteredText(SpriteFont font, ReadOnlySpan<char> text, Vector2 center, float size, Color color, bool sine = false)
 	{
 		var position = new Vector2(
@@ -466,9 +439,8 @@ public partial class Manager
 			MathF.Round(center.Y - font.LineHeight * size / font.Size * 0.5f));
 		position.Y += 1.5f;
 		if (sine)
-			font.DrawSineWave(batcher, text, position, new(), size, color, 0, Time.SecondsF * 0.3f, new(0, Time.SecondsF * 0.15f));
+			font.DrawSineWave(batcher, text, position, new(), size, color, -0.5f, Time.SecondsF * 0.19f, new(0, Time.SecondsF * 0.01f));
 		else
 			batcher.Text(font, text, position, size, color);
 	}
-
 }
