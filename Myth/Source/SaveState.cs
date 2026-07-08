@@ -12,6 +12,12 @@ public sealed class SaveState
 	public Dictionary<PickupKind, int> Pickups = [];
 	public MinimapState Map = new();
 	public RespawnState? LastGrounded;
+	// Save points the player has activated (touched), by actor id, in activation order,
+	// and the id of the most recent one — where death returns the player. Positions are
+	// resolved from the live room spec at warp/respawn time (see Game.ResolveSavePoint),
+	// so moving a save point in the editor relocates old saves instead of orphaning them.
+	public List<string> SavePoints = [];
+	public string? LastSavePoint;
 	public SessionState Session = new();
 
 	public string ToJsonString()

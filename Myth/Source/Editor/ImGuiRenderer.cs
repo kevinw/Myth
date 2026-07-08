@@ -158,6 +158,8 @@ fn vertex_main(
 	private PosTexColVertex[] vertices = [];
 	private ushort[] indices = [];
 
+	private readonly bool gamepadNav;
+
 	/// <summary>
 	/// UI Scaling
 	/// </summary>
@@ -183,9 +185,10 @@ fn vertex_main(
 	/// </summary>
 	public bool WantsMouseInput { get; private set; }
 
-	public ImGuiRenderer(App app, string? customFontPath = null)
+	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false)
 	{
 		this.app = app;
+		this.gamepadNav = enableGamepadNav;
 
 		// create imgui context
 		context = ImGui.CreateContext(null);
@@ -194,6 +197,11 @@ fn vertex_main(
 		var io = ImGui.GetIO();
 		io.BackendFlags = ImGuiBackendFlags.None;
 		io.ConfigFlags = ImGuiConfigFlags.DockingEnable;
+		if (gamepadNav)
+		{
+			io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard | ImGuiConfigFlags.NavEnableGamepad;
+			io.BackendFlags |= ImGuiBackendFlags.HasGamepad;
+		}
 
 		// load ImGui Font
 		{
@@ -290,7 +298,51 @@ fn vertex_main(
 				io.AddInputCharacter(app.Input.Keyboard.Text[i]);
 		}
 
+		if (gamepadNav)
+			FeedGamepadNav(io);
+
 		ImGui.NewFrame();
+	}
+
+	// Drives ImGui's built-in gamepad navigation from any connected controller's
+	// d-pad / left stick / face buttons. Only used when the context opted in via
+	// enableGamepadNav; other contexts (e.g. the editor) are unaffected.
+	private void FeedGamepadNav(ImGuiIOPtr io)
+	{
+		const float stickDeadzone = 0.5f;
+
+		var up = false;
+		var down = false;
+		var left = false;
+		var right = false;
+		var activate = false;
+		var cancel = false;
+
+		foreach (var controller in app.Input.Controllers)
+		{
+			if (!controller.Connected)
+				continue;
+
+			up |= controller.Down(Buttons.Up);
+			down |= controller.Down(Buttons.Down);
+			left |= controller.Down(Buttons.Left);
+			right |= controller.Down(Buttons.Right);
+			activate |= controller.Down(Buttons.South);
+			cancel |= controller.Down(Buttons.East);
+
+			var stick = controller.LeftStick;
+			up |= stick.Y < -stickDeadzone;
+			down |= stick.Y > stickDeadzone;
+			left |= stick.X < -stickDeadzone;
+			right |= stick.X > stickDeadzone;
+		}
+
+		io.AddKeyEvent(ImGuiKey.GamepadDpadUp, up);
+		io.AddKeyEvent(ImGuiKey.GamepadDpadDown, down);
+		io.AddKeyEvent(ImGuiKey.GamepadDpadLeft, left);
+		io.AddKeyEvent(ImGuiKey.GamepadDpadRight, right);
+		io.AddKeyEvent(ImGuiKey.GamepadFaceDown, activate);
+		io.AddKeyEvent(ImGuiKey.GamepadFaceRight, cancel);
 	}
 
 	/// <summary>

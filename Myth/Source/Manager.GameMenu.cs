@@ -1,5 +1,6 @@
 using System.Numerics;
 using Foster.Framework;
+using ImGuiNET;
 
 namespace Myth;
 
@@ -34,8 +35,15 @@ public partial class Manager
 	GameMenuPage gameMenuPage;
 	GameMenuPage gameMenuReturnPage;
 	int gameMenuSelection;
-	float gameMenuInputRepeat;
 	bool confirmRestart = false;
+
+	// When true, the next ImGui menu build forces keyboard/gamepad nav focus onto
+	// gameMenuSelection (set when a page is shown so focus lands sensibly).
+	bool menuFocusDirty;
+
+	// Whether BuildGameMenu produced draw data this frame; gates menuImgui.Render()
+	// so a just-closed menu doesn't get re-flushed from stale draw data.
+	bool menuLayoutBuiltThisFrame;
 
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
@@ -50,6 +58,7 @@ public partial class Manager
 		gameMenuPage = GameMenuPage.Title;
 		gameMenuReturnPage = GameMenuPage.Title;
 		gameMenuSelection = 0;
+		menuFocusDirty = true;
 		playOnStartup = false;
 		playing = false;
 		startingPlay = false;
@@ -62,6 +71,7 @@ public partial class Manager
 		gameMenuPage = GameMenuPage.Pause;
 		gameMenuReturnPage = GameMenuPage.Pause;
 		gameMenuSelection = 0;
+		menuFocusDirty = true;
 		confirmRestart = false;
 	}
 
@@ -78,71 +88,31 @@ public partial class Manager
 		confirmRestart = false;
 	}
 
-		void MenuAudioEvent(string path) => Audio.CreateEvent($"event:/{path}")?.Start();
+	void MenuAudioEvent(string path) => Audio.CreateEvent($"event:/{path}")?.Start();
 
+	// Input-phase handling that is NOT navigation: opening the pause menu, and the
+	// back/close gesture. Movement and activation are owned by ImGui nav (see
+	// BuildGameMenu), so they are intentionally absent here.
 	void UpdateGameMenuInput()
 	{
-		if (!GameMenuOpen && playing && !startingPlay && game?.MinimapOpen != true && controls.Map.ConsumePress())
-		{
-			ShowPauseMenu();
-			return;
-		}
-
 		if (!GameMenuOpen)
-			return;
-
-		if (gameMenuInputRepeat > 0)
-			gameMenuInputRepeat = Calc.Approach(gameMenuInputRepeat, 0, Time.Delta);
-
-		var itemCount = GameMenuItemCount(gameMenuPage);
-		var move = GameMenuMove();
-		if (move != 0 && gameMenuInputRepeat <= 0)
 		{
-			MenuAudioEvent("menu/select");
-			gameMenuSelection = (gameMenuSelection + move + itemCount) % itemCount;
-			gameMenuInputRepeat = 0.14f;
+			if (playing && !startingPlay && game?.MinimapOpen != true && controls.Map.ConsumePress())
+				ShowPauseMenu();
+			return;
 		}
 
-		if (Input.Keyboard.Pressed(Keys.Escape) || ControllerPressed(Buttons.East))
+		// Escape / B back out a page; the pause (Start) button toggles the menu
+		// closed, mirroring how it opened it.
+		var pausePressed = controls.Map.ConsumePress();
+		if (Input.Keyboard.Pressed(Keys.Escape) || ControllerPressed(Buttons.East) || pausePressed)
 		{
 			MenuAudioEvent("menu/back");
 			if (gameMenuPage == GameMenuPage.Options)
 				ShowGameMenuPage(gameMenuReturnPage);
 			else if (gameMenuPage == GameMenuPage.Pause)
 				CloseGameMenu();
-			return;
 		}
-
-		GameMenuCommand? didActivate = null;
-		if (GameMenuMousePressed(out var clicked))
-		{
-			ActivateGameMenuCommand(clicked);
-			didActivate = clicked;
-		}
-		else if (Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter, Keys.Space) || ControllerPressed(Buttons.South) || controls.Map.ConsumePress())
-		{
-			var command = GameMenuCommandAt(gameMenuPage, gameMenuSelection);
-			ActivateGameMenuCommand(command);
-			didActivate = command;
-		}
-
-		if (didActivate != null) {
-			if (didActivate is GameMenuCommand.Resume or GameMenuCommand.Start)
-				MenuAudioEvent("menu/show");
-			else if (didActivate is GameMenuCommand.Back or GameMenuCommand.Title or GameMenuCommand.Quit)
-				MenuAudioEvent("menu/back");
-			else
-				MenuAudioEvent("menu/proceed");
-		}
-	}
-
-	int GameMenuMove()
-	{
-		if (Input.Keyboard.Pressed(Keys.Up, Keys.W) || ControllerPressed(Buttons.Up)) return -1;
-		if (Input.Keyboard.Pressed(Keys.Down, Keys.S) || ControllerPressed(Buttons.Down)) return 1;
-
-		var y = controls.Move.IntValue.Y;
-		return y < 0 ? -1 : y > 0 ? 1 : 0;
 	}
 
 	bool ControllerPressed(Buttons button) => Input.AnyControllerButtonPressed(button);
@@ -151,6 +121,7 @@ public partial class Manager
 	{
 		gameMenuPage = page;
 		gameMenuSelection = Math.Clamp(gameMenuSelection, 0, GameMenuItemCount(page) - 1);
+		menuFocusDirty = true;
 	}
 
 	static int GameMenuItemCount(GameMenuPage page)
@@ -214,6 +185,18 @@ public partial class Manager
 		};
 	}
 
+	void ActivateGameMenuCommandWithAudio(GameMenuCommand command)
+	{
+		if (command is GameMenuCommand.Resume or GameMenuCommand.Start)
+			MenuAudioEvent("menu/show");
+		else if (command is GameMenuCommand.Back or GameMenuCommand.Title or GameMenuCommand.Quit)
+			MenuAudioEvent("menu/back");
+		else
+			MenuAudioEvent("menu/proceed");
+
+		ActivateGameMenuCommand(command);
+	}
+
 	void ActivateGameMenuCommand(GameMenuCommand command)
 	{
 		switch (command)
@@ -234,7 +217,6 @@ public partial class Manager
 				CloseGameMenu();
 				break;
 			case GameMenuCommand.Restart:
-				Console.WriteLine("confirmRestart = true");
 				confirmRestart = true;
 				break;
 			case GameMenuCommand.ConfirmRestart:
@@ -276,64 +258,154 @@ public partial class Manager
 		}
 	}
 
-	bool GameMenuMousePressed(out GameMenuCommand command)
-	{
-		command = default;
-		if (!Input.Mouse.LeftPressed)
-			return false;
-
-		var itemCount = GameMenuItemCount(gameMenuPage);
-		var start = GameMenuListStart(itemCount);
-		var cursor = MenuCursor;
-		for (var i = 0; i < itemCount; i++)
-		{
-			var rect = GameMenuButtonRect(start, i);
-			if (!rect.Contains(cursor))
-				continue;
-
-			gameMenuSelection = i;
-			command = GameMenuCommandAt(gameMenuPage, i);
-			return true;
-		}
-
-		return false;
-	}
-
 	Target? previewTarget = null;
 
-	void InitializePreviewGameForRendering(Room room) {
+	void InitializePreviewGameForRendering(Room room)
+	{
 		if (Window == null) return;
 
-		previewGame = new(this, start: room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
-		previewGame.Simulating = true;
+		var pg = previewGame = new(this, start: room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
+		pg.Simulating = true;
 		Input.Clear();
-		previewGame.Update(new Controls(Input));
-		previewGame?.ditherGlitch = 0.9f;
-		previewGame?.ditherGlitchAxis = new(1f, 0);
-		previewTarget = CaptureScreenshot(previewGame!, Window.Width, Window.Height);
+		pg.Update(new Controls(Input));
+		pg.ditherGlitch = 0.9f;
+		pg.ditherGlitchAxis = new(1f, 0);
+		previewTarget = CaptureScreenshot(pg, Window.Width, Window.Height);
 	}
 
+	// Layout phase (runs in Manager.Update, before the editor's ImGui layout).
+	// Builds the menu's ImGui window in menuImgui's own context. The window is
+	// scaled so 1 ImGui unit == 1 game pixel on screen, aligning the buttons with
+	// the batcher-drawn title (DrawGameMenu, game space via MenuMatrix).
+	void BuildGameMenu()
+	{
+		menuLayoutBuiltThisFrame = false;
 
+		if (!GameMenuOpen || Window == null)
+			return;
+
+		// Render the room preview once (drawn behind the menu in DrawGameMenu).
+		if (game == null && CurrentRoom is { } previewRoom && previewGame == null)
+			InitializePreviewGameForRendering(previewRoom);
+
+		var presentScale = MenuPresentScale;
+		if (presentScale <= 0)
+			return;
+
+		menuImgui.Scale = presentScale;
+		var origin = MenuPresentOffset / presentScale; // game-space (0,0) in ImGui coords
+
+		var itemCount = GameMenuItemCount(gameMenuPage);
+		var listStart = GameMenuListStart(itemCount);
+		var windowPos = origin + listStart;
+		var windowSize = new Vector2(MenuButtonWidth, itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap);
+
+		menuImgui.BeginLayout();
+
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, MenuButtonGap));
+		ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
+		ImGui.PushStyleColor(ImGuiCol.Button, ImColor(0x1b102e));
+		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImColor(0x323c39));
+		ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImColor(0x323c39));
+		ImGui.PushStyleColor(ImGuiCol.Border, ImColor(0x5b5274));
+		ImGui.PushStyleColor(ImGuiCol.Text, ImColor(0xc0cbdc));
+		ImGui.PushStyleColor(ImGuiCol.NavCursor, ImColor(0x5fcde4));
+
+		ImGui.SetNextWindowPos(windowPos);
+		ImGui.SetNextWindowSize(windowSize);
+
+		const ImGuiWindowFlags flags =
+			ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove |
+			ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
+			ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBackground |
+			ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoCollapse;
+
+		GameMenuCommand? activated = null;
+		ImGui.Begin("##gamemenu", flags);
+		for (var i = 0; i < itemCount; i++)
+		{
+			var command = GameMenuCommandAt(gameMenuPage, i);
+
+			if (menuFocusDirty && i == gameMenuSelection)
+				ImGui.SetKeyboardFocusHere();
+
+			if (ImGui.Button($"{GameMenuLabel(command)}##{i}", new Vector2(MenuButtonWidth, MenuButtonHeight)))
+			{
+				gameMenuSelection = i;
+				activated = command;
+			}
+
+			// Play the move cue when nav focus lands on a new item.
+			if (ImGui.IsItemFocused() && gameMenuSelection != i)
+			{
+				gameMenuSelection = i;
+				MenuAudioEvent("menu/select");
+			}
+		}
+		ImGui.End();
+
+		ImGui.PopStyleColor(6);
+		ImGui.PopStyleVar(3);
+
+		menuFocusDirty = false;
+		menuImgui.EndLayout();
+
+		// Activation may close the menu / start the game; do it after the ImGui
+		// frame is finished. Skip flushing this frame's draw data if it closed,
+		// so the menu doesn't linger for a frame.
+		if (activated is { } cmd)
+		{
+			ActivateGameMenuCommandWithAudio(cmd);
+			menuLayoutBuiltThisFrame = GameMenuOpen;
+		}
+		else
+		{
+			menuLayoutBuiltThisFrame = true;
+		}
+	}
+
+	// Render phase: the preview background, dark scrim, and animated title. The
+	// button list itself is ImGui (built in BuildGameMenu, flushed by menuImgui).
 	void DrawGameMenu()
 	{
 		if (!GameMenuOpen || Window == null)
 			return;
 
-		if (game == null && CurrentRoom is { } room)
-		{
-			// use a temporary game to render the room preview behind
-			if (previewGame == null)
-				InitializePreviewGameForRendering(room);
-		}
-
 		batcher.PushMatrix(MenuMatrix);
 		if (previewTarget != null)
 			batcher.Image(previewTarget, Vector2.Zero, Color.White);
-		var bgColor = Color.FromHexStringRGBA("0x160b1888");
-		batcher.Rect(MenuBounds, bgColor);
-		DrawGameMenuPanel();
+		batcher.Rect(MenuBounds, Color.FromHexStringRGBA("0x160b1888"));
+		DrawGameMenuTitle();
 		batcher.PopMatrix();
 	}
+
+	void DrawGameMenuTitle()
+	{
+		var itemCount = GameMenuItemCount(gameMenuPage);
+		var panelHeight = 76f + itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap;
+		var panel = Rect.CenteredAt(MenuBounds.Center, new Vector2(MenuPanelWidth, panelHeight));
+
+		var font = Assets.Font;
+		if (font == null) return;
+
+		var title = gameMenuPage switch
+		{
+			GameMenuPage.Title => "mycelon",
+			GameMenuPage.Options => "options",
+			_ => "paused"
+		};
+
+		var pos = new Vector2(panel.Center.X, panel.Top + 25);
+		DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: true);
+		DrawCenteredText(font, title, pos, 18, 0xfee761, sine: true);
+
+		var hint = gameMenuPage == GameMenuPage.Title ? "ENTER / START / A" : "ESC / B";
+		DrawCenteredText(font, hint, new Vector2(panel.Center.X, panel.Bottom - 17), 8, 0x8b81b5);
+	}
+
+	static Vector4 ImColor(uint rgb, float a = 1f)
+		=> new(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, a);
 
 	static Rect MenuBounds => new(0, 0, Game.Width, Game.Height);
 
@@ -363,84 +435,10 @@ public partial class Manager
 	Matrix3x2 MenuMatrix
 		=> Matrix3x2.CreateScale(MenuPresentScale) * Matrix3x2.CreateTranslation(MenuPresentOffset);
 
-	Vector2 MenuCursor
-		=> (Input.Mouse.Position - MenuPresentOffset) / MenuPresentScale;
-
-	void DrawGameMenuPanel()
-	{
-		var itemCount = GameMenuItemCount(gameMenuPage);
-		var panelHeight = 76f + itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap;
-		var panel = Rect.CenteredAt(MenuBounds.Center, new Vector2(MenuPanelWidth, panelHeight));
-
-		//batcher.Rect(panel, Color.Black * 0.78f);
-		//batcher.RectLine(panel, 2, Color.Lerp(0x8b81b5, Color.Coral, Time.SineWave(0, 1, 10f)));
-
-		var font = Assets.Font;
-		if (font == null) return;
-
-		var title = gameMenuPage switch
-		{
-			GameMenuPage.Title => "mycelon",
-			GameMenuPage.Options => "options",
-			_ => "paused"
-		};
-
-
-		// menu title
-		{
-			var pos = new Vector2(panel.Center.X, panel.Top + 25);
-			DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: true);
-			DrawCenteredText(font, title, pos, 18, 0xfee761, sine: true);
-		}
-
-		var start = GameMenuListStart(itemCount);
-		for (var i = 0; i < itemCount; i++)
-		{
-			var command = GameMenuCommandAt(gameMenuPage, i);
-			DrawGameMenuButton(font, command, GameMenuButtonRect(start, i), i == gameMenuSelection, arrowIsBack: command == GameMenuCommand.Back || command == GameMenuCommand.Editor || command == GameMenuCommand.Title || command == GameMenuCommand.Quit);
-		}
-
-		var hint = gameMenuPage == GameMenuPage.Title ? "ENTER / START / A" : "ESC / B";
-
-		{
-			var pos = new Vector2(panel.Center.X, panel.Bottom - 17);
-			DrawCenteredText(font, hint, pos, 8, 0x8b81b5);
-		}
-	}
-
 	Vector2 GameMenuListStart(int itemCount)
 	{
 		var totalHeight = itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap;
 		return new Vector2(MenuBounds.Center.X - MenuButtonWidth * 0.5f, MenuBounds.Center.Y - totalHeight * 0.5f + 7f);
-	}
-
-	static Rect GameMenuButtonRect(Vector2 start, int index)
-		=> new(start.X, start.Y + index * (MenuButtonHeight + MenuButtonGap), MenuButtonWidth, MenuButtonHeight);
-
-	void DrawGameMenuButton(SpriteFont font, GameMenuCommand command, Rect rect, bool selected, bool arrowIsBack = false)
-	{
-		var hovered = rect.Contains(MenuCursor);
-		var active = selected || hovered;
-		var activeLineColor = Color.Lerp(0x5fcde4, Color.AntiqueWhite, Time.SineWave(0, 1, 0.3f));
-		batcher.Rect(rect, active ? 0x323c39 : 0x1b102e);
-		batcher.RectLine(rect, 1, active ? activeLineColor : 0x5b5274);
-		if (active) {
-
-			if (arrowIsBack)
-			{
-				var pos1 = rect.Left + 7;
-				var pos2 = rect.Left + 12;
-				batcher.Triangle(new Vector2(pos1, rect.Center.Y), new Vector2(pos2, rect.Center.Y - 4), new Vector2(pos2, rect.Center.Y + 4), 0x5fcde4);
-			}
-			else
-			{
-				var pos1 = rect.Right - 7;
-				var pos2 = rect.Right - 12;
-				batcher.Triangle(new Vector2(pos1, rect.Center.Y), new Vector2(pos2, rect.Center.Y - 4), new Vector2(pos2, rect.Center.Y + 4), 0x5fcde4);
-			}
-		}
-
-		DrawCenteredText(font, GameMenuLabel(command), rect.Center + new Vector2(4, 0), 8, active ? Color.White : 0xc0cbdc);
 	}
 
 	string GameMenuLabel(GameMenuCommand command)
@@ -472,4 +470,5 @@ public partial class Manager
 		else
 			batcher.Text(font, text, position, size, color);
 	}
+
 }

@@ -20,6 +20,73 @@ public class Minimap
 	public Vector2 Pan;
 	public readonly List<MapRoom> Rooms = [];
 	public Action? Changed;
+
+	// A warp destination resolved for the current warp session: the save point's actor
+	// id plus its live world-pixel position (used to draw the marker and warp there).
+	public readonly record struct WarpTarget(string ActorId, string RoomId, Point2 Position);
+
+	// Warp mode: opened from a save point, shows every activated save point as a
+	// selectable, blinking target to travel between. See Game.OpenSavePointWarp.
+	public bool WarpMode;
+	public int WarpSelection;
+	public readonly List<WarpTarget> WarpPoints = [];
+
+	// World-pixel point the warp map is centering on; lerps toward the selected target
+	// so changing selection glides the map over (see GameView.DrawMinimap).
+	public Vector2 WarpFocus;
+
+	public WarpTarget? SelectedWarp
+		=> WarpMode && WarpSelection >= 0 && WarpSelection < WarpPoints.Count ? WarpPoints[WarpSelection] : null;
+
+	public void BeginWarp(IEnumerable<WarpTarget> targets, string? currentActorId)
+	{
+		WarpPoints.Clear();
+		WarpPoints.AddRange(targets);
+		WarpSelection = Math.Max(0, WarpPoints.FindIndex(t => t.ActorId == currentActorId));
+		WarpMode = true;
+		Open = true;
+		WarpFocus = WarpPoints.Count > 0 ? (Vector2)WarpPoints[WarpSelection].Position : Vector2.Zero;
+	}
+
+	public void CloseWarp()
+	{
+		WarpMode = false;
+		Open = false;
+	}
+
+	// Moves the warp selection to the nearest other save point in the pressed
+	// direction (screen/world space). Returns true if the selection changed.
+	public bool MoveWarpSelection(Point2 dir)
+	{
+		if (WarpPoints.Count == 0 || (dir.X == 0 && dir.Y == 0))
+			return false;
+
+		var from = (Vector2)WarpPoints[WarpSelection].Position;
+		var d = new Vector2(dir.X, dir.Y);
+		var best = -1;
+		var bestScore = float.MaxValue;
+		for (var i = 0; i < WarpPoints.Count; i++)
+		{
+			if (i == WarpSelection)
+				continue;
+			var delta = (Vector2)WarpPoints[i].Position - from;
+			var along = Vector2.Dot(delta, d);
+			if (along <= 0)
+				continue; // only points that lie in the pressed direction
+			var perp = (delta - along * d).Length();
+			var score = along + perp * 2f; // prefer aligned and close
+			if (score < bestScore)
+			{
+				bestScore = score;
+				best = i;
+			}
+		}
+		if (best < 0)
+			return false;
+
+		WarpSelection = best;
+		return true;
+	}
 	readonly HashSet<string> visitedRoomIds = [];
 	readonly HashSet<(string, string)> takenExits = [];
 	readonly HashSet<string> revealedDoorIds = [];
@@ -284,6 +351,7 @@ public sealed partial class GameView
 	static float MinimapDim => 0.8f;          // how dark the game dims behind the map
 	static float MinimapRevealSpeed => 3.5f;  // full open (zoom, then centering) over ~0.3s
 	static float MinimapZoomPhase => 0.6f;    // reveal fraction spent zooming before the center lerp starts
+	static float WarpFocusLerpSpeed => 9f;    // how fast the map glides to a newly selected warp target
 	static Color MinimapRoomFill => new(0x241a3e);
 	static Color MinimapWall => new(0x8b81b5);
 
@@ -312,6 +380,14 @@ public sealed partial class GameView
 		var s = MathF.Max(1f, MathF.Exp(Calc.Lerp(MathF.Log(TileSize), MathF.Log(MinimapTileScale), zoomEase)));
 		var focusScreen = Vector2.Lerp(focusWorld - RenderCamera, new Vector2(Width, Height) / 2, centerEase);
 		var origin = focusScreen - focus * s + game.Minimap.Pan;
+
+		// In warp mode, glide the map so the selected save point sits at screen center.
+		if (game.Minimap.WarpMode && game.Minimap.SelectedWarp is { } sel)
+		{
+			game.Minimap.WarpFocus = Vector2.Lerp(game.Minimap.WarpFocus, (Vector2)sel.Position, 1f - MathF.Exp(-Time.Delta * WarpFocusLerpSpeed));
+			origin += (focusWorld - game.Minimap.WarpFocus) / TileSize * s;
+		}
+
 		if (minimapReveal >= 1)
 			origin = origin.FloorToPoint2();
 
@@ -346,6 +422,24 @@ public sealed partial class GameView
 					: new Rect(p.X + s, p.Y, 1, exit.Length * s);
 				Batcher.Rect(rect, pulse);
 			}
+
+		// Warp mode: every activated save point blinks; the selected one is steady and
+		// ringed. Dpad moves the selection, X/South warps there (see UpdateWarpModeInput).
+		if (game.Minimap.WarpMode)
+		{
+			var warpBlink = 0.5f + 0.5f * MathF.Sin(Time.SecondsF * 6f);
+			for (var i = 0; i < game.Minimap.WarpPoints.Count; i++)
+			{
+				var wp = game.Minimap.WarpPoints[i];
+				var p = origin + (Vector2)wp.Position / TileSize * s;
+				var selected = i == game.Minimap.WarpSelection;
+				var half = (selected ? 5f : 3f) / 2f;
+				var alpha = selected ? 1f : 0.35f + 0.5f * warpBlink;
+				Batcher.Rect(new Rect(p.X - half, p.Y - half, half * 2, half * 2), new Color(0xd23c3c) * (alpha * ease));
+				if (selected)
+					Batcher.RectLine(new Rect(p.X - half - 1, p.Y - half - 1, half * 2 + 2, half * 2 + 2), 1, Color.White * ease);
+			}
+		}
 
 		// You-are-here: the player's sprite shrinking with the zoom (full size over the real
 		// player at reveal 0), blinking once the map is at rest.

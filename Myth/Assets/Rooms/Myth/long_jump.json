@@ -88,6 +88,16 @@
       "Id": "885a0ba804dd8fc3",
       "Type": "Light",
       "Position": [292, 124]
+    },
+    {
+      "Id": "d9c88435dfb351ec",
+      "Type": "Jumpthru",
+      "Position": [192, 168]
+    },
+    {
+      "Id": "073d6ce30ffe7462",
+      "Type": "Jumpthru",
+      "Position": [192, 144]
     }
   ]
 }

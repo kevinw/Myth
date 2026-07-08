@@ -480,19 +480,46 @@ public partial class Game : IDisposable
 		if (nextRoom == null && !Simulating)
 			Minimap.NoteCameraView(room, VisibleCameraTileBounds());
 
-		// Escape / gamepad Start toggles the map overlay; the sim pauses underneath while it's up.
-		if (nextRoom == null && Controls.Map.ConsumePress())
+		if (Minimap.Open && Minimap.WarpMode)
 		{
-			Minimap.Open = !Minimap.Open;
+			UpdateWarpModeInput();
+		}
+		else
+		{
+			// Escape / gamepad Start / gamepad Back (Select) toggles the map overlay; the
+			// sim pauses underneath while it's up. Back is checked directly rather than
+			// bound to Controls.Map so it doesn't also open the pause menu.
+			if (nextRoom == null && (Controls.Map.ConsumePress() || Manager.Input.AnyControllerButtonPressed(Buttons.Back)))
+			{
+				Minimap.Open = !Minimap.Open;
+				Minimap.WarpMode = false;
+				PlayAudioEvent(Minimap.Open ? "map/open" : "map/close");
+				if (Minimap.Open)
+				{
+					Minimap.ResetView();
+					Minimap.Rebuild(room);
+				}
+			}
+
+			// While the map is up, any face button (N/S/E/W) also dismisses it.
 			if (Minimap.Open)
 			{
-				Minimap.ResetView();
-				Minimap.Rebuild(room);
+				var input = Manager.Input;
+				if (input.AnyControllerButtonPressed(Buttons.North) ||
+					input.AnyControllerButtonPressed(Buttons.South) ||
+					input.AnyControllerButtonPressed(Buttons.East) ||
+					input.AnyControllerButtonPressed(Buttons.West))
+				{
+					Minimap.Open = false;
+					PlayAudioEvent("map/close");
+				}
 			}
 		}
+
 		if (Minimap.Open)
 		{
-			Minimap.UpdateView(Controls.Move.Value, Time.Delta);
+			if (!Minimap.WarpMode)
+				Minimap.UpdateView(Controls.Move.Value, Time.Delta);
 			UpdateAudioListener();
 #if BROWSER
 			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
@@ -878,7 +905,11 @@ public partial class Game : IDisposable
 		if (restartMusic)
 			StopMusic(true);
 
-		if (GetFirst<Player>() is { } player && Save.LastGrounded is { } respawn && RespawnPlayerAt(player, respawn, reloadRoom: true))
+		// On death, return to the last activated save point; fall back to the last safe
+		// grounded spot for the early game (or if that save point no longer exists).
+		var target = (Save.LastSavePoint is { } lastId ? ResolveSavePoint(lastId) : null) ?? Save.LastGrounded;
+
+		if (GetFirst<Player>() is { } player && target is { } respawn && RespawnPlayerAt(player, respawn, reloadRoom: true))
 		{
 			player.Health = Player.MaxHealth;
 			player.State = Player.States.Normal;
@@ -890,6 +921,105 @@ public partial class Game : IDisposable
 		}
 
 		ReloadRoom(restartMusic);
+	}
+
+	// Resolves an activated save point's actor id to a concrete respawn location by
+	// reading its current position from the live room spec. Returns null if the save
+	// point no longer exists (deleted from the level), so callers skip it.
+	public RespawnState? ResolveSavePoint(string actorId)
+	{
+		if (Assets.FindActorById(actorId) is not { } found)
+			return null;
+
+		var local = ActorSpecs.ReadPoint(ActorSpecs.Resolve(found.Actor), "Position") ?? Point2.Zero;
+		return new RespawnState(found.Room.Id, found.Room.WorldBounds.TopLeft + local);
+	}
+
+	// Records the given save point as a warp/respawn destination (idempotent) and makes
+	// it the one death returns to. Called when the player touches it.
+	public void ActivateSavePoint(SavePoint savePoint)
+	{
+		if (savePoint.ActorId is not { } id || string.IsNullOrWhiteSpace(id))
+			return;
+
+		if (!Save.SavePoints.Contains(id))
+			Save.SavePoints.Add(id);
+		Save.LastSavePoint = id;
+		MarkSaveDirty(captureMap: false);
+	}
+
+	// Opens the map in warp mode, showing every activated save point (resolved to its
+	// live position) and starting the selection on the one the player is standing at.
+	public void OpenSavePointWarp(SavePoint savePoint)
+	{
+		if (room == null)
+			return;
+
+		var targets = new List<Minimap.WarpTarget>();
+		foreach (var id in Save.SavePoints)
+			if (ResolveSavePoint(id) is { } r)
+				targets.Add(new(id, r.RoomId, r.Position));
+
+		if (targets.Count == 0)
+			return;
+
+		Minimap.BeginWarp(targets, savePoint.ActorId);
+		Minimap.ResetView();
+		Minimap.Rebuild(room);
+		PlayAudioEvent("map/open");
+	}
+
+	// Travels to a chosen save point (from warp mode) and closes the map.
+	public void WarpToSavePoint(Minimap.WarpTarget target)
+	{
+		Minimap.CloseWarp();
+
+		if (GetFirst<Player>() is not { } player)
+			return;
+
+		var sameRoom = room != null && room.Id == target.RoomId;
+		if (RespawnPlayerAt(player, new RespawnState(target.RoomId, target.Position), reloadRoom: !sameRoom))
+		{
+			player.State = Player.States.Normal;
+			player.Stop();
+			EnsureBudForPlayer(repositionExisting: true);
+		}
+	}
+
+	// Warp-mode map controls: dpad picks a save point, South/X confirms the warp,
+	// East/Circle (or Escape) cancels.
+	void UpdateWarpModeInput()
+	{
+		var input = Manager.Input;
+
+		var moved = false;
+		if (input.AnyControllerButtonPressed(Buttons.Up) || input.Keyboard.Pressed(Keys.Up, Keys.W))
+			moved = Minimap.MoveWarpSelection(Point2.Up);
+		else if (input.AnyControllerButtonPressed(Buttons.Down) || input.Keyboard.Pressed(Keys.Down, Keys.S))
+			moved = Minimap.MoveWarpSelection(Point2.Down);
+		else if (input.AnyControllerButtonPressed(Buttons.Left) || input.Keyboard.Pressed(Keys.Left, Keys.A))
+			moved = Minimap.MoveWarpSelection(Point2.Left);
+		else if (input.AnyControllerButtonPressed(Buttons.Right) || input.Keyboard.Pressed(Keys.Right, Keys.D))
+			moved = Minimap.MoveWarpSelection(Point2.Right);
+
+		if (moved)
+			PlayAudioEvent("map/warp_move");
+
+		if (input.AnyControllerButtonPressed(Buttons.South) || input.Keyboard.Pressed(Keys.Enter, Keys.Space))
+		{
+			if (Minimap.SelectedWarp is { } selected)
+			{
+				PlayAudioEvent("map/warp_confirm");
+				WarpToSavePoint(selected);
+			}
+			return;
+		}
+
+		if (input.AnyControllerButtonPressed(Buttons.East) || input.Keyboard.Pressed(Keys.Escape))
+		{
+			PlayAudioEvent("map/close");
+			Minimap.CloseWarp();
+		}
 	}
 
 	bool RespawnPlayerAt(Player player, RespawnState respawn, bool reloadRoom)

@@ -14,6 +14,11 @@ public partial class Manager : App
 {
 	readonly ImGuiRenderer imgui = null!;
 
+	// Dedicated ImGui context for the game menu. Unlike `imgui` (editor/browser
+	// only) this exists in every build and owns its own Scale, so the menu can lay
+	// out in game-pixel units regardless of the editor's UI scale. See Manager.GameMenu.cs.
+	readonly ImGuiRenderer menuImgui = null!;
+
 	public const string DefaultMusicArea = "Silence";
 	public const string BackgroundMusicAreaParameter = "Area";
 	public const string RoomReverbParameter = "RoomReverb";
@@ -228,6 +233,7 @@ public partial class Manager : App
 
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
+		menuImgui = new(this, enableGamepadNav: true);
 #if EDITOR
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
 #elif BROWSER
@@ -399,6 +405,7 @@ public partial class Manager : App
 #endif
 		game?.Dispose();
 		navTrace?.Dispose();
+		menuImgui?.Dispose();
 #if EDITOR
 		ClearRoomPreviewCache(deferDisposal: false);
 		DisposeDeferredRoomPreviews();
@@ -862,6 +869,10 @@ public partial class Manager : App
 
 		UpdateSaveStateAutosave();
 
+		// Build the game-menu ImGui layout in its own context before the editor's,
+		// so the two never nest (BeginLayout asserts no context is current).
+		BuildGameMenu();
+
 		imgui?.BeginLayout();
 
 #if EDITOR
@@ -1068,8 +1079,12 @@ public partial class Manager : App
 			RenderPlayTransition();
 		else if (playing)
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
-		else
+		else {
+			#if !EDITOR
+			// we render an in progress game
 			game?.Render((RectInt)(GameViewRect * Scale), showHud: false);
+			#endif
+		}
 		DrawGameMenu();
 
 		batcher.Render(Window);
@@ -1078,6 +1093,8 @@ public partial class Manager : App
 		if (screenshotPath != null && playing)
 			UpdateScreenshotCapture();
 		imgui?.Render();
+		if (menuLayoutBuiltThisFrame)
+			menuImgui.Render();
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after

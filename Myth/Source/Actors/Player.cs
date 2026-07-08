@@ -1650,7 +1650,7 @@ public partial class Player : Pawn
 		if (!BurrowHidesSprite)
 		{
 			base.RenderEmissive(batcher);
-			RenderHat(batcher, hatSprite?.Frames[0].Subtexture ?? default, Color.White);
+			// RenderHat(batcher, hatSprite?.Frames[0].Subtexture ?? default, Color.White);
 		}
 		RenderBurrowLine(batcher);
 	}
