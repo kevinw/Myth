@@ -387,8 +387,8 @@ public partial class Manager
 		// menu title
 		{
 			var pos = new Vector2(panel.Center.X, panel.Top + 25);
-			DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f));
-			DrawCenteredText(font, title, pos, 18, 0xfee761);
+			DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: true);
+			DrawCenteredText(font, title, pos, 18, 0xfee761, sine: true);
 		}
 
 		var start = GameMenuListStart(itemCount);
@@ -459,12 +459,15 @@ public partial class Manager
 			_ => ""
 		};
 
-	void DrawCenteredText(SpriteFont font, ReadOnlySpan<char> text, Vector2 center, float size, Color color)
+	void DrawCenteredText(SpriteFont font, ReadOnlySpan<char> text, Vector2 center, float size, Color color, bool sine = false)
 	{
 		var position = new Vector2(
 			MathF.Round(center.X - font.WidthOf(text, size) * 0.5f),
 			MathF.Round(center.Y - font.LineHeight * size / font.Size * 0.5f));
 		position.Y += 1.5f;
-		batcher.Text(font, text, position, size, color);
+		if (sine)
+			font.DrawSineWave(batcher, text, position, new(), size, color, 0, Time.SecondsF * 0.3f, new(0, Time.SecondsF * 0.15f));
+		else
+			batcher.Text(font, text, position, size, color);
 	}
 }
