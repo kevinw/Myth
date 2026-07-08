@@ -1110,6 +1110,20 @@ public partial class Manager : App
 		return Path.Join(dir, $"{name}_{index}{ext}");
 	}
 
+	Target CaptureScreenshot(Game game) {
+		var w = Game.Width;
+		var h = Game.Height;
+
+		// Composite the current gameplay view into a fresh target (Game.Screen
+		// is internal scratch); applyCrt is skipped for a clean pixel image.
+		// Caller owns the returned target and must dispose it.
+		var target = new Target(GraphicsDevice, w, h, "ScreenshotCapture");
+		var worldView = new Rect(game.Camera, new Vector2(w, h));
+		game.RenderWorldToTarget(target, worldView, showHud: false);
+
+		return target;
+	}
+
 	void CaptureScreenshot(string path)
 	{
 		if (game == null)
@@ -1122,9 +1136,7 @@ public partial class Manager : App
 
 			// Composite the current gameplay view into a fresh target (Game.Screen
 			// is internal scratch); applyCrt is skipped for a clean pixel image.
-			using var target = new Target(GraphicsDevice, w, h, "ScreenshotCapture");
-			var worldView = new Rect(game.Camera, new Vector2(w, h));
-			game.RenderWorldToTarget(target, worldView, showHud: false);
+			using var target = CaptureScreenshot(game);
 
 			var pixels = new Color[w * h];
 			target.Attachments[0].GetData<Color>(pixels);

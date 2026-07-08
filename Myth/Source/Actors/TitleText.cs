@@ -24,6 +24,7 @@ public class TitleText : Actor
 
 	public override void Render(Batcher batcher)
 	{
+		if (Game.Simulating) return;
 		if (Assets.Font == null || string.IsNullOrEmpty(Text)) return;
 		var text = Text;
 		var length = (int)stateDuration;

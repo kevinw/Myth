@@ -143,7 +143,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float3 best_color = original.rgb;
 
     [unroll]
-    for (int i = -18; i <= 18; i++)
+    for (int i = -9; i <= 9; i++)
     {
         float fi = float(i);
         if (abs(fi) > span || i == 0)

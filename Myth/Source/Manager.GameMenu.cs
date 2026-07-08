@@ -70,6 +70,9 @@ public partial class Manager
 		previewGame?.Dispose();
 		previewGame = null;
 
+		previewTarget?.Dispose();
+		previewTarget = null;
+
 		gameMenuPage = GameMenuPage.Closed;
 		gameMenuSelection = 0;
 		confirmRestart = false;
@@ -296,27 +299,34 @@ public partial class Manager
 		return false;
 	}
 
+	Target? previewTarget = null;
+
+	void InitializePreviewGameForRendering(Room room) {
+		previewGame = new(this, start: room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
+		previewGame.Simulating = true;
+		Input.Clear();
+		previewGame.Update(new Controls(Input));
+		previewGame?.ditherGlitch = 0.9f;
+		previewGame?.ditherGlitchAxis = new(1f, 0);
+		previewTarget = CaptureScreenshot(previewGame!);
+	}
+
+
 	void DrawGameMenu()
 	{
 		if (!GameMenuOpen || Window == null)
 			return;
 
-		if (game == null) {
-			if (CurrentRoom is { } room) {
-				// use a temporary game to render the room preview behind
-				if (previewGame == null) {
-					previewGame = new Game(this, room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
-					previewGame.Simulating = true;
-					Input.Clear();
-					previewGame.Update(new Controls(Input));
-				}
-
-				previewGame?.Render((RectInt)(GameViewRect * Scale), showHud: false);
-			}
+		if (game == null && CurrentRoom is { } room)
+		{
+			// use a temporary game to render the room preview behind
+			if (previewGame == null)
+				InitializePreviewGameForRendering(room);
 		}
 
-
 		batcher.PushMatrix(MenuMatrix);
+		if (previewTarget != null)
+			batcher.Image(previewTarget, Vector2.Zero, Color.White);
 		var bgColor = Color.FromHexStringRGBA("0x160b1888");
 		batcher.Rect(MenuBounds, bgColor);
 		DrawGameMenuPanel();

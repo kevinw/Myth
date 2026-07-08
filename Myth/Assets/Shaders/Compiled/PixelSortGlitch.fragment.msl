@@ -98,8 +98,8 @@ fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], const
         float _344;
         float3 _347;
         float _343 = _341;
-        int _348 = -18;
-        for (; _348 <= 18; _343 = _344, _346 = _347, _348++)
+        int _348 = -9;
+        for (; _348 <= 9; _343 = _344, _346 = _347, _348++)
         {
             float _353 = float(_348);
             bool _360;
