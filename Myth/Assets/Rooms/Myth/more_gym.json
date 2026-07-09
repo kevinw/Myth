@@ -4,6 +4,9 @@
   "backdropColor2": "756A89",
   "ambientColor": "FFFFFF",
   "lightNoise": 0,
+  "legend": {
+    "T": "stone"
+  },
   "tiles": [
     "00000000000T0000000TT0000000000000000000",
     "00000000000T0000000TT0000000000000000000",

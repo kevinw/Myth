@@ -375,25 +375,23 @@ public class Actor
 	/// What a "Hit" is, is up to the Actors
 	public bool Hit(Actor actor)
 	{
-		if (actor.hitCooldown <= 0)
-		{
-			actor.hitCooldown = actor.IFrameTime;
-			if (actor.Mask == Masks.Enemy)
-			{
-				if (this is Player)
-				{
-					Game.NotifyEnemyHitByPlayer(actor);
-					var hitSoundType = actor.HitSoundType;
-					if (!string.IsNullOrEmpty(hitSoundType))
-						AudioEvent("player/sword_hit", "hit_destination", hitSoundType);
-				}
-			}
-			actor.OnWasHit(this);
-			OnPerformHit(actor);
-			return true;
-		}
+		if (actor.hitCooldown > 0)
+			return false;
 
-		return false;
+		actor.hitCooldown = actor.IFrameTime;
+		if (actor.Mask == Masks.Enemy)
+		{
+			if (this is Player)
+			{
+				Game.NotifyEnemyHitByPlayer(actor);
+				var hitSoundType = actor.HitSoundType;
+				if (!string.IsNullOrEmpty(hitSoundType))
+					AudioEvent("player/sword_hit", "hit_destination", hitSoundType);
+			}
+		}
+		actor.OnWasHit(this);
+		OnPerformHit(actor);
+		return true;
 	}
 
 	/// Called when the Actor is added to the Game
@@ -521,6 +519,8 @@ public class Actor
 
 	protected void RenderSpriteSubtexture(Batcher batcher, Color color) =>
 		RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+
+	protected Sprite.Frame CurrentSpriteFrame => sprite.GetFrameAt(Animation, animationTime, animationLooping);
 
 	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
 	{

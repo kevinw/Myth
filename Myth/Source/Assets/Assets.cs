@@ -450,15 +450,14 @@ public static class Assets
 
 		string? lightingNoise = null;
 		var noisePath = Path.Join(SourcesPath, "Textures", "noise_tess2_seamless.ase");
-		if (File.Exists(noisePath))
+		if (!File.Exists(noisePath))
+			throw new SystemException("expected file to exist: " + noisePath);
+		var ase = new Aseprite(noisePath);
+		if (ase.Frames.Length > 0)
 		{
-			var ase = new Aseprite(noisePath);
-			if (ase.Frames.Length > 0)
-			{
-				using var image = ase.RenderFrame(0);
-				image.WriteQoi(Path.Join(directory, lightingNoiseFile));
-				lightingNoise = lightingNoiseFile;
-			}
+			using var image = ase.RenderFrame(0);
+			image.WriteQoi(Path.Join(directory, lightingNoiseFile));
+			lightingNoise = lightingNoiseFile;
 		}
 
 		var manifestPath = Path.Join(directory, packedVisualsManifestName);
@@ -1444,9 +1443,7 @@ public static class Assets
 	}
 
 	static List<Aseprite.Layer> GetVariantLayers(Aseprite ase, HashSet<Aseprite.Layer> nonDebugLayers)
-		=> ase.Layers
-			.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)
-			.ToList();
+		=> [.. ase.Layers.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)];
 
 	static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
@@ -1678,7 +1675,7 @@ public static class Assets
 						poses.Add(LerpSocket(source[from.Value.To], source[to.Value.From], (i + 1f) / (transition.FrameCount + 1f)));
 				}
 
-			result[socketName] = poses.ToArray();
+			result[socketName] = [.. poses];
 		}
 		return result;
 	}
@@ -2039,7 +2036,7 @@ public static class Assets
 			result[tile.X * 4 + tile.Y] = GenerateMaskOccluderSegments(mask, source);
 		}
 
-		return result.ToList();
+		return [.. result];
 	}
 
 	static Tileset.OccluderSegment[] GenerateMaskOccluderSegments(Image mask, RectInt source)
@@ -2058,7 +2055,7 @@ public static class Assets
 			MergeVerticalMaskEdges(segments, mask, source, x, left: false);
 		}
 
-		return segments.ToArray();
+		return [.. segments];
 	}
 
 	static void MergeHorizontalMaskEdges(List<Tileset.OccluderSegment> segments, Image mask, RectInt source, int y, bool top)

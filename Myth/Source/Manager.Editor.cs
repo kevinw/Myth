@@ -219,6 +219,17 @@ public partial class Manager
 #endif
 	}
 
+#if EDITOR
+	void EnteringEditor() {
+		// it was annoying that session destroyed enemies would stay disappeared while editing. but maybe this logic is better on loading the room?
+		game?.Show("EnteringEditor");
+		game?.Save.Session.DestroyedActors.Clear();
+		MarkSaveDirty();
+		FlushSaveState();
+	}
+#endif
+
+
 	void MarkParticleEffectDirty(string name)
 	{
 		particleAutosaveName = name;

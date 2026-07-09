@@ -4,6 +4,9 @@
   "ambientColor": "FFFFFF",
   "lightNoise": 0,
   "reverb": 0.389,
+  "legend": {
+    "T": "stone"
+  },
   "tiles": [
     "TTTTTTTTTTTTTTTTTTTTTTTTT000000000000000",
     "T00TTT00T000TTT00000000TT000000000000000",

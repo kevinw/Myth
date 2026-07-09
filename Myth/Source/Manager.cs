@@ -1828,6 +1828,9 @@ public partial class Manager : App
 			SelectRoom(room);
 		}
 		MatchEditorCameraToGame();
+		#if EDITOR
+		EnteringEditor();
+		#endif
 		game?.Dispose();
 		game = null;
 		startingPlay = false;
