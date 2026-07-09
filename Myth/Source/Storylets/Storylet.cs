@@ -51,9 +51,9 @@ public sealed class Storylet
 
 public sealed class StoryDeck
 {
-	private readonly Dictionary<string, Storylet> storylets = [];
-	private readonly Random random = new();
-	private int currentPlay;
+	readonly Dictionary<string, Storylet> storylets = [];
+	readonly Random random = new();
+	int currentPlay;
 
 	public Dictionary<string, object?> Context { get; } = [];
 	public IEnumerable<Storylet> Storylets => storylets.Values;
@@ -126,7 +126,7 @@ public sealed class StoryDeck
 			Context[key] = StoryExpression.Eval(value, Context);
 	}
 
-	private void Shuffle<T>(List<T> list)
+	void Shuffle<T>(List<T> list)
 	{
 		for (var i = list.Count - 1; i > 0; i--)
 		{

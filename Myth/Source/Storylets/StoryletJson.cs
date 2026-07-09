@@ -22,7 +22,7 @@ public static class StoryletJson
 		return deck;
 	}
 
-	private static void ReadPacket(StoryDeck deck, JsonObject packet, Dictionary<string, JsonNode?> defaults)
+	static void ReadPacket(StoryDeck deck, JsonObject packet, Dictionary<string, JsonNode?> defaults)
 	{
 		if (packet["context"] is JsonObject context)
 		{
@@ -54,7 +54,7 @@ public static class StoryletJson
 		}
 	}
 
-	private static Storylet ReadStorylet(JsonObject json, Dictionary<string, JsonNode?> defaults)
+	static Storylet ReadStorylet(JsonObject json, Dictionary<string, JsonNode?> defaults)
 	{
 		var merged = new Dictionary<string, JsonNode?>(defaults);
 		foreach (var (key, value) in json)
@@ -77,7 +77,7 @@ public static class StoryletJson
 		return storylet;
 	}
 
-	private static int ReadRedraw(JsonNode? node)
+	static int ReadRedraw(JsonNode? node)
 	{
 		var value = ReadValue(node);
 		if (value is string text)
@@ -90,7 +90,7 @@ public static class StoryletJson
 		return Convert.ToInt32(value);
 	}
 
-	private static Dictionary<string, Dictionary<string, object?>> ReadOutcomes(JsonObject json)
+	static Dictionary<string, Dictionary<string, object?>> ReadOutcomes(JsonObject json)
 	{
 		var outcomes = new Dictionary<string, Dictionary<string, object?>>();
 		foreach (var (key, value) in json)
@@ -99,7 +99,7 @@ public static class StoryletJson
 		return outcomes;
 	}
 
-	private static Dictionary<string, object?> ReadObject(JsonObject json)
+	static Dictionary<string, object?> ReadObject(JsonObject json)
 	{
 		var result = new Dictionary<string, object?>();
 		foreach (var (key, value) in json)
@@ -107,10 +107,10 @@ public static class StoryletJson
 		return result;
 	}
 
-	private static string? ReadString(Dictionary<string, JsonNode?> values, string key)
+	static string? ReadString(Dictionary<string, JsonNode?> values, string key)
 		=> values.TryGetValue(key, out var value) ? ReadValue(value)?.ToString() : null;
 
-	private static object? ReadValue(JsonNode? node)
+	static object? ReadValue(JsonNode? node)
 	{
 		if (node == null)
 			return null;

@@ -9,9 +9,9 @@ namespace Myth;
 public class RingBuffer<T>
 {
     // all buffer properties
-    private T?[] _buffer;
-    private int _itemStart;
-    private int _itemLength;
+    T?[] _buffer;
+    int _itemStart;
+    int _itemLength;
     /// <summary>
     /// Gets the object at the specified index.
     /// </summary>

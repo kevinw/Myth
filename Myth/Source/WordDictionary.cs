@@ -2,10 +2,10 @@ namespace Myth;
 
 internal static class WordDictionary
 {
-	private const string SysDictionaryName = "/usr/share/dict/words";
-	private static readonly bool HasSystemDictionary = File.Exists(SysDictionaryName);
-	private static readonly Random dictRng = new();
-	private static int DictionaryWordCount = -1;
+	const string SysDictionaryName = "/usr/share/dict/words";
+	static readonly bool HasSystemDictionary = File.Exists(SysDictionaryName);
+	static readonly Random dictRng = new();
+	static int DictionaryWordCount = -1;
 
 	internal static string? GetRandomWord()
 	{

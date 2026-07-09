@@ -27,7 +27,7 @@ public static class StoryExpression
 		return count;
 	}
 
-	private static bool IsTruthy(object? value)
+	static bool IsTruthy(object? value)
 		=> value switch
 		{
 			bool b => b,
@@ -37,11 +37,11 @@ public static class StoryExpression
 			_ => value != null
 		};
 
-	private sealed class Parser
+	sealed class Parser
 	{
-		private readonly List<Token> tokens;
-		private readonly Dictionary<string, object?> context;
-		private int index;
+		readonly List<Token> tokens;
+		readonly Dictionary<string, object?> context;
+		int index;
 
 		public Parser(string text, Dictionary<string, object?> context)
 		{
@@ -52,7 +52,7 @@ public static class StoryExpression
 		public object Parse()
 			=> ParseOr();
 
-		private object ParseOr()
+		object ParseOr()
 		{
 			var left = ParseAnd();
 			while (Match("or") || Match("||"))
@@ -60,7 +60,7 @@ public static class StoryExpression
 			return left;
 		}
 
-		private object ParseAnd()
+		object ParseAnd()
 		{
 			var left = ParseCompare();
 			while (Match("and") || Match("&&"))
@@ -68,7 +68,7 @@ public static class StoryExpression
 			return left;
 		}
 
-		private object ParseCompare()
+		object ParseCompare()
 		{
 			var left = ParseUnary();
 			if (Match("=="))
@@ -86,14 +86,14 @@ public static class StoryExpression
 			return left;
 		}
 
-		private object ParseUnary()
+		object ParseUnary()
 		{
 			if (Match("not") || Match("!"))
 				return !IsTruthy(ParseUnary());
 			return ParseValue();
 		}
 
-		private object ParseValue()
+		object ParseValue()
 		{
 			if (Match("("))
 			{
@@ -117,7 +117,7 @@ public static class StoryExpression
 			return context.TryGetValue(token.Text, out var value) ? value ?? false : false;
 		}
 
-		private bool Match(string text)
+		bool Match(string text)
 		{
 			if (index >= tokens.Count || !string.Equals(tokens[index].Text, text, StringComparison.OrdinalIgnoreCase))
 				return false;
@@ -125,14 +125,14 @@ public static class StoryExpression
 			return true;
 		}
 
-		private static bool EqualsNormalized(object? left, object? right)
+		static bool EqualsNormalized(object? left, object? right)
 		{
 			if (left is double or int || right is double or int)
 				return Math.Abs(ToDouble(left) - ToDouble(right)) < 0.0001;
 			return string.Equals(Convert.ToString(left, CultureInfo.InvariantCulture), Convert.ToString(right, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
 		}
 
-		private static double ToDouble(object? value)
+		static double ToDouble(object? value)
 			=> value switch
 			{
 				int i => i,
@@ -143,7 +143,7 @@ public static class StoryExpression
 				_ => 0
 			};
 
-		private static List<Token> Tokenize(string text)
+		static List<Token> Tokenize(string text)
 		{
 			var result = new List<Token>();
 			for (var i = 0; i < text.Length;)
@@ -198,7 +198,7 @@ public static class StoryExpression
 		}
 	}
 
-	private enum TokenKind
+	enum TokenKind
 	{
 		Identifier,
 		Number,
@@ -206,5 +206,5 @@ public static class StoryExpression
 		Symbol
 	}
 
-	private readonly record struct Token(TokenKind Kind, string Text);
+	readonly record struct Token(TokenKind Kind, string Text);
 }
