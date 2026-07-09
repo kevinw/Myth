@@ -33,7 +33,7 @@ public class Drone : Actor
 	static float TiltApproach => 6f;
 	static float BladeSpinSpeed => 34f;
 
-	static float BodyRadius => 6f;
+	static float BodyRadius => 7f;
 
 	// Idle bob: a gentle vertical sine while the drone is otherwise at rest. Applied as a real
 	// position offset (delta-Move) so the hitbox and muzzle bob with it; amplitude fades out as

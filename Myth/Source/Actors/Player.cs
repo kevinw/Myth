@@ -1549,7 +1549,7 @@ public partial class Player : Pawn
 	public override void OnWasHit(Actor by)
 	{
 		int healthDelta = -by.DamageValue;
-		if (!Game.GodMode)
+		if (!Game.Manager.GodMode)
 			ApplyHurt(healthDelta, fromActor: by);
 	}
 

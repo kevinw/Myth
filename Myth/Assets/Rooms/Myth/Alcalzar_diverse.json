@@ -2,6 +2,11 @@
   "position": [120, 115],
   "size": [40, 23],
   "reverb": 0.565,
+  "legend": {
+    "#": "back",
+    "1": "castle",
+    "G": "grass"
+  },
   "tiles": [
     "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGG11GGGGGGGGGGGGGG",

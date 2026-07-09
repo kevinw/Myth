@@ -216,6 +216,11 @@
       "Type": "ParticleEmitter",
       "Position": [244, 44],
       "EffectName": "snow"
+    },
+    {
+      "Id": "768f5f5ffd45efed",
+      "Type": "Drone",
+      "Position": [220, 440]
     }
   ]
 }

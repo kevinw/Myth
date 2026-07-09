@@ -126,11 +126,10 @@ public partial class Game
 		DisplayMessage($"Debug: Graphics Inspector {(ShowRenderTargetOverlay ? "On" : "Off")}");
 	}
 
-	internal bool GodMode = false;
 
 	internal void ToggleGodMode() {
-		GodMode = !GodMode;
-		DisplayMessage($"God Mode {(GodMode ? "On" : "Off")}");
+		Manager.GodMode = !Manager.GodMode;
+		DisplayMessage($"God Mode {(Manager.GodMode ? "On" : "Off")}");
 	}
 
 	// Dump a `radius`-cell solid/air map around `center` (world pixel coords) for diagnosing
