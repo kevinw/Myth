@@ -49,7 +49,6 @@ public class Actor
 
 	public Time Time => Game.Time;
 
-	[NoSerialize]
 	public Sprite? Sprite
 	{
 		get => sprite;

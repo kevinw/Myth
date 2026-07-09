@@ -70,6 +70,11 @@
       "Id": "5be46e7e344570ef",
       "Type": "ShieldKnight",
       "Position": [356, 144]
+    },
+    {
+      "Id": "0d0f20c3faffd0a3",
+      "Type": "Drone",
+      "Position": [212, 96]
     }
   ]
 }

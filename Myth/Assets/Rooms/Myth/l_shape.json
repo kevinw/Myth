@@ -270,6 +270,11 @@
       "Type": "ShieldKnight",
       "Position": [500, 336],
       "Facing": "-"
+    },
+    {
+      "Id": "165f5e749fe288df",
+      "Type": "Drone",
+      "Position": [556, 256]
     }
   ]
 }

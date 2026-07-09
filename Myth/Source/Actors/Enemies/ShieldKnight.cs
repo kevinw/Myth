@@ -6,17 +6,8 @@ namespace Myth;
 [GameActor(Tags = ActorTag.Enemy)]
 public class ShieldKnight : Actor
 {
-	enum States { Patrol, Hop, Stab, TurnAround }
-
-	IEnumerator<float>? RoutineForState(States state) {
-		return state switch {
-			States.Patrol => PatrolRoutine(),
-			States.Hop => HopRoutine(),
-			States.Stab => StabRoutine(),
-			States.TurnAround => TurnAroundRoutine(),
-			_ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
-		};
-	}
+	bool wasGrounded = true;
+	bool grounded = true;
 
 	public ShieldKnight() {
 		Mask = Masks.Enemy;
@@ -27,13 +18,14 @@ public class ShieldKnight : Actor
 	{
 		Hitbox = Hitbox.FromSprite(Sprite);
 		Play("idle");
-		SetState(States.Patrol);
+		SetState(PatrolRoutine());
 	}
 
-	void SetState(States nextState) {
-		state = nextState;
+	// A state is just its running routine. Transition by handing SetState a fresh one;
+	// the routine's own body is the state's per-frame behavior.
+	void SetState(IEnumerator<float> next) {
 		routineWait = 0;
-		routine = RoutineForState(state);
+		routine = next;
 	}
 
 	static RectInt ShieldHitbox => new(4, -18, 2, 18);
@@ -42,7 +34,6 @@ public class ShieldKnight : Actor
 	static float Friction => 480.T();
 
 	Rng rng = new();
-	States state = States.Patrol;
 	double lastBlockTime = 0;
 	int health = 2;
 	float turnTimer = 2.0f;
@@ -53,7 +44,7 @@ public class ShieldKnight : Actor
 
 	bool CheckForTurnAround() {
 		if (Facing != Math.Sign(toPlayer.X)) return false;
-		SetState(States.TurnAround);
+		SetState(TurnAroundRoutine());
 		return true;
 	}
 
@@ -66,15 +57,36 @@ public class ShieldKnight : Actor
 			if (CheckForTurnAround()) yield break;
 			if (stateTimer > 0.5f && MathF.Abs(toPlayer.X) < 30f)
 			{
-				if (rng.Chance(0.5))
+				SetState(rng.Chance(0.5) ? HopRoutine() : StabRoutine());
+				yield break;
+			}
+
+			var anim = "idle";
+			if (turnTimer > 0)
+			{
+				turnTimer -= Time.Delta;
+				if (turnTimer < 0)
 				{
-					SetState(States.Hop);
-				}
-				else
-				{
-					SetState(States.Stab);
+					turnTimer = 0;
+					anim = "walk";
+					Facing *= -1;
 				}
 			}
+			else
+			{
+				Velocity.X = Facing * WalkSpeed;
+				if (Math.Sign(toPlayer.X) == Facing)
+				{
+					turnTimer = 0.9f;
+					anim = "idle";
+					Velocity.X = 0;
+				}
+			}
+
+			if (Time.Seconds - lastBlockTime < BLOCK_FRAME_TIME)
+				anim = "block";
+
+			Play(anim);
 
 			yield return 0;
 		}
@@ -100,15 +112,22 @@ public class ShieldKnight : Actor
 			Velocity.Y = -120;
 			facing *= -1;
 			Velocity.X = facing * 60.0f;
-			yield return 0.7f;
+			float timer = 0;
+			while (timer < 0.7f) {
+				timer += Time.Delta;
+				if (!wasGrounded && grounded) {
+					Game.Shake(0.14f);
+				}
+				yield return 0;
+			}
 			if (CheckForTurnAround()) break;
 			if (Math.Abs(toPlayer.X) < 30) {
-				SetState(States.Stab);
+				SetState(StabRoutine());
 				break;
 			} else if (rng.Chance(0.3)) {
 				continue;
 			} else {
-				SetState(States.Patrol);
+				SetState(PatrolRoutine());
 				break;
 			}
 		}
@@ -128,7 +147,7 @@ public class ShieldKnight : Actor
 
 			yield return 0;
 		}
-		SetState(States.Patrol);
+		SetState(PatrolRoutine());
 	}
 
 	IEnumerator<float> TurnAroundRoutine()
@@ -137,10 +156,11 @@ public class ShieldKnight : Actor
 		Squish.X = 0.8f;
 		Facing *= -1;
 		yield return 0.1f;
-		SetState(States.Patrol);
+		SetState(PatrolRoutine());
 	}
 
-	void RunCurrentRoutine() {
+	void RunCurrentRoutine()
+	{
 		if (routine == null)
 			return;
 		var was = routine;
@@ -150,6 +170,10 @@ public class ShieldKnight : Actor
 			routineWait = routine.Current;
 		else if (was == routine)
 			routine = null;
+	}
+
+	public override void OnCollideY() {
+		base.OnCollideY();
 	}
 
 	public override void Update() {
@@ -163,36 +187,12 @@ public class ShieldKnight : Actor
 		playerPosition = player.Position;
 		toPlayer = Position - playerPosition;
 
+		wasGrounded = grounded;
+		grounded = Grounded();
+
 		RunCurrentRoutine();
 
-		if (state == States.Patrol) {
-			var anim = "idle";
-
-			if (turnTimer > 0) {
-				turnTimer -= Time.Delta;
-				if (turnTimer < 0) {
-					turnTimer = 0;
-					anim = "walk";
-					Facing *= -1;
-				}
-			} else {
-				Velocity.X = Facing * WalkSpeed;
-				var facingPlayer = Math.Sign(Position.X - player.Position.X);
-				if (facingPlayer == Facing) {
-					turnTimer = 0.9f;
-					anim = "idle";
-					Velocity.X = 0;
-				}
-			}
-
-			if (Time.Seconds - lastBlockTime < BLOCK_FRAME_TIME)
-				anim = "block";
-
-			Play(anim);
-		}
-
 		Velocity.Y += Gravity * Time.Delta;
-		var grounded = Grounded();
 		if (grounded)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
 	}

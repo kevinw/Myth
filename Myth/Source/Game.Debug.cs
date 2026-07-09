@@ -33,7 +33,13 @@ public partial class Game
 #if !BROWSER && DEBUG
 		// TODO: use an ingame console instead?
 		if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
-		if (Input.Keyboard.Pressed(Keys.G)) ToggleRenderTargetOverlay();
+		if (Input.Keyboard.Pressed(Keys.G))
+		{
+			if (Input.Keyboard.Shift)
+				ToggleGodMode();
+			else
+				ToggleRenderTargetOverlay();
+		}
 		if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
 		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
@@ -118,6 +124,13 @@ public partial class Game
 	{
 		ShowRenderTargetOverlay = !ShowRenderTargetOverlay;
 		DisplayMessage($"Debug: Graphics Inspector {(ShowRenderTargetOverlay ? "On" : "Off")}");
+	}
+
+	internal bool GodMode = false;
+
+	internal void ToggleGodMode() {
+		GodMode = !GodMode;
+		DisplayMessage($"God Mode {(GodMode ? "On" : "Off")}");
 	}
 
 	// Dump a `radius`-cell solid/air map around `center` (world pixel coords) for diagnosing
