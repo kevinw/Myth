@@ -22,7 +22,7 @@ public static class StoryExpression
 			return 0;
 		var count = 1;
 		foreach (var token in expression.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-			if (token is "and" or "or" || token.Contains("==") || token.Contains("!=") || token.Contains(">") || token.Contains("<"))
+			if (token is "and" or "or" || token.Contains("==") || token.Contains("!=") || token.Contains('>') || token.Contains('<'))
 				count++;
 		return count;
 	}
@@ -37,17 +37,11 @@ public static class StoryExpression
 			_ => value != null
 		};
 
-	sealed class Parser
+	sealed class Parser(string text, Dictionary<string, object?> context)
 	{
-		readonly List<Token> tokens;
-		readonly Dictionary<string, object?> context;
+		readonly List<Token> tokens = Tokenize(text);
+		readonly Dictionary<string, object?> context = context;
 		int index;
-
-		public Parser(string text, Dictionary<string, object?> context)
-		{
-			tokens = Tokenize(text);
-			this.context = context;
-		}
 
 		public object Parse()
 			=> ParseOr();

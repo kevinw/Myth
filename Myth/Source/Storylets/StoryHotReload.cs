@@ -20,13 +20,13 @@ internal static class StoryHotReload
 		NotifyGameOfHotReload(updatedTypes);
 	}
 
-	private static void NotifyGameOfHotReload(Type[]? updatedTypes)
+	static void NotifyGameOfHotReload(Type[]? updatedTypes)
 	{
 		if (updatedTypes is { Length: > 0 })
 			Game.NotifyHotReload("Applied edits");
 	}
 
-	private static bool TouchesStory(Type[]? updatedTypes)
+	static bool TouchesStory(Type[]? updatedTypes)
 	{
 		if (updatedTypes == null || updatedTypes.Length == 0)
 			return true;

@@ -29,14 +29,9 @@ public readonly record struct StoryContext(
 	Vector2? EventPosition,
 	float? Duration);
 
-public sealed class StoryBuilder
+public sealed class StoryBuilder(StoryDeck deck)
 {
-	private readonly StoryDeck deck;
-
-	public StoryBuilder(StoryDeck deck)
-	{
-		this.deck = deck;
-	}
+	private readonly StoryDeck deck = deck;
 
 	public StoryBuilder Bud(string id, Action<StoryletBuilder> configure)
 	{
@@ -70,15 +65,10 @@ public sealed class StoryBuilder
 	}
 }
 
-public sealed class StoryletBuilder
+public sealed class StoryletBuilder(string id)
 {
-	private readonly Storylet storylet;
+	private readonly Storylet storylet = new(id);
 	private Func<StoryContext, bool>? predicate;
-
-	public StoryletBuilder(string id)
-	{
-		storylet = new Storylet(id);
-	}
 
 	public StoryletBuilder Speaker(string speaker)
 	{
