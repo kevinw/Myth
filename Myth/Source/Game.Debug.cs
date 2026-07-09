@@ -27,10 +27,9 @@ public partial class Game
 		if (!AcceptsLiveInput)
 			return;
 
+#if DEBUG
 		if (Input.Keyboard.Pressed(Keys.R))
 			ReloadRoom();
-
-#if !BROWSER && DEBUG
 		// TODO: use an ingame console instead?
 		if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
 		if (Input.Keyboard.Pressed(Keys.G))
@@ -45,14 +44,10 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
 		if (Input.Keyboard.Pressed(Keys.J)) ToggleAtlasWander();
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
-#endif
-#if DEBUG
+
 		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
 		if (Input.Keyboard.Pressed(Keys.V) && VoiceEnabled) SpeakVoiceTest();
-#endif
-
 		int timeScaleChange = 0;
-
 		if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) timeScaleChange = -1;
 		if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) timeScaleChange = 1;
 		foreach (var controller in Input.Controllers) if (controller.Connected)
@@ -65,6 +60,7 @@ public partial class Game
 		{
 			ChangeTimeScale(timeScaleChange);
 		}
+#endif
 	}
 
 	internal int CrtShader { get; private set; }

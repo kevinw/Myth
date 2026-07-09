@@ -35,7 +35,6 @@ public abstract class Pawn : Actor
 	{
 		Normal,
 		Roll,
-		Dash,
 		Attack,
 		BlinkStrike,
 		Hurt,
@@ -218,9 +217,6 @@ public abstract class Pawn : Actor
 			case States.Roll:
 				RollState();
 				break;
-			case States.Dash:
-				DashState();
-				break;
 			default:
 				CustomState();
 				break;
@@ -250,7 +246,7 @@ public abstract class Pawn : Actor
 				jumpTimer -= Time.Delta;
 		}
 
-		if (!grounded && State != States.Dash && State != States.Burrow)
+		if (!grounded && State != States.Burrow)
 		{
 			var grav = Gravity;
 			if (inWater)
@@ -423,13 +419,15 @@ public abstract class Pawn : Actor
 		var lastFacing = Facing;
 
 		Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
+		if (dashCooldownTimer > 0)
+			Velocity.X = dashDirection * DashSpeed;
 		if (!grounded && wallJumpInputLockTimer > 0)
 			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
 		if (!grounded && rollJumpCarryTimer > 0)
 			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
 		if (MathF.Abs(Velocity.X) > maxSpeed)
 			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
-		if (moveX == 0 && grounded)
+		if (moveX == 0 && grounded && dashCooldownTimer == 0)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
 		else if (moveX == 0 && inWater)
 			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
@@ -656,23 +654,11 @@ public abstract class Pawn : Actor
 		dashRemainder = 0;
 		dashCooldownTimer = DashCooldown;
 		jumpTimer = 0;
-		Velocity = Vector2.Zero;
+		Velocity.X = dashDirection * 200f;
 		ducking = false;
 		Squish = new Vector2(1.35f, 0.82f);
 		Play("jump");
-		State = States.Dash;
 		return true;
-	}
-
-	protected void DashState()
-	{
-		ducking = false;
-		Play("jump");
-		Velocity = Vector2.Zero;
-		MoveDash(DashSpeed * Time.Delta * dashDirection);
-
-		if (state.Time >= DashDuration)
-			State = States.Normal;
 	}
 
 	void MoveDash(float value)
@@ -1102,11 +1088,6 @@ public partial class Player : Pawn
 		if (State == States.Burrow)
 		{
 			// invulnerable while underground
-		}
-		else if (State == States.Dash)
-		{
-			if (OverlapsFirst(Masks.Hazard) is { } hit)
-				hit.Hit(this);
 		}
 		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
