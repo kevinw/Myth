@@ -4,7 +4,7 @@ namespace Myth;
 
 public class Bud : Pawn
 {
-	private static readonly Color Tint = new(0x7fb6ff);
+	internal static readonly Color Tint = new(0x7fb6ff);
 	private const int FollowStopDistance = 18;
 	private const int DesiredPlayerSpacing = 20;
 	private const float EnterDelay = 1.0f;

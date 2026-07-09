@@ -374,7 +374,29 @@ public partial class Manager
 			batcher.Image(previewTarget, Vector2.Zero, Color.White);
 		batcher.Rect(MenuBounds, Color.FromHexStringRGBA("0x160b1888"));
 		DrawGameMenuTitle();
-		batcher.PopMatrix();
+
+		// draw cheeky views of the player and bud
+		{
+			void Draw(Vector2 offset, int Facing = 1, Color? tint = null, byte alpha = 255)
+			{
+				var sprite = Assets.GetSprite("player");
+				if (sprite == null) return;
+				var frame = sprite.Frames[2];
+				var origin = sprite.ResolveOrigin(SpriteAnchor.Pivot);
+				var img = frame.Subtexture;
+				batcher.PushMatrix(Matrix3x2.CreateTranslation(-origin + offset));
+				batcher.PushMatrix(Matrix3x2.CreateScale(new Vector2(6 * Facing, 6)));
+				var color = tint ?? Color.White;
+				color.A = alpha;
+				batcher.Image(img, Vector2.Zero, color);
+				batcher.PopMatrix();
+				batcher.PopMatrix();
+			}
+
+			byte alpha = 80;
+			Draw(new Vector2(-70, 50), alpha: alpha);
+			Draw(new Vector2(430, 50), -1, Bud.Tint, alpha: alpha);
+		}
 	}
 
 	void DrawGameMenuTitle()
