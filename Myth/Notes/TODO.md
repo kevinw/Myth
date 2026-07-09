@@ -1,5 +1,10 @@
 # TODO
 
+too much movement
+turret needs metal hit sound when you strike it
+shieldknight should lose shield when attacking
+telegraph more (shieldknight and drone)
+
 ## mood: CONTENT
 - more big rooms
 - connected hubs and spokes?

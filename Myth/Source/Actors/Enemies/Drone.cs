@@ -26,12 +26,21 @@ public class Drone : Actor
 	static float BulletSpeed => 135f;
 	static float RecoilSpeed => 40f;
 
+	// Turret: a short barrel that rotates toward the player at a fixed rate (so it lags and
+	// reads as mechanical) and fires bullets from its muzzle tip.
+	static float TurretLength => 10f;     // muzzle reach from the body center
+	static float TurretBack => -2f;       // back edge tucked into the body
+	static float TurretWidth => 5f;
+	static float TurretTurnSpeed => 4.5f; // radians/sec
+	static float TurretBevel => 1.6f;     // width of the outward-normal rim in the normals pass
+
 	// Banking: the rotor assembly leans in the direction of travel, eased in so it reads as
 	// momentum rather than snapping. Tilt tracks velocity, which itself ramps via Acceleration.
 	static float TiltPerSpeed => 0.005f;
 	static float MaxTilt => 0.5f;
 	static float TiltApproach => 6f;
 	static float BladeSpinSpeed => 34f;
+	static float BladeSquash => 0.65f; // horizontal squash so the spinning disc reads as tilted
 
 	static float BodyRadius => 7f;
 
@@ -49,9 +58,8 @@ public class Drone : Actor
 	float friction;
 	float tilt;
 	float bladeSpin;
+	float turretAngle;
 	float shootTimer;
-	float bobPhase;
-	float bobY; // current applied bob offset, so we Move only the per-frame delta
 
 	float routineWait;
 	IEnumerator<float>? routine;
@@ -131,11 +139,11 @@ public class Drone : Actor
 
 	void Shoot()
 	{
-		var toP = playerPosition - Position;
-		var len = toP.Length();
-		var dir = len > 0.01f ? toP / len : new Vector2(0, 1);
+		// Fire along the turret's current facing (which lags the player) from its muzzle tip.
+		var dir = Calc.AngleToVector(turretAngle);
+		var muzzle = Position + (Point2)(dir * TurretLength);
 
-		Game.Create<Bullet>(Position, b => b.Velocity = dir * BulletSpeed);
+		Game.Create<Bullet>(muzzle, b => b.Velocity = dir * BulletSpeed);
 		Velocity -= dir * RecoilSpeed; // physical kick backward
 	}
 
@@ -168,25 +176,15 @@ public class Drone : Actor
 		var targetTilt = Math.Clamp(Velocity.X * TiltPerSpeed, -MaxTilt, MaxTilt);
 		tilt = Calc.Approach(tilt, targetTilt, TiltApproach * Time.Delta);
 
+		var toPlayerDir = -toPlayer; // turret aims at the player; toPlayer points away from them
+		if (toPlayerDir.LengthSquared() > 0.0001f)
+			turretAngle = Calc.AngleApproach(turretAngle, Calc.Angle(toPlayerDir), TurretTurnSpeed * Time.Delta);
+
 		RunCurrentRoutine();
 
 		Velocity = Calc.Approach(Velocity, Vector2.Zero, friction * Time.Delta);
-
-		UpdateBob();
 	}
 
-	// Overlay a vertical sine on the drone's path, faded by how still it is. The bob rides on
-	// Position via Move (collision-aware, all render passes follow) rather than Velocity, so the
-	// drag never damps it and there's no integration drift: bobY is anchored to the true sine.
-	void UpdateBob()
-	{
-		var stationariness = 1f - Math.Clamp(Velocity.Length() / BobStillSpeed, 0f, 1f);
-		bobPhase += Calc.TAU * BobHz * Time.Delta;
-
-		var target = MathF.Sin(bobPhase) * BobAmplitude * stationariness;
-		Move(new Vector2(0, target - bobY));
-		bobY = target;
-	}
 
 	// Bounce instead of the base Stop, so knockback ricochets off walls.
 	public override void OnCollideX() => Velocity.X = -Velocity.X * WallRestitution;
@@ -239,6 +237,7 @@ public class Drone : Actor
 
 		var faceViewer = new Color(0x8080ff); // (0.5, 0.5, 1.0) => normal (0, 0, 1)
 		DrawRotor(batcher, faceViewer, faceViewer);
+		RenderTurretNormals(batcher);
 		RenderSphereNormals(batcher, Vector2.Zero, BodyRadius, 24);
 	}
 
@@ -253,8 +252,44 @@ public class Drone : Actor
 			return;
 
 		DrawRotor(batcher, new Color(0x2a2e38), new Color(0xc0c6d0));
+		DrawTurret(batcher, new Color(0x23262e), new Color(0x8a90a0));
 		batcher.Circle(Vector2.Zero, BodyRadius, 16, new Color(0x3a3f4b));
 		DrawEye(batcher);
+	}
+
+	void DrawTurret(Batcher batcher, Color barrelColor, Color muzzleColor)
+	{
+		batcher.PushMatrix(Matrix3x2.CreateRotation(turretAngle));
+		batcher.Rect(TurretBack, -TurretWidth / 2, TurretLength - TurretBack, TurretWidth, barrelColor);
+		batcher.Rect(TurretLength - 2, -TurretWidth / 2, 2, TurretWidth, muzzleColor); // muzzle tip
+		batcher.PopMatrix();
+	}
+
+	// Normal "outline": the barrel's interior faces the viewer while its four edges bevel outward
+	// (edge normals splay along the rim), so the turret catches a lit rim. The bevel normals must
+	// rotate with the barrel, and the batcher matrix only transforms positions (not vertex colors),
+	// so both the geometry and the encoded normals are rotated here in code rather than via PushMatrix.
+	void RenderTurretNormals(Batcher batcher)
+	{
+		var fwd = Calc.AngleToVector(turretAngle);
+		var side = new Vector2(-fwd.Y, fwd.X); // barrel +Y in screen space
+		float x0 = TurretBack, x1 = TurretLength, hw = TurretWidth * 0.5f;
+		var flat = new Color(0x8080ff);
+
+		Vector2 P(float px, float py) => fwd * px + side * py;
+
+		batcher.Quad(P(x0, -hw), P(x1, -hw), P(x1, hw), P(x0, hw), flat); // interior faces viewer
+		TurretBevel_(batcher, P(x1, -hw), P(x1, hw), fwd, flat);          // muzzle end
+		TurretBevel_(batcher, P(x0, hw), P(x0, -hw), -fwd, flat);         // back
+		TurretBevel_(batcher, P(x1, hw), P(x0, hw), side, flat);          // one long side
+		TurretBevel_(batcher, P(x0, -hw), P(x1, -hw), -side, flat);       // other long side
+	}
+
+	// A rim strip along edge a->b: outer vertices encode the outward normal, inner vertices are flat.
+	void TurretBevel_(Batcher batcher, Vector2 a, Vector2 b, Vector2 outward, Color flat)
+	{
+		var oc = RimNormalColor(outward);
+		batcher.Quad(a, b, b - outward * TurretBevel, a - outward * TurretBevel, oc, oc, flat, flat);
 	}
 
 	void DrawRotor(Batcher batcher, Color armColor, Color bladeColor)
@@ -299,7 +334,9 @@ public class Drone : Actor
 
 	void DrawBlade(Batcher batcher, Vector2 at, float length, float thickness, Color color)
 	{
-		batcher.PushMatrix(Matrix3x2.CreateRotation(bladeSpin) * Matrix3x2.CreateTranslation(at));
+		// Squash X in screen space (between the spin and the translate) so the disc's sweep is an
+		// ellipse, reading as a rotor tilted away from the camera rather than a flat pinwheel.
+		batcher.PushMatrix(Matrix3x2.CreateRotation(bladeSpin) * Matrix3x2.CreateScale(1.0f, BladeSquash) * Matrix3x2.CreateTranslation(at));
 		batcher.Rect(-length / 2, -thickness / 2, length, thickness, color);
 		batcher.PopMatrix();
 	}

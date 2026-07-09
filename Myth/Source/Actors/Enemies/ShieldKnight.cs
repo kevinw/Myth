@@ -138,7 +138,7 @@ public class ShieldKnight : Actor
 		yield return 0.3f;
 
 		while (Play("stab", looping: false) != AnimState.Finished) {
-			if (CurrentSpriteFrame.UserData == "spear_hit")
+			if (CurrentSpriteFrame?.UserData == "spear_hit")
 			{
 				var hurtBox = Hitbox.FromSlice(this, "spear").Rect + Position;
 				if (Game.OverlapsFirst(hurtBox, Masks.Player) is { } hit)
