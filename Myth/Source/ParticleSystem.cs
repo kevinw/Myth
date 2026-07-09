@@ -195,7 +195,13 @@ public sealed class ParticleSystem : IDisposable
 				return i;
 			}
 		}
+		Console.Error.WriteLine("ParticleSystem.AcquireEffect error: out of slots");
 		return -1;
+	}
+
+	public void ReleaseEffect(ref int slot) {
+		ReleaseEffect(slot);
+		slot = -1;
 	}
 
 	public void ReleaseEffect(int slot)

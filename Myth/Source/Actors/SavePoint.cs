@@ -38,7 +38,7 @@ public class SavePoint : Actor
 	{
 		base.Update();
 
-		pulse = Calc.Approach(pulse, 0, Time.Delta * 1.5f);
+		pulse = Calc.Approach(pulse, 0, Time.Delta * 2.5f);
 
 		showInteract = false;
 
@@ -72,7 +72,7 @@ public class SavePoint : Actor
 		playerWasOverlapping = overlapping;
 	}
 
-	float LightIntensity => (Activated ? 0.86f : 0.56f) + pulse * 0.5f;
+	float LightIntensity => (Activated ? 0.56f : 0.36f) + pulse * 0.5f;
 
 	public override void Render(Batcher batcher)
 	{

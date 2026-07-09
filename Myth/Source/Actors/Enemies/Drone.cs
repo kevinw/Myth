@@ -44,13 +44,6 @@ public class Drone : Actor
 
 	static float BodyRadius => 7f;
 
-	// Idle bob: a gentle vertical sine while the drone is otherwise at rest. Applied as a real
-	// position offset (delta-Move) so the hitbox and muzzle bob with it; amplitude fades out as
-	// the drone picks up speed, so kiting and knockback suppress it without a pop.
-	static float BobAmplitude => 5.5f;
-	static float BobHz => 0.3f;
-	static float BobStillSpeed => 30f; // at/above this speed the bob is fully faded out
-
 	Rng rng = new();
 	int health = 3;
 	Point2 playerPosition;
@@ -65,7 +58,7 @@ public class Drone : Actor
 	IEnumerator<float>? routine;
 
 	public override void Destroyed() {
-		Game.Particles?.ReleaseEffect(sparkEffect);
+		Game.Particles?.ReleaseEffect(ref sparkEffect);
 	}
 
 	public Drone()
