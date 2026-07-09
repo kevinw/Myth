@@ -763,13 +763,19 @@ public sealed partial class GameView
 		if (Assets.LightingNoise == null)
 			return;
 
+		// Tile to cover the whole target, not a fixed 320x180: the editor renders zoomed-out
+		// views into larger-than-screen targets (RenderWorldView), so derive the tiled quad's
+		// extent from the target itself. PushMatrix scales by zoomLevel, so divide it back out
+		// (a no-op at zoomLevel 1, matching in-game).
 		var renderCamera = RenderCamera;
+		var worldWidth = target.Width / zoomLevel;
+		var worldHeight = target.Height / zoomLevel;
 		Batcher.PushMatrix(Matrix3x2.CreateScale(zoomLevel));
 		Batcher.PushBlend(BlendMode.Multiply);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Repeat, TextureWrap.Repeat));
 		Batcher.Image(
 			Assets.LightingNoise,
-			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, ZoomedWidth, ZoomedHeight),
+			new Rect(renderCamera.X - Time.SecondsF * 5.0f, renderCamera.Y, worldWidth, worldHeight),
 			Vector2.Zero,
 			Color.White * CurrentLightNoise());
 		Batcher.PopSampler();

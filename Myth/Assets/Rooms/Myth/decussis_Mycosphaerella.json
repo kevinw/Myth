@@ -2,7 +2,7 @@
   "position": [-120, -46],
   "size": [80, 23],
   "ambientColor": "909090",
-  "lightNoise": 0.2,
+  "lightNoise": 0.404,
   "legend": {
     "#": "back",
     "R": "ruin",
