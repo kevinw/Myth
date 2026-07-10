@@ -4,6 +4,7 @@ too much movement
 turret needs metal hit sound when you strike it
 shieldknight should lose shield when attacking
 telegraph more (shieldknight and drone)
+bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
 
 ## mood: CONTENT
 - more big rooms

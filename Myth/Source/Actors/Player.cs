@@ -128,6 +128,7 @@ public abstract class Pawn : Actor
 	protected int dashDirection;
 	protected float dashCooldownTimer;
 	protected float dashRemainder;
+	protected bool dashNeedsGrounding;
 	protected float jumpForce = JumpForce;
 	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
 	protected float rollJumpCarryTimer;
@@ -644,7 +645,7 @@ public abstract class Pawn : Actor
 
 	bool TryStartDash(int input)
 	{
-		if (dashCooldownTimer > 0)
+		if (dashCooldownTimer > 0 || dashNeedsGrounding)
 			return false;
 
 		dashDirection = input != 0 ? Math.Sign(input) : Facing;
@@ -654,6 +655,7 @@ public abstract class Pawn : Actor
 		Facing = dashDirection;
 		dashRemainder = 0;
 		dashCooldownTimer = DashCooldown;
+		dashNeedsGrounding = true;
 		jumpTimer = 0;
 		Velocity.X = dashDirection * 200f;
 		Velocity.Y *= 0.1f;
@@ -661,28 +663,6 @@ public abstract class Pawn : Actor
 		Squish = new Vector2(1.35f, 0.82f);
 		Play("jump");
 		return true;
-	}
-
-	void MoveDash(float value)
-	{
-		dashRemainder += value;
-		var move = (int)dashRemainder;
-		dashRemainder -= move;
-
-		while (move != 0)
-		{
-			var sign = Math.Sign(move);
-			var bounds = Hitbox.Rect + Position + new Point2(sign, 0);
-			if (Game.OverlapsRoomCollision(bounds))
-			{
-				dashRemainder = 0;
-				State = States.Normal;
-				return;
-			}
-
-			Position.X += sign;
-			move -= sign;
-		}
 	}
 
 	bool GetSlopeUnderneath(out Vector2 normal)
@@ -962,8 +942,12 @@ public partial class Player : Pawn
 
 	protected override void AfterStateUpdate(Vector2 previousVelocity)
 	{
-		if (burrowNeedsGrounding && grounded)
+		if (grounded)
+		{
 			burrowNeedsGrounding = false;
+			dashNeedsGrounding = false;
+		}
+
 		UpdateAura(Time.Delta);
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
