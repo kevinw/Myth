@@ -655,6 +655,7 @@ public abstract class Pawn : Actor
 		dashCooldownTimer = DashCooldown;
 		jumpTimer = 0;
 		Velocity.X = dashDirection * 200f;
+		Velocity.Y *= 0.1f;
 		ducking = false;
 		Squish = new Vector2(1.35f, 0.82f);
 		Play("jump");
