@@ -527,7 +527,8 @@ public abstract class Pawn : Actor
 		TryStartPawnAction(moveX);
 	}
 
-	void EmitJumpParticles(Vector2 position) {
+	void EmitJumpParticles(Vector2 position)
+	{
 		if (Game.Particles is { Supported: true } particles)
 			particles.Emit(jumpParticlesEffect,
 				worldPosition: position,
@@ -1350,11 +1351,17 @@ public partial class Player : Pawn
 		}
 	}
 
+	bool attackUp = false;
+
 	public void AttackState()
 	{
 		if (duckAttack)
-		{
 			ducking = true;
+
+		if (input.MoveY < 0)
+		{
+			Game.Show("attack up");
+			attackUp = true;
 		}
 
 		Play(GetAttackAnimation(), false);
@@ -1371,7 +1378,7 @@ public partial class Player : Pawn
 			else
 			{
 				AudioEvent(duckAttack ? "sword_crouched" : "sword");
-				EmitPlasmaStrike(duckingAttack: duckAttack);
+				EmitPlasmaStrike(duckingAttack: duckAttack, attackUp: attackUp);
 			}
 		}
 
@@ -1385,6 +1392,7 @@ public partial class Player : Pawn
 		if (attackFinished)
 		{
 			attackBlocked = false;
+			attackUp = false;
 			if (duckAttack)
 			{
 				duckAttack = false;
@@ -1473,18 +1481,33 @@ public partial class Player : Pawn
 		return false;
 	}
 
-	static RectInt GetAttackHitbox(bool duckingAttack)
-		=> duckingAttack
-			? new RectInt(3, -6, 13, 6)
-			: new RectInt(8, -9, 19, 9);
-
-	void EmitPlasmaStrike(bool duckingAttack)
+	RectInt GetAttackHitbox(bool duckingAttack)
 	{
-		var direction = Facing == Signs.Positive ? Vector2.UnitX : -Vector2.UnitX;
-		var y = duckingAttack ? -3 : -4;
-		var startOffsetX = duckingAttack ? 5 : 12;
-		var lineLength = duckingAttack ? 7 : 12f;
-		Game.Particles?.EmitLine(plasmaStrikeEffect, Position + direction * startOffsetX + new Vector2(0, y), direction, lineLength: lineLength, baseVelocity: new Vector2(20.0f * Facing, 0) + new Vector2(Velocity.X, Velocity.Y * 0.9f));
+		if (duckingAttack)
+			return new(3, -6, 13, 6);
+		else if (attackUp)
+			return new(0, -20, 6, -13);
+
+		return new(8, -9, 19, 9);
+	}
+
+	void EmitPlasmaStrike(bool duckingAttack, bool attackUp = false)
+	{
+		float normalLength = 12f;
+		float baseVelocity = 20f;
+		Vector2 addedVelocity = new(Velocity.X, Velocity.Y * 0.9f);
+		if (attackUp)
+		{
+			Game.Particles?.EmitLine(plasmaStrikeEffect, Position + new Vector2(Facing * 1, 0) + new Vector2(0, -1) * 23, new Vector2(0, -1), normalLength, new Vector2(0, baseVelocity) + addedVelocity);
+		}
+		else
+		{
+			var direction = Facing == Signs.Positive ? Vector2.UnitX : -Vector2.UnitX;
+			var y = duckingAttack ? -3 : -4;
+			var startOffsetX = duckingAttack ? 5 : 12;
+			var lineLength = duckingAttack ? 7 : normalLength;
+			Game.Particles?.EmitLine(plasmaStrikeEffect, Position + direction * startOffsetX + new Vector2(0, y), direction, lineLength: lineLength, baseVelocity: new Vector2(baseVelocity * Facing, 0) + addedVelocity);
+		}
 	}
 
 	void EmitPlasmaStrike(Vector2 from, Vector2 to)
@@ -1496,6 +1519,9 @@ public partial class Player : Pawn
 	{
 		if (duckAttack)
 			return attackBlocked ? "duck_attack_block" : "duck_attack";
+
+		else if (attackUp)
+			return "attack_up";
 
 		return attackBlocked ? "attack_block" : "attack";
 	}
