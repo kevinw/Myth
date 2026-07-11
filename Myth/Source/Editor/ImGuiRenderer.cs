@@ -185,6 +185,12 @@ fn vertex_main(
 	/// </summary>
 	public bool WantsMouseInput { get; private set; }
 
+	/// <summary>
+	/// The mouse cursor ImGui wants shown this frame (resize arrows over window
+	/// edges, I-beam over text fields). The host is responsible for applying it.
+	/// </summary>
+	public ImGuiMouseCursor MouseCursor { get; private set; }
+
 	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false)
 	{
 		this.app = app;
@@ -195,7 +201,9 @@ fn vertex_main(
 		ImGui.SetCurrentContext(context);
 
 		var io = ImGui.GetIO();
-		io.BackendFlags = ImGuiBackendFlags.None;
+		// HasMouseCursors also enables resize-from-edges (imgui falls back to
+		// the corner grip only without it); the host applies MouseCursor.
+		io.BackendFlags = ImGuiBackendFlags.HasMouseCursors;
 		io.ConfigFlags = ImGuiConfigFlags.DockingEnable;
 		if (gamepadNav)
 		{
@@ -359,6 +367,7 @@ fn vertex_main(
 		WantsTextInput = io.WantTextInput;
 		WantsKeyboardInput = io.WantCaptureKeyboard;
 		WantsMouseInput = io.WantCaptureMouse;
+		MouseCursor = ImGui.GetMouseCursor();
 		ImGui.Render();
 		ImGui.SetCurrentContext(nint.Zero);
 	}

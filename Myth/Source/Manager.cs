@@ -406,6 +406,9 @@ public partial class Manager : App
 		game?.Dispose();
 		navTrace?.Dispose();
 		menuImgui?.Dispose();
+		foreach (var cursor in imguiCursors.Values)
+			cursor.Dispose();
+		imguiCursors.Clear();
 #if EDITOR
 		ClearRoomPreviewCache(deferDisposal: false);
 		DisposeDeferredRoomPreviews();
@@ -917,6 +920,45 @@ public partial class Manager : App
 		}
 
 		imgui?.EndLayout();
+		ApplyImGuiMouseCursor();
+	}
+
+	readonly Dictionary<Foster.Framework.Cursor.SystemTypes, Foster.Framework.Cursor> imguiCursors = [];
+	bool imguiCursorApplied;
+
+	// Honor the cursor ImGui asked for this frame (resize arrows over window
+	// edges/corners, I-beam over text fields), restoring the default once it
+	// goes back to a plain arrow.
+	void ApplyImGuiMouseCursor()
+	{
+		if (imgui == null)
+			return;
+
+		var type = imgui.MouseCursor switch
+		{
+			ImGuiMouseCursor.TextInput => Foster.Framework.Cursor.SystemTypes.Text,
+			ImGuiMouseCursor.ResizeAll => Foster.Framework.Cursor.SystemTypes.Move,
+			ImGuiMouseCursor.ResizeNS => Foster.Framework.Cursor.SystemTypes.ResizeVertical,
+			ImGuiMouseCursor.ResizeEW => Foster.Framework.Cursor.SystemTypes.ResizeHorizontal,
+			ImGuiMouseCursor.ResizeNESW => Foster.Framework.Cursor.SystemTypes.ResizeNESW,
+			ImGuiMouseCursor.ResizeNWSE => Foster.Framework.Cursor.SystemTypes.ResizeNWSE,
+			ImGuiMouseCursor.Hand => Foster.Framework.Cursor.SystemTypes.Pointer,
+			ImGuiMouseCursor.NotAllowed => Foster.Framework.Cursor.SystemTypes.NotAllowed,
+			_ => Foster.Framework.Cursor.SystemTypes.Default,
+		};
+
+		if (type == Foster.Framework.Cursor.SystemTypes.Default)
+		{
+			if (imguiCursorApplied)
+				SetMouseCursor(null);
+			imguiCursorApplied = false;
+			return;
+		}
+
+		if (!imguiCursors.TryGetValue(type, out var cursor))
+			imguiCursors[type] = cursor = new Foster.Framework.Cursor(type);
+		SetMouseCursor(cursor);
+		imguiCursorApplied = true;
 	}
 
 #if EDITOR
