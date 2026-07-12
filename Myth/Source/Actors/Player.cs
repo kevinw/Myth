@@ -38,7 +38,8 @@ public abstract class Pawn : Actor
 		Attack,
 		BlinkStrike,
 		Hurt,
-		Burrow
+		Burrow,
+		Climb
 	}
 	public static float FastFallMultiplier => 1.25f;
 	protected static float JumpBufferTime => 0.08f;
@@ -98,6 +99,18 @@ public abstract class Pawn : Actor
 	protected static float DashSpeed => 220;
 	protected static float DashDuration => 0.15f;
 	protected static float DashCooldown => 0.20f;
+	// Rope climbing: hold up near a rope to grab on (see Rope + ClimbState). Movement-toy
+	// tuning: swinging is meant to carry into release jumps, so RopeSwingCarry rewards a
+	// pumped-up pendulum.
+	protected static float ClimbUpSpeed => 55f.T();
+	protected static float ClimbDownSpeed => 85f.T();
+	static float RopeGrabRadius => 9f.T();
+	static float RopeRegrabTime => 0.3f;
+	static float RopeSwingCarry => 1.25f.T();
+	static float RopeJumpKick => 55f.T();
+	static float RopeGrabMomentumTransfer => 0.7f.T();
+	static float RopeDetachSnapDistance => 24f; // rope yanked further than this in one frame (rewind, teleport) -> let go
+
 	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
 	protected static RectInt DuckingHitboxRect => new(-4, -6, 8, 6);
 	// While burrowing the player is effectively a point that rides the surface, so the
@@ -133,6 +146,10 @@ public abstract class Pawn : Actor
 	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
 	protected float rollJumpCarryTimer;
 	protected PawnInput input;
+	Rope? climbRope;
+	Rope.Chain? climbChain;
+	float climbIndex;   // float point index along the chain (0 = anchor)
+	float regrabTimer;
 	protected float JumpUpSquish;
 	protected float RunStartTimer;
 	protected bool RunStartSkid;
@@ -165,7 +182,7 @@ public abstract class Pawn : Actor
 
 		// While burrowing the player rides the surface as a point; skip the normal
 		// grounded/landing machinery so it doesn't re-trigger landings mid-burrow.
-		var nowGrounded = State != States.Burrow && Velocity.Y >= 0 && Grounded();
+		var nowGrounded = State != States.Burrow && State != States.Climb && Velocity.Y >= 0 && Grounded();
 		if (nowGrounded && !grounded)
 			OnLanded(previousVelocity);
 		grounded = nowGrounded;
@@ -189,6 +206,8 @@ public abstract class Pawn : Actor
 			dashCooldownTimer = Calc.Approach(dashCooldownTimer, 0, Time.Delta);
 		if (jumpBufferTimer > 0)
 			jumpBufferTimer = Calc.Approach(jumpBufferTimer, 0, Time.Delta);
+		if (regrabTimer > 0)
+			regrabTimer = Calc.Approach(regrabTimer, 0, Time.Delta);
 
 		var waterBounds = Hitbox.Rect + Position;
 		waterBounds = waterBounds.Inflate(8);
@@ -219,6 +238,9 @@ public abstract class Pawn : Actor
 			case States.Roll:
 				RollState();
 				break;
+			case States.Climb:
+				ClimbState();
+				break;
 			default:
 				CustomState();
 				break;
@@ -248,7 +270,7 @@ public abstract class Pawn : Actor
 				jumpTimer -= Time.Delta;
 		}
 
-		if (!grounded && State != States.Burrow)
+		if (!grounded && State != States.Burrow && State != States.Climb)
 		{
 			var grav = Gravity;
 			if (inWater)
@@ -312,6 +334,9 @@ public abstract class Pawn : Actor
 
 	protected void NormalState()
 	{
+		if (input.MoveY < 0 && TryGrabRope())
+			return;
+
 		if (grounded && input.MoveY > 0)
 			ducking = true;
 		else if (ducking)
@@ -641,6 +666,131 @@ public abstract class Pawn : Actor
 			OnRollStopped(false);
 			State = States.Normal;
 			ducking = grounded && input.MoveY > 0;
+		}
+	}
+
+	bool TryGrabRope()
+	{
+		if (regrabTimer > 0)
+			return false;
+
+		var center = Position + Hitbox.Rect.Center;
+		foreach (var actor in Game.Actors)
+		{
+			if (actor is not Rope rope || !rope.TryGrab(center, RopeGrabRadius, out var chain, out var index))
+				continue;
+
+			// Momentum transfer: swinging into a grab sets the rope moving.
+			rope.AddPointVelocity(chain, index, Velocity * RopeGrabMomentumTransfer);
+			climbRope = rope;
+			climbChain = chain;
+			climbIndex = index;
+			Stop();
+			ducking = false;
+			jumpTimer = 0;
+			State = States.Climb;
+			Play("wall_slide");
+			return true;
+		}
+		return false;
+	}
+
+	protected void ClimbState()
+	{
+		if (climbRope == null || climbChain == null || !climbRope.Contains(climbChain))
+		{
+			ExitClimb();
+			return;
+		}
+
+		var rope = climbRope;
+		var chain = climbChain;
+
+		if (chain.Pinned)
+		{
+			climbIndex += input.MoveY * (input.MoveY > 0 ? ClimbDownSpeed : ClimbUpSpeed) / Rope.SegmentLength * Time.Delta;
+			if (climbIndex < 0)
+			{
+				// Climbed past the anchor: pop up off the top (lands you on the ledge when there is one).
+				ExitClimb();
+				Squish = new Vector2(0.65f, 1.4f);
+				StartJump(JumpForce * 0.85f, JumpTime * 0.8f);
+				OnPawnJump();
+				return;
+			}
+			if (climbIndex > Rope.LastIndex(chain))
+			{
+				// Slid off the loose end.
+				var slideVel = rope.PointVelocity(chain, climbIndex);
+				ExitClimb();
+				Velocity = new Vector2(slideVel.X * RopeSwingCarry, MathF.Max(slideVel.Y, 0));
+				return;
+			}
+		}
+		else if (Grounded())
+		{
+			// Riding a cut-loose remnant down: it landed, we're standing, let go.
+			ExitClimb();
+			return;
+		}
+
+		if (input.JumpPressed)
+		{
+			var vel = rope.PointVelocity(chain, climbIndex);
+			var moveX = input.MoveX;
+			ExitClimb();
+			Velocity.X = vel.X * RopeSwingCarry + moveX * RopeJumpKick;
+			if (moveX != 0)
+				Facing = moveX;
+			if (input.MoveY > 0)
+				Velocity.Y = MathF.Max(vel.Y, 0); // down+jump: just let go
+			else
+			{
+				Squish = new Vector2(0.65f, 1.4f);
+				StartJump(JumpForce, JumpTime);
+				OnPawnJump();
+			}
+			return;
+		}
+
+		if (input.MoveX != 0)
+			Facing = input.MoveX;
+		rope.SetRider(chain, climbIndex, input.MoveX);
+
+		// Hang with the chest at the rope point; step there collision-aware so a swing scrapes
+		// along walls instead of clipping. A one-frame yank beyond the snap distance (rewind,
+		// room teleport) means the attachment is no longer sane -- let go.
+		var target = rope.Sample(chain, climbIndex) - Hitbox.Rect.Center;
+		if ((target - Position).LengthSquared() > RopeDetachSnapDistance * RopeDetachSnapDistance)
+		{
+			ExitClimb();
+			return;
+		}
+		Stop();
+		Move(target - Position);
+
+		Play(input.MoveY != 0 && chain.Pinned ? "crawl" : "wall_slide");
+	}
+
+	void ExitClimb()
+	{
+		climbRope = null;
+		climbChain = null;
+		regrabTimer = RopeRegrabTime;
+		if (State == States.Climb)
+			State = States.Normal;
+	}
+
+	// A Rope we may be attached to was cut at cutIndex: below the cut our chain becomes the
+	// falling remnant -- keep riding it down (the cutscene beat); above it, nothing changes.
+	public void OnRopeCut(Rope rope, Rope.Chain upper, int cutIndex, Rope.Chain lower)
+	{
+		if (climbRope != rope || climbChain != upper)
+			return;
+		if (climbIndex >= cutIndex)
+		{
+			climbChain = lower;
+			climbIndex -= cutIndex;
 		}
 	}
 

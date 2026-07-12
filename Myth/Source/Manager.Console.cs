@@ -235,4 +235,34 @@ public partial class Manager
 		PerfToggles.HeadSlide = !PerfToggles.HeadSlide;
 		game?.DisplayMessage($"Head slide: {PerfToggles.HeadSlide}");
 	}
+
+	// Cut the nearest rope at the player's height (the cutscene beat, testable by hand).
+	[ConsoleCommand("rope_break")]
+	void RopeBreak(string _)
+	{
+		if (game?.GetFirst<Player>() is not { } player)
+			return;
+
+		Rope? best = null;
+		var bestDistSq = float.MaxValue;
+		foreach (var actor in game.Actors)
+		{
+			if (actor is not Rope rope || rope.Broken)
+				continue;
+			var distSq = (rope.Position - player.Position).LengthSquared();
+			if (distSq < bestDistSq)
+			{
+				bestDistSq = distSq;
+				best = rope;
+			}
+		}
+
+		if (best == null)
+		{
+			game.DisplayMessage("No unbroken rope in room");
+			return;
+		}
+		best.Break(player.Position.Y - 12);
+		game.DisplayMessage("Rope cut");
+	}
 }

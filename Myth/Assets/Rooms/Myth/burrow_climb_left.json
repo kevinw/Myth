@@ -221,6 +221,12 @@
       "Id": "768f5f5ffd45efed",
       "Type": "Drone",
       "Position": [220, 440]
+    },
+    {
+      "Id": "d65dffe0ddeb8b02",
+      "Type": "Rope",
+      "Position": [132, 164],
+      "Size": [8, 260]
     }
   ]
 }

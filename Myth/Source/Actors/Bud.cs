@@ -54,6 +54,18 @@ public class Bud : Pawn
 	{
 		if (!PerfToggles.BudAIEnabled) return new();
 
+		// On a rope: climb toward the player's height, then hop off toward them.
+		if (State == States.Climb && Game.GetFirst<Player>() is { } climbTarget)
+		{
+			var dy = climbTarget.Position.Y - Position.Y;
+			if (MathF.Abs(dy) <= 10)
+			{
+				var dir = Math.Sign(climbTarget.Position.X - Position.X);
+				return new(dir, 0, JumpPressed: true, JumpDown: true, DashPressed: false);
+			}
+			return new(0, Math.Sign(dy), false, false, false);
+		}
+
 		var moveX = 0;
 		var moveY = 0;
 		var jumpPressed = false;
@@ -94,7 +106,9 @@ public class Bud : Pawn
 				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
 				if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
 					moveX = 0;
-				if (player == null)
+				if (TryApproachRope(player, ref moveX, ref moveY))
+					nav.SetDebugNavState("rope approach");
+				else if (player == null)
 					nav.SetDebugNavState("no player");
 				else
 					nav.SetDebugNavState(moveX == 0
@@ -396,6 +410,50 @@ public class Bud : Pawn
 			return Position.X <= player.Position.X ? -1 : 1;
 
 		return 0;
+	}
+
+	// Nav can't path to the player (a sheer drop or climb), but a rope bridges the vertical
+	// gap: head for it -- walking off the lip if needed -- and hold up so the Pawn grab takes
+	// over once a rope point is in reach. No nav-graph integration yet; this is the "player
+	// paved the way with a RopePile" case.
+	private bool TryApproachRope(Player? player, ref int moveX, ref int moveY)
+	{
+		if (player == null || State != States.Normal)
+			return false;
+
+		var dy = player.Position.Y - Position.Y;
+		if (MathF.Abs(dy) < Game.TileSize * 3)
+			return false;
+
+		Rope? best = null;
+		var bestDx = Game.TileSize * 5f;
+		foreach (var actor in Game.Actors)
+		{
+			if (actor is not Rope rope || rope.Broken)
+				continue;
+
+			// The rope must roughly span from our height toward the player's.
+			var bounds = rope.GetVisualBounds();
+			var spans = dy > 0
+				? bounds.Top <= Position.Y + Game.TileSize && bounds.Bottom >= player.Position.Y - Game.TileSize * 2
+				: bounds.Bottom >= Position.Y - Game.TileSize && bounds.Top <= player.Position.Y + Game.TileSize * 2;
+			if (!spans)
+				continue;
+
+			var dx = MathF.Abs(bounds.Center.X - Position.X);
+			if (dx < bestDx)
+			{
+				bestDx = dx;
+				best = rope;
+			}
+		}
+		if (best == null)
+			return false;
+
+		var targetX = best.GetVisualBounds().Center.X;
+		moveX = MathF.Abs(targetX - Position.X) > 2 ? Math.Sign(targetX - Position.X) : 0;
+		moveY = -1; // hold up: grabs as soon as a rope point is in reach
+		return true;
 	}
 
 	private void OnRoomChanged(RoomChange change)
