@@ -1,4 +1,3 @@
-CFG=Debug APP_NAME=MYTH TRACE_PROFILE=cpu-sampling \
-    dotnet build -c $CFG && \
-    dotnet trace collect --format Chromium --profile $TRACE_PROFILE -- bin/$CFG/net10.0/$APP_NAME && \
-    open https://ui.perfetto.dev
+#!/bin/bash -xe
+
+dotnet build -c Debug && dotnet trace collect --format Chromium -- bin/Debug/net10.0/Myth && open https://ui.perfetto.dev
