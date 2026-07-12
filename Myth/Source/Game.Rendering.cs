@@ -1530,11 +1530,14 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 		}
 
-		if (includeShadows && !drewVisibilityClippedLight)
+		if (includeShadows)
 		{
 			PushWorldMatrix();
 			Batcher.PushBlend(ShadowBlend);
-			DrawLightShadows(position, radius);
+			if (drewVisibilityClippedLight)
+				DrawDynamicOccluderShadows(position, radius);
+			else
+				DrawLightShadows(position, radius);
 			Batcher.PopBlend();
 			Batcher.PopMatrix();
 		}
@@ -1555,11 +1558,12 @@ public sealed partial class GameView
 	// Cached visibility polygons for static lights, computed from static room geometry ONLY. A
 	// static light over unchanging geometry has an unchanging visibility polygon, so we compute it
 	// once and reuse it every frame (cleared on room / room-geometry change). Dynamic occluders
-	// (moving platforms) are deliberately excluded from the cache — see DrawVisibilityClippedNormalLight.
+	// (moving platforms) never enter visibility polygons — they cast shadows as extruded quads
+	// instead (DrawDynamicOccluderShadows) — so a nearby platform can't invalidate the cache.
 	readonly Dictionary<(Point2, int), List<VisibilityPolygon.Hit>> _staticVisibilityCache = [];
 
-	List<VisibilityPolygon.Hit> GetHits(Vector2 lightPosition, float radius, bool includeDynamicOccluders) {
-		GatherVisibilitySegments(lightPosition, radius, _segments, includeDynamicOccluders);
+	List<VisibilityPolygon.Hit> GetHits(Vector2 lightPosition, float radius) {
+		GatherVisibilitySegments(lightPosition, radius, _segments, includeDynamicOccluders: false);
 		VisibilityPolygon.Compute(lightPosition, radius, _segments, _hits, VisibilityPolygon.BoundaryRaysForRadius(radius));
 		return _hits;
 	}
@@ -1568,23 +1572,19 @@ public sealed partial class GameView
 	{
 		List<VisibilityPolygon.Hit> hits;
 
-		// A static light over static geometry has a fixed visibility polygon we can cache. But a
-		// moving platform (dynamic occluder) in range must still cast a live shadow, so when one
-		// overlaps the light we recompute the full polygon this frame and bypass the cache. Lights
-		// with no platform nearby — the common case — keep serving from the cache.
-		if (lightIsStatic && !AnyDynamicOccluderOverlaps(lightPosition, radius))
+		if (lightIsStatic)
 		{
 			var key = ((Point2)lightPosition, (int)MathF.Floor(radius));
 			if (!_staticVisibilityCache.TryGetValue(key, out var cachedHits))
 			{
-				cachedHits = [.. GetHits(lightPosition, radius, includeDynamicOccluders: false)];
+				cachedHits = [.. GetHits(lightPosition, radius)];
 				_staticVisibilityCache[key] = cachedHits;
 			}
 			hits = cachedHits;
 		}
 		else
 		{
-			hits = GetHits(lightPosition, radius, includeDynamicOccluders: true);
+			hits = GetHits(lightPosition, radius);
 		}
 
 		if (hits.Count < 3)
@@ -1890,14 +1890,35 @@ public sealed partial class GameView
 		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
 	}
 
-	// True if any dynamic occluder (moving platform, etc.) has a silhouette edge inside the light's
-	// circle. Gates whether a static light must recompute its polygon this frame instead of caching.
-	bool AnyDynamicOccluderOverlaps(Vector2 lightPosition, float radius)
+	// Shadows cast by dynamic occluders (moving platforms, etc.) onto a visibility-clipped light.
+	// The visibility polygon only clips against static geometry, so each occluder segment in range
+	// is extruded radially away from the light as a black quad over the mask. Splitting at the
+	// closest point to the light keeps each half under a quarter turn of arc, so extruding to 2x
+	// radius guarantees the quad's straight far edge lands outside the light circle (no lit sliver
+	// between chord and rim).
+	void DrawDynamicOccluderShadows(Vector2 lightPosition, float radius)
 	{
 		foreach (var segment in dynamicOccluderSegments)
-			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-				return true;
-		return false;
+		{
+			if (!VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
+				continue;
+
+			var ab = segment.B - segment.A;
+			var lengthSquared = ab.LengthSquared();
+			var t = lengthSquared <= 0.0001f
+				? 0
+				: Math.Clamp(Vector2.Dot(lightPosition - segment.A, ab) / lengthSquared, 0, 1);
+			var closest = segment.A + ab * t;
+			DrawDynamicShadowQuad(lightPosition, radius, segment.A, closest);
+			DrawDynamicShadowQuad(lightPosition, radius, closest, segment.B);
+		}
+	}
+
+	void DrawDynamicShadowQuad(Vector2 lightPosition, float radius, Vector2 a, Vector2 b)
+	{
+		var aFar = ProjectToLightRadius(lightPosition, radius * 2, a);
+		var bFar = ProjectToLightRadius(lightPosition, radius * 2, b);
+		Batcher.Quad(a, b, bFar, aFar, Color.Black);
 	}
 
 	void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments, bool includeDynamicOccluders = true)
