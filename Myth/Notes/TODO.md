@@ -1,5 +1,8 @@
 # TODO
 
+- shieldknight needs sound effects, detect, player awareness squish
+- remove white guy from beginning
+- improve language for "emerge from flat"
 too much movement
 turret needs metal hit sound when you strike it
 shieldknight should lose shield when attacking
