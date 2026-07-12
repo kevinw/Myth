@@ -13,6 +13,8 @@ struct Particle
     float seed;
     float effect;
     float flags;
+    float trailHead;
+    float trailTimer;
     float pad;
 };
 
@@ -27,9 +29,9 @@ struct EffectParams
     float collisionMode;
     float bounciness;
     float style;
-    float pad0;
-    float pad1;
-    float pad2;
+    float trailSeconds;
+    float trailWidthStart;
+    float trailWidthEnd;
 };
 
 // In SDL_gpu's vertex resource model, sampled textures precede storage buffers
@@ -42,7 +44,7 @@ StructuredBuffer<EffectParams> Effects : register(t2, space0);
 cbuffer VertexParams : register(b0, space1)
 {
     float4x4 Matrix;
-    float MaxEffects;   // LUT height (effect rows)
+    float LutHeight;   // particle gradient rows + trail gradient rows
     float _pad0;
     float _pad1;
     float _pad2;
@@ -69,7 +71,8 @@ VsOutput vertex_main(VsInput input, uint instance : SV_InstanceID)
     Particle p = Particles[instance];
     EffectParams fx = Effects[(uint)(p.effect + 0.5)];
 
-    float alive = p.lifetime > 0.0 ? 1.0 : 0.0;
+    // Hidden once past lifetime (the slot may linger while its trail drains).
+    float alive = (p.lifetime > 0.0 && p.age < p.lifetime) ? 1.0 : 0.0;
     float life_frac = p.lifetime > 0.0 ? saturate(p.age / p.lifetime) : 1.0;
 
     float size = lerp(fx.sizeStart, fx.sizeEnd, life_frac) * alive; // dead -> 0
@@ -77,7 +80,7 @@ VsOutput vertex_main(VsInput input, uint instance : SV_InstanceID)
     output.position = mul(Matrix, float4(world, 0.0, 1.0));
 
     // Color from the per-effect LUT row. Vertex stage must use SampleLevel.
-    float row = (p.effect + 0.5) / MaxEffects;
+    float row = (p.effect + 0.5) / LutHeight;
     float4 col = ColorLut.SampleLevel(ColorLutSampler, float2(life_frac, row), 0.0);
     output.color = float4(col.rgb, col.a * alive);
 	output.texCoord = input.tex_coord;

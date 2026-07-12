@@ -1,0 +1,33 @@
+{
+  "Shape": "Cone",
+  "DirectionDegrees": -90,
+  "SpreadDegrees": 70,
+  "BurstCount": 24,
+  "Mode": "Burst",
+  "SpeedMin": 120,
+  "SpeedMax": 260,
+  "LifeMin": 0.5,
+  "LifeMax": 0.9,
+  "Gravity": 160,
+  "Drag": 0.2,
+  "NoiseAmount": 10,
+  "NoiseScale": 0.02,
+  "SizeStart": 2.5,
+  "SizeEnd": 1,
+  "Additive": true,
+  "Style": "Plasma",
+  "Collision": "Bounce",
+  "Bounciness": 0.5,
+  "ColorBirth": "FFF8DC",
+  "ColorMid": "FFAA33",
+  "ColorEnd": "80200000",
+  "TrailSeconds": 0.45,
+  "TrailWidthStart": 3,
+  "TrailWidthEnd": 0,
+  "TrailColors": [
+    { "T": 0, "Color": "FFFFFFFF" },
+    { "T": 0.25, "Color": "FFC050E0" },
+    { "T": 0.7, "Color": "E0501860" },
+    { "T": 1, "Color": "40080800" }
+  ]
+}

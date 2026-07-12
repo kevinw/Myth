@@ -19,8 +19,14 @@ public static class SpriteSdf
 	// Sprites we build SDFs for.
 	private static readonly string[] SpriteNames = ["player", "bud"];
 
+	// A border texel of a sprite frame: position (texel center, canvas px) and
+	// outward normal, both in unflipped sprite-local canvas space.
+	public readonly record struct EdgePoint(Vector2 CanvasPos, Vector2 Normal);
+
 	private static Texture? atlas;
 	private static readonly Dictionary<string, List<Subtexture>> framesByName = new();
+	private static readonly Dictionary<string, EdgePoint[][]> edgesByName = new();
+	private static readonly EdgePoint[] noEdges = [];
 
 	public static Texture? Atlas => atlas;
 	public static Vector2 AtlasSize => atlas != null ? new Vector2(atlas.Width, atlas.Height) : Vector2.One;
@@ -29,6 +35,12 @@ public static class SpriteSdf
 		=> framesByName.TryGetValue(sprite, out var frames) && index >= 0 && index < frames.Count
 			? frames[index]
 			: null;
+
+	/// <summary>Border texels of a baked sprite frame (empty until the bake completes).</summary>
+	public static EdgePoint[] EdgePoints(string sprite, int index)
+		=> edgesByName.TryGetValue(sprite, out var frames) && index >= 0 && index < frames.Length
+			? frames[index]
+			: noEdges;
 
 	// The color atlas is read back from the GPU asynchronously, because WebGPU
 	// cannot read texture data back synchronously on the browser main thread.
@@ -104,9 +116,17 @@ public static class SpriteSdf
 		pendingSprites = null;
 
 		var packer = new Packer { Trim = false, Padding = 2 };
+		edgesByName.Clear();
 		foreach (var (name, frames) in sprites)
+		{
+			var edges = new EdgePoint[frames.Length][];
 			for (var i = 0; i < frames.Length; i++)
+			{
 				packer.Add($"{name}_sdf_{i}", BuildFrameSdf(atlasPixels, aw, ah, frames[i]));
+				edges[i] = ExtractEdgePoints(atlasPixels, aw, ah, frames[i]);
+			}
+			edgesByName[name] = edges;
+		}
 
 		var output = packer.Pack();
 		if (output.Pages.Count == 0)
@@ -126,6 +146,49 @@ public static class SpriteSdf
 					list.Add(sub);
 			framesByName[name] = list;
 		}
+	}
+
+	// Walks a frame's alpha in the color atlas and records each border texel
+	// (opaque with a transparent 4-neighbor) with an outward normal accumulated
+	// from its transparent 8-neighborhood, in canvas-space pixels.
+	private static EdgePoint[] ExtractEdgePoints(Color[] atlasPixels, int aw, int ah, in Subtexture frame)
+	{
+		var source = frame.Source;
+		var sx0 = (int)MathF.Round(source.X);
+		var sy0 = (int)MathF.Round(source.Y);
+		var sw = (int)MathF.Round(source.Width);
+		var sh = (int)MathF.Round(source.Height);
+		var canvasX = -(int)MathF.Round(frame.Frame.X);
+		var canvasY = -(int)MathF.Round(frame.Frame.Y);
+
+		bool Opaque(int x, int y)
+		{
+			if (x < 0 || y < 0 || x >= sw || y >= sh)
+				return false;
+			var ax = sx0 + x;
+			var ay = sy0 + y;
+			if (ax < 0 || ay < 0 || ax >= aw || ay >= ah)
+				return false;
+			return atlasPixels[ay * aw + ax].A > AlphaThreshold;
+		}
+
+		var points = new List<EdgePoint>();
+		for (var y = 0; y < sh; y++)
+			for (var x = 0; x < sw; x++)
+			{
+				if (!Opaque(x, y))
+					continue;
+				var normal = Vector2.Zero;
+				for (var ny = -1; ny <= 1; ny++)
+					for (var nx = -1; nx <= 1; nx++)
+						if ((nx != 0 || ny != 0) && !Opaque(x + nx, y + ny))
+							normal += Vector2.Normalize(new Vector2(nx, ny));
+				if (!Opaque(x - 1, y) || !Opaque(x + 1, y) || !Opaque(x, y - 1) || !Opaque(x, y + 1))
+					points.Add(new(
+						new Vector2(canvasX + x + 0.5f, canvasY + y + 0.5f),
+						normal.LengthSquared() > 1e-4f ? Vector2.Normalize(normal) : new Vector2(0, -1)));
+			}
+		return [.. points];
 	}
 
 	// Builds a padded SDF image for one frame: the trimmed silhouette is placed in

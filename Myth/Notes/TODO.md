@@ -1,12 +1,10 @@
 # TODO
 
-too much movement
-turret needs metal hit sound when you strike it
-shieldknight should lose shield when attacking
-telegraph more (shieldknight and drone)
-bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
-
 ## mood: CONTENT
+- bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
+- telegraph more (shieldknight and drone)
+- Drone has too much movement
+- shieldknight should lose shield when attacking
 - more big rooms
 - connected hubs and spokes?
 - study silksong map
@@ -26,6 +24,7 @@ bud "once per session" hints for rooms like the movingplatform room where you ha
 - draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 
 ## mood: SOUND AND MUSIC
+- turret needs metal hit sound when you strike it
 - wall jump and wall slide sounds
 - Attenuate landing sound by y velocity
 - Better revealdoor sound

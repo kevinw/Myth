@@ -95,6 +95,12 @@
       "Type": "PotatoMan",
       "Position": [157, 106],
       "Facing": "-"
+    },
+    {
+      "Id": "4ff5d493a50a6206",
+      "Type": "ParticleEmitter",
+      "Position": [60, 44],
+      "EffectName": "edge_sheen"
     }
   ]
 }

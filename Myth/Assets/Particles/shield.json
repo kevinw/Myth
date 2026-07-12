@@ -1,0 +1,33 @@
+{
+  "Shape": "Point",
+  "SpreadDegrees": 8,
+  "BurstCount": 4,
+  "Mode": "Burst",
+  "SpeedMin": 0,
+  "SpeedMax": 4,
+  "LifeMin": 0.5,
+  "LifeMax": 1.0,
+  "Gravity": 0,
+  "Drag": 0.2,
+  "NoiseAmount": 0,
+  "NoiseScale": 0.05,
+  "SizeStart": 1.2,
+  "SizeEnd": 0.4,
+  "Additive": true,
+  "Style": "Plasma",
+  "Collision": "None",
+  "EdgeSide": "All",
+  "EdgeAttraction": 90,
+  "EdgeFlow": 140,
+  "ColorBirth": "C8F0FFFF",
+  "ColorMid": "64B4FFE0",
+  "ColorEnd": "3C64FF00",
+  "TrailSeconds": 0.4,
+  "TrailWidthStart": 1.4,
+  "TrailWidthEnd": 0.2,
+  "TrailColors": [
+    { "T": 0, "Color": "E6FAFFE0" },
+    { "T": 0.4, "Color": "78C8FF90" },
+    { "T": 1, "Color": "2850C800" }
+  ]
+}

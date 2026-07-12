@@ -12,6 +12,8 @@ struct Particle
     float seed;
     float effect;
     float flags;
+    float trailHead;
+    float trailTimer;
     float pad;
 };
 
@@ -31,9 +33,9 @@ struct EffectParams
     float collisionMode;
     float bounciness;
     float style;
-    float pad0;
-    float pad1;
-    float pad2;
+    float trailSeconds;
+    float trailWidthStart;
+    float trailWidthEnd;
 };
 
 struct type_StructuredBuffer_EffectParams
@@ -44,7 +46,7 @@ struct type_StructuredBuffer_EffectParams
 struct type_VertexParams
 {
     float4x4 Matrix;
-    float MaxEffects;
+    float LutHeight;
     float _pad0;
     float _pad1;
     float _pad2;
@@ -67,24 +69,33 @@ struct vertex_main_in
 vertex vertex_main_out vertex_main(vertex_main_in in [[stage_in]], constant type_VertexParams& VertexParams [[buffer(0)]], const device type_StructuredBuffer_Particle& Particles [[buffer(1)]], const device type_StructuredBuffer_EffectParams& Effects [[buffer(2)]], texture2d<float> ColorLut [[texture(0)]], sampler ColorLutSampler [[sampler(0)]], uint gl_InstanceIndex [[instance_id]])
 {
     vertex_main_out out = {};
-    float _70 = Particles._m0[gl_InstanceIndex].effect + 0.5;
-    uint _71 = uint(_70);
-    bool _78 = Particles._m0[gl_InstanceIndex].lifetime > 0.0;
-    float _79 = float(_78);
-    float _85;
-    if (_78)
+    float _71 = Particles._m0[gl_InstanceIndex].effect + 0.5;
+    uint _72 = uint(_71);
+    bool _79 = Particles._m0[gl_InstanceIndex].lifetime > 0.0;
+    bool _83;
+    if (_79)
     {
-        _85 = fast::clamp(Particles._m0[gl_InstanceIndex].age / Particles._m0[gl_InstanceIndex].lifetime, 0.0, 1.0);
+        _83 = Particles._m0[gl_InstanceIndex].age < Particles._m0[gl_InstanceIndex].lifetime;
     }
     else
     {
-        _85 = 1.0;
+        _83 = false;
     }
-    float4 _103 = ColorLut.sample(ColorLutSampler, float2(_85, _70 / VertexParams.MaxEffects), level(0.0));
-    out.out_var_TEXCOORD0 = float4(_103.xyz, _103.w * _79);
+    float _84 = float(_83);
+    float _90;
+    if (_79)
+    {
+        _90 = fast::clamp(Particles._m0[gl_InstanceIndex].age / Particles._m0[gl_InstanceIndex].lifetime, 0.0, 1.0);
+    }
+    else
+    {
+        _90 = 1.0;
+    }
+    float4 _108 = ColorLut.sample(ColorLutSampler, float2(_90, _71 / VertexParams.LutHeight), level(0.0));
+    out.out_var_TEXCOORD0 = float4(_108.xyz, _108.w * _84);
     out.out_var_TEXCOORD1 = in.in_var_TEXCOORD1;
-    out.out_var_TEXCOORD2 = Effects._m0[_71].style;
-    out.gl_Position = VertexParams.Matrix * float4(Particles._m0[gl_InstanceIndex].pos + (in.in_var_TEXCOORD0 * (mix(Effects._m0[_71].sizeStart, Effects._m0[_71].sizeEnd, _85) * _79)), 0.0, 1.0);
+    out.out_var_TEXCOORD2 = Effects._m0[_72].style;
+    out.gl_Position = VertexParams.Matrix * float4(Particles._m0[gl_InstanceIndex].pos + (in.in_var_TEXCOORD0 * (mix(Effects._m0[_72].sizeStart, Effects._m0[_72].sizeEnd, _90) * _84)), 0.0, 1.0);
     return out;
 }
 

@@ -15,8 +15,14 @@ public sealed class ParticleSystem : IDisposable
 	public const int Capacity = 16384;
 	public const int MaxEffects = 16;
 	const int MaxEmitsPerFrame = 64;
+	const int MaxEmitPointsPerFrame = 512;
 	const int LutWidth = 64;
+	// LUT rows 0..MaxEffects-1 are particle gradients, MaxEffects.. are trail gradients.
+	const int LutHeight = MaxEffects * 2;
 	const int ThreadGroupSize = 64;
+	// Recorded positions per particle; keep in sync with TRAIL_SAMPLES in the shaders.
+	const int TrailSamples = 16;
+	const int TrailSegs = TrailSamples - 1;
 
 	// NOTE: keep this a multiple of 8 bytes. The matching HLSL/MSL struct has
 	// float2 members, so Metal rounds its StructuredBuffer stride up to 8-byte
@@ -31,7 +37,9 @@ public sealed class ParticleSystem : IDisposable
 		public float Seed;
 		public float Effect;
 		public float Flags;
-		public float Pad; // pads 36 -> 40 bytes to match the MSL struct stride
+		public float TrailHead;
+		public float TrailTimer;
+		public float Pad; // pads 44 -> 48 bytes to match the MSL struct stride
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -39,7 +47,7 @@ public sealed class ParticleSystem : IDisposable
 	{
 		public float Gravity, Drag, NoiseAmount, NoiseScale;
 		public float SizeStart, SizeEnd, CollisionMode, Bounciness;
-		public float Style, Pad0, Pad1, Pad2;
+		public float Style, TrailSeconds, TrailWidthStart, TrailWidthEnd;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -51,6 +59,16 @@ public sealed class ParticleSystem : IDisposable
 		public float Radius, DirAngle, Spread;
 		public float SpeedMin, SpeedMax, LifeMin, LifeMax;
 		public float BaseVelocityX, BaseVelocityY;
+		public uint PointStart, Pad0, Pad1, Pad2;
+	}
+
+	// Per-effect silhouette force field (see EdgeFieldParams in ParticleUpdate.hlsl).
+	[StructLayout(LayoutKind.Sequential)]
+	struct EdgeFieldParams
+	{
+		public float OriginX, OriginY, RectLocalX, RectLocalY;
+		public float RectW, RectH, SrcX, SrcY;
+		public float Flip, Attraction, Flow, Enable;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -67,15 +85,18 @@ public sealed class ParticleSystem : IDisposable
 		public float TargetW;
 
 		public float TargetH;
-		public float Pad0, Pad1, Pad2;
+		public float SdfAtlasW, SdfAtlasH, Pad2;
 	}
 
+	// Shared by the particle and trail vertex shaders (the particle shader
+	// ignores MaxEffectsF).
 	[StructLayout(LayoutKind.Sequential)]
 	struct VertexParams
 	{
 		public Matrix4x4 Matrix;
+		public float LutHeightF;
 		public float MaxEffectsF;
-		public float Pad0, Pad1, Pad2;
+		public float Pad0, Pad1;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
@@ -83,21 +104,30 @@ public sealed class ParticleSystem : IDisposable
 	Shader? updateShader;
 	Shader? vertexShader;
 	Shader? fragmentShader;
+	Shader? trailVertexShader;
+	Shader? trailFragmentShader;
 	Material? material;
+	Material? trailMaterial;
 	Mesh<PosTexColVertex, ushort>? mesh;
 	ComputeStorageBuffer<Particle>? bufferA;
 	ComputeStorageBuffer<Particle>? bufferB;
+	ComputeStorageBuffer<Vector2>? trailBufferA;
+	ComputeStorageBuffer<Vector2>? trailBufferB;
 	bool currentIsB;
 	StorageBuffer<EffectParams>? effectsBuffer;
 	StorageBuffer<EmitParams>? emitsBuffer;
+	StorageBuffer<Vector4>? emitPointsBuffer;
+	StorageBuffer<EdgeFieldParams>? fieldsBuffer;
 	Texture? colorLut;
 	int colorLutHash = -1;
 
 	readonly string?[] effectNames = new string?[MaxEffects];
 	readonly EffectParams[] effectData = new EffectParams[MaxEffects];
+	readonly EdgeFieldParams[] fieldData = new EdgeFieldParams[MaxEffects];
 	readonly Dictionary<string, int> slotByName = new(StringComparer.OrdinalIgnoreCase);
 	readonly int[] slotRefCount = new int[MaxEffects];
 	readonly List<EmitParams> pendingEmits = [];
+	readonly List<Vector4> pendingEmitPoints = [];
 	int emitCursor;
 	float time;
 	readonly Rng rng = new(1234);
@@ -105,6 +135,7 @@ public sealed class ParticleSystem : IDisposable
 	public bool AutoBurst;
 
 	ComputeStorageBuffer<Particle> Current => currentIsB ? bufferB! : bufferA!;
+	ComputeStorageBuffer<Vector2> CurrentTrail => currentIsB ? trailBufferB! : trailBufferA!;
 
 	public bool Supported => supported;
 
@@ -118,15 +149,18 @@ public sealed class ParticleSystem : IDisposable
 			var updatePath = Path.Join(dir, $"ParticleUpdate.compute.{ext}");
 			var vertexPath = Path.Join(dir, $"Particle.vertex.{ext}");
 			var fragmentPath = Path.Join(dir, $"Particle.fragment.{ext}");
-			if (!File.Exists(updatePath) || !File.Exists(vertexPath) || !File.Exists(fragmentPath))
+			var trailVertexPath = Path.Join(dir, $"ParticleTrail.vertex.{ext}");
+			var trailFragmentPath = Path.Join(dir, $"ParticleTrail.fragment.{ext}");
+			if (!File.Exists(updatePath) || !File.Exists(vertexPath) || !File.Exists(fragmentPath)
+				|| !File.Exists(trailVertexPath) || !File.Exists(trailFragmentPath))
 				return;
 
 			updateShader = new Shader(
 				graphicsDevice, ShaderStage.Compute, File.ReadAllBytes(updatePath),
-				samplerCount: 1,
+				samplerCount: 2,
 				uniformBufferCount: 1,
-				readOnlyStorageBufferCount: 3,
-				readWriteStorageBufferCount: 1,
+				readOnlyStorageBufferCount: 6,
+				readWriteStorageBufferCount: 2,
 				threadCountX: ThreadGroupSize, threadCountY: 1, threadCountZ: 1,
 				entryPoint: "compute_main", name: "ParticleUpdate");
 
@@ -140,6 +174,17 @@ public sealed class ParticleSystem : IDisposable
 				entryPoint: "fragment_main", name: "ParticleFragment");
 
 			material = new Material(vertexShader, fragmentShader);
+
+			trailVertexShader = new Shader(
+				graphicsDevice, ShaderStage.Vertex, File.ReadAllBytes(trailVertexPath),
+				samplerCount: 1, uniformBufferCount: 1, storageBufferCount: 3,
+				entryPoint: "vertex_main", name: "ParticleTrailVertex");
+
+			trailFragmentShader = new Shader(
+				graphicsDevice, ShaderStage.Fragment, File.ReadAllBytes(trailFragmentPath),
+				entryPoint: "fragment_main", name: "ParticleTrailFragment");
+
+			trailMaterial = new Material(trailVertexShader, trailFragmentShader);
 
 			mesh = new Mesh<PosTexColVertex, ushort>(graphicsDevice);
 			Span<PosTexColVertex> vertices =
@@ -159,12 +204,22 @@ public sealed class ParticleSystem : IDisposable
 			bufferA.Upload(empty);
 			bufferB.Upload(empty);
 
+			var emptyTrail = new Vector2[Capacity * TrailSamples];
+			trailBufferA = new ComputeStorageBuffer<Vector2>(graphicsDevice, "ParticleTrailsA");
+			trailBufferB = new ComputeStorageBuffer<Vector2>(graphicsDevice, "ParticleTrailsB");
+			trailBufferA.Upload(emptyTrail);
+			trailBufferB.Upload(emptyTrail);
+
 			effectsBuffer = new StorageBuffer<EffectParams>(graphicsDevice, "ParticleEffects");
 			effectsBuffer.Upload(new EffectParams[MaxEffects]);
 			emitsBuffer = new StorageBuffer<EmitParams>(graphicsDevice, "ParticleEmits");
 			emitsBuffer.Upload(new EmitParams[MaxEmitsPerFrame]);
+			emitPointsBuffer = new StorageBuffer<Vector4>(graphicsDevice, "ParticleEmitPoints");
+			emitPointsBuffer.Upload(new Vector4[MaxEmitPointsPerFrame]);
+			fieldsBuffer = new StorageBuffer<EdgeFieldParams>(graphicsDevice, "ParticleEdgeFields");
+			fieldsBuffer.Upload(new EdgeFieldParams[MaxEffects]);
 
-			colorLut = new Texture(graphicsDevice, LutWidth, MaxEffects, TextureFormat.Color, TextureFlags.None, "ParticleColorLut");
+			colorLut = new Texture(graphicsDevice, LutWidth, LutHeight, TextureFormat.Color, TextureFlags.None, "ParticleColorLut");
 
 			supported = true;
 		}
@@ -204,13 +259,35 @@ public sealed class ParticleSystem : IDisposable
 		slot = -1;
 	}
 
+	/// Acquires a dedicated (unshared) slot for the named effect. Required for
+	/// effects with an edge field (EdgeAttraction > 0), which bind one sprite
+	/// instance per slot; shed-only effects should use AcquireEffect instead.
+	public int AcquireEffectInstance(string name)
+	{
+		if (!supported)
+			return -1;
+		for (var i = 0; i < MaxEffects; i++)
+		{
+			if (effectNames[i] == null)
+			{
+				effectNames[i] = name;
+				slotRefCount[i] = 1;
+				return i;
+			}
+		}
+		Console.Error.WriteLine("ParticleSystem.AcquireEffectInstance error: out of slots");
+		return -1;
+	}
+
 	public void ReleaseEffect(int slot)
 	{
 		if (slot < 0 || slot >= MaxEffects || slotRefCount[slot] <= 0)
 			return;
 		if (--slotRefCount[slot] > 0)
 			return;
-		if (effectNames[slot] is { } name)
+		// Instance slots share a name with a potential shared slot; only drop
+		// the name mapping if it points at this slot.
+		if (effectNames[slot] is { } name && slotByName.TryGetValue(name, out var mapped) && mapped == slot)
 			slotByName.Remove(name);
 		effectNames[slot] = null;
 	}
@@ -263,6 +340,96 @@ public sealed class ParticleSystem : IDisposable
 			radius: delta.Length(), spreadRadians: effect.SpreadDegrees);
 	}
 
+	static readonly List<int> edgeScratch = [];
+
+	/// Emits from a baked sprite frame's border (see SpriteSdf), filtered to
+	/// the side chosen by the effect's Edge settings. <paramref name="canvasOffset"/>
+	/// is the sprite canvas top-left in unflipped local space (Shift - Origin
+	/// for actors); <paramref name="facing"/> is +1/-1. <paramref name="smearDt"/>
+	/// spreads spawns back along <paramref name="velocity"/> to cover fast motion.
+	public void EmitSpriteEdge(int effectIndex, string spriteName, int frameIndex, Vector2 position, Vector2 canvasOffset, int facing, Vector2 velocity, int count, float smearDt = 0f)
+	{
+		if (GetEffect(effectIndex, count) is not { } effect)
+			return;
+		var edge = SpriteSdf.EdgePoints(spriteName, frameIndex);
+		if (edge.Length == 0)
+			return;
+
+		// Side filter in unflipped sprite-local space.
+		var filter = effect.EdgeSide != ParticleEdgeSide.All;
+		var sideDir = Vector2.Zero;
+		if (effect.EdgeSide == ParticleEdgeSide.FacingMotion)
+		{
+			if (velocity.LengthSquared() < 1e-4f)
+				return;
+			sideDir = Vector2.Normalize(velocity with { X = velocity.X * facing });
+		}
+		else if (effect.EdgeSide == ParticleEdgeSide.FixedDirection)
+		{
+			var rad = effect.EdgeSideDegrees * (MathF.PI / 180.0f);
+			sideDir = new Vector2(MathF.Cos(rad), MathF.Sin(rad));
+		}
+		var cosThreshold = MathF.Cos(effect.EdgeArcDegrees * 0.5f * (MathF.PI / 180.0f));
+
+		edgeScratch.Clear();
+		for (var i = 0; i < edge.Length; i++)
+			if (!filter || Vector2.Dot(edge[i].Normal, sideDir) >= cosThreshold)
+				edgeScratch.Add(i);
+		if (edgeScratch.Count == 0)
+			return;
+
+		count = Math.Min(count, MaxEmitPointsPerFrame - pendingEmitPoints.Count);
+		if (count <= 0)
+			return;
+		var pointStart = (uint)pendingEmitPoints.Count;
+
+		// Evenly spaced picks with jitter: coherent coverage without clumping.
+		var step = edgeScratch.Count / (float)count;
+		for (var k = 0; k < count; k++)
+		{
+			var pick = edgeScratch[Math.Min((int)((k + rng.Float()) * step), edgeScratch.Count - 1)];
+			var (canvasPos, normal) = edge[pick];
+			var local = canvasOffset + canvasPos;
+			var world = position + new Vector2(facing * local.X, local.Y);
+			world -= velocity * (rng.Float() * smearDt);
+			var angle = MathF.Atan2(normal.Y, facing * normal.X);
+			pendingEmitPoints.Add(new Vector4(world.X, world.Y, angle, 0));
+		}
+
+		QueueEmit(effectIndex, effect, position, count,
+			(uint)ParticleEmitterShape.Points,
+			0f, effect.SpeedMin, effect.SpeedMax,
+			spreadRadians: effect.SpreadDegrees * (MathF.PI / 180.0f),
+			baseVelocity: velocity, pointStart: pointStart);
+	}
+
+	/// Binds the named sprite frame's silhouette SDF to the effect slot for
+	/// this frame, enabling the effect's EdgeAttraction/EdgeFlow forces. Call
+	/// every frame before the sim updates; the binding expires each frame.
+	public void SetEffectField(int effectIndex, string spriteName, int frameIndex, Vector2 position, Vector2 canvasOffset, int facing)
+	{
+		if (!supported || effectIndex < 0 || effectIndex >= MaxEffects || effectNames[effectIndex] is not { } name)
+			return;
+		var effect = ParticleEffectAssets.Get(name);
+		if (effect.EdgeAttraction <= 0f || SpriteSdf.Frame(spriteName, frameIndex) is not { } sdf)
+			return;
+		fieldData[effectIndex] = new EdgeFieldParams
+		{
+			OriginX = position.X,
+			OriginY = position.Y,
+			RectLocalX = canvasOffset.X - SpriteSdf.Margin,
+			RectLocalY = canvasOffset.Y - SpriteSdf.Margin,
+			RectW = sdf.Source.Width,
+			RectH = sdf.Source.Height,
+			SrcX = sdf.Source.X,
+			SrcY = sdf.Source.Y,
+			Flip = facing,
+			Attraction = effect.EdgeAttraction,
+			Flow = effect.EdgeFlow,
+			Enable = 1f,
+		};
+	}
+
 	ParticleEffect? GetEffect(int effectIndex, int count)
 	{
 		if (!supported || count <= 0 || effectIndex < 0 || effectIndex >= MaxEffects)
@@ -272,11 +439,12 @@ public sealed class ParticleSystem : IDisposable
 		return effectNames[effectIndex] is { } name ? ParticleEffectAssets.Get(name) : null;
 	}
 
-	void QueueEmit(int effectIndex, ParticleEffect effect, Vector2 worldPosition, int count, uint shape, float dirRadians, float speedMin, float speedMax, float radius = float.NaN, float spreadRadians = float.NaN, Vector2 baseVelocity = default)
+	void QueueEmit(int effectIndex, ParticleEffect effect, Vector2 worldPosition, int count, uint shape, float dirRadians, float speedMin, float speedMax, float radius = float.NaN, float spreadRadians = float.NaN, Vector2 baseVelocity = default, uint pointStart = 0)
 	{
 		count = Math.Min(count, Capacity);
 		pendingEmits.Add(new EmitParams
 		{
+			PointStart = pointStart,
 			Start = (uint)emitCursor,
 			Count = (uint)count,
 			Seed = (uint)rng.Int(),
@@ -317,9 +485,15 @@ public sealed class ParticleSystem : IDisposable
 		var emitCount = Math.Min(pendingEmits.Count, MaxEmitsPerFrame);
 		if (emitCount > 0)
 			emitsBuffer!.Upload(CollectionsMarshal.AsSpan(pendingEmits)[..emitCount]);
+		if (pendingEmitPoints.Count > 0)
+			emitPointsBuffer!.Upload(CollectionsMarshal.AsSpan(pendingEmitPoints));
+		fieldsBuffer!.Upload(fieldData);
 
 		var src = Current;
 		var dst = currentIsB ? bufferA! : bufferB!;
+		var trailSrc = CurrentTrail;
+		var trailDst = currentIsB ? trailBufferA! : trailBufferB!;
+		var sdfAtlas = SpriteSdf.Atlas;
 
 		uniforms.Set(new UpdateParams
 		{
@@ -332,13 +506,19 @@ public sealed class ParticleSystem : IDisposable
 			Zoom = zoom,
 			TargetW = solidMask?.Width ?? 1,
 			TargetH = solidMask?.Height ?? 1,
+			SdfAtlasW = sdfAtlas?.Width ?? 1,
+			SdfAtlasH = sdfAtlas?.Height ?? 1,
 		});
 
 		new ComputeCommand(updateShader)
 		{
-			Samplers = [new(solidMask, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp))],
-			ReadOnlyStorageBuffers = [src, effectsBuffer, emitsBuffer],
-			ReadWriteStorageBuffers = [dst],
+			Samplers =
+			[
+				new(solidMask, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp)),
+				new(sdfAtlas, new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp)),
+			],
+			ReadOnlyStorageBuffers = [src, effectsBuffer, emitsBuffer, trailSrc, emitPointsBuffer, fieldsBuffer],
+			ReadWriteStorageBuffers = [dst, trailDst],
 			UniformBuffers = [uniforms],
 			GroupCountX = (Capacity + ThreadGroupSize - 1) / ThreadGroupSize,
 			GroupCountY = 1,
@@ -347,6 +527,10 @@ public sealed class ParticleSystem : IDisposable
 
 		currentIsB = !currentIsB;
 		pendingEmits.Clear();
+		pendingEmitPoints.Clear();
+		// Fields are one-frame bindings to a moving sprite; owners re-set them
+		// every frame before Update or the force switches off.
+		Array.Clear(fieldData);
 	}
 
 	public void Render(Target target, Vector2 camera, float zoom)
@@ -354,19 +538,35 @@ public sealed class ParticleSystem : IDisposable
 		if (!supported)
 			return;
 
-		material!.Vertex.SetUniformBuffer(new VertexParams
+		var vertexParams = new VertexParams
 		{
 			Matrix = Matrix4x4.CreateTranslation(-camera.X, -camera.Y, 0) *
 				Matrix4x4.CreateScale(zoom, zoom, 1) *
 				Batcher.CreateProjectionMatrix(target.Bounds.Size),
+			LutHeightF = LutHeight,
 			MaxEffectsF = MaxEffects,
-		});
-		material.Vertex.Samplers[0] = new(colorLut, new TextureSampler(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		};
+		var lutSampler = new TextureSampler(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp);
+		var blend = new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One);
+
+		// Trails first so particle heads draw on top of their own ribbons.
+		trailMaterial!.Vertex.SetUniformBuffer(vertexParams);
+		trailMaterial.Vertex.Samplers[0] = new(colorLut, lutSampler);
+
+		new DrawCommand(target, mesh!, trailMaterial)
+		{
+			InstanceCount = Capacity * TrailSegs,
+			BlendMode = blend,
+			VertexStorageBuffers = [Current, effectsBuffer, CurrentTrail],
+		}.Submit(graphicsDevice);
+
+		material!.Vertex.SetUniformBuffer(vertexParams);
+		material.Vertex.Samplers[0] = new(colorLut, lutSampler);
 
 		new DrawCommand(target, mesh!, material)
 		{
 			InstanceCount = Capacity,
-			BlendMode = new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One),
+			BlendMode = blend,
 			VertexStorageBuffers = [Current, effectsBuffer],
 		}.Submit(graphicsDevice);
 	}
@@ -391,6 +591,9 @@ public sealed class ParticleSystem : IDisposable
 					CollisionMode = (float)e.Collision,
 					Bounciness = e.Bounciness,
 					Style = (float)e.Style,
+					TrailSeconds = e.TrailSeconds,
+					TrailWidthStart = e.TrailWidthStart,
+					TrailWidthEnd = e.TrailWidthEnd,
 				};
 			}
 			else
@@ -407,14 +610,18 @@ public sealed class ParticleSystem : IDisposable
 			return;
 		colorLutHash = hash;
 
-		Span<Color> texels = stackalloc Color[LutWidth * MaxEffects];
+		Span<Color> texels = stackalloc Color[LutWidth * LutHeight];
 		for (var i = 0; i < MaxEffects; i++)
 		{
 			if (effectNames[i] is not { } name)
 				continue;
 			var e = ParticleEffectAssets.Get(name);
 			for (var x = 0; x < LutWidth; x++)
-				texels[i * LutWidth + x] = e.EvaluateColor(x / (float)(LutWidth - 1));
+			{
+				var t = x / (float)(LutWidth - 1);
+				texels[i * LutWidth + x] = e.EvaluateColor(t);
+				texels[(MaxEffects + i) * LutWidth + x] = e.EvaluateTrailColor(t);
+			}
 		}
 		colorLut!.SetData<Color>(texels);
 	}
@@ -423,12 +630,18 @@ public sealed class ParticleSystem : IDisposable
 	{
 		bufferA?.Dispose();
 		bufferB?.Dispose();
+		trailBufferA?.Dispose();
+		trailBufferB?.Dispose();
 		effectsBuffer?.Dispose();
 		emitsBuffer?.Dispose();
+		emitPointsBuffer?.Dispose();
+		fieldsBuffer?.Dispose();
 		colorLut?.Dispose();
 		mesh?.Dispose();
 		updateShader?.Dispose();
 		vertexShader?.Dispose();
 		fragmentShader?.Dispose();
+		trailVertexShader?.Dispose();
+		trailFragmentShader?.Dispose();
 	}
 }

@@ -12,6 +12,7 @@ public enum ParticleEmitterShape
 	Circle,
 	Cone,
 	Line,
+	Points, // explicit per-frame point list (code-driven; not authorable as an emitter shape)
 }
 
 public enum ParticleRenderStyle
@@ -32,6 +33,20 @@ public enum ParticleCollisionMode
 	Kill,
 	Settle,
 	Bounce,
+}
+
+// Which part of a sprite's border EmitSpriteEdge spawns from.
+public enum ParticleEdgeSide
+{
+	FacingMotion,   // border normals aligned with the emitter's velocity (windward)
+	FixedDirection, // border normals near EdgeSideDegrees, in sprite-local space (flip-aware)
+	All,            // the whole silhouette
+}
+
+public struct TrailColorKey
+{
+	public float T;
+	public Color Color;
 }
 
 /// A named, authorable particle effect asset: emitter shape, dynamics, and
@@ -69,10 +84,30 @@ public sealed class ParticleEffect
 	public ParticleCollisionMode Collision = ParticleCollisionMode.None;
 	public float Bounciness = 0.4f;
 
+	// Trail (a ribbon of recent positions behind each particle; 0 = no trail)
+	public float TrailSeconds;
+	public float TrailWidthStart = 2.0f;
+	public float TrailWidthEnd = 0.0f;
+
+	// Sprite-edge emission (used by EmitSpriteEdge; see SpriteSdf for which
+	// sprites have baked borders). Attraction pulls particles back onto the
+	// emitting sprite's silhouette per second (0 = shed freely; ~60+ snaps
+	// them onto it every frame); Flow drives them along it (px/s, sign =
+	// direction). Flow needs Attraction > 0 to stay on the edge.
+	public ParticleEdgeSide EdgeSide = ParticleEdgeSide.FacingMotion;
+	public float EdgeSideDegrees = -90.0f; // sprite-local, -90 = top edge
+	public float EdgeArcDegrees = 120.0f;  // how wide a band of border normals qualifies
+	public float EdgeAttraction;
+	public float EdgeFlow;
+
 	// Color over life: birth -> mid -> death.
 	public Color ColorBirth = new(1.0f, 0.95f, 0.6f, 1.0f);
 	public Color ColorMid = new(1.0f, 0.5f, 0.15f, 1.0f);
 	public Color ColorEnd = new(0.3f, 0.05f, 0.05f, 0.0f);
+
+	// Trail color at keys along the trail (0 = at the particle, 1 = tail end),
+	// sorted by T. Empty = reuse the particle's own gradient.
+	public List<TrailColorKey> TrailColors = [];
 
 	/// Samples the birth -> mid -> death gradient at t in [0, 1].
 	public Color EvaluateColor(float t)
@@ -83,9 +118,31 @@ public sealed class ParticleEffect
 			: new Color(Vector4.Lerp(ColorMid, ColorEnd, (t - 0.5f) * 2.0f));
 	}
 
+	/// Samples the trail gradient at t in [0, 1] (0 = head, 1 = tail).
+	public Color EvaluateTrailColor(float t)
+	{
+		if (TrailColors.Count == 0)
+			return EvaluateColor(t);
+		t = Math.Clamp(t, 0.0f, 1.0f);
+		if (t <= TrailColors[0].T)
+			return TrailColors[0].Color;
+		for (var i = 1; i < TrailColors.Count; i++)
+		{
+			var (a, b) = (TrailColors[i - 1], TrailColors[i]);
+			if (t <= b.T)
+				return new Color(Vector4.Lerp(a.Color, b.Color, (t - a.T) / MathF.Max(1e-5f, b.T - a.T)));
+		}
+		return TrailColors[^1].Color;
+	}
+
 	/// Hash of the data that affects the baked color LUT.
 	public int ColorHash()
-		=> HashCode.Combine(ColorBirth.RGBA, ColorMid.RGBA, ColorEnd.RGBA);
+	{
+		var hash = HashCode.Combine(ColorBirth.RGBA, ColorMid.RGBA, ColorEnd.RGBA);
+		foreach (var key in TrailColors)
+			hash = HashCode.Combine(hash, key.T, key.Color.RGBA);
+		return hash;
+	}
 
 	public JsonObject ToJson()
 		=> JsonSerializer.SerializeToNode(this, ParticleEffectJsonContext.Default.ParticleEffect)?.AsObject() ?? [];

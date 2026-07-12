@@ -154,6 +154,7 @@ public abstract class Pawn : Actor
 	{
 		if (Game.Rewinding) return;
 
+
 		var previousVelocity = Velocity;
 		base.Update();
 		wallJumpDirectionCached = false;
@@ -643,7 +644,7 @@ public abstract class Pawn : Actor
 		}
 	}
 
-	bool TryStartDash(int input)
+	protected bool TryStartDash(int input)
 	{
 		if (dashCooldownTimer > 0 || dashNeedsGrounding)
 			return false;
@@ -949,6 +950,7 @@ public partial class Player : Pawn
 		}
 
 		UpdateAura(Time.Delta);
+		UpdateDashFx(Time.Delta);
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
@@ -1093,6 +1095,7 @@ public partial class Player : Pawn
 
 		UpdateBurrowAlways();
 		UpdateHat(previousVelocity);
+		UpdateShield(Time.Delta);
 	}
 
 	void UpdateHat(Vector2 previousVelocity)
@@ -1719,5 +1722,7 @@ public partial class Player : Pawn
 		if (plasmaStrikeEffect >= 0 && Game.Particles is { } particles)
 			particles.ReleaseEffect(plasmaStrikeEffect);
 		plasmaStrikeEffect = -1;
+		ReleaseDashFx();
+		ReleaseShield();
 	}
 }

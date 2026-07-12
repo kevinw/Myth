@@ -388,6 +388,7 @@ public partial class Manager : App
 #if DEBUG && !IOS && !BROWSER
 		StartAssetWatcher();
 		StartShaderWatcher();
+		StartParticleWatcher();
 		if (AudioEnabled)
 			StartAudioBankWatcher();
 #endif
@@ -419,6 +420,8 @@ public partial class Manager : App
 		assetWatcher = null;
 		shaderWatcher?.Dispose();
 		shaderWatcher = null;
+		particleWatcher?.Dispose();
+		particleWatcher = null;
 		audioBankWatcher?.Dispose();
 		audioBankWatcher = null;
 #endif
@@ -740,6 +743,7 @@ public partial class Manager : App
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
 		UpdateShaderReload();
+		UpdateParticleEffectReload();
 		UpdateAudioBankReload();
 #endif
 

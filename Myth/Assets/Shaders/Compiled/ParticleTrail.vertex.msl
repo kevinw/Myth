@@ -1,0 +1,126 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct Particle
+{
+    float2 pos;
+    float2 vel;
+    float age;
+    float lifetime;
+    float seed;
+    float effect;
+    float flags;
+    float trailHead;
+    float trailTimer;
+    float pad;
+};
+
+struct type_StructuredBuffer_Particle
+{
+    Particle _m0[1];
+};
+
+struct EffectParams
+{
+    float gravity;
+    float drag;
+    float noiseAmount;
+    float noiseScale;
+    float sizeStart;
+    float sizeEnd;
+    float collisionMode;
+    float bounciness;
+    float style;
+    float trailSeconds;
+    float trailWidthStart;
+    float trailWidthEnd;
+};
+
+struct type_StructuredBuffer_EffectParams
+{
+    EffectParams _m0[1];
+};
+
+struct type_StructuredBuffer_v2float
+{
+    float2 _m0[1];
+};
+
+struct type_VertexParams
+{
+    float4x4 Matrix;
+    float LutHeight;
+    float MaxEffects;
+    float _pad0;
+    float _pad1;
+};
+
+struct vertex_main_out
+{
+    float4 out_var_TEXCOORD0 [[user(locn0)]];
+    float2 out_var_TEXCOORD1 [[user(locn1)]];
+    float4 gl_Position [[position]];
+};
+
+struct vertex_main_in
+{
+    float2 in_var_TEXCOORD0 [[attribute(0)]];
+};
+
+vertex vertex_main_out vertex_main(vertex_main_in in [[stage_in]], constant type_VertexParams& VertexParams [[buffer(0)]], const device type_StructuredBuffer_Particle& Particles [[buffer(1)]], const device type_StructuredBuffer_EffectParams& Effects [[buffer(2)]], const device type_StructuredBuffer_v2float& Trail [[buffer(3)]], texture2d<float> ColorLut [[texture(0)]], sampler ColorLutSampler [[sampler(0)]], uint gl_InstanceIndex [[instance_id]])
+{
+    vertex_main_out out = {};
+    uint _74 = gl_InstanceIndex / 15u;
+    uint _85 = uint(Particles._m0[_74].effect + 0.5);
+    uint _92 = _74 * 16u;
+    uint _99 = (gl_InstanceIndex % 15u) + uint(in.in_var_TEXCOORD0.x + 1.0);
+    bool _100 = _99 == 0u;
+    uint _105;
+    if (_100)
+    {
+        _105 = 0u;
+    }
+    else
+    {
+        _105 = _99 - 1u;
+    }
+    uint _108 = uint(Particles._m0[_74].trailHead + 0.5) + 16u;
+    float _135;
+    if (_100)
+    {
+        _135 = 0.0;
+    }
+    else
+    {
+        _135 = fast::clamp(((float(_99 - 1u) * (Effects._m0[_85].trailSeconds * 0.066666670143604278564453125)) + Particles._m0[_74].trailTimer) / precise::max(Effects._m0[_85].trailSeconds, 9.9999997473787516355514526367188e-06), 0.0, 1.0);
+    }
+    bool _140;
+    if (Particles._m0[_74].lifetime > 0.0)
+    {
+        _140 = Effects._m0[_85].trailSeconds > 0.0;
+    }
+    else
+    {
+        _140 = false;
+    }
+    float _141 = float(_140);
+    float2 _144 = Trail._m0[_92 + ((_108 - _105) % 16u)] - Trail._m0[_92 + ((_108 - min((_99 + 1u), 15u)) % 16u)];
+    float _145 = length(_144);
+    float2 _156;
+    if (_145 > 9.9999997473787516355514526367188e-05)
+    {
+        _156 = float2(-_144.y, _144.x) / float2(_145);
+    }
+    else
+    {
+        _156 = float2(0.0);
+    }
+    float4 _181 = ColorLut.sample(ColorLutSampler, float2(_135, ((VertexParams.MaxEffects + Particles._m0[_74].effect) + 0.5) / VertexParams.LutHeight), level(0.0));
+    out.out_var_TEXCOORD0 = float4(_181.xyz, _181.w * _141);
+    out.out_var_TEXCOORD1 = float2(_135, in.in_var_TEXCOORD0.y + 0.5);
+    out.gl_Position = VertexParams.Matrix * float4(Trail._m0[_92 + ((_108 - _99) % 16u)] + (((_156 * (in.in_var_TEXCOORD0.y * 2.0)) * (mix(Effects._m0[_85].trailWidthStart, Effects._m0[_85].trailWidthEnd, _135) * _141)) * 0.5), 0.0, 1.0);
+    return out;
+}
+

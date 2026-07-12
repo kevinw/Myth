@@ -40,6 +40,12 @@ public class Controls(Input input)
 		.Add(Axes.RightTrigger, 1, 0.25f)
 	);
 
+	public readonly VirtualAction Shield = new(input, "Shield",
+		new ActionBindingSet()
+			.Add(Keys.C)
+			.Add(Axes.LeftTrigger, 1, 0.25f)
+	);
+
 	public readonly VirtualAction Saw = new(input, "Saw",
 		new ActionBindingSet()
 	//.Add(Keys.Z)

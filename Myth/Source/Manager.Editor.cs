@@ -118,8 +118,12 @@ public partial class Manager
 	FileSystemWatcher? assetWatcher;
 	FileSystemWatcher? shaderWatcher;
 	FileSystemWatcher? audioBankWatcher;
+	FileSystemWatcher? particleWatcher;
 	bool assetReloadRequested;
 	float assetReloadTimer;
+	readonly Lock particleReloadLock = new();
+	bool particleReloadRequested;
+	float particleReloadTimer;
 	readonly Lock shaderReloadLock = new();
 	bool shaderReloadRequested;
 	float shaderReloadTimer;
@@ -209,6 +213,7 @@ public partial class Manager
 			FpsOverlayImGui();
 		TransitionViewerImGui();
 		PreferencesImGui();
+		PinnedParticleEffectImGui();
 		if (!playing && !startingPlay)
 		{
 			TileKitEditorImGui();
@@ -1313,13 +1318,26 @@ public partial class Manager
 		if (name == null || !ParticleEffectAssets.Exists(name))
 			return;
 
-		var e = ParticleEffectAssets.Get(name);
-
 		ImGui.SeparatorText("Particle Asset");
 		ImGui.TextDisabled($"shared '{name}' - autosaves");
+		ImGui.SameLine();
+		var pinned = pinnedParticleEffect == name;
+		if (ImGui.SmallButton(pinned ? "Unpin" : "Pin"))
+			pinnedParticleEffect = pinned ? null : name;
 		ImGui.Indent();
 		if (ImGui.Button("Test Burst", new Vector2(-1, 0)))
 			TestParticleBurst(actor);
+
+		DrawParticleEffectControls(name);
+
+		ImGui.Unindent();
+	}
+
+	// The shared effect-asset sliders, used by both the actor inspector and the
+	// pinned play-mode window.
+	void DrawParticleEffectControls(string name)
+	{
+		var e = ParticleEffectAssets.Get(name);
 
 		FxShape("Shape", name, ref e.Shape);
 		FxInt("Count", name, ref e.BurstCount, 1, ParticleSystem.Capacity);
@@ -1358,12 +1376,70 @@ public partial class Manager
 		FxColor("Mid", name, ref e.ColorMid);
 		FxColor("Death", name, ref e.ColorEnd);
 
+		ImGui.SeparatorText("Trail");
+		FxFloat("Trail Seconds", name, ref e.TrailSeconds, 0.0f, 2.0f);
+		if (e.TrailSeconds > 0.0f)
+		{
+			FxFloat("Trail Width Start", name, ref e.TrailWidthStart, 0.0f, 8.0f);
+			FxFloat("Trail Width End", name, ref e.TrailWidthEnd, 0.0f, 8.0f);
+			ImGui.TextDisabled("trail colors: TrailColors keys in the json");
+		}
+
+		ImGui.SeparatorText("Edge (sprite emission)");
+		FxEdgeSide("Side", name, ref e.EdgeSide);
+		if (e.EdgeSide == ParticleEdgeSide.FixedDirection)
+			FxFloat("Side Angle", name, ref e.EdgeSideDegrees, -180.0f, 180.0f);
+		if (e.EdgeSide != ParticleEdgeSide.All)
+			FxFloat("Arc", name, ref e.EdgeArcDegrees, 10.0f, 360.0f);
+		FxFloat("Attract", name, ref e.EdgeAttraction, 0.0f, 100.0f);
+		FxFloat("Flow Along", name, ref e.EdgeFlow, -200.0f, 200.0f);
+
 		ImGui.SeparatorText("Collision");
 		FxCollision("Collision", name, ref e.Collision);
 		if (e.Collision == ParticleCollisionMode.Bounce)
 			FxFloat("Bounciness", name, ref e.Bounciness, 0.0f, 1.0f);
+	}
 
-		ImGui.Unindent();
+	// Pinned via the actor inspector's Pin button or the toolbar's Particles
+	// button; stays up during play mode so effects can be tuned live.
+	// Session-only; the toolbar button reopens the last pinned effect.
+	string? pinnedParticleEffect;
+	string? lastPinnedParticleEffect;
+
+	void PinnedParticleEffectImGui()
+	{
+		if (pinnedParticleEffect is not { } name)
+			return;
+		if (!ParticleEffectAssets.Exists(name))
+		{
+			pinnedParticleEffect = null;
+			return;
+		}
+		lastPinnedParticleEffect = name;
+
+		var open = true;
+		ImGui.SetNextWindowSize(new Vector2(300, 560) * Scale, ImGuiCond.FirstUseEver);
+		if (ImGui.Begin("Particles##Pinned", ref open, ImGuiWindowFlags.NoSavedSettings))
+		{
+			ImGui.SetNextItemWidth(-1);
+			if (ImGui.BeginCombo("##PinnedEffectName", name))
+			{
+				foreach (var other in ParticleEffectAssets.Names)
+					if (ImGui.Selectable(other, other == name))
+						pinnedParticleEffect = name = other;
+				ImGui.EndCombo();
+			}
+			if (ImGui.Button("Test Burst", new Vector2(-1, 0)) && game != null)
+			{
+				game.SetPreviewEffect(name);
+				game.BurstTestEffect();
+			}
+			DrawParticleEffectControls(name);
+		}
+		ImGui.End();
+
+		if (!open)
+			pinnedParticleEffect = null;
 	}
 
 	void TestParticleBurst(JsonObject actor)
@@ -1451,6 +1527,16 @@ public partial class Manager
 		if (!ImGui.Combo($"##{label}", ref v, "Continuous\0Burst\0"))
 			return;
 		using (CaptureParticleEffectUndo(name)) field = (ParticleEmissionMode)v;
+		MarkParticleEffectDirty(name);
+	}
+
+	void FxEdgeSide(string label, string name, ref ParticleEdgeSide field)
+	{
+		var v = (int)field;
+		ImGui.SetNextItemWidth(-1);
+		if (!ImGui.Combo($"##{label}", ref v, "Facing Motion\0Fixed Direction\0All\0"))
+			return;
+		using (CaptureParticleEffectUndo(name)) field = (ParticleEdgeSide)v;
 		MarkParticleEffectDirty(name);
 	}
 
@@ -4738,6 +4824,12 @@ public partial class Manager
 			tileKitEditorOpen = !tileKitEditorOpen;
 		ImGui.SameLine();
 
+		if (ImGuiTextButton("Particles", new Vector2(70, ButtonSize), pinnedParticleEffect != null))
+			pinnedParticleEffect = pinnedParticleEffect == null
+				? lastPinnedParticleEffect ?? ParticleEffectAssets.Names.FirstOrDefault()
+				: null;
+		ImGui.SameLine();
+
 		if (ImGuiTextButton("Music", new Vector2(55, ButtonSize), musicRegionsOpen))
 			musicRegionsOpen = !musicRegionsOpen;
 		ImGui.SameLine(0, ToolbarSpacing);
@@ -4902,6 +4994,57 @@ public partial class Manager
 		assetWatcher.Deleted += (_, _) => RequestAssetReload();
 		assetWatcher.Renamed += (_, _) => RequestAssetReload();
 		assetWatcher.EnableRaisingEvents = true;
+	}
+
+	// Particle effect JSONs get their own watcher: the general asset watcher
+	// only reacts to art files, and a full ReloadAssets would be overkill for a
+	// particle tweak. Reload is deferred while a tuning-window autosave is
+	// pending so an external edit can't clobber an in-progress slider drag.
+	void StartParticleWatcher()
+	{
+		var particlesPath = Path.GetFullPath(ParticleEffectAssets.FolderPath);
+		if (!Directory.Exists(particlesPath))
+			return;
+
+		particleWatcher = new FileSystemWatcher(particlesPath, "*.json")
+		{
+			IncludeSubdirectories = true,
+			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
+		};
+
+		particleWatcher.Changed += (_, _) => RequestParticleEffectReload();
+		particleWatcher.Created += (_, _) => RequestParticleEffectReload();
+		particleWatcher.Deleted += (_, _) => RequestParticleEffectReload();
+		particleWatcher.Renamed += (_, _) => RequestParticleEffectReload();
+		particleWatcher.EnableRaisingEvents = true;
+	}
+
+	void RequestParticleEffectReload()
+	{
+		lock (particleReloadLock)
+		{
+			particleReloadRequested = true;
+			particleReloadTimer = AssetReloadDelay;
+		}
+	}
+
+	void UpdateParticleEffectReload()
+	{
+		var reload = false;
+		lock (particleReloadLock)
+		{
+			if (particleReloadRequested && particleAutosaveName == null)
+			{
+				particleReloadTimer -= Time.Delta;
+				if (particleReloadTimer <= 0)
+				{
+					particleReloadRequested = false;
+					reload = true;
+				}
+			}
+		}
+		if (reload)
+			ParticleEffectAssets.Load();
 	}
 
 	void StartShaderWatcher()

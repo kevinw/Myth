@@ -1,0 +1,44 @@
+{
+  "Shape": "Circle",
+  "EmitterRadius": 10,
+  "DirectionDegrees": -90,
+  "SpreadDegrees": 40,
+  "BurstCount": 12,
+  "Mode": "Continuous",
+  "EmissionRate": 14,
+  "Prewarm": false,
+  "SpeedMin": 8,
+  "SpeedMax": 30,
+  "LifeMin": 1.4,
+  "LifeMax": 2.6,
+  "Gravity": -12,
+  "Drag": 0.3,
+  "NoiseAmount": 90,
+  "NoiseScale": 0.04,
+  "SizeStart": 1.8,
+  "SizeEnd": 0.6,
+  "Additive": true,
+  "Style": "Plasma",
+  "Collision": "None",
+  "Bounciness": 0.4,
+  "TrailSeconds": 0.889,
+  "TrailWidthStart": 1.464,
+  "TrailWidthEnd": 0,
+  "ColorBirth": "8CF0E8FF",
+  "ColorMid": "6C78F0FF",
+  "ColorEnd": "40208000",
+  "TrailColors": [
+    {
+      "T": 0,
+      "Color": "A0FFF0C0"
+    },
+    {
+      "T": 0.4,
+      "Color": "6C78F080"
+    },
+    {
+      "T": 1,
+      "Color": "30188000"
+    }
+  ]
+}
