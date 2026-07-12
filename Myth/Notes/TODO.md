@@ -1,6 +1,12 @@
 # TODO
 
+## to triage
+- webpage crashes in tall climb room near boss (add ?debug=1 to show more info, first determine cause of restart, memory limit ? show memory pressure.)
+- rebuild fmod mobile; add warning if fmod project files are newer than the built asset banks? or just build them on desktop?
+
 ## mood: CONTENT
+- neural cellular automata but even better: https://cells2pixels.github.io/#dynamic_texture
+- merge kenney font for controller buttons into SpriteFont  https://kenney.nl/assets/input-prompts and include button prompts in tutorial messages
 - improve language for "emerge from flat"
 - remove white guy from beginning
 - bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
