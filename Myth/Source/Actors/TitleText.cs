@@ -28,7 +28,10 @@ public class TitleText : Actor
 		if (Assets.Font == null || string.IsNullOrEmpty(Text)) return;
 		var text = Text;
 		var length = (int)stateDuration;
-		var span = text.AsSpan()[..Math.Min(text.Length, length)];
+		var span = text.AsSpan();
+		if (!Game.Editing)
+			span = span[..Math.Min(text.Length, length)];
+
 		batcher.Text(Assets.Font, span, Vector2.Zero, Vector2.One * 0.50f, Color.White);
 	}
 }
