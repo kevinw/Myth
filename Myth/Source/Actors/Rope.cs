@@ -181,13 +181,34 @@ public class Rope : Actor, IResizable
 	// Snip the pinned chain at the joint nearest worldY. The freed lower part keeps simulating
 	// unpinned (it falls and drapes); attached pawns are handed the new chain so they can ride it
 	// down (see Pawn.OnRopeCut).
-	public void Break(float worldY)
+	public bool Break(Vector2 worldPos)
 	{
 		var chain = PinnedChain;
 		if (chain == null || chain.Points.Length < 4 || waiting > 1)
-			return; // no snipping mid-unfurl: the held points would fall as a clump
+			return false; // no snipping mid-unfurl: the held points would fall as a clump
 
-		var cut = Math.Clamp((int)MathF.Round((worldY - TopAnchor.Y) / SegmentLength), 2, chain.Points.Length - 2);
+		float worldY = worldPos.Y;
+
+		var minDistance = float.PositiveInfinity;
+		var minI = -1;
+
+		for (var i = 0; i < chain.Points.Length; ++i)
+		{
+			var point = chain.Points[i];
+			float distance = Vector2.DistanceSquared(point, worldPos);
+			if (distance < minDistance)
+			{
+				minDistance = distance;
+				minI = i;
+			}
+		}
+
+		if (minI == -1) {
+			return false;
+		}
+
+		//var cut = Math.Clamp((int)MathF.Round((worldY - TopAnchor.Y) / SegmentLength), 2, chain.Points.Length - 2);
+		var cut = minI;
 		var lower = new Chain { Points = chain.Points[cut..], Prev = chain.Prev[cut..] };
 		chain.Points = chain.Points[..cut];
 		chain.Prev = chain.Prev[..cut];
@@ -196,6 +217,8 @@ public class Rope : Actor, IResizable
 		foreach (var actor in Game.Actors)
 			if (actor is Pawn pawn)
 				pawn.OnRopeCut(this, chain, cut, lower);
+
+		return true;
 	}
 
 	public bool Broken => chains.Count > 1 || PinnedChain == null;
@@ -280,6 +303,7 @@ public class Rope : Actor, IResizable
 		RenderChains(batcher, null);
 	}
 	public override void RenderShadow(Batcher batcher, Color color) => RenderChains(batcher, color);
+	public override void RenderReflection(Batcher batcher, Color color) => RenderChains(batcher, color);
 
 	void RenderChains(Batcher batcher, Color? flat)
 	{

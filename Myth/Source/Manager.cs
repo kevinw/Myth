@@ -660,6 +660,10 @@ public partial class Manager : App
 		if (Input.Mouse.LeftPressed)
 		{
 			var mouse = GameMouseWorld(g);
+			if (Input.Keyboard.Shift) {
+				// cut ropes here.
+				g.CutRopes(mouse);
+			}
 			if (player.GetVisualBounds().Inflate(8).Contains(mouse))
 				g.draggingPlayer = true;
 		}

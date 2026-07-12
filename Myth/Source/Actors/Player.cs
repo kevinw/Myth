@@ -27,6 +27,15 @@ public abstract class Pawn : Actor
 			jumpParticlesEffect = particles.AcquireEffect("jump");
 			splashParticlesEffect = particles.AcquireEffect("splash");
 		}
+
+		Game.RoomChanged += OnRoomChanged;
+	}
+
+	void OnRoomChanged(RoomChange change) {
+		// don't get stuck in Climb when leaving a room
+		if (state.Current == States.Climb) {
+			state.Change(States.Normal);
+		}
 	}
 
 	protected bool PlayerSpecificAudioEvents = false;
@@ -774,18 +783,24 @@ public abstract class Pawn : Actor
 		} else if (chain.Pinned && input.MoveY < 0) {
 			Play("climb");
 		} else {
-			Play("climb_idle");
+			if (!ropeIsFalling)
+				Play("climb_idle");
+			else
+				Play("climb_fall");
 		}
 	}
 
 	void ExitClimb()
 	{
+		ropeIsFalling = false;
 		climbRope = null;
 		climbChain = null;
 		regrabTimer = RopeRegrabTime;
 		if (State == States.Climb)
 			State = States.Normal;
 	}
+
+	bool ropeIsFalling;
 
 	// A Rope we may be attached to was cut at cutIndex: below the cut our chain becomes the
 	// falling remnant -- keep riding it down (the cutscene beat); above it, nothing changes.
@@ -798,6 +813,7 @@ public abstract class Pawn : Actor
 			climbChain = lower;
 			climbIndex -= cutIndex;
 		}
+		ropeIsFalling = true;
 	}
 
 	protected bool TryStartDash(int input)
@@ -1220,7 +1236,8 @@ public partial class Player : Pawn
 	}
 
 	bool IsSafeGroundedRespawn()
-		=> Health > 0 && grounded && State != States.Burrow && OverlapsFirst(Point2.Down, Masks.Solid) is not MovingPlatform;
+		=> Health > 0 && grounded && State != States.Burrow && State != States.Climb &&
+		 OverlapsFirst(Point2.Down, Masks.Solid) is not MovingPlatform;
 
 	protected override void AfterMovementUpdate(Vector2 previousVelocity)
 	{

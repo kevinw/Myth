@@ -1,5 +1,7 @@
 # TODO
 
+adjust rope springiness as a mechanic or challenge
+
 ## to triage
 - webpage crashes in tall climb room near boss (add ?debug=1 to show more info, first determine cause of restart, memory limit ? show memory pressure.)
 - rebuild fmod mobile; add warning if fmod project files are newer than the built asset banks? or just build them on desktop?

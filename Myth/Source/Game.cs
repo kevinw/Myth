@@ -624,6 +624,12 @@ public partial class Game : IDisposable
 		return RectInt.Between((view.TopLeft / TileSize).FloorToPoint2(), (view.BottomRight / TileSize).CeilingToPoint2());
 	}
 
+	internal void CutRopes(Vector2 worldPos) {
+		foreach (var actor in Actors)
+			if (actor is Rope rope)
+					rope.Break(worldPos);
+	}
+
 	void UpdateCamera()
 	{
 		if (room == null || nextRoom != null || DraggingPlayer)

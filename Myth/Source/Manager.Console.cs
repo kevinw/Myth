@@ -262,7 +262,7 @@ public partial class Manager
 			game.DisplayMessage("No unbroken rope in room");
 			return;
 		}
-		best.Break(player.Position.Y - 12);
+		best.Break(player.Position);
 		game.DisplayMessage("Rope cut");
 	}
 }

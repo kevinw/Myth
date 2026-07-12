@@ -246,7 +246,8 @@ public class Drone : Actor
 
 		DrawRotor(batcher, new Color(0x2a2e38), new Color(0xc0c6d0));
 		DrawTurret(batcher, new Color(0x23262e), new Color(0x8a90a0));
-		batcher.Circle(Vector2.Zero, BodyRadius, 16, new Color(0x3a3f4b));
+		batcher.PushMatrix(Matrix3x2.CreateScale(1.0f, 0.95f));
+		batcher.Circle(Vector2.Zero, BodyRadius, 16, Color.Violet);
 		DrawEye(batcher);
 	}
 
@@ -322,7 +323,7 @@ public class Drone : Actor
 		=> new(dir.X * 0.5f + 0.5f, dir.Y * 0.5f + 0.5f, 0.5f, 1.0f);
 
 	static void DrawEye(Batcher batcher) {
-		batcher.Circle(new Vector2(0, -1), 1.6f, 8, new Color(0xff4040)); // eye
+		//batcher.Circle(new Vector2(0, -1), 1.6f, 8, new Color(0xff4040)); // eye
 	}
 
 	void DrawBlade(Batcher batcher, Vector2 at, float length, float thickness, Color color)
