@@ -36,7 +36,7 @@ public static class VisibilityPolygon
 	public static List<Hit> Compute(Vector2 origin, float radius, IReadOnlyList<Segment> segments, List<Hit> hits, int boundaryRayCount = MaxBoundaryRays)
 	{
 		candidates.Clear();
-		candidates.EnsureCapacity(segments.Count * 6 + boundaryRayCount);
+		candidates.EnsureCapacity(segments.Count * 4 + boundaryRayCount);
 
 		for (var i = 0; i < boundaryRayCount; i++)
 			candidates.Add(new(i / (float)boundaryRayCount * MathF.Tau));
@@ -50,12 +50,92 @@ public static class VisibilityPolygon
 		candidates.Sort(static (a, b) => a.Angle.CompareTo(b.Angle));
 		RemoveDuplicateAngles(candidates);
 
+		BuildRayIndex(origin, segments);
+
 		hits.Clear();
 		hits.EnsureCapacity(candidates.Count);
 		foreach (var candidate in candidates)
 			hits.Add(CastRay(origin, radius, candidate.Angle, segments));
 
 		return hits;
+	}
+
+	// Angular index over the segments, rebuilt per Compute. Each bucket covers an equal slice of
+	// [0, tau) around the origin and lists the segments whose subtended arc touches that slice, so a
+	// ray only tests its own bucket instead of every segment. Entries are inserted in ascending
+	// order of the segment's closest distance to the origin (mirrored in minDistances, indexed by
+	// segment index), letting CastRay stop at the first entry that can't beat its current hit.
+	private const int BucketCount = 64;
+	private static readonly List<int>[] rayBuckets = CreateRayBuckets();
+	private static readonly List<float> minDistances = new List<float>();
+	private static readonly List<(float MinDistance, int Index)> segmentsByDistance = new List<(float, int)>();
+
+	private static List<int>[] CreateRayBuckets()
+	{
+		var buckets = new List<int>[BucketCount];
+		for (var i = 0; i < buckets.Length; i++)
+			buckets[i] = new List<int>();
+		return buckets;
+	}
+
+	private static int BucketIndex(float angle)
+		=> Math.Clamp((int)(angle * (BucketCount / MathF.Tau)), 0, BucketCount - 1);
+
+	private static void BuildRayIndex(Vector2 origin, IReadOnlyList<Segment> segments)
+	{
+		foreach (var bucket in rayBuckets)
+			bucket.Clear();
+
+		segmentsByDistance.Clear();
+		minDistances.Clear();
+		for (var i = 0; i < segments.Count; i++)
+		{
+			var minDistance = MinDistanceToPoint(segments[i], origin);
+			segmentsByDistance.Add((minDistance, i));
+			minDistances.Add(minDistance);
+		}
+		segmentsByDistance.Sort(static (a, b) => a.MinDistance.CompareTo(b.MinDistance));
+
+		foreach (var (_, index) in segmentsByDistance)
+		{
+			var segment = segments[index];
+			var angleA = NormalizeAngle(MathF.Atan2(segment.A.Y - origin.Y, segment.A.X - origin.X));
+			var angleB = NormalizeAngle(MathF.Atan2(segment.B.Y - origin.Y, segment.B.X - origin.X));
+
+			// A segment subtends the shorter arc between its endpoint angles (always < pi for an
+			// origin off the segment).
+			var span = angleB - angleA;
+			if (span < 0)
+				span += MathF.Tau;
+			var start = angleA;
+			if (span > MathF.PI)
+			{
+				start = angleB;
+				span = MathF.Tau - span;
+			}
+
+			// Pad one bucket to each side: candidate rays sit epsilon outside the endpoint angles,
+			// which can floor into the neighboring bucket when an endpoint lies on a bucket boundary.
+			var first = BucketIndex(start) - 1;
+			var last = (int)((start + span) * (BucketCount / MathF.Tau)) + 1;
+			if (last - first >= BucketCount)
+			{
+				first = 0;
+				last = BucketCount - 1;
+			}
+			for (var b = first; b <= last; b++)
+				rayBuckets[(b + BucketCount) % BucketCount].Add(index);
+		}
+	}
+
+	private static float MinDistanceToPoint(Segment segment, Vector2 point)
+	{
+		var ab = segment.B - segment.A;
+		var lengthSquared = ab.LengthSquared();
+		var t = lengthSquared <= IntersectionEpsilon
+			? 0
+			: Math.Clamp(Vector2.Dot(point - segment.A, ab) / lengthSquared, 0, 1);
+		return Vector2.Distance(point, segment.A + ab * t);
 	}
 
 	public static bool CircleOverlaps(Segment segment, Vector2 center, float radius)
@@ -75,9 +155,11 @@ public static class VisibilityPolygon
 		if (delta.LengthSquared() <= IntersectionEpsilon)
 			return;
 
+		// The epsilon pair brackets the endpoint's silhouette edge: one ray lands on the segment,
+		// the other slips past it to whatever lies behind. A third ray at the exact angle would land
+		// within epsilon of the first and add nothing.
 		var angle = MathF.Atan2(delta.Y, delta.X);
 		candidates.Add(new(NormalizeAngle(angle - RayAngleEpsilon)));
-		candidates.Add(new(NormalizeAngle(angle)));
 		candidates.Add(new(NormalizeAngle(angle + RayAngleEpsilon)));
 	}
 
@@ -107,13 +189,18 @@ public static class VisibilityPolygon
 		var closestSegment = -1;
 		var hitSegment = false;
 
-		for (var i = 0; i < segments.Count; i++)
+		var bucket = rayBuckets[BucketIndex(angle)];
+		for (var i = 0; i < bucket.Count; i++)
 		{
-			if (TryRaySegmentIntersection(origin, direction, segments[i], out var distance) &&
+			var index = bucket[i];
+			if (minDistances[index] >= closestDistance)
+				break;
+
+			if (TryRaySegmentIntersection(origin, direction, segments[index], out var distance) &&
 			    distance < closestDistance)
 			{
 				closestDistance = distance;
-				closestSegment = i;
+				closestSegment = index;
 				hitSegment = true;
 			}
 		}
