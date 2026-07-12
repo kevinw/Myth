@@ -40,29 +40,26 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	static float MenuButtonWidth => 110f;
+	static float MenuButtonWidth => 100f;
 	static float MenuButtonHeight => 18f;
-	static float MenuButtonGap => 3f;
+	static float MenuButtonGap => 4f;
 	static float MenuPanelWidth => 174f;
 
 	void ShowTitleMenu()
 	{
-		gameMenuPage = GameMenuPage.Title;
 		gameMenuReturnPage = GameMenuPage.Title;
-		menuFocusDirty = true;
 		playOnStartup = false;
 		playing = false;
 		startingPlay = false;
-		confirmRestart = false;
+
+		ShowGameMenuPage(GameMenuPage.Title);
 	}
 
 	void ShowPauseMenu()
 	{
 		MenuAudioEvent("menu/show");
-		gameMenuPage = GameMenuPage.Pause;
 		gameMenuReturnPage = GameMenuPage.Pause;
-		menuFocusDirty = true;
-		confirmRestart = false;
+		ShowGameMenuPage(GameMenuPage.Pause);
 	}
 
 	void CloseGameMenu()
@@ -80,6 +77,7 @@ public partial class Manager
 	void ShowGameMenuPage(GameMenuPage page)
 	{
 		gameMenuPage = page;
+		confirmRestart = false;
 		menuFocusDirty = true;
 	}
 
@@ -137,13 +135,7 @@ public partial class Manager
 			OpenMapFromMenu();
 		if (MenuButton("options"))
 			OpenOptionsPage();
-#if EDITOR
-		if (MenuButton("editor", "menu/back"))
-		{
-			CloseGameMenu();
-			StopGame();
-		}
-#elif BROWSER
+#if BROWSER
 		if (MenuButton("title", "menu/back"))
 			ReturnToTitleFromMenu();
 #else
@@ -221,7 +213,9 @@ public partial class Manager
 		// Use ### so the id is the slot index only: a button whose label toggles
 		// ("music on"/"music off", "fullscreen"/"windowed") keeps a stable id and so
 		// keeps nav focus, letting you re-toggle it with repeated South presses.
+		ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2 (0.0f, -0.5f));
 		var pressed = ImGui.Button($"{label}###{menuButtonIndex}", new Vector2(MenuButtonWidth, MenuButtonHeight));
+		ImGui.PopStyleVar();
 
 		// The first item is the default nav focus when a page's window appears (each
 		// page uses a distinct window id, so switching pages re-triggers this).
