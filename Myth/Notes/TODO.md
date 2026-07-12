@@ -1,6 +1,8 @@
 # TODO
 
 ## mood: CONTENT
+- improve language for "emerge from flat"
+- remove white guy from beginning
 - bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
 - telegraph more (shieldknight and drone)
 - Drone has too much movement
@@ -24,6 +26,7 @@
 - draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 
 ## mood: SOUND AND MUSIC
+- shieldknight needs sound effects, detect, player awareness squish
 - turret needs metal hit sound when you strike it
 - wall jump and wall slide sounds
 - Attenuate landing sound by y velocity
