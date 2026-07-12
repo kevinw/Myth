@@ -689,7 +689,7 @@ public abstract class Pawn : Actor
 			ducking = false;
 			jumpTimer = 0;
 			State = States.Climb;
-			Play("wall_slide");
+			Play("climb_idle");
 			return true;
 		}
 		return false;
@@ -769,7 +769,13 @@ public abstract class Pawn : Actor
 		Stop();
 		Move(target - Position);
 
-		Play(input.MoveY != 0 && chain.Pinned ? "crawl" : "wall_slide");
+		if (chain.Pinned && input.MoveY > 0) {
+			Play("climb_down");
+		} else if (chain.Pinned && input.MoveY < 0) {
+			Play("climb");
+		} else {
+			Play("climb_idle");
+		}
 	}
 
 	void ExitClimb()

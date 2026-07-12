@@ -90,6 +90,11 @@
       "Height": 5.05,
       "Radius": 100,
       "Intensity": 0.8
+    },
+    {
+      "Id": "217038d803979e49",
+      "Type": "RopePile",
+      "Position": [233, 168]
     }
   ]
 }

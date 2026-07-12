@@ -29,7 +29,8 @@ public class Rope : Actor, IResizable
 	// Heavier ropes hang calmer: ambient sway and pump response divide by Weight, damping
 	// multiplies by it.
 	public float Weight = 1f;
-	// Deployed by a RopePile: points start bunched at the anchor and the sim unfurls them.
+	// Deployed by a RopePile: points start gathered at the anchor and pay out one per frame as
+	// the falling end pulls taut, so the rope feeds down cleanly instead of tangling on the lip.
 	public bool StartCoiled;
 
 	public const float SegmentLength = 4f;
@@ -45,6 +46,7 @@ public class Rope : Actor, IResizable
 	static float MaxSimDelta => 1 / 30f;        // clamp hitches so the verlet step can't explode
 
 	readonly List<Chain> chains = [];
+	int waiting; // leading pinned-chain points still held at the anchor; 1 means fully paid out
 	Point2 builtSize;
 	float lastDelta = 1 / 60f;
 
@@ -52,6 +54,7 @@ public class Rope : Actor, IResizable
 	{
 		Mask = Masks.None;
 		CollidesWithSolids = false;
+		Depth = 1000;
 	}
 
 	public override bool CastsSpriteShadow => false;
@@ -74,11 +77,10 @@ public class Rope : Actor, IResizable
 		var chain = new Chain { Points = new Vector2[count], Prev = new Vector2[count], Pinned = true };
 		for (var i = 0; i < count; i++)
 		{
-			chain.Points[i] = StartCoiled
-				? TopAnchor + new Vector2(((i * 37) % 7) - 3, ((i * 23) % 5) - 4)
-				: TopAnchor + new Vector2(0, i * SegmentLength);
+			chain.Points[i] = StartCoiled ? TopAnchor : TopAnchor + new Vector2(0, i * SegmentLength);
 			chain.Prev[i] = chain.Points[i];
 		}
+		waiting = StartCoiled ? count - 1 : 1;
 		chains.Add(chain);
 	}
 
@@ -96,19 +98,35 @@ public class Rope : Actor, IResizable
 		var swayPhase = (float)(Time.Seconds * SwayFrequency * MathF.Tau);
 		foreach (var chain in chains)
 		{
-			Integrate(chain, dt, damp, swayPhase);
-			Constrain(chain);
-			Collide(chain);
+			var held = chain.Pinned ? waiting : 0;
+			Integrate(chain, held, dt, damp, swayPhase);
+			Constrain(chain, held);
+			Collide(chain, held);
 			chain.RiderIndex = -1;
 			chain.SwingAccel = 0;
 		}
+		PayOut();
 	}
 
-	void Integrate(Chain chain, float dt, float damp, float swayPhase)
+	// The rope feeds out at the anchor, tip first: the hanging span grows from the last index
+	// toward index 0, and each release hands the span's top segment to the next held point, so a
+	// segment is never stretched more than one length. Release when the span pulls the boundary
+	// segment taut; one point per frame caps the feed rate, like rope running over a lip.
+	void PayOut()
+	{
+		if (waiting <= 1 || PinnedChain is not { } chain || waiting >= chain.Points.Length)
+			return;
+		if (Vector2.DistanceSquared(chain.Points[waiting], TopAnchor) >= (SegmentLength - 1) * (SegmentLength - 1))
+			waiting--;
+	}
+
+	void Integrate(Chain chain, int held, float dt, float damp, float swayPhase)
 	{
 		var points = chain.Points;
 		var prev = chain.Prev;
-		for (var i = chain.Pinned ? 1 : 0; i < points.Length; i++)
+		for (var i = 0; i < held; i++)
+			points[i] = prev[i] = TopAnchor;
+		for (var i = held; i < points.Length; i++)
 		{
 			var accel = new Vector2(0, RopeGravity);
 			if (chain.Pinned)
@@ -120,16 +138,14 @@ public class Rope : Actor, IResizable
 			points[i] = p + (p - prev[i]) * damp + accel * (dt * dt);
 			prev[i] = p;
 		}
-		if (chain.Pinned)
-			points[0] = prev[0] = TopAnchor;
 	}
 
-	void Constrain(Chain chain)
+	void Constrain(Chain chain, int held)
 	{
 		var points = chain.Points;
 		for (var it = 0; it < ConstraintIterations; it++)
 		{
-			for (var i = 1; i < points.Length; i++)
+			for (var i = Math.Max(held, 1); i < points.Length; i++)
 			{
 				var delta = points[i] - points[i - 1];
 				var dist = delta.Length();
@@ -137,8 +153,8 @@ public class Rope : Actor, IResizable
 					continue;
 				var correction = delta / dist * (dist - SegmentLength);
 
-				// Inverse-mass weights: the pinned anchor never moves, the ridden point barely.
-				var wa = chain.Pinned && i == 1 ? 0f : i - 1 == chain.RiderIndex ? RiderConstraintShare : 1f;
+				// Inverse-mass weights: pinned/held anchor points never move, the ridden point barely.
+				var wa = i - 1 < held ? 0f : i - 1 == chain.RiderIndex ? RiderConstraintShare : 1f;
 				var wb = i == chain.RiderIndex ? RiderConstraintShare : 1f;
 				points[i - 1] += correction * (wa / (wa + wb));
 				points[i] -= correction * (wb / (wa + wb));
@@ -150,11 +166,11 @@ public class Rope : Actor, IResizable
 
 	// One point-probe per node: a move into solid is cancelled outright (position and velocity),
 	// which both stops a swing at a wall and lets unpinned remnants pile up and drape on floors.
-	void Collide(Chain chain)
+	void Collide(Chain chain, int held)
 	{
 		var points = chain.Points;
 		var prev = chain.Prev;
-		for (var i = chain.Pinned ? 1 : 0; i < points.Length; i++)
+		for (var i = held; i < points.Length; i++)
 		{
 			var p = (Point2)points[i];
 			if (Game.OverlapsRoomCollision(new RectInt(p.X, p.Y, 1, 1)))
@@ -168,8 +184,8 @@ public class Rope : Actor, IResizable
 	public void Break(float worldY)
 	{
 		var chain = PinnedChain;
-		if (chain == null || chain.Points.Length < 4)
-			return;
+		if (chain == null || chain.Points.Length < 4 || waiting > 1)
+			return; // no snipping mid-unfurl: the held points would fall as a clump
 
 		var cut = Math.Clamp((int)MathF.Round((worldY - TopAnchor.Y) / SegmentLength), 2, chain.Points.Length - 2);
 		var lower = new Chain { Points = chain.Points[cut..], Prev = chain.Prev[cut..] };
@@ -206,7 +222,7 @@ public class Rope : Actor, IResizable
 
 		var bestSq = radius * radius;
 		var best = -1;
-		for (var i = 0; i < pinned.Points.Length; i++)
+		for (var i = waiting > 1 ? waiting : 0; i < pinned.Points.Length; i++)
 		{
 			var distSq = Vector2.DistanceSquared(pinned.Points[i], from);
 			if (distSq < bestSq)
@@ -249,7 +265,7 @@ public class Rope : Actor, IResizable
 	// free end far and the near-anchor points barely at all.
 	public void SetRider(Chain chain, float index, float pumpDirection)
 	{
-		chain.RiderIndex = Math.Clamp((int)MathF.Round(index), chain.Pinned ? 1 : 0, chain.Points.Length - 1);
+		chain.RiderIndex = Math.Clamp((int)MathF.Round(index), chain.Pinned ? waiting : 0, LastIndex(chain));
 		chain.SwingAccel = pumpDirection * PumpAccel / Weight;
 	}
 
