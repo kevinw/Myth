@@ -227,8 +227,11 @@ public partial class Manager
 #if EDITOR
 	void EnteringEditor() {
 		// it was annoying that session destroyed enemies would stay disappeared while editing. but maybe this logic is better on loading the room?
-		game?.Show("EnteringEditor");
-		game?.Save.Session.DestroyedActors.Clear();
+		if (game != null)
+		{
+			game.Show("EnteringEditor");
+			game.Save.Session.DestroyedActors.Clear();
+		}
 		MarkSaveDirty();
 		FlushSaveState();
 	}
@@ -4876,6 +4879,8 @@ public partial class Manager
 			}
 			ImGui.EndCombo();
 		}
+		if (ImGui.Checkbox("Preserve playtest save state", ref preservePlaytestSaveState))
+			SaveWindowSettings();
 
 		ImGui.End();
 	}

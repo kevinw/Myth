@@ -4,7 +4,11 @@ namespace Myth;
 
 static partial class SaveStateStore
 {
+#if EDITOR
+	const string FileName = "save-editor.json";
+#else
 	const string FileName = "save.json";
+#endif
 
 	public static SaveState Load(Manager manager)
 	{

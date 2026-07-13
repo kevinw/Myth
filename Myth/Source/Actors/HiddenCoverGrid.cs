@@ -5,12 +5,12 @@ namespace Myth;
 
 public class HiddenCoverGrid : Actor
 {
-	private readonly record struct RevealDoorSpec(string Id, RectInt Rect, RevealDoor.RevealDirection Direction, string TileType);
-	private readonly record struct DrawCommand(Subtexture Tile, Subtexture Normal, Point2 Vertex, Vector2 Position, int MaterialMask, int CoverMask, int RegionId);
-	private readonly record struct HiddenSegment(VisibilityPolygon.Segment Segment, int RegionId);
-	private readonly record struct SegmentRun(float Axis, float Start, float End, int RegionId);
+	readonly record struct RevealDoorSpec(string Id, RectInt Rect, RevealDoor.RevealDirection Direction, string TileType);
+	readonly record struct DrawCommand(Subtexture Tile, Subtexture Normal, Point2 Vertex, Vector2 Position, int MaterialMask, int CoverMask, int RegionId);
+	readonly record struct HiddenSegment(VisibilityPolygon.Segment Segment, int RegionId);
+	readonly record struct SegmentRun(float Axis, float Start, float End, int RegionId);
 
-	private static readonly Point2[] MaskToTile =
+	static readonly Point2[] MaskToTile =
 	[
 		new(0, 3),
 		new(3, 3),
@@ -30,16 +30,16 @@ public class HiddenCoverGrid : Actor
 		new(2, 1),
 	];
 
-	private readonly List<DrawCommand> drawCommands = [];
-	private readonly List<HiddenSegment> visibilitySegments = [];
-	private Point2 size;
-	private char[,] coverTiles = new char[0, 0];
-	private int[,] coverRegions = new int[0, 0];
-	private float[] regionAlpha = [];
-	private string[][] regionRevealDoorIds = [];
-	private readonly HashSet<string> revealedDoorIds = [];
-	private readonly List<(RectInt Rect, int RegionId)> triggers = [];
-	private float renderOpacityScale = 1.0f;
+	readonly List<DrawCommand> drawCommands = [];
+	readonly List<HiddenSegment> visibilitySegments = [];
+	Point2 size;
+	char[,] coverTiles = new char[0, 0];
+	int[,] coverRegions = new int[0, 0];
+	float[] regionAlpha = [];
+	string[][] regionRevealDoorIds = [];
+	readonly HashSet<string> revealedDoorIds = [];
+	readonly List<(RectInt Rect, int RegionId)> triggers = [];
+	float renderOpacityScale = 1.0f;
 
 	public HiddenCoverGrid()
 	{
@@ -179,7 +179,7 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private void RevealForPlayer(Player player, bool immediate)
+	void RevealForPlayer(Player player, bool immediate)
 	{
 		var playerBounds = player.Hitbox.Rect + player.Position - Position;
 		var revealedAny = false;
@@ -201,18 +201,18 @@ public class HiddenCoverGrid : Actor
 		var top = Math.Clamp((int)MathF.Floor(playerBounds.Top / (float)Game.TileSize), 0, size.Y - 1);
 		var bottom = Math.Clamp((int)MathF.Floor((playerBounds.Bottom - 1) / (float)Game.TileSize), 0, size.Y - 1);
 
-		for (var y = top; y <= bottom; y ++)
-		for (var x = left; x <= right; x ++)
-		{
-			var regionId = coverRegions[x, y];
-			if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f)
+		for (var y = top; y <= bottom; y++)
+			for (var x = left; x <= right; x++)
 			{
-				regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
-				newlyRevealedDoorIds.AddRange(MarkRegionRevealed(regionId));
-				newlyRevealedRegions.Add(regionId);
-				revealedAny = true;
+				var regionId = coverRegions[x, y];
+				if (regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] >= 1.0f)
+				{
+					regionAlpha[regionId] = immediate ? 0.0f : 0.99f;
+					newlyRevealedDoorIds.AddRange(MarkRegionRevealed(regionId));
+					newlyRevealedRegions.Add(regionId);
+					revealedAny = true;
+				}
 			}
-		}
 
 		if (revealedAny && !immediate)
 		{
@@ -227,7 +227,7 @@ public class HiddenCoverGrid : Actor
 	}
 
 	// World-space bounding rect of a region's covered tiles (empty if the region has none).
-	private RectInt RegionWorldBounds(int regionId)
+	RectInt RegionWorldBounds(int regionId)
 	{
 		var minX = int.MaxValue;
 		var minY = int.MaxValue;
@@ -253,7 +253,7 @@ public class HiddenCoverGrid : Actor
 			(maxY - minY + 1) * Game.TileSize);
 	}
 
-	private List<string> MarkRegionRevealed(int regionId)
+	List<string> MarkRegionRevealed(int regionId)
 	{
 		if (regionId < 0 || regionId >= regionRevealDoorIds.Length)
 			return [];
@@ -288,34 +288,18 @@ public class HiddenCoverGrid : Actor
 					emit(tile);
 	}
 
-	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
+	void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
 	{
 		foreach (var command in drawCommands)
 		{
 			var tile = getTile(command);
-			if (tile.Texture == null)
-				continue;
-
-			DrawQuadrant(batcher, command, tile, TileQuadrants.TopLeft, new Rect(0, 0, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomLeft, new Rect(0, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.TopRight, new Rect(Game.TileSize / 2, 0, Game.TileSize / 2, Game.TileSize / 2));
-			DrawQuadrant(batcher, command, tile, TileQuadrants.BottomRight, new Rect(Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2, Game.TileSize / 2));
+			var alpha = RegionVisible(command.RegionId) ? regionAlpha[command.RegionId] * renderOpacityScale : 0;
+			if (tile.Texture != null && alpha > 0.01f)
+				DualGrid.DrawTile(batcher, tile, command.Position, command.MaterialMask, Color.White * alpha);
 		}
 	}
 
-	private void DrawQuadrant(Batcher batcher, DrawCommand command, Subtexture tile, int mask, Rect clip)
-	{
-		if ((command.MaterialMask & mask) == 0)
-			return;
-
-		var alpha = RegionVisible(command.RegionId) ? regionAlpha[command.RegionId] * renderOpacityScale : 0;
-		if (alpha <= 0.01f)
-			return;
-
-		batcher.Image(tile, clip, command.Position + clip.Position, Vector2.Zero, Vector2.One, 0, Color.White * alpha);
-	}
-
-	private static List<RevealDoorSpec> ReadRevealDoors(Room room)
+	static List<RevealDoorSpec> ReadRevealDoors(Room room)
 	{
 		var doors = new List<RevealDoorSpec>();
 		foreach (var actor in room.Actors)
@@ -335,7 +319,7 @@ public class HiddenCoverGrid : Actor
 		return doors;
 	}
 
-	private static RevealDoor.RevealDirection ReadDirection(System.Text.Json.Nodes.JsonObject json)
+	static RevealDoor.RevealDirection ReadDirection(System.Text.Json.Nodes.JsonObject json)
 	{
 		var text = ActorSpecs.ReadString(json, "Direction");
 		return Enum.TryParse<RevealDoor.RevealDirection>(text, ignoreCase: true, out var direction)
@@ -343,7 +327,7 @@ public class HiddenCoverGrid : Actor
 			: RevealDoor.RevealDirection.Right;
 	}
 
-	private static bool[,] BuildDoorBlockers(Point2 size, List<RevealDoorSpec> doors)
+	static bool[,] BuildDoorBlockers(Point2 size, List<RevealDoorSpec> doors)
 	{
 		var blockers = new bool[size.X, size.Y];
 		foreach (var door in doors)
@@ -356,7 +340,7 @@ public class HiddenCoverGrid : Actor
 		return blockers;
 	}
 
-	private static bool[,] BuildAirGrid(Point2 size, Room room, bool[,] blockers)
+	static bool[,] BuildAirGrid(Point2 size, Room room, bool[,] blockers)
 	{
 		var air = new bool[size.X, size.Y];
 		for (var y = 0; y < size.Y; y ++)
@@ -369,7 +353,7 @@ public class HiddenCoverGrid : Actor
 		return air;
 	}
 
-	private static int[,] BuildAirRegions(Point2 size, bool[,] air)
+	static int[,] BuildAirRegions(Point2 size, bool[,] air)
 	{
 		var regions = new int[size.X, size.Y];
 		for (var y = 0; y < size.Y; y ++)
@@ -410,7 +394,7 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private static Dictionary<int, HiddenRegionSpec> MapDoorsToRegions(Point2 size, Room room, List<RevealDoorSpec> doors, int[,] airRegions)
+	static Dictionary<int, HiddenRegionSpec> MapDoorsToRegions(Point2 size, Room room, List<RevealDoorSpec> doors, int[,] airRegions)
 	{
 		var hiddenRegions = new Dictionary<int, HiddenRegionSpec>();
 		foreach (var door in doors)
@@ -446,7 +430,7 @@ public class HiddenCoverGrid : Actor
 		return hiddenRegions;
 	}
 
-	private static Point2 DoorSeedTile(Point2 size, RevealDoorSpec door)
+	static Point2 DoorSeedTile(Point2 size, RevealDoorSpec door)
 	{
 		var bounds = TileBounds(size, door.Rect);
 		return door.Direction switch
@@ -459,7 +443,7 @@ public class HiddenCoverGrid : Actor
 		};
 	}
 
-	private static RectInt TileBounds(Point2 size, RectInt rect)
+	static RectInt TileBounds(Point2 size, RectInt rect)
 	{
 		var left = Math.Clamp((int)MathF.Floor(rect.Left / (float)Game.TileSize), 0, size.X);
 		var top = Math.Clamp((int)MathF.Floor(rect.Top / (float)Game.TileSize), 0, size.Y);
@@ -468,7 +452,7 @@ public class HiddenCoverGrid : Actor
 		return new RectInt(left, top, right - left, bottom - top);
 	}
 
-	private char ResolveCoverTile(Room room, string overrideTileType, int[,] airRegions, int sourceRegionId)
+	char ResolveCoverTile(Room room, string overrideTileType, int[,] airRegions, int sourceRegionId)
 	{
 		if (ResolveTileTypeOverride(overrideTileType) is { } tileType)
 			return tileType;
@@ -503,7 +487,7 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private static char? ResolveTileTypeOverride(string value)
+	static char? ResolveTileTypeOverride(string value)
 	{
 		if (string.IsNullOrWhiteSpace(value))
 			return null;
@@ -524,7 +508,7 @@ public class HiddenCoverGrid : Actor
 		return null;
 	}
 
-	private void BuildDrawCommands(Room room)
+	void BuildDrawCommands(Room room)
 	{
 		foreach (var tileType in CoverTileTypes())
 		{
@@ -564,7 +548,7 @@ public class HiddenCoverGrid : Actor
 		MergeAxisAlignedVisibilitySegments();
 	}
 
-	private IEnumerable<char> CoverTileTypes()
+	IEnumerable<char> CoverTileTypes()
 	{
 		var seen = new HashSet<char>();
 		for (var y = 0; y < size.Y; y ++)
@@ -573,7 +557,7 @@ public class HiddenCoverGrid : Actor
 				yield return coverTiles[x, y];
 	}
 
-	private int CoverMask(char tileType, int x, int y)
+	int CoverMask(char tileType, int x, int y)
 	{
 		var mask = 0;
 		if (IsCoverFilled(tileType, x - 1, y - 1))
@@ -587,7 +571,7 @@ public class HiddenCoverGrid : Actor
 		return mask;
 	}
 
-	private int MaterialMask(Room room, char tileType, int x, int y)
+	int MaterialMask(Room room, char tileType, int x, int y)
 	{
 		var mask = 0;
 		if (IsMaterialFilled(room, tileType, x - 1, y - 1))
@@ -601,10 +585,10 @@ public class HiddenCoverGrid : Actor
 		return mask;
 	}
 
-	private bool IsCoverFilled(char tileType, int x, int y)
+	bool IsCoverFilled(char tileType, int x, int y)
 		=> x >= 0 && y >= 0 && x < size.X && y < size.Y && coverTiles[x, y] == tileType;
 
-	private bool IsMaterialFilled(Room room, char tileType, int x, int y)
+	bool IsMaterialFilled(Room room, char tileType, int x, int y)
 	{
 		if (IsCoverFilled(tileType, x, y))
 			return true;
@@ -613,16 +597,7 @@ public class HiddenCoverGrid : Actor
 		return room.Tiles[x, y] == tileType;
 	}
 
-	private float CoverAlpha(int x, int y)
-	{
-		if (x < 0 || y < 0 || x >= size.X || y >= size.Y)
-			return 0;
-
-		var regionId = coverRegions[x, y];
-		return regionId >= 0 && regionId < regionAlpha.Length ? regionAlpha[regionId] : 0;
-	}
-
-	private int CoverRegionId(int x, int y)
+	int CoverRegionId(int x, int y)
 	{
 		var regionId = -1;
 		MergeRegion(x - 1, y - 1);
@@ -642,10 +617,10 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private bool RegionVisible(int regionId)
+	bool RegionVisible(int regionId)
 		=> regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] > 0.01f;
 
-	private void AppendWorldVisibilitySegments(Vector2 commandPosition, DrawCommand command, Tileset.OccluderSegment[] occluders)
+	void AppendWorldVisibilitySegments(Vector2 commandPosition, DrawCommand command, Tileset.OccluderSegment[] occluders)
 	{
 		foreach (var local in occluders)
 		{
@@ -659,7 +634,7 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private Point2? OwnerCell(DrawCommand command, Tileset.OccluderSegment segment)
+	Point2? OwnerCell(DrawCommand command, Tileset.OccluderSegment segment)
 	{
 		var midpoint = (segment.A + segment.B) * 0.5f;
 		var owner = midpoint.X < Game.TileSize / 2
@@ -670,7 +645,7 @@ public class HiddenCoverGrid : Actor
 			: null;
 	}
 
-	private void MergeAxisAlignedVisibilitySegments()
+	void MergeAxisAlignedVisibilitySegments()
 	{
 		if (visibilitySegments.Count <= 1)
 			return;
@@ -687,7 +662,7 @@ public class HiddenCoverGrid : Actor
 		visibilitySegments.AddRange(merged);
 	}
 
-	private void MergeHorizontalVisibilitySegments(List<HiddenSegment> merged)
+	void MergeHorizontalVisibilitySegments(List<HiddenSegment> merged)
 	{
 		var horizontal = visibilitySegments
 			.Where(static it => NearlyEqual(it.Segment.A.Y, it.Segment.B.Y))
@@ -706,7 +681,7 @@ public class HiddenCoverGrid : Actor
 		MergeRuns(horizontal, merged, static run => new(new(new Vector2(run.Start, run.Axis), new Vector2(run.End, run.Axis)), run.RegionId));
 	}
 
-	private void MergeVerticalVisibilitySegments(List<HiddenSegment> merged)
+	void MergeVerticalVisibilitySegments(List<HiddenSegment> merged)
 	{
 		var vertical = visibilitySegments
 			.Where(static it => NearlyEqual(it.Segment.A.X, it.Segment.B.X))
@@ -725,7 +700,7 @@ public class HiddenCoverGrid : Actor
 		MergeRuns(vertical, merged, static run => new(new(new Vector2(run.Axis, run.Start), new Vector2(run.Axis, run.End)), run.RegionId));
 	}
 
-	private static void MergeRuns(SegmentRun[] runs, List<HiddenSegment> merged, Func<SegmentRun, HiddenSegment> createSegment)
+	static void MergeRuns(SegmentRun[] runs, List<HiddenSegment> merged, Func<SegmentRun, HiddenSegment> createSegment)
 	{
 		if (runs.Length == 0)
 			return;
@@ -749,7 +724,7 @@ public class HiddenCoverGrid : Actor
 			merged.Add(createSegment(current));
 	}
 
-	private static int StableVariantSeed(Room room, char tileType, int x, int y)
+	static int StableVariantSeed(Room room, char tileType, int x, int y)
 	{
 		unchecked
 		{
@@ -766,16 +741,16 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	private static bool IsAxisAligned(VisibilityPolygon.Segment segment)
+	static bool IsAxisAligned(VisibilityPolygon.Segment segment)
 		=> NearlyEqual(segment.A.X, segment.B.X) || NearlyEqual(segment.A.Y, segment.B.Y);
 
-	private static bool NearlyEqual(float a, float b)
+	static bool NearlyEqual(float a, float b)
 		=> MathF.Abs(a - b) <= 0.001f;
 
-	private static float Quantize(float value)
+	static float Quantize(float value)
 		=> MathF.Round(value * 1000.0f) / 1000.0f;
 
-	private sealed class HiddenRegionSpec
+	sealed class HiddenRegionSpec
 	{
 		public readonly List<Point2> Tiles = [];
 		public readonly List<RectInt> Triggers = [];

@@ -133,7 +133,7 @@ public class DualGrid : Actor
 
 	// Draw one dual-grid tile at a local position, clipping to only the quadrants its materialMask
 	// fills (so a boundary tile's transition art lines up with the filled cells).
-	static void DrawTile(Batcher batcher, Subtexture tile, Vector2 position, int materialMask, Color color)
+	internal static void DrawTile(Batcher batcher, Subtexture tile, Vector2 position, int materialMask, Color color)
 	{
 		if (materialMask == TileQuadrants.All)
 		{

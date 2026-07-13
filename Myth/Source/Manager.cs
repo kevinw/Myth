@@ -38,6 +38,7 @@ public partial class Manager : App
 	string? selectedRoomId;
 #if EDITOR
 	(string RoomId, Point2 Position)? playtestPlayerPosition;
+	bool preservePlaytestSaveState;
 #endif
 	public bool LightingDitherEnabled = true;
 	public float LightingDitherScale = 1.0f;
@@ -332,7 +333,11 @@ public partial class Manager : App
 			Exit();
 			return;
 		}
+#if EDITOR
+		saveState = preservePlaytestSaveState ? SaveStateStore.Load(this) : new();
+#else
 		saveState = SaveStateStore.Load(this);
+#endif
 		if (playRoomId != null)
 			selectedRoomId = playRoomId;
 		else if (saveState.LastGrounded is { } respawn && Assets.GetRoom(respawn.RoomId) != null)
@@ -582,6 +587,7 @@ public partial class Manager : App
 #if EDITOR
 			if (settings.EditorScrollMode is >= EditorScrollMode.Auto and <= EditorScrollMode.Trackpad)
 				editorScrollMode = settings.EditorScrollMode;
+			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
 #endif
 		}
 		catch (Exception e)
@@ -613,7 +619,8 @@ public partial class Manager : App
 				MusicEnabled = musicEnabled,
 				AlwaysOnTop = alwaysOnTop,
 #if EDITOR
-				EditorScrollMode = editorScrollMode
+				EditorScrollMode = editorScrollMode,
+				PreservePlaytestSaveState = preservePlaytestSaveState
 #endif
 			};
 
@@ -640,6 +647,7 @@ public partial class Manager : App
 		public bool AlwaysOnTop { get; init; }
 #if EDITOR
 		public EditorScrollMode EditorScrollMode { get; init; }
+		public bool PreservePlaytestSaveState { get; init; }
 #endif
 	}
 
@@ -1577,6 +1585,8 @@ public partial class Manager : App
 		}
 
 #if EDITOR
+		if (!preservePlaytestSaveState)
+			saveState = new();
 		var fallbackPlayerDirection = editorRoomEntryDirection;
 		Point2? initialPlayerPosition = playtestPlayerPosition is { } remembered && remembered.RoomId == room.Id ? remembered.Position : null;
 #else

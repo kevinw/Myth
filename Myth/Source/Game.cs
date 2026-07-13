@@ -311,8 +311,7 @@ public partial class Game : IDisposable
 			Manager.MarkSaveDirtyWithoutAutosave();
 	}
 
-	public bool IsRevealDoorRevealed(string doorId)
-		=> Save.RevealedDoors.Contains(doorId);
+	public bool IsRevealDoorRevealed(string doorId) => Save.RevealedDoors.Contains(doorId);
 
 	public void RevealDoor(string doorId)
 	{
@@ -691,8 +690,12 @@ public partial class Game : IDisposable
 	public void RevealCameraBlockersOverlapping(RectInt worldArea)
 	{
 		foreach (var actor in Actors)
+		{
 			if (actor is CameraBlocker { Active: true } blocker && blocker.WorldRect.Overlaps(worldArea))
+			{
 				blocker.Deactivate();
+			}
+		}
 	}
 
 	readonly List<RectInt> cameraBlockerBuffer = [];
