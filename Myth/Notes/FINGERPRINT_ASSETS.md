@@ -3,6 +3,70 @@
 The release browser build is in good shape on the things that usually matter — the
 one real win left is HTTP caching of the framework files on returning loads.
 
+*(Updated 2026-07-13: reconciled with the Content.zip consolidation and the
+byte-accurate loading bar in main.js — see "Interactions with the loading bar" below,
+one of which is a must-fix if this plan ships.)*
+
+## Pros / cons
+
+**Pros**
+
+- **Warm loads make ~zero framework requests.** Today a returning player pays ~28
+  conditional GETs (304s) per load even when nothing changed — pure round-trip latency,
+  worst on mobile. With hashed names + `immutable`, the browser serves everything from
+  cache without asking. This is the entire remaining startup win for repeat players.
+- **Deploys are atomic from the client's view.** New build ⇒ new URLs; a returning
+  client either has the old complete set or fetches the new complete set. The
+  stale-mix failure mode (fresh boot config + old cached wasm) becomes impossible —
+  it's exactly the hazard that forces `must-revalidate` today.
+- **Integrity comes back for free.** The loading-bar resource loader fetches without
+  integrity metadata (streaming and integrity-fetch are mutually exclusive — see
+  main.js createResourceLoader). With the content hash in the URL, the URL itself pins
+  the bytes — equivalent assurance, no buffering.
+- **Zero maintenance once wired.** The hash moves with every build automatically, and
+  `generate-browser-asset-manifest.py` reads the real AppBundle filenames, so the
+  loading-bar manifest adapts with no changes.
+
+**Cons**
+
+- **Cache-policy split has sharp edges.** `dotnet.js` / `dotnet.boot.js` / `main.js` /
+  `index.html` / `asset-manifest.json` must stay revalidating while hashed files go
+  immutable; Cloudflare Pages `_headers` is glob-only, so the rules need real
+  verification (see caveats below). Getting this wrong serves stale entry points —
+  strictly worse than today.
+- **Client fetch modes currently defeat it:** both dotnet.js's default loader *and*
+  our custom resource loader request with `cache: "no-cache"`, which forces
+  revalidation regardless of `immutable` headers. Fingerprinting buys nothing until
+  that's switched off (must-fix in "Interactions" below).
+- **Every deploy invalidates whole files.** Any build change renames
+  `dotnet.native.wasm` (and each touched assembly), so returning players re-download
+  those files after a deploy. Same bytes-over-wire as today (a changed file 304→200s
+  anyway) — just know hashing gives no within-file delta updates.
+- **Debugging indirection.** Network tabs, stack traces, and player screenshots show
+  `dotnet.native.abc123.wasm`; correlating a report to a build means consulting
+  `dotnet.boot.js`. Minor, permanent tax.
+- **Only returning players benefit.** Cold loads are unchanged (~4.7 MB compressed
+  either way). If analytics say most sessions are first visits, this page stays low
+  priority.
+
+## Interactions with the loading bar / Content.zip work (2026-07)
+
+- **Must-fix if this ships:** `main.js`'s `createResourceLoader` mirrors dotnet.js and
+  fetches framework resources with `cache: "no-cache"`, which *always* revalidates —
+  neutering `immutable`. When fingerprinting lands: fetch hashed names with default
+  cache mode in our loader, and set `withConfig({ disableNoCacheFetch: true })` so any
+  resource still going through dotnet.js's default path behaves the same. Keep
+  revalidation for the unhashed entry files.
+- `asset-manifest.json` is the "boot config" of the asset layer (it now carries byte
+  sizes for the progress meter) — it must stay `must-revalidate`, like `dotnet.boot.js`.
+- **Assets are now one zip + loose FMOD banks** (not a file tree). `Content.zip` isn't
+  fingerprinted; one conditional GET per load for it is cheap. If we ever want it
+  immutable too, emit `Content.<hash>.zip` from `--build-content-zip` and let the
+  manifest carry the name — the loader already takes paths from the manifest.
+- Bank files change rarely; they could take a long `max-age` (not `immutable`) with
+  the manifest acting as the version signal, since the FMOD bridge now receives bytes
+  downloaded via manifest-listed paths.
+
 ## What's already fine (measured against https://myth-game.pages.dev)
 
 - **Brotli** is served on everything. `dotnet.native.wasm`: 11.97 MB → **3.66 MB** over the wire.
@@ -61,9 +125,8 @@ If those got cached long, clients would never learn about new hashes.
   specificity actually distinguishes `dotnet.boot.js` (mutable) from `dotnet.native.<hash>.js`
   (immutable). May require listing the mutable entry files explicitly *after* a broad
   `/_framework/*` immutable rule, or vice-versa — verify which wins.
-- **`Assets/` content** (FMOD `.bank`, `.wgsl`, sprites, the generated asset manifest) also wants
-  a deliberate caching policy; decide per-type (the manifest is the "boot" of the asset layer and
-  should revalidate; the banks/sprites can cache longer if their names or the manifest bust them).
+- **`Assets/` content** is now `Content.zip` + loose FMOD banks + `asset-manifest.json`
+  (see "Interactions" above for the per-file policy).
 - Prototype a local `--aot` publish first and read the real emitted filenames before writing rules.
 
 ## Side note (separate, smaller)

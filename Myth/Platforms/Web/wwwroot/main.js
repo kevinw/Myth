@@ -75,11 +75,32 @@ try {
       }
     : {};
 
+  // One byte-accurate meter for everything that downloads: the .NET runtime
+  // resources, the game content, and the FMOD banks. The manifest supplies expected
+  // sizes (built from the deployed files, so immune to Content-Encoding); streamed
+  // fetches supply progress. The last 3% is FMOD init + runtime start.
+  const startGate = prepareStartGate();
+  const progress = createDownloadProgress((fraction) =>
+    startGate.progress(fraction * 0.97),
+  );
+  const manifestPromise = loadAssetManifest().then((manifest) => {
+    progress.expect([
+      ...manifest.assets.map((entry) => [entry.path, entry.bytes]),
+      ...Object.entries(manifest.framework).map(([name, bytes]) => [
+        `_framework/${name}`,
+        bytes,
+      ]),
+    ]);
+    return manifest;
+  });
+
   let runtime = await dotnet
     .withDiagnosticTracing(debug)
     .withDebugging(debug ? 1 : 0)
     .withConfig(dotnetConfig)
+    .withResourceLoader(createResourceLoader(progress))
     .create();
+  progress.completePrefix("_framework/");
 
   const { setModuleImports, runMain } = runtime;
 
@@ -93,17 +114,18 @@ try {
     saveSaveState: (json) => localStorage.setItem("myth.save.v1", json),
     deleteSaveState: () => localStorage.removeItem("myth.save.v1"),
   });
-  const startGate = prepareStartGate();
-  startGate.progress(0.05);
-  const assetFiles = await preloadAssets(runtime.Module, (loaded, total) => {
-    startGate.progress(0.05 + (0.75 * loaded) / Math.max(total, 1));
-  });
+
+  const manifest = await manifestPromise;
+  const { bankFiles, bankData } = await preloadAssets(
+    runtime.Module,
+    manifest,
+    progress,
+  );
+  progress.completePrefix("Assets/");
   runtime.Module.runtimeKeepalivePush?.();
 
-  const bankFiles = assetFiles.filter(isFmodBankFile);
   if (bankFiles.length > 0) {
-    startGate.progress(0.85);
-    await FosterBrowserFmod.initialize(bankFiles);
+    await FosterBrowserFmod.initialize(bankFiles, bankData);
     FosterBrowserFmod.startUpdateLoop(20);
   }
 
@@ -268,40 +290,43 @@ function prepareStartGate() {
   };
 }
 
-async function preloadAssets(module, onProgress) {
-  const files = await loadAssetManifest();
+async function preloadAssets(module, manifest, progress) {
+  const files = manifest.assets.map((entry) => entry.path);
   const preloadFiles = files.filter(shouldPreloadIntoDotnetFs);
-  const fmodBankFiles = files.filter(isFmodBankFile);
-  onProgress?.(0, preloadFiles.length);
+  const bankFiles = files.filter(isFmodBankFile);
 
-  // Fetch in parallel with a bounded pool: the loop is fetch-bound, so running
-  // several at once is much faster, but unbounded would flood the connection
-  // pool and hold every file's bytes in memory at once. Each worker pulls the
-  // next index, fetches, and writes it straight into the wasm FS (createWasmFile
-  // is synchronous, so the FS-path creation never interleaves). done is a shared
-  // counter so progress stays monotonic regardless of completion order.
-  const CONCURRENCY = 25;
+  // Everything downloads through the same streaming meter, in a bounded parallel
+  // pool. Banks are kept as bytes for the FMOD bridge (which owns their filesystem);
+  // everything else lands in the dotnet wasm FS. createWasmFile is synchronous, so
+  // FS-path creation never interleaves between workers.
+  const bankData = new Map();
+  const downloads = [...preloadFiles, ...bankFiles];
+  const CONCURRENCY = 8;
   let next = 0;
-  let done = 0;
   const worker = async () => {
-    while (next < preloadFiles.length) {
-      const file = preloadFiles[next++];
-      const bytes = new Uint8Array(await (await fetch(file)).arrayBuffer());
-      createWasmFile(module, file, bytes);
-      onProgress?.(++done, preloadFiles.length);
+    while (next < downloads.length) {
+      const file = downloads[next++];
+      const response = trackResponseProgress(await fetch(file), progress, file);
+      if (!response.ok)
+        throw new Error(`Failed to fetch ${file}: ${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      progress.complete(file);
+      if (isFmodBankFile(file)) bankData.set(file, bytes);
+      else createWasmFile(module, file, bytes);
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, preloadFiles.length) }, worker),
+    Array.from({ length: Math.min(CONCURRENCY, downloads.length) }, worker),
   );
 
-  for (const file of fmodBankFiles)
-    createWasmFile(module, file, new Uint8Array());
+  // Managed path checks expect the bank files to exist in the dotnet FS too, but
+  // only as placeholders — the FMOD bridge holds the real bytes.
+  for (const file of bankFiles) createWasmFile(module, file, new Uint8Array());
 
   console.log(
-    `Preloaded ${preloadFiles.length} Myth asset files into wasm FS.`,
+    `Preloaded ${preloadFiles.length} Myth asset files into wasm FS + ${bankFiles.length} FMOD banks.`,
   );
-  return files;
+  return { files, bankFiles, bankData };
 }
 
 async function loadAssetManifest() {
@@ -309,13 +334,106 @@ async function loadAssetManifest() {
   if (!response.ok)
     throw new Error(`Failed to load asset manifest: ${response.status}`);
 
-  const files = await response.json();
-  if (!Array.isArray(files))
-    throw new Error("Asset manifest must be a JSON array.");
+  const manifest = await response.json();
+  if (!Array.isArray(manifest?.assets) || typeof manifest?.framework !== "object")
+    throw new Error("Unexpected asset manifest format (expected {assets, framework}).");
 
-  return files
-    .filter((path) => typeof path === "string" && path.startsWith("Assets/"))
-    .sort();
+  manifest.assets = manifest.assets.filter(
+    (entry) =>
+      typeof entry?.path === "string" && entry.path.startsWith("Assets/"),
+  );
+  return manifest;
+}
+
+// Shared byte meter for the whole boot download. The denominator is the manifest's
+// expected sizes; the numerator is streamed bytes, clamped per item so a
+// Content-Encoding surprise can't overshoot. complete()/completePrefix() snap items
+// to their expected size, so anything the runtime skipped (cached, absent in this
+// build) self-heals at phase boundaries and the bar always reaches the end.
+function createDownloadProgress(onFraction) {
+  const expected = new Map(); // key -> expected bytes
+  const counted = new Map(); // key -> streamed bytes
+  let shown = 0;
+
+  const report = () => {
+    let totalExpected = 0;
+    let totalLoaded = 0;
+    for (const [key, bytes] of expected) {
+      totalExpected += bytes;
+      totalLoaded += Math.min(counted.get(key) ?? 0, bytes);
+    }
+    if (totalExpected <= 0) return;
+    const fraction = Math.min(totalLoaded / totalExpected, 1);
+    if (fraction > shown) {
+      shown = fraction;
+      onFraction(fraction);
+    }
+  };
+
+  return {
+    expect(entries) {
+      for (const [key, bytes] of entries)
+        if (Number.isFinite(bytes) && bytes > 0) expected.set(key, bytes);
+      report();
+    },
+    // Registers a fallback size (e.g. Content-Length) for a file the manifest
+    // doesn't know; manifest sizes win.
+    begin(key, fallbackBytes) {
+      if (!expected.has(key) && Number.isFinite(fallbackBytes) && fallbackBytes > 0)
+        expected.set(key, fallbackBytes);
+    },
+    count(key, bytes) {
+      counted.set(key, (counted.get(key) ?? 0) + bytes);
+      report();
+    },
+    complete(key) {
+      if (expected.has(key)) counted.set(key, expected.get(key));
+      report();
+    },
+    completePrefix(prefix) {
+      for (const [key, bytes] of expected)
+        if (key.startsWith(prefix)) counted.set(key, bytes);
+      report();
+    },
+  };
+}
+
+// Wraps a fetch Response so its body bytes tick the progress meter as they stream.
+// The counted bytes are post-transfer-decompression, matching the manifest's
+// on-disk sizes.
+function trackResponseProgress(response, progress, key) {
+  if (!response.ok || !response.body) return response;
+  progress.begin(key, Number(response.headers.get("Content-Length")) || 0);
+  const counter = new TransformStream({
+    transform(chunk, controller) {
+      progress.count(key, chunk.byteLength);
+      controller.enqueue(chunk);
+    },
+  });
+  return new Response(response.body.pipeThrough(counter), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+// Streams .NET boot resources (native wasm, webcil assemblies, icu data) through
+// the shared meter via dotnet.js's loadBootResource hook. The dotnet.js module
+// itself and the boot manifest must use the default loader (dotnet.js requires a
+// URL string for those). Fetching here bypasses dotnet.js's integrity check — a
+// custom Response is trusted as-is — which is both acceptable (same-origin HTTPS)
+// and necessary: fetch() with integrity metadata buffers the entire body before
+// releasing any bytes, which would defeat streaming progress.
+function createResourceLoader(progress) {
+  return (type, name, defaultUri, _integrity, _behavior) => {
+    if (type === "dotnetjs" || type === "manifest") return undefined;
+    return (async () => {
+      const response = await fetch(defaultUri, { cache: "no-cache" });
+      if (!response.ok)
+        throw new Error(`Failed to fetch ${defaultUri}: ${response.status}`);
+      return trackResponseProgress(response, progress, `_framework/${name}`);
+    })();
+  };
 }
 
 // The bundle is filtered at build time (csproj Content excludes decide what ships), so
