@@ -89,6 +89,14 @@ jobs:
           find Myth/Assets/Shaders Foster/Framework/Content/Shaders \
             -path '*/Compiled/*' \( -name '*.wgsl' -o -name '*.spv' \) -delete -print
 
+      # The web shaders must exist before the content zip is built: the zip packs
+      # Shaders/Compiled/, and the dotnet run below only compiles this host's native
+      # format (spv on linux). The browser publish would compile .wgsl too late —
+      # the zip is already sealed by then.
+      - name: Compile web shaders (wgsl)
+        working-directory: Myth
+        run: dotnet msbuild Myth.csproj -t:CompileShaders -p:ShaderPlatform=web
+
       - name: Build visual asset pack + content zip
         working-directory: Myth
         run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip
