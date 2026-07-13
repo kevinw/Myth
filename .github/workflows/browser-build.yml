@@ -99,12 +99,12 @@ jobs:
       - name: Publish browser app (AOT)
         run: node Myth/tools/browser-dotnet.mjs publish -c Release --aot
 
-      - name: Upload browser app bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: myth-browser-wasm
-          path: Myth/bin/Release/net10.0/browser-wasm/AppBundle
-          if-no-files-found: error
+      #- name: Upload browser app bundle
+      #  uses: actions/upload-artifact@v7
+      #  with:
+      #    name: myth-browser-wasm
+      #    path: Myth/bin/Release/net10.0/browser-wasm/AppBundle
+      #    if-no-files-found: error
 
       - name: Cache npm packages
         uses: actions/cache@v5
