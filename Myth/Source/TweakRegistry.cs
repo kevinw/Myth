@@ -201,6 +201,11 @@ static class TweakRegistry
 		// Pre-register / flag every `.T(` marker that falls inside a changed range.
 		foreach (var (file, list) in ranges)
 		{
+			var attr = File.GetAttributes(file);
+			if (attr.HasFlag(FileAttributes.Directory)) {
+				continue;
+			}
+
 			string[] lines;
 			try { lines = File.ReadAllLines(file); }
 			catch
