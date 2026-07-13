@@ -73,7 +73,8 @@
       "Id": "4ae1defec06a25b0",
       "Type": "NeuralTexturePerturbActor",
       "Position": [0, 0],
-      "Size": [320, 184]
+      "Size": [320, 184],
+      "Radius": 10.4
     }
   ]
 }

@@ -1,0 +1,74 @@
+experiment_name: "MythDynamicTexture"
+task: "texture_2d"
+device: "cpu"
+precision: "float32"
+
+nca:
+  type: "PENCA"
+  graft_initialization: null
+  output_type: "s"
+  nca_kwargs:
+    channels: 16
+    fc_dim: 128
+
+siren:
+  hidden_features: 32
+  hidden_layers: 2
+  outermost_linear: true
+  fx: "linear"
+  activation: "sin"
+  # The published dynamic-texture models use sin/cos patch coordinates. This
+  # keeps the checkpoint compatible with NeuralTextureDecode.hlsl.
+  num_frequencies: 1
+  first_omega_0: 10.0
+  hidden_omega_0: 10.0
+
+train:
+  epochs: 3000
+  batch_size: 2
+  lr: 0.001
+  lr_decay_steps: [1000, 2000]
+  lr_decay_gamma: 0.3
+  pbr_training: false
+  nca_grid_size: [128, 128]
+  pool_size: 512
+  inject_seed_interval: 32
+  step_range: [32, 128]
+  summary_interval: 250
+
+renderer:
+  scale_factor: 8
+  padding: "replicate"
+  ambient_light: 0.5
+  point_light: 0.7
+  fs_shader: "vanilla"
+
+num_channels:
+  rgb: 3
+
+loss:
+  overflow_loss_weight: 100.0
+  appearance_loss_weight: 2.0
+  motion_loss_weight: 1.0
+  motion_loss_kwargs:
+    loss_type: "vector_field"
+    target_name: "circular"
+    strength_loss_weight: 1.5
+    direction_loss_weight: 1.0
+    image_size: [128, 128]
+    base_num_steps: 24
+  appearance_loss_kwargs:
+    target_image_size: [1024, 1024]
+    patch_size: [256, 256]
+    num_scales: 3
+    relative_scale: 1
+    max_image_size: [2048, 2048]
+    target_images_path:
+      rgb: "targets/bubbly_0101.jpg"
+    include_image_as_feature: false
+    num_pseudo_targets: 10
+    vgg_layers: [1, 6, 11, 18, 25]
+    ac_loss_weight: 0.0
+
+logger:
+  backend: "local"

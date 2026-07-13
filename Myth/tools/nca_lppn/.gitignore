@@ -1,0 +1,8 @@
+.cells2pixels/
+.generated/
+.venv/
+data/
+experiments/
+outputs/
+targets/
+

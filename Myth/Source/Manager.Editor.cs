@@ -229,7 +229,6 @@ public partial class Manager
 		// it was annoying that session destroyed enemies would stay disappeared while editing. but maybe this logic is better on loading the room?
 		if (game != null)
 		{
-			game.Show("EnteringEditor");
 			game.Save.Session.DestroyedActors.Clear();
 		}
 		MarkSaveDirty();

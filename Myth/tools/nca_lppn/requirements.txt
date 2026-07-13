@@ -1,0 +1,10 @@
+gdown
+matplotlib
+moviepy==1.0.3
+numpy
+pillow
+pyyaml
+torch>=2.8
+torch-geometric
+torchvision
+tqdm
