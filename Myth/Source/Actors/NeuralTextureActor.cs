@@ -9,7 +9,8 @@ public class NeuralTextureActor : Actor, IResizable
 {
 	const int StateWidth = 128;
 	const int StateHeight = 128;
-	const int WeightCount = 3441;
+	const int ColorWeightCount = 3441;
+	const int PairedWeightCount = 3466;
 	const int MaxPerturbations = 64;
 	public const string WeightsFolder = "NCA/DynamicTexture";
 
@@ -33,6 +34,8 @@ public class NeuralTextureActor : Actor, IResizable
 		public uint Height;
 		public uint OutputWidth;
 		public uint OutputHeight;
+		public uint OutputChannels;
+		public uint Pad0, Pad1, Pad2;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -77,10 +80,12 @@ public class NeuralTextureActor : Actor, IResizable
 	StorageBuffer<Vector4>? weights;
 	StorageBuffer<PerturbStamp>? perturbations;
 	Texture? output;
+	Texture? normalOutput;
 	Shader? updateShader;
 	Shader? decodeShader;
 	Shader? perturbShader;
 	bool currentIsB;
+	bool hasNormals;
 	bool supported;
 	float stepAccumulator;
 	uint seed = 1;
@@ -123,7 +128,7 @@ public class NeuralTextureActor : Actor, IResizable
 			decodeCode,
 			uniformBufferCount: 1,
 			readOnlyStorageBufferCount: 2,
-			readWriteStorageTextureCount: 1,
+			readWriteStorageTextureCount: 2,
 			threadCountX: 8,
 			threadCountY: 8,
 			threadCountZ: 1,
@@ -147,6 +152,8 @@ public class NeuralTextureActor : Actor, IResizable
 		bufferB = new(graphicsDevice, "NeuralTextureStateB");
 		weights = new(graphicsDevice, "NeuralTextureWeights");
 		perturbations = new(graphicsDevice, "NeuralTexturePerturbations");
+
+		LoadWeights();
 		output = new(
 			graphicsDevice,
 			Math.Max(1, Size.X),
@@ -154,8 +161,14 @@ public class NeuralTextureActor : Actor, IResizable
 			TextureFormat.Color,
 			TextureFlags.ComputeWrite,
 			"NeuralTextureOutput");
-
-		LoadWeights();
+		// The decode shader statically binds a normal target, so color-only models get a 1x1 stub.
+		normalOutput = new(
+			graphicsDevice,
+			hasNormals ? Math.Max(1, Size.X) : 1,
+			hasNormals ? Math.Max(1, Size.Y) : 1,
+			TextureFormat.Color,
+			TextureFlags.ComputeWrite,
+			"NeuralTextureNormalOutput");
 		var state = new CellState[StateWidth * StateHeight];
 		bufferA.Upload(state);
 		bufferB.Upload(state);
@@ -169,8 +182,9 @@ public class NeuralTextureActor : Actor, IResizable
 	{
 		var bytes = Assets.Content.ReadAllBytes($"{WeightsFolder}/{WeightsFile}");
 		var values = MemoryMarshal.Cast<byte, Vector4>(bytes.AsSpan());
-		if (values.Length != WeightCount)
-			throw new InvalidDataException($"Neural texture model '{WeightsFile}' has {values.Length} weight vectors; expected {WeightCount}.");
+		if (values.Length != ColorWeightCount && values.Length != PairedWeightCount)
+			throw new InvalidDataException($"Neural texture model '{WeightsFile}' has {values.Length} weight vectors; expected {ColorWeightCount} (color) or {PairedWeightCount} (color+normal).");
+		hasNormals = values.Length == PairedWeightCount;
 		weights!.Upload(values);
 	}
 
@@ -317,12 +331,13 @@ public class NeuralTextureActor : Actor, IResizable
 			Height = StateHeight,
 			OutputWidth = (uint)output!.Width,
 			OutputHeight = (uint)output.Height,
+			OutputChannels = hasNormals ? 6u : 3u,
 		});
 
 		new ComputeCommand(decodeShader!)
 		{
 			ReadOnlyStorageBuffers = [source, weights!],
-			ReadWriteStorageTextures = [output],
+			ReadWriteStorageTextures = [output, normalOutput!],
 			UniformBuffers = [decodeUniforms],
 			GroupCountX = (output.Width + 7) / 8,
 			GroupCountY = (output.Height + 7) / 8,
@@ -333,6 +348,12 @@ public class NeuralTextureActor : Actor, IResizable
 	{
 		if (supported && output != null)
 			batcher.Image(output, Vector2.Zero, Color.White);
+	}
+
+	public override void RenderNormals(Batcher batcher)
+	{
+		if (supported && hasNormals && normalOutput != null)
+			batcher.Image(normalOutput, Vector2.Zero, Color.White);
 	}
 
 	public override Rect GetVisualBounds()
@@ -346,6 +367,7 @@ public class NeuralTextureActor : Actor, IResizable
 		weights?.Dispose();
 		perturbations?.Dispose();
 		output?.Dispose();
+		normalOutput?.Dispose();
 		updateShader?.Dispose();
 		decodeShader?.Dispose();
 		perturbShader?.Dispose();

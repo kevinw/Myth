@@ -10,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 UPSTREAM = ROOT / ".cells2pixels"
-UPSTREAM_REVISION = "83b21b43121b54303a4a00a4ff48bc7a44a576b2"
+UPSTREAM_URL = "https://github.com/kevinw/Cells2Pixels.git"
+UPSTREAM_REVISION = "e9fc448b7465d903f1a5fddd79a7d612da30c6c6"  # myth branch
 TARGET_REVISION = "29342e2f92b2fd63133b985d34a41c20634248cd"
 DEFAULT_TARGET = ROOT / "targets" / "bubbly_0101.jpg"
 DEFAULT_TARGET_URL = (
@@ -21,10 +22,7 @@ DEFAULT_TARGET_URL = (
 
 def prepare():
     if not UPSTREAM.exists():
-        subprocess.run(
-            ["git", "clone", "https://github.com/TheDevilWillBeBee/Cells2Pixels.git", str(UPSTREAM)],
-            check=True,
-        )
+        subprocess.run(["git", "clone", UPSTREAM_URL, str(UPSTREAM)], check=True)
         subprocess.run(["git", "-C", str(UPSTREAM), "checkout", "--detach", UPSTREAM_REVISION], check=True)
     else:
         revision = subprocess.run(
@@ -67,10 +65,28 @@ def smoke_config(config):
     config["loss"]["motion_loss_kwargs"].update(image_size=[64, 64], base_num_steps=1)
 
 
+def screen_config(config):
+    config["renderer"]["scale_factor"] = 3
+    config["loss"]["appearance_loss_kwargs"].update(
+        target_image_size=[512, 512],
+        patch_size=[160, 160],
+        num_scales=2,
+        num_pseudo_targets=0,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", type=Path, default=DEFAULT_TARGET)
+    parser.add_argument("--normal", type=Path, help="Paired normal map; trains one model that outputs color and normal channels together")
     parser.add_argument("--motion", default="circular")
+    parser.add_argument("--profile", choices=["reference", "screen"], default="reference")
+    parser.add_argument(
+        "--pseudo-targets",
+        type=int,
+        help="Override the profile's channel-permutation pseudo-target count "
+        "(couples albedo/normal statistics in paired training)",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--smoke", action="store_true", help="Run one reduced epoch to validate the toolchain")
@@ -103,9 +119,28 @@ def main():
     config["device"] = device
     config["precision"] = "float16" if device.startswith("cuda") else "float32"
     config["loss"]["motion_loss_kwargs"]["target_name"] = args.motion
-    config["loss"]["appearance_loss_kwargs"]["target_images_path"]["rgb"] = str(target)
+    stem = target.stem
+    if args.normal is not None:
+        normal = args.normal.resolve()
+        if not normal.is_file():
+            raise SystemExit(f"Normal map does not exist: {normal}")
+        # Keys are sorted by the trainer: albedo gets channels 0-2, normal 3-5.
+        config["num_channels"] = {"albedo": 3, "normal": 3}
+        config["loss"]["appearance_loss_kwargs"]["target_images_path"] = {
+            "albedo": str(target),
+            "normal": str(normal),
+        }
+        stem += "+normal"
+    else:
+        config["loss"]["appearance_loss_kwargs"]["target_images_path"]["rgb"] = str(target)
+    if args.profile == "screen":
+        screen_config(config)
+    if args.pseudo_targets is not None:
+        config["loss"]["appearance_loss_kwargs"]["num_pseudo_targets"] = args.pseudo_targets
 
-    name = f"{target.stem}_{args.motion}".replace("/", "_").replace("\\", "_")
+    name = f"{stem}_{args.motion}".replace("/", "_").replace("\\", "_")
+    if args.profile != "reference":
+        name += f"_{args.profile}"
     experiment = ROOT / "experiments" / name
     config["experiment_path"] = str(experiment)
     if args.epochs is not None:
@@ -135,7 +170,7 @@ def main():
             ]
         )
 
-    print(f"Training {target.name} with motion '{args.motion}' on {device}")
+    print(f"Training {target.name} with motion '{args.motion}', profile '{args.profile}', on {device}")
     environment = os.environ.copy()
     if device == "mps":
         environment["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"

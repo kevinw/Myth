@@ -2,8 +2,10 @@
   "position": [468, 46],
   "size": [40, 23],
   "musicArea": "Intense",
-  "backdropColor": "400000",
-  "ambientColor": "8D8A8A",
+  "backdropColor": "4F4E4E",
+  "ambientColor": "252525",
+  "ambientIntensity": 0.261,
+  "lightNoise": 0,
   "reverb": 0.871,
   "legend": {
     "T": "stone"
@@ -42,15 +44,19 @@
       "Position": [92, 68],
       "Radius": 200,
       "FlickerFrequency": 1.65,
-      "FlickerIntensity": 0.13
+      "FlickerIntensity": 0.13,
+      "LightColor": "3C93F3",
+      "Height": 30.2,
+      "DrawSprite": false
     },
     {
       "Id": "d755aefc0fe01793",
       "Type": "Light",
-      "Position": [212, 68],
+      "Position": [284, 36],
       "Radius": 180,
       "FlickerFrequency": 1.55,
-      "FlickerIntensity": 0.03
+      "FlickerIntensity": 0.03,
+      "DrawSprite": false
     },
     {
       "Id": "363bfc3d0cffe5a0",
@@ -67,7 +73,8 @@
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
       "Size": [320, 184],
-      "WeightsFile": "fire_circular.bin"
+      "StepsPerSecond": 60,
+      "WeightsFile": "bubbly_0101_circular_screen.bin"
     },
     {
       "Id": "4ae1defec06a25b0",

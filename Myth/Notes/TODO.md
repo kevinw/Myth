@@ -1,5 +1,6 @@
 # TODO
 
+download a lot of LUTs and try them
 adjust rope springiness as a mechanic or challenge
 
 ## to triage

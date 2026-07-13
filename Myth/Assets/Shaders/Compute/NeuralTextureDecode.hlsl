@@ -15,6 +15,10 @@ StructuredBuffer<float4> Weights : register(t1, space0);
 [[vk::image_format("rgba8")]]
 #endif
 RWTexture2D<float4> Output : register(u0, space1);
+#if BROWSER
+[[vk::image_format("rgba8")]]
+#endif
+RWTexture2D<float4> NormalOutput : register(u1, space1);
 
 cbuffer Params : register(b0, space2)
 {
@@ -22,6 +26,10 @@ cbuffer Params : register(b0, space2)
     uint Height;
     uint OutputWidth;
     uint OutputHeight;
+    uint OutputChannels; // 3 = color only, 6 = color + normal
+    uint Pad0;
+    uint Pad1;
+    uint Pad2;
 };
 
 #define L0_W_OFFSET 2720
@@ -31,7 +39,8 @@ cbuffer Params : register(b0, space2)
 #define L2_W_OFFSET 3152
 #define L2_B_OFFSET 3408
 #define L3_W_OFFSET 3416
-#define L3_B_OFFSET 3440
+// The final bias follows the final weight rows (8 float4 per output channel),
+// so its offset depends on the model's output channel count.
 
 float weight_value(int offset, int index)
 {
@@ -110,11 +119,12 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         a[output] = sin(value * 10.0);
     }
 
+    int biasOffset = L3_W_OFFSET + (int)OutputChannels * 8;
     float3 color = 0.0;
     [unroll]
     for (int output = 0; output < 3; output++)
     {
-        float value = weight_value(L3_B_OFFSET, output);
+        float value = weight_value(biasOffset, output);
         [unroll]
         for (int i = 0; i < 8; i++)
             value += dot(float4(a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]), Weights[L3_W_OFFSET + output * 8 + i]);
@@ -122,4 +132,20 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     }
 
     Output[id.xy] = float4(saturate(color), 1.0);
+
+    if (OutputChannels >= 6)
+    {
+        float3 normal = 0.0;
+        [unroll]
+        for (int output = 0; output < 3; output++)
+        {
+            float value = weight_value(biasOffset, output + 3);
+            [unroll]
+            for (int i = 0; i < 8; i++)
+                value += dot(float4(a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]), Weights[L3_W_OFFSET + (output + 3) * 8 + i]);
+            normal[output] = value;
+        }
+
+        NormalOutput[id.xy] = float4(saturate(normal), 1.0);
+    }
 }
