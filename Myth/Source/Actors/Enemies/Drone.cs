@@ -249,6 +249,7 @@ public class Drone : Actor
 		batcher.PushMatrix(Matrix3x2.CreateScale(1.0f, 0.95f));
 		batcher.Circle(Vector2.Zero, BodyRadius, 16, Color.Violet);
 		DrawEye(batcher);
+		batcher.PopMatrix();
 	}
 
 	void DrawTurret(Batcher batcher, Color barrelColor, Color muzzleColor)
