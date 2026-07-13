@@ -478,6 +478,7 @@ public sealed partial class GameView
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
 			Prop prop => prop.Layer == Factory.TileLayer.Background,
+			NeuralTextureActor texture => texture.Layer == Factory.TileLayer.Background,
 			_ => false
 		};
 

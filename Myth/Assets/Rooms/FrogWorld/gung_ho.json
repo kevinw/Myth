@@ -2,6 +2,13 @@
   "position": [0, 0],
   "size": [40, 23],
   "ambientIntensity": 0.988,
+  "legend": {
+    "#": "back",
+    "1": "castle",
+    "G": "grass",
+    "S": "Grass Slope",
+    "g": "plants"
+  },
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -53,6 +60,12 @@
     "0000000000000000000000000000000000000000"
   ],
   "actors": [
+    {
+      "Id": "c2f0050c1a000001",
+      "Type": "NeuralTextureActor",
+      "Position": [0, 0],
+      "Size": [320, 184]
+    },
     {
       "Id": "e0fe8d5b00e2dbc4",
       "Type": "TitleText",

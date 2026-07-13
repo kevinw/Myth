@@ -65,6 +65,7 @@ try {
 
   const debug = searchParams.get("debug") === "1";
   const webAudioDisabled = searchParams.get("audio") === "0";
+  const room = searchParams.get("room")?.trim();
 
   const dotnetConfig = debug
     ? {
@@ -133,7 +134,7 @@ try {
   startGate.ready();
   await startGate.wait();
   try {
-    await runMain("Myth", []);
+    await runMain("Myth", room ? ["--play-room", room] : []);
   } catch (error) {
     const cleanExit =
       error?.name === "ExitStatus" &&

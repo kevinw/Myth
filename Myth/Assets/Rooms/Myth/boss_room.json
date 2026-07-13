@@ -1,5 +1,5 @@
 {
-  "position": [400, -23],
+  "position": [468, 46],
   "size": [40, 23],
   "musicArea": "Intense",
   "backdropColor": "400000",
@@ -61,6 +61,19 @@
       "Id": "196b40f2ec405723",
       "Type": "Boss",
       "Position": [148, 144]
+    },
+    {
+      "Id": "4ae1defec06a25af",
+      "Type": "NeuralTextureActor",
+      "Position": [0, 0],
+      "Size": [320, 184],
+      "WeightsFile": "fire_circular.bin"
+    },
+    {
+      "Id": "4ae1defec06a25b0",
+      "Type": "NeuralTexturePerturbActor",
+      "Position": [0, 0],
+      "Size": [320, 184]
     }
   ]
 }

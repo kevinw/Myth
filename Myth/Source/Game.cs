@@ -1711,9 +1711,12 @@ public partial class Game : IDisposable
 
 	public void HitVisualActors(RectInt hitbox)
 	{
-		foreach (var actor in Actors)
+		for (int i = 0, count = Actors.Count; i < count; i++)
+		{
+			var actor = Actors[i];
 			if (actor is IHitByHitbox { } hittable)
 				hittable.HitByHitbox(hitbox);
+		}
 	}
 
 	public void ReloadRoom(bool restartMusic = false)

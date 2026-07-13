@@ -1,0 +1,118 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
+struct CellState
+{
+    float4 c[4];
+};
+
+struct type_StructuredBuffer_CellState
+{
+    CellState _m0[1];
+};
+
+struct PerturbStamp
+{
+    float2 From;
+    float2 To;
+    float Radius;
+    float Strength;
+};
+
+struct type_StructuredBuffer_PerturbStamp
+{
+    PerturbStamp _m0[1];
+};
+
+struct type_RWStructuredBuffer_CellState
+{
+    CellState _m0[1];
+};
+
+struct type_Params
+{
+    uint Width;
+    uint Height;
+    uint StampCount;
+    uint Padding;
+};
+
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_CellState& SourceState [[buffer(1)]], const device type_StructuredBuffer_PerturbStamp& Stamps [[buffer(2)]], device type_RWStructuredBuffer_CellState& DestState [[buffer(3)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    do
+    {
+        bool _65;
+        if (!(gl_GlobalInvocationID.x >= Params.Width))
+        {
+            _65 = gl_GlobalInvocationID.y >= Params.Height;
+        }
+        else
+        {
+            _65 = true;
+        }
+        if (_65)
+        {
+            break;
+        }
+        float _69;
+        _69 = 0.0;
+        for (uint _72 = 0u; _72 < Params.StampCount; )
+        {
+            float2 _85 = float2(gl_GlobalInvocationID.xy);
+            float2 _86 = Stamps._m0[_72].To - Stamps._m0[_72].From;
+            float _100 = fast::clamp(1.0 - (length(_85 - (Stamps._m0[_72].From + (_86 * fast::clamp(dot(_85 - Stamps._m0[_72].From, _86) / precise::max(dot(_86, _86), 9.9999997473787516355514526367188e-05), 0.0, 1.0)))) / precise::max(Stamps._m0[_72].Radius, 9.9999997473787516355514526367188e-05)), 0.0, 1.0);
+            _69 = precise::max(_69, fast::clamp(Stamps._m0[_72].Strength, 0.0, 1.0) * ((_100 * _100) * (3.0 - (2.0 * _100))));
+            _72++;
+            continue;
+        }
+        uint _110 = (gl_GlobalInvocationID.y * Params.Width) + gl_GlobalInvocationID.x;
+        float _118 = 1.0 - _69;
+        spvUnsafeArray<float4, 4> _124 = spvUnsafeArray<float4, 4>({ SourceState._m0[_110].c[0] * _118, SourceState._m0[_110].c[1] * _118, SourceState._m0[_110].c[2] * _118, SourceState._m0[_110].c[3] * _118 });
+        DestState._m0[_110] = CellState{ { _124[0], _124[1], _124[2], _124[3] } };
+        break;
+    } while(false);
+}
+

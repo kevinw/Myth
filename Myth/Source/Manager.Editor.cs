@@ -1681,6 +1681,16 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (property.Name == nameof(NeuralTextureActor.WeightsFile) && ActorSpecs.Get(specId) is { } textureSpec && IsNeuralTextureActor(textureSpec))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawNeuralTextureWeightsCombo(ref value))
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
 		else if (property.Type == typeof(string))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
@@ -1885,6 +1895,16 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (DrawSpriteCombo(ref value))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				changed = true;
+			}
+		}
+		else if (property.Name == nameof(NeuralTextureActor.WeightsFile) && IsNeuralTextureActor(actor))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawNeuralTextureWeightsCombo(ref value))
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
@@ -2106,6 +2126,28 @@ public partial class Manager
 		return changed;
 	}
 
+	static bool DrawNeuralTextureWeightsCombo(ref string value)
+	{
+		var changed = false;
+		if (ImGui.BeginCombo("##Value", Path.GetFileNameWithoutExtension(value).Replace('_', ' ')))
+		{
+			foreach (var key in Assets.Content.EnumerateDirectory(NeuralTextureActor.WeightsFolder, "*.bin").Order(StringComparer.OrdinalIgnoreCase))
+			{
+				var name = Path.GetFileName(key);
+				var selected = string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
+				if (ImGui.Selectable(Path.GetFileNameWithoutExtension(name).Replace('_', ' '), selected))
+				{
+					value = name;
+					changed = true;
+				}
+				if (selected)
+					ImGui.SetItemDefaultFocus();
+			}
+			ImGui.EndCombo();
+		}
+		return changed;
+	}
+
 	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "TileType", StringComparison.OrdinalIgnoreCase);
 
@@ -2255,6 +2297,9 @@ public partial class Manager
 
 	static bool IsPropActor(JsonObject actor)
 		=> string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), nameof(Prop), StringComparison.OrdinalIgnoreCase);
+
+	static bool IsNeuralTextureActor(JsonObject actor)
+		=> string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), nameof(NeuralTextureActor), StringComparison.OrdinalIgnoreCase);
 
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
