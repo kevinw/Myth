@@ -176,6 +176,13 @@ if [[ -z "$device_id" ]]; then
 fi
 
 if (( no_build == 0 )); then
+	echo "Building visual asset pack + content zip ..."
+	assets_start_ms="$(now_ms)"
+	(cd "$repo_root" && dotnet run --project Myth.csproj -- \
+		--build-asset-pack Assets/Packed/Visuals \
+		--build-content-zip Assets/Content.zip)
+	print_elapsed "Assets" "$assets_start_ms"
+
 	echo "Building Myth for $runtime_id ($configuration) ..."
 	build_start_ms="$(now_ms)"
 	dotnet build "$project_path" -c "$configuration" -f net10.0-ios -r "$runtime_id" /p:ArchiveOnBuild=false

@@ -31,7 +31,13 @@
 
   <ItemGroup>
     <ImageAsset Include="Assets.xcassets/**/*" />
-    <BundleResource Include="../../../Assets/**/*"
+    <!-- Bundled content ships as one zip when it has been built (see tools/run-ios-device.sh);
+         otherwise fall back to loose files so a plain build still works. FMOD banks always
+         ship loose: FMOD opens them by real path. -->
+    <BundleResource Include="../../../Assets/Content.zip" Condition="Exists('../../../Assets/Content.zip')">
+      <LogicalName>Assets/Content.zip</LogicalName>
+    </BundleResource>
+    <BundleResource Include="../../../Assets/**/*" Condition="!Exists('../../../Assets/Content.zip')"
                     Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**;../../../Assets/Sources/Sounds/**">
       <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </BundleResource>

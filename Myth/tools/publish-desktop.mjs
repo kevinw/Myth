@@ -38,8 +38,13 @@ function capture(cmd, args) {
 }
 
 // --- 1. Fresh visual asset pack (the bundle ships no Assets/Sources, so everything
-// visual — including tile kit registrations — must be current in the pack).
-run("dotnet", ["run", "--project", "Myth.csproj", "--", "--build-asset-pack", "Assets/Packed/Visuals"]);
+// visual — including tile kit registrations — must be current in the pack), then a
+// Content.zip of the shippable Assets slice built around it.
+const contentZip = path.join(outRoot, "Content.zip");
+run("dotnet", ["run", "--project", "Myth.csproj", "--",
+  "--build-asset-pack", "Assets/Packed/Visuals",
+  "--build-content-zip", contentZip,
+]);
 
 // --- 2. NativeAOT publish, play-only.
 run("dotnet", [
@@ -68,23 +73,18 @@ for (const entry of fs.readdirSync(publishDir))
     fs.cpSync(path.join(publishDir, entry), path.join(macos, entry));
 
 // Assets go in Contents/Resources (codesign --deep rejects non-code under MacOS; the
-// game probes Resources/Assets from the executable dir). Shipped per file so authoring
-// litter and empty dirs never make it in:
-//   - nothing with a dot-prefixed component (.cache/.user/.unsaved/.DS_Store)
-//   - Sources/ never ships (authoring; the visual pack replaces it)
-//   - Sounds/: only the built Desktop banks (FMOD/Ableton projects are authoring)
-//   - Shaders/: only Compiled/*.msl — what the mac runtime loads
+// game probes Resources/Assets from the executable dir). The bundled Assets folder is
+// just Content.zip (everything the game reads through Assets.Content) plus the built
+// Desktop FMOD banks as loose files — FMOD opens banks by real path, so they can't
+// live inside the zip.
 function assetShips(rel) {
   if (rel.split(path.sep).some((part) => part.startsWith("."))) return false;
-  if (rel.startsWith(`Sources${path.sep}`)) return false;
-  if (rel.startsWith(`Sounds${path.sep}`))
-    return rel.startsWith(path.join("Sounds", "FMOD", "Build", "Desktop") + path.sep) && rel.endsWith(".bank");
-  if (rel.startsWith(`Shaders${path.sep}`))
-    return rel.startsWith(path.join("Shaders", "Compiled") + path.sep) && rel.endsWith(".msl");
-  return true;
+  return rel.startsWith(path.join("Sounds", "FMOD", "Build", "Desktop") + path.sep) && rel.endsWith(".bank");
 }
 
 const assetsRoot = path.join(root, "Assets");
+fs.mkdirSync(path.join(resources, "Assets"), { recursive: true });
+fs.copyFileSync(contentZip, path.join(resources, "Assets", "Content.zip"));
 for (const entry of fs.readdirSync(assetsRoot, { recursive: true, withFileTypes: true })) {
   if (!entry.isFile()) continue;
   const rel = path.relative(assetsRoot, path.join(entry.parentPath, entry.name));

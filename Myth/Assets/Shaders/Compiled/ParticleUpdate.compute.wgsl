@@ -140,635 +140,647 @@ var<uniform> Params: type_u002e_Params;
 var<private> global: vec3<u32>;
 
 fn compute_main_1() {
-    var phi_151_: u32;
-    var phi_286_: vec2<f32>;
-    var phi_287_: vec2<f32>;
-    var phi_296_: vec2<f32>;
-    var phi_297_: f32;
-    var phi_353_: f32;
-    var phi_354_: f32;
-    var phi_412_: u32;
-    var phi_419_: bool;
-    var phi_438_: u32;
-    var phi_474_: u32;
-    var phi_487_: bool;
-    var phi_766_: bool;
-    var phi_771_: bool;
-    var phi_777_: bool;
-    var phi_846_: vec2<f32>;
-    var phi_847_: vec2<f32>;
-    var phi_848_: vec2<f32>;
-    var phi_849_: vec2<f32>;
-    var phi_878_: bool;
-    var phi_884_: bool;
-    var phi_890_: bool;
-    var phi_898_: f32;
-    var phi_900_: bool;
-    var phi_939_: bool;
-    var phi_945_: bool;
-    var phi_951_: bool;
-    var phi_959_: f32;
+    var phi_153_: u32;
+    var phi_288_: vec2<f32>;
+    var phi_289_: vec2<f32>;
+    var phi_298_: vec2<f32>;
+    var phi_299_: f32;
+    var phi_355_: f32;
+    var phi_356_: f32;
+    var phi_414_: u32;
+    var phi_421_: bool;
+    var phi_440_: u32;
+    var phi_476_: u32;
+    var phi_489_: bool;
+    var phi_768_: bool;
+    var phi_773_: bool;
+    var phi_779_: bool;
+    var phi_850_: vec2<f32>;
+    var phi_851_: vec2<f32>;
+    var phi_852_: vec2<f32>;
+    var phi_853_: vec2<f32>;
+    var phi_854_: vec2<f32>;
+    var phi_855_: vec2<f32>;
+    var phi_856_: vec2<f32>;
+    var phi_885_: bool;
+    var phi_891_: bool;
+    var phi_897_: bool;
+    var phi_905_: f32;
+    var phi_907_: bool;
+    var phi_946_: bool;
+    var phi_952_: bool;
+    var phi_958_: bool;
+    var phi_966_: f32;
     var local: vec2<f32>;
     var local_1: f32;
     var local_2: vec2<f32>;
-    var phi_972_: bool;
-    var phi_978_: bool;
-    var phi_984_: bool;
-    var phi_992_: f32;
+    var phi_979_: bool;
+    var phi_985_: bool;
+    var phi_991_: bool;
+    var phi_999_: f32;
     var local_3: vec2<f32>;
     var local_4: f32;
     var local_5: vec2<f32>;
-    var phi_1005_: bool;
-    var phi_1011_: bool;
-    var phi_1017_: bool;
-    var phi_1025_: f32;
+    var phi_1012_: bool;
+    var phi_1018_: bool;
+    var phi_1024_: bool;
+    var phi_1032_: f32;
     var local_6: vec2<f32>;
     var local_7: f32;
     var local_8: vec2<f32>;
-    var phi_1038_: bool;
-    var phi_1044_: bool;
-    var phi_1050_: bool;
-    var phi_1058_: f32;
-    var phi_1068_: vec2<f32>;
-    var phi_1071_: vec2<f32>;
-    var phi_1073_: vec2<f32>;
-    var phi_1074_: f32;
-    var phi_1075_: f32;
-    var phi_1076_: vec2<f32>;
-    var phi_1077_: f32;
-    var phi_1078_: f32;
-    var phi_1081_: vec2<f32>;
+    var phi_1045_: bool;
+    var phi_1051_: bool;
+    var phi_1057_: bool;
+    var phi_1065_: f32;
+    var phi_1075_: vec2<f32>;
+    var phi_1078_: vec2<f32>;
+    var phi_1080_: vec2<f32>;
+    var phi_1081_: f32;
     var phi_1082_: f32;
-    var phi_1083_: f32;
-    var phi_1084_: vec2<f32>;
-    var phi_1086_: u32;
-    var phi_1109_: f32;
-    var phi_1110_: f32;
-    var phi_1111_: u32;
-    var phi_1114_: f32;
-    var phi_1115_: f32;
+    var phi_1083_: vec2<f32>;
+    var phi_1084_: f32;
+    var phi_1085_: f32;
+    var phi_1088_: vec2<f32>;
+    var phi_1089_: f32;
+    var phi_1090_: f32;
+    var phi_1091_: vec2<f32>;
+    var phi_1093_: u32;
+    var phi_1116_: f32;
+    var phi_1117_: f32;
+    var phi_1118_: u32;
+    var phi_1121_: f32;
+    var phi_1122_: f32;
 
-    let _e84 = global;
+    let _e86 = global;
     switch bitcast<i32>(0u) {
         default: {
-            let _e88 = Params.Count;
-            if (_e84.x >= _e88) {
+            let _e90 = Params.Count;
+            if (_e86.x >= _e90) {
                 break;
             }
-            let _e90 = (_e84.x * 16u);
-            phi_151_ = 0u;
+            let _e92 = (_e86.x * 16u);
+            phi_153_ = 0u;
             loop {
-                let _e92 = phi_151_;
-                let _e94 = Params.EmitCount;
-                phi_419_ = false;
-                if (_e92 < _e94) {
-                    let _e99 = Emits.member[_e92].start;
-                    let _e101 = Emits.member[_e92].count;
-                    let _e103 = Emits.member[_e92].seed;
-                    let _e105 = Emits.member[_e92].effect;
-                    let _e107 = Emits.member[_e92].originX;
-                    let _e109 = Emits.member[_e92].originY;
-                    let _e111 = Emits.member[_e92].shape;
-                    let _e113 = Emits.member[_e92].radius;
-                    let _e115 = Emits.member[_e92].dirAngle;
-                    let _e117 = Emits.member[_e92].spread;
-                    let _e119 = Emits.member[_e92].speedMin;
-                    let _e121 = Emits.member[_e92].speedMax;
-                    let _e123 = Emits.member[_e92].lifeMin;
-                    let _e125 = Emits.member[_e92].lifeMax;
-                    let _e127 = Emits.member[_e92].baseVelocityX;
-                    let _e129 = Emits.member[_e92].baseVelocityY;
-                    let _e131 = Emits.member[_e92].pointStart;
-                    let _e134 = (((_e84.x + _e88) - _e99) % _e88);
-                    if (_e134 >= _e101) {
+                let _e94 = phi_153_;
+                let _e96 = Params.EmitCount;
+                phi_421_ = false;
+                if (_e94 < _e96) {
+                    let _e101 = Emits.member[_e94].start;
+                    let _e103 = Emits.member[_e94].count;
+                    let _e105 = Emits.member[_e94].seed;
+                    let _e107 = Emits.member[_e94].effect;
+                    let _e109 = Emits.member[_e94].originX;
+                    let _e111 = Emits.member[_e94].originY;
+                    let _e113 = Emits.member[_e94].shape;
+                    let _e115 = Emits.member[_e94].radius;
+                    let _e117 = Emits.member[_e94].dirAngle;
+                    let _e119 = Emits.member[_e94].spread;
+                    let _e121 = Emits.member[_e94].speedMin;
+                    let _e123 = Emits.member[_e94].speedMax;
+                    let _e125 = Emits.member[_e94].lifeMin;
+                    let _e127 = Emits.member[_e94].lifeMax;
+                    let _e129 = Emits.member[_e94].baseVelocityX;
+                    let _e131 = Emits.member[_e94].baseVelocityY;
+                    let _e133 = Emits.member[_e94].pointStart;
+                    let _e136 = (((_e86.x + _e90) - _e101) % _e90);
+                    if (_e136 >= _e103) {
                         continue;
                     }
-                    let _e137 = vec2<f32>(_e107, _e109);
-                    if (_e111 == 1u) {
-                        let _e141 = (((_e84.x * 23u) + _e103) + 4u);
-                        let _e146 = (((_e141 ^ 61u) ^ (_e141 >> bitcast<u32>(16u))) * 9u);
-                        let _e150 = ((_e146 ^ (_e146 >> bitcast<u32>(4u))) * 668265261u);
-                        let _e161 = (((_e84.x * 29u) + _e103) + 5u);
-                        let _e166 = (((_e161 ^ 61u) ^ (_e161 >> bitcast<u32>(16u))) * 9u);
-                        let _e170 = ((_e166 ^ (_e166 >> bitcast<u32>(4u))) * 668265261u);
-                        let _e176 = (f32(((_e170 ^ (_e170 >> bitcast<u32>(15u))) & 16777215u)) * 0.00000037450704f);
-                        phi_287_ = (_e137 + (vec2<f32>(cos(_e176), sin(_e176)) * (sqrt((f32(((_e150 ^ (_e150 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f)) * _e113)));
+                    let _e139 = vec2<f32>(_e109, _e111);
+                    if (_e113 == 1u) {
+                        let _e143 = (((_e86.x * 23u) + _e105) + 4u);
+                        let _e148 = (((_e143 ^ 61u) ^ (_e143 >> bitcast<u32>(16u))) * 9u);
+                        let _e152 = ((_e148 ^ (_e148 >> bitcast<u32>(4u))) * 668265261u);
+                        let _e163 = (((_e86.x * 29u) + _e105) + 5u);
+                        let _e168 = (((_e163 ^ 61u) ^ (_e163 >> bitcast<u32>(16u))) * 9u);
+                        let _e172 = ((_e168 ^ (_e168 >> bitcast<u32>(4u))) * 668265261u);
+                        let _e178 = (f32(((_e172 ^ (_e172 >> bitcast<u32>(15u))) & 16777215u)) * 0.00000037450704f);
+                        phi_289_ = (_e139 + (vec2<f32>(cos(_e178), sin(_e178)) * (sqrt((f32(((_e152 ^ (_e152 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f)) * _e115)));
                     } else {
-                        phi_286_ = _e137;
-                        if (_e111 == 3u) {
-                            let _e183 = cos(_e115);
-                            let _e184 = sin(_e115);
-                            let _e190 = (((_e84.x * 23u) + _e103) + 4u);
-                            let _e195 = (((_e190 ^ 61u) ^ (_e190 >> bitcast<u32>(16u))) * 9u);
-                            let _e199 = ((_e195 ^ (_e195 >> bitcast<u32>(4u))) * 668265261u);
-                            let _e211 = (((_e84.x * 29u) + _e103) + 5u);
-                            let _e216 = (((_e211 ^ 61u) ^ (_e211 >> bitcast<u32>(16u))) * 9u);
-                            let _e220 = ((_e216 ^ (_e216 >> bitcast<u32>(4u))) * 668265261u);
-                            phi_286_ = ((_e137 + (vec2<f32>(_e183, _e184) * ((f32(((_e199 ^ (_e199 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) * _e113))) + (vec2<f32>(-(_e184), _e183) * (((f32(((_e220 ^ (_e220 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) - 0.5f) * _e117)));
+                        phi_288_ = _e139;
+                        if (_e113 == 3u) {
+                            let _e185 = cos(_e117);
+                            let _e186 = sin(_e117);
+                            let _e192 = (((_e86.x * 23u) + _e105) + 4u);
+                            let _e197 = (((_e192 ^ 61u) ^ (_e192 >> bitcast<u32>(16u))) * 9u);
+                            let _e201 = ((_e197 ^ (_e197 >> bitcast<u32>(4u))) * 668265261u);
+                            let _e213 = (((_e86.x * 29u) + _e105) + 5u);
+                            let _e218 = (((_e213 ^ 61u) ^ (_e213 >> bitcast<u32>(16u))) * 9u);
+                            let _e222 = ((_e218 ^ (_e218 >> bitcast<u32>(4u))) * 668265261u);
+                            phi_288_ = ((_e139 + (vec2<f32>(_e185, _e186) * ((f32(((_e201 ^ (_e201 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) * _e115))) + (vec2<f32>(-(_e186), _e185) * (((f32(((_e222 ^ (_e222 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) - 0.5f) * _e119)));
                         }
-                        let _e232 = phi_286_;
-                        phi_287_ = _e232;
+                        let _e234 = phi_288_;
+                        phi_289_ = _e234;
                     }
-                    let _e234 = phi_287_;
-                    let _e235 = (_e111 == 4u);
-                    phi_296_ = _e234;
-                    phi_297_ = 0f;
-                    if _e235 {
-                        let _e239 = EmitPoints.member[(_e131 + _e134)];
-                        phi_296_ = _e239.xy;
-                        phi_297_ = _e239.z;
+                    let _e236 = phi_289_;
+                    let _e237 = (_e113 == 4u);
+                    phi_298_ = _e236;
+                    phi_299_ = 0f;
+                    if _e237 {
+                        let _e241 = EmitPoints.member[(_e133 + _e136)];
+                        phi_298_ = _e241.xy;
+                        phi_299_ = _e241.z;
                     }
-                    let _e243 = phi_296_;
-                    let _e245 = phi_297_;
-                    if (_e111 == 2u) {
-                        let _e248 = ((_e84.x * 7u) + _e103);
-                        let _e253 = (((_e248 ^ 61u) ^ (_e248 >> bitcast<u32>(16u))) * 9u);
-                        let _e257 = ((_e253 ^ (_e253 >> bitcast<u32>(4u))) * 668265261u);
-                        phi_354_ = (_e115 + (((f32(((_e257 ^ (_e257 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) - 0.5f) * _e117));
+                    let _e245 = phi_298_;
+                    let _e247 = phi_299_;
+                    if (_e113 == 2u) {
+                        let _e250 = ((_e86.x * 7u) + _e105);
+                        let _e255 = (((_e250 ^ 61u) ^ (_e250 >> bitcast<u32>(16u))) * 9u);
+                        let _e259 = ((_e255 ^ (_e255 >> bitcast<u32>(4u))) * 668265261u);
+                        phi_356_ = (_e117 + (((f32(((_e259 ^ (_e259 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) - 0.5f) * _e119));
                     } else {
-                        if _e235 {
-                            let _e268 = ((_e84.x * 7u) + _e103);
-                            let _e273 = (((_e268 ^ 61u) ^ (_e268 >> bitcast<u32>(16u))) * 9u);
-                            let _e277 = ((_e273 ^ (_e273 >> bitcast<u32>(4u))) * 668265261u);
-                            phi_353_ = (_e245 + (((f32(((_e277 ^ (_e277 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) - 0.5f) * _e117));
+                        if _e237 {
+                            let _e270 = ((_e86.x * 7u) + _e105);
+                            let _e275 = (((_e270 ^ 61u) ^ (_e270 >> bitcast<u32>(16u))) * 9u);
+                            let _e279 = ((_e275 ^ (_e275 >> bitcast<u32>(4u))) * 668265261u);
+                            phi_355_ = (_e247 + (((f32(((_e279 ^ (_e279 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f) - 0.5f) * _e119));
                         } else {
-                            let _e288 = ((_e84.x * 7u) + _e103);
-                            let _e293 = (((_e288 ^ 61u) ^ (_e288 >> bitcast<u32>(16u))) * 9u);
-                            let _e297 = ((_e293 ^ (_e293 >> bitcast<u32>(4u))) * 668265261u);
-                            phi_353_ = (f32(((_e297 ^ (_e297 >> bitcast<u32>(15u))) & 16777215u)) * 0.00000037450704f);
+                            let _e290 = ((_e86.x * 7u) + _e105);
+                            let _e295 = (((_e290 ^ 61u) ^ (_e290 >> bitcast<u32>(16u))) * 9u);
+                            let _e299 = ((_e295 ^ (_e295 >> bitcast<u32>(4u))) * 668265261u);
+                            phi_355_ = (f32(((_e299 ^ (_e299 >> bitcast<u32>(15u))) & 16777215u)) * 0.00000037450704f);
                         }
-                        let _e305 = phi_353_;
-                        phi_354_ = _e305;
+                        let _e307 = phi_355_;
+                        phi_356_ = _e307;
                     }
-                    let _e307 = phi_354_;
-                    let _e310 = (((_e84.x * 13u) + _e103) + 1u);
-                    let _e315 = (((_e310 ^ 61u) ^ (_e310 >> bitcast<u32>(16u))) * 9u);
-                    let _e319 = ((_e315 ^ (_e315 >> bitcast<u32>(4u))) * 668265261u);
-                    let _e335 = (((_e84.x * 17u) + _e103) + 2u);
-                    let _e340 = (((_e335 ^ 61u) ^ (_e335 >> bitcast<u32>(16u))) * 9u);
-                    let _e344 = ((_e340 ^ (_e340 >> bitcast<u32>(4u))) * 668265261u);
-                    let _e354 = (((_e84.x * 19u) + _e103) + 3u);
-                    let _e359 = (((_e354 ^ 61u) ^ (_e354 >> bitcast<u32>(16u))) * 9u);
-                    let _e363 = ((_e359 ^ (_e359 >> bitcast<u32>(4u))) * 668265261u);
-                    Dst.member[_e84.x] = Particle(_e243, ((vec2<f32>(cos(_e307), sin(_e307)) * mix(_e119, _e121, (f32(((_e319 ^ (_e319 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f))) + vec2<f32>(_e127, _e129)), 0f, mix(_e123, _e125, (f32(((_e344 ^ (_e344 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f)), (f32(((_e363 ^ (_e363 >> bitcast<u32>(15u))) & 16777215u)) * 0.000059604645f), f32(_e105), 0f, 0f, 0f, f32());
-                    phi_412_ = 0u;
+                    let _e309 = phi_356_;
+                    let _e312 = (((_e86.x * 13u) + _e105) + 1u);
+                    let _e317 = (((_e312 ^ 61u) ^ (_e312 >> bitcast<u32>(16u))) * 9u);
+                    let _e321 = ((_e317 ^ (_e317 >> bitcast<u32>(4u))) * 668265261u);
+                    let _e337 = (((_e86.x * 17u) + _e105) + 2u);
+                    let _e342 = (((_e337 ^ 61u) ^ (_e337 >> bitcast<u32>(16u))) * 9u);
+                    let _e346 = ((_e342 ^ (_e342 >> bitcast<u32>(4u))) * 668265261u);
+                    let _e356 = (((_e86.x * 19u) + _e105) + 3u);
+                    let _e361 = (((_e356 ^ 61u) ^ (_e356 >> bitcast<u32>(16u))) * 9u);
+                    let _e365 = ((_e361 ^ (_e361 >> bitcast<u32>(4u))) * 668265261u);
+                    Dst.member[_e86.x] = Particle(_e245, ((vec2<f32>(cos(_e309), sin(_e309)) * mix(_e121, _e123, (f32(((_e321 ^ (_e321 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f))) + vec2<f32>(_e129, _e131)), 0f, mix(_e125, _e127, (f32(((_e346 ^ (_e346 >> bitcast<u32>(15u))) & 16777215u)) * 0.000000059604645f)), (f32(((_e365 ^ (_e365 >> bitcast<u32>(15u))) & 16777215u)) * 0.000059604645f), f32(_e107), 0f, 0f, 0f, f32());
+                    phi_414_ = 0u;
                     loop {
-                        let _e375 = phi_412_;
-                        if (_e375 < 16u) {
+                        let _e377 = phi_414_;
+                        if (_e377 < 16u) {
                             continue;
                         } else {
                             break;
                         }
                         continuing {
-                            TrailDst.member[(_e90 + _e375)] = _e243;
-                            phi_412_ = (_e375 + 1u);
+                            TrailDst.member[(_e92 + _e377)] = _e245;
+                            phi_414_ = (_e377 + 1u);
                         }
                     }
-                    phi_419_ = true;
+                    phi_421_ = true;
                     break;
                 } else {
                     break;
                 }
                 continuing {
-                    phi_151_ = (_e92 + 1u);
+                    phi_153_ = (_e94 + 1u);
                 }
             }
-            let _e382 = phi_419_;
-            if _e382 {
+            let _e384 = phi_421_;
+            if _e384 {
                 break;
             }
-            let _e385 = Src.member[_e84.x];
-            if (_e385.lifetime <= 0f) {
-                Dst.member[_e84.x] = _e385;
-                phi_438_ = 0u;
+            let _e387 = Src.member[_e86.x];
+            if (_e387.lifetime <= 0f) {
+                Dst.member[_e86.x] = _e387;
+                phi_440_ = 0u;
                 loop {
-                    let _e400 = phi_438_;
-                    if (_e400 < 16u) {
+                    let _e402 = phi_440_;
+                    if (_e402 < 16u) {
                         continue;
                     } else {
                         break;
                     }
                     continuing {
-                        let _e402 = (_e90 + _e400);
-                        let _e405 = TrailSrc.member[_e402];
-                        TrailDst.member[_e402] = _e405;
-                        phi_438_ = (_e400 + 1u);
+                        let _e404 = (_e92 + _e402);
+                        let _e407 = TrailSrc.member[_e404];
+                        TrailDst.member[_e404] = _e407;
+                        phi_440_ = (_e402 + 1u);
                     }
                 }
                 break;
             }
-            let _e410 = u32((_e385.effect + 0.5f));
-            let _e414 = Effects.member[_e410].gravity;
-            let _e416 = Effects.member[_e410].drag;
-            let _e418 = Effects.member[_e410].noiseAmount;
-            let _e420 = Effects.member[_e410].noiseScale;
-            let _e422 = Effects.member[_e410].collisionMode;
-            let _e424 = Effects.member[_e410].bounciness;
-            let _e426 = Effects.member[_e410].trailSeconds;
-            let _e428 = Params.Dt;
-            let _e429 = (_e385.age + _e428);
-            if (_e429 >= (_e385.lifetime + _e426)) {
-                Dst.member[_e84.x] = Particle(_e385.pos, _e385.vel, _e429, 0f, _e385.seed, _e385.effect, _e385.flags, _e385.trailHead, _e385.trailTimer, _e385.pad);
-                phi_474_ = 0u;
+            let _e412 = u32((_e387.effect + 0.5f));
+            let _e416 = Effects.member[_e412].gravity;
+            let _e418 = Effects.member[_e412].drag;
+            let _e420 = Effects.member[_e412].noiseAmount;
+            let _e422 = Effects.member[_e412].noiseScale;
+            let _e424 = Effects.member[_e412].collisionMode;
+            let _e426 = Effects.member[_e412].bounciness;
+            let _e428 = Effects.member[_e412].trailSeconds;
+            let _e430 = Params.Dt;
+            let _e431 = (_e387.age + _e430);
+            if (_e431 >= (_e387.lifetime + _e428)) {
+                Dst.member[_e86.x] = Particle(_e387.pos, _e387.vel, _e431, 0f, _e387.seed, _e387.effect, _e387.flags, _e387.trailHead, _e387.trailTimer, _e387.pad);
+                phi_476_ = 0u;
                 loop {
-                    let _e436 = phi_474_;
-                    if (_e436 < 16u) {
+                    let _e438 = phi_476_;
+                    if (_e438 < 16u) {
                         continue;
                     } else {
                         break;
                     }
                     continuing {
-                        let _e438 = (_e90 + _e436);
-                        let _e441 = TrailSrc.member[_e438];
-                        TrailDst.member[_e438] = _e441;
-                        phi_474_ = (_e436 + 1u);
+                        let _e440 = (_e92 + _e438);
+                        let _e443 = TrailSrc.member[_e440];
+                        TrailDst.member[_e440] = _e443;
+                        phi_476_ = (_e438 + 1u);
                     }
                 }
                 break;
             }
-            phi_487_ = false;
-            if (_e385.flags < 0.5f) {
-                phi_487_ = (_e429 < _e385.lifetime);
+            phi_489_ = false;
+            if (_e387.flags < 0.5f) {
+                phi_489_ = (_e431 < _e387.lifetime);
             }
-            let _e448 = phi_487_;
-            phi_1081_ = _e385.vel;
-            phi_1082_ = _e385.lifetime;
-            phi_1083_ = _e385.flags;
-            phi_1084_ = _e385.pos;
-            if _e448 {
-                let _e450 = u32((_e422 + 0.5f));
-                let _e453 = Params.Time;
-                let _e458 = (((_e385.pos * _e420) + vec2((_e453 * 0.5f))) + vec2(_e385.seed));
-                let _e459 = (_e458 + vec2<f32>(0f, 0.1f));
-                let _e460 = floor(_e459);
-                let _e461 = fract(_e459);
-                let _e465 = ((_e461 * _e461) * (vec2<f32>(3f, 3f) - (_e461 * 2f)));
-                let _e467 = fract((_e460 * vec2<f32>(123.34f, 345.45f)));
-                let _e471 = (_e467 + vec2(dot(_e467, (_e467 + vec2<f32>(34.345f, 34.345f)))));
-                let _e478 = fract(((_e460 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e482 = (_e478 + vec2(dot(_e478, (_e478 + vec2<f32>(34.345f, 34.345f)))));
-                let _e489 = fract(((_e460 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e493 = (_e489 + vec2(dot(_e489, (_e489 + vec2<f32>(34.345f, 34.345f)))));
-                let _e500 = fract(((_e460 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e504 = (_e500 + vec2(dot(_e500, (_e500 + vec2<f32>(34.345f, 34.345f)))));
-                let _e514 = (_e458 - vec2<f32>(0f, 0.1f));
-                let _e515 = floor(_e514);
-                let _e516 = fract(_e514);
-                let _e520 = ((_e516 * _e516) * (vec2<f32>(3f, 3f) - (_e516 * 2f)));
-                let _e522 = fract((_e515 * vec2<f32>(123.34f, 345.45f)));
-                let _e526 = (_e522 + vec2(dot(_e522, (_e522 + vec2<f32>(34.345f, 34.345f)))));
-                let _e533 = fract(((_e515 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e537 = (_e533 + vec2(dot(_e533, (_e533 + vec2<f32>(34.345f, 34.345f)))));
-                let _e544 = fract(((_e515 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e548 = (_e544 + vec2(dot(_e544, (_e544 + vec2<f32>(34.345f, 34.345f)))));
-                let _e555 = fract(((_e515 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e559 = (_e555 + vec2(dot(_e555, (_e555 + vec2<f32>(34.345f, 34.345f)))));
-                let _e569 = (_e458 + vec2<f32>(0.1f, 0f));
-                let _e570 = floor(_e569);
-                let _e571 = fract(_e569);
-                let _e575 = ((_e571 * _e571) * (vec2<f32>(3f, 3f) - (_e571 * 2f)));
-                let _e577 = fract((_e570 * vec2<f32>(123.34f, 345.45f)));
-                let _e581 = (_e577 + vec2(dot(_e577, (_e577 + vec2<f32>(34.345f, 34.345f)))));
-                let _e588 = fract(((_e570 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e592 = (_e588 + vec2(dot(_e588, (_e588 + vec2<f32>(34.345f, 34.345f)))));
-                let _e599 = fract(((_e570 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e603 = (_e599 + vec2(dot(_e599, (_e599 + vec2<f32>(34.345f, 34.345f)))));
-                let _e610 = fract(((_e570 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e614 = (_e610 + vec2(dot(_e610, (_e610 + vec2<f32>(34.345f, 34.345f)))));
-                let _e624 = (_e458 - vec2<f32>(0.1f, 0f));
-                let _e625 = floor(_e624);
-                let _e626 = fract(_e624);
-                let _e630 = ((_e626 * _e626) * (vec2<f32>(3f, 3f) - (_e626 * 2f)));
-                let _e632 = fract((_e625 * vec2<f32>(123.34f, 345.45f)));
-                let _e636 = (_e632 + vec2(dot(_e632, (_e632 + vec2<f32>(34.345f, 34.345f)))));
-                let _e643 = fract(((_e625 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e647 = (_e643 + vec2(dot(_e643, (_e643 + vec2<f32>(34.345f, 34.345f)))));
-                let _e654 = fract(((_e625 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e658 = (_e654 + vec2(dot(_e654, (_e654 + vec2<f32>(34.345f, 34.345f)))));
-                let _e665 = fract(((_e625 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
-                let _e669 = (_e665 + vec2(dot(_e665, (_e665 + vec2<f32>(34.345f, 34.345f)))));
-                let _e686 = (_e385.vel + ((vec2<f32>(((mix(mix(fract((_e471.x * _e471.y)), fract((_e482.x * _e482.y)), _e465.x), mix(fract((_e493.x * _e493.y)), fract((_e504.x * _e504.y)), _e465.x), _e465.y) - mix(mix(fract((_e526.x * _e526.y)), fract((_e537.x * _e537.y)), _e520.x), mix(fract((_e548.x * _e548.y)), fract((_e559.x * _e559.y)), _e520.x), _e520.y)) * 5f), ((mix(mix(fract((_e581.x * _e581.y)), fract((_e592.x * _e592.y)), _e575.x), mix(fract((_e603.x * _e603.y)), fract((_e614.x * _e614.y)), _e575.x), _e575.y) - mix(mix(fract((_e636.x * _e636.y)), fract((_e647.x * _e647.y)), _e630.x), mix(fract((_e658.x * _e658.y)), fract((_e669.x * _e669.y)), _e630.x), _e630.y)) * -5f)) * _e418) * _e428));
-                let _e696 = (vec2<f32>(_e686.x, (_e686.y + (_e414 * _e428))) * clamp((1f - (_e416 * _e428)), 0f, 1f));
-                let _e699 = Fields.member[_e410];
-                phi_849_ = _e696;
-                if (_e699.enable_ > 0.5f) {
-                    let _e714 = (_e385.pos - vec2<f32>(_e699.originX, _e699.originY));
-                    let _e721 = (vec2<f32>((_e714.x * _e699.flip), _e714.y) - vec2<f32>(_e699.rectLocalX, _e699.rectLocalY));
-                    phi_766_ = false;
-                    if (_e721.x >= 1f) {
-                        phi_766_ = (_e721.y >= 1f);
+            let _e450 = phi_489_;
+            phi_1088_ = _e387.vel;
+            phi_1089_ = _e387.lifetime;
+            phi_1090_ = _e387.flags;
+            phi_1091_ = _e387.pos;
+            if _e450 {
+                let _e452 = u32((_e424 + 0.5f));
+                let _e455 = Params.Time;
+                let _e460 = (((_e387.pos * _e422) + vec2((_e455 * 0.5f))) + vec2(_e387.seed));
+                let _e461 = (_e460 + vec2<f32>(0f, 0.1f));
+                let _e462 = floor(_e461);
+                let _e463 = fract(_e461);
+                let _e467 = ((_e463 * _e463) * (vec2<f32>(3f, 3f) - (_e463 * 2f)));
+                let _e469 = fract((_e462 * vec2<f32>(123.34f, 345.45f)));
+                let _e473 = (_e469 + vec2(dot(_e469, (_e469 + vec2<f32>(34.345f, 34.345f)))));
+                let _e480 = fract(((_e462 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e484 = (_e480 + vec2(dot(_e480, (_e480 + vec2<f32>(34.345f, 34.345f)))));
+                let _e491 = fract(((_e462 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e495 = (_e491 + vec2(dot(_e491, (_e491 + vec2<f32>(34.345f, 34.345f)))));
+                let _e502 = fract(((_e462 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e506 = (_e502 + vec2(dot(_e502, (_e502 + vec2<f32>(34.345f, 34.345f)))));
+                let _e516 = (_e460 - vec2<f32>(0f, 0.1f));
+                let _e517 = floor(_e516);
+                let _e518 = fract(_e516);
+                let _e522 = ((_e518 * _e518) * (vec2<f32>(3f, 3f) - (_e518 * 2f)));
+                let _e524 = fract((_e517 * vec2<f32>(123.34f, 345.45f)));
+                let _e528 = (_e524 + vec2(dot(_e524, (_e524 + vec2<f32>(34.345f, 34.345f)))));
+                let _e535 = fract(((_e517 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e539 = (_e535 + vec2(dot(_e535, (_e535 + vec2<f32>(34.345f, 34.345f)))));
+                let _e546 = fract(((_e517 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e550 = (_e546 + vec2(dot(_e546, (_e546 + vec2<f32>(34.345f, 34.345f)))));
+                let _e557 = fract(((_e517 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e561 = (_e557 + vec2(dot(_e557, (_e557 + vec2<f32>(34.345f, 34.345f)))));
+                let _e571 = (_e460 + vec2<f32>(0.1f, 0f));
+                let _e572 = floor(_e571);
+                let _e573 = fract(_e571);
+                let _e577 = ((_e573 * _e573) * (vec2<f32>(3f, 3f) - (_e573 * 2f)));
+                let _e579 = fract((_e572 * vec2<f32>(123.34f, 345.45f)));
+                let _e583 = (_e579 + vec2(dot(_e579, (_e579 + vec2<f32>(34.345f, 34.345f)))));
+                let _e590 = fract(((_e572 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e594 = (_e590 + vec2(dot(_e590, (_e590 + vec2<f32>(34.345f, 34.345f)))));
+                let _e601 = fract(((_e572 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e605 = (_e601 + vec2(dot(_e601, (_e601 + vec2<f32>(34.345f, 34.345f)))));
+                let _e612 = fract(((_e572 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e616 = (_e612 + vec2(dot(_e612, (_e612 + vec2<f32>(34.345f, 34.345f)))));
+                let _e626 = (_e460 - vec2<f32>(0.1f, 0f));
+                let _e627 = floor(_e626);
+                let _e628 = fract(_e626);
+                let _e632 = ((_e628 * _e628) * (vec2<f32>(3f, 3f) - (_e628 * 2f)));
+                let _e634 = fract((_e627 * vec2<f32>(123.34f, 345.45f)));
+                let _e638 = (_e634 + vec2(dot(_e634, (_e634 + vec2<f32>(34.345f, 34.345f)))));
+                let _e645 = fract(((_e627 + vec2<f32>(1f, 0f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e649 = (_e645 + vec2(dot(_e645, (_e645 + vec2<f32>(34.345f, 34.345f)))));
+                let _e656 = fract(((_e627 + vec2<f32>(0f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e660 = (_e656 + vec2(dot(_e656, (_e656 + vec2<f32>(34.345f, 34.345f)))));
+                let _e667 = fract(((_e627 + vec2<f32>(1f, 1f)) * vec2<f32>(123.34f, 345.45f)));
+                let _e671 = (_e667 + vec2(dot(_e667, (_e667 + vec2<f32>(34.345f, 34.345f)))));
+                let _e688 = (_e387.vel + ((vec2<f32>(((mix(mix(fract((_e473.x * _e473.y)), fract((_e484.x * _e484.y)), _e467.x), mix(fract((_e495.x * _e495.y)), fract((_e506.x * _e506.y)), _e467.x), _e467.y) - mix(mix(fract((_e528.x * _e528.y)), fract((_e539.x * _e539.y)), _e522.x), mix(fract((_e550.x * _e550.y)), fract((_e561.x * _e561.y)), _e522.x), _e522.y)) * 5f), ((mix(mix(fract((_e583.x * _e583.y)), fract((_e594.x * _e594.y)), _e577.x), mix(fract((_e605.x * _e605.y)), fract((_e616.x * _e616.y)), _e577.x), _e577.y) - mix(mix(fract((_e638.x * _e638.y)), fract((_e649.x * _e649.y)), _e632.x), mix(fract((_e660.x * _e660.y)), fract((_e671.x * _e671.y)), _e632.x), _e632.y)) * -5f)) * _e420) * _e430));
+                let _e698 = (vec2<f32>(_e688.x, (_e688.y + (_e416 * _e430))) * clamp((1f - (_e418 * _e430)), 0f, 1f));
+                let _e701 = Fields.member[_e412];
+                phi_855_ = _e698;
+                phi_856_ = _e387.pos;
+                if (_e701.enable_ > 0.5f) {
+                    let _e716 = (_e387.pos - vec2<f32>(_e701.originX, _e701.originY));
+                    let _e723 = (vec2<f32>((_e716.x * _e701.flip), _e716.y) - vec2<f32>(_e701.rectLocalX, _e701.rectLocalY));
+                    phi_768_ = false;
+                    if (_e723.x >= 1f) {
+                        phi_768_ = (_e723.y >= 1f);
                     }
-                    let _e727 = phi_766_;
-                    phi_771_ = false;
-                    if _e727 {
-                        phi_771_ = (_e721.x <= (_e699.rectW - 2f));
+                    let _e729 = phi_768_;
+                    phi_773_ = false;
+                    if _e729 {
+                        phi_773_ = (_e723.x <= (_e701.rectW - 2f));
                     }
-                    let _e731 = phi_771_;
-                    phi_777_ = false;
-                    if _e731 {
-                        phi_777_ = (_e721.y <= (_e699.rectH - 2f));
+                    let _e733 = phi_773_;
+                    phi_779_ = false;
+                    if _e733 {
+                        phi_779_ = (_e723.y <= (_e701.rectH - 2f));
                     }
-                    let _e736 = phi_777_;
-                    phi_848_ = _e696;
-                    if _e736 {
-                        let _e739 = Params.SdfAtlasW;
-                        let _e741 = Params.SdfAtlasH;
-                        let _e742 = vec2<f32>(_e739, _e741);
-                        let _e743 = (vec2<f32>(_e699.srcX, _e699.srcY) + _e721);
-                        let _e745 = textureSampleLevel(SdfAtlas, SdfSampler, (_e743 / _e742), 0f);
-                        let _e747 = (_e745.x * 255f);
-                        let _e750 = textureSampleLevel(SdfAtlas, SdfSampler, ((_e743 + vec2<f32>(1f, 0f)) / _e742), 0f);
-                        let _e755 = textureSampleLevel(SdfAtlas, SdfSampler, ((_e743 + vec2<f32>(0f, 1f)) / _e742), 0f);
-                        let _e760 = vec2<f32>(((_e750.x * 255f) - _e747), ((_e755.x * 255f) - _e747));
-                        phi_847_ = _e696;
-                        if (dot(_e760, _e760) > 0.000001f) {
-                            let _e763 = normalize(_e760);
-                            let _e765 = (_e763.x * _e699.flip);
-                            let _e768 = vec2<f32>(_e765, _e763.y);
-                            let _e779 = ((_e696 - (_e768 * (dot(_e696, _e768) * clamp((8f * _e428), 0f, 1f)))) - (_e768 * (((_e747 - 1f) * _e699.attraction) * _e428)));
-                            phi_846_ = _e779;
-                            if (_e699.flow != 0f) {
-                                let _e784 = (vec2<f32>(-(_e763.y), _e765) * _e699.flip);
-                                phi_846_ = (_e779 + (_e784 * ((_e699.flow - dot(_e779, _e784)) * clamp((10f * _e428), 0f, 1f))));
+                    let _e738 = phi_779_;
+                    phi_853_ = _e698;
+                    phi_854_ = _e387.pos;
+                    if _e738 {
+                        let _e741 = Params.SdfAtlasW;
+                        let _e743 = Params.SdfAtlasH;
+                        let _e744 = vec2<f32>(_e741, _e743);
+                        let _e745 = (vec2<f32>(_e701.srcX, _e701.srcY) + _e723);
+                        let _e747 = textureSampleLevel(SdfAtlas, SdfSampler, (_e745 / _e744), 0f);
+                        let _e749 = (_e747.x * 255f);
+                        let _e752 = textureSampleLevel(SdfAtlas, SdfSampler, ((_e745 + vec2<f32>(1f, 0f)) / _e744), 0f);
+                        let _e757 = textureSampleLevel(SdfAtlas, SdfSampler, ((_e745 + vec2<f32>(0f, 1f)) / _e744), 0f);
+                        let _e762 = vec2<f32>(((_e752.x * 255f) - _e749), ((_e757.x * 255f) - _e749));
+                        phi_851_ = _e698;
+                        phi_852_ = _e387.pos;
+                        if (dot(_e762, _e762) > 0.000001f) {
+                            let _e765 = normalize(_e762);
+                            let _e767 = (_e765.x * _e701.flip);
+                            let _e770 = vec2<f32>(_e767, _e765.y);
+                            let _e776 = (_e698 - (_e770 * (dot(_e698, _e770) * clamp((8f * _e430), 0f, 1f))));
+                            phi_850_ = _e776;
+                            if (_e701.flow != 0f) {
+                                let _e788 = (vec2<f32>(-(_e765.y), _e767) * _e701.flip);
+                                phi_850_ = (_e776 + (_e788 * ((_e701.flow - dot(_e776, _e788)) * clamp((10f * _e430), 0f, 1f))));
                             }
-                            let _e793 = phi_846_;
-                            phi_847_ = _e793;
+                            let _e797 = phi_850_;
+                            phi_851_ = _e797;
+                            phi_852_ = (_e387.pos - (_e770 * (clamp((_e749 - 1.5f), -3f, 3f) * clamp((_e701.attraction * _e430), 0f, 1f))));
                         }
-                        let _e795 = phi_847_;
-                        phi_848_ = _e795;
+                        let _e799 = phi_851_;
+                        let _e801 = phi_852_;
+                        phi_853_ = _e799;
+                        phi_854_ = _e801;
                     }
-                    let _e797 = phi_848_;
-                    phi_849_ = _e797;
+                    let _e803 = phi_853_;
+                    let _e805 = phi_854_;
+                    phi_855_ = _e803;
+                    phi_856_ = _e805;
                 }
-                let _e799 = phi_849_;
-                let _e801 = (_e385.pos + (_e799 * _e428));
-                phi_900_ = false;
-                if (_e450 > 0u) {
+                let _e807 = phi_855_;
+                let _e809 = phi_856_;
+                let _e811 = (_e809 + (_e807 * _e430));
+                phi_907_ = false;
+                if (_e452 > 0u) {
                     switch bitcast<i32>(0u) {
                         default: {
-                            let _e805 = Params.CameraX;
-                            let _e807 = Params.CameraY;
-                            let _e811 = Params.Zoom;
-                            let _e814 = Params.TargetW;
-                            let _e816 = Params.TargetH;
-                            let _e818 = (((_e801 - vec2<f32>(_e805, _e807)) * _e811) / vec2<f32>(_e814, _e816));
-                            phi_878_ = true;
-                            if !((_e818.x < 0f)) {
-                                phi_878_ = (_e818.x > 1f);
+                            let _e815 = Params.CameraX;
+                            let _e817 = Params.CameraY;
+                            let _e821 = Params.Zoom;
+                            let _e824 = Params.TargetW;
+                            let _e826 = Params.TargetH;
+                            let _e828 = (((_e811 - vec2<f32>(_e815, _e817)) * _e821) / vec2<f32>(_e824, _e826));
+                            phi_885_ = true;
+                            if !((_e828.x < 0f)) {
+                                phi_885_ = (_e828.x > 1f);
                             }
-                            let _e824 = phi_878_;
-                            phi_884_ = true;
-                            if !(_e824) {
-                                phi_884_ = (_e818.y < 0f);
+                            let _e834 = phi_885_;
+                            phi_891_ = true;
+                            if !(_e834) {
+                                phi_891_ = (_e828.y < 0f);
                             }
-                            let _e829 = phi_884_;
-                            phi_890_ = true;
-                            if !(_e829) {
-                                phi_890_ = (_e818.y > 1f);
+                            let _e839 = phi_891_;
+                            phi_897_ = true;
+                            if !(_e839) {
+                                phi_897_ = (_e828.y > 1f);
                             }
-                            let _e834 = phi_890_;
-                            if _e834 {
-                                phi_898_ = 0f;
+                            let _e844 = phi_897_;
+                            if _e844 {
+                                phi_905_ = 0f;
                                 break;
                             }
-                            let _e835 = textureSampleLevel(SolidMask, SolidSampler, _e818, 0f);
-                            phi_898_ = _e835.x;
+                            let _e845 = textureSampleLevel(SolidMask, SolidSampler, _e828, 0f);
+                            phi_905_ = _e845.x;
                             break;
                         }
                     }
-                    let _e838 = phi_898_;
-                    phi_900_ = (_e838 > 0.5f);
+                    let _e848 = phi_905_;
+                    phi_907_ = (_e848 > 0.5f);
                 }
-                let _e841 = phi_900_;
-                if _e841 {
-                    if (_e450 == 1u) {
-                        phi_1073_ = _e799;
-                        phi_1074_ = min(_e385.lifetime, _e429);
-                        phi_1075_ = _e385.flags;
+                let _e851 = phi_907_;
+                if _e851 {
+                    if (_e452 == 1u) {
+                        phi_1080_ = _e807;
+                        phi_1081_ = min(_e387.lifetime, _e431);
+                        phi_1082_ = _e387.flags;
                     } else {
-                        let _e844 = (_e450 == 2u);
-                        if _e844 {
-                            phi_1071_ = vec2<f32>(0f, 0f);
+                        let _e854 = (_e452 == 2u);
+                        if _e854 {
+                            phi_1078_ = vec2<f32>(0f, 0f);
                         } else {
                             switch bitcast<i32>(0u) {
                                 default: {
                                     switch bitcast<i32>(0u) {
                                         default: {
-                                            let _e849 = Params.CameraX;
-                                            let _e851 = Params.CameraY;
-                                            let _e852 = vec2<f32>(_e849, _e851);
-                                            let _e855 = Params.Zoom;
-                                            let _e858 = Params.TargetW;
-                                            let _e860 = Params.TargetH;
-                                            let _e861 = vec2<f32>(_e858, _e860);
-                                            let _e862 = ((((_e801 - vec2<f32>(2f, 0f)) - _e852) * _e855) / _e861);
-                                            phi_939_ = true;
-                                            local = _e852;
-                                            local_1 = _e855;
-                                            local_2 = _e861;
-                                            local_3 = _e852;
-                                            local_4 = _e855;
-                                            local_5 = _e861;
-                                            local_6 = _e852;
-                                            local_7 = _e855;
-                                            local_8 = _e861;
-                                            if !((_e862.x < 0f)) {
-                                                phi_939_ = (_e862.x > 1f);
+                                            let _e859 = Params.CameraX;
+                                            let _e861 = Params.CameraY;
+                                            let _e862 = vec2<f32>(_e859, _e861);
+                                            let _e865 = Params.Zoom;
+                                            let _e868 = Params.TargetW;
+                                            let _e870 = Params.TargetH;
+                                            let _e871 = vec2<f32>(_e868, _e870);
+                                            let _e872 = ((((_e811 - vec2<f32>(2f, 0f)) - _e862) * _e865) / _e871);
+                                            phi_946_ = true;
+                                            local = _e862;
+                                            local_1 = _e865;
+                                            local_2 = _e871;
+                                            local_3 = _e862;
+                                            local_4 = _e865;
+                                            local_5 = _e871;
+                                            local_6 = _e862;
+                                            local_7 = _e865;
+                                            local_8 = _e871;
+                                            if !((_e872.x < 0f)) {
+                                                phi_946_ = (_e872.x > 1f);
                                             }
-                                            let _e868 = phi_939_;
-                                            phi_945_ = true;
-                                            if !(_e868) {
-                                                phi_945_ = (_e862.y < 0f);
+                                            let _e878 = phi_946_;
+                                            phi_952_ = true;
+                                            if !(_e878) {
+                                                phi_952_ = (_e872.y < 0f);
                                             }
-                                            let _e873 = phi_945_;
-                                            phi_951_ = true;
-                                            if !(_e873) {
-                                                phi_951_ = (_e862.y > 1f);
+                                            let _e883 = phi_952_;
+                                            phi_958_ = true;
+                                            if !(_e883) {
+                                                phi_958_ = (_e872.y > 1f);
                                             }
-                                            let _e878 = phi_951_;
-                                            if _e878 {
-                                                phi_959_ = 0f;
+                                            let _e888 = phi_958_;
+                                            if _e888 {
+                                                phi_966_ = 0f;
                                                 break;
                                             }
-                                            let _e879 = textureSampleLevel(SolidMask, SolidSampler, _e862, 0f);
-                                            phi_959_ = _e879.x;
+                                            let _e889 = textureSampleLevel(SolidMask, SolidSampler, _e872, 0f);
+                                            phi_966_ = _e889.x;
                                             break;
                                         }
                                     }
-                                    let _e882 = phi_959_;
+                                    let _e892 = phi_966_;
                                     switch bitcast<i32>(0u) {
                                         default: {
-                                            let _e886 = local;
-                                            let _e889 = local_1;
-                                            let _e892 = local_2;
-                                            let _e893 = ((((_e801 + vec2<f32>(2f, 0f)) - _e886) * _e889) / _e892);
-                                            phi_972_ = true;
-                                            if !((_e893.x < 0f)) {
-                                                phi_972_ = (_e893.x > 1f);
+                                            let _e896 = local;
+                                            let _e899 = local_1;
+                                            let _e902 = local_2;
+                                            let _e903 = ((((_e811 + vec2<f32>(2f, 0f)) - _e896) * _e899) / _e902);
+                                            phi_979_ = true;
+                                            if !((_e903.x < 0f)) {
+                                                phi_979_ = (_e903.x > 1f);
                                             }
-                                            let _e899 = phi_972_;
-                                            phi_978_ = true;
-                                            if !(_e899) {
-                                                phi_978_ = (_e893.y < 0f);
+                                            let _e909 = phi_979_;
+                                            phi_985_ = true;
+                                            if !(_e909) {
+                                                phi_985_ = (_e903.y < 0f);
                                             }
-                                            let _e904 = phi_978_;
-                                            phi_984_ = true;
-                                            if !(_e904) {
-                                                phi_984_ = (_e893.y > 1f);
+                                            let _e914 = phi_985_;
+                                            phi_991_ = true;
+                                            if !(_e914) {
+                                                phi_991_ = (_e903.y > 1f);
                                             }
-                                            let _e909 = phi_984_;
-                                            if _e909 {
-                                                phi_992_ = 0f;
+                                            let _e919 = phi_991_;
+                                            if _e919 {
+                                                phi_999_ = 0f;
                                                 break;
                                             }
-                                            let _e910 = textureSampleLevel(SolidMask, SolidSampler, _e893, 0f);
-                                            phi_992_ = _e910.x;
+                                            let _e920 = textureSampleLevel(SolidMask, SolidSampler, _e903, 0f);
+                                            phi_999_ = _e920.x;
                                             break;
                                         }
                                     }
-                                    let _e913 = phi_992_;
+                                    let _e923 = phi_999_;
                                     switch bitcast<i32>(0u) {
                                         default: {
-                                            let _e917 = local_3;
-                                            let _e920 = local_4;
-                                            let _e923 = local_5;
-                                            let _e924 = ((((_e801 - vec2<f32>(0f, 2f)) - _e917) * _e920) / _e923);
-                                            phi_1005_ = true;
-                                            if !((_e924.x < 0f)) {
-                                                phi_1005_ = (_e924.x > 1f);
+                                            let _e927 = local_3;
+                                            let _e930 = local_4;
+                                            let _e933 = local_5;
+                                            let _e934 = ((((_e811 - vec2<f32>(0f, 2f)) - _e927) * _e930) / _e933);
+                                            phi_1012_ = true;
+                                            if !((_e934.x < 0f)) {
+                                                phi_1012_ = (_e934.x > 1f);
                                             }
-                                            let _e930 = phi_1005_;
-                                            phi_1011_ = true;
-                                            if !(_e930) {
-                                                phi_1011_ = (_e924.y < 0f);
+                                            let _e940 = phi_1012_;
+                                            phi_1018_ = true;
+                                            if !(_e940) {
+                                                phi_1018_ = (_e934.y < 0f);
                                             }
-                                            let _e935 = phi_1011_;
-                                            phi_1017_ = true;
-                                            if !(_e935) {
-                                                phi_1017_ = (_e924.y > 1f);
+                                            let _e945 = phi_1018_;
+                                            phi_1024_ = true;
+                                            if !(_e945) {
+                                                phi_1024_ = (_e934.y > 1f);
                                             }
-                                            let _e940 = phi_1017_;
-                                            if _e940 {
-                                                phi_1025_ = 0f;
+                                            let _e950 = phi_1024_;
+                                            if _e950 {
+                                                phi_1032_ = 0f;
                                                 break;
                                             }
-                                            let _e941 = textureSampleLevel(SolidMask, SolidSampler, _e924, 0f);
-                                            phi_1025_ = _e941.x;
+                                            let _e951 = textureSampleLevel(SolidMask, SolidSampler, _e934, 0f);
+                                            phi_1032_ = _e951.x;
                                             break;
                                         }
                                     }
-                                    let _e944 = phi_1025_;
+                                    let _e954 = phi_1032_;
                                     switch bitcast<i32>(0u) {
                                         default: {
-                                            let _e948 = local_6;
-                                            let _e951 = local_7;
-                                            let _e954 = local_8;
-                                            let _e955 = ((((_e801 + vec2<f32>(0f, 2f)) - _e948) * _e951) / _e954);
-                                            phi_1038_ = true;
-                                            if !((_e955.x < 0f)) {
-                                                phi_1038_ = (_e955.x > 1f);
+                                            let _e958 = local_6;
+                                            let _e961 = local_7;
+                                            let _e964 = local_8;
+                                            let _e965 = ((((_e811 + vec2<f32>(0f, 2f)) - _e958) * _e961) / _e964);
+                                            phi_1045_ = true;
+                                            if !((_e965.x < 0f)) {
+                                                phi_1045_ = (_e965.x > 1f);
                                             }
-                                            let _e961 = phi_1038_;
-                                            phi_1044_ = true;
-                                            if !(_e961) {
-                                                phi_1044_ = (_e955.y < 0f);
+                                            let _e971 = phi_1045_;
+                                            phi_1051_ = true;
+                                            if !(_e971) {
+                                                phi_1051_ = (_e965.y < 0f);
                                             }
-                                            let _e966 = phi_1044_;
-                                            phi_1050_ = true;
-                                            if !(_e966) {
-                                                phi_1050_ = (_e955.y > 1f);
+                                            let _e976 = phi_1051_;
+                                            phi_1057_ = true;
+                                            if !(_e976) {
+                                                phi_1057_ = (_e965.y > 1f);
                                             }
-                                            let _e971 = phi_1050_;
-                                            if _e971 {
-                                                phi_1058_ = 0f;
+                                            let _e981 = phi_1057_;
+                                            if _e981 {
+                                                phi_1065_ = 0f;
                                                 break;
                                             }
-                                            let _e972 = textureSampleLevel(SolidMask, SolidSampler, _e955, 0f);
-                                            phi_1058_ = _e972.x;
+                                            let _e982 = textureSampleLevel(SolidMask, SolidSampler, _e965, 0f);
+                                            phi_1065_ = _e982.x;
                                             break;
                                         }
                                     }
-                                    let _e975 = phi_1058_;
-                                    let _e978 = vec2<f32>((_e913 - _e882), (_e975 - _e944));
-                                    if (dot(_e978, _e978) < 0.000001f) {
-                                        phi_1068_ = vec2<f32>(0f, -1f);
+                                    let _e985 = phi_1065_;
+                                    let _e988 = vec2<f32>((_e923 - _e892), (_e985 - _e954));
+                                    if (dot(_e988, _e988) < 0.000001f) {
+                                        phi_1075_ = vec2<f32>(0f, -1f);
                                         break;
                                     }
-                                    phi_1068_ = -(normalize(_e978));
+                                    phi_1075_ = -(normalize(_e988));
                                     break;
                                 }
                             }
-                            let _e984 = phi_1068_;
-                            phi_1071_ = (reflect(_e799, _e984) * _e424);
+                            let _e994 = phi_1075_;
+                            phi_1078_ = (reflect(_e807, _e994) * _e426);
                         }
-                        let _e988 = phi_1071_;
-                        phi_1073_ = _e988;
-                        phi_1074_ = _e385.lifetime;
-                        phi_1075_ = select(_e385.flags, 1f, _e844);
+                        let _e998 = phi_1078_;
+                        phi_1080_ = _e998;
+                        phi_1081_ = _e387.lifetime;
+                        phi_1082_ = select(_e387.flags, 1f, _e854);
                     }
-                    let _e991 = phi_1073_;
-                    let _e993 = phi_1074_;
-                    let _e995 = phi_1075_;
-                    phi_1076_ = _e991;
-                    phi_1077_ = _e993;
-                    phi_1078_ = _e995;
+                    let _e1001 = phi_1080_;
+                    let _e1003 = phi_1081_;
+                    let _e1005 = phi_1082_;
+                    phi_1083_ = _e1001;
+                    phi_1084_ = _e1003;
+                    phi_1085_ = _e1005;
                 } else {
-                    phi_1076_ = _e799;
-                    phi_1077_ = _e385.lifetime;
-                    phi_1078_ = _e385.flags;
+                    phi_1083_ = _e807;
+                    phi_1084_ = _e387.lifetime;
+                    phi_1085_ = _e387.flags;
                 }
-                let _e997 = phi_1076_;
-                let _e999 = phi_1077_;
-                let _e1001 = phi_1078_;
-                phi_1081_ = _e997;
-                phi_1082_ = _e999;
-                phi_1083_ = _e1001;
-                phi_1084_ = select(_e801, _e385.pos, vec2(_e841));
+                let _e1007 = phi_1083_;
+                let _e1009 = phi_1084_;
+                let _e1011 = phi_1085_;
+                phi_1088_ = _e1007;
+                phi_1089_ = _e1009;
+                phi_1090_ = _e1011;
+                phi_1091_ = select(_e811, _e809, vec2(_e851));
             }
-            let _e1005 = phi_1081_;
-            let _e1007 = phi_1082_;
-            let _e1009 = phi_1083_;
-            let _e1011 = phi_1084_;
-            phi_1086_ = 0u;
+            let _e1015 = phi_1088_;
+            let _e1017 = phi_1089_;
+            let _e1019 = phi_1090_;
+            let _e1021 = phi_1091_;
+            phi_1093_ = 0u;
             loop {
-                let _e1013 = phi_1086_;
-                if (_e1013 < 16u) {
+                let _e1023 = phi_1093_;
+                if (_e1023 < 16u) {
                     continue;
                 } else {
                     break;
                 }
                 continuing {
-                    let _e1015 = (_e90 + _e1013);
-                    let _e1018 = TrailSrc.member[_e1015];
-                    TrailDst.member[_e1015] = _e1018;
-                    phi_1086_ = (_e1013 + 1u);
+                    let _e1025 = (_e92 + _e1023);
+                    let _e1028 = TrailSrc.member[_e1025];
+                    TrailDst.member[_e1025] = _e1028;
+                    phi_1093_ = (_e1023 + 1u);
                 }
             }
-            phi_1114_ = _e385.trailHead;
-            phi_1115_ = _e385.trailTimer;
-            if (_e426 > 0f) {
-                let _e1023 = (_e426 * 0.06666667f);
-                let _e1025 = u32((_e385.trailHead + 0.5f));
-                let _e1026 = (_e385.trailTimer + _e428);
-                phi_1109_ = _e385.trailHead;
-                phi_1110_ = _e1026;
-                phi_1111_ = _e1025;
-                if (_e1026 >= _e1023) {
-                    let _e1030 = ((_e1025 + 1u) % 16u);
-                    phi_1109_ = f32(_e1030);
-                    phi_1110_ = (_e1026 % _e1023);
-                    phi_1111_ = _e1030;
+            phi_1121_ = _e387.trailHead;
+            phi_1122_ = _e387.trailTimer;
+            if (_e428 > 0f) {
+                let _e1033 = (_e428 * 0.06666667f);
+                let _e1035 = u32((_e387.trailHead + 0.5f));
+                let _e1036 = (_e387.trailTimer + _e430);
+                phi_1116_ = _e387.trailHead;
+                phi_1117_ = _e1036;
+                phi_1118_ = _e1035;
+                if (_e1036 >= _e1033) {
+                    let _e1040 = ((_e1035 + 1u) % 16u);
+                    phi_1116_ = f32(_e1040);
+                    phi_1117_ = (_e1036 % _e1033);
+                    phi_1118_ = _e1040;
                 }
-                let _e1033 = phi_1109_;
-                let _e1035 = phi_1110_;
-                let _e1037 = phi_1111_;
-                TrailDst.member[(_e90 + _e1037)] = _e1011;
-                phi_1114_ = _e1033;
-                phi_1115_ = _e1035;
+                let _e1043 = phi_1116_;
+                let _e1045 = phi_1117_;
+                let _e1047 = phi_1118_;
+                TrailDst.member[(_e92 + _e1047)] = _e1021;
+                phi_1121_ = _e1043;
+                phi_1122_ = _e1045;
             }
-            let _e1042 = phi_1114_;
-            let _e1044 = phi_1115_;
-            Dst.member[_e84.x] = Particle(_e1011, _e1005, _e429, _e1007, _e385.seed, _e385.effect, _e1009, _e1042, _e1044, _e385.pad);
+            let _e1052 = phi_1121_;
+            let _e1054 = phi_1122_;
+            Dst.member[_e86.x] = Particle(_e1021, _e1015, _e431, _e1017, _e387.seed, _e387.effect, _e1019, _e1052, _e1054, _e387.pad);
             break;
         }
     }

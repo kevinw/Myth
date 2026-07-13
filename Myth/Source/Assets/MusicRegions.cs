@@ -24,16 +24,17 @@ public static class MusicRegions
 	// Lives next to the world's rooms folder (never inside it: every json in there loads
 	// as a room), e.g. Assets/Rooms/Myth.regions.json.
 	public static string FilePath => Path.Join(Assets.RoomsPath, $"{Assets.CurrentWorldId}.regions.json");
+	static string ContentKey => $"Rooms/{Assets.CurrentWorldId}.regions.json";
 
 	public static void Load()
 	{
 		Regions.Clear();
-		if (!File.Exists(FilePath))
+		if (!Assets.Content.FileExists(ContentKey))
 			return;
 
 		try
 		{
-			var json = JsonNode.Parse(File.ReadAllText(FilePath))?.AsObject();
+			var json = JsonNode.Parse(Assets.Content.ReadAllText(ContentKey))?.AsObject();
 			if (json == null || !json.TryGetPropertyValue("regions", out var regionsNode) || regionsNode is not JsonArray entries)
 				return;
 			foreach (var node in entries)

@@ -41,6 +41,7 @@ adjust rope springiness as a mechanic or challenge
 - Better revealdoor sound
 
 
+- someday: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display
 - if the git diff contains only markdown, don't run the browser workflow?
 - ScanDiff: Error reading file: /Users/kev/src/Myth/Foster
 - wall jump in one tile wide well doesn't work

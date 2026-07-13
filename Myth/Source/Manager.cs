@@ -200,6 +200,7 @@ public partial class Manager : App
 		buildAssetPack = args.buildAssetPack;
 		useAssetPack = args.useAssetPack;
 		assetPackPath = args.assetPackPath;
+		Assets.ConfigureContentZip(args.contentZipPath);
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.MaxFrames = args.maxFrames;
 		maxTimeSeconds = args.maxTimeSeconds;
@@ -285,8 +286,6 @@ public partial class Manager : App
 		{
 			appFlags |= AppFlags.GraphicsDebugging;
 		}
-
-		Console.WriteLine($"new AppConfig fullscreen={fullscreen}");
 
 		return new AppConfig(
 			ApplicationName: APPLICATION_NAME,

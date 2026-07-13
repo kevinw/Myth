@@ -32,7 +32,7 @@
   {
     /* todo: needs --no-restore prefix dir hack */
     "label": "dotnet watch (MythTestShip)",
-    "command": "dotnet watch run --non-interactive --property:MythTestShip=true",
+    "command": "dotnet watch run --non-interactive --property:MythTestShip=true -- --content-zip Assets/Content.zip",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   }
 ]

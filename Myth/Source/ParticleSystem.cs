@@ -145,18 +145,17 @@ public sealed class ParticleSystem : IDisposable
 		try
 		{
 			var ext = graphicsDevice.Driver.GetShaderExtension();
-			var dir = Path.Join(Assets.AssetsPath, "Shaders", "Compiled");
-			var updatePath = Path.Join(dir, $"ParticleUpdate.compute.{ext}");
-			var vertexPath = Path.Join(dir, $"Particle.vertex.{ext}");
-			var fragmentPath = Path.Join(dir, $"Particle.fragment.{ext}");
-			var trailVertexPath = Path.Join(dir, $"ParticleTrail.vertex.{ext}");
-			var trailFragmentPath = Path.Join(dir, $"ParticleTrail.fragment.{ext}");
-			if (!File.Exists(updatePath) || !File.Exists(vertexPath) || !File.Exists(fragmentPath)
-				|| !File.Exists(trailVertexPath) || !File.Exists(trailFragmentPath))
+			var updateCode = Assets.TryReadCompiledShader($"ParticleUpdate.compute.{ext}");
+			var vertexCode = Assets.TryReadCompiledShader($"Particle.vertex.{ext}");
+			var fragmentCode = Assets.TryReadCompiledShader($"Particle.fragment.{ext}");
+			var trailVertexCode = Assets.TryReadCompiledShader($"ParticleTrail.vertex.{ext}");
+			var trailFragmentCode = Assets.TryReadCompiledShader($"ParticleTrail.fragment.{ext}");
+			if (updateCode == null || vertexCode == null || fragmentCode == null
+				|| trailVertexCode == null || trailFragmentCode == null)
 				return;
 
 			updateShader = new Shader(
-				graphicsDevice, ShaderStage.Compute, File.ReadAllBytes(updatePath),
+				graphicsDevice, ShaderStage.Compute, updateCode,
 				samplerCount: 2,
 				uniformBufferCount: 1,
 				readOnlyStorageBufferCount: 6,
@@ -165,23 +164,23 @@ public sealed class ParticleSystem : IDisposable
 				entryPoint: "compute_main", name: "ParticleUpdate");
 
 			vertexShader = new Shader(
-				graphicsDevice, ShaderStage.Vertex, File.ReadAllBytes(vertexPath),
+				graphicsDevice, ShaderStage.Vertex, vertexCode,
 				samplerCount: 1, uniformBufferCount: 1, storageBufferCount: 2,
 				entryPoint: "vertex_main", name: "ParticleVertex");
 
 			fragmentShader = new Shader(
-				graphicsDevice, ShaderStage.Fragment, File.ReadAllBytes(fragmentPath),
+				graphicsDevice, ShaderStage.Fragment, fragmentCode,
 				entryPoint: "fragment_main", name: "ParticleFragment");
 
 			material = new Material(vertexShader, fragmentShader);
 
 			trailVertexShader = new Shader(
-				graphicsDevice, ShaderStage.Vertex, File.ReadAllBytes(trailVertexPath),
+				graphicsDevice, ShaderStage.Vertex, trailVertexCode,
 				samplerCount: 1, uniformBufferCount: 1, storageBufferCount: 3,
 				entryPoint: "vertex_main", name: "ParticleTrailVertex");
 
 			trailFragmentShader = new Shader(
-				graphicsDevice, ShaderStage.Fragment, File.ReadAllBytes(trailFragmentPath),
+				graphicsDevice, ShaderStage.Fragment, trailFragmentCode,
 				entryPoint: "fragment_main", name: "ParticleTrailFragment");
 
 			trailMaterial = new Material(trailVertexShader, trailFragmentShader);

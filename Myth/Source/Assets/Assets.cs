@@ -118,6 +118,124 @@ public static class Assets
 	// Authoring inputs (.ase sources, kit specs, bake config). Read at runtime in dev and
 	// by the pack bake; excluded wholesale from web bundles, where the pack replaces them.
 	public static string SourcesPath => Path.Join(AssetsPath, "Sources");
+
+	const string contentZipName = "Content.zip";
+	static StorageContainer? content;
+	static string? contentZipOverride;
+
+	/// <summary>
+	/// Read-only bundled content, addressed by Assets-relative keys ("Rooms/Myth/x.json").
+	/// Packaged builds read Assets/Content.zip (the Assets folder then carries only the zip
+	/// plus loose FMOD banks); dev and editor builds read the Assets folder directly, so
+	/// authoring and file watching keep working. Writable flows (user rooms, editor room
+	/// saves, pack bakes) never go through here — they use the real file system.
+	/// </summary>
+	public static StorageContainer Content => content ??= OpenContent();
+
+	/// True when bundled content is being served from Content.zip (always read-only).
+	/// Resolves Content first, so it is correct however early it is read.
+	public static bool ContentIsZip
+	{
+		get
+		{
+			_ = Content;
+			return contentIsZip;
+		}
+	}
+
+	static bool contentIsZip;
+
+	/// Forces content to load from the given zip (the --content-zip flag), including in
+	/// editor builds, which otherwise ignore Content.zip so a stale pack can't shadow the
+	/// files being edited.
+	public static void ConfigureContentZip(string? zipPath)
+	{
+		contentZipOverride = string.IsNullOrWhiteSpace(zipPath) ? null : zipPath;
+		content?.Dispose();
+		content = null;
+	}
+
+	/// <summary>
+	/// Zips the runtime-loaded slice of the Assets folder into a Content.zip for packaged
+	/// builds. Excluded: Sources/ (authoring; the visual pack replaces it), Sounds/ (FMOD
+	/// opens banks by real path, so banks ship as loose files), uncompiled shaders, and
+	/// dot-prefixed litter. Entry names are Assets-relative with forward slashes — the same
+	/// keys Content serves.
+	/// </summary>
+	public static void BuildContentZip(string outputPath)
+	{
+		outputPath = Path.GetFullPath(outputPath);
+		if (Path.GetDirectoryName(outputPath) is { Length: > 0 } outputDirectory)
+			Directory.CreateDirectory(outputDirectory);
+
+		using var stream = File.Create(outputPath);
+		using var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create);
+
+		var count = 0;
+		foreach (var file in Directory.EnumerateFiles(AssetsPath, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+		{
+			var key = Path.GetRelativePath(AssetsPath, file).Replace(Path.DirectorySeparatorChar, '/');
+			if (!ContentZipIncludes(key))
+				continue;
+
+			// PNGs are already compressed; storing them keeps reads cheap. Everything else
+			// (JSON, shader text, QOI, weights) deflates well.
+			var level = key.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+				? System.IO.Compression.CompressionLevel.NoCompression
+				: System.IO.Compression.CompressionLevel.Optimal;
+			System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(zip, file, key, level);
+			count++;
+		}
+
+		Console.WriteLine($"Wrote content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB)");
+	}
+
+	static bool ContentZipIncludes(string key)
+	{
+		foreach (var part in key.Split('/'))
+			if (part.StartsWith('.'))
+				return false;
+
+		if (key.StartsWith("Sources/", StringComparison.OrdinalIgnoreCase))
+			return false;
+		if (key.StartsWith("Sounds/", StringComparison.OrdinalIgnoreCase))
+			return false;
+		if (key.StartsWith("Shaders/", StringComparison.OrdinalIgnoreCase))
+			return key.StartsWith("Shaders/Compiled/", StringComparison.OrdinalIgnoreCase);
+		if (key.Equals(contentZipName, StringComparison.OrdinalIgnoreCase))
+			return false;
+
+		return true;
+	}
+
+	static StorageContainer OpenContent()
+	{
+		var zipPath = contentZipOverride;
+		if (zipPath == null)
+		{
+			// Packaged builds (desktop .app, iOS bundle, browser wasm FS) carry
+			// Assets/Content.zip and no loose Rooms folder. A dev tree always has Rooms/,
+			// so it keeps reading live files even when a stale zip is lying around; a zip
+			// can still be forced there with --content-zip.
+			var bundledZip = Path.Join(AssetsPath, contentZipName);
+			if (File.Exists(bundledZip) && !Directory.Exists(RoomsPath))
+				zipPath = bundledZip;
+		}
+		if (zipPath != null)
+		{
+			var fullPath = Path.GetFullPath(zipPath);
+			contentIsZip = true;
+			Console.WriteLine($"Bundled content: zip ({fullPath})");
+			// Case-insensitive lookups match dev-mode behavior on macOS/Windows, where the
+			// filesystem forgives casing mismatches that would otherwise surface only in
+			// packaged builds.
+			return new ZipStorage(() => File.OpenRead(fullPath), ignoreCase: true);
+		}
+
+		contentIsZip = false;
+		Console.WriteLine($"Bundled content: filesystem ({AssetsPath})");
+		return new FolderStorage(AssetsPath);
+	}
 	public static string DefaultVisualAssetPackPath => Path.Join(AssetsPath, packedVisualsFolderName);
 	public static string CurrentWorldId => currentWorldId;
 	public static string WorldRoomsPath => Path.Join(RoomsPath, currentWorldId);
@@ -138,10 +256,11 @@ public static class Assets
 
 	public static IReadOnlyList<string> GetWorldIds()
 	{
-		if (!Directory.Exists(RoomsPath))
+		if (!Content.DirectoryExists(roomsFolderName))
 			return Array.Empty<string>();
 
-		return Directory.EnumerateDirectories(RoomsPath)
+		return Content.EnumerateDirectory(roomsFolderName)
+			.Where(Content.DirectoryExists)
 			.Select(Path.GetFileName)
 			.Where(it => !string.IsNullOrWhiteSpace(it))
 			.Select(it => it!)
@@ -189,11 +308,11 @@ public static class Assets
 
 		// Shipped bundles carry the pack and no Assets/Sources (like the browser), so a
 		// missing sources tree implies pack mode without needing a command-line flag.
-		var packOnly = useVisualAssetPack || OperatingSystem.IsBrowser() || !Directory.Exists(SourcesPath);
-		if (buildPackPath == null && packOnly && TryLoadVisualAssetPack(gfx, visualAssetPackPath ?? DefaultVisualAssetPackPath, reloadRooms))
+		// Zip content always implies pack mode: the zip bundles the pack, never sources.
+		var packOnly = useVisualAssetPack || OperatingSystem.IsBrowser() || ContentIsZip || !Directory.Exists(SourcesPath);
+		if (buildPackPath == null && packOnly && TryLoadVisualAssetPack(gfx, reloadRooms))
 			return;
 
-		var actorsPath = Path.Join(AssetsPath, "Actors");
 		using var bake = BakeVisualAssets();
 		var output = bake.Output;
 
@@ -215,7 +334,7 @@ public static class Assets
 		if (buildPackPath != null)
 			WriteVisualAssetPack(buildPackPath, bake);
 
-		ActorSpecs.LoadSpecs(actorsPath);
+		ActorSpecs.LoadSpecs();
 		ParticleEffectAssets.Load();
 		if (reloadRooms)
 			LoadRooms();
@@ -396,28 +515,30 @@ public static class Assets
 		return new(output, spriteFiles, generatedSprites, tilesetFiles, generatedTileImages, generatedNormalImages, generatedOccluders, kitGeneratedTilesets);
 	}
 
-	static bool TryLoadVisualAssetPack(GraphicsDevice gfx, string directory, bool reloadRooms)
+	static bool TryLoadVisualAssetPack(GraphicsDevice gfx, bool reloadRooms)
 	{
-		var manifestPath = Path.Join(directory, packedVisualsManifestName);
-		if (!File.Exists(manifestPath))
+		// An explicit --asset-pack path reads a pack directory on the real file system;
+		// otherwise the pack lives inside bundled content at Packed/Visuals.
+		using var pack = visualAssetPackPath != null
+			? (StorageContainer)new FolderStorage(visualAssetPackPath)
+			: new RelativeStorage(Content, packedVisualsFolderName);
+
+		if (!pack.FileExists(packedVisualsManifestName))
 			return false;
 
-		using var manifestStream = File.OpenRead(manifestPath);
-		var manifest = ReadVisualAssetPackManifest(manifestStream, manifestPath);
+		var manifestLabel = visualAssetPackPath ?? Path.Join(packedVisualsFolderName, packedVisualsManifestName);
+		using var manifestStream = new MemoryStream(pack.ReadAllBytes(packedVisualsManifestName));
+		var manifest = ReadVisualAssetPackManifest(manifestStream, manifestLabel);
 
 		EnsureFonts(gfx);
 
-		using var atlasImage = new Image(Path.Join(directory, manifest.Atlas));
+		using var atlasImage = new Image(pack.ReadAllBytes(manifest.Atlas));
 		var atlas = new Texture(gfx, atlasImage, name: "Atlas");
 		Texture? lightingNoise = null;
-		if (!string.IsNullOrEmpty(manifest.LightingNoise))
+		if (!string.IsNullOrEmpty(manifest.LightingNoise) && pack.FileExists(manifest.LightingNoise))
 		{
-			var lightingPath = Path.Join(directory, manifest.LightingNoise);
-			if (File.Exists(lightingPath))
-			{
-				using var lighting = new Image(lightingPath);
-				lightingNoise = new Texture(gfx, lighting, name: "LightingNoise");
-			}
+			using var lighting = new Image(pack.ReadAllBytes(manifest.LightingNoise));
+			lightingNoise = new Texture(gfx, lighting, name: "LightingNoise");
 		}
 
 		LoadVisualAssetPackManifest(atlas, lightingNoise, manifest);
@@ -425,12 +546,12 @@ public static class Assets
 		// never depends on spec files being present or current.
 		TileKits.SetRegistrations(manifest.TileKits);
 
-		ActorSpecs.LoadSpecs(Path.Join(AssetsPath, "Actors"));
+		ActorSpecs.LoadSpecs();
 		ParticleEffectAssets.Load();
 		if (reloadRooms)
 			LoadRooms();
 
-		Console.WriteLine($"Loaded visual asset pack: {manifestPath}");
+		Console.WriteLine($"Loaded visual asset pack: {manifestLabel}");
 		return true;
 	}
 
@@ -1151,14 +1272,29 @@ public static class Assets
 	{
 		if (Font == null)
 		{
-			Font = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "dogica.ttf"), 8);
+			using var stream = Content.OpenRead("Fonts/dogica.ttf");
+			Font = new SpriteFont(gfx, stream, 8);
 			Font.LineGap = 4;
 		}
 		if (SpeechFont == null)
 		{
-			SpeechFont = new SpriteFont(gfx, Path.Join(AssetsPath, "Fonts", "m3x6.ttf"), 16, premultiplyAlpha: true, pixelPerfect: true);
+			using var stream = Content.OpenRead("Fonts/m3x6.ttf");
+			SpeechFont = new SpriteFont(gfx, stream, 16, premultiplyAlpha: true, pixelPerfect: true);
 			SpeechFont.LineGap = 0;
 		}
+	}
+
+	/// Reads a compiled shader blob from bundled content, or null when the shader is absent
+	public static byte[]? TryReadCompiledShader(string fileName)
+	{
+		var key = $"Shaders/Compiled/{fileName}";
+		if (Content.FileExists(key))
+		{
+			return Content.ReadAllBytes(key);
+		}
+
+		Console.Error.WriteLine("Shader file not found: " + key);
+		return null;
 	}
 
 	static List<Subtexture> LoadSubtextures(List<PackedSubtexture> packed, Texture atlas)
@@ -2588,31 +2724,36 @@ public static class Assets
 
 		var deleted = UseUserRooms ? LoadUserRoomTombstones() : [];
 
-		if (Directory.Exists(WorldRoomsPath))
-			foreach (var file in Directory.EnumerateFiles(WorldRoomsPath, "*.json"))
+		var worldRoomsKey = $"{roomsFolderName}/{currentWorldId}";
+		if (Content.DirectoryExists(worldRoomsKey))
+			foreach (var key in Content.EnumerateDirectory(worldRoomsKey, "*.json"))
 			{
-				var id = Path.GetFileNameWithoutExtension(file);
+				var id = Path.GetFileNameWithoutExtension(key);
 				if (deleted.Contains(id))
 					continue;
 
-				AddRoom(new Room(file)
-				{
-					Storage = Room.StorageKind.Bundled,
-					SourcePath = file
-				});
+				var room = LoadRoomJson(id, Content.ReadAllText(key));
+				room.Storage = Room.StorageKind.Bundled;
+				// Zip content has no per-room file to rename/delete; SourcePath stays null there.
+				room.SourcePath = ContentIsZip ? null : Path.Join(AssetsPath, key);
+				AddRoom(room);
 			}
 
 		if (UseUserRooms && UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
 			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json"))
-				AddRoom(new Room(file)
-				{
-					Storage = Room.StorageKind.User,
-					SourcePath = file
-				});
+			{
+				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(file), File.ReadAllText(file));
+				room.Storage = Room.StorageKind.User;
+				room.SourcePath = file;
+				AddRoom(room);
+			}
 
 		if (RoomsById.Count == 0)
 			CreateDefaultStartRoom();
 	}
+
+	static Room LoadRoomJson(string id, string jsonText)
+		=> new(id, Point2.Zero, Room.DefaultSize, JsonNode.Parse(jsonText)?.AsObject());
 
 	static void CreateDefaultStartRoom()
 	{
@@ -2768,6 +2909,9 @@ public static class Assets
 
 	static bool CanWriteBundledRooms()
 	{
+		if (ContentIsZip)
+			return false;
+
 		if (bundledRoomsWritable is { } cached)
 			return cached;
 

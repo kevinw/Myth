@@ -173,22 +173,21 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		graphicsDevice = Game.Manager.GraphicsDevice;
 
 		var ext = graphicsDevice.Driver.GetShaderExtension();
-		var shaderDir = Path.Join(Assets.AssetsPath, "Shaders", "Compiled");
 		var updateName = DirectionAware ? "NCAUpdateDirectional" : "NCAUpdate";
-		var updatePath = Path.Join(shaderDir, $"{updateName}.compute.{ext}");
-		var presentPath = Path.Join(shaderDir, $"NCAPresent.compute.{ext}");
-		var cutPath = Path.Join(shaderDir, $"NCACut.compute.{ext}");
-		var rippleUpdatePath = Path.Join(shaderDir, $"RippleUpdate.compute.{ext}");
-		var rippleHitPath = Path.Join(shaderDir, $"RippleHit.compute.{ext}");
+		var updateCode = Assets.TryReadCompiledShader($"{updateName}.compute.{ext}");
+		var presentCode = Assets.TryReadCompiledShader($"NCAPresent.compute.{ext}");
+		var cutCode = Assets.TryReadCompiledShader($"NCACut.compute.{ext}");
+		var rippleUpdateCode = Assets.TryReadCompiledShader($"RippleUpdate.compute.{ext}");
+		var rippleHitCode = Assets.TryReadCompiledShader($"RippleHit.compute.{ext}");
 
-		if (!File.Exists(updatePath) || !File.Exists(presentPath) || !File.Exists(cutPath)
-			|| !File.Exists(rippleUpdatePath) || !File.Exists(rippleHitPath))
+		if (updateCode == null || presentCode == null || cutCode == null
+			|| rippleUpdateCode == null || rippleHitCode == null)
 			return;
 
 		updateShader = new Shader(
 			graphicsDevice,
 			ShaderStage.Compute,
-			File.ReadAllBytes(updatePath),
+			updateCode,
 			uniformBufferCount: 1,
 			readOnlyStorageBufferCount: 2,
 			readWriteStorageBufferCount: 1,
@@ -201,7 +200,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		presentShader = new Shader(
 			graphicsDevice,
 			ShaderStage.Compute,
-			File.ReadAllBytes(presentPath),
+			presentCode,
 			uniformBufferCount: 1,
 			readOnlyStorageBufferCount: 2,
 			readWriteStorageTextureCount: 1,
@@ -214,7 +213,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		cutShader = new Shader(
 			graphicsDevice,
 			ShaderStage.Compute,
-			File.ReadAllBytes(cutPath),
+			cutCode,
 			uniformBufferCount: 1,
 			readOnlyStorageBufferCount: 1,
 			readWriteStorageBufferCount: 1,
@@ -227,7 +226,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		rippleUpdateShader = new Shader(
 			graphicsDevice,
 			ShaderStage.Compute,
-			File.ReadAllBytes(rippleUpdatePath),
+			rippleUpdateCode,
 			uniformBufferCount: 1,
 			readOnlyStorageBufferCount: 1,
 			readWriteStorageBufferCount: 1,
@@ -240,7 +239,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		rippleHitShader = new Shader(
 			graphicsDevice,
 			ShaderStage.Compute,
-			File.ReadAllBytes(rippleHitPath),
+			rippleHitCode,
 			uniformBufferCount: 1,
 			readOnlyStorageBufferCount: 1,
 			readWriteStorageBufferCount: 1,
@@ -270,8 +269,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 
 	private void LoadWeights()
 	{
-		var path = Path.Join(Assets.AssetsPath, "NCA", WeightsFile);
-		var bytes = File.ReadAllBytes(path);
+		var bytes = Assets.Content.ReadAllBytes($"NCA/{WeightsFile}");
 		var floats = MemoryMarshal.Cast<byte, float>(bytes.AsSpan());
 		weights!.Upload(floats);
 	}

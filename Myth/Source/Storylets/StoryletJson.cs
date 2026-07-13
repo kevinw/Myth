@@ -6,8 +6,11 @@ namespace Myth;
 public static class StoryletJson
 {
 	public static StoryDeck DeckFromFile(string path, Dictionary<string, object?>? context = null)
+		=> DeckFromText(File.ReadAllText(path), context);
+
+	public static StoryDeck DeckFromText(string jsonText, Dictionary<string, object?>? context = null)
 	{
-		var json = JsonNode.Parse(File.ReadAllText(path))?.AsObject() ?? [];
+		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
 		return DeckFromJson(json, context);
 	}
 

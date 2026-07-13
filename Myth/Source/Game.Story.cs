@@ -52,13 +52,13 @@ public partial class Game
 		budStorylets = new StoryDeck { UseSpecificity = true };
 		BuildStory(new StoryBuilder(budStorylets));
 
-		var path = Path.Join(Assets.AssetsPath, "Storylets", "bud.json");
-		if (!File.Exists(path))
+		const string budStoryletsKey = "Storylets/bud.json";
+		if (!Assets.Content.FileExists(budStoryletsKey))
 			return;
 
 		try
 		{
-			var jsonDeck = StoryletJson.DeckFromFile(path);
+			var jsonDeck = StoryletJson.DeckFromText(Assets.Content.ReadAllText(budStoryletsKey));
 			foreach (var (key, value) in jsonDeck.Context)
 				budStorylets.Context[key] = value;
 			foreach (var storylet in jsonDeck.Storylets)

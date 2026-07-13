@@ -111,6 +111,8 @@ function buildAssets() {
       "--",
       "--build-asset-pack",
       "Assets/Packed/Visuals",
+      "--build-content-zip",
+      "Assets/Content.zip",
     ],
     { stdio: "inherit", cwd: repoDir },
   );

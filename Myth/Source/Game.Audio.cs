@@ -35,10 +35,10 @@ public partial class Game
 		voiceGerman = null;
 		try
 		{
-			var manifest = Path.Join(Assets.AssetsPath, "Voice", "manifest.json");
-			if (File.Exists(manifest))
+			const string manifest = "Voice/manifest.json";
+			if (Assets.Content.FileExists(manifest))
 			{
-				using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
+				using var doc = JsonDocument.Parse(Assets.Content.ReadAllText(manifest));
 				if (doc.RootElement.TryGetProperty("vowels", out var arr))
 				{
 					var vowels = new List<Vowel>();
@@ -57,10 +57,10 @@ public partial class Game
 				}
 			}
 
-			var de = Path.Join(Assets.AssetsPath, "Voice", "voice-de.json");
+			const string de = "Voice/voice-de.json";
 			// Source-generated (not reflection) so it works in the trimmed/AOT browser
 			// build, where reflection-based JSON is disabled. See VoiceJsonContext below.
-			if (File.Exists(de) && JsonSerializer.Deserialize(File.ReadAllText(de), VoiceJsonContext.Default.DictionaryStringString) is { } map)
+			if (Assets.Content.FileExists(de) && JsonSerializer.Deserialize(Assets.Content.ReadAllText(de), VoiceJsonContext.Default.DictionaryStringString) is { } map)
 			{
 				voiceGerman = new(map.Count);
 				foreach (var (k, v) in map)

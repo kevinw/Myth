@@ -20,6 +20,10 @@ public struct StartArgs
 	public bool buildAssetPack;
 	public bool useAssetPack;
 	public string? assetPackPath;
+	// Load bundled content from this zip instead of the Assets folder (--content-zip).
+	public string? contentZipPath;
+	// Write a Content.zip of the runtime Assets slice to this path and exit (--build-content-zip).
+	public string? buildContentZipPath;
 	public int maxFrames = int.MaxValue;
 
 	// Exit after this many game seconds (for automated/profiling runs).
@@ -59,6 +63,10 @@ public struct StartArgs
 				screenshotCount = sc;
 			else if ((args[i] == "--build-asset-pack" || args[i] == "--asset-pack") && next != null)
 				assetPackPath = next;
+			else if (args[i] == "--content-zip" && next != null)
+				contentZipPath = next;
+			else if (args[i] == "--build-content-zip" && next != null)
+				buildContentZipPath = next;
 			else if (args[i] == "--max-time" && next != null && float.TryParse(next, out var mt))
 				maxTimeSeconds = mt;
 			else if ((args[i] == "--play-room" || args[i] == "--room") && next != null)

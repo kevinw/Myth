@@ -2318,14 +2318,14 @@ public sealed partial class GameView
 		Shader CompileShader()
 		{
 			var ext = graphicsDevice.Driver.GetShaderExtension();
-			var path = Path.Join(Assets.AssetsPath, "Shaders", "Compiled", $"{name}.fragment.{ext}");
-			if (!File.Exists(path))
-				throw new FileNotFoundException($"{name} shader not found at '{Path.GetFullPath(path)}'.", path);
+			var file = $"{name}.fragment.{ext}";
+			var code = Assets.TryReadCompiledShader(file)
+				?? throw new FileNotFoundException($"{name} shader not found in bundled content at 'Shaders/Compiled/{file}'.", file);
 
 			return new Shader(
 				graphicsDevice,
 				ShaderStage.Fragment,
-				File.ReadAllBytes(path),
+				code,
 				samplerCount: samplerCount,
 				uniformBufferCount: uniformBufferCount,
 				entryPoint: "fragment_main",

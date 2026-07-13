@@ -23,22 +23,25 @@ public static class ParticleEffectAssets
 		effects.Clear();
 		paths.Clear();
 
-		var folder = FolderPath;
-		if (Directory.Exists(folder))
+		const string contentFolder = "Particles";
+		if (Assets.Content.DirectoryExists(contentFolder))
 		{
-			foreach (var file in Directory.EnumerateFiles(folder, "*.json", SearchOption.AllDirectories))
+			foreach (var key in Assets.Content.EnumerateDirectory(contentFolder, "*.json", SearchOption.AllDirectories))
 			{
 				try
 				{
-					if (JsonNode.Parse(File.ReadAllText(file))?.AsObject() is not { } json)
+					if (JsonNode.Parse(Assets.Content.ReadAllText(key))?.AsObject() is not { } json)
 						continue;
-					var name = Path.GetFileNameWithoutExtension(file);
+					var name = Path.GetFileNameWithoutExtension(key);
 					effects[name] = ParticleEffect.FromJson(json);
-					paths[name] = file;
+					// The tuning window writes effects back to their source file; zip content
+					// has none, so saves there fall back to a fresh Assets/Particles path.
+					if (!Assets.ContentIsZip)
+						paths[name] = Path.Join(Assets.AssetsPath, key);
 				}
 				catch (Exception e)
 				{
-					Console.Error.WriteLine($"Failed to load particle effect '{file}': {e}");
+					Console.Error.WriteLine($"Failed to load particle effect '{key}': {e}");
 				}
 			}
 		}

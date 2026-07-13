@@ -5,9 +5,12 @@ using Myth;
 
 var startArgs = new StartArgs(args);
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);
-if (startArgs.buildAssetPack)
+if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
 {
-	Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
+	if (startArgs.buildAssetPack)
+		Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
+	if (startArgs.buildContentZipPath != null)
+		Assets.BuildContentZip(startArgs.buildContentZipPath);
 	return;
 }
 

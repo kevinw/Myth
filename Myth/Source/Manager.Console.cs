@@ -211,11 +211,11 @@ public partial class Manager
 		consoleRooms.Clear();
 		foreach (var world in Assets.GetWorldIds())
 		{
-			var path = Path.Join(Assets.RoomsPath, world);
-			if (!Directory.Exists(path))
+			var worldKey = $"Rooms/{world}";
+			if (!Assets.Content.DirectoryExists(worldKey))
 				continue;
-			foreach (var file in Directory.EnumerateFiles(path, "*.json"))
-				consoleRooms.Add(new(world, Path.GetFileNameWithoutExtension(file)));
+			foreach (var key in Assets.Content.EnumerateDirectory(worldKey, "*.json"))
+				consoleRooms.Add(new(world, Path.GetFileNameWithoutExtension(key)));
 		}
 		consoleRooms.Sort(static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Label, b.Label));
 	}

@@ -134,8 +134,13 @@
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <Content Include="Platforms/Web/wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
-    <Content Include="Assets/Shaders/Compiled/*.wgsl" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Bundled content ships as one zip (run-browser.mjs / publish builds it), fetched
+         into the wasm FS in a single request instead of one fetch per asset file. When
+         the zip is absent (plain dotnet build without the asset step), fall back to the
+         old loose-file layout so the bundle still works. -->
+    <Content Include="Assets/Content.zip" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets/Content.zip')" />
+    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('Assets/Content.zip')" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
+    <Content Include="Assets/Shaders/Compiled/*.wgsl" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('Assets/Content.zip')" />
     <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

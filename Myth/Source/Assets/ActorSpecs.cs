@@ -50,33 +50,38 @@ public static class ActorSpecs
 		actorNames[typeof(T)] = name;
 	}
 
-	public static void LoadSpecs(string path)
+	public const string ContentFolder = "Actors";
+
+	public static void LoadSpecs()
 	{
 		ClearSpecs();
-		if (!Directory.Exists(path))
+		if (!Assets.Content.DirectoryExists(ContentFolder))
 			return;
 
-		foreach (var file in Directory.EnumerateFiles(path, "*.json", SearchOption.AllDirectories))
+		foreach (var key in Assets.Content.EnumerateDirectory(ContentFolder, "*.json", SearchOption.AllDirectories))
 		{
 			try
 			{
-				var spec = JsonNode.Parse(File.ReadAllText(file))?.AsObject();
+				var spec = JsonNode.Parse(Assets.Content.ReadAllText(key))?.AsObject();
 				if (spec == null)
 					continue;
 
 				var name = ReadString(spec, NameKey) ?? ReadString(spec, IdKey);
 				if (string.IsNullOrWhiteSpace(name))
 				{
-					name = Path.GetFileNameWithoutExtension(file);
+					name = Path.GetFileNameWithoutExtension(key);
 					spec[NameKey] = name;
 				}
 
 				specs[name] = spec;
-				specPaths[name] = file;
+				// Spec editing writes back to the source file; zip content has none, so the
+				// prefab editor's save path is simply absent there.
+				if (!Assets.ContentIsZip)
+					specPaths[name] = Path.Join(Assets.AssetsPath, key);
 			}
 			catch (Exception e)
 			{
-				Console.Error.WriteLine($"Failed to load actor spec '{file}': {e}");
+				Console.Error.WriteLine($"Failed to load actor spec '{key}': {e}");
 			}
 		}
 	}

@@ -151,11 +151,6 @@ public class Room
 	{
 	}
 
-	public Room(string path)
-		: this(Path.GetFileNameWithoutExtension(path), Point2.Zero, DefaultSize, path)
-	{
-	}
-
 	public Room CloneRuntime()
 	{
 		var clone = new Room(Id, TileSpacePosition, Size)
@@ -187,22 +182,13 @@ public class Room
 		return clone;
 	}
 
-	public Room(string id, Point2 position, Point2 size, string? path = null)
+	public Room(string id, Point2 position, Point2 size, JsonObject? json = null)
 	{
-		SourcePath = path;
-		JsonObject? json = null;
-		if (path != null)
+		if (json != null)
 		{
-			if (!string.Equals(Path.GetExtension(path), ".json", StringComparison.OrdinalIgnoreCase))
-				throw new InvalidOperationException($"Room files must be JSON: {path}");
-
-			json = JsonNode.Parse(File.ReadAllText(path!))?.AsObject();
-			if (json != null)
-			{
-				position = JsonUtil.ReadPoint(json, "position") ?? position;
-				if (JsonUtil.ReadPoint(json, "size") is { } jsonSize && jsonSize.X > 0 && jsonSize.Y > 0)
-					size = jsonSize;
-			}
+			position = JsonUtil.ReadPoint(json, "position") ?? position;
+			if (JsonUtil.ReadPoint(json, "size") is { } jsonSize && jsonSize.X > 0 && jsonSize.Y > 0)
+				size = jsonSize;
 		}
 
 		Id = id;
@@ -221,17 +207,9 @@ public class Room
 				SetBackgroundTileUnchecked(x, tileY, '0');
 			}
 
-		if (path == null)
-		{
-			RebuildGeometry();
-			return;
-		}
-
 		if (json != null)
-		{
 			LoadJson(json);
-			RebuildGeometry();
-		}
+		RebuildGeometry();
 	}
 
 	void LoadJson(JsonObject json)
