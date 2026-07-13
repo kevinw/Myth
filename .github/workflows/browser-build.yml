@@ -89,9 +89,9 @@ jobs:
           find Myth/Assets/Shaders Foster/Framework/Content/Shaders \
             -path '*/Compiled/*' \( -name '*.wgsl' -o -name '*.spv' \) -delete -print
 
-      - name: Build visual asset pack
+      - name: Build visual asset pack + content zip
         working-directory: Myth
-        run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals
+        run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip
 
       # --aot: full WebAssembly AOT for snappier runtime perf. Requires the Foster
       # fork's SDL3.cs UnmanagedCallConv strip (committed) or mono-aot-cross SGen-asserts.
