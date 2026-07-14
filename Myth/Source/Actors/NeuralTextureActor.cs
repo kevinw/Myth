@@ -244,6 +244,19 @@ public class NeuralTextureActor : Actor, IResizable
 
 		supported = true;
 		Decode();
+		Game.EditorPreviewSync += SettleForEditorPreview;
+	}
+
+	// Steps run so the editor preview shows a settled texture instead of the near-blank seed
+	// decode; gameplay reaches this look on its own by stepping every frame.
+	const int EditorPreviewSteps = 95;
+
+	// The editor doesn't tick this actor toward its attractor before rendering the preview, so
+	// fast-forward on the sync signal. See Game.EditorPreviewSync / Manager.SyncEditorGame.
+	void SettleForEditorPreview()
+	{
+		if (supported)
+			SimulateFromSeed(EditorPreviewSteps);
 	}
 
 	public string[] SlotWeightsFiles => [WeightsFile, WeightsFile1, WeightsFile2, WeightsFile3];
@@ -566,6 +579,7 @@ public class NeuralTextureActor : Actor, IResizable
 	public override void Destroyed()
 	{
 		base.Destroyed();
+		Game.EditorPreviewSync -= SettleForEditorPreview;
 		bufferA?.Dispose();
 		bufferB?.Dispose();
 		weights?.Dispose();

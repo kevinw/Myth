@@ -299,6 +299,10 @@ public partial class Game : IDisposable
 	public NavTrace? NavTrace { get; set; }
 	public event Action<RoomChange>? RoomChanged;
 	public event Action<RoomGeoChange>? RoomGeoChanged;
+	// Raised when the editor (re)builds or switches this preview game's room, so preview-only
+	// actors can settle themselves to a representative state. Never fires during play.
+	public event Action? EditorPreviewSync;
+	internal void RaiseEditorPreviewSync() => EditorPreviewSync?.Invoke();
 
 	public SimulationScope BeginSimulation()
 		=> new(this);

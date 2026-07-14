@@ -95,7 +95,7 @@ public partial class Manager
 	float maskPaintRadius = 24.0f;
 	float maskPaintSoftness = 0.4f;
 	float maskPaintStrength = 1.0f;
-	int maskPaintPreviewSteps = 64;
+	int maskPaintPreviewSteps = 128;
 	bool maskPaintStroke;
 	static readonly List<NeuralTextureModel> neuralTextureModels = [];
 	static readonly List<string> neuralTextureImages = [];
@@ -4019,17 +4019,6 @@ public partial class Manager
 			if (actor is NeuralTextureActor texture && texture.ActorId == actorId)
 				return texture;
 		return null;
-	}
-
-	void SimulateNeuralTexturePreviews()
-	{
-		if (game == null)
-			return;
-		foreach (var actor in game.Actors)
-			if (actor is NeuralTextureActor texture)
-				texture.SimulateFromSeed(maskPaintPreviewSteps);
-		if (CurrentRoom is { } room)
-			MarkRoomPreviewDirty(room);
 	}
 
 	bool UpdateMaskPainting(Rect inner, bool worldMouseBlocked, bool keyboardBlocked)

@@ -1918,16 +1918,18 @@ public partial class Manager : App
 		// Reuse a live editor-preview Game so its GameView (render targets/materials)
 		// isn't reallocated on every room switch or edit; only rebuild from scratch
 		// when there's no reusable preview (e.g. just exited play).
+		// Reuse the live preview Game where possible (see above); either way, once the room is
+		// in place let preview-only actors settle and re-render the cached preview.
 		if (game is { IsEditorPreview: true, Disposed: false })
-		{
 			game.SwitchEditorRoom(room);
-			return;
+		else
+		{
+			game?.Dispose();
+			game = new Game(this, room, audioEventsEnabled: false, spawnBud: false);
 		}
-
-		game?.Dispose();
-		game = new Game(this, room, audioEventsEnabled: false, spawnBud: false);
 #if EDITOR
-		SimulateNeuralTexturePreviews();
+		game.RaiseEditorPreviewSync();
+		MarkRoomPreviewDirty(room);
 #endif
 	}
 
