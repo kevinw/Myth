@@ -741,7 +741,6 @@ public partial class Manager
 			ImGui.Spacing();
 			DrawRoomPaletteSection();
 			ImGui.Spacing();
-			DrawDitherPaletteSection();
 			DrawAmbientOcclusionSection();
 			DrawSoftShadowSection();
 			ImGui.Spacing();
@@ -1250,32 +1249,58 @@ public partial class Manager
 			ImGui.PopID();
 		}
 
+		ImGui.SeparatorText("Dither");
+		var ditherEnabled = room.LightingDitherEnabled;
+		if (ImGui.Checkbox("Dither Enabled", ref ditherEnabled))
+		{
+			using (CaptureRoomUndo("Edit Room Dither", room))
+				room.LightingDitherEnabled = ditherEnabled;
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Dither Scale");
+		var ditherScale = room.LightingDitherScale;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomDitherScale", ref ditherScale, 1.0f, 8.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Dither", room))
+				room.LightingDitherScale = ditherScale;
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Dither Strength");
+		var ditherStrength = room.LightingDitherStrength;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomDitherStrength", ref ditherStrength, 0.0f, 1.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Dither", room))
+				room.LightingDitherStrength = ditherStrength;
+			changed = true;
+		}
+
+		ImGui.TextUnformatted("Dither Slope Boost");
+		var ditherSlopeBoost = room.NormalDitherSlopeBoost;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomDitherSlopeBoost", ref ditherSlopeBoost, 0.0f, 1.0f))
+		{
+			using (CaptureRoomUndo("Edit Room Dither", room))
+				room.NormalDitherSlopeBoost = ditherSlopeBoost;
+			changed = true;
+		}
+
+		var ditherQuantization = room.NormalDitherQuantization;
+		if (ImGui.Checkbox("Dither Level Quantization", ref ditherQuantization))
+		{
+			using (CaptureRoomUndo("Edit Room Dither", room))
+				room.NormalDitherQuantization = ditherQuantization;
+			changed = true;
+		}
+
 		if (changed)
 		{
 			editorGameDirty = true;
 			SyncEditorGame();
 		}
-	}
-
-	void DrawDitherPaletteSection()
-	{
-		if (!ImGui.CollapsingHeader("Dither"))
-			return;
-
-		editorGameDirty |= ImGui.Checkbox("Enabled", ref LightingDitherEnabled);
-
-		ImGui.TextUnformatted("Scale");
-		ImGui.SetNextItemWidth(-1);
-		editorGameDirty |= ImGui.SliderFloat("##LightingDitherScale", ref LightingDitherScale, 1.0f, 8.0f);
-
-		ImGui.TextUnformatted("Strength");
-		ImGui.SetNextItemWidth(-1);
-		editorGameDirty |= ImGui.SliderFloat("##LightingDitherStrength", ref LightingDitherStrength, 0.0f, 1.0f);
-
-		ImGui.TextUnformatted("Slope Boost");
-		ImGui.SetNextItemWidth(-1);
-		editorGameDirty |= ImGui.SliderFloat("##NormalDitherSlopeBoost", ref NormalDitherSlopeBoost, 0.0f, 1.0f);
-		editorGameDirty |= ImGui.Checkbox("Level Quantization", ref NormalDitherQuantization);
 	}
 
 	void DrawAmbientOcclusionSection()
@@ -1583,7 +1608,7 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -1598,6 +1623,11 @@ public partial class Manager
 		room.SunColor = settings.SunColor;
 		room.SunStrength = settings.SunStrength;
 		room.SunDirection = settings.SunDirection;
+		room.LightingDitherEnabled = settings.LightingDitherEnabled;
+		room.LightingDitherScale = settings.LightingDitherScale;
+		room.LightingDitherStrength = settings.LightingDitherStrength;
+		room.NormalDitherSlopeBoost = settings.NormalDitherSlopeBoost;
+		room.NormalDitherQuantization = settings.NormalDitherQuantization;
 		if (room.ReverbAuto)
 			room.RebuildGeometry();
 	}

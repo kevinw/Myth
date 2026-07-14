@@ -59,14 +59,14 @@ internal static class PerfToggles
 			() => Set(ref AmbientOcclusion, nameof(AmbientOcclusion)),
 			() => {
 				if (reveal) {
-					if (game.Manager.LightingDitherStrength != Manager.LightingDitherStrengthDefault) {
-						game.Manager.LightingDitherStrength = Manager.LightingDitherStrengthDefault;
-						return nameof(game.Manager.LightingDitherStrength);
+					if (game.Manager.DitherPerfScale != 1.0f) {
+						game.Manager.DitherPerfScale = 1.0f;
+						return nameof(game.Manager.DitherPerfScale);
 					}
 				} else {
-					if (game.Manager.LightingDitherStrength != 0) {
-						game.Manager.LightingDitherStrength = 0;
-						return nameof(game.Manager.LightingDitherStrength);
+					if (game.Manager.DitherPerfScale != 0f) {
+						game.Manager.DitherPerfScale = 0f;
+						return nameof(game.Manager.DitherPerfScale);
 					}
 				}
 				return "";

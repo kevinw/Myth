@@ -846,9 +846,9 @@ public sealed partial class GameView
 		uniforms[i++] = LitScreen.Height;
 		uniforms[i++] = renderCamera.X;
 		uniforms[i++] = renderCamera.Y;
-		uniforms[i++] = Manager.LightingDitherEnabled ? 1.0f : 0.0f;
-		uniforms[i++] = Manager.LightingDitherScale;
-		uniforms[i++] = Manager.LightingDitherStrength;
+		uniforms[i++] = CurrentDitherEnabled() ? 1.0f : 0.0f;
+		uniforms[i++] = CurrentDitherScale();
+		uniforms[i++] = CurrentDitherStrength() * Manager.DitherPerfScale;
 		uniforms[i++] = ditherGlitch;
 		uniforms[i++] = glitchPosition.X;
 		uniforms[i++] = glitchPosition.Y;
@@ -862,8 +862,8 @@ public sealed partial class GameView
 		uniforms[i++] = aoOffset.X;
 		uniforms[i++] = aoOffset.Y;
 		uniforms[i++] = Manager.AmbientOcclusionMinVisibility;
-		uniforms[i++] = Manager.NormalDitherSlopeBoost;
-		uniforms[i++] = Manager.NormalDitherQuantization ? NormalDitherLevels : 0;
+		uniforms[i++] = CurrentDitherSlopeBoost();
+		uniforms[i++] = CurrentDitherQuantization() ? NormalDitherLevels : 0;
 		uniforms[i++] = 0;
 		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
@@ -1388,6 +1388,48 @@ public sealed partial class GameView
 			return room?.LightNoise ?? Room.DefaultLightNoise;
 
 		return float.Lerp(transitionLightNoiseFrom, transitionLightNoiseTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	// Dither floats blend across a room transition like the other lighting params; the two bools
+	// can't lerp, so they snap to the destination room at the transition midpoint.
+	bool CurrentDitherEnabled()
+	{
+		if (nextRoom == null)
+			return room?.LightingDitherEnabled ?? Room.DefaultLightingDitherEnabled;
+
+		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? transitionDitherEnabledFrom : transitionDitherEnabledTo;
+	}
+
+	float CurrentDitherScale()
+	{
+		if (nextRoom == null)
+			return room?.LightingDitherScale ?? Room.DefaultLightingDitherScale;
+
+		return float.Lerp(transitionDitherScaleFrom, transitionDitherScaleTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	float CurrentDitherStrength()
+	{
+		if (nextRoom == null)
+			return room?.LightingDitherStrength ?? Room.DefaultLightingDitherStrength;
+
+		return float.Lerp(transitionDitherStrengthFrom, transitionDitherStrengthTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	float CurrentDitherSlopeBoost()
+	{
+		if (nextRoom == null)
+			return room?.NormalDitherSlopeBoost ?? Room.DefaultNormalDitherSlopeBoost;
+
+		return float.Lerp(transitionDitherSlopeBoostFrom, transitionDitherSlopeBoostTo, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	bool CurrentDitherQuantization()
+	{
+		if (nextRoom == null)
+			return room?.NormalDitherQuantization ?? Room.DefaultNormalDitherQuantization;
+
+		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? transitionDitherQuantizationFrom : transitionDitherQuantizationTo;
 	}
 
 	Color CurrentSunColor()

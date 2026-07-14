@@ -54,6 +54,13 @@ public class Room
 	public const float DefaultAmbientIntensity = 1.0f;
 	public const float DefaultLightNoise = 0.30f;
 	public const float DefaultReverb = 0.0f;
+	// Per-room dither, overriding the engine defaults. Manager.DitherPerfScale still gates
+	// lighting strength globally for performance.
+	public const bool DefaultLightingDitherEnabled = true;
+	public const float DefaultLightingDitherScale = 1.0f;
+	public const float DefaultLightingDitherStrength = 0.155f;
+	public const float DefaultNormalDitherSlopeBoost = 0.0f;
+	public const bool DefaultNormalDitherQuantization = false;
 	public static readonly Color DefaultSunColor = new(1.0f, 0.9f, 0.72f, 1.0f);
 	public static readonly Vector2 DefaultSunDirection = Vector2.Normalize(new Vector2(1, 1));
 
@@ -136,6 +143,11 @@ public class Room
 	public Color SunColor = DefaultSunColor;
 	public float SunStrength;
 	public Vector2 SunDirection = DefaultSunDirection;
+	public bool LightingDitherEnabled = DefaultLightingDitherEnabled;
+	public float LightingDitherScale = DefaultLightingDitherScale;
+	public float LightingDitherStrength = DefaultLightingDitherStrength;
+	public float NormalDitherSlopeBoost = DefaultNormalDitherSlopeBoost;
+	public bool NormalDitherQuantization = DefaultNormalDitherQuantization;
 	public string Notes = "";
 
 	/// Bounds in World Space in Pixels
@@ -165,7 +177,12 @@ public class Room
 			Reverb = Reverb,
 			SunColor = SunColor,
 			SunStrength = SunStrength,
-			SunDirection = SunDirection
+			SunDirection = SunDirection,
+			LightingDitherEnabled = LightingDitherEnabled,
+			LightingDitherScale = LightingDitherScale,
+			LightingDitherStrength = LightingDitherStrength,
+			NormalDitherSlopeBoost = NormalDitherSlopeBoost,
+			NormalDitherQuantization = NormalDitherQuantization
 		};
 
 		for (var x = 0; x < Size.X; x++)
@@ -224,6 +241,11 @@ public class Room
 		LightNoise = JsonUtil.ReadFloat(json, "lightNoise", DefaultLightNoise);
 		ReverbAuto = JsonUtil.ReadBool(json, "reverbAuto", true);
 		Reverb = Clamp01(JsonUtil.ReadFloat(json, "reverb", DefaultReverb));
+		LightingDitherEnabled = JsonUtil.ReadBool(json, "ditherEnabled", DefaultLightingDitherEnabled);
+		LightingDitherScale = JsonUtil.ReadFloat(json, "ditherScale", DefaultLightingDitherScale);
+		LightingDitherStrength = JsonUtil.ReadFloat(json, "ditherStrength", DefaultLightingDitherStrength);
+		NormalDitherSlopeBoost = JsonUtil.ReadFloat(json, "ditherSlopeBoost", DefaultNormalDitherSlopeBoost);
+		NormalDitherQuantization = JsonUtil.ReadBool(json, "ditherQuantization", DefaultNormalDitherQuantization);
 		SunColor = DefaultSunColor;
 		SunStrength = 0.0f;
 		SunDirection = DefaultSunDirection;
@@ -1262,6 +1284,16 @@ public class Room
 			writer.WriteBoolean("reverbAuto", false);
 		if (Reverb != DefaultReverb || !ReverbAuto)
 			writer.WriteNumber("reverb", Reverb);
+		if (LightingDitherEnabled != DefaultLightingDitherEnabled)
+			writer.WriteBoolean("ditherEnabled", LightingDitherEnabled);
+		if (LightingDitherScale != DefaultLightingDitherScale)
+			writer.WriteNumber("ditherScale", LightingDitherScale);
+		if (LightingDitherStrength != DefaultLightingDitherStrength)
+			writer.WriteNumber("ditherStrength", LightingDitherStrength);
+		if (NormalDitherSlopeBoost != DefaultNormalDitherSlopeBoost)
+			writer.WriteNumber("ditherSlopeBoost", NormalDitherSlopeBoost);
+		if (NormalDitherQuantization != DefaultNormalDitherQuantization)
+			writer.WriteBoolean("ditherQuantization", NormalDitherQuantization);
 
 		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
 		{

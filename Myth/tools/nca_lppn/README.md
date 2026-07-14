@@ -115,6 +115,11 @@ PyTorch's CPU fallback for the antialiased-resize gradient used by the motion
 loss. The upstream source and downloaded training artifacts stay ignored,
 while the revision and reference image URL are pinned in `train.py`.
 
+On CUDA, `--compile-siren` uses `torch.compile` for the SIREN decoder while
+leaving the variable-length NCA rollout eager. Native Windows CUDA compilation
+requires the matching [triton-windows](https://github.com/triton-lang/triton-windows)
+wheel; PyTorch 2.13 uses Triton 3.7 (`pip install "triton-windows>=3.7,<3.8"`).
+
 The pinned trainer is the `myth` branch of the
 [kevinw/Cells2Pixels](https://github.com/kevinw/Cells2Pixels) fork. On top of
 the upstream revision it freezes the pretrained VGG and optical-flow loss
@@ -126,8 +131,9 @@ optical-flow net's symmetric-padding index maps are built once per shape
 instead of per call, and the per-epoch loss log is materialized with a single
 device sync instead of one `.item()` per sub-loss. Measured together on MPS
 they are worth a few percent; the loop is GPU-bound in the 32-128 step rollout
-backward, and `torch.compile` / fp16 autocast were measured slower or neutral
-there, so they are intentionally not used.
+backward, and compiling the NCA rollout / fp16 autocast were measured slower or
+neutral there. Compiling only the SIREN remains opt-in because its benefit is
+CUDA- and workload-dependent.
 
 ## Normal-map support
 

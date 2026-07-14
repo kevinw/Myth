@@ -73,6 +73,16 @@ public sealed partial class GameView : IDisposable
 	float transitionAmbientIntensityTo => game.transitionAmbientIntensityTo;
 	float transitionLightNoiseFrom => game.transitionLightNoiseFrom;
 	float transitionLightNoiseTo => game.transitionLightNoiseTo;
+	bool transitionDitherEnabledFrom => game.transitionDitherEnabledFrom;
+	bool transitionDitherEnabledTo => game.transitionDitherEnabledTo;
+	float transitionDitherScaleFrom => game.transitionDitherScaleFrom;
+	float transitionDitherScaleTo => game.transitionDitherScaleTo;
+	float transitionDitherStrengthFrom => game.transitionDitherStrengthFrom;
+	float transitionDitherStrengthTo => game.transitionDitherStrengthTo;
+	float transitionDitherSlopeBoostFrom => game.transitionDitherSlopeBoostFrom;
+	float transitionDitherSlopeBoostTo => game.transitionDitherSlopeBoostTo;
+	bool transitionDitherQuantizationFrom => game.transitionDitherQuantizationFrom;
+	bool transitionDitherQuantizationTo => game.transitionDitherQuantizationTo;
 	Color transitionSunColorFrom => game.transitionSunColorFrom;
 	Color transitionSunColorTo => game.transitionSunColorTo;
 	float transitionSunStrengthFrom => game.transitionSunStrengthFrom;

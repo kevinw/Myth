@@ -64,6 +64,40 @@ public class NeuralTextureActor : Actor, IResizable
 
 	readonly record struct PawnSample(Point2 Position, float Time);
 
+	// Handed to INeuralTextureAgent implementers during a step so they can disturb this texture
+	// in world space; it owns the world->state transform and the shared per-step stamp buffer.
+	public sealed class PerturbContext
+	{
+		readonly NeuralTextureActor texture;
+
+		internal PerturbContext(NeuralTextureActor texture) => this.texture = texture;
+
+		// The texture being disturbed, so agents can cull against its bounds before stamping.
+		public NeuralTextureActor Texture => texture;
+
+		// True once the per-step stamp buffer is full; stop adding.
+		public bool IsFull => texture.perturbStampCount >= texture.perturbStamps.Length;
+
+		// Stamps a disturbance sweeping from one world point to another. A zero/negative strength
+		// or radius is ignored. Returns false once the buffer is full. The stamp type stays
+		// private to the actor: agents only ever speak world coordinates.
+		public bool AddStamp(Vector2 fromWorld, Vector2 toWorld, float worldRadius, float strength)
+		{
+			var stamps = texture.perturbStamps;
+			if (texture.perturbStampCount >= stamps.Length)
+				return false;
+			if (strength > 0 && worldRadius > 0)
+				stamps[texture.perturbStampCount++] = new PerturbStamp
+				{
+					From = texture.WorldToState(fromWorld),
+					To = texture.WorldToState(toWorld),
+					Radius = MathF.Max(worldRadius * texture.StateScale, 0.5f),
+					Strength = strength,
+				};
+			return texture.perturbStampCount < stamps.Length;
+		}
+	}
+
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);
 
 	public Point2 Size { get; set; } = DefaultSize;
@@ -82,6 +116,8 @@ public class NeuralTextureActor : Actor, IResizable
 	readonly UniformBuffer decodeUniforms = new();
 	readonly UniformBuffer perturbUniforms = new();
 	readonly PerturbStamp[] perturbStamps = new PerturbStamp[MaxPerturbations];
+	readonly PerturbContext perturbContext;
+	int perturbStampCount;
 	readonly Dictionary<Pawn, PawnSample> pawnSamples = [];
 	readonly List<Pawn> stalePawnSamples = [];
 	GraphicsDevice graphicsDevice = null!;
@@ -124,6 +160,7 @@ public class NeuralTextureActor : Actor, IResizable
 		Depth = 1000;
 		CollidesWithSolids = false;
 		Hitbox = new(new RectInt(0, 0, 0, 0));
+		perturbContext = new(this);
 	}
 
 	public override void Added()
@@ -359,7 +396,7 @@ public class NeuralTextureActor : Actor, IResizable
 
 	void Step()
 	{
-		ApplyPawnPerturbations();
+		ApplyPerturbations();
 		StepState();
 		Decode();
 	}
@@ -388,9 +425,9 @@ public class NeuralTextureActor : Actor, IResizable
 		currentIsB = !currentIsB;
 	}
 
-	void ApplyPawnPerturbations()
+	void ApplyPerturbations()
 	{
-		var stampCount = 0;
+		perturbStampCount = 0;
 		var now = Time.SecondsF;
 		var textureBounds = GetVisualBounds();
 
@@ -410,7 +447,7 @@ public class NeuralTextureActor : Actor, IResizable
 
 			foreach (var other in Game.Actors)
 			{
-				if (stampCount >= MaxPerturbations)
+				if (perturbContext.IsFull)
 					break;
 				if (other is not NeuralTexturePerturbActor { Mode: NeuralTexturePerturbMode.Pawns } perturb ||
 					!perturb.WorldRect.Overlaps(textureBounds) ||
@@ -424,23 +461,31 @@ public class NeuralTextureActor : Actor, IResizable
 				var strength = MathF.Max(0, perturb.Strength);
 				if (perturb.ScaleStrengthWithSpeed && perturb.SpeedForDoubleStrength > 0)
 					strength *= 1 + speed / perturb.SpeedForDoubleStrength;
-				if (strength <= 0 || radius <= 0)
-					continue;
 
 				var centerOffset = (Vector2)pawn.Hitbox.Rect.Center;
-				perturbStamps[stampCount++] = new()
-				{
-					From = WorldToState((Vector2)previous.Position + centerOffset),
-					To = WorldToState((Vector2)position + centerOffset),
-					Radius = radius * StateScale,
-					Strength = strength,
-				};
+				perturbContext.AddStamp(
+					(Vector2)previous.Position + centerOffset,
+					(Vector2)position + centerOffset,
+					radius,
+					strength);
 			}
 
 			pawnSamples[pawn] = new(position, now);
 		}
 
 		RemoveStalePawnSamples();
+
+		// Any actor can disturb the field it overlaps by implementing INeuralTextureAgent; the
+		// context maps its world-space stamps into this texture's state grid.
+		foreach (var actor in Game.Actors)
+		{
+			if (perturbContext.IsFull)
+				break;
+			if (actor is INeuralTextureAgent agent && !Game.destroying.Contains(actor))
+				agent.PerturbNeuralTexture(perturbContext);
+		}
+
+		var stampCount = perturbStampCount;
 		if (stampCount == 0)
 			return;
 

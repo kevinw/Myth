@@ -1,5 +1,11 @@
 # TODO
 
+NCA
+  - perturb on tile edges, so it looks more integrated
+  - jump around on the surface of them?
+  - spawn enemies there?
+  - player alpha based on sim value so it looks like you're behind smoke
+
 download a lot of LUTs and try them
 adjust rope springiness as a mechanic or challenge
 

@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 UPSTREAM = ROOT / ".cells2pixels"
 UPSTREAM_URL = "https://github.com/kevinw/Cells2Pixels.git"
-UPSTREAM_REVISION = "e9fc448b7465d903f1a5fddd79a7d612da30c6c6"  # myth branch
+UPSTREAM_REVISION = "a0a78a793a6c0a295348b8e3ae17dc14b7844a26"  # myth branch
 TARGET_REVISION = "29342e2f92b2fd63133b985d34a41c20634248cd"
 DEFAULT_TARGET = ROOT / "targets" / "bubbly_0101.jpg"
 DEFAULT_TARGET_URL = (
@@ -89,6 +89,7 @@ def main():
     )
     parser.add_argument("--device", default="auto")
     parser.add_argument("--epochs", type=int)
+    parser.add_argument("--compile-siren", action="store_true", help="Compile the SIREN decoder on CUDA")
     parser.add_argument("--smoke", action="store_true", help="Run one reduced epoch to validate the toolchain")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
@@ -116,6 +117,8 @@ def main():
     config_path = ROOT / "configs" / "bubbly_circular.yaml"
     config = yaml.safe_load(config_path.read_text())
     device = automatic_device(torch) if args.device == "auto" else args.device
+    if args.compile_siren and not device.startswith("cuda"):
+        raise SystemExit("--compile-siren requires CUDA")
     config["device"] = device
     config["precision"] = "float16" if device.startswith("cuda") else "float32"
     config["loss"]["motion_loss_kwargs"]["target_name"] = args.motion
@@ -145,6 +148,8 @@ def main():
     config["experiment_path"] = str(experiment)
     if args.epochs is not None:
         config["train"]["epochs"] = args.epochs
+    if args.compile_siren:
+        config["train"]["compile_siren"] = True
     if args.smoke:
         smoke_config(config)
 

@@ -40,12 +40,10 @@ public partial class Manager : App
 	(string RoomId, Point2 Position)? playtestPlayerPosition;
 	bool preservePlaytestSaveState;
 #endif
-	public bool LightingDitherEnabled = true;
-	public float LightingDitherScale = 1.0f;
-	internal const float LightingDitherStrengthDefault = 0.155f;
-	public float LightingDitherStrength = LightingDitherStrengthDefault;
-	public float NormalDitherSlopeBoost = 0.0f;
-	public bool NormalDitherQuantization = false;
+	// Dither is authored per-room (Room.LightingDither*/NormalDither*). This global scale is
+	// multiplied onto each room's lighting dither strength so performance paths (PerfToggles,
+	// --simple) can suppress dither without touching authored values.
+	public float DitherPerfScale = 1.0f;
 
 	// Ambient occlusion: background tiles darken beneath foreground overhangs.
 	public float AmbientOcclusionStrength = 1.0f;
@@ -224,7 +222,7 @@ public partial class Manager : App
 		if (args.simple)
 		{
 			PerfToggles.UseSimpleDefaults();
-			LightingDitherStrength = 0;
+			DitherPerfScale = 0;
 		}
 
 		uiScale = 2.7f;

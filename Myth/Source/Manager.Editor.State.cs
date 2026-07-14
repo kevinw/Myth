@@ -7,7 +7,7 @@ namespace Myth;
 
 public partial class Manager
 {
-	private readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, Color AmbientColor, float AmbientIntensity, float LightNoise, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection);
+	private readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, Color AmbientColor, float AmbientIntensity, float LightNoise, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection, bool LightingDitherEnabled, float LightingDitherScale, float LightingDitherStrength, float NormalDitherSlopeBoost, bool NormalDitherQuantization);
 
 	private sealed class EditorSelectionSnapshot
 	{
