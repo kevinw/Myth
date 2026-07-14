@@ -18,6 +18,7 @@ public class NeuralTextureActor : Actor, IResizable
 	const int FinalBiasOffset = 3464;
 	const int MaxPerturbations = 64;
 	public const string WeightsFolder = "NCA/DynamicTexture";
+	public const string DefaultWeightsFile = "chequered_0050_circular.bin";
 	static readonly CellState[] EmptyState = new CellState[StateWidth * StateHeight];
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -66,7 +67,7 @@ public class NeuralTextureActor : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);
 
 	public Point2 Size { get; set; } = DefaultSize;
-	public string WeightsFile = "chequered_0050_circular.bin";
+	public string WeightsFile = DefaultWeightsFile;
 	public string WeightsFile1 = "";
 	public string WeightsFile2 = "";
 	public string WeightsFile3 = "";

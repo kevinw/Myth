@@ -171,12 +171,30 @@ public static class Assets
 		using var stream = File.Create(outputPath);
 		using var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create);
 
+		// The DynamicTexture folder holds tens of MB of NCA weights, almost all unused; a
+		// packaged build only needs the models that placed NeuralTextureActors reference.
+		var referencedWeights = CollectReferencedNeuralTextureWeights();
+		var packedWeights = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
 		var count = 0;
+		var skippedWeights = 0;
+		long skippedWeightBytes = 0;
 		foreach (var file in Directory.EnumerateFiles(AssetsPath, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
 		{
 			var key = Path.GetRelativePath(AssetsPath, file).Replace(Path.DirectorySeparatorChar, '/');
 			if (!ContentZipIncludes(key))
 				continue;
+
+			if (IsDynamicTextureWeight(key, out var weightName))
+			{
+				if (!referencedWeights.Contains(weightName))
+				{
+					skippedWeights++;
+					skippedWeightBytes += new FileInfo(file).Length;
+					continue;
+				}
+				packedWeights.Add(weightName);
+			}
 
 			// PNGs are already compressed; storing them keeps reads cheap. Everything else
 			// (JSON, shader text, QOI, weights) deflates well.
@@ -187,7 +205,74 @@ public static class Assets
 			count++;
 		}
 
-		Console.WriteLine($"Wrote content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB)");
+		// A referenced model that never matched a file on disk is a typo or a stale room; warn
+		// rather than fail so the pack still builds, but the missing texture is visible.
+		foreach (var name in referencedWeights)
+			if (!packedWeights.Contains(name))
+				Console.WriteLine($"Warning: room references neural texture model '{name}' but {NeuralTextureActor.WeightsFolder}/{name} was not found; it will be absent from the pack.");
+
+		Console.WriteLine($"Wrote content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB); "
+			+ $"packed {packedWeights.Count} neural texture models, skipped {skippedWeights} unreferenced ({skippedWeightBytes / 1024} KB).");
+	}
+
+	// True for a key naming a DynamicTexture NCA weight file, yielding its folder-relative name
+	// (the same string a NeuralTextureActor stores in WeightsFile). Files sit directly in the
+	// folder, so the name is just the basename.
+	static bool IsDynamicTextureWeight(string key, out string name)
+	{
+		name = "";
+		const string prefix = NeuralTextureActor.WeightsFolder + "/";
+		if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+			!key.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+			return false;
+		name = key[prefix.Length..];
+		return true;
+	}
+
+	// Weight files named by NeuralTextureActor instances across every bundled room, seeded with
+	// the constructor default so a freshly placed actor still resolves. Case-insensitive to match
+	// the zip's own lookups. Read from loose room files (this only runs when building the pack).
+	static HashSet<string> CollectReferencedNeuralTextureWeights()
+	{
+		var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+		{
+			NeuralTextureActor.DefaultWeightsFile,
+		};
+
+		if (!Directory.Exists(RoomsPath))
+			return referenced;
+
+		string[] fields = ["WeightsFile", "WeightsFile1", "WeightsFile2", "WeightsFile3"];
+		foreach (var file in Directory.EnumerateFiles(RoomsPath, "*.json", SearchOption.AllDirectories))
+		{
+			JsonNode? root;
+			try
+			{
+				root = JsonNode.Parse(File.ReadAllText(file));
+			}
+			catch (Exception exception)
+			{
+				// A room we can't parse might reference anything, so we can't prove a model is
+				// unused. Warn loudly — these are machine-written files, so this signals real
+				// corruption — but keep going.
+				Console.WriteLine($"Warning: could not parse room '{file}' while collecting neural texture references ({exception.Message}); models it uses may be dropped from the pack.");
+				continue;
+			}
+
+			if (root?["actors"] is not JsonArray actors)
+				continue;
+
+			foreach (var actor in actors)
+			{
+				if (actor?["Type"]?.GetValue<string>() != nameof(NeuralTextureActor))
+					continue;
+				foreach (var field in fields)
+					if (actor[field]?.GetValue<string>() is { Length: > 0 } value)
+						referenced.Add(value);
+			}
+		}
+
+		return referenced;
 	}
 
 	static bool ContentZipIncludes(string key)
