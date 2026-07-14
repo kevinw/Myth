@@ -230,6 +230,7 @@ public partial class Manager
 		if (!playing && !startingPlay)
 		{
 			TileKitEditorImGui();
+			NctTileEditorImGui();
 			MusicRegionsImGui();
 		}
 #if DEBUG
@@ -5207,6 +5208,10 @@ public partial class Manager
 
 		if (ImGuiTextButton("Tile Kits", new Vector2(70, ButtonSize), tileKitEditorOpen))
 			tileKitEditorOpen = !tileKitEditorOpen;
+		ImGui.SameLine();
+
+		if (ImGuiTextButton("NCT Tiles", new Vector2(70, ButtonSize), nctEditorOpen))
+			nctEditorOpen = !nctEditorOpen;
 		ImGui.SameLine();
 
 		if (ImGuiTextButton("Particles", new Vector2(70, ButtonSize), pinnedParticleEffect != null))

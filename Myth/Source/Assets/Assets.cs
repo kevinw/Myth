@@ -390,6 +390,7 @@ public static class Assets
 		// Kit specs load on both paths: the visual-asset-pack path skips image generation
 		// (the baked tilesets are in the pack) but Factory still registers from the specs.
 		TileKits.LoadSpecs(Path.Join(SourcesPath, "Tilesets"));
+		NctTiles.LoadSpecs(Path.Join(SourcesPath, "Tilesets"));
 
 		// Shipped bundles carry the pack and no Assets/Sources (like the browser), so a
 		// missing sources tree implies pack mode without needing a command-line flag.
@@ -433,6 +434,7 @@ public static class Assets
 		// The bake can be reached without Reload (BuildVisualAssetPack), and generating the
 		// kit tilesets needs the specs; reloading them here is cheap and idempotent.
 		TileKits.LoadSpecs(tilesetsPath);
+		NctTiles.LoadSpecs(tilesetsPath);
 		var spriteFiles = new Dictionary<string, Aseprite>();
 		var generatedSprites = new List<(string Name, Aseprite Source, Func<Predicate<Aseprite.Layer>> LayerFilter)>();
 		var tilesetFiles = new Dictionary<string, Aseprite>();

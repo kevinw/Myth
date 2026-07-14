@@ -52,8 +52,10 @@ public static class Factory
 		public readonly string? DualTilesetName;
 		public readonly TileLayer Layer;
 		public readonly float AcousticReflectivity;
+		// Non-null on neural-texture tiles: room load grows one region simulation per island.
+		public readonly NctTileSpec? NeuralTexture;
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
 		{
 			Name = name;
 			Image = image;
@@ -70,6 +72,7 @@ public static class Factory
 			DualTilesetName = dualTilesetName;
 			Layer = layer;
 			AcousticReflectivity = Math.Clamp(acousticReflectivity, 0.0f, 1.0f);
+			NeuralTexture = neuralTexture;
 		}
 	}
 
@@ -291,6 +294,32 @@ public static class Factory
 		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
+	// A neural-texture tile: paints like a normal tile but draws nothing itself. At room load,
+	// SpawnNctRegions grows one region simulation per connected island (see NctTileSpec). All the
+	// look lives in the spec's JSON, so a new one is data, not code.
+	public static Entry AsNeuralTextureTile(NctTileSpec spec)
+	{
+		// No tileset image; use a neutral placeholder for the palette icon until we bake per-model
+		// swatches. GetTileset is safe to call here — tilesets are built before tile registration.
+		var icon = Assets.GetTileset("myth-back")?.Tiles[0] ?? default;
+		return new Entry(spec.Name, icon, (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
+		{
+			if (spec.Layer == TileLayer.Foreground)
+				fg.Set(tile.X, tile.Y, new());
+			else
+				bg.Set(tile.X, tile.Y, new());
+		}, surfaceType: spec.Solid ? spec.Surface : null, blocksMovement: spec.Solid, castsShadow: spec.Solid, layer: spec.Layer, neuralTexture: spec);
+	}
+
+	// Neural-texture tile types declared by *.nct.json specs (Assets/Sources/Tilesets), loaded
+	// alongside the tile kits so a new one needs no code change; chars are assigned at registration
+	// and room legends keep files stable.
+	static void RegisterNctTiles()
+	{
+		foreach (var spec in NctTiles.Specs)
+			Register(AssignChar(spec.PreferredChar, spec.Name), AsNeuralTextureTile(spec));
+	}
+
 	// Registers a single [GameActor] type: its spec type-name mapping, plus a palette
 	// entry when the attribute carries a Sprite. The source generator calls this for every
 	// [GameActor] via GeneratedActors.RegisterAll().
@@ -385,6 +414,7 @@ public static class Factory
 		// in the editor), not a paintable tile. FungusTile remains only so old
 		// rooms migrate on load (see Room.MigrateLegacyFungusTiles).
 		RegisterTileKits();
+		RegisterNctTiles();
 		foreach (var spriteName in Assets.Sprites.Keys.Where(it => it.StartsWith(PropSpritePrefix, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
 			ActorPalette.Add(ActorPaletteEntry.FromProp(spriteName));
 		RegisterActorSpecPaletteEntries();

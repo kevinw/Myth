@@ -7,8 +7,8 @@ namespace Myth;
 [GameActor(Sprite = "editor_prop", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3, Anchor = SpriteAnchor.TopLeft)]
 public class NeuralTextureActor : Actor, IResizable
 {
-	const int StateWidth = 128;
-	const int StateHeight = 128;
+	public const int StateWidth = 128;
+	public const int StateHeight = 128;
 	const int ColorWeightCount = 3441;
 	const int PairedWeightCount = 3466;
 	const int MaxSlots = 4;
@@ -108,6 +108,11 @@ public class NeuralTextureActor : Actor, IResizable
 	public float FireRate = 0.5f;
 	public float StepsPerSecond = 30.0f;
 	public Factory.TileLayer Layer = Factory.TileLayer.Background;
+
+	// Set before Added() to drive the per-slot blend mask directly (region tiles build a
+	// feathered two-model mask from tile geometry) instead of decoding PaintedMask. Length must
+	// be StateWidth*StateHeight; each uint packs one byte per slot (R=slot0 … A=slot3).
+	public uint[]? InitialMaskCells;
 
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
@@ -221,7 +226,10 @@ public class NeuralTextureActor : Actor, IResizable
 		maskBuffer = new(graphicsDevice, "NeuralTextureMask");
 
 		LoadWeights();
-		DecodeMaskData();
+		if (InitialMaskCells is { Length: StateWidth * StateHeight } injected)
+			maskCells = injected;
+		else
+			DecodeMaskData();
 		maskBuffer.Upload(maskCells);
 		output = new(
 			graphicsDevice,

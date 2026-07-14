@@ -1,0 +1,12 @@
+{
+  "char": "N",
+  "layer": "Foreground",
+  "solid": true,
+  "surface": "Brick",
+  "interior": "calm_water_4_hyperbolic.bin",
+  "edge": "spiralled_0042_3block.bin",
+  "edgeBandCells": 19,
+  "freezeSteps": 0,
+  "stepsPerSecond": 30.02,
+  "fireRate": 0.215
+}

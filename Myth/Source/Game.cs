@@ -1960,6 +1960,7 @@ public partial class Game : IDisposable
 		EnsureBudForPlayer();
 
 		SpawnFungusLayer(forRoom);
+		SpawnNctRegions(forRoom);
 	}
 
 	/// Finds each connected island of Fungal-flagged tiles and spawns one
@@ -2044,6 +2045,171 @@ public partial class Game : IDisposable
 			layer.RegionHeight = height;
 			layer.GrowthMask = mask;
 		});
+	}
+
+	/// Grows neural-texture tile regions: for every NCT tile type, finds each connected island of
+	/// its char and spawns one region simulation that fills the island's shape (see NctTileSpec).
+	/// Like the fungus layer, these actors live only in Game.Actors — never Room.Actors — so they
+	/// regenerate from the tiles each load and are never serialized.
+	void SpawnNctRegions(Room forRoom)
+	{
+		foreach (var (id, entry) in Factory.Entries)
+			if (entry.NeuralTexture is { } spec)
+			{
+				var grid = spec.Layer == Factory.TileLayer.Foreground ? forRoom.Tiles : forRoom.BackgroundTiles;
+				SpawnNctIslands(forRoom, id, spec, grid);
+			}
+	}
+
+	void SpawnNctIslands(Room forRoom, char id, NctTileSpec spec, char[,] grid)
+	{
+		var sizeX = forRoom.Size.X;
+		var sizeY = forRoom.Size.Y;
+		var visited = new bool[sizeX, sizeY];
+		var frontier = new Stack<Point2>();
+
+		for (var sx = 0; sx < sizeX; sx++)
+			for (var sy = 0; sy < sizeY; sy++)
+			{
+				if (visited[sx, sy] || grid[sx, sy] != id)
+					continue;
+
+				int minX = sx, minY = sy, maxX = sx, maxY = sy;
+				var island = new List<Point2>();
+				visited[sx, sy] = true;
+				frontier.Push(new Point2(sx, sy));
+				while (frontier.Count > 0)
+				{
+					var t = frontier.Pop();
+					island.Add(t);
+					minX = Math.Min(minX, t.X);
+					maxX = Math.Max(maxX, t.X);
+					minY = Math.Min(minY, t.Y);
+					maxY = Math.Max(maxY, t.Y);
+					for (var d = 0; d < 4; d++)
+					{
+						var nx = t.X + FloodDX[d];
+						var ny = t.Y + FloodDY[d];
+						if (nx < 0 || ny < 0 || nx >= sizeX || ny >= sizeY)
+							continue;
+						if (visited[nx, ny] || grid[nx, ny] != id)
+							continue;
+						visited[nx, ny] = true;
+						frontier.Push(new Point2(nx, ny));
+					}
+				}
+
+				SpawnNctIsland(forRoom, spec, island, minX, minY, maxX, maxY);
+			}
+	}
+
+	void SpawnNctIsland(Room forRoom, NctTileSpec spec, List<Point2> island, int minX, int minY, int maxX, int maxY)
+	{
+		var tileW = maxX - minX + 1;
+		var tileH = maxY - minY + 1;
+		var member = new bool[tileW, tileH];
+		foreach (var t in island)
+			member[t.X - minX, t.Y - minY] = true;
+
+		var mask = BuildNctRegionMask(member, tileW, tileH, spec);
+		var position = forRoom.WorldBounds.TopLeft + new Point2(minX * TileSize, minY * TileSize);
+
+		var region = Create<NeuralTextureActor>(position, a =>
+		{
+			a.Size = new Point2(tileW * TileSize, tileH * TileSize);
+			a.Layer = spec.Layer;
+			a.WeightsFile = spec.Interior;
+			a.WeightsFile1 = spec.Edge;
+			a.WeightsFile2 = "";
+			a.WeightsFile3 = "";
+			a.FireRate = spec.FireRate;
+			// Frozen regions never step in Update; SimulateFromSeed below advances them once.
+			a.StepsPerSecond = spec.Frozen ? 0f : spec.StepsPerSecond;
+			a.InitialMaskCells = mask;
+		});
+
+		if (spec.Frozen)
+			region.SimulateFromSeed(spec.FreezeSteps);
+	}
+
+	/// Builds the per-slot blend mask (128x128 state cells) for one island: the interior model
+	/// (slot 0) fills the core and the edge model (slot 1) takes over in a distance-feathered band
+	/// along the boundary. With no edge model, the interior alone feathers out to nothing. The grid
+	/// border counts as outside, so a solid rectangular island still feathers from its edges inward.
+	static uint[] BuildNctRegionMask(bool[,] member, int tileW, int tileH, NctTileSpec spec)
+	{
+		const int W = NeuralTextureActor.StateWidth;
+		const int H = NeuralTextureActor.StateHeight;
+
+		// The decoder fits the square state onto the output as a centered square scaled by the
+		// longer side (NeuralTextureDecode.hlsl). Build the mask through the inverse of that map so
+		// each state cell carries the membership of the tile the decoder will actually draw it as —
+		// otherwise a uniform stretch here disagrees with the decoder and the region slips off the
+		// stamped tiles. Cells that fall outside the box are never shown, so they stay dead.
+		var outputW = tileW * TileSize;
+		var outputH = tileH * TileSize;
+		var extent = Math.Max(outputW, outputH);
+
+		var region = new bool[W * H];
+		for (var cy = 0; cy < H; cy++)
+			for (var cx = 0; cx < W; cx++)
+			{
+				var px = ((cx + 1.0) / W - 0.5) * extent + outputW / 2.0 - 0.5;
+				var py = ((cy + 1.0) / H - 0.5) * extent + outputH / 2.0 - 0.5;
+				if (px < 0 || py < 0 || px >= outputW || py >= outputH)
+					continue;
+				var tx = Math.Clamp((int)(px / TileSize), 0, tileW - 1);
+				var ty = Math.Clamp((int)(py / TileSize), 0, tileH - 1);
+				region[cy * W + cx] = member[tx, ty];
+			}
+
+		// Multi-source BFS: distance (in state cells) from each region cell to the nearest cell
+		// outside the region — real dead cells, plus the grid border as a virtual outside.
+		var dist = new int[W * H];
+		Array.Fill(dist, -1);
+		var queue = new Queue<int>();
+		for (var i = 0; i < W * H; i++)
+			if (!region[i])
+			{
+				dist[i] = 0;
+				queue.Enqueue(i);
+			}
+		for (var i = 0; i < W * H; i++)
+		{
+			var x = i % W;
+			var y = i / W;
+			if (region[i] && dist[i] == -1 && (x == 0 || x == W - 1 || y == 0 || y == H - 1))
+			{
+				dist[i] = 1;
+				queue.Enqueue(i);
+			}
+		}
+		while (queue.Count > 0)
+		{
+			var i = queue.Dequeue();
+			var x = i % W;
+			var y = i / W;
+			var nd = dist[i] + 1;
+			if (x > 0 && dist[i - 1] == -1) { dist[i - 1] = nd; queue.Enqueue(i - 1); }
+			if (x < W - 1 && dist[i + 1] == -1) { dist[i + 1] = nd; queue.Enqueue(i + 1); }
+			if (y > 0 && dist[i - W] == -1) { dist[i - W] = nd; queue.Enqueue(i - W); }
+			if (y < H - 1 && dist[i + W] == -1) { dist[i + W] = nd; queue.Enqueue(i + W); }
+		}
+
+		var band = Math.Max(1, spec.EdgeBandCells);
+		var hasEdge = !string.IsNullOrEmpty(spec.Edge);
+		var mask = new uint[W * H];
+		for (var i = 0; i < W * H; i++)
+		{
+			if (!region[i])
+				continue;
+			var t = Math.Clamp(Math.Max(dist[i], 0) / (float)band, 0f, 1f);
+			var smooth = t * t * (3f - 2f * t);
+			var slot0 = (uint)Math.Clamp((int)MathF.Round(255f * smooth), 0, 255);
+			var slot1 = hasEdge ? (uint)Math.Clamp((int)MathF.Round(255f * (1f - smooth)), 0, 255) : 0u;
+			mask[i] = slot0 | (slot1 << 8);
+		}
+		return mask;
 	}
 
 	static UInt64 GetStringHash(string text)
