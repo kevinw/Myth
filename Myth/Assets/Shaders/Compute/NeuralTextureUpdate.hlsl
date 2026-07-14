@@ -11,6 +11,8 @@ struct CellState
 
 StructuredBuffer<CellState> SourceState : register(t0, space0);
 StructuredBuffer<float4> Weights : register(t1, space0);
+// Per-cell blend weights for up to four models, one byte per slot.
+StructuredBuffer<uint> Mask : register(t2, space0);
 RWStructuredBuffer<CellState> DestState : register(u0, space1);
 
 cbuffer Params : register(b0, space2)
@@ -24,10 +26,14 @@ cbuffer Params : register(b0, space2)
 #define NCA_W1_OFFSET 0
 #define NCA_B1_OFFSET 2176
 #define NCA_W2_OFFSET 2208
+// Models are packed at a fixed stride in the six-channel layout.
+#define MODEL_STRIDE 3466
+// Cells with no painted model decay toward the zero seed state.
+#define EMPTY_DECAY 0.95
 
-float weight_value(int offset, int index)
+float weight_value(int base, int offset, int index)
 {
-    return Weights[offset + index / 4][index % 4];
+    return Weights[base + offset + index / 4][index % 4];
 }
 
 float hash(uint x, uint y, uint seed)
@@ -108,30 +114,44 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         0.0,
         0.0);
 
-    float hidden[HIDDEN_N];
-    [unroll]
-    for (int output = 0; output < HIDDEN_N; output++)
-    {
-        float value = weight_value(NCA_B1_OFFSET, output);
-        [unroll]
-        for (int input = 0; input < 17; input++)
-            value += dot(perception[input], Weights[NCA_W1_OFFSET + output * 17 + input]);
-        hidden[output] = max(value, 0.0);
-    }
-
+    uint mask = Mask[index];
     bool update = hash(id.x, id.y, Seed) <= FireRate;
-    CellState result;
+    float total = 0.0;
     float4 delta[4];
     [unroll]
     for (int group = 0; group < 4; group++)
         delta[group] = 0.0;
-    for (int input = 0; input < HIDDEN_N; input++)
+
+    for (uint slot = 0; slot < 4; slot++)
+    {
+        float alpha = float((mask >> (slot * 8u)) & 0xFFu) / 255.0;
+        if (alpha <= 0.0)
+            continue;
+        total += alpha;
+
+        int base = (int)slot * MODEL_STRIDE;
+        float hidden[HIDDEN_N];
         [unroll]
-        for (int group = 0; group < 4; group++)
-            delta[group] += hidden[input] * Weights[NCA_W2_OFFSET + input * 4 + group];
+        for (int output = 0; output < HIDDEN_N; output++)
+        {
+            float value = weight_value(base, NCA_B1_OFFSET, output);
+            [unroll]
+            for (int input = 0; input < 17; input++)
+                value += dot(perception[input], Weights[base + NCA_W1_OFFSET + output * 17 + input]);
+            hidden[output] = max(value, 0.0);
+        }
+
+        for (int input = 0; input < HIDDEN_N; input++)
+            [unroll]
+            for (int group = 0; group < 4; group++)
+                delta[group] += alpha * hidden[input] * Weights[base + NCA_W2_OFFSET + input * 4 + group];
+    }
+
+    CellState result;
+    float keep = lerp(EMPTY_DECAY, 1.0, saturate(total));
     [unroll]
     for (int group = 0; group < 4; group++)
-        result.c[group] = self.c[group] + (update ? delta[group] : 0.0);
+        result.c[group] = (self.c[group] + (update ? delta[group] : 0.0)) * keep;
 
     DestState[index] = result;
 }

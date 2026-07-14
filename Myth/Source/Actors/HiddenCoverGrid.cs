@@ -645,12 +645,14 @@ public class HiddenCoverGrid : Actor
 			: null;
 	}
 
+	readonly static List<HiddenSegment> _merged = [];
 	void MergeAxisAlignedVisibilitySegments()
 	{
 		if (visibilitySegments.Count <= 1)
 			return;
 
-		var merged = new List<HiddenSegment>(visibilitySegments.Count);
+		var merged = _merged;
+		merged.Clear();
 		MergeHorizontalVisibilitySegments(merged);
 		MergeVerticalVisibilitySegments(merged);
 

@@ -10,6 +10,8 @@ namespace Myth;
 
 public partial class Manager
 {
+	readonly record struct NeuralTextureModel(string FileName, string Image, string ImageLabel, string Motion, string MotionLabel, int MotionOrder, bool Paired, bool Screen);
+
 	enum EditorScrollMode
 	{
 		Auto,
@@ -87,6 +89,17 @@ public partial class Manager
 	EditorDragState editorDrag = EditorDragState.None;
 	JsonUndoScope? roomGeometryUndo;
 	string? pickingLinkedDoorTargetForActorId;
+	// Neural texture mask painting: which room actor is being painted, and the brush.
+	string? maskPaintActorId;
+	int maskPaintSlot;
+	float maskPaintRadius = 24.0f;
+	float maskPaintSoftness = 0.4f;
+	float maskPaintStrength = 1.0f;
+	int maskPaintPreviewSteps = 64;
+	bool maskPaintStroke;
+	static readonly List<NeuralTextureModel> neuralTextureModels = [];
+	static readonly List<string> neuralTextureImages = [];
+	static readonly string[] neuralTextureMotionSuffixes = ["right_acc_down", "right_acc_right", "2block_x", "2block_y", "3block", "4block", "circular", "concentrate", "diverge", "hyperbolic", "right", "up"];
 	readonly JsonUndoManager undo = new();
 	JsonUndoScope? tilePaintUndo;
 	JsonUndoScope? actorMoveUndo;
@@ -1680,15 +1693,19 @@ public partial class Manager
 				changed = true;
 			}
 		}
-		else if (property.Name == nameof(NeuralTextureActor.WeightsFile) && ActorSpecs.Get(specId) is { } textureSpec && IsNeuralTextureActor(textureSpec))
+		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && ActorSpecs.Get(specId) is { } textureSpec && IsNeuralTextureActor(textureSpec))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
-			if (DrawNeuralTextureWeightsCombo(ref value))
+			if (DrawNeuralTextureWeightsCombo(ref value, allowNone: weightsSlot > 0))
 			{
 				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
+		}
+		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && ActorSpecs.Get(specId) is { } maskSpec && IsNeuralTextureActor(maskSpec))
+		{
+			ImGui.TextDisabled("(painted per room instance)");
 		}
 		else if (property.Type == typeof(string))
 		{
@@ -1900,15 +1917,19 @@ public partial class Manager
 				changed = true;
 			}
 		}
-		else if (property.Name == nameof(NeuralTextureActor.WeightsFile) && IsNeuralTextureActor(actor))
+		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && IsNeuralTextureActor(actor))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
-			if (DrawNeuralTextureWeightsCombo(ref value))
+			if (DrawNeuralTextureWeightsCombo(ref value, allowNone: weightsSlot > 0))
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
+		}
+		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && IsNeuralTextureActor(actor))
+		{
+			DrawMaskPaintControls(room, actor);
 		}
 		else if (property.Type == typeof(string))
 		{
@@ -2125,18 +2146,125 @@ public partial class Manager
 		return changed;
 	}
 
-	static bool DrawNeuralTextureWeightsCombo(ref string value)
+	void DrawMaskPaintControls(Room room, JsonObject actor)
 	{
-		var changed = false;
-		if (ImGui.BeginCombo("##Value", Path.GetFileNameWithoutExtension(value).Replace('_', ' ')))
+		if (ActorSpecs.ReadString(actor, "Id") is not { } actorId)
 		{
-			foreach (var key in Assets.Content.EnumerateDirectory(NeuralTextureActor.WeightsFolder, "*.bin").Order(StringComparer.OrdinalIgnoreCase))
+			ImGui.TextDisabled("(actor has no id)");
+			return;
+		}
+
+		var painting = maskPaintActorId == actorId;
+		if (ImGui.Button(painting ? "Stop Painting" : "Paint Mask"))
+		{
+			EndMaskPainting();
+			if (!painting)
+				maskPaintActorId = actorId;
+		}
+
+		if (!painting)
+			return;
+
+		string?[] slotFiles =
+		[
+			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile)),
+			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile1)),
+			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile2)),
+			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile3)),
+		];
+		for (var slot = 0; slot < slotFiles.Length; slot++)
+		{
+			if (slot > 0 && string.IsNullOrEmpty(slotFiles[slot]))
+				continue;
+			var name = string.IsNullOrEmpty(slotFiles[slot])
+				? "(default)"
+				: Path.GetFileNameWithoutExtension(slotFiles[slot])!.Replace('_', ' ');
+			if (ImGui.RadioButton($"{name}##MaskSlot{slot}", maskPaintSlot == slot))
+				maskPaintSlot = slot;
+		}
+		if (ImGui.RadioButton("Eraser##MaskSlot", maskPaintSlot < 0))
+			maskPaintSlot = -1;
+
+		ImGui.SliderFloat("Radius", ref maskPaintRadius, 2.0f, 96.0f);
+		ImGui.SliderFloat("Softness", ref maskPaintSoftness, 0.05f, 1.0f);
+		ImGui.SliderFloat("Strength", ref maskPaintStrength, 0.05f, 1.0f);
+		ImGui.SliderInt("Preview Steps", ref maskPaintPreviewSteps, 0, 256);
+		if (ImGui.Button("Resimulate") && FindLiveNeuralTextureActor(actorId) is { } preview)
+		{
+			preview.SimulateFromSeed(maskPaintPreviewSteps);
+			MarkRoomPreviewDirty(room);
+		}
+
+		if (ImGui.Button("Clear Mask"))
+		{
+			using (CaptureRoomUndo("Clear Neural Texture Mask", room))
+				ActorSpecs.SetProperty(actor, nameof(NeuralTextureActor.PaintedMask), JsonValue.Create(""));
+			if (FindLiveNeuralTextureActor(actorId) is { } live)
 			{
-				var name = Path.GetFileName(key);
-				var selected = string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
-				if (ImGui.Selectable(Path.GetFileNameWithoutExtension(name).Replace('_', ' '), selected))
+				live.PaintedMask = "";
+				live.SimulateFromSeed(maskPaintPreviewSteps);
+			}
+			MarkRoomPreviewDirty(room);
+		}
+		ImGui.TextDisabled("Drag in the room to paint. Release to resimulate.\nRight-drag erases. Esc stops.");
+	}
+
+	static int NeuralTextureWeightsSlot(string propertyName) => propertyName switch
+	{
+		nameof(NeuralTextureActor.WeightsFile) => 0,
+		nameof(NeuralTextureActor.WeightsFile1) => 1,
+		nameof(NeuralTextureActor.WeightsFile2) => 2,
+		nameof(NeuralTextureActor.WeightsFile3) => 3,
+		_ => -1,
+	};
+
+	static bool DrawNeuralTextureWeightsCombo(ref string value, bool allowNone = false)
+	{
+		EnsureNeuralTextureCatalog();
+		var changed = false;
+		var width = ImGui.CalcItemWidth();
+		var currentIndex = FindNeuralTextureModel(value);
+		var image = currentIndex >= 0 ? neuralTextureModels[currentIndex].Image : "";
+		var imageLabel = currentIndex >= 0 ? neuralTextureModels[currentIndex].ImageLabel : value.Length == 0 ? "(none)" : Path.GetFileNameWithoutExtension(value).Replace('_', ' ');
+		if (ImGui.BeginCombo("##Image", $"Image: {imageLabel}"))
+		{
+			if (allowNone && ImGui.Selectable("(none)", value.Length == 0))
+			{
+				value = "";
+				changed = true;
+			}
+			for (var i = 0; i < neuralTextureImages.Count; i++)
+			{
+				var nextImage = neuralTextureImages[i];
+				var selected = string.Equals(image, nextImage, StringComparison.OrdinalIgnoreCase);
+				var first = FirstNeuralTextureModel(nextImage);
+				if (ImGui.Selectable(neuralTextureModels[first].ImageLabel, selected))
 				{
-					value = name;
+					value = BestNeuralTextureModel(nextImage, currentIndex).FileName;
+					changed = true;
+				}
+				if (selected)
+					ImGui.SetItemDefaultFocus();
+			}
+			ImGui.EndCombo();
+		}
+
+		currentIndex = FindNeuralTextureModel(value);
+		if (currentIndex < 0)
+			return changed;
+		var current = neuralTextureModels[currentIndex];
+		ImGui.SetNextItemWidth(width);
+		if (ImGui.BeginCombo("##Motion", $"Motion: {current.MotionLabel}"))
+		{
+			for (var i = 0; i < neuralTextureModels.Count; i++)
+			{
+				var model = neuralTextureModels[i];
+				if (!string.Equals(model.Image, current.Image, StringComparison.OrdinalIgnoreCase))
+					continue;
+				var selected = i == currentIndex;
+				if (ImGui.Selectable(model.MotionLabel, selected))
+				{
+					value = model.FileName;
 					changed = true;
 				}
 				if (selected)
@@ -2145,6 +2273,112 @@ public partial class Manager
 			ImGui.EndCombo();
 		}
 		return changed;
+	}
+
+	static void EnsureNeuralTextureCatalog()
+	{
+		if (neuralTextureModels.Count > 0)
+			return;
+
+		foreach (var key in Assets.Content.EnumerateDirectory(NeuralTextureActor.WeightsFolder, "*.bin"))
+			neuralTextureModels.Add(ParseNeuralTextureModel(Path.GetFileName(key)));
+		neuralTextureModels.Sort(static (a, b) =>
+		{
+			var image = StringComparer.OrdinalIgnoreCase.Compare(a.Image, b.Image);
+			if (image != 0)
+				return image;
+			var motion = a.MotionOrder.CompareTo(b.MotionOrder);
+			return motion != 0 ? motion : StringComparer.OrdinalIgnoreCase.Compare(a.MotionLabel, b.MotionLabel);
+		});
+
+		for (var i = 0; i < neuralTextureModels.Count; i++)
+			if (i == 0 || !string.Equals(neuralTextureModels[i].Image, neuralTextureModels[i - 1].Image, StringComparison.OrdinalIgnoreCase))
+				neuralTextureImages.Add(neuralTextureModels[i].Image);
+	}
+
+	static NeuralTextureModel ParseNeuralTextureModel(string fileName)
+	{
+		var stem = Path.GetFileNameWithoutExtension(fileName);
+		var screen = stem.EndsWith("_screen", StringComparison.OrdinalIgnoreCase);
+		if (screen)
+			stem = stem[..^"_screen".Length];
+
+		var motion = "default";
+		for (var i = 0; i < neuralTextureMotionSuffixes.Length; i++)
+			if (stem.EndsWith($"_{neuralTextureMotionSuffixes[i]}", StringComparison.OrdinalIgnoreCase))
+			{
+				motion = neuralTextureMotionSuffixes[i];
+				stem = stem[..^(motion.Length + 1)];
+				break;
+			}
+
+		var paired = stem.EndsWith("_pair", StringComparison.OrdinalIgnoreCase);
+		if (paired)
+			stem = stem[..^"_pair".Length];
+		var motionLabel = motion.Replace('_', ' ');
+		if (paired)
+			motionLabel += " · normals";
+		if (screen)
+			motionLabel += " · screen";
+		return new(fileName, stem, stem.Replace('_', ' '), motion, motionLabel, NeuralTextureMotionOrder(motion), paired, screen);
+	}
+
+	static int NeuralTextureMotionOrder(string motion) => motion switch
+	{
+		"2block_x" => 0,
+		"2block_y" => 1,
+		"3block" => 2,
+		"4block" => 3,
+		"circular" => 4,
+		"concentrate" => 5,
+		"diverge" => 6,
+		"hyperbolic" => 7,
+		"right" => 8,
+		"right_acc_down" => 9,
+		"right_acc_right" => 10,
+		"up" => 11,
+		_ => 12,
+	};
+
+	static int FindNeuralTextureModel(string fileName)
+	{
+		for (var i = 0; i < neuralTextureModels.Count; i++)
+			if (string.Equals(neuralTextureModels[i].FileName, fileName, StringComparison.OrdinalIgnoreCase))
+				return i;
+		return -1;
+	}
+
+	static int FirstNeuralTextureModel(string image)
+	{
+		for (var i = 0; i < neuralTextureModels.Count; i++)
+			if (string.Equals(neuralTextureModels[i].Image, image, StringComparison.OrdinalIgnoreCase))
+				return i;
+		return -1;
+	}
+
+	static NeuralTextureModel BestNeuralTextureModel(string image, int currentIndex)
+	{
+		var first = FirstNeuralTextureModel(image);
+		if (currentIndex < 0)
+		{
+			for (var i = first; i < neuralTextureModels.Count && string.Equals(neuralTextureModels[i].Image, image, StringComparison.OrdinalIgnoreCase); i++)
+				if (neuralTextureModels[i].Motion == "circular")
+					return neuralTextureModels[i];
+			return neuralTextureModels[first];
+		}
+
+		var current = neuralTextureModels[currentIndex];
+		for (var pass = 0; pass < 4; pass++)
+			for (var i = first; i < neuralTextureModels.Count && string.Equals(neuralTextureModels[i].Image, image, StringComparison.OrdinalIgnoreCase); i++)
+			{
+				var candidate = neuralTextureModels[i];
+				if (pass == 0 && candidate.Motion == current.Motion && candidate.Paired == current.Paired && candidate.Screen == current.Screen ||
+					pass == 1 && candidate.Motion == current.Motion && candidate.Screen == current.Screen ||
+					pass == 2 && candidate.Motion == current.Motion ||
+					pass == 3 && candidate.Motion == "circular")
+					return candidate;
+			}
+		return neuralTextureModels[first];
 	}
 
 	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
@@ -3747,6 +3981,81 @@ public partial class Manager
 		return null;
 	}
 
+	NeuralTextureActor? FindLiveNeuralTextureActor(string actorId)
+	{
+		if (game == null)
+			return null;
+		foreach (var actor in game.Actors)
+			if (actor is NeuralTextureActor texture && texture.ActorId == actorId)
+				return texture;
+		return null;
+	}
+
+	void SimulateNeuralTexturePreviews()
+	{
+		if (game == null)
+			return;
+		foreach (var actor in game.Actors)
+			if (actor is NeuralTextureActor texture)
+				texture.SimulateFromSeed(maskPaintPreviewSteps);
+		if (CurrentRoom is { } room)
+			MarkRoomPreviewDirty(room);
+	}
+
+	bool UpdateMaskPainting(Rect inner, bool worldMouseBlocked, bool keyboardBlocked)
+	{
+		if (maskPaintActorId == null)
+			return false;
+
+		var live = FindLiveNeuralTextureActor(maskPaintActorId);
+		if (live == null || (!keyboardBlocked && Input.Keyboard.Pressed(Keys.Escape)))
+		{
+			EndMaskPainting();
+			return live != null;
+		}
+
+		var canInteract = !worldMouseBlocked && inner.Contains(Cursor);
+		if (canInteract && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
+		{
+			var slot = Input.Mouse.RightDown ? -1 : maskPaintSlot;
+			var flow = Math.Clamp(maskPaintStrength * Time.Delta * 10.0f, 0.0f, 1.0f);
+			live.PaintMask(ScreenToEditorWorld(Cursor, inner), maskPaintRadius, maskPaintSoftness, flow, slot);
+			if (CurrentRoom is { } room)
+				MarkRoomPreviewDirty(room);
+			maskPaintStroke = true;
+		}
+		else if (maskPaintStroke)
+		{
+			CommitMaskStroke(live);
+		}
+
+		return true;
+	}
+
+	void EndMaskPainting()
+	{
+		if (maskPaintActorId != null && maskPaintStroke && FindLiveNeuralTextureActor(maskPaintActorId) is { } live)
+			CommitMaskStroke(live);
+		maskPaintActorId = null;
+		maskPaintStroke = false;
+	}
+
+	void CommitMaskStroke(NeuralTextureActor live)
+	{
+		maskPaintStroke = false;
+		if (CurrentRoom is not { } room)
+			return;
+		foreach (var actor in room.Actors)
+			if (ActorSpecs.ReadString(actor, "Id") == maskPaintActorId)
+			{
+				using (CaptureRoomUndo("Paint Neural Texture Mask", room))
+					ActorSpecs.SetProperty(actor, nameof(NeuralTextureActor.PaintedMask), JsonValue.Create(live.SerializeMask()));
+				live.SimulateFromSeed(maskPaintPreviewSteps);
+				MarkRoomPreviewDirty(room);
+				return;
+			}
+	}
+
 	bool UpdateLinkedDoorTargetPicker(Rect inner, Rect visibleWorld, bool worldMouseBlocked, bool keyboardBlocked)
 	{
 		if (pickingLinkedDoorTargetForActorId == null)
@@ -3927,6 +4236,8 @@ public partial class Manager
 
 		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
 		if (UpdateLinkedDoorTargetPicker(inner, visibleWorld, worldMouseBlocked, keyboardBlocked))
+			worldMouseBlocked = true;
+		if (UpdateMaskPainting(inner, worldMouseBlocked, keyboardBlocked))
 			worldMouseBlocked = true;
 
 		// Room picking. A single click selects the room under the cursor (room-edit mode only, so it
@@ -4329,6 +4640,14 @@ public partial class Manager
 			DrawRevealDoorMarkers(editing, gridWeight);
 			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
+			if (maskPaintActorId != null)
+			{
+				var brushColor = maskPaintSlot < 0 ? new Color(255, 90, 90, 255) : Color.White;
+				batcher.CircleLine(worldMouse, maskPaintRadius, gridWeight, 48, brushColor);
+				var core = maskPaintRadius * (1.0f - maskPaintSoftness);
+				if (core > 1.0f)
+					batcher.CircleLine(worldMouse, core, gridWeight, 48, brushColor * 0.4f);
+			}
 
 			if (proposedRoomTiles is { } proposal)
 			{

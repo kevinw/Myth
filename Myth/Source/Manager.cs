@@ -1928,6 +1928,9 @@ public partial class Manager : App
 
 		game?.Dispose();
 		game = new Game(this, room, audioEventsEnabled: false, spawnBud: false);
+#if EDITOR
+		SimulateNeuralTexturePreviews();
+#endif
 	}
 
 #if !IOS && !BROWSER
