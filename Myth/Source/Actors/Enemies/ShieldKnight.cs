@@ -195,11 +195,22 @@ public class ShieldKnight : Actor
 		Velocity.Y += Gravity * Time.Delta;
 		if (grounded)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
+#if DEBUG
+		if (IsBlockingWithShield)
+			Game.CollisionRectsThisFrame.Add(WorldSpaceShieldHitbox);
+#endif
 	}
 
+	RectInt WorldSpaceShieldHitbox => ShieldHitbox.ScaleX((int)Facing) + Position;
+	bool IsBlockingWithShield => Animation.Name != "stab";
+
 	public override bool BlocksAttack(Actor attacker, in RectInt attackPath) {
+		if (!IsBlockingWithShield) return false;
+
+		var rect = WorldSpaceShieldHitbox;
+
 		var blocks = MathF.Sign(attacker.Position.X - Position.X) == Facing &&
-			attackPath.Overlaps(ShieldHitbox.ScaleX((int)Facing) + Position);
+			attackPath.Overlaps(rect);
 
 		if (blocks)
 			lastBlockTime = Time.Seconds;
