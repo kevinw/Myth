@@ -39,6 +39,16 @@ weights and the official optical-flow checkpoint:
 ./train.py circuit
 ```
 
+Queue several targets in one invocation and they will be trained, tested, and
+exported one after another using the same options:
+
+```sh
+./train.py circuit moss path/to/water.png
+```
+
+All target paths are checked before training begins, and the queue stops if any
+run fails.
+
 This writes the checkpoint to `experiments/circuit_circular`, the final image
 and rollout video to `outputs/circuit_circular`, and the game-ready weights to
 `../../Assets/NCA/DynamicTexture/circuit_circular.bin`. A reduced one-epoch
@@ -82,6 +92,33 @@ instead of the 2x of two runs:
     --motion circular
 ```
 
+## Generating normal maps from photos
+
+On macOS, generate paired color and OpenGL-normal targets using Apple's local
+Depth Anything V2 Small Core ML model. The model is downloaded and cached on
+the first run:
+
+```sh
+./generate_normals.py targets/*.jpg
+./train.py targets/generated/*_color.png --normal auto
+```
+
+The default uses the full estimated depth. Large-scale scene shape and local
+surface relief can be controlled independently; setting the scene weight to
+zero keeps only relief, while reducing detail emphasizes the scene:
+
+```sh
+./generate_normals.py circuit --scene-weight 0 --detail-weight 1
+./generate_normals.py circuit --scene-weight 1 --detail-weight .25 --overwrite
+```
+
+`--strength` controls normal slope, `--detail-radius` controls the scene/detail
+split, and `--smooth` suppresses depth noise. Use `--invert` if the inferred
+near/far direction is wrong for the image, `--seamless` for wrapping textures,
+and `--save-depth` to inspect the normalized estimate. Generated color and
+normal files use the exact same square crop. `--normal auto` pairs every
+`*_color.png` target with its sibling `*_normal.png`, including batch runs.
+
 ## Myth screen profile
 
 The optional `screen` profile targets Myth's 320x180 presentation rather than
@@ -111,10 +148,14 @@ color+normal checkpoints):
 ```
 
 `train.py` selects CUDA, then MPS, then CPU. Override that choice with
-`--device`. CUDA uses float16; MPS and CPU use float32. MPS also enables
+`--device`. CUDA uses float16; MPS and CPU use float32 by default. Opt into
+MPS mixed precision with `--precision float16`; MPS also enables
 PyTorch's CPU fallback for the antialiased-resize gradient used by the motion
-loss. The upstream source and downloaded training artifacts stay ignored,
+loss. MPS keeps the recurrent NCA state in float32 to preserve its numeric
+range while autocasting the convolution and decoder work to float16. The
+upstream source and downloaded training artifacts stay ignored,
 while the revision and reference image URL are pinned in `train.py`.
+The pinned fork includes the mixed-precision and loss-sampling optimizations.
 
 On CUDA, `--compile-siren` uses `torch.compile` for the SIREN decoder while
 leaving the variable-length NCA rollout eager. Native Windows CUDA compilation
