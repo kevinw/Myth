@@ -1,0 +1,10 @@
+{
+  "layer": "Background",
+  "solid": false,
+  "interior": "bricks096_pair_circular_screen.bin",
+  "edge": "",
+  "edgeBandCells": 10,
+  "freezeSteps": 141,
+  "fireRate": 0.5,
+  "featureScale": 1
+}

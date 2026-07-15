@@ -11,7 +11,6 @@
     "G": "grass",
     "P": "dirt",
     "R": "ruin",
-    "S": "Grass Slope",
     "T": "stone",
     "g": "plants",
     "m": "Myth Back",
@@ -59,7 +58,7 @@
     "PPPPPPPPP00000000000000000000RRRRRRRRRRR",
     "PPPPPPPPP00000000000000000000RRRRRRRRRRR",
     "PPPPPPPPP00000000000000000000RRRRRRRRRRR",
-    "PPPPPPPPPr00000SGGS0000000ggrRRRRRRRRRRR",
+    "PPPPPPPPPr00000GGGG0000000ggrRRRRRRRRRRR",
     "PPPPPPPPPG0000GGGGGGGGGGGGGGGPPPPPPPPPPP",
     "PPPPPPPPPPwwwwPPPPPPPPPPPPPPPPPPPPPPPPPP",
     "PPPPPPPPPPwwwwPPPPPPPPPPPPPPPPPPPPPPPPPP",
@@ -115,6 +114,8 @@
     "0000000000000000000000000000000000000000"
   ],
   "fungal": [[37, 16],[37, 17],[4, 18],[5, 18],[7, 18],[37, 19],[34, 22],[35, 22],[33, 24],[33, 25],[5, 26],[6, 26],[7, 26],[33, 27],[33, 29],[30, 31],[31, 31],[5, 32],[6, 32],[21, 32],[23, 32],[29, 32],[22, 33],[29, 33],[8, 34],[29, 34],[8, 35],[8, 36],[29, 36],[8, 37],[8, 38],[15, 38],[16, 38],[14, 39],[19, 39],[20, 39],[21, 39],[26, 39],[27, 39],[28, 39]
+  ],
+  "slopes": [[15, 38],[18, 38]
   ],
   "actors": [
     {
