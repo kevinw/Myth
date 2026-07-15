@@ -3,10 +3,17 @@
   "layer": "Foreground",
   "solid": true,
   "surface": "Brick",
-  "interior": "calm_water_4_hyperbolic.bin",
-  "edge": "spiralled_0042_3block.bin",
-  "edgeBandCells": 19,
-  "freezeSteps": 0,
-  "stepsPerSecond": 30.02,
-  "fireRate": 0.215
+  "slopes": true,
+  "interior": "broccoli_circular.bin",
+  "edge": "leaf_circular.bin",
+  "edgeBandCells": 1,
+  "roundingPixels": 1.75,
+  "outsetPixels": 0.02,
+  "freezeSteps": 154,
+  "fireRate": 0.215,
+  "contrast": 1.56,
+  "saturation": 1.2,
+  "brightness": -0.04,
+  "normalStrength": 0.87,
+  "silhouetteNormalStrength": 0.91
 }

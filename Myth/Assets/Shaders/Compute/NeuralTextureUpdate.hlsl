@@ -21,6 +21,13 @@ cbuffer Params : register(b0, space2)
     uint Height;
     uint Seed;
     float FireRate;
+    uint OriginX;
+    uint OriginY;
+    uint DispatchWidth;
+    uint DispatchHeight;
+    float2 WorldStateOrigin;
+    float StatePixelsPerCell;
+    uint Padding;
 };
 
 #define NCA_W1_OFFSET 0
@@ -44,6 +51,14 @@ float hash(uint x, uint y, uint seed)
     return float(h & 0x00FFFFFFu) / float(0x01000000u);
 }
 
+// Repeat the model's trained [-1, 1] coordinate domain at a fixed 128-cell wavelength.
+// Mirroring alternate spans keeps the coordinate field continuous at patch boundaries.
+float fixed_coordinate(float cell)
+{
+    float phase = frac((cell + 64.0) / 256.0) * 256.0;
+    return 1.0 - abs(phase - 128.0) / 64.0;
+}
+
 CellState load_cell(int2 pos)
 {
     pos = clamp(pos, int2(0, 0), int2((int)Width - 1, (int)Height - 1));
@@ -53,8 +68,29 @@ CellState load_cell(int2 pos)
 [numthreads(8, 8, 1)]
 void compute_main(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= Width || id.y >= Height)
+    if (id.x >= DispatchWidth || id.y >= DispatchHeight)
         return;
+
+    int2 pos = int2(id.xy + uint2(OriginX, OriginY));
+    uint index = pos.y * Width + pos.x;
+    CellState self = SourceState[index];
+    uint mask = Mask[index];
+    float total = float(
+        (mask & 0xFFu) +
+        ((mask >> 8u) & 0xFFu) +
+        ((mask >> 16u) & 0xFFu) +
+        ((mask >> 24u) & 0xFFu)) / 255.0;
+    float keep = lerp(EMPTY_DECAY, 1.0, saturate(total));
+    bool update = total > 0.0 && hash(pos.x, pos.y, Seed) <= FireRate;
+    if (!update)
+    {
+        CellState result;
+        [unroll]
+        for (int group = 0; group < 4; group++)
+            result.c[group] = self.c[group] * keep;
+        DestState[index] = result;
+        return;
+    }
 
     static const float sobel_x[3][3] = {
         { -1.0,  0.0, 1.0 },
@@ -72,9 +108,6 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         { 1.0,   2.0, 1.0 },
     };
 
-    int2 pos = int2(id.xy);
-    uint index = id.y * Width + id.x;
-    CellState self = SourceState[index];
     float4 perception[17];
 
     [unroll]
@@ -108,15 +141,18 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
     // PENCA appends normalized row then column coordinates. The JSON export pads
     // the two inputs to a vec4, so the last two values remain zero.
-    perception[16] = float4(
-        2.0 * ((float(id.y) + 0.5) / float(Height) - 0.5),
-        2.0 * ((float(id.x) + 0.5) / float(Width) - 0.5),
-        0.0,
-        0.0);
+    perception[16] = StatePixelsPerCell > 0.0
+        ? float4(
+            fixed_coordinate(WorldStateOrigin.y + float(pos.y)),
+            fixed_coordinate(WorldStateOrigin.x + float(pos.x)),
+            0.0,
+            0.0)
+        : float4(
+            2.0 * ((float(pos.y) + 0.5) / float(Height) - 0.5),
+            2.0 * ((float(pos.x) + 0.5) / float(Width) - 0.5),
+            0.0,
+            0.0);
 
-    uint mask = Mask[index];
-    bool update = hash(id.x, id.y, Seed) <= FireRate;
-    float total = 0.0;
     float4 delta[4];
     [unroll]
     for (int group = 0; group < 4; group++)
@@ -127,8 +163,6 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         float alpha = float((mask >> (slot * 8u)) & 0xFFu) / 255.0;
         if (alpha <= 0.0)
             continue;
-        total += alpha;
-
         int base = (int)slot * MODEL_STRIDE;
         float hidden[HIDDEN_N];
         [unroll]
@@ -148,10 +182,9 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     }
 
     CellState result;
-    float keep = lerp(EMPTY_DECAY, 1.0, saturate(total));
     [unroll]
     for (int group = 0; group < 4; group++)
-        result.c[group] = (self.c[group] + (update ? delta[group] : 0.0)) * keep;
+        result.c[group] = self.c[group] + delta[group];
 
     DestState[index] = result;
 }

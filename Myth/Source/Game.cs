@@ -2099,11 +2099,11 @@ public partial class Game : IDisposable
 					}
 				}
 
-				SpawnNctIsland(forRoom, spec, island, minX, minY, maxX, maxY);
+				SpawnNctIsland(forRoom, id, spec, island, minX, minY, maxX, maxY);
 			}
 	}
 
-	void SpawnNctIsland(Room forRoom, NctTileSpec spec, List<Point2> island, int minX, int minY, int maxX, int maxY)
+	void SpawnNctIsland(Room forRoom, char id, NctTileSpec spec, List<Point2> island, int minX, int minY, int maxX, int maxY)
 	{
 		var tileW = maxX - minX + 1;
 		var tileH = maxY - minY + 1;
@@ -2111,18 +2111,41 @@ public partial class Game : IDisposable
 		foreach (var t in island)
 			member[t.X - minX, t.Y - minY] = true;
 
-		var mask = BuildNctRegionMask(member, tileW, tileH, spec);
-		var position = forRoom.WorldBounds.TopLeft + new Point2(minX * TileSize, minY * TileSize);
+		var tileOrigin = new Point2(minX, minY);
+		var padding = (int)MathF.Ceiling(MathF.Max(0, spec.OutsetPixels));
+		var position = forRoom.WorldBounds.TopLeft + tileOrigin * TileSize - new Point2(padding, padding);
+		var outputSize = new Point2(tileW * TileSize, tileH * TileSize) + new Point2(padding * 2, padding * 2);
+		var simulationSize = new Point2(
+			AlignToComputeGroup((int)MathF.Ceiling(outputSize.X / spec.FeatureScale)),
+			AlignToComputeGroup((int)MathF.Ceiling(outputSize.Y / spec.FeatureScale)));
+		var mask = BuildNctRegionMask(member, spec, forRoom, tileOrigin, position, outputSize, simulationSize);
 
 		var region = Create<NeuralTextureActor>(position, a =>
 		{
-			a.Size = new Point2(tileW * TileSize, tileH * TileSize);
+			a.Size = outputSize;
+			a.SimulationSize = simulationSize;
+			a.StatePixelsPerCell = spec.FeatureScale;
 			a.Layer = spec.Layer;
+			a.MaterialTile = id;
+			a.CastsMaskShadow = spec.Solid;
 			a.WeightsFile = spec.Interior;
 			a.WeightsFile1 = spec.Edge;
 			a.WeightsFile2 = "";
 			a.WeightsFile3 = "";
 			a.FireRate = spec.FireRate;
+			a.Contrast = spec.Contrast;
+			a.Saturation = spec.Saturation;
+			a.Brightness = spec.Brightness;
+			a.Tint = spec.Tint;
+			a.NormalStrength = spec.NormalStrength;
+			a.SilhouetteNormalStrength = spec.SilhouetteNormalStrength;
+			a.DetailScale = spec.DetailScale;
+			a.DetailPhase = spec.DetailPhase;
+			a.PatchFrequency = spec.PatchFrequency;
+			a.SirenFrequency = spec.SirenFrequency;
+			a.LatentGain = spec.LatentGain;
+			a.LatentBias = spec.LatentBias;
+			a.NearestStateSampling = spec.NearestStateSampling;
 			// Frozen regions never step in Update; SimulateFromSeed below advances them once.
 			a.StepsPerSecond = spec.Frozen ? 0f : spec.StepsPerSecond;
 			a.InitialMaskCells = mask;
@@ -2130,55 +2153,49 @@ public partial class Game : IDisposable
 
 		if (spec.Frozen)
 			region.SimulateFromSeed(spec.FreezeSteps);
+
+		static int AlignToComputeGroup(int value) => Math.Max(8, (value + 7) / 8 * 8);
 	}
 
-	/// Builds the per-slot blend mask (128x128 state cells) for one island: the interior model
+	/// Builds the per-slot blend mask for one island at its fixed world-space simulation scale: the interior model
 	/// (slot 0) fills the core and the edge model (slot 1) takes over in a distance-feathered band
 	/// along the boundary. With no edge model, the interior alone feathers out to nothing. The grid
 	/// border counts as outside, so a solid rectangular island still feathers from its edges inward.
-	static uint[] BuildNctRegionMask(bool[,] member, int tileW, int tileH, NctTileSpec spec)
+	static uint[] BuildNctRegionMask(bool[,] member, NctTileSpec spec, Room room, Point2 tileOrigin, Point2 position, Point2 outputSize, Point2 simulationSize)
 	{
-		const int W = NeuralTextureActor.StateWidth;
-		const int H = NeuralTextureActor.StateHeight;
+		var width = simulationSize.X;
+		var height = simulationSize.Y;
 
-		// The decoder fits the square state onto the output as a centered square scaled by the
-		// longer side (NeuralTextureDecode.hlsl). Build the mask through the inverse of that map so
-		// each state cell carries the membership of the tile the decoder will actually draw it as —
-		// otherwise a uniform stretch here disagrees with the decoder and the region slips off the
-		// stamped tiles. Cells that fall outside the box are never shown, so they stay dead.
-		var outputW = tileW * TileSize;
-		var outputH = tileH * TileSize;
-		var extent = Math.Max(outputW, outputH);
-
-		var region = new bool[W * H];
-		for (var cy = 0; cy < H; cy++)
-			for (var cx = 0; cx < W; cx++)
+		// Invert the decoder's centered fixed-scale mapping exactly. Compute-group alignment adds
+		// a few state cells around the output; those remain dead and are never displayed.
+		var region = new bool[width * height];
+		for (var cy = 0; cy < height; cy++)
+			for (var cx = 0; cx < width; cx++)
 			{
-				var px = ((cx + 1.0) / W - 0.5) * extent + outputW / 2.0 - 0.5;
-				var py = ((cy + 1.0) / H - 0.5) * extent + outputH / 2.0 - 0.5;
-				if (px < 0 || py < 0 || px >= outputW || py >= outputH)
+				var outputPoint = (new Vector2(cx + 0.5f, cy + 0.5f) - (Vector2)simulationSize * 0.5f) * spec.FeatureScale + (Vector2)outputSize * 0.5f;
+				if (outputPoint.X < 0 || outputPoint.Y < 0 || outputPoint.X >= outputSize.X || outputPoint.Y >= outputSize.Y)
 					continue;
-				var tx = Math.Clamp((int)(px / TileSize), 0, tileW - 1);
-				var ty = Math.Clamp((int)(py / TileSize), 0, tileH - 1);
-				region[cy * W + cx] = member[tx, ty];
+				region[cy * width + cx] = NctShapeContains(member, room, tileOrigin, (Vector2)position + outputPoint, spec.RoundingPixels);
 			}
+
+		ApplyNctOutset(region, width, height, spec.OutsetPixels, spec.FeatureScale);
 
 		// Multi-source BFS: distance (in state cells) from each region cell to the nearest cell
 		// outside the region — real dead cells, plus the grid border as a virtual outside.
-		var dist = new int[W * H];
+		var dist = new int[width * height];
 		Array.Fill(dist, -1);
 		var queue = new Queue<int>();
-		for (var i = 0; i < W * H; i++)
+		for (var i = 0; i < width * height; i++)
 			if (!region[i])
 			{
 				dist[i] = 0;
 				queue.Enqueue(i);
 			}
-		for (var i = 0; i < W * H; i++)
+		for (var i = 0; i < width * height; i++)
 		{
-			var x = i % W;
-			var y = i / W;
-			if (region[i] && dist[i] == -1 && (x == 0 || x == W - 1 || y == 0 || y == H - 1))
+			var x = i % width;
+			var y = i / width;
+			if (region[i] && dist[i] == -1 && (x == 0 || x == width - 1 || y == 0 || y == height - 1))
 			{
 				dist[i] = 1;
 				queue.Enqueue(i);
@@ -2187,29 +2204,121 @@ public partial class Game : IDisposable
 		while (queue.Count > 0)
 		{
 			var i = queue.Dequeue();
-			var x = i % W;
-			var y = i / W;
+			var x = i % width;
+			var y = i / width;
 			var nd = dist[i] + 1;
 			if (x > 0 && dist[i - 1] == -1) { dist[i - 1] = nd; queue.Enqueue(i - 1); }
-			if (x < W - 1 && dist[i + 1] == -1) { dist[i + 1] = nd; queue.Enqueue(i + 1); }
-			if (y > 0 && dist[i - W] == -1) { dist[i - W] = nd; queue.Enqueue(i - W); }
-			if (y < H - 1 && dist[i + W] == -1) { dist[i + W] = nd; queue.Enqueue(i + W); }
+			if (x < width - 1 && dist[i + 1] == -1) { dist[i + 1] = nd; queue.Enqueue(i + 1); }
+			if (y > 0 && dist[i - width] == -1) { dist[i - width] = nd; queue.Enqueue(i - width); }
+			if (y < height - 1 && dist[i + width] == -1) { dist[i + width] = nd; queue.Enqueue(i + width); }
 		}
 
 		var band = Math.Max(1, spec.EdgeBandCells);
 		var hasEdge = !string.IsNullOrEmpty(spec.Edge);
-		var mask = new uint[W * H];
-		for (var i = 0; i < W * H; i++)
+		var mask = new uint[width * height];
+		for (var i = 0; i < width * height; i++)
 		{
 			if (!region[i])
 				continue;
 			var t = Math.Clamp(Math.Max(dist[i], 0) / (float)band, 0f, 1f);
-			var smooth = t * t * (3f - 2f * t);
-			var slot0 = (uint)Math.Clamp((int)MathF.Round(255f * smooth), 0, 255);
-			var slot1 = hasEdge ? (uint)Math.Clamp((int)MathF.Round(255f * (1f - smooth)), 0, 255) : 0u;
+			var smooth = MathF.Pow(t * t * (3f - 2f * t), spec.BlendCurve);
+			var edge = hasEdge ? (1f - smooth) * spec.EdgeWeight : 0f;
+			var slot0 = (uint)Math.Clamp((int)MathF.Round(255f * (hasEdge ? 1f - edge : smooth)), 0, 255);
+			var slot1 = (uint)Math.Clamp((int)MathF.Round(255f * edge), 0, 255);
 			mask[i] = slot0 | (slot1 << 8);
 		}
 		return mask;
+	}
+
+	static bool NctShapeContains(bool[,] member, Room room, Point2 tileOrigin, Vector2 point, float rounding)
+	{
+		var inside = NctRawShapeContains(member, room, tileOrigin, point);
+		if (rounding <= 0)
+			return inside;
+
+		var vertex = ((point - (Vector2)room.WorldBounds.TopLeft) / TileSize).RoundToPoint2();
+		var vertexPoint = (Vector2)room.WorldBounds.TopLeft + vertex * TileSize;
+		var delta = point - vertexPoint;
+		if (MathF.Abs(delta.X) >= rounding || MathF.Abs(delta.Y) >= rounding)
+			return inside;
+
+		var radius = new Vector2(rounding);
+		var topLeft = NctRawShapeContains(member, room, tileOrigin, vertexPoint - radius) ? 1f : 0f;
+		var topRight = NctRawShapeContains(member, room, tileOrigin, vertexPoint + new Vector2(rounding, -rounding)) ? 1f : 0f;
+		var bottomLeft = NctRawShapeContains(member, room, tileOrigin, vertexPoint + new Vector2(-rounding, rounding)) ? 1f : 0f;
+		var bottomRight = NctRawShapeContains(member, room, tileOrigin, vertexPoint + radius) ? 1f : 0f;
+		var amount = delta / (rounding * 2) + new Vector2(0.5f);
+		return float.Lerp(float.Lerp(topLeft, topRight, amount.X), float.Lerp(bottomLeft, bottomRight, amount.X), amount.Y) >= 0.5f;
+	}
+
+	static bool NctRawShapeContains(bool[,] member, Room room, Point2 tileOrigin, Vector2 point)
+	{
+		var tile = ((point - (Vector2)room.WorldBounds.TopLeft) / TileSize).FloorToPoint2();
+		var local = tile - tileOrigin;
+		if (local.X < 0 || local.Y < 0 || local.X >= member.GetLength(0) || local.Y >= member.GetLength(1) || !member[local.X, local.Y])
+			return false;
+
+		return !room.TryGetSlopeTile(tile, out var slope) || room.SlopeContainsPoint(slope, point);
+	}
+
+	static void ApplyNctOutset(bool[] region, int width, int height, float outsetPixels, float pixelsPerCell)
+	{
+		if (MathF.Abs(outsetPixels) < 0.01f)
+			return;
+
+		var source = (bool[])region.Clone();
+		var grow = outsetPixels > 0;
+		var distances = new float[region.Length];
+		Array.Fill(distances, float.PositiveInfinity);
+		var queue = new PriorityQueue<int, float>();
+		for (var y = 0; y < height; y++)
+			for (var x = 0; x < width; x++)
+			{
+				var index = y * width + x;
+				if (source[index] == grow)
+				{
+					distances[index] = 0;
+					queue.Enqueue(index, 0);
+				}
+				else if (!grow && (x == 0 || y == 0 || x == width - 1 || y == height - 1))
+				{
+					distances[index] = 1;
+					queue.Enqueue(index, 1);
+				}
+			}
+
+		Span<Point2> directions =
+		[
+			new(-1, -1), new(0, -1), new(1, -1),
+			new(-1, 0),              new(1, 0),
+			new(-1, 1),  new(0, 1),  new(1, 1)
+		];
+		while (queue.TryDequeue(out var index, out var queuedDistance))
+		{
+			if (queuedDistance != distances[index])
+				continue;
+
+			var x = index % width;
+			var y = index / width;
+			foreach (var direction in directions)
+			{
+				var next = new Point2(x, y) + direction;
+				if (next.X < 0 || next.Y < 0 || next.X >= width || next.Y >= height)
+					continue;
+
+				var nextIndex = next.Y * width + next.X;
+				var nextDistance = queuedDistance + (direction.X != 0 && direction.Y != 0 ? 1.41421356f : 1f);
+				if (nextDistance >= distances[nextIndex])
+					continue;
+				distances[nextIndex] = nextDistance;
+				queue.Enqueue(nextIndex, nextDistance);
+			}
+		}
+
+		var limit = MathF.Abs(outsetPixels);
+		for (var i = 0; i < region.Length; i++)
+			if (source[i] != grow && MathF.Max(0, distances[i] - 0.5f) * pixelsPerCell <= limit)
+				region[i] = grow;
 	}
 
 	static UInt64 GetStringHash(string text)

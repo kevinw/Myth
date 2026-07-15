@@ -69,7 +69,7 @@ public static class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 7; // v7: tile kit registrations (self-describing pack)
+	const int visualAssetPackVersion = 10; // v10: NCT decoder controls
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
@@ -172,7 +172,7 @@ public static class Assets
 		using var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create);
 
 		// The DynamicTexture folder holds tens of MB of NCA weights, almost all unused; a
-		// packaged build only needs the models that placed NeuralTextureActors reference.
+		// packaged build only needs models referenced by rooms or registered NCT tile specs.
 		var referencedWeights = CollectReferencedNeuralTextureWeights();
 		var packedWeights = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -193,6 +193,8 @@ public static class Assets
 					skippedWeightBytes += new FileInfo(file).Length;
 					continue;
 				}
+				if (IsGitLfsPointer(file))
+					throw new InvalidOperationException($"Neural texture model '{key}' is still a Git LFS pointer. Run 'git lfs pull' before building content.");
 				packedWeights.Add(weightName);
 			}
 
@@ -205,11 +207,9 @@ public static class Assets
 			count++;
 		}
 
-		// A referenced model that never matched a file on disk is a typo or a stale room; warn
-		// rather than fail so the pack still builds, but the missing texture is visible.
-		foreach (var name in referencedWeights)
-			if (!packedWeights.Contains(name))
-				Console.WriteLine($"Warning: room references neural texture model '{name}' but {NeuralTextureActor.WeightsFolder}/{name} was not found; it will be absent from the pack.");
+		var missingWeights = referencedWeights.Where(name => !packedWeights.Contains(name)).ToArray();
+		if (missingWeights.Length > 0)
+			throw new InvalidOperationException($"Missing referenced neural texture models: {string.Join(", ", missingWeights)}. Run 'git lfs pull' and check the room/NCT spec references.");
 
 		Console.WriteLine($"Wrote content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB); "
 			+ $"packed {packedWeights.Count} neural texture models, skipped {skippedWeights} unreferenced ({skippedWeightBytes / 1024} KB).");
@@ -229,15 +229,30 @@ public static class Assets
 		return true;
 	}
 
-	// Weight files named by NeuralTextureActor instances across every bundled room, seeded with
-	// the constructor default so a freshly placed actor still resolves. Case-insensitive to match
-	// the zip's own lookups. Read from loose room files (this only runs when building the pack).
+	static bool IsGitLfsPointer(string path)
+	{
+		const string signature = "version https://git-lfs.github.com/spec/v1";
+		Span<byte> buffer = stackalloc byte[signature.Length];
+		using var stream = File.OpenRead(path);
+		return stream.Read(buffer) == buffer.Length && Encoding.ASCII.GetString(buffer) == signature;
+	}
+
+	// Weight files named by NCT tile specs and NeuralTextureActor instances across every bundled
+	// room, seeded with the constructor default so a freshly placed actor still resolves.
+	// Case-insensitive to match the zip's own lookups. Room references come from loose files
+	// because this only runs while building the pack.
 	static HashSet<string> CollectReferencedNeuralTextureWeights()
 	{
 		var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
 			NeuralTextureActor.DefaultWeightsFile,
 		};
+		foreach (var spec in NctTiles.Specs)
+		{
+			referenced.Add(spec.Interior);
+			if (!string.IsNullOrEmpty(spec.Edge))
+				referenced.Add(spec.Edge);
+		}
 
 		if (!Directory.Exists(RoomsPath))
 			return referenced;
@@ -632,6 +647,7 @@ public static class Assets
 		// Registration data ships inside the pack (baked with the images), so pack mode
 		// never depends on spec files being present or current.
 		TileKits.SetRegistrations(manifest.TileKits);
+		NctTiles.SetSpecs(manifest.NctTiles);
 
 		ActorSpecs.LoadSpecs();
 		ParticleEffectAssets.Load();
@@ -681,6 +697,8 @@ public static class Assets
 			LightingNoise = lightingNoise
 		};
 		manifest.TileKits.AddRange(TileKits.Registrations);
+		foreach (var spec in NctTiles.Specs)
+			manifest.NctTiles.Add(NctTiles.Clone(spec));
 
 		foreach (var (name, subtexture) in bake.Subtextures)
 			manifest.Subtextures.Add(PackedNamedSubtexture.From(name, subtexture));
@@ -1090,6 +1108,44 @@ public static class Assets
 			writer.Write(kit.AcousticReflectivity);
 			writer.Write(kit.HasSlope);
 		}
+
+		WriteCount(writer, manifest.NctTiles.Count, "NCT tiles");
+		foreach (var spec in manifest.NctTiles)
+		{
+			writer.Write(spec.Name);
+			writer.Write((int)spec.PreferredChar);
+			writer.Write(spec.Interior);
+			writer.Write(spec.Edge);
+			writer.Write(spec.EdgeBandCells);
+			writer.Write(spec.RoundingPixels);
+			writer.Write(spec.OutsetPixels);
+			writer.Write(spec.FreezeSteps);
+			writer.Write(spec.StepsPerSecond);
+			writer.Write(spec.FireRate);
+			writer.Write(spec.Contrast);
+			writer.Write(spec.Saturation);
+			writer.Write(spec.Brightness);
+			var tint = spec.Tint.ToVector4();
+			writer.Write(tint.X);
+			writer.Write(tint.Y);
+			writer.Write(tint.Z);
+			writer.Write(spec.NormalStrength);
+			writer.Write(spec.SilhouetteNormalStrength);
+			writer.Write(spec.BlendCurve);
+			writer.Write(spec.EdgeWeight);
+			writer.Write(spec.DetailScale);
+			writer.Write(spec.DetailPhase.X);
+			writer.Write(spec.DetailPhase.Y);
+			writer.Write(spec.PatchFrequency);
+			writer.Write(spec.SirenFrequency);
+			writer.Write(spec.LatentGain);
+			writer.Write(spec.LatentBias);
+			writer.Write(spec.NearestStateSampling);
+			writer.Write((int)spec.Layer);
+			writer.Write(spec.Solid);
+			writer.Write(spec.Surface);
+			writer.Write(spec.HasSlope);
+		}
 	}
 
 	static VisualAssetPackManifest ReadVisualAssetPackManifest(Stream stream, string path)
@@ -1193,6 +1249,41 @@ public static class Assets
 				ReflectionOpacity: reader.ReadSingle(),
 				AcousticReflectivity: reader.ReadSingle(),
 				HasSlope: reader.ReadBoolean()));
+
+		var nctTileCount = ReadCount(reader, "NCT tiles");
+		for (var i = 0; i < nctTileCount; i++)
+			manifest.NctTiles.Add(new()
+			{
+				Name = reader.ReadString(),
+				PreferredChar = (char)reader.ReadInt32(),
+				Interior = reader.ReadString(),
+				Edge = reader.ReadString(),
+				EdgeBandCells = reader.ReadInt32(),
+				RoundingPixels = reader.ReadSingle(),
+				OutsetPixels = reader.ReadSingle(),
+				FreezeSteps = reader.ReadInt32(),
+				StepsPerSecond = reader.ReadSingle(),
+				FireRate = reader.ReadSingle(),
+				Contrast = reader.ReadSingle(),
+				Saturation = reader.ReadSingle(),
+				Brightness = reader.ReadSingle(),
+				Tint = new Color(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), 1f),
+				NormalStrength = reader.ReadSingle(),
+				SilhouetteNormalStrength = reader.ReadSingle(),
+				BlendCurve = reader.ReadSingle(),
+				EdgeWeight = reader.ReadSingle(),
+				DetailScale = reader.ReadSingle(),
+				DetailPhase = new Vector2(reader.ReadSingle(), reader.ReadSingle()),
+				PatchFrequency = reader.ReadSingle(),
+				SirenFrequency = reader.ReadSingle(),
+				LatentGain = reader.ReadSingle(),
+				LatentBias = reader.ReadSingle(),
+				NearestStateSampling = reader.ReadBoolean(),
+				Layer = (Factory.TileLayer)reader.ReadInt32(),
+				Solid = reader.ReadBoolean(),
+				Surface = reader.ReadString(),
+				HasSlope = reader.ReadBoolean()
+			});
 
 		return manifest;
 	}
@@ -1429,6 +1520,7 @@ public static class Assets
 		public List<PackedSprite> Sprites { get; set; } = [];
 		public List<PackedTileset> Tilesets { get; set; } = [];
 		public List<TileKitRegistration> TileKits { get; set; } = [];
+		public List<NctTileSpec> NctTiles { get; set; } = [];
 	}
 
 	sealed class VisualAssetBake : IDisposable

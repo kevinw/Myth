@@ -808,7 +808,6 @@ public partial class Manager
 			vsb.Append(id);
 
 			if (entry.Layer != activeTileLayer) continue;
-			if (entry.IsSlope) continue; // skip slope tiles; we can place them with control
 
 			if (index > 0 && index % PaletteColumns != 0)
 				ImGui.SameLine();
@@ -3321,30 +3320,18 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	// Solid terrain tiles that have a slope counterpart, and vice versa, so slope painting can
-	// derive both the diagonal (slope) char and the fill (solid) char from whichever is the brush.
-	static bool TryGetSlopePair(char brush, out char solid, out char slope)
-	{
-		switch (brush)
-		{
-			case '1': case '2': solid = '1'; slope = '2'; return true;
-			case 'G': case 'S': solid = 'G'; slope = 'S'; return true;
-			case 'T': case 'Y': solid = 'T'; slope = 'Y'; return true;
-			default: solid = slope = '\0'; return false;
-		}
-	}
-
-	// Slope painting is a foreground-terrain affordance: only offered when the active brush is a
-	// solid terrain tile that has a slope counterpart and we're editing the foreground layer.
+	// Slope painting is a foreground-terrain affordance: only offered when the active brush
+	// supports slopes and we're editing the foreground layer.
 	bool SlopePaintAvailable
-		=> activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && selectedActorPaletteIndex < 0 && TryGetSlopePair(brush, out _, out _);
+		=> activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && selectedActorPaletteIndex < 0
+			&& Factory.Find(brush) is { BlocksMovement: true, SupportsSlope: true };
 
 	// Fill the dragged rectangle with a slope staircase whose descent matches the drag direction:
 	// down-right/left = a floor ramp (solid below), up-right/left = an underhang (solid above). The
 	// run length per step follows the rectangle's width:height, and the engine infers each run's
 	// facing from the surroundings we lay down (see Room.InferSlopeShape). `from`/`to` are the raw
 	// (direction-preserving) drag endpoints.
-	void ApplySlopeRect(Room room, Point2 from, Point2 to, char solid, char slope)
+	void ApplySlopeRect(Room room, Point2 from, Point2 to, char tile)
 	{
 		var rect = ClampTileRect(NormalizeTileRect(from, to), room);
 		var w = rect.Width;
@@ -3365,22 +3352,24 @@ public partial class Manager
 			var surfaceRow = underhang ? h - 1 - step : step;
 			var col = rect.Left + x;
 
-			room.SetTile(layer, new Point2(col, rect.Top + surfaceRow), slope, rebuildGeometry: false);
+			var surfaceTile = new Point2(col, rect.Top + surfaceRow);
+			room.SetTile(layer, surfaceTile, tile, rebuildGeometry: false);
+			room.SetSlope(surfaceTile, true, rebuildGeometry: false);
 
 			// Body fill: solid below the surface for a floor, above it for an underhang.
 			if (underhang)
 				for (var y = 0; y < surfaceRow; y++)
-					room.SetTile(layer, new Point2(col, rect.Top + y), solid, rebuildGeometry: false);
+					room.SetTile(layer, new Point2(col, rect.Top + y), tile, rebuildGeometry: false);
 			else
 				for (var y = surfaceRow + 1; y < h; y++)
-					room.SetTile(layer, new Point2(col, rect.Top + y), solid, rebuildGeometry: false);
+					room.SetTile(layer, new Point2(col, rect.Top + y), tile, rebuildGeometry: false);
 		}
 
 		// Cap the high corner with solid so the topmost run has a solid neighbour on its high side --
 		// otherwise InferSlopeShape's DownRight fallback mis-faces an isolated leftward/underhang ramp.
 		var highCol = rect.Left + (toRight ? 0 : w - 1);
 		var highRow = rect.Top + (underhang ? h - 1 : 0);
-		room.SetTile(layer, new Point2(highCol, highRow), solid, rebuildGeometry: false);
+		room.SetTile(layer, new Point2(highCol, highRow), tile, rebuildGeometry: false);
 
 		room.RebuildGeometry();
 		editorGameDirty = true;
@@ -3513,38 +3502,6 @@ public partial class Manager
 			{
 				room.SetTile(layer, new Point2(x, y), '0', rebuildGeometry: false);
 			}
-	}
-
-	static bool TryGetSlopeToggle(char tile, out char result)
-	{
-		result = tile switch
-		{
-			'1' => '2',
-			'2' => '1',
-			'G' => 'S',
-			'S' => 'G',
-			'T' => 'Y',
-			'Y' => 'T',
-			_ => '\0'
-		};
-		return result != '\0';
-	}
-
-	static Subtexture GetPreviewTileImage(Room room, Point2 tile, char previewTile, Factory.Entry entry)
-	{
-		if (!entry.IsSlope || entry.SlopeTilesetName == null)
-			return entry.Image;
-
-		var previous = room.Tiles[tile.X, tile.Y];
-		room.Tiles[tile.X, tile.Y] = previewTile;
-		room.RebuildGeometry();
-		var seed = Factory.StableVariantSeed(room, entry.SlopeTilesetName, tile);
-		var image = room.TryGetSlopeTile(tile, out var slope)
-			? Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed)
-			: entry.Image;
-		room.Tiles[tile.X, tile.Y] = previous;
-		room.RebuildGeometry();
-		return image.Texture != null ? image : entry.Image;
 	}
 
 	void UpdateEditorWorldView(Rect inner)
@@ -4467,13 +4424,11 @@ public partial class Manager
 				actorSelectTool = false;
 				editorSelectionRect = null;
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && !brushIsActor && overGame && ctrlClick && TryGetSlopeToggle(editing.Tiles[tileOver.X, tileOver.Y], out var toggledTile))
+			else if (!editingRoomGeometry && !worldMouseBlocked && activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && !brushIsActor && overGame && ctrlClick && editing.GetEntry(tileOver) is { BlocksMovement: true, SupportsSlope: true })
 			{
 				using (CaptureRoomUndo("Toggle Slope Tile", editing))
 				{
-					editing.Set(tileOver, toggledTile);
-					brush = toggledTile;
-					tileTypePlacing = toggledTile;
+					editing.SetSlope(tileOver, !editing.IsSlope(tileOver));
 					selectedActorPaletteIndex = -1;
 					CancelTilePaint();
 					editorGameDirty = true;
@@ -4626,7 +4581,7 @@ public partial class Manager
 								for (var x = previewTileRect.Left; x < previewTileRect.Right; x++)
 								{
 									var tile = new Point2(x, y);
-									var image = GetPreviewTileImage(editing, tile, tileTypePlacing, placing);
+									var image = placing.Image;
 									batcher.Image(image, roomTopLeft + tile * Game.TileSize + placing.Offset, placing.Origin, Vector2.One, 0, Color.White);
 								}
 					}
@@ -4691,8 +4646,8 @@ public partial class Manager
 		{
 			if (TilePlacing && CurrentRoom is { } room)
 			{
-				if (slopePaint && tileTypePlacing != '0' && SlopePaintAvailable && TryGetSlopePair(tileTypePlacing, out var slopeSolid, out var slopeChar))
-					ApplySlopeRect(room, tileRectPaintFrom, tileRectPaintTo, slopeSolid, slopeChar);
+				if (slopePaint && tileTypePlacing != '0' && SlopePaintAvailable)
+					ApplySlopeRect(room, tileRectPaintFrom, tileRectPaintTo, tileTypePlacing);
 				else
 					ApplyTileRect(room, NormalizeTileRect(tileRectPaintFrom, tileRectPaintTo), activeTileLayer, tileTypePlacing);
 			}
@@ -5733,6 +5688,9 @@ public partial class Manager
 		vsb.Append("FPS ");
 		if (fpsOverlayMode == 0) {
 			vsb.Append((int)MathF.Round(fpsOverlayValue));
+			vsb.Append(" (");
+			vsb.Append(MathF.Round(1000.0f / fpsOverlayValue, 2));
+			vsb.Append(" ms)");
 #if DEBUG
 			var gcMs = gcTotalPauseDuration.TotalMilliseconds;
 

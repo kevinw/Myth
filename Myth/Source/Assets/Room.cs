@@ -22,7 +22,8 @@ public class Room
 		None = 0,
 		Breakable = 1 << 0,
 		BreakOnStand = 1 << 1,
-		Fungal = 1 << 2
+		Fungal = 1 << 2,
+		Slope = 1 << 3
 	}
 
 	public enum SlopeDirection
@@ -304,6 +305,13 @@ public class Room
 					tileFlags[tile.X, tile.Y] |= TileFlags.Fungal;
 		}
 
+		if (json.TryGetPropertyValue("slopes", out var slopesNode) && slopesNode is JsonArray slopeCells)
+		{
+			foreach (var node in slopeCells)
+				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
+					tileFlags[tile.X, tile.Y] |= TileFlags.Slope;
+		}
+
 		MigrateLegacyFungusTiles();
 
 		NormalizeTileLayers();
@@ -328,12 +336,15 @@ public class Room
 			return;
 
 		var remap = new Dictionary<char, char>();
+		var legacySlopes = new HashSet<char>();
 		foreach (var (fileChar, name) in pendingLegend)
 		{
 			if (fileChar == '0')
 				continue;
 			if (Factory.CharForName(name) is { } canonical)
 			{
+				if (Factory.IsLegacySlopeName(name))
+					legacySlopes.Add(fileChar);
 				if (canonical != fileChar)
 					remap[fileChar] = canonical;
 			}
@@ -341,7 +352,7 @@ public class Room
 				Console.WriteLine($"Error: Room '{Id}' legend references unknown tile type '{name}'; keeping '{fileChar}'");
 		}
 		pendingLegend = null;
-		if (remap.Count == 0)
+		if (remap.Count == 0 && legacySlopes.Count == 0)
 			return;
 
 		// Write the grids directly: SetTileUnchecked would reset per-tile flags, which are
@@ -349,7 +360,10 @@ public class Room
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
 			{
-				if (remap.TryGetValue(Tiles[x, y], out var tile))
+				var foreground = Tiles[x, y];
+				if (legacySlopes.Contains(foreground))
+					tileFlags[x, y] |= TileFlags.Slope;
+				if (remap.TryGetValue(foreground, out var tile))
 					Tiles[x, y] = tile;
 				if (remap.TryGetValue(BackgroundTiles[x, y], out var background))
 					BackgroundTiles[x, y] = background;
@@ -448,11 +462,11 @@ public class Room
 		// output collection, so they run concurrently on desktop/iOS (serial on wasm).
 		Par.Invoke(
 			BuildDualTerrainJoinMasks,
-			() => BuildRects(CollisionRects, static entry => entry.BlocksMovement && !entry.IsSlope),
+			() => BuildRects(CollisionRects, static entry => entry.BlocksMovement, excludeSlopes: true),
 			BuildSolidTileMask,
 			() =>
 			{
-				BuildRects(LightOccluders, static entry => entry.CastsShadow && !entry.IsSlope && !HasBakedDualOccluders(entry));
+				BuildRects(LightOccluders, static entry => entry.CastsShadow && !HasBakedDualOccluders(entry), excludeSlopes: true);
 				BuildSlopeLightOccluders();
 			},
 			BuildReflectionRects,
@@ -765,10 +779,11 @@ public class Room
 	}
 
 	bool IsSlopeTile(int x, int y)
-		=> GetTileEntry(x, y) is { IsSlope: true };
+		=> ContainsTile(x, y) && (tileFlags[x, y] & TileFlags.Slope) != 0
+			&& GetTileEntry(x, y) is { BlocksMovement: true };
 
 	bool IsFullBlockTile(int x, int y)
-		=> GetTileEntry(x, y) is { BlocksMovement: true, IsSlope: false };
+		=> GetTileEntry(x, y) is { BlocksMovement: true } && !IsSlopeTile(x, y);
 
 	public bool IsDualMaterialFilled(char tileType, Factory.TileLayer layer, int x, int y)
 	{
@@ -777,7 +792,8 @@ public class Room
 
 		x = Math.Clamp(x, 0, Size.X - 1);
 		y = Math.Clamp(y, 0, Size.Y - 1);
-		return (layer == Factory.TileLayer.Foreground ? Tiles[x, y] : BackgroundTiles[x, y]) == tileType;
+		return (layer == Factory.TileLayer.Foreground ? Tiles[x, y] : BackgroundTiles[x, y]) == tileType
+			&& (layer != Factory.TileLayer.Foreground || !IsSlopeTile(x, y));
 	}
 
 	bool IsTerrainJoinTile(int x, int y)
@@ -797,14 +813,16 @@ public class Room
 
 	void SetTileUnchecked(int x, int y, char tile)
 	{
+		tileFlags[x, y] = TileFlags.None;
 		if (TryGetLegacyBreakableTileBase(tile, out var baseTile))
 		{
 			tile = baseTile;
 			tileFlags[x, y] |= TileFlags.Breakable;
 		}
-		else
+		else if (Factory.TryGetLegacySlopeBase(tile, out baseTile))
 		{
-			tileFlags[x, y] = TileFlags.None;
+			tile = baseTile;
+			tileFlags[x, y] |= TileFlags.Slope;
 		}
 
 		Tiles[x, y] = tile;
@@ -845,6 +863,11 @@ public class Room
 					Tiles[x, y] = baseTile;
 					tileFlags[x, y] |= TileFlags.Breakable;
 				}
+				else if (Factory.TryGetLegacySlopeBase(Tiles[x, y], out baseTile))
+				{
+					Tiles[x, y] = baseTile;
+					tileFlags[x, y] |= TileFlags.Slope;
+				}
 
 				tileEntries[x, y] = Factory.Find(Tiles[x, y]);
 				backgroundTileEntries[x, y] = Factory.Find(BackgroundTiles[x, y]);
@@ -863,6 +886,23 @@ public class Room
 			tileFlags[tile.X, tile.Y] |= TileFlags.Breakable;
 		else
 			tileFlags[tile.X, tile.Y] &= ~TileFlags.Breakable;
+	}
+
+	public bool IsSlope(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Slope) != 0;
+
+	public void SetSlope(Point2 tile, bool slope, bool rebuildGeometry = true)
+	{
+		if (!ContainsTile(tile.X, tile.Y))
+			return;
+
+		if (slope)
+			tileFlags[tile.X, tile.Y] |= TileFlags.Slope;
+		else
+			tileFlags[tile.X, tile.Y] &= ~TileFlags.Slope;
+
+		if (rebuildGeometry)
+			RebuildGeometry();
 	}
 
 	public bool IsFungal(Point2 tile)
@@ -914,7 +954,8 @@ public class Room
 	void BuildSlopeLightOccluders()
 	{
 		foreach (var slope in SlopeTiles)
-			LightOccluderPolygons.Add(new(GetSlopePolygon(slope), slope.WorldBounds(this)));
+			if (GetTileEntry(slope.Tile.X, slope.Tile.Y) is { CastsShadow: true })
+				LightOccluderPolygons.Add(new(GetSlopePolygon(slope), slope.WorldBounds(this)));
 	}
 
 	void BuildVisibilitySegments()
@@ -945,6 +986,9 @@ public class Room
 
 	public StackList8<Point2> GetSlopePolygon(SlopeTile slope)
 		=> slopePolygonLookup.TryGetValue(slope.Tile, out var polygon) ? polygon : BuildSlopePolygon(slope);
+
+	public bool SlopeContainsPoint(SlopeTile slope, Vector2 point)
+		=> PointInPolygonInclusive(point, GetSlopePolygon(slope));
 
 	public void GetSlopeSurface(SlopeTile slope, out Vector2 left, out Vector2 right)
 	{
@@ -1052,25 +1096,25 @@ public class Room
 
 		for (var y = 0; y < Size.Y; y++)
 			for (var x = 0; x < Size.X; x++)
-				SolidTiles[y * Size.X + x] = Matches(x, y, static entry => entry.BlocksMovement && !entry.IsSlope);
+				SolidTiles[y * Size.X + x] = Matches(x, y, static entry => entry.BlocksMovement) && !IsSlopeTile(x, y);
 	}
 
-	void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate)
+	void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate, bool excludeSlopes = false)
 	{
 		var used = new bool[Size.X, Size.Y]; // TODO alloc
 
 		for (var y = 0; y < Size.Y; y++)
 			for (var x = 0; x < Size.X; x++)
 			{
-				if (used[x, y] || !Matches(x, y, predicate))
+				if (used[x, y] || !Matches(x, y, predicate) || excludeSlopes && IsSlopeTile(x, y))
 					continue;
 
 				var width = 1;
-				while (x + width < Size.X && !used[x + width, y] && Matches(x + width, y, predicate))
+				while (x + width < Size.X && !used[x + width, y] && Matches(x + width, y, predicate) && (!excludeSlopes || !IsSlopeTile(x + width, y)))
 					width++;
 
 				var height = 1;
-				while (y + height < Size.Y && RowMatches(x, y + height, width, used, predicate))
+				while (y + height < Size.Y && RowMatches(x, y + height, width, used, predicate, excludeSlopes))
 					height++;
 
 				for (var yy = y; yy < y + height; yy++)
@@ -1095,7 +1139,7 @@ public class Room
 		foreach (Factory.ReflectionMode mode in new[] { Factory.ReflectionMode.Flat, Factory.ReflectionMode.Distorted })
 		{
 			bounds.Clear();
-			BuildRects(bounds, entry => entry.Reflection == mode);
+			BuildRects(bounds, entry => entry.Reflection == mode, excludeSlopes: true);
 			bool distorted = mode == Factory.ReflectionMode.Distorted;
 			foreach (var rect in bounds)
 			{
@@ -1185,11 +1229,11 @@ public class Room
 		}
 	}
 
-	bool RowMatches(int x, int y, int width, bool[,] used, Func<Factory.Entry, bool> predicate)
+	bool RowMatches(int x, int y, int width, bool[,] used, Func<Factory.Entry, bool> predicate, bool excludeSlopes)
 	{
 		for (var xx = x; xx < x + width; xx++)
 		{
-			if (used[xx, y] || !Matches(xx, y, predicate))
+			if (used[xx, y] || !Matches(xx, y, predicate) || excludeSlopes && IsSlopeTile(xx, y))
 				return false;
 		}
 
@@ -1352,6 +1396,16 @@ public class Room
 			writer.WriteEndArray();
 		}
 
+		if (HasSlopeTiles())
+		{
+			writer.WriteStartArray("slopes");
+			for (var y = 0; y < Size.Y; y++)
+				for (var x = 0; x < Size.X; x++)
+					if ((tileFlags[x, y] & TileFlags.Slope) != 0)
+						WriteIntPairValue(writer, x, y);
+			writer.WriteEndArray();
+		}
+
 		if (Actors.Count > 0)
 		{
 			writer.WriteStartArray("actors");
@@ -1481,6 +1535,16 @@ public class Room
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
 				if ((tileFlags[x, y] & TileFlags.Fungal) != 0)
+					return true;
+
+		return false;
+	}
+
+	bool HasSlopeTiles()
+	{
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+				if ((tileFlags[x, y] & TileFlags.Slope) != 0)
 					return true;
 
 		return false;

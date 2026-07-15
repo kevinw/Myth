@@ -27,7 +27,9 @@ jobs:
       # Fetch only the LFS objects + submodule the browser build needs. Skips
       # ~137 MB of iOS-only binaries (xcframeworks, iOS FMOD libs), dev-only
       # Production assets, audio authoring sources (the browser ships built Mobile
-      # banks, which live outside Sources), and the iOS cimgui-src submodule.
+      # banks, which live outside Sources), and the iOS cimgui-src submodule. This
+      # deliberately includes Assets/NCA/**/*.bin; the content-pack build below
+      # selects the referenced models and fails if LFS left any of them as pointers.
       - name: Fetch browser LFS + Foster submodule
         run: |
           set -euo pipefail

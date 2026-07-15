@@ -46,7 +46,6 @@ public static class Factory
 		public readonly float ReflectionOpacity;
 		public readonly bool ReflectsSprites => Reflection != ReflectionMode.None;
 		public readonly bool Destructible;
-		public readonly bool IsSlope;
 		public readonly string? TilesetName;
 		public readonly string? SlopeTilesetName;
 		public readonly string? DualTilesetName;
@@ -54,8 +53,9 @@ public static class Factory
 		public readonly float AcousticReflectivity;
 		// Non-null on neural-texture tiles: room load grows one region simulation per island.
 		public readonly NctTileSpec? NeuralTexture;
+		public bool SupportsSlope => SlopeTilesetName != null || NeuralTexture is { HasSlope: true };
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, bool isSlope = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
+		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
 		{
 			Name = name;
 			Image = image;
@@ -66,7 +66,6 @@ public static class Factory
 			Reflection = reflection;
 			ReflectionOpacity = reflectionOpacity;
 			Destructible = destructible;
-			IsSlope = isSlope;
 			TilesetName = tilesetName;
 			SlopeTilesetName = slopeTilesetName;
 			DualTilesetName = dualTilesetName;
@@ -161,6 +160,8 @@ public static class Factory
 	// Entry names are the stable identity of a tile type (room legends map file chars to
 	// them); chars are session-local handles assigned at registration.
 	static readonly Dictionary<string, char> charsByEntryName = new(StringComparer.OrdinalIgnoreCase);
+	static readonly Dictionary<char, char> legacySlopeChars = [];
+	static readonly HashSet<string> legacySlopeNames = new(StringComparer.OrdinalIgnoreCase);
 
 	// Tags declared on each [GameActor], keyed by registered type name, so spec/prefab
 	// palette entries can inherit their underlying type's tags.
@@ -197,13 +198,28 @@ public static class Factory
 	public static char? CharForName(string name)
 		=> charsByEntryName.TryGetValue(name, out var id) ? id : null;
 
+	public static bool IsLegacySlopeName(string name)
+		=> legacySlopeNames.Contains(name);
+
+	public static bool TryGetLegacySlopeBase(char tile, out char baseTile)
+		=> legacySlopeChars.TryGetValue(tile, out baseTile);
+
+	static void RegisterLegacySlope(char tile, string name, char baseTile)
+	{
+		if (tile != '\0')
+			legacySlopeChars[tile] = baseTile;
+		legacySlopeNames.Add(name);
+		charsByEntryName[name] = baseTile;
+	}
+
 	/// Picks a free char for a tile type: its preferred char if available, else the first
 	/// letter of its name (upper then lower), else the first free char in a fixed alphabet.
 	/// '0' means empty and 'f' is the legacy fungus tile; neither is ever assigned.
 	static char AssignChar(char preferred, string name)
 	{
-		const string reserved = "0f";
-		static bool Free(char c) => !reserved.Contains(c) && !Entries.ContainsKey(c);
+		const string reserved = "0f2SY$J";
+		bool Free(char c) => !reserved.Contains(c) && !Entries.ContainsKey(c)
+			&& !TileKits.Registrations.Exists(it => it.HasSlope && it.SlopePreferredChar == c);
 
 		if (preferred != '\0' && Free(preferred))
 			return preferred;
@@ -240,26 +256,6 @@ public static class Factory
 		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
-	public static Entry AsSlopeTile(string tilesetName, string surfaceType, string? name = null, float acousticReflectivity = 1.0f)
-	{
-		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
-		if (tileset == null)
-			return new();
-
-		var image = Assets.GetSlopeSubtexture(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, 1, 0);
-		if (image.Texture == null)
-			image = tileset.Tiles[0];
-
-		return new Entry(name ?? $"{tileset.Name} Slope", image, (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
-		{
-			var seed = StableVariantSeed(room, tilesetName, tile);
-			if (room.TryGetSlopeTile(tile, out var slope))
-				fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed));
-			else
-				fg.Set(tile.X, tile.Y, image);
-		}, surfaceType, blocksMovement: true, castsShadow: true, isSlope: true, slopeTilesetName: tilesetName, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
-	}
-
 	public static int StableVariantSeed(Room room, string key, Point2 tile)
 	{
 		unchecked
@@ -278,7 +274,7 @@ public static class Factory
 		}
 	}
 
-	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null, float acousticReflectivity = 1.0f, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f)
+	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null, float acousticReflectivity = 1.0f, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool hasSlope = false)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
@@ -288,10 +284,15 @@ public static class Factory
 		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			if (layer == TileLayer.Foreground)
-				fg.Set(tile.X, tile.Y, new());
+			{
+				if (hasSlope && room.TryGetSlopeTile(tile, out var slope))
+					fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, StableVariantSeed(room, tilesetName, tile)));
+				else
+					fg.Set(tile.X, tile.Y, new());
+			}
 			else
 				bg.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
+		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, slopeTilesetName: hasSlope ? tilesetName : null, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
 	// A neural-texture tile: paints like a normal tile but draws nothing itself. At room load,
@@ -308,7 +309,7 @@ public static class Factory
 				fg.Set(tile.X, tile.Y, new());
 			else
 				bg.Set(tile.X, tile.Y, new());
-		}, surfaceType: spec.Solid ? spec.Surface : null, blocksMovement: spec.Solid, castsShadow: spec.Solid, layer: spec.Layer, neuralTexture: spec);
+		}, surfaceType: spec.Solid ? spec.Surface : null, blocksMovement: spec.Solid, layer: spec.Layer, neuralTexture: spec);
 	}
 
 	// Neural-texture tile types declared by *.nct.json specs (Assets/Sources/Tilesets), loaded
@@ -384,21 +385,21 @@ public static class Factory
 		string BRICK_SURF = "Brick";
 
 		// Add Tile Types
-		Register('1', AsDualTile("castle", "castle-dual", BRICK_SURF));
-		Register('2', AsSlopeTile("castle", BRICK_SURF, "Castle Slope"));
-		Register('G', AsDualTile("grass", "grass-dual", GRASS_SURF, acousticReflectivity: 0.15f));
-		Register('S', AsSlopeTile("grass", GRASS_SURF, "Grass Slope", acousticReflectivity: 0.15f));
+		Register('1', AsDualTile("castle", "castle-dual", BRICK_SURF, hasSlope: true));
+		RegisterLegacySlope('2', "Castle Slope", '1');
+		Register('G', AsDualTile("grass", "grass-dual", GRASS_SURF, acousticReflectivity: 0.15f, hasSlope: true));
+		RegisterLegacySlope('S', "Grass Slope", 'G');
 		Register('M', AsDualTile("metal", "metal-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f));
 
 
-		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF));
-		Register('Y', AsSlopeTile("stone", BRICK_SURF, "Stone Slope"));
+		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF, hasSlope: true));
+		RegisterLegacySlope('Y', "Stone Slope", 'T');
 
-		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SURF));
-		Register('$', AsSlopeTile("crosshatch", BRICK_SURF, "Crosshatch Slope"));
+		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SURF, hasSlope: true));
+		RegisterLegacySlope('$', "Crosshatch Slope", '%');
 
-		Register('P', AsDualTile("dirt", "dirt-dual", GRASS_SURF, acousticReflectivity: 0.15f));
-		Register('J', AsSlopeTile("dirt", GRASS_SURF, "Dirt Slope", acousticReflectivity: 0.15f));
+		Register('P', AsDualTile("dirt", "dirt-dual", GRASS_SURF, acousticReflectivity: 0.15f, hasSlope: true));
+		RegisterLegacySlope('J', "Dirt Slope", 'P');
 		Register('g', AsTile("plants", false, GRASS_SURF, acousticReflectivity: 0.20f));
 		Register('i', AsTile("gates", isFg: false, surfaceType: BRICK_SURF, acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
@@ -429,11 +430,10 @@ public static class Factory
 	{
 		foreach (var kit in TileKits.Registrations)
 		{
-			Register(AssignChar(kit.PreferredChar, kit.Name),
-				AsDualTile(kit.Name, kit.DualName, kit.Surface, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity));
+			var tile = AssignChar(kit.PreferredChar, kit.Name);
+			Register(tile, AsDualTile(kit.Name, kit.DualName, kit.Surface, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity, hasSlope: kit.HasSlope));
 			if (kit.HasSlope)
-				Register(AssignChar(kit.SlopePreferredChar, kit.SlopeEntryName),
-					AsSlopeTile(kit.Name, kit.Surface, kit.SlopeEntryName, acousticReflectivity: kit.AcousticReflectivity));
+				RegisterLegacySlope(kit.SlopePreferredChar, kit.SlopeEntryName, tile);
 		}
 	}
 
@@ -458,6 +458,8 @@ public static class Factory
 	{
 		Entries.Clear();
 		charsByEntryName.Clear();
+		legacySlopeChars.Clear();
+		legacySlopeNames.Clear();
 		ActorPalette.Clear();
 	}
 

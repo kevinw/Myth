@@ -480,7 +480,7 @@ public class HiddenCoverGrid : Actor
 				return;
 
 			var tile = room.Tiles[x, y];
-			if (Factory.Find(tile) is not { BlocksMovement: true, IsSlope: false, DualTilesetName: not null, Layer: Factory.TileLayer.Foreground })
+			if (Factory.Find(tile) is not { BlocksMovement: true, DualTilesetName: not null, Layer: Factory.TileLayer.Foreground } || room.IsSlope(new Point2(x, y)))
 				return;
 
 			counts[tile] = counts.GetValueOrDefault(tile) + 1;

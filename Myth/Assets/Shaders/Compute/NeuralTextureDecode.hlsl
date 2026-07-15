@@ -31,9 +31,21 @@ cbuffer Params : register(b0, space2)
     uint OutputWidth;
     uint OutputHeight;
     uint NormalSlots; // bit per slot: model was trained with normal channels
+    float Contrast;
+    float Saturation;
+    float Brightness;
+    float4 Tint;
+    float NormalStrength;
+    float DetailScale;
+    float PatchFrequency;
+    float SirenFrequency;
+    float2 DetailPhase;
+    float LatentGain;
+    float LatentBias;
+    uint NearestStateSampling;
+    float StatePixelsPerCell;
     uint Pad0;
     uint Pad1;
-    uint Pad2;
 };
 
 // Models are packed at a fixed stride in the six-channel layout.
@@ -81,18 +93,20 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         return;
 
     float2 outputSize = float2(OutputWidth, OutputHeight);
-    float extent = max(outputSize.x, outputSize.y);
-    float2 uv = (float2(id.xy) + 0.5 - outputSize * 0.5) / extent + 0.5;
+    float2 stateSize = float2(Width, Height);
+    float2 stateCenter = stateSize * 0.5 - 0.5;
+    float2 outputFromCenter = float2(id.xy) + 0.5 - outputSize * 0.5;
+    float2 statePos = StatePixelsPerCell > 0.0
+        ? outputFromCenter / StatePixelsPerCell + stateCenter
+        : outputFromCenter / max(outputSize.x, outputSize.y) * stateSize + stateCenter;
+    int2 maskCellPos = int2(floor(statePos));
+    float2 maskBlend = frac(statePos);
 
-    float2 statePos = uv * float2(Width, Height) - 0.5;
-    int2 cellPos = int2(floor(statePos));
-    float2 blend = frac(statePos);
-
-    float4 m00 = load_mask(cellPos);
-    float4 m10 = load_mask(cellPos + int2(1, 0));
-    float4 m01 = load_mask(cellPos + int2(0, 1));
-    float4 m11 = load_mask(cellPos + int2(1, 1));
-    float4 slotAlpha = lerp(lerp(m00, m10, blend.x), lerp(m01, m11, blend.x), blend.y);
+    float4 m00 = load_mask(maskCellPos);
+    float4 m10 = load_mask(maskCellPos + int2(1, 0));
+    float4 m01 = load_mask(maskCellPos + int2(0, 1));
+    float4 m11 = load_mask(maskCellPos + int2(1, 1));
+    float4 slotAlpha = lerp(lerp(m00, m10, maskBlend.x), lerp(m01, m11, maskBlend.x), maskBlend.y);
     float total = dot(slotAlpha, 1.0);
 
     if (total < 1.0 / 512.0)
@@ -102,13 +116,16 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         return;
     }
 
+    float2 latentStatePos = (statePos - stateCenter) * DetailScale + stateCenter + DetailPhase;
+    int2 cellPos = NearestStateSampling != 0u ? int2(round(latentStatePos)) : int2(floor(latentStatePos));
+    float2 blend = NearestStateSampling != 0u ? 0.0 : frac(latentStatePos);
     CellState c00 = load_cell(cellPos);
     CellState c10 = load_cell(cellPos + int2(1, 0));
     CellState c01 = load_cell(cellPos + int2(0, 1));
     CellState c11 = load_cell(cellPos + int2(1, 1));
 
     float4 input[5];
-    float2 patch = (frac(uv * float2(Width, Height)) - 0.5) * 2.0;
+    float2 patch = (frac(latentStatePos + 0.5) - 0.5) * 2.0 * PatchFrequency;
     // PyTorch meshgrid order is row, column: Y precedes X.
     input[0] = float4(
         sin(3.14159265359 * patch.y),
@@ -120,7 +137,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     {
         float4 top = lerp(c00.c[group], c10.c[group], blend.x);
         float4 bottom = lerp(c01.c[group], c11.c[group], blend.x);
-        input[1 + group] = lerp(top, bottom, blend.y);
+        input[1 + group] = lerp(top, bottom, blend.y) * LatentGain + LatentBias;
     }
 
     float3 color = 0.0;
@@ -143,7 +160,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
             [unroll]
             for (int i = 0; i < 5; i++)
                 value += dot(input[i], Weights[base + L0_W_OFFSET + output * 5 + i]);
-            a[output] = sin(value * 10.0);
+            a[output] = sin(value * SirenFrequency);
         }
 
         [unroll]
@@ -153,7 +170,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
             [unroll]
             for (int i = 0; i < 8; i++)
                 value += dot(float4(a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]), Weights[base + L1_W_OFFSET + output * 8 + i]);
-            b[output] = sin(value * 10.0);
+            b[output] = sin(value * SirenFrequency);
         }
 
         [unroll]
@@ -163,7 +180,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
             [unroll]
             for (int i = 0; i < 8; i++)
                 value += dot(float4(b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]), Weights[base + L2_W_OFFSET + output * 8 + i]);
-            a[output] = sin(value * 10.0);
+            a[output] = sin(value * SirenFrequency);
         }
 
         float slotNormal = (NormalSlots & (1u << slot)) != 0u ? 1.0 : 0.0;
@@ -182,7 +199,21 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         normalTotal += alpha * slotNormal;
     }
 
-    // The batcher blends premultiplied alpha: weighted sums are already premultiplied.
-    Output[id.xy] = float4(saturate(color), saturate(total));
-    NormalOutput[id.xy] = float4(saturate(normal), saturate(normalTotal));
+    float coverage = saturate(total);
+    float3 graded = color / max(total, 1.0 / 512.0);
+    float luminance = dot(graded, float3(0.2126, 0.7152, 0.0722));
+    graded = lerp(luminance.xxx, graded, Saturation);
+    graded = (graded - 0.5) * Contrast + 0.5 + Brightness;
+    graded *= Tint.rgb;
+
+    float normalCoverage = saturate(normalTotal);
+    float3 decodedNormal = normal / max(normalTotal, 1.0 / 512.0) * 2.0 - 1.0;
+    decodedNormal.xy *= NormalStrength;
+    decodedNormal /= max(length(decodedNormal), 0.0001);
+
+    // The batcher blends premultiplied alpha.
+    Output[id.xy] = float4(saturate(graded) * coverage, coverage);
+    NormalOutput[id.xy] = normalTotal > 0.0
+        ? float4((decodedNormal * 0.5 + 0.5) * normalCoverage, normalCoverage)
+        : 0.0;
 }

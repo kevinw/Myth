@@ -966,7 +966,7 @@ public sealed partial class GameView
 			DrawCachedRoomTileField(currentRoomTileFieldCache);
 		if (nextRoomTileFieldCache != null)
 			DrawCachedRoomTileField(nextRoomTileFieldCache);
-		DrawMovingPlatformTileFields();
+		DrawDynamicTileFields();
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
@@ -977,12 +977,12 @@ public sealed partial class GameView
 		Batcher.Image(cache.Target, cache.Room.WorldBounds.TopLeft, Color.White);
 
 	// State for tileFieldStampColor so the per-vertex callback can be cached once instead of
-	// reallocating a closure per platform per frame.
+	// reallocating a closure per actor per frame.
 	char tileFieldStampTile;
 	int tileFieldStampAnchor;
 	Func<Point2, Color>? tileFieldStampColor;
 
-	void DrawMovingPlatformTileFields()
+	void DrawDynamicTileFields()
 	{
 		if (!ShowForegroundLayer || tileFieldStampMaterial == null)
 			return;
@@ -990,11 +990,21 @@ public sealed partial class GameView
 		var anchor = 1;
 		Batcher.PushBlend(TileFieldStampBlend);
 		Batcher.PushMaterial(tileFieldStampMaterial.Material);
-		// Cached delegate + mutable state (per-platform tile/anchor) so the per-vertex color callback
+		// Cached delegate + mutable state (per-actor tile/anchor) so the per-vertex color callback
 		// doesn't allocate a closure each frame; see drawLightMaskLightAction for the same idiom.
 		tileFieldStampColor ??= worldTile => TileFieldColor(tileFieldStampTile, worldTile, tileFieldStampAnchor);
 		foreach (var actor in rendering)
 		{
+			if (actor is NeuralTextureActor { Visible: true, Layer: Factory.TileLayer.Foreground, MaterialTile: not '\0' } texture)
+			{
+				tileFieldStampTile = texture.MaterialTile;
+				tileFieldStampAnchor = 0;
+				Batcher.PushMatrix(texture.Position);
+				texture.RenderTileField(Batcher, tileFieldStampColor);
+				Batcher.PopMatrix();
+				continue;
+			}
+
 			if (actor is not MovingPlatform { Visible: true } platform)
 				continue;
 
@@ -1160,15 +1170,19 @@ public sealed partial class GameView
 			for (var x = 0; x < renderRoom.Size.X; x++)
 			{
 				var tile = renderRoom.Tiles[x, y];
-				if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground, DualTilesetName: null } entry)
+				if (Factory.Find(tile) is not { Layer: Factory.TileLayer.Foreground } entry)
+					continue;
+				if (entry.NeuralTexture != null)
 					continue;
 
 				var image = entry.Image;
-				if (entry is { IsSlope: true, SlopeTilesetName: not null } && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
+				if (entry.SlopeTilesetName is { } slopeTilesetName && renderRoom.TryGetSlopeTile(new Point2(x, y), out var slope))
 				{
-					var seed = Factory.StableVariantSeed(renderRoom, entry.SlopeTilesetName, new Point2(x, y));
-					image = Assets.GetSlopeSubtexture(entry.SlopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
+					var seed = Factory.StableVariantSeed(renderRoom, slopeTilesetName, new Point2(x, y));
+					image = Assets.GetSlopeSubtexture(slopeTilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed);
 				}
+				else if (entry.DualTilesetName != null)
+					continue;
 				else if (entry.TilesetName != null && Assets.GetTileset(entry.TilesetName) is { } tileset)
 				{
 					Rng localRng = new(x + y * renderRoom.Size.X);
@@ -2141,7 +2155,7 @@ public sealed partial class GameView
 		var origin = renderRoom.WorldBounds.TopLeft;
 
 		FillRoomNormalMask(mask, renderRoom, origin);
-		SuppressBakedDualRoomNormals(suppressMask, renderRoom);
+		SuppressActorDrivenRoomNormals(suppressMask, renderRoom);
 
 		var previousMatrix = Batcher.Matrix;
 		Batcher.Matrix = Matrix3x2.Identity;
@@ -2203,13 +2217,16 @@ public sealed partial class GameView
 			FillRoomNormalMask(mask, polygon, origin);
 	}
 
-	static void SuppressBakedDualRoomNormals(bool[,] suppressMask, Room renderRoom)
+	static void SuppressActorDrivenRoomNormals(bool[,] suppressMask, Room renderRoom)
 	{
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
 			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
 			{
-				if (renderRoom.GetEntry(new Point2(tileX, tileY)) is not { DualTilesetName: { } dualTilesetName } ||
-					Assets.GetTileset(dualTilesetName) is not { NormalTiles.Count: > 0 } and not { NormalVariants.Count: > 0 })
+				var entry = renderRoom.GetEntry(new Point2(tileX, tileY));
+				var actorDrawsNormals = entry?.NeuralTexture != null ||
+					entry is { DualTilesetName: { } dualTilesetName } &&
+					Assets.GetTileset(dualTilesetName) is { NormalTiles.Count: > 0 } or { NormalVariants.Count: > 0 };
+				if (!actorDrawsNormals)
 					continue;
 
 				var left = Math.Clamp(tileX * Game.TileSize, 0, suppressMask.GetLength(0));

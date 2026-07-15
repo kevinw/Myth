@@ -1,11 +1,13 @@
+using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Foster.Framework;
 
 namespace Myth;
 
 [GameActor(Sprite = "editor_prop", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3, Anchor = SpriteAnchor.TopLeft)]
-public class NeuralTextureActor : Actor, IResizable
+public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 {
 	public const int StateWidth = 128;
 	public const int StateHeight = 128;
@@ -19,7 +21,72 @@ public class NeuralTextureActor : Actor, IResizable
 	const int MaxPerturbations = 64;
 	public const string WeightsFolder = "NCA/DynamicTexture";
 	public const string DefaultWeightsFile = "chequered_0050_circular.bin";
-	static readonly CellState[] EmptyState = new CellState[StateWidth * StateHeight];
+	static readonly ConditionalWeakTable<GraphicsDevice, SharedGpuResources> SharedResources = new();
+
+	sealed class SharedGpuResources
+	{
+		public readonly Shader UpdateShader;
+		public readonly Shader DecodeShader;
+		public readonly Shader PerturbShader;
+		readonly GraphicsDevice graphicsDevice;
+		readonly Dictionary<string, (StorageBuffer<Vector4> Buffer, uint NormalSlots)> weights = [];
+
+		public SharedGpuResources(GraphicsDevice graphicsDevice, byte[] updateCode, byte[] decodeCode, byte[] perturbCode)
+		{
+			this.graphicsDevice = graphicsDevice;
+			UpdateShader = new(
+				graphicsDevice, ShaderStage.Compute, updateCode,
+				uniformBufferCount: 1, readOnlyStorageBufferCount: 3, readWriteStorageBufferCount: 1,
+				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
+				entryPoint: "compute_main", name: "NeuralTextureUpdate");
+			DecodeShader = new(
+				graphicsDevice, ShaderStage.Compute, decodeCode,
+				uniformBufferCount: 1, readOnlyStorageBufferCount: 3, readWriteStorageTextureCount: 2,
+				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
+				entryPoint: "compute_main", name: "NeuralTextureDecode");
+			PerturbShader = new(
+				graphicsDevice, ShaderStage.Compute, perturbCode,
+				uniformBufferCount: 1, readOnlyStorageBufferCount: 2, readWriteStorageBufferCount: 1,
+				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
+				entryPoint: "compute_main", name: "NeuralTexturePerturb");
+		}
+
+		public (StorageBuffer<Vector4> Buffer, uint NormalSlots) GetWeights(string[] files)
+		{
+			var key = string.Join('\n', files);
+			if (weights.TryGetValue(key, out var cached))
+				return cached;
+
+			var packed = new Vector4[MaxSlots * PairedWeightCount];
+			var normalSlots = 0u;
+			for (var slot = 0; slot < MaxSlots; slot++)
+			{
+				if (string.IsNullOrEmpty(files[slot]))
+					continue;
+				var bytes = Assets.Content.ReadAllBytes($"{WeightsFolder}/{files[slot]}");
+				var values = MemoryMarshal.Cast<byte, Vector4>(bytes.AsSpan());
+				var dest = packed.AsSpan(slot * PairedWeightCount, PairedWeightCount);
+				if (values.Length == PairedWeightCount)
+				{
+					values.CopyTo(dest);
+					normalSlots |= 1u << slot;
+				}
+				else if (values.Length == ColorWeightCount)
+				{
+					values[..FinalWeightRowsEnd].CopyTo(dest);
+					var bias = values[FinalWeightRowsEnd];
+					dest[FinalBiasOffset] = new Vector4(bias.X, bias.Y, bias.Z, 0.5f);
+					dest[FinalBiasOffset + 1] = new Vector4(0.5f, 1.0f, 0.0f, 0.0f);
+				}
+				else
+					throw new InvalidDataException($"Neural texture model '{files[slot]}' has {values.Length} weight vectors; expected {ColorWeightCount} (color) or {PairedWeightCount} (color+normal).");
+			}
+
+			var buffer = new StorageBuffer<Vector4>(graphicsDevice, $"NeuralTextureWeights:{key}");
+			buffer.Upload(packed);
+			return weights[key] = (buffer, normalSlots);
+		}
+	}
 
 	[StructLayout(LayoutKind.Sequential)]
 	struct CellState
@@ -33,6 +100,13 @@ public class NeuralTextureActor : Actor, IResizable
 		public uint Height;
 		public uint Seed;
 		public float FireRate;
+		public uint OriginX;
+		public uint OriginY;
+		public uint DispatchWidth;
+		public uint DispatchHeight;
+		public Vector2 WorldStateOrigin;
+		public float StatePixelsPerCell;
+		public uint Padding;
 	}
 
 	struct DecodeParams
@@ -42,7 +116,20 @@ public class NeuralTextureActor : Actor, IResizable
 		public uint OutputWidth;
 		public uint OutputHeight;
 		public uint NormalSlots;
-		public uint Pad0, Pad1, Pad2;
+		public float Contrast;
+		public float Saturation;
+		public float Brightness;
+		public Vector4 Tint;
+		public float NormalStrength;
+		public float DetailScale;
+		public float PatchFrequency;
+		public float SirenFrequency;
+		public Vector2 DetailPhase;
+		public float LatentGain;
+		public float LatentBias;
+		public uint NearestStateSampling;
+		public float StatePixelsPerCell;
+		public uint Pad0, Pad1;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -101,13 +188,33 @@ public class NeuralTextureActor : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);
 
 	public Point2 Size { get; set; } = DefaultSize;
+	// Simulation size is independent from output Size. Standalone actors retain the trained
+	// 128x128 state by default; generated tile regions choose dimensions from FeatureScale.
+	public Point2 SimulationSize = new(StateWidth, StateHeight);
+	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
+	public float StatePixelsPerCell;
 	public string WeightsFile = DefaultWeightsFile;
 	public string WeightsFile1 = "";
 	public string WeightsFile2 = "";
 	public string WeightsFile3 = "";
 	public float FireRate = 0.5f;
 	public float StepsPerSecond = 30.0f;
+	public float Contrast = 1f;
+	public float Saturation = 1f;
+	public float Brightness;
+	public Color Tint = Color.White;
+	public float NormalStrength = 1f;
+	public float SilhouetteNormalStrength = 1f;
+	public float DetailScale = 1f;
+	public Vector2 DetailPhase;
+	public float PatchFrequency = 1f;
+	public float SirenFrequency = 10f;
+	public float LatentGain = 1f;
+	public float LatentBias;
+	public bool NearestStateSampling;
 	public Factory.TileLayer Layer = Factory.TileLayer.Background;
+	public char MaterialTile;
+	public bool CastsMaskShadow;
 
 	// Set before Added() to drive the per-slot blend mask directly (region tiles build a
 	// feathered two-model mask from tile geometry) instead of decoding PaintedMask. Length must
@@ -132,15 +239,21 @@ public class NeuralTextureActor : Actor, IResizable
 	StorageBuffer<PerturbStamp>? perturbations;
 	Texture? output;
 	Texture? normalOutput;
+	Texture? silhouetteNormalOutput;
 	Shader? updateShader;
 	Shader? decodeShader;
 	Shader? perturbShader;
 	StorageBuffer<uint>? maskBuffer;
 	uint[] maskCells = [];
+	CellState[] emptyState = [];
+	Point2 updateOrigin;
+	Point2 updateSize;
+	readonly List<VisibilityPolygon.Segment> occluderSegments = [];
 	string maskData = "";
 	uint normalSlots;
 	bool currentIsB;
 	bool supported;
+	bool settledFromSeed;
 	float stepAccumulator;
 	uint seed = 1;
 
@@ -156,6 +269,8 @@ public class NeuralTextureActor : Actor, IResizable
 			{
 				DecodeMaskData();
 				maskBuffer!.Upload(maskCells);
+				RebuildUpdateBounds();
+				RebuildSilhouette();
 			}
 		}
 	}
@@ -180,56 +295,23 @@ public class NeuralTextureActor : Actor, IResizable
 		if (updateCode == null || decodeCode == null || perturbCode == null)
 			return;
 
-		updateShader = new Shader(
-			graphicsDevice,
-			ShaderStage.Compute,
-			updateCode,
-			uniformBufferCount: 1,
-			readOnlyStorageBufferCount: 3,
-			readWriteStorageBufferCount: 1,
-			threadCountX: 8,
-			threadCountY: 8,
-			threadCountZ: 1,
-			entryPoint: "compute_main",
-			name: "NeuralTextureUpdate");
-
-		decodeShader = new Shader(
-			graphicsDevice,
-			ShaderStage.Compute,
-			decodeCode,
-			uniformBufferCount: 1,
-			readOnlyStorageBufferCount: 3,
-			readWriteStorageTextureCount: 2,
-			threadCountX: 8,
-			threadCountY: 8,
-			threadCountZ: 1,
-			entryPoint: "compute_main",
-			name: "NeuralTextureDecode");
-
-		perturbShader = new Shader(
-			graphicsDevice,
-			ShaderStage.Compute,
-			perturbCode,
-			uniformBufferCount: 1,
-			readOnlyStorageBufferCount: 2,
-			readWriteStorageBufferCount: 1,
-			threadCountX: 8,
-			threadCountY: 8,
-			threadCountZ: 1,
-			entryPoint: "compute_main",
-			name: "NeuralTexturePerturb");
+		var shared = SharedResources.GetValue(graphicsDevice, _ => new(graphicsDevice, updateCode, decodeCode, perturbCode));
+		updateShader = shared.UpdateShader;
+		decodeShader = shared.DecodeShader;
+		perturbShader = shared.PerturbShader;
 
 		bufferA = new(graphicsDevice, "NeuralTextureStateA");
 		bufferB = new(graphicsDevice, "NeuralTextureStateB");
-		weights = new(graphicsDevice, "NeuralTextureWeights");
 		perturbations = new(graphicsDevice, "NeuralTexturePerturbations");
 		maskBuffer = new(graphicsDevice, "NeuralTextureMask");
 
-		LoadWeights();
-		if (InitialMaskCells is { Length: StateWidth * StateHeight } injected)
+		(weights, normalSlots) = shared.GetWeights(SlotWeightsFiles);
+		emptyState = new CellState[StateCellCount];
+		if (InitialMaskCells is { Length: var length } injected && length == StateCellCount)
 			maskCells = injected;
 		else
 			DecodeMaskData();
+		RebuildUpdateBounds();
 		maskBuffer.Upload(maskCells);
 		output = new(
 			graphicsDevice,
@@ -246,9 +328,10 @@ public class NeuralTextureActor : Actor, IResizable
 			TextureFormat.Color,
 			TextureFlags.ComputeWrite,
 			"NeuralTextureNormalOutput");
-		bufferA.Upload(EmptyState);
-		bufferB.Upload(EmptyState);
+		bufferA.Upload(emptyState);
+		bufferB.Upload(emptyState);
 		perturbations.Upload(perturbStamps);
+		RebuildSilhouette();
 
 		supported = true;
 		Decode();
@@ -263,49 +346,15 @@ public class NeuralTextureActor : Actor, IResizable
 	// fast-forward on the sync signal. See Game.EditorPreviewSync / Manager.SyncEditorGame.
 	void SettleForEditorPreview()
 	{
-		if (supported)
+		if (supported && !settledFromSeed)
 			SimulateFromSeed(EditorPreviewSteps);
 	}
 
 	public string[] SlotWeightsFiles => [WeightsFile, WeightsFile1, WeightsFile2, WeightsFile3];
 
-	void LoadWeights()
-	{
-		var packed = new Vector4[MaxSlots * PairedWeightCount];
-		normalSlots = 0;
-		var files = SlotWeightsFiles;
-		for (var slot = 0; slot < MaxSlots; slot++)
-		{
-			if (string.IsNullOrEmpty(files[slot]))
-				continue;
-			var bytes = Assets.Content.ReadAllBytes($"{WeightsFolder}/{files[slot]}");
-			var values = MemoryMarshal.Cast<byte, Vector4>(bytes.AsSpan());
-			var dest = packed.AsSpan(slot * PairedWeightCount, PairedWeightCount);
-			if (values.Length == PairedWeightCount)
-			{
-				values.CopyTo(dest);
-				normalSlots |= 1u << slot;
-			}
-			else if (values.Length == ColorWeightCount)
-			{
-				// Pad the three-channel layout to the six-channel stride: the extra
-				// final-layer rows stay zero with a flat-normal bias.
-				values[..FinalWeightRowsEnd].CopyTo(dest);
-				var bias = values[FinalWeightRowsEnd];
-				dest[FinalBiasOffset] = new Vector4(bias.X, bias.Y, bias.Z, 0.5f);
-				dest[FinalBiasOffset + 1] = new Vector4(0.5f, 1.0f, 0.0f, 0.0f);
-			}
-			else
-			{
-				throw new InvalidDataException($"Neural texture model '{files[slot]}' has {values.Length} weight vectors; expected {ColorWeightCount} (color) or {PairedWeightCount} (color+normal).");
-			}
-		}
-		weights!.Upload(packed);
-	}
-
 	void DecodeMaskData()
 	{
-		maskCells = new uint[StateWidth * StateHeight];
+		maskCells = new uint[StateCellCount];
 		if (string.IsNullOrEmpty(maskData))
 		{
 			Array.Fill(maskCells, 0xFFu); // slot 0 fully painted
@@ -316,8 +365,8 @@ public class NeuralTextureActor : Actor, IResizable
 		{
 			using var stream = new MemoryStream(Convert.FromBase64String(maskData));
 			var image = new Image(stream);
-			if (image.Width != StateWidth || image.Height != StateHeight)
-				throw new InvalidDataException($"mask is {image.Width}x{image.Height}; expected {StateWidth}x{StateHeight}");
+			if (image.Width != SimulationSize.X || image.Height != SimulationSize.Y)
+				throw new InvalidDataException($"mask is {image.Width}x{image.Height}; expected {SimulationSize.X}x{SimulationSize.Y}");
 			var pixels = image.Data;
 			for (var i = 0; i < maskCells.Length; i++)
 				maskCells[i] = pixels[i].R | ((uint)pixels[i].G << 8) | ((uint)pixels[i].B << 16) | ((uint)pixels[i].A << 24);
@@ -331,7 +380,7 @@ public class NeuralTextureActor : Actor, IResizable
 
 	public string SerializeMask()
 	{
-		var image = new Image(StateWidth, StateHeight);
+		var image = new Image(SimulationSize.X, SimulationSize.Y);
 		var pixels = image.Data;
 		for (var i = 0; i < maskCells.Length; i++)
 			pixels[i] = new Color(
@@ -352,9 +401,9 @@ public class NeuralTextureActor : Actor, IResizable
 		var radius = MathF.Max(worldRadius * StateScale, 0.5f);
 		var falloff = MathF.Max(softness, 0.01f);
 		var minX = Math.Max((int)(center.X - radius * 2), 0);
-		var maxX = Math.Min((int)(center.X + radius * 2) + 1, StateWidth - 1);
+		var maxX = Math.Min((int)(center.X + radius * 2) + 1, SimulationSize.X - 1);
 		var minY = Math.Max((int)(center.Y - radius * 2), 0);
-		var maxY = Math.Min((int)(center.Y + radius * 2) + 1, StateHeight - 1);
+		var maxY = Math.Min((int)(center.Y + radius * 2) + 1, SimulationSize.Y - 1);
 
 		for (var y = minY; y <= maxY; y++)
 			for (var x = minX; x <= maxX; x++)
@@ -367,7 +416,7 @@ public class NeuralTextureActor : Actor, IResizable
 				if (weight <= 0.001f)
 					continue;
 
-				var index = y * StateWidth + x;
+				var index = y * SimulationSize.X + x;
 				var cell = maskCells[index];
 				var next = 0u;
 				for (var s = 0; s < MaxSlots; s++)
@@ -381,7 +430,131 @@ public class NeuralTextureActor : Actor, IResizable
 			}
 
 		maskBuffer!.Upload(maskCells);
+		RebuildUpdateBounds();
+		RebuildSilhouette();
 		Decode();
+	}
+
+	bool IShapeOccluder.CastsShadow => CastsMaskShadow && supported;
+
+	public void AppendOccluderSegments(List<VisibilityPolygon.Segment> segments)
+	{
+		var offset = (Vector2)Position;
+		foreach (var segment in occluderSegments)
+			segments.Add(new(segment.A + offset, segment.B + offset));
+	}
+
+	// Trace the exact non-zero alpha footprint produced by NeuralTextureDecode. Like DualGrid's
+	// mask tracer, neighboring pixel edges are merged into the segment currency used by both
+	// point-light and sun shadows.
+	void RebuildSilhouette()
+	{
+		occluderSegments.Clear();
+		var width = Math.Max(1, Size.X);
+		var height = Math.Max(1, Size.Y);
+		var solid = new bool[width * height];
+		for (var y = 0; y < height; y++)
+			for (var x = 0; x < width; x++)
+			{
+				var state = OutputToState(new Vector2(x + 0.5f, y + 0.5f));
+				var cell = state.FloorToPoint2();
+				var blend = state - (Vector2)cell;
+				var top = float.Lerp(MaskAlpha(cell), MaskAlpha(cell + Point2.UnitX), blend.X);
+				var bottom = float.Lerp(MaskAlpha(cell + Point2.UnitY), MaskAlpha(cell + Point2.One), blend.X);
+				solid[y * width + x] = float.Lerp(top, bottom, blend.Y) >= 1f / 512f;
+			}
+
+		for (var y = 0; y < height; y++)
+		{
+			MergeHorizontal(y, -1, y);
+			MergeHorizontal(y, 1, y + 1);
+		}
+		for (var x = 0; x < width; x++)
+		{
+			MergeVertical(x, -1, x);
+			MergeVertical(x, 1, x + 1);
+		}
+
+		var normalPixels = new Color[solid.Length];
+		for (var y = 0; y < height; y++)
+			for (var x = 0; x < width; x++)
+			{
+				if (!IsSolid(x, y))
+					continue;
+				var sx = SolidValue(x - 1, y) - SolidValue(x + 1, y);
+				var sy = SolidValue(x, y - 1) - SolidValue(x, y + 1);
+				if (sx == 0 && sy == 0)
+					continue;
+				var normal = Vector3.Normalize(new Vector3(sx, sy, 1) * new Vector3(SilhouetteNormalStrength, SilhouetteNormalStrength, 1)) * 0.5f + Vector3.One * 0.5f;
+				normalPixels[y * width + x] = new Color(normal.X, normal.Y, normal.Z, 1);
+			}
+		if (silhouetteNormalOutput == null)
+			silhouetteNormalOutput = new(graphicsDevice, width, height, normalPixels, name: "NeuralTextureSilhouetteNormals");
+		else
+			silhouetteNormalOutput.SetData<Color>(normalPixels);
+
+		float MaskAlpha(Point2 cell)
+		{
+			cell = new(Math.Clamp(cell.X, 0, SimulationSize.X - 1), Math.Clamp(cell.Y, 0, SimulationSize.Y - 1));
+			var packed = maskCells[cell.Y * SimulationSize.X + cell.X];
+			return ((packed & 0xFF) + ((packed >> 8) & 0xFF) + ((packed >> 16) & 0xFF) + (packed >> 24)) / 255f;
+		}
+
+		bool IsSolid(int x, int y) => x >= 0 && y >= 0 && x < width && y < height && solid[y * width + x];
+		int SolidValue(int x, int y) => IsSolid(x, y) ? 1 : 0;
+
+		void MergeHorizontal(int y, int neighborOffset, int edgeY)
+		{
+			var start = -1;
+			for (var x = 0; x <= width; x++)
+			{
+				var edge = x < width && IsSolid(x, y) && !IsSolid(x, y + neighborOffset);
+				if (edge && start < 0)
+					start = x;
+				else if (!edge && start >= 0)
+				{
+					occluderSegments.Add(new(new Vector2(start, edgeY), new Vector2(x, edgeY)));
+					start = -1;
+				}
+			}
+		}
+
+		void MergeVertical(int x, int neighborOffset, int edgeX)
+		{
+			var start = -1;
+			for (var y = 0; y <= height; y++)
+			{
+				var edge = y < height && IsSolid(x, y) && !IsSolid(x + neighborOffset, y);
+				if (edge && start < 0)
+					start = y;
+				else if (!edge && start >= 0)
+				{
+					occluderSegments.Add(new(new Vector2(edgeX, start), new Vector2(edgeX, y)));
+					start = -1;
+				}
+			}
+		}
+	}
+
+	internal void RenderTileField(Batcher batcher, Func<Point2, Color> colorForTile)
+	{
+		if (!supported || output == null)
+			return;
+
+		var worldBounds = GetVisualBounds();
+		var first = (worldBounds.TopLeft / Game.TileSize).FloorToPoint2();
+		var last = (worldBounds.BottomRight / Game.TileSize).CeilingToPoint2();
+		for (var y = first.Y; y < last.Y; y++)
+			for (var x = first.X; x < last.X; x++)
+			{
+				var worldTile = new Point2(x, y);
+				var tileBounds = new Rect((Vector2)worldTile * Game.TileSize, new Vector2(Game.TileSize));
+				var intersection = worldBounds.GetIntersection(tileBounds);
+				if (intersection.Width <= 0 || intersection.Height <= 0)
+					continue;
+				var clip = intersection - (Vector2)Position;
+				batcher.Image(output, clip, clip.Position, colorForTile(worldTile));
+			}
 	}
 
 	public void SimulateFromSeed(int steps)
@@ -389,15 +562,18 @@ public class NeuralTextureActor : Actor, IResizable
 		if (!supported)
 			return;
 
-		bufferA!.Upload(EmptyState);
-		bufferB!.Upload(EmptyState);
+		bufferA!.Upload(emptyState);
+		bufferB!.Upload(emptyState);
 		currentIsB = false;
 		stepAccumulator = 0;
 		seed = 1;
 		pawnSamples.Clear();
+		var started = Stopwatch.GetTimestamp();
 		for (var i = 0; i < steps; i++)
 			StepState();
 		Decode();
+		settledFromSeed = true;
+		Log.Info($"NCT settle: {steps} steps, {updateSize.X}x{updateSize.Y} of {SimulationSize.X}x{SimulationSize.Y}, {Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.00} ms CPU submit");
 	}
 
 	public override void Update()
@@ -424,14 +600,26 @@ public class NeuralTextureActor : Actor, IResizable
 
 	void StepState()
 	{
+		if (updateSize.X <= 0 || updateSize.Y <= 0)
+			return;
+
 		var source = currentIsB ? bufferB! : bufferA!;
 		var destination = currentIsB ? bufferA! : bufferB!;
 		updateUniforms.Set(new UpdateParams
 		{
-			Width = StateWidth,
-			Height = StateHeight,
+			Width = (uint)SimulationSize.X,
+			Height = (uint)SimulationSize.Y,
 			Seed = seed++,
 			FireRate = FireRate,
+			OriginX = (uint)updateOrigin.X,
+			OriginY = (uint)updateOrigin.Y,
+			DispatchWidth = (uint)updateSize.X,
+			DispatchHeight = (uint)updateSize.Y,
+			StatePixelsPerCell = StatePixelsPerCell,
+			WorldStateOrigin = StatePixelsPerCell > 0
+				? ((Vector2)Position + (Vector2)Size * 0.5f) / StatePixelsPerCell - ((Vector2)SimulationSize - Vector2.One) * 0.5f
+				: Vector2.Zero,
+			Padding = 0,
 		});
 
 		new ComputeCommand(updateShader!)
@@ -439,11 +627,27 @@ public class NeuralTextureActor : Actor, IResizable
 			ReadOnlyStorageBuffers = [source, weights!, maskBuffer!],
 			ReadWriteStorageBuffers = [destination],
 			UniformBuffers = [updateUniforms],
-			GroupCountX = (StateWidth + 7) / 8,
-			GroupCountY = (StateHeight + 7) / 8,
+			GroupCountX = (updateSize.X + 7) / 8,
+			GroupCountY = (updateSize.Y + 7) / 8,
 		}.Submit(graphicsDevice);
 
 		currentIsB = !currentIsB;
+	}
+
+	void RebuildUpdateBounds()
+	{
+		var min = SimulationSize;
+		var max = new Point2(-1, -1);
+		for (var y = 0; y < SimulationSize.Y; y++)
+			for (var x = 0; x < SimulationSize.X; x++)
+				if (maskCells[y * SimulationSize.X + x] != 0)
+				{
+					min = Point2.Min(min, new(x, y));
+					max = Point2.Max(max, new(x, y));
+				}
+
+		updateOrigin = min;
+		updateSize = max.X >= min.X && max.Y >= min.Y ? max - min + Point2.One : Point2.Zero;
 	}
 
 	void ApplyPerturbations()
@@ -513,8 +717,8 @@ public class NeuralTextureActor : Actor, IResizable
 		perturbations!.Upload(perturbStamps.AsSpan(0, stampCount));
 		perturbUniforms.Set(new PerturbParams
 		{
-			Width = StateWidth,
-			Height = StateHeight,
+			Width = (uint)SimulationSize.X,
+			Height = (uint)SimulationSize.Y,
 			StampCount = (uint)stampCount,
 			Padding = 0,
 		});
@@ -526,16 +730,28 @@ public class NeuralTextureActor : Actor, IResizable
 			ReadOnlyStorageBuffers = [source, perturbations],
 			ReadWriteStorageBuffers = [destination],
 			UniformBuffers = [perturbUniforms],
-			GroupCountX = (StateWidth + 7) / 8,
-			GroupCountY = (StateHeight + 7) / 8,
+			GroupCountX = (SimulationSize.X + 7) / 8,
+			GroupCountY = (SimulationSize.Y + 7) / 8,
 		}.Submit(graphicsDevice);
 		currentIsB = !currentIsB;
 	}
 
-	public float StateScale => StateWidth / (float)Math.Max(Size.X, Size.Y);
+	int StateCellCount => SimulationSize.X * SimulationSize.Y;
+
+	public float StateScale => StatePixelsPerCell > 0 ? 1f / StatePixelsPerCell : SimulationSize.X / (float)Math.Max(Size.X, Size.Y);
 
 	Vector2 WorldToState(Vector2 world)
-		=> (world - (Vector2)Position - (Vector2)Size * 0.5f) * StateScale + new Vector2((StateWidth - 1) * 0.5f, (StateHeight - 1) * 0.5f);
+		=> OutputToState(world - (Vector2)Position);
+
+	Vector2 OutputToState(Vector2 output)
+	{
+		var outputSize = (Vector2)Size;
+		var stateSize = (Vector2)SimulationSize;
+		if (StatePixelsPerCell > 0)
+			return (output - outputSize * 0.5f) / StatePixelsPerCell + (stateSize - Vector2.One) * 0.5f;
+		var extent = Math.Max(Size.X, Size.Y);
+		return (output - outputSize * 0.5f) / extent * stateSize + (stateSize - Vector2.One) * 0.5f;
+	}
 
 	void RemoveStalePawnSamples()
 	{
@@ -552,11 +768,26 @@ public class NeuralTextureActor : Actor, IResizable
 		var source = currentIsB ? bufferB! : bufferA!;
 		decodeUniforms.Set(new DecodeParams
 		{
-			Width = StateWidth,
-			Height = StateHeight,
+			Width = (uint)SimulationSize.X,
+			Height = (uint)SimulationSize.Y,
 			OutputWidth = (uint)output!.Width,
 			OutputHeight = (uint)output.Height,
 			NormalSlots = normalSlots,
+			Contrast = Contrast,
+			Saturation = Saturation,
+			Brightness = Brightness,
+			Tint = Tint.ToVector4(),
+			NormalStrength = NormalStrength,
+			DetailScale = DetailScale,
+			PatchFrequency = PatchFrequency,
+			SirenFrequency = SirenFrequency,
+			DetailPhase = DetailPhase,
+			LatentGain = LatentGain,
+			LatentBias = LatentBias,
+			NearestStateSampling = NearestStateSampling ? 1u : 0u,
+			StatePixelsPerCell = StatePixelsPerCell,
+			Pad0 = 0,
+			Pad1 = 0,
 		});
 
 		new ComputeCommand(decodeShader!)
@@ -577,6 +808,8 @@ public class NeuralTextureActor : Actor, IResizable
 
 	public override void RenderNormals(Batcher batcher)
 	{
+		if (supported && silhouetteNormalOutput != null)
+			batcher.Image(silhouetteNormalOutput, Vector2.Zero, Color.White);
 		if (supported && normalSlots != 0 && normalOutput != null)
 			batcher.Image(normalOutput, Vector2.Zero, Color.White);
 	}
@@ -590,13 +823,10 @@ public class NeuralTextureActor : Actor, IResizable
 		Game.EditorPreviewSync -= SettleForEditorPreview;
 		bufferA?.Dispose();
 		bufferB?.Dispose();
-		weights?.Dispose();
 		perturbations?.Dispose();
 		maskBuffer?.Dispose();
 		output?.Dispose();
 		normalOutput?.Dispose();
-		updateShader?.Dispose();
-		decodeShader?.Dispose();
-		perturbShader?.Dispose();
+		silhouetteNormalOutput?.Dispose();
 	}
 }
