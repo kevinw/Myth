@@ -92,12 +92,6 @@
       "Position": [275, 68]
     },
     {
-      "Id": "7bd7e2227855236e",
-      "Type": "PotatoMan",
-      "Position": [157, 106],
-      "Facing": "-"
-    },
-    {
       "Id": "89e4c3f6761c3004",
       "Type": "RevealDoor",
       "Position": [96, 96],
@@ -107,6 +101,11 @@
       "Id": "ef9b233f8e6de2f2",
       "Type": "Chest",
       "Position": [76, 136]
+    },
+    {
+      "Id": "98bec32551cacbf2",
+      "Type": "Bramble",
+      "Position": [164, 104]
     }
   ]
 }

@@ -1,0 +1,12 @@
+{
+  "layer": "Background",
+  "solid": false,
+  "interior": "onyx011_pair_converge_screen.bin",
+  "edge": "",
+  "edgeBandCells": 3,
+  "freezeSteps": 0,
+  "stepsPerSecond": 30,
+  "fireRate": 0.5,
+  "blendCurve": 0.37,
+  "featureScale": 1
+}

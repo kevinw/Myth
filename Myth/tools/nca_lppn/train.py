@@ -1,4 +1,5 @@
-"""Runs the pinned Cells2Pixels dynamic-texture trainer for Myth."""
+#!/usr/bin/env python3
+"""Trains and exports a Cells2Pixels dynamic texture for Myth."""
 
 import argparse
 import os
@@ -18,6 +19,19 @@ DEFAULT_TARGET_URL = (
     "https://raw.githubusercontent.com/Cells2Pixels/Cells2Pixels.github.io/"
     f"{TARGET_REVISION}/dynamic_texture_demo/target_images/textures_hr/bubbly_0101.jpg"
 )
+WEIGHTS = ROOT.parents[1] / "Assets" / "NCA" / "DynamicTexture"
+VENV = ROOT / ".venv"
+
+
+def resolve_target(value):
+    value = Path(value).expanduser()
+    candidates = [value, ROOT / value, ROOT / "targets" / value]
+    if not value.suffix:
+        candidates += [path.with_suffix(extension) for path in candidates for extension in (".png", ".jpg", ".jpeg")]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise SystemExit(f"Target image does not exist: {value}")
 
 
 def prepare():
@@ -76,11 +90,16 @@ def screen_config(config):
 
 
 def main():
+    venv_python = VENV / "bin" / "python"
+    if venv_python.is_file() and Path(sys.prefix).resolve() != VENV.resolve():
+        os.execv(venv_python, [str(venv_python), *sys.argv])
+
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target", type=Path, default=DEFAULT_TARGET)
+    parser.add_argument("target", nargs="?", default=DEFAULT_TARGET, help="Image path, or a name under targets/ (for example: circuit)")
+    parser.add_argument("--target", dest="target_option", help=argparse.SUPPRESS)
     parser.add_argument("--normal", type=Path, help="Paired normal map; trains one model that outputs color and normal channels together")
     parser.add_argument("--motion", default="circular")
-    parser.add_argument("--profile", choices=["reference", "screen"], default="reference")
+    parser.add_argument("--profile", choices=["reference", "screen"], default="reference", help="Training configuration (default: reference)")
     parser.add_argument(
         "--pseudo-targets",
         type=int,
@@ -94,6 +113,7 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no-test", action="store_true")
+    parser.add_argument("--no-export", action="store_true")
     parser.add_argument("--test-steps", type=int, default=1024)
     parser.add_argument("--test-video-frames", type=int, default=240)
     parser.add_argument("--test-fps", type=float, default=30.0)
@@ -110,9 +130,7 @@ def main():
     except ImportError as error:
         raise SystemExit("Install requirements with: .venv/bin/pip install -r requirements.txt") from error
 
-    target = args.target.resolve()
-    if not target.is_file():
-        raise SystemExit(f"Target image does not exist: {target}")
+    target = resolve_target(args.target_option or args.target)
 
     config_path = ROOT / "configs" / "bubbly_circular.yaml"
     config = yaml.safe_load(config_path.read_text())
@@ -181,6 +199,9 @@ def main():
         environment["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
     subprocess.run(command, cwd=ROOT, env=environment, check=True)
     print(f"Checkpoint: {experiment}")
+    if not args.no_export:
+        output = WEIGHTS / f"{name}.bin"
+        subprocess.run([sys.executable, str(ROOT / "export_model.py"), str(experiment), str(output)], check=True)
 
 
 if __name__ == "__main__":

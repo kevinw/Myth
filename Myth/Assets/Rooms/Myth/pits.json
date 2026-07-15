@@ -104,6 +104,11 @@
       "Id": "2d54f0fe86388a20",
       "Type": "ShieldKnight",
       "Position": [116, 104]
+    },
+    {
+      "Id": "2f09490f18625682",
+      "Type": "Bramble",
+      "Position": [52, 136]
     }
   ]
 }

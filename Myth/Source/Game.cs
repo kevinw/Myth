@@ -79,32 +79,6 @@ public partial class Game : IDisposable
 	Point2 transitionDirection;
 	Vector2 transitionCameraFrom;
 	Vector2 transitionCameraTo;
-	internal Color transitionBackdropColorFrom;
-	internal Color transitionBackdropColorTo;
-	internal Color transitionBackdropColor2From;
-	internal Color transitionBackdropColor2To;
-	internal Color transitionAmbientColorFrom;
-	internal Color transitionAmbientColorTo;
-	internal float transitionAmbientIntensityFrom;
-	internal float transitionAmbientIntensityTo;
-	internal float transitionLightNoiseFrom;
-	internal float transitionLightNoiseTo;
-	internal bool transitionDitherEnabledFrom;
-	internal bool transitionDitherEnabledTo;
-	internal float transitionDitherScaleFrom;
-	internal float transitionDitherScaleTo;
-	internal float transitionDitherStrengthFrom;
-	internal float transitionDitherStrengthTo;
-	internal float transitionDitherSlopeBoostFrom;
-	internal float transitionDitherSlopeBoostTo;
-	internal bool transitionDitherQuantizationFrom;
-	internal bool transitionDitherQuantizationTo;
-	internal Color transitionSunColorFrom;
-	internal Color transitionSunColorTo;
-	internal float transitionSunStrengthFrom;
-	internal float transitionSunStrengthTo;
-	internal Vector2 transitionSunDirectionFrom;
-	internal Vector2 transitionSunDirectionTo;
 	float linkedDoorCooldown;
 	bool roomSwappedThisFrame;
 	internal readonly List<Actor> destroying = [];
@@ -1402,32 +1376,6 @@ public partial class Game : IDisposable
 				transitionCameraFrom = Camera;
 				var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
 				transitionCameraTo = ClampCameraToRoomFb(exitPosition - new Vector2(Width, Height) / 2, fbPad, nextRoom.WorldBounds);
-				transitionBackdropColorFrom = room.BackdropColor;
-				transitionBackdropColorTo = nextRoom.BackdropColor;
-				transitionBackdropColor2From = room.BackdropColor2 ?? room.BackdropColor;
-				transitionBackdropColor2To = nextRoom.BackdropColor2 ?? nextRoom.BackdropColor;
-				transitionAmbientColorFrom = room.AmbientColor;
-				transitionAmbientColorTo = nextRoom.AmbientColor;
-				transitionAmbientIntensityFrom = room.AmbientIntensity;
-				transitionAmbientIntensityTo = nextRoom.AmbientIntensity;
-				transitionLightNoiseFrom = room.LightNoise;
-				transitionLightNoiseTo = nextRoom.LightNoise;
-				transitionDitherEnabledFrom = room.LightingDitherEnabled;
-				transitionDitherEnabledTo = nextRoom.LightingDitherEnabled;
-				transitionDitherScaleFrom = room.LightingDitherScale;
-				transitionDitherScaleTo = nextRoom.LightingDitherScale;
-				transitionDitherStrengthFrom = room.LightingDitherStrength;
-				transitionDitherStrengthTo = nextRoom.LightingDitherStrength;
-				transitionDitherSlopeBoostFrom = room.NormalDitherSlopeBoost;
-				transitionDitherSlopeBoostTo = nextRoom.NormalDitherSlopeBoost;
-				transitionDitherQuantizationFrom = room.NormalDitherQuantization;
-				transitionDitherQuantizationTo = nextRoom.NormalDitherQuantization;
-				transitionSunColorFrom = room.SunColor;
-				transitionSunColorTo = nextRoom.SunColor;
-				transitionSunStrengthFrom = room.SunStrength;
-				transitionSunStrengthTo = nextRoom.SunStrength;
-				transitionSunDirectionFrom = room.SunDirection;
-				transitionSunDirectionTo = nextRoom.SunDirection;
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
@@ -2165,6 +2113,7 @@ public partial class Game : IDisposable
 	{
 		var width = simulationSize.X;
 		var height = simulationSize.Y;
+		var clipSlopes = spec.Layer == Factory.TileLayer.Foreground;
 
 		// Invert the decoder's centered fixed-scale mapping exactly. Compute-group alignment adds
 		// a few state cells around the output; those remain dead and are never displayed.
@@ -2175,7 +2124,7 @@ public partial class Game : IDisposable
 				var outputPoint = (new Vector2(cx + 0.5f, cy + 0.5f) - (Vector2)simulationSize * 0.5f) * spec.FeatureScale + (Vector2)outputSize * 0.5f;
 				if (outputPoint.X < 0 || outputPoint.Y < 0 || outputPoint.X >= outputSize.X || outputPoint.Y >= outputSize.Y)
 					continue;
-				region[cy * width + cx] = NctShapeContains(member, room, tileOrigin, (Vector2)position + outputPoint, spec.RoundingPixels);
+				region[cy * width + cx] = NctShapeContains(member, room, tileOrigin, (Vector2)position + outputPoint, clipSlopes, spec.RoundingPixels);
 			}
 
 		ApplyNctOutset(region, width, height, spec.OutsetPixels, spec.FeatureScale);
@@ -2230,9 +2179,9 @@ public partial class Game : IDisposable
 		return mask;
 	}
 
-	static bool NctShapeContains(bool[,] member, Room room, Point2 tileOrigin, Vector2 point, float rounding)
+	static bool NctShapeContains(bool[,] member, Room room, Point2 tileOrigin, Vector2 point, bool clipSlopes, float rounding)
 	{
-		var inside = NctRawShapeContains(member, room, tileOrigin, point);
+		var inside = NctRawShapeContains(member, room, tileOrigin, point, clipSlopes);
 		if (rounding <= 0)
 			return inside;
 
@@ -2243,22 +2192,22 @@ public partial class Game : IDisposable
 			return inside;
 
 		var radius = new Vector2(rounding);
-		var topLeft = NctRawShapeContains(member, room, tileOrigin, vertexPoint - radius) ? 1f : 0f;
-		var topRight = NctRawShapeContains(member, room, tileOrigin, vertexPoint + new Vector2(rounding, -rounding)) ? 1f : 0f;
-		var bottomLeft = NctRawShapeContains(member, room, tileOrigin, vertexPoint + new Vector2(-rounding, rounding)) ? 1f : 0f;
-		var bottomRight = NctRawShapeContains(member, room, tileOrigin, vertexPoint + radius) ? 1f : 0f;
+		var topLeft = NctRawShapeContains(member, room, tileOrigin, vertexPoint - radius, clipSlopes) ? 1f : 0f;
+		var topRight = NctRawShapeContains(member, room, tileOrigin, vertexPoint + new Vector2(rounding, -rounding), clipSlopes) ? 1f : 0f;
+		var bottomLeft = NctRawShapeContains(member, room, tileOrigin, vertexPoint + new Vector2(-rounding, rounding), clipSlopes) ? 1f : 0f;
+		var bottomRight = NctRawShapeContains(member, room, tileOrigin, vertexPoint + radius, clipSlopes) ? 1f : 0f;
 		var amount = delta / (rounding * 2) + new Vector2(0.5f);
 		return float.Lerp(float.Lerp(topLeft, topRight, amount.X), float.Lerp(bottomLeft, bottomRight, amount.X), amount.Y) >= 0.5f;
 	}
 
-	static bool NctRawShapeContains(bool[,] member, Room room, Point2 tileOrigin, Vector2 point)
+	static bool NctRawShapeContains(bool[,] member, Room room, Point2 tileOrigin, Vector2 point, bool clipSlopes)
 	{
 		var tile = ((point - (Vector2)room.WorldBounds.TopLeft) / TileSize).FloorToPoint2();
 		var local = tile - tileOrigin;
 		if (local.X < 0 || local.Y < 0 || local.X >= member.GetLength(0) || local.Y >= member.GetLength(1) || !member[local.X, local.Y])
 			return false;
 
-		return !room.TryGetSlopeTile(tile, out var slope) || room.SlopeContainsPoint(slope, point);
+		return !clipSlopes || !room.TryGetSlopeTile(tile, out var slope) || room.SlopeContainsPoint(slope, point);
 	}
 
 	static void ApplyNctOutset(bool[] region, int width, int height, float outsetPixels, float pixelsPerCell)

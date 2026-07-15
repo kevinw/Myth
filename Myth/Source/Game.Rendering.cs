@@ -1371,7 +1371,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.AmbientColor ?? Room.DefaultAmbientColor;
 
-		return LerpColor(transitionAmbientColorFrom, transitionAmbientColorTo, Ease.Cube.InOut(nextRoomEase));
+		return LerpColor(room!.AmbientColor, nextRoom.AmbientColor, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	(Color Top, Color Bottom) CurrentBackdropColors()
@@ -1384,8 +1384,8 @@ public sealed partial class GameView
 
 		var amount = Ease.Cube.InOut(nextRoomEase);
 		return (
-			LerpColor(transitionBackdropColorFrom, transitionBackdropColorTo, amount),
-			LerpColor(transitionBackdropColor2From, transitionBackdropColor2To, amount));
+			LerpColor(room!.BackdropColor, nextRoom.BackdropColor, amount),
+			LerpColor(room.BackdropColor2 ?? room.BackdropColor, nextRoom.BackdropColor2 ?? nextRoom.BackdropColor, amount));
 	}
 
 	float CurrentAmbientIntensity()
@@ -1393,7 +1393,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.AmbientIntensity ?? Room.DefaultAmbientIntensity;
 
-		return float.Lerp(transitionAmbientIntensityFrom, transitionAmbientIntensityTo, Ease.Cube.InOut(nextRoomEase));
+		return float.Lerp(room!.AmbientIntensity, nextRoom.AmbientIntensity, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	float CurrentLightNoise()
@@ -1401,7 +1401,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.LightNoise ?? Room.DefaultLightNoise;
 
-		return float.Lerp(transitionLightNoiseFrom, transitionLightNoiseTo, Ease.Cube.InOut(nextRoomEase));
+		return float.Lerp(room!.LightNoise, nextRoom.LightNoise, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	// Dither floats blend across a room transition like the other lighting params; the two bools
@@ -1411,7 +1411,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.LightingDitherEnabled ?? Room.DefaultLightingDitherEnabled;
 
-		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? transitionDitherEnabledFrom : transitionDitherEnabledTo;
+		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? room!.LightingDitherEnabled : nextRoom.LightingDitherEnabled;
 	}
 
 	float CurrentDitherScale()
@@ -1419,7 +1419,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.LightingDitherScale ?? Room.DefaultLightingDitherScale;
 
-		return float.Lerp(transitionDitherScaleFrom, transitionDitherScaleTo, Ease.Cube.InOut(nextRoomEase));
+		return float.Lerp(room!.LightingDitherScale, nextRoom.LightingDitherScale, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	float CurrentDitherStrength()
@@ -1427,7 +1427,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.LightingDitherStrength ?? Room.DefaultLightingDitherStrength;
 
-		return float.Lerp(transitionDitherStrengthFrom, transitionDitherStrengthTo, Ease.Cube.InOut(nextRoomEase));
+		return float.Lerp(room!.LightingDitherStrength, nextRoom.LightingDitherStrength, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	float CurrentDitherSlopeBoost()
@@ -1435,7 +1435,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.NormalDitherSlopeBoost ?? Room.DefaultNormalDitherSlopeBoost;
 
-		return float.Lerp(transitionDitherSlopeBoostFrom, transitionDitherSlopeBoostTo, Ease.Cube.InOut(nextRoomEase));
+		return float.Lerp(room!.NormalDitherSlopeBoost, nextRoom.NormalDitherSlopeBoost, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	bool CurrentDitherQuantization()
@@ -1443,7 +1443,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.NormalDitherQuantization ?? Room.DefaultNormalDitherQuantization;
 
-		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? transitionDitherQuantizationFrom : transitionDitherQuantizationTo;
+		return Ease.Cube.InOut(nextRoomEase) < 0.5f ? room!.NormalDitherQuantization : nextRoom.NormalDitherQuantization;
 	}
 
 	Color CurrentSunColor()
@@ -1451,7 +1451,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.SunColor ?? Room.DefaultSunColor;
 
-		return LerpColor(transitionSunColorFrom, transitionSunColorTo, Ease.Cube.InOut(nextRoomEase));
+		return LerpColor(room!.SunColor, nextRoom.SunColor, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	float CurrentSunStrength()
@@ -1459,7 +1459,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.SunStrength ?? 0.0f;
 
-		return float.Lerp(transitionSunStrengthFrom, transitionSunStrengthTo, Ease.Cube.InOut(nextRoomEase));
+		return float.Lerp(room!.SunStrength, nextRoom.SunStrength, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	Vector2 CurrentSunDirection()
@@ -1467,7 +1467,7 @@ public sealed partial class GameView
 		if (nextRoom == null)
 			return room?.SunDirection ?? Room.DefaultSunDirection;
 
-		var direction = Vector2.Lerp(transitionSunDirectionFrom, transitionSunDirectionTo, Ease.Cube.InOut(nextRoomEase));
+		var direction = Vector2.Lerp(room!.SunDirection, nextRoom.SunDirection, Ease.Cube.InOut(nextRoomEase));
 		return Room.NormalizeOrDefault(direction, Room.DefaultSunDirection);
 	}
 

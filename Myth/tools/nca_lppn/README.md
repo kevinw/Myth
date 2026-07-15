@@ -31,37 +31,38 @@ python3.12 -m venv .venv
 .venv/bin/python train.py --prepare-only
 ```
 
-Run the full circular-motion experiment. The first run also downloads VGG16
+Train and export a target from `targets/` by name. The reference configuration
+shipped by Cells2Pixels is the default; the first run also downloads VGG16
 weights and the official optical-flow checkpoint:
 
 ```sh
-.venv/bin/python train.py --motion circular
+./train.py circuit
 ```
 
-Checkpoints are written to `experiments/bubbly_0101_circular`; the final image
-and rollout video are written to `outputs/bubbly_0101_circular`. A reduced
-one-epoch toolchain check is available with `--smoke`.
+This writes the checkpoint to `experiments/circuit_circular`, the final image
+and rollout video to `outputs/circuit_circular`, and the game-ready weights to
+`../../Assets/NCA/DynamicTexture/circuit_circular.bin`. A reduced one-epoch
+toolchain check is available with `./train.py circuit --smoke`. Use
+`--no-test` or `--no-export` to skip those final steps.
 
 Motion is trained into the model. Use another target name to train a separate
 variant, for example:
 
 ```sh
-.venv/bin/python train.py --motion diverge
-.venv/bin/python train.py --motion converge
-.venv/bin/python train.py --motion hyperbolic
-.venv/bin/python train.py --motion 90
+./train.py circuit --motion diverge
+./train.py circuit --motion converge
+./train.py circuit --motion hyperbolic
+./train.py circuit --motion 90
 ```
 
-Use another opaque texture image with `--target path/to/texture.jpg`.
+An explicit image path works too: `./train.py path/to/texture.jpg`.
 
 Prepare downloaded PBR texture sets into paired 512x512 color and OpenGL-normal
 PNGs, then train the color target:
 
 ```sh
 .venv/bin/python prepare_textures.py
-.venv/bin/python train.py \
-    --target targets/prepared/onyx011_color.png \
-    --motion circular --profile screen
+./train.py targets/prepared/onyx011_color.png --motion circular
 ```
 
 By default the preparer scans `~/Downloads/NCA_TEXTURES`. It recognizes common
@@ -76,19 +77,18 @@ shared rollout makes one paired run roughly 1.13x the cost of a color-only run
 instead of the 2x of two runs:
 
 ```sh
-.venv/bin/python train.py \
-    --target targets/prepared/onyx011_color.png \
+./train.py targets/prepared/onyx011_color.png \
     --normal targets/prepared/onyx011_normal.png \
-    --motion circular --profile screen
+    --motion circular
 ```
 
 ## Myth screen profile
 
-The `screen` profile targets Myth's 320x180 presentation rather than decoding
-eight samples per NCA cell for the training loss:
+The optional `screen` profile targets Myth's 320x180 presentation rather than
+decoding eight samples per NCA cell for the training loss:
 
 ```sh
-.venv/bin/python train.py --motion circular --profile screen
+./train.py circuit --motion circular --profile screen
 ```
 
 It uses an LPPN scale of 3, 160x160 VGG patches, two appearance scales, a
@@ -101,8 +101,9 @@ and recovery are still trained. Results are kept separate under
 The official motion loss also supports `circle`, `2block_x`, `2block_y`,
 `3block`, `4block`, and `grad_<motion-degrees>_<gradient-degrees>`.
 
-Export a completed checkpoint into the packed runtime layout (the exporter
-detects three-channel color and six-channel color+normal checkpoints):
+`train.py` exports automatically. To re-export a completed checkpoint manually,
+use the exporter directly (it detects three-channel color and six-channel
+color+normal checkpoints):
 
 ```sh
 .venv/bin/python export_model.py experiments/bubbly_0101_circular \
