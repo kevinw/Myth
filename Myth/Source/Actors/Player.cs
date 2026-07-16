@@ -419,6 +419,8 @@ public abstract class Pawn : Actor
 			{
 				if (Velocity.X != 0 && moveX != 0 && Math.Sign(Velocity.X) != Math.Sign(moveX))
 					jumpAnim = "jump_turn";
+				else if (Velocity.Y > 0 && input.MoveY == 1)
+					jumpAnim = "jump_down";
 				else
 					jumpAnim = "jump";
 			}
@@ -449,8 +451,6 @@ public abstract class Pawn : Actor
 		{
 			maxSpeed *= WaterHorizontalSpeedMultiplier;
 		}
-
-
 
 		var lastFacing = Facing;
 
@@ -565,13 +565,12 @@ public abstract class Pawn : Actor
 
 	void EmitJumpParticles(Vector2 position)
 	{
-		if (Game.Particles is { Supported: true } particles)
-			particles.Emit(jumpParticlesEffect,
-				worldPosition: position,
-				count: 8,
-				directionRadians: MathF.PI / 2.0f,
-				speedScale: 2.5f,
-				spreadRadians: 59.0f * Calc.DegToRad);
+		Game.Particles?.Emit(jumpParticlesEffect,
+			worldPosition: position,
+			count: 8,
+			directionRadians: MathF.PI / 2.0f,
+			speedScale: 2.5f,
+			spreadRadians: 59.0f * Calc.DegToRad);
 	}
 
 	protected float burrowTimer = 0;
@@ -585,7 +584,6 @@ public abstract class Pawn : Actor
 		if (State != States.Normal) return false;
 		return true;
 	}
-
 
 	protected bool TryStartRoll(Vector2 impactVelocity)
 	{
@@ -783,10 +781,7 @@ public abstract class Pawn : Actor
 		} else if (chain.Pinned && input.MoveY < 0) {
 			Play("climb");
 		} else {
-			if (!ropeIsFalling)
-				Play("climb_idle");
-			else
-				Play("climb_fall");
+			Play(ropeIsFalling ? "climb_fall" : "climb_idle");
 		}
 	}
 

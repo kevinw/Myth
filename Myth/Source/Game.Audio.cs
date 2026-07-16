@@ -126,21 +126,21 @@ public partial class Game
 	Audio Audio => Manager.Audio;
 	public bool AudioEventsEnabled { get; }
 
-	private readonly HashSet<string> audioFailures = [];
-	private SoundInstance? music;
-	private string? musicArea;
+	readonly HashSet<string> audioFailures = [];
+	SoundInstance? music;
+	string? musicArea;
 
 	static float PlayerHitSnapshotHoldTime => 0.12f;
 	const string PlayerHitSnapshotPath = "snapshot:/player_hit";
 
-	private SoundInstance? playerHitSnapshot;
-	private float playerHitSnapshotTimer;
+	SoundInstance? playerHitSnapshot;
+	float playerHitSnapshotTimer;
 
-	private float? roomReverb;
+	float? roomReverb;
 
 	public readonly record struct MusicReloadState(bool WasPlaying, int TimelinePosition, string? Area);
 
-	bool NoAudio => Simulating || AudioMuted || !Manager.AudioEnabled;
+	bool NoAudio => Simulating || AudioMuted || !Manager.AudioEnabled || !Audio.Initialized;
 
 	public void PlayAudioEvent(string path, string parameterName, float parameterFloat, Vector2? position = null)
 	{
@@ -185,10 +185,7 @@ public partial class Game
 
 	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null)
 	{
-		if (Simulating || AudioMuted)
-			return null;
-		if (!AudioEventsEnabled || !Audio.Initialized)
-			return null;
+		if (NoAudio) return null;
 
 		try
 		{
@@ -209,10 +206,7 @@ public partial class Game
 	// unknown parameter) without spamming or crashing.
 	public void SetAudioEventParameter(SoundInstance? instance, string name, float value)
 	{
-		if (Simulating || AudioMuted)
-			return;
-		if (instance == null || !Audio.Initialized)
-			return;
+		if (NoAudio || instance == null) return;
 
 		try
 		{
@@ -227,9 +221,7 @@ public partial class Game
 
 	public void SetAudioEventPosition(SoundInstance? instance, Vector2 position, Vector2? relativeTo = null)
 	{
-		if (Simulating || AudioMuted)
-			return;
-		if (instance == null || !Audio.Initialized)
+		if (NoAudio || instance == null)
 			return;
 
 		try
@@ -246,7 +238,7 @@ public partial class Game
 		}
 	}
 
-	private void UpdateAudioListener()
+	void UpdateAudioListener()
 	{
 		if (!Audio.Initialized)
 			return;
@@ -254,7 +246,7 @@ public partial class Game
 		Audio.SetListenerAttributes(ToAudioPosition(Camera + new Vector2(Width, Height) / 2));
 	}
 
-	private static Vector3 ToAudioPosition(Vector2 position)
+	static Vector3 ToAudioPosition(Vector2 position)
 	{
 		return new(-position.X / AudioPixelsPerUnit, position.Y / AudioPixelsPerUnit, 0);
 	}
@@ -350,7 +342,7 @@ public partial class Game
 	}
 
 
-	private void StartMusic()
+	void StartMusic()
 	{
 		if (!Manager.MusicEnabled || !Audio.Initialized || music != null)
 			return;
@@ -402,7 +394,7 @@ public partial class Game
 		}
 	}
 
-	private void ApplyRoomReverb(Room forRoom)
+	void ApplyRoomReverb(Room forRoom)
 	{
 		var reverb = EffectiveRoomReverb(forRoom);
 		if (!AudioEventsEnabled || !Audio.Initialized || roomReverb == reverb)
@@ -420,7 +412,7 @@ public partial class Game
 		}
 	}
 
-	private static float EffectiveRoomReverb(Room forRoom)
+	static float EffectiveRoomReverb(Room forRoom)
 	{
 #if BROWSER
 		return BrowserPlatform.IsMobileBrowser() ? 0.0f : forRoom.Reverb;
@@ -452,7 +444,7 @@ public partial class Game
 		}
 	}
 
-	private void UpdatePlayerHitSnapshot()
+	void UpdatePlayerHitSnapshot()
 	{
 		if (playerHitSnapshot == null)
 			return;
@@ -464,7 +456,7 @@ public partial class Game
 		StopPlayerHitSnapshot(false);
 	}
 
-	private void StopPlayerHitSnapshot(bool immediate)
+	void StopPlayerHitSnapshot(bool immediate)
 	{
 		if (playerHitSnapshot == null)
 			return;

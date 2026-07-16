@@ -14,7 +14,6 @@ adjust rope springiness as a mechanic or challenge
 
 ## mood: CONTENT
 - merge kenney font for controller buttons into SpriteFont  https://kenney.nl/assets/input-prompts and include button prompts in tutorial messages
-- remove white guy from beginning
 - bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
 - telegraph more (shieldknight and drone)
 - Drone has too much movement
@@ -32,8 +31,6 @@ adjust rope springiness as a mechanic or challenge
 - have local notarize-publish process upload to cloudflare storage under a date-git-hash folder
 - after roll under a 1-tile tall tunnel, you stand stuck in the wall
 - Build a custom SDL3 iOS xcframework with unused camera and Bluetooth/HIDAPI support disabled, then replace the bundled SDL3.xcframework so App Store uploads no longer need privacy purpose strings for APIs Myth does not use.
-- move the Program.cs out of 'Desktop' since it's also for the browser
-- git diff checker on bg thread
 - draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 
 ## mood: SOUND AND MUSIC
