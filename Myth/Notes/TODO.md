@@ -1,5 +1,10 @@
 # TODO
 
+one way fall tiles
+one way "wind" tiles <<<<
+one tile crawl critter
+computer that puts something on your map as a goal
+
 NCA
   - perturb on tile edges, so it looks more integrated
   - jump around on the surface of them?

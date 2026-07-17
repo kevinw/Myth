@@ -185,6 +185,9 @@ public partial class Manager : App
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled, fullscreen: args.fullscreen))
 	{
+#if EDITOR
+		particleEditor = new(undo);
+#endif
 		AudioEnabled = args.audio;
 		dumpAtlases = args.dumpAtlases;
 		gymMode = args.gym;
@@ -865,7 +868,7 @@ public partial class Manager : App
 			// Particles animate the active-room preview, so it must re-render each frame while one is selected.
 			activeRoomPreviewAnimating = selectedEmitterId != null;
 			game?.PreviewParticlesInEditor(Time.Delta, selectedEmitterId);
-			UpdateParticleEffectAutosave();
+			particleEditor.Update(Time.Delta);
 #endif
 		}
 

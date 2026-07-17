@@ -87,7 +87,6 @@ public partial class Manager
 	Point2 editorSelectionFrom;
 	Point2 editorSelectionTo;
 	EditorDragState editorDrag = EditorDragState.None;
-	JsonUndoScope? roomGeometryUndo;
 	string? pickingLinkedDoorTargetForActorId;
 	// Neural texture mask painting: which room actor is being painted, and the brush.
 	string? maskPaintActorId;
@@ -101,10 +100,9 @@ public partial class Manager
 	static readonly List<string> neuralTextureImages = [];
 	static readonly string[] neuralTextureMotionSuffixes = ["right_acc_down", "right_acc_right", "2block_x", "2block_y", "3block", "4block", "circular", "concentrate", "diverge", "hyperbolic", "right", "up"];
 	readonly JsonUndoManager undo = new();
-	JsonUndoScope? tilePaintUndo;
-	JsonUndoScope? actorMoveUndo;
-	JsonUndoScope? prefabUndo;
-	string? prefabUndoSpecId;
+	// Mutable struct on purpose: methods called through this field update its state in place.
+	// Assigned in the Manager constructor (it needs `undo`).
+	ParticleEffectEditor particleEditor;
 	readonly Dictionary<string, EditorRoomPreview> roomPreviewCache = [];
 	readonly Dictionary<string, int> roomPreviewVersions = [];
 	readonly Queue<string> roomPreviewBuildQueue = [];
@@ -200,13 +198,19 @@ public partial class Manager
 	JsonUndoScope CapturePrefabUndo(string name, string specId)
 		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
 
-	JsonUndoScope CaptureParticleEffectUndo(string effectName)
-		=> undo.Capture("Edit Particle Effect", new ParticleEffectUndoTarget(effectName));
+	// Pending-scope slots (see JsonUndoManager.OpenPending): each multi-frame editor gesture
+	// opens its scope under one of these on its first change and commits it when the gesture ends.
+	const string RoomGeometryUndoSlot = "room-geometry";
+	const string ActorMoveUndoSlot = "actor-move";
+	const string TilePaintUndoSlot = "tile-paint";
+	const string PrefabUndoSlot = "prefab";
 
-	// Debounced autosave for the particle effect asset edited in the inspector.
-	string? particleAutosaveName;
-	float particleAutosaveTimer;
-	const float ParticleAutosaveDelay = 0.6f;
+	// The HasPending guard keeps repeat calls during a drag from re-allocating the targets.
+	void OpenPendingRoomUndo(string slot, string name, Room room)
+	{
+		if (!undo.HasPending(slot))
+			undo.OpenPending(slot, name, CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
+	}
 
 	internal void EditorUI()
 	{
@@ -226,7 +230,7 @@ public partial class Manager
 			FpsOverlayImGui();
 		TransitionViewerImGui();
 		PreferencesImGui();
-		PinnedParticleEffectImGui();
+		particleEditor.PinnedWindowImGui(game, Scale);
 		if (!playing && !startingPlay)
 		{
 			TileKitEditorImGui();
@@ -249,25 +253,6 @@ public partial class Manager
 		FlushSaveState();
 	}
 #endif
-
-
-	void MarkParticleEffectDirty(string name)
-	{
-		particleAutosaveName = name;
-		particleAutosaveTimer = ParticleAutosaveDelay;
-	}
-
-	void UpdateParticleEffectAutosave()
-	{
-		if (particleAutosaveName is not { } name)
-			return;
-		particleAutosaveTimer -= Time.Delta;
-		if (particleAutosaveTimer <= 0)
-		{
-			ParticleEffectAssets.Save(name);
-			particleAutosaveName = null;
-		}
-	}
 
 
 	/// Eases the PaletteView out/in as the Game opens/closes
@@ -360,14 +345,10 @@ public partial class Manager
 			MarkRoomPreviewDirty(room);
 		}
 
+		// Pending undo scopes were abandoned by JsonUndoManager.Undo/Redo; only UI state is ours.
 		ClearEditorDragState();
-		roomGeometryUndo = null;
 		CancelTilePaint();
 		editorSelectionRect = null;
-		actorMoveUndo = null;
-		tilePaintUndo = null;
-		prefabUndo = null;
-		prefabUndoSpecId = null;
 		SyncEditorGame();
 	}
 
@@ -530,20 +511,6 @@ public partial class Manager
 		public string UndoId => $"actor-spec:{specId}";
 		public string CaptureJson() => ActorSpecs.CaptureSpecJson(specId);
 		public void ApplyJson(string json) => ActorSpecs.ApplySpecJson(specId, json);
-	}
-
-	sealed class ParticleEffectUndoTarget(string name) : IJsonUndoTarget
-	{
-		public string UndoId => $"particle-effect:{name}";
-		public string CaptureJson() => ParticleEffectAssets.Get(name).ToJson().ToJsonString();
-		public void ApplyJson(string json)
-		{
-			if (System.Text.Json.Nodes.JsonNode.Parse(json) is System.Text.Json.Nodes.JsonObject obj)
-			{
-				ParticleEffectAssets.Set(name, ParticleEffect.FromJson(obj));
-				ParticleEffectAssets.Save(name);
-			}
-		}
 	}
 
 	// Undo target for a whole room's *existence*, so create/paste/duplicate/delete are all undoable
@@ -1343,253 +1310,6 @@ public partial class Manager
 		editorGameDirty |= ImGui.SliderFloat("##SoftShadowMinSoftness", ref SoftShadowMinSoftness, 0.0f, 1.0f);
 	}
 
-	// Draws the editable fields of a shared particle effect asset inside the
-	// actor inspector. Each change is captured for undo (like actor properties)
-	// and triggers a debounced autosave.
-	void DrawParticleEffectBox(JsonObject actor)
-	{
-		if (game?.Particles is not { Supported: true })
-			return;
-
-		// EffectName is stripped from the JSON when it equals the default, so fall
-		// back to the actor's baseline value (what the runtime actually uses).
-		var name = ActorSpecs.ReadString(actor, "EffectName")
-			?? ActorSpecs.GetEditableProperties(actor).FirstOrDefault(p => p.JsonName == "EffectName").Value?.GetValue<string>();
-		if (name == null || !ParticleEffectAssets.Exists(name))
-			return;
-
-		ImGui.SeparatorText("Particle Asset");
-		ImGui.TextDisabled($"shared '{name}' - autosaves");
-		ImGui.SameLine();
-		var pinned = pinnedParticleEffect == name;
-		if (ImGui.SmallButton(pinned ? "Unpin" : "Pin"))
-			pinnedParticleEffect = pinned ? null : name;
-		ImGui.Indent();
-		if (ImGui.Button("Test Burst", new Vector2(-1, 0)))
-			TestParticleBurst(actor);
-
-		DrawParticleEffectControls(name);
-
-		ImGui.Unindent();
-	}
-
-	// The shared effect-asset sliders, used by both the actor inspector and the
-	// pinned play-mode window.
-	void DrawParticleEffectControls(string name)
-	{
-		var e = ParticleEffectAssets.Get(name);
-
-		FxShape("Shape", name, ref e.Shape);
-		FxInt("Count", name, ref e.BurstCount, 1, ParticleSystem.Capacity);
-		if (e.Shape == ParticleEmitterShape.Circle)
-			FxFloat("Radius", name, ref e.EmitterRadius, 0.0f, 320.0f);
-		if (e.Shape == ParticleEmitterShape.Cone)
-		{
-			FxFloat("Direction", name, ref e.DirectionDegrees, -180.0f, 180.0f);
-			FxFloat("Spread", name, ref e.SpreadDegrees, 0.0f, 360.0f);
-		}
-		if (e.Shape == ParticleEmitterShape.Line)
-		{
-			FxFloat("Length", name, ref e.EmitterRadius, 0.0f, 128.0f);
-			FxFloat("Direction", name, ref e.DirectionDegrees, -180.0f, 180.0f);
-			FxFloat("Thickness", name, ref e.SpreadDegrees, 0.0f, 32.0f);
-		}
-		FxMode("Mode", name, ref e.Mode);
-		FxCheckbox("Prewarm", name, ref e.Prewarm);
-		if (e.Mode == ParticleEmissionMode.Continuous)
-			FxFloat("Rate", name, ref e.EmissionRate, 0.0f, 400.0f);
-
-		ImGui.SeparatorText("Dynamics");
-		FxRange("Speed", name, ref e.SpeedMin, ref e.SpeedMax, 1.0f, 0.0f, 600.0f);
-		FxRange("Life", name, ref e.LifeMin, ref e.LifeMax, 0.02f, 0.05f, 8.0f);
-		FxFloat("Gravity", name, ref e.Gravity, -200.0f, 200.0f);
-		FxFloat("Drag", name, ref e.Drag, 0.0f, 4.0f);
-		FxFloat("Noise Amount", name, ref e.NoiseAmount, 0.0f, 200.0f);
-		FxFloat("Noise Scale", name, ref e.NoiseScale, 0.005f, 0.3f);
-
-		ImGui.SeparatorText("Appearance");
-		FxFloat("Size Start", name, ref e.SizeStart, 0.0f, 16.0f);
-		FxFloat("Size End", name, ref e.SizeEnd, 0.0f, 16.0f);
-		FxCheckbox("Additive", name, ref e.Additive);
-		FxStyle("Style", name, ref e.Style);
-		FxColor("Birth", name, ref e.ColorBirth);
-		FxColor("Mid", name, ref e.ColorMid);
-		FxColor("Death", name, ref e.ColorEnd);
-
-		ImGui.SeparatorText("Trail");
-		FxFloat("Trail Seconds", name, ref e.TrailSeconds, 0.0f, 2.0f);
-		if (e.TrailSeconds > 0.0f)
-		{
-			FxFloat("Trail Width Start", name, ref e.TrailWidthStart, 0.0f, 8.0f);
-			FxFloat("Trail Width End", name, ref e.TrailWidthEnd, 0.0f, 8.0f);
-			ImGui.TextDisabled("trail colors: TrailColors keys in the json");
-		}
-
-		ImGui.SeparatorText("Edge (sprite emission)");
-		FxEdgeSide("Side", name, ref e.EdgeSide);
-		if (e.EdgeSide == ParticleEdgeSide.FixedDirection)
-			FxFloat("Side Angle", name, ref e.EdgeSideDegrees, -180.0f, 180.0f);
-		if (e.EdgeSide != ParticleEdgeSide.All)
-			FxFloat("Arc", name, ref e.EdgeArcDegrees, 10.0f, 360.0f);
-		FxFloat("Attract", name, ref e.EdgeAttraction, 0.0f, 100.0f);
-		FxFloat("Flow Along", name, ref e.EdgeFlow, -200.0f, 200.0f);
-
-		ImGui.SeparatorText("Collision");
-		FxCollision("Collision", name, ref e.Collision);
-		if (e.Collision == ParticleCollisionMode.Bounce)
-			FxFloat("Bounciness", name, ref e.Bounciness, 0.0f, 1.0f);
-	}
-
-	// Pinned via the actor inspector's Pin button or the toolbar's Particles
-	// button; stays up during play mode so effects can be tuned live.
-	// Session-only; the toolbar button reopens the last pinned effect.
-	string? pinnedParticleEffect;
-	string? lastPinnedParticleEffect;
-
-	void PinnedParticleEffectImGui()
-	{
-		if (pinnedParticleEffect is not { } name)
-			return;
-		if (!ParticleEffectAssets.Exists(name))
-		{
-			pinnedParticleEffect = null;
-			return;
-		}
-		lastPinnedParticleEffect = name;
-
-		var open = true;
-		ImGui.SetNextWindowSize(new Vector2(300, 560) * Scale, ImGuiCond.FirstUseEver);
-		if (ImGui.Begin("Particles##Pinned", ref open, ImGuiWindowFlags.NoSavedSettings))
-		{
-			ImGui.SetNextItemWidth(-1);
-			if (ImGui.BeginCombo("##PinnedEffectName", name))
-			{
-				foreach (var other in ParticleEffectAssets.Names)
-					if (ImGui.Selectable(other, other == name))
-						pinnedParticleEffect = name = other;
-				ImGui.EndCombo();
-			}
-			if (ImGui.Button("Test Burst", new Vector2(-1, 0)) && game != null)
-			{
-				game.SetPreviewEffect(name);
-				game.BurstTestEffect();
-			}
-			DrawParticleEffectControls(name);
-		}
-		ImGui.End();
-
-		if (!open)
-			pinnedParticleEffect = null;
-	}
-
-	void TestParticleBurst(JsonObject actor)
-	{
-		var id = ActorSpecs.GetActorId(actor);
-		if (game == null || id == null)
-			return;
-		foreach (var instance in game.Actors)
-			if (instance is ParticleEmitter emitter && emitter.ActorId == id)
-			{
-				emitter.TestBurst();
-				return;
-			}
-	}
-
-	void FxFloat(string label, string name, ref float field, float min, float max)
-	{
-		var v = field;
-		if (!ImGui.SliderFloat(label, ref v, min, max))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxInt(string label, string name, ref int field, int min, int max)
-	{
-		var v = field;
-		if (!ImGui.SliderInt(label, ref v, min, max))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxRange(string label, string name, ref float a, ref float b, float speed, float min, float max)
-	{
-		float x = a, y = b;
-		if (!ImGui.DragFloatRange2(label, ref x, ref y, speed, min, max))
-			return;
-		using (CaptureParticleEffectUndo(name)) { a = x; b = y; }
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxCheckbox(string label, string name, ref bool field)
-	{
-		var v = field;
-		if (!ImGui.Checkbox(label, ref v))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxColor(string label, string name, ref Color field)
-	{
-		var v = (Vector4)field;
-		if (!ImGui.ColorEdit4(label, ref v, ImGuiColorEditFlags.AlphaBar))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = new Color(v);
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxShape(string label, string name, ref ParticleEmitterShape field)
-	{
-		var v = (int)field;
-		ImGui.SetNextItemWidth(-1);
-		if (!ImGui.Combo($"##{label}", ref v, "Point\0Circle\0Cone\0Line\0"))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = (ParticleEmitterShape)v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxStyle(string label, string name, ref ParticleRenderStyle field)
-	{
-		var v = (int)field;
-		ImGui.SetNextItemWidth(-1);
-		if (!ImGui.Combo($"##{label}", ref v, "Square\0Plasma\0"))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = (ParticleRenderStyle)v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxMode(string label, string name, ref ParticleEmissionMode field)
-	{
-		var v = (int)field;
-		ImGui.SetNextItemWidth(-1);
-		if (!ImGui.Combo($"##{label}", ref v, "Continuous\0Burst\0"))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = (ParticleEmissionMode)v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxEdgeSide(string label, string name, ref ParticleEdgeSide field)
-	{
-		var v = (int)field;
-		ImGui.SetNextItemWidth(-1);
-		if (!ImGui.Combo($"##{label}", ref v, "Facing Motion\0Fixed Direction\0All\0"))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = (ParticleEdgeSide)v;
-		MarkParticleEffectDirty(name);
-	}
-
-	void FxCollision(string label, string name, ref ParticleCollisionMode field)
-	{
-		var v = (int)field;
-		ImGui.SetNextItemWidth(-1);
-		if (!ImGui.Combo($"##{label}", ref v, "None\0Kill\0Settle\0Bounce\0"))
-			return;
-		using (CaptureParticleEffectUndo(name)) field = (ParticleCollisionMode)v;
-		MarkParticleEffectDirty(name);
-	}
-
 #if false
 	void DrawPreviewPaletteSection()
 	{
@@ -1804,7 +1524,7 @@ public partial class Manager
 			ImGui.TextUnformatted("-");
 		}
 		ImGui.PopID();
-		if (prefabUndoSpecId == specId && ImGui.IsItemDeactivatedAfterEdit())
+		if (undo.HasPending(PrefabUndoSlot, specId) && ImGui.IsItemDeactivatedAfterEdit())
 			CommitPrefabUndo();
 
 		if (property.HasLocalValue)
@@ -1879,7 +1599,7 @@ public partial class Manager
 		// the room), so it doesn't trigger SyncEditorGame - the selected emitter
 		// reflects changes immediately, and edits autosave + are undoable.
 		if (IsParticleEmitterActor(actor))
-			DrawParticleEffectBox(actor);
+			particleEditor.DrawActorInspectorBox(game, actor);
 
 		ImGui.End();
 	}
@@ -2488,20 +2208,12 @@ public partial class Manager
 
 	void BeginPrefabUndo(string specId)
 	{
-		if (prefabUndoSpecId == specId && prefabUndo != null)
-			return;
-
-		CommitPrefabUndo();
-		prefabUndoSpecId = specId;
-		prefabUndo = CapturePrefabUndo("Edit Prefab", specId);
+		if (!undo.HasPending(PrefabUndoSlot, specId))
+			undo.OpenPending(PrefabUndoSlot, specId, "Edit Prefab", new ActorSpecUndoTarget(specId));
 	}
 
 	void CommitPrefabUndo()
-	{
-		prefabUndo?.Commit();
-		prefabUndo = null;
-		prefabUndoSpecId = null;
-	}
+		=> undo.CommitPending(PrefabUndoSlot);
 
 	static Vector3 HexToVector3(string hex)
 	{
@@ -2947,10 +2659,8 @@ public partial class Manager
 	void CommitEditorDragState()
 	{
 		ClearEditorDragState();
-		actorMoveUndo?.Commit();
-		actorMoveUndo = null;
-		roomGeometryUndo?.Commit();
-		roomGeometryUndo = null;
+		undo.CommitPending(ActorMoveUndoSlot);
+		undo.CommitPending(RoomGeometryUndoSlot);
 	}
 
 	static Point2 SnapRoomActorLocalPosition(Vector2 local, Point2 offset)
@@ -4336,7 +4046,7 @@ public partial class Manager
 			{
 				ClearEditorDragState();
 				editorDrag.Kind = EditorDragKind.RoomGeometry;
-				roomGeometryUndo ??= CaptureRoomUndo("Edit Room Geometry", editing);
+				OpenPendingRoomUndo(RoomGeometryUndoSlot, "Edit Room Geometry", editing);
 				editorDrag.RoomGeometryHandle = hoveredRoomGeometryHandle;
 				var mouseTile = WorldToRoomGeometryTile(worldMouse);
 				editorDrag.RoomGeometryOffset = mouseTile - editing.TileSpacePosition;
@@ -4353,7 +4063,7 @@ public partial class Manager
 			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && editorSelectionRect is { } selection && TileRectContains(selection, tileOver))
 			{
 				var duplicateSelection = Input.Keyboard.Down(Keys.LeftControl) || Input.Keyboard.Down(Keys.RightControl);
-				actorMoveUndo ??= CaptureRoomUndo(duplicateSelection ? "Duplicate Selection" : "Move Selection", editing);
+				OpenPendingRoomUndo(ActorMoveUndoSlot, duplicateSelection ? "Duplicate Selection" : "Move Selection", editing);
 				ClearEditorDragState();
 				editorDrag.Kind = EditorDragKind.SelectionMove;
 				editorDrag.DuplicateSelection = duplicateSelection;
@@ -4481,8 +4191,8 @@ public partial class Manager
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && !brushIsActor && brushEntry != null && (Input.Mouse.LeftPressed || Input.Mouse.RightPressed))
 			{
-				tilePaintUndo?.Commit();
-				tilePaintUndo = CaptureRoomUndo("Paint Tiles", editing);
+				undo.CommitPending(TilePaintUndoSlot);
+				OpenPendingRoomUndo(TilePaintUndoSlot, "Paint Tiles", editing);
 				tileRectPaintFrom = ClampTile(editing, tileOver);
 				tileRectPaintTo = tileRectPaintFrom;
 				tileTypePlacing = Input.Mouse.LeftPressed ? brush : '0';
@@ -4497,12 +4207,12 @@ public partial class Manager
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorResize && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
-				actorMoveUndo ??= CaptureRoomUndo("Resize Actor", editing);
+				OpenPendingRoomUndo(ActorMoveUndoSlot, "Resize Actor", editing);
 				ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.RoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
-				actorMoveUndo ??= CaptureRoomUndo("Move Actor", editing);
+				OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Actor", editing);
 				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, RoomActorDragShouldSnap(keyboardBlocked));
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.SelectionMove && editorDrag.SelectionSnapshot != null && Input.Mouse.LeftDown)
@@ -4654,8 +4364,7 @@ public partial class Manager
 			tileTypePlacing = brush;
 			if (TilePlacing)
 				ClearEditorDragState();
-			tilePaintUndo?.Commit();
-			tilePaintUndo = null;
+			undo.CommitPending(TilePaintUndoSlot);
 		}
 
 		using (PerfStats.Time(PerfDetail.EditorSync))
@@ -5169,10 +4878,8 @@ public partial class Manager
 			nctEditorOpen = !nctEditorOpen;
 		ImGui.SameLine();
 
-		if (ImGuiTextButton("Particles", new Vector2(70, ButtonSize), pinnedParticleEffect != null))
-			pinnedParticleEffect = pinnedParticleEffect == null
-				? lastPinnedParticleEffect ?? ParticleEffectAssets.Names.FirstOrDefault()
-				: null;
+		if (ImGuiTextButton("Particles", new Vector2(70, ButtonSize), particleEditor.PinnedWindowOpen))
+			particleEditor.TogglePinnedWindow();
 		ImGui.SameLine();
 
 		if (ImGuiTextButton("Music", new Vector2(55, ButtonSize), musicRegionsOpen))
@@ -5380,7 +5087,7 @@ public partial class Manager
 		var reload = false;
 		lock (particleReloadLock)
 		{
-			if (particleReloadRequested && particleAutosaveName == null)
+			if (particleReloadRequested && !particleEditor.AutosavePending)
 			{
 				particleReloadTimer -= Time.Delta;
 				if (particleReloadTimer <= 0)

@@ -12,6 +12,7 @@ public sealed class JsonUndoManager
 	private const int MaxUndoEntries = 50;
 	private readonly List<JsonUndoEntry> undoStack = [];
 	private readonly List<JsonUndoEntry> redoStack = [];
+	private readonly Dictionary<string, (string Identity, JsonUndoScope Scope)> pending = [];
 
 	public bool CanUndo => undoStack.Count > 0;
 	public bool CanRedo => redoStack.Count > 0;
@@ -19,14 +20,49 @@ public sealed class JsonUndoManager
 	public JsonUndoScope Capture(string name, params IJsonUndoTarget[] targets)
 		=> new(this, name, targets);
 
+	// Pending scopes: a multi-frame gesture (a drag, a paint stroke, a slider edit) opens a
+	// scope under a slot at its first change and commits it when the gesture ends, so the whole
+	// gesture becomes one undo entry. One scope per slot; opening a slot under a different
+	// identity (e.g. another prefab's id) commits the previous scope first. Undo/Redo abandon
+	// all pending scopes, since their before-states predate the rewind.
+
+	public void OpenPending(string slot, string name, params IJsonUndoTarget[] targets)
+		=> OpenPending(slot, "", name, targets);
+
+	public void OpenPending(string slot, string identity, string name, params IJsonUndoTarget[] targets)
+	{
+		if (pending.TryGetValue(slot, out var entry) && entry.Identity == identity)
+			return;
+
+		CommitPending(slot);
+		pending[slot] = (identity, new JsonUndoScope(this, name, targets));
+	}
+
+	public bool HasPending(string slot)
+		=> pending.ContainsKey(slot);
+
+	public bool HasPending(string slot, string identity)
+		=> pending.TryGetValue(slot, out var entry) && entry.Identity == identity;
+
+	public void CommitPending(string slot)
+	{
+		if (pending.Remove(slot, out var entry))
+			entry.Scope.Commit();
+	}
+
+	public void AbandonPending()
+		=> pending.Clear();
+
 	public void Clear()
 	{
 		undoStack.Clear();
 		redoStack.Clear();
+		AbandonPending();
 	}
 
 	public void Undo()
 	{
+		AbandonPending();
 		if (!CanUndo)
 			return;
 
@@ -38,6 +74,7 @@ public sealed class JsonUndoManager
 
 	public void Redo()
 	{
+		AbandonPending();
 		if (!CanRedo)
 			return;
 

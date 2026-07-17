@@ -147,15 +147,9 @@ public class Actor
 	/// Checks if an animation is playing
 	public bool IsPlaying(string name) => Animation.Name == name;
 
-	public bool Verbose = false;
-
 	/// Checks if an animation is finished playing.
 	public bool IsFinishedPlaying(string? name = null)
 	{
-		if (Verbose)
-		{
-			Console.WriteLine($"IsFinishedPlaying: animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping} name={name}");
-		}
 		return !animationLooping && animationTime >= Animation.Duration && (name == null || IsPlaying(name));
 	}
 
@@ -440,10 +434,6 @@ public class Actor
 			animationName = target;
 			animationTime = 0;
 			animationLooping = targetAnimationLooping;
-			if (Verbose)
-			{
-				Console.WriteLine($"Landed on target animation: animationName={animationName} animationTime={animationTime} Animation.Duration={Animation.Duration} animationLooping={animationLooping}");
-			}
 		}
 
 		UpdateEnteredFrames(prevFrame, prevAnim);
