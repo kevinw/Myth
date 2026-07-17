@@ -33,6 +33,12 @@ jobs:
           git submodule update --init Foster Myth/Source/External/StringBuilder
           git -C Foster lfs pull
 
+      # The arm64 shadercross binary depends on locally-built dylibs that aren't part
+      # of Foster. Shipped MSL is committed; make it newer than Git's checkout mtimes
+      # so MSBuild uses it rather than trying to rebuild it on the clean runner.
+      - name: Use committed macOS shaders
+        run: find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.msl' -exec touch {} +
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
