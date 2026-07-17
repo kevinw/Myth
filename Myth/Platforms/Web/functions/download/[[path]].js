@@ -34,7 +34,7 @@ export async function onRequest({ env, params, request, next }) {
         return next();
     if (path === "releases.json")
         return releases(env.MYTH_DOWNLOADS, new URL(request.url).searchParams.get("cursor"));
-    if (!/^Myth-[0-9a-f]{8}\.zip$/.test(path))
+    if (!/^Myth-[0-9a-f]{8}(?:-(?:mac|windows-x64))?\.zip$/.test(path))
         return new Response("Not found", { status: 404 });
 
     const object = request.method === "HEAD"

@@ -44,7 +44,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Check release configuration
+      - name: Check macOS release configuration
         shell: bash
         env:
           MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
@@ -52,8 +52,6 @@ jobs:
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
           APPSTORE_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           missing=0
@@ -62,9 +60,7 @@ jobs:
             MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD \
             APPSTORE_API_PRIVATE_KEY \
             APPSTORE_API_KEY_ID \
-            APPSTORE_ISSUER_ID \
-            CLOUDFLARE_ACCOUNT_ID \
-            CLOUDFLARE_API_TOKEN
+            APPSTORE_ISSUER_ID
           do
             if [[ -z "${!name:-}" ]]; then
               echo "Missing GitHub secret or variable: $name" >&2
@@ -102,6 +98,166 @@ jobs:
       - name: Publish and notarize
         run: node Myth/tools/publish-desktop.mjs --notarize
 
+      - name: Name macOS build
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="Myth-${GITHUB_SHA:0:8}-mac.zip"
+          cp Myth/bin/publish/Myth.zip "$RUNNER_TEMP/$file"
+          echo "file=$RUNNER_TEMP/$file" >> "$GITHUB_OUTPUT"
+
+      - name: Save macOS build
+        uses: actions/upload-artifact@v7
+        with:
+          name: myth-macos
+          path: ${{ steps.archive.outputs.file }}
+          retention-days: 1
+          if-no-files-found: error
+
+  compile-windows-shaders:
+    name: Compile Windows shaders
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          lfs: false
+          submodules: false
+
+      - name: Fetch Linux shader compiler
+        run: |
+          set -euo pipefail
+          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster
+          git -C Foster lfs pull --include='tools/linux/**'
+          chmod +x Foster/tools/linux/shadercross
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Compile DXIL
+        run: |
+          set -euo pipefail
+          find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -delete
+          dotnet msbuild Foster/Framework/Foster.Framework.csproj -t:CompileShaders -p:ShaderPlatform=windows
+          dotnet msbuild Myth/Myth.csproj -t:CompileShaders -p:ShaderPlatform=windows
+          tar -cf "$RUNNER_TEMP/windows-shaders.tar" \
+            Myth/Assets/Shaders/Compiled/*.dxil \
+            Foster/Framework/Content/Shaders/Compiled/*.dxil
+
+      - name: Save Windows shaders
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-shaders
+          path: ${{ runner.temp }}/windows-shaders.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  publish-windows:
+    name: Publish Windows (x64, unsigned)
+    needs: compile-windows-shaders
+    runs-on: windows-2025
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+          submodules: false
+
+      - name: Update desktop submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster Myth/Source/External/StringBuilder
+          git -C Foster lfs pull --include='Framework/Internal/Native/win-x64/**'
+
+      - name: Restore compiled Windows shaders
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-shaders
+          path: ${{ runner.temp }}/windows-shaders
+
+      - name: Install compiled Windows shaders
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xf "$RUNNER_TEMP/windows-shaders/windows-shaders.tar"
+          find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -exec touch {} +
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish Windows build
+        run: node Myth/tools/publish-windows.mjs
+
+      - name: Package Windows build
+        id: archive
+        shell: pwsh
+        run: |
+          $file = "Myth-$($env:GITHUB_SHA.Substring(0, 8))-windows-x64.zip"
+          $archive = Join-Path $env:RUNNER_TEMP $file
+          Compress-Archive -Path Myth/bin/publish/Myth -DestinationPath $archive
+          "file=$archive" >> $env:GITHUB_OUTPUT
+
+      - name: Save Windows build
+        uses: actions/upload-artifact@v7
+        with:
+          name: myth-windows
+          path: ${{ steps.archive.outputs.file }}
+          retention-days: 1
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish desktop downloads
+    if: ${{ always() && needs.publish-macos.result == 'success' }}
+    needs:
+      - publish-macos
+      - publish-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          lfs: false
+          submodules: false
+
+      - name: Restore macOS build
+        uses: actions/download-artifact@v8
+        with:
+          name: myth-macos
+          path: ${{ runner.temp }}/release
+
+      - name: Restore Windows build
+        if: ${{ needs.publish-windows.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: myth-windows
+          path: ${{ runner.temp }}/release
+
+      - name: Check Cloudflare configuration
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing GitHub secret: $name" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Prepare release metadata
         id: release
         shell: bash
@@ -109,8 +265,6 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          short_sha="${GITHUB_SHA:0:8}"
-          file="Myth-$short_sha.zip"
           published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           previous_sha=""
           if releases="$(curl -fsS 'https://myth-game.pages.dev/download/releases.json')"; then
@@ -127,29 +281,28 @@ jobs:
             echo "No published release index yet; using the push range for this changelog."
           fi
           node Myth/tools/write-desktop-release.mjs \
-            "$RUNNER_TEMP/release.json" "$GITHUB_SHA" "$file" "$published_at" "$previous_sha" "$BEFORE_SHA"
+            "$RUNNER_TEMP/release.json" "$RUNNER_TEMP/release" "$GITHUB_SHA" "$published_at" "$previous_sha" "$BEFORE_SHA"
           commit_count="$(git rev-list --count "$GITHUB_SHA")"
           reverse_order="$(node -p 'String(999999999999 - Number(process.argv[1])).padStart(12, "0")' "$commit_count")"
-          {
-            echo "file=$file"
-            echo "descriptor=releases/$reverse_order-$GITHUB_SHA.json"
-          } >> "$GITHUB_OUTPUT"
+          echo "descriptor=releases/$reverse_order-$GITHUB_SHA.json" >> "$GITHUB_OUTPUT"
 
-      - name: Upload desktop build to R2
+      - name: Upload desktop builds to R2
         working-directory: Myth/Platforms/Web
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          FILE: ${{ steps.release.outputs.file }}
           DESCRIPTOR: ${{ steps.release.outputs.descriptor }}
         run: |
           set -euo pipefail
-          npx wrangler@latest r2 object put "$R2_BUCKET/$FILE" \
-            --remote \
-            --file "../../bin/publish/Myth.zip" \
-            --content-type application/zip \
-            --content-disposition "attachment; filename=\"$FILE\"" \
-            --cache-control "public, max-age=31536000, immutable"
+          for archive in "$RUNNER_TEMP"/release/*.zip; do
+            file="$(basename "$archive")"
+            npx wrangler@latest r2 object put "$R2_BUCKET/$file" \
+              --remote \
+              --file "$archive" \
+              --content-type application/zip \
+              --content-disposition "attachment; filename=\"$file\"" \
+              --cache-control "public, max-age=31536000, immutable"
+          done
           npx wrangler@latest r2 object put "$R2_BUCKET/$DESCRIPTOR" \
             --remote \
             --file "$RUNNER_TEMP/release.json" \

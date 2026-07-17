@@ -38,13 +38,14 @@
             .meta { color: var(--muted); font-size: 13px; }
             .download {
                 display: inline-block;
-                margin-top: 12px;
+                margin: 12px 8px 0 0;
                 padding: 10px 14px;
                 border: 1px solid var(--accent);
                 background: rgb(224 211 167 / 12%);
                 font-weight: 700;
                 text-decoration: none;
             }
+            .warning { color: var(--muted); font-size: 12px; }
             .changes { margin: 18px 0 0; padding-left: 24px; }
             details { margin-top: 28px; }
             summary { color: var(--accent); cursor: pointer; font-weight: 700; }
@@ -54,7 +55,7 @@
     <body>
         <main>
             <h1>Myth</h1>
-            <p>Desktop builds for macOS on Apple silicon.</p>
+            <p>Desktop builds for macOS and Windows.</p>
             <div id="latest"><p id="status">Loading latest build…</p></div>
             <details id="old" hidden>
                 <summary>Old versions</summary>
@@ -73,7 +74,7 @@
                 section.className = "release";
 
                 const heading = document.createElement("h2");
-                heading.textContent = isLatest ? "Latest macOS build" : `Myth ${release.shortSha}`;
+                heading.textContent = isLatest ? "Latest build" : `Myth ${release.shortSha}`;
                 section.append(heading);
 
                 const meta = document.createElement("p");
@@ -81,13 +82,26 @@
                 meta.textContent = `${new Date(release.publishedAt).toLocaleString()} · ${release.shortSha}`;
                 section.append(meta);
 
-                const link = document.createElement("a");
-                link.className = "download";
-                link.href = `/download/${release.file}`;
-                link.textContent = "Download for macOS";
-                section.append(link);
+                const downloads = release.downloads ?? [{
+                    platform: "macOS",
+                    architecture: "Apple silicon",
+                    file: release.file,
+                }];
+                for (const download of downloads) {
+                    const link = document.createElement("a");
+                    link.className = "download";
+                    link.href = `/download/${download.file}`;
+                    link.textContent = `Download for ${download.platform} (${download.architecture})`;
+                    section.append(link);
+                    if (download.unsigned) {
+                        const warning = document.createElement("p");
+                        warning.className = "warning";
+                        warning.textContent = "Windows build is unsigned; Windows may show a security warning.";
+                        section.append(warning);
+                    }
+                }
 
-                if (release.commits.length) {
+                if (release.commits?.length) {
                     const changes = document.createElement("ul");
                     changes.className = "changes";
                     for (const subject of release.commits) {
