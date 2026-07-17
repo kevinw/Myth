@@ -23,7 +23,8 @@ public class Room
 		Breakable = 1 << 0,
 		BreakOnStand = 1 << 1,
 		Fungal = 1 << 2,
-		Slope = 1 << 3
+		Slope = 1 << 3,
+		Crumble = 1 << 4 // Crumbles when you stand on it, returns as a "debris tile"
 	}
 
 	public enum SlopeDirection
@@ -310,6 +311,13 @@ public class Room
 			foreach (var node in slopeCells)
 				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
 					tileFlags[tile.X, tile.Y] |= TileFlags.Slope;
+		}
+
+		if (json.TryGetPropertyValue("crumble", out var crumbleNode) && crumbleNode is JsonArray crumbleCells)
+		{
+			foreach (var node in crumbleCells)
+				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
+					tileFlags[tile.X, tile.Y] |= TileFlags.Crumble;
 		}
 
 		MigrateLegacyFungusTiles();
@@ -877,30 +885,27 @@ public class Room
 	public bool IsBreakable(Point2 tile)
 		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Breakable) != 0;
 
-	public void SetBreakable(Point2 tile, bool breakable)
+	public bool HasTileFlag(Point2 tile, TileFlags flag)
+		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & flag) != 0;
+
+	public void SetTileFlag(Point2 tile, TileFlags flag, bool set)
 	{
 		if (!ContainsTile(tile.X, tile.Y))
 			return;
 
-		if (breakable)
-			tileFlags[tile.X, tile.Y] |= TileFlags.Breakable;
+		if (set)
+			tileFlags[tile.X, tile.Y] |= flag;
 		else
-			tileFlags[tile.X, tile.Y] &= ~TileFlags.Breakable;
+			tileFlags[tile.X, tile.Y] &= ~flag;
 	}
 
-	public bool IsSlope(Point2 tile)
-		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Slope) != 0;
+	public void SetBreakable(Point2 tile, bool breakable) => SetTileFlag(tile, TileFlags.Breakable, breakable);
+
+	public bool IsSlope(Point2 tile) => ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Slope) != 0;
 
 	public void SetSlope(Point2 tile, bool slope, bool rebuildGeometry = true)
 	{
-		if (!ContainsTile(tile.X, tile.Y))
-			return;
-
-		if (slope)
-			tileFlags[tile.X, tile.Y] |= TileFlags.Slope;
-		else
-			tileFlags[tile.X, tile.Y] &= ~TileFlags.Slope;
-
+		SetTileFlag(tile, TileFlags.Slope, slope);
 		if (rebuildGeometry)
 			RebuildGeometry();
 	}
@@ -1376,35 +1381,10 @@ public class Room
 			writer.WriteEndArray();
 		}
 
-		if (HasBreakableTiles())
-		{
-			writer.WriteStartArray("breakable");
-			for (var y = 0; y < Size.Y; y++)
-				for (var x = 0; x < Size.X; x++)
-					if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
-						WriteIntPairValue(writer, x, y);
-			writer.WriteEndArray();
-		}
-
-		if (HasFungalTiles())
-		{
-			writer.WriteStartArray("fungal");
-			for (var y = 0; y < Size.Y; y++)
-				for (var x = 0; x < Size.X; x++)
-					if ((tileFlags[x, y] & TileFlags.Fungal) != 0)
-						WriteIntPairValue(writer, x, y);
-			writer.WriteEndArray();
-		}
-
-		if (HasSlopeTiles())
-		{
-			writer.WriteStartArray("slopes");
-			for (var y = 0; y < Size.Y; y++)
-				for (var x = 0; x < Size.X; x++)
-					if ((tileFlags[x, y] & TileFlags.Slope) != 0)
-						WriteIntPairValue(writer, x, y);
-			writer.WriteEndArray();
-		}
+		WriteFlaggedTiles(writer, "breakable", TileFlags.Breakable);
+		WriteFlaggedTiles(writer, "fungal", TileFlags.Fungal);
+		WriteFlaggedTiles(writer, "slopes", TileFlags.Slope);
+		WriteFlaggedTiles(writer, "crumble", TileFlags.Crumble);
 
 		if (Actors.Count > 0)
 		{
@@ -1520,33 +1500,26 @@ public class Room
 		return false;
 	}
 
-	bool HasBreakableTiles()
+	bool HasFlaggedTiles(TileFlags flag)
 	{
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
-				if ((tileFlags[x, y] & TileFlags.Breakable) != 0)
+				if ((tileFlags[x, y] & flag) != 0)
 					return true;
 
 		return false;
 	}
 
-	bool HasFungalTiles()
+	void WriteFlaggedTiles(Utf8JsonWriter writer, string name, TileFlags flag)
 	{
-		for (var x = 0; x < Size.X; x++)
-			for (var y = 0; y < Size.Y; y++)
-				if ((tileFlags[x, y] & TileFlags.Fungal) != 0)
-					return true;
+		if (!HasFlaggedTiles(flag))
+			return;
 
-		return false;
-	}
-
-	bool HasSlopeTiles()
-	{
-		for (var x = 0; x < Size.X; x++)
-			for (var y = 0; y < Size.Y; y++)
-				if ((tileFlags[x, y] & TileFlags.Slope) != 0)
-					return true;
-
-		return false;
+		writer.WriteStartArray(name);
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X; x++)
+				if ((tileFlags[x, y] & flag) != 0)
+					WriteIntPairValue(writer, x, y);
+		writer.WriteEndArray();
 	}
 }

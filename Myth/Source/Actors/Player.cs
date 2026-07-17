@@ -1089,23 +1089,27 @@ public partial class Player : Pawn
 
 	protected override void OnLanded(Vector2 previousVelocity)
 	{
-		if (input.JumpDown && !burrowNeedsGrounding)
-		{
-			TryStartBurrow(previousVelocity);
-			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+		if (input.JumpDown && !burrowNeedsGrounding && TryStartBurrow(previousVelocity)) {
 			return;
 		}
+
 		// A horizontal wall-pop lands grounded immediately; keep the pop squish
 		// rather than stamping the flat landing squish over it.
 		if (burrowExitTimer > 0)
 		{
-			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+			PlayLandingSound();
 			CanPlaySquishSound = true;
 			return;
 		}
+
 		base.OnLanded(previousVelocity);
-		AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+		PlayLandingSound();
 		CanPlaySquishSound = true;
+	}
+
+	void PlayLandingSound()
+	{
+		AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
 	}
 
 	protected override void AfterStateUpdate(Vector2 previousVelocity)
@@ -1114,6 +1118,7 @@ public partial class Player : Pawn
 		{
 			burrowNeedsGrounding = false;
 			dashNeedsGrounding = false;
+			Game.TriggerCrumbleBelow(this);
 		}
 
 		UpdateAura(Time.Delta);

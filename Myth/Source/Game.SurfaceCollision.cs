@@ -263,11 +263,8 @@ public partial class Game
 	{
 		if (room != null)
 		{
-			foreach (var slope in room.SlopeTiles)
+			foreach (var slope in room.SlopeTiles) if (OverlapsSlope(bounds, room, slope))
 			{
-				if (!OverlapsSlope(bounds, room, slope))
-					continue;
-
 				room.GetSlopeSurface(slope, out var left, out var right);
 				var normal = SlopeNormal(left, right, slope.Fill);
 				var correction = (Vector2)offset + SlopeCorrection(bounds, left, normal);
@@ -275,11 +272,8 @@ public partial class Game
 				return true;
 			}
 
-			foreach (var rect in room.CollisionRects)
+			foreach (var rect in room.CollisionRects) if (bounds.Overlaps(rect))
 			{
-				if (!bounds.Overlaps(rect))
-					continue;
-
 				var normal = AxisNormal(searchDirection);
 				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, null, rect, Vector2.Zero);
 				return true;
@@ -295,7 +289,7 @@ public partial class Game
 				continue;
 
 			var normal = AxisNormal(searchDirection);
-			hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, other, null, other.Hitbox.Rect + other.Position, Vector2.Zero);
+			hit = new (SurfacePoint(bounds, normal), normal, distance, other, null, other.Hitbox.Rect + other.Position, Vector2.Zero);
 			return true;
 		}
 

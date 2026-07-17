@@ -3863,32 +3863,21 @@ public partial class Manager
 	}
 
 	void DrawBreakableTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
-	{
-		var color = new Color(1.0f, 0.82f, 0.24f, 0.2f);
-		var tileSize = Game.TileSize - lineWeight * 4;
-		for (var x = 0; x < room.Size.X; x++)
-			for (var y = 0; y < room.Size.Y; y++)
-			{
-				var tile = new Point2(x, y);
-				if (!room.IsBreakable(tile))
-					continue;
-
-				var rect = new Rect(
-					roomTopLeft.X + x * Game.TileSize + lineWeight * 2,
-					roomTopLeft.Y + y * Game.TileSize + lineWeight * 2, tileSize, tileSize);
-				batcher.RectDashed(rect, lineWeight, color, 1, 5.5f);
-			}
-	}
+		=> DrawFlaggedTileMarkers(room, roomTopLeft, lineWeight, Room.TileFlags.Breakable, new Color(1.0f, 0.82f, 0.24f, 0.2f));
 
 	void DrawFungalTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
+		=> DrawFlaggedTileMarkers(room, roomTopLeft, lineWeight, Room.TileFlags.Fungal, new Color(0.40f, 0.90f, 0.42f, 0.35f));
+
+	void DrawCrumbleTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight)
+		=> DrawFlaggedTileMarkers(room, roomTopLeft, lineWeight, Room.TileFlags.Crumble, new Color(0.72f, 0.72f, 0.76f, 0.35f));
+
+	void DrawFlaggedTileMarkers(Room room, Vector2 roomTopLeft, float lineWeight, Room.TileFlags flag, Color color)
 	{
-		var color = new Color(0.40f, 0.90f, 0.42f, 0.35f);
 		var tileSize = Game.TileSize - lineWeight * 4;
 		for (var x = 0; x < room.Size.X; x++)
 			for (var y = 0; y < room.Size.Y; y++)
 			{
-				var tile = new Point2(x, y);
-				if (!room.IsFungal(tile))
+				if (!room.HasTileFlag(new Point2(x, y), flag))
 					continue;
 
 				var rect = new Rect(
@@ -4049,6 +4038,7 @@ public partial class Manager
 			for (int y = 1; y < editing.Size.Y; y++)
 				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize), roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, (y - 1) % 4 == 0 ? gridColorHeavy : gridColor);
 			DrawBreakableTileMarkers(editing, roomTopLeft, gridWeight);
+			DrawCrumbleTileMarkers(editing, roomTopLeft, gridWeight);
 			if (showFungalMarkers)
 				DrawFungalTileMarkers(editing, roomTopLeft, gridWeight);
 
@@ -4181,6 +4171,17 @@ public partial class Manager
 					using (CaptureRoomUndo("Toggle Breakable Tile", editing))
 					{
 						editing.SetBreakable(tileOver, !editing.IsBreakable(tileOver));
+						editorGameDirty = true;
+					}
+				}
+			}
+			else if (!editingRoomGeometry && !worldMouseBlocked && activeTileLayer == Factory.TileLayer.Foreground && overGame && !keyboardBlocked && Input.Keyboard.Pressed(Keys.C))
+			{
+				if (editing.GetEntry(tileOver) is { BlocksMovement: true })
+				{
+					using (CaptureRoomUndo("Toggle Crumble Tile", editing))
+					{
+						editing.SetTileFlag(tileOver, Room.TileFlags.Crumble, !editing.HasTileFlag(tileOver, Room.TileFlags.Crumble));
 						editorGameDirty = true;
 					}
 				}

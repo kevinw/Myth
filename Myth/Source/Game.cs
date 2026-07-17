@@ -440,6 +440,7 @@ public partial class Game : IDisposable
 		CollisionRectsThisFrame.Clear();
 		UpdatePlayerHitSnapshot();
 		UpdateRoomTransitionGc();
+		UpdateCrumbleTiles();
 		if (linkedDoorCooldown > 0)
 			linkedDoorCooldown = Calc.Approach(linkedDoorCooldown, 0, Time.Delta);
 		if (pendingHotReloadMessage is { } msg)
@@ -1633,6 +1634,8 @@ public partial class Game : IDisposable
 		return false;
 	}
 
+	readonly List<Point2> tileRemovalScratch = [];
+
 	public bool BreakTiles(RectInt hitbox)
 	{
 		if (room == null)
@@ -1646,40 +1649,50 @@ public partial class Game : IDisposable
 		var right = Math.Clamp((int)MathF.Floor((local.Right - 1) / (float)TileSize), 0, room.Size.X - 1);
 		var top = Math.Clamp((int)MathF.Floor(local.Top / (float)TileSize), 0, room.Size.Y - 1);
 		var bottom = Math.Clamp((int)MathF.Floor((local.Bottom - 1) / (float)TileSize), 0, room.Size.Y - 1);
-		var brokeAny = false;
 
-		var tileTypesBroken = new HashSet<string>();
-
+		tileRemovalScratch.Clear();
 		for (var y = top; y <= bottom; y++)
 			for (var x = left; x <= right; x++)
 			{
-				var tile = room.Tiles[x, y];
 				var point = new Point2(x, y);
-
-				if (!room.IsBreakable(point) && Factory.Find(tile) is not { Destructible: true })
-					continue;
-
-				if (Factory.Find(tile) is { SurfaceType: { } surfaceType })
-					tileTypesBroken.Add(surfaceType);
-
-				room.Set(point, '0');
-				Create<Pop>(room.WorldBounds.TopLeft + new Point2(x * TileSize + TileSize / 2, y * TileSize + TileSize / 2));
-				brokeAny = true;
+				if (room.IsBreakable(point) || Factory.Find(room.Tiles[x, y]) is { Destructible: true })
+					tileRemovalScratch.Add(point);
 			}
 
-		if (brokeAny)
+		return RemoveTiles(tileRemovalScratch, hitbox.Center);
+	}
+
+	// Removes the given room tiles as one batch: a single geometry rebuild + visual refresh
+	// (not one per tile), a Pop per tile, and one break sound per surface type removed.
+	bool RemoveTiles(List<Point2> tiles, Vector2 soundPosition)
+	{
+		if (room == null || tiles.Count == 0)
+			return false;
+
+		var tileTypesBroken = new HashSet<string>();
+		foreach (var point in tiles)
 		{
-			RefreshRoomTiles();
-			View?.MarkRoomNormalCacheDirty(room);
-			View?.MarkRoomTileFieldCacheDirty(room);
-			foreach (var surfaceType in tileTypesBroken)
-			{
-				PlayAudioEvent("tile_break", "Type", surfaceType, position: hitbox.Center);
-			}
+			if (Factory.Find(room.Tiles[point.X, point.Y]) is { SurfaceType: { } surfaceType })
+				tileTypesBroken.Add(surfaceType);
+
+			room.Set(point, '0', rebuildGeometry: false);
+			Create<Pop>(TileWorldCenter(point));
 		}
 
-		return brokeAny;
+		room.RebuildGeometry();
+		RefreshRoomTiles();
+		View?.MarkRoomNormalCacheDirty(room);
+		View?.MarkRoomTileFieldCacheDirty(room);
+		foreach (var surfaceType in tileTypesBroken)
+			PlayAudioEvent("tile_break", "Type", surfaceType, position: soundPosition);
+
+		return true;
 	}
+
+	Point2 TileWorldCenter(Point2 tile)
+		=> room != null
+			? room.WorldBounds.TopLeft + new Point2(tile.X * TileSize + TileSize / 2, tile.Y * TileSize + TileSize / 2)
+			: Point2.Zero;
 
 	public void HitVisualActors(RectInt hitbox)
 	{
