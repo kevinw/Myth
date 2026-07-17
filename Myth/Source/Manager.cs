@@ -149,7 +149,6 @@ public partial class Manager : App
 		}
 	}
 
-	readonly Lock assetReloadLock = new();
 	readonly List<string> musicAreas = [];
 	readonly bool dumpAtlases;
 	readonly float maxTimeSeconds;
@@ -421,14 +420,7 @@ public partial class Manager : App
 		DisposeEditorCursors();
 		imgui?.Dispose();
 #if DEBUG && !IOS
-		assetWatcher?.Dispose();
-		assetWatcher = null;
-		shaderWatcher?.Dispose();
-		shaderWatcher = null;
-		particleWatcher?.Dispose();
-		particleWatcher = null;
-		audioBankWatcher?.Dispose();
-		audioBankWatcher = null;
+		DisposeAssetWatchers();
 #endif
 #endif
 
@@ -1245,98 +1237,6 @@ public partial class Manager : App
 	}
 
 #if EDITOR && DEBUG && !IOS
-	void RequestAssetReload()
-	{
-		lock (assetReloadLock)
-		{
-			assetReloadRequested = true;
-			assetReloadTimer = AssetReloadDelay;
-		}
-	}
-
-
-	void UpdateAssetReload()
-	{
-		var reload = false;
-
-		lock (assetReloadLock)
-		{
-			if (assetReloadRequested)
-			{
-				assetReloadTimer -= Time.Delta;
-				if (assetReloadTimer <= 0)
-				{
-					assetReloadRequested = false;
-					reload = true;
-				}
-			}
-		}
-
-		if (reload)
-			ReloadAssets(false);
-	}
-
-
-	void RequestShaderReload()
-	{
-		lock (shaderReloadLock)
-		{
-			shaderReloadRequested = true;
-			shaderReloadTimer = AssetReloadDelay;
-		}
-	}
-
-	void UpdateShaderReload()
-	{
-		var reload = false;
-
-		lock (shaderReloadLock)
-		{
-			if (shaderReloadRequested)
-			{
-				shaderReloadTimer -= Time.Delta;
-				if (shaderReloadTimer <= 0)
-				{
-					shaderReloadRequested = false;
-					reload = true;
-				}
-			}
-		}
-
-		if (reload)
-			CompileAndReloadShaders();
-	}
-
-	void RequestAudioBankReload()
-	{
-		lock (audioBankReloadLock)
-		{
-			audioBankReloadRequested = true;
-			audioBankReloadTimer = AssetReloadDelay;
-		}
-	}
-
-	void UpdateAudioBankReload()
-	{
-		var reload = false;
-
-		lock (audioBankReloadLock)
-		{
-			if (audioBankReloadRequested)
-			{
-				audioBankReloadTimer -= Time.Delta;
-				if (audioBankReloadTimer <= 0)
-				{
-					audioBankReloadRequested = false;
-					reload = true;
-				}
-			}
-		}
-
-		if (reload)
-			ReloadAudioBanks();
-	}
-
 	void ReloadAudioBanks()
 	{
 		try

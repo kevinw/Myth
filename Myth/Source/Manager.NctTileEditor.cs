@@ -132,13 +132,13 @@ public partial class Manager
 		// same way (grouped by texture, then flow/motion variant).
 		ImGui.TextUnformatted("interior");
 		ImGui.PushID("interior");
-		changed = DrawNeuralTextureWeightsCombo(ref draft.Interior, allowNone: false);
+		changed = NeuralTextureCatalog.DrawCombo(ref draft.Interior, allowNone: false);
 		MarkNctEdited(changed, discrete: true);
 		ImGui.PopID();
 
 		ImGui.TextUnformatted("edge");
 		ImGui.PushID("edge");
-		changed = DrawNeuralTextureWeightsCombo(ref draft.Edge, allowNone: true);
+		changed = NeuralTextureCatalog.DrawCombo(ref draft.Edge, allowNone: true);
 		MarkNctEdited(changed, discrete: true);
 		ImGui.PopID();
 
