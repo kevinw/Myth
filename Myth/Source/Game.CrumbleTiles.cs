@@ -73,7 +73,6 @@ public partial class Game
 		var scale = Vector2.One * 0.25f;
 		Create<Pop>(TileWorldCenter(tile), (pop) => {
 			pop.Squish = scale;
-			pop.SquishTarget = scale;
 		});
 	}
 
