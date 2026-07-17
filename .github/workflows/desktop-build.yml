@@ -206,7 +206,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar -xf "$RUNNER_TEMP/windows-shaders.tar"
+          tar -xf "$(cygpath -u "$RUNNER_TEMP")/windows-shaders.tar"
           find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -exec touch {} +
 
       - name: Set up .NET
