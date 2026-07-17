@@ -25,11 +25,13 @@ async function releases(bucket, cursor) {
     });
 }
 
-export async function onRequest({ env, params, request }) {
+export async function onRequest({ env, params, request, next }) {
     if (request.method !== "GET" && request.method !== "HEAD")
         return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
 
     const path = Array.isArray(params.path) ? params.path.join("/") : params.path;
+    if (!path)
+        return next();
     if (path === "releases.json")
         return releases(env.MYTH_DOWNLOADS, new URL(request.url).searchParams.get("cursor"));
     if (!/^Myth-[0-9a-f]{8}\.zip$/.test(path))
