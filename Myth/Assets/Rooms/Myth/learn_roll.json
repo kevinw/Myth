@@ -102,6 +102,12 @@
       "Type": "Goal",
       "Position": [312, 144],
       "Name": "learn_roll"
+    },
+    {
+      "Id": "979a2697e3068de3",
+      "Type": "Wildlife",
+      "Position": [152, 40],
+      "FishCount": 2
     }
   ]
 }
