@@ -11,8 +11,8 @@ public class LinkedDoor : Actor
 	public string TargetActorId = "";
 	public Point2 SpawnOffset = DefaultSpawnOffset;
 
-	private bool showInteract;
-	private float interactTime;
+	bool showInteract;
+	float interactTime;
 
 	public LinkedDoor()
 	{
@@ -57,8 +57,9 @@ public class LinkedDoor : Actor
 			return;
 		}
 
-		var anim = interactSprite.Animations[0];
-		var frame = interactSprite.GetFrameAt(anim, interactTime, true);
+		if (interactSprite.FrameForAnimationIndex(0, interactTime, true) is not { } frame)
+			return;
+
 		batcher.Image(frame.Subtexture, new Vector2(-8, -31), interactSprite.Origin, Vector2.One, 0, Color.White);
 	}
 }

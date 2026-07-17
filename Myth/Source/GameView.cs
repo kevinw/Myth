@@ -61,34 +61,7 @@ public sealed partial class GameView : IDisposable
 	float ZoomedWidth => Width / zoomLevel;
 	float ZoomedHeight => Height / zoomLevel;
 	Game.DebugView debugView => game.debugView;
-	// Transition animation params: sim writes during room transitions, view lerps.
 	float nextRoomEase => game.nextRoomEase;
-	Color transitionBackdropColorFrom => game.transitionBackdropColorFrom;
-	Color transitionBackdropColorTo => game.transitionBackdropColorTo;
-	Color transitionBackdropColor2From => game.transitionBackdropColor2From;
-	Color transitionBackdropColor2To => game.transitionBackdropColor2To;
-	Color transitionAmbientColorFrom => game.transitionAmbientColorFrom;
-	Color transitionAmbientColorTo => game.transitionAmbientColorTo;
-	float transitionAmbientIntensityFrom => game.transitionAmbientIntensityFrom;
-	float transitionAmbientIntensityTo => game.transitionAmbientIntensityTo;
-	float transitionLightNoiseFrom => game.transitionLightNoiseFrom;
-	float transitionLightNoiseTo => game.transitionLightNoiseTo;
-	bool transitionDitherEnabledFrom => game.transitionDitherEnabledFrom;
-	bool transitionDitherEnabledTo => game.transitionDitherEnabledTo;
-	float transitionDitherScaleFrom => game.transitionDitherScaleFrom;
-	float transitionDitherScaleTo => game.transitionDitherScaleTo;
-	float transitionDitherStrengthFrom => game.transitionDitherStrengthFrom;
-	float transitionDitherStrengthTo => game.transitionDitherStrengthTo;
-	float transitionDitherSlopeBoostFrom => game.transitionDitherSlopeBoostFrom;
-	float transitionDitherSlopeBoostTo => game.transitionDitherSlopeBoostTo;
-	bool transitionDitherQuantizationFrom => game.transitionDitherQuantizationFrom;
-	bool transitionDitherQuantizationTo => game.transitionDitherQuantizationTo;
-	Color transitionSunColorFrom => game.transitionSunColorFrom;
-	Color transitionSunColorTo => game.transitionSunColorTo;
-	float transitionSunStrengthFrom => game.transitionSunStrengthFrom;
-	float transitionSunStrengthTo => game.transitionSunStrengthTo;
-	Vector2 transitionSunDirectionFrom => game.transitionSunDirectionFrom;
-	Vector2 transitionSunDirectionTo => game.transitionSunDirectionTo;
 
 	private void PushWorldMatrix()
 		=> Batcher.PushMatrix(

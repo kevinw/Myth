@@ -1,4 +1,5 @@
 gdown
+coremltools; sys_platform == 'darwin'
 matplotlib
 moviepy==1.0.3
 numpy

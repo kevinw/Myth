@@ -31,37 +31,48 @@ python3.12 -m venv .venv
 .venv/bin/python train.py --prepare-only
 ```
 
-Run the full circular-motion experiment. The first run also downloads VGG16
+Train and export a target from `targets/` by name. The reference configuration
+shipped by Cells2Pixels is the default; the first run also downloads VGG16
 weights and the official optical-flow checkpoint:
 
 ```sh
-.venv/bin/python train.py --motion circular
+./train.py circuit
 ```
 
-Checkpoints are written to `experiments/bubbly_0101_circular`; the final image
-and rollout video are written to `outputs/bubbly_0101_circular`. A reduced
-one-epoch toolchain check is available with `--smoke`.
+Queue several targets in one invocation and they will be trained, tested, and
+exported one after another using the same options:
+
+```sh
+./train.py circuit moss path/to/water.png
+```
+
+All target paths are checked before training begins, and the queue stops if any
+run fails.
+
+This writes the checkpoint to `experiments/circuit_circular`, the final image
+and rollout video to `outputs/circuit_circular`, and the game-ready weights to
+`../../Assets/NCA/DynamicTexture/circuit_circular.bin`. A reduced one-epoch
+toolchain check is available with `./train.py circuit --smoke`. Use
+`--no-test` or `--no-export` to skip those final steps.
 
 Motion is trained into the model. Use another target name to train a separate
 variant, for example:
 
 ```sh
-.venv/bin/python train.py --motion diverge
-.venv/bin/python train.py --motion converge
-.venv/bin/python train.py --motion hyperbolic
-.venv/bin/python train.py --motion 90
+./train.py circuit --motion diverge
+./train.py circuit --motion converge
+./train.py circuit --motion hyperbolic
+./train.py circuit --motion 90
 ```
 
-Use another opaque texture image with `--target path/to/texture.jpg`.
+An explicit image path works too: `./train.py path/to/texture.jpg`.
 
 Prepare downloaded PBR texture sets into paired 512x512 color and OpenGL-normal
 PNGs, then train the color target:
 
 ```sh
 .venv/bin/python prepare_textures.py
-.venv/bin/python train.py \
-    --target targets/prepared/onyx011_color.png \
-    --motion circular --profile screen
+./train.py targets/prepared/onyx011_color.png --motion circular
 ```
 
 By default the preparer scans `~/Downloads/NCA_TEXTURES`. It recognizes common
@@ -76,19 +87,45 @@ shared rollout makes one paired run roughly 1.13x the cost of a color-only run
 instead of the 2x of two runs:
 
 ```sh
-.venv/bin/python train.py \
-    --target targets/prepared/onyx011_color.png \
+./train.py targets/prepared/onyx011_color.png \
     --normal targets/prepared/onyx011_normal.png \
-    --motion circular --profile screen
+    --motion circular
 ```
+
+## Generating normal maps from photos
+
+On macOS, generate paired color and OpenGL-normal targets using Apple's local
+Depth Anything V2 Small Core ML model. The model is downloaded and cached on
+the first run:
+
+```sh
+./generate_normals.py targets/*.jpg
+./train.py targets/generated/*_color.png --normal auto
+```
+
+The default uses the full estimated depth. Large-scale scene shape and local
+surface relief can be controlled independently; setting the scene weight to
+zero keeps only relief, while reducing detail emphasizes the scene:
+
+```sh
+./generate_normals.py circuit --scene-weight 0 --detail-weight 1
+./generate_normals.py circuit --scene-weight 1 --detail-weight .25 --overwrite
+```
+
+`--strength` controls normal slope, `--detail-radius` controls the scene/detail
+split, and `--smooth` suppresses depth noise. Use `--invert` if the inferred
+near/far direction is wrong for the image, `--seamless` for wrapping textures,
+and `--save-depth` to inspect the normalized estimate. Generated color and
+normal files use the exact same square crop. `--normal auto` pairs every
+`*_color.png` target with its sibling `*_normal.png`, including batch runs.
 
 ## Myth screen profile
 
-The `screen` profile targets Myth's 320x180 presentation rather than decoding
-eight samples per NCA cell for the training loss:
+The optional `screen` profile targets Myth's 320x180 presentation rather than
+decoding eight samples per NCA cell for the training loss:
 
 ```sh
-.venv/bin/python train.py --motion circular --profile screen
+./train.py circuit --motion circular --profile screen
 ```
 
 It uses an LPPN scale of 3, 160x160 VGG patches, two appearance scales, a
@@ -101,8 +138,9 @@ and recovery are still trained. Results are kept separate under
 The official motion loss also supports `circle`, `2block_x`, `2block_y`,
 `3block`, `4block`, and `grad_<motion-degrees>_<gradient-degrees>`.
 
-Export a completed checkpoint into the packed runtime layout (the exporter
-detects three-channel color and six-channel color+normal checkpoints):
+`train.py` exports automatically. To re-export a completed checkpoint manually,
+use the exporter directly (it detects three-channel color and six-channel
+color+normal checkpoints):
 
 ```sh
 .venv/bin/python export_model.py experiments/bubbly_0101_circular \
@@ -110,10 +148,14 @@ detects three-channel color and six-channel color+normal checkpoints):
 ```
 
 `train.py` selects CUDA, then MPS, then CPU. Override that choice with
-`--device`. CUDA uses float16; MPS and CPU use float32. MPS also enables
+`--device`. CUDA uses float16; MPS and CPU use float32 by default. Opt into
+MPS mixed precision with `--precision float16`; MPS also enables
 PyTorch's CPU fallback for the antialiased-resize gradient used by the motion
-loss. The upstream source and downloaded training artifacts stay ignored,
+loss. MPS keeps the recurrent NCA state in float32 to preserve its numeric
+range while autocasting the convolution and decoder work to float16. The
+upstream source and downloaded training artifacts stay ignored,
 while the revision and reference image URL are pinned in `train.py`.
+The pinned fork includes the mixed-precision and loss-sampling optimizations.
 
 On CUDA, `--compile-siren` uses `torch.compile` for the SIREN decoder while
 leaving the variable-length NCA rollout eager. Native Windows CUDA compilation

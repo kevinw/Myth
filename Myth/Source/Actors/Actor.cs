@@ -88,7 +88,10 @@ public class Actor
 	// Convention: an actor's sprite defaults to one named after its class (case-insensitive),
 	// so Mosquito uses mosquito.ase automatically. Assigning Sprite in a subclass ctor overrides
 	// this and marks a deliberate exception (e.g. the blob-family enemies reusing "blob").
-	public Actor() => Sprite = Assets.GetSprite(GetType().Name);
+	public Actor()
+	{
+		Sprite = Assets.GetSprite(GetType().Name, logMissing: false);
+	}
 
 	public AnimState PlayOnce(string name, bool restart = false)
 	{
@@ -593,7 +596,7 @@ public class Actor
 	/// Called when the Actor was destroyed
 	public virtual void Destroyed() { }
 
-	protected void StopAndReleaseSound(ref SoundInstance? sound, bool immediate = false)
+	static protected void StopAndReleaseSound(ref SoundInstance? sound, bool immediate = false)
 	{
 		if (sound == null) return;
 

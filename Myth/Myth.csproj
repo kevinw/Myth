@@ -125,7 +125,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Platforms/Desktop/Program.cs" />
+    <Compile Include="Source/Program.cs" />
     <!-- MythDesktopOnly: the desktop/browser exe never needs Myth.Core's net10.0-ios TFM,
          so drop it here to cut restore/eval work in the dev loop. The iOS app references
          Myth.Core directly (without this flag), so it still builds net10.0-ios. -->

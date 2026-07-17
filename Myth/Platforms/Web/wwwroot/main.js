@@ -144,6 +144,42 @@ try {
 } catch (error) {
   console.error("Myth browser startup failed", error);
   console.error(error?.stack ?? error);
+  showStartupFailure(error);
+}
+
+function showStartupFailure(error) {
+  const gate = document.querySelector("#start-gate");
+  const panel = document.querySelector("#startup-error");
+  const title = document.querySelector("#startup-error-title");
+  const message = document.querySelector("#startup-error-message");
+  const help = document.querySelector("#startup-error-help");
+  if (
+    !(gate instanceof HTMLElement) ||
+    !(panel instanceof HTMLElement) ||
+    !(title instanceof HTMLElement) ||
+    !(message instanceof HTMLElement) ||
+    !(help instanceof HTMLElement)
+  )
+    return;
+
+  const details = String(error?.message ?? error);
+  const webGPUUnavailable =
+    details.includes("WebGPU adapter was not available") ||
+    (!("gpu" in navigator) && details.includes("WebGPU"));
+
+  title.textContent = webGPUUnavailable
+    ? "WebGPU isn’t available"
+    : "The game couldn’t start";
+  message.textContent = webGPUUnavailable
+    ? "This game needs WebGPU, but this browser couldn’t provide a compatible GPU adapter."
+    : "An unexpected error occurred while starting the browser build.";
+  help.textContent = webGPUUnavailable
+    ? "Try an up-to-date WebGPU-capable browser or another device."
+    : "Try reloading the page or using another browser. Technical details were written to the developer console.";
+
+  gate.hidden = false;
+  gate.toggleAttribute("data-error", true);
+  panel.hidden = false;
 }
 
 function prepareReloadPrompt() {

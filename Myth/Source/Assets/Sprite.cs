@@ -110,6 +110,14 @@ public class Sprite(string name, Vector2 origin)
 				Sockets[name] = poses;
 	}
 
+	public Frame? FrameForAnimationIndex(int animationIndex, float time, bool loop)
+	{
+		if (animationIndex >= Animations.Count)
+			return null;
+
+		return GetFrameAt(Animations[animationIndex], time, loop);
+	}
+
 	public Frame GetFrameAt(in Animation animation, float time, bool loop)
 	{
 		var index = GetFrameIndexAt(animation, time, loop);

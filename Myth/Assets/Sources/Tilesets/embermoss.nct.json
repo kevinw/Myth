@@ -5,15 +5,18 @@
   "surface": "Brick",
   "slopes": true,
   "interior": "broccoli_circular.bin",
-  "edge": "leaf_circular.bin",
-  "edgeBandCells": 1,
+  "edge": "bumpy_0169_circular.bin",
+  "edgeBandCells": 6,
   "roundingPixels": 1.75,
-  "outsetPixels": 0.02,
-  "freezeSteps": 154,
+  "freezeSteps": 0,
+  "stepsPerSecond": 30,
   "fireRate": 0.215,
   "contrast": 1.56,
   "saturation": 1.2,
   "brightness": -0.04,
   "normalStrength": 0.87,
-  "silhouetteNormalStrength": 0.91
+  "silhouetteNormalStrength": 0.91,
+  "blendCurve": 2.27,
+  "edgeWeight": 0.36,
+  "featureScale": 1
 }

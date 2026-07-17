@@ -3345,7 +3345,15 @@ public static class Assets
 		ActorSpecs.ClearActorTypes();
 	}
 
-	public static Sprite? GetSprite(string name) => Sprites.GetValueOrDefault(name);
+	public static Sprite? GetSprite(string name, bool logMissing = true)
+	{
+		var sprite = Sprites.GetValueOrDefault(name);
+#if DEBUG
+		if (logMissing && sprite == null) Console.WriteLine($"Error: Sprite '{name}' not found");
+#endif
+		return sprite;
+	}
+
 	public static Tileset? GetTileset(string name, bool logMissing = false)
 	{
 		var tileset = Tilesets.GetValueOrDefault(name);
