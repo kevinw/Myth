@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Download Myth</title>
+        <style>
+            :root {
+                color-scheme: dark;
+                --backdrop: #150e22;
+                --panel: #2f213f;
+                --accent: #e0d3a7;
+                --text: #f5e9c8;
+                --muted: #b9acc2;
+                --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+            }
+
+            * { box-sizing: border-box; }
+            body {
+                margin: 0;
+                min-height: 100vh;
+                padding: 48px 20px;
+                background: var(--backdrop);
+                color: var(--text);
+                font: 15px/1.55 var(--mono);
+            }
+            main { width: min(720px, 100%); margin: 0 auto; }
+            h1 { margin: 0 0 8px; font-size: clamp(32px, 8vw, 64px); }
+            h2 { margin: 0; font-size: 18px; }
+            p { margin: 8px 0; }
+            a { color: var(--accent); }
+            .release {
+                margin: 24px 0;
+                padding: 20px;
+                border: 1px solid var(--accent);
+                background: var(--panel);
+            }
+            .meta { color: var(--muted); font-size: 13px; }
+            .download {
+                display: inline-block;
+                margin-top: 12px;
+                padding: 10px 14px;
+                border: 1px solid var(--accent);
+                background: rgb(224 211 167 / 12%);
+                font-weight: 700;
+                text-decoration: none;
+            }
+            .changes { margin: 18px 0 0; padding-left: 24px; }
+            details { margin-top: 28px; }
+            summary { color: var(--accent); cursor: pointer; font-weight: 700; }
+            #status { color: var(--muted); }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>Myth</h1>
+            <p>Desktop builds for macOS on Apple silicon.</p>
+            <div id="latest"><p id="status">Loading latest build…</p></div>
+            <details id="old" hidden>
+                <summary>Old versions</summary>
+                <div id="versions"></div>
+            </details>
+        </main>
+        <script>
+            const latest = document.querySelector("#latest");
+            const old = document.querySelector("#old");
+            const versions = document.querySelector("#versions");
+            let cursor;
+            let loading = false;
+
+            function releaseView(release, isLatest = false) {
+                const section = document.createElement("section");
+                section.className = "release";
+
+                const heading = document.createElement("h2");
+                heading.textContent = isLatest ? "Latest macOS build" : `Myth ${release.shortSha}`;
+                section.append(heading);
+
+                const meta = document.createElement("p");
+                meta.className = "meta";
+                meta.textContent = `${new Date(release.publishedAt).toLocaleString()} · ${release.shortSha}`;
+                section.append(meta);
+
+                const link = document.createElement("a");
+                link.className = "download";
+                link.href = `/download/${release.file}`;
+                link.textContent = "Download for macOS";
+                section.append(link);
+
+                if (release.commits.length) {
+                    const changes = document.createElement("ul");
+                    changes.className = "changes";
+                    for (const subject of release.commits) {
+                        const item = document.createElement("li");
+                        item.textContent = subject;
+                        changes.append(item);
+                    }
+                    section.append(changes);
+                }
+                return section;
+            }
+
+            async function loadPage(first = false) {
+                if (loading || (!first && !cursor)) return false;
+                loading = true;
+                try {
+                    const url = new URL("/download/releases.json", location.origin);
+                    if (cursor) url.searchParams.set("cursor", cursor);
+                    const response = await fetch(url, { cache: "no-store" });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const page = await response.json();
+                    cursor = page.cursor;
+
+                    if (first) {
+                        if (!page.releases.length) {
+                            latest.textContent = "No desktop builds have been published yet.";
+                            return true;
+                        }
+                        latest.replaceChildren(releaseView(page.releases.shift(), true));
+                    }
+                    for (const release of page.releases)
+                        versions.append(releaseView(release));
+                    old.hidden = versions.childElementCount === 0 && !cursor;
+                    return true;
+                } catch (error) {
+                    if (first) latest.textContent = `Could not load builds: ${error.message}`;
+                    return false;
+                } finally {
+                    loading = false;
+                }
+            }
+
+            old.addEventListener("toggle", async () => {
+                if (!old.open) return;
+                while (cursor && await loadPage()) {}
+            });
+            loadPage(true);
+        </script>
+    </body>
+</html>

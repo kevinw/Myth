@@ -1,0 +1,151 @@
+name: Desktop Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
+  R2_BUCKET: myth-downloads
+  MYTH_NOTARY_PROFILE: myth-notary
+
+jobs:
+  publish-macos:
+    name: Publish macOS (Apple silicon)
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          lfs: true
+          submodules: false
+
+      - name: Update desktop submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init Foster Myth/Source/External/StringBuilder
+          git -C Foster lfs pull
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check release configuration
+        shell: bash
+        env:
+          MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          APPSTORE_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 \
+            MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD \
+            APPSTORE_API_PRIVATE_KEY \
+            APPSTORE_API_KEY_ID \
+            APPSTORE_ISSUER_ID \
+            CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_API_TOKEN
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing GitHub secret or variable: $name" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Import Developer ID certificate
+        uses: Apple-Actions/import-codesign-certs@v7.0.0
+        with:
+          p12-file-base64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+
+      - name: Store notarization credentials
+        shell: bash
+        env:
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          APPSTORE_API_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/AuthKey_$APPSTORE_API_KEY_ID.p8"
+          trap 'rm -f "$key_path"' EXIT
+          printf '%s' "$APPSTORE_API_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          xcrun notarytool store-credentials "$MYTH_NOTARY_PROFILE" \
+            --key "$key_path" \
+            --key-id "$APPSTORE_API_KEY_ID" \
+            --issuer "$APPSTORE_ISSUER_ID"
+
+      - name: Verify Developer ID identity
+        run: security find-identity -v -p codesigning | grep 'Developer ID Application'
+
+      - name: Publish and notarize
+        run: node Myth/tools/publish-desktop.mjs --notarize
+
+      - name: Prepare release metadata
+        id: release
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA:0:8}"
+          file="Myth-$short_sha.zip"
+          published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          previous_sha=""
+          if releases="$(curl -fsS 'https://myth-game.pages.dev/download/releases.json')"; then
+            previous_sha="$(printf '%s' "$releases" | node -e '
+              let input = "";
+              process.stdin.on("data", chunk => input += chunk);
+              process.stdin.on("end", () => {
+                const current = process.argv[1];
+                const release = JSON.parse(input).releases.find(value => value.sha !== current);
+                process.stdout.write(release?.sha ?? "");
+              });
+            ' "$GITHUB_SHA")"
+          else
+            echo "No published release index yet; using the push range for this changelog."
+          fi
+          node Myth/tools/write-desktop-release.mjs \
+            "$RUNNER_TEMP/release.json" "$GITHUB_SHA" "$file" "$published_at" "$previous_sha" "$BEFORE_SHA"
+          commit_count="$(git rev-list --count "$GITHUB_SHA")"
+          reverse_order="$(node -p 'String(999999999999 - Number(process.argv[1])).padStart(12, "0")' "$commit_count")"
+          {
+            echo "file=$file"
+            echo "descriptor=releases/$reverse_order-$GITHUB_SHA.json"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload desktop build to R2
+        working-directory: Myth/Platforms/Web
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          FILE: ${{ steps.release.outputs.file }}
+          DESCRIPTOR: ${{ steps.release.outputs.descriptor }}
+        run: |
+          set -euo pipefail
+          npx wrangler@latest r2 object put "$R2_BUCKET/$FILE" \
+            --remote \
+            --file "../../bin/publish/Myth.zip" \
+            --content-type application/zip \
+            --content-disposition "attachment; filename=\"$FILE\"" \
+            --cache-control "public, max-age=31536000, immutable"
+          npx wrangler@latest r2 object put "$R2_BUCKET/$DESCRIPTOR" \
+            --remote \
+            --file "$RUNNER_TEMP/release.json" \
+            --content-type "application/json; charset=utf-8" \
+            --cache-control "public, max-age=31536000, immutable"
