@@ -1382,7 +1382,7 @@ public partial class Manager
 		FxShape("Shape", name, ref e.Shape);
 		FxInt("Count", name, ref e.BurstCount, 1, ParticleSystem.Capacity);
 		if (e.Shape == ParticleEmitterShape.Circle)
-			FxFloat("Radius", name, ref e.EmitterRadius, 0.0f, 64.0f);
+			FxFloat("Radius", name, ref e.EmitterRadius, 0.0f, 320.0f);
 		if (e.Shape == ParticleEmitterShape.Cone)
 		{
 			FxFloat("Direction", name, ref e.DirectionDegrees, -180.0f, 180.0f);

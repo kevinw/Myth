@@ -1,11 +1,11 @@
 {
   "Shape": "Circle",
-  "EmitterRadius": 80,
+  "EmitterRadius": 121.307,
   "DirectionDegrees": -90,
   "SpreadDegrees": 360,
   "BurstCount": 429,
   "Mode": "Continuous",
-  "EmissionRate": 16.471,
+  "EmissionRate": 21.7,
   "Prewarm": true,
   "SpeedMin": 2,
   "SpeedMax": 8,
@@ -21,7 +21,16 @@
   "Style": "Square",
   "Collision": "Settle",
   "Bounciness": 0,
-  "ColorBirth": "A0B171",
-  "ColorMid": "848A7E",
-  "ColorEnd": "313B1D"
+  "TrailSeconds": 0,
+  "TrailWidthStart": 2,
+  "TrailWidthEnd": 0,
+  "EdgeSide": "FacingMotion",
+  "EdgeSideDegrees": -90,
+  "EdgeArcDegrees": 120,
+  "EdgeAttraction": 0,
+  "EdgeFlow": 0,
+  "ColorBirth": "A0B171FF",
+  "ColorMid": "848A7EFF",
+  "ColorEnd": "313B1DFF",
+  "TrailColors": []
 }
