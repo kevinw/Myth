@@ -9,6 +9,8 @@ namespace Myth;
 [GameActor(Sprite = "editor_prop", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3, Anchor = SpriteAnchor.TopLeft)]
 public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 {
+	readonly static bool doLog = false;
+
 	public const int StateWidth = 128;
 	public const int StateHeight = 128;
 	const int ColorWeightCount = 3441;
@@ -557,7 +559,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			}
 	}
 
-	public void SimulateFromSeed(int steps)
+	internal void SimulateFromSeed(int steps)
 	{
 		if (!supported)
 			return;
@@ -568,12 +570,15 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		stepAccumulator = 0;
 		seed = 1;
 		pawnSamples.Clear();
-		var started = Stopwatch.GetTimestamp();
+		long started = 0;
+		if (doLog)
+			started = Stopwatch.GetTimestamp();
 		for (var i = 0; i < steps; i++)
 			StepState();
 		Decode();
 		settledFromSeed = true;
-		Log.Info($"NCT settle: {steps} steps, {updateSize.X}x{updateSize.Y} of {SimulationSize.X}x{SimulationSize.Y}, {Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.00} ms CPU submit");
+		if (doLog)
+			Log.Info($"NCT settle: {steps} steps, {updateSize.X}x{updateSize.Y} of {SimulationSize.X}x{SimulationSize.Y}, {Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.00} ms CPU submit");
 	}
 
 	public override void Update()

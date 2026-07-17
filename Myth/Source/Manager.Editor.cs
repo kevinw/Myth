@@ -67,18 +67,22 @@ public partial class Manager
 	Point2 tileRectPaintFrom;
 	Point2 tileRectPaintTo;
 	RectInt? proposedRoomTiles;
+	// Snapshot of the proposal the context menu was opened on: proposedRoomTiles follows the
+	// cursor and goes null once ImGui takes the mouse, so the menu needs its own copy.
+	RectInt? pendingCreateRoomTiles;
+	bool createRoomPopupRequested;
 	string? selectedActorSpecId;
 	int selectedActorPaletteIndex = -1;
 	ActorTag actorPaletteFilter = ActorTag.None; // None = show all
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
-	// Click-to-cycle picking: repeated clicks at the same screen spot walk down the stack of
-	// overlapping actors so hidden ones are reachable. Scratch + last-click state drive it.
+	// Click-to-cycle picking: a click that doesn't drag walks down the stack of overlapping actors
+	// so hidden ones are reachable. Scratch + press state drive it.
 	readonly List<int> actorPickScratch = [];
-	Vector2 lastActorPickCursor;
-	bool hasLastActorPick;
-	const float ActorPickCycleThreshold = 4f; // UI pixels: clicks within this cycle, farther clicks reset
+	Vector2 actorPressCursor;
+	bool actorPressCanCycle;
+	const float ActorPickCycleThreshold = 4f; // UI pixels: a release within this of the press is a click, not a drag
 	bool selectionIncludeBackgroundTiles = true;
 	bool selectionIncludeForegroundTiles = true;
 	SnapshotFlags selectionSnapshotFlags = SnapshotFlags.None;
@@ -2389,31 +2393,47 @@ public partial class Manager
 				into.Add(i);
 	}
 
-	// Which actor a left-click selects. A click at a fresh spot picks the topmost actor under the
-	// cursor; clicking the same spot again advances to the next actor below the current selection
-	// (wrapping), so actors hidden behind overlapping ones can still be reached.
-	int PickRoomActorForClick(Room room, Vector2 world)
+	// Which actor a left-press acts on. A press holds onto the current selection whenever it is
+	// under the cursor, so handles and drags always affect the actor the inspector is showing;
+	// otherwise it takes the topmost. The selection is only given up for something more specific
+	// than the topmost hit (a small actor sitting on a room-sized one), so clicking a light on top
+	// of a selected backdrop actor still grabs the light. Reaching an actor underneath is a click
+	// that doesn't drag; see CycleRoomActorSelection.
+	int PickRoomActorForPress(Room room, Vector2 world)
 	{
 		HitTestRoomActors(room, world, actorPickScratch);
+		actorPressCursor = Cursor;
+		actorPressCanCycle = false;
 		if (actorPickScratch.Count == 0)
-		{
-			hasLastActorPick = false;
 			return -1;
-		}
 
-		var sameSpot = hasLastActorPick &&
-			Vector2.DistanceSquared(Cursor, lastActorPickCursor) <= ActorPickCycleThreshold * ActorPickCycleThreshold;
-		var pick = actorPickScratch[0];
-		if (sameSpot)
-		{
-			var current = actorPickScratch.IndexOf(selectedRoomActorIndex);
-			if (current >= 0)
-				pick = actorPickScratch[(current + 1) % actorPickScratch.Count];
-		}
+		var topmost = actorPickScratch[0];
+		if (!actorPickScratch.Contains(selectedRoomActorIndex))
+			return topmost;
 
-		lastActorPickCursor = Cursor;
-		hasLastActorPick = true;
-		return pick;
+		if (RoomActorPickArea(room, selectedRoomActorIndex) > RoomActorPickArea(room, topmost))
+			return topmost;
+
+		actorPressCanCycle = actorPickScratch.Count > 1;
+		return selectedRoomActorIndex;
+	}
+
+	static long RoomActorPickArea(Room room, int index)
+	{
+		var bounds = RoomActorBounds(room, room.Actors[index]);
+		return (long)bounds.Width * bounds.Height;
+	}
+
+	// A left-click that never moved is a request for the actor underneath the one already selected.
+	void CycleRoomActorSelection(Room room, Vector2 world)
+	{
+		HitTestRoomActors(room, world, actorPickScratch);
+		var current = actorPickScratch.IndexOf(selectedRoomActorIndex);
+		if (current < 0)
+			return;
+
+		using (CaptureSelectionUndo("Select Actor"))
+			selectedRoomActorIndex = actorPickScratch[(current + 1) % actorPickScratch.Count];
 	}
 
 	// The lattice rooms tile on: one gameplay screen wide, one tile taller (Rows = Height/TileSize + 1).
@@ -4098,7 +4118,7 @@ public partial class Manager
 				{
 					using (CaptureSelectionUndo("Select Actor"))
 					{
-						selectedRoomActorIndex = PickRoomActorForClick(editing, worldMouse);
+						selectedRoomActorIndex = PickRoomActorForPress(editing, worldMouse);
 						ClearEditorDragState();
 						editorSelectionRect = null;
 						editorDrag.Kind = EditorDragKind.RoomActor;
@@ -4259,6 +4279,10 @@ public partial class Manager
 
 			if (!Input.Mouse.LeftDown && DragKind != EditorDragKind.TilePaint)
 			{
+				if (DragKind == EditorDragKind.RoomActor && actorPressCanCycle && !worldMouseBlocked && actorSelectActive &&
+					Vector2.DistanceSquared(Cursor, actorPressCursor) <= ActorPickCycleThreshold * ActorPickCycleThreshold)
+					CycleRoomActorSelection(editing, worldMouse);
+				actorPressCanCycle = false;
 				CommitEditorDragState();
 			}
 
@@ -4365,18 +4389,20 @@ public partial class Manager
 					batcher.CircleLine(worldMouse, core, gridWeight, 48, brushColor * 0.4f);
 			}
 
-			if (proposedRoomTiles is { } proposal)
+			// Right-click the "proposed" adjacent room to open the menu that adds a room there.
+			if (proposedRoomTiles is { } proposal && !worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.RightPressed && !eyedropper)
 			{
-				// Draw "proposed" adjacent room; click it to add a new room there.
-				var proposalBounds = TileRectToWorldRect(proposal);
+				pendingCreateRoomTiles = proposal;
+				createRoomPopupRequested = true;
+			}
+
+			// Keep the pending proposal on screen while the menu is up: ImGui owns the mouse then,
+			// so proposedRoomTiles is null and the rect would otherwise vanish under the menu.
+			if ((pendingCreateRoomTiles ?? proposedRoomTiles) is { } showProposal)
+			{
+				var proposalBounds = TileRectToWorldRect(showProposal);
 				batcher.Rect(proposalBounds, Color.Gray * 0.35f);
 				batcher.RectLine(proposalBounds, gridWeight * 2, Color.Gray);
-
-				if (!worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.LeftPressed && !eyedropper)
-				{
-					CreateRoom(proposal.Position, proposal.Size);
-					proposedRoomTiles = null;
-				}
 			}
 		}
 
@@ -4804,6 +4830,33 @@ public partial class Manager
 		CancelRoomRename();
 	}
 
+	// Opening is requested from Editor(), which runs earlier in the frame at a different ImGui ID
+	// stack level; OpenPopup happens here so it pairs with BeginPopup below.
+	void DrawCreateRoomPopup()
+	{
+		if (createRoomPopupRequested)
+		{
+			createRoomPopupRequested = false;
+			ImGui.OpenPopup("Create Room");
+		}
+
+		if (!ImGui.BeginPopup("Create Room"))
+		{
+			pendingCreateRoomTiles = null;
+			return;
+		}
+
+		if (ImGui.Selectable("Create New Room") && pendingCreateRoomTiles is { } proposal)
+		{
+			CreateRoom(proposal.Position, proposal.Size);
+			pendingCreateRoomTiles = null;
+			proposedRoomTiles = null;
+			ImGui.CloseCurrentPopup();
+		}
+
+		ImGui.EndPopup();
+	}
+
 	void DrawDeleteRoomPopup()
 	{
 		var open = true;
@@ -4926,6 +4979,7 @@ public partial class Manager
 
 		DrawCenteredRoomName(CurrentRoom);
 		DrawDeleteRoomPopup();
+		DrawCreateRoomPopup();
 
 		ImGui.End();
 		ImGui.PopStyleColor();

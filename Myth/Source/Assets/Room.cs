@@ -332,6 +332,20 @@ public class Room
 		}
 	}
 
+	internal bool IsBreakableRoomCollisionPoint(Vector2 worldPoint)
+	{
+		var local = worldPoint - (Vector2)WorldBounds.TopLeft;
+		var tile = new Point2(
+			(int)MathF.Floor(local.X / Game.TileSize),
+			(int)MathF.Floor(local.Y / Game.TileSize));
+
+		if (tile.X < 0 || tile.Y < 0 || tile.X >= Size.X || tile.Y >= Size.Y)
+			return false;
+
+		return IsBreakable(tile) || Factory.Find(Tiles[tile.X, tile.Y]) is { Destructible: true };
+	}
+
+
 	// A room file's "legend" maps its chars to tile type names (Factory entry names), so
 	// files stay valid however chars get reassigned. Parsed at load, then resolved to the
 	// session's canonical chars once the Factory is populated. Rooms without a legend read

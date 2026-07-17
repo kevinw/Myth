@@ -1596,21 +1596,7 @@ public partial class Game : IDisposable
 		return false;
 	}
 
-	bool IsBreakableRoomCollisionPoint(Vector2 point)
-	{
-		if (room == null)
-			return false;
-
-		var local = point - (Vector2)room.WorldBounds.TopLeft;
-		var tile = new Point2(
-			(int)MathF.Floor(local.X / TileSize),
-			(int)MathF.Floor(local.Y / TileSize));
-
-		if (tile.X < 0 || tile.Y < 0 || tile.X >= room.Size.X || tile.Y >= room.Size.Y)
-			return false;
-
-		return room.IsBreakable(tile) || Factory.Find(room.Tiles[tile.X, tile.Y]) is { Destructible: true };
-	}
+	bool IsBreakableRoomCollisionPoint(Vector2 point) => room?.IsBreakableRoomCollisionPoint(point) ?? false;
 
 	static bool OverlapsSlope(RectInt bounds, Room room, Room.SlopeTile slope)
 	{
