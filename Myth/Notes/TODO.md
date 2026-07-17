@@ -1,9 +1,13 @@
 # TODO
 
+second song needs some automation curves
 one way fall tiles
 one way "wind" tiles <<<<
 one tile crawl critter
 computer that puts something on your map as a goal
+an enemy that flies at you regardless of collision
+flames that come out of a spot
+
 
 NCA
   - perturb on tile edges, so it looks more integrated

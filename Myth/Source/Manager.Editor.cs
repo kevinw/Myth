@@ -204,6 +204,8 @@ public partial class Manager
 	const string ActorMoveUndoSlot = "actor-move";
 	const string TilePaintUndoSlot = "tile-paint";
 	const string PrefabUndoSlot = "prefab";
+	const string RoomSettingsUndoSlot = "room-settings";
+	const string ActorPropertyUndoSlot = "actor-property";
 
 	// The HasPending guard keeps repeat calls during a drag from re-allocating the targets.
 	void OpenPendingRoomUndo(string slot, string name, Room room)
@@ -212,8 +214,32 @@ public partial class Manager
 			undo.OpenPending(slot, name, CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
 	}
 
+	// Inspector gestures (room-settings sliders, actor-property drags, text fields) each hold
+	// one pending scope so a whole drag or typing session becomes a single undo entry. They
+	// have no single deactivation point we can observe (popup color pickers, sections that can
+	// collapse mid-gesture), so EditorUI commits them once no ImGui item is active anywhere.
+	void OpenRoomSettingsUndo(string name, Room room)
+	{
+		if (!undo.HasPending(RoomSettingsUndoSlot, room.Id))
+			undo.OpenPending(RoomSettingsUndoSlot, room.Id, name, CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
+	}
+
+	void OpenActorPropertyUndo(Room room, JsonObject actor)
+	{
+		var id = ActorSpecs.GetActorId(actor) ?? "";
+		if (!undo.HasPending(ActorPropertyUndoSlot, id))
+			undo.OpenPending(ActorPropertyUndoSlot, id, "Edit Actor Property", CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
+	}
+
 	internal void EditorUI()
 	{
+		// End-of-gesture commit for the inspector undo scopes (see OpenRoomSettingsUndo).
+		if (!ImGui.IsAnyItemActive())
+		{
+			undo.CommitPending(RoomSettingsUndoSlot);
+			undo.CommitPending(ActorPropertyUndoSlot);
+		}
+
 		if (gameEase < 1.0f && !startingPlay)
 		{
 			using (PerfStats.Time(PerfDetail.PaletteImGui))
@@ -628,7 +654,7 @@ public partial class Manager
 			var bytesAfterTween = GC.GetAllocatedBytesForCurrentThread();
 			var bytesAllocated = bytesAfterTween - gcBytesBeforeEditorTween;
 			if (bytesAllocated > 0)
-				[Console.WriteLine($"Editor tween: GC allocated {bytesAllocated} bytes");
+				Console.WriteLine($"Editor tween: GC allocated {bytesAllocated} bytes");
 		}
 #endif
 #endif
@@ -1060,15 +1086,21 @@ public partial class Manager
 
 		ImGui.TextUnformatted("Notes");
 		ImGui.SetNextItemWidth(-1);
-		ImGui.InputTextMultiline("##RoomNotesEditor", ref room.Notes, 3000, new(-1, 80));
+		// Local copy so the undo scope captures the room *before* the first keystroke lands.
+		var notes = room.Notes;
+		if (ImGui.InputTextMultiline("##RoomNotesEditor", ref notes, 3000, new(-1, 80)))
+		{
+			OpenRoomSettingsUndo("Edit Room Notes", room);
+			room.Notes = notes;
+		}
 
 		ImGui.TextUnformatted("Backdrop");
 		var backdrop = ColorToVector3(room.BackdropColor);
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.ColorEdit3("##RoomBackdropColor", ref backdrop, ImGuiColorEditFlags.NoInputs))
 		{
-			using (CaptureRoomUndo("Edit Room Backdrop", room))
-				room.BackdropColor = Vector3ToColor(backdrop);
+			OpenRoomSettingsUndo("Edit Room Backdrop", room);
+			room.BackdropColor = Vector3ToColor(backdrop);
 			changed = true;
 		}
 
@@ -1087,8 +1119,8 @@ public partial class Manager
 			ImGui.SetNextItemWidth(-1);
 			if (ImGui.ColorEdit3("##RoomBackdropColor2", ref backdrop2, ImGuiColorEditFlags.NoInputs))
 			{
-				using (CaptureRoomUndo("Edit Room Backdrop", room))
-					room.BackdropColor2 = Vector3ToColor(backdrop2);
+				OpenRoomSettingsUndo("Edit Room Backdrop", room);
+				room.BackdropColor2 = Vector3ToColor(backdrop2);
 				changed = true;
 			}
 		}
@@ -1098,8 +1130,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.ColorEdit3("##RoomAmbientColor", ref ambient, ImGuiColorEditFlags.NoInputs))
 		{
-			using (CaptureRoomUndo("Edit Room Lighting", room))
-				room.AmbientColor = Vector3ToColor(ambient);
+			OpenRoomSettingsUndo("Edit Room Lighting", room);
+			room.AmbientColor = Vector3ToColor(ambient);
 			changed = true;
 		}
 
@@ -1108,8 +1140,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomAmbientIntensity", ref ambientIntensity, 0.0f, 2.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Lighting", room))
-				room.AmbientIntensity = ambientIntensity;
+			OpenRoomSettingsUndo("Edit Room Lighting", room);
+			room.AmbientIntensity = ambientIntensity;
 			changed = true;
 		}
 
@@ -1118,8 +1150,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomLightNoise", ref lightNoise, 0.0f, 1.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Lighting", room))
-				room.LightNoise = lightNoise;
+			OpenRoomSettingsUndo("Edit Room Lighting", room);
+			room.LightNoise = lightNoise;
 			changed = true;
 		}
 
@@ -1140,11 +1172,9 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomReverb", ref reverb, 0.0f, 1.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Reverb", room))
-			{
-				room.ReverbAuto = false;
-				room.Reverb = Math.Clamp(reverb, 0.0f, 1.0f);
-			}
+			OpenRoomSettingsUndo("Edit Room Reverb", room);
+			room.ReverbAuto = false;
+			room.Reverb = Math.Clamp(reverb, 0.0f, 1.0f);
 			changed = true;
 		}
 
@@ -1153,8 +1183,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomSunStrength", ref sunStrength, 0.0f, 2.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Sun", room))
-				room.SunStrength = sunStrength;
+			OpenRoomSettingsUndo("Edit Room Sun", room);
+			room.SunStrength = sunStrength;
 			changed = true;
 		}
 
@@ -1165,8 +1195,8 @@ public partial class Manager
 			ImGui.SetNextItemWidth(-1);
 			if (ImGui.ColorEdit3("##RoomSunColor", ref sun, ImGuiColorEditFlags.NoInputs))
 			{
-				using (CaptureRoomUndo("Edit Room Sun", room))
-					room.SunColor = Vector3ToColor(sun);
+				OpenRoomSettingsUndo("Edit Room Sun", room);
+				room.SunColor = Vector3ToColor(sun);
 				changed = true;
 			}
 
@@ -1175,8 +1205,8 @@ public partial class Manager
 			ImGui.SetNextItemWidth(-1);
 			if (ImGui.DragFloat2("##RoomSunDirection", ref sunDirection, 0.01f, -1.0f, 1.0f))
 			{
-				using (CaptureRoomUndo("Edit Room Sun", room))
-					room.SunDirection = Room.NormalizeOrDefault(sunDirection, room.SunDirection);
+				OpenRoomSettingsUndo("Edit Room Sun", room);
+				room.SunDirection = Room.NormalizeOrDefault(sunDirection, room.SunDirection);
 				changed = true;
 			}
 		}
@@ -1230,8 +1260,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomDitherScale", ref ditherScale, 1.0f, 8.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Dither", room))
-				room.LightingDitherScale = ditherScale;
+			OpenRoomSettingsUndo("Edit Room Dither", room);
+			room.LightingDitherScale = ditherScale;
 			changed = true;
 		}
 
@@ -1240,8 +1270,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomDitherStrength", ref ditherStrength, 0.0f, 1.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Dither", room))
-				room.LightingDitherStrength = ditherStrength;
+			OpenRoomSettingsUndo("Edit Room Dither", room);
+			room.LightingDitherStrength = ditherStrength;
 			changed = true;
 		}
 
@@ -1250,8 +1280,8 @@ public partial class Manager
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomDitherSlopeBoost", ref ditherSlopeBoost, 0.0f, 1.0f))
 		{
-			using (CaptureRoomUndo("Edit Room Dither", room))
-				room.NormalDitherSlopeBoost = ditherSlopeBoost;
+			OpenRoomSettingsUndo("Edit Room Dither", room);
+			room.NormalDitherSlopeBoost = ditherSlopeBoost;
 			changed = true;
 		}
 
@@ -1622,8 +1652,8 @@ public partial class Manager
 			var value = property.Value?.GetValue<float>() ?? 0;
 			if (ImGui.DragFloat("##Value", ref value, 0.05f))
 			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				OpenActorPropertyUndo(room, actor);
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
 		}
@@ -1632,8 +1662,8 @@ public partial class Manager
 			var value = property.Value?.GetValue<int>() ?? 0;
 			if (ImGui.DragInt("##Value", ref value))
 			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				OpenActorPropertyUndo(room, actor);
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
 		}
@@ -1686,8 +1716,8 @@ public partial class Manager
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (ImGui.InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, 64)))
 			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				OpenActorPropertyUndo(room, actor);
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
 				changed = true;
 			}
 		}
@@ -1697,8 +1727,8 @@ public partial class Manager
 			var values = new[] { point.X, point.Y };
 			if (ImGui.DragInt2("##Value", ref values[0]))
 			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, new JsonArray(values[0], values[1]));
+				OpenActorPropertyUndo(room, actor);
+				ActorSpecs.SetProperty(actor, property.JsonName, new JsonArray(values[0], values[1]));
 				changed = true;
 			}
 		}
@@ -1718,8 +1748,8 @@ public partial class Manager
 			var rgb = HexToVector3(color);
 			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
 			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
+				OpenActorPropertyUndo(room, actor);
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
 				changed = true;
 			}
 		}

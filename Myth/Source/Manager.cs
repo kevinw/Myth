@@ -1449,6 +1449,11 @@ public partial class Manager : App
 			{
 				Assets.Unload();
 				Assets.Load(GraphicsDevice);
+#if EDITOR
+				// Every Room was just recreated; undo entries hold targets bound to the old
+				// instances, so applying them would edit detached rooms.
+				undo.Clear();
+#endif
 			}
 			else
 			{

@@ -65,16 +65,16 @@ public partial class Player : Pawn
 	float burrowLeapTravelX;              // remembered horizontal glide so the coyote leap keeps its arc
 	static float BurrowLeapCoyoteTime => 0.12f;
 
-	void TryStartBurrow(Vector2 previousVelocity)
+	bool TryStartBurrow(Vector2 previousVelocity)
 	{
-		if (!CanBurrow()) return;
+		if (!CanBurrow()) return false;
 
 		Hitbox = new(BurrowHitboxRect);
 		burrowToward = Vector2.UnitY;
 		if (!Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
 		{
 			Hitbox = new(StandingHitboxRect); // no surface in reach; we're staying in Normal
-			return;
+			return false;
 		}
 
 		Velocity = Vector2.Zero;
@@ -114,6 +114,7 @@ public partial class Player : Pawn
 		burrowSound?.Start();
 		UpdateBurrowAudio();
 		AudioEvent("player/burrow_start");
+		return true;
 	}
 
 	// Screen-axis squish aligned to a surface normal: `normalScale` is applied along
