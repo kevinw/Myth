@@ -2,7 +2,8 @@
 
 neuraltexturerippleactor could draw editor radius; it's editor hitbox doesn't show center
 esa notes:
-  - switch when hit, Pops along a Point2[] array until a door
+  - alternate vertical and horizontal challenge
+  - think about save points and optional challenging runs
   - tubes as visible layers on top of a room
   - or invisible layers on top of a room
   - some genuinely difficult optional traversal challenges with the grapple

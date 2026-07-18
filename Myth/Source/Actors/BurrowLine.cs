@@ -6,12 +6,78 @@ namespace Myth;
 [GameActor(Sprite = "buttons", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System, Anchor = SpriteAnchor.Center)]
 public class BurrowLine : PointPathActor
 {
+	public bool RenderProcedural;
+	public float ProceduralWidth = 3f;
+	public Color ProceduralOuterColor = new(0x454a52);
+	public Color ProceduralInnerColor = new(0x959ba5);
+
 	public BurrowLine()
 	{
 		Sprite = null;
-		Visible = false;
 		CollidesWithSolids = false;
 	}
+
+	public override void Render(Batcher batcher)
+	{
+		if (!RenderProcedural || ProceduralWidth <= 0)
+			return;
+
+		RenderRoundedPath(batcher, ProceduralWidth, ProceduralOuterColor);
+		RenderRoundedPath(batcher, ProceduralWidth * 0.45f, ProceduralInnerColor);
+	}
+
+	public override void RenderNormals(Batcher batcher)
+	{
+		if (!RenderProcedural || ProceduralWidth <= 0)
+			return;
+
+		var radius = ProceduralWidth * 0.5f;
+		for (var i = 1; i < Points.Length; i++)
+			RenderSegmentNormals(batcher, Points[i - 1], Points[i], radius);
+		for (var i = 0; i < Points.Length; i++)
+			RenderRoundNormals(batcher, Points[i], radius);
+	}
+
+	void RenderRoundedPath(Batcher batcher, float width, Color color)
+	{
+		var radius = width * 0.5f;
+		for (var i = 1; i < Points.Length; i++)
+			if (Points[i - 1] != Points[i])
+				batcher.Line(Points[i - 1], Points[i], width, color);
+		for (var i = 0; i < Points.Length; i++)
+			batcher.Circle(Points[i], radius, 12, color);
+	}
+
+	static void RenderSegmentNormals(Batcher batcher, Vector2 from, Vector2 to, float radius)
+	{
+		var delta = to - from;
+		if (delta == Vector2.Zero)
+			return;
+
+		var side = new Vector2(-delta.Y, delta.X).Normalized();
+		var edgeA = NormalColor(side);
+		var edgeB = NormalColor(-side);
+		var flat = new Color(0x8080ff);
+		var offset = side * radius;
+		batcher.Quad(from + offset, from, to, to + offset, edgeA, flat, flat, edgeA);
+		batcher.Quad(from, from - offset, to - offset, to, flat, edgeB, edgeB, flat);
+	}
+
+	static void RenderRoundNormals(Batcher batcher, Vector2 center, float radius)
+	{
+		const int steps = 12;
+		var flat = new Color(0x8080ff);
+		for (var i = 0; i < steps; i++)
+		{
+			var a = Calc.AngleToVector(i / (float)steps * Calc.TAU);
+			var b = Calc.AngleToVector((i + 1) / (float)steps * Calc.TAU);
+			batcher.Triangle(center, center + a * radius, center + b * radius,
+				flat, NormalColor(a), NormalColor(b));
+		}
+	}
+
+	static Color NormalColor(Vector2 direction)
+		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1f);
 
 	public bool TryGetEndpoint(Vector2 near, float maxDistance, out int segment, out float t, out int direction, out Vector2 point, out Vector2 heading)
 	{
