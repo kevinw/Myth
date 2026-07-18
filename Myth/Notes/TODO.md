@@ -1,5 +1,14 @@
 # TODO
 
+neuraltexturerippleactor could draw editor radius; it's editor hitbox doesn't show center
+esa notes:
+  - some genuinely difficult optional traversal challenges with the grapple
+  - pipes which can overlap the room
+  - switch blocks recontextualize an area
+  - light irridescence is nice
+  - lots of small songs
+  - every song intro is an area intro is something new (a new movement/enemy/both)
+
 second song needs some automation curves
 one way fall tiles
 one way "wind" tiles <<<<
@@ -29,18 +38,13 @@ adjust rope springiness as a mechanic or challenge
 - more big rooms
 - connected hubs and spokes?
 - study silksong map
-- a "wildlife" system which draws flies, hoppers, fish and more. they aren't more than 3x3 pixels, and render as a bit transparent. it's "ambient" wildlife.
 - build Detect; use it for ShieldKnight. make him (and other actors?) understand ledges.
-- an enemy who gets knocked around when you hit it, their air friction decreases and then comes back
 
 ## mood: MINUTIA
 - separate "editingRoomId" and "playRoomId" and put them in editor.json and save.json
-- remove "fullscreen" menu from browser
 - actors should be destroyed when they go off the bottom of the screen. (what happens? do their positions already get clamped? first: show their positions.)
-- have local notarize-publish process upload to cloudflare storage under a date-git-hash folder
 - after roll under a 1-tile tall tunnel, you stand stuck in the wall
 - Build a custom SDL3 iOS xcframework with unused camera and Bluetooth/HIDAPI support disabled, then replace the bundled SDL3.xcframework so App Store uploads no longer need privacy purpose strings for APIs Myth does not use.
-- draw "block rect" from shieldknight in C debug view (track extra "block rects this frame")
 
 ## mood: SOUND AND MUSIC
 - shieldknight needs sound effects, detect, player awareness squish

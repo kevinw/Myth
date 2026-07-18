@@ -1,0 +1,13 @@
+{
+  "layer": "Foreground",
+  "solid": true,
+  "surface": "Grass",
+  "slopes": true,
+  "interior": "computerjunk_color_circular.bin",
+  "edge": "",
+  "edgeBandCells": 7,
+  "freezeSteps": 0,
+  "stepsPerSecond": 30,
+  "fireRate": 0.5,
+  "featureScale": 1
+}

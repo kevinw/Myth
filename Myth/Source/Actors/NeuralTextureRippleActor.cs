@@ -11,6 +11,10 @@ namespace Myth;
 [GameActor(Sprite = "editor_prop", BoundsW = Game.TileSize * 2, BoundsH = Game.TileSize * 2, Anchor = SpriteAnchor.Center, Tags = ActorTag.System)]
 public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 {
+	public string? SourceActorId;
+	bool sourceWasActive;
+	float sourceStoppedAt = -1;
+	float sourceStoppedLeadRadius;
 	// World units a ring travels per second.
 	public float RingSpeed = 70f;
 	// World-unit gap between successive rings; the ripple period is RingSpacing / RingSpeed.
@@ -37,13 +41,30 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 		if (RingSpeed <= 0 || RingSpacing <= 0 || MaxRadius <= 0 || StampsPerRing <= 0 || Strength <= 0)
 			return;
 
+		var now = Time.SecondsF;
+		var sourceActive = SourceActorId == null || Game.GetActorById(SourceActorId) != null;
+		if (sourceActive)
+		{
+			sourceWasActive = true;
+			sourceStoppedAt = -1;
+		}
+		else if (!sourceWasActive)
+			return;
+		else if (sourceStoppedAt < 0)
+		{
+			sourceStoppedAt = now;
+			sourceStoppedLeadRadius = (now * RingSpeed) % RingSpacing;
+		}
+
 		var center = (Vector2)Position;
 		// Cull textures the ripple can't reach (loose corner test, but cheap and safe).
 		if (!context.Texture.GetVisualBounds().Inflate(MaxRadius).Contains(center))
 			return;
 
 		// Leading ring's distance past the last spawn boundary; the rest trail by RingSpacing.
-		var leadRadius = (Time.SecondsF * RingSpeed) % RingSpacing;
+		var leadRadius = sourceStoppedAt < 0
+			? (now * RingSpeed) % RingSpacing
+			: sourceStoppedLeadRadius + (now - sourceStoppedAt) * RingSpeed;
 		var step = MathF.Tau / StampsPerRing;
 
 		for (var radius = leadRadius; radius <= MaxRadius; radius += RingSpacing)

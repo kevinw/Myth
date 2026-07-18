@@ -2,6 +2,11 @@
   "position": [-120, -7],
   "size": [40, 30],
   "ambientColor": "3C3C3C",
+  "legend": {
+    "1": "castle",
+    "G": "grass",
+    "g": "plants"
+  },
   "tiles": [
     "000000000000000000000000000000000GGGGGGG",
     "000000000000000000000000000000000GGGGGGG",

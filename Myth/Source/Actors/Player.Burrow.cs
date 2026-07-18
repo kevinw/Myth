@@ -24,6 +24,8 @@ public partial class Player : Pawn
 	static float BurrowGlowWeight => 1.5f;
 	static float BurrowGlowCycleSpeed => 0.6f; // rainbow hue cycles per second
 	static float BurrowGlowHueScale => 0.03f;  // hue shift per world px along the line
+	static float BudBurrowDurationMultiplier => 2f;
+	static float BudBurrowDotRadius => 2.25f;
 	static int BurrowIntervals => 3;           // burrow time is split into this many countdown intervals
 	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
 	static float BurrowMinSpread => 0.4f;      // arc shrinks to this fraction of full by the final interval
@@ -36,6 +38,8 @@ public partial class Player : Pawn
 
 	float burrowEnterTimer;
 	float burrowExitTimer;
+	float burrowDuration;
+	Bud? burrowPassenger;
 	Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
 	bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
 	Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
@@ -78,7 +82,9 @@ public partial class Player : Pawn
 		}
 
 		Velocity = Vector2.Zero;
-		burrowTimer = BurrowDuration;
+		burrowPassenger = Game.GetFirst<Bud>() is { } bud && bud.TryEnterPlayerBurrow(this) ? bud : null;
+		burrowDuration = BurrowDuration * (burrowPassenger != null ? BudBurrowDurationMultiplier : 1f);
+		burrowTimer = burrowDuration;
 		burrowIntervalIndex = 0;
 		burrowPulseTimer = BurrowPulseTime; // flash the first interval's start too (the line igniting)
 		burrowSpreadScale = 1f;
@@ -171,8 +177,8 @@ public partial class Player : Pawn
 	// automatic pop-out nears, making the remaining time readable at a glance.
 	void UpdateBurrowIntervals()
 	{
-		var intervalLength = BurrowDuration / BurrowIntervals;
-		var elapsed = BurrowDuration - burrowTimer;
+		var intervalLength = burrowDuration / BurrowIntervals;
+		var elapsed = burrowDuration - burrowTimer;
 		var interval = Math.Clamp((int)(elapsed / intervalLength), 0, BurrowIntervals - 1);
 		if (interval != burrowIntervalIndex)
 		{
@@ -390,7 +396,7 @@ public partial class Player : Pawn
 			// (a quick tap in and out) gets the same soft pop regardless of input — it
 			// clearly wasn't a committed launch, so don't fling the player.
 			Velocity = -exitDir * popMagnitude + travel;
-			var shortBurrow = BurrowDuration - burrowTimer < ShortBurrowDampenTime;
+			var shortBurrow = burrowDuration - burrowTimer < ShortBurrowDampenTime;
 			if (Velocity.Y < 50 && (shortBurrow || Controls.Move.IntValue.Y == 1))
 				Velocity.Y *= 0.5f;
 
@@ -415,6 +421,9 @@ public partial class Player : Pawn
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
+
+		burrowPassenger?.BeginPlayerBurrowPop(Position, Velocity, Squish, Facing, BurrowPopTime, burrowExitOutward);
+		burrowPassenger = null;
 
 		// emit a final burst up and opposite the direction of leaving
 		if (Game.Particles is { } particles)
@@ -557,6 +566,9 @@ public partial class Player : Pawn
 		Vector2 origin = Position;
 		for (var i = 0; i + 1 < glowPoints.Count; i++)
 			batcher.Line(glowPoints[i] - origin, glowPoints[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(glowPoints[i]), BurrowGlowColorAt(glowPoints[i + 1]));
+
+		if (burrowPassenger != null)
+			batcher.Circle(burrowGlowAnchor - origin, BudBurrowDotRadius, 12, Color.White, Color.Transparent);
 
 	}
 

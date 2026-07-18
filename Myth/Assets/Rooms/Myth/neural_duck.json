@@ -95,6 +95,7 @@
       "Id": "dc4c3733f809df85",
       "Type": "NeuralTextureRippleActor",
       "Position": [128, 128],
+      "SourceActorId": "574c49f8e2ee020d",
       "StampsPerRing": 33,
       "Thickness": 5.4,
       "Strength": 0.85,
@@ -105,7 +106,8 @@
       "Id": "574c49f8e2ee020d",
       "Type": "Prop",
       "Position": [124, 124],
-      "SpriteName": "Props/duck"
+      "SpriteName": "Props/duck",
+      "propFlags": "DestroyPersists"
     },
     {
       "Id": "54e2bb64b2489fac",

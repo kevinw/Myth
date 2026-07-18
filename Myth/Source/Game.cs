@@ -1205,6 +1205,14 @@ public partial class Game : IDisposable
 		return null;
 	}
 
+	public Actor? GetActorById(string actorId)
+	{
+		foreach (var it in Actors)
+			if (string.Equals(it.ActorId, actorId, StringComparison.OrdinalIgnoreCase) && !destroying.Contains(it))
+				return it;
+		return null;
+	}
+
 	public Actor? GetFirst(Actor.Masks mask)
 	{
 		foreach (var it in Actors)

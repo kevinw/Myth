@@ -3,6 +3,7 @@ using LinkDotNet.StringBuilder; // Namespace of the package
 using System.Numerics;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using Foster.Editor;
 using Foster.Framework;
 using ImGuiNET;
 
@@ -1406,7 +1407,7 @@ public partial class Manager
 		else if (property.Type.IsEnum)
 		{
 			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
-			if (DrawEnumCombo(property.Type, ref value))
+			if (EditorGui.DrawEnumCombo(property.Type, ref value))
 			{
 				BeginPrefabUndo(specId);
 				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
@@ -1630,7 +1631,7 @@ public partial class Manager
 		else if (property.Type.IsEnum)
 		{
 			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
-			if (DrawEnumCombo(property.Type, ref value))
+			if (EditorGui.DrawEnumCombo(property.Type, ref value))
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
@@ -1745,27 +1746,6 @@ public partial class Manager
 			}
 		}
 
-		return changed;
-	}
-
-	static bool DrawEnumCombo(Type type, ref string value)
-	{
-		var changed = false;
-		if (ImGui.BeginCombo("##Value", value))
-		{
-			foreach (var name in Enum.GetNames(type))
-			{
-				var selected = string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
-				if (ImGui.Selectable(name, selected))
-				{
-					value = name;
-					changed = true;
-				}
-				if (selected)
-					ImGui.SetItemDefaultFocus();
-			}
-			ImGui.EndCombo();
-		}
 		return changed;
 	}
 
@@ -3970,7 +3950,7 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 3));
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.04f, 0.05f, 0.82f));
 		ImGui.Begin("Selection Options", flags);
-		ImGuiExt.CheckboxFlags("Empty Tiles", ref selectionSnapshotFlags, SnapshotFlags.IncludeEmptyTiles);
+		EditorGui.CheckboxFlags("Empty Tiles", ref selectionSnapshotFlags, SnapshotFlags.IncludeEmptyTiles);
 		ImGui.Checkbox("BG Tiles", ref selectionIncludeBackgroundTiles);
 		ImGui.Checkbox("FG Tiles", ref selectionIncludeForegroundTiles);
 		ImGui.Checkbox("Actors", ref selectionIncludeActors);

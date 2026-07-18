@@ -348,6 +348,53 @@ public class Actor
 		remainder = Vector2.Zero;
 	}
 
+	protected static int UnstickMaxRadius => Game.TileSize * 2;
+
+	// If the current hitbox is embedded in solid, snap to the nearest free offset,
+	// biased toward preferredDir. Returns false only when no nearby position is free.
+	protected bool TryUnstick(Vector2 preferredDir)
+	{
+		if (!OverlapsAny(Masks.Solid))
+			return true;
+
+		if (preferredDir.LengthSquared() > 0.0001f)
+			preferredDir = Vector2.Normalize(preferredDir);
+
+		for (var r = 1; r <= UnstickMaxRadius; r++)
+		{
+			var bestScore = float.MaxValue;
+			var best = Point2.Zero;
+			var found = false;
+			for (var oy = -r; oy <= r; oy++)
+				for (var ox = -r; ox <= r; ox++)
+				{
+					if (Math.Max(Math.Abs(ox), Math.Abs(oy)) != r)
+						continue;
+					var off = new Point2(ox, oy);
+					if (OverlapsAny(off, Masks.Solid))
+						continue;
+
+					var dist = MathF.Sqrt(ox * ox + oy * oy);
+					var align = Vector2.Dot(Vector2.Normalize(new Vector2(ox, oy)), preferredDir);
+					var score = dist - align;
+					if (score < bestScore)
+					{
+						bestScore = score;
+						best = off;
+						found = true;
+					}
+				}
+
+			if (found)
+			{
+				Position += best;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/// Stops X Velocity
 	public void StopX()
 	{
@@ -375,15 +422,11 @@ public class Actor
 			return false;
 
 		actor.hitCooldown = actor.IFrameTime;
-		if (actor.Mask == Masks.Enemy)
-		{
-			if (this is Player)
-			{
-				Game.NotifyEnemyHitByPlayer(actor);
-				var hitSoundType = actor.HitSoundType;
-				if (!string.IsNullOrEmpty(hitSoundType))
-					AudioEvent("player/sword_hit", "hit_destination", hitSoundType);
-			}
+		if (actor.Mask == Masks.Enemy && this is Player) {
+			Game.NotifyEnemyHitByPlayer(actor);
+			var hitSoundType = actor.HitSoundType;
+			if (!string.IsNullOrEmpty(hitSoundType))
+				AudioEvent("player/sword_hit", "hit_destination", hitSoundType);
 		}
 		actor.OnWasHit(this);
 		OnPerformHit(actor);

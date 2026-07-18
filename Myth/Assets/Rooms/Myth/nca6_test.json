@@ -6,6 +6,7 @@
   "ambientColor": "B4B4B4",
   "ambientIntensity": 0.201,
   "lightNoise": 0,
+  "reverb": 0.861,
   "legend": {
     "T": "stone"
   },

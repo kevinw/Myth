@@ -10,6 +10,9 @@ public class Bud : Pawn
 	private const float EnterDelay = 1.0f;
 	private const float MirrorPlayerCrawlDelay = 0.25f;
 	private const float MirrorPlayerCrawlReleaseDelay = 0.25f;
+	static float BurrowRideRadius => 14f;
+	static float BurrowPopDelay => 0.25f;
+	static float BurrowPopInputMirrorTime => 0.25f;
 	private readonly Navigator nav;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
@@ -18,6 +21,15 @@ public class Bud : Pawn
 	private float mirrorPlayerCrawlTimer;
 	private float mirrorPlayerCrawlReleaseTimer;
 	private bool mirrorPlayerCrawl;
+	bool ridingPlayerBurrow;
+	float burrowPopDelayTimer;
+	float burrowPopInputMirrorTimer;
+	Point2 burrowPopPosition;
+	Vector2 burrowPopVelocity;
+	Vector2 burrowPopSquish;
+	Vector2 burrowPopOutward;
+	Signs burrowPopFacing;
+	float burrowPopJumpTime;
 	protected override float GroundSpeedMultiplier => 1.0f;
 	protected override float AirSpeedMultiplier => 1.0f;
 	public bool CanSay => Game.CanShowBudSpeech();
@@ -53,6 +65,8 @@ public class Bud : Pawn
 	public override PawnInput GetInput()
 	{
 		if (!PerfToggles.BudAIEnabled) return new();
+		if (burrowPopInputMirrorTimer > 0 && Game.GetFirst<Player>() is { } burrowPlayer)
+			return burrowPlayer.GetInput();
 
 		// On a rope: climb toward the player's height, then hop off toward them.
 		if (State == States.Climb && Game.GetFirst<Player>() is { } climbTarget)
@@ -142,6 +156,23 @@ public class Bud : Pawn
 
 	public override void Update()
 	{
+		if (ridingPlayerBurrow)
+		{
+			if (Game.GetFirst<Player>() is { } player)
+				Position = player.Position;
+			return;
+		}
+
+		if (burrowPopDelayTimer > 0)
+		{
+			burrowPopDelayTimer = Calc.Approach(burrowPopDelayTimer, 0, Time.Delta);
+			if (burrowPopDelayTimer <= 0)
+				CompletePlayerBurrowPop();
+			return;
+		}
+
+		burrowPopInputMirrorTimer = Calc.Approach(burrowPopInputMirrorTimer, 0, Time.Delta);
+
 		if (pendingRoomChange is { } change)
 		{
 			enterTimer = Calc.Approach(enterTimer, 0, Time.Delta);
@@ -177,6 +208,73 @@ public class Bud : Pawn
 
 	public void Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
 		=> Game.ShowBudSpeech(Position + new Vector2(0, -32), text, emotion);
+
+	internal bool TryEnterPlayerBurrow(Player player)
+	{
+		if (!Visible || pendingRoomChange != null || ridingPlayerBurrow || burrowPopDelayTimer > 0 || State != States.Normal)
+			return false;
+		if (Vector2.DistanceSquared(Position, player.Position) > BurrowRideRadius * BurrowRideRadius)
+			return false;
+
+		ridingPlayerBurrow = true;
+		Visible = false;
+		CollidesWithSolids = false;
+		Stop();
+		Game.Create<Pop>(Position + new Point2(0, -6));
+		Position = player.Position;
+		return true;
+	}
+
+	internal void BeginPlayerBurrowPop(Point2 position, Vector2 velocity, Vector2 squish, Signs facing, float jumpTime, Vector2 outward)
+	{
+		if (!ridingPlayerBurrow)
+			return;
+
+		ridingPlayerBurrow = false;
+		burrowPopDelayTimer = BurrowPopDelay;
+		burrowPopPosition = position;
+		burrowPopVelocity = velocity;
+		burrowPopSquish = squish;
+		burrowPopOutward = outward;
+		burrowPopFacing = facing;
+		burrowPopJumpTime = jumpTime;
+		Position = position;
+		Stop();
+	}
+
+	void CompletePlayerBurrowPop()
+	{
+		var playerPosition = Game.GetFirst<Player>()?.Position ?? burrowPopPosition;
+		var foundStanding = TryPlaceBurrowPop(burrowPopPosition, StandingHitboxRect)
+			|| TryPlaceBurrowPop(playerPosition, StandingHitboxRect);
+		if (!foundStanding &&
+			!TryPlaceBurrowPop(burrowPopPosition, DuckingHitboxRect) &&
+			!TryPlaceBurrowPop(playerPosition, DuckingHitboxRect))
+		{
+			burrowPopDelayTimer = Time.Delta;
+			return;
+		}
+
+		Velocity = burrowPopVelocity;
+		Squish = burrowPopSquish;
+		Facing = burrowPopFacing;
+		State = States.Normal;
+		ducking = !foundStanding;
+		Hitbox = new(ducking ? DuckingHitboxRect : StandingHitboxRect);
+		jumpTimer = burrowPopJumpTime;
+		jumpCutImmune = true;
+		Visible = true;
+		CollidesWithSolids = true;
+		burrowPopInputMirrorTimer = BurrowPopInputMirrorTime;
+		Game.Create<Pop>(Position + new Point2(0, -6));
+	}
+
+	bool TryPlaceBurrowPop(Point2 origin, RectInt hitbox)
+	{
+		Position = origin;
+		Hitbox = new(hitbox);
+		return TryUnstick(burrowPopOutward);
+	}
 
 	private bool TryNavigateToPlayer(Player player, out int moveX, out int moveY, out bool jumpPressed)
 	{
@@ -460,6 +558,12 @@ public class Bud : Pawn
 	{
 		if (change.Kind == RoomChangeKind.InitialLoad)
 			return;
+		if (ridingPlayerBurrow || burrowPopDelayTimer > 0)
+		{
+			pendingRoomChange = null;
+			nav.ClearBlockedPathEdges();
+			return;
+		}
 
 		pendingRoomChange = change;
 		enterTimer = EnterDelay;
@@ -482,8 +586,7 @@ public class Bud : Pawn
 
 	private Point2 FindEnterPosition(RoomChange change)
 	{
-		var player = Game.GetFirst<Player>();
-		var anchor = player?.Position ?? (Point2)change.PlayerPosition;
+		var anchor = Game.RoomEntryPosition;
 		var bounds = change.To.WorldBounds;
 		var direction = change.Direction;
 

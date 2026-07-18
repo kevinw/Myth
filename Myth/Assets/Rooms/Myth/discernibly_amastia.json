@@ -93,6 +93,14 @@
       "Id": "eda40d9fa4a6cfff",
       "Type": "Chest",
       "Position": [284, 136]
+    },
+    {
+      "Id": "e7f90f2ec0ecb6cc",
+      "Type": "Wildlife",
+      "Position": [128, 72],
+      "FishCount": 0,
+      "BugCount": 3,
+      "FlyCount": 2
     }
   ]
 }

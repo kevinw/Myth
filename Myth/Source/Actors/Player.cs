@@ -1321,51 +1321,6 @@ public partial class Player : Pawn
 
 	}
 
-	const int UnstickMaxRadius = 16;
-
-	// If the current hitbox is embedded in solid, snap to the nearest free offset,
-	// biased toward `preferredDir`. Cheap no-op (one overlap test) when not embedded.
-	void TryUnstick(Vector2 preferredDir)
-	{
-		if (!OverlapsAny(Masks.Solid))
-			return;
-
-		if (preferredDir.LengthSquared() > 0.0001f)
-			preferredDir = Vector2.Normalize(preferredDir);
-
-		for (var r = 1; r <= UnstickMaxRadius; r++)
-		{
-			var bestScore = float.MaxValue;
-			var best = Point2.Zero;
-			var found = false;
-			for (var oy = -r; oy <= r; oy++)
-				for (var ox = -r; ox <= r; ox++)
-				{
-					if (Math.Max(Math.Abs(ox), Math.Abs(oy)) != r)
-						continue; // only the current ring
-					var off = new Point2(ox, oy);
-					if (OverlapsAny(off, Masks.Solid))
-						continue; // not free here
-
-					var dist = MathF.Sqrt(ox * ox + oy * oy);
-					var align = Vector2.Dot(Vector2.Normalize(new Vector2(ox, oy)), preferredDir);
-					var score = dist - align; // nearer and better-aligned wins
-					if (score < bestScore)
-					{
-						bestScore = score;
-						best = off;
-						found = true;
-					}
-				}
-
-			if (found)
-			{
-				Position += best;
-				return;
-			}
-		}
-	}
-
 	protected override bool AllowDuckingInState() => State == States.Attack && duckAttack;
 
 	protected override bool TryStartPawnAction(int moveX)
