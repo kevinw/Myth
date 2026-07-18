@@ -11,6 +11,13 @@ if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
 	return;
 }
 
+#if !BROWSER
+// Route the windowed game's logs to %APPDATA%\Mycelon\logs so the console-less shipped build
+// stays diagnosable. Headless/CLI runs keep plain console output for their tooling.
+if (!startArgs.headless)
+	LogFile.Install(Manager.APPLICATION_NAME);
+#endif
+
 var manager = Manager.Create(startArgs);
 PlatformSpecific.ManagerSetup(manager);
 manager.Run();

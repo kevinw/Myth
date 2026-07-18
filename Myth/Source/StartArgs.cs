@@ -17,6 +17,10 @@ public struct StartArgs
 	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
 	public bool aspectFourThree;
 	public bool play; // if true, play immediately on startup even in desktop/editor-capable environments
+	// Skip the boot shader/pipeline warmup + loading screen (--no-warmup). For A/B testing the
+	// warmup against a cold driver shader cache: with this set, pipelines compile lazily on first
+	// room entry (the original hitch) instead of up front. See tools/windows/clear-system-shader-caches.mjs.
+	public bool noWarmup;
 	public bool buildAssetPack;
 	public bool useAssetPack;
 	public string? assetPackPath;
@@ -96,6 +100,7 @@ public struct StartArgs
 		simple = args.Contains("--simple");
 		bench = args.Contains("--bench");
 		aspectFourThree = args.Contains("--aspect-four-three");
+		noWarmup = args.Contains("--no-warmup");
 		play = args.Contains("--play") || screenshotPath != null || playRoomId != null;
 	}
 

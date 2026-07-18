@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Numerics;
 using Foster.Framework;
 
@@ -13,6 +14,22 @@ sealed record GymRun(Room Room, string GoalId, string? GoalName, Point2 GoalLoca
 	public string StartDisplay => StartLabel ?? "default";
 }
 sealed record GymResult(string Room, string Goal, string Start, double SimTime, bool Success, string Reason);
+
+// Summary line printed after all gym runs. Property names use JsonPropertyName to preserve the
+// original lowercase wire format (the source-generated context otherwise emits the record's
+// PascalCase names).
+sealed record GymSummary(
+	[property: JsonPropertyName("rooms")] int Rooms,
+	[property: JsonPropertyName("success")] int Success,
+	[property: JsonPropertyName("fail")] int Fail,
+	[property: JsonPropertyName("totalTime")] double TotalTime);
+sealed record GymSummaryReport([property: JsonPropertyName("summary")] GymSummary Summary);
+
+// Source-generated JSON metadata for gym output: reflection-free serialization, so it survives
+// trimming/NativeAOT (no IL2026/IL3050). GymResult keeps its PascalCase keys as before.
+[JsonSerializable(typeof(GymResult))]
+[JsonSerializable(typeof(GymSummaryReport))]
+internal partial class GymJsonContext : JsonSerializerContext;
 
 
 internal struct Gym
@@ -128,18 +145,11 @@ internal struct Gym
 		{
 			if (r.Success) successCount++;
 			totalTime += r.SimTime;
-			Console.WriteLine(JsonSerializer.Serialize(r));
+			Console.WriteLine(JsonSerializer.Serialize(r, GymJsonContext.Default.GymResult));
 		}
-		Console.WriteLine(JsonSerializer.Serialize(new
-		{
-			summary = new
-			{
-				rooms = results.Count,
-				success = successCount,
-				fail = results.Count - successCount,
-				totalTime
-			}
-		}));
+		Console.WriteLine(JsonSerializer.Serialize(
+			new GymSummaryReport(new GymSummary(results.Count, successCount, results.Count - successCount, totalTime)),
+			GymJsonContext.Default.GymSummaryReport));
 	}
 }
 

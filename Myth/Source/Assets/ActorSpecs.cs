@@ -20,16 +20,33 @@ public static class ActorSpecs
 	// otherwise emit CRLF on Windows), so room/spec files don't churn whitespace diffs.
 	private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, NewLine = "\n" };
 
+	// Members the trimmer/AOT compiler must keep on every registered actor type: reflection in
+	// Apply/SerializeActorDefaults reads public fields/properties, and Create/GetBaseline construct
+	// via the parameterless ctor.
+	private const DynamicallyAccessedMemberTypes RegisteredActorMembers =
+		DynamicallyAccessedMemberTypes.PublicParameterlessConstructor |
+		DynamicallyAccessedMemberTypes.PublicFields |
+		DynamicallyAccessedMemberTypes.PublicProperties;
+
+	// Wraps a registered Type so the DynamicallyAccessedMembers annotation flows through the
+	// dictionary. Storing a bare Type in Dictionary<string, Type> drops the annotation, so every
+	// TryGetValue consumer would warn (IL2067/IL2072); the annotated property preserves it.
+	private readonly record struct ActorType(
+		[param: DynamicallyAccessedMembers(RegisteredActorMembers)]
+		[property: DynamicallyAccessedMembers(RegisteredActorMembers)]
+		Type Type);
+
 	private static readonly Dictionary<string, JsonObject> specs = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, string> specPaths = new(StringComparer.OrdinalIgnoreCase);
-	private static readonly Dictionary<string, Type> actorTypes = new(StringComparer.OrdinalIgnoreCase);
+	private static readonly Dictionary<string, ActorType> actorTypes = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<Type, string> actorNames = new();
 
 	public static IEnumerable<(string Id, JsonObject Spec)> Specs => specs.Select(it => (it.Key, it.Value));
 
 	// Registered actor type-name -> CLR type. The editor uses this to discover capabilities
 	// (e.g. IResizable) without hardcoding type lists.
-	public static IEnumerable<KeyValuePair<string, Type>> ActorTypes => actorTypes;
+	public static IEnumerable<KeyValuePair<string, Type>> ActorTypes =>
+		actorTypes.Select(it => new KeyValuePair<string, Type>(it.Key, it.Value.Type));
 	public readonly record struct EditableProperty(string Name, string JsonName, Type Type, JsonNode? Value, bool HasLocalValue);
 
 	public static void ClearSpecs()
@@ -44,9 +61,9 @@ public static class ActorSpecs
 		actorNames.Clear();
 	}
 
-	public static void RegisterActor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] T>(string name) where T : Actor
+	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name) where T : Actor
 	{
-		actorTypes[name] = typeof(T);
+		actorTypes[name] = new ActorType(typeof(T));
 		actorNames[typeof(T)] = name;
 	}
 
@@ -120,7 +137,7 @@ public static class ActorSpecs
 		}
 
 		var actorPosition = position ?? ReadPoint(resolved, PositionKey) ?? Point2.Zero;
-		return game.Create(type, actorPosition, actor => Apply(actor, resolved));
+		return game.Create(type.Type, actorPosition, actor => Apply(actor, type.Type, resolved));
 	}
 
 	public static JsonObject CloneObject(JsonObject source)
@@ -171,7 +188,7 @@ public static class ActorSpecs
 			yield break;
 
 		var defaults = GetBaseline(new JsonObject { [TypeKey] = typeName }, resolved);
-		foreach (var member in GetSerializableMembers(type))
+		foreach (var member in GetSerializableMembers(type.Type))
 		{
 			var jsonName = member.Name;
 			var hasLocal = JsonUtil.ContainsProperty(spec, jsonName);
@@ -262,7 +279,7 @@ public static class ActorSpecs
 
 		var memberNames = ReadString(resolved, TypeKey) is { } resolvedTypeName &&
 						  actorTypes.TryGetValue(resolvedTypeName, out var resolvedType)
-			? GetSerializableMembers(resolvedType).ToDictionary(it => it.Name, StringComparer.OrdinalIgnoreCase)
+			? GetSerializableMembers(resolvedType.Type).ToDictionary(it => it.Name, StringComparer.OrdinalIgnoreCase)
 			: [];
 
 		foreach (var (key, value) in spec)
@@ -315,10 +332,12 @@ public static class ActorSpecs
 		return merged;
 	}
 
-	private static void Apply(Actor actor, JsonObject spec)
+	// type is the actor's registered CLR type (annotated so its members survive trimming); it
+	// equals actor.GetType() but carries the DynamicallyAccessedMembers annotation GetType() drops.
+	private static void Apply(Actor actor, [DynamicallyAccessedMembers(RegisteredActorMembers)] Type type, JsonObject spec)
 	{
 		actor.ActorId = ReadString(spec, IdKey);
-		foreach (var member in GetSerializableMembers(actor.GetType()))
+		foreach (var member in GetSerializableMembers(type))
 		{
 			if (!JsonUtil.TryGetProperty(spec, member.Name, out var node) || node == null)
 				continue;
@@ -337,14 +356,14 @@ public static class ActorSpecs
 		if (typeName == null || !actorTypes.TryGetValue(typeName, out var type))
 			return [];
 
-		var actor = (Actor?)Activator.CreateInstance(type);
-		return actor != null ? SerializeActorDefaults(actor) : [];
+		var actor = (Actor?)Activator.CreateInstance(type.Type);
+		return actor != null ? SerializeActorDefaults(type.Type, actor) : [];
 	}
 
-	private static JsonObject SerializeActorDefaults(Actor actor)
+	private static JsonObject SerializeActorDefaults([DynamicallyAccessedMembers(RegisteredActorMembers)] Type type, Actor actor)
 	{
 		var json = new JsonObject();
-		foreach (var member in GetSerializableMembers(actor.GetType()))
+		foreach (var member in GetSerializableMembers(type))
 		{
 			var value = GetMemberValue(member, actor);
 			if (ToJsonNode(value) is { } node)

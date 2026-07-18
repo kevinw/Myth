@@ -25,6 +25,31 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public const string DefaultWeightsFile = "chequered_0050_circular.bin";
 	static readonly ConditionalWeakTable<GraphicsDevice, SharedGpuResources> SharedResources = new();
 
+	// The three NCT compute shaders are weight-independent and shared across every
+	// NeuralTextureActor on a device. Creating a compute Shader eagerly compiles its GPU
+	// pipeline (SDL_CreateGPUComputePipeline), which is the ~seconds-long stall the first
+	// time a neural room (e.g. neural_duck) loads. Building the shared set up front — at the
+	// loading screen — makes the first actor's Added() reuse it instantly. Returns null if
+	// the compiled shaders are missing (unsupported driver / stripped build).
+	static SharedGpuResources? GetSharedResources(GraphicsDevice graphicsDevice)
+	{
+		if (SharedResources.TryGetValue(graphicsDevice, out var existing))
+			return existing;
+
+		var ext = graphicsDevice.Driver.GetShaderExtension();
+		var updateCode = Assets.TryReadCompiledShader($"NeuralTextureUpdate.compute.{ext}");
+		var decodeCode = Assets.TryReadCompiledShader($"NeuralTextureDecode.compute.{ext}");
+		var perturbCode = Assets.TryReadCompiledShader($"NeuralTexturePerturb.compute.{ext}");
+		if (updateCode == null || decodeCode == null || perturbCode == null)
+			return null;
+
+		return SharedResources.GetValue(graphicsDevice, _ => new(graphicsDevice, updateCode, decodeCode, perturbCode));
+	}
+
+	// Pre-builds the shared compute pipelines so the first neural room doesn't stall. Safe to
+	// call before any NeuralTextureActor exists; a no-op if already warmed. See ShaderWarmup.
+	public static void WarmPipelines(GraphicsDevice graphicsDevice) => GetSharedResources(graphicsDevice);
+
 	sealed class SharedGpuResources
 	{
 		public readonly Shader UpdateShader;
@@ -290,14 +315,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		base.Added();
 		graphicsDevice = Game.Manager.GraphicsDevice;
 
-		var ext = graphicsDevice.Driver.GetShaderExtension();
-		var updateCode = Assets.TryReadCompiledShader($"NeuralTextureUpdate.compute.{ext}");
-		var decodeCode = Assets.TryReadCompiledShader($"NeuralTextureDecode.compute.{ext}");
-		var perturbCode = Assets.TryReadCompiledShader($"NeuralTexturePerturb.compute.{ext}");
-		if (updateCode == null || decodeCode == null || perturbCode == null)
+		var shared = GetSharedResources(graphicsDevice);
+		if (shared == null)
 			return;
 
-		var shared = SharedResources.GetValue(graphicsDevice, _ => new(graphicsDevice, updateCode, decodeCode, perturbCode));
 		updateShader = shared.UpdateShader;
 		decodeShader = shared.DecodeShader;
 		perturbShader = shared.PerturbShader;

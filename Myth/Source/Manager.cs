@@ -61,6 +61,17 @@ public partial class Manager : App
 	bool playOnStartup;
 	readonly bool skipStartupMenu;
 	bool startingPlay;
+	// Boot loading screen: warm GPU pipelines a step at a time while showing "Loading...", then
+	// call EnterInitialScreen(). See UpdateBootWarmup/RenderBootWarmup and ShaderWarmup.
+	bool bootWarming;
+	int warmupIndex;
+	// A warm step blocks Update for seconds, freezing whatever was last presented. So we hold off
+	// warming until the window has reached its final (fullscreen) size for a few frames — the
+	// frozen frame must be the correct full-size one, not the tiny pre-resize first frame.
+	const int BootSettleFrames = 3;
+	Point2 bootLastSize = new(-1, -1);
+	int bootStableFrames;
+	readonly bool noWarmup;
 	SaveState saveState = new();
 	bool saveDirty;
 	bool saveFlushScheduled;
@@ -207,6 +218,7 @@ public partial class Manager : App
 		maxTimeSeconds = args.maxTimeSeconds;
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
+		noWarmup = args.noWarmup;
 		skipStartupMenu = args.play || args.gym || args.headless;
 		screenshotPath = args.screenshotPath;
 		screenshotFrame = args.screenshotFrame;
@@ -243,7 +255,7 @@ public partial class Manager : App
 #endif
 	}
 
-	const string APPLICATION_NAME = "Mycelon";
+	public const string APPLICATION_NAME = "Mycelon";
 
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false, bool? fullscreen = null)
 	{
@@ -349,15 +361,57 @@ public partial class Manager : App
 		if (AudioEnabled)
 			LoadAudioBanks();
 
+#if !EDITOR && !BROWSER
+		// Normal windowed play: cover GPU pipeline warmup with a loading screen so the first
+		// neural room doesn't hitch. Gym/headless/screenshot runs have no loading UI, so warm
+		// inline and enter immediately. EnterInitialScreen() runs once warmup finishes — see
+		// UpdateBootWarmup(). --no-warmup skips all of it so pipelines compile lazily on first
+		// room entry (baseline for A/B testing against a cold driver cache).
+		if (noWarmup)
+		{
+			EnterInitialScreen();
+		}
+		else if (!headless && !gymMode && screenshotPath == null)
+		{
+			bootWarming = true;
+			warmupIndex = 0;
+		}
+		else
+		{
+			if (!headless)
+				ShaderWarmup.WarmAll(GraphicsDevice);
+			EnterInitialScreen();
+		}
+#else
+		EnterInitialScreen();
+#endif
+
+#if EDITOR
+
+// Watch development assets
+#if DEBUG && !IOS && !BROWSER
+		StartAssetWatcher();
+		StartShaderWatcher();
+		StartParticleWatcher();
+		if (AudioEnabled)
+			StartAudioBankWatcher();
+#endif
+
+		if (!playOnStartup)
+			SyncEditorGame();
+#endif
+	}
+
+	// Enters the first on-screen state after boot/warmup: the title menu, immediate play, or a
+	// gym run. Extracted from Startup so the windowed build can defer it behind a loading screen.
+	void EnterInitialScreen()
+	{
 #if BROWSER || !EDITOR
 		if (!skipStartupMenu)
 			ShowTitleMenu();
 		else
 			playOnStartup = true; // explicit play/test runs still boot straight into play
 #endif
-
-
-
 		if (playOnStartup)
 			StartGame(immediate: playRoomId != null);
 #if !BROWSER
@@ -385,21 +439,54 @@ public partial class Manager : App
 			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {run.DisplayId}@{run.StartDisplay}");
 			StartGymRun(run);
 		}
+	}
 
-#if EDITOR
+	// Drives the boot loading screen: once the window has settled, warm one ShaderWarmup step per
+	// frame, then reveal the game.
+	void UpdateBootWarmup()
+	{
+		if (bootStableFrames < BootSettleFrames)
+			return;
 
-// Watch development assets
-#if DEBUG && !IOS && !BROWSER
-		StartAssetWatcher();
-		StartShaderWatcher();
-		StartParticleWatcher();
-		if (AudioEnabled)
-			StartAudioBankWatcher();
-#endif
+		if (warmupIndex < ShaderWarmup.Steps.Length)
+		{
+			ShaderWarmup.Warm(ShaderWarmup.Steps[warmupIndex], GraphicsDevice);
+			warmupIndex++;
+			return;
+		}
 
-		if (!playOnStartup)
-			SyncEditorGame();
-#endif
+		bootWarming = false;
+		EnterInitialScreen();
+	}
+
+	void RenderBootWarmup()
+	{
+		var window = RequiredWindow;
+		window.Clear(0x2e1426);
+
+		// The batcher draws in window-pixel space (see View: WidthInPixels/Scale). Track the size
+		// so UpdateBootWarmup only blocks on a warm compile once it has stopped changing.
+		var size = new Point2(window.WidthInPixels, window.HeightInPixels);
+		if (size == bootLastSize)
+			bootStableFrames++;
+		else
+		{
+			bootStableFrames = 0;
+			bootLastSize = size;
+		}
+
+		// SpeechFont is a crisp pixel-perfect 16px raster; scale it by an integer so it stays sharp
+		// (the 8px UI Font upscaled non-integer smears). Centered in the window via justify.
+		if ((Assets.SpeechFont ?? Assets.Font) is { } font)
+		{
+			var scale = Math.Max(1, (int)(size.Y / 360f));
+			batcher.PushMatrix(Matrix3x2.CreateScale(scale));
+			batcher.Text(font, "Loading...", new Vector2(size.X, size.Y) / (2f * scale), new Vector2(0.5f, 0.5f), Color.White);
+			batcher.PopMatrix();
+		}
+
+		batcher.Render(window);
+		batcher.Clear();
 	}
 
 	protected override void Shutdown()
@@ -722,6 +809,12 @@ public partial class Manager : App
 		if (headless)
 		{
 			HeadlessUpdate();
+			return;
+		}
+
+		if (bootWarming)
+		{
+			UpdateBootWarmup();
 			return;
 		}
 
@@ -1119,6 +1212,12 @@ public partial class Manager : App
 	{
 		if (Window == null)
 			return;
+
+		if (bootWarming)
+		{
+			RenderBootWarmup();
+			return;
+		}
 
 		PerfStats.Record(PerfStat.Present, GraphicsDevice.LastPresentDuration);
 		UpdateFpsOverlay();
