@@ -28,6 +28,8 @@ public partial class Player : Pawn
 	static float BudBurrowDotRadius => 2.25f;
 	static int BurrowIntervals => 3;           // burrow time is split into this many countdown intervals
 	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
+	static float BurrowStuckPulseSpeed => 3.5f;
+	static float BurrowStuckPulseScale => 0.55f;
 	static float BurrowMinSpread => 0.4f;      // arc shrinks to this fraction of full by the final interval
 	static float BurrowSpreadEaseRate => 1.4f; // per-second ease of the arc toward the current interval's spread
 	const float BurrowEnterSquishTime = 0.12f; // sprite stays visible this long to play the squash-in
@@ -50,7 +52,14 @@ public partial class Player : Pawn
 	float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
 	float burrowSpeed;                  // current travel speed; eases via accel/friction
 	bool burrowOnJumpthru;              // current surface is a one-way platform (ride on top, no submerge)
+	BurrowLine? burrowLine;
+	BurrowLine? burrowLineExit;
+	int burrowLineSegment;
+	float burrowLineT;
+	int burrowLineDirection;
+	Vector2 burrowLineHeading;
 	readonly List<Vector2> glowPoints = [];
+	readonly List<Vector2> burrowLineGlowBack = [];
 	Point2 burrowGlowAnchor;
 	int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
 	float burrowSparkAccumulator;
@@ -62,12 +71,14 @@ public partial class Player : Pawn
 
 	int burrowIntervalIndex;      // which countdown interval we're in (0-based); a change fires a pulse + tick
 	float burrowPulseTimer;       // counts down after each interval boundary; flashes the line brighter
+	bool burrowExitBlocked;       // a release/timeout inside solid guide geometry cannot produce a valid player hitbox
 	float burrowSpreadScale = 1f; // eased multiplier on the glow arc length; shrinks as intervals elapse
 
 	float burrowLeapCoyote;               // time left to still pop UP after rounding a downward corner
 	Vector2 burrowLeapExitDir;            // remembered outward dir (from riding a top surface) for that leap
 	float burrowLeapTravelX;              // remembered horizontal glide so the coyote leap keeps its arc
 	static float BurrowLeapCoyoteTime => 0.12f;
+	Vector2 BurrowTravelHeading => burrowLine != null ? burrowLineHeading : burrowHeading;
 
 	bool TryStartBurrow(Vector2 previousVelocity)
 	{
@@ -87,6 +98,7 @@ public partial class Player : Pawn
 		burrowTimer = burrowDuration;
 		burrowIntervalIndex = 0;
 		burrowPulseTimer = BurrowPulseTime; // flash the first interval's start too (the line igniting)
+		burrowExitBlocked = false;
 		burrowSpreadScale = 1f;
 		burrowLeapCoyote = 0;
 		burrowEnterTimer = BurrowEnterSquishTime;
@@ -94,6 +106,8 @@ public partial class Player : Pawn
 		burrowLastIntent = Vector2.Zero; // a tangential press establishes the orbit
 		burrowOrbiting = false;
 		burrowReverseQueued = false;
+		burrowLine = null;
+		burrowLineExit = null;
 		// Initialize the walk state: heading = +tangent, solid on the right (matches +tangent).
 		burrowSolidLeft = false;
 		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
@@ -168,7 +182,10 @@ public partial class Player : Pawn
 		{
 			burrowGlowAnchor = Position;
 		}
-		Game.TraceSurfaceFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, arcLength, glowPoints);
+		if (burrowLine != null)
+			burrowLine.Trace(burrowLineSegment, burrowLineT, arcLength, glowPoints, burrowLineGlowBack);
+		else
+			Game.TraceSurfaceFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, arcLength, glowPoints);
 	}
 
 	// Split the burrow's lifetime into BurrowIntervals countdown steps. Crossing into a new
@@ -199,6 +216,12 @@ public partial class Player : Pawn
 	// at the top instead of getting the sideways pop off the vertical face.
 	void UpdateBurrowLeapCoyote()
 	{
+		if (burrowLine != null)
+		{
+			burrowLeapCoyote = Calc.Approach(burrowLeapCoyote, 0, Time.Delta);
+			return;
+		}
+
 		if (burrowToward.Y > 0.5f)
 		{
 			burrowLeapCoyote = BurrowLeapCoyoteTime;
@@ -259,7 +282,7 @@ public partial class Player : Pawn
 		var intent = new Vector2(input.MoveX, input.MoveY);
 		var pressed = intent != Vector2.Zero;
 		var changed = intent != burrowLastIntent;
-		var proj = Vector2.Dot(intent, (Vector2)burrowHeading);
+		var proj = Vector2.Dot(intent, BurrowTravelHeading);
 		var tangential = MathF.Abs(proj) > BurrowTangentDeadzone;
 
 		if (!pressed)
@@ -280,7 +303,7 @@ public partial class Player : Pawn
 		// slope lands in between on its own (the cardinal walker alternates up/flat steps).
 		// Descending counts as flat, so you keep momentum going down. A queued reversal
 		// targets zero speed (friction) so a direction switch decelerates before flipping.
-		var climb = MathF.Max(0, -burrowHeading.Y);
+		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
 		var targetSpeed = move && !burrowReverseQueued ? BurrowMaxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
 		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
 		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
@@ -289,8 +312,16 @@ public partial class Player : Pawn
 		// other way next frame.
 		if (burrowReverseQueued && burrowSpeed <= BurrowReverseFlipSpeed)
 		{
-			burrowHeading = new(-burrowHeading.X, -burrowHeading.Y);
-			burrowSolidLeft = !burrowSolidLeft;
+			if (burrowLine != null)
+			{
+				burrowLineDirection *= -1;
+				burrowLineHeading = -burrowLineHeading;
+			}
+			else
+			{
+				burrowHeading = new(-burrowHeading.X, -burrowHeading.Y);
+				burrowSolidLeft = !burrowSolidLeft;
+			}
 			burrowReverseQueued = false;
 		}
 
@@ -299,32 +330,72 @@ public partial class Player : Pawn
 		burrowMoveRemainder -= pixels;
 		if (pixels > 0)
 		{
-			var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
-			burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
-			if (moved == 0)
+			if (burrowLine == null && Game.TryEnterBurrowLine(Position, burrowHeading, burrowLineExit, 3,
+				out var enteredLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
+				out var entryPoint, out burrowLineHeading))
 			{
-				// A dead end. If we're driving into it and the surface exits the room into an
-				// adjacent one, transition and keep burrowing on the far side. The world is laid
-				// out in contiguous coordinates, so the surface continues across the shared edge.
-				// Otherwise (no adjacent room) pop out; if we merely coasted here on friction,
-				// kill the glide and stay put.
-				if (move)
+				burrowLine = enteredLine;
+				Position = (Point2)entryPoint;
+				burrowLineExit = null;
+			}
+
+			if (burrowLine != null)
+			{
+				var exitedLine = burrowLine.Advance(ref burrowLineSegment, ref burrowLineT, burrowLineDirection,
+					pixels, out var linePoint, out burrowLineHeading);
+				Position = (Point2)linePoint;
+				if (exitedLine)
 				{
-					// Only a surface that ran off the room edge can continue in a neighbor. A
-					// dead-end away from the edge (e.g. the end of a one-way jumpthru sitting
-					// mid-room) has nowhere to go, so pop out instead of letting Transition
-					// teleport us into the adjacent screen — it only checks the perpendicular axis.
-					if (BurrowAtRoomEdge() && Game.Transition(burrowHeading))
-						return; // stay burrowed; resumed by ResolveBurrowRoomTransition after the swap
-					PopOutOfBurrow();
-					return;
+					if (Game.TryAttachBurrowSurface(Position, burrowLineHeading, intent, BurrowAttachProbe,
+						out var surfacePosition, out var surfaceHeading, out var surfaceSolidLeft, out var surfaceToward))
+					{
+						burrowLineExit = burrowLine;
+						burrowLine = null;
+						Position = surfacePosition;
+						burrowHeading = surfaceHeading;
+						burrowSolidLeft = surfaceSolidLeft;
+						burrowToward = surfaceToward;
+						burrowExitBlocked = false;
+					}
+					else if (CanExitBurrowLine(out var exitDucking))
+					{
+						ducking = exitDucking;
+						PopOutOfBurrow();
+						return;
+					}
+					else
+					{
+						burrowExitBlocked = true;
+						burrowSpeed = 0;
+						burrowMoveRemainder = 0;
+					}
 				}
-				burrowSpeed = 0;
-				burrowMoveRemainder = 0;
+			}
+			else
+			{
+				var moved = Game.WalkSurface(ref Position, ref burrowHeading, burrowSolidLeft, pixels);
+				burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
+				if (moved == 0)
+				{
+					// A dead end. If we're driving into it and the surface exits the room into an
+					// adjacent one, transition and keep burrowing on the far side. Otherwise pop out;
+					// if we merely coasted here on friction, kill the glide and stay put.
+					if (move)
+					{
+						if (BurrowAtRoomEdge() && Game.Transition(burrowHeading))
+							return;
+						PopOutOfBurrow();
+						return;
+					}
+					burrowSpeed = 0;
+					burrowMoveRemainder = 0;
+				}
 			}
 		}
 
-		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
+		if (burrowLineExit != null && !burrowLineExit.NearEndpoint(Position, 4))
+			burrowLineExit = null;
+		burrowOnJumpthru = burrowLine == null && Game.SurfaceIsJumpthru(Position, burrowToward);
 		UpdateBurrowLeapCoyote();
 		UpdateBurrowShift();
 		UpdateBurrowIntervals();
@@ -336,13 +407,38 @@ public partial class Player : Pawn
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);
 
-		burrowTimer -= Time.Delta;
-		if (burrowTimer <= 0 || !input.JumpDown) {
-			if (burrowTimer <= 0) {
-				AudioEvent("player/burrow_tick", "Interval", (float)BurrowIntervals);
+		burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
+		var wantsExit = burrowTimer <= 0 || !input.JumpDown;
+		if (burrowExitBlocked && (burrowLine == null || CanExitBurrowLine(out _)))
+			burrowExitBlocked = false;
+		if (wantsExit)
+		{
+			if (!CanExitBurrowLine(out var exitDucking))
+			{
+				burrowExitBlocked = true;
+				return;
 			}
-		PopOutOfBurrow();
+
+			ducking = exitDucking;
+			if (burrowTimer <= 0)
+				AudioEvent("player/burrow_tick", "Interval", (float)BurrowIntervals);
+			PopOutOfBurrow();
 		}
+	}
+
+	bool CanExitBurrowLine(out bool exitDucking)
+	{
+		exitDucking = false;
+		if (burrowLine == null)
+			return true;
+		if (!Game.OverlapsSolid(this, StandingHitboxRect + Position))
+			return true;
+		if (!Game.OverlapsSolid(this, DuckingHitboxRect + Position))
+		{
+			exitDucking = true;
+			return true;
+		}
+		return false;
 	}
 
 	// StopBurrow stop a burrow
@@ -360,7 +456,7 @@ public partial class Player : Pawn
 		// This is a bit of a hard coded hack: if we're exiting downwards,
 		// move the hitbox down so that its top is at the edge of the surface we
 		// are exiting from.
-		if (exitDir.Y < 0)
+		if (burrowLine == null && exitDir.Y < 0)
 		{
 			Position = (Point2)(new Vector2(Position.X, Position.Y + StandingHitboxRect.Height));
 
@@ -374,7 +470,7 @@ public partial class Player : Pawn
 		// Climbing straight up a vertical wall pops into a wall slide instead of launching
 		// off it: drop the outward push, keep hugging the wall, and carry strong upward
 		// velocity. Feels better and sets up wall-jump / re-burrow chaining off the launch.
-		if (MathF.Abs(burrowToward.X) > MathF.Abs(burrowToward.Y) && burrowHeading.Y < 0)
+		if (burrowLine == null && MathF.Abs(burrowToward.X) > MathF.Abs(burrowToward.Y) && burrowHeading.Y < 0)
 		{
 			Velocity = new Vector2(0, BurrowWallSlideLaunch);
 			Facing = Math.Sign(burrowToward.X); // face into the wall so the slide reads
@@ -386,8 +482,9 @@ public partial class Player : Pawn
 			// tangential glide momentum (so popping out of a fast rightward burrow keeps
 			// that rightward speed).
 			var popMagnitude = MathF.Abs(BurrowPopForce);
-			var travel = burrowHeading != Point2.Zero
-				? Vector2.Normalize((Vector2)burrowHeading) * burrowSpeed
+			var heading = BurrowTravelHeading;
+			var travel = heading != Vector2.Zero
+				? Vector2.Normalize(heading) * burrowSpeed
 				: Vector2.Zero;
 			if (leapCoyote)
 				travel = new Vector2(burrowLeapTravelX, 0); // recover the pre-corner horizontal arc, drop the downward glide
@@ -419,6 +516,7 @@ public partial class Player : Pawn
 		burrowTimer = -BurrowCooldown;
 		burrowGlowExitTimer = BurrowGlowExitTime;
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
+		burrowExitBlocked = false;
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
 
@@ -430,7 +528,7 @@ public partial class Player : Pawn
 		{
 			float direction = MathF.Atan2(Velocity.X, Velocity.Y);
 			particles.Emit(burrowSparkEffect,
-				worldPosition: burrowGlowAnchor - exitDir * 2.0f - Vector2.Normalize((Vector2)burrowHeading) * 3.0f,
+				worldPosition: burrowGlowAnchor - exitDir * 2.0f - Vector2.Normalize(BurrowTravelHeading) * 3.0f,
 				count: 20,
 				directionRadians: direction + MathF.PI / 2.0f,
 				speedScale: 2.5f,
@@ -473,6 +571,8 @@ public partial class Player : Pawn
 		if (burrowGlowExitTimer > 0)
 			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
 		burrowGlowExitTimer = Calc.Approach(burrowGlowExitTimer, 0, Time.Delta);
+		if (State != States.Burrow && burrowGlowExitTimer <= 0)
+			burrowLine = null;
 		burrowPulseTimer = Calc.Approach(burrowPulseTimer, 0, Time.Delta);
 	}
 
@@ -489,7 +589,7 @@ public partial class Player : Pawn
 		Game.SetAudioEventPosition(burrowSound, Position, Game.GetFirst(Masks.Player)?.Position);
 
 		var speed01 = BurrowMaxSpeed > 0 ? burrowSpeed / BurrowMaxSpeed : 0f;
-		var climb = MathF.Max(0, -burrowHeading.Y);
+		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
 		Game.SetAudioEventParameter(burrowSound, "Speed", speed01);
 		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
 	}
@@ -557,6 +657,12 @@ public partial class Player : Pawn
 
 				pulse *= 0.5f;
 				color = Color.Lerp(color, flash, pulse);
+			}
+			if (burrowExitBlocked)
+			{
+				var pulse = 0.5f + 0.5f * MathF.Sin((Time.SecondsF * BurrowStuckPulseSpeed - dist * BurrowStuckPulseScale) * Calc.TAU);
+				var warning = new Color(1f, 0.08f, 0.16f, MathF.Min(1f, alpha + 0.25f));
+				color = Color.Lerp(color, warning, 0.45f + pulse * 0.5f);
 			}
 			return color;
 		}

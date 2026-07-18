@@ -3,9 +3,10 @@ using Foster.Framework;
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Door)]
-public class Door : Actor
+public class Door : Actor, IActivatable
 {
 	public bool StartsVisible;
+	public bool Locked;
 	private float delay = 0;
 
 	public Door()
@@ -17,7 +18,7 @@ public class Door : Actor
 
 	public override void Added()
 	{
-		if (StartsVisible)
+		if (StartsVisible || Locked)
 			Appear();
 
 	}
@@ -43,7 +44,7 @@ public class Door : Actor
 				Appear();
 		}
 		// wait for all enemies to be gone
-		else if (Timer > 0.25f)
+		else if (!Locked && Timer > 0.25f)
 		{
 			bool anyEnemiesAlive = false;
 
@@ -64,5 +65,13 @@ public class Door : Actor
 				delay += Time.Delta;
 			}
 		}
+	}
+
+	public void Activate(Actor source)
+	{
+		if (Game.destroying.Contains(this))
+			return;
+		Game.Create<Pop>(Position + new Point2(0, -8));
+		Game.Destroy(this);
 	}
 }

@@ -107,6 +107,88 @@ public partial class Game
 	public Vector2 SurfaceNormal(Point2 heading, bool solidLeft)
 		=> (Vector2)(solidLeft ? new Point2(heading.Y, -heading.X) : new Point2(-heading.Y, heading.X));
 
+	public bool TryEnterBurrowLine(Point2 position, Vector2 travelHeading, BurrowLine? exclude, float maxDistance,
+		out BurrowLine? line, out int segment, out float t, out int direction, out Vector2 point, out Vector2 heading)
+	{
+		line = null;
+		segment = 0;
+		t = 0;
+		direction = 1;
+		point = position;
+		heading = travelHeading;
+		var bestDistance = maxDistance * maxDistance;
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not BurrowLine candidate || candidate == exclude ||
+				!candidate.TryGetEndpoint(position, maxDistance, out var candidateSegment, out var candidateT,
+					out var candidateDirection, out var candidatePoint, out var candidateHeading))
+				continue;
+
+			var toEndpoint = candidatePoint - position;
+			var distance = toEndpoint.LengthSquared();
+			if (distance > 0.001f && Vector2.Dot(Vector2.Normalize(toEndpoint), travelHeading) < 0)
+				continue;
+			if (distance > bestDistance)
+				continue;
+
+			bestDistance = distance;
+			line = candidate;
+			segment = candidateSegment;
+			t = candidateT;
+			direction = candidateDirection;
+			point = candidatePoint;
+			heading = candidateHeading;
+		}
+
+		return line != null;
+	}
+
+	public bool TryAttachBurrowSurface(Point2 near, Vector2 travelHeading, Vector2 heldIntent, float maxReach,
+		out Point2 position, out Point2 heading, out bool solidLeft, out Vector2 towardSolid)
+	{
+		position = near;
+		heading = Point2.Right;
+		solidLeft = false;
+		towardSolid = Vector2.UnitY;
+		var found = false;
+		var bestScore = float.MaxValue;
+		Span<Vector2> normals = [Vector2.UnitX, -Vector2.UnitX, Vector2.UnitY, -Vector2.UnitY];
+		travelHeading = travelHeading.LengthSquared() > 0 ? Vector2.Normalize(travelHeading) : Vector2.UnitX;
+
+		foreach (var normal in normals)
+		{
+			var candidate = near;
+			var toward = normal;
+			if (!SnapToSurface(ref candidate, ref toward, maxReach))
+				continue;
+
+			var tangent = new Vector2(toward.Y, -toward.X);
+			var alignment = Vector2.Dot(tangent, travelHeading);
+			// A guide meeting a surface orthogonally has no momentum-based answer for left
+			// versus right. Use held input only for that ambiguous seam; otherwise preserve
+			// incoming travel so ordinary guide exits and the boundary walk keep their orbit.
+			var directionAlignment = MathF.Abs(alignment) > 0.25f
+				? alignment
+				: Vector2.Dot(tangent, heldIntent);
+			var candidateSolidLeft = directionAlignment < 0;
+			if (candidateSolidLeft)
+				tangent = -tangent;
+			var score = Vector2.DistanceSquared(candidate, near) + (1 - MathF.Abs(alignment)) * 2;
+			if (score >= bestScore)
+				continue;
+
+			bestScore = score;
+			found = true;
+			position = candidate;
+			heading = new Point2((int)MathF.Round(tangent.X), (int)MathF.Round(tangent.Y));
+			solidLeft = candidateSolidLeft;
+			towardSolid = toward;
+		}
+
+		return found;
+	}
+
 	void WalkBoundary(Point2 startVertex, Point2 heading, bool solidLeft, float maxArc, List<Vector2> outPoints)
 	{
 		var v = startVertex;

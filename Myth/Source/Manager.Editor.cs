@@ -1373,6 +1373,29 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (property.Type == typeof(Point2[]))
+		{
+			var points = ActorSpecs.ReadPointArray(property.Value) ?? [];
+			ImGui.TextUnformatted($"{points.Length} points");
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Add"))
+			{
+				var next = points.Length > 0 ? points[^1] + new Point2(Game.TileSize * 4, 0) : Point2.Zero;
+				using (CapturePrefabUndo("Add Path Point", specId))
+					ActorSpecs.SetProperty(specId, property.JsonName, ActorSpecs.ToJsonNode((Point2[])[.. points, next]));
+				changed = true;
+			}
+			if (points.Length > 2)
+			{
+				ImGui.SameLine();
+				if (ImGui.SmallButton("Remove Last"))
+				{
+					using (CapturePrefabUndo("Remove Path Point", specId))
+						ActorSpecs.SetProperty(specId, property.JsonName, ActorSpecs.ToJsonNode(points[..^1]));
+					changed = true;
+				}
+			}
+		}
 		else if (property.Type == typeof(bool))
 		{
 			var value = property.Value?.GetValue<bool>() ?? false;
@@ -1502,6 +1525,8 @@ public partial class Manager
 	{
 		if (property.Name == nameof(LinkedDoor.TargetActorId) && IsLinkedDoorActor(actor))
 			return DrawLinkedDoorTargetProperty(room, actor, property);
+		if (property.Name == nameof(Switch.TargetActorId) && IsSwitchActor(actor))
+			return DrawSwitchTargetProperty(room, actor, property);
 
 		if (property.Name == nameof(ParticleEmitter.EffectName) && IsParticleEmitterActor(actor))
 			return DrawParticleEffectNameProperty(room, actor, property);
@@ -1594,6 +1619,29 @@ public partial class Manager
 				OpenActorPropertyUndo(room, actor);
 				ActorSpecs.SetProperty(actor, property.JsonName, new JsonArray(values[0], values[1]));
 				changed = true;
+			}
+		}
+		else if (property.Type == typeof(Point2[]))
+		{
+			var points = ActorSpecs.ReadPointArray(property.Value) ?? [];
+			ImGui.TextUnformatted($"{points.Length} points");
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Add"))
+			{
+				var next = points.Length > 0 ? points[^1] + new Point2(Game.TileSize * 4, 0) : Point2.Zero;
+				using (CaptureRoomUndo("Add Path Point", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode((Point2[])[.. points, next]));
+				changed = true;
+			}
+			if (points.Length > 2)
+			{
+				ImGui.SameLine();
+				if (ImGui.SmallButton("Remove Last"))
+				{
+					using (CaptureRoomUndo("Remove Path Point", room))
+						ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode(points[..^1]));
+					changed = true;
+				}
 			}
 		}
 		else if (property.Type == typeof(bool))
@@ -1732,6 +1780,60 @@ public partial class Manager
 			}
 		}
 		ImGui.EndGroup();
+
+		if (property.HasLocalValue)
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Reset"))
+			{
+				using (CaptureRoomUndo("Reset Actor Property", room))
+					ActorSpecs.ResetProperty(actor, property.JsonName);
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
+
+	bool DrawSwitchTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		var changed = false;
+		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
+		var value = property.Value?.GetValue<string>() ?? string.Empty;
+		var target = Assets.FindActorById(value);
+		var label = target is { } found
+			? $"{ActorSpecs.GetTypeName(found.Actor)} ({value[..Math.Min(8, value.Length)]})"
+			: string.IsNullOrWhiteSpace(value) ? "No target" : $"Missing ({value})";
+
+		ImGui.SetNextItemWidth(controlWidth);
+		if (ImGui.BeginCombo("##Value", label))
+		{
+			foreach (var candidate in room.Actors)
+			{
+				if (!IsActivatableActor(candidate) || ActorSpecs.GetActorId(candidate) is not { } candidateId)
+					continue;
+				var typeName = ActorSpecs.GetTypeName(candidate) ?? "Actor";
+				var selected = string.Equals(value, candidateId, StringComparison.OrdinalIgnoreCase);
+				if (ImGui.Selectable($"{typeName} ({candidateId[..Math.Min(8, candidateId.Length)]})", selected))
+				{
+					using (CaptureRoomUndo("Set Switch Target", room))
+						ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(candidateId));
+					changed = true;
+				}
+			}
+			ImGui.EndCombo();
+		}
+
+		if (!string.IsNullOrWhiteSpace(value))
+		{
+			ImGui.SameLine();
+			if (ImGui.SmallButton("Clear"))
+			{
+				using (CaptureRoomUndo("Clear Switch Target", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(""));
+				changed = true;
+			}
+		}
 
 		if (property.HasLocalValue)
 		{
@@ -1958,6 +2060,53 @@ public partial class Manager
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
 
+	static bool IsSwitchActor(JsonObject actor)
+		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(Switch), StringComparison.OrdinalIgnoreCase);
+
+	static HashSet<string>? pointPathActorTypes;
+	static HashSet<string> PointPathActorTypes
+		=> pointPathActorTypes ??= BuildActorCapabilityTypes<IPointPath>();
+
+	static HashSet<string>? activatableActorTypes;
+	static HashSet<string> ActivatableActorTypes
+		=> activatableActorTypes ??= BuildActorCapabilityTypes<IActivatable>();
+
+	static HashSet<string> BuildActorCapabilityTypes<T>()
+	{
+		var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (name, type) in ActorSpecs.ActorTypes)
+			if (typeof(T).IsAssignableFrom(type))
+				result.Add(name);
+		return result;
+	}
+
+	static bool IsPointPathActor(JsonObject actor)
+		=> PointPathActorTypes.Contains(ActorSpecs.GetTypeName(actor) ?? "");
+
+	static bool IsActivatableActor(JsonObject actor)
+		=> ActivatableActorTypes.Contains(ActorSpecs.GetTypeName(actor) ?? "");
+
+	static Point2[] PointPathPoints(JsonObject actor)
+	{
+		if (PointPathNodes(actor) is not { } nodes)
+			return [Point2.Zero, new Point2(Game.TileSize * 8, 0)];
+
+		var points = new Point2[nodes.Count];
+		for (var i = 0; i < points.Length; i++)
+			points[i] = PointPathPoint(nodes, i);
+		return points;
+	}
+
+	static JsonArray? PointPathNodes(JsonObject actor)
+		=> ActorSpecs.GetResolvedProperty(actor, nameof(IPointPath.Points)) as JsonArray;
+
+	static int PointPathPointCount(JsonArray? nodes) => nodes?.Count ?? 2;
+
+	static Point2 PointPathPoint(JsonArray? nodes, int index)
+		=> nodes != null
+			? ActorSpecs.ReadPoint(nodes[index]) ?? Point2.Zero
+			: index == 0 ? Point2.Zero : new Point2(Game.TileSize * 8, 0);
+
 	// Actor types that author as a tile-snapped room rect, sharing the resize-handle UI: every
 	// actor implementing IResizable, mapped to the default size of a freshly placed instance (its
 	// public static DefaultSize). Built once from the actor type registry, so a new resizable
@@ -2022,7 +2171,7 @@ public partial class Manager
 	int HitTestRoomActor(Room room, Vector2 world)
 	{
 		for (var i = room.Actors.Count - 1; i >= 0; i--)
-			if (RoomActorBounds(room, room.Actors[i]).Contains(world))
+			if (RoomActorContains(room, room.Actors[i], world))
 				return i;
 
 		return -1;
@@ -2034,8 +2183,25 @@ public partial class Manager
 	{
 		into.Clear();
 		for (var i = room.Actors.Count - 1; i >= 0; i--)
-			if (RoomActorBounds(room, room.Actors[i]).Contains(world))
+			if (RoomActorContains(room, room.Actors[i], world))
 				into.Add(i);
+	}
+
+	bool RoomActorContains(Room room, JsonObject actor, Vector2 world)
+	{
+		if (RoomActorBounds(room, actor).Contains(world))
+			return true;
+		if (!IsPointPathActor(actor))
+			return false;
+
+		var points = PointPathNodes(actor);
+		var count = PointPathPointCount(points);
+		var origin = PointPathOrigin(room, actor);
+		var tolerance = MathF.Max(3, 6 / editorZoom);
+		for (var i = 1; i < count; i++)
+			if (new Line(origin + PointPathPoint(points, i - 1), origin + PointPathPoint(points, i)).DistanceSquared(world) <= tolerance * tolerance)
+				return true;
+		return false;
 	}
 
 	// Which actor a left-press acts on. A press holds onto the current selection whenever it is
@@ -2119,7 +2285,7 @@ public partial class Manager
 		for (var i = 0; i < room.Actors.Count; i++)
 		{
 			var selected = i == selectedRoomActorIndex;
-			if ((DragKind is EditorDragKind.RoomActor or EditorDragKind.ActorResize) && !selected)
+			if ((DragKind is EditorDragKind.RoomActor or EditorDragKind.ActorPathPoint or EditorDragKind.ActorResize) && !selected)
 				continue;
 
 			var hovered = i == hoveredIndex;
@@ -2134,6 +2300,56 @@ public partial class Manager
 				DrawHiddenWallResizeHandles(bounds, lineWeight, ResizableRoomRectInfo(room.Actors[i]).Axes);
 		}
 	}
+
+	void DrawPointPaths(Room room, float lineWeight)
+	{
+		for (var actorIndex = 0; actorIndex < room.Actors.Count; actorIndex++)
+		{
+			var actor = room.Actors[actorIndex];
+			if (!IsPointPathActor(actor))
+				continue;
+
+			var points = PointPathNodes(actor);
+			var count = PointPathPointCount(points);
+			var origin = PointPathOrigin(room, actor);
+			var selected = actorIndex == selectedRoomActorIndex;
+			var typeName = ActorSpecs.GetTypeName(actor);
+			var color = typeName == nameof(BurrowLine) ? new Color(0x54e6c1) : new Color(0xffb454);
+			var weight = lineWeight * (selected ? 3 : 2);
+			for (var i = 1; i < count; i++)
+				batcher.Line(origin + PointPathPoint(points, i - 1), origin + PointPathPoint(points, i), weight, color * (selected ? 1 : 0.65f));
+
+			if (!selected)
+				continue;
+			var radius = PointPathHandleRadius(lineWeight);
+			for (var i = 0; i < count; i++)
+			{
+				var point = origin + PointPathPoint(points, i);
+				batcher.Circle(point, radius, 12, color);
+				batcher.CircleLine(point, radius, lineWeight, 12, Color.White);
+			}
+		}
+	}
+
+	int HitTestPointPathHandle(Room room, int actorIndex, Vector2 world, float lineWeight)
+	{
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count || !IsPointPathActor(room.Actors[actorIndex]))
+			return -1;
+
+		var actor = room.Actors[actorIndex];
+		var points = PointPathNodes(actor);
+		var origin = PointPathOrigin(room, actor);
+		var radius = PointPathHandleRadius(lineWeight) * 1.5f;
+		for (var i = PointPathPointCount(points) - 1; i >= 0; i--)
+			if (Vector2.DistanceSquared(world, origin + PointPathPoint(points, i)) <= radius * radius)
+				return i;
+		return -1;
+	}
+
+	static Vector2 PointPathOrigin(Room room, JsonObject actor)
+		=> room.WorldBounds.TopLeft + (ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero);
+
+	static float PointPathHandleRadius(float lineWeight) => MathF.Max(3, lineWeight * 5);
 
 	void DrawRevealDoorMarkers(Room room, float lineWeight)
 	{
@@ -2301,6 +2517,24 @@ public partial class Manager
 			? SnapRoomActorLocalPosition(targetLocal, offset)
 			: (Point2)targetLocal;
 		actor["Position"] = new JsonArray(local.X, local.Y);
+		editorGameDirty = true;
+	}
+
+	void MovePointPathPoint(Room room, int actorIndex, int pointIndex, Vector2 world, bool snap)
+	{
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count)
+			return;
+
+		var actor = room.Actors[actorIndex];
+		var points = PointPathPoints(actor);
+		if (pointIndex < 0 || pointIndex >= points.Length)
+			return;
+
+		var local = world - PointPathOrigin(room, actor);
+		points[pointIndex] = snap
+			? (local / Game.TileSize).RoundToPoint2() * Game.TileSize
+			: local.RoundToPoint2();
+		ActorSpecs.SetProperty(actor, nameof(IPointPath.Points), ActorSpecs.ToJsonNode(points));
 		editorGameDirty = true;
 	}
 
@@ -3484,6 +3718,9 @@ public partial class Manager
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
+			var hoveredPathPoint = !worldMouseBlocked && actorSelectActive && overGame
+				? HitTestPointPathHandle(editing, selectedRoomActorIndex, worldMouse, gridWeight)
+				: -1;
 			var revealDoorFocused =
 				hoveredActorIndex >= 0 && hoveredActorIndex < editing.Actors.Count && IsRevealDoorActor(editing.Actors[hoveredActorIndex]) ||
 				selectedRoomActorIndex >= 0 && selectedRoomActorIndex < editing.Actors.Count && IsRevealDoorActor(editing.Actors[selectedRoomActorIndex]);
@@ -3537,6 +3774,15 @@ public partial class Manager
 				editorDrag.RoomGeometryHandle = hoveredRoomGeometryHandle;
 				var mouseTile = WorldToRoomGeometryTile(worldMouse);
 				editorDrag.RoomGeometryOffset = mouseTile - editing.TileSpacePosition;
+				CancelTilePaint();
+			}
+			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredPathPoint >= 0)
+			{
+				ClearEditorDragState();
+				editorDrag.Kind = EditorDragKind.ActorPathPoint;
+				editorDrag.PathPointIndex = hoveredPathPoint;
+				editorDrag.ActorSnapsByDefault = true;
+				editorSelectionRect = null;
 				CancelTilePaint();
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredHiddenWallHandle != ResizeHandle.None)
@@ -3600,6 +3846,8 @@ public partial class Manager
 			{
 				using (CaptureRoomUndo("Delete Actor", editing))
 				{
+					var deletedActor = hoveredActorIndex < editing.Actors.Count ? editing.Actors[hoveredActorIndex] : null;
+
 					editing.Actors.RemoveAt(hoveredActorIndex);
 					if (selectedRoomActorIndex == hoveredActorIndex)
 						selectedRoomActorIndex = -1;
@@ -3609,6 +3857,10 @@ public partial class Manager
 					editorSelectionRect = null;
 					CancelTilePaint();
 					editorGameDirty = true;
+
+					if (deletedActor is { } actor) {
+						DisplayMessage($"Deleted {actor["Type"]}");
+					}
 				}
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
@@ -3702,6 +3954,11 @@ public partial class Manager
 			if (!worldMouseBlocked && DragKind == EditorDragKind.RoomGeometry && Input.Mouse.LeftDown)
 			{
 				ApplyRoomGeometryDrag(editing, worldMouse);
+			}
+			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorPathPoint && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
+			{
+				OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Path Point", editing);
+				MovePointPathPoint(editing, selectedRoomActorIndex, editorDrag.PathPointIndex, worldMouse, RoomActorDragShouldSnap(keyboardBlocked));
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorResize && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
@@ -3825,6 +4082,7 @@ public partial class Manager
 				DrawRoomGeometryHandles(editing, gridWeight);
 			DrawPlaytestPlayerMarker(editing);
 			DrawRevealDoorMarkers(editing, gridWeight);
+			DrawPointPaths(editing, gridWeight);
 			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 			if (maskPaintActorId != null)

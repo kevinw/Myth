@@ -2,6 +2,9 @@
 
 neuraltexturerippleactor could draw editor radius; it's editor hitbox doesn't show center
 esa notes:
+  - switch when hit, Pops along a Point2[] array until a door
+  - tubes as visible layers on top of a room
+  - or invisible layers on top of a room
   - some genuinely difficult optional traversal challenges with the grapple
   - pipes which can overlap the room
   - switch blocks recontextualize an area
@@ -10,7 +13,6 @@ esa notes:
   - every song intro is an area intro is something new (a new movement/enemy/both)
 
 second song needs some automation curves
-one way fall tiles
 one way "wind" tiles <<<<
 one tile crawl critter
 computer that puts something on your map as a goal
