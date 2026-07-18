@@ -960,12 +960,12 @@ public partial class Manager
 		}
 
 		ImGui.TextUnformatted("Backdrop");
-		var backdrop = ColorToVector3(room.BackdropColor);
+		var backdrop = room.BackdropColor.ToVector3();
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.ColorEdit3("##RoomBackdropColor", ref backdrop, ImGuiColorEditFlags.NoInputs))
 		{
 			OpenRoomSettingsUndo("Edit Room Backdrop", room);
-			room.BackdropColor = Vector3ToColor(backdrop);
+			room.BackdropColor = new Color(Vector3.Clamp(backdrop, Vector3.Zero, Vector3.One));
 			changed = true;
 		}
 
@@ -980,23 +980,23 @@ public partial class Manager
 		if (room.BackdropColor2 is { } backdrop2Color)
 		{
 			ImGui.TextUnformatted("Backdrop Bottom");
-			var backdrop2 = ColorToVector3(backdrop2Color);
+			var backdrop2 = backdrop2Color.ToVector3();
 			ImGui.SetNextItemWidth(-1);
 			if (ImGui.ColorEdit3("##RoomBackdropColor2", ref backdrop2, ImGuiColorEditFlags.NoInputs))
 			{
 				OpenRoomSettingsUndo("Edit Room Backdrop", room);
-				room.BackdropColor2 = Vector3ToColor(backdrop2);
+				room.BackdropColor2 = new Color(Vector3.Clamp(backdrop2, Vector3.Zero, Vector3.One));
 				changed = true;
 			}
 		}
 
 		ImGui.TextUnformatted("Ambient");
-		var ambient = ColorToVector3(room.AmbientColor);
+		var ambient = room.AmbientColor.ToVector3();
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.ColorEdit3("##RoomAmbientColor", ref ambient, ImGuiColorEditFlags.NoInputs))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
-			room.AmbientColor = Vector3ToColor(ambient);
+			room.AmbientColor = new Color(Vector3.Clamp(ambient, Vector3.Zero, Vector3.One));
 			changed = true;
 		}
 
@@ -1056,12 +1056,12 @@ public partial class Manager
 		if (sunStrength > 0)
 		{
 			ImGui.TextUnformatted("Sun Color");
-			var sun = ColorToVector3(room.SunColor);
+			var sun = room.SunColor.ToVector3();
 			ImGui.SetNextItemWidth(-1);
 			if (ImGui.ColorEdit3("##RoomSunColor", ref sun, ImGuiColorEditFlags.NoInputs))
 			{
 				OpenRoomSettingsUndo("Edit Room Sun", room);
-				room.SunColor = Vector3ToColor(sun);
+				room.SunColor = new Color(Vector3.Clamp(sun, Vector3.Zero, Vector3.One));
 				changed = true;
 			}
 
@@ -1385,12 +1385,11 @@ public partial class Manager
 		}
 		else if (property.Type == typeof(Color))
 		{
-			var color = property.Value?.GetValue<string>() ?? "ffffff";
-			var rgb = HexToVector3(color);
+			var rgb = JsonUtil.ReadColor(property.Value)?.ToVector3() ?? Vector3.One;
 			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
 			{
 				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
+				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(new Color(Vector3.Clamp(rgb, Vector3.Zero, Vector3.One)).ToHexStringRGB()));
 				changed = true;
 			}
 		}
@@ -1609,12 +1608,11 @@ public partial class Manager
 		}
 		else if (property.Type == typeof(Color))
 		{
-			var color = property.Value?.GetValue<string>() ?? "ffffff";
-			var rgb = HexToVector3(color);
+			var rgb = JsonUtil.ReadColor(property.Value)?.ToVector3() ?? Vector3.One;
 			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
 			{
 				OpenActorPropertyUndo(room, actor);
-				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(Vector3ToHex(rgb)));
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(new Color(Vector3.Clamp(rgb, Vector3.Zero, Vector3.One)).ToHexStringRGB()));
 				changed = true;
 			}
 		}
@@ -1925,36 +1923,6 @@ public partial class Manager
 
 	void CommitPrefabUndo()
 		=> undo.CommitPending(PrefabUndoSlot);
-
-	static Vector3 HexToVector3(string hex)
-	{
-		hex = hex.TrimStart('#');
-		if (hex.Length < 6 || !uint.TryParse(hex[..6], System.Globalization.NumberStyles.HexNumber, null, out var value))
-			return Vector3.One;
-
-		return new Vector3(
-			((value >> 16) & 0xff) / 255.0f,
-			((value >> 8) & 0xff) / 255.0f,
-			(value & 0xff) / 255.0f);
-	}
-
-	static string Vector3ToHex(Vector3 value)
-	{
-		var r = (int)(Math.Clamp(value.X, 0, 1) * 255);
-		var g = (int)(Math.Clamp(value.Y, 0, 1) * 255);
-		var b = (int)(Math.Clamp(value.Z, 0, 1) * 255);
-		return $"{r:X2}{g:X2}{b:X2}";
-	}
-
-	static Vector3 ColorToVector3(Color color)
-		=> new(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f);
-
-	static Color Vector3ToColor(Vector3 value)
-		=> new(
-			Math.Clamp(value.X, 0, 1),
-			Math.Clamp(value.Y, 0, 1),
-			Math.Clamp(value.Z, 0, 1),
-			1.0f);
 
 	static RectInt RoomActorBounds(Room room, JsonObject actor)
 	{
