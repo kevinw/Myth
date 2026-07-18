@@ -88,6 +88,8 @@ public partial class Player : Pawn
 		burrowToward = Vector2.UnitY;
 		if (!Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
 		{
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow($"start rejected: no surface near={Position}");
 			Hitbox = new(StandingHitboxRect); // no surface in reach; we're staying in Normal
 			return false;
 		}
@@ -134,6 +136,9 @@ public partial class Player : Pawn
 		burrowSound?.Start();
 		UpdateBurrowAudio();
 		AudioEvent("player/burrow_start");
+		if (Game.BurrowTraceEnabled)
+			Game.TraceBurrow(
+				$"start position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} normal={burrowToward} speed={burrowSpeed:0.##} passenger={burrowPassenger != null}");
 		return true;
 	}
 
@@ -286,14 +291,24 @@ public partial class Player : Pawn
 		var tangential = MathF.Abs(proj) > BurrowTangentDeadzone;
 
 		if (!pressed)
+		{
+			if (burrowOrbiting && Game.BurrowTraceEnabled)
+				Game.TraceBurrow("intent released: stop orbiting");
 			burrowOrbiting = false;
+		}
 		else if (changed && tangential)
 		{
 			// Pressing opposite the heading queues a reversal (brakes first, below);
 			// pressing forward cancels any pending reversal.
 			burrowReverseQueued = proj < 0;
 			burrowOrbiting = true;
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow(
+					$"intent accepted intent={intent} travel={BurrowTravelHeading} projection={proj:0.##} reverseQueued={burrowReverseQueued}");
 		}
+		else if (changed && Game.BurrowTraceEnabled)
+			Game.TraceBurrow(
+				$"intent ignored as non-tangential intent={intent} travel={BurrowTravelHeading} projection={proj:0.##}");
 		burrowLastIntent = intent;
 
 		var move = burrowOrbiting;
@@ -312,6 +327,7 @@ public partial class Player : Pawn
 		// other way next frame.
 		if (burrowReverseQueued && burrowSpeed <= BurrowReverseFlipSpeed)
 		{
+			var oldHeading = BurrowTravelHeading;
 			if (burrowLine != null)
 			{
 				burrowLineDirection *= -1;
@@ -323,6 +339,9 @@ public partial class Player : Pawn
 				burrowSolidLeft = !burrowSolidLeft;
 			}
 			burrowReverseQueued = false;
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow(
+					$"reversal applied oldHeading={oldHeading} newHeading={BurrowTravelHeading} onLine={burrowLine != null}");
 		}
 
 		burrowMoveRemainder += burrowSpeed * Time.Delta;
@@ -337,6 +356,9 @@ public partial class Player : Pawn
 				burrowLine = enteredLine;
 				Position = (Point2)entryPoint;
 				burrowLineExit = null;
+				if (Game.BurrowTraceEnabled)
+					Game.TraceBurrow(
+						$"line entered id={burrowLine?.ActorId ?? "?"} position={Position} segment={burrowLineSegment} t={burrowLineT:0.###} direction={burrowLineDirection} heading={burrowLineHeading}");
 			}
 
 			if (burrowLine != null)
@@ -346,9 +368,13 @@ public partial class Player : Pawn
 				Position = (Point2)linePoint;
 				if (exitedLine)
 				{
+					if (Game.BurrowTraceEnabled)
+						Game.TraceBurrow(
+							$"line endpoint reached id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading} intent={intent}");
 					if (Game.TryAttachBurrowSurface(Position, burrowLineHeading, intent, BurrowAttachProbe,
 						out var surfacePosition, out var surfaceHeading, out var surfaceSolidLeft, out var surfaceToward))
 					{
+						var exitedLineId = burrowLine.ActorId ?? "?";
 						burrowLineExit = burrowLine;
 						burrowLine = null;
 						Position = surfacePosition;
@@ -356,9 +382,14 @@ public partial class Player : Pawn
 						burrowSolidLeft = surfaceSolidLeft;
 						burrowToward = surfaceToward;
 						burrowExitBlocked = false;
+						if (Game.BurrowTraceEnabled)
+							Game.TraceBurrow(
+								$"line attached to surface id={exitedLineId} position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} normal={burrowToward}");
 					}
 					else if (CanExitBurrowLine(out var exitDucking))
 					{
+						if (Game.BurrowTraceEnabled)
+							Game.TraceBurrow("line has no surface: popping out");
 						ducking = exitDucking;
 						PopOutOfBurrow();
 						return;
@@ -368,6 +399,8 @@ public partial class Player : Pawn
 						burrowExitBlocked = true;
 						burrowSpeed = 0;
 						burrowMoveRemainder = 0;
+						if (Game.BurrowTraceEnabled)
+							Game.TraceBurrow("line endpoint blocked: waiting for a valid exit");
 					}
 				}
 			}
@@ -377,6 +410,9 @@ public partial class Player : Pawn
 				burrowToward = Game.SurfaceNormal(burrowHeading, burrowSolidLeft);
 				if (moved == 0)
 				{
+					if (Game.BurrowTraceEnabled)
+						Game.TraceBurrow(
+							$"surface dead end position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} moving={move}");
 					// A dead end. If we're driving into it and the surface exits the room into an
 					// adjacent one, transition and keep burrowing on the far side. Otherwise pop out;
 					// if we merely coasted here on friction, kill the glide and stay put.
@@ -394,7 +430,12 @@ public partial class Player : Pawn
 		}
 
 		if (burrowLineExit != null && !burrowLineExit.NearEndpoint(Position, 4))
+		{
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow(
+					$"line re-entry guard cleared id={burrowLineExit.ActorId ?? "?"} position={Position}");
 			burrowLineExit = null;
+		}
 		burrowOnJumpthru = burrowLine == null && Game.SurfaceIsJumpthru(Position, burrowToward);
 		UpdateBurrowLeapCoyote();
 		UpdateBurrowShift();
@@ -415,6 +456,9 @@ public partial class Player : Pawn
 		{
 			if (!CanExitBurrowLine(out var exitDucking))
 			{
+				if (!burrowExitBlocked && Game.BurrowTraceEnabled)
+					Game.TraceBurrow(
+						$"pop blocked inside guide id={burrowLine?.ActorId ?? "?"} position={Position}");
 				burrowExitBlocked = true;
 				return;
 			}
@@ -445,6 +489,9 @@ public partial class Player : Pawn
 	private void PopOutOfBurrow()
 	{
 		var exitDir = burrowToward;
+		if (Game.BurrowTraceEnabled)
+			Game.TraceBurrow(
+				$"pop position={Position} travel={BurrowTravelHeading} normal={exitDir} speed={burrowSpeed:0.##} onLine={burrowLine?.ActorId ?? "none"}");
 
 		// Burrow-leap coyote: if we just rounded off a top surface (down a corner) within the
 		// window, pop upward as if we were still on top instead of getting the sideways pop off
