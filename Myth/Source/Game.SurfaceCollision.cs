@@ -9,6 +9,10 @@ public partial class Game
 {
 	static readonly List<Vector2> surfaceTraceForward = [];
 	static readonly List<Vector2> surfaceTraceBack = [];
+	static readonly bool burrowTraceEnabled = Environment.GetEnvironmentVariable("MYTH_BURROW_TRACE") is { Length: > 0 } value && value != "0";
+	internal bool BurrowTraceEnabled => burrowTraceEnabled;
+	internal void TraceBurrow(string message)
+		=> Console.WriteLine($"[Burrow t={Time.Seconds:0.000} room={CurrentRoom?.Id ?? "?"}] {message}");
 
 	/// Trace the contour as a world-space polyline from an existing walk state (boundary
 	/// `vertex` + `heading` + handedness), walking `maxArcPerSide` pixels forward and
@@ -50,6 +54,12 @@ public partial class Game
 		var guard = 0;
 		while (Seed(c) && guard++ < maxReach)
 			c -= n;
+		if (Seed(c))
+		{
+			if (BurrowTraceEnabled)
+				TraceBurrow($"surface seed failed to escape solid near={nearPoint} normal={n} reach={maxReach}");
+			return false;
+		}
 		guard = 0;
 		while (!Seed(c + n) && guard++ < maxReach)
 			c += n;
@@ -106,6 +116,139 @@ public partial class Game
 	/// The surface normal (into solid) for a walk state.
 	public Vector2 SurfaceNormal(Point2 heading, bool solidLeft)
 		=> (Vector2)(solidLeft ? new Point2(heading.Y, -heading.X) : new Point2(-heading.Y, heading.X));
+
+	public bool TryEnterBurrowLine(Point2 position, Vector2 travelHeading, BurrowLine? exclude, float maxDistance,
+		out BurrowLine? line, out int segment, out float t, out int direction, out Vector2 point, out Vector2 heading)
+	{
+		line = null;
+		segment = 0;
+		t = 0;
+		direction = 1;
+		point = position;
+		heading = travelHeading;
+		var bestDistance = maxDistance * maxDistance;
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not BurrowLine candidate || candidate == exclude ||
+				!candidate.TryGetEndpoint(position, maxDistance, out var candidateSegment, out var candidateT,
+					out var candidateDirection, out var candidatePoint, out var candidateHeading))
+				continue;
+
+			var toEndpoint = candidatePoint - position;
+			var distance = toEndpoint.LengthSquared();
+			if (distance > 0.001f && Vector2.Dot(Vector2.Normalize(toEndpoint), travelHeading) < 0)
+				continue;
+			if (distance > bestDistance)
+				continue;
+
+			bestDistance = distance;
+			line = candidate;
+			segment = candidateSegment;
+			t = candidateT;
+			direction = candidateDirection;
+			point = candidatePoint;
+			heading = candidateHeading;
+		}
+
+		return line != null;
+	}
+
+	public bool TryAttachBurrowSurface(Point2 near, Vector2 travelHeading, Vector2 heldIntent, float maxReach,
+		out Point2 position, out Point2 heading, out bool solidLeft, out Vector2 towardSolid)
+	{
+		position = near;
+		heading = Point2.Right;
+		solidLeft = false;
+		towardSolid = Vector2.UnitY;
+		var found = false;
+		var bestScore = float.MaxValue;
+		Span<Vector2> normals = [Vector2.UnitX, -Vector2.UnitX, Vector2.UnitY, -Vector2.UnitY];
+		travelHeading = travelHeading.LengthSquared() > 0 ? Vector2.Normalize(travelHeading) : Vector2.UnitX;
+		if (BurrowTraceEnabled)
+			TraceBurrow($"attach begin at={near} travel={travelHeading} held={heldIntent}");
+
+		// Authored guide endpoints normally land exactly on a boundary vertex. Prefer the
+		// boundary walk's own solid/air test here: unlike an axis probe, it distinguishes
+		// which edge leaves a corner (for example, the lower-left versus lower-right edge
+		// of a pillar). A forward-aligned edge preserves guide momentum; when the guide meets
+		// the surface orthogonally, held input chooses between the valid outgoing edges.
+		var bestExactScore = float.MinValue;
+		Span<Point2> headings = [Point2.Right, Point2.Down, Point2.Left, Point2.Up];
+		foreach (var candidateHeading in headings)
+		{
+			for (var handedness = 0; handedness < 2; handedness++)
+			{
+				var candidateSolidLeft = handedness != 0;
+				if (!BoundaryEdgeValid(near, candidateHeading, candidateSolidLeft))
+					continue;
+
+				var candidateVector = (Vector2)candidateHeading;
+				var travelAlignment = Vector2.Dot(candidateVector, travelHeading);
+				var heldAlignment = Vector2.Dot(candidateVector, heldIntent);
+				var score = (travelAlignment > 0.25f ? 4f : 0f) + travelAlignment * 0.25f + heldAlignment;
+				if (BurrowTraceEnabled)
+					TraceBurrow(
+						$"attach exact candidate heading={candidateHeading} solidLeft={candidateSolidLeft} travel={travelAlignment:0.##} held={heldAlignment:0.##} score={score:0.##}");
+				if (score <= bestExactScore)
+					continue;
+
+				bestExactScore = score;
+				found = true;
+				position = near;
+				heading = candidateHeading;
+				solidLeft = candidateSolidLeft;
+				towardSolid = SurfaceNormal(candidateHeading, candidateSolidLeft);
+			}
+		}
+
+		if (found)
+		{
+			if (BurrowTraceEnabled)
+				TraceBurrow(
+					$"attach exact chosen position={position} heading={heading} solidLeft={solidLeft} normal={towardSolid}");
+			return true;
+		}
+
+		foreach (var normal in normals)
+		{
+			var candidate = near;
+			var toward = normal;
+			if (!SnapToSurface(ref candidate, ref toward, maxReach))
+				continue;
+
+			var tangent = new Vector2(toward.Y, -toward.X);
+			var alignment = Vector2.Dot(tangent, travelHeading);
+			// A guide meeting a surface orthogonally has no momentum-based answer for left
+			// versus right. Use held input only for that ambiguous seam; otherwise preserve
+			// incoming travel so ordinary guide exits and the boundary walk keep their orbit.
+			var directionAlignment = MathF.Abs(alignment) > 0.25f
+				? alignment
+				: Vector2.Dot(tangent, heldIntent);
+			var candidateSolidLeft = directionAlignment < 0;
+			if (candidateSolidLeft)
+				tangent = -tangent;
+			var score = Vector2.DistanceSquared(candidate, near) + (1 - MathF.Abs(alignment)) * 2;
+			if (BurrowTraceEnabled)
+				TraceBurrow(
+					$"attach snap candidate position={candidate} heading={tangent} normal={toward} score={score:0.##}");
+			if (score >= bestScore)
+				continue;
+
+			bestScore = score;
+			found = true;
+			position = candidate;
+			heading = new Point2((int)MathF.Round(tangent.X), (int)MathF.Round(tangent.Y));
+			solidLeft = candidateSolidLeft;
+			towardSolid = toward;
+		}
+		if (BurrowTraceEnabled)
+			TraceBurrow(found
+				? $"attach snap chosen position={position} heading={heading} solidLeft={solidLeft} normal={towardSolid}"
+				: "attach failed: no valid exact edge or nearby surface");
+
+		return found;
+	}
 
 	void WalkBoundary(Point2 startVertex, Point2 heading, bool solidLeft, float maxArc, List<Vector2> outPoints)
 	{

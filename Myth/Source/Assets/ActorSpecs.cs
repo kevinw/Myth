@@ -113,7 +113,19 @@ public static class ActorSpecs
 		=> Resolve(spec, []);
 
 	public static string? GetTypeName(JsonObject spec)
-		=> ReadString(Resolve(spec), TypeKey);
+		=> GetResolvedProperty(spec, TypeKey)?.GetValue<string>();
+
+	public static JsonNode? GetResolvedProperty(JsonObject spec, string name)
+	{
+		for (var depth = 0; depth < 64; depth++)
+		{
+			if (JsonUtil.TryGetProperty(spec, name, out var value))
+				return value;
+			if (ReadString(spec, FromKey) is not { } from || !specs.TryGetValue(from, out spec!))
+				return null;
+		}
+		return null;
+	}
 
 	public static Actor? Create(Game game, string id, Point2? position = null)
 	{
@@ -255,12 +267,21 @@ public static class ActorSpecs
 			float it => JsonValue.Create(it),
 			string it => JsonValue.Create(it),
 			Point2 it => new JsonArray(it.X, it.Y),
+			Point2[] it => PointArrayToJson(it),
 			Vector2 it => new JsonArray(it.X, it.Y),
 			Color it => JsonValue.Create(JsonUtil.ColorToHex(it)),
 			Signs it => JsonValue.Create(it.ToString()),
 			Enum it => JsonValue.Create(it.ToString()),
 			_ => null
 		};
+	}
+
+	static JsonArray PointArrayToJson(Point2[] points)
+	{
+		var array = new JsonArray();
+		foreach (var point in points)
+			array.Add(new JsonArray(point.X, point.Y));
+		return array;
 	}
 
 	public static JsonObject PruneForSave(JsonObject spec)
@@ -423,6 +444,7 @@ public static class ActorSpecs
 		   type == typeof(float) ||
 		   type == typeof(string) ||
 		   type == typeof(Point2) ||
+		   type == typeof(Point2[]) ||
 		   type == typeof(Vector2) ||
 		   type == typeof(Color) ||
 		   type == typeof(Signs) ||
@@ -465,6 +487,8 @@ public static class ActorSpecs
 				value = node.GetValue<string>();
 			else if (type == typeof(Point2))
 				value = ReadPoint(node);
+			else if (type == typeof(Point2[]))
+				value = ReadPointArray(node);
 			else if (type == typeof(Vector2))
 				value = JsonUtil.ReadVector2(node);
 			else if (type == typeof(Color))
@@ -490,6 +514,20 @@ public static class ActorSpecs
 
 	public static Point2? ReadPoint(JsonNode? node)
 		=> JsonUtil.ReadPoint(node);
+
+	public static Point2[]? ReadPointArray(JsonNode? node)
+	{
+		if (node is not JsonArray array)
+			return null;
+
+		var points = new Point2[array.Count];
+		for (var i = 0; i < array.Count; i++)
+			if (ReadPoint(array[i]) is { } point)
+				points[i] = point;
+			else
+				return null;
+		return points;
+	}
 
 	public static Signs ReadSigns(JsonNode? node)
 	{

@@ -317,7 +317,19 @@ public partial class Manager
 
 		var fps = fpsFrames / fpsElapsed;
 		if (Window is { } window)
-			window.Title = $"Myth - {fps:0} FPS";
+		{
+			var vsb = new ValueStringBuilder(stackalloc char[256]);
+			vsb.Append(APPLICATION_NAME);
+			vsb.Append(" - ");
+			vsb.Append((int)MathF.Round(fps));
+			vsb.Append(" FPS");
+			// Show the room name when we're in DEBUG
+			if (game?.room is { } room) {
+				vsb.Append(" - ");
+				vsb.Append(room.Id);
+			}
+			window.Title = vsb.ToString();
+		}
 		fpsFrames = 0;
 		fpsElapsed = 0;
 	}

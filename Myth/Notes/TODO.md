@@ -11,6 +11,10 @@
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon
 esa notes:
+  - alternate vertical and horizontal challenge
+  - think about save points and optional challenging runs
+  - tubes as visible layers on top of a room
+  - or invisible layers on top of a room
   - some genuinely difficult optional traversal challenges with the grapple
   - pipes which can overlap the room
   - switch blocks recontextualize an area
@@ -19,7 +23,6 @@ esa notes:
   - every song intro is an area intro is something new (a new movement/enemy/both)
 
 second song needs some automation curves
-one way fall tiles
 one way "wind" tiles <<<<
 one tile crawl critter
 computer that puts something on your map as a goal

@@ -25,6 +25,7 @@ public partial class Manager
 	{
 		None,
 		RoomActor,
+		ActorPathPoint,
 		ActorResize,
 		SelectionRect,
 		SelectionMove,
@@ -37,6 +38,7 @@ public partial class Manager
 		public EditorDragKind Kind;
 		public Vector2 ActorOffset;
 		public bool ActorSnapsByDefault;
+		public int PathPointIndex;
 		public ResizeHandle ResizeHandle;
 		public ResizeHandle RoomGeometryHandle;
 		public Point2 RoomGeometryOffset;
