@@ -26,6 +26,7 @@ public partial class Manager
 		None,
 		RoomActor,
 		ActorPathPoint,
+		ActorGizmo,
 		ActorResize,
 		SelectionRect,
 		SelectionMove,
@@ -39,6 +40,7 @@ public partial class Manager
 		public Vector2 ActorOffset;
 		public bool ActorSnapsByDefault;
 		public int PathPointIndex;
+		public string? GizmoId;
 		public ResizeHandle ResizeHandle;
 		public ResizeHandle RoomGeometryHandle;
 		public Point2 RoomGeometryOffset;
@@ -52,6 +54,109 @@ public partial class Manager
 			Kind = EditorDragKind.None,
 			ActorSnapsByDefault = true
 		};
+	}
+
+	internal readonly struct EditorActor(Room room, JsonObject json)
+	{
+		internal readonly Room Room = room;
+		internal readonly JsonObject Json = json;
+		internal Vector2 RoomOrigin => Room.WorldBounds.TopLeft;
+		internal RectInt Bounds => RoomActorBounds(Room, Json);
+
+		internal T GetEnum<T>(string property, T fallback) where T : struct, Enum
+			=> Enum.TryParse<T>(ActorSpecs.GetResolvedProperty(Json, property)?.GetValue<string>(), true, out var value) ? value : fallback;
+
+		internal Point2 GetRoomPoint(string property, Point2 fallback)
+			=> ActorSpecs.ReadPoint(ActorSpecs.GetResolvedProperty(Json, property)) ?? fallback;
+
+		internal bool Has(string property) => ActorSpecs.GetResolvedProperty(Json, property) != null;
+		internal void Set(string property, Point2 value) => ActorSpecs.SetProperty(Json, property, ActorSpecs.ToJsonNode(value));
+	}
+
+	internal abstract class ActorEditor
+	{
+		internal abstract Type ActorType { get; }
+		internal abstract void Gizmos(EditorActor actor, ref EditorGizmos gizmos);
+		internal virtual void BeforeMove(EditorActor actor) { }
+		internal virtual void PropertyChanged(EditorActor actor, string property) { }
+	}
+
+	internal abstract class ActorEditor<T> : ActorEditor where T : Actor
+	{
+		internal override Type ActorType => typeof(T);
+	}
+
+	internal struct EditorGizmos
+	{
+		readonly Manager manager;
+		readonly EditorActor actor;
+		readonly Vector2 worldMouse;
+		readonly float lineWeight;
+		readonly bool draw;
+		readonly bool canInteract;
+		readonly bool keyboardBlocked;
+		internal bool ConsumedPress;
+		internal float LineWeight => lineWeight;
+
+		internal EditorGizmos(Manager manager, EditorActor actor, Vector2 worldMouse, float lineWeight,
+			bool draw, bool canInteract, bool keyboardBlocked)
+		{
+			this.manager = manager;
+			this.actor = actor;
+			this.worldMouse = worldMouse;
+			this.lineWeight = lineWeight;
+			this.draw = draw;
+			this.canInteract = canInteract;
+			this.keyboardBlocked = keyboardBlocked;
+			ConsumedPress = false;
+		}
+
+		internal void Line(Vector2 from, Vector2 to, float width, Color color)
+		{
+			if (draw)
+				manager.batcher.Line(from, to, width, color);
+		}
+
+		internal void CircleDashed(Vector2 center, float radius, float width, int steps, Color color, float dashLength)
+		{
+			if (draw && radius > 0)
+				manager.batcher.CircleDashed(center, radius, width, steps, color, dashLength, 0);
+		}
+
+		internal void RoomPointHandle(string property, Vector2 position, Color color, string undoName)
+		{
+			var radius = PointPathHandleRadius(lineWeight);
+			var active = manager.DragKind == EditorDragKind.ActorGizmo && manager.editorDrag.GizmoId == property;
+			var hovered = Vector2.DistanceSquared(worldMouse, position) <= radius * radius * 2.25f;
+
+			if (!draw && canInteract && !active && manager.Input.Mouse.LeftPressed && hovered)
+			{
+				manager.ClearEditorDragState();
+				manager.editorDrag.Kind = EditorDragKind.ActorGizmo;
+				manager.editorDrag.GizmoId = property;
+				manager.editorDrag.ActorSnapsByDefault = true;
+				manager.editorSelectionRect = null;
+				manager.CancelTilePaint();
+				ConsumedPress = active = true;
+			}
+
+			if (!draw && canInteract && active && manager.Input.Mouse.LeftDown)
+			{
+				manager.OpenPendingRoomUndo(ActorMoveUndoSlot, undoName, actor.Room);
+				var local = worldMouse - actor.RoomOrigin;
+				var point = manager.RoomActorDragShouldSnap(keyboardBlocked)
+					? (local / Game.TileSize).RoundToPoint2() * Game.TileSize
+					: local.RoundToPoint2();
+				actor.Set(property, point);
+				manager.editorGameDirty = true;
+			}
+
+			if (draw)
+			{
+				manager.batcher.Circle(position, radius, 12, active ? Color.White : color);
+				manager.batcher.CircleLine(position, radius, lineWeight, 12, Color.White);
+			}
+		}
 	}
 }
 #endif

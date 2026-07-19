@@ -7,6 +7,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 {
 	SoundInstance? moveSound;
 	public static readonly Point2 DefaultSize = new(48, 32);
+	public static readonly Point2 DefaultCircleCenterOffset = new(0, 80);
 
 	public Point2 Size { get; set; } = DefaultSize;
 
@@ -17,13 +18,24 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	const float WAIT_TIME = 0.856f;
 	public float Speed = 30f;
 	public float StartFriction = 8f;
-	float currentSpeed = 0;
+	float currentSpeed;
 	public int TravelDistance = 80;
 
+	public enum MovementMode
+	{
+		StraightLine,
+		Circle
+	}
 
+	public MovementMode Mode = MovementMode.StraightLine;
+	// Room-local center of the circular orbit. Null places the initial authoring handle below us.
+	public Point2? CircleCenter { get; set; }
 	int direction = 1;
+	float circleAngle;
+	Vector2 circleOffset;
+	Vector2 circleCenterOffset;
 	float waitTimer = WAIT_TIME;
-	float moveRemainder;               // sub-pixel travel accumulator (we move in whole pixels)
+	Vector2 moveRemainder;             // sub-pixel travel accumulator (we move in whole pixels)
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
 
@@ -44,6 +56,10 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		// hitbox here to match the authored footprint rather than the construction-time default.
 		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 		originalPosition = Position;
+		var platformCenter = (Vector2)Position + (Vector2)Size / 2;
+		circleCenterOffset = CircleCenter is { } center
+			? (Vector2)(Game.CurrentRoom?.WorldBounds.TopLeft ?? Point2.Zero) + center - platformCenter
+			: DefaultCircleCenterOffset;
 	}
 
 	public override void Update()
@@ -59,38 +75,69 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			return;
 		}
 
-		if (direction == 0)
+		if (Mode == MovementMode.StraightLine && direction == 0)
 		{
 			return;
 		}
 
-		// Accumulate fractional travel and move in whole pixels, clamped to the patrol range so
-		// the platform and its riders never drift apart by rounding.
 		currentSpeed = Calc.Approach(currentSpeed, Speed, StartFriction * Time.Delta);
-		moveRemainder += direction * currentSpeed * Time.Delta;
-		var step = (int)moveRemainder;
-		moveRemainder -= step;
+		if (Mode == MovementMode.Circle)
+			MoveCircle(currentSpeed * Time.Delta);
+		else
+			MoveStraight(currentSpeed * Time.Delta);
 
-		if (moveSound!= null) {
+		if (moveSound != null) {
 			Game.SetAudioEventPosition(moveSound, Position);
 		}
+	}
+
+	void MoveStraight(float distance)
+	{
+		// Accumulate fractional travel and move in whole pixels, clamped to the patrol range so
+		// the platform and its riders never drift apart by rounding.
+		moveRemainder.X += direction * distance;
+		var step = TakeMoveStep();
 
 		var min = originalPosition.X;
 		var max = originalPosition.X + TravelDistance;
-		step = Math.Clamp(Position.X + step, min, max) - Position.X;
-		if (step != 0)
-			MoveSolid(new Point2(step, 0));
+		step.X = Math.Clamp(Position.X + step.X, min, max) - Position.X;
+		if (step != Point2.Zero)
+			MoveSolid(step);
 
 		// Only the bound we're heading toward ends the leg — checking both would trip the min
 		// bound instantly, since the platform starts there.
 		if ((direction > 0 && Position.X >= max) || (direction < 0 && Position.X <= min))
 		{
 			waitTimer = WaitTime;
-			moveRemainder = 0;
+			moveRemainder = Vector2.Zero;
 			direction = -direction;
 			currentSpeed = 0;
 			StopAndReleaseSound(ref moveSound, false);
 		}
+	}
+
+	void MoveCircle(float distance)
+	{
+		var radiusVector = -circleCenterOffset;
+		var radius = radiusVector.Length();
+		if (radius <= 0)
+			return;
+
+		circleAngle = Calc.AngleWrap(circleAngle + distance / radius);
+		var nextOffset = circleCenterOffset + Calc.AngleToVector(radiusVector.Angle() + circleAngle, radius);
+		moveRemainder += nextOffset - circleOffset;
+		circleOffset = nextOffset;
+
+		var step = TakeMoveStep();
+		if (step != Point2.Zero)
+			MoveSolid(step);
+	}
+
+	Point2 TakeMoveStep()
+	{
+		var step = (Point2)moveRemainder;
+		moveRemainder -= (Vector2)step;
+		return step;
 	}
 
 	// Move the platform by a whole-pixel delta, carrying actors riding on top and pushing any
@@ -217,4 +264,44 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	int TileColumns => Math.Max(1, Size.X / Game.TileSize);
 	int TileRows => Math.Max(1, Size.Y / Game.TileSize);
 
+#if EDITOR
+	sealed class Editor : Manager.ActorEditor<MovingPlatform>
+	{
+		internal override void Gizmos(Manager.EditorActor actor, ref Manager.EditorGizmos gizmos)
+		{
+			if (!IsCircle(actor))
+				return;
+
+			var platform = actor.Bounds.CenterF;
+			var center = actor.RoomOrigin + Center(actor);
+			var radius = Vector2.Distance(platform, center);
+			var color = new Color(0x66d9ff);
+			gizmos.CircleDashed(center, radius, gizmos.LineWeight * 2, 64, color * 0.8f,
+				MathF.Max(3, gizmos.LineWeight * 6));
+			gizmos.Line(platform, center, gizmos.LineWeight, color * 0.65f);
+			gizmos.RoomPointHandle(nameof(CircleCenter), center, color, "Move Circle Center");
+		}
+
+		internal override void BeforeMove(Manager.EditorActor actor) => MaterializeCenter(actor);
+
+		internal override void PropertyChanged(Manager.EditorActor actor, string property)
+		{
+			if (property == nameof(Mode))
+				MaterializeCenter(actor);
+		}
+
+		static bool IsCircle(Manager.EditorActor actor)
+			=> actor.GetEnum(nameof(Mode), MovementMode.StraightLine) == MovementMode.Circle;
+
+		static Point2 Center(Manager.EditorActor actor)
+			=> actor.GetRoomPoint(nameof(CircleCenter),
+				(actor.Bounds.CenterF - actor.RoomOrigin + DefaultCircleCenterOffset).RoundToPoint2());
+
+		static void MaterializeCenter(Manager.EditorActor actor)
+		{
+			if (IsCircle(actor) && !actor.Has(nameof(CircleCenter)))
+				actor.Set(nameof(CircleCenter), Center(actor));
+		}
+	}
+#endif
 }

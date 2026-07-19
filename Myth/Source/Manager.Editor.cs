@@ -1362,7 +1362,7 @@ public partial class Manager
 				changed = true;
 			}
 		}
-		else if (property.Type == typeof(Point2))
+		else if (property.Type == typeof(Point2) || property.Type == typeof(Point2?))
 		{
 			var point = ActorSpecs.ReadPoint(property.Value) ?? Point2.Zero;
 			var values = new[] { point.X, point.Y };
@@ -1610,7 +1610,7 @@ public partial class Manager
 				changed = true;
 			}
 		}
-		else if (property.Type == typeof(Point2))
+		else if (property.Type == typeof(Point2) || property.Type == typeof(Point2?))
 		{
 			var point = ActorSpecs.ReadPoint(property.Value) ?? Point2.Zero;
 			var values = new[] { point.X, point.Y };
@@ -1680,7 +1680,10 @@ public partial class Manager
 			if (EditorGui.DrawEnumCombo(property.Type, ref value))
 			{
 				using (CaptureRoomUndo("Edit Actor Property", room))
+				{
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+					EditorFor(actor)?.PropertyChanged(new EditorActor(room, actor), property.Name);
+				}
 				changed = true;
 			}
 		}
@@ -2063,6 +2066,38 @@ public partial class Manager
 	static bool IsSwitchActor(JsonObject actor)
 		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(Switch), StringComparison.OrdinalIgnoreCase);
 
+	static Dictionary<string, ActorEditor>? actorEditors;
+	static ActorEditor? EditorFor(JsonObject actor)
+	{
+		actorEditors ??= BuildActorEditors();
+		return actorEditors.GetValueOrDefault(ActorSpecs.GetTypeName(actor) ?? "");
+	}
+
+	static Dictionary<string, ActorEditor> BuildActorEditors()
+	{
+		var result = new Dictionary<string, ActorEditor>(StringComparer.OrdinalIgnoreCase);
+		foreach (var type in typeof(Manager).Assembly.GetTypes())
+		{
+			if (type.IsAbstract || !typeof(ActorEditor).IsAssignableFrom(type))
+				continue;
+			if (Activator.CreateInstance(type, nonPublic: true) is ActorEditor editor)
+				result[editor.ActorType.Name] = editor;
+		}
+		return result;
+	}
+
+	bool RunActorGizmos(Room room, int actorIndex, Vector2 worldMouse, float lineWeight,
+		bool draw, bool canInteract, bool keyboardBlocked)
+	{
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count || EditorFor(room.Actors[actorIndex]) is not { } editor)
+			return false;
+
+		var actor = new EditorActor(room, room.Actors[actorIndex]);
+		var gizmos = new EditorGizmos(this, actor, worldMouse, lineWeight, draw, canInteract, keyboardBlocked);
+		editor.Gizmos(actor, ref gizmos);
+		return gizmos.ConsumedPress;
+	}
+
 	static HashSet<string>? pointPathActorTypes;
 	static HashSet<string> PointPathActorTypes
 		=> pointPathActorTypes ??= BuildActorCapabilityTypes<IPointPath>();
@@ -2285,7 +2320,7 @@ public partial class Manager
 		for (var i = 0; i < room.Actors.Count; i++)
 		{
 			var selected = i == selectedRoomActorIndex;
-			if ((DragKind is EditorDragKind.RoomActor or EditorDragKind.ActorPathPoint or EditorDragKind.ActorResize) && !selected)
+			if ((DragKind is EditorDragKind.RoomActor or EditorDragKind.ActorPathPoint or EditorDragKind.ActorGizmo or EditorDragKind.ActorResize) && !selected)
 				continue;
 
 			var hovered = i == hoveredIndex;
@@ -2511,6 +2546,7 @@ public partial class Manager
 
 		var actor = room.Actors[actorIndex];
 		var offset = GetRoomActorPaletteOffset(actor);
+		EditorFor(actor)?.BeforeMove(new EditorActor(room, actor));
 
 		var targetLocal = world - editorDrag.ActorOffset - (Vector2)room.WorldBounds.TopLeft;
 		var local = snap
@@ -3717,6 +3753,9 @@ public partial class Manager
 			if (selectedRoomActorIndex >= editing.Actors.Count)
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
+			if (!editingRoomGeometry && actorSelectActive)
+				worldMouseBlocked |= RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,
+					draw: false, canInteract: !worldMouseBlocked && inner.Contains(Cursor), keyboardBlocked);
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
 			var hoveredPathPoint = !worldMouseBlocked && actorSelectActive && overGame
 				? HitTestPointPathHandle(editing, selectedRoomActorIndex, worldMouse, gridWeight)
@@ -4083,6 +4122,8 @@ public partial class Manager
 			DrawPlaytestPlayerMarker(editing);
 			DrawRevealDoorMarkers(editing, gridWeight);
 			DrawPointPaths(editing, gridWeight);
+			RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,
+				draw: true, canInteract: false, keyboardBlocked);
 			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 			if (maskPaintActorId != null)

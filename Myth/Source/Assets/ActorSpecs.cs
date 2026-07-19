@@ -444,6 +444,7 @@ public static class ActorSpecs
 		   type == typeof(float) ||
 		   type == typeof(string) ||
 		   type == typeof(Point2) ||
+		   type == typeof(Point2?) ||
 		   type == typeof(Point2[]) ||
 		   type == typeof(Vector2) ||
 		   type == typeof(Color) ||
@@ -486,6 +487,8 @@ public static class ActorSpecs
 			else if (type == typeof(string))
 				value = node.GetValue<string>();
 			else if (type == typeof(Point2))
+				value = ReadPoint(node);
+			else if (type == typeof(Point2?))
 				value = ReadPoint(node);
 			else if (type == typeof(Point2[]))
 				value = ReadPointArray(node);
