@@ -160,8 +160,8 @@ public partial class Player : Pawn
 		}
 	}
 
-	// Rebuild the glow polyline by tracing the boundary from the burrow's own walk state,
-	// so the line is always centered on the burrow point (no re-seed mis-anchoring at corners).
+	// Rebuild the glow from the burrow's own travel state, including the same guide-entry
+	// probe movement uses before choosing the next solid edge.
 	void UpdateBurrowGlow()
 	{
 		glowPoints.Clear();
@@ -190,7 +190,7 @@ public partial class Player : Pawn
 		if (burrowLine != null)
 			burrowLine.Trace(burrowLineSegment, burrowLineT, arcLength, glowPoints, burrowLineGlowBack);
 		else
-			Game.TraceSurfaceFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, arcLength, glowPoints);
+			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, burrowLineExit, arcLength, glowPoints);
 	}
 
 	// Split the burrow's lifetime into BurrowIntervals countdown steps. Crossing into a new
@@ -349,7 +349,7 @@ public partial class Player : Pawn
 		burrowMoveRemainder -= pixels;
 		if (pixels > 0)
 		{
-			if (burrowLine == null && Game.TryEnterBurrowLine(Position, burrowHeading, burrowLineExit, 3,
+			if (burrowLine == null && Game.TryEnterBurrowLine(Position, burrowHeading, burrowLineExit, Game.BurrowLineAttachDistance,
 				out var enteredLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
 				out var entryPoint, out burrowLineHeading))
 			{
@@ -641,6 +641,7 @@ public partial class Player : Pawn
 		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
 	}
 
+	static Rng rng = new Rng();
 	// Spray sparks out of the surface at the burrow point, scaled by glide speed.
 	private void EmitBurrowSparks()
 	{
@@ -660,7 +661,15 @@ public partial class Player : Pawn
 		// Aim out of the solid (burrowToward points into it); fall back to straight up.
 		var outward = -burrowToward;
 		outward = outward.LengthSquared() > 0.0001f ? Vector2.Normalize(outward) : new Vector2(0, -1);
-		var origin = (Vector2)Position + outward * 1.0f;
+		Vector2 origin;
+		if (burrowLine == null) {
+			// Offset a bit by outward so the sparks appear a bit above the surface.
+			origin = (Vector2)Position + outward * 1.0f;
+		} else {
+			// ..But when in a line, jitter the position a bit and don't offset by outward, so it looks more like we're following the line.
+			const float A = 0.6f;
+			origin = (Vector2)Position + new Vector2(rng.Float(-A, A), rng.Float(-A, A));
+		}
 		if (outward.X != 0 && outward.Y == 0)
 			origin = (Vector2)Position;
 		var direction = MathF.Atan2(outward.Y, outward.X);

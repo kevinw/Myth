@@ -2,7 +2,7 @@ using Foster.Framework;
 using System.Numerics;
 namespace Myth;
 
-[GameActor(Tags = ActorTag.Obstacle, Sprite = "editor_moving_platform", Anchor = SpriteAnchor.TopLeft)]
+[GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/moving_platform", Anchor = SpriteAnchor.TopLeft)]
 class MovingPlatform : Actor, IResizable, IShapeOccluder
 {
 	SoundInstance? moveSound;

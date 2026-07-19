@@ -162,6 +162,31 @@
       "Type": "Jumpthru",
       "Position": [256, 112],
       "Size": [16, 8]
+    },
+    {
+      "Id": "2c5e13223a056dda",
+      "Type": "Jumpthru",
+      "Position": [72, 40]
+    },
+    {
+      "Id": "29481f44a629b1f8",
+      "Type": "Jumpthru",
+      "Position": [104, 56]
+    },
+    {
+      "Id": "3f0191230037ba29",
+      "Type": "Jumpthru",
+      "Position": [152, 56]
+    },
+    {
+      "Id": "d81fd42025c46c58",
+      "Type": "Jumpthru",
+      "Position": [200, 48]
+    },
+    {
+      "Id": "58e2b3671432d2fc",
+      "Type": "Jumpthru",
+      "Position": [264, 32]
     }
   ]
 }

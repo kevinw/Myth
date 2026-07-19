@@ -8,7 +8,7 @@ public enum NeuralTexturePerturbMode
 	Pawns,
 }
 
-[GameActor(Sprite = "editor_prop", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3, Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System)]
+[GameActor(Sprite = "Editor/neural_texture_perturb", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3, Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System)]
 public class NeuralTexturePerturbActor : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);

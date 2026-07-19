@@ -8,7 +8,7 @@ namespace Myth;
 // steps, so a moving ring reads as a wave. New rings spawn on a fixed spacing, giving continuous
 // concentric ripples that fade as they reach MaxRadius. Placement point (Center anchor) is the
 // ripple origin.
-[GameActor(Sprite = "editor_prop", BoundsW = Game.TileSize * 2, BoundsH = Game.TileSize * 2, Anchor = SpriteAnchor.Center, Tags = ActorTag.System)]
+[GameActor(Sprite = "Editor/neural_texture_ripple", BoundsW = Game.TileSize * 2, BoundsH = Game.TileSize * 2, Anchor = SpriteAnchor.Center, Tags = ActorTag.System)]
 public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 {
 	public string? SourceActorId;

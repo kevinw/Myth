@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "editor_prop", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.Decoration)]
+[GameActor(Sprite = "Editor/wildlife", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.Decoration)]
 public class Wildlife : Actor
 {
 	public int FishCount = 12;

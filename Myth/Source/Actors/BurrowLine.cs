@@ -1,9 +1,12 @@
+/*
+Lets the player burrow inside solid surfaces by defining a series of line segments the burrow can follow.
+*/
 using System.Numerics;
 using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "buttons", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System, Anchor = SpriteAnchor.Center)]
+[GameActor(Sprite = "Editor/burrow_line", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System, Anchor = SpriteAnchor.Center)]
 public class BurrowLine : PointPathActor
 {
 	public bool RenderProcedural;
@@ -164,9 +167,10 @@ public class BurrowLine : PointPathActor
 			points.Insert(0, backward[i]);
 	}
 
-	void TraceDirection(int segment, float t, int direction, float distance, List<Vector2> into)
+	internal void TraceDirection(int segment, float t, int direction, float distance, List<Vector2> into, bool includeStart = true)
 	{
-		into.Add(Position + Vector2.Lerp(Points[segment], Points[segment + 1], t));
+		if (includeStart)
+			into.Add(Position + Vector2.Lerp(Points[segment], Points[segment + 1], t));
 		while (distance > 0)
 		{
 			var from = (Vector2)Points[segment];

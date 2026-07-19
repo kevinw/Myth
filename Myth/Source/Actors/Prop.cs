@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "editor_prop", Anchor = PropSpriteAnchor, Tags = ActorTag.Decoration)]
+[GameActor(Sprite = "Editor/prop", Anchor = PropSpriteAnchor, Tags = ActorTag.Decoration)]
 public class Prop : Actor
 {
 	const SpriteAnchor PropSpriteAnchor = SpriteAnchor.TopLeft;

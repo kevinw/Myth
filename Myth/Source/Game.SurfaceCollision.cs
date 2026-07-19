@@ -7,6 +7,7 @@ public readonly record struct SurfaceHit(Vector2 Point, Vector2 Normal, float Di
 
 public partial class Game
 {
+	internal static float BurrowLineAttachDistance => 3;
 	static readonly List<Vector2> surfaceTraceForward = [];
 	static readonly List<Vector2> surfaceTraceBack = [];
 	static readonly bool burrowTraceEnabled = Environment.GetEnvironmentVariable("MYTH_BURROW_TRACE") is { Length: > 0 } value && value != "0";
@@ -14,22 +15,49 @@ public partial class Game
 	internal void TraceBurrow(string message)
 		=> Console.WriteLine($"[Burrow t={Time.Seconds:0.000} room={CurrentRoom?.Id ?? "?"}] {message}");
 
-	/// Trace the contour as a world-space polyline from an existing walk state (boundary
-	/// `vertex` + `heading` + handedness), walking `maxArcPerSide` pixels forward and
-	/// backward. Used by the burrow glow so it shares the player's exact, corner-correct
-	/// walk position instead of re-seeding (which can mis-anchor at concave corners).
-	public bool TraceSurfaceFromState(Point2 vertex, Point2 heading, bool solidLeft, float maxArcPerSide, List<Vector2> outPoints)
+	// Trace the route the burrow movement would take from an existing surface state, including
+	// transfers onto authored BurrowLines before the boundary walker chooses its next solid edge.
+	internal bool TraceBurrowPathFromState(Point2 vertex, Point2 heading, bool solidLeft, BurrowLine? exclude,
+		float maxArcPerSide, List<Vector2> outPoints)
 	{
 		outPoints.Clear();
 		surfaceTraceForward.Clear();
 		surfaceTraceBack.Clear();
-		WalkBoundary(vertex, heading, solidLeft, maxArcPerSide, surfaceTraceForward);
-		WalkBoundary(vertex, new Point2(-heading.X, -heading.Y), !solidLeft, maxArcPerSide, surfaceTraceBack);
+		TraceBurrowPathDirection(vertex, heading, solidLeft, exclude, maxArcPerSide, surfaceTraceForward);
+		TraceBurrowPathDirection(vertex, new Point2(-heading.X, -heading.Y), !solidLeft, exclude, maxArcPerSide, surfaceTraceBack);
 
 		for (var i = surfaceTraceBack.Count - 1; i >= 1; i--) // skip shared start vertex
 			outPoints.Add(surfaceTraceBack[i]);
 		outPoints.AddRange(surfaceTraceForward);
 		return outPoints.Count >= 2;
+	}
+
+	void TraceBurrowPathDirection(Point2 start, Point2 heading, bool solidLeft, BurrowLine? exclude,
+		float maxArc, List<Vector2> into)
+	{
+		var position = start;
+		var distance = 0f;
+		into.Add(position);
+		while (distance < maxArc)
+		{
+			if (TryEnterBurrowLine(position, heading, exclude, BurrowLineAttachDistance, out var line, out var segment, out var t,
+				out var direction, out var entryPoint, out _))
+			{
+				var entryDistance = Vector2.Distance(position, entryPoint);
+				if (entryDistance > 0.001f)
+					into.Add(entryPoint);
+				line!.TraceDirection(segment, t, direction, MathF.Max(0, maxArc - distance - entryDistance), into, includeStart: false);
+				return;
+			}
+
+			var next = PickBoundaryDir(position, heading, solidLeft);
+			if (next == Point2.Zero)
+				return;
+			position += next;
+			heading = next;
+			distance++;
+			into.Add(position);
+		}
 	}
 
 	// Find the solid/air face nearest `nearPoint` along `towardSolid`. Returns the
@@ -248,24 +276,6 @@ public partial class Game
 				: "attach failed: no valid exact edge or nearby surface");
 
 		return found;
-	}
-
-	void WalkBoundary(Point2 startVertex, Point2 heading, bool solidLeft, float maxArc, List<Vector2> outPoints)
-	{
-		var v = startVertex;
-		var d = heading;
-		outPoints.Add(v);
-		var len = 0f;
-		while (len < maxArc)
-		{
-			var nd = PickBoundaryDir(v, d, solidLeft);
-			if (nd == Point2.Zero)
-				break;
-			v += nd;
-			d = nd;
-			len += 1f;
-			outPoints.Add(v);
-		}
 	}
 
 	// Left-hand rule: prefer turning toward the solid, then straight, then away. No
