@@ -1476,7 +1476,6 @@ public partial class Player : Pawn
 
 		if (input.MoveY < 0)
 		{
-			Game.Show("attack up");
 			attackUp = true;
 		}
 
