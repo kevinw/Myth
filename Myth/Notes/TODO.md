@@ -1,10 +1,10 @@
 # TODO
 
-- imgui.ini showed up next to build. it should be in appdata, and be named something else, or be folded into another thing
 - cimgui.dll is 1.4MB; can it be statically linked?
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon
-esa notes:
+
+Environmental Station Alpha playthorugh notes:
   - alternate vertical and horizontal challenge
   - think about save points and optional challenging runs
   - tubes as visible layers on top of a room

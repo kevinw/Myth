@@ -1,0 +1,128 @@
+{
+  "position": [-368, 23],
+  "size": [32, 23],
+  "backdropColor": "100D1C",
+  "backdropColor2": "17293A",
+  "ambientColor": "587888",
+  "ambientIntensity": 0.42,
+  "lightNoise": 0.24,
+  "reverb": 0.732,
+  "legend": {
+    "#": "back",
+    "G": "grass",
+    "M": "metal",
+    "R": "ruin",
+    "T": "stone",
+    "u": "Myth Runes",
+    "v": "Myth Vines",
+    "w": "water"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTT0000000TTTTTTTTT",
+    "T000000000000000000000000000000T",
+    "T00000000000000000000000T000000T",
+    "T00000000000000000000000T000000T",
+    "T00000000000000000000000T000000T",
+    "T00000000000000000RRRR00T000000T",
+    "T00000000000000000RRRR00T000000T",
+    "T000000000000000000000000000000T",
+    "T000000TTTT00000000000000000000T",
+    "00MMMMMMMTT00000000000000GGGGG0T",
+    "0000000TTTT0000000RRRR00TGGGGG0T",
+    "0000000TTTT0000000RRRRMMTMMMMM0T",
+    "00wwwwwTTTTwwwwwwwRRRRwwTTTTTTTT",
+    "00wwwww0000wwwwwwwRRRRwwwwwwww0T",
+    "00wwwww0000wwwwwwwRRRRwwwwwwww0T",
+    "00wwwww0000MMMMMMMRRRRwwwwwwww0T",
+    "T0wwwwwTTTTwwwwwwwRRRRwwwwwwww0T",
+    "T0wwwwwTTTTwwwwwwwRRRRwwwwwwww0T",
+    "T0wwwwwwwwwwwwwwwwRRRRwwwwwwww0T",
+    "T0wwwwwwwwwwwwwwwwwwwwwwwwwwww0T",
+    "T0wwwwwwwwwwwwwwwwwwwwwwwwwwww0T",
+    "T0TTTTTTTTTTTTTTTTTTTTTTTTTTTT0T",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "00000000000000000000000000000000",
+    "000000000000000000000000000v0000",
+    "0000#####000000000000000###v0000",
+    "000#00000#0000####00000#000v#000",
+    "00#0000000#00#0000#000#0000v0#00",
+    "00#0000000#0#0uuuu0#00#0000v0#00",
+    "00#0000000#0#0uuuu0#00#0000v0#00",
+    "00#0000000#0#0uuuu0#00#0000v0#00",
+    "00#0000000#0#0uuuu0#00#0000v0#00",
+    "00#0000000#0#0uuuu0#00#0000v0#00",
+    "00#0000000#0#0uuuu0#00#0000v0#00",
+    "00#0000000#0#0uuuu0#00#000000#00",
+    "00#0000000#0#0uuuu0#00#000000#00",
+    "00#0000000#0#0uuuu0#00#000000#00",
+    "00#0000000#0#0uuuu0#00#000000#00",
+    "00#0000000#0#0uuuu0#00#000000#00",
+    "00#0000000#0#0uuuu0#00#000000#00",
+    "00#0000000#0#000000#00#000000#00",
+    "00#0000000#0#000000#00#000000#00",
+    "00#0000000#0#000000#00#000000#00",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000"
+  ],
+  "actors": [
+    {
+      "Id": "ae00000000000038",
+      "Type": "BurrowLine",
+      "Position": [0, 104],
+      "Points": [[0, 0],[72, 0],[72, 48],[160, 48],[160, -104]
+      ],
+      "RenderProcedural": true,
+      "ProceduralOuterColor": "303842",
+      "ProceduralInnerColor": "75D6DA"
+    },
+    {
+      "Id": "ae00000000000039",
+      "Type": "Wind",
+      "Position": [136, 80],
+      "Size": [56, 88],
+      "Acceleration": 300,
+      "MaxSpeed": 88,
+      "StreakColor": "8CE8F2",
+      "StreakSpacing": 12
+    },
+    {
+      "Id": "ae00000000000040",
+      "Type": "RevealDoor",
+      "Position": [192, 56],
+      "Size": [8, 24]
+    },
+    {
+      "Id": "ae00000000000041",
+      "Type": "Chest",
+      "Position": [224, 96]
+    },
+    {
+      "Id": "ae00000000000042",
+      "Type": "Jumpthru",
+      "Position": [104, 120],
+      "Size": [40, 8]
+    },
+    {
+      "Id": "ae00000000000043",
+      "Type": "Light",
+      "Position": [152, 112],
+      "DrawSprite": false,
+      "LightColor": "75D8EE",
+      "Radius": 150,
+      "Intensity": 0.67,
+      "Height": 22,
+      "FlickerIntensity": 0.01
+    },
+    {
+      "Id": "ae00000000000044",
+      "Type": "Wildlife",
+      "Position": [136, 144],
+      "FishCount": 18,
+      "BugCount": 3,
+      "FlyCount": 2
+    }
+  ]
+}

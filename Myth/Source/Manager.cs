@@ -249,7 +249,7 @@ public partial class Manager : App
 		controls = new(Input);
 		menuImgui = new(this, enableGamepadNav: true);
 #if EDITOR
-		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf") { Scale = Scale };
+		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf", iniPath: Path.Join(UserPath, "editor-layout.ini")) { Scale = Scale };
 #elif BROWSER
 		imgui = new(this) { Scale = 1.0f };
 #endif

@@ -1,0 +1,98 @@
+{
+  "position": [-440, 0],
+  "size": [40, 15],
+  "backdropColor": "100D1C",
+  "backdropColor2": "17293A",
+  "ambientColor": "71828B",
+  "ambientIntensity": 0.58,
+  "lightNoise": 0.24,
+  "reverb": 0.741,
+  "legend": {
+    "#": "back",
+    "%": "crosshatch",
+    "M": "metal",
+    "R": "ruin",
+    "T": "stone",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "R0000000RR00000000MM000000000RR00000000R",
+    "R0000000RR00000000MM000000000RR00000000R",
+    "R0000000RR00000000MM000000000RR00000000R",
+    "R0000000RR0000000000000000000RR00000000R",
+    "00000000RRTTTTTTTT00TTTTTTTTTRR000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000uuuu000000000000000000v0000",
+    "00000###000000###000000###000000###v0000",
+    "0000#000#0000#000#0000#000#0000#000v0000",
+    "000#00000#00#00000#00#00000#00#0000v#000",
+    "000#00000#00#00000#00#00000#00#0000v#000",
+    "000#00000#00#00000#00#00000#00#0000v#000",
+    "000#00000#00#00000#00#00000#00#0000v#000",
+    "000#00000#00#00000#00#00000#00#00000#000",
+    "000#00000#00#00000#00#00000#00#00000#000",
+    "0%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%0",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000"
+  ],
+  "crumble": [[14, 2],[15, 2],[16, 2],[17, 2]
+  ],
+  "actors": [
+    {
+      "Id": "ae00000000000001",
+      "Type": "PlayerStart",
+      "Position": [24, 96]
+    },
+    {
+      "Id": "ae00000000000002",
+      "Type": "BudStoryBark",
+      "Position": [48, 40],
+      "Size": [136, 56],
+      "Text": "This place is breathing."
+    },
+    {
+      "Id": "ae00000000000003",
+      "Type": "Light",
+      "Position": [92, 76],
+      "DrawSprite": false,
+      "LightColor": "82D8E8",
+      "Radius": 112,
+      "Intensity": 0.7,
+      "Height": 20,
+      "FlickerIntensity": 0.02
+    },
+    {
+      "Id": "ae00000000000004",
+      "Type": "Light",
+      "Position": [252, 76],
+      "DrawSprite": false,
+      "LightColor": "E7B46A",
+      "Radius": 96,
+      "Intensity": 0.58,
+      "Height": 12
+    },
+    {
+      "Id": "ae00000000000005",
+      "Type": "Wildlife",
+      "Position": [176, 48],
+      "FishCount": 0,
+      "BugCount": 2,
+      "FlyCount": 7
+    }
+  ]
+}

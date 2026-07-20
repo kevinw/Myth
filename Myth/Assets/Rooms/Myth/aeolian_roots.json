@@ -1,0 +1,112 @@
+{
+  "position": [-400, 23],
+  "size": [32, 23],
+  "backdropColor": "100D1C",
+  "backdropColor2": "17293A",
+  "ambientColor": "637B72",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.24,
+  "reverb": 0.61,
+  "legend": {
+    "#": "back",
+    "G": "grass",
+    "P": "dirt",
+    "R": "ruin",
+    "T": "stone",
+    "u": "Myth Runes",
+    "v": "Myth Vines",
+    "w": "water"
+  },
+  "tiles": [
+    "PPPPPPPP0000000PPPPPPPPPPPPPPPPP",
+    "P000000000000000000000000000000P",
+    "P000000000000000000000000000000P",
+    "P0000000000000000R00R0000000000P",
+    "P000000000000000R00R00000000000P",
+    "P000000PPPPPRRRRRRRRPRPPPPP0000P",
+    "P000000PPPPPPPPPPPPPPPPPPPP0000P",
+    "P000000PPPTTTTTTTTTTTTTTPPP0000P",
+    "P000000PPPTTTTTTTTTTTTTTPPP0000P",
+    "P000000PPPTTTTTTTTTTTTTTPPP00000",
+    "P000000PPPTTTTTTTTTTTTTTPPP00000",
+    "P000000PPPTTTTTTTTTTTTTTP0000000",
+    "P000000PPPTTTTTTTTTTTTTTP0000000",
+    "P000000PPPTTTTTTTTTTTTTTP0000000",
+    "P000000PPPTTTTTTTTTTTTTTP0000000",
+    "P00000000PTTTTTTTTTTTTTTP0000000",
+    "P00000000PPPPPPPPPPPPPPPPPP0000P",
+    "P00000000PPPPPPPPPPPPPPGGGGGGG0P",
+    "P0GGGGGGGGG00000000000wwwwwwww0P",
+    "P0wwwwwwwwww0000000000wwwwwwww0P",
+    "P0wwwwwwwwww0000000000wwwwwwww0P",
+    "P0wwwwwwwwww0000000000wwwwwwww0P",
+    "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+  ],
+  "backgroundTiles": [
+    "00000000000000000000000000000000",
+    "00000v00000000000000000000000000",
+    "00000v0000000000000000#####v0000",
+    "0000#v###000000000000#00000v#000",
+    "000#0v000#0000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#0uuuuuuuuu000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#00v0000#000000000#000000v0#00",
+    "00#0000000#000000000#000000v0#00",
+    "00#0000000#000000000#000000v0#00",
+    "00#0000000#000000000#00000000#00",
+    "00000000000000000000#00000000#00",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000"
+  ],
+  "crumble": [[12, 5],[13, 5],[14, 5],[15, 5],[16, 5],[17, 5],[18, 5],[19, 5]
+  ],
+  "actors": [
+    {
+      "Id": "ae00000000000033",
+      "Type": "BurrowLine",
+      "Position": [88, 0],
+      "Points": [[0, 0],[0, 104],[128, 104],[168, 104]
+      ],
+      "RenderProcedural": true,
+      "ProceduralOuterColor": "342F35",
+      "ProceduralInnerColor": "74CED0"
+    },
+    {
+      "Id": "ae00000000000034",
+      "Type": "Bramble",
+      "Position": [48, 144]
+    },
+    {
+      "Id": "ae00000000000035",
+      "Type": "Blob",
+      "Position": [48, 136]
+    },
+    {
+      "Id": "ae00000000000036",
+      "Type": "Light",
+      "Position": [104, 80],
+      "DrawSprite": false,
+      "LightColor": "78CFC3",
+      "Radius": 116,
+      "Intensity": 0.55,
+      "Height": 8
+    },
+    {
+      "Id": "ae00000000000037",
+      "Type": "Wildlife",
+      "Position": [112, 152],
+      "FishCount": 7,
+      "BugCount": 8,
+      "FlyCount": 3
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Foster.Framework;
 using ImGuiNET;
 
@@ -39,6 +40,7 @@ fn vertex_main(
 
 	private readonly App app;
 	private readonly IntPtr context;
+	readonly IntPtr iniFilename;
 	private readonly Mesh<PosTexColVertex, ushort> mesh;
 	private readonly Material material;
 	private readonly Texture fontTexture;
@@ -191,7 +193,7 @@ fn vertex_main(
 	/// </summary>
 	public ImGuiMouseCursor MouseCursor { get; private set; }
 
-	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false)
+	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false, string? iniPath = null)
 	{
 		this.app = app;
 		this.gamepadNav = enableGamepadNav;
@@ -201,9 +203,14 @@ fn vertex_main(
 		ImGui.SetCurrentContext(context);
 
 		var io = ImGui.GetIO();
+		unsafe
+		{
+			iniFilename = iniPath == null ? IntPtr.Zero : Marshal.StringToCoTaskMemUTF8(iniPath);
+			io.NativePtr->IniFilename = (byte*)iniFilename;
+		}
 		// HasMouseCursors also enables resize-from-edges (imgui falls back to
 		// the corner grip only without it); the host applies MouseCursor.
-		io.BackendFlags = ImGuiBackendFlags.HasMouseCursors;
+		io.BackendFlags = ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.RendererHasVtxOffset;
 		io.ConfigFlags = ImGuiConfigFlags.DockingEnable;
 		if (gamepadNav)
 		{
@@ -651,5 +658,7 @@ fn vertex_main(
 	{
 		GC.SuppressFinalize(this);
 		ImGui.DestroyContext(context);
+		if (iniFilename != IntPtr.Zero)
+			Marshal.FreeCoTaskMem(iniFilename);
 	}
 }
