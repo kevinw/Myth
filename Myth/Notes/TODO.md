@@ -23,7 +23,6 @@ esa notes:
   - every song intro is an area intro is something new (a new movement/enemy/both)
 
 second song needs some automation curves
-one way "wind" tiles <<<<
 one tile crawl critter
 computer that puts something on your map as a goal
 an enemy that flies at you regardless of collision

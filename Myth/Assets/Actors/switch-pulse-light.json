@@ -1,0 +1,11 @@
+{
+  "Name": "SwitchPulseLight",
+  "From": "PlayerGlowLight",
+  "Radius": 44,
+  "Intensity": 0.9,
+  "LightColor": "78c8ff",
+  "Height": 10,
+  "FlickerFrequency": 14,
+  "FlickerIntensity": 0.14,
+  "IsStatic": false
+}

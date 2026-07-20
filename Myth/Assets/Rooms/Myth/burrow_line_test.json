@@ -75,7 +75,8 @@
       "RenderProcedural": true,
       "ProceduralInnerColor": "E0346F",
       "Points": [[32, 16],[32, 32],[8, 32],[-72, 32],[-88, 32],[-88, 16]
-      ]
+      ],
+      "ProceduralWidth": 2
     },
     {
       "Id": "cec7127da47af981",
@@ -99,7 +100,8 @@
       "Position": [80, 112],
       "RenderProcedural": true,
       "Points": [[240, 56],[168, 56],[168, 64],[88, 64],[88, 48]
-      ]
+      ],
+      "ProceduralWidth": 2
     }
   ]
 }
