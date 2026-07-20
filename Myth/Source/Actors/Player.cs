@@ -652,7 +652,7 @@ public abstract class Pawn : Actor
 		// once we have that, it would be fun to gradually increase speed as you roll down many slopes without stopping
 		Velocity.X = Calc.Approach(Velocity.X, Facing * targetSpeed, friction * Time.Delta);
 
-		if (input.JumpPressed)
+		if (input.JumpPressed && CanStandUp())
 		{
 			OnRollStopped(false);
 			JumpUpSquish = 0;
@@ -672,7 +672,7 @@ public abstract class Pawn : Actor
 		{
 			OnRollStopped(false);
 			State = States.Normal;
-			ducking = grounded && input.MoveY > 0;
+			ducking = grounded && (input.MoveY > 0 || !CanStandUp());
 		}
 	}
 
