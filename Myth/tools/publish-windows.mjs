@@ -17,9 +17,11 @@ function run(cmd, args) {
 }
 
 const contentZip = path.join(outRoot, "Content.zip");
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "--",
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "-p:ShaderPlatform=windows", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
+  "--content-target", "windows",
+  "--content-world", "Myth",
 ]);
 run("dotnet", [
   "publish", "Myth.csproj",
@@ -28,6 +30,7 @@ run("dotnet", [
   "--self-contained",
   "-p:MythShip=true",
   "-p:MythDesktopOnly=true",
+  "-p:ShaderPlatform=windows",
   "-o", publishDir,
 ]);
 

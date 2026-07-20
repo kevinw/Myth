@@ -7,7 +7,11 @@ if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
 	if (startArgs.buildAssetPack)
 		Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
 	if (startArgs.buildContentZipPath != null)
-		Assets.BuildContentZip(startArgs.buildContentZipPath);
+	{
+		if (string.IsNullOrWhiteSpace(startArgs.contentTarget))
+			throw new ArgumentException("--build-content-zip requires --content-target mac, ios, windows, linux, or browser.");
+		Assets.BuildContentZip(startArgs.buildContentZipPath, startArgs.contentTarget, startArgs.contentWorld);
+	}
 	return;
 }
 

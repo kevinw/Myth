@@ -100,16 +100,6 @@ function buildOnce() {
 }
 
 function buildAssets() {
-  // The content zip packs Shaders/Compiled/, and the desktop dotnet run below only
-  // compiles this host's native shader format — the .wgsl the browser needs must be
-  // compiled first or the zip ships without them.
-  const shaders = spawnSync(
-    "dotnet",
-    ["msbuild", "Myth.csproj", "-t:CompileShaders", "-p:ShaderPlatform=web"],
-    { stdio: "inherit", cwd: repoDir },
-  );
-  if (shaders.status !== 0) process.exit(shaders.status ?? 1);
-
   const result = spawnSync(
     "dotnet",
     [
@@ -118,11 +108,16 @@ function buildAssets() {
       "Myth.csproj",
       "-c",
       configuration,
+      "-p:ShaderPlatform=web",
       "--",
       "--build-asset-pack",
       "Assets/Packed/Visuals",
       "--build-content-zip",
       "Assets/Content.zip",
+      "--content-target",
+      "browser",
+      "--content-world",
+      "Myth",
     ],
     { stdio: "inherit", cwd: repoDir },
   );

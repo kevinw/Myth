@@ -41,9 +41,11 @@ function capture(cmd, args) {
 // visual — including tile kit registrations — must be current in the pack), then a
 // Content.zip of the shippable Assets slice built around it.
 const contentZip = path.join(outRoot, "Content.zip");
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "--",
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "-p:ShaderPlatform=mac", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
+  "--content-target", "mac",
+  "--content-world", "Myth",
 ]);
 
 // --- 2. NativeAOT publish, play-only.

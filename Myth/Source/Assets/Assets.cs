@@ -157,13 +157,26 @@ public static class Assets
 
 	/// <summary>
 	/// Zips the runtime-loaded slice of the Assets folder into a Content.zip for packaged
-	/// builds. Excluded: Sources/ (authoring; the visual pack replaces it), Sounds/ (FMOD
-	/// opens banks by real path, so banks ship as loose files), uncompiled shaders, and
-	/// dot-prefixed litter. Entry names are Assets-relative with forward slashes — the same
-	/// keys Content serves.
+	/// builds. Keeps only the requested world and shader backend. Excluded: Sources/
+	/// (authoring; the visual pack replaces it), Sounds/ (FMOD opens banks by real path, so
+	/// banks ship as loose files), editor fonts, uncompiled shaders, and dot-prefixed litter.
+	/// Entry names are Assets-relative with forward slashes — the same keys Content serves.
 	/// </summary>
-	public static void BuildContentZip(string outputPath)
+	public static void BuildContentZip(string outputPath, string target, string? worldId = null)
 	{
+		var shaderExtension = target.Trim().ToLowerInvariant() switch
+		{
+			"mac" => "msl",
+			"ios" => "msl",
+			"windows" => "dxil",
+			"linux" => "spv",
+			"browser" => "wgsl",
+			_ => throw new ArgumentException($"Unknown content target '{target}'; expected mac, ios, windows, linux, or browser."),
+		};
+		worldId = string.IsNullOrWhiteSpace(worldId) ? defaultWorldId : worldId.Trim();
+		if (worldId.IndexOfAny(['/', '\\']) >= 0 || !Directory.Exists(Path.Join(RoomsPath, worldId)))
+			throw new ArgumentException($"Unknown content world '{worldId}'.");
+
 		outputPath = Path.GetFullPath(outputPath);
 		if (Path.GetDirectoryName(outputPath) is { Length: > 0 } outputDirectory)
 			Directory.CreateDirectory(outputDirectory);
@@ -173,7 +186,7 @@ public static class Assets
 
 		// The DynamicTexture folder holds tens of MB of NCA weights, almost all unused; a
 		// packaged build only needs models referenced by rooms or registered NCT tile specs.
-		var referencedWeights = CollectReferencedNeuralTextureWeights();
+		var referencedWeights = CollectReferencedNeuralTextureWeights(worldId);
 		var packedWeights = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		var count = 0;
@@ -182,7 +195,7 @@ public static class Assets
 		foreach (var file in Directory.EnumerateFiles(AssetsPath, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
 		{
 			var key = Path.GetRelativePath(AssetsPath, file).Replace(Path.DirectorySeparatorChar, '/');
-			if (!ContentZipIncludes(key))
+			if (!ContentZipIncludes(key, shaderExtension, worldId))
 				continue;
 
 			if (IsDynamicTextureWeight(key, out var weightName))
@@ -211,7 +224,7 @@ public static class Assets
 		if (missingWeights.Length > 0)
 			throw new InvalidOperationException($"Missing referenced neural texture models: {string.Join(", ", missingWeights)}. Run 'git lfs pull' and check the room/NCT spec references.");
 
-		Console.WriteLine($"Wrote content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB); "
+		Console.WriteLine($"Wrote {target}/{worldId} content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB); "
 			+ $"packed {packedWeights.Count} neural texture models, skipped {skippedWeights} unreferenced ({skippedWeightBytes / 1024} KB).");
 	}
 
@@ -237,11 +250,11 @@ public static class Assets
 		return stream.Read(buffer) == buffer.Length && Encoding.ASCII.GetString(buffer) == signature;
 	}
 
-	// Weight files named by NCT tile specs and NeuralTextureActor instances across every bundled
-	// room, seeded with the constructor default so a freshly placed actor still resolves.
+	// Weight files named by NCT tile specs and NeuralTextureActor instances in the shipped world,
+	// seeded with the constructor default so a freshly placed actor still resolves.
 	// Case-insensitive to match the zip's own lookups. Room references come from loose files
 	// because this only runs while building the pack.
-	static HashSet<string> CollectReferencedNeuralTextureWeights()
+	static HashSet<string> CollectReferencedNeuralTextureWeights(string worldId)
 	{
 		var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
@@ -254,11 +267,12 @@ public static class Assets
 				referenced.Add(spec.Edge);
 		}
 
-		if (!Directory.Exists(RoomsPath))
+		var worldRoomsPath = Path.Join(RoomsPath, worldId);
+		if (!Directory.Exists(worldRoomsPath))
 			return referenced;
 
 		string[] fields = ["WeightsFile", "WeightsFile1", "WeightsFile2", "WeightsFile3"];
-		foreach (var file in Directory.EnumerateFiles(RoomsPath, "*.json", SearchOption.AllDirectories))
+		foreach (var file in Directory.EnumerateFiles(worldRoomsPath, "*.json", SearchOption.AllDirectories))
 		{
 			JsonNode? root;
 			try
@@ -290,7 +304,7 @@ public static class Assets
 		return referenced;
 	}
 
-	static bool ContentZipIncludes(string key)
+	static bool ContentZipIncludes(string key, string shaderExtension, string worldId)
 	{
 		foreach (var part in key.Split('/'))
 			if (part.StartsWith('.'))
@@ -300,8 +314,13 @@ public static class Assets
 			return false;
 		if (key.StartsWith("Sounds/", StringComparison.OrdinalIgnoreCase))
 			return false;
+		if (key.StartsWith("Rooms/", StringComparison.OrdinalIgnoreCase))
+			return key.StartsWith($"Rooms/{worldId}/", StringComparison.OrdinalIgnoreCase);
+		if (key.Equals("Fonts/Myna-Regular.ttf", StringComparison.OrdinalIgnoreCase))
+			return false;
 		if (key.StartsWith("Shaders/", StringComparison.OrdinalIgnoreCase))
-			return key.StartsWith("Shaders/Compiled/", StringComparison.OrdinalIgnoreCase);
+			return key.StartsWith("Shaders/Compiled/", StringComparison.OrdinalIgnoreCase)
+				&& key.EndsWith($".{shaderExtension}", StringComparison.OrdinalIgnoreCase);
 		if (key.Equals(contentZipName, StringComparison.OrdinalIgnoreCase))
 			return false;
 

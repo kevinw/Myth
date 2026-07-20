@@ -180,7 +180,9 @@ if (( no_build == 0 )); then
 	assets_start_ms="$(now_ms)"
 	(cd "$repo_root" && dotnet run --project Myth.csproj -- \
 		--build-asset-pack Assets/Packed/Visuals \
-		--build-content-zip Assets/Content.zip)
+		--build-content-zip Assets/Content.zip \
+		--content-target ios \
+		--content-world Myth)
 	print_elapsed "Assets" "$assets_start_ms"
 
 	echo "Building Myth for $runtime_id ($configuration) ..."

@@ -649,8 +649,10 @@ public partial class Manager : App
 
 			var settings = GetWindowSettingsFromJSON();
 			if (settings == null) return;
+#if EDITOR
 			if (!string.IsNullOrWhiteSpace(settings.WorldId))
 				Assets.SelectWorld(settings.WorldId);
+#endif
 			if (Window != null)
 			{
 				if (settings is { Width: > 0, Height: > 0 })

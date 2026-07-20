@@ -1,11 +1,6 @@
 # TODO
 
 - imgui.ini showed up next to build. it should be in appdata, and be named something else, or be folded into another thing
-- FrogWorld is included in Content.zip
-- msl and wsgl shaders are in windows build Content.zip
-- three ttf files are included in Content.zip
-- Do we need to ship Master.strings.bank? in content.zip
-- do we need both fmod.dll and fmodstudio.dll
 - cimgui.dll is 1.4MB; can it be statically linked?
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon

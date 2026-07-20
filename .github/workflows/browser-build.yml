@@ -84,24 +84,16 @@ jobs:
         run: cargo install naga-cli --version 29.0.3 --locked
 
       # Git can't preserve mtimes, so MSBuild's incremental check can't tell when a
-      # committed .wgsl/.spv is stale relative to its .hlsl. Delete them so every CI
+      # committed .wgsl is stale relative to its .hlsl. Delete it so every CI
       # run recompiles from source and the deployed shaders are always up to date.
       - name: Clean compiled shaders (force fresh compilation)
         run: |
           find Myth/Assets/Shaders Foster/Framework/Content/Shaders \
-            -path '*/Compiled/*' \( -name '*.wgsl' -o -name '*.spv' \) -delete -print
-
-      # The web shaders must exist before the content zip is built: the zip packs
-      # Shaders/Compiled/, and the dotnet run below only compiles this host's native
-      # format (spv on linux). The browser publish would compile .wgsl too late —
-      # the zip is already sealed by then.
-      - name: Compile web shaders (wgsl)
-        working-directory: Myth
-        run: dotnet msbuild Myth.csproj -t:CompileShaders -p:ShaderPlatform=web
+            -path '*/Compiled/*' -name '*.wgsl' -delete -print
 
       - name: Build visual asset pack + content zip
         working-directory: Myth
-        run: dotnet run --project Myth.csproj -c Release -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip
+        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip --content-target browser --content-world Myth
 
       # --aot: full WebAssembly AOT for snappier runtime perf. Requires the Foster
       # fork's SDL3.cs UnmanagedCallConv strip (committed) or mono-aot-cross SGen-asserts.

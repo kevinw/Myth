@@ -28,6 +28,8 @@ public struct StartArgs
 	public string? contentZipPath;
 	// Write a Content.zip of the runtime Assets slice to this path and exit (--build-content-zip).
 	public string? buildContentZipPath;
+	public string? contentTarget;
+	public string? contentWorld;
 	public int maxFrames = int.MaxValue;
 
 	// Exit after this many game seconds (for automated/profiling runs).
@@ -71,6 +73,10 @@ public struct StartArgs
 				contentZipPath = next;
 			else if (args[i] == "--build-content-zip" && next != null)
 				buildContentZipPath = next;
+			else if (args[i] == "--content-target" && next != null)
+				contentTarget = next;
+			else if (args[i] == "--content-world" && next != null)
+				contentWorld = next;
 			else if (args[i] == "--max-time" && next != null && float.TryParse(next, out var mt))
 				maxTimeSeconds = mt;
 			else if ((args[i] == "--play-room" || args[i] == "--room") && next != null)
