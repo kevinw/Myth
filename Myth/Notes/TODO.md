@@ -64,6 +64,7 @@ adjust rope springiness as a mechanic or challenge
 - wall jump and wall slide sounds
 - Attenuate landing sound by y velocity
 - Better revealdoor sound
+- map open close sounds
 
 
 - someday: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display
