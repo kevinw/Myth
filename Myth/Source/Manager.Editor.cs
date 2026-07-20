@@ -2360,10 +2360,33 @@ public partial class Manager
 			for (var i = 0; i < count; i++)
 			{
 				var point = origin + PointPathPoint(points, i);
+				if (typeName == nameof(BurrowLine) && BurrowLinePointConnected(room, actorIndex, i, point))
+					batcher.CircleLine(point, radius * 1.65f, lineWeight * 2, 16, color);
 				batcher.Circle(point, radius, 12, color);
 				batcher.CircleLine(point, radius, lineWeight, 12, Color.White);
 			}
 		}
+	}
+
+	bool BurrowLinePointConnected(Room room, int sourceIndex, int sourcePoint, Vector2 point)
+	{
+		var maxDistanceSquared = BurrowLine.JunctionDistance * BurrowLine.JunctionDistance;
+		for (var actorIndex = 0; actorIndex < room.Actors.Count; actorIndex++)
+		{
+			var actor = room.Actors[actorIndex];
+			if (actorIndex == sourceIndex || !string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var points = PointPathNodes(actor);
+			var count = PointPathPointCount(points);
+			var origin = PointPathOrigin(room, actor);
+			for (var i = 0; i < count; i++)
+				if ((actorIndex != sourceIndex || i != sourcePoint) &&
+					Vector2.DistanceSquared(point, origin + PointPathPoint(points, i)) <= maxDistanceSquared)
+					return true;
+		}
+
+		return false;
 	}
 
 	int HitTestPointPathHandle(Room room, int actorIndex, Vector2 world, float lineWeight)

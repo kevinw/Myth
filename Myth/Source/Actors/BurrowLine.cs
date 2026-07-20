@@ -1,5 +1,6 @@
 /*
 Lets the player burrow inside solid surfaces by defining a series of line segments the burrow can follow.
+Touching path points form junctions; held input chooses an aligned branch, otherwise momentum wins.
 */
 using System.Numerics;
 using Foster.Framework;
@@ -9,6 +10,9 @@ namespace Myth;
 [GameActor(Sprite = "Editor/burrow_line", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System, Anchor = SpriteAnchor.Center)]
 public class BurrowLine : PointPathActor
 {
+	public static float JunctionDistance => 1f;
+	internal const int MaxJunctionTransfers = 8;
+
 	public bool RenderProcedural;
 	public float ProceduralWidth = 3f;
 	public Color ProceduralOuterColor = new(0x454a52);
@@ -118,9 +122,11 @@ public class BurrowLine : PointPathActor
 		=> Points.Length > 0 &&
 			(MathF.Min(Vector2.DistanceSquared(point, WorldPoint(0)), Vector2.DistanceSquared(point, WorldPoint(Points.Length - 1))) <= distance * distance);
 
-	public bool Advance(ref int segment, ref float t, int direction, float distance, out Vector2 point, out Vector2 heading)
+	public bool Advance(ref int segment, ref float t, int direction, float distance,
+		out Vector2 point, out Vector2 heading, out float remaining, out int junctionPoint)
 	{
 		var reachedEnd = false;
+		junctionPoint = -1;
 		while (distance > 0 && segment >= 0 && segment < Points.Length - 1)
 		{
 			var length = Vector2.Distance(Points[segment], Points[segment + 1]);
@@ -144,6 +150,12 @@ public class BurrowLine : PointPathActor
 			{
 				t = direction > 0 ? 1 : 0;
 				distance -= available;
+				junctionPoint = direction > 0 ? segment + 1 : segment;
+				if (Game.BurrowLinePointConnected(this, junctionPoint))
+				{
+					reachedEnd = true;
+					break;
+				}
 				if (!NextSegment(ref segment, ref t, direction))
 				{
 					reachedEnd = true;
@@ -154,20 +166,67 @@ public class BurrowLine : PointPathActor
 
 		point = Position + Vector2.Lerp(Points[segment], Points[segment + 1], t);
 		heading = SegmentHeading(segment, direction);
+		remaining = reachedEnd ? distance : 0;
 		return reachedEnd;
 	}
 
-	public void Trace(int segment, float t, float distance, List<Vector2> points, List<Vector2> backward)
+	public bool TryFindJunction(int segment, float t, Vector2 steeringIntent, float maxDistance,
+		int preferredDirection, out int direction, out float distance)
+	{
+		var forward = TryFindJunction(segment, t, 1, steeringIntent, maxDistance, out var forwardDistance);
+		var backward = TryFindJunction(segment, t, -1, steeringIntent, maxDistance, out var backwardDistance);
+		if (!forward && !backward)
+		{
+			direction = preferredDirection;
+			distance = 0;
+			return false;
+		}
+
+		direction = !backward || forward && (forwardDistance < backwardDistance ||
+			forwardDistance == backwardDistance && preferredDirection > 0) ? 1 : -1;
+		distance = direction > 0 ? forwardDistance : backwardDistance;
+		return true;
+	}
+
+	bool TryFindJunction(int segment, float t, int direction, Vector2 steeringIntent,
+		float maxDistance, out float distance)
+	{
+		distance = 0;
+		while (segment >= 0 && segment < Points.Length - 1)
+		{
+			var length = Vector2.Distance(Points[segment], Points[segment + 1]);
+			distance += (direction > 0 ? 1 - t : t) * length;
+			if (distance > maxDistance)
+				return false;
+
+			var pointIndex = direction > 0 ? segment + 1 : segment;
+			var travelHeading = SegmentHeading(segment, direction);
+			if (Game.BurrowLinePointConnected(this, pointIndex) &&
+				Game.TryContinueBurrowLine(this, pointIndex, segment, direction, travelHeading, steeringIntent,
+					out _, out _, out _, out _, out _, out var branchHeading) &&
+				Game.BurrowLineHeadingFollowsSteering(branchHeading, travelHeading, steeringIntent))
+				return true;
+
+			if (!NextSegment(ref segment, ref t, direction))
+				return false;
+		}
+
+		return false;
+	}
+
+	public void Trace(int segment, float t, int travelDirection, Vector2 steeringIntent,
+		float distance, List<Vector2> points, List<Vector2> backward)
 	{
 		points.Clear();
 		backward.Clear();
-		TraceDirection(segment, t, 1, distance, points);
-		TraceDirection(segment, t, -1, distance, backward);
+		TraceDirection(segment, t, travelDirection, distance, points, steeringIntent: steeringIntent);
+		TraceDirection(segment, t, -travelDirection, distance, backward);
 		for (var i = 1; i < backward.Count; i++)
 			points.Insert(0, backward[i]);
 	}
 
-	internal void TraceDirection(int segment, float t, int direction, float distance, List<Vector2> into, bool includeStart = true)
+	internal void TraceDirection(int segment, float t, int direction, float distance, List<Vector2> into,
+		bool includeStart = true, Vector2 steeringIntent = default, int junctionsRemaining = MaxJunctionTransfers)
 	{
 		if (includeStart)
 			into.Add(Position + Vector2.Lerp(Points[segment], Points[segment + 1], t));
@@ -185,9 +244,23 @@ public class BurrowLine : PointPathActor
 			}
 
 			distance -= available;
-			into.Add(Position + (direction > 0 ? to : from));
+			var endpoint = Position + (direction > 0 ? to : from);
+			var pointIndex = direction > 0 ? segment + 1 : segment;
+			into.Add(endpoint);
+			if (junctionsRemaining > 0 && Game.BurrowLinePointConnected(this, pointIndex) &&
+				Game.TryContinueBurrowLine(this, pointIndex, segment, direction, SegmentHeading(segment, direction),
+					steeringIntent, out var branch, out var branchSegment, out var branchT, out var branchDirection,
+					out var branchPoint, out _))
+			{
+				if (Vector2.DistanceSquared(endpoint, branchPoint) > 0.001f)
+					into.Add(branchPoint);
+				branch!.TraceDirection(branchSegment, branchT, branchDirection, distance, into, includeStart: false,
+					steeringIntent: steeringIntent, junctionsRemaining: junctionsRemaining - 1);
+				return;
+			}
 			if (!NextSegment(ref segment, ref t, direction))
 				return;
+
 		}
 	}
 
@@ -205,7 +278,7 @@ public class BurrowLine : PointPathActor
 		return true;
 	}
 
-	Vector2 SegmentHeading(int segment, int direction)
+	internal Vector2 SegmentHeading(int segment, int direction)
 	{
 		var delta = (Vector2)(Points[segment + 1] - Points[segment]);
 		return delta.LengthSquared() > 0 ? Vector2.Normalize(delta) * direction : Vector2.UnitX * direction;

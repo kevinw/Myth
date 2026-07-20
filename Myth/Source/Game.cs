@@ -1435,7 +1435,7 @@ public partial class Game : IDisposable
 		// rather than the normal push-out-of-collision placement.
 		if (player.State == Player.States.Burrow)
 		{
-			player.ResolveBurrowRoomTransition();
+			player.ResolveBurrowRoomTransition(direction);
 			return;
 		}
 

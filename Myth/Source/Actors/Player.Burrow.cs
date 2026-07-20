@@ -11,6 +11,7 @@ public partial class Player : Pawn
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
+	static float BurrowJunctionSeekDistance => 8f;
 	static float BurrowClimbSpeedMultiplier => 0.59f; // straight-up wall climb is half speed; 45° lands in between
 													 // The burrow pop is meant to read as stronger than a full held jump: a bigger launch
 													 // velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
@@ -188,9 +189,11 @@ public partial class Player : Pawn
 			burrowGlowAnchor = Position;
 		}
 		if (burrowLine != null)
-			burrowLine.Trace(burrowLineSegment, burrowLineT, arcLength, glowPoints, burrowLineGlowBack);
+			burrowLine.Trace(burrowLineSegment, burrowLineT, burrowLineDirection,
+				new Vector2(input.MoveX, input.MoveY), arcLength, glowPoints, burrowLineGlowBack);
 		else
-			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, burrowLineExit, arcLength, glowPoints);
+			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, burrowLineExit,
+				arcLength, glowPoints, new Vector2(input.MoveX, input.MoveY));
 	}
 
 	// Split the burrow's lifetime into BurrowIntervals countdown steps. Crossing into a new
@@ -248,17 +251,20 @@ public partial class Player : Pawn
 	static float ShortBurrowDampenTime => 0.09f; // burrows briefer than this pop softly, as if holding Down
 
 	// Is the burrow point against the room boundary in the direction we're driving? Only then
-	// can the surface plausibly continue in the adjacent room. Room bounds are half-open
-	// [Left, Right) / [Top, Bottom); a small tolerance covers the surface ending a pixel shy.
+	// can a surface or authored line plausibly continue in the adjacent room. Room bounds are
+	// half-open [Left, Right) / [Top, Bottom); a small tolerance covers ending a pixel shy.
 	const int BurrowRoomEdgeTolerance = 2;
-	bool BurrowAtRoomEdge()
+	bool TryBurrowRoomTransition(Vector2 travelHeading)
 	{
 		var bounds = Game.Bounds;
-		if (burrowHeading.X > 0) return Position.X >= bounds.Right - BurrowRoomEdgeTolerance;
-		if (burrowHeading.X < 0) return Position.X <= bounds.Left + BurrowRoomEdgeTolerance;
-		if (burrowHeading.Y > 0) return Position.Y >= bounds.Bottom - BurrowRoomEdgeTolerance;
-		if (burrowHeading.Y < 0) return Position.Y <= bounds.Top + BurrowRoomEdgeTolerance;
-		return false;
+		var direction = MathF.Abs(travelHeading.X) >= MathF.Abs(travelHeading.Y)
+			? new Point2(Math.Sign(travelHeading.X), 0)
+			: new Point2(0, Math.Sign(travelHeading.Y));
+		var atEdge = direction.X > 0 ? Position.X >= bounds.Right - BurrowRoomEdgeTolerance
+			: direction.X < 0 ? Position.X <= bounds.Left + BurrowRoomEdgeTolerance
+			: direction.Y > 0 ? Position.Y >= bounds.Bottom - BurrowRoomEdgeTolerance
+			: direction.Y < 0 && Position.Y <= bounds.Top + BurrowRoomEdgeTolerance;
+		return atEdge && Game.Transition(direction);
 	}
 
 	private void BurrowState()
@@ -310,6 +316,18 @@ public partial class Player : Pawn
 			Game.TraceBurrow(
 				$"intent ignored as non-tangential intent={intent} travel={BurrowTravelHeading} projection={proj:0.##}");
 		burrowLastIntent = intent;
+		if (pressed && !burrowOrbiting && burrowSpeed <= BurrowReverseFlipSpeed && burrowLine != null &&
+			burrowLine.TryFindJunction(burrowLineSegment, burrowLineT, intent, BurrowJunctionSeekDistance,
+				burrowLineDirection, out var seekDirection, out var seekDistance))
+		{
+			burrowLineDirection = seekDirection;
+			burrowLineHeading = burrowLine.SegmentHeading(burrowLineSegment, seekDirection);
+			burrowReverseQueued = false;
+			burrowOrbiting = true;
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow(
+					$"junction seek intent={intent} direction={seekDirection} distance={seekDistance:0.##} heading={burrowLineHeading}");
+		}
 
 		var move = burrowOrbiting;
 
@@ -349,7 +367,7 @@ public partial class Player : Pawn
 		burrowMoveRemainder -= pixels;
 		if (pixels > 0)
 		{
-			if (burrowLine == null && Game.TryEnterBurrowLine(Position, burrowHeading, burrowLineExit, Game.BurrowLineAttachDistance,
+			if (burrowLine == null && Game.TryEnterBurrowLine(Position, burrowHeading, burrowLineExit, Game.BurrowLineAttachDistance, intent,
 				out var enteredLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
 				out var entryPoint, out burrowLineHeading))
 			{
@@ -363,14 +381,43 @@ public partial class Player : Pawn
 
 			if (burrowLine != null)
 			{
-				var exitedLine = burrowLine.Advance(ref burrowLineSegment, ref burrowLineT, burrowLineDirection,
-					pixels, out var linePoint, out burrowLineHeading);
-				Position = (Point2)linePoint;
-				if (exitedLine)
+				var remaining = (float)pixels;
+				for (var junctions = 0; burrowLine != null && junctions < BurrowLine.MaxJunctionTransfers; junctions++)
 				{
+					var exitedLine = burrowLine.Advance(ref burrowLineSegment, ref burrowLineT, burrowLineDirection,
+						remaining, out var linePoint, out burrowLineHeading, out remaining, out var junctionPointIndex);
+					Position = (Point2)linePoint;
+					if (!exitedLine)
+						break;
+
 					if (Game.BurrowTraceEnabled)
 						Game.TraceBurrow(
 							$"line endpoint reached id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading} intent={intent}");
+					if (junctionPointIndex >= 0 && Game.TryContinueBurrowLine(burrowLine, junctionPointIndex,
+						burrowLineSegment, burrowLineDirection, burrowLineHeading, intent,
+						out var nextLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
+						out var junctionPoint, out burrowLineHeading))
+					{
+						var previousLineId = burrowLine.ActorId ?? "?";
+						burrowLine = nextLine;
+						Position = (Point2)junctionPoint;
+						burrowExitBlocked = false;
+						if (Game.BurrowTraceEnabled)
+							Game.TraceBurrow(
+								$"line junction {previousLineId} -> {burrowLine?.ActorId ?? "?"} position={Position} heading={burrowLineHeading} remaining={remaining:0.##}");
+						if (remaining > 0)
+							continue;
+						break;
+					}
+					if (TryBurrowRoomTransition(burrowLineHeading))
+					{
+						burrowMoveRemainder += remaining;
+						if (Game.BurrowTraceEnabled)
+							Game.TraceBurrow(
+								$"line crossing room edge id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+						return;
+					}
+
 					if (Game.TryAttachBurrowSurface(Position, burrowLineHeading, intent, BurrowAttachProbe,
 						out var surfacePosition, out var surfaceHeading, out var surfaceSolidLeft, out var surfaceToward))
 					{
@@ -402,6 +449,7 @@ public partial class Player : Pawn
 						if (Game.BurrowTraceEnabled)
 							Game.TraceBurrow("line endpoint blocked: waiting for a valid exit");
 					}
+					break;
 				}
 			}
 			else
@@ -418,7 +466,7 @@ public partial class Player : Pawn
 					// if we merely coasted here on friction, kill the glide and stay put.
 					if (move)
 					{
-						if (BurrowAtRoomEdge() && Game.Transition(burrowHeading))
+						if (TryBurrowRoomTransition(burrowHeading))
 							return;
 						PopOutOfBurrow();
 						return;
@@ -585,20 +633,44 @@ public partial class Player : Pawn
 		AudioEvent("player/burrow_end");
 	}
 
-	// Called by Game right after a room swap that began mid-burrow (see BurrowState's dead-end
-	// handling). Rooms are contiguous in world space, so the surface continues at our current
-	// position — re-anchor to it and keep gliding with the same heading/handedness/speed instead
-	// of running the normal push-out-of-collision placement (which would shove us off the line).
-	public void ResolveBurrowRoomTransition()
+	// Called by Game right after a room swap that began mid-burrow. Rooms are contiguous in world
+	// space: first reconnect an authored line at the shared edge, otherwise re-anchor to a surface.
+	public void ResolveBurrowRoomTransition(Point2 direction)
 	{
 		if (State != States.Burrow)
 			return;
+		if (burrowLine != null)
+		{
+			var previousLine = burrowLine;
+			if (Game.TryEnterBurrowLine(Position, burrowLineHeading, previousLine, BurrowLine.JunctionDistance,
+				new Vector2(input.MoveX, input.MoveY), out var nextLine, out burrowLineSegment, out burrowLineT,
+				out burrowLineDirection, out var entryPoint, out burrowLineHeading))
+			{
+				burrowLine = nextLine;
+				burrowLineExit = null;
+				Position = (Point2)entryPoint;
+				burrowExitBlocked = false;
+				burrowOnJumpthru = false;
+				UpdateBurrowShift();
+				UpdateBurrowGlow();
+				if (Game.BurrowTraceEnabled)
+					Game.TraceBurrow(
+						$"line room handoff {previousLine.ActorId ?? "?"} -> {burrowLine?.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+				return;
+			}
+
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow(
+					$"line room handoff missing id={previousLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+			burrowLine = null;
+			burrowLineExit = null;
+		}
 
 		// Step one pixel into the new room along the heading before re-snapping. Room bounds
 		// are half-open ([Left, Right)/[Top, Bottom)), so when exiting the left/top edge our
 		// position lands exactly on the next room's exclusive Right/Bottom edge, where it reads
 		// as out-of-room and the snap would fail (this is why left/up transitions popped out).
-		Position += burrowHeading;
+		Position += direction;
 
 		if (Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
 		{

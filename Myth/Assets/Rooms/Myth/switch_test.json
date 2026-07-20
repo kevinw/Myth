@@ -105,6 +105,13 @@
       ],
       "RenderProcedural": true,
       "ProceduralWidth": 1.05
+    },
+    {
+      "Id": "87bf6cafdd596a69",
+      "Type": "BurrowLine",
+      "Position": [16, 160],
+      "Points": [[-16, 8],[8, 8]
+      ]
     }
   ]
 }

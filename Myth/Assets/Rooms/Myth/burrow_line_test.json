@@ -72,10 +72,10 @@
       "Id": "7b3a7917358de16d",
       "Type": "BurrowLine",
       "Position": [160, 128],
-      "Points": [[32, 16],[32, 32],[-96, 32],[-96, 16]
-      ],
       "RenderProcedural": true,
-      "ProceduralInnerColor": "E0346F"
+      "ProceduralInnerColor": "E0346F",
+      "Points": [[32, 16],[32, 32],[8, 32],[-72, 32],[-88, 32],[-88, 16]
+      ]
     },
     {
       "Id": "cec7127da47af981",
@@ -92,6 +92,14 @@
       "Height": 2.1,
       "Radius": 97.55,
       "Intensity": 0.75
+    },
+    {
+      "Id": "8129f11b72ad0a7d",
+      "Type": "BurrowLine",
+      "Position": [80, 112],
+      "RenderProcedural": true,
+      "Points": [[240, 56],[168, 56],[168, 64],[88, 64],[88, 48]
+      ]
     }
   ]
 }

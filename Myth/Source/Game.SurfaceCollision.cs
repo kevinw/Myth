@@ -8,6 +8,7 @@ public readonly record struct SurfaceHit(Vector2 Point, Vector2 Normal, float Di
 public partial class Game
 {
 	internal static float BurrowLineAttachDistance => 3;
+	static float BurrowLineSteerThreshold => 0.3f;
 	static readonly List<Vector2> surfaceTraceForward = [];
 	static readonly List<Vector2> surfaceTraceBack = [];
 	static readonly bool burrowTraceEnabled = Environment.GetEnvironmentVariable("MYTH_BURROW_TRACE") is { Length: > 0 } value && value != "0";
@@ -18,12 +19,12 @@ public partial class Game
 	// Trace the route the burrow movement would take from an existing surface state, including
 	// transfers onto authored BurrowLines before the boundary walker chooses its next solid edge.
 	internal bool TraceBurrowPathFromState(Point2 vertex, Point2 heading, bool solidLeft, BurrowLine? exclude,
-		float maxArcPerSide, List<Vector2> outPoints)
+		float maxArcPerSide, List<Vector2> outPoints, Vector2 steeringIntent = default)
 	{
 		outPoints.Clear();
 		surfaceTraceForward.Clear();
 		surfaceTraceBack.Clear();
-		TraceBurrowPathDirection(vertex, heading, solidLeft, exclude, maxArcPerSide, surfaceTraceForward);
+		TraceBurrowPathDirection(vertex, heading, solidLeft, exclude, maxArcPerSide, surfaceTraceForward, steeringIntent);
 		TraceBurrowPathDirection(vertex, new Point2(-heading.X, -heading.Y), !solidLeft, exclude, maxArcPerSide, surfaceTraceBack);
 
 		for (var i = surfaceTraceBack.Count - 1; i >= 1; i--) // skip shared start vertex
@@ -33,20 +34,22 @@ public partial class Game
 	}
 
 	void TraceBurrowPathDirection(Point2 start, Point2 heading, bool solidLeft, BurrowLine? exclude,
-		float maxArc, List<Vector2> into)
+		float maxArc, List<Vector2> into, Vector2 steeringIntent = default)
 	{
 		var position = start;
 		var distance = 0f;
 		into.Add(position);
 		while (distance < maxArc)
 		{
-			if (TryEnterBurrowLine(position, heading, exclude, BurrowLineAttachDistance, out var line, out var segment, out var t,
+			if (TryEnterBurrowLine(position, heading, exclude, BurrowLineAttachDistance, steeringIntent,
+				out var line, out var segment, out var t,
 				out var direction, out var entryPoint, out _))
 			{
 				var entryDistance = Vector2.Distance(position, entryPoint);
 				if (entryDistance > 0.001f)
 					into.Add(entryPoint);
-				line!.TraceDirection(segment, t, direction, MathF.Max(0, maxArc - distance - entryDistance), into, includeStart: false);
+				line!.TraceDirection(segment, t, direction, MathF.Max(0, maxArc - distance - entryDistance), into,
+					includeStart: false, steeringIntent: steeringIntent);
 				return;
 			}
 
@@ -147,6 +150,12 @@ public partial class Game
 
 	public bool TryEnterBurrowLine(Point2 position, Vector2 travelHeading, BurrowLine? exclude, float maxDistance,
 		out BurrowLine? line, out int segment, out float t, out int direction, out Vector2 point, out Vector2 heading)
+		=> TryEnterBurrowLine(position, travelHeading, exclude, maxDistance, Vector2.Zero,
+			out line, out segment, out t, out direction, out point, out heading);
+
+	public bool TryEnterBurrowLine(Point2 position, Vector2 travelHeading, BurrowLine? exclude, float maxDistance,
+		Vector2 steeringIntent, out BurrowLine? line, out int segment, out float t, out int direction,
+		out Vector2 point, out Vector2 heading)
 	{
 		line = null;
 		segment = 0;
@@ -155,10 +164,13 @@ public partial class Game
 		point = position;
 		heading = travelHeading;
 		var bestDistance = maxDistance * maxDistance;
+		var bestHeadingScore = float.MinValue;
+		travelHeading = travelHeading.LengthSquared() > 0 ? Vector2.Normalize(travelHeading) : Vector2.UnitX;
+		steeringIntent = steeringIntent.LengthSquared() > 0 ? Vector2.Normalize(steeringIntent) : Vector2.Zero;
 
 		foreach (var actor in Actors)
 		{
-			if (actor is not BurrowLine candidate || candidate == exclude ||
+			if (actor is not BurrowLine candidate || candidate == exclude || destroying.Contains(candidate) ||
 				!candidate.TryGetEndpoint(position, maxDistance, out var candidateSegment, out var candidateT,
 					out var candidateDirection, out var candidatePoint, out var candidateHeading))
 				continue;
@@ -167,10 +179,14 @@ public partial class Game
 			var distance = toEndpoint.LengthSquared();
 			if (distance > 0.001f && Vector2.Dot(Vector2.Normalize(toEndpoint), travelHeading) < 0)
 				continue;
-			if (distance > bestDistance)
+
+			var headingScore = BurrowLineHeadingScore(candidateHeading, travelHeading, steeringIntent);
+			if (distance > bestDistance + 0.001f ||
+				MathF.Abs(distance - bestDistance) <= 0.001f && headingScore <= bestHeadingScore)
 				continue;
 
 			bestDistance = distance;
+			bestHeadingScore = headingScore;
 			line = candidate;
 			segment = candidateSegment;
 			t = candidateT;
@@ -181,6 +197,116 @@ public partial class Game
 
 		return line != null;
 	}
+
+	internal bool BurrowLinePointConnected(BurrowLine source, int sourcePoint)
+	{
+		var point = source.WorldPoint(sourcePoint);
+		var maxDistanceSquared = BurrowLine.JunctionDistance * BurrowLine.JunctionDistance;
+		foreach (var actor in Actors)
+		{
+			if (actor is not BurrowLine candidate || candidate == source || destroying.Contains(candidate))
+				continue;
+			for (var i = 0; i < candidate.Points.Length; i++)
+				if (Vector2.DistanceSquared(point, candidate.WorldPoint(i)) <= maxDistanceSquared)
+					return true;
+		}
+
+		return false;
+	}
+
+	public bool TryContinueBurrowLine(BurrowLine current, int currentPoint, int incomingSegment, int incomingDirection,
+		Vector2 travelHeading, Vector2 steeringIntent, out BurrowLine? line, out int segment, out float t,
+		out int direction, out Vector2 point, out Vector2 heading)
+	{
+		line = null;
+		segment = 0;
+		t = 0;
+		direction = 1;
+		var junctionPosition = current.WorldPoint(currentPoint);
+		point = junctionPosition;
+		heading = travelHeading;
+		var bestDistance = BurrowLine.JunctionDistance * BurrowLine.JunctionDistance;
+		var bestHeadingScore = float.MinValue;
+		travelHeading = travelHeading.LengthSquared() > 0 ? Vector2.Normalize(travelHeading) : Vector2.UnitX;
+		steeringIntent = steeringIntent.LengthSquared() > 0 ? Vector2.Normalize(steeringIntent) : Vector2.Zero;
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not BurrowLine candidate || destroying.Contains(candidate))
+				continue;
+			for (var candidatePointIndex = 0; candidatePointIndex < candidate.Points.Length; candidatePointIndex++)
+			{
+				var candidatePoint = candidate.WorldPoint(candidatePointIndex);
+				var distance = Vector2.DistanceSquared(junctionPosition, candidatePoint);
+				if (distance > BurrowLine.JunctionDistance * BurrowLine.JunctionDistance)
+					continue;
+
+				if (candidatePointIndex < candidate.Points.Length - 1 &&
+					(candidate != current || candidatePointIndex != incomingSegment || incomingDirection != -1))
+					ConsiderBurrowLineRoute(candidate, candidatePointIndex, 0, 1, candidatePoint, distance,
+						travelHeading, steeringIntent, ref line, ref segment, ref t, ref direction, ref point,
+						ref heading, ref bestDistance, ref bestHeadingScore);
+				if (candidatePointIndex > 0 &&
+					(candidate != current || candidatePointIndex - 1 != incomingSegment || incomingDirection != 1))
+					ConsiderBurrowLineRoute(candidate, candidatePointIndex - 1, 1, -1, candidatePoint, distance,
+						travelHeading, steeringIntent, ref line, ref segment, ref t, ref direction, ref point,
+						ref heading, ref bestDistance, ref bestHeadingScore);
+			}
+		}
+
+		return line != null;
+	}
+
+	void ConsiderBurrowLineRoute(BurrowLine candidate, int candidateSegment, float candidateT, int candidateDirection,
+		Vector2 candidatePoint, float distance, Vector2 travelHeading, Vector2 steeringIntent,
+		ref BurrowLine? line, ref int segment, ref float t, ref int direction, ref Vector2 point,
+		ref Vector2 heading, ref float bestDistance, ref float bestHeadingScore)
+	{
+		var candidateHeading = candidate.SegmentHeading(candidateSegment, candidateDirection);
+		var headingScore = BurrowLineHeadingScore(candidateHeading, travelHeading, steeringIntent);
+		if (headingScore < bestHeadingScore - 0.001f ||
+			MathF.Abs(headingScore - bestHeadingScore) <= 0.001f && distance >= bestDistance)
+			return;
+
+		line = candidate;
+		segment = candidateSegment;
+		t = candidateT;
+		direction = candidateDirection;
+		point = candidatePoint;
+		heading = candidateHeading;
+		bestDistance = distance;
+		bestHeadingScore = headingScore;
+	}
+
+	static float BurrowLineHeadingScore(Vector2 candidateHeading, Vector2 travelHeading, Vector2 steeringIntent)
+	{
+		var travelAlignment = Vector2.Dot(candidateHeading, travelHeading);
+		steeringIntent = BurrowLineSteeringDirection(travelHeading, steeringIntent);
+		if (steeringIntent == Vector2.Zero)
+			return travelAlignment;
+
+		var intentAlignment = Vector2.Dot(candidateHeading, steeringIntent);
+		return intentAlignment > BurrowLineSteerThreshold
+			? 4 + intentAlignment + travelAlignment * 0.1f
+			: travelAlignment;
+	}
+
+	internal static Vector2 BurrowLineSteeringDirection(Vector2 travelHeading, Vector2 steeringIntent)
+	{
+		if (steeringIntent.LengthSquared() <= 0)
+			return Vector2.Zero;
+		travelHeading = travelHeading.LengthSquared() > 0 ? Vector2.Normalize(travelHeading) : Vector2.UnitX;
+		steeringIntent = Vector2.Normalize(steeringIntent);
+		// Keeping the travel direction held while adding a perpendicular direction means
+		// "take that branch," not "keep going straight because the diagonal is tied."
+		var turnIntent = steeringIntent - travelHeading * Vector2.Dot(steeringIntent, travelHeading);
+		return turnIntent.LengthSquared() > BurrowLineSteerThreshold * BurrowLineSteerThreshold
+			? Vector2.Normalize(turnIntent)
+			: steeringIntent;
+	}
+
+	internal static bool BurrowLineHeadingFollowsSteering(Vector2 heading, Vector2 travelHeading, Vector2 steeringIntent)
+		=> Vector2.Dot(heading, BurrowLineSteeringDirection(travelHeading, steeringIntent)) > BurrowLineSteerThreshold;
 
 	public bool TryAttachBurrowSurface(Point2 near, Vector2 travelHeading, Vector2 heldIntent, float maxReach,
 		out Point2 position, out Point2 heading, out bool solidLeft, out Vector2 towardSolid)
