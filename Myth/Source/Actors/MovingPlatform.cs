@@ -58,7 +58,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		originalPosition = Position;
 		var platformCenter = (Vector2)Position + (Vector2)Size / 2;
 		circleCenterOffset = CircleCenter is { } center
-			? (Vector2)(Game.CurrentRoom?.WorldBounds.TopLeft ?? Point2.Zero) + center - platformCenter
+			? (Vector2)(Room?.WorldBounds.TopLeft ?? Point2.Zero) + center - platformCenter
 			: DefaultCircleCenterOffset;
 	}
 

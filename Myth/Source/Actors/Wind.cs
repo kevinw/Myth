@@ -16,6 +16,19 @@ public enum WindTargets
 [GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System)]
 public class Wind : Actor, IResizable
 {
+	internal struct PawnInfluence
+	{
+		public float PositiveXSpeedLimit;
+		public float NegativeXSpeedLimit;
+		public bool PositiveXUnlimited;
+		public bool NegativeXUnlimited;
+
+		public readonly float HorizontalSpeedLimit(float fallback, float velocityX)
+			=> velocityX < 0
+				? NegativeXUnlimited ? float.PositiveInfinity : MathF.Max(fallback, NegativeXSpeedLimit)
+				: PositiveXUnlimited ? float.PositiveInfinity : MathF.Max(fallback, PositiveXSpeedLimit);
+	}
+
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 8, Game.TileSize * 6);
 
 	public Point2 Size { get; set; } = DefaultSize;
@@ -44,20 +57,63 @@ public class Wind : Actor, IResizable
 	{
 		base.Update();
 		var direction = DirectionVector;
-		if (direction == Vector2.Zero || Acceleration == 0)
+		if (direction == Vector2.Zero || Acceleration <= 0)
 			return;
 
 		foreach (var actor in Game.Actors)
 		{
-			if (actor == this || !Affects(actor) || !actor.Hitbox.Overlaps(WorldRect - actor.Position))
+			if (actor == this || actor is Pawn || !Affects(actor) || !Overlaps(actor))
 				continue;
 
-			actor.Velocity += direction * Acceleration * Time.Delta;
-			var along = Vector2.Dot(actor.Velocity, direction);
-			if (MaxSpeed > 0 && along > MaxSpeed)
-				actor.Velocity -= direction * (along - MaxSpeed);
+			Accelerate(actor, direction);
 		}
 	}
+
+	internal static PawnInfluence ApplyTo(Pawn pawn)
+	{
+		var influence = new PawnInfluence();
+		foreach (var actor in pawn.Game.Actors)
+		{
+			if (actor is not Wind wind || !wind.Affects(pawn) || !wind.Overlaps(pawn))
+				continue;
+
+			var direction = wind.DirectionVector;
+			if (direction == Vector2.Zero || wind.Acceleration <= 0)
+				continue;
+
+			wind.Accelerate(pawn, direction);
+			if (wind.MaxSpeed <= 0)
+			{
+				if (direction.X > 0)
+					influence.PositiveXUnlimited = true;
+				else if (direction.X < 0)
+					influence.NegativeXUnlimited = true;
+				continue;
+			}
+
+			var horizontalLimit = MathF.Abs(direction.X) * wind.MaxSpeed;
+			if (direction.X > 0)
+				influence.PositiveXSpeedLimit = MathF.Max(influence.PositiveXSpeedLimit, horizontalLimit);
+			else if (direction.X < 0)
+				influence.NegativeXSpeedLimit = MathF.Max(influence.NegativeXSpeedLimit, horizontalLimit);
+		}
+		return influence;
+	}
+
+	void Accelerate(Actor actor, Vector2 direction)
+	{
+		var acceleration = Acceleration * Time.Delta;
+		if (MaxSpeed > 0)
+		{
+			var remaining = MaxSpeed - Vector2.Dot(actor.Velocity, direction);
+			if (remaining <= 0)
+				return;
+			acceleration = MathF.Min(acceleration, remaining);
+		}
+		actor.Velocity += direction * acceleration;
+	}
+
+	bool Overlaps(Actor actor) => actor.Hitbox.Overlaps(WorldRect - actor.Position);
 
 	bool Affects(Actor actor)
 		=> actor switch

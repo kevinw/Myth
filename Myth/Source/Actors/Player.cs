@@ -162,6 +162,7 @@ public abstract class Pawn : Actor
 	protected float JumpUpSquish;
 	protected float RunStartTimer;
 	protected bool RunStartSkid;
+	Wind.PawnInfluence windInfluence;
 
 	public States State
 	{
@@ -183,6 +184,7 @@ public abstract class Pawn : Actor
 
 		var previousVelocity = Velocity;
 		base.Update();
+		windInfluence = Wind.ApplyTo(this);
 		wallJumpDirectionCached = false;
 		input = GetInput();
 		if (input.JumpPressed)
@@ -457,6 +459,7 @@ public abstract class Pawn : Actor
 		Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
 		if (dashCooldownTimer > 0)
 			Velocity.X = dashDirection * DashSpeed;
+		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
 		if (!grounded && wallJumpInputLockTimer > 0)
 			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
 		if (!grounded && rollJumpCarryTimer > 0)

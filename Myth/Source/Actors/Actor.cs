@@ -21,6 +21,7 @@ public class Actor
 	}
 
 	[NoSerialize] public Game Game = null!;
+	[NoSerialize] internal Room? Room;
 	[NoSerialize] public Point2 Position;
 	[NoSerialize] public Vector2 Velocity;
 	[NoSerialize] public Hitbox Hitbox;

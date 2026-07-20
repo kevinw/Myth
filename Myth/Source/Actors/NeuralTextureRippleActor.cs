@@ -20,7 +20,7 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 	// World-unit gap between successive rings; the ripple period is RingSpacing / RingSpeed.
 	public float RingSpacing = 44f;
 	// Rings fade to nothing and recycle once they reach this radius from the origin.
-	public float MaxRadius = 130f;
+	public float MaxRadius = DefaultMaxRadius;
 	// Peak erase strength at the origin, before the per-ring distance fade (clamped to 1 in shader).
 	public float Strength = 0.5f;
 	// Base ring thickness (stamp radius). Rings also thicken as they expand so they stay unbroken.
@@ -28,6 +28,7 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 	// Stamps placed around each ring. More closes gaps on large rings at the cost of the shared
 	// 64-stamp perturbation budget.
 	public int StampsPerRing = 16;
+	static float DefaultMaxRadius => 130f;
 
 	public NeuralTextureRippleActor()
 	{
@@ -92,4 +93,22 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 			}
 		}
 	}
+
+#if EDITOR
+	sealed class Editor : Manager.ActorEditor<NeuralTextureRippleActor>
+	{
+		internal override void Gizmos(Manager.EditorActor actor, ref Manager.EditorGizmos gizmos)
+		{
+			var center = actor.Bounds.CenterF;
+			var radius = ActorSpecs.GetResolvedProperty(actor.Json, nameof(MaxRadius))?.GetValue<float>() ?? DefaultMaxRadius;
+			var color = new Color(0x8de8ff);
+			gizmos.CircleDashed(center, radius, gizmos.LineWeight * 2, 64, color * 0.8f,
+				MathF.Max(3, gizmos.LineWeight * 6));
+
+			var centerMark = MathF.Max(3, gizmos.LineWeight * 3);
+			gizmos.Line(center - Vector2.UnitX * centerMark, center + Vector2.UnitX * centerMark, gizmos.LineWeight, color);
+			gizmos.Line(center - Vector2.UnitY * centerMark, center + Vector2.UnitY * centerMark, gizmos.LineWeight, color);
+		}
+	}
+#endif
 }

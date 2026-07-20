@@ -73,6 +73,7 @@ public partial class Game : IDisposable
 
 	internal Room? room;
 	internal Room? nextRoom;
+	Room? loadingRoom;
 	// Transition animation params: written by sim during room transitions, read by
 	// GameView's lerping (Current*Color/Intensity). Exposed internal + forwarded on View.
 	internal float nextRoomEase;
@@ -873,6 +874,8 @@ public partial class Game : IDisposable
 			roomEntryPosition = player.Position;
 		roomEntryDirection = kind == RoomChangeKind.EdgeTransition ? transitionDirection : Point2.Zero;
 		RemoveDestroyedActors();
+		for (var i = 0; i < Actors.Count; i++)
+			Actors[i].Room = room;
 		View?.PruneInactiveRoomCaches();
 		PrepareRoomTransitionGc();
 		RequestRoomTransitionGc(kind);
@@ -1172,6 +1175,7 @@ public partial class Game : IDisposable
 		var instance = new T
 		{
 			Game = this,
+			Room = loadingRoom ?? room,
 			Position = position ?? Point2.Zero,
 			Anchor = Factory.AnchorForType(typeof(T).Name)
 		};
@@ -1189,6 +1193,7 @@ public partial class Game : IDisposable
 	{
 		var instance = (Actor)(Activator.CreateInstance(type) ?? throw new InvalidOperationException($"Failed to create actor '{type.Name}'."));
 		instance.Game = this;
+		instance.Room = loadingRoom ?? room;
 		instance.Position = position ?? Point2.Zero;
 		instance.Anchor = Factory.AnchorForType(type.Name);
 		init?.Invoke(instance);
@@ -1851,6 +1856,20 @@ public partial class Game : IDisposable
 	}
 
 	public void LoadRoom(Room forRoom)
+	{
+		var previousLoadingRoom = loadingRoom;
+		loadingRoom = forRoom;
+		try
+		{
+			LoadRoomContents(forRoom);
+		}
+		finally
+		{
+			loadingRoom = previousLoadingRoom;
+		}
+	}
+
+	void LoadRoomContents(Room forRoom)
 	{
 		forRoom.RoomGeoChanged += RoomGeoChanged;
 

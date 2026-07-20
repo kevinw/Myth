@@ -7,7 +7,6 @@
 - Do we need to ship Master.strings.bank? in content.zip
 - do we need both fmod.dll and fmodstudio.dll
 - cimgui.dll is 1.4MB; can it be statically linked?
-- neuraltexturerippleactor could draw editor radius; it's editor hitbox doesn't show center
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon
 esa notes:

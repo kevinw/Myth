@@ -22,6 +22,7 @@ public class Wildlife : Actor
 	static Color BugColor => 0xc6a15b;
 	static Color FlyColor => 0xd8d1ba;
 	static Color FlyWingColor => new(0xd8d1ba, 0.45f);
+	static Color FlatNormal => new(0.5f, 0.5f, 1, 1);
 
 	struct FishState
 	{
@@ -75,7 +76,7 @@ public class Wildlife : Actor
 	public override void Added()
 	{
 		base.Added();
-		if (Game.CurrentRoom is not { } room)
+		if (Room is not { } room)
 			return;
 
 		var tile = (Position - room.WorldBounds.TopLeft) / Game.TileSize;
@@ -176,7 +177,7 @@ public class Wildlife : Actor
 	public override void Update()
 	{
 		base.Update();
-		if (Game.CurrentRoom is not { } room)
+		if (Room is not { } room)
 			return;
 
 		var playerActor = Game.GetFirst<Player>();
@@ -277,38 +278,46 @@ public class Wildlife : Actor
 		state.Phase += Time.Delta * 28;
 	}
 
-	public override void Render(Batcher batcher)
+	public override void Render(Batcher batcher) => RenderWildlife(batcher, false);
+	public override void RenderNormals(Batcher batcher) => RenderWildlife(batcher, true);
+
+	void RenderWildlife(Batcher batcher, bool normals)
 	{
+		var fishColor = normals ? FlatNormal : FishColor;
+		var fishTailColor = normals ? FlatNormal : FishTailColor;
+		var bugColor = normals ? FlatNormal : BugColor;
+		var flyColor = normals ? FlatNormal : FlyColor;
+		var flyWingColor = normals ? FlatNormal : FlyWingColor;
+
 		for (var i = 0; i < fish.Length; i++)
 		{
 			ref var state = ref fish[i];
 			var at = (state.Position - (Vector2)Position).Round();
 			var facing = state.Velocity.X < 0 ? -1 : 1;
-			batcher.Rect(facing > 0 ? at.X - 1 : at.X, at.Y, 2, 1, FishColor);
-			batcher.Rect(at.X - facing * 2, at.Y + (MathF.Sin(state.Phase) > 0 ? -1 : 1), 1, 1, FishTailColor);
+			batcher.Rect(facing > 0 ? at.X - 1 : at.X, at.Y, 2, 1, fishColor);
+			batcher.Rect(at.X - facing * 2, at.Y + (MathF.Sin(state.Phase) > 0 ? -1 : 1), 1, 1, fishTailColor);
 		}
 
 		for (var i = 0; i < bugs.Length; i++)
 		{
 			var at = (bugs[i].Position - (Vector2)Position).Round();
-			batcher.Rect(at.X - 1, at.Y - 1, 2, 1, BugColor);
+			batcher.Rect(at.X - 1, at.Y - 1, 2, 1, bugColor);
 			if (bugs[i].Grounded)
-				batcher.Rect(at.X, at.Y, 1, 1, BugColor * 0.7f);
+				batcher.Rect(at.X, at.Y, 1, 1, normals ? bugColor : bugColor * 0.7f);
 		}
 
 		for (var i = 0; i < flies.Length; i++)
 		{
 			var at = (flies[i].Position - (Vector2)Position).Round();
-			batcher.Rect(at.X, at.Y, 1, 1, FlyColor);
+			batcher.Rect(at.X, at.Y, 1, 1, flyColor);
 			var wing = MathF.Sin(flies[i].Phase) > 0 ? -1 : 1;
-			batcher.Rect(at.X + wing, at.Y, 1, 1, FlyWingColor);
+			batcher.Rect(at.X + wing, at.Y, 1, 1, flyWingColor);
 		}
 	}
 
-	public override void RenderNormals(Batcher batcher) { }
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 	public override void RenderEmissive(Batcher batcher) { }
 	public override void RenderEmissiveOccluder(Batcher batcher) { }
-	public override Rect GetVisualBounds() => Game.CurrentRoom?.WorldBounds ?? new Rect(Position.X, Position.Y, 1, 1);
+	public override Rect GetVisualBounds() => Room?.WorldBounds ?? new Rect(Position.X, Position.Y, 1, 1);
 }
