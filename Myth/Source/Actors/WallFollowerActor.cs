@@ -19,6 +19,12 @@ public abstract class WallFollowerActor : Actor
 	private bool attached;
 	private bool exitingRoom;
 
+	protected void SetInitialSurfaceDirection(Point2 direction)
+	{
+		if (direction != Point2.Zero)
+			towardSurface = direction.Normalized();
+	}
+
 	public override void Added()
 	{
 		attached = AttachToSurface(CornerProbeDistance);

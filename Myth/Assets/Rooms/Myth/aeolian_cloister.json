@@ -118,6 +118,33 @@
   ],
   "actors": [
     {
+      "Id": "ae10000000000015",
+      "Type": "WindReliquary",
+      "Position": [112, 160],
+      "Size": [64, 112],
+      "MetalColor": "B88858",
+      "GlowColor": "E5B96F",
+      "Resonance": 0.9
+    },
+    {
+      "Id": "ae10000000000002",
+      "Type": "WindReliquary",
+      "Position": [216, 24],
+      "Size": [80, 120],
+      "MetalColor": "9C7654",
+      "GlowColor": "E5B96F",
+      "Resonance": 0.7
+    },
+    {
+      "Id": "ae10000000000003",
+      "Type": "WindReliquary",
+      "Position": [344, 192],
+      "Size": [48, 80],
+      "MetalColor": "756B62",
+      "GlowColor": "8CE1E8",
+      "Resonance": 0.4
+    },
+    {
       "Id": "ae00000000000078",
       "Type": "PlayerStart",
       "Position": [24, 280]

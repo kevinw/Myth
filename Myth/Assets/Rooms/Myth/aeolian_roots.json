@@ -71,6 +71,15 @@
   ],
   "actors": [
     {
+      "Id": "ae10000000000006",
+      "Type": "WindReliquary",
+      "Position": [136, 24],
+      "Size": [56, 112],
+      "MetalColor": "6F7061",
+      "GlowColor": "78CFC3",
+      "Resonance": 0.35
+    },
+    {
       "Id": "ae00000000000033",
       "Type": "BurrowLine",
       "Position": [88, 0],
@@ -79,6 +88,31 @@
       "RenderProcedural": true,
       "ProceduralOuterColor": "342F35",
       "ProceduralInnerColor": "74CED0"
+    },
+    {
+      "Id": "ae10000000000012",
+      "Type": "BurrowLine",
+      "Position": [88, 80],
+      "Points": [[0, 0],[64, 0],[64, -40],[112, -40]
+      ],
+      "RenderProcedural": true,
+      "ProceduralOuterColor": "342F35",
+      "ProceduralInnerColor": "D7A966"
+    },
+    {
+      "Id": "ae10000000000013",
+      "Type": "Chest",
+      "Position": [176, 32]
+    },
+    {
+      "Id": "ae10000000000014",
+      "Type": "Light",
+      "Position": [176, 24],
+      "DrawSprite": false,
+      "LightColor": "D7A966",
+      "Radius": 70,
+      "Intensity": 0.58,
+      "Height": 8
     },
     {
       "Id": "ae00000000000034",

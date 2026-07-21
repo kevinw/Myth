@@ -54,6 +54,15 @@
   ],
   "actors": [
     {
+      "Id": "ae10000000000001",
+      "Type": "WindReliquary",
+      "Position": [136, 16],
+      "Size": [48, 72],
+      "MetalColor": "9C7654",
+      "GlowColor": "E5B96F",
+      "Resonance": 0.55
+    },
+    {
       "Id": "ae00000000000001",
       "Type": "PlayerStart",
       "Position": [24, 96]

@@ -70,6 +70,15 @@
   ],
   "actors": [
     {
+      "Id": "ae10000000000005",
+      "Type": "WindReliquary",
+      "Position": [88, 8],
+      "Size": [64, 104],
+      "MetalColor": "A47D55",
+      "GlowColor": "E7C67B",
+      "Resonance": 0.85
+    },
+    {
       "Id": "ae00000000000025",
       "Type": "MovingPlatform",
       "Position": [120, 128],

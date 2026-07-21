@@ -70,6 +70,15 @@
   ],
   "actors": [
     {
+      "Id": "ae10000000000010",
+      "Type": "WindReliquary",
+      "Position": [72, 16],
+      "Size": [64, 120],
+      "MetalColor": "B0875C",
+      "GlowColor": "F2C777",
+      "Resonance": 1.25
+    },
+    {
       "Id": "ae00000000000064",
       "Type": "BudStoryBark",
       "Position": [8, 32],

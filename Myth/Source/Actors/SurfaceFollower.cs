@@ -14,6 +14,7 @@ public sealed class SurfaceFollower
 	public float SurfaceProbeDistance = 10;
 	public float CornerProbeDistance = 4;
 	public float MaxSurfaceSnapDistance = 1;
+	public bool ClimbsWallsAndCeilings = true;
 
 	public Vector2 Remainder;
 
@@ -33,7 +34,11 @@ public sealed class SurfaceFollower
 		if (!actor.Game.TryFindSurface(actor, bounds, TowardSurface, distance, out var hit))
 			return false;
 
-		TowardSurface = -hit.Normal;
+		var nextSurface = -hit.Normal;
+		if (!CanUseSurface(nextSurface))
+			return false;
+
+		TowardSurface = nextSurface;
 		if (hit.Slope.HasValue)
 		{
 			actor.Position += RoundCorrection(hit.Correction, maxSnap);
@@ -82,7 +87,10 @@ public sealed class SurfaceFollower
 		{
 			if (actor.Game.TryFindSurface(actor, bounds, (Vector2)step, 1, out var surfaceHit))
 			{
-				TowardSurface = -surfaceHit.Normal;
+				var nextSurface = -surfaceHit.Normal;
+				if (!CanUseSurface(nextSurface))
+					return false;
+				TowardSurface = nextSurface;
 				if (surfaceHit.Slope.HasValue)
 					return TryMoveBlockedSlopeStep(step, surfaceHit);
 			}
@@ -95,6 +103,13 @@ public sealed class SurfaceFollower
 
 		var previousTowardSurface = TowardSurface;
 		TowardSurface = -NormalizeOrDefault((Vector2)step, TowardSurface);
+		if (!CanUseSurface(TowardSurface))
+		{
+			actor.Position -= step;
+			TowardSurface = previousTowardSurface;
+			Remainder = Vector2.Zero;
+			return false;
+		}
 		if (TryMoveAroundOutsideCorner(previousTowardSurface))
 			return true;
 
@@ -173,6 +188,8 @@ public sealed class SurfaceFollower
 	}
 
 	private RectInt Bounds() => actor.Hitbox.Rect + actor.Position;
+
+	bool CanUseSurface(Vector2 direction) => ClimbsWallsAndCeilings || direction.Y > 0.5f;
 
 	private static Vector2 NormalizeOrDefault(Vector2 value, Vector2 fallback)
 		=> value.LengthSquared() <= 0.0001f ? fallback : Vector2.Normalize(value);
