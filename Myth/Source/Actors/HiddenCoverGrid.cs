@@ -95,7 +95,7 @@ public class HiddenCoverGrid : Actor
 		if (hiddenRegions.Count <= 0)
 			return;
 
-		regionAlpha = Enumerable.Repeat(1.0f, hiddenRegions.Count).ToArray();
+		regionAlpha = [.. Enumerable.Repeat(1.0f, hiddenRegions.Count)];
 		regionRevealDoorIds = new string[hiddenRegions.Count][];
 		var remap = hiddenRegions.Keys
 			.Select((sourceRegionId, hiddenRegionId) => (sourceRegionId, hiddenRegionId))
@@ -104,7 +104,7 @@ public class HiddenCoverGrid : Actor
 		foreach (var (sourceRegionId, spec) in hiddenRegions)
 		{
 			var hiddenRegionId = remap[sourceRegionId];
-			regionRevealDoorIds[hiddenRegionId] = spec.RevealDoorIds.Distinct().ToArray();
+			regionRevealDoorIds[hiddenRegionId] = [.. spec.RevealDoorIds.Distinct()];
 			if (regionRevealDoorIds[hiddenRegionId].Any(revealedDoorIds.Contains))
 				regionAlpha[hiddenRegionId] = 0.0f;
 
