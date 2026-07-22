@@ -307,7 +307,7 @@ partial class Manager
 	private void StartGymRun(GymRun run)
 	{
 		var room = run.Room;
-		selectedRoomId = null;
+		selectedRoomId = room.Id; // select the run's room so StartGame's CurrentRoom resolves
 		gym.roomStartTime = Time.Seconds;
 		gymNoPathStartTime = -1;
 		gymStartOverride = run.StartLocalPosition is { } startLocal

@@ -6,6 +6,7 @@
   "ambientIntensity": 0.7,
   "lightNoise": 0.15,
   "reverb": 0.902,
+  "ditherStrength": 0.352,
   "legend": {
     "#": "back",
     "E": "ember",
@@ -106,7 +107,7 @@
     {
       "Id": "spiral_pstart01",
       "Type": "PlayerStart",
-      "Position": [36, 32]
+      "Position": [34, 38]
     },
     {
       "Id": "spiral_door_0001",
@@ -151,6 +152,58 @@
       "Direction": "Left",
       "WaitDelay": 2.1,
       "StartDelay": 1.7
+    },
+    {
+      "Id": "10c51b64b9982dad",
+      "Type": "Light",
+      "Position": [148, 52],
+      "Radius": 69.75,
+      "Height": 14.8
+    },
+    {
+      "Id": "ee007d5403574b2a",
+      "Type": "Light",
+      "Position": [276, 92]
+    },
+    {
+      "Id": "66881532a186b0fb",
+      "Type": "Light",
+      "Position": [196, 132]
+    },
+    {
+      "Id": "b3162f6beb4b2b10",
+      "Type": "Light",
+      "Position": [268, 172]
+    },
+    {
+      "Id": "65c25bf417fe73b8",
+      "Type": "Light",
+      "Position": [132, 244]
+    },
+    {
+      "Id": "ffbbc39ac6233aed",
+      "Type": "Light",
+      "Position": [324, 284]
+    },
+    {
+      "Id": "bfa03742b3e1429b",
+      "Type": "Light",
+      "Position": [404, 140]
+    },
+    {
+      "Id": "df4be796aad8a0ce",
+      "Type": "Light",
+      "Position": [356, 164]
+    },
+    {
+      "Id": "3e2ea4dad5dd8266",
+      "Type": "Light",
+      "Position": [68, 84]
+    },
+    {
+      "Id": "b8be203c0c2b507a",
+      "Type": "Goal",
+      "Position": [87, 60]
     }
   ]
 }
