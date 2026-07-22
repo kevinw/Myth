@@ -261,7 +261,7 @@ public class Spider : Actor
 			return;
 		DrawLegs(batcher, new Color(0x8080ff), new Color(0x8080ff));
 		var offset = BodyOffset;
-		batcher.PushMatrix(Matrix3x2.CreateRotation(bodyAngle) * Matrix3x2.CreateTranslation(offset));
+		batcher.PushMatrix(Matrix3x2.CreateTranslation(offset));
 		RenderSphereNormals(batcher, BodyRadius, 24);
 		batcher.PopMatrix();
 	}

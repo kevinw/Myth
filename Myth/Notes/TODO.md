@@ -1,6 +1,5 @@
 # TODO
 
-- hitstun to emphasize RevealDoor reveals
 - don't accept gamepad input when not focused (make an option)
 - cimgui.dll is 1.4MB; can it be statically linked?
 - Change Content.zip extension and add some simple byte level change

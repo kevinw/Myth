@@ -1350,18 +1350,14 @@ public partial class Player : Pawn
 			{
 				duckAttack = true;
 				duckAttackCooldownTimer = DuckAttackCooldown;
-				State = States.Attack;
-				if (grounded)
-					StopX();
+				StartAttack();
 				return true;
 			}
 			else if (!ducking)
 			{
 				duckAttack = false;
 				attackBlocked = false;
-				State = States.Attack;
-				if (grounded)
-					StopX();
+				StartAttack();
 				return true;
 			}
 		}
@@ -1388,6 +1384,13 @@ public partial class Player : Pawn
 		}
 
 		return false;
+	}
+
+	void StartAttack() {
+		State = States.Attack;
+		attackUp = input.MoveY < 0;
+		if (grounded)
+			StopX();
 	}
 
 	protected override void OnPawnJump()
@@ -1476,11 +1479,6 @@ public partial class Player : Pawn
 	{
 		if (duckAttack)
 			ducking = true;
-
-		if (input.MoveY < 0)
-		{
-			attackUp = true;
-		}
 
 		Play(GetAttackAnimation(), false);
 
