@@ -389,7 +389,7 @@ public static class Factory
 		RegisterLegacySlope('2', "Castle Slope", '1');
 		Register('G', AsDualTile("grass", "grass-dual", GRASS_SURF, acousticReflectivity: 0.15f, hasSlope: true));
 		RegisterLegacySlope('S', "Grass Slope", 'G');
-		Register('M', AsDualTile("metal", "metal-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f));
+		Register('M', AsDualTile("metal", "metal-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f, hasSlope: true));
 
 
 		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF, hasSlope: true));
