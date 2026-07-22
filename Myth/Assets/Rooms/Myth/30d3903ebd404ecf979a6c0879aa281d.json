@@ -78,6 +78,11 @@
       "Type": "ParticleEmitter",
       "Position": [212, 116],
       "EffectName": "smoke"
+    },
+    {
+      "Id": "a5a6ff90c2a9c2ab",
+      "Type": "LightningTrap",
+      "Position": [164, 40]
     }
   ]
 }

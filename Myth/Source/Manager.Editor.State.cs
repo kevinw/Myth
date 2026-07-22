@@ -117,6 +117,24 @@ public partial class Manager
 				manager.batcher.Line(from, to, width, color);
 		}
 
+		internal void Arrow(Vector2 from, Vector2 to, float width, Color color, float headSize = 4f)
+		{
+			if (!draw)
+				return;
+
+			var shaft = to - from;
+			var length = shaft.Length();
+			manager.batcher.Line(from, to, width, color);
+			if (length < 0.0001f)
+				return;
+
+			var dir = shaft / length;
+			var side = new Vector2(-dir.Y, dir.X);
+			var head = MathF.Min(headSize, length);
+			manager.batcher.Line(to, to - dir * head + side * (head * 0.7f), width, color);
+			manager.batcher.Line(to, to - dir * head - side * (head * 0.7f), width, color);
+		}
+
 		internal void CircleDashed(Vector2 center, float radius, float width, int steps, Color color, float dashLength)
 		{
 			if (draw && radius > 0)

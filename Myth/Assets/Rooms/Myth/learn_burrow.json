@@ -192,6 +192,12 @@
       "Type": "Wildlife",
       "Position": [112, 176],
       "FishCount": 1
+    },
+    {
+      "Id": "13a35bb8e94d7a85",
+      "Type": "LightningTrap",
+      "Position": [164, 264],
+      "Direction": "Left"
     }
   ]
 }
