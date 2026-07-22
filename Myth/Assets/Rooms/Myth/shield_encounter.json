@@ -71,9 +71,8 @@
       "Id": "6aa30cf3668a43c1",
       "Type": "Light",
       "Position": [97, 47],
-      "Intensity": 0.75,
-      "Height": 37.8,
-      "FlickerFrequency": 0.65
+      "FlickerFrequency": 0.65,
+      "Height": 11.7
     },
     {
       "Id": "915ac1bee41e797d",

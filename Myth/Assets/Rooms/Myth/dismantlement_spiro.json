@@ -70,7 +70,8 @@
       "Type": "Light",
       "Position": [52, 76],
       "Intensity": 0.6,
-      "Radius": 130
+      "Radius": 130,
+      "Height": 7
     },
     {
       "Id": "c72c23b615ec943e",
@@ -88,8 +89,9 @@
       "Id": "76c2180a52a0970d",
       "Type": "Light",
       "Position": [148, 100],
-      "Intensity": 0.6,
-      "Radius": 130
+      "Radius": 130,
+      "Height": 8.25,
+      "Intensity": 0.7
     },
     {
       "Id": "2fd93d3a751f46d4",
