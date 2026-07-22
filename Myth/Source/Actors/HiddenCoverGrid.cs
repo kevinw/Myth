@@ -216,6 +216,7 @@ public class HiddenCoverGrid : Actor
 
 		if (revealedAny && !immediate)
 		{
+			Game.HitStun(0.1f);
 			Game.PlayAudioEvent("reveal", position: player.Position);
 			foreach (var id in newlyRevealedDoorIds.Distinct(StringComparer.OrdinalIgnoreCase))
 				Game.NotifyPlayerEnteredRevealDoor(id, player.Position);
