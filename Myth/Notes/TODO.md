@@ -1,5 +1,6 @@
 # TODO
 
+- consider making explicit quit or window close also kill the dotnet watch process.
 - make sure renaming to an existing room name fails
 - don't accept gamepad input when not focused (make an option)
 - cimgui.dll is 1.4MB; can it be statically linked?

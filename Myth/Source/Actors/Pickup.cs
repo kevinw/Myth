@@ -30,6 +30,25 @@ public class Pickup : Actor
 	float armTimer = ArmTime;
 	float life = LifeTime;
 
+	// Fan `count` pickups across an upward arc, evenly spaced and centered on straight up —
+	// the standard broken-container burst (Chest, breakable Crate).
+	public static void Scatter(Game game, Point2 position, PickupKind kind, int count, float spreadArc = 1.4f)
+	{
+		var up = -MathF.PI / 2f;
+		for (var i = 0; i < count; i++)
+		{
+			var t = count > 1 ? i / (float)(count - 1) : 0.5f;
+			var angle = up - spreadArc / 2f + spreadArc * t;
+			var speed = 60f + Random.Shared.NextSingle() * 40f;
+			var velocity = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
+			game.Create<Pickup>(position, p =>
+			{
+				p.Kind = kind;
+				p.Velocity = velocity;
+			});
+		}
+	}
+
 	public Pickup()
 	{
 		Depth = -20;

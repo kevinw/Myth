@@ -1295,6 +1295,7 @@ public partial class Player : Pawn
 
 		UpdateBurrowAlways();
 		UpdateCarriedPosition();
+		// ShowCarryDebug();
 		UpdateHat(previousVelocity);
 		UpdateShield(Time.Delta);
 	}

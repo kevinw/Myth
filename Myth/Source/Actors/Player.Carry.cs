@@ -16,14 +16,15 @@ public partial class Player : Pawn
 	static Vector2 HurtDropVelocity => new(30f, -70f); // x is applied away from Facing
 	static RectInt CarryCatchRect => new(-4, -16, 8, 16); // probe above the burrow-pop point
 
-	Carryable? carried;
+	Actor? carried; // always an ICarryable (Carryable cargo or Bud)
+	int carriedHeight;
 
 	protected override bool IsCarrying => carried != null;
 
 	protected override RectInt CurrentStandingHitboxRect => carried == null
 		? StandingHitboxRect
-		: new(StandingHitboxRect.X, StandingHitboxRect.Y - carried.CarryHeight,
-			StandingHitboxRect.Width, StandingHitboxRect.Height + carried.CarryHeight);
+		: new(StandingHitboxRect.X, StandingHitboxRect.Y - carriedHeight,
+			StandingHitboxRect.Width, StandingHitboxRect.Height + carriedHeight);
 
 	// Cargo rides with its hitbox bottom at the top of the standing hitbox.
 	Point2 CarryPosition => Position + new Point2(0, StandingHitboxRect.Y);
@@ -31,19 +32,26 @@ public partial class Player : Pawn
 	bool TryCatchCarryable()
 	{
 		var probe = CarryCatchRect + Position;
+		Actor? best = null;
 		foreach (var actor in Game.Actors)
 		{
-			if (actor is not Carryable carryable || carryable.CarriedBy != null || Game.destroying.Contains(actor))
+			if (actor is not ICarryable cargo || !cargo.CanBeCaught || Game.destroying.Contains(actor))
 				continue;
-			if (!carryable.Hitbox.Overlaps(probe - carryable.Position))
+			if (!actor.Hitbox.Overlaps(probe - actor.Position))
 				continue;
 
-			carried = carryable;
-			carryable.OnPickedUp(this);
-			carryable.Position = CarryPosition;
-			return true;
+			// Inert cargo wins a tie over a pawn (Bud) sharing the probe.
+			if (best == null || best is not Carryable && actor is Carryable)
+				best = actor;
 		}
-		return false;
+		if (best == null)
+			return false;
+
+		carried = best;
+		carriedHeight = ((ICarryable)best).CarryHeight;
+		((ICarryable)best).OnPickedUp(this);
+		best.Position = CarryPosition;
+		return true;
 	}
 
 	void ThrowCarried()
@@ -63,20 +71,20 @@ public partial class Player : Pawn
 		var velocity = input.MoveY < 0
 			? new Vector2(inherit.X, ThrowUpForce + MathF.Min(inherit.Y, 0))
 			: new Vector2((int)Facing * ThrowSpeedX + inherit.X, ThrowUpKick);
-		cargo.Release(CarryPosition, velocity);
+		((ICarryable)cargo).Release(CarryPosition, velocity);
 		Squish = new Vector2(0.8f, 1.2f);
 	}
 
 	// Held-Down release: set the cargo down in front of the feet instead of flinging it.
-	bool TryDropCarriedAtFeet(Carryable cargo)
+	bool TryDropCarriedAtFeet(Actor cargo)
 	{
 		var reach = StandingHitboxRect.Width / 2 + cargo.Hitbox.Rect.Width / 2 + 1;
 		var target = Position + new Point2((int)Facing * reach, 0);
-		if (Game.OverlapsRoomCollision(cargo.Hitbox.Rect + target))
+		if (Game.OverlapsSolid(cargo, cargo.Hitbox.Rect + target))
 			return false;
 
 		carried = null;
-		cargo.Release(target, Vector2.Zero);
+		((ICarryable)cargo).Release(target, Vector2.Zero);
 		return true;
 	}
 
@@ -87,12 +95,22 @@ public partial class Player : Pawn
 
 		var cargo = carried;
 		carried = null;
-		cargo.Release(CarryPosition, new Vector2(-(int)Facing * HurtDropVelocity.X, HurtDropVelocity.Y));
+		((ICarryable)cargo).Release(CarryPosition, new Vector2(-(int)Facing * HurtDropVelocity.X, HurtDropVelocity.Y));
 	}
 
 	void UpdateCarriedPosition()
 	{
 		if (carried != null)
 			carried.Position = CarryPosition;
+	}
+
+	// Debug overlay while the carry/burrow-ride interplay is being verified.
+	void ShowCarryDebug()
+	{
+		var carrying = carried == null ? "-" : $"{carried.GetType().Name}@{carried.Position}";
+		var player = $"{State}{(ducking ? " duck" : "")} passenger={burrowPassenger != null} " +
+			$"hitbox={CurrentStandingHitboxRect} pos={Position}";
+		var bud = Game.GetFirst<Bud>()?.CarryDebugState ?? "-";
+		Game.Show<string, string, string>(carrying, player, bud);
 	}
 }

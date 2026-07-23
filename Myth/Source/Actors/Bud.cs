@@ -2,7 +2,7 @@ using Foster.Framework;
 using System.Numerics;
 namespace Myth;
 
-public class Bud : Pawn
+public class Bud : Pawn, ICarryable
 {
 	internal static readonly Color Tint = new(0x7fb6ff);
 	private const int FollowStopDistance = 18;
@@ -21,7 +21,11 @@ public class Bud : Pawn
 	private float mirrorPlayerCrawlTimer;
 	private float mirrorPlayerCrawlReleaseTimer;
 	private bool mirrorPlayerCrawl;
+	static float LaunchLingerTime => 2.5f;
 	bool ridingPlayerBurrow;
+	[NoSerialize] public Player? CarriedBy { get; private set; }
+	bool launched;     // in flight from a carry launch; the linger starts on landing
+	float lingerTimer; // stay put where the launch landed before nav resumes following
 	float burrowPopDelayTimer;
 	float burrowPopInputMirrorTimer;
 	Point2 burrowPopPosition;
@@ -62,9 +66,66 @@ public class Bud : Pawn
 		Game.RoomChanged -= OnRoomChanged;
 	}
 
+	// While carried the standing height defines the combined body — the live hitbox may be
+	// the ducking rect (caught mid-crawl) and our Update, which would restore it, is
+	// suspended in hand.
+	public int CarryHeight => StandingHitboxRect.Height;
+
+	// The carry and the burrow-ride are separate relationships: a Bud riding the player's
+	// burrow (position-synced to the player, invisible) must not be "caught" by the pop
+	// that ends the ride. Mirrors the TryEnterPlayerBurrow eligibility guards.
+	public bool CanBeCaught => CarriedBy == null && Visible && !ridingPlayerBurrow
+		&& burrowPopDelayTimer <= 0 && pendingRoomChange == null && State == States.Normal;
+
+	// One-line state summary for the Game.Show carry-debug overlay (Player.Carry.cs).
+	internal string CarryDebugState =>
+		$"pos={Position} carried={CarriedBy != null} riding={ridingPlayerBurrow} " +
+		$"popDelay={burrowPopDelayTimer:0.00} vis={Visible} state={State} " +
+		$"launched={launched} linger={lingerTimer:0.0}";
+
+	public void OnPickedUp(Player player)
+	{
+		CarriedBy = player;
+		CollidesWithSolids = false;
+		Stop();
+		ducking = false;
+		Hitbox = new(StandingHitboxRect);
+		launched = false;
+		lingerTimer = 0;
+		State = States.Normal;
+		Squish = new Vector2(0.8f, 1.25f);
+		Play("idle");
+		Game.TryBudStorylet("bud_carried");
+	}
+
+	public void Release(Point2 position, Vector2 velocity)
+	{
+		CarriedBy = null;
+		CollidesWithSolids = true;
+		Position = position;
+		Velocity = velocity;
+		State = States.Normal;
+		// The launch is Bud's own leap off the player's head: full jump float, never cut
+		// short; his mid-air recovery steers the landing.
+		jumpTimer = JumpTime;
+		jumpCutImmune = true;
+		launched = velocity.LengthSquared() > 1; // a gentle set-down skips the linger
+		if (velocity.X != 0)
+			Facing = Math.Sign(velocity.X);
+		Squish = new Vector2(0.65f, 1.4f);
+		TryUnstick(new Vector2(0, -1));
+		if (launched)
+		{
+			AudioEvent("jump");
+			Game.TryBudStorylet("bud_launched");
+		}
+	}
+
 	public override PawnInput GetInput()
 	{
 		if (!PerfToggles.BudAIEnabled) return new();
+		if (lingerTimer > 0 && State == States.Normal)
+			return new(); // lingering where the carry launch landed us
 		if (burrowPopInputMirrorTimer > 0 && Game.GetFirst<Player>() is { } burrowPlayer)
 			return burrowPlayer.GetInput();
 
@@ -178,6 +239,9 @@ public class Bud : Pawn
 
 	public override void Update()
 	{
+		if (CarriedBy != null)
+			return; // in the player's hands: AI + physics suspended, the carrier syncs position
+
 		if (ridingPlayerBurrow)
 		{
 			if (Game.GetFirst<Player>() is { } player)
@@ -205,6 +269,20 @@ public class Bud : Pawn
 		}
 
 		base.Update();
+
+		if (launched)
+		{
+			if (State == States.Climb)
+				launched = false; // grabbed a rope mid-flight: the climb takes over
+			else if (grounded || InWater)
+			{
+				launched = false;
+				lingerTimer = LaunchLingerTime;
+				Game.TryBudStorylet("bud_launch_landed");
+			}
+		}
+		else if (lingerTimer > 0)
+			lingerTimer = Calc.Approach(lingerTimer, 0, Time.Delta);
 
 		if (!enteredRoom)
 		{
@@ -591,7 +669,7 @@ public class Bud : Pawn
 	{
 		if (change.Kind == RoomChangeKind.InitialLoad)
 			return;
-		if (ridingPlayerBurrow || burrowPopDelayTimer > 0)
+		if (ridingPlayerBurrow || burrowPopDelayTimer > 0 || CarriedBy != null)
 		{
 			pendingRoomChange = null;
 			nav.ClearBlockedPathEdges();

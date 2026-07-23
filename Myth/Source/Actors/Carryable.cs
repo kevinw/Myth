@@ -6,20 +6,24 @@ namespace Myth;
 // An object the player can hoist overhead by burrow-popping underneath it (Player.Carry.cs).
 // While carried it is collision-inert and rides above the player's head — the player's
 // swollen standing hitbox is the combined body, so too-short passages block naturally.
-// Released, it flies under pawn gravity and settles where it lands. Not itself Solid: it
-// obstructs only through the carry hitbox.
-public abstract class Carryable : Actor
+// Released, it flies under pawn gravity as a projectile (Hitting Destructibles it passes,
+// so a throw can trigger a Switch beyond sword reach), then settles where it lands and
+// becomes Solid — standable, stackable, a placed step.
+public abstract class Carryable : Actor, ICarryable
 {
 	static float LandSquishX => 1.35f;
 	static float LandSquishY => 0.65f;
 	static int OutOfRoomResetMargin => 24;
 
-	[NoSerialize] public Player? CarriedBy;
+	[NoSerialize] public Player? CarriedBy { get; private set; }
 	[NoSerialize] bool airborne;
 	[NoSerialize] Point2 spawnPosition;
+	[NoSerialize] float landingSpeed; // downward speed at the last ground contact, for OnSettled
 
 	// Height added on top of the player's standing hitbox while carried.
 	public int CarryHeight => Hitbox.Rect.Height;
+
+	public bool CanBeCaught => CarriedBy == null;
 
 	public Carryable()
 	{
@@ -37,6 +41,7 @@ public abstract class Carryable : Actor
 	{
 		CarriedBy = player;
 		airborne = false;
+		Mask = Masks.None; // collision-inert in hand and in flight; solid again on settle
 		KeepOnRoomTransition = true; // the carry can span rooms
 		Stop();
 		Squish = new Vector2(0.8f, 1.25f);
@@ -47,6 +52,7 @@ public abstract class Carryable : Actor
 		CarriedBy = null;
 		KeepOnRoomTransition = false;
 		airborne = true;
+		landingSpeed = 0;
 		Position = position;
 		Velocity = velocity;
 		// A hurt-drop or tight-corner release can start with a corner inside geometry.
@@ -62,29 +68,64 @@ public abstract class Carryable : Actor
 		if (CarriedBy != null)
 			return; // the carrier syncs our position after its own move
 
-		if (!airborne)
+		if (airborne)
+		{
+			// In flight we're a projectile: Hit what we pass through, so a throw can
+			// trigger a Switch (or break a Destructible) beyond sword reach.
+			if (OverlapsFirst(Masks.Destructible) is { } target)
+				Hit(target);
+
+			Velocity.Y += Pawn.Gravity * Time.Delta;
+			if (Velocity.Y > Pawn.TerminalVelocity)
+				Velocity.Y = Pawn.TerminalVelocity;
+
+			if (Velocity.Y >= 0 && Grounded())
+			{
+				Stop();
+				airborne = false;
+				Squish = new Vector2(LandSquishX, LandSquishY);
+				AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this));
+				OnSettled(landingSpeed);
+			}
+
+			// Fell out of the room (thrown off a cliff edge): reset to spawn so the puzzle
+			// can't soft-lock.
+			if (Position.Y > Game.Bounds.Bottom + OutOfRoomResetMargin)
+			{
+				Position = spawnPosition;
+				Stop();
+			}
 			return;
-
-		Velocity.Y += Pawn.Gravity * Time.Delta;
-		if (Velocity.Y > Pawn.TerminalVelocity)
-			Velocity.Y = Pawn.TerminalVelocity;
-
-		if (Velocity.Y >= 0 && Grounded())
-		{
-			Stop();
-			airborne = false;
-			Squish = new Vector2(LandSquishX, LandSquishY);
-			AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this));
 		}
 
-		// Fell out of the room (thrown off a cliff edge): reset to spawn so the puzzle
-		// can't soft-lock.
-		if (Position.Y > Game.Bounds.Bottom + OutOfRoomResetMargin)
+		// At rest. If the support vanished (a stacked crate lifted out from under us, a
+		// crumbled tile), fall again.
+		if (!Grounded())
 		{
-			Position = spawnPosition;
-			Stop();
+			Mask = Masks.None;
+			airborne = true;
+			return;
 		}
+
+		// Solidify once settled and clear of pawns — never around someone inside (an
+		// up-throw can land the crate overlapping the player's head; it stays a ghost
+		// until they step out).
+		if (!Mask.Has(Masks.Solid) && OverlapsFirst(Masks.Player | Masks.Enemy) == null)
+			Mask = Masks.Solid;
 	}
+
+	// The mover zeroes Velocity.Y in OnCollideY before the settle check can read it, so
+	// the impact speed is captured here at the moment of ground contact.
+	public override void OnCollideY()
+	{
+		if (Velocity.Y > 0)
+			landingSpeed = Velocity.Y;
+		base.OnCollideY();
+	}
+
+	// Fired once on coming to rest after a flight; impactSpeed is the downward speed at
+	// ground contact (a gentle set-down is ~0).
+	protected virtual void OnSettled(float impactSpeed) { }
 
 	public override bool CastsSpriteShadow => true;
 	public override bool CastsReflection => true;
@@ -138,4 +179,20 @@ public abstract class Carryable : Actor
 	BoundsX = -6, BoundsY = -10, BoundsW = 12, BoundsH = 10)]
 public class Crate : Carryable
 {
+	const int MycelonDrop = 3; // pickups scattered when a Breakable crate shatters
+	static float BreakImpactSpeed => 80f; // landing softer than this survives (a set-down is ~0)
+
+	public bool Breakable;
+	public PickupKind DropKind = PickupKind.Mycelon;
+
+	protected override void OnSettled(float impactSpeed)
+	{
+		if (!Breakable || impactSpeed < BreakImpactSpeed)
+			return;
+
+		Game.Create<Pop>(Position);
+		Pickup.Scatter(Game, Position, DropKind, MycelonDrop);
+		Game.HitStun(0.22f);
+		Game.DestroyPersistently(this);
+	}
 }
