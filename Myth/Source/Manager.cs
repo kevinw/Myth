@@ -1645,6 +1645,7 @@ public partial class Manager : App
 			initialPlayerPosition: initialPlayerPosition,
 			spawnBud: true,
 			spawnBudAtPlayer: gymMode,
+			loadGoals: gymMode,
 			carryMusic: carriedMusic,
 			save: saveState
 		)
@@ -1961,7 +1962,7 @@ public partial class Manager : App
 		else
 		{
 			game?.Dispose();
-			game = new Game(this, room, audioEventsEnabled: false, spawnBud: false);
+			game = new Game(this, room, audioEventsEnabled: false, spawnBud: false, loadGoals: true);
 		}
 #if EDITOR
 		game.RaiseEditorPreviewSync();

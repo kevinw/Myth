@@ -138,7 +138,7 @@ public partial class Manager
 
 		var previewSize = GetRoomPreviewPixelSize(room);
 		var target = new Target(GraphicsDevice, previewSize.X, previewSize.Y, name: $"RoomPreview/{room.Id}");
-		using var previewGame = new Game(this, room, audioEventsEnabled: false, spawnBud: false, enableParticles: false);
+		using var previewGame = new Game(this, room, audioEventsEnabled: false, spawnBud: false, enableParticles: false, loadGoals: true);
 		previewGame.ShowForegroundLayer = editorShowForegroundLayer;
 		previewGame.ShowBackgroundLayer = editorShowBackgroundLayer;
 		previewGame.RenderWorldToTarget(target, new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height));

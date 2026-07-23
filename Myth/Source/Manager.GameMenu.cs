@@ -260,7 +260,7 @@ public partial class Manager
 	{
 		if (Window == null) return;
 
-		var pg = previewGame = new(this, start: room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false);
+		var pg = previewGame = new(this, start: room, audioEventsEnabled: false, spawnFallbackPlayer: false, spawnBud: false, loadGoals: true);
 		pg.Simulating = true;
 		Input.Clear();
 		pg.Update(new Controls(Input));

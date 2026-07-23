@@ -130,6 +130,7 @@ public partial class Game : IDisposable
 	Point2 roomEntryPosition;
 	Point2 roomEntryDirection;
 	readonly bool spawnBud;
+	readonly bool loadGoals;
 	// In the gym, Bud is the character under test, so it spawns exactly at the player
 	// start (the PlayerStart marker) rather than at an offset follow position.
 	readonly bool spawnBudAtPlayer;
@@ -332,7 +333,7 @@ public partial class Game : IDisposable
 	{
 	}
 
-	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false, (SoundInstance? Music, string? Area)? carryMusic = null, SaveState? save = null)
+	public Game(Manager manager, Room? start, bool audioEventsEnabled = true, Point2? fallbackPlayerDirection = null, bool spawnFallbackPlayer = false, Point2? initialPlayerPosition = null, bool spawnBud = true, bool enableParticles = true, bool spawnBudAtPlayer = false, bool loadGoals = false, (SoundInstance? Music, string? Area)? carryMusic = null, SaveState? save = null)
 	{
 		rewinder = new(this);
 		Manager = manager;
@@ -346,6 +347,7 @@ public partial class Game : IDisposable
 			AdoptMusic(carried, carryMusic.Value.Area);
 		this.spawnBud = spawnBud;
 		this.spawnBudAtPlayer = spawnBudAtPlayer;
+		this.loadGoals = loadGoals;
 		// All GPU/render state lives in GameView. A headless Game (the gym, or a
 		// nav-graph worker) has no view and allocates no render targets/materials.
 		View = manager.GraphicsDevice.Driver == GraphicsDriver.Headless
@@ -1924,7 +1926,10 @@ public partial class Game : IDisposable
 
 		foreach (var actor in forRoom.Actors)
 		{
-			if (GetFirst<Player>() != null && string.Equals(ActorSpecs.GetTypeName(actor), "Player", StringComparison.OrdinalIgnoreCase))
+			var type = ActorSpecs.GetTypeName(actor);
+			if (!loadGoals && string.Equals(type, nameof(Goal), StringComparison.OrdinalIgnoreCase))
+				continue;
+			if (GetFirst<Player>() != null && string.Equals(type, nameof(Player), StringComparison.OrdinalIgnoreCase))
 				continue;
 
 			var localPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
