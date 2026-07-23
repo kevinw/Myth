@@ -169,8 +169,8 @@ public abstract class Carryable : Actor, ICarryable
 	{
 		var rect = Hitbox.Rect;
 		batcher.PushMatrix(Matrix3x2.CreateScale(Squish.X, Squish.Y));
-		batcher.Rect(new Rect(rect.X, rect.Y, rect.Width, rect.Height), frame);
-		batcher.Rect(new Rect(rect.X + 1, rect.Y + 1, rect.Width - 2, rect.Height - 2), face);
+		batcher.Rect(new Rect(rect.X + Shift.X, rect.Y + Shift.Y, rect.Width, rect.Height), frame);
+		batcher.Rect(new Rect(rect.X + Shift.X + 1, rect.Y + Shift.Y + 1, rect.Width - 2, rect.Height - 2), face);
 		batcher.PopMatrix();
 	}
 }

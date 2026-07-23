@@ -16,8 +16,19 @@ public partial class Player : Pawn
 	static Vector2 HurtDropVelocity => new(30f, -70f); // x is applied away from Facing
 	static RectInt CarryCatchRect => new(-4, -16, 8, 16); // probe above the burrow-pop point
 
+	// Carried cargo rides on a damped spring driven by the player's acceleration, like the
+	// hat (UpdateHat) but heavier: more lag, softer spring, a bigger cap. Render-only — the
+	// offset lives in the cargo's Shift, never its Position, so collision is unaffected.
+	static Vector2 CarrySpring => new(90f, 70f);
+	static Vector2 CarryDamping => new(18f, 9f);
+	static float CarryMotionResponse => 0.3f;
+	static float CarryMaxOffset => 4f;
+	static float CarryMaxVelocityDelta => 250f;
+
 	Actor? carried; // always an ICarryable (Carryable cargo or Bud)
 	int carriedHeight;
+	Vector2 carryShift;
+	Vector2 carryShiftVelocity;
 
 	protected override bool IsCarrying => carried != null;
 
@@ -49,9 +60,19 @@ public partial class Player : Pawn
 
 		carried = best;
 		carriedHeight = ((ICarryable)best).CarryHeight;
+		carryShift = Vector2.Zero;
+		carryShiftVelocity = Vector2.Zero;
 		((ICarryable)best).OnPickedUp(this);
 		best.Position = CarryPosition;
 		return true;
+	}
+
+	void ReleaseCarried(Actor cargo, Point2 position, Vector2 velocity)
+	{
+		carried = null;
+		carriedHeight = 0;
+		cargo.Shift = Vector2.Zero;
+		((ICarryable)cargo).Release(position, velocity);
 	}
 
 	void ThrowCarried()
@@ -66,12 +87,11 @@ public partial class Player : Pawn
 			return;
 		}
 
-		carried = null;
 		var inherit = Velocity * ThrowVelocityInherit;
 		var velocity = input.MoveY < 0
 			? new Vector2(inherit.X, ThrowUpForce + MathF.Min(inherit.Y, 0))
 			: new Vector2((int)Facing * ThrowSpeedX + inherit.X, ThrowUpKick);
-		((ICarryable)cargo).Release(CarryPosition, velocity);
+		ReleaseCarried(cargo, CarryPosition, velocity);
 		Squish = new Vector2(0.8f, 1.2f);
 	}
 
@@ -83,8 +103,7 @@ public partial class Player : Pawn
 		if (Game.OverlapsSolid(cargo, cargo.Hitbox.Rect + target))
 			return false;
 
-		carried = null;
-		((ICarryable)cargo).Release(target, Vector2.Zero);
+		ReleaseCarried(cargo, target, Vector2.Zero);
 		return true;
 	}
 
@@ -94,14 +113,34 @@ public partial class Player : Pawn
 			return;
 
 		var cargo = carried;
-		carried = null;
-		((ICarryable)cargo).Release(CarryPosition, new Vector2(-(int)Facing * HurtDropVelocity.X, HurtDropVelocity.Y));
+		ReleaseCarried(cargo, CarryPosition, new Vector2(-(int)Facing * HurtDropVelocity.X, HurtDropVelocity.Y));
 	}
 
-	void UpdateCarriedPosition()
+	void UpdateCarriedPosition(Vector2 previousVelocity)
 	{
-		if (carried != null)
-			carried.Position = CarryPosition;
+		if (carried == null)
+			return;
+
+		carried.Position = CarryPosition;
+
+		var velocityDelta = Vector2.Clamp(Velocity - previousVelocity, new(-CarryMaxVelocityDelta), new(CarryMaxVelocityDelta));
+		carryShiftVelocity -= velocityDelta * CarryMotionResponse;
+
+		var dt = Math.Min(Time.Delta, 1f / 30f);
+		carryShiftVelocity.X += -carryShift.X * CarrySpring.X * dt;
+		carryShiftVelocity.Y += -carryShift.Y * CarrySpring.Y * dt;
+		carryShiftVelocity.X *= MathF.Exp(-CarryDamping.X * dt);
+		carryShiftVelocity.Y *= MathF.Exp(-CarryDamping.Y * dt);
+		carryShift += carryShiftVelocity * dt;
+
+		if (carryShift.LengthSquared() > CarryMaxOffset * CarryMaxOffset)
+		{
+			var outward = Vector2.Normalize(carryShift);
+			carryShift = outward * CarryMaxOffset;
+			carryShiftVelocity -= outward * MathF.Max(0, Vector2.Dot(carryShiftVelocity, outward));
+		}
+
+		carried.Shift = carryShift;
 	}
 
 	// Debug overlay while the carry/burrow-ride interplay is being verified.

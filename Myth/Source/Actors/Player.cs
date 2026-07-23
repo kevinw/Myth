@@ -1294,7 +1294,7 @@ public partial class Player : Pawn
 				fungus.OnPlayerStep(footPosition);
 
 		UpdateBurrowAlways();
-		UpdateCarriedPosition();
+		UpdateCarriedPosition(previousVelocity);
 		// ShowCarryDebug();
 		UpdateHat(previousVelocity);
 		UpdateShield(Time.Delta);
