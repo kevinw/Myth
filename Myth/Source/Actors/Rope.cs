@@ -43,12 +43,13 @@ public class Rope : Actor, IResizable
 	static float RiderExtraGravity => 500f;     // the hanging pawn's weight pulls the rope taut
 	static float RiderConstraintShare => 0.15f; // ridden point moves this fraction in the solve (it's heavy)
 	const int ConstraintIterations = 4;
-	static float MaxSimDelta => 1 / 30f;        // clamp hitches so the verlet step can't explode
+	static float MaxSimStep => 1f / 60f;
 
 	readonly List<Chain> chains = [];
 	int waiting; // leading pinned-chain points still held at the anchor; 1 means fully paid out
 	Point2 builtSize;
 	float lastDelta = 1 / 60f;
+	float swayPhase;
 
 	public Rope()
 	{
@@ -89,23 +90,44 @@ public class Rope : Actor, IResizable
 		if (builtSize != Size)
 			BuildChains(); // editor resize while unbroken; runtime never resizes
 
-		var dt = MathF.Min(Time.Delta, MaxSimDelta);
-		if (dt <= 0)
+		var frameDelta = Time.Delta;
+		if (frameDelta <= 0)
 			return;
+
+		// Slow motion still gets one smooth, small step per update; fast motion and hitches
+		// split into equal steps so no solve exceeds the stable 60 Hz timestep.
+		var stepCount = Math.Max(1, (int)MathF.Ceiling(frameDelta / MaxSimStep - 0.0001f));
+		var dt = frameDelta / stepCount;
+		var displacementScale = dt / lastDelta;
+		for (var step = 0; step < stepCount; step++)
+		{
+			SimulateStep(dt, displacementScale);
+			displacementScale = 1;
+		}
 		lastDelta = dt;
 
-		var damp = Math.Clamp(1f - DampingRate * Weight * dt, 0f, 1f);
-		var swayPhase = (float)(Time.Seconds * SwayFrequency * MathF.Tau);
 		foreach (var chain in chains)
 		{
-			var held = chain.Pinned ? waiting : 0;
-			Integrate(chain, held, dt, damp, swayPhase);
-			Constrain(chain, held);
-			Collide(chain, held);
 			chain.RiderIndex = -1;
 			chain.SwingAccel = 0;
 		}
 		PayOut();
+	}
+
+	void SimulateStep(float dt, float displacementScale)
+	{
+		var damp = MathF.Exp(-DampingRate * Weight * dt);
+		swayPhase += dt * SwayFrequency * MathF.Tau;
+		if (swayPhase >= MathF.Tau)
+			swayPhase -= MathF.Tau;
+
+		foreach (var chain in chains)
+		{
+			var held = chain.Pinned ? waiting : 0;
+			Integrate(chain, held, dt, displacementScale, damp);
+			Constrain(chain, held);
+			Collide(chain, held);
+		}
 	}
 
 	// The rope feeds out at the anchor, tip first: the hanging span grows from the last index
@@ -120,7 +142,7 @@ public class Rope : Actor, IResizable
 			waiting--;
 	}
 
-	void Integrate(Chain chain, int held, float dt, float damp, float swayPhase)
+	void Integrate(Chain chain, int held, float dt, float displacementScale, float damp)
 	{
 		var points = chain.Points;
 		var prev = chain.Prev;
@@ -135,7 +157,7 @@ public class Rope : Actor, IResizable
 				accel += new Vector2(chain.SwingAccel, RiderExtraGravity);
 
 			var p = points[i];
-			points[i] = p + (p - prev[i]) * damp + accel * (dt * dt);
+			points[i] = p + (p - prev[i]) * displacementScale * damp + accel * (dt * dt);
 			prev[i] = p;
 		}
 	}
