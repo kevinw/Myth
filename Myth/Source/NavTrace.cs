@@ -97,6 +97,8 @@ public sealed class NavTrace : IDisposable
 			json["edgeFrom"] = edge.Value.From;
 			json["edgeTo"] = edge.Value.To;
 			json["edgeKind"] = edge.Value.Kind.ToString();
+			if (edge.Value.ConnectorActorId != null)
+				json["connectorActorId"] = edge.Value.ConnectorActorId;
 			if (edge.Value.Jump is { } jump)
 				json["jump"] = new JsonObject
 				{

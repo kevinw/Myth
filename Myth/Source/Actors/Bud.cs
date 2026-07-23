@@ -69,7 +69,7 @@ public class Bud : Pawn
 			return burrowPlayer.GetInput();
 
 		// On a rope: climb toward the player's height, then hop off toward them.
-		if (State == States.Climb && Game.GetFirst<Player>() is { } climbTarget)
+		if (State == States.Climb && !nav.ActiveEdgeIsRope && Game.GetFirst<Player>() is { } climbTarget)
 		{
 			var dy = climbTarget.Position.Y - Position.Y;
 			if (MathF.Abs(dy) <= 10)
@@ -361,7 +361,7 @@ public class Bud : Pawn
 			return false;
 		}
 
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb)
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope)
 		{
 			nav.DebugNavStartNodeId = start.Value.Id;
 			nav.DebugNavGoalNodeId = goal.Value.Id;

@@ -108,6 +108,7 @@ public sealed class Navigator(Pawn owner)
 	public bool JumpHeld { get; private set; }
 	public bool ActiveEdgeAllowsWallJump =>
 		activeEdge.Edge is { Jump.WallJump: true } or { Kind: PlatformNavGraph.EdgeKind.WellClimb };
+	public bool ActiveEdgeIsRope => activeEdge.Edge is { Kind: PlatformNavGraph.EdgeKind.Rope };
 
 	// Terminal result of the most recently run active edge. The nav-graph build drives
 	// a Navigator over a simulated pawn to validate jump edges, then reads this to decide
@@ -286,7 +287,7 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb)
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope)
 		{
 			UpdateDebugNav(start.Value.Id, goal.Value.Id, edge.To);
 			StartActiveEdge(edge, blockPathOnTimeout: true);
@@ -391,7 +392,7 @@ public sealed class Navigator(Pawn owner)
 			? ResolveSafeJumpLandingTarget(graph, to)
 			: to.Position;
 
-		if (activeEdge.Timer > ActiveEdgeTimeoutFor(edge))
+		if (activeEdge.Timer > ActiveEdgeTimeoutFor(edge, from, to))
 		{
 			Game.NavTrace?.EdgeEvent(Game, "edgeTimeout", edge, ("timer", activeEdge.Timer), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 			if (activeEdgeBlocksPath)
@@ -438,6 +439,12 @@ public sealed class Navigator(Pawn owner)
 				}
 				ExecuteWellClimb(from, to, out moveX, out jumpPressed);
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeEdge.Timer:0.0}" : "active edge";
+				break;
+
+			case PlatformNavGraph.EdgeKind.Rope:
+				if (!TryExecuteRopeEdge(edge, from, to, out moveX, out moveY, out jumpPressed))
+					return false;
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} t {activeEdge.Timer:0.0}" : "active edge";
 				break;
 
 			case PlatformNavGraph.EdgeKind.Fall:
@@ -494,6 +501,8 @@ public sealed class Navigator(Pawn owner)
 	public void StartActiveEdge(PlatformNavGraph.Edge edge, bool blockPathOnTimeout = false)
 	{
 		activeEdge = EdgeState.Start(edge);
+		if (edge.Kind == PlatformNavGraph.EdgeKind.Rope && edge.ConnectorActorId != null)
+			activeEdge.Rope = Game.GetActorById(edge.ConnectorActorId) as Rope;
 		activeEdgeBlocksPath = blockPathOnTimeout;
 		LastEdgeRunState = EdgeRunState.Active;
 		lastTraceStateKey = null;
@@ -1426,12 +1435,14 @@ public sealed class Navigator(Pawn owner)
 			owner.Velocity.X = 0;
 	}
 
-	static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge)
+	static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge, PlatformNavGraph.Node from, PlatformNavGraph.Node to)
 	{
 		// A tall well is many kick cycles; give the climb real time and let blockedPathEdges
 		// handle a genuinely stuck one.
 		if (edge.Kind == PlatformNavGraph.EdgeKind.WellClimb)
 			return 12.0f;
+		if (edge.Kind == PlatformNavGraph.EdgeKind.Rope)
+			return 4.0f + MathF.Abs(to.Position.Y - from.Position.Y) / 50.0f;
 		if (edge.Jump is not { } plan)
 			return ActiveEdgeTimeout;
 		// A descent walks to the edge, slides for RunupTime, kicks, and lands — give it the
@@ -1441,6 +1452,72 @@ public sealed class Navigator(Pawn owner)
 		if (plan.MaxWallKicks <= 1)
 			return ActiveEdgeTimeout;
 		return MathF.Max(ActiveEdgeTimeout, 0.55f + plan.MaxWallKicks * 0.45f);
+	}
+
+	bool TryExecuteRopeEdge(
+		PlatformNavGraph.Edge edge,
+		PlatformNavGraph.Node from,
+		PlatformNavGraph.Node to,
+		out float moveX,
+		out int moveY,
+		out bool jumpPressed)
+	{
+		moveX = 0;
+		moveY = 0;
+		jumpPressed = false;
+		if (activeEdge.Rope is not { Broken: false } rope)
+		{
+			BlockPathEdge(edge);
+			ClearActiveEdge("rope unavailable");
+			return false;
+		}
+
+		if (activeEdge.Phase == ActiveEdgePhase.RopeExit)
+		{
+			var dx = to.Position.X - Position.X;
+			moveX = MathF.Abs(dx) > NavNodeReachDistance * 0.5f ? Math.Sign(dx) : 0;
+			if (IsGrounded && activeEdge.Timer > 0.2f &&
+				MathF.Abs(dx) <= NavNodeReachDistance * 2 &&
+				MathF.Abs(to.Position.Y - Position.Y) <= Game.TileSize)
+			{
+				ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
+				return false;
+			}
+			return true;
+		}
+
+		if (owner.State == Pawn.States.Climb)
+		{
+			activeEdge.Phase = ActiveEdgePhase.RopeClimb;
+			var dy = to.Position.Y - Position.Y;
+			if (MathF.Abs(dy) <= NavNodeReachDistance)
+			{
+				moveX = Math.Sign(to.Position.X - Position.X);
+				moveY = Math.Sign(to.Position.Y - from.Position.Y);
+				jumpPressed = true;
+				activeEdge.Phase = ActiveEdgePhase.RopeExit;
+			}
+			else
+				moveY = Math.Sign(dy);
+			return true;
+		}
+
+		activeEdge.Phase = ActiveEdgePhase.RopeApproach;
+		var center = Position + owner.Hitbox.Rect.Center;
+		if (!rope.TryGetGrabTarget(center, out var grabTarget))
+		{
+			BlockPathEdge(edge);
+			ClearActiveEdge("rope unavailable");
+			return false;
+		}
+
+		var approachX = grabTarget.X - center.X;
+		moveX = MathF.Abs(approachX) > 2 ? Math.Sign(approachX) : 0;
+		moveY = -1;
+		if (IsGrounded && moveX != 0 &&
+			(!HasGroundSupportAhead(moveX) || MathF.Abs(approachX) <= Game.TileSize * 3))
+			jumpPressed = true;
+		return true;
 	}
 
 	static Vector2 ResolveSafeJumpLandingTarget(PlatformNavGraph graph, PlatformNavGraph.Node to)
@@ -1606,7 +1683,10 @@ public sealed class Navigator(Pawn owner)
 		Settle,
 		Runup,
 		Airborne,
-		Landing
+		Landing,
+		RopeApproach,
+		RopeClimb,
+		RopeExit
 	}
 
 	private struct EdgeState
@@ -1621,12 +1701,18 @@ public sealed class Navigator(Pawn owner)
 		// long jump (bounded; no backing up). Lets him leave from the lip of a cramped node
 		// with speed instead of leaping flat-footed and clipping the wall below the target.
 		public float RunupForward;
+		public Rope? Rope;
 
 		public static EdgeState Start(PlatformNavGraph.Edge edge)
 			=> new()
 			{
 				Edge = edge,
-				Phase = edge.Kind == PlatformNavGraph.EdgeKind.Jump ? ActiveEdgePhase.ApproachTakeoff : ActiveEdgePhase.Runup
+				Phase = edge.Kind switch
+				{
+					PlatformNavGraph.EdgeKind.Jump => ActiveEdgePhase.ApproachTakeoff,
+					PlatformNavGraph.EdgeKind.Rope => ActiveEdgePhase.RopeApproach,
+					_ => ActiveEdgePhase.Runup
+				}
 			};
 	}
 }

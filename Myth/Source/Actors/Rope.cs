@@ -238,27 +238,45 @@ public class Rope : Actor, IResizable
 	// remnants are set dressing, not ladders).
 	public bool TryGrab(Vector2 from, float radius, out Chain chain, out float index)
 	{
-		chain = null!;
+		if (TryGetClosestGrabbablePoint(from, radius * radius, out chain, out var pointIndex))
+		{
+			index = pointIndex;
+			return true;
+		}
 		index = 0;
+		return false;
+	}
+
+	internal bool TryGetGrabTarget(Vector2 from, out Vector2 target)
+	{
+		if (TryGetClosestGrabbablePoint(from, float.PositiveInfinity, out var chain, out var index))
+		{
+			target = chain.Points[index];
+			return true;
+		}
+		target = default;
+		return false;
+	}
+
+	bool TryGetClosestGrabbablePoint(Vector2 from, float bestSq, out Chain chain, out int index)
+	{
+		chain = null!;
+		index = -1;
 		if (PinnedChain is not { } pinned)
 			return false;
 
-		var bestSq = radius * radius;
-		var best = -1;
 		for (var i = waiting > 1 ? waiting : 0; i < pinned.Points.Length; i++)
 		{
 			var distSq = Vector2.DistanceSquared(pinned.Points[i], from);
 			if (distSq < bestSq)
 			{
 				bestSq = distSq;
-				best = i;
+				index = i;
 			}
 		}
-		if (best < 0)
+		if (index < 0)
 			return false;
-
 		chain = pinned;
-		index = best;
 		return true;
 	}
 

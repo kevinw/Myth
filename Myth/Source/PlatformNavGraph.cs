@@ -29,7 +29,8 @@ public sealed class PlatformNavGraph
 		Swim,
 		// Chained wall kicks up a walled vertical shaft (a well) from a node at its mouth to
 		// a node at its top opening — the input-driven climb the runtime controller executes.
-		WellClimb
+		WellClimb,
+		Rope
 	}
 
 	public enum RoomExitKind
@@ -52,7 +53,7 @@ public sealed class PlatformNavGraph
 	// AirDirection. Used to drop into a shaft and kick into a pocket under an overhang, which no
 	// upward jump arc can reach.
 	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime, bool WallJump = false, int MaxWallKicks = 1, bool Descend = false);
-	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null);
+	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null, string? ConnectorActorId = null);
 
 	const int SampleStep = Game.TileSize;
 	const float SimDelta = 1.0f / 60.0f;
@@ -161,7 +162,7 @@ public sealed class PlatformNavGraph
 	long pathQueries, pathExpandedNodes, pathEdgesExamined;
 	long surfacePathQueries, surfacePathExpandedNodes, surfacePathEdgesExamined;
 
-	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, WaterNodes, RoomExits, Ready }
+	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RopeEdges, WaterNodes, RoomExits, Ready }
 
 	BuildPhase phase = BuildPhase.Idle;
 	int revision;
@@ -185,6 +186,8 @@ public sealed class PlatformNavGraph
 	static readonly List<Actor> jumpthruActors = [];
 	readonly List<Actor> simulationCollisionActors = [];
 	readonly List<Actor> simulationWindActors = [];
+	readonly Dictionary<int, (Node Node, float Distance)> ropeAttachments = [];
+	readonly List<Node> ropeAttachmentNodes = [];
 
 	// --- profiling instrumentation (temporary) ---
 	static bool collectBuildStats;
@@ -457,6 +460,7 @@ public sealed class PlatformNavGraph
 			// A long multi-kick maneuver: dependable but slow, so shorter routes win when they
 			// exist while a well remains far cheaper than an unreliable chained-jump plan.
 			EdgeKind.WellClimb => distance + 350,
+			EdgeKind.Rope => distance + 120,
 			_ => distance
 		};
 	}
@@ -475,6 +479,7 @@ public sealed class PlatformNavGraph
 			EdgeKind.Fall => distance + 20,
 			EdgeKind.Jump => distance + 180,
 			EdgeKind.RoomExit => distance + 5,
+			EdgeKind.Rope => distance + 120,
 			_ => distance
 		};
 	}
@@ -599,6 +604,10 @@ public sealed class PlatformNavGraph
 				case BuildPhase.JumpEdges:
 					TickJumpEdges();
 					break;
+				case BuildPhase.RopeEdges:
+					BuildRopeEdges(rebuildGame!);
+					phase = BuildPhase.WaterNodes;
+					break;
 				case BuildPhase.WaterNodes:
 					BuildWaterAreaNodes(rebuildGame!, rebuildRoom!);
 					phase = BuildPhase.RoomExits;
@@ -682,7 +691,7 @@ public sealed class PlatformNavGraph
 	void LogGraphSummary()
 	{
 		Span<int> nodeKinds = stackalloc int[5];
-		Span<int> edgeKinds = stackalloc int[7];
+		Span<int> edgeKinds = stackalloc int[8];
 		foreach (var node in Nodes)
 			nodeKinds[(int)node.Kind]++;
 
@@ -724,7 +733,7 @@ public sealed class PlatformNavGraph
 
 		var avgOutDegree = Nodes.Count > 0 ? Edges.Count / (float)Nodes.Count : 0;
 		Console.WriteLine($"  nodes: Ground {nodeKinds[(int)NodeKind.Ground]}, Landing {nodeKinds[(int)NodeKind.Landing]}, Ledge {nodeKinds[(int)NodeKind.Ledge]}, RoomExit {nodeKinds[(int)NodeKind.RoomExit]}, Swim {nodeKinds[(int)NodeKind.Swim]}");
-		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}, Swim {edgeKinds[(int)EdgeKind.Swim]}");
+		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}, Swim {edgeKinds[(int)EdgeKind.Swim]}, WellClimb {edgeKinds[(int)EdgeKind.WellClimb]}, Rope {edgeKinds[(int)EdgeKind.Rope]}");
 		Console.WriteLine($"  components {components}, isolated {isolated}, total edge length {totalLength:0}, avg out-degree {avgOutDegree:0.00}");
 		if (components > 1)
 			LogComponentBounds(parent);
@@ -779,6 +788,7 @@ public sealed class PlatformNavGraph
 		var crawlPairs = new HashSet<(int From, int To)>();
 		var fallPairs = new HashSet<(int From, int To)>();
 		var jumpPairs = new HashSet<(int From, int To)>();
+		var ropePairs = new HashSet<(int From, int To)>();
 		var jumpPlanPairs = new HashSet<(int From, int To, JumpPlan Plan)>();
 		var jumpEdgesPerPair = new Dictionary<(int From, int To), int>();
 		var unmappedEdges = 0;
@@ -814,6 +824,9 @@ public sealed class PlatformNavGraph
 						jumpPlanPairs.Add((fromSpan, toSpan, edge.Jump.Value));
 					jumpEdgesPerPair[pair] = jumpEdgesPerPair.TryGetValue(pair, out var count) ? count + 1 : 1;
 					break;
+				case EdgeKind.Rope:
+					ropePairs.Add(pair);
+					break;
 			}
 		}
 
@@ -827,7 +840,7 @@ public sealed class PlatformNavGraph
 				maxJumpEdgesPerPair = count;
 		}
 
-		Span<int> surfaceEdgeKinds = stackalloc int[7];
+		Span<int> surfaceEdgeKinds = stackalloc int[8];
 		var jumpSurfaceNodeEdges = 0;
 		foreach (var edge in SurfaceEdges)
 		{
@@ -840,8 +853,8 @@ public sealed class PlatformNavGraph
 			var avgNodesPerSpan = SurfaceSpans.Count > 0 ? totalNodesOnSpans / (float)SurfaceSpans.Count : 0;
 			var avgJumpNodesPerSurfaceEdge = surfaceEdgeKinds[(int)EdgeKind.Jump] > 0 ? jumpSurfaceNodeEdges / (float)surfaceEdgeKinds[(int)EdgeKind.Jump] : 0;
 			Console.WriteLine($"  surfaces: {SurfaceSpans.Count} spans ({duckingSpans} ducking, {singletonSpans} singleton), avg {avgNodesPerSpan:0.0} nodes/span");
-			Console.WriteLine($"  surface edge collapse: Walk {edgeKinds[(int)EdgeKind.Walk]}->{walkPairs.Count}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}->{crawlPairs.Count}, Fall {edgeKinds[(int)EdgeKind.Fall]}->{fallPairs.Count}, Jump {edgeKinds[(int)EdgeKind.Jump]}->{jumpPairs.Count} span pairs / {jumpPlanPairs.Count} plan pairs");
-			Console.WriteLine($"  surface interval edges: Walk {surfaceEdgeKinds[(int)EdgeKind.Walk]}, Crawl {surfaceEdgeKinds[(int)EdgeKind.Crawl]}, Fall {surfaceEdgeKinds[(int)EdgeKind.Fall]}, Jump {surfaceEdgeKinds[(int)EdgeKind.Jump]} (avg {avgJumpNodesPerSurfaceEdge:0.0} point jump edges)");
+			Console.WriteLine($"  surface edge collapse: Walk {edgeKinds[(int)EdgeKind.Walk]}->{walkPairs.Count}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}->{crawlPairs.Count}, Fall {edgeKinds[(int)EdgeKind.Fall]}->{fallPairs.Count}, Jump {edgeKinds[(int)EdgeKind.Jump]}->{jumpPairs.Count} span pairs / {jumpPlanPairs.Count} plan pairs, Rope {edgeKinds[(int)EdgeKind.Rope]}->{ropePairs.Count}");
+			Console.WriteLine($"  surface interval edges: Walk {surfaceEdgeKinds[(int)EdgeKind.Walk]}, Crawl {surfaceEdgeKinds[(int)EdgeKind.Crawl]}, Fall {surfaceEdgeKinds[(int)EdgeKind.Fall]}, Jump {surfaceEdgeKinds[(int)EdgeKind.Jump]} (avg {avgJumpNodesPerSurfaceEdge:0.0} point jump edges), Rope {surfaceEdgeKinds[(int)EdgeKind.Rope]}");
 			if (jumpPairs.Count > 0)
 				Console.WriteLine($"  jump interval pressure: {multiJumpPairs}/{jumpPairs.Count} span pairs have multiple point edges, max {maxJumpEdgesPerPair}");
 			if (unmappedEdges > 0)
@@ -943,7 +956,7 @@ public sealed class PlatformNavGraph
 			}
 		}
 
-		phase = BuildPhase.WaterNodes;
+		phase = BuildPhase.RopeEdges;
 	}
 
 	void SimulateJumpPlan(Node from, JumpPlan plan, int planIndex)
@@ -1023,6 +1036,53 @@ public sealed class PlatformNavGraph
 	}
 
 	readonly List<int> swimNodeIds = [];
+	static float RopeAttachmentMaxHorizontal => 56;
+	static float RopeAttachmentVerticalGrace => 12;
+
+	void BuildRopeEdges(Game game)
+	{
+		foreach (var actor in game.Actors)
+		{
+			if (actor is not Rope { Broken: false, StartCoiled: false } rope || rope.ActorId == null)
+				continue;
+
+			ropeAttachments.Clear();
+			var ropeX = rope.Position.X + rope.Size.X * 0.5f;
+			var ropeTop = rope.Position.Y;
+			var ropeBottom = rope.Position.Y + rope.Size.Y;
+			foreach (var node in Nodes)
+			{
+				var spanId = NodeSurfaceSpanId(node.Id);
+				if (spanId < 0 || node.RequiresDucking)
+					continue;
+
+				var grabY = node.Position.Y + PawnProbe.Center.Y;
+				if (grabY < ropeTop - RopeAttachmentVerticalGrace || grabY > ropeBottom + RopeAttachmentVerticalGrace)
+					continue;
+
+				var distance = MathF.Abs(node.Position.X - ropeX);
+				if (distance > RopeAttachmentMaxHorizontal)
+					continue;
+				if (!ropeAttachments.TryGetValue(spanId, out var existing) || distance < existing.Distance)
+					ropeAttachments[spanId] = (node, distance);
+			}
+
+			ropeAttachmentNodes.Clear();
+			foreach (var attachment in ropeAttachments.Values)
+				ropeAttachmentNodes.Add(attachment.Node);
+
+			for (var i = 0; i < ropeAttachmentNodes.Count; i++)
+				for (var j = i + 1; j < ropeAttachmentNodes.Count; j++)
+				{
+					var a = ropeAttachmentNodes[i];
+					var b = ropeAttachmentNodes[j];
+					if (MathF.Abs(a.Position.Y - b.Position.Y) < Game.TileSize * 2)
+						continue;
+					AddEdge(a.Id, b.Id, EdgeKind.Rope, connectorActorId: rope.ActorId);
+					AddEdge(b.Id, a.Id, EdgeKind.Rope, connectorActorId: rope.ActorId);
+				}
+		}
+	}
 
 	// Minimum length of the open face two swim areas must share to be joined by a portal
 	// (so a pawn can actually fit through the gap between the obstacles that split them).
@@ -1731,11 +1791,11 @@ public sealed class PlatformNavGraph
 
 	bool HasEdge(int from, int to) => edgeLookup.Contains((from, to));
 
-	bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null)
+	bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null, string? connectorActorId = null)
 	{
 		if (!edgeLookup.Add((from, to)))
 			return false;
-		var edge = new Edge(from, to, kind, jump);
+		var edge = new Edge(from, to, kind, jump, connectorActorId);
 		Edges.Add(edge);
 		outgoingEdges[from].Add(edge);
 		return true;
