@@ -72,7 +72,6 @@ adjust rope springiness as a mechanic or challenge
 - Rolling down a 45degree slope needs to "stick" more
 - make Bud's "fallback_walk" more interesting. maybe we walks slowly. investigates different points.
 - make rim_light a uniform; investigate less harsh ways of lighting things
-- a player sprite frame for "holding down before a roll"
 - wall jump too difficult (go back to "just jump"?)
 - mobile web:  instead of tap to zoom out, respect pinch in and out to adjust zoom level
 - bug: dying and respawning elsewhere goes back one room at a time. (but maybe its a feature? if I remove the hit stun at each room entry?)

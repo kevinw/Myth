@@ -84,6 +84,13 @@ public abstract class Pawn : Actor
 	public static float WaterHorizontalSpeedMultiplier => 0.6f.T();
 	public static float WaterHorizontalDrag => 300f.T();
 	public static float WaterRollSpeedMultiplier => 0.55f.T();
+	public static float WaterRollDamping => 0f.T();
+	public static float WaterRollSinkSpeed => 45f.T();
+	static float WaterRollSurfaceDepth => 3f;
+	static float WaterRollSurfaceCatchHeight => 6f;
+	static float WaterRollSplashSpacing => 16f;
+	static float WaterRollSplashStrength => 20f;
+	static float WaterRollHopHeight => 3f;
 
 	protected static float WallHugGravityMultiplier => 0.25f.T();
 	protected static float WallSlideMaxFallSpeed => 80f.T();  // capped, slower descent while wall sliding
@@ -110,6 +117,7 @@ public abstract class Pawn : Actor
 	protected static float RollJumpTime => 0.11f;
 	protected static float RollJumpSpeed => 150;
 	protected static float RollJumpCarryTime => 0.28f;
+	static float AirborneRollDistance => Game.TileSize * 2f;
 	protected static float DashSpeed => 220;
 	protected static float DashDuration => 0.15f;
 	protected static float DashCooldown => 0.20f;
@@ -141,6 +149,8 @@ public abstract class Pawn : Actor
 	protected bool inWater;
 	bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
 	protected bool atWaterSurface; // torso submerged but head is above the waterline
+	bool rollingOnWater;
+	float waterRollSplashDistance;
 	float airBubbleTimer;
 	// GetWallJumpDirection runs two solid-overlap probes and is called up to 3x per
 	// Update (gravity wall-hug, NormalState wall-slide, jump handling). Position is
@@ -159,6 +169,7 @@ public abstract class Pawn : Actor
 	protected float jumpForce = JumpForce;
 	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
 	protected float rollJumpCarryTimer;
+	float airborneRollDistance;
 	protected PawnInput input;
 	Rope? climbRope;
 	Rope.Chain? climbChain;
@@ -193,6 +204,8 @@ public abstract class Pawn : Actor
 
 		var previousVelocity = Velocity;
 		base.Update();
+		if (rollingOnWater && State != States.Roll)
+			StopWaterRoll();
 		windInfluence = Wind.ApplyTo(this);
 		wallJumpDirectionCached = false;
 		input = GetInput();
@@ -233,12 +246,20 @@ public abstract class Pawn : Actor
 		waterBounds = waterBounds.Inflate(8);
 		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center);
 		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
+		if (!rollingOnWater && State == States.Roll)
+			TryStartWaterRoll();
+		if (rollingOnWater)
+		{
+			inWater = true;
+			atWaterSurface = true;
+		}
 		// Crossing the surface (either direction) kicks it into a splash + droplets scaled by
 		// the crossing speed. On entry, surface tension also gives an extra one-time slowdown.
 		if (inWater && !wasInWater)
 		{
 			OnCrossedWaterSurface(Velocity.Y, exiting: false); // downward plunge -> dip
-			Velocity *= WaterSurfaceTensionMultiplier;
+			if (!rollingOnWater)
+				Velocity *= WaterSurfaceTensionMultiplier;
 			AudioEventDebounced("player/splash", 0.2f);
 		}
 		else if (!inWater && wasInWater)
@@ -290,7 +311,7 @@ public abstract class Pawn : Actor
 				jumpTimer -= Time.Delta;
 		}
 
-		if (!grounded && State != States.Burrow && State != States.Climb)
+		if (!grounded && State != States.Burrow && State != States.Climb && !rollingOnWater)
 		{
 			var grav = Gravity;
 			if (inWater)
@@ -349,6 +370,7 @@ public abstract class Pawn : Actor
 		base.OnCollideX();
 		if (State == States.Roll)
 		{
+			StopWaterRoll();
 			OnRollStopped(false);
 			State = States.Normal;
 		}
@@ -588,7 +610,7 @@ public abstract class Pawn : Actor
 		TryStartPawnAction(moveX);
 	}
 
-	void EmitJumpParticles(Vector2 position)
+	protected void EmitJumpParticles(Vector2 position)
 	{
 		Game.Particles?.Emit(jumpParticlesEffect,
 			worldPosition: position,
@@ -643,6 +665,7 @@ public abstract class Pawn : Actor
 		Squish = new(1.65f, 0.62f);
 		Play("roll");
 		State = States.Roll;
+		airborneRollDistance = 0;
 		OnRollStarted();
 		return true;
 	}
@@ -662,25 +685,45 @@ public abstract class Pawn : Actor
 		ducking = true;
 		Play("roll");
 
-		if (!grounded)
-		{
-			OnRollStopped(false);
-			State = States.Normal;
-			return;
-		}
-
 		UpdateRollAudioPosition();
-		var (targetSpeed, friction) = TargetRollSpeedAndFriction();
+		var airborneRolling = false;
+		if (rollingOnWater)
+		{
+			if (!UpdateWaterRoll())
+			{
+				OnRollStopped(false);
+				State = States.Normal;
+				ducking = false;
+				return;
+			}
+		}
+		else if (!grounded)
+		{
+			airborneRollDistance += MathF.Abs(Velocity.X) * Time.Delta;
+			if (this is not Player || airborneRollDistance >= AirborneRollDistance)
+			{
+				OnRollStopped(false);
+				State = States.Normal;
+				return;
+			}
+			airborneRolling = true;
+		}
+		else
+		{
+			airborneRollDistance = 0;
+			var (targetSpeed, friction) = TargetRollSpeedAndFriction();
 
-		// NOTE: this Velocity set is suspect, because in Update() it gets set with a different maxSpeed anyways.
-		// probably needs some kind of unification, or some other way for pieces of code to adjust a max speed,
-		// which then gets set in one place.
-		//
-		// once we have that, it would be fun to gradually increase speed as you roll down many slopes without stopping
-		Velocity.X = Calc.Approach(Velocity.X, Facing * targetSpeed, friction * Time.Delta);
+			// NOTE: this Velocity set is suspect, because in Update() it gets set with a different maxSpeed anyways.
+			// probably needs some kind of unification, or some other way for pieces of code to adjust a max speed,
+			// which then gets set in one place.
+			//
+			// once we have that, it would be fun to gradually increase speed as you roll down many slopes without stopping
+			Velocity.X = Calc.Approach(Velocity.X, Facing * targetSpeed, friction * Time.Delta);
+		}
 
 		if (input.JumpPressed && CanStandUp())
 		{
+			StopWaterRoll();
 			OnRollStopped(false);
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.75f, 1.25f);
@@ -693,6 +736,12 @@ public abstract class Pawn : Actor
 		}
 
 		if (TryRollCancel())
+		{
+			StopWaterRoll();
+			return;
+		}
+
+		if (rollingOnWater || airborneRolling)
 			return;
 
 		if (state.Time >= RollDuration || input.MoveY <= 0)
@@ -701,6 +750,59 @@ public abstract class Pawn : Actor
 			State = States.Normal;
 			ducking = grounded && (input.MoveY > 0 || !CanStandUp());
 		}
+	}
+
+	void TryStartWaterRoll()
+	{
+		if (this is not Player || Velocity.Y < 0 || MathF.Abs(Velocity.X) < WaterRollSinkSpeed)
+			return;
+		if (Game.WaterSurfaceAtX(Position.X) is not { } surface)
+			return;
+		if (Position.Y < surface.SurfaceY - WaterRollSurfaceCatchHeight || Position.Y > surface.SurfaceY + Game.TileSize)
+			return;
+
+		rollingOnWater = true;
+		waterRollSplashDistance = WaterRollSplashSpacing;
+		SnapRollToWater(surface);
+	}
+
+	bool UpdateWaterRoll()
+	{
+		if (Game.WaterSurfaceAtX(Position.X) is not { } surface)
+		{
+			StopWaterRoll();
+			return false;
+		}
+
+		Velocity.X = Calc.Approach(Velocity.X, 0, WaterRollDamping * Time.Delta);
+		if (MathF.Abs(Velocity.X) < WaterRollSinkSpeed)
+		{
+			StopWaterRoll();
+			return false;
+		}
+
+		SnapRollToWater(surface);
+		waterRollSplashDistance -= MathF.Abs(Velocity.X) * Time.Delta;
+		if (waterRollSplashDistance <= 0)
+		{
+			EmitWaterRollSplash();
+			waterRollSplashDistance += WaterRollSplashSpacing;
+		}
+		var hopProgress = 1f - waterRollSplashDistance / WaterRollSplashSpacing;
+		Shift.Y = -MathF.Sin(hopProgress * MathF.PI) * WaterRollHopHeight;
+		return true;
+	}
+
+	void SnapRollToWater(WaterSurface surface)
+	{
+		Position.Y = (int)MathF.Round(surface.SurfaceY + WaterRollSurfaceDepth);
+		StopY();
+	}
+
+	void StopWaterRoll()
+	{
+		rollingOnWater = false;
+		Shift.Y = 0;
 	}
 
 	bool TryGrabRope()
@@ -971,13 +1073,23 @@ public abstract class Pawn : Actor
 			return;
 
 		var strength = MathF.Max(0f, crossingSpeed);
+		EmitWaterSurfaceSplash(strength, exiting, (int)Calc.Clamp(6f + strength * 0.25f, 6f, 28f));
+	}
+
+	void EmitWaterRollSplash()
+	{
+		EmitWaterSurfaceSplash(WaterRollSplashStrength, exiting: false, count: 6);
+		AudioEventDebounced("player/splash", 0.2f);
+	}
+
+	void EmitWaterSurfaceSplash(float strength, bool exiting, int count)
+	{
 		Game.SplashWater(Position.X, exiting ? -strength : strength);
 
 		if (splashParticlesEffect >= 0 && Game.Particles is { Supported: true } particles)
 		{
 			// Emit at the waterline (segment surface Y) rather than the submerged torso.
 			var surfaceY = Game.WaterSurfaceAtX(Position.X)?.SurfaceY ?? (Hitbox.Rect + Position).Top;
-			var count = (int)Calc.Clamp(6f + strength * 0.25f, 6f, 28f);
 			particles.Emit(splashParticlesEffect,
 				worldPosition: new Vector2(Position.X, surfaceY),
 				count: count,
@@ -994,7 +1106,7 @@ public abstract class Pawn : Actor
 	{
 		// The nav-graph build steps throwaway pawns through Pawn.Update; don't spawn real
 		// bubbles into the room during that simulation.
-		if (!inWater || Game.Simulating)
+		if (!inWater || rollingOnWater || Game.Simulating)
 			return;
 
 		airBubbleTimer -= Time.Delta;
@@ -1131,8 +1243,12 @@ public partial class Player : Pawn
 
 		base.OnLanded(previousVelocity);
 		PlayLandingSound();
+		if (!InWater && previousVelocity.Y >= HardLandingSpeed)
+			EmitJumpParticles(Position);
 		CanPlaySquishSound = true;
 	}
+
+	static float HardLandingSpeed => 200f;
 
 	void PlayLandingSound()
 	{
