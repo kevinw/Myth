@@ -89,6 +89,7 @@ public sealed class Navigator(Pawn owner)
 	Vector2 Position => owner.Position;
 	bool IsGrounded => owner.IsGrounded;
 	bool ShouldBuildDebugNavLabel => !SuppressDebug && (owner.Game.IsPlatformNavDebugVisible || owner.Game.GymMode);
+	bool ShouldBuildDebugSurfacePath => !SuppressDebug && owner.Game.IsPlatformNavDebugVisible;
 
 	// Set on the throwaway Navigator the nav-graph build drives during edge validation:
 	// skips the per-frame debug-label/trace formatting (pure overhead off-screen).
@@ -456,7 +457,7 @@ public sealed class Navigator(Pawn owner)
 	public void UpdateDebugSurfacePath(PlatformNavGraph graph, int startNodeId, int goalNodeId)
 	{
 		surfaceNavPath.Clear();
-		if (ShouldBuildDebugNavLabel)
+		if (ShouldBuildDebugSurfacePath)
 			graph.TryFindSurfacePath(startNodeId, goalNodeId, surfaceNavPath);
 	}
 

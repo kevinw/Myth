@@ -228,6 +228,7 @@ partial class Manager
 		var current = gym.runs[gym.runIndex];
 		var simTime = Time.Seconds - gym.roomStartTime;
 		var reason = success ? "goal" : failureReason ?? (game?.GymBudDied == true ? "fell" : "timeout");
+		game?.GetPlatformNavGraph()?.LogPathStats();
 		if (gym.exitAfterAll)
 		{
 			gym.results ??= [];

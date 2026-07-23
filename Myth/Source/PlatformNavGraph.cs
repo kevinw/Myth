@@ -138,11 +138,13 @@ public sealed class PlatformNavGraph
 
 	readonly Dictionary<Point2, int> nodeLookup = [];
 	readonly HashSet<(int From, int To)> edgeLookup = [];
+	readonly List<List<Edge>> outgoingEdges = [];
 	readonly Dictionary<int, List<Node>> landingRows = [];
 	readonly Dictionary<int, List<int>> landingCandidateRows = [];
 	readonly Dictionary<int, List<int>> surfaceRows = [];
 	readonly List<int> nodeSurfaceSpanIds = [];
 	readonly Dictionary<SurfaceEdgeKey, SurfaceEdgeAccumulator> surfaceEdgeLookup = [];
+	readonly List<List<SurfaceEdge>> outgoingSurfaceEdges = [];
 	readonly Dictionary<int, (JumpPlan Plan, float Cost, int PlanIndex)> jumpCandidates = [];
 	readonly Dictionary<int, (JumpPlan Plan, float Slide)> descentCandidates = [];
 
@@ -156,6 +158,8 @@ public sealed class PlatformNavGraph
 	readonly PriorityQueue<int, float> surfacePathFrontier = new();
 	readonly Dictionary<int, SurfaceEdge> surfacePathCameFrom = [];
 	readonly Dictionary<int, float> surfacePathCostSoFar = [];
+	long pathQueries, pathExpandedNodes, pathEdgesExamined;
+	long surfacePathQueries, surfacePathExpandedNodes, surfacePathEdgesExamined;
 
 	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, WaterNodes, RoomExits, Ready }
 
@@ -320,6 +324,7 @@ public sealed class PlatformNavGraph
 
 	public bool TryFindPath(int startId, int goalId, List<Edge> path, IReadOnlySet<(int From, int To)>? blockedEdges = null)
 	{
+		pathQueries++;
 		path.Clear();
 		if (startId == goalId)
 			return true;
@@ -334,16 +339,16 @@ public sealed class PlatformNavGraph
 		while (pathFrontier.Count > 0)
 		{
 			var current = pathFrontier.Dequeue();
+			pathExpandedNodes++;
 			if (current == goalId)
 			{
 				BuildPath(startId, goalId, pathCameFrom, path);
 				return true;
 			}
 
-			foreach (var edge in Edges)
+			pathEdgesExamined += outgoingEdges[current].Count;
+			foreach (var edge in outgoingEdges[current])
 			{
-				if (edge.From != current)
-					continue;
 				if (blockedEdges != null && blockedEdges.Contains((edge.From, edge.To)))
 					continue;
 
@@ -362,6 +367,7 @@ public sealed class PlatformNavGraph
 
 	public bool TryFindSurfacePath(int startNodeId, int goalNodeId, List<SurfaceEdge> path)
 	{
+		surfacePathQueries++;
 		path.Clear();
 		var startId = NodeSurfaceSpanId(startNodeId);
 		var goalId = NodeSurfaceSpanId(goalNodeId);
@@ -380,17 +386,16 @@ public sealed class PlatformNavGraph
 		while (surfacePathFrontier.Count > 0)
 		{
 			var current = surfacePathFrontier.Dequeue();
+			surfacePathExpandedNodes++;
 			if (current == goalId)
 			{
 				BuildSurfacePath(startId, goalId, surfacePathCameFrom, path);
 				return true;
 			}
 
-			foreach (var edge in SurfaceEdges)
+			surfacePathEdgesExamined += outgoingSurfaceEdges[current].Count;
+			foreach (var edge in outgoingSurfaceEdges[current])
 			{
-				if (edge.From != current)
-					continue;
-
 				var nextCost = surfacePathCostSoFar[current] + SurfaceEdgeCost(edge);
 				if (surfacePathCostSoFar.TryGetValue(edge.To, out var existingCost) && nextCost >= existingCost)
 					continue;
@@ -402,6 +407,14 @@ public sealed class PlatformNavGraph
 		}
 
 		return false;
+	}
+
+	public void LogPathStats()
+	{
+		if (!NavGraphLogging() || pathQueries + surfacePathQueries == 0)
+			return;
+
+		Console.WriteLine($"[NavGraph] paths: {pathQueries} node queries, {pathExpandedNodes} nodes / {pathEdgesExamined} edges examined; {surfacePathQueries} surface queries, {surfacePathExpandedNodes} spans / {surfacePathEdgesExamined} edges examined");
 	}
 
 	float EdgeCost(Edge edge)
@@ -489,7 +502,9 @@ public sealed class PlatformNavGraph
 		SurfaceEdges.Clear();
 		nodeLookup.Clear();
 		edgeLookup.Clear();
+		outgoingEdges.Clear();
 		surfaceEdgeLookup.Clear();
+		outgoingSurfaceEdges.Clear();
 		nodeSurfaceSpanIds.Clear();
 		rebuildGame = game;
 		rebuildRoom = room;
@@ -503,6 +518,8 @@ public sealed class PlatformNavGraph
 		supportChecks = 0;
 		simsRun = simSteps = simLanded = simStalled = simTimedOut = simOutOfBounds = landingSearchIterations = 0;
 		jumpSimTicks = landingSearchTicks = 0;
+		pathQueries = pathExpandedNodes = pathEdgesExamined = 0;
+		surfacePathQueries = surfacePathExpandedNodes = surfacePathEdgesExamined = 0;
 		for (var i = 0; i < planStats.Length; i++)
 			planStats[i] = new PlanStat { MinReach = float.MaxValue, MaxReach = float.MinValue, MinDy = float.MaxValue, MaxDy = float.MinValue };
 		Array.Clear(phaseElapsedMs);
@@ -920,6 +937,7 @@ public sealed class PlatformNavGraph
 
 		var id = Nodes.Count;
 		Nodes.Add(new(id, position, kind, exit, requiresDucking));
+		outgoingEdges.Add([]);
 		nodeLookup[position] = id;
 		return id;
 	}
@@ -939,6 +957,7 @@ public sealed class PlatformNavGraph
 		var id = Nodes.Count;
 		var center = new Vector2(area.X + area.Width / 2f, area.Y + area.Height / 2f);
 		Nodes.Add(new Node(id, center, NodeKind.Swim, Area: area));
+		outgoingEdges.Add([]);
 		swimNodeIds.Add(id);
 		return id;
 	}
@@ -1263,6 +1282,9 @@ public sealed class PlatformNavGraph
 	{
 		SurfaceEdges.Clear();
 		surfaceEdgeLookup.Clear();
+		outgoingSurfaceEdges.Clear();
+		for (var i = 0; i < SurfaceSpans.Count; i++)
+			outgoingSurfaceEdges.Add([]);
 
 		foreach (var edge in Edges)
 		{
@@ -1287,7 +1309,7 @@ public sealed class PlatformNavGraph
 
 		foreach (var (key, accumulator) in surfaceEdgeLookup)
 		{
-			SurfaceEdges.Add(new(
+			var edge = new SurfaceEdge(
 				key.From,
 				key.To,
 				key.Kind,
@@ -1296,7 +1318,9 @@ public sealed class PlatformNavGraph
 				accumulator.ToLeft,
 				accumulator.ToRight,
 				key.HasJump ? key.Jump : null,
-				accumulator.Count));
+				accumulator.Count);
+			SurfaceEdges.Add(edge);
+			outgoingSurfaceEdges[edge.From].Add(edge);
 		}
 	}
 
@@ -1628,7 +1652,9 @@ public sealed class PlatformNavGraph
 	{
 		if (!edgeLookup.Add((from, to)))
 			return false;
-		Edges.Add(new(from, to, kind, jump));
+		var edge = new Edge(from, to, kind, jump);
+		Edges.Add(edge);
+		outgoingEdges[from].Add(edge);
 		return true;
 	}
 

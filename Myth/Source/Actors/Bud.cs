@@ -322,14 +322,14 @@ public class Bud : Pawn
 			return true;
 
 		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
-		var goal = FindGoalNodeBesidePlayer(graph, player);
+		var goal = FindGoalNodeBesidePlayer(graph, player, start, out var pathFound);
 		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
 		{
 			nav.SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
 			return false;
 		}
 
-		if (!graph.TryFindPath(start.Value.Id, goal.Value.Id, nav.NavPath) || nav.NavPath.Count <= 0)
+		if ((!pathFound && !graph.TryFindPath(start.Value.Id, goal.Value.Id, nav.NavPath)) || nav.NavPath.Count <= 0)
 		{
 			nav.ClearDebugSurfacePath();
 			nav.DebugNavStartNodeId = start.Value.Id;
@@ -470,20 +470,25 @@ public class Bud : Pawn
 
 	private readonly List<PlatformNavGraph.Node> goalCandidates = [];
 
-	private PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player)
+	PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, PlatformNavGraph.Node? start, out bool pathFound)
 	{
+		pathFound = false;
 		// Head for the nearest node Bud can actually path to, not just the nearest node:
 		// otherwise, standing in a slot, he'd pick a closer-looking node across a thin
 		// wall (which is only reachable the long way around) instead of the platform
 		// right next to the player.
-		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
 		if (start.HasValue)
 		{
 			graph.FindNearestNodes(player.Position, Navigator.GoalNodeSearchDistance, goalCandidates);
 			foreach (var node in goalCandidates) // nearest-first
 			{
-				if (node.Id == start.Value.Id || graph.TryFindPath(start.Value.Id, node.Id, nav.NavPath))
+				if (node.Id == start.Value.Id)
 					return node;
+				if (graph.TryFindPath(start.Value.Id, node.Id, nav.NavPath))
+				{
+					pathFound = true;
+					return node;
+				}
 			}
 		}
 
