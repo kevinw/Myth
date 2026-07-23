@@ -33,6 +33,10 @@ public sealed class Navigator(Pawn owner)
 	static float TakeoffApproachBrakeAccel => 1600.0f;
 	static float BlockedPathTargetResetDistance => 16.0f;
 	static float PathTargetReplanDistance => Game.TileSize;
+	static float FollowSlowDistance => 48.0f;
+	static float FollowMaxSpeed => 36.0f;
+	static float FollowPositionGain => 2.0f;
+	static float FollowStopDistance => 2.0f;
 	static float DirectGoalJumpMaxHorizontalDistance => 64.0f;
 	// Capped at what a held jump can actually rise (~30px): any taller "direct" hop is
 	// physically unmakeable and would just hijack pathing that could route there properly.
@@ -338,6 +342,12 @@ public sealed class Navigator(Pawn owner)
 	}
 
 	public bool TryNavigateSameSurface(PlatformNavGraph graph, Vector2 target, bool forceDucking, out float moveX, out int moveY)
+		=> TryNavigateSameSurface(graph, target, forceDucking, false, out moveX, out moveY);
+
+	public bool TryFollowSameSurface(PlatformNavGraph graph, Vector2 target, bool forceDucking, out float moveX, out int moveY)
+		=> TryNavigateSameSurface(graph, target, forceDucking, true, out moveX, out moveY);
+
+	bool TryNavigateSameSurface(PlatformNavGraph graph, Vector2 target, bool forceDucking, bool followArrival, out float moveX, out int moveY)
 	{
 		moveX = 0;
 		moveY = 0;
@@ -352,12 +362,13 @@ public sealed class Navigator(Pawn owner)
 		// can't be reached by walking on top of it — let node pathing route around instead.
 		if (target.Y > span.Y + 4 && target.X >= span.Left - 4 && target.X <= span.Right + 4)
 			return false;
-		moveX = MoveTowardNavTarget(goal.Value.Position);
+		moveX = followArrival ? MoveTowardFollowTarget(goal.Value.Position) : MoveTowardNavTarget(goal.Value.Position);
 		moveY = forceDucking || span.RequiresDucking ? 1 : 0;
-		if (moveX == 0)
+		if (!followArrival && moveX == 0)
 			return false;
 
-		if (!HasGroundSupportAhead(moveX))
+		var targetDirection = Math.Sign(goal.Value.Position.X - Position.X);
+		if (targetDirection != 0 && !HasGroundSupportAhead(targetDirection))
 			return false;
 
 		navPath.Clear();
@@ -367,7 +378,9 @@ public sealed class Navigator(Pawn owner)
 		UpdateDebugNav(null, null, null);
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;
-		DebugNavLabel = ShouldBuildDebugNavLabel ? $"surface walk {span.Id}" : "following surface";
+		DebugNavLabel = ShouldBuildDebugNavLabel
+			? $"{(followArrival ? "surface follow" : "surface walk")} {span.Id}"
+			: "following surface";
 		return true;
 	}
 
@@ -679,6 +692,18 @@ public sealed class Navigator(Pawn owner)
 		if (MathF.Abs(dx) > NavNodeReachDistance * 0.5f)
 			return Math.Sign(dx);
 		return 0;
+	}
+
+	float MoveTowardFollowTarget(Vector2 target)
+	{
+		var dx = target.X - Position.X;
+		if (MathF.Abs(dx) > FollowSlowDistance)
+			return Math.Sign(dx);
+		if (MathF.Abs(dx) <= FollowStopDistance && MathF.Abs(owner.Velocity.X) <= Pawn.Friction * owner.Time.Delta)
+			return 0;
+
+		var desiredVelocity = Math.Clamp(dx * FollowPositionGain, -FollowMaxSpeed, FollowMaxSpeed);
+		return AnalogThrustToward(desiredVelocity, Pawn.GroundAccel);
 	}
 
 	// Swim toward the target area: steer horizontally to the nearest point inside it (which

@@ -57,7 +57,7 @@ public abstract class Pawn : Actor
 	public static float MaxGroundSpeed => 93.T();
 	public static float MaxAirSpeed => 100.T();
 	protected static float CrawlSpeed => 28.T();
-	protected static float GroundAccel => 400.T();
+	public static float GroundAccel => 400.T();
 	public static float AirAccel => 310.T();
 	public static float Friction => 480.T();
 	// Analog MoveX below this magnitude counts as no horizontal input (friction/idle engage).

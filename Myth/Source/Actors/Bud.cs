@@ -424,13 +424,7 @@ public class Bud : Pawn
 	private bool TryNavigateSameSurfaceBesidePlayer(PlatformNavGraph graph, Player player, int side, out float moveX, out int moveY)
 	{
 		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
-		if (MathF.Abs(desired.X - player.Position.X) < DesiredPlayerSpacing * 0.5f)
-		{
-			moveX = 0;
-			moveY = 0;
-			return false;
-		}
-		return nav.TryNavigateSameSurface(graph, desired, ShouldMirrorPlayerCrawl(player), out moveX, out moveY);
+		return nav.TryFollowSameSurface(graph, desired, ShouldMirrorPlayerCrawl(player), out moveX, out moveY);
 	}
 
 	private bool ShouldMirrorPlayerCrawl(Player? player)
