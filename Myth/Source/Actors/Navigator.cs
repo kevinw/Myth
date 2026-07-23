@@ -703,6 +703,10 @@ public sealed class Navigator(Pawn owner)
 			return 0;
 
 		var desiredVelocity = Math.Clamp(dx * FollowPositionGain, -FollowMaxSpeed, FollowMaxSpeed);
+		if (IsGrounded &&
+			(desiredVelocity == 0 || Math.Sign(owner.Velocity.X) == Math.Sign(desiredVelocity)) &&
+			MathF.Abs(owner.Velocity.X) > MathF.Abs(desiredVelocity))
+			return 0;
 		return AnalogThrustToward(desiredVelocity, Pawn.GroundAccel);
 	}
 

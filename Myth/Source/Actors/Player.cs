@@ -60,8 +60,10 @@ public abstract class Pawn : Actor
 	public static float GroundAccel => 400.T();
 	public static float AirAccel => 310.T();
 	public static float Friction => 480.T();
-	// Analog MoveX below this magnitude counts as no horizontal input (friction/idle engage).
+	// Analog MoveX below this magnitude counts as no horizontal input for physics and facing.
 	static float MoveInputDeadzone => 0.1f;
+	static float GroundLocomotionAnimationHold => 0.1f;
+	static float GroundLocomotionAnimationSpeed => 2.0f;
 	public static float Gravity => 450.T();
 	public static float TerminalVelocity => 500.T();
 
@@ -165,6 +167,7 @@ public abstract class Pawn : Actor
 	protected float JumpUpSquish;
 	protected float RunStartTimer;
 	protected bool RunStartSkid;
+	float groundLocomotionAnimationTimer;
 	Wind.PawnInfluence windInfluence;
 
 	public States State
@@ -367,10 +370,14 @@ public abstract class Pawn : Actor
 			ducking = false;
 
 		var moveXAnalog = input.MoveX;
-		// Digital projection (with a deadzone) drives every discrete check below — facing,
-		// animation, the friction gate, wall-jump — while the raw analog value scales the
-		// horizontal thrust, so an AI pawn can steer/brake with fractional input.
+		// Digital projection (with a deadzone) drives facing, the friction gate, and wall-jump,
+		// while the raw analog value scales horizontal thrust.
 		var moveX = MathF.Abs(moveXAnalog) < MoveInputDeadzone ? 0 : Math.Sign(moveXAnalog);
+		if (grounded && (moveX != 0 || MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed))
+			groundLocomotionAnimationTimer = GroundLocomotionAnimationHold;
+		else
+			groundLocomotionAnimationTimer = Calc.Approach(groundLocomotionAnimationTimer, 0, Time.Delta);
+		var animateGroundLocomotion = groundLocomotionAnimationTimer > 0;
 
 		int facing = moveX;
 		float movementInput = moveX == 0 ? 0f : moveXAnalog;
@@ -383,8 +390,8 @@ public abstract class Pawn : Actor
 		if (grounded)
 		{
 			if (ducking)
-				Play(moveX == 0 ? "duck" : "crawl");
-			else if (moveX == 0)
+				Play(animateGroundLocomotion ? "crawl" : "duck");
+			else if (!animateGroundLocomotion)
 				Play("idle");
 			else if (Velocity.X > 0 && moveX < 0 || Velocity.X < 0 && moveX > 0)
 			{
