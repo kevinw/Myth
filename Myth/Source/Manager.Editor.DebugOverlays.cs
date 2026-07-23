@@ -11,6 +11,38 @@ namespace Myth;
 // GameWorldToImGui, so they line up with the game view at any zoom.
 public partial class Manager
 {
+	void ActorPositionDebugOverlayImGui()
+	{
+		if (game == null || !playing || !game.IsCollisionDebugVisible)
+			return;
+
+		var viewport = GameViewRect;
+		var draw = ImGui.GetForegroundDrawList();
+		var color = ImGuiColor(1.0f, 0.72f, 0.24f, 1.0f);
+		var label = new ValueStringBuilder(stackalloc char[96]);
+		draw.PushClipRect(viewport.TopLeft, viewport.BottomRight, true);
+		foreach (var actor in game.Actors)
+		{
+			if (!actor.Tags.Has(ActorTag.Enemy) || game.destroying.Contains(actor) || actor.Room is not { } room)
+				continue;
+
+			var position = GameWorldToImGui(viewport, game, actor.Position);
+			var local = actor.Position - room.WorldBounds.TopLeft;
+			label.Clear();
+			label.Append(actor.GetType().Name);
+			label.Append("  (");
+			label.Append(local.X);
+			label.Append(", ");
+			label.Append(local.Y);
+			label.Append(')');
+			draw.AddLine(position - new Vector2(4, 0), position + new Vector2(4, 0), color, 1.5f);
+			draw.AddLine(position - new Vector2(0, 4), position + new Vector2(0, 4), color, 1.5f);
+			draw.AddText(position + new Vector2(5, -15), color, label.ToString());
+		}
+		draw.PopClipRect();
+		label.Dispose();
+	}
+
 	void BudDebugOverlayImGui()
 	{
 		if (game == null || !playing || !game.TryGetBudDebugOverlay(out var worldPosition, out var label))
@@ -227,7 +259,7 @@ public partial class Manager
 		var scale = MathF.Min(viewport.Width / game.Screen.Width, viewport.Height / game.Screen.Height);
 		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
 		var topLeft = viewport.Center - size / 2;
-		return topLeft + (worldPosition - game.Camera) * scale;
+		return topLeft + (worldPosition - game.RenderCamera) * game.ZoomLevel * scale;
 	}
 
 	void FpsOverlayImGui()

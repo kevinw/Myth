@@ -109,6 +109,7 @@ public partial class Game
 	PlatformNavGraph platformNavGraph = new();
 	Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
+	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
 	public List<RectInt> CollisionRectsThisFrame = [];
 

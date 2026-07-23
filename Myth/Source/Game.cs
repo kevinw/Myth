@@ -531,7 +531,9 @@ public partial class Game : IDisposable
 				RemoveDestroyedActors();
 				for (var i = 0; i < Actors.Count; i++)
 				{
-					Actors[i].Update();
+					var actor = Actors[i];
+					actor.Update();
+					DestroyFallenEnemy(actor);
 					if (roomSwappedThisFrame)
 						break;
 				}
@@ -1179,6 +1181,7 @@ public partial class Game : IDisposable
 			Game = this,
 			Room = loadingRoom ?? room,
 			Position = position ?? Point2.Zero,
+			Tags = Factory.TagsForType(typeof(T)),
 			Anchor = Factory.AnchorForType(typeof(T).Name)
 		};
 		init?.Invoke(instance);
@@ -1197,6 +1200,7 @@ public partial class Game : IDisposable
 		instance.Game = this;
 		instance.Room = loadingRoom ?? room;
 		instance.Position = position ?? Point2.Zero;
+		instance.Tags = Factory.TagsForType(type);
 		instance.Anchor = Factory.AnchorForType(type.Name);
 		init?.Invoke(instance);
 		instance.Added();
@@ -1527,6 +1531,34 @@ public partial class Game : IDisposable
 			return false;
 
 		return OverlapsRoomCollision(actor.Hitbox.Rect + actor.Position + offset);
+	}
+
+	internal bool OverlapsEnemyRoomBoundary(Actor actor, Point2 offset)
+	{
+		if (!actor.Tags.Has(ActorTag.Enemy) || actor.Hitbox.Shape != Hitbox.Shapes.Rect || actor.Room is not { } actorRoom)
+			return false;
+
+		var current = actor.Hitbox.Rect + actor.Position;
+		var candidate = current + offset;
+		var bounds = actorRoom.WorldBounds;
+		return candidate.Left < bounds.Left && candidate.Left < current.Left ||
+			candidate.Right > bounds.Right && candidate.Right > current.Right ||
+			candidate.Top < bounds.Top && candidate.Top < current.Top ||
+			actor.Tags.Has(ActorTag.Flying) && candidate.Bottom > bounds.Bottom && candidate.Bottom > current.Bottom;
+	}
+
+	void DestroyFallenEnemy(Actor actor)
+	{
+		if (destroying.Contains(actor) || !actor.Tags.Has(ActorTag.Enemy) || actor.Tags.Has(ActorTag.Flying) ||
+			actor.Hitbox.Shape != Hitbox.Shapes.Rect || actor.Room is not { } actorRoom ||
+			(actor.Hitbox.Rect + actor.Position).Top < actorRoom.WorldBounds.Bottom)
+			return;
+
+#if DEBUG
+		var local = actor.Position - actorRoom.WorldBounds.TopLeft;
+		Console.WriteLine($"[RoomBounds] {actor.GetType().Name} fell out of {actorRoom.Id} at local {local}, world {actor.Position}");
+#endif
+		DestroyForThisSession(actor);
 	}
 
 	public bool OverlapsRoomCollision(in RectInt bounds)

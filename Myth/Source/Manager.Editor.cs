@@ -215,6 +215,7 @@ public partial class Manager
 				ToolbarImGui();
 		}
 		PlatformNavDebugOverlayImGui();
+		ActorPositionDebugOverlayImGui();
 		BudDebugOverlayImGui();
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();

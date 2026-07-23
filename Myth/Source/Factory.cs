@@ -166,6 +166,7 @@ public static class Factory
 	// Tags declared on each [GameActor], keyed by registered type name, so spec/prefab
 	// palette entries can inherit their underlying type's tags.
 	static readonly Dictionary<string, ActorTag> actorTags = new(StringComparer.OrdinalIgnoreCase);
+	static readonly Dictionary<Type, ActorTag> actorTypeTags = [];
 
 	// Declared SpriteAnchor for each [GameActor], so palette boxes and spawned instances
 	// resolve the same origin. Keyed by registered type name.
@@ -173,6 +174,9 @@ public static class Factory
 
 	public static ActorTag TagsForType(string? typeName)
 		=> typeName != null && actorTags.TryGetValue(typeName, out var tags) ? tags : ActorTag.None;
+
+	public static ActorTag TagsForType(Type type)
+		=> actorTypeTags.TryGetValue(type, out var tags) ? tags : ActorTag.None;
 
 	public static SpriteAnchor AnchorForType(string? typeName)
 		=> typeName != null && actorAnchors.TryGetValue(typeName, out var anchor) ? anchor : SpriteAnchor.Auto;
@@ -328,8 +332,10 @@ public static class Factory
 	{
 		var attr = typeof(T).GetCustomAttribute<GameActorAttribute>();
 		var name = attr?.Name ?? typeof(T).Name;
+		var tags = attr?.Tags ?? ActorTag.None;
 		ActorSpecs.RegisterActor<T>(name);
-		actorTags[name] = attr?.Tags ?? ActorTag.None;
+		actorTags[name] = tags;
+		actorTypeTags[typeof(T)] = tags;
 		var anchor = attr?.Anchor ?? SpriteAnchor.Auto;
 		actorAnchors[name] = anchor;
 
@@ -379,6 +385,7 @@ public static class Factory
 	{
 		ActorSpecs.ClearActorTypes();
 		actorTags.Clear();
+		actorTypeTags.Clear();
 		GeneratedActors.RegisterAll();
 
 		string GRASS_SURF = "Grass";

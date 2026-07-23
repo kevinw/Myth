@@ -40,6 +40,7 @@ public class Actor
 	[NoSerialize] public float IFrameTime = 0.50f;
 	[NoSerialize] public bool CollidesWithSolids = true;
 	[NoSerialize] public string? ActorId;
+	internal ActorTag Tags;
 	[NoSerialize] internal string? SessionDestroyKey;
 	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
@@ -181,7 +182,8 @@ public class Actor
 	/// Checks to see if we overlap any actors of the given mask
 	public bool OverlapsAny(Point2 offset, Masks mask)
 	{
-		if (mask.Has(Masks.Solid) && Game.OverlapsRoomCollision(this, offset))
+		if (mask.Has(Masks.Solid) &&
+			(Game.OverlapsEnemyRoomBoundary(this, offset) || Game.OverlapsRoomCollision(this, offset)))
 			return true;
 
 		return OverlapsFirst(offset, mask) != null;
