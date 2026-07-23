@@ -179,6 +179,9 @@ partial class Manager
 	const double GymNoPathTimeout = 5.0;
 	double gymNoPathStartTime = -1;
 
+	// Last run index whose nav-graph nodes were dumped by the dense gym trace (GYM_TRACE_DENSE).
+	int gymNodesDumpRunIndex = -1;
+
 	// World position the player (and thus Bud) should spawn at for the current gym
 	// run, taken from the run's PlayerStart marker. Null means use the default spawn.
 	Point2? gymStartOverride;

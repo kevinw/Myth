@@ -33,7 +33,9 @@ public sealed class Navigator(Pawn owner)
 	static float TakeoffApproachBrakeAccel => 1600.0f;
 	static float BlockedPathTargetResetDistance => 16.0f;
 	static float DirectGoalJumpMaxHorizontalDistance => 64.0f;
-	static float DirectGoalJumpMaxVerticalDistance => 56.0f;
+	// Capped at what a held jump can actually rise (~30px): any taller "direct" hop is
+	// physically unmakeable and would just hijack pathing that could route there properly.
+	static float DirectGoalJumpMaxVerticalDistance => 30.0f;
 	static float DirectGoalJumpMinVerticalDistance => 12.0f;
 	// Nominal time a jump spends airborne, used to convert "horizontal distance to the
 	// landing" into a target takeoff speed. Matches a typical single hop (~0.5s up-and-down).
@@ -60,6 +62,14 @@ public sealed class Navigator(Pawn owner)
 	// Landing brake only engages when ground is within this many px below Bud's feet
 	// (i.e. the final descent onto a platform), so it never fires while arcing over a gap.
 	static int LandingBrakeGroundProbeDepth => 14;
+	static float FallTakeoffSpeed => 24.0f; // gentle speed to tip off a ledge for a near-vertical Fall edge
+	static float LedgeLandingSteerDistance => 48.0f; // start the analog ledge-landing steer this far out
+	static float MissedLandingDepth => Game.TileSize * 2; // this far below a node while falling = the arc missed it
+	static float RecoverMinFallSpeed => 30.0f; // recovery steering engages once falling at least this fast
+	static int WallRecoverProbeDistance => 64; // how far to the side recovery looks for a wall to grab
+	static float WellClimbMinRise => 16.0f;    // target must be at least this far overhead to climb for it
+	static float WellClimbMaxLateral => 32.0f; // and roughly straight up (Bud stands under it in the shaft)
+	static int WellClimbWallReach => 28;       // both shaft walls must be within this many px
 	// A descent kicks off the wall once it has slid to within this many px above the landing
 	// node's level — low enough that the kick arc threads under the overhang into the pocket.
 	static float DescentKickHeight => 0.0f;
@@ -86,7 +96,8 @@ public sealed class Navigator(Pawn owner)
 
 	// Public state Bud/Boss read to build PawnInput
 	public bool JumpHeld { get; private set; }
-	public bool ActiveEdgeAllowsWallJump => activeEdge.Edge is { Jump: { WallJump: true } };
+	public bool ActiveEdgeAllowsWallJump =>
+		activeEdge.Edge is { Jump.WallJump: true } or { Kind: PlatformNavGraph.EdgeKind.WellClimb };
 
 	// Terminal result of the most recently run active edge. The nav-graph build drives
 	// a Navigator over a simulated pawn to validate jump edges, then reads this to decide
@@ -124,7 +135,7 @@ public sealed class Navigator(Pawn owner)
 			JumpHeld = false;
 	}
 
-	public bool TryNavigateToPosition(Vector2 target, out int moveX, out int moveY, out bool jumpPressed)
+	public bool TryNavigateToPosition(Vector2 target, out float moveX, out int moveY, out bool jumpPressed)
 	{
 		moveX = 0;
 		moveY = 0;
@@ -153,6 +164,17 @@ public sealed class Navigator(Pawn owner)
 
 		var start = graph.FindNearestNode(Position, NavSearchDistance, includeSwim: true);
 		graph.FindNearestNodes(target, GoalNodeSearchDistance, goalCandidates, includeSwim: true);
+		// A node can't claim a target buried beneath its own platform — standing on it puts
+		// the floor slab between Bud and the target (e.g. a goal in the corridor below), so
+		// walking there just stalls on top of it. Route to a node that can actually reach it.
+		for (var i = goalCandidates.Count - 1; i >= 0; i--)
+			if (IsTargetBuriedBelowNode(graph, goalCandidates[i], target))
+				goalCandidates.RemoveAt(i);
+		// A target with no node nearby (e.g. perched atop a climbable well the graph has no
+		// surface for) still deserves an approach: head for the node closest to it, and let
+		// the final-approach maneuvers (direct jump, well climb) take over from there.
+		if (goalCandidates.Count <= 0 && FindNodeNearestTo(graph, target) is { } surrogate)
+			goalCandidates.Add(surrogate);
 		if (!start.HasValue || goalCandidates.Count <= 0)
 		{
 			SetDebugNavState("no node");
@@ -218,7 +240,7 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall)
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb)
 		{
 			UpdateDebugNav(start.Value.Id, goal.Value.Id, edge.To);
 			StartActiveEdge(edge, blockPathOnTimeout: true);
@@ -268,7 +290,7 @@ public sealed class Navigator(Pawn owner)
 		return true;
 	}
 
-	public bool TryNavigateSameSurface(PlatformNavGraph graph, Vector2 target, bool forceDucking, out int moveX, out int moveY)
+	public bool TryNavigateSameSurface(PlatformNavGraph graph, Vector2 target, bool forceDucking, out float moveX, out int moveY)
 	{
 		moveX = 0;
 		moveY = 0;
@@ -279,6 +301,10 @@ public sealed class Navigator(Pawn owner)
 			return false;
 
 		var span = graph.SurfaceSpans[start.Value.SpanId];
+		// A target buried beneath this surface (e.g. a goal in the corridor below the slab)
+		// can't be reached by walking on top of it — let node pathing route around instead.
+		if (target.Y > span.Y + 4 && target.X >= span.Left - 4 && target.X <= span.Right + 4)
+			return false;
 		moveX = MoveTowardNavTarget(goal.Value.Position);
 		moveY = forceDucking || span.RequiresDucking ? 1 : 0;
 		if (moveX == 0)
@@ -298,7 +324,7 @@ public sealed class Navigator(Pawn owner)
 		return true;
 	}
 
-	public bool TryExecuteActiveEdge(out int moveX, out int moveY, out bool jumpPressed)
+	public bool TryExecuteActiveEdge(out float moveX, out int moveY, out bool jumpPressed)
 	{
 		moveX = 0;
 		moveY = 0;
@@ -357,10 +383,33 @@ public sealed class Navigator(Pawn owner)
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeEdge.Timer:0.0}" : "active edge";
 				break;
 
+			case PlatformNavGraph.EdgeKind.WellClimb:
+				if (IsGrounded && activeEdge.Timer > 0.2f &&
+					Position.Y <= to.Position.Y + 4 && MathF.Abs(to.Position.X - Position.X) <= 24)
+				{
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
+					return false;
+				}
+				ExecuteWellClimb(from, to, out moveX, out jumpPressed);
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} t {activeEdge.Timer:0.0}" : "active edge";
+				break;
+
 			case PlatformNavGraph.EdgeKind.Fall:
-				moveX = Math.Sign(to.Position.X - from.Position.X);
-				if (!IsGrounded && MathF.Abs(target.X - Position.X) > NavNodeReachDistance * 0.5f)
-					moveX = Math.Sign(target.X - Position.X);
+				if (HasFallenPastLanding(to))
+				{
+					AbortMissedEdge(edge, "fell past");
+					return false;
+				}
+				if (IsGrounded)
+					// Tip off the ledge at a low, controlled speed for a near-vertical drop: bleed
+					// excess horizontal speed, then creep forward just enough to go over. Self-
+					// correcting between the two, so it settles near FallTakeoffSpeed and never
+					// stalls on the lip.
+					moveX = MathF.Abs(owner.Velocity.X) > FallTakeoffSpeed ? 0 : Math.Sign(to.Position.X - from.Position.X);
+				else
+					moveX = MathF.Abs(target.X - Position.X) > NavNodeReachDistance * 0.5f
+						? Math.Sign(target.X - Position.X)
+						: 0;
 				if (IsGrounded && activeEdge.Timer > 0.12f && IsNearNode(target))
 				{
 					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
@@ -453,7 +502,7 @@ public sealed class Navigator(Pawn owner)
 		blockedPathTarget = target;
 	}
 
-	bool TryDirectGoalJump(Vector2 target, out int moveX, out bool jumpPressed)
+	bool TryDirectGoalJump(Vector2 target, out float moveX, out bool jumpPressed)
 	{
 		moveX = 0;
 		jumpPressed = false;
@@ -655,11 +704,11 @@ public sealed class Navigator(Pawn owner)
 
 	// True when a low ceiling (solid where the standing body's head would be) sits at or just
 	// ahead of Bud, so he must duck to fit through the gap.
-	bool NeedsCrawl(int moveX)
+	bool NeedsCrawl(float moveX)
 	{
 		// Probe the standing head region from where Bud is out to a bit ahead in his travel
 		// direction, so a ceiling he's already under (or about to be) triggers the duck.
-		var lookAhead = moveX * 6;
+		var lookAhead = (int)MathF.Round(moveX * 6);
 		var headProbe = new RectInt(-4 + Math.Min(0, lookAhead), -12, 8 + Math.Abs(lookAhead), 6)
 			+ new Point2((int)Position.X, (int)Position.Y);
 		return Game.OverlapsRoomCollision(headProbe);
@@ -669,13 +718,13 @@ public sealed class Navigator(Pawn owner)
 		=> MathF.Abs(Position.X - node.X) <= NavNodeReachDistance &&
 		   MathF.Abs(Position.Y - node.Y) <= NavNodeReachDistance;
 
-	public bool HasGroundSupportAhead(int moveX)
+	public bool HasGroundSupportAhead(float moveX)
 	{
 		if (!IsGrounded || moveX == 0) return true;
 		return HasFootSupport(moveX, GroundSupportLookAhead, GroundSupportCastDepth);
 	}
 
-	public bool HasGroundSupportNextStep(int moveX)
+	public bool HasGroundSupportNextStep(float moveX)
 	{
 		if (!IsGrounded || moveX == 0) return true;
 		return HasFootSupport(moveX, 1, ImmediateGroundSupportCastDepth);
@@ -690,7 +739,7 @@ public sealed class Navigator(Pawn owner)
 		return Game.OverlapsRoomCollision(probe) || OverlapsJumpthruSupport(probe);
 	}
 
-	bool HasFootSupport(int moveX, int lookAhead, int castDepth)
+	bool HasFootSupport(float moveX, int lookAhead, int castDepth)
 	{
 		var bounds = owner.Hitbox.Rect + owner.Position;
 		var direction = Math.Sign(moveX);
@@ -721,7 +770,7 @@ public sealed class Navigator(Pawn owner)
 		PlatformNavGraph.Edge blockedEdge,
 		int startNodeId,
 		int goalNodeId,
-		out int moveX,
+		out float moveX,
 		out int moveY,
 		out bool jumpPressed)
 	{
@@ -760,7 +809,7 @@ public sealed class Navigator(Pawn owner)
 		PlatformNavGraph.Node from,
 		PlatformNavGraph.Node to,
 		Vector2 target,
-		out int moveX,
+		out float moveX,
 		out bool jumpPressed)
 	{
 		moveX = 0;
@@ -778,6 +827,18 @@ public sealed class Navigator(Pawn owner)
 			{
 				if (!IsGrounded)
 				{
+					// Waiting to be grounded at the takeoff is hopeless once we've dropped below
+					// it — or while falling over a true pit, where ground never comes at all.
+					// Hand control back immediately so recovery still has altitude to work with.
+					if (HasFallenPastLanding(from) || (owner.Velocity.Y > 0 && !HasAnySupportBelow()))
+					{
+						AbortMissedEdge(edge, "fell before start");
+						return false;
+					}
+					// Drift toward the takeoff node while falling instead of idling: dropping
+					// straight down beside its platform just misses it and starts over.
+					if (MathF.Abs(from.Position.X - Position.X) > NavNodeReachDistance * 0.5f)
+						moveX = Math.Sign(from.Position.X - Position.X);
 					DebugNavProbeRect = null;
 					DebugNavProbeHit = false;
 					DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} wait ground {edge.From}->{edge.To}" : "wait ground";
@@ -850,6 +911,12 @@ public sealed class Navigator(Pawn owner)
 				takeoffDirection != 0 &&
 				MathF.Sign(owner.Velocity.X) == -takeoffDirection &&
 				MathF.Abs(owner.Velocity.X) > OpposingJumpVelocityThreshold;
+			// Wall-kick plans are calibrated from a standing start (the build sim runs their own
+			// runup); entering hot flies a different arc that sails past the kick wall. Settle
+			// those to rest first. Plain jumps keep their carry speed — many rely on it.
+			if (plan.WallJump && IsGrounded &&
+				MathF.Abs(owner.Velocity.X) > OpposingJumpVelocityThreshold)
+				opposingVelocity = true;
 			if (opposingVelocity && activeEdge.JumpPrepareTimer < JumpPrepareMaxTime)
 			{
 				activeEdge.Phase = ActiveEdgePhase.Settle;
@@ -857,6 +924,7 @@ public sealed class Navigator(Pawn owner)
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} settle {edge.From}->{edge.To} vx {owner.Velocity.X:0}" : "settle";
 				return true;
 			}
+
 
 			activeEdge.Phase = ActiveEdgePhase.Runup;
 			activeEdge.JumpPlanStarted = true;
@@ -896,6 +964,17 @@ public sealed class Navigator(Pawn owner)
 
 		if (activeEdge.Jump.Started && !IsGrounded)
 		{
+			// The arc has clearly missed once Bud is descending below the landing — it can
+			// never rise back to it (a single wall kick fires at/above the landing's wall, so
+			// falling past it means that window is gone too). Block the edge (so the re-path
+			// routes differently) and bail early, while there's still altitude for recovery
+			// steering to use. Multi-kick chains and descents legitimately dip below their
+			// landing mid-maneuver, so they're exempt.
+			if (!plan.Descend && plan.MaxWallKicks <= 1 && HasFallenPastLanding(to))
+			{
+				AbortMissedEdge(edge, "missed low");
+				return false;
+			}
 			activeEdge.Phase = ActiveEdgePhase.Airborne;
 			JumpPlanExecution.SyncWallKickLock(ref activeEdge.Jump, plan, owner.IsWallJumpLocked, Math.Sign(owner.Velocity.X));
 			// A descent hugs the wall and slides DOWN to the landing's level before kicking, so it
@@ -947,7 +1026,9 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} p {activeEdge.Jump.Timer:0.0}" : "jump";
+		DebugNavLabel = ShouldBuildDebugNavLabel
+			? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} p {activeEdge.Jump.Timer:0.0}{(plan.Descend ? " D" : "")}{(plan.WallJump ? $" W{plan.MaxWallKicks}" : "")}"
+			: "jump";
 		return true;
 	}
 
@@ -995,6 +1076,283 @@ public sealed class Navigator(Pawn owner)
 			owner.Velocity.X = travel * maxSpeed;
 	}
 
+	// True once Bud is descending and has clearly dropped below `node`'s standing level —
+	// the arc can never rise back to it, so any edge targeting it from above has missed.
+	bool HasFallenPastLanding(PlatformNavGraph.Node node)
+		=> !IsGrounded && owner.Velocity.Y > 0 &&
+			Position.Y > node.Position.Y + MissedLandingDepth;
+
+	// Blocks the edge for this pathing target (so the next path routes around it) and clears it.
+	void AbortMissedEdge(PlatformNavGraph.Edge edge, string label)
+	{
+		blockedPathEdges.Add((edge.From, edge.To));
+		Game.NavTrace?.EdgeEvent(Game, "edgeAbortMissed", edge, ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
+		ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} {label} {edge.From}->{edge.To}" : label);
+	}
+
+	// Falling with no viable edge: pick the best node the remaining ballistic arc can actually
+	// reach (perfect vision over the graph) and thrust toward arriving on it — gravity does the
+	// rest, so this is purely input-driven. Over a true pit with no reachable node (e.g. sliding
+	// down a platform's cliff face after a missed jump), hug the nearest feasible wall and kick
+	// back up. False when grounded, rising, or nothing at all can be done.
+	public bool TryRecoverLanding(out float moveX, out bool jumpPressed, out bool allowWallJump)
+	{
+		moveX = 0;
+		jumpPressed = false;
+		allowWallJump = false;
+		if (IsGrounded || owner.Velocity.Y < RecoverMinFallSpeed)
+			return false;
+		if ((GraphOverride ?? Game.GetPlatformNavGraph()) is not { } graph)
+			return false;
+
+		var vy = owner.Velocity.Y;
+		var vx = owner.Velocity.X;
+		PlatformNavGraph.Node? best = null;
+		var bestCost = float.MaxValue;
+		var bestTime = 0f;
+		foreach (var node in graph.Nodes)
+		{
+			if (node.Kind is PlatformNavGraph.NodeKind.RoomExit)
+				continue;
+			var dy = node.Position.Y - Position.Y;
+			if (dy < 0)
+				continue;
+			var timeToLand = (MathF.Sqrt(vy * vy + 2f * Pawn.Gravity * dy) - vy) / Pawn.Gravity;
+			var dx = node.Position.X - Position.X;
+			var drift = vx * timeToLand;
+			var correction = 0.5f * Pawn.AirAccel * timeToLand * timeToLand;
+			if (MathF.Abs(dx - drift) > correction + NavNodeReachDistance)
+				continue;
+			var cost = timeToLand * 100f + MathF.Abs(dx);
+			if (cost < bestCost)
+			{
+				bestCost = cost;
+				best = node;
+				bestTime = timeToLand;
+			}
+		}
+
+		if (best is not { } landing)
+		{
+			// No reachable node. Over a true pit (nothing below to land on), steer to a
+			// feasible wall to wall-slide and kick back up; with support below, leave the
+			// fall to normal pathing, which handles ordinary descents fine.
+			if (HasAnySupportBelow())
+				return false;
+			var wall = WallDirectionToward(out var wallDistance);
+			if (wall == 0)
+				return false;
+			// Steer into the wall the whole way there; only press jump once close enough to
+			// hug, so the kick fires the frame the wall-slide becomes valid.
+			moveX = wall;
+			jumpPressed = wallDistance <= 2;
+			allowWallJump = true;
+			DebugNavLabel = ShouldBuildDebugNavLabel ? $"recover wall {wall} d{wallDistance}" : "recover";
+			return true;
+		}
+
+		var desiredVx = Math.Clamp(
+			(landing.Position.X - Position.X) / MathF.Max(bestTime, 0.05f),
+			-MaxAirSpeedApprox, MaxAirSpeedApprox);
+		moveX = AnalogThrustToward(desiredVx, Pawn.AirAccel);
+		DebugNavTargetNodeId = landing.Id;
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"recover ->{landing.Id}" : "recover";
+		return true;
+	}
+
+	// Last-ditch recovery once normal pathing has also come up empty: brake to drop onto
+	// whatever support lies straight below, so drift doesn't carry the fall off it.
+	public bool TryRecoverPit(out float moveX, out bool jumpPressed, out bool allowWallJump)
+	{
+		moveX = 0;
+		jumpPressed = false;
+		allowWallJump = false;
+		if (IsGrounded || owner.Velocity.Y < RecoverMinFallSpeed)
+			return false;
+		if (!HasAnySupportBelow())
+			return false;
+
+		moveX = AnalogThrustToward(0, Pawn.AirAccel);
+		DebugNavLabel = ShouldBuildDebugNavLabel ? "recover brake" : "recover";
+		return true;
+	}
+
+	// Anything beneath the fall line that would end the fall safely: solid ground anywhere
+	// below (one tall column query), or water at intervals down to the room's bottom.
+	bool HasAnySupportBelow()
+	{
+		var bounds = owner.Hitbox.Rect + owner.Position;
+		var height = (int)(Game.Bounds.Bottom - bounds.Bottom);
+		if (height <= 0)
+			return false;
+		if (Game.OverlapsRoomCollision(new RectInt(bounds.Left - 2, bounds.Bottom, bounds.Width + 4, height)))
+			return true;
+		for (var y = bounds.Bottom; y < Game.Bounds.Bottom; y += Game.TileSize)
+			if (Game.IsWaterAt(new Point2(bounds.CenterX, y)))
+				return true;
+		return false;
+	}
+
+	// Nearest solid wall the pawn can plausibly reach, with its distance. Momentum decides
+	// feasibility: a wall opposite a fast drift can't be closed before the fall ends, so the
+	// probe checks the travel side first and only considers the opposite side when drifting
+	// slowly. Air steering can close a few tiles of gap during a long fall, so it reaches wide.
+	int WallDirectionToward(out int distance)
+	{
+		var bounds = owner.Hitbox.Rect + owner.Position;
+		var travel = Math.Sign(owner.Velocity.X);
+		var fastDrift = MathF.Abs(owner.Velocity.X) > 40;
+		ReadOnlySpan<int> sides = travel switch
+		{
+			> 0 => fastDrift ? [1] : [1, -1],
+			< 0 => fastDrift ? [-1] : [-1, 1],
+			_ => (ReadOnlySpan<int>)[1, -1],
+		};
+		foreach (var side in sides)
+			for (var d = 1; d <= WallRecoverProbeDistance; d += 2)
+			{
+				var probe = side > 0
+					? new RectInt(bounds.Right + d - 1, bounds.Top, 2, bounds.Height)
+					: new RectInt(bounds.Left - d - 1, bounds.Top, 2, bounds.Height);
+				if (Game.OverlapsRoomCollision(probe))
+				{
+					distance = d;
+					return side;
+				}
+			}
+		distance = int.MaxValue;
+		return 0;
+	}
+
+	// True when `target` lies below the node's standing surface and within its platform's
+	// horizontal span — i.e. the platform itself separates a pawn on the node from the target.
+	static bool IsTargetBuriedBelowNode(PlatformNavGraph graph, PlatformNavGraph.Node node, Vector2 target)
+	{
+		if (target.Y <= node.Position.Y + 4)
+			return false;
+		if (!graph.TryGetNodeSurfaceSpan(node.Id, out var span))
+			return false;
+		return target.X >= span.Left - 4 && target.X <= span.Right + 4;
+	}
+
+	// Nearest non-exit node to a point, unbounded — for approaching targets that sit off the
+	// graph entirely (nothing within GoalNodeSearchDistance).
+	static PlatformNavGraph.Node? FindNodeNearestTo(PlatformNavGraph graph, Vector2 target)
+	{
+		PlatformNavGraph.Node? best = null;
+		var bestDistance = float.MaxValue;
+		foreach (var node in graph.Nodes)
+		{
+			if (node.Kind is PlatformNavGraph.NodeKind.RoomExit or PlatformNavGraph.NodeKind.Swim)
+				continue;
+			var distance = Vector2.DistanceSquared(node.Position, target);
+			if (distance < bestDistance)
+			{
+				bestDistance = distance;
+				best = node;
+			}
+		}
+		return best;
+	}
+
+	// Climb a walled shaft toward a target overhead using chained wall kicks — jump, hug a
+	// wall, kick off it, carry to the other wall, kick again — until at target height, then
+	// steer onto it. Pure inputs: the same wall-jump mechanics a player uses to scale a well.
+	// Only engages when the target is genuinely above and Bud stands in a shaft with walls
+	// close on both sides (so it can't hijack open-air navigation).
+	public bool TryClimbWellToward(Vector2 target, out float moveX, out int moveY, out bool jumpPressed, out bool allowWallJump)
+	{
+		moveX = 0;
+		moveY = 0;
+		jumpPressed = false;
+		allowWallJump = false;
+
+		var rise = Position.Y - target.Y;
+		if (rise < WellClimbMinRise || MathF.Abs(target.X - Position.X) > WellClimbMaxLateral)
+			return false;
+
+		var bounds = owner.Hitbox.Rect + owner.Position;
+		var left = WallWithin(bounds, -1, WellClimbWallReach);
+		var right = WallWithin(bounds, 1, WellClimbWallReach);
+		if (left < 0 || right < 0)
+			return false;
+
+		allowWallJump = true;
+		KickCycleInputs(left, right, out moveX, out jumpPressed);
+		DebugNavLabel = ShouldBuildDebugNavLabel ? $"well climb rise {rise:0}" : "well climb";
+		return true;
+	}
+
+	// One frame of the chained wall-kick cycle, given wall distances on each side: aim at the
+	// nearer wall; while the kick's input lock carries us away, press toward the far wall so
+	// the hug is ready the moment we arrive; jump to leave the ground or to kick when hugging.
+	void KickCycleInputs(int left, int right, out float moveX, out bool jumpPressed)
+	{
+		var side = left <= right ? -1 : 1;
+		if (owner.IsWallJumpLocked)
+			side = -side;
+		moveX = side;
+		jumpPressed = IsGrounded || owner.Velocity.Y > 0 && (side < 0 ? left : right) <= 1;
+	}
+
+	// Executes a WellClimb edge: line up under the well at the from-node, jump in, kick-cycle
+	// up the shaft, and steer onto the to-node's platform once above its level.
+	void ExecuteWellClimb(PlatformNavGraph.Node from, PlatformNavGraph.Node to, out float moveX, out bool jumpPressed)
+	{
+		moveX = 0;
+		jumpPressed = false;
+
+		// Above the top opening: drift onto the destination platform and let gravity land us.
+		if (Position.Y <= to.Position.Y + 2)
+		{
+			moveX = AnalogThrustToward(
+				Math.Clamp((to.Position.X - Position.X) * 4f, -MaxAirSpeedApprox, MaxAirSpeedApprox),
+				Pawn.AirAccel);
+			return;
+		}
+
+		var bounds = owner.Hitbox.Rect + owner.Position;
+		var left = WallWithin(bounds, -1, WellClimbWallReach);
+		var right = WallWithin(bounds, 1, WellClimbWallReach);
+		if (left < 0 || right < 0)
+		{
+			// Not between the shaft walls yet (or drifted out an opening): line up under the
+			// well's column and hop up into it.
+			var dx = from.Position.X - Position.X;
+			moveX = MathF.Abs(dx) > 2 ? Math.Sign(dx) : 0;
+			if (IsGrounded && MathF.Abs(dx) <= 3)
+				jumpPressed = true;
+			return;
+		}
+
+		KickCycleInputs(left, right, out moveX, out jumpPressed);
+	}
+
+	// Distance to solid within `reach` px on `side` (-1/1) of the pawn, or -1 if none.
+	int WallWithin(RectInt bounds, int side, int reach)
+	{
+		for (var d = 1; d <= reach; d++)
+		{
+			var probe = side > 0
+				? new RectInt(bounds.Right + d - 1, bounds.Top, 1, bounds.Height)
+				: new RectInt(bounds.Left - d, bounds.Top, 1, bounds.Height);
+			if (Game.OverlapsRoomCollision(probe))
+				return d;
+		}
+		return -1;
+	}
+
+	// The analog MoveX (in [-1,1]) whose thrust moves Velocity.X toward `desiredVelocity` this
+	// frame. Saturates at full stick when the gap exceeds one frame of accel — the honest,
+	// input-only version of a velocity write, bounded by what the pawn can actually do.
+	float AnalogThrustToward(float desiredVelocity, float accel)
+	{
+		var dt = owner.Time.Delta;
+		if (dt <= 0 || accel <= 0)
+			return 0;
+		return Math.Clamp((desiredVelocity - owner.Velocity.X) / (accel * dt), -1f, 1f);
+	}
+
 	void BrakeForTakeoffApproach(float dx)
 	{
 		if (MathF.Abs(dx) > TakeoffApproachBrakeDistance || owner.Velocity.X == 0)
@@ -1010,6 +1368,10 @@ public sealed class Navigator(Pawn owner)
 
 	static float ActiveEdgeTimeoutFor(PlatformNavGraph.Edge edge)
 	{
+		// A tall well is many kick cycles; give the climb real time and let blockedPathEdges
+		// handle a genuinely stuck one.
+		if (edge.Kind == PlatformNavGraph.EdgeKind.WellClimb)
+			return 12.0f;
 		if (edge.Jump is not { } plan)
 			return ActiveEdgeTimeout;
 		// A descent walks to the edge, slides for RunupTime, kicks, and lands — give it the
@@ -1083,12 +1445,12 @@ public sealed class Navigator(Pawn owner)
 		return moveX;
 	}
 
-	int AirSteerTowardLanding(
+	float AirSteerTowardLanding(
 		PlatformNavGraph.JumpPlan plan,
 		Vector2 takeoff,
 		Vector2 landing,
 		PlatformNavGraph.NodeKind targetKind,
-		int plannedMoveX)
+		float plannedMoveX)
 	{
 		var dx = landing.X - Position.X;
 		var remainingX = MathF.Abs(dx);
@@ -1122,6 +1484,34 @@ public sealed class Navigator(Pawn owner)
 			owner.Velocity.X = Calc.Approach(owner.Velocity.X, desiredVelocity, LandingStabilizeBrakeAccel * owner.Time.Delta);
 			var velocityError = desiredVelocity - owner.Velocity.X;
 			steer = MathF.Abs(velocityError) > 4.0f ? Math.Sign(velocityError) : Math.Sign(dx);
+		}
+		else if (targetKind == PlatformNavGraph.NodeKind.Ledge &&
+			owner.Velocity.Y >= 0 &&
+			remainingX <= LedgeLandingSteerDistance)
+		{
+			// Ledge landings get an input-only stabilize, engaged only when the ballistic arc
+			// would carry Bud PAST the ledge: thrust (bounded by real air accel) toward the
+			// velocity that sets him down on it. An undershooting arc is left alone — it needs
+			// all its speed to get there at all.
+			var dy = MathF.Max(0f, landing.Y - Position.Y);
+			var vy = owner.Velocity.Y;
+			var timeToLand = (MathF.Sqrt(vy * vy + 2f * Pawn.Gravity * dy) - vy) / Pawn.Gravity;
+			var projectedX = owner.Velocity.X * timeToLand;
+			var movingWithTarget = targetDirection != 0 && Math.Sign(owner.Velocity.X) == targetDirection;
+			bool willOvershoot;
+			if (movingWithTarget)
+				willOvershoot = (projectedX - dx) * targetDirection > NavNodeReachDistance;
+			else if (targetDirection == 0)
+				willOvershoot = MathF.Abs(projectedX) > NavNodeReachDistance;
+			else
+				willOvershoot = MathF.Abs(owner.Velocity.X) > 1; // drifting away from the ledge — steer back
+			if (willOvershoot)
+			{
+				var desiredVelocity = MathF.Abs(dx) <= NavNodeReachDistance
+					? 0
+					: Math.Clamp(dx * LandingStabilizeGain, -LandingStabilizeMaxSpeed, LandingStabilizeMaxSpeed);
+				steer = AnalogThrustToward(desiredVelocity, Pawn.AirAccel);
+			}
 		}
 
 		DebugNavProbeRect = null;

@@ -80,7 +80,7 @@ public class Bud : Pawn
 			return new(0, Math.Sign(dy), false, false, false);
 		}
 
-		var moveX = 0;
+		var moveX = 0f;
 		var moveY = 0;
 		var jumpPressed = false;
 		var player = Game.GetFirst<Player>();
@@ -88,14 +88,29 @@ public class Bud : Pawn
 		var followTarget = gymTarget != null
 			? (Vector2?)gymTarget.Position
 			: player != null ? DesiredFollowPosition(player) : null;
+		var recoverWallJump = false;
 		if (!nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
 		{
-			if (gymTarget != null)
+			if (nav.TryRecoverLanding(out moveX, out jumpPressed, out recoverWallJump))
 			{
-				if (!nav.TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
+				// Mid-air with no edge to run (a missed/aborted arc): steer onto a reachable
+				// surface — or over a pit, onto a wall to kick back up — pathing resumes
+				// once grounded.
+			}
+			else if (gymTarget != null)
+			{
+				if (nav.TryClimbWellToward(gymTarget.Position, out moveX, out moveY, out jumpPressed, out recoverWallJump))
+				{
+					// Goal overhead in a walled shaft: chained wall kicks are the only way up.
+				}
+				else if (!nav.TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
 				{
 					var navLabel = nav.DebugNavLabel;
-					if (navLabel == "no graph")
+					if (nav.TryRecoverPit(out moveX, out jumpPressed, out recoverWallJump))
+					{
+						moveY = 0;
+					}
+					else if (navLabel == "no graph")
 					{
 						moveX = 0;
 						moveY = 0;
@@ -116,18 +131,25 @@ public class Bud : Pawn
 			else if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
 			{
 				var navLabel = nav.DebugNavLabel;
-				moveX = GetFallbackMoveX(followTarget, player);
-				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
-				if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
-					moveX = 0;
-				if (TryApproachRope(player, ref moveX, ref moveY))
-					nav.SetDebugNavState("rope approach");
-				else if (player == null)
-					nav.SetDebugNavState("no player");
+				if (nav.TryRecoverPit(out moveX, out jumpPressed, out recoverWallJump))
+				{
+					moveY = 0;
+				}
 				else
-					nav.SetDebugNavState(moveX == 0
-						? IsBesidePlayer(player) ? "beside player" : navLabel
-						: Game.IsPlatformNavDebugVisible ? $"fallback walk {moveX}" : "fallback walk");
+				{
+					moveX = GetFallbackMoveX(followTarget, player);
+					moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
+					if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
+						moveX = 0;
+					if (TryApproachRope(player, ref moveX, ref moveY))
+						nav.SetDebugNavState("rope approach");
+					else if (player == null)
+						nav.SetDebugNavState("no player");
+					else
+						nav.SetDebugNavState(moveX == 0
+							? IsBesidePlayer(player) ? "beside player" : navLabel
+							: Game.IsPlatformNavDebugVisible ? $"fallback walk {moveX}" : "fallback walk");
+				}
 			}
 		}
 
@@ -150,7 +172,7 @@ public class Bud : Pawn
 			JumpPressed: jumpPressed,
 			JumpDown: nav.JumpHeld,
 			DashPressed: false,
-			AllowWallJump: nav.ActiveEdgeAllowsWallJump
+			AllowWallJump: nav.ActiveEdgeAllowsWallJump || recoverWallJump
 		);
 	}
 
@@ -276,7 +298,7 @@ public class Bud : Pawn
 		return TryUnstick(burrowPopOutward);
 	}
 
-	private bool TryNavigateToPlayer(Player player, out int moveX, out int moveY, out bool jumpPressed)
+	private bool TryNavigateToPlayer(Player player, out float moveX, out int moveY, out bool jumpPressed)
 	{
 		moveX = 0;
 		moveY = 0;
@@ -327,7 +349,7 @@ public class Bud : Pawn
 			return false;
 		}
 
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall)
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb)
 		{
 			nav.DebugNavStartNodeId = start.Value.Id;
 			nav.DebugNavGoalNodeId = goal.Value.Id;
@@ -387,7 +409,7 @@ public class Bud : Pawn
 		return true;
 	}
 
-	private bool TryNavigateSameSurfaceBesidePlayer(PlatformNavGraph graph, Player player, int side, out int moveX, out int moveY)
+	private bool TryNavigateSameSurfaceBesidePlayer(PlatformNavGraph graph, Player player, int side, out float moveX, out int moveY)
 	{
 		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
 		if (MathF.Abs(desired.X - player.Position.X) < DesiredPlayerSpacing * 0.5f)
@@ -514,7 +536,7 @@ public class Bud : Pawn
 	// gap: head for it -- walking off the lip if needed -- and hold up so the Pawn grab takes
 	// over once a rope point is in reach. No nav-graph integration yet; this is the "player
 	// paved the way with a RopePile" case.
-	private bool TryApproachRope(Player? player, ref int moveX, ref int moveY)
+	private bool TryApproachRope(Player? player, ref float moveX, ref int moveY)
 	{
 		if (player == null || State != States.Normal)
 			return false;

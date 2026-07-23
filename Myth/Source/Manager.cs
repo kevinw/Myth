@@ -790,11 +790,23 @@ public partial class Manager : App
 				Console.WriteLine($"[Gym] t={Time.Seconds - gym.roomStartTime:F2}s gst={gym.roomStartTime:F2}s bud=({bud.Position.X:F0},{bud.Position.Y:F0}) lbl={bud.DebugNavLabel}");
 			gym.nextLog += 5.0;
 		}
-		if (Time.Seconds - gym.roomStartTime > 1.0 && (int)((Time.Seconds - gym.roomStartTime) * 10) % 10 == 0)
+		var traceT = Time.Seconds - gym.roomStartTime;
+		// GYM_TRACE_DENSE=<seconds> logs every frame for the first that-many seconds of each run
+		// (GYM_TRACE_DENSE=1 => 1s; quick falls need only a few). Otherwise a one-frame burst per
+		// whole second keeps the default output readable.
+		var denseTrace = Environment.GetEnvironmentVariable("GYM_TRACE_DENSE") is { } dense &&
+			double.TryParse(dense, out var denseSeconds) && traceT <= denseSeconds;
+		if (denseTrace || (traceT > 1.0 && (int)(traceT * 10) % 10 == 0))
 		{
 			var bud = game.GetFirst<Bud>();
 			if (bud != null)
-				Console.WriteLine($"[Gym] t={Time.Seconds - gym.roomStartTime:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
+				Console.WriteLine($"[Gym] t={traceT:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
+			if (denseTrace && bud != null && gymNodesDumpRunIndex != gym.runIndex &&
+				game.GetPlatformNavGraph() is { IsReady: true } dumpGraph)
+			{
+				gymNodesDumpRunIndex = gym.runIndex;
+				dumpGraph.DumpNodesNear(bud.Position, 4096);
+			}
 		}
 	}
 

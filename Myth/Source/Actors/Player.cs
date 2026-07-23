@@ -4,7 +4,8 @@ using Foster.Framework;
 namespace Myth;
 
 public readonly record struct PawnInput(
-	int MoveX,
+	float MoveX,          // analog horizontal thrust in [-1, 1]; AI can output fractional values for
+	                      // precise steering/braking. Human/sim producers emit -1/0/1 as before.
 	int MoveY,
 	bool JumpPressed,
 	bool JumpDown,
@@ -59,6 +60,8 @@ public abstract class Pawn : Actor
 	protected static float GroundAccel => 400.T();
 	public static float AirAccel => 310.T();
 	public static float Friction => 480.T();
+	// Analog MoveX below this magnitude counts as no horizontal input (friction/idle engage).
+	static float MoveInputDeadzone => 0.1f;
 	public static float Gravity => 450.T();
 	public static float TerminalVelocity => 500.T();
 
@@ -181,6 +184,9 @@ public abstract class Pawn : Actor
 	{
 		if (Game.Rewinding) return;
 
+		// Gym runs test Bud; the stand-in player is scenery. Freeze it so it can't wander,
+		// fall into a pit, or die and drag the room through a transition mid-run.
+		if (Game.GymMode && this is Player) return;
 
 		var previousVelocity = Velocity;
 		base.Update();
@@ -355,10 +361,14 @@ public abstract class Pawn : Actor
 		else
 			ducking = false;
 
-		var moveX = input.MoveX;
+		var moveXAnalog = input.MoveX;
+		// Digital projection (with a deadzone) drives every discrete check below — facing,
+		// animation, the friction gate, wall-jump — while the raw analog value scales the
+		// horizontal thrust, so an AI pawn can steer/brake with fractional input.
+		var moveX = MathF.Abs(moveXAnalog) < MoveInputDeadzone ? 0 : Math.Sign(moveXAnalog);
 
 		int facing = moveX;
-		var movementInput = moveX;
+		float movementInput = moveX == 0 ? 0f : moveXAnalog;
 		if (!grounded && wallJumpInputLockTimer > 0)
 			movementInput = wallJumpDirection;
 
@@ -751,7 +761,7 @@ public abstract class Pawn : Actor
 			ExitClimb();
 			Velocity.X = vel.X * RopeSwingCarry + moveX * RopeJumpKick;
 			if (moveX != 0)
-				Facing = moveX;
+				Facing = Math.Sign(moveX);
 			if (input.MoveY > 0)
 				Velocity.Y = MathF.Max(vel.Y, 0); // down+jump: just let go
 			else
@@ -764,8 +774,8 @@ public abstract class Pawn : Actor
 		}
 
 		if (input.MoveX != 0)
-			Facing = input.MoveX;
-		rope.SetRider(chain, climbIndex, input.MoveX);
+			Facing = Math.Sign(input.MoveX);
+		rope.SetRider(chain, climbIndex, Math.Sign(input.MoveX));
 
 		// Hang with the chest at the rope point; step there collision-aware so a swing scrapes
 		// along walls instead of clipping. A one-frame yank beyond the snap distance (rewind,
@@ -1678,6 +1688,10 @@ public partial class Player : Pawn
 
 	void ApplyHurt(int healthDelta = -1, Actor? fromActor = null)
 	{
+		if (Game.Simulating) {
+			return;
+		}
+
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
 		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor), amount: healthDelta == 0 ? 0.7f : 1.0f);

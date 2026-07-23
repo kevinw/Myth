@@ -26,7 +26,10 @@ public sealed class PlatformNavGraph
 		RoomExit,
 		// Traversal involving water: portals between adjacent swim areas, entering water
 		// from a standable node, or a surface hop-out onto a standable node above.
-		Swim
+		Swim,
+		// Chained wall kicks up a walled vertical shaft (a well) from a node at its mouth to
+		// a node at its top opening — the input-driven climb the runtime controller executes.
+		WellClimb
 	}
 
 	public enum RoomExitKind
@@ -421,6 +424,9 @@ public sealed class PlatformNavGraph
 			// walk/jump win a jumpable gap, while a real crossing (no land route) still routes
 			// through the water since it's the only path.
 			EdgeKind.Swim => distance + 120,
+			// A long multi-kick maneuver: dependable but slow, so shorter routes win when they
+			// exist while a well remains far cheaper than an unreliable chained-jump plan.
+			EdgeKind.WellClimb => distance + 350,
 			_ => distance
 		};
 	}
@@ -551,6 +557,7 @@ public sealed class PlatformNavGraph
 					break;
 				case BuildPhase.RoomExits:
 					BuildRoomExitNodes(rebuildRoom!);
+					BuildWellClimbEdges(rebuildGame!);
 					phase = BuildPhase.Ready;
 					break;
 			}
@@ -624,7 +631,7 @@ public sealed class PlatformNavGraph
 	void LogGraphSummary()
 	{
 		Span<int> nodeKinds = stackalloc int[5];
-		Span<int> edgeKinds = stackalloc int[6];
+		Span<int> edgeKinds = stackalloc int[7];
 		foreach (var node in Nodes)
 			nodeKinds[(int)node.Kind]++;
 
@@ -769,7 +776,7 @@ public sealed class PlatformNavGraph
 				maxJumpEdgesPerPair = count;
 		}
 
-		Span<int> surfaceEdgeKinds = stackalloc int[5];
+		Span<int> surfaceEdgeKinds = stackalloc int[7];
 		var jumpSurfaceNodeEdges = 0;
 		foreach (var edge in SurfaceEdges)
 		{
@@ -1737,11 +1744,11 @@ public sealed class PlatformNavGraph
 		public string Outcome = "?";
 		public bool FellInPit;
 
-		public JumpValidationPawn(Game game, PlatformNavGraph graph, Node from, Node to, JumpPlan plan, float entryVx)
+		public JumpValidationPawn(Game game, PlatformNavGraph graph, Node from, Node to, JumpPlan plan, float entryVx, Vector2? startPosition = null)
 		{
 			this.game = game;
 			Game = game;
-			Position = (Point2)from.Position;
+			Position = (Point2)(startPosition ?? from.Position);
 			Hitbox = new(PawnProbe);
 			Facing = plan.Direction == 0 ? Signs.Positive : (Signs)plan.Direction;
 			Velocity = new Vector2(entryVx, 0);
@@ -1789,6 +1796,79 @@ public sealed class PlatformNavGraph
 			Outcome = "timeout";
 			return false;
 		}
+	}
+
+	// Wells: vertical shafts with solid walls close on both sides, too tall for any jump plan,
+	// climbable by chained wall kicks. Emits WellClimb edges from a node at a well's mouth to
+	// nodes at its top opening, so A* can route up shafts (e.g. a spiral's ascending arms).
+	const int WellClimbMinRise = 48;      // below this a jump/wall-kick plan already covers it
+	const int WellClimbMaxRise = 420;
+	const int WellClimbMaxLateral = 40;   // top node must sit close to the well's column
+	const int WellClimbWallReach = 28;    // both walls within this of the well center
+
+	void BuildWellClimbEdges(Game game)
+	{
+		for (var bi = 0; bi < Nodes.Count; bi++)
+		{
+			var bottom = Nodes[bi];
+			if (bottom.Kind is not (NodeKind.Ground or NodeKind.Ledge or NodeKind.Landing))
+				continue;
+
+			// A well must rise from just above this node's head; measure how far up it goes.
+			var wellTop = MeasureWellAbove(game, bottom.Position);
+			if (bottom.Position.Y - wellTop < WellClimbMinRise)
+				continue;
+
+			for (var ti = 0; ti < Nodes.Count; ti++)
+			{
+				if (ti == bi)
+					continue;
+				var top = Nodes[ti];
+				if (top.Kind is not (NodeKind.Ground or NodeKind.Ledge or NodeKind.Landing))
+					continue;
+				var rise = bottom.Position.Y - top.Position.Y;
+				if (rise < WellClimbMinRise || rise > WellClimbMaxRise)
+					continue;
+				if (MathF.Abs(top.Position.X - bottom.Position.X) > WellClimbMaxLateral)
+					continue;
+				// The well must reach at least up to the top node's level for the climb to
+				// exit there.
+				if (wellTop > top.Position.Y + Game.TileSize)
+					continue;
+				if (HasEdge(bottom.Id, top.Id))
+					continue;
+				AddEdge(bottom.Id, top.Id, EdgeKind.WellClimb);
+			}
+		}
+	}
+
+	// Lowest Y (highest point) still inside a continuous walled shaft above `from`, or
+	// from.Y when there's no well. Scans upward a tile at a time requiring open space at
+	// the column with solid walls within reach on both sides.
+	float MeasureWellAbove(Game game, Vector2 from)
+	{
+		var x = (int)from.X;
+		var top = from.Y;
+		// start above head height so the mouth (where side walls may be the corridor's own
+		// walls or absent) doesn't fail the scan
+		for (var y = (int)from.Y - Game.TileSize * 3; ; y -= Game.TileSize)
+		{
+			if (game.OverlapsRoomCollision(new RectInt(x - 3, y, 6, Game.TileSize)))
+				break;
+			var wallLeft = false;
+			var wallRight = false;
+			for (var d = 4; d <= WellClimbWallReach && !(wallLeft && wallRight); d += 4)
+			{
+				if (!wallLeft && game.OverlapsRoomCollision(new RectInt(x - d - 2, y, 2, Game.TileSize)))
+					wallLeft = true;
+				if (!wallRight && game.OverlapsRoomCollision(new RectInt(x + d, y, 2, Game.TileSize)))
+					wallRight = true;
+			}
+			if (!wallLeft || !wallRight)
+				break;
+			top = y;
+		}
+		return top;
 	}
 
 	static bool CanAttemptChainedWallJump(Game game, Vector2 from)

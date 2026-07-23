@@ -60,7 +60,8 @@ adjust rope springiness as a mechanic or challenge
 - Better revealdoor sound
 - map open close sounds
 
-
+- motion vectors and blur
+  but make cartoony with colors and frames
 - someday: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display
 - if the git diff contains only markdown, don't run the browser workflow?
 - ScanDiff: Error reading file: /Users/kev/src/Myth/Foster

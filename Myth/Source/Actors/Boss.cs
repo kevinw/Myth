@@ -109,7 +109,7 @@ public class Boss : Pawn
 			retargetTimer = RetargetInterval;
 		}
 
-		var moveX = 0;
+		var moveX = 0f;
 		var moveY = 0;
 		var jumpPressed = false;
 
