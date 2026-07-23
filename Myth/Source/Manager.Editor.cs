@@ -697,6 +697,8 @@ public partial class Manager
 			ImGui.Spacing();
 			DrawActorPaletteSection();
 			ImGui.Spacing();
+			DrawActorListSection();
+			ImGui.Spacing();
 			DrawRoomPaletteSection();
 			ImGui.Spacing();
 			DrawAmbientOcclusionSection();
