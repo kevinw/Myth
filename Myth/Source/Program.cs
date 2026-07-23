@@ -1,4 +1,5 @@
 using Myth;
+using System.Runtime.InteropServices;
 
 var startArgs = new StartArgs(args);
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);
@@ -25,4 +26,27 @@ if (!startArgs.headless)
 var manager = Manager.Create(startArgs);
 PlatformSpecific.ManagerSetup(manager);
 manager.Run();
+var stopWatch = manager.UserQuitRequested;
 PlatformSpecific.ManagerCleanup(manager);
+#if !BROWSER
+if (stopWatch)
+	WatchProcess.Stop();
+
+static class WatchProcess
+{
+	const int InterruptSignal = 2;
+
+	[DllImport("libc", EntryPoint = "kill")]
+	static extern int Kill(int process, int signal);
+
+	public static void Stop()
+	{
+		// When running as "dotnet watch" we actually want, when the user has pressed command-Q or closed the window,
+		// to send a signal to stop, so that dotnet watch doesn't proceed to then resurrect our process when we edit
+		// a file. the normal "keep the game open and edit stuff" flow remains unchanged.
+		if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1" &&
+			(OperatingSystem.IsMacOS() || OperatingSystem.IsLinux()))
+			Kill(0, InterruptSignal);
+	}
+}
+#endif

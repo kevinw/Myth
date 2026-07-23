@@ -123,7 +123,7 @@ public partial class Manager
 			OpenOptionsPage();
 #if !BROWSER
 		if (MenuButton("quit", "menu/back"))
-			Exit();
+			RequestQuit();
 #endif
 	}
 
@@ -140,7 +140,7 @@ public partial class Manager
 			ReturnToTitleFromMenu();
 #else
 		if (MenuButton("quit", "menu/back"))
-			Exit();
+			RequestQuit();
 #endif
 	}
 

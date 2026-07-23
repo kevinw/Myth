@@ -184,6 +184,7 @@ public partial class Manager : App
 	}
 	public bool WantsVirtualGameController => playing || startingPlay;
 	public bool AudioEnabled = true;
+	public bool UserQuitRequested { get; private set; }
 	public event Action<bool>? VirtualGameControllerVisibilityChanged;
 	public const string BackgroundMusicEventPath = "event:/background_music";
 
@@ -248,6 +249,9 @@ public partial class Manager : App
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 		menuImgui = new(this, enableGamepadNav: true);
+		OnExitRequested = RequestQuit;
+		if (Window != null)
+			Window.OnCloseRequested = RequestQuit;
 #if EDITOR
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf", iniPath: Path.Join(UserPath, "editor-layout.ini")) { Scale = Scale };
 #elif BROWSER
@@ -256,6 +260,12 @@ public partial class Manager : App
 	}
 
 	public const string APPLICATION_NAME = "Mycelon";
+
+	void RequestQuit()
+	{
+		UserQuitRequested = true;
+		Exit();
+	}
 
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false, bool? fullscreen = null)
 	{
