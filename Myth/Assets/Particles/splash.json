@@ -18,7 +18,7 @@
   "SizeEnd": 0.4,
   "Additive": false,
   "Style": "Square",
-  "Collision": "None",
+  "Collision": "Bounce",
   "Bounciness": 0.3,
   "ColorBirth": "B4BFFD",
   "ColorMid": "5D9BB7",
