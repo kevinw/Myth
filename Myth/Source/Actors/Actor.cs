@@ -49,6 +49,8 @@ public class Actor
 	internal virtual int DamageValue => 1;
 
 	public Time Time => Game.Time;
+	internal virtual List<Actor> CollisionActors => Game.Actors;
+	internal virtual List<Actor> WindActors => Game.Actors;
 
 	public Sprite? Sprite
 	{
@@ -194,7 +196,8 @@ public class Actor
 	/// Finds the first overlapping actor of the given mask
 	public Actor? OverlapsFirst(Point2 offset, Masks mask)
 	{
-		foreach (var other in Game.Actors)
+		var actors = (mask & ~(Masks.Solid | Masks.Jumpthru)) == 0 ? CollisionActors : Game.Actors;
+		foreach (var other in actors)
 		{
 			if (other is Grid && other.Mask.Has(Masks.Solid))
 				continue;
@@ -217,7 +220,7 @@ public class Actor
 		if (Game.OverlapsRoomCollision(this, Point2.Down))
 			return true;
 
-		foreach (var other in Game.Actors)
+		foreach (var other in CollisionActors)
 		{
 			if (other is Grid && other.Mask.Has(Masks.Solid))
 				continue;

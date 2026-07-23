@@ -97,6 +97,7 @@ public class Room
 	/// Per-tile solid mask (BlocksMovement and not a slope), row-major Size.X*Size.Y.
 	/// Mirrors <see cref="CollisionRects"/> for O(tiles-covered) collision queries.
 	public bool[] SolidTiles = [];
+	public bool[] WaterTiles = [];
 
 	/// Slope tiles keep their own geometry because collision follows the inferred surface line.
 	public readonly List<SlopeTile> SlopeTiles = [];
@@ -486,6 +487,7 @@ public class Room
 			BuildDualTerrainJoinMasks,
 			() => BuildRects(CollisionRects, static entry => entry.BlocksMovement, excludeSlopes: true),
 			BuildSolidTileMask,
+			BuildWaterTileMask,
 			() =>
 			{
 				BuildRects(LightOccluders, static entry => entry.CastsShadow && !HasBakedDualOccluders(entry), excludeSlopes: true);
@@ -1117,6 +1119,24 @@ public class Room
 			for (var x = 0; x < Size.X; x++)
 				SolidTiles[y * Size.X + x] = Matches(x, y, static entry => entry.BlocksMovement) && !IsSlopeTile(x, y);
 	}
+
+	void BuildWaterTileMask()
+	{
+		var count = Size.X * Size.Y;
+		if (WaterTiles.Length != count)
+			WaterTiles = new bool[count];
+		else
+			Array.Clear(WaterTiles);
+
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X; x++)
+				WaterTiles[y * Size.X + x] = IsWaterTile(x, y);
+	}
+
+	public bool IsWaterTile(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y)
+			&& WaterTiles.Length == Size.X * Size.Y
+			&& WaterTiles[tile.Y * Size.X + tile.X];
 
 	void BuildRects(List<RectInt> output, Func<Factory.Entry, bool> predicate, bool excludeSlopes = false)
 	{

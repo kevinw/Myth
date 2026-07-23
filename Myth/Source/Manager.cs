@@ -1622,6 +1622,9 @@ public partial class Manager : App
 
 		// In the gym, carry the live background music across the dispose/recreate so it
 		// keeps playing seamlessly between runs instead of restarting on each goal.
+		var reusableGymNavGraph = gymMode && game?.CurrentRoom?.Id == room.Id
+			? game.ReadyPlatformNavGraph
+			: null;
 		var carriedMusic = gymMode ? game?.DetachMusic() : null;
 		game?.Dispose();
 		game = new Game(
@@ -1639,6 +1642,8 @@ public partial class Manager : App
 			AudioMuted = gymMode || headless,
 			NavTrace = navTrace
 		};
+		if (reusableGymNavGraph != null)
+			game.ReusePlatformNavGraph(reusableGymNavGraph);
 		game.NavTrace?.Event(game, "gameStart");
 #if IOS
 		playTransition = 1.0f;

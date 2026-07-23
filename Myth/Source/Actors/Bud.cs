@@ -322,7 +322,17 @@ public class Bud : Pawn
 			return true;
 
 		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
-		var goal = FindGoalNodeBesidePlayer(graph, player, start, out var pathFound);
+		PlatformNavGraph.Node? goal;
+		PlatformNavGraph.Node cachedGoal = default;
+		bool pathFound;
+		var reusedPath = start.HasValue && nav.TryReuseNavPath(graph, start.Value.Id, player.Position, out cachedGoal);
+		if (reusedPath)
+		{
+			goal = cachedGoal;
+			pathFound = true;
+		}
+		else
+			goal = FindGoalNodeBesidePlayer(graph, player, start, out pathFound);
 		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
 		{
 			nav.SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
@@ -338,6 +348,8 @@ public class Bud : Pawn
 			nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
 			return false;
 		}
+		if (!reusedPath)
+			nav.RememberNavPath(graph, start.Value.Id, goal.Value.Id, player.Position);
 		nav.UpdateDebugSurfacePath(graph, start.Value.Id, goal.Value.Id);
 
 		if (!nav.TryGetActionableEdge(graph, out var edge))

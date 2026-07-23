@@ -106,7 +106,7 @@ public partial class Game
 	internal PlayerRewinder rewinder;
 	internal bool Rewinding => rewinder.Rewinding;
 	internal DebugView debugView;
-	readonly PlatformNavGraph platformNavGraph = new();
+	PlatformNavGraph platformNavGraph = new();
 	Room? platformNavGraphRoom;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 
@@ -252,6 +252,16 @@ public partial class Game
 
 		platformNavGraph.Tick(unthrottled ? float.MaxValue : 2.0f);
 		return platformNavGraph.IsReady ? platformNavGraph : null;
+	}
+
+	internal PlatformNavGraph? ReadyPlatformNavGraph
+		=> platformNavGraph.IsReady ? platformNavGraph : null;
+
+	internal void ReusePlatformNavGraph(PlatformNavGraph graph)
+	{
+		platformNavGraph = graph;
+		platformNavGraphRoom = room;
+		graph.ResetPathStats();
 	}
 
 	public bool TryGetBudDebugOverlay(out Vector2 worldPosition, out string label)

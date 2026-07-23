@@ -72,7 +72,7 @@ public class Wind : Actor, IResizable
 	internal static PawnInfluence ApplyTo(Pawn pawn)
 	{
 		var influence = new PawnInfluence();
-		foreach (var actor in pawn.Game.Actors)
+		foreach (var actor in pawn.WindActors)
 		{
 			if (actor is not Wind wind || !wind.Affects(pawn) || !wind.Overlaps(pawn))
 				continue;

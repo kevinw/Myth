@@ -164,20 +164,30 @@ public sealed class PlatformNavGraph
 	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, WaterNodes, RoomExits, Ready }
 
 	BuildPhase phase = BuildPhase.Idle;
+	int revision;
 	Game? rebuildGame;
 	Room? rebuildRoom;
 	RectInt sampleBounds;
 	int sampleX;
 	int sampleY;
 	int nextJumpSourceId;
+	int nextJumpPlanIndex;
+	int nextDescentPlanIndex;
+	bool currentSourceCanAttemptChainedWallJump;
+	JumpBuildStage jumpBuildStage;
 	long rebuildStartTimestamp;
 	int rebuildFrameCount;
+
+	enum JumpBuildStage { StartSource, Plans, CommitPlans, Descents, CommitDescents }
 
 	// jumpthru actors in the room, snapshotted once per Tick so HasStandableSupport
 	// doesn't re-scan (and mask-filter) every actor on each of its ~100k calls.
 	static readonly List<Actor> jumpthruActors = [];
+	readonly List<Actor> simulationCollisionActors = [];
+	readonly List<Actor> simulationWindActors = [];
 
 	// --- profiling instrumentation (temporary) ---
+	static bool collectBuildStats;
 	static long collisionQueries;
 	static long supportChecks;
 	static long simsRun, simSteps, simLanded, simStalled, simTimedOut, simOutOfBounds, landingSearchIterations;
@@ -216,6 +226,7 @@ public sealed class PlatformNavGraph
 	}
 
 	public bool IsReady => phase == BuildPhase.Ready;
+	public int Revision => revision;
 
 	public Node? FindNearestNode(Vector2 position, float maxDistance, bool includeRoomExits = false, bool includeSwim = false)
 	{
@@ -417,6 +428,12 @@ public sealed class PlatformNavGraph
 		Console.WriteLine($"[NavGraph] paths: {pathQueries} node queries, {pathExpandedNodes} nodes / {pathEdgesExamined} edges examined; {surfacePathQueries} surface queries, {surfacePathExpandedNodes} spans / {surfacePathEdgesExamined} edges examined");
 	}
 
+	internal void ResetPathStats()
+	{
+		pathQueries = pathExpandedNodes = pathEdgesExamined = 0;
+		surfacePathQueries = surfacePathExpandedNodes = surfacePathEdgesExamined = 0;
+	}
+
 	float EdgeCost(Edge edge)
 	{
 		var distance = Vector2.Distance(Nodes[edge.From].Position, Nodes[edge.To].Position);
@@ -496,6 +513,7 @@ public sealed class PlatformNavGraph
 
 	public void Rebuild(Game game, Room room)
 	{
+		revision++;
 		Nodes.Clear();
 		Edges.Clear();
 		SurfaceSpans.Clear();
@@ -512,7 +530,11 @@ public sealed class PlatformNavGraph
 		sampleX = sampleBounds.Left + SampleStep / 2;
 		sampleY = sampleBounds.Top + Math.Abs(DuckingPawnProbe.Top);
 		nextJumpSourceId = 0;
-		rebuildStartTimestamp = Stopwatch.GetTimestamp();
+		nextJumpPlanIndex = 0;
+		nextDescentPlanIndex = 0;
+		jumpBuildStage = JumpBuildStage.StartSource;
+		collectBuildStats = VerboseBuildLog && NavGraphLogging();
+		rebuildStartTimestamp = collectBuildStats ? Stopwatch.GetTimestamp() : 0;
 		rebuildFrameCount = 0;
 		collisionQueries = 0;
 		supportChecks = 0;
@@ -533,20 +555,29 @@ public sealed class PlatformNavGraph
 			return;
 
 		rebuildFrameCount++;
+		var unbounded = budgetMs == float.MaxValue;
 		var start = Stopwatch.GetTimestamp();
 
 		// refresh the jumpthru-actor snapshot for this frame (actors are static
 		// within a frame, so this matches reading game.Actors live per call)
 		jumpthruActors.Clear();
+		simulationCollisionActors.Clear();
+		simulationWindActors.Clear();
 		foreach (var actor in rebuildGame!.Actors)
+		{
 			if (actor.Mask.Has(Actor.Masks.Jumpthru))
 				jumpthruActors.Add(actor);
+			if (actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru))
+				simulationCollisionActors.Add(actor);
+			if (actor is Wind)
+				simulationWindActors.Add(actor);
+		}
 
 		do
 		{
 			var active = phase;
-			var iterStart = Stopwatch.GetTimestamp();
-			var collisionsBefore = collisionQueries;
+			var iterStart = collectBuildStats ? Stopwatch.GetTimestamp() : 0;
+			var collisionsBefore = collectBuildStats ? collisionQueries : 0;
 
 			switch (phase)
 			{
@@ -579,14 +610,17 @@ public sealed class PlatformNavGraph
 					break;
 			}
 
-			phaseElapsedMs[(int)active] += Stopwatch.GetElapsedTime(iterStart).TotalMilliseconds;
-			phaseCollisionCounts[(int)active] += collisionQueries - collisionsBefore;
-		} while (phase < BuildPhase.Ready && Stopwatch.GetElapsedTime(start).TotalMilliseconds < budgetMs);
+			if (collectBuildStats)
+			{
+				phaseElapsedMs[(int)active] += Stopwatch.GetElapsedTime(iterStart).TotalMilliseconds;
+				phaseCollisionCounts[(int)active] += collisionQueries - collisionsBefore;
+			}
+		} while (phase < BuildPhase.Ready && (unbounded || Stopwatch.GetElapsedTime(start).TotalMilliseconds < budgetMs));
 
 		if (phase == BuildPhase.Ready)
 		{
 			BuildSurfaceEdges();
-			if (VerboseBuildLog && NavGraphLogging())
+			if (collectBuildStats)
 				LogRebuildStats();
 		}
 	}
@@ -844,85 +878,131 @@ public sealed class PlatformNavGraph
 
 	void TickJumpEdges()
 	{
-		if (nextJumpSourceId >= Nodes.Count)
+		while (nextJumpSourceId < Nodes.Count)
 		{
-			phase = BuildPhase.WaterNodes;
+			var from = Nodes[nextJumpSourceId];
+			switch (jumpBuildStage)
+			{
+				case JumpBuildStage.StartSource:
+					if (from.RequiresDucking)
+					{
+						nextJumpSourceId++;
+						continue;
+					}
+					jumpCandidates.Clear();
+					nextJumpPlanIndex = 0;
+					currentSourceCanAttemptChainedWallJump = CanAttemptChainedWallJump(rebuildGame!, from.Position);
+					jumpBuildStage = JumpBuildStage.Plans;
+					continue;
+
+				case JumpBuildStage.Plans:
+					while (nextJumpPlanIndex < JumpPlans.Length)
+					{
+						var pi = nextJumpPlanIndex++;
+						var plan = JumpPlans[pi];
+						if (plan.MaxWallKicks > 1 && !currentSourceCanAttemptChainedWallJump)
+							continue;
+						SimulateJumpPlan(from, plan, pi);
+						return;
+					}
+					jumpBuildStage = JumpBuildStage.CommitPlans;
+					continue;
+
+				case JumpBuildStage.CommitPlans:
+					foreach (var (toId, jump) in jumpCandidates)
+					{
+						if (CullPitFallJumps && !ValidateJumpWithController(from, Nodes[toId], jump.Plan))
+							continue;
+						if (AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan) && collectBuildStats)
+							planStats[jump.PlanIndex].Kept++;
+					}
+					if (EmitDescentEdges && from.Kind == NodeKind.Ledge)
+					{
+						descentCandidates.Clear();
+						nextDescentPlanIndex = 0;
+						jumpBuildStage = JumpBuildStage.Descents;
+					}
+					else
+						FinishJumpSource();
+					continue;
+
+				case JumpBuildStage.Descents:
+					if (nextDescentPlanIndex < DescentPlans.Length)
+					{
+						SimulateDescentPlan(from, DescentPlans[nextDescentPlanIndex++]);
+						return;
+					}
+					jumpBuildStage = JumpBuildStage.CommitDescents;
+					continue;
+
+				case JumpBuildStage.CommitDescents:
+					foreach (var (toId, candidate) in descentCandidates)
+						AddEdge(from.Id, toId, EdgeKind.Jump, candidate.Plan);
+					FinishJumpSource();
+					continue;
+			}
+		}
+
+		phase = BuildPhase.WaterNodes;
+	}
+
+	void SimulateJumpPlan(Node from, JumpPlan plan, int planIndex)
+	{
+		var t0 = collectBuildStats ? Stopwatch.GetTimestamp() : 0;
+		var simulated = TrySimulateJump(rebuildGame!, from, plan, out var landing);
+		if (collectBuildStats)
+			jumpSimTicks += Stopwatch.GetTimestamp() - t0;
+		if (!simulated)
 			return;
-		}
 
-		// Process a single source node per call so the caller's per-iteration
-		// budget check runs between nodes. A full node's jump plans are enough
-		// to overflow the frame budget if batched.
-		var from = Nodes[nextJumpSourceId];
-		nextJumpSourceId++;
-
-		if (!from.RequiresDucking)
+		if (collectBuildStats)
 		{
-			jumpCandidates.Clear();
-			for (var pi = 0; pi < JumpPlans.Length; pi++)
-			{
-				var plan = JumpPlans[pi];
-				if (plan.MaxWallKicks > 1 && !CanAttemptChainedWallJump(rebuildGame!, from.Position))
-					continue;
-
-				var t0 = Stopwatch.GetTimestamp();
-				var simulated = TrySimulateJump(rebuildGame!, from, plan, out var landing);
-				jumpSimTicks += Stopwatch.GetTimestamp() - t0;
-				if (!simulated)
-					continue;
-
-				// record where this plan reaches (its coverage in the height x distance map)
-				var reach = MathF.Abs(landing.X - from.Position.X);
-				var dy = landing.Y - from.Position.Y;
-				ref var st = ref planStats[pi];
-				st.Landed++;
-				st.SumReach += reach;
-				if (reach < st.MinReach) st.MinReach = reach;
-				if (reach > st.MaxReach) st.MaxReach = reach;
-				if (dy < st.MinDy) st.MinDy = dy;
-				if (dy > st.MaxDy) st.MaxDy = dy;
-
-				var t1 = Stopwatch.GetTimestamp();
-				var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
-				landingSearchTicks += Stopwatch.GetTimestamp() - t1;
-				if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
-					continue;
-
-				var cost = JumpPlanCost(from, to.Value, plan);
-				if (!jumpCandidates.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
-					jumpCandidates[to.Value.Id] = (plan, cost, pi);
-			}
-
-			foreach (var (toId, jump) in jumpCandidates)
-			{
-				if (CullPitFallJumps && !ValidateJumpWithController(from, Nodes[toId], jump.Plan))
-					continue;
-				if (AddEdge(from.Id, toId, EdgeKind.Jump, jump.Plan))
-					planStats[jump.PlanIndex].Kept++;
-			}
-
-			// Descent-and-kick edges: only from ledges (platform edges, where Bud can drop into
-			// an adjacent shaft). Per landing node, keep the shortest slide that reaches it.
-			if (EmitDescentEdges && from.Kind == NodeKind.Ledge)
-			{
-				descentCandidates.Clear();
-				foreach (var plan in DescentPlans)
-				{
-					if (!TrySimulateJump(rebuildGame!, from, plan, out var landing))
-						continue;
-					var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
-					if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
-						continue;
-					if (!descentCandidates.TryGetValue(to.Value.Id, out var existing) || plan.RunupTime < existing.Slide)
-						descentCandidates[to.Value.Id] = (plan, plan.RunupTime);
-				}
-				foreach (var (toId, c) in descentCandidates)
-					AddEdge(from.Id, toId, EdgeKind.Jump, c.Plan);
-			}
+			var reach = MathF.Abs(landing.X - from.Position.X);
+			var dy = landing.Y - from.Position.Y;
+			ref var stats = ref planStats[planIndex];
+			stats.Landed++;
+			stats.SumReach += reach;
+			if (reach < stats.MinReach) stats.MinReach = reach;
+			if (reach > stats.MaxReach) stats.MaxReach = reach;
+			if (dy < stats.MinDy) stats.MinDy = dy;
+			if (dy > stats.MaxDy) stats.MaxDy = dy;
 		}
 
-		if (nextJumpSourceId >= Nodes.Count)
-			phase = BuildPhase.WaterNodes;
+		var t1 = collectBuildStats ? Stopwatch.GetTimestamp() : 0;
+		var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
+		if (collectBuildStats)
+			landingSearchTicks += Stopwatch.GetTimestamp() - t1;
+		if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
+			return;
+
+		var cost = JumpPlanCost(from, to.Value, plan);
+		if (!jumpCandidates.TryGetValue(to.Value.Id, out var existing) || cost < existing.Cost)
+			jumpCandidates[to.Value.Id] = (plan, cost, planIndex);
+	}
+
+	void SimulateDescentPlan(Node from, JumpPlan plan)
+	{
+		var t0 = collectBuildStats ? Stopwatch.GetTimestamp() : 0;
+		var simulated = TrySimulateJump(rebuildGame!, from, plan, out var landing);
+		if (collectBuildStats)
+			jumpSimTicks += Stopwatch.GetTimestamp() - t0;
+		if (!simulated)
+			return;
+
+		var t1 = collectBuildStats ? Stopwatch.GetTimestamp() : 0;
+		var to = FindNearestLandingNode(from.Id, landing, SimLandingTolerance);
+		if (collectBuildStats)
+			landingSearchTicks += Stopwatch.GetTimestamp() - t1;
+		if (!to.HasValue || HasEdge(from.Id, to.Value.Id))
+			return;
+		if (!descentCandidates.TryGetValue(to.Value.Id, out var existing) || plan.RunupTime < existing.Slide)
+			descentCandidates[to.Value.Id] = (plan, plan.RunupTime);
+	}
+
+	void FinishJumpSource()
+	{
+		nextJumpSourceId++;
+		jumpBuildStage = JumpBuildStage.StartSource;
 	}
 
 	int AddNode(Point2 position, NodeKind kind, RoomExit? exit = null, bool requiresDucking = false)
@@ -1444,7 +1524,8 @@ public sealed class PlatformNavGraph
 
 	static bool OverlapsCollision(Game game, RectInt bounds)
 	{
-		collisionQueries++;
+		if (collectBuildStats)
+			collisionQueries++;
 		return game.OverlapsRoomCollision(bounds);
 	}
 
@@ -1479,7 +1560,8 @@ public sealed class PlatformNavGraph
 
 	static bool HasStandableSupport(Game game, RectInt bounds)
 	{
-		supportChecks++;
+		if (collectBuildStats)
+			supportChecks++;
 		if (OverlapsCollision(game, bounds + Point2.Down))
 			return true;
 
@@ -1590,7 +1672,8 @@ public sealed class PlatformNavGraph
 
 			foreach (var nodeId in row)
 			{
-				landingSearchIterations++;
+				if (collectBuildStats)
+					landingSearchIterations++;
 				if (nodeId == fromId)
 					continue;
 
@@ -1712,10 +1795,10 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	static bool TrySimulateJump(Game game, Node from, JumpPlan plan, out Vector2 landing)
+	bool TrySimulateJump(Game game, Node from, JumpPlan plan, out Vector2 landing)
 	{
 		using var _ = game.BeginSimulation();
-		var sim = new JumpSimulationPawn(game, from.Position, plan);
+		var sim = new JumpSimulationPawn(game, from.Position, plan, simulationCollisionActors, simulationWindActors);
 		return sim.Run(out landing);
 	}
 
@@ -1919,6 +2002,8 @@ public sealed class PlatformNavGraph
 		readonly Game game;
 		readonly Vector2 from;
 		readonly JumpPlan plan;
+		readonly List<Actor> simulationCollisionActors;
+		readonly List<Actor> simulationWindActors;
 		float elapsed;
 		bool leftStart;
 		bool leftGround;
@@ -1926,11 +2011,16 @@ public sealed class PlatformNavGraph
 		int lastX;
 		int stalledFrames;
 
-		public JumpSimulationPawn(Game game, Vector2 from, JumpPlan plan)
+		internal override List<Actor> CollisionActors => simulationCollisionActors;
+		internal override List<Actor> WindActors => simulationWindActors;
+
+		public JumpSimulationPawn(Game game, Vector2 from, JumpPlan plan, List<Actor> simulationCollisionActors, List<Actor> simulationWindActors)
 		{
 			this.game = game;
 			this.from = from;
 			this.plan = plan;
+			this.simulationCollisionActors = simulationCollisionActors;
+			this.simulationWindActors = simulationWindActors;
 			Game = game;
 			Position = (Point2)from;
 			Hitbox = new(PawnProbe);
@@ -1988,7 +2078,8 @@ public sealed class PlatformNavGraph
 
 		public bool Run(out Vector2 landing)
 		{
-			simsRun++;
+			if (collectBuildStats)
+				simsRun++;
 			var dt = game.Time.Delta;
 			if (dt <= 0)
 				dt = SimDelta;
@@ -1996,7 +2087,8 @@ public sealed class PlatformNavGraph
 			var maxTime = plan.MaxWallKicks > 1 ? SimChainMaxTime : SimMaxTime;
 			for (elapsed = 0.0f; elapsed < maxTime; elapsed += dt)
 			{
-				simSteps++;
+				if (collectBuildStats)
+					simSteps++;
 				Update();
 
 				if (Vector2.DistanceSquared((Vector2)Position, from) > 9)
@@ -2009,7 +2101,8 @@ public sealed class PlatformNavGraph
 				// check fires on the first few px of grounded movement, before the maneuver begins.
 				if (leftStart && leftGround && Velocity.Y >= 0 && IsGrounded)
 				{
-					simLanded++;
+					if (collectBuildStats)
+						simLanded++;
 					landing = Position;
 					return true;
 				}
@@ -2023,7 +2116,8 @@ public sealed class PlatformNavGraph
 					Position.X < game.Bounds.Left - Game.TileSize * 2 ||
 					Position.X > game.Bounds.Right + Game.TileSize * 2)
 				{
-					simOutOfBounds++;
+					if (collectBuildStats)
+						simOutOfBounds++;
 					landing = default;
 					return false;
 				}
@@ -2041,13 +2135,15 @@ public sealed class PlatformNavGraph
 
 				if (stalledFrames > 20)
 				{
-					simStalled++;
+					if (collectBuildStats)
+						simStalled++;
 					landing = default;
 					return false;
 				}
 			}
 
-			simTimedOut++;
+			if (collectBuildStats)
+				simTimedOut++;
 			landing = default;
 			return false;
 		}

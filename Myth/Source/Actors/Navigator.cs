@@ -32,6 +32,7 @@ public sealed class Navigator(Pawn owner)
 	static float TakeoffApproachBrakeDistance => 10.0f;
 	static float TakeoffApproachBrakeAccel => 1600.0f;
 	static float BlockedPathTargetResetDistance => 16.0f;
+	static float PathTargetReplanDistance => Game.TileSize;
 	static float DirectGoalJumpMaxHorizontalDistance => 64.0f;
 	// Capped at what a held jump can actually rise (~30px): any taller "direct" hop is
 	// physically unmakeable and would just hijack pathing that could route there properly.
@@ -76,10 +77,18 @@ public sealed class Navigator(Pawn owner)
 
 	readonly List<PlatformNavGraph.Edge> navPath = [];
 	public List<PlatformNavGraph.Edge> NavPath => navPath;
+	readonly List<PlatformNavGraph.Edge> directJumpPath = [];
 	readonly List<PlatformNavGraph.SurfaceEdge> surfaceNavPath = [];
 	readonly List<PlatformNavGraph.Node> goalCandidates = [];
 	readonly HashSet<(int From, int To)> blockedPathEdges = [];
 	Vector2? blockedPathTarget;
+	PlatformNavGraph? cachedPathGraph;
+	Vector2 cachedPathTarget;
+	int cachedPathGraphRevision = -1;
+	int cachedPathStartId = -1;
+	int cachedPathGoalId = -1;
+	int cachedPathBlockedRevision = -1;
+	int blockedPathRevision;
 	EdgeState activeEdge;
 	bool activeEdgeBlocksPath;
 	string? lastTraceStateKey;
@@ -120,6 +129,37 @@ public sealed class Navigator(Pawn owner)
 	public IReadOnlyList<PlatformNavGraph.SurfaceEdge> DebugSurfaceNavPath => surfaceNavPath;
 	public RectInt? DebugNavProbeRect { get; set; }
 	public bool DebugNavProbeHit { get; set; }
+
+	internal bool TryReuseNavPath(PlatformNavGraph graph, int startId, Vector2 target, out PlatformNavGraph.Node goal)
+	{
+		if (cachedPathGraph != graph ||
+			cachedPathGraphRevision != graph.Revision ||
+			cachedPathStartId != startId ||
+			Vector2.DistanceSquared(cachedPathTarget, target) > PathTargetReplanDistance * PathTargetReplanDistance ||
+			cachedPathBlockedRevision != blockedPathRevision ||
+			cachedPathGoalId < 0 ||
+			cachedPathGoalId >= graph.Nodes.Count ||
+			navPath.Count <= 0 ||
+			navPath[0].From != startId ||
+			navPath[^1].To != cachedPathGoalId)
+		{
+			goal = default;
+			return false;
+		}
+
+		goal = graph.Nodes[cachedPathGoalId];
+		return true;
+	}
+
+	internal void RememberNavPath(PlatformNavGraph graph, int startId, int goalId, Vector2 target)
+	{
+		cachedPathGraph = graph;
+		cachedPathGraphRevision = graph.Revision;
+		cachedPathStartId = startId;
+		cachedPathGoalId = goalId;
+		cachedPathTarget = target;
+		cachedPathBlockedRevision = blockedPathRevision;
+	}
 
 	public void UpdateJumpHeld(bool jumpPressed)
 	{
@@ -189,8 +229,11 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
+		var reusedPath = TryReuseNavPath(graph, start.Value.Id, target, out var cachedGoal);
 		PlatformNavGraph.Node? goal = null;
-		foreach (var candidate in goalCandidates)
+		if (reusedPath)
+			goal = cachedGoal;
+		else foreach (var candidate in goalCandidates)
 		{
 			if (candidate.Id == start.Value.Id)
 				continue;
@@ -223,6 +266,8 @@ public sealed class Navigator(Pawn owner)
 			}
 		}
 
+		if (!reusedPath)
+			RememberNavPath(graph, start.Value.Id, goal.Value.Id, target);
 		UpdateDebugSurfacePath(graph, start.Value.Id, goal.Value.Id);
 		TraceState(
 			$"path:{start.Value.Id}:{goal.Value.Id}:{navPath.Count}",
@@ -350,7 +395,7 @@ public sealed class Navigator(Pawn owner)
 		{
 			Game.NavTrace?.EdgeEvent(Game, "edgeTimeout", edge, ("timer", activeEdge.Timer), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 			if (activeEdgeBlocksPath)
-				blockedPathEdges.Add((edge.From, edge.To));
+				BlockPathEdge(edge);
 			ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} timeout {edge.From}->{edge.To}" : "timeout");
 			return false;
 		}
@@ -477,6 +522,8 @@ public sealed class Navigator(Pawn owner)
 
 	public void ClearBlockedPathEdges()
 	{
+		if (blockedPathEdges.Count > 0)
+			blockedPathRevision++;
 		blockedPathEdges.Clear();
 		blockedPathTarget = null;
 	}
@@ -499,8 +546,16 @@ public sealed class Navigator(Pawn owner)
 			Vector2.DistanceSquared(blockedPathTarget.Value, target) <= BlockedPathTargetResetDistance * BlockedPathTargetResetDistance)
 			return;
 
+		if (blockedPathEdges.Count > 0)
+			blockedPathRevision++;
 		blockedPathEdges.Clear();
 		blockedPathTarget = target;
+	}
+
+	void BlockPathEdge(PlatformNavGraph.Edge edge)
+	{
+		if (blockedPathEdges.Add((edge.From, edge.To)))
+			blockedPathRevision++;
 	}
 
 	bool TryDirectGoalJump(Vector2 target, out float moveX, out bool jumpPressed)
@@ -566,6 +621,7 @@ public sealed class Navigator(Pawn owner)
 	{
 		PlatformNavGraph.Node? best = null;
 		var bestScore = float.MaxValue;
+		directJumpPath.Clear();
 		foreach (var node in graph.Nodes)
 		{
 			if (node.Kind == PlatformNavGraph.NodeKind.RoomExit || node.RequiresDucking)
@@ -582,6 +638,8 @@ public sealed class Navigator(Pawn owner)
 				continue;
 			best = node;
 			bestScore = score;
+			directJumpPath.Clear();
+			directJumpPath.AddRange(navPath);
 		}
 
 		if (!best.HasValue)
@@ -590,7 +648,8 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		graph.TryFindPath(startId, best.Value.Id, navPath, blockedPathEdges);
+		navPath.Clear();
+		navPath.AddRange(directJumpPath);
 		goal = best.Value;
 		return true;
 	}
@@ -1086,7 +1145,7 @@ public sealed class Navigator(Pawn owner)
 	// Blocks the edge for this pathing target (so the next path routes around it) and clears it.
 	void AbortMissedEdge(PlatformNavGraph.Edge edge, string label)
 	{
-		blockedPathEdges.Add((edge.From, edge.To));
+		BlockPathEdge(edge);
 		Game.NavTrace?.EdgeEvent(Game, "edgeAbortMissed", edge, ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 		ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} {label} {edge.From}->{edge.To}" : label);
 	}

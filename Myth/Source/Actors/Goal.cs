@@ -17,7 +17,7 @@ public class Goal : Actor
 		Depth = -100;
 	}
 
-	bool ShouldRender => Game.Manager.CurrentRunGoalId() == ActorId;
+	bool ShouldRender => Game.Manager.CurrentRunGoalId() == ActorId || Game.Editing;
 
 	public override void Render(Batcher batcher)
 	{
