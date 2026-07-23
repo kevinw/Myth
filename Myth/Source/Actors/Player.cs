@@ -228,7 +228,7 @@ public abstract class Pawn : Actor
 
 		var waterBounds = Hitbox.Rect + Position;
 		waterBounds = waterBounds.Inflate(8);
-		inWater = Game.IsWaterAt(waterBounds.Center);
+		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center);
 		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
 		// Crossing the surface (either direction) kicks it into a splash + droplets scaled by
 		// the crossing speed. On entry, surface tension also gives an extra one-time slowdown.
@@ -272,7 +272,7 @@ public abstract class Pawn : Actor
 		else if (ducking || State == States.Roll)
 			Hitbox = new(DuckingHitboxRect);
 		else
-			Hitbox = new(StandingHitboxRect);
+			Hitbox = new(CurrentStandingHitboxRect);
 
 		if (jumpTimer > 0)
 		{
@@ -325,6 +325,11 @@ public abstract class Pawn : Actor
 	protected virtual void AfterMovementUpdate(Vector2 previousVelocity) { }
 	protected virtual void CustomState() { }
 	protected virtual bool AllowDuckingInState() => false;
+	// Hands-full flag (Player: holding a Carryable). Gates duck/roll/dash/burrow, the wall
+	// moves, and rope grabs; the standing hitbox is read through CurrentStandingHitboxRect
+	// so a carrier can swell it to the combined player+cargo body.
+	protected virtual bool IsCarrying => false;
+	protected virtual RectInt CurrentStandingHitboxRect => StandingHitboxRect;
 	protected virtual bool TryStartPawnAction(int moveX) => false;
 	protected virtual void OnPawnJump() { }
 	protected virtual void OnRollStarted() { }
@@ -354,7 +359,7 @@ public abstract class Pawn : Actor
 		if (input.MoveY < 0 && TryGrabRope())
 			return;
 
-		if (grounded && input.MoveY > 0)
+		if (grounded && input.MoveY > 0 && !IsCarrying)
 			ducking = true;
 		else if (ducking)
 			ducking = grounded && !CanStandUp();
@@ -523,7 +528,7 @@ public abstract class Pawn : Actor
 		var canGroundJump = grounded && CanStandUp();
 		var wasGroundedJump = canGroundJump;
 		canGroundJump |= canCoyoteJump;
-		var canWallJump = input.AllowWallJump && wallJump != 0 && moveX != 0;
+		var canWallJump = input.AllowWallJump && !IsCarrying && wallJump != 0 && moveX != 0;
 		var jumpPressed = input.JumpPressed;
 		if (!jumpPressed && canGroundJump && jumpBufferTimer > 0)
 			jumpPressed = true;
@@ -591,6 +596,7 @@ public abstract class Pawn : Actor
 	protected bool CanBurrow()
 	{
 		if (inWater) return false;
+		if (IsCarrying) return false;
 		if (wallSliding) return false;
 		if (burrowNeedsGrounding) return false;
 		if (burrowTimer < 0) return false; // the ability is still cooling down
@@ -601,6 +607,7 @@ public abstract class Pawn : Actor
 	protected bool TryStartRoll(Vector2 impactVelocity)
 	{
 		if (State != States.Normal) return false;
+		if (IsCarrying) return false;
 		if (input.MoveY <= 0) return false; // must be holding "downwards" to roll
 
 		bool onSlope = GetSlopeUnderneath(out var normal);
@@ -691,7 +698,7 @@ public abstract class Pawn : Actor
 
 	bool TryGrabRope()
 	{
-		if (regrabTimer > 0)
+		if (IsCarrying || regrabTimer > 0)
 			return false;
 
 		var center = Position + Hitbox.Rect.Center;
@@ -826,7 +833,7 @@ public abstract class Pawn : Actor
 
 	protected bool TryStartDash(int input)
 	{
-		if (dashCooldownTimer > 0 || dashNeedsGrounding)
+		if (IsCarrying || dashCooldownTimer > 0 || dashNeedsGrounding)
 			return false;
 
 		dashDirection = input != 0 ? Math.Sign(input) : Facing;
@@ -897,11 +904,11 @@ public abstract class Pawn : Actor
 
 	protected bool CanStandUp()
 	{
-		var standingBounds = StandingHitboxRect + Position;
+		var standingBounds = CurrentStandingHitboxRect + Position;
 		if (Game.OverlapsRoomCollision(standingBounds))
 			return false;
 
-		foreach (var other in Game.Actors)
+		foreach (var other in CollisionActors)
 		{
 			if (other == this || other is Grid || !other.Mask.Has(Masks.Solid))
 				continue;
@@ -940,7 +947,7 @@ public abstract class Pawn : Actor
 		=> IsWallHugging(GetWallJumpDirection());
 
 	bool IsWallHugging(int wallJumpDirection)
-		=> wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
+		=> !IsCarrying && wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
 
 	// Splash droplet burst tuning (the surface ripple itself is scaled in WaterSurface).
 	const float SplashDropletSpeedRef = 60f; // plunge speed that maps to ~1x droplet speed
@@ -1280,6 +1287,7 @@ public partial class Player : Pawn
 				fungus.OnPlayerStep(footPosition);
 
 		UpdateBurrowAlways();
+		UpdateCarriedPosition();
 		UpdateHat(previousVelocity);
 		UpdateShield(Time.Delta);
 	}
@@ -1338,7 +1346,7 @@ public partial class Player : Pawn
 
 	protected override bool TryStartPawnAction(int moveX)
 	{
-		if (Controls.BlinkStrike.ConsumePress())
+		if (carried == null && Controls.BlinkStrike.ConsumePress())
 		{
 			blinkStrikeTarget = FindBlinkStrikeTarget();
 			if (blinkStrikeTarget != null)
@@ -1353,6 +1361,12 @@ public partial class Player : Pawn
 		}
 		else if (Controls.Attack.ConsumePress())
 		{
+			if (carried != null)
+			{
+				ThrowCarried();
+				return true;
+			}
+
 			if (!grounded && moveX != 0)
 				Facing = moveX;
 
@@ -1371,7 +1385,7 @@ public partial class Player : Pawn
 				return true;
 			}
 		}
-		else if (Controls.Saw.ConsumePress())
+		else if (carried == null && Controls.Saw.ConsumePress())
 		{
 			var existingSaw = Game.GetFirst<Saw>();
 			if (existingSaw != null)
@@ -1692,6 +1706,7 @@ public partial class Player : Pawn
 			return;
 		}
 
+		DropCarriedFromHurt();
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
 		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor), amount: healthDelta == 0 ? 0.7f : 1.0f);

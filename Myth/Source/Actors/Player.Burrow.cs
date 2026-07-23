@@ -562,6 +562,12 @@ public partial class Player : Pawn
 			}
 		}
 
+		// Popping up underneath a Carryable at rest catches it overhead — the burrow is the
+		// lift verb. Resolved before the launch so the catch can soften it (dampened below,
+		// like the hold-Down pop), and before AfterMovementUpdate's TryUnstick sees the
+		// swollen carry hitbox.
+		var caught = exitDir.Y > 0.5f && TryCatchCarryable();
+
 		// Climbing straight up a vertical wall pops into a wall slide instead of launching
 		// off it: drop the outward push, keep hugging the wall, and carry strong upward
 		// velocity. Feels better and sets up wall-jump / re-burrow chaining off the launch.
@@ -589,7 +595,7 @@ public partial class Player : Pawn
 			// clearly wasn't a committed launch, so don't fling the player.
 			Velocity = -exitDir * popMagnitude + travel;
 			var shortBurrow = burrowDuration - burrowTimer < ShortBurrowDampenTime;
-			if (Velocity.Y < 50 && (shortBurrow || Controls.Move.IntValue.Y == 1))
+			if (Velocity.Y < 50 && (shortBurrow || caught || Controls.Move.IntValue.Y == 1))
 				Velocity.Y *= 0.5f;
 
 			// Burrow glide can exceed normal air speed; let the carried horizontal
