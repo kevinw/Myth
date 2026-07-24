@@ -502,7 +502,7 @@ public partial class Manager : App
 	protected override void Shutdown()
 	{
 #if !MYTHSHIP && !BROWSER && !IOS
-		try { if (MythCapture.IsRecording) MythCapture.Stop(); } catch { /* best-effort finalize */ }
+		try { if (MythCapture.IsRecording) StopMovieRecording(reveal: false); } catch { /* best-effort finalize */ }
 #endif
 		FlushSaveState();
 #if !BROWSER
@@ -1151,7 +1151,7 @@ public partial class Manager : App
 		{
 			if (Input.Keyboard.Pressed(Keys.B)) ToggleBudAI();
 #if !MYTHSHIP
-			if (Input.Keyboard.Pressed(Keys.M)) ToggleMovieRecording();
+			if (Input.Keyboard.Pressed(Keys.M)) ToggleMovieRecording(Input.Keyboard.Shift);
 #endif
 		}
 #endif
@@ -1181,74 +1181,6 @@ public partial class Manager : App
 		ShowPerfToggleMessage("BudAIEnabled", PerfToggles.BudAIEnabled);
 	}
 
-#if !MYTHSHIP && !BROWSER && !IOS
-	// Records the game window to an .mp4 via ScreenCaptureKit (see native/MythCapture).
-	void ToggleMovieRecording()
-	{
-		if (!MythCapture.Available)
-		{
-			DisplayMessage("Window capture: macOS only");
-			return;
-		}
-
-		try
-		{
-			if (MythCapture.IsRecording)
-			{
-				var ok = MythCapture.Stop();
-				DisplayMessage(ok ? $"Saved → {MythCapture.OutputPath}" : $"Rec stop failed: {MythCapture.LastError()}");
-				if (ok && MythCapture.OutputPath is { } saved)
-					RevealInFinder(saved);
-			}
-			else
-			{
-				var dir = MovieOutputDir();
-				Directory.CreateDirectory(dir);
-				var room = SanitizeForFilename(game?.CurrentRoom?.Id);
-				var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-				var name = string.IsNullOrEmpty(room) ? $"myth-{stamp}.mp4" : $"myth-{room}-{stamp}.mp4";
-				var path = Path.Combine(dir, name);
-				var ok = MythCapture.Start(path);
-				if (!ok) DisplayMessage($"Rec failed: {MythCapture.LastError()}");
-			}
-		}
-		catch (DllNotFoundException)
-		{
-			DisplayMessage("libMythCapture.dylib missing — run native/MythCapture/build.sh");
-		}
-	}
-
-	static string MovieOutputDir()
-	{
-		var movies = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-		if (string.IsNullOrEmpty(movies))
-			movies = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
-		return Path.Combine(movies, "Myth");
-	}
-
-	// Room ids can contain path separators / spaces; make one filename-safe.
-	static string SanitizeForFilename(string? name)
-	{
-		if (string.IsNullOrEmpty(name))
-			return "";
-		var invalid = Path.GetInvalidFileNameChars();
-		var chars = name.Select(c => invalid.Contains(c) || c == ' ' ? '_' : c).ToArray();
-		return new string(chars);
-	}
-
-	// Reveal (and select) the finished recording in a Finder window.
-	static void RevealInFinder(string path)
-	{
-		try
-		{
-			var info = new System.Diagnostics.ProcessStartInfo("open") { UseShellExecute = false };
-			info.ArgumentList.Add("-R");
-			info.ArgumentList.Add(path);
-			System.Diagnostics.Process.Start(info);
-		}
-		catch { /* best-effort: recording already saved */ }
-	}
-#endif
 
 	// Transient on-screen status message (debug toggles, music cycle, etc.). Stored on
 	// the Manager rather than the Game so it survives Game recreation (e.g. a message
@@ -1343,6 +1275,10 @@ public partial class Manager : App
 		imgui?.Render();
 		if (menuLayoutBuiltThisFrame)
 			menuImgui.Render();
+#if !MYTHSHIP && !BROWSER && !IOS
+		if (movieTracksPlayer)
+			RecordMoviePlayerSample();
+#endif
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after

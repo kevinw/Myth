@@ -31,11 +31,16 @@ final class MythRecorder: NSObject, SCStreamOutput {
 
 	// constant-frame-rate re-timing state
 	private var fps: Int32 = 60
+	private var outputWidth: Int32 = 0
+	private var outputHeight: Int32 = 0
 	private var startPTS: CMTime = .invalid
 	private var lastIndex: Int64 = -1
 
 	var isRecording: Bool { lock.lock(); defer { lock.unlock() }; return recordingFlag }
 	var lastError: String { lock.lock(); defer { lock.unlock() }; return lastErr }
+	var effectiveFps: Int32 { lock.lock(); defer { lock.unlock() }; return fps }
+	var width: Int32 { lock.lock(); defer { lock.unlock() }; return outputWidth }
+	var height: Int32 { lock.lock(); defer { lock.unlock() }; return outputHeight }
 	private func setError(_ s: String) { lock.lock(); lastErr = s; lock.unlock() }
 
 	// The display refresh rate (capped) — the game is vsync'd to it, so capturing at this
@@ -150,7 +155,8 @@ final class MythRecorder: NSObject, SCStreamOutput {
 
 		lock.lock()
 		self.writer = writer; self.input = input; self.adaptor = adaptor; self.stream = stream
-		self.fps = fps; self.startPTS = .invalid; self.lastIndex = -1
+		self.fps = fps; self.outputWidth = Int32(w); self.outputHeight = Int32(h)
+		self.startPTS = .invalid; self.lastIndex = -1
 		lock.unlock()
 
 		let startSem = DispatchSemaphore(value: 0)
@@ -252,6 +258,24 @@ public func myth_capture_stop() -> Int32 {
 public func myth_capture_is_recording() -> Int32 {
 	guard #available(macOS 12.3, *) else { return 0 }
 	return MythRecorder.shared.isRecording ? 1 : 0
+}
+
+@_cdecl("myth_capture_fps")
+public func myth_capture_fps() -> Int32 {
+	guard #available(macOS 12.3, *) else { return 0 }
+	return MythRecorder.shared.effectiveFps
+}
+
+@_cdecl("myth_capture_width")
+public func myth_capture_width() -> Int32 {
+	guard #available(macOS 12.3, *) else { return 0 }
+	return MythRecorder.shared.width
+}
+
+@_cdecl("myth_capture_height")
+public func myth_capture_height() -> Int32 {
+	guard #available(macOS 12.3, *) else { return 0 }
+	return MythRecorder.shared.height
 }
 
 @_cdecl("myth_capture_last_error")

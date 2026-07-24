@@ -82,6 +82,7 @@ public class Actor
 	protected void SetAnimationTime(float time) => animationTime = time;
 
 	Vector2 remainder;
+	internal Vector2 SubPixelRemainder => remainder;
 	Sprite? sprite;
 	string? animationName;
 	float animationTime = 0;

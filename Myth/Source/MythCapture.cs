@@ -1,4 +1,5 @@
 #if !MYTHSHIP && !BROWSER && !IOS
+using Foster.Framework;
 using System.Runtime.InteropServices;
 
 namespace Myth;
@@ -28,6 +29,15 @@ static partial class MythCapture
 	[LibraryImport(Lib, EntryPoint = "myth_capture_is_recording")]
 	private static partial int NativeIsRecording();
 
+	[LibraryImport(Lib, EntryPoint = "myth_capture_fps")]
+	private static partial int NativeFps();
+
+	[LibraryImport(Lib, EntryPoint = "myth_capture_width")]
+	private static partial int NativeWidth();
+
+	[LibraryImport(Lib, EntryPoint = "myth_capture_height")]
+	private static partial int NativeHeight();
+
 	[LibraryImport(Lib, EntryPoint = "myth_capture_last_error")]
 	private static partial void NativeLastError([Out] byte[] buffer, int capacity);
 
@@ -53,6 +63,8 @@ static partial class MythCapture
 	}
 
 	public static bool Stop() => NativeStop() == 0;
+	public static int EffectiveFps => NativeFps();
+	public static Point2 OutputSize => new(NativeWidth(), NativeHeight());
 
 	public static string LastError()
 	{
