@@ -393,25 +393,39 @@ public class Bud : Pawn, ICarryable
 			return false;
 		}
 
-		var preferredSide = Position.X <= player.Position.X ? -1 : 1;
-		if (TryNavigateSameSurfaceBesidePlayer(graph, player, preferredSide, out moveX, out moveY))
-			return true;
-		if (TryNavigateSameSurfaceBesidePlayer(graph, player, -preferredSide, out moveX, out moveY))
+		var playerPlatform = player.OverlapsFirst(Point2.Down, Masks.Solid) as MovingPlatform;
+		if (playerPlatform is { SupportsPlatformNav: false })
+			playerPlatform = null;
+		if (playerPlatform != null && nav.TryFollowPlayerOnPlatform(player, playerPlatform, out moveX))
 			return true;
 
+		if (playerPlatform == null)
+		{
+			var preferredSide = Position.X <= player.Position.X ? -1 : 1;
+			if (TryNavigateSameSurfaceBesidePlayer(graph, player, preferredSide, out moveX, out moveY))
+				return true;
+			if (TryNavigateSameSurfaceBesidePlayer(graph, player, -preferredSide, out moveX, out moveY))
+				return true;
+		}
+
+		var pathTarget = playerPlatform?.NavStartPosition ?? player.Position;
 		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
 		PlatformNavGraph.Node? goal;
 		PlatformNavGraph.Node cachedGoal = default;
 		bool pathFound;
-		var reusedPath = start.HasValue && nav.TryReuseNavPath(graph, start.Value.Id, player.Position, out cachedGoal);
+		var reusedPath = start.HasValue &&
+			nav.TryReuseNavPath(graph, start.Value.Id, pathTarget, out cachedGoal) &&
+			PathMatchesPlayerPlatform(playerPlatform);
 		if (reusedPath)
 		{
 			goal = cachedGoal;
 			pathFound = true;
 		}
+		else if (playerPlatform != null)
+			goal = FindGoalOnMovingPlatform(graph, playerPlatform, start, out pathFound);
 		else
 			goal = FindGoalNodeBesidePlayer(graph, player, start, out pathFound);
-		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id)
+		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id && !pathFound)
 		{
 			nav.SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
 			return false;
@@ -427,7 +441,7 @@ public class Bud : Pawn, ICarryable
 			return false;
 		}
 		if (!reusedPath)
-			nav.RememberNavPath(graph, start.Value.Id, goal.Value.Id, player.Position);
+			nav.RememberNavPath(graph, start.Value.Id, goal.Value.Id, pathTarget);
 		nav.UpdateDebugSurfacePath(graph, start.Value.Id, goal.Value.Id);
 
 		if (!nav.TryGetActionableEdge(graph, out var edge))
@@ -439,7 +453,7 @@ public class Bud : Pawn, ICarryable
 			return false;
 		}
 
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope)
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope or PlatformNavGraph.EdgeKind.MovingPlatform)
 		{
 			nav.DebugNavStartNodeId = start.Value.Id;
 			nav.DebugNavGoalNodeId = goal.Value.Id;
@@ -553,6 +567,68 @@ public class Bud : Pawn, ICarryable
 		   MathF.Abs(Position.Y - player.Position.Y) <= Game.TileSize + Navigator.NavNodeReachDistance;
 
 	private readonly List<PlatformNavGraph.Node> goalCandidates = [];
+	readonly List<PlatformNavGraph.Edge> movingPlatformPathCandidate = [];
+	readonly List<PlatformNavGraph.Edge> movingPlatformBestPath = [];
+
+	bool PathMatchesPlayerPlatform(MovingPlatform? platform)
+	{
+		if (nav.NavPath[^1] is not { Kind: PlatformNavGraph.EdgeKind.MovingPlatform, PlatformRide.StayAboard: true } edge)
+			return platform == null;
+		return platform?.ActorId == edge.ConnectorActorId;
+	}
+
+	PlatformNavGraph.Node? FindGoalOnMovingPlatform(
+		PlatformNavGraph graph,
+		MovingPlatform platform,
+		PlatformNavGraph.Node? start,
+		out bool pathFound)
+	{
+		pathFound = false;
+		if (!start.HasValue || platform.ActorId is not { } actorId)
+			return null;
+
+		PlatformNavGraph.MovingPlatformAttachment? best = null;
+		var bestCost = float.MaxValue;
+		var bestDistance = float.MaxValue;
+		movingPlatformBestPath.Clear();
+		foreach (var attachment in graph.MovingPlatformAttachments)
+		{
+			if (attachment.ActorId != actorId ||
+				!graph.TryFindPath(start.Value.Id, attachment.NodeId, movingPlatformPathCandidate))
+				continue;
+
+			var distance = Vector2.DistanceSquared(Position, graph.Nodes[attachment.NodeId].Position);
+			var cost = graph.PathCost(movingPlatformPathCandidate);
+			if (cost > bestCost || cost == bestCost && distance >= bestDistance)
+				continue;
+
+			best = attachment;
+			bestCost = cost;
+			bestDistance = distance;
+			movingPlatformBestPath.Clear();
+			movingPlatformBestPath.AddRange(movingPlatformPathCandidate);
+		}
+
+		if (best is not { } destination)
+			return null;
+
+		nav.NavPath.Clear();
+		nav.NavPath.AddRange(movingPlatformBestPath);
+		nav.NavPath.Add(new(
+			destination.NodeId,
+			destination.NodeId,
+			PlatformNavGraph.EdgeKind.MovingPlatform,
+			ConnectorActorId: actorId,
+			PlatformRide: new(
+				destination.RouteStart,
+				destination.RouteEnd,
+				destination.RouteStart,
+				destination.RouteEnd,
+				0,
+				StayAboard: true)));
+		pathFound = true;
+		return graph.Nodes[destination.NodeId];
+	}
 
 	PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, PlatformNavGraph.Node? start, out bool pathFound)
 	{

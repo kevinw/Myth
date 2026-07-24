@@ -30,7 +30,8 @@ public sealed class PlatformNavGraph
 		// Chained wall kicks up a walled vertical shaft (a well) from a node at its mouth to
 		// a node at its top opening — the input-driven climb the runtime controller executes.
 		WellClimb,
-		Rope
+		Rope,
+		MovingPlatform
 	}
 
 	public enum RoomExitKind
@@ -65,7 +66,9 @@ public sealed class PlatformNavGraph
 	// AirDirection. Used to drop into a shaft and kick into a pocket under an overhang, which no
 	// upward jump arc can reach.
 	public readonly record struct JumpPlan(int Direction, float RunupTime, float HoldTime, int AirDirection, float SwitchTime, bool WallJump = false, int MaxWallKicks = 1, bool Descend = false);
-	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null, string? ConnectorActorId = null);
+	public readonly record struct MovingPlatformRide(float BoardStart, float BoardEnd, float ExitStart, float ExitEnd, int Direction, bool StayAboard = false);
+	public readonly record struct MovingPlatformAttachment(string ActorId, int NodeId, float RouteStart, float RouteEnd);
+	public readonly record struct Edge(int From, int To, EdgeKind Kind, JumpPlan? Jump = null, string? ConnectorActorId = null, MovingPlatformRide? PlatformRide = null);
 
 	const int SampleStep = Game.TileSize;
 	const float SimDelta = 1.0f / 60.0f;
@@ -141,6 +144,7 @@ public sealed class PlatformNavGraph
 	public readonly List<SurfaceSpan> SurfaceSpans = [];
 	public readonly List<Vector2> SurfacePoints = [];
 	public readonly List<SurfaceEdge> SurfaceEdges = [];
+	public readonly List<MovingPlatformAttachment> MovingPlatformAttachments = [];
 	public IEnumerable<Node> RoomExits
 	{
 		get
@@ -175,7 +179,7 @@ public sealed class PlatformNavGraph
 	long pathQueries, pathExpandedNodes, pathEdgesExamined;
 	long surfacePathQueries, surfacePathExpandedNodes, surfacePathEdgesExamined;
 
-	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RopeEdges, WaterNodes, RoomExits, Ready }
+	public enum BuildPhase { Idle, Sampling, AddLandingNodes, WalkEdges, FallEdges, JumpEdges, RopeEdges, MovingPlatforms, WaterNodes, RoomExits, Ready }
 
 	BuildPhase phase = BuildPhase.Idle;
 	int revision;
@@ -201,6 +205,8 @@ public sealed class PlatformNavGraph
 	readonly List<Actor> simulationWindActors = [];
 	readonly Dictionary<int, (Node Node, float Distance)> ropeAttachments = [];
 	readonly List<Node> ropeAttachmentNodes = [];
+	readonly Dictionary<int, MovingPlatformAttachmentCandidate> movingPlatformAttachments = [];
+	readonly List<MovingPlatformAttachmentCandidate> movingPlatformAttachmentList = [];
 
 	// --- profiling instrumentation (temporary) ---
 	static bool collectBuildStats;
@@ -219,6 +225,7 @@ public sealed class PlatformNavGraph
 	readonly record struct SurfaceEdgeKey(int From, int To, EdgeKind Kind, bool HasJump, JumpPlan Jump);
 	readonly record struct JumpAttemptKey(Point2 From, JumpPlan Plan);
 	readonly record struct JumpAttempt(bool Landed, Vector2 Landing, RectInt DependencyBounds);
+	readonly record struct MovingPlatformAttachmentCandidate(Node Node, float RouteStart, float RouteEnd);
 
 	struct SurfaceEdgeAccumulator
 	{
@@ -511,8 +518,17 @@ public sealed class PlatformNavGraph
 			// exist while a well remains far cheaper than an unreliable chained-jump plan.
 			EdgeKind.WellClimb => distance + 350,
 			EdgeKind.Rope => distance + 120,
+			EdgeKind.MovingPlatform => distance + 300,
 			_ => distance
 		};
+	}
+
+	internal float PathCost(IReadOnlyList<Edge> path)
+	{
+		var cost = 0f;
+		foreach (var edge in path)
+			cost += EdgeCost(edge);
+		return cost;
 	}
 
 	float SurfaceEdgeCost(SurfaceEdge edge)
@@ -530,6 +546,7 @@ public sealed class PlatformNavGraph
 			EdgeKind.Jump => distance + 180,
 			EdgeKind.RoomExit => distance + 5,
 			EdgeKind.Rope => distance + 120,
+			EdgeKind.MovingPlatform => distance + 300,
 			_ => distance
 		};
 	}
@@ -595,6 +612,7 @@ public sealed class PlatformNavGraph
 		SurfaceSpans.Clear();
 		SurfacePoints.Clear();
 		SurfaceEdges.Clear();
+		MovingPlatformAttachments.Clear();
 		nodeLookup.Clear();
 		edgeLookup.Clear();
 		outgoingEdges.Clear();
@@ -635,7 +653,18 @@ public sealed class PlatformNavGraph
 			if (!actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru) && actor is not Wind)
 				continue;
 			hash.Add(actor.GetType());
-			hash.Add(actor.Position);
+			if (actor is MovingPlatform platform)
+			{
+				hash.Add(platform.NavStartPosition);
+				hash.Add(platform.Size);
+				hash.Add(platform.TravelDistance);
+				hash.Add(platform.Mode);
+				hash.Add(platform.Speed);
+				hash.Add(platform.StartFriction);
+				hash.Add(platform.WaitTime);
+			}
+			else
+				hash.Add(actor.Position);
 			hash.Add(actor.Hitbox.Rect);
 			hash.Add(actor.Mask);
 			if (actor is Wind wind)
@@ -668,7 +697,7 @@ public sealed class PlatformNavGraph
 		{
 			if (actor.Mask.Has(Actor.Masks.Jumpthru))
 				jumpthruActors.Add(actor);
-			if (actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru))
+			if (actor is not MovingPlatform && actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru))
 				simulationCollisionActors.Add(actor);
 			if (actor is Wind)
 				simulationWindActors.Add(actor);
@@ -703,6 +732,10 @@ public sealed class PlatformNavGraph
 					break;
 				case BuildPhase.RopeEdges:
 					BuildRopeEdges(rebuildGame!);
+					phase = BuildPhase.MovingPlatforms;
+					break;
+				case BuildPhase.MovingPlatforms:
+					BuildMovingPlatformEdges(rebuildGame!);
 					phase = BuildPhase.WaterNodes;
 					break;
 				case BuildPhase.WaterNodes:
@@ -792,7 +825,7 @@ public sealed class PlatformNavGraph
 	void LogGraphSummary()
 	{
 		Span<int> nodeKinds = stackalloc int[5];
-		Span<int> edgeKinds = stackalloc int[8];
+		Span<int> edgeKinds = stackalloc int[(int)EdgeKind.MovingPlatform + 1];
 		foreach (var node in Nodes)
 			nodeKinds[(int)node.Kind]++;
 
@@ -834,7 +867,7 @@ public sealed class PlatformNavGraph
 
 		var avgOutDegree = Nodes.Count > 0 ? Edges.Count / (float)Nodes.Count : 0;
 		Console.WriteLine($"  nodes: Ground {nodeKinds[(int)NodeKind.Ground]}, Landing {nodeKinds[(int)NodeKind.Landing]}, Ledge {nodeKinds[(int)NodeKind.Ledge]}, RoomExit {nodeKinds[(int)NodeKind.RoomExit]}, Swim {nodeKinds[(int)NodeKind.Swim]}");
-		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}, Swim {edgeKinds[(int)EdgeKind.Swim]}, WellClimb {edgeKinds[(int)EdgeKind.WellClimb]}, Rope {edgeKinds[(int)EdgeKind.Rope]}");
+		Console.WriteLine($"  edges: Walk {edgeKinds[(int)EdgeKind.Walk]}, Crawl {edgeKinds[(int)EdgeKind.Crawl]}, Fall {edgeKinds[(int)EdgeKind.Fall]}, Jump {edgeKinds[(int)EdgeKind.Jump]}, RoomExit {edgeKinds[(int)EdgeKind.RoomExit]}, Swim {edgeKinds[(int)EdgeKind.Swim]}, WellClimb {edgeKinds[(int)EdgeKind.WellClimb]}, Rope {edgeKinds[(int)EdgeKind.Rope]}, MovingPlatform {edgeKinds[(int)EdgeKind.MovingPlatform]}");
 		Console.WriteLine($"  components {components}, isolated {isolated}, total edge length {totalLength:0}, avg out-degree {avgOutDegree:0.00}");
 		if (components > 1)
 			LogComponentBounds(parent);
@@ -944,7 +977,7 @@ public sealed class PlatformNavGraph
 				maxJumpEdgesPerPair = count;
 		}
 
-		Span<int> surfaceEdgeKinds = stackalloc int[8];
+		Span<int> surfaceEdgeKinds = stackalloc int[(int)EdgeKind.MovingPlatform + 1];
 		var jumpSurfaceNodeEdges = 0;
 		foreach (var edge in SurfaceEdges)
 		{
@@ -1143,6 +1176,9 @@ public sealed class PlatformNavGraph
 	static float RopeAttachmentMaxHorizontal => 56;
 	static float RopeAttachmentVerticalGrace => 12;
 	static float RopeAttachmentMaxRise => Game.TileSize * 3;
+	static float MovingPlatformHorizontalReach => 56;
+	static float MovingPlatformMaxRise => 30;
+	static float MovingPlatformMaxDrop => 64;
 
 	void BuildRopeEdges(Game game)
 	{
@@ -1185,6 +1221,81 @@ public sealed class PlatformNavGraph
 						continue;
 					AddEdge(a.Id, b.Id, EdgeKind.Rope, connectorActorId: rope.ActorId);
 					AddEdge(b.Id, a.Id, EdgeKind.Rope, connectorActorId: rope.ActorId);
+				}
+		}
+	}
+
+	void BuildMovingPlatformEdges(Game game)
+	{
+		foreach (var actor in game.Actors)
+		{
+			if (actor is not MovingPlatform { SupportsPlatformNav: true } platform || platform.ActorId == null)
+				continue;
+
+			movingPlatformAttachments.Clear();
+			var platformTop = platform.NavStartPosition.Y;
+			var routeLength = platform.NavRouteLength;
+			var platformWidth = platform.Size.X;
+			foreach (var node in Nodes)
+			{
+				var spanId = NodeSurfaceSpanId(node.Id);
+				if (spanId < 0 || node.RequiresDucking)
+					continue;
+
+				var platformBelow = platformTop - node.Position.Y;
+				if (platformBelow > MovingPlatformMaxDrop || platformBelow < -MovingPlatformMaxRise)
+					continue;
+
+				var routeStart = Math.Clamp(
+					node.Position.X - platform.NavStartPosition.X - platformWidth - MovingPlatformHorizontalReach,
+					0,
+					routeLength);
+				var routeEnd = Math.Clamp(
+					node.Position.X - platform.NavStartPosition.X + MovingPlatformHorizontalReach,
+					0,
+					routeLength);
+				if (routeStart > routeEnd ||
+					node.Position.X < platform.NavStartPosition.X - MovingPlatformHorizontalReach ||
+					node.Position.X > platform.NavStartPosition.X + routeLength + platformWidth + MovingPlatformHorizontalReach)
+					continue;
+
+				var attachment = new MovingPlatformAttachmentCandidate(node, routeStart, routeEnd);
+				if (!movingPlatformAttachments.TryGetValue(spanId, out var existing) ||
+					routeEnd - routeStart > existing.RouteEnd - existing.RouteStart)
+					movingPlatformAttachments[spanId] = attachment;
+			}
+
+			movingPlatformAttachmentList.Clear();
+			foreach (var attachment in movingPlatformAttachments.Values)
+			{
+				movingPlatformAttachmentList.Add(attachment);
+				MovingPlatformAttachments.Add(new(platform.ActorId, attachment.Node.Id, attachment.RouteStart, attachment.RouteEnd));
+			}
+
+			for (var i = 0; i < movingPlatformAttachmentList.Count; i++)
+				for (var j = 0; j < movingPlatformAttachmentList.Count; j++)
+				{
+					if (i == j)
+						continue;
+					var from = movingPlatformAttachmentList[i];
+					var to = movingPlatformAttachmentList[j];
+					var direction = Math.Sign(
+						(to.RouteStart + to.RouteEnd) -
+						(from.RouteStart + from.RouteEnd));
+					if (direction == 0)
+						continue;
+
+					AddEdge(
+						from.Node.Id,
+						to.Node.Id,
+						EdgeKind.MovingPlatform,
+						connectorActorId: platform.ActorId,
+						platformRide: new(
+							from.RouteStart,
+							from.RouteEnd,
+							to.RouteStart,
+							to.RouteEnd,
+							direction));
 				}
 		}
 	}
@@ -1932,11 +2043,11 @@ public sealed class PlatformNavGraph
 
 	bool HasEdge(int from, int to) => edgeLookup.Contains((from, to));
 
-	bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null, string? connectorActorId = null)
+	bool AddEdge(int from, int to, EdgeKind kind, JumpPlan? jump = null, string? connectorActorId = null, MovingPlatformRide? platformRide = null)
 	{
 		if (!edgeLookup.Add((from, to)))
 			return false;
-		var edge = new Edge(from, to, kind, jump, connectorActorId);
+		var edge = new Edge(from, to, kind, jump, connectorActorId, platformRide);
 		Edges.Add(edge);
 		outgoingEdges[from].Add(edge);
 		return true;

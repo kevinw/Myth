@@ -105,6 +105,7 @@ public partial class Manager
 				PlatformNavGraph.EdgeKind.RoomExit => ImGuiColor(0.72f, 0.55f, 1.00f, 0.45f),
 				PlatformNavGraph.EdgeKind.Swim => ImGuiColor(0.30f, 0.62f, 1.00f, 0.55f),
 				PlatformNavGraph.EdgeKind.Rope => ImGuiColor(0.71f, 0.48f, 0.25f, 0.75f),
+				PlatformNavGraph.EdgeKind.MovingPlatform => ImGuiColor(0.35f, 1.00f, 0.75f, 0.75f),
 				_ => ImGuiColor(0.37f, 0.80f, 0.89f, 0.18f)
 			};
 			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.RoomExit ? 3.0f : 2.0f);
@@ -235,7 +236,7 @@ public partial class Manager
 
 		var incoming = 0;
 		var outgoing = 0;
-		Span<int> outgoingKinds = stackalloc int[(int)PlatformNavGraph.EdgeKind.Rope + 1];
+		Span<int> outgoingKinds = stackalloc int[(int)PlatformNavGraph.EdgeKind.MovingPlatform + 1];
 		foreach (var edge in graph.Edges)
 		{
 			if (edge.To == node.Id)
@@ -277,6 +278,7 @@ public partial class Manager
 				PlatformNavGraph.EdgeKind.Jump when edge.Jump is { WallJump: true } => ImGuiColor(1.00f, 0.42f, 0.96f, 0.98f),
 				PlatformNavGraph.EdgeKind.Jump => ImGuiColor(1.00f, 0.95f, 0.66f, 0.95f),
 				PlatformNavGraph.EdgeKind.Rope => ImGuiColor(0.92f, 0.66f, 0.34f, 0.98f),
+				PlatformNavGraph.EdgeKind.MovingPlatform => ImGuiColor(0.35f, 1.00f, 0.75f, 0.98f),
 				_ => ImGuiColor(1.00f, 1.00f, 1.00f, 0.78f)
 			};
 			DrawPlatformNavEdge(draw, viewport, game, graph, edge, color, edge.Kind == PlatformNavGraph.EdgeKind.Jump ? 4.0f : 5.0f);

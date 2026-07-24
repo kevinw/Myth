@@ -39,6 +39,14 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
 
+	internal bool SupportsPlatformNav => Mode == MovementMode.StraightLine && TravelDistance > 0 && ActorId != null;
+	internal Point2 NavStartPosition => originalPosition;
+	internal float NavRouteLength => TravelDistance;
+	internal float NavRoutePosition => Math.Clamp(Position.X - originalPosition.X, 0, TravelDistance);
+	internal int NavRouteDirection => direction;
+	internal bool NavWaiting => waitTimer > 0;
+	internal float NavVelocityX => waitTimer > 0 ? 0 : direction * currentSpeed;
+
 	public MovingPlatform()
 	{
 		Mask = Masks.Solid;

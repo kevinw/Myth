@@ -37,6 +37,9 @@ public sealed class Navigator(Pawn owner)
 	static float FollowMaxSpeed => 36.0f;
 	static float FollowPositionGain => 2.0f;
 	static float FollowStopDistance => 2.0f;
+	static float PlatformCompanionInset => 6.0f;
+	static float PlatformCompanionSpacing => 20.0f;
+	static float PlatformCompanionReleaseDelay => 0.35f;
 	static float DirectGoalJumpMaxHorizontalDistance => 64.0f;
 	// Capped at what a held jump can actually rise (~30px): any taller "direct" hop is
 	// physically unmakeable and would just hijack pathing that could route there properly.
@@ -313,7 +316,7 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope)
+		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope or PlatformNavGraph.EdgeKind.MovingPlatform)
 		{
 			UpdateDebugNav(start.Value.Id, goal.Value.Id, edge.To);
 			StartActiveEdge(edge, blockPathOnTimeout: true);
@@ -431,6 +434,7 @@ public sealed class Navigator(Pawn owner)
 		}
 
 		activeEdge.Timer += owner.Time.Delta;
+		activeEdge.PhaseTimer += owner.Time.Delta;
 		var from = graph.Nodes[edge.From];
 		var to = graph.Nodes[edge.To];
 		var target = edge.Kind == PlatformNavGraph.EdgeKind.Jump
@@ -488,6 +492,12 @@ public sealed class Navigator(Pawn owner)
 
 			case PlatformNavGraph.EdgeKind.Rope:
 				if (!TryExecuteRopeEdge(edge, from, to, out moveX, out moveY, out jumpPressed))
+					return false;
+				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} t {activeEdge.Timer:0.0}" : "active edge";
+				break;
+
+			case PlatformNavGraph.EdgeKind.MovingPlatform:
+				if (!TryExecuteMovingPlatformEdge(graph, edge, from, to, out moveX, out jumpPressed))
 					return false;
 				DebugNavLabel = ShouldBuildDebugNavLabel ? $"{edge.Kind} {edge.From}->{edge.To} {activeEdge.Phase} t {activeEdge.Timer:0.0}" : "active edge";
 				break;
@@ -556,6 +566,8 @@ public sealed class Navigator(Pawn owner)
 		activeEdgeGraphRevision = activeEdgeGraph?.Revision ?? -1;
 		if (edge.Kind == PlatformNavGraph.EdgeKind.Rope && edge.ConnectorActorId != null)
 			activeEdge.Rope = Game.GetActorById(edge.ConnectorActorId) as Rope;
+		if (edge.Kind == PlatformNavGraph.EdgeKind.MovingPlatform && edge.ConnectorActorId != null)
+			activeEdge.Platform = Game.GetActorById(edge.ConnectorActorId) as MovingPlatform;
 		activeEdgeBlocksPath = blockPathOnTimeout;
 		LastEdgeRunState = EdgeRunState.Active;
 		lastTraceStateKey = null;
@@ -736,6 +748,18 @@ public sealed class Navigator(Pawn owner)
 		if (MathF.Abs(dx) > NavNodeReachDistance * 0.5f)
 			return Math.Sign(dx);
 		return 0;
+	}
+
+	internal bool TryFollowPlayerOnPlatform(Player player, MovingPlatform platform, out float moveX)
+	{
+		moveX = 0;
+		if (!IsRiding(owner, platform) || !IsRiding(player, platform))
+			return false;
+
+		moveX = MoveBesidePlayerOnPlatform(player, platform);
+		UpdateDebugNav(null, null, null);
+		DebugNavLabel = ShouldBuildDebugNavLabel ? "with player on platform" : "following player";
+		return true;
 	}
 
 	float MoveTowardFollowTarget(Vector2 target)
@@ -1516,6 +1540,8 @@ public sealed class Navigator(Pawn owner)
 			return 12.0f;
 		if (edge.Kind == PlatformNavGraph.EdgeKind.Rope)
 			return 4.0f + MathF.Abs(to.Position.Y - from.Position.Y) / 50.0f;
+		if (edge.Kind == PlatformNavGraph.EdgeKind.MovingPlatform)
+			return 60.0f;
 		if (edge.Jump is not { } plan)
 			return ActiveEdgeTimeout;
 		// A descent walks to the edge, slides for RunupTime, kicks, and lands — give it the
@@ -1591,6 +1617,213 @@ public sealed class Navigator(Pawn owner)
 			(!HasGroundSupportAhead(moveX) || MathF.Abs(approachX) <= Game.TileSize * 3))
 			jumpPressed = true;
 		return true;
+	}
+
+	bool TryExecuteMovingPlatformEdge(
+		PlatformNavGraph graph,
+		PlatformNavGraph.Edge edge,
+		PlatformNavGraph.Node from,
+		PlatformNavGraph.Node to,
+		out float moveX,
+		out bool jumpPressed)
+	{
+		moveX = 0;
+		jumpPressed = false;
+		if (activeEdge.Platform is not { SupportsPlatformNav: true } platform ||
+			edge.PlatformRide is not { } ride)
+		{
+			BlockPathEdge(edge);
+			ClearActiveEdge("platform unavailable");
+			return false;
+		}
+
+		var riding = IsRiding(platform);
+		if (activeEdge.Phase == ActiveEdgePhase.PlatformWait)
+		{
+			if (riding)
+			{
+				SetPlatformPhase(ActiveEdgePhase.PlatformRide);
+				return true;
+			}
+
+			var dx = from.Position.X - Position.X;
+			if (!IsGrounded || MathF.Abs(dx) > NavNodeReachDistance * 0.5f)
+			{
+				moveX = Math.Sign(dx);
+				if (IsGrounded && moveX != 0 && !HasGroundSupportAhead(moveX))
+					moveX = 0;
+				return true;
+			}
+
+			if (!PlatformInWindow(platform, ride.BoardStart, ride.BoardEnd, ride.Direction))
+				return true;
+
+			moveX = Math.Sign(platform.Position.X + platform.Size.X * 0.5f - Position.X);
+			jumpPressed = true;
+			StartPlatformJump(moveX);
+			SetPlatformPhase(ActiveEdgePhase.PlatformBoard);
+			return true;
+		}
+
+		if (activeEdge.Phase == ActiveEdgePhase.PlatformBoard)
+		{
+			JumpPlanExecution.DecayHold(ref activeEdge.Jump, owner.Time.Delta, jumpPressed: false);
+			if (riding)
+			{
+				SetPlatformPhase(ActiveEdgePhase.PlatformRide);
+				return true;
+			}
+
+			var targetX = Math.Clamp(
+				Position.X,
+				platform.Position.X + 5,
+				platform.Position.X + platform.Size.X - 5);
+			var desiredVelocity = Math.Clamp(
+				(targetX - Position.X) * 5 + platform.NavVelocityX,
+				-MaxAirSpeedApprox,
+				MaxAirSpeedApprox);
+			moveX = AnalogThrustToward(desiredVelocity, Pawn.AirAccel);
+
+			if (activeEdge.PhaseTimer > 0.2f && IsGrounded)
+			{
+				SetPlatformPhase(ActiveEdgePhase.PlatformWait);
+				return true;
+			}
+			if (activeEdge.PhaseTimer > 2.5f || Position.Y > platform.Position.Y + platform.Size.Y + Game.TileSize)
+			{
+				AbortMissedEdge(edge, "missed platform");
+				return false;
+			}
+			return true;
+		}
+
+		if (activeEdge.Phase == ActiveEdgePhase.PlatformRide)
+		{
+			if (!riding)
+			{
+				if (activeEdge.PhaseTimer < 0.2f)
+					return true;
+				SetPlatformPhase(ActiveEdgePhase.PlatformBoard);
+				return true;
+			}
+
+			if (ride.StayAboard && !activeEdge.PlatformGoalReleased)
+			{
+				if (Game.GetFirst<Player>() is { } player && IsRiding(player, platform))
+				{
+					activeEdge.Timer = 0;
+					activeEdge.PlatformGoalMissingTimer = 0;
+					moveX = MoveBesidePlayerOnPlatform(player, platform);
+					return true;
+				}
+
+				activeEdge.PlatformGoalMissingTimer += owner.Time.Delta;
+				if (activeEdge.PlatformGoalMissingTimer < PlatformCompanionReleaseDelay)
+					return true;
+				activeEdge.PlatformGoalReleased = true;
+			}
+
+			var exitDirection = ride.StayAboard
+				? Math.Sign(to.Position.X - (platform.Position.X + platform.Size.X * 0.5f))
+				: ride.Direction;
+			if (exitDirection == 0)
+				exitDirection = platform.NavRouteDirection;
+			var departureX = exitDirection > 0
+				? platform.Position.X + platform.Size.X - 6
+				: platform.Position.X + 6;
+			var dx = departureX - Position.X;
+			moveX = AnalogThrustToward(Math.Clamp(dx * 4, -36, 36), Pawn.GroundAccel);
+			if (MathF.Abs(dx) <= 5 &&
+				PlatformInWindow(platform, ride.ExitStart, ride.ExitEnd, ride.StayAboard ? 0 : ride.Direction, allowEndpointWait: true))
+			{
+				moveX = exitDirection;
+				jumpPressed = true;
+				StartPlatformJump(exitDirection);
+				SetPlatformPhase(ActiveEdgePhase.PlatformExit);
+			}
+			return true;
+		}
+
+		if (activeEdge.Phase == ActiveEdgePhase.PlatformExit)
+		{
+			JumpPlanExecution.DecayHold(ref activeEdge.Jump, owner.Time.Delta, jumpPressed: false);
+			if (activeEdge.PhaseTimer > 0.18f && IsGrounded)
+			{
+				if (riding)
+				{
+					SetPlatformPhase(ActiveEdgePhase.PlatformRide);
+					return true;
+				}
+				if (graph.IsPositionOnNodeSurface(Position, edge.To))
+				{
+					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
+					return false;
+				}
+				ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} miss {edge.From}->{edge.To}" : "miss");
+				return false;
+			}
+
+			var exitDx = to.Position.X - Position.X;
+			var desiredVelocity = MathF.Abs(exitDx) > 3
+				? Math.Sign(exitDx) * MaxAirSpeedApprox
+				: 0;
+			moveX = AnalogThrustToward(desiredVelocity, Pawn.AirAccel);
+			if (activeEdge.PhaseTimer > 2.5f || Position.Y > to.Position.Y + Game.TileSize * 4)
+			{
+				AbortMissedEdge(edge, "missed platform exit");
+				return false;
+			}
+			return true;
+		}
+
+		SetPlatformPhase(ActiveEdgePhase.PlatformWait);
+		return true;
+	}
+
+	void StartPlatformJump(float direction)
+	{
+		var dir = Math.Sign(direction);
+		if (dir == 0)
+			dir = owner.Facing == 0 ? 1 : owner.Facing;
+		activeEdge.Jump = default;
+		JumpPlanExecution.StartJump(
+			ref activeEdge.Jump,
+			new(dir, 0, 0.18f, dir, 99));
+	}
+
+	float MoveBesidePlayerOnPlatform(Player player, MovingPlatform platform)
+	{
+		var side = Position.X <= player.Position.X ? -1 : 1;
+		var inset = MathF.Min(PlatformCompanionInset, platform.Size.X * 0.5f);
+		var targetX = Math.Clamp(
+			player.Position.X + side * PlatformCompanionSpacing,
+			platform.Position.X + inset,
+			platform.Position.X + platform.Size.X - inset);
+		return MoveTowardFollowTarget(new(targetX, Position.Y));
+	}
+
+	static bool IsRiding(Actor rider, MovingPlatform platform)
+		=> rider.OverlapsAny(Point2.Down, platform) && !rider.OverlapsAny(Point2.Zero, platform);
+
+	bool IsRiding(MovingPlatform platform) => IsRiding(owner, platform);
+
+	static bool PlatformInWindow(
+		MovingPlatform platform,
+		float start,
+		float end,
+		int direction,
+		bool allowEndpointWait = false)
+		=> platform.NavRoutePosition >= start &&
+		   platform.NavRoutePosition <= end &&
+		   (direction == 0 ||
+			platform.NavRouteDirection == direction ||
+			allowEndpointWait && platform.NavWaiting &&
+			(platform.NavRoutePosition <= 0.5f || platform.NavRoutePosition >= platform.NavRouteLength - 0.5f));
+
+	void SetPlatformPhase(ActiveEdgePhase phase)
+	{
+		activeEdge.Phase = phase;
+		activeEdge.PhaseTimer = 0;
 	}
 
 	static Vector2 ResolveSafeJumpLandingTarget(PlatformNavGraph graph, PlatformNavGraph.Node to)
@@ -1759,7 +1992,11 @@ public sealed class Navigator(Pawn owner)
 		Landing,
 		RopeApproach,
 		RopeClimb,
-		RopeExit
+		RopeExit,
+		PlatformWait,
+		PlatformBoard,
+		PlatformRide,
+		PlatformExit
 	}
 
 	private struct EdgeState
@@ -1767,6 +2004,7 @@ public sealed class Navigator(Pawn owner)
 		public PlatformNavGraph.Edge? Edge;
 		public ActiveEdgePhase Phase;
 		public float Timer;
+		public float PhaseTimer;
 		public JumpPlanExecution.State Jump;
 		public bool JumpPlanStarted;
 		public float JumpPrepareTimer;
@@ -1775,6 +2013,9 @@ public sealed class Navigator(Pawn owner)
 		// with speed instead of leaping flat-footed and clipping the wall below the target.
 		public float RunupForward;
 		public Rope? Rope;
+		public MovingPlatform? Platform;
+		public float PlatformGoalMissingTimer;
+		public bool PlatformGoalReleased;
 
 		public static EdgeState Start(PlatformNavGraph.Edge edge)
 			=> new()
@@ -1784,6 +2025,7 @@ public sealed class Navigator(Pawn owner)
 				{
 					PlatformNavGraph.EdgeKind.Jump => ActiveEdgePhase.ApproachTakeoff,
 					PlatformNavGraph.EdgeKind.Rope => ActiveEdgePhase.RopeApproach,
+					PlatformNavGraph.EdgeKind.MovingPlatform => ActiveEdgePhase.PlatformWait,
 					_ => ActiveEdgePhase.Runup
 				}
 			};
