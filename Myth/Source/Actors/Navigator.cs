@@ -196,7 +196,10 @@ public sealed class Navigator(Pawn owner)
 
 		ResetBlockedPathEdgesForTarget(target);
 
-		if (TryDirectGoalJump(target, out moveX, out jumpPressed))
+		// Keep following a graph route once we have one. In particular, don't replace the
+		// next edge with a direct-goal hop on the exact frame a precision jump lands.
+		if (!TryGetActionableEdge(graph, out _) &&
+			TryDirectGoalJump(target, out moveX, out jumpPressed))
 		{
 			moveY = 0;
 			TraceState($"direct:{moveX}:{(int)target.X}:{(int)target.Y}", "directGoalJump", ("moveX", moveX), ("target", NavTrace.Vec(target)));
@@ -461,6 +464,8 @@ public sealed class Navigator(Pawn owner)
 				break;
 
 			case PlatformNavGraph.EdgeKind.Fall:
+				if (from.RequiresDucking || to.RequiresDucking)
+					moveY = 1;
 				if (HasFallenPastLanding(to))
 				{
 					AbortMissedEdge(edge, "fell past");
@@ -473,9 +478,12 @@ public sealed class Navigator(Pawn owner)
 					// stalls on the lip.
 					moveX = MathF.Abs(owner.Velocity.X) > FallTakeoffSpeed ? 0 : Math.Sign(to.Position.X - from.Position.X);
 				else
-					moveX = MathF.Abs(target.X - Position.X) > NavNodeReachDistance * 0.5f
-						? Math.Sign(target.X - Position.X)
-						: 0;
+				{
+					var dy = MathF.Max(0, target.Y - Position.Y);
+					var timeToLand = (MathF.Sqrt(owner.Velocity.Y * owner.Velocity.Y + 2 * Pawn.Gravity * dy) - owner.Velocity.Y) / Pawn.Gravity;
+					var desiredVelocity = Math.Clamp((target.X - Position.X) / MathF.Max(timeToLand, 0.05f), -MaxAirSpeedApprox, MaxAirSpeedApprox);
+					moveX = AnalogThrustToward(desiredVelocity, Pawn.AirAccel);
+				}
 				if (IsGrounded && activeEdge.Timer > 0.12f && IsNearNode(target))
 				{
 					ClearActiveEdge(ShouldBuildDebugNavLabel ? $"{edge.Kind} done" : "done", EdgeRunState.Landed);
@@ -1652,7 +1660,7 @@ public sealed class Navigator(Pawn owner)
 			steer = MathF.Abs(velocityError) > 4.0f ? Math.Sign(velocityError) : Math.Sign(dx);
 		}
 		else if (targetKind == PlatformNavGraph.NodeKind.Ledge &&
-			owner.Velocity.Y >= 0 &&
+			(owner.Velocity.Y >= 0 || MathF.Abs(landing.X - takeoff.X) <= Game.TileSize * 4) &&
 			remainingX <= LedgeLandingSteerDistance)
 		{
 			// Ledge landings get an input-only stabilize, engaged only when the ballistic arc

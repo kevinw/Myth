@@ -92,6 +92,11 @@
       "Id": "d2a5a9327591bf27",
       "Type": "Goal",
       "Position": [128, 24]
+    },
+    {
+      "Id": "48f4fecb050e62ad",
+      "Type": "Goal",
+      "Position": [96, 152]
     }
   ]
 }

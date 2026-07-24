@@ -50,6 +50,11 @@ public partial class Manager
 
 		var viewport = GameViewRect;
 		var screenPosition = GameWorldToImGui(viewport, game, worldPosition);
+		DebugOverlayLabelImGui("BudDebugOverlay", screenPosition, label, viewport);
+	}
+
+	static void DebugOverlayLabelImGui(string id, Vector2 screenPosition, ReadOnlySpan<char> label, Rect viewport)
+	{
 		var textSize = ImGui.CalcTextSize(label) * 0.82f;
 		var padding = new Vector2(4, 2);
 		var size = textSize + padding * 2;
@@ -63,7 +68,7 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 1);
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.72f));
 		ImGui.Begin(
-			"BudDebugOverlay",
+			id,
 			ImGuiWindowFlags.NoDecoration |
 			ImGuiWindowFlags.NoInputs |
 			ImGuiWindowFlags.NoSavedSettings |
@@ -86,7 +91,8 @@ public partial class Manager
 			return;
 
 		var viewport = GameViewRect;
-		var draw = ImGui.GetForegroundDrawList();
+		var draw = ImGui.GetBackgroundDrawList();
+		var hoveredNode = HoveredPlatformNavNode(viewport, game, graph);
 		draw.PushClipRect(viewport.TopLeft, viewport.BottomRight, true);
 
 		foreach (var edge in graph.Edges)
@@ -132,7 +138,126 @@ public partial class Manager
 			draw.AddCircleFilled(GameWorldToImGui(viewport, game, node.Position), radius, color, 8);
 		}
 
+		if (hoveredNode is { } hovered)
+			draw.AddCircle(GameWorldToImGui(viewport, game, hovered.Position), 10, ImGuiColor(1, 1, 1, 0.95f), 12, 2.5f);
 		draw.PopClipRect();
+
+		if (hoveredNode is { } tooltipNode)
+			PlatformNavNodeTooltipImGui(viewport, game, graph, tooltipNode);
+	}
+
+	static PlatformNavGraph.Node? HoveredPlatformNavNode(Rect viewport, Game game, PlatformNavGraph graph)
+	{
+		var mouse = ImGui.GetMousePos();
+		if (!viewport.Contains(mouse))
+			return null;
+
+		const float hoverRadius = 10;
+		var nearestDistanceSquared = hoverRadius * hoverRadius;
+		PlatformNavGraph.Node? nearest = null;
+		foreach (var node in graph.Nodes)
+		{
+			var distanceSquared = Vector2.DistanceSquared(mouse, GameWorldToImGui(viewport, game, node.Position));
+			if (node.Kind == PlatformNavGraph.NodeKind.Swim && node.Area is { } area)
+			{
+				var topLeft = GameWorldToImGui(viewport, game, area.TopLeft);
+				var bottomRight = GameWorldToImGui(viewport, game, area.BottomRight);
+				if (Rect.Between(topLeft, bottomRight).Contains(mouse))
+					distanceSquared = 0;
+			}
+			if (distanceSquared > nearestDistanceSquared)
+				continue;
+
+			nearest = node;
+			nearestDistanceSquared = distanceSquared;
+		}
+		return nearest;
+	}
+
+	static void PlatformNavNodeTooltipImGui(Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.Node node)
+	{
+		var label = new ValueStringBuilder(stackalloc char[512]);
+		label.Append("Node ");
+		label.Append(node.Id);
+		label.Append("  ");
+		label.Append(node.Kind.ToString());
+		if (node.RequiresDucking)
+			label.Append("  ducking");
+
+		var local = (node.Position - (game.CurrentRoom?.WorldBounds.TopLeft ?? Point2.Zero)).RoundToPoint2();
+		label.Append("\nlocal (");
+		label.Append(local.X);
+		label.Append(", ");
+		label.Append(local.Y);
+		label.Append(')');
+
+		if (graph.TryGetNodeSurfaceSpan(node.Id, out var span))
+		{
+			var roomLeft = game.CurrentRoom?.WorldBounds.Left ?? 0;
+			var roomTop = game.CurrentRoom?.WorldBounds.Top ?? 0;
+			label.Append("  span ");
+			label.Append(span.Id);
+			label.Append(" [");
+			label.Append(span.Left - roomLeft);
+			label.Append("..");
+			label.Append(span.Right - roomLeft);
+			label.Append("] y ");
+			label.Append(span.Y - roomTop);
+		}
+
+		if (node.Area is { } area)
+		{
+			label.Append("\narea ");
+			label.Append(area.Width);
+			label.Append('x');
+			label.Append(area.Height);
+		}
+
+		if (node.Exit is { } exit)
+		{
+			label.Append("\nexit ");
+			label.Append(exit.Kind == PlatformNavGraph.RoomExitKind.Edge ? "edge" : "door");
+			if (!string.IsNullOrEmpty(exit.TargetRoomId))
+			{
+				label.Append(" -> ");
+				label.Append(exit.TargetRoomId);
+			}
+			label.Append(" dir ");
+			label.Append(exit.Direction.X);
+			label.Append(',');
+			label.Append(exit.Direction.Y);
+		}
+
+		var incoming = 0;
+		var outgoing = 0;
+		Span<int> outgoingKinds = stackalloc int[(int)PlatformNavGraph.EdgeKind.Rope + 1];
+		foreach (var edge in graph.Edges)
+		{
+			if (edge.To == node.Id)
+				incoming++;
+			if (edge.From == node.Id)
+			{
+				outgoing++;
+				outgoingKinds[(int)edge.Kind]++;
+			}
+		}
+		label.Append("\nedges in ");
+		label.Append(incoming);
+		label.Append("  out ");
+		label.Append(outgoing);
+		for (var i = 0; i < outgoingKinds.Length; i++)
+		{
+			if (outgoingKinds[i] <= 0)
+				continue;
+			label.Append("  ");
+			label.Append(((PlatformNavGraph.EdgeKind)i).ToString());
+			label.Append(' ');
+			label.Append(outgoingKinds[i]);
+		}
+
+		var position = GameWorldToImGui(viewport, game, node.Position) - new Vector2(0, 12);
+		DebugOverlayLabelImGui("PlatformNavNodeTooltip", position, label.AsSpan(), viewport);
+		label.Dispose();
 	}
 
 	void DrawBudPlatformNavOverlay(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, Bud bud)

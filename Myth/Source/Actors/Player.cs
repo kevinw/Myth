@@ -387,7 +387,7 @@ public abstract class Pawn : Actor
 		if (grounded && input.MoveY > 0 && !IsCarrying)
 			ducking = true;
 		else if (ducking)
-			ducking = grounded && !CanStandUp();
+			ducking = !CanStandUp();
 		else
 			ducking = false;
 

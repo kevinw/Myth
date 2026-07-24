@@ -61,6 +61,7 @@ public sealed class PlatformNavGraph
 	const float SimChainMaxTime = 4.00f;
 	const int SimLandingTolerance = 12;
 	const int SimMinimumLandingDistance = Game.TileSize * 2;
+	static int FallMaxHorizontal => Game.TileSize * 4;
 	static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
 	static readonly RectInt DuckingPawnProbe = new(-4, -6, 8, 6);
 	static readonly Point2[] RoomExitDirections = [Point2.Left, Point2.Right, Point2.Up, Point2.Down];
@@ -1038,6 +1039,7 @@ public sealed class PlatformNavGraph
 	readonly List<int> swimNodeIds = [];
 	static float RopeAttachmentMaxHorizontal => 56;
 	static float RopeAttachmentVerticalGrace => 12;
+	static float RopeAttachmentMaxRise => Game.TileSize * 3;
 
 	void BuildRopeEdges(Game game)
 	{
@@ -1057,7 +1059,7 @@ public sealed class PlatformNavGraph
 					continue;
 
 				var grabY = node.Position.Y + PawnProbe.Center.Y;
-				if (grabY < ropeTop - RopeAttachmentVerticalGrace || grabY > ropeBottom + RopeAttachmentVerticalGrace)
+				if (grabY < ropeTop - RopeAttachmentVerticalGrace || grabY > ropeBottom + RopeAttachmentMaxRise)
 					continue;
 
 				var distance = MathF.Abs(node.Position.X - ropeX);
@@ -1688,11 +1690,26 @@ public sealed class PlatformNavGraph
 
 			if (!IsStandable(game, (Point2)node.Position + new Point2(-SampleStep, 0)) &&
 				FindFallLanding(game, node, -SampleStep) is { } leftLanding)
-				AddEdge(node.Id, leftLanding.Id, EdgeKind.Fall);
+				AddFallEdge(node, leftLanding);
 
 			if (!IsStandable(game, (Point2)node.Position + new Point2(SampleStep, 0)) &&
 				FindFallLanding(game, node, SampleStep) is { } rightLanding)
-				AddEdge(node.Id, rightLanding.Id, EdgeKind.Fall);
+				AddFallEdge(node, rightLanding);
+		}
+	}
+
+	void AddFallEdge(Node from, Node to)
+	{
+		AddEdge(from.Id, to.Id, EdgeKind.Fall);
+		var delta = from.Position - to.Position;
+		if (delta.X != 0 &&
+			delta.Y == -Game.TileSize * 3 &&
+			MathF.Abs(delta.X) <= FallMaxHorizontal &&
+			TryGetNodeSurfaceSpan(from.Id, out var fromSpan) && fromSpan.NodeCount == 1 &&
+			TryGetNodeSurfaceSpan(to.Id, out var toSpan) && toSpan.NodeCount == 1)
+		{
+			var direction = Math.Sign(delta.X);
+			AddEdge(to.Id, from.Id, EdgeKind.Jump, new(direction, 0, 0.18f, direction, 99));
 		}
 	}
 
@@ -1803,22 +1820,33 @@ public sealed class PlatformNavGraph
 
 	Node? FindFallLanding(Game game, Node from, int offsetX)
 	{
-		Node? best = null;
 		var start = (Point2)from.Position + new Point2(offsetX, 0);
-		foreach (var to in Nodes)
+		var direction = Math.Sign(offsetX);
+		for (var pass = 0; pass < 2; pass++)
 		{
-			if ((int)to.Position.X != start.X || to.Position.Y <= from.Position.Y)
-				continue;
+			var maxHorizontal = pass == 0 ? 0 : FallMaxHorizontal;
+			Node? best = null;
+			foreach (var to in Nodes)
+			{
+				var deltaX = (int)to.Position.X - start.X;
+				if (to.Position.Y <= from.Position.Y || deltaX * direction < 0 || Math.Abs(deltaX) > maxHorizontal)
+					continue;
 
-			if (best is { } current && to.Position.Y >= current.Position.Y)
-				continue;
+				if (best is { } current &&
+					(to.Position.Y > current.Position.Y ||
+						to.Position.Y == current.Position.Y &&
+						Math.Abs(deltaX) >= Math.Abs(current.Position.X - start.X)))
+					continue;
 
-			if (!FallProbeClear(game, start, (Point2)to.Position))
-				continue;
+				if (!FallProbeClear(game, start, (Point2)to.Position, from.RequiresDucking))
+					continue;
 
-			best = to;
+				best = to;
+			}
+			if (best.HasValue)
+				return best;
 		}
-		return best;
+		return null;
 	}
 
 	static EdgeKind? WalkEdgeKind(Game game, Node from, Node to)
@@ -1843,14 +1871,17 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	static bool FallProbeClear(Game game, Point2 from, Point2 to)
+	static bool FallProbeClear(Game game, Point2 from, Point2 to, bool requiresDucking)
 	{
-		if (OverlapsCollision(game, PawnProbe + from))
-			return false;
-
-		for (var y = from.Y + 1; y < to.Y; y += 2)
-			if (OverlapsCollision(game, PawnProbe + new Point2(from.X, y)))
+		var steps = Math.Max(1, (int)MathF.Ceiling(Vector2.Distance(from, to) / 2));
+		for (var i = 0; i < steps; i++)
+		{
+			var position = (Point2)Vector2.Lerp(from, to, i / (float)steps);
+			if (requiresDucking && !OverlapsCollision(game, PawnProbe + position))
+				requiresDucking = false;
+			if (OverlapsCollision(game, (requiresDucking ? DuckingPawnProbe : PawnProbe) + position))
 				return false;
+		}
 
 		return true;
 	}
