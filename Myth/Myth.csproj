@@ -176,4 +176,23 @@
       Text="Foster browser FMOD runtime files are missing. Expected fmodstudioP.js and fmodstudioP.wasm in Foster/Framework/Content/Web/FMOD/." />
   </Target>
 
+  <!-- Native ScreenCaptureKit window recorder (see native/MythCapture, used by the 'M'
+       record shortcut). Built + copied for macOS non-ship builds (Debug or Release), so it's
+       available for performant Release captures but never lands in a ship publish
+       (MythShip=true). ContinueOnError keeps the C# build working even without a Swift
+       toolchain (the feature just reports it's missing). C# is likewise gated on #if !MYTHSHIP. -->
+  <Target Name="BuildMythCapture"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(MythShip)' != 'true'"
+          Inputs="../native/MythCapture/MythCapture.swift"
+          Outputs="../native/MythCapture/libMythCapture.dylib">
+    <Exec Command="bash '$(MSBuildProjectDirectory)/../native/MythCapture/build.sh'" ContinueOnError="true" />
+  </Target>
+
+  <Target Name="CopyMythCapture"
+          AfterTargets="Build"
+          DependsOnTargets="BuildMythCapture"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(MythShip)' != 'true' And Exists('../native/MythCapture/libMythCapture.dylib')">
+    <Copy SourceFiles="../native/MythCapture/libMythCapture.dylib" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

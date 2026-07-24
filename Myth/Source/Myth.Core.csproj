@@ -22,6 +22,9 @@
     <DefineConstants Condition="'$(MythTestShip)' == 'true'">$(DefineConstants);IMGUI</DefineConstants>
     <DefineConstants Condition="'$(MythTestShip)' != 'true' and '$(MythShip)' != 'true'">$(DefineConstants);EDITOR;IMGUI</DefineConstants>
     <DefineConstants Condition="'$(MythTestShip)' != 'true' and '$(MythShip)' == 'true'">$(DefineConstants);IMGUI</DefineConstants>
+    <!-- Marks the published/ship build; dev tools guarded with #if !MYTHSHIP (e.g. the
+         MythCapture window recorder) then compile out of a ship publish. -->
+    <DefineConstants Condition="'$(MythShip)' == 'true'">$(DefineConstants);MYTHSHIP</DefineConstants>
   </PropertyGroup>
 
   <!-- Dear ImGui is available in the browser when the prebuilt cimgui wasm archive
