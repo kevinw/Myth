@@ -625,6 +625,15 @@ public partial class Game : IDisposable
 
 	void UpdateCamera()
 	{
+		// Debug capture mode: keep the player dead-centre, ignoring room edges entirely.
+		if (DebugCenterCamera && GetFirst<Player>() is { } centerPlayer)
+		{
+			Camera = Vector2.Round((Vector2)centerPlayer.Position - new Vector2(Width, Height) / 2);
+			previousCameraTarget = null;
+			cameraError = Vector2.Zero;
+			return;
+		}
+
 		if (room == null || nextRoom != null || DraggingPlayer)
 		{
 			// The camera is under transition/drag control; drop the easing state so normal
