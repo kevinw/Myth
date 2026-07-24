@@ -15,7 +15,7 @@ public enum RoomChangeKind
 }
 
 public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
-public readonly record struct RoomGeoChange(Room Room);
+public readonly record struct RoomGeoChange(Room Room, RectInt? DirtyWorldBounds = null);
 
 public partial class Game : IDisposable
 {
@@ -873,6 +873,7 @@ public partial class Game : IDisposable
 
 	void FinishRoomActivation(RoomChangeKind kind)
 	{
+		ResetPlatformNavGraphRoomState();
 		// The player has been placed into the (new) room by now, so this is the way back in.
 		if (GetFirst<Player>() is { } player)
 			roomEntryPosition = player.Position;
@@ -1055,7 +1056,7 @@ public partial class Game : IDisposable
 				Destroy(actor);
 			}
 
-		room?.RoomGeoChanged -= RoomGeoChanged;
+		room?.RoomGeoChanged -= OnRoomGeoChanged;
 		room = targetRoom;
 		nextRoom = null;
 		transitionDirection = direction;
@@ -1709,6 +1710,7 @@ public partial class Game : IDisposable
 		if (room == null || tiles.Count == 0)
 			return false;
 
+		var dirtyBounds = TileWorldBounds(tiles);
 		var tileTypesBroken = new HashSet<string>();
 		foreach (var point in tiles)
 		{
@@ -1719,7 +1721,7 @@ public partial class Game : IDisposable
 			Create<Pop>(TileWorldCenter(point));
 		}
 
-		room.RebuildGeometry();
+		room.RebuildGeometry(dirtyBounds);
 		RefreshRoomTiles();
 		View?.MarkRoomNormalCacheDirty(room);
 		View?.MarkRoomTileFieldCacheDirty(room);
@@ -1727,6 +1729,14 @@ public partial class Game : IDisposable
 			PlayAudioEvent("tile_break", "Type", surfaceType, position: soundPosition);
 
 		return true;
+	}
+
+	RectInt TileWorldBounds(List<Point2> tiles)
+	{
+		var bounds = new RectInt(room!.WorldBounds.TopLeft + tiles[0] * TileSize, Point2.One * TileSize);
+		for (var i = 1; i < tiles.Count; i++)
+			bounds = bounds.Conflate(new RectInt(room.WorldBounds.TopLeft + tiles[i] * TileSize, Point2.One * TileSize));
+		return bounds;
 	}
 
 	Point2 TileWorldCenter(Point2 tile)
@@ -1756,7 +1766,7 @@ public partial class Game : IDisposable
 		foreach (var actor in Actors)
 			Destroy(actor);
 
-		room.RoomGeoChanged -= RoomGeoChanged;
+		room.RoomGeoChanged -= OnRoomGeoChanged;
 		room = reloaded;
 
 		LoadRoom(room);
@@ -1792,8 +1802,8 @@ public partial class Game : IDisposable
 		foreach (var actor in Actors)
 			Destroy(actor);
 
+		room?.RoomGeoChanged -= OnRoomGeoChanged;
 		room = target.CloneRuntime();
-		room.RoomGeoChanged += RoomGeoChanged;
 		Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
 		UpdateAudioListener();
 		LoadRoom(room);
@@ -1912,7 +1922,7 @@ public partial class Game : IDisposable
 
 	void LoadRoomContents(Room forRoom)
 	{
-		forRoom.RoomGeoChanged += RoomGeoChanged;
+		forRoom.RoomGeoChanged += OnRoomGeoChanged;
 
 		// Geometry is already built: every caller passes a freshly CloneRuntime()'d room,
 		// and CloneRuntime() ends with RebuildGeometry(). Rebuilding here ran the full

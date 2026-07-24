@@ -204,7 +204,7 @@ partial class Manager
 			if (!GymLoop) Console.WriteLine("[Gym] Bud fell off world");
 			AdvanceGym(success: false);
 		}
-		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud && goal.OverlapsAny(Point2.Zero, bud))
+		else if (game.GymTarget is Goal goal && game.GetFirst<Bud>() is { } bud && goal.ReachedBy(bud))
 		{
 			if (!GymLoop) Console.WriteLine("[Gym] Bud reached goal");
 			AdvanceGym(success: true);

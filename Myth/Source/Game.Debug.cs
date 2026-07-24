@@ -108,6 +108,7 @@ public partial class Game
 	internal DebugView debugView;
 	PlatformNavGraph platformNavGraph = new();
 	Room? platformNavGraphRoom;
+	bool platformNavGraphPristine = true;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
@@ -256,14 +257,32 @@ public partial class Game
 	}
 
 	internal PlatformNavGraph? ReadyPlatformNavGraph
-		=> platformNavGraph.IsReady ? platformNavGraph : null;
+		=> platformNavGraphPristine && platformNavGraph.IsReady ? platformNavGraph : null;
 
 	internal void ReusePlatformNavGraph(PlatformNavGraph graph)
 	{
 		platformNavGraph = graph;
 		platformNavGraphRoom = room;
+		platformNavGraphPristine = true;
 		graph.ResetPathStats();
 	}
+
+	void OnRoomGeoChanged(RoomGeoChange change)
+	{
+		RoomGeoChanged?.Invoke(change);
+		if (change.Room != room)
+			return;
+
+		platformNavGraphPristine = false;
+		if (platformNavGraphRoom == room)
+		{
+			platformNavGraph.Rebuild(this, room, change.DirtyWorldBounds);
+			navBuildSettleTimer = 0;
+		}
+	}
+
+	void ResetPlatformNavGraphRoomState()
+		=> platformNavGraphPristine = true;
 
 	public bool TryGetBudDebugOverlay(out Vector2 worldPosition, out string label)
 	{

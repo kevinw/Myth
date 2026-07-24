@@ -114,7 +114,7 @@ public partial class Manager
 			DrawBudPlatformNavOverlay(draw, viewport, game, graph, bud);
 
 		foreach (var span in graph.SurfaceSpans)
-			DrawPlatformNavSurfaceSpan(draw, viewport, game, span);
+			DrawPlatformNavSurfaceSpan(draw, viewport, game, graph, span);
 
 		foreach (var node in graph.Nodes)
 		{
@@ -202,7 +202,12 @@ public partial class Manager
 			label.Append("..");
 			label.Append(span.Right - roomLeft);
 			label.Append("] y ");
-			label.Append(span.Y - roomTop);
+			label.Append(span.Top - roomTop);
+			if (span.IsSloped)
+			{
+				label.Append("..");
+				label.Append(span.Bottom - roomTop);
+			}
 		}
 
 		if (node.Area is { } area)
@@ -333,24 +338,30 @@ public partial class Manager
 		}
 	}
 
-	static void DrawPlatformNavSurfaceSpan(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph.SurfaceSpan span)
+	static void DrawPlatformNavSurfaceSpan(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.SurfaceSpan span)
 	{
 		const int yOffset = -5;
 		const int singletonHalfWidth = 5;
-		var left = span.Left;
-		var right = span.Right;
-		if (left == right)
-		{
-			left -= singletonHalfWidth;
-			right += singletonHalfWidth;
-		}
-
 		var color = span.RequiresDucking
 			? ImGuiColor(0.95f, 0.66f, 1.00f, 0.35f)
 			: ImGuiColor(0.18f, 1.00f, 0.82f, 0.35f);
-		var from = GameWorldToImGui(viewport, game, new Vector2(left, span.Y + yOffset));
-		var to = GameWorldToImGui(viewport, game, new Vector2(right, span.Y + yOffset));
-		draw.AddLine(from, to, color, 3.0f);
+		var offset = new Vector2(0, yOffset);
+		if (span.PointCount == 1)
+		{
+			var point = graph.SurfacePoints[span.PointStart] + offset;
+			var from = GameWorldToImGui(viewport, game, point - new Vector2(singletonHalfWidth, 0));
+			var to = GameWorldToImGui(viewport, game, point + new Vector2(singletonHalfWidth, 0));
+			draw.AddLine(from, to, color, 3.0f);
+			return;
+		}
+
+		var previous = GameWorldToImGui(viewport, game, graph.SurfacePoints[span.PointStart] + offset);
+		for (var i = 1; i < span.PointCount; i++)
+		{
+			var point = GameWorldToImGui(viewport, game, graph.SurfacePoints[span.PointStart + i] + offset);
+			draw.AddLine(previous, point, color, 3.0f);
+			previous = point;
+		}
 	}
 
 	static void DrawPlatformNavSurfaceEdge(ImDrawListPtr draw, Rect viewport, Game game, PlatformNavGraph graph, PlatformNavGraph.SurfaceEdge edge, uint color, float thickness)
@@ -360,8 +371,8 @@ public partial class Manager
 
 		var fromSpan = graph.SurfaceSpans[edge.From];
 		var toSpan = graph.SurfaceSpans[edge.To];
-		var from = new Vector2((edge.FromLeft + edge.FromRight) * 0.5f, fromSpan.Y - 9);
-		var to = new Vector2((edge.ToLeft + edge.ToRight) * 0.5f, toSpan.Y - 9);
+		var from = graph.SurfacePointAtX(fromSpan, (edge.FromLeft + edge.FromRight) * 0.5f) - new Vector2(0, 9);
+		var to = graph.SurfacePointAtX(toSpan, (edge.ToLeft + edge.ToRight) * 0.5f) - new Vector2(0, 9);
 		if (edge.Kind == PlatformNavGraph.EdgeKind.Jump)
 			DrawPlatformNavJump(draw, viewport, game, from, to, edge.Jump is { WallJump: true } ? ImGuiColor(1.00f, 0.42f, 0.96f, 0.78f) : color, thickness, edge.Jump is { WallJump: true });
 		else

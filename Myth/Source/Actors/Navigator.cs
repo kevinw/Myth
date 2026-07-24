@@ -87,13 +87,17 @@ public sealed class Navigator(Pawn owner)
 	readonly HashSet<(int From, int To)> blockedPathEdges = [];
 	Vector2? blockedPathTarget;
 	PlatformNavGraph? cachedPathGraph;
+	PlatformNavGraph? observedGraph;
 	Vector2 cachedPathTarget;
 	int cachedPathGraphRevision = -1;
+	int observedGraphRevision = -1;
 	int cachedPathStartId = -1;
 	int cachedPathGoalId = -1;
 	int cachedPathBlockedRevision = -1;
 	int blockedPathRevision;
 	EdgeState activeEdge;
+	PlatformNavGraph? activeEdgeGraph;
+	int activeEdgeGraphRevision = -1;
 	bool activeEdgeBlocksPath;
 	string? lastTraceStateKey;
 
@@ -137,6 +141,7 @@ public sealed class Navigator(Pawn owner)
 
 	internal bool TryReuseNavPath(PlatformNavGraph graph, int startId, Vector2 target, out PlatformNavGraph.Node goal)
 	{
+		ObserveGraph(graph);
 		if (cachedPathGraph != graph ||
 			cachedPathGraphRevision != graph.Revision ||
 			cachedPathStartId != startId ||
@@ -154,6 +159,19 @@ public sealed class Navigator(Pawn owner)
 
 		goal = graph.Nodes[cachedPathGoalId];
 		return true;
+	}
+
+	void ObserveGraph(PlatformNavGraph graph)
+	{
+		if (observedGraph == graph && observedGraphRevision == graph.Revision)
+			return;
+
+		observedGraph = graph;
+		observedGraphRevision = graph.Revision;
+		cachedPathGraph = null;
+		navPath.Clear();
+		surfaceNavPath.Clear();
+		ClearBlockedPathEdges();
 	}
 
 	internal void RememberNavPath(PlatformNavGraph graph, int startId, int goalId, Vector2 target)
@@ -194,6 +212,7 @@ public sealed class Navigator(Pawn owner)
 			return false;
 		}
 
+		ObserveGraph(graph);
 		ResetBlockedPathEdgesForTarget(target);
 
 		// Keep following a graph route once we have one. In particular, don't replace the
@@ -363,7 +382,7 @@ public sealed class Navigator(Pawn owner)
 		var span = graph.SurfaceSpans[start.Value.SpanId];
 		// A target buried beneath this surface (e.g. a goal in the corridor below the slab)
 		// can't be reached by walking on top of it — let node pathing route around instead.
-		if (target.Y > span.Y + 4 && target.X >= span.Left - 4 && target.X <= span.Right + 4)
+		if (target.Y > goal.Value.Position.Y + 4 && target.X >= span.Left - 4 && target.X <= span.Right + 4)
 			return false;
 		moveX = followArrival ? MoveTowardFollowTarget(goal.Value.Position) : MoveTowardNavTarget(goal.Value.Position);
 		moveY = forceDucking || span.RequiresDucking ? 1 : 0;
@@ -392,8 +411,18 @@ public sealed class Navigator(Pawn owner)
 		moveX = 0;
 		moveY = 0;
 		jumpPressed = false;
-		if (activeEdge.Edge is not { } edge || (GraphOverride ?? Game.GetPlatformNavGraph()) is not { } graph)
+		if (activeEdge.Edge is not { } edge)
 			return false;
+		if ((GraphOverride ?? Game.GetPlatformNavGraph()) is not { } graph)
+		{
+			ClearActiveEdge("graph rebuilding");
+			return false;
+		}
+		if (activeEdgeGraph != graph || activeEdgeGraphRevision != graph.Revision)
+		{
+			ClearActiveEdge("graph changed");
+			return false;
+		}
 
 		if (edge.From < 0 || edge.From >= graph.Nodes.Count || edge.To < 0 || edge.To >= graph.Nodes.Count)
 		{
@@ -503,12 +532,13 @@ public sealed class Navigator(Pawn owner)
 
 	public bool TryGetActionableEdge(PlatformNavGraph graph, out PlatformNavGraph.Edge edge)
 	{
+		ObserveGraph(graph);
 		foreach (var candidate in navPath)
 		{
 			if (candidate.To < 0 || candidate.To >= graph.Nodes.Count)
 				continue;
 			var to = graph.Nodes[candidate.To];
-			if (candidate.Kind is PlatformNavGraph.EdgeKind.Walk or PlatformNavGraph.EdgeKind.Crawl or PlatformNavGraph.EdgeKind.RoomExit &&
+			if ((candidate.Kind is PlatformNavGraph.EdgeKind.Walk or PlatformNavGraph.EdgeKind.Crawl or PlatformNavGraph.EdgeKind.RoomExit) &&
 				MoveTowardNavTarget(to.Position) == 0 &&
 				IsNearNode(to.Position))
 				continue;
@@ -522,6 +552,8 @@ public sealed class Navigator(Pawn owner)
 	public void StartActiveEdge(PlatformNavGraph.Edge edge, bool blockPathOnTimeout = false)
 	{
 		activeEdge = EdgeState.Start(edge);
+		activeEdgeGraph = GraphOverride ?? Game.GetPlatformNavGraph();
+		activeEdgeGraphRevision = activeEdgeGraph?.Revision ?? -1;
 		if (edge.Kind == PlatformNavGraph.EdgeKind.Rope && edge.ConnectorActorId != null)
 			activeEdge.Rope = Game.GetActorById(edge.ConnectorActorId) as Rope;
 		activeEdgeBlocksPath = blockPathOnTimeout;
@@ -543,6 +575,8 @@ public sealed class Navigator(Pawn owner)
 		if (activeEdge.Edge is { } edge)
 			Game.NavTrace?.EdgeEvent(Game, "edgeClear", edge, ("label", label), ("timer", activeEdge.Timer), ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(owner.Velocity)));
 		activeEdge = default;
+		activeEdgeGraph = null;
+		activeEdgeGraphRevision = -1;
 		activeEdgeBlocksPath = false;
 		LastEdgeRunState = outcome;
 		DebugNavProbeRect = null;
@@ -564,6 +598,8 @@ public sealed class Navigator(Pawn owner)
 		navPath.Clear();
 		surfaceNavPath.Clear();
 		activeEdge = default;
+		activeEdgeGraph = null;
+		activeEdgeGraphRevision = -1;
 		activeEdgeBlocksPath = false;
 		DebugNavProbeRect = null;
 		DebugNavProbeHit = false;

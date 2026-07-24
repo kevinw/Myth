@@ -9,13 +9,18 @@ public class Goal : Actor
 
 	public Goal()
 	{
-		if (Sprite != null && Sprite.Frames.Count > 0)
-		{
-			Hitbox = Hitbox.FromSprite(Sprite);
-		}
 		Mask = Masks.None;
 		Depth = -100;
 	}
+
+	public override void Added()
+	{
+		base.Added();
+		Hitbox = Hitbox.FromSprite(Sprite, Anchor);
+	}
+
+	public bool ReachedBy(Actor actor)
+		=> (Hitbox.Rect + Position).Inflate(1).Overlaps(actor.Hitbox.Rect + actor.Position);
 
 	bool ShouldRender => Game.Manager.CurrentRunGoalId() == ActorId || Game.Editing;
 

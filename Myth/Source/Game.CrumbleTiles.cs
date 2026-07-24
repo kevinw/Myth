@@ -146,7 +146,7 @@ public partial class Game
 				PopAt(tile);
 			}
 
-			room.RebuildGeometry();
+			room.RebuildGeometry(TileWorldBounds(crumbleRestoreScratch));
 			RefreshRoomTiles();
 			View?.MarkRoomNormalCacheDirty(room);
 			View?.MarkRoomTileFieldCacheDirty(room);

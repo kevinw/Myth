@@ -463,7 +463,7 @@ public class Room
 		});
 	}
 
-	public void RebuildGeometry()
+	public void RebuildGeometry(RectInt? dirtyWorldBounds = null)
 	{
 		ApplyLegend();
 		RebuildTileEntryCache();
@@ -503,7 +503,7 @@ public class Room
 		if (ReverbAuto)
 			Reverb = InferReverb();
 
-		RoomGeoChanged?.Invoke(new (this));
+		RoomGeoChanged?.Invoke(new(this, dirtyWorldBounds));
 	}
 
 	static bool HasBakedDualOccluders(Factory.Entry entry)
