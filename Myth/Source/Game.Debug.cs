@@ -43,6 +43,7 @@ public partial class Game
 		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
 		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
 		if (Input.Keyboard.Pressed(Keys.J)) ToggleAtlasWander();
+		if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugCenterCamera();
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 
 		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
@@ -69,6 +70,16 @@ public partial class Game
 	{
 		CrtShader = (CrtShader + 1) % 2;
 		DisplayMessage($"CRT: {(CrtShader == 0 ? "Myth" : "GDV Mini Ultra Trinitron")}");
+	}
+
+	// Locks the camera dead-centre on the player, ignoring room bounds/blockers —
+	// for recording clean player-focused clips. See UpdateCamera.
+	internal bool DebugCenterCamera { get; private set; }
+
+	void ToggleDebugCenterCamera()
+	{
+		DebugCenterCamera = !DebugCenterCamera;
+		DisplayMessage($"Center Camera: {(DebugCenterCamera ? "on" : "off")}");
 	}
 
 	internal bool AtlasWander { get; private set; }

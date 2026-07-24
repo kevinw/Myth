@@ -109,12 +109,6 @@
       "Type": "Wildlife",
       "Position": [152, 40],
       "FishCount": 2
-    },
-    {
-      "Id": "844be260c9fda164",
-      "Type": "Spider",
-      "Position": [125, 85],
-      "ClimbsWallsAndCeilings": true
     }
   ]
 }

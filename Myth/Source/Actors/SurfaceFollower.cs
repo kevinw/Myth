@@ -16,6 +16,11 @@ public sealed class SurfaceFollower
 	public float MaxSurfaceSnapDistance = 1;
 	public bool ClimbsWallsAndCeilings = true;
 
+	/// Local rect (relative to actor.Position) used for surface probing. Lets an
+	/// actor keep a ground-locked follow point separate from a hitbox that has
+	/// drifted elsewhere (e.g. a body that rides on its legs). Empty = use Hitbox.
+	public RectInt ProbeRect;
+
 	public Vector2 Remainder;
 
 	public SurfaceFollower(Actor actor)
@@ -187,7 +192,7 @@ public sealed class SurfaceFollower
 		return false;
 	}
 
-	private RectInt Bounds() => actor.Hitbox.Rect + actor.Position;
+	private RectInt Bounds() => (ProbeRect.Width == 0 ? actor.Hitbox.Rect : ProbeRect) + actor.Position;
 
 	bool CanUseSurface(Vector2 direction) => ClimbsWallsAndCeilings || direction.Y > 0.5f;
 
