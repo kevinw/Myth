@@ -1,7 +1,10 @@
 using System.Numerics;
+using System.Globalization;
 using System.Diagnostics;
 using Foster.Framework;
+using System.Text.Json;
 namespace Myth;
+
 
 public partial class Manager : App
 {
@@ -16,7 +19,7 @@ public partial class Manager : App
 	int movieTrackingFps;
 	Point2 movieOutputSize;
 
-	// Records the game window to an .mp4 via ScreenCaptureKit (see native/MythCapture).
+	// Records the game window to video via ScreenCaptureKit (see native/MythCapture).
 	void ToggleMovieRecording(bool trackPlayer)
 	{
 		if (!MythCapture.Available)
@@ -35,7 +38,8 @@ public partial class Manager : App
 				Directory.CreateDirectory(dir);
 				var room = SanitizeForFilename(game?.CurrentRoom?.Id);
 				var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-				var name = string.IsNullOrEmpty(room) ? $"myth-{stamp}.mp4" : $"myth-{room}-{stamp}.mp4";
+				var ext = "mov";
+				var name = string.IsNullOrEmpty(room) ? $"myth-{stamp}.{ext}" : $"myth-{room}-{stamp}.{ext}";
 				var path = Path.Combine(dir, name);
 				var ok = MythCapture.Start(path);
 				if (!ok)
@@ -119,7 +123,8 @@ public partial class Manager : App
 
 		var present = liveGame.PresentRect(viewport);
 		var presentScale = liveGame.PresentScale(present, Game.Width, Game.Height);
-		var continuous = (Vector2)player.Position + player.SubPixelRemainder;
+		var useRemainder = true;
+		var continuous = (Vector2)player.Position + (useRemainder ? player.SubPixelRemainder : Vector2.Zero);
 		var viewPosition = (continuous - liveGame.RenderCamera) * liveGame.ZoomLevel;
 		var windowPosition =
 			(Vector2)present.Center +
@@ -198,6 +203,8 @@ public partial class Manager : App
 		if (ffmpeg == null)
 			return false;
 
+		var sourceEncoding = ProbeVideoEncoding(ffmpeg, videoPath);
+
 		var cropWidth = Even((int)(movieOutputSize.X / MoviePlayerCropZoom));
 		var cropHeight = Even((int)(movieOutputSize.Y / MoviePlayerCropZoom));
 		var commandsPath = Path.Combine(Path.GetTempPath(), $"myth-crop-{Guid.NewGuid():N}.txt");
@@ -216,8 +223,10 @@ public partial class Manager : App
 		var info = new ProcessStartInfo(ffmpeg)
 		{
 			UseShellExecute = false,
-			CreateNoWindow = true
+			CreateNoWindow = true,
+			RedirectStandardError = true,
 		};
+
 		info.ArgumentList.Add("-y");
 		info.ArgumentList.Add("-i");
 		info.ArgumentList.Add(videoPath);
@@ -227,14 +236,9 @@ public partial class Manager : App
 		info.ArgumentList.Add("0:v:0");
 		info.ArgumentList.Add("-map");
 		info.ArgumentList.Add("0:a?");
-		info.ArgumentList.Add("-c:v");
-		info.ArgumentList.Add("libx264");
-		info.ArgumentList.Add("-preset");
-		info.ArgumentList.Add("medium");
-		info.ArgumentList.Add("-crf");
-		info.ArgumentList.Add("12");
-		info.ArgumentList.Add("-pix_fmt");
-		info.ArgumentList.Add("yuv420p");
+		info.ArgumentList.Add("-map");
+		info.ArgumentList.Add("0:a?");
+		AddMatchingVideoEncoder(info, sourceEncoding);
 		info.ArgumentList.Add("-c:a");
 		info.ArgumentList.Add("copy");
 		info.ArgumentList.Add("-movflags");
@@ -242,6 +246,11 @@ public partial class Manager : App
 		info.ArgumentList.Add(croppedPath);
 
 		var process = new Process { StartInfo = info, EnableRaisingEvents = true };
+		process.ErrorDataReceived += (_, e) =>
+		{
+			if (e.Data != null)
+				Console.WriteLine($"ffmpeg: {e.Data}");
+		};
 		process.Exited += (_, _) =>
 		{
 			try
@@ -263,7 +272,10 @@ public partial class Manager : App
 		try
 		{
 			if (process.Start())
+			{
+				process.BeginErrorReadLine();
 				return true;
+			}
 		}
 		catch
 		{
@@ -277,15 +289,31 @@ public partial class Manager : App
 		return false;
 	}
 
-	void WriteCropCommand(StreamWriter writer, double time, Vector2 center, int cropWidth, int cropHeight)
+	void WriteCropCommand(
+		StreamWriter writer,
+		double time,
+		Vector2 center,
+		int cropWidth,
+		int cropHeight)
 	{
-		var x = Math.Clamp(center.X * movieOutputSize.X - cropWidth * 0.5f, 0, movieOutputSize.X - cropWidth);
-		var y = Math.Clamp(center.Y * movieOutputSize.Y - cropHeight * 0.5f, 0, movieOutputSize.Y - cropHeight);
+		var maxX = movieOutputSize.X - cropWidth;
+		var maxY = movieOutputSize.Y - cropHeight;
+
+		var rawX = center.X * movieOutputSize.X - cropWidth * 0.5f;
+		var rawY = center.Y * movieOutputSize.Y - cropHeight * 0.5f;
+
+		var x = Math.Clamp((int)MathF.Round(rawX), 0, maxX);
+		var y = Math.Clamp((int)MathF.Round(rawY), 0, maxY);
+
+		// Safe for both 4:2:2 ProRes and potential 4:2:0 H.264/HEVC inputs.
+		x &= ~1;
+		y &= ~1;
+
 		writer.Write(time.ToString("0.######", CultureInfo.InvariantCulture));
 		writer.Write(" crop x ");
-		writer.Write(x.ToString("0.###", CultureInfo.InvariantCulture));
+		writer.Write(x.ToString(CultureInfo.InvariantCulture));
 		writer.Write(", crop y ");
-		writer.Write(y.ToString("0.###", CultureInfo.InvariantCulture));
+		writer.Write(y.ToString(CultureInfo.InvariantCulture));
 		writer.WriteLine(";");
 	}
 
@@ -339,5 +367,163 @@ public partial class Manager : App
 		Vector2 CropPosition,
 		int Facing,
 		Vector2 Velocity);
+
+	private sealed record VideoEncoding(string CodecName, string? Profile, string? PixelFormat);
+
+	private static VideoEncoding ProbeVideoEncoding(string ffmpegPath, string videoPath) {
+		var directory = Path.GetDirectoryName(ffmpegPath)
+			?? throw new InvalidOperationException("FFmpeg path has no directory");
+
+		var ffprobePath = Path.Combine(
+			directory,
+			OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
+
+		if (!File.Exists(ffprobePath))
+			throw new FileNotFoundException(
+				"ffprobe must be installed alongside ffmpeg",
+				ffprobePath);
+
+		var info = new ProcessStartInfo(ffprobePath)
+		{
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			RedirectStandardOutput = true,
+			RedirectStandardError = true
+		};
+
+		info.ArgumentList.Add("-v");
+		info.ArgumentList.Add("error");
+
+		info.ArgumentList.Add("-select_streams");
+		info.ArgumentList.Add("v:0");
+
+		info.ArgumentList.Add("-show_entries");
+		info.ArgumentList.Add("stream=codec_name,profile,pix_fmt");
+
+		info.ArgumentList.Add("-of");
+		info.ArgumentList.Add("json");
+
+		info.ArgumentList.Add(videoPath);
+
+		using var process = Process.Start(info)
+			?? throw new InvalidOperationException("Could not start ffprobe");
+
+		var json = process.StandardOutput.ReadToEnd();
+		var stderr = process.StandardError.ReadToEnd();
+
+		process.WaitForExit();
+
+		if (process.ExitCode != 0)
+			throw new InvalidOperationException(
+				$"ffprobe failed with exit code {process.ExitCode}: {stderr}");
+
+		using var document = JsonDocument.Parse(json);
+
+		if (!document.RootElement.TryGetProperty("streams", out var streams) ||
+		    streams.GetArrayLength() == 0)
+		{
+			throw new InvalidOperationException(
+				"No video stream was found in the input file");
+		}
+
+		var stream = streams[0];
+
+		var codecName = stream.GetProperty("codec_name").GetString()
+			?? throw new InvalidOperationException(
+				"ffprobe did not report a video codec");
+
+		var profile = stream.TryGetProperty("profile", out var profileElement)
+			? profileElement.GetString()
+			: null;
+
+		var pixelFormat = stream.TryGetProperty("pix_fmt", out var pixelFormatElement)
+			? pixelFormatElement.GetString()
+			: null;
+
+		return new VideoEncoding(codecName, profile, pixelFormat);
+	}
+
+	private static string GetProResProfile(string? sourceProfile)
+	{
+		var profile = sourceProfile?.Trim().ToLowerInvariant() ?? "";
+
+		if (profile.Contains("xq"))
+			return "4444xq";
+
+		if (profile.Contains("4444"))
+			return "4444";
+
+		if (profile.Contains("hq"))
+			return "hq";
+
+		if (profile.Contains("lt"))
+			return "lt";
+
+		if (profile.Contains("proxy"))
+			return "proxy";
+
+		if (profile.Contains("standard"))
+			return "standard";
+
+		throw new NotSupportedException(
+			$"Unknown ProRes profile: {sourceProfile ?? "(missing)"}");
+	}
+
+	private static void AddMatchingVideoEncoder(
+		ProcessStartInfo info,
+		VideoEncoding source)
+	{
+		void Add(string option, string value)
+		{
+			info.ArgumentList.Add(option);
+			info.ArgumentList.Add(value);
+		}
+
+		switch (source.CodecName.ToLowerInvariant())
+		{
+			case "prores":
+			{
+				var profile = GetProResProfile(source.Profile);
+
+				Add("-c:v", "prores_videotoolbox");
+				Add(
+					"-profile:v",
+					profile == "4444xq" ? "xq" : profile);
+
+				// 10-bit, bi-planar 4:2:2 input expected by VideoToolbox.
+				Add("-pix_fmt", "p210le");
+
+				break;
+			}
+
+			case "h264":
+				Add("-c:v", "libx264");
+				Add("-preset", "medium");
+				Add("-crf", "12");
+				Add("-pix_fmt", "yuv420p");
+				break;
+
+			case "hevc":
+			case "h265":
+				Add("-c:v", "libx265");
+				Add("-preset", "medium");
+				Add("-crf", "12");
+
+				// Preserve 10-bit HEVC when the source was 10-bit.
+				Add(
+					"-pix_fmt",
+					source.PixelFormat?.Contains("10", StringComparison.Ordinal) == true
+						? "yuv420p10le"
+						: "yuv420p");
+
+				break;
+
+			default:
+				throw new NotSupportedException(
+					$"Cannot preserve unsupported source codec " +
+					$"'{source.CodecName}'");
+		}
+	}
+
 }
 #endif

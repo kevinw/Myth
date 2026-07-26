@@ -18,7 +18,18 @@ static partial class MythCapture
 	public static int Fps = 60;
 	public static int BitrateMbps = 0;
 	public static int MaxHeight = 1080;
-	public static bool Hevc = false;
+
+	// must match myth_capture_start
+	enum Codec: int
+	{
+		H264 = 0,
+		HEVC = 1,
+		ProRes_422_LT = 2,
+		ProRes_422 = 3,
+		ProRes_422_HQ = 4,
+	}
+
+	readonly static Codec DefaultCodec = Codec.ProRes_422_LT;
 
 	[LibraryImport(Lib, EntryPoint = "myth_capture_start", StringMarshalling = StringMarshalling.Utf8)]
 	private static partial int NativeStart(string path, int fps, int bitrateBps, int maxHeight, int hevc);
@@ -59,7 +70,7 @@ static partial class MythCapture
 	{
 		OutputPath = path;
 		var bitrateBps = BitrateMbps > 0 ? BitrateMbps * 1_000_000 : 0;
-		return NativeStart(path, Fps, bitrateBps, MaxHeight, Hevc ? 1 : 0) == 0;
+		return NativeStart(path, Fps, bitrateBps, MaxHeight, (int)DefaultCodec) == 0;
 	}
 
 	public static bool Stop() => NativeStop() == 0;

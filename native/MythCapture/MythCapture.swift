@@ -1,4 +1,5 @@
-// MythCapture — capture this app's own window to an .mp4 via ScreenCaptureKit + AVFoundation.
+// MythCapture — capture this app's own window via ScreenCaptureKit + AVFoundation.
+// H.264/HEVC recordings use .mp4; Apple ProRes recordings use .mov.
 // Exposed over a flat C ABI (see the @_cdecl functions at the bottom) so the C# game can
 // P/Invoke it. Requires Screen Recording permission (System Settings › Privacy & Security ›
 // Screen Recording) for whichever process hosts the game.
@@ -14,6 +15,56 @@ import AVFoundation
 import CoreMedia
 import CoreVideo
 import ScreenCaptureKit
+
+@available(macOS 12.3, *)
+private enum MythCaptureCodec: Int32 {
+	// Keep 0 and 1 compatible with the previous `hevc` boolean parameter:
+	// false/0 = H.264, true/1 = HEVC.
+	case h264 = 0
+	case hevc = 1
+	case proRes422LT = 2
+	case proRes422 = 3
+	case proRes422HQ = 4
+
+	var avCodec: AVVideoCodecType {
+		switch self {
+		case .h264: return .h264
+		case .hevc: return .hevc
+		case .proRes422LT: return .proRes422LT
+		case .proRes422: return .proRes422
+		case .proRes422HQ: return .proRes422HQ
+		}
+	}
+
+	var fileType: AVFileType {
+		switch self {
+		case .h264, .hevc: return .mp4
+		case .proRes422LT, .proRes422, .proRes422HQ: return .mov
+		}
+	}
+
+	var requiredPathExtension: String {
+		fileType == .mov ? "mov" : "mp4"
+	}
+
+	var displayName: String {
+		switch self {
+		case .h264: return "H.264"
+		case .hevc: return "HEVC"
+		case .proRes422LT: return "Apple ProRes 422 LT"
+		case .proRes422: return "Apple ProRes 422"
+		case .proRes422HQ: return "Apple ProRes 422 HQ"
+		}
+	}
+
+	var defaultBitsPerPixelPerFrame: Double? {
+		switch self {
+		case .h264: return 0.20
+		case .hevc: return 0.12
+		case .proRes422LT, .proRes422, .proRes422HQ: return nil
+		}
+	}
+}
 
 @available(macOS 12.3, *)
 final class MythRecorder: NSObject, SCStreamOutput {
@@ -50,9 +101,13 @@ final class MythRecorder: NSObject, SCStreamOutput {
 		return rate > 0 ? min(120, Int32(rate)) : 60
 	}
 
-	func start(path: String, fps requestedFps: Int32, bitrateBps: Int, maxHeight: Int, hevc: Bool) -> Bool {
+	func start(path: String, fps requestedFps: Int32, bitrateBps: Int, maxHeight: Int, codec rawCodec: Int32) -> Bool {
 		if isRecording { setError("already recording"); return false }
 		setError("")
+		guard let codec = MythCaptureCodec(rawValue: rawCodec) else {
+			setError("unsupported codec \(rawCodec); expected 0...4")
+			return false
+		}
 		let fps = requestedFps > 0 ? requestedFps : autoFps()
 
 		// 1. Find our own on-screen window (largest, in case of helper windows).
@@ -94,7 +149,7 @@ final class MythRecorder: NSObject, SCStreamOutput {
 			w = Int((Double(w) * Double(maxHeight) / Double(h)).rounded())
 			h = maxHeight
 		}
-		w -= w % 2; h -= h % 2   // h264/hevc need even dimensions
+		w -= w % 2; h -= h % 2   // 4:2:0 and 4:2:2 codecs require even dimensions
 		if w < 2 || h < 2 { setError("degenerate window size"); return false }
 
 		let config = SCStreamConfiguration()
@@ -111,30 +166,47 @@ final class MythRecorder: NSObject, SCStreamOutput {
 			config.ignoreGlobalClipSingleWindow = true
 		}
 
-		// 3. Asset writer (mp4, h264 or hevc) with an explicit high-quality bitrate.
+		// 3. Asset writer. H.264/HEVC use explicit bitrate controls; ProRes chooses
+		//    its own profile-defined bitrate and should not receive H.264-style settings.
 		let url = URL(fileURLWithPath: path)
-		try? FileManager.default.removeItem(at: url)
-		guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else {
-			setError("could not create writer at \(path)")
+		guard url.pathExtension.lowercased() == codec.requiredPathExtension else {
+			setError("\(codec.displayName) requires a .\(codec.requiredPathExtension) output path")
 			return false
 		}
 
-		let bitrate = bitrateBps > 0 ? bitrateBps : Int(Double(w * h * Int(fps)) * (hevc ? 0.12 : 0.2))
-		var compression: [String: Any] = [
-			AVVideoAverageBitRateKey: bitrate,
-			AVVideoExpectedSourceFrameRateKey: Int(fps),
-			AVVideoMaxKeyFrameIntervalKey: Int(fps) * 2,
-			AVVideoAllowFrameReorderingKey: false,   // no B-frames: crisp timing, low latency
-		]
-		if !hevc {
-			compression[AVVideoProfileLevelKey] = AVVideoProfileLevelH264HighAutoLevel
+		try? FileManager.default.removeItem(at: url)
+		guard let writer = try? AVAssetWriter(outputURL: url, fileType: codec.fileType) else {
+			setError("could not create \(codec.displayName) writer at \(path)")
+			return false
 		}
-		let settings: [String: Any] = [
-			AVVideoCodecKey: hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
+
+		var settings: [String: Any] = [
+			AVVideoCodecKey: codec.avCodec,
 			AVVideoWidthKey: w,
 			AVVideoHeightKey: h,
-			AVVideoCompressionPropertiesKey: compression,
 		]
+
+		if let defaultRate = codec.defaultBitsPerPixelPerFrame {
+			let bitrate = bitrateBps > 0
+				? bitrateBps
+				: Int(Double(w * h * Int(fps)) * defaultRate)
+
+			var compression: [String: Any] = [
+				AVVideoAverageBitRateKey: bitrate,
+				AVVideoExpectedSourceFrameRateKey: Int(fps),
+				AVVideoMaxKeyFrameIntervalKey: Int(fps) * 2,
+				AVVideoAllowFrameReorderingKey: false,   // no B-frames: crisp timing, low latency
+			]
+			if codec == .h264 {
+				compression[AVVideoProfileLevelKey] = AVVideoProfileLevelH264HighAutoLevel
+			}
+			settings[AVVideoCompressionPropertiesKey] = compression
+		}
+
+		guard writer.canApply(outputSettings: settings, forMediaType: .video) else {
+			setError("\(codec.displayName) is not supported for \(w)x\(h) at \(fps) fps on this Mac")
+			return false
+		}
 
 		let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
 		input.expectsMediaDataInRealTime = true
@@ -242,10 +314,22 @@ final class MythRecorder: NSObject, SCStreamOutput {
 
 // MARK: - C ABI
 
+// codec values:
+//   0 = H.264          (.mp4; bitrateBps is used)
+//   1 = HEVC           (.mp4; bitrateBps is used; retained for ABI compatibility)
+//   2 = ProRes 422 LT  (.mov; bitrateBps is ignored)
+//   3 = ProRes 422     (.mov; bitrateBps is ignored)
+//   4 = ProRes 422 HQ  (.mov; bitrateBps is ignored)
 @_cdecl("myth_capture_start")
-public func myth_capture_start(_ path: UnsafePointer<CChar>, _ fps: Int32, _ bitrateBps: Int32, _ maxHeight: Int32, _ hevc: Int32) -> Int32 {
+public func myth_capture_start(_ path: UnsafePointer<CChar>, _ fps: Int32, _ bitrateBps: Int32, _ maxHeight: Int32, _ codec: Int32) -> Int32 {
 	guard #available(macOS 12.3, *) else { return -2 }
-	return MythRecorder.shared.start(path: String(cString: path), fps: fps, bitrateBps: Int(bitrateBps), maxHeight: Int(maxHeight), hevc: hevc != 0) ? 0 : -1
+	return MythRecorder.shared.start(
+		path: String(cString: path),
+		fps: fps,
+		bitrateBps: Int(bitrateBps),
+		maxHeight: Int(maxHeight),
+		codec: codec
+	) ? 0 : -1
 }
 
 @_cdecl("myth_capture_stop")
