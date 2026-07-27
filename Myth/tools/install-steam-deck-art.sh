@@ -12,15 +12,15 @@ deck_ssh='ssh -i C:\Users\kev\AppData\Local\steamos-devkit\steamos-devkit\devkit
 
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
-cp "$art/library-capsule.png" "$staging/${appid}p.png"
-cp "$art/library-header.png" "$staging/$appid.png"
-cp "$art/library-header.png" "$staging/$gameid.png"
-cp "$art/library-hero.png" "$staging/${appid}_hero.png"
+cp "$art/library-capsule.jpg" "$staging/${appid}p.jpg"
+cp "$art/library-header.jpg" "$staging/$appid.jpg"
+cp "$art/library-header.jpg" "$staging/$gameid.jpg"
+cp "$art/library-hero.jpg" "$staging/${appid}_hero.jpg"
 cp "$art/library-logo.png" "$staging/${appid}_logo.png"
 
 tar -C "$staging" -cf - . |
   ssh bro "$deck_ssh \"mkdir -p $grid && tar -xf - -C $grid\""
 
-ssh bro "$deck_ssh \"sha256sum $grid/${appid}p.png $grid/$appid.png $grid/$gameid.png $grid/${appid}_hero.png $grid/${appid}_logo.png\""
+ssh bro "$deck_ssh \"rm -f $grid/${appid}p.png $grid/$appid.png $grid/$gameid.png $grid/${appid}_hero.png && sha256sum $grid/${appid}p.jpg $grid/$appid.jpg $grid/$gameid.jpg $grid/${appid}_hero.jpg $grid/${appid}_logo.png\""
 
 echo "Installed Steam library art for Myth on the Steam Deck"
