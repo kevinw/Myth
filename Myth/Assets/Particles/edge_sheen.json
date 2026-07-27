@@ -5,14 +5,14 @@
   "Mode": "Burst",
   "SpeedMin": 10,
   "SpeedMax": 45,
-  "LifeMin": 0.3,
-  "LifeMax": 0.7,
-  "Gravity": -20,
-  "Drag": 1.5,
-  "NoiseAmount": 25,
+  "LifeMin": 0.05,
+  "LifeMax": 0.08,
+  "Gravity": -18,
+  "Drag": 1.4,
+  "NoiseAmount": 29,
   "NoiseScale": 0.06,
-  "SizeStart": 1.2,
-  "SizeEnd": 0.4,
+  "SizeStart": 1.0,
+  "SizeEnd": 0.1,
   "Additive": true,
   "Style": "Plasma",
   "Collision": "None",
@@ -25,7 +25,7 @@
   "TrailWidthStart": 1.2,
   "TrailWidthEnd": 0,
   "TrailColors": [
-    { "T": 0, "Color": "EAF6FFC0" },
+    { "T": 0, "Color": "cccccccc" },
     { "T": 1, "Color": "3C50C800" }
   ]
 }
