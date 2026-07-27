@@ -5,11 +5,10 @@ using Foster.Framework;
 using System.Text.Json;
 namespace Myth;
 
-
+#if !MYTHSHIP && !BROWSER && !IOS
 public partial class Manager : App
 {
 
-#if !MYTHSHIP && !BROWSER && !IOS
 	readonly List<MoviePlayerSample> moviePlayerSamples = [];
 	bool movieTracksPlayer;
 	long movieTrackingStartTimestamp;
