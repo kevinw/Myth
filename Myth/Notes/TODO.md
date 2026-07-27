@@ -1,6 +1,7 @@
 # TODO
 
 steam notes
+- main music didn't work; but boss did?
 - hat on pause screen player
 - no steam library art
 - make bud's breathing slower than yours.

@@ -34,5 +34,17 @@
     "label": "dotnet watch (MythTestShip)",
     "command": "dotnet watch run --non-interactive --property:MythTestShip=true -- --content-zip Assets/Content.zip",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+  },
+  {
+    "label": "publish Windows to Steam Deck",
+    "command": "ssh bro 'cd /d C:\\Users\\kev\\src\\Myth && git pull --ff-only && cd Myth && node tools\\publish-windows.mjs && curl.exe -fsS -X POST http://127.0.0.1:32010/post_event -H \"Content-Type: application/json\" --data-binary \"{\\\"type\\\":\\\"build\\\",\\\"status\\\":\\\"success\\\",\\\"name\\\":\\\"Myth\\\"}\"'",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE",
+    "use_new_terminal": true,
+  },
+  {
+    "label": "install Steam Deck library art",
+    "command": "./Myth/tools/install-steam-deck-art.sh",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE",
+    "use_new_terminal": true,
   }
 ]
