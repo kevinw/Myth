@@ -49,6 +49,7 @@ public partial class Manager
 	float trackpadScrollLatch;
 	EditorScrollMode editorScrollMode;
 	bool preferencesOpen;
+	bool editorGameRunInBackground = true;
 	static float TrackpadScrollLatchTime => 0.5f;
 	// World pixels panned per unit of (small, ~0.1-0.4) trackpad wheel delta, before the zoom divide.
 	static float EditorTrackpadPanSpeed => 20f;
@@ -4786,6 +4787,8 @@ public partial class Manager
 			ImGui.EndCombo();
 		}
 		if (ImGui.Checkbox("Preserve playtest save state", ref preservePlaytestSaveState))
+			SaveWindowSettings();
+		if (ImGui.Checkbox("Editor Game Run in Background", ref editorGameRunInBackground))
 			SaveWindowSettings();
 
 		ImGui.End();

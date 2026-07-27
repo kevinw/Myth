@@ -1,8 +1,8 @@
 # TODO
 
+- water ambience for water tile rooms
 - make a youtube account for the game. post the head bug as a youtube short.
 - make sure renaming to an existing room name fails
-- don't accept gamepad input when not focused (make an option)
 - cimgui.dll is 1.4MB; can it be statically linked?
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon

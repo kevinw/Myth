@@ -169,6 +169,12 @@ public partial class Manager : App
 	readonly string? assetPackPath;
 	bool musicEnabled = true;
 	bool alwaysOnTop;
+#if !IOS && !BROWSER
+	bool runInBackground;
+	bool windowFocused;
+	bool backgroundSuspended;
+	static int BackgroundSleepMilliseconds => 50;
+#endif
 	internal bool PlatformNavDebugVisible { get; set; }
 	readonly NavTrace? navTrace;
 
@@ -182,6 +188,33 @@ public partial class Manager : App
 				game?.StopMusic(true);
 		}
 	}
+#if !IOS && !BROWSER
+	void WindowFocusGained() => windowFocused = true;
+	void WindowFocusLost() => windowFocused = false;
+
+	bool UpdateBackgroundSuspension()
+	{
+		var runsInBackground = runInBackground;
+#if EDITOR
+		runsInBackground |= editorGameRunInBackground;
+#endif
+		var suspend = !runsInBackground && !windowFocused;
+		if (backgroundSuspended == suspend)
+		{
+			if (suspend)
+				Thread.Sleep(BackgroundSleepMilliseconds);
+			return suspend;
+		}
+
+		backgroundSuspended = suspend;
+		Audio.SetPaused(suspend);
+		if (suspend)
+		{
+			Thread.Sleep(BackgroundSleepMilliseconds);
+		}
+		return true;
+	}
+#endif
 	public bool WantsVirtualGameController => playing || startingPlay;
 	public bool AudioEnabled = true;
 	public bool UserQuitRequested { get; private set; }
@@ -251,7 +284,13 @@ public partial class Manager : App
 		menuImgui = new(this, enableGamepadNav: true);
 		OnExitRequested = RequestQuit;
 		if (Window != null)
+		{
 			Window.OnCloseRequested = RequestQuit;
+#if !IOS && !BROWSER
+			Window.OnFocusGain += WindowFocusGained;
+			Window.OnFocusLost += WindowFocusLost;
+#endif
+		}
 #if EDITOR
 		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf", iniPath: Path.Join(UserPath, "editor-layout.ini")) { Scale = Scale };
 #elif BROWSER
@@ -327,6 +366,9 @@ public partial class Manager : App
 
 	protected override void Startup()
 	{
+#if !IOS && !BROWSER
+		windowFocused = Window?.Focused == true;
+#endif
 #if !BROWSER
 		LoadWindowSettings();
 #endif
@@ -679,10 +721,14 @@ public partial class Manager : App
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
 			alwaysOnTop = settings.AlwaysOnTop;
+#if !IOS && !BROWSER
+			runInBackground = settings.RunInBackground;
+#endif
 #if EDITOR
 			if (settings.EditorScrollMode is >= EditorScrollMode.Auto and <= EditorScrollMode.Trackpad)
 				editorScrollMode = settings.EditorScrollMode;
 			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
+			editorGameRunInBackground = settings.EditorGameRunInBackground;
 #endif
 		}
 		catch (Exception e)
@@ -713,9 +759,13 @@ public partial class Manager : App
 				RoomId = currentRoom?.Id ?? selectedRoomId,
 				MusicEnabled = musicEnabled,
 				AlwaysOnTop = alwaysOnTop,
+#if !IOS && !BROWSER
+				RunInBackground = runInBackground,
+#endif
 #if EDITOR
 				EditorScrollMode = editorScrollMode,
-				PreservePlaytestSaveState = preservePlaytestSaveState
+				PreservePlaytestSaveState = preservePlaytestSaveState,
+				EditorGameRunInBackground = editorGameRunInBackground
 #endif
 			};
 
@@ -740,9 +790,13 @@ public partial class Manager : App
 		public int RoomY { get; init; }
 		public bool MusicEnabled { get; init; } = true;
 		public bool AlwaysOnTop { get; init; }
+#if !IOS && !BROWSER
+		public bool RunInBackground { get; init; }
+#endif
 #if EDITOR
 		public EditorScrollMode EditorScrollMode { get; init; }
 		public bool PreservePlaytestSaveState { get; init; }
+		public bool EditorGameRunInBackground { get; init; } = true;
 #endif
 	}
 
@@ -838,6 +892,11 @@ public partial class Manager : App
 			HeadlessUpdate();
 			return;
 		}
+
+#if !IOS && !BROWSER
+		if (UpdateBackgroundSuspension())
+			return;
+#endif
 
 		if (bootWarming)
 		{
@@ -1243,6 +1302,11 @@ public partial class Manager : App
 	{
 		if (Window == null)
 			return;
+
+#if !IOS && !BROWSER
+		if (backgroundSuspended)
+			return;
+#endif
 
 		if (bootWarming)
 		{

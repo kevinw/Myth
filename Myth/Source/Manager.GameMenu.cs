@@ -40,7 +40,7 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	static float MenuButtonWidth => 100f;
+	float MenuButtonWidth => gameMenuPage == GameMenuPage.Options ? 150f : 100f;
 	static float MenuButtonHeight => 18f;
 	static float MenuButtonGap => 4f;
 	static float MenuPanelWidth => 174f;
@@ -149,6 +149,8 @@ public partial class Manager
 		if (MenuButton(musicEnabled ? "music on" : "music off"))
 			MusicEnabled = !MusicEnabled;
 #if !IOS && !BROWSER
+		if (MenuButton(runInBackground ? "run in background on" : "run in background off"))
+			runInBackground = !runInBackground;
 		if (MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
 			window.Fullscreen = !window.Fullscreen;
 #endif
