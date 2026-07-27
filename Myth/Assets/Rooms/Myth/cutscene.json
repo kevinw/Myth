@@ -183,14 +183,19 @@
   "actors": [
     {
       "Id": "c1048d1142457c6b",
-      "Type": "RopePile",
-      "Position": [72, 114],
-      "MaxLength": 350
+      "Type": "Rope",
+      "Position": [84, 114],
+      "Size": [8, 350]
     },
     {
       "Id": "459f24b891ac49c6",
       "Type": "PlayerStart",
       "Position": [52, 112]
+    },
+    {
+      "Id": "bbde344f80390c50",
+      "Type": "Cutscene",
+      "Position": [72, 114]
     }
   ]
 }

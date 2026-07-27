@@ -180,6 +180,8 @@ public abstract class Pawn : Actor
 	protected bool RunStartSkid;
 	float groundLocomotionAnimationTimer;
 	Wind.PawnInfluence windInfluence;
+	internal PawnInput? ScriptedInput;
+	internal float ScriptedClimbSpeed = 1;
 
 	public States State
 	{
@@ -208,7 +210,7 @@ public abstract class Pawn : Actor
 			StopWaterRoll();
 		windInfluence = Wind.ApplyTo(this);
 		wallJumpDirectionCached = false;
-		input = GetInput();
+		input = ScriptedInput ?? GetInput();
 		if (input.JumpPressed)
 			jumpBufferTimer = JumpBufferTime;
 		AfterActorUpdate(previousVelocity);
@@ -805,7 +807,7 @@ public abstract class Pawn : Actor
 		Shift.Y = 0;
 	}
 
-	bool TryGrabRope()
+	internal bool TryGrabRope()
 	{
 		if (IsCarrying || regrabTimer > 0)
 			return false;
@@ -844,7 +846,8 @@ public abstract class Pawn : Actor
 
 		if (chain.Pinned)
 		{
-			climbIndex += input.MoveY * (input.MoveY > 0 ? ClimbDownSpeed : ClimbUpSpeed) / Rope.SegmentLength * Time.Delta;
+			climbIndex += input.MoveY * (input.MoveY > 0 ? ClimbDownSpeed : ClimbUpSpeed) *
+				ScriptedClimbSpeed / Rope.SegmentLength * Time.Delta;
 			if (climbIndex < 0)
 			{
 				// Climbed past the anchor: pop up off the top (lands you on the ledge when there is one).
@@ -1124,6 +1127,9 @@ public abstract class Pawn : Actor
 [GameActor(HideFromPalette = true)]
 public partial class Player : Pawn
 {
+	internal Game.StorySpeechBubble? Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
+		=> Game.ShowSpeech(this, new Vector2(0, -32), text, Game.PlayerVoiceProfile, emotion, Game.PlayerVoiceName);
+
 	public override PawnInput GetInput()
 	{
 		return new(
@@ -1470,6 +1476,9 @@ public partial class Player : Pawn
 
 	protected override bool TryStartPawnAction(int moveX)
 	{
+		if (ScriptedInput.HasValue)
+			return false;
+
 		if (carried == null && Controls.BlinkStrike.ConsumePress())
 		{
 			blinkStrikeTarget = FindBlinkStrikeTarget();
@@ -1551,6 +1560,9 @@ public partial class Player : Pawn
 
 	protected override bool TryRollCancel()
 	{
+		if (ScriptedInput.HasValue)
+			return false;
+
 		if (Controls.Attack.ConsumePress() && duckAttackCooldownTimer <= 0)
 		{
 			duckAttack = true;

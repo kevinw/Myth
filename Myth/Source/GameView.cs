@@ -69,7 +69,7 @@ public sealed partial class GameView : IDisposable
 			Matrix3x2.CreateScale(zoomLevel));
 
 	private Vector2 PlayerDitherGlitchPosition()
-		=> game.GetFirst<Player>()?.Position ?? Camera + new Vector2(Width, Height) * 0.5f;
+		=> game.ditherGlitchPosition ?? game.GetFirst<Player>()?.Position ?? Camera + new Vector2(Width, Height) * 0.5f;
 
 	// Drives the GPU particle sim each frame and auto-bursts at the screen center.
 	// Emitter actors enqueue emission in their own Update; this consumes the queue.
@@ -221,7 +221,7 @@ public sealed partial class GameView : IDisposable
 		if (layout.Lines.Count == 0)
 			return;
 
-		var anchor = (Point2)(bubble.Position - RenderCamera);
+		var anchor = (Point2)(game.ClampStorySpeechPosition(bubble.Position, layout) - RenderCamera);
 		var box = new Rect(
 			anchor.X - layout.Width - layout.Padding.X,
 			anchor.Y - layout.Lines.Count * layout.LineHeight - layout.Padding.Y,

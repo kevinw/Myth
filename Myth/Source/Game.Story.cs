@@ -6,13 +6,14 @@ namespace Myth;
 
 public partial class Game
 {
-	internal sealed class StorySpeechBubble(Vector2 position, string text, float duration, Utterance utterance, ISyllableSink sink)
+	internal sealed class StorySpeechBubble(Actor speaker, Vector2 offset, string text, float duration, Utterance utterance, ISyllableSink sink)
 	{
-		public readonly Vector2 Position = position;
+		public Vector2 Position => speaker.Position + offset;
 		public readonly string Text = text;
 		public readonly float Duration = duration;
 		public float Age;
 		public int VisibleLength;
+		public bool Finished;
 
 		public void Tick(float dt)
 		{
@@ -82,7 +83,10 @@ public partial class Game
 			var bubble = storySpeechBubbles[i];
 			bubble.Tick(Time.Delta);
 			if (bubble.Age >= bubble.Duration)
+			{
+				bubble.Finished = true;
 				storySpeechBubbles.RemoveAt(i);
+			}
 		}
 	}
 
@@ -110,7 +114,7 @@ public partial class Game
 
 	private void TryBudStorylet(string trigger, StoryEventContext eventContext)
 	{
-		if (budStorylets == null || GetFirst<Bud>() is not { } bud || !CanShowBudSpeech())
+		if (ActiveCutscene != null || budStorylets == null || GetFirst<Bud>() is not { } bud || !CanShowBudSpeech())
 			return;
 
 		RefreshStoryContext(trigger, eventContext);
@@ -145,16 +149,21 @@ public partial class Game
 	}
 
 	internal bool CanShowBudSpeech()
+		=> CanShowSpeech();
+
+	internal bool CanShowSpeech()
 		=> storySpeechBubbles.Count == 0;
 
-	internal void ShowBudSpeech(Vector2 position, string text, Emotion emotion = Emotion.Neutral, string? voice = null)
+	internal StorySpeechBubble? ShowSpeech(Actor speaker, Vector2 offset, string text, VoiceProfile profile,
+		Emotion emotion = Emotion.Neutral, string? voice = null)
 	{
-		if (!Game.VoiceEnabled) return;
+		if (!Game.VoiceEnabled) return null;
 		text = NormalizeSpeech(text);
-		var utterance = Utterance.Build(text, emotion, BudVoiceProfile, GermanFor(text));
+		var utterance = Utterance.Build(text, emotion, profile, GermanFor(text));
 		var duration = utterance.RevealSeconds + Math.Clamp(text.Length * 0.04f, 1.2f, 3f);
-		var anchor = ClampStorySpeechPosition(position, text);
-		storySpeechBubbles.Add(new(anchor, text, duration, utterance, CreateVoiceSink(anchor, voice ?? BudVoiceName)));
+		var bubble = new StorySpeechBubble(speaker, offset, text, duration, utterance, CreateVoiceSink(speaker, offset, voice ?? BudVoiceName));
+		storySpeechBubbles.Add(bubble);
+		return bubble;
 	}
 
 	// Canonical form so the reveal index, wrap layout, utterance, and German lookup key all
@@ -162,13 +171,11 @@ public partial class Game
 	internal static string NormalizeSpeech(string text)
 		=> string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-	private Vector2 ClampStorySpeechPosition(Vector2 position, string text)
+	internal Vector2 ClampStorySpeechPosition(Vector2 position, in StorySpeechLayout layout)
 	{
-		var font = Assets.SpeechFont ?? Assets.Font;
-		if (font == null || room == null)
+		if (room == null)
 			return position;
 
-		var layout = MeasureStorySpeech(font, text);
 		if (layout.Lines.Count == 0)
 			return position;
 

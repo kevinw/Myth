@@ -129,6 +129,7 @@ public sealed partial class GameView
 				output = ReflectionScreen;
 			else if (debugView == DebugView.None)
 			{
+				DrawCutsceneOverlay(output);
 				if (PerfToggles.Glitch)
 				{
 					using (PerfStats.Time(PerfStat.Post))
@@ -206,7 +207,7 @@ public sealed partial class GameView
 		if (false && showHud && debugView is DebugView.None or DebugView.CollisionRects)
 			DrawPlayerHud(destination, viewport, scissor);
 
-		if (showHud && debugView is DebugView.None or DebugView.CollisionRects)
+		if (showHud && game.ActiveCutscene == null && debugView is (DebugView.None or DebugView.CollisionRects))
 			DrawCurrencyHud(destination, viewport, scissor);
 	}
 
@@ -227,6 +228,13 @@ public sealed partial class GameView
 		using (GraphicsDevice.DebugGroup("Myth/story speech"))
 			DrawStorySpeech(output);
 
+		if (game.ActiveCutscene is { } cutscene)
+		{
+			cutscene.RenderFade(Batcher);
+			Batcher.Render(output);
+			Batcher.Clear();
+		}
+
 		// Show << Rewinding text when rewinding the player position.
 		if (game.Rewinding && Time.BetweenInterval(0.25))
 		{
@@ -238,6 +246,16 @@ public sealed partial class GameView
 				Batcher.Clear();
 			}
 		}
+	}
+
+	void DrawCutsceneOverlay(Target output)
+	{
+		if (game.ActiveCutscene is not { } cutscene)
+			return;
+
+		cutscene.RenderOverlay(Batcher);
+		Batcher.Render(output);
+		Batcher.Clear();
 	}
 
 	void PrepareRenderingList()

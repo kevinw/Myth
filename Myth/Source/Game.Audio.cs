@@ -13,6 +13,7 @@ public partial class Game
 	// Each voice is its own FMOD event event:/voice/<name>; speakers pick one. The syllable
 	// inventory (labels/vowels in manifest.json) is shared across voices.
 	public static string BudVoiceName => "Kev";
+	public static string PlayerVoiceName => "Kev";
 	// Loaded from Assets/Voice/ by LoadVoice(): per-clip vowel tags, syllable label names
 	// (for the FMOD labeled "syllable" parameter), and the English->German cache.
 	Vowel[]? voiceClipVowels;
@@ -23,6 +24,7 @@ public partial class Game
 	public int VoiceSyllableCount => voiceClipVowels?.Length ?? 32;
 	// Bud is a small companion -> higher, slightly quicker voice. Pitch in semitones.
 	public VoiceProfile BudVoiceProfile => new(VoiceSyllableCount, BasePitch: 4f, PitchVariance: 2f, CharsPerSecond: 26f, ClipVowels: voiceClipVowels);
+	public VoiceProfile PlayerVoiceProfile => new(VoiceSyllableCount, BasePitch: -3f, PitchVariance: 1.5f, CharsPerSecond: 22f, ClipVowels: voiceClipVowels);
 
 	// German translation of an (already whitespace-normalized) line, for vowel-melody colouring.
 	public string? GermanFor(string normalizedEnglish)
@@ -84,12 +86,12 @@ public partial class Game
 	};
 
 	// Captures a speaker's voice + position so OutLoud can stay engine-agnostic; one per spoken line.
-	sealed class VoiceSink(Game game, Vector2 position, string voice) : ISyllableSink
+	sealed class VoiceSink(Game game, Actor speaker, Vector2 offset, string voice) : ISyllableSink
 	{
-		public void Play(int syllable, float pitch, float gain) => game.PlayVoiceSyllable(voice, syllable, pitch, gain, position);
+		public void Play(int syllable, float pitch, float gain) => game.PlayVoiceSyllable(voice, syllable, pitch, gain, speaker.Position + offset);
 	}
 
-	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
+	public ISyllableSink CreateVoiceSink(Actor speaker, Vector2 offset, string voice) => new VoiceSink(this, speaker, offset, voice);
 
 	static bool VoiceEnabled = true;
 

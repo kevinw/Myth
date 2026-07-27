@@ -109,8 +109,10 @@ public partial class Game : IDisposable
 	internal float ditherGlitch;
 	internal float ditherGlitchTarget;
 	internal Vector2 ditherGlitchAxis = Vector2.UnitX;
+	internal Vector2? ditherGlitchPosition;
 	internal Point2 shake;
 	internal Rng rng = new();
+	internal Cutscene? ActiveCutscene;
 
 
 #if DEBUG
@@ -123,6 +125,11 @@ public partial class Game : IDisposable
 	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
 	internal bool AcceptsLiveInput => room != null && nextRoom == null;
 	float timeScale = 1.0f;
+	internal float TimeScale
+	{
+		get => timeScale;
+		set => timeScale = Math.Max(0, value);
+	}
 	readonly Point2? respawnPosition;
 	// Where the player entered the *current* room. Unlike respawnPosition (readonly, the
 	// initial room's spawn), this is refreshed on every room activation — including edge
@@ -480,7 +487,7 @@ public partial class Game : IDisposable
 			// Escape / gamepad Start / gamepad Back (Select) toggles the map overlay; the
 			// sim pauses underneath while it's up. Back is checked directly rather than
 			// bound to Controls.Map so it doesn't also open the pause menu.
-			if (nextRoom == null && (Controls.Map.ConsumePress() || Manager.Input.AnyControllerButtonPressed(Buttons.Back)))
+			if (ActiveCutscene == null && nextRoom == null && (Controls.Map.ConsumePress() || Manager.Input.AnyControllerButtonPressed(Buttons.Back)))
 			{
 				Minimap.Open = !Minimap.Open;
 				Minimap.WarpMode = false;

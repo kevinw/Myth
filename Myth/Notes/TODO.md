@@ -1,11 +1,38 @@
 # TODO
 
+steam notes
+- hat on pause screen player
+- no steam library art
+- make bud's breathing slower than yours.
+- absolutely change the title to something weird for now
+- "ship" mode needs a cheat code to move between rooms like the editor does, involving a set of button presses
+  - maybe we render all the rooms, and use a filter on them for the actual map...
+- menu blue overlay doesn't cover entire screen; there's a slim area on the bottom that it doesn't reach
+- map: remove the player, or make it a simple blinking icon at a constant scale
+- map: fix easing to not be 1/2, or remove easing
+- setup a script to sync steam devkit windows build
+- right stick could look around or up or down
+- blue clear clashes with steam black; just clear black
+- consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
+- pause music on pause
+- pause rendering on pause, like we did for background
+- in the big rope down and over and up chest room, diving all the way off the left lets you "catch" on the corner and not die in the pit. you should die even if you find the "room edge"
+- teleport animation
+- windows build warnings:
+```
+C:\Users\kev\src\Myth\Myth\Source\Assets\ActorSpecs.cs(284): Trim analysis warning IL2026: Myth.ActorSpecs.PointArrayToJson(Point2[]): Using member 'System.Text.Json.Nodes.JsonArray.Add<JsonArray>(JsonArray)' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. Creating JsonValue instances with non-primitive types is not compatible with trimming. It can result in non-primitive types being serialized, which may have their members trimmed.
+C:\Users\kev\src\Myth\Myth\Source\Assets\ActorSpecs.cs(284): AOT analysis warning IL3050: Myth.ActorSpecs.PointArrayToJson(Point2[]): Using member 'System.Text.Json.Nodes.JsonArray.Add<JsonArray>(JsonArray)' which has 'RequiresDynamicCodeAttribute' can break functionality when AOT compiling. Creating JsonValue instances with non-primitive types requires generating code at runtime.
+```
+
+- i get a feeling watching metroidvania videos on twitter: bleh. boss fight. grapple hook. it's all so samey. we should do ___ instead.
 - water ambience for water tile rooms
 - make a youtube account for the game. post the head bug as a youtube short.
 - make sure renaming to an existing room name fails
 - cimgui.dll is 1.4MB; can it be statically linked?
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon
+
+- fmod 2.4 will have better browser perf
 
 Environmental Station Alpha playthorugh notes:
   - alternate vertical and horizontal challenge

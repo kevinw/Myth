@@ -306,8 +306,8 @@ public class Bud : Pawn, ICarryable
 		RenderSpriteSubtexture(batcher, Tint);
 	}
 
-	public void Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
-		=> Game.ShowBudSpeech(Position + new Vector2(0, -32), text, emotion);
+	internal Game.StorySpeechBubble? Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
+		=> Game.ShowSpeech(this, new Vector2(0, -32), text, Game.BudVoiceProfile, emotion, Game.BudVoiceName);
 
 	internal bool TryEnterPlayerBurrow(Player player)
 	{

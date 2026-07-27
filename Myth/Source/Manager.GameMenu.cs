@@ -44,6 +44,7 @@ public partial class Manager
 	static float MenuButtonHeight => 18f;
 	static float MenuButtonGap => 4f;
 	static float MenuPanelWidth => 174f;
+	static readonly bool isSteamDeck = Environment.GetEnvironmentVariable("SteamDeck") == "1";
 
 	void ShowTitleMenu()
 	{
@@ -149,10 +150,13 @@ public partial class Manager
 		if (MenuButton(musicEnabled ? "music on" : "music off"))
 			MusicEnabled = !MusicEnabled;
 #if !IOS && !BROWSER
-		if (MenuButton(runInBackground ? "run in background on" : "run in background off"))
-			runInBackground = !runInBackground;
-		if (MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
-			window.Fullscreen = !window.Fullscreen;
+		if (!isSteamDeck)
+		{
+			if (MenuButton(runInBackground ? "run in background on" : "run in background off"))
+				runInBackground = !runInBackground;
+			if (MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
+				window.Fullscreen = !window.Fullscreen;
+		}
 #endif
 		if (MenuButton(confirmRestart ? "you sure?" : "erase game"))
 			EraseGameStep();
@@ -415,8 +419,11 @@ public partial class Manager
 		DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: true);
 		DrawCenteredText(font, title, pos, 18, 0xfee761, sine: true);
 
-		var hint = gameMenuPage == GameMenuPage.Title ? "ENTER / START / A" : "ESC / B";
-		DrawCenteredText(font, hint, new Vector2(panel.Center.X, panel.Bottom - 17), 8, 0x8b81b5);
+		if (gameMenuPage != GameMenuPage.Title || !isSteamDeck)
+		{
+			var hint = gameMenuPage == GameMenuPage.Title ? "ENTER / START / A" : "ESC / B";
+			DrawCenteredText(font, hint, new Vector2(panel.Center.X, panel.Bottom - 17), 8, 0x8b81b5);
+		}
 	}
 
 	static Vector4 ImColor(uint rgb, float a = 1f)
