@@ -3,8 +3,6 @@ using Foster.Framework;
 
 namespace Myth;
 
-public enum Cardinal { Right, Down, Left, Up }
-
 // A wall/floor-mounted trap that periodically emits a 1-tile-thick band of lightning along
 // Direction. The beam reflects off 45-degree reflective (metal) slopes, so its path is a polyline
 // of axis-aligned segments. It gathers for a moment (light sparking in from both ends of the whole
@@ -70,18 +68,14 @@ public class LightningTrap : Actor
 
 	Vector2 Dir => DirectionVector(Direction);
 
-	static Vector2 DirectionVector(Cardinal direction) => direction switch
-	{
-		Cardinal.Right => new Vector2(1, 0),
-		Cardinal.Left => new Vector2(-1, 0),
-		Cardinal.Up => new Vector2(0, -1),
-		_ => new Vector2(0, 1),
-	};
+	static Vector2 DirectionVector(Cardinal direction) => direction.Normal;
 
 	public override void Update()
 	{
 		base.Update();
 		phaseTime += Time.Delta;
+		if (phase != Phase.Wait)
+			TraceBeam();
 		switch (phase)
 		{
 			case Phase.Wait:
@@ -399,7 +393,7 @@ public class LightningTrap : Actor
 	{
 		internal override void Gizmos(Manager.EditorActor actor, ref Manager.EditorGizmos gizmos)
 		{
-			var dir = DirectionVector(actor.GetEnum(nameof(Direction), Cardinal.Right));
+			var dir = DirectionVector(actor.GetCardinal(nameof(Direction), Cardinal.Right));
 			var center = actor.Bounds.CenterF;
 			gizmos.Arrow(center + dir * 5, center + dir * 13, gizmos.LineWeight * 2, new Color(0xff3040));
 		}

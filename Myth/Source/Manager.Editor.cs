@@ -1430,6 +1430,16 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (property.Type == typeof(Cardinal))
+		{
+			var value = ActorSpecs.ReadCardinal(property.Value) ?? Cardinal.Right;
+			if (DrawCardinalCombo(ref value))
+			{
+				BeginPrefabUndo(specId);
+				ActorSpecs.SetProperty(specId, property.JsonName, ActorSpecs.ToJsonNode(value));
+				changed = true;
+			}
+		}
 		else if (property.Type.IsEnum)
 		{
 			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
@@ -1678,6 +1688,16 @@ public partial class Manager
 				changed = true;
 			}
 		}
+		else if (property.Type == typeof(Cardinal))
+		{
+			var value = ActorSpecs.ReadCardinal(property.Value) ?? Cardinal.Right;
+			if (DrawCardinalCombo(ref value))
+			{
+				using (CaptureRoomUndo("Edit Actor Property", room))
+					ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode(value));
+				changed = true;
+			}
+		}
 		else if (property.Type.IsEnum)
 		{
 			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
@@ -1708,6 +1728,28 @@ public partial class Manager
 			}
 		}
 
+		return changed;
+	}
+
+	static bool DrawCardinalCombo(ref Cardinal value)
+	{
+		var changed = false;
+		if (ImGui.BeginCombo("##Value", value.ToString()))
+		{
+			for (var raw = Cardinal.RightValue; raw <= Cardinal.UpValue; raw++)
+			{
+				var direction = Cardinal.FromRawValue(raw);
+				var selected = value == direction;
+				if (ImGui.Selectable(direction.ToString(), selected))
+				{
+					value = direction;
+					changed = true;
+				}
+				if (selected)
+					ImGui.SetItemDefaultFocus();
+			}
+			ImGui.EndCombo();
+		}
 		return changed;
 	}
 

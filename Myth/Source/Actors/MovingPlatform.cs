@@ -23,14 +23,17 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	public enum MovementMode
 	{
-		StraightLine,
+		Horizontal,
+		Vertical,
 		Circle
 	}
 
-	public MovementMode Mode = MovementMode.StraightLine;
+	const MovementMode DEFAULT_MODE = MovementMode.Horizontal;
+	public MovementMode Mode = DEFAULT_MODE;
+
 	// Room-local center of the circular orbit. Null places the initial authoring handle below us.
 	public Point2? CircleCenter { get; set; }
-	int direction = 1;
+	int direction;
 	float circleAngle;
 	Vector2 circleOffset;
 	Vector2 circleCenterOffset;
@@ -38,14 +41,22 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	Vector2 moveRemainder;             // sub-pixel travel accumulator (we move in whole pixels)
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
+	RectInt routeBounds;
 
-	internal bool SupportsPlatformNav => Mode == MovementMode.StraightLine && TravelDistance > 0 && ActorId != null;
-	internal Point2 NavStartPosition => originalPosition;
+	internal bool SupportsPlatformNav => Mode == MovementMode.Horizontal && TravelDistance > 0 && ActorId != null;
+	internal Point2 NavStartPosition => routeBounds.TopLeft;
 	internal float NavRouteLength => TravelDistance;
-	internal float NavRoutePosition => Math.Clamp(Position.X - originalPosition.X, 0, TravelDistance);
+	internal float NavRoutePosition => Math.Clamp(Position.X - routeBounds.Left, 0, TravelDistance);
 	internal int NavRouteDirection => direction;
 	internal bool NavWaiting => waitTimer > 0;
 	internal float NavVelocityX => waitTimer > 0 ? 0 : direction * currentSpeed;
+
+	static Cardinal? StartingDirection(MovementMode mode, Signs facing) => mode switch
+	{
+		MovementMode.Horizontal => facing.CardinalX,
+		MovementMode.Vertical => facing.CardinalY,
+		_ => null
+	};
 
 	public MovingPlatform()
 	{
@@ -64,6 +75,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		// hitbox here to match the authored footprint rather than the construction-time default.
 		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 		originalPosition = Position;
+		if (StartingDirection(Mode, Facing) is { } startingDirection)
+		{
+			direction = Facing;
+			routeBounds = RectInt.Between(originalPosition, originalPosition + startingDirection * TravelDistance);
+		}
 		var platformCenter = (Vector2)Position + (Vector2)Size / 2;
 		circleCenterOffset = CircleCenter is { } center
 			? (Vector2)(Room?.WorldBounds.TopLeft ?? Point2.Zero) + center - platformCenter
@@ -83,16 +99,16 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			return;
 		}
 
-		if (Mode == MovementMode.StraightLine && direction == 0)
-		{
-			return;
-		}
-
 		currentSpeed = Calc.Approach(currentSpeed, Speed, StartFriction * Time.Delta);
-		if (Mode == MovementMode.Circle)
-			MoveCircle(currentSpeed * Time.Delta);
-		else
-			MoveStraight(currentSpeed * Time.Delta);
+		switch (Mode) {
+			case MovementMode.Circle:
+				MoveCircle(currentSpeed * Time.Delta);
+				break;
+			case MovementMode.Horizontal:
+			case MovementMode.Vertical:
+				MoveStraight(currentSpeed * Time.Delta);
+				break;
+		}
 
 		if (moveSound != null) {
 			Game.SetAudioEventPosition(moveSound, Position);
@@ -103,18 +119,15 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	{
 		// Accumulate fractional travel and move in whole pixels, clamped to the patrol range so
 		// the platform and its riders never drift apart by rounding.
-		moveRemainder.X += direction * distance;
-		var step = TakeMoveStep();
+		moveRemainder += (Mode == MovementMode.Vertical ? Vector2.UnitY : Vector2.UnitX) * direction * distance;
+		var step = (Position + TakeMoveStep()).Clamp(routeBounds) - Position;
 
-		var min = originalPosition.X;
-		var max = originalPosition.X + TravelDistance;
-		step.X = Math.Clamp(Position.X + step.X, min, max) - Position.X;
 		if (step != Point2.Zero)
 			MoveSolid(step);
 
 		// Only the bound we're heading toward ends the leg — checking both would trip the min
 		// bound instantly, since the platform starts there.
-		if ((direction > 0 && Position.X >= max) || (direction < 0 && Position.X <= min))
+		if (Position == (direction > 0 ? routeBounds.BottomRight : routeBounds.TopLeft))
 		{
 			waitTimer = WaitTime;
 			moveRemainder = Vector2.Zero;
@@ -277,17 +290,29 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	{
 		internal override void Gizmos(Manager.EditorActor actor, ref Manager.EditorGizmos gizmos)
 		{
-			if (!IsCircle(actor))
-				return;
-
-			var platform = actor.Bounds.CenterF;
-			var center = actor.RoomOrigin + Center(actor);
-			var radius = Vector2.Distance(platform, center);
-			var color = new Color(0x66d9ff);
-			gizmos.CircleDashed(center, radius, gizmos.LineWeight * 2, 64, color * 0.8f,
-				MathF.Max(3, gizmos.LineWeight * 6));
-			gizmos.Line(platform, center, gizmos.LineWeight, color * 0.65f);
-			gizmos.RoomPointHandle(nameof(CircleCenter), center, color, "Move Circle Center");
+			if (IsCircle(actor))
+			{
+				var platform = actor.Bounds.CenterF;
+				var center = actor.RoomOrigin + Center(actor);
+				var radius = Vector2.Distance(platform, center);
+				var color = new Color(0x66d9ff);
+				gizmos.CircleDashed(center, radius, gizmos.LineWeight * 2, 64, color * 0.8f,
+					MathF.Max(3, gizmos.LineWeight * 6));
+				gizmos.Line(platform, center, gizmos.LineWeight, color * 0.65f);
+				gizmos.RoomPointHandle(nameof(CircleCenter), center, color, "Move Circle Center");
+			}
+			else {
+				var center = actor.Bounds.CenterF;
+				var mode = GetModeFromEditorActor(actor);
+				if (StartingDirection(mode, actor.GetFacing()) is { } direction)
+				{
+					var distance = actor.GetInt(nameof(TravelDistance), 80);
+					var color = new Color(0xff3040);
+					gizmos.Arrow(center, center + direction * (float)distance, gizmos.LineWeight * 2, color);
+					gizmos.CardinalDistanceHandle(nameof(TravelDistance), center, direction, distance, color,
+						"Change Travel Distance");
+				}
+			}
 		}
 
 		internal override void BeforeMove(Manager.EditorActor actor) => MaterializeCenter(actor);
@@ -298,8 +323,9 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 				MaterializeCenter(actor);
 		}
 
-		static bool IsCircle(Manager.EditorActor actor)
-			=> actor.GetEnum(nameof(Mode), MovementMode.StraightLine) == MovementMode.Circle;
+		static MovementMode GetModeFromEditorActor(Manager.EditorActor actor) => actor.GetEnum(nameof(Mode), DEFAULT_MODE);
+
+		static bool IsCircle(Manager.EditorActor actor) => GetModeFromEditorActor(actor) == MovementMode.Circle;
 
 		static Point2 Center(Manager.EditorActor actor)
 			=> actor.GetRoomPoint(nameof(CircleCenter),

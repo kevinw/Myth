@@ -271,6 +271,7 @@ public static class ActorSpecs
 			Vector2 it => new JsonArray(it.X, it.Y),
 			Color it => JsonValue.Create(JsonUtil.ColorToHex(it)),
 			Signs it => JsonValue.Create(it.ToString()),
+			Cardinal it => JsonValue.Create(it.ToString()),
 			Enum it => JsonValue.Create(it.ToString()),
 			_ => null
 		};
@@ -449,6 +450,7 @@ public static class ActorSpecs
 		   type == typeof(Vector2) ||
 		   type == typeof(Color) ||
 		   type == typeof(Signs) ||
+		   type == typeof(Cardinal) ||
 		   type.IsEnum;
 
 	private static Type GetMemberType(MemberInfo member)
@@ -498,6 +500,8 @@ public static class ActorSpecs
 				value = JsonUtil.ReadColor(node);
 			else if (type == typeof(Signs))
 				value = ReadSigns(node);
+			else if (type == typeof(Cardinal))
+				value = ReadCardinal(node);
 			else if (type.IsEnum)
 				value = Enum.Parse(type, node.GetValue<string>(), ignoreCase: true);
 			else
@@ -539,6 +543,18 @@ public static class ActorSpecs
 		if (JsonUtil.TryReadInt(node, out var asInt))
 			return Signs.FromInt(asInt);
 		return Signs.Parse(node.GetValue<string>());
+	}
+
+	public static Cardinal? ReadCardinal(JsonNode? node)
+	{
+		var text = node?.GetValue<string>();
+		for (var raw = Cardinal.RightValue; raw <= Cardinal.UpValue; raw++)
+		{
+			var direction = Cardinal.FromRawValue(raw);
+			if (string.Equals(text, direction.ToString(), StringComparison.OrdinalIgnoreCase))
+				return direction;
+		}
+		return null;
 	}
 
 	public static string? ReadString(JsonObject json, string key)

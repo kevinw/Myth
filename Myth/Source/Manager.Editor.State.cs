@@ -63,13 +63,23 @@ public partial class Manager
 		internal Vector2 RoomOrigin => Room.WorldBounds.TopLeft;
 		internal RectInt Bounds => RoomActorBounds(Room, Json);
 
+		internal Signs GetFacing()
+			=> ActorSpecs.ReadSigns(ActorSpecs.GetResolvedProperty(Json, nameof(Actor.Facing)));
+
 		internal T GetEnum<T>(string property, T fallback) where T : struct, Enum
 			=> Enum.TryParse<T>(ActorSpecs.GetResolvedProperty(Json, property)?.GetValue<string>(), true, out var value) ? value : fallback;
+
+		internal Cardinal GetCardinal(string property, Cardinal fallback)
+			=> ActorSpecs.ReadCardinal(ActorSpecs.GetResolvedProperty(Json, property)) ?? fallback;
+
+		internal int GetInt(string property, int fallback)
+			=> ActorSpecs.GetResolvedProperty(Json, property)?.GetValue<int>() ?? fallback;
 
 		internal Point2 GetRoomPoint(string property, Point2 fallback)
 			=> ActorSpecs.ReadPoint(ActorSpecs.GetResolvedProperty(Json, property)) ?? fallback;
 
 		internal bool Has(string property) => ActorSpecs.GetResolvedProperty(Json, property) != null;
+		internal void Set(string property, int value) => ActorSpecs.SetProperty(Json, property, JsonValue.Create(value));
 		internal void Set(string property, Point2 value) => ActorSpecs.SetProperty(Json, property, ActorSpecs.ToJsonNode(value));
 	}
 
@@ -166,6 +176,43 @@ public partial class Manager
 					? (local / Game.TileSize).RoundToPoint2() * Game.TileSize
 					: local.RoundToPoint2();
 				actor.Set(property, point);
+				manager.editorGameDirty = true;
+			}
+
+			if (draw)
+			{
+				manager.batcher.Circle(position, radius, 12, active ? Color.White : color);
+				manager.batcher.CircleLine(position, radius, lineWeight, 12, Color.White);
+			}
+		}
+
+		internal void CardinalDistanceHandle(string property, Vector2 origin, Cardinal direction, int distance,
+			Color color, string undoName)
+		{
+			var position = origin + direction * (float)distance;
+			var radius = PointPathHandleRadius(lineWeight);
+			var active = manager.DragKind == EditorDragKind.ActorGizmo && manager.editorDrag.GizmoId == property;
+			var hovered = Vector2.DistanceSquared(worldMouse, position) <= radius * radius * 2.25f;
+
+			if (!draw && canInteract && !active && manager.Input.Mouse.LeftPressed && hovered)
+			{
+				manager.ClearEditorDragState();
+				manager.editorDrag.Kind = EditorDragKind.ActorGizmo;
+				manager.editorDrag.GizmoId = property;
+				manager.editorDrag.ActorSnapsByDefault = true;
+				manager.editorSelectionRect = null;
+				manager.CancelTilePaint();
+				ConsumedPress = active = true;
+			}
+
+			if (!draw && canInteract && active && manager.Input.Mouse.LeftDown)
+			{
+				manager.OpenPendingRoomUndo(ActorMoveUndoSlot, undoName, actor.Room);
+				var projected = Vector2.Dot(worldMouse - origin, direction.Normal);
+				var next = manager.RoomActorDragShouldSnap(keyboardBlocked)
+					? Calc.Round(projected / Game.TileSize) * Game.TileSize
+					: Calc.Round(projected);
+				actor.Set(property, Math.Max(0, next));
 				manager.editorGameDirty = true;
 			}
 
