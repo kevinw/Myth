@@ -435,9 +435,14 @@ public partial class Manager
 
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
-		var useSineWave = false; // TODO: looks bad after the game has been running awhile
-		DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: useSineWave);
-		DrawCenteredText(font, title, pos, 18, 0xfee761, sine: useSineWave);
+		if (gameMenuPage != GameMenuPage.Options && Assets.GetSprite("logo", logMissing: false) is { Frames.Count: > 0 } logo)
+			batcher.Image(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Vector2.One, 0, Color.White);
+		else
+		{
+			var useSineWave = false; // TODO: looks bad after the game has been running awhile
+			DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: useSineWave);
+			DrawCenteredText(font, title, pos, 18, 0xfee761, sine: useSineWave);
+		}
 
 		if (gameMenuPage != GameMenuPage.Title || !isSteamDeck)
 		{
