@@ -2,7 +2,6 @@
 
 steam notes
 - crouching under a ledge shouldn't trigger aura unless you hold down.
-- hat on pause screen player
 - absolutely change the title to something weird for now
 - maybe we render all the rooms, and use a filter on them for the actual map...
 - setup a script to sync steam devkit windows build

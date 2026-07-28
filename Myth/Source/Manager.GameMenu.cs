@@ -389,11 +389,12 @@ public partial class Manager
 
 		// draw cheeky views of the player and bud
 		{
-			void Draw(Vector2 offset, int Facing = 1, Color? tint = null, byte alpha = 255)
+			void Draw(Vector2 offset, int Facing = 1, Color? tint = null, byte alpha = 255, bool hat = false)
 			{
 				var sprite = Assets.GetSprite("player");
 				if (sprite == null) return;
-				var frame = sprite.Frames[2];
+				const int frameIndex = 2;
+				var frame = sprite.Frames[frameIndex];
 				var origin = sprite.ResolveOrigin(SpriteAnchor.Pivot);
 				var img = frame.Subtexture;
 				batcher.PushMatrix(Matrix3x2.CreateTranslation(-origin + offset));
@@ -401,12 +402,16 @@ public partial class Manager
 				var color = tint ?? Color.White;
 				color.A = alpha;
 				batcher.Image(img, Vector2.Zero, color);
+				if (hat && Assets.GetSprite("hat") is { Frames.Count: > 0 } hatSprite &&
+					sprite.TryGetSocket("hat", frameIndex, out var socket))
+					batcher.Image(hatSprite.Frames[0].Subtexture, socket.Position + new Vector2(1, 2),
+						hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter), Vector2.One, 0, color);
 				batcher.PopMatrix();
 				batcher.PopMatrix();
 			}
 
 			byte alpha = 80;
-			Draw(new Vector2(-70, 50), alpha: alpha);
+			Draw(new Vector2(-70, 50), alpha: alpha, hat: true);
 			Draw(new Vector2(430, 50), -1, Bud.Tint, alpha: alpha);
 		}
 		batcher.PopMatrix();
