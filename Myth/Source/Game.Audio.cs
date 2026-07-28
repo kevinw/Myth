@@ -127,7 +127,6 @@ public partial class Game
 	readonly HashSet<string> audioFailures = [];
 	SoundInstance? music;
 	string? musicArea;
-	bool musicPaused;
 
 	static float PlayerHitSnapshotHoldTime => 0.12f;
 	const string PlayerHitSnapshotPath = "snapshot:/player_hit";
@@ -269,23 +268,6 @@ public partial class Game
 		musicArea = null;
 	}
 
-	public void SetMusicPaused(bool paused)
-	{
-		musicPaused = paused;
-		if (music == null)
-			return;
-
-		try
-		{
-			music.SetPaused(paused);
-		}
-		catch (Exception e)
-		{
-			if (audioFailures.Add($"music:{(paused ? "pause" : "resume")}"))
-				Console.Error.WriteLine($"Failed to {(paused ? "pause" : "resume")} background music: {e}");
-		}
-	}
-
 	// Hand off the live background-music instance without stopping it, so a freshly
 	// recreated Game (the next gym run) can keep it playing with no gap. Nulls our
 	// own references so Dispose()'s StopMusic() no-ops instead of releasing it.
@@ -303,7 +285,6 @@ public partial class Game
 	{
 		music = carried;
 		musicArea = area;
-		SetMusicPaused(musicPaused);
 	}
 
 	public void RefreshMusic()
@@ -346,7 +327,6 @@ public partial class Game
 			music.SetTimelinePosition(state.TimelinePosition);
 			music.Start();
 			musicArea = area;
-			SetMusicPaused(musicPaused);
 		}
 		catch (Exception e)
 		{
@@ -368,7 +348,6 @@ public partial class Game
 		{
 			music = Audio.CreateEvent(Manager.BackgroundMusicEventPath);
 			music.Start();
-			SetMusicPaused(musicPaused);
 		}
 		catch (Exception e)
 		{

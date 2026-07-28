@@ -635,6 +635,7 @@ public partial class Manager : App
 #endif
 			);
 			LoadMusicAreas();
+			ApplyGameplayAudioPause();
 		}
 		catch (Exception e)
 		{

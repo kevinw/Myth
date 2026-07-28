@@ -19,6 +19,7 @@ public partial class Manager
 		{
 			var musicState = game?.CaptureMusicReloadState();
 			Audio.Restart();
+			ApplyGameplayAudioPause();
 			if (musicState is { } state)
 				game?.RestoreMusicReloadState(state);
 			Console.WriteLine("Rebuilt FMOD audio output after interruption.");

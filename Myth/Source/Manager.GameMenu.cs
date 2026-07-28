@@ -72,17 +72,19 @@ public partial class Manager
 		previewTarget = null;
 
 		gameMenuPage = GameMenuPage.Closed;
-		game?.SetMusicPaused(false);
+		ApplyGameplayAudioPause();
 		confirmRestart = false;
 	}
 
 	void ShowGameMenuPage(GameMenuPage page)
 	{
 		gameMenuPage = page;
-		game?.SetMusicPaused(GameMenuPausesGame);
+		ApplyGameplayAudioPause();
 		confirmRestart = false;
 		menuFocusDirty = true;
 	}
+
+	void ApplyGameplayAudioPause() => Audio.SetBusPaused("bus:/Gameplay", GameMenuPausesGame);
 
 	void MenuAudioEvent(string path) => Audio.CreateEvent($"event:/{path}")?.Start();
 
@@ -371,10 +373,18 @@ public partial class Manager
 		if (!GameMenuOpen || Window == null)
 			return;
 
-		batcher.PushMatrix(MenuMatrix);
 		if (previewTarget != null)
+		{
+			batcher.PushMatrix(MenuMatrix);
 			batcher.Image(previewTarget, Vector2.Zero, Color.White);
-		batcher.Rect(MenuBounds, Color.FromHexStringRGBA("0x160b1888"));
+			batcher.PopMatrix();
+		}
+
+		// The menu content stays on the 16:9 game canvas, but the scrim covers the
+		// actual viewport (notably the Steam Deck's extra 16:10 bands).
+		batcher.Rect(MenuViewport, Color.FromHexStringRGBA("0x160b1888"));
+
+		batcher.PushMatrix(MenuMatrix);
 		DrawGameMenuTitle();
 
 		// draw cheeky views of the player and bud
@@ -399,6 +409,7 @@ public partial class Manager
 			Draw(new Vector2(-70, 50), alpha: alpha);
 			Draw(new Vector2(430, 50), -1, Bud.Tint, alpha: alpha);
 		}
+		batcher.PopMatrix();
 	}
 
 	void DrawGameMenuTitle()
