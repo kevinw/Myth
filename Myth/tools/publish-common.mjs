@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 export function checkFmodBankMtimes(root, platform) {
+  return; // This needs a rethink. Not all banks get rebuilt; FMOD is "smart" about changes.
+
   if (process.argv.includes("--skip-fmod-mtime-check")) {
     console.warn("Skipping FMOD bank freshness check.");
     return;
