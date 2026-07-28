@@ -79,6 +79,7 @@ public class Actor
 	}
 	public float AnimationTime => animationTime;
 	public int AnimationFrameIndex => sprite?.GetFrameIndexAt(Animation, animationTime, animationLooping) ?? -1;
+	protected virtual float AnimationRate => 1;
 	protected void SetAnimationTime(float time) => animationTime = time;
 
 	Vector2 remainder;
@@ -474,7 +475,7 @@ public class Actor
 		var prevFrame = AnimationFrameIndex;
 		var prevAnim = animationName;
 
-		animationTime += Time.Delta;
+		animationTime += Time.Delta * AnimationRate;
 		Timer += Time.Delta;
 
 		// If a transition animation finished, land on the target animation

@@ -36,6 +36,7 @@ public class Bud : Pawn, ICarryable
 	float burrowPopJumpTime;
 	protected override float GroundSpeedMultiplier => 1.0f;
 	protected override float AirSpeedMultiplier => 1.0f;
+	protected override float IdleBreathingRate => 0.7f;
 	public bool CanSay => Game.CanShowBudSpeech();
 
 	// Forwarded for editor nav debug visualization

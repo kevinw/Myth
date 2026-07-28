@@ -64,6 +64,10 @@ public abstract class Pawn : Actor
 	static float MoveInputDeadzone => 0.1f;
 	static float GroundLocomotionAnimationHold => 0.1f;
 	static float GroundLocomotionAnimationSpeed => 2.0f;
+	static float RunningOutOfBreathRate => 0.14f;
+	static float JumpOutOfBreath => 0.16f;
+	static float OutOfBreathRecoveryRate => 0.08f;
+	static float OutOfBreathAnimationBoost => 0.3f;
 	public static float Gravity => 450.T();
 	public static float TerminalVelocity => 500.T();
 
@@ -193,6 +197,10 @@ public abstract class Pawn : Actor
 	public bool AtWaterSurface => atWaterSurface;
 	public bool IsDucking => ducking;
 	public bool IsWallJumpLocked => wallJumpInputLockTimer > 0;
+	[NoSerialize] public float OutOfBreath { get; private set; }
+	protected virtual float IdleBreathingRate => 1;
+	protected override float AnimationRate
+		=> IsPlaying("idle") ? IdleBreathingRate * (1 + OutOfBreath * OutOfBreathAnimationBoost) : 1;
 
 	public abstract PawnInput GetInput();
 
@@ -338,7 +346,18 @@ public abstract class Pawn : Actor
 		}
 
 		AfterMovementUpdate(previousVelocity);
+		UpdateOutOfBreath();
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
+	}
+
+	void UpdateOutOfBreath()
+	{
+		var running = grounded && State == States.Normal && !ducking &&
+			MathF.Abs(input.MoveX) >= MoveInputDeadzone &&
+			MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed;
+		OutOfBreath = running
+			? Calc.Approach(OutOfBreath, 1, RunningOutOfBreathRate * Time.Delta)
+			: Calc.Approach(OutOfBreath, 0, OutOfBreathRecoveryRate * Time.Delta);
 	}
 
 	protected virtual void AfterActorUpdate(Vector2 previousVelocity) { }
@@ -1000,6 +1019,7 @@ public abstract class Pawn : Actor
 		jumpTimer = duration;
 		jumpCutImmune = false; // normal jumps can be cut short by releasing
 		Velocity.Y = force;
+		OutOfBreath = Math.Clamp(OutOfBreath + JumpOutOfBreath, 0, 1);
 	}
 
 	bool CanCoyoteJump()
