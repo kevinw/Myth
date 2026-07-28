@@ -1,23 +1,15 @@
 # TODO
 
 steam notes
-- crouching under a ledge shouldn't trigger aura unless you hold down.
 - absolutely change the title to something weird for now
 - maybe we render all the rooms, and use a filter on them for the actual map...
 - setup a script to sync steam devkit windows build
 - consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
 - pause rendering on pause, like we did for background
-- teleport animation
-- windows build warnings:
-```
-C:\Users\kev\src\Myth\Myth\Source\Assets\ActorSpecs.cs(284): Trim analysis warning IL2026: Myth.ActorSpecs.PointArrayToJson(Point2[]): Using member 'System.Text.Json.Nodes.JsonArray.Add<JsonArray>(JsonArray)' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. Creating JsonValue instances with non-primitive types is not compatible with trimming. It can result in non-primitive types being serialized, which may have their members trimmed.
-C:\Users\kev\src\Myth\Myth\Source\Assets\ActorSpecs.cs(284): AOT analysis warning IL3050: Myth.ActorSpecs.PointArrayToJson(Point2[]): Using member 'System.Text.Json.Nodes.JsonArray.Add<JsonArray>(JsonArray)' which has 'RequiresDynamicCodeAttribute' can break functionality when AOT compiling. Creating JsonValue instances with non-primitive types requires generating code at runtime.
-```
 
 - i get a feeling watching metroidvania videos on twitter: bleh. boss fight. grapple hook. it's all so samey. we should do ___ instead.
 - water ambience for water tile rooms
 - make a youtube account for the game. post the head bug as a youtube short.
-- make sure renaming to an existing room name fails
 - cimgui.dll is 1.4MB; can it be statically linked?
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon
@@ -66,7 +58,6 @@ adjust rope springiness as a mechanic or challenge
 
 ## mood: MINUTIA
 - separate "editingRoomId" and "playRoomId" and put them in editor.json and save.json
-- actors should be destroyed when they go off the bottom of the screen. (what happens? do their positions already get clamped? first: show their positions.)
 - Build a custom SDL3 iOS xcframework with unused camera and Bluetooth/HIDAPI support disabled, then replace the bundled SDL3.xcframework so App Store uploads no longer need privacy purpose strings for APIs Myth does not use.
 
 ## mood: SOUND AND MUSIC
@@ -82,7 +73,6 @@ adjust rope springiness as a mechanic or challenge
 - someday: https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display
 - if the git diff contains only markdown, don't run the browser workflow?
 - ScanDiff: Error reading file: /Users/kev/src/Myth/Foster
-- wall jump in one tile wide well doesn't work
 - use 16:10 screen fully on tall rooms. make letterboxing fully based on the room size
 - Death is weird, you can fall through jumpthrus into water; maybe simplify
 - idea to try: Store fall height in burrow; pop out with that height

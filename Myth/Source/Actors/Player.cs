@@ -602,6 +602,7 @@ public abstract class Pawn : Actor
 				facing = wallJumpDirection;
 				Facing = wallJumpDirection;
 				Velocity.X = wallJumpDirection * WallJumpSpeed;
+				EmitJumpParticles(Position - Vector2.UnitX * wallJumpDirection * Hitbox.Rect.Width / 2);
 			}
 			StartJump(JumpForce, JumpTime);
 			OnPawnJump();
@@ -1069,10 +1070,11 @@ public abstract class Pawn : Actor
 
 		var touchingLeft = OverlapsAny(Point2.Left, Masks.Solid);
 		var touchingRight = OverlapsAny(Point2.Right, Masks.Solid);
-		if (touchingLeft == touchingRight)
-			return 0;
+		// In a one-tile shaft both probes hit; push off the wall the pawn is pressing toward.
+		if (touchingLeft && touchingRight)
+			return MathF.Abs(input.MoveX) < MoveInputDeadzone ? 0 : -Math.Sign(input.MoveX);
 
-		return touchingLeft ? 1 : -1;
+		return touchingLeft ? 1 : touchingRight ? -1 : 0;
 	}
 
 	bool IsWallHugging()

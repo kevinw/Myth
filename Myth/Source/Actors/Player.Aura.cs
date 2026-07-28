@@ -19,8 +19,8 @@ public partial class Player
 	float auraEnterTimer;
 
 
-	private bool AuraActive =>
-		Velocity.RoundToPoint2() == Point2.Zero && state.Current == States.Normal && IsDucking && Game.GetFirst<Bud>() is { } bud && bud.IsDucking;
+	bool AuraActive =>
+		input.MoveY > 0 && Velocity.RoundToPoint2() == Point2.Zero && state.Current == States.Normal && IsDucking && Game.GetFirst<Bud>() is { } bud && bud.IsDucking;
 
 	public void UpdateAura(float dt)
 	{

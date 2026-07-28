@@ -281,7 +281,7 @@ public static class ActorSpecs
 	{
 		var array = new JsonArray();
 		foreach (var point in points)
-			array.Add(new JsonArray(point.X, point.Y));
+			array.Add((JsonNode)new JsonArray(point.X, point.Y));
 		return array;
 	}
 
