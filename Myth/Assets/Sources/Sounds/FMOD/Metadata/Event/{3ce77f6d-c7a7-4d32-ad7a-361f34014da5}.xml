@@ -90,6 +90,9 @@
 		</relationship>
 	</object>
 	<object class="SingleSound" id="{ee8b5eb4-a177-49de-8678-7571139140a4}">
+		<property name="volume">
+			<value>-3.5</value>
+		</property>
 		<relationship name="modulators">
 			<destination>{901b0f61-d648-4dad-aafd-ef97e5e84f76}</destination>
 		</relationship>
@@ -101,6 +104,9 @@
 		<property name="start">
 			<value>1</value>
 		</property>
+		<property name="volume">
+			<value>-2</value>
+		</property>
 		<relationship name="modulators">
 			<destination>{089a5ad4-4afc-4b1c-a8b5-a2ad0644329a}</destination>
 		</relationship>
@@ -111,6 +117,9 @@
 	<object class="SingleSound" id="{4a36c812-2eb6-482c-9bc7-f61a1431d2e8}">
 		<property name="start">
 			<value>2</value>
+		</property>
+		<property name="volume">
+			<value>-3</value>
 		</property>
 		<relationship name="modulators">
 			<destination>{e9eee38b-ee8a-456e-bf1c-ceb0afb19755}</destination>
