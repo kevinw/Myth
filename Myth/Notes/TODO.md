@@ -7,7 +7,6 @@ steam notes
 - setup a script to sync steam devkit windows build
 - consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
 - pause rendering on pause, like we did for background
-- in the big rope down and over and up chest room, diving all the way off the left lets you "catch" on the corner and not die in the pit. you should die even if you find the "room edge"
 - teleport animation
 - windows build warnings:
 ```

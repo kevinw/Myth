@@ -1308,6 +1308,15 @@ public partial class Player : Pawn
 	{
 		if (Health <= 0) return;
 
+		// Resolve a fall before horizontal edges: otherwise continued outward velocity at a
+		// bottom corner can cross and re-clamp X every frame, starving this check forever.
+		if (Position.Y > Game.Bounds.Bottom + 12)
+		{
+			if (!Game.Transition(Point2.Down))
+				FallOffCliff();
+			return;
+		}
+
 		if (Position.X > Game.Bounds.Right && !Game.Transition(Point2.Right))
 		{
 			Position.X = Game.Bounds.Right;
@@ -1315,10 +1324,6 @@ public partial class Player : Pawn
 		else if (Position.X < Game.Bounds.Left && !Game.Transition(Point2.Left))
 		{
 			Position.X = Game.Bounds.Left;
-		}
-		else if (Position.Y > Game.Bounds.Bottom + 12 && !Game.Transition(Point2.Down))
-		{
-			FallOffCliff();
 		}
 		else if (Position.Y < Game.Bounds.Top)
 		{
