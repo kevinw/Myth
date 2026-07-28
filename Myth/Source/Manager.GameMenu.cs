@@ -72,12 +72,14 @@ public partial class Manager
 		previewTarget = null;
 
 		gameMenuPage = GameMenuPage.Closed;
+		game?.SetMusicPaused(false);
 		confirmRestart = false;
 	}
 
 	void ShowGameMenuPage(GameMenuPage page)
 	{
 		gameMenuPage = page;
+		game?.SetMusicPaused(GameMenuPausesGame);
 		confirmRestart = false;
 		menuFocusDirty = true;
 	}

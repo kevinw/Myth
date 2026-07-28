@@ -315,7 +315,8 @@ public static class Assets
 		if (key.StartsWith("Sounds/", StringComparison.OrdinalIgnoreCase))
 			return false;
 		if (key.StartsWith("Rooms/", StringComparison.OrdinalIgnoreCase))
-			return key.StartsWith($"Rooms/{worldId}/", StringComparison.OrdinalIgnoreCase);
+			return key.StartsWith($"Rooms/{worldId}/", StringComparison.OrdinalIgnoreCase)
+				|| key.Equals($"Rooms/{worldId}.regions.json", StringComparison.OrdinalIgnoreCase);
 		if (key.Equals("Fonts/Myna-Regular.ttf", StringComparison.OrdinalIgnoreCase))
 			return false;
 		if (key.StartsWith("Shaders/", StringComparison.OrdinalIgnoreCase))

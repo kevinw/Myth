@@ -1,19 +1,16 @@
 # TODO
 
 steam notes
-- main music didn't work; but boss did?
+- crouching under a ledge shouldn't trigger aura unless you hold down.
 - hat on pause screen player
-- no steam library art
 - make bud's breathing slower than yours.
 - absolutely change the title to something weird for now
 - "ship" mode needs a cheat code to move between rooms like the editor does, involving a set of button presses
   - maybe we render all the rooms, and use a filter on them for the actual map...
-- menu blue overlay doesn't cover entire screen; there's a slim area on the bottom that it doesn't reach
 - map: remove the player, or make it a simple blinking icon at a constant scale
 - map: fix easing to not be 1/2, or remove easing
 - setup a script to sync steam devkit windows build
 - right stick could look around or up or down
-- blue clear clashes with steam black; just clear black
 - consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
 - pause music on pause
 - pause rendering on pause, like we did for background

@@ -34,6 +34,7 @@ public partial class Manager : App
 #if !EDITOR
 	static Color highlight => 0x5fcde4;
 #endif
+	Color WINDOW_CLEAR_COLOR = new(0x2e1426);
 
 	string? selectedRoomId;
 #if EDITOR
@@ -514,7 +515,7 @@ public partial class Manager : App
 	void RenderBootWarmup()
 	{
 		var window = RequiredWindow;
-		window.Clear(0x2e1426);
+		window.Clear(WINDOW_CLEAR_COLOR);
 
 		// The batcher draws in window-pixel space (see View: WidthInPixels/Scale). Track the size
 		// so UpdateBootWarmup only blocks on a warm compile once it has stopped changing.
@@ -1317,7 +1318,7 @@ public partial class Manager : App
 		PerfStats.Record(PerfStat.Present, GraphicsDevice.LastPresentDuration);
 		UpdateFpsOverlay();
 		using var renderPerf = PerfStats.Time(PerfStat.Render);
-		Window.Clear(0x2e1426);
+		Window.Clear(WINDOW_CLEAR_COLOR);
 
 		if (startingPlay)
 			RenderPlayTransition();
