@@ -65,7 +65,7 @@ public abstract class Pawn : Actor
 	static float DashRunAirSpeed => 155.T();
 	static float DashRunReverseAccelMultiplier => 0.85f.T();
 	static float DashRunAnimationRate => 1.4f.T();
-	static float DashCrouchFriction => 900f.T();
+	protected static float DashCancelFriction => 900f.T();
 	protected static int DashGroundParticleCount => 1;
 	// Analog MoveX below this magnitude counts as no horizontal input for physics and facing.
 	static float MoveInputDeadzone => 0.1f;
@@ -131,7 +131,7 @@ public abstract class Pawn : Actor
 	static float AirborneRollDistance => Game.TileSize * 2f;
 	protected static float DashSpeed => 220;
 	protected static float DashDuration => 0.15f;
-	protected static float DashCooldown => 0.20f;
+	protected static float DashCooldown => 0.154f;
 	// Rope climbing: hold up near a rope to grab on (see Rope + ClimbState). Movement-toy
 	// tuning: swinging is meant to carry into release jumps, so RopeSwingCarry rewards a
 	// pumped-up pendulum.
@@ -180,7 +180,7 @@ public abstract class Pawn : Actor
 	protected bool dashRunArmed;
 	protected int dashRunDirection;
 	protected float horizontalInput;
-	bool dashCrouchBraking;
+	protected bool dashCancelBraking;
 	protected float jumpForce = JumpForce;
 	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
 	protected float rollJumpCarryTimer;
@@ -206,7 +206,7 @@ public abstract class Pawn : Actor
 			if (value != States.Normal && value != States.Burrow)
 			{
 				EndDashRun();
-				dashCrouchBraking = false;
+				dashCancelBraking = false;
 			}
 			state.Change(value);
 		}
@@ -450,6 +450,13 @@ public abstract class Pawn : Actor
 		horizontalInput = input.MoveX;
 	}
 
+	protected void BeginDashCancelBrake()
+	{
+		dashCancelBraking = true;
+		dashCooldownTimer = 0;
+		EndDashRun();
+	}
+
 	protected float UpdateDashRunDirection(float moveX)
 	{
 		if (MathF.Abs(moveX) >= MoveInputDeadzone)
@@ -475,11 +482,7 @@ public abstract class Pawn : Actor
 		else
 			ducking = false;
 		if (ducking && dashRunArmed)
-		{
-			dashCrouchBraking = true;
-			dashCooldownTimer = 0;
-			EndDashRun();
-		}
+			BeginDashCancelBrake();
 		else if (ducking)
 			EndDashRun();
 
@@ -488,7 +491,7 @@ public abstract class Pawn : Actor
 		// while the raw analog value scales horizontal thrust.
 		var moveX = MathF.Abs(moveXAnalog) < MoveInputDeadzone ? 0 : Math.Sign(moveXAnalog);
 		if (!ducking && moveX != 0)
-			dashCrouchBraking = false;
+			dashCancelBraking = false;
 		if (grounded && (moveX != 0 || MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed))
 			groundLocomotionAnimationTimer = GroundLocomotionAnimationHold;
 		else
@@ -603,7 +606,7 @@ public abstract class Pawn : Actor
 		if (dashCooldownTimer > 0)
 			Velocity.X = dashDirection * DashSpeed;
 		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
-		if (dashCrouchBraking)
+		if (dashCancelBraking)
 			maxSpeed = MathF.Max(maxSpeed, MathF.Abs(Velocity.X));
 		if (!grounded && wallJumpInputLockTimer > 0)
 			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
@@ -611,11 +614,11 @@ public abstract class Pawn : Actor
 			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
 		if (MathF.Abs(Velocity.X) > maxSpeed)
 			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
-		if (dashCrouchBraking)
+		if (dashCancelBraking)
 		{
 			var target = ducking ? movementInput * CrawlSpeed * GroundSpeedMultiplier : 0;
-			Velocity.X = Calc.Approach(Velocity.X, target, DashCrouchFriction * Time.Delta);
-			dashCrouchBraking = Velocity.X != target;
+			Velocity.X = Calc.Approach(Velocity.X, target, DashCancelFriction * Time.Delta);
+			dashCancelBraking = Velocity.X != target;
 		}
 		else if (moveX == 0 && grounded && dashCooldownTimer == 0)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
@@ -1067,7 +1070,7 @@ public abstract class Pawn : Actor
 		dashRunDirection = dashDirection;
 		jumpTimer = 0;
 		Velocity.X = dashDirection * 200f;
-		Velocity.Y *= 0.1f;
+		Velocity.Y = 0;
 		ducking = false;
 		Squish = new Vector2(1.35f, 0.82f);
 		Play("jump");
@@ -1666,10 +1669,14 @@ public partial class Player : Pawn
 		return false;
 	}
 
-	void StartAttack() {
+	void StartAttack()
+	{
+		var brakeFromDash = grounded && dashRunArmed;
 		State = States.Attack;
 		attackUp = input.MoveY < 0;
-		if (grounded)
+		if (brakeFromDash)
+			BeginDashCancelBrake();
+		else if (grounded)
 			StopX();
 	}
 
@@ -1787,7 +1794,12 @@ public partial class Player : Pawn
 		}
 
 		if (Grounded())
-			Velocity.X = Calc.Approach(Velocity.X, 0, AttackFriction * Time.Delta);
+		{
+			Velocity.X = Calc.Approach(Velocity.X, 0,
+				(dashCancelBraking ? DashCancelFriction : AttackFriction) * Time.Delta);
+			if (Velocity.X == 0)
+				dashCancelBraking = false;
+		}
 
 		var attackFinished = attackBlocked
 			? IsFinishedPlaying(GetAttackAnimation())
