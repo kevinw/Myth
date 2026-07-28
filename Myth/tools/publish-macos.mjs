@@ -44,7 +44,7 @@ checkFmodBankMtimes(root, "Desktop");
 // visual — including tile kit registrations — must be current in the pack), then a
 // Content.zip of the shippable Assets slice built around it.
 const contentZip = path.join(outRoot, "Content.zip");
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "-p:ShaderPlatform=mac", "--",
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
   "--content-target", "mac",
@@ -58,7 +58,6 @@ run("dotnet", [
   "-r", rid,
   "--self-contained",
   "-p:MythShip=true", // also enables NativeAOT via Myth.csproj
-  "-p:MythDesktopOnly=true", // restore Myth.Core as net10.0 only (no ios TFM against an osx RID)
   "-o", publishDir,
 ]);
 

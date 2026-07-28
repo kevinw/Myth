@@ -444,10 +444,6 @@ public partial class Manager : App
 // Watch development assets
 #if DEBUG && !IOS && !BROWSER
 		StartAssetWatcher();
-		StartShaderWatcher();
-		StartParticleWatcher();
-		if (AudioEnabled)
-			StartAudioBankWatcher();
 #endif
 
 		if (!playOnStartup)

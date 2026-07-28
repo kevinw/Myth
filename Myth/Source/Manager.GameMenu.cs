@@ -434,8 +434,10 @@ public partial class Manager
 		};
 
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
-		DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: true);
-		DrawCenteredText(font, title, pos, 18, 0xfee761, sine: true);
+
+		var useSineWave = false; // TODO: looks bad after the game has been running awhile
+		DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: useSineWave);
+		DrawCenteredText(font, title, pos, 18, 0xfee761, sine: useSineWave);
 
 		if (gameMenuPage != GameMenuPage.Title || !isSteamDeck)
 		{

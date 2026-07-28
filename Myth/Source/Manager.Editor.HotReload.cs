@@ -3,8 +3,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-// Development hot reload: a FileSystemWatcher per asset kind, each debouncing its reload by
-// AssetReloadDelay so a burst of writes (or a save that lands as several events) reloads once.
+// Development hot reload: one FileSystemWatcher routes each asset kind to its own debounced reload,
+// so a burst of writes (or a save that lands as several events) reloads once.
 // Watcher callbacks arrive off the main thread, hence the locks; the reload itself runs from
 // Update via the matching Update*Reload.
 public partial class Manager
@@ -12,9 +12,6 @@ public partial class Manager
 	const float AssetReloadDelay = 0.25f;
 
 	FileSystemWatcher? assetWatcher;
-	FileSystemWatcher? shaderWatcher;
-	FileSystemWatcher? audioBankWatcher;
-	FileSystemWatcher? particleWatcher;
 	readonly Lock assetReloadLock = new();
 	bool assetReloadRequested;
 	float assetReloadTimer;
@@ -37,15 +34,40 @@ public partial class Manager
 		};
 		assetWatcher.Filters.Add("*.ase");
 		assetWatcher.Filters.Add("*.aseprite");
-		assetWatcher.Filters.Add("inbetweens.json");
-		assetWatcher.Filters.Add("*.kit.json");
+		assetWatcher.Filters.Add("*.json");
+		assetWatcher.Filters.Add("*.hlsl");
+		assetWatcher.Filters.Add("*.bank");
 
-		assetWatcher.Changed += (_, _) => RequestAssetReload();
-		assetWatcher.Created += (_, _) => RequestAssetReload();
-		assetWatcher.Deleted += (_, _) => RequestAssetReload();
-		assetWatcher.Renamed += (_, _) => RequestAssetReload();
+		assetWatcher.Changed += (_, e) => RouteAssetChange(e.FullPath);
+		assetWatcher.Created += (_, e) => RouteAssetChange(e.FullPath);
+		assetWatcher.Deleted += (_, e) => RouteAssetChange(e.FullPath);
+		assetWatcher.Renamed += (_, e) => RouteAssetChange(e.FullPath);
 		assetWatcher.EnableRaisingEvents = true;
 	}
+
+	void RouteAssetChange(string path)
+	{
+		var extension = Path.GetExtension(path);
+		if (extension.Equals(".ase", StringComparison.OrdinalIgnoreCase) ||
+			extension.Equals(".aseprite", StringComparison.OrdinalIgnoreCase) ||
+			Path.GetFileName(path).Equals("inbetweens.json", StringComparison.OrdinalIgnoreCase) ||
+			path.EndsWith(".kit.json", StringComparison.OrdinalIgnoreCase))
+		{
+			RequestAssetReload();
+			return;
+		}
+
+		var relative = Path.GetRelativePath(Assets.AssetsPath, path);
+		if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, "Particles"))
+			RequestParticleEffectReload();
+		else if (extension.Equals(".hlsl", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, "Shaders"))
+			RequestShaderReload();
+		else if (AudioEnabled && extension.Equals(".bank", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sounds", "FMOD")))
+			RequestAudioBankReload();
+	}
+
+	static bool IsAssetDirectory(string relative, string directory)
+		=> relative.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
 	void RequestAssetReload()
 	{
@@ -81,25 +103,6 @@ public partial class Manager
 	// only reacts to art files, and a full ReloadAssets would be overkill for a
 	// particle tweak. Reload is deferred while a tuning-window autosave is
 	// pending so an external edit can't clobber an in-progress slider drag.
-	void StartParticleWatcher()
-	{
-		var particlesPath = Path.GetFullPath(ParticleEffectAssets.FolderPath);
-		if (!Directory.Exists(particlesPath))
-			return;
-
-		particleWatcher = new FileSystemWatcher(particlesPath, "*.json")
-		{
-			IncludeSubdirectories = true,
-			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
-		};
-
-		particleWatcher.Changed += (_, _) => RequestParticleEffectReload();
-		particleWatcher.Created += (_, _) => RequestParticleEffectReload();
-		particleWatcher.Deleted += (_, _) => RequestParticleEffectReload();
-		particleWatcher.Renamed += (_, _) => RequestParticleEffectReload();
-		particleWatcher.EnableRaisingEvents = true;
-	}
-
 	void RequestParticleEffectReload()
 	{
 		lock (particleReloadLock)
@@ -126,25 +129,6 @@ public partial class Manager
 		}
 		if (reload)
 			ParticleEffectAssets.Load();
-	}
-
-	void StartShaderWatcher()
-	{
-		var shadersPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Shaders"));
-		if (!Directory.Exists(shadersPath))
-			return;
-
-		shaderWatcher = new FileSystemWatcher(shadersPath, "*.hlsl")
-		{
-			IncludeSubdirectories = false,
-			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
-		};
-
-		shaderWatcher.Changed += (_, _) => RequestShaderReload();
-		shaderWatcher.Created += (_, _) => RequestShaderReload();
-		shaderWatcher.Deleted += (_, _) => RequestShaderReload();
-		shaderWatcher.Renamed += (_, _) => RequestShaderReload();
-		shaderWatcher.EnableRaisingEvents = true;
 	}
 
 	void RequestShaderReload()
@@ -175,25 +159,6 @@ public partial class Manager
 
 		if (reload)
 			CompileAndReloadShaders();
-	}
-
-	void StartAudioBankWatcher()
-	{
-		var fmodPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Sounds", "FMOD"));
-		if (!Directory.Exists(fmodPath))
-			return;
-
-		audioBankWatcher = new FileSystemWatcher(fmodPath, "*.bank")
-		{
-			IncludeSubdirectories = true,
-			NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime
-		};
-
-		audioBankWatcher.Changed += (_, _) => RequestAudioBankReload();
-		audioBankWatcher.Created += (_, _) => RequestAudioBankReload();
-		audioBankWatcher.Deleted += (_, _) => RequestAudioBankReload();
-		audioBankWatcher.Renamed += (_, _) => RequestAudioBankReload();
-		audioBankWatcher.EnableRaisingEvents = true;
 	}
 
 	void RequestAudioBankReload()
@@ -230,12 +195,6 @@ public partial class Manager
 	{
 		assetWatcher?.Dispose();
 		assetWatcher = null;
-		shaderWatcher?.Dispose();
-		shaderWatcher = null;
-		particleWatcher?.Dispose();
-		particleWatcher = null;
-		audioBankWatcher?.Dispose();
-		audioBankWatcher = null;
 	}
 }
 #endif

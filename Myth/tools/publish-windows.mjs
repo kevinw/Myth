@@ -21,7 +21,7 @@ function run(cmd, args) {
 checkFmodBankMtimes(root, "Desktop");
 
 const contentZip = path.join(outRoot, "Content.zip");
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "-p:ShaderPlatform=windows", "--",
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
   "--content-target", "windows",
@@ -33,7 +33,6 @@ run("dotnet", [
   "-r", "win-x64",
   "--self-contained",
   "-p:MythShip=true",
-  "-p:MythDesktopOnly=true",
   "-p:ShaderPlatform=windows",
   "-o", publishDir,
 ]);

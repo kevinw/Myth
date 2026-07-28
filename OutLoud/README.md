@@ -1,6 +1,7 @@
 # OutLoud
 
-This is intended to be a subproject usable by Myth and other future games.
+Voice-authoring notes and tools for Myth. The runtime implementation lives in
+`Myth/Source/OutLoud.cs`.
 
 ## Overview
 

@@ -38,10 +38,20 @@
   </Target>
 
   <PropertyGroup>
+    <NoWarn>$(NoWarn);IDE0130</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- MythShip strips the editor from a published game build; ImGui stays available
+       (potential in-game UI), so only EDITOR is dropped. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <DefineConstants Condition="'$(MythTestShip)' == 'true'">$(DefineConstants);IMGUI</DefineConstants>
+    <DefineConstants Condition="'$(MythTestShip)' != 'true' and '$(MythShip)' != 'true'">$(DefineConstants);EDITOR;IMGUI</DefineConstants>
+    <DefineConstants Condition="'$(MythTestShip)' != 'true' and '$(MythShip)' == 'true'">$(DefineConstants);IMGUI</DefineConstants>
+    <DefineConstants Condition="'$(MythShip)' == 'true'">$(DefineConstants);MYTHSHIP</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
@@ -68,6 +78,7 @@
        native relink of dotnet.native.wasm. -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserImGui)' != 'false' and Exists('Platforms/Web/Native/cimgui.a')">
     <MythBrowserImGui>true</MythBrowserImGui>
+    <DefineConstants>$(DefineConstants);IMGUI</DefineConstants>
     <WasmBuildNative>true</WasmBuildNative>
     <!-- The web cimgui archive is pinned to ImGui.NET's native ABI. ImGui.NET still
          P/Invokes a few functions this cimgui build does not export; they are never
@@ -133,11 +144,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Source/Program.cs" />
-    <!-- MythDesktopOnly: the desktop/browser exe never needs Myth.Core's net10.0-ios TFM,
-         so drop it here to cut restore/eval work in the dev loop. The iOS app references
-         Myth.Core directly (without this flag), so it still builds net10.0-ios. -->
-    <ProjectReference Include="Source/Myth.Core.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);MythBrowser=$(MythBrowser);MythBrowserFmod=$(MythBrowserFmod);MythBrowserFmodPThread=$(MythBrowserFmodPThread);MythBrowserJsFmod=$(MythBrowserJsFmod);MythShip=$(MythShip);MythDesktopOnly=true" />
+    <CoreCompileCache Include="$(DefineConstants)" />
+    <Compile Include="Source/**/*.cs" Exclude="Source/**/bin/**;Source/**/obj/**;Source/External/StringBuilder/tests/**" />
+    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
+    <!-- Build-time only: emits GeneratedActors.RegisterAll() from [GameActor]. -->
+    <ProjectReference Include="tools/Myth.SourceGen/Myth.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+  </ItemGroup>
+
+  <!-- Managed bindings only; the native cimgui wasm archive is linked above. -->
+  <ItemGroup Condition="'$(MythBrowserImGui)' == 'true'">
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" ExcludeAssets="native" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">

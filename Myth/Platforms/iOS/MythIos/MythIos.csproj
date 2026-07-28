@@ -44,7 +44,7 @@
     <BundleResource Include="../../../Assets/Sounds/FMOD/Build/Mobile/*.bank">
       <LogicalName>Assets/Sounds/FMOD/Build/Mobile/%(Filename)%(Extension)</LogicalName>
     </BundleResource>
-    <ProjectReference Include="../../../Source/Myth.Core.csproj" />
+    <ProjectReference Include="../../../Source/Myth.Core.iOS.csproj" />
     <ProjectReference Include="../../../../Foster/Framework/Foster.Framework.csproj" />
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>

@@ -16,7 +16,7 @@
   },
   {
     "label": "dotnet watch",
-    "command": "dotnet watch run --non-interactive --no-restore",
+    "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
