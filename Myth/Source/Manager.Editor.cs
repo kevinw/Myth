@@ -4747,7 +4747,7 @@ public partial class Manager
 			StartGame();
 		ImGui.SameLine();
 
-		if (ImGuiIconButton("Music Areas", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), "Music", musicEnabled, ToolbarButtonImagePadding))
+		if (ImGuiIconButton("Music Areas", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), musicEnabled ? "Music ON" : "Music OFF", musicEnabled, ToolbarButtonImagePadding))
 		{
 			musicEnabled = !musicEnabled;
 			game?.RefreshMusic();
