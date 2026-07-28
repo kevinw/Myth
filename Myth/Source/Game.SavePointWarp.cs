@@ -39,6 +39,9 @@ public partial class Game
 			(room?.Id != target.RoomId && Assets.GetRoom(target.RoomId) == null))
 			return;
 
+
+		PlayAudioEvent("teleport_from");
+
 		savePointWarpTarget = target;
 		savePointWarpPhase = SavePointWarpPhase.Exit;
 		savePointWarpTime = 0;
@@ -117,6 +120,12 @@ public partial class Game
 
 	void SetSavePointWarpPhase(SavePointWarpPhase phase)
 	{
+		switch (phase) {
+			case SavePointWarpPhase.Enter:
+				PlayAudioEvent("teleport_to");
+				break;
+
+		}
 		savePointWarpPhase = phase;
 		savePointWarpTime = 0;
 	}

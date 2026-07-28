@@ -201,6 +201,7 @@ fn vertex_main(
 		// create imgui context
 		context = ImGui.CreateContext(null);
 		ImGui.SetCurrentContext(context);
+		ImGui.GetStyle().FrameRounding = 2;
 
 		var io = ImGui.GetIO();
 		unsafe

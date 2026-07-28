@@ -229,6 +229,7 @@ public partial class Manager
 			NctTileEditorImGui();
 			MusicRegionsImGui();
 		}
+		ProceduralSoundEditorImGui();
 #if DEBUG
 		TweakRegistry.DrawPanel();
 #endif
@@ -4783,6 +4784,10 @@ public partial class Manager
 
 		if (ImGuiTextButton("Music", new Vector2(55, ButtonSize), musicRegionsOpen))
 			musicRegionsOpen = !musicRegionsOpen;
+		ImGui.SameLine(0, ToolbarSpacing);
+
+		if (ImGuiTextButton("SFX", new Vector2(45, ButtonSize), proceduralSoundEditorOpen))
+			proceduralSoundEditorOpen = !proceduralSoundEditorOpen;
 		ImGui.SameLine(0, ToolbarSpacing);
 
 		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))

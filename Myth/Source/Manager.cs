@@ -1486,6 +1486,7 @@ public partial class Manager : App
 			LoadAudioBanks();
 			if (musicState is { } state)
 				game?.RestoreMusicReloadState(state);
+			proceduralMissingEventsLoaded = false;
 			game?.DisplayMessage("Reloaded FMOD banks");
 			Console.WriteLine("Reloaded FMOD banks.");
 		}

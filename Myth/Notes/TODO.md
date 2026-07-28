@@ -1,4 +1,5 @@
 # TODO
+- update fmod dylibs
 
 steam notes
 - absolutely change the title to something weird for now

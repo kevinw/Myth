@@ -125,6 +125,9 @@ public partial class Game
 	public bool AudioEventsEnabled { get; }
 
 	readonly HashSet<string> audioFailures = [];
+#if EDITOR && !IOS && !BROWSER
+	internal static readonly HashSet<string> MissingAudioEvents = [];
+#endif
 	SoundInstance? music;
 	string? musicArea;
 
@@ -188,13 +191,20 @@ public partial class Game
 		try
 		{
 			var instance = Audio.CreateEvent($"event:/{path}");
+#if EDITOR && !IOS && !BROWSER
+			MissingAudioEvents.Remove(path);
+#endif
 			if (position is { } pos)
 				SetAudioEventPosition(instance, pos);
 			return instance;
 		}
 		catch (Exception e)
 		{
-			Console.WriteLine(e);
+#if EDITOR && !IOS && !BROWSER
+			MissingAudioEvents.Add(path);
+#endif
+			if (audioFailures.Add(path))
+				Console.Error.WriteLine($"Failed to create FMOD event 'event:/{path}': {e}");
 			return null;
 		}
 	}
