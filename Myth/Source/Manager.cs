@@ -948,6 +948,12 @@ public partial class Manager : App
 
 		var gameMenuPausesGame = GameMenuPausesGame;
 
+#if !EDITOR
+		var shipRoomCheatChordActive = UpdateShipRoomCheat(gameMenuPausesGame);
+#else
+		const bool shipRoomCheatChordActive = false;
+#endif
+
 		if (!keyboardShortcutsBlocked && playing && !gameMenuPausesGame && GymLoop && Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter))
 			AdvanceGym(failureReason: "manual");
 
@@ -1008,7 +1014,7 @@ public partial class Manager : App
 #if DEBUG
 						UpdatePlayerMouseDrag(g);
 #endif
-						if (!keyboardShortcutsBlocked && !perfToggleChordActive)
+						if (!keyboardShortcutsBlocked && !perfToggleChordActive && !shipRoomCheatChordActive)
 							g.HandleGameDebugShortcuts(Input);
 						using (PerfStats.Time(PerfDetail.GameUpdate))
 #if EDITOR
@@ -1234,6 +1240,44 @@ public partial class Manager : App
 
 	static bool PerfModifierDown(ControllerState controller)
 		=> !controller.IsGamepad && controller.Down(4);
+
+#if !EDITOR
+	Point2 shipRoomCheatDirection;
+	static float ShipRoomCheatStickThreshold => 0.65f;
+
+	bool UpdateShipRoomCheat(bool gameMenuPausesGame)
+	{
+		var chordActive = false;
+		var direction = Point2.Zero;
+
+		if (playing && !gameMenuPausesGame && game?.AcceptsLiveInput == true)
+			foreach (var controller in Input.Controllers)
+				if (controller.Connected &&
+					controller.Down(Buttons.LeftShoulder) &&
+					controller.Down(Buttons.RightShoulder) &&
+					controller.Down(Buttons.Up))
+				{
+					chordActive = true;
+					direction = ShipRoomCheatDirection(controller.RightStick);
+					controls.Move.Clear();
+					break;
+				}
+
+		if (direction != Point2.Zero && direction != shipRoomCheatDirection)
+			game?.CheatShiftRoom(direction);
+		shipRoomCheatDirection = direction;
+		return chordActive;
+	}
+
+	static Point2 ShipRoomCheatDirection(Vector2 stick)
+	{
+		if (MathF.Max(MathF.Abs(stick.X), MathF.Abs(stick.Y)) < ShipRoomCheatStickThreshold)
+			return Point2.Zero;
+		return MathF.Abs(stick.X) > MathF.Abs(stick.Y)
+			? new(Math.Sign(stick.X), 0)
+			: new(0, Math.Sign(stick.Y));
+	}
+#endif
 
 	void ToggleBudAI()
 	{

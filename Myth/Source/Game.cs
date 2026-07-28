@@ -1432,6 +1432,41 @@ public partial class Game : IDisposable
 		return false;
 	}
 
+#if !EDITOR
+	public bool CheatShiftRoom(Point2 direction)
+	{
+		if (room == null || nextRoom != null || GetFirst<Player>() is not { } player)
+			return false;
+
+		var source = Assets.GetRoom(room.Id) ?? room;
+		var bounds = source.WorldBounds;
+		var exitPosition = direction.X > 0 ? new Vector2(bounds.Right, bounds.CenterY)
+			: direction.X < 0 ? new Vector2(bounds.Left - 1, bounds.CenterY)
+			: direction.Y > 0 ? new Vector2(bounds.CenterX, bounds.Bottom)
+			: new Vector2(bounds.CenterX, bounds.Top - 1);
+		if (Assets.FindAdjacentRoom(source, direction, exitPosition) is not { } adjacent)
+			return false;
+
+		var target = adjacent.CloneRuntime();
+		var playerPosition = FindFallbackPlayerPosition(target, direction);
+		foreach (var actor in target.Actors)
+		{
+			var resolved = ActorSpecs.Resolve(actor);
+			if (string.Equals(ActorSpecs.ReadString(resolved, "Type"), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
+			{
+				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero);
+				break;
+			}
+		}
+
+		ActivateRoomImmediately(target, player, playerPosition, RoomChangeKind.Reload, direction);
+		player.State = Player.States.Normal;
+		player.Stop();
+		EnsureBudForPlayer(repositionExisting: true);
+		return true;
+	}
+#endif
+
 	public bool TransitionToLinkedDoor(string targetActorId)
 	{
 		if (room == null || nextRoom != null || linkedDoorCooldown > 0 || GetFirst<Player>() is not { } player)
