@@ -6,7 +6,7 @@
 //   - signed with the best identity available (Developer ID Application > Apple
 //     Development > ad-hoc), hardened runtime either way
 //
-// Usage: node tools/publish-desktop.mjs [--open] [--notarize]
+// Usage: node tools/publish-macos.mjs [--open] [--notarize] [--skip-fmod-mtime-check]
 //
 // --notarize (distribution to other machines) needs one-time setup:
 //   1. A "Developer ID Application" certificate — created by the Account Holder at
@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkFmodBankMtimes } from "./publish-common.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const rid = process.arch === "arm64" ? "osx-arm64" : "osx-x64";
@@ -36,6 +37,8 @@ function run(cmd, args, opts = {}) {
 function capture(cmd, args) {
   return execFileSync(cmd, args, { cwd: root, encoding: "utf8" });
 }
+
+checkFmodBankMtimes(root, "Desktop");
 
 // --- 1. Fresh visual asset pack (the bundle ships no Assets/Sources, so everything
 // visual — including tile kit registrations — must be current in the pack), then a

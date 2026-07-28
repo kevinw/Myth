@@ -13,7 +13,7 @@
     <OutputType>WinExe</OutputType>
   </PropertyGroup>
 
-  <!-- Shipped desktop builds (tools/publish-desktop.mjs): play-only NativeAOT. Set here
+  <!-- Shipped macOS builds (tools/publish-macos.mjs): play-only NativeAOT. Set here
        rather than on the publish command line so the property doesn't leak into projects
        that don't support AOT (Myth.SourceGen targets netstandard). -->
   <PropertyGroup Condition="'$(MythShip)' == 'true' and '$(RuntimeIdentifier)' != 'browser-wasm'">

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Publishes Myth as a self-contained, unsigned Windows x64 build.
+// Usage: node tools/publish-windows.mjs [--skip-fmod-mtime-check]
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkFmodBankMtimes } from "./publish-common.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outRoot = path.join(root, "bin", "publish");
@@ -15,6 +17,8 @@ function run(cmd, args) {
   console.log(`\n> ${cmd} ${args.join(" ")}`);
   execFileSync(cmd, args, { cwd: root, stdio: "inherit" });
 }
+
+checkFmodBankMtimes(root, "Desktop");
 
 const contentZip = path.join(outRoot, "Content.zip");
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythDesktopOnly=true", "-p:ShaderPlatform=windows", "--",
