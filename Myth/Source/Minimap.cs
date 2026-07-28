@@ -30,6 +30,7 @@ public class Minimap
 	public bool WarpMode;
 	public int WarpSelection;
 	public readonly List<WarpTarget> WarpPoints = [];
+	public string? WarpOriginActorId;
 
 	// World-pixel point the warp map is centering on; lerps toward the selected target
 	// so changing selection glides the map over (see GameView.DrawMinimap).
@@ -45,6 +46,7 @@ public class Minimap
 		WarpSelection = Math.Max(0, WarpPoints.FindIndex(t => t.ActorId == currentActorId));
 		WarpMode = true;
 		Open = true;
+		WarpOriginActorId = currentActorId;
 		WarpFocus = WarpPoints.Count > 0 ? (Vector2)WarpPoints[WarpSelection].Position : Vector2.Zero;
 	}
 
@@ -52,6 +54,7 @@ public class Minimap
 	{
 		WarpMode = false;
 		Open = false;
+		WarpOriginActorId = null;
 	}
 
 	// Moves the warp selection to the nearest other save point in the pressed
@@ -132,7 +135,7 @@ public class Minimap
 	{
 		if (move.LengthSquared() > 1)
 			move = Vector2.Normalize(move);
-		Pan += move * MinimapPanSpeed * dt;
+		Pan -= move * MinimapPanSpeed * dt;
 	}
 
 	static float MinimapPanSpeed => 92f;

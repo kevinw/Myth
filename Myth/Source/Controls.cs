@@ -33,25 +33,29 @@ public class Controls(Input input)
 			.Add(Buttons.West)
 	);
 
-	/* disabled intentionally. don't love these ability yet.
 	public readonly VirtualAction BlinkStrike = new(input, "BlinkStrike",
 		new ActionBindingSet()
+		/* disabled intentionally. don't love this ability yet.
 			.Add(Keys.Q)
 			.Add(Buttons.East)
+			*/
 	);
 
 	public readonly VirtualAction Shield = new(input, "Shield",
 		new ActionBindingSet()
+		/* disabled intentionally. don't love this ability yet.
 			.Add(Keys.C)
 			.Add(Axes.LeftTrigger, 1, 0.25f)
+			*/
 	);
 
 	public readonly VirtualAction Saw = new(input, "Saw",
 		new ActionBindingSet()
-		.Add(Keys.Z)
-		.Add(Buttons.North)
+		/* disabled intentionally. don't love this ability yet.
+			.Add(Keys.Z)
+			.Add(Buttons.North)
+			*/
 	);
-	*/
 
 	public readonly VirtualAction Dash = new(input, "Dash",
 		new ActionBindingSet()

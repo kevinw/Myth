@@ -1014,8 +1014,10 @@ public partial class Game : IDisposable
 	// Travels to a chosen save point (from warp mode) and closes the map.
 	public void WarpToSavePoint(Minimap.WarpTarget target)
 	{
+		var returnToPlaying = target.ActorId == Minimap.WarpOriginActorId;
 		Minimap.CloseWarp();
-		BeginSavePointWarp(target);
+		if (!returnToPlaying)
+			BeginSavePointWarp(target);
 	}
 
 	// Warp-mode map controls: dpad picks a save point, South/X confirms the warp,
