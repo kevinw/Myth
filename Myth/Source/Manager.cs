@@ -1261,6 +1261,7 @@ public partial class Manager : App
 					chordActive = true;
 					direction = ShipRoomCheatDirection(controller.RightStick);
 					controls.Move.Clear();
+					controls.Look.Clear();
 					break;
 				}
 

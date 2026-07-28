@@ -16,6 +16,11 @@ public class Controls(Input input)
 			.Add(Axes.LeftX, 0.25f, Axes.LeftY, 0.50f, 0.25f)
 	);
 
+	public readonly VirtualStick Look = new(input, "Look",
+		new StickBindingSet()
+			.Add(Axes.RightX, 0.25f, Axes.RightY, 0.25f, 0.25f)
+	);
+
 	public readonly VirtualAction Jump = new(input, "Jump",
 		new ActionBindingSet()
 			.Add(Keys.Space)

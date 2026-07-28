@@ -169,8 +169,11 @@ public partial class Game : IDisposable
 	// decaying error so the view glides over the jump instead of snapping.
 	Vector2 cameraError;
 	Vector2? previousCameraTarget;
-	Vector2 previousPlayerPosition;
+	Vector2 previousCameraFocus;
+	Vector2 cameraLookAhead;
 	static float CameraEaseRate => 10f;
+	static float CameraLookAheadEdgeInset => 0.15f;
+	static float CameraLookAheadEaseRate => 8f;
 	const float CameraEaseTriggerEpsilon = 2f;
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
@@ -638,6 +641,7 @@ public partial class Game : IDisposable
 			Camera = Vector2.Round((Vector2)centerPlayer.Position - new Vector2(Width, Height) / 2);
 			previousCameraTarget = null;
 			cameraError = Vector2.Zero;
+			cameraLookAhead = Vector2.Zero;
 			return;
 		}
 
@@ -648,6 +652,7 @@ public partial class Game : IDisposable
 			// (old-room) target.
 			previousCameraTarget = null;
 			cameraError = Vector2.Zero;
+			cameraLookAhead = Vector2.Zero;
 			return;
 		}
 
@@ -666,20 +671,26 @@ public partial class Game : IDisposable
 
 		UpdatePlayerCameraTarget();
 
-		var target = GetGameplayCameraTarget();
-		var player = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
+		var lookRange = new Vector2(FbZoomedWidth, FbZoomedHeight) * (0.5f - CameraLookAheadEdgeInset);
+		var lookTarget = ActiveCutscene == null ? Controls.Look.Value * lookRange : Vector2.Zero;
+		cameraLookAhead = Vector2.Lerp(cameraLookAhead, lookTarget, 1 - MathF.Exp(-Time.Delta * CameraLookAheadEaseRate));
+		if ((cameraLookAhead - lookTarget).LengthSquared() < 0.01f)
+			cameraLookAhead = lookTarget;
 
-		// A static clamp moves the target at most as far as the player moved on each axis, so
+		var cameraFocus = easedPlayerCameraTarget + cameraLookAhead;
+		var target = GetGameplayCameraTarget();
+
+		// A static clamp moves the target at most as far as the camera focus moved on each axis, so
 		// any excess this frame is a discontinuity (a cap toggling / a reveal). Fold that excess
 		// into the error and let it decay, gliding the view across the jump.
 		if (previousCameraTarget is { } prev)
 		{
 			var targetDelta = target - prev;
-			var playerDelta = player - previousPlayerPosition;
-			if (MathF.Abs(targetDelta.X) - MathF.Abs(playerDelta.X) > CameraEaseTriggerEpsilon)
-				cameraError.X -= targetDelta.X - playerDelta.X;
-			if (MathF.Abs(targetDelta.Y) - MathF.Abs(playerDelta.Y) > CameraEaseTriggerEpsilon)
-				cameraError.Y -= targetDelta.Y - playerDelta.Y;
+			var focusDelta = cameraFocus - previousCameraFocus;
+			if (MathF.Abs(targetDelta.X) - MathF.Abs(focusDelta.X) > CameraEaseTriggerEpsilon)
+				cameraError.X -= targetDelta.X - focusDelta.X;
+			if (MathF.Abs(targetDelta.Y) - MathF.Abs(focusDelta.Y) > CameraEaseTriggerEpsilon)
+				cameraError.Y -= targetDelta.Y - focusDelta.Y;
 		}
 
 		cameraError *= MathF.Exp(-Time.Delta * CameraEaseRate);
@@ -692,7 +703,7 @@ public partial class Game : IDisposable
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
 		Camera = ClampCameraToRoomFb(target + cameraError, padding);
 		previousCameraTarget = target;
-		previousPlayerPosition = player;
+		previousCameraFocus = cameraFocus;
 	}
 
 	// Deactivate any active camera blocker whose rect the just-revealed area overlaps, so a
@@ -790,7 +801,7 @@ public partial class Game : IDisposable
 		if (room == null)
 			return Camera;
 
-		var unclamped = easedPlayerCameraTarget - new Vector2(Width, Height) / 2;
+		var unclamped = easedPlayerCameraTarget + cameraLookAhead - new Vector2(Width, Height) / 2;
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
 
 		var blockers = ActiveCameraBlockers();
@@ -847,7 +858,7 @@ public partial class Game : IDisposable
 		cameraError = Vector2.Zero;
 		Camera = GetGameplayCameraTarget();
 		previousCameraTarget = Camera;
-		previousPlayerPosition = GetFirst<Player>() is { } p ? (Vector2)p.Position : previousPlayerPosition;
+		previousCameraFocus = easedPlayerCameraTarget + cameraLookAhead;
 	}
 
 	Vector2 ClampCameraToRoom(Vector2 target)
