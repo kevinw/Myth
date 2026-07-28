@@ -24,7 +24,6 @@ public partial class Manager : App
 	public const string RoomReverbParameter = "RoomReverb";
 
 	const string WindowSettingsFileName = "window.json";
-	const string FmodProjectPath = "Sources/Sounds/FMOD/Myth.fspro";
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
 	static float uiScale = 2.7f;
@@ -232,6 +231,9 @@ public partial class Manager : App
 	{
 #if EDITOR
 		particleEditor = new(undo);
+#if !IOS && !BROWSER
+		proceduralSoundEditor = new(Audio);
+#endif
 #endif
 		AudioEnabled = args.audio;
 		dumpAtlases = args.dumpAtlases;
@@ -282,7 +284,7 @@ public partial class Manager : App
 
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
-		menuImgui = new(this, enableGamepadNav: true);
+		menuImgui = new(this, enableGamepadNav: true, frameRounding: 0);
 		OnExitRequested = RequestQuit;
 		if (Window != null)
 		{
@@ -1486,7 +1488,7 @@ public partial class Manager : App
 			LoadAudioBanks();
 			if (musicState is { } state)
 				game?.RestoreMusicReloadState(state);
-			proceduralMissingEventsLoaded = false;
+			proceduralSoundEditor.AudioBanksReloaded();
 			game?.DisplayMessage("Reloaded FMOD banks");
 			Console.WriteLine("Reloaded FMOD banks.");
 		}
@@ -2088,34 +2090,6 @@ public partial class Manager : App
 		MarkRoomPreviewDirty(room);
 #endif
 	}
-
-#if !IOS && !BROWSER
-	static void OpenFmodStudio()
-	{
-		var projectPath = Path.GetFullPath(Path.Join(Assets.AssetsPath, FmodProjectPath));
-		if (!File.Exists(projectPath))
-		{
-			Console.Error.WriteLine($"FMOD Studio project not found at '{projectPath}'.");
-			return;
-		}
-
-		try
-		{
-			var open = new ProcessStartInfo("/usr/bin/open")
-			{
-				UseShellExecute = false
-			};
-			open.ArgumentList.Add("-a");
-			open.ArgumentList.Add("FMOD Studio");
-			open.ArgumentList.Add(projectPath);
-			Process.Start(open);
-		}
-		catch (Exception e)
-		{
-			Console.Error.WriteLine($"Failed to open FMOD Studio: {e}");
-		}
-	}
-#endif
 
 #endif
 }

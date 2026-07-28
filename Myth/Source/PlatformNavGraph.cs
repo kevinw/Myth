@@ -2208,7 +2208,13 @@ public sealed class PlatformNavGraph
 		{
 			nav.TryExecuteActiveEdge(out var moveX, out var moveY, out var jumpPressed);
 			nav.UpdateJumpHeld(jumpPressed);
-			return new(moveX, moveY, jumpPressed, nav.JumpHeld, false, nav.ActiveEdgeAllowsWallJump);
+			return new(
+				MoveX: moveX,
+				MoveY: moveY,
+				JumpPressed: jumpPressed,
+				JumpDown: nav.JumpHeld,
+				DashPressed: false,
+				AllowWallJump: nav.ActiveEdgeAllowsWallJump);
 		}
 
 		public bool Run()

@@ -8,6 +8,7 @@ public partial class Player : Pawn
 {
 	static float BurrowDuration => 1.133f;
 	static float BurrowMaxSpeed => 150f;
+	static float DashBurrowSpeedMultiplier => 1.3f;
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
@@ -45,6 +46,7 @@ public partial class Player : Pawn
 	Bud? burrowPassenger;
 	Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
 	bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
+	Vector2 burrowIntent;
 	Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
 	bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
 	bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
@@ -119,13 +121,18 @@ public partial class Player : Pawn
 		// moving (reversing heading + handedness keeps the normal pointing into the solid),
 		// and seed the speed with the incoming horizontal velocity so a fast run/roll dives
 		// straight into a fast burrow instead of starting from a standstill.
-		if (previousVelocity.X != 0 && burrowHeading.X != 0
-			&& Math.Sign(previousVelocity.X) != Math.Sign(burrowHeading.X))
+		burrowIntent = GetBurrowIntent();
+		var entryDirection = previousVelocity.X != 0
+			? Math.Sign(previousVelocity.X)
+			: input.DashDown ? Math.Sign(horizontalInput) : 0;
+		if (entryDirection != 0 && burrowHeading.X != 0
+			&& entryDirection != Math.Sign(burrowHeading.X))
 		{
 			burrowHeading = new Point2(-burrowHeading.X, -burrowHeading.Y);
 			burrowSolidLeft = !burrowSolidLeft;
 		}
-		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), BurrowMaxSpeed);
+		var maxSpeed = BurrowMaxSpeed * (input.DashDown ? DashBurrowSpeedMultiplier : 1f);
+		burrowSpeed = MathF.Min(MathF.Abs(previousVelocity.X), maxSpeed);
 
 		State = States.Burrow;
 		burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
@@ -190,10 +197,23 @@ public partial class Player : Pawn
 		}
 		if (burrowLine != null)
 			burrowLine.Trace(burrowLineSegment, burrowLineT, burrowLineDirection,
-				new Vector2(input.MoveX, input.MoveY), arcLength, glowPoints, burrowLineGlowBack);
+				burrowIntent, arcLength, glowPoints, burrowLineGlowBack);
 		else
 			Game.TraceBurrowPathFromState(burrowGlowAnchor, burrowHeading, burrowSolidLeft, burrowLineExit,
-				arcLength, glowPoints, new Vector2(input.MoveX, input.MoveY));
+				arcLength, glowPoints, burrowIntent);
+	}
+
+	Vector2 GetBurrowIntent()
+	{
+		var intent = new Vector2(input.MoveX, input.MoveY);
+		if (!input.DashDown)
+			return intent;
+
+		dashRunArmed = true;
+		horizontalInput = UpdateDashRunDirection(input.MoveX);
+		if (intent == Vector2.Zero)
+			intent.X = horizontalInput;
+		return intent;
 	}
 
 	// Split the burrow's lifetime into BurrowIntervals countdown steps. Crossing into a new
@@ -290,7 +310,8 @@ public partial class Player : Pawn
 		// intent is constant, so the heading auto-rotates around corners (hold one way to
 		// loop a whole shape) and the perpendicular input you were holding when you turned
 		// a corner keeps carrying you. Releasing drops the latch.
-		var intent = new Vector2(input.MoveX, input.MoveY);
+		var intent = burrowIntent = GetBurrowIntent();
+		var dashBurrowing = input.DashDown;
 		var pressed = intent != Vector2.Zero;
 		var changed = intent != burrowLastIntent;
 		var proj = Vector2.Dot(intent, BurrowTravelHeading);
@@ -329,7 +350,7 @@ public partial class Player : Pawn
 					$"junction seek intent={intent} direction={seekDirection} distance={seekDistance:0.##} heading={burrowLineHeading}");
 		}
 
-		var move = burrowOrbiting;
+		var move = burrowOrbiting || dashBurrowing;
 
 		// Speed eases in and out (accel + friction) rather than snapping, and climbing slows
 		// you down: a straight-up wall heading runs at BurrowClimbSpeedMultiplier, while a 45°
@@ -337,7 +358,8 @@ public partial class Player : Pawn
 		// Descending counts as flat, so you keep momentum going down. A queued reversal
 		// targets zero speed (friction) so a direction switch decelerates before flipping.
 		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
-		var targetSpeed = move && !burrowReverseQueued ? BurrowMaxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
+		var maxSpeed = BurrowMaxSpeed * (dashBurrowing ? DashBurrowSpeedMultiplier : 1f);
+		var targetSpeed = move && !burrowReverseQueued ? maxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
 		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
 		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
 
@@ -649,7 +671,7 @@ public partial class Player : Pawn
 		{
 			var previousLine = burrowLine;
 			if (Game.TryEnterBurrowLine(Position, burrowLineHeading, previousLine, BurrowLine.JunctionDistance,
-				new Vector2(input.MoveX, input.MoveY), out var nextLine, out burrowLineSegment, out burrowLineT,
+				burrowIntent, out var nextLine, out burrowLineSegment, out burrowLineT,
 				out burrowLineDirection, out var entryPoint, out burrowLineHeading))
 			{
 				burrowLine = nextLine;

@@ -10,6 +10,7 @@ public readonly record struct PawnInput(
 	bool JumpPressed,
 	bool JumpDown,
 	bool DashPressed,
+	bool DashDown = false,
 	bool AllowWallJump = true);
 
 
@@ -60,6 +61,12 @@ public abstract class Pawn : Actor
 	public static float GroundAccel => 400.T();
 	public static float AirAccel => 310.T();
 	public static float Friction => 480.T();
+	static float DashRunGroundSpeed => 145.T();
+	static float DashRunAirSpeed => 155.T();
+	static float DashRunReverseAccelMultiplier => 0.85f.T();
+	static float DashRunAnimationRate => 1.4f.T();
+	static float DashCrouchFriction => 900f.T();
+	protected static int DashGroundParticleCount => 1;
 	// Analog MoveX below this magnitude counts as no horizontal input for physics and facing.
 	static float MoveInputDeadzone => 0.1f;
 	static float GroundLocomotionAnimationHold => 0.1f;
@@ -170,6 +177,10 @@ public abstract class Pawn : Actor
 	protected float dashCooldownTimer;
 	protected float dashRemainder;
 	protected bool dashNeedsGrounding;
+	protected bool dashRunArmed;
+	protected int dashRunDirection;
+	protected float horizontalInput;
+	bool dashCrouchBraking;
 	protected float jumpForce = JumpForce;
 	protected bool jumpCutImmune; // suppresses the short-hop cut (e.g. for the burrow pop)
 	protected float rollJumpCarryTimer;
@@ -190,7 +201,15 @@ public abstract class Pawn : Actor
 	public States State
 	{
 		get => state.Current;
-		set => state.Change(value);
+		set
+		{
+			if (value != States.Normal && value != States.Burrow)
+			{
+				EndDashRun();
+				dashCrouchBraking = false;
+			}
+			state.Change(value);
+		}
 	}
 	public bool IsGrounded => grounded;
 	public bool InWater => inWater;
@@ -200,7 +219,9 @@ public abstract class Pawn : Actor
 	[NoSerialize] public float OutOfBreath { get; private set; }
 	protected virtual float IdleBreathingRate => 1;
 	protected override float AnimationRate
-		=> IsPlaying("idle") ? IdleBreathingRate * (1 + OutOfBreath * OutOfBreathAnimationBoost) : 1;
+		=> IsPlaying("idle") ? IdleBreathingRate * (1 + OutOfBreath * OutOfBreathAnimationBoost)
+		: IsDashRunning() && (IsPlaying("run") || IsPlaying("run_start")) ? DashRunAnimationRate
+		: 1;
 
 	public abstract PawnInput GetInput();
 
@@ -219,6 +240,11 @@ public abstract class Pawn : Actor
 		windInfluence = Wind.ApplyTo(this);
 		wallJumpDirectionCached = false;
 		input = ScriptedInput ?? GetInput();
+		if (!input.DashDown)
+			EndDashRun();
+		horizontalInput = dashRunArmed && input.DashDown
+			? UpdateDashRunDirection(input.MoveX)
+			: input.MoveX;
 		if (input.JumpPressed)
 			jumpBufferTimer = JumpBufferTime;
 		AfterActorUpdate(previousVelocity);
@@ -278,6 +304,8 @@ public abstract class Pawn : Actor
 			AudioEventDebounced("player/splash", 0.2f);
 		}
 		wasInWater = inWater;
+		if (inWater)
+			EndDashRun();
 		UpdateAirBubbles();
 
 		wallSliding = false;
@@ -353,7 +381,7 @@ public abstract class Pawn : Actor
 	void UpdateOutOfBreath()
 	{
 		var running = grounded && State == States.Normal && !ducking &&
-			MathF.Abs(input.MoveX) >= MoveInputDeadzone &&
+			MathF.Abs(horizontalInput) >= MoveInputDeadzone &&
 			MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed;
 		OutOfBreath = running
 			? Calc.Approach(OutOfBreath, 1, RunningOutOfBreathRate * Time.Delta)
@@ -381,6 +409,7 @@ public abstract class Pawn : Actor
 	protected virtual void OnRollStopped(bool immediate)
 	{
 	}
+	protected virtual void OnDashImpact() { }
 	protected virtual bool TryRollCancel() => false;
 	protected virtual void UpdateRollAudioPosition() { }
 	protected virtual float GroundSpeedMultiplier => 1.0f;
@@ -388,17 +417,51 @@ public abstract class Pawn : Actor
 
 	public override void OnCollideX()
 	{
+		var dashCollision = State != States.Burrow && (dashCooldownTimer > 0 || IsDashRunning());
+		var dashImpact = dashCollision && Grounded();
 		base.OnCollideX();
+		if (State != States.Burrow)
+		{
+			dashCooldownTimer = 0;
+			EndDashRun();
+		}
 		if (State == States.Roll)
 		{
 			StopWaterRoll();
 			OnRollStopped(false);
 			State = States.Normal;
 		}
+		if (dashCollision && PlayerSpecificAudioEvents)
+			AudioEvent("player/dash_wall");
+		if (dashImpact)
+			OnDashImpact();
 	}
 
 	bool wallSliding = false;
 	double lastSkidParticlesTime;
+
+	protected bool IsDashRunning() =>
+		state.Current == States.Normal && dashRunArmed && input.DashDown && !ducking && !inWater;
+
+	protected void EndDashRun()
+	{
+		dashRunArmed = false;
+		dashRunDirection = 0;
+		horizontalInput = input.MoveX;
+	}
+
+	protected float UpdateDashRunDirection(float moveX)
+	{
+		if (MathF.Abs(moveX) >= MoveInputDeadzone)
+			dashRunDirection = Math.Sign(moveX);
+		else
+		{
+			if (dashRunDirection == 0)
+				dashRunDirection = Facing == 0 ? Signs.Positive : Facing;
+			moveX = dashRunDirection;
+		}
+		return moveX;
+	}
 
 	protected void NormalState()
 	{
@@ -411,11 +474,21 @@ public abstract class Pawn : Actor
 			ducking = !CanStandUp();
 		else
 			ducking = false;
+		if (ducking && dashRunArmed)
+		{
+			dashCrouchBraking = true;
+			dashCooldownTimer = 0;
+			EndDashRun();
+		}
+		else if (ducking)
+			EndDashRun();
 
-		var moveXAnalog = input.MoveX;
+		var moveXAnalog = horizontalInput;
 		// Digital projection (with a deadzone) drives facing, the friction gate, and wall-jump,
 		// while the raw analog value scales horizontal thrust.
 		var moveX = MathF.Abs(moveXAnalog) < MoveInputDeadzone ? 0 : Math.Sign(moveXAnalog);
+		if (!ducking && moveX != 0)
+			dashCrouchBraking = false;
 		if (grounded && (moveX != 0 || MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed))
 			groundLocomotionAnimationTimer = GroundLocomotionAnimationHold;
 		else
@@ -501,14 +574,15 @@ public abstract class Pawn : Actor
 		}
 
 		var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
+		var dashRunning = IsDashRunning();
 		float maxSpeed;
 		if (grounded)
 		{
-			maxSpeed = MaxGroundSpeed * GroundSpeedMultiplier;
+			maxSpeed = (dashRunning ? DashRunGroundSpeed : MaxGroundSpeed) * GroundSpeedMultiplier;
 		}
 		else
 		{
-			maxSpeed = MaxAirSpeed * AirSpeedMultiplier;
+			maxSpeed = (dashRunning ? DashRunAirSpeed : MaxAirSpeed) * AirSpeedMultiplier;
 		}
 		if (ducking)
 		{
@@ -521,17 +595,29 @@ public abstract class Pawn : Actor
 
 		var lastFacing = Facing;
 
-		Velocity.X += movementInput * (grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier) * Time.Delta;
+		var acceleration = grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier;
+		if (dashRunning && wallJumpInputLockTimer <= 0 && movementInput != 0 && Velocity.X != 0 &&
+			Math.Sign(movementInput) != Math.Sign(Velocity.X))
+			acceleration *= DashRunReverseAccelMultiplier;
+		Velocity.X += movementInput * acceleration * Time.Delta;
 		if (dashCooldownTimer > 0)
 			Velocity.X = dashDirection * DashSpeed;
 		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
+		if (dashCrouchBraking)
+			maxSpeed = MathF.Max(maxSpeed, MathF.Abs(Velocity.X));
 		if (!grounded && wallJumpInputLockTimer > 0)
 			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
 		if (!grounded && rollJumpCarryTimer > 0)
 			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
 		if (MathF.Abs(Velocity.X) > maxSpeed)
 			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
-		if (moveX == 0 && grounded && dashCooldownTimer == 0)
+		if (dashCrouchBraking)
+		{
+			var target = ducking ? movementInput * CrawlSpeed * GroundSpeedMultiplier : 0;
+			Velocity.X = Calc.Approach(Velocity.X, target, DashCrouchFriction * Time.Delta);
+			dashCrouchBraking = Velocity.X != target;
+		}
+		else if (moveX == 0 && grounded && dashCooldownTimer == 0)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
 		else if (moveX == 0 && inWater)
 			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
@@ -603,6 +689,7 @@ public abstract class Pawn : Actor
 				Facing = wallJumpDirection;
 				Velocity.X = wallJumpDirection * WallJumpSpeed;
 				EmitJumpParticles(Position - Vector2.UnitX * wallJumpDirection * Hitbox.Rect.Width / 2);
+				EndDashRun();
 			}
 			StartJump(JumpForce, JumpTime);
 			OnPawnJump();
@@ -632,11 +719,11 @@ public abstract class Pawn : Actor
 		TryStartPawnAction(moveX);
 	}
 
-	protected void EmitJumpParticles(Vector2 position)
+	protected void EmitJumpParticles(Vector2 position, int count = 8)
 	{
 		Game.Particles?.Emit(jumpParticlesEffect,
 			worldPosition: position,
-			count: 8,
+			count: count,
 			directionRadians: MathF.PI / 2.0f,
 			speedScale: 2.5f,
 			spreadRadians: 59.0f * Calc.DegToRad);
@@ -963,12 +1050,12 @@ public abstract class Pawn : Actor
 		ropeIsFalling = true;
 	}
 
-	protected bool TryStartDash(int input)
+	protected bool TryStartDash(int direction)
 	{
-		if (IsCarrying || dashCooldownTimer > 0 || dashNeedsGrounding)
+		if (IsCarrying || dashCooldownTimer > 0 || dashNeedsGrounding || ducking && !CanStandUp())
 			return false;
 
-		dashDirection = input != 0 ? Math.Sign(input) : Facing;
+		dashDirection = direction != 0 ? Math.Sign(direction) : Facing;
 		if (dashDirection == 0)
 			dashDirection = Signs.Positive;
 
@@ -976,12 +1063,16 @@ public abstract class Pawn : Actor
 		dashRemainder = 0;
 		dashCooldownTimer = DashCooldown;
 		dashNeedsGrounding = true;
+		dashRunArmed = input.DashDown;
+		dashRunDirection = dashDirection;
 		jumpTimer = 0;
 		Velocity.X = dashDirection * 200f;
 		Velocity.Y *= 0.1f;
 		ducking = false;
 		Squish = new Vector2(1.35f, 0.82f);
 		Play("jump");
+		if (PlayerSpecificAudioEvents)
+			AudioEvent("player/dash_start");
 		return true;
 	}
 
@@ -1072,7 +1163,7 @@ public abstract class Pawn : Actor
 		var touchingRight = OverlapsAny(Point2.Right, Masks.Solid);
 		// In a one-tile shaft both probes hit; push off the wall the pawn is pressing toward.
 		if (touchingLeft && touchingRight)
-			return MathF.Abs(input.MoveX) < MoveInputDeadzone ? 0 : -Math.Sign(input.MoveX);
+			return MathF.Abs(horizontalInput) < MoveInputDeadzone ? 0 : -Math.Sign(horizontalInput);
 
 		return touchingLeft ? 1 : touchingRight ? -1 : 0;
 	}
@@ -1081,7 +1172,7 @@ public abstract class Pawn : Actor
 		=> IsWallHugging(GetWallJumpDirection());
 
 	bool IsWallHugging(int wallJumpDirection)
-		=> !IsCarrying && wallJumpDirection != 0 && input.MoveX == -wallJumpDirection;
+		=> !IsCarrying && wallJumpDirection != 0 && horizontalInput == -wallJumpDirection;
 
 	// Splash droplet burst tuning (the surface ripple itself is scaled in WaterSurface).
 	const float SplashDropletSpeedRef = 60f; // plunge speed that maps to ~1x droplet speed
@@ -1159,7 +1250,8 @@ public partial class Player : Pawn
 			MoveY: Controls.Move.IntValue.Y,
 			JumpPressed: Controls.Jump.Pressed,
 			JumpDown: Controls.Jump.Down,
-			DashPressed: Controls.Dash.Pressed
+			DashPressed: Controls.Dash.Pressed,
+			DashDown: Controls.Dash.Down
 		);
 	}
 
@@ -1170,6 +1262,7 @@ public partial class Player : Pawn
 	static float DuckAttackCooldown => 0.4f;
 	static float AttackBlockOverlapThreshold => 0.5f;
 	static float HurtDuration => 0.5f;
+	static float DashImpactHurtDurationMultiplier => 0.7f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
 	static Vector2 HatSpring => new(130f, 100f);
@@ -1193,6 +1286,7 @@ public partial class Player : Pawn
 	Light? light;
 	SoundInstance? rollSound;
 	bool CanPlaySquishSound = false;
+	float hurtStateDuration = HurtDuration;
 	readonly Sprite? hatSprite;
 	Vector2 hatOffset;
 	Vector2 hatOffsetVelocity;
@@ -1294,6 +1388,8 @@ public partial class Player : Pawn
 
 		UpdateAura(Time.Delta);
 		UpdateDashFx(Time.Delta);
+		if (grounded && State == States.Normal && (dashCooldownTimer > 0 || IsDashRunning()))
+			EmitJumpParticles(Position, DashGroundParticleCount);
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
@@ -1585,6 +1681,11 @@ public partial class Player : Pawn
 			AudioEvent("jump");
 	}
 
+	protected override void OnDashImpact() => ApplyHurt(0,
+		bounceMultiplier: 0.5f,
+		hurtDurationMultiplier: DashImpactHurtDurationMultiplier,
+		glitch: false);
+
 	protected override bool TryRollCancel()
 	{
 		if (ScriptedInput.HasValue)
@@ -1841,7 +1942,7 @@ public partial class Player : Pawn
 
 		Velocity.X = Calc.Approach(Velocity.X, 0, HurtFriction * Time.Delta);
 
-		if (state.Time >= HurtDuration && Health > 0)
+		if (state.Time >= hurtStateDuration && Health > 0)
 			State = States.Normal;
 
 		if (state.Time >= DeathDuration && Health <= 0)
@@ -1863,7 +1964,8 @@ public partial class Player : Pawn
 			ApplyHurt(healthDelta, fromActor: by);
 	}
 
-	void ApplyHurt(int healthDelta = -1, Actor? fromActor = null)
+	void ApplyHurt(int healthDelta = -1, Actor? fromActor = null, float bounceMultiplier = 1,
+		float hurtDurationMultiplier = 1, bool glitch = true)
 	{
 		if (Game.Simulating) {
 			return;
@@ -1872,7 +1974,8 @@ public partial class Player : Pawn
 		DropCarriedFromHurt();
 		Game.HitStun(0.1f);
 		Game.Shake(0.1f);
-		Game.PulseDitherGlitch(HurtGlitchAxis(fromActor), amount: healthDelta == 0 ? 0.7f : 1.0f);
+		if (glitch)
+			Game.PulseDitherGlitch(HurtGlitchAxis(fromActor), amount: healthDelta == 0 ? 0.7f : 1.0f);
 		if (healthDelta < 0 && Health > 0)
 			Game.NotifyPlayerHurt(fromActor, Position);
 
@@ -1887,7 +1990,8 @@ public partial class Player : Pawn
 			if (actorDelta != 0)
 				signDirection = actorDelta;
 		}
-		Velocity = new Vector2(signDirection * 100, -80);
+		Velocity = new Vector2(signDirection * 100, -80) * bounceMultiplier;
+		hurtStateDuration = HurtDuration * hurtDurationMultiplier;
 		State = States.Hurt;
 
 		var wasHealth = Health;

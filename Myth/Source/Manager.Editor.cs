@@ -102,6 +102,9 @@ public partial class Manager
 	// Mutable struct on purpose: methods called through this field update its state in place.
 	// Assigned in the Manager constructor (it needs `undo`).
 	ParticleEffectEditor particleEditor;
+#if !IOS && !BROWSER
+	readonly ProceduralSoundEditor proceduralSoundEditor;
+#endif
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
 	RoomSettings? copiedRoomSettings;
 	JsonObject? actorClipboard;
@@ -229,7 +232,9 @@ public partial class Manager
 			NctTileEditorImGui();
 			MusicRegionsImGui();
 		}
-		ProceduralSoundEditorImGui();
+#if !IOS && !BROWSER
+		proceduralSoundEditor.Draw();
+#endif
 #if DEBUG
 		TweakRegistry.DrawPanel();
 #endif
@@ -4767,7 +4772,7 @@ public partial class Manager
 		ImGui.SameLine();
 
 		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio", imagePadding: ToolbarButtonImagePadding))
-			OpenFmodStudio();
+			FmodStudio.Open();
 		ImGui.SameLine();
 
 		if (ImGuiTextButton("Tile Kits", new Vector2(70, ButtonSize), tileKitEditorOpen))
@@ -4786,9 +4791,11 @@ public partial class Manager
 			musicRegionsOpen = !musicRegionsOpen;
 		ImGui.SameLine(0, ToolbarSpacing);
 
-		if (ImGuiTextButton("SFX", new Vector2(45, ButtonSize), proceduralSoundEditorOpen))
-			proceduralSoundEditorOpen = !proceduralSoundEditorOpen;
+#if !BROWSER
+		if (ImGuiTextButton("SFX", new Vector2(45, ButtonSize), proceduralSoundEditor.Open))
+			proceduralSoundEditor.Open = !proceduralSoundEditor.Open;
 		ImGui.SameLine(0, ToolbarSpacing);
+#endif
 
 		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
 		//showTransitionViewer = !showTransitionViewer;

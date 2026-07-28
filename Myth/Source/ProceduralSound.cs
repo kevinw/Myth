@@ -1,14 +1,17 @@
 #if EDITOR && !IOS && !BROWSER
 namespace Myth;
 
-// Adapted from chr15m/jsfxr's public-domain sfxr.js:
+// Adapted from chr15m/jsfxr's public-domain sfxr.js, with additional synthesis
+// ideas from KilledByAPixel/ZzFX:
 // https://github.com/chr15m/jsfxr (see External/jsfxr/UNLICENSE).
+// https://github.com/KilledByAPixel/ZzFX (see External/ZzFX/LICENSE).
 public enum ProceduralWave
 {
 	Square,
 	Sawtooth,
 	Sine,
 	Noise,
+	Triangle,
 }
 
 public enum ProceduralSoundPreset
@@ -46,10 +49,21 @@ public sealed class ProceduralSoundPatch
 
 	public float Duty;
 	public float DutySweep;
+	public float NoiseMix;
+	public float WaveShape;
+	public float FmDepth;
+	public float FmRatio = 0.1f;
 	public float RepeatSpeed;
+	public float TremoloDepth;
+	public float TremoloSpeed;
 
 	public float FlangerOffset;
 	public float FlangerSweep;
+	public float BitCrush;
+	public float SampleRateReduction;
+	public float DelayTime;
+	public float DelayFeedback;
+	public float DelayMix;
 
 	public float LowPassCutoff = 1;
 	public float LowPassSweep;
@@ -166,6 +180,11 @@ public static class ProceduralSoundSynth
 			var samples = new float[Math.Min(MaxSamples, envelopeLength[0] + envelopeLength[1] + envelopeLength[2])];
 			var sampleCount = 0;
 			var phase = 0;
+			var fmPhase = 0f;
+			var tremoloPhase = 0f;
+			var heldSample = 0f;
+			var sampleHoldTime = 0;
+			var sampleHoldLength = 1 + (int)(patch.SampleRateReduction * patch.SampleRateReduction * 63);
 
 			for (var time = 0; sampleCount < samples.Length; time++)
 			{
@@ -226,11 +245,18 @@ public static class ProceduralSoundSynth
 					if (phase >= integerPeriod)
 					{
 						phase %= integerPeriod;
-						if (patch.Wave == ProceduralWave.Noise)
+						if (patch.Wave == ProceduralWave.Noise || patch.NoiseMix > 0)
 							FillNoise();
 					}
 
 					var position = phase / (float)integerPeriod;
+					if (patch.FmDepth > 0)
+					{
+						var fmRatio = 0.25f + patch.FmRatio * 7.75f;
+						fmPhase += MathF.Tau * fmRatio / integerPeriod;
+						position += MathF.Sin(fmPhase) * patch.FmDepth * 0.5f;
+						position -= MathF.Floor(position);
+					}
 					var subSample = patch.Wave switch
 					{
 						ProceduralWave.Square => position < dutyCycle ? 0.5f : -0.5f,
@@ -238,8 +264,13 @@ public static class ProceduralSoundSynth
 							? -1 + 2 * position / MathF.Max(dutyCycle, 0.0001f)
 							: 1 - 2 * (position - dutyCycle) / MathF.Max(1 - dutyCycle, 0.0001f),
 						ProceduralWave.Sine => MathF.Sin(position * 2 * MathF.PI),
-						_ => noise[Math.Min(noise.Length - 1, phase * noise.Length / integerPeriod)],
+						ProceduralWave.Triangle => 1 - 4 * MathF.Abs(position - 0.5f),
+						_ => NoiseSample(phase, integerPeriod),
 					};
+					if (patch.NoiseMix > 0 && patch.Wave != ProceduralWave.Noise)
+						subSample += (NoiseSample(phase, integerPeriod) - subSample) * patch.NoiseMix;
+					if (patch.WaveShape != 0)
+						subSample = MathF.CopySign(MathF.Pow(MathF.Abs(subSample), MathF.Pow(4, patch.WaveShape)), subSample);
 
 					var previousLowPass = lowPassPosition;
 					lowPassCutoff = Math.Clamp(lowPassCutoff * lowPassCutoffSlide, 0, 0.1f);
@@ -266,11 +297,30 @@ public static class ProceduralSoundSynth
 					sample += subSample * envelopeVolume;
 				}
 
-				samples[sampleCount++] = sample / Oversampling * gain;
+				var output = sample / Oversampling * gain;
+				if (patch.TremoloDepth > 0)
+				{
+					var tremoloHz = 0.5f + patch.TremoloSpeed * patch.TremoloSpeed * 29.5f;
+					tremoloPhase += MathF.Tau * tremoloHz / ProceduralSoundRender.SampleRate;
+					output *= 1 - patch.TremoloDepth * 0.5f + MathF.Sin(tremoloPhase) * patch.TremoloDepth * 0.5f;
+				}
+				if (patch.BitCrush > 0)
+				{
+					var levels = MathF.Pow(2, 15 - patch.BitCrush * 14) - 1;
+					output = MathF.Round(output * levels) / levels;
+				}
+				if (sampleHoldLength > 1)
+				{
+					if (sampleHoldTime++ % sampleHoldLength == 0)
+						heldSample = output;
+					output = heldSample;
+				}
+				samples[sampleCount++] = output;
 			}
 
 			if (sampleCount != samples.Length)
 				Array.Resize(ref samples, sampleCount);
+			ApplyDelay(ref samples);
 
 			var pcm = new byte[samples.Length * sizeof(short)];
 			var clipped = 0;
@@ -284,6 +334,33 @@ public static class ProceduralSoundSynth
 				pcm[i * 2 + 1] = (byte)(integer >> 8);
 			}
 			return new(samples, pcm, clipped);
+		}
+
+		void ApplyDelay(ref float[] samples)
+		{
+			if (patch.DelayTime <= 0 || patch.DelayMix <= 0 || samples.Length == 0)
+				return;
+
+			var delaySamples = Math.Max(1,
+				(int)((0.01f + patch.DelayTime * patch.DelayTime * 0.49f) * ProceduralSoundRender.SampleRate));
+			var feedback = MathF.Min(patch.DelayFeedback, 0.95f);
+			var repeats = 1;
+			for (var amplitude = feedback; amplitude > 0.01f && repeats < 16; amplitude *= feedback)
+				repeats++;
+
+			var dryLength = samples.Length;
+			Array.Resize(ref samples, Math.Min(MaxSamples, dryLength + delaySamples * repeats));
+			var delayLine = new float[delaySamples];
+			var delayIndex = 0;
+			for (var i = 0; i < samples.Length; i++)
+			{
+				var dry = i < dryLength ? samples[i] : 0;
+				var delayed = delayLine[delayIndex];
+				samples[i] = dry + delayed * patch.DelayMix;
+				delayLine[delayIndex] = dry + delayed * feedback;
+				if (++delayIndex == delayLine.Length)
+					delayIndex = 0;
+			}
 		}
 
 		void ResetRepeat()
@@ -308,6 +385,9 @@ public static class ProceduralSoundSynth
 			for (var i = 0; i < noise.Length; i++)
 				noise[i] = random.NextFloat() * 2 - 1;
 		}
+
+		float NoiseSample(int phase, int integerPeriod)
+			=> noise[Math.Min(noise.Length - 1, phase * noise.Length / integerPeriod)];
 	}
 
 	public static ProceduralSoundPatch Preset(ProceduralSoundPreset preset, int seed)
@@ -405,8 +485,14 @@ public static class ProceduralSoundSynth
 		Mutate(ref patch.FrequencyDeltaSlide, ref random);
 		Mutate(ref patch.Duty, ref random);
 		Mutate(ref patch.DutySweep, ref random);
+		Mutate(ref patch.NoiseMix, ref random);
+		Mutate(ref patch.WaveShape, ref random);
+		Mutate(ref patch.FmDepth, ref random);
+		Mutate(ref patch.FmRatio, ref random);
 		Mutate(ref patch.VibratoDepth, ref random);
 		Mutate(ref patch.VibratoSpeed, ref random);
+		Mutate(ref patch.TremoloDepth, ref random);
+		Mutate(ref patch.TremoloSpeed, ref random);
 		Mutate(ref patch.Attack, ref random);
 		Mutate(ref patch.Sustain, ref random);
 		Mutate(ref patch.Decay, ref random);
@@ -418,6 +504,11 @@ public static class ProceduralSoundSynth
 		Mutate(ref patch.HighPassSweep, ref random);
 		Mutate(ref patch.FlangerOffset, ref random);
 		Mutate(ref patch.FlangerSweep, ref random);
+		Mutate(ref patch.BitCrush, ref random);
+		Mutate(ref patch.SampleRateReduction, ref random);
+		Mutate(ref patch.DelayTime, ref random);
+		Mutate(ref patch.DelayFeedback, ref random);
+		Mutate(ref patch.DelayMix, ref random);
 		Mutate(ref patch.RepeatSpeed, ref random);
 		Mutate(ref patch.ArpeggioSpeed, ref random);
 		Mutate(ref patch.ArpeggioAmount, ref random);
@@ -427,14 +518,26 @@ public static class ProceduralSoundSynth
 
 	static void Randomize(ProceduralSoundPatch patch, ref SfxrRandom random)
 	{
-		patch.Wave = (ProceduralWave)random.NextInt(3);
+		patch.Wave = (ProceduralWave)random.NextInt(4);
 		patch.StartFrequency = random.CoinFlip() ? MathF.Pow(random.Range(2) - 1, 3) + 0.5f : MathF.Pow(random.Range(1), 2);
 		patch.FrequencySlide = MathF.Pow(random.Range(2) - 1, 5);
 		patch.FrequencyDeltaSlide = MathF.Pow(random.Range(2) - 1, 3);
 		patch.Duty = random.Range(2) - 1;
 		patch.DutySweep = MathF.Pow(random.Range(2) - 1, 3);
+		if (random.CoinFlip()) patch.NoiseMix = random.Range(0.5f);
+		if (random.CoinFlip()) patch.WaveShape = random.Range(2) - 1;
+		if (random.CoinFlip())
+		{
+			patch.FmDepth = random.Range(0.6f);
+			patch.FmRatio = random.Range(1);
+		}
 		patch.VibratoDepth = MathF.Pow(random.Range(2) - 1, 3);
 		patch.VibratoSpeed = random.Range(2) - 1;
+		if (random.CoinFlip())
+		{
+			patch.TremoloDepth = random.Range(0.7f);
+			patch.TremoloSpeed = random.Range(1);
+		}
 		patch.Attack = MathF.Pow(random.Range(2) - 1, 3);
 		patch.Sustain = MathF.Pow(random.Range(2) - 1, 2);
 		patch.Decay = random.Range(2) - 1;
@@ -451,6 +554,14 @@ public static class ProceduralSoundSynth
 		patch.HighPassSweep = MathF.Pow(random.Range(2) - 1, 5);
 		patch.FlangerOffset = MathF.Pow(random.Range(2) - 1, 3);
 		patch.FlangerSweep = MathF.Pow(random.Range(2) - 1, 3);
+		if (random.CoinFlip()) patch.BitCrush = random.Range(0.8f);
+		if (random.CoinFlip()) patch.SampleRateReduction = random.Range(0.8f);
+		if (random.CoinFlip())
+		{
+			patch.DelayTime = random.Range(0.6f);
+			patch.DelayFeedback = random.Range(0.7f);
+			patch.DelayMix = random.Range(0.6f);
+		}
 		patch.RepeatSpeed = random.Range(2) - 1;
 		patch.ArpeggioSpeed = random.Range(2) - 1;
 		patch.ArpeggioAmount = random.Range(2) - 1;
@@ -477,7 +588,17 @@ public static class ProceduralSoundSynth
 		patch.VibratoSpeed = Math.Clamp(patch.VibratoSpeed, 0, 1);
 		patch.ArpeggioSpeed = Math.Clamp(patch.ArpeggioSpeed, 0, 1);
 		patch.Duty = Math.Clamp(patch.Duty, 0, 1);
+		patch.NoiseMix = Math.Clamp(patch.NoiseMix, 0, 1);
+		patch.FmDepth = Math.Clamp(patch.FmDepth, 0, 1);
+		patch.FmRatio = Math.Clamp(patch.FmRatio, 0, 1);
 		patch.RepeatSpeed = Math.Clamp(patch.RepeatSpeed, 0, 1);
+		patch.TremoloDepth = Math.Clamp(patch.TremoloDepth, 0, 1);
+		patch.TremoloSpeed = Math.Clamp(patch.TremoloSpeed, 0, 1);
+		patch.BitCrush = Math.Clamp(patch.BitCrush, 0, 1);
+		patch.SampleRateReduction = Math.Clamp(patch.SampleRateReduction, 0, 1);
+		patch.DelayTime = Math.Clamp(patch.DelayTime, 0, 1);
+		patch.DelayFeedback = Math.Clamp(patch.DelayFeedback, 0, 1);
+		patch.DelayMix = Math.Clamp(patch.DelayMix, 0, 1);
 		patch.LowPassCutoff = Math.Clamp(patch.LowPassCutoff, 0, 1);
 		patch.LowPassResonance = Math.Clamp(patch.LowPassResonance, 0, 1);
 		patch.HighPassCutoff = Math.Clamp(patch.HighPassCutoff, 0, 1);
@@ -486,6 +607,7 @@ public static class ProceduralSoundSynth
 		patch.FrequencyDeltaSlide = Math.Clamp(patch.FrequencyDeltaSlide, -1, 1);
 		patch.ArpeggioAmount = Math.Clamp(patch.ArpeggioAmount, -1, 1);
 		patch.DutySweep = Math.Clamp(patch.DutySweep, -1, 1);
+		patch.WaveShape = Math.Clamp(patch.WaveShape, -1, 1);
 		patch.FlangerOffset = Math.Clamp(patch.FlangerOffset, -1, 1);
 		patch.FlangerSweep = Math.Clamp(patch.FlangerSweep, -1, 1);
 		patch.LowPassSweep = Math.Clamp(patch.LowPassSweep, -1, 1);

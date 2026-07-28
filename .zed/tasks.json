@@ -37,7 +37,7 @@
   },
   {
     "label": "publish Windows to Steam Deck",
-    "command": "ssh bro 'cd /d C:\\Users\\kev\\src\\Myth && git pull --ff-only && git submodule update --init && cd Myth && node tools\\publish-windows.mjs && curl.exe -fsS -X POST http://127.0.0.1:32010/post_event -H \"Content-Type: application/json\" --data-binary \"{\\\"type\\\":\\\"build\\\",\\\"status\\\":\\\"success\\\",\\\"name\\\":\\\"Myth\\\"}\"'",
+    "command": "ssh bro.fritz.box 'cd /d C:\\Users\\kev\\src\\Myth && git pull --ff-only && git submodule update --init && cd Myth && node tools\\publish-windows.mjs && curl.exe -fsS -X POST http://127.0.0.1:32010/post_event -H \"Content-Type: application/json\" --data-binary \"{\\\"type\\\":\\\"build\\\",\\\"status\\\":\\\"success\\\",\\\"name\\\":\\\"Myth\\\"}\"'",
     "cwd": "$ZED_MAIN_GIT_WORKTREE",
     "use_new_terminal": true,
   },

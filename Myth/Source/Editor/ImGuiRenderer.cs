@@ -193,7 +193,7 @@ fn vertex_main(
 	/// </summary>
 	public ImGuiMouseCursor MouseCursor { get; private set; }
 
-	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false, string? iniPath = null)
+	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false, string? iniPath = null, float frameRounding = 2)
 	{
 		this.app = app;
 		this.gamepadNav = enableGamepadNav;
@@ -201,7 +201,7 @@ fn vertex_main(
 		// create imgui context
 		context = ImGui.CreateContext(null);
 		ImGui.SetCurrentContext(context);
-		ImGui.GetStyle().FrameRounding = 2;
+		ImGui.GetStyle().FrameRounding = frameRounding;
 
 		var io = ImGui.GetIO();
 		unsafe
