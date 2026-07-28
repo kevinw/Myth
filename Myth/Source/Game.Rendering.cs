@@ -209,6 +209,13 @@ public sealed partial class GameView
 
 		if (showHud && game.ActiveCutscene == null && debugView is (DebugView.None or DebugView.CollisionRects))
 			DrawCurrencyHud(destination, viewport, scissor);
+
+		if (game.SavePointWarpFade > 0)
+		{
+			Batcher.Rect(viewport, Color.Black * game.SavePointWarpFade);
+			Batcher.Render(destination, scissor: scissor?.GetIntersection(viewport) ?? viewport);
+			Batcher.Clear();
+		}
 	}
 
 	Target CompositeRawWorld()

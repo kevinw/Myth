@@ -236,6 +236,40 @@ public partial class Manager
 		game?.DisplayMessage($"Head slide: {PerfToggles.HeadSlide}");
 	}
 
+	[ConsoleCommand("reveal_map")]
+	void RevealMap(string _)
+	{
+		if (game?.CurrentRoom is not { } currentRoom)
+			throw new InvalidOperationException("Start the game first");
+
+		var map = new MinimapState();
+		var savePointsAdded = 0;
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			map.VisitedRoomIds.Add(room.Id);
+			map.SeenTiles[room.Id] = new RectInt(room.Size);
+
+			foreach (var actor in room.Actors)
+			{
+				var resolved = ActorSpecs.Resolve(actor);
+				var id = ActorSpecs.GetActorId(actor);
+				if (ActorSpecs.ReadString(resolved, "Type") == nameof(SavePoint) &&
+					!string.IsNullOrWhiteSpace(id) && !game.Save.SavePoints.Contains(id))
+				{
+					game.Save.SavePoints.Add(id);
+					savePointsAdded++;
+				}
+			}
+		}
+
+		game.Minimap.ApplyState(map);
+		game.Minimap.ApplyRevealedDoors(game.Save.RevealedDoors);
+		game.Minimap.Rebuild(currentRoom);
+		game.Save.Map = game.Minimap.CaptureState();
+		MarkSaveDirty();
+		game.DisplayMessage($"Map revealed; {savePointsAdded} save points activated");
+	}
+
 	// Cut the nearest rope at the player's height (the cutscene beat, testable by hand).
 	[ConsoleCommand("rope_break")]
 	void RopeBreak(string _)

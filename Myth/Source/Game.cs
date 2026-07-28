@@ -123,7 +123,7 @@ public partial class Game : IDisposable
 #endif
 	// True when the sim is in a room and not mid-transition: when Manager applies live
 	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
-	internal bool AcceptsLiveInput => room != null && nextRoom == null;
+	internal bool AcceptsLiveInput => room != null && nextRoom == null && !SavePointWarpActive;
 	float timeScale = 1.0f;
 	internal float TimeScale
 	{
@@ -522,6 +522,15 @@ public partial class Game : IDisposable
 			if (!Minimap.WarpMode)
 				Minimap.UpdateView(Controls.Move.Value, Time.Delta);
 			UpdateAudioListener();
+#if BROWSER
+			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
+#endif
+			return;
+		}
+
+		if (UpdateSavePointWarp())
+		{
+			if (!Simulating) UpdateAudioListener();
 #if BROWSER
 			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
 #endif
@@ -1006,17 +1015,7 @@ public partial class Game : IDisposable
 	public void WarpToSavePoint(Minimap.WarpTarget target)
 	{
 		Minimap.CloseWarp();
-
-		if (GetFirst<Player>() is not { } player)
-			return;
-
-		var sameRoom = room != null && room.Id == target.RoomId;
-		if (RespawnPlayerAt(player, new RespawnState(target.RoomId, target.Position), reloadRoom: !sameRoom))
-		{
-			player.State = Player.States.Normal;
-			player.Stop();
-			EnsureBudForPlayer(repositionExisting: true);
-		}
+		BeginSavePointWarp(target);
 	}
 
 	// Warp-mode map controls: dpad picks a save point, South/X confirms the warp,

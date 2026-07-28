@@ -1,0 +1,45 @@
+{
+  "Shape": "Point",
+  "EmitterRadius": 4,
+  "DirectionDegrees": -90,
+  "SpreadDegrees": 12,
+  "BurstCount": 8,
+  "Mode": "Burst",
+  "EmissionRate": 90,
+  "Prewarm": false,
+  "SpeedMin": 0,
+  "SpeedMax": 3,
+  "LifeMin": 0.45,
+  "LifeMax": 0.9,
+  "Gravity": -38,
+  "Drag": 0.8,
+  "NoiseAmount": 16,
+  "NoiseScale": 0.08,
+  "SizeStart": 1.4,
+  "SizeEnd": 0.15,
+  "Additive": true,
+  "Style": "Plasma",
+  "Collision": "None",
+  "Bounciness": 0,
+  "TrailSeconds": 0.16,
+  "TrailWidthStart": 1,
+  "TrailWidthEnd": 0,
+  "EdgeSide": "All",
+  "EdgeSideDegrees": -90,
+  "EdgeArcDegrees": 360,
+  "EdgeAttraction": 0,
+  "EdgeFlow": 0,
+  "ColorBirth": "FFF4D8FF",
+  "ColorMid": "9A72FFE0",
+  "ColorEnd": "3C50C800",
+  "TrailColors": [
+    {
+      "T": 0,
+      "Color": "FFF4D8E0"
+    },
+    {
+      "T": 1,
+      "Color": "6848D000"
+    }
+  ]
+}
