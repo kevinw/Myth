@@ -106,6 +106,7 @@ public abstract class Pawn : Actor
 	protected static float WallHugGravityMultiplier => 0.25f.T();
 	protected static float WallSlideMaxFallSpeed => 80f.T();  // capped, slower descent while wall sliding
 	protected static float WallSlideFallDamping => 320f.T();  // eases a fast fall down to the slide cap
+	static float WallJumpCoyoteTime => 0.08f.T();
 	public static float JumpForce => -125.T();
 	public static float JumpTime => 0.19f.T();
 	// Gravity is scaled by this while the jump button is held (floatier ascent), and
@@ -170,6 +171,8 @@ public abstract class Pawn : Actor
 	// result is invariant within a frame. Cache it, invalidated once per Update.
 	int wallJumpDirectionCache;
 	bool wallJumpDirectionCached;
+	int wallJumpCoyoteDirection;
+	float wallJumpCoyoteTimer;
 	protected bool ducking;
 	protected float wallJumpInputLockTimer;
 	protected int wallJumpDirection;
@@ -260,6 +263,8 @@ public abstract class Pawn : Actor
 			coyoteJumpTimer = CoyoteJumpTime;
 			coyoteJumpY = Position.Y;
 			wallJumpInputLockTimer = 0;
+			wallJumpCoyoteTimer = 0;
+			wallJumpCoyoteDirection = 0;
 			rollJumpCarryTimer = 0;
 		}
 		else
@@ -268,6 +273,8 @@ public abstract class Pawn : Actor
 				coyoteJumpTimer = Calc.Approach(coyoteJumpTimer, 0, Time.Delta);
 			if (wallJumpInputLockTimer > 0)
 				wallJumpInputLockTimer = Calc.Approach(wallJumpInputLockTimer, 0, Time.Delta);
+			if (wallJumpCoyoteTimer > 0)
+				wallJumpCoyoteTimer = Calc.Approach(wallJumpCoyoteTimer, 0, Time.Delta);
 		}
 		if (!grounded && rollJumpCarryTimer > 0)
 			rollJumpCarryTimer = Calc.Approach(rollJumpCarryTimer, 0, Time.Delta);
@@ -692,6 +699,9 @@ public abstract class Pawn : Actor
 				Facing = wallJumpDirection;
 				Velocity.X = wallJumpDirection * WallJumpSpeed;
 				EmitJumpParticles(Position - Vector2.UnitX * wallJumpDirection * Hitbox.Rect.Width / 2);
+				wallJumpCoyoteTimer = 0;
+				wallJumpCoyoteDirection = 0;
+				dashCooldownTimer = 0;
 				EndDashRun();
 			}
 			StartJump(JumpForce, JumpTime);
@@ -1154,6 +1164,13 @@ public abstract class Pawn : Actor
 
 		wallJumpDirectionCached = true;
 		wallJumpDirectionCache = ComputeWallJumpDirection();
+		if (wallJumpDirectionCache != 0)
+		{
+			wallJumpCoyoteDirection = wallJumpDirectionCache;
+			wallJumpCoyoteTimer = WallJumpCoyoteTime;
+		}
+		else if (wallJumpCoyoteTimer > 0)
+			wallJumpDirectionCache = wallJumpCoyoteDirection;
 		return wallJumpDirectionCache;
 	}
 
