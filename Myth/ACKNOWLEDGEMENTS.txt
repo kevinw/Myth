@@ -157,6 +157,13 @@ SOFTWARE.
 PUBLIC-DOMAIN PROJECTS
 ----------------------
 
+Kenney Input Prompts
+Created by Kenney
+https://kenney.nl/
+
+The input prompt artwork and fonts are released under Creative Commons Zero
+(CC0 1.0).
+
 StbTrueTypeSharp
 A C# port of stb_truetype.h
 https://github.com/StbSharp/StbTrueTypeSharp

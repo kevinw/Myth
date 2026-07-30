@@ -12,6 +12,7 @@ public sealed partial class GameView : IDisposable
 {
 	internal readonly Game game;
 	private readonly List<Actor> rendering = [];
+	internal readonly List<InputPromptGlyph> InputPromptGlyphs = [];
 
 	// Render-init: all GPU resources live here now, built when a Game has a view.
 	public GameView(Game game, bool enableParticles)

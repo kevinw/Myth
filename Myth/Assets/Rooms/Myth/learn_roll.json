@@ -109,6 +109,14 @@
       "Type": "Wildlife",
       "Position": [152, 40],
       "FishCount": 2
+    },
+    {
+      "Id": "f59f181c2ccde014",
+      "Type": "TitleText",
+      "Position": [69, 121],
+      "Text": "hold down to\ncrouch",
+      "Emissive": true,
+      "RevealSpeed": 9999999
     }
   ]
 }

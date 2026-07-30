@@ -1,7 +1,6 @@
 # TODO
 
 ## release attribution
-- replace the GPL-2.0-or-later `crt-gdv-mini-ultra` port in `Crt.hlsl` with an independently written or permissively licensed CRT shader
 - replace `609203__cupido-1__roll-apple-on-carpet.ogg`; it is CC BY-NC 4.0 and cannot be used in a commercial release
 - obtain permission for or replace/retrain the imported Cells2Pixels NCA weights; the upstream repositories do not provide a license
 - review the provenance and commercial-use rights of the NCA training textures, especially images derived from the Describable Textures Dataset

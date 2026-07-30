@@ -41,7 +41,6 @@ public partial class Game
 		}
 		if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
 		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
-		if (Input.Keyboard.Pressed(Keys.H)) CycleCrtShader();
 		if (Input.Keyboard.Pressed(Keys.J)) ToggleAtlasWander();
 		if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugCenterCamera();
 		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
@@ -62,14 +61,6 @@ public partial class Game
 			ChangeTimeScale(timeScaleChange);
 		}
 #endif
-	}
-
-	internal int CrtShader { get; private set; }
-
-	void CycleCrtShader()
-	{
-		CrtShader = (CrtShader + 1) % 2;
-		DisplayMessage($"CRT: {(CrtShader == 0 ? "Myth" : "GDV Mini Ultra Trinitron")}");
 	}
 
 	// Locks the camera dead-centre on the player, ignoring room bounds/blockers —

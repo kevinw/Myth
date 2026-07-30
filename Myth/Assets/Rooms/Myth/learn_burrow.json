@@ -184,8 +184,10 @@
     {
       "Id": "c3c0b88e85233b43",
       "Type": "TitleText",
-      "Position": [156, 216],
-      "Text": "hold jump to squish\nand climb walls"
+      "Position": [188, 336],
+      "Text": "hold {Jump} to squish\nand climb walls",
+      "RevealSpeed": 999999,
+      "Emissive": true
     },
     {
       "Id": "d5b6f3147c909268",

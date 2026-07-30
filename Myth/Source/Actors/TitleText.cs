@@ -5,16 +5,15 @@ namespace Myth;
 
 using Color = Foster.Framework.Color;
 
-/// <summary>
-/// Shows text placed as actor metadata.
-/// </summary>
+// Shows text placed as actor metadata.
 [GameActor(Sprite = "Editor/text", Tags = ActorTag.System)]
 public class TitleText : Actor
 {
-	private float stateDuration = 0;
+	float stateDuration;
 	public string Text = string.Empty;
 	public float RevealSpeed = 7.0f;
 	public override bool CastsSpriteShadow => false;
+	public bool Emissive = false;
 
 	public override void Update()
 	{
@@ -22,16 +21,34 @@ public class TitleText : Actor
 		stateDuration += Time.Delta * RevealSpeed;
 	}
 
-	public override void Render(Batcher batcher)
-	{
-		if (Game.Simulating) return;
-		if (Assets.Font == null || string.IsNullOrEmpty(Text)) return;
-		var text = Text;
-		var length = (int)stateDuration;
-		var span = text.AsSpan();
-		if (!Game.Editing)
-			span = span[..Math.Min(text.Length, length)];
+	SpriteFont? ShouldRenderWithFont() {
+		if (Game.Simulating) return null;
+		if (Assets.Font == null) return null;
+		if (string.IsNullOrEmpty(Text)) return null;
+		return Assets.Font;
+	}
 
-		batcher.Text(Assets.Font, span, Vector2.Zero, Vector2.One * 0.50f, Color.White);
+	public override void Render(Batcher batcher) => DoRender(batcher, Game.View?.InputPromptGlyphs);
+	public override void RenderEmissive(Batcher batcher) {
+		if (Emissive) {
+			DoRender(batcher, null);
+		}
+	}
+
+	void DoRender(Batcher batcher, List<InputPromptGlyph>? deferredGlyphs) {
+		var font = ShouldRenderWithFont();
+		if (font == null) return;
+
+		Game.Manager.InputPrompts?.DrawText(
+			batcher,
+			font,
+			Text,
+			Vector2.Zero,
+			font.Size,
+			new Vector2(0.5f),
+			Color.White,
+			Game.Editing ? int.MaxValue : (int)stateDuration,
+			deferredGlyphs,
+			drawGlyphs: false);
 	}
 }

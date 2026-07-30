@@ -21,6 +21,7 @@ public sealed partial class GameView
 
 	void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
+		InputPromptGlyphs.Clear();
 		if (game.AtlasWander)
 		{
 			atlasWanderElapsed += Time.Delta;
@@ -164,6 +165,11 @@ public sealed partial class GameView
 		// draw screen to window
 		var crt = applyCrt && PerfToggles.Crt ? crtMaterial : null;
 		var useCrt = crt != null;
+		var present = game.PresentRect(viewport);
+		var scale = game.PresentScale(present, output.Width, output.Height);
+		var clip = game.AspectCropActive
+			? (scissor.HasValue ? scissor.Value.GetIntersection(present) : present)
+			: scissor;
 		using (PerfStats.Time(PerfStat.FinalComposite))
 		using (GraphicsDevice.DebugGroup(useCrt ? "Myth/final composite crt" : "Myth/final composite"))
 		{
@@ -171,12 +177,7 @@ public sealed partial class GameView
 			// cover-fitting the 16:9 frame so its sides are cropped; aspectUncrop lerps back to a
 			// contained (full, letterboxed) frame while Zoom is held. The cover-scaled frame
 			// overflows the present region, so clip it to never bleed past the pillarbox bars.
-			var present = game.PresentRect(viewport);
 			var center = present.Center;
-			var scale = game.PresentScale(present, output.Width, output.Height);
-			var clip = game.AspectCropActive
-				? (scissor.HasValue ? scissor.Value.GetIntersection(present) : present)
-				: scissor;
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
@@ -187,12 +188,10 @@ public sealed partial class GameView
 				crt!.Material.Fragment.SetUniformBuffer([
 					output.Width,
 					output.Height,
-					output.Width * scale,
-					output.Height * scale,
 					BloomAmount,
 					VignetteAmount,
 					RgbOffset,
-					game.CrtShader,
+					0, 0, 0,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
@@ -203,6 +202,9 @@ public sealed partial class GameView
 			Batcher.Render(destination, scissor: clip);
 			Batcher.Clear();
 		}
+
+		if (debugView is DebugView.None or DebugView.CollisionRects)
+			DrawInputPromptGlyphs(destination, present, output.Bounds.Size, scale, clip);
 
 		if (false && showHud && debugView is DebugView.None or DebugView.CollisionRects)
 			DrawPlayerHud(destination, viewport, scissor);
@@ -216,6 +218,23 @@ public sealed partial class GameView
 			Batcher.Render(destination, scissor: scissor?.GetIntersection(viewport) ?? viewport);
 			Batcher.Clear();
 		}
+	}
+
+	void DrawInputPromptGlyphs(IDrawableTarget target, in RectInt present, Vector2 outputSize, float scale, RectInt? scissor)
+	{
+		var prompts = Manager.InputPrompts;
+		if (prompts == null || InputPromptGlyphs.Count == 0)
+			return;
+
+		var offset = (Vector2)present.Center - outputSize * scale * 0.5f;
+		Batcher.PushMatrix(Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(offset));
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		foreach (var glyph in InputPromptGlyphs)
+			prompts.DrawGlyphCentered(Batcher, glyph.Action, glyph.Center, glyph.Height, glyph.Color);
+		Batcher.PopSampler();
+		Batcher.PopMatrix();
+		Batcher.Render(target, scissor: scissor);
+		Batcher.Clear();
 	}
 
 	Target CompositeRawWorld()

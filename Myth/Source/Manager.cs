@@ -116,6 +116,7 @@ public partial class Manager : App
 	/// Sprite Batcher for general Editor visuals
 	readonly Batcher batcher;
 	readonly Controls controls;
+	internal InputPrompts? InputPrompts { get; private set; }
 
 	/// Visible Space
 	Window RequiredWindow => Window ?? throw new InvalidOperationException("Window is not available in headless mode.");
@@ -401,6 +402,7 @@ public partial class Manager : App
 			Exit();
 			return;
 		}
+		InputPrompts = new(GraphicsDevice, Input);
 #if EDITOR
 		saveState = preservePlaytestSaveState ? SaveStateStore.Load(this) : new();
 #else
@@ -559,6 +561,8 @@ public partial class Manager : App
 		game?.Dispose();
 		navTrace?.Dispose();
 		menuImgui?.Dispose();
+		InputPrompts?.Dispose();
+		InputPrompts = null;
 		foreach (var cursor in imguiCursors.Values)
 			cursor.Dispose();
 		imguiCursors.Clear();
@@ -916,6 +920,8 @@ public partial class Manager : App
 			UpdateBootWarmup();
 			return;
 		}
+
+		InputPrompts?.Update(Time.Elapsed);
 
 		if (debugViewMessageTimer > 0)
 		{

@@ -116,6 +116,14 @@
       "Name": "learn_jump"
     },
     {
+      "Id": "57d00c4a4e3e4f13",
+      "Type": "TitleText",
+      "Position": [164, 64],
+      "Text": "press {Jump} to jump",
+      "RevealSpeed": 100000000,
+      "Emissive": true
+    },
+    {
       "Id": "fa0e1da50cb9a503",
       "Type": "Light",
       "Position": [12, 100]

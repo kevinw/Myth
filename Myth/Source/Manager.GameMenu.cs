@@ -444,11 +444,13 @@ public partial class Manager
 			DrawCenteredText(font, title, pos, 18, 0xfee761, sine: useSineWave);
 		}
 
-		if (gameMenuPage != GameMenuPage.Title || !isSteamDeck)
-		{
-			var hint = gameMenuPage == GameMenuPage.Title ? "ENTER / START / A" : "ESC / B";
-			DrawCenteredText(font, hint, new Vector2(panel.Center.X, panel.Bottom - 17), 8, 0x8b81b5);
-		}
+		var hint = gameMenuPage == GameMenuPage.Title ? InputPromptAction.Confirm : InputPromptAction.Back;
+		InputPrompts?.DrawGlyphCentered(
+			batcher,
+			hint,
+			new Vector2(panel.Center.X, panel.Bottom - 17),
+			12,
+			0x8b81b5);
 	}
 
 	static Vector4 ImColor(uint rgb, float a = 1f)

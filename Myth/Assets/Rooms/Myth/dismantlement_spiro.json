@@ -77,7 +77,8 @@
       "Id": "c72c23b615ec943e",
       "Type": "TitleText",
       "Position": [156, 40],
-      "Text": "emerge from squished\nto jump high"
+      "Text": "emerge from squished\nto jump high",
+      "RevealSpeed": 9999999
     },
     {
       "Id": "ceb9410ecd2965be",
