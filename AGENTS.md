@@ -1,5 +1,7 @@
 - We're working on a 2D C# platformer game in Myth/.
 - It uses Foster/, an SDL backed 2D game framework. It builds to Desktop (default), iOS, and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for the device/browser builds.
+- It's name is Mycelon, not Myth, which is the code name used in some scripts and projects.
+
 - Try, within reason, not to allocate every frame, e.g., use a static reusable scratch List you .Clear() instead. Don't use LINQ in per-frame code.
 - Omit C#'s XML documentation tags like <summary></summary>.
 - Omit "private" keyword since it is implicit in C#.

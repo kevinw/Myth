@@ -28,6 +28,7 @@ const rid = process.arch === "arm64" ? "osx-arm64" : "osx-x64";
 const outRoot = path.join(root, "bin", "publish");
 const publishDir = path.join(outRoot, rid);
 const appDir = path.join(outRoot, "Myth.app");
+const acknowledgements = path.join(root, "ACKNOWLEDGEMENTS.txt");
 
 function run(cmd, args, opts = {}) {
   console.log(`\n> ${cmd} ${args.join(" ")}`);
@@ -97,6 +98,7 @@ for (const entry of fs.readdirSync(assetsRoot, { recursive: true, withFileTypes:
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(path.join(assetsRoot, rel), dest);
 }
+fs.copyFileSync(acknowledgements, path.join(resources, "ACKNOWLEDGEMENTS.txt"));
 
 // Icon: AppIcon.png -> AppIcon.icns via sips/iconutil.
 const iconset = path.join(outRoot, "AppIcon.iconset");
@@ -178,21 +180,32 @@ for (const candidate of candidates) {
 }
 run("codesign", ["--verify", "--strict", "--verbose", appDir]);
 
-// --- 5. Notarize: zip, submit + wait, staple the ticket, and prove Gatekeeper is happy.
-if (notarize) {
-  const zip = path.join(outRoot, "Myth.zip");
+// --- 5. Package with acknowledgements at the archive root. Notarized builds submit
+// that archive, then rebuild it after stapling the ticket to the app.
+const zip = path.join(outRoot, "Myth.zip");
+const archiveDir = path.join(outRoot, "macos-archive");
+
+function createArchive() {
+  fs.rmSync(archiveDir, { recursive: true, force: true });
+  fs.mkdirSync(archiveDir, { recursive: true });
+  fs.cpSync(appDir, path.join(archiveDir, "Myth.app"), { recursive: true });
+  fs.copyFileSync(acknowledgements, path.join(archiveDir, "ACKNOWLEDGEMENTS.txt"));
   fs.rmSync(zip, { force: true });
-  run("ditto", ["-c", "-k", "--keepParent", appDir, zip]);
+  run("ditto", ["-c", "-k", "--sequesterRsrc", archiveDir, zip]);
+}
+
+if (notarize) {
+  createArchive();
   run("xcrun", ["notarytool", "submit", zip, "--keychain-profile", profile, "--wait"]);
   run("xcrun", ["stapler", "staple", appDir]);
   run("spctl", ["--assess", "--type", "execute", "--verbose", appDir]);
-  // Re-zip the stapled app: this is the artifact to distribute.
-  fs.rmSync(zip, { force: true });
-  run("ditto", ["-c", "-k", "--keepParent", appDir, zip]);
-  console.log(`\nNotarized and stapled. Distribute: ${zip}`);
 }
+createArchive();
+if (notarize)
+  console.log(`\nNotarized and stapled. Distribute: ${zip}`);
 
 const size = capture("du", ["-sh", appDir]).trim().split("\t")[0];
 console.log(`\nSigned with: ${identity === "-" ? "ad-hoc (this machine only; use --notarize to distribute)" : identity}`);
 console.log(`Built ${appDir} (${size})`);
+console.log(`Packaged ${zip}`);
 if (process.argv.includes("--open")) run("open", [appDir]);

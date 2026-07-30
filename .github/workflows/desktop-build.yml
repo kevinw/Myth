@@ -100,7 +100,7 @@ jobs:
         run: security find-identity -v -p codesigning | grep 'Developer ID Application'
 
       - name: Publish and notarize
-        run: node Myth/tools/publish-desktop.mjs --notarize
+        run: node Myth/tools/publish-macos.mjs --notarize
 
       - name: Name macOS build
         id: archive

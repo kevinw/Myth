@@ -232,6 +232,7 @@ function prepareFeedback() {
     message.focus();
   });
   closeButton.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => openButton.blur());
 
   // Registered before Foster initializes, so keyboard events used to edit the
   // textarea do not also reach SDL's window-level game input listeners.

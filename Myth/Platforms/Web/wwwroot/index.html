@@ -117,6 +117,17 @@
                 font: 700 12px var(--mono);
             }
 
+            #acknowledgements-link {
+                position: fixed;
+                padding: 15px;
+                right: max(8px, env(safe-area-inset-right));
+                bottom: max(8px, env(safe-area-inset-bottom));
+                z-index: 2;
+                color: rgba(var(--text-rgb), 0.72);
+                font: 22px var(--mono);
+                touch-action: auto;
+            }
+
             #feedback-dialog {
                 width: min(560px, calc(100% - 32px));
                 padding: 0;
@@ -401,6 +412,7 @@
             </form>
         </dialog>
         <div id="start-gate">
+            <a id="acknowledgements-link" href="/acknowledgements">Acknowledgements</a>
             <div id="start-panel">
                 <div id="loading-bud" aria-hidden="true"></div>
                 <p class="start-hint">Hold jump when landing: become 1D.</p>

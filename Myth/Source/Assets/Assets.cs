@@ -164,6 +164,9 @@ public static class Assets
 	/// </summary>
 	public static void BuildContentZip(string outputPath, string target, string? worldId = null)
 	{
+		if (!File.Exists(Path.Join(DefaultVisualAssetPackPath, packedVisualsManifestName)))
+			throw new InvalidOperationException("Visual asset pack is missing. Build it with --build-asset-pack before building Content.zip.");
+
 		var shaderExtension = target.Trim().ToLowerInvariant() switch
 		{
 			"mac" => "msl",

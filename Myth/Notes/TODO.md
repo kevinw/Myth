@@ -1,5 +1,20 @@
 # TODO
+
+## release attribution
+- replace the GPL-2.0-or-later `crt-gdv-mini-ultra` port in `Crt.hlsl` with an independently written or permissively licensed CRT shader
+- replace `609203__cupido-1__roll-apple-on-carpet.ogg`; it is CC BY-NC 4.0 and cannot be used in a commercial release
+- obtain permission for or replace/retrain the imported Cells2Pixels NCA weights; the upstream repositories do not provide a license
+- review the provenance and commercial-use rights of the NCA training textures, especially images derived from the Describable Textures Dataset
+- add an audio source ledger containing the filename, creator, source URL, and license for every downloaded sound
+- confirm the provenance of the generically named music, footstep, fly, sword, and voice files
+- ship the version-matched .NET runtime `THIRD-PARTY-NOTICES.TXT` beside release executables
+
+- put license and foster acknowledgement on webpage front!
+- update from foster trunk
+- do some light stat analysis on Rng
 - update fmod dylibs
+
+neural PARTICAL automata https://selforg-npa.github.io/#growing and https://noisenca.github.io
 
 steam notes
 - absolutely change the title to something weird for now

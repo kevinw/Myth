@@ -175,8 +175,10 @@
   <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true'" />
+    <MakeDir Directories="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/download.html" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="$(IntermediateOutputPath)acknowledgements/index.html" DestinationFolder="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/loading-player.webp" DestinationFolder="$(WasmAppDir)" />
@@ -188,6 +190,15 @@
     <Copy SourceFiles="../Foster/Framework/Content/Web/FMOD/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.wasm')" />
     <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />
     <Exec Command="python3 tools/generate-browser-asset-manifest.py &quot;$(WasmAppDir)&quot;" />
+  </Target>
+
+  <Target Name="GenerateAcknowledgementsPage"
+          BeforeTargets="CopyBrowserShell"
+          Condition="'$(RuntimeIdentifier)' == 'browser-wasm'"
+          Inputs="ACKNOWLEDGEMENTS.txt;tools/generate-acknowledgements.mjs"
+          Outputs="$(IntermediateOutputPath)acknowledgements/index.html">
+    <MakeDir Directories="$(IntermediateOutputPath)acknowledgements" />
+    <Exec Command="node tools/generate-acknowledgements.mjs ACKNOWLEDGEMENTS.txt &quot;$(IntermediateOutputPath)acknowledgements/index.html&quot;" />
   </Target>
 
   <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserJsFmod)' == 'true'">

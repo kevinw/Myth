@@ -4,3 +4,4 @@ artifacts/browser-smoke/
 chrome/
 node_modules/
 Assets/Content.zip
+/Assets/Packed/Visuals/

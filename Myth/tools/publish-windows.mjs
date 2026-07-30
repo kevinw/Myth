@@ -12,6 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outRoot = path.join(root, "bin", "publish");
 const publishDir = path.join(outRoot, "win-x64");
 const gameDir = path.join(outRoot, "Myth");
+const acknowledgements = path.join(root, "ACKNOWLEDGEMENTS.txt");
 
 function run(cmd, args) {
   console.log(`\n> ${cmd} ${args.join(" ")}`);
@@ -43,6 +44,7 @@ for (const entry of fs.readdirSync(publishDir))
   if (entry.endsWith(".exe") || entry.endsWith(".dll"))
     fs.copyFileSync(path.join(publishDir, entry), path.join(gameDir, entry));
 fs.copyFileSync(contentZip, path.join(gameDir, "Assets", "Content.zip"));
+fs.copyFileSync(acknowledgements, path.join(gameDir, "ACKNOWLEDGEMENTS.txt"));
 
 const assetsRoot = path.join(root, "Assets");
 for (const entry of fs.readdirSync(assetsRoot, { recursive: true, withFileTypes: true })) {
