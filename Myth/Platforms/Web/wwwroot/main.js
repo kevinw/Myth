@@ -1,15 +1,15 @@
 prepareReloadPrompt();
 prepareFeedback();
-const [{ dotnet }, FosterWebGPU, FosterBrowserFmod, VirtualGamepad] =
+const [{ dotnet }, FosterWebGPU, MythBrowserFmod, VirtualGamepad] =
   await Promise.all([
     import("./_framework/dotnet.js"),
     import("./_framework/Content/Web/foster-webgpu.js"),
-    import("./_framework/Content/Web/foster-fmod.js"),
+    import("./FMOD/myth-fmod.js"),
     import("./virtual-gamepad.js"),
   ]);
 
 globalThis.FosterWebGPU = FosterWebGPU;
-globalThis.FosterBrowserFmod = FosterBrowserFmod;
+globalThis.MythBrowserFmod = MythBrowserFmod;
 
 // On-screen touch controller (web analog of the iOS GCVirtualController).
 VirtualGamepad.initialize();
@@ -106,7 +106,7 @@ try {
   const { setModuleImports, runMain } = runtime;
 
   setModuleImports("FosterWebGPU", FosterWebGPU);
-  setModuleImports("FosterBrowserFmod", FosterBrowserFmod);
+  setModuleImports("MythBrowserFmod", MythBrowserFmod);
   setModuleImports("MythOverlay", {
     setVirtualControllerVisible: VirtualGamepad.setVirtualControllerVisible,
     getAudioDisabled: () => webAudioDisabled,
@@ -126,8 +126,8 @@ try {
   runtime.Module.runtimeKeepalivePush?.();
 
   if (bankFiles.length > 0) {
-    await FosterBrowserFmod.initialize(bankFiles, bankData);
-    FosterBrowserFmod.startUpdateLoop(20);
+    await MythBrowserFmod.initialize(bankFiles, bankData);
+    MythBrowserFmod.startUpdateLoop(20);
   }
 
   globalThis.MythStartReady = true;

@@ -1,6 +1,4 @@
 #if BROWSER
-using Foster.Framework;
-
 namespace Myth;
 
 public partial class Manager

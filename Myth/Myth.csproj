@@ -43,6 +43,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
+    <FmodNativeDir>$(MSBuildProjectDirectory)/Platforms/FMOD/Native/</FmodNativeDir>
   </PropertyGroup>
 
   <!-- MythShip strips the editor from a published game build; ImGui stays available
@@ -55,13 +56,10 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
-    <DefineConstants>$(DefineConstants);BROWSER</DefineConstants>
+    <DefineConstants>$(DefineConstants);BROWSER;BROWSER_JS_FMOD</DefineConstants>
     <MythBrowser>true</MythBrowser>
     <WasmEmitSymbolMap Condition="'$(Configuration)' == 'Release' and '$(WasmEmitSymbolMap)' == ''">false</WasmEmitSymbolMap>
-    <MythBrowserFmod Condition="'$(MythBrowserFmod)' == ''">true</MythBrowserFmod>
-    <MythBrowserJsFmod Condition="'$(MythBrowserJsFmod)' == ''">true</MythBrowserJsFmod>
     <MythBrowserThreads Condition="'$(MythBrowserThreads)' == ''">false</MythBrowserThreads>
-    <MythBrowserFmodPThread Condition="'$(MythBrowserFmodPThread)' == ''">false</MythBrowserFmodPThread>
     <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
     <InvariantGlobalization>true</InvariantGlobalization>
     <WasmMainJSPath>Platforms/Web/wwwroot/main.js</WasmMainJSPath>
@@ -146,13 +144,26 @@
   <ItemGroup>
     <CoreCompileCache Include="$(DefineConstants)" />
     <Compile Include="Source/**/*.cs" Exclude="Source/**/bin/**;Source/**/obj/**;Source/External/StringBuilder/tests/**" />
-    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier);FosterBrowserFmodPThread=$(MythBrowserFmodPThread);FosterBrowserJsFmod=$(MythBrowserJsFmod)" />
+    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier)" />
     <!-- Build-time only: emits GeneratedActors.RegisterAll() from [GameActor]. -->
     <ProjectReference Include="tools/Myth.SourceGen/Myth.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <Content Include="$(FmodNativeDir)win-x64/*.dll" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="$(FmodNativeDir)osx/*.dylib" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))) or '$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))) or '$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 
   <!-- Managed bindings only; the native cimgui wasm archive is linked above. -->
@@ -174,7 +185,7 @@
 
   <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
-    <MakeDir Directories="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true'" />
+    <MakeDir Directories="$(WasmAppDir)FMOD" />
     <MakeDir Directories="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/download.html" DestinationFolder="$(WasmAppDir)" />
@@ -185,9 +196,9 @@
     <Copy SourceFiles="Platforms/Web/wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/_routes.json" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
-    <Copy SourceFiles="../Foster/Framework/Content/Web/foster-fmod.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
-    <Copy SourceFiles="../Foster/Framework/Content/Web/FMOD/fmodstudioP.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.js')" />
-    <Copy SourceFiles="../Foster/Framework/Content/Web/FMOD/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)_framework/Content/Web/FMOD" Condition="'$(MythBrowserJsFmod)' == 'true' and Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.wasm')" />
+    <Copy SourceFiles="Platforms/Web/FMOD/myth-fmod.js" DestinationFolder="$(WasmAppDir)FMOD" />
+    <Copy SourceFiles="Platforms/Web/FMOD/fmodstudioP.js" DestinationFolder="$(WasmAppDir)FMOD" />
+    <Copy SourceFiles="Platforms/Web/FMOD/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)FMOD" />
     <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />
     <Exec Command="python3 tools/generate-browser-asset-manifest.py &quot;$(WasmAppDir)&quot;" />
   </Target>
@@ -201,10 +212,10 @@
     <Exec Command="node tools/generate-acknowledgements.mjs ACKNOWLEDGEMENTS.txt &quot;$(IntermediateOutputPath)acknowledgements/index.html&quot;" />
   </Target>
 
-  <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(MythBrowserJsFmod)' == 'true'">
+  <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <Error
-      Condition="!Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.js') or !Exists('../Foster/Framework/Content/Web/FMOD/fmodstudioP.wasm')"
-      Text="Foster browser FMOD runtime files are missing. Expected fmodstudioP.js and fmodstudioP.wasm in Foster/Framework/Content/Web/FMOD/." />
+      Condition="!Exists('Platforms/Web/FMOD/myth-fmod.js') or !Exists('Platforms/Web/FMOD/fmodstudioP.js') or !Exists('Platforms/Web/FMOD/fmodstudioP.wasm')"
+      Text="Myth browser FMOD runtime files are missing from Platforms/Web/FMOD/." />
   </Target>
 
   <!-- Native ScreenCaptureKit window recorder (see native/MythCapture, used by the 'M'

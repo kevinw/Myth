@@ -12,6 +12,7 @@ namespace Myth;
 /// Runs the Game and, when the game is not running, displays a tile-based Level Editor (see Manager.Editor.cs)
 public partial class Manager : App
 {
+	public readonly Audio Audio = new();
 	readonly ImGuiRenderer imgui = null!;
 
 	// Dedicated ImGui context for the game menu. Unlike `imgui` (editor/browser
@@ -542,6 +543,12 @@ public partial class Manager : App
 
 	protected override void Shutdown()
 	{
+		ShutdownGame();
+		Audio.Shutdown();
+	}
+
+	void ShutdownGame()
+	{
 #if !MYTHSHIP && !BROWSER && !IOS
 		try { if (MythCapture.IsRecording) StopMovieRecording(reveal: false); } catch { /* best-effort finalize */ }
 #endif
@@ -878,6 +885,12 @@ public partial class Manager : App
 	}
 
 	protected override void Update()
+	{
+		UpdateGame();
+		Audio.Update();
+	}
+
+	void UpdateGame()
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
 
