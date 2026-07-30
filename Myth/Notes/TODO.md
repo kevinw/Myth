@@ -10,7 +10,6 @@
 - ship the version-matched .NET runtime `THIRD-PARTY-NOTICES.TXT` beside release executables
 
 - put license and foster acknowledgement on webpage front!
-- update from foster trunk
 - do some light stat analysis on Rng
 - update fmod dylibs
 
