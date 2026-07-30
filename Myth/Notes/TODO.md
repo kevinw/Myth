@@ -9,11 +9,9 @@
 - confirm the provenance of the generically named music, footstep, fly, sword, and voice files
 - ship the version-matched .NET runtime `THIRD-PARTY-NOTICES.TXT` beside release executables
 
-- put license and foster acknowledgement on webpage front!
-- do some light stat analysis on Rng
 - update fmod dylibs
 
-neural PARTICAL automata https://selforg-npa.github.io/#growing and https://noisenca.github.io
+neural PARTICLE automata https://selforg-npa.github.io/#growing and https://noisenca.github.io
 
 steam notes
 - absolutely change the title to something weird for now
