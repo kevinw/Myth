@@ -22,14 +22,8 @@ public partial class Manager
 		for (var i = 0; i < room.Actors.Count; i++)
 		{
 			var actor = room.Actors[i];
-			var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 			label.Clear();
 			label.Append(ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.GetTypeName(actor) ?? "Actor");
-			label.Append(" (");
-			label.Append(position.X);
-			label.Append(", ");
-			label.Append(position.Y);
-			label.Append(')');
 
 			ImGui.PushID(i);
 			if (ImGui.Selectable(label.AsSpan(), selectedRoomActorIndex == i))
