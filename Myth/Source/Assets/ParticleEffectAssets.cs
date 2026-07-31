@@ -77,4 +77,87 @@ public static class ParticleEffectAssets
 		paths[name] = path;
 		File.WriteAllText(path, effect.ToJson().ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 	}
+
+	public static bool IsValidName(string name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+			return false;
+		foreach (var c in name)
+			if (!char.IsAsciiLetterOrDigit(c) && c != '_' && c != '-')
+				return false;
+		return true;
+	}
+
+	public static bool TryDuplicate(string name, out string copyName, out string? error)
+	{
+		if (!effects.TryGetValue(name, out var effect))
+		{
+			copyName = "";
+			error = $"Particle effect '{name}' no longer exists.";
+			return false;
+		}
+		copyName = $"{name}_copy";
+		for (var suffix = 2; Exists(copyName) || File.Exists(Path.Join(FolderPath, $"{copyName}.json")); suffix++)
+			copyName = $"{name}_copy{suffix}";
+
+		try
+		{
+			Set(copyName, ParticleEffect.FromJson(effect.ToJson()));
+			Save(copyName);
+			error = null;
+			return true;
+		}
+		catch (Exception exception)
+		{
+			effects.Remove(copyName);
+			paths.Remove(copyName);
+			error = exception.Message;
+			return false;
+		}
+	}
+
+	public static bool TryRename(string name, string newName, out string? error)
+	{
+		if (!effects.TryGetValue(name, out var effect))
+		{
+			error = $"Particle effect '{name}' no longer exists.";
+			return false;
+		}
+		if (!IsValidName(newName))
+		{
+			error = "Use only letters, numbers, underscores, and hyphens.";
+			return false;
+		}
+		if (string.Equals(name, newName, StringComparison.OrdinalIgnoreCase) || Exists(newName))
+		{
+			error = $"Particle effect '{newName}' already exists.";
+			return false;
+		}
+
+		var oldPath = paths.GetValueOrDefault(name) ?? Path.Join(FolderPath, $"{name}.json");
+		var newPath = Path.Join(FolderPath, $"{newName}.json");
+		if (File.Exists(newPath))
+		{
+			error = $"File '{newName}.json' already exists.";
+			return false;
+		}
+
+		try
+		{
+			Save(name);
+			File.Move(oldPath, newPath);
+		}
+		catch (Exception exception)
+		{
+			error = exception.Message;
+			return false;
+		}
+
+		effects.Remove(name);
+		paths.Remove(name);
+		effects[newName] = effect;
+		paths[newName] = newPath;
+		error = null;
+		return true;
+	}
 }

@@ -27,6 +27,10 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 	// Debounced autosave for the effect asset being edited.
 	string? autosaveName;
 	float autosaveTimer;
+	string? renameEffect;
+	string renameName = "";
+	string? assetActionError;
+	bool renamePopupRequested;
 
 	/// True while an edit is waiting on the debounced autosave (the asset file is stale).
 	public readonly bool AutosavePending => autosaveName != null;
@@ -103,17 +107,86 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 						pinnedEffect = name = other;
 				ImGui.EndCombo();
 			}
+			if (ImGui.Button("Duplicate"))
+			{
+				Flush(name);
+				if (ParticleEffectAssets.TryDuplicate(name, out var copy, out assetActionError))
+				{
+					pinnedEffect = lastPinnedEffect = name = copy;
+					game?.SetPreviewEffect(name);
+				}
+			}
+			ImGui.SameLine();
+			if (ImGui.Button("Rename..."))
+			{
+				Flush(name);
+				renameEffect = name;
+				renameName = name;
+				assetActionError = null;
+				renamePopupRequested = true;
+			}
+			if (assetActionError != null)
+				ImGui.TextColored(new Vector4(1.0f, 0.35f, 0.35f, 1.0f), assetActionError);
 			if (ImGui.Button("Test Burst", new Vector2(-1, 0)) && game != null)
 			{
 				game.SetPreviewEffect(name);
 				game.BurstTestEffect();
 			}
 			DrawControls(name);
+			DrawRenamePopup(game);
 		}
 		ImGui.End();
 
 		if (!open)
 			pinnedEffect = null;
+	}
+
+	void DrawRenamePopup(Game? game)
+	{
+		if (renamePopupRequested)
+		{
+			renamePopupRequested = false;
+			ImGui.OpenPopup("Rename Particle Effect");
+		}
+
+		var open = true;
+		if (!ImGui.BeginPopupModal("Rename Particle Effect", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+			return;
+
+		ImGui.TextUnformatted($"Rename '{renameEffect}':");
+		ImGui.SetNextItemWidth(280);
+		if (ImGui.IsWindowAppearing())
+			ImGui.SetKeyboardFocusHere();
+		var submit = ImGui.InputText("##ParticleEffectName", ref renameName, 128,
+			ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+		ImGui.TextColored(new Vector4(1.0f, 0.72f, 0.3f, 1.0f),
+			"Existing room and code references are not renamed.");
+
+		var candidate = renameName.Trim();
+		var valid = renameEffect != null && ParticleEffectAssets.IsValidName(candidate) &&
+			!string.Equals(renameEffect, candidate, StringComparison.OrdinalIgnoreCase) &&
+			!ParticleEffectAssets.Exists(candidate);
+		ImGui.BeginDisabled(!valid);
+		var rename = ImGui.Button("Rename", new Vector2(90, 0)) || submit;
+		ImGui.EndDisabled();
+		ImGui.SameLine();
+		var cancel = ImGui.Button("Cancel", new Vector2(90, 0)) || !open;
+		if (rename && valid && ParticleEffectAssets.TryRename(renameEffect!, candidate, out assetActionError))
+		{
+			pinnedEffect = lastPinnedEffect = candidate;
+			game?.SetPreviewEffect(candidate);
+			renameEffect = null;
+			ImGui.CloseCurrentPopup();
+		}
+		if (assetActionError != null)
+			ImGui.TextColored(new Vector4(1.0f, 0.35f, 0.35f, 1.0f), assetActionError);
+		if (cancel)
+		{
+			renameEffect = null;
+			assetActionError = null;
+			ImGui.CloseCurrentPopup();
+		}
+		ImGui.EndPopup();
 	}
 
 	// The shared effect-asset sliders, used by both the actor inspector and the
@@ -206,6 +279,15 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 	{
 		autosaveName = name;
 		autosaveTimer = AutosaveDelay;
+	}
+
+	void Flush(string name)
+	{
+		CommitUndo();
+		if (autosaveName != name)
+			return;
+		ParticleEffectAssets.Save(name);
+		autosaveName = null;
 	}
 
 	JsonUndoScope CaptureUndo(string effectName)
