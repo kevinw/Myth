@@ -40,6 +40,8 @@ public sealed partial class GameView
 
 		using (PerfStats.Time(PerfStat.World))
 		{
+			using (GraphicsDevice.DebugGroup("Myth/room color fields"))
+				DrawRoomColorFields();
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
 				DrawWorldLayer(BackgroundScreen, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
@@ -346,9 +348,9 @@ public sealed partial class GameView
 				continue;
 
 			Batcher.PushMatrix(actor.Position);
-			var decal = !atlasWander && PushPropDecalMaterial(actor);
+			var actorMaterial = !atlasWander && PushWorldActorMaterial(actor, background);
 			actor.Render(Batcher);
-			if (decal)
+			if (actorMaterial)
 				Batcher.PopMaterial();
 			Batcher.PopMatrix();
 		}
@@ -369,6 +371,67 @@ public sealed partial class GameView
 			else
 				DrawPlatformSurfaceReflections(target);
 		}
+	}
+
+	void DrawRoomColorFields()
+	{
+		hasBackgroundColorField = DrawRoomColorField(BackgroundColorField, background: true);
+		hasForegroundColorField = DrawRoomColorField(ForegroundColorField, background: false);
+	}
+
+	bool DrawRoomColorField(Target target, bool background)
+	{
+		target.Clear(Color.Transparent);
+		if (background ? !ShowBackgroundLayer : !ShowForegroundLayer)
+			return false;
+		var drew = false;
+		PushWorldMatrix();
+		Batcher.PushBlend(ColorFieldCopyBlend);
+		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+		foreach (var visibleRoom in VisibleRooms())
+		{
+			var field = background ? visibleRoom.BackgroundColorField : visibleRoom.ForegroundColorField;
+			if (!field.HasPaint)
+				continue;
+			var texture = GetRoomColorFieldTexture(field);
+			Batcher.Image(texture, visibleRoom.WorldBounds.TopLeft, Vector2.Zero, Vector2.One * Game.TileSize, 0, Color.White);
+			drew = true;
+		}
+		Batcher.PopSampler();
+		Batcher.PopBlend();
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+		return drew;
+	}
+
+	bool PushWorldActorMaterial(Actor actor, bool background)
+	{
+		var hasField = background ? hasBackgroundColorField : hasForegroundColorField;
+		if (!hasField)
+			return PushPropDecalMaterial(actor);
+
+		var field = background ? BackgroundColorField : ForegroundColorField;
+		if (actor is Prop { Decal: true })
+		{
+			var coverage = background ? BackgroundCoverage : ParticleSolidMask;
+			var material = background ? backgroundColorFieldDecalMaterial : foregroundColorFieldDecalMaterial;
+			if (material == null)
+				return PushPropDecalMaterial(actor);
+			material.Material.Fragment.SetUniformBuffer([field.Width, field.Height, 0, 0]);
+			material.Material.Fragment.Samplers[1] = new(coverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+			material.Material.Fragment.Samplers[2] = new(field, new(TextureFilter.Linear, TextureWrap.Clamp));
+			Batcher.PushMaterial(material.Material);
+			return true;
+		}
+
+		if (actor is not Grid and not DualGrid and not Prop || colorFieldMaterial == null)
+			return false;
+
+		colorFieldMaterial.Material.Fragment.SetUniformBuffer([field.Width, field.Height, 0, 0]);
+		colorFieldMaterial.Material.Fragment.Samplers[1] = new(field, new(TextureFilter.Linear, TextureWrap.Clamp));
+		Batcher.PushMaterial(colorFieldMaterial.Material);
+		return true;
 	}
 
 	// Draws the dynamic water bodies (the static 'w' tile visual is suppressed in Factory).
@@ -2012,6 +2075,8 @@ public sealed partial class GameView
 		Screen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GameScreen"));
 		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
+		BackgroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundColorField"));
+		ForegroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundColorField"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
@@ -2078,13 +2143,22 @@ public sealed partial class GameView
 		roomTileFieldCaches.Clear();
 	}
 
+	void DisposeRoomColorFieldCaches()
+	{
+		foreach (var cache in roomColorFieldCaches.Values)
+			cache.Dispose();
+		roomColorFieldCaches.Clear();
+	}
+
 	readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
 	readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
+	readonly Dictionary<RoomColorField, RoomColorFieldTextureCache> roomColorFieldCaches = [];
 
 	internal void PruneInactiveRoomCaches()
 	{
 		PruneInactiveRoomNormalCaches();
 		PruneInactiveRoomTileFieldCaches();
+		PruneInactiveRoomColorFieldCaches();
 	}
 
 	bool IsActiveRoomCache(Room cachedRoom)
@@ -2124,6 +2198,41 @@ public sealed partial class GameView
 			return;
 		foreach (var cachedRoom in remove)
 			roomTileFieldCaches.Remove(cachedRoom);
+	}
+
+	void PruneInactiveRoomColorFieldCaches()
+	{
+		List<RoomColorField>? remove = null;
+		foreach (var (field, cache) in roomColorFieldCaches)
+		{
+			if (IsActiveRoomColorField(field))
+				continue;
+			remove ??= [];
+			remove.Add(field);
+			cache.Dispose();
+		}
+		if (remove == null)
+			return;
+		foreach (var field in remove)
+			roomColorFieldCaches.Remove(field);
+	}
+
+	bool IsActiveRoomColorField(RoomColorField field)
+		=> room != null && (field == room.ForegroundColorField || field == room.BackgroundColorField)
+			|| nextRoom != null && (field == nextRoom.ForegroundColorField || field == nextRoom.BackgroundColorField);
+
+	Texture GetRoomColorFieldTexture(RoomColorField field)
+	{
+		if (!roomColorFieldCaches.TryGetValue(field, out var cache) || cache.Texture.Size != field.Size)
+		{
+			cache?.Dispose();
+			cache = new(new Texture(GraphicsDevice, field.Size.X, field.Size.Y, field.Pixels, name: "RoomColorField"));
+			roomColorFieldCaches[field] = cache;
+		}
+		else if (cache.Version != field.Version)
+			cache.Texture.SetData<Color>(field.Pixels);
+		cache.Version = field.Version;
+		return cache.Texture;
 	}
 
 	public float SdfAuraScrollTime => Time.SecondsF * SdfAuraScrollSpeed;
@@ -2205,6 +2314,7 @@ public sealed partial class GameView
 
 	// --- view state moved from Game.cs (fields/consts/caches) ---
 	static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
+	static readonly BlendMode ColorFieldCopyBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
 	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
@@ -2225,6 +2335,8 @@ public sealed partial class GameView
 
 	Target BackgroundScreen { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
+	Target BackgroundColorField { get; set; } = null!;
+	Target ForegroundColorField { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
 	Target ForegroundEmissive { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
@@ -2252,6 +2364,7 @@ public sealed partial class GameView
 	public bool ShowBackgroundLayer { get; set; } = true;
 	readonly ReloadableMaterial? crtMaterial;
 	readonly ReloadableMaterial? atlasWanderMaterial;
+	readonly ReloadableMaterial? colorFieldMaterial;
 	readonly ReloadableMaterial? lightingCompositeMaterial;
 	readonly ReloadableMaterial? reflectionDistortMaterial;
 	readonly ReloadableMaterial? tileFieldStampMaterial;
@@ -2261,7 +2374,11 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
 	readonly ReloadableMaterial? foregroundDecalMaskMaterial;
+	readonly ReloadableMaterial? backgroundColorFieldDecalMaterial;
+	readonly ReloadableMaterial? foregroundColorFieldDecalMaterial;
 	readonly ReloadableMaterial? coverageMaskMaterial;
+	bool hasBackgroundColorField;
+	bool hasForegroundColorField;
 	Vector2 atlasWanderOffset;
 	float atlasWanderElapsed;
 	const float SdfAuraScrollSpeed = 14f; // px/sec the rainbow bands travel outward
@@ -2286,5 +2403,12 @@ public sealed partial class GameView
 
 		public void Dispose()
 			=> Target.Dispose();
+	}
+
+	sealed class RoomColorFieldTextureCache(Texture texture) : IDisposable
+	{
+		public readonly Texture Texture = texture;
+		public int Version = -1;
+		public void Dispose() => Texture.Dispose();
 	}
 }

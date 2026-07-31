@@ -98,6 +98,7 @@ public partial class Manager
 	float maskPaintStrength = 1.0f;
 	int maskPaintPreviewSteps = 128;
 	bool maskPaintStroke;
+	readonly RoomColorFieldPainter roomColorFieldPainter = new();
 	readonly JsonUndoManager undo = new();
 	// Mutable struct on purpose: methods called through this field update its state in place.
 	// Assigned in the Manager constructor (it needs `undo`).
@@ -174,6 +175,7 @@ public partial class Manager
 	const string PrefabUndoSlot = "prefab";
 	const string RoomSettingsUndoSlot = "room-settings";
 	const string ActorPropertyUndoSlot = "actor-property";
+	const string RoomColorFieldUndoSlot = "room-color-field";
 
 	// The HasPending guard keeps repeat calls during a drag from re-allocating the targets.
 	void OpenPendingRoomUndo(string slot, string name, Room room)
@@ -212,6 +214,7 @@ public partial class Manager
 		{
 			using (PerfStats.Time(PerfDetail.PaletteImGui))
 				PaletteImGui();
+			DrawPaintOverlay();
 		}
 		if (!playing && !startingPlay)
 		{
@@ -259,6 +262,8 @@ public partial class Manager
 
 	void ClearEditorStateForEnteringPlayMode()
 	{
+		EndRoomColorFieldPainting();
+		EndMaskPainting();
 		editingRoomGeometry = false;
 	}
 
@@ -371,7 +376,20 @@ public partial class Manager
 			Input.Keyboard.Down(Keys.LeftOS) ||
 			Input.Keyboard.Down(Keys.RightOS);
 		if (!modifier)
+		{
+			if (Input.Keyboard.Pressed(Keys.P) && CurrentRoom is { } room)
+			{
+				if (roomColorFieldPainter.IsActive(room))
+					EndRoomColorFieldPainting();
+				else
+				{
+					EndMaskPainting();
+					roomColorFieldPainter.Start(room, activeTileLayer);
+				}
+				return true;
+			}
 			return false;
+		}
 
 		// In room-edit mode the clipboard operates on whole rooms; otherwise on the selected actor.
 		if (editingRoomGeometry)
@@ -968,6 +986,13 @@ public partial class Manager
 			OpenRoomSettingsUndo("Edit Room Notes", room);
 			room.Notes = notes;
 		}
+
+		ImGui.SeparatorText("Color Fields");
+		var wasColorPainting = roomColorFieldPainter.IsActive(room);
+		if (roomColorFieldPainter.DrawStartStop(room, activeTileLayer) && !wasColorPainting)
+			EndMaskPainting();
+		if (wasColorPainting && !roomColorFieldPainter.IsActive(room))
+			CommitRoomColorFieldStroke(room);
 
 		ImGui.TextUnformatted("Backdrop");
 		var backdrop = room.BackdropColor.ToVector3();
@@ -1957,26 +1982,101 @@ public partial class Manager
 		{
 			EndMaskPainting();
 			if (!painting)
+			{
+				EndRoomColorFieldPainting();
 				maskPaintActorId = actorId;
+			}
 		}
+	}
 
-		if (!painting)
+	void DrawPaintOverlay()
+	{
+		if (CurrentRoom is not { } room)
 			return;
 
-		string?[] slotFiles =
-		[
-			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile)),
-			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile1)),
-			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile2)),
-			ActorSpecs.ReadString(actor, nameof(NeuralTextureActor.WeightsFile3)),
-		];
-		for (var slot = 0; slot < slotFiles.Length; slot++)
+		JsonObject? maskActor = null;
+		if (maskPaintActorId != null)
+			foreach (var actor in room.Actors)
+				if (ActorSpecs.ReadString(actor, "Id") == maskPaintActorId)
+				{
+					maskActor = actor;
+					break;
+				}
+
+		var colorPainting = roomColorFieldPainter.IsActive(room);
+		if (!colorPainting && maskActor == null)
+			return;
+
+		var flags =
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.AlwaysAutoResize |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoMove |
+			ImGuiWindowFlags.NoFocusOnAppearing;
+		ImGui.SetNextWindowPos(GameViewRect.TopLeft + new Vector2(10, 10), ImGuiCond.Always);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 10));
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 2);
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 2);
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(7, 5));
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.12f, 0.015f, 0.08f, 0.96f));
+		ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 0.24f, 0.55f, 1.0f));
+		ImGui.Begin("Painting Controls", flags);
+		ImGui.TextColored(new Vector4(1.0f, 0.4f, 0.65f, 1.0f),
+			colorPainting ? "ROOM COLOR PAINTING ACTIVE" : "NEURAL MASK PAINTING ACTIVE");
+		ImGui.Separator();
+		ImGui.PushItemWidth(220);
+		if (colorPainting)
+			DrawRoomColorPaintOverlay(room);
+		else
+			DrawMaskPaintOverlay(room, maskActor!);
+		ImGui.PopItemWidth();
+		ImGui.End();
+		ImGui.PopStyleColor(2);
+		ImGui.PopStyleVar(4);
+	}
+
+	void DrawRoomColorPaintOverlay(Room room)
+	{
+		if (ImGui.Button("Stop Painting"))
 		{
-			if (slot > 0 && string.IsNullOrEmpty(slotFiles[slot]))
+			EndRoomColorFieldPainting();
+			return;
+		}
+
+		roomColorFieldPainter.DrawBrushControls(out var clear);
+		if (clear)
+		{
+			using (CaptureRoomUndo($"Clear {roomColorFieldPainter.Layer} Color Field", room))
+				roomColorFieldPainter.Field(room).Clear();
+			SyncRoomColorFieldPreview(room);
+			room.Save();
+		}
+		ImGui.TextDisabled("Drag in the room to paint.\nRight-drag erases. P or Esc stops.");
+	}
+
+	void DrawMaskPaintOverlay(Room room, JsonObject actor)
+	{
+		var actorId = maskPaintActorId!;
+		if (ImGui.Button("Stop Painting"))
+		{
+			EndMaskPainting();
+			return;
+		}
+
+		for (var slot = 0; slot < 4; slot++)
+		{
+			var file = ActorSpecs.ReadString(actor, slot switch
+			{
+				0 => nameof(NeuralTextureActor.WeightsFile),
+				1 => nameof(NeuralTextureActor.WeightsFile1),
+				2 => nameof(NeuralTextureActor.WeightsFile2),
+				_ => nameof(NeuralTextureActor.WeightsFile3),
+			});
+			if (slot > 0 && string.IsNullOrEmpty(file))
 				continue;
-			var name = string.IsNullOrEmpty(slotFiles[slot])
+			var name = string.IsNullOrEmpty(file)
 				? "(default)"
-				: Path.GetFileNameWithoutExtension(slotFiles[slot])!.Replace('_', ' ');
+				: Path.GetFileNameWithoutExtension(file)!.Replace('_', ' ');
 			if (ImGui.RadioButton($"{name}##MaskSlot{slot}", maskPaintSlot == slot))
 				maskPaintSlot = slot;
 		}
@@ -3580,6 +3680,79 @@ public partial class Manager
 		return true;
 	}
 
+	bool UpdateRoomColorFieldPainting(Rect inner, bool worldMouseBlocked, bool keyboardBlocked)
+	{
+		if (!roomColorFieldPainter.Active)
+			return false;
+		if (CurrentRoom is not { } room || !roomColorFieldPainter.IsActive(room))
+		{
+			EndRoomColorFieldPainting();
+			return false;
+		}
+
+		if (!keyboardBlocked && Input.Keyboard.Pressed(Keys.Escape))
+		{
+			EndRoomColorFieldPainting();
+			return true;
+		}
+
+		if (maskPaintActorId != null)
+			EndMaskPainting();
+
+		var canInteract = !worldMouseBlocked && inner.Contains(Cursor);
+		if (canInteract && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
+		{
+			if (!roomColorFieldPainter.Stroke)
+			{
+				undo.OpenPending(RoomColorFieldUndoSlot, room.Id, $"Paint {roomColorFieldPainter.Layer} Color Field",
+					CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
+				roomColorFieldPainter.Stroke = true;
+			}
+
+			if (roomColorFieldPainter.Paint(room, ScreenToEditorWorld(Cursor, inner), Time.Delta, Input.Mouse.RightDown))
+				SyncRoomColorFieldPreview(room);
+		}
+		else if (roomColorFieldPainter.Stroke)
+			CommitRoomColorFieldStroke(room);
+
+		return true;
+	}
+
+	void EndRoomColorFieldPainting()
+	{
+		if (CurrentRoom is { } room)
+			CommitRoomColorFieldStroke(room);
+		else
+		{
+			undo.CommitPending(RoomColorFieldUndoSlot);
+			roomColorFieldPainter.Stroke = false;
+		}
+		roomColorFieldPainter.Stop();
+	}
+
+	void CommitRoomColorFieldStroke(Room room)
+	{
+		if (!roomColorFieldPainter.Stroke)
+			return;
+		roomColorFieldPainter.Stroke = false;
+		undo.CommitPending(RoomColorFieldUndoSlot);
+		room.Save();
+		MarkRoomPreviewDirty(room);
+	}
+
+	void SyncRoomColorFieldPreview(Room room)
+	{
+		if (game?.CurrentRoom is { } preview && preview.Id == room.Id)
+		{
+			var source = roomColorFieldPainter.Field(room);
+			var destination = roomColorFieldPainter.Layer == Factory.TileLayer.Foreground
+				? preview.ForegroundColorField
+				: preview.BackgroundColorField;
+			destination.CopyFrom(source);
+		}
+		MarkRoomPreviewDirty(room);
+	}
+
 	void EndMaskPainting()
 	{
 		if (maskPaintActorId != null && maskPaintStroke && FindLiveNeuralTextureActor(maskPaintActorId) is { } live)
@@ -3773,6 +3946,8 @@ public partial class Manager
 
 		var eyedropper = !keyboardBlocked && Input.Keyboard.Alt;
 		if (UpdateLinkedDoorTargetPicker(inner, visibleWorld, worldMouseBlocked, keyboardBlocked))
+			worldMouseBlocked = true;
+		if (UpdateRoomColorFieldPainting(inner, worldMouseBlocked, keyboardBlocked))
 			worldMouseBlocked = true;
 		if (UpdateMaskPainting(inner, worldMouseBlocked, keyboardBlocked))
 			worldMouseBlocked = true;
@@ -4225,6 +4400,14 @@ public partial class Manager
 				var brushColor = maskPaintSlot < 0 ? new Color(255, 90, 90, 255) : Color.White;
 				batcher.CircleLine(worldMouse, maskPaintRadius, gridWeight, 48, brushColor);
 				var core = maskPaintRadius * (1.0f - maskPaintSoftness);
+				if (core > 1.0f)
+					batcher.CircleLine(worldMouse, core, gridWeight, 48, brushColor * 0.4f);
+			}
+			if (roomColorFieldPainter.IsActive(editing))
+			{
+				var brushColor = Input.Mouse.RightDown ? new Color(255, 90, 90, 255) : roomColorFieldPainter.BrushColor;
+				batcher.CircleLine(worldMouse, roomColorFieldPainter.Radius, gridWeight, 48, brushColor);
+				var core = roomColorFieldPainter.Radius * (1.0f - roomColorFieldPainter.Softness);
 				if (core > 1.0f)
 					batcher.CircleLine(worldMouse, core, gridWeight, 48, brushColor * 0.4f);
 			}

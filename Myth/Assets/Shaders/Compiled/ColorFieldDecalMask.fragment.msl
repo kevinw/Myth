@@ -1,0 +1,34 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct type_FragmentUniformBlock
+{
+    float4 TargetSize;
+};
+
+struct fragment_main_out
+{
+    float4 out_var_SV_Target0 [[color(0)]];
+};
+
+struct fragment_main_in
+{
+    float2 in_var_TEXCOORD0 [[user(locn0)]];
+    float4 in_var_TEXCOORD1 [[user(locn1)]];
+    float4 in_var_TEXCOORD4 [[user(locn2)]];
+};
+
+fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Texture [[texture(0)]], texture2d<float> Coverage [[texture(1)]], texture2d<float> Field [[texture(2)]], sampler Sampler [[sampler(0)]], sampler CoverageSampler [[sampler(1)]], sampler FieldSampler [[sampler(2)]], float4 gl_FragCoord [[position]])
+{
+    fragment_main_out out = {};
+    float4 _45 = Texture.sample(Sampler, in.in_var_TEXCOORD0);
+    float2 _64 = gl_FragCoord.xy / FragmentUniformBlock.TargetSize.xy;
+    float4 _70 = ((((_45 * in.in_var_TEXCOORD4.x) * in.in_var_TEXCOORD1) + (in.in_var_TEXCOORD1 * (in.in_var_TEXCOORD4.y * _45.w))) + (in.in_var_TEXCOORD1 * in.in_var_TEXCOORD4.z)) * Coverage.sample(CoverageSampler, _64).x;
+    float4 _74 = Field.sample(FieldSampler, _64);
+    float3 _80 = _70.xyz * ((float3(1.0) - _74.www) + _74.xyz);
+    out.out_var_SV_Target0 = float4(_80.x, _80.y, _80.z, _70.w);
+    return out;
+}
+

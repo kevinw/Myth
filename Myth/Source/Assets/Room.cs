@@ -85,6 +85,8 @@ public class Room
 	/// Tile grids
 	public char[,] Tiles;
 	public char[,] BackgroundTiles;
+	public RoomColorField ForegroundColorField;
+	public RoomColorField BackgroundColorField;
 	Factory.Entry?[,] tileEntries;
 	Factory.Entry?[,] backgroundTileEntries;
 	TileFlags[,] tileFlags;
@@ -188,7 +190,9 @@ public class Room
 			LightingDitherScale = LightingDitherScale,
 			LightingDitherStrength = LightingDitherStrength,
 			NormalDitherSlopeBoost = NormalDitherSlopeBoost,
-			NormalDitherQuantization = NormalDitherQuantization
+			NormalDitherQuantization = NormalDitherQuantization,
+			ForegroundColorField = ForegroundColorField.Clone(),
+			BackgroundColorField = BackgroundColorField.Clone()
 		};
 
 		for (var x = 0; x < Size.X; x++)
@@ -219,6 +223,8 @@ public class Room
 		Size = size;
 		Tiles = new char[Size.X, Size.Y];
 		BackgroundTiles = new char[Size.X, Size.Y];
+		ForegroundColorField = new(Size);
+		BackgroundColorField = new(Size);
 		tileEntries = new Factory.Entry?[Size.X, Size.Y];
 		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 		tileFlags = new TileFlags[Size.X, Size.Y];
@@ -237,6 +243,11 @@ public class Room
 
 	void LoadJson(JsonObject json)
 	{
+		if (json["colorFields"] is JsonObject colorFields)
+		{
+			ForegroundColorField.Deserialize(JsonUtil.ReadString(colorFields, "foreground"), Size);
+			BackgroundColorField.Deserialize(JsonUtil.ReadString(colorFields, "background"), Size);
+		}
 		MusicArea = JsonUtil.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
 			MusicArea = null;
@@ -579,6 +590,7 @@ public class Room
 		var previousTiles = Tiles;
 		var previousBackgroundTiles = BackgroundTiles;
 		var previousTileFlags = tileFlags;
+		var colorFieldOffset = bounds.Position - previousPosition;
 
 		TileSpacePosition = bounds.Position;
 		Size = bounds.Size;
@@ -587,6 +599,8 @@ public class Room
 		tileEntries = new Factory.Entry?[Size.X, Size.Y];
 		backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 		tileFlags = new TileFlags[Size.X, Size.Y];
+		ForegroundColorField.Resize(Size, colorFieldOffset);
+		BackgroundColorField.Resize(Size, colorFieldOffset);
 
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
@@ -1297,14 +1311,14 @@ public class Room
 			Reverb = InferReverb();
 
 		var buffer = new ArrayBufferWriter<byte>();
-		WriteJson(buffer);
+		WriteJson(buffer, includeColorFields: false);
 		Assets.SaveRoom(this, buffer.WrittenSpan);
 	}
 
 	public string ToJsonString()
 	{
 		var buffer = new ArrayBufferWriter<byte>();
-		WriteJson(buffer);
+		WriteJson(buffer, includeColorFields: true);
 		return Encoding.UTF8.GetString(buffer.WrittenSpan);
 	}
 
@@ -1347,7 +1361,7 @@ public class Room
 			writer.WriteEndObject();
 	}
 
-	void WriteJson(IBufferWriter<byte> output)
+	void WriteJson(IBufferWriter<byte> output, bool includeColorFields)
 	{
 		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true, NewLine = "\n" });
 		writer.WriteStartObject();
@@ -1393,6 +1407,16 @@ public class Room
 			writer.WriteNumberValue(SunDirection.X);
 			writer.WriteNumberValue(SunDirection.Y);
 			writer.WriteEndArray();
+			writer.WriteEndObject();
+		}
+
+		if (includeColorFields && (ForegroundColorField.HasPaint || BackgroundColorField.HasPaint))
+		{
+			writer.WriteStartObject("colorFields");
+			if (ForegroundColorField.HasPaint)
+				writer.WriteString("foreground", ForegroundColorField.Serialize());
+			if (BackgroundColorField.HasPaint)
+				writer.WriteString("background", BackgroundColorField.Serialize());
 			writer.WriteEndObject();
 		}
 
@@ -1511,10 +1535,14 @@ public class Room
 			Size = size;
 			Tiles = new char[Size.X, Size.Y];
 			BackgroundTiles = new char[Size.X, Size.Y];
+			ForegroundColorField.Resize(Size, Point2.Zero);
+			BackgroundColorField.Resize(Size, Point2.Zero);
 			tileEntries = new Factory.Entry?[Size.X, Size.Y];
 			backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 			tileFlags = new TileFlags[Size.X, Size.Y];
 		}
+		ForegroundColorField.Deserialize(null, Size);
+		BackgroundColorField.Deserialize(null, Size);
 
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)

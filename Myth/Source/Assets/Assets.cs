@@ -2949,6 +2949,7 @@ public static class Assets
 				room.Storage = Room.StorageKind.Bundled;
 				// Zip content has no per-room file to rename/delete; SourcePath stays null there.
 				room.SourcePath = ContentIsZip ? null : Path.Join(AssetsPath, key);
+				LoadRoomColorFields(room, key);
 				AddRoom(room);
 			}
 
@@ -2958,6 +2959,7 @@ public static class Assets
 				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(file), File.ReadAllText(file));
 				room.Storage = Room.StorageKind.User;
 				room.SourcePath = file;
+				LoadRoomColorFields(room, file, fromContent: false);
 				AddRoom(room);
 			}
 
@@ -2993,6 +2995,7 @@ public static class Assets
 		File.WriteAllBytes(path, json);
 		room.Storage = IsUserRoomPath(path) ? Room.StorageKind.User : Room.StorageKind.Bundled;
 		room.SourcePath = path;
+		SaveRoomColorFields(room, path);
 		if (room.Storage == Room.StorageKind.User)
 			ClearUserRoomTombstone(room.Id);
 	}
@@ -3008,6 +3011,8 @@ public static class Assets
 			return true;
 
 		var oldPath = room.SourcePath;
+		var oldForegroundColorPath = room.ForegroundColorField.SourcePath;
+		var oldBackgroundColorPath = room.BackgroundColorField.SourcePath;
 		var oldBundledPath = BundledRoomPath(oldId);
 		var oldHadBundledRoom = File.Exists(oldBundledPath);
 		room.Id = id;
@@ -3016,6 +3021,8 @@ public static class Assets
 		room.Save();
 
 		DeleteRoomFile(oldPath, oldId);
+		DeleteColorFieldFile(oldForegroundColorPath);
+		DeleteColorFieldFile(oldBackgroundColorPath);
 		if (oldHadBundledRoom && !string.Equals(oldPath, oldBundledPath, StringComparison.Ordinal))
 			WriteUserRoomTombstone(oldId);
 
@@ -3046,6 +3053,8 @@ public static class Assets
 
 		var bundledPath = BundledRoomPath(room.Id);
 		var hadBundledRoom = File.Exists(bundledPath);
+		DeleteColorFieldFile(room.ForegroundColorField.SourcePath);
+		DeleteColorFieldFile(room.BackgroundColorField.SourcePath);
 		DeleteRoomFile(room.SourcePath, room.Id);
 		if (hadBundledRoom && !string.Equals(room.SourcePath, bundledPath, StringComparison.Ordinal))
 			WriteUserRoomTombstone(room.Id);
@@ -3074,6 +3083,69 @@ public static class Assets
 			throw new InvalidOperationException("User room path has not been configured.");
 
 		return Path.Join(userRoomsPath, currentWorldId, $"{id}.json");
+	}
+
+	static void LoadRoomColorFields(Room room, string roomPath, bool fromContent = true)
+	{
+		LoadRoomColorField(room.ForegroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Foreground), room.Size, fromContent);
+		LoadRoomColorField(room.BackgroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Background), room.Size, fromContent);
+	}
+
+	static void LoadRoomColorField(RoomColorField field, string path, Point2 size, bool fromContent)
+	{
+		try
+		{
+			if (fromContent)
+			{
+				if (!Content.FileExists(path))
+					return;
+				field.Load(Content.ReadAllBytes(path), size, ContentIsZip ? null : Path.Join(AssetsPath, path));
+			}
+			else if (File.Exists(path))
+				field.Load(File.ReadAllBytes(path), size, path);
+		}
+		catch (Exception exception)
+		{
+			Console.Error.WriteLine($"Could not load room color field '{path}': {exception.Message}");
+		}
+	}
+
+	static void SaveRoomColorFields(Room room, string roomPath)
+	{
+		SaveRoomColorField(room.ForegroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Foreground));
+		SaveRoomColorField(room.BackgroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Background));
+	}
+
+	static void SaveRoomColorField(RoomColorField field, string path)
+	{
+		if (!field.Dirty && string.Equals(field.SourcePath, path, StringComparison.Ordinal))
+			return;
+
+		if (!field.HasPaint)
+		{
+			DeleteColorFieldFile(field.SourcePath);
+			if (!string.Equals(field.SourcePath, path, StringComparison.Ordinal))
+				DeleteColorFieldFile(path);
+			field.MarkSaved(null);
+			return;
+		}
+
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		File.WriteAllBytes(path, field.WritePng());
+		field.MarkSaved(path);
+	}
+
+	static string RoomColorFieldPath(string roomPath, Factory.TileLayer layer)
+	{
+		var extension = Path.GetExtension(roomPath);
+		var stem = extension.Length > 0 ? roomPath[..^extension.Length] : roomPath;
+		return $"{stem}.{(layer == Factory.TileLayer.Foreground ? "foreground" : "background")}-color.png";
+	}
+
+	static void DeleteColorFieldFile(string? path)
+	{
+		if (path != null && File.Exists(path) && CanDeleteFile(path))
+			File.Delete(path);
 	}
 
 	static bool IsUserRoomPath(string path)

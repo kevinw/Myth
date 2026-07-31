@@ -25,11 +25,14 @@ public sealed partial class GameView : IDisposable
 		gpuLighting = loadVisualShaders ? new(gd) : null;
 		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
 		atlasWanderMaterial = loadVisualShaders ? CreateFragmentMaterial("AtlasWander", samplerCount: 1, uniformBufferCount: 1) : null;
+		colorFieldMaterial = loadVisualShaders ? CreateFragmentMaterial("ColorField", samplerCount: 2, uniformBufferCount: 1) : null;
 		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 12, uniformBufferCount: 1) : null;
 		blurMaterial = loadVisualShaders ? CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1) : null;
 		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
 		backgroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;
 		foregroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;
+		backgroundColorFieldDecalMaterial = loadVisualShaders ? CreateFragmentMaterial("ColorFieldDecalMask", samplerCount: 3, uniformBufferCount: 1) : null;
+		foregroundColorFieldDecalMaterial = loadVisualShaders ? CreateFragmentMaterial("ColorFieldDecalMask", samplerCount: 3, uniformBufferCount: 1) : null;
 		coverageMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("CoverageMask", samplerCount: 1) : null;
 		// Transient preview/thumbnail games skip particles: they render and dispose
 		// in one synchronous call, which would free the GPU draw resources while the
@@ -244,6 +247,7 @@ public sealed partial class GameView : IDisposable
 	{
 		crtMaterial?.Reload();
 		atlasWanderMaterial?.Reload();
+		colorFieldMaterial?.Reload();
 		lightingCompositeMaterial?.Reload();
 		gpuLighting?.ReloadShaders();
 		reflectionDistortMaterial?.Reload();
@@ -253,6 +257,8 @@ public sealed partial class GameView : IDisposable
 		sdfAuraMaterial?.Reload();
 		backgroundDecalMaskMaterial?.Reload();
 		foregroundDecalMaskMaterial?.Reload();
+		backgroundColorFieldDecalMaterial?.Reload();
+		foregroundColorFieldDecalMaterial?.Reload();
 		coverageMaskMaterial?.Reload();
 	}
 #endif
@@ -263,8 +269,10 @@ public sealed partial class GameView : IDisposable
 		DisposeRenderTargets();
 		DisposeRoomNormalCaches();
 		DisposeRoomTileFieldCaches();
+		DisposeRoomColorFieldCaches();
 		crtMaterial?.Dispose();
 		atlasWanderMaterial?.Dispose();
+		colorFieldMaterial?.Dispose();
 		lightingCompositeMaterial?.Dispose();
 		reflectionDistortMaterial?.Dispose();
 		tileFieldStampMaterial?.Dispose();
@@ -274,6 +282,8 @@ public sealed partial class GameView : IDisposable
 		sdfAuraMaterial?.Dispose();
 		backgroundDecalMaskMaterial?.Dispose();
 		foregroundDecalMaskMaterial?.Dispose();
+		backgroundColorFieldDecalMaterial?.Dispose();
+		foregroundColorFieldDecalMaterial?.Dispose();
 		coverageMaskMaterial?.Dispose();
 		particleSystem?.Dispose();
 		gpuLighting?.Dispose();
