@@ -130,7 +130,7 @@ public abstract class Pawn : Actor
 	protected static float RollJumpSpeed => 150;
 	protected static float RollJumpCarryTime => 0.28f;
 	static float AirborneRollDistance => Game.TileSize * 2f;
-	protected static float DashSpeed => 220;
+	protected static float DashSpeed => 250;
 	protected static float DashDuration => 0.15f;
 	protected static float DashCooldown => 0.154f;
 	// Rope climbing: hold up near a rope to grab on (see Rope + ClimbState). Movement-toy
