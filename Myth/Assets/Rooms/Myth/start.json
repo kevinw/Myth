@@ -93,7 +93,7 @@
     {
       "Id": "a1f30c88d21e4b03",
       "Type": "Jumpthru",
-      "Position": [192, 88],
+      "Position": [192, 96],
       "Size": [32, 8]
     },
     {
@@ -147,7 +147,9 @@
     {
       "Id": "58cc3fa613938e36",
       "Type": "Wildlife",
-      "Position": [200, 56]
+      "Position": [200, 56],
+      "FishCount": 3,
+      "BugCount": 5
     }
   ]
 }

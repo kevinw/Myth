@@ -89,14 +89,16 @@
       "Id": "b2e41d99e32f5c03",
       "Type": "Light",
       "Position": [104, 72],
-      "Radius": 80.0
+      "Radius": 80.0,
+      "Height": 5.65
     },
     {
       "Id": "b2e41d99e32f5c04",
       "From": "BlueMemoryLight",
       "Position": [252, 124],
       "Radius": 100.0,
-      "Intensity": 0.7
+      "Intensity": 0.7,
+      "Height": 2.7
     },
     {
       "Id": "b2e41d99e32f5c05",
