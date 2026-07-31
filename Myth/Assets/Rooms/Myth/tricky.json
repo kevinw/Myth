@@ -176,6 +176,12 @@
       "Id": "8b87170aefa0e921",
       "Type": "Chest",
       "Position": [36, 160]
+    },
+    {
+      "Id": "303cf9672bffa360",
+      "Type": "ParticleEmitter",
+      "Position": [148, 52],
+      "EffectName": "pollen_light"
     }
   ]
 }

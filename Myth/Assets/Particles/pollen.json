@@ -19,6 +19,7 @@
   "SizeEnd": 0.95,
   "Additive": false,
   "Style": "Square",
+  "LightResponse": 0.677,
   "Collision": "Settle",
   "Bounciness": 0,
   "TrailSeconds": 0,
