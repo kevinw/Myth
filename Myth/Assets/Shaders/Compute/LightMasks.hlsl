@@ -1,4 +1,4 @@
-#include "../Common.hlsl"
+#include "Common.hlsl"
 
 #define POINT_SHADOW_SAMPLES 512
 #define MAX_LIGHTS 64

@@ -24,18 +24,17 @@ jobs:
           lfs: false
           submodules: false
 
-      # Fetch only the LFS objects + submodule the browser build needs. Skips
+      # Fetch only the LFS objects and submodules the browser build needs. Skips
       # ~137 MB of iOS-only binaries (xcframeworks, iOS FMOD libs), dev-only
       # Production assets, audio authoring sources (the browser ships built Mobile
       # banks, which live outside Sources), and the iOS cimgui-src submodule. This
       # deliberately includes Assets/NCA/**/*.bin; the content-pack build below
       # selects the referenced models and fails if LFS left any of them as pointers.
-      - name: Fetch browser LFS + Foster submodule
+      - name: Fetch browser LFS + submodules
         run: |
           set -euo pipefail
           git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production,Myth/Assets/Sources/Sounds"
-          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster
-          git -C Foster lfs pull --exclude="Framework/Internal/Native/ios,Framework/Internal/Native/win-x64,Framework/Internal/Native/osx,tools/macos"
+          git submodule update --init Foster
           git submodule update --init --remote Myth/Source/External/StringBuilder
 
       - name: Cache .NET SDK and workloads

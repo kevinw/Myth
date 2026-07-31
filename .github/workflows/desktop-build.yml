@@ -31,7 +31,6 @@ jobs:
         run: |
           set -euo pipefail
           git submodule update --init Foster Myth/Source/External/StringBuilder
-          git -C Foster lfs pull
 
       # The arm64 shadercross binary depends on locally-built dylibs that aren't part
       # of Foster. Shipped MSL is committed; make it newer than Git's checkout mtimes
@@ -141,8 +140,7 @@ jobs:
       - name: Fetch Linux shader compiler
         run: |
           set -euo pipefail
-          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster
-          git -C Foster lfs pull --include='tools/linux/**'
+          git submodule update --init Foster
           chmod +x Foster/tools/linux/shadercross
 
       - name: Set up .NET
@@ -187,8 +185,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init Foster Myth/Source/External/StringBuilder
-          git -C Foster lfs pull --include='Framework/Internal/Native/win-x64/**'
+          git submodule update --init Foster Myth/Source/External/StringBuilder
 
       - name: Restore compiled Windows shaders
         working-directory: Myth/Platforms/Web
