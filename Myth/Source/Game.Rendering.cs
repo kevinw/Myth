@@ -426,7 +426,7 @@ public sealed partial class GameView
 			return true;
 		}
 
-		if (actor is not Grid and not DualGrid and not Prop || colorFieldMaterial == null)
+		if (actor is not Grid and not DualGrid and not Prop and not HiddenCoverGrid and not HiddenWallGrid || colorFieldMaterial == null)
 			return false;
 
 		colorFieldMaterial.Material.Fragment.SetUniformBuffer([field.Width, field.Height, 0, 0]);
