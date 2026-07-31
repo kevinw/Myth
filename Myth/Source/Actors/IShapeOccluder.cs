@@ -5,8 +5,7 @@ using Foster.Framework;
 namespace Myth;
 
 // A solid shape an actor presents to the lighting system as a dynamic shadow caster -- the moving
-// equivalent of a solid tile's static occluder. Occluders emit world-space edge segments (the
-// currency the visibility-polygon and sun-shadow passes already consume), so any silhouette -- a
+// equivalent of a solid tile's static occluder. Occluders emit world-space edge segments, so any silhouette -- a
 // rect, a circle, or a tile-traced outline -- plugs in the same way and matches its own art.
 enum ShapeType
 {
@@ -36,8 +35,8 @@ readonly struct OccluderShape
 		=> new(ShapeType.Circle, default, center, radius);
 
 	// Append the shape's perimeter as world-space segments. A circle becomes an octagon; segments
-	// are undirected (both the visibility and sun passes treat them so), so winding doesn't matter.
-	public void AppendSegments(List<VisibilityPolygon.Segment> segments)
+	// are undirected (both point and sun shadow passes treat them so), so winding doesn't matter.
+	public void AppendSegments(List<ShadowSegment> segments)
 	{
 		if (Type == ShapeType.Rect)
 		{
@@ -77,5 +76,5 @@ interface IShapeOccluder
 	bool CastsShadow { get; }
 
 	// Append this occluder's silhouette as world-space segments.
-	void AppendOccluderSegments(List<VisibilityPolygon.Segment> segments);
+	void AppendOccluderSegments(List<ShadowSegment> segments);
 }

@@ -275,7 +275,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	CellState[] emptyState = [];
 	Point2 updateOrigin;
 	Point2 updateSize;
-	readonly List<VisibilityPolygon.Segment> occluderSegments = [];
+	readonly List<ShadowSegment> occluderSegments = [];
 	string maskData = "";
 	uint normalSlots;
 	bool currentIsB;
@@ -460,7 +460,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 	bool IShapeOccluder.CastsShadow => CastsMaskShadow && supported;
 
-	public void AppendOccluderSegments(List<VisibilityPolygon.Segment> segments)
+	public void AppendOccluderSegments(List<ShadowSegment> segments)
 	{
 		var offset = (Vector2)Position;
 		foreach (var segment in occluderSegments)

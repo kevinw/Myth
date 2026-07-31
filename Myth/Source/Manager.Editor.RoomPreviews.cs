@@ -25,7 +25,7 @@ public partial class Manager
 	Target? activeRoomPreviewTarget;
 	string? activeRoomPreviewId;
 	// Cache state for the active room preview: it is only re-rendered when one of these
-	// changed, instead of every frame (the full lighting/visibility render was the editor's
+	// changed, instead of every frame (the full lighting/shadow render was the editor's
 	// dominant cost). See GetActiveRoomPreview.
 	int activeRoomPreviewVersion = -1;
 	bool activeRoomPreviewShowForeground;
@@ -56,7 +56,7 @@ public partial class Manager
 		// same signal cached previews use, set by MarkRoomPreviewDirty/InvalidateRoomPreview),
 		// a layer-visibility toggle, the target was recreated (room/size change), or a
 		// particle emitter is animating live. Otherwise reuse last frame's render â€” the full
-		// lighting/visibility pass was the editor's dominant per-frame cost.
+		// lighting/shadow pass was the editor's dominant per-frame cost.
 		var version = GetRoomPreviewVersion(room);
 		var needsRender = game != null && (recreated
 			|| activeRoomPreviewVersion != version

@@ -7,7 +7,7 @@ public class HiddenCoverGrid : Actor
 {
 	readonly record struct RevealDoorSpec(string Id, RectInt Rect, RevealDoor.RevealDirection Direction, string TileType);
 	readonly record struct DrawCommand(Subtexture Tile, Subtexture Normal, Point2 Vertex, Vector2 Position, int MaterialMask, int CoverMask, int RegionId);
-	readonly record struct HiddenSegment(VisibilityPolygon.Segment Segment, int RegionId);
+	readonly record struct HiddenSegment(ShadowSegment Segment, int RegionId);
 	readonly record struct SegmentRun(float Axis, float Start, float End, int RegionId);
 
 	static readonly Point2[] MaskToTile =
@@ -31,7 +31,7 @@ public class HiddenCoverGrid : Actor
 	];
 
 	readonly List<DrawCommand> drawCommands = [];
-	readonly List<HiddenSegment> visibilitySegments = [];
+	readonly List<HiddenSegment> shadowSegments = [];
 	Point2 size;
 	char[,] coverTiles = new char[0, 0];
 	int[,] coverRegions = new int[0, 0];
@@ -64,7 +64,7 @@ public class HiddenCoverGrid : Actor
 	{
 		size = room.Size;
 		drawCommands.Clear();
-		visibilitySegments.Clear();
+		shadowSegments.Clear();
 		triggers.Clear();
 		coverTiles = new char[size.X, size.Y];
 		coverRegions = new int[size.X, size.Y];
@@ -145,20 +145,9 @@ public class HiddenCoverGrid : Actor
 	public override void RenderNormals(Batcher batcher)
 		=> RenderTiles(batcher, static command => command.Normal);
 
-	public void AppendVisibilitySegments(List<VisibilityPolygon.Segment> segments, Vector2 lightPosition, float radius)
+	public void AppendAllShadowSegments(List<ShadowSegment> segments)
 	{
-		foreach (var segment in visibilitySegments)
-		{
-			if (!RegionVisible(segment.RegionId) || !VisibilityPolygon.CircleOverlaps(segment.Segment, lightPosition, radius))
-				continue;
-
-			segments.Add(segment.Segment);
-		}
-	}
-
-	public void AppendAllVisibilitySegments(List<VisibilityPolygon.Segment> segments)
-	{
-		foreach (var segment in visibilitySegments)
+		foreach (var segment in shadowSegments)
 			if (RegionVisible(segment.RegionId))
 				segments.Add(segment.Segment);
 	}
@@ -542,11 +531,11 @@ public class HiddenCoverGrid : Actor
 
 				var command = new DrawCommand(subtexture, normal, new Point2(x, y), position, materialMask, coverMask, regionId);
 				drawCommands.Add(command);
-				AppendWorldVisibilitySegments(position, command, occluders);
+				AppendWorldShadowSegments(position, command, occluders);
 			}
 		}
 
-		MergeAxisAlignedVisibilitySegments();
+		MergeAxisAlignedShadowSegments();
 	}
 
 	IEnumerable<char> CoverTileTypes()
@@ -621,7 +610,7 @@ public class HiddenCoverGrid : Actor
 	bool RegionVisible(int regionId)
 		=> regionId >= 0 && regionId < regionAlpha.Length && regionAlpha[regionId] > 0.01f;
 
-	void AppendWorldVisibilitySegments(Vector2 commandPosition, DrawCommand command, Tileset.OccluderSegment[] occluders)
+	void AppendWorldShadowSegments(Vector2 commandPosition, DrawCommand command, Tileset.OccluderSegment[] occluders)
 	{
 		foreach (var local in occluders)
 		{
@@ -629,7 +618,7 @@ public class HiddenCoverGrid : Actor
 			if (owner == null)
 				continue;
 
-			visibilitySegments.Add(new(
+			shadowSegments.Add(new(
 				new(Position + commandPosition + local.A, Position + commandPosition + local.B),
 				coverRegions[owner.Value.X, owner.Value.Y]));
 		}
@@ -647,27 +636,27 @@ public class HiddenCoverGrid : Actor
 	}
 
 	readonly static List<HiddenSegment> _merged = [];
-	void MergeAxisAlignedVisibilitySegments()
+	void MergeAxisAlignedShadowSegments()
 	{
-		if (visibilitySegments.Count <= 1)
+		if (shadowSegments.Count <= 1)
 			return;
 
 		var merged = _merged;
 		merged.Clear();
-		MergeHorizontalVisibilitySegments(merged);
-		MergeVerticalVisibilitySegments(merged);
+		MergeHorizontalShadowSegments(merged);
+		MergeVerticalShadowSegments(merged);
 
-		foreach (var segment in visibilitySegments)
+		foreach (var segment in shadowSegments)
 			if (!IsAxisAligned(segment.Segment))
 				merged.Add(segment);
 
-		visibilitySegments.Clear();
-		visibilitySegments.AddRange(merged);
+		shadowSegments.Clear();
+		shadowSegments.AddRange(merged);
 	}
 
-	void MergeHorizontalVisibilitySegments(List<HiddenSegment> merged)
+	void MergeHorizontalShadowSegments(List<HiddenSegment> merged)
 	{
-		var horizontal = visibilitySegments
+		var horizontal = shadowSegments
 			.Where(static it => NearlyEqual(it.Segment.A.Y, it.Segment.B.Y))
 			.Select(static it =>
 			{
@@ -684,9 +673,9 @@ public class HiddenCoverGrid : Actor
 		MergeRuns(horizontal, merged, static run => new(new(new Vector2(run.Start, run.Axis), new Vector2(run.End, run.Axis)), run.RegionId));
 	}
 
-	void MergeVerticalVisibilitySegments(List<HiddenSegment> merged)
+	void MergeVerticalShadowSegments(List<HiddenSegment> merged)
 	{
-		var vertical = visibilitySegments
+		var vertical = shadowSegments
 			.Where(static it => NearlyEqual(it.Segment.A.X, it.Segment.B.X))
 			.Select(static it =>
 			{
@@ -744,7 +733,7 @@ public class HiddenCoverGrid : Actor
 		}
 	}
 
-	static bool IsAxisAligned(VisibilityPolygon.Segment segment)
+	static bool IsAxisAligned(ShadowSegment segment)
 		=> NearlyEqual(segment.A.X, segment.B.X) || NearlyEqual(segment.A.Y, segment.B.Y);
 
 	static bool NearlyEqual(float a, float b)

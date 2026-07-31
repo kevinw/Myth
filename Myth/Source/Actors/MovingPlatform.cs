@@ -215,7 +215,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
 	public bool CastsShadow => true;
 
-	public void AppendOccluderSegments(List<VisibilityPolygon.Segment> segments)
+	public void AppendOccluderSegments(List<ShadowSegment> segments)
 	{
 		if (Assets.GetTileset(Material) is { } tileset)
 			DualGrid.AppendRectOccluders(segments, tileset, TileColumns, TileRows, new Vector2(Position.X, Position.Y), VariantTileOrigin, MaterialTile);

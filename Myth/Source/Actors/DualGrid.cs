@@ -28,11 +28,11 @@ public class DualGrid : Actor
 	];
 
 	private readonly List<DrawCommand> drawCommands = [];
-	private readonly List<VisibilityPolygon.Segment> visibilitySegments = [];
+	private readonly List<ShadowSegment> shadowSegments = [];
 
 	// Reused across Build() calls so RebuildGeometry (which fires per editor edit)
 	// doesn't churn the GC. Cleared and refilled each merge instead of reallocated.
-	private readonly List<VisibilityPolygon.Segment> mergeScratch = [];
+	private readonly List<ShadowSegment> mergeScratch = [];
 	private readonly List<SegmentRun> horizontalRuns = [];
 	private readonly List<SegmentRun> verticalRuns = [];
 
@@ -84,16 +84,16 @@ public class DualGrid : Actor
 					position,
 					materialMask));
 
-				AppendWorldVisibilitySegments(position, materialMask, occluders);
+				AppendWorldShadowSegments(position, materialMask, occluders);
 			}
 
-		MergeAxisAlignedVisibilitySegments();
+		MergeAxisAlignedShadowSegments();
 	}
 
 	public void Clear()
 	{
 		drawCommands.Clear();
-		visibilitySegments.Clear();
+		shadowSegments.Clear();
 	}
 
 	private static int StableVariantSeed(Room room, char tileType, int x, int y)
@@ -193,7 +193,7 @@ public class DualGrid : Actor
 
 	// World-space occluder segments for the same rectangle, traced from the tileset's per-tile
 	// occluders so a shadow follows the (rounded) art -- the moving counterpart of the room occluders.
-	internal static void AppendRectOccluders(List<VisibilityPolygon.Segment> segments, Tileset tileset, int cols, int rows, Vector2 origin, Point2 variantTileOrigin, char tileType)
+	internal static void AppendRectOccluders(List<ShadowSegment> segments, Tileset tileset, int cols, int rows, Vector2 origin, Point2 variantTileOrigin, char tileType)
 	{
 		foreach (var vertex in new RectVertices(cols, rows))
 		{
@@ -253,26 +253,17 @@ public class DualGrid : Actor
 		}
 	}
 
-	public void AppendVisibilitySegments(List<VisibilityPolygon.Segment> segments, Vector2 lightPosition, float radius)
-	{
-		foreach (var segment in visibilitySegments)
-		{
-			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-				segments.Add(segment);
-		}
-	}
+	public void AppendAllShadowSegments(List<ShadowSegment> segments)
+		=> segments.AddRange(shadowSegments);
 
-	public void AppendAllVisibilitySegments(List<VisibilityPolygon.Segment> segments)
-		=> segments.AddRange(visibilitySegments);
-
-	private void AppendWorldVisibilitySegments(Vector2 commandPosition, int materialMask, Tileset.OccluderSegment[] occluders)
+	private void AppendWorldShadowSegments(Vector2 commandPosition, int materialMask, Tileset.OccluderSegment[] occluders)
 	{
 		foreach (var local in occluders)
 		{
 			if (!OwnsOccluderSegment(materialMask, local))
 				continue;
 
-			visibilitySegments.Add(new(
+			shadowSegments.Add(new(
 				Position + commandPosition + local.A,
 				Position + commandPosition + local.B));
 		}
@@ -288,16 +279,16 @@ public class DualGrid : Actor
 		return (materialMask & quadrant) != 0;
 	}
 
-	private void MergeAxisAlignedVisibilitySegments()
+	private void MergeAxisAlignedShadowSegments()
 	{
-		if (visibilitySegments.Count <= 1)
+		if (shadowSegments.Count <= 1)
 			return;
 
 		mergeScratch.Clear();
 		horizontalRuns.Clear();
 		verticalRuns.Clear();
 
-		foreach (var segment in visibilitySegments)
+		foreach (var segment in shadowSegments)
 		{
 			if (NearlyEqual(segment.A.Y, segment.B.Y))
 				horizontalRuns.Add(new(
@@ -319,11 +310,11 @@ public class DualGrid : Actor
 		MergeRuns(horizontalRuns, mergeScratch, horizontal: true);
 		MergeRuns(verticalRuns, mergeScratch, horizontal: false);
 
-		visibilitySegments.Clear();
-		visibilitySegments.AddRange(mergeScratch);
+		shadowSegments.Clear();
+		shadowSegments.AddRange(mergeScratch);
 	}
 
-	private static void MergeRuns(List<SegmentRun> runs, List<VisibilityPolygon.Segment> merged, bool horizontal)
+	private static void MergeRuns(List<SegmentRun> runs, List<ShadowSegment> merged, bool horizontal)
 	{
 		if (runs.Count == 0)
 			return;
@@ -347,7 +338,7 @@ public class DualGrid : Actor
 			merged.Add(CreateSegment(current, horizontal));
 	}
 
-	private static VisibilityPolygon.Segment CreateSegment(SegmentRun run, bool horizontal)
+	private static ShadowSegment CreateSegment(SegmentRun run, bool horizontal)
 		=> horizontal
 			? new(new Vector2(run.Start, run.Axis), new Vector2(run.End, run.Axis))
 			: new(new Vector2(run.Axis, run.Start), new Vector2(run.Axis, run.End));

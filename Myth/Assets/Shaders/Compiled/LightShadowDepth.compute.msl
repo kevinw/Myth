@@ -1,0 +1,253 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct Segment
+{
+    float4 Coordinates;
+    float4 Properties;
+};
+
+struct type_StructuredBuffer_Segment
+{
+    Segment _m0[1];
+};
+
+struct Light
+{
+    float2 Position;
+    float Radius;
+    float Height;
+    float4 ColorIntensity;
+};
+
+struct type_StructuredBuffer_Light
+{
+    Light _m0[1];
+};
+
+struct type_RWStructuredBuffer_float
+{
+    float _m0[1];
+};
+
+struct type_Params
+{
+    uint SegmentCount;
+    uint LightCount;
+    uint SunEnabled;
+    uint ShadowSamples;
+    float2 SunDirection;
+    float2 SunPerpendicular;
+    float SunPerpendicularMin;
+    float SunPerpendicularMax;
+    float SunAlongMin;
+    float SunAlongMax;
+    float2 Camera;
+    float2 TargetSize;
+    float4 ZoomPadding;
+};
+
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_Segment& Segments [[buffer(1)]], const device type_StructuredBuffer_Light& Lights [[buffer(2)]], device type_RWStructuredBuffer_float& ShadowDepth [[buffer(3)]], texture2d<float> SpriteShadowMask [[texture(0)]], sampler SpriteShadowSampler [[sampler(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    do
+    {
+        bool _84;
+        if (!(gl_GlobalInvocationID.x >= Params.ShadowSamples))
+        {
+            _84 = gl_GlobalInvocationID.y > 64u;
+        }
+        else
+        {
+            _84 = true;
+        }
+        if (_84)
+        {
+            break;
+        }
+        uint _90 = (gl_GlobalInvocationID.y * Params.ShadowSamples) + gl_GlobalInvocationID.x;
+        if (gl_GlobalInvocationID.y < 64u)
+        {
+            if (gl_GlobalInvocationID.y >= Params.LightCount)
+            {
+                ShadowDepth._m0[_90] = 0.0;
+                break;
+            }
+            float _108 = ((float(gl_GlobalInvocationID.x) + 0.5) / float(Params.ShadowSamples)) * 6.283185482025146484375;
+            float _109 = cos(_108);
+            float _110 = sin(_108);
+            float2 _111 = float2(_109, _110);
+            float _113;
+            _113 = Lights._m0[gl_GlobalInvocationID.y].Radius;
+            float _114;
+            for (uint _116 = 0u; _116 < Params.SegmentCount; _113 = _114, _116++)
+            {
+                float _159;
+                bool _160;
+                do
+                {
+                    float2 _129 = Segments._m0[_116].Coordinates.zw - Segments._m0[_116].Coordinates.xy;
+                    float _130 = _129.y;
+                    float _132 = _129.x;
+                    float _134 = (_109 * _130) - (_110 * _132);
+                    if (abs(_134) <= 9.9999997473787516355514526367188e-05)
+                    {
+                        _159 = 0.0;
+                        _160 = false;
+                        break;
+                    }
+                    float2 _139 = Segments._m0[_116].Coordinates.xy - Lights._m0[gl_GlobalInvocationID.y].Position;
+                    float _140 = _139.x;
+                    float _142 = _139.y;
+                    float _145 = ((_140 * _130) - (_142 * _132)) / _134;
+                    float _149 = ((_140 * _110) - (_142 * _109)) / _134;
+                    bool _154;
+                    if (_145 >= 0.0)
+                    {
+                        _154 = _149 >= 0.0;
+                    }
+                    else
+                    {
+                        _154 = false;
+                    }
+                    bool _158;
+                    if (_154)
+                    {
+                        _158 = _149 <= 1.0;
+                    }
+                    else
+                    {
+                        _158 = false;
+                    }
+                    _159 = _145;
+                    _160 = _158;
+                    break;
+                } while(false);
+                if (_160)
+                {
+                    _114 = precise::min(_113, _159);
+                }
+                else
+                {
+                    _114 = _113;
+                }
+            }
+            float _167 = precise::max(0.5, 0.5 / Params.ZoomPadding.x);
+            float _208;
+            float _169 = _167;
+            for (;;)
+            {
+                if (_169 < _113)
+                {
+                    bool _205;
+                    do
+                    {
+                        float2 _182 = ((Lights._m0[gl_GlobalInvocationID.y].Position + (_111 * _169)) - Params.Camera) * Params.ZoomPadding.x;
+                        bool _192;
+                        if (!any(_182 < float2(0.0)))
+                        {
+                            _192 = any(_182 >= Params.TargetSize);
+                        }
+                        else
+                        {
+                            _192 = true;
+                        }
+                        if (_192)
+                        {
+                            _205 = false;
+                            break;
+                        }
+                        _205 = SpriteShadowMask.sample(SpriteShadowSampler, ((_182 + float2(0.5)) / Params.TargetSize), level(0.0)).x > 0.100000001490116119384765625;
+                        break;
+                    } while(false);
+                    if (_205)
+                    {
+                        _208 = _169;
+                        break;
+                    }
+                    _169 += _167;
+                    continue;
+                }
+                else
+                {
+                    _208 = _113;
+                    break;
+                }
+            }
+            ShadowDepth._m0[_90] = _208;
+            break;
+        }
+        if (Params.SunEnabled == 0u)
+        {
+            ShadowDepth._m0[_90] = Params.SunAlongMax;
+            break;
+        }
+        float2 _235 = (Params.SunPerpendicular * mix(Params.SunPerpendicularMin, Params.SunPerpendicularMax, (float(gl_GlobalInvocationID.x) + 0.5) / float(Params.ShadowSamples))) + (Params.SunDirection * Params.SunAlongMin);
+        float _240;
+        _240 = Params.SunAlongMax - Params.SunAlongMin;
+        float _241;
+        for (uint _243 = 0u; _243 < Params.SegmentCount; _240 = _241, _243++)
+        {
+            if (((device float*)&Segments._m0[_243].Properties)[0] <= 0.0)
+            {
+                _241 = _240;
+                continue;
+            }
+            float _293;
+            bool _294;
+            do
+            {
+                float2 _261 = Segments._m0[_243].Coordinates.zw - Segments._m0[_243].Coordinates.xy;
+                float _263 = _261.y;
+                float _266 = _261.x;
+                float _268 = (Params.SunDirection.x * _263) - (Params.SunDirection.y * _266);
+                if (abs(_268) <= 9.9999997473787516355514526367188e-05)
+                {
+                    _293 = 0.0;
+                    _294 = false;
+                    break;
+                }
+                float2 _273 = Segments._m0[_243].Coordinates.xy - _235;
+                float _274 = _273.x;
+                float _276 = _273.y;
+                float _279 = ((_274 * _263) - (_276 * _266)) / _268;
+                float _283 = ((_274 * Params.SunDirection.y) - (_276 * Params.SunDirection.x)) / _268;
+                bool _288;
+                if (_279 >= 0.0)
+                {
+                    _288 = _283 >= 0.0;
+                }
+                else
+                {
+                    _288 = false;
+                }
+                bool _292;
+                if (_288)
+                {
+                    _292 = _283 <= 1.0;
+                }
+                else
+                {
+                    _292 = false;
+                }
+                _293 = _279;
+                _294 = _292;
+                break;
+            } while(false);
+            float _298;
+            if (_294)
+            {
+                _298 = precise::min(_240, _293);
+            }
+            else
+            {
+                _298 = _240;
+            }
+            _241 = _298;
+        }
+        ShadowDepth._m0[_90] = Params.SunAlongMin + _240;
+        break;
+    } while(false);
+}
+

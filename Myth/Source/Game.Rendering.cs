@@ -152,10 +152,10 @@ public sealed partial class GameView
 			if (showHud)
 				DrawMinimap(output);
 		}
-		if (debugView == DebugView.Visibility)
+		if (debugView == DebugView.ShadowSegments)
 		{
-			using (GraphicsDevice.DebugGroup("Myth/visibility debug"))
-				DrawVisibilityDebug(output);
+			using (GraphicsDevice.DebugGroup("Myth/shadow-segment debug"))
+				DrawShadowDebug(output);
 		}
 		if (debugView == DebugView.PlatformNav)
 		{
@@ -784,8 +784,7 @@ public sealed partial class GameView
 		if (lightingCompositeMaterial == null)
 			return ForegroundScreen;
 
-		DrawLightMask(BackgroundLightMask, includeShadows: true);
-		DrawLightMask(ForegroundLightMask, includeShadows: false);
+		DrawGpuLightMasks();
 
 		var aoStrength = 0.0f;
 		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
@@ -1358,48 +1357,98 @@ public sealed partial class GameView
 		return hash;
 	}
 
-	// State for drawLightMaskLightAction so the delegate can be cached once instead
-	// of reallocating a closure per actor per frame (DrawLightMask runs twice a frame,
-	// and ForEachLight is called for every actor).
-	Target? lightMaskTarget;
-	bool lightMaskIncludeShadows;
-	Action<Vector2, float, float, float, Color>? drawLightMaskLightAction;
+	Action<Vector2, float, float, float, Color>? gatherGpuLightAction;
+	readonly List<ShadowSegment> gpuSegmentScratch = [];
+	readonly HashSet<Actor> gpuLightEmitters = [];
+	Actor? gatheringGpuLightActor;
 
-	void DrawLightMask(Target lightMask, bool includeShadows)
+	void DrawGpuLightMasks()
 	{
-		lightMask.Clear(ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
-
-		// Dynamic occluders move, so they can't bake into a room's static occluder lists; gather
-		// them once here (they're the same for every light this frame) and let the sun, point and
-		// fallback shadow passes share the result.
-		if (includeShadows)
-			GatherDynamicOccluders();
-
-		if (CurrentSunStrength() > SunStrengthEpsilon)
+		if (gpuLighting is not { Supported: true } renderer)
 		{
-			DrawSunLightMask(includeShadows);
-			AddSingleLightMask(lightMask);
+			var ambient = ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity());
+			BackgroundLightMask.Clear(ambient);
+			ForegroundLightMask.Clear(ambient);
+			return;
 		}
 
-		lightMaskTarget = lightMask;
-		lightMaskIncludeShadows = includeShadows;
-		drawLightMaskLightAction ??= (position, radius, intensity, height, lightColor) =>
-		{
-			DrawSingleLightMask(position, radius, intensity, height, lightColor, lightMaskIncludeShadows, lightIsStatic: false);
-			AddSingleLightMask(lightMaskTarget!);
-		};
+		renderer.Begin();
+		foreach (var visibleRoom in VisibleRooms())
+			for (var i = 0; i < visibleRoom.ShadowSegments.Count; i++)
+			{
+				var segment = visibleRoom.ShadowSegments[i];
+				renderer.AddSegment(segment.A, segment.B, castsSunShadow: i >= 4);
+			}
 
+		gpuSegmentScratch.Clear();
+		foreach (var actor in Actors)
+		{
+			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
+				dualGrid.AppendAllShadowSegments(gpuSegmentScratch);
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.AppendAllShadowSegments(gpuSegmentScratch);
+			if (actor is IShapeOccluder { CastsShadow: true } occluder)
+				occluder.AppendOccluderSegments(gpuSegmentScratch);
+		}
+		foreach (var segment in gpuSegmentScratch)
+			renderer.AddSegment(segment.A, segment.B);
+
+		foreach (var actor in Actors)
+			if (actor is HiddenWallGrid hiddenWalls)
+				hiddenWalls.ForEachVisibleCell(renderer, static (gpu, rect, _, _) => gpu.AddRect(rect));
+
+		gpuLightEmitters.Clear();
+		gatherGpuLightAction ??= (position, radius, intensity, height, color) =>
+		{
+			gpuLighting!.AddLight(position, radius, intensity, height, color);
+			gpuLightEmitters.Add(gatheringGpuLightActor!);
+		};
 		foreach (var actor in Actors)
 		{
 			if (actor is Light light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
-			{
-				DrawSingleLightMask(light, includeShadows);
-				AddSingleLightMask(lightMask);
-			}
-
-			actor.ForEachLight(drawLightMaskLightAction);
+				renderer.AddLight(
+					light.Position,
+					light.Radius * light.FlickerScaleMax,
+					light.Intensity * light.FlickerScaleMax,
+					light.Height,
+					light.LightColor);
+			gatheringGpuLightActor = actor;
+			actor.ForEachLight(gatherGpuLightAction);
 		}
+		gatheringGpuLightActor = null;
+		DrawGpuSpriteShadowMask();
 
+		renderer.Render(
+			NormalBuffer,
+			SpriteShadowMask,
+			BackgroundLightMask,
+			ForegroundLightMask,
+			RenderCamera,
+			zoomLevel,
+			CurrentAmbientColor(),
+			CurrentAmbientIntensity(),
+			CurrentSunDirection(),
+			CurrentSunColor(),
+			CurrentSunStrength(),
+			PerfToggles.SoftShadows && Manager.SoftShadowPenumbra > 0.01f,
+			Manager.SoftShadowPenumbra,
+			Manager.SoftShadowMinSoftness);
+	}
+
+	void DrawGpuSpriteShadowMask()
+	{
+		SpriteShadowMask.Clear(Color.Transparent);
+		PushWorldMatrix();
+		foreach (var actor in Actors)
+			if (actor.Visible && actor.CastsSpriteShadow && actor is not Grid && !gpuLightEmitters.Contains(actor))
+			{
+				Batcher.PushMatrix(actor.Position);
+				actor.RenderShadow(Batcher, Color.White);
+				Batcher.PopMatrix();
+			}
+		Batcher.PopMatrix();
+		Batcher.Render(SpriteShadowMask);
+		Batcher.Clear();
 	}
 
 	bool LightIsCovered(Vector2 position)
@@ -1518,278 +1567,6 @@ public sealed partial class GameView
 	static Color LerpColor(Color from, Color to, float amount)
 		=> new(Vector4.Lerp(from, to, amount));
 
-	const float SunStrengthEpsilon = 0.001f;
-
-	void DrawSunLightMask(bool includeShadows)
-	{
-		SingleLightMask.Clear(Color.Transparent);
-		var strength = CurrentSunStrength();
-
-		var direction = CurrentSunDirection();
-		var lightColor = CurrentSunColor();
-		if (normalLightMaterial != null)
-		{
-			var lightColorValue = (Vector4)lightColor;
-			normalLightMaterial.Material.Fragment.SetUniformBuffer([
-				NormalBuffer.Width,
-				NormalBuffer.Height,
-				0,
-				0,
-				direction.X,
-				direction.Y,
-				-1.0f,
-				1.0f,
-				lightColorValue.X,
-				lightColorValue.Y,
-				lightColorValue.Z,
-				strength
-			]);
-
-			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-			Batcher.PushMaterial(normalLightMaterial.Material);
-			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
-			Batcher.PopMaterial();
-			Batcher.PopSampler();
-		}
-		else
-		{
-			Batcher.Rect(new Rect(0, 0, SingleLightMask.Width, SingleLightMask.Height), ScaleColor(lightColor, strength));
-		}
-
-		if (includeShadows)
-		{
-			PushWorldMatrix();
-			Batcher.PushBlend(ShadowBlend);
-			DrawSunShadows(direction);
-			Batcher.PopBlend();
-			Batcher.PopMatrix();
-		}
-
-		Batcher.Render(SingleLightMask);
-		Batcher.Clear();
-
-		if (includeShadows && SoftShadowsEnabled)
-			SoftenSingleLightMask(Vector2.Zero, 0, uniform: true);
-	}
-
-	void DrawSingleLightMask(Light light, bool includeShadows)
-		=> DrawSingleLightMask(
-			light.Position,
-			light.Radius * light.FlickerScaleMax,
-			light.Intensity * light.FlickerScaleMax,
-			light.Height,
-			light.LightColor,
-			includeShadows: includeShadows,
-			lightIsStatic: light.IsStatic
-		);
-
-	void DrawSingleLightMask(
-		Vector2 position, float radius, float intensity, float height,
-		Color lightColor, bool includeShadows, bool lightIsStatic)
-	{
-		SingleLightMask.Clear(Color.Transparent);
-		var drewVisibilityClippedLight = false;
-
-		if (normalLightMaterial != null)
-		{
-			var screenPosition = (position - RenderCamera) * zoomLevel;
-			var lightColorValue = (Vector4)lightColor;
-			normalLightMaterial.Material.Fragment.SetUniformBuffer([
-				NormalBuffer.Width,
-				NormalBuffer.Height,
-				0,
-				0,
-				screenPosition.X,
-				screenPosition.Y,
-				radius * zoomLevel,
-				height * zoomLevel,
-				lightColorValue.X,
-				lightColorValue.Y,
-				lightColorValue.Z,
-				intensity
-			]);
-
-			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-			Batcher.PushMaterial(normalLightMaterial.Material);
-			if (includeShadows)
-			{
-				DrawVisibilityClippedNormalLight(position, radius, lightIsStatic: lightIsStatic);
-				drewVisibilityClippedLight = true;
-			}
-			else
-			{
-				Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
-			}
-			Batcher.PopMaterial();
-			Batcher.PopSampler();
-		}
-		else
-		{
-			PushWorldMatrix();
-			var color = ScaleColor(lightColor, intensity);
-			Batcher.Circle(position, radius, 32, color, Color.Transparent);
-			Batcher.PopMatrix();
-		}
-
-		if (includeShadows)
-		{
-			PushWorldMatrix();
-			Batcher.PushBlend(ShadowBlend);
-			if (drewVisibilityClippedLight)
-				DrawDynamicOccluderShadows(position, radius);
-			else
-				DrawLightShadows(position, radius);
-			Batcher.PopBlend();
-			Batcher.PopMatrix();
-		}
-
-		Batcher.Render(SingleLightMask);
-		Batcher.Clear();
-
-		if (includeShadows && SoftShadowsEnabled)
-		{
-			var screenPosition = (position - RenderCamera) * zoomLevel;
-			SoftenSingleLightMask(screenPosition, radius * zoomLevel, uniform: false);
-		}
-	}
-
-	static readonly List<VisibilityPolygon.Hit> _hits = new();
-	static readonly List<VisibilityPolygon.Segment> _segments = new();
-
-	// Cached visibility polygons for static lights, computed from static room geometry ONLY. A
-	// static light over unchanging geometry has an unchanging visibility polygon, so we compute it
-	// once and reuse it every frame (cleared on room / room-geometry change). Dynamic occluders
-	// (moving platforms) never enter visibility polygons — they cast shadows as extruded quads
-	// instead (DrawDynamicOccluderShadows) — so a nearby platform can't invalidate the cache.
-	readonly Dictionary<(Point2, int), List<VisibilityPolygon.Hit>> _staticVisibilityCache = [];
-
-	List<VisibilityPolygon.Hit> GetHits(Vector2 lightPosition, float radius) {
-		GatherVisibilitySegments(lightPosition, radius, _segments, includeDynamicOccluders: false);
-		VisibilityPolygon.Compute(lightPosition, radius, _segments, _hits, VisibilityPolygon.BoundaryRaysForRadius(radius));
-		return _hits;
-	}
-
-	void DrawVisibilityClippedNormalLight(Vector2 lightPosition, float radius, bool lightIsStatic)
-	{
-		List<VisibilityPolygon.Hit> hits;
-
-		if (lightIsStatic)
-		{
-			var key = ((Point2)lightPosition, (int)MathF.Floor(radius));
-			if (!_staticVisibilityCache.TryGetValue(key, out var cachedHits))
-			{
-				cachedHits = [.. GetHits(lightPosition, radius)];
-				_staticVisibilityCache[key] = cachedHits;
-			}
-			hits = cachedHits;
-		}
-		else
-		{
-			hits = GetHits(lightPosition, radius);
-		}
-
-		if (hits.Count < 3)
-		{
-			Batcher.Image(NormalBuffer, NormalBuffer.Bounds.Center, NormalBuffer.Bounds.Size / 2, Vector2.One, 0, Color.White);
-			return;
-		}
-
-		var renderCamera = RenderCamera;
-		var screenLight = (lightPosition - renderCamera) * zoomLevel;
-		var texture = NormalBuffer.Attachments[0];
-		var textureSize = new Vector2(NormalBuffer.Width, NormalBuffer.Height);
-		for (var i = 0; i < hits.Count; i++)
-		{
-			var a = (hits[i].Point - renderCamera) * zoomLevel;
-			var b = (hits[(i + 1) % hits.Count].Point - renderCamera) * zoomLevel;
-			Batcher.Triangle(
-				texture,
-				screenLight,
-				a,
-				b,
-				screenLight / textureSize,
-				a / textureSize,
-				b / textureSize,
-				Color.White);
-		}
-	}
-
-	bool SoftShadowsEnabled
-		=> PerfToggles.SoftShadows && softShadowMaterial != null && Manager.SoftShadowPenumbra > 0.01f;
-
-	// Softens the just-rendered per-light SingleLightMask with a separable
-	// variable-radius blur before it is accumulated. The blur widens with
-	// distance from the light, so shadows stay crisp near their caster and
-	// soften further away. The sun blurs uniformly (uniform: true).
-	void SoftenSingleLightMask(Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
-	{
-		var maxPenumbra = Manager.SoftShadowPenumbra;
-		RunSoftShadowPass(SingleLightMask, SoftShadowScratch, new Vector2(1, 0), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
-		RunSoftShadowPass(SoftShadowScratch, SingleLightMask, new Vector2(0, 1), maxPenumbra, lightScreenPosition, lightRadiusPixels, uniform);
-	}
-
-	void RunSoftShadowPass(Target source, Target destination, Vector2 direction, float maxPenumbra, Vector2 lightScreenPosition, float lightRadiusPixels, bool uniform)
-	{
-		destination.Clear(Color.Transparent);
-		softShadowMaterial!.Material.Fragment.SetUniformBuffer([
-			direction.X,
-			direction.Y,
-			maxPenumbra,
-			uniform ? 1.0f : 0.0f,
-			lightScreenPosition.X,
-			lightScreenPosition.Y,
-			lightRadiusPixels,
-			Manager.SoftShadowMinSoftness,
-			1.0f / source.Width,
-			1.0f / source.Height,
-			0,
-			0
-		]);
-
-		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
-		Batcher.PushMaterial(softShadowMaterial.Material);
-		Batcher.Image(source, source.Bounds.Center, source.Bounds.Size / 2, Vector2.One, 0, Color.White);
-		Batcher.PopMaterial();
-		Batcher.PopSampler();
-		Batcher.Render(destination);
-		Batcher.Clear();
-	}
-
-	void AddSingleLightMask(Target lightMask)
-	{
-		Batcher.PushBlend(new(BlendOp.Add, BlendFactor.One, BlendFactor.One));
-		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
-		Batcher.Image(SingleLightMask, SingleLightMask.Bounds.Center, SingleLightMask.Bounds.Size / 2, Vector2.One, 0, Color.White);
-		Batcher.PopSampler();
-		Batcher.PopBlend();
-		Batcher.Render(lightMask);
-		Batcher.Clear();
-	}
-
-	void DrawLightShadows(Vector2 lightPosition, float radius)
-	{
-		if (room != null)
-			DrawRoomLightShadows(room, lightPosition, radius);
-		if (nextRoom != null && nextRoom != room)
-			DrawRoomLightShadows(nextRoom, lightPosition, radius);
-
-		foreach (var actor in Actors)
-		{
-			if (actor is not HiddenWallGrid hiddenWalls)
-				continue;
-
-			hiddenWalls.ForEachVisibleCell((self: this, lightPosition, radius), static (s, rect, _, _) =>
-			{
-				if (CircleOverlapsRect(s.lightPosition, s.radius, rect))
-					s.self.DrawShadowVolume(s.lightPosition, s.radius, rect);
-			});
-		}
-
-		DrawActorSpriteShadows(lightPosition, radius);
-	}
-
-	// Struct enumerable (value-type GetEnumerator) so `foreach (… in VisibleRooms())`
-	// in per-light/per-frame paths doesn't heap-allocate an iterator each call.
 	internal VisibleRoomsEnumerable VisibleRooms() => new(room, nextRoom);
 
 	internal readonly struct VisibleRoomsEnumerable(Room? room, Room? nextRoom)
@@ -1814,296 +1591,6 @@ public sealed partial class GameView
 				return false;
 			}
 		}
-	}
-
-	void DrawSunShadows(Vector2 direction)
-	{
-		var distance = SunShadowDistance();
-		foreach (var visibleRoom in VisibleRooms())
-			DrawRoomSunShadows(visibleRoom, direction, distance);
-
-		foreach (var actor in Actors)
-		{
-			if (actor is HiddenCoverGrid hiddenCover)
-				hiddenCover.AppendAllVisibilitySegments(sunSegmentBuffer);
-			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
-				dualGrid.AppendAllVisibilitySegments(sunSegmentBuffer);
-		}
-		sunSegmentBuffer.AddRange(dynamicOccluderSegments);
-
-		foreach (var segment in sunSegmentBuffer)
-			DrawSunShadowSegment(segment, direction, distance);
-		sunSegmentBuffer.Clear();
-
-		foreach (var actor in Actors)
-			if (actor is HiddenWallGrid hiddenWalls)
-				hiddenWalls.ForEachVisibleCell((self: this, direction, distance), static (s, rect, _, _) =>
-					s.self.DrawSunShadowVolume(s.direction, s.distance, rect));
-	}
-
-	readonly List<VisibilityPolygon.Segment> sunSegmentBuffer = [];
-
-	// Per-frame silhouette segments of IShapeOccluder actors (moving platforms, etc.), gathered once
-	// in DrawLightMask and consumed by the visibility + sun passes -- the same segment currency tiles
-	// and DualGrid use, so a platform's shadow traces its own (rounded) art, not a bounding box.
-	readonly List<VisibilityPolygon.Segment> dynamicOccluderSegments = [];
-
-	void GatherDynamicOccluders()
-	{
-		dynamicOccluderSegments.Clear();
-		foreach (var actor in Actors)
-			if (actor is IShapeOccluder { CastsShadow: true } occluder)
-				occluder.AppendOccluderSegments(dynamicOccluderSegments);
-	}
-
-	float SunShadowDistance()
-		=> MathF.Sqrt(NormalBuffer.Width * NormalBuffer.Width + NormalBuffer.Height * NormalBuffer.Height) + TileSize * MathF.Max(Columns, Rows) * 2;
-
-	void DrawRoomSunShadows(Room renderRoom, Vector2 direction, float distance)
-	{
-		foreach (var rect in renderRoom.LightOccluders)
-			DrawSunShadowVolume(direction, distance, rect);
-
-		foreach (var polygon in renderRoom.LightOccluderPolygons)
-			DrawSunShadowVolume(direction, distance, polygon.Points);
-	}
-
-	void DrawSunShadowVolume(Vector2 direction, float distance, RectInt rect)
-	{
-		Span<Point2> corners =
-		[
-			rect.TopLeft,
-			rect.TopRight,
-			rect.BottomRight,
-			rect.BottomLeft
-		];
-		DrawSunShadowVolume(direction, distance, corners);
-	}
-
-	void DrawSunShadowVolume(Vector2 direction, float distance, ReadOnlySpan<Point2> points)
-	{
-		for (var i = 0; i < points.Length; i++)
-		{
-			var a = (Vector2)points[i];
-			var b = (Vector2)points[(i + 1) % points.Length];
-			if (!IsSunShadowCastingEdge(a, b, direction))
-				continue;
-
-			DrawSunShadowSegment(new(a, b), direction, distance);
-		}
-	}
-
-	static bool IsSunShadowCastingEdge(Vector2 a, Vector2 b, Vector2 direction)
-	{
-		var edge = b - a;
-		var outward = new Vector2(edge.Y, -edge.X);
-		return Vector2.Dot(outward, direction) > 0.001f;
-	}
-
-	void DrawSunShadowSegment(VisibilityPolygon.Segment segment, Vector2 direction, float distance)
-	{
-		var offset = direction * distance;
-		Batcher.Quad(segment.A, segment.B, segment.B + offset, segment.A + offset, Color.Black);
-	}
-
-	void DrawRoomLightShadows(Room renderRoom, Vector2 lightPosition, float radius)
-	{
-		foreach (var rect in renderRoom.LightOccluders)
-			if (CircleOverlapsRect(lightPosition, radius, rect))
-				DrawShadowVolume(lightPosition, radius, rect);
-
-		foreach (var polygon in renderRoom.LightOccluderPolygons)
-			if (CircleOverlapsRect(lightPosition, radius, polygon.Bounds))
-				DrawShadowVolume(lightPosition, radius, polygon.Points, polygon.Bounds);
-	}
-
-	void DrawActorSpriteShadows(Vector2 lightPosition, float radius)
-	{
-		foreach (var actor in Actors)
-		{
-			if (!actor.Visible || !actor.CastsSpriteShadow)
-				continue;
-			if (actor is Grid or DualGrid)
-				continue;
-
-			var toActor = actor.Position - lightPosition;
-			var distanceSquared = toActor.LengthSquared();
-			if (distanceSquared <= 0.0001f || distanceSquared > radius * radius)
-				continue;
-
-			var distance = MathF.Sqrt(distanceSquared);
-			var direction = toActor / distance;
-			var reach = 1.0f - distance / radius;
-			var shadowLength = ActorShadowMinLength + (ActorShadowMaxLength - ActorShadowMinLength) * reach;
-
-			for (var i = 1; i <= ActorShadowSteps; i++)
-			{
-				var t = i / (float)ActorShadowSteps;
-				var offset = direction * shadowLength * t;
-				var alpha = ActorShadowStrength * 0.25f * (1.0f - t * 0.75f);
-
-				Batcher.PushMatrix(actor.Position + offset);
-				actor.RenderShadow(Batcher, Color.Black * alpha);
-				Batcher.PopMatrix();
-			}
-		}
-	}
-
-	void DrawShadowVolume(Vector2 lightPosition, float radius, RectInt rect)
-	{
-		Span<Point2> corners =
-		[
-			rect.TopLeft,
-			rect.TopRight,
-			rect.BottomRight,
-			rect.BottomLeft
-		];
-		DrawShadowVolume(lightPosition, radius, corners, rect);
-	}
-
-	void DrawShadowVolume(Vector2 lightPosition, float radius, ReadOnlySpan<Point2> points, RectInt bounds)
-	{
-		if (bounds.Contains(lightPosition))
-			return;
-
-		var bestA = (Vector2)points[0];
-		var bestB = (Vector2)points[1];
-		var bestSpan = -1.0f;
-
-		for (var i = 0; i < points.Length; i++)
-			for (var j = i + 1; j < points.Length; j++)
-			{
-				var pointA = (Vector2)points[i];
-				var pointB = (Vector2)points[j];
-				var a = DirectionFromLight(lightPosition, pointA);
-				var b = DirectionFromLight(lightPosition, pointB);
-				var span = 1 - Vector2.Dot(a, b);
-				if (span > bestSpan)
-				{
-					bestSpan = span;
-					bestA = pointA;
-					bestB = pointB;
-				}
-			}
-
-		var aFar = ProjectToLightRadius(lightPosition, radius, bestA);
-		var bFar = ProjectToLightRadius(lightPosition, radius, bestB);
-		Batcher.Quad(bestA, bestB, bFar, aFar, Color.Black);
-	}
-
-	// Shadows cast by dynamic occluders (moving platforms, etc.) onto a visibility-clipped light.
-	// The visibility polygon only clips against static geometry, so each occluder segment in range
-	// is extruded radially away from the light as a black quad over the mask. Splitting at the
-	// closest point to the light keeps each half under a quarter turn of arc, so extruding to 2x
-	// radius guarantees the quad's straight far edge lands outside the light circle (no lit sliver
-	// between chord and rim).
-	void DrawDynamicOccluderShadows(Vector2 lightPosition, float radius)
-	{
-		foreach (var segment in dynamicOccluderSegments)
-		{
-			if (!VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-				continue;
-
-			var ab = segment.B - segment.A;
-			var lengthSquared = ab.LengthSquared();
-			var t = lengthSquared <= 0.0001f
-				? 0
-				: Math.Clamp(Vector2.Dot(lightPosition - segment.A, ab) / lengthSquared, 0, 1);
-			var closest = segment.A + ab * t;
-			DrawDynamicShadowQuad(lightPosition, radius, segment.A, closest);
-			DrawDynamicShadowQuad(lightPosition, radius, closest, segment.B);
-		}
-	}
-
-	void DrawDynamicShadowQuad(Vector2 lightPosition, float radius, Vector2 a, Vector2 b)
-	{
-		var aFar = ProjectToLightRadius(lightPosition, radius * 2, a);
-		var bFar = ProjectToLightRadius(lightPosition, radius * 2, b);
-		Batcher.Quad(a, b, bFar, aFar, Color.Black);
-	}
-
-	void GatherVisibilitySegments(Vector2 lightPosition, float radius, List<VisibilityPolygon.Segment> segments, bool includeDynamicOccluders = true)
-	{
-		segments.Clear();
-		foreach (var visibleRoom in VisibleRooms())
-			AddRoomVisibilitySegments(segments, visibleRoom, lightPosition, radius);
-
-		foreach (var actor in Actors)
-		{
-			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
-			{
-				dualGrid.AppendVisibilitySegments(segments, lightPosition, radius);
-				continue;
-			}
-			if (actor is HiddenCoverGrid hiddenCover)
-			{
-				hiddenCover.AppendVisibilitySegments(segments, lightPosition, radius);
-				continue;
-			}
-
-			if (actor is HiddenWallGrid hiddenWalls)
-			{
-				hiddenWalls.ForEachVisibleCell((segments, lightPosition, radius), static (s, rect, _, _) =>
-					AddRectVisibilitySegments(s.segments, rect, s.lightPosition, s.radius));
-			}
-		}
-
-		if (includeDynamicOccluders)
-			foreach (var segment in dynamicOccluderSegments)
-				if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-					segments.Add(segment);
-	}
-
-	static void AddRoomVisibilitySegments(List<VisibilityPolygon.Segment> segments, Room renderRoom, Vector2 lightPosition, float radius)
-	{
-		if (!CircleOverlapsRect(lightPosition, radius, renderRoom.WorldBounds))
-			return;
-
-		foreach (var segment in renderRoom.VisibilitySegments)
-			if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-				segments.Add(segment);
-	}
-
-	static void AddRectVisibilitySegments(List<VisibilityPolygon.Segment> segments, RectInt rect, Vector2 lightPosition, float radius)
-	{
-		AddVisibilitySegment(segments, rect.TopLeft, rect.TopRight, lightPosition, radius);
-		AddVisibilitySegment(segments, rect.TopRight, rect.BottomRight, lightPosition, radius);
-		AddVisibilitySegment(segments, rect.BottomRight, rect.BottomLeft, lightPosition, radius);
-		AddVisibilitySegment(segments, rect.BottomLeft, rect.TopLeft, lightPosition, radius);
-	}
-
-	static void AddVisibilitySegment(List<VisibilityPolygon.Segment> segments, Vector2 a, Vector2 b, Vector2 lightPosition, float radius)
-	{
-		var segment = new VisibilityPolygon.Segment(a, b);
-		if (VisibilityPolygon.CircleOverlaps(segment, lightPosition, radius))
-			segments.Add(segment);
-	}
-
-	static Vector2 ProjectToLightRadius(Vector2 lightPosition, float radius, Vector2 point)
-	{
-		var direction = point - lightPosition;
-		var distance = direction.Length();
-		if (distance <= 0.0001f)
-			return point;
-
-		return lightPosition + direction / distance * radius;
-	}
-
-	static Vector2 DirectionFromLight(Vector2 lightPosition, Vector2 point)
-	{
-		var direction = point - lightPosition;
-		if (direction.LengthSquared() <= 0.0001f)
-			return Vector2.Zero;
-
-		return Vector2.Normalize(direction);
-	}
-
-	static bool CircleOverlapsRect(Vector2 center, float radius, RectInt rect)
-	{
-		var x = Math.Clamp(center.X, rect.Left, rect.Right);
-		var y = Math.Clamp(center.Y, rect.Top, rect.Bottom);
-		var closest = new Vector2(x, y);
-		return Vector2.DistanceSquared(center, closest) <= radius * radius;
 	}
 
 	void DrawNormalBuffer()
@@ -2501,27 +1988,32 @@ public sealed partial class GameView
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
-		BackgroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundLightMask"));
-		ForegroundLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundLightMask"));
-		SingleLightMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SingleLightMask"));
+		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
+		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
 		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
 		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
 		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
+		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
 		ReflectionMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ReflectionMask"));
 		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoMask"));
 		AoBlurScratch = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoBlurScratch"));
 		BackgroundCoverage = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "BackgroundCoverage"));
-		SoftShadowScratch = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "SoftShadowScratch"));
 	}
 
 	Target Track(Target target)
 	{
 		debugTargets.Add(target);
 		return target;
+	}
+
+	Target CreateComputeTarget(int width, int height, string name)
+	{
+		ReadOnlySpan<TextureFormat> attachments = [TextureFormat.Color];
+		return new Target(GraphicsDevice, width, height, attachments, TextureFlags.ComputeWrite, name);
 	}
 
 
@@ -2538,7 +2030,10 @@ public sealed partial class GameView
 	void DisposeRenderTargets()
 	{
 		foreach (var target in debugTargets)
-			RenderTargetPool.Return(target);
+			if (target == BackgroundLightMask || target == ForegroundLightMask)
+				target.Dispose();
+			else
+				RenderTargetPool.Return(target);
 		debugTargets.Clear();
 	}
 
@@ -2682,14 +2177,6 @@ public sealed partial class GameView
 	}
 
 	// --- view state moved from Game.cs (fields/consts/caches) ---
-	const int ActorShadowSteps = 8;
-	const float ActorShadowStrength = 0.5f;
-	const float ActorShadowMinLength = 4.0f;
-	const float ActorShadowMaxLength = 28.0f;
-	static readonly BlendMode ShadowBlend = new(
-		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
-		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
-		BlendMask.RGB, Color.White);
 	static readonly BlendMode EmissiveOccluderBlend = new(BlendOp.Add, BlendFactor.Zero, BlendFactor.OneMinusSrcAlpha);
 	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
@@ -2705,6 +2192,7 @@ public sealed partial class GameView
 	const int DitherAnchorFloatCount = MaxDitherAnchors * 4;
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
+	readonly GpuLighting? gpuLighting;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
 	public Target Screen { get; private set; } = null!;
 
@@ -2714,19 +2202,18 @@ public sealed partial class GameView
 	Target ForegroundEmissive { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
-	Target SingleLightMask { get; set; } = null!;
 	Target LitScreen { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
 	Target DitherMask { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
+	Target SpriteShadowMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	Target ReflectionMask { get; set; } = null!;
 	Target AoMask { get; set; } = null!;
 	Target AoBlurScratch { get; set; } = null!;
 	Target BackgroundCoverage { get; set; } = null!;
-	Target SoftShadowScratch { get; set; } = null!;
 
 	// Every render target created in EnsureRenderTargets, in creation order, for the
 	// debug render-target overlay (toggled with G). Populated via Track().
@@ -2738,13 +2225,11 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? crtMaterial;
 	readonly ReloadableMaterial? atlasWanderMaterial;
 	readonly ReloadableMaterial? lightingCompositeMaterial;
-	readonly ReloadableMaterial? normalLightMaterial;
 	readonly ReloadableMaterial? reflectionDistortMaterial;
 	readonly ReloadableMaterial? tileFieldStampMaterial;
 	readonly ReloadableMaterial? tileFieldDebugMaterial;
 	readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	readonly ReloadableMaterial? blurMaterial;
-	readonly ReloadableMaterial? softShadowMaterial;
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
 	readonly ReloadableMaterial? foregroundDecalMaskMaterial;

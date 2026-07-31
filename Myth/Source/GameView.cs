@@ -22,11 +22,11 @@ public sealed partial class GameView : IDisposable
 		Batcher = new(gd, name: "GameBatcher");
 		EnsureRenderTargets(Width, Height);
 		var loadVisualShaders = gd.Driver != GraphicsDriver.Headless;
+		gpuLighting = loadVisualShaders ? new(gd) : null;
 		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
 		atlasWanderMaterial = loadVisualShaders ? CreateFragmentMaterial("AtlasWander", samplerCount: 1, uniformBufferCount: 1) : null;
 		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 11, uniformBufferCount: 1) : null;
 		blurMaterial = loadVisualShaders ? CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1) : null;
-		softShadowMaterial = loadVisualShaders ? CreateFragmentMaterial("SoftShadow", samplerCount: 1, uniformBufferCount: 1) : null;
 		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
 		backgroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;
 		foregroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;
@@ -35,14 +35,11 @@ public sealed partial class GameView : IDisposable
 		// in one synchronous call, which would free the GPU draw resources while the
 		// submitted particle draw is still in flight (corruption).
 		particleSystem = enableParticles ? new ParticleSystem(gd) : null;
-		normalLightMaterial = loadVisualShaders ? CreateFragmentMaterial("NormalLight", samplerCount: 1, uniformBufferCount: 1) : null;
 		reflectionDistortMaterial = loadVisualShaders ? CreateFragmentMaterial("ReflectionDistort", samplerCount: 2, uniformBufferCount: 1) : null;
 		tileFieldStampMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldStamp", samplerCount: 1) : null;
 		tileFieldDebugMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1) : null;
 		pixelSortGlitchMaterial = loadVisualShaders ? CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1) : null;
 
-		game.RoomChanged += OnRoomChanged;
-		game.RoomGeoChanged += OnRoomGeoChanged;
 	}
 
 	// --- thin read-only views onto sim state, so render code reads it unqualified ---
@@ -90,50 +87,20 @@ public sealed partial class GameView : IDisposable
 		}
 	}
 
-	static readonly List<VisibilityPolygon.Hit> debugHits = [];
-	static readonly List<VisibilityPolygon.Segment> debugSegments = [];
+	static readonly List<ShadowSegment> debugSegments = [];
 
-	void OnRoomChanged(RoomChange change)
+	void DrawShadowDebug(Target target)
 	{
-		_staticVisibilityCache.Clear();
-	}
-
-	void OnRoomGeoChanged(RoomGeoChange room) {
-		if (room.Room == game.room) {
-			_staticVisibilityCache.Clear();
-		}
-	}
-
-	void DrawVisibilityDebug(Target target)
-	{
-		if (!TryGetVisibilityDebugLight(out var lightPosition, out var radius))
+		if (!TryGetShadowDebugLight(out var lightPosition, out var radius))
 			return;
 
-		GatherVisibilitySegments(lightPosition, radius, debugSegments);
-		VisibilityPolygon.Compute(lightPosition, radius, debugSegments, debugHits, VisibilityPolygon.BoundaryRaysForRadius(radius));
+		GatherShadowDebugSegments();
 
 		Batcher.PushMatrix(-(Point2)Camera + shake);
 		Batcher.Circle(lightPosition, radius, 64, Color.Transparent, new Color(0x5fcde4, 0.35f));
 
-		var hits = debugHits;
-		for (var i = 0; i < hits.Count; i++)
-		{
-			var a = hits[i].Point;
-			var b = hits[(i + 1) % hits.Count].Point;
-			Batcher.Triangle(lightPosition, a, b, new Color(0x5fcde4, 0.08f));
-		}
-
 		for (var i = 0; i < debugSegments.Count; i++)
-			Batcher.Line(debugSegments[i].A, debugSegments[i].B, 1, VisibilityDebugSegmentColor(i, 0.9f));
-
-		foreach (var hit in hits)
-		{
-			var color = hit.HitSegment
-				? VisibilityDebugSegmentColor(hit.SegmentIndex, 0.75f)
-				: new Color(0xcbdbfc, 0.45f);
-			Batcher.Line(lightPosition, hit.Point, 1, color * 0.45f);
-			Batcher.Circle(hit.Point, 1.5f, 8, color);
-		}
+			Batcher.Line(debugSegments[i].A, debugSegments[i].B, 1, ShadowDebugSegmentColor(i, 0.9f));
 
 		Batcher.Circle(lightPosition, 2.5f, 16, 0xffffff);
 		Batcher.PopMatrix();
@@ -141,7 +108,31 @@ public sealed partial class GameView : IDisposable
 		Batcher.Clear();
 	}
 
-	private bool TryGetVisibilityDebugLight(out Vector2 lightPosition, out float radius)
+	void GatherShadowDebugSegments()
+	{
+		debugSegments.Clear();
+		foreach (var visibleRoom in VisibleRooms())
+			debugSegments.AddRange(visibleRoom.ShadowSegments);
+		foreach (var actor in Actors)
+		{
+			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
+				dualGrid.AppendAllShadowSegments(debugSegments);
+			if (actor is HiddenCoverGrid hiddenCover)
+				hiddenCover.AppendAllShadowSegments(debugSegments);
+			if (actor is IShapeOccluder { CastsShadow: true } occluder)
+				occluder.AppendOccluderSegments(debugSegments);
+			if (actor is HiddenWallGrid hiddenWalls)
+				hiddenWalls.ForEachVisibleCell(debugSegments, static (segments, rect, _, _) =>
+				{
+					segments.Add(new(rect.TopLeft, rect.TopRight));
+					segments.Add(new(rect.TopRight, rect.BottomRight));
+					segments.Add(new(rect.BottomRight, rect.BottomLeft));
+					segments.Add(new(rect.BottomLeft, rect.TopLeft));
+				});
+		}
+	}
+
+	private bool TryGetShadowDebugLight(out Vector2 lightPosition, out float radius)
 	{
 		if (game.GetFirst<Player>() is { } player)
 		{
@@ -155,7 +146,7 @@ public sealed partial class GameView : IDisposable
 		return false;
 	}
 
-	private static Color VisibilityDebugSegmentColor(int index, float alpha)
+	private static Color ShadowDebugSegmentColor(int index, float alpha)
 	{
 		var hue = (index * 0.61803398875f) % 1.0f;
 		return ColorFromHsv(hue, 0.72f, 1.0f, alpha);
@@ -254,12 +245,11 @@ public sealed partial class GameView : IDisposable
 		crtMaterial?.Reload();
 		atlasWanderMaterial?.Reload();
 		lightingCompositeMaterial?.Reload();
-		normalLightMaterial?.Reload();
+		gpuLighting?.ReloadShaders();
 		reflectionDistortMaterial?.Reload();
 		tileFieldDebugMaterial?.Reload();
 		pixelSortGlitchMaterial?.Reload();
 		blurMaterial?.Reload();
-		softShadowMaterial?.Reload();
 		sdfAuraMaterial?.Reload();
 		backgroundDecalMaskMaterial?.Reload();
 		foregroundDecalMaskMaterial?.Reload();
@@ -269,7 +259,6 @@ public sealed partial class GameView : IDisposable
 
 	public void Dispose()
 	{
-		game.RoomChanged -= OnRoomChanged;
 		rendering.Clear();
 		DisposeRenderTargets();
 		DisposeRoomNormalCaches();
@@ -277,18 +266,17 @@ public sealed partial class GameView : IDisposable
 		crtMaterial?.Dispose();
 		atlasWanderMaterial?.Dispose();
 		lightingCompositeMaterial?.Dispose();
-		normalLightMaterial?.Dispose();
 		reflectionDistortMaterial?.Dispose();
 		tileFieldStampMaterial?.Dispose();
 		tileFieldDebugMaterial?.Dispose();
 		pixelSortGlitchMaterial?.Dispose();
 		blurMaterial?.Dispose();
-		softShadowMaterial?.Dispose();
 		sdfAuraMaterial?.Dispose();
 		backgroundDecalMaskMaterial?.Dispose();
 		foregroundDecalMaskMaterial?.Dispose();
 		coverageMaskMaterial?.Dispose();
 		particleSystem?.Dispose();
+		gpuLighting?.Dispose();
 		Batcher.Dispose();
 	}
 }

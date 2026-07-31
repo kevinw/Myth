@@ -1989,7 +1989,7 @@ public partial class Game : IDisposable
 
 		// Geometry is already built: every caller passes a freshly CloneRuntime()'d room,
 		// and CloneRuntime() ends with RebuildGeometry(). Rebuilding here ran the full
-		// slope/collision/occluder/visibility/reflection build a second time per load.
+		// slope/collision/occluder/shadow/reflection build a second time per load.
 		var offset = forRoom.WorldBounds.TopLeft;
 
 		var bg = Create<Grid>(offset);

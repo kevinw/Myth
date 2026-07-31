@@ -114,8 +114,8 @@ public class Room
 	/// World-space convex polygons for light occluders that are not rectangular.
 	public readonly List<LightOccluderPolygon> LightOccluderPolygons = [];
 
-	/// Cached world-space segments used by visibility-polygon shadow tests.
-	public readonly List<VisibilityPolygon.Segment> VisibilitySegments = [];
+	/// Cached world-space segments uploaded for GPU shadow tests.
+	public readonly List<ShadowSegment> ShadowSegments = [];
 
 	public readonly struct ReflectionRect(RectInt bounds, float opacity, bool distorted)
 	{
@@ -473,7 +473,7 @@ public class Room
 		slopePolygonLookup.Clear();
 		LightOccluders.Clear();
 		LightOccluderPolygons.Clear();
-		VisibilitySegments.Clear();
+		ShadowSegments.Clear();
 		ReflectionRects.Clear();
 		WaterSurfaces.Clear();
 		CappedWaterRects.Clear();
@@ -498,7 +498,7 @@ public class Room
 			BuildCappedWaterRects);
 
 		// Reads LightOccluders + LightOccluderPolygons produced by the parallel phase.
-		BuildVisibilitySegments();
+		BuildShadowSegments();
 
 		if (ReverbAuto)
 			Reverb = InferReverb();
@@ -979,31 +979,31 @@ public class Room
 				LightOccluderPolygons.Add(new(GetSlopePolygon(slope), slope.WorldBounds(this)));
 	}
 
-	void BuildVisibilitySegments()
+	void BuildShadowSegments()
 	{
 		var bounds = WorldBounds;
-		AddVisibilitySegment(bounds.TopLeft, bounds.TopRight);
-		AddVisibilitySegment(bounds.TopRight, bounds.BottomRight);
-		AddVisibilitySegment(bounds.BottomRight, bounds.BottomLeft);
-		AddVisibilitySegment(bounds.BottomLeft, bounds.TopLeft);
+		AddShadowSegment(bounds.TopLeft, bounds.TopRight);
+		AddShadowSegment(bounds.TopRight, bounds.BottomRight);
+		AddShadowSegment(bounds.BottomRight, bounds.BottomLeft);
+		AddShadowSegment(bounds.BottomLeft, bounds.TopLeft);
 
 		foreach (var rect in LightOccluders)
 		{
-			AddVisibilitySegment(rect.TopLeft, rect.TopRight);
-			AddVisibilitySegment(rect.TopRight, rect.BottomRight);
-			AddVisibilitySegment(rect.BottomRight, rect.BottomLeft);
-			AddVisibilitySegment(rect.BottomLeft, rect.TopLeft);
+			AddShadowSegment(rect.TopLeft, rect.TopRight);
+			AddShadowSegment(rect.TopRight, rect.BottomRight);
+			AddShadowSegment(rect.BottomRight, rect.BottomLeft);
+			AddShadowSegment(rect.BottomLeft, rect.TopLeft);
 		}
 
 		foreach (var polygon in LightOccluderPolygons)
 		{
 			for (var i = 0; i < polygon.Points.Count; i++)
-				AddVisibilitySegment(polygon.Points[i], polygon.Points[(i + 1) % polygon.Points.Count]);
+				AddShadowSegment(polygon.Points[i], polygon.Points[(i + 1) % polygon.Points.Count]);
 		}
 	}
 
-	void AddVisibilitySegment(Vector2 a, Vector2 b)
-		=> VisibilitySegments.Add(new(a, b));
+	void AddShadowSegment(Vector2 a, Vector2 b)
+		=> ShadowSegments.Add(new(a, b));
 
 	public StackList8<Point2> GetSlopePolygon(SlopeTile slope)
 		=> slopePolygonLookup.TryGetValue(slope.Tile, out var polygon) ? polygon : BuildSlopePolygon(slope);

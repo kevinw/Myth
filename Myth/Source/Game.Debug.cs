@@ -16,7 +16,7 @@ public partial class Game
 		TileFieldGreen,
 		DitherMask,
 		Reflection,
-		Visibility,
+		ShadowSegments,
 		PlatformNav
 	}
 
@@ -211,7 +211,7 @@ public partial class Game
 			DebugView.TileFieldGreen => "Tile Field G: Family",
 			DebugView.DitherMask => "Dither Mask",
 			DebugView.Reflection => "Reflection Screen",
-			DebugView.Visibility => "Visibility Polygon",
+			DebugView.ShadowSegments => "GPU Shadow Segments",
 			DebugView.PlatformNav => "Platform Nav",
 			_ => view.ToString()
 		};
