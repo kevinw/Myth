@@ -100,6 +100,11 @@
       "Type": "Prop",
       "Position": [170, 59],
       "SpriteName": "Props/chair"
+    },
+    {
+      "Id": "42c3dc56c473bf3b",
+      "Type": "Wildlife",
+      "Position": [112, 64]
     }
   ]
 }
