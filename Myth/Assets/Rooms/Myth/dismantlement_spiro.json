@@ -78,7 +78,8 @@
       "Type": "TitleText",
       "Position": [156, 40],
       "Text": "emerge from squished\nto jump high",
-      "RevealSpeed": 9999999
+      "RevealSpeed": 9999999,
+      "Emissive": true
     },
     {
       "Id": "ceb9410ecd2965be",

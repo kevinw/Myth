@@ -15,7 +15,7 @@ readonly record struct InputPromptGlyph(InputPromptAction Action, Vector2 Center
 
 sealed class InputPrompts : IDisposable
 {
-	static float InlineGlyphScale => 2.2f;
+	static float InlineGlyphScale => 1.3f;
 
 	enum GlyphSet
 	{
@@ -97,9 +97,9 @@ sealed class InputPrompts : IDisposable
 		var lineHeight = textFont.LineHeight * size / textFont.Size;
 		var textHeight = textFont.Height * size / textFont.Size;
 		var glyphHeight = textHeight * InlineGlyphScale;
-		var at = new Vector2(
+		var at = (position + new Vector2(
 			-justify.X * WidthOfLine(textFont, text, size, glyphHeight),
-			-justify.Y * textFont.HeightOf(text, size));
+			-justify.Y * textFont.HeightOf(text, size))).Round() - position;
 		var runStart = 0;
 		var index = 0;
 
@@ -110,9 +110,9 @@ sealed class InputPrompts : IDisposable
 				at.X += DrawRun(batcher, textFont, text[runStart..index], position + at, size, color);
 				index++;
 				runStart = index;
-				at = new Vector2(
+				at = (position + new Vector2(
 					-justify.X * WidthOfLine(textFont, text[index..], size, glyphHeight),
-					at.Y + lineHeight);
+					at.Y + lineHeight)).Round() - position;
 				continue;
 			}
 

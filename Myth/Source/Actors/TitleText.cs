@@ -22,10 +22,8 @@ public class TitleText : Actor
 	}
 
 	SpriteFont? ShouldRenderWithFont() {
-		if (Game.Simulating) return null;
-		if (Assets.Font == null) return null;
-		if (string.IsNullOrEmpty(Text)) return null;
-		return Assets.Font;
+		if (Game.Simulating || string.IsNullOrEmpty(Text)) return null;
+		return Assets.SpeechFont ?? Assets.Font;
 	}
 
 	public override void Render(Batcher batcher) => DoRender(batcher, Game.View?.InputPromptGlyphs);

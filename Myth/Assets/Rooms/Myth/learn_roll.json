@@ -113,10 +113,10 @@
     {
       "Id": "f59f181c2ccde014",
       "Type": "TitleText",
-      "Position": [69, 121],
-      "Text": "hold down to\ncrouch",
+      "Position": [69, 123],
       "Emissive": true,
-      "RevealSpeed": 9999999
+      "RevealSpeed": 9999999,
+      "Text": "hold down\nto crouch"
     }
   ]
 }
