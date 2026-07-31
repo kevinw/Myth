@@ -144,6 +144,13 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Parameters", ImGuiTreeNodeFlags.DefaultOpen))
 			return;
 
+		var background = draft.Layer == Factory.TileLayer.Background;
+		if (ImGui.Checkbox("background tile", ref background))
+		{
+			draft.Layer = background ? Factory.TileLayer.Background : Factory.TileLayer.Foreground;
+			MarkTileKitEdited();
+		}
+
 		var wobble = draft.Wobble;
 		if (ImGui.SliderFloat("wobble", ref wobble, 0f, 1f))
 		{

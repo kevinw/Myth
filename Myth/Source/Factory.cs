@@ -438,7 +438,7 @@ public static class Factory
 		foreach (var kit in TileKits.Registrations)
 		{
 			var tile = AssignChar(kit.PreferredChar, kit.Name);
-			Register(tile, AsDualTile(kit.Name, kit.DualName, kit.Surface, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity, hasSlope: kit.HasSlope));
+			Register(tile, AsDualTile(kit.Name, kit.DualName, kit.Surface, layer: kit.Layer, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity, hasSlope: kit.HasSlope));
 			if (kit.HasSlope)
 				RegisterLegacySlope(kit.SlopePreferredChar, kit.SlopeEntryName, tile);
 		}

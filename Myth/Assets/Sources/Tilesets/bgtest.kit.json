@@ -1,0 +1,49 @@
+{
+  "surface": "Brick",
+  "layer": "Background",
+  "mask": "stone-kit",
+  "seed": 122411225,
+  "edgeWidth": "1-3",
+  "wobble": 0.603,
+  "acousticReflectivity": 0.749,
+  "palette": {
+    "a": "827B7B",
+    "b": "BED17E"
+  },
+  "heights": {
+    "a": 0.4,
+    "b": 0
+  },
+  "fills": [
+    [
+      "aaabaaaa",
+      "bbabbbbb",
+      "aaaaabaa",
+      "aaaaabaa",
+      "babbbbab",
+      "aabaaaaa",
+      "aabaaaaa",
+      "aaaaabaa"
+    ]
+  ],
+  "edge": [
+    [
+      "9BADB7",
+      45
+    ],
+    [
+      "847E87",
+      40
+    ],
+    [
+      "595652",
+      15
+    ]
+  ],
+  "edgeTop": [
+    [
+      "A04141",
+      20
+    ]
+  ]
+}

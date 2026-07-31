@@ -69,7 +69,7 @@ public static class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 10; // v10: NCT decoder controls
+	const int visualAssetPackVersion = 11; // v11: tile-kit layers
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
@@ -1126,6 +1126,7 @@ public static class Assets
 			writer.Write((int)kit.PreferredChar);
 			writer.Write((int)kit.SlopePreferredChar);
 			writer.Write(kit.Surface);
+			writer.Write((int)kit.Layer);
 			writer.Write((int)kit.Reflection);
 			writer.Write(kit.ReflectionOpacity);
 			writer.Write(kit.AcousticReflectivity);
@@ -1268,6 +1269,7 @@ public static class Assets
 				PreferredChar: (char)reader.ReadInt32(),
 				SlopePreferredChar: (char)reader.ReadInt32(),
 				Surface: reader.ReadString(),
+				Layer: (Factory.TileLayer)reader.ReadInt32(),
 				Reflection: (Factory.ReflectionMode)reader.ReadInt32(),
 				ReflectionOpacity: reader.ReadSingle(),
 				AcousticReflectivity: reader.ReadSingle(),

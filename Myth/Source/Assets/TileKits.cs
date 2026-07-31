@@ -16,6 +16,7 @@ public sealed class TileKitSpec
 	public string EdgeWidth = "2";
 	public float Wobble = 0.6f;
 	public string Surface = "Brick";
+	public Factory.TileLayer Layer = Factory.TileLayer.Foreground;
 	public char PreferredChar;
 	public char SlopePreferredChar;
 	public Factory.ReflectionMode Reflection = Factory.ReflectionMode.None;
@@ -43,6 +44,7 @@ public sealed record TileKitRegistration(
 	char PreferredChar,
 	char SlopePreferredChar,
 	string Surface,
+	Factory.TileLayer Layer,
 	Factory.ReflectionMode Reflection,
 	float ReflectionOpacity,
 	float AcousticReflectivity,
@@ -53,7 +55,8 @@ public sealed record TileKitRegistration(
 
 	public static TileKitRegistration From(TileKitSpec spec)
 		=> new(spec.Name, spec.PreferredChar, spec.SlopePreferredChar, spec.Surface,
-			spec.Reflection, spec.ReflectionOpacity, spec.AcousticReflectivity, spec.HasEdges);
+			spec.Layer, spec.Reflection, spec.ReflectionOpacity, spec.AcousticReflectivity,
+			spec.Layer == Factory.TileLayer.Foreground && spec.HasEdges);
 }
 
 public static class TileKits
@@ -106,6 +109,8 @@ public static class TileKits
 		spec.EdgeWidth = JsonUtil.ReadString(json, "edgeWidth", spec.EdgeWidth);
 		spec.Wobble = Math.Clamp(JsonUtil.ReadFloat(json, "wobble", spec.Wobble), 0f, 1f);
 		spec.Surface = JsonUtil.ReadString(json, "surface", spec.Surface);
+		if (JsonUtil.ReadString(json, "layer") is { } layer)
+			spec.Layer = Enum.Parse<Factory.TileLayer>(layer, ignoreCase: true);
 		spec.PreferredChar = ReadChar(json, "char");
 		spec.SlopePreferredChar = ReadChar(json, "slopeChar");
 		spec.ReflectionOpacity = JsonUtil.ReadFloat(json, "reflectionOpacity", spec.ReflectionOpacity);
@@ -186,6 +191,7 @@ public static class TileKits
 			EdgeWidth = spec.EdgeWidth,
 			Wobble = spec.Wobble,
 			Surface = spec.Surface,
+			Layer = spec.Layer,
 			PreferredChar = spec.PreferredChar,
 			SlopePreferredChar = spec.SlopePreferredChar,
 			Reflection = spec.Reflection,
@@ -237,6 +243,8 @@ public static class TileKits
 		using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, NewLine = "\n" });
 		writer.WriteStartObject();
 		writer.WriteString("surface", spec.Surface);
+		if (spec.Layer != Factory.TileLayer.Foreground)
+			writer.WriteString("layer", spec.Layer.ToString());
 		if (spec.PreferredChar != '\0')
 			writer.WriteString("char", spec.PreferredChar.ToString());
 		if (spec.SlopePreferredChar != '\0')

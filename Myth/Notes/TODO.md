@@ -1,5 +1,7 @@
 # TODO
 
+right click a tilekit tile and it shows "Open in Sprite Editor" which does nothing; it should open it in the tilekit editor instead
+
 ## release attribution
 - replace `609203__cupido-1__roll-apple-on-carpet.ogg`; it is CC BY-NC 4.0 and cannot be used in a commercial release
 - obtain permission for or replace/retrain the imported Cells2Pixels NCA weights; the upstream repositories do not provide a license
