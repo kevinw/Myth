@@ -164,8 +164,17 @@ public static class Assets
 	/// </summary>
 	public static void BuildContentZip(string outputPath, string target, string? worldId = null)
 	{
-		if (!File.Exists(Path.Join(DefaultVisualAssetPackPath, packedVisualsManifestName)))
+		var manifestPath = Path.Join(DefaultVisualAssetPackPath, packedVisualsManifestName);
+		if (!File.Exists(manifestPath))
 			throw new InvalidOperationException("Visual asset pack is missing. Build it with --build-asset-pack before building Content.zip.");
+		using (var reader = new BinaryReader(File.OpenRead(manifestPath)))
+		{
+			if (reader.BaseStream.Length < sizeof(uint) + sizeof(int) || reader.ReadUInt32() != visualAssetPackMagic)
+				throw new InvalidOperationException("Visual asset pack manifest is invalid. Rebuild it with --build-asset-pack before building Content.zip.");
+			var version = reader.ReadInt32();
+			if (version != visualAssetPackVersion)
+				throw new InvalidOperationException($"Visual asset pack is stale. Expected version {visualAssetPackVersion}, found {version}. Rebuild it with --build-asset-pack before building Content.zip.");
+		}
 
 		var shaderExtension = target.Trim().ToLowerInvariant() switch
 		{
