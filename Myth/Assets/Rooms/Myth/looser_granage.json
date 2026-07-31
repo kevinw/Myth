@@ -76,17 +76,20 @@
     {
       "Id": "69d9e7c94fdc7884",
       "Type": "Light",
-      "Position": [116, 132]
+      "Position": [116, 132],
+      "Height": 3.5
     },
     {
       "Id": "c7074786e94688c0",
       "Type": "Light",
-      "Position": [164, 132]
+      "Position": [164, 132],
+      "Height": 6.9
     },
     {
       "Id": "ed6608b3234dd041",
       "Type": "Light",
-      "Position": [212, 132]
+      "Position": [212, 132],
+      "Height": 8.45
     },
     {
       "Id": "a0f7de9a82f78f6a",
@@ -96,22 +99,26 @@
     {
       "Id": "1e0c41c83e08cb1b",
       "Type": "Light",
-      "Position": [276, 36]
+      "Position": [276, 36],
+      "Height": 6.9
     },
     {
       "Id": "24e163ba0e7a1ec5",
       "Type": "Light",
-      "Position": [212, 52]
+      "Position": [212, 52],
+      "Height": 6.8
     },
     {
       "Id": "1d8a104a6b228244",
       "Type": "Light",
-      "Position": [164, 60]
+      "Position": [164, 60],
+      "Height": 5.7
     },
     {
       "Id": "374015dd5ef9ebf6",
       "Type": "Light",
-      "Position": [116, 60]
+      "Position": [116, 60],
+      "Height": 4.8
     },
     {
       "Id": "1d2b39c985ec43ae",
@@ -121,7 +128,8 @@
     {
       "Id": "7bba68107355410d",
       "Type": "Light",
-      "Position": [84, 148]
+      "Position": [84, 148],
+      "Height": 7.7
     },
     {
       "Id": "f91f63c8401f45d1",
