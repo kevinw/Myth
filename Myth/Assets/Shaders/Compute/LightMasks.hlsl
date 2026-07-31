@@ -14,8 +14,10 @@ struct Light
 
 Texture2D NormalTexture : register(t0, space0);
 SamplerState NormalSampler : register(s0, space0);
-StructuredBuffer<Light> Lights : register(t1, space0);
-StructuredBuffer<float2> ShadowDepth : register(t2, space0);
+Texture2D SporeNoise : register(t1, space0);
+SamplerState SporeNoiseSampler : register(s1, space0);
+StructuredBuffer<Light> Lights : register(t2, space0);
+StructuredBuffer<float2> ShadowDepth : register(t3, space0);
 
 #if BROWSER
 [[vk::image_format("rgba8")]]
@@ -25,6 +27,10 @@ RWTexture2D<float4> BackgroundMask : register(u0, space1);
 [[vk::image_format("rgba8")]]
 #endif
 RWTexture2D<float4> ForegroundMask : register(u1, space1);
+#if BROWSER
+[[vk::image_format("rgba8")]]
+#endif
+RWTexture2D<float4> SporeFogMask : register(u2, space1);
 
 cbuffer Params : register(b0, space2)
 {
@@ -51,6 +57,14 @@ cbuffer Params : register(b0, space2)
     float SpriteShadowMinLength;
     float SpriteShadowMaxLength;
     float SpriteShadowPadding;
+    float4 SporeFogTint;
+    float2 SporeFogDrift;
+    float Time;
+    float SporeFogStrength;
+    float SporeFogScale;
+    float SporeFogContrast;
+    float SporeFogPointStrength;
+    float SporeFogSunStrength;
 };
 
 float normal_response(float3 normal, float normalStrength, float3 lightDirection)
@@ -126,6 +140,22 @@ float sun_visibility(float2 world)
     return visibility;
 }
 
+float spore_density(float2 world)
+{
+    if (SporeFogStrength <= 0.0)
+        return 0.0;
+
+    float2 drift = SporeFogDrift * Time;
+    float coarse = SporeNoise.SampleLevel(SporeNoiseSampler, (world + drift) * SporeFogScale, 0.0).r;
+    float2 rotatedWorld = float2(-world.y, world.x);
+    float fine = SporeNoise.SampleLevel(
+        SporeNoiseSampler,
+        (rotatedWorld - drift * 0.4) * SporeFogScale * 3.17 + float2(0.37, 0.61),
+        0.0).g;
+    float density = coarse * lerp(0.75, 1.25, fine);
+    return saturate((density - 0.5) * SporeFogContrast + 0.5);
+}
+
 [numthreads(8, 8, 1)]
 void compute_main(uint3 id : SV_DispatchThreadID)
 {
@@ -139,13 +169,16 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float3 normal = normalize(normalData.rgb * 2.0 - 1.0);
     float4 shadowed = Ambient;
     float4 unshadowed = Ambient;
+    float3 sporeFog = 0.0;
 
     if (SunEnabled != 0)
     {
         float response = normal_response(normal, normalStrength, float3(-SunDirection, 1.0));
         float4 contribution = float4(SunColor.rgb * SunStrength * response, 1.0);
+        float visibility = sun_visibility(world);
         unshadowed += contribution;
-        shadowed += contribution * sun_visibility(world);
+        shadowed += contribution * visibility;
+        sporeFog += SunColor.rgb * SunStrength * SporeFogSunStrength * visibility;
     }
 
     for (uint i = 0; i < LightCount; i++)
@@ -154,16 +187,22 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         float2 toLight = light.Position - world;
         float distanceToLight = length(toLight);
         float attenuation = saturate(1.0 - distanceToLight / light.Radius);
-        attenuation *= attenuation;
         if (attenuation <= 0.0)
             continue;
 
+        float fogAttenuation = attenuation;
+        attenuation *= attenuation;
         float response = normal_response(normal, normalStrength, float3(toLight, light.Height));
         float4 contribution = float4(light.ColorIntensity.rgb * light.ColorIntensity.a * attenuation * response, attenuation);
+        float visibility = point_visibility(i, -toLight, distanceToLight, light.Radius);
         unshadowed += contribution;
-        shadowed += contribution * point_visibility(i, -toLight, distanceToLight, light.Radius);
+        shadowed += contribution * visibility;
+        sporeFog += light.ColorIntensity.rgb * light.ColorIntensity.a * fogAttenuation * SporeFogPointStrength * visibility;
     }
 
+    sporeFog *= spore_density(world) * SporeFogStrength * SporeFogTint.rgb;
+    sporeFog = 1.0 - exp(-sporeFog);
     BackgroundMask[id.xy] = saturate(shadowed);
     ForegroundMask[id.xy] = saturate(unshadowed);
+    SporeFogMask[id.xy] = float4(saturate(sporeFog), saturate(max(max(sporeFog.r, sporeFog.g), sporeFog.b)));
 }

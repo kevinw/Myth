@@ -70,6 +70,14 @@ sealed class GpuLighting : IDisposable
 		public float SpriteShadowMinLength;
 		public float SpriteShadowMaxLength;
 		public float SpriteShadowPadding;
+		public Vector4 SporeFogTint;
+		public Vector2 SporeFogDrift;
+		public float Time;
+		public float SporeFogStrength;
+		public float SporeFogScale;
+		public float SporeFogContrast;
+		public float SporeFogPointStrength;
+		public float SporeFogSunStrength;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
@@ -134,10 +142,14 @@ sealed class GpuLighting : IDisposable
 	public void Render(
 		Target normalBuffer,
 		Target spriteShadowMask,
+		Texture? sporeNoise,
 		Target backgroundMask,
 		Target foregroundMask,
+		Target sporeFogMask,
 		Vector2 camera,
 		float zoom,
+		float time,
+		float sporeFogStrength,
 		Color ambientColor,
 		float ambientIntensity,
 		Vector2 sunDirection,
@@ -209,12 +221,29 @@ sealed class GpuLighting : IDisposable
 			SpriteShadowStrength = Manager.SpriteShadowStrength,
 			SpriteShadowMinLength = Manager.SpriteShadowMinLength,
 			SpriteShadowMaxLength = Manager.SpriteShadowMaxLength,
+			SporeFogTint = (Vector4)Manager.SporeFogTint,
+			SporeFogDrift = Manager.SporeFogDrift,
+			Time = time,
+			SporeFogStrength = sporeNoise != null ? sporeFogStrength : 0,
+			SporeFogScale = Manager.SporeFogScale,
+			SporeFogContrast = Manager.SporeFogContrast,
+			SporeFogPointStrength = Manager.SporeFogPointStrength,
+			SporeFogSunStrength = Manager.SporeFogSunStrength,
 		});
 		new ComputeCommand(maskShader!)
 		{
-			Samplers = [new(normalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp))],
+			Samplers =
+			[
+				new(normalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp)),
+				new(sporeNoise ?? normalBuffer.Attachments[0], new(TextureFilter.Linear, TextureWrap.Repeat, TextureWrap.Repeat)),
+			],
 			ReadOnlyStorageBuffers = [lightBuffer, shadowDepthBuffer],
-			ReadWriteStorageTextures = [backgroundMask.Attachments[0], foregroundMask.Attachments[0]],
+			ReadWriteStorageTextures =
+			[
+				backgroundMask.Attachments[0],
+				foregroundMask.Attachments[0],
+				sporeFogMask.Attachments[0],
+			],
 			UniformBuffers = [maskUniforms],
 			GroupCountX = (normalBuffer.Width + 7) / 8,
 			GroupCountY = (normalBuffer.Height + 7) / 8,
@@ -289,10 +318,10 @@ sealed class GpuLighting : IDisposable
 				entryPoint: "compute_main", name: "LightShadowDepth");
 			maskShader = new(
 				graphicsDevice, ShaderStage.Compute, maskCode,
-				samplerCount: 1,
+				samplerCount: 2,
 				uniformBufferCount: 1,
 				readOnlyStorageBufferCount: 2,
-				readWriteStorageTextureCount: 2,
+				readWriteStorageTextureCount: 3,
 				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 				entryPoint: "compute_main", name: "LightMasks");
 		}

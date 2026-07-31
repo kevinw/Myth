@@ -61,6 +61,9 @@ SamplerState ForegroundEmissiveSampler : register(s9, space2);
 Texture2D NormalTexture : register(t10, space2);
 SamplerState NormalSampler : register(s10, space2);
 
+Texture2D SporeFogTexture : register(t11, space2);
+SamplerState SporeFogSampler : register(s11, space2);
+
 struct VsInput
 {
     float2 position : TEXCOORD0;
@@ -366,6 +369,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     }
 
     float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope);
+    background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         ForegroundLightTexture.Sample(ForegroundLightSampler, sample),

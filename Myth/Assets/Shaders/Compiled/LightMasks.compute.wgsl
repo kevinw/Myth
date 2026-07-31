@@ -37,21 +37,35 @@ struct type_u002e_Params {
     SpriteShadowMinLength: f32,
     SpriteShadowMaxLength: f32,
     SpriteShadowPadding: f32,
+    SporeFogTint: vec4<f32>,
+    SporeFogDrift: vec2<f32>,
+    Time: f32,
+    SporeFogStrength: f32,
+    SporeFogScale: f32,
+    SporeFogContrast: f32,
+    SporeFogPointStrength: f32,
+    SporeFogSunStrength: f32,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var NormalTexture: texture_2d<f32>;
-@group(0) @binding(100) 
+@group(0) @binding(100)
 var NormalSampler: sampler;
-@group(0) @binding(1) 
+@group(0) @binding(1)
+var SporeNoise: texture_2d<f32>;
+@group(0) @binding(101)
+var SporeNoiseSampler: sampler;
+@group(0) @binding(2)
 var<storage> Lights: type_u002e_StructuredBuffer_u002e_Light;
-@group(0) @binding(2) 
+@group(0) @binding(3)
 var<storage> ShadowDepth: type_u002e_StructuredBuffer_u002e_v2float;
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var BackgroundMask: texture_storage_2d<rgba8unorm,write>;
-@group(1) @binding(1) 
+@group(1) @binding(1)
 var ForegroundMask: texture_storage_2d<rgba8unorm,write>;
-@group(2) @binding(0) 
+@group(1) @binding(2)
+var SporeFogMask: texture_storage_2d<rgba8unorm,write>;
+@group(2) @binding(0)
 var<uniform> Params: type_u002e_Params;
 var<private> global: vec3<u32>;
 
@@ -60,298 +74,344 @@ fn compute_main_1() {
     var offsets: array<i32, 5>;
     var weights_1: array<f32, 5>;
     var offsets_1: array<i32, 5>;
-    var phi_122_: bool;
-    var phi_217_: f32;
-    var phi_220_: u32;
-    var phi_241_: f32;
-    var phi_244_: vec4<f32>;
-    var phi_245_: vec4<f32>;
-    var phi_247_: bool;
-    var phi_250_: bool;
-    var phi_252_: vec4<f32>;
-    var phi_254_: vec4<f32>;
-    var phi_256_: u32;
-    var phi_307_: f32;
-    var phi_322_: i32;
-    var phi_344_: bool;
-    var phi_365_: f32;
-    var phi_381_: f32;
-    var phi_384_: u32;
-    var phi_398_: i32;
-    var phi_422_: bool;
-    var phi_443_: f32;
-    var phi_445_: bool;
+    var phi_140_: bool;
+    var phi_234_: f32;
+    var phi_237_: u32;
+    var phi_258_: f32;
+    var phi_266_: vec3<f32>;
+    var phi_267_: vec4<f32>;
+    var phi_268_: vec4<f32>;
+    var phi_270_: vec3<f32>;
+    var phi_273_: bool;
+    var phi_275_: bool;
+    var phi_277_: vec4<f32>;
+    var phi_279_: vec4<f32>;
+    var phi_281_: u32;
+    var phi_331_: f32;
+    var phi_346_: i32;
+    var phi_368_: bool;
+    var phi_389_: f32;
+    var phi_405_: f32;
+    var phi_408_: u32;
+    var phi_422_: i32;
     var phi_446_: bool;
-    var phi_447_: f32;
-    var phi_248_: bool;
-    var phi_251_: bool;
-    var phi_253_: vec4<f32>;
-    var phi_255_: vec4<f32>;
-    var local: vec4<f32>;
-    var local_1: vec4<f32>;
-    var local_2: f32;
-    var local_3: f32;
+    var phi_467_: f32;
+    var phi_469_: bool;
+    var phi_470_: bool;
+    var phi_471_: f32;
+    var phi_271_: vec3<f32>;
+    var phi_274_: bool;
+    var phi_276_: bool;
+    var phi_278_: vec4<f32>;
+    var phi_280_: vec4<f32>;
+    var phi_527_: f32;
+    var local: f32;
+    var local_1: vec3<f32>;
+    var local_2: vec4<f32>;
+    var local_3: vec4<f32>;
     var local_4: f32;
+    var local_5: f32;
+    var local_6: f32;
 
-    let _e62 = global;
+    let _e80 = global;
     switch bitcast<i32>(0u) {
         default: {
-            let _e65 = global[0i];
-            let _e67 = Params.Width;
-            phi_122_ = true;
-            if !((_e65 >= _e67)) {
-                let _e71 = global[1i];
-                let _e73 = Params.Height;
-                phi_122_ = (_e71 >= _e73);
+            let _e83 = global[0i];
+            let _e85 = Params.Width;
+            phi_140_ = true;
+            if !((_e83 >= _e85)) {
+                let _e89 = global[1i];
+                let _e91 = Params.Height;
+                phi_140_ = (_e89 >= _e91);
             }
-            let _e76 = phi_122_;
-            if _e76 {
+            let _e94 = phi_140_;
+            if _e94 {
                 break;
             }
-            let _e77 = _e62.xy;
-            let _e79 = (vec2<f32>(_e77) + vec2<f32>(0.5f, 0.5f));
-            let _e82 = Params.Height;
-            let _e87 = Params.Camera;
-            let _e89 = Params.Zoom;
-            let _e92 = (_e87 + (_e79 / vec2(_e89)));
-            let _e93 = textureSampleLevel(NormalTexture, NormalSampler, (_e79 / vec2<f32>(f32(_e67), f32(_e82))), 0f);
-            let _e98 = normalize(((_e93.xyz * 2f) - vec3<f32>(1f, 1f, 1f)));
-            let _e100 = Params.Ambient;
-            let _e102 = Params.SunEnabled;
-            phi_244_ = _e100;
-            phi_245_ = _e100;
-            if (_e102 != 0u) {
-                let _e105 = Params.SunDirection;
-                let _e106 = -(_e105);
-                let _e117 = Params.SunColor;
-                let _e120 = Params.SunStrength;
-                let _e122 = ((_e117.xyz * _e120) * mix(1f, (0.12f + (clamp(dot(_e98, normalize(vec3<f32>(_e106.x, _e106.y, 1f))), 0f, 1f) * 2.15f)), _e93.w));
-                let _e126 = vec4<f32>(_e122.x, _e122.y, _e122.z, 1f);
+            let _e95 = _e80.xy;
+            let _e97 = (vec2<f32>(_e95) + vec2<f32>(0.5f, 0.5f));
+            let _e100 = Params.Height;
+            let _e105 = Params.Camera;
+            let _e107 = Params.Zoom;
+            let _e110 = (_e105 + (_e97 / vec2(_e107)));
+            let _e111 = textureSampleLevel(NormalTexture, NormalSampler, (_e97 / vec2<f32>(f32(_e85), f32(_e100))), 0f);
+            let _e116 = normalize(((_e111.xyz * 2f) - vec3<f32>(1f, 1f, 1f)));
+            let _e118 = Params.Ambient;
+            let _e120 = Params.SunEnabled;
+            phi_266_ = vec3<f32>(0f, 0f, 0f);
+            phi_267_ = _e118;
+            phi_268_ = _e118;
+            if (_e120 != 0u) {
+                let _e123 = Params.SunDirection;
+                let _e124 = -(_e123);
+                let _e135 = Params.SunColor;
+                let _e138 = Params.SunStrength;
+                let _e139 = (_e135.xyz * _e138);
+                let _e140 = (_e139 * mix(1f, (0.12f + (clamp(dot(_e116, normalize(vec3<f32>(_e124.x, _e124.y, 1f))), 0f, 1f) * 2.15f)), _e111.w));
+                let _e144 = vec4<f32>(_e140.x, _e140.y, _e140.z, 1f);
                 switch bitcast<i32>(0u) {
                     default: {
-                        let _e130 = Params.SunPerpendicular;
-                        let _e133 = Params.SunPerpendicularMin;
-                        let _e136 = Params.SunPerpendicularMax;
-                        let _e142 = i32(round((clamp(((dot(_e92, _e130) - _e133) / (_e136 - _e133)), 0f, 1f) * 511f)));
-                        let _e144 = Params.SunSoftness;
-                        if (_e144 <= 0f) {
-                            let _e151 = ShadowDepth.member[bitcast<u32>((32768i + _e142))][0i];
-                            let _e154 = Params.ShadowBias;
-                            phi_241_ = select(0f, 1f, (dot(_e92, _e105) <= (_e151 + _e154)));
+                        let _e147 = Params.SunPerpendicular;
+                        let _e150 = Params.SunPerpendicularMin;
+                        let _e153 = Params.SunPerpendicularMax;
+                        let _e159 = i32(round((clamp(((dot(_e110, _e147) - _e150) / (_e153 - _e150)), 0f, 1f) * 511f)));
+                        let _e161 = Params.SunSoftness;
+                        if (_e161 <= 0f) {
+                            let _e168 = ShadowDepth.member[bitcast<u32>((32768i + _e159))][0i];
+                            let _e171 = Params.ShadowBias;
+                            phi_258_ = select(0f, 1f, (dot(_e110, _e123) <= (_e168 + _e171)));
                             break;
                         }
                         offsets_1 = array<i32, 5>(-2i, -1i, 0i, 1i, 2i);
                         weights_1 = array<f32, 5>(0.1f, 0.2f, 0.4f, 0.2f, 0.1f);
-                        phi_217_ = 0f;
-                        phi_220_ = 0u;
+                        phi_234_ = 0f;
+                        phi_237_ = 0u;
                         loop {
-                            let _e163 = phi_217_;
-                            let _e165 = phi_220_;
-                            local_2 = _e163;
-                            if (_e165 < 5u) {
+                            let _e180 = phi_234_;
+                            let _e182 = phi_237_;
+                            local_4 = _e180;
+                            if (_e182 < 5u) {
                                 continue;
                             } else {
                                 break;
                             }
                             continuing {
-                                let _e168 = offsets_1[_e165];
-                                let _e177 = ShadowDepth.member[bitcast<u32>((32768i + clamp((_e142 + (_e168 * max(1i, i32(round(_e144))))), 0i, 511i)))][0i];
-                                let _e179 = weights_1[_e165];
-                                let _e181 = Params.ShadowBias;
-                                phi_217_ = (_e163 + (_e179 * select(0f, 1f, (dot(_e92, _e105) <= (_e177 + _e181)))));
-                                phi_220_ = (_e165 + 1u);
+                                let _e185 = offsets_1[_e182];
+                                let _e194 = ShadowDepth.member[bitcast<u32>((32768i + clamp((_e159 + (_e185 * max(1i, i32(round(_e161))))), 0i, 511i)))][0i];
+                                let _e196 = weights_1[_e182];
+                                let _e198 = Params.ShadowBias;
+                                phi_234_ = (_e180 + (_e196 * select(0f, 1f, (dot(_e110, _e123) <= (_e194 + _e198)))));
+                                phi_237_ = (_e182 + 1u);
                             }
                         }
-                        let _e398 = local_2;
-                        phi_241_ = _e398;
+                        let _e492 = local_4;
+                        phi_258_ = _e492;
                         break;
                     }
                 }
-                let _e189 = phi_241_;
-                phi_244_ = (_e100 + _e126);
-                phi_245_ = (_e100 + (_e126 * _e189));
+                let _e206 = phi_258_;
+                let _e211 = Params.SporeFogSunStrength;
+                phi_266_ = ((_e139 * _e211) * _e206);
+                phi_267_ = (_e118 + _e144);
+                phi_268_ = (_e118 + (_e144 * _e206));
             }
-            let _e193 = phi_244_;
-            let _e195 = phi_245_;
-            phi_247_ = false;
-            phi_250_ = false;
-            phi_252_ = _e193;
-            phi_254_ = _e195;
-            phi_256_ = 0u;
+            let _e215 = phi_266_;
+            let _e217 = phi_267_;
+            let _e219 = phi_268_;
+            phi_270_ = _e215;
+            phi_273_ = false;
+            phi_275_ = false;
+            phi_277_ = _e217;
+            phi_279_ = _e219;
+            phi_281_ = 0u;
             loop {
-                let _e197 = phi_247_;
-                let _e199 = phi_250_;
-                let _e201 = phi_252_;
-                let _e203 = phi_254_;
-                let _e205 = phi_256_;
-                let _e207 = Params.LightCount;
-                local = _e203;
-                local_1 = _e201;
-                if (_e205 < _e207) {
-                    let _e211 = Lights.member[_e205];
-                    let _e216 = (_e211.Position - _e92);
-                    let _e217 = length(_e216);
-                    let _e218 = (_e217 / _e211.Radius);
-                    let _e220 = clamp((1f - _e218), 0f, 1f);
-                    let _e221 = (_e220 * _e220);
-                    if (_e221 <= 0f) {
-                        phi_248_ = _e197;
-                        phi_251_ = _e199;
-                        phi_253_ = _e201;
-                        phi_255_ = _e203;
+                let _e221 = phi_270_;
+                let _e223 = phi_273_;
+                let _e225 = phi_275_;
+                let _e227 = phi_277_;
+                let _e229 = phi_279_;
+                let _e231 = phi_281_;
+                let _e233 = Params.LightCount;
+                local_1 = _e221;
+                local_2 = _e229;
+                local_3 = _e227;
+                if (_e231 < _e233) {
+                    let _e237 = Lights.member[_e231];
+                    let _e242 = (_e237.Position - _e110);
+                    let _e243 = length(_e242);
+                    let _e244 = (_e243 / _e237.Radius);
+                    let _e246 = clamp((1f - _e244), 0f, 1f);
+                    if (_e246 <= 0f) {
+                        phi_271_ = _e221;
+                        phi_274_ = _e223;
+                        phi_276_ = _e225;
+                        phi_278_ = _e227;
+                        phi_280_ = _e229;
                         continue;
                     }
-                    let _e236 = (((_e211.ColorIntensity.xyz * _e211.ColorIntensity.w) * _e221) * mix(1f, (0.12f + (clamp(dot(_e98, normalize(vec3<f32>(_e216.x, _e216.y, _e211.Height))), 0f, 1f) * 2.15f)), _e93.w));
-                    let _e240 = vec4<f32>(_e236.x, _e236.y, _e236.z, _e221);
-                    let _e242 = -(_e216);
+                    let _e248 = (_e246 * _e246);
+                    let _e260 = (_e237.ColorIntensity.xyz * _e237.ColorIntensity.w);
+                    let _e262 = ((_e260 * _e248) * mix(1f, (0.12f + (clamp(dot(_e116, normalize(vec3<f32>(_e242.x, _e242.y, _e237.Height))), 0f, 1f) * 2.15f)), _e111.w));
+                    let _e266 = vec4<f32>(_e262.x, _e262.y, _e262.z, _e248);
+                    let _e267 = -(_e242);
                     switch bitcast<i32>(0u) {
                         default: {
-                            let _e246 = atan2(_e242.y, _e242.x);
-                            phi_307_ = _e246;
-                            if (_e246 < 0f) {
-                                phi_307_ = (_e246 + 6.2831855f);
+                            let _e271 = atan2(_e267.y, _e267.x);
+                            phi_331_ = _e271;
+                            if (_e271 < 0f) {
+                                phi_331_ = (_e271 + 6.2831855f);
                             }
-                            let _e250 = phi_307_;
-                            let _e254 = i32(round(((_e250 * 81.48733f) - 0.5f)));
-                            let _e256 = Params.SoftShadowSamples;
-                            if (_e256 <= 0f) {
-                                let _e258 = (_e254 % 512i);
-                                phi_322_ = _e258;
-                                if (_e258 < 0i) {
-                                    phi_322_ = (_e258 + 512i);
+                            let _e275 = phi_331_;
+                            let _e279 = i32(round(((_e275 * 81.48733f) - 0.5f)));
+                            let _e281 = Params.SoftShadowSamples;
+                            if (_e281 <= 0f) {
+                                let _e283 = (_e279 % 512i);
+                                phi_346_ = _e283;
+                                if (_e283 < 0i) {
+                                    phi_346_ = (_e283 + 512i);
                                 }
-                                let _e262 = phi_322_;
+                                let _e287 = phi_346_;
                                 switch bitcast<i32>(0u) {
                                     default: {
-                                        let _e269 = ShadowDepth.member[((_e205 * 512u) + bitcast<u32>(_e262))];
-                                        let _e272 = Params.ShadowBias;
-                                        if (_e217 > (_e269.x + _e272)) {
-                                            phi_365_ = 0f;
+                                        let _e294 = ShadowDepth.member[((_e231 * 512u) + bitcast<u32>(_e287))];
+                                        let _e297 = Params.ShadowBias;
+                                        if (_e243 > (_e294.x + _e297)) {
+                                            phi_389_ = 0f;
                                             break;
                                         }
-                                        phi_344_ = true;
-                                        if !((_e269.y >= _e211.Radius)) {
-                                            phi_344_ = (_e217 <= (_e269.y + _e272));
+                                        phi_368_ = true;
+                                        if !((_e294.y >= _e237.Radius)) {
+                                            phi_368_ = (_e243 <= (_e294.y + _e297));
                                         }
-                                        let _e281 = phi_344_;
-                                        if _e281 {
-                                            phi_365_ = 1f;
+                                        let _e306 = phi_368_;
+                                        if _e306 {
+                                            phi_389_ = 1f;
                                             break;
                                         }
-                                        let _e286 = Params.SpriteShadowMinLength;
-                                        let _e288 = Params.SpriteShadowMaxLength;
-                                        let _e296 = Params.SpriteShadowStrength;
-                                        phi_365_ = (1f - (clamp(_e296, 0f, 1f) * clamp((1f - ((_e217 - _e269.y) / max(mix(_e286, _e288, clamp((1f - (_e269.y / _e211.Radius)), 0f, 1f)), 0.0001f))), 0f, 1f)));
+                                        let _e311 = Params.SpriteShadowMinLength;
+                                        let _e313 = Params.SpriteShadowMaxLength;
+                                        let _e321 = Params.SpriteShadowStrength;
+                                        phi_389_ = (1f - (clamp(_e321, 0f, 1f) * clamp((1f - ((_e243 - _e294.y) / max(mix(_e311, _e313, clamp((1f - (_e294.y / _e237.Radius)), 0f, 1f)), 0.0001f))), 0f, 1f)));
                                         break;
                                     }
                                 }
-                                let _e301 = phi_365_;
-                                phi_445_ = _e197;
-                                phi_446_ = _e199;
-                                phi_447_ = _e301;
+                                let _e326 = phi_389_;
+                                phi_469_ = _e223;
+                                phi_470_ = _e225;
+                                phi_471_ = _e326;
                                 break;
                             }
-                            let _e303 = Params.MinimumSoftness;
-                            if _e199 {
+                            let _e328 = Params.MinimumSoftness;
+                            if _e225 {
                             } else {
                                 offsets = array<i32, 5>(-2i, -1i, 0i, 1i, 2i);
                             }
-                            if _e197 {
+                            if _e223 {
                             } else {
                                 weights = array<f32, 5>(0.1f, 0.2f, 0.4f, 0.2f, 0.1f);
                             }
-                            phi_381_ = 0f;
-                            phi_384_ = 0u;
+                            phi_405_ = 0f;
+                            phi_408_ = 0u;
                             loop {
-                                let _e313 = phi_381_;
-                                let _e315 = phi_384_;
-                                local_4 = _e313;
-                                if (_e315 < 5u) {
-                                    let _e318 = offsets[_e315];
-                                    let _e321 = ((_e254 + (_e318 * max(1i, i32(round((_e256 * mix(_e303, 1f, clamp(_e218, 0f, 1f)))))))) % 512i);
-                                    phi_398_ = _e321;
-                                    if (_e321 < 0i) {
-                                        phi_398_ = (_e321 + 512i);
+                                let _e338 = phi_405_;
+                                let _e340 = phi_408_;
+                                local_6 = _e338;
+                                if (_e340 < 5u) {
+                                    let _e343 = offsets[_e340];
+                                    let _e346 = ((_e279 + (_e343 * max(1i, i32(round((_e281 * mix(_e328, 1f, clamp(_e244, 0f, 1f)))))))) % 512i);
+                                    phi_422_ = _e346;
+                                    if (_e346 < 0i) {
+                                        phi_422_ = (_e346 + 512i);
                                     }
-                                    let _e325 = phi_398_;
-                                    let _e327 = weights[_e315];
+                                    let _e350 = phi_422_;
+                                    let _e352 = weights[_e340];
                                     switch bitcast<i32>(0u) {
                                         default: {
-                                            let _e334 = ShadowDepth.member[((_e205 * 512u) + bitcast<u32>(_e325))];
-                                            let _e337 = Params.ShadowBias;
-                                            if (_e217 > (_e334.x + _e337)) {
-                                                phi_443_ = 0f;
+                                            let _e359 = ShadowDepth.member[((_e231 * 512u) + bitcast<u32>(_e350))];
+                                            let _e362 = Params.ShadowBias;
+                                            if (_e243 > (_e359.x + _e362)) {
+                                                phi_467_ = 0f;
                                                 break;
                                             }
-                                            phi_422_ = true;
-                                            if !((_e334.y >= _e211.Radius)) {
-                                                phi_422_ = (_e217 <= (_e334.y + _e337));
+                                            phi_446_ = true;
+                                            if !((_e359.y >= _e237.Radius)) {
+                                                phi_446_ = (_e243 <= (_e359.y + _e362));
                                             }
-                                            let _e346 = phi_422_;
-                                            if _e346 {
-                                                phi_443_ = 1f;
+                                            let _e371 = phi_446_;
+                                            if _e371 {
+                                                phi_467_ = 1f;
                                                 break;
                                             }
-                                            let _e351 = Params.SpriteShadowMinLength;
-                                            let _e353 = Params.SpriteShadowMaxLength;
-                                            let _e361 = Params.SpriteShadowStrength;
-                                            phi_443_ = (1f - (clamp(_e361, 0f, 1f) * clamp((1f - ((_e217 - _e334.y) / max(mix(_e351, _e353, clamp((1f - (_e334.y / _e211.Radius)), 0f, 1f)), 0.0001f))), 0f, 1f)));
+                                            let _e376 = Params.SpriteShadowMinLength;
+                                            let _e378 = Params.SpriteShadowMaxLength;
+                                            let _e386 = Params.SpriteShadowStrength;
+                                            phi_467_ = (1f - (clamp(_e386, 0f, 1f) * clamp((1f - ((_e243 - _e359.y) / max(mix(_e376, _e378, clamp((1f - (_e359.y / _e237.Radius)), 0f, 1f)), 0.0001f))), 0f, 1f)));
                                             break;
                                         }
                                     }
-                                    let _e366 = phi_443_;
-                                    local_3 = (_e313 + (_e327 * _e366));
+                                    let _e391 = phi_467_;
+                                    local_5 = (_e338 + (_e352 * _e391));
                                     continue;
                                 } else {
                                     break;
                                 }
                                 continuing {
-                                    let _e412 = local_3;
-                                    phi_381_ = _e412;
-                                    phi_384_ = (_e315 + 1u);
+                                    let _e508 = local_5;
+                                    phi_405_ = _e508;
+                                    phi_408_ = (_e340 + 1u);
                                 }
                             }
-                            phi_445_ = select(true, _e197, _e197);
-                            phi_446_ = select(true, _e199, _e199);
-                            let _e421 = local_4;
-                            phi_447_ = _e421;
+                            phi_469_ = select(true, _e223, _e223);
+                            phi_470_ = select(true, _e225, _e225);
+                            let _e517 = local_6;
+                            phi_471_ = _e517;
                             break;
                         }
                     }
-                    let _e371 = phi_445_;
-                    let _e373 = phi_446_;
-                    let _e375 = phi_447_;
-                    phi_248_ = _e371;
-                    phi_251_ = _e373;
-                    phi_253_ = (_e201 + _e240);
-                    phi_255_ = (_e203 + (_e240 * _e375));
+                    let _e396 = phi_469_;
+                    let _e398 = phi_470_;
+                    let _e400 = phi_471_;
+                    let _e406 = Params.SporeFogPointStrength;
+                    phi_271_ = (_e221 + (((_e260 * _e246) * _e406) * _e400));
+                    phi_274_ = _e396;
+                    phi_276_ = _e398;
+                    phi_278_ = (_e227 + _e266);
+                    phi_280_ = (_e229 + (_e266 * _e400));
                     continue;
                 } else {
                     break;
                 }
                 continuing {
-                    let _e379 = phi_248_;
-                    let _e381 = phi_251_;
-                    let _e383 = phi_253_;
-                    let _e385 = phi_255_;
-                    phi_247_ = _e379;
-                    phi_250_ = _e381;
-                    phi_252_ = _e383;
-                    phi_254_ = _e385;
-                    phi_256_ = (_e205 + 1u);
+                    let _e411 = phi_271_;
+                    let _e413 = phi_274_;
+                    let _e415 = phi_276_;
+                    let _e417 = phi_278_;
+                    let _e419 = phi_280_;
+                    phi_270_ = _e411;
+                    phi_273_ = _e413;
+                    phi_275_ = _e415;
+                    phi_277_ = _e417;
+                    phi_279_ = _e419;
+                    phi_281_ = (_e231 + 1u);
                 }
             }
-            let _e388 = local;
-            textureStore(BackgroundMask, _e77, clamp(_e388, vec4<f32>(0f, 0f, 0f, 0f), vec4<f32>(1f, 1f, 1f, 1f)));
-            let _e391 = local_1;
-            textureStore(ForegroundMask, _e77, clamp(_e391, vec4<f32>(0f, 0f, 0f, 0f), vec4<f32>(1f, 1f, 1f, 1f)));
+            let _e422 = Params.SporeFogTint;
+            switch bitcast<i32>(0u) {
+                default: {
+                    let _e426 = Params.SporeFogStrength;
+                    local = _e426;
+                    if (_e426 <= 0f) {
+                        phi_527_ = 0f;
+                        break;
+                    }
+                    let _e429 = Params.SporeFogDrift;
+                    let _e431 = Params.Time;
+                    let _e432 = (_e429 * _e431);
+                    let _e435 = Params.SporeFogScale;
+                    let _e437 = textureSampleLevel(SporeNoise, SporeNoiseSampler, ((_e110 + _e432) * _e435), 0f);
+                    let _e448 = textureSampleLevel(SporeNoise, SporeNoiseSampler, ((((vec2<f32>(-(_e110.y), _e110.x) - (_e432 * 0.4f)) * _e435) * 3.17f) + vec2<f32>(0.37f, 0.61f)), 0f);
+                    let _e454 = Params.SporeFogContrast;
+                    phi_527_ = clamp(((((_e437.x * mix(0.75f, 1.25f, _e448.y)) - 0.5f) * _e454) + 0.5f), 0f, 1f);
+                    break;
+                }
+            }
+            let _e459 = phi_527_;
+            let _e461 = local;
+            let _e465 = local_1;
+            let _e469 = (vec3<f32>(1f, 1f, 1f) - exp(-((_e465 * (_e422.xyz * (_e459 * _e461))))));
+            let _e471 = local_2;
+            textureStore(BackgroundMask, _e95, clamp(_e471, vec4<f32>(0f, 0f, 0f, 0f), vec4<f32>(1f, 1f, 1f, 1f)));
+            let _e474 = local_3;
+            textureStore(ForegroundMask, _e95, clamp(_e474, vec4<f32>(0f, 0f, 0f, 0f), vec4<f32>(1f, 1f, 1f, 1f)));
+            let _e476 = clamp(_e469, vec3<f32>(0f, 0f, 0f), vec3<f32>(1f, 1f, 1f));
+            textureStore(SporeFogMask, _e95, vec4<f32>(_e476.x, _e476.y, _e476.z, clamp(max(max(_e469.x, _e469.y), _e469.z), 0f, 1f)));
             break;
         }
     }
     return;
 }
 
-@compute @workgroup_size(8, 8, 1) 
+@compute @workgroup_size(8, 8, 1)
 fn compute_main(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     compute_main_1();

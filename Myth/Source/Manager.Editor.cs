@@ -1030,6 +1030,16 @@ public partial class Manager
 			changed = true;
 		}
 
+		ImGui.TextUnformatted("Spore Fog");
+		var sporeFogStrength = room.SporeFogStrength;
+		ImGui.SetNextItemWidth(-1);
+		if (ImGui.SliderFloat("##RoomSporeFogStrength", ref sporeFogStrength, 0.0f, 1.0f))
+		{
+			OpenRoomSettingsUndo("Edit Room Lighting", room);
+			room.SporeFogStrength = sporeFogStrength;
+			changed = true;
+		}
+
 		ImGui.TextUnformatted("Reverb");
 		var reverbAuto = room.ReverbAuto;
 		if (ImGui.Checkbox("Auto Reverb", ref reverbAuto))
@@ -1233,7 +1243,7 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.SporeFogStrength, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -1243,6 +1253,7 @@ public partial class Manager
 		room.AmbientColor = settings.AmbientColor;
 		room.AmbientIntensity = settings.AmbientIntensity;
 		room.LightNoise = settings.LightNoise;
+		room.SporeFogStrength = settings.SporeFogStrength;
 		room.ReverbAuto = settings.ReverbAuto;
 		room.Reverb = settings.Reverb;
 		room.SunColor = settings.SunColor;

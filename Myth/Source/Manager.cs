@@ -59,6 +59,14 @@ public partial class Manager : App
 	public static float SpriteShadowMinLength => 4.0f;
 	public static float SpriteShadowMaxLength => 28.0f;
 
+	// Illuminated spore fog: world-space participating medium between the background and foreground.
+	public static float SporeFogScale => 1.0f / 80.0f;
+	public static Vector2 SporeFogDrift => new(2.0f, -0.5f);
+	public static float SporeFogContrast => 1.8f;
+	public static Color SporeFogTint => new(0.72f, 1.0f, 0.78f, 1.0f);
+	public static float SporeFogPointStrength => 0.65f;
+	public static float SporeFogSunStrength => 0.3f;
+
 	/// The room renderer / simulation.
 	internal Game? game;
 	internal bool playing;

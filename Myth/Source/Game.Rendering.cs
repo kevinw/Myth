@@ -880,6 +880,7 @@ public sealed partial class GameView
 		material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[11] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
@@ -1369,6 +1370,7 @@ public sealed partial class GameView
 			var ambient = ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity());
 			BackgroundLightMask.Clear(ambient);
 			ForegroundLightMask.Clear(ambient);
+			SporeFogMask.Clear(Color.Transparent);
 			return;
 		}
 
@@ -1425,10 +1427,14 @@ public sealed partial class GameView
 		renderer.Render(
 			NormalBuffer,
 			SpriteShadowMask,
+			Assets.LightingNoise,
 			BackgroundLightMask,
 			ForegroundLightMask,
+			SporeFogMask,
 			RenderCamera,
 			zoomLevel,
+			Time.SecondsF,
+			CurrentSporeFogStrength(),
 			CurrentAmbientColor(),
 			CurrentAmbientIntensity(),
 			CurrentSunDirection(),
@@ -1499,6 +1505,14 @@ public sealed partial class GameView
 			return room?.LightNoise ?? Room.DefaultLightNoise;
 
 		return float.Lerp(room!.LightNoise, nextRoom.LightNoise, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	float CurrentSporeFogStrength()
+	{
+		if (nextRoom == null)
+			return room?.SporeFogStrength ?? Room.DefaultSporeFogStrength;
+
+		return float.Lerp(room!.SporeFogStrength, nextRoom.SporeFogStrength, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	// Dither floats blend across a room transition like the other lighting params; the two bools
@@ -1994,6 +2008,7 @@ public sealed partial class GameView
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
+		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
 		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
@@ -2034,7 +2049,7 @@ public sealed partial class GameView
 	void DisposeRenderTargets()
 	{
 		foreach (var target in debugTargets)
-			if (target == BackgroundLightMask || target == ForegroundLightMask)
+			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask)
 				target.Dispose();
 			else
 				RenderTargetPool.Return(target);
@@ -2206,6 +2221,7 @@ public sealed partial class GameView
 	Target ForegroundEmissive { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
+	Target SporeFogMask { get; set; } = null!;
 	Target LitScreen { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;

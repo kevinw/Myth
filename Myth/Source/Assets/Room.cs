@@ -55,6 +55,7 @@ public class Room
 	public static readonly Color DefaultAmbientColor = new(0.42f, 0.42f, 0.46f, 1.0f);
 	public const float DefaultAmbientIntensity = 1.0f;
 	public const float DefaultLightNoise = 0.30f;
+	public const float DefaultSporeFogStrength = 0.0f;
 	public const float DefaultReverb = 0.0f;
 	// Per-room dither, overriding the engine defaults. Manager.DitherPerfScale still gates
 	// lighting strength globally for performance.
@@ -141,6 +142,7 @@ public class Room
 	public Color AmbientColor = DefaultAmbientColor;
 	public float AmbientIntensity = DefaultAmbientIntensity;
 	public float LightNoise = DefaultLightNoise;
+	public float SporeFogStrength = DefaultSporeFogStrength;
 	public bool ReverbAuto = true;
 	public float Reverb = DefaultReverb;
 	public Color SunColor = DefaultSunColor;
@@ -176,6 +178,7 @@ public class Room
 			AmbientColor = AmbientColor,
 			AmbientIntensity = AmbientIntensity,
 			LightNoise = LightNoise,
+			SporeFogStrength = SporeFogStrength,
 			ReverbAuto = ReverbAuto,
 			Reverb = Reverb,
 			SunColor = SunColor,
@@ -242,6 +245,7 @@ public class Room
 		AmbientColor = JsonUtil.ReadColor(json, "ambientColor") ?? DefaultAmbientColor;
 		AmbientIntensity = JsonUtil.ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
 		LightNoise = JsonUtil.ReadFloat(json, "lightNoise", DefaultLightNoise);
+		SporeFogStrength = Clamp01(JsonUtil.ReadFloat(json, "sporeFogStrength", DefaultSporeFogStrength));
 		ReverbAuto = JsonUtil.ReadBool(json, "reverbAuto", true);
 		Reverb = Clamp01(JsonUtil.ReadFloat(json, "reverb", DefaultReverb));
 		LightingDitherEnabled = JsonUtil.ReadBool(json, "ditherEnabled", DefaultLightingDitherEnabled);
@@ -1363,6 +1367,8 @@ public class Room
 			writer.WriteNumber("ambientIntensity", AmbientIntensity);
 		if (LightNoise != DefaultLightNoise)
 			writer.WriteNumber("lightNoise", LightNoise);
+		if (SporeFogStrength != DefaultSporeFogStrength)
+			writer.WriteNumber("sporeFogStrength", SporeFogStrength);
 		if (!ReverbAuto)
 			writer.WriteBoolean("reverbAuto", false);
 		if (Reverb != DefaultReverb || !ReverbAuto)
