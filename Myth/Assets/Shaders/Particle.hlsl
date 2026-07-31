@@ -32,6 +32,10 @@ struct EffectParams
     float trailSeconds;
     float trailWidthStart;
     float trailWidthEnd;
+    float lightResponse;
+    float _effectPad0;
+    float _effectPad1;
+    float _effectPad2;
 };
 
 // In SDL_gpu's vertex resource model, sampled textures precede storage buffers
@@ -50,6 +54,18 @@ cbuffer VertexParams : register(b0, space1)
     float _pad2;
 };
 
+Texture2D LightTexture : register(t0, space2);
+SamplerState LightSampler : register(s0, space2);
+
+cbuffer FragmentParams : register(b0, space3)
+{
+    float2 TargetSize;
+    float LightingEnabled;
+    float _fragmentPad0;
+    float3 AmbientLight;
+    float _fragmentPad1;
+};
+
 struct VsInput
 {
     float2 position : TEXCOORD0;  // unit-quad corner offset in [-0.5, 0.5]
@@ -62,6 +78,7 @@ struct VsOutput
     float4 color : TEXCOORD0;
 	float2 texCoord : TEXCOORD1;
 	float style : TEXCOORD2;
+    float lightResponse : TEXCOORD3;
     float4 position : SV_Position;
 };
 
@@ -85,18 +102,29 @@ VsOutput vertex_main(VsInput input, uint instance : SV_InstanceID)
     output.color = float4(col.rgb, col.a * alive);
 	output.texCoord = input.tex_coord;
 	output.style = fx.style;
+    output.lightResponse = fx.lightResponse;
     return output;
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
 {
+	float4 color = input.color;
 	if (input.style > 0.5)
 	{
 		float radialDistance = length(input.texCoord - 0.5) * 2.0;
 		float aura = 1.0 - smoothstep(0.35, 1.0, radialDistance);
 		float core = 1.0 - smoothstep(0.0, 0.38, radialDistance);
-		float3 color = lerp(input.color.rgb, 1.0, core * 0.85);
-		return float4(color, input.color.a * max(aura * 0.45, core));
+		color = float4(lerp(input.color.rgb, 1.0, core * 0.85), input.color.a * max(aura * 0.45, core));
 	}
-    return input.color;
+
+    float response = saturate(input.lightResponse * LightingEnabled);
+    if (response > 0.0)
+    {
+        float3 light = LightTexture.Sample(LightSampler, input.position.xy / TargetSize).rgb;
+        float3 directLight = max(light - AmbientLight, 0.0);
+        float illumination = max(directLight.r, max(directLight.g, directLight.b));
+        color.rgb = lerp(color.rgb, color.rgb * directLight * 2.0, response);
+        color.a *= lerp(1.0, smoothstep(0.02, 0.45, illumination), response);
+    }
+    return color;
 }

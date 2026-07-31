@@ -39,6 +39,10 @@ struct EffectParams
 	float trailSeconds; // 0 = no trail
 	float trailWidthStart;
     float trailWidthEnd;
+    float lightResponse;
+    float _effectPad0;
+    float _effectPad1;
+    float _effectPad2;
 };
 
 struct EmitParams

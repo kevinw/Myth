@@ -48,6 +48,7 @@ public sealed class ParticleSystem : IDisposable
 		public float Gravity, Drag, NoiseAmount, NoiseScale;
 		public float SizeStart, SizeEnd, CollisionMode, Bounciness;
 		public float Style, TrailSeconds, TrailWidthStart, TrailWidthEnd;
+		public float LightResponse, Pad0, Pad1, Pad2;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -97,6 +98,13 @@ public sealed class ParticleSystem : IDisposable
 		public float LutHeightF;
 		public float MaxEffectsF;
 		public float Pad0, Pad1;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	struct FragmentParams
+	{
+		public float TargetWidth, TargetHeight, LightingEnabled, Pad0;
+		public float AmbientR, AmbientG, AmbientB, Pad1;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
@@ -170,6 +178,7 @@ public sealed class ParticleSystem : IDisposable
 
 			fragmentShader = new Shader(
 				graphicsDevice, ShaderStage.Fragment, fragmentCode,
+				samplerCount: 1, uniformBufferCount: 1,
 				entryPoint: "fragment_main", name: "ParticleFragment");
 
 			material = new Material(vertexShader, fragmentShader);
@@ -181,6 +190,7 @@ public sealed class ParticleSystem : IDisposable
 
 			trailFragmentShader = new Shader(
 				graphicsDevice, ShaderStage.Fragment, trailFragmentCode,
+				samplerCount: 1, uniformBufferCount: 1,
 				entryPoint: "fragment_main", name: "ParticleTrailFragment");
 
 			trailMaterial = new Material(trailVertexShader, trailFragmentShader);
@@ -532,7 +542,7 @@ public sealed class ParticleSystem : IDisposable
 		Array.Clear(fieldData);
 	}
 
-	public void Render(Target target, Vector2 camera, float zoom)
+	public void Render(Target target, Target lightMask, Vector2 camera, float zoom, bool lightingEnabled, Color ambientLight)
 	{
 		if (!supported)
 			return;
@@ -545,12 +555,24 @@ public sealed class ParticleSystem : IDisposable
 			LutHeightF = LutHeight,
 			MaxEffectsF = MaxEffects,
 		};
+		var ambient = ambientLight.ToVector3();
+		var fragmentParams = new FragmentParams
+		{
+			TargetWidth = target.Width,
+			TargetHeight = target.Height,
+			LightingEnabled = lightingEnabled ? 1 : 0,
+			AmbientR = ambient.X,
+			AmbientG = ambient.Y,
+			AmbientB = ambient.Z,
+		};
 		var lutSampler = new TextureSampler(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp);
 		var blend = new BlendMode(BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.One);
 
 		// Trails first so particle heads draw on top of their own ribbons.
 		trailMaterial!.Vertex.SetUniformBuffer(vertexParams);
 		trailMaterial.Vertex.Samplers[0] = new(colorLut, lutSampler);
+		trailMaterial.Fragment.SetUniformBuffer(fragmentParams);
+		trailMaterial.Fragment.Samplers[0] = new(lightMask, lutSampler);
 
 		new DrawCommand(target, mesh!, trailMaterial)
 		{
@@ -561,6 +583,8 @@ public sealed class ParticleSystem : IDisposable
 
 		material!.Vertex.SetUniformBuffer(vertexParams);
 		material.Vertex.Samplers[0] = new(colorLut, lutSampler);
+		material.Fragment.SetUniformBuffer(fragmentParams);
+		material.Fragment.Samplers[0] = new(lightMask, lutSampler);
 
 		new DrawCommand(target, mesh!, material)
 		{
@@ -593,6 +617,7 @@ public sealed class ParticleSystem : IDisposable
 					TrailSeconds = e.TrailSeconds,
 					TrailWidthStart = e.TrailWidthStart,
 					TrailWidthEnd = e.TrailWidthEnd,
+					LightResponse = e.LightResponse,
 				};
 			}
 			else

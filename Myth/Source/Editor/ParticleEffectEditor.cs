@@ -234,6 +234,7 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 		FxFloat("Size End", name, ref e.SizeEnd, 0.0f, 16.0f);
 		FxCheckbox("Additive", name, ref e.Additive);
 		FxStyle("Style", name, ref e.Style);
+		FxFloat("Light Response", name, ref e.LightResponse, 0.0f, 1.0f);
 		FxColor("Birth", name, ref e.ColorBirth);
 		FxColor("Mid", name, ref e.ColorMid);
 		FxColor("Death", name, ref e.ColorEnd);

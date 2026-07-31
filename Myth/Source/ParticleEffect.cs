@@ -79,6 +79,7 @@ public sealed class ParticleEffect
 	public float SizeEnd = 0.5f;
 	public bool Additive = true;
 	public ParticleRenderStyle Style;
+	public float LightResponse;
 
 	// Collision (against the foreground solid mask)
 	public ParticleCollisionMode Collision = ParticleCollisionMode.None;

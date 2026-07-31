@@ -36,6 +36,10 @@ struct EffectParams
     float trailSeconds;
     float trailWidthStart;
     float trailWidthEnd;
+    float lightResponse;
+    float _effectPad0;
+    float _effectPad1;
+    float _effectPad2;
 };
 
 struct type_StructuredBuffer_EffectParams

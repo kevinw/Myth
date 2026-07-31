@@ -28,6 +28,10 @@ struct EffectParams {
     trailSeconds: f32,
     trailWidthStart: f32,
     trailWidthEnd: f32,
+    lightResponse: f32,
+    _effectPad0_: f32,
+    _effectPad1_: f32,
+    _effectPad2_: f32,
 }
 
 struct type_u002e_StructuredBuffer_u002e_EffectParams {

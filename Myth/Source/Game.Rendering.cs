@@ -146,7 +146,8 @@ public sealed partial class GameView
 		if (PerfToggles.Particles && particleSystem is { Supported: true })
 		{
 			using (GraphicsDevice.DebugGroup("Myth/particles"))
-				particleSystem.Render(output, RenderCamera, zoomLevel);
+				particleSystem.Render(output, BackgroundLightMask, RenderCamera, zoomLevel, PerfToggles.Lighting,
+					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 		}
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
