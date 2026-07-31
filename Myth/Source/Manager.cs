@@ -225,7 +225,7 @@ public partial class Manager : App
 
 	public static Manager Create(StartArgs args) {
 		var settings = GetWindowSettingsFromJSON();
-		args.fullscreen = settings?.Fullscreen;
+		args.fullscreen ??= settings?.Fullscreen;
 		return new(args);
 	}
 

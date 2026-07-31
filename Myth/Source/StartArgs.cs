@@ -105,6 +105,7 @@ public struct StartArgs
 		traceNavFrames = args.Contains("--trace-nav-frames");
 		simple = args.Contains("--simple");
 		bench = args.Contains("--bench");
+		fullscreen = args.Contains("--fullscreen") ? true : null;
 		aspectFourThree = args.Contains("--aspect-four-three");
 		noWarmup = args.Contains("--no-warmup");
 		play = args.Contains("--play") || screenshotPath != null || playRoomId != null;
