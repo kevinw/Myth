@@ -19,7 +19,7 @@ Texture2D SpriteShadowMask : register(t0, space0);
 SamplerState SpriteShadowSampler : register(s0, space0);
 StructuredBuffer<Segment> Segments : register(t1, space0);
 StructuredBuffer<Light> Lights : register(t2, space0);
-RWStructuredBuffer<float> ShadowDepth : register(u0, space1);
+RWStructuredBuffer<float2> ShadowDepth : register(u0, space1);
 
 cbuffer Params : register(b0, space2)
 {
@@ -82,34 +82,47 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     {
         if (id.y >= LightCount)
         {
-            ShadowDepth[outputIndex] = 0.0;
+            ShadowDepth[outputIndex] = float2(0.0, 0.0);
             return;
         }
 
         Light light = Lights[id.y];
         float angle = (id.x + 0.5) / ShadowSamples * 6.28318530718;
         float2 direction = float2(cos(angle), sin(angle));
-        float closest = light.Radius;
+        float hardDepth = light.Radius;
         for (uint i = 0; i < SegmentCount; i++)
         {
             float distance;
             if (ray_segment(light.Position, direction, Segments[i], distance))
-                closest = min(closest, distance);
+                hardDepth = min(hardDepth, distance);
         }
+
+        float spriteExit = light.Radius;
+        bool insideSprite = false;
         float stepSize = max(0.5, 0.5 / ZoomPadding.x);
-        for (float distance = stepSize; distance < closest; distance += stepSize)
-            if (sprite_occludes(light.Position + direction * distance))
+        for (float distance = stepSize; distance < hardDepth; distance += stepSize)
+        {
+            bool occluded = sprite_occludes(light.Position + direction * distance);
+            if (!insideSprite)
             {
-                closest = distance;
+                insideSprite = occluded;
+                continue;
+            }
+            if (!occluded)
+            {
+                spriteExit = distance;
                 break;
             }
-        ShadowDepth[outputIndex] = closest;
+        }
+        if (insideSprite && spriteExit == light.Radius)
+            spriteExit = hardDepth;
+        ShadowDepth[outputIndex] = float2(hardDepth, spriteExit);
         return;
     }
 
     if (SunEnabled == 0)
     {
-        ShadowDepth[outputIndex] = SunAlongMax;
+        ShadowDepth[outputIndex] = float2(SunAlongMax, SunAlongMax);
         return;
     }
 
@@ -124,5 +137,5 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         if (ray_segment(origin, SunDirection, Segments[i], distance))
             closest = min(closest, distance);
     }
-    ShadowDepth[outputIndex] = SunAlongMin + closest;
+    ShadowDepth[outputIndex] = float2(SunAlongMin + closest, SunAlongMax);
 }

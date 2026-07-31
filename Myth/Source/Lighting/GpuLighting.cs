@@ -66,12 +66,16 @@ sealed class GpuLighting : IDisposable
 		public float SunAlongMax;
 		public float SunSoftness;
 		public float MinimumSoftness;
+		public float SpriteShadowStrength;
+		public float SpriteShadowMinLength;
+		public float SpriteShadowMaxLength;
+		public float SpriteShadowPadding;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
 	readonly StorageBuffer<GpuLight> lightBuffer;
 	readonly StorageBuffer<GpuSegment> segmentBuffer;
-	readonly ComputeStorageBuffer<float> shadowDepthBuffer;
+	readonly ComputeStorageBuffer<Vector2> shadowDepthBuffer;
 	readonly UniformBuffer depthUniforms = new();
 	readonly UniformBuffer maskUniforms = new();
 	readonly GpuLight[] lights = new GpuLight[MaxLights];
@@ -91,7 +95,7 @@ sealed class GpuLighting : IDisposable
 		shadowDepthBuffer = new(graphicsDevice, "LightShadowDepth");
 		lightBuffer.Upload(lights);
 		segmentBuffer.Upload(segments.AsSpan(0, 1));
-		shadowDepthBuffer.Upload(new float[ShadowRows * ShadowSamples]);
+		shadowDepthBuffer.Upload(new Vector2[ShadowRows * ShadowSamples]);
 		LoadShaders();
 	}
 
@@ -202,6 +206,9 @@ sealed class GpuLighting : IDisposable
 			SunAlongMax = alongMax,
 			SunSoftness = softenShadows ? softness : 0,
 			MinimumSoftness = minimumSoftness,
+			SpriteShadowStrength = Manager.SpriteShadowStrength,
+			SpriteShadowMinLength = Manager.SpriteShadowMinLength,
+			SpriteShadowMaxLength = Manager.SpriteShadowMaxLength,
 		});
 		new ComputeCommand(maskShader!)
 		{

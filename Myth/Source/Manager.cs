@@ -55,6 +55,9 @@ public partial class Manager : App
 	// Soft shadows: per-light shadow edges soften with distance from the light.
 	public float SoftShadowPenumbra = 2.3f;
 	public float SoftShadowMinSoftness = 0.0f;
+	public static float SpriteShadowStrength => 0.5f;
+	public static float SpriteShadowMinLength => 4.0f;
+	public static float SpriteShadowMaxLength => 28.0f;
 
 	/// The room renderer / simulation.
 	internal Game? game;

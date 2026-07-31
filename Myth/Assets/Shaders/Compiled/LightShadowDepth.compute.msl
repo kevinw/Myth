@@ -27,9 +27,9 @@ struct type_StructuredBuffer_Light
     Light _m0[1];
 };
 
-struct type_RWStructuredBuffer_float
+struct type_RWStructuredBuffer_v2float
 {
-    float _m0[1];
+    float2 _m0[1];
 };
 
 struct type_Params
@@ -49,7 +49,7 @@ struct type_Params
     float4 ZoomPadding;
 };
 
-kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_Segment& Segments [[buffer(1)]], const device type_StructuredBuffer_Light& Lights [[buffer(2)]], device type_RWStructuredBuffer_float& ShadowDepth [[buffer(3)]], texture2d<float> SpriteShadowMask [[texture(0)]], sampler SpriteShadowSampler [[sampler(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_Segment& Segments [[buffer(1)]], const device type_StructuredBuffer_Light& Lights [[buffer(2)]], device type_RWStructuredBuffer_v2float& ShadowDepth [[buffer(3)]], texture2d<float> SpriteShadowMask [[texture(0)]], sampler SpriteShadowSampler [[sampler(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     do
     {
@@ -71,7 +71,7 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
         {
             if (gl_GlobalInvocationID.y >= Params.LightCount)
             {
-                ShadowDepth._m0[_90] = 0.0;
+                ShadowDepth._m0[_90] = float2(0.0);
                 break;
             }
             float _108 = ((float(gl_GlobalInvocationID.x) + 0.5) / float(Params.ShadowSamples)) * 6.283185482025146484375;
@@ -134,119 +134,142 @@ kernel void compute_main(constant type_Params& Params [[buffer(0)]], const devic
                 }
             }
             float _167 = precise::max(0.5, 0.5 / Params.ZoomPadding.x);
-            float _208;
-            float _169 = _167;
+            bool _169;
+            _169 = false;
+            bool _170;
+            float _214;
+            float _172 = _167;
             for (;;)
             {
-                if (_169 < _113)
+                if (_172 < _113)
                 {
-                    bool _205;
+                    bool _207;
                     do
                     {
-                        float2 _182 = ((Lights._m0[gl_GlobalInvocationID.y].Position + (_111 * _169)) - Params.Camera) * Params.ZoomPadding.x;
-                        bool _192;
-                        if (!any(_182 < float2(0.0)))
+                        float2 _184 = ((Lights._m0[gl_GlobalInvocationID.y].Position + (_111 * _172)) - Params.Camera) * Params.ZoomPadding.x;
+                        bool _194;
+                        if (!any(_184 < float2(0.0)))
                         {
-                            _192 = any(_182 >= Params.TargetSize);
+                            _194 = any(_184 >= Params.TargetSize);
                         }
                         else
                         {
-                            _192 = true;
+                            _194 = true;
                         }
-                        if (_192)
+                        if (_194)
                         {
-                            _205 = false;
+                            _207 = false;
                             break;
                         }
-                        _205 = SpriteShadowMask.sample(SpriteShadowSampler, ((_182 + float2(0.5)) / Params.TargetSize), level(0.0)).x > 0.100000001490116119384765625;
+                        _207 = SpriteShadowMask.sample(SpriteShadowSampler, ((_184 + float2(0.5)) / Params.TargetSize), level(0.0)).x > 0.100000001490116119384765625;
                         break;
                     } while(false);
-                    if (_205)
+                    if (!_169)
                     {
-                        _208 = _169;
+                        _170 = _207;
+                        float _173 = _172 + _167;
+                        _169 = _170;
+                        _172 = _173;
+                        continue;
+                    }
+                    if (!_207)
+                    {
+                        _214 = _172;
                         break;
                     }
-                    _169 += _167;
+                    _170 = _169;
+                    float _173 = _172 + _167;
+                    _169 = _170;
+                    _172 = _173;
                     continue;
                 }
                 else
                 {
-                    _208 = _113;
+                    _214 = Lights._m0[gl_GlobalInvocationID.y].Radius;
                     break;
                 }
             }
-            ShadowDepth._m0[_90] = _208;
+            bool _218;
+            if (_169)
+            {
+                _218 = _214 == Lights._m0[gl_GlobalInvocationID.y].Radius;
+            }
+            else
+            {
+                _218 = false;
+            }
+            ShadowDepth._m0[_90] = float2(_113, _218 ? _113 : _214);
             break;
         }
         if (Params.SunEnabled == 0u)
         {
-            ShadowDepth._m0[_90] = Params.SunAlongMax;
+            ShadowDepth._m0[_90] = float2(Params.SunAlongMax);
             break;
         }
-        float2 _235 = (Params.SunPerpendicular * mix(Params.SunPerpendicularMin, Params.SunPerpendicularMax, (float(gl_GlobalInvocationID.x) + 0.5) / float(Params.ShadowSamples))) + (Params.SunDirection * Params.SunAlongMin);
-        float _240;
-        _240 = Params.SunAlongMax - Params.SunAlongMin;
-        float _241;
-        for (uint _243 = 0u; _243 < Params.SegmentCount; _240 = _241, _243++)
+        float2 _248 = (Params.SunPerpendicular * mix(Params.SunPerpendicularMin, Params.SunPerpendicularMax, (float(gl_GlobalInvocationID.x) + 0.5) / float(Params.ShadowSamples))) + (Params.SunDirection * Params.SunAlongMin);
+        float _253;
+        _253 = Params.SunAlongMax - Params.SunAlongMin;
+        float _254;
+        for (uint _256 = 0u; _256 < Params.SegmentCount; _253 = _254, _256++)
         {
-            if (((device float*)&Segments._m0[_243].Properties)[0] <= 0.0)
+            if (((device float*)&Segments._m0[_256].Properties)[0] <= 0.0)
             {
-                _241 = _240;
+                _254 = _253;
                 continue;
             }
-            float _293;
-            bool _294;
+            float _306;
+            bool _307;
             do
             {
-                float2 _261 = Segments._m0[_243].Coordinates.zw - Segments._m0[_243].Coordinates.xy;
-                float _263 = _261.y;
-                float _266 = _261.x;
-                float _268 = (Params.SunDirection.x * _263) - (Params.SunDirection.y * _266);
-                if (abs(_268) <= 9.9999997473787516355514526367188e-05)
+                float2 _274 = Segments._m0[_256].Coordinates.zw - Segments._m0[_256].Coordinates.xy;
+                float _276 = _274.y;
+                float _279 = _274.x;
+                float _281 = (Params.SunDirection.x * _276) - (Params.SunDirection.y * _279);
+                if (abs(_281) <= 9.9999997473787516355514526367188e-05)
                 {
-                    _293 = 0.0;
-                    _294 = false;
+                    _306 = 0.0;
+                    _307 = false;
                     break;
                 }
-                float2 _273 = Segments._m0[_243].Coordinates.xy - _235;
-                float _274 = _273.x;
-                float _276 = _273.y;
-                float _279 = ((_274 * _263) - (_276 * _266)) / _268;
-                float _283 = ((_274 * Params.SunDirection.y) - (_276 * Params.SunDirection.x)) / _268;
-                bool _288;
-                if (_279 >= 0.0)
+                float2 _286 = Segments._m0[_256].Coordinates.xy - _248;
+                float _287 = _286.x;
+                float _289 = _286.y;
+                float _292 = ((_287 * _276) - (_289 * _279)) / _281;
+                float _296 = ((_287 * Params.SunDirection.y) - (_289 * Params.SunDirection.x)) / _281;
+                bool _301;
+                if (_292 >= 0.0)
                 {
-                    _288 = _283 >= 0.0;
+                    _301 = _296 >= 0.0;
                 }
                 else
                 {
-                    _288 = false;
+                    _301 = false;
                 }
-                bool _292;
-                if (_288)
+                bool _305;
+                if (_301)
                 {
-                    _292 = _283 <= 1.0;
+                    _305 = _296 <= 1.0;
                 }
                 else
                 {
-                    _292 = false;
+                    _305 = false;
                 }
-                _293 = _279;
-                _294 = _292;
+                _306 = _292;
+                _307 = _305;
                 break;
             } while(false);
-            float _298;
-            if (_294)
+            float _311;
+            if (_307)
             {
-                _298 = precise::min(_240, _293);
+                _311 = precise::min(_253, _306);
             }
             else
             {
-                _298 = _240;
+                _311 = _253;
             }
-            _241 = _298;
+            _254 = _311;
         }
-        ShadowDepth._m0[_90] = Params.SunAlongMin + _240;
+        ShadowDepth._m0[_90] = float2(Params.SunAlongMin + _253, Params.SunAlongMax);
         break;
     } while(false);
 }

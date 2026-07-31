@@ -15,7 +15,7 @@ struct Light
 Texture2D NormalTexture : register(t0, space0);
 SamplerState NormalSampler : register(s0, space0);
 StructuredBuffer<Light> Lights : register(t1, space0);
-StructuredBuffer<float> ShadowDepth : register(t2, space0);
+StructuredBuffer<float2> ShadowDepth : register(t2, space0);
 
 #if BROWSER
 [[vk::image_format("rgba8")]]
@@ -47,12 +47,30 @@ cbuffer Params : register(b0, space2)
     float SunAlongMax;
     float SunSoftness;
     float MinimumSoftness;
+    float SpriteShadowStrength;
+    float SpriteShadowMinLength;
+    float SpriteShadowMaxLength;
+    float SpriteShadowPadding;
 };
 
 float normal_response(float3 normal, float normalStrength, float3 lightDirection)
 {
     float diffuse = saturate(dot(normal, normalize(lightDirection)));
     return lerp(1.0, 0.12 + diffuse * 2.15, normalStrength);
+}
+
+float point_sample_visibility(uint lightIndex, int sampleIndex, float distanceToLight, float radius)
+{
+    float2 depth = ShadowDepth[lightIndex * POINT_SHADOW_SAMPLES + sampleIndex];
+    if (distanceToLight > depth.x + ShadowBias)
+        return 0.0;
+    if (depth.y >= radius || distanceToLight <= depth.y + ShadowBias)
+        return 1.0;
+
+    float reach = saturate(1.0 - depth.y / radius);
+    float shadowLength = lerp(SpriteShadowMinLength, SpriteShadowMaxLength, reach);
+    float fade = saturate(1.0 - (distanceToLight - depth.y) / max(shadowLength, 0.0001));
+    return 1.0 - saturate(SpriteShadowStrength) * fade;
 }
 
 float point_visibility(uint lightIndex, float2 delta, float distanceToLight, float radius)
@@ -67,7 +85,7 @@ float point_visibility(uint lightIndex, float2 delta, float distanceToLight, flo
         int sampleIndex = center % POINT_SHADOW_SAMPLES;
         if (sampleIndex < 0)
             sampleIndex += POINT_SHADOW_SAMPLES;
-        return distanceToLight <= ShadowDepth[lightIndex * POINT_SHADOW_SAMPLES + sampleIndex] + ShadowBias ? 1.0 : 0.0;
+        return point_sample_visibility(lightIndex, sampleIndex, distanceToLight, radius);
     }
     float radialSoftness = lerp(MinimumSoftness, 1.0, saturate(distanceToLight / radius));
     int stepSize = max(1, (int)round(SoftShadowSamples * radialSoftness));
@@ -79,8 +97,7 @@ float point_visibility(uint lightIndex, float2 delta, float distanceToLight, flo
         int sampleIndex = (center + offsets[i] * stepSize) % POINT_SHADOW_SAMPLES;
         if (sampleIndex < 0)
             sampleIndex += POINT_SHADOW_SAMPLES;
-        float depth = ShadowDepth[lightIndex * POINT_SHADOW_SAMPLES + sampleIndex];
-        visibility += weights[i] * (distanceToLight <= depth + ShadowBias ? 1.0 : 0.0);
+        visibility += weights[i] * point_sample_visibility(lightIndex, sampleIndex, distanceToLight, radius);
     }
     return visibility;
 }
@@ -92,7 +109,7 @@ float sun_visibility(float2 world)
     int center = (int)round(samplePosition * (POINT_SHADOW_SAMPLES - 1));
     if (SunSoftness <= 0.0)
     {
-        float depth = ShadowDepth[SUN_SHADOW_ROW * POINT_SHADOW_SAMPLES + center];
+        float depth = ShadowDepth[SUN_SHADOW_ROW * POINT_SHADOW_SAMPLES + center].x;
         return dot(world, SunDirection) <= depth + ShadowBias ? 1.0 : 0.0;
     }
     int stepSize = max(1, (int)round(SunSoftness));
@@ -103,7 +120,7 @@ float sun_visibility(float2 world)
     for (uint i = 0; i < 5; i++)
     {
         int sampleIndex = clamp(center + offsets[i] * stepSize, 0, POINT_SHADOW_SAMPLES - 1);
-        float depth = ShadowDepth[SUN_SHADOW_ROW * POINT_SHADOW_SAMPLES + sampleIndex];
+        float depth = ShadowDepth[SUN_SHADOW_ROW * POINT_SHADOW_SAMPLES + sampleIndex].x;
         visibility += weights[i] * (along <= depth + ShadowBias ? 1.0 : 0.0);
     }
     return visibility;
