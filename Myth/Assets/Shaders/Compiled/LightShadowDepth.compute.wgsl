@@ -12,6 +12,9 @@ struct Light {
     Radius: f32,
     Height: f32,
     ColorIntensity: vec4<f32>,
+    Cookie: vec4<f32>,
+    CookieShape: vec4<f32>,
+    Shadow: vec4<f32>,
 }
 
 struct type_u002e_StructuredBuffer_u002e_Light {

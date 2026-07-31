@@ -11,12 +11,15 @@ sealed class GpuLighting : IDisposable
 	const int ShadowRows = MaxLights + 1;
 
 	[StructLayout(LayoutKind.Sequential)]
-	readonly struct GpuLight(Vector2 position, float radius, float height, Vector4 colorIntensity)
+	readonly struct GpuLight(Vector2 position, float radius, float height, Vector4 colorIntensity, Vector4 cookie, Vector4 cookieShape, Vector4 shadow)
 	{
 		public readonly Vector2 Position = position;
 		public readonly float Radius = radius;
 		public readonly float Height = height;
 		public readonly Vector4 ColorIntensity = colorIntensity;
+		public readonly Vector4 Cookie = cookie;
+		public readonly Vector4 CookieShape = cookieShape;
+		public readonly Vector4 Shadow = shadow;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -65,7 +68,7 @@ sealed class GpuLighting : IDisposable
 		public float SunAlongMin;
 		public float SunAlongMax;
 		public float SunSoftness;
-		public float MinimumSoftness;
+		public float PointShadowPadding;
 		public float SpriteShadowStrength;
 		public float SpriteShadowMinLength;
 		public float SpriteShadowMaxLength;
@@ -114,12 +117,37 @@ sealed class GpuLighting : IDisposable
 	}
 
 	public void AddLight(Vector2 position, float radius, float intensity, float height, Color color)
+		=> AddLight(position, radius, intensity, height, color, LightCookie.None, 0, 0, 1, 1, 0.12f, Light.DefaultShadowSourceRadius, 1, 0, 0);
+
+	public void AddLight(
+		Vector2 position,
+		float radius,
+		float intensity,
+		float height,
+		Color color,
+		LightCookie cookie,
+		float cookieAngleDegrees,
+		float cookieSpeedDegrees,
+		float cookieScale,
+		float cookieStrength,
+		float cookieFeather,
+		float shadowSourceRadius,
+		float shadowSoftness,
+		float shadowNoise,
+		float shadowNoiseSpeed)
 	{
 		if (lightCount >= lights.Length || radius <= 0 || intensity <= 0)
 			return;
 
 		var value = (Vector4)color;
-		lights[lightCount++] = new(position, radius, height, new(value.X, value.Y, value.Z, intensity));
+		lights[lightCount++] = new(
+			position,
+			radius,
+			height,
+			new(value.X, value.Y, value.Z, intensity),
+			new((float)cookie, cookieAngleDegrees * MathF.PI / 180, cookieSpeedDegrees * MathF.PI / 180, cookieScale),
+			new(cookieStrength, cookieFeather, 0, 0),
+			new(shadowSourceRadius, shadowSoftness, shadowNoise, shadowNoiseSpeed));
 	}
 
 	public void AddSegment(Vector2 a, Vector2 b, bool castsSunShadow = true)
@@ -155,9 +183,7 @@ sealed class GpuLighting : IDisposable
 		Vector2 sunDirection,
 		Color sunColor,
 		float sunStrength,
-		bool softenShadows,
-		float softness,
-		float minimumSoftness)
+		bool softenShadows)
 	{
 		if (!Supported)
 			return;
@@ -209,15 +235,14 @@ sealed class GpuLighting : IDisposable
 			Ambient = ambient,
 			SunDirection = sunDirection,
 			SunStrength = sunStrength,
-			SoftShadowSamples = softenShadows ? softness : 0,
+			SoftShadowSamples = softenShadows ? 1 : 0,
 			SunColor = (Vector4)sunColor,
 			SunPerpendicular = perpendicular,
 			SunPerpendicularMin = perpendicularMin,
 			SunPerpendicularMax = perpendicularMax,
 			SunAlongMin = alongMin,
 			SunAlongMax = alongMax,
-			SunSoftness = softenShadows ? softness : 0,
-			MinimumSoftness = minimumSoftness,
+			SunSoftness = softenShadows ? Manager.SunShadowSoftness : 0,
 			SpriteShadowStrength = Manager.SpriteShadowStrength,
 			SpriteShadowMinLength = Manager.SpriteShadowMinLength,
 			SpriteShadowMaxLength = Manager.SpriteShadowMaxLength,

@@ -1215,14 +1215,6 @@ public partial class Manager
 			return;
 
 		editorGameDirty |= ImGui.Checkbox("Enabled##SS", ref PerfToggles.SoftShadows);
-
-		ImGui.TextUnformatted("Penumbra (px)");
-		ImGui.SetNextItemWidth(-1);
-		editorGameDirty |= ImGui.SliderFloat("##SoftShadowPenumbra", ref SoftShadowPenumbra, 0.0f, 24.0f);
-
-		ImGui.TextUnformatted("Min Softness");
-		ImGui.SetNextItemWidth(-1);
-		editorGameDirty |= ImGui.SliderFloat("##SoftShadowMinSoftness", ref SoftShadowMinSoftness, 0.0f, 1.0f);
 	}
 
 #if false
@@ -1284,8 +1276,11 @@ public partial class Manager
 		actorSpecInspectorOpen = open;
 
 		var changed = false;
+		var spec = ActorSpecs.Get(selectedActorSpecId);
 		foreach (var property in ActorSpecs.GetEditableProperties(selectedActorSpecId))
 		{
+			if (spec != null && HideInactiveLightCookieProperty(spec, property))
+				continue;
 			ImGui.PushID(property.JsonName);
 			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
 			ImGui.PopID();
@@ -1532,6 +1527,8 @@ public partial class Manager
 		var changed = false;
 		foreach (var property in ActorSpecs.GetEditableProperties(actor))
 		{
+			if (HideInactiveLightCookieProperty(actor, property))
+				continue;
 			ImGui.PushID(property.JsonName);
 			changed |= DrawActorInstanceProperty(room, actor, property);
 			ImGui.PopID();
@@ -1550,6 +1547,17 @@ public partial class Manager
 			particleEditor.DrawActorInspectorBox(game, actor);
 
 		ImGui.End();
+	}
+
+	static bool HideInactiveLightCookieProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		if (ActorSpecs.GetTypeName(actor) != nameof(Light) ||
+			property.Name == nameof(Light.Cookie) ||
+			!property.Name.StartsWith(nameof(Light.Cookie), StringComparison.Ordinal))
+			return false;
+
+		return !Enum.TryParse<LightCookie>(ActorSpecs.GetResolvedProperty(actor, nameof(Light.Cookie))?.GetValue<string>(), true, out var cookie) ||
+			cookie == LightCookie.None;
 	}
 
 	bool DrawActorInstanceProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)

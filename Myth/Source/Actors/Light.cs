@@ -2,9 +2,21 @@ using Foster.Framework;
 
 namespace Myth;
 
+public enum LightCookie
+{
+	None,
+	Mushroom,
+	Tendrils,
+	Flame,
+	Cone,
+	Broken
+}
+
 [GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, Tags = ActorTag.Light)]
 public class Light : Actor
 {
+	internal static float DefaultShadowSourceRadius => 2.3f;
+
 	public float Radius = 48;
 	public string SpriteName = "fire";
 	public Color LightColor = 0xffd37a;
@@ -12,6 +24,16 @@ public class Light : Actor
 	public float Height = 16;
 	public float FlickerFrequency = 4;
 	public float FlickerIntensity = 0.08f;
+	public LightCookie Cookie;
+	public float CookieAngleDegrees;
+	public float CookieSpeedDegrees;
+	public float CookieScale = 1.0f;
+	public float CookieStrength = 1.0f;
+	public float CookieFeather = 0.12f;
+	public float ShadowSourceRadius = DefaultShadowSourceRadius;
+	public float ShadowSoftness = 1.0f;
+	public float ShadowNoise;
+	public float ShadowNoiseSpeed = 8.0f;
 	readonly float FlickerRandomOffset = 0;
 	public bool DrawSprite = true;
 	internal Actor? SpriteShadowOwner;

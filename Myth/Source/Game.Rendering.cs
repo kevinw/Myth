@@ -1414,7 +1414,17 @@ public sealed partial class GameView
 					light.Radius * light.FlickerScaleMax,
 					light.Intensity * light.FlickerScaleMax,
 					light.Height,
-					light.LightColor);
+					light.LightColor,
+					light.Cookie,
+					light.CookieAngleDegrees,
+					light.CookieSpeedDegrees,
+					light.CookieScale,
+					light.CookieStrength,
+					light.CookieFeather,
+					light.ShadowSourceRadius,
+					light.ShadowSoftness,
+					light.ShadowNoise,
+					light.ShadowNoiseSpeed);
 				if (light.SpriteShadowOwner is { } owner)
 					gpuLightEmitters.Add(owner);
 			}
@@ -1440,9 +1450,7 @@ public sealed partial class GameView
 			CurrentSunDirection(),
 			CurrentSunColor(),
 			CurrentSunStrength(),
-			PerfToggles.SoftShadows && Manager.SoftShadowPenumbra > 0.01f,
-			Manager.SoftShadowPenumbra,
-			Manager.SoftShadowMinSoftness);
+			PerfToggles.SoftShadows);
 	}
 
 	void DrawGpuSpriteShadowMask()

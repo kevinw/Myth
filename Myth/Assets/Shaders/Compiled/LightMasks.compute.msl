@@ -50,6 +50,9 @@ struct Light
     float Radius;
     float Height;
     float4 ColorIntensity;
+    float4 Cookie;
+    float4 CookieShape;
+    float4 Shadow;
 };
 
 struct type_StructuredBuffer_Light
@@ -82,7 +85,7 @@ struct type_Params
     float SunAlongMin;
     float SunAlongMax;
     float SunSoftness;
-    float MinimumSoftness;
+    float PointShadowPadding;
     float SpriteShadowStrength;
     float SpriteShadowMinLength;
     float SpriteShadowMaxLength;
@@ -97,245 +100,355 @@ struct type_Params
     float SporeFogSunStrength;
 };
 
-constant spvUnsafeArray<int, 5> _119 = spvUnsafeArray<int, 5>({ -2, -1, 0, 1, 2 });
-constant spvUnsafeArray<float, 5> _120 = spvUnsafeArray<float, 5>({ 0.100000001490116119384765625, 0.20000000298023223876953125, 0.4000000059604644775390625, 0.20000000298023223876953125, 0.100000001490116119384765625 });
+constant spvUnsafeArray<int, 5> _154 = spvUnsafeArray<int, 5>({ -2, -1, 0, 1, 2 });
+constant spvUnsafeArray<float, 5> _155 = spvUnsafeArray<float, 5>({ 0.100000001490116119384765625, 0.20000000298023223876953125, 0.4000000059604644775390625, 0.20000000298023223876953125, 0.100000001490116119384765625 });
 
 kernel void compute_main(constant type_Params& Params [[buffer(0)]], const device type_StructuredBuffer_Light& Lights [[buffer(1)]], const device type_StructuredBuffer_v2float& ShadowDepth [[buffer(2)]], texture2d<float> NormalTexture [[texture(0)]], texture2d<float> SporeNoise [[texture(1)]], texture2d<float, access::write> BackgroundMask [[texture(2)]], texture2d<float, access::write> ForegroundMask [[texture(3)]], texture2d<float, access::write> SporeFogMask [[texture(4)]], sampler NormalSampler [[sampler(0)]], sampler SporeNoiseSampler [[sampler(1)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     do
     {
-        bool _140;
+        bool _176;
         if (!(gl_GlobalInvocationID.x >= Params.Width))
         {
-            _140 = gl_GlobalInvocationID.y >= Params.Height;
+            _176 = gl_GlobalInvocationID.y >= Params.Height;
         }
         else
         {
-            _140 = true;
+            _176 = true;
         }
-        if (_140)
+        if (_176)
         {
             break;
         }
-        float2 _145 = float2(gl_GlobalInvocationID.xy) + float2(0.5);
-        float2 _158 = Params.Camera + (_145 / float2(Params.Zoom));
-        float4 _162 = NormalTexture.sample(NormalSampler, (_145 / float2(float(Params.Width), float(Params.Height))), level(0.0));
-        float _163 = _162.w;
-        float3 _167 = fast::normalize((_162.xyz * 2.0) - float3(1.0));
-        float3 _266;
-        float4 _267;
-        float4 _268;
+        float2 _181 = float2(gl_GlobalInvocationID.xy) + float2(0.5);
+        float2 _194 = Params.Camera + (_181 / float2(Params.Zoom));
+        float4 _198 = NormalTexture.sample(NormalSampler, (_181 / float2(float(Params.Width), float(Params.Height))), level(0.0));
+        float _199 = _198.w;
+        float3 _203 = fast::normalize((_198.xyz * 2.0) - float3(1.0));
+        float3 _302;
+        float4 _303;
+        float4 _304;
         if (Params.SunEnabled != 0u)
         {
-            float3 _192 = Params.SunColor.xyz * Params.SunStrength;
-            float4 _197 = float4(_192 * mix(1.0, 0.119999997317790985107421875 + (fast::clamp(dot(_167, fast::normalize(float3(-Params.SunDirection, 1.0))), 0.0, 1.0) * 2.150000095367431640625), _163), 1.0);
-            float _258;
+            float3 _228 = Params.SunColor.xyz * Params.SunStrength;
+            float4 _233 = float4(_228 * mix(1.0, 0.119999997317790985107421875 + (fast::clamp(dot(_203, fast::normalize(float3(-Params.SunDirection, 1.0))), 0.0, 1.0) * 2.150000095367431640625), _199), 1.0);
+            float _294;
             do
             {
-                int _213 = int(rint(fast::clamp((dot(_158, Params.SunPerpendicular) - Params.SunPerpendicularMin) / (Params.SunPerpendicularMax - Params.SunPerpendicularMin), 0.0, 1.0) * 511.0));
+                int _249 = int(rint(fast::clamp((dot(_194, Params.SunPerpendicular) - Params.SunPerpendicularMin) / (Params.SunPerpendicularMax - Params.SunPerpendicularMin), 0.0, 1.0) * 511.0));
                 if (Params.SunSoftness <= 0.0)
                 {
-                    _258 = float(dot(_158, Params.SunDirection) <= (((device float*)&ShadowDepth._m0[uint(32768 + _213)])[0] + Params.ShadowBias));
+                    _294 = float(dot(_194, Params.SunDirection) <= (((device float*)&ShadowDepth._m0[uint(32768 + _249)])[0] + Params.ShadowBias));
                     break;
                 }
-                int _231 = max(1, int(rint(Params.SunSoftness)));
-                float _232 = dot(_158, Params.SunDirection);
-                float _234;
-                _234 = 0.0;
-                for (uint _237 = 0u; _237 < 5u; )
+                int _267 = max(1, int(rint(Params.SunSoftness)));
+                float _268 = dot(_194, Params.SunDirection);
+                float _270;
+                _270 = 0.0;
+                for (uint _273 = 0u; _273 < 5u; )
                 {
-                    _234 += (_120[_237] * float(_232 <= (((device float*)&ShadowDepth._m0[uint(32768 + clamp(_213 + (_119[_237] * _231), 0, 511))])[0] + Params.ShadowBias)));
-                    _237++;
+                    _270 += (_155[_273] * float(_268 <= (((device float*)&ShadowDepth._m0[uint(32768 + clamp(_249 + (_154[_273] * _267), 0, 511))])[0] + Params.ShadowBias)));
+                    _273++;
                     continue;
                 }
-                _258 = _234;
+                _294 = _270;
                 break;
             } while(false);
-            _266 = (_192 * Params.SporeFogSunStrength) * _258;
-            _267 = Params.Ambient + _197;
-            _268 = Params.Ambient + (_197 * _258);
+            _302 = (_228 * Params.SporeFogSunStrength) * _294;
+            _303 = Params.Ambient + _233;
+            _304 = Params.Ambient + (_233 * _294);
         }
         else
         {
-            _266 = float3(0.0);
-            _267 = Params.Ambient;
-            _268 = Params.Ambient;
+            _302 = float3(0.0);
+            _303 = Params.Ambient;
+            _304 = Params.Ambient;
         }
-        float3 _270;
-        float4 _277;
-        float4 _279;
-        _270 = _266;
-        _277 = _267;
-        _279 = _268;
+        float3 _306;
+        float4 _313;
+        float4 _315;
+        _306 = _302;
+        _313 = _303;
+        _315 = _304;
         spvUnsafeArray<int, 5> offsets;
         spvUnsafeArray<float, 5> weights;
-        float3 _271;
-        bool _274;
-        bool _276;
-        float4 _278;
-        float4 _280;
-        bool _273 = false;
-        bool _275 = false;
-        uint _281 = 0u;
-        for (; _281 < Params.LightCount; _270 = _271, _273 = _274, _275 = _276, _277 = _278, _279 = _280, _281++)
+        float3 _307;
+        bool _310;
+        bool _312;
+        float4 _314;
+        float4 _316;
+        bool _309 = false;
+        bool _311 = false;
+        uint _317 = 0u;
+        for (; _317 < Params.LightCount; _306 = _307, _309 = _310, _311 = _312, _313 = _314, _315 = _316, _317++)
         {
-            float2 _294 = Lights._m0[_281].Position - _158;
-            float _295 = length(_294);
-            float _296 = _295 / Lights._m0[_281].Radius;
-            float _298 = fast::clamp(1.0 - _296, 0.0, 1.0);
-            if (_298 <= 0.0)
-            {
-                _271 = _270;
-                _274 = _273;
-                _276 = _275;
-                _278 = _277;
-                _280 = _279;
-                continue;
-            }
-            float _302 = _298 * _298;
-            float3 _314 = Lights._m0[_281].ColorIntensity.xyz * Lights._m0[_281].ColorIntensity.w;
-            float4 _320 = float4((_314 * _302) * mix(1.0, 0.119999997317790985107421875 + (fast::clamp(dot(_167, fast::normalize(float3(_294, Lights._m0[_281].Height))), 0.0, 1.0) * 2.150000095367431640625), _163), _302);
-            float2 _321 = -_294;
-            bool _469;
-            bool _470;
-            float _471;
+            float2 _333 = Lights._m0[_317].Position - _194;
+            float _334 = length(_333);
+            float _335 = _334 / Lights._m0[_317].Radius;
+            float2 _338 = -_333;
+            float _486;
             do
             {
-                float _326 = precise::atan2(_321.y, _321.x);
-                float _331;
-                if (_326 < 0.0)
+                int _343 = int(rint(Lights._m0[_317].Cookie.x));
+                bool _350;
+                if (!(_343 == 0))
                 {
-                    _331 = _326 + 6.283185482025146484375;
+                    _350 = Lights._m0[_317].CookieShape.x <= 0.0;
                 }
                 else
                 {
-                    _331 = _326;
+                    _350 = true;
                 }
-                int _335 = int(rint((_331 * 81.48732757568359375) - 0.5));
-                if (Params.SoftShadowSamples <= 0.0)
+                if (_350)
                 {
-                    int _341 = _335 - 512 * (_335 / 512);
-                    int _346;
-                    if (_341 < 0)
-                    {
-                        _346 = _341 + 512;
-                    }
-                    else
-                    {
-                        _346 = _341;
-                    }
-                    float _389;
-                    do
-                    {
-                        uint _351 = (_281 * 512u) + uint(_346);
-                        if (_295 > (ShadowDepth._m0[_351].x + Params.ShadowBias))
-                        {
-                            _389 = 0.0;
-                            break;
-                        }
-                        bool _368;
-                        if (!(ShadowDepth._m0[_351].y >= Lights._m0[_281].Radius))
-                        {
-                            _368 = _295 <= (ShadowDepth._m0[_351].y + Params.ShadowBias);
-                        }
-                        else
-                        {
-                            _368 = true;
-                        }
-                        if (_368)
-                        {
-                            _389 = 1.0;
-                            break;
-                        }
-                        _389 = 1.0 - (fast::clamp(Params.SpriteShadowStrength, 0.0, 1.0) * fast::clamp(1.0 - ((_295 - ShadowDepth._m0[_351].y) / precise::max(mix(Params.SpriteShadowMinLength, Params.SpriteShadowMaxLength, fast::clamp(1.0 - (ShadowDepth._m0[_351].y / Lights._m0[_281].Radius), 0.0, 1.0)), 9.9999997473787516355514526367188e-05)), 0.0, 1.0));
-                        break;
-                    } while(false);
-                    _469 = _273;
-                    _470 = _275;
-                    _471 = _389;
+                    _486 = 1.0;
                     break;
                 }
-                int _397 = max(1, int(rint(Params.SoftShadowSamples * mix(Params.MinimumSoftness, 1.0, fast::clamp(_296, 0.0, 1.0)))));
-                if (!_275)
+                float _358 = Lights._m0[_317].Cookie.y + (Lights._m0[_317].Cookie.z * Params.Time);
+                float _359 = sin(_358);
+                float _360 = cos(_358);
+                float _361 = _338.x;
+                float _363 = _338.y;
+                float _375 = abs(Lights._m0[_317].Cookie.w);
+                float _376 = precise::max(_375, 0.00999999977648258209228515625);
+                float2 _377 = (float2((_360 * _361) + (_359 * _363), ((-_359) * _361) + (_360 * _363)) / float2(precise::max(Lights._m0[_317].Radius, 9.9999997473787516355514526367188e-05))) * _376;
+                float _378 = length(_377);
+                float _379 = _377.y;
+                float _380 = _377.x;
+                float _381 = precise::atan2(_379, _380);
+                float _383 = fast::clamp(Lights._m0[_317].CookieShape.y, 0.001000000047497451305389404296875, 0.5);
+                float _482;
+                if (_343 == 1)
                 {
-                    offsets = _119;
+                    float2 _470 = abs(_377 + float2(0.2800000011920928955078125, 0.0)) - float2(0.3400000035762786865234375, 0.12999999523162841796875);
+                    _482 = 1.0 - smoothstep(-_383, _383, precise::min(length((_377 - float2(0.180000007152557373046875, 0.0)) * float2(1.0, 1.75)) - 0.62000000476837158203125, length(precise::max(_470, float2(0.0))) + precise::min(precise::max(_470.x, _470.y), 0.0)));
                 }
-                if (!_273)
+                else
                 {
-                    weights = _120;
-                }
-                float _405;
-                _405 = 0.0;
-                float _406;
-                for (uint _408 = 0u; _408 < 5u; _405 = _406, _408++)
-                {
-                    int _417 = (_335 + (offsets[_408] * _397)) - 512 * ((_335 + (offsets[_408] * _397)) / 512);
-                    int _422;
-                    if (_417 < 0)
+                    float _463;
+                    if (_343 == 2)
                     {
-                        _422 = _417 + 512;
+                        _463 = smoothstep(0.449999988079071044921875 - _383, 0.550000011920928955078125 + _383, abs(sin((_381 * precise::max(1.0, 5.0 * _375)) + (_378 * 18.0))));
                     }
                     else
                     {
-                        _422 = _417;
-                    }
-                    float _467;
-                    do
-                    {
-                        uint _429 = (_281 * 512u) + uint(_422);
-                        if (_295 > (ShadowDepth._m0[_429].x + Params.ShadowBias))
+                        float _452;
+                        if (_343 == 3)
                         {
-                            _467 = 0.0;
-                            break;
-                        }
-                        bool _446;
-                        if (!(ShadowDepth._m0[_429].y >= Lights._m0[_281].Radius))
-                        {
-                            _446 = _295 <= (ShadowDepth._m0[_429].y + Params.ShadowBias);
+                            _452 = 1.0 - smoothstep(-_383, _383, precise::max(abs(_379) - ((0.4199999868869781494140625 * (1.0 - (fast::clamp(_380, 0.0, 1.0) * 0.699999988079071044921875))) * (0.819999992847442626953125 + (0.180000007152557373046875 * sin((_380 * 22.0) + (_381 * 3.0))))), precise::max((-0.2199999988079071044921875) - _380, _380 - 1.0)));
                         }
                         else
                         {
-                            _446 = true;
+                            float _431;
+                            if (_343 == 4)
+                            {
+                                float _427 = cos(fast::clamp(0.7799999713897705078125 / _376, 0.07999999821186065673828125, 1.5));
+                                _431 = smoothstep(_427 - _383, _427 + _383, _380 / precise::max(_378, 9.9999997473787516355514526367188e-05));
+                            }
+                            else
+                            {
+                                float _422;
+                                if (_343 == 5)
+                                {
+                                    float _403 = precise::max(1.0, _375);
+                                    _422 = smoothstep(-_383, _383, ((sin(((_381 * 3.099999904632568359375) * _403) + (sin(_381 * 7.30000019073486328125) * 1.2000000476837158203125)) * 0.64999997615814208984375) + (sin(((_378 * 14.0) * _403) - (_381 * 2.0)) * 0.3499999940395355224609375)) - 0.100000001490116119384765625);
+                                }
+                                else
+                                {
+                                    _422 = 1.0;
+                                }
+                                _431 = _422;
+                            }
+                            _452 = _431;
                         }
-                        if (_446)
-                        {
-                            _467 = 1.0;
-                            break;
-                        }
-                        _467 = 1.0 - (fast::clamp(Params.SpriteShadowStrength, 0.0, 1.0) * fast::clamp(1.0 - ((_295 - ShadowDepth._m0[_429].y) / precise::max(mix(Params.SpriteShadowMinLength, Params.SpriteShadowMaxLength, fast::clamp(1.0 - (ShadowDepth._m0[_429].y / Lights._m0[_281].Radius), 0.0, 1.0)), 9.9999997473787516355514526367188e-05)), 0.0, 1.0));
-                        break;
-                    } while(false);
-                    _406 = _405 + (weights[_408] * _467);
+                        _463 = _452;
+                    }
+                    _482 = _463;
                 }
-                _469 = _273 ? _273 : true;
-                _470 = _275 ? _275 : true;
-                _471 = _405;
+                _486 = mix(1.0, _482, fast::clamp(Lights._m0[_317].CookieShape.x, 0.0, 1.0));
                 break;
             } while(false);
-            _271 = _270 + (((_314 * _298) * Params.SporeFogPointStrength) * _471);
-            _274 = _469;
-            _276 = _470;
-            _278 = _277 + _320;
-            _280 = _279 + (_320 * _471);
-        }
-        float _487;
-        float _525;
-        do
-        {
-            _487 = Params.SporeFogStrength;
+            float _487 = fast::clamp(1.0 - _335, 0.0, 1.0) * _486;
             if (_487 <= 0.0)
             {
-                _525 = 0.0;
+                _307 = _306;
+                _310 = _309;
+                _312 = _311;
+                _314 = _313;
+                _316 = _315;
+                continue;
+            }
+            float _491 = _487 * _487;
+            float3 _503 = Lights._m0[_317].ColorIntensity.xyz * Lights._m0[_317].ColorIntensity.w;
+            float4 _509 = float4((_503 * _491) * mix(1.0, 0.119999997317790985107421875 + (fast::clamp(dot(_203, fast::normalize(float3(_333, Lights._m0[_317].Height))), 0.0, 1.0) * 2.150000095367431640625), _199), _491);
+            bool _697;
+            bool _698;
+            float _699;
+            do
+            {
+                float _514 = precise::atan2(_338.y, _338.x);
+                float _519;
+                if (_514 < 0.0)
+                {
+                    _519 = _514 + 6.283185482025146484375;
+                }
+                else
+                {
+                    _519 = _514;
+                }
+                float _521 = (_519 * 81.48732757568359375) - 0.5;
+                int _523 = int(rint(_521));
+                bool _532;
+                if (!(Params.SoftShadowSamples <= 0.0))
+                {
+                    _532 = Lights._m0[_317].Shadow.x <= 0.0;
+                }
+                else
+                {
+                    _532 = true;
+                }
+                bool _538;
+                if (!_532)
+                {
+                    _538 = Lights._m0[_317].Shadow.y <= 0.0;
+                }
+                else
+                {
+                    _538 = true;
+                }
+                if (_538)
+                {
+                    int _541 = _523 - 512 * (_523 / 512);
+                    int _546;
+                    if (_541 < 0)
+                    {
+                        _546 = _541 + 512;
+                    }
+                    else
+                    {
+                        _546 = _541;
+                    }
+                    float _589;
+                    do
+                    {
+                        uint _551 = (_317 * 512u) + uint(_546);
+                        if (_334 > (ShadowDepth._m0[_551].x + Params.ShadowBias))
+                        {
+                            _589 = 0.0;
+                            break;
+                        }
+                        bool _568;
+                        if (!(ShadowDepth._m0[_551].y >= Lights._m0[_317].Radius))
+                        {
+                            _568 = _334 <= (ShadowDepth._m0[_551].y + Params.ShadowBias);
+                        }
+                        else
+                        {
+                            _568 = true;
+                        }
+                        if (_568)
+                        {
+                            _589 = 1.0;
+                            break;
+                        }
+                        _589 = 1.0 - (fast::clamp(Params.SpriteShadowStrength, 0.0, 1.0) * fast::clamp(1.0 - ((_334 - ShadowDepth._m0[_551].y) / precise::max(mix(Params.SpriteShadowMinLength, Params.SpriteShadowMaxLength, fast::clamp(1.0 - (ShadowDepth._m0[_551].y / Lights._m0[_317].Radius), 0.0, 1.0)), 9.9999997473787516355514526367188e-05)), 0.0, 1.0));
+                        break;
+                    } while(false);
+                    _697 = _309;
+                    _698 = _311;
+                    _699 = _589;
+                    break;
+                }
+                int _597 = max(1, int(rint((Lights._m0[_317].Shadow.x * Lights._m0[_317].Shadow.y) * fast::clamp(_335, 0.0, 1.0))));
+                int _625;
+                if (Lights._m0[_317].Shadow.z > 0.0)
+                {
+                    _625 = int(rint(_521 + (((fract(52.98291778564453125 * fract(dot(floor(_338 * Params.Zoom), float2(0.067110560834407806396484375, 0.005837149918079376220703125)) + ((float(_317) + floor(Params.Time * precise::max(0.0, Lights._m0[_317].Shadow.w))) * 0.75487768650054931640625))) - 0.5) * Lights._m0[_317].Shadow.z) * float(_597))));
+                }
+                else
+                {
+                    _625 = _523;
+                }
+                if (!_311)
+                {
+                    offsets = _154;
+                }
+                if (!_309)
+                {
+                    weights = _155;
+                }
+                float _633;
+                _633 = 0.0;
+                float _634;
+                for (uint _636 = 0u; _636 < 5u; _633 = _634, _636++)
+                {
+                    int _645 = (_625 + (offsets[_636] * _597)) - 512 * ((_625 + (offsets[_636] * _597)) / 512);
+                    int _650;
+                    if (_645 < 0)
+                    {
+                        _650 = _645 + 512;
+                    }
+                    else
+                    {
+                        _650 = _645;
+                    }
+                    float _695;
+                    do
+                    {
+                        uint _657 = (_317 * 512u) + uint(_650);
+                        if (_334 > (ShadowDepth._m0[_657].x + Params.ShadowBias))
+                        {
+                            _695 = 0.0;
+                            break;
+                        }
+                        bool _674;
+                        if (!(ShadowDepth._m0[_657].y >= Lights._m0[_317].Radius))
+                        {
+                            _674 = _334 <= (ShadowDepth._m0[_657].y + Params.ShadowBias);
+                        }
+                        else
+                        {
+                            _674 = true;
+                        }
+                        if (_674)
+                        {
+                            _695 = 1.0;
+                            break;
+                        }
+                        _695 = 1.0 - (fast::clamp(Params.SpriteShadowStrength, 0.0, 1.0) * fast::clamp(1.0 - ((_334 - ShadowDepth._m0[_657].y) / precise::max(mix(Params.SpriteShadowMinLength, Params.SpriteShadowMaxLength, fast::clamp(1.0 - (ShadowDepth._m0[_657].y / Lights._m0[_317].Radius), 0.0, 1.0)), 9.9999997473787516355514526367188e-05)), 0.0, 1.0));
+                        break;
+                    } while(false);
+                    _634 = _633 + (weights[_636] * _695);
+                }
+                _697 = _309 ? _309 : true;
+                _698 = _311 ? _311 : true;
+                _699 = _633;
+                break;
+            } while(false);
+            _307 = _306 + (((_503 * _487) * Params.SporeFogPointStrength) * _699);
+            _310 = _697;
+            _312 = _698;
+            _314 = _313 + _509;
+            _316 = _315 + (_509 * _699);
+        }
+        float _715;
+        float _753;
+        do
+        {
+            _715 = Params.SporeFogStrength;
+            if (_715 <= 0.0)
+            {
+                _753 = 0.0;
                 break;
             }
-            float2 _495 = Params.SporeFogDrift * Params.Time;
-            _525 = fast::clamp((((SporeNoise.sample(SporeNoiseSampler, ((_158 + _495) * Params.SporeFogScale), level(0.0)).x * mix(0.75, 1.25, SporeNoise.sample(SporeNoiseSampler, ((((float2(-_158.y, _158.x) - (_495 * 0.4000000059604644775390625)) * Params.SporeFogScale) * 3.1700000762939453125) + float2(0.37000000476837158203125, 0.61000001430511474609375)), level(0.0)).y)) - 0.5) * Params.SporeFogContrast) + 0.5, 0.0, 1.0);
+            float2 _723 = Params.SporeFogDrift * Params.Time;
+            _753 = fast::clamp((((SporeNoise.sample(SporeNoiseSampler, ((_194 + _723) * Params.SporeFogScale), level(0.0)).x * mix(0.75, 1.25, SporeNoise.sample(SporeNoiseSampler, ((((float2(-_194.y, _194.x) - (_723 * 0.4000000059604644775390625)) * Params.SporeFogScale) * 3.1700000762939453125) + float2(0.37000000476837158203125, 0.61000001430511474609375)), level(0.0)).y)) - 0.5) * Params.SporeFogContrast) + 0.5, 0.0, 1.0);
             break;
         } while(false);
-        float3 _531 = float3(1.0) - exp(-(_270 * (Params.SporeFogTint.xyz * (_525 * _487))));
-        BackgroundMask.write(fast::clamp(_279, float4(0.0), float4(1.0)), uint2(gl_GlobalInvocationID.xy));
-        ForegroundMask.write(fast::clamp(_277, float4(0.0), float4(1.0)), uint2(gl_GlobalInvocationID.xy));
-        SporeFogMask.write(float4(fast::clamp(_531, float3(0.0), float3(1.0)), fast::clamp(precise::max(precise::max(_531.x, _531.y), _531.z), 0.0, 1.0)), uint2(gl_GlobalInvocationID.xy));
+        float3 _759 = float3(1.0) - exp(-(_306 * (Params.SporeFogTint.xyz * (_753 * _715))));
+        BackgroundMask.write(fast::clamp(_315, float4(0.0), float4(1.0)), uint2(gl_GlobalInvocationID.xy));
+        ForegroundMask.write(fast::clamp(_313, float4(0.0), float4(1.0)), uint2(gl_GlobalInvocationID.xy));
+        SporeFogMask.write(float4(fast::clamp(_759, float3(0.0), float3(1.0)), fast::clamp(precise::max(precise::max(_759.x, _759.y), _759.z), 0.0, 1.0)), uint2(gl_GlobalInvocationID.xy));
         break;
     } while(false);
 }

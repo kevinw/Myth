@@ -10,6 +10,9 @@ struct Light
     float Radius;
     float Height;
     float4 ColorIntensity;
+    float4 Cookie;
+    float4 CookieShape;
+    float4 Shadow;
 };
 
 Texture2D NormalTexture : register(t0, space0);
@@ -52,7 +55,7 @@ cbuffer Params : register(b0, space2)
     float SunAlongMin;
     float SunAlongMax;
     float SunSoftness;
-    float MinimumSoftness;
+    float PointShadowPadding;
     float SpriteShadowStrength;
     float SpriteShadowMinLength;
     float SpriteShadowMaxLength;
@@ -73,6 +76,72 @@ float normal_response(float3 normal, float normalStrength, float3 lightDirection
     return lerp(1.0, 0.12 + diffuse * 2.15, normalStrength);
 }
 
+float box_distance(float2 localPosition, float2 halfSize)
+{
+    float2 offset = abs(localPosition) - halfSize;
+    return length(max(offset, 0.0)) + min(max(offset.x, offset.y), 0.0);
+}
+
+float light_cookie(Light light, float2 delta)
+{
+    int mode = (int)round(light.Cookie.x);
+    if (mode == 0 || light.CookieShape.x <= 0.0)
+        return 1.0;
+
+    float rotation = light.Cookie.y + light.Cookie.z * Time;
+    float sine = sin(rotation);
+    float cosine = cos(rotation);
+    float2 localPosition = float2(
+        cosine * delta.x + sine * delta.y,
+        -sine * delta.x + cosine * delta.y) / max(light.Radius, 0.0001);
+    localPosition *= max(abs(light.Cookie.w), 0.01);
+    float radius = length(localPosition);
+    float angle = atan2(localPosition.y, localPosition.x);
+    float feather = clamp(light.CookieShape.y, 0.001, 0.5);
+    float mask = 1.0;
+
+    if (mode == 1)
+    {
+        float cap = length((localPosition - float2(0.18, 0.0)) * float2(1.0, 1.75)) - 0.62;
+        float stem = box_distance(localPosition + float2(0.28, 0.0), float2(0.34, 0.13));
+        mask = 1.0 - smoothstep(-feather, feather, min(cap, stem));
+    }
+    else if (mode == 2)
+    {
+        float lobes = max(1.0, 5.0 * abs(light.Cookie.w));
+        float tendrils = abs(sin(angle * lobes + radius * 18.0));
+        mask = smoothstep(0.45 - feather, 0.55 + feather, tendrils);
+    }
+    else if (mode == 3)
+    {
+        float width = 0.42 * (1.0 - saturate(localPosition.x) * 0.7);
+        width *= 0.82 + 0.18 * sin(localPosition.x * 22.0 + angle * 3.0);
+        float body = abs(localPosition.y) - width;
+        float ends = max(-localPosition.x - 0.22, localPosition.x - 1.0);
+        mask = 1.0 - smoothstep(-feather, feather, max(body, ends));
+    }
+    else if (mode == 4)
+    {
+        float halfAngle = clamp(0.78 / max(abs(light.Cookie.w), 0.01), 0.08, 1.5);
+        float direction = localPosition.x / max(radius, 0.0001);
+        mask = smoothstep(cos(halfAngle) - feather, cos(halfAngle) + feather, direction);
+    }
+    else if (mode == 5)
+    {
+        float frequency = max(1.0, abs(light.Cookie.w));
+        float angular = sin(angle * 3.1 * frequency + sin(angle * 7.3) * 1.2);
+        float radial = sin(radius * 14.0 * frequency - angle * 2.0);
+        mask = smoothstep(-feather, feather, angular * 0.65 + radial * 0.35 - 0.1);
+    }
+
+    return lerp(1.0, mask, saturate(light.CookieShape.x));
+}
+
+float interleaved_gradient_noise(float2 pixel, float frame)
+{
+    return frac(52.9829189 * frac(dot(pixel, float2(0.06711056, 0.00583715)) + frame * 0.75487766));
+}
+
 float point_sample_visibility(uint lightIndex, int sampleIndex, float distanceToLight, float radius)
 {
     float2 depth = ShadowDepth[lightIndex * POINT_SHADOW_SAMPLES + sampleIndex];
@@ -87,22 +156,28 @@ float point_sample_visibility(uint lightIndex, int sampleIndex, float distanceTo
     return 1.0 - saturate(SpriteShadowStrength) * fade;
 }
 
-float point_visibility(uint lightIndex, float2 delta, float distanceToLight, float radius)
+float point_visibility(uint lightIndex, Light light, float2 delta, float distanceToLight)
 {
     float angle = atan2(delta.y, delta.x);
     if (angle < 0.0)
         angle += 6.28318530718;
     float samplePosition = angle / 6.28318530718 * POINT_SHADOW_SAMPLES - 0.5;
     int center = (int)round(samplePosition);
-    if (SoftShadowSamples <= 0.0)
+    if (SoftShadowSamples <= 0.0 || light.Shadow.x <= 0.0 || light.Shadow.y <= 0.0)
     {
         int sampleIndex = center % POINT_SHADOW_SAMPLES;
         if (sampleIndex < 0)
             sampleIndex += POINT_SHADOW_SAMPLES;
-        return point_sample_visibility(lightIndex, sampleIndex, distanceToLight, radius);
+        return point_sample_visibility(lightIndex, sampleIndex, distanceToLight, light.Radius);
     }
-    float radialSoftness = lerp(MinimumSoftness, 1.0, saturate(distanceToLight / radius));
-    int stepSize = max(1, (int)round(SoftShadowSamples * radialSoftness));
+    float radialSoftness = saturate(distanceToLight / light.Radius);
+    int stepSize = max(1, (int)round(light.Shadow.x * light.Shadow.y * radialSoftness));
+    if (light.Shadow.z > 0.0)
+    {
+        float frame = floor(Time * max(0.0, light.Shadow.w));
+        float noise = interleaved_gradient_noise(floor(delta * Zoom), lightIndex + frame);
+        center = (int)round(samplePosition + (noise - 0.5) * light.Shadow.z * stepSize);
+    }
     float visibility = 0.0;
     static const int offsets[5] = { -2, -1, 0, 1, 2 };
     static const float weights[5] = { 0.1, 0.2, 0.4, 0.2, 0.1 };
@@ -111,7 +186,7 @@ float point_visibility(uint lightIndex, float2 delta, float distanceToLight, flo
         int sampleIndex = (center + offsets[i] * stepSize) % POINT_SHADOW_SAMPLES;
         if (sampleIndex < 0)
             sampleIndex += POINT_SHADOW_SAMPLES;
-        visibility += weights[i] * point_sample_visibility(lightIndex, sampleIndex, distanceToLight, radius);
+        visibility += weights[i] * point_sample_visibility(lightIndex, sampleIndex, distanceToLight, light.Radius);
     }
     return visibility;
 }
@@ -187,6 +262,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         float2 toLight = light.Position - world;
         float distanceToLight = length(toLight);
         float attenuation = saturate(1.0 - distanceToLight / light.Radius);
+        attenuation *= light_cookie(light, -toLight);
         if (attenuation <= 0.0)
             continue;
 
@@ -194,7 +270,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         attenuation *= attenuation;
         float response = normal_response(normal, normalStrength, float3(toLight, light.Height));
         float4 contribution = float4(light.ColorIntensity.rgb * light.ColorIntensity.a * attenuation * response, attenuation);
-        float visibility = point_visibility(i, -toLight, distanceToLight, light.Radius);
+        float visibility = point_visibility(i, light, -toLight, distanceToLight);
         unshadowed += contribution;
         shadowed += contribution * visibility;
         sporeFog += light.ColorIntensity.rgb * light.ColorIntensity.a * fogAttenuation * SporeFogPointStrength * visibility;

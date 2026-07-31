@@ -70,7 +70,10 @@
       "Position": [164, 28],
       "Radius": 200,
       "Intensity": 0.85,
-      "Height": 5.65
+      "Height": 5.65,
+      "CookieAngleDegrees": 38.4,
+      "CookieSpeedDegrees": 50.9,
+      "Cookie": "None"
     },
     {
       "Id": "e6b0b01a6338a282",

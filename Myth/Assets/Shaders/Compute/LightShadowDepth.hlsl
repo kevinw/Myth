@@ -13,6 +13,9 @@ struct Light
     float Radius;
     float Height;
     float4 ColorIntensity;
+    float4 Cookie;
+    float4 CookieShape;
+    float4 Shadow;
 };
 
 Texture2D SpriteShadowMask : register(t0, space0);
