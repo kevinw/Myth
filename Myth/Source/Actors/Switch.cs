@@ -35,6 +35,8 @@ public class Switch : PointPathActor
 		Play("top-on");
 		effectDistance = 0;
 		pulseLight = ActorSpecs.Create(Game, "SwitchPulseLight", (Point2)PointAtDistance(0)) as Light;
+		if (pulseLight != null)
+			pulseLight.SpriteShadowOwner = this;
 	}
 
 	public override void Update()

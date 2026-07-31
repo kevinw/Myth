@@ -14,6 +14,7 @@ public class Light : Actor
 	public float FlickerIntensity = 0.08f;
 	readonly float FlickerRandomOffset = 0;
 	public bool DrawSprite = true;
+	internal Actor? SpriteShadowOwner;
 
 	public float FlickerScale => 1 + CurrentFlicker * FlickerIntensity;
 	public float FlickerScaleMax => 1 + FlickerIntensity;

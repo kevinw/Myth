@@ -1406,12 +1406,16 @@ public sealed partial class GameView
 		foreach (var actor in Actors)
 		{
 			if (actor is Light light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
+			{
 				renderer.AddLight(
 					light.Position,
 					light.Radius * light.FlickerScaleMax,
 					light.Intensity * light.FlickerScaleMax,
 					light.Height,
 					light.LightColor);
+				if (light.SpriteShadowOwner is { } owner)
+					gpuLightEmitters.Add(owner);
+			}
 			gatheringGpuLightActor = actor;
 			actor.ForEachLight(gatherGpuLightAction);
 		}

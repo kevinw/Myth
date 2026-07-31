@@ -1341,6 +1341,7 @@ public partial class Player : Pawn
 			it.FlickerIntensity = 0.02f;
 			it.DrawSprite = false;
 			it.KeepOnRoomTransition = true;
+			it.SpriteShadowOwner = this;
 		});
 		UpdateLightPosition();
 
