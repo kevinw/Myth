@@ -84,7 +84,7 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 		ImGui.Unindent();
 	}
 
-	public void PinnedWindowImGui(Game? game, float scale)
+	public void PinnedWindowImGui(Game? game, float scale, Action? onBegin = null)
 	{
 		if (pinnedEffect is not { } name)
 			return;
@@ -97,8 +97,9 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 
 		var open = true;
 		ImGui.SetNextWindowSize(new Vector2(300, 560) * scale, ImGuiCond.FirstUseEver);
-		if (ImGui.Begin("Particles##Pinned", ref open, ImGuiWindowFlags.NoSavedSettings))
+		if (ImGui.Begin("Particles##Pinned", ref open))
 		{
+			onBegin?.Invoke();
 			ImGui.SetNextItemWidth(-1);
 			if (ImGui.BeginCombo("##PinnedEffectName", name))
 			{

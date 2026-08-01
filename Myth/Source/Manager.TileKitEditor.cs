@@ -71,11 +71,14 @@ public partial class Manager
 		}
 
 		ImGui.SetNextWindowSize(new Vector2(480, 720), ImGuiCond.FirstUseEver);
+		DockNextToolWindow("Tile Creator");
 		if (!ImGui.Begin("Tile Creator", ref tileKitEditorOpen))
 		{
+			NoteDockedWindow();
 			ImGui.End();
 			return;
 		}
+		NoteDockedWindow();
 
 		if (tileKitDraft == null && TileKits.Specs.Count > 0)
 			SelectTileKit(TileKits.Specs[0]);

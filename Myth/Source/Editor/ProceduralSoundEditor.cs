@@ -75,7 +75,7 @@ sealed class ProceduralSoundEditor
 		return options;
 	}
 
-	public void Draw()
+	public void Draw(Action? onBegin = null)
 	{
 		if (!Open)
 			return;
@@ -89,9 +89,11 @@ sealed class ProceduralSoundEditor
 		ImGui.SetNextWindowSize(new Vector2(500, 720), ImGuiCond.FirstUseEver);
 		if (!ImGui.Begin("Procedural Sounds", ref Open))
 		{
+			onBegin?.Invoke();
 			ImGui.End();
 			return;
 		}
+		onBegin?.Invoke();
 
 		DrawDraftRow();
 

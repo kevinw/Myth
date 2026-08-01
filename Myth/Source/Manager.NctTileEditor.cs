@@ -23,11 +23,14 @@ public partial class Manager
 			return;
 
 		ImGui.SetNextWindowSize(new Vector2(420, 560), ImGuiCond.FirstUseEver);
+		DockNextToolWindow("NCT Tiles");
 		if (!ImGui.Begin("NCT Tiles", ref nctEditorOpen))
 		{
+			NoteDockedWindow();
 			ImGui.End();
 			return;
 		}
+		NoteDockedWindow();
 
 		if (nctDraft == null && NctTiles.Specs.Count > 0)
 			SelectNctTile(NctTiles.Specs[0]);

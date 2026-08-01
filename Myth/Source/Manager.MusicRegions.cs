@@ -52,11 +52,14 @@ public partial class Manager
 			return;
 
 		ImGui.SetNextWindowSize(new Vector2(380, 420), ImGuiCond.FirstUseEver);
+		DockNextToolWindow("Music Regions");
 		if (!ImGui.Begin("Music Regions", ref musicRegionsOpen))
 		{
+			NoteDockedWindow();
 			ImGui.End();
 			return;
 		}
+		NoteDockedWindow();
 
 		if (ImGuiTextButton(musicRegionDrawArm ? "Drag a rect in the world view (Esc cancels)" : "Draw New Region", new Vector2(0, 0), musicRegionDrawArm))
 			musicRegionDrawArm = !musicRegionDrawArm;

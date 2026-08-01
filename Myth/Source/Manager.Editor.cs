@@ -134,9 +134,12 @@ public partial class Manager
 	/// Palette View when the Editor is Open
 	Rect PaletteOpenRect => new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
 
-	/// Edit Workspace when the Editor is Open
+	/// Edit Workspace when the Editor is Open: the Game dock window's content rect, which the
+	/// dock layout decides. Falls back to the plain centre region before the window exists.
 	Rect EditorOpenRect
-		=> new Rect(WorkRect.X + PaletteWidth + BoxSpacing, WorkRect.Y, WorkRect.Width - PaletteWidth - BoxSpacing, WorkRect.Height);
+		=> gameViewWindowRect.Width > 1 && gameViewWindowRect.Height > 1
+			? gameViewWindowRect
+			: EditorCenterRect;
 
 	/// Eases between the EditView and the PlayView as the Game opens/closes
 	Rect WorkspaceRect
@@ -231,7 +234,9 @@ public partial class Manager
 			FpsOverlayImGui();
 		TransitionViewerImGui();
 		PreferencesImGui();
-		particleEditor.PinnedWindowImGui(game, Scale);
+		if (particleEditor.PinnedWindowOpen)
+			DockNextToolWindow("Particles##Pinned");
+		particleEditor.PinnedWindowImGui(game, Scale, NoteDockedWindow);
 		if (!playing && !startingPlay)
 		{
 			TileKitEditorImGui();
@@ -239,7 +244,9 @@ public partial class Manager
 			MusicRegionsImGui();
 		}
 #if !IOS && !BROWSER
-		proceduralSoundEditor.Draw();
+		if (proceduralSoundEditor.Open)
+			DockNextToolWindow("Procedural Sounds");
+		proceduralSoundEditor.Draw(NoteDockedWindow);
 #endif
 #if DEBUG
 		TweakRegistry.DrawPanel();
@@ -702,17 +709,10 @@ public partial class Manager
 
 	void PaletteImGui()
 	{
-		var rect = PaletteSlideRect;
-		var flags =
-			ImGuiWindowFlags.NoTitleBar |
-			ImGuiWindowFlags.NoMove |
-			ImGuiWindowFlags.NoResize |
-			ImGuiWindowFlags.NoCollapse |
-			ImGuiWindowFlags.NoSavedSettings |
-			ImGuiWindowFlags.NoBringToFrontOnFocus;
-
-		ImGui.SetNextWindowPos(rect.TopLeft, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(rect.Size, ImGuiCond.Always);
+		// A normal dockable window: it lives in the left dock region by default, but can be
+		// torn off, moved to the right region, or tabbed with anything else.
+		DockNextWindow("Palette", editorPaletteDockId);
+		var flags = ImGuiWindowFlags.NoCollapse;
 
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BoxPadding, BoxPadding));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, ButtonSpacing));
@@ -723,6 +723,7 @@ public partial class Manager
 
 		if (ImGui.Begin("Palette", flags))
 		{
+			NoteDockedWindow();
 			if (ImGuiSubtextureButton("##Select", Assets.GetSubtexture("buttons/16"), null, actorSelectTool, ButtonSizeV, true))
 				SelectEditorActorTool();
 			ImGui.Spacing();
@@ -768,7 +769,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
 
-		var pos = new Vector2(PaletteSlideRect.Right + 10, ToolbarHeight + 10);
+		var pos = new Vector2(EditorPaletteDockRect.Right + 10, ToolbarHeight + 10);
 		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.04f, 0.05f, 0.82f));
@@ -791,6 +792,7 @@ public partial class Manager
 	{
 		ImGui.TextUnformatted("Tiles");
 		DrawTileLayerSelector();
+		var columns = PaletteColumnsForWidth();
 		var index = 0;
 		ValueStringBuilder vsb = new(stackalloc char[30]);
 		foreach (var (id, entry) in Factory.Entries)
@@ -801,7 +803,7 @@ public partial class Manager
 
 			if (entry.Layer != activeTileLayer) continue;
 
-			if (index > 0 && index % PaletteColumns != 0)
+			if (index > 0 && index % columns != 0)
 				ImGui.SameLine();
 
 			var dualPreview = GetDualTilesetPreview(entry);
@@ -858,6 +860,10 @@ public partial class Manager
 		actorSelectTool = false;
 	}
 
+	/// Icons per row for the palette grids, from however wide the panel currently is.
+	static int PaletteColumnsForWidth()
+		=> Math.Max(1, (int)((ImGui.GetContentRegionAvail().X + ButtonSpacing) / (ButtonSize + ButtonSpacing)));
+
 	static Tileset? GetDualTilesetPreview(Factory.Entry entry)
 		=> entry.DualTilesetName != null ? Assets.GetTileset(entry.DualTilesetName) : null;
 
@@ -865,6 +871,7 @@ public partial class Manager
 	{
 		ImGui.TextUnformatted("Actors");
 		DrawActorTagFilter();
+		var columns = PaletteColumnsForWidth();
 		var index = 0;
 		var vsb = new ValueStringBuilder(stackalloc char[30]);
 		for (var i = 0; i < Factory.ActorPalette.Count; i++)
@@ -875,7 +882,7 @@ public partial class Manager
 			if (actorPaletteFilter != ActorTag.None && (entry.Tags & actorPaletteFilter) == 0)
 				continue;
 
-			if (index > 0 && index % PaletteColumns != 0)
+			if (index > 0 && index % columns != 0)
 				ImGui.SameLine();
 
 			vsb.Clear();
@@ -3420,7 +3427,7 @@ public partial class Manager
 		if (UpdateEditorTouchView(inner))
 			return;
 
-		var canInteract = !imgui.WantsMouseInput && inner.Contains(cursor);
+		var canInteract = (!imgui.WantsMouseInput || gameViewHovered) && inner.Contains(cursor);
 
 		// Music-region drawing/resizing owns the mouse while the regions window is engaged.
 		if (UpdateMusicRegionInteraction(canInteract, cursor, inner))
@@ -3946,7 +3953,7 @@ public partial class Manager
 	{
 		using var perf = PerfStats.Time(PerfDetail.EditorWorld);
 		var inner = GameViewRect;
-		var worldMouseBlocked = imgui.WantsMouseInput && !SingleTouchInEditorWorld(inner);
+		var worldMouseBlocked = imgui.WantsMouseInput && !gameViewHovered && !SingleTouchInEditorWorld(inner);
 		var keyboardBlocked = ImGuiWantsKeyboard;
 		var roomActivationClickConsumed = false;
 		UpdateEditorShortcuts();
@@ -4529,7 +4536,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
 
-		var pos = new Vector2(PaletteSlideRect.Right + 10, ToolbarHeight + 10);
+		var pos = new Vector2(EditorPaletteDockRect.Right + 10, ToolbarHeight + 10);
 		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 3));
@@ -5068,11 +5075,14 @@ public partial class Manager
 			return;
 
 		ImGui.SetNextWindowSize(new Vector2(280, 0), ImGuiCond.FirstUseEver);
-		if (!ImGui.Begin("Preferences", ref preferencesOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse))
+		DockNextToolWindow("Preferences");
+		if (!ImGui.Begin("Preferences", ref preferencesOpen, ImGuiWindowFlags.NoCollapse))
 		{
+			NoteDockedWindow();
 			ImGui.End();
 			return;
 		}
+		NoteDockedWindow();
 
 		ImGui.SetNextItemWidth(150);
 		if (ImGui.BeginCombo("Scroll input", EditorScrollModeName(editorScrollMode)))
@@ -5097,6 +5107,10 @@ public partial class Manager
 			SaveWindowSettings();
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip("On: a pasted actor lands in the middle of the editor view.\nOff: it keeps the position it was copied from.\nEither way it is clamped inside the room.");
+		if (ImGui.Button("Reset tool window layout"))
+			ResetEditorToolWindowLayout();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Docks Tile Creator, NCT Tiles, Particles, Music, SFX and this window\nback into the panel on the right.");
 
 		ImGui.End();
 	}
