@@ -1257,7 +1257,9 @@ public partial class Manager
 
 		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
 		var open = actorSpecInspectorOpen;
-		if (!ImGui.Begin($"Prefab: {selectedActorSpecId}", ref open, ImGuiWindowFlags.NoSavedSettings))
+		// Settings are saved: the "###" id means every prefab shares this one window, so the
+		// place you put it is worth keeping across launches (and lets it be docked).
+		if (!ImGui.Begin($"Prefab: {selectedActorSpecId}###ActorSpecInspector", ref open))
 		{
 			actorSpecInspectorOpen = open;
 			ImGui.End();
@@ -1489,7 +1491,7 @@ public partial class Manager
 		ImGui.SetNextWindowPos(inspectorPos, ImGuiCond.Appearing, Vector2.One);
 		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
 		var open = true;
-		if (!ImGui.Begin($"Actor: {title}##ActorInstanceInspector", ref open, ImGuiWindowFlags.NoSavedSettings))
+		if (!ImGui.Begin($"Actor: {title}###ActorInstanceInspector", ref open, ImGuiWindowFlags.NoSavedSettings))
 		{
 			if (!open)
 				selectedRoomActorIndex = -1;
