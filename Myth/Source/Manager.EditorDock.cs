@@ -152,12 +152,49 @@ public partial class Manager
 		paletteDockedThisFrame = 0;
 		toolDockedThisFrame = 0;
 
-		if (EditorPaletteDockVisible)
+		var paletteVisible = EditorPaletteDockVisible;
+		var toolVisible = EditorDockVisible;
+		var centreVisible = paletteVisible || toolVisible || gameEase < 1.0f;
+
+		if (paletteVisible)
 			EditorDockHostImGui("##EditorPaletteDockHost", "EditorPaletteDock", EditorPaletteDockRect, ref editorPaletteDockId, rightSide: false);
-		if (EditorDockVisible)
+		if (toolVisible)
 			EditorDockHostImGui("##EditorDockHost", "EditorDock", EditorDockRect, ref editorDockId, rightSide: true);
-		if (EditorPaletteDockVisible || EditorDockVisible || gameEase < 1.0f)
+		if (centreVisible)
 			EditorCenterDockImGui();
+
+		KeepHiddenDockRegionsAlive(paletteVisible, toolVisible, centreVisible);
+	}
+
+	/// A dockspace that stops being submitted takes its nodes with it, and ImGui undocks every
+	/// window that was in them -- which is why entering play mode and coming back used to leave
+	/// every panel floating. Play mode hides all three regions, so they are kept alive instead.
+	void KeepHiddenDockRegionsAlive(bool paletteVisible, bool toolVisible, bool centreVisible)
+	{
+		if (paletteVisible && toolVisible && centreVisible)
+			return;
+
+		// KeepAliveOnly does not draw or write to the current window, but it does need one.
+		var flags =
+			ImGuiWindowFlags.NoDecoration |
+			ImGuiWindowFlags.NoSavedSettings |
+			ImGuiWindowFlags.NoInputs |
+			ImGuiWindowFlags.NoNav |
+			ImGuiWindowFlags.NoBackground |
+			ImGuiWindowFlags.NoDocking;
+
+		ImGui.SetNextWindowPos(new Vector2(-4000, -4000), ImGuiCond.Always);
+		ImGui.SetNextWindowSize(Vector2.One, ImGuiCond.Always);
+		if (ImGui.Begin("##EditorDockKeepAlive", flags))
+		{
+			if (!paletteVisible && editorPaletteDockId != 0)
+				ImGui.DockSpace(editorPaletteDockId, Vector2.Zero, ImGuiDockNodeFlags.KeepAliveOnly);
+			if (!toolVisible && editorDockId != 0)
+				ImGui.DockSpace(editorDockId, Vector2.Zero, ImGuiDockNodeFlags.KeepAliveOnly);
+			if (!centreVisible && editorCenterDockId != 0)
+				ImGui.DockSpace(editorCenterDockId, Vector2.Zero, ImGuiDockNodeFlags.KeepAliveOnly);
+		}
+		ImGui.End();
 	}
 
 	/// The game view's own dock region. It has no splitter: it simply takes what the side
