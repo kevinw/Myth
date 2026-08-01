@@ -45,9 +45,12 @@ public partial class Manager
 			return;
 
 		DockNextWindow(name, editorPaletteDockId);
+		// FramePadding is deliberately NOT pushed around Begin: a docked window reserves
+		// GetFrameHeight() for its tab bar, so zeroing it here makes the window reserve less
+		// than the host actually draws and the content spills up over the tabs. It is pushed
+		// inside the window instead, where the icon grids still get their tight buttons.
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BoxPadding, BoxPadding));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, ButtonSpacing));
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, LineWeight);
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
 
@@ -57,14 +60,16 @@ public partial class Manager
 		NoteDockedWindow();
 		if (visible)
 		{
+			ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
 			body();
+			ImGui.PopStyleVar();
 			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
 				SelectEditorActorTool();
 		}
 		ImGui.End();
 
 		ImGui.PopStyleColor();
-		ImGui.PopStyleVar(4);
+		ImGui.PopStyleVar(3);
 	}
 
 	/// Type-to-filter over the actor grid. Sixty-odd icons, many of them near-identical
