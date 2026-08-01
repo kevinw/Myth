@@ -176,6 +176,7 @@ public partial class Manager : App
 	readonly float maxTimeSeconds;
 	readonly string? playRoomId;
 	readonly bool buildAssetPack;
+	readonly bool bakeWorldMap;
 	readonly bool useAssetPack;
 	readonly string? assetPackPath;
 	bool musicEnabled = true;
@@ -205,7 +206,9 @@ public partial class Manager : App
 
 	bool UpdateBackgroundSuspension()
 	{
-		var runsInBackground = runInBackground;
+		// Automated captures run unattended and may never take focus, so they must keep
+		// stepping regardless of it -- otherwise the run suspends and never reaches its frame.
+		var runsInBackground = runInBackground || screenshotPath != null || gymMode;
 #if EDITOR
 		runsInBackground |= editorGameRunInBackground;
 #endif
@@ -258,6 +261,7 @@ public partial class Manager : App
 		foreach (var goalId in args.gymGoalIds)
 			gym.goalIds.Add(goalId);
 		buildAssetPack = args.buildAssetPack;
+		bakeWorldMap = args.bakeWorldMap;
 		useAssetPack = args.useAssetPack;
 		assetPackPath = args.assetPackPath;
 		Assets.ConfigureContentZip(args.contentZipPath);
@@ -427,6 +431,15 @@ public partial class Manager : App
 		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
 		if (AudioEnabled)
 			LoadAudioBanks();
+
+#if EDITOR
+		if (bakeWorldMap)
+		{
+			BakeWorldMap();
+			Exit();
+			return;
+		}
+#endif
 
 #if !EDITOR && !BROWSER
 		// Normal windowed play: cover GPU pipeline warmup with a loading screen so the first
@@ -749,6 +762,7 @@ public partial class Manager : App
 				editorScrollMode = settings.EditorScrollMode;
 			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
 			editorGameRunInBackground = settings.EditorGameRunInBackground;
+			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
 #endif
 		}
 		catch (Exception e)
@@ -785,7 +799,8 @@ public partial class Manager : App
 #if EDITOR
 				EditorScrollMode = editorScrollMode,
 				PreservePlaytestSaveState = preservePlaytestSaveState,
-				EditorGameRunInBackground = editorGameRunInBackground
+				EditorGameRunInBackground = editorGameRunInBackground,
+				PasteActorAtViewCenter = pasteActorAtViewCenter
 #endif
 			};
 
@@ -817,6 +832,7 @@ public partial class Manager : App
 		public EditorScrollMode EditorScrollMode { get; init; }
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
+		public bool PasteActorAtViewCenter { get; init; } = true;
 #endif
 	}
 

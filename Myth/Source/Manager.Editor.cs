@@ -50,6 +50,9 @@ public partial class Manager
 	EditorScrollMode editorScrollMode;
 	bool preferencesOpen;
 	bool editorGameRunInBackground = true;
+	// Paste drops the actor under the middle of the editor view instead of at the position it
+	// was copied from. Either way the paste is clamped into the room (see PasteActor).
+	bool pasteActorAtViewCenter = true;
 	static float TrackpadScrollLatchTime => 0.5f;
 	// World pixels panned per unit of (small, ~0.1-0.4) trackpad wheel delta, before the zoom divide.
 	static float EditorTrackpadPanSpeed => 20f;
@@ -291,6 +294,7 @@ public partial class Manager
 			copy["Position"] = new JsonArray(position.X + Game.TileSize, position.Y);
 			ActorSpecs.AssignNewActorId(copy);
 			room.Actors.Add(copy);
+			ClampRoomActorToRoom(room, copy);
 			selectedRoomActorIndex = room.Actors.Count - 1;
 			ClearEditorDragState();
 			editorGameDirty = true;
@@ -329,6 +333,9 @@ public partial class Manager
 			if (!actorClipboardPreservesId || string.IsNullOrWhiteSpace(id) || Assets.FindActorById(id) != null)
 				ActorSpecs.AssignNewActorId(actor);
 			room.Actors.Add(actor);
+			if (pasteActorAtViewCenter)
+				CenterRoomActorOnEditorCamera(room, actor);
+			ClampRoomActorToRoom(room, actor);
 			selectedRoomActorIndex = room.Actors.Count - 1;
 			actorSelectTool = true;
 			selectedActorPaletteIndex = -1;
@@ -809,7 +816,12 @@ public partial class Manager
 
 			if (ImGui.BeginPopupContextItem(vsb.AsSpan()))
 			{
-				if (ImGui.Selectable("Open in Sprite Editor"))
+				if (FindTileKitSpec(entry) is { } kit)
+				{
+					if (ImGui.Selectable("Open in Tile Kit Editor"))
+						OpenTileKitEditor(kit);
+				}
+				else if (ImGui.Selectable("Open in Sprite Editor"))
 				{
 					AsepriteLauncher.Open(entry);
 				}
@@ -2217,6 +2229,35 @@ public partial class Manager
 			return (entry.EditorBounds ?? entry.DefaultEditorBounds) + position;
 
 		return new RectInt(position.X - 4, position.Y - 4, 8, 8);
+	}
+
+	/// Moves an actor so its whole footprint sits inside the room. The clamp is applied to the
+	/// actor's bounds rather than its Position, since the two differ by the sprite/palette origin;
+	/// an actor larger than the room pins to the top-left corner.
+	static void ClampRoomActorToRoom(Room room, JsonObject actor)
+	{
+		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+		var bounds = RoomActorBounds(room, actor);
+		var boundsLocal = bounds.TopLeft - room.WorldBounds.TopLeft;
+		var clamped = new Point2(
+			Math.Clamp(boundsLocal.X, 0, Math.Max(0, room.WorldBounds.Width - bounds.Width)),
+			Math.Clamp(boundsLocal.Y, 0, Math.Max(0, room.WorldBounds.Height - bounds.Height)));
+		if (clamped == boundsLocal)
+			return;
+
+		actor["Position"] = new JsonArray(local.X + clamped.X - boundsLocal.X, local.Y + clamped.Y - boundsLocal.Y);
+	}
+
+	/// Puts the actor's bounds under the middle of the editor view (which is editorCamera in
+	/// world space), so a paste lands where you are looking instead of where it was copied from.
+	void CenterRoomActorOnEditorCamera(Room room, JsonObject actor)
+	{
+		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+		var bounds = RoomActorBounds(room, actor);
+		var target = (editorCamera - (Vector2)bounds.Size / 2).RoundToPoint2();
+		actor["Position"] = new JsonArray(
+			local.X + target.X - bounds.X,
+			local.Y + target.Y - bounds.Y);
 	}
 
 	static bool IsHiddenWallActor(JsonObject actor)
@@ -4985,6 +5026,12 @@ public partial class Manager
 			nctEditorOpen = !nctEditorOpen;
 		ImGui.SameLine();
 
+		if (ImGuiTextButton("Bake Map", new Vector2(70, ButtonSize), false))
+			BakeWorldMap();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Render every room into the world map image the map overlay samples.\nWrites into the visual asset pack folder.");
+		ImGui.SameLine();
+
 		if (ImGuiTextButton("Particles", new Vector2(70, ButtonSize), particleEditor.PinnedWindowOpen))
 			particleEditor.TogglePinnedWindow();
 		ImGui.SameLine();
@@ -5046,6 +5093,10 @@ public partial class Manager
 			SaveWindowSettings();
 		if (ImGui.Checkbox("Editor Game Run in Background", ref editorGameRunInBackground))
 			SaveWindowSettings();
+		if (ImGui.Checkbox("Paste actors at view center", ref pasteActorAtViewCenter))
+			SaveWindowSettings();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("On: a pasted actor lands in the middle of the editor view.\nOff: it keeps the position it was copied from.\nEither way it is clamped inside the room.");
 
 		ImGui.End();
 	}

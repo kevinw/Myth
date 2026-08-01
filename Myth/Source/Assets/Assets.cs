@@ -423,7 +423,21 @@ public static class Assets
 		if (dumpPackedAtlases)
 			DumpPackedAtlasPages(bake.Output);
 #endif
-		WriteVisualAssetPack(path ?? DefaultVisualAssetPackPath, bake);
+		var directory = path ?? DefaultVisualAssetPackPath;
+		WriteVisualAssetPack(directory, bake);
+		ReportWorldMapState(directory);
+	}
+
+	/// The world map is a GPU render of every room, so this build (which runs headless, with no
+	/// graphics device) can only leave alone whatever a previous in-app bake wrote. It is written
+	/// into the pack folder and never deleted by a rebuild, so a rebuilt pack keeps its map.
+	static void ReportWorldMapState(string directory)
+	{
+		var hasMap = File.Exists(Path.Join(directory, WorldMap.ImageFile))
+			&& File.Exists(Path.Join(directory, WorldMap.BoundsFile));
+		Console.WriteLine(hasMap
+			? $"World map: kept existing {WorldMap.ImageFile} (rebake it in the editor if rooms changed)."
+			: $"World map: none in {directory}. Bake it from the editor toolbar (Bake Map).");
 	}
 
 	public static void BuildVisualAssetPack(GraphicsDevice gfx, string? path = null, bool dumpPackedAtlases = false)
@@ -431,6 +445,9 @@ public static class Assets
 
 	public static void ReloadRooms()
 		=> LoadRooms();
+
+	public static void ReloadWorldMap(GraphicsDevice gfx)
+		=> LoadWorldMap(gfx);
 
 	static void Reload(GraphicsDevice gfx, bool reloadRooms, bool dumpPackedAtlases, string? buildPackPath)
 	{
@@ -471,6 +488,7 @@ public static class Assets
 		ParticleEffectAssets.Load();
 		if (reloadRooms)
 			LoadRooms();
+		LoadWorldMap(gfx);
 	}
 
 	static VisualAssetBake BakeVisualAssets()
@@ -649,13 +667,24 @@ public static class Assets
 		return new(output, spriteFiles, generatedSprites, tilesetFiles, generatedTileImages, generatedNormalImages, generatedOccluders, kitGeneratedTilesets);
 	}
 
+	/// An explicit --asset-pack path reads a pack directory on the real file system;
+	/// otherwise the pack lives inside bundled content at Packed/Visuals.
+	static StorageContainer OpenVisualAssetPack()
+		=> visualAssetPackPath != null
+			? new FolderStorage(visualAssetPackPath)
+			: new RelativeStorage(Content, packedVisualsFolderName);
+
+	/// The baked world map ships beside the pack on both paths (dev builds read the same
+	/// folder the pack is written to), so it loads the same way whether or not pack mode is on.
+	static void LoadWorldMap(GraphicsDevice gfx)
+	{
+		using var pack = OpenVisualAssetPack();
+		WorldMap.Load(gfx, pack);
+	}
+
 	static bool TryLoadVisualAssetPack(GraphicsDevice gfx, bool reloadRooms)
 	{
-		// An explicit --asset-pack path reads a pack directory on the real file system;
-		// otherwise the pack lives inside bundled content at Packed/Visuals.
-		using var pack = visualAssetPackPath != null
-			? (StorageContainer)new FolderStorage(visualAssetPackPath)
-			: new RelativeStorage(Content, packedVisualsFolderName);
+		using var pack = OpenVisualAssetPack();
 
 		if (!pack.FileExists(packedVisualsManifestName))
 			return false;
@@ -685,6 +714,7 @@ public static class Assets
 		ParticleEffectAssets.Load();
 		if (reloadRooms)
 			LoadRooms();
+		LoadWorldMap(gfx);
 
 		Console.WriteLine($"Loaded visual asset pack: {manifestLabel}");
 		return true;

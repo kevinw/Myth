@@ -78,19 +78,12 @@
       "Position": [16, 104]
     },
     {
-      "Id": "b2e41d99e32f5c02",
-      "Type": "Light",
-      "Position": [44, 80],
-      "Intensity": 0.85,
-      "Radius": 65.0,
-      "FlickerFrequency": 0.7
-    },
-    {
       "Id": "b2e41d99e32f5c03",
       "Type": "Light",
       "Position": [104, 72],
       "Radius": 80.0,
-      "Height": 5.65
+      "Height": 5.65,
+      "Intensity": 0.45
     },
     {
       "Id": "b2e41d99e32f5c04",

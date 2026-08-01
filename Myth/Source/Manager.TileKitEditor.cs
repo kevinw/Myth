@@ -15,6 +15,7 @@ public partial class Manager
 	TileKitSpec? tileKitDraft;
 	bool tileKitDirty;
 	bool tileKitPreviewStale;
+	bool tileKitFocusRequested;
 	char tileKitPaintKey;
 	string tileKitNewName = "";
 	Texture? tileKitPreviewTexture;
@@ -34,10 +35,40 @@ public partial class Manager
 		"############",
 	];
 
+	/// The kit spec a palette tile was baked from, or null for tiles that come from a .ase
+	/// tileset (those open in Aseprite instead).
+	static TileKitSpec? FindTileKitSpec(Factory.Entry entry)
+	{
+		foreach (var spec in TileKits.Specs)
+			if (NameMatches(spec.Name, entry.TilesetName) ||
+				NameMatches(spec.Name, entry.SlopeTilesetName) ||
+				NameMatches(spec.DualName, entry.DualTilesetName))
+				return spec;
+
+		return null;
+
+		static bool NameMatches(string specName, string? tilesetName)
+			=> string.Equals(specName, tilesetName, StringComparison.OrdinalIgnoreCase);
+	}
+
+	void OpenTileKitEditor(TileKitSpec spec)
+	{
+		tileKitEditorOpen = true;
+		tileKitFocusRequested = true;
+		if (tileKitSelected != spec.Name)
+			SelectTileKit(spec);
+	}
+
 	void TileKitEditorImGui()
 	{
 		if (!tileKitEditorOpen)
 			return;
+
+		if (tileKitFocusRequested)
+		{
+			tileKitFocusRequested = false;
+			ImGui.SetNextWindowFocus();
+		}
 
 		ImGui.SetNextWindowSize(new Vector2(480, 720), ImGuiCond.FirstUseEver);
 		if (!ImGui.Begin("Tile Creator", ref tileKitEditorOpen))

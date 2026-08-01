@@ -22,6 +22,10 @@ public struct StartArgs
 	// room entry (the original hitch) instead of up front. See tools/windows/clear-system-shader-caches.mjs.
 	public bool noWarmup;
 	public bool buildAssetPack;
+	// Render every room into the world map image the map overlay samples, then exit
+	// (--bake-world-map). Needs a real graphics device, so it runs windowed rather than
+	// through the headless --build-asset-pack.
+	public bool bakeWorldMap;
 	public bool useAssetPack;
 	public string? assetPackPath;
 	// Load bundled content from this zip instead of the Assets folder (--content-zip).
@@ -95,6 +99,7 @@ public struct StartArgs
 
 		dumpAtlases = args.Contains("--dump-atlases");
 		buildAssetPack = args.Contains("--build-asset-pack");
+		bakeWorldMap = args.Contains("--bake-world-map");
 		useAssetPack = args.Contains("--asset-pack");
 		var gymCli = args.Contains("--gym-cli");
 		gym = gymCli || args.Contains("--gym");

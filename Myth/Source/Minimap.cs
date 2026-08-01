@@ -353,8 +353,9 @@ public sealed partial class GameView
 	static float MinimapDim => 0.8f;       // how dark the game dims behind the map
 	static float MinimapFadeSpeed => 10f;  // fully fades in or out in 0.1s
 	static float WarpFocusLerpSpeed => 9f; // how fast the map glides to a newly selected warp target
-	static Color MinimapRoomFill => new(0x241a3e);
-	static Color MinimapWall => new(0x8b81b5);
+	static Color MinimapRoomFill => new(0x241a3e, 50);
+	static Color MinimapWall => new(0x00, 80);
+	static float MinimapWorldColorOpacity => 1f; // how strongly the baked world map reads as the room fill
 
 	float minimapOpacity;
 
@@ -384,8 +385,25 @@ public sealed partial class GameView
 		Batcher.Rect(new Rect(0, 0, Width, Height), Color.Black * (MinimapDim * minimapOpacity));
 
 		// Only the camera-seen part of each room is drawn; the rest stays dark until explored.
+		// The fill is the baked world map where there is one (its colors are the rooms' own),
+		// and the flat fill color otherwise.
+		var worldMap = WorldMap.Available;
+		if (worldMap)
+			Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
 		foreach (var mapRoom in game.Minimap.Rooms)
-			Batcher.Rect(new Rect(origin + (Vector2)(mapRoom.TileBounds.Position + mapRoom.SeenRect.Position) * s, (Vector2)mapRoom.SeenRect.Size * s), MinimapRoomFill * minimapOpacity);
+		{
+			var seenTiles = new RectInt(mapRoom.TileBounds.Position + mapRoom.SeenRect.Position, mapRoom.SeenRect.Size);
+			var fill = new Rect(origin + (Vector2)seenTiles.Position * s, (Vector2)seenTiles.Size * s);
+			if (worldMap)
+				Batcher.ImageStretch(
+					new Subtexture(WorldMap.Texture, WorldMap.SourceRect(seenTiles * TileSize)),
+					fill,
+					Color.White * (MinimapWorldColorOpacity * minimapOpacity));
+			else
+				Batcher.Rect(fill, MinimapRoomFill * minimapOpacity);
+		}
+		if (worldMap)
+			Batcher.PopSampler();
 
 		foreach (var mapRoom in game.Minimap.Rooms)
 		{
