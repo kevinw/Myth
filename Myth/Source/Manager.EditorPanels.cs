@@ -35,6 +35,13 @@ public partial class Manager
 			DrawAmbientOcclusionSection();
 			DrawSoftShadowSection();
 		});
+
+		// These rode along at the end of the old single palette window and are not panels
+		// themselves: the two inspectors plus the floating tile/selection option popups.
+		ActorSpecInspectorImGui();
+		ActorInstanceInspectorImGui();
+		DrawEditorSelectionOptions();
+		DrawSlopePaintOption();
 	}
 
 	/// One palette panel: the shared style the old single window used, plus the click-empty-
