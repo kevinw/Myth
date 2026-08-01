@@ -31,6 +31,8 @@ public partial class Manager
 		EditorPanelImGui("Actor List", ref actorListPanelOpen, DrawActorListSection);
 		EditorPanelImGui("Room", ref roomPanelOpen, () =>
 		{
+			if (CurrentRoom is { } room)
+				DrawRoomIdentitySection(room);
 			DrawRoomPaletteSection();
 			DrawAmbientOcclusionSection();
 			DrawSoftShadowSection();

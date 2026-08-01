@@ -23,9 +23,6 @@ public partial class Manager
 	static float BoxSpacing => 0;
 	static float BoxPadding => 4;
 	static int PaletteColumns => 5;
-	static int ToolbarSpacing => 4;
-	static float ToolbarHeight => ButtonSize + 4;
-	static float ToolbarButtonImagePadding => 4;
 	static float PaletteWidth => BoxPadding * 2 + PaletteColumns * ButtonSize + (PaletteColumns - 1) * ButtonSpacing;
 	static Color highlight => 0x5fcde4;
 
@@ -125,11 +122,9 @@ public partial class Manager
 	string? roomNameEditingRoomId;
 	string? pendingDeleteRoomId;
 
-	/// Toolbar Space
-	Rect ToolbarRect => new(View.X, View.Y, View.Width, ToolbarHeight);
-
-	/// Workspace, which is the full space below the Toolbar
-	Rect WorkRect => new(View.X, View.Y + ToolbarSpacing + ToolbarHeight, View.Width, View.Height - ToolbarHeight - ToolbarSpacing);
+	/// Workspace: the whole view. The old toolbar strip is gone, replaced by the hamburger
+	/// overlay (see Manager.EditorMenu.cs), which floats over the game view and costs no layout.
+	Rect WorkRect => View;
 
 	/// Palette View when the Editor is Open
 	Rect PaletteOpenRect => new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
@@ -225,7 +220,7 @@ public partial class Manager
 		if (!playing && !startingPlay)
 		{
 			using (PerfStats.Time(PerfDetail.ToolbarImGui))
-				ToolbarImGui();
+				EditorMenuImGui();
 		}
 		PlatformNavDebugOverlayImGui();
 		ActorPositionDebugOverlayImGui();
@@ -722,7 +717,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
 
-		var pos = new Vector2(EditorPaletteDockRect.Right + 10, ToolbarHeight + 10);
+		var pos = new Vector2(EditorPaletteDockRect.Right + 10, WorkRect.Y + 10);
 		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.04f, 0.05f, 0.82f));
@@ -4487,7 +4482,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
 
-		var pos = new Vector2(EditorPaletteDockRect.Right + 10, ToolbarHeight + 10);
+		var pos = new Vector2(EditorPaletteDockRect.Right + 10, WorkRect.Y + 10);
 		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 3));
@@ -4762,64 +4757,6 @@ public partial class Manager
 		return bounds.Center;
 	}
 
-	void DrawCenteredRoomName(Room? room)
-	{
-		if (room == null)
-		{
-			DrawCenteredToolbarText($"null Room");
-			return;
-		}
-
-		if (editingRoomName && roomNameEditingRoomId != room.Id)
-			CancelRoomRename();
-
-		if (editingRoomName)
-		{
-			var width = Math.Max(160, ImGui.CalcTextSize(roomNameEditor).X + 24);
-			var windowPos = ImGui.GetWindowPos();
-			var windowSize = ImGui.GetWindowSize();
-			var pos = new Vector2(
-				windowPos.X + windowSize.X * 0.5f - width * 0.5f,
-				windowPos.Y + windowSize.Y * 0.5f - ImGui.GetFrameHeight() * 0.5f);
-
-			ImGui.SetCursorScreenPos(pos);
-			ImGui.SetNextItemWidth(width);
-			if (focusRoomNameEditor)
-			{
-				ImGui.SetKeyboardFocusHere();
-				focusRoomNameEditor = false;
-			}
-
-			var commit = ImGui.InputText("##RoomNameEditor", ref roomNameEditor, 128, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
-			var cancel = ImGui.IsKeyPressed(ImGuiKey.Escape);
-			if (cancel)
-				CancelRoomRename();
-			else if (commit || ImGui.IsItemDeactivated())
-				CommitRoomRename(room);
-			return;
-		}
-
-		DrawCenteredToolbarText(room.Id, canDoubleClick: true);
-		var textHovered = ImGui.IsItemHovered();
-		if (textHovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-			BeginRoomRename(room);
-
-		var deleteSize = new Vector2(ButtonSize, ButtonSize);
-		var deletePos = ImGui.GetItemRectMax() + new Vector2(ToolbarSpacing, -ButtonSize * 0.5f - ImGui.GetItemRectSize().Y * 0.5f);
-		var deleteRect = new Rect(deletePos, deleteSize);
-		var mouse = ImGui.GetMousePos();
-		var showDelete = textHovered || deleteRect.Contains(mouse);
-		if (showDelete)
-		{
-			ImGui.SetCursorScreenPos(deletePos);
-			if (ImGuiSubtextureButton("DeleteRoom", Assets.GetSubtexture("buttons/14"), "Delete room", false, deleteSize, imagePadding: ToolbarButtonImagePadding))
-			{
-				pendingDeleteRoomId = room.Id;
-				ImGui.OpenPopup("Delete Room?");
-			}
-		}
-	}
-
 	void BeginRoomRename(Room room)
 	{
 		editingRoomName = true;
@@ -4912,113 +4849,7 @@ public partial class Manager
 			RemoveRoomFromWorld(room);
 	}
 
-	static void DrawCenteredToolbarText(ReadOnlySpan<char> text, bool canDoubleClick = false)
-	{
-		var size = ImGui.CalcTextSize(text);
-		var windowPos = ImGui.GetWindowPos();
-		var windowSize = ImGui.GetWindowSize();
-		var pos = new Vector2(
-			windowPos.X + windowSize.X * 0.5f - size.X * 0.5f,
-			windowPos.Y + windowSize.Y * 0.5f - size.Y * 0.5f);
-		if (canDoubleClick)
-		{
-			ImGui.SetCursorScreenPos(pos);
-			ImGui.InvisibleButton("##CenteredToolbarText", size);
-		}
-		ImGui.GetWindowDrawList().AddText(pos, ImGui.GetColorU32(ImGuiCol.Text), text);
-	}
-
 	bool ToggleEditorPressed() => Input.Keyboard.Pressed(Keys.Tab) || Input.AnyControllerButtonPressed(Buttons.RightStick);
-
-	void ToolbarImGui()
-	{
-		var flags =
-			ImGuiWindowFlags.NoDecoration |
-			ImGuiWindowFlags.NoMove |
-			ImGuiWindowFlags.NoSavedSettings |
-			ImGuiWindowFlags.NoScrollbar |
-			ImGuiWindowFlags.NoScrollWithMouse |
-			ImGuiWindowFlags.NoBringToFrontOnFocus;
-
-		ImGui.SetNextWindowPos(Vector2.Zero, ImGuiCond.Always);
-		var window = RequiredWindow;
-		ImGui.SetNextWindowSize(new Vector2(window.WidthInPixels / imgui.Scale, ToolbarHeight), ImGuiCond.Always);
-
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
-		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, 0));
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.18f, 0.08f, 0.15f, 1.0f));
-		ImGui.Begin("Toolbar", flags);
-
-		if (ImGuiIconButton("Play", Assets.GetSubtexture("buttons/0"), "Play [Tab/R3]", imagePadding: ToolbarButtonImagePadding))
-			StartGame();
-		ImGui.SameLine();
-
-		if (ImGuiIconButton("Music Areas", Assets.GetSubtexture(musicEnabled ? "buttons/9" : "buttons/10"), musicEnabled ? "Music ON" : "Music OFF", musicEnabled, ToolbarButtonImagePadding))
-		{
-			musicEnabled = !musicEnabled;
-			game?.RefreshMusic();
-		}
-		ImGui.SameLine();
-		if (ImGuiIconButton("Preferences", Assets.GetSubtexture("buttons/17"), OperatingSystem.IsMacOS() ? "Preferences [Command+,]" : "Preferences", imagePadding: ToolbarButtonImagePadding))
-			preferencesOpen = true;
-		ImGui.SameLine();
-
-#if !IOS
-		if (ImGuiIconButton("AlwaysOnTop", Assets.GetSubtexture(alwaysOnTop ? "buttons/11" : "buttons/12"), "Always on Top", alwaysOnTop, ToolbarButtonImagePadding))
-		{
-			alwaysOnTop = !alwaysOnTop;
-			window.AlwaysOnTop = alwaysOnTop;
-		}
-		ImGui.SameLine();
-
-		if (ImGuiIconButton("OpenFmodStudio", Assets.GetSubtexture("buttons/13"), "Open FMOD Studio", imagePadding: ToolbarButtonImagePadding))
-			FmodStudio.Open();
-		ImGui.SameLine();
-
-		if (ImGuiTextButton("Tile Kits", new Vector2(70, ButtonSize), tileKitEditorOpen))
-			tileKitEditorOpen = !tileKitEditorOpen;
-		ImGui.SameLine();
-
-		if (ImGuiTextButton("NCT Tiles", new Vector2(70, ButtonSize), nctEditorOpen))
-			nctEditorOpen = !nctEditorOpen;
-		ImGui.SameLine();
-
-		if (ImGuiTextButton("Bake Map", new Vector2(70, ButtonSize), false))
-			BakeWorldMap();
-		if (ImGui.IsItemHovered())
-			ImGui.SetTooltip("Render every room into the world map image the map overlay samples.\nWrites into the visual asset pack folder.");
-		ImGui.SameLine();
-
-		if (ImGuiTextButton("Particles", new Vector2(70, ButtonSize), particleEditor.PinnedWindowOpen))
-			particleEditor.TogglePinnedWindow();
-		ImGui.SameLine();
-
-		if (ImGuiTextButton("Music", new Vector2(55, ButtonSize), musicRegionsOpen))
-			musicRegionsOpen = !musicRegionsOpen;
-		ImGui.SameLine(0, ToolbarSpacing);
-
-#if !BROWSER
-		if (ImGuiTextButton("SFX", new Vector2(45, ButtonSize), proceduralSoundEditor.Open))
-			proceduralSoundEditor.Open = !proceduralSoundEditor.Open;
-		ImGui.SameLine(0, ToolbarSpacing);
-#endif
-
-		//if (ImGuiTextButton("Transitions", new Vector2(70, ButtonSize), showTransitionViewer))
-		//showTransitionViewer = !showTransitionViewer;
-		ImGui.SameLine(0, ToolbarSpacing);
-#endif
-
-		DrawWorldSelector();
-
-		DrawCenteredRoomName(CurrentRoom);
-		DrawDeleteRoomPopup();
-		DrawCreateRoomPopup();
-
-		ImGui.End();
-		ImGui.PopStyleColor();
-		ImGui.PopStyleVar(3);
-	}
 
 	void PreferencesImGui()
 	{
@@ -5072,31 +4903,6 @@ public partial class Manager
 		EditorScrollMode.Trackpad => "Trackpad",
 		_ => "Auto"
 	};
-
-	void DrawWorldSelector()
-	{
-		var worlds = Assets.GetWorldIds();
-		if (worlds.Count == 0)
-			return;
-
-		var width = Math.Clamp(ImGui.CalcTextSize(Assets.CurrentWorldId).X + 32, 96, 180);
-		ImGui.SetCursorPosY((ToolbarHeight - ImGui.GetFrameHeight()) * 0.5f);
-		ImGui.SetNextItemWidth(width);
-		if (ImGui.BeginCombo("##WorldSelector", Assets.CurrentWorldId))
-		{
-			foreach (var world in worlds)
-			{
-				var selected = string.Equals(world, Assets.CurrentWorldId, StringComparison.OrdinalIgnoreCase);
-				if (ImGui.Selectable(world, selected))
-					SwitchWorld(world);
-				if (selected)
-					ImGui.SetItemDefaultFocus();
-			}
-
-			ImGui.EndCombo();
-		}
-		ImGui.SameLine(0, ToolbarSpacing);
-	}
 
 	void SwitchWorld(int worldSwitch)
 	{
