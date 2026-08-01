@@ -208,7 +208,10 @@ public partial class Manager
 			ImGuiWindowFlags.NoScrollbar |
 			ImGuiWindowFlags.NoScrollWithMouse |
 			ImGuiWindowFlags.NoCollapse |
-			ImGuiWindowFlags.NoNavFocus;
+			ImGuiWindowFlags.NoNavFocus |
+			// Clicking the room must not raise this window above the overlays drawn on top of
+			// it (the hamburger, the paint options): it is a canvas, never the foreground.
+			ImGuiWindowFlags.NoBringToFrontOnFocus;
 
 		// NoBackground is not honoured once the window is docked -- the dock node draws the
 		// window background itself, which is ImGui's default near-black WindowBg at alpha 0.94
@@ -219,7 +222,7 @@ public partial class Manager
 		if (ImGui.Begin("Game", flags))
 		{
 			NoteDockedWindow();
-			gameViewHovered = ImGui.IsWindowHovered();
+			gameViewHovered = ImGui.IsWindowHovered() && !EditorMenuButtonRect.Contains(ImGui.GetMousePos());
 			var origin = ImGui.GetCursorScreenPos();
 			var size = ImGui.GetContentRegionAvail();
 			if (size.X > 1 && size.Y > 1)

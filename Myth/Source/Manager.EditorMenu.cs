@@ -1,5 +1,6 @@
 #if EDITOR
 using System.Numerics;
+using Foster.Framework;
 using ImGuiNET;
 
 namespace Myth;
@@ -12,6 +13,11 @@ public partial class Manager
 {
 	const string EditorMenuPopup = "##EditorMenuPopup";
 
+	static float EditorMenuButtonSize => ButtonSize * 0.8f;
+
+	/// Where the hamburger sits, so the game view can exclude it from its own hover test.
+	Rect EditorMenuButtonRect => new(EditorOpenRect.TopLeft + new Vector2(6, 6), new Vector2(EditorMenuButtonSize, EditorMenuButtonSize));
+
 	void EditorMenuImGui()
 	{
 		if (startingPlay || gameEase >= 1.0f)
@@ -23,7 +29,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoSavedSettings |
 			ImGuiWindowFlags.NoDocking |
 			ImGuiWindowFlags.AlwaysAutoResize |
-			ImGuiWindowFlags.NoBringToFrontOnFocus |
+			ImGuiWindowFlags.NoFocusOnAppearing |
 			ImGuiWindowFlags.NoBackground;
 
 		ImGui.SetNextWindowPos(EditorOpenRect.TopLeft + new Vector2(6, 6), ImGuiCond.Always);
@@ -44,7 +50,7 @@ public partial class Manager
 	/// Drawn rather than glyphed: the editor font has no hamburger character.
 	bool DrawHamburgerButton()
 	{
-		var size = new Vector2(ButtonSize, ButtonSize);
+		var size = new Vector2(EditorMenuButtonSize, EditorMenuButtonSize);
 		var origin = ImGui.GetCursorScreenPos();
 		var pressed = ImGui.InvisibleButton("##EditorMenuButton", size);
 		var hovered = ImGui.IsItemHovered();
