@@ -9,7 +9,7 @@ public partial class Manager
 {
 	void DrawActorListSection()
 	{
-		if (!ImGui.CollapsingHeader("Actor List", ImGuiTreeNodeFlags.DefaultOpen) || CurrentRoom is not { } room)
+		if (CurrentRoom is not { } room)
 			return;
 
 		if (room.Actors.Count == 0)

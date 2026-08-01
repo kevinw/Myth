@@ -45,7 +45,7 @@ public partial class Manager
 	/// Bump to re-home every panel on the next launch (see EditorDockLayoutVersion in the window
 	/// settings): imgui.ini already holds a position for every window that has ever been opened,
 	/// and FirstUseEver never overrides that.
-	public const int EditorDockLayoutVersion = 2;
+	public const int EditorDockLayoutVersion = 3;
 
 	/// Windows forced into a dock since the last layout reset. Each is re-homed once, the next
 	/// time it is submitted, so windows closed during the reset still land when next opened.
@@ -137,6 +137,7 @@ public partial class Manager
 		tileKitEditorOpen = true;
 		nctEditorOpen = true;
 		musicRegionsOpen = true;
+		OpenAllEditorPanels();
 	}
 
 	/// Must run before any dockable window is submitted: a dockspace has to exist in the frame

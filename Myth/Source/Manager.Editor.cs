@@ -707,53 +707,6 @@ public partial class Manager
 		}
 	}
 
-	void PaletteImGui()
-	{
-		// A normal dockable window: it lives in the left dock region by default, but can be
-		// torn off, moved to the right region, or tabbed with anything else.
-		DockNextWindow("Palette", editorPaletteDockId);
-		var flags = ImGuiWindowFlags.NoCollapse;
-
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BoxPadding, BoxPadding));
-		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, ButtonSpacing));
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, Vector2.Zero);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, LineWeight);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
-		//ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(1.0f, 1.0f, 1.0f, 1.0f));
-
-		if (ImGui.Begin("Palette", flags))
-		{
-			NoteDockedWindow();
-			if (ImGuiSubtextureButton("##Select", Assets.GetSubtexture("buttons/16"), null, actorSelectTool, ButtonSizeV, true))
-				SelectEditorActorTool();
-			ImGui.Spacing();
-			DrawTilePaletteSection();
-			ImGui.Spacing();
-			DrawActorPaletteSection();
-			ImGui.Spacing();
-			DrawActorListSection();
-			ImGui.Spacing();
-			DrawRoomPaletteSection();
-			ImGui.Spacing();
-			DrawAmbientOcclusionSection();
-			DrawSoftShadowSection();
-			ImGui.Spacing();
-			//DrawPreviewPaletteSection();
-
-			if (ImGui.IsWindowHovered() && !ImGui.IsAnyItemHovered() && Input.Mouse.LeftPressed)
-				SelectEditorActorTool();
-		}
-		ImGui.End();
-
-		ImGui.PopStyleColor(1);
-		ImGui.PopStyleVar(4);
-
-		ActorSpecInspectorImGui();
-		ActorInstanceInspectorImGui();
-		DrawEditorSelectionOptions();
-		DrawSlopePaintOption();
-	}
-
 	void DrawSlopePaintOption()
 	{
 		if (!SlopePaintAvailable)
@@ -790,7 +743,6 @@ public partial class Manager
 
 	void DrawTilePaletteSection()
 	{
-		ImGui.TextUnformatted("Tiles");
 		DrawTileLayerSelector();
 		var columns = PaletteColumnsForWidth();
 		var index = 0;
@@ -869,7 +821,7 @@ public partial class Manager
 
 	void DrawActorPaletteSection()
 	{
-		ImGui.TextUnformatted("Actors");
+		DrawActorPaletteSearch();
 		DrawActorTagFilter();
 		var columns = PaletteColumnsForWidth();
 		var index = 0;
@@ -880,6 +832,8 @@ public partial class Manager
 			if (entry.Image.Texture == null)
 				continue;
 			if (actorPaletteFilter != ActorTag.None && (entry.Tags & actorPaletteFilter) == 0)
+				continue;
+			if (!ActorPaletteSearchMatches(entry))
 				continue;
 
 			if (index > 0 && index % columns != 0)
@@ -964,9 +918,6 @@ public partial class Manager
 	void DrawRoomPaletteSection()
 	{
 		if (CurrentRoom is not { } room)
-			return;
-
-		if (!ImGui.CollapsingHeader("Room"))
 			return;
 
 		var changed = false;
