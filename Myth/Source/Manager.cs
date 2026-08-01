@@ -475,6 +475,11 @@ public partial class Manager : App
 
 		if (!playOnStartup)
 			SyncEditorGame();
+		if (pendingEditorDockLayoutReset)
+		{
+			pendingEditorDockLayoutReset = false;
+			ResetEditorToolWindowLayout();
+		}
 #endif
 	}
 
@@ -763,6 +768,18 @@ public partial class Manager : App
 			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
 			editorGameRunInBackground = settings.EditorGameRunInBackground;
 			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
+			// Absent (an older settings file) means "never set", which is not the same as a
+			// user-dragged width -- fall back to the defaults rather than clamping a zero.
+			editorDockWidth = settings.EditorDockWidth > 0
+				? Math.Clamp(settings.EditorDockWidth, EditorDockMinWidth, EditorDockMaxWidth)
+				: DefaultToolDockWidth;
+			editorPaletteWidth = settings.EditorPaletteWidth > 0
+				? Math.Clamp(settings.EditorPaletteWidth, EditorDockMinWidth, EditorDockMaxWidth)
+				: DefaultPaletteDockWidth;
+			// Tool windows saved before the dock region existed sit wherever they last floated,
+			// so re-home them once when the layout version moves.
+			if (settings.EditorDockLayoutVersion < EditorDockLayoutVersion)
+				pendingEditorDockLayoutReset = true;
 #endif
 		}
 		catch (Exception e)
@@ -800,7 +817,10 @@ public partial class Manager : App
 				EditorScrollMode = editorScrollMode,
 				PreservePlaytestSaveState = preservePlaytestSaveState,
 				EditorGameRunInBackground = editorGameRunInBackground,
-				PasteActorAtViewCenter = pasteActorAtViewCenter
+				PasteActorAtViewCenter = pasteActorAtViewCenter,
+				EditorDockWidth = editorDockWidth,
+				EditorPaletteWidth = editorPaletteWidth,
+				EditorDockLayoutVersion = EditorDockLayoutVersion
 #endif
 			};
 
@@ -833,6 +853,9 @@ public partial class Manager : App
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
 		public bool PasteActorAtViewCenter { get; init; } = true;
+		public float EditorDockWidth { get; init; } = DefaultToolDockWidth;
+		public float EditorPaletteWidth { get; init; } = DefaultPaletteDockWidth;
+		public int EditorDockLayoutVersion { get; init; }
 #endif
 	}
 
@@ -1116,6 +1139,13 @@ public partial class Manager : App
 		imgui?.BeginLayout();
 
 #if EDITOR
+		// Ahead of Editor(): the game view is a dock window and the world is drawn into the rect
+		// it reports. Submitting it after Editor() would draw into last frame's rect, which is a
+		// frame of lag on every layout change. It also has to precede every other dockable
+		// window, since a dockspace must exist before anything can dock into it.
+		if (imgui != null)
+			EditorDockImGui();
+
 		// Build our Sprite Batch
 		using (PerfStats.Time(PerfDetail.BatchBuild))
 		{
