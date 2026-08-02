@@ -190,7 +190,7 @@ public class Minimap
 		foreach (var id in visitedRoomIds)
 		{
 			var room = currentRoom.Id == id ? currentRoom : Assets.RoomsById.GetValueOrDefault(id);
-			if (room != null)
+			if (room != null && room.Sublayer == currentRoom.Sublayer)
 				Rooms.Add(BuildRoom(room));
 		}
 	}
@@ -295,7 +295,7 @@ public class Minimap
 				if (!solid[tile.Y * size.X + tile.X] && seen.Contains(tile))
 				{
 					var outside = room.TileSpacePosition + tile + direction;
-					if (RoomAtWorldTile(outside) is { } neighbor &&
+					if (RoomAtWorldTile(outside, room.Sublayer) is { } neighbor &&
 					    !visitedRoomIds.Contains(neighbor.Id) &&
 					    !IsWorldTileSolid(neighbor, outside))
 						adjacent = neighbor;
@@ -330,10 +330,10 @@ public class Minimap
 		}
 	}
 
-	static Room? RoomAtWorldTile(Point2 worldTile)
+	static Room? RoomAtWorldTile(Point2 worldTile, int sublayer)
 	{
 		foreach (var room in Assets.RoomsById.Values)
-			if (new RectInt(room.TileSpacePosition, room.Size).Contains(worldTile))
+			if (room.Sublayer == sublayer && new RectInt(room.TileSpacePosition, room.Size).Contains(worldTile))
 				return room;
 		return null;
 	}
@@ -387,7 +387,7 @@ public sealed partial class GameView
 		// Only the camera-seen part of each room is drawn; the rest stays dark until explored.
 		// The fill is the baked world map where there is one (its colors are the rooms' own),
 		// and the flat fill color otherwise.
-		var worldMap = WorldMap.Available;
+		var worldMap = WorldMap.Available && game.CurrentRoom?.Sublayer == 0;
 		if (worldMap)
 			Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
 		foreach (var mapRoom in game.Minimap.Rooms)

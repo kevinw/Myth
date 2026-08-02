@@ -52,7 +52,7 @@ internal struct Gym
 	internal bool CollectGymRooms(string? playRoomId = null)
 	{
 		var runs = new List<GymRun>();
-		foreach (var room in Assets.Rooms.Values)
+		foreach (var room in Assets.RoomsById.Values)
 		{
 			// With --play-room, restrict the gym to that one room's goals (and loop
 			// through just those); otherwise gather goals from every room as before.

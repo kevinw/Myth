@@ -55,6 +55,7 @@ public class Room
 	public static readonly Color DefaultAmbientColor = new(0.42f, 0.42f, 0.46f, 1.0f);
 	public const float DefaultAmbientIntensity = 1.0f;
 	public const float DefaultLightNoise = 0.30f;
+	public const bool DefaultPlayerLightEnabled = true;
 	public const float DefaultSporeFogStrength = 0.0f;
 	public const float DefaultReverb = 0.0f;
 	// Per-room dither, overriding the engine defaults. Manager.DitherPerfScale still gates
@@ -72,6 +73,7 @@ public class Room
 
 	public StorageKind Storage { get; internal set; } = StorageKind.Bundled;
 	public string? SourcePath { get; internal set; }
+	public int Sublayer;
 
 	/// Compatibility screen-grid location of the Room.
 	public Point2 Cell => new(TileSpacePosition.X / Game.Columns, TileSpacePosition.Y / Game.Rows);
@@ -144,6 +146,7 @@ public class Room
 	public Color AmbientColor = DefaultAmbientColor;
 	public float AmbientIntensity = DefaultAmbientIntensity;
 	public float LightNoise = DefaultLightNoise;
+	public bool PlayerLightEnabled = DefaultPlayerLightEnabled;
 	public float SporeFogStrength = DefaultSporeFogStrength;
 	public bool ReverbAuto = true;
 	public float Reverb = DefaultReverb;
@@ -174,12 +177,14 @@ public class Room
 	{
 		var clone = new Room(Id, TileSpacePosition, Size)
 		{
+			Sublayer = Sublayer,
 			MusicArea = MusicArea,
 			BackdropColor = BackdropColor,
 			BackdropColor2 = BackdropColor2,
 			AmbientColor = AmbientColor,
 			AmbientIntensity = AmbientIntensity,
 			LightNoise = LightNoise,
+			PlayerLightEnabled = PlayerLightEnabled,
 			SporeFogStrength = SporeFogStrength,
 			ReverbAuto = ReverbAuto,
 			Reverb = Reverb,
@@ -243,6 +248,7 @@ public class Room
 
 	void LoadJson(JsonObject json)
 	{
+		Sublayer = Math.Max(0, JsonUtil.ReadInt(json, "sublayer", Sublayer));
 		if (json["colorFields"] is JsonObject colorFields)
 		{
 			ForegroundColorField.Deserialize(JsonUtil.ReadString(colorFields, "foreground"), Size);
@@ -256,6 +262,7 @@ public class Room
 		AmbientColor = JsonUtil.ReadColor(json, "ambientColor") ?? DefaultAmbientColor;
 		AmbientIntensity = JsonUtil.ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
 		LightNoise = JsonUtil.ReadFloat(json, "lightNoise", DefaultLightNoise);
+		PlayerLightEnabled = JsonUtil.ReadBool(json, "playerLight", DefaultPlayerLightEnabled);
 		SporeFogStrength = Clamp01(JsonUtil.ReadFloat(json, "sporeFogStrength", DefaultSporeFogStrength));
 		ReverbAuto = JsonUtil.ReadBool(json, "reverbAuto", true);
 		Reverb = Clamp01(JsonUtil.ReadFloat(json, "reverb", DefaultReverb));
@@ -1368,6 +1375,8 @@ public class Room
 
 		WriteIntPairProperty(writer, "position", TileSpacePosition.X, TileSpacePosition.Y);
 		WriteIntPairProperty(writer, "size", Size.X, Size.Y);
+		if (includeColorFields && Sublayer > 0)
+			writer.WriteNumber("sublayer", Sublayer);
 
 		if (!string.IsNullOrEmpty(MusicArea))
 			writer.WriteString("musicArea", MusicArea);
@@ -1381,6 +1390,8 @@ public class Room
 			writer.WriteNumber("ambientIntensity", AmbientIntensity);
 		if (LightNoise != DefaultLightNoise)
 			writer.WriteNumber("lightNoise", LightNoise);
+		if (PlayerLightEnabled != DefaultPlayerLightEnabled)
+			writer.WriteBoolean("playerLight", PlayerLightEnabled);
 		if (SporeFogStrength != DefaultSporeFogStrength)
 			writer.WriteNumber("sporeFogStrength", SporeFogStrength);
 		if (!ReverbAuto)

@@ -2160,7 +2160,7 @@ public partial class Player : Pawn
 
 		var target = State == States.Burrow ? 1f : 0f;
 		burrowLightBlend = Calc.Approach(burrowLightBlend, target, BurrowLightBlendRate * Time.Delta);
-		light.Intensity = BaseLightIntensity + (BurrowLightIntensity - BaseLightIntensity) * burrowLightBlend;
+		light.Intensity = Game.CurrentRoom?.PlayerLightEnabled == false ? 0 : BaseLightIntensity + (BurrowLightIntensity - BaseLightIntensity) * burrowLightBlend;
 		light.LightColor = Color.Lerp(BaseLightColor, BurrowLightColor, burrowLightBlend);
 	}
 

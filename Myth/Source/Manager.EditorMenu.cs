@@ -46,12 +46,47 @@ public partial class Manager
 		{
 			if (DrawHamburgerButton())
 				ImGui.OpenPopup(EditorMenuPopup);
+			DrawEditorSublayerButtons();
 			DrawEditorMenuPopup();
 			// Root-scope popups: opened from a flag (world switch, create room), so they need
 			// somewhere stable to be submitted now that the toolbar is gone.
 			DrawCreateRoomPopup();
 		}
 		ImGui.End();
+		ImGui.PopStyleVar();
+	}
+
+	void DrawEditorSublayerButtons()
+	{
+		var max = 0;
+		foreach (var room in Assets.RoomsById.Values)
+			max = Math.Max(max, room.Sublayer);
+		if (max == 0)
+			return;
+
+		ImGui.SameLine();
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(7, 3));
+		for (var layer = 0; layer <= max; layer++)
+		{
+			var exists = false;
+			foreach (var room in Assets.RoomsById.Values)
+				if (room.Sublayer == layer)
+				{
+					exists = true;
+					break;
+				}
+			if (!exists)
+				continue;
+			if (layer > 0)
+				ImGui.SameLine();
+			var selected = layer == editorSublayer;
+			if (selected)
+				ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.ButtonActive]);
+			if (ImGui.SmallButton(layer == 0 ? "Main" : $"Sub {layer}"))
+				SelectEditorSublayer(layer);
+			if (selected)
+				ImGui.PopStyleColor();
+		}
 		ImGui.PopStyleVar();
 	}
 

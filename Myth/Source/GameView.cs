@@ -63,6 +63,29 @@ public sealed partial class GameView : IDisposable
 	float ZoomedHeight => Height / zoomLevel;
 	Game.DebugView debugView => game.debugView;
 	float nextRoomEase => game.nextRoomEase;
+	Vector2 layerTransitionPivot;
+	bool layerTransitionCaptured;
+
+	internal void BeginLayerTransition(Point2 worldPivot)
+	{
+		layerTransitionCaptured = false;
+		LayerTransitionScreen.Clear(Color.Transparent);
+		RenderCurrentView(LayerTransitionScreen, LayerTransitionScreen.Bounds, showHud: false, scissor: null, applyCrt: false);
+		layerTransitionPivot = ((Vector2)worldPivot - RenderCamera) * zoomLevel;
+		layerTransitionCaptured = true;
+	}
+
+	void DrawLayerTransition(Target output)
+	{
+		if (!game.LayerTransitionActive || !layerTransitionCaptured)
+			return;
+
+		var progress = Ease.Cube.Out(game.LayerTransitionProgress);
+		var scale = Vector2.One * Calc.Lerp(1, 1.1f, progress);
+		Batcher.Image(new Subtexture(LayerTransitionScreen.Attachments[0]), layerTransitionPivot, layerTransitionPivot, scale, 0, Color.White * (1 - progress));
+		Batcher.Render(output);
+		Batcher.Clear();
+	}
 
 	private void PushWorldMatrix()
 		=> Batcher.PushMatrix(

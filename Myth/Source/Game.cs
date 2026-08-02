@@ -81,6 +81,10 @@ public partial class Game : IDisposable
 	Vector2 transitionCameraFrom;
 	Vector2 transitionCameraTo;
 	float linkedDoorCooldown;
+	float layerTransitionTime;
+	static float LayerTransitionDuration => 0.25f;
+	internal bool LayerTransitionActive => layerTransitionTime > 0;
+	internal float LayerTransitionProgress => 1 - layerTransitionTime / LayerTransitionDuration;
 	bool roomSwappedThisFrame;
 	internal readonly List<Actor> destroying = [];
 
@@ -123,7 +127,7 @@ public partial class Game : IDisposable
 #endif
 	// True when the sim is in a room and not mid-transition: when Manager applies live
 	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
-	internal bool AcceptsLiveInput => room != null && nextRoom == null && !SavePointWarpActive;
+	internal bool AcceptsLiveInput => room != null && nextRoom == null && !SavePointWarpActive && !LayerTransitionActive;
 	float timeScale = 1.0f;
 	internal float TimeScale
 	{
@@ -470,6 +474,16 @@ public partial class Game : IDisposable
 		// Don't run normal gameplay loop if no room is loaded
 		if (room == null)
 		{
+#if BROWSER
+			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
+#endif
+			return;
+		}
+
+		if (layerTransitionTime > 0)
+		{
+			layerTransitionTime = Calc.Approach(layerTransitionTime, 0, Time.Delta);
+			UpdateAudioListener();
 #if BROWSER
 			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
 #endif
@@ -1494,11 +1508,21 @@ public partial class Game : IDisposable
 
 		ReadLinkedDoorDestination(resolvedTarget, out var localPosition, out var spawnOffset);
 		var targetRoom = target.Room.CloneRuntime();
-		var targetPosition = targetRoom.WorldBounds.TopLeft + localPosition + spawnOffset;
+		var crossLayer = targetRoom.Sublayer != room.Sublayer;
+		var targetPosition = crossLayer ? player.Position + spawnOffset : targetRoom.WorldBounds.TopLeft + localPosition + spawnOffset;
+		var oldCamera = Camera;
+		if (crossLayer)
+			View?.BeginLayerTransition(player.Position);
 
 		ActivateRoomImmediately(targetRoom, player, targetPosition, RoomChangeKind.LinkedDoor, Point2.Zero);
+		if (crossLayer)
+		{
+			Camera = oldCamera;
+			layerTransitionTime = LayerTransitionDuration;
+		}
 		linkedDoorCooldown = 0.35f;
-		PulseDitherGlitch();
+		if (!crossLayer)
+			PulseDitherGlitch();
 		return true;
 	}
 

@@ -149,6 +149,7 @@ public sealed partial class GameView
 				particleSystem.Render(output, BackgroundLightMask, RenderCamera, zoomLevel, PerfToggles.Lighting,
 					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 		}
+		DrawLayerTransition(output);
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
 			DrawOverlayElements(output);
@@ -1471,7 +1472,7 @@ public sealed partial class GameView
 		};
 		foreach (var actor in Actors)
 		{
-			if (actor is Light light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
+			if (actor is Light { Intensity: > 0 } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
 			{
 				renderer.AddLight(
 					light.Position,
@@ -2085,6 +2086,7 @@ public sealed partial class GameView
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
 		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
+		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
 		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
@@ -2122,6 +2124,7 @@ public sealed partial class GameView
 	// (no double-return) and the property fields are always reassigned before next use.
 	void DisposeRenderTargets()
 	{
+		layerTransitionCaptured = false;
 		foreach (var target in debugTargets)
 			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask)
 				target.Dispose();
@@ -2345,6 +2348,7 @@ public sealed partial class GameView
 	Target SporeFogMask { get; set; } = null!;
 	Target LitScreen { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
+	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
 	Target DitherMask { get; set; } = null!;

@@ -14,6 +14,14 @@ public class LinkedDoor : Actor
 	bool showInteract;
 	float interactTime;
 
+	[Flags]
+	public enum LinkedDoorFlags {
+		None = 0,
+		InvisibleExit = 1 << 0,
+	}
+
+	public LinkedDoorFlags Flags = 0;
+
 	public LinkedDoor()
 	{
 		Sprite = Assets.GetSprite("back_door");
@@ -22,11 +30,19 @@ public class LinkedDoor : Actor
 		Play("idle");
 	}
 
+	public override void Added() {
+		Visible = !Flags.Has(LinkedDoorFlags.InvisibleExit);
+	}
+
 	public override void Update()
 	{
 		base.Update();
 
 		showInteract = false;
+
+		if (Flags.Has(LinkedDoorFlags.InvisibleExit))
+			return;
+
 
 		if (string.IsNullOrWhiteSpace(TargetActorId))
 			return;
@@ -47,7 +63,7 @@ public class LinkedDoor : Actor
 
 	public override void RenderEmissive(Batcher batcher)
 	{
-		if (!showInteract)
+		if (!showInteract || Flags.Has(LinkedDoorFlags.InvisibleExit))
 			return;
 
 		var interactSpriteMaybe = Assets.GetSprite("interact");

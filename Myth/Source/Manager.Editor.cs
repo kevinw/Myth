@@ -33,6 +33,7 @@ public partial class Manager
 	Vector2 editorCamera;
 	float editorZoom = 1.0f;
 	float editorZoomTarget = 1.0f;
+	int editorSublayer;
 	const bool AutoSelectRoomByCamera = true;
 	Vector2 editorCameraTweenFrom;
 	Vector2 editorCameraTweenTo;
@@ -150,13 +151,18 @@ public partial class Manager
 	Rect GameViewRect => WorkspaceRect;
 
 	IJsonUndoTarget CurrentRoomUndoTarget(Room room)
-		=> new RoomUndoTarget(room);
+		=> new RoomUndoTarget(this, room);
 
 	IJsonUndoTarget EditorSelectionUndoTarget()
 		=> new EditorSelectionTarget(this);
 
 	JsonUndoScope CaptureRoomUndo(string name, Room room)
 		=> undo.Capture(name, CurrentRoomUndoTarget(room), EditorSelectionUndoTarget());
+
+	JsonUndoScope CaptureRoomUndo(string name, Room first, Room second)
+		=> first == second
+			? CaptureRoomUndo(name, first)
+			: undo.Capture(name, CurrentRoomUndoTarget(first), CurrentRoomUndoTarget(second), EditorSelectionUndoTarget());
 
 	JsonUndoScope CaptureSelectionUndo(string name)
 		=> undo.Capture(name, EditorSelectionUndoTarget());
@@ -472,7 +478,7 @@ public partial class Manager
 		return false;
 	}
 
-	sealed class RoomUndoTarget(Room room) : IJsonUndoTarget
+	sealed class RoomUndoTarget(Manager manager, Room room) : IJsonUndoTarget
 	{
 		public string UndoId => $"room:{room.Id}";
 		public string CaptureJson() => room.ToJsonString();
@@ -481,6 +487,8 @@ public partial class Manager
 			var oldCell = room.Cell;
 			room.LoadJsonState(json);
 			UpdateRoomCellIndex(room, oldCell);
+			room.Save();
+			manager.MarkRoomPreviewDirty(room);
 		}
 	}
 
@@ -717,7 +725,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
 
-		var pos = new Vector2(EditorPaletteDockRect.Right + 10, WorkRect.Y + 10);
+		var pos = new Vector2(EditorPaletteDockRect.Right + 10, WorkRect.Y + EditorMenuButtonSize + 12);
 		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
 		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.04f, 0.05f, 0.82f));
@@ -926,6 +934,10 @@ public partial class Manager
 			vsb.Append(room.Size.Y);
 			ImGui.TextUnformatted(vsb.AsSpan());
 		}
+		ImGui.TextDisabled(room.Sublayer == 0 ? "Main layer" : $"Sublayer {room.Sublayer}");
+		ImGui.SameLine();
+		if (ImGui.SmallButton("Add Sublayer"))
+			AddSublayer(room);
 
 		// These copy/paste only the room's *settings* (backdrop/ambient/etc.) onto the current room.
 		// Whole-room copy/paste is the world-level Ctrl+C/V in room-edit mode.
@@ -1017,6 +1029,14 @@ public partial class Manager
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
 			room.LightNoise = lightNoise;
+			changed = true;
+		}
+
+		var playerLightEnabled = room.PlayerLightEnabled;
+		if (ImGui.Checkbox("Player Light", ref playerLightEnabled))
+		{
+			using (CaptureRoomUndo("Toggle Player Light", room))
+				room.PlayerLightEnabled = playerLightEnabled;
 			changed = true;
 		}
 
@@ -1225,7 +1245,7 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.SporeFogStrength, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -1235,6 +1255,7 @@ public partial class Manager
 		room.AmbientColor = settings.AmbientColor;
 		room.AmbientIntensity = settings.AmbientIntensity;
 		room.LightNoise = settings.LightNoise;
+		room.PlayerLightEnabled = settings.PlayerLightEnabled;
 		room.SporeFogStrength = settings.SporeFogStrength;
 		room.ReverbAuto = settings.ReverbAuto;
 		room.Reverb = settings.Reverb;
@@ -1980,7 +2001,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoSavedSettings |
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
-		ImGui.SetNextWindowPos(GameViewRect.TopLeft + new Vector2(10, 10), ImGuiCond.Always);
+		ImGui.SetNextWindowPos(GameViewRect.TopLeft + new Vector2(10, EditorMenuButtonSize + 12), ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 10));
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 2);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 2);
@@ -2018,7 +2039,7 @@ public partial class Manager
 			SyncRoomColorFieldPreview(room);
 			room.Save();
 		}
-		ImGui.TextDisabled("Drag in the room to paint.\nRight-drag erases. P or Esc stops.");
+		ImGui.TextDisabled("Drag in the room to paint. Wheel resizes.\nRight-drag erases. P or Esc stops.");
 	}
 
 	void DrawMaskPaintOverlay(Room room, JsonObject actor)
@@ -2977,7 +2998,7 @@ public partial class Manager
 	{
 		foreach (var room in Assets.RoomsById.Values)
 		{
-			if (room == editing)
+			if (room == editing || room.Sublayer != editing.Sublayer)
 				continue;
 			if (candidate.Overlaps(new RectInt(room.TileSpacePosition, room.Size)))
 				return true;
@@ -3002,17 +3023,17 @@ public partial class Manager
 
 	static void UpdateRoomCellIndex(Room room, Point2 oldCell)
 	{
-		if (Assets.Rooms.TryGetValue(oldCell, out var indexed) && indexed == room)
-			Assets.Rooms.Remove(oldCell);
-		Assets.Rooms[room.Cell] = room;
+		if (Assets.Rooms.TryGetValue((room.Sublayer, oldCell), out var indexed) && indexed == room)
+			Assets.Rooms.Remove((room.Sublayer, oldCell));
+		Assets.Rooms[(room.Sublayer, room.Cell)] = room;
 	}
 
-	static bool RoomGeometryOverlaps(Point2 position, Point2 size, Room? exclude)
+	static bool RoomGeometryOverlaps(Point2 position, Point2 size, int sublayer, Room? exclude)
 	{
 		var candidate = new RectInt(position, size);
 		foreach (var room in Assets.RoomsById.Values)
 		{
-			if (room == exclude)
+			if (room == exclude || room.Sublayer != sublayer)
 				continue;
 			if (candidate.Overlaps(new RectInt(room.TileSpacePosition, room.Size)))
 				return true;
@@ -3023,7 +3044,7 @@ public partial class Manager
 
 	// Nearest free room-lattice cell to a desired tile, spiralling outward a lattice step at a time so
 	// a pasted/duplicated room lands next to where it was asked for without overlapping existing rooms.
-	Point2 FindFreeRoomCell(Point2 desiredTile, Point2 size)
+	Point2 FindFreeRoomCell(Point2 desiredTile, Point2 size, int sublayer)
 	{
 		var start = SnapToRoomLattice(desiredTile);
 		var lattice = RoomLatticeTiles;
@@ -3034,7 +3055,7 @@ public partial class Manager
 					if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius)
 						continue;
 					var pos = start + new Point2(dx * lattice.X, dy * lattice.Y);
-					if (!RoomGeometryOverlaps(pos, size, null))
+					if (!RoomGeometryOverlaps(pos, size, sublayer, null))
 						return pos;
 				}
 
@@ -3103,7 +3124,7 @@ public partial class Manager
 
 		var it = new Room(Assets.GenerateRandomRoomId(), desiredTile, Room.DefaultSize);
 		it.LoadJsonState(json);                       // pulls in size/tiles/actors/settings (and the source position)
-		it.MoveTo(FindFreeRoomCell(desiredTile, it.Size));
+		it.MoveTo(FindFreeRoomCell(desiredTile, it.Size, it.Sublayer));
 
 		using (CaptureRoomExistenceUndo("Paste Room", it))
 		{
@@ -3414,24 +3435,30 @@ public partial class Manager
 			var wheel = Input.Mouse.Wheel;
 			if (wheel != Vector2.Zero)
 			{
-				if (editorScrollMode == EditorScrollMode.Auto && IsPreciseScroll(wheel))
-					trackpadScrollLatch = TrackpadScrollLatchTime;
-
-				if (editorScrollMode == EditorScrollMode.Trackpad ||
-					editorScrollMode == EditorScrollMode.Auto && trackpadScrollLatch > 0)
+				var resizingColorBrush = wheel.Y != 0 && CurrentRoom is { } room && roomColorFieldPainter.IsActive(room);
+				if (resizingColorBrush)
+					roomColorFieldPainter.AdjustRadius(wheel.Y);
+				else
 				{
-					wheel.X *= -1f;
+					if (editorScrollMode == EditorScrollMode.Auto && IsPreciseScroll(wheel))
+						trackpadScrollLatch = TrackpadScrollLatchTime;
 
-					// SDL reports natural (flipped) direction, so move the camera opposite the swipe to
-					// keep content under the fingers. Divide by zoom for consistent screen-space speed.
-					editorCameraTween = 1.0f;
-					editorZoomTarget = editorZoom;
-					editorCamera -= wheel * EditorTrackpadPanSpeed / editorZoom;
-				}
-				else if (wheel.Y != 0)
-				{
-					editorCameraTween = 1.0f;
-					editorZoomTarget = Math.Clamp(editorZoomTarget * MathF.Pow(1.15f, wheel.Y), 0.15f, 8.0f);
+					if (editorScrollMode == EditorScrollMode.Trackpad ||
+						editorScrollMode == EditorScrollMode.Auto && trackpadScrollLatch > 0)
+					{
+						wheel.X *= -1f;
+
+						// SDL reports natural (flipped) direction, so move the camera opposite the swipe to
+						// keep content under the fingers. Divide by zoom for consistent screen-space speed.
+						editorCameraTween = 1.0f;
+						editorZoomTarget = editorZoom;
+						editorCamera -= wheel * EditorTrackpadPanSpeed / editorZoom;
+					}
+					else if (wheel.Y != 0)
+					{
+						editorCameraTween = 1.0f;
+						editorZoomTarget = Math.Clamp(editorZoomTarget * MathF.Pow(1.15f, wheel.Y), 0.15f, 8.0f);
+					}
 				}
 			}
 		}
@@ -3540,6 +3567,8 @@ public partial class Manager
 		var bestCoverage = 0.0f;
 		foreach (var room in Assets.RoomsById.Values)
 		{
+			if (room.Sublayer != editorSublayer)
+				continue;
 			var bounds = room.WorldBounds;
 			var roomRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
 			var coverage = worldView.GetIntersection(roomRect).Area / viewArea;
@@ -3596,41 +3625,48 @@ public partial class Manager
 	{
 		using var perf = PerfStats.Time(PerfDetail.DrawEditorRooms);
 		BuildQueuedRoomPreview();
+		if (editorSublayer > 0)
+			foreach (var room in Assets.RoomsById.Values)
+				if (room.Sublayer == 0)
+					DrawEditorRoom(room, visibleWorld, Color.White * 0.16f, Color.Gray * 0.25f);
 		foreach (var room in Assets.RoomsById.Values)
-		{
-			var bounds = room.WorldBounds;
-			if (visibleWorld.GetIntersection(new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height)).Area <= 0)
-				continue;
-
-			var line = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
-
-			if (GetEditorRoomTexture(room) is { } preview)
-				DrawEditorRoomPreview(preview, bounds);
-			else
-				DrawEditorRoomBackdrop(room, bounds);
-			batcher.RectLine(bounds, line, Color.Gray);
-		}
+			if (room.Sublayer == editorSublayer)
+				DrawEditorRoom(room, visibleWorld, Color.White, Color.Gray);
 	}
 
-	void DrawEditorRoomBackdrop(Room room, RectInt bounds)
+	void DrawEditorRoom(Room room, Rect visibleWorld, Color tint, Color outline)
 	{
-		var top = room.BackdropColor;
-		var bottom = room.BackdropColor2 ?? top;
+		var bounds = room.WorldBounds;
+		if (visibleWorld.GetIntersection(new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height)).Area <= 0)
+			return;
+
+		if (GetEditorRoomTexture(room) is { } preview)
+			DrawEditorRoomPreview(preview, bounds, tint);
+		else
+			DrawEditorRoomBackdrop(room, bounds, tint);
+		batcher.RectLine(bounds, MathF.Max(1.0f / editorZoom, LineWeight / editorZoom), outline);
+	}
+
+	void DrawEditorRoomBackdrop(Room room, RectInt bounds, Color tint)
+	{
+		var opacity = tint.A / 255.0f;
+		var top = room.BackdropColor * opacity;
+		var bottom = (room.BackdropColor2 ?? room.BackdropColor) * opacity;
 		batcher.Rect(bounds, top, top, bottom, bottom);
 	}
 
-	void DrawEditorRoomPreview(Texture preview, RectInt bounds)
+	void DrawEditorRoomPreview(Texture preview, RectInt bounds, Color tint)
 	{
 		var scale = new Vector2(
 			bounds.Width / (float)Math.Max(1, preview.Width),
 			bounds.Height / (float)Math.Max(1, preview.Height));
-		batcher.Image(preview, bounds.TopLeft, Vector2.Zero, scale, 0, Color.White);
+		batcher.Image(preview, bounds.TopLeft, Vector2.Zero, scale, 0, tint);
 	}
 
 	Room? GetRoomAtWorld(Vector2 world)
 	{
 		foreach (var room in Assets.RoomsById.Values)
-			if (room.WorldBounds.Contains(world))
+			if (room.Sublayer == editorSublayer && room.WorldBounds.Contains(world))
 				return room;
 
 		return null;
@@ -3794,12 +3830,24 @@ public partial class Manager
 		if (FindLinkedDoorAtWorld(world, pickingLinkedDoorTargetForActorId) is { } target &&
 			Assets.FindActorById(pickingLinkedDoorTargetForActorId) is { } source)
 		{
-			using (CaptureRoomUndo("Set Linked Door Target", source.Room))
-				ActorSpecs.SetProperty(source.Actor, nameof(LinkedDoor.TargetActorId), JsonValue.Create(ActorSpecs.ReadString(target.Actor, "Id") ?? ""));
+			var targetId = ActorSpecs.ReadString(target.Actor, "Id") ?? "";
+			var sourceId = ActorSpecs.ReadString(source.Actor, "Id") ?? "";
+			using (CaptureRoomUndo("Link Doors", source.Room, target.Room))
+			{
+				ActorSpecs.SetProperty(source.Actor, nameof(LinkedDoor.TargetActorId), JsonValue.Create(targetId));
+				ActorSpecs.SetProperty(target.Actor, nameof(LinkedDoor.TargetActorId), JsonValue.Create(sourceId));
+			}
+			MarkRoomPreviewDirty(source.Room);
+			if (target.Room != source.Room)
+				MarkRoomPreviewDirty(target.Room);
 			if (source.Room == CurrentRoom)
 				editorGameDirty = true;
 			else
 				source.Room.Save();
+			if (target.Room == CurrentRoom)
+				editorGameDirty = true;
+			else if (target.Room != source.Room)
+				target.Room.Save();
 			pickingLinkedDoorTargetForActorId = null;
 		}
 
@@ -3811,6 +3859,8 @@ public partial class Manager
 		var lineWeight = MathF.Max(1.0f / editorZoom, LineWeight / editorZoom);
 		foreach (var room in Assets.RoomsById.Values)
 		{
+			if (room.Sublayer != editorSublayer)
+				continue;
 			if (visibleWorld.GetIntersection(new Rect(room.WorldBounds.X, room.WorldBounds.Y, room.WorldBounds.Width, room.WorldBounds.Height)).Area <= 0)
 				continue;
 
@@ -3828,11 +3878,11 @@ public partial class Manager
 		}
 	}
 
-	static (Room Room, JsonObject Actor)? FindLinkedDoorAtWorld(Vector2 world, string excludeId)
+	(Room Room, JsonObject Actor)? FindLinkedDoorAtWorld(Vector2 world, string excludeId)
 	{
 		foreach (var room in Assets.RoomsById.Values)
 		{
-			if (!room.WorldBounds.Contains(world))
+			if (room.Sublayer != editorSublayer || !room.WorldBounds.Contains(world))
 				continue;
 
 			for (var i = room.Actors.Count - 1; i >= 0; i--)
@@ -4014,7 +4064,9 @@ public partial class Manager
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, width, height).Contains(localMouse);
-			proposedRoomTiles = editorDrag.Kind != EditorDragKind.None || editingRoomGeometry || worldMouseBlocked || overGame ? null : GetProposedRoomTiles(editing, worldMouse);
+			proposedRoomTiles = editorDrag.Kind != EditorDragKind.None || worldMouseBlocked || overGame
+				? null
+				: (!editingRoomGeometry ? GetProposedRoomTiles(editing, worldMouse) : null) ?? GetEmptyRoomCellProposal(worldMouse);
 			if (selectedRoomActorIndex >= editing.Actors.Count)
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
@@ -4408,7 +4460,7 @@ public partial class Manager
 					batcher.CircleLine(worldMouse, core, gridWeight, 48, brushColor * 0.4f);
 			}
 
-			// Right-click the "proposed" adjacent room to open the menu that adds a room there.
+			// Right-click an adjacent proposal or any empty world-grid cell to add a room there.
 			if (proposedRoomTiles is { } proposal && !worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.RightPressed && !eyedropper)
 			{
 				pendingCreateRoomTiles = proposal;
@@ -4484,7 +4536,7 @@ public partial class Manager
 			ImGuiWindowFlags.NoMove |
 			ImGuiWindowFlags.NoFocusOnAppearing;
 
-		var pos = new Vector2(EditorPaletteDockRect.Right + 10, WorkRect.Y + 10);
+		var pos = new Vector2(EditorPaletteDockRect.Right + 10, WorkRect.Y + EditorMenuButtonSize + 12);
 		ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(6, 3));
@@ -4610,6 +4662,17 @@ public partial class Manager
 		return null;
 	}
 
+	RectInt? GetEmptyRoomCellProposal(Vector2 world)
+	{
+		if (GetRoomAtWorld(world) != null)
+			return null;
+
+		var position = (world / (Vector2)RoomLatticeSize).FloorToPoint2() * RoomLatticeTiles;
+		return RoomGeometryOverlaps(position, Room.DefaultSize, editorSublayer, null)
+			? null
+			: new RectInt(position, Room.DefaultSize);
+	}
+
 	RectInt? FitProposedRoom(RectInt source, Point2 direction, int mouseAxis)
 	{
 		var vertical = direction.X != 0;
@@ -4629,6 +4692,8 @@ public partial class Manager
 
 		foreach (var room in Assets.RoomsById.Values)
 		{
+			if (room.Sublayer != editorSublayer)
+				continue;
 			var roomTiles = new RectInt(room.TileSpacePosition, room.Size);
 			if (!candidate.Overlaps(roomTiles))
 				continue;
@@ -4675,6 +4740,7 @@ public partial class Manager
 		CurrentRoom?.Save();
 
 		var it = new Room(position, size);
+		it.Sublayer = editorSublayer;
 		if (sourceSettings is { } settings)
 			ApplyRoomSettings(it, settings);
 		MirrorAdjacentRoomBorders(it);
@@ -4687,6 +4753,60 @@ public partial class Manager
 		}
 
 		TweenEditorCameraToRoom(it);
+	}
+
+	void AddSublayer(Room source)
+	{
+		var sublayer = 1;
+		while (RoomGeometryOverlaps(source.TileSpacePosition, source.Size, sublayer, null))
+			sublayer++;
+
+		var baseRoom = Assets.RoomsById.Values.FirstOrDefault(it =>
+			it.Sublayer == 0 && it.TileSpacePosition == source.TileSpacePosition && it.Size == source.Size) ?? source;
+		var id = $"{baseRoom.Id}_sub{sublayer}";
+		for (var suffix = 2; Assets.RoomsById.ContainsKey(id); suffix++)
+			id = $"{baseRoom.Id}_sub{sublayer}_{suffix}";
+
+		CurrentRoom?.Save();
+		var room = new Room(id, source.TileSpacePosition, source.Size) { Sublayer = sublayer };
+		ApplyRoomSettings(room, CaptureRoomSettings(source));
+		using (CaptureRoomExistenceUndo("Add Sublayer", room))
+		{
+			AddRoomToWorld(room);
+			SelectRoom(room);
+			selectedRoomActorIndex = -1;
+			editorRoomEntryDirection = null;
+			SyncEditorGame();
+		}
+	}
+
+	void SelectEditorSublayer(int sublayer)
+	{
+		if (sublayer == editorSublayer)
+			return;
+
+		var focus = CurrentRoom?.WorldBounds.Center ?? editorCamera.RoundToPoint2();
+		Room? nearest = null;
+		var nearestDistance = float.MaxValue;
+		foreach (var candidate in Assets.RoomsById.Values)
+		{
+			if (candidate.Sublayer != sublayer)
+				continue;
+			var distance = Vector2.DistanceSquared(candidate.WorldBounds.Center, focus);
+			if (distance < nearestDistance)
+			{
+				nearest = candidate;
+				nearestDistance = distance;
+			}
+		}
+		if (nearest == null)
+			return;
+
+		CurrentRoom?.Save();
+		SelectRoom(nearest);
+		selectedRoomActorIndex = -1;
+		editorRoomEntryDirection = null;
+		SyncEditorGame();
 	}
 
 	static void MirrorAdjacentRoomBorders(Room room)
@@ -4710,7 +4830,7 @@ public partial class Manager
 	{
 		foreach (var room in Assets.RoomsById.Values)
 		{
-			if (room == exclude)
+			if (room == exclude || room.Sublayer != exclude.Sublayer)
 				continue;
 			if (worldTile.X < room.TileSpacePosition.X || worldTile.Y < room.TileSpacePosition.Y ||
 				worldTile.X >= room.TileSpacePosition.X + room.Size.X || worldTile.Y >= room.TileSpacePosition.Y + room.Size.Y)
@@ -4962,6 +5082,7 @@ public partial class Manager
 	{
 		selectedRoomId = room.Id;
 		roomCreatePosition = room.TileSpacePosition;
+		editorSublayer = room.Sublayer;
 	}
 
 	void ResolveSelectedRoom()
@@ -4980,6 +5101,7 @@ public partial class Manager
 
 		selectedRoomId = null;
 		roomCreatePosition = Point2.Zero;
+		editorSublayer = 0;
 	}
 
 

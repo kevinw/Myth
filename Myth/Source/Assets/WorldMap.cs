@@ -30,7 +30,8 @@ public static class WorldMap
 	{
 		var bounds = new RectInt();
 		foreach (var room in Assets.RoomsById.Values)
-			bounds = bounds.Width <= 0 ? room.WorldBounds : bounds.Conflate(room.WorldBounds);
+			if (room.Sublayer == 0)
+				bounds = bounds.Width <= 0 ? room.WorldBounds : bounds.Conflate(room.WorldBounds);
 		return bounds;
 	}
 

@@ -369,6 +369,8 @@ public partial class Manager
 
 		foreach (var room in Assets.RoomsById.Values)
 		{
+			if (room.Sublayer != editorSublayer)
+				continue;
 			var bounds = room.WorldBounds;
 			if (visibleWorld.GetIntersection(new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height)).Area <= 0)
 				continue;

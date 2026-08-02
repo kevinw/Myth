@@ -12,6 +12,7 @@ public sealed class RoomColorFieldPainter
 	float radius = 28.0f;
 	float softness = 0.55f;
 	float strength = 0.8f;
+	static float RadiusWheelStep => 4.0f;
 
 	public Factory.TileLayer Layer { get; private set; } = Factory.TileLayer.Foreground;
 	public bool Stroke { get; set; }
@@ -21,6 +22,7 @@ public sealed class RoomColorFieldPainter
 	public Color BrushColor => new(color);
 
 	public bool IsActive(Room room) => roomId == room.Id;
+	public void AdjustRadius(float wheel) => radius = Math.Clamp(radius + wheel * RadiusWheelStep, 4.0f, 128.0f);
 
 	public bool DrawStartStop(Room room, Factory.TileLayer initialLayer)
 	{

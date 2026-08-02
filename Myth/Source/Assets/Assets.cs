@@ -18,7 +18,7 @@ public static class Assets
 	public static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
 	public static readonly Dictionary<string, Tileset> Tilesets = [];
 	public static readonly Dictionary<string, Subtexture> Subtextures = [];
-	public static readonly Dictionary<Point2, Room> Rooms = [];
+	public static readonly Dictionary<(int Sublayer, Point2 Cell), Room> Rooms = [];
 	public static readonly Dictionary<string, Room> RoomsById = [];
 
 	internal static string GenerateRandomRoomId()
@@ -2969,13 +2969,14 @@ public static class Assets
 
 		var worldRoomsKey = $"{roomsFolderName}/{currentWorldId}";
 		if (Content.DirectoryExists(worldRoomsKey))
-			foreach (var key in Content.EnumerateDirectory(worldRoomsKey, "*.json"))
+			foreach (var key in Content.EnumerateDirectory(worldRoomsKey, "*.json", SearchOption.AllDirectories))
 			{
 				var id = Path.GetFileNameWithoutExtension(key);
 				if (deleted.Contains(id))
 					continue;
 
 				var room = LoadRoomJson(id, Content.ReadAllText(key));
+				room.Sublayer = RoomSublayerFromPath(worldRoomsKey, key);
 				room.Storage = Room.StorageKind.Bundled;
 				// Zip content has no per-room file to rename/delete; SourcePath stays null there.
 				room.SourcePath = ContentIsZip ? null : Path.Join(AssetsPath, key);
@@ -2984,9 +2985,10 @@ public static class Assets
 			}
 
 		if (UseUserRooms && UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
-			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json"))
+			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json", SearchOption.AllDirectories))
 			{
 				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(file), File.ReadAllText(file));
+				room.Sublayer = RoomSublayerFromPath(userWorldRoomsPath, file);
 				room.Storage = Room.StorageKind.User;
 				room.SourcePath = file;
 				LoadRoomColorFields(room, file, fromContent: false);
@@ -3000,6 +3002,15 @@ public static class Assets
 	static Room LoadRoomJson(string id, string jsonText)
 		=> new(id, Point2.Zero, Room.DefaultSize, JsonNode.Parse(jsonText)?.AsObject());
 
+	static int RoomSublayerFromPath(string root, string path)
+	{
+		var relative = Path.GetRelativePath(root, path);
+		var separator = relative.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+		var directory = separator < 0 ? "" : relative[..separator];
+		return directory.StartsWith("Sub", StringComparison.OrdinalIgnoreCase) &&
+			int.TryParse(directory.AsSpan(3), out var sublayer) && sublayer > 0 ? sublayer : 0;
+	}
+
 	static void CreateDefaultStartRoom()
 	{
 		var room = new Room(defaultStartRoomId, Point2.Zero, Room.DefaultSize);
@@ -3009,12 +3020,15 @@ public static class Assets
 
 	static void AddRoom(Room room)
 	{
-		if (RoomsById.TryGetValue(room.Id, out var existing) &&
-			Rooms.TryGetValue(existing.Cell, out var byOldCell) &&
-			byOldCell == existing)
-			Rooms.Remove(existing.Cell);
+		if (RoomsById.TryGetValue(room.Id, out var duplicate) && duplicate.Storage == room.Storage)
+			throw new InvalidDataException($"Duplicate room id '{room.Id}' in '{duplicate.SourcePath}' and '{room.SourcePath}'.");
 
-		Rooms[room.Cell] = room;
+		if (RoomsById.TryGetValue(room.Id, out var existing) &&
+			Rooms.TryGetValue((existing.Sublayer, existing.Cell), out var byOldCell) &&
+			byOldCell == existing)
+			Rooms.Remove((existing.Sublayer, existing.Cell));
+
+		Rooms[(room.Sublayer, room.Cell)] = room;
 		RoomsById[room.Id] = room;
 	}
 
@@ -3043,7 +3057,7 @@ public static class Assets
 		var oldPath = room.SourcePath;
 		var oldForegroundColorPath = room.ForegroundColorField.SourcePath;
 		var oldBackgroundColorPath = room.BackgroundColorField.SourcePath;
-		var oldBundledPath = BundledRoomPath(oldId);
+		var oldBundledPath = BundledRoomPath(oldId, room.Sublayer);
 		var oldHadBundledRoom = File.Exists(oldBundledPath);
 		room.Id = id;
 		RoomsById.Remove(oldId);
@@ -3078,10 +3092,10 @@ public static class Assets
 		if (!RoomsById.Remove(room.Id))
 			return false;
 
-		if (Rooms.TryGetValue(room.Cell, out var byCell) && byCell == room)
-			Rooms.Remove(room.Cell);
+		if (Rooms.TryGetValue((room.Sublayer, room.Cell), out var byCell) && byCell == room)
+			Rooms.Remove((room.Sublayer, room.Cell));
 
-		var bundledPath = BundledRoomPath(room.Id);
+		var bundledPath = BundledRoomPath(room.Id, room.Sublayer);
 		var hadBundledRoom = File.Exists(bundledPath);
 		DeleteColorFieldFile(room.ForegroundColorField.SourcePath);
 		DeleteColorFieldFile(room.BackgroundColorField.SourcePath);
@@ -3095,25 +3109,27 @@ public static class Assets
 	static string GetRoomSavePath(Room room)
 	{
 		if (room.Storage == Room.StorageKind.User)
-			return UserRoomPath(room.Id);
+			return UserRoomPath(room.Id, room.Sublayer);
 
-		var bundledPath = BundledRoomPath(room.Id);
+		var bundledPath = BundledRoomPath(room.Id, room.Sublayer);
 		if (CanWriteBundledRooms())
 			return bundledPath;
 
-		return UserRoomPath(room.Id);
+		return UserRoomPath(room.Id, room.Sublayer);
 	}
 
-	static string BundledRoomPath(string id)
-		=> Path.Join(WorldRoomsPath, $"{id}.json");
+	static string BundledRoomPath(string id, int sublayer = 0)
+		=> Path.Join(WorldRoomsPath, RoomSublayerDirectory(sublayer), $"{id}.json");
 
-	static string UserRoomPath(string id)
+	static string UserRoomPath(string id, int sublayer = 0)
 	{
 		if (userRoomsPath == null)
 			throw new InvalidOperationException("User room path has not been configured.");
 
-		return Path.Join(userRoomsPath, currentWorldId, $"{id}.json");
+		return Path.Join(userRoomsPath, currentWorldId, RoomSublayerDirectory(sublayer), $"{id}.json");
 	}
+
+	static string RoomSublayerDirectory(int sublayer) => sublayer > 0 ? $"Sub{sublayer}" : "";
 
 	static void LoadRoomColorFields(Room room, string roomPath, bool fromContent = true)
 	{
@@ -3189,9 +3205,10 @@ public static class Assets
 
 	static bool RoomFileExists(string id)
 	{
-		if (File.Exists(BundledRoomPath(id)))
+		if (Directory.Exists(WorldRoomsPath) && Directory.EnumerateFiles(WorldRoomsPath, $"{id}.json", SearchOption.AllDirectories).Any())
 			return true;
-		if (userRoomsPath != null && File.Exists(UserRoomPath(id)))
+		if (UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath) &&
+			Directory.EnumerateFiles(userWorldRoomsPath, $"{id}.json", SearchOption.AllDirectories).Any())
 			return true;
 		return false;
 	}
@@ -3497,7 +3514,7 @@ public static class Assets
 			Console.WriteLine($"Error: Tileset '{name}' not found");
 		return tileset;
 	}
-	public static Room? GetRoom(Point2 cell) => Rooms.GetValueOrDefault(cell);
+	public static Room? GetRoom(Point2 cell, int sublayer = 0) => Rooms.GetValueOrDefault((sublayer, cell));
 	public static Room? GetRoom(string id) => RoomsById.GetValueOrDefault(id);
 
 	public static (Room Room, JsonObject Actor)? FindActorById(string id)
@@ -3521,7 +3538,7 @@ public static class Assets
 
 		foreach (var candidate in RoomsById.Values)
 		{
-			if (candidate == room)
+			if (candidate == room || candidate.Sublayer != room.Sublayer)
 				continue;
 
 			var candidateBounds = candidate.WorldBounds;
@@ -3550,7 +3567,7 @@ public static class Assets
 		var attempts = 10;
 		while (attempts > 0)
 		{
-			foreach (var candidate in RoomsById.Values) if (candidate != room)
+			foreach (var candidate in RoomsById.Values) if (candidate != room && candidate.Sublayer == room.Sublayer)
 			{
 				var candidateBounds = candidate.WorldBounds;
 				var intersection = candidateBounds.GetIntersection(adjacentBounds);

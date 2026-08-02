@@ -32,6 +32,8 @@ public partial class Manager
 		var baked = 0;
 		foreach (var room in Assets.RoomsById.Values)
 		{
+			if (room.Sublayer != 0)
+				continue;
 			if (BakeWorldMapRoom(room, bounds, target) )
 				baked++;
 		}

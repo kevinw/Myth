@@ -214,7 +214,7 @@ public partial class Manager
 			var worldKey = $"Rooms/{world}";
 			if (!Assets.Content.DirectoryExists(worldKey))
 				continue;
-			foreach (var key in Assets.Content.EnumerateDirectory(worldKey, "*.json"))
+			foreach (var key in Assets.Content.EnumerateDirectory(worldKey, "*.json", SearchOption.AllDirectories))
 				consoleRooms.Add(new(world, Path.GetFileNameWithoutExtension(key)));
 		}
 		consoleRooms.Sort(static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Label, b.Label));
