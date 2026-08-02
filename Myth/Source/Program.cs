@@ -1,5 +1,8 @@
 using Myth;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Mycelon.Scenario")]
 
 var startArgs = new StartArgs(args);
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);

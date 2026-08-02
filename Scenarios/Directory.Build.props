@@ -1,0 +1,7 @@
+<Project>
+  <!-- Each file-based app uses the same friend assembly name, so its intermediate path must
+       include the source file's virtual project name. -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

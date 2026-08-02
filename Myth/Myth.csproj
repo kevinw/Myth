@@ -212,6 +212,15 @@
     <Exec Command="node tools/generate-acknowledgements.mjs ACKNOWLEDGEMENTS.txt &quot;$(IntermediateOutputPath)acknowledgements/index.html&quot;" />
   </Target>
 
+  <Target Name="GenerateDashboard" BeforeTargets="CopyBrowserShell" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <Exec Command="python3 tools/generate-dashboard.py" Condition="'$(Configuration)' == 'Release' or !Exists('Platforms/Web/dashboard/data.json')" />
+    <MakeDir Directories="$(WasmAppDir)dashboard" />
+    <ItemGroup>
+      <DashboardFiles Include="Platforms/Web/dashboard/**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DashboardFiles)" DestinationFiles="@(DashboardFiles->'$(WasmAppDir)dashboard/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
   <Target Name="ValidateBrowserFmod" BeforeTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <Error
       Condition="!Exists('Platforms/Web/FMOD/myth-fmod.js') or !Exists('Platforms/Web/FMOD/fmodstudioP.js') or !Exists('Platforms/Web/FMOD/fmodstudioP.wasm')"

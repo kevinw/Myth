@@ -68,6 +68,8 @@ public partial class Manager : App
 	/// The room renderer / simulation.
 	internal Game? game;
 	internal bool playing;
+	internal event Action<Manager>? ScenarioUpdate;
+	internal event Action<Manager>? ScenarioRender;
 	bool playOnStartup;
 	readonly bool skipStartupMenu;
 	bool startingPlay;
@@ -318,7 +320,7 @@ public partial class Manager : App
 
 	public const string APPLICATION_NAME = "Mycelon";
 
-	void RequestQuit()
+	internal void RequestQuit()
 	{
 		UserQuitRequested = true;
 		Exit();
@@ -939,6 +941,7 @@ public partial class Manager : App
 	protected override void Update()
 	{
 		UpdateGame();
+		ScenarioUpdate?.Invoke(this);
 		Audio.Update();
 	}
 
@@ -1452,6 +1455,7 @@ public partial class Manager : App
 
 		batcher.Render(Window);
 		batcher.Clear();
+		ScenarioRender?.Invoke(this);
 
 		if (screenshotPath != null && playing)
 			UpdateScreenshotCapture();
@@ -1508,10 +1512,10 @@ public partial class Manager : App
 		return target;
 	}
 
-	void CaptureScreenshot(string path)
+	internal bool CaptureScreenshot(string path, int? frame = null)
 	{
 		if (game == null)
-			return;
+			return false;
 
 		try
 		{
@@ -1531,11 +1535,13 @@ public partial class Manager : App
 			if (!string.IsNullOrEmpty(dir))
 				Directory.CreateDirectory(dir);
 			image.WritePng(full);
-			Console.WriteLine($"[Screenshot] wrote {full} ({w}x{h}) at frame {playingFrame}");
+			Console.WriteLine($"[Screenshot] wrote {full} ({w}x{h}) at frame {frame ?? playingFrame}");
+			return true;
 		}
 		catch (Exception e)
 		{
 			Console.Error.WriteLine($"[Screenshot] failed: {e}");
+			return false;
 		}
 	}
 

@@ -339,6 +339,8 @@ public partial class Manager
 		{
 			ImGui.PushID(v);
 			var fill = draft.Fills[v];
+			ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.One);
+			ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 0);
 			ImGui.BeginGroup();
 			for (var y = 0; y < Game.TileSize; y++)
 			{
@@ -361,6 +363,7 @@ public partial class Manager
 				}
 			}
 			ImGui.EndGroup();
+			ImGui.PopStyleVar(2);
 			ImGui.SameLine();
 			ImGui.BeginGroup();
 			if (ImGui.SmallButton("copy"))

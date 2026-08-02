@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111914">
+  <title>Mycelon · Development dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <div class="spores" aria-hidden="true"></div>
+  <main>
+    <header>
+      <a class="back" href="/">← play Mycelon</a>
+      <div class="eyebrow"><span></span> living build telemetry</div>
+      <h1>Mycelon is<br><em>growing.</em></h1>
+      <p class="lede">A living view into the worlds, creatures, and code that make up the game.</p>
+      <div class="controls">
+        <div class="segmented" id="world-picker" aria-label="World"></div>
+        <div class="segmented" id="range-picker" aria-label="Time range">
+          <button data-range="183">6m</button>
+          <button data-range="365">1y</button>
+          <button data-range="all" class="active">all</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="stats" id="stats" aria-label="Current totals"></section>
+
+    <section class="chart-grid world-charts">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><span class="kicker">world growth</span><h2>Rooms</h2></div><strong id="rooms-value"></strong></div>
+        <div class="chart" id="rooms-chart"></div>
+      </article>
+      <article class="panel chart-panel wide">
+        <div class="panel-heading"><div><span class="kicker">terrain</span><h2>Solid tiles</h2></div><strong id="tiles-value"></strong></div>
+        <div class="chart" id="tiles-chart"></div>
+      </article>
+      <article class="panel chart-panel wide">
+        <div class="panel-heading"><div><span class="kicker">population</span><h2>Placed actors</h2></div><strong id="actors-value"></strong></div>
+        <div class="chart" id="actors-chart"></div>
+      </article>
+    </section>
+
+    <section class="panel actor-panel">
+      <div class="panel-heading">
+        <div><span class="kicker">ecosystem</span><h2>Actors by type</h2></div>
+        <p>Top-eight history · every current type</p>
+      </div>
+      <div class="actor-layout">
+        <div class="chart actor-chart" id="types-chart"></div>
+        <div class="legend" id="types-legend"></div>
+      </div>
+    </section>
+
+    <section class="section-heading">
+      <span class="kicker">the shape of the world</span>
+      <h2>World character</h2>
+    </section>
+    <section class="chart-grid character-charts">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Terrain pressure</h2><p>How much room-space is solid</p></div><strong id="pressure-value"></strong></div>
+        <div class="chart" id="pressure-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Cast diversity</h2><p>Effective number of equally common types</p></div><strong id="diversity-value"></strong></div>
+        <div class="chart" id="diversity-chart"></div>
+      </article>
+    </section>
+
+    <section class="section-heading practice-heading">
+      <span class="kicker">one strange room at a time</span>
+      <h2>Daily design practice</h2>
+    </section>
+    <section class="chart-grid practice-charts">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Novel pairings</h2><p>Never-before-seen gameplay actor pairs</p></div><strong id="novel-value"></strong></div>
+        <div class="chart" id="novel-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Reuse leverage</h2><p>Novel pairs built only from familiar actors</p></div><strong id="reuse-value"></strong></div>
+        <div class="chart" id="reuse-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Design distance</h2><p>Average distance from the nearest sibling room</p></div><strong id="distance-value"></strong></div>
+        <div class="chart" id="distance-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Interaction triangles</h2><p>Rooms combining three distinct gameplay actor types</p></div><strong id="triangles-value"></strong></div>
+        <div class="chart" id="triangles-chart"></div>
+      </article>
+    </section>
+
+    <section class="section-heading">
+      <span class="kicker">under the forest floor</span>
+      <h2>Codebase</h2>
+    </section>
+    <section class="chart-grid code-charts">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Lines of code</h2><p>First-party C# source</p></div><strong id="lines-value"></strong></div>
+        <div class="chart" id="lines-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Cyclomatic complexity</h2><p>Aggregate McCabe score</p></div><strong id="complexity-value"></strong></div>
+        <div class="chart" id="complexity-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Decision density</h2><p>Complexity per 1,000 source lines</p></div><strong id="density-value"></strong></div>
+        <div class="chart" id="density-chart"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>Top-10 gravity</h2><p>Code held by the ten largest files</p></div><strong id="gravity-value"></strong></div>
+        <div class="chart" id="gravity-chart"></div>
+      </article>
+    </section>
+
+    <footer>
+      <p id="freshness"></p>
+      <details><summary>How these numbers are measured</summary><div id="methodology"></div></details>
+    </footer>
+  </main>
+  <div class="tooltip" id="tooltip" role="status"></div>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
