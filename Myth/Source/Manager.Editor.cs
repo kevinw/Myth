@@ -4801,7 +4801,7 @@ public partial class Manager
 			ImGui.OpenPopup("Create Room");
 		}
 
-		if (!ImGui.BeginPopup("Create Room"))
+		if (!BeginPaddedPopup("Create Room"))
 		{
 			pendingCreateRoomTiles = null;
 			return;
@@ -4815,7 +4815,7 @@ public partial class Manager
 			ImGui.CloseCurrentPopup();
 		}
 
-		ImGui.EndPopup();
+		EndPaddedPopup();
 	}
 
 	void DrawDeleteRoomPopup()

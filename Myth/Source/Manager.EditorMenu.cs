@@ -14,6 +14,14 @@ public partial class Manager
 	const string EditorMenuPopup = "##EditorMenuPopup";
 
 	static float EditorMenuButtonSize => ButtonSize * 0.8f;
+	static bool BeginPaddedPopup(string id)
+	{
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
+		var open = ImGui.BeginPopup(id);
+		if (!open) ImGui.PopStyleVar();
+		return open;
+	}
+	static void EndPaddedPopup() { ImGui.EndPopup(); ImGui.PopStyleVar(); }
 
 	/// Where the hamburger sits, so the game view can exclude it from its own hover test.
 	Rect EditorMenuButtonRect => new(EditorOpenRect.TopLeft + new Vector2(6, 6), new Vector2(EditorMenuButtonSize, EditorMenuButtonSize));
@@ -69,7 +77,7 @@ public partial class Manager
 
 	void DrawEditorMenuPopup()
 	{
-		if (!ImGui.BeginPopup(EditorMenuPopup))
+		if (!BeginPaddedPopup(EditorMenuPopup))
 			return;
 
 		if (ImGui.MenuItem("Play", "Tab"))
@@ -128,7 +136,7 @@ public partial class Manager
 		}
 #endif
 
-		ImGui.EndPopup();
+		EndPaddedPopup();
 	}
 
 	/// Room identity, moved out of the toolbar: the name (double-click or Rename to edit),
