@@ -1,5 +1,8 @@
 # TODO
 
+- region based background settings?
+- drawing background slopes needs to be possible in the editor
+- room based player light toggle
 right click a tilekit tile and it shows "Open in Sprite Editor" which does nothing; it should open it in the tilekit editor instead
 
 ## release attribution
