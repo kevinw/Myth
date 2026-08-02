@@ -14,7 +14,6 @@ neural PARTICLE automata https://selforg-npa.github.io/#growing and https://nois
 steam notes
 - absolutely change the title to something weird for now
 - consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
-- pause rendering on pause, like we did for background
 
 - i get a feeling watching metroidvania videos on twitter: bleh. boss fight. grapple hook. it's all so samey. we should do ___ instead.
 - water ambience for water tile rooms
