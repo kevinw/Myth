@@ -24,7 +24,8 @@ public class Room
 		BreakOnStand = 1 << 1,
 		Fungal = 1 << 2,
 		Slope = 1 << 3,
-		Crumble = 1 << 4 // Crumbles when you stand on it, returns as a "debris tile"
+		Crumble = 1 << 4, // Crumbles when you stand on it, returns as a "debris tile"
+		BackgroundSlope = 1 << 5
 	}
 
 	public enum SlopeDirection
@@ -108,8 +109,10 @@ public class Room
 	public readonly List<SlopeTile> SlopeTiles = [];
 
 	readonly Dictionary<Point2, SlopeTile> slopeLookup = [];
+	readonly Dictionary<Point2, SlopeTile> backgroundSlopeLookup = [];
 	readonly Dictionary<Point2, StackList8<Point2>> slopePolygonLookup = [];
 	byte[,] dualTerrainJoinMasks = new byte[0, 0];
+	byte[,] backgroundDualTerrainJoinMasks = new byte[0, 0];
 
 	/// <summary>
 	/// World-space rectangles built from adjacent light-occluding tiles.
@@ -336,6 +339,13 @@ public class Room
 					tileFlags[tile.X, tile.Y] |= TileFlags.Slope;
 		}
 
+		if (json.TryGetPropertyValue("backgroundSlopes", out var backgroundSlopesNode) && backgroundSlopesNode is JsonArray backgroundSlopeCells)
+		{
+			foreach (var node in backgroundSlopeCells)
+				if (JsonUtil.ReadPoint(node) is { } tile && ContainsTile(tile.X, tile.Y))
+					tileFlags[tile.X, tile.Y] |= TileFlags.BackgroundSlope;
+		}
+
 		if (json.TryGetPropertyValue("crumble", out var crumbleNode) && crumbleNode is JsonArray crumbleCells)
 		{
 			foreach (var node in crumbleCells)
@@ -408,6 +418,8 @@ public class Room
 				var foreground = Tiles[x, y];
 				if (legacySlopes.Contains(foreground))
 					tileFlags[x, y] |= TileFlags.Slope;
+				if (legacySlopes.Contains(BackgroundTiles[x, y]))
+					tileFlags[x, y] |= TileFlags.BackgroundSlope;
 				if (remap.TryGetValue(foreground, out var tile))
 					Tiles[x, y] = tile;
 				if (remap.TryGetValue(BackgroundTiles[x, y], out var background))
@@ -492,6 +504,7 @@ public class Room
 		CollisionRects.Clear();
 		SlopeTiles.Clear();
 		slopeLookup.Clear();
+		backgroundSlopeLookup.Clear();
 		slopePolygonLookup.Clear();
 		LightOccluders.Clear();
 		LightOccluderPolygons.Clear();
@@ -501,7 +514,8 @@ public class Room
 		CappedWaterRects.Clear();
 
 		// Slopes first: the passes below only read the slope lookups (never mutate them).
-		BuildSlopeTiles();
+		BuildSlopeTiles(Factory.TileLayer.Foreground);
+		BuildSlopeTiles(Factory.TileLayer.Background);
 
 		// These passes each read only the prebuilt tile/slope caches and write a distinct
 		// output collection, so they run concurrently on desktop/iOS (serial on wasm).
@@ -539,29 +553,37 @@ public class Room
 	public bool TryGetSlopeTile(Point2 tile, out SlopeTile slope)
 		=> slopeLookup.TryGetValue(tile, out slope);
 
+	public bool TryGetSlopeTile(Point2 tile, Factory.TileLayer layer, out SlopeTile slope)
+		=> (layer == Factory.TileLayer.Foreground ? slopeLookup : backgroundSlopeLookup).TryGetValue(tile, out slope);
+
 	public int GetDualTerrainJoinMask(int vertexX, int vertexY)
+		=> GetDualTerrainJoinMask(Factory.TileLayer.Foreground, vertexX, vertexY);
+
+	public int GetDualTerrainJoinMask(Factory.TileLayer layer, int vertexX, int vertexY)
 	{
-		if (vertexX < 0 || vertexY < 0 || vertexX >= dualTerrainJoinMasks.GetLength(0) || vertexY >= dualTerrainJoinMasks.GetLength(1))
+		var masks = layer == Factory.TileLayer.Foreground ? dualTerrainJoinMasks : backgroundDualTerrainJoinMasks;
+		if (vertexX < 0 || vertexY < 0 || vertexX >= masks.GetLength(0) || vertexY >= masks.GetLength(1))
 			return 0;
 
-		return dualTerrainJoinMasks[vertexX, vertexY];
+		return masks[vertexX, vertexY];
 	}
 
-	bool IsTerrainJoinedToDualVertex(int tileX, int tileY, int vertexX, int vertexY)
+	bool IsTerrainJoinedToDualVertex(Factory.TileLayer layer, int tileX, int tileY, int vertexX, int vertexY)
 	{
 		if (!ContainsTile(tileX, tileY))
-			return IsOffscreenFullBlockJoinTile(tileX, tileY);
+			return IsOffscreenFullBlockJoinTile(layer, tileX, tileY);
 
-		if (IsFullBlockTile(tileX, tileY))
+		if (IsFullDualTile(layer, tileX, tileY))
 			return true;
 
-		if (!slopeLookup.TryGetValue(new Point2(tileX, tileY), out var slope))
+		var slopes = layer == Factory.TileLayer.Foreground ? slopeLookup : backgroundSlopeLookup;
+		if (!slopes.TryGetValue(new Point2(tileX, tileY), out var slope))
 			return false;
 
 		var vertex = new Vector2(
 			vertexX * Game.TileSize + WorldBounds.X,
 			vertexY * Game.TileSize + WorldBounds.Y);
-		var polygon = GetSlopePolygon(slope);
+		var polygon = layer == Factory.TileLayer.Foreground ? GetSlopePolygon(slope) : BuildSlopePolygon(slope);
 		if (PointInPolygonInclusive(vertex, polygon))
 			return true;
 
@@ -571,14 +593,14 @@ public class Room
 		return PointInPolygonInclusive(sample, polygon);
 	}
 
-	bool IsOffscreenFullBlockJoinTile(int tileX, int tileY)
+	bool IsOffscreenFullBlockJoinTile(Factory.TileLayer layer, int tileX, int tileY)
 	{
 		if (Size.X <= 0 || Size.Y <= 0)
 			return false;
 
 		var clampedX = Math.Clamp(tileX, 0, Size.X - 1);
 		var clampedY = Math.Clamp(tileY, 0, Size.Y - 1);
-		return IsFullBlockTile(clampedX, clampedY);
+		return IsFullDualTile(layer, clampedX, clampedY);
 	}
 
 	public void MoveTo(Point2 position)
@@ -747,30 +769,35 @@ public class Room
 	static float Clamp01(float value)
 		=> Math.Clamp(value, 0.0f, 1.0f);
 
-	void BuildSlopeTiles()
+	void BuildSlopeTiles(Factory.TileLayer layer)
 	{
+		var lookup = layer == Factory.TileLayer.Foreground ? slopeLookup : backgroundSlopeLookup;
+		var tiles = layer == Factory.TileLayer.Foreground ? Tiles : BackgroundTiles;
 		for (var y = 0; y < Size.Y; y++)
 			for (var x = 0; x < Size.X;)
 			{
-				if (!IsSlopeTile(x, y))
+				if (!IsSlopeTile(layer, x, y))
 				{
 					x++;
 					continue;
 				}
 
 				var start = x;
-				var slopeChar = Tiles[x, y];
-				while (x < Size.X && Tiles[x, y] == slopeChar && IsSlopeTile(x, y))
+				var slopeChar = tiles[x, y];
+				while (x < Size.X && tiles[x, y] == slopeChar && IsSlopeTile(layer, x, y))
 					x++;
 
 				var runLength = x - start;
-				var (direction, fill) = InferSlopeShape(start, y, runLength);
+				var (direction, fill) = InferSlopeShape(layer, start, y, runLength);
 				for (var i = 0; i < runLength; i++)
 				{
 					var slope = new SlopeTile(new Point2(start + i, y), runLength, i, direction, fill);
-					SlopeTiles.Add(slope);
-					slopeLookup[slope.Tile] = slope;
-					slopePolygonLookup[slope.Tile] = BuildSlopePolygon(slope);
+					lookup[slope.Tile] = slope;
+					if (layer == Factory.TileLayer.Foreground)
+					{
+						SlopeTiles.Add(slope);
+						slopePolygonLookup[slope.Tile] = BuildSlopePolygon(slope);
+					}
 				}
 			}
 	}
@@ -778,30 +805,37 @@ public class Room
 	void BuildDualTerrainJoinMasks()
 	{
 		dualTerrainJoinMasks = new byte[Size.X + 1, Size.Y + 1];
+		backgroundDualTerrainJoinMasks = new byte[Size.X + 1, Size.Y + 1];
 		for (var x = 0; x <= Size.X; x++)
 			for (var y = 0; y <= Size.Y; y++)
 			{
-				var mask = 0;
-				if (IsTerrainJoinedToDualVertex(x - 1, y - 1, x, y))
-					mask |= TileQuadrants.TopLeft;
-				if (IsTerrainJoinedToDualVertex(x - 1, y, x, y))
-					mask |= TileQuadrants.BottomLeft;
-				if (IsTerrainJoinedToDualVertex(x, y - 1, x, y))
-					mask |= TileQuadrants.TopRight;
-				if (IsTerrainJoinedToDualVertex(x, y, x, y))
-					mask |= TileQuadrants.BottomRight;
-				dualTerrainJoinMasks[x, y] = (byte)mask;
+				dualTerrainJoinMasks[x, y] = BuildDualTerrainJoinMask(Factory.TileLayer.Foreground, x, y);
+				backgroundDualTerrainJoinMasks[x, y] = BuildDualTerrainJoinMask(Factory.TileLayer.Background, x, y);
 			}
 	}
 
-	(SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(int startX, int y, int runLength)
+	byte BuildDualTerrainJoinMask(Factory.TileLayer layer, int x, int y)
 	{
-		var leftHigh = IsTerrainJoinTile(startX - 1, y);
-		var leftLow = IsTerrainJoinTile(startX - 1, y + 1);
-		var rightHigh = IsTerrainJoinTile(startX + runLength, y);
-		var rightLow = IsTerrainJoinTile(startX + runLength, y + 1);
-		var aboveLeft = IsTerrainJoinTile(startX, y - 1);
-		var aboveRight = IsTerrainJoinTile(startX + runLength - 1, y - 1);
+		var mask = 0;
+		if (IsTerrainJoinedToDualVertex(layer, x - 1, y - 1, x, y))
+			mask |= TileQuadrants.TopLeft;
+		if (IsTerrainJoinedToDualVertex(layer, x - 1, y, x, y))
+			mask |= TileQuadrants.BottomLeft;
+		if (IsTerrainJoinedToDualVertex(layer, x, y - 1, x, y))
+			mask |= TileQuadrants.TopRight;
+		if (IsTerrainJoinedToDualVertex(layer, x, y, x, y))
+			mask |= TileQuadrants.BottomRight;
+		return (byte)mask;
+	}
+
+	(SlopeDirection Direction, SlopeFill Fill) InferSlopeShape(Factory.TileLayer layer, int startX, int y, int runLength)
+	{
+		var leftHigh = IsTerrainJoinTile(layer, startX - 1, y);
+		var leftLow = IsTerrainJoinTile(layer, startX - 1, y + 1);
+		var rightHigh = IsTerrainJoinTile(layer, startX + runLength, y);
+		var rightLow = IsTerrainJoinTile(layer, startX + runLength, y + 1);
+		var aboveLeft = IsTerrainJoinTile(layer, startX, y - 1);
+		var aboveRight = IsTerrainJoinTile(layer, startX + runLength - 1, y - 1);
 
 		if (rightHigh && (aboveLeft || aboveRight))
 			return (SlopeDirection.DownRight, SlopeFill.AboveLine);
@@ -817,8 +851,8 @@ public class Room
 		if (leftHigh && !rightHigh)
 			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 
-		var belowLeft = IsTerrainJoinTile(startX, y + 1);
-		var belowRight = IsTerrainJoinTile(startX + runLength - 1, y + 1);
+		var belowLeft = IsTerrainJoinTile(layer, startX, y + 1);
+		var belowRight = IsTerrainJoinTile(layer, startX + runLength - 1, y + 1);
 		if (belowRight && !belowLeft)
 			return (SlopeDirection.DownRight, SlopeFill.BelowLine);
 		if (belowLeft && !belowRight)
@@ -828,11 +862,21 @@ public class Room
 	}
 
 	bool IsSlopeTile(int x, int y)
-		=> ContainsTile(x, y) && (tileFlags[x, y] & TileFlags.Slope) != 0
-			&& GetTileEntry(x, y) is { BlocksMovement: true };
+		=> IsSlopeTile(Factory.TileLayer.Foreground, x, y);
+
+	bool IsSlopeTile(Factory.TileLayer layer, int x, int y)
+		=> ContainsTile(x, y) && (tileFlags[x, y] & SlopeFlag(layer)) != 0
+			&& (layer == Factory.TileLayer.Foreground
+				? GetTileEntry(x, y) is { BlocksMovement: true }
+				: GetBackgroundEntry(new Point2(x, y)) is { SupportsSlope: true });
 
 	bool IsFullBlockTile(int x, int y)
 		=> GetTileEntry(x, y) is { BlocksMovement: true } && !IsSlopeTile(x, y);
+
+	bool IsFullDualTile(Factory.TileLayer layer, int x, int y)
+		=> layer == Factory.TileLayer.Foreground
+			? IsFullBlockTile(x, y)
+			: GetBackgroundEntry(new Point2(x, y)) is { DualTilesetName: not null } && !IsSlopeTile(layer, x, y);
 
 	public bool IsDualMaterialFilled(char tileType, Factory.TileLayer layer, int x, int y)
 	{
@@ -842,11 +886,16 @@ public class Room
 		x = Math.Clamp(x, 0, Size.X - 1);
 		y = Math.Clamp(y, 0, Size.Y - 1);
 		return (layer == Factory.TileLayer.Foreground ? Tiles[x, y] : BackgroundTiles[x, y]) == tileType
-			&& (layer != Factory.TileLayer.Foreground || !IsSlopeTile(x, y));
+			&& !IsSlopeTile(layer, x, y);
 	}
 
 	bool IsTerrainJoinTile(int x, int y)
 		=> IsFullBlockTile(x, y) || IsSlopeTile(x, y);
+
+	bool IsTerrainJoinTile(Factory.TileLayer layer, int x, int y)
+		=> layer == Factory.TileLayer.Foreground
+			? IsTerrainJoinTile(x, y)
+			: ContainsTile(x, y) && GetBackgroundEntry(new Point2(x, y)) is { DualTilesetName: not null };
 
 	Factory.Entry? GetTileEntry(int x, int y)
 		=> ContainsTile(x, y) ? tileEntries[x, y] : null;
@@ -862,7 +911,7 @@ public class Room
 
 	void SetTileUnchecked(int x, int y, char tile)
 	{
-		tileFlags[x, y] = TileFlags.None;
+		tileFlags[x, y] &= TileFlags.BackgroundSlope;
 		if (TryGetLegacyBreakableTileBase(tile, out var baseTile))
 		{
 			tile = baseTile;
@@ -891,6 +940,7 @@ public class Room
 
 	void SetBackgroundTileUnchecked(int x, int y, char tile)
 	{
+		tileFlags[x, y] &= ~TileFlags.BackgroundSlope;
 		BackgroundTiles[x, y] = tile;
 		backgroundTileEntries[x, y] = Factory.Find(tile);
 	}
@@ -943,13 +993,17 @@ public class Room
 	public void SetBreakable(Point2 tile, bool breakable) => SetTileFlag(tile, TileFlags.Breakable, breakable);
 
 	public bool IsSlope(Point2 tile) => ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Slope) != 0;
+	public bool IsSlope(Point2 tile, Factory.TileLayer layer) => ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & SlopeFlag(layer)) != 0;
 
-	public void SetSlope(Point2 tile, bool slope, bool rebuildGeometry = true)
+	public void SetSlope(Point2 tile, bool slope, Factory.TileLayer layer = Factory.TileLayer.Foreground, bool rebuildGeometry = true)
 	{
-		SetTileFlag(tile, TileFlags.Slope, slope);
+		SetTileFlag(tile, SlopeFlag(layer), slope);
 		if (rebuildGeometry)
 			RebuildGeometry();
 	}
+
+	static TileFlags SlopeFlag(Factory.TileLayer layer)
+		=> layer == Factory.TileLayer.Foreground ? TileFlags.Slope : TileFlags.BackgroundSlope;
 
 	public bool IsFungal(Point2 tile)
 		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Fungal) != 0;
@@ -987,9 +1041,12 @@ public class Room
 			{
 				if (tileEntries[x, y] is { Layer: Factory.TileLayer.Background })
 				{
+					var slope = (tileFlags[x, y] & TileFlags.Slope) != 0;
 					if (BackgroundTiles[x, y] == '0')
 						SetBackgroundTileUnchecked(x, y, Tiles[x, y]);
 					SetTileUnchecked(x, y, '0');
+					if (slope)
+						tileFlags[x, y] |= TileFlags.BackgroundSlope;
 				}
 
 				if (backgroundTileEntries[x, y] is { Layer: Factory.TileLayer.Foreground })
@@ -1459,6 +1516,7 @@ public class Room
 		WriteFlaggedTiles(writer, "breakable", TileFlags.Breakable);
 		WriteFlaggedTiles(writer, "fungal", TileFlags.Fungal);
 		WriteFlaggedTiles(writer, "slopes", TileFlags.Slope);
+		WriteFlaggedTiles(writer, "backgroundSlopes", TileFlags.BackgroundSlope);
 		WriteFlaggedTiles(writer, "crumble", TileFlags.Crumble);
 
 		if (Actors.Count > 0)

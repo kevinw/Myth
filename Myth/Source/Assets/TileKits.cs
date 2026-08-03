@@ -56,7 +56,7 @@ public sealed record TileKitRegistration(
 	public static TileKitRegistration From(TileKitSpec spec)
 		=> new(spec.Name, spec.PreferredChar, spec.SlopePreferredChar, spec.Surface,
 			spec.Layer, spec.Reflection, spec.ReflectionOpacity, spec.AcousticReflectivity,
-			spec.Layer == Factory.TileLayer.Foreground && spec.HasEdges);
+			spec.HasEdges);
 }
 
 public static class TileKits

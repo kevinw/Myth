@@ -63,9 +63,7 @@ public class DualGrid : Actor
 				if (materialMask == 0)
 					continue;
 
-				var mask = layer == Factory.TileLayer.Foreground
-					? room.GetDualTerrainJoinMask(x, y)
-					: materialMask;
+				var mask = room.GetDualTerrainJoinMask(layer, x, y);
 				if (mask == 0)
 					continue;
 

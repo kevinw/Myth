@@ -815,6 +815,16 @@ public partial class Manager
 		actorSelectTool = false;
 	}
 
+	void SelectTileBrush(Factory.TileLayer layer, char tile)
+	{
+		activeTileLayer = layer;
+		brush = tile;
+		tileTypePlacing = tile;
+		selectedActorPaletteIndex = -1;
+		actorSelectTool = false;
+		editorSelectionRect = null;
+	}
+
 	/// Icons per row for the palette grids, from however wide the panel currently is.
 	static int PaletteColumnsForWidth()
 		=> Math.Max(1, (int)((ImGui.GetContentRegionAvail().X + ButtonSpacing) / (ButtonSize + ButtonSpacing)));
@@ -3206,11 +3216,12 @@ public partial class Manager
 		editorGameDirty = true;
 	}
 
-	// Slope painting is a foreground-terrain affordance: only offered when the active brush
-	// supports slopes and we're editing the foreground layer.
+	// Slope painting is offered for slope-capable foreground terrain and tile-kit backgrounds.
 	bool SlopePaintAvailable
-		=> activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && selectedActorPaletteIndex < 0
-			&& Factory.Find(brush) is { BlocksMovement: true, SupportsSlope: true };
+		=> !actorSelectTool && selectedActorPaletteIndex < 0
+			&& Factory.Find(brush) is { SupportsSlope: true } entry
+			&& entry.Layer == activeTileLayer
+			&& (activeTileLayer == Factory.TileLayer.Background || entry.BlocksMovement);
 
 	// Fill the dragged rectangle with a slope staircase whose descent matches the drag direction:
 	// down-right/left = a floor ramp (solid below), up-right/left = an underhang (solid above). The
@@ -3227,7 +3238,7 @@ public partial class Manager
 
 		var toRight = to.X >= from.X;
 		var underhang = to.Y < from.Y;
-		var layer = Factory.TileLayer.Foreground;
+		var layer = activeTileLayer;
 
 		for (var x = 0; x < w; x++)
 		{
@@ -3240,7 +3251,7 @@ public partial class Manager
 
 			var surfaceTile = new Point2(col, rect.Top + surfaceRow);
 			room.SetTile(layer, surfaceTile, tile, rebuildGeometry: false);
-			room.SetSlope(surfaceTile, true, rebuildGeometry: false);
+			room.SetSlope(surfaceTile, true, layer, rebuildGeometry: false);
 
 			// Body fill: solid below the surface for a floor, above it for an underhang.
 			if (underhang)
@@ -4221,19 +4232,20 @@ public partial class Manager
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
 			{
-				brush = activeTileLayer == Factory.TileLayer.Background
-					? editing.BackgroundTiles[tileOver.X, tileOver.Y]
-					: editing.Tiles[tileOver.X, tileOver.Y];
-				tileTypePlacing = brush;
-				selectedActorPaletteIndex = -1;
-				actorSelectTool = false;
-				editorSelectionRect = null;
+				var foreground = editing.Tiles[tileOver.X, tileOver.Y];
+				var background = editing.BackgroundTiles[tileOver.X, tileOver.Y];
+				var layer = foreground != '0'
+					? Factory.TileLayer.Foreground
+					: background != '0' ? Factory.TileLayer.Background : activeTileLayer;
+				SelectTileBrush(layer, layer == Factory.TileLayer.Foreground ? foreground : background);
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && activeTileLayer == Factory.TileLayer.Foreground && !actorSelectTool && !brushIsActor && overGame && ctrlClick && editing.GetEntry(tileOver) is { BlocksMovement: true, SupportsSlope: true })
+			else if (!editingRoomGeometry && !worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && ctrlClick &&
+				(activeTileLayer == Factory.TileLayer.Background ? editing.GetBackgroundEntry(tileOver) : editing.GetEntry(tileOver)) is { SupportsSlope: true } slopeEntry &&
+				(activeTileLayer == Factory.TileLayer.Background || slopeEntry.BlocksMovement))
 			{
 				using (CaptureRoomUndo("Toggle Slope Tile", editing))
 				{
-					editing.SetSlope(tileOver, !editing.IsSlope(tileOver));
+					editing.SetSlope(tileOver, !editing.IsSlope(tileOver, activeTileLayer), activeTileLayer);
 					selectedActorPaletteIndex = -1;
 					CancelTilePaint();
 					editorGameDirty = true;

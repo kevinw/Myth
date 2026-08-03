@@ -287,15 +287,11 @@ public static class Factory
 
 		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
-			if (layer == TileLayer.Foreground)
-			{
-				if (hasSlope && room.TryGetSlopeTile(tile, out var slope))
-					fg.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, StableVariantSeed(room, tilesetName, tile)));
-				else
-					fg.Set(tile.X, tile.Y, new());
-			}
+			var grid = layer == TileLayer.Foreground ? fg : bg;
+			if (hasSlope && room.TryGetSlopeTile(tile, layer, out var slope))
+				grid.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, StableVariantSeed(room, tilesetName, tile)));
 			else
-				bg.Set(tile.X, tile.Y, new());
+				grid.Set(tile.X, tile.Y, new());
 		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, slopeTilesetName: hasSlope ? tilesetName : null, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 

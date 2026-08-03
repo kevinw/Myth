@@ -1,5 +1,7 @@
 # TODO
 
+- lightning traps aren't centered
+- lightning traps need sound fx
 - region based background settings?
 - drawing background slopes needs to be possible in the editor
 - room based player light toggle
@@ -23,6 +25,8 @@ steam notes
 - water ambience for water tile rooms
 - make a youtube account for the game. post the head bug as a youtube short.
 - cimgui.dll is 1.4MB; can it be statically linked?
+- integrate Dear ImGui Test Engine so automated editor scenarios can identify, drive, and assert docked, scrolling, and popup UI directly
+- consider using a C++ build of Dear ImGui's SDL_GPU backend so we don't have to compile our ImGui backend each time
 - Change Content.zip extension and add some simple byte level change
 - windows Myth.exe doesn't have an icon
 

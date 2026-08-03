@@ -1334,9 +1334,7 @@ public sealed partial class GameView
 					if (materialMask == 0)
 						continue;
 
-					var joinMask = layer == Factory.TileLayer.Foreground
-						? renderRoom.GetDualTerrainJoinMask(x, y)
-						: materialMask;
+					var joinMask = renderRoom.GetDualTerrainJoinMask(layer, x, y);
 					if (joinMask == 0)
 						continue;
 
