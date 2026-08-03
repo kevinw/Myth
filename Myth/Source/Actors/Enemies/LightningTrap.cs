@@ -45,6 +45,11 @@ public class LightningTrap : Actor
 	int seed;
 	int sparkEffect = -1;
 	float sparkTimer;
+	SoundInstance? sound;
+
+	const string SoundEvent = "lightning_trap";
+	const string WarmupParameter = "Warmup";
+	const string FireDurationParameter = "FireDuration";
 
 	public LightningTrap()
 	{
@@ -64,7 +69,11 @@ public class LightningTrap : Actor
 		sparkEffect = Game.Particles?.AcquireEffect("lightning_spark") ?? -1;
 	}
 
-	public override void Destroyed() => Game.Particles?.ReleaseEffect(ref sparkEffect);
+	public override void Destroyed()
+	{
+		Game.Particles?.ReleaseEffect(ref sparkEffect);
+		StopAndReleaseSound(ref sound, true);
+	}
 
 	Vector2 Dir => DirectionVector(Direction);
 
@@ -84,18 +93,23 @@ public class LightningTrap : Actor
 				break;
 
 			case Phase.Gather:
+				UpdateSound(GatherProgress, 0);
 				if (phaseTime >= GatherTime)
 				{
 					phase = Phase.Fire;
 					phaseTime = 0;
+					UpdateSound(1, 0);
 				}
 				break;
 
 			case Phase.Fire:
+				UpdateSound(1, FireProgress);
 				ApplyDamage();
 				UpdateSparks();
 				if (phaseTime >= FireTime)
 				{
+					UpdateSound(1, 1);
+					StopAndReleaseSound(ref sound);
 					phase = Phase.Wait;
 					phaseTime = 0;
 				}
@@ -109,7 +123,17 @@ public class LightningTrap : Actor
 		phaseTime = 0;
 		sparkTimer = 0;
 		TraceBeam();
-		AudioEventDebounced("bubble", 0.1f);
+		StopAndReleaseSound(ref sound, true);
+		sound = Game.CreateAudioEvent(SoundEvent, Position);
+		UpdateSound(0, 0);
+		sound?.Start();
+	}
+
+	void UpdateSound(float warmup, float fireDuration)
+	{
+		Game.SetAudioEventPosition(sound, Position);
+		Game.SetAudioEventParameter(sound, WarmupParameter, warmup);
+		Game.SetAudioEventParameter(sound, FireDurationParameter, fireDuration);
 	}
 
 	// Walks the beam from the mouth, reflecting off reflective (metal) 45-degree slopes, building a
@@ -121,13 +145,12 @@ public class LightningTrap : Actor
 		pathLength = 0;
 
 		var dir = Dir;
-		// Center the beam in its tile lane so it travels cleanly down a column/row rather than along
-		// a tile boundary — a boundary-aligned ray straddles the neighbouring solid tile and reads it
-		// as a flat wall instead of seeing the slope it's aimed at.
-		var visualStart = SnapToLane((Vector2)Position + Dir * MouthOffset, dir);
+		// Keep the beam centered on its authored housing. The collision probe still snaps to the
+		// tile lane so a boundary-aligned ray doesn't straddle a solid and miss the slope it targets.
+		var visualStart = (Vector2)Position + dir * MouthOffset;
 		// The trap is mounted inside a wall, so search from the first pixel clear of solid; otherwise
 		// the ray hits the very tile it's embedded in and the beam collapses to zero length.
-		var rayStart = AdvancePastSolid(visualStart, dir);
+		var rayStart = AdvancePastSolid(SnapToLane(visualStart, dir), dir);
 
 		for (var bounce = 0; ; bounce++)
 		{
@@ -254,10 +277,13 @@ public class LightningTrap : Actor
 
 	void ClearHurtbox() => Hitbox = new(new RectInt(0, 0, 0, 0));
 
+	float GatherProgress => Math.Clamp(phaseTime / MathF.Max(0.0001f, GatherTime), 0, 1);
+	float FireProgress => Math.Clamp(phaseTime / MathF.Max(0.0001f, FireTime), 0, 1);
+
 	// 0 idle, ramps up through the gather, full while firing.
 	float Glow => phase switch
 	{
-		Phase.Gather => Calc.Lerp(0.2f, 0.8f, Math.Clamp(phaseTime / MathF.Max(0.0001f, GatherTime), 0, 1)),
+		Phase.Gather => Calc.Lerp(0.2f, 0.8f, GatherProgress),
 		Phase.Fire => 1f,
 		_ => 0f,
 	};
@@ -305,7 +331,7 @@ public class LightningTrap : Actor
 	{
 		if (phase == Phase.Gather)
 		{
-			var g = Math.Clamp(phaseTime / MathF.Max(0.0001f, GatherTime), 0, 1);
+			var g = GatherProgress;
 			var e = Ease.Quad.Out(g);
 			coverStart = e * 0.72f;                   // emitter end reaches farther...
 			coverEnd = e * 0.5f;                      // ...far end weaker; together they connect by fire
