@@ -125,6 +125,19 @@ public partial class Manager
 		if (ImGui.MenuItem("Play", "Tab"))
 			StartGame();
 		ImGui.Separator();
+		var commandKey = OperatingSystem.IsMacOS() ? "Cmd" : "Ctrl";
+		var undoLabel = undo.UndoName is { } undoName ? $"Undo {undoName}" : "Undo";
+		if (ImGui.MenuItem(undoLabel, $"{commandKey}+Z", false, undo.CanUndo))
+			UndoEditor();
+		var redoLabel = undo.RedoName is { } redoName ? $"Redo {redoName}" : "Redo";
+		var redoShortcut = OperatingSystem.IsMacOS() ? "Cmd+Shift+Z" : "Ctrl+Y";
+		if (ImGui.MenuItem(redoLabel, redoShortcut, false, undo.CanRedo))
+			RedoEditor();
+		var canSavePrefab = actorSpecInspectorOpen && selectedActorSpecId is { } specId &&
+			ActorSpecs.IsSpecDirty(specId) && ActorSpecs.CanSaveSpec(specId);
+		if (ImGui.MenuItem("Save Prefab", $"{commandKey}+S", false, canSavePrefab))
+			SaveSelectedActorSpec();
+		ImGui.Separator();
 
 		if (ImGui.BeginMenu("Windows"))
 		{

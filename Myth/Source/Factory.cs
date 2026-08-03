@@ -423,6 +423,9 @@ public static class Factory
 			ActorPalette.Add(ActorPaletteEntry.FromProp(spriteName));
 		RegisterActorSpecPaletteEntries();
 
+#if EDITOR
+		ActorSpecs.CaptureSavedSpecState();
+#endif
 	}
 
 	// Tile types declared by JSON kit specs. The registration data comes from the specs in

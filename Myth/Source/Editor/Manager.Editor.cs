@@ -385,6 +385,13 @@ public partial class Manager
 			preferencesOpen = true;
 			return true;
 		}
+		var modifier =
+			Input.Keyboard.Down(Keys.LeftControl) ||
+			Input.Keyboard.Down(Keys.RightControl) ||
+			Input.Keyboard.Down(Keys.LeftOS) ||
+			Input.Keyboard.Down(Keys.RightOS);
+		if (modifier && Input.Keyboard.Pressed(Keys.S) && SaveSelectedActorSpec())
+			return true;
 		if (ImGuiWantsKeyboard)
 			return false;
 
@@ -393,11 +400,6 @@ public partial class Manager
 			SelectEditorActorTool();
 		}
 
-		var modifier =
-			Input.Keyboard.Down(Keys.LeftControl) ||
-			Input.Keyboard.Down(Keys.RightControl) ||
-			Input.Keyboard.Down(Keys.LeftOS) ||
-			Input.Keyboard.Down(Keys.RightOS);
 		if (!modifier)
 		{
 			if (Input.Keyboard.Pressed(Keys.P) && CurrentRoom is { } room)
@@ -1327,7 +1329,8 @@ public partial class Manager
 		if (!actorSpecInspectorOpen || selectedActorSpecId == null)
 			return;
 
-		var windowTitle = $"Prefab: {selectedActorSpecId}";
+		var dirty = ActorSpecs.IsSpecDirty(selectedActorSpecId);
+		var windowTitle = $"Prefab: {selectedActorSpecId}{(dirty ? " *" : "")}";
 		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
 		var open = actorSpecInspectorOpen;
 		// Settings are saved: the "###" id means every prefab shares this one window, so the
@@ -1358,10 +1361,23 @@ public partial class Manager
 			SyncEditorGame();
 		}
 
+		ImGui.BeginDisabled(!dirty || !ActorSpecs.CanSaveSpec(selectedActorSpecId));
 		if (ImGui.Button("Save"))
-			ActorSpecs.SaveSpec(selectedActorSpecId);
+			SaveSelectedActorSpec();
+		ImGui.EndDisabled();
 
 		ImGui.End();
+	}
+
+	bool SaveSelectedActorSpec()
+	{
+		if (!actorSpecInspectorOpen || selectedActorSpecId == null ||
+			!ActorSpecs.IsSpecDirty(selectedActorSpecId) || !ActorSpecs.CanSaveSpec(selectedActorSpecId))
+			return false;
+
+		CommitPrefabUndo();
+		ActorSpecs.SaveSpec(selectedActorSpecId);
+		return true;
 	}
 
 	bool DrawActorSpecProperty(string specId, ActorSpecs.EditableProperty property)

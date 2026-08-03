@@ -40,6 +40,10 @@ public static class ActorSpecs
 	private static readonly Dictionary<string, string> specPaths = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, ActorType> actorTypes = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<Type, string> actorNames = new();
+#if EDITOR
+	static readonly Dictionary<string, string> savedSpecJson = new(StringComparer.OrdinalIgnoreCase);
+	static readonly HashSet<string> dirtySpecs = new(StringComparer.OrdinalIgnoreCase);
+#endif
 
 	public static IEnumerable<(string Id, JsonObject Spec)> Specs => specs.Select(it => (it.Key, it.Value));
 
@@ -53,6 +57,10 @@ public static class ActorSpecs
 	{
 		specs.Clear();
 		specPaths.Clear();
+#if EDITOR
+		savedSpecJson.Clear();
+		dirtySpecs.Clear();
+#endif
 	}
 
 	public static void ClearActorTypes()
@@ -224,6 +232,9 @@ public static class ActorSpecs
 
 		JsonUtil.RemoveProperty(spec, jsonName);
 		spec[jsonName] = value?.DeepClone();
+#if EDITOR
+		dirtySpecs.Add(id);
+#endif
 	}
 
 	public static void SetProperty(JsonObject spec, string jsonName, JsonNode? value)
@@ -235,7 +246,12 @@ public static class ActorSpecs
 	public static void ResetProperty(string id, string jsonName)
 	{
 		if (specs.TryGetValue(id, out var spec))
+		{
 			JsonUtil.RemoveProperty(spec, jsonName);
+#if EDITOR
+			dirtySpecs.Add(id);
+#endif
+		}
 	}
 
 	public static void ResetProperty(JsonObject spec, string jsonName)
@@ -246,7 +262,12 @@ public static class ActorSpecs
 		if (!specs.TryGetValue(id, out var spec) || !specPaths.TryGetValue(id, out var path))
 			return;
 
-		File.WriteAllText(path, ToJsonString(PruneSpecForSave(id, spec)));
+		var json = ToJsonString(PruneSpecForSave(id, spec));
+		File.WriteAllText(path, json);
+#if EDITOR
+		savedSpecJson[id] = json;
+		dirtySpecs.Remove(id);
+#endif
 	}
 
 	public static string CaptureSpecJson(string id)
@@ -258,7 +279,31 @@ public static class ActorSpecs
 		if (string.IsNullOrWhiteSpace(ReadString(spec, NameKey)))
 			spec[NameKey] = id;
 		specs[id] = spec;
+#if EDITOR
+		UpdateSpecDirty(id);
+#endif
 	}
+
+#if EDITOR
+	public static bool CanSaveSpec(string id) => specPaths.ContainsKey(id);
+	public static bool IsSpecDirty(string id) => dirtySpecs.Contains(id);
+
+	public static void CaptureSavedSpecState()
+	{
+		savedSpecJson.Clear();
+		dirtySpecs.Clear();
+		foreach (var (id, _) in specs)
+			savedSpecJson[id] = CaptureSpecJson(id);
+	}
+
+	static void UpdateSpecDirty(string id)
+	{
+		if (savedSpecJson.TryGetValue(id, out var saved) && CaptureSpecJson(id) == saved)
+			dirtySpecs.Remove(id);
+		else
+			dirtySpecs.Add(id);
+	}
+#endif
 
 	public static JsonNode? ToJsonNode(object? value)
 	{

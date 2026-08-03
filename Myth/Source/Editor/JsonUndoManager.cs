@@ -16,6 +16,8 @@ public sealed class JsonUndoManager
 
 	public bool CanUndo => undoStack.Count > 0;
 	public bool CanRedo => redoStack.Count > 0;
+	public string? UndoName => CanUndo ? undoStack[^1].Name : null;
+	public string? RedoName => CanRedo ? redoStack[^1].Name : null;
 
 	public JsonUndoScope Capture(string name, params IJsonUndoTarget[] targets)
 		=> new(this, name, targets);
