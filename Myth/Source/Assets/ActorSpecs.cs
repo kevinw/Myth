@@ -51,7 +51,13 @@ public static class ActorSpecs
 	// (e.g. IResizable) without hardcoding type lists.
 	public static IEnumerable<KeyValuePair<string, Type>> ActorTypes =>
 		actorTypes.Select(it => new KeyValuePair<string, Type>(it.Key, it.Value.Type));
-	public readonly record struct EditableProperty(string Name, string JsonName, Type Type, JsonNode? Value, bool HasLocalValue);
+	public readonly record struct EditableProperty(
+		string Name,
+		string JsonName,
+		Type Type,
+		JsonNode? Value,
+		JsonNode? ResetValue,
+		bool HasLocalValue);
 
 	public static void ClearSpecs()
 	{
@@ -211,17 +217,25 @@ public static class ActorSpecs
 			yield break;
 
 		var defaults = GetBaseline(new JsonObject { [TypeKey] = typeName }, resolved);
+		var inherited = ReadString(spec, FromKey) is { } from && specs.TryGetValue(from, out var inheritedSpec)
+			? inheritedSpec
+			: null;
 		foreach (var member in GetSerializableMembers(type.Type))
 		{
 			var jsonName = member.Name;
 			var hasLocal = JsonUtil.ContainsProperty(spec, jsonName);
 			JsonNode? value = null;
+			JsonNode? resetValue = null;
 			if (JsonUtil.TryGetProperty(resolved, jsonName, out var resolvedValue) && resolvedValue != null)
 				value = resolvedValue.DeepClone();
 			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var defaultValue) && defaultValue != null)
 				value = defaultValue.DeepClone();
+			if (inherited != null && GetResolvedProperty(inherited, jsonName) is { } inheritedValue)
+				resetValue = inheritedValue;
+			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var resetDefaultValue))
+				resetValue = resetDefaultValue;
 
-			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, hasLocal);
+			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, resetValue, hasLocal);
 		}
 	}
 

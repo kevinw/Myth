@@ -66,18 +66,14 @@
     {
       "Id": "281afeb3b91ea43f",
       "From": "BlueMemoryLight",
-      "Position": [212, 116]
+      "Position": [212, 116],
+      "Height": 4.6
     },
     {
       "Id": "0d3b8cb6ad6e5eb5",
       "From": "BlueMemoryLight",
-      "Position": [148, 92]
-    },
-    {
-      "Id": "479b6bad41bdaef8",
-      "Type": "ParticleEmitter",
-      "Position": [212, 116],
-      "EffectName": "smoke"
+      "Position": [148, 92],
+      "Height": 6.6
     },
     {
       "Id": "a5a6ff90c2a9c2ab",

@@ -8,6 +8,9 @@ namespace Myth;
 
 public class ImGuiRenderer : IDisposable
 {
+	const float FontSize = 16;
+	const float IconFontSize = 14;
+
 #if BROWSER
 	const string BrowserVertexShader = """
 struct UniformBlockType {
@@ -194,10 +197,11 @@ fn vertex_main(
 	public ImGuiMouseCursor MouseCursor { get; private set; }
 
 	public ImGuiRenderer(App app, string? customFontPath = null, int customFontFace = 0, bool enableGamepadNav = false, string? iniPath = null, float frameRounding = 2,
-		string? mergedFontPath = null, ushort[]? mergedFontGlyphRanges = null, float mergedFontSize = 56)
+		string? mergedFontPath = null, ushort[]? mergedFontGlyphRanges = null, float mergedFontSize = IconFontSize, float scale = 2)
 	{
 		this.app = app;
 		this.gamepadNav = enableGamepadNav;
+		Scale = scale;
 
 		// create imgui context
 		context = ImGui.CreateContext(null);
@@ -239,10 +243,10 @@ fn vertex_main(
 				{
 					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig());
 					config.FontNo = customFontFace;
-					io.Fonts.AddFontFromFileTTF(customFontPath, 64, config);
+					config.RasterizerDensity = scale;
+					io.Fonts.AddFontFromFileTTF(customFontPath, FontSize, config);
 					config.Destroy();
 				}
-				io.FontGlobalScale = 16.0f / 64.0f;
 			}
 			else
 			{
@@ -261,6 +265,7 @@ fn vertex_main(
 					config.MergeMode = true;
 					config.PixelSnapH = true;
 					config.GlyphMinAdvanceX = mergedFontSize;
+					config.RasterizerDensity = scale;
 					io.Fonts.AddFontFromFileTTF(mergedFontPath, mergedFontSize, config, mergedFontGlyphRangesHandle.AddrOfPinnedObject());
 					config.Destroy();
 				}
@@ -612,7 +617,8 @@ fn vertex_main(
 		return id;
 	}
 
-	public bool ImageButton(ReadOnlySpan<char> id, in Subtexture subtexture, Vector2 size, bool selected = false, Vector4? selectedColor = null, bool fitAspectRatio = false, Vector2? imagePadding = null)
+	public bool ImageButton(ReadOnlySpan<char> id, in Subtexture subtexture, Vector2 size, bool selected = false, Vector4? selectedColor = null,
+		bool fitAspectRatio = false, Vector2? imagePadding = null, bool drawBorder = true)
 	{
 		if (subtexture.Texture == null)
 			return ImGui.Button(id, size);
@@ -652,7 +658,8 @@ fn vertex_main(
 			imageMax,
 			subtexture.TexCoords[0],
 			subtexture.TexCoords[2]);
-		draw.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(border), style.FrameRounding);
+		if (drawBorder)
+			draw.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(border), style.FrameRounding);
 		return pressed;
 	}
 

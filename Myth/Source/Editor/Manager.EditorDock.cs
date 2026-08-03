@@ -19,10 +19,15 @@ public partial class Manager
 	const float EditorDockMinWidth = 160;
 	const float EditorDockMaxWidth = 900;
 	static float EditorDockSplitterWidth => 6;
+	static float EditorDockTabFontScale => 0.9f;
+	static float EditorDockTabVerticalPadding => 2;
 
 	/// A node holding one window drops its tab bar and shows only the small corner triangle,
 	/// which opens the dock menu. Panels keep tabs as soon as two share a node.
-	const ImGuiDockNodeFlags EditorDockNodeFlags = ImGuiDockNodeFlags.AutoHideTabBar;
+	// NoCloseButton is an internal docking flag in our pinned ImGui 1.91.6, so ImGui.NET does
+	// not name it. Applying its stable bit to the dockspaces keeps floating-window close buttons.
+	const ImGuiDockNodeFlags EditorDockNodeFlags =
+		ImGuiDockNodeFlags.AutoHideTabBar | (ImGuiDockNodeFlags)(1 << 15);
 
 	float editorDockWidth = DefaultToolDockWidth;
 	static float DefaultToolDockWidth => 460;
@@ -223,7 +228,7 @@ public partial class Manager
 		{
 			editorCenterDockId = ImGui.GetID("EditorCenterDock");
 			ImGui.PushStyleColor(ImGuiCol.DockingEmptyBg, 0u);
-			ImGui.DockSpace(editorCenterDockId, Vector2.Zero, EditorDockNodeFlags | ImGuiDockNodeFlags.PassthruCentralNode);
+			DrawEditorDockSpace(editorCenterDockId, EditorDockNodeFlags | ImGuiDockNodeFlags.PassthruCentralNode);
 			ImGui.PopStyleColor();
 		}
 		ImGui.End();
@@ -291,12 +296,22 @@ public partial class Manager
 		if (ImGui.Begin(hostName, flags))
 		{
 			dockId = ImGui.GetID(dockLabel);
-			ImGui.DockSpace(dockId, Vector2.Zero, EditorDockNodeFlags);
+			DrawEditorDockSpace(dockId, EditorDockNodeFlags);
 		}
 		ImGui.End();
 		ImGui.PopStyleVar();
 
 		DrawEditorDockSplitter(rect, rightSide);
+	}
+
+	static void DrawEditorDockSpace(uint id, ImGuiDockNodeFlags flags)
+	{
+		var framePadding = ImGui.GetStyle().FramePadding;
+		ImGui.SetWindowFontScale(EditorDockTabFontScale);
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(framePadding.X, EditorDockTabVerticalPadding));
+		ImGui.DockSpace(id, Vector2.Zero, flags);
+		ImGui.PopStyleVar();
+		ImGui.SetWindowFontScale(1);
 	}
 
 	// Drag handle on a region's inner edge. It is its own window so it sits above the dock host

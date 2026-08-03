@@ -21,8 +21,18 @@ public partial class Manager
 	{
 		EditorPanelImGui("Tiles", ref tilesPanelOpen, () =>
 		{
+			var headerStartX = ImGui.GetCursorPosX();
+			var headerRightX = headerStartX + ImGui.GetContentRegionAvail().X;
 			if (ImGuiSubtextureButton("##Select", Assets.GetSubtexture("buttons/16"), null, actorSelectTool, ButtonSizeV, true))
 				SelectEditorActorTool();
+
+			var selectorWidth = TileLayerSelectorWidth();
+			if (headerRightX - selectorWidth >= headerStartX + ButtonSize + ImGui.GetStyle().ItemSpacing.X)
+			{
+				ImGui.SameLine();
+				ImGui.SetCursorPosX(headerRightX - selectorWidth);
+			}
+			DrawTileLayerSelector();
 			ImGui.Spacing();
 			DrawTilePaletteSection();
 		});
@@ -57,7 +67,9 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(BoxPadding, BoxPadding));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(ButtonSpacing, ButtonSpacing));
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, LineWeight);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, editorTheme == EditorTheme.Default
+			? new Vector4(0, 0, 0, 1)
+			: ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg]);
 
 		// Reported whether or not the body draws: a window tabbed behind another is still
 		// docked, and the region's visibility must not depend on which tab is active.

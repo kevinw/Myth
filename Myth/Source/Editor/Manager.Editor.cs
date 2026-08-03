@@ -19,6 +19,7 @@ public partial class Manager
 	}
 
 	static Vector2 ButtonSizeV = new(ButtonSize, ButtonSize);
+	const float TileButtonSpacing = 1;
 	static float BoxSpacing => 0;
 	static float BoxPadding => 4;
 	static int PaletteColumns => 5;
@@ -770,9 +771,9 @@ public partial class Manager
 
 	void DrawTilePaletteSection()
 	{
-		DrawTileLayerSelector();
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.One);
 		ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 1));
-		var columns = PaletteColumnsForWidth();
+		var columns = PaletteColumnsForWidth(TileButtonSpacing);
 		var index = 0;
 		ValueStringBuilder vsb = new(stackalloc char[30]);
 		foreach (var (id, entry) in Factory.Entries)
@@ -789,7 +790,8 @@ public partial class Manager
 			var dualPreview = GetDualTilesetPreview(entry);
 
 			if (ImGuiSubtextureButton(vsb.AsSpan(), entry.Image, entry.Name, dualPreview,
-				selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize)))
+				selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize),
+				imagePadding: 0, drawBorder: false))
 			{
 				brush = id;
 				selectedActorPaletteIndex = -1;
@@ -827,6 +829,7 @@ public partial class Manager
 			addTilePopupRequested = true;
 		}
 		ImGui.PopStyleColor();
+		ImGui.PopStyleVar();
 		DrawAddTilePopup();
 	}
 
@@ -844,17 +847,58 @@ public partial class Manager
 
 	void DrawTileLayerSelector()
 	{
-		if (ImGui.SmallButton("O ##ShowBG"))
+		var framePadding = ImGui.GetStyle().FramePadding;
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(framePadding.X, 1));
+		ImGui.BeginGroup();
+		var buttonWidth = TileLayerButtonWidth();
+		if (DrawTileLayerVisibilityButton("Background", editorShowBackgroundLayer))
 			editorShowBackgroundLayer = !editorShowBackgroundLayer;
 		ImGui.SameLine();
-		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Background ? "Background *" : "Background"))
+		if (DrawTileLayerButton("Background", Factory.TileLayer.Background, buttonWidth))
 			SelectTileLayer(Factory.TileLayer.Background);
 
-		if (ImGui.SmallButton("O ##ShowFG"))
+		if (DrawTileLayerVisibilityButton("Foreground", editorShowForegroundLayer))
 			editorShowForegroundLayer = !editorShowForegroundLayer;
 		ImGui.SameLine();
-		if (ImGui.Button(activeTileLayer == Factory.TileLayer.Foreground ? "Foreground *" : "Foreground"))
+		if (DrawTileLayerButton("Foreground", Factory.TileLayer.Foreground, buttonWidth))
 			SelectTileLayer(Factory.TileLayer.Foreground);
+		ImGui.EndGroup();
+		ImGui.PopStyleVar();
+	}
+
+	static float TileLayerButtonWidth()
+		=> ImGui.CalcTextSize("Foreground").X + ImGui.GetStyle().FramePadding.X * 2;
+
+	static float TileLayerSelectorWidth()
+	{
+		var style = ImGui.GetStyle();
+		var iconWidth = MathF.Max(ImGui.CalcTextSize(EditorIcons.Visible).X, ImGui.CalcTextSize(EditorIcons.Hidden).X) + style.FramePadding.X * 2;
+		return iconWidth + style.ItemSpacing.X + TileLayerButtonWidth();
+	}
+
+	static bool DrawTileLayerVisibilityButton(string id, bool visible)
+	{
+		ImGui.PushID(id);
+		ImGui.PushStyleColor(ImGuiCol.Button, Vector4.Zero);
+		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Vector4.Zero);
+		ImGui.PushStyleColor(ImGuiCol.ButtonActive, Vector4.Zero);
+		var pressed = ImGui.Button(visible ? EditorIcons.Visible : EditorIcons.Hidden);
+		ImGui.PopStyleColor(3);
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip(visible ? "Hide tile layer" : "Show tile layer");
+		ImGui.PopID();
+		return pressed;
+	}
+
+	bool DrawTileLayerButton(string label, Factory.TileLayer layer, float width)
+	{
+		var selected = activeTileLayer == layer;
+		if (selected)
+			ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.ButtonActive]);
+		var pressed = ImGui.Button(label, new Vector2(width, 0));
+		if (selected)
+			ImGui.PopStyleColor();
+		return pressed;
 	}
 
 	void SelectTileLayer(Factory.TileLayer layer)
@@ -880,7 +924,10 @@ public partial class Manager
 
 	/// Icons per row for the palette grids, from however wide the panel currently is.
 	static int PaletteColumnsForWidth()
-		=> Math.Max(1, (int)((ImGui.GetContentRegionAvail().X + ButtonSpacing) / (ButtonSize + ButtonSpacing)));
+		=> PaletteColumnsForWidth(ButtonSpacing);
+
+	static int PaletteColumnsForWidth(float spacing)
+		=> Math.Max(1, (int)((ImGui.GetContentRegionAvail().X + spacing) / (ButtonSize + spacing)));
 
 	static Tileset? GetDualTilesetPreview(Factory.Entry entry)
 		=> entry.DualTilesetName != null ? Assets.GetTileset(entry.DualTilesetName) : null;
@@ -1019,7 +1066,7 @@ public partial class Manager
 			}
 		}
 
-		var controlWidth = BeginPropertyRow("Notes");
+		var controlWidth = BeginPropertyRow("Notes").ControlWidth;
 		// Local copy so the undo scope captures the room *before* the first keystroke lands.
 		var notes = room.Notes;
 		if (ImGui.InputTextMultiline("##RoomNotesEditor", ref notes, 3000, new(controlWidth, 80)))
@@ -1382,18 +1429,44 @@ public partial class Manager
 
 	bool DrawActorSpecProperty(string specId, ActorSpecs.EditableProperty property)
 	{
-		var changed = false;
-		var controlWidth = BeginPropertyRow(property.Name, property.HasLocalValue);
-		ImGui.PushID("Value");
+		if (ActorSpecs.Get(specId) is not { } spec)
+			return false;
 
+		return DrawActorProperty(specId, null, spec, property);
+	}
+
+	bool DrawActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
+		ImGui.PushID("Value");
+		var changed = DrawActorPropertyValue(specId, room, actor, property, row.ControlWidth);
+		ImGui.PopID();
+
+		if (specId != null && undo.HasPending(PrefabUndoSlot, specId) && ImGui.IsItemDeactivatedAfterEdit())
+			CommitPrefabUndo();
+
+		if (property.HasLocalValue)
+		{
+			ImGui.SameLine();
+			if (DrawPropertyResetButton(property))
+			{
+				ResetActorProperty(specId, room, actor, property);
+				changed = true;
+			}
+		}
+
+		return changed;
+	}
+
+	bool DrawActorPropertyValue(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, float controlWidth)
+	{
 		if (property.Type == typeof(float))
 		{
 			var value = property.Value?.GetValue<float>() ?? 0;
 			if (ImGui.DragFloat("##Value", ref value, 0.05f))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
+				return true;
 			}
 		}
 		else if (property.Type == typeof(int))
@@ -1401,74 +1474,70 @@ public partial class Manager
 			var value = property.Value?.GetValue<int>() ?? 0;
 			if (ImGui.DragInt("##Value", ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
+				return true;
 			}
 		}
 		else if (IsHiddenWallTileTypeProperty(property))
 		{
 			var value = property.Value?.GetValue<string>() ?? "castle";
-			if (DrawHiddenWallTileTypeButtons(value, next =>
+			if (DrawHiddenWallTileTypeButtons(ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(next));
-			}))
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
+			}
 		}
 		else if (IsMovingPlatformMaterialProperty(property))
 		{
 			var value = property.Value?.GetValue<string>() ?? "metal-dual";
-			if (DrawMovingPlatformMaterialButtons(value, next =>
+			if (DrawMovingPlatformMaterialButtons(ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(next));
-			}))
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
+			}
 		}
-		else if (property.Name == nameof(Prop.SpriteName) && ActorSpecs.Get(specId) is { } spec && IsPropActor(spec))
+		else if (property.Name == nameof(Prop.SpriteName) && IsPropActor(actor))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (DrawSpriteCombo(ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
 			}
 		}
-		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && ActorSpecs.Get(specId) is { } textureSpec && IsNeuralTextureActor(textureSpec))
+		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && IsNeuralTextureActor(actor))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (NeuralTextureCatalog.DrawCombo(ref value, allowNone: weightsSlot > 0))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
 			}
 		}
-		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && ActorSpecs.Get(specId) is { } maskSpec && IsNeuralTextureActor(maskSpec))
+		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && IsNeuralTextureActor(actor))
 		{
-			ImGui.TextDisabled("(painted per room instance)");
+			if (room != null)
+				DrawMaskPaintControls(room, actor);
+			else
+				ImGui.TextDisabled("(painted per room instance)");
 		}
 		else if (property.Type == typeof(string))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (ImGui.InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, 64)))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
+				return true;
 			}
 		}
 		else if (property.Type == typeof(Point2) || property.Type == typeof(Point2?))
 		{
 			var point = ActorSpecs.ReadPoint(property.Value) ?? Point2.Zero;
-			var values = new[] { point.X, point.Y };
+			Span<int> values = stackalloc int[2] { point.X, point.Y };
 			if (ImGui.DragInt2("##Value", ref values[0]))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, new JsonArray(values[0], values[1]));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, new JsonArray(values[0], values[1]), continuous: true);
+				return true;
 			}
 		}
 		else if (property.Type == typeof(Point2[]))
@@ -1479,18 +1548,18 @@ public partial class Manager
 			if (ImGui.SmallButton("Add"))
 			{
 				var next = points.Length > 0 ? points[^1] + new Point2(Game.TileSize * 4, 0) : Point2.Zero;
-				using (CapturePrefabUndo("Add Path Point", specId))
-					ActorSpecs.SetProperty(specId, property.JsonName, ActorSpecs.ToJsonNode((Point2[])[.. points, next]));
-				changed = true;
+				SetActorProperty(specId, room, actor, property,
+					ActorSpecs.ToJsonNode((Point2[])[.. points, next]), "Add Path Point");
+				return true;
 			}
 			if (points.Length > 2)
 			{
 				ImGui.SameLine();
 				if (ImGui.SmallButton("Remove Last"))
 				{
-					using (CapturePrefabUndo("Remove Path Point", specId))
-						ActorSpecs.SetProperty(specId, property.JsonName, ActorSpecs.ToJsonNode(points[..^1]));
-					changed = true;
+					SetActorProperty(specId, room, actor, property,
+						ActorSpecs.ToJsonNode(points[..^1]), "Remove Path Point");
+					return true;
 				}
 			}
 		}
@@ -1499,9 +1568,8 @@ public partial class Manager
 			var value = property.Value?.GetValue<bool>() ?? false;
 			if (ImGui.Checkbox("##Value", ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
 			}
 		}
 		else if (property.Type == typeof(Color))
@@ -1509,9 +1577,9 @@ public partial class Manager
 			var rgb = JsonUtil.ReadColor(property.Value)?.ToVector3() ?? Vector3.One;
 			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(new Color(Vector3.Clamp(rgb, Vector3.Zero, Vector3.One)).ToHexStringRGB()));
-				changed = true;
+				var value = new Color(Vector3.Clamp(rgb, Vector3.Zero, Vector3.One)).ToHexStringRGB();
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
+				return true;
 			}
 		}
 		else if (property.Type == typeof(Signs))
@@ -1519,9 +1587,8 @@ public partial class Manager
 			var value = ActorSpecs.ReadSigns(property.Value);
 			if (ImGuiSubtextureButton("##Value", Assets.GetSubtexture("buttons/15"), FacingTooltip(value), false, new Vector2(ButtonSize, ButtonSize), true))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create((-value).ToString()));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, JsonValue.Create((-value).ToString()), continuous: false);
+				return true;
 			}
 		}
 		else if (property.Type == typeof(Cardinal))
@@ -1529,9 +1596,8 @@ public partial class Manager
 			var value = ActorSpecs.ReadCardinal(property.Value) ?? Cardinal.Right;
 			if (DrawCardinalCombo(ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, ActorSpecs.ToJsonNode(value));
-				changed = true;
+				SetActorProperty(specId, room, actor, property, ActorSpecs.ToJsonNode(value), continuous: false);
+				return true;
 			}
 		}
 		else if (property.Type.IsEnum)
@@ -1539,33 +1605,80 @@ public partial class Manager
 			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
 			if (EditorGui.DrawEnumCombo(property.Type, ref value))
 			{
-				BeginPrefabUndo(specId);
-				ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
-				changed = true;
+				SetActorEnumProperty(specId, room, actor, property, value);
+				return true;
 			}
 		}
 		else
 		{
 			ImGui.TextUnformatted("-");
 		}
-		ImGui.PopID();
-		if (undo.HasPending(PrefabUndoSlot, specId) && ImGui.IsItemDeactivatedAfterEdit())
-			CommitPrefabUndo();
 
-		if (property.HasLocalValue)
+		return false;
+	}
+
+	void SetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, JsonNode? value, bool continuous)
+	{
+		if (specId != null)
 		{
-			ImGui.SameLine();
-			if (ImGui.SmallButton(EditorIcons.ResetButton))
+			BeginPrefabUndo(specId);
+			ActorSpecs.SetProperty(specId, property.JsonName, value);
+		}
+		else if (room != null && continuous)
+		{
+			OpenActorPropertyUndo(room, actor);
+			ActorSpecs.SetProperty(actor, property.JsonName, value);
+		}
+		else if (room != null)
+		{
+			using (CaptureRoomUndo("Edit Actor Property", room))
+				ActorSpecs.SetProperty(actor, property.JsonName, value);
+		}
+	}
+
+	void SetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, JsonNode? value, string undoName)
+	{
+		if (specId != null)
+		{
+			using (CapturePrefabUndo(undoName, specId))
+				ActorSpecs.SetProperty(specId, property.JsonName, value);
+		}
+		else if (room != null)
+		{
+			using (CaptureRoomUndo(undoName, room))
+				ActorSpecs.SetProperty(actor, property.JsonName, value);
+		}
+	}
+
+	void SetActorEnumProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, string value)
+	{
+		if (specId != null)
+		{
+			BeginPrefabUndo(specId);
+			ActorSpecs.SetProperty(specId, property.JsonName, JsonValue.Create(value));
+		}
+		else if (room != null)
+		{
+			using (CaptureRoomUndo("Edit Actor Property", room))
 			{
-				using (CapturePrefabUndo("Reset Prefab Property", specId))
-				{
-					ActorSpecs.ResetProperty(specId, property.JsonName);
-					changed = true;
-				}
+				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
+				EditorFor(actor)?.PropertyChanged(new EditorActor(room, actor), property.Name);
 			}
 		}
+	}
 
-		return changed;
+	void ResetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property)
+	{
+		if (specId != null)
+		{
+			using (CapturePrefabUndo("Reset Prefab Property", specId))
+				ActorSpecs.ResetProperty(specId, property.JsonName);
+		}
+		else if (room != null)
+		{
+			using (CaptureRoomUndo("Reset Actor Property", room))
+				ActorSpecs.ResetProperty(actor, property.JsonName);
+		}
 	}
 
 	void ActorInstanceInspectorImGui()
@@ -1689,193 +1802,10 @@ public partial class Manager
 			return DrawLinkedDoorTargetProperty(room, actor, property);
 		if (property.Name == nameof(Switch.TargetActorId) && IsSwitchActor(actor))
 			return DrawSwitchTargetProperty(room, actor, property);
-
 		if (property.Name == nameof(ParticleEmitter.EffectName) && IsParticleEmitterActor(actor))
 			return DrawParticleEffectNameProperty(room, actor, property);
 
-		var changed = false;
-		var controlWidth = BeginPropertyRow(property.Name, property.HasLocalValue);
-		ImGui.PushID("Value");
-
-		if (property.Type == typeof(float))
-		{
-			var value = property.Value?.GetValue<float>() ?? 0;
-			if (ImGui.DragFloat("##Value", ref value, 0.05f))
-			{
-				OpenActorPropertyUndo(room, actor);
-				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-				changed = true;
-			}
-		}
-		else if (property.Type == typeof(int))
-		{
-			var value = property.Value?.GetValue<int>() ?? 0;
-			if (ImGui.DragInt("##Value", ref value))
-			{
-				OpenActorPropertyUndo(room, actor);
-				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-				changed = true;
-			}
-		}
-		else if (IsHiddenWallTileTypeProperty(property))
-		{
-			var value = property.Value?.GetValue<string>() ?? "castle";
-			if (DrawHiddenWallTileTypeButtons(value, next =>
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(next));
-			}))
-				changed = true;
-		}
-		else if (IsMovingPlatformMaterialProperty(property))
-		{
-			var value = property.Value?.GetValue<string>() ?? "metal-dual";
-			if (DrawMovingPlatformMaterialButtons(value, next =>
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(next));
-			}))
-				changed = true;
-		}
-		else if (property.Name == nameof(Prop.SpriteName) && IsPropActor(actor))
-		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
-			if (DrawSpriteCombo(ref value))
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-				changed = true;
-			}
-		}
-		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && IsNeuralTextureActor(actor))
-		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
-			if (NeuralTextureCatalog.DrawCombo(ref value, allowNone: weightsSlot > 0))
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-				changed = true;
-			}
-		}
-		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && IsNeuralTextureActor(actor))
-		{
-			DrawMaskPaintControls(room, actor);
-		}
-		else if (property.Type == typeof(string))
-		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
-			if (ImGui.InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, 64)))
-			{
-				OpenActorPropertyUndo(room, actor);
-				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-				changed = true;
-			}
-		}
-		else if (property.Type == typeof(Point2) || property.Type == typeof(Point2?))
-		{
-			var point = ActorSpecs.ReadPoint(property.Value) ?? Point2.Zero;
-			var values = new[] { point.X, point.Y };
-			if (ImGui.DragInt2("##Value", ref values[0]))
-			{
-				OpenActorPropertyUndo(room, actor);
-				ActorSpecs.SetProperty(actor, property.JsonName, new JsonArray(values[0], values[1]));
-				changed = true;
-			}
-		}
-		else if (property.Type == typeof(Point2[]))
-		{
-			var points = ActorSpecs.ReadPointArray(property.Value) ?? [];
-			ImGui.TextUnformatted($"{points.Length} points");
-			ImGui.SameLine();
-			if (ImGui.SmallButton("Add"))
-			{
-				var next = points.Length > 0 ? points[^1] + new Point2(Game.TileSize * 4, 0) : Point2.Zero;
-				using (CaptureRoomUndo("Add Path Point", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode((Point2[])[.. points, next]));
-				changed = true;
-			}
-			if (points.Length > 2)
-			{
-				ImGui.SameLine();
-				if (ImGui.SmallButton("Remove Last"))
-				{
-					using (CaptureRoomUndo("Remove Path Point", room))
-						ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode(points[..^1]));
-					changed = true;
-				}
-			}
-		}
-		else if (property.Type == typeof(bool))
-		{
-			var value = property.Value?.GetValue<bool>() ?? false;
-			if (ImGui.Checkbox("##Value", ref value))
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-				changed = true;
-			}
-		}
-		else if (property.Type == typeof(Color))
-		{
-			var rgb = JsonUtil.ReadColor(property.Value)?.ToVector3() ?? Vector3.One;
-			if (ImGui.ColorEdit3("##Value", ref rgb, ImGuiColorEditFlags.NoInputs))
-			{
-				OpenActorPropertyUndo(room, actor);
-				ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(new Color(Vector3.Clamp(rgb, Vector3.Zero, Vector3.One)).ToHexStringRGB()));
-				changed = true;
-			}
-		}
-		else if (property.Type == typeof(Signs))
-		{
-			var value = ActorSpecs.ReadSigns(property.Value);
-			if (ImGuiSubtextureButton("##Value", Assets.GetSubtexture("buttons/15"), FacingTooltip(value), false, new Vector2(ButtonSize, ButtonSize), true))
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create((-value).ToString()));
-				changed = true;
-			}
-		}
-		else if (property.Type == typeof(Cardinal))
-		{
-			var value = ActorSpecs.ReadCardinal(property.Value) ?? Cardinal.Right;
-			if (DrawCardinalCombo(ref value))
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, ActorSpecs.ToJsonNode(value));
-				changed = true;
-			}
-		}
-		else if (property.Type.IsEnum)
-		{
-			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
-			if (EditorGui.DrawEnumCombo(property.Type, ref value))
-			{
-				using (CaptureRoomUndo("Edit Actor Property", room))
-				{
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(value));
-					EditorFor(actor)?.PropertyChanged(new EditorActor(room, actor), property.Name);
-				}
-				changed = true;
-			}
-		}
-		else
-		{
-			ImGui.TextUnformatted("-");
-		}
-		ImGui.PopID();
-
-		if (property.HasLocalValue)
-		{
-			ImGui.SameLine();
-			if (ImGui.SmallButton(EditorIcons.ResetButton))
-			{
-				using (CaptureRoomUndo("Reset Actor Property", room))
-					ActorSpecs.ResetProperty(actor, property.JsonName);
-				changed = true;
-			}
-		}
-
-		return changed;
+		return DrawActorProperty(null, room, actor, property);
 	}
 
 	static bool DrawCardinalCombo(ref Cardinal value)
@@ -1908,7 +1838,7 @@ public partial class Manager
 	bool DrawParticleEffectNameProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		BeginPropertyRow(property.Name, property.HasLocalValue);
+		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
 		ImGui.PushID("Value");
 
 		var current = property.Value?.GetValue<string>() ?? string.Empty;
@@ -1925,13 +1855,22 @@ public partial class Manager
 		}
 
 		ImGui.PopID();
+		if (property.HasLocalValue)
+		{
+			ImGui.SameLine();
+			if (DrawPropertyResetButton(property))
+			{
+				ResetActorProperty(null, room, actor, property);
+				changed = true;
+			}
+		}
 		return changed;
 	}
 
 	bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		BeginPropertyRow(property.Name, property.HasLocalValue);
+		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
 		var value = property.Value?.GetValue<string>() ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var sourceId = ActorSpecs.ReadString(actor, "Id") ?? "";
@@ -1978,7 +1917,7 @@ public partial class Manager
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
-			if (ImGui.SmallButton(EditorIcons.ResetButton))
+			if (DrawPropertyResetButton(property))
 			{
 				using (CaptureRoomUndo("Reset Actor Property", room))
 					ActorSpecs.ResetProperty(actor, property.JsonName);
@@ -1992,7 +1931,7 @@ public partial class Manager
 	bool DrawSwitchTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		BeginPropertyRow(property.Name, property.HasLocalValue);
+		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
 		var value = property.Value?.GetValue<string>() ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var label = target is { } found
@@ -2031,7 +1970,7 @@ public partial class Manager
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
-			if (ImGui.SmallButton(EditorIcons.ResetButton))
+			if (DrawPropertyResetButton(property))
 			{
 				using (CaptureRoomUndo("Reset Actor Property", room))
 					ActorSpecs.ResetProperty(actor, property.JsonName);
@@ -2213,26 +2152,24 @@ public partial class Manager
 	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "TileType", StringComparison.OrdinalIgnoreCase);
 
-	bool DrawHiddenWallTileTypeButtons(string value, Action<string> setValue)
+	bool DrawHiddenWallTileTypeButtons(ref string value)
 	{
 		var current = NormalizeHiddenWallTileType(value);
-		var changed = false;
-
-		changed |= DrawHiddenWallTileTypeButton("castle", "Castle", current, setValue);
+		var changed = DrawHiddenWallTileTypeButton("castle", "Castle", current, ref value);
 		ImGui.SameLine();
-		changed |= DrawHiddenWallTileTypeButton("grass", "Grass", current, setValue);
+		changed |= DrawHiddenWallTileTypeButton("grass", "Grass", current, ref value);
 
 		return changed;
 	}
 
-	bool DrawHiddenWallTileTypeButton(string tileType, string label, string current, Action<string> setValue)
+	bool DrawHiddenWallTileTypeButton(string tileType, string label, string current, ref string value)
 	{
 		var image = Assets.GetTileset(tileType)?.Tiles.FirstOrDefault() ?? new Subtexture();
 		if (!ImGuiSubtextureButton(tileType, image, label, current == tileType, new Vector2(ButtonSize, ButtonSize)))
 			return false;
 
 		if (current != tileType)
-			setValue(tileType);
+			value = tileType;
 		return current != tileType;
 	}
 
@@ -2250,7 +2187,7 @@ public partial class Manager
 	static bool IsMovingPlatformMaterialProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
 
-	bool DrawMovingPlatformMaterialButtons(string value, Action<string> setValue)
+	bool DrawMovingPlatformMaterialButtons(ref string value)
 	{
 		var changed = false;
 		for (var i = 0; i < PlatformMaterials.Length; i++)
@@ -2262,34 +2199,135 @@ public partial class Manager
 			var image = Assets.GetTileset(tileset)?.Tiles.FirstOrDefault() ?? new Subtexture();
 			if (ImGuiSubtextureButton(tileset, image, label, value == tileset, new Vector2(ButtonSize, ButtonSize)) && value != tileset)
 			{
-				setValue(tileset);
+				value = tileset;
 				changed = true;
 			}
 		}
 		return changed;
 	}
 
-	static float BeginPropertyRow(string label, bool hasTrailingButton = false)
+	readonly record struct PropertyRowLayout(float ControlWidth);
+
+	static PropertyRowLayout BeginPropertyRow(string label, bool hasTrailingButton = false)
 	{
 		var style = ImGui.GetStyle();
 		var available = ImGui.GetContentRegionAvail().X;
-		var trailingWidth = hasTrailingButton ? ImGui.CalcTextSize(EditorIcons.ResetButton).X + style.FramePadding.X * 2 + style.ItemSpacing.X : 0;
-		var labelWidth = MathF.Min(128, MathF.Max(104, available * 0.4f));
-		labelWidth = MathF.Max(56, MathF.Min(labelWidth, available - trailingWidth - style.ItemSpacing.X - 72));
-		var controlWidth = MathF.Max(72, available - labelWidth - trailingWidth - style.ItemSpacing.X);
-		var labelSize = ImGui.CalcTextSize(label);
+		var trailingWidth = hasTrailingButton
+			? ImGui.CalcTextSize(EditorIcons.Reset).X + style.FramePadding.X * 2 + style.ItemSpacing.X
+			: 0;
+		var stacked = available < 56 + 72 + style.ItemSpacing.X + trailingWidth;
 		var rowStartX = ImGui.GetCursorPosX();
 
 		ImGui.AlignTextToFramePadding();
-		ImGui.SetCursorPosX(rowStartX + MathF.Max(0, labelWidth - labelSize.X));
-		ImGui.TextUnformatted(label);
-		if (ImGui.IsItemHovered() && labelSize.X > labelWidth)
-			ImGui.SetTooltip(label);
+		if (stacked)
+		{
+			DrawPropertyLabel(label, available, rowStartX, rightAligned: false);
+			var stackedControlWidth = MathF.Max(1, available - trailingWidth);
+			ImGui.SetNextItemWidth(stackedControlWidth);
+			return new(stackedControlWidth);
+		}
+
+		var labelWidth = MathF.Min(MathF.Max(104, available * 0.42f), 200);
+		labelWidth = MathF.Min(labelWidth, available - trailingWidth - style.ItemSpacing.X - 72);
+		var controlWidth = available - labelWidth - trailingWidth - style.ItemSpacing.X;
+		DrawPropertyLabel(label, labelWidth, rowStartX, rightAligned: true);
 		ImGui.SameLine();
 		ImGui.SetCursorPosX(rowStartX + labelWidth + style.ItemSpacing.X);
 		ImGui.SetNextItemWidth(controlWidth);
 
-		return controlWidth;
+		return new(controlWidth);
+	}
+
+	static void DrawPropertyLabel(string label, float width, float startX, bool rightAligned)
+	{
+		var fullSize = ImGui.CalcTextSize(label);
+		var clipped = fullSize.X > width;
+		var text = new ValueStringBuilder(stackalloc char[label.Length + 3]);
+		if (clipped)
+			BuildEllipsizedText(label, width, ref text);
+		else
+			text.Append(label);
+
+		var textSize = ImGui.CalcTextSize(text.AsSpan());
+		ImGui.SetCursorPosX(startX + (rightAligned ? MathF.Max(0, width - textSize.X) : 0));
+		ImGui.TextUnformatted(text.AsSpan());
+		if (clipped && ImGui.IsItemHovered())
+			ImGui.SetTooltip(label);
+		text.Dispose();
+	}
+
+	static void BuildEllipsizedText(string label, float width, ref ValueStringBuilder text)
+	{
+		const string ellipsis = "...";
+		var prefix = (label.Length + 1) / 2;
+		var suffix = label.Length / 2;
+		while (prefix >= 3 && suffix >= 3)
+		{
+			SetMiddleEllipsis(label, prefix, suffix, ref text);
+			if (ImGui.CalcTextSize(text.AsSpan()).X <= width)
+			{
+				var boundaryPrefix = PascalBoundaryAtOrBefore(label, prefix);
+				var boundarySuffix = PascalBoundaryAtOrAfter(label, label.Length - suffix);
+				if (boundaryPrefix >= 3 && label.Length - boundarySuffix >= 3 && boundaryPrefix < boundarySuffix)
+					SetMiddleEllipsis(label, boundaryPrefix, label.Length - boundarySuffix, ref text);
+				return;
+			}
+			if (prefix >= suffix)
+				prefix--;
+			else
+				suffix--;
+		}
+
+		prefix = label.Length;
+		do
+		{
+			prefix--;
+			text.Clear();
+			text.Append(label.AsSpan(0, prefix));
+			text.Append(ellipsis);
+		}
+		while (prefix > 0 && ImGui.CalcTextSize(text.AsSpan()).X > width);
+	}
+
+	static void SetMiddleEllipsis(string label, int prefix, int suffix, ref ValueStringBuilder text)
+	{
+		text.Clear();
+		text.Append(label.AsSpan(0, prefix));
+		text.Append("...");
+		text.Append(label.AsSpan(label.Length - suffix));
+	}
+
+	static int PascalBoundaryAtOrBefore(string text, int index)
+	{
+		for (var i = Math.Min(index, text.Length - 1); i > 0; i--)
+			if (char.IsUpper(text[i]))
+				return i;
+		return index;
+	}
+
+	static int PascalBoundaryAtOrAfter(string text, int index)
+	{
+		for (var i = Math.Max(1, index); i < text.Length; i++)
+			if (char.IsUpper(text[i]))
+				return i;
+		return index;
+	}
+
+	static bool DrawPropertyResetButton(ActorSpecs.EditableProperty property)
+	{
+		var pressed = ImGui.SmallButton(EditorIcons.Reset);
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip($"Reset to {FormatPropertyValue(property.ResetValue)}");
+		return pressed;
+	}
+
+	static string FormatPropertyValue(JsonNode? value)
+	{
+		if (value == null)
+			return "None";
+		if (value is JsonValue scalar && scalar.TryGetValue<string>(out var text))
+			return string.IsNullOrEmpty(text) ? "(empty)" : text;
+		return value.ToJsonString();
 	}
 
 	void BeginPrefabUndo(string specId)
@@ -5155,6 +5193,18 @@ public partial class Manager
 			return;
 		}
 		NoteDockedWindow();
+
+		ImGui.SetNextItemWidth(150);
+		if (ImGui.BeginCombo("Theme", EditorThemeName(editorTheme)))
+		{
+			for (var i = (int)EditorTheme.Default; i <= (int)EditorTheme.SolarizedLight; i++)
+			{
+				var theme = (EditorTheme)i;
+				if (ImGui.Selectable(EditorThemeName(theme), theme == editorTheme))
+					SelectEditorTheme(theme);
+			}
+			ImGui.EndCombo();
+		}
 
 		ImGui.SetNextItemWidth(150);
 		if (ImGui.BeginCombo("Scroll input", EditorScrollModeName(editorScrollMode)))

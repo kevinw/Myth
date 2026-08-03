@@ -312,23 +312,16 @@ public partial class Manager : App
 #endif
 		}
 #if EDITOR
-		var editorFontPath = Assets.AssetsPath + "/Fonts/Myna-Regular.ttf";
+		var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterVariable.ttf");
+		//var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterTightVariable.ttf");
 		var editorFontFace = 0;
-		const string MacEditorFontPath = "/System/Library/Fonts/Avenir Next Condensed.ttc";
-		const int MacEditorFontFace = 7;
-		//const string MacEditorFontPath = "/Library/Fonts/SF-Compact-Display-Thin.otf";
-		//const int MacEditorFontFace = 0;
-		if (OperatingSystem.IsMacOS() && File.Exists(MacEditorFontPath))
-		{
-			editorFontPath = MacEditorFontPath;
-			editorFontFace = MacEditorFontFace;
-		}
 		imgui = new(this, editorFontPath, editorFontFace,
 			iniPath: Path.Join(UserPath, "editor-layout.ini"),
 			mergedFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"),
-			mergedFontGlyphRanges: EditorIcons.GlyphRanges) { Scale = Scale };
+			mergedFontGlyphRanges: EditorIcons.GlyphRanges,
+			scale: Scale);
 #elif BROWSER
-		imgui = new(this) { Scale = 1.0f };
+		imgui = new(this, scale: 1);
 #endif
 	}
 
@@ -781,6 +774,8 @@ public partial class Manager : App
 #if EDITOR
 			if (settings.EditorScrollMode is >= EditorScrollMode.Auto and <= EditorScrollMode.Trackpad)
 				editorScrollMode = settings.EditorScrollMode;
+			if (settings.EditorTheme is >= EditorTheme.Default and <= EditorTheme.SolarizedLight)
+				editorTheme = settings.EditorTheme;
 			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
 			editorGameRunInBackground = settings.EditorGameRunInBackground;
 			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
@@ -831,6 +826,7 @@ public partial class Manager : App
 #endif
 #if EDITOR
 				EditorScrollMode = editorScrollMode,
+				EditorTheme = editorTheme,
 				PreservePlaytestSaveState = preservePlaytestSaveState,
 				EditorGameRunInBackground = editorGameRunInBackground,
 				PasteActorAtViewCenter = pasteActorAtViewCenter,
@@ -866,6 +862,7 @@ public partial class Manager : App
 #endif
 #if EDITOR
 		public EditorScrollMode EditorScrollMode { get; init; }
+		public EditorTheme EditorTheme { get; init; }
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
 		public bool PasteActorAtViewCenter { get; init; } = true;
@@ -1156,6 +1153,7 @@ public partial class Manager : App
 		imgui?.BeginLayout();
 
 #if EDITOR
+		EnsureEditorTheme();
 		// Ahead of Editor(): the game view is a dock window and the world is drawn into the rect
 		// it reports. Submitting it after Editor() would draw into last frame's rect, which is a
 		// frame of lag on every layout change. It also has to precede every other dockable
@@ -2009,9 +2007,11 @@ public partial class Manager : App
 		return pressed;
 	}
 
-	bool ImGuiSubtextureButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size, bool fitAspectRatio = false)
+	bool ImGuiSubtextureButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, Tileset? tooltipTileset, bool selected, Vector2 size,
+		bool fitAspectRatio = false, float? imagePadding = null, bool drawBorder = true)
 	{
-		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio);
+		var padding = imagePadding.HasValue ? new Vector2(imagePadding.Value) : (Vector2?)null;
+		var pressed = imgui.ImageButton(id, icon, size, selected, highlight, fitAspectRatio, padding, drawBorder);
 		if (ImGui.IsItemHovered() && (!string.IsNullOrEmpty(tooltip) || tooltipTileset != null))
 		{
 			ImGui.BeginTooltip();
