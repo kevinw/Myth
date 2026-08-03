@@ -67,6 +67,9 @@ public static class ActorSpecs
 		actorNames[typeof(T)] = name;
 	}
 
+	public static Type? GetActorType(string name)
+		=> actorTypes.TryGetValue(name, out var actorType) ? actorType.Type : null;
+
 	public const string ContentFolder = "Actors";
 
 	public static void LoadSpecs()

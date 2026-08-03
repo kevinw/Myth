@@ -39,6 +39,7 @@ public partial class Manager
 	float editorZoomTweenFrom;
 	float editorZoomTweenTo;
 	float editorCameraTween = 1.0f;
+	Vector2? previousStableGameViewCenter;
 
 	// Seconds left where wheel events are treated as a trackpad two-finger swipe (pan) rather than a
 	// mouse wheel (zoom). A trackpad sends precise/fractional deltas; we latch on those so the stray
@@ -85,6 +86,8 @@ public partial class Manager
 	Vector2 actorPressCursor;
 	bool actorPressCanCycle;
 	const float ActorPickCycleThreshold = 4f; // UI pixels: a release within this of the press is a click, not a drag
+	bool ActorPressPassedDragThreshold
+		=> Vector2.DistanceSquared(Cursor, actorPressCursor) > ActorPickCycleThreshold * ActorPickCycleThreshold;
 	bool selectionIncludeBackgroundTiles = true;
 	bool selectionIncludeForegroundTiles = true;
 	SnapshotFlags selectionSnapshotFlags = SnapshotFlags.None;
@@ -672,6 +675,20 @@ public partial class Manager
 #endif
 	}
 
+	void PreserveEditorViewAcrossLayoutChanges(Rect view)
+	{
+		if (gameEase > 0 || editorCameraTween < 1)
+		{
+			previousStableGameViewCenter = null;
+			return;
+		}
+
+		var center = view.Center;
+		if (previousStableGameViewCenter is { } previous)
+			editorCamera += (center - previous) / editorZoom;
+		previousStableGameViewCenter = center;
+	}
+
 	void MatchEditorCameraToGame()
 	{
 		if (game == null)
@@ -752,6 +769,7 @@ public partial class Manager
 	void DrawTilePaletteSection()
 	{
 		DrawTileLayerSelector();
+		ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 1));
 		var columns = PaletteColumnsForWidth();
 		var index = 0;
 		ValueStringBuilder vsb = new(stackalloc char[30]);
@@ -775,18 +793,23 @@ public partial class Manager
 				selectedActorPaletteIndex = -1;
 				actorSelectTool = false;
 			}
+			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+				OpenTileSourceEditor(entry);
 
 			if (ImGui.BeginPopupContextItem(vsb.AsSpan()))
 			{
-				if (FindTileKitSpec(entry) is { } kit)
+				if (entry.NeuralTexture != null)
+				{
+					if (ImGui.Selectable("Open in NCT Tiles"))
+						OpenTileSourceEditor(entry);
+				}
+				else if (FindTileKitSpec(entry) is not null)
 				{
 					if (ImGui.Selectable("Open in Tile Kit Editor"))
-						OpenTileKitEditor(kit);
+						OpenTileSourceEditor(entry);
 				}
 				else if (ImGui.Selectable("Open in Sprite Editor"))
-				{
-					AsepriteLauncher.Open(entry);
-				}
+					OpenTileSourceEditor(entry);
 				ImGui.EndPopup();
 			}
 
@@ -801,10 +824,21 @@ public partial class Manager
 			newTileLayer = activeTileLayer;
 			addTilePopupRequested = true;
 		}
+		ImGui.PopStyleColor();
 		DrawAddTilePopup();
 	}
 
 	const string EditorButtonSubtexture_Plus = "buttons/18";
+
+	void OpenTileSourceEditor(Factory.Entry entry)
+	{
+		if (entry.NeuralTexture is { } nct)
+			OpenNctTileEditor(nct);
+		else if (FindTileKitSpec(entry) is { } kit)
+			OpenTileKitEditor(kit);
+		else
+			AsepriteLauncher.Open(entry);
+	}
 
 	void DrawTileLayerSelector()
 	{
@@ -882,6 +916,8 @@ public partial class Manager
 					actorSpecInspectorOpen = true;
 				}
 			}
+			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+				ZedLauncher.OpenActor(entry);
 
 			index++;
 		}
@@ -897,7 +933,7 @@ public partial class Manager
 			return;
 
 		var visibleMaxX = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3)); // the palette zeroes FramePadding; give tags a bit back
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3));
 		ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
 
 		DrawTagButton("All", actorPaletteFilter == ActorTag.None, () => actorPaletteFilter = ActorTag.None, visibleMaxX, firstInRow: true);
@@ -981,11 +1017,10 @@ public partial class Manager
 			}
 		}
 
-		ImGui.TextUnformatted("Notes");
-		ImGui.SetNextItemWidth(-1);
+		var controlWidth = BeginPropertyRow("Notes");
 		// Local copy so the undo scope captures the room *before* the first keystroke lands.
 		var notes = room.Notes;
-		if (ImGui.InputTextMultiline("##RoomNotesEditor", ref notes, 3000, new(-1, 80)))
+		if (ImGui.InputTextMultiline("##RoomNotesEditor", ref notes, 3000, new(controlWidth, 80)))
 		{
 			OpenRoomSettingsUndo("Edit Room Notes", room);
 			room.Notes = notes;
@@ -998,9 +1033,8 @@ public partial class Manager
 		if (wasColorPainting && !roomColorFieldPainter.IsActive(room))
 			CommitRoomColorFieldStroke(room);
 
-		ImGui.TextUnformatted("Backdrop");
+		BeginPropertyRow("Backdrop");
 		var backdrop = room.BackdropColor.ToVector3();
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.ColorEdit3("##RoomBackdropColor", ref backdrop, ImGuiColorEditFlags.NoInputs))
 		{
 			OpenRoomSettingsUndo("Edit Room Backdrop", room);
@@ -1009,7 +1043,8 @@ public partial class Manager
 		}
 
 		var gradient = room.BackdropColor2.HasValue;
-		if (ImGui.Checkbox("Gradient", ref gradient))
+		BeginPropertyRow("Gradient");
+		if (ImGui.Checkbox("##RoomBackdropGradient", ref gradient))
 		{
 			using (CaptureRoomUndo("Edit Room Backdrop", room))
 				room.BackdropColor2 = gradient ? room.BackdropColor : null;
@@ -1018,9 +1053,8 @@ public partial class Manager
 
 		if (room.BackdropColor2 is { } backdrop2Color)
 		{
-			ImGui.TextUnformatted("Backdrop Bottom");
+			BeginPropertyRow("Backdrop Bottom");
 			var backdrop2 = backdrop2Color.ToVector3();
-			ImGui.SetNextItemWidth(-1);
 			if (ImGui.ColorEdit3("##RoomBackdropColor2", ref backdrop2, ImGuiColorEditFlags.NoInputs))
 			{
 				OpenRoomSettingsUndo("Edit Room Backdrop", room);
@@ -1029,9 +1063,8 @@ public partial class Manager
 			}
 		}
 
-		ImGui.TextUnformatted("Ambient");
+		BeginPropertyRow("Ambient");
 		var ambient = room.AmbientColor.ToVector3();
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.ColorEdit3("##RoomAmbientColor", ref ambient, ImGuiColorEditFlags.NoInputs))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
@@ -1039,9 +1072,8 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Intensity");
+		BeginPropertyRow("Intensity");
 		var ambientIntensity = room.AmbientIntensity;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomAmbientIntensity", ref ambientIntensity, 0.0f, 2.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
@@ -1049,9 +1081,8 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Noise");
+		BeginPropertyRow("Noise");
 		var lightNoise = room.LightNoise;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomLightNoise", ref lightNoise, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
@@ -1060,16 +1091,16 @@ public partial class Manager
 		}
 
 		var playerLightEnabled = room.PlayerLightEnabled;
-		if (ImGui.Checkbox("Player Light", ref playerLightEnabled))
+		BeginPropertyRow("Player Light");
+		if (ImGui.Checkbox("##RoomPlayerLight", ref playerLightEnabled))
 		{
 			using (CaptureRoomUndo("Toggle Player Light", room))
 				room.PlayerLightEnabled = playerLightEnabled;
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Spore Fog");
+		BeginPropertyRow("Spore Fog");
 		var sporeFogStrength = room.SporeFogStrength;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomSporeFogStrength", ref sporeFogStrength, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
@@ -1077,9 +1108,9 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Reverb");
 		var reverbAuto = room.ReverbAuto;
-		if (ImGui.Checkbox("Auto Reverb", ref reverbAuto))
+		BeginPropertyRow("Auto Reverb");
+		if (ImGui.Checkbox("##RoomAutoReverb", ref reverbAuto))
 		{
 			using (CaptureRoomUndo("Edit Room Reverb", room))
 			{
@@ -1090,8 +1121,8 @@ public partial class Manager
 			changed = true;
 		}
 
+		BeginPropertyRow("Reverb");
 		var reverb = room.Reverb;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomReverb", ref reverb, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Reverb", room);
@@ -1100,9 +1131,8 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Sun Strength");
+		BeginPropertyRow("Sun Strength");
 		var sunStrength = room.SunStrength;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomSunStrength", ref sunStrength, 0.0f, 2.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Sun", room);
@@ -1112,9 +1142,8 @@ public partial class Manager
 
 		if (sunStrength > 0)
 		{
-			ImGui.TextUnformatted("Sun Color");
+			BeginPropertyRow("Sun Color");
 			var sun = room.SunColor.ToVector3();
-			ImGui.SetNextItemWidth(-1);
 			if (ImGui.ColorEdit3("##RoomSunColor", ref sun, ImGuiColorEditFlags.NoInputs))
 			{
 				OpenRoomSettingsUndo("Edit Room Sun", room);
@@ -1122,9 +1151,8 @@ public partial class Manager
 				changed = true;
 			}
 
-			ImGui.TextUnformatted("Sun Direction");
+			BeginPropertyRow("Sun Direction");
 			var sunDirection = room.SunDirection;
-			ImGui.SetNextItemWidth(-1);
 			if (ImGui.DragFloat2("##RoomSunDirection", ref sunDirection, 0.01f, -1.0f, 1.0f))
 			{
 				OpenRoomSettingsUndo("Edit Room Sun", room);
@@ -1135,12 +1163,11 @@ public partial class Manager
 
 		if (musicAreas.Count > 0)
 		{
-			ImGui.TextUnformatted("Music");
+			BeginPropertyRow("Music");
 			ImGui.PushID("Music");
 			// null = auto: inherit from the containing music region, or the default. Any
 			// selected area (including the default) is an explicit per-room override.
 			var autoLabel = $"Auto ({MusicRegions.ResolveRegion(room)?.Area ?? DefaultMusicArea})";
-			ImGui.SetNextItemWidth(-1);
 			if (ImGui.BeginCombo("##RoomMusicArea", room.MusicArea ?? autoLabel))
 			{
 				if (ImGui.Selectable(autoLabel, room.MusicArea == null))
@@ -1170,16 +1197,16 @@ public partial class Manager
 
 		ImGui.SeparatorText("Dither");
 		var ditherEnabled = room.LightingDitherEnabled;
-		if (ImGui.Checkbox("Dither Enabled", ref ditherEnabled))
+		BeginPropertyRow("Enabled");
+		if (ImGui.Checkbox("##RoomDitherEnabled", ref ditherEnabled))
 		{
 			using (CaptureRoomUndo("Edit Room Dither", room))
 				room.LightingDitherEnabled = ditherEnabled;
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Dither Scale");
+		BeginPropertyRow("Scale");
 		var ditherScale = room.LightingDitherScale;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomDitherScale", ref ditherScale, 1.0f, 8.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Dither", room);
@@ -1187,9 +1214,8 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Dither Strength");
+		BeginPropertyRow("Strength");
 		var ditherStrength = room.LightingDitherStrength;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomDitherStrength", ref ditherStrength, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Dither", room);
@@ -1197,9 +1223,8 @@ public partial class Manager
 			changed = true;
 		}
 
-		ImGui.TextUnformatted("Dither Slope Boost");
+		BeginPropertyRow("Slope Boost");
 		var ditherSlopeBoost = room.NormalDitherSlopeBoost;
-		ImGui.SetNextItemWidth(-1);
 		if (ImGui.SliderFloat("##RoomDitherSlopeBoost", ref ditherSlopeBoost, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Dither", room);
@@ -1208,7 +1233,8 @@ public partial class Manager
 		}
 
 		var ditherQuantization = room.NormalDitherQuantization;
-		if (ImGui.Checkbox("Dither Level Quantization", ref ditherQuantization))
+		BeginPropertyRow("Quantization");
+		if (ImGui.Checkbox("##RoomDitherQuantization", ref ditherQuantization))
 		{
 			using (CaptureRoomUndo("Edit Room Dither", room))
 				room.NormalDitherQuantization = ditherQuantization;
@@ -1227,22 +1253,19 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Ambient Occlusion"))
 			return;
 
-		editorGameDirty |= ImGui.Checkbox("Enabled##AO", ref PerfToggles.AmbientOcclusion);
+		BeginPropertyRow("Enabled");
+		editorGameDirty |= ImGui.Checkbox("##AmbientOcclusionEnabled", ref PerfToggles.AmbientOcclusion);
 
-		ImGui.TextUnformatted("Strength");
-		ImGui.SetNextItemWidth(-1);
+		BeginPropertyRow("Strength");
 		editorGameDirty |= ImGui.SliderFloat("##AmbientOcclusionStrength", ref AmbientOcclusionStrength, 0.0f, 4.0f);
 
-		ImGui.TextUnformatted("Blur");
-		ImGui.SetNextItemWidth(-1);
+		BeginPropertyRow("Blur");
 		editorGameDirty |= ImGui.SliderFloat("##AmbientOcclusionBlur", ref AmbientOcclusionBlur, 0.0f, 32.0f);
 
-		ImGui.TextUnformatted("Offset (px)");
-		ImGui.SetNextItemWidth(-1);
+		BeginPropertyRow("Offset (px)");
 		editorGameDirty |= ImGui.SliderFloat2("##AmbientOcclusionOffset", ref AmbientOcclusionOffset, -16.0f, 16.0f);
 
-		ImGui.TextUnformatted("Min Visibility");
-		ImGui.SetNextItemWidth(-1);
+		BeginPropertyRow("Min Visibility");
 		editorGameDirty |= ImGui.SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
 	}
 
@@ -1251,7 +1274,8 @@ public partial class Manager
 		if (!ImGui.CollapsingHeader("Soft Shadows"))
 			return;
 
-		editorGameDirty |= ImGui.Checkbox("Enabled##SS", ref PerfToggles.SoftShadows);
+		BeginPropertyRow("Enabled");
+		editorGameDirty |= ImGui.Checkbox("##SoftShadowsEnabled", ref PerfToggles.SoftShadows);
 	}
 
 #if false
@@ -1303,17 +1327,20 @@ public partial class Manager
 		if (!actorSpecInspectorOpen || selectedActorSpecId == null)
 			return;
 
+		var windowTitle = $"Prefab: {selectedActorSpecId}";
 		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
 		var open = actorSpecInspectorOpen;
 		// Settings are saved: the "###" id means every prefab shares this one window, so the
 		// place you put it is worth keeping across launches (and lets it be docked).
-		if (!ImGui.Begin($"Prefab: {selectedActorSpecId}###ActorSpecInspector", ref open))
+		if (!ImGui.Begin($"{windowTitle}###ActorSpecInspector", ref open))
 		{
 			actorSpecInspectorOpen = open;
 			ImGui.End();
 			return;
 		}
 		actorSpecInspectorOpen = open;
+		if (ImGui.IsWindowDocked())
+			DrawDockedInspectorTitle(windowTitle);
 
 		var changed = false;
 		var spec = ActorSpecs.Get(selectedActorSpecId);
@@ -1340,8 +1367,7 @@ public partial class Manager
 	bool DrawActorSpecProperty(string specId, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
-		ImGui.SetNextItemWidth(controlWidth);
+		var controlWidth = BeginPropertyRow(property.Name, property.HasLocalValue);
 		ImGui.PushID("Value");
 
 		if (property.Type == typeof(float))
@@ -1513,7 +1539,7 @@ public partial class Manager
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
-			if (ImGui.SmallButton("Reset"))
+			if (ImGui.SmallButton(EditorIcons.ResetButton))
 			{
 				using (CapturePrefabUndo("Reset Prefab Property", specId))
 				{
@@ -1533,19 +1559,25 @@ public partial class Manager
 
 		var actor = room.Actors[selectedRoomActorIndex];
 		var title = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
+		var windowTitle = $"Actor: {title}";
 		var inspectorPadding = Vector2.One * 16;
 		var window = RequiredWindow;
 		var inspectorPos = new Vector2(window.WidthInPixels / imgui.Scale, window.HeightInPixels / imgui.Scale) - inspectorPadding;
-		ImGui.SetNextWindowPos(inspectorPos, ImGuiCond.Appearing, Vector2.One);
+		ImGui.SetNextWindowPos(inspectorPos, ImGuiCond.FirstUseEver, Vector2.One);
 		ImGui.SetNextWindowSize(new Vector2(260, 0), ImGuiCond.FirstUseEver);
 		var open = true;
-		if (!ImGui.Begin($"Actor: {title}###ActorInstanceInspector", ref open, ImGuiWindowFlags.NoSavedSettings))
+		if (!ImGui.Begin($"{windowTitle}###ActorInstanceInspector", ref open))
 		{
 			if (!open)
 				selectedRoomActorIndex = -1;
 			ImGui.End();
 			return;
 		}
+		var actorId = ActorSpecs.GetActorId(actor);
+		if (ImGui.IsWindowDocked())
+			DrawDockedInspectorTitle(windowTitle, actorId);
+		else if (actorId is not null)
+			DrawActorIdInWindowTitle(windowTitle, actorId);
 
 		if (!open)
 		{
@@ -1589,6 +1621,41 @@ public partial class Manager
 		ImGui.End();
 	}
 
+	static void DrawDockedInspectorTitle(string title, string? detail = null)
+	{
+		ImGui.TextUnformatted(title);
+		if (detail is not null)
+		{
+			ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+			var textColor = ImGui.GetStyle().Colors[(int)ImGuiCol.Text];
+			textColor.W *= 0.5f;
+			ImGui.PushStyleColor(ImGuiCol.Text, textColor);
+			ImGui.TextUnformatted(detail);
+			ImGui.PopStyleColor();
+		}
+		ImGui.Separator();
+	}
+
+	static void DrawActorIdInWindowTitle(string title, string actorId)
+	{
+		var style = ImGui.GetStyle();
+		var windowPos = ImGui.GetWindowPos();
+		var windowSize = ImGui.GetWindowSize();
+		var titleSize = ImGui.CalcTextSize(title);
+		var titleHeight = ImGui.GetFrameHeight();
+		var titleStartX = windowPos.X + style.WindowBorderSize + style.FramePadding.X +
+			ImGui.GetFontSize() + style.ItemInnerSpacing.X * 2;
+		var textColor = style.Colors[(int)ImGuiCol.Text];
+		textColor.W *= 0.5f;
+		var position = new Vector2(
+			titleStartX + titleSize.X + style.ItemInnerSpacing.X,
+			windowPos.Y + (titleHeight - titleSize.Y) * 0.5f);
+		var draw = ImGui.GetWindowDrawList();
+		draw.PushClipRect(windowPos, windowPos + new Vector2(windowSize.X - titleHeight, titleHeight), false);
+		draw.AddText(position, ImGui.ColorConvertFloat4ToU32(textColor), actorId);
+		draw.PopClipRect();
+	}
+
 	static bool HideInactiveLightCookieProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		if (ActorSpecs.GetTypeName(actor) != nameof(Light) ||
@@ -1611,8 +1678,7 @@ public partial class Manager
 			return DrawParticleEffectNameProperty(room, actor, property);
 
 		var changed = false;
-		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
-		ImGui.SetNextItemWidth(controlWidth);
+		var controlWidth = BeginPropertyRow(property.Name, property.HasLocalValue);
 		ImGui.PushID("Value");
 
 		if (property.Type == typeof(float))
@@ -1785,7 +1851,7 @@ public partial class Manager
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
-			if (ImGui.SmallButton("Reset"))
+			if (ImGui.SmallButton(EditorIcons.ResetButton))
 			{
 				using (CaptureRoomUndo("Reset Actor Property", room))
 					ActorSpecs.ResetProperty(actor, property.JsonName);
@@ -1826,11 +1892,10 @@ public partial class Manager
 	bool DrawParticleEffectNameProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
+		BeginPropertyRow(property.Name, property.HasLocalValue);
 		ImGui.PushID("Value");
 
 		var current = property.Value?.GetValue<string>() ?? string.Empty;
-		ImGui.SetNextItemWidth(controlWidth);
 		if (ImGui.BeginCombo("##Value", current))
 		{
 			foreach (var name in ParticleEffectAssets.Names)
@@ -1850,7 +1915,7 @@ public partial class Manager
 	bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
+		BeginPropertyRow(property.Name, property.HasLocalValue);
 		var value = property.Value?.GetValue<string>() ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var sourceId = ActorSpecs.ReadString(actor, "Id") ?? "";
@@ -1858,7 +1923,6 @@ public partial class Manager
 					  string.Equals(pickingLinkedDoorTargetForActorId, sourceId, StringComparison.OrdinalIgnoreCase);
 
 		ImGui.BeginGroup();
-		ImGui.SetNextItemWidth(controlWidth);
 		ImGui.InputText("##Value", ref value, 128, ImGuiInputTextFlags.ReadOnly);
 
 		if (target is { } found)
@@ -1898,7 +1962,7 @@ public partial class Manager
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
-			if (ImGui.SmallButton("Reset"))
+			if (ImGui.SmallButton(EditorIcons.ResetButton))
 			{
 				using (CaptureRoomUndo("Reset Actor Property", room))
 					ActorSpecs.ResetProperty(actor, property.JsonName);
@@ -1912,14 +1976,13 @@ public partial class Manager
 	bool DrawSwitchTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		var controlWidth = BeginInspectorPropertyRow(property.Name, property.HasLocalValue);
+		BeginPropertyRow(property.Name, property.HasLocalValue);
 		var value = property.Value?.GetValue<string>() ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var label = target is { } found
 			? $"{ActorSpecs.GetTypeName(found.Actor)} ({value[..Math.Min(8, value.Length)]})"
 			: string.IsNullOrWhiteSpace(value) ? "No target" : $"Missing ({value})";
 
-		ImGui.SetNextItemWidth(controlWidth);
 		if (ImGui.BeginCombo("##Value", label))
 		{
 			foreach (var candidate in room.Actors)
@@ -1952,7 +2015,7 @@ public partial class Manager
 		if (property.HasLocalValue)
 		{
 			ImGui.SameLine();
-			if (ImGui.SmallButton("Reset"))
+			if (ImGui.SmallButton(EditorIcons.ResetButton))
 			{
 				using (CaptureRoomUndo("Reset Actor Property", room))
 					ActorSpecs.ResetProperty(actor, property.JsonName);
@@ -2190,18 +2253,25 @@ public partial class Manager
 		return changed;
 	}
 
-	static float BeginInspectorPropertyRow(string label, bool hasResetButton)
+	static float BeginPropertyRow(string label, bool hasTrailingButton = false)
 	{
+		var style = ImGui.GetStyle();
 		var available = ImGui.GetContentRegionAvail().X;
-		var labelWidth = MathF.Min(92, MathF.Max(56, available * 0.38f));
-		var resetWidth = hasResetButton ? ImGui.CalcTextSize("Reset").X + ImGui.GetStyle().FramePadding.X * 2 + ImGui.GetStyle().ItemSpacing.X : 0;
-		var controlWidth = MathF.Max(72, available - labelWidth - resetWidth - ImGui.GetStyle().ItemSpacing.X);
+		var trailingWidth = hasTrailingButton ? ImGui.CalcTextSize(EditorIcons.ResetButton).X + style.FramePadding.X * 2 + style.ItemSpacing.X : 0;
+		var labelWidth = MathF.Min(128, MathF.Max(104, available * 0.4f));
+		labelWidth = MathF.Max(56, MathF.Min(labelWidth, available - trailingWidth - style.ItemSpacing.X - 72));
+		var controlWidth = MathF.Max(72, available - labelWidth - trailingWidth - style.ItemSpacing.X);
+		var labelSize = ImGui.CalcTextSize(label);
+		var rowStartX = ImGui.GetCursorPosX();
 
 		ImGui.AlignTextToFramePadding();
+		ImGui.SetCursorPosX(rowStartX + MathF.Max(0, labelWidth - labelSize.X));
 		ImGui.TextUnformatted(label);
-		if (ImGui.IsItemHovered() && ImGui.CalcTextSize(label).X > labelWidth)
+		if (ImGui.IsItemHovered() && labelSize.X > labelWidth)
 			ImGui.SetTooltip(label);
-		ImGui.SameLine(labelWidth);
+		ImGui.SameLine();
+		ImGui.SetCursorPosX(rowStartX + labelWidth + style.ItemSpacing.X);
+		ImGui.SetNextItemWidth(controlWidth);
 
 		return controlWidth;
 	}
@@ -2777,7 +2847,7 @@ public partial class Manager
 		batcher.Image(sprite.Frames[0].Subtexture, remembered.Position, sprite.Origin, Vector2.One, 0, Color.White * 0.25f);
 	}
 
-	void MoveRoomActorTo(Room room, int actorIndex, Vector2 world, bool snap)
+	void MoveRoomActorTo(Room room, int actorIndex, Vector2 world, Vector2 pressWorld, bool snap)
 	{
 		if (actorIndex < 0 || actorIndex >= room.Actors.Count)
 			return;
@@ -2786,7 +2856,7 @@ public partial class Manager
 		var offset = GetRoomActorPaletteOffset(actor);
 		EditorFor(actor)?.BeforeMove(new EditorActor(room, actor));
 
-		var targetLocal = world - editorDrag.ActorOffset - (Vector2)room.WorldBounds.TopLeft;
+		var targetLocal = (Vector2)editorDrag.ActorStartPosition + world - pressWorld;
 		var local = snap
 			? SnapRoomActorLocalPosition(targetLocal, offset)
 			: (Point2)targetLocal;
@@ -4000,6 +4070,7 @@ public partial class Manager
 		if (!editorViewInitialized)
 			FocusEditorOnCurrentRoom();
 		UpdateEditorCameraTween();
+		PreserveEditorViewAcrossLayoutChanges(inner);
 		UpdateEditorWorldView(inner);
 		UpdateRoomEditModeFromZoom(inner);
 		if (!editingRoomGeometry)
@@ -4199,7 +4270,8 @@ public partial class Manager
 						ClearEditorDragState();
 						editorSelectionRect = null;
 						editorDrag.Kind = EditorDragKind.RoomActor;
-						editorDrag.ActorOffset = worldMouse - (roomTopLeft + (Vector2)(ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "Position") ?? Point2.Zero));
+						editorDrag.ActorStartPosition = ActorSpecs.ReadPoint(editing.Actors[selectedRoomActorIndex], "Position") ?? Point2.Zero;
+						editorDrag.ActorPressWorld = worldMouse;
 						editorDrag.ActorSnapsByDefault = RoomActorPositionIsSnapped(editing.Actors[selectedRoomActorIndex]);
 						CancelTilePaint();
 					}
@@ -4352,8 +4424,14 @@ public partial class Manager
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.RoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
-				OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Actor", editing);
-				MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse, RoomActorDragShouldSnap(keyboardBlocked));
+				if (!editorDrag.ActorDragStarted && ActorPressPassedDragThreshold)
+					editorDrag.ActorDragStarted = true;
+				if (editorDrag.ActorDragStarted)
+				{
+					OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Actor", editing);
+					MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse,
+						ScreenToEditorWorld(actorPressCursor, inner), RoomActorDragShouldSnap(keyboardBlocked));
+				}
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.SelectionMove && editorDrag.SelectionSnapshot != null && Input.Mouse.LeftDown)
 			{
@@ -4368,9 +4446,9 @@ public partial class Manager
 
 			if (!Input.Mouse.LeftDown && DragKind != EditorDragKind.TilePaint)
 			{
-				if (DragKind == EditorDragKind.RoomActor && actorPressCanCycle && !worldMouseBlocked && actorSelectActive &&
-					Vector2.DistanceSquared(Cursor, actorPressCursor) <= ActorPickCycleThreshold * ActorPickCycleThreshold)
-					CycleRoomActorSelection(editing, worldMouse);
+				if (DragKind == EditorDragKind.RoomActor && actorPressCanCycle && !editorDrag.ActorDragStarted &&
+					!ActorPressPassedDragThreshold && !worldMouseBlocked && actorSelectActive)
+					CycleRoomActorSelection(editing, editorDrag.ActorPressWorld);
 				actorPressCanCycle = false;
 				CommitEditorDragState();
 			}
@@ -5085,7 +5163,7 @@ public partial class Manager
 			SaveWindowSettings();
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip("On: a pasted actor lands in the middle of the editor view.\nOff: it keeps the position it was copied from.\nEither way it is clamped inside the room.");
-		if (ImGui.Button("Reset tool window layout"))
+		if (ImGui.Button(EditorIcons.ResetToolWindowLayout))
 			ResetEditorToolWindowLayout();
 		if (ImGui.IsItemHovered())
 			ImGui.SetTooltip("Docks Tile Creator, NCT Tiles, Particles, Music, SFX and this window\nback into the panel on the right.");

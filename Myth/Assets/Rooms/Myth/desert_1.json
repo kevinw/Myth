@@ -79,6 +79,22 @@
       "Id": "d15aa11eafaaa63f",
       "Type": "PlayerStart",
       "Position": [156, 136]
+    },
+    {
+      "Id": "a16d1dec6b3f2217",
+      "Type": "ParticleEmitter",
+      "Position": [228, 52]
+    },
+    {
+      "Id": "50cf1716cfe4aff6",
+      "Type": "Floater",
+      "Position": [76, 76]
+    },
+    {
+      "Id": "7a42fe42adcfb327",
+      "Type": "Rope",
+      "Position": [159, 20],
+      "Size": [8, 108]
     }
   ]
 }

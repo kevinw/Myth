@@ -153,6 +153,11 @@
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>
 
+	<ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythTestShip)' != 'true' and '$(MythShip)' != 'true'">
+		<None Remove="EditorAssets/**" />
+		<Content Include="EditorAssets/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
     <Content Include="$(FmodNativeDir)win-x64/*.dll" Visible="false">
       <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">PreserveNewest</CopyToOutputDirectory>

@@ -13,6 +13,7 @@ public partial class Manager
 	string? nctSelected;
 	NctTileSpec? nctDraft;
 	bool nctDirty;
+	bool nctFocusRequested;
 	bool nctAutoSave;
 	bool nctAutoSaveRequested;
 	string nctNewName = "";
@@ -21,6 +22,12 @@ public partial class Manager
 	{
 		if (!nctEditorOpen)
 			return;
+
+		if (nctFocusRequested)
+		{
+			nctFocusRequested = false;
+			ImGui.SetNextWindowFocus();
+		}
 
 		ImGui.SetNextWindowSize(new Vector2(420, 560), ImGuiCond.FirstUseEver);
 		DockNextToolWindow("NCT Tiles");
@@ -53,6 +60,13 @@ public partial class Manager
 			ImGui.TextDisabled("Select a tile above, or create a new one.");
 
 		ImGui.End();
+	}
+
+	void OpenNctTileEditor(NctTileSpec spec)
+	{
+		nctEditorOpen = true;
+		nctFocusRequested = true;
+		SelectNctTile(spec);
 	}
 
 	void SelectNctTile(NctTileSpec spec)
@@ -276,7 +290,7 @@ public partial class Manager
 			if (changed) draft.NearestStateSampling = nearest;
 			MarkNctEdited(changed, discrete: true);
 
-			changed = ImGui.Button("Reset experimental");
+			changed = ImGui.Button(EditorIcons.ResetExperimental);
 			if (changed)
 			{
 				draft.DetailScale = 1f;

@@ -37,7 +37,9 @@ public partial class Manager
 	private struct EditorDragState
 	{
 		public EditorDragKind Kind;
-		public Vector2 ActorOffset;
+		public Point2 ActorStartPosition;
+		public Vector2 ActorPressWorld;
+		public bool ActorDragStarted;
 		public bool ActorSnapsByDefault;
 		public int PathPointIndex;
 		public string? GizmoId;

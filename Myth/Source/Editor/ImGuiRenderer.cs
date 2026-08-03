@@ -193,7 +193,8 @@ fn vertex_main(
 	/// </summary>
 	public ImGuiMouseCursor MouseCursor { get; private set; }
 
-	public ImGuiRenderer(App app, string? customFontPath = null, bool enableGamepadNav = false, string? iniPath = null, float frameRounding = 2)
+	public ImGuiRenderer(App app, string? customFontPath = null, int customFontFace = 0, bool enableGamepadNav = false, string? iniPath = null, float frameRounding = 2,
+		string? mergedFontPath = null, ushort[]? mergedFontGlyphRanges = null, float mergedFontSize = 56)
 	{
 		this.app = app;
 		this.gamepadNav = enableGamepadNav;
@@ -222,6 +223,8 @@ fn vertex_main(
 			io.ConfigNavCursorVisibleAlways = true;
 		}
 
+		var mergedFontGlyphRangesHandle = default(GCHandle);
+
 		// load ImGui Font
 		{
 			if (customFontPath != null && !File.Exists(customFontPath))
@@ -232,20 +235,51 @@ fn vertex_main(
 
 			if (customFontPath != null && File.Exists(customFontPath))
 			{
-				io.Fonts.AddFontFromFileTTF(customFontPath, 64);
+				unsafe
+				{
+					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig());
+					config.FontNo = customFontFace;
+					io.Fonts.AddFontFromFileTTF(customFontPath, 64, config);
+					config.Destroy();
+				}
 				io.FontGlobalScale = 16.0f / 64.0f;
 			}
 			else
 			{
 				io.Fonts.AddFontDefault();
 			}
+
+			if (mergedFontPath != null && !File.Exists(mergedFontPath))
+				Console.Error.WriteLine($"Could not find merged font at {mergedFontPath}");
+
+			if (mergedFontPath != null && File.Exists(mergedFontPath) && mergedFontGlyphRanges is { Length: > 0 })
+			{
+				mergedFontGlyphRangesHandle = GCHandle.Alloc(mergedFontGlyphRanges, GCHandleType.Pinned);
+				unsafe
+				{
+					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig());
+					config.MergeMode = true;
+					config.PixelSnapH = true;
+					config.GlyphMinAdvanceX = mergedFontSize;
+					io.Fonts.AddFontFromFileTTF(mergedFontPath, mergedFontSize, config, mergedFontGlyphRangesHandle.AddrOfPinnedObject());
+					config.Destroy();
+				}
+			}
 		}
 
 		// create font texture
-		unsafe
+		try
 		{
-			io.Fonts.GetTexDataAsRGBA32(out byte* pixelData, out int width, out int height, out int bytesPerPixel);
-			fontTexture = new Texture(app.GraphicsDevice, width, height, new ReadOnlySpan<byte>(pixelData, width * height * 4));
+			unsafe
+			{
+				io.Fonts.GetTexDataAsRGBA32(out byte* pixelData, out int width, out int height, out int bytesPerPixel);
+				fontTexture = new Texture(app.GraphicsDevice, width, height, new ReadOnlySpan<byte>(pixelData, width * height * 4));
+			}
+		}
+		finally
+		{
+			if (mergedFontGlyphRangesHandle.IsAllocated)
+				mergedFontGlyphRangesHandle.Free();
 		}
 
 		// create drawing resources

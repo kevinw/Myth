@@ -27,7 +27,7 @@ public partial class Manager : App
 	const string WindowSettingsFileName = "window.json";
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
-	static float uiScale = 2.7f;
+	static float uiScale = 2.5f;
 	static float Scale => uiScale;
 	static float ButtonSize => 34;
 	static float ButtonSpacing => 2;
@@ -293,7 +293,7 @@ public partial class Manager : App
 			DitherPerfScale = 0;
 		}
 
-		uiScale = 2.7f;
+		uiScale = 2.5f;
 		if (OperatingSystem.IsWindows())
 		{
 			uiScale = 1.5f;
@@ -312,7 +312,21 @@ public partial class Manager : App
 #endif
 		}
 #if EDITOR
-		imgui = new(this, Assets.AssetsPath + "/Fonts/Myna-Regular.ttf", iniPath: Path.Join(UserPath, "editor-layout.ini")) { Scale = Scale };
+		var editorFontPath = Assets.AssetsPath + "/Fonts/Myna-Regular.ttf";
+		var editorFontFace = 0;
+		const string MacEditorFontPath = "/System/Library/Fonts/Avenir Next Condensed.ttc";
+		const int MacEditorFontFace = 7;
+		//const string MacEditorFontPath = "/Library/Fonts/SF-Compact-Display-Thin.otf";
+		//const int MacEditorFontFace = 0;
+		if (OperatingSystem.IsMacOS() && File.Exists(MacEditorFontPath))
+		{
+			editorFontPath = MacEditorFontPath;
+			editorFontFace = MacEditorFontFace;
+		}
+		imgui = new(this, editorFontPath, editorFontFace,
+			iniPath: Path.Join(UserPath, "editor-layout.ini"),
+			mergedFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"),
+			mergedFontGlyphRanges: EditorIcons.GlyphRanges) { Scale = Scale };
 #elif BROWSER
 		imgui = new(this) { Scale = 1.0f };
 #endif

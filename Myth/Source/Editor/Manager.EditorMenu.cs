@@ -186,7 +186,7 @@ public partial class Manager
 	/// plus deleting the room. Drawn at the top of the Room panel.
 	void DrawRoomIdentitySection(Room room)
 	{
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3)); // panels zero it; give buttons some back
+		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3));
 		if (editingRoomName && roomNameEditingRoomId == room.Id)
 		{
 			ImGui.SetNextItemWidth(-1);

@@ -1,10 +1,11 @@
 - We're working on a 2D C# platformer game in Myth/ named Mycelon (code name is Myth)
-- It uses Foster/, an SDL backed 2D game framework. It builds to Desktop (default), and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for release build scripts. iOS is supported but not given attention right now
+- It uses Foster/, an SDL backed 2D framework. It builds to Desktop (default), and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for release build scripts. iOS is supported but not given attention right now
 - Try not to allocate every frame, e.g., use a static reusable scratch List you .Clear() instead. Don't use LINQ in per-frame code
 - Omit: XML doc tags like <summary></summary>, implicit "private" keyword
 - For simple gameplay-esque values, instead of a field like `const float TweakableValue = 9f;` prefer `static float TweakableValue => 9f;` -- we use dotnet watch to do live gamedev and for values we want to dial in, the getter allows us to change the value w/out recompiling
 - Prefer "vector arithmetic" style over per-component math: operate on whole Point2/Vector2/Rect/RectInt values with operators and their built-in methods (e.g. `(-origin - frame.TopLeft).FloorToPoint2()`, `RectInt.Between(a, b)`, `rect.Inflate(-inset)`) instead of hand-rolling `.X`/`.Y` and `MathF` calls. Before writing such code, grok what the base Point2/Vector2/Rect/RectInt structs in Foster/ already provide -- the method you want usually exists.
 - When I ask for a commit, no need to branch first
+- Backwards compat is only important for the game content on disk; remove obsolete paths instead of adding compat layers, fallbacks.
 - You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
     - Can this be one line? Make it one line.
     - No boilerplate nobody asked for.
