@@ -11,7 +11,6 @@ namespace Myth;
 
 public partial class Manager
 {
-
 	enum EditorScrollMode
 	{
 		Auto,
