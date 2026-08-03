@@ -46,6 +46,7 @@ public partial class Manager
 	float trackpadScrollLatch;
 	EditorScrollMode editorScrollMode;
 	bool preferencesOpen;
+	bool imguiDemoOpen;
 	bool editorGameRunInBackground = true;
 	// Paste drops the actor under the middle of the editor view instead of at the position it
 	// was copied from. Either way the paste is clamped into the room (see PasteActor).
@@ -69,6 +70,9 @@ public partial class Manager
 	// cursor and goes null once ImGui takes the mouse, so the menu needs its own copy.
 	RectInt? pendingCreateRoomTiles;
 	bool createRoomPopupRequested;
+	bool addTilePopupRequested;
+	string newTileName = "";
+	Factory.TileLayer newTileLayer;
 	string? selectedActorSpecId;
 	int selectedActorPaletteIndex = -1;
 	ActorTag actorPaletteFilter = ActorTag.None; // None = show all
@@ -234,6 +238,8 @@ public partial class Manager
 			FpsOverlayImGui();
 		TransitionViewerImGui();
 		PreferencesImGui();
+		if (imguiDemoOpen)
+			ImGui.ShowDemoWindow(ref imguiDemoOpen);
 		if (particleEditor.PinnedWindowOpen)
 			DockNextToolWindow("Particles##Pinned");
 		particleEditor.PinnedWindowImGui(game, Scale, NoteDockedWindow);
@@ -786,7 +792,19 @@ public partial class Manager
 
 			index++;
 		}
+
+		if (index > 0 && index % columns != 0)
+			ImGui.SameLine();
+		if (ImGuiSubtextureButton("##AddTile", Assets.GetSubtexture(EditorButtonSubtexture_Plus), "Add a new tile",
+			false, new Vector2(ButtonSize, ButtonSize), true, 4))
+		{
+			newTileLayer = activeTileLayer;
+			addTilePopupRequested = true;
+		}
+		DrawAddTilePopup();
 	}
+
+	const string EditorButtonSubtexture_Plus = "buttons/18";
 
 	void DrawTileLayerSelector()
 	{
@@ -4943,6 +4961,51 @@ public partial class Manager
 			CreateRoom(proposal.Position, proposal.Size);
 			pendingCreateRoomTiles = null;
 			proposedRoomTiles = null;
+			ImGui.CloseCurrentPopup();
+		}
+
+		EndPaddedPopup();
+	}
+
+	void DrawAddTilePopup()
+	{
+		if (addTilePopupRequested)
+		{
+			addTilePopupRequested = false;
+			newTileName = "";
+			ImGui.OpenPopup("Add Tile");
+		}
+
+		var open = true;
+		if (!BeginPaddedPopupModal("Add Tile", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+			return;
+
+		ImGui.TextUnformatted(newTileLayer == Factory.TileLayer.Background
+			? "Create a new background tile:"
+			: "Create a new foreground tile:");
+		ImGui.SetNextItemWidth(240);
+		if (ImGui.IsWindowAppearing())
+			ImGui.SetKeyboardFocusHere();
+		var submit = ImGui.InputTextWithHint("##NewTileName", "tile name", ref newTileName, 32,
+			ImGuiInputTextFlags.EnterReturnsTrue);
+		var name = newTileName.Trim().ToLowerInvariant();
+		var valid = CanCreateTileKit(name);
+		ImGui.BeginDisabled(!valid);
+		var create = ImGui.Button("Create", new Vector2(90, 0)) || submit;
+		ImGui.EndDisabled();
+		ImGui.SameLine();
+		var cancel = ImGui.Button("Cancel", new Vector2(90, 0)) || !open;
+
+		if (create && valid)
+		{
+			var spec = CreateTileKitDraft(name, newTileLayer);
+			newTileName = "";
+			OpenTileKitEditor(spec);
+			ImGui.CloseCurrentPopup();
+		}
+		else if (cancel)
+		{
+			newTileName = "";
 			ImGui.CloseCurrentPopup();
 		}
 

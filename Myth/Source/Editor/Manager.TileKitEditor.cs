@@ -17,7 +17,6 @@ public partial class Manager
 	bool tileKitPreviewStale;
 	bool tileKitFocusRequested;
 	char tileKitPaintKey;
-	string tileKitNewName = "";
 	Texture? tileKitPreviewTexture;
 
 	// Demo terrain for the preview: a floating island, a bumpy floor, an overhang and a
@@ -83,8 +82,8 @@ public partial class Manager
 		if (tileKitDraft == null && TileKits.Specs.Count > 0)
 			SelectTileKit(TileKits.Specs[0]);
 
-		// The kit list and save row stay pinned; only the editing sections scroll.
-		DrawTileKitList();
+		if (tileKitDraft is { } activeDraft)
+			ImGui.TextUnformatted(activeDraft.Name);
 		ImGui.Separator();
 
 		if (tileKitDraft is { } draft)
@@ -103,38 +102,27 @@ public partial class Manager
 			DrawTileKitSaveRow(draft);
 		}
 		else
-			ImGui.TextDisabled("Select a kit above, or create a new one.");
+			ImGui.TextDisabled("Open a tile from the palette to edit it.");
 
 		ImGui.End();
 	}
 
-	void DrawTileKitList()
-	{
-		foreach (var spec in TileKits.Specs)
-		{
-			if (ImGuiTextButton(spec.Name, new Vector2(0, 0), tileKitSelected == spec.Name))
-				SelectTileKit(spec);
-			ImGui.SameLine();
-		}
-		ImGui.SetNextItemWidth(120);
-		ImGui.InputTextWithHint("##NewKitName", "new kit name", ref tileKitNewName, 32);
-		ImGui.SameLine();
-		var name = tileKitNewName.Trim().ToLowerInvariant();
-		var valid = name.Length > 0 && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '-')
-			&& char.IsAsciiLetter(name[0])
+	static bool CanCreateTileKit(string name)
+		=> name.Length > 0 && char.IsAsciiLetter(name[0])
+			&& name.All(c => char.IsAsciiLetterOrDigit(c) || c == '-')
 			&& TileKits.Specs.All(it => !string.Equals(it.Name, name, StringComparison.OrdinalIgnoreCase))
 			&& Assets.GetTileset(name) == null;
-		ImGui.BeginDisabled(!valid);
-		if (ImGui.Button("New Kit"))
-		{
-			tileKitDraft = TileKits.CreateDefault(name);
-			tileKitSelected = name;
-			tileKitNewName = "";
-			tileKitPaintKey = 'a';
-			tileKitDirty = true;
-			tileKitPreviewStale = true;
-		}
-		ImGui.EndDisabled();
+
+	TileKitSpec CreateTileKitDraft(string name, Factory.TileLayer layer)
+	{
+		var draft = TileKits.CreateDefault(name);
+		draft.Layer = layer;
+		tileKitDraft = draft;
+		tileKitSelected = name;
+		tileKitPaintKey = 'a';
+		tileKitDirty = true;
+		tileKitPreviewStale = true;
+		return draft;
 	}
 
 	void SelectTileKit(TileKitSpec spec)
@@ -217,36 +205,39 @@ public partial class Manager
 			MarkTileKitEdited();
 		}
 
-		var surfaces = (string[])[Factory.DefaultSurfaceType, "Brick"];
-		var surfaceIndex = Math.Max(0, Array.IndexOf(surfaces, draft.Surface));
-		if (ImGui.Combo("surface", ref surfaceIndex, surfaces, surfaces.Length))
+		if (!background)
 		{
-			draft.Surface = surfaces[surfaceIndex];
-			MarkTileKitEdited();
-		}
-
-		var reflections = Enum.GetNames<Factory.ReflectionMode>();
-		var reflectionIndex = (int)draft.Reflection;
-		if (ImGui.Combo("reflection", ref reflectionIndex, reflections, reflections.Length))
-		{
-			draft.Reflection = (Factory.ReflectionMode)reflectionIndex;
-			MarkTileKitEdited();
-		}
-		if (draft.Reflection != Factory.ReflectionMode.None)
-		{
-			var opacity = draft.ReflectionOpacity;
-			if (ImGui.SliderFloat("reflection opacity", ref opacity, 0f, 1f))
+			var surfaces = (string[])[Factory.DefaultSurfaceType, "Brick"];
+			var surfaceIndex = Math.Max(0, Array.IndexOf(surfaces, draft.Surface));
+			if (ImGui.Combo("surface", ref surfaceIndex, surfaces, surfaces.Length))
 			{
-				draft.ReflectionOpacity = opacity;
+				draft.Surface = surfaces[surfaceIndex];
 				MarkTileKitEdited();
 			}
-		}
 
-		var acoustic = draft.AcousticReflectivity;
-		if (ImGui.SliderFloat("acoustic reflectivity", ref acoustic, 0f, 1f))
-		{
-			draft.AcousticReflectivity = acoustic;
-			MarkTileKitEdited();
+			var reflections = Enum.GetNames<Factory.ReflectionMode>();
+			var reflectionIndex = (int)draft.Reflection;
+			if (ImGui.Combo("reflection", ref reflectionIndex, reflections, reflections.Length))
+			{
+				draft.Reflection = (Factory.ReflectionMode)reflectionIndex;
+				MarkTileKitEdited();
+			}
+			if (draft.Reflection != Factory.ReflectionMode.None)
+			{
+				var opacity = draft.ReflectionOpacity;
+				if (ImGui.SliderFloat("reflection opacity", ref opacity, 0f, 1f))
+				{
+					draft.ReflectionOpacity = opacity;
+					MarkTileKitEdited();
+				}
+			}
+
+			var acoustic = draft.AcousticReflectivity;
+			if (ImGui.SliderFloat("acoustic reflectivity", ref acoustic, 0f, 1f))
+			{
+				draft.AcousticReflectivity = acoustic;
+				MarkTileKitEdited();
+			}
 		}
 	}
 

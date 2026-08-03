@@ -318,6 +318,9 @@ public partial class Manager
 		ImGui.SetNextWindowPos(new Vector2(x, dock.Y), ImGuiCond.Always);
 		ImGui.SetNextWindowSize(new Vector2(EditorDockSplitterWidth, dock.Height), ImGuiCond.Always);
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+		// ImGui otherwise clamps this 6px input window to Style.WindowMinSize (32px by
+		// default), leaving an invisible full-height strip over the docked tool window.
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowMinSize, Vector2.Zero);
 		if (ImGui.Begin(rightSide ? "##EditorDockSplitter" : "##EditorPaletteSplitter", flags))
 		{
 			ImGui.InvisibleButton("##Drag", new Vector2(EditorDockSplitterWidth, dock.Height));
@@ -342,7 +345,7 @@ public partial class Manager
 					ImGui.GetColorU32(ImGuiCol.SeparatorHovered));
 		}
 		ImGui.End();
-		ImGui.PopStyleVar();
+		ImGui.PopStyleVar(2);
 	}
 }
 #endif

@@ -1,0 +1,42 @@
+{
+  "surface": "Brick",
+  "layer": "Background",
+  "mask": "stone-kit",
+  "seed": 1415503277,
+  "edgeWidth": "1-2",
+  "wobble": 0.6,
+  "palette": {
+    "a": "45283C",
+    "b": "663C28"
+  },
+  "heights": {
+    "a": 0.67,
+    "b": 0
+  },
+  "fills": [
+    [
+      "aaabaaaa",
+      "bbabbbbb",
+      "aaaaabaa",
+      "aaaaabaa",
+      "babbbbab",
+      "aabaaaaa",
+      "aabaaaaa",
+      "aaaaabaa"
+    ]
+  ],
+  "edge": [
+    [
+      "9BADB7",
+      45
+    ],
+    [
+      "847E87",
+      40
+    ],
+    [
+      "595652",
+      15
+    ]
+  ]
+}

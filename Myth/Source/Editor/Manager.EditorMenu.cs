@@ -21,6 +21,13 @@ public partial class Manager
 		if (!open) ImGui.PopStyleVar();
 		return open;
 	}
+	static bool BeginPaddedPopupModal(string id, ref bool open, ImGuiWindowFlags flags)
+	{
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8, 6));
+		var begun = ImGui.BeginPopupModal(id, ref open, flags);
+		if (!begun) ImGui.PopStyleVar();
+		return begun;
+	}
 	static void EndPaddedPopup() { ImGui.EndPopup(); ImGui.PopStyleVar(); }
 
 	/// Where the hamburger sits, so the game view can exclude it from its own hover test.
@@ -136,6 +143,7 @@ public partial class Manager
 #endif
 			ImGui.MenuItem("Preferences", null, ref preferencesOpen);
 			ImGui.Separator();
+			ImGui.MenuItem("Dear ImGui Demo", null, ref imguiDemoOpen);
 			if (ImGui.MenuItem("Reset Layout"))
 				ResetEditorToolWindowLayout();
 			ImGui.EndMenu();
