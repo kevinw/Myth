@@ -11,6 +11,7 @@ public enum WindTargets
 	Bud = 1 << 1,
 	Enemies = 1 << 2,
 	Projectiles = 1 << 3,
+	Ropes = 1 << 4,
 }
 
 [GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System, LivePositionEditable = true)]
@@ -35,7 +36,7 @@ public class Wind : Actor, IResizable
 	public Point2 Direction = Point2.Up;
 	public float Acceleration = 620f;
 	public float MaxSpeed = 150f;
-	public WindTargets Targets = WindTargets.Player | WindTargets.Bud;
+	public WindTargets Targets = WindTargets.Player | WindTargets.Bud | WindTargets.Ropes;
 	public bool DrawStreaks = true;
 	public Color StreakColor = new(0x9edfff);
 	public float StreakSpeed = 70f;
@@ -98,6 +99,17 @@ public class Wind : Actor, IResizable
 				influence.NegativeXSpeedLimit = MathF.Max(influence.NegativeXSpeedLimit, horizontalLimit);
 		}
 		return influence;
+	}
+
+	// Ropes sample the wind field per verlet point instead of receiving Velocity pushes.
+	// SpeedLimit is the horizontal cap along the push direction; 0 means uncapped.
+	internal bool TryGetHorizontalPush(out RectInt rect, out float accelX, out float speedLimit)
+	{
+		var direction = DirectionVector;
+		rect = WorldRect;
+		accelX = direction.X * Acceleration;
+		speedLimit = MaxSpeed > 0 ? MathF.Abs(direction.X) * MaxSpeed : 0;
+		return Targets.Has(WindTargets.Ropes) && Acceleration > 0 && accelX != 0;
 	}
 
 	void Accelerate(Actor actor, Vector2 direction)

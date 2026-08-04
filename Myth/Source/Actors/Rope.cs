@@ -45,7 +45,15 @@ public class Rope : Actor, IResizable
 	const int ConstraintIterations = 4;
 	static float MaxSimStep => 1f / 60f;
 
+	struct WindPush
+	{
+		public RectInt Rect;
+		public float Accel;
+		public float SpeedLimit; // 0 means uncapped
+	}
+
 	readonly List<Chain> chains = [];
+	readonly List<WindPush> windPushes = [];
 	int waiting; // leading pinned-chain points still held at the anchor; 1 means fully paid out
 	Point2 builtSize;
 	float lastDelta = 1 / 60f;
@@ -93,6 +101,11 @@ public class Rope : Actor, IResizable
 		var frameDelta = Time.Delta;
 		if (frameDelta <= 0)
 			return;
+
+		windPushes.Clear();
+		foreach (var actor in Game.Actors)
+			if (actor is Wind wind && wind.TryGetHorizontalPush(out var rect, out var accel, out var limit))
+				windPushes.Add(new WindPush { Rect = rect, Accel = accel, SpeedLimit = limit });
 
 		// Slow motion still gets one smooth, small step per update; fast motion and hitches
 		// split into equal steps so no solve exceeds the stable 60 Hz timestep.
@@ -153,6 +166,21 @@ public class Rope : Actor, IResizable
 			var accel = new Vector2(0, RopeGravity);
 			if (chain.Pinned)
 				accel.X += SwayAccel / Weight * MathF.Sin(swayPhase + i * SwayPointPhase);
+			foreach (var wind in windPushes)
+			{
+				if (!wind.Rect.Contains((Point2)points[i]))
+					continue;
+				var push = wind.Accel / Weight;
+				if (wind.SpeedLimit > 0)
+				{
+					// Same cap as Wind.Accelerate: never push a point past the wind's speed limit.
+					var remaining = wind.SpeedLimit - (points[i].X - prev[i].X) / dt * MathF.Sign(push);
+					if (remaining <= 0)
+						continue;
+					push = MathF.Sign(push) * MathF.Min(MathF.Abs(push), remaining / dt);
+				}
+				accel.X += push;
+			}
 			if (i == chain.RiderIndex)
 				accel += new Vector2(chain.SwingAccel, RiderExtraGravity);
 

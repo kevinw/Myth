@@ -1,5 +1,6 @@
 # TODO
 
+- if you go up, there's only exploration, if you go down, there's also combat
 - idea: one type of smoky NCT could write over other actors, but have the alpha depend on a simulation value.
 - lightning traps need sound fx
 - region based background settings?
@@ -61,7 +62,6 @@ adjust rope springiness as a mechanic or challenge
 - rebuild fmod mobile; add warning if fmod project files are newer than the built asset banks? or just build them on desktop?
 
 ## mood: CONTENT
-- merge kenney font for controller buttons into SpriteFont  https://kenney.nl/assets/input-prompts and include button prompts in tutorial messages
 - bud "once per session" hints for rooms like the movingplatform room where you have to burrow.
 - telegraph more (shieldknight and drone)
 - Drone has too much movement
