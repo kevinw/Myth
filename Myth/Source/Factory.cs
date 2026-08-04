@@ -353,14 +353,15 @@ public static class Factory
 			return;
 
 		// Palette icon defaults to a sprite named after the class. An explicit name that
-		// doesn't resolve is a typo (surface it); a missing conventional sprite just means
-		// the actor isn't placeable, so skip it quietly.
+		// doesn't resolve is a typo (surface it); a missing conventional sprite leaves the
+		// actor out of the palette, so log it rather than skipping silently.
 		var iconName = attr?.Sprite ?? typeof(T).Name;
 		var sprite = Assets.GetSprite(iconName);
 		if (sprite == null)
 		{
 			if (attr?.Sprite != null)
 				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' references missing sprite '{iconName}'.");
+			Log.Error($"[GameActor] '{typeof(T).Name}' has no palette icon: no sprite named '{iconName}' (set Sprite on the attribute or HideFromPalette to skip).");
 			return;
 		}
 

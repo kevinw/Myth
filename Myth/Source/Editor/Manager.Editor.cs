@@ -3156,33 +3156,45 @@ public partial class Manager
 				break;
 		}
 
+		// Clamp and enforce the one-tile minimum only on the axis the handle resizes: the other
+		// axis must pass through untouched, or a sub-tile dimension (e.g. a 4px-tall conveyor
+		// belt) gets silently inflated to a tile by a drag along the other axis.
 		var roomWidth = room.Size.X * Game.TileSize;
 		var roomHeight = room.Size.Y * Game.TileSize;
-		left = Math.Clamp(left, 0, roomWidth - Game.TileSize);
-		top = Math.Clamp(top, 0, roomHeight - Game.TileSize);
-		right = Math.Clamp(right, Game.TileSize, roomWidth);
-		bottom = Math.Clamp(bottom, Game.TileSize, roomHeight);
 
-		if (right - left < Game.TileSize)
+		if (handle is not (ResizeHandle.Top or ResizeHandle.Bottom))
 		{
-			if (handle is ResizeHandle.Left or ResizeHandle.TopLeft or ResizeHandle.BottomLeft)
-				left = right - Game.TileSize;
-			else
-				right = left + Game.TileSize;
+			left = Math.Clamp(left, 0, roomWidth - Game.TileSize);
+			right = Math.Clamp(right, Game.TileSize, roomWidth);
+
+			if (right - left < Game.TileSize)
+			{
+				if (handle is ResizeHandle.Left or ResizeHandle.TopLeft or ResizeHandle.BottomLeft)
+					left = right - Game.TileSize;
+				else
+					right = left + Game.TileSize;
+			}
+
+			left = Math.Clamp(left, 0, roomWidth - Game.TileSize);
+			right = Math.Clamp(right, left + Game.TileSize, roomWidth);
 		}
 
-		if (bottom - top < Game.TileSize)
+		if (handle is not (ResizeHandle.Left or ResizeHandle.Right))
 		{
-			if (handle is ResizeHandle.Top or ResizeHandle.TopLeft or ResizeHandle.TopRight)
-				top = bottom - Game.TileSize;
-			else
-				bottom = top + Game.TileSize;
-		}
+			top = Math.Clamp(top, 0, roomHeight - Game.TileSize);
+			bottom = Math.Clamp(bottom, Game.TileSize, roomHeight);
 
-		left = Math.Clamp(left, 0, roomWidth - Game.TileSize);
-		top = Math.Clamp(top, 0, roomHeight - Game.TileSize);
-		right = Math.Clamp(right, left + Game.TileSize, roomWidth);
-		bottom = Math.Clamp(bottom, top + Game.TileSize, roomHeight);
+			if (bottom - top < Game.TileSize)
+			{
+				if (handle is ResizeHandle.Top or ResizeHandle.TopLeft or ResizeHandle.TopRight)
+					top = bottom - Game.TileSize;
+				else
+					bottom = top + Game.TileSize;
+			}
+
+			top = Math.Clamp(top, 0, roomHeight - Game.TileSize);
+			bottom = Math.Clamp(bottom, top + Game.TileSize, roomHeight);
+		}
 
 		actor["Position"] = new JsonArray(left, top);
 		actor["Size"] = new JsonArray(right - left, bottom - top);

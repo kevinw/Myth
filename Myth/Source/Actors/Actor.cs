@@ -263,6 +263,23 @@ public class Actor
 		return true;
 	}
 
+	// Move by an exact whole-pixel delta, collision-aware. Used by solids (moving platforms,
+	// conveyors) to push and carry actors. Critically this uses MovePixel rather than Move so it
+	// does NOT touch the sub-pixel `remainder` accumulator — that accumulator is also fed by the
+	// actor's own velocity (e.g. a player pressing into the solid while wall-sliding), and routing
+	// the push through it lets a pending fraction cancel the move, leaving the actor stuck 1px
+	// inside the solid (false grounding/vibration).
+	public void MovePixels(Point2 step)
+	{
+		for (var n = Math.Abs(step.X); n > 0; n--)
+			MovePixel(new Point2(Math.Sign(step.X), 0));
+		for (var n = Math.Abs(step.Y); n > 0; n--)
+			MovePixel(new Point2(0, Math.Sign(step.Y)));
+	}
+
+	// What a moving solid will push or carry: everything but level geometry and other solids.
+	internal bool IsCarryable(Actor actor) => actor != this && actor is not Grid && !actor.Mask.Has(Masks.Solid);
+
 	// A single step-up/step-down is a (±1, ∓1) diagonal covering √2 px along the slope, but the
 	// X loop only debits 1 px of horizontal budget for it. Charging the √2-1 shortfall keeps the
 	// actor's along-slope speed equal to its flat-ground speed instead of √2× too fast.

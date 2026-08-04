@@ -190,26 +190,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			// top, carry it. Both move by the same delta with the actor's own collision, so they
 			// scrape to a stop against walls instead of clipping through.
 			if (actor.OverlapsAny(Point2.Zero, this) || riders.Contains(actor))
-				StepActor(actor, step);
+				actor.MovePixels(step);
 		}
 
 		Mask = savedMask;
 	}
-
-	// Move an actor by an exact whole-pixel delta, collision-aware. Critically this uses
-	// MovePixel rather than Actor.Move so it does NOT touch the actor's sub-pixel `remainder`
-	// accumulator — that accumulator is also fed by the actor's own velocity (e.g. a player
-	// pressing into us while wall-sliding), and routing the push through it lets a pending
-	// fraction cancel the move, leaving the actor stuck 1px inside us (false grounding/vibration).
-	static void StepActor(Actor actor, Point2 step)
-	{
-		for (var n = Math.Abs(step.X); n > 0; n--)
-			actor.MovePixel(new Point2(Math.Sign(step.X), 0));
-		for (var n = Math.Abs(step.Y); n > 0; n--)
-			actor.MovePixel(new Point2(0, Math.Sign(step.Y)));
-	}
-
-	bool IsCarryable(Actor actor) => actor != this && actor is not Grid && !actor.Mask.Has(Masks.Solid);
 
 	// Occlude light like the dual tiles it's skinned with: DualGrid traces occluder segments from the
 	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
