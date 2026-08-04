@@ -167,6 +167,8 @@ public static class Factory
 	// palette entries can inherit their underlying type's tags.
 	static readonly Dictionary<string, ActorTag> actorTags = new(StringComparer.OrdinalIgnoreCase);
 	static readonly Dictionary<Type, ActorTag> actorTypeTags = [];
+	static readonly HashSet<Type> livePositionEditableActorTypes = [];
+	static readonly HashSet<Type> liveResizableActorTypes = [];
 
 	// Declared SpriteAnchor for each [GameActor], so palette boxes and spawned instances
 	// resolve the same origin. Keyed by registered type name.
@@ -177,6 +179,8 @@ public static class Factory
 
 	public static ActorTag TagsForType(Type type)
 		=> actorTypeTags.TryGetValue(type, out var tags) ? tags : ActorTag.None;
+	public static bool LivePositionEditable(Type type) => livePositionEditableActorTypes.Contains(type);
+	public static bool LiveResizable(Type type) => liveResizableActorTypes.Contains(type);
 
 	public static SpriteAnchor AnchorForType(string? typeName)
 		=> typeName != null && actorAnchors.TryGetValue(typeName, out var anchor) ? anchor : SpriteAnchor.Auto;
@@ -332,6 +336,16 @@ public static class Factory
 		ActorSpecs.RegisterActor<T>(name);
 		actorTags[name] = tags;
 		actorTypeTags[typeof(T)] = tags;
+		if (attr?.LivePositionEditable == true)
+			livePositionEditableActorTypes.Add(typeof(T));
+		if (attr?.LiveResizable == true)
+		{
+			if (!attr.LivePositionEditable)
+				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' enables LiveResizable without LivePositionEditable.");
+			if (!typeof(IResizable).IsAssignableFrom(typeof(T)))
+				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' enables LiveResizable without implementing IResizable.");
+			liveResizableActorTypes.Add(typeof(T));
+		}
 		var anchor = attr?.Anchor ?? SpriteAnchor.Auto;
 		actorAnchors[name] = anchor;
 
@@ -382,6 +396,8 @@ public static class Factory
 		ActorSpecs.ClearActorTypes();
 		actorTags.Clear();
 		actorTypeTags.Clear();
+		livePositionEditableActorTypes.Clear();
+		liveResizableActorTypes.Clear();
 		GeneratedActors.RegisterAll();
 
 		string GRASS_SURF = "Grass";

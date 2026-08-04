@@ -978,6 +978,13 @@ public class Room
 
 	public bool HasTileFlag(Point2 tile, TileFlags flag)
 		=> ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & flag) != 0;
+	internal TileFlags GetTileFlags(Point2 tile)
+		=> ContainsTile(tile.X, tile.Y) ? tileFlags[tile.X, tile.Y] : TileFlags.None;
+	internal void SetTileFlags(Point2 tile, TileFlags flags)
+	{
+		if (ContainsTile(tile.X, tile.Y))
+			tileFlags[tile.X, tile.Y] = flags;
+	}
 
 	public void SetTileFlag(Point2 tile, TileFlags flag, bool set)
 	{

@@ -2,7 +2,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "door", BoundsW = Game.TileSize, BoundsH = Game.TileSize * 2, Tags = ActorTag.Door)]
+[GameActor(Sprite = "door", BoundsW = Game.TileSize, BoundsH = Game.TileSize * 2, Tags = ActorTag.Door,
+	LivePositionEditable = true, LiveResizable = true)]
 public class RevealDoor : Actor, IResizable
 {
 	public enum RevealDirection

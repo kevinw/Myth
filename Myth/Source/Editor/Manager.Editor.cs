@@ -62,11 +62,8 @@ public partial class Manager
 	bool editorShowForegroundLayer = true;
 	bool editorShowBackgroundLayer = true;
 
-	char tileTypePlacing;
 	bool editingRoomGeometry;
 	bool slopePaint; // when set, a tile-rect drag lays a slope staircase instead of a solid block
-	Point2 tileRectPaintFrom;
-	Point2 tileRectPaintTo;
 	RectInt? proposedRoomTiles;
 	// Snapshot of the proposal the context menu was opened on: proposedRoomTiles follows the
 	// cursor and goes null once ImGui takes the mouse, so the menu needs its own copy.
@@ -238,6 +235,8 @@ public partial class Manager
 		PlatformNavDebugOverlayImGui();
 		ActorPositionDebugOverlayImGui();
 		BudDebugOverlayImGui();
+		LiveTileEditingImGui();
+		LiveActorEditingImGui();
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();
 		TransitionViewerImGui();
@@ -282,6 +281,8 @@ public partial class Manager
 
 	void ClearEditorStateForEnteringPlayMode()
 	{
+		CancelLiveTileEditing();
+		CancelLiveActorEditing();
 		EndRoomColorFieldPainting();
 		EndMaskPainting();
 		editingRoomGeometry = false;
@@ -916,7 +917,6 @@ public partial class Manager
 	{
 		activeTileLayer = layer;
 		brush = tile;
-		tileTypePlacing = tile;
 		selectedActorPaletteIndex = -1;
 		actorSelectTool = false;
 		editorSelectionRect = null;
@@ -2344,6 +2344,8 @@ public partial class Manager
 		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var position = room.WorldBounds.TopLeft + local;
 		var resolved = ActorSpecs.Resolve(actor);
+		if (string.Equals(ActorSpecs.ReadString(resolved, "Type"), nameof(TitleText), StringComparison.OrdinalIgnoreCase))
+			return TitleText.EditorBounds(position, ActorSpecs.ReadString(resolved, nameof(TitleText.Text)));
 		if (ResizableRoomRectTypes.TryGetValue(ActorSpecs.ReadString(resolved, "Type") ?? "", out var info))
 		{
 			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? info.DefaultSize;
@@ -2969,10 +2971,12 @@ public partial class Manager
 	}
 
 	EditorDragKind DragKind => editorDrag.Kind;
-	bool TilePlacing => DragKind == EditorDragKind.TilePaint;
+	bool TilePlacing => DragKind == EditorDragKind.TilePaint && tilePaintStroke.Active;
 
 	void ClearEditorDragState()
 	{
+		if (DragKind == EditorDragKind.TilePaint)
+			tilePaintStroke.Cancel();
 		editorDrag = EditorDragState.None;
 	}
 
@@ -2980,7 +2984,8 @@ public partial class Manager
 	{
 		if (DragKind == EditorDragKind.TilePaint)
 			ClearEditorDragState();
-		tileTypePlacing = brush;
+		else
+			tilePaintStroke.Cancel();
 	}
 
 	void CommitEditorDragState()
@@ -3003,7 +3008,11 @@ public partial class Manager
 		if (actorIndex < 0 || actorIndex >= room.Actors.Count || handle == ResizeHandle.None)
 			return;
 
-		var actor = room.Actors[actorIndex];
+		ResizeRoomActor(room, room.Actors[actorIndex], handle, world, tile, snap);
+	}
+
+	void ResizeRoomActor(Room room, JsonObject actor, ResizeHandle handle, Vector2 world, Point2 tile, bool snap)
+	{
 		if (!IsResizableRoomRectActor(actor))
 			return;
 
@@ -3344,74 +3353,12 @@ public partial class Manager
 		return ClampTileRect(new RectInt(left, top, right - left, bottom - top), room);
 	}
 
-	void ApplyTileRect(Room room, RectInt rect, Factory.TileLayer layer, char tile)
-	{
-		rect = ClampTileRect(rect, room);
-		for (var y = rect.Top; y < rect.Bottom; y++)
-			for (var x = rect.Left; x < rect.Right; x++)
-			{
-				room.SetTile(layer, new Point2(x, y), tile, rebuildGeometry: false);
-			}
-
-		room.RebuildGeometry();
-		editorGameDirty = true;
-	}
-
 	// Slope painting is offered for slope-capable foreground terrain and tile-kit backgrounds.
 	bool SlopePaintAvailable
 		=> !actorSelectTool && selectedActorPaletteIndex < 0
 			&& Factory.Find(brush) is { SupportsSlope: true } entry
 			&& entry.Layer == activeTileLayer
 			&& (activeTileLayer == Factory.TileLayer.Background || entry.BlocksMovement);
-
-	// Fill the dragged rectangle with a slope staircase whose descent matches the drag direction:
-	// down-right/left = a floor ramp (solid below), up-right/left = an underhang (solid above). The
-	// run length per step follows the rectangle's width:height, and the engine infers each run's
-	// facing from the surroundings we lay down (see Room.InferSlopeShape). `from`/`to` are the raw
-	// (direction-preserving) drag endpoints.
-	void ApplySlopeRect(Room room, Point2 from, Point2 to, char tile)
-	{
-		var rect = ClampTileRect(NormalizeTileRect(from, to), room);
-		var w = rect.Width;
-		var h = rect.Height;
-		if (w <= 0 || h <= 0)
-			return;
-
-		var toRight = to.X >= from.X;
-		var underhang = to.Y < from.Y;
-		var layer = activeTileLayer;
-
-		for (var x = 0; x < w; x++)
-		{
-			// 0 at the high (uphill) end, growing toward the low end; the run length per 1-tile
-			// step is w/h, so the ramp spans the rectangle corner to corner.
-			var fromHigh = toRight ? x : w - 1 - x;
-			var step = Math.Min(h - 1, fromHigh * h / w);
-			var surfaceRow = underhang ? h - 1 - step : step;
-			var col = rect.Left + x;
-
-			var surfaceTile = new Point2(col, rect.Top + surfaceRow);
-			room.SetTile(layer, surfaceTile, tile, rebuildGeometry: false);
-			room.SetSlope(surfaceTile, true, layer, rebuildGeometry: false);
-
-			// Body fill: solid below the surface for a floor, above it for an underhang.
-			if (underhang)
-				for (var y = 0; y < surfaceRow; y++)
-					room.SetTile(layer, new Point2(col, rect.Top + y), tile, rebuildGeometry: false);
-			else
-				for (var y = surfaceRow + 1; y < h; y++)
-					room.SetTile(layer, new Point2(col, rect.Top + y), tile, rebuildGeometry: false);
-		}
-
-		// Cap the high corner with solid so the topmost run has a solid neighbour on its high side --
-		// otherwise InferSlopeShape's DownRight fallback mis-faces an isolated leftward/underhang ramp.
-		var highCol = rect.Left + (toRight ? 0 : w - 1);
-		var highRow = rect.Top + (underhang ? h - 1 : 0);
-		room.SetTile(layer, new Point2(highCol, highRow), tile, rebuildGeometry: false);
-
-		room.RebuildGeometry();
-		editorGameDirty = true;
-	}
 
 	EditorSelectionSnapshot CaptureEditorSelection(Room room)
 	{
@@ -4375,12 +4322,8 @@ public partial class Manager
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && eyedropper && overGame && Input.Mouse.LeftPressed)
 			{
-				var foreground = editing.Tiles[tileOver.X, tileOver.Y];
-				var background = editing.BackgroundTiles[tileOver.X, tileOver.Y];
-				var layer = foreground != '0'
-					? Factory.TileLayer.Foreground
-					: background != '0' ? Factory.TileLayer.Background : activeTileLayer;
-				SelectTileBrush(layer, layer == Factory.TileLayer.Foreground ? foreground : background);
+				if (TrySampleVisibleTile(editing, tileOver, activeTileLayer, out var layer, out var sampled))
+					SelectTileBrush(layer, sampled);
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && !actorSelectTool && !brushIsActor && overGame && ctrlClick &&
 				(activeTileLayer == Factory.TileLayer.Background ? editing.GetBackgroundEntry(tileOver) : editing.GetEntry(tileOver)) is { SupportsSlope: true } slopeEntry &&
@@ -4454,10 +4397,13 @@ public partial class Manager
 			{
 				undo.CommitPending(TilePaintUndoSlot);
 				OpenPendingRoomUndo(TilePaintUndoSlot, "Paint Tiles", editing);
-				tileRectPaintFrom = ClampTile(editing, tileOver);
-				tileRectPaintTo = tileRectPaintFrom;
-				tileTypePlacing = Input.Mouse.LeftPressed ? brush : '0';
 				ClearEditorDragState();
+				tilePaintStroke.Begin(
+					editing.Id,
+					ClampTile(editing, tileOver),
+					activeTileLayer,
+					Input.Mouse.LeftPressed ? brush : '0',
+					slopePaint && Input.Mouse.LeftPressed && SlopePaintAvailable);
 				editorDrag.Kind = EditorDragKind.TilePaint;
 				editorSelectionRect = null;
 			}
@@ -4518,9 +4464,6 @@ public partial class Manager
 				}
 			}
 
-			if (!Input.Mouse.RightDown && !TilePlacing)
-				tileTypePlacing = brush;
-
 			if (!editingRoomGeometry && !worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
 			{
 				if (eyedropper)
@@ -4534,19 +4477,19 @@ public partial class Manager
 				}
 				else if (brushEntry is { } placing)
 				{
-					var previewTileRect = TilePlacing ? NormalizeTileRect(tileRectPaintFrom, ClampTile(editing, tileOver)) : new RectInt(tileOver.X, tileOver.Y, 1, 1);
+					var previewTileRect = TilePlacing ? tilePaintStroke.Rect : new RectInt(tileOver.X, tileOver.Y, 1, 1);
 					var cursorRect = TileRectToRoomWorldRect(editing, previewTileRect).Inflate(gridWeight * 2);
-					var cursorColor = tileTypePlacing == '0' ? Color.Red : highlight;
+					var placingTile = TilePlacing ? tilePaintStroke.Tile : brush;
+					var cursorColor = placingTile == '0' ? Color.Red : highlight;
 					batcher.RectLine(cursorRect, gridWeight * 2, cursorColor);
-					if (tileTypePlacing != '0')
+					if (placingTile != '0')
 					{
-						if (slopePaint && SlopePaintAvailable && TilePlacing)
+						if (TilePlacing && tilePaintStroke.Slope)
 						{
 							// The inferred slope subtextures need a geometry rebuild per cell, so just
 							// outline the triangle we'll fill -- its hypotenuse is the ramp surface.
-							var clampedEnd = ClampTile(editing, tileOver);
-							var toRight = clampedEnd.X >= tileRectPaintFrom.X;
-							var underhang = clampedEnd.Y < tileRectPaintFrom.Y;
+							var toRight = tilePaintStroke.ToRight;
+							var underhang = tilePaintStroke.Underhang;
 
 							Vector2 Corner(int tx, int ty) => roomTopLeft + new Vector2(tx * Game.TileSize, ty * Game.TileSize);
 							var tl = Corner(previewTileRect.Left, previewTileRect.Top);
@@ -4575,9 +4518,7 @@ public partial class Manager
 			}
 
 			if (!editingRoomGeometry && !worldMouseBlocked && !eyedropper && !brushIsActor && brushEntry != null && TilePlacing && (Input.Mouse.LeftDown || Input.Mouse.RightDown))
-			{
-				tileRectPaintTo = ClampTile(editing, tileOver);
-			}
+				tilePaintStroke.Update(ClampTile(editing, tileOver));
 
 			batcher.RectLine(roomBounds, gridWeight * 2, Color.Black);
 			if (editorSelectionRect is { } selectedRect)
@@ -4645,12 +4586,13 @@ public partial class Manager
 		{
 			if (TilePlacing && CurrentRoom is { } room)
 			{
-				if (slopePaint && tileTypePlacing != '0' && SlopePaintAvailable)
-					ApplySlopeRect(room, tileRectPaintFrom, tileRectPaintTo, tileTypePlacing);
-				else
-					ApplyTileRect(room, NormalizeTileRect(tileRectPaintFrom, tileRectPaintTo), activeTileLayer, tileTypePlacing);
+				var stroke = tilePaintStroke;
+				if (stroke.RoomId == room.Id)
+				{
+					ApplyTileStroke(room, stroke);
+					editorGameDirty = true;
+				}
 			}
-			tileTypePlacing = brush;
 			if (TilePlacing)
 				ClearEditorDragState();
 			undo.CommitPending(TilePaintUndoSlot);

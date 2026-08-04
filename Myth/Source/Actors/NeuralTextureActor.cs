@@ -6,7 +6,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/neural_texture_actor", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3, Anchor = SpriteAnchor.TopLeft)]
+[GameActor(Sprite = "Editor/neural_texture_actor", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3,
+	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true)]
 public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 {
 	readonly static bool doLog = false;

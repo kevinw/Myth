@@ -1,7 +1,6 @@
 # TODO
 
 - idea: one type of smoky NCT could write over other actors, but have the alpha depend on a simulation value.
-- lightning traps aren't centered
 - lightning traps need sound fx
 - region based background settings?
 - drawing background slopes needs to be possible in the editor

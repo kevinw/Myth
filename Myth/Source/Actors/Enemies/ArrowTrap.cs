@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "arrow_trap", Tags = ActorTag.Hazard)]
+[GameActor(Sprite = "arrow_trap", Tags = ActorTag.Hazard, LivePositionEditable = true)]
 public class ArrowTrap : Actor
 {
 	private bool didFire;

@@ -175,7 +175,9 @@ public partial class Manager : App
 
 	readonly List<string> musicAreas = [];
 	readonly bool dumpAtlases;
+	readonly int maxFrames;
 	readonly float maxTimeSeconds;
+	int completedGameFrames;
 	readonly string? playRoomId;
 	readonly bool buildAssetPack;
 	readonly bool bakeWorldMap;
@@ -268,7 +270,8 @@ public partial class Manager : App
 		assetPackPath = args.assetPackPath;
 		Assets.ConfigureContentZip(args.contentZipPath);
 		Inbetweens.BenchMode = args.bench;
-		Inbetweens.MaxFrames = args.maxFrames;
+		Inbetweens.BenchSourceFrames = args.benchSourceFrames;
+		maxFrames = args.maxFrames;
 		maxTimeSeconds = args.maxTimeSeconds;
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
@@ -876,37 +879,56 @@ public partial class Manager : App
 	partial class WindowSettingsJsonContext : JsonSerializerContext;
 
 #if DEBUG
-	// Editor mouse-drag of the player: host input, drives sim state directly.
-	void UpdatePlayerMouseDrag(Game g)
+	Point2 playerDragStartPosition;
+	Vector2 playerDragPressWorld;
+	Vector2 playerDragPressCursor;
+	bool playerDragStarted;
+	const float PlayerDragThreshold = 4;
+
+	// Debug mouse-drag of the player: a direct press selects, then movement begins only after
+	// crossing the same small threshold used by authored actors.
+	bool UpdatePlayerMouseDrag(Game g)
 	{
 		if (!g.AcceptsLiveInput || g.GetFirst<Player>() is not { } player)
 		{
 			g.draggingPlayer = false;
-			return;
+			playerDragStarted = false;
+			return false;
 		}
 
 		if (Input.Mouse.LeftPressed)
 		{
 			var mouse = GameMouseWorld(g);
-			if (Input.Keyboard.Shift) {
-				// cut ropes here.
-				g.CutRopes(mouse);
-			}
-			if (player.GetVisualBounds().Inflate(8).Contains(mouse))
+			if (player.GetVisualBounds().Contains(mouse))
+			{
 				g.draggingPlayer = true;
+				playerDragStartPosition = player.Position;
+				playerDragPressWorld = mouse;
+				playerDragPressCursor = Cursor;
+				playerDragStarted = false;
+			}
+			else if (Input.Keyboard.Shift)
+				g.CutRopes(mouse);
 		}
 
 		if (!Input.Mouse.LeftDown)
 		{
+			var owned = g.draggingPlayer;
 			g.draggingPlayer = false;
-			return;
+			playerDragStarted = false;
+			return owned;
 		}
 
 		if (!g.draggingPlayer)
-			return;
+			return false;
 
-		player.Position = (Point2)GameMouseWorld(g);
-		player.Velocity = Vector2.Zero;
+		playerDragStarted |= Vector2.DistanceSquared(Cursor, playerDragPressCursor) > PlayerDragThreshold * PlayerDragThreshold;
+		if (playerDragStarted)
+		{
+			player.Position = (Point2)((Vector2)playerDragStartPosition + GameMouseWorld(g) - playerDragPressWorld);
+			player.Velocity = Vector2.Zero;
+		}
+		return true;
 	}
 #endif
 
@@ -916,6 +938,7 @@ public partial class Manager : App
 		if (game == null) return;
 
 		game.Update(controls);
+		CompleteGameFrame();
 
 		if (gym.runs == null) return;
 		GymTick();
@@ -1023,7 +1046,11 @@ public partial class Manager : App
 			TweakRegistry.Open = !TweakRegistry.Open;
 #endif
 
-		if (!keyboardShortcutsBlocked)
+		if (!keyboardShortcutsBlocked
+#if EDITOR
+			&& !((liveTileBrushArmed || LiveActorEditingWantsEscape) && Input.Keyboard.Pressed(Keys.Escape))
+#endif
+		)
 			UpdateGameMenuInput();
 
 		var gameMenuPausesGame = GameMenuPausesGame;
@@ -1091,16 +1118,27 @@ public partial class Manager : App
 				{
 					if (game is { } g)
 					{
+#if EDITOR
+						var editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
+						if (!editorOwnsPlayMouse)
+							editorOwnsPlayMouse = UpdateLiveActorEditing(g, keyboardShortcutsBlocked);
 #if DEBUG
+						if (!editorOwnsPlayMouse)
+							editorOwnsPlayMouse = UpdatePlayerMouseDrag(g);
+#endif
+#elif DEBUG
 						UpdatePlayerMouseDrag(g);
 #endif
 						if (!keyboardShortcutsBlocked && !perfToggleChordActive && !shipRoomCheatChordActive)
 							g.HandleGameDebugShortcuts(Input);
-						using (PerfStats.Time(PerfDetail.GameUpdate))
 #if EDITOR
 							if (!commandConsoleOpen)
 #endif
-								g.Update(controls);
+							{
+								using (PerfStats.Time(PerfDetail.GameUpdate))
+									g.Update(controls);
+								CompleteGameFrame();
+							}
 					}
 				}
 
@@ -1203,6 +1241,12 @@ public partial class Manager : App
 
 		imgui?.EndLayout();
 		ApplyImGuiMouseCursor();
+	}
+
+	void CompleteGameFrame()
+	{
+		if (maxFrames != int.MaxValue && ++completedGameFrames >= maxFrames)
+			Exit();
 	}
 
 	readonly Dictionary<Foster.Framework.Cursor.SystemTypes, Foster.Framework.Cursor> imguiCursors = [];
@@ -2127,6 +2171,10 @@ public partial class Manager : App
 
 	void StopGame()
 	{
+#if EDITOR
+		CancelLiveTileEditing();
+		CancelLiveActorEditing(restoreDrag: false);
+#endif
 #if IOS
 		playModePinchStartDistance = 0.0f;
 #endif

@@ -3,7 +3,7 @@ using System.Numerics;
 using Foster.Framework;
 namespace Myth;
 
-[GameActor]
+[GameActor(LivePositionEditable = true)]
 public class Chest : Actor
 {
 	const int MycelonDrop = 3;              // Mycelons scattered when the chest is broken

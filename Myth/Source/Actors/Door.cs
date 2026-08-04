@@ -2,7 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Tags = ActorTag.Door)]
+[GameActor(Tags = ActorTag.Door, LivePositionEditable = true)]
 public class Door : Actor, IActivatable
 {
 	public bool StartsVisible;

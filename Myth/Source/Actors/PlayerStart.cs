@@ -2,7 +2,7 @@ using Foster.Framework;
 namespace Myth;
 
 // A marker for where the player should start in a room, if they are first spawned there.
-[GameActor(Sprite = "player_start")]
+[GameActor(Sprite = "player_start", LivePositionEditable = true)]
 public class PlayerStart : Actor
 {
 	public PlayerStart()

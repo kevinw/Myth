@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Myth;
 
 public struct StartArgs
@@ -34,7 +36,10 @@ public struct StartArgs
 	public string? buildContentZipPath;
 	public string? contentTarget;
 	public string? contentWorld;
+	// Exit after this many completed gameplay frames (excluding loading, editing, and pauses).
 	public int maxFrames = int.MaxValue;
+	// Maximum source animation frames per sprite compared by --bench (minimum 2).
+	public int benchSourceFrames = int.MaxValue;
 
 	// Exit after this many game seconds (for automated/profiling runs).
 	public float maxTimeSeconds = float.PositiveInfinity;
@@ -58,81 +63,137 @@ public struct StartArgs
 	public StartArgs(string[] args)
 	{
 		maxFrames = int.MaxValue;
+		benchSourceFrames = int.MaxValue;
+		var gymCli = false;
+		var benchSourceFramesProvided = false;
 		for (int i = 0; i < args.Length; i++)
 		{
-			var next = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal) ? args[i + 1] : null;
-			if (args[i] == "--max-frames" && next != null && int.TryParse(next, out var mf))
-				maxFrames = mf;
-			else if (args[i] == "--screenshot" && next != null)
-				screenshotPath = next;
-			else if (args[i] == "--screenshot-frame" && next != null && int.TryParse(next, out var sf))
-				screenshotFrame = sf;
-			else if (args[i] == "--screenshot-interval" && next != null && int.TryParse(next, out var si))
-				screenshotInterval = si;
-			else if (args[i] == "--screenshot-count" && next != null && int.TryParse(next, out var sc))
-				screenshotCount = sc;
-			else if ((args[i] == "--build-asset-pack" || args[i] == "--asset-pack") && next != null)
-				assetPackPath = next;
-			else if (args[i] == "--content-zip" && next != null)
-				contentZipPath = next;
-			else if (args[i] == "--build-content-zip" && next != null)
-				buildContentZipPath = next;
-			else if (args[i] == "--content-target" && next != null)
-				contentTarget = next;
-			else if (args[i] == "--content-world" && next != null)
-				contentWorld = next;
-			else if (args[i] == "--max-time" && next != null && float.TryParse(next, out var mt))
-				maxTimeSeconds = mt;
-			else if ((args[i] == "--play-room" || args[i] == "--room") && next != null)
-				playRoomId = next;
-			else if (args[i] == "--trace-json" && next != null)
-				traceJsonPath = next;
-			else if (args[i] == "--trace-room" && next != null)
-				traceRoomId = next;
-			else if (args[i] == "--trace-goal" && next != null)
-				traceGoalId = next;
-			else if (args[i] == "--gym-goal" && next != null)
-				gymGoalIds = [..gymGoalIds, ..ParseList(next)];
-			else if (args[i] == "--trace-edge" && next != null)
-				ParseTraceEdge(next, out traceEdgeFrom, out traceEdgeTo);
+			var option = args[i];
+			switch (option)
+			{
+				case "--dump-atlases": dumpAtlases = true; break;
+				case "--gym": gym = true; break;
+				case "--gym-cli": gymCli = true; break;
+				case "--headless": headless = true; break;
+				case "--unthrottled": unthrottled = true; break;
+				case "--gym-exit-after-all": gymExitAfterAll = true; break;
+				case "--trace-nav": traceNav = true; break;
+				case "--trace-nav-frames": traceNavFrames = true; break;
+				case "--simple": simple = true; break;
+				case "--bench": bench = true; break;
+				case "--fullscreen": fullscreen = true; break;
+				case "--aspect-four-three": aspectFourThree = true; break;
+				case "--no-warmup": noWarmup = true; break;
+				case "--play": play = true; break;
+				case "--bake-world-map": bakeWorldMap = true; break;
+
+				case "--max-frames":
+					maxFrames = ReadInt(args, ref i, option, minimum: 1);
+					break;
+				case "--bench-source-frames":
+					benchSourceFrames = ReadInt(args, ref i, option, minimum: 2);
+					benchSourceFramesProvided = true;
+					break;
+				case "--screenshot": screenshotPath = ReadValue(args, ref i, option); break;
+				case "--screenshot-frame": screenshotFrame = ReadInt(args, ref i, option, minimum: 0); break;
+				case "--screenshot-interval": screenshotInterval = ReadInt(args, ref i, option, minimum: 1); break;
+				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;
+				case "--content-zip": contentZipPath = ReadValue(args, ref i, option); break;
+				case "--build-content-zip": buildContentZipPath = ReadValue(args, ref i, option); break;
+				case "--content-target": contentTarget = ReadValue(args, ref i, option); break;
+				case "--content-world": contentWorld = ReadValue(args, ref i, option); break;
+				case "--max-time": maxTimeSeconds = ReadFloat(args, ref i, option, minimum: 0); break;
+				case "--play-room":
+				case "--room": playRoomId = ReadValue(args, ref i, option); break;
+				case "--trace-json": traceJsonPath = ReadValue(args, ref i, option); break;
+				case "--trace-room": traceRoomId = ReadValue(args, ref i, option); break;
+				case "--trace-goal": traceGoalId = ReadValue(args, ref i, option); break;
+				case "--gym-goal":
+				{
+					var goals = ParseList(ReadValue(args, ref i, option));
+					if (goals.Length == 0)
+						throw Invalid(option, "expected one or more comma-separated goal IDs");
+					gymGoalIds = [..gymGoalIds, ..goals];
+					break;
+				}
+				case "--trace-edge":
+					if (!TryParseTraceEdge(ReadValue(args, ref i, option), out traceEdgeFrom, out traceEdgeTo))
+						throw Invalid(option, "expected FROM:TO or FROM->TO with non-negative integer node IDs");
+					break;
+
+				// The visual pack path is optional; omitting it uses Assets/Packed/Visuals.
+				case "--build-asset-pack":
+					buildAssetPack = true;
+					assetPackPath = ReadOptionalValue(args, ref i);
+					break;
+				case "--asset-pack":
+					useAssetPack = true;
+					assetPackPath = ReadOptionalValue(args, ref i);
+					break;
+
+				default:
+					throw Invalid(option, "unknown argument");
+			}
 		}
 
-		dumpAtlases = args.Contains("--dump-atlases");
-		buildAssetPack = args.Contains("--build-asset-pack");
-		bakeWorldMap = args.Contains("--bake-world-map");
-		useAssetPack = args.Contains("--asset-pack");
-		var gymCli = args.Contains("--gym-cli");
-		gym = gymCli || args.Contains("--gym");
-		headless = gymCli || args.Contains("--headless");
-		unthrottled = gymCli || args.Contains("--unthrottled");
-		gymExitAfterAll = gymCli || args.Contains("--gym-exit-after-all");
-		traceNav = args.Contains("--trace-nav") || traceJsonPath != null;
-		traceNavFrames = args.Contains("--trace-nav-frames");
-		simple = args.Contains("--simple");
-		bench = args.Contains("--bench");
-		fullscreen = args.Contains("--fullscreen") ? true : null;
-		aspectFourThree = args.Contains("--aspect-four-three");
-		noWarmup = args.Contains("--no-warmup");
-		play = args.Contains("--play") || screenshotPath != null || playRoomId != null;
+		gym |= gymCli;
+		headless |= gymCli;
+		unthrottled |= gymCli;
+		gymExitAfterAll |= gymCli;
+		traceNav |= traceJsonPath != null;
+		play |= screenshotPath != null || playRoomId != null;
+
+		if (benchSourceFramesProvided && !bench)
+			throw Invalid("--bench-source-frames", "only valid with --bench");
+		if (buildContentZipPath != null && string.IsNullOrWhiteSpace(contentTarget))
+			throw Invalid("--build-content-zip", "requires --content-target mac, ios, windows, linux, or browser");
 	}
 
-	private static IEnumerable<string> ParseList(string value)
-	{
-		foreach (var part in value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-			yield return part;
-	}
+	static string[] ParseList(string value)
+		=> value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-	private static void ParseTraceEdge(string value, out int? from, out int? to)
+	static bool TryParseTraceEdge(string value, out int? from, out int? to)
 	{
 		from = null;
 		to = null;
 		var parts = value.Replace("->", ":", StringComparison.Ordinal).Split(':', StringSplitOptions.TrimEntries);
-		if (parts.Length == 2)
-		{
-			if (int.TryParse(parts[0], out var parsedFrom))
-				from = parsedFrom;
-			if (int.TryParse(parts[1], out var parsedTo))
-				to = parsedTo;
-		}
+		if (parts.Length != 2 || !int.TryParse(parts[0], out var parsedFrom) || parsedFrom < 0 ||
+			!int.TryParse(parts[1], out var parsedTo) || parsedTo < 0)
+			return false;
+		from = parsedFrom;
+		to = parsedTo;
+		return true;
 	}
+
+	static string ReadValue(string[] args, ref int index, string option)
+	{
+		if (index + 1 >= args.Length || IsOption(args[index + 1]))
+			throw Invalid(option, "missing value");
+		var value = args[++index];
+		if (string.IsNullOrWhiteSpace(value))
+			throw Invalid(option, "value cannot be empty");
+		return value;
+	}
+
+	static string? ReadOptionalValue(string[] args, ref int index)
+		=> index + 1 < args.Length && !IsOption(args[index + 1]) ? args[++index] : null;
+
+	static int ReadInt(string[] args, ref int index, string option, int minimum)
+	{
+		var text = ReadValue(args, ref index, option);
+		if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < minimum)
+			throw Invalid(option, $"expected an integer greater than or equal to {minimum}, got '{text}'");
+		return value;
+	}
+
+	static float ReadFloat(string[] args, ref int index, string option, float minimum)
+	{
+		var text = ReadValue(args, ref index, option);
+		if (!float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !float.IsFinite(value) || value < minimum)
+			throw Invalid(option, $"expected a finite number greater than or equal to {minimum}, got '{text}'");
+		return value;
+	}
+
+	static bool IsOption(string value) => value.StartsWith("--", StringComparison.Ordinal);
+	static ArgumentException Invalid(string option, string reason) => new($"{option}: {reason}.");
 }

@@ -2,7 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Anchor = SpriteAnchor.TopLeft)]
+[GameActor(Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true)]
 public class Goal : Actor
 {
 	public string Name = "";

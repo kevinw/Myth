@@ -3,7 +3,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Anchor = SpriteAnchor.TopLeft, BoundsW = Game.TileSize, BoundsH = Game.TileSize)]
+[GameActor(Anchor = SpriteAnchor.TopLeft, BoundsW = Game.TileSize, BoundsH = Game.TileSize,
+	LivePositionEditable = true, LiveResizable = true)]
 public class Jumpthru : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(Game.TileSize, Game.TileSize);
@@ -11,7 +12,16 @@ public class Jumpthru : Actor, IResizable
 
 	// Only the width is editable; height stays one tile (see ResizableAxes). The collision is the
 	// thin top strip the player lands on, spanning the full width.
-	public Point2 Size { get; set; } = DefaultSize;
+	Point2 size = DefaultSize;
+	public Point2 Size
+	{
+		get => size;
+		set
+		{
+			size = value;
+			Hitbox = new(new RectInt(0, 0, size.X, Game.TileSize / 4));
+		}
+	}
 
 	public Jumpthru()
 	{
@@ -24,7 +34,7 @@ public class Jumpthru : Actor, IResizable
 	{
 		base.Added();
 		// Size is applied from the spec before Added (editor resizes write it), so size the hitbox here.
-		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Game.TileSize / 4));
+		Hitbox = new(new RectInt(0, 0, Size.X, Game.TileSize / 4));
 	}
 
 	public override void Render(Batcher batcher) => RenderTiled(batcher, normals: false);

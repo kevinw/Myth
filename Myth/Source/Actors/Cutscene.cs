@@ -4,7 +4,8 @@ using OutLoud;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/text", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System)]
+[GameActor(Sprite = "Editor/text", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System,
+	LivePositionEditable = true)]
 public class Cutscene : Actor
 {
 	static float DescentSpeed => 0.12f;

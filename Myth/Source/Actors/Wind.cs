@@ -13,7 +13,7 @@ public enum WindTargets
 	Projectiles = 1 << 3,
 }
 
-[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System)]
+[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System, LivePositionEditable = true)]
 public class Wind : Actor, IResizable
 {
 	internal struct PawnInfluence

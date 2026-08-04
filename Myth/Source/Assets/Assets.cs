@@ -2768,6 +2768,10 @@ public static class Assets
 	// in-betweens) and packs them, then bakes any whitelisted transitions.
 	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Image[]? emissives, Packer packer)
 	{
+		var benchCount = InbetweenBenchCount(name);
+		if (Inbetweens.BenchMode && benchCount > 0)
+			_ = Inbetweens.Generate(name, frames, ase, benchCount);
+
 		if (TryBuildInbetweenSpec(name, ase, frames.Length, out var spec, out var durationsSec))
 		{
 			var (expFrames, expDurations, map) = Inbetweens.GenerateExpanded(frames, durationsSec, spec);
@@ -2798,6 +2802,18 @@ public static class Assets
 		}
 
 		GenerateTransitionFrames(name, ase, frames, normals, heights, emissives, packer);
+	}
+
+	static int InbetweenBenchCount(string name)
+	{
+		var result = 0;
+		foreach (var (key, count) in InbetweenAnimations)
+			if (key.Sprite == name)
+				result = Math.Max(result, count);
+		foreach (var (key, count) in InbetweenTransitions)
+			if (key.Sprite == name)
+				result = Math.Max(result, count);
+		return result;
 	}
 
 	// Builds the per-frame in-between spec for a sprite from the InbetweenAnimations

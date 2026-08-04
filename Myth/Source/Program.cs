@@ -4,7 +4,17 @@ using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Mycelon.Scenario")]
 
-var startArgs = new StartArgs(args);
+StartArgs startArgs;
+try
+{
+	startArgs = new(args);
+}
+catch (ArgumentException e)
+{
+	Console.Error.WriteLine($"Argument error: {e.Message}");
+	Environment.ExitCode = 2;
+	return;
+}
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);
 if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
 {
@@ -12,9 +22,7 @@ if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
 		Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
 	if (startArgs.buildContentZipPath != null)
 	{
-		if (string.IsNullOrWhiteSpace(startArgs.contentTarget))
-			throw new ArgumentException("--build-content-zip requires --content-target mac, ios, windows, linux, or browser.");
-		Assets.BuildContentZip(startArgs.buildContentZipPath, startArgs.contentTarget, startArgs.contentWorld);
+		Assets.BuildContentZip(startArgs.buildContentZipPath, startArgs.contentTarget!, startArgs.contentWorld);
 	}
 	return;
 }

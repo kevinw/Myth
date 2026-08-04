@@ -8,7 +8,7 @@ static class Inbetweens
 {
 	public static bool UseRustCli = false;
 	public static bool BenchMode = false;
-	public static int MaxFrames = int.MaxValue;
+	public static int BenchSourceFrames = int.MaxValue;
 
 	public static (Image[] Frames, float[] Durations)? Generate(
 		string name, Image[] frames, Aseprite ase, int count)
@@ -105,8 +105,8 @@ static class Inbetweens
 		string name, Image[] frames, Aseprite ase, int count)
 	{
 		// snapshot the frames we actually need
-		var bf = MaxFrames < frames.Length
-			? frames[..MaxFrames]
+		var bf = BenchSourceFrames < frames.Length
+			? frames[..BenchSourceFrames]
 			: frames;
 
 		// Run both generators
@@ -114,7 +114,11 @@ static class Inbetweens
 		var csResult   = GenerateWithCSharp(name, bf, ase, count);
 
 		if (rustResult == null || csResult == null)
+		{
+			Console.Error.WriteLine($"[Bench] {name}: used {bf.Length}/{frames.Length} source frames; "
+				+ (rustResult == null ? "Rust CLI unavailable" : "C# generator unavailable"));
 			return UseRustCli ? rustResult : csResult;
+		}
 
 		var (rustFrames, rustDurs) = rustResult.Value;
 		var (csFrames,   csDurs)   = csResult.Value;
@@ -178,7 +182,7 @@ static class Inbetweens
 		var totalMse = metrics.Average(m => m.MSE);
 		var totalRmse = MathF.Sqrt(totalMse);
 		var maxOverallDiff = metrics.Max(m => m.MaxChannelDiff);
-		Console.Error.WriteLine($"[Bench] {name}: {metrics.Count} frames, "
+		Console.Error.WriteLine($"[Bench] {name}: used {bf.Length}/{frames.Length} source frames, compared {metrics.Count} frames, "
 			+ $"RMSE={totalRmse:F2}, max-diff={maxOverallDiff:F0}, "
 			+ $"C#={csFrames.Length}f ib, Rust={rustFrames.Length}f ib, "
 			+ $"took {totalSec:F2}s");

@@ -12,7 +12,7 @@ public enum LightCookie
 	Broken
 }
 
-[GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, Tags = ActorTag.Light)]
+[GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, Tags = ActorTag.Light, LivePositionEditable = true)]
 public class Light : Actor
 {
 	internal static float DefaultShadowSourceRadius => 2.3f;

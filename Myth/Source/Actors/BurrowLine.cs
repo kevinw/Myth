@@ -7,7 +7,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/burrow_line", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System, Anchor = SpriteAnchor.Center)]
+[GameActor(Sprite = "Editor/burrow_line", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System,
+	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
 public class BurrowLine : PointPathActor
 {
 	public static float JunctionDistance => 1f;

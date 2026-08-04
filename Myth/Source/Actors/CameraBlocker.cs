@@ -11,7 +11,7 @@ namespace Myth;
 //     revealed area intersects this rect opens.
 // Blockers should bite in from a room edge/corner (not float in the interior) so the camera
 // clamp stays continuous -- see Game.ClampViewToRoomAndBlockers.
-[GameActor(Sprite = "door", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 4)]
+[GameActor(Sprite = "door", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 4, LivePositionEditable = true)]
 public class CameraBlocker : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 4, Game.TileSize * 4);

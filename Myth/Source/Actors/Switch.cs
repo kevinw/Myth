@@ -3,7 +3,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "buttons", BoundsX = -8, BoundsY = -8, BoundsW = 16, BoundsH = 16, Tags = ActorTag.System, Anchor = SpriteAnchor.Center)]
+[GameActor(Sprite = "buttons", BoundsX = -8, BoundsY = -8, BoundsW = 16, BoundsH = 16, Tags = ActorTag.System,
+	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
 public class Switch : PointPathActor
 {
 	public string TargetActorId = "";

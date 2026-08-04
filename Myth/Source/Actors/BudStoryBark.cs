@@ -3,7 +3,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/text", Anchor = SpriteAnchor.TopLeft, BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 2, Tags = ActorTag.System)]
+[GameActor(Sprite = "Editor/text", Anchor = SpriteAnchor.TopLeft, BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 2,
+	Tags = ActorTag.System, LivePositionEditable = true)]
 public class BudStoryBark : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 4, Game.TileSize * 2);

@@ -2,7 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Tags = ActorTag.Enemy | ActorTag.Hazard)]
+[GameActor(Tags = ActorTag.Enemy | ActorTag.Hazard, LivePositionEditable = true)]
 public class Bramble : Actor
 {
 	public Bramble()

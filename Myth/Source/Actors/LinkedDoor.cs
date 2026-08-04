@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "back_door", Tags = ActorTag.Door)]
+[GameActor(Sprite = "back_door", Tags = ActorTag.Door, LivePositionEditable = true)]
 public class LinkedDoor : Actor
 {
 	public static readonly Point2 DefaultSpawnOffset = Point2.Zero;
