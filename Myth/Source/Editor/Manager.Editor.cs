@@ -78,6 +78,10 @@ public partial class Manager
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
+	const string ActorContextMenuPopup = "##ActorContextMenu";
+	string? actorContextMenuRoomId;
+	int actorContextMenuIndex = -1;
+	bool actorContextMenuRequested;
 	// Click-to-cycle picking: a click that doesn't drag walks down the stack of overlapping actors
 	// so hidden ones are reachable. Scratch + press state drive it.
 	readonly List<int> actorPickScratch = [];
@@ -337,6 +341,75 @@ public partial class Manager
 			editorSelectionRect = null;
 			editorGameDirty = true;
 		}
+	}
+
+	void DeleteSelectedActor()
+	{
+		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
+			return;
+
+		using (CaptureRoomUndo("Delete Actor", room))
+		{
+			room.Actors.RemoveAt(selectedRoomActorIndex);
+			selectedRoomActorIndex = -1;
+			ClearEditorDragState();
+			editorSelectionRect = null;
+			editorGameDirty = true;
+		}
+	}
+
+	void OpenActorContextMenu(Room room, int actorIndex)
+	{
+		if (selectedRoomActorIndex != actorIndex)
+			using (CaptureSelectionUndo("Select Actor"))
+				selectedRoomActorIndex = actorIndex;
+		actorContextMenuRoomId = room.Id;
+		actorContextMenuIndex = actorIndex;
+		ClearEditorDragState();
+		editorSelectionRect = null;
+		CancelTilePaint();
+		actorContextMenuRequested = true;
+	}
+
+	void DrawActorContextMenu()
+	{
+		if (actorContextMenuRequested)
+		{
+			actorContextMenuRequested = false;
+			ImGui.OpenPopup(ActorContextMenuPopup);
+		}
+		if (!BeginPaddedPopup(ActorContextMenuPopup))
+			return;
+
+		if (CurrentRoom is { } room && room.Id == actorContextMenuRoomId &&
+			actorContextMenuIndex >= 0 && actorContextMenuIndex < room.Actors.Count)
+		{
+			selectedRoomActorIndex = actorContextMenuIndex;
+			var actor = room.Actors[actorContextMenuIndex];
+			var sourceFilename = ZedLauncher.ActorSourceFilename(actor);
+			var commandKey = OperatingSystem.IsMacOS() ? "Cmd" : "Ctrl";
+			if (ImGui.MenuItem(EditorIcons.DuplicateMenuItem, $"{commandKey}+D"))
+				DuplicateSelectedActor();
+			if (ImGui.MenuItem(EditorIcons.CopyMenuItem, $"{commandKey}+C"))
+				CopySelectedActor(cut: false);
+			if (ImGui.MenuItem(EditorIcons.CutMenuItem, $"{commandKey}+X"))
+				CopySelectedActor(cut: true);
+
+			ImGui.Separator();
+			if (ImGui.MenuItem(EditorIcons.DeleteMenuItem, "Delete"))
+				DeleteSelectedActor();
+
+			if (sourceFilename is { } filename)
+			{
+				ImGui.Separator();
+				if (ImGui.MenuItem($"{EditorIcons.SourceFile}  Open {filename}"))
+					ZedLauncher.OpenActor(actor);
+			}
+		}
+		else
+			ImGui.CloseCurrentPopup();
+
+		EndPaddedPopup();
 	}
 
 	void PasteActor()
@@ -1478,10 +1551,10 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (IsHiddenWallTileTypeProperty(property))
+		else if (IsRevealDoorTileTypeProperty(actor, property))
 		{
-			var value = property.Value?.GetValue<string>() ?? "castle";
-			if (DrawHiddenWallTileTypeButtons(ref value))
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawRevealDoorTileTypeButtons(ref value, controlWidth))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
 				return true;
@@ -2149,32 +2222,61 @@ public partial class Manager
 		_ => -1,
 	};
 
-	static bool IsHiddenWallTileTypeProperty(ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && string.Equals(property.JsonName, "TileType", StringComparison.OrdinalIgnoreCase);
+	static bool IsRevealDoorTileTypeProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+		=> IsRevealDoorActor(actor) && property.Type == typeof(string) && property.JsonName == nameof(RevealDoor.TileType);
 
-	bool DrawHiddenWallTileTypeButtons(ref string value)
+	bool DrawRevealDoorTileTypeButtons(ref string value, float controlWidth)
 	{
-		var current = NormalizeHiddenWallTileType(value);
-		var changed = DrawHiddenWallTileTypeButton("castle", "Castle", current, ref value);
-		ImGui.SameLine();
-		changed |= DrawHiddenWallTileTypeButton("grass", "Grass", current, ref value);
+		var style = ImGui.GetStyle();
+		var size = MathF.Min(ButtonSize, controlWidth);
+		var columns = Math.Max(1, (int)((controlWidth + style.ItemSpacing.X) / (size + style.ItemSpacing.X)));
+		var index = 0;
+		var changed = false;
+		var auto = string.IsNullOrWhiteSpace(value);
+		if (auto)
+			ImGui.PushStyleColor(ImGuiCol.Button, style.Colors[(int)ImGuiCol.ButtonActive]);
+		if (ImGui.Button("Auto##RevealDoorTileType", new Vector2(size, size)) && !auto)
+		{
+			value = string.Empty;
+			changed = true;
+		}
+		if (auto)
+			ImGui.PopStyleColor();
+		if (ImGui.IsItemHovered())
+			ImGui.SetTooltip("Infer the cover material from nearby solid tiles");
+		index++;
+
+		foreach (var (tile, entry) in Factory.Entries)
+		{
+			if (entry.Layer != Factory.TileLayer.Foreground || entry.DualTilesetName == null)
+				continue;
+			if (index % columns != 0)
+				ImGui.SameLine();
+
+			var selected = RevealDoorTileTypeMatches(value, tile, entry);
+			if (ImGuiSubtextureButton(entry.Name, entry.Image, entry.Name, selected, new Vector2(size, size)) && !selected)
+			{
+				value = entry.Name;
+				changed = true;
+			}
+			index++;
+		}
 
 		return changed;
 	}
 
-	bool DrawHiddenWallTileTypeButton(string tileType, string label, string current, ref string value)
+	static bool RevealDoorTileTypeMatches(string value, char tile, Factory.Entry entry)
 	{
-		var image = Assets.GetTileset(tileType)?.Tiles.FirstOrDefault() ?? new Subtexture();
-		if (!ImGuiSubtextureButton(tileType, image, label, current == tileType, new Vector2(ButtonSize, ButtonSize)))
+		if ((value.Length == 1 && value[0] == tile) || string.Equals(value, entry.Name, StringComparison.OrdinalIgnoreCase))
+			return true;
+		if (entry.DualTilesetName is not { } dual)
 			return false;
-
-		if (current != tileType)
-			value = tileType;
-		return current != tileType;
+		if (string.Equals(value, dual, StringComparison.OrdinalIgnoreCase))
+			return true;
+		const string suffix = "-dual";
+		return dual.Length == value.Length + suffix.Length && dual.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+			dual.AsSpan(0, value.Length).Equals(value, StringComparison.OrdinalIgnoreCase);
 	}
-
-	static string NormalizeHiddenWallTileType(string value)
-		=> value == "grass" ? "grass" : "castle";
 
 	// Dual tilesets a MovingPlatform can be skinned with (each has generated color + normal tiles).
 	static readonly (string Tileset, string Label)[] PlatformMaterials =
@@ -4215,6 +4317,11 @@ public partial class Manager
 			var ctrlClick =
 				Input.Mouse.LeftPressed &&
 				(Input.Keyboard.Down(Keys.LeftControl) || Input.Keyboard.Down(Keys.RightControl));
+			if (!editingRoomGeometry && !worldMouseBlocked && overGame && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
+			{
+				OpenActorContextMenu(editing, hoveredActorIndex);
+				worldMouseBlocked = true;
+			}
 
 			if (eyedropper)
 				CancelTilePaint();
@@ -4296,27 +4403,6 @@ public partial class Manager
 						selectedRoomActorIndex = -1;
 						ClearEditorDragState();
 						CancelTilePaint();
-					}
-				}
-			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && overGame && brushIsActor && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
-			{
-				using (CaptureRoomUndo("Delete Actor", editing))
-				{
-					var deletedActor = hoveredActorIndex < editing.Actors.Count ? editing.Actors[hoveredActorIndex] : null;
-
-					editing.Actors.RemoveAt(hoveredActorIndex);
-					if (selectedRoomActorIndex == hoveredActorIndex)
-						selectedRoomActorIndex = -1;
-					else if (selectedRoomActorIndex > hoveredActorIndex)
-						selectedRoomActorIndex--;
-					ClearEditorDragState();
-					editorSelectionRect = null;
-					CancelTilePaint();
-					editorGameDirty = true;
-
-					if (deletedActor is { } actor) {
-						DisplayMessage($"Deleted {actor["Type"]}");
 					}
 				}
 			}
@@ -4454,15 +4540,7 @@ public partial class Manager
 			}
 
 			if (!keyboardBlocked && actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
-			{
-				using (CaptureRoomUndo("Delete Actor", editing))
-				{
-					editing.Actors.RemoveAt(selectedRoomActorIndex);
-					selectedRoomActorIndex = -1;
-					ClearEditorDragState();
-					editorGameDirty = true;
-				}
-			}
+				DeleteSelectedActor();
 
 			if (!editingRoomGeometry && !worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
 			{

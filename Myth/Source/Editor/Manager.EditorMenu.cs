@@ -58,6 +58,7 @@ public partial class Manager
 			// Root-scope popups: opened from a flag (world switch, create room), so they need
 			// somewhere stable to be submitted now that the toolbar is gone.
 			DrawCreateRoomPopup();
+			DrawActorContextMenu();
 		}
 		ImGui.End();
 		ImGui.PopStyleVar();

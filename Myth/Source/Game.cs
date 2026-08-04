@@ -1370,14 +1370,17 @@ public partial class Game : IDisposable
 	// True when the given world point falls inside a water tile. Water is a non-solid
 	// tile (Factory 'w'); pawns sample their torso here to drive swim physics.
 	public bool HasWater => room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
-	public bool IsWaterAt(Point2 worldPoint)
+	public bool IsWaterAt(Point2 worldPoint, bool continuePastTopEdge = false)
 	{
 		if (room == null)
 			return false;
 		var local = worldPoint - room.WorldBounds.TopLeft;
-		return room.IsWaterTile(new(
+		var tile = new Point2(
 			(int)MathF.Floor(local.X / (float)TileSize),
-			(int)MathF.Floor(local.Y / (float)TileSize)));
+			(int)MathF.Floor(local.Y / (float)TileSize));
+		if (continuePastTopEdge && tile.Y < 0 && tile.X >= 0 && tile.X < room.Size.X)
+			tile.Y = 0;
+		return room.IsWaterTile(tile);
 	}
 
 	// Kicks the water surface under worldX (if any) into a splash. impulseSpeed is signed:

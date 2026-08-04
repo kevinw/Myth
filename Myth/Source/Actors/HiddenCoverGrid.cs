@@ -6,7 +6,7 @@ namespace Myth;
 public class HiddenCoverGrid : Actor
 {
 	readonly record struct RevealDoorSpec(string Id, RectInt Rect, RevealDoor.RevealDirection Direction, string TileType);
-	readonly record struct DrawCommand(Subtexture Tile, Subtexture Normal, Point2 Vertex, Vector2 Position, int MaterialMask, int CoverMask, int RegionId);
+	readonly record struct DrawCommand(Subtexture Tile, Subtexture Normal, Point2 Vertex, Vector2 Position, char TileType, int MaterialMask, int CoverMask, int RegionId);
 	readonly record struct HiddenSegment(ShadowSegment Segment, int RegionId);
 	readonly record struct SegmentRun(float Axis, float Start, float End, int RegionId);
 
@@ -144,6 +144,15 @@ public class HiddenCoverGrid : Actor
 
 	public override void RenderNormals(Batcher batcher)
 		=> RenderTiles(batcher, static command => command.Normal);
+
+	internal void RenderTileField(Batcher batcher, Func<char, Point2, Color> colorForTile)
+	{
+		var worldTileOrigin = Position / Game.TileSize;
+		foreach (var command in drawCommands)
+			if (command.Tile.Texture != null && RegionVisible(command.RegionId) && regionAlpha[command.RegionId] * renderOpacityScale > 0.01f)
+				DualGrid.DrawTile(batcher, command.Tile, command.Position, command.MaterialMask,
+					colorForTile(command.TileType, worldTileOrigin + command.Vertex));
+	}
 
 	public void AppendAllShadowSegments(List<ShadowSegment> segments)
 	{
@@ -529,7 +538,7 @@ public class HiddenCoverGrid : Actor
 				if (regionId < 0)
 					continue;
 
-				var command = new DrawCommand(subtexture, normal, new Point2(x, y), position, materialMask, coverMask, regionId);
+				var command = new DrawCommand(subtexture, normal, new Point2(x, y), position, tileType, materialMask, coverMask, regionId);
 				drawCommands.Add(command);
 				AppendWorldShadowSegments(position, command, occluders);
 			}

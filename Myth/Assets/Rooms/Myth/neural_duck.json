@@ -109,7 +109,8 @@
       "Type": "Prop",
       "Position": [124, 124],
       "SpriteName": "Props/duck",
-      "propFlags": "DestroyPersists"
+      "propFlags": "DestroyPersists",
+      "Facing": "-"
     },
     {
       "Id": "54e2bb64b2489fac",

@@ -287,8 +287,8 @@ public abstract class Pawn : Actor
 
 		var waterBounds = Hitbox.Rect + Position;
 		waterBounds = waterBounds.Inflate(8);
-		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center);
-		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top));
+		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center, continuePastTopEdge: true);
+		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top), continuePastTopEdge: true);
 		if (!rollingOnWater && State == States.Roll)
 			TryStartWaterRoll();
 		if (rollingOnWater)
@@ -1447,7 +1447,7 @@ public partial class Player : Pawn
 		else if (Position.Y < Game.Bounds.Top)
 		{
 			if (Game.Transition(Point2.Up))
-				Velocity.Y = -150;
+				Velocity.Y = inWater ? MathF.Min(Velocity.Y, WaterSwimStroke) : -150;
 			else
 				Position.Y = Game.Bounds.Top;
 		}

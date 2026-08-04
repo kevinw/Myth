@@ -40,10 +40,10 @@
     "T00000T0gg0GGGG00PPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
     "TTTTTTTGGGGGGGGGGPPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
     "TTTTTTTPPPPPPPPPPPPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
-    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
-    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
-    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
-    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP",
+    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP",
+    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP",
+    "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP"
   ],
   "backgroundTiles": [
     "0000000000000000v000000000000vvv00000000000000",
@@ -72,7 +72,7 @@
   ],
   "breakable": [[6, 15],[6, 16]
   ],
-  "fungal": [[40, 13],[41, 13],[6, 14],[6, 15],[17, 15],[20, 15],[27, 15],[32, 15],[35, 15],[6, 16],[6, 17],[14, 17],[15, 17],[16, 17],[21, 19],[22, 19],[28, 19],[29, 19],[39, 19]
+  "fungal": [[40, 13],[41, 13],[6, 14],[6, 15],[17, 15],[20, 15],[27, 15],[32, 15],[35, 15],[6, 16],[6, 17],[14, 17],[15, 17],[16, 17],[21, 19],[22, 19],[28, 19],[29, 19]
   ],
   "slopes": [[11, 16],[14, 16]
   ],
@@ -150,6 +150,14 @@
       "Position": [200, 56],
       "FishCount": 3,
       "BugCount": 5
+    },
+    {
+      "Id": "be9a81725a30f986",
+      "Type": "RevealDoor",
+      "Position": [288, 152],
+      "Direction": "Down",
+      "Size": [32, 8],
+      "TileType": "dirt"
     }
   ]
 }

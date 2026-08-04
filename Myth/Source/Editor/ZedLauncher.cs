@@ -1,16 +1,25 @@
 #if EDITOR
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 
 namespace Myth;
 
 static class ZedLauncher
 {
 	public static void OpenActor(Factory.ActorPaletteEntry entry)
+		=> OpenActorType(entry.ActorTypeName);
+
+	public static void OpenActor(JsonObject actor)
+		=> OpenActorType(ActorSpecs.GetTypeName(actor));
+
+	public static string? ActorSourceFilename(JsonObject actor)
+		=> SourceTypeName(ActorSpecs.GetTypeName(actor)) is { } name ? $"{name}.cs" : null;
+
+	static void OpenActorType(string? actorTypeName)
 	{
-		if (entry.ActorTypeName is not { Length: > 0 } actorTypeName)
+		if (SourceTypeName(actorTypeName) is not { } clrTypeName)
 			return;
 
-		var clrTypeName = ActorSpecs.GetActorType(actorTypeName)?.Name ?? actorTypeName;
 		var sourceRoot = Path.GetFullPath(Path.Join(Assets.AssetsPath, "..", "Source"));
 		if (!Directory.Exists(sourceRoot))
 		{
@@ -51,6 +60,11 @@ static class ZedLauncher
 			Console.Error.WriteLine($"Failed to open '{filename}' in Zed: {e.Message}");
 		}
 	}
+
+	static string? SourceTypeName(string? actorTypeName)
+		=> actorTypeName is { Length: > 0 }
+			? ActorSpecs.GetActorType(actorTypeName)?.Name ?? actorTypeName
+			: null;
 
 	static ProcessStartInfo CreateStartInfo(string executable, params string[] arguments)
 	{

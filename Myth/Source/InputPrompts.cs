@@ -11,7 +11,7 @@ enum InputPromptAction
 	Back
 }
 
-readonly record struct InputPromptGlyph(InputPromptAction Action, Vector2 Center, float Height, Color Color);
+readonly record struct InputPromptGlyph(InputPromptAction Action, Vector2 Center, float Height, Color Color, bool MapOverlay);
 
 sealed class InputPrompts : IDisposable
 {
@@ -88,7 +88,7 @@ sealed class InputPrompts : IDisposable
 
 	public void DrawText(Batcher batcher, SpriteFont textFont, ReadOnlySpan<char> text, Vector2 position,
 		float size, Vector2 justify, Color color, int visibleElements = int.MaxValue,
-		List<InputPromptGlyph>? deferredGlyphs = null, bool drawGlyphs = true)
+		List<InputPromptGlyph>? deferredGlyphs = null, bool drawGlyphs = true, bool mapOverlay = false)
 	{
 		text = text[..VisibleLength(text, visibleElements)];
 		if (text.IsEmpty)
@@ -128,7 +128,8 @@ sealed class InputPrompts : IDisposable
 						action,
 						Vector2.Transform(center, batcher.Matrix),
 						Vector2.TransformNormal(Vector2.UnitY * glyphHeight, batcher.Matrix).Length(),
-						color));
+						color,
+						mapOverlay));
 				}
 				else if (drawGlyphs)
 					DrawGlyph(batcher, action, glyphPosition, glyphHeight, color);

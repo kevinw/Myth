@@ -1284,9 +1284,10 @@ public class Room
 
 	// A free surface exists only where water meets open air above: the tile above must be
 	// neither water nor a solid tile (water under a ledge/overhang is capped, not a
-	// surface). Out-of-bounds above the top room row reads as air, so top-row water counts.
+	// surface). Top-row water continues into the room above rather than ending at a surface.
 	bool IsExposedWaterSurface(int x, int y)
-		=> IsWaterTile(x, y)
+		=> y > 0
+			&& IsWaterTile(x, y)
 			&& !IsWaterTile(x, y - 1)
 			&& GetTileEntry(x, y - 1) is not { BlocksMovement: true };
 
@@ -1327,8 +1328,8 @@ public class Room
 
 	[ThreadStatic] static List<float>? waterBottomsScratch;
 
-	// Every maximal vertical water run whose top is NOT an exposed surface (solid above, or
-	// a pocket under a ledge) becomes a flat-tint rect. This is the exact complement of the
+	// Every maximal vertical water run whose top is NOT an exposed surface (room edge,
+	// solid above, or a pocket under a ledge) becomes a flat-tint rect. This complements the
 	// exposed runs that WaterSurfaces fill, so together they tint every water tile once.
 	void BuildCappedWaterRects()
 	{

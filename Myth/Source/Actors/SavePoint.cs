@@ -73,7 +73,7 @@ public class SavePoint : Actor
 		playerWasOverlapping = overlapping;
 	}
 
-	float LightIntensity => (Activated ? 0.56f : 0.36f) + pulse * 0.5f;
+	float LightIntensity => (Activated ? 0.76f : 0.56f) + pulse * 0.5f;
 
 	public override void Render(Batcher batcher)
 	{

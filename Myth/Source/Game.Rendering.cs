@@ -51,6 +51,8 @@ public sealed partial class GameView
 			if (PerfToggles.Reflections)
 				using (GraphicsDevice.DebugGroup("Myth/flat reflections"))
 					CompositeFlatReflections(ForegroundScreen);
+			using (GraphicsDevice.DebugGroup("Myth/hidden covers"))
+				DrawHiddenCovers(ForegroundScreen);
 		}
 		if (PerfToggles.Emissive)
 		{
@@ -150,11 +152,15 @@ public sealed partial class GameView
 					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 		}
 		DrawLayerTransition(output);
+		var mapOverlayVisible = false;
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 		{
 			DrawOverlayElements(output);
 			if (showHud)
+			{
 				DrawMinimap(output);
+				mapOverlayVisible = minimapOpacity > 0.001f;
+			}
 		}
 		if (debugView == DebugView.ShadowSegments)
 		{
@@ -208,7 +214,7 @@ public sealed partial class GameView
 		}
 
 		if (debugView is DebugView.None or DebugView.CollisionRects)
-			DrawInputPromptGlyphs(destination, present, output.Bounds.Size, scale, clip);
+			DrawInputPromptGlyphs(destination, present, output.Bounds.Size, scale, clip, mapOverlayVisible);
 
 		if (false && showHud && debugView is DebugView.None or DebugView.CollisionRects)
 			DrawPlayerHud(destination, viewport, scissor);
@@ -224,7 +230,7 @@ public sealed partial class GameView
 		}
 	}
 
-	void DrawInputPromptGlyphs(IDrawableTarget target, in RectInt present, Vector2 outputSize, float scale, RectInt? scissor)
+	void DrawInputPromptGlyphs(IDrawableTarget target, in RectInt present, Vector2 outputSize, float scale, RectInt? scissor, bool mapOverlayVisible)
 	{
 		var prompts = Manager.InputPrompts;
 		if (prompts == null || InputPromptGlyphs.Count == 0)
@@ -234,7 +240,8 @@ public sealed partial class GameView
 		Batcher.PushMatrix(Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(offset));
 		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
 		foreach (var glyph in InputPromptGlyphs)
-			prompts.DrawGlyphCentered(Batcher, glyph.Action, glyph.Center, glyph.Height, glyph.Color);
+			if (glyph.MapOverlay == mapOverlayVisible)
+				prompts.DrawGlyphCentered(Batcher, glyph.Action, glyph.Center, glyph.Height, glyph.Color);
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		Batcher.Render(target, scissor: scissor);
@@ -344,17 +351,12 @@ public sealed partial class GameView
 		// draw actors
 		foreach (var actor in rendering)
 		{
-			if (!actor.Visible)
+			if (!actor.Visible || actor is HiddenCoverGrid)
 				continue;
 			if (IsBackgroundActor(actor) != background)
 				continue;
 
-			Batcher.PushMatrix(actor.Position);
-			var actorMaterial = !atlasWander && PushWorldActorMaterial(actor, background);
-			actor.Render(Batcher);
-			if (actorMaterial)
-				Batcher.PopMaterial();
-			Batcher.PopMatrix();
+			DrawWorldActor(actor, background, atlasWander);
 		}
 
 		if (!background && debugView == DebugView.CollisionRects)
@@ -373,6 +375,33 @@ public sealed partial class GameView
 			else
 				DrawPlatformSurfaceReflections(target);
 		}
+	}
+
+	void DrawHiddenCovers(Target target)
+	{
+		if (!ShowForegroundLayer)
+			return;
+
+		PushWorldMatrix();
+		var atlasWander = PushAtlasWanderMaterial();
+		foreach (var actor in rendering)
+			if (actor is HiddenCoverGrid { Visible: true })
+				DrawWorldActor(actor, background: false, atlasWander);
+		if (atlasWander)
+			Batcher.PopMaterial();
+		Batcher.PopMatrix();
+		Batcher.Render(target);
+		Batcher.Clear();
+	}
+
+	void DrawWorldActor(Actor actor, bool background, bool atlasWander)
+	{
+		Batcher.PushMatrix(actor.Position);
+		var actorMaterial = !atlasWander && PushWorldActorMaterial(actor, background);
+		actor.Render(Batcher);
+		if (actorMaterial)
+			Batcher.PopMaterial();
+		Batcher.PopMatrix();
 	}
 
 	void DrawRoomColorFields()
@@ -1090,6 +1119,7 @@ public sealed partial class GameView
 	char tileFieldStampTile;
 	int tileFieldStampAnchor;
 	Func<Point2, Color>? tileFieldStampColor;
+	static readonly Func<char, Point2, Color> HiddenCoverTileFieldColor = static (tile, worldTile) => TileFieldColor(tile, worldTile);
 
 	void DrawDynamicTileFields()
 	{
@@ -1104,6 +1134,14 @@ public sealed partial class GameView
 		tileFieldStampColor ??= worldTile => TileFieldColor(tileFieldStampTile, worldTile, tileFieldStampAnchor);
 		foreach (var actor in rendering)
 		{
+			if (actor is HiddenCoverGrid { Visible: true } hiddenCover)
+			{
+				Batcher.PushMatrix(hiddenCover.Position);
+				hiddenCover.RenderTileField(Batcher, HiddenCoverTileFieldColor);
+				Batcher.PopMatrix();
+				continue;
+			}
+
 			if (actor is NeuralTextureActor { Visible: true, Layer: Factory.TileLayer.Foreground, MaterialTile: not '\0' } texture)
 			{
 				tileFieldStampTile = texture.MaterialTile;

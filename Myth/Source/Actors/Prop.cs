@@ -37,6 +37,8 @@ public class Prop : Actor
 	{
 		base.Added();
 		Sprite = Assets.GetSprite(SpriteName);
+		if (Facing == Signs.Negative && Sprite?.Frames.Count > 0)
+			Shift.X = -Sprite.Frames[0].Subtexture.Source.Width;
 		Depth = Layer == Factory.TileLayer.Background ? 8 : 4;
 		Play();
 		SetAnimationTime(rng.Float(Animation.Duration));

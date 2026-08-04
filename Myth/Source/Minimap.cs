@@ -356,6 +356,8 @@ public sealed partial class GameView
 	static Color MinimapRoomFill => new(0x241a3e, 50);
 	static Color MinimapWall => new(0x00, 80);
 	static float MinimapWorldColorOpacity => 1f; // how strongly the baked world map reads as the room fill
+	const string WarpHelp = "{Move} Move    {Confirm} Teleport    {Back} Back";
+	const string WarpHelpNoMovement = "{Confirm} Teleport    {Back} Back";
 
 	float minimapOpacity;
 
@@ -454,6 +456,19 @@ public sealed partial class GameView
 			var position = (origin + player.Position / TileSize * s).FloorToPoint2() - Point2.One;
 			Batcher.Rect(new Rect(position, Point2.One * 2), Color.White * minimapOpacity);
 		}
+
+		if (game.Minimap.WarpMode && Manager.InputPrompts is { } prompts && Assets.Font is { } font)
+			prompts.DrawText(
+				Batcher,
+				font,
+				game.Minimap.WarpPoints.Count > 1 ? WarpHelp : WarpHelpNoMovement,
+				new Vector2(Width * 0.5f, Height - 4),
+				font.Size,
+				new Vector2(0.5f, 1),
+				Color.White * minimapOpacity,
+				deferredGlyphs: InputPromptGlyphs,
+				drawGlyphs: false,
+				mapOverlay: true);
 
 		Batcher.Render(output);
 		Batcher.Clear();
