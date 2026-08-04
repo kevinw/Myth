@@ -20,6 +20,10 @@ public partial class Manager
 	GameMenuPage gameMenuReturnPage;
 	// The page whose ImGui data was built; a button callback can change gameMenuPage mid-build.
 	GameMenuPage gameMenuLayoutPage;
+	float gameMenuPageTransition = 1f;
+	float gameMenuLayoutEase = 1f;
+	Vector2 gameMenuEnterDirection = Vector2.UnitY;
+	Vector2 gameMenuLayoutOffset;
 	bool confirmRestart = false;
 
 	// Set when a page is shown; makes the next build reset the focused-slot tracker so
@@ -46,6 +50,8 @@ public partial class Manager
 	static float MenuButtonHeight => 14f;
 	static float MenuButtonGap => 4f;
 	static float MenuPanelWidth => 174f;
+	static float MenuEnterDuration => 0.16f;
+	static float MenuEnterDistance => 5f;
 	static readonly bool isSteamDeck = Environment.GetEnvironmentVariable("SteamDeck") == "1";
 
 	void ShowTitleMenu()
@@ -80,6 +86,12 @@ public partial class Manager
 
 	void ShowGameMenuPage(GameMenuPage page)
 	{
+		if (gameMenuPage != page)
+		{
+			gameMenuEnterDirection = page == GameMenuPage.Options ? Vector2.UnitX :
+				gameMenuPage == GameMenuPage.Options ? -Vector2.UnitX : Vector2.UnitY;
+			gameMenuPageTransition = 0;
+		}
 		gameMenuPage = page;
 		ApplyGameplayAudioPause();
 		confirmRestart = false;
@@ -235,7 +247,7 @@ public partial class Manager
 			{
 				var x = font['x'];
 				var inkCenter = font.Ascent + x.Offset.Y + x.Subtexture.Height * 0.5f;
-				labelBatch.Text(font, label, new Vector2(ImGui.GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), 0xc0cbdc);
+				labelBatch.Text(font, label, new Vector2(ImGui.GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), new Color(0xc0cbdc) * gameMenuLayoutEase);
 			}
 			menuImgui.EndBatch();
 		}
@@ -256,7 +268,7 @@ public partial class Manager
 			var max = ImGui.GetItemRectMax() + Vector2.One;
 			var draw = ImGui.GetWindowDrawList();
 			draw.PushClipRectFullScreen();
-			draw.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ImColor(0x5fcde4)), 0f, ImDrawFlags.None, 1f);
+			draw.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ImColor(0x5fcde4, gameMenuLayoutEase)), 0f, ImDrawFlags.None, 1f);
 			draw.PopClipRect();
 		}
 
@@ -320,16 +332,19 @@ public partial class Manager
 
 		menuImgui.Scale = presentScale;
 		var origin = MenuPresentOffset / presentScale; // game-space (0,0) in ImGui coords
+		gameMenuPageTransition = MathF.Min(1f, gameMenuPageTransition + Time.Delta / MenuEnterDuration);
+		gameMenuLayoutEase = Ease.Cube.Out(gameMenuPageTransition);
+		gameMenuLayoutOffset = gameMenuEnterDirection * ((1f - gameMenuLayoutEase) * MenuEnterDistance);
+		gameMenuLayoutPage = gameMenuPage;
 
 		if (menuFocusDirty)
 			menuFocusedIndex = -1;
 
 		menuImgui.BeginLayout();
 		PushMenuStyle();
-		gameMenuLayoutPage = gameMenuPage;
 
 		// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
-		var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7);
+		var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7) + gameMenuLayoutOffset;
 		ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
 
 		menuButtonIndex = 0;
@@ -365,6 +380,7 @@ public partial class Manager
 		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
 		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, MenuButtonGap));
 		ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
+		ImGui.PushStyleVar(ImGuiStyleVar.Alpha, gameMenuLayoutEase);
 		ImGui.PushStyleColor(ImGuiCol.Button, ImColor(0x1b102e));
 		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImColor(0x323c39));
 		ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImColor(0x323c39));
@@ -377,7 +393,7 @@ public partial class Manager
 	void PopMenuStyle()
 	{
 		ImGui.PopStyleColor(6);
-		ImGui.PopStyleVar(3);
+		ImGui.PopStyleVar(4);
 	}
 
 	// Render phase: the preview background, dark scrim, and animated title. The button
@@ -399,7 +415,9 @@ public partial class Manager
 		batcher.Rect(MenuViewport, Color.FromHexStringRGBA("0x160b1888"));
 
 		batcher.PushMatrix(MenuMatrix);
+		batcher.PushMatrix(Matrix3x2.CreateTranslation(gameMenuLayoutOffset));
 		DrawGameMenuTitle();
+		batcher.PopMatrix();
 
 		// draw cheeky views of the player and bud
 		{
@@ -450,12 +468,12 @@ public partial class Manager
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
 		if (gameMenuLayoutPage != GameMenuPage.Options && Assets.GetSprite("logo", logMissing: false) is { Frames.Count: > 0 } logo)
-			batcher.Image(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Vector2.One, 0, Color.White);
+			batcher.Image(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Vector2.One, 0, Color.White * gameMenuLayoutEase);
 		else
 		{
 			var useSineWave = false; // TODO: looks bad after the game has been running awhile
-			DrawCenteredText(font, title, pos + Vector2.One, font.Size * 2, Color.Lerp(0xfee761, Color.Black, 0.8f), sine: useSineWave);
-			DrawCenteredText(font, title, pos, font.Size * 2, 0xfee761, sine: useSineWave);
+			DrawCenteredText(font, title, pos + Vector2.One, font.Size * 2, Color.Lerp(0xfee761, Color.Black, 0.8f) * gameMenuLayoutEase, sine: useSineWave);
+			DrawCenteredText(font, title, pos, font.Size * 2, new Color(0xfee761) * gameMenuLayoutEase, sine: useSineWave);
 		}
 
 		var hint = gameMenuLayoutPage == GameMenuPage.Title ? InputPromptAction.Confirm : InputPromptAction.Back;
@@ -464,7 +482,7 @@ public partial class Manager
 			hint,
 			new Vector2(panel.Center.X, panel.Bottom - 17),
 			12,
-			0x8b81b5);
+			new Color(0x8b81b5) * gameMenuLayoutEase);
 	}
 
 	static Vector4 ImColor(uint rgb, float a = 1f)
