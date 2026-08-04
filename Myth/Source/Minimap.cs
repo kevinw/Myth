@@ -457,7 +457,7 @@ public sealed partial class GameView
 			Batcher.Rect(new Rect(position, Point2.One * 2), Color.White * minimapOpacity);
 		}
 
-		if (game.Minimap.WarpMode && Manager.InputPrompts is { } prompts && Assets.Font is { } font)
+		if (game.Minimap.WarpMode && Manager.InputPrompts is { } prompts && (Assets.SpeechFont ?? Assets.Font) is { } font)
 			prompts.DrawText(
 				Batcher,
 				font,

@@ -25,6 +25,9 @@ public partial class Manager : App
 	public const string RoomReverbParameter = "RoomReverb";
 
 	const string WindowSettingsFileName = "window.json";
+#if EDITOR
+	const string EditorSettingsFileName = "editor-settings.json";
+#endif
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
 	static float uiScale = 2.5f;
@@ -621,6 +624,9 @@ public partial class Manager : App
 	}
 
 	static string WindowSettingsPath => Path.Join(UserPathForApplicationName(APPLICATION_NAME), WindowSettingsFileName);
+#if EDITOR
+	static string EditorSettingsPath => Path.Join(UserPathForApplicationName(APPLICATION_NAME), EditorSettingsFileName);
+#endif
 
 #if !EDITOR
 	// Editor-less builds (browser, shipped desktop): pick the room to start play in
@@ -751,8 +757,10 @@ public partial class Manager : App
 	{
 		try
 		{
-
 			var settings = GetWindowSettingsFromJSON();
+#if EDITOR
+			LoadEditorSettings();
+#endif
 			if (settings == null) return;
 #if EDITOR
 			if (!string.IsNullOrWhiteSpace(settings.WorldId))
@@ -774,27 +782,6 @@ public partial class Manager : App
 #if !IOS && !BROWSER
 			runInBackground = settings.RunInBackground;
 #endif
-#if EDITOR
-			if (settings.EditorScrollMode is >= EditorScrollMode.Auto and <= EditorScrollMode.Trackpad)
-				editorScrollMode = settings.EditorScrollMode;
-			if (settings.EditorTheme is >= EditorTheme.Default and <= EditorTheme.SolarizedLight)
-				editorTheme = settings.EditorTheme;
-			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
-			editorGameRunInBackground = settings.EditorGameRunInBackground;
-			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
-			// Absent (an older settings file) means "never set", which is not the same as a
-			// user-dragged width -- fall back to the defaults rather than clamping a zero.
-			editorDockWidth = settings.EditorDockWidth > 0
-				? Math.Clamp(settings.EditorDockWidth, EditorDockMinWidth, EditorDockMaxWidth)
-				: DefaultToolDockWidth;
-			editorPaletteWidth = settings.EditorPaletteWidth > 0
-				? Math.Clamp(settings.EditorPaletteWidth, EditorDockMinWidth, EditorDockMaxWidth)
-				: DefaultPaletteDockWidth;
-			// Tool windows saved before the dock region existed sit wherever they last floated,
-			// so re-home them once when the layout version moves.
-			if (settings.EditorDockLayoutVersion < EditorDockLayoutVersion)
-				pendingEditorDockLayoutReset = true;
-#endif
 		}
 		catch (Exception e)
 		{
@@ -804,6 +791,9 @@ public partial class Manager : App
 
 	void SaveWindowSettings()
 	{
+#if EDITOR
+		SaveEditorSettings();
+#endif
 		if (Window == null)
 			return;
 
@@ -826,16 +816,6 @@ public partial class Manager : App
 				AlwaysOnTop = alwaysOnTop,
 #if !IOS && !BROWSER
 				RunInBackground = runInBackground,
-#endif
-#if EDITOR
-				EditorScrollMode = editorScrollMode,
-				EditorTheme = editorTheme,
-				PreservePlaytestSaveState = preservePlaytestSaveState,
-				EditorGameRunInBackground = editorGameRunInBackground,
-				PasteActorAtViewCenter = pasteActorAtViewCenter,
-				EditorDockWidth = editorDockWidth,
-				EditorPaletteWidth = editorPaletteWidth,
-				EditorDockLayoutVersion = EditorDockLayoutVersion
 #endif
 			};
 
@@ -863,7 +843,71 @@ public partial class Manager : App
 #if !IOS && !BROWSER
 		public bool RunInBackground { get; init; }
 #endif
+	}
+
 #if EDITOR
+	void LoadEditorSettings()
+	{
+		var migrate = !File.Exists(EditorSettingsPath);
+		var path = migrate ? WindowSettingsPath : EditorSettingsPath;
+		if (!File.Exists(path))
+			return;
+
+		try
+		{
+			var settings = JsonSerializer.Deserialize(File.ReadAllText(path), WindowSettingsJsonContext.Default.EditorSettings);
+			if (settings == null)
+				return;
+			if (settings.EditorScrollMode is >= EditorScrollMode.Auto and <= EditorScrollMode.Trackpad)
+				editorScrollMode = settings.EditorScrollMode;
+			if (settings.EditorTheme is >= EditorTheme.Default and <= EditorTheme.SolarizedLight)
+				editorTheme = settings.EditorTheme;
+			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
+			editorGameRunInBackground = settings.EditorGameRunInBackground;
+			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
+			editorDockWidth = settings.EditorDockWidth > 0
+				? Math.Clamp(settings.EditorDockWidth, EditorDockMinWidth, EditorDockMaxWidth)
+				: DefaultToolDockWidth;
+			editorPaletteWidth = settings.EditorPaletteWidth > 0
+				? Math.Clamp(settings.EditorPaletteWidth, EditorDockMinWidth, EditorDockMaxWidth)
+				: DefaultPaletteDockWidth;
+			if (settings.EditorDockLayoutVersion < EditorDockLayoutVersion)
+				pendingEditorDockLayoutReset = true;
+			if (migrate)
+				SaveEditorSettings();
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to load editor settings: {e}");
+		}
+	}
+
+	void SaveEditorSettings()
+	{
+		try
+		{
+			Directory.CreateDirectory(UserPath);
+			var settings = new EditorSettings
+			{
+				EditorScrollMode = editorScrollMode,
+				EditorTheme = editorTheme,
+				PreservePlaytestSaveState = preservePlaytestSaveState,
+				EditorGameRunInBackground = editorGameRunInBackground,
+				PasteActorAtViewCenter = pasteActorAtViewCenter,
+				EditorDockWidth = editorDockWidth,
+				EditorPaletteWidth = editorPaletteWidth,
+				EditorDockLayoutVersion = EditorDockLayoutVersion
+			};
+			File.WriteAllText(EditorSettingsPath, JsonSerializer.Serialize(settings, WindowSettingsJsonContext.Default.EditorSettings));
+		}
+		catch (Exception e)
+		{
+			Console.Error.WriteLine($"Failed to save editor settings: {e}");
+		}
+	}
+
+	sealed class EditorSettings
+	{
 		public EditorScrollMode EditorScrollMode { get; init; }
 		public EditorTheme EditorTheme { get; init; }
 		public bool PreservePlaytestSaveState { get; init; }
@@ -871,11 +915,14 @@ public partial class Manager : App
 		public bool PasteActorAtViewCenter { get; init; } = true;
 		public float EditorDockWidth { get; init; } = DefaultToolDockWidth;
 		public float EditorPaletteWidth { get; init; } = DefaultPaletteDockWidth;
-		public int EditorDockLayoutVersion { get; init; }
-#endif
+		public int EditorDockLayoutVersion { get; init; } = Manager.EditorDockLayoutVersion;
 	}
+#endif
 
 	[JsonSerializable(typeof(WindowSettings))]
+#if EDITOR
+	[JsonSerializable(typeof(EditorSettings))]
+#endif
 	partial class WindowSettingsJsonContext : JsonSerializerContext;
 
 #if DEBUG

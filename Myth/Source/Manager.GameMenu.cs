@@ -40,8 +40,8 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	float MenuButtonWidth => gameMenuPage == GameMenuPage.Options ? 150f : 100f;
-	static float MenuButtonHeight => 18f;
+	float MenuButtonWidth => gameMenuPage == GameMenuPage.Options ? 100f : 50f;
+	static float MenuButtonHeight => 14f;
 	static float MenuButtonGap => 4f;
 	static float MenuPanelWidth => 174f;
 	static readonly bool isSteamDeck = Environment.GetEnvironmentVariable("SteamDeck") == "1";
@@ -151,12 +151,12 @@ public partial class Manager
 
 	void OptionsMenu()
 	{
-		if (MenuButton(musicEnabled ? "music on" : "music off"))
+		if (MenuButton(musicEnabled ? "music: on" : "music: off"))
 			MusicEnabled = !MusicEnabled;
 #if !IOS && !BROWSER
 		if (!isSteamDeck)
 		{
-			if (MenuButton(runInBackground ? "run in background on" : "run in background off"))
+			if (MenuButton(runInBackground ? "run in background: on" : "run in background: off"))
 				runInBackground = !runInBackground;
 			if (MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
 				window.Fullscreen = !window.Fullscreen;
@@ -223,9 +223,20 @@ public partial class Manager
 		// Use ### so the id is the slot index only: a button whose label toggles
 		// ("music on"/"music off", "fullscreen"/"windowed") keeps a stable id and so
 		// keeps nav focus, letting you re-toggle it with repeated South presses.
-		ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2 (0.0f, -0.5f));
-		var pressed = ImGui.Button($"{label}###{menuButtonIndex}", new Vector2(MenuButtonWidth, MenuButtonHeight));
-		ImGui.PopStyleVar();
+		var pressed = ImGui.Button($"###{menuButtonIndex}", new Vector2(MenuButtonWidth, MenuButtonHeight));
+		var buttonMin = ImGui.GetItemRectMin();
+		var buttonMax = ImGui.GetItemRectMax();
+		if ((Assets.SpeechFont ?? Assets.Font) is { } font)
+		{
+			var visible = menuImgui.BeginBatchAt(Rect.Between(buttonMin, buttonMax), out var labelBatch, out var bounds);
+			if (visible)
+			{
+				var x = font['x'];
+				var inkCenter = font.Ascent + x.Offset.Y + x.Subtexture.Height * 0.5f;
+				labelBatch.Text(font, label, new Vector2(ImGui.GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), 0xc0cbdc);
+			}
+			menuImgui.EndBatch();
+		}
 
 		// The first item is the default nav focus when a page's window appears (each
 		// page uses a distinct window id, so switching pages re-triggers this).
@@ -423,7 +434,7 @@ public partial class Manager
 		var panelHeight = 76f + itemCount * MenuButtonHeight + (itemCount - 1) * MenuButtonGap;
 		var panel = Rect.CenteredAt(MenuBounds.Center, new Vector2(MenuPanelWidth, panelHeight));
 
-		var font = Assets.Font;
+		var font = Assets.SpeechFont ?? Assets.Font;
 		if (font == null) return;
 
 		var title = gameMenuPage switch
@@ -440,8 +451,8 @@ public partial class Manager
 		else
 		{
 			var useSineWave = false; // TODO: looks bad after the game has been running awhile
-			DrawCenteredText(font, title, pos + Vector2.One * 1f, 18, Color.Lerp(0xfee761, Color.Coral, 0.8f), sine: useSineWave);
-			DrawCenteredText(font, title, pos, 18, 0xfee761, sine: useSineWave);
+			DrawCenteredText(font, title, pos + Vector2.One, font.Size * 2, Color.Lerp(0xfee761, Color.Black, 0.8f), sine: useSineWave);
+			DrawCenteredText(font, title, pos, font.Size * 2, 0xfee761, sine: useSineWave);
 		}
 
 		var hint = gameMenuPage == GameMenuPage.Title ? InputPromptAction.Confirm : InputPromptAction.Back;
