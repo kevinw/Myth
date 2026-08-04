@@ -1050,7 +1050,8 @@ public partial class Manager : App
 		if (bootWarming)
 		{
 			UpdateBootWarmup();
-			return;
+			if (bootWarming)
+				return;
 		}
 
 		InputPrompts?.Update(Time.Elapsed);

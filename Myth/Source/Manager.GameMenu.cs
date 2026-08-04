@@ -18,6 +18,8 @@ public partial class Manager
 
 	GameMenuPage gameMenuPage;
 	GameMenuPage gameMenuReturnPage;
+	// The page whose ImGui data was built; a button callback can change gameMenuPage mid-build.
+	GameMenuPage gameMenuLayoutPage;
 	bool confirmRestart = false;
 
 	// Set when a page is shown; makes the next build reset the focused-slot tracker so
@@ -40,7 +42,7 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	float MenuButtonWidth => gameMenuPage == GameMenuPage.Options ? 100f : 50f;
+	float MenuButtonWidth => gameMenuLayoutPage == GameMenuPage.Options ? 100f : 50f;
 	static float MenuButtonHeight => 14f;
 	static float MenuButtonGap => 4f;
 	static float MenuPanelWidth => 174f;
@@ -324,6 +326,7 @@ public partial class Manager
 
 		menuImgui.BeginLayout();
 		PushMenuStyle();
+		gameMenuLayoutPage = gameMenuPage;
 
 		// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
 		var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7);
@@ -334,8 +337,8 @@ public partial class Manager
 
 		// Distinct id per page so switching pages makes the window "appear", which is
 		// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
-		ImGui.Begin($"##gamemenu_{gameMenuPage}", MenuWindowFlags);
-		switch (gameMenuPage)
+		ImGui.Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
+		switch (gameMenuLayoutPage)
 		{
 			case GameMenuPage.Title: TitleMenu(); break;
 			case GameMenuPage.Pause: PauseMenu(); break;
@@ -346,7 +349,7 @@ public partial class Manager
 		menuItemCount = menuButtonIndex; // how many buttons the page emitted, for the title layout
 
 		PopMenuStyle();
-		menuFocusDirty = false;
+		menuFocusDirty = gameMenuPage != gameMenuLayoutPage;
 		menuImgui.EndLayout();
 
 		// A button that closed the menu (resume / start / quit) should not linger for a
@@ -437,7 +440,7 @@ public partial class Manager
 		var font = Assets.SpeechFont ?? Assets.Font;
 		if (font == null) return;
 
-		var title = gameMenuPage switch
+		var title = gameMenuLayoutPage switch
 		{
 			GameMenuPage.Title => "mycelon",
 			GameMenuPage.Options => "options",
@@ -446,7 +449,7 @@ public partial class Manager
 
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
-		if (gameMenuPage != GameMenuPage.Options && Assets.GetSprite("logo", logMissing: false) is { Frames.Count: > 0 } logo)
+		if (gameMenuLayoutPage != GameMenuPage.Options && Assets.GetSprite("logo", logMissing: false) is { Frames.Count: > 0 } logo)
 			batcher.Image(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Vector2.One, 0, Color.White);
 		else
 		{
@@ -455,7 +458,7 @@ public partial class Manager
 			DrawCenteredText(font, title, pos, font.Size * 2, 0xfee761, sine: useSineWave);
 		}
 
-		var hint = gameMenuPage == GameMenuPage.Title ? InputPromptAction.Confirm : InputPromptAction.Back;
+		var hint = gameMenuLayoutPage == GameMenuPage.Title ? InputPromptAction.Confirm : InputPromptAction.Back;
 		InputPrompts?.DrawGlyphCentered(
 			batcher,
 			hint,
