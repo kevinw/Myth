@@ -63,6 +63,15 @@ public abstract class Carryable : Actor, ICarryable
 	{
 		if (Game.Rewinding) return;
 
+		// An external impulse (e.g. a Bouncer) sets Velocity while we're at rest. Transition
+		// to airborne before base.Update() so the velocity is treated as physics, not discarded.
+		if (!airborne && CarriedBy == null && Velocity != Vector2.Zero)
+		{
+			Mask = Masks.None;
+			airborne = true;
+			landingSpeed = 0;
+		}
+
 		base.Update();
 
 		if (CarriedBy != null)

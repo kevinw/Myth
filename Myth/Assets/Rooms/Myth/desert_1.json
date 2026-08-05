@@ -82,7 +82,7 @@
     {
       "Id": "a16d1dec6b3f2217",
       "Type": "ParticleEmitter",
-      "Position": [284, 12]
+      "Position": [268, -4]
     },
     {
       "Id": "7a42fe42adcfb327",
@@ -128,6 +128,30 @@
       "Type": "Bouncer",
       "Position": [492, 151],
       "Strength": 250
+    },
+    {
+      "Id": "65ffde354a4675a8",
+      "Type": "Crate",
+      "Position": [136, 88]
+    },
+    {
+      "Id": "0d819e97745f50dd",
+      "Type": "ConveyorBelt",
+      "Position": [264, 40],
+      "JumpThrough": true,
+      "Size": [32, 4]
+    },
+    {
+      "Id": "a613c84df4ddda2a",
+      "Type": "ConveyorBelt",
+      "Position": [288, 56],
+      "JumpThrough": true,
+      "Size": [32, 4]
+    },
+    {
+      "Id": "223441ab0eb2537e",
+      "Type": "Crate",
+      "Position": [272, 0]
     }
   ]
 }
