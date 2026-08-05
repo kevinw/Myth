@@ -22,39 +22,35 @@ public partial class Game
 
 	// Debug/dev keyboard + controller shortcuts. Host concern: Manager reads input and
 	// drives the sim through its public API (moved out of Game.Update for Phase 2).
-	internal void HandleGameDebugShortcuts(Input Input)
+	// Bindings live in DebugControls, which the '?' help window also reads.
+	internal void HandleGameDebugShortcuts(DebugControls debug, Input Input)
 	{
 		if (!AcceptsLiveInput)
 			return;
 
 #if DEBUG
-		if (Input.Keyboard.Pressed(Keys.R))
+		if (debug.ReloadRoom.Pressed)
 			ReloadRoom();
 		// TODO: use an ingame console instead?
-		if (Input.Keyboard.Pressed(Keys.P)) ToggleDebugView(DebugView.PlatformNav);
-		if (Input.Keyboard.Pressed(Keys.G))
+		if (debug.PlatformNavView.Pressed) ToggleDebugView(DebugView.PlatformNav);
+		if (debug.RenderTargets.Pressed)
 		{
 			if (Input.Keyboard.Shift)
 				ToggleGodMode();
 			else
 				ToggleRenderTargetOverlay();
 		}
-		if (Input.Keyboard.Pressed(Keys.C)) ToggleDebugView(DebugView.CollisionRects);
-		if (Input.Keyboard.Pressed(Keys.N)) ToggleDebugView(DebugView.NormalBuffer);
-		if (Input.Keyboard.Pressed(Keys.J)) ToggleAtlasWander();
-		if (Input.Keyboard.Pressed(Keys.L)) ToggleDebugCenterCamera();
-		if (Input.Keyboard.Pressed(Keys.U)) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
+		if (debug.CollisionView.Pressed) ToggleDebugView(DebugView.CollisionRects);
+		if (debug.NormalsView.Pressed) ToggleDebugView(DebugView.NormalBuffer);
+		if (debug.AtlasWander.Pressed) ToggleAtlasWander();
+		if (debug.CenterCamera.Pressed) ToggleDebugCenterCamera();
+		if (debug.PerfReveal.Pressed) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 
 		// Cycle OutLoud test lines through Bud to dial in reveal rate / pitch / emotion.
-		if (Input.Keyboard.Pressed(Keys.V) && VoiceEnabled) SpeakVoiceTest();
+		if (debug.VoiceTest.Pressed && VoiceEnabled) SpeakVoiceTest();
 		int timeScaleChange = 0;
-		if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) timeScaleChange = -1;
-		if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) timeScaleChange = 1;
-		foreach (var controller in Input.Controllers) if (controller.Connected)
-		{
-			if (controller.Pressed(Buttons.LeftShoulder)) timeScaleChange = -1;
-			if (controller.Pressed(Buttons.RightShoulder)) timeScaleChange = 1;
-		}
+		if (debug.TimeScaleDown.Pressed) timeScaleChange = -1;
+		if (debug.TimeScaleUp.Pressed) timeScaleChange = 1;
 
 		if (timeScaleChange != 0)
 		{

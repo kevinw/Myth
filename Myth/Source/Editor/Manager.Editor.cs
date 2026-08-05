@@ -5210,7 +5210,7 @@ public partial class Manager
 			RemoveRoomFromWorld(room);
 	}
 
-	bool ToggleEditorPressed() => Input.Keyboard.Pressed(Keys.Tab) || Input.AnyControllerButtonPressed(Buttons.RightStick);
+	bool ToggleEditorPressed() => debugControls.ToggleEditor.Pressed;
 
 	void PreferencesImGui()
 	{

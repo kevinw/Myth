@@ -130,6 +130,7 @@ public partial class Manager : App
 	/// Sprite Batcher for general Editor visuals
 	readonly Batcher batcher;
 	readonly Controls controls;
+	internal readonly DebugControls debugControls;
 	internal InputPrompts? InputPrompts { get; private set; }
 
 	/// Visible Space
@@ -307,6 +308,7 @@ public partial class Manager : App
 
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
+		debugControls = new(Input);
 		menuImgui = new(this, enableGamepadNav: true, frameRounding: 0);
 		OnExitRequested = RequestQuit;
 		if (Window != null)
@@ -1090,7 +1092,7 @@ public partial class Manager : App
 #if DEBUG
 		// Toggle the Tweaks panel from anywhere — edit or play — except while actively typing into a
 		// text field (so T reaches the search box). Runs before the play/edit branch so both modes see it.
-		if (imgui is { WantsTextInput: false } && Input.Keyboard.Pressed(Keys.T))
+		if (imgui is { WantsTextInput: false } && debugControls.Tweaks.Pressed)
 			TweakRegistry.Open = !TweakRegistry.Open;
 #endif
 #if EDITOR
@@ -1112,7 +1114,7 @@ public partial class Manager : App
 		const bool shipRoomCheatChordActive = false;
 #endif
 
-		if (!keyboardShortcutsBlocked && playing && !gameMenuPausesGame && GymLoop && Input.Keyboard.Pressed(Keys.Enter, Keys.KeypadEnter))
+		if (!keyboardShortcutsBlocked && playing && !gameMenuPausesGame && GymLoop && debugControls.AdvanceGym.Pressed)
 			AdvanceGym(failureReason: "manual");
 
 		// Misc. Hotkeys
@@ -1129,10 +1131,10 @@ public partial class Manager : App
 				//game?.DisplayMessage($"Transitions {(Actor.TransitionsEnabled ? "On" : "Off")}");
 				//}
 
-				if (Input.Keyboard.Pressed(Keys.F5))
+				if (debugControls.FpsOverlay.Pressed)
 					ToggleFpsOverlay();
 #if !IOS && !BROWSER
-				if (Window is { } window && !keyboardShortcutsBlocked && Input.Keyboard.Pressed(Keys.F4))
+				if (Window is { } window && !keyboardShortcutsBlocked && debugControls.Fullscreen.Pressed)
 					window.Fullscreen = !window.Fullscreen;
 #endif
 #if EDITOR
@@ -1181,7 +1183,7 @@ public partial class Manager : App
 						UpdatePlayerMouseDrag(g);
 #endif
 						if (!keyboardShortcutsBlocked && !perfToggleChordActive && !shipRoomCheatChordActive)
-							g.HandleGameDebugShortcuts(Input);
+							g.HandleGameDebugShortcuts(debugControls, Input);
 #if EDITOR
 							if (!commandConsoleOpen)
 #endif
@@ -1203,8 +1205,8 @@ public partial class Manager : App
 			gameEase = Calc.Approach(gameEase, 0.0f, Time.Delta * 4.0f);
 			if (!keyboardShortcutsBlocked)
 			{
-				if (Input.Keyboard.Pressed(Keys.Minus, Keys.KeypadMinus)) ChangeEditorUiScale(-0.1f);
-				if (Input.Keyboard.Pressed(Keys.Equals, Keys.KeypadPlus)) ChangeEditorUiScale(0.1f);
+				if (debugControls.UiScaleDown.Pressed) ChangeEditorUiScale(-0.1f);
+				if (debugControls.UiScaleUp.Pressed) ChangeEditorUiScale(0.1f);
 				using (PerfStats.Time(PerfDetail.EditorNavigation))
 					UpdateEditorNavigation();
 			}
@@ -1399,9 +1401,9 @@ public partial class Manager : App
 #if !BROWSER && !IOS
 		if (!keyboardShortcutsBlocked)
 		{
-			if (Input.Keyboard.Pressed(Keys.B)) ToggleBudAI();
+			if (debugControls.BudAI.Pressed) ToggleBudAI();
 #if !MYTHSHIP
-			if (Input.Keyboard.Pressed(Keys.M)) ToggleMovieRecording(Input.Keyboard.Shift);
+			if (debugControls.MovieRecording.Pressed) ToggleMovieRecording(Input.Keyboard.Shift);
 #endif
 		}
 #endif

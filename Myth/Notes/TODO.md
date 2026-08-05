@@ -1,5 +1,7 @@
 # TODO
 
+- better Bud idle behavior.
+- more google doc writing https://docs.google.com/spreadsheets/d/1KKmU3uwT2x6hbNzBEyBdjEReGU-bd9zTvpJAd4vOTTg/edit?gid=0#gid=0
 - it would be very fun to introduce a slow version of bud that kills you and hunts you across rooms.
 - if you go up, there's only exploration, if you go down, there's also combat
 - idea: one type of smoky NCT could write over other actors, but have the alpha depend on a simulation value.

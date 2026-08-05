@@ -48,7 +48,7 @@ public partial class Manager
 
 	void UpdateCommandConsoleToggle()
 	{
-		if (!Input.Keyboard.Pressed(Keys.Tilde))
+		if (!debugControls.Console.Pressed)
 			return;
 		commandConsoleOpen = !commandConsoleOpen;
 		focusCommandConsole = commandConsoleOpen;

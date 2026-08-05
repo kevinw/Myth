@@ -87,7 +87,8 @@
     {
       "Id": "885a0ba804dd8fc3",
       "Type": "Light",
-      "Position": [292, 124]
+      "Position": [292, 124],
+      "Height": 9.8
     },
     {
       "Id": "d9c88435dfb351ec",
