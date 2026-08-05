@@ -107,11 +107,13 @@ public class Bouncer : Actor, IResizable
 	void Bounce(Actor actor)
 	{
 		var direction = BounceDirection(actor);
+		
+		// Don't squash velocity in the direction we're not bouncing (i.e., let a player keep traveling horizontally for a vertical bounce).
 		var hasX = MathF.Abs(direction.X) > 0.01f;
 		var hasY = MathF.Abs(direction.Y) > 0.01f;
 		if (hasX) actor.Velocity.X = 0.0f;
 		if (hasY) actor.Velocity.Y = 0.0f;
-		Game.Show(direction, hasX, hasY);
+		
 		actor.Velocity += direction * Strength;
 
 		// Dent the membrane on the impact side; the spring-back overshoot is the squish.
