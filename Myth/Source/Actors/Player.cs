@@ -103,12 +103,12 @@ public abstract class Pawn : Actor
 	static float WaterRollSplashStrength => 20f;
 	static float WaterRollHopHeight => 3f;
 
-	protected static float WallHugGravityMultiplier => 0.25f.T();
-	protected static float WallSlideMaxFallSpeed => 80f.T();  // capped, slower descent while wall sliding
-	protected static float WallSlideFallDamping => 320f.T();  // eases a fast fall down to the slide cap
-	static float WallJumpCoyoteTime => 0.08f.T();
-	public static float JumpForce => -125.T();
-	public static float JumpTime => 0.19f.T();
+	protected static float WallHugGravityMultiplier => 0.25f;
+	protected static float WallSlideMaxFallSpeed => 80f;  // capped, slower descent while wall sliding
+	protected static float WallSlideFallDamping => 320f;  // eases a fast fall down to the slide cap
+	static float WallJumpCoyoteTime => 0.08f;
+	public static float JumpForce => -139;
+	public static float JumpTime => 0.22f;
 	// Gravity is scaled by this while the jump button is held (floatier ascent), and
 	// vertical velocity is multiplied by JumpCutMultiplier when the jump is released early.
 	// Centralized here so the jump-arc sweep (JumpPhysics) reads the same numbers as Update.
@@ -1527,6 +1527,38 @@ public partial class Player : Pawn
 		return Game.OverlapsRoomCollision(new RectInt(box.Left, groundY, 1, 1))
 			&& Game.OverlapsRoomCollision(new RectInt(box.Right - 1, groundY, 1, 1));
 	}
+
+#if EDITOR
+	// Death-loop rescue (see Game.RespawnPlayerAtLastGrounded): nearest tile-aligned spot in the
+	// current room with supported footing. Tile-aligned candidates land exactly on flat tile
+	// ground, which is all a rescue needs.
+	public bool TryFindSafeFootingNear(Point2 from, out Point2 result)
+	{
+		result = from;
+		if (Game.CurrentRoom is not { } room)
+			return false;
+
+		var origin = room.WorldBounds.TopLeft;
+		var bestSq = long.MaxValue;
+		for (var ty = 1; ty < room.Size.Y; ty++)
+			for (var tx = 0; tx < room.Size.X; tx++)
+			{
+				var candidate = new Point2(
+					origin.X + tx * Game.TileSize + Game.TileSize / 2,
+					origin.Y + ty * Game.TileSize);
+				if (!HasSupportedFooting(candidate))
+					continue;
+				long dx = candidate.X - from.X, dy = candidate.Y - from.Y;
+				var distSq = dx * dx + dy * dy;
+				if (distSq < bestSq)
+				{
+					bestSq = distSq;
+					result = candidate;
+				}
+			}
+		return bestSq != long.MaxValue;
+	}
+#endif
 
 	bool IsSafeGroundedRespawn()
 		=> Health > 0 && grounded && State != States.Burrow && State != States.Climb &&

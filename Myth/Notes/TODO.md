@@ -1,5 +1,6 @@
 # TODO
 
+- it would be very fun to introduce a slow version of bud that kills you and hunts you across rooms.
 - if you go up, there's only exploration, if you go down, there's also combat
 - idea: one type of smoky NCT could write over other actors, but have the alpha depend on a simulation value.
 - lightning traps need sound fx
@@ -120,12 +121,24 @@ adjust rope springiness as a mechanic or challenge
 - roll on surface of water, become a skipping stone
 - roll into vertical wall: fast wall climb
 - burrow under bud: carry him
+- carry a powered-up bud who gives you a balloon lift
 - bud gets hit, rolls away from danger
 - double tap for 0-to-60 running
 - up jump near bud gets a boost
 - trying to put out all the torches in a room, but bugs are trying to light them
 - a room where Bud gets stuck; you hear him from the other room, or talk on a radio
 - boss rush storylets: like Hades, each time you face off against one, you get new dialog. but winning doesn't mean they won't come back and that you are "punished" with less dialog; maybe they come back stronger!
+
+### platformer elements
+- fan block: solid tile projecting a toggleable short Wind column (updraft elevator; blow ropes sideways)
+- swinging pendulum platform: platform hung from a rope pivot; landing momentum pumps it, wind pushes it
+- crusher: slow rise, telegraphed pause, fast slam (build on MovingPlatform's MoveSolid push/squish)
+- timed flip blocks: tiles phasing solid/ghost on a metronome or per-jump (ESA switch blocks in miniature)
+- water spout / geyser: periodic vertical jet that carries you up while on; gives vertical rooms a rhythm
+- falling icicle: trembles when you pass under, drops, sticks in as a temporary platform/spike
+- one-way valve door: directional Jumpthru in any orientation; huge for loop-shaped room design
+- pressure plate + counterweight gate: stays down only while weighted (crate, Bud, or a draped cut rope)
+- sticky honey strip: inverse ConveyorBelt; halves speed and jump height, escaped by burrowing under it
 
 
 ## resources

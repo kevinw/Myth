@@ -1093,6 +1093,9 @@ public partial class Manager : App
 		if (imgui is { WantsTextInput: false } && Input.Keyboard.Pressed(Keys.T))
 			TweakRegistry.Open = !TweakRegistry.Open;
 #endif
+#if EDITOR
+		UpdateDebugHelpToggle();
+#endif
 
 		if (!keyboardShortcutsBlocked
 #if EDITOR
@@ -1280,6 +1283,7 @@ public partial class Manager : App
 #if EDITOR
 			EditorUI();
 			DrawCommandConsole();
+			DrawDebugHelp();
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();

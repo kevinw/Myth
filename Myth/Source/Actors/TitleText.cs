@@ -14,6 +14,7 @@ public class TitleText : Actor
 	float stateDuration;
 	public string Text = string.Empty;
 	public float RevealSpeed = 7.0f;
+	public float LineHeightMultiplier = 1f;
 	public override bool CastsSpriteShadow => false;
 	public bool Emissive = false;
 
@@ -26,12 +27,14 @@ public class TitleText : Actor
 	SpriteFont? ShouldRenderWithFont() => Game.Simulating ? null : Assets.SpeechFont ?? Assets.Font;
 	internal static string EditorText(string? text) => string.IsNullOrEmpty(text) ? EmptyEditorText : text;
 
-	internal static RectInt EditorBounds(Point2 position, string? text)
+	internal static RectInt EditorBounds(Point2 position, string? text, float lineHeightMultiplier = 1)
 	{
 		if ((Assets.SpeechFont ?? Assets.Font) is not { } font)
 			return new(position - new Point2(4, 4), new Point2(8, 8));
 
-		var size = font.SizeOf(EditorText(text));
+		var display = EditorText(text);
+		var size = font.SizeOf(display);
+		size.Y += font.LineHeight * (lineHeightMultiplier - 1) * display.AsSpan().Count('\n');
 		return new(position + (-size * 0.5f).RoundToPoint2(), size.CeilingToPoint2());
 	}
 
@@ -57,6 +60,7 @@ public class TitleText : Actor
 			Color.White,
 			Game.Editing ? int.MaxValue : (int)stateDuration,
 			deferredGlyphs,
-			drawGlyphs: false);
+			drawGlyphs: false,
+			lineHeightMultiplier: LineHeightMultiplier);
 	}
 }

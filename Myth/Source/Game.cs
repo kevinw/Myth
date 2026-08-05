@@ -940,6 +940,9 @@ public partial class Game : IDisposable
 	{
 		if (room == null || nextRoom != null || Simulating)
 			return;
+#if EDITOR
+		deathsWithoutSafeGround = 0;
+#endif
 		var respawn = new RespawnState(room.Id, position);
 		if (Save.LastGrounded == respawn)
 			return;
@@ -973,11 +976,40 @@ public partial class Game : IDisposable
 			EnsureBudForPlayer(repositionExisting: true);
 			if (restartMusic)
 				MusicWasRestarted();
-			return;
 		}
+		else
+			ReloadRoom(restartMusic);
 
-		ReloadRoom(restartMusic);
+#if EDITOR
+		EditorDeathLoopRescue();
+#endif
 	}
+
+#if EDITOR
+	// Editing a room out from under the player can leave every respawn target hanging over a
+	// pit, so each respawn falls straight back to its death and the loop never breaks on its
+	// own. Deaths with no safe grounding in between count up (NoteSafeGroundedRespawn resets);
+	// after a few, move the player to the nearest supported footing in the room and make that
+	// the new grounded respawn.
+	int deathsWithoutSafeGround;
+	const int DeathLoopRescueThreshold = 3;
+
+	void EditorDeathLoopRescue()
+	{
+		if (++deathsWithoutSafeGround < DeathLoopRescueThreshold || GetFirst<Player>() is not { } player)
+			return;
+
+		deathsWithoutSafeGround = 0;
+		if (!player.TryFindSafeFootingNear(player.Position, out var safe))
+			return;
+
+		player.Position = safe;
+		player.Stop();
+		NoteSafeGroundedRespawn(safe);
+		EnsureBudForPlayer(repositionExisting: true);
+		DisplayMessage("death loop detected: moved player to safe ground");
+	}
+#endif
 
 	// Resolves an activated save point's actor id to a concrete respawn location by
 	// reading its current position from the live room spec. Returns null if the save

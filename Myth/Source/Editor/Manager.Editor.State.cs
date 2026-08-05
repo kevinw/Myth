@@ -77,6 +77,9 @@ public partial class Manager
 		internal int GetInt(string property, int fallback)
 			=> ActorSpecs.GetResolvedProperty(Json, property)?.GetValue<int>() ?? fallback;
 
+		internal bool GetBool(string property, bool fallback)
+			=> ActorSpecs.GetResolvedProperty(Json, property)?.GetValue<bool>() ?? fallback;
+
 		internal Point2 GetRoomPoint(string property, Point2 fallback)
 			=> ActorSpecs.ReadPoint(ActorSpecs.GetResolvedProperty(Json, property)) ?? fallback;
 

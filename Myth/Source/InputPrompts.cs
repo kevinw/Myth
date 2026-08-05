@@ -88,18 +88,21 @@ sealed class InputPrompts : IDisposable
 
 	public void DrawText(Batcher batcher, SpriteFont textFont, ReadOnlySpan<char> text, Vector2 position,
 		float size, Vector2 justify, Color color, int visibleElements = int.MaxValue,
-		List<InputPromptGlyph>? deferredGlyphs = null, bool drawGlyphs = true, bool mapOverlay = false)
+		List<InputPromptGlyph>? deferredGlyphs = null, bool drawGlyphs = true, bool mapOverlay = false,
+		float lineHeightMultiplier = 1)
 	{
 		text = text[..VisibleLength(text, visibleElements)];
 		if (text.IsEmpty)
 			return;
 
-		var lineHeight = textFont.LineHeight * size / textFont.Size;
+		var baseLineHeight = textFont.LineHeight * size / textFont.Size;
+		var lineHeight = baseLineHeight * lineHeightMultiplier;
 		var textHeight = textFont.Height * size / textFont.Size;
 		var glyphHeight = textHeight * InlineGlyphScale;
+		var blockHeight = textFont.HeightOf(text, size) + (lineHeight - baseLineHeight) * text.Count('\n');
 		var at = (position + new Vector2(
 			-justify.X * WidthOfLine(textFont, text, size, glyphHeight),
-			-justify.Y * textFont.HeightOf(text, size))).Round() - position;
+			-justify.Y * blockHeight)).Round() - position;
 		var runStart = 0;
 		var index = 0;
 

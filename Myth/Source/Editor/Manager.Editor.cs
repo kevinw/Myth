@@ -2447,7 +2447,8 @@ public partial class Manager
 		var position = room.WorldBounds.TopLeft + local;
 		var resolved = ActorSpecs.Resolve(actor);
 		if (string.Equals(ActorSpecs.ReadString(resolved, "Type"), nameof(TitleText), StringComparison.OrdinalIgnoreCase))
-			return TitleText.EditorBounds(position, ActorSpecs.ReadString(resolved, nameof(TitleText.Text)));
+			return TitleText.EditorBounds(position, ActorSpecs.ReadString(resolved, nameof(TitleText.Text)),
+				JsonUtil.ReadFloat(resolved, nameof(TitleText.LineHeightMultiplier), 1));
 		if (ResizableRoomRectTypes.TryGetValue(ActorSpecs.ReadString(resolved, "Type") ?? "", out var info))
 		{
 			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? info.DefaultSize;
