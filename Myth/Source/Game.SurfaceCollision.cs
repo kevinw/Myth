@@ -455,7 +455,9 @@ public partial class Game
 
 		foreach (var other in Actors)
 		{
-			if (other is Grid || !other.Mask.Has(Actor.Masks.Solid) || other.Hitbox.Shape != Hitbox.Shapes.Rect)
+			// ICarryable actors (crates, buds) are transparent to the burrow surface walk so
+			// the player can travel underneath them; they're still solid for normal physics.
+			if (other is Grid || other is ICarryable || !other.Mask.Has(Actor.Masks.Solid) || other.Hitbox.Shape != Hitbox.Shapes.Rect)
 				continue;
 
 			var rect = other.Hitbox.Rect + other.Position;

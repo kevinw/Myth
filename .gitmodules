@@ -3,7 +3,7 @@
 	url = https://github.com/cimgui/cimgui.git
 [submodule "Foster"]
 	path = Foster
-	url = https://github.com/kevinw/Foster.git
+	url = git@github.com:kevinw/Foster.git
 [submodule "Myth/Source/External/StringBuilder"]
 	path = Myth/Source/External/StringBuilder
 	url = https://github.com/linkdotnet/StringBuilder.git

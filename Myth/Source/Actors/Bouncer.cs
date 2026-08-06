@@ -17,14 +17,23 @@ public class Bouncer : Actor, IResizable
 	public float Strength = 80f;
 	// Pad mode: always launch along Direction instead of radially away from the center.
 	public bool Directional;
+	// How much wider the straight-up sector is relative to the other seven. 0.2 = 20% wider.
+	public float UpwardBias = 0.2f;
 	public Point2 Direction = Point2.Up;
 	public Color FillColor = new(0x6d2b56);
 	public Color RimColor = new(0xff7ac2);
 
 	// Membrane spring: accel per px of displacement from rest, and per-second velocity bleed.
 	static float Stiffness => 3280f;
-	static float DampingRate => 9f;
+	static float DampingRate => 11f;
 	static float MaxSimStep => 1f / 30f;
+	static float VisualRecoilOffset => 4f;
+
+	// Whole-body recoil spring: kicks 2px opposite the launch direction on a bounce.
+	static float RecoilStiffness => 900f;
+	static float RecoilDamping => 42f;
+	Vector2 recoilOffset;
+	Vector2 recoilVelocity;
 
 	// The ring simulates in actor-local space so editor drags carry the blob along rigidly.
 	Vector2[] points = [];
@@ -78,6 +87,10 @@ public class Bouncer : Actor, IResizable
 
 		Simulate(MathF.Min(Time.Delta, MaxSimStep));
 
+		var recoilAccel = -recoilOffset * RecoilStiffness - recoilVelocity * RecoilDamping;
+		recoilVelocity += recoilAccel * Time.Delta;
+		recoilOffset += recoilVelocity * Time.Delta;
+
 		insideNow.Clear();
 		foreach (var actor in Game.Actors)
 		{
@@ -107,7 +120,17 @@ public class Bouncer : Actor, IResizable
 	void Bounce(Actor actor)
 	{
 		var direction = BounceDirection(actor);
-		actor.Velocity = direction * Strength;
+		
+		// Don't squash velocity in the direction we're not bouncing (i.e., let a player keep traveling horizontally for a vertical bounce).
+		var hasX = MathF.Abs(direction.X) > 0.01f;
+		var hasY = MathF.Abs(direction.Y) > 0.01f;
+		if (hasX) actor.Velocity.X = 0.0f;
+		if (hasY) actor.Velocity.Y = 0.0f;
+		
+		actor.Velocity += direction * Strength;
+
+		recoilOffset = -direction * VisualRecoilOffset;
+		recoilVelocity = Vector2.Zero;
 
 		// Dent the membrane on the impact side; the spring-back overshoot is the squish.
 		var impact = actor.Position + actor.Hitbox.Rect.CenterF - (Position + LocalCenter);
@@ -130,7 +153,20 @@ public class Bouncer : Actor, IResizable
 		var v = actor.Position + actor.Hitbox.Rect.CenterF - (Position + LocalCenter);
 		if (v == Vector2.Zero)
 			return -Vector2.UnitY;
-		var angle = MathF.Round(v.Angle() / (MathF.PI / 4)) * (MathF.PI / 4);
+
+		var angle = v.Angle();
+
+		// Each sector is normally π/4 wide (±π/8 from its centre). Check straight up
+		// first with an expanded half-width so it wins an extra UpwardBias fraction of
+		// the arc, carved equally from the two adjacent upper-diagonal sectors.
+		const float UpAngle = -MathF.PI / 2f;
+		const float HalfSector = MathF.PI / 8f;
+		var delta = angle - UpAngle;
+		delta -= MathF.Round(delta / (MathF.PI * 2)) * (MathF.PI * 2); // wrap to [-π, π]
+		if (MathF.Abs(delta) <= HalfSector * (1f + UpwardBias))
+			return -Vector2.UnitY;
+
+		angle = MathF.Round(angle / (MathF.PI / 4)) * (MathF.PI / 4);
 		return Calc.AngleToVector(angle);
 	}
 
@@ -139,6 +175,7 @@ public class Bouncer : Actor, IResizable
 		{
 			Player player => player.State != Pawn.States.Burrow,
 			Bud => true,
+			ICarryable { CarriedBy: null } => true,
 			_ => actor.Mask.Has(Masks.Enemy),
 		};
 
@@ -146,11 +183,13 @@ public class Bouncer : Actor, IResizable
 	{
 		if (points.Length < 3)
 			return;
+		batcher.PushMatrix(Matrix3x2.CreateTranslation(recoilOffset));
 		var center = LocalCenter;
 		for (var i = 0; i < points.Length; i++)
 			batcher.Triangle(center, points[i], points[(i + 1) % points.Length], FillColor);
 		for (var i = 0; i < points.Length; i++)
 			batcher.Line(points[i], points[(i + 1) % points.Length], 1, RimColor);
+		batcher.PopMatrix();
 	}
 
 	public override Rect GetVisualBounds()
