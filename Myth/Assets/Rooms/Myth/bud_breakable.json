@@ -6,6 +6,7 @@
   "ambientColor": "FFFFFF",
   "ambientIntensity": 0.439,
   "lightNoise": 0,
+  "playerLight": false,
   "sporeFogStrength": 0.595,
   "reverb": 0.182,
   "ditherScale": 2.438,
