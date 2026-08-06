@@ -111,6 +111,7 @@ public class DebugControls
 		Note("Click / drag", "Select / move live-editable actor", Context.Playing);
 		Note("Handles", "Resize live-editable actor", Context.Playing);
 		Note("Shift (dragging)", "Toggle position snap", Context.Playing);
+		Note("Backspace / Delete", "Delete selected live actor", Context.Playing);
 		Note("Esc", "Cancel live drag / deselect", Context.Playing);
 		Note("Ctrl+Z / Ctrl+Y", "Undo / redo live actor edit", Context.Playing);
 

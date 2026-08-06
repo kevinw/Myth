@@ -208,7 +208,7 @@ public sealed class Navigator(Pawn owner)
 		moveY = 0;
 		jumpPressed = false;
 
-		if (Game.GetPlatformNavGraph() is not { } graph)
+		if ((GraphOverride ?? Game.GetPlatformNavGraph()) is not { } graph)
 		{
 			SetDebugNavState("no graph");
 			TraceState("no-graph", "navNoGraph");

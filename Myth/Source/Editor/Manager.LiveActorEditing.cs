@@ -11,6 +11,7 @@ public partial class Manager
 {
 	const string LiveActorMoveUndoName = "Move Actor While Playing";
 	const string LiveActorResizeUndoName = "Resize Actor While Playing";
+	const string LiveActorDeleteUndoName = "Delete Actor While Playing";
 	const float LiveActorDragThreshold = 4;
 	const float LiveActorHandleRadius = 6;
 
@@ -73,6 +74,11 @@ public partial class Manager
 		}
 
 		if (!inputBlocked && UpdateLiveActorUndoShortcut())
+			return true;
+
+		if (!inputBlocked && liveActorDragKind == LiveActorDragKind.None && liveSelectedActorId != null &&
+			(Input.Keyboard.Pressed(Keys.Backspace) || Input.Keyboard.Pressed(Keys.Delete)) &&
+			TryDeleteSelectedLiveActor(liveGame, runtimeRoom))
 			return true;
 
 		// Once the player owns a press, keep routing subsequent frames to its drag path so a
@@ -221,6 +227,51 @@ public partial class Manager
 		liveActorUndoBefore = null;
 	}
 
+	// Removes the selected actor from the authored room and from the running game. Undo
+	// restores both (see LiveActorDeleteUndoTarget), so the actor comes back alive.
+	bool TryDeleteSelectedLiveActor(Game liveGame, Room runtimeRoom)
+	{
+		if (!TryGetSelectedLiveActor(liveGame, runtimeRoom, out var runtime, out var authoredRoom, out _) ||
+			runtime.ActorId is not { } actorId)
+			return false;
+
+		var name = runtime.GetType().Name;
+		using (undo.Capture(LiveActorDeleteUndoName, new LiveActorDeleteUndoTarget(this, authoredRoom.Id, actorId)))
+		{
+			var index = FindAuthoredActorIndex(authoredRoom, actorId);
+			if (index < 0)
+				return false;
+
+			authoredRoom.Actors.RemoveAt(index);
+			liveGame.Destroy(runtime);
+			authoredRoom.Save();
+			MarkRoomPreviewDirty(authoredRoom);
+			editorGameDirty = true;
+		}
+
+		liveSelectedActorId = null;
+		liveHoveredActorId = null;
+		DisplayMessage($"Deleted {name}");
+		return true;
+	}
+
+	// Re-creates an authored actor in the running game, for delete-undo. No-op unless the
+	// room it belongs to is the one being played.
+	void RespawnLiveActor(Room room, JsonObject authored)
+	{
+		if (game?.CurrentRoom is not { } current || current.Id != room.Id)
+			return;
+
+		var local = ActorSpecs.ReadPoint(ActorSpecs.Resolve(authored), "Position") ?? Point2.Zero;
+		ActorSpecs.Create(game, authored, current.WorldBounds.TopLeft + local);
+	}
+
+	void DestroyLiveActor(string actorId)
+	{
+		if (game?.GetActorById(actorId) is { } runtime)
+			game.Destroy(runtime);
+	}
+
 	void CancelLiveActorEditing(bool restoreDrag = true)
 	{
 		EndLiveActorDrag(restoreDrag);
@@ -237,14 +288,14 @@ public partial class Manager
 		if (Input.Keyboard.Pressed(Keys.Z))
 		{
 			var name = redo ? undo.RedoName : undo.UndoName;
-			if (name is not LiveActorMoveUndoName and not LiveActorResizeUndoName)
+			if (name is not LiveActorMoveUndoName and not LiveActorResizeUndoName and not LiveActorDeleteUndoName)
 				return false;
 			if (redo) undo.Redo(); else undo.Undo();
 			DisplayMessage(redo ? "Redid live actor edit" : "Undid live actor edit");
 			return true;
 		}
 
-		if (Input.Keyboard.Pressed(Keys.Y) && undo.RedoName is LiveActorMoveUndoName or LiveActorResizeUndoName)
+		if (Input.Keyboard.Pressed(Keys.Y) && undo.RedoName is LiveActorMoveUndoName or LiveActorResizeUndoName or LiveActorDeleteUndoName)
 		{
 			undo.Redo();
 			DisplayMessage("Redid live actor edit");
@@ -310,10 +361,16 @@ public partial class Manager
 
 	static JsonObject? FindAuthoredActor(Room room, string id)
 	{
-		foreach (var actor in room.Actors)
-			if (string.Equals(ActorSpecs.GetActorId(actor), id, StringComparison.OrdinalIgnoreCase))
-				return actor;
-		return null;
+		var index = FindAuthoredActorIndex(room, id);
+		return index >= 0 ? room.Actors[index] : null;
+	}
+
+	static int FindAuthoredActorIndex(Room room, string id)
+	{
+		for (var i = 0; i < room.Actors.Count; i++)
+			if (string.Equals(ActorSpecs.GetActorId(room.Actors[i]), id, StringComparison.OrdinalIgnoreCase))
+				return i;
+		return -1;
 	}
 
 	static RectInt LiveActorBounds(Actor runtime, Room authoredRoom, JsonObject authored)
@@ -427,6 +484,56 @@ public partial class Manager
 		var color = selected ? ImGuiColor(0.45f, 1, 0.72f, 0.95f) : ImGuiColor(1, 1, 1, 0.42f);
 		draw.AddRectFilled(topLeft, bottomRight, selected ? ImGuiColor(0.35f, 1, 0.62f, 0.05f) : ImGuiColor(1, 1, 1, 0.025f));
 		draw.AddRect(topLeft, bottomRight, color, 0, ImDrawFlags.None, selected ? 2 : 1.25f);
+	}
+
+	// Whole-actor presence undo: captures whether the actor is in the room, where in the list,
+	// and its full spec, so undo/redo can put it back (in the room file and in the running
+	// game) or take it away again.
+	sealed class LiveActorDeleteUndoTarget(Manager manager, string roomId, string actorId) : IJsonUndoTarget
+	{
+		public string UndoId => $"live-actor-delete:{roomId}:{actorId}";
+
+		public string CaptureJson()
+		{
+			var room = Assets.GetRoom(roomId);
+			var index = room != null ? FindAuthoredActorIndex(room, actorId) : -1;
+			return ActorSpecs.ToJsonString(new JsonObject
+			{
+				["present"] = index >= 0,
+				["index"] = index,
+				["actor"] = index >= 0 ? room!.Actors[index].DeepClone() : null
+			});
+		}
+
+		public void ApplyJson(string json)
+		{
+			var state = JsonNode.Parse(json)?.AsObject();
+			if (state == null || Assets.GetRoom(roomId) is not { } room)
+				return;
+
+			var existing = FindAuthoredActorIndex(room, actorId);
+			if (JsonUtil.ReadBool(state, "present"))
+			{
+				if (existing >= 0 || state["actor"] is not JsonObject stored)
+					return;
+
+				var restored = stored.DeepClone().AsObject();
+				room.Actors.Insert(Math.Clamp(JsonUtil.ReadInt(state, "index", room.Actors.Count), 0, room.Actors.Count), restored);
+				manager.RespawnLiveActor(room, restored);
+			}
+			else
+			{
+				if (existing < 0)
+					return;
+
+				room.Actors.RemoveAt(existing);
+				manager.DestroyLiveActor(actorId);
+			}
+
+			room.Save();
+			manager.MarkRoomPreviewDirty(room);
+			manager.editorGameDirty = true;
+		}
 	}
 
 	sealed class LiveActorUndoTarget(Manager manager, string roomId, string actorId) : IJsonUndoTarget

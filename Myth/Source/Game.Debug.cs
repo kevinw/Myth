@@ -225,33 +225,47 @@ public partial class Game
 	float navBuildSettleTimer;
 
 	public PlatformNavGraph? GetPlatformNavGraph()
+		=> room == null ? null : TickNavGraph(platformNavGraph, ref platformNavGraphRoom, ref navBuildSettleTimer);
+
+	// Second graph, probed with the Stalker's larger body so its paths only use gaps that
+	// body fits through. Built lazily — rooms without a Stalker never pay for it.
+	PlatformNavGraph? stalkerNavGraph;
+	Room? stalkerNavGraphRoom;
+	float stalkerNavBuildSettleTimer;
+
+	public PlatformNavGraph? GetStalkerNavGraph()
 	{
 		if (room == null)
 			return null;
+		stalkerNavGraph ??= new PlatformNavGraph(Stalker.NavProbe, Stalker.NavDuckingProbe);
+		return TickNavGraph(stalkerNavGraph, ref stalkerNavGraphRoom, ref stalkerNavBuildSettleTimer);
+	}
 
+	PlatformNavGraph? TickNavGraph(PlatformNavGraph graph, ref Room? graphRoom, ref float settleTimer)
+	{
 		// Unthrottled (gym) builds the whole graph in one tick so it becomes ready on a
 		// deterministic frame, and never defers — its determinism must not depend on
 		// camera/slide state.
 		var unthrottled = Manager.Unthrottled;
 
-		if (platformNavGraphRoom != room)
+		if (graphRoom != room)
 		{
-			platformNavGraph.Rebuild(this, room);
-			platformNavGraphRoom = room;
-			navBuildSettleTimer = unthrottled ? 0f : NavBuildSettleSeconds;
+			graph.Rebuild(this, room!);
+			graphRoom = room;
+			settleTimer = unthrottled ? 0f : NavBuildSettleSeconds;
 		}
 
 		// While a room transition is sliding or the post-slide camera is still settling,
 		// skip the budgeted build (return the existing graph, or null if none yet).
-		if (!unthrottled && (nextRoom != null || navBuildSuppressedByHost || navBuildSettleTimer > 0f))
+		if (!unthrottled && (nextRoom != null || navBuildSuppressedByHost || settleTimer > 0f))
 		{
-			if (nextRoom == null && !navBuildSuppressedByHost && navBuildSettleTimer > 0f)
-				navBuildSettleTimer = MathF.Max(0f, navBuildSettleTimer - Time.Delta);
-			return platformNavGraph.IsReady ? platformNavGraph : null;
+			if (nextRoom == null && !navBuildSuppressedByHost && settleTimer > 0f)
+				settleTimer = MathF.Max(0f, settleTimer - Time.Delta);
+			return graph.IsReady ? graph : null;
 		}
 
-		platformNavGraph.Tick(unthrottled ? float.MaxValue : 2.0f);
-		return platformNavGraph.IsReady ? platformNavGraph : null;
+		graph.Tick(unthrottled ? float.MaxValue : 2.0f);
+		return graph.IsReady ? graph : null;
 	}
 
 	internal PlatformNavGraph? ReadyPlatformNavGraph
@@ -276,6 +290,11 @@ public partial class Game
 		{
 			platformNavGraph.Rebuild(this, room, change.DirtyWorldBounds);
 			navBuildSettleTimer = 0;
+		}
+		if (stalkerNavGraph != null && stalkerNavGraphRoom == room)
+		{
+			stalkerNavGraph.Rebuild(this, room, change.DirtyWorldBounds);
+			stalkerNavBuildSettleTimer = 0;
 		}
 	}
 

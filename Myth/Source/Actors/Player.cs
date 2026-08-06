@@ -339,7 +339,7 @@ public abstract class Pawn : Actor
 		if (State == States.Burrow)
 			Hitbox = new(BurrowHitboxRect);
 		else if (ducking || State == States.Roll)
-			Hitbox = new(DuckingHitboxRect);
+			Hitbox = new(CurrentDuckingHitboxRect);
 		else
 			Hitbox = new(CurrentStandingHitboxRect);
 
@@ -410,6 +410,8 @@ public abstract class Pawn : Actor
 	// so a carrier can swell it to the combined player+cargo body.
 	protected virtual bool IsCarrying => false;
 	protected virtual RectInt CurrentStandingHitboxRect => StandingHitboxRect;
+	// Bodies that don't fit the default crouch (see Stalker) size their own.
+	protected virtual RectInt CurrentDuckingHitboxRect => DuckingHitboxRect;
 	protected virtual bool TryStartPawnAction(int moveX) => false;
 	protected virtual void OnPawnJump() { }
 	protected virtual void OnRollStarted() { }

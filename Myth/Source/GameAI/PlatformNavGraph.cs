@@ -77,8 +77,19 @@ public sealed class PlatformNavGraph
 	const int SimLandingTolerance = 12;
 	const int SimMinimumLandingDistance = Game.TileSize * 2;
 	static int FallMaxHorizontal => Game.TileSize * 4;
-	static readonly RectInt PawnProbe = new(-4, -12, 8, 12);
-	static readonly RectInt DuckingPawnProbe = new(-4, -6, 8, 6);
+	// Clearance rects the whole build probes with. Default matches the Bud/player body; a
+	// graph built with a larger probe (see Stalker) naturally drops the edges that body
+	// cannot fit through — crawl spaces produce no edges at all when the probes are equal.
+	readonly RectInt PawnProbe = new(-4, -12, 8, 12);
+	readonly RectInt DuckingPawnProbe = new(-4, -6, 8, 6);
+
+	public PlatformNavGraph() { }
+
+	public PlatformNavGraph(RectInt pawnProbe, RectInt duckingPawnProbe)
+	{
+		PawnProbe = pawnProbe;
+		DuckingPawnProbe = duckingPawnProbe;
+	}
 	static readonly Point2[] RoomExitDirections = [Point2.Left, Point2.Right, Point2.Up, Point2.Down];
 	static readonly Comparison<Node> CompareNodeX = static (a, b) => a.Position.X.CompareTo(b.Position.X);
 	static readonly JumpPlan[] JumpPlans =
@@ -1826,12 +1837,12 @@ public sealed class PlatformNavGraph
 		return game.OverlapsRoomCollision(bounds);
 	}
 
-	static bool IsStandable(Game game, Point2 position)
+	bool IsStandable(Game game, Point2 position)
 	{
 		return TryGetStandableProbe(game, position, out _);
 	}
 
-	static bool TryGetStandableProbe(Game game, Point2 position, out bool requiresDucking)
+	bool TryGetStandableProbe(Game game, Point2 position, out bool requiresDucking)
 	{
 		if (IsStandableWithProbe(game, position, PawnProbe))
 		{
@@ -1875,7 +1886,7 @@ public sealed class PlatformNavGraph
 		return false;
 	}
 
-	static bool IsLedge(Game game, Point2 position)
+	bool IsLedge(Game game, Point2 position)
 	{
 		var left = position + new Point2(-SampleStep, 0);
 		var right = position + new Point2(SampleStep, 0);
@@ -2084,7 +2095,7 @@ public sealed class PlatformNavGraph
 		return null;
 	}
 
-	static EdgeKind? WalkEdgeKind(Game game, Node from, Node to)
+	EdgeKind? WalkEdgeKind(Game game, Node from, Node to)
 	{
 		if (!from.RequiresDucking && !to.RequiresDucking && WalkProbeClear(game, from.Position, to.Position, PawnProbe))
 			return EdgeKind.Walk;
@@ -2106,7 +2117,7 @@ public sealed class PlatformNavGraph
 		return true;
 	}
 
-	static bool FallProbeClear(Game game, Point2 from, Point2 to, bool requiresDucking)
+	bool FallProbeClear(Game game, Point2 from, Point2 to, bool requiresDucking)
 	{
 		var steps = Math.Max(1, (int)MathF.Ceiling(Vector2.Distance(from, to) / 2));
 		for (var i = 0; i < steps; i++)
@@ -2134,7 +2145,7 @@ public sealed class PlatformNavGraph
 		}
 
 		using var _ = game.BeginSimulation();
-		var sim = new JumpSimulationPawn(game, from.Position, plan, simulationCollisionActors, simulationWindActors);
+		var sim = new JumpSimulationPawn(game, from.Position, plan, PawnProbe, simulationCollisionActors, simulationWindActors);
 		var landed = sim.Run(out landing);
 		jumpAttemptCache[key] = new(landed, landing, sim.DependencyBounds.Inflate(1));
 		return landed;
@@ -2196,7 +2207,7 @@ public sealed class PlatformNavGraph
 			this.game = game;
 			Game = game;
 			Position = (Point2)(startPosition ?? from.Position);
-			Hitbox = new(PawnProbe);
+			Hitbox = new(graph.PawnProbe);
 			Facing = plan.Direction == 0 ? Signs.Positive : (Signs)plan.Direction;
 			Velocity = new Vector2(entryVx, 0);
 			grounded = Grounded();
@@ -2348,6 +2359,7 @@ public sealed class PlatformNavGraph
 		readonly JumpPlan plan;
 		readonly List<Actor> simulationCollisionActors;
 		readonly List<Actor> simulationWindActors;
+		readonly RectInt pawnProbe;
 		float elapsed;
 		bool leftStart;
 		bool leftGround;
@@ -2359,18 +2371,19 @@ public sealed class PlatformNavGraph
 		internal override List<Actor> CollisionActors => simulationCollisionActors;
 		internal override List<Actor> WindActors => simulationWindActors;
 
-		public JumpSimulationPawn(Game game, Vector2 from, JumpPlan plan, List<Actor> simulationCollisionActors, List<Actor> simulationWindActors)
+		public JumpSimulationPawn(Game game, Vector2 from, JumpPlan plan, RectInt pawnProbe, List<Actor> simulationCollisionActors, List<Actor> simulationWindActors)
 		{
 			this.game = game;
 			this.from = from;
 			this.plan = plan;
+			this.pawnProbe = pawnProbe;
 			this.simulationCollisionActors = simulationCollisionActors;
 			this.simulationWindActors = simulationWindActors;
 			Game = game;
 			Position = (Point2)from;
-			Hitbox = new(PawnProbe);
+			Hitbox = new(pawnProbe);
 			Facing = plan.Direction == 0 ? Signs.Positive : (Signs)plan.Direction;
-			DependencyBounds = PawnProbe + Position;
+			DependencyBounds = pawnProbe + Position;
 			grounded = Grounded();
 			lastX = Position.X;
 		}
@@ -2436,7 +2449,7 @@ public sealed class PlatformNavGraph
 				if (collectBuildStats)
 					simSteps++;
 				Update();
-				DependencyBounds = DependencyBounds.Conflate(PawnProbe + Position);
+				DependencyBounds = DependencyBounds.Conflate(pawnProbe + Position);
 
 				if (Vector2.DistanceSquared((Vector2)Position, from) > 9)
 					leftStart = true;
@@ -2496,6 +2509,6 @@ public sealed class PlatformNavGraph
 		}
 
 		bool HasGroundSupportNextStep(int moveX)
-			=> PlatformNavGraph.HasStandableSupport(game, PawnProbe + Position + new Point2(Math.Sign(moveX), 0));
+			=> PlatformNavGraph.HasStandableSupport(game, pawnProbe + Position + new Point2(Math.Sign(moveX), 0));
 	}
 }
