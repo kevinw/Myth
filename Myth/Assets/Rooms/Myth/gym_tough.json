@@ -2,6 +2,7 @@
   "position": [144, -115],
   "size": [68, 23],
   "backdropColor2": "756A89",
+  "backdropSurface": "test1",
   "ambientColor": "FFFFFF",
   "lightNoise": 0,
   "legend": {

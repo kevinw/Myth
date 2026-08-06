@@ -520,6 +520,27 @@ public sealed partial class GameView
 	{
 		var (top, bottom) = CurrentBackdropColors();
 		Batcher.Rect(new Rect(0, 0, target.Width, target.Height), top, top, bottom, bottom);
+
+		if (nextRoom == null || string.Equals(room?.BackdropSurfaceId, nextRoom.BackdropSurfaceId, StringComparison.OrdinalIgnoreCase))
+		{
+			DrawBackdropSurface(room ?? nextRoom, target, 1);
+			return;
+		}
+
+		var amount = Ease.Cube.InOut(nextRoomEase);
+		DrawBackdropSurface(room, target, 1 - amount);
+		DrawBackdropSurface(nextRoom, target, amount);
+	}
+
+	void DrawBackdropSurface(Room? backdropRoom, Target target, float opacity)
+	{
+		if (opacity <= 0 || Assets.GetSurface(backdropRoom?.BackdropSurfaceId) is not { } surface)
+			return;
+
+		var bounds = new Rect(RenderCamera, new Vector2(target.Width, target.Height) / zoomLevel);
+		PushWorldMatrix();
+		surface.Render(Batcher, bounds, Time.SecondsF, opacity);
+		Batcher.PopMatrix();
 	}
 
 	void DrawPlayerHud(IDrawableTarget target, in RectInt viewport, RectInt? scissor)

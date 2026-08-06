@@ -1345,6 +1345,15 @@ public partial class Manager
 			}
 		}
 
+		BeginPropertyRow("Surface");
+		var backdropSurface = room.BackdropSurfaceId;
+		if (DrawSurfacePicker(ref backdropSurface))
+		{
+			using (CaptureRoomUndo("Edit Room Backdrop", room))
+				room.BackdropSurfaceId = backdropSurface;
+			changed = true;
+		}
+
 		BeginPropertyRow("Ambient");
 		var ambient = room.AmbientColor.ToVector3();
 		if (ImGui.ColorEdit3("##RoomAmbientColor", ref ambient, ImGuiColorEditFlags.NoInputs))
@@ -1578,13 +1587,14 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
 		room.MusicArea = settings.MusicArea;
 		room.BackdropColor = settings.BackdropColor;
 		room.BackdropColor2 = settings.BackdropColor2;
+		room.BackdropSurfaceId = settings.BackdropSurfaceId;
 		room.AmbientColor = settings.AmbientColor;
 		room.AmbientIntensity = settings.AmbientIntensity;
 		room.LightNoise = settings.LightNoise;
@@ -2476,7 +2486,10 @@ public partial class Manager
 
 		if (current != null)
 		{
-			if (ImGuiSubtextureButton("##SurfacePreview", current.Preview, $"Surface '{value}' — click to change", false, cell, true))
+			var clicked = ImGuiSubtextureButton("##SurfacePreview", GetSurfacePreview(current), $"Surface '{value}' — click to change, double-click to edit", false, cell, true);
+			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+				OpenSurfaceEditor(current.Id);
+			else if (clicked)
 				ImGui.OpenPopup("##SurfaceGrid");
 		}
 		else if (ImGui.Button("None##SurfacePreview", cell))
@@ -2512,7 +2525,7 @@ public partial class Manager
 					if (i % SurfacePickerColumns != 0)
 						ImGui.SameLine();
 					i++;
-					if (ImGuiSubtextureButton($"##surf{id}", surface.Preview, id, value == id, cell, true))
+					if (ImGuiSubtextureButton($"##surf{id}", GetSurfacePreview(surface), id, value == id, cell, true))
 					{
 						value = id;
 						changed = true;
@@ -4104,6 +4117,8 @@ public partial class Manager
 		var top = room.BackdropColor * opacity;
 		var bottom = (room.BackdropColor2 ?? room.BackdropColor) * opacity;
 		batcher.Rect(bounds, top, top, bottom, bottom);
+		if (Assets.GetSurface(room.BackdropSurfaceId) is { } surface)
+			surface.Render(batcher, new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height), Time.SecondsF, opacity);
 	}
 
 	void DrawEditorRoomPreview(Texture preview, RectInt bounds, Color tint)

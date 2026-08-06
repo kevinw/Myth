@@ -283,11 +283,12 @@ public static partial class Assets
 					Console.WriteLine($"Warning: could not parse room '{file}' collecting surface references ({e.Message}); surfaces it uses may be dropped.");
 					continue;
 				}
-				if (root?["actors"] is not JsonArray actors)
-					continue;
-				foreach (var actor in actors)
-					if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
-						surfaces.Add(id);
+				if (root?["backdropSurface"]?.GetValue<string>() is { Length: > 0 } backdropSurface)
+					surfaces.Add(backdropSurface);
+				if (root?["actors"] is JsonArray actors)
+					foreach (var actor in actors)
+						if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
+							surfaces.Add(id);
 			}
 
 		var surfacesDir = Path.Join(DefaultVisualAssetPackPath, "surfaces");

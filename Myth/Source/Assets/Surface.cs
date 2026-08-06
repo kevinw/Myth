@@ -111,9 +111,6 @@ public sealed class Surface : IDisposable
 
 	public bool HasNormal => normalTexture != null;
 
-	// First-layer thumbnail, for the editor surface picker.
-	public Subtexture Preview { get; }
-
 	Surface(string id, Layer[] layers, Texture? normalTexture, bool ownsNormal, Vector2 normalTiling, Vector2 normalScroll, float normalStrength)
 	{
 		Id = id;
@@ -123,7 +120,6 @@ public sealed class Surface : IDisposable
 		this.normalTiling = normalTiling;
 		this.normalScroll = normalScroll;
 		this.normalStrength = normalStrength;
-		Preview = layers.Length > 0 ? layers[0].Texture.Thumbnail : new Subtexture();
 	}
 
 	public struct Vertex(Vector2 pos, Vector2 world)
@@ -175,7 +171,7 @@ public sealed class Surface : IDisposable
 		return new Surface(spec.Id, layers.ToArray(), normal, ownsNormal, normalTiling, normalScroll, spec.NormalStrength);
 	}
 
-	public void Render(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time)
+	public void Render(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time, float opacity = 1)
 	{
 		if (layers.Length == 0 || triangles.Length < 3)
 			return;
@@ -205,8 +201,22 @@ public sealed class Surface : IDisposable
 		material.Fragment.SetUniformBuffer(u);
 
 		batcher.PushMaterial(material);
-		DrawTriangles(batcher, triangles);
+		DrawTriangles(batcher, triangles, Color.White * opacity);
 		batcher.PopMaterial();
+	}
+
+	public void Render(Batcher batcher, Rect bounds, float time, float opacity = 1)
+	{
+		var topLeft = bounds.TopLeft;
+		var topRight = new Vector2(bounds.Right, bounds.Top);
+		var bottomLeft = new Vector2(bounds.Left, bounds.Bottom);
+		var bottomRight = bounds.BottomRight;
+		Span<Vertex> triangles = stackalloc Vertex[]
+		{
+			new(topLeft, topLeft), new(topRight, topRight), new(bottomRight, bottomRight),
+			new(topLeft, topLeft), new(bottomRight, bottomRight), new(bottomLeft, bottomLeft)
+		};
+		Render(batcher, triangles, time, opacity);
 	}
 
 	public void RenderNormals(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time)
@@ -223,17 +233,17 @@ public sealed class Surface : IDisposable
 		material.Fragment.Samplers[1] = new(normalTexture, RepeatSampler);
 
 		batcher.PushMaterial(material);
-		DrawTriangles(batcher, triangles);
+		DrawTriangles(batcher, triangles, Color.White);
 		batcher.PopMaterial();
 	}
 
-	static void DrawTriangles(Batcher batcher, ReadOnlySpan<Vertex> triangles)
+	static void DrawTriangles(Batcher batcher, ReadOnlySpan<Vertex> triangles, Color color)
 	{
 		for (var i = 0; i + 2 < triangles.Length; i += 3)
 			batcher.Triangle(null,
 				triangles[i].Pos, triangles[i + 1].Pos, triangles[i + 2].Pos,
 				triangles[i].World, triangles[i + 1].World, triangles[i + 2].World,
-				Color.White);
+				color);
 	}
 
 	public void Dispose()

@@ -12,8 +12,11 @@ public partial class Manager
 	SurfaceSpec? surfaceDraft;
 	string newSurfaceName = "";
 	readonly HashSet<SurfaceLayerSpec> unlockedSurfaceTiling = [];
+	readonly Dictionary<string, Target> surfacePreviewCache = new(StringComparer.OrdinalIgnoreCase);
+	Batcher? surfacePreviewBatcher;
 	static readonly string[] SurfaceBlendNames = Enum.GetNames<SurfaceBlend>();
 	const string SurfaceUndoSlot = "surface";
+	const int SurfacePreviewSize = 48;
 
 	static string SurfaceSpecPath(string id)
 		=> Path.Join(Assets.SourcesPath, "Surfaces", $"{id}.json");
@@ -536,6 +539,55 @@ public partial class Manager
 	{
 		spec.Save(SurfaceSpecPath(spec.Id));
 		Assets.SetSurface(GraphicsDevice, spec);
+		InvalidateSurfacePreview(spec.Id);
+		InvalidateSurfaceUsers(spec.Id);
+	}
+
+	Subtexture GetSurfacePreview(Surface surface)
+	{
+		if (!surfacePreviewCache.TryGetValue(surface.Id, out var target))
+		{
+			target = new Target(GraphicsDevice, SurfacePreviewSize, SurfacePreviewSize, name: $"SurfacePreview/{surface.Id}");
+			target.Clear(new Color(0x24222a));
+			surfacePreviewBatcher ??= new Batcher(GraphicsDevice, "SurfacePreviews");
+			for (var y = 0; y < SurfacePreviewSize; y += 8)
+				for (var x = 0; x < SurfacePreviewSize; x += 8)
+					if ((x + y) % 16 == 0)
+						surfacePreviewBatcher.Rect(new Rect(x, y, 8, 8), new Color(0x36333e));
+			surface.Render(surfacePreviewBatcher, new Rect(0, 0, SurfacePreviewSize, SurfacePreviewSize), 0);
+			surfacePreviewBatcher.Render(target);
+			surfacePreviewBatcher.Clear();
+			surfacePreviewCache[surface.Id] = target;
+		}
+		return new Subtexture(target.Attachments[0]);
+	}
+
+	void InvalidateSurfacePreview(string id)
+	{
+		if (surfacePreviewCache.Remove(id, out var target))
+			deferredRoomPreviewDisposals.Add(target);
+	}
+
+	void InvalidateSurfaceUsers(string id)
+	{
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			var usesSurface = string.Equals(room.BackdropSurfaceId, id, StringComparison.OrdinalIgnoreCase);
+			for (var i = 0; !usesSurface && i < room.Actors.Count; i++)
+				usesSurface = string.Equals(ActorSpecs.ReadString(room.Actors[i], nameof(Bouncer.SurfaceId)), id, StringComparison.OrdinalIgnoreCase);
+			if (usesSurface)
+				MarkRoomPreviewDirty(room);
+		}
+	}
+
+	void ClearSurfacePreviewCache(bool deferDisposal = true)
+	{
+		foreach (var target in surfacePreviewCache.Values)
+			if (deferDisposal)
+				deferredRoomPreviewDisposals.Add(target);
+			else
+				target.Dispose();
+		surfacePreviewCache.Clear();
 	}
 
 	sealed class SurfaceUndoTarget(Manager manager, string id) : IJsonUndoTarget
@@ -558,6 +610,8 @@ public partial class Manager
 				if (File.Exists(path))
 					File.Delete(path);
 				Assets.RemoveSurface(id);
+				manager.InvalidateSurfacePreview(id);
+				manager.InvalidateSurfaceUsers(id);
 				if (manager.surfaceDraft?.Id == id)
 					manager.surfaceDraft = null;
 				return;

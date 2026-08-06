@@ -146,6 +146,7 @@ public class Room
 	public string? MusicArea;
 	public Color BackdropColor = DefaultBackdropColor;
 	public Color? BackdropColor2;
+	public string BackdropSurfaceId = "";
 	public Color AmbientColor = DefaultAmbientColor;
 	public float AmbientIntensity = DefaultAmbientIntensity;
 	public float LightNoise = DefaultLightNoise;
@@ -184,6 +185,7 @@ public class Room
 			MusicArea = MusicArea,
 			BackdropColor = BackdropColor,
 			BackdropColor2 = BackdropColor2,
+			BackdropSurfaceId = BackdropSurfaceId,
 			AmbientColor = AmbientColor,
 			AmbientIntensity = AmbientIntensity,
 			LightNoise = LightNoise,
@@ -262,6 +264,7 @@ public class Room
 			MusicArea = null;
 		BackdropColor = JsonUtil.ReadColor(json, "backdropColor") ?? DefaultBackdropColor;
 		BackdropColor2 = JsonUtil.ReadColor(json, "backdropColor2");
+		BackdropSurfaceId = JsonUtil.ReadString(json, "backdropSurface", "");
 		AmbientColor = JsonUtil.ReadColor(json, "ambientColor") ?? DefaultAmbientColor;
 		AmbientIntensity = JsonUtil.ReadFloat(json, "ambientIntensity", DefaultAmbientIntensity);
 		LightNoise = JsonUtil.ReadFloat(json, "lightNoise", DefaultLightNoise);
@@ -1449,6 +1452,8 @@ public class Room
 			writer.WriteString("backdropColor", JsonUtil.ColorToHex(BackdropColor));
 		if (BackdropColor2.HasValue)
 			writer.WriteString("backdropColor2", JsonUtil.ColorToHex(BackdropColor2.Value));
+		if (!string.IsNullOrEmpty(BackdropSurfaceId))
+			writer.WriteString("backdropSurface", BackdropSurfaceId);
 		if (AmbientColor != DefaultAmbientColor)
 			writer.WriteString("ambientColor", JsonUtil.ColorToHex(AmbientColor));
 		if (AmbientIntensity != DefaultAmbientIntensity)

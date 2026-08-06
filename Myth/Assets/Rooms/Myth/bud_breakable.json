@@ -2,9 +2,14 @@
   "position": [104, -115],
   "size": [40, 23],
   "backdropColor2": "756A89",
+  "backdropSurface": "blobby",
   "ambientColor": "FFFFFF",
+  "ambientIntensity": 0.439,
   "lightNoise": 0,
+  "sporeFogStrength": 0.595,
   "reverb": 0.182,
+  "ditherScale": 2.438,
+  "ditherStrength": 0.269,
   "legend": {
     "R": "ruin"
   },
@@ -40,6 +45,22 @@
       "Id": "f65775eab5064ce4",
       "Type": "PlayerStart",
       "Position": [60, 136]
+    },
+    {
+      "Id": "d21365c59a748182",
+      "Type": "Light",
+      "Position": [84, 68],
+      "LightColor": "FFFFFF",
+      "Height": 14.8,
+      "Intensity": 0.85,
+      "Radius": 53.85
+    },
+    {
+      "Id": "ec40e78bb7155391",
+      "Type": "Bouncer",
+      "Position": [196, 116],
+      "SurfaceId": "bouncer",
+      "Strength": 170
     }
   ]
 }

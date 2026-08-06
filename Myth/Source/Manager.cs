@@ -612,6 +612,8 @@ public partial class Manager : App
 		imguiCursors.Clear();
 #if EDITOR
 		ClearRoomPreviewCache(deferDisposal: false);
+		ClearSurfacePreviewCache(deferDisposal: false);
+		surfacePreviewBatcher?.Dispose();
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
 		imgui?.Dispose();
@@ -1799,6 +1801,7 @@ public partial class Manager : App
 			Assets.RebuildRoomGeometry();
 #if EDITOR
 			ClearRoomPreviewCache();
+			ClearSurfacePreviewCache();
 #endif
 			ResolveSelectedRoom();
 			if (playing)
