@@ -9,7 +9,7 @@ struct VertexOutput {
     @builtin(position) member_3: vec4<f32>,
 }
 
-@group(1) @binding(0)
+@group(1) @binding(0) 
 var<uniform> VertexUniformBlock: type_u002e_VertexUniformBlock;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec2<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec2<f32>;
@@ -33,7 +33,7 @@ fn vertex_main_1() {
     return;
 }
 
-@vertex
+@vertex 
 fn vertex_main(@location(0) in_u002e_var_u002e_TEXCOORD0_: vec2<f32>, @location(1) in_u002e_var_u002e_TEXCOORD1_: vec2<f32>, @location(2) in_u002e_var_u002e_TEXCOORD2_: vec4<f32>, @location(3) in_u002e_var_u002e_TEXCOORD4_: vec4<f32>) -> VertexOutput {
     in_u002e_var_u002e_TEXCOORD0_1 = in_u002e_var_u002e_TEXCOORD0_;
     in_u002e_var_u002e_TEXCOORD1_1 = in_u002e_var_u002e_TEXCOORD1_;

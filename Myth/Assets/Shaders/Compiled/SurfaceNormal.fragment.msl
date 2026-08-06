@@ -1,0 +1,30 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct type_FragmentUniformBlock
+{
+    float4 NormalConfig;
+    float4 NormalMotion;
+};
+
+struct fragment_main_out
+{
+    float4 out_var_SV_Target0 [[color(0)]];
+};
+
+struct fragment_main_in
+{
+    float2 in_var_TEXCOORD0 [[user(locn0)]];
+};
+
+fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> NormalMap [[texture(1)]], sampler NormalSampler [[sampler(1)]])
+{
+    fragment_main_out out = {};
+    float3 _57 = (NormalMap.sample(NormalSampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.NormalMotion.xy * FragmentUniformBlock.NormalConfig.w)) / precise::max(FragmentUniformBlock.NormalConfig.xy, float2(1.0)))).xyz * 2.0) - float3(1.0);
+    float2 _62 = _57.xy * precise::max(FragmentUniformBlock.NormalConfig.z, 0.0);
+    out.out_var_SV_Target0 = float4((fast::normalize(float3(_62.x, _62.y, _57.z)) * 0.5) + float3(0.5), 1.0);
+    return out;
+}
+

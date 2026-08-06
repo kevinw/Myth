@@ -8,55 +8,55 @@ struct type_u002e_FragmentUniformBlock {
     DitherAnchorOffsets: array<vec4<f32>, 32>,
 }
 
-@group(3) @binding(0)
+@group(3) @binding(0) 
 var<uniform> FragmentUniformBlock: type_u002e_FragmentUniformBlock;
-@group(2) @binding(0)
+@group(2) @binding(0) 
 var Texture: texture_2d<f32>;
-@group(2) @binding(100)
+@group(2) @binding(100) 
 var Sampler: sampler;
-@group(2) @binding(1)
+@group(2) @binding(1) 
 var LightTexture: texture_2d<f32>;
-@group(2) @binding(101)
+@group(2) @binding(101) 
 var LightSampler: sampler;
-@group(2) @binding(2)
+@group(2) @binding(2) 
 var TileFieldTexture: texture_2d<f32>;
-@group(2) @binding(102)
+@group(2) @binding(102) 
 var TileFieldSampler: sampler;
-@group(2) @binding(3)
+@group(2) @binding(3) 
 var DitherMaskTexture: texture_2d<f32>;
-@group(2) @binding(103)
+@group(2) @binding(103) 
 var DitherMaskSampler: sampler;
-@group(2) @binding(4)
+@group(2) @binding(4) 
 var EmissiveTexture: texture_2d<f32>;
-@group(2) @binding(104)
+@group(2) @binding(104) 
 var EmissiveSampler: sampler;
-@group(2) @binding(5)
+@group(2) @binding(5) 
 var AoTexture: texture_2d<f32>;
-@group(2) @binding(105)
+@group(2) @binding(105) 
 var AoSampler: sampler;
-@group(2) @binding(6)
+@group(2) @binding(6) 
 var BackgroundCoverageTexture: texture_2d<f32>;
-@group(2) @binding(106)
+@group(2) @binding(106) 
 var BackgroundCoverageSampler: sampler;
-@group(2) @binding(7)
+@group(2) @binding(7) 
 var ForegroundTexture: texture_2d<f32>;
-@group(2) @binding(107)
+@group(2) @binding(107) 
 var ForegroundSampler: sampler;
-@group(2) @binding(8)
+@group(2) @binding(8) 
 var ForegroundLightTexture: texture_2d<f32>;
-@group(2) @binding(108)
+@group(2) @binding(108) 
 var ForegroundLightSampler: sampler;
-@group(2) @binding(9)
+@group(2) @binding(9) 
 var ForegroundEmissiveTexture: texture_2d<f32>;
-@group(2) @binding(109)
+@group(2) @binding(109) 
 var ForegroundEmissiveSampler: sampler;
-@group(2) @binding(10)
+@group(2) @binding(10) 
 var NormalTexture: texture_2d<f32>;
-@group(2) @binding(110)
+@group(2) @binding(110) 
 var NormalSampler: sampler;
-@group(2) @binding(11)
+@group(2) @binding(11) 
 var SporeFogTexture: texture_2d<f32>;
-@group(2) @binding(111)
+@group(2) @binding(111) 
 var SporeFogSampler: sampler;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec2<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec4<f32>;
@@ -918,7 +918,7 @@ fn fragment_main_1() {
     return;
 }
 
-@fragment
+@fragment 
 fn fragment_main(@location(0) in_u002e_var_u002e_TEXCOORD0_: vec2<f32>, @location(1) in_u002e_var_u002e_TEXCOORD1_: vec4<f32>, @location(2) in_u002e_var_u002e_TEXCOORD4_: vec4<f32>, @builtin(position) param: vec4<f32>) -> @location(0) vec4<f32> {
     in_u002e_var_u002e_TEXCOORD0_1 = in_u002e_var_u002e_TEXCOORD0_;
     in_u002e_var_u002e_TEXCOORD1_1 = in_u002e_var_u002e_TEXCOORD1_;

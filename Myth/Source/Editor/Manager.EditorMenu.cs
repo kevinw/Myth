@@ -59,6 +59,7 @@ public partial class Manager
 			// somewhere stable to be submitted now that the toolbar is gone.
 			DrawCreateRoomPopup();
 			DrawActorContextMenu();
+			DrawCreatePrefabPopup();
 		}
 		ImGui.End();
 		ImGui.PopStyleVar();
@@ -148,6 +149,7 @@ public partial class Manager
 			ImGui.MenuItem("Room", null, ref roomPanelOpen);
 			ImGui.Separator();
 			ImGui.MenuItem("Tile Kits", null, ref tileKitEditorOpen);
+			ImGui.MenuItem("Surfaces", null, ref surfaceEditorOpen);
 			ImGui.MenuItem("NCT Tiles", null, ref nctEditorOpen);
 			if (ImGui.MenuItem("Particles", null, particleEditor.PinnedWindowOpen))
 				particleEditor.TogglePinnedWindow();

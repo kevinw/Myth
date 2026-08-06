@@ -8,7 +8,7 @@ namespace Myth;
 // bounce pad that always launches along Direction. Actors are bounced once on entry and re-arm
 // by leaving, so resting on a pad keeps bouncing but sitting inside a bumper doesn't buzz.
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/bouncer", Anchor = SpriteAnchor.TopLeft,
-	LivePositionEditable = true, LiveResizable = true)]
+	ShowFacing = false, LivePositionEditable = true, LiveResizable = true)]
 public class Bouncer : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 2, Game.TileSize * 2);
@@ -22,6 +22,10 @@ public class Bouncer : Actor, IResizable
 	public Point2 Direction = Point2.Up;
 	public Color FillColor = new(0x6d2b56);
 	public Color RimColor = new(0xff7ac2);
+
+	// Surface asset (Sources/Surfaces/<id>.json) filling the blob interior, tiled in
+	// world space and lit via its normal map. Null/empty = solid FillColor.
+	public string? SurfaceId;
 
 	// Membrane spring: accel per px of displacement from rest, and per-second velocity bleed.
 	static float Stiffness => 3280f;
@@ -52,6 +56,7 @@ public class Bouncer : Actor, IResizable
 	}
 
 	public override bool CastsSpriteShadow => false;
+	public override bool LightingDithered => false;
 
 	RectInt WorldRect => new(Position, Size);
 	Vector2 LocalCenter => (Vector2)Size / 2;
@@ -184,12 +189,64 @@ public class Bouncer : Actor, IResizable
 		if (points.Length < 3)
 			return;
 		batcher.PushMatrix(Matrix3x2.CreateTranslation(recoilOffset));
-		var center = LocalCenter;
-		for (var i = 0; i < points.Length; i++)
-			batcher.Triangle(center, points[i], points[(i + 1) % points.Length], FillColor);
+
+		if (Assets.GetSurface(SurfaceId) is { } surface)
+		{
+			Span<Surface.Vertex> fan = stackalloc Surface.Vertex[points.Length * 3];
+			BuildFan(fan);
+			surface.Render(batcher, fan, Time.SecondsF);
+		}
+		else
+			DrawFan(batcher, FillColor);
+
 		for (var i = 0; i < points.Length; i++)
 			batcher.Line(points[i], points[(i + 1) % points.Length], 1, RimColor);
 		batcher.PopMatrix();
+	}
+
+	public override void RenderShadow(Batcher batcher, Color color)
+	{
+		if (points.Length < 3)
+			return;
+		batcher.PushMatrix(Matrix3x2.CreateTranslation(recoilOffset));
+		DrawFan(batcher, color);
+		batcher.PopMatrix();
+	}
+
+	public override void RenderNormals(Batcher batcher)
+	{
+		if (points.Length < 3 || Assets.GetSurface(SurfaceId) is not { HasNormal: true } surface)
+			return;
+		batcher.PushMatrix(Matrix3x2.CreateTranslation(recoilOffset));
+		Span<Surface.Vertex> fan = stackalloc Surface.Vertex[points.Length * 3];
+		BuildFan(fan);
+		surface.RenderNormals(batcher, fan, Time.SecondsF);
+		batcher.PopMatrix();
+	}
+
+	// Triangle-fan over the ring. Position is local (the recoil matrix + world matrix
+	// place it); World is the actor-world pixel position, anchoring the tiling in world
+	// space so it doesn't slide with the recoil or stretch as the blob resizes.
+	void BuildFan(Span<Surface.Vertex> fan)
+	{
+		var center = LocalCenter;
+		var worldOrigin = (Vector2)Position;
+		for (var i = 0; i < points.Length; i++)
+		{
+			var a = points[i];
+			var b = points[(i + 1) % points.Length];
+			var t = i * 3;
+			fan[t + 0] = new Surface.Vertex(center, worldOrigin + center);
+			fan[t + 1] = new Surface.Vertex(a, worldOrigin + a);
+			fan[t + 2] = new Surface.Vertex(b, worldOrigin + b);
+		}
+	}
+
+	void DrawFan(Batcher batcher, Color color)
+	{
+		var center = LocalCenter;
+		for (var i = 0; i < points.Length; i++)
+			batcher.Triangle(center, points[i], points[(i + 1) % points.Length], color);
 	}
 
 	public override Rect GetVisualBounds()

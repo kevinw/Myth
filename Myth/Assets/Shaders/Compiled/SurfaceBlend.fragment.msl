@@ -1,0 +1,292 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct type_FragmentUniformBlock
+{
+    float4 SurfaceMeta;
+    float4 LayerConfig[6];
+    float4 LayerTint[6];
+    float4 LayerMotion[6];
+    float4 LayerBlack[6];
+};
+
+struct fragment_main_out
+{
+    float4 out_var_SV_Target0 [[color(0)]];
+};
+
+struct fragment_main_in
+{
+    float2 in_var_TEXCOORD0 [[user(locn0)]];
+    float4 in_var_TEXCOORD1 [[user(locn1)]];
+};
+
+fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Layer0 [[texture(1)]], texture2d<float> Layer1 [[texture(2)]], texture2d<float> Layer2 [[texture(3)]], texture2d<float> Layer3 [[texture(4)]], texture2d<float> Layer4 [[texture(5)]], texture2d<float> Layer5 [[texture(6)]], sampler Layer0Sampler [[sampler(1)]], sampler Layer1Sampler [[sampler(2)]], sampler Layer2Sampler [[sampler(3)]], sampler Layer3Sampler [[sampler(4)]], sampler Layer4Sampler [[sampler(5)]], sampler Layer5Sampler [[sampler(6)]])
+{
+    fragment_main_out out = {};
+    float _73;
+    float4 _89;
+    do
+    {
+        _73 = FragmentUniformBlock.SurfaceMeta.y;
+        float4 _80 = Layer0.sample(Layer0Sampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.LayerMotion[0].xy * _73)) / precise::max(FragmentUniformBlock.LayerConfig[0].xy, float2(1.0))));
+        if (FragmentUniformBlock.LayerConfig[0].w == 1.0)
+        {
+            _89 = mix(FragmentUniformBlock.LayerBlack[0], FragmentUniformBlock.LayerTint[0], float4(_80.x));
+            break;
+        }
+        _89 = _80 * FragmentUniformBlock.LayerTint[0];
+        break;
+    } while(false);
+    float4 _118;
+    do
+    {
+        float4 _109 = Layer1.sample(Layer1Sampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.LayerMotion[1].xy * _73)) / precise::max(FragmentUniformBlock.LayerConfig[1].xy, float2(1.0))));
+        if (FragmentUniformBlock.LayerConfig[1].w == 1.0)
+        {
+            _118 = mix(FragmentUniformBlock.LayerBlack[1], FragmentUniformBlock.LayerTint[1], float4(_109.x));
+            break;
+        }
+        _118 = _109 * FragmentUniformBlock.LayerTint[1];
+        break;
+    } while(false);
+    float4 _147;
+    do
+    {
+        float4 _138 = Layer2.sample(Layer2Sampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.LayerMotion[2].xy * _73)) / precise::max(FragmentUniformBlock.LayerConfig[2].xy, float2(1.0))));
+        if (FragmentUniformBlock.LayerConfig[2].w == 1.0)
+        {
+            _147 = mix(FragmentUniformBlock.LayerBlack[2], FragmentUniformBlock.LayerTint[2], float4(_138.x));
+            break;
+        }
+        _147 = _138 * FragmentUniformBlock.LayerTint[2];
+        break;
+    } while(false);
+    float4 _176;
+    do
+    {
+        float4 _167 = Layer3.sample(Layer3Sampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.LayerMotion[3].xy * _73)) / precise::max(FragmentUniformBlock.LayerConfig[3].xy, float2(1.0))));
+        if (FragmentUniformBlock.LayerConfig[3].w == 1.0)
+        {
+            _176 = mix(FragmentUniformBlock.LayerBlack[3], FragmentUniformBlock.LayerTint[3], float4(_167.x));
+            break;
+        }
+        _176 = _167 * FragmentUniformBlock.LayerTint[3];
+        break;
+    } while(false);
+    float4 _205;
+    do
+    {
+        float4 _196 = Layer4.sample(Layer4Sampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.LayerMotion[4].xy * _73)) / precise::max(FragmentUniformBlock.LayerConfig[4].xy, float2(1.0))));
+        if (FragmentUniformBlock.LayerConfig[4].w == 1.0)
+        {
+            _205 = mix(FragmentUniformBlock.LayerBlack[4], FragmentUniformBlock.LayerTint[4], float4(_196.x));
+            break;
+        }
+        _205 = _196 * FragmentUniformBlock.LayerTint[4];
+        break;
+    } while(false);
+    float4 _234;
+    do
+    {
+        float4 _225 = Layer5.sample(Layer5Sampler, ((in.in_var_TEXCOORD0 - (FragmentUniformBlock.LayerMotion[5].xy * _73)) / precise::max(FragmentUniformBlock.LayerConfig[5].xy, float2(1.0))));
+        if (FragmentUniformBlock.LayerConfig[5].w == 1.0)
+        {
+            _234 = mix(FragmentUniformBlock.LayerBlack[5], FragmentUniformBlock.LayerTint[5], float4(_225.x));
+            break;
+        }
+        _234 = _225 * FragmentUniformBlock.LayerTint[5];
+        break;
+    } while(false);
+    int _237 = int(FragmentUniformBlock.SurfaceMeta.x);
+    float4 _281;
+    if (0 < _237)
+    {
+        float4 _280;
+        do
+        {
+            if (FragmentUniformBlock.LayerConfig[0].z == 1.0)
+            {
+                _280 = float4(0.0, 0.0, 0.0, fast::clamp(_89.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[0].z == 2.0)
+            {
+                _280 = float4(_89.xyz * _89.w, fast::clamp(_89.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[0].z == 3.0)
+            {
+                _280 = float4(_89.xyz * _89.w, fast::clamp(_89.w, 0.0, 1.0));
+                break;
+            }
+            _280 = float4(_89.xyz * _89.w, _89.w);
+            break;
+        } while(false);
+        _281 = _280;
+    }
+    else
+    {
+        _281 = float4(0.0);
+    }
+    float4 _353;
+    if (1 < _237)
+    {
+        float4 _352;
+        do
+        {
+            if (FragmentUniformBlock.LayerConfig[1].z == 1.0)
+            {
+                _352 = float4(_281.xyz * mix(float3(1.0), _118.xyz, float3(_118.w)), fast::clamp(_281.w + _118.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[1].z == 2.0)
+            {
+                _352 = float4(_281.xyz + (_118.xyz * _118.w), fast::clamp(_281.w + _118.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[1].z == 3.0)
+            {
+                _352 = float4(float3(1.0) - ((float3(1.0) - _281.xyz) * (float3(1.0) - (_118.xyz * _118.w))), fast::clamp(_281.w + _118.w, 0.0, 1.0));
+                break;
+            }
+            float _340 = 1.0 - _118.w;
+            _352 = float4((_118.xyz * _118.w) + (_281.xyz * _340), _118.w + (_281.w * _340));
+            break;
+        } while(false);
+        _353 = _352;
+    }
+    else
+    {
+        _353 = _281;
+    }
+    float4 _425;
+    if (2 < _237)
+    {
+        float4 _424;
+        do
+        {
+            if (FragmentUniformBlock.LayerConfig[2].z == 1.0)
+            {
+                _424 = float4(_353.xyz * mix(float3(1.0), _147.xyz, float3(_147.w)), fast::clamp(_353.w + _147.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[2].z == 2.0)
+            {
+                _424 = float4(_353.xyz + (_147.xyz * _147.w), fast::clamp(_353.w + _147.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[2].z == 3.0)
+            {
+                _424 = float4(float3(1.0) - ((float3(1.0) - _353.xyz) * (float3(1.0) - (_147.xyz * _147.w))), fast::clamp(_353.w + _147.w, 0.0, 1.0));
+                break;
+            }
+            float _412 = 1.0 - _147.w;
+            _424 = float4((_147.xyz * _147.w) + (_353.xyz * _412), _147.w + (_353.w * _412));
+            break;
+        } while(false);
+        _425 = _424;
+    }
+    else
+    {
+        _425 = _353;
+    }
+    float4 _497;
+    if (3 < _237)
+    {
+        float4 _496;
+        do
+        {
+            if (FragmentUniformBlock.LayerConfig[3].z == 1.0)
+            {
+                _496 = float4(_425.xyz * mix(float3(1.0), _176.xyz, float3(_176.w)), fast::clamp(_425.w + _176.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[3].z == 2.0)
+            {
+                _496 = float4(_425.xyz + (_176.xyz * _176.w), fast::clamp(_425.w + _176.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[3].z == 3.0)
+            {
+                _496 = float4(float3(1.0) - ((float3(1.0) - _425.xyz) * (float3(1.0) - (_176.xyz * _176.w))), fast::clamp(_425.w + _176.w, 0.0, 1.0));
+                break;
+            }
+            float _484 = 1.0 - _176.w;
+            _496 = float4((_176.xyz * _176.w) + (_425.xyz * _484), _176.w + (_425.w * _484));
+            break;
+        } while(false);
+        _497 = _496;
+    }
+    else
+    {
+        _497 = _425;
+    }
+    float4 _569;
+    if (4 < _237)
+    {
+        float4 _568;
+        do
+        {
+            if (FragmentUniformBlock.LayerConfig[4].z == 1.0)
+            {
+                _568 = float4(_497.xyz * mix(float3(1.0), _205.xyz, float3(_205.w)), fast::clamp(_497.w + _205.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[4].z == 2.0)
+            {
+                _568 = float4(_497.xyz + (_205.xyz * _205.w), fast::clamp(_497.w + _205.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[4].z == 3.0)
+            {
+                _568 = float4(float3(1.0) - ((float3(1.0) - _497.xyz) * (float3(1.0) - (_205.xyz * _205.w))), fast::clamp(_497.w + _205.w, 0.0, 1.0));
+                break;
+            }
+            float _556 = 1.0 - _205.w;
+            _568 = float4((_205.xyz * _205.w) + (_497.xyz * _556), _205.w + (_497.w * _556));
+            break;
+        } while(false);
+        _569 = _568;
+    }
+    else
+    {
+        _569 = _497;
+    }
+    float4 _641;
+    if (5 < _237)
+    {
+        float4 _640;
+        do
+        {
+            if (FragmentUniformBlock.LayerConfig[5].z == 1.0)
+            {
+                _640 = float4(_569.xyz * mix(float3(1.0), _234.xyz, float3(_234.w)), fast::clamp(_569.w + _234.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[5].z == 2.0)
+            {
+                _640 = float4(_569.xyz + (_234.xyz * _234.w), fast::clamp(_569.w + _234.w, 0.0, 1.0));
+                break;
+            }
+            if (FragmentUniformBlock.LayerConfig[5].z == 3.0)
+            {
+                _640 = float4(float3(1.0) - ((float3(1.0) - _569.xyz) * (float3(1.0) - (_234.xyz * _234.w))), fast::clamp(_569.w + _234.w, 0.0, 1.0));
+                break;
+            }
+            float _628 = 1.0 - _234.w;
+            _640 = float4((_234.xyz * _234.w) + (_569.xyz * _628), _234.w + (_569.w * _628));
+            break;
+        } while(false);
+        _641 = _640;
+    }
+    else
+    {
+        _641 = _569;
+    }
+    out.out_var_SV_Target0 = _641 * in.in_var_TEXCOORD1;
+    return out;
+}
+

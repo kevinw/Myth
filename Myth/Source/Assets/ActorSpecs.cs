@@ -34,7 +34,8 @@ public static class ActorSpecs
 	private readonly record struct ActorType(
 		[param: DynamicallyAccessedMembers(RegisteredActorMembers)]
 		[property: DynamicallyAccessedMembers(RegisteredActorMembers)]
-		Type Type);
+		Type Type,
+		bool ShowFacing);
 
 	private static readonly Dictionary<string, JsonObject> specs = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, string> specPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -75,9 +76,9 @@ public static class ActorSpecs
 		actorNames.Clear();
 	}
 
-	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name) where T : Actor
+	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name, bool showFacing) where T : Actor
 	{
-		actorTypes[name] = new ActorType(typeof(T));
+		actorTypes[name] = new ActorType(typeof(T), showFacing);
 		actorNames[typeof(T)] = name;
 	}
 
@@ -222,6 +223,8 @@ public static class ActorSpecs
 			: null;
 		foreach (var member in GetSerializableMembers(type.Type))
 		{
+			if (!type.ShowFacing && member.Name == nameof(Actor.Facing))
+				continue;
 			var jsonName = member.Name;
 			var hasLocal = JsonUtil.ContainsProperty(spec, jsonName);
 			JsonNode? value = null;
@@ -301,6 +304,25 @@ public static class ActorSpecs
 #if EDITOR
 	public static bool CanSaveSpec(string id) => specPaths.ContainsKey(id);
 	public static bool IsSpecDirty(string id) => dirtySpecs.Contains(id);
+
+	public static void CreateSpec(string id, string path, JsonObject spec)
+	{
+		spec = CloneObject(spec);
+		spec[NameKey] = id;
+		specs[id] = spec;
+		specPaths[id] = path;
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		SaveSpec(id);
+	}
+
+	public static void DeleteSpec(string id)
+	{
+		if (specPaths.Remove(id, out var path) && File.Exists(path))
+			File.Delete(path);
+		specs.Remove(id);
+		savedSpecJson.Remove(id);
+		dirtySpecs.Remove(id);
+	}
 
 	public static void CaptureSavedSpecState()
 	{

@@ -140,6 +140,7 @@ public partial class Manager
 		// still closed keeps its old position rather than being yanked around later.
 		editorDockResetFrames = 2;
 		tileKitEditorOpen = true;
+		surfaceEditorOpen = true;
 		nctEditorOpen = true;
 		musicRegionsOpen = true;
 		OpenAllEditorPanels();

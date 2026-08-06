@@ -1,5 +1,7 @@
 # TODO
 
+- a bloom knob
+- reachable Assets get packed
 - better Bud idle behavior.
 - more google doc writing https://docs.google.com/spreadsheets/d/1KKmU3uwT2x6hbNzBEyBdjEReGU-bd9zTvpJAd4vOTTg/edit?gid=0#gid=0
 - it would be very fun to introduce a slow version of bud that kills you and hunts you across rooms.
@@ -50,7 +52,6 @@ second song needs some automation curves
 one tile crawl critter
 computer that puts something on your map as a goal
 an enemy that flies at you regardless of collision
-
 
 NCA
   - perturb on tile edges, so it looks more integrated

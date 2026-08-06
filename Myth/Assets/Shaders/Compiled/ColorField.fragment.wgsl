@@ -2,15 +2,15 @@ struct type_u002e_FragmentUniformBlock {
     FieldSize: vec4<f32>,
 }
 
-@group(3) @binding(0)
+@group(3) @binding(0) 
 var<uniform> FragmentUniformBlock: type_u002e_FragmentUniformBlock;
-@group(2) @binding(0)
+@group(2) @binding(0) 
 var Texture: texture_2d<f32>;
-@group(2) @binding(100)
+@group(2) @binding(100) 
 var Sampler: sampler;
-@group(2) @binding(1)
+@group(2) @binding(1) 
 var Field: texture_2d<f32>;
-@group(2) @binding(101)
+@group(2) @binding(101) 
 var FieldSampler: sampler;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec2<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec4<f32>;
@@ -32,7 +32,7 @@ fn fragment_main_1() {
     return;
 }
 
-@fragment
+@fragment 
 fn fragment_main(@location(0) in_u002e_var_u002e_TEXCOORD0_: vec2<f32>, @location(1) in_u002e_var_u002e_TEXCOORD1_: vec4<f32>, @location(2) in_u002e_var_u002e_TEXCOORD4_: vec4<f32>, @builtin(position) param: vec4<f32>) -> @location(0) vec4<f32> {
     in_u002e_var_u002e_TEXCOORD0_1 = in_u002e_var_u002e_TEXCOORD0_;
     in_u002e_var_u002e_TEXCOORD1_1 = in_u002e_var_u002e_TEXCOORD1_;

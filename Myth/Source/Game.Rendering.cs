@@ -1241,7 +1241,7 @@ public sealed partial class GameView
 	}
 
 	static float DitherAmountForActor(Actor actor)
-		=> actor.Mask.Has(Actor.Masks.Player | Actor.Masks.Enemy) ? ActorDitherAmount : 1.0f;
+		=> actor.LightingDithered ? 1.0f : ActorDitherAmount;
 
 	void DrawParticleSolidMask()
 	{

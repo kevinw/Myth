@@ -4,8 +4,13 @@ namespace Myth;
 static class EditorIcons
 {
 	public const string Search = "\uf002";
+	public const string Lock = "\uf023";
+	public const string Up = "\uf062";
+	public const string Down = "\uf063";
 	public const string Visible = "\uf06e";
 	public const string Hidden = "\uf070";
+	public const string Randomize = "\uf074";
+	public const string Unlock = "\uf09c";
 	public const string Cut = "\uf0c4";
 	public const string Copy = "\uf0c5";
 	public const string Reset = "\uf0e2";
@@ -24,8 +29,12 @@ static class EditorIcons
 	public static readonly ushort[] GlyphRanges =
 	[
 		0xf002, 0xf002,
+		0xf023, 0xf023,
+		0xf062, 0xf063,
 		0xf06e, 0xf06e,
 		0xf070, 0xf070,
+		0xf074, 0xf074,
+		0xf09c, 0xf09c,
 		0xf0c4, 0xf0c5,
 		0xf0e2, 0xf0e2,
 		0xf1c9, 0xf1c9,

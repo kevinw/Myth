@@ -82,6 +82,11 @@ public partial class Manager
 	string? actorContextMenuRoomId;
 	int actorContextMenuIndex = -1;
 	bool actorContextMenuRequested;
+	bool createPrefabPopupRequested;
+	string? createPrefabRoomId;
+	string? createPrefabActorId;
+	int createPrefabActorIndex = -1;
+	string newPrefabName = "";
 	// Click-to-cycle picking: a click that doesn't drag walks down the stack of overlapping actors
 	// so hidden ones are reachable. Scratch + press state drive it.
 	readonly List<int> actorPickScratch = [];
@@ -223,6 +228,7 @@ public partial class Manager
 		{
 			undo.CommitPending(RoomSettingsUndoSlot);
 			undo.CommitPending(ActorPropertyUndoSlot);
+			undo.CommitPending(SurfaceUndoSlot);
 		}
 
 		if (gameEase < 1.0f && !startingPlay)
@@ -253,6 +259,7 @@ public partial class Manager
 		if (!playing && !startingPlay)
 		{
 			TileKitEditorImGui();
+			SurfaceEditorImGui();
 			NctTileEditorImGui();
 			MusicRegionsImGui();
 		}
@@ -394,6 +401,8 @@ public partial class Manager
 				CopySelectedActor(cut: false);
 			if (ImGui.MenuItem(EditorIcons.CutMenuItem, $"{commandKey}+X"))
 				CopySelectedActor(cut: true);
+			if (ImGui.MenuItem("Create Prefab…"))
+				RequestCreatePrefab(room, actor);
 
 			ImGui.Separator();
 			if (ImGui.MenuItem(EditorIcons.DeleteMenuItem, "Delete"))
@@ -410,6 +419,144 @@ public partial class Manager
 			ImGui.CloseCurrentPopup();
 
 		EndPaddedPopup();
+	}
+
+	void RequestCreatePrefab(Room room, JsonObject actor)
+	{
+		createPrefabRoomId = room.Id;
+		createPrefabActorId = ActorSpecs.GetActorId(actor);
+		createPrefabActorIndex = room.Actors.IndexOf(actor);
+		var type = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
+		var baseName = PrefabNameSuggestion(type);
+		newPrefabName = baseName;
+		for (var suffix = 2; !CanCreatePrefab(newPrefabName); suffix++)
+			newPrefabName = baseName + suffix;
+		createPrefabPopupRequested = true;
+	}
+
+	void DrawCreatePrefabPopup()
+	{
+		if (createPrefabPopupRequested)
+		{
+			createPrefabPopupRequested = false;
+			ImGui.OpenPopup("Create Prefab");
+		}
+
+		var open = true;
+		if (!BeginPaddedPopupModal("Create Prefab", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+			return;
+
+		ImGui.TextUnformatted("Create a prefab from this actor:");
+		ImGui.SetNextItemWidth(260);
+		if (ImGui.IsWindowAppearing())
+			ImGui.SetKeyboardFocusHere();
+		var submit = ImGui.InputTextWithHint("##PrefabName", "PrefabName", ref newPrefabName, 64,
+			ImGuiInputTextFlags.EnterReturnsTrue);
+		var name = newPrefabName.Trim();
+		var valid = CanCreatePrefab(name) && FindCreatePrefabActor() != null;
+		ImGui.BeginDisabled(!valid);
+		var create = ImGui.Button("Create", new Vector2(90, 0)) || submit;
+		ImGui.EndDisabled();
+		ImGui.SameLine();
+		var cancel = ImGui.Button("Cancel", new Vector2(90, 0)) || !open;
+
+		if (create && valid && FindCreatePrefabActor() is { } found)
+		{
+			CreatePrefabFromActor(found.Room, found.Index, name);
+			ClearCreatePrefabRequest();
+			ImGui.CloseCurrentPopup();
+		}
+		else if (cancel)
+		{
+			ClearCreatePrefabRequest();
+			ImGui.CloseCurrentPopup();
+		}
+
+		EndPaddedPopup();
+	}
+
+	readonly record struct PrefabActor(Room Room, int Index);
+
+	PrefabActor? FindCreatePrefabActor()
+	{
+		if (createPrefabRoomId == null || Assets.GetRoom(createPrefabRoomId) is not { } room)
+			return null;
+		if (createPrefabActorId != null)
+			for (var i = 0; i < room.Actors.Count; i++)
+				if (ActorSpecs.GetActorId(room.Actors[i]) == createPrefabActorId)
+					return new(room, i);
+		if (createPrefabActorIndex >= 0 && createPrefabActorIndex < room.Actors.Count)
+			return new(room, createPrefabActorIndex);
+		return null;
+	}
+
+	static string PrefabNameSuggestion(string type)
+	{
+		var name = new ValueStringBuilder(stackalloc char[type.Length + "ActorPrefab".Length]);
+		foreach (var c in type)
+			if (char.IsAsciiLetterOrDigit(c))
+				name.Append(c);
+		if (name.Length == 0 || !char.IsAsciiLetter(name[0]))
+			name.Insert(0, "Actor");
+		name.Append("Prefab");
+		return name.ToString();
+	}
+
+	static bool CanCreatePrefab(string name)
+		=> name.Length > 0 && char.IsAsciiLetter(name[0])
+			&& name.All(char.IsAsciiLetterOrDigit)
+			&& ActorSpecs.Get(name) == null
+			&& !File.Exists(PrefabPath(name));
+
+	static string PrefabPath(string name)
+	{
+		var filename = new ValueStringBuilder(stackalloc char[name.Length * 2]);
+		for (var i = 0; i < name.Length; i++)
+		{
+			var c = name[i];
+			if (i > 0 && char.IsAsciiLetterUpper(c) && char.IsAsciiLetterLower(name[i - 1]))
+				filename.Append('-');
+			filename.Append(char.ToLowerInvariant(c));
+		}
+		return Path.Join(Assets.AssetsPath, ActorSpecs.ContentFolder, filename.ToString() + ".json");
+	}
+
+	void CreatePrefabFromActor(Room room, int actorIndex, string name)
+	{
+		var actor = room.Actors[actorIndex];
+		var path = PrefabPath(name);
+		using (undo.Capture("Create Prefab", CurrentRoomUndoTarget(room),
+			new ActorSpecExistenceUndoTarget(name, path), EditorSelectionUndoTarget()))
+		{
+			var spec = ActorSpecs.PruneForSave(actor);
+			JsonUtil.RemoveProperty(spec, "Id");
+			JsonUtil.RemoveProperty(spec, "Position");
+			ActorSpecs.CreateSpec(name, path, spec);
+
+			var instance = new JsonObject
+			{
+				["Id"] = ActorSpecs.GetActorId(actor),
+				["From"] = name,
+			};
+			if (JsonUtil.TryGetProperty(actor, "Position", out var position))
+				instance["Position"] = position?.DeepClone();
+			room.Actors[actorIndex] = instance;
+			selectedRoomActorIndex = actorIndex;
+			selectedActorSpecId = name;
+			actorSpecInspectorOpen = true;
+		}
+
+		room.Save();
+		editorGameDirty = true;
+		SyncEditorGame();
+	}
+
+	void ClearCreatePrefabRequest()
+	{
+		createPrefabRoomId = null;
+		createPrefabActorId = null;
+		createPrefabActorIndex = -1;
+		newPrefabName = "";
 	}
 
 	void PasteActor()
@@ -629,6 +776,19 @@ public partial class Manager
 		public string UndoId => $"actor-spec:{specId}";
 		public string CaptureJson() => ActorSpecs.CaptureSpecJson(specId);
 		public void ApplyJson(string json) => ActorSpecs.ApplySpecJson(specId, json);
+	}
+
+	sealed class ActorSpecExistenceUndoTarget(string specId, string path) : IJsonUndoTarget
+	{
+		public string UndoId => $"actor-spec-exists:{specId}";
+		public string CaptureJson() => ActorSpecs.Get(specId) is null ? "" : ActorSpecs.CaptureSpecJson(specId);
+		public void ApplyJson(string json)
+		{
+			if (json.Length == 0)
+				ActorSpecs.DeleteSpec(specId);
+			else
+				ActorSpecs.CreateSpec(specId, path, JsonNode.Parse(json)?.AsObject() ?? []);
+		}
 	}
 
 	// Undo target for a whole room's *existence*, so create/paste/duplicate/delete are all undoable
@@ -1533,7 +1693,16 @@ public partial class Manager
 
 	bool DrawActorPropertyValue(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, float controlWidth)
 	{
-		if (property.Type == typeof(float))
+		if (IsBouncerSurfaceProperty(actor, property))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawSurfacePicker(ref value))
+			{
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
+			}
+		}
+		else if (property.Type == typeof(float))
 		{
 			var value = property.Value?.GetValue<float>() ?? 0;
 			if (ImGui.DragFloat("##Value", ref value, 0.05f))
@@ -2289,6 +2458,74 @@ public partial class Manager
 	static bool IsMovingPlatformMaterialProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
 
+	static bool IsBouncerSurfaceProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+		=> property.Type == typeof(string)
+			&& property.Name == nameof(Bouncer.SurfaceId)
+			&& string.Equals(ActorSpecs.GetTypeName(actor), nameof(Bouncer), StringComparison.OrdinalIgnoreCase);
+
+	// A "color picker"-style surface selector: a preview button that opens a grid of
+	// surface previews. Returns true (and updates value) when a surface is chosen; an
+	// empty string selects "None" (solid fill).
+	const int SurfacePickerColumns = 8;
+
+	bool DrawSurfacePicker(ref string value)
+	{
+		var changed = false;
+		var cell = new Vector2(ButtonSize, ButtonSize);
+		var current = Assets.GetSurface(value);
+
+		if (current != null)
+		{
+			if (ImGuiSubtextureButton("##SurfacePreview", current.Preview, $"Surface '{value}' — click to change", false, cell, true))
+				ImGui.OpenPopup("##SurfaceGrid");
+		}
+		else if (ImGui.Button("None##SurfacePreview", cell))
+		{
+			ImGui.OpenPopup("##SurfaceGrid");
+		}
+		if (ImGui.BeginPopupContextItem("##SurfaceContext"))
+		{
+			ImGui.BeginDisabled(current == null);
+			if (ImGui.MenuItem("Edit") && current != null)
+				OpenSurfaceEditor(current.Id);
+			ImGui.EndDisabled();
+			ImGui.EndPopup();
+		}
+
+		if (ImGui.BeginPopup("##SurfaceGrid"))
+		{
+			if (Assets.Surfaces.Count == 0)
+			{
+				ImGui.TextDisabled("No surfaces loaded (Assets/Sources/Surfaces/*.json)");
+			}
+			else
+			{
+				if (ImGui.Button("None", cell))
+				{
+					value = string.Empty;
+					changed = true;
+					ImGui.CloseCurrentPopup();
+				}
+				var i = 0;
+				foreach (var (id, surface) in Assets.Surfaces)
+				{
+					if (i % SurfacePickerColumns != 0)
+						ImGui.SameLine();
+					i++;
+					if (ImGuiSubtextureButton($"##surf{id}", surface.Preview, id, value == id, cell, true))
+					{
+						value = id;
+						changed = true;
+						ImGui.CloseCurrentPopup();
+					}
+				}
+			}
+			ImGui.EndPopup();
+		}
+
+		return changed;
+	}
+
 	bool DrawMovingPlatformMaterialButtons(ref string value)
 	{
 		var changed = false;
@@ -2329,7 +2566,7 @@ public partial class Manager
 			return new(stackedControlWidth);
 		}
 
-		var labelWidth = MathF.Min(MathF.Max(104, available * 0.42f), 200);
+		var labelWidth = MathF.Min(MathF.Max(94, available * 0.38f), 180);
 		labelWidth = MathF.Min(labelWidth, available - trailingWidth - style.ItemSpacing.X - 72);
 		var controlWidth = available - labelWidth - trailingWidth - style.ItemSpacing.X;
 		DrawPropertyLabel(label, labelWidth, rowStartX, rightAligned: true);

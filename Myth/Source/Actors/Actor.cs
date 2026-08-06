@@ -45,6 +45,7 @@ public class Actor
 	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;
+	public virtual bool LightingDithered => !Mask.Has(Masks.Player | Masks.Enemy);
 	public virtual string HitSoundType => "flesh";
 
 	internal virtual int DamageValue => 1;

@@ -109,25 +109,33 @@
       "Id": "3330c98766fca8e0",
       "Type": "Bouncer",
       "Position": [224, 86],
-      "Strength": 250
+      "Strength": 250,
+      "FillColor": "EE3F09",
+      "SurfaceId": "bouncer"
     },
     {
       "Id": "f65ad8c47409281b",
       "Type": "Bouncer",
       "Position": [356, 152],
-      "Strength": 250
+      "Strength": 250,
+      "SurfaceId": "bouncer"
     },
     {
       "Id": "204b50e1ec4720df",
       "Type": "Bouncer",
-      "Position": [428, 147],
-      "Strength": 250
+      "Position": [418, 141],
+      "Strength": 250,
+      "Size": [36, 35],
+      "RimColor": "FFB0DC",
+      "FillColor": "A99F86",
+      "SurfaceId": "bouncer"
     },
     {
       "Id": "d66f748604a5bc46",
       "Type": "Bouncer",
       "Position": [492, 151],
-      "Strength": 250
+      "Strength": 250,
+      "SurfaceId": "bouncer"
     },
     {
       "Id": "65ffde354a4675a8",

@@ -17,7 +17,7 @@ public static class TileQuadrants
 	public const int All = TopLeft | BottomLeft | TopRight | BottomRight;
 }
 
-public static class Assets
+public static partial class Assets
 {
 	public const int MaxSlopeRun = 10;
 
@@ -203,13 +203,19 @@ public static class Assets
 		if (Path.GetDirectoryName(outputPath) is { Length: > 0 } outputDirectory)
 			Directory.CreateDirectory(outputDirectory);
 
-		using var stream = File.Create(outputPath);
-		using var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create);
-
 		// The DynamicTexture folder holds tens of MB of NCA weights, almost all unused; a
 		// packaged build only needs models referenced by rooms or registered NCT tile specs.
 		var referencedWeights = CollectReferencedNeuralTextureWeights(worldId);
 		var packedWeights = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		// Only the surfaces (and their textures) referenced by the shipped world's rooms.
+		CollectReferencedSurfaceAssets(worldId, out var referencedSurfaces, out var referencedTextures);
+		ValidateReferencedSurfaceAssets(referencedSurfaces, referencedTextures);
+		var skippedSurfaceAssets = 0;
+		long skippedSurfaceBytes = 0;
+
+		using var stream = File.Create(outputPath);
+		using var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create);
 
 		var count = 0;
 		var skippedWeights = 0;
@@ -219,6 +225,14 @@ public static class Assets
 			var key = Path.GetRelativePath(AssetsPath, file).Replace(Path.DirectorySeparatorChar, '/');
 			if (!ContentZipIncludes(key, shaderExtension, worldId))
 				continue;
+
+			if ((IsPackSurfaceFile(key, out var surfaceId) && !referencedSurfaces.Contains(surfaceId))
+				|| (IsPackTextureFile(key, out var textureKey) && !referencedTextures.Contains(textureKey)))
+			{
+				skippedSurfaceAssets++;
+				skippedSurfaceBytes += new FileInfo(file).Length;
+				continue;
+			}
 
 			if (IsDynamicTextureWeight(key, out var weightName))
 			{
@@ -247,7 +261,86 @@ public static class Assets
 			throw new InvalidOperationException($"Missing referenced neural texture models: {string.Join(", ", missingWeights)}. Run 'git lfs pull' and check the room/NCT spec references.");
 
 		Console.WriteLine($"Wrote {target}/{worldId} content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB); "
-			+ $"packed {packedWeights.Count} neural texture models, skipped {skippedWeights} unreferenced ({skippedWeightBytes / 1024} KB).");
+			+ $"packed {packedWeights.Count} neural texture models, skipped {skippedWeights} unreferenced ({skippedWeightBytes / 1024} KB); "
+			+ $"surfaces: kept {referencedSurfaces.Count} + {referencedTextures.Count} textures, skipped {skippedSurfaceAssets} unreferenced ({skippedSurfaceBytes / 1024} KB).");
+	}
+
+	// Surfaces referenced by actors in the shipped world, and the texture keys those
+	// surfaces use. Surface specs are read from the baked pack (their shipping location).
+	static void CollectReferencedSurfaceAssets(string worldId, out HashSet<string> surfaces, out HashSet<string> textures)
+	{
+		surfaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		textures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		var worldRoomsPath = Path.Join(RoomsPath, worldId);
+		if (Directory.Exists(worldRoomsPath))
+			foreach (var file in Directory.EnumerateFiles(worldRoomsPath, "*.json", SearchOption.AllDirectories))
+			{
+				JsonNode? root;
+				try { root = JsonNode.Parse(File.ReadAllText(file)); }
+				catch (Exception e)
+				{
+					Console.WriteLine($"Warning: could not parse room '{file}' collecting surface references ({e.Message}); surfaces it uses may be dropped.");
+					continue;
+				}
+				if (root?["actors"] is not JsonArray actors)
+					continue;
+				foreach (var actor in actors)
+					if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
+						surfaces.Add(id);
+			}
+
+		var surfacesDir = Path.Join(DefaultVisualAssetPackPath, "surfaces");
+		foreach (var id in surfaces)
+		{
+			var specPath = Path.Join(surfacesDir, $"{id}.json");
+			if (!File.Exists(specPath))
+				continue;
+			try
+			{
+				foreach (var key in SurfaceSpec.Parse(File.ReadAllText(specPath), id).ReferencedTextures())
+					textures.Add(key);
+			}
+			catch (Exception e)
+			{
+				Console.WriteLine($"Warning: could not parse surface '{specPath}' ({e.Message}); its textures may be dropped.");
+			}
+		}
+	}
+
+	static void ValidateReferencedSurfaceAssets(HashSet<string> surfaces, HashSet<string> textures)
+	{
+		var surfacesDir = Path.Join(DefaultVisualAssetPackPath, "surfaces");
+		foreach (var id in surfaces)
+			if (!File.Exists(Path.Join(surfacesDir, $"{id}.json")))
+				throw new InvalidOperationException($"Missing referenced surface '{id}'. Rebuild the visual asset pack and check room SurfaceId references.");
+
+		var texturesDir = Path.Join(DefaultVisualAssetPackPath, "textures");
+		foreach (var key in textures)
+			if (!File.Exists(Path.Join(texturesDir, key + ".png")))
+				throw new InvalidOperationException($"Missing texture '{key}' referenced by a shipped surface. Rebuild the visual asset pack and check the Surface spec.");
+	}
+
+	// key = "Packed/Visuals/surfaces/<id>.json" -> id
+	static bool IsPackSurfaceFile(string key, out string id)
+	{
+		id = "";
+		var prefix = $"{packedVisualsFolderName}/surfaces/";
+		if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !key.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+			return false;
+		id = key[prefix.Length..^".json".Length];
+		return true;
+	}
+
+	// key = "Packed/Visuals/textures/<textureKey>.png" -> textureKey (e.g. "patterns/pattern_07")
+	static bool IsPackTextureFile(string key, out string textureKey)
+	{
+		textureKey = "";
+		var prefix = $"{packedVisualsFolderName}/textures/";
+		if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+			return false;
+		textureKey = key[prefix.Length..^".png".Length];
+		return true;
 	}
 
 	// True for a key naming a DynamicTexture NCA weight file, yielding its folder-relative name
@@ -489,7 +582,9 @@ public static class Assets
 		// create texture file
 		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
 		var lightingNoise = Assets.LoadAsepriteTexture(gfx, Path.Join("Sources", "Textures", "noise_tess2_seamless.ase"), "LightingNoise");
-		LoadVisualAssetPackManifest(atlas, lightingNoise, BuildVisualAssetPackManifest(bake, "", null));
+		var textures2D = Assets.LoadTextureBucket(gfx, Content, "Sources/Textures/Patterns", "patterns");
+		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, BuildVisualAssetPackManifest(bake, "", null));
+		BuildSurfaces(gfx, Content, "Sources/Surfaces");
 
 		if (buildPackPath != null)
 			WriteVisualAssetPack(buildPackPath, bake);
@@ -714,7 +809,11 @@ public static class Assets
 			lightingNoise = new Texture(gfx, lighting, name: "LightingNoise");
 		}
 
-		LoadVisualAssetPackManifest(atlas, lightingNoise, manifest);
+		// Surface textures + specs are baked into the pack under textures/ and surfaces/;
+		// their storage layout already encodes the key, so no prefix.
+		var textures2D = Assets.LoadTextureBucket(gfx, pack, "textures", "");
+		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, manifest);
+		BuildSurfaces(gfx, pack, "surfaces");
 		// Registration data ships inside the pack (baked with the images), so pack mode
 		// never depends on spec files being present or current.
 		TileKits.SetRegistrations(manifest.TileKits);
@@ -756,9 +855,43 @@ public static class Assets
 			lightingNoise = lightingNoiseFile;
 		}
 
+		WriteSurfaceAssetsToPack(directory);
+
 		var manifestPath = Path.Join(directory, packedVisualsManifestName);
 		WriteVisualAssetPackManifest(manifestPath, BuildVisualAssetPackManifest(bake, atlasFile, lightingNoise));
 		Console.WriteLine($"Wrote visual asset pack: {manifestPath}");
+	}
+
+	// Bakes the direct-PNG texture bucket and Surface specs into the pack so packaged
+	// builds have them (Sources/ is not shipped). The whole set goes in; Content.zip
+	// prunes to what a world references (see BuildContentZip). Layout mirrors the pack
+	// load: textures/<key>.png and surfaces/<id>.json.
+	static void WriteSurfaceAssetsToPack(string directory)
+	{
+		var texturesDir = Path.Join(directory, "textures");
+		var surfacesDir = Path.Join(directory, "surfaces");
+		if (Directory.Exists(texturesDir))
+			Directory.Delete(texturesDir, recursive: true);
+		if (Directory.Exists(surfacesDir))
+			Directory.Delete(surfacesDir, recursive: true);
+
+		var sourceTextures = Path.Join(SourcesPath, "Textures", "Patterns");
+		if (Directory.Exists(sourceTextures))
+			foreach (var file in Directory.EnumerateFiles(sourceTextures, "*.png", SearchOption.AllDirectories))
+			{
+				var rel = Path.GetRelativePath(sourceTextures, file);
+				var dest = Path.Join(texturesDir, "patterns", rel);
+				Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+				File.Copy(file, dest, overwrite: true);
+			}
+
+		var sourceSurfaces = Path.Join(SourcesPath, "Surfaces");
+		if (Directory.Exists(sourceSurfaces))
+		{
+			Directory.CreateDirectory(surfacesDir);
+			foreach (var file in Directory.EnumerateFiles(sourceSurfaces, "*.json"))
+				File.Copy(file, Path.Join(surfacesDir, Path.GetFileName(file)), overwrite: true);
+		}
 	}
 
 	static VisualAssetPackManifest BuildVisualAssetPackManifest(VisualAssetBake bake, string atlas, string? lightingNoise)
@@ -792,12 +925,14 @@ public static class Assets
 		return manifest;
 	}
 
-	static void LoadVisualAssetPackManifest(Texture atlas, Texture? lightingNoise, VisualAssetPackManifest manifest)
+	static void LoadVisualAssetPackManifest(Texture atlas, Texture? lightingNoise, TextureBucket? textures2D, VisualAssetPackManifest manifest)
 	{
 		var oldAtlas = Atlas;
 		var oldLightingNoise = LightingNoise;
+		var oldTextures2D = Textures2D;
 		Atlas = atlas;
 		LightingNoise = lightingNoise;
+		Textures2D = textures2D;
 
 		Subtextures.Clear();
 		foreach (var packed in manifest.Subtextures)
@@ -878,6 +1013,7 @@ public static class Assets
 
 		oldAtlas?.Dispose();
 		oldLightingNoise?.Dispose();
+		oldTextures2D?.Dispose();
 	}
 
 	static PackedSprite BuildPackedSpriteAsset(VisualAssetBake bake, string name, Aseprite ase)
@@ -1794,6 +1930,34 @@ public static class Assets
 
 		using var image = ase.RenderFrame(0);
 		return new Texture(gfx, image, name);
+	}
+
+	// Box-filter downscale of a source image region into dst at the given origin.
+	static void BoxDownscaleInto(Image dst, Point2 origin, ReadOnlySpan<Color> src, int srcWidth, int srcHeight, int dstWidth, int dstHeight)
+	{
+		for (var ty = 0; ty < dstHeight; ty++)
+		{
+			var sy0 = ty * srcHeight / dstHeight;
+			var sy1 = Math.Max(sy0 + 1, (ty + 1) * srcHeight / dstHeight);
+			for (var tx = 0; tx < dstWidth; tx++)
+			{
+				var sx0 = tx * srcWidth / dstWidth;
+				var sx1 = Math.Max(sx0 + 1, (tx + 1) * srcWidth / dstWidth);
+
+				int r = 0, g = 0, b = 0, a = 0, n = 0;
+				for (var sy = sy0; sy < sy1; sy++)
+				{
+					var rowOffset = sy * srcWidth;
+					for (var sx = sx0; sx < sx1; sx++)
+					{
+						var c = src[rowOffset + sx];
+						r += c.R; g += c.G; b += c.B; a += c.A; n++;
+					}
+				}
+				n = Math.Max(1, n);
+				dst[origin.X + tx, origin.Y + ty] = new Color((byte)(r / n), (byte)(g / n), (byte)(b / n), (byte)(a / n));
+			}
+		}
 	}
 
 	static IEnumerable<string> EnumerateAsepriteFiles(string path)

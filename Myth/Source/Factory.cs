@@ -333,7 +333,7 @@ public static class Factory
 		var attr = typeof(T).GetCustomAttribute<GameActorAttribute>();
 		var name = attr?.Name ?? typeof(T).Name;
 		var tags = attr?.Tags ?? ActorTag.None;
-		ActorSpecs.RegisterActor<T>(name);
+		ActorSpecs.RegisterActor<T>(name, attr?.ShowFacing ?? true);
 		actorTags[name] = tags;
 		actorTypeTags[typeof(T)] = tags;
 		if (attr?.LivePositionEditable == true)
