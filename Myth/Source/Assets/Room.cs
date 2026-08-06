@@ -1283,7 +1283,7 @@ public class Room
 	}
 
 	bool IsWaterTile(int x, int y)
-		=> GetTileEntry(x, y) is { SurfaceType: Factory.WaterSurfaceType };
+		=> GetTileEntry(x, y) is { Substance: Factory.WaterSubstance };
 
 	// A free surface exists only where water meets open air above: the tile above must be
 	// neither water nor a solid tile (water under a ledge/overhang is capped, not a

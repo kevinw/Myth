@@ -1,7 +1,7 @@
 {
   "layer": "Foreground",
   "solid": true,
-  "surface": "Grass",
+  "substance": "Grass",
   "slopes": true,
   "interior": "computerjunk_color_circular.bin",
   "edge": "",

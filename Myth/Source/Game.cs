@@ -1353,32 +1353,32 @@ public partial class Game : IDisposable
 				hiddenCover.SetRenderOpacityScale(IsEditorPreview ? focused ? 0.5f : 0.0f : 1.0f);
 	}
 
-	public string GetSurfaceTypeBelow(Actor actor, bool searchOutward = false)
+	public string GetSubstanceBelow(Actor actor, bool searchOutward = false)
 	{
 		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
-			return Factory.DefaultSurfaceType;
+			return Factory.DefaultSubstance;
 
 		var bounds = actor.Hitbox.Rect + actor.Position;
 		var y = bounds.Bottom;
-		if (TryGetSurfaceTypeAtWorldPoint(new(bounds.Left + 1, y), out var surfaceType))
-			return surfaceType;
-		if (TryGetSurfaceTypeAtWorldPoint(new(bounds.Right - 1, y), out surfaceType))
-			return surfaceType;
+		if (TryGetSubstanceAtWorldPoint(new(bounds.Left + 1, y), out var substance))
+			return substance;
+		if (TryGetSubstanceAtWorldPoint(new(bounds.Right - 1, y), out substance))
+			return substance;
 
-		// TODO: make a more generic system for landing on Actors, and let them provide a surface type.
+		// TODO: make a more generic system for landing on Actors, and let them provide a substance.
 		var hitActor = OverlapsFirst(actor.Hitbox.Rect + actor.Position + new Point2(0, 1), Actor.Masks.Jumpthru);
 		if (hitActor != null) return "Wood";
 
 		// Edge landings can sit just beside the supporting tile, so landing audio gets a one-tile horizontal grace scan.
-		if (searchOutward && TryGetSurfaceTypeOutwardFromBottom(bounds, out surfaceType))
-			return surfaceType;
+		if (searchOutward && TryGetSubstanceOutwardFromBottom(bounds, out substance))
+			return substance;
 
-		return Factory.DefaultSurfaceType;
+		return Factory.DefaultSubstance;
 	}
 
-	bool TryGetSurfaceTypeAtWorldPoint(Point2 point, out string surfaceType)
+	bool TryGetSubstanceAtWorldPoint(Point2 point, out string substance)
 	{
-		surfaceType = Factory.DefaultSurfaceType;
+		substance = Factory.DefaultSubstance;
 		if (room == null)
 			return false;
 
@@ -1390,9 +1390,9 @@ public partial class Game : IDisposable
 		if (tile.X < 0 || tile.Y < 0 || tile.X >= room.Size.X || tile.Y >= room.Size.Y)
 			return false;
 
-		if (room.GetEntry(tile) is { SurfaceType: { } foundSurfaceType })
+		if (room.GetEntry(tile) is { Substance: { } foundSubstance })
 		{
-			surfaceType = foundSurfaceType;
+			substance = foundSubstance;
 			return true;
 		}
 
@@ -1448,19 +1448,19 @@ public partial class Game : IDisposable
 			surface.Update(Time.Delta);
 	}
 
-	bool TryGetSurfaceTypeOutwardFromBottom(RectInt bounds, out string surfaceType)
+	bool TryGetSubstanceOutwardFromBottom(RectInt bounds, out string substance)
 	{
 		var centerX = bounds.Center.X;
 		var y = bounds.Bottom;
 		for (var offset = 0; offset <= TileSize; offset++)
 		{
-			if (TryGetSurfaceTypeAtWorldPoint(new(centerX - offset, y), out surfaceType))
+			if (TryGetSubstanceAtWorldPoint(new(centerX - offset, y), out substance))
 				return true;
-			if (offset > 0 && TryGetSurfaceTypeAtWorldPoint(new(centerX + offset, y), out surfaceType))
+			if (offset > 0 && TryGetSubstanceAtWorldPoint(new(centerX + offset, y), out substance))
 				return true;
 		}
 
-		surfaceType = Factory.DefaultSurfaceType;
+		substance = Factory.DefaultSubstance;
 		return false;
 	}
 
@@ -1826,18 +1826,18 @@ public partial class Game : IDisposable
 	}
 
 	// Removes the given room tiles as one batch: a single geometry rebuild + visual refresh
-	// (not one per tile), a Pop per tile, and one break sound per surface type removed.
+	// (not one per tile), a Pop per tile, and one break sound per substance removed.
 	bool RemoveTiles(List<Point2> tiles, Vector2 soundPosition)
 	{
 		if (room == null || tiles.Count == 0)
 			return false;
 
 		var dirtyBounds = TileWorldBounds(tiles);
-		var tileTypesBroken = new HashSet<string>();
+		var substancesBroken = new HashSet<string>();
 		foreach (var point in tiles)
 		{
-			if (Factory.Find(room.Tiles[point.X, point.Y]) is { SurfaceType: { } surfaceType })
-				tileTypesBroken.Add(surfaceType);
+			if (Factory.Find(room.Tiles[point.X, point.Y]) is { Substance: { } substance })
+				substancesBroken.Add(substance);
 
 			room.Set(point, '0', rebuildGeometry: false);
 			Create<Pop>(TileWorldCenter(point));
@@ -1847,8 +1847,8 @@ public partial class Game : IDisposable
 		RefreshRoomTiles();
 		View?.MarkRoomNormalCacheDirty(room);
 		View?.MarkRoomTileFieldCacheDirty(room);
-		foreach (var surfaceType in tileTypesBroken)
-			PlayAudioEvent("tile_break", "Type", surfaceType, position: soundPosition);
+		foreach (var substance in substancesBroken)
+			PlayAudioEvent("tile_break", "Type", substance, position: soundPosition);
 
 		return true;
 	}

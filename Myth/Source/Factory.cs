@@ -9,8 +9,8 @@ namespace Myth;
 /// It describes tile types and editor actor palette entries.
 public static class Factory
 {
-	public const string DefaultSurfaceType = "Grass";
-	public const string WaterSurfaceType = "Water";
+	public const string DefaultSubstance = "Grass";
+	public const string WaterSubstance = "Water";
 	const string PropSpritePrefix = "Props/";
 
 	/// Background tile type that marks a region for NCALayer to grow fungus into.
@@ -39,7 +39,7 @@ public static class Factory
 		public readonly Vector2 Origin;
 		public readonly Point2 Offset;
 		public readonly TileFn? Tile;
-		public readonly string? SurfaceType;
+		public readonly string? Substance;
 		public readonly bool BlocksMovement;
 		public readonly bool CastsShadow;
 		public readonly ReflectionMode Reflection;
@@ -55,12 +55,12 @@ public static class Factory
 		public readonly NctTileSpec? NeuralTexture;
 		public bool SupportsSlope => SlopeTilesetName != null || NeuralTexture is { HasSlope: true };
 
-		public Entry(string name, Subtexture image, TileFn tile, string? surfaceType = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
+		public Entry(string name, Subtexture image, TileFn tile, string? substance = null, bool blocksMovement = false, bool castsShadow = false, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? slopeTilesetName = null, string? dualTilesetName = null, TileLayer layer = TileLayer.Foreground, string? tilesetName = null, float acousticReflectivity = 1.0f, NctTileSpec? neuralTexture = null)
 		{
 			Name = name;
 			Image = image;
 			Tile = tile;
-			SurfaceType = surfaceType;
+			Substance = substance;
 			BlocksMovement = blocksMovement;
 			CastsShadow = castsShadow;
 			Reflection = reflection;
@@ -244,7 +244,7 @@ public static class Factory
 		throw new InvalidOperationException($"No free tile chars left registering '{name}'.");
 	}
 
-	public static Entry AsTile(string tilesetName, bool isFg, string? surfaceType = null, bool? castsShadow = null, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f, bool drawsVisual = true)
+	public static Entry AsTile(string tilesetName, bool isFg, string? substance = null, bool? castsShadow = null, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool destructible = false, string? name = null, TileLayer layer = TileLayer.Foreground, float acousticReflectivity = 1.0f, bool drawsVisual = true)
 	{
 		var tileset = Assets.GetTileset(tilesetName, logMissing: true);
 		if (tileset == null)
@@ -253,7 +253,7 @@ public static class Factory
 		return new Entry(name ?? tileset.Name, tileset.Tiles[0], (Point2 tile, Room room, Grid fg, Grid fgVisual, Grid bg, DualGrid dual) =>
 		{
 			// Water draws nothing into the tile field; WaterSurface renders it dynamically
-			// instead. The surface type / reflection registration below still apply, so swim
+			// instead. The substance / reflection registration below still apply, so swim
 			// physics and reflections are unaffected.
 			if (!drawsVisual)
 				return;
@@ -261,7 +261,7 @@ public static class Factory
 			var target = layer == TileLayer.Background ? bg : isFg ? fg : fgVisual;
 			var image = tileset.GetRandomTile(ref rng, out var normal);
 			target.Set(tile.X, tile.Y, image, reflection != ReflectionMode.None && !isFg ? 0.55f : 1.0f, normal);
-		}, surfaceType, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
+		}, substance, blocksMovement: isFg, castsShadow: castsShadow ?? isFg, reflection: reflection, reflectionOpacity: reflectionOpacity, destructible: destructible, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
 	public static int StableVariantSeed(Room room, string key, Point2 tile)
@@ -282,7 +282,7 @@ public static class Factory
 		}
 	}
 
-	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string surfaceType, TileLayer layer = TileLayer.Foreground, string? name = null, float acousticReflectivity = 1.0f, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool hasSlope = false)
+	public static Entry AsDualTile(string tilesetName, string dualTilesetName, string substance, TileLayer layer = TileLayer.Foreground, string? name = null, float acousticReflectivity = 1.0f, ReflectionMode reflection = ReflectionMode.None, float reflectionOpacity = 0.5f, bool hasSlope = false)
 	{
 		var tileset = Assets.GetTileset(tilesetName);
 		var dualTileset = Assets.GetTileset(dualTilesetName);
@@ -296,7 +296,7 @@ public static class Factory
 				grid.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, StableVariantSeed(room, tilesetName, tile)));
 			else
 				grid.Set(tile.X, tile.Y, new());
-		}, surfaceType, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, slopeTilesetName: hasSlope ? tilesetName : null, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
+		}, substance, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, slopeTilesetName: hasSlope ? tilesetName : null, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);
 	}
 
 	// A neural-texture tile: paints like a normal tile but draws nothing itself. At room load,
@@ -313,7 +313,7 @@ public static class Factory
 				fg.Set(tile.X, tile.Y, new());
 			else
 				bg.Set(tile.X, tile.Y, new());
-		}, surfaceType: spec.Solid ? spec.Surface : null, blocksMovement: spec.Solid, layer: spec.Layer, neuralTexture: spec);
+		}, substance: spec.Solid ? spec.Substance : null, blocksMovement: spec.Solid, layer: spec.Layer, neuralTexture: spec);
 	}
 
 	// Neural-texture tile types declared by *.nct.json specs (Assets/Sources/Tilesets), loaded
@@ -401,29 +401,29 @@ public static class Factory
 		liveResizableActorTypes.Clear();
 		GeneratedActors.RegisterAll();
 
-		string GRASS_SURF = "Grass";
-		string BRICK_SURF = "Brick";
+		string GRASS_SUBSTANCE = "Grass";
+		string BRICK_SUBSTANCE = "Brick";
 
 		// Add Tile Types
-		Register('1', AsDualTile("castle", "castle-dual", BRICK_SURF, hasSlope: true));
+		Register('1', AsDualTile("castle", "castle-dual", BRICK_SUBSTANCE, hasSlope: true));
 		RegisterLegacySlope('2', "Castle Slope", '1');
-		Register('G', AsDualTile("grass", "grass-dual", GRASS_SURF, acousticReflectivity: 0.15f, hasSlope: true));
+		Register('G', AsDualTile("grass", "grass-dual", GRASS_SUBSTANCE, acousticReflectivity: 0.15f, hasSlope: true));
 		RegisterLegacySlope('S', "Grass Slope", 'G');
-		Register('M', AsDualTile("metal", "metal-dual", BRICK_SURF, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f, hasSlope: true));
+		Register('M', AsDualTile("metal", "metal-dual", BRICK_SUBSTANCE, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f, hasSlope: true));
 
 
-		Register('T', AsDualTile("stone", "stone-dual", BRICK_SURF, hasSlope: true));
+		Register('T', AsDualTile("stone", "stone-dual", BRICK_SUBSTANCE, hasSlope: true));
 		RegisterLegacySlope('Y', "Stone Slope", 'T');
 
-		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SURF, hasSlope: true));
+		Register('%', AsDualTile("crosshatch", "crosshatch-dual", BRICK_SUBSTANCE, hasSlope: true));
 		RegisterLegacySlope('$', "Crosshatch Slope", '%');
 
-		Register('P', AsDualTile("dirt", "dirt-dual", GRASS_SURF, acousticReflectivity: 0.15f, hasSlope: true));
+		Register('P', AsDualTile("dirt", "dirt-dual", GRASS_SUBSTANCE, acousticReflectivity: 0.15f, hasSlope: true));
 		RegisterLegacySlope('J', "Dirt Slope", 'P');
-		Register('g', AsTile("plants", false, GRASS_SURF, acousticReflectivity: 0.20f));
-		Register('i', AsTile("gates", isFg: false, surfaceType: BRICK_SURF, acousticReflectivity: 0.05f));
+		Register('g', AsTile("plants", false, GRASS_SUBSTANCE, acousticReflectivity: 0.20f));
+		Register('i', AsTile("gates", isFg: false, substance: BRICK_SUBSTANCE, acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
-		Register('w', AsTile("water", false, WaterSurfaceType, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f, drawsVisual: false));
+		Register('w', AsTile("water", false, WaterSubstance, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f, drawsVisual: false));
 		Register('#', AsTile("back", false, layer: TileLayer.Background));
 		Register('-', AsTile("back-right", false, layer: TileLayer.Background));
 		Register(')', AsTile("back-ne", false, layer: TileLayer.Background));
@@ -454,7 +454,7 @@ public static class Factory
 		foreach (var kit in TileKits.Registrations)
 		{
 			var tile = AssignChar(kit.PreferredChar, kit.Name);
-			Register(tile, AsDualTile(kit.Name, kit.DualName, kit.Surface, layer: kit.Layer, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity, hasSlope: kit.HasSlope));
+			Register(tile, AsDualTile(kit.Name, kit.DualName, kit.Substance, layer: kit.Layer, reflection: kit.Reflection, reflectionOpacity: kit.ReflectionOpacity, acousticReflectivity: kit.AcousticReflectivity, hasSlope: kit.HasSlope));
 			if (kit.HasSlope)
 				RegisterLegacySlope(kit.SlopePreferredChar, kit.SlopeEntryName, tile);
 		}

@@ -128,11 +128,11 @@ public partial class Manager
 
 		if (draft.Solid)
 		{
-			var surfaces = (string[])[Factory.DefaultSurfaceType, "Brick"];
-			var surfaceIndex = Math.Max(0, Array.IndexOf(surfaces, draft.Surface));
-			changed = ImGui.Combo("surface", ref surfaceIndex, surfaces, surfaces.Length);
+			var substances = (string[])[Factory.DefaultSubstance, "Brick"];
+			var substanceIndex = Math.Max(0, Array.IndexOf(substances, draft.Substance));
+			changed = ImGui.Combo("substance", ref substanceIndex, substances, substances.Length);
 			if (changed)
-				draft.Surface = surfaces[surfaceIndex];
+				draft.Substance = substances[substanceIndex];
 			MarkNctEdited(changed, discrete: true);
 
 			if (draft.Layer == Factory.TileLayer.Foreground)

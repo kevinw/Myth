@@ -98,12 +98,12 @@ public class Wildlife : Actor
 			{
 				var tile = new Point2(x, y);
 				var entry = room.GetEntry(tile);
-				if (entry is { SurfaceType: Factory.WaterSurfaceType })
+				if (entry is { Substance: Factory.WaterSubstance })
 					waterCells.Add(tile);
 				else if (entry is not { BlocksMovement: true })
 					airCells.Add(tile);
 
-				if (entry is not { BlocksMovement: true, SurfaceType: Factory.DefaultSurfaceType }
+				if (entry is not { BlocksMovement: true, Substance: Factory.DefaultSubstance }
 					|| room.GetEntry(tile + Point2.Up) is { BlocksMovement: true })
 					continue;
 

@@ -2,7 +2,7 @@
   "char": "N",
   "layer": "Foreground",
   "solid": true,
-  "surface": "Brick",
+  "substance": "Brick",
   "slopes": true,
   "interior": "broccoli_circular.bin",
   "edge": "bumpy_0169_circular.bin",

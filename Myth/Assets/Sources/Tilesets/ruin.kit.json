@@ -1,5 +1,5 @@
 {
-  "surface": "Brick",
+  "substance": "Brick",
   "char": "R",
   "slopeChar": "Z",
   "mask": "stone-kit",

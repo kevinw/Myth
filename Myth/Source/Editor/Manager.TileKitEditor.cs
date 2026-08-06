@@ -207,11 +207,11 @@ public partial class Manager
 
 		if (!background)
 		{
-			var surfaces = (string[])[Factory.DefaultSurfaceType, "Brick"];
-			var surfaceIndex = Math.Max(0, Array.IndexOf(surfaces, draft.Surface));
-			if (ImGui.Combo("surface", ref surfaceIndex, surfaces, surfaces.Length))
+			var substances = (string[])[Factory.DefaultSubstance, "Brick"];
+			var substanceIndex = Math.Max(0, Array.IndexOf(substances, draft.Substance));
+			if (ImGui.Combo("substance", ref substanceIndex, substances, substances.Length))
 			{
-				draft.Surface = surfaces[surfaceIndex];
+				draft.Substance = substances[substanceIndex];
 				MarkTileKitEdited();
 			}
 

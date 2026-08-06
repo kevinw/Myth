@@ -1311,7 +1311,7 @@ public static partial class Assets
 			writer.Write(kit.Name);
 			writer.Write((int)kit.PreferredChar);
 			writer.Write((int)kit.SlopePreferredChar);
-			writer.Write(kit.Surface);
+			writer.Write(kit.Substance);
 			writer.Write((int)kit.Layer);
 			writer.Write((int)kit.Reflection);
 			writer.Write(kit.ReflectionOpacity);
@@ -1353,7 +1353,7 @@ public static partial class Assets
 			writer.Write(spec.NearestStateSampling);
 			writer.Write((int)spec.Layer);
 			writer.Write(spec.Solid);
-			writer.Write(spec.Surface);
+			writer.Write(spec.Substance);
 			writer.Write(spec.HasSlope);
 		}
 	}
@@ -1454,7 +1454,7 @@ public static partial class Assets
 				Name: reader.ReadString(),
 				PreferredChar: (char)reader.ReadInt32(),
 				SlopePreferredChar: (char)reader.ReadInt32(),
-				Surface: reader.ReadString(),
+				Substance: reader.ReadString(),
 				Layer: (Factory.TileLayer)reader.ReadInt32(),
 				Reflection: (Factory.ReflectionMode)reader.ReadInt32(),
 				ReflectionOpacity: reader.ReadSingle(),
@@ -1492,7 +1492,7 @@ public static partial class Assets
 				NearestStateSampling = reader.ReadBoolean(),
 				Layer = (Factory.TileLayer)reader.ReadInt32(),
 				Solid = reader.ReadBoolean(),
-				Surface = reader.ReadString(),
+				Substance = reader.ReadString(),
 				HasSlope = reader.ReadBoolean()
 			});
 

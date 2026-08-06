@@ -7,7 +7,7 @@ namespace Myth;
 /// Generative dual-tileset kits authored as JSON (Assets/Tilesets/&lt;name&gt;.kit.json)
 /// instead of .ase files. A spec carries everything the .ase kits encoded in pixels —
 /// palette, fill patterns, edge-noise weights, heights, params — plus the Factory
-/// registration info (surface, chars, reflection) so a new tile type is pure data.
+/// registration info (substance, chars, reflection) so a new tile type is pure data.
 public sealed class TileKitSpec
 {
 	public required string Name;
@@ -15,7 +15,7 @@ public sealed class TileKitSpec
 	public long Seed = 1;
 	public string EdgeWidth = "2";
 	public float Wobble = 0.6f;
-	public string Surface = "Brick";
+	public string Substance = "Brick";
 	public Factory.TileLayer Layer = Factory.TileLayer.Foreground;
 	public char PreferredChar;
 	public char SlopePreferredChar;
@@ -43,7 +43,7 @@ public sealed record TileKitRegistration(
 	string Name,
 	char PreferredChar,
 	char SlopePreferredChar,
-	string Surface,
+	string Substance,
 	Factory.TileLayer Layer,
 	Factory.ReflectionMode Reflection,
 	float ReflectionOpacity,
@@ -54,7 +54,7 @@ public sealed record TileKitRegistration(
 	public string SlopeEntryName => $"{char.ToUpperInvariant(Name[0])}{Name[1..]} Slope";
 
 	public static TileKitRegistration From(TileKitSpec spec)
-		=> new(spec.Name, spec.PreferredChar, spec.SlopePreferredChar, spec.Surface,
+		=> new(spec.Name, spec.PreferredChar, spec.SlopePreferredChar, spec.Substance,
 			spec.Layer, spec.Reflection, spec.ReflectionOpacity, spec.AcousticReflectivity,
 			spec.HasEdges);
 }
@@ -108,7 +108,7 @@ public static class TileKits
 		spec.Seed = JsonUtil.ReadInt(json, "seed", 1);
 		spec.EdgeWidth = JsonUtil.ReadString(json, "edgeWidth", spec.EdgeWidth);
 		spec.Wobble = Math.Clamp(JsonUtil.ReadFloat(json, "wobble", spec.Wobble), 0f, 1f);
-		spec.Surface = JsonUtil.ReadString(json, "surface", spec.Surface);
+		spec.Substance = JsonUtil.ReadString(json, "substance", spec.Substance);
 		if (JsonUtil.ReadString(json, "layer") is { } layer)
 			spec.Layer = Enum.Parse<Factory.TileLayer>(layer, ignoreCase: true);
 		spec.PreferredChar = ReadChar(json, "char");
@@ -190,7 +190,7 @@ public static class TileKits
 			Seed = spec.Seed,
 			EdgeWidth = spec.EdgeWidth,
 			Wobble = spec.Wobble,
-			Surface = spec.Surface,
+			Substance = spec.Substance,
 			Layer = spec.Layer,
 			PreferredChar = spec.PreferredChar,
 			SlopePreferredChar = spec.SlopePreferredChar,
@@ -242,7 +242,7 @@ public static class TileKits
 		using var stream = File.Create(SpecPath(spec.Name));
 		using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, NewLine = "\n" });
 		writer.WriteStartObject();
-		writer.WriteString("surface", spec.Surface);
+		writer.WriteString("substance", spec.Substance);
 		if (spec.Layer != Factory.TileLayer.Foreground)
 			writer.WriteString("layer", spec.Layer.ToString());
 		if (spec.PreferredChar != '\0')

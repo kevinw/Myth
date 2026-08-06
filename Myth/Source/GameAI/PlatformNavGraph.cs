@@ -1423,7 +1423,7 @@ public sealed class PlatformNavGraph
 			(int)MathF.Floor(local.X / (float)Game.TileSize),
 			(int)MathF.Floor(local.Y / (float)Game.TileSize));
 		var entry = room.GetEntry(tile) ?? room.GetBackgroundEntry(tile);
-		return entry is { SurfaceType: Factory.WaterSurfaceType };
+		return entry is { Substance: Factory.WaterSubstance };
 	}
 
 	static bool SwimAreasConnected(RectInt a, RectInt b)
@@ -1457,7 +1457,7 @@ public sealed class PlatformNavGraph
 			{
 				var tile = new Point2(x, y);
 				var entry = room.GetEntry(tile) ?? room.GetBackgroundEntry(tile);
-				if (entry is { SurfaceType: Factory.WaterSurfaceType })
+				if (entry is { Substance: Factory.WaterSubstance })
 				{
 					water[x, y] = true;
 					any = true;

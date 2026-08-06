@@ -1397,7 +1397,7 @@ public partial class Player : Pawn
 
 	void PlayLandingSound()
 	{
-		AudioEvent("land", "Type", Game.GetSurfaceTypeBelow(this, searchOutward: true));
+		AudioEvent("land", "Type", Game.GetSubstanceBelow(this, searchOutward: true));
 	}
 
 	protected override void AfterStateUpdate(Vector2 previousVelocity)
@@ -1816,7 +1816,7 @@ public partial class Player : Pawn
 		var localFrame = frame - animation.FrameStart;
 		if (localFrame >= 0 && localFrame % 6 == 0)
 		{
-			AudioEvent("footstep", "Type", Game.GetSurfaceTypeBelow(this));
+			AudioEvent("footstep", "Type", Game.GetSubstanceBelow(this));
 		}
 	}
 

@@ -56,8 +56,8 @@ public sealed class NctTileSpec
 	// Blocks movement and casts shadow like a normal foreground tile. Independent of Layer: a
 	// background NCT can be non-solid decoration, a foreground one a solid mass you burrow through.
 	public bool Solid = false;
-	// Collision surface (footsteps, physics) when Solid.
-	public string Surface = Factory.DefaultSurfaceType;
+	// Gameplay substance (footsteps, water behavior) when Solid.
+	public string Substance = Factory.DefaultSubstance;
 	// Allows solid foreground cells of this tile to be painted as slopes.
 	public bool HasSlope;
 
@@ -131,7 +131,7 @@ public static class NctTiles
 		spec.LatentBias = Math.Clamp(JsonUtil.ReadFloat(json, "latentBias", spec.LatentBias), -2f, 2f);
 		spec.NearestStateSampling = JsonUtil.ReadBool(json, "nearestStateSampling", spec.NearestStateSampling);
 		spec.Solid = JsonUtil.ReadBool(json, "solid", spec.Solid);
-		spec.Surface = JsonUtil.ReadString(json, "surface", spec.Surface);
+		spec.Substance = JsonUtil.ReadString(json, "substance", spec.Substance);
 		if (JsonUtil.ReadString(json, "layer") is { Length: > 0 } layer)
 			spec.Layer = Enum.Parse<Factory.TileLayer>(layer, ignoreCase: true);
 		spec.HasSlope = JsonUtil.ReadBool(json, "slopes", spec.HasSlope) && spec.Solid && spec.Layer == Factory.TileLayer.Foreground;
@@ -168,7 +168,7 @@ public static class NctTiles
 		NearestStateSampling = spec.NearestStateSampling,
 		Layer = spec.Layer,
 		Solid = spec.Solid,
-		Surface = spec.Surface,
+		Substance = spec.Substance,
 		HasSlope = spec.HasSlope,
 	};
 
@@ -190,7 +190,7 @@ public static class NctTiles
 		writer.WriteString("layer", spec.Layer.ToString());
 		writer.WriteBoolean("solid", spec.Solid);
 		if (spec.Solid)
-			writer.WriteString("surface", spec.Surface);
+			writer.WriteString("substance", spec.Substance);
 		if (spec.HasSlope)
 			writer.WriteBoolean("slopes", true);
 		writer.WriteString("interior", spec.Interior);
