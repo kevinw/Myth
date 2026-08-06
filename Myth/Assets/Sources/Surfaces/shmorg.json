@@ -1,0 +1,64 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/pattern_12",
+      "Blend": "Add",
+      "Tint": "de4e61ff",
+      "BlackColor": "d723d7ff",
+      "Tiling": [
+        48,
+        48
+      ],
+      "Scroll": [
+        3.2,
+        0
+      ]
+    },
+    {
+      "Texture": "patterns/pattern_55",
+      "Blend": "Add",
+      "Tint": "8a8500c1",
+      "BlackColor": "042f87ff",
+      "Tiling": [
+        64,
+        64
+      ],
+      "Scroll": [
+        -6,
+        1
+      ]
+    },
+    {
+      "Texture": "patterns/pattern_24",
+      "Blend": "Multiply",
+      "Tint": "6fff92ff",
+      "BlackColor": "00000075",
+      "Tiling": [
+        48,
+        48
+      ],
+      "Scroll": [
+        0.8,
+        -3.9
+      ]
+    },
+    {
+      "Texture": "patterns/pattern_49",
+      "Blend": "Multiply",
+      "Tint": "00ff8e30",
+      "BlackColor": "f8545463",
+      "Tiling": [
+        48,
+        48
+      ],
+      "Scroll": [
+        0.6,
+        0
+      ]
+    }
+  ],
+  "NormalFromHeight": false,
+  "NormalTexture": null,
+  "NormalStrength": 1,
+  "HeightFromLayer": 0
+}

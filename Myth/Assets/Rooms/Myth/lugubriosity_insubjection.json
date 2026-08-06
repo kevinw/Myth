@@ -76,7 +76,9 @@
     {
       "Id": "5591a5340a0c9bea",
       "Type": "Floater",
-      "Position": [152, 140]
+      "Position": [152, 140],
+      "SurfaceId": "shmorg",
+      "LaserThickness": 9.05
     },
     {
       "Id": "fbde6ede12457dad",

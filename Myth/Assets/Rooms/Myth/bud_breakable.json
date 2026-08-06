@@ -8,8 +8,8 @@
   "lightNoise": 0,
   "playerLight": false,
   "sporeFogStrength": 0.595,
-  "reverb": 0.182,
-  "ditherScale": 2.438,
+  "reverb": 0.183,
+  "ditherScale": 1.955,
   "ditherStrength": 0.269,
   "legend": {
     "R": "ruin"
@@ -18,7 +18,7 @@
     "RRRRR00000000000RR0000000000000000RRRRRR",
     "RRRRR00000000000RR0000000000000000RRRRRR",
     "RRRRR00000000000RR0000000000000000RRRRRR",
-    "RRRRR00000000000RR0000000000000000RRRRRR",
+    "RRRRR00000000000000000000000000000RRRRRR",
     "RRRRR00000000000RR0000000000000000RRRRRR",
     "RRRRR00000000000RR0000000000000000RRRRRR",
     "RRRRR00000000000RR0000000000000000RRRRRR",
@@ -41,6 +41,8 @@
   ],
   "breakable": [[16, 15],[17, 15],[16, 16],[17, 16]
   ],
+  "fungal": [[17, 14],[16, 15],[17, 15],[15, 16],[17, 16]
+  ],
   "actors": [
     {
       "Id": "f65775eab5064ce4",
@@ -50,7 +52,7 @@
     {
       "Id": "d21365c59a748182",
       "Type": "Light",
-      "Position": [84, 68],
+      "Position": [136, 29],
       "LightColor": "FFFFFF",
       "Height": 14.8,
       "Intensity": 0.85,
@@ -59,9 +61,10 @@
     {
       "Id": "ec40e78bb7155391",
       "Type": "Bouncer",
-      "Position": [196, 116],
+      "Position": [122, 68],
       "SurfaceId": "bouncer",
-      "Strength": 170
+      "Strength": 170,
+      "Size": [28, 28]
     }
   ]
 }

@@ -1,27 +1,27 @@
 [
   {
     "label": "simple",
-    "command": "dotnet watch run --no-restore -- --simple",
+    "command": "dotnet watch run --no-restore --property:UseFosterDll=true -- --simple",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "gym",
-    "command": "dotnet watch run -c Release --no-restore -- --gym",
+    "command": "dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "gym (unthrottled)",
-    "command": "dotnet watch run -c Release --no-restore -- --gym --unthrottled",
+    "command": "dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym --unthrottled",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "dotnet watch",
-    "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false",
+    "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "dotnet run",
-    "command": "dotnet run --no-restore",
+    "command": "dotnet run --no-restore --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
@@ -32,7 +32,7 @@
   {
     /* todo: needs --no-restore prefix dir hack */
     "label": "dotnet watch (MythTestShip)",
-    "command": "dotnet watch run --non-interactive --property:MythTestShip=true -- --content-zip Assets/Content.zip",
+    "command": "dotnet watch run --non-interactive --property:MythTestShip=true --property:UseFosterDll=true -- --content-zip Assets/Content.zip",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {

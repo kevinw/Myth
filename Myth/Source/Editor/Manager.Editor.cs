@@ -1,5 +1,5 @@
 #if EDITOR
-using LinkDotNet.StringBuilder; // Namespace of the package
+using LinkDotNet.StringBuilder;
 using System.Numerics;
 using System.Reflection;
 using System.Text.Json.Nodes;
@@ -1269,16 +1269,6 @@ public partial class Manager
 			return;
 
 		var changed = false;
-		// Room geometry is edited directly in the world now: zoom out until the room is small on
-		// screen to enter room-edit mode (move/resize handles, drag, copy/paste). No button needed.
-		{
-			var vsb = new ValueStringBuilder(stackalloc char[40]);
-			vsb.Append("Size ");
-			vsb.Append(room.Size.X);
-			vsb.Append(" x ");
-			vsb.Append(room.Size.Y);
-			ImGui.TextUnformatted(vsb.AsSpan());
-		}
 		ImGui.TextDisabled(room.Sublayer == 0 ? "Main layer" : $"Sublayer {room.Sublayer}");
 		ImGui.SameLine();
 		if (ImGui.SmallButton("Add Sublayer"))
@@ -1299,6 +1289,7 @@ public partial class Manager
 			}
 		}
 
+		/*
 		var controlWidth = BeginPropertyRow("Notes").ControlWidth;
 		// Local copy so the undo scope captures the room *before* the first keystroke lands.
 		var notes = room.Notes;
@@ -1307,6 +1298,7 @@ public partial class Manager
 			OpenRoomSettingsUndo("Edit Room Notes", room);
 			room.Notes = notes;
 		}
+		*/
 
 		ImGui.SeparatorText("Color Fields");
 		var wasColorPainting = roomColorFieldPainter.IsActive(room);
@@ -1541,8 +1533,7 @@ public partial class Manager
 
 	void DrawAmbientOcclusionSection()
 	{
-		if (!ImGui.CollapsingHeader("Ambient Occlusion"))
-			return;
+		ImGui.SeparatorText("Ambient Occlusion");
 
 		BeginPropertyRow("Enabled");
 		editorGameDirty |= ImGui.Checkbox("##AmbientOcclusionEnabled", ref PerfToggles.AmbientOcclusion);
@@ -1562,9 +1553,7 @@ public partial class Manager
 
 	void DrawSoftShadowSection()
 	{
-		if (!ImGui.CollapsingHeader("Soft Shadows"))
-			return;
-
+		ImGui.SeparatorText("Soft Shadows");
 		BeginPropertyRow("Enabled");
 		editorGameDirty |= ImGui.Checkbox("##SoftShadowsEnabled", ref PerfToggles.SoftShadows);
 	}
@@ -1703,7 +1692,7 @@ public partial class Manager
 
 	bool DrawActorPropertyValue(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, float controlWidth)
 	{
-		if (IsBouncerSurfaceProperty(actor, property))
+		if (IsActorSurfaceProperty(property))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (DrawSurfacePicker(ref value))
@@ -2468,10 +2457,8 @@ public partial class Manager
 	static bool IsMovingPlatformMaterialProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
 
-	static bool IsBouncerSurfaceProperty(JsonObject actor, ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string)
-			&& property.Name == nameof(Bouncer.SurfaceId)
-			&& string.Equals(ActorSpecs.GetTypeName(actor), nameof(Bouncer), StringComparison.OrdinalIgnoreCase);
+	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
+		=> property.Type == typeof(string) && property.Name == "SurfaceId";
 
 	// A "color picker"-style surface selector: a preview button that opens a grid of
 	// surface previews. Returns true (and updates value) when a surface is chosen; an
@@ -2507,6 +2494,7 @@ public partial class Manager
 
 		if (ImGui.BeginPopup("##SurfaceGrid"))
 		{
+			var canCreate = Assets.Textures2D?.Order.Count > 0;
 			if (Assets.Surfaces.Count == 0)
 			{
 				ImGui.TextDisabled("No surfaces loaded (Assets/Sources/Surfaces/*.json)");
@@ -2533,6 +2521,18 @@ public partial class Manager
 					}
 				}
 			}
+			if (Assets.Surfaces.Count > 0 && Assets.Surfaces.Count % SurfacePickerColumns != 0)
+				ImGui.SameLine();
+			ImGui.BeginDisabled(!canCreate);
+			if (ImGui.Button($"{EditorIcons.Add}##CreateRandomSurface", cell))
+			{
+				value = CreateRandomSurface();
+				changed = true;
+				ImGui.CloseCurrentPopup();
+			}
+			ImGui.EndDisabled();
+			if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+				ImGui.SetTooltip(canCreate ? "Create random surface" : "No surface textures loaded");
 			ImGui.EndPopup();
 		}
 

@@ -13,7 +13,8 @@ namespace Myth;
 // Runtime blend (not baked) so per-layer tiling and future animation stay cheap; the
 // heavy per-texture work (format classification, normal bake) is cached at load.
 
-public enum SurfaceBlend { Over = 0, Multiply = 1, Add = 2, Screen = 3 }
+public enum SurfaceBlend { Over = 0, Multiply = 1, Add = 2, Screen = 3, Darken = 4, Lighten = 5, Difference = 6 }
+public enum SurfaceRotation { None = 0, Cw90 = 1, Cw180 = 2, Cw270 = 3 }
 
 // On-disk authoring spec (Sources/Surfaces/<id>.json). Texture references are stable
 // bucket keys (e.g. "patterns/pattern_07"), so reordering the bucket can't repoint a room.
@@ -24,8 +25,16 @@ public sealed class SurfaceLayerSpec
 	public string Tint { get; set; } = "ffffffff"; // RGBA hex; white endpoint for luminance textures
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public string? BlackColor { get; set; } // luminance black endpoint; null preserves legacy tint alpha
+	public float Opacity { get; set; } = 1f;
 	public float[] Tiling { get; set; } = [48f, 48f]; // world px per tile repeat
+	public float[] Offset { get; set; } = [0f, 0f]; // static world px offset before tiling
 	public float[] Scroll { get; set; } = [0f, 0f]; // visual motion in world px / second
+	public SurfaceRotation Rotation { get; set; }
+	public bool FlipX { get; set; }
+	public bool FlipY { get; set; }
+	public float Contrast { get; set; } = 1f;
+	public float Bias { get; set; }
+	public float Quantize { get; set; }
 }
 
 public sealed class SurfaceSpec
@@ -91,14 +100,22 @@ public sealed class SurfaceSpec
 
 public sealed class Surface : IDisposable
 {
-	readonly struct Layer(Assets.BucketTexture texture, SurfaceBlend blend, Color tint, Color blackColor, Vector2 tiling, Vector2 scroll)
+	readonly struct Layer(Assets.BucketTexture texture, SurfaceBlend blend, Color tint, Color blackColor, float opacity, Vector2 tiling, Vector2 offset, Vector2 scroll, SurfaceRotation rotation, bool flipX, bool flipY, float contrast, float bias, float quantize)
 	{
 		public readonly Assets.BucketTexture Texture = texture;
 		public readonly SurfaceBlend Blend = blend;
 		public readonly Color Tint = tint;
 		public readonly Color BlackColor = blackColor;
+		public readonly float Opacity = opacity;
 		public readonly Vector2 Tiling = tiling;
+		public readonly Vector2 Offset = offset;
 		public readonly Vector2 Scroll = scroll;
+		public readonly SurfaceRotation Rotation = rotation;
+		public readonly bool FlipX = flipX;
+		public readonly bool FlipY = flipY;
+		public readonly float Contrast = contrast;
+		public readonly float Bias = bias;
+		public readonly float Quantize = quantize;
 	}
 
 	public readonly string Id;
@@ -138,12 +155,13 @@ public sealed class Surface : IDisposable
 			if (bucket.Get(layerSpec.Texture) is not { } tex)
 				continue;
 			var tiling = layerSpec.Tiling is { Length: >= 2 } t ? new Vector2(t[0], t[1]) : new Vector2(48f);
+			var offset = layerSpec.Offset is { Length: >= 2 } o ? new Vector2(o[0], o[1]) : Vector2.Zero;
 			var scroll = layerSpec.Scroll is { Length: >= 2 } s ? new Vector2(s[0], s[1]) : Vector2.Zero;
 			var tint = SurfaceSpec.ParseTint(layerSpec.Tint);
 			var blackColor = layerSpec.BlackColor != null
 				? SurfaceSpec.ParseTint(layerSpec.BlackColor)
 				: new Color(0, 0, 0, tint.A);
-			layers.Add(new Layer(tex, layerSpec.Blend, tint, blackColor, tiling, scroll));
+			layers.Add(new Layer(tex, layerSpec.Blend, tint, blackColor, layerSpec.Opacity, tiling, offset, scroll, layerSpec.Rotation, layerSpec.FlipX, layerSpec.FlipY, layerSpec.Contrast, layerSpec.Bias, layerSpec.Quantize));
 		}
 
 		Texture? normal = null;
@@ -177,7 +195,7 @@ public sealed class Surface : IDisposable
 			return;
 
 		var material = BlendMaterial(batcher.GraphicsDevice);
-		Span<float> u = stackalloc float[4 + SurfaceSpec.MaxLayers * 4 * 4];
+		Span<float> u = stackalloc float[4 + SurfaceSpec.MaxLayers * 4 * 6];
 		u[0] = layers.Length;
 		u[1] = time;
 		for (var i = 0; i < SurfaceSpec.MaxLayers; i++)
@@ -192,10 +210,14 @@ public sealed class Surface : IDisposable
 			var t = 4 + SurfaceSpec.MaxLayers * 4 + i * 4;
 			u[t + 0] = tint.X; u[t + 1] = tint.Y; u[t + 2] = tint.Z; u[t + 3] = tint.W;
 			var m = 4 + SurfaceSpec.MaxLayers * 8 + i * 4;
-			u[m + 0] = layer.Scroll.X; u[m + 1] = layer.Scroll.Y;
+			u[m + 0] = layer.Scroll.X; u[m + 1] = layer.Scroll.Y; u[m + 2] = layer.Offset.X; u[m + 3] = layer.Offset.Y;
 			var black = (Vector4)layer.BlackColor;
 			var b = 4 + SurfaceSpec.MaxLayers * 12 + i * 4;
 			u[b + 0] = black.X; u[b + 1] = black.Y; u[b + 2] = black.Z; u[b + 3] = black.W;
+			var x = 4 + SurfaceSpec.MaxLayers * 16 + i * 4;
+			u[x + 0] = (float)layer.Rotation; u[x + 1] = layer.FlipX ? 1f : 0f; u[x + 2] = layer.FlipY ? 1f : 0f;
+			var a = 4 + SurfaceSpec.MaxLayers * 20 + i * 4;
+			u[a + 0] = layer.Opacity; u[a + 1] = layer.Contrast; u[a + 2] = layer.Bias; u[a + 3] = layer.Quantize;
 			material.Fragment.Samplers[i + 1] = new(layer.Texture.Texture, RepeatSampler);
 		}
 		material.Fragment.SetUniformBuffer(u);

@@ -1,0 +1,58 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/pattern_55",
+      "Blend": "Over",
+      "Tint": "e08e8aff",
+      "BlackColor": "b0a2f8ff",
+      "Opacity": 0.677418,
+      "Tiling": [
+        82,
+        82
+      ],
+      "Offset": [
+        62,
+        54
+      ],
+      "Scroll": [
+        0,
+        1.5
+      ],
+      "Rotation": "Cw180",
+      "FlipX": false,
+      "FlipY": true,
+      "Contrast": 0.93,
+      "Bias": 0.04,
+      "Quantize": 7
+    },
+    {
+      "Texture": "patterns/pattern_69",
+      "Blend": "Darken",
+      "Tint": "8159ddff",
+      "BlackColor": "ac7b91ff",
+      "Opacity": 0.9370508,
+      "Tiling": [
+        95,
+        95
+      ],
+      "Offset": [
+        42,
+        45
+      ],
+      "Scroll": [
+        -4,
+        -4
+      ],
+      "Rotation": "Cw90",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 0.93,
+      "Bias": -0.09,
+      "Quantize": 0
+    }
+  ],
+  "NormalFromHeight": false,
+  "NormalTexture": null,
+  "NormalStrength": 1,
+  "HeightFromLayer": 0
+}

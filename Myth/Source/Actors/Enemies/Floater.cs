@@ -19,6 +19,7 @@ public class Floater : Actor
 	public float LaserLightIntensity = 1.2f;
 	public float LaserLightHeight = 8;
 	public Color LaserLightColor = 0x5fcde4;
+	public string? SurfaceId;
 
 	int dir;
 	float laserAngle;
@@ -132,6 +133,7 @@ public class Floater : Actor
 	private void RenderLasers(Batcher batcher, float angle, float scale, float alpha)
 	{
 		var origin = (Vector2)Position;
+		var surface = Assets.GetSurface(SurfaceId);
 		for (var i = 0; i < 4; i ++)
 		{
 			var direction = LaserDirection(angle, i);
@@ -140,9 +142,27 @@ public class Floater : Actor
 			if (Vector2.DistanceSquared(start, end) <= 0.001f)
 				continue;
 			batcher.Line(start, end, LaserThickness + 2, Color.White * 0.75f * alpha);
-			batcher.Line(start, end, LaserThickness, new Color(0x5fcde4, alpha));
+			if (surface != null)
+				RenderLaserSurface(batcher, surface, origin, start, end, direction, alpha);
+			else
+				batcher.Line(start, end, LaserThickness, new Color(0x5fcde4, alpha));
 			batcher.Circle(end, LaserThickness * 0.5f, 12, new Color(0x5fcde4, alpha));
 		}
+	}
+
+	void RenderLaserSurface(Batcher batcher, Surface surface, Vector2 origin, Vector2 start, Vector2 end, Vector2 direction, float alpha)
+	{
+		var side = new Vector2(-direction.Y, direction.X) * (LaserThickness * 0.5f);
+		var a = start - side;
+		var b = start + side;
+		var c = end + side;
+		var d = end - side;
+		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[]
+		{
+			new(a, origin + a), new(b, origin + b), new(c, origin + c),
+			new(a, origin + a), new(c, origin + c), new(d, origin + d)
+		};
+		surface.Render(batcher, triangles, Time.SecondsF, alpha);
 	}
 
 	private void UpdateLasers(float scale)
