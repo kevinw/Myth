@@ -61,7 +61,7 @@
     {
       "Id": "ec40e78bb7155391",
       "Type": "Bouncer",
-      "Position": [122, 68],
+      "Position": [30, 118],
       "SurfaceId": "bouncer",
       "Strength": 170,
       "Size": [28, 28]

@@ -90,8 +90,8 @@
       "Type": "NeuralTexturePerturbActor",
       "Position": [8, 0],
       "Radius": 11.95,
-      "Strength": 4,
-      "Size": [312, 168]
+      "Size": [312, 168],
+      "Strength": 6
     },
     {
       "Id": "dc4c3733f809df85",
@@ -117,7 +117,8 @@
       "Type": "Light",
       "Position": [124, 108],
       "Radius": 200,
-      "Intensity": 0.45
+      "Intensity": 0.45,
+      "Height": 4
     }
   ]
 }

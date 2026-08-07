@@ -129,6 +129,11 @@
       "Type": "Prop",
       "Position": [152, 24],
       "SpriteName": "Props/server"
+    },
+    {
+      "Id": "eaaf5f7f9eabc432",
+      "Type": "Stalker",
+      "Position": [284, 72]
     }
   ]
 }

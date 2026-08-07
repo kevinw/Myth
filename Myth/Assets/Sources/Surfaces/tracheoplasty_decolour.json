@@ -1,0 +1,108 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/brushstrokes/74",
+      "Blend": "Over",
+      "Tint": "0006eeff",
+      "BlackColor": "a1cc95ff",
+      "Opacity": 0.33402753,
+      "Tiling": [
+        52,
+        52
+      ],
+      "Offset": [
+        -49,
+        19
+      ],
+      "Scroll": [
+        0,
+        -2
+      ],
+      "Rotation": "Cw90",
+      "FlipX": true,
+      "FlipY": false,
+      "Contrast": 0.71,
+      "Bias": -0.04,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/brushstrokes/60",
+      "Blend": "Multiply",
+      "Tint": "664047ff",
+      "BlackColor": "664047ff",
+      "Opacity": 0.34,
+      "Tiling": [
+        11,
+        11
+      ],
+      "Offset": [
+        25,
+        -52
+      ],
+      "Scroll": [
+        5,
+        -2
+      ],
+      "Rotation": "Cw90",
+      "FlipX": true,
+      "FlipY": false,
+      "Contrast": 0.91,
+      "Bias": -0.03,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/noise/Noise_079",
+      "Blend": "Add",
+      "Tint": "efefefff",
+      "BlackColor": "30142eff",
+      "Opacity": 0.9714846,
+      "Tiling": [
+        65,
+        65
+      ],
+      "Offset": [
+        7,
+        13
+      ],
+      "Scroll": [
+        -3,
+        -1
+      ],
+      "Rotation": "Cw90",
+      "FlipX": true,
+      "FlipY": false,
+      "Contrast": 0.69,
+      "Bias": -0.25,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/brushstrokes/37",
+      "Blend": "Multiply",
+      "Tint": "ff8600ff",
+      "BlackColor": "664047ff",
+      "Opacity": 0.73990226,
+      "Tiling": [
+        358,
+        358
+      ],
+      "Offset": [
+        39,
+        -18
+      ],
+      "Scroll": [
+        1,
+        2
+      ],
+      "Rotation": "Cw90",
+      "FlipX": false,
+      "FlipY": true,
+      "Contrast": 1.23,
+      "Bias": 0.04,
+      "Quantize": 0
+    }
+  ],
+  "NormalFromHeight": false,
+  "NormalTexture": null,
+  "NormalStrength": 1,
+  "HeightFromLayer": 0
+}
