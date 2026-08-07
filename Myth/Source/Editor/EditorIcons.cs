@@ -4,6 +4,7 @@ namespace Myth;
 static class EditorIcons
 {
 	public const string Search = "\uf002";
+	public const string Add = "\uf067";
 	public const string Lock = "\uf023";
 	public const string Up = "\uf062";
 	public const string Down = "\uf063";
@@ -29,6 +30,7 @@ static class EditorIcons
 	public static readonly ushort[] GlyphRanges =
 	[
 		0xf002, 0xf002,
+		0xf067, 0xf067,
 		0xf023, 0xf023,
 		0xf062, 0xf063,
 		0xf06e, 0xf06e,

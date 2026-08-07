@@ -1819,60 +1819,6 @@ public partial class Manager : App
 		}
 	}
 
-
-	/// Draws a box outline (for palette / workspace)
-	void Box(Rect box)
-	{
-		batcher.Rect(box, 0x000000);
-		batcher.RectLine(box, LineWeight, 0xffffff);
-	}
-
-	/// Draws a Pressable button with an icon and tooltip
-	bool Button(Rect button, Subtexture subtexture, string text, bool selected = false)
-	{
-		var hovering = button.Contains(Cursor);
-
-		batcher.Rect(button, Color.Black);
-		batcher.ImageFit(subtexture, button.Inflate(-LineWeight), Vector2.One * 0.50f, Color.White, false, false);
-		batcher.RectRoundedLine(button, 4, LineWeight, hovering ? Color.White : (selected ? highlight : Color.Gray));
-
-		if (hovering && Assets.Font != null)
-		{
-			var at = new Rect(
-				Cursor.X + 32,
-				Cursor.Y - Assets.Font.LineHeight / 2,
-				Assets.Font.WidthOf(text),
-				Assets.Font.LineHeight).Inflate(12, 6, 12, 6);
-
-			at.X = Calc.Clamp(at.X, View.Left + 8, View.Right - at.Width - 8);
-			at.Y = Calc.Clamp(at.Y, View.Top + 8, View.Bottom - at.Height - 8);
-
-			if (at.Contains(Cursor))
-				at.X = Cursor.X - at.Width - 8;
-
-			batcher.PushLayer(-10);
-			batcher.RectRounded(at, 4, Color.DarkGray);
-			batcher.RectRoundedLine(at, 4, LineWeight, Color.Gray);
-			batcher.Text(Assets.Font, text, at.Center, Vector2.One * 0.50f, Color.White);
-			batcher.PopLayer();
-		}
-
-		return hovering && Input.Mouse.LeftPressed;
-	}
-
-	bool TextButton(Rect button, string text, bool selected = false)
-	{
-		var hovering = button.Contains(Cursor);
-
-		batcher.Rect(button, Color.Black);
-		batcher.RectRoundedLine(button, 4, LineWeight, hovering ? Color.White : (selected ? highlight : Color.Gray));
-
-		if (Assets.Font != null)
-			batcher.Text(Assets.Font, text, button.Center, new Vector2(0.50f, 0.50f), Color.White);
-
-		return hovering && Input.Mouse.LeftPressed;
-	}
-
 	void EraseSaveGame()
 	{
 		saveState = new();

@@ -1,10 +1,12 @@
 {
   "position": [144, -115],
   "size": [68, 23],
-  "backdropColor2": "756A89",
+  "backdropColor": "000000",
   "backdropSurface": "test1",
   "ambientColor": "FFFFFF",
+  "ambientIntensity": 0.526,
   "lightNoise": 0,
+  "ditherStrength": 0.044,
   "legend": {
     "%": "crosshatch",
     "1": "castle",
@@ -98,6 +100,31 @@
       "Id": "48f4fecb050e62ad",
       "Type": "Goal",
       "Position": [96, 152]
+    },
+    {
+      "Id": "7fcc6028791d1d39",
+      "Type": "Light",
+      "Position": [180, 68]
+    },
+    {
+      "Id": "0e600d80b5a36d4f",
+      "Type": "Light",
+      "Position": [292, 52]
+    },
+    {
+      "Id": "43f232f938175c91",
+      "Type": "Light",
+      "Position": [428, 36]
+    },
+    {
+      "Id": "69704032e71801e3",
+      "Type": "Light",
+      "Position": [148, 124]
+    },
+    {
+      "Id": "4a0caa4ce2813dea",
+      "Type": "Light",
+      "Position": [348, 12]
     }
   ]
 }

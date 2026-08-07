@@ -1,4 +1,5 @@
 #if EDITOR
+using LinkDotNet.StringBuilder;
 using System.Numerics;
 using Foster.Framework;
 using ImGuiNET;
@@ -198,8 +199,7 @@ public partial class Manager
 		EndPaddedPopup();
 	}
 
-	/// Room identity, moved out of the toolbar: the name (double-click or Rename to edit),
-	/// plus deleting the room. Drawn at the top of the Room panel.
+	/// Room identity plus deleting the room. Drawn at the top of the Room panel.
 	void DrawRoomIdentitySection(Room room)
 	{
 		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3));
@@ -220,9 +220,16 @@ public partial class Manager
 		else
 		{
 			ImGui.TextUnformatted(room.Id);
+			{
+				ImGui.SameLine();
+				var vsb = new ValueStringBuilder(stackalloc char[20]);
+				vsb.Append(" - ");
+				vsb.Append(room.Size.X);
+				vsb.Append(" x ");
+				vsb.Append(room.Size.Y);
+				ImGui.TextDisabled(vsb.AsSpan());
+			}
 			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-				BeginRoomRename(room);
-			if (ImGui.SmallButton("Rename"))
 				BeginRoomRename(room);
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Delete"))

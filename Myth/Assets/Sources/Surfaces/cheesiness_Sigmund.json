@@ -1,0 +1,83 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/pattern_16",
+      "Blend": "Over",
+      "Tint": "48376cff",
+      "BlackColor": "bfdce1ff",
+      "Opacity": 0.69761765,
+      "Tiling": [
+        107,
+        107
+      ],
+      "Offset": [
+        27,
+        -8
+      ],
+      "Scroll": [
+        1,
+        -1
+      ],
+      "Rotation": "Cw180",
+      "FlipX": true,
+      "FlipY": true,
+      "Contrast": 2.59,
+      "Bias": 0.2,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/pattern_31",
+      "Blend": "Lighten",
+      "Tint": "48376cff",
+      "BlackColor": "6c56abff",
+      "Opacity": 0.48991,
+      "Tiling": [
+        100,
+        100
+      ],
+      "Offset": [
+        -23,
+        36
+      ],
+      "Scroll": [
+        7,
+        3
+      ],
+      "Rotation": "Cw270",
+      "FlipX": true,
+      "FlipY": true,
+      "Contrast": 0.93,
+      "Bias": 0.22,
+      "Quantize": 5
+    },
+    {
+      "Texture": "patterns/pattern_59",
+      "Blend": "Darken",
+      "Tint": "bfdce1ff",
+      "BlackColor": "6c56abff",
+      "Opacity": 0.8350363,
+      "Tiling": [
+        119,
+        119
+      ],
+      "Offset": [
+        -20,
+        -15
+      ],
+      "Scroll": [
+        7,
+        5
+      ],
+      "Rotation": "Cw270",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 2.11,
+      "Bias": 0.15,
+      "Quantize": 0
+    }
+  ],
+  "NormalFromHeight": false,
+  "NormalTexture": null,
+  "NormalStrength": 1,
+  "HeightFromLayer": 0
+}

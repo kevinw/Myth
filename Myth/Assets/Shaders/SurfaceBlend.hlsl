@@ -18,8 +18,10 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 SurfaceMeta;             // x = active layer count, y = elapsed seconds
     float4 LayerConfig[MAX_LAYERS]; // xy = tile size in world px, z = blend mode, w = swizzle mode
     float4 LayerTint[MAX_LAYERS];   // rgba tint (straight alpha)
-    float4 LayerMotion[MAX_LAYERS]; // xy = visual motion in world px / second
+    float4 LayerMotion[MAX_LAYERS]; // xy = visual motion in world px / second, zw = static world px offset
     float4 LayerBlack[MAX_LAYERS];  // luminance texture's black endpoint
+    float4 LayerTransform[MAX_LAYERS]; // x = 90-degree rotation, y = flip x, z = flip y
+    float4 LayerAdjust[MAX_LAYERS]; // x = opacity, y = contrast, z = bias, w = quantize levels
 };
 
 // t0/s0 is the batcher's texture slot (unused here); layers live at t1..t6.
@@ -58,13 +60,53 @@ VsOutput vertex_main(VsInput input)
     return output;
 }
 
-float4 sample_layer(Texture2D tex, SamplerState samp, float2 world, float4 config, float4 tint, float2 motion, float4 black_color)
+float2 transform_uv(float2 uv, float4 transform)
 {
-    float2 uv = (world - motion * SurfaceMeta.y) / max(config.xy, float2(1.0, 1.0));
+    if (transform.y != 0.0)
+        uv.x = -uv.x;
+    if (transform.z != 0.0)
+        uv.y = -uv.y;
+
+    if (transform.x == 1.0)
+        uv = float2(uv.y, -uv.x);
+    else if (transform.x == 2.0)
+        uv = -uv;
+    else if (transform.x == 3.0)
+        uv = float2(-uv.y, uv.x);
+    return uv;
+}
+
+float adjust_value(float value, float4 adjust)
+{
+    value = saturate((value + adjust.z - 0.5) * max(adjust.y, 0.0) + 0.5);
+    if (adjust.w >= 2.0)
+    {
+        float steps = floor(adjust.w);
+        value = floor(value * (steps - 1.0) + 0.5) / (steps - 1.0);
+    }
+    return value;
+}
+
+float3 adjust_color(float3 color, float4 adjust)
+{
+    color = saturate((color + adjust.z - 0.5) * max(adjust.y, 0.0) + 0.5);
+    if (adjust.w >= 2.0)
+    {
+        float steps = floor(adjust.w);
+        color = floor(color * (steps - 1.0) + 0.5) / (steps - 1.0);
+    }
+    return color;
+}
+
+float4 sample_layer(Texture2D tex, SamplerState samp, float2 world, float4 config, float4 tint, float4 motion, float4 black_color, float4 transform, float4 adjust)
+{
+    float2 uv = transform_uv((world + motion.zw - motion.xy * SurfaceMeta.y) / max(config.xy, float2(1.0, 1.0)), transform);
     float4 s = tex.Sample(samp, uv);
-    if (config.w == 1.0) // R8 luminance
-        return lerp(black_color, tint, s.r);
-    return s * tint;
+    float4 color = config.w == 1.0 // R8 luminance
+        ? lerp(black_color, tint, adjust_value(s.r, adjust))
+        : float4(adjust_color(s.rgb, adjust), s.a) * tint;
+    color.a *= adjust.x;
+    return color;
 }
 
 float4 blend_over(float4 dst, float4 src, float mode)
@@ -75,6 +117,12 @@ float4 blend_over(float4 dst, float4 src, float mode)
         return float4(dst.rgb + src.rgb * src.a, saturate(dst.a + src.a));
     if (mode == 3.0) // screen
         return float4(1.0 - (1.0 - dst.rgb) * (1.0 - src.rgb * src.a), saturate(dst.a + src.a));
+    if (mode == 4.0) // darken
+        return float4(lerp(dst.rgb, min(dst.rgb, src.rgb), src.a), saturate(dst.a + src.a));
+    if (mode == 5.0) // lighten
+        return float4(lerp(dst.rgb, max(dst.rgb, src.rgb), src.a), saturate(dst.a + src.a));
+    if (mode == 6.0) // difference
+        return float4(abs(dst.rgb - src.rgb) * src.a + dst.rgb * (1.0 - src.a), saturate(dst.a + src.a));
     // over (0)
     float a = src.a + dst.a * (1.0 - src.a);
     return float4(src.rgb * src.a + dst.rgb * (1.0 - src.a), a);
@@ -83,20 +131,20 @@ float4 blend_over(float4 dst, float4 src, float mode)
 float4 fragment_main(VsOutput input) : SV_Target0
 {
     float2 world = input.TexCoord;
-    float4 samples[MAX_LAYERS];
-    samples[0] = sample_layer(Layer0, Layer0Sampler, world, LayerConfig[0], LayerTint[0], LayerMotion[0].xy, LayerBlack[0]);
-    samples[1] = sample_layer(Layer1, Layer1Sampler, world, LayerConfig[1], LayerTint[1], LayerMotion[1].xy, LayerBlack[1]);
-    samples[2] = sample_layer(Layer2, Layer2Sampler, world, LayerConfig[2], LayerTint[2], LayerMotion[2].xy, LayerBlack[2]);
-    samples[3] = sample_layer(Layer3, Layer3Sampler, world, LayerConfig[3], LayerTint[3], LayerMotion[3].xy, LayerBlack[3]);
-    samples[4] = sample_layer(Layer4, Layer4Sampler, world, LayerConfig[4], LayerTint[4], LayerMotion[4].xy, LayerBlack[4]);
-    samples[5] = sample_layer(Layer5, Layer5Sampler, world, LayerConfig[5], LayerTint[5], LayerMotion[5].xy, LayerBlack[5]);
-
     int count = (int)SurfaceMeta.x;
     float4 acc = float4(0.0, 0.0, 0.0, 0.0);
-    [unroll]
-    for (int i = 0; i < MAX_LAYERS; i++)
-        if (i < count)
-            acc = blend_over(acc, samples[i], LayerConfig[i].z);
+    if (count > 0)
+        acc = blend_over(acc, sample_layer(Layer0, Layer0Sampler, world, LayerConfig[0], LayerTint[0], LayerMotion[0], LayerBlack[0], LayerTransform[0], LayerAdjust[0]), LayerConfig[0].z);
+    if (count > 1)
+        acc = blend_over(acc, sample_layer(Layer1, Layer1Sampler, world, LayerConfig[1], LayerTint[1], LayerMotion[1], LayerBlack[1], LayerTransform[1], LayerAdjust[1]), LayerConfig[1].z);
+    if (count > 2)
+        acc = blend_over(acc, sample_layer(Layer2, Layer2Sampler, world, LayerConfig[2], LayerTint[2], LayerMotion[2], LayerBlack[2], LayerTransform[2], LayerAdjust[2]), LayerConfig[2].z);
+    if (count > 3)
+        acc = blend_over(acc, sample_layer(Layer3, Layer3Sampler, world, LayerConfig[3], LayerTint[3], LayerMotion[3], LayerBlack[3], LayerTransform[3], LayerAdjust[3]), LayerConfig[3].z);
+    if (count > 4)
+        acc = blend_over(acc, sample_layer(Layer4, Layer4Sampler, world, LayerConfig[4], LayerTint[4], LayerMotion[4], LayerBlack[4], LayerTransform[4], LayerAdjust[4]), LayerConfig[4].z);
+    if (count > 5)
+        acc = blend_over(acc, sample_layer(Layer5, Layer5Sampler, world, LayerConfig[5], LayerTint[5], LayerMotion[5], LayerBlack[5], LayerTransform[5], LayerAdjust[5]), LayerConfig[5].z);
 
     return acc * input.Color;
 }

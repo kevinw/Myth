@@ -144,10 +144,39 @@
   <ItemGroup>
     <CoreCompileCache Include="$(DefineConstants)" />
     <Compile Include="Source/**/*.cs" Exclude="Source/**/bin/**;Source/**/obj/**;Source/External/StringBuilder/tests/**" />
-    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier)" />
     <!-- Build-time only: emits GeneratedActors.RegisterAll() from [GameActor]. -->
     <ProjectReference Include="tools/Myth.SourceGen/Myth.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(UseFosterDll)' != 'true'">
+    <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseFosterDll)' == 'true'">
+    <Reference Include="Foster.Framework">
+      <HintPath>../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll</HintPath>
+    </Reference>
+    <Content Include="../Foster/Framework/Internal/Native/win-x64/**" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="../Foster/Framework/Internal/Native/linux-x64/**" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))) or '$(RuntimeIdentifier)' == 'linux-x64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))) or '$(RuntimeIdentifier)' == 'linux-x64'">PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="../Foster/Framework/Internal/Native/osx/**" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))) or '$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))) or '$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="_RequireFosterDll" BeforeTargets="ResolveReferences" Condition="'$(UseFosterDll)' == 'true'">
+    <Error Condition="!Exists('../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll')"
+           Text="UseFosterDll=true requires ../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll. Build Foster once for this configuration, or omit UseFosterDll." />
+  </Target>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
