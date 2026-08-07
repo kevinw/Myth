@@ -1376,7 +1376,7 @@ public partial class Game : IDisposable
 		return Factory.DefaultSubstance;
 	}
 
-	bool TryGetSubstanceAtWorldPoint(Point2 point, out string substance)
+	public bool TryGetSubstanceAtWorldPoint(Point2 point, out string substance)
 	{
 		substance = Factory.DefaultSubstance;
 		if (room == null)

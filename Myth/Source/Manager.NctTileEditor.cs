@@ -128,7 +128,7 @@ public partial class Manager
 
 		if (draft.Solid)
 		{
-			var substances = (string[])[Factory.DefaultSubstance, "Brick"];
+			var substances = (string[])[Factory.DefaultSubstance, "Brick", Factory.MetalSubstance];
 			var substanceIndex = Math.Max(0, Array.IndexOf(substances, draft.Substance));
 			changed = ImGui.Combo("substance", ref substanceIndex, substances, substances.Length);
 			if (changed)

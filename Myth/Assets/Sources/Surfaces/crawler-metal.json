@@ -1,0 +1,36 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/pattern_39",
+      "Blend": "Over",
+      "Tint": "747b86ff",
+      "BlackColor": "252a33ff",
+      "Tiling": [
+        26,
+        26
+      ],
+      "Scroll": [
+        0,
+        0
+      ]
+    },
+    {
+      "Texture": "patterns/pattern_83",
+      "Blend": "Screen",
+      "Tint": "8f99a8a0",
+      "BlackColor": "00000000",
+      "Tiling": [
+        52,
+        52
+      ],
+      "Scroll": [
+        0.35,
+        0
+      ]
+    }
+  ],
+  "NormalFromHeight": true,
+  "NormalTexture": null,
+  "NormalStrength": 1.8,
+  "HeightFromLayer": 0
+}

@@ -1703,7 +1703,7 @@ public partial class Manager
 
 	bool DrawActorPropertyValue(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, float controlWidth)
 	{
-		if (IsBouncerSurfaceProperty(actor, property))
+		if (IsSurfaceAssetProperty(actor, property))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (DrawSurfacePicker(ref value))
@@ -2468,10 +2468,12 @@ public partial class Manager
 	static bool IsMovingPlatformMaterialProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
 
-	static bool IsBouncerSurfaceProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+	static bool IsSurfaceAssetProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string)
 			&& property.Name == nameof(Bouncer.SurfaceId)
-			&& string.Equals(ActorSpecs.GetTypeName(actor), nameof(Bouncer), StringComparison.OrdinalIgnoreCase);
+			&& ActorSpecs.GetTypeName(actor) is { } type
+			&& (string.Equals(type, nameof(Bouncer), StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(type, nameof(MagneticCrawler), StringComparison.OrdinalIgnoreCase));
 
 	// A "color picker"-style surface selector: a preview button that opens a grid of
 	// surface previews. Returns true (and updates value) when a surface is chosen; an

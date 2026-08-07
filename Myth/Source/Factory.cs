@@ -11,6 +11,8 @@ public static class Factory
 {
 	public const string DefaultSubstance = "Grass";
 	public const string WaterSubstance = "Water";
+	public const string MetalSubstance = "Metal";
+	public static string SubstanceSoundType(string substance) => substance == MetalSubstance ? "Brick" : substance;
 	const string PropSpritePrefix = "Props/";
 
 	/// Background tile type that marks a region for NCALayer to grow fungus into.
@@ -409,7 +411,7 @@ public static class Factory
 		RegisterLegacySlope('2', "Castle Slope", '1');
 		Register('G', AsDualTile("grass", "grass-dual", GRASS_SUBSTANCE, acousticReflectivity: 0.15f, hasSlope: true));
 		RegisterLegacySlope('S', "Grass Slope", 'G');
-		Register('M', AsDualTile("metal", "metal-dual", BRICK_SUBSTANCE, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f, hasSlope: true));
+		Register('M', AsDualTile("metal", "metal-dual", MetalSubstance, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f, hasSlope: true));
 
 
 		Register('T', AsDualTile("stone", "stone-dual", BRICK_SUBSTANCE, hasSlope: true));

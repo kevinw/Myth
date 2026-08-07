@@ -93,7 +93,7 @@ public abstract class Carryable : Actor, ICarryable
 				Stop();
 				airborne = false;
 				Squish = new Vector2(LandSquishX, LandSquishY);
-				AudioEvent("land", "Type", Game.GetSubstanceBelow(this));
+				AudioEvent("land", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
 				OnSettled(landingSpeed);
 			}
 

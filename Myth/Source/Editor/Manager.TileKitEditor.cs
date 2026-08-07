@@ -207,7 +207,7 @@ public partial class Manager
 
 		if (!background)
 		{
-			var substances = (string[])[Factory.DefaultSubstance, "Brick"];
+			var substances = (string[])[Factory.DefaultSubstance, "Brick", Factory.MetalSubstance];
 			var substanceIndex = Math.Max(0, Array.IndexOf(substances, draft.Substance));
 			if (ImGui.Combo("substance", ref substanceIndex, substances, substances.Length))
 			{
