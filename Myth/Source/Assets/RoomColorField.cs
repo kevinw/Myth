@@ -115,9 +115,9 @@ public sealed class RoomColorField
 		Version++;
 	}
 
-	public void Load(ReadOnlySpan<byte> png, Point2 expectedSize, string? sourcePath)
+	public void Load(ReadOnlySpan<byte> encoded, Point2 expectedSize, string? sourcePath)
 	{
-		using var image = new Image(png.ToArray());
+		using var image = new Image(encoded.ToArray());
 		Size = new(image.Width, image.Height);
 		pixels = image.Data.ToArray();
 		SourcePath = sourcePath;

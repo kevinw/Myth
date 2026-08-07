@@ -1,5 +1,6 @@
 prepareReloadPrompt();
 prepareFeedback();
+const fullscreenControls = prepareFullscreenControls();
 const [{ dotnet }, FosterWebGPU, MythBrowserFmod, VirtualGamepad] =
   await Promise.all([
     import("./_framework/dotnet.js"),
@@ -133,6 +134,7 @@ try {
   globalThis.MythStartReady = true;
   startGate.ready();
   await startGate.wait();
+  fullscreenControls.showChromeButton();
   try {
     await runMain("Myth", room ? ["--play-room", room] : []);
   } catch (error) {
@@ -279,6 +281,45 @@ function prepareFeedback() {
       submitButton.textContent = "Send anonymous feedback";
     }
   });
+}
+
+function prepareFullscreenControls() {
+  const chromeButton = document.querySelector("#fullscreen-button");
+  if (!(chromeButton instanceof HTMLButtonElement))
+    return { showChromeButton: () => {} };
+
+  const available =
+    document.fullscreenEnabled && document.documentElement.requestFullscreen;
+  if (!available) {
+    chromeButton.hidden = true;
+    return { showChromeButton: () => {} };
+  }
+
+  const request = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (error) {
+      console.warn("Fullscreen request failed", error);
+    }
+  };
+  const sync = () => {
+    const fullscreen = !!document.fullscreenElement;
+    chromeButton.textContent = fullscreen ? "×" : "⛶";
+    chromeButton.title = fullscreen ? "Exit fullscreen" : "Fullscreen";
+    chromeButton.setAttribute("aria-label", chromeButton.title);
+  };
+
+  chromeButton.addEventListener("click", request);
+  document.addEventListener("fullscreenchange", sync);
+  sync();
+
+  return {
+    showChromeButton: () => {
+      chromeButton.hidden = false;
+      sync();
+    },
+  };
 }
 
 function prepareStartGate() {

@@ -79,7 +79,7 @@ public static partial class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 11; // v11: tile-kit layers
+	const int visualAssetPackVersion = 13; // v13: browser PNG decode, surface textures packed PNG
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
@@ -3330,16 +3330,22 @@ public static partial class Assets
 
 	static void LoadRoomColorField(RoomColorField field, string path, Point2 size, bool fromContent)
 	{
+		var legacyPath = LegacyRoomColorFieldPath(path);
 		try
 		{
 			if (fromContent)
 			{
-				if (!Content.FileExists(path))
+				if (Content.FileExists(path))
+					field.Load(Content.ReadAllBytes(path), size, ContentIsZip ? null : Path.Join(AssetsPath, path));
+				else if (Content.FileExists(legacyPath))
+					field.Load(Content.ReadAllBytes(legacyPath), size, ContentIsZip ? null : Path.Join(AssetsPath, legacyPath));
+				else
 					return;
-				field.Load(Content.ReadAllBytes(path), size, ContentIsZip ? null : Path.Join(AssetsPath, path));
 			}
 			else if (File.Exists(path))
 				field.Load(File.ReadAllBytes(path), size, path);
+			else if (File.Exists(legacyPath))
+				field.Load(File.ReadAllBytes(legacyPath), size, legacyPath);
 		}
 		catch (Exception exception)
 		{
@@ -3369,6 +3375,7 @@ public static partial class Assets
 
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 		File.WriteAllBytes(path, field.WritePng());
+		DeleteColorFieldFile(LegacyRoomColorFieldPath(path));
 		field.MarkSaved(path);
 	}
 
@@ -3378,6 +3385,9 @@ public static partial class Assets
 		var stem = extension.Length > 0 ? roomPath[..^extension.Length] : roomPath;
 		return $"{stem}.{(layer == Factory.TileLayer.Foreground ? "foreground" : "background")}-color.png";
 	}
+
+	static string LegacyRoomColorFieldPath(string path)
+		=> Path.ChangeExtension(path, ".qoi");
 
 	static void DeleteColorFieldFile(string? path)
 	{

@@ -207,6 +207,8 @@
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <Content Include="Platforms/Web/wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
+    <NativeFileReference Include="../Foster/Framework/Internal/Native/browser/foster_png_decode.cpp" />
+    <NativeFileReference Include="../Foster/Framework/Internal/Native/browser/lodepng/foster_lodepng.cpp" />
     <!-- Bundled content ships as one zip (run-browser.mjs / publish builds it), fetched
          into the wasm FS in a single request instead of one fetch per asset file. When
          the zip is absent (plain dotnet build without the asset step), fall back to the

@@ -103,11 +103,18 @@
                 display: none;
             }
 
-            #feedback-button {
+            #top-controls {
                 position: fixed;
                 top: max(8px, env(safe-area-inset-top));
                 left: max(8px, env(safe-area-inset-left));
                 z-index: 2;
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+
+            #fullscreen-button,
+            #feedback-button {
                 height: 28px;
                 padding: 0 10px;
                 border: 1px solid rgba(var(--text-rgb), 0.55);
@@ -115,6 +122,16 @@
                 color: var(--text);
                 cursor: pointer;
                 font: 700 12px var(--mono);
+            }
+
+            #fullscreen-button {
+                width: 28px;
+                padding: 0;
+                font-size: 15px;
+            }
+
+            #fullscreen-button[hidden] {
+                display: none;
             }
 
             #acknowledgements-link {
@@ -350,6 +367,9 @@
                 padding: 16px 28px;
                 cursor: pointer;
                 background-color: var(--panel);
+            }
+
+            #start-button {
                 background-image: linear-gradient(
                     to right,
                     rgba(var(--accent-rgb), 0.4) var(--p, 0%),
@@ -385,7 +405,10 @@
             <canvas id="foster-canvas" width="1280" height="720"></canvas>
             <button id="reload-button" type="button" hidden>Reload</button>
         </div>
-        <button id="feedback-button" type="button" tabindex="-1">Feedback</button>
+        <div id="top-controls">
+            <button id="fullscreen-button" type="button" aria-label="Fullscreen" title="Fullscreen" hidden>⛶</button>
+            <button id="feedback-button" type="button" tabindex="-1">Feedback</button>
+        </div>
         <dialog id="feedback-dialog" aria-labelledby="feedback-title">
             <form id="feedback-form">
                 <div id="feedback-header">

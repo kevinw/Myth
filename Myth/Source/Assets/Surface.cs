@@ -49,16 +49,9 @@ public sealed class SurfaceSpec
 
 	[JsonIgnore] public string Id { get; set; } = "";
 
-	static readonly JsonSerializerOptions JsonOptions = new()
-	{
-		WriteIndented = true,
-		Converters = { new JsonStringEnumConverter() },
-		PropertyNameCaseInsensitive = true,
-	};
-
 	public static SurfaceSpec Parse(string json, string id)
 	{
-		var spec = JsonSerializer.Deserialize<SurfaceSpec>(json, JsonOptions) ?? new SurfaceSpec();
+		var spec = JsonSerializer.Deserialize(json, SurfaceSpecJsonContext.Default.SurfaceSpec) ?? new SurfaceSpec();
 		spec.Id = id;
 		if (spec.Layers.Count > MaxLayers)
 			spec.Layers = spec.Layers.GetRange(0, MaxLayers);
@@ -84,7 +77,7 @@ public sealed class SurfaceSpec
 		File.WriteAllText(path, ToJson());
 	}
 
-	public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+	public string ToJson() => JsonSerializer.Serialize(this, SurfaceSpecJsonContext.Default.SurfaceSpec);
 
 	public static Color ParseTint(string hex)
 	{
@@ -97,6 +90,10 @@ public sealed class SurfaceSpec
 		return Color.White;
 	}
 }
+
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(SurfaceSpec))]
+internal partial class SurfaceSpecJsonContext : JsonSerializerContext;
 
 public sealed class Surface : IDisposable
 {
@@ -178,7 +175,7 @@ public sealed class Surface : IDisposable
 		{
 			var heightLayer = Math.Clamp(spec.HeightFromLayer, 0, layers.Count - 1);
 			var source = layers[heightLayer];
-			using var heightImage = new Image(source.Texture.SourcePng);
+			using var heightImage = new Image(source.Texture.SourceImage);
 			using var normalImage = Assets.GenerateNormalImage(heightImage, wrap: true);
 			normal = new Texture(gfx, normalImage, name: $"{spec.Id}-normal");
 			ownsNormal = true;

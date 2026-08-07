@@ -3,7 +3,7 @@ using Foster.Framework;
 namespace Myth;
 
 // A "texture bucket" is the library of source images that Surfaces draw their layers
-// from. Images are loaded directly from PNG (no Aseprite bake) and classified by
+// from. Images are loaded directly from image files (no Aseprite bake) and classified by
 // content: a fully-opaque black-and-white image becomes a 1-channel R8 texture (4x
 // smaller), everything else stays RGBA, and a *_n / *_normal image is tagged as a
 // normal map. Each texture is keyed by a stable path (e.g. "patterns/pattern_07") so
@@ -20,10 +20,10 @@ public static partial class Assets
 		Normal = 2,    // tangent-space normal map (rgb used directly)
 	}
 
-	public sealed class BucketTexture(string key, byte[] sourcePng, Texture texture, TextureSwizzle swizzle, Subtexture thumbnail)
+	public sealed class BucketTexture(string key, byte[] sourceImage, Texture texture, TextureSwizzle swizzle, Subtexture thumbnail)
 	{
 		public readonly string Key = key;
-		public readonly byte[] SourcePng = sourcePng; // encoded PNG, for re-decoding CPU pixels (normal bake)
+		public readonly byte[] SourceImage = sourceImage; // encoded PNG/QOI, for re-decoding CPU pixels (normal bake)
 		public readonly Texture Texture = texture;
 		public readonly TextureSwizzle Swizzle = swizzle;
 		public readonly Subtexture Thumbnail = thumbnail; // small RGBA preview for the editor
@@ -46,7 +46,8 @@ public static partial class Assets
 		}
 	}
 
-	// The library every Surface samples from. Loaded from Sources/Textures/<bucket>/*.png.
+	// The library every Surface samples from. Loaded from Sources/Textures/<bucket>/*.png in dev
+	// and from packed QOI files in browser/shipped builds.
 	public static TextureBucket? Textures2D { get; private set; }
 
 	// Room-referenced Surface assets, keyed by id (the spec filename).
@@ -95,25 +96,31 @@ public static partial class Assets
 
 	const int BucketThumbSize = 48;
 	const int BucketThumbColumns = 12;
+	static readonly string[] BucketImageExtensions = [".png", ".qoi"];
 
 	// Loads a bucket from a storage container (the dev Assets folder or the baked pack),
 	// so the same code serves both. Keys are keyPrefix + the path relative to dir (minus
-	// ".png"); pass an empty prefix when the storage layout already encodes the key.
+	// the image extension); pass an empty prefix when the storage layout already encodes the key.
 	internal static TextureBucket LoadTextureBucket(GraphicsDevice gfx, StorageContainer storage, string dir, string keyPrefix)
 	{
 		var textures = new Dictionary<string, BucketTexture>(StringComparer.OrdinalIgnoreCase);
 		var order = new List<string>();
 
-		var entries = new List<(string Key, byte[] Png, Image Image, Texture Texture, TextureSwizzle Swizzle)>();
+		var entries = new List<(string Key, byte[] Encoded, Image Image, Texture Texture, TextureSwizzle Swizzle)>();
 		if (storage.DirectoryExists(dir))
 		{
-			foreach (var file in storage.EnumerateDirectory(dir, "*.png", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+			var files = new List<string>();
+			foreach (var extension in BucketImageExtensions)
+				files.AddRange(storage.EnumerateDirectory(dir, $"*{extension}", SearchOption.AllDirectories));
+			files.Sort(StringComparer.Ordinal);
+			foreach (var file in files)
 			{
 				var rel = Path.GetRelativePath(dir, file).Replace(Path.DirectorySeparatorChar, '/');
-				var key = string.IsNullOrEmpty(keyPrefix) ? rel[..^".png".Length] : $"{keyPrefix}/{rel[..^".png".Length]}";
+				var keyRel = rel[..^Path.GetExtension(rel).Length];
+				var key = string.IsNullOrEmpty(keyPrefix) ? keyRel : $"{keyPrefix}/{keyRel}";
 
-				var png = storage.ReadAllBytes(file);
-				var image = new Image(png);
+				var encoded = storage.ReadAllBytes(file);
+				var image = new Image(encoded);
 				var isNormal = key.EndsWith("_n", StringComparison.OrdinalIgnoreCase)
 					|| key.EndsWith("_normal", StringComparison.OrdinalIgnoreCase);
 
@@ -136,7 +143,7 @@ public static partial class Assets
 					swizzle = isNormal ? TextureSwizzle.Normal : TextureSwizzle.Rgba;
 				}
 
-				entries.Add((key, png, image, texture, swizzle));
+				entries.Add((key, encoded, image, texture, swizzle));
 			}
 		}
 
@@ -159,7 +166,7 @@ public static partial class Assets
 			var e = entries[i];
 			var thumb = new Subtexture(thumbnailAtlas,
 				new Rect((i % columns) * BucketThumbSize, (i / columns) * BucketThumbSize, BucketThumbSize, BucketThumbSize));
-			textures[e.Key] = new BucketTexture(e.Key, e.Png, e.Texture, e.Swizzle, thumb);
+			textures[e.Key] = new BucketTexture(e.Key, e.Encoded, e.Texture, e.Swizzle, thumb);
 			order.Add(e.Key);
 		}
 
