@@ -365,6 +365,24 @@ public partial class Manager
 		}
 	}
 
+	bool NudgeSelectedRoomActor(Point2 offset)
+	{
+		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
+			return false;
+
+		using (CaptureRoomUndo("Nudge Actor", room))
+		{
+			var actor = room.Actors[selectedRoomActorIndex];
+			var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+			ActorSpecs.SetProperty(actor, "Position", ActorSpecs.ToJsonNode(position + offset));
+			ClearEditorDragState();
+			editorSelectionRect = null;
+			editorGameDirty = true;
+		}
+
+		return true;
+	}
+
 	void OpenActorContextMenu(Room room, int actorIndex)
 	{
 		if (selectedRoomActorIndex != actorIndex)
@@ -945,21 +963,33 @@ public partial class Manager
 
 	void UpdateEditorNavigation()
 	{
+		var keyMove = WasdDirection(down: true);
 		// Keyboard Shift + WASD moves the camera around incrementally.
-		if (Input.Keyboard.Shift && controls.Move.Value != Point2.Zero)
+		if (Input.Keyboard.Shift && keyMove != Point2.Zero)
 		{
 			editorCameraMoveMultiplier += Time.Delta * EDITOR_CAM_MOVE_MULTIPLIER_SPEED_UP;
-			editorCamera += controls.Move.Value * Time.Delta * 700.0f / editorZoom * (editorCameraMoveMultiplier);
+			editorCamera += (Vector2)keyMove * Time.Delta * 700.0f / editorZoom * editorCameraMoveMultiplier;
+			return;
+		}
+
+		if (ArrowDirection() is { } nudge && nudge != Point2.Zero)
+		{
+			editorCameraMoveMultiplier = BASE_EDITOR_CAM_MOVE_MULTIPLIER;
+			if (NudgeSelectedRoomActor(nudge))
+				controls.Move.Clear();
 			return;
 		}
 
 		// Otherwise, we jump to adjacent rooms.
 		editorCameraMoveMultiplier = BASE_EDITOR_CAM_MOVE_MULTIPLIER;
-		var direction = Point2.Zero;
-		if (controls.Move.PressedUp) direction += Point2.Up;
-		if (controls.Move.PressedDown) direction += Point2.Down;
-		if (controls.Move.PressedLeft) direction += Point2.Left;
-		if (controls.Move.PressedRight) direction += Point2.Right;
+		var direction = WasdDirection(down: false);
+		if (direction == Point2.Zero)
+		{
+			if (controls.Move.PressedUp) direction += Point2.Up;
+			if (controls.Move.PressedDown) direction += Point2.Down;
+			if (controls.Move.PressedLeft) direction += Point2.Left;
+			if (controls.Move.PressedRight) direction += Point2.Right;
+		}
 
 		if (direction != Point2.Zero)
 		{
@@ -967,6 +997,26 @@ public partial class Manager
 				ShiftRoom(direction);
 			controls.Move.Clear();
 		}
+	}
+
+	Point2 WasdDirection(bool down)
+	{
+		var direction = Point2.Zero;
+		if (down ? Input.Keyboard.Down(Keys.W) : Input.Keyboard.Pressed(Keys.W)) direction += Point2.Up;
+		if (down ? Input.Keyboard.Down(Keys.S) : Input.Keyboard.Pressed(Keys.S)) direction += Point2.Down;
+		if (down ? Input.Keyboard.Down(Keys.A) : Input.Keyboard.Pressed(Keys.A)) direction += Point2.Left;
+		if (down ? Input.Keyboard.Down(Keys.D) : Input.Keyboard.Pressed(Keys.D)) direction += Point2.Right;
+		return direction;
+	}
+
+	Point2 ArrowDirection()
+	{
+		var direction = Point2.Zero;
+		if (Input.Keyboard.Pressed(Keys.Up)) direction += Point2.Up;
+		if (Input.Keyboard.Pressed(Keys.Down)) direction += Point2.Down;
+		if (Input.Keyboard.Pressed(Keys.Left)) direction += Point2.Left;
+		if (Input.Keyboard.Pressed(Keys.Right)) direction += Point2.Right;
+		return direction;
 	}
 
 	void DrawSlopePaintOption()
@@ -3321,9 +3371,9 @@ public partial class Manager
 		return SnapRoomActorLocalPosition(position, GetRoomActorPaletteOffset(actor)) == position;
 	}
 
-	bool RoomActorDragShouldSnap(bool keyboardBlocked)
+	bool RoomActorDragShouldSnap()
 	{
-		var shiftDown = !keyboardBlocked && Input.Keyboard.Shift;
+		var shiftDown = Input.Keyboard.Shift;
 		return editorDrag.ActorSnapsByDefault ? !shiftDown : shiftDown;
 	}
 
@@ -4770,12 +4820,12 @@ public partial class Manager
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorPathPoint && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Path Point", editing);
-				MovePointPathPoint(editing, selectedRoomActorIndex, editorDrag.PathPointIndex, worldMouse, RoomActorDragShouldSnap(keyboardBlocked));
+				MovePointPathPoint(editing, selectedRoomActorIndex, editorDrag.PathPointIndex, worldMouse, RoomActorDragShouldSnap());
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorResize && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				OpenPendingRoomUndo(ActorMoveUndoSlot, "Resize Actor", editing);
-				ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, tileOver, keyboardBlocked || !Input.Keyboard.Shift);
+				ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, tileOver, !Input.Keyboard.Shift);
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.RoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
@@ -4785,7 +4835,7 @@ public partial class Manager
 				{
 					OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Actor", editing);
 					MoveRoomActorTo(editing, selectedRoomActorIndex, worldMouse,
-						ScreenToEditorWorld(actorPressCursor, inner), RoomActorDragShouldSnap(keyboardBlocked));
+						ScreenToEditorWorld(actorPressCursor, inner), RoomActorDragShouldSnap());
 				}
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.SelectionMove && editorDrag.SelectionSnapshot != null && Input.Mouse.LeftDown)

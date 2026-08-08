@@ -177,7 +177,7 @@ public partial class Manager
 			{
 				manager.OpenPendingRoomUndo(ActorMoveUndoSlot, undoName, actor.Room);
 				var local = worldMouse - actor.RoomOrigin;
-				var point = manager.RoomActorDragShouldSnap(keyboardBlocked)
+				var point = manager.RoomActorDragShouldSnap()
 					? (local / Game.TileSize).RoundToPoint2() * Game.TileSize
 					: local.RoundToPoint2();
 				actor.Set(property, point);
@@ -214,7 +214,7 @@ public partial class Manager
 			{
 				manager.OpenPendingRoomUndo(ActorMoveUndoSlot, undoName, actor.Room);
 				var projected = Vector2.Dot(worldMouse - origin, direction.Normal);
-				var next = manager.RoomActorDragShouldSnap(keyboardBlocked)
+				var next = manager.RoomActorDragShouldSnap()
 					? Calc.Round(projected / Game.TileSize) * Game.TileSize
 					: Calc.Round(projected);
 				actor.Set(property, Math.Max(0, next));

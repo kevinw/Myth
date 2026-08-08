@@ -208,6 +208,13 @@ public partial class Manager
 	void EditorCenterDockImGui()
 	{
 		var rect = EditorCenterRect;
+		if (OperatingSystem.IsLinux())
+		{
+			gameViewWindowRect = rect;
+			gameViewHovered = rect.Contains(Cursor);
+			return;
+		}
+
 		var flags =
 			ImGuiWindowFlags.NoTitleBar |
 			ImGuiWindowFlags.NoMove |
