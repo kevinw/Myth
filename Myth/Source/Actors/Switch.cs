@@ -55,7 +55,7 @@ public class Switch : PointPathActor
 			return;
 
 		if (Game.GetActorById(TargetActorId) is IActivatable target)
-			target.Activate(this);
+			target.SetActive(this, true);
 		triggered = false;
 		DestroyPulseLight();
 	}

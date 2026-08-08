@@ -190,6 +190,7 @@ public abstract class Pawn : Actor
 	protected float rollJumpCarryTimer;
 	float airborneRollDistance;
 	protected PawnInput input;
+	internal Vector2 ButtonPressIntent => new(input.MoveX, input.MoveY);
 	Rope? climbRope;
 	Rope.Chain? climbChain;
 	float climbIndex;   // float point index along the chain (0 = anchor)

@@ -8,6 +8,7 @@ public sealed class SaveState
 {
 	public int Version = 1;
 	public HashSet<string> PersistentDestroyedActors = [];
+	public HashSet<string> PressedButtons = [];
 	public HashSet<string> RevealedDoors = [];
 	public Dictionary<PickupKind, int> Pickups = [];
 	public MinimapState Map = new();

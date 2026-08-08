@@ -316,6 +316,13 @@ public partial class Game : IDisposable
 	}
 
 	public bool IsRevealDoorRevealed(string doorId) => Save.RevealedDoors.Contains(doorId);
+	public bool IsButtonPressed(string? buttonId) => buttonId != null && Save.PressedButtons.Contains(buttonId);
+
+	public void PressButtonPersistently(string? buttonId)
+	{
+		if (!string.IsNullOrWhiteSpace(buttonId) && Save.PressedButtons.Add(buttonId))
+			MarkSaveDirty();
+	}
 
 	public void RevealDoor(string doorId)
 	{

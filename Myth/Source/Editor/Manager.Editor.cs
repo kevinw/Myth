@@ -2041,8 +2041,8 @@ public partial class Manager
 	{
 		if (property.Name == nameof(LinkedDoor.TargetActorId) && IsLinkedDoorActor(actor))
 			return DrawLinkedDoorTargetProperty(room, actor, property);
-		if (property.Name == nameof(Switch.TargetActorId) && IsSwitchActor(actor))
-			return DrawSwitchTargetProperty(room, actor, property);
+		if (property.Name == nameof(Switch.TargetActorId) && IsActivationSourceActor(actor))
+			return DrawActivationTargetProperty(room, actor, property);
 		if (property.Name == nameof(ParticleEmitter.EffectName) && IsParticleEmitterActor(actor))
 			return DrawParticleEffectNameProperty(room, actor, property);
 
@@ -2169,7 +2169,7 @@ public partial class Manager
 		return changed;
 	}
 
-	bool DrawSwitchTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	bool DrawActivationTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
 		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
@@ -2189,7 +2189,7 @@ public partial class Manager
 				var selected = string.Equals(value, candidateId, StringComparison.OrdinalIgnoreCase);
 				if (ImGui.Selectable($"{typeName} ({candidateId[..Math.Min(8, candidateId.Length)]})", selected))
 				{
-					using (CaptureRoomUndo("Set Switch Target", room))
+					using (CaptureRoomUndo("Set Activation Target", room))
 						ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(candidateId));
 					changed = true;
 				}
@@ -2202,7 +2202,7 @@ public partial class Manager
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Clear"))
 			{
-				using (CaptureRoomUndo("Clear Switch Target", room))
+				using (CaptureRoomUndo("Clear Activation Target", room))
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(""));
 				changed = true;
 			}
@@ -2757,8 +2757,12 @@ public partial class Manager
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
 
-	static bool IsSwitchActor(JsonObject actor)
-		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(Switch), StringComparison.OrdinalIgnoreCase);
+	static bool IsActivationSourceActor(JsonObject actor)
+	{
+		var type = ActorSpecs.GetTypeName(actor);
+		return string.Equals(type, nameof(Switch), StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(type, nameof(Button), StringComparison.OrdinalIgnoreCase);
+	}
 
 	static Dictionary<string, ActorEditor>? actorEditors;
 	static ActorEditor? EditorFor(JsonObject actor)
