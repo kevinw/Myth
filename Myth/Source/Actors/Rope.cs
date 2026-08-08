@@ -39,7 +39,7 @@ public class Rope : Actor, IResizable
 	static float SwayAccel => 5.5f;             // px/s² ambient drift at Weight 1
 	static float SwayFrequency => 0.35f;        // sway cycles per second
 	static float SwayPointPhase => 0.09f;       // phase shift per point, so the rope bows instead of shifting rigidly
-	public static float PumpAccel => 340f;      // holding left/right while attached, at Weight 1
+	public static float PumpAccel => 340f;      // active rider pump, at Weight 1
 	static float RiderExtraGravity => 500f;     // the hanging pawn's weight pulls the rope taut
 	static float RiderConstraintShare => 0.15f; // ridden point moves this fraction in the solve (it's heavy)
 	const int ConstraintIterations = 4;

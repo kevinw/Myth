@@ -1,15 +1,19 @@
 # TODO
 
+- burrow sound needs to be the best sound in the entire game
 - make a button you can hit by carrying bud; could be useful as way to teach you to bring him with you.
 - maybe you collect poems as currency
-- spend an entire day making bud more interesting
+- memory pulse instead of a map; only in the radius around you?
+- Spend an entire day making bud more interesting
+  - More barks.
+  - Fix idle animation.
 - make this todo into a plan with time estimates; or make a google spreadsheet; or use a time tracker
 - save points are more fun in hubs where you have somewhere else to go than where you died
-- make the burrow moving platform have a mode where when you're on it, it moves, so it's more fun if you miss it
+- Make the burrow moving platform have a mode where when you're on it, it moves, so it's more fun if you miss it
 - take all Blobs/Foster sample actors out; comment out the code
-- you can just hold left on a rope and it will stay left
-- not enough reasons to burrow outside of combat
-- burrow sound needs to be the best sound in the entire game
+- Not enough reasons to burrow outside of combat
+  - Burrow switch
+  - Some further interaction with dash
 - duck needs a quack
 - rope unfurl sfx
 - rope unfurl connected to pile, pile needs to go away

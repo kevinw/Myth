@@ -143,6 +143,7 @@ public abstract class Pawn : Actor
 	static float RopeSwingCarry => 1.25f.T();
 	static float RopeJumpKick => 55f.T();
 	static float RopeGrabMomentumTransfer => 0.7f.T();
+	static float RopePumpReversalSpeed => 2f;
 	static float RopeDetachSnapDistance => 24f; // rope yanked further than this in one frame (rewind, teleport) -> let go
 
 	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
@@ -192,6 +193,9 @@ public abstract class Pawn : Actor
 	Rope? climbRope;
 	Rope.Chain? climbChain;
 	float climbIndex;   // float point index along the chain (0 = anchor)
+	int ropePumpInputDirection;
+	int ropePumpDirection;
+	bool ropePumpStarted;
 	float regrabTimer;
 	protected float JumpUpSquish;
 	protected float RunStartTimer;
@@ -1016,7 +1020,20 @@ public abstract class Pawn : Actor
 
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);
-		rope.SetRider(chain, climbIndex, Math.Sign(input.MoveX));
+
+		var pumpInput = Math.Sign(input.MoveX);
+		if (pumpInput != ropePumpInputDirection)
+		{
+			ropePumpInputDirection = pumpInput;
+			ropePumpDirection = pumpInput;
+			ropePumpStarted = false;
+		}
+		var pumpVelocity = rope.PointVelocity(chain, climbIndex).X * ropePumpDirection;
+		if (pumpVelocity > RopePumpReversalSpeed)
+			ropePumpStarted = true;
+		else if (ropePumpStarted && pumpVelocity < -RopePumpReversalSpeed)
+			ropePumpDirection = 0;
+		rope.SetRider(chain, climbIndex, ropePumpDirection);
 
 		// Hang with the chest at the rope point; step there collision-aware so a swing scrapes
 		// along walls instead of clipping. A one-frame yank beyond the snap distance (rewind,
@@ -1044,6 +1061,8 @@ public abstract class Pawn : Actor
 		ropeIsFalling = false;
 		climbRope = null;
 		climbChain = null;
+		ropePumpInputDirection = ropePumpDirection = 0;
+		ropePumpStarted = false;
 		regrabTimer = RopeRegrabTime;
 		if (State == States.Climb)
 			State = States.Normal;
