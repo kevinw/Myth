@@ -11,6 +11,23 @@ namespace Myth;
 // GameWorldToImGui, so they line up with the game view at any zoom.
 public partial class Manager
 {
+	float debugOverlayTopBottom;
+
+	static float DebugOverlayTopMargin => 32;
+	static float DebugOverlayRowGap => 4;
+
+	void ResetDebugOverlayLayout()
+	{
+		debugOverlayTopBottom = DebugOverlayTopMargin;
+	}
+
+	Vector2 AllocateDebugOverlayTopCenter(Rect viewport, float height)
+	{
+		var bottom = debugOverlayTopBottom;
+		debugOverlayTopBottom += height + DebugOverlayRowGap;
+		return viewport.TopLeft + new Vector2(viewport.Width * 0.5f, bottom);
+	}
+
 	void ActorPositionDebugOverlayImGui()
 	{
 		if (game == null || !playing || !game.IsCollisionDebugVisible)
@@ -398,6 +415,14 @@ public partial class Manager
 		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
 		var topLeft = viewport.Center - size / 2;
 		return topLeft + (worldPosition - game.RenderCamera) * game.ZoomLevel * scale;
+	}
+
+	static Vector2 GameImGuiToWorld(Rect viewport, Game game, Vector2 screenPosition)
+	{
+		var scale = MathF.Min(viewport.Width / game.Screen.Width, viewport.Height / game.Screen.Height);
+		var size = new Vector2(game.Screen.Width, game.Screen.Height) * scale;
+		var topLeft = viewport.Center - size / 2;
+		return (screenPosition - topLeft) / (game.ZoomLevel * scale) + game.RenderCamera;
 	}
 
 	void FpsOverlayImGui()

@@ -1495,12 +1495,15 @@ public partial class Game : IDisposable
 				ApplyRoomReverb(nextRoom);
 				return true;
 			}
+#if EDITOR
+			if (Manager.NotifyMissingLiveAdjacentRoom(this, fromRoom, direction, exitPosition))
+				return true;
+#endif
 		}
 
 		return false;
 	}
 
-#if !EDITOR
 	public bool CheatShiftRoom(Point2 direction)
 	{
 		if (room == null || nextRoom != null || GetFirst<Player>() is not { } player)
@@ -1533,7 +1536,6 @@ public partial class Game : IDisposable
 		EnsureBudForPlayer(repositionExisting: true);
 		return true;
 	}
-#endif
 
 	public bool TransitionToLinkedDoor(string targetActorId)
 	{
