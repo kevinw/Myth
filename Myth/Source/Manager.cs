@@ -1110,6 +1110,11 @@ public partial class Manager : App
 
 		var gameMenuPausesGame = GameMenuPausesGame;
 
+#if EDITOR
+		if (!gameMenuPausesGame && ToggleEditorPressed(keyboardShortcutsBlocked))
+			ToggleGame();
+#endif
+
 #if !EDITOR
 		var shipRoomCheatChordActive = UpdateShipRoomCheat(gameMenuPausesGame);
 #else
@@ -1138,10 +1143,6 @@ public partial class Manager : App
 #if !IOS && !BROWSER
 				if (Window is { } window && !keyboardShortcutsBlocked && debugControls.Fullscreen.Pressed)
 					window.Fullscreen = !window.Fullscreen;
-#endif
-#if EDITOR
-				if (!gameMenuPausesGame && ToggleEditorPressed())
-					ToggleGame();
 #endif
 			}
 
@@ -1174,7 +1175,9 @@ public partial class Manager : App
 					if (game is { } g)
 					{
 #if EDITOR
-						var editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
+						var editorOwnsPlayMouse = UpdateLiveRoomEditing(g, keyboardShortcutsBlocked);
+						if (!editorOwnsPlayMouse)
+							editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
 						if (!editorOwnsPlayMouse)
 							editorOwnsPlayMouse = UpdateLiveActorEditing(g, keyboardShortcutsBlocked);
 #if DEBUG
@@ -1190,8 +1193,14 @@ public partial class Manager : App
 							if (!commandConsoleOpen)
 #endif
 							{
-								using (PerfStats.Time(PerfDetail.GameUpdate))
-									g.Update(controls);
+#if EDITOR
+								var updatePlayingGame = !LiveRoomCreationModalOpen && !LiveTileControllerModeOpen;
+#else
+								var updatePlayingGame = true;
+#endif
+								if (updatePlayingGame)
+									using (PerfStats.Time(PerfDetail.GameUpdate))
+										g.Update(controls);
 								CompleteGameFrame();
 							}
 					}
@@ -1987,6 +1996,16 @@ public partial class Manager : App
 		{
 			case DebugViewMessagePosition.TopCenter:
 				position = new Vector2(CenterX - size.X * 0.5f, 8);
+#if EDITOR
+				if (playing && game != null)
+				{
+					var editorViewport = GameViewRect;
+					var screenPosition = AllocateDebugOverlayTopCenter(editorViewport, size.Y);
+					position = new Vector2(screenPosition.X - size.X * 0.5f, screenPosition.Y - size.Y);
+					position.X = Math.Clamp(position.X, editorViewport.Left + 4, editorViewport.Right - size.X - 4);
+					position.Y = Math.Clamp(position.Y, editorViewport.Top + 4, editorViewport.Bottom - size.Y - 4);
+				}
+#endif
 				break;
 			case DebugViewMessagePosition.BottomCenter:
 				position = new Vector2(CenterX - size.X * 0.5f, Bottom - size.Y - 8);

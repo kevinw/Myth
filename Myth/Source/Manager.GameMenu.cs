@@ -319,7 +319,13 @@ public partial class Manager
 	{
 		menuLayoutBuiltThisFrame = false;
 
-		if (!GameMenuOpen || Window == null)
+		var buildLiveEditorMenu =
+#if EDITOR
+			LiveRoomEditorMenuOpen;
+#else
+			false;
+#endif
+		if ((!GameMenuOpen && !buildLiveEditorMenu) || Window == null)
 			return;
 
 		// Render the room preview once (drawn behind the menu in DrawGameMenu).
@@ -343,23 +349,30 @@ public partial class Manager
 		menuImgui.BeginLayout();
 		PushMenuStyle();
 
-		// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
-		var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7) + gameMenuLayoutOffset;
-		ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
-
 		menuButtonIndex = 0;
 		menuActivated = false;
 
-		// Distinct id per page so switching pages makes the window "appear", which is
-		// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
-		ImGui.Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
-		switch (gameMenuLayoutPage)
+		if (GameMenuOpen)
 		{
-			case GameMenuPage.Title: TitleMenu(); break;
-			case GameMenuPage.Pause: PauseMenu(); break;
-			case GameMenuPage.Options: OptionsMenu(); break;
+			// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
+			var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7) + gameMenuLayoutOffset;
+			ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+
+			// Distinct id per page so switching pages makes the window "appear", which is
+			// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
+			ImGui.Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
+			switch (gameMenuLayoutPage)
+			{
+				case GameMenuPage.Title: TitleMenu(); break;
+				case GameMenuPage.Pause: PauseMenu(); break;
+				case GameMenuPage.Options: OptionsMenu(); break;
+			}
+			ImGui.End();
 		}
-		ImGui.End();
+
+#if EDITOR
+		LiveRoomEditingMenuImGui();
+#endif
 
 		menuItemCount = menuButtonIndex; // how many buttons the page emitted, for the title layout
 
@@ -369,7 +382,7 @@ public partial class Manager
 
 		// A button that closed the menu (resume / start / quit) should not linger for a
 		// frame; keep flushing only while the menu is still open.
-		menuLayoutBuiltThisFrame = menuActivated ? GameMenuOpen : true;
+		menuLayoutBuiltThisFrame = GameMenuOpen ? menuActivated ? GameMenuOpen : true : buildLiveEditorMenu;
 	}
 
 	void PushMenuStyle()

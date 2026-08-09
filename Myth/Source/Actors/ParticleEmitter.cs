@@ -10,7 +10,7 @@ namespace Myth;
 /// selected in the editor.
 /// </summary>
 [GameActor(Sprite = "Editor/particles", OffsetX = 4, OffsetY = 4, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
-	Tags = ActorTag.System, LivePositionEditable = true)]
+	Tags = ActorTag.System, ShowFacing = false, LivePositionEditable = true)]
 public class ParticleEmitter : Actor
 {
 	public string EffectName = "sparks";

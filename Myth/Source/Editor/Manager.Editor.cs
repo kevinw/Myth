@@ -242,11 +242,13 @@ public partial class Manager
 			using (PerfStats.Time(PerfDetail.ToolbarImGui))
 				EditorMenuImGui();
 		}
+		ResetDebugOverlayLayout();
 		PlatformNavDebugOverlayImGui();
 		ActorPositionDebugOverlayImGui();
 		BudDebugOverlayImGui();
 		LiveTileEditingImGui();
 		LiveActorEditingImGui();
+		LiveRoomEditingImGui();
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();
 		TransitionViewerImGui();
@@ -5235,24 +5237,33 @@ public partial class Manager
 		=> new(tiles.X * Game.TileSize, tiles.Y * Game.TileSize, tiles.Width * Game.TileSize, tiles.Height * Game.TileSize);
 
 	void CreateRoom(Point2 position, Point2 size)
+		=> CreateRoomFromSource(CurrentRoom, position, size, select: true, tween: true, undoName: "Create Room");
+
+	Room CreateRoomFromSource(Room? source, Point2 position, Point2 size, bool select, bool tween, string undoName, Action<Room>? configure = null)
 	{
-		var sourceSettings = CurrentRoom is { } source ? CaptureRoomSettings(source) : (RoomSettings?)null;
+		var sourceSettings = source != null ? CaptureRoomSettings(source) : (RoomSettings?)null;
 		CurrentRoom?.Save();
+		if (source != null && source != CurrentRoom)
+			source.Save();
 
 		var it = new Room(position, size);
-		it.Sublayer = editorSublayer;
+		it.Sublayer = source?.Sublayer ?? editorSublayer;
 		if (sourceSettings is { } settings)
 			ApplyRoomSettings(it, settings);
 		MirrorAdjacentRoomBorders(it);
+		configure?.Invoke(it);
 
-		using (CaptureRoomExistenceUndo("Create Room", it))
+		using (undo.Capture(undoName, new RoomExistenceUndoTarget(this, it), EditorSelectionUndoTarget()))
 		{
 			AddRoomToWorld(it);
-			SelectRoom(it);
+			if (select)
+				SelectRoom(it);
 			SyncEditorGame();
 		}
 
-		TweenEditorCameraToRoom(it);
+		if (tween)
+			TweenEditorCameraToRoom(it);
+		return it;
 	}
 
 	void AddSublayer(Room source)
@@ -5516,7 +5527,8 @@ public partial class Manager
 			RemoveRoomFromWorld(room);
 	}
 
-	bool ToggleEditorPressed() => debugControls.ToggleEditor.Pressed;
+	bool ToggleEditorPressed(bool keyboardBlocked)
+		=> (!keyboardBlocked && Input.Keyboard.Pressed(Keys.Tab)) || Input.AnyControllerButtonPressed(Buttons.RightStick);
 
 	void PreferencesImGui()
 	{

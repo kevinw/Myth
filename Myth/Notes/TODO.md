@@ -1,6 +1,7 @@
 # TODO
 
 - burrow sound needs to be the best sound in the entire game
+- actor search needs a close button to clear the text.
 - make a button you can hit by carrying bud; could be useful as way to teach you to bring him with you.
 - maybe you collect poems as currency
 - memory pulse instead of a map; only in the radius around you?
