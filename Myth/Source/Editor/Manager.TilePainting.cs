@@ -3,12 +3,19 @@ using System.Numerics;
 using System.Text.Json.Nodes;
 using Foster.Framework;
 using ImGuiNET;
+using static ImGuiNET.ImGui;
 
 namespace Myth;
 
 public partial class Manager
 {
 	const string LiveTilePaintUndoName = "Paint Tiles While Playing";
+
+	static float LiveTileStickDeadzone => 0.45f;
+	static float LiveTileCursorFirstRepeat => 0.18f;
+	static float LiveTileCursorRepeat => 0.055f;
+	
+	bool LiveTileControllerModeOpen => liveTileController.Active || liveTileController.BlockGameUpdate;
 
 	struct TilePaintStroke
 	{
@@ -43,6 +50,10 @@ public partial class Manager
 	}
 
 	TilePaintStroke tilePaintStroke;
+	LiveTileControllerState liveTileController;
+	bool liveTileBrushArmed;
+	string liveTileLabel = "";
+	
 	struct LiveTileControllerState
 	{
 		public bool Active;
@@ -50,14 +61,6 @@ public partial class Manager
 		public Point2 Cursor;
 		public float RepeatTimer;
 	}
-
-	LiveTileControllerState liveTileController;
-	bool liveTileBrushArmed;
-	string liveTileLabel = "";
-	bool LiveTileControllerModeOpen => liveTileController.Active || liveTileController.BlockGameUpdate;
-	static float LiveTileStickDeadzone => 0.45f;
-	static float LiveTileCursorFirstRepeat => 0.18f;
-	static float LiveTileCursorRepeat => 0.055f;
 
 	static bool TrySampleVisibleTile(Room room, Point2 tile, Factory.TileLayer fallbackLayer,
 		out Factory.TileLayer layer, out char sampled)
@@ -516,7 +519,7 @@ public partial class Manager
 		var erasing = tilePaintStroke.Active && tilePaintStroke.Tile == '0';
 		var color = erasing ? ImGuiColor(1.0f, 0.25f, 0.20f, 0.95f) : ImGuiColor(0.45f, 1.0f, 0.75f, 0.95f);
 		var fill = erasing ? ImGuiColor(1.0f, 0.15f, 0.12f, 0.12f) : ImGuiColor(0.35f, 1.0f, 0.65f, 0.12f);
-		var draw = ImGui.GetForegroundDrawList();
+		var draw = GetForegroundDrawList();
 		draw.PushClipRect(viewport.TopLeft, viewport.BottomRight, true);
 		draw.AddRectFilled(topLeft, bottomRight, fill);
 		draw.AddRect(topLeft, bottomRight, color, 0, ImDrawFlags.None, 2.0f);
@@ -525,7 +528,7 @@ public partial class Manager
 
 	void LiveTileStatusOverlayImGui(Rect viewport)
 	{
-		var textSize = ImGui.CalcTextSize(liveTileLabel) * 0.82f;
+		var textSize = CalcTextSize(liveTileLabel) * 0.82f;
 		var swatchSize = new Vector2(14, 14);
 		var padding = new Vector2(4, 2);
 		var gap = 5;
@@ -536,12 +539,12 @@ public partial class Manager
 		position.X = Math.Clamp(position.X, viewport.Left + 4, viewport.Right - size.X - 4);
 		position.Y = Math.Clamp(position.Y, viewport.Top + 4, viewport.Bottom - size.Y - 4);
 
-		ImGui.SetNextWindowPos(position, ImGuiCond.Always);
-		ImGui.SetNextWindowSize(size, ImGuiCond.Always);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 1);
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.72f));
-		ImGui.Begin(
+		SetNextWindowPos(position, ImGuiCond.Always);
+		SetNextWindowSize(size, ImGuiCond.Always);
+		PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+		PushStyleVar(ImGuiStyleVar.WindowRounding, 1);
+		PushStyleColor(ImGuiCol.WindowBg, new Vector4(0, 0, 0, 0.72f));
+		Begin(
 			"LiveTileEditingStatus",
 			ImGuiWindowFlags.NoDecoration |
 			ImGuiWindowFlags.NoInputs |
@@ -549,13 +552,13 @@ public partial class Manager
 			ImGuiWindowFlags.NoFocusOnAppearing |
 			ImGuiWindowFlags.NoNav);
 		DrawLiveTileBrushSwatch(swatchSize);
-		ImGui.SameLine(0, gap);
-		ImGui.SetWindowFontScale(0.82f);
-		ImGui.TextUnformatted(liveTileLabel);
-		ImGui.SetWindowFontScale(1.0f);
-		ImGui.End();
-		ImGui.PopStyleColor();
-		ImGui.PopStyleVar(2);
+		SameLine(0, gap);
+		SetWindowFontScale(0.82f);
+		TextUnformatted(liveTileLabel);
+		SetWindowFontScale(1.0f);
+		End();
+		PopStyleColor();
+		PopStyleVar(2);
 	}
 
 	void DrawLiveTileBrushSwatch(Vector2 size)
@@ -563,11 +566,11 @@ public partial class Manager
 		if (Factory.Find(brush) is { } entry && entry.Image.Texture != null && imgui != null)
 			imgui.Image(entry.Image, size);
 		else
-			ImGui.Dummy(size);
+			Dummy(size);
 
-		var min = ImGui.GetItemRectMin();
-		var max = ImGui.GetItemRectMax();
-		var draw = ImGui.GetWindowDrawList();
+		var min = GetItemRectMin();
+		var max = GetItemRectMax();
+		var draw = GetWindowDrawList();
 		draw.AddRect(min, max, ImGuiColor(1, 1, 1, 0.55f), 0, ImDrawFlags.None, 1);
 		if (brush == '0')
 		{
@@ -583,7 +586,7 @@ public partial class Manager
 		var worldBottomRight = room.WorldBounds.TopLeft + rect.BottomRight * Game.TileSize;
 		var topLeft = GameWorldToImGui(viewport, game!, worldTopLeft);
 		var bottomRight = GameWorldToImGui(viewport, game!, worldBottomRight);
-		var draw = ImGui.GetForegroundDrawList();
+		var draw = GetForegroundDrawList();
 		draw.PushClipRect(viewport.TopLeft, viewport.BottomRight, true);
 		draw.AddRectFilled(topLeft, bottomRight, ImGuiColor(0.35f, 1.0f, 0.65f, 0.14f));
 		draw.AddRect(topLeft, bottomRight, ImGuiColor(0.45f, 1.0f, 0.75f, 0.95f), 0, ImDrawFlags.None, 2.0f);
