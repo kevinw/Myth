@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Foster.Framework;
 using ImGuiNET;
 
-namespace Myth;
+namespace Kit;
 
 public class ImGuiRenderer : IDisposable
 {

@@ -17,4 +17,8 @@
     <ProjectReference Include="../Foster/Framework/Foster.Framework.csproj" AdditionalProperties="RuntimeIdentifier=$(RuntimeIdentifier)" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
+  </ItemGroup>
+
 </Project>
