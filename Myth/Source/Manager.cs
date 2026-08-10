@@ -299,7 +299,7 @@ public partial class Manager : App
 			PerfToggles.UseSimpleDefaults();
 			DitherPerfScale = 0;
 		}
-		
+
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 		debugControls = new(Input);
@@ -317,7 +317,7 @@ public partial class Manager : App
 		var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterVariable.ttf");
 		//var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterTightVariable.ttf");
 		var editorFontFace = 0;
-		
+
 		imgui = new(this, editorFontPath, editorFontFace,
 			iniPath: Path.Join(UserPath, "editor-layout.ini"),
 			mergedFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"),
@@ -872,7 +872,7 @@ public partial class Manager : App
 				: DefaultPaletteDockWidth;
 			if (settings.EditorDockLayoutVersion < EditorDockLayoutVersion)
 				pendingEditorDockLayoutReset = true;
-			imgui.Scale = settings.UIScale;
+			SetImGuiScale(settings.UIScale);
 			if (migrate)
 				SaveEditorSettings();
 		}
@@ -896,7 +896,7 @@ public partial class Manager : App
 			EditorDockLayoutVersion = EditorDockLayoutVersion,
 			UIScale = imgui.Scale,
 		};
-		
+
 		try {
 			Directory.CreateDirectory(UserPath);
 			File.WriteAllText(EditorSettingsPath, JsonSerializer.Serialize(settings, WindowSettingsJsonContext.Default.EditorSettings));
@@ -1350,7 +1350,10 @@ public partial class Manager : App
 
 #if EDITOR
 	void ChangeEditorUiScale(float amount)
-		=> imgui.Scale = Math.Clamp(imgui.Scale + amount, 0.5f, 4.0f);
+		=> SetImGuiScale(imgui.Scale + amount);
+
+	void SetImGuiScale(float scale)
+		=> imgui.Scale = Math.Clamp(scale, 0.5f, 4.0f);
 #endif
 
 

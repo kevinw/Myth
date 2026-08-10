@@ -1,5 +1,18 @@
 # TODO
 
+- recognizable evolved company logos
+- use the chair prop as an existence proof and as a pump for a drawing exercise: new props!
+  - church pews
+  - a pulpit which tumbles when you step on it
+- render animation into the dither field (around an enemy, or as part of a room's vibe)
+- maybe you start in a treehouse, makeshift, there is some incredible danger flowing like a river beneath you in intervals
+- a burrowline teleporter
+- how many petabytes per cubit? (writing)
+- Bud projects a light hologram map from his mouth
+- "This body is but one spelling of my true word"
+- One of the characters speaks with curated chain of thought messages from an open model
+- get a list of every static thing which might be trivially animatable
+- a function for turning the logo into a series of polygons
 - burrow sound needs to be the best sound in the entire game
 - actor search needs a close button to clear the text.
 - make a button you can hit by carrying bud; could be useful as way to teach you to bring him with you.
