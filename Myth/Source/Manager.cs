@@ -30,8 +30,8 @@ public partial class Manager : App
 #endif
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
-	static float uiScale = 2.5f;
-	static float Scale => uiScale;
+	const float DEFAULT_UI_SCALE = 2.5f;
+	float Scale => imgui.Scale;
 	static float ButtonSize => 34;
 	static float ButtonSpacing => 2;
 #if !EDITOR
@@ -299,13 +299,7 @@ public partial class Manager : App
 			PerfToggles.UseSimpleDefaults();
 			DitherPerfScale = 0;
 		}
-
-		uiScale = 2.5f;
-		if (OperatingSystem.IsWindows())
-		{
-			uiScale = 1.5f;
-		}
-
+		
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 		debugControls = new(Input);
@@ -323,11 +317,12 @@ public partial class Manager : App
 		var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterVariable.ttf");
 		//var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterTightVariable.ttf");
 		var editorFontFace = 0;
+		
 		imgui = new(this, editorFontPath, editorFontFace,
 			iniPath: Path.Join(UserPath, "editor-layout.ini"),
 			mergedFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"),
 			mergedFontGlyphRanges: EditorIcons.GlyphRanges,
-			scale: Scale);
+			scale: DEFAULT_UI_SCALE);
 #elif BROWSER
 		imgui = new(this, scale: 1);
 #endif
@@ -877,6 +872,7 @@ public partial class Manager : App
 				: DefaultPaletteDockWidth;
 			if (settings.EditorDockLayoutVersion < EditorDockLayoutVersion)
 				pendingEditorDockLayoutReset = true;
+			imgui.Scale = settings.UIScale;
 			if (migrate)
 				SaveEditorSettings();
 		}
@@ -888,24 +884,23 @@ public partial class Manager : App
 
 	void SaveEditorSettings()
 	{
-		try
+		var settings = new EditorSettings
 		{
+			EditorScrollMode = editorScrollMode,
+			EditorTheme = editorTheme,
+			PreservePlaytestSaveState = preservePlaytestSaveState,
+			EditorGameRunInBackground = editorGameRunInBackground,
+			PasteActorAtViewCenter = pasteActorAtViewCenter,
+			EditorDockWidth = editorDockWidth,
+			EditorPaletteWidth = editorPaletteWidth,
+			EditorDockLayoutVersion = EditorDockLayoutVersion,
+			UIScale = imgui.Scale,
+		};
+		
+		try {
 			Directory.CreateDirectory(UserPath);
-			var settings = new EditorSettings
-			{
-				EditorScrollMode = editorScrollMode,
-				EditorTheme = editorTheme,
-				PreservePlaytestSaveState = preservePlaytestSaveState,
-				EditorGameRunInBackground = editorGameRunInBackground,
-				PasteActorAtViewCenter = pasteActorAtViewCenter,
-				EditorDockWidth = editorDockWidth,
-				EditorPaletteWidth = editorPaletteWidth,
-				EditorDockLayoutVersion = EditorDockLayoutVersion
-			};
 			File.WriteAllText(EditorSettingsPath, JsonSerializer.Serialize(settings, WindowSettingsJsonContext.Default.EditorSettings));
-		}
-		catch (Exception e)
-		{
+		} catch (Exception e) {
 			Console.Error.WriteLine($"Failed to save editor settings: {e}");
 		}
 	}
@@ -920,6 +915,7 @@ public partial class Manager : App
 		public float EditorDockWidth { get; init; } = DefaultToolDockWidth;
 		public float EditorPaletteWidth { get; init; } = DefaultPaletteDockWidth;
 		public int EditorDockLayoutVersion { get; init; } = Manager.EditorDockLayoutVersion;
+		public float UIScale { get; init; } = DEFAULT_UI_SCALE;
 	}
 #endif
 
@@ -1354,7 +1350,7 @@ public partial class Manager : App
 
 #if EDITOR
 	void ChangeEditorUiScale(float amount)
-		=> imgui.Scale = uiScale = Math.Clamp(uiScale + amount, 0.5f, 4.0f);
+		=> imgui.Scale = Math.Clamp(imgui.Scale + amount, 0.5f, 4.0f);
 #endif
 
 
