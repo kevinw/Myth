@@ -11,6 +11,7 @@ sealed class SokobanGame() : App(new AppConfig("Sokoban", "Sokoban", 960, 540, R
 	const int Rows = 8;
 
 	Batcher batcher = null!;
+	SpriteCatalog sprites = null!;
 	readonly Stack<MoveUndo> undo = [];
 	StateMachine<PlayState> state = new(PlayState.Playing);
 	Point2 player;
@@ -31,14 +32,21 @@ sealed class SokobanGame() : App(new AppConfig("Sokoban", "Sokoban", 960, 540, R
 	protected override void Startup()
 	{
 		batcher = new Batcher(GraphicsDevice, "SokobanBatcher");
+		sprites = new SpriteCatalog(GraphicsDevice, FindSpritePath());
+		sprites.Load();
+		sprites.Watch();
 		Reset();
 	}
 
 	protected override void Shutdown()
-		=> batcher.Dispose();
+	{
+		sprites.Dispose();
+		batcher.Dispose();
+	}
 
 	protected override void Update()
 	{
+		sprites.Update(Time.Delta);
 		state.Update(Time.Delta);
 
 		if (Input.Keyboard.Pressed(Keys.Escape))
@@ -65,13 +73,18 @@ sealed class SokobanGame() : App(new AppConfig("Sokoban", "Sokoban", 960, 540, R
 
 		Window.Clear(new Color(0x16181d));
 
-		var origin = new Vector2(
-			(Window.WidthInPixels - Columns * Tile) * 0.5f,
-			(Window.HeightInPixels - Rows * Tile) * 0.5f);
+		var boardSize = new Vector2(Columns * Tile, Rows * Tile);
+		var scale = MathF.Max(1, MathF.Floor(MathF.Min(Window.WidthInPixels / boardSize.X, Window.HeightInPixels / boardSize.Y)));
+		var origin = (new Vector2(Window.WidthInPixels, Window.HeightInPixels) - boardSize * scale) * 0.5f;
+		origin = new Vector2(MathF.Floor(origin.X), MathF.Floor(origin.Y));
 
+		batcher.PushMatrix(
+			Matrix3x2.CreateScale(scale) *
+			Matrix3x2.CreateTranslation(origin));
 		for (var y = 0; y < Rows; y++)
 			for (var x = 0; x < Columns; x++)
-				DrawCell(origin, new Point2(x, y));
+				DrawCell(new Point2(x, y));
+		batcher.PopMatrix();
 
 		batcher.Render(Window);
 		batcher.Clear();
@@ -135,9 +148,9 @@ sealed class SokobanGame() : App(new AppConfig("Sokoban", "Sokoban", 960, 540, R
 		return true;
 	}
 
-	void DrawCell(Vector2 origin, Point2 cell)
+	void DrawCell(Point2 cell)
 	{
-		var pos = origin + (Vector2)(cell * Tile);
+		var pos = (Vector2)(cell * Tile);
 		var baseRect = new Rect(pos, new Vector2(Tile));
 		var floor = ((cell.X + cell.Y) & 1) == 0 ? new Color(0x242a31) : new Color(0x20262d);
 		batcher.Rect(baseRect, map[cell.X, cell.Y] == '#' ? new Color(0x59616d) : floor);
@@ -145,8 +158,27 @@ sealed class SokobanGame() : App(new AppConfig("Sokoban", "Sokoban", 960, 540, R
 			batcher.Rect(baseRect.Inflate(-10), new Color(0xf2cc60));
 		if (map[cell.X, cell.Y] == '$')
 			batcher.Rect(baseRect.Inflate(-5), new Color(0xc17f59));
-		if (cell == player)
+		if (cell == player && !DrawSprite("player", pos + new Vector2(Tile * 0.5f, Tile), SpriteAnchor.BottomCenter))
 			batcher.Rect(baseRect.Inflate(-7), state.Current == PlayState.Won ? new Color(0x7bd88f) : new Color(0x5fcde4));
+	}
+
+	bool DrawSprite(string name, Vector2 position, SpriteAnchor anchor)
+	{
+		if (sprites.Get(name, logMissing: false) is not { Frames.Count: > 0 } sprite)
+			return false;
+
+		var frame = sprite.GetFrameAt(sprite.Animations.Count > 0 ? sprite.Animations[0] : new Sprite.Animation("", 0, sprite.Frames.Count, 0), Time.SecondsF, loop: true);
+		batcher.Image(frame.Subtexture, position, sprite.ResolveOrigin(anchor), Vector2.One, 0, Color.White);
+		return true;
+	}
+
+	static string FindSpritePath()
+	{
+		var local = Path.GetFullPath(Path.Join(Environment.CurrentDirectory, "Assets", "Sources", "Sprites"));
+		if (Directory.Exists(local))
+			return local;
+
+		return Path.GetFullPath(Path.Join(Environment.CurrentDirectory, "..", "Myth", "Assets", "Sources", "Sprites"));
 	}
 
 	readonly record struct MoveUndo(Point2 Player, Point2? Box);
