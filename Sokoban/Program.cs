@@ -1,6 +1,6 @@
 using System.Numerics;
 using Foster.Framework;
-using FosterGames;
+using Kit;
 
 new SokobanGame().Run();
 

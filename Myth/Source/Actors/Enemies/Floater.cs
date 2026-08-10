@@ -1,5 +1,4 @@
 using System.Numerics;
-using FosterGames;
 
 namespace Myth;
 using Foster.Framework;

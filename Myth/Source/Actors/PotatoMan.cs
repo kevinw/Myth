@@ -1,6 +1,5 @@
 namespace Myth;
 
-using FosterGames;
 using Foster.Framework;
 
 [GameActor(Tags = ActorTag.Enemy)]

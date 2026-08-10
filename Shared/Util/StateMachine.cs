@@ -1,4 +1,4 @@
-namespace FosterGames;
+namespace Kit;
 
 public sealed class StateMachine<T>(T initial = default)
 	where T : struct, Enum
