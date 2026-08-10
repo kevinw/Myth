@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../Shared/**/*.cs" Exclude="../Shared/**/bin/**;../Shared/**/obj/**" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../Kit/**/*.cs" Exclude="../Kit/**/bin/**;../Kit/**/obj/**" Link="Kit/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
