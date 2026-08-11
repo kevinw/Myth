@@ -8,7 +8,7 @@ namespace Myth;
 // map in warp mode to travel between activated save points (see Minimap warp mode).
 // For now it renders as a red line on the ground with a soft column of light above.
 [GameActor(Sprite = "Editor/savepoint", Tags = ActorTag.System, BoundsX = -8, BoundsY = -40, BoundsW = 16, BoundsH = 40,
-	LivePositionEditable = true)]
+	LivePositionEditable = true, ShowFacing = false)]
 public class SavePoint : Actor
 {
 	const int LineWidth = 2 * Game.TileSize;   // 2 tiles wide
