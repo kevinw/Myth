@@ -1,4 +1,11 @@
-#if DEBUG
+#if !DEBUG
+namespace Myth;
+
+static class TweakRegistry
+{
+	public static bool Hovered => false;
+}
+#else
 using System.Globalization;
 using System.Diagnostics;
 using System.IO;
