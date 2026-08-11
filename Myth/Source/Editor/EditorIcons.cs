@@ -14,6 +14,7 @@ static class EditorIcons
 	public const string Unlock = "\uf09c";
 	public const string Cut = "\uf0c4";
 	public const string Copy = "\uf0c5";
+	public const string Close = "\uf00d";
 	public const string Reset = "\uf0e2";
 	public const string Pencil = "\uf040";
 	public const string Sliders = "\uf1de";
@@ -32,6 +33,7 @@ static class EditorIcons
 	public static readonly ushort[] GlyphRanges =
 	[
 		0xf002, 0xf002,
+		0xf00d, 0xf00d,
 		0xf067, 0xf067,
 		0xf023, 0xf023,
 		0xf040, 0xf040,
