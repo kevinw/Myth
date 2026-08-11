@@ -43,6 +43,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
     <FmodNativeDir>$(MSBuildProjectDirectory)/Platforms/FMOD/Native/</FmodNativeDir>
   </PropertyGroup>
 

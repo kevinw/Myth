@@ -23,9 +23,12 @@ public class Prop : Actor
 	public string SpriteName = "fire";
 	public Factory.TileLayer Layer;
 	public bool Decal;
+	public float AnimationSpeedRandomness;
+	float animationRate = 1;
 
 	public override bool CastsSpriteShadow => !Decal;
 	public override bool CastsReflection => !Decal;
+	protected override float AnimationRate => animationRate;
 
 	public Prop()
 	{
@@ -42,6 +45,7 @@ public class Prop : Actor
 		Depth = Layer == Factory.TileLayer.Background ? 8 : 4;
 		Play();
 		SetAnimationTime(rng.Float(Animation.Duration));
+		animationRate = MathF.Max(0.01f, 1 + rng.Float(-AnimationSpeedRandomness, AnimationSpeedRandomness));
 		if (propFlags.HasFlag(PropFlags.Destroyable) || propFlags.HasFlag(PropFlags.DestroyPersists))
 		{
 			Mask |= Masks.Destructible;
