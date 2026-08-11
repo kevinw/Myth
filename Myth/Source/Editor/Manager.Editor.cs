@@ -271,9 +271,6 @@ public partial class Manager
 			DockNextToolWindow("Procedural Sounds");
 		proceduralSoundEditor.Draw(NoteDockedWindow);
 #endif
-#if DEBUG
-		TweakRegistry.DrawPanel();
-#endif
 	}
 
 #if EDITOR

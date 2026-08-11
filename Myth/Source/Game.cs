@@ -178,6 +178,7 @@ public partial class Game : IDisposable
 	static float CameraEaseRate => 10f;
 	static float CameraLookAheadEdgeInset => 0.15f;
 	static float CameraLookAheadEaseRate => 8f;
+	static float DebugPlayerDragCameraEaseRate => 2.5539999f.T();
 	const float CameraEaseTriggerEpsilon = 2f;
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
@@ -519,7 +520,7 @@ public partial class Game : IDisposable
 				if (Minimap.Open)
 				{
 					Minimap.ResetView();
-					Minimap.Rebuild(room);
+					Minimap.Rebuild(room, this);
 				}
 			}
 
@@ -675,9 +676,9 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		if (room == null || nextRoom != null || DraggingPlayer)
+		if (room == null || nextRoom != null)
 		{
-			// The camera is under transition/drag control; drop the easing state so normal
+			// The camera is under transition control; drop the easing state so normal
 			// control resumes cleanly clamped to the new room rather than gliding from a stale
 			// (old-room) target.
 			previousCameraTarget = null;
@@ -685,6 +686,14 @@ public partial class Game : IDisposable
 			cameraLookAhead = Vector2.Zero;
 			return;
 		}
+
+#if DEBUG
+		if (DraggingPlayer && GetFirst<Player>() is { } draggedPlayer)
+		{
+			UpdateDraggedPlayerCamera(draggedPlayer);
+			return;
+		}
+#endif
 
 		// In 4:3 crop mode the Zoom control un-crops (reveals the cut-off sides) instead of the
 		// usual 2x magnify, so the two never fight: suppress fbZoom whenever cropping is active.
@@ -735,6 +744,23 @@ public partial class Game : IDisposable
 		previousCameraTarget = target;
 		previousCameraFocus = cameraFocus;
 	}
+
+#if DEBUG
+	void UpdateDraggedPlayerCamera(Player player)
+	{
+		easedPlayerCameraTarget = player.Position;
+		easedPlayerVelocity = Vector2.Zero;
+		cameraError = Vector2.Zero;
+		cameraLookAhead = Vector2.Zero;
+
+		var target = GetGameplayCameraTarget();
+		var amount = 1 - MathF.Exp(-Time.Delta * DebugPlayerDragCameraEaseRate);
+		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		Camera = ClampCameraToRoomFb(Vector2.Lerp(Camera, target, amount), padding);
+		previousCameraTarget = null;
+		previousCameraFocus = easedPlayerCameraTarget;
+	}
+#endif
 
 	// Deactivate any active camera blocker whose rect the just-revealed area overlaps, so a
 	// RevealDoor opening also opens the camera over the secret it uncovered.
@@ -1060,7 +1086,7 @@ public partial class Game : IDisposable
 
 		Minimap.BeginWarp(targets, savePoint.ActorId);
 		Minimap.ResetView();
-		Minimap.Rebuild(room);
+		Minimap.Rebuild(room, this);
 		PlayAudioEvent("map/open");
 	}
 

@@ -8,6 +8,7 @@ namespace Myth;
 public partial class Manager
 {
 	const string LiveRoomCreateUndoName = "Create Room While Playing";
+	static bool LiveRoomCreationEnabled => false;
 	static int LiveRoomPlatformExtensionTiles => 10;
 
 	bool liveRoomEditingEnabled = true;
@@ -61,6 +62,8 @@ public partial class Manager
 
 	internal bool NotifyMissingLiveAdjacentRoom(Game liveGame, Room runtimeRoom, Point2 direction, Vector2 exitPosition)
 	{
+		if (!LiveRoomCreationEnabled)
+			return false;
 		if (!playing || !liveRoomEditingEnabled || liveCreateRoomTiles != null || !liveGame.AcceptsLiveInput)
 			return false;
 		if (Assets.GetRoom(runtimeRoom.Id) is not { } source)

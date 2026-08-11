@@ -199,7 +199,7 @@ public partial class Manager
 		if (game?.CurrentRoom is { } room)
 		{
 			game.Minimap.Open = true;
-			game.Minimap.Rebuild(room);
+			game.Minimap.Rebuild(room, game);
 		}
 		CloseGameMenu();
 	}

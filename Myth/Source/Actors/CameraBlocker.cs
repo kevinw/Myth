@@ -17,6 +17,7 @@ public class CameraBlocker : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 4, Game.TileSize * 4);
 
 	public Point2 Size { get; set; } = DefaultSize;
+	public bool HighlightOnMap = false;
 
 	// Runtime-only: blockers reset to active each time the room (re)loads, so reveals last
 	// for the visit but not across reloads.

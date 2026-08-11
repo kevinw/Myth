@@ -1099,7 +1099,7 @@ public partial class Manager : App
 #if DEBUG
 		// Toggle the Tweaks panel from anywhere — edit or play — except while actively typing into a
 		// text field (so T reaches the search box). Runs before the play/edit branch so both modes see it.
-		if (imgui is { WantsTextInput: false } && debugControls.Tweaks.Pressed)
+		if (imgui is { WantsTextInput: false } && Input.Keyboard.Pressed(Keys.T))
 			TweakRegistry.Open = !TweakRegistry.Open;
 #endif
 #if EDITOR
@@ -1208,8 +1208,14 @@ public partial class Manager : App
 								var updatePlayingGame = true;
 #endif
 								if (updatePlayingGame)
+								{
+#if EDITOR
+									if (keyboardShortcutsBlocked)
+										controls.Clear();
+#endif
 									using (PerfStats.Time(PerfDetail.GameUpdate))
 										UpdateGameWithAllocationProfile(g);
+								}
 								CompleteGameFrame();
 							}
 					}
@@ -1306,6 +1312,9 @@ public partial class Manager : App
 			EditorUI();
 			DrawCommandConsole();
 			DrawDebugHelp();
+#endif
+#if DEBUG
+			TweakRegistry.DrawPanel();
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();

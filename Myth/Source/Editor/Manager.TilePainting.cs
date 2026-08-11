@@ -159,7 +159,7 @@ public partial class Manager
 			return true;
 
 		var viewport = GameViewRect;
-		var overGame = viewport.Contains(Cursor) && (!imgui.WantsMouseInput || gameViewHovered);
+		var overGame = viewport.Contains(Cursor) && !TweakRegistry.Hovered && (!imgui.WantsMouseInput || gameViewHovered);
 		if (!overGame)
 		{
 			if (tilePaintStroke.Active && !Input.Mouse.LeftDown && !Input.Mouse.RightDown)
@@ -501,6 +501,7 @@ public partial class Manager
 		}
 
 		if ((!liveTileBrushArmed && !Input.Keyboard.Alt) || !viewport.Contains(Cursor)
+			|| TweakRegistry.Hovered
 			|| imgui.WantsMouseInput && !gameViewHovered)
 			return;
 

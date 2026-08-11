@@ -105,7 +105,7 @@ public partial class Manager
 		}
 
 		var viewport = GameViewRect;
-		var overGame = viewport.Contains(Cursor) && (!imgui.WantsMouseInput || gameViewHovered);
+		var overGame = viewport.Contains(Cursor) && !TweakRegistry.Hovered && (!imgui.WantsMouseInput || gameViewHovered);
 		if (!overGame)
 		{
 			liveHoveredActorId = null;

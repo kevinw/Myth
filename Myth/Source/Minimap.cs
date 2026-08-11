@@ -14,7 +14,11 @@ public class Minimap
 	/// space beyond it). Tile is world tile space.
 	public readonly record struct ExitMarker(Point2 Tile, Point2 Direction, int Length);
 
-	public readonly record struct MapRoom(RectInt TileBounds, RectInt SeenRect, List<RectInt> SolidRuns, List<StackList8<Vector2>> SlopePolygons, List<ExitMarker> Markers);
+	/// A terminal edge of the visible map, softened inward so room-color crops don't read as
+	/// hard screenshot boundaries. Tile is world tile space; Direction is the outward normal.
+	public readonly record struct EdgeShade(Point2 Tile, Point2 Direction, int Length);
+
+	public readonly record struct MapRoom(RectInt TileBounds, RectInt SeenRect, List<RectInt> SolidRuns, List<StackList8<Vector2>> SlopePolygons, List<ExitMarker> Markers, List<EdgeShade> EdgeShades);
 
 	public bool Open;
 	public Vector2 Pan;
@@ -35,6 +39,7 @@ public class Minimap
 	// World-pixel point the warp map is centering on; lerps toward the selected target
 	// so changing selection glides the map over (see GameView.DrawMinimap).
 	public Vector2 WarpFocus;
+	public Vector2 WarpMarkerPosition;
 
 	public WarpTarget? SelectedWarp
 		=> WarpMode && WarpSelection >= 0 && WarpSelection < WarpPoints.Count ? WarpPoints[WarpSelection] : null;
@@ -48,6 +53,7 @@ public class Minimap
 		Open = true;
 		WarpOriginActorId = currentActorId;
 		WarpFocus = WarpPoints.Count > 0 ? (Vector2)WarpPoints[WarpSelection].Position : Vector2.Zero;
+		WarpMarkerPosition = WarpFocus;
 	}
 
 	public void CloseWarp()
@@ -184,18 +190,18 @@ public class Minimap
 				revealedDoorIds.Add(id);
 	}
 
-	public void Rebuild(Room currentRoom)
+	public void Rebuild(Room currentRoom, Game? currentGame = null)
 	{
 		Rooms.Clear();
 		foreach (var id in visitedRoomIds)
 		{
 			var room = currentRoom.Id == id ? currentRoom : Assets.RoomsById.GetValueOrDefault(id);
 			if (room != null && room.Sublayer == currentRoom.Sublayer)
-				Rooms.Add(BuildRoom(room));
+				Rooms.Add(BuildRoom(room, room == currentRoom ? currentGame : null));
 		}
 	}
 
-	MapRoom BuildRoom(Room room)
+	MapRoom BuildRoom(Room room, Game? currentGame)
 	{
 		var size = room.Size;
 		var seen = seenTiles.TryGetValue(room.Id, out var seenRect) ? seenRect : new RectInt(size);
@@ -208,6 +214,7 @@ public class Minimap
 			solid[tile.Y * size.X + tile.X] = true;
 			hidden[tile.Y * size.X + tile.X] = true;
 		});
+		ApplyCameraBlockers(room, currentGame, solid, hidden);
 
 		// Slopes count as solid for exit/frontier logic but draw as their actual polygons —
 		// unless still hidden under an unrevealed cover, where a square must not leak the shape.
@@ -248,8 +255,56 @@ public class Minimap
 		CollectLinkedDoorExits(room, seen, markers);
 		CollectFrontiers(room, solid, seen, markers);
 
-		return new MapRoom(new RectInt(room.TileSpacePosition, size), seen, runs, slopePolygons, markers);
+		var edgeShades = new List<EdgeShade>();
+		CollectEdgeShades(room, solid, seen, Point2.Up, edgeShades);
+		CollectEdgeShades(room, solid, seen, Point2.Down, edgeShades);
+		CollectEdgeShades(room, solid, seen, Point2.Left, edgeShades);
+		CollectEdgeShades(room, solid, seen, Point2.Right, edgeShades);
+
+		return new MapRoom(new RectInt(room.TileSpacePosition, size), seen, runs, slopePolygons, markers, edgeShades);
 	}
+
+	static void ApplyCameraBlockers(Room room, Game? currentGame, bool[] solid, bool[] hidden)
+	{
+		if (currentGame != null)
+		{
+			foreach (var actor in currentGame.Actors)
+				if (actor is CameraBlocker { Active: true, HighlightOnMap: false } blocker && blocker.Room == room)
+					ApplyCameraBlocker(room, blocker.WorldRect, solid, hidden);
+			return;
+		}
+
+		foreach (var actor in room.Actors)
+		{
+			if (ActorSpecs.ReadResolvedString(actor, "Type") != nameof(CameraBlocker) ||
+			    ActorSpecs.GetResolvedProperty(actor, nameof(CameraBlocker.HighlightOnMap))?.GetValue<bool>() == true)
+				continue;
+			var local = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
+			var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? CameraBlocker.DefaultSize;
+			ApplyCameraBlocker(room, new RectInt(room.WorldBounds.TopLeft + local, size), solid, hidden);
+		}
+	}
+
+	static void ApplyCameraBlocker(Room room, RectInt worldRect, bool[] solid, bool[] hidden)
+	{
+		var topLeft = new Point2(FloorDiv(worldRect.Left, Game.TileSize), FloorDiv(worldRect.Top, Game.TileSize)) - room.TileSpacePosition;
+		var bottomRight = new Point2(CeilDiv(worldRect.Right, Game.TileSize), CeilDiv(worldRect.Bottom, Game.TileSize)) - room.TileSpacePosition;
+		var local = RectInt.Between(topLeft, bottomRight)
+			.GetIntersection(new RectInt(room.Size));
+		for (var y = local.Top; y < local.Bottom; y++)
+			for (var x = local.Left; x < local.Right; x++)
+			{
+				var index = y * room.Size.X + x;
+				solid[index] = true;
+				hidden[index] = true;
+			}
+	}
+
+	static int FloorDiv(int value, int divisor)
+		=> value >= 0 ? value / divisor : -((-value + divisor - 1) / divisor);
+
+	static int CeilDiv(int value, int divisor)
+		=> value >= 0 ? (value + divisor - 1) / divisor : -((-value) / divisor);
 
 	// Edges of the seen area that cut through the room with open space beyond them: the camera
 	// hasn't panned there yet, so they pulse like exits.
@@ -273,6 +328,37 @@ public class Minimap
 				if (!solid[y * size.X + x])
 					return true;
 		return false;
+	}
+
+	void CollectEdgeShades(Room room, bool[] solid, RectInt seen, Point2 direction, List<EdgeShade> shades)
+	{
+		var along = direction.Y != 0 ? Point2.Right : Point2.Down;
+		var length = direction.Y != 0 ? seen.Width : seen.Height;
+		var first = new Point2(direction.X > 0 ? seen.Right - 1 : seen.Left, direction.Y > 0 ? seen.Bottom - 1 : seen.Top);
+
+		var runStart = 0;
+		var inRun = false;
+		for (var i = 0; i <= length; i++)
+		{
+			var terminal = i < length && IsTerminalEdge(room, solid, first + along * i, direction);
+			if (terminal == inRun)
+				continue;
+			if (inRun)
+				shades.Add(new(room.TileSpacePosition + first + along * runStart, direction, i - runStart));
+			inRun = terminal;
+			runStart = i;
+		}
+	}
+
+	static bool IsTerminalEdge(Room room, bool[] solid, Point2 tile, Point2 direction)
+	{
+		var size = room.Size;
+		var outside = tile + direction;
+		if (outside.X >= 0 && outside.Y >= 0 && outside.X < size.X && outside.Y < size.Y)
+			return solid[outside.Y * size.X + outside.X];
+
+		var outsideWorld = room.TileSpacePosition + outside;
+		return RoomAtWorldTile(outsideWorld, room.Sublayer) == null;
 	}
 
 	// Walks one border edge grouping contiguous open tiles that face the same unvisited room
@@ -352,8 +438,11 @@ public sealed partial class GameView
 	static float MinimapDim => 0.8f;       // how dark the game dims behind the map
 	static float MinimapFadeSpeed => 10f;  // fully fades in or out in 0.1s
 	static float WarpFocusLerpSpeed => 9f; // how fast the map glides to a newly selected warp target
+	static float WarpMarkerLerpSpeed => 24f;
 	static Color MinimapRoomFill => new(0x241a3e, 50);
 	static Color MinimapWall => new(0x00, 80);
+	static int MinimapEdgeShadeSteps => 2;
+	static float MinimapEdgeShadeAlpha => 0.36f;
 	static float MinimapWorldColorOpacity => 1f; // how strongly the baked world map reads as the room fill
 	const string WarpHelp = "{Move} Move    {Confirm} Teleport    {Back} Back";
 	const string WarpHelpNoMovement = "{Confirm} Teleport    {Back} Back";
@@ -378,6 +467,7 @@ public sealed partial class GameView
 		if (game.Minimap.WarpMode && game.Minimap.SelectedWarp is { } sel)
 		{
 			game.Minimap.WarpFocus = Vector2.Lerp(game.Minimap.WarpFocus, (Vector2)sel.Position, 1f - MathF.Exp(-Time.Delta * WarpFocusLerpSpeed));
+			game.Minimap.WarpMarkerPosition = Vector2.Lerp(game.Minimap.WarpMarkerPosition, (Vector2)sel.Position, 1f - MathF.Exp(-Time.Delta * WarpMarkerLerpSpeed));
 			origin += (focusWorld - game.Minimap.WarpFocus) / TileSize * s;
 		}
 
@@ -409,6 +499,8 @@ public sealed partial class GameView
 		foreach (var mapRoom in game.Minimap.Rooms)
 		{
 			var basePosition = origin + (Vector2)mapRoom.TileBounds.Position * s;
+			foreach (var edge in mapRoom.EdgeShades)
+				DrawMinimapEdgeShade(origin, edge, s, minimapOpacity);
 			foreach (var run in mapRoom.SolidRuns)
 				Batcher.Rect(new Rect(basePosition + (Vector2)run.Position * s, (Vector2)run.Size * s), MinimapWall * minimapOpacity);
 			foreach (var polygon in mapRoom.SlopePolygons)
@@ -440,8 +532,8 @@ public sealed partial class GameView
 			for (var i = 0; i < game.Minimap.WarpPoints.Count; i++)
 			{
 				var wp = game.Minimap.WarpPoints[i];
-				var p = origin + (Vector2)wp.Position / TileSize * s;
 				var selected = i == game.Minimap.WarpSelection;
+				var p = origin + (selected ? game.Minimap.WarpMarkerPosition : (Vector2)wp.Position) / TileSize * s;
 				var half = (selected ? 5f : 3f) / 2f;
 				var alpha = selected ? 1f : 0.35f + 0.5f * warpBlink;
 				Batcher.Rect(new Rect(p.X - half, p.Y - half, half * 2, half * 2), new Color(0xd23c3c) * (alpha * minimapOpacity));
@@ -471,5 +563,19 @@ public sealed partial class GameView
 
 		Batcher.Render(output);
 		Batcher.Clear();
+	}
+
+	void DrawMinimapEdgeShade(Vector2 origin, Minimap.EdgeShade edge, float scale, float opacity)
+	{
+		var p = origin + (Vector2)edge.Tile * scale;
+		for (var i = 0; i < MinimapEdgeShadeSteps; i++)
+		{
+			var alpha = MinimapEdgeShadeAlpha * (1 - i / (float)MinimapEdgeShadeSteps) * opacity;
+			var rect = edge.Direction.Y < 0 ? new Rect(p.X, p.Y + i, edge.Length * scale, 1)
+				: edge.Direction.Y > 0 ? new Rect(p.X, p.Y + scale - 1 - i, edge.Length * scale, 1)
+				: edge.Direction.X < 0 ? new Rect(p.X + i, p.Y, 1, edge.Length * scale)
+				: new Rect(p.X + scale - 1 - i, p.Y, 1, edge.Length * scale);
+			Batcher.Rect(rect, Color.Black * alpha);
+		}
 	}
 }
