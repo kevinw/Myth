@@ -1,5 +1,7 @@
 # TODO
 
+- make a glass tube. the lights go out. all you illuminate is the tube.
+- add a shortcut for opening in the xcode graphics debugger; have a look and see if we're doing anything dumb.
 - go back to the original two inspo images (multicolored dither cliff and cathedral) and try to make a room more like them; color variety!
 - recognizable evolved company logos
 - use the chair prop as an existence proof and as a pump for a drawing exercise: new props!
