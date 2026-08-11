@@ -79,8 +79,8 @@
       "Position": [156, 32],
       "RevealSpeed": 9999999,
       "Emissive": true,
-      "Text": "emerge from squished\nto jump high",
-      "LineHeightMultiplier": 0.7
+      "LineHeightMultiplier": 0.7,
+      "Text": "emerge from bosonic\nto jump higher"
     },
     {
       "Id": "ceb9410ecd2965be",
@@ -100,7 +100,8 @@
       "Id": "2fd93d3a751f46d4",
       "Type": "Prop",
       "Position": [170, 51],
-      "SpriteName": "Props/chair"
+      "SpriteName": "Props/chair",
+      "propFlags": "Destroyable"
     },
     {
       "Id": "42c3dc56c473bf3b",

@@ -118,7 +118,7 @@
     {
       "Id": "57d00c4a4e3e4f13",
       "Type": "TitleText",
-      "Position": [188, 160],
+      "Position": [212, 40],
       "Text": "press {Jump} to jump",
       "RevealSpeed": 100000000,
       "Emissive": true

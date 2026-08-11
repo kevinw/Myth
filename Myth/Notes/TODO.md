@@ -1,5 +1,6 @@
 # TODO
 
+- go back to the original two inspo images (multicolored dither cliff and cathedral) and try to make a room more like them; color variety!
 - recognizable evolved company logos
 - use the chair prop as an existence proof and as a pump for a drawing exercise: new props!
   - church pews

@@ -10,12 +10,20 @@ public class Bud : Pawn, ICarryable
 	private const float EnterDelay = 1.0f;
 	private const float MirrorPlayerCrawlDelay = 0.25f;
 	private const float MirrorPlayerCrawlReleaseDelay = 0.25f;
+	private const int EnterGroundProbeDepth = 4;
+	private const int EnterSearchRadiusTiles = 5;
+	private const int EnterWalkDistance = Game.TileSize * 3;
+	private const int EnterWalkOffscreenPixels = Game.TileSize - 1;
+	private const int EnterWalkPathStep = 2;
+	private const int EnterWalkReachDistance = 2;
 	static float BurrowRideRadius => 14f;
 	static float BurrowPopDelay => 0.25f;
 	static float BurrowPopInputMirrorTime => 0.25f;
 	private readonly Navigator nav;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
+	private Point2? enterWalkTarget;
+	private bool enterWalkDucking;
 	private bool enteredRoom;
 	private Point2 entryPosition;
 	private float mirrorPlayerCrawlTimer;
@@ -87,6 +95,8 @@ public class Bud : Pawn, ICarryable
 	public void OnPickedUp(Player player)
 	{
 		CarriedBy = player;
+		enterWalkTarget = null;
+		enterWalkDucking = false;
 		CollidesWithSolids = false;
 		Stop();
 		ducking = false;
@@ -153,7 +163,11 @@ public class Bud : Pawn, ICarryable
 		var recoverWallJump = false;
 		if (!nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
 		{
-			if (nav.TryRecoverLanding(out moveX, out jumpPressed, out recoverWallJump))
+			if (TryWalkInFromEntrance(out moveX, out moveY))
+			{
+				// Finishing the room-entry reveal; normal following resumes at the target.
+			}
+			else if (nav.TryRecoverLanding(out moveX, out jumpPressed, out recoverWallJump))
 			{
 				// Mid-air with no edge to run (a missed/aborted arc): steer onto a reachable
 				// surface — or over a pit, onto a wall to kick back up — pathing resumes
@@ -749,11 +763,15 @@ public class Bud : Pawn, ICarryable
 		if (ridingPlayerBurrow || burrowPopDelayTimer > 0 || CarriedBy != null)
 		{
 			pendingRoomChange = null;
+			enterWalkTarget = null;
+			enterWalkDucking = false;
 			nav.ClearBlockedPathEdges();
 			return;
 		}
 
 		pendingRoomChange = change;
+		enterWalkTarget = null;
+		enterWalkDucking = false;
 		enterTimer = EnterDelay;
 		Visible = false;
 		CollidesWithSolids = false;
@@ -764,8 +782,27 @@ public class Bud : Pawn, ICarryable
 	private void EnterRoom(RoomChange change)
 	{
 		pendingRoomChange = null;
-		Position = FindEnterPosition(change);
-		entryPosition = Position;
+		ducking = false;
+		Hitbox = new(StandingHitboxRect);
+		var position = FindEnterPosition(change);
+		var walkDucking = false;
+		if (TryFindWalkInEntrance(change, position, StandingHitboxRect, out var start, out var target) ||
+			(walkDucking = true) && TryFindWalkInEntrance(change, position, DuckingHitboxRect, out start, out target))
+		{
+			Position = start;
+			enterWalkTarget = target;
+			enterWalkDucking = walkDucking;
+			ducking = enterWalkDucking;
+			Hitbox = new(ducking ? DuckingHitboxRect : StandingHitboxRect);
+			entryPosition = target;
+		}
+		else
+		{
+			Position = position;
+			enterWalkTarget = null;
+			enterWalkDucking = false;
+			entryPosition = position;
+		}
 		Velocity = Vector2.Zero;
 		CollidesWithSolids = true;
 		Visible = true;
@@ -808,11 +845,159 @@ public class Bud : Pawn, ICarryable
 		foreach (var offset in offsets)
 		{
 			var position = basePosition + offset;
-			var hitbox = Hitbox.Rect + position;
-			if (!Game.OverlapsRoomCollision(hitbox))
+			if (CanEnterAt(change.To, position, true))
 				return position;
 		}
 
-		return basePosition;
+		for (var radius = 1; radius <= EnterSearchRadiusTiles; radius++)
+		{
+			for (var y = -radius; y <= radius; y++)
+			for (var x = -radius; x <= radius; x++)
+			{
+				if (Math.Abs(x) != radius && Math.Abs(y) != radius)
+					continue;
+
+				var position = basePosition + new Point2(x * Game.TileSize, y * Game.TileSize);
+				if (CanEnterAt(change.To, position, true))
+					return position;
+			}
+		}
+
+		if (change.Direction.Y > 0)
+		{
+			foreach (var offset in offsets)
+			{
+				var position = basePosition + offset;
+				if (CanEnterAt(change.To, position, false))
+					return position;
+			}
+		}
+
+		return CanEnterAt(change.To, basePosition, false) ? basePosition : Game.RoomEntryPosition;
+	}
+
+	private bool CanEnterAt(Room room, Point2 position, bool requireGround)
+		=> CanEnterAt(room, position, StandingHitboxRect, requireGround);
+
+	private bool CanEnterAt(Room room, Point2 position, RectInt hitbox, bool requireGround)
+	{
+		var body = hitbox + position;
+		if (!room.WorldBounds.Contains(body) || Game.OverlapsRoomCollision(room, body))
+			return false;
+
+		if (!requireGround)
+			return true;
+
+		var ground = new RectInt(body.Left, body.Bottom, body.Width, EnterGroundProbeDepth);
+		return Game.OverlapsRoomCollision(room, ground) || OverlapsJumpthruSupport(room, ground);
+	}
+
+	private bool TryFindWalkInEntrance(RoomChange change, Point2 fallbackTarget, RectInt hitbox, out Point2 start, out Point2 target)
+	{
+		start = default;
+		target = default;
+		if (change.Kind != RoomChangeKind.EdgeTransition || change.Direction.X == 0)
+			return false;
+
+		var room = change.To;
+		var bounds = room.WorldBounds;
+		var inward = Math.Sign(change.Direction.X);
+		var startX = inward > 0
+			? bounds.Left - hitbox.Right + 1
+			: bounds.Right - hitbox.Left - 1;
+		start = new Point2(startX, fallbackTarget.Y);
+		if (!CanWalkInFrom(room, start, target: fallbackTarget, hitbox))
+			return false;
+
+		target = fallbackTarget;
+		if ((target.X - start.X) * inward < EnterWalkDistance)
+		{
+			var targetX = start.X + inward * EnterWalkDistance;
+			target = new Point2(targetX, fallbackTarget.Y);
+			if (!CanEnterAt(room, target, hitbox, true))
+				target = fallbackTarget;
+		}
+
+		return (target.X - start.X) * inward > EnterWalkReachDistance &&
+			IsWalkInPathClear(room, start, target, hitbox);
+	}
+
+	private bool IsWalkInPathClear(Room room, Point2 start, Point2 target, RectInt hitbox)
+	{
+		var direction = Math.Sign(target.X - start.X);
+		if (direction == 0)
+			return false;
+
+		for (var x = start.X; direction > 0 ? x <= target.X : x >= target.X; x += direction * EnterWalkPathStep)
+			if (!CanWalkInAt(room, new Point2(x, start.Y), hitbox))
+				return false;
+
+		return CanEnterAt(room, target, hitbox, true);
+	}
+
+	private bool CanWalkInFrom(Room room, Point2 start, Point2 target, RectInt hitbox)
+	{
+		var direction = Math.Sign(target.X - start.X);
+		if (direction == 0)
+			return false;
+
+		var firstInsideX = direction > 0
+			? room.WorldBounds.Left - hitbox.Left + 1
+			: room.WorldBounds.Right - hitbox.Right - 1;
+		for (var x = start.X; direction > 0 ? x <= firstInsideX : x >= firstInsideX; x += direction * EnterWalkPathStep)
+			if (!CanWalkInAt(room, new Point2(x, start.Y), hitbox))
+				return false;
+
+		return CanEnterAt(room, new Point2(firstInsideX, start.Y), hitbox, true);
+	}
+
+	private bool CanWalkInAt(Room room, Point2 position, RectInt hitbox)
+	{
+		var body = hitbox + position;
+		var allowed = room.WorldBounds;
+		if (body.Left < room.WorldBounds.Left)
+			allowed.Left -= EnterWalkOffscreenPixels + hitbox.Width;
+		else if (body.Right > room.WorldBounds.Right)
+			allowed.Right += EnterWalkOffscreenPixels + hitbox.Width;
+
+		if (!allowed.Contains(body) || Game.OverlapsRoomCollision(room, body))
+			return false;
+
+		var ground = new RectInt(body.Left, body.Bottom, body.Width, EnterGroundProbeDepth);
+		return Game.OverlapsRoomCollision(room, ground) || OverlapsJumpthruSupport(room, ground);
+	}
+
+	private bool TryWalkInFromEntrance(out float moveX, out int moveY)
+	{
+		moveX = 0;
+		moveY = 0;
+		if (enterWalkTarget is not { } target)
+			return false;
+
+		var dx = target.X - Position.X;
+		if (Math.Abs(dx) <= EnterWalkReachDistance)
+		{
+			Position = target;
+			enterWalkTarget = null;
+			enterWalkDucking = false;
+			return false;
+		}
+
+		moveX = Math.Sign(dx);
+		moveY = enterWalkDucking ? 1 : 0;
+		nav.SetDebugNavState(Game.IsPlatformNavDebugVisible ? $"enter walk {target}" : "enter walk");
+		return true;
+	}
+
+	private bool OverlapsJumpthruSupport(Room room, RectInt probe)
+	{
+		foreach (var actor in Game.Actors)
+		{
+			if (actor == this || actor.Room != room || !actor.Mask.Has(Masks.Jumpthru))
+				continue;
+			if (actor.Hitbox.Shape == Hitbox.Shapes.Rect && probe.Overlaps(actor.Hitbox.Rect + actor.Position))
+				return true;
+		}
+		return false;
 	}
 }

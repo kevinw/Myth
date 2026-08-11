@@ -108,10 +108,11 @@
     {
       "Id": "f59f181c2ccde014",
       "Type": "TitleText",
-      "Position": [69, 123],
+      "Position": [68, 70],
       "Emissive": true,
       "RevealSpeed": 9999999,
-      "Text": "hold down\nto crouch"
+      "LineHeightMultiplier": 0.7,
+      "Text": "hold down\nto crawl"
     }
   ]
 }
