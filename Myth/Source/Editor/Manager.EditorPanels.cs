@@ -95,12 +95,7 @@ public partial class Manager
 			(entry.Name?.Contains(actorPaletteSearch, StringComparison.OrdinalIgnoreCase) ?? false);
 
 	void DrawActorPaletteSearch()
-	{
-		ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3));
-		ImGui.SetNextItemWidth(-1);
-		ImGui.InputTextWithHint("##ActorSearch", EditorIcons.SearchActors, ref actorPaletteSearch, 64);
-		ImGui.PopStyleVar();
-	}
+		=> EditorSearchBar.Draw("##ActorSearch", ref actorPaletteSearch, 64, "Actors");
 
 	/// Which panels exist, for the layout reset to re-home them all.
 	void OpenAllEditorPanels()

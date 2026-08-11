@@ -7,7 +7,12 @@ public class Door : Actor, IActivatable
 {
 	public bool StartsVisible;
 	public bool Locked;
-	private float delay = 0;
+	float delay;
+	bool activationOpen;
+	bool pendingClose;
+	HashSet<Actor>? activationSources;
+
+	static RectInt DoorHitbox => new(-6, -16, 12, 16);
 
 	public Door()
 	{
@@ -18,14 +23,14 @@ public class Door : Actor, IActivatable
 
 	public override void Added()
 	{
+		base.Added();
+		Hitbox = new(DoorHitbox);
 		if (StartsVisible || Locked)
 			Appear();
-
 	}
 
 	public void Appear()
 	{
-		Hitbox = new (new RectInt(-6, -16, 12, 16));
 		Mask = Masks.Solid;
 		Visible = true;
 
@@ -36,6 +41,17 @@ public class Door : Actor, IActivatable
 	public override void Update()
 	{
 		base.Update();
+		if (activationOpen)
+			return;
+		if (pendingClose)
+		{
+			if (CanClose())
+			{
+				pendingClose = false;
+				Appear();
+			}
+			return;
+		}
 
 		// wait to appear
 		if (!Visible)
@@ -67,11 +83,29 @@ public class Door : Actor, IActivatable
 		}
 	}
 
-	public void Activate(Actor source)
+	public void SetActive(Actor source, bool active)
 	{
-		if (Game.destroying.Contains(this))
+		activationSources ??= [];
+		if (active ? !activationSources.Add(source) : !activationSources.Remove(source))
 			return;
-		Game.Create<Pop>(Position + new Point2(0, -8));
-		Game.Destroy(this);
+
+		activationOpen = activationSources.Count > 0;
+		pendingClose = !activationOpen;
+		if (!activationOpen)
+			return;
+
+		pendingClose = false;
+		if (Visible)
+			Game.Create<Pop>(Position + new Point2(0, -8));
+		Mask = Masks.None;
+		Visible = false;
+	}
+
+	bool CanClose()
+	{
+		foreach (var actor in Game.Actors)
+			if ((actor is Pawn || actor is ICarryable { CarriedBy: null }) && actor.OverlapsAny(Point2.Zero, this))
+				return false;
+		return true;
 	}
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 
 namespace Myth;
@@ -40,6 +41,9 @@ public class Actor
 	[NoSerialize] public float IFrameTime = 0.50f;
 	[NoSerialize] public bool CollidesWithSolids = true;
 	[NoSerialize] public string? ActorId;
+#if EDITOR
+	[NoSerialize] internal JsonObject? AuthoredSpec;
+#endif
 	internal ActorTag Tags;
 	[NoSerialize] internal string? SessionDestroyKey;
 	internal bool KeepOnRoomTransition;

@@ -63,8 +63,7 @@ public static partial class Assets
 	public static string INBETWEENS_JSON_FILENAME => Path.Join(SourcesPath, "inbetweens.json");
 
 	// Populated during the visual bake and serialized into sprite animations.
-	public record struct GeneratedTransition(string FromTag, string ToTag, int FrameCount, float[] Durations);
-	public static readonly Dictionary<string, List<GeneratedTransition>> GeneratedTransitions = new();
+	public static readonly Dictionary<string, List<GeneratedSpriteTransition>> GeneratedTransitions = new();
 
 	// Expanded frame durations for sprites with inbetweens
 	static readonly Dictionary<string, float[]> ExpandedFrameDurations = new();
@@ -939,49 +938,7 @@ public static partial class Assets
 		foreach (var packed in manifest.Subtextures)
 			Subtextures[packed.Name] = packed.ToSubtexture(atlas);
 
-		var foundSprites = new HashSet<string>();
-		foreach (var packed in manifest.Sprites)
-		{
-			foundSprites.Add(packed.Name);
-			if (!Sprites.TryGetValue(packed.Name, out var sprite))
-			{
-				sprite = new Sprite(packed.Name, packed.Origin.ToVector2());
-				Sprites.Add(packed.Name, sprite);
-			}
-
-			var frames = new List<Sprite.Frame>(packed.Frames.Count);
-			foreach (var frame in packed.Frames)
-				frames.Add(new(
-					frame.Subtexture.ToSubtexture(atlas),
-					frame.VisibleSubtexture.ToSubtexture(atlas),
-					frame.NormalSubtexture.ToSubtexture(atlas),
-					frame.EmissiveSubtexture.ToSubtexture(atlas),
-					frame.Duration,
-					frame.UserData));
-
-			var animations = new List<Sprite.Animation>(packed.Animations.Count);
-			foreach (var animation in packed.Animations)
-				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
-
-			var sockets = new Dictionary<string, Sprite.Socket[]>(StringComparer.OrdinalIgnoreCase);
-			foreach (var (socketName, packedPoses) in packed.Sockets)
-			{
-				var poses = new Sprite.Socket[packedPoses.Count];
-				for (var i = 0; i < poses.Length; i++)
-					poses[i] = new(packedPoses[i].Position.ToVector2(), packedPoses[i].Normal.ToVector2());
-				sockets[socketName] = poses;
-			}
-
-			sprite.Reload(packed.Origin.ToVector2(), frames, animations, packed.Slices, sockets);
-		}
-
-		foreach (var (name, sprite) in Sprites.ToArray())
-		{
-			if (foundSprites.Contains(name))
-				continue;
-			sprite.Reload(Vector2.Zero, [], []);
-			Sprites.Remove(name);
-		}
+		PackedSpriteLoader.Load(atlas, manifest.Sprites, Sprites);
 
 		var foundTilesets = new HashSet<string>();
 		foreach (var packed in manifest.Tilesets)
@@ -1018,147 +975,15 @@ public static partial class Assets
 	}
 
 	static PackedSprite BuildPackedSpriteAsset(VisualAssetBake bake, string name, Aseprite ase)
-	{
-		// Origin is the pivot of the first slice that has one (slice order isn't guaranteed, so
-		// don't assume Slices[0] — an unrelated slice like attack_hitbox could sort first).
-		// Aseprite stores a slice's pivot relative to its own bounds, so add the bounds offset
-		// to land in frame/canvas space (pivot (15,40) in a slice at (9,2) => origin (24,42)).
-		var origin = Vector2.Zero;
-		foreach (var slice in ase.Slices)
-			if (slice.Keys.FirstOrDefault() is { Pivot: { } pivot } key)
-			{
-				origin = key.Bounds.Position + pivot;
-				break;
-			}
-
-		var packed = new PackedSprite
-		{
-			Name = name,
-			Origin = PackedVector.From(origin)
-		};
-
-		// Named slices, keyed by name, first key's canvas-space bounds (e.g. an attack hitbox).
-		foreach (var slice in ase.Slices)
-			if (slice.Keys.Length > 0)
-				packed.Slices[slice.Name] = slice.Keys[0].Bounds;
-
-		var useExpanded = ExpandedFrameDurations.TryGetValue(name, out var expDurations);
-		var frameCount = useExpanded ? expDurations!.Length : ase.Frames.Length;
-
-		// Per-frame cel userdata (the "impact"-style tags). For expanded sprites the userdata
-		// only belongs to the original keyframes (interpolated in-betweens carry none), so map
-		// each source frame to its expanded start index; otherwise it's 1:1.
-		var frameUserData = new string?[frameCount];
-		if (useExpanded && ExpandedFrameMap.TryGetValue(name, out var expMap))
-		{
-			for (var src = 0; src < expMap.Length && src < ase.Frames.Length; src++)
-				frameUserData[expMap[src]] = CelUserData(ase.Frames[src]);
-		}
-		else
-		{
-			for (var i = 0; i < frameCount && i < ase.Frames.Length; i++)
-				frameUserData[i] = CelUserData(ase.Frames[i]);
-		}
-
-		for (var i = 0; i < frameCount; i++)
-			packed.Frames.Add(new()
-			{
-				Subtexture = bake.Subtexture($"{name}/{i}"),
-				VisibleSubtexture = PackedSubtexture.VisibleFrom(bake.Subtexture($"{name}/{i}")),
-				NormalSubtexture = bake.Subtexture($"{name}/normal/{i}"),
-				EmissiveSubtexture = bake.SubtextureOrDefault($"{name}/emissive/{i}"),
-				Duration = useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f,
-				UserData = frameUserData[i]
-			});
-
-		foreach (var tag in ase.Tags)
-		{
-			if (string.IsNullOrEmpty(tag.Name))
-				continue;
-
-			int animFrom, animCount;
-			if (useExpanded && ExpandedFrameMap.TryGetValue(name, out var map))
-			{
-				animFrom = map[tag.From];
-				var animEnd = tag.To + 1 < map.Length ? map[tag.To + 1] : frameCount;
-				animCount = animEnd - animFrom;
-			}
-			else
-			{
-				animFrom = tag.From;
-				animCount = tag.To - tag.From + 1;
-			}
-
-			var totalAnimDuration = 0.0f;
-			for (var i = animFrom; i < animFrom + animCount && i < packed.Frames.Count; i++)
-				totalAnimDuration += packed.Frames[i].Duration;
-			packed.Animations.Add(new() { Name = tag.Name, FrameStart = animFrom, FrameCount = animCount, Duration = totalAnimDuration });
-		}
-
-		// If there are no tags, add a default "idle" animation from all frames.
-		if (ase.Tags.Length == 0 && ase.Frames.Length > 0)
-		{
-			float totalAnimDuration = 0;
-			for (var i = 0; i < ase.Frames.Length; i++)
-				totalAnimDuration += packed.Frames[i].Duration;
-
-			packed.Animations.Add(new()
-			{
-				Name = DEFAULT_ANIM_NAME,
-				FrameStart = 0,
-				FrameCount = ase.Frames.Length,
-				Duration = totalAnimDuration,
-			});
-		}
-
-		if (GeneratedTransitions.TryGetValue(name, out var transitions))
-		{
-			var transFrameStart = packed.Frames.Count;
-			foreach (var trans in transitions)
-			{
-				float duration = 0;
-				for (var i = 0; i < trans.FrameCount; i++)
-				{
-					var subtexture = bake.Subtexture($"{name}/transition/{trans.FromTag}->{trans.ToTag}/{i}");
-					packed.Frames.Add(new()
-					{
-						Subtexture = subtexture,
-						VisibleSubtexture = PackedSubtexture.VisibleFrom(subtexture),
-						NormalSubtexture = bake.Subtexture($"{name}/transition/{trans.FromTag}->{trans.ToTag}/normal/{i}"),
-						EmissiveSubtexture = bake.SubtextureOrDefault($"{name}/transition/{trans.FromTag}->{trans.ToTag}/emissive/{i}"),
-						Duration = trans.Durations[i]
-					});
-					duration += trans.Durations[i];
-				}
-				packed.Animations.Add(new() { Name = $"{trans.FromTag}->{trans.ToTag}", FrameStart = transFrameStart, FrameCount = trans.FrameCount, Duration = duration });
-				transFrameStart += trans.FrameCount;
-			}
-		}
-
-		foreach (var (socketName, poses) in BuildSocketPoses(name, ase))
-		{
-			if (poses.Length != packed.Frames.Count)
-				throw new InvalidOperationException($"Sprite '{name}' socket '{socketName}' has {poses.Length} poses for {packed.Frames.Count} frames");
-			var packedPoses = new List<PackedSocketPose>(poses.Length);
-			foreach (var pose in poses)
-				packedPoses.Add(new() { Position = PackedVector.From(pose.Position), Normal = PackedVector.From(pose.Normal) });
-			packed.Sockets[socketName] = packedPoses;
-		}
-
-		return packed;
-	}
-
-	internal const string DEFAULT_ANIM_NAME = "idle";
-
-	// First non-empty cel userdata text on a frame (artists tag a cel on the layer they're
-	// working in, so any layer's cel can carry the label).
-	static string? CelUserData(Aseprite.Frame frame)
-	{
-		foreach (var cel in frame.Cels)
-			if (!string.IsNullOrEmpty(cel.UserData.Text))
-				return cel.UserData.Text;
-		return null;
-	}
+		=> AsepriteSpriteBaker.BuildPackedSprite(
+			name,
+			ase,
+			bake.Subtexture,
+			bake.SubtextureOrDefault,
+			ExpandedFrameDurations,
+			ExpandedFrameMap,
+			GeneratedTransitions,
+			BuildSocketPoses);
 
 	static PackedTileset BuildPackedTilesetAsset(VisualAssetBake bake, string name, Aseprite ase)
 	{
@@ -1786,67 +1611,6 @@ public static partial class Assets
 		}
 	}
 
-	sealed class PackedNamedSubtexture : PackedSubtexture
-	{
-		public string Name { get; set; } = "";
-
-		public static PackedNamedSubtexture From(string name, PackedSubtexture subtexture)
-			=> new() { Name = name, Source = subtexture.Source, Frame = subtexture.Frame };
-	}
-
-	class PackedSubtexture
-	{
-		public PackedRect Source { get; set; } = new();
-		public PackedRect Frame { get; set; } = new();
-
-		public static PackedSubtexture From(Rect source, Rect frame)
-			=> new() { Source = PackedRect.From(source), Frame = PackedRect.From(frame) };
-
-		public static PackedSubtexture VisibleFrom(PackedSubtexture subtexture)
-			=> new()
-			{
-				Source = subtexture.Source,
-				Frame = new() { X = 0, Y = 0, W = subtexture.Source.W, H = subtexture.Source.H }
-			};
-
-		public Subtexture ToSubtexture(Texture atlas)
-			=> Source.W > 0 && Source.H > 0 ? new(atlas, Source.ToRect(), Frame.ToRect()) : new();
-	}
-
-	sealed class PackedSprite
-	{
-		public string Name { get; set; } = "";
-		public PackedVector Origin { get; set; } = new();
-		public List<PackedSpriteFrame> Frames { get; set; } = [];
-		public List<PackedSpriteAnimation> Animations { get; set; } = [];
-		public Dictionary<string, RectInt> Slices { get; set; } = [];
-		public Dictionary<string, List<PackedSocketPose>> Sockets { get; set; } = [];
-	}
-
-	sealed class PackedSocketPose
-	{
-		public PackedVector Position { get; set; } = new();
-		public PackedVector Normal { get; set; } = new();
-	}
-
-	sealed class PackedSpriteFrame
-	{
-		public PackedSubtexture Subtexture { get; set; } = new();
-		public PackedSubtexture VisibleSubtexture { get; set; } = new();
-		public PackedSubtexture NormalSubtexture { get; set; } = new();
-		public PackedSubtexture EmissiveSubtexture { get; set; } = new();
-		public float Duration { get; set; }
-		public string? UserData { get; set; }
-	}
-
-	sealed class PackedSpriteAnimation
-	{
-		public string Name { get; set; } = "";
-		public int FrameStart { get; set; }
-		public int FrameCount { get; set; }
-		public float Duration { get; set; }
-	}
-
 	sealed class PackedTileset
 	{
 		public string Name { get; set; } = "";
@@ -1858,32 +1622,6 @@ public static partial class Assets
 		public List<List<PackedSubtexture>> NormalVariants { get; set; } = [];
 		public List<List<PackedOccluderSegment>> OccluderTiles { get; set; } = [];
 		public List<List<List<PackedOccluderSegment>>> OccluderVariants { get; set; } = [];
-	}
-
-	sealed class PackedRect
-	{
-		public float X { get; set; }
-		public float Y { get; set; }
-		public float W { get; set; }
-		public float H { get; set; }
-
-		public static PackedRect From(Rect rect)
-			=> new() { X = rect.X, Y = rect.Y, W = rect.Width, H = rect.Height };
-
-		public Rect ToRect()
-			=> new(X, Y, W, H);
-	}
-
-	sealed class PackedVector
-	{
-		public float X { get; set; }
-		public float Y { get; set; }
-
-		public static PackedVector From(Vector2 vector)
-			=> new() { X = vector.X, Y = vector.Y };
-
-		public Vector2 ToVector2()
-			=> new(X, Y);
 	}
 
 	sealed class PackedOccluderSegment
@@ -3076,7 +2814,7 @@ public static partial class Assets
 		});
 
 		// Pack results sequentially (packer.Add is not thread-safe)
-		var transitions = new List<GeneratedTransition>();
+		var transitions = new List<GeneratedSpriteTransition>();
 		for (int i = 0; i < pairs.Count; i++)
 		{
 			if (results[i] is not (var transFrames, var transDurations))
@@ -3191,7 +2929,7 @@ public static partial class Assets
 	}
 
 	static Room LoadRoomJson(string id, string jsonText)
-		=> new(id, Point2.Zero, Room.DefaultSize, JsonNode.Parse(jsonText)?.AsObject());
+		=> new(id, Point2.Zero, Room.DefaultSize, JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []));
 
 	static int RoomSublayerFromPath(string root, string path)
 	{

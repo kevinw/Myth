@@ -105,7 +105,6 @@ public partial class Game
 	private void ReloadStory()
 	{
 		LoadStory();
-		DisplayMessage("Reloaded story");
 		Console.WriteLine("Reloaded story.");
 	}
 

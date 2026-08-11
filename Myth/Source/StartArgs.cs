@@ -38,6 +38,8 @@ public struct StartArgs
 	public string? contentWorld;
 	// Exit after this many completed gameplay frames (excluding loading, editing, and pauses).
 	public int maxFrames = int.MaxValue;
+	public int allocWarmupFrames;
+	public int allocMeasureFrames;
 	// Maximum source animation frames per sprite compared by --bench (minimum 2).
 	public int benchSourceFrames = int.MaxValue;
 
@@ -89,6 +91,12 @@ public struct StartArgs
 
 				case "--max-frames":
 					maxFrames = ReadInt(args, ref i, option, minimum: 1);
+					break;
+				case "--alloc-warmup-frames":
+					allocWarmupFrames = ReadInt(args, ref i, option, minimum: 0);
+					break;
+				case "--alloc-measure-frames":
+					allocMeasureFrames = ReadInt(args, ref i, option, minimum: 1);
 					break;
 				case "--bench-source-frames":
 					benchSourceFrames = ReadInt(args, ref i, option, minimum: 2);

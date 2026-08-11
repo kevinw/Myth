@@ -30,8 +30,8 @@ public partial class Manager : App
 #endif
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
-	static float uiScale = 2.5f;
-	static float Scale => uiScale;
+	const float DEFAULT_UI_SCALE = 2.5f;
+	float Scale => imgui.Scale;
 	static float ButtonSize => 34;
 	static float ButtonSpacing => 2;
 #if !EDITOR
@@ -182,6 +182,13 @@ public partial class Manager : App
 	readonly int maxFrames;
 	readonly float maxTimeSeconds;
 	int completedGameFrames;
+	readonly int allocWarmupFrames;
+	readonly int allocMeasureFrames;
+	int allocProfileFrames;
+	int allocProfileMeasuredFrames;
+	long allocProfileBytes;
+	bool allocProfileStarted;
+	bool allocProfileComplete;
 	readonly string? playRoomId;
 	readonly bool buildAssetPack;
 	readonly bool bakeWorldMap;
@@ -276,6 +283,8 @@ public partial class Manager : App
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.BenchSourceFrames = args.benchSourceFrames;
 		maxFrames = args.maxFrames;
+		allocWarmupFrames = args.allocWarmupFrames;
+		allocMeasureFrames = args.allocMeasureFrames;
 		maxTimeSeconds = args.maxTimeSeconds;
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
@@ -300,12 +309,6 @@ public partial class Manager : App
 			DitherPerfScale = 0;
 		}
 
-		uiScale = 2.5f;
-		if (OperatingSystem.IsWindows())
-		{
-			uiScale = 1.5f;
-		}
-
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
 		debugControls = new(Input);
@@ -323,11 +326,12 @@ public partial class Manager : App
 		var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterVariable.ttf");
 		//var editorFontPath = Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "InterTightVariable.ttf");
 		var editorFontFace = 0;
+
 		imgui = new(this, editorFontPath, editorFontFace,
 			iniPath: Path.Join(UserPath, "editor-layout.ini"),
 			mergedFontPath: Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"),
 			mergedFontGlyphRanges: EditorIcons.GlyphRanges,
-			scale: Scale);
+			scale: DEFAULT_UI_SCALE);
 #elif BROWSER
 		imgui = new(this, scale: 1);
 #endif
@@ -877,6 +881,7 @@ public partial class Manager : App
 				: DefaultPaletteDockWidth;
 			if (settings.EditorDockLayoutVersion < EditorDockLayoutVersion)
 				pendingEditorDockLayoutReset = true;
+			SetImGuiScale(settings.UIScale);
 			if (migrate)
 				SaveEditorSettings();
 		}
@@ -888,24 +893,23 @@ public partial class Manager : App
 
 	void SaveEditorSettings()
 	{
-		try
+		var settings = new EditorSettings
 		{
+			EditorScrollMode = editorScrollMode,
+			EditorTheme = editorTheme,
+			PreservePlaytestSaveState = preservePlaytestSaveState,
+			EditorGameRunInBackground = editorGameRunInBackground,
+			PasteActorAtViewCenter = pasteActorAtViewCenter,
+			EditorDockWidth = editorDockWidth,
+			EditorPaletteWidth = editorPaletteWidth,
+			EditorDockLayoutVersion = EditorDockLayoutVersion,
+			UIScale = imgui.Scale,
+		};
+
+		try {
 			Directory.CreateDirectory(UserPath);
-			var settings = new EditorSettings
-			{
-				EditorScrollMode = editorScrollMode,
-				EditorTheme = editorTheme,
-				PreservePlaytestSaveState = preservePlaytestSaveState,
-				EditorGameRunInBackground = editorGameRunInBackground,
-				PasteActorAtViewCenter = pasteActorAtViewCenter,
-				EditorDockWidth = editorDockWidth,
-				EditorPaletteWidth = editorPaletteWidth,
-				EditorDockLayoutVersion = EditorDockLayoutVersion
-			};
 			File.WriteAllText(EditorSettingsPath, JsonSerializer.Serialize(settings, WindowSettingsJsonContext.Default.EditorSettings));
-		}
-		catch (Exception e)
-		{
+		} catch (Exception e) {
 			Console.Error.WriteLine($"Failed to save editor settings: {e}");
 		}
 	}
@@ -913,13 +917,14 @@ public partial class Manager : App
 	sealed class EditorSettings
 	{
 		public EditorScrollMode EditorScrollMode { get; init; }
-		public EditorTheme EditorTheme { get; init; }
+		public EditorTheme EditorTheme { get; init; } = EditorTheme.Mycelium;
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
 		public bool PasteActorAtViewCenter { get; init; } = true;
 		public float EditorDockWidth { get; init; } = DefaultToolDockWidth;
 		public float EditorPaletteWidth { get; init; } = DefaultPaletteDockWidth;
 		public int EditorDockLayoutVersion { get; init; } = Manager.EditorDockLayoutVersion;
+		public float UIScale { get; init; } = DEFAULT_UI_SCALE;
 	}
 #endif
 
@@ -988,7 +993,7 @@ public partial class Manager : App
 		if (!playing) return;
 		if (game == null) return;
 
-		game.Update(controls);
+		UpdateGameWithAllocationProfile(game);
 		CompleteGameFrame();
 
 		if (gym.runs == null) return;
@@ -1094,7 +1099,7 @@ public partial class Manager : App
 #if DEBUG
 		// Toggle the Tweaks panel from anywhere — edit or play — except while actively typing into a
 		// text field (so T reaches the search box). Runs before the play/edit branch so both modes see it.
-		if (imgui is { WantsTextInput: false } && debugControls.Tweaks.Pressed)
+		if (imgui is { WantsTextInput: false } && Input.Keyboard.Pressed(Keys.T))
 			TweakRegistry.Open = !TweakRegistry.Open;
 #endif
 #if EDITOR
@@ -1109,6 +1114,11 @@ public partial class Manager : App
 			UpdateGameMenuInput();
 
 		var gameMenuPausesGame = GameMenuPausesGame;
+
+#if EDITOR
+		if (!gameMenuPausesGame && ToggleEditorPressed(keyboardShortcutsBlocked))
+			ToggleGame();
+#endif
 
 #if !EDITOR
 		var shipRoomCheatChordActive = UpdateShipRoomCheat(gameMenuPausesGame);
@@ -1135,13 +1145,13 @@ public partial class Manager : App
 
 				if (debugControls.FpsOverlay.Pressed)
 					ToggleFpsOverlay();
+#if KIT_DIAGNOSTICS && !IOS && !BROWSER
+				if (Input.Keyboard.Shift && debugControls.AllocationTrace.Pressed)
+					ToggleAllocationTrace();
+#endif
 #if !IOS && !BROWSER
 				if (Window is { } window && !keyboardShortcutsBlocked && debugControls.Fullscreen.Pressed)
 					window.Fullscreen = !window.Fullscreen;
-#endif
-#if EDITOR
-				if (!gameMenuPausesGame && ToggleEditorPressed())
-					ToggleGame();
 #endif
 			}
 
@@ -1174,7 +1184,9 @@ public partial class Manager : App
 					if (game is { } g)
 					{
 #if EDITOR
-						var editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
+						var editorOwnsPlayMouse = UpdateLiveRoomEditing(g, keyboardShortcutsBlocked);
+						if (!editorOwnsPlayMouse)
+							editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
 						if (!editorOwnsPlayMouse)
 							editorOwnsPlayMouse = UpdateLiveActorEditing(g, keyboardShortcutsBlocked);
 #if DEBUG
@@ -1190,8 +1202,20 @@ public partial class Manager : App
 							if (!commandConsoleOpen)
 #endif
 							{
-								using (PerfStats.Time(PerfDetail.GameUpdate))
-									g.Update(controls);
+#if EDITOR
+								var updatePlayingGame = !LiveRoomCreationModalOpen && !LiveTileControllerModeOpen;
+#else
+								var updatePlayingGame = true;
+#endif
+								if (updatePlayingGame)
+								{
+#if EDITOR
+									if (keyboardShortcutsBlocked)
+										controls.Clear();
+#endif
+									using (PerfStats.Time(PerfDetail.GameUpdate))
+										UpdateGameWithAllocationProfile(g);
+								}
 								CompleteGameFrame();
 							}
 					}
@@ -1289,6 +1313,9 @@ public partial class Manager : App
 			DrawCommandConsole();
 			DrawDebugHelp();
 #endif
+#if DEBUG
+			TweakRegistry.DrawPanel();
+#endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))
 				DebugViewMessageImGui();
 
@@ -1303,6 +1330,53 @@ public partial class Manager : App
 	{
 		if (maxFrames != int.MaxValue && ++completedGameFrames >= maxFrames)
 			Exit();
+	}
+
+	bool AllocationProfileEnabled => allocMeasureFrames > 0;
+
+	void UpdateGameWithAllocationProfile(Game g)
+	{
+		if (!AllocationProfileEnabled || allocProfileComplete)
+		{
+			g.Update(controls);
+			return;
+		}
+
+		if (!allocProfileStarted && allocProfileFrames >= allocWarmupFrames)
+			StartAllocationProfile();
+
+		if (allocProfileStarted)
+		{
+			var before = GC.GetAllocatedBytesForCurrentThread();
+			g.Update(controls);
+			allocProfileBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+			allocProfileMeasuredFrames++;
+			if (allocProfileMeasuredFrames >= allocMeasureFrames)
+				FinishAllocationProfile();
+		}
+		else
+		{
+			g.Update(controls);
+		}
+
+		allocProfileFrames++;
+	}
+
+	void StartAllocationProfile()
+	{
+		allocProfileStarted = true;
+		GC.Collect();
+		GC.WaitForPendingFinalizers();
+		GC.Collect();
+	}
+
+	void FinishAllocationProfile()
+	{
+		allocProfileComplete = true;
+		var bytesPerFrame = allocProfileBytes / (double)allocProfileMeasuredFrames;
+		Console.WriteLine(
+			$"ALLOC_PROFILE game_update warmup_frames={allocWarmupFrames} measure_frames={allocProfileMeasuredFrames} bytes={allocProfileBytes} bytes_per_frame={bytesPerFrame.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+		Exit();
 	}
 
 	readonly Dictionary<Foster.Framework.Cursor.SystemTypes, Foster.Framework.Cursor> imguiCursors = [];
@@ -1345,7 +1419,10 @@ public partial class Manager : App
 
 #if EDITOR
 	void ChangeEditorUiScale(float amount)
-		=> imgui.Scale = uiScale = Math.Clamp(uiScale + amount, 0.5f, 4.0f);
+		=> SetImGuiScale(imgui.Scale + amount);
+
+	void SetImGuiScale(float scale)
+		=> imgui.Scale = Math.Clamp(scale, 0.5f, 4.0f);
 #endif
 
 
@@ -1987,6 +2064,16 @@ public partial class Manager : App
 		{
 			case DebugViewMessagePosition.TopCenter:
 				position = new Vector2(CenterX - size.X * 0.5f, 8);
+#if EDITOR
+				if (playing && game != null)
+				{
+					var editorViewport = GameViewRect;
+					var screenPosition = AllocateDebugOverlayTopCenter(editorViewport, size.Y);
+					position = new Vector2(screenPosition.X - size.X * 0.5f, screenPosition.Y - size.Y);
+					position.X = Math.Clamp(position.X, editorViewport.Left + 4, editorViewport.Right - size.X - 4);
+					position.Y = Math.Clamp(position.Y, editorViewport.Top + 4, editorViewport.Bottom - size.Y - 4);
+				}
+#endif
 				break;
 			case DebugViewMessagePosition.BottomCenter:
 				position = new Vector2(CenterX - size.X * 0.5f, Bottom - size.Y - 8);

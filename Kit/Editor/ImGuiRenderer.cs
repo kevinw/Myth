@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Foster.Framework;
 using ImGuiNET;
 
-namespace Myth;
+namespace Kit;
 
 public class ImGuiRenderer : IDisposable
 {
@@ -241,9 +241,11 @@ fn vertex_main(
 			{
 				unsafe
 				{
-					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig());
-					config.FontNo = customFontFace;
-					config.RasterizerDensity = scale;
+					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig())
+					{
+						FontNo = customFontFace,
+						RasterizerDensity = scale
+					};
 					io.Fonts.AddFontFromFileTTF(customFontPath, FontSize, config);
 					config.Destroy();
 				}
@@ -261,11 +263,13 @@ fn vertex_main(
 				mergedFontGlyphRangesHandle = GCHandle.Alloc(mergedFontGlyphRanges, GCHandleType.Pinned);
 				unsafe
 				{
-					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig());
-					config.MergeMode = true;
-					config.PixelSnapH = true;
-					config.GlyphMinAdvanceX = mergedFontSize;
-					config.RasterizerDensity = scale;
+					var config = new ImFontConfigPtr(ImGuiNative.ImFontConfig_ImFontConfig())
+					{
+						MergeMode = true,
+						PixelSnapH = true,
+						GlyphMinAdvanceX = mergedFontSize,
+						RasterizerDensity = scale
+					};
 					io.Fonts.AddFontFromFileTTF(mergedFontPath, mergedFontSize, config, mergedFontGlyphRangesHandle.AddrOfPinnedObject());
 					config.Destroy();
 				}
@@ -671,7 +675,6 @@ fn vertex_main(
 		ImGui.Dummy(size);
 
 		var min = ImGui.GetItemRectMin();
-		var max = ImGui.GetItemRectMax();
 		var draw = ImGui.GetWindowDrawList();
 		var scale = new Vector2(
 			subtexture.Width > 0 ? size.X / subtexture.Width : 1,

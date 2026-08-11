@@ -1,28 +1,39 @@
 [
   {
     "label": "simple",
-    "command": "dotnet watch run --no-restore --property:UseFosterDll=true -- --simple",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet watch run --no-restore --property:UseFosterDll=true -- --simple",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "gym",
-    "command": "dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "gym (unthrottled)",
-    "command": "dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym --unthrottled",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym --unthrottled",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
     "label": "dotnet watch",
-    "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false --property:UseFosterDll=true",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+    "allow_concurrent_runs": true,
+    "use_new_terminal": false
+  },
+  {
+    "label": "dotnet watch (Sokoban)",
+    "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Sokoban",
+    "allow_concurrent_runs": true,
+    "use_new_terminal": false
   },
   {
     "label": "dotnet run",
-    "command": "dotnet run --no-restore --property:UseFosterDll=true",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet run --no-restore --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+    "allow_concurrent_runs": true,
+    "use_new_terminal": false
   },
   {
     "label": "open in browser",
@@ -32,7 +43,7 @@
   {
     /* todo: needs --no-restore prefix dir hack */
     "label": "dotnet watch (MythTestShip)",
-    "command": "dotnet watch run --non-interactive --property:MythTestShip=true --property:UseFosterDll=true -- --content-zip Assets/Content.zip",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet watch run --non-interactive --property:MythTestShip=true --property:UseFosterDll=true -- --content-zip Assets/Content.zip",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {

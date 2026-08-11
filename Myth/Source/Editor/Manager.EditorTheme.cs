@@ -29,7 +29,7 @@ public partial class Manager
 		uint AccentActive,
 		uint Secondary);
 
-	EditorTheme editorTheme;
+	EditorTheme editorTheme = EditorTheme.Mycelium;
 	EditorTheme? appliedEditorTheme;
 
 	void EnsureEditorTheme()

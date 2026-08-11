@@ -178,6 +178,7 @@ public partial class Game : IDisposable
 	static float CameraEaseRate => 10f;
 	static float CameraLookAheadEdgeInset => 0.15f;
 	static float CameraLookAheadEaseRate => 8f;
+	static float DebugPlayerDragCameraEaseRate => 2.5539999f.T();
 	const float CameraEaseTriggerEpsilon = 2f;
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
@@ -316,6 +317,13 @@ public partial class Game : IDisposable
 	}
 
 	public bool IsRevealDoorRevealed(string doorId) => Save.RevealedDoors.Contains(doorId);
+	public bool IsButtonPressed(string? buttonId) => buttonId != null && Save.PressedButtons.Contains(buttonId);
+
+	public void PressButtonPersistently(string? buttonId)
+	{
+		if (!string.IsNullOrWhiteSpace(buttonId) && Save.PressedButtons.Add(buttonId))
+			MarkSaveDirty();
+	}
 
 	public void RevealDoor(string doorId)
 	{
@@ -512,7 +520,7 @@ public partial class Game : IDisposable
 				if (Minimap.Open)
 				{
 					Minimap.ResetView();
-					Minimap.Rebuild(room);
+					Minimap.Rebuild(room, this);
 				}
 			}
 
@@ -668,9 +676,9 @@ public partial class Game : IDisposable
 			return;
 		}
 
-		if (room == null || nextRoom != null || DraggingPlayer)
+		if (room == null || nextRoom != null)
 		{
-			// The camera is under transition/drag control; drop the easing state so normal
+			// The camera is under transition control; drop the easing state so normal
 			// control resumes cleanly clamped to the new room rather than gliding from a stale
 			// (old-room) target.
 			previousCameraTarget = null;
@@ -678,6 +686,14 @@ public partial class Game : IDisposable
 			cameraLookAhead = Vector2.Zero;
 			return;
 		}
+
+#if DEBUG
+		if (DraggingPlayer && GetFirst<Player>() is { } draggedPlayer)
+		{
+			UpdateDraggedPlayerCamera(draggedPlayer);
+			return;
+		}
+#endif
 
 		// In 4:3 crop mode the Zoom control un-crops (reveals the cut-off sides) instead of the
 		// usual 2x magnify, so the two never fight: suppress fbZoom whenever cropping is active.
@@ -728,6 +744,23 @@ public partial class Game : IDisposable
 		previousCameraTarget = target;
 		previousCameraFocus = cameraFocus;
 	}
+
+#if DEBUG
+	void UpdateDraggedPlayerCamera(Player player)
+	{
+		easedPlayerCameraTarget = player.Position;
+		easedPlayerVelocity = Vector2.Zero;
+		cameraError = Vector2.Zero;
+		cameraLookAhead = Vector2.Zero;
+
+		var target = GetGameplayCameraTarget();
+		var amount = 1 - MathF.Exp(-Time.Delta * DebugPlayerDragCameraEaseRate);
+		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		Camera = ClampCameraToRoomFb(Vector2.Lerp(Camera, target, amount), padding);
+		previousCameraTarget = null;
+		previousCameraFocus = easedPlayerCameraTarget;
+	}
+#endif
 
 	// Deactivate any active camera blocker whose rect the just-revealed area overlaps, so a
 	// RevealDoor opening also opens the camera over the secret it uncovered.
@@ -1019,7 +1052,7 @@ public partial class Game : IDisposable
 		if (Assets.FindActorById(actorId) is not { } found)
 			return null;
 
-		var local = ActorSpecs.ReadPoint(ActorSpecs.Resolve(found.Actor), "Position") ?? Point2.Zero;
+		var local = ActorSpecs.ReadResolvedPoint(found.Actor, "Position") ?? Point2.Zero;
 		return new RespawnState(found.Room.Id, found.Room.WorldBounds.TopLeft + local);
 	}
 
@@ -1053,7 +1086,7 @@ public partial class Game : IDisposable
 
 		Minimap.BeginWarp(targets, savePoint.ActorId);
 		Minimap.ResetView();
-		Minimap.Rebuild(room);
+		Minimap.Rebuild(room, this);
 		PlayAudioEvent("map/open");
 	}
 
@@ -1488,12 +1521,15 @@ public partial class Game : IDisposable
 				ApplyRoomReverb(nextRoom);
 				return true;
 			}
+#if EDITOR
+			if (Manager.NotifyMissingLiveAdjacentRoom(this, fromRoom, direction, exitPosition))
+				return true;
+#endif
 		}
 
 		return false;
 	}
 
-#if !EDITOR
 	public bool CheatShiftRoom(Point2 direction)
 	{
 		if (room == null || nextRoom != null || GetFirst<Player>() is not { } player)
@@ -1512,10 +1548,9 @@ public partial class Game : IDisposable
 		var playerPosition = FindFallbackPlayerPosition(target, direction);
 		foreach (var actor in target.Actors)
 		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (string.Equals(ActorSpecs.ReadString(resolved, "Type"), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
+			if (string.Equals(ActorSpecs.ReadResolvedString(actor, "Type"), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
 			{
-				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero);
+				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero);
 				break;
 			}
 		}
@@ -1526,7 +1561,6 @@ public partial class Game : IDisposable
 		EnsureBudForPlayer(repositionExisting: true);
 		return true;
 	}
-#endif
 
 	public bool TransitionToLinkedDoor(string targetActorId)
 	{
@@ -1537,11 +1571,10 @@ public partial class Game : IDisposable
 		if (Assets.FindActorById(targetActorId) is not { } target)
 			return false;
 
-		var resolvedTarget = ActorSpecs.Resolve(target.Actor);
-		if (!string.Equals(ActorSpecs.ReadString(resolvedTarget, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(ActorSpecs.ReadResolvedString(target.Actor, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 			return false;
 
-		ReadLinkedDoorDestination(resolvedTarget, out var localPosition, out var spawnOffset);
+		ReadLinkedDoorDestination(target.Actor, out var localPosition, out var spawnOffset);
 		var targetRoom = target.Room.CloneRuntime();
 		var crossLayer = targetRoom.Sublayer != room.Sublayer;
 		var targetPosition = crossLayer ? player.Position + spawnOffset : targetRoom.WorldBounds.TopLeft + localPosition + spawnOffset;
@@ -1561,10 +1594,10 @@ public partial class Game : IDisposable
 		return true;
 	}
 
-	static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)
+	static void ReadLinkedDoorDestination(JsonObject actor, out Point2 localPosition, out Point2 spawnOffset)
 	{
-		localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
-		spawnOffset = ActorSpecs.ReadPoint(resolved, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
+		localPosition = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
+		spawnOffset = ActorSpecs.ReadResolvedPoint(actor, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
 	}
 
 	void ResolvePlayerRoomTransition(Point2 direction)

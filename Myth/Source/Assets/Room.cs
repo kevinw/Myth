@@ -1610,7 +1610,7 @@ public class Room
 
 	public void LoadJsonState(string jsonText)
 	{
-		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
+		var json = JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []);
 		TileSpacePosition = JsonUtil.ReadPoint(json, "position") ?? TileSpacePosition;
 		if (JsonUtil.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)
 		{

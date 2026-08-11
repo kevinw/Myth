@@ -21,6 +21,7 @@ public class DebugControls
 	public readonly VirtualAction Fullscreen;
 	public readonly VirtualAction BudAI;
 	public readonly VirtualAction MovieRecording;
+	public readonly VirtualAction AllocationTrace;
 	public readonly VirtualAction ReloadRoom;
 	public readonly VirtualAction CollisionView;
 	public readonly VirtualAction NormalsView;
@@ -35,6 +36,7 @@ public class DebugControls
 	public readonly VirtualAction AdvanceGym;
 	public readonly VirtualAction UiScaleDown;
 	public readonly VirtualAction UiScaleUp;
+	public readonly VirtualAction ToggleLiveRoomEditing;
 
 	public DebugControls(Input input)
 	{
@@ -67,6 +69,9 @@ public class DebugControls
 		MovieRecording = Make("DebugMovieRecording",
 			new ActionBindingSet().Add(Keys.M),
 			"M / Shift+M", "Movie recording", Context.Anywhere);
+		AllocationTrace = Make("DebugAllocationTrace",
+			new ActionBindingSet().Add(Keys.F9),
+			"Shift+F9", "Start / stop allocation trace", Context.Anywhere);
 		Help = Make("DebugHelp",
 			new ActionBindingSet().Add(Keys.Slash),
 			"?", "This window", Context.Anywhere);
@@ -99,10 +104,10 @@ public class DebugControls
 			new ActionBindingSet().Add(Keys.V),
 			"V", "Bud voice test line", Context.Playing);
 		TimeScaleDown = Make("DebugTimeScaleDown",
-			new ActionBindingSet().Add(Keys.Minus, Keys.KeypadMinus).Add(Buttons.LeftShoulder),
+			new ActionBindingSet().Add(Keys.Minus, Keys.KeypadMinus),//.Add(Buttons.LeftShoulder),
 			"- / LB", "Time scale down", Context.Playing);
 		TimeScaleUp = Make("DebugTimeScaleUp",
-			new ActionBindingSet().Add(Keys.Equals, Keys.KeypadPlus).Add(Buttons.RightShoulder),
+			new ActionBindingSet().Add(Keys.Equals, Keys.KeypadPlus),//.Add(Buttons.RightShoulder),
 			"= / RB", "Time scale up", Context.Playing);
 		AdvanceGym = Make("DebugAdvanceGym",
 			new ActionBindingSet().Add(Keys.Enter, Keys.KeypadEnter),
@@ -111,9 +116,15 @@ public class DebugControls
 		Note("Click / drag", "Select / move live-editable actor", Context.Playing);
 		Note("Handles", "Resize live-editable actor", Context.Playing);
 		Note("Shift (dragging)", "Toggle position snap", Context.Playing);
+		Note("LB+RB+DPad Up", "Toggle controller live tile brush", Context.Playing);
+		Note("Live brush: DPad/left stick/touchpad", "Move tile cursor", Context.Playing);
+		Note("Live brush: South/East/West/North", "Paint / erase / sample / layer", Context.Playing);
 		Note("Backspace / Delete", "Delete selected live actor", Context.Playing);
 		Note("Esc", "Cancel live drag / deselect", Context.Playing);
 		Note("Ctrl+Z / Ctrl+Y", "Undo / redo live actor edit", Context.Playing);
+		ToggleLiveRoomEditing = Make("DebugToggleLiveRoomEditing",
+			new ActionBindingSet().Add(Keys.F8),
+			"F8 / LB+RB+DPad Down", "Toggle live room creation", Context.Playing);
 
 		UiScaleDown = Make("DebugUiScaleDown",
 			new ActionBindingSet().Add(Keys.Minus, Keys.KeypadMinus),

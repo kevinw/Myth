@@ -85,6 +85,15 @@ public static class ActorSpecs
 	public static Type? GetActorType(string name)
 		=> actorTypes.TryGetValue(name, out var actorType) ? actorType.Type : null;
 
+	public static string? ReadResolvedString(JsonObject spec, string key)
+		=> GetResolvedProperty(spec, key)?.GetValue<string>();
+
+	public static Point2? ReadResolvedPoint(JsonObject spec, string key)
+		=> JsonUtil.ReadPoint(GetResolvedProperty(spec, key));
+
+	public static float ReadResolvedFloat(JsonObject spec, string key, float fallback = 0)
+		=> GetResolvedProperty(spec, key) is { } node && JsonUtil.TryReadFloat(node, out var value) ? value : fallback;
+
 	public const string ContentFolder = "Actors";
 
 	public static void LoadSpecs()
@@ -100,6 +109,7 @@ public static class ActorSpecs
 				var spec = JsonNode.Parse(Assets.Content.ReadAllText(key))?.AsObject();
 				if (spec == null)
 					continue;
+				JsonUtil.NormalizeStringValues(spec);
 
 				var name = ReadString(spec, NameKey) ?? ReadString(spec, IdKey);
 				if (string.IsNullOrWhiteSpace(name))
@@ -167,11 +177,17 @@ public static class ActorSpecs
 		}
 
 		var actorPosition = position ?? ReadPoint(resolved, PositionKey) ?? Point2.Zero;
-		return game.Create(type.Type, actorPosition, actor => Apply(actor, type.Type, resolved));
+		return game.Create(type.Type, actorPosition, actor =>
+		{
+			Apply(actor, type.Type, resolved);
+#if EDITOR
+			actor.AuthoredSpec = spec;
+#endif
+		});
 	}
 
 	public static JsonObject CloneObject(JsonObject source)
-		=> source.DeepClone().AsObject();
+		=> JsonUtil.NormalizeStringValues(source.DeepClone().AsObject());
 
 	public static string GenerateActorId()
 	{
@@ -292,7 +308,7 @@ public static class ActorSpecs
 
 	public static void ApplySpecJson(string id, string jsonText)
 	{
-		var spec = JsonNode.Parse(jsonText)?.AsObject() ?? [];
+		var spec = JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []);
 		if (string.IsNullOrWhiteSpace(ReadString(spec, NameKey)))
 			spec[NameKey] = id;
 		specs[id] = spec;

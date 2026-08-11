@@ -1,10 +1,54 @@
 # TODO
 
+- go back to the original two inspo images (multicolored dither cliff and cathedral) and try to make a room more like them; color variety!
+- recognizable evolved company logos
+- use the chair prop as an existence proof and as a pump for a drawing exercise: new props!
+  - church pews
+  - a pulpit which tumbles when you step on it
+- render animation into the dither field (around an enemy, or as part of a room's vibe)
+- maybe you start in a treehouse, makeshift, there is some incredible danger flowing like a river beneath you in intervals
+- a burrowline teleporter
+- how many petabytes per cubit? (writing)
+- Bud projects a light hologram map from his mouth
+- One of the characters speaks with curated chain of thought messages from an open model
+- burrow sound needs to be the best sound in the entire game
+- actor search needs a close button to clear the text.
+- maybe you collect poems as currency
+- memory pulse instead of a map; only in the radius around you?
+- Spend an entire day making bud more interesting
+  - More barks.
+  - Fix idle animation.
+- make this todo into a plan with time estimates; or make a google spreadsheet; or use a time tracker
+- save points are more fun in hubs where you have somewhere else to go than where you died
+- Make the burrow moving platform have a mode where when you're on it, it moves, so it's more fun if you miss it
+- take all Blobs/Foster sample actors out; comment out the code
+- Not enough reasons to burrow outside of combat
+  - Burrow switch
+  - Some further interaction with dash
+- duck needs a quack
+- rope unfurl sfx
+- rope unfurl connected to pile, pile needs to go away
+- respawning at a teleporter after death needs a small animation
+- maybe dying is not what this game is about
+- the map shows a blinking line for places that are actually unimportant, but you just haven't pushed the camera up; like the tall room you have to burrow up the left of, with a drone. the line could probably just be omitted in places we know there's nothing
+- burrow could leave a temporary foreground texture paint 
+- introduce a burrow line faster
+- maybe you always respawn where bud was?
+  - maybe bud clones himself and makes you
+- props like server could have a "speed randomness" as well as a "random offset"
+- first rope in big rope room needs to be longer, and needs to show that jumping left is not the way
+- grabbing a rope and sliding down it needs sfx
+- big stutter on NCT room; need shader preload?
+- flames should flicker; blue lights should be bulbs
+- first tall room has a camera stutter when you go down
+- make tower door a sublayer
+- make save point pulse better, sfx
+- quick menu for adding actors during play
+- create a room by going left or right during play
+- a new sprite added to the folder gets pasted in during play as a prop
 - a bloom knob
 - reachable Assets get packed
 - better Bud idle behavior.
-- more google doc writing https://docs.google.com/spreadsheets/d/1KKmU3uwT2x6hbNzBEyBdjEReGU-bd9zTvpJAd4vOTTg/edit?gid=0#gid=0
-- it would be very fun to introduce a slow version of bud that kills you and hunts you across rooms.
 - if you go up, there's only exploration, if you go down, there's also combat
 - idea: one type of smoky NCT could write over other actors, but have the alpha depend on a simulation value.
 - lightning traps need sound fx

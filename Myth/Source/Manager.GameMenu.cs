@@ -199,7 +199,7 @@ public partial class Manager
 		if (game?.CurrentRoom is { } room)
 		{
 			game.Minimap.Open = true;
-			game.Minimap.Rebuild(room);
+			game.Minimap.Rebuild(room, game);
 		}
 		CloseGameMenu();
 	}
@@ -319,7 +319,13 @@ public partial class Manager
 	{
 		menuLayoutBuiltThisFrame = false;
 
-		if (!GameMenuOpen || Window == null)
+		var buildLiveEditorMenu =
+#if EDITOR
+			LiveRoomEditorMenuOpen;
+#else
+			false;
+#endif
+		if ((!GameMenuOpen && !buildLiveEditorMenu) || Window == null)
 			return;
 
 		// Render the room preview once (drawn behind the menu in DrawGameMenu).
@@ -343,23 +349,30 @@ public partial class Manager
 		menuImgui.BeginLayout();
 		PushMenuStyle();
 
-		// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
-		var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7) + gameMenuLayoutOffset;
-		ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
-
 		menuButtonIndex = 0;
 		menuActivated = false;
 
-		// Distinct id per page so switching pages makes the window "appear", which is
-		// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
-		ImGui.Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
-		switch (gameMenuLayoutPage)
+		if (GameMenuOpen)
 		{
-			case GameMenuPage.Title: TitleMenu(); break;
-			case GameMenuPage.Pause: PauseMenu(); break;
-			case GameMenuPage.Options: OptionsMenu(); break;
+			// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
+			var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7) + gameMenuLayoutOffset;
+			ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+
+			// Distinct id per page so switching pages makes the window "appear", which is
+			// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
+			ImGui.Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
+			switch (gameMenuLayoutPage)
+			{
+				case GameMenuPage.Title: TitleMenu(); break;
+				case GameMenuPage.Pause: PauseMenu(); break;
+				case GameMenuPage.Options: OptionsMenu(); break;
+			}
+			ImGui.End();
 		}
-		ImGui.End();
+
+#if EDITOR
+		LiveRoomEditingMenuImGui();
+#endif
 
 		menuItemCount = menuButtonIndex; // how many buttons the page emitted, for the title layout
 
@@ -369,7 +382,7 @@ public partial class Manager
 
 		// A button that closed the menu (resume / start / quit) should not linger for a
 		// frame; keep flushing only while the menu is still open.
-		menuLayoutBuiltThisFrame = menuActivated ? GameMenuOpen : true;
+		menuLayoutBuiltThisFrame = GameMenuOpen ? menuActivated ? GameMenuOpen : true : buildLiveEditorMenu;
 	}
 
 	void PushMenuStyle()
@@ -468,7 +481,7 @@ public partial class Manager
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
 		if (gameMenuLayoutPage != GameMenuPage.Options && Assets.GetSprite("logo", logMissing: false) is { Frames.Count: > 0 } logo)
-			batcher.Image(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Vector2.One, 0, Color.White * gameMenuLayoutEase);
+			DrawDistortedLogo(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Color.White * gameMenuLayoutEase);
 		else
 		{
 			var useSineWave = false; // TODO: looks bad after the game has been running awhile
@@ -484,6 +497,69 @@ public partial class Manager
 			12,
 			new Color(0x8b81b5) * gameMenuLayoutEase);
 	}
+
+	static int LogoGridColumns => 30;
+	static int LogoGridRows => 12;
+	static float LogoIdleAmplitude => 0.1f;
+	static float LogoMouseRadius => 70f;
+	static float LogoMousePush => 1f;
+
+	void DrawDistortedLogo(Subtexture subtexture, Vector2 position, Vector2 origin, Color color)
+	{
+		if (subtexture.Texture == null)
+			return;
+
+		var mouse = MenuMouse;
+		var time = Time.SecondsF;
+		for (var y = 0; y < LogoGridRows; y++)
+		{
+			var v0 = y / (float)LogoGridRows;
+			var v1 = (y + 1) / (float)LogoGridRows;
+			for (var x = 0; x < LogoGridColumns; x++)
+			{
+				var u0 = x / (float)LogoGridColumns;
+				var u1 = (x + 1) / (float)LogoGridColumns;
+
+				var p0 = DistortedLogoVertex(subtexture, position, origin, u0, v0, mouse, time);
+				var p1 = DistortedLogoVertex(subtexture, position, origin, u1, v0, mouse, time);
+				var p2 = DistortedLogoVertex(subtexture, position, origin, u1, v1, mouse, time);
+				var p3 = DistortedLogoVertex(subtexture, position, origin, u0, v1, mouse, time);
+				var t0 = LogoUv(subtexture, u0, v0);
+				var t1 = LogoUv(subtexture, u1, v0);
+				var t2 = LogoUv(subtexture, u1, v1);
+				var t3 = LogoUv(subtexture, u0, v1);
+
+				batcher.Quad(subtexture.Texture, p0, p1, p2, p3, t0, t1, t2, t3, color);
+			}
+		}
+	}
+
+	static Vector2 DistortedLogoVertex(Subtexture subtexture, Vector2 position, Vector2 origin, float u, float v, Vector2 mouse, float time)
+	{
+		var local = Vector2.Lerp(Vector2.Lerp(subtexture.DrawCoords[0], subtexture.DrawCoords[1], u),
+			Vector2.Lerp(subtexture.DrawCoords[3], subtexture.DrawCoords[2], u), v);
+		var point = position + local - origin;
+		var ripple = new Vector2(
+			MathF.Sin(time * 1.7f + u * 12f + v * 3f),
+			MathF.Sin(time * 1.25f + u * 4f + v * 9f)) * LogoIdleAmplitude;
+
+		var delta = point - mouse;
+		var distance = delta.Length();
+		if (distance < LogoMouseRadius)
+		{
+			var influence = 1 - distance / LogoMouseRadius;
+			influence *= influence;
+			var direction = distance > 0.001f ? delta / distance : Vector2.UnitY;
+			var tangent = new Vector2(-direction.Y, direction.X);
+			ripple += direction * (LogoMousePush * influence) + tangent * (MathF.Sin(time * 7f + distance * 0.08f) * LogoMousePush * 0.35f * influence);
+		}
+
+		return point + ripple;
+	}
+
+	static Vector2 LogoUv(Subtexture subtexture, float u, float v)
+		=> Vector2.Lerp(Vector2.Lerp(subtexture.TexCoords[0], subtexture.TexCoords[1], u),
+			Vector2.Lerp(subtexture.TexCoords[3], subtexture.TexCoords[2], u), v);
 
 	static Vector4 ImColor(uint rgb, float a = 1f)
 		=> new(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, a);
@@ -515,6 +591,9 @@ public partial class Manager
 
 	Matrix3x2 MenuMatrix
 		=> Matrix3x2.CreateScale(MenuPresentScale) * Matrix3x2.CreateTranslation(MenuPresentOffset);
+
+	Vector2 MenuMouse
+		=> (Input.Mouse.Position - MenuPresentOffset) / MenuPresentScale - gameMenuLayoutOffset;
 
 	void DrawCenteredText(SpriteFont font, ReadOnlySpan<char> text, Vector2 center, float size, Color color, bool sine = false)
 	{

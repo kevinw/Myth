@@ -71,13 +71,15 @@
       "Id": "fa0235e3dccd6f7d",
       "Type": "Light",
       "Position": [84, 92],
-      "Radius": 100
+      "Radius": 100,
+      "Height": 3.7
     },
     {
       "Id": "672c3952f479bed5",
       "Type": "Light",
       "Position": [196, 92],
-      "Radius": 100
+      "Radius": 100,
+      "Height": 3.6
     },
     {
       "Id": "85d3d8e3d4696ced",

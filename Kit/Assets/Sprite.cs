@@ -2,7 +2,7 @@
 using System.Numerics;
 using Foster.Framework;
 
-namespace Myth;
+namespace Kit;
 
 // Where an actor's Position sits within its sprite. This single anchor drives the sprite
 // draw origin, the horizontal flip pivot, the editor's draggable box, and Hitbox.FromSprite,

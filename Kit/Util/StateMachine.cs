@@ -1,5 +1,4 @@
-using Foster.Framework;
-namespace Myth;
+namespace Kit;
 
 public sealed class StateMachine<T>(T initial = default)
 	where T : struct, Enum

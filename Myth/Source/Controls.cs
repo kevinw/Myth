@@ -1,3 +1,6 @@
+#if EDITOR
+using System.Reflection;
+#endif
 using Foster.Framework;
 namespace Myth;
 
@@ -78,4 +81,35 @@ public class Controls(Input input)
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
 	);
+
+#if EDITOR
+	static readonly FieldInfo[] ClearableFields = GetClearableFields();
+
+	public void Clear()
+	{
+		foreach (var field in ClearableFields)
+			switch (field.GetValue(this))
+			{
+				case VirtualAction action:
+					action.Clear();
+					break;
+				case VirtualStick stick:
+					stick.Clear();
+					break;
+				case VirtualAxis axis:
+					axis.Clear();
+					break;
+			}
+	}
+
+	static FieldInfo[] GetClearableFields()
+	{
+		var fields = typeof(Controls).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+		var clearable = new List<FieldInfo>();
+		foreach (var field in fields)
+			if (field.FieldType == typeof(VirtualAction) || field.FieldType == typeof(VirtualStick) || field.FieldType == typeof(VirtualAxis))
+				clearable.Add(field);
+		return clearable.ToArray();
+	}
+#endif
 }

@@ -2,5 +2,5 @@ namespace Myth;
 
 public interface IActivatable
 {
-	void Activate(Actor source);
+	void SetActive(Actor source, bool active);
 }
