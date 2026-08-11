@@ -917,7 +917,7 @@ public partial class Manager : App
 	sealed class EditorSettings
 	{
 		public EditorScrollMode EditorScrollMode { get; init; }
-		public EditorTheme EditorTheme { get; init; }
+		public EditorTheme EditorTheme { get; init; } = EditorTheme.Mycelium;
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
 		public bool PasteActorAtViewCenter { get; init; } = true;
