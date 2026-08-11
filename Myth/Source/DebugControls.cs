@@ -21,6 +21,7 @@ public class DebugControls
 	public readonly VirtualAction Fullscreen;
 	public readonly VirtualAction BudAI;
 	public readonly VirtualAction MovieRecording;
+	public readonly VirtualAction AllocationTrace;
 	public readonly VirtualAction ReloadRoom;
 	public readonly VirtualAction CollisionView;
 	public readonly VirtualAction NormalsView;
@@ -68,6 +69,9 @@ public class DebugControls
 		MovieRecording = Make("DebugMovieRecording",
 			new ActionBindingSet().Add(Keys.M),
 			"M / Shift+M", "Movie recording", Context.Anywhere);
+		AllocationTrace = Make("DebugAllocationTrace",
+			new ActionBindingSet().Add(Keys.F9),
+			"Shift+F9", "Start / stop allocation trace", Context.Anywhere);
 		Help = Make("DebugHelp",
 			new ActionBindingSet().Add(Keys.Slash),
 			"?", "This window", Context.Anywhere);

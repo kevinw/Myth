@@ -262,7 +262,7 @@ public partial class Manager
 		if (game?.CurrentRoom is not { } current || current.Id != room.Id)
 			return;
 
-		var local = ActorSpecs.ReadPoint(ActorSpecs.Resolve(authored), "Position") ?? Point2.Zero;
+		var local = ActorSpecs.ReadResolvedPoint(authored, "Position") ?? Point2.Zero;
 		ActorSpecs.Create(game, authored, current.WorldBounds.TopLeft + local);
 	}
 
@@ -351,8 +351,17 @@ public partial class Manager
 		authored = null!;
 		if (runtime.ActorId is not { } id || runtime.Room?.Id != runtimeRoom.Id ||
 			liveGame.destroying.Contains(runtime) || !Factory.LivePositionEditable(runtime.GetType()) ||
-			Assets.GetRoom(runtimeRoom.Id) is not { } room || FindAuthoredActor(room, id) is not { } json)
+			Assets.GetRoom(runtimeRoom.Id) is not { } room)
 			return false;
+
+		var json = runtime.AuthoredSpec;
+		if (json == null || !room.Actors.Contains(json))
+		{
+			json = FindAuthoredActor(room, id);
+			if (json == null)
+				return false;
+			runtime.AuthoredSpec = json;
+		}
 
 		authoredRoom = room;
 		authored = json;
@@ -384,7 +393,7 @@ public partial class Manager
 		var local = ActorSpecs.ReadPoint(authored, "Position") ?? Point2.Zero;
 		runtime.Position = (runtime.Room?.WorldBounds.TopLeft ?? authoredRoom.WorldBounds.TopLeft) + local;
 		runtime.Velocity = Vector2.Zero;
-		if (runtime is IResizable resizable && ActorSpecs.ReadPoint(ActorSpecs.Resolve(authored), "Size") is { } size)
+		if (runtime is IResizable resizable && ActorSpecs.ReadResolvedPoint(authored, "Size") is { } size)
 			resizable.Size = size;
 	}
 

@@ -2929,7 +2929,7 @@ public static partial class Assets
 	}
 
 	static Room LoadRoomJson(string id, string jsonText)
-		=> new(id, Point2.Zero, Room.DefaultSize, JsonNode.Parse(jsonText)?.AsObject());
+		=> new(id, Point2.Zero, Room.DefaultSize, JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []));
 
 	static int RoomSublayerFromPath(string root, string path)
 	{

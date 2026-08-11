@@ -414,7 +414,7 @@ public partial class Manager
 		{
 			selectedRoomActorIndex = actorContextMenuIndex;
 			var actor = room.Actors[actorContextMenuIndex];
-			var sourceFilename = ZedLauncher.ActorSourceFilename(actor);
+			var sourceFilename = ActorZedLauncher.ActorSourceFilename(actor);
 			var commandKey = OperatingSystem.IsMacOS() ? "Cmd" : "Ctrl";
 			if (MenuItem(EditorIcons.DuplicateMenuItem, $"{commandKey}+D"))
 				DuplicateSelectedActor();
@@ -433,7 +433,7 @@ public partial class Manager
 			{
 				Separator();
 				if (MenuItem($"{EditorIcons.SourceFile}  Open {filename}"))
-					ZedLauncher.OpenActor(actor);
+					ActorZedLauncher.OpenActor(actor);
 			}
 		}
 		else
@@ -1252,7 +1252,7 @@ public partial class Manager
 				}
 			}
 			if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton.Left))
-				ZedLauncher.OpenActor(entry);
+				ActorZedLauncher.OpenActor(entry);
 
 			index++;
 		}
@@ -2748,16 +2748,17 @@ public partial class Manager
 	{
 		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var position = room.WorldBounds.TopLeft + local;
-		var resolved = ActorSpecs.Resolve(actor);
-		if (string.Equals(ActorSpecs.ReadString(resolved, "Type"), nameof(TitleText), StringComparison.OrdinalIgnoreCase))
-			return TitleText.EditorBounds(position, ActorSpecs.ReadString(resolved, nameof(TitleText.Text)),
-				JsonUtil.ReadFloat(resolved, nameof(TitleText.LineHeightMultiplier), 1));
-		if (ResizableRoomRectTypes.TryGetValue(ActorSpecs.ReadString(resolved, "Type") ?? "", out var info))
+		var type = ActorSpecs.ReadResolvedString(actor, "Type") ?? "";
+		if (string.Equals(type, nameof(TitleText), StringComparison.OrdinalIgnoreCase))
+			return TitleText.EditorBounds(position, ActorSpecs.ReadResolvedString(actor, nameof(TitleText.Text)),
+				ActorSpecs.ReadResolvedFloat(actor, nameof(TitleText.LineHeightMultiplier), 1));
+		if (ResizableRoomRectTypes.TryGetValue(type, out var info))
 		{
-			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? info.DefaultSize;
+			var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? info.DefaultSize;
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
-		if (IsPropActor(actor) && Assets.GetSprite(ActorSpecs.ReadString(resolved, nameof(Prop.SpriteName)) ?? "") is { } sprite)
+		if (string.Equals(type, nameof(Prop), StringComparison.OrdinalIgnoreCase) &&
+			Assets.GetSprite(ActorSpecs.ReadResolvedString(actor, nameof(Prop.SpriteName)) ?? "") is { } sprite)
 			return Factory.ActorPaletteEntry.GetDefaultEditorBounds(sprite, sprite.ResolveOrigin(SpriteAnchor.TopLeft)) + position;
 
 		if (FindRoomActorEntry(actor) is { } entry)
@@ -2796,19 +2797,19 @@ public partial class Manager
 	}
 
 	static bool IsHiddenWallActor(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "HiddenWall";
+		=> ActorSpecs.ReadResolvedString(actor, "Type") == "HiddenWall";
 
 	static bool IsRevealDoorActor(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "RevealDoor";
+		=> ActorSpecs.ReadResolvedString(actor, "Type") == "RevealDoor";
 
 	static bool IsPropActor(JsonObject actor)
-		=> string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), nameof(Prop), StringComparison.OrdinalIgnoreCase);
+		=> string.Equals(ActorSpecs.ReadResolvedString(actor, "Type"), nameof(Prop), StringComparison.OrdinalIgnoreCase);
 
 	static bool IsNeuralTextureActor(JsonObject actor)
-		=> string.Equals(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type"), nameof(NeuralTextureActor), StringComparison.OrdinalIgnoreCase);
+		=> string.Equals(ActorSpecs.ReadResolvedString(actor, "Type"), nameof(NeuralTextureActor), StringComparison.OrdinalIgnoreCase);
 
 	static bool IsLinkedDoorActor(JsonObject actor)
-		=> ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") == "LinkedDoor";
+		=> ActorSpecs.ReadResolvedString(actor, "Type") == "LinkedDoor";
 
 	static bool IsActivationSourceActor(JsonObject actor)
 	{
@@ -2921,11 +2922,11 @@ public partial class Manager
 	}
 
 	static bool IsResizableRoomRectActor(JsonObject actor)
-		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "");
+		=> ResizableRoomRectTypes.ContainsKey(ActorSpecs.ReadResolvedString(actor, "Type") ?? "");
 
 	static ResizableInfo ResizableRoomRectInfo(JsonObject actor)
 		=> ResizableRoomRectTypes.GetValueOrDefault(
-			ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Type") ?? "", new ResizableInfo(new(Game.TileSize * 2, Game.TileSize * 2), ResizeAxes.Both));
+			ActorSpecs.ReadResolvedString(actor, "Type") ?? "", new ResizableInfo(new(Game.TileSize * 2, Game.TileSize * 2), ResizeAxes.Both));
 
 	static Point2 ResizableRoomRectDefaultSize(JsonObject actor)
 		=> ResizableRoomRectInfo(actor).DefaultSize;
@@ -3170,7 +3171,7 @@ public partial class Manager
 	void DrawRevealDoorMarker(Room room, JsonObject actor, float lineWeight)
 	{
 		var bounds = RoomActorBounds(room, actor);
-		var direction = Enum.TryParse<RevealDoor.RevealDirection>(ActorSpecs.ReadString(ActorSpecs.Resolve(actor), "Direction"), true, out var parsed)
+		var direction = Enum.TryParse<RevealDoor.RevealDirection>(ActorSpecs.ReadResolvedString(actor, "Direction"), true, out var parsed)
 			? parsed
 			: RevealDoor.RevealDirection.Right;
 		var arrow = direction switch
@@ -3426,9 +3427,8 @@ public partial class Manager
 		if (!IsResizableRoomRectActor(actor))
 			return;
 
-		var resolved = ActorSpecs.Resolve(actor);
 		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
-		var size = ActorSpecs.ReadPoint(resolved, "Size") ?? ResizableRoomRectDefaultSize(actor);
+		var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? ResizableRoomRectDefaultSize(actor);
 		var cursor = snap ? tile * Game.TileSize : (Point2)(world - (Vector2)room.WorldBounds.TopLeft);
 
 		var left = position.X;

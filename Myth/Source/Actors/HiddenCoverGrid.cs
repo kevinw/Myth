@@ -303,14 +303,13 @@ public class HiddenCoverGrid : Actor
 		var doors = new List<RevealDoorSpec>();
 		foreach (var actor in room.Actors)
 		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (ActorSpecs.ReadString(resolved, "Type") != "RevealDoor")
+			if (ActorSpecs.ReadResolvedString(actor, "Type") != "RevealDoor")
 				continue;
 
-			var localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
-			var size = ActorSpecs.ReadPoint(resolved, "Size") ?? RevealDoor.DefaultSize;
-			var direction = ReadDirection(resolved);
-			var tileType = ActorSpecs.ReadString(resolved, "TileType") ?? "";
+			var localPosition = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
+			var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? RevealDoor.DefaultSize;
+			var direction = ReadDirection(actor);
+			var tileType = ActorSpecs.ReadResolvedString(actor, "TileType") ?? "";
 			var id = ActorSpecs.ReadString(actor, "Id") ?? "";
 			doors.Add(new(id, new RectInt(localPosition.X, localPosition.Y, size.X, size.Y), direction, tileType));
 		}
@@ -320,7 +319,7 @@ public class HiddenCoverGrid : Actor
 
 	static RevealDoor.RevealDirection ReadDirection(System.Text.Json.Nodes.JsonObject json)
 	{
-		var text = ActorSpecs.ReadString(json, "Direction");
+		var text = ActorSpecs.ReadResolvedString(json, "Direction");
 		return Enum.TryParse<RevealDoor.RevealDirection>(text, ignoreCase: true, out var direction)
 			? direction
 			: RevealDoor.RevealDirection.Right;

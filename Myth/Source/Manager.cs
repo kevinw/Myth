@@ -182,6 +182,13 @@ public partial class Manager : App
 	readonly int maxFrames;
 	readonly float maxTimeSeconds;
 	int completedGameFrames;
+	readonly int allocWarmupFrames;
+	readonly int allocMeasureFrames;
+	int allocProfileFrames;
+	int allocProfileMeasuredFrames;
+	long allocProfileBytes;
+	bool allocProfileStarted;
+	bool allocProfileComplete;
 	readonly string? playRoomId;
 	readonly bool buildAssetPack;
 	readonly bool bakeWorldMap;
@@ -276,6 +283,8 @@ public partial class Manager : App
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.BenchSourceFrames = args.benchSourceFrames;
 		maxFrames = args.maxFrames;
+		allocWarmupFrames = args.allocWarmupFrames;
+		allocMeasureFrames = args.allocMeasureFrames;
 		maxTimeSeconds = args.maxTimeSeconds;
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
@@ -984,7 +993,7 @@ public partial class Manager : App
 		if (!playing) return;
 		if (game == null) return;
 
-		game.Update(controls);
+		UpdateGameWithAllocationProfile(game);
 		CompleteGameFrame();
 
 		if (gym.runs == null) return;
@@ -1136,6 +1145,10 @@ public partial class Manager : App
 
 				if (debugControls.FpsOverlay.Pressed)
 					ToggleFpsOverlay();
+#if KIT_DIAGNOSTICS && !IOS && !BROWSER
+				if (Input.Keyboard.Shift && debugControls.AllocationTrace.Pressed)
+					ToggleAllocationTrace();
+#endif
 #if !IOS && !BROWSER
 				if (Window is { } window && !keyboardShortcutsBlocked && debugControls.Fullscreen.Pressed)
 					window.Fullscreen = !window.Fullscreen;
@@ -1196,7 +1209,7 @@ public partial class Manager : App
 #endif
 								if (updatePlayingGame)
 									using (PerfStats.Time(PerfDetail.GameUpdate))
-										g.Update(controls);
+										UpdateGameWithAllocationProfile(g);
 								CompleteGameFrame();
 							}
 					}
@@ -1308,6 +1321,53 @@ public partial class Manager : App
 	{
 		if (maxFrames != int.MaxValue && ++completedGameFrames >= maxFrames)
 			Exit();
+	}
+
+	bool AllocationProfileEnabled => allocMeasureFrames > 0;
+
+	void UpdateGameWithAllocationProfile(Game g)
+	{
+		if (!AllocationProfileEnabled || allocProfileComplete)
+		{
+			g.Update(controls);
+			return;
+		}
+
+		if (!allocProfileStarted && allocProfileFrames >= allocWarmupFrames)
+			StartAllocationProfile();
+
+		if (allocProfileStarted)
+		{
+			var before = GC.GetAllocatedBytesForCurrentThread();
+			g.Update(controls);
+			allocProfileBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+			allocProfileMeasuredFrames++;
+			if (allocProfileMeasuredFrames >= allocMeasureFrames)
+				FinishAllocationProfile();
+		}
+		else
+		{
+			g.Update(controls);
+		}
+
+		allocProfileFrames++;
+	}
+
+	void StartAllocationProfile()
+	{
+		allocProfileStarted = true;
+		GC.Collect();
+		GC.WaitForPendingFinalizers();
+		GC.Collect();
+	}
+
+	void FinishAllocationProfile()
+	{
+		allocProfileComplete = true;
+		var bytesPerFrame = allocProfileBytes / (double)allocProfileMeasuredFrames;
+		Console.WriteLine(
+			$"ALLOC_PROFILE game_update warmup_frames={allocWarmupFrames} measure_frames={allocProfileMeasuredFrames} bytes={allocProfileBytes} bytes_per_frame={bytesPerFrame.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+		Exit();
 	}
 
 	readonly Dictionary<Foster.Framework.Cursor.SystemTypes, Foster.Framework.Cursor> imguiCursors = [];

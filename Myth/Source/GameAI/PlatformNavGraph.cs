@@ -1762,15 +1762,14 @@ public sealed class PlatformNavGraph
 	{
 		foreach (var actor in room.Actors)
 		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (!string.Equals(ActorSpecs.ReadString(resolved, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+			if (!string.Equals(ActorSpecs.ReadResolvedString(actor, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 				continue;
 
-			var targetActorId = ActorSpecs.ReadString(resolved, nameof(LinkedDoor.TargetActorId));
+			var targetActorId = ActorSpecs.ReadResolvedString(actor, nameof(LinkedDoor.TargetActorId));
 			if (string.IsNullOrWhiteSpace(targetActorId))
 				continue;
 
-			var localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
+			var localPosition = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
 			var position = room.WorldBounds.TopLeft + localPosition;
 			var targetRoomId = Assets.FindActorById(targetActorId) is { } target ? target.Room.Id : null;
 			var exitId = AddNode(position, NodeKind.RoomExit, new RoomExit(RoomExitKind.LinkedDoor, targetRoomId, targetActorId, Point2.Zero));

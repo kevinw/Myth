@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Foster.Framework;
 
@@ -10,35 +11,45 @@ internal static class JsonUtil
 	public static bool ContainsProperty(JsonObject json, string key)
 		=> TryGetProperty(json, key, out _);
 
-	public static bool TryGetProperty(JsonObject json, string key, out JsonNode? value)
+	public static JsonObject NormalizeStringValues(JsonObject json)
 	{
-		if (json.TryGetPropertyValue(key, out value))
-			return true;
+		NormalizeStringValues((JsonNode)json);
+		return json;
+	}
 
-		foreach (var property in json)
+	public static JsonNode? NormalizeStringValues(JsonNode? node)
+	{
+		switch (node)
 		{
-			if (!string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-				continue;
-
-			value = property.Value;
-			return true;
+			case JsonObject json:
+				foreach (var (key, value) in json.ToArray())
+					if (NormalizeStringValue(value) is { } normalized)
+						json[key] = normalized;
+					else
+						NormalizeStringValues(value);
+				break;
+			case JsonArray array:
+				for (var i = 0; i < array.Count; i++)
+					if (NormalizeStringValue(array[i]) is { } normalized)
+						array[i] = normalized;
+					else
+						NormalizeStringValues(array[i]);
+				break;
 		}
 
-		value = null;
-		return false;
+		return node;
 	}
+
+	static JsonNode? NormalizeStringValue(JsonNode? node)
+		=> node is JsonValue value && value.GetValueKind() == JsonValueKind.String
+			? JsonValue.Create(value.GetValue<string>())
+			: null;
+
+	public static bool TryGetProperty(JsonObject json, string key, out JsonNode? value)
+		=> json.TryGetPropertyValue(key, out value);
 
 	public static void RemoveProperty(JsonObject json, string key)
-	{
-		if (json.Remove(key))
-			return;
-
-		foreach (var property in json.ToArray())
-		{
-			if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-				json.Remove(property.Key);
-		}
-	}
+		=> json.Remove(key);
 
 	public static string? ReadString(JsonObject json, string key)
 		=> TryGetProperty(json, key, out var node) && node != null ? node.GetValue<string>() : null;
@@ -51,7 +62,14 @@ internal static class JsonUtil
 		if (!TryGetProperty(json, key, out var node) || node == null)
 			return fallback;
 
-		return bool.TryParse(node.ToString(), out var value) ? value : fallback;
+		if (node is JsonValue jsonValue)
+		{
+			if (jsonValue.TryGetValue<bool>(out var value))
+				return value;
+			if (jsonValue.TryGetValue<string>(out var text) && bool.TryParse(text, out value))
+				return value;
+		}
+		return fallback;
 	}
 
 	public static int ReadInt(JsonObject json, string key, int fallback = 0)
@@ -107,12 +125,24 @@ internal static class JsonUtil
 	public static bool TryReadInt(JsonNode? node, out int value)
 	{
 		value = 0;
-		return node != null && int.TryParse(node.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+		if (node is not JsonValue json)
+			return false;
+		if (json.TryGetValue(out value))
+			return true;
+		if (json.TryGetValue<string>(out var text))
+			return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+		return false;
 	}
 
 	public static bool TryReadFloat(JsonNode? node, out float value)
 	{
 		value = 0;
-		return node != null && float.TryParse(node.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+		if (node is not JsonValue json)
+			return false;
+		if (json.TryGetValue(out value))
+			return true;
+		if (json.TryGetValue<string>(out var text))
+			return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+		return false;
 	}
 }

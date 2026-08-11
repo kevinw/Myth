@@ -1,10 +1,9 @@
 #if EDITOR
-using System.Diagnostics;
 using System.Text.Json.Nodes;
 
 namespace Myth;
 
-static class ZedLauncher
+static class ActorZedLauncher
 {
 	public static void OpenActor(Factory.ActorPaletteEntry entry)
 		=> OpenActorType(entry.ActorTypeName);
@@ -40,38 +39,12 @@ static class ZedLauncher
 			return;
 		}
 
-		try
-		{
-			Process.Start(CreateStartInfo("zed", "-a", filename));
-		}
-		catch (Exception e) when (OperatingSystem.IsMacOS())
-		{
-			try
-			{
-				Process.Start(CreateStartInfo("/usr/bin/open", "-a", "Zed", filename));
-			}
-			catch (Exception fallback)
-			{
-				Console.Error.WriteLine($"Failed to open '{filename}' in Zed: {e.Message}; fallback failed: {fallback.Message}");
-			}
-		}
-		catch (Exception e)
-		{
-			Console.Error.WriteLine($"Failed to open '{filename}' in Zed: {e.Message}");
-		}
+		ZedLauncher.OpenFile(filename);
 	}
 
 	static string? SourceTypeName(string? actorTypeName)
 		=> actorTypeName is { Length: > 0 }
 			? ActorSpecs.GetActorType(actorTypeName)?.Name ?? actorTypeName
 			: null;
-
-	static ProcessStartInfo CreateStartInfo(string executable, params string[] arguments)
-	{
-		var startInfo = new ProcessStartInfo(executable) { UseShellExecute = false };
-		foreach (var argument in arguments)
-			startInfo.ArgumentList.Add(argument);
-		return startInfo;
-	}
 }
 #endif

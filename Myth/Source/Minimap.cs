@@ -315,18 +315,17 @@ public class Minimap
 	{
 		foreach (var actor in room.Actors)
 		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (ActorSpecs.ReadString(resolved, "Type") != "LinkedDoor")
-				continue;
-			var targetId = ActorSpecs.ReadString(resolved, "TargetActorId");
-			if (string.IsNullOrWhiteSpace(targetId))
-				continue;
-			if (Assets.FindActorById(targetId) is not { } target || visitedRoomIds.Contains(target.Room.Id))
-				continue;
+				if (ActorSpecs.ReadResolvedString(actor, "Type") != "LinkedDoor")
+					continue;
+				var targetId = ActorSpecs.ReadResolvedString(actor, "TargetActorId");
+				if (string.IsNullOrWhiteSpace(targetId))
+					continue;
+				if (Assets.FindActorById(targetId) is not { } target || visitedRoomIds.Contains(target.Room.Id))
+					continue;
 
-			var doorTile = (ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero) / Game.TileSize;
-			if (seen.Contains(doorTile))
-				exits.Add(new(room.TileSpacePosition + doorTile, Point2.Zero, 1));
+				var doorTile = (ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero) / Game.TileSize;
+				if (seen.Contains(doorTile))
+					exits.Add(new(room.TileSpacePosition + doorTile, Point2.Zero, 1));
 		}
 	}
 

@@ -1026,7 +1026,7 @@ public partial class Game : IDisposable
 		if (Assets.FindActorById(actorId) is not { } found)
 			return null;
 
-		var local = ActorSpecs.ReadPoint(ActorSpecs.Resolve(found.Actor), "Position") ?? Point2.Zero;
+		var local = ActorSpecs.ReadResolvedPoint(found.Actor, "Position") ?? Point2.Zero;
 		return new RespawnState(found.Room.Id, found.Room.WorldBounds.TopLeft + local);
 	}
 
@@ -1522,10 +1522,9 @@ public partial class Game : IDisposable
 		var playerPosition = FindFallbackPlayerPosition(target, direction);
 		foreach (var actor in target.Actors)
 		{
-			var resolved = ActorSpecs.Resolve(actor);
-			if (string.Equals(ActorSpecs.ReadString(resolved, "Type"), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
+			if (string.Equals(ActorSpecs.ReadResolvedString(actor, "Type"), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
 			{
-				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero);
+				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero);
 				break;
 			}
 		}
@@ -1546,11 +1545,10 @@ public partial class Game : IDisposable
 		if (Assets.FindActorById(targetActorId) is not { } target)
 			return false;
 
-		var resolvedTarget = ActorSpecs.Resolve(target.Actor);
-		if (!string.Equals(ActorSpecs.ReadString(resolvedTarget, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(ActorSpecs.ReadResolvedString(target.Actor, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
 			return false;
 
-		ReadLinkedDoorDestination(resolvedTarget, out var localPosition, out var spawnOffset);
+		ReadLinkedDoorDestination(target.Actor, out var localPosition, out var spawnOffset);
 		var targetRoom = target.Room.CloneRuntime();
 		var crossLayer = targetRoom.Sublayer != room.Sublayer;
 		var targetPosition = crossLayer ? player.Position + spawnOffset : targetRoom.WorldBounds.TopLeft + localPosition + spawnOffset;
@@ -1570,10 +1568,10 @@ public partial class Game : IDisposable
 		return true;
 	}
 
-	static void ReadLinkedDoorDestination(JsonObject resolved, out Point2 localPosition, out Point2 spawnOffset)
+	static void ReadLinkedDoorDestination(JsonObject actor, out Point2 localPosition, out Point2 spawnOffset)
 	{
-		localPosition = ActorSpecs.ReadPoint(resolved, "Position") ?? Point2.Zero;
-		spawnOffset = ActorSpecs.ReadPoint(resolved, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
+		localPosition = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
+		spawnOffset = ActorSpecs.ReadResolvedPoint(actor, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
 	}
 
 	void ResolvePlayerRoomTransition(Point2 direction)
