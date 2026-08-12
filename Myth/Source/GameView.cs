@@ -56,6 +56,7 @@ public sealed partial class GameView : IDisposable
 	System.Collections.Generic.List<Actor> Actors => game.Actors;
 	float zoomLevel => game.zoomLevel;
 	Vector2 RenderCamera => game.RenderCamera;
+	Vector2 RenderTargetShake => game.renderTargetShake;
 	float ditherGlitch => game.ditherGlitch;
 	Vector2 ditherGlitchAxis => game.ditherGlitchAxis;
 	Point2 shake { get => game.shake; set => game.shake = value; }

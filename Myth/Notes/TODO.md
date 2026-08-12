@@ -1,5 +1,11 @@
 # TODO
 
+- try render-target-space screenshake on gameplay beats: hits, landings, chest opens, boss impacts, burrow pops, door/portal transfers.
+- quake lessons:
+  - frenetic.
+  - secrets help you level up immediately.
+  - trap rooms. moving platforms. monster closets.
+- maybe burrowing underneath enemies freezes or stuns them
 - make a glass tube. the lights go out. all you illuminate is the tube.
 - add a shortcut for opening in the xcode graphics debugger; have a look and see if we're doing anything dumb.
 - go back to the original two inspo images (multicolored dither cliff and cathedral) and try to make a room more like them; color variety!

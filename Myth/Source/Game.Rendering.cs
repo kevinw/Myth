@@ -187,7 +187,7 @@ public sealed partial class GameView
 			// cover-fitting the 16:9 frame so its sides are cropped; aspectUncrop lerps back to a
 			// contained (full, letterboxed) frame while Zoom is held. The cover-scaled frame
 			// overflows the present region, so clip it to never bleed past the pillarbox bars.
-			var center = present.Center;
+			var center = (Vector2)present.Center + RenderTargetShake;
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)

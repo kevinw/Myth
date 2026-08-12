@@ -286,24 +286,47 @@
                 transform: translateY(-2vh);
             }
 
-            /* Running-player silhouette (tools/export-loading-silhouette.py). The webp is
-		   white-on-transparent and used as a mask, so background-color is the tint —
-		   change it freely. A bob keeps it lively even where animated masks don't play
-		   (iOS Safari renders the mask's first frame only). */
-            #loading-bud {
-                width: 90px;
-                height: 96px;
-                background: var(--accent);
-                -webkit-mask: url(loading-player.webp) center / contain
-                    no-repeat;
-                mask: url(loading-player.webp) center / contain no-repeat;
+            #loading-stage {
+                position: relative;
+                width: min(240px, 72vw);
+                aspect-ratio: 3 / 2;
+            }
+
+            #loading-duck {
+                position: absolute;
+                inset: 0;
+                width: min(240px, 72vw);
+                height: auto;
                 image-rendering: pixelated;
+                filter: drop-shadow(0 12px 0 rgba(0, 0, 0, 0.26));
                 animation: bud-bob 0.5s ease-in-out infinite alternate;
+            }
+
+            #loading-gamepad {
+                position: absolute;
+                left: -4%;
+                top: 38%;
+                z-index: 1;
+                width: min(96px, 29vw);
+                height: auto;
+                image-rendering: pixelated;
+                transform-origin: 52% 50%;
+                animation: gamepad-spin 1.1s linear infinite;
             }
 
             @keyframes bud-bob {
                 to {
                     transform: translateY(-2px);
+                }
+            }
+
+            @keyframes gamepad-spin {
+                from {
+                    transform: rotate(0deg);
+                }
+
+                to {
+                    transform: rotate(360deg);
                 }
             }
 
@@ -317,7 +340,8 @@
                 text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
             }
 
-            #start-gate[data-error] #loading-bud,
+            #start-gate[data-error] #loading-duck,
+            #start-gate[data-error] #loading-gamepad,
             #start-gate[data-error] .start-hint,
             #start-gate[data-error] #start-button {
                 display: none;
@@ -437,11 +461,11 @@
         <div id="start-gate">
             <a id="acknowledgements-link" href="/acknowledgements">Acknowledgements</a>
             <div id="start-panel">
-                <div id="loading-bud" aria-hidden="true"></div>
-                <p class="start-hint">Hold jump when landing: become 1D.</p>
-                <p class="start-hint">
-                    Keep holding to climb walls and move faster along surfaces.
-                </p>
+                <div id="loading-stage" aria-hidden="true">
+                    <img id="loading-duck" src="loading-duck.webp" alt="" />
+                    <img id="loading-gamepad" src="loading-gamepad.webp" alt="" />
+                </div>
+                <p class="start-hint">pick up yer gamepad</p>
                 <button id="start-button" type="button" disabled>
                     Loading...
                 </button>

@@ -226,6 +226,14 @@
     <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <Target Name="GenerateWebUiAssets"
+          BeforeTargets="CopyBrowserShell"
+          Inputs="Production/WebUI/gamepad.ase"
+          Outputs="Platforms/Web/wwwroot/loading-gamepad.webp"
+          Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <Exec Command="dotnet run --project tools/WebUiAssetExporter/WebUiAssetExporter.csproj -- Production/WebUI/gamepad.ase Platforms/Web/wwwroot/loading-gamepad.webp" />
+  </Target>
+
   <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
     <MakeDir Directories="$(WasmAppDir)FMOD" />
@@ -235,7 +243,8 @@
     <Copy SourceFiles="$(IntermediateOutputPath)acknowledgements/index.html" DestinationFolder="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />
-    <Copy SourceFiles="Platforms/Web/wwwroot/loading-player.webp" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/loading-duck.webp" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="Platforms/Web/wwwroot/loading-gamepad.webp" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/_headers" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/_routes.json" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="../Foster/Framework/Content/Web/foster-webgpu.js" DestinationFolder="$(WasmAppDir)_framework/Content/Web" />
