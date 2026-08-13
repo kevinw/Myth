@@ -2923,9 +2923,9 @@ public partial class Manager
 			if (!typeof(IResizable).IsAssignableFrom(type))
 				continue;
 
-			var sizeField = type.GetField("DefaultSize", BindingFlags.Public | BindingFlags.Static)
+			var sizeField = type.GetField("DefaultSize", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
 				?? throw new InvalidOperationException($"Resizable actor '{type.Name}' is missing a public static \"DefaultSize\" field.");
-			var axesField = type.GetField(nameof(Jumpthru.ResizableAxes), BindingFlags.Public | BindingFlags.Static);
+			var axesField = type.GetField(nameof(Jumpthru.ResizableAxes), BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
 			var axes = axesField != null ? (ResizeAxes)axesField.GetValue(null)! : ResizeAxes.Both;
 			result[name] = new ResizableInfo((Point2)sizeField.GetValue(null)!, axes);
 		}
