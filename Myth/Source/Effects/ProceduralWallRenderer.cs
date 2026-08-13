@@ -228,6 +228,7 @@ sealed class ProceduralWallRenderer : IDisposable
 		HyphaWall hypha => hypha.RootDetail,
 		StrataWall strata => strata.CrackDetail,
 		CircuitWall circuit => circuit.TraceDetail,
+		ArchiveWall archive => archive.ArchiveDetail,
 		_ => 1,
 	};
 
@@ -405,6 +406,28 @@ sealed class ProceduralWallRenderer : IDisposable
 			hash = unchecked(hash * 31 + circuit.SignalDensity.GetHashCode());
 			hash = unchecked(hash * 31 + circuit.SignalPulse.GetHashCode());
 		}
+		else if (wall is ArchiveWall archive)
+		{
+			hash = unchecked(hash * 31 + archive.CabinetColor.GetHashCode());
+			hash = unchecked(hash * 31 + archive.ShelfColor.GetHashCode());
+			hash = unchecked(hash * 31 + archive.LabelColor.GetHashCode());
+			hash = unchecked(hash * 31 + archive.BookColor1.GetHashCode());
+			hash = unchecked(hash * 31 + archive.BookColor2.GetHashCode());
+			hash = unchecked(hash * 31 + archive.BookColor3.GetHashCode());
+			hash = unchecked(hash * 31 + archive.BookColor4.GetHashCode());
+			hash = unchecked(hash * 31 + archive.CableColor.GetHashCode());
+			hash = unchecked(hash * 31 + archive.RelicColor.GetHashCode());
+			hash = unchecked(hash * 31 + archive.BayScale.GetHashCode());
+			hash = unchecked(hash * 31 + archive.ShelfThickness.GetHashCode());
+			hash = unchecked(hash * 31 + archive.ShelfDepth.GetHashCode());
+			hash = unchecked(hash * 31 + archive.BookDensity.GetHashCode());
+			hash = unchecked(hash * 31 + archive.DrawerDensity.GetHashCode());
+			hash = unchecked(hash * 31 + archive.CompartmentMotion.GetHashCode());
+			hash = unchecked(hash * 31 + archive.CableDensity.GetHashCode());
+			hash = unchecked(hash * 31 + archive.CableWidth.GetHashCode());
+			hash = unchecked(hash * 31 + archive.ReliquaryDensity.GetHashCode());
+			hash = unchecked(hash * 31 + archive.RelicGlow.GetHashCode());
+		}
 		return hash;
 	}
 
@@ -425,6 +448,8 @@ sealed class ProceduralWallRenderer : IDisposable
 				AddStrataWall(strata, data);
 			else if (wall is CircuitWall circuit)
 				AddCircuitWall(circuit, data);
+			else if (wall is ArchiveWall archive)
+				AddArchiveWall(archive, data);
 		}
 		data.Instances.Sort(static (a, b) => a.DepthMotion.X.CompareTo(b.DepthMotion.X));
 		data.StraightPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
@@ -435,6 +460,100 @@ sealed class ProceduralWallRenderer : IDisposable
 		data.StraightPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.StraightPipes));
 		data.ElbowPipeBuffer.Clear();
 		data.ElbowPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.ElbowPipes));
+	}
+
+	void AddArchiveWall(ArchiveWall wall, WallData data)
+	{
+		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
+			return;
+
+		var rng = new Rng(wall.Seed);
+		var cabinet = (Vector4)wall.CabinetColor;
+		var shelf = (Vector4)wall.ShelfColor;
+		var label = (Vector4)wall.LabelColor;
+		var bayWidth = MathF.Max(20, 36 * MathF.Max(wall.BayScale, 0.25f));
+		var bayHeight = MathF.Max(16, 27 * MathF.Max(wall.BayScale, 0.25f));
+		var columns = Math.Max(1, (int)MathF.Ceiling(wall.Size.X / bayWidth));
+		var rows = Math.Max(1, (int)MathF.Ceiling(wall.Size.Y / bayHeight));
+		bayWidth = wall.Size.X / (float)columns;
+		bayHeight = wall.Size.Y / (float)rows;
+		AddStaticBlock(data, (Vector2)wall.Position + (Vector2)wall.Size * 0.5f, wall.Size, 1,
+			new(cabinet.X * 0.46f, cabinet.Y * 0.5f, cabinet.Z * 0.49f, 0.82f));
+
+		var thickness = MathF.Max(1, wall.ShelfThickness);
+		for (var row = 0; row <= rows; row++)
+			AddStaticBlock(data, new(wall.Position.X + wall.Size.X * 0.5f, wall.Position.Y + MathF.Min(row * bayHeight, wall.Size.Y)),
+				new(wall.Size.X, thickness), 8 * MathF.Max(wall.ShelfDepth, 0), new(shelf.X, shelf.Y, shelf.Z, 0.64f));
+		for (var column = 0; column <= columns; column++)
+			AddStaticBlock(data, new(wall.Position.X + MathF.Min(column * bayWidth, wall.Size.X), wall.Position.Y + wall.Size.Y * 0.5f),
+				new(thickness, wall.Size.Y), 8 * MathF.Max(wall.ShelfDepth, 0), new(shelf.X, shelf.Y, shelf.Z, 0.64f));
+
+		for (var row = 0; row < rows; row++)
+			for (var column = 0; column < columns; column++)
+			{
+				var left = wall.Position.X + column * bayWidth + thickness + 2;
+				var top = wall.Position.Y + row * bayHeight + thickness + 2;
+				var innerWidth = MathF.Max(4, bayWidth - thickness * 2 - 4);
+				var innerHeight = MathF.Max(4, bayHeight - thickness * 2 - 4);
+				var roll = rng.Float();
+				var drawerChance = Math.Clamp(wall.DrawerDensity * 0.34f, 0, 0.85f);
+				var relicChance = Math.Clamp(wall.ReliquaryDensity * 0.12f, 0, 0.5f);
+				if (roll < relicChance)
+				{
+					var center = new Vector2(left + innerWidth * 0.5f, top + innerHeight * 0.52f);
+					var frameSize = new Vector2(innerWidth * 0.62f, innerHeight * 0.72f);
+					AddStaticBlock(data, center, frameSize, 7, new(shelf.X * 0.72f, shelf.Y * 0.72f, shelf.Z * 0.72f, 0.58f));
+					AddStaticBlock(data, center, frameSize - new Vector2(4), 8, new(cabinet.X * 0.34f, cabinet.Y * 0.34f, cabinet.Z * 0.34f, 0.88f));
+					var relic = (Vector4)wall.RelicColor;
+					var relicSize = rng.Float(2.5f, 5);
+					AddAnimatedBlock(data, center, new(relicSize, relicSize * 1.35f), 13,
+						new(relic.X, relic.Y, relic.Z, 0.24f), rng.Float(Calc.TAU), 0, 0,
+						emissive: MathF.Max(wall.RelicGlow, 0), flat: true, pulse: 0.35f);
+				}
+				else if (roll < relicChance + drawerChance)
+				{
+					var center = new Vector2(left + innerWidth * 0.5f, top + innerHeight * 0.5f);
+					var moving = rng.Float() < 0.18f;
+					AddAnimatedBlock(data, center, new(innerWidth - 1, innerHeight - 1), rng.Float(5, 9),
+						new(shelf.X * rng.Float(0.58f, 0.84f), shelf.Y * rng.Float(0.58f, 0.84f), shelf.Z * rng.Float(0.58f, 0.84f), 0.72f),
+						rng.Float(Calc.TAU), rng.Float(0.06f, 0.14f), moving ? rng.Float(1, 3) * MathF.Max(wall.CompartmentMotion, 0) : 0);
+					AddStaticBlock(data, center, new(innerWidth * 0.36f, 2), 11, new(label.X, label.Y, label.Z, 0.4f), flat: true);
+					AddStaticBlock(data, center + new Vector2(innerWidth * 0.32f, 0), new(1.8f), 12,
+						new(label.X * 0.72f, label.Y * 0.72f, label.Z * 0.72f, 0.28f), flat: true);
+				}
+				else if (rng.Float() < Math.Clamp(wall.BookDensity * 0.82f, 0, 1))
+				{
+					var x = left;
+					while (x < left + innerWidth - 2)
+					{
+						var width = rng.Float(1.8f, 4.6f);
+						var height = rng.Float(innerHeight * 0.48f, innerHeight * 0.96f);
+						var size = new Vector2(MathF.Min(width, left + innerWidth - x), height);
+						var center = new Vector2(x + size.X * 0.5f, top + innerHeight - size.Y * 0.5f);
+						var color = ArchiveBookColor(wall, rng.Int(4));
+						AddRotatedBlock(data, center, size, rng.Float(9, 13), new(color.X, color.Y, color.Z, rng.Float(0.55f, 0.8f)),
+							rng.Float(-0.08f, 0.08f));
+						x += width + rng.Float(0.25f, 1);
+					}
+				}
+			}
+
+		var cableCount = Math.Clamp((int)MathF.Round((wall.Size.X * wall.Size.Y / 22000f + 1) * MathF.Max(wall.CableDensity, 0)), 0, 16);
+		Span<Vector2> points = stackalloc Vector2[4];
+		Span<float> radii = stackalloc float[3];
+		for (var cable = 0; cable < cableCount; cable++)
+		{
+			var x0 = rng.Float(4, wall.Size.X - 4);
+			var x1 = Math.Clamp(x0 + rng.Float(-bayWidth, bayWidth), 4, wall.Size.X - 4);
+			points[0] = (Vector2)wall.Position + new Vector2(x0, 0);
+			points[1] = (Vector2)wall.Position + new Vector2(x0, wall.Size.Y * rng.Float(0.28f, 0.48f));
+			points[2] = (Vector2)wall.Position + new Vector2(x1, points[1].Y - wall.Position.Y);
+			points[3] = (Vector2)wall.Position + new Vector2(x1, wall.Size.Y * rng.Float(0.72f, 1));
+			for (var i = 0; i < radii.Length; i++)
+				radii[i] = MathF.Max(0.45f, wall.CableWidth * rng.Float(0.3f, 0.58f));
+			AddRoundedPipe(data, points, radii, MathF.Max(3, wall.CableWidth * 1.4f), rng.Float(13, 17),
+				wall.CableColor, 0.68f, rng.Float());
+		}
 	}
 
 	void AddCircuitWall(CircuitWall wall, WallData data)
@@ -957,6 +1076,14 @@ sealed class ProceduralWallRenderer : IDisposable
 		0 => wall.TraceColor1,
 		1 => wall.TraceColor2,
 		_ => wall.TraceColor3,
+	});
+
+	static Vector4 ArchiveBookColor(ArchiveWall wall, int index) => (Vector4)(index switch
+	{
+		0 => wall.BookColor1,
+		1 => wall.BookColor2,
+		2 => wall.BookColor3,
+		_ => wall.BookColor4,
 	});
 
 	static Vector4 LedColor(int index)

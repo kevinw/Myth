@@ -294,10 +294,12 @@ public static partial class Assets
 						{
 							var defaultPattern = wallType == typeof(HyphaWall) ? "patterns/pattern_68" :
 								wallType == typeof(StrataWall) ? "patterns/pattern_37" :
-								wallType == typeof(CircuitWall) ? "patterns/pattern_12" : ProceduralWallRenderer.DefaultPatternTexture;
+								wallType == typeof(CircuitWall) ? "patterns/pattern_12" :
+								wallType == typeof(ArchiveWall) ? "patterns/pattern_57" : ProceduralWallRenderer.DefaultPatternTexture;
 							var defaultDetail = wallType == typeof(HyphaWall) ? "patterns/noise/Noise_036" :
 								wallType == typeof(StrataWall) ? "patterns/noise/Noise_022" :
-								wallType == typeof(CircuitWall) ? "patterns/noise/Noise_003" : ProceduralWallRenderer.DefaultDetailTexture;
+								wallType == typeof(CircuitWall) ? "patterns/noise/Noise_003" :
+								wallType == typeof(ArchiveWall) ? "patterns/noise/Noise_041" : ProceduralWallRenderer.DefaultDetailTexture;
 							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.PatternTexture)) is { Length: > 0 } pattern
 								? pattern : defaultPattern);
 							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.DetailTexture)) is { Length: > 0 } detail
