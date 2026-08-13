@@ -230,6 +230,7 @@ sealed class ProceduralWallRenderer : IDisposable
 		CircuitWall circuit => circuit.TraceDetail,
 		ArchiveWall archive => archive.ArchiveDetail,
 		FleshWall flesh => flesh.FleshDetail,
+		RuinsWall ruins => ruins.RuinDetail,
 		_ => 1,
 	};
 
@@ -452,6 +453,27 @@ sealed class ProceduralWallRenderer : IDisposable
 			hash = unchecked(hash * 31 + flesh.PulseRate.GetHashCode());
 			hash = unchecked(hash * 31 + flesh.Wetness.GetHashCode());
 		}
+		else if (wall is RuinsWall ruins)
+		{
+			hash = unchecked(hash * 31 + ruins.MortarColor.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.StoneColor1.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.StoneColor2.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.StoneColor3.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.RootColor.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.ArtifactColor.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.BlockScale.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.BlockDepth.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.CourseVariation.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.Damage.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.ArchDensity.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.ArchScale.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.RootDensity.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.RootWidth.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.CrackDensity.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.CrackWidth.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.ArtifactDensity.GetHashCode());
+			hash = unchecked(hash * 31 + ruins.ArtifactGlow.GetHashCode());
+		}
 		return hash;
 	}
 
@@ -476,6 +498,8 @@ sealed class ProceduralWallRenderer : IDisposable
 				AddArchiveWall(archive, data);
 			else if (wall is FleshWall flesh)
 				AddFleshWall(flesh, data);
+			else if (wall is RuinsWall ruins)
+				AddRuinsWall(ruins, data);
 		}
 		data.Instances.Sort(static (a, b) => a.DepthMotion.X.CompareTo(b.DepthMotion.X));
 		data.StraightPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
@@ -486,6 +510,102 @@ sealed class ProceduralWallRenderer : IDisposable
 		data.StraightPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.StraightPipes));
 		data.ElbowPipeBuffer.Clear();
 		data.ElbowPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.ElbowPipes));
+	}
+
+	void AddRuinsWall(RuinsWall wall, WallData data)
+	{
+		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
+			return;
+
+		var rng = new Rng(wall.Seed);
+		var mortar = (Vector4)wall.MortarColor;
+		var blockScale = MathF.Max(wall.BlockScale, 0.2f);
+		var blockHeight = 10 * blockScale;
+		var damage = Math.Clamp(wall.Damage, 0, 1);
+		AddStaticBlock(data, (Vector2)wall.Position + (Vector2)wall.Size * 0.5f, wall.Size, 1,
+			new(mortar.X * 0.5f, mortar.Y * 0.52f, mortar.Z * 0.5f, 0.94f));
+
+		var rows = Math.Max(1, (int)MathF.Ceiling(wall.Size.Y / blockHeight));
+		for (var row = 0; row < rows; row++)
+		{
+			var y = wall.Position.Y + row * blockHeight;
+			var x = row % 2 == 0 ? -12 * blockScale : 0;
+			while (x < wall.Size.X)
+			{
+				var width = rng.Float(16, 32) * blockScale * rng.Float(0.8f, 1.2f);
+				var height = MathF.Min(blockHeight - rng.Float(0.7f, 2.1f), wall.Size.Y - row * blockHeight);
+				if (height > 1 && rng.Float() > damage * 0.19f)
+				{
+					var center = new Vector2(wall.Position.X + x + width * 0.5f,
+						y + height * 0.5f + rng.Float(-1, 1) * MathF.Max(wall.CourseVariation, 0));
+					var stone = RuinStoneColor(wall, rng.Int(3));
+					var variation = rng.Float(0.72f, 1.14f);
+					AddRotatedBlock(data, center, new(MathF.Max(2, width - 1.2f), height),
+						rng.Float(3, 9) * MathF.Max(wall.BlockDepth, 0),
+						new(stone.X * variation, stone.Y * variation, stone.Z * variation, rng.Float(0.72f, 0.94f)),
+						rng.Float(-0.035f, 0.035f) * MathF.Max(wall.CourseVariation, 0));
+				}
+				x += width;
+			}
+		}
+
+		var area = wall.Size.X * wall.Size.Y;
+		var archCount = Math.Clamp((int)MathF.Round(area / 30000f * MathF.Max(wall.ArchDensity, 0)), 0, 10);
+		for (var arch = 0; arch < archCount; arch++)
+		{
+			var radius = rng.Float(18, 34) * MathF.Max(wall.ArchScale, 0.2f);
+			var center = (Vector2)wall.Position + new Vector2(rng.Float(radius, wall.Size.X - radius), rng.Float(radius, wall.Size.Y - 5));
+			var stones = Math.Clamp((int)(radius * MathF.PI / (8 * blockScale)), 7, 18);
+			for (var stoneIndex = 0; stoneIndex < stones; stoneIndex++)
+			{
+				var angle = MathF.PI + stoneIndex / (float)(stones - 1) * MathF.PI;
+				var direction = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+				var stone = RuinStoneColor(wall, stoneIndex % 3);
+				AddRotatedBlock(data, center + direction * radius, new(9 * blockScale, 6 * blockScale),
+					12 * MathF.Max(wall.BlockDepth, 0), new(stone.X, stone.Y, stone.Z, 0.76f), angle + MathF.PI * 0.5f);
+			}
+		}
+
+		Span<Vector2> points = stackalloc Vector2[4];
+		Span<float> radii = stackalloc float[3];
+		var rootCount = Math.Clamp((int)MathF.Round((area / 18000f + 1) * MathF.Max(wall.RootDensity, 0)), 0, 18);
+		for (var root = 0; root < rootCount; root++)
+		{
+			var x0 = rng.Float(0, wall.Size.X);
+			var x1 = Math.Clamp(x0 + rng.Float(-50, 50), 0, wall.Size.X);
+			var x2 = Math.Clamp(x1 + rng.Float(-35, 35), 0, wall.Size.X);
+			points[0] = (Vector2)wall.Position + new Vector2(x0, rng.Boolean() ? 0 : wall.Size.Y);
+			points[1] = (Vector2)wall.Position + new Vector2(x0, wall.Size.Y * rng.Float(0.25f, 0.42f));
+			points[2] = (Vector2)wall.Position + new Vector2(x1, wall.Size.Y * rng.Float(0.55f, 0.72f));
+			points[3] = (Vector2)wall.Position + new Vector2(x2, rng.Boolean() ? 0 : wall.Size.Y);
+			var radius = MathF.Max(0.5f, wall.RootWidth * rng.Float(0.32f, 0.68f));
+			for (var segment = 0; segment < radii.Length; segment++)
+				radii[segment] = MathF.Max(0.4f, radius * (1 - segment * 0.18f));
+			AddRoundedPipe(data, points, radii, MathF.Max(3, radius * 1.5f), rng.Float(13, 18), wall.RootColor, 0.72f, rng.Float());
+		}
+
+		Span<Vector2> crack = stackalloc Vector2[2];
+		Span<float> crackRadius = stackalloc float[1];
+		var crackCount = Math.Clamp((int)MathF.Round(area / 11000f * MathF.Max(wall.CrackDensity, 0)), 0, 24);
+		for (var i = 0; i < crackCount; i++)
+		{
+			crack[0] = (Vector2)wall.Position + new Vector2(rng.Float(0, wall.Size.X), rng.Float(0, wall.Size.Y));
+			crack[1] = crack[0] + new Vector2(rng.Float(-18, 18), rng.Float(8, 28));
+			crackRadius[0] = MathF.Max(0.32f, wall.CrackWidth * rng.Float(0.2f, 0.48f));
+			AddRoundedPipe(data, crack, crackRadius, 0, 11, wall.MortarColor, 0.98f, rng.Float());
+		}
+
+		var artifactCount = Math.Clamp((int)MathF.Round(area / 26000f * MathF.Max(wall.ArtifactDensity, 0)), 0, 10);
+		for (var artifact = 0; artifact < artifactCount; artifact++)
+		{
+			var center = (Vector2)wall.Position + new Vector2(rng.Float(10, wall.Size.X - 10), rng.Float(10, wall.Size.Y - 10));
+			var frame = RuinStoneColor(wall, rng.Int(3));
+			AddStaticBlock(data, center, new(11, 14), 16, new(frame.X * 0.72f, frame.Y * 0.72f, frame.Z * 0.72f, 0.72f));
+			AddStaticBlock(data, center, new(7, 10), 17, new(mortar.X * 0.32f, mortar.Y * 0.32f, mortar.Z * 0.32f, 0.95f));
+			var glow = (Vector4)wall.ArtifactColor;
+			AddAnimatedBlock(data, center, new(2.5f, 5), 18, new(glow.X, glow.Y, glow.Z, 0.22f),
+				rng.Float(Calc.TAU), 0, 0, emissive: MathF.Max(wall.ArtifactGlow, 0), flat: true, pulse: 0.28f);
+		}
 	}
 
 	void AddFleshWall(FleshWall wall, WallData data)
@@ -1221,6 +1341,13 @@ sealed class ProceduralWallRenderer : IDisposable
 		1 => wall.BookColor2,
 		2 => wall.BookColor3,
 		_ => wall.BookColor4,
+	});
+
+	static Vector4 RuinStoneColor(RuinsWall wall, int index) => (Vector4)(index switch
+	{
+		0 => wall.StoneColor1,
+		1 => wall.StoneColor2,
+		_ => wall.StoneColor3,
 	});
 
 	static Vector4 LedColor(int index)
