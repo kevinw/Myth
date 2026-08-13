@@ -292,8 +292,10 @@ public static partial class Assets
 						if (actor is JsonObject proceduralWall && ActorSpecs.GetTypeName(proceduralWall) is { } wallTypeName &&
 							ActorSpecs.GetActorType(wallTypeName) is { } wallType && typeof(ProceduralWall).IsAssignableFrom(wallType))
 						{
-							var defaultPattern = wallType == typeof(HyphaWall) ? "patterns/pattern_68" : ProceduralWallRenderer.DefaultPatternTexture;
-							var defaultDetail = wallType == typeof(HyphaWall) ? "patterns/noise/Noise_036" : ProceduralWallRenderer.DefaultDetailTexture;
+							var defaultPattern = wallType == typeof(HyphaWall) ? "patterns/pattern_68" :
+								wallType == typeof(StrataWall) ? "patterns/pattern_37" : ProceduralWallRenderer.DefaultPatternTexture;
+							var defaultDetail = wallType == typeof(HyphaWall) ? "patterns/noise/Noise_036" :
+								wallType == typeof(StrataWall) ? "patterns/noise/Noise_022" : ProceduralWallRenderer.DefaultDetailTexture;
 							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.PatternTexture)) is { Length: > 0 } pattern
 								? pattern : defaultPattern);
 							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.DetailTexture)) is { Length: > 0 } detail

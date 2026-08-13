@@ -226,6 +226,7 @@ sealed class ProceduralWallRenderer : IDisposable
 	{
 		MachineWall machine => machine.PipeDetail,
 		HyphaWall hypha => hypha.RootDetail,
+		StrataWall strata => strata.CrackDetail,
 		_ => 1,
 	};
 
@@ -365,6 +366,24 @@ sealed class ProceduralWallRenderer : IDisposable
 			hash = unchecked(hash * 31 + hypha.BreathingAmount.GetHashCode());
 			hash = unchecked(hash * 31 + hypha.Wetness.GetHashCode());
 		}
+		else if (wall is StrataWall strata)
+		{
+			hash = unchecked(hash * 31 + strata.RockColor.GetHashCode());
+			hash = unchecked(hash * 31 + strata.LayerColor.GetHashCode());
+			hash = unchecked(hash * 31 + strata.FaultColor.GetHashCode());
+			hash = unchecked(hash * 31 + strata.FossilColor.GetHashCode());
+			hash = unchecked(hash * 31 + strata.CrystalColor1.GetHashCode());
+			hash = unchecked(hash * 31 + strata.CrystalColor2.GetHashCode());
+			hash = unchecked(hash * 31 + strata.LayerCount);
+			hash = unchecked(hash * 31 + strata.LayerVariation.GetHashCode());
+			hash = unchecked(hash * 31 + strata.LayerDepth.GetHashCode());
+			hash = unchecked(hash * 31 + strata.FaultDensity.GetHashCode());
+			hash = unchecked(hash * 31 + strata.FaultWidth.GetHashCode());
+			hash = unchecked(hash * 31 + strata.FossilDensity.GetHashCode());
+			hash = unchecked(hash * 31 + strata.CrystalDensity.GetHashCode());
+			hash = unchecked(hash * 31 + strata.CrystalScale.GetHashCode());
+			hash = unchecked(hash * 31 + strata.Erosion.GetHashCode());
+		}
 		return hash;
 	}
 
@@ -381,6 +400,8 @@ sealed class ProceduralWallRenderer : IDisposable
 				AddMachineWall(machine, data);
 			else if (wall is HyphaWall hypha)
 				AddHyphaWall(hypha, data);
+			else if (wall is StrataWall strata)
+				AddStrataWall(strata, data);
 		}
 		data.Instances.Sort(static (a, b) => a.DepthMotion.X.CompareTo(b.DepthMotion.X));
 		data.StraightPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
@@ -391,6 +412,88 @@ sealed class ProceduralWallRenderer : IDisposable
 		data.StraightPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.StraightPipes));
 		data.ElbowPipeBuffer.Clear();
 		data.ElbowPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.ElbowPipes));
+	}
+
+	void AddStrataWall(StrataWall wall, WallData data)
+	{
+		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
+			return;
+
+		var rng = new Rng(wall.Seed);
+		var rock = (Vector4)wall.RockColor;
+		var layer = (Vector4)wall.LayerColor;
+		AddStaticBlock(data, (Vector2)wall.Position + (Vector2)wall.Size * 0.5f, wall.Size, 1,
+			new(rock.X * 0.54f, rock.Y * 0.52f, rock.Z * 0.48f, 0.92f));
+
+		var layerCount = Math.Clamp(wall.LayerCount, 1, 48);
+		var layerHeight = wall.Size.Y / (float)layerCount;
+		var erosion = Math.Clamp(wall.Erosion, 0, 1);
+		for (var row = 0; row < layerCount; row++)
+		{
+			var y = wall.Position.Y + (row + 0.5f) * layerHeight + rng.Float(-1.5f, 1.5f) * wall.LayerVariation;
+			var x = 0f;
+			while (x < wall.Size.X)
+			{
+				var width = MathF.Min(rng.Float(18, 58) * MathF.Max(wall.LayerVariation, 0.2f), wall.Size.X - x);
+				var gap = rng.Float(0.35f, 1.7f) * erosion;
+				var height = MathF.Max(1, layerHeight - rng.Float(0.6f, 2.2f) * erosion);
+				var variation = rng.Float(0.68f, 1.14f) * (row % 2 == 0 ? 0.9f : 1.05f);
+				AddStaticBlock(data, new(wall.Position.X + x + width * 0.5f, y),
+					new(MathF.Max(1, width - gap), height), rng.Float(2.5f, 8) * MathF.Max(wall.LayerDepth, 0),
+					new(layer.X * variation, layer.Y * variation, layer.Z * variation, 0.86f));
+				x += width;
+			}
+		}
+
+		var area = wall.Size.X * wall.Size.Y;
+		var faultCount = Math.Clamp((int)MathF.Round((area / 26000f + 1) * MathF.Max(wall.FaultDensity, 0)), 0, 12);
+		Span<Vector2> segment = stackalloc Vector2[2];
+		Span<float> radius = stackalloc float[1];
+		for (var fault = 0; fault < faultCount; fault++)
+		{
+			var point = (Vector2)wall.Position + new Vector2(rng.Float(0, wall.Size.X), 0);
+			var direction = new Vector2(rng.Float(-0.38f, 0.38f), 1).Normalized();
+			var steps = Math.Clamp((int)(wall.Size.Y / 28f), 3, 10);
+			for (var step = 0; step < steps; step++)
+			{
+				segment[0] = point;
+				point += direction * wall.Size.Y / steps;
+				point.X += rng.Float(-8, 8) * MathF.Max(wall.LayerVariation, 0);
+				segment[1] = point;
+				radius[0] = MathF.Max(0.45f, wall.FaultWidth * rng.Float(0.24f, 0.52f));
+				AddRoundedPipe(data, segment, radius, 0, rng.Float(9, 13), wall.FaultColor, 0.94f, rng.Float());
+			}
+		}
+
+		var fossilCount = Math.Clamp((int)MathF.Round(area / 14000f * MathF.Max(wall.FossilDensity, 0)), 0, 16);
+		for (var fossil = 0; fossil < fossilCount; fossil++)
+		{
+			var center = (Vector2)wall.Position + new Vector2(rng.Float(8, wall.Size.X - 8), rng.Float(8, wall.Size.Y - 8));
+			var size = rng.Float(3, 7);
+			for (var arm = 0; arm < 3; arm++)
+			{
+				var angle = arm * MathF.PI / 3 + rng.Float(-0.18f, 0.18f);
+				var axis = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * size;
+				segment[0] = center - axis;
+				segment[1] = center + axis;
+				radius[0] = rng.Float(0.35f, 0.7f);
+				AddRoundedPipe(data, segment, radius, 0, 10, wall.FossilColor, 0.8f, rng.Float());
+			}
+		}
+
+		var crystalCount = Math.Clamp((int)MathF.Round(area / 18000f * MathF.Max(wall.CrystalDensity, 0)), 0, 14);
+		for (var cluster = 0; cluster < crystalCount; cluster++)
+		{
+			var center = (Vector2)wall.Position + new Vector2(rng.Float(10, wall.Size.X - 10), rng.Float(10, wall.Size.Y - 10));
+			var color = (Vector4)(rng.Boolean() ? wall.CrystalColor1 : wall.CrystalColor2);
+			for (var shard = 0; shard < 3; shard++)
+			{
+				var size = new Vector2(rng.Float(2, 4), rng.Float(7, 15)) * MathF.Max(wall.CrystalScale, 0.1f);
+				var angle = rng.Float(-0.72f, 0.72f);
+				AddRotatedBlock(data, center + new Vector2((shard - 1) * 3, rng.Float(-2, 2)), size,
+					rng.Float(11, 17), new(color.X, color.Y, color.Z, 0.34f), angle, emissive: 0.08f);
+			}
+		}
 	}
 
 	void AddHyphaWall(HyphaWall wall, WallData data)
@@ -733,6 +836,18 @@ sealed class ProceduralWallRenderer : IDisposable
 			TintRoughness = color,
 			Uv = new(phase / Calc.TAU, phase / Calc.TAU, MathF.Max(size.X / 12, 0.2f), MathF.Max(size.Y / 12, 0.2f)),
 			Flags = new(emissive, flat ? 1 : 0, phase / Calc.TAU, pulse),
+		});
+
+	void AddRotatedBlock(WallData data, Vector2 center, Vector2 size, float depth, Vector4 color,
+		float angle, float emissive = 0)
+		=> data.Instances.Add(new Instance
+		{
+			Rect = new(center.X, center.Y, size.X, size.Y),
+			DepthMotion = new(depth, 5, 0, 0),
+			AxisAmount = new(0, 0, 1, angle),
+			TintRoughness = color,
+			Uv = new(0, 0, MathF.Max(size.X / 12, 0.2f), MathF.Max(size.Y / 12, 0.2f)),
+			Flags = new(emissive, 0, 0, 0),
 		});
 
 	static Vector4 PipeColor(MachineWall wall, int index) => (Vector4)(index switch

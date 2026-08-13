@@ -48,98 +48,98 @@ struct vertex_main_in
 vertex vertex_main_out vertex_main(vertex_main_in in [[stage_in]], constant type_VertexParams& VertexParams [[buffer(0)]], const device type_StructuredBuffer_Instance& Instances [[buffer(1)]], uint gl_InstanceIndex [[instance_id]])
 {
     vertex_main_out out = {};
-    float4 _69 = Instances._m0[gl_InstanceIndex].Flags;
-    float _77 = sin(((VertexParams.Time * Instances._m0[gl_InstanceIndex].DepthMotion.w) * 6.283185482025146484375) + Instances._m0[gl_InstanceIndex].DepthMotion.z);
-    float3 _107;
-    float _108;
+    float4 _70 = Instances._m0[gl_InstanceIndex].Flags;
+    float _78 = sin(((VertexParams.Time * Instances._m0[gl_InstanceIndex].DepthMotion.w) * 6.283185482025146484375) + Instances._m0[gl_InstanceIndex].DepthMotion.z);
+    float3 _111;
+    float _112;
     if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 1.0)
     {
-        float3 _85 = float3(0.0);
-        _85.z = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
-        _107 = _85;
-        _108 = 0.0;
+        float3 _86 = float3(0.0);
+        _86.z = _78 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+        _111 = _86;
+        _112 = 0.0;
     }
     else
     {
-        float3 _105;
-        float _106;
+        float3 _109;
+        float _110;
         if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 2.0)
         {
-            float3 _91 = float3(0.0);
-            _91.x = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
-            _105 = _91;
-            _106 = 0.0;
+            float3 _92 = float3(0.0);
+            _92.x = _78 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+            _109 = _92;
+            _110 = 0.0;
         }
         else
         {
-            float3 _103;
-            float _104;
+            float3 _107;
+            float _108;
             if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 3.0)
             {
-                float3 _97 = float3(0.0);
-                _97.y = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
-                _103 = _97;
-                _104 = 0.0;
+                float3 _98 = float3(0.0);
+                _98.y = _78 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+                _107 = _98;
+                _108 = 0.0;
             }
             else
             {
-                float _102;
+                float _106;
                 if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 4.0)
                 {
-                    _102 = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+                    _106 = _78 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
                 }
                 else
                 {
-                    _102 = 0.0;
+                    _106 = (Instances._m0[gl_InstanceIndex].DepthMotion.y == 5.0) ? Instances._m0[gl_InstanceIndex].AxisAmount.w : 0.0;
                 }
-                _103 = float3(0.0);
-                _104 = _102;
+                _107 = float3(0.0);
+                _108 = _106;
             }
-            _105 = _103;
-            _106 = _104;
+            _109 = _107;
+            _110 = _108;
         }
-        _107 = _105;
-        _108 = _106;
+        _111 = _109;
+        _112 = _110;
     }
-    float3 _113 = in.in_var_TEXCOORD0 * float3(Instances._m0[gl_InstanceIndex].Rect.zw, Instances._m0[gl_InstanceIndex].DepthMotion.x);
-    float3 _146;
-    float3 _147;
-    float3 _148;
-    if (_108 != 0.0)
+    float3 _117 = in.in_var_TEXCOORD0 * float3(Instances._m0[gl_InstanceIndex].Rect.zw, Instances._m0[gl_InstanceIndex].DepthMotion.x);
+    float3 _150;
+    float3 _151;
+    float3 _152;
+    if (_112 != 0.0)
     {
-        float3 _118 = fast::normalize(Instances._m0[gl_InstanceIndex].AxisAmount.xyz);
-        float _119 = sin(_108);
-        float _120 = cos(_108);
-        float _127 = 1.0 - _120;
-        _146 = ((in.in_var_TEXCOORD3 * _120) + (cross(_118, in.in_var_TEXCOORD3) * _119)) + ((_118 * dot(_118, in.in_var_TEXCOORD3)) * _127);
-        _147 = ((in.in_var_TEXCOORD1 * _120) + (cross(_118, in.in_var_TEXCOORD1) * _119)) + ((_118 * dot(_118, in.in_var_TEXCOORD1)) * _127);
-        _148 = ((_113 * _120) + (cross(_118, _113) * _119)) + ((_118 * dot(_118, _113)) * _127);
+        float3 _122 = fast::normalize(Instances._m0[gl_InstanceIndex].AxisAmount.xyz);
+        float _123 = sin(_112);
+        float _124 = cos(_112);
+        float _131 = 1.0 - _124;
+        _150 = ((in.in_var_TEXCOORD3 * _124) + (cross(_122, in.in_var_TEXCOORD3) * _123)) + ((_122 * dot(_122, in.in_var_TEXCOORD3)) * _131);
+        _151 = ((in.in_var_TEXCOORD1 * _124) + (cross(_122, in.in_var_TEXCOORD1) * _123)) + ((_122 * dot(_122, in.in_var_TEXCOORD1)) * _131);
+        _152 = ((_117 * _124) + (cross(_122, _117) * _123)) + ((_122 * dot(_122, _117)) * _131);
     }
     else
     {
-        _146 = in.in_var_TEXCOORD3;
-        _147 = in.in_var_TEXCOORD1;
-        _148 = _113;
+        _150 = in.in_var_TEXCOORD3;
+        _151 = in.in_var_TEXCOORD1;
+        _152 = _117;
     }
-    float3 _154 = (_148 + float3(Instances._m0[gl_InstanceIndex].Rect.xy, Instances._m0[gl_InstanceIndex].DepthMotion.x * 0.5)) + _107;
-    float2 _171 = (((((_154.xy + (VertexParams.ProjectionSkew * _154.z)) - VertexParams.Camera) * VertexParams.Zoom) / VertexParams.TargetSize) * 2.0) - float2(1.0);
-    float4 _191;
-    if (_69.w > 0.0)
+    float3 _158 = (_152 + float3(Instances._m0[gl_InstanceIndex].Rect.xy, Instances._m0[gl_InstanceIndex].DepthMotion.x * 0.5)) + _111;
+    float2 _175 = (((((_158.xy + (VertexParams.ProjectionSkew * _158.z)) - VertexParams.Camera) * VertexParams.Zoom) / VertexParams.TargetSize) * 2.0) - float2(1.0);
+    float4 _195;
+    if (_70.w > 0.0)
     {
-        float4 _190 = _69;
-        _190.x = _69.x * (0.7200000286102294921875 + (sin(((VertexParams.Time * _69.w) * 3.0) + Instances._m0[gl_InstanceIndex].DepthMotion.z) * 0.2800000011920928955078125));
-        _191 = _190;
+        float4 _194 = _70;
+        _194.x = _70.x * (0.7200000286102294921875 + (sin(((VertexParams.Time * _70.w) * 3.0) + Instances._m0[gl_InstanceIndex].DepthMotion.z) * 0.2800000011920928955078125));
+        _195 = _194;
     }
     else
     {
-        _191 = _69;
+        _195 = _70;
     }
-    out.out_var_TEXCOORD0 = _147;
-    out.out_var_TEXCOORD1 = _146;
+    out.out_var_TEXCOORD0 = _151;
+    out.out_var_TEXCOORD1 = _150;
     out.out_var_TEXCOORD2 = Instances._m0[gl_InstanceIndex].Uv.xy + (in.in_var_TEXCOORD2 * Instances._m0[gl_InstanceIndex].Uv.zw);
     out.out_var_TEXCOORD3 = Instances._m0[gl_InstanceIndex].TintRoughness;
-    out.out_var_TEXCOORD4 = _191;
-    out.gl_Position = float4(_171.x, -_171.y, 0.0, 1.0);
+    out.out_var_TEXCOORD4 = _195;
+    out.gl_Position = float4(_175.x, -_175.y, 0.0, 1.0);
     return out;
 }
 

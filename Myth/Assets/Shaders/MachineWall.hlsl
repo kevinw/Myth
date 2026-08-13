@@ -76,6 +76,8 @@ VsOutput vertex_main(VsInput input, uint instanceId : SV_InstanceID)
         translation.y = wave * amount;
     else if (motionType == 4.0)
         angle = wave * amount;
+    else if (motionType == 5.0)
+        angle = amount;
 
     float3 size = float3(instance.Rect.zw, instance.DepthMotion.x);
     float3 local = input.Position * size;
