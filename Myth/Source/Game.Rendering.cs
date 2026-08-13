@@ -306,7 +306,7 @@ public sealed partial class GameView
 		rendering.Clear();
 		rendering.AddRange(Actors);
 		rendering.Sort((a, b) => b.Depth - a.Depth);
-		hasMachineWalls = machineWallRenderer?.Prepare(rendering) ?? false;
+		hasProceduralWalls = proceduralWallRenderer?.Prepare(rendering) ?? false;
 	}
 
 	Target DrawFieldDebug(Target field, int channel)
@@ -347,9 +347,9 @@ public sealed partial class GameView
 			DrawBackdrop(target);
 			Batcher.Render(target);
 			Batcher.Clear();
-			if (ShowBackgroundLayer && hasMachineWalls)
-				machineWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
-					MachineWallRenderer.Pass.Color);
+			if (ShowBackgroundLayer && hasProceduralWalls)
+				proceduralWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+					ProceduralWallRenderer.Pass.Color);
 		}
 
 		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
@@ -638,7 +638,7 @@ public sealed partial class GameView
 	static bool IsBackgroundActor(Actor actor)
 		=> actor switch
 		{
-			MachineWall => true,
+			ProceduralWall => true,
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
 			Prop prop => prop.Layer == Factory.TileLayer.Background,
@@ -681,9 +681,9 @@ public sealed partial class GameView
 	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
-		if (background && ShowBackgroundLayer && hasMachineWalls)
-			machineWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
-				MachineWallRenderer.Pass.Emissive);
+		if (background && ShowBackgroundLayer && hasProceduralWalls)
+			proceduralWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				ProceduralWallRenderer.Pass.Emissive);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -1147,15 +1147,15 @@ public sealed partial class GameView
 
 	void DrawActorTileField()
 	{
-		if (!ShowBackgroundLayer || !hasMachineWalls)
+		if (!ShowBackgroundLayer || !hasProceduralWalls)
 		{
 			ClearActorTileField();
 			return;
 		}
 
 		ActorTileField.Clear(Color.Transparent);
-		machineWallRenderer?.Render(ActorTileField, rendering, RenderCamera, zoomLevel, Time.SecondsF,
-			MachineWallRenderer.Pass.ActorTileField);
+		proceduralWallRenderer?.Render(ActorTileField, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+			ProceduralWallRenderer.Pass.ActorTileField);
 		actorTileFieldPopulated = true;
 	}
 
@@ -1780,9 +1780,9 @@ public sealed partial class GameView
 	void DrawNormalBuffer()
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
-		if (ShowBackgroundLayer && hasMachineWalls)
-			machineWallRenderer?.Render(NormalBuffer, rendering, RenderCamera, zoomLevel, Time.SecondsF,
-				MachineWallRenderer.Pass.Normals);
+		if (ShowBackgroundLayer && hasProceduralWalls)
+			proceduralWallRenderer?.Render(NormalBuffer, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				ProceduralWallRenderer.Pass.Normals);
 		RoomNormalCache? currentRoomNormalCache = null;
 		RoomNormalCache? nextRoomNormalCache = null;
 		if (ShowForegroundLayer)
@@ -2440,9 +2440,9 @@ public sealed partial class GameView
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
 	readonly GpuLighting? gpuLighting;
-	readonly MachineWallRenderer? machineWallRenderer;
+	readonly ProceduralWallRenderer? proceduralWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
-	bool hasMachineWalls;
+	bool hasProceduralWalls;
 	bool actorTileFieldPopulated;
 	public Target Screen { get; private set; } = null!;
 

@@ -100,6 +100,8 @@ VsOutput vertex_main(VsInput input, uint instanceId : SV_InstanceID)
     output.TexCoord = instance.Uv.xy + input.TexCoord * instance.Uv.zw;
     output.TintRoughness = instance.TintRoughness;
     output.Flags = instance.Flags;
+    if (output.Flags.w > 0.0)
+        output.Flags.x *= 0.72 + sin(Time * output.Flags.w * 3.0 + instance.DepthMotion.z) * 0.28;
     output.Position = float4(clip, 0.0, 1.0);
     return output;
 }

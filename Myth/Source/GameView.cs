@@ -23,7 +23,7 @@ public sealed partial class GameView : IDisposable
 		EnsureRenderTargets(Width, Height);
 		var loadVisualShaders = gd.Driver != GraphicsDriver.Headless;
 		gpuLighting = loadVisualShaders ? new(gd) : null;
-		machineWallRenderer = loadVisualShaders ? new(gd) : null;
+		proceduralWallRenderer = loadVisualShaders ? new(gd) : null;
 		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
 		atlasWanderMaterial = loadVisualShaders ? CreateFragmentMaterial("AtlasWander", samplerCount: 1, uniformBufferCount: 1) : null;
 		colorFieldMaterial = loadVisualShaders ? CreateFragmentMaterial("ColorField", samplerCount: 2, uniformBufferCount: 1) : null;
@@ -275,7 +275,7 @@ public sealed partial class GameView : IDisposable
 		colorFieldMaterial?.Reload();
 		lightingCompositeMaterial?.Reload();
 		gpuLighting?.ReloadShaders();
-		machineWallRenderer?.ReloadShaders();
+		proceduralWallRenderer?.ReloadShaders();
 		reflectionDistortMaterial?.Reload();
 		tileFieldDebugMaterial?.Reload();
 		pixelSortGlitchMaterial?.Reload();
@@ -313,7 +313,7 @@ public sealed partial class GameView : IDisposable
 		coverageMaskMaterial?.Dispose();
 		particleSystem?.Dispose();
 		gpuLighting?.Dispose();
-		machineWallRenderer?.Dispose();
+		proceduralWallRenderer?.Dispose();
 		Batcher.Dispose();
 	}
 }

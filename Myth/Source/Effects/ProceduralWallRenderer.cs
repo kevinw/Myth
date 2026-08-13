@@ -5,7 +5,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-sealed class MachineWallRenderer : IDisposable
+sealed class ProceduralWallRenderer : IDisposable
 {
 	public enum Pass
 	{
@@ -130,16 +130,16 @@ sealed class MachineWallRenderer : IDisposable
 	readonly Mesh<Vertex, ushort> mesh;
 	readonly Mesh<PipeVertex, ushort> straightPipeMesh;
 	readonly Mesh<PipeVertex, ushort> elbowPipeMesh;
-	readonly Dictionary<MachineWall, WallData> walls = [];
+	readonly Dictionary<ProceduralWall, WallData> walls = [];
 	readonly Dictionary<Assets.BucketTexture, Texture> materialTextures = [];
-	readonly List<MachineWall> staleWalls = [];
+	readonly List<ProceduralWall> staleWalls = [];
 	bool[] occupied = [];
 	Shader vertexShader;
 	Shader fragmentShader;
 	Shader pipeVertexShader;
 	Shader pipeFragmentShader;
 
-	public MachineWallRenderer(GraphicsDevice graphicsDevice)
+	public ProceduralWallRenderer(GraphicsDevice graphicsDevice)
 	{
 		this.graphicsDevice = graphicsDevice;
 		mesh = new(graphicsDevice, "MachineWallCube");
@@ -193,7 +193,7 @@ sealed class MachineWallRenderer : IDisposable
 		};
 
 		foreach (var actor in actors)
-			if (actor is MachineWall { Visible: true } wall && walls.TryGetValue(wall, out var data) && data.Instances.Count > 0)
+			if (actor is ProceduralWall { Visible: true } wall && walls.TryGetValue(wall, out var data) && data.Instances.Count > 0)
 			{
 				EnsureMaterial(wall, data);
 				parameters.LightSpecular.W = SpecularStrength * MathF.Max(wall.Specular, 0);
@@ -210,7 +210,7 @@ sealed class MachineWallRenderer : IDisposable
 				data.Material.Fragment.SetUniformBuffer(parameters);
 				var pipeParameters = parameters;
 				pipeParameters.NormalSettings.X = PipeNormalStrength * MathF.Max(wall.NormalStrength, 0);
-				pipeParameters.NormalSettings.Y = MathF.Max(wall.PipeDetail, 0.01f);
+				pipeParameters.NormalSettings.Y = MathF.Max(PipeDetail(wall), 0.01f);
 				data.PipeMaterial.Fragment.SetUniformBuffer(pipeParameters);
 				var blend = pass == Pass.Normals ? NormalBufferBlend : BlendMode.Premultiply;
 				DrawCubes(target, data, blend);
@@ -221,6 +221,13 @@ sealed class MachineWallRenderer : IDisposable
 
 	static float EncodeDitherScale(float scale)
 		=> Math.Clamp(MathF.Round(MathF.Log2(MathF.Max(scale, 0.25f)) * 8 + 16), 0, 31);
+
+	static float PipeDetail(ProceduralWall wall) => wall switch
+	{
+		MachineWall machine => machine.PipeDetail,
+		HyphaWall hypha => hypha.RootDetail,
+		_ => 1,
+	};
 
 	void DrawCubes(Target target, WallData data, BlendMode blend)
 		=> new DrawCommand(target, mesh, data.Material!)
@@ -248,7 +255,7 @@ sealed class MachineWallRenderer : IDisposable
 			}.Submit(graphicsDevice);
 	}
 
-	void EnsureMaterial(MachineWall wall, WallData data)
+	void EnsureMaterial(ProceduralWall wall, WallData data)
 	{
 		var pattern = Assets.Textures2D?.Get(wall.PatternTexture)
 			?? throw new FileNotFoundException($"MachineWall texture '{wall.PatternTexture}' not found.");
@@ -288,7 +295,7 @@ sealed class MachineWallRenderer : IDisposable
 	{
 		var hasVisibleWalls = false;
 		foreach (var actor in actors)
-			if (actor is MachineWall wall)
+			if (actor is ProceduralWall wall)
 			{
 				if (!walls.TryGetValue(wall, out var data))
 					walls.Add(wall, data = new(graphicsDevice));
@@ -310,34 +317,58 @@ sealed class MachineWallRenderer : IDisposable
 		return hasVisibleWalls;
 	}
 
-	static int WallLayoutHash(MachineWall wall)
+	static int WallLayoutHash(ProceduralWall wall)
 	{
 		var hash = RuntimeHelpers.GetHashCode(wall);
 		hash = unchecked(hash * 31 + wall.Visible.GetHashCode());
 		hash = unchecked(hash * 31 + wall.Position.GetHashCode());
 		hash = unchecked(hash * 31 + wall.Size.GetHashCode());
 		hash = unchecked(hash * 31 + wall.Seed);
-		hash = unchecked(hash * 31 + wall.MetalColor.GetHashCode());
-		hash = unchecked(hash * 31 + wall.Motion.GetHashCode());
-		hash = unchecked(hash * 31 + wall.GreebleScale.GetHashCode());
-		hash = unchecked(hash * 31 + wall.GreebleDepth.GetHashCode());
 		hash = unchecked(hash * 31 + wall.TextureScale.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeDensity.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeMinWidth.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeMaxWidth.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeBend.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeDepth.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeRoughness.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeColor1.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeColor2.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeColor3.GetHashCode());
-		hash = unchecked(hash * 31 + wall.PipeColor4.GetHashCode());
-		hash = unchecked(hash * 31 + wall.ControlPanelDensity.GetHashCode());
-		hash = unchecked(hash * 31 + wall.LedBrightness.GetHashCode());
+		if (wall is MachineWall machine)
+		{
+			hash = unchecked(hash * 31 + machine.MetalColor.GetHashCode());
+			hash = unchecked(hash * 31 + machine.Motion.GetHashCode());
+			hash = unchecked(hash * 31 + machine.GreebleScale.GetHashCode());
+			hash = unchecked(hash * 31 + machine.GreebleDepth.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeDensity.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeMinWidth.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeMaxWidth.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeBend.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeDepth.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeRoughness.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeColor1.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeColor2.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeColor3.GetHashCode());
+			hash = unchecked(hash * 31 + machine.PipeColor4.GetHashCode());
+			hash = unchecked(hash * 31 + machine.ControlPanelDensity.GetHashCode());
+			hash = unchecked(hash * 31 + machine.LedBrightness.GetHashCode());
+		}
+		else if (wall is HyphaWall hypha)
+		{
+			hash = unchecked(hash * 31 + hypha.SurfaceColor.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.PlateColor.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.VeinColor.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.GlowColor1.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.GlowColor2.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.GrowthScale.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.BranchDensity.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.BranchWidthMin.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.BranchWidthMax.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.Taper.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.Curl.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.PlateDensity.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.PlateSize.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.PlateDepth.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.GlowDensity.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.GlowPulse.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.BreathingAmount.GetHashCode());
+			hash = unchecked(hash * 31 + hypha.Wetness.GetHashCode());
+		}
 		return hash;
 	}
 
-	void BuildWall(MachineWall wall, WallData data, int hash)
+	void BuildWall(ProceduralWall wall, WallData data, int hash)
 	{
 		data.HasLayout = true;
 		data.LayoutHash = hash;
@@ -345,7 +376,12 @@ sealed class MachineWallRenderer : IDisposable
 		data.StraightPipes.Clear();
 		data.ElbowPipes.Clear();
 		if (wall.Visible)
-			AddWall(wall, data);
+		{
+			if (wall is MachineWall machine)
+				AddMachineWall(machine, data);
+			else if (wall is HyphaWall hypha)
+				AddHyphaWall(hypha, data);
+		}
 		data.Instances.Sort(static (a, b) => a.DepthMotion.X.CompareTo(b.DepthMotion.X));
 		data.StraightPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
 		data.ElbowPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
@@ -357,7 +393,97 @@ sealed class MachineWallRenderer : IDisposable
 		data.ElbowPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.ElbowPipes));
 	}
 
-	void AddWall(MachineWall wall, WallData data)
+	void AddHyphaWall(HyphaWall wall, WallData data)
+	{
+		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
+			return;
+
+		var rng = new Rng(wall.Seed);
+		var growth = MathF.Max(wall.GrowthScale, 0.1f);
+		var surface = (Vector4)wall.SurfaceColor;
+		var plate = (Vector4)wall.PlateColor;
+		var vein = (Vector4)wall.VeinColor;
+		AddStaticBlock(data, (Vector2)wall.Position + (Vector2)wall.Size * 0.5f, wall.Size, 1,
+			new(surface.X * 0.46f, surface.Y * 0.52f, surface.Z * 0.48f, 0.9f));
+
+		var area = wall.Size.X * wall.Size.Y;
+		var plateCount = Math.Clamp((int)MathF.Round(area / 1500f * MathF.Max(wall.PlateDensity, 0)), 0, 96);
+		for (var i = 0; i < plateCount; i++)
+		{
+			var scale = MathF.Max(wall.PlateSize, 0.1f) * growth;
+			var size = new Vector2(rng.Float(10, 34), rng.Float(7, 24)) * scale;
+			size = Vector2.Min(size, wall.Size);
+			var center = (Vector2)wall.Position + new Vector2(
+				rng.Float(size.X * 0.5f, wall.Size.X - size.X * 0.5f),
+				rng.Float(size.Y * 0.5f, wall.Size.Y - size.Y * 0.5f));
+			var variation = rng.Float(0.72f, 1.18f);
+			AddAnimatedBlock(data, center, size, rng.Float(3, 9) * MathF.Max(wall.PlateDepth, 0),
+				new(plate.X * variation, plate.Y * variation, plate.Z * variation, 0.68f + wall.Wetness * 0.18f),
+				rng.Float(Calc.TAU), rng.Float(0.08f, 0.2f), rng.Float(0.15f, 0.75f) * MathF.Max(wall.BreathingAmount, 0));
+		}
+
+		var branchCount = Math.Clamp((int)MathF.Round((area / 7000f + 6) * MathF.Max(wall.BranchDensity, 0)), 0, 48);
+		Span<Vector2> points = stackalloc Vector2[4];
+		Span<float> radii = stackalloc float[3];
+		Span<Vector2> offshoot = stackalloc Vector2[3];
+		Span<float> offshootRadii = stackalloc float[2];
+		for (var i = 0; i < branchCount; i++)
+		{
+			var horizontal = rng.Boolean();
+			var width = (float)wall.Size.X;
+			var height = (float)wall.Size.Y;
+			var cross0 = rng.Float(0.08f, 0.92f) * (horizontal ? height : width);
+			var cross1 = Math.Clamp(cross0 + rng.Float(-36, 36) * MathF.Max(wall.Curl, 0), 4, (horizontal ? height : width) - 4);
+			var start = rng.Float(0.02f, 0.18f) * (horizontal ? width : height);
+			var middle = rng.Float(0.35f, 0.65f) * (horizontal ? width : height);
+			var end = rng.Float(0.82f, 0.98f) * (horizontal ? width : height);
+			if (rng.Boolean())
+				(start, end) = (end, start);
+			points[0] = horizontal ? new(start, cross0) : new(cross0, start);
+			points[1] = horizontal ? new(middle, cross0) : new(cross0, middle);
+			points[2] = horizontal ? new(middle, cross1) : new(cross1, middle);
+			points[3] = horizontal ? new(end, cross1) : new(cross1, end);
+			for (var p = 0; p < points.Length; p++)
+				points[p] += wall.Position;
+
+			var minRadius = MathF.Max(0.5f, MathF.Min(wall.BranchWidthMin, wall.BranchWidthMax) * 0.5f * growth);
+			var maxRadius = MathF.Max(minRadius, MathF.Max(wall.BranchWidthMin, wall.BranchWidthMax) * 0.5f * growth);
+			var root = rng.Float(minRadius, maxRadius);
+			for (var segment = 0; segment < radii.Length; segment++)
+				radii[segment] = MathF.Max(0.45f, root * (1 - segment / 2f * Math.Clamp(wall.Taper, 0, 1) * 0.62f));
+			var colorVariation = rng.Float(0.72f, 1.16f);
+			AddRoundedPipe(data, points, radii, MathF.Max(3, root * 1.5f) * MathF.Max(wall.Curl, 0.15f),
+				rng.Float(8, 15), new(vein.X * colorVariation, vein.Y * colorVariation, vein.Z * colorVariation, 1),
+				Math.Clamp(0.78f - wall.Wetness * 0.5f, 0.08f, 0.9f), rng.Float());
+
+			if (rng.Boolean())
+			{
+				var joint = points[rng.Boolean() ? 1 : 2];
+				var reach = rng.Float(12, 34) * growth;
+				var direction = horizontal ? new Vector2(0, rng.Boolean() ? -1 : 1) : new(rng.Boolean() ? -1 : 1, 0);
+				offshoot[0] = joint;
+				offshoot[1] = joint + direction * reach * 0.55f;
+				offshoot[2] = offshoot[1] + (horizontal ? Vector2.UnitX : Vector2.UnitY) * rng.Float(-reach, reach);
+				var twig = MathF.Max(0.45f, root * rng.Float(0.25f, 0.52f));
+				offshootRadii[0] = twig;
+				offshootRadii[1] = MathF.Max(0.4f, twig * (1 - Math.Clamp(wall.Taper, 0, 1) * 0.7f));
+				AddRoundedPipe(data, offshoot, offshootRadii, MathF.Max(2, twig * 1.4f), rng.Float(9, 15),
+					new(vein.X * colorVariation, vein.Y * colorVariation, vein.Z * colorVariation, 1),
+					Math.Clamp(0.78f - wall.Wetness * 0.5f, 0.08f, 0.9f), rng.Float());
+			}
+
+			if (rng.Float() < Math.Clamp(wall.GlowDensity * 0.34f, 0, 1))
+			{
+				var glow = (Vector4)(rng.Boolean() ? wall.GlowColor1 : wall.GlowColor2);
+				var nodeSize = rng.Float(2.5f, 5.5f) * growth;
+				AddAnimatedBlock(data, points[rng.Boolean() ? 1 : 2], new(nodeSize, nodeSize), rng.Float(14, 18),
+					new(glow.X, glow.Y, glow.Z, 0.25f), rng.Float(Calc.TAU), 0, 0,
+					emissive: rng.Float(0.75f, 1.2f), flat: true, pulse: MathF.Max(wall.GlowPulse, 0));
+			}
+		}
+	}
+
+	void AddMachineWall(MachineWall wall, WallData data)
 	{
 		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
 			return;
@@ -595,6 +721,18 @@ sealed class MachineWallRenderer : IDisposable
 			TintRoughness = color,
 			Uv = new(0, 0, MathF.Max(size.X / 12, 0.2f), MathF.Max(size.Y / 12, 0.2f)),
 			Flags = new(emissive, flat ? 1 : 0, 0, 0),
+		});
+
+	void AddAnimatedBlock(WallData data, Vector2 center, Vector2 size, float depth, Vector4 color,
+		float phase, float speed, float amount, float emissive = 0, bool flat = false, float pulse = 0)
+		=> data.Instances.Add(new Instance
+		{
+			Rect = new(center.X, center.Y, size.X, size.Y),
+			DepthMotion = new(depth, amount > 0 ? 1 : 0, phase, speed),
+			AxisAmount = new(0, 0, 1, amount),
+			TintRoughness = color,
+			Uv = new(phase / Calc.TAU, phase / Calc.TAU, MathF.Max(size.X / 12, 0.2f), MathF.Max(size.Y / 12, 0.2f)),
+			Flags = new(emissive, flat ? 1 : 0, phase / Calc.TAU, pulse),
 		});
 
 	static Vector4 PipeColor(MachineWall wall, int index) => (Vector4)(index switch

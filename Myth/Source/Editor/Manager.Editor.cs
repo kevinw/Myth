@@ -1751,7 +1751,7 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (IsMachineWallTextureProperty(actor, property))
+		else if (IsProceduralWallTextureProperty(actor, property))
 		{
 			var value = property.Value?.GetValue<string>() ?? string.Empty;
 			if (DrawSurfaceTexturePicker(ref value, controlWidth))
@@ -2519,9 +2519,10 @@ public partial class Manager
 	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && property.Name == "SurfaceId";
 
-	static bool IsMachineWallTextureProperty(JsonObject actor, ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && ActorSpecs.GetTypeName(actor) == nameof(MachineWall) &&
-			property.Name is nameof(MachineWall.PatternTexture) or nameof(MachineWall.DetailTexture);
+	static bool IsProceduralWallTextureProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+		=> property.Type == typeof(string) && ActorSpecs.GetTypeName(actor) is { } typeName &&
+			ActorSpecs.GetActorType(typeName) is { } actorType && typeof(ProceduralWall).IsAssignableFrom(actorType) &&
+			property.Name is nameof(ProceduralWall.PatternTexture) or nameof(ProceduralWall.DetailTexture);
 
 	// A "color picker"-style surface selector: a preview button that opens a grid of
 	// surface previews. Returns true (and updates value) when a surface is chosen; an

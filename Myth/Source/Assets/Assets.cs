@@ -289,12 +289,15 @@ public static partial class Assets
 					{
 						if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
 							surfaces.Add(id);
-						if (actor is JsonObject machineWall && ActorSpecs.GetTypeName(machineWall) == nameof(MachineWall))
+						if (actor is JsonObject proceduralWall && ActorSpecs.GetTypeName(proceduralWall) is { } wallTypeName &&
+							ActorSpecs.GetActorType(wallTypeName) is { } wallType && typeof(ProceduralWall).IsAssignableFrom(wallType))
 						{
-							textures.Add(ActorSpecs.ReadResolvedString(machineWall, nameof(MachineWall.PatternTexture)) is { Length: > 0 } pattern
-								? pattern : MachineWallRenderer.DefaultPatternTexture);
-							textures.Add(ActorSpecs.ReadResolvedString(machineWall, nameof(MachineWall.DetailTexture)) is { Length: > 0 } detail
-								? detail : MachineWallRenderer.DefaultDetailTexture);
+							var defaultPattern = wallType == typeof(HyphaWall) ? "patterns/pattern_68" : ProceduralWallRenderer.DefaultPatternTexture;
+							var defaultDetail = wallType == typeof(HyphaWall) ? "patterns/noise/Noise_036" : ProceduralWallRenderer.DefaultDetailTexture;
+							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.PatternTexture)) is { Length: > 0 } pattern
+								? pattern : defaultPattern);
+							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.DetailTexture)) is { Length: > 0 } detail
+								? detail : defaultDetail);
 						}
 					}
 			}

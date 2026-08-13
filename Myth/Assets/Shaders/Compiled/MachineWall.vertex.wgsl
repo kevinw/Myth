@@ -28,9 +28,9 @@ struct VertexOutput {
     @builtin(position) member_5: vec4<f32>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage> Instances: type_u002e_StructuredBuffer_u002e_Instance;
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var<uniform> VertexParams: type_u002e_VertexParams;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec3<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec3<f32>;
@@ -45,89 +45,95 @@ var<private> out_u002e_var_u002e_TEXCOORD4_: vec4<f32>;
 var<private> global_1: vec4<f32> = vec4<f32>(0f, 0f, 0f, 1f);
 
 fn vertex_main_1() {
-    var phi_100_: f32;
-    var phi_101_: vec3<f32>;
     var phi_102_: f32;
     var phi_103_: vec3<f32>;
     var phi_104_: f32;
     var phi_105_: vec3<f32>;
     var phi_106_: f32;
-    var phi_144_: vec3<f32>;
-    var phi_145_: vec3<f32>;
+    var phi_107_: vec3<f32>;
+    var phi_108_: f32;
     var phi_146_: vec3<f32>;
+    var phi_147_: vec3<f32>;
+    var phi_148_: vec3<f32>;
+    var phi_191_: vec4<f32>;
 
-    let _e27 = in_u002e_var_u002e_TEXCOORD0_1;
-    let _e28 = in_u002e_var_u002e_TEXCOORD1_1;
-    let _e29 = in_u002e_var_u002e_TEXCOORD2_1;
-    let _e30 = in_u002e_var_u002e_TEXCOORD3_1;
-    let _e31 = global;
-    let _e34 = Instances.member[_e31];
-    let _e42 = VertexParams.Time;
-    let _e48 = sin((((_e42 * _e34.DepthMotion.w) * 6.2831855f) + _e34.DepthMotion.z));
-    if (_e34.DepthMotion.y == 1f) {
-        phi_105_ = vec3<f32>(vec3<f32>(0f, 0f, 0f).x, vec3<f32>(0f, 0f, 0f).y, (_e48 * _e34.AxisAmount.w));
-        phi_106_ = 0f;
+    let _e29 = in_u002e_var_u002e_TEXCOORD0_1;
+    let _e30 = in_u002e_var_u002e_TEXCOORD1_1;
+    let _e31 = in_u002e_var_u002e_TEXCOORD2_1;
+    let _e32 = in_u002e_var_u002e_TEXCOORD3_1;
+    let _e33 = global;
+    let _e36 = Instances.member[_e33];
+    let _e44 = VertexParams.Time;
+    let _e50 = sin((((_e44 * _e36.DepthMotion.w) * 6.2831855f) + _e36.DepthMotion.z));
+    if (_e36.DepthMotion.y == 1f) {
+        phi_107_ = vec3<f32>(vec3<f32>(0f, 0f, 0f).x, vec3<f32>(0f, 0f, 0f).y, (_e50 * _e36.AxisAmount.w));
+        phi_108_ = 0f;
     } else {
-        if (_e34.DepthMotion.y == 2f) {
-            phi_103_ = vec3<f32>((_e48 * _e34.AxisAmount.w), vec3<f32>(0f, 0f, 0f).y, vec3<f32>(0f, 0f, 0f).z);
-            phi_104_ = 0f;
+        if (_e36.DepthMotion.y == 2f) {
+            phi_105_ = vec3<f32>((_e50 * _e36.AxisAmount.w), vec3<f32>(0f, 0f, 0f).y, vec3<f32>(0f, 0f, 0f).z);
+            phi_106_ = 0f;
         } else {
-            if (_e34.DepthMotion.y == 3f) {
-                phi_101_ = vec3<f32>(vec3<f32>(0f, 0f, 0f).x, (_e48 * _e34.AxisAmount.w), vec3<f32>(0f, 0f, 0f).z);
-                phi_102_ = 0f;
+            if (_e36.DepthMotion.y == 3f) {
+                phi_103_ = vec3<f32>(vec3<f32>(0f, 0f, 0f).x, (_e50 * _e36.AxisAmount.w), vec3<f32>(0f, 0f, 0f).z);
+                phi_104_ = 0f;
             } else {
-                phi_100_ = 0f;
-                if (_e34.DepthMotion.y == 4f) {
-                    phi_100_ = (_e48 * _e34.AxisAmount.w);
+                phi_102_ = 0f;
+                if (_e36.DepthMotion.y == 4f) {
+                    phi_102_ = (_e50 * _e36.AxisAmount.w);
                 }
-                let _e72 = phi_100_;
-                phi_101_ = vec3<f32>(0f, 0f, 0f);
-                phi_102_ = _e72;
+                let _e74 = phi_102_;
+                phi_103_ = vec3<f32>(0f, 0f, 0f);
+                phi_104_ = _e74;
             }
-            let _e74 = phi_101_;
-            let _e76 = phi_102_;
-            phi_103_ = _e74;
-            phi_104_ = _e76;
+            let _e76 = phi_103_;
+            let _e78 = phi_104_;
+            phi_105_ = _e76;
+            phi_106_ = _e78;
         }
-        let _e78 = phi_103_;
-        let _e80 = phi_104_;
-        phi_105_ = _e78;
-        phi_106_ = _e80;
+        let _e80 = phi_105_;
+        let _e82 = phi_106_;
+        phi_107_ = _e80;
+        phi_108_ = _e82;
     }
-    let _e82 = phi_105_;
-    let _e84 = phi_106_;
-    let _e89 = (_e27 * vec3<f32>(_e34.Rect.z, _e34.Rect.w, _e34.DepthMotion.x));
-    phi_144_ = _e30;
-    phi_145_ = _e28;
-    phi_146_ = _e89;
-    if (_e84 != 0f) {
-        let _e92 = normalize(_e34.AxisAmount.xyz);
-        let _e93 = sin(_e84);
-        let _e94 = cos(_e84);
-        let _e101 = (1f - _e94);
-        phi_144_ = (((_e30 * _e94) + (cross(_e92, _e30) * _e93)) + ((_e92 * dot(_e92, _e30)) * _e101));
-        phi_145_ = (((_e28 * _e94) + (cross(_e92, _e28) * _e93)) + ((_e92 * dot(_e92, _e28)) * _e101));
-        phi_146_ = (((_e89 * _e94) + (cross(_e92, _e89) * _e93)) + ((_e92 * dot(_e92, _e89)) * _e101));
+    let _e84 = phi_107_;
+    let _e86 = phi_108_;
+    let _e91 = (_e29 * vec3<f32>(_e36.Rect.z, _e36.Rect.w, _e36.DepthMotion.x));
+    phi_146_ = _e32;
+    phi_147_ = _e30;
+    phi_148_ = _e91;
+    if (_e86 != 0f) {
+        let _e94 = normalize(_e36.AxisAmount.xyz);
+        let _e95 = sin(_e86);
+        let _e96 = cos(_e86);
+        let _e103 = (1f - _e96);
+        phi_146_ = (((_e32 * _e96) + (cross(_e94, _e32) * _e95)) + ((_e94 * dot(_e94, _e32)) * _e103));
+        phi_147_ = (((_e30 * _e96) + (cross(_e94, _e30) * _e95)) + ((_e94 * dot(_e94, _e30)) * _e103));
+        phi_148_ = (((_e91 * _e96) + (cross(_e94, _e91) * _e95)) + ((_e94 * dot(_e94, _e91)) * _e103));
     }
-    let _e121 = phi_144_;
-    let _e123 = phi_145_;
-    let _e125 = phi_146_;
-    let _e131 = ((_e125 + vec3<f32>(_e34.Rect.x, _e34.Rect.y, (_e34.DepthMotion.x * 0.5f))) + _e82);
-    let _e134 = VertexParams.ProjectionSkew;
-    let _e139 = VertexParams.Camera;
-    let _e142 = VertexParams.Zoom;
-    let _e145 = VertexParams.TargetSize;
-    let _e148 = ((((((_e131.xy + (_e134 * _e131.z)) - _e139) * _e142) / _e145) * 2f) - vec2<f32>(1f, 1f));
-    out_u002e_var_u002e_TEXCOORD0_ = _e123;
-    out_u002e_var_u002e_TEXCOORD1_ = _e121;
-    out_u002e_var_u002e_TEXCOORD2_ = (_e34.Uv.xy + (_e29 * _e34.Uv.zw));
-    out_u002e_var_u002e_TEXCOORD3_ = _e34.TintRoughness;
-    out_u002e_var_u002e_TEXCOORD4_ = _e34.Flags;
-    global_1 = vec4<f32>(_e148.x, -(_e148.y), 0f, 1f);
+    let _e123 = phi_146_;
+    let _e125 = phi_147_;
+    let _e127 = phi_148_;
+    let _e133 = ((_e127 + vec3<f32>(_e36.Rect.x, _e36.Rect.y, (_e36.DepthMotion.x * 0.5f))) + _e84);
+    let _e136 = VertexParams.ProjectionSkew;
+    let _e141 = VertexParams.Camera;
+    let _e144 = VertexParams.Zoom;
+    let _e147 = VertexParams.TargetSize;
+    let _e150 = ((((((_e133.xy + (_e136 * _e133.z)) - _e141) * _e144) / _e147) * 2f) - vec2<f32>(1f, 1f));
+    phi_191_ = _e36.Flags;
+    if (_e36.Flags.w > 0f) {
+        phi_191_ = vec4<f32>((_e36.Flags.x * (0.72f + (sin((((_e44 * _e36.Flags.w) * 3f) + _e36.DepthMotion.z)) * 0.28f))), _e36.Flags.y, _e36.Flags.z, _e36.Flags.w);
+    }
+    let _e173 = phi_191_;
+    out_u002e_var_u002e_TEXCOORD0_ = _e125;
+    out_u002e_var_u002e_TEXCOORD1_ = _e123;
+    out_u002e_var_u002e_TEXCOORD2_ = (_e36.Uv.xy + (_e31 * _e36.Uv.zw));
+    out_u002e_var_u002e_TEXCOORD3_ = _e36.TintRoughness;
+    out_u002e_var_u002e_TEXCOORD4_ = _e173;
+    global_1 = vec4<f32>(_e150.x, -(_e150.y), 0f, 1f);
     return;
 }
 
-@vertex 
+@vertex
 fn vertex_main(@location(0) in_u002e_var_u002e_TEXCOORD0_: vec3<f32>, @location(1) in_u002e_var_u002e_TEXCOORD1_: vec3<f32>, @location(2) in_u002e_var_u002e_TEXCOORD2_: vec2<f32>, @location(3) in_u002e_var_u002e_TEXCOORD3_: vec3<f32>, @builtin(instance_index) param: u32) -> VertexOutput {
     in_u002e_var_u002e_TEXCOORD0_1 = in_u002e_var_u002e_TEXCOORD0_;
     in_u002e_var_u002e_TEXCOORD1_1 = in_u002e_var_u002e_TEXCOORD1_;

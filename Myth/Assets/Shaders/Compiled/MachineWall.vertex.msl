@@ -48,86 +48,98 @@ struct vertex_main_in
 vertex vertex_main_out vertex_main(vertex_main_in in [[stage_in]], constant type_VertexParams& VertexParams [[buffer(0)]], const device type_StructuredBuffer_Instance& Instances [[buffer(1)]], uint gl_InstanceIndex [[instance_id]])
 {
     vertex_main_out out = {};
-    float _75 = sin(((VertexParams.Time * Instances._m0[gl_InstanceIndex].DepthMotion.w) * 6.283185482025146484375) + Instances._m0[gl_InstanceIndex].DepthMotion.z);
-    float3 _105;
-    float _106;
+    float4 _69 = Instances._m0[gl_InstanceIndex].Flags;
+    float _77 = sin(((VertexParams.Time * Instances._m0[gl_InstanceIndex].DepthMotion.w) * 6.283185482025146484375) + Instances._m0[gl_InstanceIndex].DepthMotion.z);
+    float3 _107;
+    float _108;
     if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 1.0)
     {
-        float3 _83 = float3(0.0);
-        _83.z = _75 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
-        _105 = _83;
-        _106 = 0.0;
+        float3 _85 = float3(0.0);
+        _85.z = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+        _107 = _85;
+        _108 = 0.0;
     }
     else
     {
-        float3 _103;
-        float _104;
+        float3 _105;
+        float _106;
         if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 2.0)
         {
-            float3 _89 = float3(0.0);
-            _89.x = _75 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
-            _103 = _89;
-            _104 = 0.0;
+            float3 _91 = float3(0.0);
+            _91.x = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+            _105 = _91;
+            _106 = 0.0;
         }
         else
         {
-            float3 _101;
-            float _102;
+            float3 _103;
+            float _104;
             if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 3.0)
             {
-                float3 _95 = float3(0.0);
-                _95.y = _75 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
-                _101 = _95;
-                _102 = 0.0;
+                float3 _97 = float3(0.0);
+                _97.y = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+                _103 = _97;
+                _104 = 0.0;
             }
             else
             {
-                float _100;
+                float _102;
                 if (Instances._m0[gl_InstanceIndex].DepthMotion.y == 4.0)
                 {
-                    _100 = _75 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
+                    _102 = _77 * Instances._m0[gl_InstanceIndex].AxisAmount.w;
                 }
                 else
                 {
-                    _100 = 0.0;
+                    _102 = 0.0;
                 }
-                _101 = float3(0.0);
-                _102 = _100;
+                _103 = float3(0.0);
+                _104 = _102;
             }
-            _103 = _101;
-            _104 = _102;
+            _105 = _103;
+            _106 = _104;
         }
-        _105 = _103;
-        _106 = _104;
+        _107 = _105;
+        _108 = _106;
     }
-    float3 _111 = in.in_var_TEXCOORD0 * float3(Instances._m0[gl_InstanceIndex].Rect.zw, Instances._m0[gl_InstanceIndex].DepthMotion.x);
-    float3 _144;
-    float3 _145;
+    float3 _113 = in.in_var_TEXCOORD0 * float3(Instances._m0[gl_InstanceIndex].Rect.zw, Instances._m0[gl_InstanceIndex].DepthMotion.x);
     float3 _146;
-    if (_106 != 0.0)
+    float3 _147;
+    float3 _148;
+    if (_108 != 0.0)
     {
-        float3 _116 = fast::normalize(Instances._m0[gl_InstanceIndex].AxisAmount.xyz);
-        float _117 = sin(_106);
-        float _118 = cos(_106);
-        float _125 = 1.0 - _118;
-        _144 = ((in.in_var_TEXCOORD3 * _118) + (cross(_116, in.in_var_TEXCOORD3) * _117)) + ((_116 * dot(_116, in.in_var_TEXCOORD3)) * _125);
-        _145 = ((in.in_var_TEXCOORD1 * _118) + (cross(_116, in.in_var_TEXCOORD1) * _117)) + ((_116 * dot(_116, in.in_var_TEXCOORD1)) * _125);
-        _146 = ((_111 * _118) + (cross(_116, _111) * _117)) + ((_116 * dot(_116, _111)) * _125);
+        float3 _118 = fast::normalize(Instances._m0[gl_InstanceIndex].AxisAmount.xyz);
+        float _119 = sin(_108);
+        float _120 = cos(_108);
+        float _127 = 1.0 - _120;
+        _146 = ((in.in_var_TEXCOORD3 * _120) + (cross(_118, in.in_var_TEXCOORD3) * _119)) + ((_118 * dot(_118, in.in_var_TEXCOORD3)) * _127);
+        _147 = ((in.in_var_TEXCOORD1 * _120) + (cross(_118, in.in_var_TEXCOORD1) * _119)) + ((_118 * dot(_118, in.in_var_TEXCOORD1)) * _127);
+        _148 = ((_113 * _120) + (cross(_118, _113) * _119)) + ((_118 * dot(_118, _113)) * _127);
     }
     else
     {
-        _144 = in.in_var_TEXCOORD3;
-        _145 = in.in_var_TEXCOORD1;
-        _146 = _111;
+        _146 = in.in_var_TEXCOORD3;
+        _147 = in.in_var_TEXCOORD1;
+        _148 = _113;
     }
-    float3 _152 = (_146 + float3(Instances._m0[gl_InstanceIndex].Rect.xy, Instances._m0[gl_InstanceIndex].DepthMotion.x * 0.5)) + _105;
-    float2 _169 = (((((_152.xy + (VertexParams.ProjectionSkew * _152.z)) - VertexParams.Camera) * VertexParams.Zoom) / VertexParams.TargetSize) * 2.0) - float2(1.0);
-    out.out_var_TEXCOORD0 = _145;
-    out.out_var_TEXCOORD1 = _144;
+    float3 _154 = (_148 + float3(Instances._m0[gl_InstanceIndex].Rect.xy, Instances._m0[gl_InstanceIndex].DepthMotion.x * 0.5)) + _107;
+    float2 _171 = (((((_154.xy + (VertexParams.ProjectionSkew * _154.z)) - VertexParams.Camera) * VertexParams.Zoom) / VertexParams.TargetSize) * 2.0) - float2(1.0);
+    float4 _191;
+    if (_69.w > 0.0)
+    {
+        float4 _190 = _69;
+        _190.x = _69.x * (0.7200000286102294921875 + (sin(((VertexParams.Time * _69.w) * 3.0) + Instances._m0[gl_InstanceIndex].DepthMotion.z) * 0.2800000011920928955078125));
+        _191 = _190;
+    }
+    else
+    {
+        _191 = _69;
+    }
+    out.out_var_TEXCOORD0 = _147;
+    out.out_var_TEXCOORD1 = _146;
     out.out_var_TEXCOORD2 = Instances._m0[gl_InstanceIndex].Uv.xy + (in.in_var_TEXCOORD2 * Instances._m0[gl_InstanceIndex].Uv.zw);
     out.out_var_TEXCOORD3 = Instances._m0[gl_InstanceIndex].TintRoughness;
-    out.out_var_TEXCOORD4 = Instances._m0[gl_InstanceIndex].Flags;
-    out.gl_Position = float4(_169.x, -_169.y, 0.0, 1.0);
+    out.out_var_TEXCOORD4 = _191;
+    out.gl_Position = float4(_171.x, -_171.y, 0.0, 1.0);
     return out;
 }
 
