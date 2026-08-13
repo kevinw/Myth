@@ -1,0 +1,39 @@
+using Foster.Framework;
+
+namespace Myth;
+
+[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration,
+	LivePositionEditable = true, LiveResizable = true)]
+public class CircuitWall : ProceduralWall
+{
+	public Color BoardColor = new(0x173a35);
+	public Color ModuleColor = new(0x344a48);
+	public Color TraceColor1 = new(0xb98b42);
+	public Color TraceColor2 = new(0x4faaa2);
+	public Color TraceColor3 = new(0xb7c4b5);
+	public Color ContactColor = new(0xd5c07a);
+	public Color SignalColor1 = new(0x5cff86);
+	public Color SignalColor2 = new(0xff554c);
+	public float GridScale = 1;
+	public float ModuleDensity = 1;
+	public float ModuleDepth = 1;
+	public float TraceDensity = 1;
+	public float TraceWidth = 1.5f;
+	public float TraceDepth = 1;
+	public float ContactDensity = 1;
+	public float SignalDensity = 1;
+	public float SignalPulse = 1;
+	public float TraceDetail = 1.4f;
+
+	public CircuitWall()
+	{
+		PatternTexture = "patterns/pattern_12";
+		DetailTexture = "patterns/noise/Noise_003";
+		TextureScale = 0.65f;
+		DetailScale = 1.8f;
+		Specular = 0.42f;
+		DitherPattern = MachineWallDitherPattern.Ordered;
+		DitherScale = 0.55f;
+		DitherDetailPreservation = 0.9f;
+	}
+}

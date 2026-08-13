@@ -227,6 +227,7 @@ sealed class ProceduralWallRenderer : IDisposable
 		MachineWall machine => machine.PipeDetail,
 		HyphaWall hypha => hypha.RootDetail,
 		StrataWall strata => strata.CrackDetail,
+		CircuitWall circuit => circuit.TraceDetail,
 		_ => 1,
 	};
 
@@ -384,6 +385,26 @@ sealed class ProceduralWallRenderer : IDisposable
 			hash = unchecked(hash * 31 + strata.CrystalScale.GetHashCode());
 			hash = unchecked(hash * 31 + strata.Erosion.GetHashCode());
 		}
+		else if (wall is CircuitWall circuit)
+		{
+			hash = unchecked(hash * 31 + circuit.BoardColor.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.ModuleColor.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.TraceColor1.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.TraceColor2.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.TraceColor3.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.ContactColor.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.SignalColor1.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.SignalColor2.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.GridScale.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.ModuleDensity.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.ModuleDepth.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.TraceDensity.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.TraceWidth.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.TraceDepth.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.ContactDensity.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.SignalDensity.GetHashCode());
+			hash = unchecked(hash * 31 + circuit.SignalPulse.GetHashCode());
+		}
 		return hash;
 	}
 
@@ -402,6 +423,8 @@ sealed class ProceduralWallRenderer : IDisposable
 				AddHyphaWall(hypha, data);
 			else if (wall is StrataWall strata)
 				AddStrataWall(strata, data);
+			else if (wall is CircuitWall circuit)
+				AddCircuitWall(circuit, data);
 		}
 		data.Instances.Sort(static (a, b) => a.DepthMotion.X.CompareTo(b.DepthMotion.X));
 		data.StraightPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
@@ -412,6 +435,77 @@ sealed class ProceduralWallRenderer : IDisposable
 		data.StraightPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.StraightPipes));
 		data.ElbowPipeBuffer.Clear();
 		data.ElbowPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.ElbowPipes));
+	}
+
+	void AddCircuitWall(CircuitWall wall, WallData data)
+	{
+		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
+			return;
+
+		var rng = new Rng(wall.Seed);
+		var board = (Vector4)wall.BoardColor;
+		var module = (Vector4)wall.ModuleColor;
+		var grid = MathF.Max(4, 8 * MathF.Max(wall.GridScale, 0.25f));
+		AddStaticBlock(data, (Vector2)wall.Position + (Vector2)wall.Size * 0.5f, wall.Size, 1,
+			new(board.X * 0.52f, board.Y * 0.58f, board.Z * 0.56f, 0.74f));
+
+		var area = wall.Size.X * wall.Size.Y;
+		var moduleCount = Math.Clamp((int)MathF.Round(area / 2400f * MathF.Max(wall.ModuleDensity, 0)), 0, 80);
+		for (var i = 0; i < moduleCount; i++)
+		{
+			var width = rng.Int(1, 5) * grid;
+			var height = rng.Int(1, 4) * grid;
+			var center = (Vector2)wall.Position + new Vector2(
+				(MathF.Floor(rng.Float(0, MathF.Max(wall.Size.X - width, 1)) / grid) + 0.5f) * grid + width * 0.5f,
+				(MathF.Floor(rng.Float(0, MathF.Max(wall.Size.Y - height, 1)) / grid) + 0.5f) * grid + height * 0.5f);
+			var variation = rng.Float(0.72f, 1.15f);
+			AddStaticBlock(data, center, new(MathF.Max(2, width - 1.2f), MathF.Max(2, height - 1.2f)),
+				rng.Float(3, 9) * MathF.Max(wall.ModuleDepth, 0),
+				new(module.X * variation, module.Y * variation, module.Z * variation, rng.Float(0.42f, 0.7f)));
+		}
+
+		var traceCount = Math.Clamp((int)MathF.Round((area / 3000f + 4) * MathF.Max(wall.TraceDensity, 0)), 0, 80);
+		Span<Vector2> points = stackalloc Vector2[4];
+		Span<float> radii = stackalloc float[3];
+		for (var i = 0; i < traceCount; i++)
+		{
+			var horizontal = rng.Boolean();
+			var major = horizontal ? wall.Size.X : wall.Size.Y;
+			var cross = horizontal ? wall.Size.Y : wall.Size.X;
+			var a = MathF.Round(rng.Float(0.04f, 0.22f) * major / grid) * grid;
+			var b = MathF.Round(rng.Float(0.34f, 0.66f) * major / grid) * grid;
+			var c = MathF.Round(rng.Float(0.78f, 0.96f) * major / grid) * grid;
+			var cross0 = MathF.Round(rng.Float(0.06f, 0.94f) * cross / grid) * grid;
+			var cross1 = Math.Clamp(cross0 + rng.Int(-5, 6) * grid, grid, cross - grid);
+			points[0] = horizontal ? new(a, cross0) : new(cross0, a);
+			points[1] = horizontal ? new(b, cross0) : new(cross0, b);
+			points[2] = horizontal ? new(b, cross1) : new(cross1, b);
+			points[3] = horizontal ? new(c, cross1) : new(cross1, c);
+			for (var p = 0; p < points.Length; p++)
+				points[p] += wall.Position;
+			var radius = MathF.Max(0.35f, wall.TraceWidth * rng.Float(0.32f, 0.62f));
+			for (var segment = 0; segment < radii.Length; segment++)
+				radii[segment] = radius * rng.Float(0.82f, 1.18f);
+			AddRoundedPipe(data, points, radii, grid * 0.42f, rng.Float(8, 13) * MathF.Max(wall.TraceDepth, 0),
+				CircuitTraceColor(wall, rng.Int(3)), rng.Float(0.25f, 0.55f), rng.Float());
+
+			if (rng.Float() < Math.Clamp(wall.ContactDensity * 0.68f, 0, 1))
+			{
+				var contact = (Vector4)wall.ContactColor;
+				var size = rng.Float(1.4f, 2.8f);
+				AddStaticBlock(data, points[rng.Boolean() ? 1 : 2], new(size, size), rng.Float(13, 16),
+					new(contact.X, contact.Y, contact.Z, 0.28f), flat: true);
+			}
+
+			if (rng.Float() < Math.Clamp(wall.SignalDensity * 0.24f, 0, 1))
+			{
+				var signal = (Vector4)(rng.Boolean() ? wall.SignalColor1 : wall.SignalColor2);
+				var size = rng.Float(1.6f, 3.2f);
+				AddAnimatedBlock(data, points[rng.Boolean() ? 0 : 3], new(size, size), 17,
+					new(signal.X, signal.Y, signal.Z, 0.2f), rng.Float(Calc.TAU), 0, 0,
+					emissive: rng.Float(0.8f, 1.25f), flat: true, pulse: MathF.Max(wall.SignalPulse, 0));
+			}
+		}
 	}
 
 	void AddStrataWall(StrataWall wall, WallData data)
@@ -856,6 +950,13 @@ sealed class ProceduralWallRenderer : IDisposable
 		1 => wall.PipeColor2,
 		2 => wall.PipeColor3,
 		_ => wall.PipeColor4,
+	});
+
+	static Vector4 CircuitTraceColor(CircuitWall wall, int index) => (Vector4)(index switch
+	{
+		0 => wall.TraceColor1,
+		1 => wall.TraceColor2,
+		_ => wall.TraceColor3,
 	});
 
 	static Vector4 LedColor(int index)
