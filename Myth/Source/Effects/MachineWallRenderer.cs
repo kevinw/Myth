@@ -101,17 +101,13 @@ sealed class MachineWallRenderer : IDisposable
 		public readonly List<PipeInstance> ElbowPipes = [];
 		public Material? Material;
 		public Material? PipeMaterial;
-		public Texture? PatternNormal;
-		public Texture? DetailNormal;
-		public string PatternTexture = "";
-		public string DetailTexture = "";
+		public Assets.BucketTexture? PatternTexture;
+		public Assets.BucketTexture? DetailTexture;
 		public int LayoutHash;
 		public bool HasLayout;
 
 		public void Dispose()
 		{
-			PatternNormal?.Dispose();
-			DetailNormal?.Dispose();
 			InstancesBuffer.Dispose();
 			StraightPipeBuffer.Dispose();
 			ElbowPipeBuffer.Dispose();
@@ -135,6 +131,7 @@ sealed class MachineWallRenderer : IDisposable
 	readonly Mesh<PipeVertex, ushort> straightPipeMesh;
 	readonly Mesh<PipeVertex, ushort> elbowPipeMesh;
 	readonly Dictionary<MachineWall, WallData> walls = [];
+	readonly Dictionary<Assets.BucketTexture, Texture> materialTextures = [];
 	readonly List<MachineWall> staleWalls = [];
 	bool[] occupied = [];
 	Shader vertexShader;
@@ -162,7 +159,7 @@ sealed class MachineWallRenderer : IDisposable
 			?? throw new FileNotFoundException($"MachineWall fragment shader not found for {ext}.");
 		vertexShader = new Shader(graphicsDevice, ShaderStage.Vertex, vertexCode, uniformBufferCount: 1,
 			storageBufferCount: 1, entryPoint: "vertex_main", name: "MachineWallVertex");
-		fragmentShader = new Shader(graphicsDevice, ShaderStage.Fragment, fragmentCode, samplerCount: 4,
+		fragmentShader = new Shader(graphicsDevice, ShaderStage.Fragment, fragmentCode, samplerCount: 2,
 			uniformBufferCount: 1, entryPoint: "fragment_main", name: "MachineWallFragment");
 
 		var pipeVertexCode = Assets.TryReadCompiledShader($"MachineWallPipe.vertex.{ext}")
@@ -171,7 +168,7 @@ sealed class MachineWallRenderer : IDisposable
 			?? throw new FileNotFoundException($"MachineWallPipe fragment shader not found for {ext}.");
 		pipeVertexShader = new Shader(graphicsDevice, ShaderStage.Vertex, pipeVertexCode, uniformBufferCount: 1,
 			storageBufferCount: 1, entryPoint: "vertex_main", name: "MachineWallPipeVertex");
-		pipeFragmentShader = new Shader(graphicsDevice, ShaderStage.Fragment, pipeFragmentCode, samplerCount: 2,
+		pipeFragmentShader = new Shader(graphicsDevice, ShaderStage.Fragment, pipeFragmentCode, samplerCount: 1,
 			uniformBufferCount: 1, entryPoint: "fragment_main", name: "MachineWallPipeFragment");
 	}
 
@@ -255,28 +252,38 @@ sealed class MachineWallRenderer : IDisposable
 
 	void EnsureMaterial(MachineWall wall, WallData data)
 	{
-		if (data.Material != null && data.PatternTexture == wall.PatternTexture && data.DetailTexture == wall.DetailTexture)
-			return;
-
 		var pattern = Assets.Textures2D?.Get(wall.PatternTexture)
 			?? throw new FileNotFoundException($"MachineWall texture '{wall.PatternTexture}' not found.");
 		var detail = Assets.Textures2D?.Get(wall.DetailTexture)
 			?? throw new FileNotFoundException($"MachineWall texture '{wall.DetailTexture}' not found.");
-		data.PatternNormal?.Dispose();
-		data.DetailNormal?.Dispose();
-		data.PatternNormal = CreateNormalTexture(pattern, "MachineWallPatternNormal");
-		data.DetailNormal = CreateNormalTexture(detail, "MachineWallDetailNormal");
-		data.PatternTexture = wall.PatternTexture;
-		data.DetailTexture = wall.DetailTexture;
+		if (data.Material != null && data.PatternTexture == pattern && data.DetailTexture == detail)
+			return;
+
+		var patternMaterial = GetMaterialTexture(pattern);
+		var detailMaterial = GetMaterialTexture(detail);
+		data.PatternTexture = pattern;
+		data.DetailTexture = detail;
 		data.Material ??= new(vertexShader, fragmentShader);
 		data.PipeMaterial ??= new(pipeVertexShader, pipeFragmentShader);
 		var sampler = new TextureSampler(TextureFilter.Linear, TextureWrap.Repeat, TextureWrap.Repeat);
-		data.Material.Fragment.Samplers[0] = new(pattern.Texture, sampler);
-		data.Material.Fragment.Samplers[1] = new(detail.Texture, sampler);
-		data.Material.Fragment.Samplers[2] = new(data.PatternNormal, sampler);
-		data.Material.Fragment.Samplers[3] = new(data.DetailNormal, sampler);
-		data.PipeMaterial.Fragment.Samplers[0] = new(detail.Texture, sampler);
-		data.PipeMaterial.Fragment.Samplers[1] = new(data.DetailNormal, sampler);
+		data.Material.Fragment.Samplers[0] = new(patternMaterial, sampler);
+		data.Material.Fragment.Samplers[1] = new(detailMaterial, sampler);
+		data.PipeMaterial.Fragment.Samplers[0] = new(detailMaterial, sampler);
+	}
+
+	Texture GetMaterialTexture(Assets.BucketTexture source)
+	{
+		if (materialTextures.TryGetValue(source, out var texture))
+			return texture;
+
+		using var image = new Image(source.SourceImage);
+		using var normal = Assets.GenerateNormalImage(image, wrap: true);
+		using var packed = new Image(image.Width, image.Height);
+		for (var i = 0; i < packed.PixelCount; i++)
+			packed[i] = new Color(image[i].R, normal[i].R, normal[i].G, normal[i].B);
+		texture = new Texture(graphicsDevice, packed, name: $"MachineWallMaterial:{source.Key}");
+		materialTextures.Add(source, texture);
+		return texture;
 	}
 
 	void EnsureWalls(List<Actor> actors)
@@ -654,13 +661,6 @@ sealed class MachineWallRenderer : IDisposable
 		return indices;
 	}
 
-	static Texture CreateNormalTexture(Assets.BucketTexture source, string name)
-	{
-		using var image = new Image(source.SourceImage);
-		using var normal = Assets.GenerateNormalImage(image, wrap: true);
-		return new Texture(source.Texture.GraphicsDevice, normal, name: name);
-	}
-
 #if DEBUG
 	public void ReloadShaders()
 	{
@@ -676,6 +676,8 @@ sealed class MachineWallRenderer : IDisposable
 	{
 		foreach (var data in walls.Values)
 			data.Dispose();
+		foreach (var texture in materialTextures.Values)
+			texture.Dispose();
 		mesh.Dispose();
 		straightPipeMesh.Dispose();
 		elbowPipeMesh.Dispose();

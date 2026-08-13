@@ -25,50 +25,49 @@ struct fragment_main_in
     float4 in_var_TEXCOORD4 [[user(locn4)]];
 };
 
-fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentParams& FragmentParams [[buffer(0)]], texture2d<float> PatternTexture [[texture(0)]], texture2d<float> DetailTexture [[texture(1)]], texture2d<float> PatternNormalTexture [[texture(2)]], texture2d<float> DetailNormalTexture [[texture(3)]], sampler PatternSampler [[sampler(0)]], sampler DetailSampler [[sampler(1)]], sampler PatternNormalSampler [[sampler(2)]], sampler DetailNormalSampler [[sampler(3)]])
+fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentParams& FragmentParams [[buffer(0)]], texture2d<float> PatternTexture [[texture(0)]], texture2d<float> DetailTexture [[texture(1)]], sampler PatternSampler [[sampler(0)]], sampler DetailSampler [[sampler(1)]])
 {
     fragment_main_out out = {};
-    float4 _269;
+    float4 _249;
     do
     {
-        float3 _84 = fast::normalize(in.in_var_TEXCOORD0);
-        float3 _88 = fast::normalize(FragmentParams.ViewNormalPass.xyz);
-        if (dot(_84, _88) <= 0.001000000047497451305389404296875)
+        float3 _80 = fast::normalize(in.in_var_TEXCOORD0);
+        float3 _84 = fast::normalize(FragmentParams.ViewNormalPass.xyz);
+        if (dot(_80, _84) <= 0.001000000047497451305389404296875)
         {
             discard_fragment();
         }
-        float3 _93 = fast::normalize(in.in_var_TEXCOORD1);
-        float4 _99 = PatternNormalTexture.sample(PatternNormalSampler, in.in_var_TEXCOORD2);
-        float3 _102 = (_99.xyz * 2.0) - float3(1.0);
-        float2 _107 = in.in_var_TEXCOORD2 * FragmentParams.NormalSettings.z;
-        float4 _109 = DetailNormalTexture.sample(DetailNormalSampler, _107);
-        float3 _112 = (_109.xyz * 2.0) - float3(1.0);
-        float2 _113 = _102.xy;
-        float2 _117 = _112.xy;
-        float3 _133 = fast::normalize(float3(((_113 * FragmentParams.NormalSettings.x) + (_117 * FragmentParams.NormalSettings.y)) * (1.0 - in.in_var_TEXCOORD4.y), precise::max(_102.z * _112.z, 0.20000000298023223876953125)));
-        float3 _142 = fast::normalize(((_93 * _133.x) + (fast::normalize(cross(_84, _93)) * _133.y)) + (_84 * _133.z));
+        float3 _89 = fast::normalize(in.in_var_TEXCOORD1);
+        float4 _95 = PatternTexture.sample(PatternSampler, in.in_var_TEXCOORD2);
+        float4 _102 = DetailTexture.sample(DetailSampler, (in.in_var_TEXCOORD2 * FragmentParams.NormalSettings.z));
+        float3 _105 = (_95.yzw * 2.0) - float3(1.0);
+        float3 _108 = (_102.yzw * 2.0) - float3(1.0);
+        float2 _109 = _105.xy;
+        float2 _113 = _108.xy;
+        float3 _129 = fast::normalize(float3(((_109 * FragmentParams.NormalSettings.x) + (_113 * FragmentParams.NormalSettings.y)) * (1.0 - in.in_var_TEXCOORD4.y), precise::max(_105.z * _108.z, 0.20000000298023223876953125)));
+        float3 _138 = fast::normalize(((_89 * _129.x) + (fast::normalize(cross(_80, _89)) * _129.y)) + (_80 * _129.z));
         if (FragmentParams.ViewNormalPass.w > 2.5)
         {
-            _269 = float4(((FragmentParams.ActorFieldSettings.x * 32.0) + fmod(floor((fast::clamp(in.in_var_TEXCOORD4.z, 0.0, 1.0) * 255.0) + 0.5), 30.0)) * 0.0039215688593685626983642578125, ((FragmentParams.ActorFieldSettings.y * 8.0) + floor((fast::clamp(0.5 + (((fast::clamp(((length(_113) * 0.550000011920928955078125) + (length(_117) * 0.300000011920928955078125)) + (abs(PatternTexture.sample(PatternSampler, in.in_var_TEXCOORD2).x - DetailTexture.sample(DetailSampler, _107).x) * 0.300000011920928955078125), 0.0, 1.0) - 0.5) * FragmentParams.ActorFieldSettings.z) * 0.699999988079071044921875), 0.0, 1.0) * 7.0) + 0.5)) * 0.0039215688593685626983642578125, 0.0, 1.0);
+            _249 = float4(((FragmentParams.ActorFieldSettings.x * 32.0) + fmod(floor((fast::clamp(in.in_var_TEXCOORD4.z, 0.0, 1.0) * 255.0) + 0.5), 30.0)) * 0.0039215688593685626983642578125, ((FragmentParams.ActorFieldSettings.y * 8.0) + floor((fast::clamp(0.5 + (((fast::clamp(((length(_109) * 0.550000011920928955078125) + (length(_113) * 0.300000011920928955078125)) + (abs(_95.x - _102.x) * 0.300000011920928955078125), 0.0, 1.0) - 0.5) * FragmentParams.ActorFieldSettings.z) * 0.699999988079071044921875), 0.0, 1.0) * 7.0) + 0.5)) * 0.0039215688593685626983642578125, 0.0, 1.0);
             break;
         }
         if (FragmentParams.ViewNormalPass.w > 0.5)
         {
             if (FragmentParams.ViewNormalPass.w > 1.5)
             {
-                _269 = float4(in.in_var_TEXCOORD3.xyz * in.in_var_TEXCOORD4.x, fast::clamp(in.in_var_TEXCOORD4.x, 0.0, 1.0));
+                _249 = float4(in.in_var_TEXCOORD3.xyz * in.in_var_TEXCOORD4.x, fast::clamp(in.in_var_TEXCOORD4.x, 0.0, 1.0));
                 break;
             }
-            _269 = float4((_142 * 0.5) + float3(0.5), 1.0);
+            _249 = float4((_138 * 0.5) + float3(0.5), 1.0);
             break;
         }
-        float _228 = mix(DetailTexture.sample(DetailSampler, _107).x, 0.5, in.in_var_TEXCOORD4.y);
-        float _234 = fast::clamp(in.in_var_TEXCOORD3.w + ((_228 - 0.5) * 0.1599999964237213134765625), 0.0, 1.0);
-        float3 _238 = fast::normalize(FragmentParams.LightSpecular.xyz);
-        _269 = float4(fast::clamp(((in.in_var_TEXCOORD3.xyz * mix(0.7599999904632568359375, 1.12000000476837158203125, (mix(PatternTexture.sample(PatternSampler, in.in_var_TEXCOORD2).x, 0.7200000286102294921875, in.in_var_TEXCOORD4.y) * 0.680000007152557373046875) + (_228 * 0.319999992847442626953125))) * (0.4799999892711639404296875 + (fast::clamp(dot(_142, _238), 0.0, 1.0) * 0.519999980926513671875))) + float3(powr(fast::clamp(dot(_142, fast::normalize(_238 + _88)), 0.0, 1.0), mix(72.0, 18.0, _234)) * (FragmentParams.LightSpecular.w * (1.0 - (_234 * 0.64999997615814208984375)))), float3(0.0), float3(1.0)), 1.0);
+        float _208 = mix(_102.x, 0.5, in.in_var_TEXCOORD4.y);
+        float _214 = fast::clamp(in.in_var_TEXCOORD3.w + ((_208 - 0.5) * 0.1599999964237213134765625), 0.0, 1.0);
+        float3 _218 = fast::normalize(FragmentParams.LightSpecular.xyz);
+        _249 = float4(fast::clamp(((in.in_var_TEXCOORD3.xyz * mix(0.7599999904632568359375, 1.12000000476837158203125, (mix(_95.x, 0.7200000286102294921875, in.in_var_TEXCOORD4.y) * 0.680000007152557373046875) + (_208 * 0.319999992847442626953125))) * (0.4799999892711639404296875 + (fast::clamp(dot(_138, _218), 0.0, 1.0) * 0.519999980926513671875))) + float3(powr(fast::clamp(dot(_138, fast::normalize(_218 + _84)), 0.0, 1.0), mix(72.0, 18.0, _214)) * (FragmentParams.LightSpecular.w * (1.0 - (_214 * 0.64999997615814208984375)))), float3(0.0), float3(1.0)), 1.0);
         break;
     } while(false);
-    out.out_var_SV_Target0 = _269;
+    out.out_var_SV_Target0 = _249;
     return out;
 }
 

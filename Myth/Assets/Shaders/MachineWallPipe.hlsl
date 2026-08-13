@@ -21,8 +21,6 @@ cbuffer VertexParams : register(b0, space1)
 
 Texture2D DetailTexture : register(t0, space2);
 SamplerState DetailSampler : register(s0, space2);
-Texture2D DetailNormalTexture : register(t1, space2);
-SamplerState DetailNormalSampler : register(s1, space2);
 
 cbuffer FragmentParams : register(b0, space3)
 {
@@ -87,8 +85,9 @@ float4 fragment_main(VsOutput input) : SV_Target0
         discard;
 
     float2 detailUv = input.TexCoord * float2(1.4, 3.0) * NormalSettings.y;
-    float grain = DetailTexture.Sample(DetailSampler, detailUv).r;
-    float3 sampledNormal = DetailNormalTexture.Sample(DetailNormalSampler, detailUv).xyz * 2.0 - 1.0;
+    float4 detailSample = DetailTexture.Sample(DetailSampler, detailUv);
+    float grain = detailSample.r;
+    float3 sampledNormal = detailSample.gba * 2.0 - 1.0;
     float3 tangent = normalize(input.Tangent);
     float3 bitangent = normalize(cross(geometricNormal, tangent));
     float3 normal = normalize(

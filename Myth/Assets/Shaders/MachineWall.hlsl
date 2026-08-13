@@ -25,10 +25,6 @@ Texture2D PatternTexture : register(t0, space2);
 SamplerState PatternSampler : register(s0, space2);
 Texture2D DetailTexture : register(t1, space2);
 SamplerState DetailSampler : register(s1, space2);
-Texture2D PatternNormalTexture : register(t2, space2);
-SamplerState PatternNormalSampler : register(s2, space2);
-Texture2D DetailNormalTexture : register(t3, space2);
-SamplerState DetailNormalSampler : register(s3, space2);
 
 cbuffer FragmentParams : register(b0, space3)
 {
@@ -122,8 +118,10 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float3 tangent = normalize(input.Tangent);
     float3 bitangent = normalize(cross(geometricNormal, tangent));
-    float3 coarse = unpack_normal(PatternNormalTexture.Sample(PatternNormalSampler, input.TexCoord).xyz);
-    float3 detail = unpack_normal(DetailNormalTexture.Sample(DetailNormalSampler, input.TexCoord * NormalSettings.z).xyz);
+    float4 patternSample = PatternTexture.Sample(PatternSampler, input.TexCoord);
+    float4 detailSample = DetailTexture.Sample(DetailSampler, input.TexCoord * NormalSettings.z);
+    float3 coarse = unpack_normal(patternSample.gba);
+    float3 detail = unpack_normal(detailSample.gba);
     float3 tangentNormal = normalize(float3(
         (coarse.xy * NormalSettings.x + detail.xy * NormalSettings.y) * (1.0 - input.Flags.y),
         max(coarse.z * detail.z, 0.2)));
@@ -134,8 +132,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     if (ViewNormalPass.w > 2.5)
     {
-        float pattern = PatternTexture.Sample(PatternSampler, input.TexCoord).r;
-        float grain = DetailTexture.Sample(DetailSampler, input.TexCoord * NormalSettings.z).r;
+        float pattern = patternSample.r;
+        float grain = detailSample.r;
         float priorityDetail = saturate(length(coarse.xy) * 0.55 + length(detail.xy) * 0.30 + abs(pattern - grain) * 0.30);
         float priority = 0.5 + (priorityDetail - 0.5) * ActorFieldSettings.z * 0.7;
         float variant = fmod(floor(saturate(input.Flags.z) * 255.0 + 0.5), 30.0);
@@ -151,8 +149,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
         return float4(normal * 0.5 + 0.5, 1.0);
     }
 
-    float pattern = PatternTexture.Sample(PatternSampler, input.TexCoord).r;
-    float grain = DetailTexture.Sample(DetailSampler, input.TexCoord * NormalSettings.z).r;
+    float pattern = patternSample.r;
+    float grain = detailSample.r;
     pattern = lerp(pattern, 0.72, input.Flags.y);
     grain = lerp(grain, 0.5, input.Flags.y);
     float roughness = saturate(input.TintRoughness.w + (grain - 0.5) * 0.16);
