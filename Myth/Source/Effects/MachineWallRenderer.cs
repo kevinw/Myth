@@ -7,6 +7,14 @@ namespace Myth;
 
 sealed class MachineWallRenderer : IDisposable
 {
+	public enum Pass
+	{
+		Color,
+		Normals,
+		Emissive,
+		ActorTileField,
+	}
+
 	public const string DefaultPatternTexture = "patterns/pattern_59";
 	public const string DefaultDetailTexture = "patterns/noise/Noise_014";
 
@@ -163,8 +171,7 @@ sealed class MachineWallRenderer : IDisposable
 			uniformBufferCount: 1, entryPoint: "fragment_main", name: "MachineWallPipeFragment");
 	}
 
-	public void Render(Target color, Target normals, Target? emissive, Target? actorTileField,
-		List<Actor> actors, Vector2 camera, float zoom, float time)
+	public void Render(Target target, List<Actor> actors, Vector2 camera, float zoom, float time, Pass pass)
 	{
 		EnsureWalls(actors);
 
@@ -172,7 +179,7 @@ sealed class MachineWallRenderer : IDisposable
 		var vertexParams = new VertexParams
 		{
 			Camera = camera,
-			TargetSize = new(color.Width, color.Height),
+			TargetSize = new(target.Width, target.Height),
 			ProjectionSkew = skew,
 			Zoom = zoom,
 			Time = time,
@@ -182,7 +189,7 @@ sealed class MachineWallRenderer : IDisposable
 		var parameters = new FragmentParams
 		{
 			LightSpecular = new(light, SpecularStrength),
-			ViewNormalPass = new(view, 0),
+			ViewNormalPass = new(view, (float)pass),
 			NormalSettings = new(CoarseNormalStrength, DetailNormalStrength, 0, 0),
 		};
 
@@ -206,30 +213,9 @@ sealed class MachineWallRenderer : IDisposable
 				pipeParameters.NormalSettings.X = PipeNormalStrength * MathF.Max(wall.NormalStrength, 0);
 				pipeParameters.NormalSettings.Y = MathF.Max(wall.PipeDetail, 0.01f);
 				data.PipeMaterial.Fragment.SetUniformBuffer(pipeParameters);
-				DrawCubes(color, data);
-				DrawPipes(color, data);
-				parameters.ViewNormalPass.W = pipeParameters.ViewNormalPass.W = 1;
-				data.Material.Fragment.SetUniformBuffer(parameters);
-				data.PipeMaterial.Fragment.SetUniformBuffer(pipeParameters);
-				DrawCubes(normals, data);
-				DrawPipes(normals, data);
-				parameters.ViewNormalPass.W = 0;
-				if (emissive != null)
-				{
-					parameters.ViewNormalPass.W = 2;
-					data.Material.Fragment.SetUniformBuffer(parameters);
-					DrawCubes(emissive, data);
-					parameters.ViewNormalPass.W = 0;
-				}
-				if (actorTileField != null)
-				{
-					parameters.ViewNormalPass.W = pipeParameters.ViewNormalPass.W = 3;
-					data.Material.Fragment.SetUniformBuffer(parameters);
-					data.PipeMaterial.Fragment.SetUniformBuffer(pipeParameters);
-					DrawCubes(actorTileField, data);
-					DrawPipes(actorTileField, data);
-					parameters.ViewNormalPass.W = 0;
-				}
+				DrawCubes(target, data);
+				if (pass != Pass.Emissive)
+					DrawPipes(target, data);
 			}
 	}
 

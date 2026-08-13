@@ -42,8 +42,6 @@ public sealed partial class GameView
 		{
 			using (GraphicsDevice.DebugGroup("Myth/room color fields"))
 				DrawRoomColorFields();
-			using (GraphicsDevice.DebugGroup("Myth/machine walls"))
-				DrawMachineWalls();
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
 				DrawWorldLayer(BackgroundScreen, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
@@ -90,6 +88,8 @@ public sealed partial class GameView
 			{
 				using (GraphicsDevice.DebugGroup("Myth/tile field"))
 					DrawTileField();
+				using (GraphicsDevice.DebugGroup("Myth/actor tile field"))
+					DrawActorTileField();
 				using (GraphicsDevice.DebugGroup("Myth/dither mask"))
 					DrawDitherMask();
 			}
@@ -97,6 +97,7 @@ public sealed partial class GameView
 		else
 		{
 			TileField.Clear(Color.Transparent);
+			ActorTileField.Clear(Color.Transparent);
 			DitherMask.Clear(Color.White);
 		}
 
@@ -334,34 +335,21 @@ public sealed partial class GameView
 			_ => 0
 		};
 
-	void DrawMachineWalls()
-	{
-		MachineWallColor.Clear(Color.Transparent);
-		MachineWallNormals.Clear(Color.Transparent);
-		MachineWallEmissive.Clear(Color.Transparent);
-		ActorTileField.Clear(Color.Transparent);
-		if (ShowBackgroundLayer)
-			machineWallRenderer?.Render(MachineWallColor, MachineWallNormals,
-				PerfToggles.Emissive ? MachineWallEmissive : null,
-				PerfToggles.DitherAndTileField ? ActorTileField : null,
-				rendering, RenderCamera, zoomLevel, Time.SecondsF);
-	}
-
 	void DrawWorldLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
 		if (background)
 		{
 			DrawBackdrop(target);
-			Batcher.Image(MachineWallColor, MachineWallColor.Bounds.Center, MachineWallColor.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			Batcher.Render(target);
+			Batcher.Clear();
+			if (ShowBackgroundLayer)
+				machineWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+					MachineWallRenderer.Pass.Color);
 		}
 
 		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
-		{
-			Batcher.Render(target);
-			Batcher.Clear();
 			return;
-		}
 
 		PushWorldMatrix();
 		var atlasWander = PushAtlasWanderMaterial();
@@ -695,9 +683,9 @@ public sealed partial class GameView
 	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
-		if (background)
-			Batcher.Image(MachineWallEmissive, MachineWallEmissive.Bounds.Center, MachineWallEmissive.Bounds.Size / 2,
-				Vector2.One, 0, Color.White);
+		if (background && ShowBackgroundLayer)
+			machineWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				MachineWallRenderer.Pass.Emissive);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -1153,6 +1141,14 @@ public sealed partial class GameView
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
 		Batcher.Clear();
+	}
+
+	void DrawActorTileField()
+	{
+		ActorTileField.Clear(Color.Transparent);
+		if (ShowBackgroundLayer)
+			machineWallRenderer?.Render(ActorTileField, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				MachineWallRenderer.Pass.ActorTileField);
 	}
 
 	void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
@@ -1768,7 +1764,8 @@ public sealed partial class GameView
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
 		if (ShowBackgroundLayer)
-			Batcher.Image(MachineWallNormals, MachineWallNormals.Bounds.Center, MachineWallNormals.Bounds.Size / 2, Vector2.One, 0, Color.White);
+			machineWallRenderer?.Render(NormalBuffer, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				MachineWallRenderer.Pass.Normals);
 		RoomNormalCache? currentRoomNormalCache = null;
 		RoomNormalCache? nextRoomNormalCache = null;
 		if (ShowForegroundLayer)
@@ -2158,9 +2155,6 @@ public sealed partial class GameView
 
 		Screen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GameScreen"));
 		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
-		MachineWallColor = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "MachineWallColor"));
-		MachineWallNormals = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "MachineWallNormals"));
-		MachineWallEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "MachineWallEmissive"));
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
 		BackgroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundColorField"));
 		ForegroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundColorField"));
@@ -2425,9 +2419,6 @@ public sealed partial class GameView
 	public Target Screen { get; private set; } = null!;
 
 	Target BackgroundScreen { get; set; } = null!;
-	Target MachineWallColor { get; set; } = null!;
-	Target MachineWallNormals { get; set; } = null!;
-	Target MachineWallEmissive { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
 	Target BackgroundColorField { get; set; } = null!;
 	Target ForegroundColorField { get; set; } = null!;
