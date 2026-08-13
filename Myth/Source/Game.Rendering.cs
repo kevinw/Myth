@@ -42,6 +42,8 @@ public sealed partial class GameView
 		{
 			using (GraphicsDevice.DebugGroup("Myth/room color fields"))
 				DrawRoomColorFields();
+			using (GraphicsDevice.DebugGroup("Myth/machine walls"))
+				DrawMachineWalls();
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
 				DrawWorldLayer(BackgroundScreen, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
@@ -332,11 +334,27 @@ public sealed partial class GameView
 			_ => 0
 		};
 
+	void DrawMachineWalls()
+	{
+		MachineWallColor.Clear(Color.Transparent);
+		MachineWallNormals.Clear(Color.Transparent);
+		MachineWallEmissive.Clear(Color.Transparent);
+		ActorTileField.Clear(Color.Transparent);
+		if (ShowBackgroundLayer)
+			machineWallRenderer?.Render(MachineWallColor, MachineWallNormals,
+				PerfToggles.Emissive ? MachineWallEmissive : null,
+				PerfToggles.DitherAndTileField ? ActorTileField : null,
+				rendering, RenderCamera, zoomLevel, Time.SecondsF);
+	}
+
 	void DrawWorldLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
 		if (background)
+		{
 			DrawBackdrop(target);
+			Batcher.Image(MachineWallColor, MachineWallColor.Bounds.Center, MachineWallColor.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		}
 
 		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
 		{
@@ -634,6 +652,7 @@ public sealed partial class GameView
 	static bool IsBackgroundActor(Actor actor)
 		=> actor switch
 		{
+			MachineWall => true,
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
 			Prop prop => prop.Layer == Factory.TileLayer.Background,
@@ -676,6 +695,9 @@ public sealed partial class GameView
 	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
+		if (background)
+			Batcher.Image(MachineWallEmissive, MachineWallEmissive.Bounds.Center, MachineWallEmissive.Bounds.Size / 2,
+				Vector2.One, 0, Color.White);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -996,6 +1018,7 @@ public sealed partial class GameView
 		material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[12] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
@@ -1744,6 +1767,8 @@ public sealed partial class GameView
 	void DrawNormalBuffer()
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
+		if (ShowBackgroundLayer)
+			Batcher.Image(MachineWallNormals, MachineWallNormals.Bounds.Center, MachineWallNormals.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		RoomNormalCache? currentRoomNormalCache = null;
 		RoomNormalCache? nextRoomNormalCache = null;
 		if (ShowForegroundLayer)
@@ -2133,6 +2158,9 @@ public sealed partial class GameView
 
 		Screen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GameScreen"));
 		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
+		MachineWallColor = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "MachineWallColor"));
+		MachineWallNormals = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "MachineWallNormals"));
+		MachineWallEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "MachineWallEmissive"));
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
 		BackgroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundColorField"));
 		ForegroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundColorField"));
@@ -2146,6 +2174,7 @@ public sealed partial class GameView
 		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
+		ActorTileField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ActorTileField"));
 		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
 		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
 		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
@@ -2391,10 +2420,14 @@ public sealed partial class GameView
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
 	readonly GpuLighting? gpuLighting;
+	readonly MachineWallRenderer? machineWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
 	public Target Screen { get; private set; } = null!;
 
 	Target BackgroundScreen { get; set; } = null!;
+	Target MachineWallColor { get; set; } = null!;
+	Target MachineWallNormals { get; set; } = null!;
+	Target MachineWallEmissive { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
 	Target BackgroundColorField { get; set; } = null!;
 	Target ForegroundColorField { get; set; } = null!;
@@ -2408,6 +2441,7 @@ public sealed partial class GameView
 	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
+	Target ActorTileField { get; set; } = null!;
 	Target DitherMask { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
 	Target SpriteShadowMask { get; set; } = null!;

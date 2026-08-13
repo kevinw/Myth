@@ -491,7 +491,8 @@ public partial class Manager
 		var topLeft = GameWorldToImGui(viewport, game, bounds.TopLeft);
 		var bottomRight = GameWorldToImGui(viewport, game, bounds.BottomRight);
 		var color = selected ? ImGuiColor(0.45f, 1, 0.72f, 0.95f) : ImGuiColor(1, 1, 1, 0.42f);
-		draw.AddRectFilled(topLeft, bottomRight, selected ? ImGuiColor(0.35f, 1, 0.62f, 0.05f) : ImGuiColor(1, 1, 1, 0.025f));
+		if (selected)
+			draw.AddRectFilled(topLeft, bottomRight, ImGuiColor(0.35f, 1, 0.62f, 0.05f));
 		draw.AddRect(topLeft, bottomRight, color, 0, ImDrawFlags.None, selected ? 2 : 1.25f);
 	}
 

@@ -121,6 +121,14 @@
       "Type": "Prop",
       "Position": [208, 96],
       "SpriteName": "Props/server"
+    },
+    {
+      "Id": "9bf6d4a546002065",
+      "Type": "MachineWall",
+      "Position": [16, 32],
+      "Size": [304, 144],
+      "PipeColor2": "26726C",
+      "Motion": 1.85
     }
   ]
 }

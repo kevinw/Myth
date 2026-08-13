@@ -286,8 +286,17 @@ public static partial class Assets
 					surfaces.Add(backdropSurface);
 				if (root?["actors"] is JsonArray actors)
 					foreach (var actor in actors)
+					{
 						if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
 							surfaces.Add(id);
+						if (actor is JsonObject machineWall && ActorSpecs.GetTypeName(machineWall) == nameof(MachineWall))
+						{
+							textures.Add(ActorSpecs.ReadResolvedString(machineWall, nameof(MachineWall.PatternTexture)) is { Length: > 0 } pattern
+								? pattern : MachineWallRenderer.DefaultPatternTexture);
+							textures.Add(ActorSpecs.ReadResolvedString(machineWall, nameof(MachineWall.DetailTexture)) is { Length: > 0 } detail
+								? detail : MachineWallRenderer.DefaultDetailTexture);
+						}
+					}
 			}
 
 		var surfacesDir = Path.Join(DefaultVisualAssetPackPath, "surfaces");
