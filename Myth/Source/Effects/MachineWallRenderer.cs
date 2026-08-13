@@ -174,8 +174,6 @@ sealed class MachineWallRenderer : IDisposable
 
 	public void Render(Target target, List<Actor> actors, Vector2 camera, float zoom, float time, Pass pass)
 	{
-		EnsureWalls(actors);
-
 		var skew = ProjectionSkew;
 		var vertexParams = new VertexParams
 		{
@@ -286,8 +284,9 @@ sealed class MachineWallRenderer : IDisposable
 		return texture;
 	}
 
-	void EnsureWalls(List<Actor> actors)
+	public bool Prepare(List<Actor> actors)
 	{
+		var hasVisibleWalls = false;
 		foreach (var actor in actors)
 			if (actor is MachineWall wall)
 			{
@@ -296,6 +295,7 @@ sealed class MachineWallRenderer : IDisposable
 				var hash = WallLayoutHash(wall);
 				if (!data.HasLayout || data.LayoutHash != hash)
 					BuildWall(wall, data, hash);
+				hasVisibleWalls |= wall.Visible && data.Instances.Count > 0;
 			}
 
 		staleWalls.Clear();
@@ -307,6 +307,7 @@ sealed class MachineWallRenderer : IDisposable
 			walls[wall].Dispose();
 			walls.Remove(wall);
 		}
+		return hasVisibleWalls;
 	}
 
 	static int WallLayoutHash(MachineWall wall)

@@ -24,7 +24,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
-    float4 NormalDitherSettings; // x = slope boost, y = quantization levels
+    float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -355,7 +355,6 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background_scene = Texture.Sample(Sampler, sample) * input.color;
     float4 background_light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
-    float4 actor_tile_field = ActorTileFieldTexture.Sample(ActorTileFieldSampler, sample);
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
     float dither_mask = normal_data.b;
@@ -363,17 +362,24 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = screen_to_world(input.position, TextureSizeCamera.xy, TextureSizeCamera.zw, zoom);
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
-    float packed_actor_family_variant = floor(actor_tile_field.r * 255.0 + 0.5);
-    float actor_family = floor(packed_actor_family_variant / 32.0);
-    float actor_variant = fmod(packed_actor_family_variant, 32.0);
-    float actor_coverage = step(0.5, actor_family);
-    float4 decoded_actor_tile_field = float4(actor_variant / 255.0, actor_family * 32.0 / 255.0, 0.0, 1.0);
-    float4 background_tile_field = lerp(tile_field, decoded_actor_tile_field, actor_coverage);
-    float packed_actor_scale_priority = floor(actor_tile_field.g * 255.0 + 0.5);
-    float actor_scale = exp2((floor(packed_actor_scale_priority / 8.0) - 16.0) / 8.0);
-    float actor_detail_priority = fmod(packed_actor_scale_priority, 8.0) / 7.0;
-    float2 background_pattern_pixel = lerp(pattern_pixel, world_pixel / actor_scale, actor_coverage);
-    float background_detail_priority = lerp(0.5, actor_detail_priority, actor_coverage);
+    float4 background_tile_field = tile_field;
+    float2 background_pattern_pixel = pattern_pixel;
+    float background_detail_priority = 0.5;
+    if (NormalDitherSettings.z > 0.5)
+    {
+        float4 actor_tile_field = ActorTileFieldTexture.Sample(ActorTileFieldSampler, sample);
+        float packed_actor_family_variant = floor(actor_tile_field.r * 255.0 + 0.5);
+        float actor_family = floor(packed_actor_family_variant / 32.0);
+        float actor_variant = fmod(packed_actor_family_variant, 32.0);
+        float actor_coverage = step(0.5, actor_family);
+        float4 decoded_actor_tile_field = float4(actor_variant / 255.0, actor_family * 32.0 / 255.0, 0.0, 1.0);
+        background_tile_field = lerp(tile_field, decoded_actor_tile_field, actor_coverage);
+        float packed_actor_scale_priority = floor(actor_tile_field.g * 255.0 + 0.5);
+        float actor_scale = exp2((floor(packed_actor_scale_priority / 8.0) - 16.0) / 8.0);
+        float actor_detail_priority = fmod(packed_actor_scale_priority, 8.0) / 7.0;
+        background_pattern_pixel = lerp(pattern_pixel, world_pixel / actor_scale, actor_coverage);
+        background_detail_priority = lerp(0.5, actor_detail_priority, actor_coverage);
+    }
 
     // Ambient occlusion: darken the light where blurred foreground coverage
     // overhangs background tiles. Applied to the light buffer before the dither

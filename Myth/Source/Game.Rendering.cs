@@ -97,7 +97,7 @@ public sealed partial class GameView
 		else
 		{
 			TileField.Clear(Color.Transparent);
-			ActorTileField.Clear(Color.Transparent);
+			ClearActorTileField();
 		}
 
 		Target output;
@@ -306,6 +306,7 @@ public sealed partial class GameView
 		rendering.Clear();
 		rendering.AddRange(Actors);
 		rendering.Sort((a, b) => b.Depth - a.Depth);
+		hasMachineWalls = machineWallRenderer?.Prepare(rendering) ?? false;
 	}
 
 	Target DrawFieldDebug(Target field, int channel)
@@ -346,7 +347,7 @@ public sealed partial class GameView
 			DrawBackdrop(target);
 			Batcher.Render(target);
 			Batcher.Clear();
-			if (ShowBackgroundLayer)
+			if (ShowBackgroundLayer && hasMachineWalls)
 				machineWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
 					MachineWallRenderer.Pass.Color);
 		}
@@ -680,7 +681,7 @@ public sealed partial class GameView
 	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
-		if (background && ShowBackgroundLayer)
+		if (background && ShowBackgroundLayer && hasMachineWalls)
 			machineWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
 				MachineWallRenderer.Pass.Emissive);
 		PushWorldMatrix();
@@ -1035,7 +1036,7 @@ public sealed partial class GameView
 		uniforms[i++] = Manager.AmbientOcclusionMinVisibility;
 		uniforms[i++] = CurrentDitherSlopeBoost();
 		uniforms[i++] = CurrentDitherQuantization() ? NormalDitherLevels : 0;
-		uniforms[i++] = 0;
+		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
 		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
@@ -1146,10 +1147,24 @@ public sealed partial class GameView
 
 	void DrawActorTileField()
 	{
+		if (!ShowBackgroundLayer || !hasMachineWalls)
+		{
+			ClearActorTileField();
+			return;
+		}
+
 		ActorTileField.Clear(Color.Transparent);
-		if (ShowBackgroundLayer)
-			machineWallRenderer?.Render(ActorTileField, rendering, RenderCamera, zoomLevel, Time.SecondsF,
-				MachineWallRenderer.Pass.ActorTileField);
+		machineWallRenderer?.Render(ActorTileField, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+			MachineWallRenderer.Pass.ActorTileField);
+		actorTileFieldPopulated = true;
+	}
+
+	void ClearActorTileField()
+	{
+		if (!actorTileFieldPopulated)
+			return;
+		ActorTileField.Clear(Color.Transparent);
+		actorTileFieldPopulated = false;
 	}
 
 	void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
@@ -1765,7 +1780,7 @@ public sealed partial class GameView
 	void DrawNormalBuffer()
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
-		if (ShowBackgroundLayer)
+		if (ShowBackgroundLayer && hasMachineWalls)
 			machineWallRenderer?.Render(NormalBuffer, rendering, RenderCamera, zoomLevel, Time.SecondsF,
 				MachineWallRenderer.Pass.Normals);
 		RoomNormalCache? currentRoomNormalCache = null;
@@ -2171,6 +2186,8 @@ public sealed partial class GameView
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
 		ActorTileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "ActorTileField"));
+		ActorTileField.Clear(Color.Transparent);
+		actorTileFieldPopulated = false;
 		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
 		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
@@ -2425,6 +2442,8 @@ public sealed partial class GameView
 	readonly GpuLighting? gpuLighting;
 	readonly MachineWallRenderer? machineWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
+	bool hasMachineWalls;
+	bool actorTileFieldPopulated;
 	public Target Screen { get; private set; } = null!;
 
 	Target BackgroundScreen { get; set; } = null!;
