@@ -241,8 +241,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float2 world = Camera + (float2(id.xy) + 0.5) / Zoom;
     float4 normalData = NormalTexture.SampleLevel(NormalSampler, target_uv(uv), 0.0);
     float normalStrength = normalData.a;
-    float2 normalXY = normalData.rg * 2.0 - 1.0;
-    float3 normal = normalize(float3(normalXY, sqrt(saturate(1.0 - dot(normalXY, normalXY)))));
+    float3 normal = normalize(normalData.rgb * 2.0 - 1.0);
     float4 shadowed = Ambient;
     float4 unshadowed = Ambient;
     float3 sporeFog = 0.0;

@@ -92,8 +92,6 @@ public sealed partial class GameView
 					DrawTileField();
 				using (GraphicsDevice.DebugGroup("Myth/actor tile field"))
 					DrawActorTileField();
-				using (GraphicsDevice.DebugGroup("Myth/dither mask"))
-					DrawDitherMask();
 			}
 		}
 		else
@@ -111,7 +109,10 @@ public sealed partial class GameView
 		else if (debugView == DebugView.DitherMask)
 		{
 			using (GraphicsDevice.DebugGroup("Myth/dither mask debug"))
+			{
+				DrawDitherMask();
 				output = DrawFieldDebug(NormalBuffer, 2);
+			}
 		}
 		else
 		{
@@ -906,6 +907,11 @@ public sealed partial class GameView
 			return ForegroundScreen;
 
 		DrawGpuLightMasks();
+		if (PerfToggles.DitherAndTileField && debugView != DebugView.NormalBuffer)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/dither mask"))
+				DrawDitherMask();
+		}
 
 		var aoStrength = 0.0f;
 		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
