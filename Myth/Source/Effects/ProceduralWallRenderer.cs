@@ -229,6 +229,7 @@ sealed class ProceduralWallRenderer : IDisposable
 		StrataWall strata => strata.CrackDetail,
 		CircuitWall circuit => circuit.TraceDetail,
 		ArchiveWall archive => archive.ArchiveDetail,
+		FleshWall flesh => flesh.FleshDetail,
 		_ => 1,
 	};
 
@@ -428,6 +429,29 @@ sealed class ProceduralWallRenderer : IDisposable
 			hash = unchecked(hash * 31 + archive.ReliquaryDensity.GetHashCode());
 			hash = unchecked(hash * 31 + archive.RelicGlow.GetHashCode());
 		}
+		else if (wall is FleshWall flesh)
+		{
+			hash = unchecked(hash * 31 + flesh.MembraneColor.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MuscleColor1.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MuscleColor2.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.VeinColor.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.ValveColor.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.OrganColor.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.NerveGlowColor.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MembraneDensity.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MembraneDepth.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MuscleDensity.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MuscleWidthMin.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MuscleWidthMax.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.MuscleDepth.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.VeinDensity.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.VeinWidth.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.OrganDensity.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.OrganScale.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.PulseAmount.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.PulseRate.GetHashCode());
+			hash = unchecked(hash * 31 + flesh.Wetness.GetHashCode());
+		}
 		return hash;
 	}
 
@@ -450,6 +474,8 @@ sealed class ProceduralWallRenderer : IDisposable
 				AddCircuitWall(circuit, data);
 			else if (wall is ArchiveWall archive)
 				AddArchiveWall(archive, data);
+			else if (wall is FleshWall flesh)
+				AddFleshWall(flesh, data);
 		}
 		data.Instances.Sort(static (a, b) => a.DepthMotion.X.CompareTo(b.DepthMotion.X));
 		data.StraightPipes.Sort(static (a, b) => a.DepthUvRoughness.X.CompareTo(b.DepthUvRoughness.X));
@@ -460,6 +486,117 @@ sealed class ProceduralWallRenderer : IDisposable
 		data.StraightPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.StraightPipes));
 		data.ElbowPipeBuffer.Clear();
 		data.ElbowPipeBuffer.Upload(CollectionsMarshal.AsSpan(data.ElbowPipes));
+	}
+
+	void AddFleshWall(FleshWall wall, WallData data)
+	{
+		if (wall.Size.X <= 0 || wall.Size.Y <= 0)
+			return;
+
+		var rng = new Rng(wall.Seed);
+		var membrane = (Vector4)wall.MembraneColor;
+		var muscle1 = (Vector4)wall.MuscleColor1;
+		var muscle2 = (Vector4)wall.MuscleColor2;
+		var vein = (Vector4)wall.VeinColor;
+		var roughness = Math.Clamp(0.82f - wall.Wetness * 0.58f, 0.08f, 0.9f);
+		AddStaticBlock(data, (Vector2)wall.Position + (Vector2)wall.Size * 0.5f, wall.Size, 1,
+			new(membrane.X * 0.64f, membrane.Y * 0.58f, membrane.Z * 0.61f, roughness + 0.16f));
+
+		var area = wall.Size.X * wall.Size.Y;
+		var membraneCount = Math.Clamp((int)MathF.Round(area / 1800f * MathF.Max(wall.MembraneDensity, 0)), 0, 96);
+		for (var i = 0; i < membraneCount; i++)
+		{
+			var size = new Vector2(rng.Float(16, 48), rng.Float(10, 30));
+			var center = (Vector2)wall.Position + new Vector2(rng.Float(0, wall.Size.X), rng.Float(0, wall.Size.Y));
+			var variation = rng.Float(0.64f, 1.18f);
+			AddRotatedBlock(data, center, size, rng.Float(2.5f, 7) * MathF.Max(wall.MembraneDepth, 0),
+				new(membrane.X * variation, membrane.Y * variation, membrane.Z * variation, roughness), rng.Float(-0.5f, 0.5f));
+		}
+
+		var muscleCount = Math.Clamp((int)MathF.Round((area / 5200f + 5) * MathF.Max(wall.MuscleDensity, 0)), 0, 56);
+		Span<Vector2> points = stackalloc Vector2[4];
+		Span<float> radii = stackalloc float[3];
+		for (var i = 0; i < muscleCount; i++)
+		{
+			var horizontal = rng.Boolean();
+			var major = horizontal ? wall.Size.X : wall.Size.Y;
+			var cross = horizontal ? wall.Size.Y : wall.Size.X;
+			var start = rng.Float(-0.08f, 0.62f) * major;
+			var length = rng.Float(0.28f, 0.62f) * major;
+			var a = start + length * rng.Float(0.28f, 0.42f);
+			var b = start + length * rng.Float(0.58f, 0.76f);
+			var end = start + length;
+			var cross0 = rng.Float(0.04f, 0.96f) * cross;
+			var cross1 = Math.Clamp(cross0 + rng.Float(-42, 42), 2, cross - 2);
+			var lead = Math.Clamp(cross0 + rng.Float(-10, 10), 2, cross - 2);
+			var tail = Math.Clamp(cross1 + rng.Float(-10, 10), 2, cross - 2);
+			points[0] = horizontal ? new(start, cross0) : new(cross0, start);
+			points[1] = horizontal ? new(a, lead) : new(lead, a);
+			points[2] = horizontal ? new(b, cross1) : new(cross1, b);
+			points[3] = horizontal ? new(end, tail) : new(tail, end);
+			for (var p = 0; p < points.Length; p++)
+				points[p] += wall.Position;
+			var minRadius = MathF.Max(0.75f, MathF.Min(wall.MuscleWidthMin, wall.MuscleWidthMax) * 0.5f);
+			var maxRadius = MathF.Max(minRadius, MathF.Max(wall.MuscleWidthMin, wall.MuscleWidthMax) * 0.5f);
+			var radius = rng.Float(minRadius, maxRadius);
+			for (var segment = 0; segment < radii.Length; segment++)
+				radii[segment] = radius * rng.Float(0.78f, 1.18f);
+			var color = rng.Boolean() ? muscle1 : muscle2;
+			var variation = rng.Float(0.76f, 1.14f);
+			AddRoundedPipe(data, points, radii, MathF.Max(4, radius * 1.5f), rng.Float(7, 14) * MathF.Max(wall.MuscleDepth, 0),
+				new(color.X * variation, color.Y * variation, color.Z * variation, 1), roughness, rng.Float());
+		}
+
+		var veinCount = Math.Clamp((int)MathF.Round((area / 7200f + 3) * MathF.Max(wall.VeinDensity, 0)), 0, 40);
+		for (var i = 0; i < veinCount; i++)
+		{
+			var horizontal = rng.Boolean();
+			var major = horizontal ? wall.Size.X : wall.Size.Y;
+			var cross = horizontal ? wall.Size.Y : wall.Size.X;
+			var cross0 = rng.Float(0.05f, 0.95f) * cross;
+			var cross1 = Math.Clamp(cross0 + rng.Float(-40, 40), 2, cross - 2);
+			var start = rng.Float(-0.05f, 0.68f) * major;
+			var length = rng.Float(0.24f, 0.54f) * major;
+			var bend = start + length * rng.Float(0.38f, 0.62f);
+			points[0] = horizontal ? new(start, cross0) : new(cross0, start);
+			points[1] = horizontal ? new(bend, cross0) : new(cross0, bend);
+			points[2] = horizontal ? new(bend, cross1) : new(cross1, bend);
+			points[3] = horizontal ? new(start + length, cross1) : new(cross1, start + length);
+			for (var p = 0; p < points.Length; p++)
+				points[p] += wall.Position;
+			var radius = MathF.Max(0.35f, wall.VeinWidth * rng.Float(0.24f, 0.58f));
+			for (var segment = 0; segment < radii.Length; segment++)
+				radii[segment] = radius * (1 - segment * 0.16f);
+			AddRoundedPipe(data, points, radii, MathF.Max(2, radius * 1.5f), rng.Float(14, 18),
+				new(vein.X, vein.Y, vein.Z, 1), Math.Clamp(roughness + 0.12f, 0, 1), rng.Float());
+		}
+
+		var organCount = Math.Clamp((int)MathF.Round(area / 12000f * MathF.Max(wall.OrganDensity, 0)), 0, 20);
+		for (var organ = 0; organ < organCount; organ++)
+		{
+			var center = (Vector2)wall.Position + new Vector2(rng.Float(12, wall.Size.X - 12), rng.Float(12, wall.Size.Y - 12));
+			var scale = rng.Float(0.72f, 1.35f) * MathF.Max(wall.OrganScale, 0.1f);
+			var color = (Vector4)wall.OrganColor;
+			for (var lobe = 0; lobe < 3; lobe++)
+			{
+				var angle = lobe * Calc.TAU / 3 + rng.Float(-0.4f, 0.4f);
+				var offset = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * 3.5f * scale;
+				AddAnimatedBlock(data, center + offset, new Vector2(rng.Float(7, 12), rng.Float(9, 15)) * scale,
+					rng.Float(15, 20), new(color.X * rng.Float(0.82f, 1.15f), color.Y * rng.Float(0.82f, 1.15f), color.Z * rng.Float(0.82f, 1.15f), roughness),
+					rng.Float(Calc.TAU), rng.Float(0.12f, 0.24f) * MathF.Max(wall.PulseRate, 0),
+					rng.Float(0.8f, 2.2f) * MathF.Max(wall.PulseAmount, 0));
+			}
+			var valve = (Vector4)wall.ValveColor;
+			AddAnimatedBlock(data, center, new Vector2(4) * scale, 21, new(valve.X, valve.Y, valve.Z, 0.24f),
+				rng.Float(Calc.TAU), 0, 0, emissive: 0.12f, flat: true, pulse: MathF.Max(wall.PulseRate, 0));
+			if (rng.Boolean())
+			{
+				var nerve = (Vector4)wall.NerveGlowColor;
+				AddAnimatedBlock(data, center + new Vector2(rng.Float(-7, 7), rng.Float(-7, 7)), new Vector2(2.2f) * scale, 22,
+					new(nerve.X, nerve.Y, nerve.Z, 0.2f), rng.Float(Calc.TAU), 0, 0,
+					emissive: 0.65f, flat: true, pulse: MathF.Max(wall.PulseRate, 0));
+			}
+		}
 	}
 
 	void AddArchiveWall(ArchiveWall wall, WallData data)
