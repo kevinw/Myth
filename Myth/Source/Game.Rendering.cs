@@ -40,10 +40,12 @@ public sealed partial class GameView
 
 		using (PerfStats.Time(PerfStat.World))
 		{
-			using (GraphicsDevice.DebugGroup("Myth/room color fields"))
-				DrawRoomColorFields();
+			using (GraphicsDevice.DebugGroup("Myth/background color field"))
+				hasBackgroundColorField = DrawRoomColorField(ColorField, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
 				DrawWorldLayer(BackgroundScreen, background: true);
+			using (GraphicsDevice.DebugGroup("Myth/foreground color field"))
+				hasForegroundColorField = DrawRoomColorField(ColorField, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
 				DrawWorldLayer(ForegroundScreen, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/water"))
@@ -410,12 +412,6 @@ public sealed partial class GameView
 		Batcher.PopMatrix();
 	}
 
-	void DrawRoomColorFields()
-	{
-		hasBackgroundColorField = DrawRoomColorField(BackgroundColorField, background: true);
-		hasForegroundColorField = DrawRoomColorField(ForegroundColorField, background: false);
-	}
-
 	bool DrawRoomColorField(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
@@ -448,7 +444,7 @@ public sealed partial class GameView
 		if (!hasField)
 			return PushPropDecalMaterial(actor);
 
-		var field = background ? BackgroundColorField : ForegroundColorField;
+		var field = ColorField;
 		if (actor is Prop { Decal: true })
 		{
 			var coverage = background ? BackgroundCoverage : ParticleSolidMask;
@@ -922,9 +918,9 @@ public sealed partial class GameView
 		CompositeLighting(aoStrength);
 
 		if (PerfToggles.LightingNoise)
-			ApplyLightingNoise(LitScreen);
+			ApplyLightingNoise(Screen);
 
-		return LitScreen;
+		return Screen;
 	}
 
 	void ApplyLightingNoise(Target target)
@@ -994,7 +990,7 @@ public sealed partial class GameView
 	{
 		var material = lightingCompositeMaterial!.Material;
 
-		LitScreen.Clear(Color.Transparent);
+		Screen.Clear(Color.Transparent);
 		material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
@@ -1012,8 +1008,8 @@ public sealed partial class GameView
 		var aoOffset = Manager.AmbientOcclusionOffset;
 		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
 		var i = 0;
-		uniforms[i++] = LitScreen.Width;
-		uniforms[i++] = LitScreen.Height;
+		uniforms[i++] = Screen.Width;
+		uniforms[i++] = Screen.Height;
 		uniforms[i++] = renderCamera.X;
 		uniforms[i++] = renderCamera.Y;
 		uniforms[i++] = CurrentDitherEnabled() ? 1.0f : 0.0f;
@@ -1044,7 +1040,7 @@ public sealed partial class GameView
 		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopMaterial();
 		Batcher.PopSampler();
-		Batcher.Render(LitScreen);
+		Batcher.Render(Screen);
 		Batcher.Clear();
 	}
 
@@ -2156,14 +2152,12 @@ public sealed partial class GameView
 		Screen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GameScreen"));
 		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
-		BackgroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundColorField"));
-		ForegroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundColorField"));
+		ColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ColorField"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
-		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
@@ -2420,14 +2414,12 @@ public sealed partial class GameView
 
 	Target BackgroundScreen { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
-	Target BackgroundColorField { get; set; } = null!;
-	Target ForegroundColorField { get; set; } = null!;
+	Target ColorField { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
 	Target ForegroundEmissive { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
-	Target LitScreen { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
