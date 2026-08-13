@@ -1,46 +1,103 @@
 {
   "Layers": [
     {
-      "Texture": "patterns/pattern_23",
+      "Texture": "patterns/pattern_32",
       "Blend": "Over",
-      "Tint": "7e7863ff",
+      "Tint": "00ffab84",
       "BlackColor": "1b241bff",
+      "Opacity": 1,
       "Tiling": [
-        54,
-        54
+        77,
+        77
+      ],
+      "Offset": [
+        0,
+        0
       ],
       "Scroll": [
-        4.2,
-        2
-      ]
+        -0.9,
+        1
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": 0,
+      "Quantize": 0
     },
     {
       "Texture": "patterns/pattern_58",
       "Blend": "Multiply",
-      "Tint": "6c7d40ff",
-      "BlackColor": "4c5b10ff",
+      "Tint": "78407dff",
+      "BlackColor": "4c5b1047",
+      "Opacity": 1,
       "Tiling": [
         90,
         90
       ],
+      "Offset": [
+        0,
+        0
+      ],
       "Scroll": [
         -1,
         -0.3
-      ]
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": 0.37,
+      "Quantize": 0
     },
     {
       "Texture": "patterns/pattern_45",
       "Blend": "Multiply",
       "Tint": "eb9e2c36",
       "BlackColor": "031d03ff",
+      "Opacity": 1,
       "Tiling": [
         48,
         48
       ],
-      "Scroll": [
-        0.2,
+      "Offset": [
+        0,
         0
-      ]
+      ],
+      "Scroll": [
+        -0.3,
+        0
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": -0.01,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/noise/Noise_044",
+      "Blend": "Screen",
+      "Tint": "ff32001e",
+      "Opacity": 1,
+      "Tiling": [
+        519,
+        519
+      ],
+      "Offset": [
+        0,
+        0
+      ],
+      "Scroll": [
+        0.5,
+        0.2
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 2.32,
+      "Bias": 0.17,
+      "Quantize": 0
     }
   ],
   "NormalFromHeight": false,
