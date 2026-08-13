@@ -125,6 +125,10 @@ sealed class MachineWallRenderer : IDisposable
 	static float CoarseNormalStrength => 0.38f;
 	static float DetailNormalStrength => 0.12f;
 	static float PipeNormalStrength => 0.18f;
+	static readonly BlendMode NormalBufferBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Red | BlendMask.Green | BlendMask.Alpha, Color.White);
 
 	readonly GraphicsDevice graphicsDevice;
 	readonly Mesh<Vertex, ushort> mesh;
@@ -213,38 +217,39 @@ sealed class MachineWallRenderer : IDisposable
 				pipeParameters.NormalSettings.X = PipeNormalStrength * MathF.Max(wall.NormalStrength, 0);
 				pipeParameters.NormalSettings.Y = MathF.Max(wall.PipeDetail, 0.01f);
 				data.PipeMaterial.Fragment.SetUniformBuffer(pipeParameters);
-				DrawCubes(target, data);
+				var blend = pass == Pass.Normals ? NormalBufferBlend : BlendMode.Premultiply;
+				DrawCubes(target, data, blend);
 				if (pass != Pass.Emissive)
-					DrawPipes(target, data);
+					DrawPipes(target, data, blend);
 			}
 	}
 
 	static float EncodeDitherScale(float scale)
 		=> Math.Clamp(MathF.Round(MathF.Log2(MathF.Max(scale, 0.25f)) * 8 + 16), 0, 31);
 
-	void DrawCubes(Target target, WallData data)
+	void DrawCubes(Target target, WallData data, BlendMode blend)
 		=> new DrawCommand(target, mesh, data.Material!)
 		{
 			InstanceCount = data.Instances.Count,
 			VertexStorageBuffers = [data.InstancesBuffer],
-			BlendMode = BlendMode.Premultiply,
+			BlendMode = blend,
 		}.Submit(graphicsDevice);
 
-	void DrawPipes(Target target, WallData data)
+	void DrawPipes(Target target, WallData data, BlendMode blend)
 	{
 		if (data.StraightPipes.Count > 0)
 			new DrawCommand(target, straightPipeMesh, data.PipeMaterial!)
 			{
 				InstanceCount = data.StraightPipes.Count,
 				VertexStorageBuffers = [data.StraightPipeBuffer],
-				BlendMode = BlendMode.Premultiply,
+				BlendMode = blend,
 			}.Submit(graphicsDevice);
 		if (data.ElbowPipes.Count > 0)
 			new DrawCommand(target, elbowPipeMesh, data.PipeMaterial!)
 			{
 				InstanceCount = data.ElbowPipes.Count,
 				VertexStorageBuffers = [data.ElbowPipeBuffer],
-				BlendMode = BlendMode.Premultiply,
+				BlendMode = blend,
 			}.Submit(graphicsDevice);
 	}
 

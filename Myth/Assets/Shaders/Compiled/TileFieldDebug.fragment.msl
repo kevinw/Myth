@@ -43,7 +43,16 @@ fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], const
         _66 = _65;
     }
     float _75 = fast::clamp((_66 - FragmentUniformBlock.ChannelMinMaxPadding.y) / precise::max(FragmentUniformBlock.ChannelMinMaxPadding.z - FragmentUniformBlock.ChannelMinMaxPadding.y, 9.9999997473787516355514526367188e-05), 0.0, 1.0);
-    out.out_var_SV_Target0 = float4(_75, _75, _75, _43.w) * in.in_var_TEXCOORD1;
+    float _81;
+    if (_47 == 2)
+    {
+        _81 = 1.0;
+    }
+    else
+    {
+        _81 = _43.w;
+    }
+    out.out_var_SV_Target0 = float4(_75, _75, _75, _81) * in.in_var_TEXCOORD1;
     return out;
 }
 

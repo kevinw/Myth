@@ -100,18 +100,18 @@ public sealed partial class GameView
 		{
 			TileField.Clear(Color.Transparent);
 			ActorTileField.Clear(Color.Transparent);
-			DitherMask.Clear(Color.White);
 		}
 
 		Target output;
 		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen)
 		{
 			using (GraphicsDevice.DebugGroup("Myth/tile field debug"))
-				output = DrawTileFieldDebug();
+				output = DrawFieldDebug(TileField, TileFieldDebugChannel());
 		}
 		else if (debugView == DebugView.DitherMask)
 		{
-			output = DitherMask;
+			using (GraphicsDevice.DebugGroup("Myth/dither mask debug"))
+				output = DrawFieldDebug(NormalBuffer, 2);
 		}
 		else
 		{
@@ -307,21 +307,21 @@ public sealed partial class GameView
 		rendering.Sort((a, b) => b.Depth - a.Depth);
 	}
 
-	Target DrawTileFieldDebug()
+	Target DrawFieldDebug(Target field, int channel)
 	{
 		Screen.Clear(Color.Transparent);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		if (tileFieldDebugMaterial != null)
 		{
 			tileFieldDebugMaterial.Material.Fragment.SetUniformBuffer([
-				TileFieldDebugChannel(),
+				channel,
 				0,
 				1,
 				0
 			]);
 			Batcher.PushMaterial(tileFieldDebugMaterial.Material);
 		}
-		Batcher.Image(TileField, TileField.Bounds.Center, TileField.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.Image(field, field.Bounds.Center, field.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		if (tileFieldDebugMaterial != null)
 			Batcher.PopMaterial();
 		Batcher.PopSampler();
@@ -993,16 +993,15 @@ public sealed partial class GameView
 		Screen.Clear(Color.Transparent);
 		material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[4] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[7] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[11] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		material.Fragment.Samplers[12] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[3] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[4] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[5] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[6] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[7] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[8] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[9] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
@@ -1256,7 +1255,7 @@ public sealed partial class GameView
 
 	void DrawDitherMask()
 	{
-		DitherMask.Clear(Color.White);
+		Batcher.PushBlend(DitherBufferBlend);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -1272,7 +1271,8 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
-		Batcher.Render(DitherMask);
+		Batcher.PopBlend();
+		Batcher.Render(NormalBuffer);
 		Batcher.Clear();
 	}
 
@@ -1772,6 +1772,7 @@ public sealed partial class GameView
 				nextRoomNormalCache = GetRoomNormalCache(nextRoom);
 		}
 
+		Batcher.PushBlend(NormalBufferBlend);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -1810,6 +1811,7 @@ public sealed partial class GameView
 		}
 
 		Batcher.PopMatrix();
+		Batcher.PopBlend();
 		Batcher.Render(NormalBuffer);
 		Batcher.Clear();
 	}
@@ -2163,7 +2165,6 @@ public sealed partial class GameView
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
 		ActorTileField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ActorTileField"));
-		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
 		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
 		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
@@ -2397,6 +2398,14 @@ public sealed partial class GameView
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendMask.Red | BlendMask.Green, Color.White);
+	static readonly BlendMode NormalBufferBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Red | BlendMask.Green | BlendMask.Alpha, Color.White);
+	static readonly BlendMode DitherBufferBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Blue, Color.White);
 
 	static float DitherGlitchRadius => 150.0f;
 	static float NormalDitherLevels => 4.0f;
@@ -2425,7 +2434,6 @@ public sealed partial class GameView
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
 	Target ActorTileField { get; set; } = null!;
-	Target DitherMask { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
 	Target SpriteShadowMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;

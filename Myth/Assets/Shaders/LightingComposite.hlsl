@@ -37,35 +37,32 @@ SamplerState LightSampler : register(s1, space2);
 Texture2D TileFieldTexture : register(t2, space2);
 SamplerState TileFieldSampler : register(s2, space2);
 
-Texture2D DitherMaskTexture : register(t3, space2);
-SamplerState DitherMaskSampler : register(s3, space2);
+Texture2D EmissiveTexture : register(t3, space2);
+SamplerState EmissiveSampler : register(s3, space2);
 
-Texture2D EmissiveTexture : register(t4, space2);
-SamplerState EmissiveSampler : register(s4, space2);
+Texture2D AoTexture : register(t4, space2);
+SamplerState AoSampler : register(s4, space2);
 
-Texture2D AoTexture : register(t5, space2);
-SamplerState AoSampler : register(s5, space2);
+Texture2D BackgroundCoverageTexture : register(t5, space2);
+SamplerState BackgroundCoverageSampler : register(s5, space2);
 
-Texture2D BackgroundCoverageTexture : register(t6, space2);
-SamplerState BackgroundCoverageSampler : register(s6, space2);
+Texture2D ForegroundTexture : register(t6, space2);
+SamplerState ForegroundSampler : register(s6, space2);
 
-Texture2D ForegroundTexture : register(t7, space2);
-SamplerState ForegroundSampler : register(s7, space2);
+Texture2D ForegroundLightTexture : register(t7, space2);
+SamplerState ForegroundLightSampler : register(s7, space2);
 
-Texture2D ForegroundLightTexture : register(t8, space2);
-SamplerState ForegroundLightSampler : register(s8, space2);
+Texture2D ForegroundEmissiveTexture : register(t8, space2);
+SamplerState ForegroundEmissiveSampler : register(s8, space2);
 
-Texture2D ForegroundEmissiveTexture : register(t9, space2);
-SamplerState ForegroundEmissiveSampler : register(s9, space2);
+Texture2D NormalTexture : register(t9, space2);
+SamplerState NormalSampler : register(s9, space2);
 
-Texture2D NormalTexture : register(t10, space2);
-SamplerState NormalSampler : register(s10, space2);
+Texture2D SporeFogTexture : register(t10, space2);
+SamplerState SporeFogSampler : register(s10, space2);
 
-Texture2D SporeFogTexture : register(t11, space2);
-SamplerState SporeFogSampler : register(s11, space2);
-
-Texture2D ActorTileFieldTexture : register(t12, space2);
-SamplerState ActorTileFieldSampler : register(s12, space2);
+Texture2D ActorTileFieldTexture : register(t11, space2);
+SamplerState ActorTileFieldSampler : register(s11, space2);
 
 struct VsInput
 {
@@ -359,9 +356,9 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background_light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float4 actor_tile_field = ActorTileFieldTexture.Sample(ActorTileFieldSampler, sample);
-    float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
+    float dither_mask = normal_data.b;
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = screen_to_world(input.position, TextureSizeCamera.xy, TextureSizeCamera.zw, zoom);
