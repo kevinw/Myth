@@ -102,8 +102,10 @@ float4 fragment_main(VsOutput input) : SV_Target0
         float ribDetail = abs(cos(input.TexCoord.y * 25.132741));
         float detail = saturate(length(sampledNormal.xy) * 0.55 + ringDetail * 0.30 + ribDetail * 0.10 + abs(grain - 0.5) * 0.25);
         float priority = 0.5 + (detail - 0.5) * ActorFieldSettings.z * 0.7;
-        float familyScale = (ActorFieldSettings.x * 32.0 + ActorFieldSettings.y) / 255.0;
-        return float4(input.FieldVariant, familyScale, priority, 1.0);
+        float variant = fmod(floor(saturate(input.FieldVariant) * 255.0 + 0.5), 30.0);
+        float familyVariant = (ActorFieldSettings.x * 32.0 + variant) / 255.0;
+        float scalePriority = (ActorFieldSettings.y * 8.0 + floor(saturate(priority) * 7.0 + 0.5)) / 255.0;
+        return float4(familyVariant, scalePriority, 0.0, 1.0);
     }
 
     if (ViewNormalPass.w > 0.5)

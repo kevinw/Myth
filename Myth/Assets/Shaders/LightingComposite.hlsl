@@ -363,12 +363,17 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = screen_to_world(input.position, TextureSizeCamera.xy, TextureSizeCamera.zw, zoom);
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
-    float actor_coverage = step(0.5, actor_tile_field.a);
-    float4 background_tile_field = lerp(tile_field, actor_tile_field, actor_coverage);
-    float packed_actor_field = floor(actor_tile_field.g * 255.0 + 0.5);
-    float actor_scale = exp2((fmod(packed_actor_field, 32.0) - 16.0) / 8.0);
+    float packed_actor_family_variant = floor(actor_tile_field.r * 255.0 + 0.5);
+    float actor_family = floor(packed_actor_family_variant / 32.0);
+    float actor_variant = fmod(packed_actor_family_variant, 32.0);
+    float actor_coverage = step(0.5, actor_family);
+    float4 decoded_actor_tile_field = float4(actor_variant / 255.0, actor_family * 32.0 / 255.0, 0.0, 1.0);
+    float4 background_tile_field = lerp(tile_field, decoded_actor_tile_field, actor_coverage);
+    float packed_actor_scale_priority = floor(actor_tile_field.g * 255.0 + 0.5);
+    float actor_scale = exp2((floor(packed_actor_scale_priority / 8.0) - 16.0) / 8.0);
+    float actor_detail_priority = fmod(packed_actor_scale_priority, 8.0) / 7.0;
     float2 background_pattern_pixel = lerp(pattern_pixel, world_pixel / actor_scale, actor_coverage);
-    float background_detail_priority = lerp(0.5, actor_tile_field.b, actor_coverage);
+    float background_detail_priority = lerp(0.5, actor_detail_priority, actor_coverage);
 
     // Ambient occlusion: darken the light where blurred foreground coverage
     // overhangs background tiles. Applied to the light buffer before the dither

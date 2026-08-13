@@ -138,8 +138,10 @@ float4 fragment_main(VsOutput input) : SV_Target0
         float grain = DetailTexture.Sample(DetailSampler, input.TexCoord * NormalSettings.z).r;
         float priorityDetail = saturate(length(coarse.xy) * 0.55 + length(detail.xy) * 0.30 + abs(pattern - grain) * 0.30);
         float priority = 0.5 + (priorityDetail - 0.5) * ActorFieldSettings.z * 0.7;
-        float familyScale = (ActorFieldSettings.x * 32.0 + ActorFieldSettings.y) / 255.0;
-        return float4(input.Flags.z, familyScale, priority, 1.0);
+        float variant = fmod(floor(saturate(input.Flags.z) * 255.0 + 0.5), 30.0);
+        float familyVariant = (ActorFieldSettings.x * 32.0 + variant) / 255.0;
+        float scalePriority = (ActorFieldSettings.y * 8.0 + floor(saturate(priority) * 7.0 + 0.5)) / 255.0;
+        return float4(familyVariant, scalePriority, 0.0, 1.0);
     }
 
     if (ViewNormalPass.w > 0.5)
