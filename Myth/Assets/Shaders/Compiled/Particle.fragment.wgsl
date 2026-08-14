@@ -41,7 +41,7 @@ fn fragment_main_1() {
     phi_114_ = _e50;
     if (_e54 > 0f) {
         let _e58 = FragmentParams.TargetSize;
-        let _e60 = textureSample(LightTexture, LightSampler, (_e28.xy / _e58));
+        let _e60 = textureSampleLevel(LightTexture, LightSampler, (_e28.xy / _e58), 0f);
         let _e63 = FragmentParams.AmbientLight;
         let _e65 = max((_e60.xyz - _e63), vec3<f32>(0f, 0f, 0f));
         let _e71 = _e50.xyz;
