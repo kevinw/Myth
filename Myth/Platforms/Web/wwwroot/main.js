@@ -137,6 +137,8 @@ try {
   fullscreenControls.showChromeButton();
   try {
     await runMain("Myth", room ? ["--play-room", room] : []);
+    await new Promise(requestAnimationFrame);
+    startGate.hide();
   } catch (error) {
     const cleanExit =
       error?.name === "ExitStatus" &&
@@ -330,6 +332,7 @@ function prepareStartGate() {
       progress: () => {},
       ready: () => {},
       wait: () => Promise.resolve(),
+      hide: () => {},
     };
 
   const setFill = (value) =>
@@ -350,7 +353,6 @@ function prepareStartGate() {
       button.style.opacity = 0.5;
       if (!ready) return;
 
-      gate.hidden = true;
       setTimeout(resolve, 100);
     };
 
@@ -366,6 +368,7 @@ function prepareStartGate() {
       setFill(1);
     },
     wait: () => wait,
+    hide: () => gate.hidden = true,
   };
 }
 
