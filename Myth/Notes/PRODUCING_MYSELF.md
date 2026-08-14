@@ -26,8 +26,6 @@ Possible description:
 > castle with Bud, an unpredictable little companion. Burrow through surfaces,
 > uncover hidden paths, and turn expressive movement into combat.
 
-Emoji: 🍄
-
 Do not make the application wait for demo improvements.
 
 ### Showcase Demo
