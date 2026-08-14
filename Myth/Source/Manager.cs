@@ -75,6 +75,7 @@ public partial class Manager : App
 	internal event Action<Manager>? ScenarioRender;
 	bool playOnStartup;
 	readonly bool skipStartupMenu;
+	readonly bool checkRooms;
 	bool startingPlay;
 	// Boot loading screen: warm GPU pipelines a step at a time while showing "Loading...", then
 	// call EnterInitialScreen(). See UpdateBootWarmup/RenderBootWarmup and ShaderWarmup.
@@ -268,6 +269,7 @@ public partial class Manager : App
 		dumpAtlases = args.dumpAtlases;
 		gymMode = args.gym;
 		headless = args.headless;
+		checkRooms = args.checkRooms;
 		unthrottled = args.unthrottled;
 		gym = new()
 		{
@@ -449,6 +451,12 @@ public partial class Manager : App
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
+		if (checkRooms)
+		{
+			CheckRooms();
+			Exit();
+			return;
+		}
 		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
 		if (AudioEnabled)
 			LoadAudioBanks();
@@ -502,6 +510,26 @@ public partial class Manager : App
 			ResetEditorToolWindowLayout();
 		}
 #endif
+	}
+
+	void CheckRooms()
+	{
+		var timer = Stopwatch.StartNew();
+		var loaded = 0;
+		foreach (var room in Assets.RoomsById.Values.OrderBy(static room => room.Id, StringComparer.Ordinal))
+		{
+			try
+			{
+				using var game = new Game(this, room, audioEventsEnabled: false, spawnBud: false,
+					enableParticles: false, loadGoals: true, save: new());
+			}
+			catch (Exception exception)
+			{
+				throw new InvalidOperationException($"Failed to load room '{room.Id}'.", exception);
+			}
+			loaded++;
+		}
+		Console.WriteLine($"[CheckRooms] Loaded {loaded}/{Assets.RoomsById.Count} rooms in {timer.Elapsed.TotalSeconds:F2}s.");
 	}
 
 	// Enters the first on-screen state after boot/warmup: the title menu, immediate play, or a

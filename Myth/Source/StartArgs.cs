@@ -8,6 +8,7 @@ public struct StartArgs
 	public bool gym;
 	public bool audio = true;
 	public bool headless;
+	public bool checkRooms;
 	public bool unthrottled;
 	public bool gymExitAfterAll;
 	public bool traceNav;
@@ -77,6 +78,7 @@ public struct StartArgs
 				case "--gym": gym = true; break;
 				case "--gym-cli": gymCli = true; break;
 				case "--headless": headless = true; break;
+				case "--check-rooms": checkRooms = true; break;
 				case "--unthrottled": unthrottled = true; break;
 				case "--gym-exit-after-all": gymExitAfterAll = true; break;
 				case "--trace-nav": traceNav = true; break;
@@ -146,6 +148,11 @@ public struct StartArgs
 
 		gym |= gymCli;
 		headless |= gymCli;
+		if (checkRooms)
+		{
+			headless = true;
+			audio = false;
+		}
 		unthrottled |= gymCli;
 		gymExitAfterAll |= gymCli;
 		traceNav |= traceJsonPath != null;

@@ -34,6 +34,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	// the compiled shaders are missing (unsupported driver / stripped build).
 	static SharedGpuResources? GetSharedResources(GraphicsDevice graphicsDevice)
 	{
+		if (graphicsDevice.Driver == GraphicsDriver.Headless)
+			return null;
 		if (SharedResources.TryGetValue(graphicsDevice, out var existing))
 			return existing;
 
