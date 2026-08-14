@@ -31,15 +31,10 @@
 
   <ItemGroup>
     <ImageAsset Include="Assets.xcassets/**/*" />
-    <!-- Bundled content ships as one zip when it has been built (see tools/run-ios-device.sh);
-         otherwise fall back to loose files so a plain build still works. FMOD banks always
-         ship loose: FMOD opens them by real path. -->
-    <BundleResource Include="../../../Assets/Content.zip" Condition="Exists('../../../Assets/Content.zip')">
+    <!-- run-ios-device.sh and TestFlight build this archive, including compiled shaders.
+         FMOD banks stay loose because FMOD opens them by real path. -->
+    <BundleResource Include="../../../Assets/Content.zip">
       <LogicalName>Assets/Content.zip</LogicalName>
-    </BundleResource>
-    <BundleResource Include="../../../Assets/**/*" Condition="!Exists('../../../Assets/Content.zip')"
-                    Exclude="../../../Assets/**/.DS_Store;../../../Assets/Sounds/**;../../../Assets/Sources/Sounds/**">
-      <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </BundleResource>
     <BundleResource Include="../../../Assets/Sounds/FMOD/Build/Mobile/*.bank">
       <LogicalName>Assets/Sounds/FMOD/Build/Mobile/%(Filename)%(Extension)</LogicalName>
@@ -48,6 +43,11 @@
     <ProjectReference Include="../../../../Foster/Framework/Foster.Framework.csproj" />
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>
+
+  <Target Name="RequireIosContent" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('../../../Assets/Content.zip')"
+           Text="iOS content is missing. Build with tools/run-ios-device.sh, or generate Assets/Content.zip before building this project." />
+  </Target>
 
   <ItemGroup Condition="Exists('../Native/SDL3.xcframework')">
     <NativeReference Include="../Native/SDL3.xcframework">

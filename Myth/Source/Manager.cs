@@ -31,7 +31,7 @@ public partial class Manager : App
 	readonly Point MinimumRestoredWindowSize = new(640, 360);
 
 	const float DEFAULT_UI_SCALE = 2.5f;
-	float Scale => imgui.Scale;
+	float Scale => imgui?.Scale ?? DEFAULT_UI_SCALE;
 	static float ButtonSize => 34;
 	static float ButtonSpacing => 2;
 #if !EDITOR

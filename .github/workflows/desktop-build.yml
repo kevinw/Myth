@@ -32,11 +32,8 @@ jobs:
           set -euo pipefail
           git submodule update --init Foster Myth/Source/External/StringBuilder
 
-      # The arm64 shadercross binary depends on locally-built dylibs that aren't part
-      # of Foster. Shipped MSL is committed; make it newer than Git's checkout mtimes
-      # so MSBuild uses it rather than trying to rebuild it on the clean runner.
-      - name: Use committed macOS shaders
-        run: find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.msl' -exec touch {} +
+      - name: Force fresh Foster shader compilation
+        run: find Foster/Framework/Content/Shaders/Compiled -name '*.msl' -delete
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -151,7 +148,7 @@ jobs:
       - name: Compile DXIL
         run: |
           set -euo pipefail
-          find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -delete
+          find Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -delete
           dotnet msbuild Foster/Framework/Foster.Framework.csproj -t:CompileShaders -p:ShaderPlatform=windows
           dotnet msbuild Myth/Myth.csproj -t:CompileShaders -p:ShaderPlatform=windows
           tar -cf "$RUNNER_TEMP/windows-shaders.tar" \

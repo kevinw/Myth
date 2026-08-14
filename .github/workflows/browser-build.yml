@@ -72,13 +72,10 @@ jobs:
         if: steps.cache-naga.outputs.cache-hit != 'true'
         run: cargo install naga-cli --version 29.0.3 --locked
 
-      # Git can't preserve mtimes, so MSBuild's incremental check can't tell when a
-      # committed .wgsl is stale relative to its .hlsl. Delete it so every CI
-      # run recompiles from source and the deployed shaders are always up to date.
-      - name: Clean compiled shaders (force fresh compilation)
-        run: |
-          find Myth/Assets/Shaders Foster/Framework/Content/Shaders \
-            -path '*/Compiled/*' -name '*.wgsl' -delete -print
+      # Foster still ships embedded compiled shaders. Git can't preserve mtimes, so
+      # force those to rebuild; Myth shaders are generated and ignored.
+      - name: Force fresh Foster shader compilation
+        run: find Foster/Framework/Content/Shaders/Compiled -name '*.wgsl' -delete
 
       - name: Build visual asset pack + content zip
         working-directory: Myth

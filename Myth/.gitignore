@@ -5,3 +5,4 @@ chrome/
 node_modules/
 Assets/Content.zip
 /Assets/Packed/Visuals/
+/Assets/Shaders/Compiled/
