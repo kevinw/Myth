@@ -353,6 +353,7 @@ function prepareStartGate() {
       button.style.opacity = 0.5;
       if (!ready) return;
 
+      MythBrowserFmod.resumeFromGesture();
       setTimeout(resolve, 100);
     };
 

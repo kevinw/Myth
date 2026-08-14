@@ -57,11 +57,12 @@ export async function initialize(bankPaths, bankData) {
 	trackAudioContexts();
 	fmod = await globalThis.FMODModule(module);
 
-	lastBankPaths = normalizedBankPaths;
+	lastBankPaths = sortBankPaths(normalizedBankPaths);
 	createStudioSystem();
+	loadBanksFromFs(lastBankPaths);
 	initialized = true;
 	installAudioResumeHandlers();
-	console.log(`FMOD JS bridge initialized with ${normalizedBankPaths.length} preloaded banks.`);
+	console.log(`FMOD JS bridge initialized with ${banks.length} loaded banks.`);
 }
 
 // Create the FMOD Studio + core system and initialize the output device. Calling
@@ -134,8 +135,16 @@ export function consumeReinitRequest() {
 
 export function reloadBanks(bankPaths) {
 	ensureInitialized();
-	lastBankPaths = Array.from(bankPaths ?? []);
+	const nextBankPaths = sortBankPaths(bankPaths);
+	if (banks.length === nextBankPaths.length && sameBankPaths(lastBankPaths, nextBankPaths))
+		return;
+	lastBankPaths = nextBankPaths;
 	loadBanksFromFs(lastBankPaths);
+}
+
+export function resumeFromGesture() {
+	if (initialized)
+		enterForeground("start");
 }
 
 // Load banks from the emscripten FS (preloaded at initialize() and persisted with
@@ -580,6 +589,14 @@ function ensureInitialized() {
 
 function bankLoadCompare(a, b) {
 	return bankLoadOrder(a) - bankLoadOrder(b) || a.localeCompare(b);
+}
+
+function sortBankPaths(bankPaths) {
+	return Array.from(bankPaths ?? []).sort(bankLoadCompare);
+}
+
+function sameBankPaths(a, b) {
+	return a.length === b.length && a.every((path, i) => path === b[i]);
 }
 
 function bankLoadOrder(path) {

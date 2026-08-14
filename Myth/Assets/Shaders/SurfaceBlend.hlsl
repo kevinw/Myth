@@ -24,15 +24,13 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 LayerAdjust[MAX_LAYERS]; // x = opacity, y = contrast, z = bias, w = quantize levels
 };
 
-// t0/s0 is the batcher's texture slot (unused here); layers live at t1..t6.
-Texture2D BatchTexture : register(t0, space2);
-SamplerState BatchSampler : register(s0, space2);
-Texture2D Layer0 : register(t1, space2); SamplerState Layer0Sampler : register(s1, space2);
-Texture2D Layer1 : register(t2, space2); SamplerState Layer1Sampler : register(s2, space2);
-Texture2D Layer2 : register(t3, space2); SamplerState Layer2Sampler : register(s3, space2);
-Texture2D Layer3 : register(t4, space2); SamplerState Layer3Sampler : register(s4, space2);
-Texture2D Layer4 : register(t5, space2); SamplerState Layer4Sampler : register(s5, space2);
-Texture2D Layer5 : register(t6, space2); SamplerState Layer5Sampler : register(s6, space2);
+// Layer 0 uses the batcher's texture slot; additional layers follow it.
+Texture2D Layer0 : register(t0, space2); SamplerState Layer0Sampler : register(s0, space2);
+Texture2D Layer1 : register(t1, space2); SamplerState Layer1Sampler : register(s1, space2);
+Texture2D Layer2 : register(t2, space2); SamplerState Layer2Sampler : register(s2, space2);
+Texture2D Layer3 : register(t3, space2); SamplerState Layer3Sampler : register(s3, space2);
+Texture2D Layer4 : register(t4, space2); SamplerState Layer4Sampler : register(s4, space2);
+Texture2D Layer5 : register(t5, space2); SamplerState Layer5Sampler : register(s5, space2);
 
 struct VsInput
 {

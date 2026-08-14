@@ -5,9 +5,9 @@ struct type_u002e_FragmentUniformBlock {
 
 @group(3) @binding(0) 
 var<uniform> FragmentUniformBlock: type_u002e_FragmentUniformBlock;
-@group(2) @binding(1) 
+@group(2) @binding(0)
 var NormalMap: texture_2d<f32>;
-@group(2) @binding(101) 
+@group(2) @binding(100)
 var NormalSampler: sampler;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec2<f32>;
 var<private> out_u002e_var_u002e_SV_Target0_: vec4<f32>;

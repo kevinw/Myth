@@ -25,7 +25,7 @@ struct fragment_main_in
     float4 in_var_TEXCOORD1 [[user(locn1)]];
 };
 
-fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Layer0 [[texture(1)]], texture2d<float> Layer1 [[texture(2)]], texture2d<float> Layer2 [[texture(3)]], texture2d<float> Layer3 [[texture(4)]], texture2d<float> Layer4 [[texture(5)]], texture2d<float> Layer5 [[texture(6)]], sampler Layer0Sampler [[sampler(1)]], sampler Layer1Sampler [[sampler(2)]], sampler Layer2Sampler [[sampler(3)]], sampler Layer3Sampler [[sampler(4)]], sampler Layer4Sampler [[sampler(5)]], sampler Layer5Sampler [[sampler(6)]])
+fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], constant type_FragmentUniformBlock& FragmentUniformBlock [[buffer(0)]], texture2d<float> Layer0 [[texture(0)]], texture2d<float> Layer1 [[texture(1)]], texture2d<float> Layer2 [[texture(2)]], texture2d<float> Layer3 [[texture(3)]], texture2d<float> Layer4 [[texture(4)]], texture2d<float> Layer5 [[texture(5)]], sampler Layer0Sampler [[sampler(0)]], sampler Layer1Sampler [[sampler(1)]], sampler Layer2Sampler [[sampler(2)]], sampler Layer3Sampler [[sampler(3)]], sampler Layer4Sampler [[sampler(4)]], sampler Layer5Sampler [[sampler(5)]])
 {
     fragment_main_out out = {};
     int _68 = int(FragmentUniformBlock.SurfaceMeta.x);

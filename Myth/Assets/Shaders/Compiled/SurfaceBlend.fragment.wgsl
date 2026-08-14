@@ -10,29 +10,29 @@ struct type_u002e_FragmentUniformBlock {
 
 @group(3) @binding(0) 
 var<uniform> FragmentUniformBlock: type_u002e_FragmentUniformBlock;
-@group(2) @binding(1) 
+@group(2) @binding(0)
 var Layer0_: texture_2d<f32>;
-@group(2) @binding(101) 
+@group(2) @binding(100)
 var Layer0Sampler: sampler;
-@group(2) @binding(2) 
+@group(2) @binding(1)
 var Layer1_: texture_2d<f32>;
-@group(2) @binding(102) 
+@group(2) @binding(101)
 var Layer1Sampler: sampler;
-@group(2) @binding(3) 
+@group(2) @binding(2)
 var Layer2_: texture_2d<f32>;
-@group(2) @binding(103) 
+@group(2) @binding(102)
 var Layer2Sampler: sampler;
-@group(2) @binding(4) 
+@group(2) @binding(3)
 var Layer3_: texture_2d<f32>;
-@group(2) @binding(104) 
+@group(2) @binding(103)
 var Layer3Sampler: sampler;
-@group(2) @binding(5) 
+@group(2) @binding(4)
 var Layer4_: texture_2d<f32>;
-@group(2) @binding(105) 
+@group(2) @binding(104)
 var Layer4Sampler: sampler;
-@group(2) @binding(6) 
+@group(2) @binding(5)
 var Layer5_: texture_2d<f32>;
-@group(2) @binding(106) 
+@group(2) @binding(105)
 var Layer5Sampler: sampler;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec2<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec4<f32>;

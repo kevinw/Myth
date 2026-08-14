@@ -16,10 +16,8 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 NormalMotion; // xy = visual motion in world px / second
 };
 
-Texture2D BatchTexture : register(t0, space2);
-SamplerState BatchSampler : register(s0, space2);
-Texture2D NormalMap : register(t1, space2);
-SamplerState NormalSampler : register(s1, space2);
+Texture2D NormalMap : register(t0, space2);
+SamplerState NormalSampler : register(s0, space2);
 
 struct VsInput
 {

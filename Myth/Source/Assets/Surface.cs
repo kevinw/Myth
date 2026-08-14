@@ -215,12 +215,13 @@ public sealed class Surface : IDisposable
 			u[x + 0] = (float)layer.Rotation; u[x + 1] = layer.FlipX ? 1f : 0f; u[x + 2] = layer.FlipY ? 1f : 0f;
 			var a = 4 + SurfaceSpec.MaxLayers * 20 + i * 4;
 			u[a + 0] = layer.Opacity; u[a + 1] = layer.Contrast; u[a + 2] = layer.Bias; u[a + 3] = layer.Quantize;
-			material.Fragment.Samplers[i + 1] = new(layer.Texture.Texture, RepeatSampler);
+			if (i > 0)
+				material.Fragment.Samplers[i] = new(layer.Texture.Texture, RepeatSampler);
 		}
 		material.Fragment.SetUniformBuffer(u);
 
 		batcher.PushMaterial(material);
-		DrawTriangles(batcher, triangles, Color.White * opacity);
+		DrawTriangles(batcher, layers[0].Texture.Texture, triangles, Color.White * opacity);
 		batcher.PopMaterial();
 	}
 
@@ -249,20 +250,20 @@ public sealed class Surface : IDisposable
 			normalTiling.X, normalTiling.Y, normalStrength, time,
 			normalScroll.X, normalScroll.Y, 0f, 0f
 		});
-		material.Fragment.Samplers[1] = new(normalTexture, RepeatSampler);
-
 		batcher.PushMaterial(material);
-		DrawTriangles(batcher, triangles, Color.White);
+		DrawTriangles(batcher, normalTexture, triangles, Color.White);
 		batcher.PopMaterial();
 	}
 
-	static void DrawTriangles(Batcher batcher, ReadOnlySpan<Vertex> triangles, Color color)
+	static void DrawTriangles(Batcher batcher, Texture texture, ReadOnlySpan<Vertex> triangles, Color color)
 	{
+		batcher.PushSampler(RepeatSampler);
 		for (var i = 0; i + 2 < triangles.Length; i += 3)
-			batcher.Triangle(null,
+			batcher.Triangle(texture,
 				triangles[i].Pos, triangles[i + 1].Pos, triangles[i + 2].Pos,
 				triangles[i].World, triangles[i + 1].World, triangles[i + 2].World,
 				color);
+		batcher.PopSampler();
 	}
 
 	public void Dispose()
@@ -277,10 +278,10 @@ public sealed class Surface : IDisposable
 	static Material? normalMaterial;
 
 	static Material BlendMaterial(GraphicsDevice gfx)
-		=> blendMaterial ??= new Material(null, LoadFragment(gfx, "SurfaceBlend", samplerCount: 7));
+		=> blendMaterial ??= new Material(null, LoadFragment(gfx, "SurfaceBlend", samplerCount: 6));
 
 	static Material NormalMaterial(GraphicsDevice gfx)
-		=> normalMaterial ??= new Material(null, LoadFragment(gfx, "SurfaceNormal", samplerCount: 2));
+		=> normalMaterial ??= new Material(null, LoadFragment(gfx, "SurfaceNormal", samplerCount: 1));
 
 	static Shader LoadFragment(GraphicsDevice gfx, string name, int samplerCount)
 	{
