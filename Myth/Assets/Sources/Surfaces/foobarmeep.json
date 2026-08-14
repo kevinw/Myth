@@ -3,7 +3,7 @@
     {
       "Texture": "patterns/noise/Noise_054",
       "Blend": "Over",
-      "Tint": "9e8e19ff",
+      "Tint": "9e5519ff",
       "BlackColor": "010101ff",
       "Opacity": 0.64,
       "Tiling": [
@@ -52,8 +52,8 @@
     },
     {
       "Texture": "patterns/noise/Noise_006",
-      "Blend": "Darken",
-      "Tint": "b8b0a8ff",
+      "Blend": "Difference",
+      "Tint": "40476bff",
       "BlackColor": "b25116ff",
       "Opacity": 0,
       "Tiling": [

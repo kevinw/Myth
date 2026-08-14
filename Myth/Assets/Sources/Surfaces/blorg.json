@@ -52,7 +52,7 @@
     },
     {
       "Texture": "patterns/pattern_45",
-      "Blend": "Multiply",
+      "Blend": "Add",
       "Tint": "eb9e2c36",
       "BlackColor": "031d03ff",
       "Opacity": 1,
@@ -65,14 +65,14 @@
         0
       ],
       "Scroll": [
-        -0.3,
+        0.7,
         0
       ],
       "Rotation": "None",
       "FlipX": false,
       "FlipY": false,
       "Contrast": 1,
-      "Bias": -0.01,
+      "Bias": 0.41,
       "Quantize": 0
     },
     {
