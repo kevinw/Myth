@@ -41,6 +41,7 @@
     <NoWarn>$(NoWarn);IDE0130</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
     <ApplicationIcon>AppIcon.ico</ApplicationIcon>
