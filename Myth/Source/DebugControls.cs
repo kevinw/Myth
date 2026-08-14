@@ -28,6 +28,7 @@ public class DebugControls
 	public readonly VirtualAction RenderTargets;
 	public readonly VirtualAction PlatformNavView;
 	public readonly VirtualAction AtlasWander;
+	public readonly VirtualAction RenderTargetShake;
 	public readonly VirtualAction CenterCamera;
 	public readonly VirtualAction PerfReveal;
 	public readonly VirtualAction VoiceTest;
@@ -94,6 +95,9 @@ public class DebugControls
 		AtlasWander = Make("DebugAtlasWander",
 			new ActionBindingSet().Add(Keys.J),
 			"J", "Atlas wander", Context.Playing);
+		RenderTargetShake = Make("DebugRenderTargetShake",
+			new ActionBindingSet().Add(Keys.K),
+			"K / Shift+K", "Test target-space shake / toggle shake mode", Context.Playing);
 		CenterCamera = Make("DebugCenterCamera",
 			new ActionBindingSet().Add(Keys.L),
 			"L", "Center camera on player", Context.Playing);

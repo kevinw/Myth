@@ -239,6 +239,9 @@ static class Inbetweens
 	private static (Image[] Frames, float[] Durations)? GenerateWithRustCli(
 		string name, Image[] frames, Aseprite ase, int count)
 	{
+#if BROWSER
+		return null;
+#else
 		if (frames.Length < 2)
 			return null;
 
@@ -326,6 +329,7 @@ static class Inbetweens
 		{
 			try { Directory.Delete(tempDir, true); } catch { }
 		}
+#endif
 	}
 
 	// ── C# optical-flow implementation ──────────────────────────────

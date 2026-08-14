@@ -43,6 +43,13 @@ public partial class Game
 		if (debug.CollisionView.Pressed) ToggleDebugView(DebugView.CollisionRects);
 		if (debug.NormalsView.Pressed) ToggleDebugView(DebugView.NormalBuffer);
 		if (debug.AtlasWander.Pressed) ToggleAtlasWander();
+		if (debug.RenderTargetShake.Pressed)
+		{
+			if (Input.Keyboard.Shift)
+				ToggleRenderTargetShakeMode();
+			else
+				DebugShakeRenderTarget();
+		}
 		if (debug.CenterCamera.Pressed) ToggleDebugCenterCamera();
 		if (debug.PerfReveal.Pressed) PerfToggles.RevealOne(this, !Input.Keyboard.Shift);
 
@@ -77,6 +84,12 @@ public partial class Game
 		if (!AtlasWander)
 			View?.ResetAtlasWander();
 		DisplayMessage($"Atlas Wander: {(AtlasWander ? "On" : "Off")}");
+	}
+
+	void ToggleRenderTargetShakeMode()
+	{
+		ShakeInRenderTargetSpace = !ShakeInRenderTargetSpace;
+		DisplayMessage($"Shake Space: {(ShakeInRenderTargetSpace ? "Render Target" : "World")}");
 	}
 
 #if DEBUG

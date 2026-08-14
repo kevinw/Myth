@@ -52,5 +52,5 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float minValue = ChannelMinMaxPadding.y;
     float maxValue = ChannelMinMaxPadding.z;
     value = saturate((value - minValue) / max(maxValue - minValue, 0.0001));
-    return float4(value, value, value, field.a) * input.Color;
+    return float4(value, value, value, channel == 2 ? 1.0 : field.a) * input.Color;
 }

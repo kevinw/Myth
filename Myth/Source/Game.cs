@@ -115,6 +115,10 @@ public partial class Game : IDisposable
 	internal Vector2 ditherGlitchAxis = Vector2.UnitX;
 	internal Vector2? ditherGlitchPosition;
 	internal Point2 shake;
+	internal Vector2 renderTargetShake;
+	internal bool ShakeInRenderTargetSpace;
+	float renderTargetShaking;
+	float renderTargetShakeStepTimer;
 	internal Rng rng = new();
 	internal Cutscene? ActiveCutscene;
 
@@ -601,6 +605,7 @@ public partial class Game : IDisposable
 			FinishRoomActivation(RoomChangeKind.EdgeTransition);
 		}
 
+		UpdateRenderTargetShake();
 		if (!Simulating) UpdateAudioListener();
 #if BROWSER
 		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
@@ -627,6 +632,28 @@ public partial class Game : IDisposable
 		}
 		else
 			shake = Point2.Zero;
+	}
+
+	static float RenderTargetShakeAmount => 4f.T(0, 4);
+	static float RenderTargetShakeFrequency => 88.9570007f.T(1, 120);
+	static float DebugRenderTargetShakeSeconds => 0.226999998f.T(0, 2);
+
+	void UpdateRenderTargetShake()
+	{
+		if (renderTargetShaking <= 0)
+		{
+			renderTargetShake = Vector2.Zero;
+			renderTargetShakeStepTimer = 0;
+			return;
+		}
+
+		renderTargetShaking -= Time.Delta;
+		renderTargetShakeStepTimer -= Time.Delta;
+		if (renderTargetShakeStepTimer > 0)
+			return;
+
+		renderTargetShakeStepTimer += 1.0f / RenderTargetShakeFrequency;
+		renderTargetShake = rng.Vec2() * RenderTargetShakeAmount;
 	}
 
 	internal void ChangeTimeScale(int direction)
@@ -2601,7 +2628,17 @@ public partial class Game : IDisposable
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
 
-	public void Shake(float time) => shaking = MathF.Max(shaking, time);
+	public void Shake(float time)
+	{
+		if (ShakeInRenderTargetSpace)
+			ShakeRenderTarget(time);
+		else
+			shaking = MathF.Max(shaking, time);
+	}
+
+	public void ShakeRenderTarget(float time) => renderTargetShaking = MathF.Max(renderTargetShaking, time);
+
+	internal void DebugShakeRenderTarget() => ShakeRenderTarget(DebugRenderTargetShakeSeconds);
 
 	public void PulseDitherGlitch(Vector2? axis = null, float amount = 1.0f)
 	{

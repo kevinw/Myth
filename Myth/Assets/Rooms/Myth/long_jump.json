@@ -99,6 +99,18 @@
       "Id": "073d6ce30ffe7462",
       "Type": "Jumpthru",
       "Position": [192, 144]
+    },
+    {
+      "Id": "e4e8eacaee941703",
+      "Type": "Prop",
+      "Position": [110, 67],
+      "SpriteName": "Props/chair"
+    },
+    {
+      "Id": "a5c519eea3622476",
+      "Type": "Prop",
+      "Position": [160, 104],
+      "SpriteName": "Props/server"
     }
   ]
 }

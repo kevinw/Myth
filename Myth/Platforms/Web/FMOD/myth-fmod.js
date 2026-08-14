@@ -157,10 +157,9 @@ export function getEventParameterLabels(eventPath, parameterName) {
 	const parameter = {};
 	check(description.getParameterDescriptionByName(parameterName, parameter), `Failed to find FMOD parameter '${parameterName}' on event '${eventPath}'`);
 
-	const min = Math.floor(parameter.minimum ?? 0);
-	const max = Math.floor(parameter.maximum ?? -1);
+	const count = Math.max(0, Math.floor((parameter.maximum ?? -1) - (parameter.minimum ?? 0)) + 1);
 	const labels = [];
-	for (let i = min; i <= max; i++) {
+	for (let i = 0; i < count; i++) {
 		const label = {};
 		try {
 			check(description.getParameterLabelByName(parameterName, i, label), `Failed to find FMOD parameter label ${i} for '${parameterName}'`);

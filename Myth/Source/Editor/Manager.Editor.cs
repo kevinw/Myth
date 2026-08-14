@@ -1751,6 +1751,15 @@ public partial class Manager
 				return true;
 			}
 		}
+		else if (IsProceduralWallTextureProperty(actor, property))
+		{
+			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			if (DrawSurfaceTexturePicker(ref value, controlWidth))
+			{
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
+			}
+		}
 		else if (property.Type == typeof(float))
 		{
 			var value = property.Value?.GetValue<float>() ?? 0;
@@ -2510,6 +2519,11 @@ public partial class Manager
 	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && property.Name == "SurfaceId";
 
+	static bool IsProceduralWallTextureProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+		=> property.Type == typeof(string) && ActorSpecs.GetTypeName(actor) is { } typeName &&
+			ActorSpecs.GetActorType(typeName) is { } actorType && typeof(ProceduralWall).IsAssignableFrom(actorType) &&
+			property.Name is nameof(ProceduralWall.PatternTexture) or nameof(ProceduralWall.DetailTexture);
+
 	// A "color picker"-style surface selector: a preview button that opens a grid of
 	// surface previews. Returns true (and updates value) when a surface is chosen; an
 	// empty string selects "None" (solid fill).
@@ -2909,9 +2923,9 @@ public partial class Manager
 			if (!typeof(IResizable).IsAssignableFrom(type))
 				continue;
 
-			var sizeField = type.GetField("DefaultSize", BindingFlags.Public | BindingFlags.Static)
+			var sizeField = type.GetField("DefaultSize", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
 				?? throw new InvalidOperationException($"Resizable actor '{type.Name}' is missing a public static \"DefaultSize\" field.");
-			var axesField = type.GetField(nameof(Jumpthru.ResizableAxes), BindingFlags.Public | BindingFlags.Static);
+			var axesField = type.GetField(nameof(Jumpthru.ResizableAxes), BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
 			var axes = axesField != null ? (ResizeAxes)axesField.GetValue(null)! : ResizeAxes.Both;
 			result[name] = new ResizableInfo((Point2)sizeField.GetValue(null)!, axes);
 		}

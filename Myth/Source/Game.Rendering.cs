@@ -40,10 +40,12 @@ public sealed partial class GameView
 
 		using (PerfStats.Time(PerfStat.World))
 		{
-			using (GraphicsDevice.DebugGroup("Myth/room color fields"))
-				DrawRoomColorFields();
+			using (GraphicsDevice.DebugGroup("Myth/background color field"))
+				hasBackgroundColorField = DrawRoomColorField(ColorField, background: true);
 			using (GraphicsDevice.DebugGroup("Myth/background world"))
 				DrawWorldLayer(BackgroundScreen, background: true);
+			using (GraphicsDevice.DebugGroup("Myth/foreground color field"))
+				hasForegroundColorField = DrawRoomColorField(ColorField, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/foreground world"))
 				DrawWorldLayer(ForegroundScreen, background: false);
 			using (GraphicsDevice.DebugGroup("Myth/water"))
@@ -88,25 +90,29 @@ public sealed partial class GameView
 			{
 				using (GraphicsDevice.DebugGroup("Myth/tile field"))
 					DrawTileField();
-				using (GraphicsDevice.DebugGroup("Myth/dither mask"))
-					DrawDitherMask();
+				using (GraphicsDevice.DebugGroup("Myth/actor tile field"))
+					DrawActorTileField();
 			}
 		}
 		else
 		{
 			TileField.Clear(Color.Transparent);
-			DitherMask.Clear(Color.White);
+			ClearActorTileField();
 		}
 
 		Target output;
 		if (debugView is DebugView.TileFieldRed or DebugView.TileFieldGreen)
 		{
 			using (GraphicsDevice.DebugGroup("Myth/tile field debug"))
-				output = DrawTileFieldDebug();
+				output = DrawFieldDebug(TileField, TileFieldDebugChannel());
 		}
 		else if (debugView == DebugView.DitherMask)
 		{
-			output = DitherMask;
+			using (GraphicsDevice.DebugGroup("Myth/dither mask debug"))
+			{
+				DrawDitherMask();
+				output = DrawFieldDebug(NormalBuffer, 2);
+			}
 		}
 		else
 		{
@@ -187,7 +193,7 @@ public sealed partial class GameView
 			// cover-fitting the 16:9 frame so its sides are cropped; aspectUncrop lerps back to a
 			// contained (full, letterboxed) frame while Zoom is held. The cover-scaled frame
 			// overflows the present region, so clip it to never bleed past the pillarbox bars.
-			var center = present.Center;
+			var center = (Vector2)present.Center + RenderTargetShake;
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
@@ -300,23 +306,24 @@ public sealed partial class GameView
 		rendering.Clear();
 		rendering.AddRange(Actors);
 		rendering.Sort((a, b) => b.Depth - a.Depth);
+		hasProceduralWalls = proceduralWallRenderer?.Prepare(rendering) ?? false;
 	}
 
-	Target DrawTileFieldDebug()
+	Target DrawFieldDebug(Target field, int channel)
 	{
 		Screen.Clear(Color.Transparent);
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		if (tileFieldDebugMaterial != null)
 		{
 			tileFieldDebugMaterial.Material.Fragment.SetUniformBuffer([
-				TileFieldDebugChannel(),
+				channel,
 				0,
 				1,
 				0
 			]);
 			Batcher.PushMaterial(tileFieldDebugMaterial.Material);
 		}
-		Batcher.Image(TileField, TileField.Bounds.Center, TileField.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.Image(field, field.Bounds.Center, field.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		if (tileFieldDebugMaterial != null)
 			Batcher.PopMaterial();
 		Batcher.PopSampler();
@@ -336,14 +343,17 @@ public sealed partial class GameView
 	{
 		target.Clear(Color.Transparent);
 		if (background)
-			DrawBackdrop(target);
-
-		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
 		{
+			DrawBackdrop(target);
 			Batcher.Render(target);
 			Batcher.Clear();
-			return;
+			if (ShowBackgroundLayer && hasProceduralWalls)
+				proceduralWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+					ProceduralWallRenderer.Pass.Color);
 		}
+
+		if ((background && !ShowBackgroundLayer) || (!background && !ShowForegroundLayer))
+			return;
 
 		PushWorldMatrix();
 		var atlasWander = PushAtlasWanderMaterial();
@@ -404,12 +414,6 @@ public sealed partial class GameView
 		Batcher.PopMatrix();
 	}
 
-	void DrawRoomColorFields()
-	{
-		hasBackgroundColorField = DrawRoomColorField(BackgroundColorField, background: true);
-		hasForegroundColorField = DrawRoomColorField(ForegroundColorField, background: false);
-	}
-
 	bool DrawRoomColorField(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
@@ -442,7 +446,7 @@ public sealed partial class GameView
 		if (!hasField)
 			return PushPropDecalMaterial(actor);
 
-		var field = background ? BackgroundColorField : ForegroundColorField;
+		var field = ColorField;
 		if (actor is Prop { Decal: true })
 		{
 			var coverage = background ? BackgroundCoverage : ParticleSolidMask;
@@ -634,6 +638,7 @@ public sealed partial class GameView
 	static bool IsBackgroundActor(Actor actor)
 		=> actor switch
 		{
+			ProceduralWall => true,
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
 			Prop prop => prop.Layer == Factory.TileLayer.Background,
@@ -676,6 +681,9 @@ public sealed partial class GameView
 	void DrawEmissiveLayer(Target target, bool background)
 	{
 		target.Clear(Color.Transparent);
+		if (background && ShowBackgroundLayer && hasProceduralWalls)
+			proceduralWallRenderer?.Render(target, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				ProceduralWallRenderer.Pass.Emissive);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -900,6 +908,11 @@ public sealed partial class GameView
 			return ForegroundScreen;
 
 		DrawGpuLightMasks();
+		if (PerfToggles.DitherAndTileField && debugView != DebugView.NormalBuffer)
+		{
+			using (GraphicsDevice.DebugGroup("Myth/dither mask"))
+				DrawDitherMask();
+		}
 
 		var aoStrength = 0.0f;
 		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
@@ -912,9 +925,9 @@ public sealed partial class GameView
 		CompositeLighting(aoStrength);
 
 		if (PerfToggles.LightingNoise)
-			ApplyLightingNoise(LitScreen);
+			ApplyLightingNoise(Screen);
 
-		return LitScreen;
+		return Screen;
 	}
 
 	void ApplyLightingNoise(Target target)
@@ -984,25 +997,25 @@ public sealed partial class GameView
 	{
 		var material = lightingCompositeMaterial!.Material;
 
-		LitScreen.Clear(Color.Transparent);
+		Screen.Clear(Color.Transparent);
 		material.Fragment.Samplers[1] = new(BackgroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[2] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[3] = new(DitherMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[4] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[5] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		material.Fragment.Samplers[6] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[7] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[8] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
-		material.Fragment.Samplers[9] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[10] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
-		material.Fragment.Samplers[11] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[3] = new(BackgroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[4] = new(AoMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[5] = new(BackgroundCoverage, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[6] = new(ForegroundScreen, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[7] = new(ForegroundLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[8] = new(ForegroundEmissive, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[9] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.AmbientOcclusionOffset;
 		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
 		var i = 0;
-		uniforms[i++] = LitScreen.Width;
-		uniforms[i++] = LitScreen.Height;
+		uniforms[i++] = Screen.Width;
+		uniforms[i++] = Screen.Height;
 		uniforms[i++] = renderCamera.X;
 		uniforms[i++] = renderCamera.Y;
 		uniforms[i++] = CurrentDitherEnabled() ? 1.0f : 0.0f;
@@ -1023,7 +1036,7 @@ public sealed partial class GameView
 		uniforms[i++] = Manager.AmbientOcclusionMinVisibility;
 		uniforms[i++] = CurrentDitherSlopeBoost();
 		uniforms[i++] = CurrentDitherQuantization() ? NormalDitherLevels : 0;
-		uniforms[i++] = 0;
+		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
 		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
@@ -1033,7 +1046,7 @@ public sealed partial class GameView
 		Batcher.Image(BackgroundScreen, BackgroundScreen.Bounds.Center, BackgroundScreen.Bounds.Size / 2, Vector2.One, 0, Color.White);
 		Batcher.PopMaterial();
 		Batcher.PopSampler();
-		Batcher.Render(LitScreen);
+		Batcher.Render(Screen);
 		Batcher.Clear();
 	}
 
@@ -1130,6 +1143,28 @@ public sealed partial class GameView
 		Batcher.PopMatrix();
 		Batcher.Render(TileField);
 		Batcher.Clear();
+	}
+
+	void DrawActorTileField()
+	{
+		if (!ShowBackgroundLayer || !hasProceduralWalls)
+		{
+			ClearActorTileField();
+			return;
+		}
+
+		ActorTileField.Clear(Color.Transparent);
+		proceduralWallRenderer?.Render(ActorTileField, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+			ProceduralWallRenderer.Pass.ActorTileField);
+		actorTileFieldPopulated = true;
+	}
+
+	void ClearActorTileField()
+	{
+		if (!actorTileFieldPopulated)
+			return;
+		ActorTileField.Clear(Color.Transparent);
+		actorTileFieldPopulated = false;
 	}
 
 	void DrawCachedRoomTileField(RoomTileFieldCache cache) =>
@@ -1241,7 +1276,7 @@ public sealed partial class GameView
 
 	void DrawDitherMask()
 	{
-		DitherMask.Clear(Color.White);
+		Batcher.PushBlend(DitherBufferBlend);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -1257,7 +1292,8 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
-		Batcher.Render(DitherMask);
+		Batcher.PopBlend();
+		Batcher.Render(NormalBuffer);
 		Batcher.Clear();
 	}
 
@@ -1744,6 +1780,9 @@ public sealed partial class GameView
 	void DrawNormalBuffer()
 	{
 		NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
+		if (ShowBackgroundLayer && hasProceduralWalls)
+			proceduralWallRenderer?.Render(NormalBuffer, rendering, RenderCamera, zoomLevel, Time.SecondsF,
+				ProceduralWallRenderer.Pass.Normals);
 		RoomNormalCache? currentRoomNormalCache = null;
 		RoomNormalCache? nextRoomNormalCache = null;
 		if (ShowForegroundLayer)
@@ -1754,6 +1793,7 @@ public sealed partial class GameView
 				nextRoomNormalCache = GetRoomNormalCache(nextRoom);
 		}
 
+		Batcher.PushBlend(NormalBufferBlend);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
 		{
@@ -1792,6 +1832,7 @@ public sealed partial class GameView
 		}
 
 		Batcher.PopMatrix();
+		Batcher.PopBlend();
 		Batcher.Render(NormalBuffer);
 		Batcher.Clear();
 	}
@@ -2134,19 +2175,19 @@ public sealed partial class GameView
 		Screen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GameScreen"));
 		BackgroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundScreen"));
 		ForegroundScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundScreen"));
-		BackgroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundColorField"));
-		ForegroundColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundColorField"));
+		ColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ColorField"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
-		LitScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LitScreen"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
-		DitherMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "DitherMask"));
+		ActorTileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "ActorTileField"));
+		ActorTileField.Clear(Color.Transparent);
+		actorTileFieldPopulated = false;
 		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
 		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
@@ -2380,6 +2421,14 @@ public sealed partial class GameView
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendMask.Red | BlendMask.Green, Color.White);
+	static readonly BlendMode NormalBufferBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Red | BlendMask.Green | BlendMask.Alpha, Color.White);
+	static readonly BlendMode DitherBufferBlend = new(
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Blue, Color.White);
 
 	static float DitherGlitchRadius => 150.0f;
 	static float NormalDitherLevels => 4.0f;
@@ -2391,24 +2440,25 @@ public sealed partial class GameView
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
 	readonly GpuLighting? gpuLighting;
+	readonly ProceduralWallRenderer? proceduralWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
+	bool hasProceduralWalls;
+	bool actorTileFieldPopulated;
 	public Target Screen { get; private set; } = null!;
 
 	Target BackgroundScreen { get; set; } = null!;
 	Target ForegroundScreen { get; set; } = null!;
-	Target BackgroundColorField { get; set; } = null!;
-	Target ForegroundColorField { get; set; } = null!;
+	Target ColorField { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
 	Target ForegroundEmissive { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
-	Target LitScreen { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
-	Target DitherMask { get; set; } = null!;
+	Target ActorTileField { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
 	Target SpriteShadowMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;

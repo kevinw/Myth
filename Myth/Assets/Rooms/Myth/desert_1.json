@@ -3,6 +3,7 @@
   "size": [80, 23],
   "backdropColor": "BDBD8D",
   "ambientColor": "BABA94",
+  "ambientIntensity": 0.989,
   "lightNoise": 0,
   "playerLight": false,
   "sporeFogStrength": 0.041,

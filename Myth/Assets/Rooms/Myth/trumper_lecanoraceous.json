@@ -1,7 +1,7 @@
 {
   "position": [200, 69],
   "size": [40, 23],
-  "ambientColor": "868686",
+  "ambientColor": "525252",
   "legend": {
     "T": "stone"
   },
@@ -58,6 +58,28 @@
       "Position": [88, 64],
       "Size": [32, 32],
       "TravelDistance": 50
+    },
+    {
+      "Id": "1c0d7ec2b7614287",
+      "Type": "MachineWall",
+      "Position": [0, 0],
+      "Size": [320, 183],
+      "Motion": 2.55,
+      "PipeMinWidth": 1.45,
+      "PipeMaxWidth": 19,
+      "PipeBend": 1.6,
+      "PipeDensity": 3.45,
+      "ControlPanelDensity": 1.45,
+      "LedBrightness": 0.3,
+      "Seed": 38,
+      "TextureScale": 1.65,
+      "PatternTexture": "patterns/pattern_49",
+      "DetailTexture": "patterns/noise/Noise_087",
+      "MetalColor": "666666",
+      "PipeColor2": "A08740",
+      "PipeColor1": "287B7E",
+      "PipeColor3": "843E3E",
+      "PipeColor4": "888E8B"
     }
   ]
 }

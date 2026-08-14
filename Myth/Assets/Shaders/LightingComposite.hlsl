@@ -24,7 +24,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
-    float4 NormalDitherSettings; // x = slope boost, y = quantization levels
+    float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -37,32 +37,32 @@ SamplerState LightSampler : register(s1, space2);
 Texture2D TileFieldTexture : register(t2, space2);
 SamplerState TileFieldSampler : register(s2, space2);
 
-Texture2D DitherMaskTexture : register(t3, space2);
-SamplerState DitherMaskSampler : register(s3, space2);
+Texture2D EmissiveTexture : register(t3, space2);
+SamplerState EmissiveSampler : register(s3, space2);
 
-Texture2D EmissiveTexture : register(t4, space2);
-SamplerState EmissiveSampler : register(s4, space2);
+Texture2D AoTexture : register(t4, space2);
+SamplerState AoSampler : register(s4, space2);
 
-Texture2D AoTexture : register(t5, space2);
-SamplerState AoSampler : register(s5, space2);
+Texture2D BackgroundCoverageTexture : register(t5, space2);
+SamplerState BackgroundCoverageSampler : register(s5, space2);
 
-Texture2D BackgroundCoverageTexture : register(t6, space2);
-SamplerState BackgroundCoverageSampler : register(s6, space2);
+Texture2D ForegroundTexture : register(t6, space2);
+SamplerState ForegroundSampler : register(s6, space2);
 
-Texture2D ForegroundTexture : register(t7, space2);
-SamplerState ForegroundSampler : register(s7, space2);
+Texture2D ForegroundLightTexture : register(t7, space2);
+SamplerState ForegroundLightSampler : register(s7, space2);
 
-Texture2D ForegroundLightTexture : register(t8, space2);
-SamplerState ForegroundLightSampler : register(s8, space2);
+Texture2D ForegroundEmissiveTexture : register(t8, space2);
+SamplerState ForegroundEmissiveSampler : register(s8, space2);
 
-Texture2D ForegroundEmissiveTexture : register(t9, space2);
-SamplerState ForegroundEmissiveSampler : register(s9, space2);
+Texture2D NormalTexture : register(t9, space2);
+SamplerState NormalSampler : register(s9, space2);
 
-Texture2D NormalTexture : register(t10, space2);
-SamplerState NormalSampler : register(s10, space2);
+Texture2D SporeFogTexture : register(t10, space2);
+SamplerState SporeFogSampler : register(s10, space2);
 
-Texture2D SporeFogTexture : register(t11, space2);
-SamplerState SporeFogSampler : register(s11, space2);
+Texture2D ActorTileFieldTexture : register(t11, space2);
+SamplerState ActorTileFieldSampler : register(s11, space2);
 
 struct VsInput
 {
@@ -235,6 +235,12 @@ float pattern_for_family(float family, float variant)
         return choice == 0.0 ? 2.0 : choice == 1.0 ? 9.0 : 10.0;
     if (family == 3.0)
         return choice == 0.0 ? 3.0 : choice == 1.0 ? 5.0 : 1.0;
+    if (family == 5.0)
+        return 0.0;
+    if (family == 6.0)
+        return 6.0;
+    if (family >= 7.0)
+        return 4.0;
     if (family >= 4.0)
         return choice == 0.0 ? 4.0 : choice == 1.0 ? 7.0 : 10.0;
 
@@ -273,7 +279,8 @@ float ellipse_distance(float2 position, float2 origin, float2 axis, float long_r
     return sqrt(along * along + across * across);
 }
 
-float3 dither_light_intensity(float3 light, float2 world_position, float2 pattern_position, float4 tile_field, float dither_mask, float normal_slope)
+float3 dither_light_intensity(float3 light, float2 world_position, float2 pattern_position, float4 tile_field,
+    float dither_mask, float normal_slope, float detail_priority)
 {
     if (DitherSettings.x <= 0.0 && NormalDitherSettings.x <= 0.0 && NormalDitherSettings.y <= 1.0)
         return light;
@@ -302,6 +309,7 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     float threshold = threshold_for_pattern(dither_position, pattern);
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
     threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
+    threshold = saturate(threshold + 0.5 - detail_priority);
     float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
 
 #if 1
@@ -327,9 +335,10 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
 #endif
 }
 
-float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel, float4 tile_field, float dither_mask, float normal_slope)
+float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel,
+    float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
 {
-    light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope);
+    light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
@@ -346,13 +355,31 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background_scene = Texture.Sample(Sampler, sample) * input.color;
     float4 background_light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
-    float dither_mask = DitherMaskTexture.Sample(DitherMaskSampler, sample).r;
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
+    float dither_mask = normal_data.b;
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
     float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
     float2 world_pixel = screen_to_world(input.position, TextureSizeCamera.xy, TextureSizeCamera.zw, zoom);
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
+    float4 background_tile_field = tile_field;
+    float2 background_pattern_pixel = pattern_pixel;
+    float background_detail_priority = 0.5;
+    if (NormalDitherSettings.z > 0.5)
+    {
+        float4 actor_tile_field = ActorTileFieldTexture.Sample(ActorTileFieldSampler, sample);
+        float packed_actor_family_variant = floor(actor_tile_field.r * 255.0 + 0.5);
+        float actor_family = floor(packed_actor_family_variant / 32.0);
+        float actor_variant = fmod(packed_actor_family_variant, 32.0);
+        float actor_coverage = step(0.5, actor_family);
+        float4 decoded_actor_tile_field = float4(actor_variant / 255.0, actor_family * 32.0 / 255.0, 0.0, 1.0);
+        background_tile_field = lerp(tile_field, decoded_actor_tile_field, actor_coverage);
+        float packed_actor_scale_priority = floor(actor_tile_field.g * 255.0 + 0.5);
+        float actor_scale = exp2((floor(packed_actor_scale_priority / 8.0) - 16.0) / 8.0);
+        float actor_detail_priority = fmod(packed_actor_scale_priority, 8.0) / 7.0;
+        background_pattern_pixel = lerp(pattern_pixel, world_pixel / actor_scale, actor_coverage);
+        background_detail_priority = lerp(0.5, actor_detail_priority, actor_coverage);
+    }
 
     // Ambient occlusion: darken the light where blurred foreground coverage
     // overhangs background tiles. Applied to the light buffer before the dither
@@ -368,7 +395,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
         background_light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
     }
 
-    float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope);
+    float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,
+        background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
     background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
@@ -378,6 +406,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
         pattern_pixel,
         tile_field,
         dither_mask,
-        normal_slope);
+        normal_slope,
+        0.5);
     return saturate(foreground + background * (1.0 - foreground.a));
 }
