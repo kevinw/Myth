@@ -84,9 +84,7 @@ jobs:
         working-directory: Myth
         run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip --content-target browser --content-world Myth
 
-      # --aot: full WebAssembly AOT for snappier runtime perf. Requires the Foster
-      # fork's SDL3.cs UnmanagedCallConv strip (committed) or mono-aot-cross SGen-asserts.
-      # The wasm-tools workload already provides the AOT cross-compiler + emscripten packs.
+      # use --aot for WebAssembly AOT for better runtime perf
       - name: Publish browser app (AOT)
         run: node Myth/tools/browser-dotnet.mjs publish -c Release --aot
 
