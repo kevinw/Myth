@@ -12,16 +12,16 @@ public class StrataWall : ProceduralWall
 	public Color FossilColor = new(0xc1b58f);
 	public Color CrystalColor1 = new(0x72b5b0);
 	public Color CrystalColor2 = new(0xc6d5bd);
-	public int LayerCount = 11;
-	public float LayerVariation = 1;
-	public float LayerDepth = 1;
-	public float FaultDensity = 1;
-	public float FaultWidth = 2;
-	public float FossilDensity = 1.35f;
-	public float CrystalDensity = 1.4f;
-	public float CrystalScale = 1;
-	public float Erosion = 0.6f;
-	public float CrackDetail = 0.7f;
+	[I(3, 24)] public int LayerCount = 11;
+	[I(0, 3)] public float LayerVariation = 1;
+	[I(0, 3)] public float LayerDepth = 1;
+	[I(0, 4)] public float FaultDensity = 1;
+	[I(0.5f, 8)] public float FaultWidth = 2;
+	[I(0, 4)] public float FossilDensity = 1.35f;
+	[I(0, 4)] public float CrystalDensity = 1.4f;
+	[I(0.5f, 3)] public float CrystalScale = 1;
+	[I(0, 1)] public float Erosion = 0.6f;
+	[I(0.25f, 4)] public float CrackDetail = 0.7f;
 
 	public StrataWall()
 	{

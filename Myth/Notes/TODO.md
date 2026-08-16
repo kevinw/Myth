@@ -21,7 +21,6 @@
 - One of the characters speaks with curated chain of thought messages from an open model
 - burrow sound needs to be the best sound in the entire game
 - actor search needs a close button to clear the text.
-- maybe you collect poems as currency
 - memory pulse instead of a map; only in the radius around you?
 - Spend an entire day making bud more interesting
   - More barks.

@@ -873,6 +873,7 @@ public partial class Manager : App
 			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
 			editorGameRunInBackground = settings.EditorGameRunInBackground;
 			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
+			editorDockOpen = settings.EditorDockOpen;
 			editorDockWidth = settings.EditorDockWidth > 0
 				? Math.Clamp(settings.EditorDockWidth, EditorDockMinWidth, EditorDockMaxWidth)
 				: DefaultToolDockWidth;
@@ -900,6 +901,7 @@ public partial class Manager : App
 			PreservePlaytestSaveState = preservePlaytestSaveState,
 			EditorGameRunInBackground = editorGameRunInBackground,
 			PasteActorAtViewCenter = pasteActorAtViewCenter,
+			EditorDockOpen = editorDockOpen,
 			EditorDockWidth = editorDockWidth,
 			EditorPaletteWidth = editorPaletteWidth,
 			EditorDockLayoutVersion = EditorDockLayoutVersion,
@@ -921,6 +923,7 @@ public partial class Manager : App
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
 		public bool PasteActorAtViewCenter { get; init; } = true;
+		public bool EditorDockOpen { get; init; } = true;
 		public float EditorDockWidth { get; init; } = DefaultToolDockWidth;
 		public float EditorPaletteWidth { get; init; } = DefaultPaletteDockWidth;
 		public int EditorDockLayoutVersion { get; init; } = Manager.EditorDockLayoutVersion;
@@ -2262,6 +2265,7 @@ public partial class Manager : App
 	void StopGame()
 	{
 #if EDITOR
+		var selectedLiveActorId = liveSelectedActorId;
 		CancelLiveTileEditing();
 		CancelLiveActorEditing(restoreDrag: false);
 #endif
@@ -2273,6 +2277,15 @@ public partial class Manager : App
 			if (game.GetFirst<Player>() is { } player)
 				playtestPlayerPosition = (room.Id, player.Position);
 			SelectRoom(room);
+#if EDITOR
+			if (selectedLiveActorId is { } actorId && CurrentRoom is { } authoredRoom &&
+				FindAuthoredActorIndex(authoredRoom, actorId) is var actorIndex && actorIndex >= 0)
+			{
+				SelectEditorActorTool();
+				selectedRoomActorIndex = actorIndex;
+				editorSelectionRect = null;
+			}
+#endif
 		}
 		MatchEditorCameraToGame();
 		#if EDITOR

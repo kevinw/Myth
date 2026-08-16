@@ -6,10 +6,10 @@ namespace Myth;
 [GameActor(Sprite = "spitter", Tags = ActorTag.Enemy)]
 public class WallSpitter : WallFollowerActor
 {
-	public int Health = 2;
-	public float ShotInterval = 2.0f;
-	public float ShotRange = 120;
-	public float BulletSpeed = 100;
+	[I(1, 10)] public int Health = 2;
+	[I(0.25f, 6)] public float ShotInterval = 2.0f;
+	[I(32, 320)] public float ShotRange = 120;
+	[I(20, 240)] public float BulletSpeed = 100;
 
 	private float shotTimer;
 

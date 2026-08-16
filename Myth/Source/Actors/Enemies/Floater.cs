@@ -6,18 +6,18 @@ using Foster.Framework;
 [GameActor(Tags = ActorTag.Enemy | ActorTag.Flying)]
 public class Floater : Actor
 {
-	public float LaserWarmup = 0.2f;
-	public float LaserGrowTime = 0.12f;
-	public float LaserFadeTime = 0.16f;
-	public float LaserRotationSpeed = 0.10f;
-	public float LaserRange = 260;
-	public float LaserThickness = 3;
+	[I(0.05f, 1.5f)] public float LaserWarmup = 0.2f;
+	[I(0.02f, 0.75f)] public float LaserGrowTime = 0.12f;
+	[I(0.02f, 0.75f)] public float LaserFadeTime = 0.16f;
+	[I(-1, 1)] public float LaserRotationSpeed = 0.10f;
+	[I(48, 480)] public float LaserRange = 260;
+	[I(1, 12)] public float LaserThickness = 3;
 	static float LaserStartPadding => 5;
 	static float LaserEndPadding => 2;
-	public float LaserPopInterval = 0.08f;
-	public float LaserLightRadius = 22;
-	public float LaserLightIntensity = 1.2f;
-	public float LaserLightHeight = 8;
+	[I(0.02f, 0.5f)] public float LaserPopInterval = 0.08f;
+	[I(4, 64)] public float LaserLightRadius = 22;
+	[I(0, 3)] public float LaserLightIntensity = 1.2f;
+	[I(0, 32)] public float LaserLightHeight = 8;
 	public Color LaserLightColor = 0x5fcde4;
 	public string? SurfaceId;
 

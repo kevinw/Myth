@@ -8,8 +8,8 @@ namespace Myth;
 [GameActor(Tags = ActorTag.Obstacle)]
 public class RopePile : Actor
 {
-	public int MaxLength = 160;
-	public float RopeWeight = 1f;
+	[I(32, 512)] public int MaxLength = 160;
+	[I(0.25f, 4)] public float RopeWeight = 1f;
 
 	static float TriggerRadius => 14f;
 	const int DropProbeStep = 4;

@@ -6,8 +6,8 @@ namespace Myth;
 [GameActor(Tags = ActorTag.Enemy)]
 public class Blob : Actor
 {
-	public int Health = 3;
-	public float JumpTimer = 2;
+	[I(1, 10)] public int Health = 3;
+	[I(0.25f, 5)] public float JumpTimer = 2;
 	private bool grounded = true;
 
 	public Blob()

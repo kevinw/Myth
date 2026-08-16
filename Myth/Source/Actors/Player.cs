@@ -1317,7 +1317,7 @@ public partial class Player : Pawn
 	static float HatMaxAngle => 30f * Calc.DegToRad;
 	static float HatMaxVelocityDelta => 250f;
 
-	public int Health = MaxHealth;
+	[I(1, MaxHealth)] public int Health = MaxHealth;
 	public Controls Controls => Game.Controls;
 
 	int footstepFrame = -1;

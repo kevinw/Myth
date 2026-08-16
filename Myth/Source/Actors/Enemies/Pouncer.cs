@@ -14,14 +14,14 @@ public class Pouncer : Actor
 		Recovering
 	}
 
-	public int Health = 2;
-	public float TriggerRange = 88;
-	public float VerticalRange = 42;
-	public float CrouchTime = 0.35f;
-	public float RecoverTime = 0.55f;
-	public float LeapSpeedX = 78;
-	public float LeapSpeedY = 120;
-	public float Gravity = 360;
+	[I(1, 10)] public int Health = 2;
+	[I(24, 224)] public float TriggerRange = 88;
+	[I(16, 128)] public float VerticalRange = 42;
+	[I(0.1f, 1.5f)] public float CrouchTime = 0.35f;
+	[I(0.1f, 2)] public float RecoverTime = 0.55f;
+	[I(20, 180)] public float LeapSpeedX = 78;
+	[I(40, 240)] public float LeapSpeedY = 120;
+	[I(100, 800)] public float Gravity = 360;
 
 	private States state = States.Waiting;
 	private float stateTimer;

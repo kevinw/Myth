@@ -8,8 +8,8 @@ namespace Myth;
 public class Switch : PointPathActor
 {
 	public string TargetActorId = "";
-	public float PulseSpeed = 85f;
-	public float PulseLength = 64f;
+	[I(20, 240)] public float PulseSpeed = 85f;
+	[I(8, 192)] public float PulseLength = 64f;
 
 	bool triggered;
 	float effectDistance;

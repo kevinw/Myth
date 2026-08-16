@@ -29,21 +29,21 @@ public class Spider : Actor
 
 	// behaviour
 	public bool ClimbsWallsAndCeilings;
-	public int Health = 5;
-	public float WalkSpeed = 18f;
+	[I(1, 16)] public int Health = 5;
+	[I(4, 64)] public float WalkSpeed = 18f;
 	public bool LaysSaws = true;
-	public float LayInterval = 3.2f;
-	public float LayRange = 176f;
+	[I(0.5f, 8)] public float LayInterval = 3.2f;
+	[I(32, 320)] public float LayRange = 176f;
 
 	// size & shape
-	public float Scale = 1f;
-	public float BodyRadius = 10f;
-	public float BodyHeight = 0f;   // how high the body rides above the surface
-	public int LegPairs = 4;
-	public float LegLength = 1f;
-	public float LegArch = 1f;      // how tall the leg joints hump up
-	public float LegThickness = 4f;
-	public float StepAnticipation = 0.85f;   // how far ahead (× step reach) feet reach when walking
+	[I(0.5f, 2)] public float Scale = 1f;
+	[I(4, 24)] public float BodyRadius = 10f;
+	[I(-8, 20)] public float BodyHeight = 0f;   // how high the body rides above the surface
+	[I(2, 8)] public int LegPairs = 4;
+	[I(0.5f, 2)] public float LegLength = 1f;
+	[I(0, 2.5f)] public float LegArch = 1f;      // how tall the leg joints hump up
+	[I(1, 8)] public float LegThickness = 4f;
+	[I(0, 1.5f)] public float StepAnticipation = 0.85f;   // how far ahead (× step reach) feet reach when walking
 	public bool Hairy = true;
 
 	// colours

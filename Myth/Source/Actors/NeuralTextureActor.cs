@@ -220,25 +220,25 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	// 128x128 state by default; generated tile regions choose dimensions from FeatureScale.
 	public Point2 SimulationSize = new(StateWidth, StateHeight);
 	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
-	public float StatePixelsPerCell;
+	[I(0, 8)] public float StatePixelsPerCell;
 	public string WeightsFile = DefaultWeightsFile;
 	public string WeightsFile1 = "";
 	public string WeightsFile2 = "";
 	public string WeightsFile3 = "";
-	public float FireRate = 0.5f;
-	public float StepsPerSecond = 30.0f;
-	public float Contrast = 1f;
-	public float Saturation = 1f;
-	public float Brightness;
+	[I(0, 1)] public float FireRate = 0.5f;
+	[I(1, 120)] public float StepsPerSecond = 30.0f;
+	[I(0, 3)] public float Contrast = 1f;
+	[I(0, 3)] public float Saturation = 1f;
+	[I(-1, 1)] public float Brightness;
 	public Color Tint = Color.White;
-	public float NormalStrength = 1f;
-	public float SilhouetteNormalStrength = 1f;
-	public float DetailScale = 1f;
+	[I(0, 4)] public float NormalStrength = 1f;
+	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
+	[I(0.1f, 4)] public float DetailScale = 1f;
 	public Vector2 DetailPhase;
-	public float PatchFrequency = 1f;
-	public float SirenFrequency = 10f;
-	public float LatentGain = 1f;
-	public float LatentBias;
+	[I(0, 4)] public float PatchFrequency = 1f;
+	[I(0, 30)] public float SirenFrequency = 10f;
+	[I(0, 3)] public float LatentGain = 1f;
+	[I(-2, 2)] public float LatentBias;
 	public bool NearestStateSampling;
 	public Factory.TileLayer Layer = Factory.TileLayer.Background;
 	public char MaterialTile;

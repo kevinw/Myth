@@ -6,9 +6,9 @@ namespace Myth;
 [GameActor(Sprite = "Editor/wildlife", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.Decoration)]
 public class Wildlife : Actor
 {
-	public int FishCount = 12;
-	public int BugCount = 10;
-	public int FlyCount = 6;
+	[I(0, 64)] public int FishCount = 12;
+	[I(0, 64)] public int BugCount = 10;
+	[I(0, 64)] public int FlyCount = 6;
 
 	static int MaxCount => 64;
 	static float FishSpeed => 10f;

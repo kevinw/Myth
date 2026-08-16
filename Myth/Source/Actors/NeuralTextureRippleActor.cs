@@ -17,18 +17,18 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 	float sourceStoppedAt = -1;
 	float sourceStoppedLeadRadius;
 	// World units a ring travels per second.
-	public float RingSpeed = 70f;
+	[I(10, 200)] public float RingSpeed = 70f;
 	// World-unit gap between successive rings; the ripple period is RingSpacing / RingSpeed.
-	public float RingSpacing = 44f;
+	[I(8, 128)] public float RingSpacing = 44f;
 	// Rings fade to nothing and recycle once they reach this radius from the origin.
-	public float MaxRadius = DefaultMaxRadius;
+	[I(32, 320)] public float MaxRadius = DefaultMaxRadius;
 	// Peak erase strength at the origin, before the per-ring distance fade (clamped to 1 in shader).
-	public float Strength = 0.5f;
+	[I(0.05f, 1)] public float Strength = 0.5f;
 	// Base ring thickness (stamp radius). Rings also thicken as they expand so they stay unbroken.
-	public float Thickness = 5f;
+	[I(1, 16)] public float Thickness = 5f;
 	// Stamps placed around each ring. More closes gaps on large rings at the cost of the shared
 	// 64-stamp perturbation budget.
-	public int StampsPerRing = 16;
+	[I(4, 32)] public int StampsPerRing = 16;
 	static float DefaultMaxRadius => 130f;
 
 	public NeuralTextureRippleActor()

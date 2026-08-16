@@ -14,12 +14,14 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	// Dual (marching-squares) tileset the platform is skinned with -- supplies color + normals so it
 	// lights and reflects like solid tiles. Editor-pickable; see Manager.Editor material picker.
 	public string Material = "metal-dual";
-	public float WaitTime = WAIT_TIME;
+	[I(0, 5)] public float WaitTime = WAIT_TIME;
 	const float WAIT_TIME = 0.856f;
-	public float Speed = 30f;
-	public float StartFriction = 8f;
+	[I(5, 160)] public float Speed = 30f;
+	[I(0, 24)] public float StartFriction = 8f;
 	float currentSpeed;
-	public int TravelDistance = 80;
+	[I(8, 512)] public int TravelDistance = 80;
+	public bool ActivatedByWeight;
+	public bool RenderActivationLights;
 
 	public enum MovementMode
 	{
@@ -38,6 +40,8 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	Vector2 circleOffset;
 	Vector2 circleCenterOffset;
 	float waitTimer = WAIT_TIME;
+	bool weightedTravelComplete;
+	bool activationLightsOn;
 	Vector2 moveRemainder;             // sub-pixel travel accumulator (we move in whole pixels)
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
@@ -75,6 +79,8 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		// hitbox here to match the authored footprint rather than the construction-time default.
 		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 		originalPosition = Position;
+		waitTimer = WaitTime;
+		activationLightsOn = !ActivatedByWeight || Mode == MovementMode.Circle;
 		if (StartingDirection(Mode, Facing) is { } startingDirection)
 		{
 			direction = Facing;
@@ -88,6 +94,26 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	public override void Update()
 	{
+		if (ActivatedByWeight && Mode != MovementMode.Circle)
+		{
+			if (weightedTravelComplete)
+			{
+				activationLightsOn = true;
+				return;
+			}
+			activationLightsOn = HasStandingWeight();
+			if (!activationLightsOn)
+			{
+				waitTimer = WaitTime;
+				currentSpeed = 0;
+				moveRemainder = Vector2.Zero;
+				StopAndReleaseSound(ref moveSound, false);
+				return;
+			}
+		}
+		else
+			activationLightsOn = true;
+
 		if (waitTimer > 0)
 		{
 			waitTimer -= Time.Delta;
@@ -129,11 +155,17 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		// bound instantly, since the platform starts there.
 		if (Position == (direction > 0 ? routeBounds.BottomRight : routeBounds.TopLeft))
 		{
-			waitTimer = WaitTime;
 			moveRemainder = Vector2.Zero;
-			direction = -direction;
 			currentSpeed = 0;
 			StopAndReleaseSound(ref moveSound, false);
+			if (ActivatedByWeight)
+			{
+				weightedTravelComplete = true;
+				activationLightsOn = true;
+				return;
+			}
+			waitTimer = WaitTime;
+			direction = -direction;
 		}
 	}
 
@@ -168,13 +200,13 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	void MoveSolid(Point2 step)
 	{
 		riders.Clear();
-		foreach (var actor in Game.Actors) if (IsCarryable(actor))
+		foreach (var actor in Game.Actors) if (CanRidePlatform(actor))
 		{
 			// Riding = standing on top, or — while airborne — hugging a side face (a wall-slide).
 			// Carrying side huggers keeps the player glued as we move, so wall-slide contact
 			// doesn't flicker open 1px at a time (which toggles the slow-slide gravity and makes
 			// the player vibrate). The !Grounded gate excludes things merely standing beside us.
-			if (actor.OverlapsAny(Point2.Down, this)
+			if (IsStandingOnPlatform(actor)
 				|| (!actor.Grounded() && (actor.OverlapsAny(Point2.Left, this) || actor.OverlapsAny(Point2.Right, this))))
 				riders.Add(actor);
 		}
@@ -184,7 +216,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 		Position += step;
 
-		foreach (var actor in Game.Actors) if (IsCarryable(actor))
+		foreach (var actor in Game.Actors) if (CanRidePlatform(actor))
 		{
 			// Overlapping after the move => we ran into it: push. Otherwise, if it was riding on
 			// top, carry it. Both move by the same delta with the actor's own collision, so they
@@ -195,6 +227,20 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 		Mask = savedMask;
 	}
+
+	bool HasStandingWeight()
+	{
+		foreach (var actor in Game.Actors)
+			if (CanRidePlatform(actor) && IsStandingOnPlatform(actor))
+				return true;
+		return false;
+	}
+
+	bool CanRidePlatform(Actor actor)
+		=> IsCarryable(actor) || actor is ICarryable { CarriedBy: null };
+
+	bool IsStandingOnPlatform(Actor actor)
+		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);
 
 	// Occlude light like the dual tiles it's skinned with: DualGrid traces occluder segments from the
 	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
@@ -208,13 +254,29 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			OccluderShape.FromRect(new RectInt(Position.X, Position.Y, Size.X, Size.Y)).AppendSegments(segments);
 	}
 
-	public override void Render(Batcher batcher) => RenderMaterial(batcher, normals: false, Color.White);
+	public override void Render(Batcher batcher)
+	{
+		RenderMaterial(batcher, normals: false, Color.White);
+		RenderActivationLightColor(batcher, 1);
+	}
 	// Spriteless, so the Actor default RenderShadow (which stamps the sprite silhouette into the
 	// particle-collision coverage mask) draws nothing and particles pass straight through. Stamp the
 	// dual-tile art instead: the CoverageMask shader keys off texture alpha, so the mask picks up the
 	// rounded blob corners rather than a bare rectangle.
 	public override void RenderShadow(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
-	public override void RenderNormals(Batcher batcher) => RenderMaterial(batcher, normals: true, Color.White);
+	public override void RenderNormals(Batcher batcher)
+	{
+		RenderMaterial(batcher, normals: true, Color.White);
+		RenderActivationLightNormals(batcher);
+	}
+	public override void RenderEmissive(Batcher batcher)
+	{
+		if (CanRenderActivationLights && activationLightsOn)
+		{
+			batcher.Circle(NorthwestActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * 0.7f);
+			batcher.Circle(NortheastActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * 0.7f);
+		}
+	}
 	// Stamp the platform into the TileField with per-tile field colors (so its dither variation matches
 	// neighboring stone) rather than one flat color. colorForTile maps a cell's anchored world tile to
 	// its field color; falls back to a flat fill when the material is missing.
@@ -245,7 +307,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	}
 
 	public override bool CastsReflection => true;
-	public override void RenderReflection(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+	public override void RenderReflection(Batcher batcher, Color color)
+	{
+		RenderMaterial(batcher, normals: false, color);
+		RenderActivationLightColor(batcher, color.A / 255.0f);
+	}
 
 	// Spriteless, so the sprite-based default is a zero rect; report the real footprint so
 	// reflection culling (and any other visual-bounds consumer) sees the whole platform.
@@ -265,6 +331,62 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			DualGrid.RenderRect(batcher, tileset, TileColumns, TileRows, normals, color, VariantTileOrigin, MaterialTile);
 		else
 			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
+	}
+
+	static float ActivationLightInset => 5;
+	static float ActivationLightRadius => 3;
+	static float ActivationLightLensRadius => 1.75f;
+	static float ActivationLightNormalSlope => 0.8f;
+	const int ActivationLightSteps = 12;
+	static readonly Color ActivationLightHousingColor = new(0x171319);
+	static readonly Color ActivationLightOffColor = new(0x3a3550);
+	static readonly Color ActivationLightColor = new(0x79cfff);
+
+	bool CanRenderActivationLights
+		=> RenderActivationLights && Size.X >= ActivationLightInset * 2 + ActivationLightRadius * 2 && Size.Y >= ActivationLightInset + ActivationLightRadius;
+	Vector2 NorthwestActivationLight => new(ActivationLightInset, ActivationLightInset);
+	Vector2 NortheastActivationLight => new(Size.X - ActivationLightInset, ActivationLightInset);
+
+	void RenderActivationLightColor(Batcher batcher, float opacity)
+	{
+		if (!CanRenderActivationLights)
+			return;
+		var lens = (activationLightsOn ? ActivationLightColor : ActivationLightOffColor) * opacity;
+		var housing = ActivationLightHousingColor * opacity;
+		DrawActivationLightColor(batcher, NorthwestActivationLight, housing, lens);
+		DrawActivationLightColor(batcher, NortheastActivationLight, housing, lens);
+	}
+
+	void RenderActivationLightNormals(Batcher batcher)
+	{
+		if (!CanRenderActivationLights)
+			return;
+		DrawActivationLightInset(batcher, NorthwestActivationLight);
+		DrawActivationLightInset(batcher, NortheastActivationLight);
+	}
+
+	static void DrawActivationLightColor(Batcher batcher, Vector2 center, Color housing, Color lens)
+	{
+		batcher.Circle(center, ActivationLightRadius, ActivationLightSteps, housing);
+		batcher.Circle(center, ActivationLightLensRadius, ActivationLightSteps, lens);
+	}
+
+	static void DrawActivationLightInset(Batcher batcher, Vector2 center)
+	{
+		var flat = new Color(0x8080ff);
+		for (var i = 0; i < ActivationLightSteps; i++)
+		{
+			var a = Calc.AngleToVector(i / (float)ActivationLightSteps * Calc.TAU);
+			var b = Calc.AngleToVector((i + 1) / (float)ActivationLightSteps * Calc.TAU);
+			batcher.Triangle(center, center + a * ActivationLightRadius, center + b * ActivationLightRadius,
+				flat, ActivationLightInsetNormal(a), ActivationLightInsetNormal(b));
+		}
+	}
+
+	static Color ActivationLightInsetNormal(Vector2 direction)
+	{
+		var normal = Vector3.Normalize(new Vector3(-direction * ActivationLightNormalSlope, 1));
+		return new(normal * 0.5f + Vector3.One * 0.5f);
 	}
 
 	int TileColumns => Math.Max(1, Size.X / Game.TileSize);

@@ -5,12 +5,12 @@ namespace Myth;
 
 public abstract class WallFollowerActor : Actor
 {
-	public float Speed = 110;
-	public float Gravity = 360;
-	public float LandingProbeDistance = 1;
-	public float SurfaceProbeDistance = 10;
-	public float CornerProbeDistance = 4;
-	public float MaxSurfaceSnapDistance = 1;
+	[I(0, 240)] public float Speed = 110;
+	[I(0, 800)] public float Gravity = 360;
+	[I(0.5f, 8)] public float LandingProbeDistance = 1;
+	[I(2, 24)] public float SurfaceProbeDistance = 10;
+	[I(1, 12)] public float CornerProbeDistance = 4;
+	[I(0.5f, 8)] public float MaxSurfaceSnapDistance = 1;
 	public bool DebugMovement;
 
 	private Vector2 remainder;
