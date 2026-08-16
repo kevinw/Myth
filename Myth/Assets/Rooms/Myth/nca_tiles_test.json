@@ -78,6 +78,12 @@
       "Id": "ade22c95485fd729",
       "From": "BlueMemoryLight",
       "Position": [204, 44]
+    },
+    {
+      "Id": "fbb291ab512dbccc",
+      "Type": "NeuralTextureActor",
+      "Position": [280, 0],
+      "WeightsFile": "woven_0121_circular.bin"
     }
   ]
 }

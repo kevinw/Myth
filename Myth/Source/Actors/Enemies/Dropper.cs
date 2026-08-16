@@ -15,11 +15,11 @@ public class Dropper : Actor
 		Resetting
 	}
 
-	public int Health = 1;
-	public float TriggerWidth = 24;
-	public float TriggerHeight = 92;
-	public float WarningTime = 0.35f;
-	public float ScuttleTime = 1.4f;
+	[I(1, 10)] public int Health = 1;
+	[I(8, 96)] public float TriggerWidth = 24;
+	[I(24, 256)] public float TriggerHeight = 92;
+	[I(0.1f, 1.5f)] public float WarningTime = 0.35f;
+	[I(0.25f, 4)] public float ScuttleTime = 1.4f;
 
 	private States state = States.Hanging;
 	private float stateTimer;

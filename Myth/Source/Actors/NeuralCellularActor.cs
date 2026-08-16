@@ -102,10 +102,10 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
 
-	public int GridWidth = 96;
-	public int GridHeight = 96;
-	public float FireRate = 0.5f;
-	public float StepsPerSecond = 30.0f;
+	[I(32, 192)] public int GridWidth = 96;
+	[I(32, 192)] public int GridHeight = 96;
+	[I(0, 1)] public float FireRate = 0.5f;
+	[I(1, 120)] public float StepsPerSecond = 30.0f;
 	public string WeightsFile = "lizard_weights.bin";
 
 	/// <summary>
@@ -120,25 +120,25 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 	/// Wave speed for the ripple displacement field's discrete wave equation.
 	/// Higher values propagate hit impulses outward faster.
 	/// </summary>
-	public float RippleWaveSpeed = 0.7f;
+	[I(0.05f, 1)] public float RippleWaveSpeed = 0.7f;
 
 	/// <summary>
 	/// Per-step decay applied to the ripple field (1.0 = no decay). Controls
 	/// how quickly a ripple fades out after a hit.
 	/// </summary>
-	public float RippleDamping = 0.97f;
+	[I(0.8f, 1)] public float RippleDamping = 0.97f;
 
 	/// <summary>
 	/// Scales how far rendered cells are pushed by the local ripple
 	/// gradient, in cells.
 	/// </summary>
-	public float RippleDisplacement = 3.9f;
+	[I(0, 8)] public float RippleDisplacement = 3.9f;
 
 	/// <summary>
 	/// Scales how strongly the ripple wave's amplitude flashes the rendered
 	/// cells toward white.
 	/// </summary>
-	public float RippleTintStrength = 0.8f;
+	[I(0, 1)] public float RippleTintStrength = 0.8f;
 
 	private static Rng rng = new();
 

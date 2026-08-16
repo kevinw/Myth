@@ -12,7 +12,7 @@ public class WindReliquary : Actor, IResizable
 	public Point2 Size { get; set; } = DefaultSize;
 	public Color MetalColor = new(0x8f765d);
 	public Color GlowColor = new(0xa7ecff);
-	public float Resonance = 1f;
+	[I(0, 3)] public float Resonance = 1f;
 
 	public WindReliquary()
 	{

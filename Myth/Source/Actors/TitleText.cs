@@ -13,8 +13,8 @@ public class TitleText : Actor
 
 	float stateDuration;
 	public string Text = string.Empty;
-	public float RevealSpeed = 7.0f;
-	public float LineHeightMultiplier = 1f;
+	[I(0.5f, 30)] public float RevealSpeed = 7.0f;
+	[I(0.5f, 2)] public float LineHeightMultiplier = 1f;
 	public override bool CastsSpriteShadow => false;
 	public bool Emissive = false;
 

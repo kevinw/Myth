@@ -7,16 +7,16 @@ public abstract class ProceduralWall : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);
 
 	public Point2 Size { get; set; } = DefaultSize;
-	public int Seed = 1;
+	[I(1, 9999)] public int Seed = 1;
 	public string PatternTexture = ProceduralWallRenderer.DefaultPatternTexture;
 	public string DetailTexture = ProceduralWallRenderer.DefaultDetailTexture;
-	public float TextureScale = 1;
-	public float DetailScale = 1;
-	public float NormalStrength = 1;
-	public float Specular = 1;
+	[I(0.1f, 4)] public float TextureScale = 1;
+	[I(0.1f, 4)] public float DetailScale = 1;
+	[I(0, 3)] public float NormalStrength = 1;
+	[I(0, 1)] public float Specular = 1;
 	public MachineWallDitherPattern DitherPattern = MachineWallDitherPattern.Auto;
-	public float DitherScale = 0.65f;
-	public float DitherDetailPreservation = 0.35f;
+	[I(0.1f, 2)] public float DitherScale = 0.65f;
+	[I(0, 1)] public float DitherDetailPreservation = 0.35f;
 
 	protected ProceduralWall()
 	{

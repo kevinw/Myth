@@ -14,11 +14,11 @@ public class Watcher : Actor
 		Recovering
 	}
 
-	public int Health = 2;
-	public float WakeRange = 88;
-	public float ShootRange = 120;
-	public float ChargeTime = 0.65f;
-	public float RecoverTime = 1.20f;
+	[I(1, 10)] public int Health = 2;
+	[I(24, 96)] public float WakeRange = 88;
+	[I(96, 256)] public float ShootRange = 120;
+	[I(0.15f, 2)] public float ChargeTime = 0.65f;
+	[I(0.2f, 4)] public float RecoverTime = 1.20f;
 
 	private States state = States.Sleeping;
 	private float stateTimer;

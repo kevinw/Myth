@@ -28,7 +28,7 @@ public class Rope : Actor, IResizable
 
 	// Heavier ropes hang calmer: ambient sway and pump response divide by Weight, damping
 	// multiplies by it.
-	public float Weight = 1f;
+	[I(0.25f, 4)] public float Weight = 1f;
 	// Deployed by a RopePile: points start gathered at the anchor and pay out one per frame as
 	// the falling end pulls taut, so the rope feeds down cleanly instead of tangling on the lip.
 	public bool StartCoiled;

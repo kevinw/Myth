@@ -13,11 +13,11 @@ public class LedgePatrol : Actor
 		Stunned
 	}
 
-	public int Health = 2;
-	public float PatrolSpeed = 34;
-	public float AlertSpeed = 58;
-	public float AlertRange = 72;
-	public float StunnedDuration = 0.45f;
+	[I(1, 10)] public int Health = 2;
+	[I(10, 50)] public float PatrolSpeed = 34;
+	[I(50, 120)] public float AlertSpeed = 58;
+	[I(24, 192)] public float AlertRange = 72;
+	[I(0.1f, 2)] public float StunnedDuration = 0.45f;
 
 	private States state = States.Patrol;
 	private float stateTimer;

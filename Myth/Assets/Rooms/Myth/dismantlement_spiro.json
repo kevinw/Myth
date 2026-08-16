@@ -74,15 +74,6 @@
       "Height": 7
     },
     {
-      "Id": "c72c23b615ec943e",
-      "Type": "TitleText",
-      "Position": [156, 32],
-      "RevealSpeed": 9999999,
-      "Emissive": true,
-      "LineHeightMultiplier": 0.7,
-      "Text": "emerge from bosonic\nto jump higher"
-    },
-    {
       "Id": "ceb9410ecd2965be",
       "Type": "Jumpthru",
       "Position": [104, 64],

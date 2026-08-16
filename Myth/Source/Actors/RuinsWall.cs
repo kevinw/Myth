@@ -12,19 +12,19 @@ public class RuinsWall : ProceduralWall
 	public Color StoneColor3 = new(0x4d5d59);
 	public Color RootColor = new(0x536044);
 	public Color ArtifactColor = new(0x77c7b2);
-	public float BlockScale = 1;
-	public float BlockDepth = 1;
-	public float CourseVariation = 1;
-	public float Damage = 0.45f;
-	public float ArchDensity = 1;
-	public float ArchScale = 1;
-	public float RootDensity = 1;
-	public float RootWidth = 3;
-	public float CrackDensity = 1;
-	public float CrackWidth = 1;
-	public float ArtifactDensity = 1;
-	public float ArtifactGlow = 0.65f;
-	public float RuinDetail = 0.9f;
+	[I(0.25f, 4)] public float BlockScale = 1;
+	[I(0, 3)] public float BlockDepth = 1;
+	[I(0, 3)] public float CourseVariation = 1;
+	[I(0, 1)] public float Damage = 0.45f;
+	[I(0, 4)] public float ArchDensity = 1;
+	[I(0.5f, 3)] public float ArchScale = 1;
+	[I(0, 4)] public float RootDensity = 1;
+	[I(0.5f, 8)] public float RootWidth = 3;
+	[I(0, 4)] public float CrackDensity = 1;
+	[I(0.25f, 4)] public float CrackWidth = 1;
+	[I(0, 4)] public float ArtifactDensity = 1;
+	[I(0, 2)] public float ArtifactGlow = 0.65f;
+	[I(0.25f, 4)] public float RuinDetail = 0.9f;
 
 	public RuinsWall()
 	{

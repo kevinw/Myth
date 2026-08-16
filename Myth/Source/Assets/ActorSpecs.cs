@@ -41,6 +41,7 @@ public static class ActorSpecs
 	private static readonly Dictionary<string, string> specPaths = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, ActorType> actorTypes = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<Type, string> actorNames = new();
+	static readonly Dictionary<MemberInfo, IAttribute?> inspectorMetadata = [];
 #if EDITOR
 	static readonly Dictionary<string, string> savedSpecJson = new(StringComparer.OrdinalIgnoreCase);
 	static readonly HashSet<string> dirtySpecs = new(StringComparer.OrdinalIgnoreCase);
@@ -58,7 +59,8 @@ public static class ActorSpecs
 		Type Type,
 		JsonNode? Value,
 		JsonNode? ResetValue,
-		bool HasLocalValue);
+		bool HasLocalValue,
+		IAttribute? Inspector);
 
 	public static void ClearSpecs()
 	{
@@ -74,6 +76,7 @@ public static class ActorSpecs
 	{
 		actorTypes.Clear();
 		actorNames.Clear();
+		inspectorMetadata.Clear();
 	}
 
 	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name, bool showFacing) where T : Actor
@@ -254,8 +257,16 @@ public static class ActorSpecs
 			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var resetDefaultValue))
 				resetValue = resetDefaultValue;
 
-			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, resetValue, hasLocal);
+			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, resetValue, hasLocal,
+				GetInspectorMetadata(member));
 		}
+	}
+
+	static IAttribute? GetInspectorMetadata(MemberInfo member)
+	{
+		if (!inspectorMetadata.TryGetValue(member, out var metadata))
+			inspectorMetadata[member] = metadata = member.GetCustomAttribute<IAttribute>();
+		return metadata;
 	}
 
 	public static void SetProperty(string id, string jsonName, JsonNode? value)

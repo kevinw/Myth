@@ -15,7 +15,7 @@ public class BurrowLine : PointPathActor
 	internal const int MaxJunctionTransfers = 8;
 
 	public bool RenderProcedural;
-	public float ProceduralWidth = 3f;
+	[I(0.5f, 12)] public float ProceduralWidth = 3f;
 	public Color ProceduralOuterColor = new(0x454a52);
 	public Color ProceduralInnerColor = new(0x959ba5);
 

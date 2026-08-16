@@ -6,12 +6,12 @@ namespace Myth;
 [GameActor(Sprite = "blob", Tags = ActorTag.Enemy)]
 public class Splitter : Actor
 {
-	public int Health = 2;
+	[I(1, 10)] public int Health = 2;
 	public bool Small;
-	public float HopInterval = 1.45f;
-	public float HopSpeedX = 44;
-	public float HopSpeedY = 92;
-	public float Gravity = 340;
+	[I(0.25f, 4)] public float HopInterval = 1.45f;
+	[I(10, 120)] public float HopSpeedX = 44;
+	[I(30, 200)] public float HopSpeedY = 92;
+	[I(100, 800)] public float Gravity = 340;
 
 	private float hopTimer;
 	private bool wasGrounded = true;

@@ -26,14 +26,14 @@ public class Stalker : Pawn
 
 	// Slower than the player on purpose: in-room it can always be outrun. The threat is that
 	// it never stops, not that it wins a footrace.
-	public float SpeedMultiplier = 0.75f;
-	public float SightRange = 160f;
+	[I(0.25f, 1.5f)] public float SpeedMultiplier = 0.75f;
+	[I(32, 320)] public float SightRange = 160f;
 	// Off-screen pursuit speed, px/sec, used to turn distance-to-exit into an arrival delay.
-	public float TravelSpeed = 45f;
-	public float MinArrivalDelay = 1.5f;
-	public float MaxArrivalDelay = 12f;
+	[I(10, 120)] public float TravelSpeed = 45f;
+	[I(0, 4)] public float MinArrivalDelay = 1.5f;
+	[I(5, 24)] public float MaxArrivalDelay = 12f;
 	// Never materialize right on top of the player; hold the arrival until there's room to react.
-	public float MinArrivalDistance = 56f;
+	[I(16, 160)] public float MinArrivalDistance = 56f;
 
 	static float TelegraphTime => 0.9f;
 

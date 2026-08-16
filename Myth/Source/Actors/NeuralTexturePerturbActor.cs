@@ -18,9 +18,9 @@ public class NeuralTexturePerturbActor : Actor, IResizable
 	public NeuralTexturePerturbMode Mode = NeuralTexturePerturbMode.Pawns;
 	public bool DisturbStationary = true;
 	public bool ScaleStrengthWithSpeed = true;
-	public float Strength = 0.35f;
-	public float SpeedForDoubleStrength = 100f;
-	public float Radius = 6f;
+	[I(0, 1)] public float Strength = 0.35f;
+	[I(20, 240)] public float SpeedForDoubleStrength = 100f;
+	[I(1, 32)] public float Radius = 6f;
 
 	public RectInt WorldRect => new(Position, Size);
 
