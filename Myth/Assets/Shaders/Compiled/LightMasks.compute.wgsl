@@ -50,25 +50,25 @@ struct type_u002e_Params {
     SporeFogSunStrength: f32,
 }
 
-@group(0) @binding(0)
+@group(0) @binding(0) 
 var NormalTexture: texture_2d<f32>;
-@group(0) @binding(100)
+@group(0) @binding(100) 
 var NormalSampler: sampler;
-@group(0) @binding(1)
+@group(0) @binding(1) 
 var SporeNoise: texture_2d<f32>;
-@group(0) @binding(101)
+@group(0) @binding(101) 
 var SporeNoiseSampler: sampler;
-@group(0) @binding(2)
+@group(0) @binding(2) 
 var<storage> Lights: type_u002e_StructuredBuffer_u002e_Light;
-@group(0) @binding(3)
+@group(0) @binding(3) 
 var<storage> ShadowDepth: type_u002e_StructuredBuffer_u002e_v2float;
-@group(1) @binding(0)
+@group(1) @binding(0) 
 var BackgroundMask: texture_storage_2d<rgba8unorm,write>;
-@group(1) @binding(1)
+@group(1) @binding(1) 
 var ForegroundMask: texture_storage_2d<rgba8unorm,write>;
-@group(1) @binding(2)
+@group(1) @binding(2) 
 var SporeFogMask: texture_storage_2d<rgba8unorm,write>;
-@group(2) @binding(0)
+@group(2) @binding(0) 
 var<uniform> Params: type_u002e_Params;
 var<private> global: vec3<u32>;
 
@@ -117,7 +117,7 @@ fn compute_main_1() {
     var phi_312_: bool;
     var phi_314_: vec4<f32>;
     var phi_316_: vec4<f32>;
-    var phi_755_: f32;
+    var phi_753_: f32;
     var local: f32;
     var local_1: vec3<f32>;
     var local_2: vec4<f32>;
@@ -470,7 +470,7 @@ fn compute_main_1() {
                     let _e639 = Params.SporeFogStrength;
                     local = _e639;
                     if (_e639 <= 0f) {
-                        phi_755_ = 0f;
+                        phi_753_ = 0f;
                         break;
                     }
                     let _e642 = Params.SporeFogDrift;
@@ -480,11 +480,11 @@ fn compute_main_1() {
                     let _e650 = textureSampleLevel(SporeNoise, SporeNoiseSampler, ((_e146 + _e645) * _e648), 0f);
                     let _e661 = textureSampleLevel(SporeNoise, SporeNoiseSampler, ((((vec2<f32>(-(_e146.y), _e146.x) - (_e645 * 0.4f)) * _e648) * 3.17f) + vec2<f32>(0.37f, 0.61f)), 0f);
                     let _e667 = Params.SporeFogContrast;
-                    phi_755_ = clamp(((((_e650.x * mix(0.75f, 1.25f, _e661.y)) - 0.5f) * _e667) + 0.5f), 0f, 1f);
+                    phi_753_ = clamp(((((_e650.x * mix(0.75f, 1.25f, _e661.y)) - 0.5f) * _e667) + 0.5f), 0f, 1f);
                     break;
                 }
             }
-            let _e672 = phi_755_;
+            let _e672 = phi_753_;
             let _e674 = local;
             let _e678 = local_1;
             let _e682 = (vec3<f32>(1f, 1f, 1f) - exp(-((_e678 * (_e635.xyz * (_e672 * _e674))))));
@@ -500,7 +500,7 @@ fn compute_main_1() {
     return;
 }
 
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(8, 8, 1) 
 fn compute_main(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     compute_main_1();

@@ -28,9 +28,9 @@ struct VertexOutput {
     @builtin(position) member_5: vec4<f32>,
 }
 
-@group(0) @binding(0)
+@group(0) @binding(0) 
 var<storage> Instances: type_u002e_StructuredBuffer_u002e_Instance;
-@group(1) @binding(0)
+@group(1) @binding(0) 
 var<uniform> VertexParams: type_u002e_VertexParams;
 var<private> in_u002e_var_u002e_TEXCOORD0_1: vec3<f32>;
 var<private> in_u002e_var_u002e_TEXCOORD1_1: vec3<f32>;
@@ -134,7 +134,7 @@ fn vertex_main_1() {
     return;
 }
 
-@vertex
+@vertex 
 fn vertex_main(@location(0) in_u002e_var_u002e_TEXCOORD0_: vec3<f32>, @location(1) in_u002e_var_u002e_TEXCOORD1_: vec3<f32>, @location(2) in_u002e_var_u002e_TEXCOORD2_: vec2<f32>, @location(3) in_u002e_var_u002e_TEXCOORD3_: vec3<f32>, @builtin(instance_index) param: u32) -> VertexOutput {
     in_u002e_var_u002e_TEXCOORD0_1 = in_u002e_var_u002e_TEXCOORD0_;
     in_u002e_var_u002e_TEXCOORD1_1 = in_u002e_var_u002e_TEXCOORD1_;

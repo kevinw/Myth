@@ -135,7 +135,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float response = saturate(input.lightResponse * LightingEnabled);
     if (response > 0.0)
     {
-        float3 light = LightTexture.Sample(LightSampler, input.position.xy / TargetSize).rgb;
+        float3 light = LightTexture.SampleLevel(LightSampler, input.position.xy / TargetSize, 0.0).rgb;
         float3 directLight = max(light - AmbientLight, 0.0);
         float illumination = max(directLight.r, max(directLight.g, directLight.b));
         color.rgb = lerp(color.rgb, color.rgb * directLight * 2.0, response);

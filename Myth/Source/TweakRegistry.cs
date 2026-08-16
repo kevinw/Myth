@@ -1,4 +1,4 @@
-#if !DEBUG
+#if !DEBUG || BROWSER
 namespace Myth;
 
 static class TweakRegistry

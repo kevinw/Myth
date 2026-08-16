@@ -725,8 +725,6 @@ public partial class Manager : App
 		var labels = Audio.GetEventParameterLabels(BackgroundMusicEventPath, BackgroundMusicAreaParameter);
 		if (labels.Length <= 0)
 		{
-			// Expected on the web FMOD bridge (it can't query labels); we fall back
-			// to the default area, so this is a warning, not an error.
 			musicAreas.Add(DefaultMusicArea);
 			Console.WriteLine($"Warning: could not discover FMOD labels for '{BackgroundMusicAreaParameter}' on background music event; using default area.");
 			return;
@@ -1099,7 +1097,7 @@ public partial class Manager : App
 #endif
 		var keyboardShortcutsBlocked = ImGuiWantsKeyboard;
 
-#if DEBUG
+#if DEBUG && !BROWSER
 		// Toggle the Tweaks panel from anywhere — edit or play — except while actively typing into a
 		// text field (so T reaches the search box). Runs before the play/edit branch so both modes see it.
 		if (imgui is { WantsTextInput: false } && Input.Keyboard.Pressed(Keys.T))
@@ -1316,7 +1314,7 @@ public partial class Manager : App
 			DrawCommandConsole();
 			DrawDebugHelp();
 #endif
-#if DEBUG
+#if DEBUG && !BROWSER
 			TweakRegistry.DrawPanel();
 #endif
 			using (PerfStats.Time(PerfDetail.DebugMessageImGui))

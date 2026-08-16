@@ -9,7 +9,9 @@ public sealed class SpriteCatalog : IDisposable
 	readonly GraphicsDevice graphicsDevice;
 	readonly string spritesPath;
 	readonly Lock reloadLock = new();
+#if !BROWSER
 	FileSystemWatcher? watcher;
+#endif
 	bool reloadRequested;
 	float reloadTimer;
 
@@ -84,6 +86,7 @@ public sealed class SpriteCatalog : IDisposable
 
 	public void Watch()
 	{
+#if !BROWSER
 		if (!Directory.Exists(spritesPath))
 			return;
 
@@ -99,6 +102,7 @@ public sealed class SpriteCatalog : IDisposable
 		watcher.Deleted += (_, _) => RequestReload();
 		watcher.Renamed += (_, _) => RequestReload();
 		watcher.EnableRaisingEvents = true;
+#endif
 	}
 
 	public void Update(float dt)
@@ -179,7 +183,9 @@ public sealed class SpriteCatalog : IDisposable
 
 	public void Dispose()
 	{
+#if !BROWSER
 		watcher?.Dispose();
+#endif
 		Atlas?.Dispose();
 	}
 }

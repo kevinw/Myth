@@ -43,7 +43,7 @@ fragment fragment_main_out fragment_main(fragment_main_in in [[stage_in]], const
     float4 _115;
     if (_82 > 0.0)
     {
-        float3 _98 = precise::max(LightTexture.sample(LightSampler, (gl_FragCoord.xy / FragmentParams.TargetSize)).xyz - float3(FragmentParams.AmbientLight), float3(0.0));
+        float3 _98 = precise::max(LightTexture.sample(LightSampler, (gl_FragCoord.xy / FragmentParams.TargetSize), level(0.0)).xyz - float3(FragmentParams.AmbientLight), float3(0.0));
         float3 _108 = mix(_78.xyz, (_78.xyz * _98) * 2.0, float3(_82));
         float4 _109 = float4(_108.x, _108.y, _108.z, _78.w);
         _109.w = _78.w * mix(1.0, smoothstep(0.0199999995529651641845703125, 0.449999988079071044921875, precise::max(_98.x, precise::max(_98.y, _98.z))), _82);

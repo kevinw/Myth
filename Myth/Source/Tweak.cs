@@ -16,7 +16,7 @@ public static class Tweak
 		[CallerFilePath] string file = "",
 		[CallerLineNumber] int line = 0,
 		[CallerArgumentExpression(nameof(value))] string expr = "")
-#if DEBUG
+#if DEBUG && !BROWSER
 		=> TweakRegistry.ResolveFloat(file, line, expr, value, null, null);
 #else
 		=> value;
@@ -28,7 +28,7 @@ public static class Tweak
 		[CallerFilePath] string file = "",
 		[CallerLineNumber] int line = 0,
 		[CallerArgumentExpression(nameof(value))] string expr = "")
-#if DEBUG
+#if DEBUG && !BROWSER
 		=> TweakRegistry.ResolveFloat(file, line, expr, value, min, max);
 #else
 		=> value;
@@ -39,7 +39,7 @@ public static class Tweak
 		[CallerFilePath] string file = "",
 		[CallerLineNumber] int line = 0,
 		[CallerArgumentExpression(nameof(value))] string expr = "")
-#if DEBUG
+#if DEBUG && !BROWSER
 		=> TweakRegistry.ResolveInt(file, line, expr, value, null, null);
 #else
 		=> value;
@@ -51,7 +51,7 @@ public static class Tweak
 		[CallerFilePath] string file = "",
 		[CallerLineNumber] int line = 0,
 		[CallerArgumentExpression(nameof(value))] string expr = "")
-#if DEBUG
+#if DEBUG && !BROWSER
 		=> TweakRegistry.ResolveInt(file, line, expr, value, min, max);
 #else
 		=> value;
