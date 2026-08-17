@@ -434,8 +434,7 @@ public static class Factory
 		// Add Tile Types
 		Register('1', AsDualTile("castle", "castle-dual", BRICK_SUBSTANCE, hasSlope: true));
 		RegisterLegacySlope('2', "Castle Slope", '1');
-		Register('G', AsDualTile("grass", "grass-dual", GRASS_SUBSTANCE, acousticReflectivity: 0.15f, hasSlope: true));
-		RegisterLegacySlope('S', "Grass Slope", 'G');
+		// 'G' grass is a JSON kit (grass.kit.json) -- registered by RegisterTileKits below.
 		Register('M', AsDualTile("metal", "metal-dual", MetalSubstance, reflection: ReflectionMode.Flat, reflectionOpacity: 0.7f, hasSlope: true));
 
 

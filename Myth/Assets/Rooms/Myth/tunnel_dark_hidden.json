@@ -128,7 +128,8 @@
       "Position": [16, 32],
       "Size": [304, 144],
       "PipeColor2": "26726C",
-      "Motion": 1.85
+      "Motion": 1.85,
+      "ControlPanelDensity": 0
     }
   ]
 }

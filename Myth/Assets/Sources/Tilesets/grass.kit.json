@@ -1,0 +1,109 @@
+{
+  "substance": "Grass",
+  "char": "G",
+  "slopeChar": "S",
+  "mask": "stone-kit",
+  "seed": 1471523,
+  "edgeWidth": "1-3",
+  "wobble": 0.6,
+  "acousticReflectivity": 0.15,
+  "palette": {
+    "a": "75B03A",
+    "b": "595B33",
+    "k": "0B1212"
+  },
+  "fills": [
+    [
+      "akkkkbak",
+      "akakakkk",
+      "kbkkakak",
+      "kbbakkkb",
+      "kkbkaakb",
+      "kkaaabkk",
+      "aaaakkak",
+      "aakaaakk"
+    ],
+    [
+      "kkbkbbak",
+      "akbkkbka",
+      "bkkkkaaa",
+      "kakaaaak",
+      "akkaakaa",
+      "bakakkkk",
+      "kkkakaka",
+      "kakkbkka"
+    ],
+    [
+      "akkakaaa",
+      "aaakkaak",
+      "kkbakakk",
+      "kakkkaka",
+      "kakakkbk",
+      "akkkbkbb",
+      "kaakbkkb",
+      "aabkkkka"
+    ],
+    [
+      "akakkkak",
+      "kkakakkb",
+      "bakkkbkb",
+      "bkaakbkk",
+      "aaabkkkk",
+      "aakkakaa",
+      "kaaakkaa",
+      "kkkbakak"
+    ],
+    [
+      "kkbkkkak",
+      "kkakbkkb",
+      "bakkkbkb",
+      "bkaakbbk",
+      "aaabkkkb",
+      "abkkakaa",
+      "kaakkkak",
+      "kkkbakak"
+    ]
+  ],
+  "edge": [
+    [
+      "57AF47",
+      35
+    ],
+    [
+      "A2A65E",
+      40
+    ],
+    [
+      "595B33",
+      25
+    ]
+  ],
+  "edgeTop": [
+    [
+      "57AF47",
+      55
+    ],
+    [
+      "A2A65E",
+      30
+    ],
+    [
+      "595B33",
+      15
+    ]
+  ],
+  "edgeBottom": [
+    [
+      "595B33",
+      55
+    ],
+    [
+      "000000",
+      30
+    ],
+    [
+      "A2A65E",
+      15
+    ]
+  ]
+}

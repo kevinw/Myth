@@ -1738,8 +1738,14 @@ public partial class Manager
 				hasRanges = true;
 				break;
 			}
-		if (!hasRanges || !Button($"{EditorIcons.Randomize}  Randomize all"))
-			return false;
+
+		if (!hasRanges) return false;
+
+		var change = Button($"{EditorIcons.Randomize}");
+		if (IsItemHovered())
+			SetTooltip($"Randomize All Actor Properties");
+
+		if (!change) return false;
 
 		if (specId != null)
 		{
@@ -2085,11 +2091,15 @@ public partial class Manager
 			return;
 		}
 		var actorId = ActorSpecs.GetActorId(actor);
+		var changed = false;
 		if (IsWindowDocked())
-			DrawDockedInspectorTitle(windowTitle, actorId);
+			DrawDockedInspectorTitle(windowTitle, actorId, () => {
+				changed |= DrawRandomizeActorPropertiesButton(null, room, actor);
+			});
 		else if (actorId is not null)
 			DrawActorIdInWindowTitle(windowTitle, actorId);
 
+		//changed |= DrawRandomizeActorPropertiesButton(null, room, actor);
 		if (!open)
 		{
 			selectedRoomActorIndex = -1;
@@ -2107,10 +2117,8 @@ public partial class Manager
 			Separator();
 		}
 
-		var changed = false;
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
-		changed |= DrawRandomizeActorPropertiesButton(null, room, actor);
 		foreach (var property in actorPropertyScratch)
 		{
 			if (HideInactiveLightCookieProperty(actor, property))
@@ -2135,8 +2143,9 @@ public partial class Manager
 		End();
 	}
 
-	static void DrawDockedInspectorTitle(string title, string? detail = null)
+	static void DrawDockedInspectorTitle(string title, string? detail = null, Action? sameLineCallback = null)
 	{
+		AlignTextToFramePadding();
 		TextUnformatted(title);
 		if (detail is not null)
 		{
@@ -2146,6 +2155,10 @@ public partial class Manager
 			PushStyleColor(ImGuiCol.Text, textColor);
 			TextUnformatted(detail);
 			PopStyleColor();
+		}
+		if (sameLineCallback != null) {
+			SameLine(0, GetStyle().ItemInnerSpacing.X);
+			sameLineCallback();
 		}
 		Separator();
 	}

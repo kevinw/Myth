@@ -21,6 +21,9 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	float currentSpeed;
 	[I(8, 512)] public int TravelDistance = 80;
 	public bool ActivatedByWeight;
+	// Weight-activated platforms travel back to where they started once nothing is standing on
+	// them; turn this off for a one-way lift that parks at the far end.
+	public bool ReturnsWhenUnweighted = true;
 	public bool RenderActivationLights;
 
 	public enum MovementMode
@@ -40,7 +43,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	Vector2 circleOffset;
 	Vector2 circleCenterOffset;
 	float waitTimer = WAIT_TIME;
-	bool weightedTravelComplete;
 	bool activationLightsOn;
 	Vector2 moveRemainder;             // sub-pixel travel accumulator (we move in whole pixels)
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
@@ -96,19 +98,20 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	{
 		if (ActivatedByWeight && Mode != MovementMode.Circle)
 		{
-			if (weightedTravelComplete)
+			// Weight sends us out along the route, losing it brings us home: the leg we're on is
+			// decided fresh every frame, so stepping off mid-travel turns us around where we are.
+			activationLightsOn = HasStandingWeight();
+			var forward = (int)Facing;
+			var heading = activationLightsOn ? forward : ReturnsWhenUnweighted ? -forward : 0;
+			if (heading == 0 || IsAtRouteEnd(heading))
 			{
-				activationLightsOn = true;
+				Park();
 				return;
 			}
-			activationLightsOn = HasStandingWeight();
-			if (!activationLightsOn)
+			if (heading != direction)
 			{
-				waitTimer = WaitTime;
-				currentSpeed = 0;
-				moveRemainder = Vector2.Zero;
-				StopAndReleaseSound(ref moveSound, false);
-				return;
+				direction = heading;
+				Park(); // the wait plays out before we set off the other way
 			}
 		}
 		else
@@ -151,22 +154,31 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		if (step != Point2.Zero)
 			MoveSolid(step);
 
-		// Only the bound we're heading toward ends the leg — checking both would trip the min
-		// bound instantly, since the platform starts there.
-		if (Position == (direction > 0 ? routeBounds.BottomRight : routeBounds.TopLeft))
+		if (IsAtRouteEnd(direction))
 		{
 			moveRemainder = Vector2.Zero;
 			currentSpeed = 0;
 			StopAndReleaseSound(ref moveSound, false);
 			if (ActivatedByWeight)
-			{
-				weightedTravelComplete = true;
-				activationLightsOn = true;
-				return;
-			}
+				return; // Update turns us around when the weight on top changes
+
 			waitTimer = WaitTime;
 			direction = -direction;
 		}
+	}
+
+	// Only the bound we're heading toward ends the leg — checking both would trip the min
+	// bound instantly, since the platform starts there.
+	bool IsAtRouteEnd(int heading)
+		=> Position == (heading > 0 ? routeBounds.BottomRight : routeBounds.TopLeft);
+
+	// Sit still with the departure wait armed, so the next leg starts from a standstill.
+	void Park()
+	{
+		waitTimer = WaitTime;
+		currentSpeed = 0;
+		moveRemainder = Vector2.Zero;
+		StopAndReleaseSound(ref moveSound, false);
 	}
 
 	void MoveCircle(float distance)
