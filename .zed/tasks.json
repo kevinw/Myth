@@ -15,8 +15,15 @@
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
-    "label": "dotnet watch (Human Questions)",
+    "label": "dotnet watch (HQ)",
     "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false --property:UseFosterDll=true",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+    "allow_concurrent_runs": true,
+    "use_new_terminal": false
+  },
+  {
+    "label": "dotnet run (HQ)",
+    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet run --no-restore --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
     "allow_concurrent_runs": true,
     "use_new_terminal": false
@@ -25,13 +32,6 @@
     "label": "dotnet watch (Sokoban)",
     "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Sokoban",
-    "allow_concurrent_runs": true,
-    "use_new_terminal": false
-  },
-  {
-    "label": "dotnet run (Human Questions)",
-    "command": "TMPDIR=/tmp TMP=/tmp TEMP=/tmp dotnet run --no-restore --property:UseFosterDll=true",
-    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
     "allow_concurrent_runs": true,
     "use_new_terminal": false
   },

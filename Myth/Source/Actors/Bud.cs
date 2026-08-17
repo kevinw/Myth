@@ -2,7 +2,7 @@ using Foster.Framework;
 using System.Numerics;
 namespace Myth;
 
-public class Bud : Pawn, ICarryable
+public class Bud : Pawn, ICarryable, IHitByHitbox
 {
 	internal static readonly Color Tint = new(0x7fb6ff);
 	private const int FollowStopDistance = 18;
@@ -30,6 +30,12 @@ public class Bud : Pawn, ICarryable
 	private float mirrorPlayerCrawlReleaseTimer;
 	private bool mirrorPlayerCrawl;
 	static float LaunchLingerTime => 2.5f;
+	static float BackDashSpeed => 120;
+	static float BackDashDuration => 0.22f;
+	static float BackDashFriction => 260;
+	static float BackDashCooldown => 0.6f;
+	float backDashTimer;
+	float backDashCooldownTimer;
 	bool ridingPlayerBurrow;
 	[NoSerialize] public Player? CarriedBy { get; private set; }
 	bool launched;     // in flight from a carry launch; the linger starts on landing
@@ -80,11 +86,15 @@ public class Bud : Pawn, ICarryable
 	// suspended in hand.
 	public int CarryHeight => StandingHitboxRect.Height;
 
+	// Free-standing and running his own AI: not in hand, not riding or popping out of the
+	// player's burrow, not mid room-entry. Mirrors the TryEnterPlayerBurrow eligibility guards.
+	bool Interruptible => CarriedBy == null && Visible && !ridingPlayerBurrow
+		&& burrowPopDelayTimer <= 0 && pendingRoomChange == null && State == States.Normal;
+
 	// The carry and the burrow-ride are separate relationships: a Bud riding the player's
 	// burrow (position-synced to the player, invisible) must not be "caught" by the pop
-	// that ends the ride. Mirrors the TryEnterPlayerBurrow eligibility guards.
-	public bool CanBeCaught => CarriedBy == null && Visible && !ridingPlayerBurrow
-		&& burrowPopDelayTimer <= 0 && pendingRoomChange == null && State == States.Normal;
+	// that ends the ride.
+	public bool CanBeCaught => Interruptible;
 
 	// One-line state summary for the Game.Show carry-debug overlay (Player.Carry.cs).
 	internal string CarryDebugState =>
@@ -132,9 +142,56 @@ public class Bud : Pawn, ICarryable
 		}
 	}
 
+	// Caught by a swing of the player's sword (the attack hitbox, not a damage source --
+	// Bud has no health). He rounds on whoever swung and hops out of reach.
+	public void HitByHitbox(RectInt hitbox)
+	{
+		if (!Interruptible || backDashCooldownTimer > 0 || !hitbox.Overlaps(Hitbox.Rect + Position))
+			return;
+
+		StartBackDash(Game.GetFirst<Player>()?.Position.X ?? hitbox.Center.X);
+	}
+
+	void StartBackDash(float attackerX)
+	{
+		var toAttacker = Math.Sign(attackerX - Position.X);
+		if (toAttacker != 0)
+			Facing = toAttacker;
+
+		backDashTimer = BackDashDuration;
+		backDashCooldownTimer = BackDashCooldown;
+		Velocity.X = -(int)Facing * BackDashSpeed;
+		jumpTimer = 0;
+		Squish = new Vector2(0.75f, 1.3f);
+		nav.ClearActiveEdge("back dash"); // whatever he was in the middle of, re-path after landing
+		State = States.BackDash;
+		Play("back_dash", looping: false);
+		AudioEvent("hurt");
+		Game.TryBudStorylet("bud_struck");
+	}
+
+	protected override void CustomState()
+	{
+		if (State != States.BackDash)
+			return;
+
+		backDashTimer = Calc.Approach(backDashTimer, 0, Time.Delta);
+		Velocity.X = Calc.Approach(Velocity.X, 0, BackDashFriction * Time.Delta);
+		if (backDashTimer <= 0)
+			EndBackDash();
+	}
+
+	void EndBackDash()
+	{
+		backDashTimer = 0;
+		State = States.Normal;
+		Play("idle");
+	}
+
 	public override PawnInput GetInput()
 	{
 		if (!PerfToggles.BudAIEnabled) return new();
+		if (State == States.BackDash) return new();
 		if (lingerTimer > 0 && State == States.Normal)
 			return new(); // lingering where the carry launch landed us
 		if (burrowPopInputMirrorTimer > 0 && Game.GetFirst<Player>() is { } burrowPlayer)
@@ -273,6 +330,7 @@ public class Bud : Pawn, ICarryable
 		}
 
 		burrowPopInputMirrorTimer = Calc.Approach(burrowPopInputMirrorTimer, 0, Time.Delta);
+		backDashCooldownTimer = Calc.Approach(backDashCooldownTimer, 0, Time.Delta);
 
 		if (pendingRoomChange is { } change)
 		{
@@ -768,6 +826,9 @@ public class Bud : Pawn, ICarryable
 			nav.ClearBlockedPathEdges();
 			return;
 		}
+
+		if (State == States.BackDash)
+			EndBackDash(); // the entry Update path never reaches CustomState to finish it
 
 		pendingRoomChange = change;
 		enterWalkTarget = null;

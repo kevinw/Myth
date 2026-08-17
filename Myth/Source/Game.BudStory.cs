@@ -51,6 +51,23 @@ public partial class Game
 				"Hm..."
 			));
 
+		story.BudBarks("bud_back_dash", s => s
+			.On(StoryTrigger.BudStruck)
+			.Redraw(6)
+			.Priority(3)
+			.Say(
+				"Ow. Really?",
+				"Hey! Watch it.",
+				"That's my head.",
+				"Point that thing somewhere else.",
+				"I'm on your side, remember?",
+				"You could just ask me to move.",
+				"Do that again and I walk.",
+				"Hilarious.",
+				"I'll remember that.",
+				"Cut it out."
+			));
+
 		story.BudBarks("bud_idle", s => s
 			.OnPlayerIdle(StoryIdleSeconds)
 			.Redraw(3)

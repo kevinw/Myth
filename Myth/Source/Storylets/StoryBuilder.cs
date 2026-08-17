@@ -10,7 +10,8 @@ public enum StoryTrigger
 	PlayerEnteredRevealDoor,
 	PlayerHurt,
 	EnemyKilled,
-	PlayerIdle
+	PlayerIdle,
+	BudStruck
 }
 
 public readonly record struct StoryContext(

@@ -50,7 +50,8 @@ public abstract class Pawn : Actor
 		BlinkStrike,
 		Hurt,
 		Burrow,
-		Climb
+		Climb,
+		BackDash
 	}
 	public static float FastFallMultiplier => 1.25f;
 	protected static float JumpBufferTime => 0.08f;

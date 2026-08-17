@@ -356,6 +356,7 @@ public partial class Game
 			"player_hurt" => StoryTrigger.PlayerHurt,
 			"enemy_killed" => StoryTrigger.EnemyKilled,
 			"player_idle" => StoryTrigger.PlayerIdle,
+			"bud_struck" => StoryTrigger.BudStruck,
 			_ => StoryTrigger.None
 		};
 	}
