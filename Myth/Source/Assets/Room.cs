@@ -156,6 +156,7 @@ public class Room
 	public float SporeFogStrength = DefaultSporeFogStrength;
 	public bool ReverbAuto = true;
 	public float Reverb = DefaultReverb;
+	[I(0, 1)] public float MusicMuffle = 0f;
 	public Color SunColor = DefaultSunColor;
 	public float SunStrength;
 	public Vector2 SunDirection = DefaultSunDirection;
@@ -195,6 +196,7 @@ public class Room
 			SporeFogStrength = SporeFogStrength,
 			ReverbAuto = ReverbAuto,
 			Reverb = Reverb,
+			MusicMuffle = MusicMuffle,
 			SunColor = SunColor,
 			SunStrength = SunStrength,
 			SunDirection = SunDirection,
@@ -274,6 +276,7 @@ public class Room
 		SporeFogStrength = Clamp01(JsonUtil.ReadFloat(json, "sporeFogStrength", DefaultSporeFogStrength));
 		ReverbAuto = JsonUtil.ReadBool(json, "reverbAuto", true);
 		Reverb = Clamp01(JsonUtil.ReadFloat(json, "reverb", DefaultReverb));
+		MusicMuffle = Clamp01(JsonUtil.ReadFloat(json, "musicMuffle", 0f));
 		LightingDitherEnabled = JsonUtil.ReadBool(json, "ditherEnabled", DefaultLightingDitherEnabled);
 		LightingDitherScale = JsonUtil.ReadFloat(json, "ditherScale", DefaultLightingDitherScale);
 		LightingDitherStrength = JsonUtil.ReadFloat(json, "ditherStrength", DefaultLightingDitherStrength);
@@ -1477,6 +1480,8 @@ public class Room
 			writer.WriteBoolean("reverbAuto", false);
 		if (Reverb != DefaultReverb || !ReverbAuto)
 			writer.WriteNumber("reverb", Reverb);
+		if (MusicMuffle != 0)
+			writer.WriteNumber("musicMuffle", MusicMuffle);
 		if (LightingDitherEnabled != DefaultLightingDitherEnabled)
 			writer.WriteBoolean("ditherEnabled", LightingDitherEnabled);
 		if (LightingDitherScale != DefaultLightingDitherScale)

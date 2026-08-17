@@ -1569,8 +1569,8 @@ public sealed partial class GameView
 			{
 				renderer.AddLight(
 					light.Position,
-					light.Radius * light.FlickerScaleMax,
-					light.Intensity * light.FlickerScaleMax,
+					light.Radius * light.RenderScale,
+					light.Intensity * light.RenderScale,
 					light.Height,
 					light.LightColor,
 					light.Cookie,

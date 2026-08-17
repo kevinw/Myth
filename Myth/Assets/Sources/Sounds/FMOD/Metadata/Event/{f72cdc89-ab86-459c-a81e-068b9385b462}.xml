@@ -5,7 +5,7 @@
 			<value>Resting</value>
 		</property>
 		<property name="outputFormat">
-			<value>0</value>
+			<value>1</value>
 		</property>
 		<relationship name="folder">
 			<destination>{3a9c48e2-8a94-465b-8389-9ebcec09c62b}</destination>
@@ -60,12 +60,16 @@
 		<relationship name="modules">
 			<destination>{09860d31-f7f0-4c65-b661-f2d4582c6927}</destination>
 			<destination>{0eda0b5a-7114-4e43-b80a-68a9c9c8b278}</destination>
+			<destination>{6e5cff36-5e84-43e7-861d-b1e2e319a0bd}</destination>
 		</relationship>
 		<relationship name="mixerGroup">
 			<destination>{f4ce96d3-ceb4-4d3b-b4cf-3e725e5f1d9e}</destination>
 		</relationship>
 	</object>
 	<object class="Timeline" id="{0e84d2c6-8502-42f7-90ce-694483f87ee5}">
+		<relationship name="modules">
+			<destination>{6e5cff36-5e84-43e7-861d-b1e2e319a0bd}</destination>
+		</relationship>
 		<relationship name="markers">
 			<destination>{ce406ddd-8afb-4370-8d46-83428a218345}</destination>
 			<destination>{eb5976fc-dc71-467c-b8c0-28030a0238dc}</destination>
@@ -115,6 +119,14 @@
 		</property>
 		<relationship name="fadeInCurve">
 			<destination>{0a3468fb-cd4e-4876-baf9-9fe810db95bc}</destination>
+		</relationship>
+	</object>
+	<object class="SingleSound" id="{6e5cff36-5e84-43e7-861d-b1e2e319a0bd}">
+		<property name="length">
+			<value>215.58857142857144</value>
+		</property>
+		<relationship name="audioFile">
+			<destination>{6791bd7d-6f79-48cf-bdc9-d246eba4e30e}</destination>
 		</relationship>
 	</object>
 	<object class="EventMixerGroup" id="{f4ce96d3-ceb4-4d3b-b4cf-3e725e5f1d9e}">

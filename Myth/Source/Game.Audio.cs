@@ -138,6 +138,7 @@ public partial class Game
 	float playerHitSnapshotTimer;
 
 	float? roomReverb;
+	float? roomMusicMuffle;
 
 	public readonly record struct MusicReloadState(bool WasPlaying, int TimelinePosition, string? Area);
 
@@ -416,6 +417,28 @@ public partial class Game
 		{
 			if (audioFailures.Add(Manager.RoomReverbParameter))
 				Console.Error.WriteLine($"Failed to set room reverb '{reverb:0.###}': {e}");
+		}
+	}
+
+	// Hidden/subsurface rooms duck the mediums and highs out of the music: the room's value
+	// drives the global the background_music event's ThreeEQ mid/high gains are automated on.
+	// Left on the parameter's authored seek speed, so it glides rather than switching at the
+	// room boundary (unlike reverb, which snaps).
+	void ApplyRoomMusicMuffle(Room forRoom)
+	{
+		var muffle = forRoom.MusicMuffle;
+		if (!AudioEventsEnabled || !Audio.Initialized || roomMusicMuffle == muffle)
+			return;
+
+		try
+		{
+			Audio.SetParameter(Manager.MusicMuffleParameter, muffle);
+			roomMusicMuffle = muffle;
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add(Manager.MusicMuffleParameter))
+				Console.Error.WriteLine($"Failed to set music muffle '{muffle:0.###}': {e}");
 		}
 	}
 

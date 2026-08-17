@@ -35,6 +35,9 @@ public class Actor
 	public Vector2 Origin => sprite?.ResolveOrigin(Anchor) ?? Vector2.Zero;
 	[NoSerialize] public Vector2 Squish = Vector2.One;
 	[NoSerialize] public Vector2 Shift = Vector2.Zero;
+	// Horizontal lean of the sprite as x-per-y: 0.3 slides the top edge a third of the sprite's
+	// height to the right, with the base planted. Set it and it eases back to zero like Squish.
+	[NoSerialize] public float Skew = 0;
 	[NoSerialize] public int Depth = 0;
 	[NoSerialize] public float Timer = 0;
 	[NoSerialize] public bool Visible = true;
@@ -490,6 +493,7 @@ public class Actor
 		if (Velocity != Vector2.Zero)
 			Move(Velocity * Time.Delta);
 		Squish = Calc.Approach(Squish, Vector2.One, Time.Delta * 4.0f);
+		Skew = Calc.Approach(Skew, 0, Time.Delta * 4.0f);
 		hitCooldown = Calc.Approach(hitCooldown, 0, Time.Delta);
 
 		// Snapshot before advancing so we can tell which frames we cross this Update (the
@@ -614,10 +618,22 @@ public class Actor
 				return;
 		}
 
-		batcher.PushMatrix(Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y));
+		// Scale first, then shear about the sprite's base: the shear sits outside the Facing
+		// flip so a lean stays world-space (a left-facing actor still leans right), and every
+		// pass -- color, normals, emissive, shadow, reflection -- comes through here together.
+		var transform = Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y);
+		if (Skew != 0)
+			transform *= SkewMatrix(SpriteBaseY(frame) * Squish.Y);
+		batcher.PushMatrix(transform);
 		batcher.Image(subtexture, Shift, Origin, Vector2.One, 0, color);
 		batcher.PopMatrix();
 	}
+
+	// Sprite-local y of the bottom edge, the line the lean pivots around.
+	float SpriteBaseY(Sprite.Frame frame) => Shift.Y - Origin.Y + frame.Subtexture.Height;
+
+	// x' = x + Skew * (baseY - y): zero displacement at the base, growing toward the top.
+	Matrix3x2 SkewMatrix(float baseY) => new(1, 0, -Skew, 1, Skew * baseY, 0);
 
 	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 
@@ -653,7 +669,9 @@ public class Actor
 
 		var left = MathF.Min(x0, x1);
 		var top = MathF.Min(y0, y1);
-		return new Rect(left, top, MathF.Max(x0, x1) - left, MathF.Max(y0, y1) - top);
+		var bounds = new Rect(left, top, MathF.Max(x0, x1) - left, MathF.Max(y0, y1) - top);
+		// A lean carries the top edge sideways; widen both ways so culling keeps it whole.
+		return Skew == 0 ? bounds : bounds.InflateX(MathF.Abs(Skew) * bounds.Height);
 	}
 
 	/// Called when the Actor was destroyed

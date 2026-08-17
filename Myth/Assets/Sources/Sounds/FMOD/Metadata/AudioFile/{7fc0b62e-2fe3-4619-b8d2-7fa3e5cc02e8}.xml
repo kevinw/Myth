@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <objects serializationModel="Studio.02.03.00">
-	<object class="AudioFile" id="{45020c29-6415-4e5c-a09f-85ea9edc5d20}">
+	<object class="AudioFile" id="{7fc0b62e-2fe3-4619-b8d2-7fa3e5cc02e8}">
 		<property name="assetPath">
-			<value>325268__deleted_user_2104797__brick-on-soil.wav</value>
+			<value>530355__danielpodlovics__fire.ogg</value>
 		</property>
 		<property name="frequencyInKHz">
-			<value>48</value>
+			<value>44.0999985</value>
 		</property>
 		<property name="channelCount">
-			<value>1</value>
+			<value>2</value>
 		</property>
 		<property name="length">
-			<value>3.8695208333333335</value>
+			<value>0.30764172335600909</value>
 		</property>
 		<relationship name="masterAssetFolder">
 			<destination>{0c477f3c-ca46-455a-aecc-567ce41f5eab}</destination>

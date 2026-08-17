@@ -428,6 +428,7 @@ public partial class Game : IDisposable
 				StartMusic();
 				ApplyMusicArea(room);
 				ApplyRoomReverb(room);
+				ApplyRoomMusicMuffle(room);
 			}
 
 		}
@@ -1201,6 +1202,7 @@ public partial class Game : IDisposable
 		Camera = ClampCameraToRoomFb(player.Position - new Vector2(Width, Height) / 2, fbPad);
 		ApplyMusicArea(room);
 		ApplyRoomReverb(room);
+		ApplyRoomMusicMuffle(room);
 		roomSwappedThisFrame = true;
 		RaiseRoomChanged(fromRoom, room, kind, direction);
 		FinishRoomActivation(kind);
@@ -1552,6 +1554,7 @@ public partial class Game : IDisposable
 				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
 				ApplyMusicArea(nextRoom);
 				ApplyRoomReverb(nextRoom);
+				ApplyRoomMusicMuffle(nextRoom);
 				return true;
 			}
 #if EDITOR
@@ -1975,6 +1978,7 @@ public partial class Game : IDisposable
 		{
 			ApplyMusicArea(room);
 			ApplyRoomReverb(room);
+			ApplyRoomMusicMuffle(room);
 		}
 	}
 

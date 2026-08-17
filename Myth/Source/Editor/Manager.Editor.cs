@@ -1472,6 +1472,15 @@ public partial class Manager
 			changed = true;
 		}
 
+		BeginPropertyRow("Music Muffle");
+		var musicMuffle = room.MusicMuffle;
+		if (SliderFloat("##RoomMusicMuffle", ref musicMuffle, 0.0f, 1.0f))
+		{
+			OpenRoomSettingsUndo("Edit Room Music Muffle", room);
+			room.MusicMuffle = Math.Clamp(musicMuffle, 0.0f, 1.0f);
+			changed = true;
+		}
+
 		BeginPropertyRow("Sun Strength");
 		var sunStrength = room.SunStrength;
 		if (SliderFloat("##RoomSunStrength", ref sunStrength, 0.0f, 2.0f))

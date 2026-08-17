@@ -10,6 +10,11 @@
     <_FosterGamesIntermediateFlavor Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_FosterGamesIntermediateFlavor>
     <_FosterGamesIntermediateFlavor Condition="'$(_FosterGamesIntermediateFlavor)' == '' and '$(MythBrowser)' == 'true'">browser-wasm</_FosterGamesIntermediateFlavor>
     <_FosterGamesIntermediateFlavor Condition="'$(_FosterGamesIntermediateFlavor)' == ''">desktop</_FosterGamesIntermediateFlavor>
+    <!-- Ship flavors drop the editor, and MythShip also drops the diagnostics PackageReference.
+         Sharing restore state with the dev flavor leaves the next no-restore build compiling
+         KIT_DIAGNOSTICS against an assets file that no longer lists the package. -->
+    <_FosterGamesIntermediateFlavor Condition="'$(MythShip)' == 'true'">$(_FosterGamesIntermediateFlavor)-ship</_FosterGamesIntermediateFlavor>
+    <_FosterGamesIntermediateFlavor Condition="'$(MythTestShip)' == 'true'">$(_FosterGamesIntermediateFlavor)-testship</_FosterGamesIntermediateFlavor>
     <BaseIntermediateOutputPath>obj/$(_FosterGamesIntermediateFlavor)/</BaseIntermediateOutputPath>
   </PropertyGroup>
 </Project>

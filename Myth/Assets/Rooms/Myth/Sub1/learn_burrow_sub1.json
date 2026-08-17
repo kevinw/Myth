@@ -3,6 +3,7 @@
   "size": [40, 23],
   "ambientColor": "202020",
   "reverb": 0.862,
+  "musicMuffle": 1,
   "legend": {
     "T": "stone",
     "m": "Myth Back"

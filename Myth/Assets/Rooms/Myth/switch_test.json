@@ -112,6 +112,13 @@
       "Position": [16, 160],
       "Points": [[-16, 8],[8, 8]
       ]
+    },
+    {
+      "Id": "eda793b92c749104",
+      "Type": "BurrowLine",
+      "Position": [24, 160],
+      "Points": [[-16, 8],[8, 8]
+      ]
     }
   ]
 }

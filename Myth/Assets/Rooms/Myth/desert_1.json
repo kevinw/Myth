@@ -1,7 +1,9 @@
 {
-  "position": [-240, -92],
+  "position": [-240, 161],
   "size": [80, 23],
   "backdropColor": "BDBD8D",
+  "backdropColor2": "A6A676",
+  "backdropSurface": "untransmitted_hodful",
   "ambientColor": "BABA94",
   "ambientIntensity": 0.989,
   "lightNoise": 0,

@@ -216,7 +216,10 @@
       "Type": "BudStorySequence",
       "Position": [72, 104],
       "Once": true,
-      "Script": "I think we gotta go down."
+      "Script": [
+        "[pause 1]",
+        "I think we gotta go down."
+      ]
     }
   ]
 }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{00836bcf-da84-4e10-a00d-52f2069af9b3}">
+		<property name="name">
+			<value>RoomMusicMuffle</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{edeb288d-6756-4382-8fd2-76ced8b16288}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{edeb288d-6756-4382-8fd2-76ced8b16288}">
+		<property name="isGlobal">
+			<value>true</value>
+		</property>
+		<property name="initialValue">
+			<value>0</value>
+		</property>
+		<property name="isExposedRecursively">
+			<value>false</value>
+		</property>
+	</object>
+</objects>

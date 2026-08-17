@@ -71,7 +71,9 @@
       "Position": [52, 76],
       "Intensity": 0.6,
       "Radius": 130,
-      "Height": 7
+      "Height": 7,
+      "HitFlickerTime": 0.705,
+      "HitSkew": 0.332
     },
     {
       "Id": "ceb9410ecd2965be",

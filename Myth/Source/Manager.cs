@@ -23,6 +23,7 @@ public partial class Manager : App
 	public const string DefaultMusicArea = "Silence";
 	public const string BackgroundMusicAreaParameter = "Area";
 	public const string RoomReverbParameter = "RoomReverb";
+	public const string MusicMuffleParameter = "RoomMusicMuffle";
 
 	const string WindowSettingsFileName = "window.json";
 #if EDITOR
