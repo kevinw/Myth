@@ -428,7 +428,7 @@ def annotate_design_practice(snapshots):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate Mycelon's static development dashboard data.")
+    parser = argparse.ArgumentParser(description="Generate Human Questions's static development dashboard data.")
     parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument("--current-only", action="store_true", help="Skip Git history (useful for quick iteration).")
     args = parser.parse_args()

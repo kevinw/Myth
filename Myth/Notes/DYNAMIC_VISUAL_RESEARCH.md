@@ -1,7 +1,7 @@
 # Dynamic Visual Research
 
 The useful question is not "what effect can we add?" but "which currently-static
-visual facts could become signals?" Mycelon already has a lot of writable visual
+visual facts could become signals?" Human Questions already has a lot of writable visual
 surfaces: room color fields, tile/dither field, dither mask, normal buffer,
 emissive buffers, light masks, spore fog, reflection masks, particle collision
 masks, neural textures, and ripple states. The cheapest wild experiments are
