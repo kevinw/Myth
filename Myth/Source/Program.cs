@@ -34,15 +34,25 @@ if (!startArgs.headless)
 	LogFile.Install(Manager.APPLICATION_NAME);
 #endif
 
-var manager = Manager.Create(startArgs);
-PlatformSpecific.ManagerSetup(manager);
-manager.Run();
-var stopWatch = manager.UserQuitRequested;
-PlatformSpecific.ManagerCleanup(manager);
+try
+{
+	var manager = Manager.Create(startArgs);
+	PlatformSpecific.ManagerSetup(manager);
+	manager.Run();
+	var stopWatch = manager.UserQuitRequested;
+	PlatformSpecific.ManagerCleanup(manager);
 #if !BROWSER
-if (stopWatch)
-	WatchProcess.Stop();
+	if (stopWatch)
+		WatchProcess.Stop();
+#endif
+}
+catch (Exception e)
+{
+	Console.Error.WriteLine($"[Crash] {e}");
+	throw;
+}
 
+#if !BROWSER
 static class WatchProcess
 {
 	const int InterruptSignal = 2;
