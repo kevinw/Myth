@@ -8,20 +8,20 @@ public class PatternProjectile : Actor
 {
 	const int CircleSegments = 14;
 
-	public float Radius = 3;
+	[I(1, 12)] public float Radius = 3;
 	public Color Color = new(0x88e7ff);
 	public Color EdgeColor = new(0x264a64);
 	public string SurfaceId = "shmorg";
 	public Vector2 Direction = Vector2.UnitX;
-	public float Speed = 36;
-	public float StartSpeedScale = 0.25f;
-	public float SpeedRampTime = 0.45f;
-	public float LaunchDelay = 0.12f;
-	public float WobbleAmplitude = 2.5f;
-	public float WobbleFrequency = 1.6f;
-	public float WobblePhase;
-	public float LifeTime = 4;
-	public float SurfaceWorldMotionScale = 0.5f;
+	[I(5, 160)] public float Speed = 36;
+	[I(0, 1)] public float StartSpeedScale = 0.25f;
+	[I(0, 2)] public float SpeedRampTime = 0.45f;
+	[I(0, 2)] public float LaunchDelay = 0.12f;
+	[I(0, 12)] public float WobbleAmplitude = 2.5f;
+	[I(0, 6)] public float WobbleFrequency = 1.6f;
+	[I(0, MathF.Tau)] public float WobblePhase;
+	[I(0.5f, 12)] public float LifeTime = 4;
+	[I(0, 2)] public float SurfaceWorldMotionScale = 0.5f;
 	public bool PopOnDestroy = true;
 	public override string HitSoundType => "";
 	public override bool CastsSpriteShadow => false;

@@ -14,11 +14,11 @@ public class Burrower : Actor
 		Tired
 	}
 
-	public int Health = 2;
-	public float TriggerRange = 72;
-	public float ChargeSpeed = 95;
-	public float ChargeDuration = 1.35f;
-	public float TiredDuration = 0.85f;
+	[I(1, 10)] public int Health = 2;
+	[I(24, 192)] public float TriggerRange = 72;
+	[I(30, 180)] public float ChargeSpeed = 95;
+	[I(0.25f, 3)] public float ChargeDuration = 1.35f;
+	[I(0.2f, 3)] public float TiredDuration = 0.85f;
 
 	private States state = States.Hidden;
 	private float stateTimer;

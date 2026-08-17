@@ -31,6 +31,7 @@ public partial class Manager
 
 	float editorDockWidth = DefaultToolDockWidth;
 	static float DefaultToolDockWidth => 460;
+	bool editorDockOpen = true;
 	float editorPaletteWidth = DefaultPaletteDockWidth;
 
 	/// The old fixed palette was PaletteWidth of pure content; a docked window spends some of
@@ -60,26 +61,24 @@ public partial class Manager
 
 	bool EditorDockResetting => editorDockResetFrames > 0;
 
-	// Which regions actually held a window last frame. A region that is merely "open" is not
-	// enough: dock every tool window on the left and the right region must give its width back
-	// to the game view instead of leaving a gap. Counted from the previous frame because a
-	// window reports its dock id while being submitted, after the region has been sized.
+	// Which left region actually held a window last frame. Counted from the previous frame
+	// because a window reports its dock id while being submitted, after the region is sized.
+	// The right region is explicit user state: inferring it from window geometry creates a
+	// feedback loop when a center-docked window occupies the same screen-space strip.
 	int paletteDockedLastFrame;
-	int toolDockedLastFrame;
 	int paletteDockedThisFrame;
-	int toolDockedThisFrame;
 
-	/// The region takes space while it holds a window -- plus while its id is still unknown or a
-	/// reset is running, so there is always somewhere for windows to land.
+	/// The right region stays where the user left it. Hidden dock nodes are kept alive below, so
+	/// collapsing and reopening does not undock their windows.
 	bool EditorDockVisible
-		=> !playing && !startingPlay &&
-			(toolDockedLastFrame > 0 || EditorDockResetting || editorDockId == 0);
+		=> !playing && !startingPlay && editorDockOpen;
 
 	bool EditorPaletteDockVisible
 		=> gameEase < 1.0f && !startingPlay &&
 			(paletteDockedLastFrame > 0 || EditorDockResetting || editorPaletteDockId == 0);
 
-	/// Called by each dockable window just after its Begin, so the regions know what they hold.
+	/// Called by each dockable window just after its Begin, so the auto-hiding left region knows
+	/// whether it still holds anything.
 	/// Matched by geometry rather than dock id: a docked window reports the leaf node it landed
 	/// in, which is not the root dockspace id these regions create.
 	void NoteDockedWindow()
@@ -90,8 +89,6 @@ public partial class Manager
 		var center = ImGui.GetWindowPos() + ImGui.GetWindowSize() / 2;
 		if (EditorPaletteDockRect.Contains(center))
 			paletteDockedThisFrame++;
-		else if (EditorDockRect.Contains(center))
-			toolDockedThisFrame++;
 	}
 
 	float EditorDockReservedWidth => EditorDockVisible ? editorDockWidth + BoxSpacing : 0;
@@ -135,6 +132,7 @@ public partial class Manager
 	/// (they are re-homed when next opened).
 	public void ResetEditorToolWindowLayout()
 	{
+		editorDockOpen = true;
 		editorDockForced.Clear();
 		// Two frames is enough for every window opened below to be submitted once; anything
 		// still closed keeps its old position rather than being yanked around later.
@@ -154,9 +152,7 @@ public partial class Manager
 			editorDockResetFrames--;
 
 		paletteDockedLastFrame = paletteDockedThisFrame;
-		toolDockedLastFrame = toolDockedThisFrame;
 		paletteDockedThisFrame = 0;
-		toolDockedThisFrame = 0;
 
 		var paletteVisible = EditorPaletteDockVisible;
 		var toolVisible = EditorDockVisible;

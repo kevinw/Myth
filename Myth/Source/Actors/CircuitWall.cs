@@ -14,16 +14,16 @@ public class CircuitWall : ProceduralWall
 	public Color ContactColor = new(0xd5c07a);
 	public Color SignalColor1 = new(0x5cff86);
 	public Color SignalColor2 = new(0xff554c);
-	public float GridScale = 1;
-	public float ModuleDensity = 1;
-	public float ModuleDepth = 1;
-	public float TraceDensity = 1;
-	public float TraceWidth = 1.5f;
-	public float TraceDepth = 1;
-	public float ContactDensity = 1;
-	public float SignalDensity = 1;
-	public float SignalPulse = 1;
-	public float TraceDetail = 1.4f;
+	[I(0.25f, 4)] public float GridScale = 1;
+	[I(0, 4)] public float ModuleDensity = 1;
+	[I(0, 3)] public float ModuleDepth = 1;
+	[I(0, 4)] public float TraceDensity = 1;
+	[I(0.5f, 6)] public float TraceWidth = 1.5f;
+	[I(0, 3)] public float TraceDepth = 1;
+	[I(0, 4)] public float ContactDensity = 1;
+	[I(0, 4)] public float SignalDensity = 1;
+	[I(0, 3)] public float SignalPulse = 1;
+	[I(0.25f, 4)] public float TraceDetail = 1.4f;
 
 	public CircuitWall()
 	{

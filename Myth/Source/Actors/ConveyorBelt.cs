@@ -15,7 +15,7 @@ public class ConveyorBelt : Actor, IResizable
 	public static readonly ResizeAxes ResizableAxes = ResizeAxes.X;
 
 	public Point2 Size { get; set; } = DefaultSize;
-	public float Speed = 40f;
+	[I(0, 160)] public float Speed = 40f;
 	// Jumpthru-masked instead of solid: the player can jump up through the belt and land on top.
 	public bool JumpThrough;
 	public Color ColorA = new(0x3a2416);
@@ -78,6 +78,44 @@ public class ConveyorBelt : Actor, IResizable
 				batcher.Rect(new Rect(left, 0, right - left, Size.Y), ColorB);
 		}
 	}
+
+	public override void RenderNormals(Batcher batcher)
+	{
+		if (Size.X <= 0 || Size.Y <= 0)
+			return;
+
+		var bevel = MathF.Min(Size.X, Size.Y) * 0.5f;
+		var x0 = 0f;
+		var x1 = bevel;
+		var x2 = Size.X - bevel;
+		var x3 = (float)Size.X;
+		var y0 = 0f;
+		var y1 = bevel;
+		var y2 = Size.Y - bevel;
+		var y3 = (float)Size.Y;
+		var flat = new Color(0x8080ff);
+		var left = NormalColor(-Vector2.UnitX);
+		var right = NormalColor(Vector2.UnitX);
+		var top = NormalColor(-Vector2.UnitY);
+		var bottom = NormalColor(Vector2.UnitY);
+		var topLeft = NormalColor(new Vector2(-1, -1).Normalized());
+		var topRight = NormalColor(new Vector2(1, -1).Normalized());
+		var bottomRight = NormalColor(Vector2.One.Normalized());
+		var bottomLeft = NormalColor(new Vector2(-1, 1).Normalized());
+
+		batcher.Quad(new(x0, y0), new(x1, y0), new(x1, y1), new(x0, y1), topLeft, top, flat, left);
+		batcher.Quad(new(x1, y0), new(x2, y0), new(x2, y1), new(x1, y1), top, top, flat, flat);
+		batcher.Quad(new(x2, y0), new(x3, y0), new(x3, y1), new(x2, y1), top, topRight, right, flat);
+		batcher.Quad(new(x0, y1), new(x1, y1), new(x1, y2), new(x0, y2), left, flat, flat, left);
+		batcher.Quad(new(x1, y1), new(x2, y1), new(x2, y2), new(x1, y2), flat);
+		batcher.Quad(new(x2, y1), new(x3, y1), new(x3, y2), new(x2, y2), flat, right, right, flat);
+		batcher.Quad(new(x0, y2), new(x1, y2), new(x1, y3), new(x0, y3), left, flat, bottom, bottomLeft);
+		batcher.Quad(new(x1, y2), new(x2, y2), new(x2, y3), new(x1, y3), flat, flat, bottom, bottom);
+		batcher.Quad(new(x2, y2), new(x3, y2), new(x3, y3), new(x2, y3), flat, right, bottomRight, bottom);
+	}
+
+	static Color NormalColor(Vector2 direction)
+		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1f);
 
 	// Spriteless, so the sprite-based default is a zero rect; report the real footprint.
 	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);

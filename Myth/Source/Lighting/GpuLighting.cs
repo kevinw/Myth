@@ -286,6 +286,9 @@ sealed class GpuLighting : IDisposable
 		out float alongMin,
 		out float alongMax)
 	{
+		const float PerpendicularPaddingPixels = 8;
+		const float AlongPadding = 2;
+
 		var viewSize = (Vector2)targetSize / zoom;
 		var topLeft = camera;
 		var bottomRight = camera + viewSize;
@@ -293,31 +296,39 @@ sealed class GpuLighting : IDisposable
 		var perpendicularMaximum = float.MinValue;
 		var alongMinimum = float.MaxValue;
 		var alongMaximum = float.MinValue;
-		Include(topLeft);
-		Include(new(bottomRight.X, topLeft.Y));
-		Include(bottomRight);
-		Include(new(topLeft.X, bottomRight.Y));
+		IncludeViewPoint(topLeft);
+		IncludeViewPoint(new(bottomRight.X, topLeft.Y));
+		IncludeViewPoint(bottomRight);
+		IncludeViewPoint(new(topLeft.X, bottomRight.Y));
 		for (var i = 0; i < segmentCount; i++)
 		{
 			var segment = segments[i];
 			if (segment.Properties.X <= 0)
 				continue;
-			Include(new(segment.Coordinates.X, segment.Coordinates.Y));
-			Include(new(segment.Coordinates.Z, segment.Coordinates.W));
+			IncludeAlong(new(segment.Coordinates.X, segment.Coordinates.Y));
+			IncludeAlong(new(segment.Coordinates.Z, segment.Coordinates.W));
 		}
 
-		var padding = 2.0f;
-		perpendicularMin = perpendicularMinimum - padding;
-		perpendicularMax = perpendicularMaximum + padding;
-		alongMin = alongMinimum - padding;
-		alongMax = alongMaximum + padding;
+		// Keep the lateral ray grid at viewport resolution and anchored to world-space cells.
+		// Including moving occluders in these bounds slides every sun shadow when any one moves.
+		var perpendicularPadding = PerpendicularPaddingPixels / zoom;
+		var sampleSpacing = (perpendicularMaximum - perpendicularMinimum + perpendicularPadding * 2) / ShadowSamples;
+		perpendicularMin = MathF.Floor((perpendicularMinimum - perpendicularPadding) / sampleSpacing) * sampleSpacing;
+		perpendicularMax = perpendicularMin + sampleSpacing * ShadowSamples;
+		alongMin = alongMinimum - AlongPadding;
+		alongMax = alongMaximum + AlongPadding;
 
-		void Include(Vector2 point)
+		void IncludeViewPoint(Vector2 point)
 		{
 			var across = Vector2.Dot(point, perpendicular);
-			var along = Vector2.Dot(point, direction);
 			perpendicularMinimum = MathF.Min(perpendicularMinimum, across);
 			perpendicularMaximum = MathF.Max(perpendicularMaximum, across);
+			IncludeAlong(point);
+		}
+
+		void IncludeAlong(Vector2 point)
+		{
+			var along = Vector2.Dot(point, direction);
 			alongMinimum = MathF.Min(alongMinimum, along);
 			alongMaximum = MathF.Max(alongMaximum, along);
 		}

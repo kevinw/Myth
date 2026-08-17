@@ -24,3 +24,11 @@ public sealed class GameActorAttribute : Attribute
 	public Point2 Offset => new(OffsetX, OffsetY);
 	public RectInt? EditorBounds => BoundsW > 0 && BoundsH > 0 ? new RectInt(BoundsX, BoundsY, BoundsW, BoundsH) : null;
 }
+
+// Compact metadata for fields shown in the actor inspector.
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class IAttribute(float min, float max) : Attribute
+{
+	public float Min => min;
+	public float Max => max;
+}

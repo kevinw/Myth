@@ -14,10 +14,10 @@ namespace Myth;
 public class LightningTrap : Actor
 {
 	public Cardinal Direction = Cardinal.Right;
-	public float WaitDelay = 1.5f;   // idle time between fires
-	public float GatherTime = 0.4f;  // telegraph windup; beam gathers but isn't lethal yet
-	public float FireTime = 0.7f;    // duration the lethal hurtbox is on
-	public float StartDelay = 0f;    // one-time extra wait before the first fire, to stagger traps
+	[I(0.1f, 5)] public float WaitDelay = 1.5f;   // idle time between fires
+	[I(0.1f, 2)] public float GatherTime = 0.4f;  // telegraph windup; beam gathers but isn't lethal yet
+	[I(0.1f, 2)] public float FireTime = 0.7f;    // duration the lethal hurtbox is on
+	[I(0, 8)] public float StartDelay = 0f;       // one-time extra wait before the first fire, to stagger traps
 
 	static float FireRampTime => 0.07f; // visual ramp to full intensity when the hurtbox turns on
 	static float FireTailTime => 0.08f; // quick visual fade as the window closes

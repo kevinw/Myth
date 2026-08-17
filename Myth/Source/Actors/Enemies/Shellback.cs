@@ -13,12 +13,12 @@ public class Shellback : Actor
 		Stunned
 	}
 
-	public int Health = 3;
-	public float PatrolSpeed = 24;
-	public float ChargeSpeed = 92;
-	public float AlertRange = 96;
-	public float StunTime = 0.75f;
-	public float Gravity = 360;
+	[I(1, 12)] public int Health = 3;
+	[I(8, 48)] public float PatrolSpeed = 24;
+	[I(48, 180)] public float ChargeSpeed = 92;
+	[I(24, 224)] public float AlertRange = 96;
+	[I(0.15f, 3)] public float StunTime = 0.75f;
+	[I(100, 800)] public float Gravity = 360;
 
 	private States state = States.Patrol;
 	private float stateTimer;

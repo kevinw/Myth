@@ -17,23 +17,23 @@ public class Light : Actor
 {
 	internal static float DefaultShadowSourceRadius => 2.3f;
 
-	public float Radius = 48;
+	[I(8, 256)] public float Radius = 48;
 	public string SpriteName = "fire";
 	public Color LightColor = 0xffd37a;
-	public float Intensity = 1.0f;
-	public float Height = 16;
-	public float FlickerFrequency = 4;
-	public float FlickerIntensity = 0.08f;
+	[I(0, 3)] public float Intensity = 1.0f;
+	[I(0, 64)] public float Height = 16;
+	[I(0, 20)] public float FlickerFrequency = 4;
+	[I(0, 0.5f)] public float FlickerIntensity = 0.08f;
 	public LightCookie Cookie;
-	public float CookieAngleDegrees;
-	public float CookieSpeedDegrees;
-	public float CookieScale = 1.0f;
-	public float CookieStrength = 1.0f;
-	public float CookieFeather = 0.12f;
-	public float ShadowSourceRadius = DefaultShadowSourceRadius;
-	public float ShadowSoftness = 1.0f;
-	public float ShadowNoise;
-	public float ShadowNoiseSpeed = 8.0f;
+	[I(-180, 180)] public float CookieAngleDegrees;
+	[I(-360, 360)] public float CookieSpeedDegrees;
+	[I(0.1f, 4)] public float CookieScale = 1.0f;
+	[I(0, 2)] public float CookieStrength = 1.0f;
+	[I(0, 1)] public float CookieFeather = 0.12f;
+	[I(0, 16)] public float ShadowSourceRadius = DefaultShadowSourceRadius;
+	[I(0, 3)] public float ShadowSoftness = 1.0f;
+	[I(0, 1)] public float ShadowNoise;
+	[I(0, 40)] public float ShadowNoiseSpeed = 8.0f;
 	readonly float FlickerRandomOffset = 0;
 	public bool DrawSprite = true;
 	internal Actor? SpriteShadowOwner;

@@ -34,13 +34,13 @@ public class Wind : Actor, IResizable
 
 	public Point2 Size { get; set; } = DefaultSize;
 	public Point2 Direction = Point2.Up;
-	public float Acceleration = 620f;
-	public float MaxSpeed = 150f;
+	[I(50, 1600)] public float Acceleration = 620f;
+	[I(0, 400)] public float MaxSpeed = 150f;
 	public WindTargets Targets = WindTargets.Player | WindTargets.Bud | WindTargets.Ropes;
 	public bool DrawStreaks = true;
 	public Color StreakColor = new(0x9edfff);
-	public float StreakSpeed = 70f;
-	public int StreakSpacing = 16;
+	[I(10, 240)] public float StreakSpeed = 70f;
+	[I(4, 64)] public int StreakSpacing = 16;
 
 	public RectInt WorldRect => new(Position, Size);
 

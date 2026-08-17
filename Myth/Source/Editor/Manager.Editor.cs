@@ -91,6 +91,7 @@ public partial class Manager
 	// Click-to-cycle picking: a click that doesn't drag walks down the stack of overlapping actors
 	// so hidden ones are reachable. Scratch + press state drive it.
 	readonly List<int> actorPickScratch = [];
+	readonly List<ActorSpecs.EditableProperty> actorPropertyScratch = [];
 	Vector2 actorPressCursor;
 	bool actorPressCanCycle;
 	const float ActorPickCycleThreshold = 4f; // UI pixels: a release within this of the press is a click, not a drag
@@ -261,6 +262,7 @@ public partial class Manager
 		particleEditor.PinnedWindowImGui(game, Scale, NoteDockedWindow);
 		if (!playing && !startingPlay)
 		{
+			ActorInstancesImGui();
 			TileKitEditorImGui();
 			SurfaceEditorImGui();
 			NctTileEditorImGui();
@@ -593,8 +595,7 @@ public partial class Manager
 				CenterRoomActorOnEditorCamera(room, actor);
 			ClampRoomActorToRoom(room, actor);
 			selectedRoomActorIndex = room.Actors.Count - 1;
-			actorSelectTool = true;
-			selectedActorPaletteIndex = -1;
+			SelectEditorActorTool();
 			ClearEditorDragState();
 			editorSelectionRect = null;
 			editorGameDirty = true;
@@ -1050,6 +1051,7 @@ public partial class Manager
 	void SelectEditorActorTool()
 	{
 		actorSelectTool = true;
+		selectedActorPaletteIndex = -1;
 		brush = '0';
 	}
 
@@ -1250,6 +1252,12 @@ public partial class Manager
 			}
 			if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				ActorZedLauncher.OpenActor(entry);
+			if (BeginPopupContextItem(vsb.AsSpan()))
+			{
+				if (MenuItem("Find Instances..."))
+					OpenActorInstanceSearch(entry);
+				EndPopup();
+			}
 
 			index++;
 		}
@@ -1676,7 +1684,11 @@ public partial class Manager
 
 		var changed = false;
 		var spec = ActorSpecs.Get(selectedActorSpecId);
-		foreach (var property in ActorSpecs.GetEditableProperties(selectedActorSpecId))
+		actorPropertyScratch.Clear();
+		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(selectedActorSpecId));
+		if (spec != null)
+			changed |= DrawRandomizeActorPropertiesButton(selectedActorSpecId, null, spec);
+		foreach (var property in actorPropertyScratch)
 		{
 			if (spec != null && HideInactiveLightCookieProperty(spec, property))
 				continue;
@@ -1717,15 +1729,71 @@ public partial class Manager
 		return DrawActorProperty(specId, null, spec, property);
 	}
 
+	bool DrawRandomizeActorPropertiesButton(string? specId, Room? room, JsonObject actor)
+	{
+		var hasRanges = false;
+		foreach (var property in actorPropertyScratch)
+			if (property.Inspector != null)
+			{
+				hasRanges = true;
+				break;
+			}
+		if (!hasRanges || !Button($"{EditorIcons.Randomize}  Randomize all"))
+			return false;
+
+		if (specId != null)
+		{
+			using (CapturePrefabUndo("Randomize Actor Properties", specId))
+				RandomizeActorProperties(specId, actor);
+		}
+		else if (room != null)
+		{
+			using (CaptureRoomUndo("Randomize Actor Properties", room))
+				RandomizeActorProperties(null, actor);
+		}
+		return true;
+	}
+
+	void RandomizeActorProperties(string? specId, JsonObject actor)
+	{
+		foreach (var property in actorPropertyScratch)
+			if (property.Inspector is { } inspector)
+			{
+				var value = RandomActorValue(property, inspector);
+				if (specId != null)
+					ActorSpecs.SetProperty(specId, property.JsonName, value);
+				else
+					ActorSpecs.SetProperty(actor, property.JsonName, value);
+			}
+	}
+
+	static JsonNode RandomActorValue(ActorSpecs.EditableProperty property, IAttribute inspector)
+		=> property.Type == typeof(int)
+			? JsonValue.Create(Random.Shared.Next((int)MathF.Ceiling(inspector.Min), (int)MathF.Floor(inspector.Max) + 1))
+			: JsonValue.Create(inspector.Min + Random.Shared.NextSingle() * (inspector.Max - inspector.Min));
+
 	bool DrawActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
-		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
+		var row = BeginPropertyRow(property.Name, property.HasLocalValue,
+			additionalTrailingButtons: property.Inspector != null ? 1 : 0);
 		PushID("Value");
 		var changed = DrawActorPropertyValue(specId, room, actor, property, row.ControlWidth);
 		PopID();
 
 		if (specId != null && undo.HasPending(PrefabUndoSlot, specId) && IsItemDeactivatedAfterEdit())
 			CommitPrefabUndo();
+
+		if (property.Inspector is { } inspector)
+		{
+			SameLine();
+			if (SmallButton($"{EditorIcons.Randomize}##Randomize"))
+			{
+				SetActorProperty(specId, room, actor, property, RandomActorValue(property, inspector), "Randomize Actor Property");
+				changed = true;
+			}
+			if (IsItemHovered())
+				SetTooltip($"Randomize from {inspector.Min:g} to {inspector.Max:g}");
+		}
 
 		if (property.HasLocalValue)
 		{
@@ -1763,7 +1831,10 @@ public partial class Manager
 		else if (property.Type == typeof(float))
 		{
 			var value = property.Value?.GetValue<float>() ?? 0;
-			if (DragFloat("##Value", ref value, 0.05f))
+			var edited = property.Inspector is { } inspector
+				? SliderFloat("##Value", ref value, inspector.Min, inspector.Max, "%.3f", ImGuiSliderFlags.AlwaysClamp)
+				: DragFloat("##Value", ref value, 0.05f);
+			if (edited)
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
 				return true;
@@ -1772,7 +1843,10 @@ public partial class Manager
 		else if (property.Type == typeof(int))
 		{
 			var value = property.Value?.GetValue<int>() ?? 0;
-			if (DragInt("##Value", ref value))
+			var edited = property.Inspector is { } inspector
+				? SliderInt("##Value", ref value, (int)inspector.Min, (int)inspector.Max, "%d", ImGuiSliderFlags.AlwaysClamp)
+				: DragInt("##Value", ref value);
+			if (edited)
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
 				return true;
@@ -2026,7 +2100,10 @@ public partial class Manager
 		}
 
 		var changed = false;
-		foreach (var property in ActorSpecs.GetEditableProperties(actor))
+		actorPropertyScratch.Clear();
+		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
+		changed |= DrawRandomizeActorPropertiesButton(null, room, actor);
+		foreach (var property in actorPropertyScratch)
 		{
 			if (HideInactiveLightCookieProperty(actor, property))
 				continue;
@@ -2624,14 +2701,17 @@ public partial class Manager
 
 	readonly record struct PropertyRowLayout(float ControlWidth);
 
-	static PropertyRowLayout BeginPropertyRow(string label, bool hasTrailingButton = false)
+	static PropertyRowLayout BeginPropertyRow(string label, bool hasTrailingButton = false, int additionalTrailingButtons = 0)
 	{
+		const float MinimumLabelWidth = 94;
+		const float MinimumControlWidth = 72;
+		const float MaximumLabelWidth = 140;
+
 		var style = GetStyle();
 		var available = GetContentRegionAvail().X;
-		var trailingWidth = hasTrailingButton
-			? CalcTextSize(EditorIcons.Reset).X + style.FramePadding.X * 2 + style.ItemSpacing.X
-			: 0;
-		var stacked = available < 56 + 72 + style.ItemSpacing.X + trailingWidth;
+		var trailingButtons = (hasTrailingButton ? 1 : 0) + additionalTrailingButtons;
+		var trailingWidth = trailingButtons * (CalcTextSize(EditorIcons.Reset).X + style.FramePadding.X * 2 + style.ItemSpacing.X);
+		var stacked = available < MinimumLabelWidth + MinimumControlWidth + style.ItemSpacing.X + trailingWidth;
 		var rowStartX = GetCursorPosX();
 
 		AlignTextToFramePadding();
@@ -2643,8 +2723,7 @@ public partial class Manager
 			return new(stackedControlWidth);
 		}
 
-		var labelWidth = MathF.Min(MathF.Max(94, available * 0.38f), 180);
-		labelWidth = MathF.Min(labelWidth, available - trailingWidth - style.ItemSpacing.X - 72);
+		var labelWidth = Math.Clamp(available * 0.25f, MinimumLabelWidth, MaximumLabelWidth);
 		var controlWidth = available - labelWidth - trailingWidth - style.ItemSpacing.X;
 		DrawPropertyLabel(label, labelWidth, rowStartX, rightAligned: true);
 		SameLine();
@@ -4807,7 +4886,12 @@ public partial class Manager
 						editing.AddActorType(actorEntry.ActorTypeName, position);
 					// Select the just-placed actor so its inspector opens immediately.
 					if (editing.Actors.Count == before + 1)
+					{
 						selectedRoomActorIndex = editing.Actors.Count - 1;
+						SelectEditorActorTool();
+						ClearEditorDragState();
+						editorSelectionRect = null;
+					}
 					CancelTilePaint();
 					editorGameDirty = true;
 				}

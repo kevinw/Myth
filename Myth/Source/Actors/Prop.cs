@@ -23,7 +23,7 @@ public class Prop : Actor
 	public string SpriteName = "fire";
 	public Factory.TileLayer Layer;
 	public bool Decal;
-	public float AnimationSpeedRandomness;
+	[I(0, 1)] public float AnimationSpeedRandomness;
 	float animationRate = 1;
 
 	public override bool CastsSpriteShadow => !Decal;

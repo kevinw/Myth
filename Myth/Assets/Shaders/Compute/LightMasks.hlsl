@@ -194,8 +194,8 @@ float point_visibility(uint lightIndex, Light light, float2 delta, float distanc
 float sun_visibility(float2 world)
 {
     float across = dot(world, SunPerpendicular);
-    float samplePosition = saturate((across - SunPerpendicularMin) / (SunPerpendicularMax - SunPerpendicularMin));
-    int center = (int)round(samplePosition * (POINT_SHADOW_SAMPLES - 1));
+    float sampleSpacing = max((SunPerpendicularMax - SunPerpendicularMin) / POINT_SHADOW_SAMPLES, 0.0001);
+    int center = clamp((int)floor((across - SunPerpendicularMin) / sampleSpacing), 0, POINT_SHADOW_SAMPLES - 1);
     if (SunSoftness <= 0.0)
     {
         float depth = ShadowDepth[SUN_SHADOW_ROW * POINT_SHADOW_SAMPLES + center].x;

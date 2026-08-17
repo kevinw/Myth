@@ -144,6 +144,9 @@ public partial class Manager
 
 		if (ImGui.BeginMenu("Windows"))
 		{
+			if (ImGui.MenuItem("Right Tool Dock", null, ref editorDockOpen))
+				SaveWindowSettings();
+			ImGui.Separator();
 			ImGui.MenuItem("Tiles", null, ref tilesPanelOpen);
 			ImGui.MenuItem("Actors", null, ref actorsPanelOpen);
 			ImGui.MenuItem("Actor List", null, ref actorListPanelOpen);
