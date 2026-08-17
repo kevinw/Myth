@@ -176,6 +176,7 @@ public static partial class Assets
 	/// </summary>
 	public static void BuildContentZip(string outputPath, string target, string? worldId = null)
 	{
+		ActorSpecs.LoadSpecs();
 		var manifestPath = Path.Join(DefaultVisualAssetPackPath, packedVisualsManifestName);
 		if (!File.Exists(manifestPath))
 			throw new InvalidOperationException("Visual asset pack is missing. Build it with --build-asset-pack before building Content.zip.");
@@ -293,24 +294,12 @@ public static partial class Assets
 						if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
 							surfaces.Add(id);
 						if (actor is JsonObject proceduralWall && ActorSpecs.GetTypeName(proceduralWall) is { } wallTypeName &&
-							ActorSpecs.GetActorType(wallTypeName) is { } wallType && typeof(ProceduralWall).IsAssignableFrom(wallType))
+							ProceduralWallDefaultTextures(wallTypeName) is { } defaults)
 						{
-							var defaultPattern = wallType == typeof(HyphaWall) ? "patterns/pattern_68" :
-								wallType == typeof(StrataWall) ? "patterns/pattern_37" :
-								wallType == typeof(CircuitWall) ? "patterns/pattern_12" :
-								wallType == typeof(ArchiveWall) ? "patterns/pattern_57" :
-								wallType == typeof(FleshWall) ? "patterns/pattern_34" :
-								wallType == typeof(RuinsWall) ? "patterns/pattern_68" : ProceduralWallRenderer.DefaultPatternTexture;
-							var defaultDetail = wallType == typeof(HyphaWall) ? "patterns/noise/Noise_036" :
-								wallType == typeof(StrataWall) ? "patterns/noise/Noise_022" :
-								wallType == typeof(CircuitWall) ? "patterns/noise/Noise_003" :
-								wallType == typeof(ArchiveWall) ? "patterns/noise/Noise_041" :
-								wallType == typeof(FleshWall) ? "patterns/noise/Noise_069" :
-								wallType == typeof(RuinsWall) ? "patterns/noise/Noise_055" : ProceduralWallRenderer.DefaultDetailTexture;
 							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.PatternTexture)) is { Length: > 0 } pattern
-								? pattern : defaultPattern);
+								? pattern : defaults.Pattern);
 							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.DetailTexture)) is { Length: > 0 } detail
-								? detail : defaultDetail);
+								? detail : defaults.Detail);
 						}
 					}
 			}
@@ -332,6 +321,18 @@ public static partial class Assets
 			}
 		}
 	}
+
+	static (string Pattern, string Detail)? ProceduralWallDefaultTextures(string typeName) => typeName.ToLowerInvariant() switch
+	{
+		"machinewall" => (ProceduralWallRenderer.DefaultPatternTexture, ProceduralWallRenderer.DefaultDetailTexture),
+		"hyphawall" => ("patterns/pattern_68", "patterns/noise/Noise_036"),
+		"stratawall" => ("patterns/pattern_37", "patterns/noise/Noise_022"),
+		"circuitwall" => ("patterns/pattern_12", "patterns/noise/Noise_003"),
+		"archivewall" => ("patterns/pattern_57", "patterns/noise/Noise_041"),
+		"fleshwall" => ("patterns/pattern_34", "patterns/noise/Noise_069"),
+		"ruinswall" => ("patterns/pattern_68", "patterns/noise/Noise_055"),
+		_ => null,
+	};
 
 	static void ValidateReferencedSurfaceAssets(HashSet<string> surfaces, HashSet<string> textures)
 	{
