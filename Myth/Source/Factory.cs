@@ -126,6 +126,21 @@ public static class Factory
 		}
 #endif
 
+#if EDITOR
+		// FromActorIcon's counterpart for a spec: an actor type drawn with an editor icon
+		// lends it to its prefabs, which place and preview at the same size.
+		public static ActorPaletteEntry FromActorSpecIcon(string specId, Subtexture icon, Point2 offset, RectInt editorBounds)
+		{
+			var spec = ActorSpecs.Get(specId)
+				?? throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing actor spec.");
+			var typeName = ActorSpecs.GetTypeName(spec);
+			var origin = icon.Size / 2;
+			var previewScale = Game.TileSize / MathF.Max(icon.Width, icon.Height);
+			return new ActorPaletteEntry(specId, icon, origin, offset, editorBounds, typeName, specId,
+				editorBounds, TagsForType(typeName), previewImage: icon, previewScale: previewScale);
+		}
+#endif
+
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
 		{
 			var spec = ActorSpecs.Get(specId);
@@ -374,6 +389,7 @@ public static class Factory
 			if (!EditorIcons.TryGetPaletteIcon(editorIconName, out var icon))
 				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' references unknown editor icon '{editorIconName}'.");
 			var iconOffset = attr.OffsetX != 0 || attr.OffsetY != 0 ? attr.Offset : Point2.Zero;
+			paletteLooks[name] = new PaletteLook(editorIconName, null, iconOffset, editorBounds);
 			ActorPalette.Add(ActorPaletteEntry.FromActorIcon(name, icon, iconOffset, editorBounds, tags));
 #endif
 			return;
@@ -398,8 +414,15 @@ public static class Factory
 			: attr?.EditorBounds != null ? Point2.Zero
 			: DeriveTileOffset(sprite, anchor);
 
+		paletteLooks[name] = new PaletteLook(null, iconName, offset, attr?.EditorBounds);
 		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None, anchor));
 	}
+
+	// How a registered actor type's palette button looks, captured while registering the type
+	// so its specs (prefabs) can wear the same one. Types that skip the palette record nothing,
+	// which keeps their prefabs out of it as well.
+	readonly record struct PaletteLook(string? IconName, string? SpriteName, Point2 Offset, RectInt? EditorBounds);
+	static readonly Dictionary<string, PaletteLook> paletteLooks = new(StringComparer.OrdinalIgnoreCase);
 
 	// Where the resolved origin should land within a clicked tile: centered horizontally, and
 	// sitting on the tile bottom when the origin is in the sprite's lower half (a grounded
@@ -426,6 +449,7 @@ public static class Factory
 		actorTypeTags.Clear();
 		livePositionEditableActorTypes.Clear();
 		liveResizableActorTypes.Clear();
+		paletteLooks.Clear();
 		GeneratedActors.RegisterAll();
 
 		string GRASS_SUBSTANCE = "Grass";
@@ -486,20 +510,27 @@ public static class Factory
 		}
 	}
 
+	// Every actor spec in Assets/Actors gets a palette button, drawn with the palette look of
+	// the actor type it specializes -- so a new prefab is a JSON file, not a code change.
 	private static void RegisterActorSpecPaletteEntries()
 	{
 		foreach (var (id, spec) in ActorSpecs.Specs.OrderBy(it => it.Id))
 		{
-			if (string.Equals(ActorSpecs.GetTypeName(spec), "Light", StringComparison.OrdinalIgnoreCase))
+			if (ActorSpecs.GetTypeName(spec) is not { } typeName ||
+				!paletteLooks.TryGetValue(typeName, out var look))
+				continue;
+
+			if (look.SpriteName is { } spriteName)
 			{
-				ActorPalette.Add(ActorPaletteEntry.FromActorSpec(id, "fire", new Point2(4, 4)));
+				ActorPalette.Add(ActorPaletteEntry.FromActorSpec(id, spriteName, look.Offset, look.EditorBounds));
 				continue;
 			}
 
-			var typeName = ActorSpecs.GetTypeName(spec);
-			if (string.Equals(typeName, "Door", StringComparison.OrdinalIgnoreCase) ||
-				string.Equals(typeName, "LinkedDoor", StringComparison.OrdinalIgnoreCase))
-				ActorPalette.Add(ActorPaletteEntry.FromActorSpec(id, "door", new Point2(4, 8)));
+#if EDITOR
+			if (look.IconName is { } iconName && look.EditorBounds is { } bounds &&
+				EditorIcons.TryGetPaletteIcon(iconName, out var icon))
+				ActorPalette.Add(ActorPaletteEntry.FromActorSpecIcon(id, icon, look.Offset, bounds));
+#endif
 		}
 	}
 
@@ -510,6 +541,7 @@ public static class Factory
 		legacySlopeChars.Clear();
 		legacySlopeNames.Clear();
 		ActorPalette.Clear();
+		paletteLooks.Clear();
 	}
 
 }

@@ -71,6 +71,8 @@
   ],
   "slopes": [[15, 13],[16, 14],[17, 14],[18, 15],[19, 15],[20, 16],[21, 16],[22, 17],[23, 17]
   ],
+  "crumble": [[9, 14]
+  ],
   "actors": [
     {
       "Id": "b2e41d99e32f5c01",
@@ -107,12 +109,17 @@
     },
     {
       "Id": "f59f181c2ccde014",
-      "Type": "TitleText",
-      "Position": [68, 70],
-      "Emissive": true,
-      "RevealSpeed": 9999999,
-      "LineHeightMultiplier": 0.7,
-      "Text": "hold down\nto crawl"
+      "From": "TutorialText",
+      "Position": [40, 122]
+    },
+    {
+      "Id": "7eac8a8cdba0058c",
+      "From": "TutorialText",
+      "Position": [128, 144],
+      "Text": [
+        "hold down and right",
+        "when landing to roll"
+      ]
     }
   ]
 }

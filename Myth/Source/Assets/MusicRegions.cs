@@ -34,7 +34,7 @@ public static class MusicRegions
 
 		try
 		{
-			var json = JsonNode.Parse(Assets.Content.ReadAllText(ContentKey))?.AsObject();
+			var json = JsonUtil.Parse(Assets.Content.ReadAllText(ContentKey))?.AsObject();
 			if (json == null || !json.TryGetPropertyValue("regions", out var regionsNode) || regionsNode is not JsonArray entries)
 				return;
 			foreach (var node in entries)

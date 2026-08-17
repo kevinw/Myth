@@ -5,6 +5,8 @@ namespace Myth;
 public class Bud : Pawn, ICarryable, IHitByHitbox
 {
 	internal static readonly Color Tint = new(0x7fb6ff);
+	// His speech reads as his own blue, lifted toward white so it stays legible over dark rooms.
+	internal static readonly Color SpeechColor = Color.Lerp(Tint, Color.White, 0.45f);
 	private const int FollowStopDistance = 18;
 	private const int DesiredPlayerSpacing = 20;
 	private const float EnterDelay = 1.0f;
@@ -380,7 +382,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	}
 
 	internal Game.StorySpeechBubble? Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
-		=> Game.ShowSpeech(this, new Vector2(0, -32), text, Game.BudVoiceProfile, emotion, Game.BudVoiceName);
+		=> Game.ShowSpeech(this, new Vector2(0, -32), text, Game.BudVoiceProfile, SpeechColor, emotion, Game.BudVoiceName);
 
 	internal bool TryEnterPlayerBurrow(Player player)
 	{

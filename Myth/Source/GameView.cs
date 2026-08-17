@@ -228,25 +228,33 @@ public sealed partial class GameView : IDisposable
 		if (font == null)
 			return;
 
+		var screen = new Point2(target.Width, target.Height);
+		CollectSpeechObstacles(screen);
 		foreach (var bubble in game.storySpeechBubbles)
-			DrawStorySpeechBubble(font, bubble);
+			DrawStorySpeechBubble(font, bubble, screen);
 
 		Batcher.Render(target);
 		Batcher.Clear();
 	}
 
-	private void DrawStorySpeechBubble(SpriteFont font, Game.StorySpeechBubble bubble)
+	private void DrawStorySpeechBubble(SpriteFont font, Game.StorySpeechBubble bubble, Point2 screen)
 	{
 		var layout = Game.MeasureStorySpeech(font, bubble.Text);
 		if (layout.Lines.Count == 0)
 			return;
 
-		var anchor = (Point2)(game.ClampStorySpeechPosition(bubble.Position, layout) - RenderCamera);
-		var box = new Rect(
-			anchor.X - layout.Width - layout.Padding.X,
-			anchor.Y - layout.Lines.Count * layout.LineHeight - layout.Padding.Y,
+		// The bubble hangs up and to the left of its world anchor, then slides back onto the
+		// screen so a line spoken at the view's edge is still readable in full.
+		var anchor = (Point2)(bubble.Position - RenderCamera);
+		var size = new Vector2(
 			layout.Width + layout.Padding.X * 2,
 			layout.Lines.Count * layout.LineHeight + layout.Padding.Y * 2);
+		var box = new Rect(
+			ClampToScreen(anchor.X - size.X + layout.Padding.X, size.X, screen.X),
+			ClampToScreen(anchor.Y - size.Y + layout.Padding.Y, size.Y, screen.Y),
+			size.X,
+			size.Y);
+		box = DodgeSpeechObstacles(box, screen);
 
 		// Reveal characters over the canonical (whitespace-normalized) text: lines join
 		// back into it with one space each, so a per-line budget with a -1 per join is exact.
@@ -260,11 +268,81 @@ public sealed partial class GameView : IDisposable
 				(int)MathF.Round(box.Left + layout.Padding.X + (layout.Width - lineWidth) * 0.5f),
 				(int)MathF.Round(box.Top + layout.Padding.Y + i * layout.LineHeight));
 			if (shown.Length > 0)
-				Batcher.Text(font, shown, at, font.Size, Color.White);
+			{
+				// Same drop shadow TitleText uses, so speech sits on busy tiles as readably.
+				Batcher.Text(font, shown, at + new Point2(SpeechShadowOffset, SpeechShadowOffset), font.Size, SpeechShadowColor);
+				Batcher.Text(font, shown, at, font.Size, bubble.Color);
+			}
 			remaining -= full.Length + 1; // +1 for the space that joined this line to the next
 			if (remaining <= 0)
 				break;
 		}
+	}
+
+	private const int SpeechShadowOffset = 1;
+	private static readonly Color SpeechShadowColor = new(0x000000, (byte)170);
+
+	// Whole pixels, so a bubble pinned in world space doesn't shimmer as the camera moves.
+	// A box too big for the screen keeps its leading edge rather than centering.
+	private static float ClampToScreen(float position, float size, int screen)
+	{
+		const float Margin = 3;
+		return MathF.Round(MathF.Max(Margin, MathF.Min(position, screen - Margin - size)));
+	}
+
+	private const float SpeechObstacleGap = 3;
+	private readonly List<Rect> speechObstacles = [];
+
+	// Text already on screen that a bubble must not print over -- TitleText signage today.
+	// Collected once per frame in screen space, padded by the gap the bubble should keep.
+	private void CollectSpeechObstacles(Point2 screen)
+	{
+		speechObstacles.Clear();
+		if (game.Simulating)
+			return; // TitleText doesn't draw while simulating either
+
+		foreach (var actor in Actors)
+		{
+			if (actor is not TitleText { Visible: true } title || string.IsNullOrWhiteSpace(title.Text))
+				continue;
+
+			var bounds = TitleText.TextBounds(title.Position, title.Text, title.LineHeightMultiplier);
+			var rect = new Rect(bounds.X - RenderCamera.X, bounds.Y - RenderCamera.Y, bounds.Width, bounds.Height)
+				.Inflate(SpeechObstacleGap);
+			if (rect.Right > 0 && rect.Left < screen.X && rect.Bottom > 0 && rect.Top < screen.Y)
+				speechObstacles.Add(rect);
+		}
+	}
+
+	// Slide a blocked bubble above the text in its way, or below it if there's no room above.
+	// Each move can land on another obstacle, hence the retries; if nothing clears, the bubble
+	// stays where it was so it at least reads near the speaker.
+	private Rect DodgeSpeechObstacles(Rect box, Point2 screen)
+	{
+		for (var attempt = 0; attempt < 3 && speechObstacles.Count > 0; attempt++)
+		{
+			if (FirstSpeechObstacleOverlapping(box) is not { } blocker)
+				break;
+
+			var above = new Rect(box.X, ClampToScreen(blocker.Top - box.Height, box.Height, screen.Y), box.Width, box.Height);
+			if (FirstSpeechObstacleOverlapping(above) == null)
+				return above;
+
+			var below = new Rect(box.X, ClampToScreen(blocker.Bottom, box.Height, screen.Y), box.Width, box.Height);
+			if (FirstSpeechObstacleOverlapping(below) == null)
+				return below;
+
+			box = above; // keep pushing upward against a stack of obstacles
+		}
+		return box;
+	}
+
+	private Rect? FirstSpeechObstacleOverlapping(in Rect box)
+	{
+		foreach (var obstacle in speechObstacles)
+			if (obstacle.Overlaps(box))
+				return obstacle;
+		return null;
 	}
 
 #if DEBUG

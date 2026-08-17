@@ -7,7 +7,7 @@ namespace Myth;
 	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
 public class Switch : PointPathActor
 {
-	public string TargetActorId = "";
+	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
 	[I(20, 240)] public float PulseSpeed = 85f;
 	[I(8, 192)] public float PulseLength = 64f;
 

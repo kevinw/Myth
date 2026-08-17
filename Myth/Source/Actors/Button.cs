@@ -15,7 +15,7 @@ public class Button : Actor
 	public Cardinal Direction = Cardinal.Up;
 	public ButtonMode Mode;
 	public bool Persistent;
-	public string TargetActorId = "";
+	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
 	public string? SurfaceId;
 
 	static int HousingDepth => 3;

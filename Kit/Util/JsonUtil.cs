@@ -8,6 +8,21 @@ namespace Myth;
 
 internal static class JsonUtil
 {
+	// Authored content (rooms, actor specs, tile kits, storylets) is hand-edited, so parse it
+	// the way an editor's user expects: a trailing comma left behind mid-edit is not an error,
+	// and // notes are skipped. Neither survives a re-save -- the DOM doesn't carry them.
+	static readonly JsonDocumentOptions LenientOptions = new()
+	{
+		AllowTrailingCommas = true,
+		CommentHandling = JsonCommentHandling.Skip
+	};
+
+	public static JsonNode? Parse(string json)
+		=> JsonNode.Parse(json, documentOptions: LenientOptions);
+
+	public static JsonNode? Parse(ReadOnlySpan<byte> utf8Json)
+		=> JsonNode.Parse(utf8Json, documentOptions: LenientOptions);
+
 	public static bool ContainsProperty(JsonObject json, string key)
 		=> TryGetProperty(json, key, out _);
 

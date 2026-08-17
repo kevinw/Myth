@@ -134,6 +134,14 @@ public abstract class Pawn : Actor
 	protected static float DashSpeed => 250;
 	protected static float DashDuration => 0.15f;
 	protected static float DashCooldown => 0.154f;
+	// Dash as a mode rather than a launch: the press skips the fixed-speed burst and its
+	// particles, and only engages the faster run (held). False restores the burst.
+	protected static bool DashEngagesRunOnly => true;
+	// Applies while dash-running under DashEngagesRunOnly, since there's no burst to carry
+	// you up to the raised top speed.
+	protected static float DashRunAccelMultiplier => 1.5f.T();
+	// How fast you must already be moving for a neutral stick to keep dash-running you along.
+	protected static float DashRunAutoRunSpeed => 8f.T();
 	// Rope climbing: hold up near a rope to grab on (see Rope + ClimbState). Movement-toy
 	// tuning: swinging is meant to carry into release jumps, so RopeSwingCarry rewards a
 	// pumped-up pendulum.
@@ -432,7 +440,7 @@ public abstract class Pawn : Actor
 
 	public override void OnCollideX()
 	{
-		var dashCollision = State != States.Burrow && (dashCooldownTimer > 0 || IsDashRunning());
+		var dashCollision = State != States.Burrow && (DashBursting || IsDashRunning());
 		var dashImpact = dashCollision && Grounded();
 		base.OnCollideX();
 		if (State != States.Burrow)
@@ -455,6 +463,10 @@ public abstract class Pawn : Actor
 	bool wallSliding = false;
 	double lastSkidParticlesTime;
 
+	// The launch window: the fixed-speed burst is driving movement (and its fx). Distinct from
+	// dashCooldownTimer's other job, which is gating the next dash press.
+	protected bool DashBursting => !DashEngagesRunOnly && dashCooldownTimer > 0;
+
 	protected bool IsDashRunning() =>
 		state.Current == States.Normal && dashRunArmed && input.DashDown && !ducking && !inWater;
 
@@ -476,7 +488,7 @@ public abstract class Pawn : Actor
 	{
 		if (MathF.Abs(moveX) >= MoveInputDeadzone)
 			dashRunDirection = Math.Sign(moveX);
-		else
+		else if (CanAutoRunOnNeutralStick)
 		{
 			if (dashRunDirection == 0)
 				dashRunDirection = Facing == 0 ? Signs.Positive : Facing;
@@ -484,6 +496,12 @@ public abstract class Pawn : Actor
 		}
 		return moveX;
 	}
+
+	// Letting go of the stick while dash-running keeps you running. In the mode-only dash
+	// that carry needs motion to carry: without the launch, it would otherwise walk you off
+	// from a standstill the moment you held the button.
+	bool CanAutoRunOnNeutralStick
+		=> !DashEngagesRunOnly || MathF.Abs(Velocity.X) >= DashRunAutoRunSpeed;
 
 	protected void NormalState()
 	{
@@ -614,11 +632,13 @@ public abstract class Pawn : Actor
 		var lastFacing = Facing;
 
 		var acceleration = grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier;
+		if (dashRunning && DashEngagesRunOnly)
+			acceleration *= DashRunAccelMultiplier;
 		if (dashRunning && wallJumpInputLockTimer <= 0 && movementInput != 0 && Velocity.X != 0 &&
 			Math.Sign(movementInput) != Math.Sign(Velocity.X))
 			acceleration *= DashRunReverseAccelMultiplier;
 		Velocity.X += movementInput * acceleration * Time.Delta;
-		if (dashCooldownTimer > 0)
+		if (DashBursting)
 			Velocity.X = dashDirection * DashSpeed;
 		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
 		if (dashCancelBraking)
@@ -635,7 +655,7 @@ public abstract class Pawn : Actor
 			Velocity.X = Calc.Approach(Velocity.X, target, DashCancelFriction * Time.Delta);
 			dashCancelBraking = Velocity.X != target;
 		}
-		else if (moveX == 0 && grounded && dashCooldownTimer == 0)
+		else if (moveX == 0 && grounded && !DashBursting)
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
 		else if (moveX == 0 && inWater)
 			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
@@ -1101,12 +1121,15 @@ public abstract class Pawn : Actor
 		dashNeedsGrounding = true;
 		dashRunArmed = input.DashDown;
 		dashRunDirection = dashDirection;
-		jumpTimer = 0;
-		Velocity.X = dashDirection * 200f;
-		Velocity.Y = 0;
 		ducking = false;
 		Squish = new Vector2(1.35f, 0.82f);
-		Play("jump");
+		if (!DashEngagesRunOnly)
+		{
+			jumpTimer = 0;
+			Velocity.X = dashDirection * 200f;
+			Velocity.Y = 0;
+			Play("jump");
+		}
 		if (PlayerSpecificAudioEvents)
 			AudioEvent("player/dash_start");
 		return true;
@@ -1283,8 +1306,12 @@ public abstract class Pawn : Actor
 [GameActor(HideFromPalette = true)]
 public partial class Player : Pawn
 {
+	// The body pink out of player.ase, lifted toward white the same way Bud's blue is.
+	internal static readonly Color BodyColor = new(0xc2698d);
+	internal static readonly Color SpeechColor = Color.Lerp(BodyColor, Color.White, 0.45f);
+
 	internal Game.StorySpeechBubble? Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
-		=> Game.ShowSpeech(this, new Vector2(0, -32), text, Game.PlayerVoiceProfile, emotion, Game.PlayerVoiceName);
+		=> Game.ShowSpeech(this, new Vector2(0, -32), text, Game.PlayerVoiceProfile, SpeechColor, emotion, Game.PlayerVoiceName);
 
 	public override PawnInput GetInput()
 	{
@@ -1432,7 +1459,7 @@ public partial class Player : Pawn
 
 		UpdateAura(Time.Delta);
 		UpdateDashFx(Time.Delta);
-		if (grounded && State == States.Normal && (dashCooldownTimer > 0 || IsDashRunning()))
+		if (grounded && State == States.Normal && DashBursting)
 			EmitJumpParticles(Position, DashGroundParticleCount);
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)

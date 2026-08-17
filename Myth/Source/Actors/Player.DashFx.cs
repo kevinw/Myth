@@ -11,7 +11,7 @@ public partial class Player
 
 	int dashEdgeSlot = -1;
 
-	bool DashActive => dashCooldownTimer > 0;
+	bool DashActive => DashBursting;
 
 	void UpdateDashFx(float dt)
 	{

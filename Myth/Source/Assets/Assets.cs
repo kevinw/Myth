@@ -280,7 +280,7 @@ public static partial class Assets
 			foreach (var file in Directory.EnumerateFiles(worldRoomsPath, "*.json", SearchOption.AllDirectories))
 			{
 				JsonNode? root;
-				try { root = JsonNode.Parse(File.ReadAllText(file)); }
+				try { root = JsonUtil.Parse(File.ReadAllText(file)); }
 				catch (Exception e)
 				{
 					Console.WriteLine($"Warning: could not parse room '{file}' collecting surface references ({e.Message}); surfaces it uses may be dropped.");
@@ -418,7 +418,7 @@ public static partial class Assets
 			JsonNode? root;
 			try
 			{
-				root = JsonNode.Parse(File.ReadAllText(file));
+				root = JsonUtil.Parse(File.ReadAllText(file));
 			}
 			catch (Exception exception)
 			{
@@ -2959,7 +2959,7 @@ public static partial class Assets
 	}
 
 	static Room LoadRoomJson(string id, ReadOnlySpan<byte> json)
-		=> new(id, Point2.Zero, Room.DefaultSize, JsonUtil.NormalizeStringValues(JsonNode.Parse(json)?.AsObject() ?? []));
+		=> new(id, Point2.Zero, Room.DefaultSize, JsonUtil.NormalizeStringValues(JsonUtil.Parse(json)?.AsObject() ?? []));
 
 	static int RoomSublayerFromPath(string root, string path)
 	{

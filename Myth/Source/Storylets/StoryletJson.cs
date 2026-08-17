@@ -10,7 +10,7 @@ public static class StoryletJson
 
 	public static StoryDeck DeckFromText(string jsonText, Dictionary<string, object?>? context = null)
 	{
-		var json = JsonNode.Parse(jsonText)?.AsObject() ?? [];
+		var json = JsonUtil.Parse(jsonText)?.AsObject() ?? [];
 		return DeckFromJson(json, context);
 	}
 

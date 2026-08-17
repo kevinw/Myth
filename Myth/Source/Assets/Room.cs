@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Numerics;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Foster.Framework;
@@ -1439,7 +1440,14 @@ public class Room
 
 	void WriteJson(IBufferWriter<byte> output, bool includeColorFields)
 	{
-		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true, NewLine = "\n" });
+		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions
+		{
+			Indented = true,
+			NewLine = "\n",
+			// Leave apostrophes and the like as themselves rather than \u0027 escapes: room files
+			// are hand-edited, and this only relaxes escaping meant for embedding JSON in HTML.
+			Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+		});
 		writer.WriteStartObject();
 
 		WriteIntPairProperty(writer, "position", TileSpacePosition.X, TileSpacePosition.Y);
@@ -1611,7 +1619,7 @@ public class Room
 
 	public void LoadJsonState(string jsonText)
 	{
-		var json = JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []);
+		var json = JsonUtil.NormalizeStringValues(JsonUtil.Parse(jsonText)?.AsObject() ?? []);
 		TileSpacePosition = JsonUtil.ReadPoint(json, "position") ?? TileSpacePosition;
 		if (JsonUtil.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)
 		{

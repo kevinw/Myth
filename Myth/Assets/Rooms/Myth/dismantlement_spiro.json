@@ -101,12 +101,9 @@
     },
     {
       "Id": "6e3e410f8d0f59fd",
-      "Type": "TitleText",
+      "From": "TutorialText",
       "Position": [156, 32],
-      "Text": "emerge from bosonic\nto jump higher",
-      "LineHeightMultiplier": 0.655,
-      "Emissive": true,
-      "RevealSpeed": 17.127
+      "Text": "emerge from bosonic\nto jump higher"
     }
   ]
 }

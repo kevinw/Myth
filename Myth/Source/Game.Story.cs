@@ -6,10 +6,12 @@ namespace Myth;
 
 public partial class Game
 {
-	internal sealed class StorySpeechBubble(Actor speaker, Vector2 offset, string text, float duration, Utterance utterance, ISyllableSink sink)
+	// The line is pinned to where it was spoken: the speaker walks on, the words stay put.
+	internal sealed class StorySpeechBubble(Vector2 position, string text, Color color, float duration, Utterance utterance, ISyllableSink sink)
 	{
-		public Vector2 Position => speaker.Position + offset;
+		public readonly Vector2 Position = position;
 		public readonly string Text = text;
+		public readonly Color Color = color; // whose voice this is, at a glance
 		public readonly float Duration = duration;
 		public float Age;
 		public int VisibleLength;
@@ -30,6 +32,7 @@ public partial class Game
 		float? Duration = null);
 
 	private const float StorySpeechMaxWidth = 120.0f;
+	private const int StorySpeechRoomSlack = 24; // a line spoken at the room's lip still counts as inside
 	private const float StoryIdleSeconds = 10.0f;
 	private const float StoryIdleMovementTolerance = 0.5f;
 	private static int storyReloadVersion;
@@ -83,13 +86,18 @@ public partial class Game
 		{
 			var bubble = storySpeechBubbles[i];
 			bubble.Tick(Time.Delta);
-			if (bubble.Age >= bubble.Duration)
+			if (bubble.Age >= bubble.Duration || !IsSpeechInCurrentRoom(bubble))
 			{
 				bubble.Finished = true;
 				storySpeechBubbles.RemoveAt(i);
 			}
 		}
 	}
+
+	// A pinned line belongs to the spot it was spoken in: leaving that room ends it, rather
+	// than parking it against the edge of the screen for the rest of its duration.
+	private bool IsSpeechInCurrentRoom(StorySpeechBubble bubble)
+		=> room == null || room.WorldBounds.Inflate(StorySpeechRoomSlack).Contains(bubble.Position);
 
 	private void OnStoryRoomChanged(RoomChange change)
 	{
@@ -183,13 +191,16 @@ public partial class Game
 		=> storySpeechBubbles.Count == 0;
 
 	internal StorySpeechBubble? ShowSpeech(Actor speaker, Vector2 offset, string text, VoiceProfile profile,
-		Emotion emotion = Emotion.Neutral, string? voice = null)
+		Color color, Emotion emotion = Emotion.Neutral, string? voice = null)
 	{
 		if (!Game.VoiceEnabled) return null;
 		text = NormalizeSpeech(text);
 		var utterance = Utterance.Build(text, emotion, profile, GermanFor(text));
 		var duration = utterance.RevealSeconds + Math.Clamp(text.Length * 0.04f, 1.2f, 3f);
-		var bubble = new StorySpeechBubble(speaker, offset, text, duration, utterance, CreateVoiceSink(speaker, offset, voice ?? BudVoiceName));
+		// Snapshot where the speaker stood: both the bubble and the voice stay at that spot
+		// for the whole line rather than trailing the speaker around.
+		var origin = (Vector2)speaker.Position + offset;
+		var bubble = new StorySpeechBubble(origin, text, color, duration, utterance, CreateVoiceSink(origin, voice ?? BudVoiceName));
 		storySpeechBubbles.Add(bubble);
 		return bubble;
 	}
@@ -198,24 +209,6 @@ public partial class Game
 	// measure the same string (see DrawStorySpeechBubble).
 	internal static string NormalizeSpeech(string text)
 		=> string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-
-	internal Vector2 ClampStorySpeechPosition(Vector2 position, in StorySpeechLayout layout)
-	{
-		if (room == null)
-			return position;
-
-		if (layout.Lines.Count == 0)
-			return position;
-
-		var bounds = room.WorldBounds;
-		var minX = bounds.Left + layout.Width + layout.Padding.X;
-		var maxX = bounds.Right - layout.Padding.X;
-		var minY = bounds.Top + layout.Lines.Count * layout.LineHeight + layout.Padding.Y;
-		var maxY = bounds.Bottom - layout.Padding.Y;
-		return new Vector2(
-			Math.Clamp(position.X, minX, maxX),
-			Math.Clamp(position.Y, minY, maxY));
-	}
 
 	internal static StorySpeechLayout MeasureStorySpeech(SpriteFont font, string text)
 	{

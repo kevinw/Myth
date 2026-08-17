@@ -30,7 +30,7 @@ public static class ParticleEffectAssets
 			{
 				try
 				{
-					if (JsonNode.Parse(Assets.Content.ReadAllText(key))?.AsObject() is not { } json)
+					if (JsonUtil.Parse(Assets.Content.ReadAllText(key))?.AsObject() is not { } json)
 						continue;
 					var name = Path.GetFileNameWithoutExtension(key);
 					effects[name] = ParticleEffect.FromJson(json);

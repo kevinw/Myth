@@ -1826,7 +1826,7 @@ public partial class Manager
 	{
 		if (IsActorSurfaceProperty(property))
 		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawSurfacePicker(ref value))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
@@ -1835,7 +1835,7 @@ public partial class Manager
 		}
 		else if (IsProceduralWallTextureProperty(actor, property))
 		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawSurfaceTexturePicker(ref value, controlWidth))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
@@ -1868,7 +1868,7 @@ public partial class Manager
 		}
 		else if (IsRevealDoorTileTypeProperty(actor, property))
 		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawRevealDoorTileTypeButtons(ref value, controlWidth))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
@@ -1877,7 +1877,7 @@ public partial class Manager
 		}
 		else if (IsMovingPlatformMaterialProperty(property))
 		{
-			var value = property.Value?.GetValue<string>() ?? "metal-dual";
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? "metal-dual";
 			if (DrawMovingPlatformMaterialButtons(ref value))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
@@ -1886,7 +1886,7 @@ public partial class Manager
 		}
 		else if (property.Name == nameof(Prop.SpriteName) && IsPropActor(actor))
 		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawSpriteCombo(ref value))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
@@ -1895,7 +1895,7 @@ public partial class Manager
 		}
 		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && IsNeuralTextureActor(actor))
 		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (NeuralTextureCatalog.DrawCombo(ref value, allowNone: weightsSlot > 0))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
@@ -1911,10 +1911,19 @@ public partial class Manager
 		}
 		else if (property.Type == typeof(string))
 		{
-			var value = property.Value?.GetValue<string>() ?? string.Empty;
-			if (InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, 64)))
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
+			if (property.ActorRef is { } actorRef && room != null)
+				return DrawActorRefProperty(specId, room, actor, property, actorRef, value);
+
+			// Single line unless the field asks for prose -- or already holds a newline, so text
+			// authored before the annotation stays readable.
+			var lines = property.Multiline?.Lines ?? (value.Contains('\n') ? 4 : 0);
+			var edited = lines > 0
+				? InputTextMultiline("##Value", ref value, 2048, new Vector2(controlWidth, GetTextLineHeight() * lines + GetStyle().FramePadding.Y * 2))
+				: InputText("##Value", ref value, 2048);
+			if (edited)
 			{
-				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: true);
+				SetActorProperty(specId, room, actor, property, ActorSpecs.StringToJson(value), continuous: true);
 				return true;
 			}
 		}
@@ -1990,7 +1999,7 @@ public partial class Manager
 		}
 		else if (property.Type.IsEnum)
 		{
-			var value = property.Value?.GetValue<string>() ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? Enum.GetNames(property.Type).FirstOrDefault() ?? string.Empty;
 			if (EditorGui.DrawEnumCombo(property.Type, ref value))
 			{
 				SetActorEnumProperty(specId, room, actor, property, value);
@@ -2198,8 +2207,6 @@ public partial class Manager
 	{
 		if (property.Name == nameof(LinkedDoor.TargetActorId) && IsLinkedDoorActor(actor))
 			return DrawLinkedDoorTargetProperty(room, actor, property);
-		if (property.Name == nameof(Switch.TargetActorId) && IsActivationSourceActor(actor))
-			return DrawActivationTargetProperty(room, actor, property);
 		if (property.Name == nameof(ParticleEmitter.EffectName) && IsParticleEmitterActor(actor))
 			return DrawParticleEffectNameProperty(room, actor, property);
 
@@ -2239,7 +2246,7 @@ public partial class Manager
 		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
 		PushID("Value");
 
-		var current = property.Value?.GetValue<string>() ?? string.Empty;
+		var current = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 		if (BeginCombo("##Value", current))
 		{
 			foreach (var name in ParticleEffectAssets.Names)
@@ -2269,7 +2276,7 @@ public partial class Manager
 	{
 		var changed = false;
 		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
-		var value = property.Value?.GetValue<string>() ?? string.Empty;
+		var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var sourceId = ActorSpecs.ReadString(actor, "Id") ?? "";
 		var picking = !string.IsNullOrWhiteSpace(sourceId) &&
@@ -2326,58 +2333,58 @@ public partial class Manager
 		return changed;
 	}
 
-	bool DrawActivationTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
+	// [ActorRef]: pick another actor in the room by type and id rather than typing its id.
+	// A picked actor that has no id yet gets one, so anything placed is linkable.
+	bool DrawActorRefProperty(string? specId, Room room, JsonObject actor, ActorSpecs.EditableProperty property, ActorRefAttribute actorRef, string value)
 	{
 		var changed = false;
-		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
-		var value = property.Value?.GetValue<string>() ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var label = target is { } found
-			? $"{ActorSpecs.GetTypeName(found.Actor)} ({value[..Math.Min(8, value.Length)]})"
-			: string.IsNullOrWhiteSpace(value) ? "No target" : $"Missing ({value})";
+			? $"{ActorSpecs.GetTypeName(found.Actor)} ({ShortActorId(value)})"
+			: string.IsNullOrWhiteSpace(value) ? "(none)" : $"Missing ({ShortActorId(value)})";
 
-		if (BeginCombo("##Value", label))
+		if (!BeginCombo("##Value", label))
+			return false;
+
+		if (Selectable("(none)", string.IsNullOrWhiteSpace(value)))
 		{
-			foreach (var candidate in room.Actors)
+			SetActorProperty(specId, room, actor, property, JsonValue.Create(""), "Clear Actor Reference");
+			changed = true;
+		}
+
+		for (var i = 0; i < room.Actors.Count; i++)
+		{
+			var candidate = room.Actors[i];
+			if (candidate == actor || !MatchesActorRefKind(candidate, actorRef.Kind))
+				continue;
+
+			var candidateId = ActorSpecs.GetActorId(candidate);
+			var typeName = ActorSpecs.GetTypeName(candidate) ?? "Actor";
+			var selected = !string.IsNullOrWhiteSpace(candidateId) &&
+				string.Equals(value, candidateId, StringComparison.OrdinalIgnoreCase);
+			var candidateLabel = string.IsNullOrWhiteSpace(candidateId) ? typeName : $"{typeName} ({ShortActorId(candidateId)})";
+			if (Selectable($"{candidateLabel}##{i}", selected))
 			{
-				if (!IsActivatableActor(candidate) || ActorSpecs.GetActorId(candidate) is not { } candidateId)
-					continue;
-				var typeName = ActorSpecs.GetTypeName(candidate) ?? "Actor";
-				var selected = string.Equals(value, candidateId, StringComparison.OrdinalIgnoreCase);
-				if (Selectable($"{typeName} ({candidateId[..Math.Min(8, candidateId.Length)]})", selected))
+				using (CaptureRoomUndo("Set Actor Reference", room))
 				{
-					using (CaptureRoomUndo("Set Activation Target", room))
-						ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(candidateId));
-					changed = true;
+					ActorSpecs.EnsureActorId(candidate);
+					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(ActorSpecs.GetActorId(candidate)));
 				}
-			}
-			EndCombo();
-		}
-
-		if (!string.IsNullOrWhiteSpace(value))
-		{
-			SameLine();
-			if (SmallButton("Clear"))
-			{
-				using (CaptureRoomUndo("Clear Activation Target", room))
-					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(""));
 				changed = true;
 			}
+			if (selected)
+				SetItemDefaultFocus();
 		}
-
-		if (property.HasLocalValue)
-		{
-			SameLine();
-			if (DrawPropertyResetButton(property))
-			{
-				using (CaptureRoomUndo("Reset Actor Property", room))
-					ActorSpecs.ResetProperty(actor, property.JsonName);
-				changed = true;
-			}
-		}
+		EndCombo();
 
 		return changed;
 	}
+
+	static string ShortActorId(string? id)
+		=> string.IsNullOrEmpty(id) ? "" : id[..Math.Min(8, id.Length)];
+
+	static bool MatchesActorRefKind(JsonObject candidate, Type? kind)
+		=> kind == null || ActorTypesAssignableTo(kind).Contains(ActorSpecs.GetTypeName(candidate) ?? "");
 
 	static bool DrawSpriteCombo(ref string value)
 	{
@@ -2861,7 +2868,7 @@ public partial class Manager
 		var position = room.WorldBounds.TopLeft + local;
 		var type = ActorSpecs.ReadResolvedString(actor, "Type") ?? "";
 		if (string.Equals(type, nameof(TitleText), StringComparison.OrdinalIgnoreCase))
-			return TitleText.EditorBounds(position, ActorSpecs.ReadResolvedString(actor, nameof(TitleText.Text)),
+			return TitleText.TextBounds(position, ActorSpecs.ReadResolvedString(actor, nameof(TitleText.Text)),
 				ActorSpecs.ReadResolvedFloat(actor, nameof(TitleText.LineHeightMultiplier), 1));
 		if (ResizableRoomRectTypes.TryGetValue(type, out var info))
 		{
@@ -2922,13 +2929,6 @@ public partial class Manager
 	static bool IsLinkedDoorActor(JsonObject actor)
 		=> ActorSpecs.ReadResolvedString(actor, "Type") == "LinkedDoor";
 
-	static bool IsActivationSourceActor(JsonObject actor)
-	{
-		var type = ActorSpecs.GetTypeName(actor);
-		return string.Equals(type, nameof(Switch), StringComparison.OrdinalIgnoreCase) ||
-			string.Equals(type, nameof(Button), StringComparison.OrdinalIgnoreCase);
-	}
-
 	static Dictionary<string, ActorEditor>? actorEditors;
 	static ActorEditor? EditorFor(JsonObject actor)
 	{
@@ -2961,28 +2961,24 @@ public partial class Manager
 		return gizmos.ConsumedPress;
 	}
 
-	static HashSet<string>? pointPathActorTypes;
-	static HashSet<string> PointPathActorTypes
-		=> pointPathActorTypes ??= BuildActorCapabilityTypes<IPointPath>();
-
-	static HashSet<string>? activatableActorTypes;
-	static HashSet<string> ActivatableActorTypes
-		=> activatableActorTypes ??= BuildActorCapabilityTypes<IActivatable>();
-
-	static HashSet<string> BuildActorCapabilityTypes<T>()
+	// Registered actor type names assignable to kind, for capability checks and [ActorRef]
+	// candidate filtering. Registrations are fixed once the Factory has run, so cache them.
+	static readonly Dictionary<Type, HashSet<string>> actorTypesAssignableTo = [];
+	static HashSet<string> ActorTypesAssignableTo(Type kind)
 	{
-		var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (actorTypesAssignableTo.TryGetValue(kind, out var names))
+			return names;
+
+		names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var (name, type) in ActorSpecs.ActorTypes)
-			if (typeof(T).IsAssignableFrom(type))
-				result.Add(name);
-		return result;
+			if (kind.IsAssignableFrom(type))
+				names.Add(name);
+		actorTypesAssignableTo[kind] = names;
+		return names;
 	}
 
 	static bool IsPointPathActor(JsonObject actor)
-		=> PointPathActorTypes.Contains(ActorSpecs.GetTypeName(actor) ?? "");
-
-	static bool IsActivatableActor(JsonObject actor)
-		=> ActivatableActorTypes.Contains(ActorSpecs.GetTypeName(actor) ?? "");
+		=> ActorTypesAssignableTo(typeof(IPointPath)).Contains(ActorSpecs.GetTypeName(actor) ?? "");
 
 	static Point2[] PointPathPoints(JsonObject actor)
 	{

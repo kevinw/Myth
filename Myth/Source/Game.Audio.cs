@@ -86,12 +86,12 @@ public partial class Game
 	};
 
 	// Captures a speaker's voice + position so OutLoud can stay engine-agnostic; one per spoken line.
-	sealed class VoiceSink(Game game, Actor speaker, Vector2 offset, string voice) : ISyllableSink
+	sealed class VoiceSink(Game game, Vector2 position, string voice) : ISyllableSink
 	{
-		public void Play(int syllable, float pitch, float gain) => game.PlayVoiceSyllable(voice, syllable, pitch, gain, speaker.Position + offset);
+		public void Play(int syllable, float pitch, float gain) => game.PlayVoiceSyllable(voice, syllable, pitch, gain, position);
 	}
 
-	public ISyllableSink CreateVoiceSink(Actor speaker, Vector2 offset, string voice) => new VoiceSink(this, speaker, offset, voice);
+	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
 
 	static bool VoiceEnabled = true;
 

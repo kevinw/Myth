@@ -39,7 +39,7 @@
     "T00000T0000000000GGGG000GGGG0000GGGG0000PPPPPP",
     "T00000T0gg0GGGG00PPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
     "TTTTTTTGGGGGGGGGGPPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
-    "TTTTTTTPPPPPPPPPPPPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
+    "TTTTTTTPPPPGPGGPPPPPPwwwPPPPwwwwPPPPwwwwPPPPPP",
     "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP",
     "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP",
     "TTTTTTTPPPPPPPPPPPPPPPPPPPPPPPPPPPPPwwwwPPPPPP",
@@ -116,14 +116,6 @@
       "Name": "learn_jump"
     },
     {
-      "Id": "57d00c4a4e3e4f13",
-      "Type": "TitleText",
-      "Position": [212, 40],
-      "Text": "press {Jump} to jump",
-      "RevealSpeed": 100000000,
-      "Emissive": true
-    },
-    {
       "Id": "fa0e1da50cb9a503",
       "Type": "Light",
       "Position": [12, 100]
@@ -153,6 +145,27 @@
       "Direction": "Down",
       "Size": [32, 8],
       "TileType": "dirt"
+    },
+    {
+      "Id": "c0ca1459d71c75b1",
+      "Type": "BudStorySequence",
+      "Position": [171, 89],
+      "Once": true,
+      "Script": [
+        "[pause 2]",
+        "You OK?",
+        "you: I think so.",
+        "[pause 2]",
+        "Did someone cut the rope?",
+        "[pause 2]",
+        "Let's see what's ahead."
+      ]
+    },
+    {
+      "Id": "6d7aba95624e4eb6",
+      "From": "TutorialText",
+      "Position": [212, 160],
+      "Text": "press {Jump} to jump"
     }
   ]
 }

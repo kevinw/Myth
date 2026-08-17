@@ -12,7 +12,7 @@ namespace Myth;
 	Anchor = SpriteAnchor.Center, Tags = ActorTag.System, LivePositionEditable = true)]
 public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 {
-	public string? SourceActorId;
+	[ActorRef] public string? SourceActorId;
 	bool sourceWasActive;
 	float sourceStoppedAt = -1;
 	float sourceStoppedLeadRadius;

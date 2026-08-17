@@ -33,3 +33,20 @@ public sealed class IAttribute(float min, float max) : Attribute
 	public float Min => min;
 	public float Max => max;
 }
+
+// String fields are single-line in the inspector; this gives one a text box Lines tall
+// (for prose: barks, titles, scripts).
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class MultilineAttribute(int lines = 4) : Attribute
+{
+	public int Lines => Math.Max(1, lines);
+}
+
+// A string field holding another actor's Id: the inspector offers the room's actors by
+// type and id instead of a free-text box. Kind narrows the list to actors assignable to
+// it (e.g. typeof(IActivatable)).
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class ActorRefAttribute(Type? kind = null) : Attribute
+{
+	public Type? Kind => kind;
+}

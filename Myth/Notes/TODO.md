@@ -8,6 +8,7 @@
 
 # TODO
 
+- chat about how spectral color mixing might help
 - axiom verge thoughts
   - upgrades to projectile size, distance
 - try render-target-space screenshake on gameplay beats: hits, landings, chest opens, boss impacts, burrow pops, door/portal transfers.

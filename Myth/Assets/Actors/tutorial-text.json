@@ -1,0 +1,10 @@
+{
+  "Name": "TutorialText",
+  "Type": "TitleText",
+  "Emissive": true,
+  "RevealSpeed": 9999999,
+  "LineHeightMultiplier": 0.7,
+  "Text": "hold down\nto crawl",
+  "Color": "267437",
+  "dropShadow": 1
+}

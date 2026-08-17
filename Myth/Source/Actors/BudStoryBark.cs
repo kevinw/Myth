@@ -10,7 +10,7 @@ public class BudStoryBark : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 4, Game.TileSize * 2);
 
 	public Point2 Size { get; set; } = DefaultSize;
-	public string Text = "What's this place?";
+	[Multiline(3)] public string Text = "What's this place?";
 	bool spoken;
 
 	public BudStoryBark()

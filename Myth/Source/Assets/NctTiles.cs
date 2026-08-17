@@ -93,7 +93,7 @@ public static class NctTiles
 		JsonObject json;
 		try
 		{
-			json = JsonNode.Parse(File.ReadAllText(path))?.AsObject() ?? throw new InvalidOperationException("root is not an object");
+			json = JsonUtil.Parse(File.ReadAllText(path))?.AsObject() ?? throw new InvalidOperationException("root is not an object");
 		}
 		catch (Exception e)
 		{

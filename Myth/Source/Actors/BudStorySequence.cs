@@ -14,13 +14,15 @@ public enum BudStorySequenceTrigger
 	Tags = ActorTag.System, LivePositionEditable = true)]
 public class BudStorySequence : Actor
 {
-	readonly record struct Step(string? Text, float Pause);
+	readonly record struct Step(string? Text, float Pause, bool PlayerSpeaks);
 
 	public BudStorySequenceTrigger Trigger;
-	public string SourceActorId = "";
+	[ActorRef] public string SourceActorId = "";
 	public bool Once;
-	// One bark per line; a line such as [pause 2.5] waits between barks.
-	public string Script = "";
+	// One bark per line; a line such as [pause 2.5] waits between barks. A line prefixed
+	// "you:" is spoken by the player (over their head, in their color) instead of Bud;
+	// "bud:" says so explicitly, and an unprefixed line is Bud as before.
+	[Multiline(6)] public string Script = "";
 
 	Step[] steps = [];
 	Game.StorySpeechBubble? speech;
@@ -77,9 +79,8 @@ public class BudStorySequence : Actor
 				pause = step.Pause;
 				return;
 			}
-			if (step.Text != null && Game.CanShowSpeech() && Game.GetFirst<Bud>() is { } bud)
+			if (step.Text != null && Game.CanShowSpeech() && TrySpeak(step, out speech))
 			{
-				speech = bud.Say(step.Text);
 				stepIndex++;
 				if (speech != null && Once && !onceRecorded)
 				{
@@ -94,6 +95,25 @@ public class BudStorySequence : Actor
 		running = false;
 		triggered = false;
 		Game.EndBudStorySequence(this);
+	}
+
+	// False when the step's speaker isn't in the room, so the step waits for a later frame
+	// (a null bubble is fine -- speech can be switched off, and the sequence still advances).
+	bool TrySpeak(in Step step, out Game.StorySpeechBubble? bubble)
+	{
+		bubble = null;
+		if (step.PlayerSpeaks)
+		{
+			if (Game.GetFirst<Player>() is not { } player)
+				return false;
+			bubble = player.Say(step.Text!);
+			return true;
+		}
+
+		if (Game.GetFirst<Bud>() is not { } bud)
+			return false;
+		bubble = bud.Say(step.Text!);
+		return true;
 	}
 
 	void TryStart()
@@ -135,12 +155,28 @@ public class BudStorySequence : Actor
 				float.TryParse(line.AsSpan(7, line.Length - 8), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
 			{
 				if (seconds > 0)
-					result.Add(new(null, seconds));
+					result.Add(new(null, seconds, false));
 				continue;
 			}
-			result.Add(new(line, 0));
+
+			var playerSpeaks = TryTakeSpeaker(ref line, "you:");
+			if (!playerSpeaks)
+				TryTakeSpeaker(ref line, "bud:");
+			if (line.Length == 0)
+				continue;
+
+			result.Add(new(line, 0, playerSpeaks));
 		}
 		return [.. result];
+	}
+
+	static bool TryTakeSpeaker(ref string line, string prefix)
+	{
+		if (!line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+			return false;
+
+		line = line[prefix.Length..].TrimStart();
+		return true;
 	}
 
 	public override void Render(Batcher batcher) { }

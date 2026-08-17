@@ -103,13 +103,6 @@
       "FlyCount": 28
     },
     {
-      "Id": "fa001a8688083da8",
-      "Type": "Wind",
-      "Position": [196, 96],
-      "Size": [64, 88],
-      "Acceleration": 900.953
-    },
-    {
       "Id": "7e070d871394c34c",
       "Type": "ConveyorBelt",
       "Position": [320, 112],

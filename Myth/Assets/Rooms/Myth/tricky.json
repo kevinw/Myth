@@ -182,16 +182,6 @@
       "Type": "ParticleEmitter",
       "Position": [148, 52],
       "EffectName": "pollen_light"
-    },
-    {
-      "Id": "d453413234c9bc2a",
-      "Type": "Bouncer",
-      "Position": [256, 164],
-      "Strength": 250,
-      "Size": [20, 16],
-      "RimColor": "FFB0DC",
-      "FillColor": "A99F86",
-      "SurfaceId": "bouncer"
     }
   ]
 }

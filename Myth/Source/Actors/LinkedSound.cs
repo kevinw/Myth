@@ -7,7 +7,7 @@ namespace Myth;
 public class LinkedSound : Actor
 {
 	public string EventName = "";
-	public string SourceActorId = "";
+	[ActorRef] public string SourceActorId = "";
 	public string EnabledParameter = "Enabled";
 	public string DisabledEventName = "";
 

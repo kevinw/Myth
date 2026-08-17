@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -18,7 +19,13 @@ public static class ActorSpecs
 	private const string PositionKey = "Position";
 	// NewLine = "\n" keeps serialized JSON LF on every platform (the indented writer would
 	// otherwise emit CRLF on Windows), so room/spec files don't churn whitespace diffs.
-	private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, NewLine = "\n" };
+	private static readonly JsonSerializerOptions JsonOptions = new()
+	{
+		WriteIndented = true,
+		NewLine = "\n",
+		// Same reason as Room.WriteJson: these files are read and edited by hand.
+		Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+	};
 
 	// Members the trimmer/AOT compiler must keep on every registered actor type: reflection in
 	// Apply/SerializeActorDefaults reads public fields/properties, and Create/GetBaseline construct
@@ -41,7 +48,7 @@ public static class ActorSpecs
 	private static readonly Dictionary<string, string> specPaths = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, ActorType> actorTypes = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<Type, string> actorNames = new();
-	static readonly Dictionary<MemberInfo, IAttribute?> inspectorMetadata = [];
+	static readonly Dictionary<(MemberInfo Member, Type Attribute), Attribute?> memberAttributes = [];
 #if EDITOR
 	static readonly Dictionary<string, string> savedSpecJson = new(StringComparer.OrdinalIgnoreCase);
 	static readonly HashSet<string> dirtySpecs = new(StringComparer.OrdinalIgnoreCase);
@@ -61,7 +68,9 @@ public static class ActorSpecs
 		JsonNode? Value,
 		JsonNode? ResetValue,
 		bool HasLocalValue,
-		IAttribute? Inspector);
+		IAttribute? Inspector,
+		MultilineAttribute? Multiline,
+		ActorRefAttribute? ActorRef);
 
 	public static void ClearSpecs()
 	{
@@ -77,7 +86,7 @@ public static class ActorSpecs
 	{
 		actorTypes.Clear();
 		actorNames.Clear();
-		inspectorMetadata.Clear();
+		memberAttributes.Clear();
 	}
 
 	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name, bool showFacing) where T : Actor
@@ -90,7 +99,34 @@ public static class ActorSpecs
 		=> actorTypes.TryGetValue(name, out var actorType) ? actorType.Type : null;
 
 	public static string? ReadResolvedString(JsonObject spec, string key)
-		=> GetResolvedProperty(spec, key)?.GetValue<string>();
+		=> ReadStringValue(GetResolvedProperty(spec, key));
+
+	// JSON has no multi-line string, so a string property may also be written as an array of
+	// lines -- what keeps a Script or a Text legible (and editable) in a hand-edited room file.
+	// Both spellings read back identically; see StringToJson for the way back out.
+	public static string? ReadStringValue(JsonNode? node)
+		=> node switch
+		{
+			JsonArray lines => string.Join('\n', lines.Select(line => SingleLineString(line) ?? "")),
+			null => null,
+			_ => SingleLineString(node)
+		};
+
+	static string? SingleLineString(JsonNode? node)
+		=> node is JsonValue value && value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : null;
+
+	// Multi-line values go back out as an array of lines rather than one "\n"-escaped string,
+	// so what the editor writes stays as readable as what you'd hand-author.
+	public static JsonNode StringToJson(string value)
+	{
+		if (!value.Contains('\n'))
+			return JsonValue.Create(value);
+
+		var lines = new JsonArray();
+		foreach (var line in value.ReplaceLineEndings("\n").Split('\n'))
+			lines.Add((JsonNode)JsonValue.Create(line)); // the JsonNode overload; Add<T> isn't trim/AOT safe
+		return lines;
+	}
 
 	public static Point2? ReadResolvedPoint(JsonObject spec, string key)
 		=> JsonUtil.ReadPoint(GetResolvedProperty(spec, key));
@@ -110,7 +146,7 @@ public static class ActorSpecs
 		{
 			try
 			{
-				var spec = JsonNode.Parse(Assets.Content.ReadAllText(key))?.AsObject();
+				var spec = JsonUtil.Parse(Assets.Content.ReadAllText(key))?.AsObject();
 				if (spec == null)
 					continue;
 				JsonUtil.NormalizeStringValues(spec);
@@ -260,15 +296,18 @@ public static class ActorSpecs
 
 			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), member.DeclaringType ?? type.Type,
 				value, resetValue, hasLocal,
-				GetInspectorMetadata(member));
+				GetMemberAttribute<IAttribute>(member),
+				GetMemberAttribute<MultilineAttribute>(member),
+				GetMemberAttribute<ActorRefAttribute>(member));
 		}
 	}
 
-	static IAttribute? GetInspectorMetadata(MemberInfo member)
+	static T? GetMemberAttribute<T>(MemberInfo member) where T : Attribute
 	{
-		if (!inspectorMetadata.TryGetValue(member, out var metadata))
-			inspectorMetadata[member] = metadata = member.GetCustomAttribute<IAttribute>();
-		return metadata;
+		var key = (member, typeof(T));
+		if (!memberAttributes.TryGetValue(key, out var attribute))
+			memberAttributes[key] = attribute = member.GetCustomAttribute<T>();
+		return (T?)attribute;
 	}
 
 	public static void SetProperty(string id, string jsonName, JsonNode? value)
@@ -321,7 +360,7 @@ public static class ActorSpecs
 
 	public static void ApplySpecJson(string id, string jsonText)
 	{
-		var spec = JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []);
+		var spec = JsonUtil.NormalizeStringValues(JsonUtil.Parse(jsonText)?.AsObject() ?? []);
 		if (string.IsNullOrWhiteSpace(ReadString(spec, NameKey)))
 			spec[NameKey] = id;
 		specs[id] = spec;
@@ -378,7 +417,7 @@ public static class ActorSpecs
 			bool it => JsonValue.Create(it),
 			int it => JsonValue.Create(it),
 			float it => JsonValue.Create(it),
-			string it => JsonValue.Create(it),
+			string it => StringToJson(it),
 			Point2 it => new JsonArray(it.X, it.Y),
 			Point2[] it => PointArrayToJson(it),
 			Vector2 it => new JsonArray(it.X, it.Y),
@@ -600,7 +639,7 @@ public static class ActorSpecs
 			else if (type == typeof(float))
 				value = node.GetValue<float>();
 			else if (type == typeof(string))
-				value = node.GetValue<string>();
+				value = ReadStringValue(node);
 			else if (type == typeof(Point2))
 				value = ReadPoint(node);
 			else if (type == typeof(Point2?))
@@ -671,5 +710,5 @@ public static class ActorSpecs
 	}
 
 	public static string? ReadString(JsonObject json, string key)
-		=> JsonUtil.ReadString(json, key);
+		=> ReadStringValue(JsonUtil.TryGetProperty(json, key, out var node) ? node : null);
 }
