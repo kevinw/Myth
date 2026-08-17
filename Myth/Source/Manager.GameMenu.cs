@@ -48,7 +48,7 @@ public partial class Manager
 
 	float MenuButtonWidth => gameMenuLayoutPage == GameMenuPage.Options ? 100f : 50f;
 	static float MenuButtonHeight => 14f;
-	static float MenuButtonGap => 4f;
+	static float MenuButtonGap => 3f;
 	static float MenuPanelWidth => 174f;
 	static float MenuEnterDuration => 0.16f;
 	static float MenuEnterDistance => 5f;
@@ -354,8 +354,13 @@ public partial class Manager
 
 		if (GameMenuOpen)
 		{
+			var y = gameMenuLayoutPage switch {
+				GameMenuPage.Title => 27f,
+				GameMenuPage.Pause => 27f,
+				_ => 7f,
+			};
 			// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
-			var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, 7) + gameMenuLayoutOffset;
+			var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, y) + gameMenuLayoutOffset;
 			ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
 
 			// Distinct id per page so switching pages makes the window "appear", which is
@@ -473,14 +478,14 @@ public partial class Manager
 
 		var title = gameMenuLayoutPage switch
 		{
-			GameMenuPage.Title => "mycelon",
+			GameMenuPage.Title => "Human Questions",
 			GameMenuPage.Options => "options",
 			_ => "paused"
 		};
 
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
-		if (gameMenuLayoutPage != GameMenuPage.Options && Assets.GetSprite("logo", logMissing: false) is { Frames.Count: > 0 } logo)
+		if (gameMenuLayoutPage != GameMenuPage.Options && Assets.GetSprite("logo2", logMissing: false) is { Frames.Count: > 0 } logo)
 			DrawDistortedLogo(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Color.White * gameMenuLayoutEase);
 		else
 		{
@@ -489,11 +494,11 @@ public partial class Manager
 			DrawCenteredText(font, title, pos, font.Size * 2, new Color(0xfee761) * gameMenuLayoutEase, sine: useSineWave);
 		}
 
-		var hint = gameMenuLayoutPage == GameMenuPage.Title ? InputPromptAction.Confirm : InputPromptAction.Back;
+		var hint = gameMenuLayoutPage == GameMenuPage.Pause ? InputPromptAction.Confirm : InputPromptAction.Back;
 		InputPrompts?.DrawGlyphCentered(
 			batcher,
 			hint,
-			new Vector2(panel.Center.X, panel.Bottom - 17),
+			new Vector2(panel.Center.X, panel.Bottom - (gameMenuLayoutPage == GameMenuPage.Title || gameMenuLayoutPage == GameMenuPage.Pause ? 0f : 17f)),
 			12,
 			new Color(0x8b81b5) * gameMenuLayoutEase);
 	}

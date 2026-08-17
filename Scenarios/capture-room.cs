@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using Foster.Framework;
 using Myth;
 
-UseMycelonWorkingDirectory();
+UseGameWorkingDirectory();
 var room = args.Length > 0 ? args[0] : "start";
 var position = new Point2(
 	args.Length > 1 ? int.Parse(args[1]) : 120,
@@ -47,5 +47,5 @@ manager.ScenarioRender += it =>
 
 manager.Run();
 
-static void UseMycelonWorkingDirectory([CallerFilePath] string source = "")
+static void UseGameWorkingDirectory([CallerFilePath] string source = "")
 	=> Directory.SetCurrentDirectory(Path.GetFullPath(Path.Join(Path.GetDirectoryName(source)!, "../Myth")));

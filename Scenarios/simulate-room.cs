@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Myth;
 
-UseMycelonWorkingDirectory();
+UseGameWorkingDirectory();
 var room = args.Length > 0 ? args[0] : "start";
 var frameLimit = args.Length > 1 ? int.Parse(args[1]) : 600;
 var output = Path.GetFullPath(args.Length > 2 ? args[2] : "../tmp/scenario-simulation.json");
@@ -43,5 +43,5 @@ manager.ScenarioUpdate += it =>
 
 manager.Run();
 
-static void UseMycelonWorkingDirectory([CallerFilePath] string source = "")
+static void UseGameWorkingDirectory([CallerFilePath] string source = "")
 	=> Directory.SetCurrentDirectory(Path.GetFullPath(Path.Join(Path.GetDirectoryName(source)!, "../Myth")));

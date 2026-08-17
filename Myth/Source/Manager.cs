@@ -339,7 +339,7 @@ public partial class Manager : App
 #endif
 	}
 
-	public const string APPLICATION_NAME = "Mycelon";
+	public const string APPLICATION_NAME = "Human Questions";
 
 	internal void RequestQuit()
 	{
@@ -349,7 +349,7 @@ public partial class Manager : App
 
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false, bool? fullscreen = null)
 	{
-		const string windowTitle = "Mycelon";
+		const string windowTitle = APPLICATION_NAME;
 		Point2 windowSize = new(1280, 720);
 		GraphicsDriver graphicsDriver = GraphicsDriver.None; // no preference
 		bool resizable = true;

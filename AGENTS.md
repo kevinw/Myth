@@ -1,4 +1,4 @@
-- We're working on a 2D C# platformer game in Myth/ named Mycelon (code name is Myth)
+- We're working on a 2D C# platformer game in Myth/ named Human Questions (code name is Myth)
 - It uses Foster/, an SDL backed 2D framework. It builds to Desktop (default), and to WebGPU/Browser via a browser layer in Foster. See ./tools/run-* for release build scripts. iOS is supported but not given attention right now
 - When building things which might be useful for other games, we put functionality in Kit/ where possible, our gamedev toolkit.
 - Try not to allocate every frame, e.g., use a static reusable scratch List you .Clear() instead. Don't use LINQ in per-frame code. stackalloc + ValueStringBuilder for gluing strings together.

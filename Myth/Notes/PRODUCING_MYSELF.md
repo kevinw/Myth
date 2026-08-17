@@ -3,7 +3,7 @@
 Talk & Play #57 is Wednesday, September 9, 2026. Applications start being reviewed
 August 19.
 
-The goal is not to finish Mycelon. The goal is for a stranger to have a satisfying
+The goal is not to finish Human Questions. The goal is for a stranger to have a satisfying
 6–10 minute encounter with it without Kevin explaining how to play.
 
 Available development time: 4 hours a day, 6 days a week, or 24 hours per week.
@@ -22,7 +22,7 @@ Submit before August 19 with:
 
 Possible description:
 
-> Mycelon is an atmospheric action-platformer about exploring a strange living
+> Human Questions is an atmospheric action-platformer about exploring a strange living
 > castle with Bud, an unpredictable little companion. Burrow through surfaces,
 > uncover hidden paths, and turn expressive movement into combat.
 
