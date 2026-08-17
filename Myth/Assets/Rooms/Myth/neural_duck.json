@@ -4,7 +4,7 @@
   "ambientColor": "3E3E3E",
   "ambientIntensity": 1.428,
   "lightNoise": 0,
-  "ditherEnabled": false,
+  "ditherStrength": 0.061,
   "sun": {
     "strength": 0,
     "color": "FFE5B7",
@@ -62,7 +62,7 @@
     "000000000000000#000000000000000000000000",
     "000000000000000#000000000000000000000000",
     "000000000000000#000000000000000000000000",
-    "000000000000000#000000000000000000000000",
+    "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
@@ -88,7 +88,7 @@
     {
       "Id": "772ca23743ef9a3e",
       "Type": "NeuralTexturePerturbActor",
-      "Position": [8, 0],
+      "Position": [-5, 0],
       "Radius": 11.95,
       "Size": [312, 168],
       "Strength": 6
@@ -113,12 +113,42 @@
       "Facing": "-"
     },
     {
+      "Id": "16a646b9f65965f8",
+      "Type": "LinkedSound",
+      "Position": [124, 124],
+      "EventName": "machine/duck",
+      "DisabledEventName": "machine/duck_break",
+      "SourceActorId": "574c49f8e2ee020d"
+    },
+    {
+      "Id": "718dc20ab2f403ef",
+      "Type": "BudStorySequence",
+      "Position": [108, 124],
+      "Once": true,
+      "Script": "Uhh. What is this?\n[pause 5]\nI think we should get out of here.\nThis thing icks me out."
+    },
+    {
+      "Id": "8b6ba75a776d7803",
+      "Type": "BudStorySequence",
+      "Position": [140, 124],
+      "Trigger": "SourceDestroyed",
+      "SourceActorId": "574c49f8e2ee020d",
+      "Script": "Woah! Why did you do that?\n[pause 3]\nLet\u0027s go."
+    },
+    {
       "Id": "54e2bb64b2489fac",
       "Type": "Light",
       "Position": [124, 108],
       "Radius": 200,
       "Intensity": 0.45,
       "Height": 4
+    },
+    {
+      "Id": "6ea8c8c4e7c4c6f2",
+      "Type": "Prop",
+      "Position": [105, 151],
+      "SpriteName": "Props/server",
+      "Layer": "Background"
     }
   ]
 }

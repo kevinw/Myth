@@ -90,8 +90,9 @@ public static class Factory
 		public readonly string? ActorSpecId;
 		public readonly string? PropSpriteName;
 		public readonly ActorTag Tags;
+		public readonly float PreviewScale;
 
-		ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null, ActorTag tags = ActorTag.None, string? propSpriteName = null, Subtexture previewImage = default)
+		ActorPaletteEntry(string name, Subtexture image, Vector2 origin, Point2 offset, RectInt defaultEditorBounds, string? actorTypeName, string? actorSpecId, RectInt? editorBounds = null, ActorTag tags = ActorTag.None, string? propSpriteName = null, Subtexture previewImage = default, float previewScale = 1)
 		{
 			Name = name;
 			Image = image;
@@ -104,6 +105,7 @@ public static class Factory
 			PropSpriteName = propSpriteName;
 			EditorBounds = editorBounds;
 			Tags = tags;
+			PreviewScale = previewScale;
 		}
 
 		public static ActorPaletteEntry FromActor<T>(string spriteName, Point2? offset = null, RectInt? editorBounds = null, ActorTag tags = ActorTag.None, SpriteAnchor anchor = SpriteAnchor.Auto) where T : Actor
@@ -113,6 +115,16 @@ public static class Factory
 			var origin = sprite.ResolveOrigin(anchor);
 			return new ActorPaletteEntry(typeName, sprite.Frames[0].VisibleSubtexture, origin, offset ?? Point2.Zero, GetDefaultEditorBounds(sprite, origin), typeName, null, editorBounds, tags, previewImage: sprite.Frames[0].Subtexture);
 		}
+
+#if EDITOR
+		public static ActorPaletteEntry FromActorIcon(string typeName, Subtexture icon, Point2 offset, RectInt editorBounds, ActorTag tags)
+		{
+			var origin = icon.Size / 2;
+			var previewScale = Game.TileSize / MathF.Max(icon.Width, icon.Height);
+			return new ActorPaletteEntry(typeName, icon, origin, offset, editorBounds, typeName, null,
+				editorBounds, tags, previewImage: icon, previewScale: previewScale);
+		}
+#endif
 
 		public static ActorPaletteEntry FromActorSpec(string specId, string spriteName, Point2? offset = null, RectInt? editorBounds = null)
 		{
@@ -328,7 +340,7 @@ public static class Factory
 	}
 
 	// Registers a single [GameActor] type: its spec type-name mapping, plus a palette
-	// entry when the attribute carries a Sprite. The source generator calls this for every
+	// entry when the attribute carries an Icon or Sprite. The source generator calls this for every
 	// [GameActor] via GeneratedActors.RegisterAll().
 	public static void Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] T>() where T : Actor
 	{
@@ -353,6 +365,19 @@ public static class Factory
 
 		if (attr is { HideFromPalette: true })
 			return;
+
+		if (attr?.Icon is { } editorIconName)
+		{
+#if EDITOR
+			if (attr.EditorBounds is not { } editorBounds)
+				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' uses Icon without explicit editor bounds.");
+			if (!EditorIcons.TryGetPaletteIcon(editorIconName, out var icon))
+				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' references unknown editor icon '{editorIconName}'.");
+			var iconOffset = attr.OffsetX != 0 || attr.OffsetY != 0 ? attr.Offset : Point2.Zero;
+			ActorPalette.Add(ActorPaletteEntry.FromActorIcon(name, icon, iconOffset, editorBounds, tags));
+#endif
+			return;
+		}
 
 		// Palette icon defaults to a sprite named after the class. An explicit name that
 		// doesn't resolve is a typo (surface it); a missing conventional sprite leaves the

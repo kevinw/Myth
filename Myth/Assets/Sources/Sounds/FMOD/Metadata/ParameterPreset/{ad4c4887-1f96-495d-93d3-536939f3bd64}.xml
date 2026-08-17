@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{ad4c4887-1f96-495d-93d3-536939f3bd64}">
+		<property name="name">
+			<value>Enabled</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{e56f1bbf-5263-4200-bc02-42a7a4c784a2}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{e56f1bbf-5263-4200-bc02-42a7a4c784a2}">
+		<property name="initialValue">
+			<value>0.5</value>
+		</property>
+		<relationship name="modulators">
+			<destination>{e74d0a83-18e0-4ab8-be69-837880579c13}</destination>
+		</relationship>
+	</object>
+	<object class="SeekModulator" id="{e74d0a83-18e0-4ab8-be69-837880579c13}">
+		<property name="nameOfPropertyBeingModulated">
+			<value>cursorPosition</value>
+		</property>
+		<property name="speedDescending">
+			<value>0.14000000059604645</value>
+		</property>
+		<property name="asymmetric">
+			<value>true</value>
+		</property>
+	</object>
+</objects>

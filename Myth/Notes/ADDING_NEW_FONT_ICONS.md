@@ -41,6 +41,13 @@ Editor icons use Font Awesome Free Solid 6.7.2. The font is merged into the edit
    ImGui.Button(EditorIcons.AddButton);
    ```
 
+   Invisible actors can use a named glyph instead of drawing a palette sprite. Add its
+   name to `TryGetPaletteIcon`, then declare explicit editor bounds:
+
+   ```csharp
+   [GameActor(Icon = "speaker", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8)]
+   ```
+
 5. Restart the editor. The font atlas is built once during startup, so hot reload cannot add a newly requested glyph to the existing atlas.
 
 If the icon is only available in another Font Awesome style, that style's font must also be bundled and merged. If the icon list grows large, generate `EditorIcons.cs` from Font Awesome's metadata instead of maintaining it manually.

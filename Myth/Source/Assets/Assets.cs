@@ -1,6 +1,7 @@
 
 using System.Text;
 using System.Numerics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Foster.Framework;
@@ -30,6 +31,8 @@ public static partial class Assets
 	public static readonly Dictionary<string, Subtexture> Subtextures = [];
 	public static readonly Dictionary<(int Sublayer, Point2 Cell), Room> Rooms = [];
 	public static readonly Dictionary<string, Room> RoomsById = [];
+	public static event Action<Room, string>? RoomSaveConflict;
+	public static event Action<string>? RoomFileDeleted;
 
 	internal static string GenerateRandomRoomId()
 	{
@@ -2926,7 +2929,9 @@ public static partial class Assets
 				if (deleted.Contains(id))
 					continue;
 
-				var room = LoadRoomJson(id, Content.ReadAllText(key));
+				var json = Content.ReadAllBytes(key);
+				var room = LoadRoomJson(id, json);
+				room.DiskRevision = RoomRevision(json);
 				room.Sublayer = RoomSublayerFromPath(worldRoomsKey, key);
 				room.Storage = Room.StorageKind.Bundled;
 				// Zip content has no per-room file to rename/delete; SourcePath stays null there.
@@ -2938,7 +2943,9 @@ public static partial class Assets
 		if (UseUserRooms && UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
 			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json", SearchOption.AllDirectories))
 			{
-				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(file), File.ReadAllText(file));
+				var json = File.ReadAllBytes(file);
+				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(file), json);
+				room.DiskRevision = RoomRevision(json);
 				room.Sublayer = RoomSublayerFromPath(userWorldRoomsPath, file);
 				room.Storage = Room.StorageKind.User;
 				room.SourcePath = file;
@@ -2950,8 +2957,8 @@ public static partial class Assets
 			CreateDefaultStartRoom();
 	}
 
-	static Room LoadRoomJson(string id, string jsonText)
-		=> new(id, Point2.Zero, Room.DefaultSize, JsonUtil.NormalizeStringValues(JsonNode.Parse(jsonText)?.AsObject() ?? []));
+	static Room LoadRoomJson(string id, ReadOnlySpan<byte> json)
+		=> new(id, Point2.Zero, Room.DefaultSize, JsonUtil.NormalizeStringValues(JsonNode.Parse(json)?.AsObject() ?? []));
 
 	static int RoomSublayerFromPath(string root, string path)
 	{
@@ -2983,16 +2990,64 @@ public static partial class Assets
 		RoomsById[room.Id] = room;
 	}
 
-	public static void SaveRoom(Room room, ReadOnlySpan<byte> json)
+	public static bool SaveRoom(Room room, ReadOnlySpan<byte> json, bool overwriteExternal = false)
 	{
 		var path = GetRoomSavePath(room);
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		if (!overwriteExternal && room.SourcePath is { } sourcePath && PathsEqual(sourcePath, path) && room.DiskRevision != null &&
+			!RevisionEquals(room.DiskRevision, ReadRoomRevision(path)))
+		{
+			Console.Error.WriteLine($"Room save blocked: '{room.Id}' changed on disk.");
+			RoomSaveConflict?.Invoke(room, path);
+			return false;
+		}
 		File.WriteAllBytes(path, json);
+		room.DiskRevision = RoomRevision(json);
 		room.Storage = IsUserRoomPath(path) ? Room.StorageKind.User : Room.StorageKind.Bundled;
 		room.SourcePath = path;
 		SaveRoomColorFields(room, path);
 		if (room.Storage == Room.StorageKind.User)
 			ClearUserRoomTombstone(room.Id);
+		return true;
+	}
+
+	internal static bool IsCurrentWorldRoomPath(string path)
+		=> IsPathWithin(path, WorldRoomsPath);
+
+	internal static bool RoomFileMatchesLoadedRevision(string path)
+	{
+		foreach (var room in RoomsById.Values)
+			if (room.SourcePath is { } sourcePath && PathsEqual(sourcePath, path))
+				return room.DiskRevision != null && RevisionEquals(room.DiskRevision, ReadRoomRevision(path));
+		return false;
+	}
+
+	static byte[] RoomRevision(ReadOnlySpan<byte> json) => SHA256.HashData(json);
+
+	static byte[]? ReadRoomRevision(string path)
+	{
+		try
+		{
+			return File.Exists(path) ? RoomRevision(File.ReadAllBytes(path)) : null;
+		}
+		catch (IOException)
+		{
+			return null;
+		}
+	}
+
+	static bool RevisionEquals(byte[] expected, byte[]? actual)
+		=> actual != null && expected.AsSpan().SequenceEqual(actual);
+
+	static bool PathsEqual(string a, string b)
+		=> string.Equals(Path.GetFullPath(a), Path.GetFullPath(b),
+			OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+	static bool IsPathWithin(string path, string directory)
+	{
+		var relative = Path.GetRelativePath(Path.GetFullPath(directory), Path.GetFullPath(path));
+		return relative != ".." && !Path.IsPathRooted(relative) &&
+			!relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 	}
 
 	public static bool RenameRoom(Room room, string id)
@@ -3180,7 +3235,10 @@ public static partial class Assets
 			return;
 
 		if (CanDeleteFile(path))
+		{
 			File.Delete(path);
+			RoomFileDeleted?.Invoke(path);
+		}
 		else if (!IsUserRoomPath(path))
 			WriteUserRoomTombstone(id);
 	}

@@ -37,6 +37,7 @@ public partial class Game
 	private readonly Dictionary<string, int> storyRoomVisits = [];
 	internal readonly List<StorySpeechBubble> storySpeechBubbles = [];
 	private readonly HashSet<Actor> storyPlayerHitEnemies = [];
+	private BudStorySequence? activeBudStorySequence;
 	private float storyRoomTime;
 	private float storyIdleTime;
 	private bool storyIdleTriggered;
@@ -148,7 +149,35 @@ public partial class Game
 	}
 
 	internal bool CanShowBudSpeech()
-		=> CanShowSpeech();
+		=> activeBudStorySequence == null && CanShowSpeech();
+
+	internal bool BeginBudStorySequence(BudStorySequence sequence, bool interrupt)
+	{
+		if (activeBudStorySequence == sequence)
+			return true;
+		if (activeBudStorySequence != null)
+		{
+			if (!interrupt)
+				return false;
+			activeBudStorySequence.Cancel();
+		}
+		activeBudStorySequence = sequence;
+		return true;
+	}
+
+	internal void EndBudStorySequence(BudStorySequence sequence)
+	{
+		if (activeBudStorySequence == sequence)
+			activeBudStorySequence = null;
+	}
+
+	internal void CancelSpeech(StorySpeechBubble? speech)
+	{
+		if (speech == null)
+			return;
+		speech.Finished = true;
+		storySpeechBubbles.Remove(speech);
+	}
 
 	internal bool CanShowSpeech()
 		=> storySpeechBubbles.Count == 0;

@@ -57,6 +57,7 @@ public static class ActorSpecs
 		string Name,
 		string JsonName,
 		Type Type,
+		Type DeclaringType,
 		JsonNode? Value,
 		JsonNode? ResetValue,
 		bool HasLocalValue,
@@ -257,7 +258,8 @@ public static class ActorSpecs
 			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var resetDefaultValue))
 				resetValue = resetDefaultValue;
 
-			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), value, resetValue, hasLocal,
+			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), member.DeclaringType ?? type.Type,
+				value, resetValue, hasLocal,
 				GetInspectorMetadata(member));
 		}
 	}

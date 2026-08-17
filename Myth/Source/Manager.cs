@@ -440,6 +440,7 @@ public partial class Manager : App
 		}
 		InputPrompts = new(GraphicsDevice, Input);
 #if EDITOR
+		EditorIcons.LoadPaletteFont(GraphicsDevice);
 		saveState = preservePlaytestSaveState ? SaveStateStore.Load(this) : new();
 #else
 		saveState = SaveStateStore.Load(this);
@@ -649,6 +650,7 @@ public partial class Manager : App
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
 		imgui?.Dispose();
+		EditorIcons.UnloadPaletteFont();
 #if DEBUG && !IOS
 		DisposeAssetWatchers();
 #endif
@@ -1115,6 +1117,7 @@ public partial class Manager : App
 #if EDITOR && DEBUG && !IOS
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
+		UpdateRoomReload();
 		UpdateShaderReload();
 		UpdateParticleEffectReload();
 		UpdateAudioBankReload();
@@ -1971,13 +1974,19 @@ public partial class Manager : App
 	{
 #if EDITOR
 		ClearEditorStateForEnteringPlayMode();
-		CurrentRoom?.Save();
 #endif
 		if (CurrentRoom is not { } room)
 		{
 			Console.Error.WriteLine("No room found for startup.");
 			return;
 		}
+#if EDITOR
+		if (!room.Save())
+		{
+			Console.Error.WriteLine("Play cancelled: the current room changed on disk and is being reloaded.");
+			return;
+		}
+#endif
 
 #if EDITOR
 		if (!preservePlaytestSaveState)

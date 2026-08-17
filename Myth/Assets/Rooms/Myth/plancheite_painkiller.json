@@ -66,12 +66,6 @@
       "Position": [244, 52]
     },
     {
-      "Id": "b8bb93aed4bf2335",
-      "Type": "TitleText",
-      "Position": [84, 24],
-      "Text": "todo"
-    },
-    {
       "Id": "e08b34a0689c5166",
       "Type": "TitleText",
       "Position": [148, 96]

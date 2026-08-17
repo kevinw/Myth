@@ -6,10 +6,16 @@ namespace Myth;
 internal static class ZedLauncher
 {
 	public static void OpenFile(string filename)
+		=> OpenFile(filename, filename);
+
+	public static void OpenFile(string filename, int line, int column = 1)
+		=> OpenFile(filename, $"{filename}:{line}:{column}");
+
+	static void OpenFile(string filename, string target)
 	{
 		try
 		{
-			Process.Start(CreateStartInfo("zed", "-a", filename));
+			Process.Start(CreateStartInfo("zed", "-a", target));
 		}
 		catch (Exception e) when (OperatingSystem.IsMacOS())
 		{

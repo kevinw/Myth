@@ -12,6 +12,7 @@ public sealed class GameActorAttribute : Attribute
 {
 	public string? Name;          // persisted "Type" in room/spec JSON; defaults to the class name
 	public string? Sprite;        // palette icon sprite; defaults to a sprite named after the class
+	public string? Icon;          // editor icon name; takes precedence over Sprite for the palette
 	public int OffsetX, OffsetY;  // palette icon origin offset
 	public int BoundsX, BoundsY, BoundsW, BoundsH; // explicit editor bounds; W/H == 0 => auto from sprite
 	public ActorTag Tags;

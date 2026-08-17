@@ -1396,6 +1396,12 @@ public partial class Game : IDisposable
 		Destroy(actor);
 	}
 
+	internal void PreventActorRespawn(Actor actor)
+	{
+		if (!string.IsNullOrEmpty(actor.SessionDestroyKey) && Save.PersistentDestroyedActors.Add(actor.SessionDestroyKey))
+			MarkSaveDirty();
+	}
+
 	void RemoveDestroyedActors()
 	{
 		for (var i = 0; i < destroying.Count; i++)

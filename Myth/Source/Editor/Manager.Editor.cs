@@ -1776,12 +1776,20 @@ public partial class Manager
 	{
 		var row = BeginPropertyRow(property.Name, property.HasLocalValue,
 			additionalTrailingButtons: property.Inspector != null ? 1 : 0);
+		if (BeginPopupContextItem("##PropertyContext"))
+		{
+			if (MenuItem(property.Inspector != null ? "Open [I] in Zed" : "Open declaration in Zed"))
+				ActorZedLauncher.OpenActorProperty(property.DeclaringType, property.Name);
+			EndPopup();
+		}
 		PushID("Value");
 		var changed = DrawActorPropertyValue(specId, room, actor, property, row.ControlWidth);
 		PopID();
 
 		if (specId != null && undo.HasPending(PrefabUndoSlot, specId) && IsItemDeactivatedAfterEdit())
 			CommitPrefabUndo();
+		if (property.Inspector is { } range && IsItemHovered())
+			SetTooltip($"Drag range: {range.Min:g} to {range.Max:g}\nCtrl-click to enter any value");
 
 		if (property.Inspector is { } inspector)
 		{
@@ -1832,7 +1840,7 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<float>() ?? 0;
 			var edited = property.Inspector is { } inspector
-				? SliderFloat("##Value", ref value, inspector.Min, inspector.Max, "%.3f", ImGuiSliderFlags.AlwaysClamp)
+				? SliderFloat("##Value", ref value, inspector.Min, inspector.Max, "%.3f")
 				: DragFloat("##Value", ref value, 0.05f);
 			if (edited)
 			{
@@ -1844,7 +1852,7 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<int>() ?? 0;
 			var edited = property.Inspector is { } inspector
-				? SliderInt("##Value", ref value, (int)inspector.Min, (int)inspector.Max, "%d", ImGuiSliderFlags.AlwaysClamp)
+				? SliderInt("##Value", ref value, (int)inspector.Min, (int)inspector.Max, "%d")
 				: DragInt("##Value", ref value);
 			if (edited)
 			{
@@ -3418,6 +3426,8 @@ public partial class Manager
 			? SnapRoomActorLocalPosition(targetLocal, offset)
 			: (Point2)targetLocal;
 		actor["Position"] = new JsonArray(local.X, local.Y);
+		if (game is { IsEditorPreview: true } && ActorSpecs.GetActorId(actor) is { } actorId && game.GetActorById(actorId) is { } live)
+			live.Position = room.WorldBounds.TopLeft + local;
 		editorGameDirty = true;
 	}
 
@@ -4968,7 +4978,7 @@ public partial class Manager
 				}
 				else if (actorBrush is { } actorPreview)
 				{
-					batcher.Image(actorPreview.PreviewImage, actorBrushPosition, actorPreview.Origin, Vector2.One, 0, Color.White);
+					batcher.Image(actorPreview.PreviewImage, actorBrushPosition, actorPreview.Origin, new Vector2(actorPreview.PreviewScale), 0, Color.White);
 				}
 				else if (brushEntry is { } placing)
 				{
@@ -5095,21 +5105,28 @@ public partial class Manager
 
 		using (PerfStats.Time(PerfDetail.EditorSync))
 		{
-			if (editorGameDirty && (TilePlacing || DragKind == EditorDragKind.RoomGeometry))
+			// A room-actor drag moves its live preview instance directly. Rebuilding the whole
+			// preview here would recreate every actor for every pixel, including NCA prewarm.
+			// Once the mouse is released CommitEditorDragState clears the drag and the normal
+			// save/rebuild below runs once, restoring any actor-specific derived state.
+			if (editorGameDirty && DragKind != EditorDragKind.RoomActor)
 			{
-				if (CurrentRoom is { } room)
-					MarkRoomPreviewDirty(room);
-				SyncEditorGame();
-			}
-			else if (editorGameDirty)
-			{
-				editorGameDirty = false;
-				if (CurrentRoom is { } room)
+				if (TilePlacing || DragKind == EditorDragKind.RoomGeometry)
 				{
-					MarkRoomPreviewDirty(room);
-					room.Save();
+					if (CurrentRoom is { } room)
+						MarkRoomPreviewDirty(room);
+					SyncEditorGame();
 				}
-				SyncEditorGame();
+				else
+				{
+					editorGameDirty = false;
+					if (CurrentRoom is { } room)
+					{
+						MarkRoomPreviewDirty(room);
+						room.Save();
+					}
+					SyncEditorGame();
+				}
 			}
 		}
 	}

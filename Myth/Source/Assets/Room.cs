@@ -74,6 +74,7 @@ public class Room
 
 	public StorageKind Storage { get; internal set; } = StorageKind.Bundled;
 	public string? SourcePath { get; internal set; }
+	internal byte[]? DiskRevision;
 	public int Sublayer;
 
 	/// Compatibility screen-grid location of the Room.
@@ -1380,14 +1381,14 @@ public class Room
 		return predicate(entry);
 	}
 
-	public void Save()
+	public bool Save(bool overwriteExternal = false)
 	{
 		if (ReverbAuto)
 			Reverb = InferReverb();
 
 		var buffer = new ArrayBufferWriter<byte>();
 		WriteJson(buffer, includeColorFields: false);
-		Assets.SaveRoom(this, buffer.WrittenSpan);
+		return Assets.SaveRoom(this, buffer.WrittenSpan, overwriteExternal);
 	}
 
 	public string ToJsonString()

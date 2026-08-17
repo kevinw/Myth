@@ -61,6 +61,9 @@ public partial class Manager
 			DrawCreateRoomPopup();
 			DrawActorContextMenu();
 			DrawCreatePrefabPopup();
+#if DEBUG && !IOS
+			DrawRoomSaveConflictPopup();
+#endif
 		}
 		ImGui.End();
 		ImGui.PopStyleVar();

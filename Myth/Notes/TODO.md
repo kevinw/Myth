@@ -1,3 +1,11 @@
+# Submission
+
+- burrow sound effect
+- replace all foster baddies with my own sprites. start by drawing, then also tweak or augment their behaviour.
+- duck room needs a bassy sound effect
+
+
+
 # TODO
 
 - axiom verge thoughts

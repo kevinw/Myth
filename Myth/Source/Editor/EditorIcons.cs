@@ -1,9 +1,12 @@
 #if EDITOR
+using Foster.Framework;
+
 namespace Myth;
 
 static class EditorIcons
 {
 	public const string Search = "\uf002";
+	public const string Speaker = "\uf028";
 	public const string Add = "\uf067";
 	public const string Lock = "\uf023";
 	public const string Up = "\uf062";
@@ -36,6 +39,7 @@ static class EditorIcons
 		0xf00d, 0xf00d,
 		0xf067, 0xf067,
 		0xf023, 0xf023,
+		0xf028, 0xf028,
 		0xf040, 0xf040,
 		0xf062, 0xf063,
 		0xf06e, 0xf06e,
@@ -50,5 +54,42 @@ static class EditorIcons
 		0xf24d, 0xf24d,
 		0
 	];
+
+	static SpriteFont? paletteFont;
+
+	public static void LoadPaletteFont(GraphicsDevice graphics)
+		=> paletteFont = new SpriteFont(graphics,
+			Path.Join(AppContext.BaseDirectory, "EditorAssets", "Fonts", "fa-solid-900.ttf"), 32, GetGlyphCodepoints());
+
+	static int[] GetGlyphCodepoints()
+	{
+		var count = 0;
+		for (var i = 0; GlyphRanges[i] != 0; i += 2)
+			count += GlyphRanges[i + 1] - GlyphRanges[i] + 1;
+
+		var codepoints = new int[count];
+		var index = 0;
+		for (var i = 0; GlyphRanges[i] != 0; i += 2)
+			for (var codepoint = GlyphRanges[i]; codepoint <= GlyphRanges[i + 1]; codepoint++)
+				codepoints[index++] = codepoint;
+		return codepoints;
+	}
+
+	public static bool TryGetPaletteIcon(string name, out Subtexture icon)
+	{
+		var codepoint = name switch
+		{
+			"speaker" => Speaker[0],
+			_ => 0
+		};
+		icon = paletteFont?[codepoint].Subtexture ?? default;
+		return icon.Texture != null;
+	}
+
+	public static void UnloadPaletteFont()
+	{
+		paletteFont?.Dispose();
+		paletteFont = null;
+	}
 }
 #endif

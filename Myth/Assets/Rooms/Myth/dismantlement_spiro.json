@@ -98,6 +98,15 @@
       "Id": "42c3dc56c473bf3b",
       "Type": "Wildlife",
       "Position": [112, 56]
+    },
+    {
+      "Id": "6e3e410f8d0f59fd",
+      "Type": "TitleText",
+      "Position": [156, 32],
+      "Text": "emerge from bosonic\nto jump higher",
+      "LineHeightMultiplier": 0.655,
+      "Emissive": true,
+      "RevealSpeed": 17.127
     }
   ]
 }
