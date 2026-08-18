@@ -207,7 +207,10 @@ public partial class Manager
 		if (OperatingSystem.IsLinux())
 		{
 			gameViewWindowRect = rect;
-			gameViewHovered = rect.Contains(Cursor);
+			// rect.Contains alone doesn't know about floating windows (e.g. the Tile Creator)
+			// drawn on top of the game view -- AnyWindow reports the cursor's topmost ImGui hit,
+			// so clicks/drags over an overlapping window no longer leak through to the room.
+			gameViewHovered = rect.Contains(Cursor) && !ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow);
 			return;
 		}
 
