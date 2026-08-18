@@ -4,6 +4,8 @@
   "Radius": 72,
   "Intensity": 1.35,
   "LightColor": "80c8ff",
+  "SpriteName": "fire_greyscale",
+  "TintSprite": true,
   "Height": 20,
   "FlickerFrequency": 1.25,
   "FlickerIntensity": 0.025

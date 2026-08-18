@@ -36,7 +36,63 @@ public class Light : Actor, IHitByHitbox
 	[I(0, 40)] public float ShadowNoiseSpeed = 8.0f;
 	readonly float FlickerRandomOffset = 0;
 	public bool DrawSprite = true;
+	// Multiplies the sprite by LightColor, so one neutral sprite (fire_greyscale) can stand in
+	// for a flame of any colour. The normals pass stays untinted -- it carries directions, not
+	// colour -- but the reflection follows the sprite so water doesn't show the untinted original.
+	public bool TintSprite;
+	[I(0, 2)] public float TintSaturation = 1;
+	[I(0, 1)] public float TintVividness = 0;
 	internal Actor? SpriteShadowOwner;
+
+	// Multiplying a grey sprite by a colour hands every pixel that colour's saturation exactly
+	// -- the grey cancels out of 1 - min/max -- so the flame is only ever as vivid as LightColor
+	// is. These two reshape the tint before the multiply; the light it casts still uses LightColor.
+	Color SpriteTint => TintSprite ? Saturate(PureHue(LightColor, TintVividness), TintSaturation) : Color.White;
+
+	// Pulls a colour toward its own hue at full saturation and value. Pale light colours
+	// (DDEBFF is 13% saturated) have almost no hue for TintSaturation to scale, so this is
+	// what gives them something to work with.
+	static Color PureHue(Color color, float amount)
+	{
+		if (amount <= 0)
+			return color;
+
+		var lo = Math.Min(color.R, Math.Min(color.G, color.B));
+		var hi = Math.Max(color.R, Math.Max(color.G, color.B));
+		if (hi == lo)
+			return color; // no hue to pull toward
+
+		var scale = 255f / (hi - lo);
+		return new Color(
+			Lerp(color.R, (color.R - lo) * scale, amount),
+			Lerp(color.G, (color.G - lo) * scale, amount),
+			Lerp(color.B, (color.B - lo) * scale, amount),
+			color.A);
+	}
+
+	// Scales saturation about the colour's own luma, which the lerp leaves untouched: 0 is grey,
+	// 1 is the colour as authored, above 1 extrapolates past it.
+	static Color Saturate(Color color, float amount)
+	{
+		if (amount == 1)
+			return color;
+
+		var luma = 0.2126f * color.R + 0.7152f * color.G + 0.0722f * color.B;
+		return new Color(
+			Lerp(luma, color.R, amount),
+			Lerp(luma, color.G, amount),
+			Lerp(luma, color.B, amount),
+			color.A);
+	}
+
+	static byte Lerp(float from, float to, float amount)
+		=> (byte)Math.Clamp(from + (to - from) * amount, 0, 255);
+
+	static Color Multiply(Color a, Color b) => new(
+		(byte)(a.R * b.R / 255),
+		(byte)(a.G * b.G / 255),
+		(byte)(a.B * b.B / 255),
+		(byte)(a.A * b.A / 255));
 
 	public float FlickerScale => 1 + CurrentFlicker * FlickerIntensity;
 	public float FlickerScaleMax => 1 + FlickerIntensity;
@@ -135,7 +191,7 @@ public class Light : Actor, IHitByHitbox
 		Sprite = Assets.GetSprite(SpriteName);
 		Play("idle");
 		CollidesWithSolids = false;
-		Depth = 1;
+		Depth = Depths.Ambient;
 	}
 
 	public override void Added()
@@ -148,7 +204,7 @@ public class Light : Actor, IHitByHitbox
 	public override void Render(Batcher batcher)
 	{
 		if (DrawSprite)
-			base.Render(batcher);
+			RenderSpriteSubtexture(batcher, SpriteTint);
 	}
 
 	public override void RenderNormals(Batcher batcher)
@@ -161,6 +217,12 @@ public class Light : Actor, IHitByHitbox
 	{
 		if (DrawSprite)
 			base.RenderEmissive(batcher);
+	}
+
+	public override void RenderReflection(Batcher batcher, Color color)
+	{
+		if (DrawSprite)
+			base.RenderReflection(batcher, Multiply(color, SpriteTint));
 	}
 
 }

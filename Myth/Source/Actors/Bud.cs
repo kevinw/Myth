@@ -69,7 +69,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	{
 		nav = new(this);
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
-		Depth = -4;
+		Depth = Depths.BehindPlayer;
 		Play("idle");
 	}
 

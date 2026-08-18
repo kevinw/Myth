@@ -128,8 +128,10 @@
       "Id": "ae00000000000036",
       "Type": "Light",
       "Position": [104, 80],
-      "DrawSprite": false,
+      "DrawSprite": true,
       "LightColor": "78CFC3",
+      "SpriteName": "fire_greyscale",
+      "TintSprite": true,
       "Radius": 116,
       "Intensity": 0.55,
       "Height": 8

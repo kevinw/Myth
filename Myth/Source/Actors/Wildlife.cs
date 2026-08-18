@@ -67,7 +67,7 @@ public class Wildlife : Actor
 	public Wildlife()
 	{
 		CollidesWithSolids = false;
-		Depth = 1;
+		Depth = Depths.Ambient;
 	}
 
 	public override bool CastsSpriteShadow => false;

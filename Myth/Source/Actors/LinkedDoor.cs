@@ -26,7 +26,7 @@ public class LinkedDoor : Actor
 	{
 		Sprite = Assets.GetSprite("back_door");
 		Hitbox = new(new RectInt(-8, -16, 16, 16));
-		Depth = 1;
+		Depth = Depths.Ambient;
 		Play("idle");
 	}
 

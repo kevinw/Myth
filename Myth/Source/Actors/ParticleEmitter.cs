@@ -23,7 +23,7 @@ public class ParticleEmitter : Actor
 	{
 		Hitbox = new(new RectInt(-4, -4, 8, 8));
 		CollidesWithSolids = false;
-		Depth = 1;
+		Depth = Depths.Ambient;
 	}
 
 	public override bool CastsSpriteShadow => false;

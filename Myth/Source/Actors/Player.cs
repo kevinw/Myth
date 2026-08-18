@@ -1369,6 +1369,7 @@ public partial class Player : Pawn
 		hatSprite = Assets.GetSprite("hat");
 		Hitbox = new(StandingHitboxRect);
 		Mask = Masks.Player;
+		Depth = Depths.Player;
 		IFrameTime = InvincibleDuration;
 		grounded = true;
 		Play("sword");

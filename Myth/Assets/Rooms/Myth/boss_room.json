@@ -46,8 +46,10 @@
       "FlickerFrequency": 1.65,
       "FlickerIntensity": 0.13,
       "LightColor": "3C93F3",
+      "SpriteName": "fire_greyscale",
+      "TintSprite": true,
       "Height": 30.2,
-      "DrawSprite": false
+      "DrawSprite": true
     },
     {
       "Id": "d755aefc0fe01793",

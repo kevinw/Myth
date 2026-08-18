@@ -1699,7 +1699,7 @@ public partial class Manager
 			changed |= DrawRandomizeActorPropertiesButton(selectedActorSpecId, null, spec);
 		foreach (var property in actorPropertyScratch)
 		{
-			if (spec != null && HideInactiveLightCookieProperty(spec, property))
+			if (spec != null && HideInactiveLightProperty(spec, property))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
@@ -2139,7 +2139,7 @@ public partial class Manager
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
 		foreach (var property in actorPropertyScratch)
 		{
-			if (HideInactiveLightCookieProperty(actor, property))
+			if (HideInactiveLightProperty(actor, property))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorInstanceProperty(room, actor, property);
@@ -2201,15 +2201,23 @@ public partial class Manager
 		draw.PopClipRect();
 	}
 
-	static bool HideInactiveLightCookieProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+	static bool HideInactiveLightProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 	{
-		if (ActorSpecs.GetTypeName(actor) != nameof(Light) ||
-			property.Name == nameof(Light.Cookie) ||
-			!property.Name.StartsWith(nameof(Light.Cookie), StringComparison.Ordinal))
+		if (ActorSpecs.GetTypeName(actor) != nameof(Light))
 			return false;
 
-		return !Enum.TryParse<LightCookie>(ActorSpecs.GetResolvedProperty(actor, nameof(Light.Cookie))?.GetValue<string>(), true, out var cookie) ||
-			cookie == LightCookie.None;
+		// The Cookie* knobs only mean something once a cookie is chosen; the Tint* ones only
+		// once the sprite is being tinted. Both gates leave the property they key off visible.
+		if (property.Name != nameof(Light.Cookie) &&
+			property.Name.StartsWith(nameof(Light.Cookie), StringComparison.Ordinal))
+			return !Enum.TryParse<LightCookie>(ActorSpecs.GetResolvedProperty(actor, nameof(Light.Cookie))?.GetValue<string>(), true, out var cookie) ||
+				cookie == LightCookie.None;
+
+		if (property.Name != nameof(Light.TintSprite) &&
+			property.Name.StartsWith("Tint", StringComparison.Ordinal))
+			return ActorSpecs.GetResolvedProperty(actor, nameof(Light.TintSprite))?.GetValue<bool>() != true;
+
+		return false;
 	}
 
 	bool DrawActorInstanceProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
