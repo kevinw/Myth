@@ -235,6 +235,9 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public Color Tint = Color.White;
 	[I(0, 4)] public float NormalStrength = 1f;
 	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
+	// Hides the outermost painted cells, which simulate against partly-empty neighborhoods and
+	// decode to an off-palette rim. Measured in simulation cells; see RebuildDecodeMask.
+	[I(0, 4)] public int EdgeTrim;
 	[I(0.1f, 4)] public float DetailScale = 1f;
 	public Vector2 DetailPhase;
 	[I(0, 4)] public float PatchFrequency = 1f;
@@ -274,7 +277,9 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	Shader? decodeShader;
 	Shader? perturbShader;
 	StorageBuffer<uint>? maskBuffer;
+	StorageBuffer<uint>? decodeMaskBuffer;
 	uint[] maskCells = [];
+	uint[] decodeMaskCells = [];
 	CellState[] emptyState = [];
 	Point2 updateOrigin;
 	Point2 updateSize;
@@ -300,6 +305,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				DecodeMaskData();
 				maskBuffer!.Upload(maskCells);
 				RebuildUpdateBounds();
+				RebuildDecodeMask();
 				RebuildSilhouette();
 			}
 		}
@@ -339,6 +345,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			DecodeMaskData();
 		RebuildUpdateBounds();
 		maskBuffer.Upload(maskCells);
+		RebuildDecodeMask();
 		output = new(
 			graphicsDevice,
 			Math.Max(1, Size.X),
@@ -457,6 +464,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		maskBuffer!.Upload(maskCells);
 		RebuildUpdateBounds();
+		RebuildDecodeMask();
 		RebuildSilhouette();
 		Decode();
 	}
@@ -478,17 +486,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		occluderSegments.Clear();
 		var width = Math.Max(1, Size.X);
 		var height = Math.Max(1, Size.Y);
-		var solid = new bool[width * height];
-		for (var y = 0; y < height; y++)
-			for (var x = 0; x < width; x++)
-			{
-				var state = OutputToState(new Vector2(x + 0.5f, y + 0.5f));
-				var cell = state.FloorToPoint2();
-				var blend = state - (Vector2)cell;
-				var top = float.Lerp(MaskAlpha(cell), MaskAlpha(cell + Point2.UnitX), blend.X);
-				var bottom = float.Lerp(MaskAlpha(cell + Point2.UnitY), MaskAlpha(cell + Point2.One), blend.X);
-				solid[y * width + x] = float.Lerp(top, bottom, blend.Y) >= 1f / 512f;
-			}
+		var solid = Trace(decodeMaskCells);
+		// What the painter drew, before EdgeTrim shaved the visible edge back: the bevel below
+		// follows this, so trimming hides cells without carving a fresh lit edge into the shape.
+		var painted = ReferenceEquals(decodeMaskCells, maskCells) ? solid : Trace(maskCells);
 
 		for (var y = 0; y < height; y++)
 		{
@@ -519,15 +520,34 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		else
 			silhouetteNormalOutput.SetData<Color>(normalPixels);
 
-		float MaskAlpha(Point2 cell)
+		bool[] Trace(uint[] cells)
+		{
+			var map = new bool[width * height];
+			for (var y = 0; y < height; y++)
+				for (var x = 0; x < width; x++)
+				{
+					var state = OutputToState(new Vector2(x + 0.5f, y + 0.5f));
+					var cell = state.FloorToPoint2();
+					var blend = state - (Vector2)cell;
+					var top = float.Lerp(MaskAlpha(cells, cell), MaskAlpha(cells, cell + Point2.UnitX), blend.X);
+					var bottom = float.Lerp(MaskAlpha(cells, cell + Point2.UnitY), MaskAlpha(cells, cell + Point2.One), blend.X);
+					map[y * width + x] = float.Lerp(top, bottom, blend.Y) >= 1f / 512f;
+				}
+			return map;
+		}
+
+		float MaskAlpha(uint[] cells, Point2 cell)
 		{
 			cell = new(Math.Clamp(cell.X, 0, SimulationSize.X - 1), Math.Clamp(cell.Y, 0, SimulationSize.Y - 1));
-			var packed = maskCells[cell.Y * SimulationSize.X + cell.X];
+			var packed = cells[cell.Y * SimulationSize.X + cell.X];
 			return ((packed & 0xFF) + ((packed >> 8) & 0xFF) + ((packed >> 16) & 0xFF) + (packed >> 24)) / 255f;
 		}
 
 		bool IsSolid(int x, int y) => x >= 0 && y >= 0 && x < width && y < height && solid[y * width + x];
-		int SolidValue(int x, int y) => IsSolid(x, y) ? 1 : 0;
+		// Off-image neighbors count as solid: the image border is where the texture stops, not a
+		// silhouette edge, and beveling it stamps a one-pixel rim of normals over whatever the
+		// actor is layered against. Only painted silhouettes inside the image get a bevel.
+		int SolidValue(int x, int y) => (uint)x >= (uint)width || (uint)y >= (uint)height || painted[y * width + x] ? 1 : 0;
 
 		void MergeHorizontal(int y, int neighborOffset, int edgeY)
 		{
@@ -679,6 +699,44 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		updateSize = max.X >= min.X && max.Y >= min.Y ? max - min + Point2.One : Point2.Zero;
 	}
 
+	// A cell painted next to empty space steps against a partly-empty neighborhood, so it settles
+	// somewhere the model never trained and decodes as a rim one cell wide. EdgeTrim hides those
+	// cells from the decode and the silhouette while the simulation keeps running on the authored
+	// mask, so the newly outermost visible cell is one that settled with full neighbors.
+	void RebuildDecodeMask()
+	{
+		decodeMaskCells = maskCells;
+		if (EdgeTrim <= 0)
+			return;
+
+		var (width, height) = (SimulationSize.X, SimulationSize.Y);
+		// Separable erosion: a cell survives only if every cell within EdgeTrim of it is painted,
+		// and off-grid counts as unpainted so the trim eats inward from the image border too.
+		var rowKept = new bool[maskCells.Length];
+		for (var y = 0; y < height; y++)
+			for (var x = 0; x < width; x++)
+			{
+				var kept = true;
+				for (var dx = -EdgeTrim; dx <= EdgeTrim && kept; dx++)
+					kept = (uint)(x + dx) < (uint)width && maskCells[y * width + x + dx] != 0;
+				rowKept[y * width + x] = kept;
+			}
+
+		decodeMaskCells = new uint[maskCells.Length];
+		for (var y = 0; y < height; y++)
+			for (var x = 0; x < width; x++)
+			{
+				var kept = true;
+				for (var dy = -EdgeTrim; dy <= EdgeTrim && kept; dy++)
+					kept = (uint)(y + dy) < (uint)height && rowKept[(y + dy) * width + x];
+				if (kept)
+					decodeMaskCells[y * width + x] = maskCells[y * width + x];
+			}
+
+		decodeMaskBuffer ??= new(graphicsDevice, "NeuralTextureDecodeMask");
+		decodeMaskBuffer.Upload(decodeMaskCells);
+	}
+
 	void ApplyPerturbations()
 	{
 		perturbStampCount = 0;
@@ -821,7 +879,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		new ComputeCommand(decodeShader!)
 		{
-			ReadOnlyStorageBuffers = [source, weights!, maskBuffer!],
+			ReadOnlyStorageBuffers = [source, weights!, decodeMaskBuffer ?? maskBuffer!],
 			ReadWriteStorageTextures = [output, normalOutput!],
 			UniformBuffers = [decodeUniforms],
 			GroupCountX = (output.Width + 7) / 8,
@@ -854,6 +912,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		bufferB?.Dispose();
 		perturbations?.Dispose();
 		maskBuffer?.Dispose();
+		decodeMaskBuffer?.Dispose();
 		output?.Dispose();
 		normalOutput?.Dispose();
 		silhouetteNormalOutput?.Dispose();
