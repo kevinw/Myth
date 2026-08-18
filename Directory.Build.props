@@ -7,7 +7,10 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(BaseIntermediateOutputPath)' == ''">
-    <_FosterGamesIntermediateFlavor Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_FosterGamesIntermediateFlavor>
+    <!-- Analyzer project references build with RuntimeIdentifier undefined but restore with it
+         defined, so a RID-derived flavor restores project.assets.json to one obj/ flavor and
+         then fails the build looking for it in another. -->
+    <_FosterGamesIntermediateFlavor Condition="'$(RuntimeIdentifier)' != '' and '$(MSBuildProjectName)' != 'Myth.SourceGen'">$(RuntimeIdentifier)</_FosterGamesIntermediateFlavor>
     <_FosterGamesIntermediateFlavor Condition="'$(_FosterGamesIntermediateFlavor)' == '' and '$(MythBrowser)' == 'true'">browser-wasm</_FosterGamesIntermediateFlavor>
     <_FosterGamesIntermediateFlavor Condition="'$(_FosterGamesIntermediateFlavor)' == ''">desktop</_FosterGamesIntermediateFlavor>
     <!-- Ship flavors drop the editor, and MythShip also drops the diagnostics PackageReference.
