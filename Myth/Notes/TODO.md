@@ -1,13 +1,44 @@
-# Submission
+# fer playtest
 
-- burrow sound effect
-- replace all foster baddies with my own sprites. start by drawing, then also tweak or augment their behaviour.
-- duck room needs a bassy sound effect
-
+- what is the guy responding to?
+- feels weird to leave the guy behind.
+- hidden/breakable walls confusion, we need a more consistent visual design for secrets
+- water droplets would be nice
+- spitter room with water at the bottom is ugly
+- pressing dash alone makes sound
+- save arrow up is not obvious
+- left stick on the map is not moving
+- move / zoom the map during save
+- could use arrows next to your location on the map indicating where you can go
+- bring back health view
+- rope up from one room w/ save point leads nowhere
+- visual hierarchy: what is the path?
+- making sure that either all gaps which lead to an adjacent room are obvious, or that there are no pits? not sure
+- first dark room in the tower--fer didn't find the hidden wall
+- carry is confusing
+- burrowing through a save doesn't save
+- lightning trap wall jump room isn't clear
+- down jump on wall through?
+- should we be able to burrow on a jumpthru?
+- he thought the duck would hurt you
+- duck death sound played on leave
+- the bg NCT should disintegrate when you kill the duck
+- start menu maybe needs "return to checkpoint"
+- lighting trap sfx stuck when the map opens; what is a general solution for this
+- make untakedn map exits more obvious than the current pulsating 1px line
+- left stick down still zooms, get rid of it
+- doors in the floater room are unclear
+- floater room shadows look like safe spots but they are not
+- health hud
+- save point after the floater "boss"
+- thought tower was a new room because he came down and the hidden wall was revealed immediately
+- remove LinkedDoors that warp you across the map; respect the player's understanding of spatial relations
 
 
 # TODO
 
+- burrow sound effect
+- duck room needs a bassy sound effect
 - chat about how spectral color mixing might help
 - axiom verge thoughts
   - upgrades to projectile size, distance

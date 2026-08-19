@@ -226,6 +226,9 @@ public partial class Manager
 		else
 		{
 			ImGui.TextUnformatted(room.Id);
+			// IsItemHovered only ever answers for the last item submitted, so the name's own hover
+			// has to be read here, before the size label becomes that item.
+			var hoveringName = ImGui.IsItemHovered();
 			{
 				ImGui.SameLine();
 				var vsb = new ValueStringBuilder(stackalloc char[20]);
@@ -235,7 +238,7 @@ public partial class Manager
 				vsb.Append(room.Size.Y);
 				ImGui.TextDisabled(vsb.AsSpan());
 			}
-			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+			if ((hoveringName || ImGui.IsItemHovered()) && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				BeginRoomRename(room);
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Delete"))

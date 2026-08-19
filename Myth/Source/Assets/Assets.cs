@@ -3069,16 +3069,35 @@ public static partial class Assets
 		room.Id = id;
 		RoomsById.Remove(oldId);
 		RoomsById[id] = room;
-		room.Save();
+		// The save writes the room and its color-field pngs under the new id (SaveRoomColorFields
+		// derives their paths from the room's path), leaving the old files to clean up below. A
+		// refused save (see SaveRoom's disk-conflict check) wrote nothing, so put the id back
+		// instead of deleting the files it still lives in.
+		if (!room.Save())
+		{
+			room.Id = oldId;
+			RoomsById.Remove(id);
+			RoomsById[oldId] = room;
+			return false;
+		}
 
-		DeleteRoomFile(oldPath, oldId);
-		DeleteColorFieldFile(oldForegroundColorPath);
-		DeleteColorFieldFile(oldBackgroundColorPath);
+		if (!RenamedOntoItself(oldPath, room.SourcePath))
+			DeleteRoomFile(oldPath, oldId);
+		if (!RenamedOntoItself(oldForegroundColorPath, room.ForegroundColorField.SourcePath))
+			DeleteColorFieldFile(oldForegroundColorPath);
+		if (!RenamedOntoItself(oldBackgroundColorPath, room.BackgroundColorField.SourcePath))
+			DeleteColorFieldFile(oldBackgroundColorPath);
 		if (oldHadBundledRoom && !string.Equals(oldPath, oldBundledPath, StringComparison.Ordinal))
 			WriteUserRoomTombstone(oldId);
 
 		return true;
 	}
+
+	// A rename that only changes case (which CanRenameRoom allows) lands back on the same file on
+	// Windows and macOS, where the save just overwrote it -- deleting the "old" path there would
+	// throw away the file that was written.
+	static bool RenamedOntoItself(string? oldPath, string? newPath)
+		=> oldPath != null && newPath != null && PathsEqual(oldPath, newPath);
 
 	public static bool CanRenameRoom(Room room, string id)
 	{
