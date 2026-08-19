@@ -104,8 +104,13 @@
     {
       "Id": "6e3e410f8d0f59fd",
       "From": "TutorialText",
-      "Position": [156, 32],
-      "Text": "emerge from bosonic\nto jump higher"
+      "Position": [156, 24],
+      "Text": [
+        "hold {Jump} and release",
+        "emerge from bosonic",
+        "to jump higher"
+      ],
+      "LineHeightMultiplier": 0.859
     }
   ]
 }

@@ -17,7 +17,7 @@ public readonly record struct PawnInput(
 
 public abstract class Pawn : Actor
 {
-	int jumpParticlesEffect = -1;
+	protected int jumpParticlesEffect = -1;
 	int splashParticlesEffect = -1;
 
 	override public void Added()
@@ -760,15 +760,13 @@ public abstract class Pawn : Actor
 		TryStartPawnAction(moveX);
 	}
 
-	protected void EmitJumpParticles(Vector2 position, int count = 8)
-	{
+	protected void EmitJumpParticles(Vector2 position, int count = 8) =>
 		Game.Particles?.Emit(jumpParticlesEffect,
 			worldPosition: position,
 			count: count,
 			directionRadians: MathF.PI / 2.0f,
 			speedScale: 2.5f,
 			spreadRadians: 59.0f * Calc.DegToRad);
-	}
 
 	protected float burrowTimer = 0;
 	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm

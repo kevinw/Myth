@@ -59,6 +59,7 @@ public class SavePoint : Actor
 			{
 				pulse = 1f;
 				Game.ActivateSavePoint(this);
+				AudioEvent("save_point/activate");
 			}
 
 			var moveInt = Game.Controls.Move.IntValue;
