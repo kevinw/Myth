@@ -1346,6 +1346,7 @@ public partial class Player : Pawn
 	static float HatMaxVelocityDelta => 250f;
 
 	[I(1, MaxHealth)] public int Health = MaxHealth;
+	float deathTimer;
 	public Controls Controls => Game.Controls;
 
 	int footstepFrame = -1;
@@ -1620,6 +1621,7 @@ public partial class Player : Pawn
 		if (IsSafeGroundedRespawn())
 			Game.NoteSafeGroundedRespawn(Position);
 
+		UpdateDeathRecovery();
 		ClampPositionToRoomOrTransitionRooms();
 
 		if (State == States.Burrow)
@@ -2057,9 +2059,25 @@ public partial class Player : Pawn
 
 		if (state.Time >= hurtStateDuration && Health > 0)
 			State = States.Normal;
+	}
 
-		if (state.Time >= DeathDuration && Health <= 0)
+	// Death is timed on the player rather than on HurtState, which only runs while we're in
+	// States.Hurt. A save-point warp, a cutscene, or a room shift taken during the death
+	// animation puts us back in another state, and the respawn would then never fire: we'd
+	// keep playing at zero health, where ClampPositionToRoomOrTransitionRooms bails out and
+	// room edges stop both transitioning and blocking.
+	void UpdateDeathRecovery()
+	{
+		if (Health > 0)
 		{
+			deathTimer = 0;
+			return;
+		}
+
+		deathTimer += Time.Delta;
+		if (deathTimer >= DeathDuration)
+		{
+			deathTimer = 0;
 			Game.RespawnPlayerAtLastGrounded(restartMusic: true);
 		}
 	}

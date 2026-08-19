@@ -138,6 +138,11 @@ public partial class Game
 		RespawnPlayerAt(player,
 			new RespawnState(savePointWarpTarget.RoomId, savePointWarpTarget.Position),
 			reloadRoom: room?.Id != savePointWarpTarget.RoomId);
+		// The map (and so warp mode) opens during the death animation, so a warp can land here
+		// with no health left. State goes back to Normal below, which would otherwise leave a
+		// dead player walking around.
+		if (player.Health <= 0)
+			player.Health = Player.MaxHealth;
 		player.State = Player.States.Normal;
 		player.Stop();
 		EnsureBudForPlayer(repositionExisting: true);

@@ -1592,6 +1592,8 @@ public partial class Game : IDisposable
 		}
 
 		ActivateRoomImmediately(target, player, playerPosition, RoomChangeKind.Reload, direction);
+		if (player.Health <= 0)
+			player.Health = Player.MaxHealth;
 		player.State = Player.States.Normal;
 		player.Stop();
 		EnsureBudForPlayer(repositionExisting: true);
