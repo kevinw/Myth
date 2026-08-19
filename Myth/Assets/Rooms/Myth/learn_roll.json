@@ -112,15 +112,10 @@
     {
       "Id": "f59f181c2ccde014",
       "From": "TutorialText",
-      "Position": [40, 122]
-    },
-    {
-      "Id": "7eac8a8cdba0058c",
-      "From": "TutorialText",
-      "Position": [151, 153],
+      "Position": [69, 121],
       "Text": [
         "hold down and right",
-        "when landing to roll"
+        "to crawl"
       ]
     }
   ]

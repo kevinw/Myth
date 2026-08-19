@@ -164,21 +164,24 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         if (alpha <= 0.0)
             continue;
         int base = (int)slot * MODEL_STRIDE;
-        float hidden[HIDDEN_N];
-        [unroll]
+        // Each hidden unit feeds the output layer as soon as it is produced. Holding all
+        // HIDDEN_N of them in an array across two passes puts them in scratch, and unrolling
+        // the outer loop inlines HIDDEN_N * 17 dot products -- together those are most of this
+        // shader's compiled size, which is what a cold driver has to chew through on a first
+        // run. The inner input loop stays unrolled: it is short, and it keeps the indices into
+        // `perception` constant so that array stays in registers.
         for (int output = 0; output < HIDDEN_N; output++)
         {
             float value = weight_value(base, NCA_B1_OFFSET, output);
             [unroll]
             for (int input = 0; input < 17; input++)
                 value += dot(perception[input], Weights[base + NCA_W1_OFFSET + output * 17 + input]);
-            hidden[output] = max(value, 0.0);
-        }
 
-        for (int input = 0; input < HIDDEN_N; input++)
+            float hidden = max(value, 0.0);
             [unroll]
             for (int group = 0; group < 4; group++)
-                delta[group] += alpha * hidden[input] * Weights[base + NCA_W2_OFFSET + input * 4 + group];
+                delta[group] += alpha * hidden * Weights[base + NCA_W2_OFFSET + output * 4 + group];
+        }
     }
 
     CellState result;
