@@ -38,7 +38,10 @@ public partial class Manager : App
 #if !EDITOR
 	static Color highlight => 0x5fcde4;
 #endif
-	Color WINDOW_CLEAR_COLOR = new(0x2e1426);
+	// Anything the game doesn't draw over: the letterbox bands around the 16:9 frame (the
+	// Steam Deck's 16:10 panel), the boot warmup screen, and the title screen before a room
+	// preview exists. Rooms fill the frame opaquely via DrawBackdrop, so play is unaffected.
+	Color WINDOW_CLEAR_COLOR = Color.Black;
 
 	string? selectedRoomId;
 #if EDITOR
