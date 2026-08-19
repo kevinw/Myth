@@ -14,7 +14,7 @@ public class Bouncer : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 2, Game.TileSize * 2);
 
 	public Point2 Size { get; set; } = DefaultSize;
-	[I(20, 200)] public float Strength = 80f;
+	[I(20, 400)] public float Strength = 220f;
 	// Pad mode: always launch along Direction instead of radially away from the center.
 	public bool Directional;
 	// How much wider the straight-up sector is relative to the other seven. 0.2 = 20% wider.
@@ -125,13 +125,13 @@ public class Bouncer : Actor, IResizable
 	void Bounce(Actor actor)
 	{
 		var direction = BounceDirection(actor);
-		
+
 		// Don't squash velocity in the direction we're not bouncing (i.e., let a player keep traveling horizontally for a vertical bounce).
 		var hasX = MathF.Abs(direction.X) > 0.01f;
 		var hasY = MathF.Abs(direction.Y) > 0.01f;
 		if (hasX) actor.Velocity.X = 0.0f;
 		if (hasY) actor.Velocity.Y = 0.0f;
-		
+
 		actor.Velocity += direction * Strength;
 
 		recoilOffset = -direction * VisualRecoilOffset;

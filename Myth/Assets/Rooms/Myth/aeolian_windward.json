@@ -6,7 +6,7 @@
   "ambientColor": "668695",
   "ambientIntensity": 0.48,
   "lightNoise": 0.24,
-  "reverb": 0.817,
+  "reverb": 0.81,
   "legend": {
     "#": "back",
     "G": "grass",
@@ -37,8 +37,8 @@
     "T00000G000000TTTTTT000TTTTTTTTTT",
     "T0RRRRRRRRR000TTTT0000000000000T",
     "T0RRRRRRRRRGGGGG000000000000000T",
-    "T0RRRRRRRRRRR000000000000000000T",
-    "T0RRRRRRRRRR0000000000000000000T",
+    "T000000000000000000000000000000T",
+    "T000000000000000000000000000000T",
     "TTTTTTTT0000000TTTTTTTTTTTTTTTTT"
   ],
   "backgroundTiles": [
@@ -129,7 +129,6 @@
       "Id": "ae00000000000023",
       "Type": "Light",
       "Position": [120, 64],
-      "DrawSprite": true,
       "LightColor": "95E9FF",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,
@@ -139,7 +138,19 @@
     {
       "Id": "ae00000000000024",
       "Type": "ParticleEmitter",
-      "Position": [220, 72]
+      "Position": [202, 9]
+    },
+    {
+      "Id": "f268e2957eeeb901",
+      "Type": "Jumpthru",
+      "Position": [64, 176],
+      "Size": [24, 8]
+    },
+    {
+      "Id": "a380f58418421216",
+      "Type": "Jumpthru",
+      "Position": [96, 176],
+      "Size": [24, 8]
     }
   ]
 }

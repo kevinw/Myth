@@ -1,5 +1,5 @@
 {
-  "position": [200, 69],
+  "position": [560, 69],
   "size": [40, 23],
   "ambientColor": "525252",
   "legend": {
@@ -44,7 +44,8 @@
     {
       "Id": "d228f2b601c5f15b",
       "Type": "LinkedDoor",
-      "Position": [44, 96]
+      "Position": [44, 96],
+      "TargetActorId": "2596ca1f3b9ea72f"
     },
     {
       "Id": "a12072b5cd2c19fd",
@@ -80,6 +81,12 @@
       "PipeColor1": "287B7E",
       "PipeColor3": "843E3E",
       "PipeColor4": "888E8B"
+    },
+    {
+      "Id": "045996c72fb5203a",
+      "Type": "LinkedDoor",
+      "Position": [208, 88],
+      "TargetActorId": "06c7ec4b372a3ce0"
     }
   ]
 }

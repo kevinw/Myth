@@ -1,5 +1,5 @@
 {
-  "position": [468, 46],
+  "position": [480, 0],
   "size": [40, 23],
   "musicArea": "Intense",
   "backdropColor": "4F4E4E",
@@ -48,8 +48,7 @@
       "LightColor": "3C93F3",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,
-      "Height": 30.2,
-      "DrawSprite": true
+      "Height": 30.2
     },
     {
       "Id": "d755aefc0fe01793",

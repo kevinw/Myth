@@ -37,15 +37,15 @@
     "T000000000000000000TTTTT",
     "T00000000000RRMMMMRTTTTT",
     "T000000000000000000TTTTT",
-    "T000wwwwwwwwwwwwwwwTTTTT",
-    "T000wwwwwwwwwwwwwwwTTTTT",
-    "T000wwwwwwwwwwwwwwwTTTTT",
-    "T000wwwwwwwwwwwwwwwTTTTT",
+    "TwwwwwwwwwwwwwwwwwwTTTTT",
+    "TwwwwwwwwwwwwwwwwwwTTTTT",
+    "TwwwwwwwwwwwwwwwwwwTTTTT",
+    "TwwwwwwwwwwwwwwwwwwTTTTT",
     "TTTTTTTTTTTTTTTTTTTTTTTT"
   ],
   "backgroundTiles": [
     "000000000000000000000000",
-    "00000v000000000000000000",
+    "00000v000000000000000v00",
     "0000#v##00000mmmmmm00v00",
     "000#0v00#000m000000m0v00",
     "00#00v000#0m00000000mv00",
@@ -88,7 +88,7 @@
     {
       "Id": "ae00000000000065",
       "Type": "Chest",
-      "Position": [128, 168]
+      "Position": [146, 176]
     },
     {
       "Id": "ae00000000000066",

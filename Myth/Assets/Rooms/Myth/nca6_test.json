@@ -1,11 +1,12 @@
 {
-  "position": [468, 46],
+  "position": [520, 0],
   "size": [40, 23],
   "musicArea": "Intense",
   "backdropColor": "777777",
   "ambientColor": "B4B4B4",
   "ambientIntensity": 0.201,
   "lightNoise": 0,
+  "reverb": 0.861,
   "legend": {
     "T": "stone"
   },

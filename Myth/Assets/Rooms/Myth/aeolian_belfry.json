@@ -110,7 +110,7 @@
     {
       "Id": "ae00000000000029",
       "Type": "Chest",
-      "Position": [216, 72]
+      "Position": [223, 80]
     },
     {
       "Id": "ae00000000000030",
@@ -126,7 +126,6 @@
       "Id": "ae00000000000031",
       "Type": "Light",
       "Position": [112, 104],
-      "DrawSprite": true,
       "LightColor": "8BCFDF",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,

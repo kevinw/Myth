@@ -1,7 +1,8 @@
 {
-  "position": [280, 46],
+  "position": [280, 69],
   "size": [40, 23],
   "ambientColor": "757474",
+  "sporeFogStrength": 0.281,
   "reverb": 0.206,
   "legend": {
     "#": "back",

@@ -6,7 +6,7 @@
   "ambientColor": "587888",
   "ambientIntensity": 0.42,
   "lightNoise": 0.24,
-  "reverb": 0.732,
+  "reverb": 0.727,
   "legend": {
     "#": "back",
     "G": "grass",
@@ -30,16 +30,16 @@
     "00MMMMMMMTT00000000000000GGGGG0T",
     "0000000TTTT0000000RRRR00TGGGGG0T",
     "0000000TTTT0000000RRRRMMTMMMMM0T",
-    "00wwwwwTTTTwwwwwwwRRRRwwTTTTTTTT",
-    "00wwwww0000wwwwwwwRRRRwwwwwwww0T",
-    "00wwwww0000wwwwwwwRRRRwwwwwwww0T",
-    "00wwwww0000MMMMMMMRRRRwwwwwwww0T",
-    "T0wwwwwTTTTwwwwwwwRRRRwwwwwwww0T",
-    "T0wwwwwTTTTwwwwwwwRRRRwwwwwwww0T",
-    "T0wwwwwwwwwwwwwwwwRRRRwwwwwwww0T",
-    "T0wwwwwwwwwwwwwwwwwwwwwwwwwwww0T",
-    "T0wwwwwwwwwwwwwwwwwwwwwwwwwwww0T",
-    "T0TTTTTTTTTTTTTTTTTTTTTTTTTTTT0T",
+    "0000000TTTT0000000RRRR00000000TT",
+    "000000000000000000RRRR000000000T",
+    "000000000000000000RRRR000000000T",
+    "00000000000MMMMMMMRRRR000000000T",
+    "T0000000TT000000000000000000000T",
+    "TwwwwwwTTTTwwwwwwwRRRRwwwwwwww0T",
+    "TwwwwwwwwwwwwwwwwwRRRRwwwwwwww0T",
+    "Twwwwwwwwwwwwwwwwwwwwwwwwwwwww0T",
+    "Twwwwwwwwwwwwwwwwwwwwwwwwwwwww0T",
+    "TwwwTTTTTTTTTTTTTTTTTTTTTTTTTT0T",
     "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
   ],
   "backgroundTiles": [
@@ -106,7 +106,7 @@
     {
       "Id": "ae00000000000041",
       "Type": "Chest",
-      "Position": [224, 96]
+      "Position": [228, 72]
     },
     {
       "Id": "ae00000000000042",
@@ -118,7 +118,6 @@
       "Id": "ae00000000000043",
       "Type": "Light",
       "Position": [152, 112],
-      "DrawSprite": true,
       "LightColor": "75D8EE",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,

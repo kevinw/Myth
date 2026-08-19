@@ -6,7 +6,7 @@
   "ambientColor": "817766",
   "ambientIntensity": 0.5,
   "lightNoise": 0.24,
-  "reverb": 0.869,
+  "reverb": 0.883,
   "legend": {
     "#": "back",
     "%": "crosshatch",
@@ -39,8 +39,8 @@
     "TGGGGGGGGGGGG000TTT000000000TTTTTTTTTTTT",
     "T000000000000000TTT00000000000000000000T",
     "T000000000000RRRRRRRRRRRRRRR00000000000T",
-    "T00000000000000000000000000000000000000T",
-    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTT0000000TTTT"
+    "T0000000000000000000000000000TTTT000000T",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT000TTTT"
   ],
   "backgroundTiles": [
     "0000000000000000000000000000000000000000",
@@ -104,11 +104,6 @@
       "TargetActorId": "ae00000000000045"
     },
     {
-      "Id": "ae00000000000047",
-      "Type": "ShieldKnight",
-      "Position": [120, 152]
-    },
-    {
       "Id": "ae00000000000048",
       "Type": "ShieldKnight",
       "Position": [208, 160],
@@ -120,14 +115,9 @@
       "Position": [176, 72]
     },
     {
-      "Id": "ae00000000000050",
-      "Type": "Bramble",
-      "Position": [56, 136]
-    },
-    {
       "Id": "ae00000000000051",
       "Type": "Bramble",
-      "Position": [288, 136]
+      "Position": [287, 144]
     },
     {
       "Id": "ae00000000000052",

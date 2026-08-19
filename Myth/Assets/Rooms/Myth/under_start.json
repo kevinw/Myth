@@ -1,6 +1,7 @@
 {
   "position": [-166, 23],
   "size": [46, 23],
+  "musicArea": "Silence",
   "ambientColor": "545454",
   "reverb": 0.288,
   "legend": {

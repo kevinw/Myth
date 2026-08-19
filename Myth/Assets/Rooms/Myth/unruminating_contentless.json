@@ -1,5 +1,5 @@
 {
-  "position": [400, 46],
+  "position": [400, 69],
   "size": [68, 23],
   "ambientColor": "908E8E",
   "reverb": 0.859,
@@ -176,7 +176,7 @@
     {
       "Id": "25c4891d776dcbeb",
       "Type": "RevealDoor",
-      "Position": [512, 168],
+      "Position": [520, 168],
       "Size": [8, 8]
     },
     {
@@ -204,14 +204,6 @@
       "RingSpacing": 73.483,
       "RingSpeed": 53.405,
       "SourceActorId": "544e64d861f6b9ee"
-    },
-    {
-      "Id": "0cb68332a8a1db55",
-      "Type": "MagneticCrawler",
-      "Position": [348, 156],
-      "RequiresMetal": false,
-      "Scale": 1.393,
-      "SurfaceId": "crawler-metal"
     }
   ]
 }

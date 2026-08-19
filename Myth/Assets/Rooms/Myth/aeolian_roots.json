@@ -36,10 +36,10 @@
     "P00000000PTTTTTTTTTTTTTTP0000000",
     "P00000000PPPPPPPPPPPPPPPPPP0000P",
     "P00000000PPPPPPPPPPPPPPGGGGGGG0P",
-    "P0GGGGGGGGG00000000000wwwwwwww0P",
-    "P0wwwwwwwwww0000000000wwwwwwww0P",
-    "P0wwwwwwwwww0000000000wwwwwwww0P",
-    "P0wwwwwwwwww0000000000wwwwwwww0P",
+    "P0GGGGGGGGwwwwwwwwwwwwwwwwwwwwwP",
+    "PwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwP",
+    "PwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwP",
+    "PwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwP",
     "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
   ],
   "backgroundTiles": [
@@ -102,7 +102,7 @@
     {
       "Id": "ae10000000000013",
       "Type": "Chest",
-      "Position": [176, 32]
+      "Position": [187, 39]
     },
     {
       "Id": "ae10000000000014",
@@ -128,7 +128,6 @@
       "Id": "ae00000000000036",
       "Type": "Light",
       "Position": [104, 80],
-      "DrawSprite": true,
       "LightColor": "78CFC3",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,

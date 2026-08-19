@@ -1,6 +1,7 @@
 {
-  "position": [-40, -46],
+  "position": [-80, -46],
   "size": [40, 23],
+  "musicArea": "Silence",
   "ambientColor": "3E3E3E",
   "ambientIntensity": 1.428,
   "lightNoise": 0,
@@ -149,6 +150,11 @@
       "Position": [105, 151],
       "SpriteName": "Props/server",
       "Layer": "Background"
+    },
+    {
+      "Id": "a8887dd91e3c3f05",
+      "Type": "SavePoint",
+      "Position": [52, 160]
     }
   ]
 }

@@ -6,7 +6,7 @@
   "ambientColor": "66808A",
   "ambientIntensity": 0.46,
   "lightNoise": 0.24,
-  "reverb": 0.679,
+  "reverb": 0.68,
   "legend": {
     "#": "back",
     "%": "crosshatch",
@@ -39,7 +39,7 @@
     "R0wwwwwww000000000000000000000000000000R",
     "R0wwwwwww0000000000000000000TT000000000R",
     "R0wwwwwww0000000000000000000TT000000000R",
-    "RTTTTTTTTTT000000000000000000TTTTTTTTTTR",
+    "RTTTTTTTTTT00000000000000000TTTTTTTTTTTR",
     "RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR"
   ],
   "backgroundTiles": [
@@ -122,7 +122,6 @@
       "Id": "ae00000000000062",
       "Type": "Light",
       "Position": [200, 96],
-      "DrawSprite": true,
       "LightColor": "8BD9E7",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,
