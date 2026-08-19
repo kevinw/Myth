@@ -1,6 +1,7 @@
 {
   "position": [-166, 0],
   "size": [46, 23],
+  "musicArea": "Silence",
   "ambientColor": "545454",
   "legend": {
     "#": "back",
@@ -154,11 +155,8 @@
       "Script": [
         "[pause 2]",
         "You OK?",
-        "you: I think so.",
         "[pause 2]",
-        "Did someone cut the rope?",
-        "[pause 2]",
-        "Let's see what's ahead."
+        "Let's go."
       ]
     },
     {

@@ -992,6 +992,7 @@ public abstract class Pawn : Actor
 
 		if (chain.Pinned)
 		{
+			if (input.MoveY > 0) AudioEventDebounced("rope/slide", 1.0f);
 			climbIndex += input.MoveY * (input.MoveY > 0 ? ClimbDownSpeed : ClimbUpSpeed) *
 				ScriptedClimbSpeed / Rope.SegmentLength * Time.Delta;
 			if (climbIndex < 0)

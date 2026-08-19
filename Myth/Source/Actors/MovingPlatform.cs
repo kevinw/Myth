@@ -211,14 +211,28 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	// real walls (so it can squish, not snag on us).
 	void MoveSolid(Point2 step)
 	{
+		// TODO: riders are re-derived from overlap probes every step, so each new way of holding on
+		// (side huggers, burrowers) needs another probe here. The replacement is an explicit
+		// attachment: whoever grabs a surface records the actor and its offset -- the burrow walk
+		// already knows which actor's face it is on -- and applies that actor's per-frame delta
+		// itself. That drops the guessing below, survives diagonal motion (circle mode steps X and Y
+		// together, so a rider straddling a face can lose contact on both axes at once), and gives
+		// riders a defined order against their own movement instead of one that depends on where the
+		// platform lands in Game.Actors.
 		riders.Clear();
 		foreach (var actor in Game.Actors) if (CanRidePlatform(actor))
 		{
-			// Riding = standing on top, or — while airborne — hugging a side face (a wall-slide).
-			// Carrying side huggers keeps the player glued as we move, so wall-slide contact
-			// doesn't flicker open 1px at a time (which toggles the slow-slide gravity and makes
-			// the player vibrate). The !Grounded gate excludes things merely standing beside us.
-			if (IsStandingOnPlatform(actor)
+			// Riding = standing on top, embedded in us, or — while airborne — hugging a side face (a
+			// wall-slide). Carrying side huggers keeps the player glued as we move, so wall-slide
+			// contact doesn't flicker open 1px at a time (which toggles the slow-slide gravity and
+			// makes the player vibrate). The !Grounded gate excludes things merely standing beside us.
+			//
+			// Embedded is the burrowing player: its 2x2 hitbox straddles our face by a single pixel,
+			// so a step away from the trailing face breaks contact outright. The post-move push below
+			// only catches the leading face (we move into that one), and the wall-hug branch can't
+			// help because a burrower on a vertical face reads as Grounded -- its box shifted down
+			// still overlaps us. Left behind, its boundary walk finds no edge and the burrow pops.
+			if (IsStandingOnPlatform(actor) || actor.OverlapsAny(Point2.Zero, this)
 				|| (!actor.Grounded() && (actor.OverlapsAny(Point2.Left, this) || actor.OverlapsAny(Point2.Right, this))))
 				riders.Add(actor);
 		}

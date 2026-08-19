@@ -33,7 +33,7 @@ public class ShieldKnight : Actor
 	static float WalkSpeed => 22f.T();
 	static float Gravity => 360f;
 	static float Friction => 480.T();
-	static float FireRange => 96f.T();
+	static float FireRange => 90f.T();
 	static float FireProjectileSpeed => 36f.T();
 	static float FireArcRadians => 1.2f.T();
 	static float FireChargeTime => 0.45f.T();
@@ -70,7 +70,7 @@ public class ShieldKnight : Actor
 				SetState(rng.Chance(0.5) ? HopRoutine() : StabRoutine());
 				yield break;
 			}
-			if (stateTimer > 0.8f && MathF.Abs(toPlayer.X) < FireRange && MathF.Abs(toPlayer.Y) < 48f && rng.Chance(0.35))
+			if (stateTimer > 0.8f && MathF.Abs(toPlayer.X) > FireRange && MathF.Abs(toPlayer.Y) < 48f && rng.Chance(0.35))
 			{
 				SetState(FireRoutine());
 				yield break;

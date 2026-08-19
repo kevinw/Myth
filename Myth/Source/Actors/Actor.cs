@@ -54,6 +54,9 @@ public class Actor
 	public virtual bool CastsReflection => sprite != null;
 	public virtual bool LightingDithered => !Mask.Has(Masks.Player | Masks.Enemy);
 	public virtual string HitSoundType => "flesh";
+	// Substance landing/footstep audio reports for anything standing on this actor (see
+	// Game.GetSubstanceBelow). Null means the actor isn't a walkable surface of its own.
+	public virtual string? SurfaceSubstance => null;
 
 	internal virtual int DamageValue => 1;
 

@@ -50,6 +50,7 @@ public class RopePile : Actor
 			if (length < Game.TileSize * 2)
 				continue;
 
+			AudioEvent("rope/unfurl");
 			Game.Create<Rope>(new Point2(x - Rope.DefaultSize.X / 2, Position.Y), rope =>
 			{
 				rope.Size = new(Rope.DefaultSize.X, length);

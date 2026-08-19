@@ -64,6 +64,9 @@
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{9963a15d-2870-4b69-baf8-cc71869193ae}">
+		<property name="volume">
+			<value>-3.5</value>
+		</property>
 		<relationship name="effectChain">
 			<destination>{86381863-421f-491b-8c62-8c5d38ae9572}</destination>
 		</relationship>
@@ -96,6 +99,7 @@
 	<object class="MixerBusPanner" id="{f8d3dc05-2ac8-439f-a479-e8b40e29cccd}" />
 	<object class="MixerBusEffectChain" id="{86381863-421f-491b-8c62-8c5d38ae9572}">
 		<relationship name="effects">
+			<destination>{775294a6-a305-41fe-bd58-736c8ee39cc8}</destination>
 			<destination>{4545bec7-eb4d-4e27-b4e5-cc0d0ce45d58}</destination>
 			<destination>{119c3324-7903-4c26-af35-d9a68721e909}</destination>
 		</relationship>
@@ -110,6 +114,26 @@
 		</property>
 	</object>
 	<object class="MixerBusFader" id="{e65b95be-8bd7-4bc1-9ab0-5b7e93ff0223}" />
+	<object class="TremoloEffect" id="{775294a6-a305-41fe-bd58-736c8ee39cc8}">
+		<property name="frequency">
+			<value>4</value>
+		</property>
+		<property name="shape">
+			<value>0.13499999</value>
+		</property>
+		<property name="skew">
+			<value>0.179999992</value>
+		</property>
+		<property name="duty">
+			<value>0.319999993</value>
+		</property>
+		<property name="square">
+			<value>0.109999999</value>
+		</property>
+		<property name="phase">
+			<value>0.24499999</value>
+		</property>
+	</object>
 	<object class="MixerBusFader" id="{4545bec7-eb4d-4e27-b4e5-cc0d0ce45d58}" />
 	<object class="SpatialiserEffect" id="{119c3324-7903-4c26-af35-d9a68721e909}" />
 </objects>

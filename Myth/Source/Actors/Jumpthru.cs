@@ -42,6 +42,7 @@ public class Jumpthru : Actor, IResizable
 	public override void RenderReflection(Batcher batcher, Color color) => RenderTiled(batcher, normals: true, color: color);
 
 	public override bool CastsReflection => true;
+	public override string? SurfaceSubstance => "Wood";
 
 	// Repeat the one-tile sprite across the authored width, clipping the final tile so widths that
 	// aren't a whole number of tiles still tile seamlessly (the atlas-friendly stand-in for a

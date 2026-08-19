@@ -94,7 +94,6 @@
       "Id": "ae00000000000066",
       "Type": "Light",
       "Position": [128, 112],
-      "DrawSprite": true,
       "LightColor": "B8F4FF",
       "SpriteName": "fire_greyscale",
       "TintSprite": true,

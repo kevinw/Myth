@@ -105,6 +105,16 @@
       "Type": "ParticleEmitter",
       "Position": [115, 41],
       "EffectName": "smoke"
+    },
+    {
+      "Id": "3e27abb94f6b2352",
+      "Type": "Blob",
+      "Position": [300, 112]
+    },
+    {
+      "Id": "b64074511dc56a2a",
+      "Type": "SavePoint",
+      "Position": [213, 176]
     }
   ]
 }

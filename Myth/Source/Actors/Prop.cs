@@ -56,8 +56,15 @@ public class Prop : Actor
 	public override void OnWasHit(Actor by) {
 		Game.Create<Pop>(Position);
 		if (propFlags.HasFlag(PropFlags.DestroyPersists))
+		{
+			AudioEvent("prop_break_temp");
 			Game.DestroyPersistently(this);
+			Game.HitStun(0.4f);
+		}
 		else
+		{
 			Game.Destroy(this);
+			Game.HitStun(0.1f);
+		}
 	}
 }

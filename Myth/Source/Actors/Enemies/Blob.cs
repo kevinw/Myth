@@ -30,6 +30,7 @@ public class Blob : Actor
 			{
 				Play("idle");
 				Squish = new Vector2(1.5f, 0.50f);
+				AudioEvent("blob/land");
 			}
 
 			Velocity.X = Calc.Approach(Velocity.X, 0, 400 * Time.Delta);
@@ -44,8 +45,16 @@ public class Blob : Actor
 		if (JumpTimer <= 0)
 		{
 			Play("jump");
-			JumpTimer = 2;
-			Velocity.Y = -90;
+			AudioEvent("blob/jump");
+			JumpTimer = rng.Chance(0.4f) ? 2.8f : 2f;
+			if (rng.Chance(0.20f))
+			{
+				Velocity.Y = -130;
+			}
+			else
+			{
+				Velocity.Y = -90;
+			}
 			Squish = new Vector2(0.5f, 1.5f);
 
 			if (Game.GetFirst(Masks.Player) is Actor player)
@@ -58,6 +67,8 @@ public class Blob : Actor
 			}
 		}
 	}
+
+	Rng rng = new();
 
 	public override void OnWasHit(Actor by)
 	{

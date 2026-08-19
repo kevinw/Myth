@@ -109,12 +109,6 @@
       "Size": [48, 8]
     },
     {
-      "Id": "c0233b662745c712",
-      "Type": "ShieldKnight",
-      "Position": [252, 104],
-      "Facing": "-"
-    },
-    {
       "Id": "3b99c7625fde0a5f",
       "Type": "SavePoint",
       "Position": [54, 96]
@@ -135,6 +129,11 @@
       "Resonance": 0.9,
       "MetalColor": "B85886",
       "GlowColor": "35F5BD"
+    },
+    {
+      "Id": "ff0499341543f1a1",
+      "Type": "Blob",
+      "Position": [236, 104]
     }
   ]
 }

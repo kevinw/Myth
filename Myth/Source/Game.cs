@@ -1433,9 +1433,12 @@ public partial class Game : IDisposable
 		if (TryGetSubstanceAtWorldPoint(new(bounds.Right - 1, y), out substance))
 			return substance;
 
-		// TODO: make a more generic system for landing on Actors, and let them provide a substance.
-		var hitActor = OverlapsFirst(actor.Hitbox.Rect + actor.Position + new Point2(0, 1), Actor.Masks.Jumpthru);
-		if (hitActor != null) return "Wood";
+		// Nothing underfoot is tiled, so ask the actor being stood on what it is made of. Anything
+		// jumpthru-masked that doesn't answer stays wooden, as every jumpthru sounded before
+		// SurfaceSubstance existed.
+		var footprint = actor.Hitbox.Rect + actor.Position + new Point2(0, 1);
+		if (OverlapsFirstSurface(footprint) is { } surface)
+			return surface.SurfaceSubstance ?? "Wood";
 
 		// Edge landings can sit just beside the supporting tile, so landing audio gets a one-tile horizontal grace scan.
 		if (searchOutward && TryGetSubstanceOutwardFromBottom(bounds, out substance))
@@ -1707,6 +1710,24 @@ public partial class Game : IDisposable
 		return results.Count > 0;
 	}
 
+	// First actor overlapping rect that something can stand on: one that names its own
+	// SurfaceSubstance, or failing that any jumpthru (see GetSubstanceBelow).
+	Actor? OverlapsFirstSurface(in RectInt rect)
+	{
+		Actor? jumpthru = null;
+		foreach (var actor in Actors)
+		{
+			if (!actor.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru) || !actor.Hitbox.Overlaps(rect - actor.Position))
+				continue;
+			if (actor.SurfaceSubstance != null)
+				return actor;
+			if (jumpthru == null && actor.Mask.Has(Actor.Masks.Jumpthru))
+				jumpthru = actor;
+		}
+
+		return jumpthru;
+	}
+
 	public Actor? OverlapsFirst(in RectInt rect, Actor.Masks mask)
 	{
 		foreach (var actor in Actors)
@@ -1919,7 +1940,7 @@ public partial class Game : IDisposable
 		View?.MarkRoomNormalCacheDirty(room);
 		View?.MarkRoomTileFieldCacheDirty(room);
 		foreach (var substance in substancesBroken)
-			PlayAudioEvent("tile_break", "Type", substance, position: soundPosition);
+			PlayAudioEvent("tile_break", "Type", Factory.SubstanceSoundType(substance), position: soundPosition);
 
 		return true;
 	}
@@ -2574,6 +2595,7 @@ public partial class Game : IDisposable
 				bud.Position = position;
 				bud.Velocity = Vector2.Zero;
 				bud.Facing = player.Facing;
+				bud.CancelFallRespawn();
 			}
 			return;
 		}

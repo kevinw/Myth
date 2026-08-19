@@ -106,9 +106,16 @@
       "Position": [76, 136]
     },
     {
-      "Id": "98bec32551cacbf2",
-      "Type": "Bramble",
-      "Position": [164, 104]
+      "Id": "11ab43065d589e93",
+      "Type": "Prop",
+      "Position": [152, 80],
+      "SpriteName": "Props/server"
+    },
+    {
+      "Id": "c1dfc33b9474bb56",
+      "Type": "Prop",
+      "Position": [135, 80],
+      "SpriteName": "Props/server"
     }
   ]
 }

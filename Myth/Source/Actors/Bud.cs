@@ -9,6 +9,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	internal static readonly Color SpeechColor = Color.Lerp(Tint, Color.White, 0.45f);
 	private const int FollowStopDistance = 18;
 	private const int DesiredPlayerSpacing = 20;
+	private const int StruckSpeechEnemyDistance = Game.TileSize * 4;
 	private const float EnterDelay = 1.0f;
 	private const float MirrorPlayerCrawlDelay = 0.25f;
 	private const float MirrorPlayerCrawlReleaseDelay = 0.25f;
@@ -19,6 +20,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	private const int EnterWalkPathStep = 2;
 	private const int EnterWalkReachDistance = 2;
 	static float BurrowRideRadius => 14f;
+	static float FallRespawnDelay => 3f;
 	static float BurrowPopDelay => 0.25f;
 	static float BurrowPopInputMirrorTime => 0.25f;
 	private readonly Navigator nav;
@@ -43,6 +45,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	bool launched;     // in flight from a carry launch; the linger starts on landing
 	float lingerTimer; // stay put where the launch landed before nav resumes following
 	float burrowPopDelayTimer;
+	float fallRespawnTimer; // counts down out of sight after falling out of the room
 	float burrowPopInputMirrorTimer;
 	Point2 burrowPopPosition;
 	Vector2 burrowPopVelocity;
@@ -169,7 +172,20 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		State = States.BackDash;
 		Play("back_dash", looping: false);
 		AudioEvent("hurt");
-		Game.TryBudStorylet("bud_struck");
+		if (!EnemyNearby())
+			Game.TryBudStorylet("bud_struck");
+	}
+
+	// A swing that catches him mid-fight was aimed at the enemy, not at him, so he ducks out of the
+	// way without remarking on it. The bark is for being swung at with nothing else around.
+	private bool EnemyNearby()
+	{
+		var reach = new RectInt(
+			Position.X - StruckSpeechEnemyDistance,
+			Position.Y - StruckSpeechEnemyDistance,
+			StruckSpeechEnemyDistance * 2,
+			StruckSpeechEnemyDistance * 2);
+		return Game.OverlapsFirst(reach, Masks.Enemy) != null;
 	}
 
 	protected override void CustomState()
@@ -331,6 +347,15 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			return;
 		}
 
+		if (fallRespawnTimer > 0)
+		{
+			fallRespawnTimer = Calc.Approach(fallRespawnTimer, 0, Time.Delta);
+			nav.SetDebugNavState(Game.IsPlatformNavDebugVisible ? $"fell {fallRespawnTimer:0.0}s" : "fell");
+			if (fallRespawnTimer <= 0)
+				FinishFallRespawn();
+			return;
+		}
+
 		burrowPopInputMirrorTimer = Calc.Approach(burrowPopInputMirrorTimer, 0, Time.Delta);
 		backDashCooldownTimer = Calc.Approach(backDashCooldownTimer, 0, Time.Delta);
 
@@ -369,8 +394,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		{
 			Game.GymBudDied = true;
 			Game.NavTrace?.Event(Game, "budFell", ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(Velocity)));
-			Stop();
-			Position = entryPosition;
+			BeginFallRespawn();
 		}
 
 		Game.NavTrace?.Frame(Game, this);
@@ -449,6 +473,42 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Position = origin;
 		Hitbox = new(hitbox);
 		return TryUnstick(burrowPopOutward);
+	}
+
+	// Falling out of the room takes him out of play for FallRespawnDelay before he turns back up
+	// where he came in. Hidden and non-colliding for the wait (the same shape as the room-entry
+	// delay), so the player can't catch or burrow-ride a Bud who is mid-respawn.
+	void BeginFallRespawn()
+	{
+		Stop();
+		fallRespawnTimer = FallRespawnDelay;
+		Visible = false;
+		CollidesWithSolids = false;
+		nav.ClearActiveEdge("fell off the world");
+	}
+
+	void FinishFallRespawn()
+	{
+		Position = entryPosition;
+		EndFallRespawn();
+	}
+
+	// A game-driven placement (player respawn, room reload, save-point warp) has already put him
+	// somewhere sensible, so the wait ends there rather than dragging him back to entryPosition.
+	internal void CancelFallRespawn()
+	{
+		if (fallRespawnTimer > 0)
+			EndFallRespawn();
+	}
+
+	void EndFallRespawn()
+	{
+		fallRespawnTimer = 0;
+		Stop();
+		ducking = false;
+		Hitbox = new(StandingHitboxRect);
+		Visible = true;
+		CollidesWithSolids = true;
 	}
 
 	private bool TryNavigateToPlayer(Player player, out float moveX, out int moveY, out bool jumpPressed)
@@ -833,6 +893,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			EndBackDash(); // the entry Update path never reaches CustomState to finish it
 
 		pendingRoomChange = change;
+		fallRespawnTimer = 0; // EnterRoom places (and unhides) him; an armed respawn would yank him back
 		enterWalkTarget = null;
 		enterWalkDucking = false;
 		enterTimer = EnterDelay;

@@ -21,11 +21,20 @@ public class Floater : Actor
 	public Color LaserLightColor = 0x5fcde4;
 	public string? SurfaceId;
 
+	static float FireEndTime => 3.0f; // how long the lasers stay live once they're up
+
 	int dir;
 	float laserAngle;
 	float laserFadeAngle;
 	float laserFadeTimer;
 	float laserPopTimer;
+	SoundInstance? sound;
+
+	// Borrowing the LightningTrap's event for now, parameters and all: Warmup ramps while the
+	// lasers wind up, FireDuration runs across the window they're live.
+	const string SoundEvent = "lightning_trap";
+	const string WarmupParameter = "Warmup";
+	const string FireDurationParameter = "FireDuration";
 
 	enum State
 	{
@@ -56,6 +65,7 @@ public class Floater : Actor
 
 	public override void Update()
 	{
+		Velocity.X = Calc.Approach(Velocity.X, 0, 250 * Time.Delta);
 		base.Update();
 		state.Update(Time.Delta);
 		laserFadeTimer = Calc.Approach(laserFadeTimer, 0, Time.Delta);
@@ -68,6 +78,7 @@ public class Floater : Actor
 				Velocity = new();
 				state.Change(State.Firing);
 				Play("shoot", looping: false);
+				StartFireSound();
 			}
 		}
 		else if (state.Current == State.Firing)
@@ -77,8 +88,11 @@ public class Floater : Actor
 				laserAngle += LaserRotationSpeed * MathF.Tau * Time.Delta;
 				UpdateLasers(LaserVisibleScale());
 			}
-			if (state.Time > 3.0f)
+			UpdateSound(WarmupProgress, FireProgress);
+			if (state.Time > FireEndTime)
 			{
+				UpdateSound(1, 1);
+				StopAndReleaseSound(ref sound);
 				laserFadeAngle = laserAngle;
 				laserFadeTimer = LaserFadeTime;
 				ChangeDir();
@@ -87,6 +101,26 @@ public class Floater : Actor
 			}
 
 		}
+	}
+
+	public override void Destroyed() => StopAndReleaseSound(ref sound, true);
+
+	float WarmupProgress => Math.Clamp(state.Time / MathF.Max(0.0001f, LaserWarmup), 0, 1);
+	float FireProgress => Math.Clamp((state.Time - LaserWarmup) / MathF.Max(0.0001f, FireEndTime - LaserWarmup), 0, 1);
+
+	void StartFireSound()
+	{
+		StopAndReleaseSound(ref sound, true);
+		sound = Game.CreateAudioEvent(SoundEvent, Position);
+		UpdateSound(0, 0);
+		sound?.Start();
+	}
+
+	void UpdateSound(float warmup, float fireDuration)
+	{
+		Game.SetAudioEventPosition(sound, Position);
+		Game.SetAudioEventParameter(sound, WarmupParameter, warmup);
+		Game.SetAudioEventParameter(sound, FireDurationParameter, fireDuration);
 	}
 
 	public override void Render(Batcher batcher)
@@ -240,8 +274,18 @@ public class Floater : Actor
 		});
 	}
 
+	static int FloaterHealth => 2;
+	int health = FloaterHealth;
+
 	public override void OnWasHit(Actor by)
 	{
-		Game.DestroyEnemy(this);
+		health--;
+		if (health <= 0)
+		{
+			Game.DestroyEnemy(this);
+		} else {
+			var sign = MathF.Sign(Position.X - by.Position.X);
+			Velocity.X = sign * 100;
+		}
 	}
 }

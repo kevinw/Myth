@@ -23,6 +23,9 @@ public class ConveyorBelt : Actor, IResizable
 
 	const float DashLength = 4f;
 
+	// Lands and footsteps read as wood, matching Jumpthru, whether or not the belt is jumpthru-masked.
+	public override string? SurfaceSubstance => "Wood";
+
 	float carryRemainder; // sub-pixel carry accumulator (riders move in whole pixels)
 
 	public ConveyorBelt()

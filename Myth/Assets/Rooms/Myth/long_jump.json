@@ -111,6 +111,11 @@
       "Type": "Prop",
       "Position": [160, 104],
       "SpriteName": "Props/server"
+    },
+    {
+      "Id": "7603f4402ca67cd0",
+      "Type": "Mosquito",
+      "Position": [76, 28]
     }
   ]
 }

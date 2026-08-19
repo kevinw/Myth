@@ -35,7 +35,10 @@ public class Door : Actor, IActivatable
 		Visible = true;
 
 		if (Timer > 0.1f)
+		{
 			Game.Create<Pop>(Position + new Point2(0, -8));
+			AudioEvent("door/unlock"); // TODO: use a different sound for lock/unlock
+		}
 	}
 
 	public override void Update()
@@ -75,6 +78,7 @@ public class Door : Actor, IActivatable
 			{
 				if (delay > 0.50f)
 				{
+					AudioEvent("door/unlock");
 					Game.Create<Pop>(Position + new Point2(0, -8));
 					Game.Destroy(this);
 				}

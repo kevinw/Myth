@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{688ce905-3d39-4bbe-b8e2-33d198abe8fb}">
+		<property name="name">
+			<value>Warmup</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{c38e6986-b64d-4413-a1ab-08df4c98d0a3}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{c38e6986-b64d-4413-a1ab-08df4c98d0a3}">
+		<property name="initialValue">
+			<value>0</value>
+		</property>
+	</object>
+</objects>

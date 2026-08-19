@@ -17,10 +17,19 @@ public class SavePoint : Actor
 	static readonly Color LineColor = 0xd23c3c;
 	static readonly Color LightColor = 0xefefef;
 
+	const string SavedText = "Saved!";
+	const float SavedTextDuration = 1.1f;
+	const float SavedTextFade = 0.35f;   // trailing seconds it spends fading out
+	const float SavedTextY = -44;        // just above the 16px interact prompt at -31
+	const float SavedTextRise = 6;
+	const int SavedTextShadowOffset = 1;
+	static readonly Color SavedTextShadowColor = new(0x000000, (byte)170);
+
 	bool showInteract;
 	float interactTime;
 	bool playerWasOverlapping;
 	float pulse; // 0..1, decays after a touch
+	float savedTextTime; // counts down from SavedTextDuration after a touch
 
 	public SavePoint()
 	{
@@ -40,6 +49,7 @@ public class SavePoint : Actor
 		base.Update();
 
 		pulse = Calc.Approach(pulse, 0, Time.Delta * 2.5f);
+		savedTextTime = Calc.Approach(savedTextTime, 0, Time.Delta);
 
 		showInteract = false;
 
@@ -58,6 +68,7 @@ public class SavePoint : Actor
 			if (!playerWasOverlapping)
 			{
 				pulse = 1f;
+				savedTextTime = SavedTextDuration;
 				Game.ActivateSavePoint(this);
 				AudioEvent("save_point/activate");
 			}
@@ -80,6 +91,24 @@ public class SavePoint : Actor
 	{
 		// Red line on the ground, centered on Position.
 		batcher.Rect(new Rect(-LineWidth / 2f, -1, LineWidth, 1), LineColor);
+
+		DrawSavedText(batcher);
+	}
+
+	// Confirmation of the save the touch just recorded: drifts up and fades out. Same drop
+	// shadow as speech and TitleText so it stays readable over whatever is behind it.
+	void DrawSavedText(Batcher batcher)
+	{
+		if (savedTextTime <= 0 || (Assets.SpeechFont ?? Assets.Font) is not { } font)
+			return;
+
+		var elapsed = 1 - savedTextTime / SavedTextDuration;
+		var alpha = Math.Clamp(savedTextTime / SavedTextFade, 0, 1);
+		var position = new Vector2(0, MathF.Round(SavedTextY - Ease.Cube.Out(elapsed) * SavedTextRise));
+		var justify = new Vector2(0.5f, 0.5f);
+
+		batcher.Text(font, SavedText, position + Vector2.One * SavedTextShadowOffset, justify, font.Size, SavedTextShadowColor * alpha);
+		batcher.Text(font, SavedText, position, justify, font.Size, LightColor * alpha);
 	}
 
 	public override void RenderEmissive(Batcher batcher)
@@ -111,5 +140,11 @@ public class SavePoint : Actor
 	}
 
 	public override Rect GetVisualBounds()
-		=> new(Position.X - LineWidth / 2f, Position.Y - LightHeight, LineWidth, LightHeight);
+	{
+		var bounds = new Rect(Position.X - LineWidth / 2f, Position.Y - LightHeight, LineWidth, LightHeight);
+		// "Saved!" is wider than the light column, so it must not cull with it.
+		return savedTextTime > 0 && (Assets.SpeechFont ?? Assets.Font) is { } font
+			? bounds.InflateX(MathF.Ceiling(font.WidthOf(SavedText) * 0.5f))
+			: bounds;
+	}
 }
