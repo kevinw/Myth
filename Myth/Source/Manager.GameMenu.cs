@@ -1,6 +1,7 @@
 using System.Numerics;
 using Foster.Framework;
 using ImGuiNET;
+using static ImGuiNET.ImGui;
 
 namespace Myth;
 
@@ -237,9 +238,9 @@ public partial class Manager
 		// Use ### so the id is the slot index only: a button whose label toggles
 		// ("music on"/"music off", "fullscreen"/"windowed") keeps a stable id and so
 		// keeps nav focus, letting you re-toggle it with repeated South presses.
-		var pressed = ImGui.Button($"###{menuButtonIndex}", new Vector2(MenuButtonWidth, MenuButtonHeight));
-		var buttonMin = ImGui.GetItemRectMin();
-		var buttonMax = ImGui.GetItemRectMax();
+		var pressed = Button($"###{menuButtonIndex}", new Vector2(MenuButtonWidth, MenuButtonHeight));
+		var buttonMin = GetItemRectMin();
+		var buttonMax = GetItemRectMax();
 		if ((Assets.SpeechFont ?? Assets.Font) is { } font)
 		{
 			var visible = menuImgui.BeginBatchAt(Rect.Between(buttonMin, buttonMax), out var labelBatch, out var bounds);
@@ -247,7 +248,7 @@ public partial class Manager
 			{
 				var x = font['x'];
 				var inkCenter = font.Ascent + x.Offset.Y + x.Subtexture.Height * 0.5f;
-				labelBatch.Text(font, label, new Vector2(ImGui.GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), new Color(0xc0cbdc) * gameMenuLayoutEase);
+				labelBatch.Text(font, label, new Vector2(GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), new Color(0xc0cbdc) * gameMenuLayoutEase);
 			}
 			menuImgui.EndBatch();
 		}
@@ -255,24 +256,24 @@ public partial class Manager
 		// The first item is the default nav focus when a page's window appears (each
 		// page uses a distinct window id, so switching pages re-triggers this).
 		if (menuButtonIndex == 0)
-			ImGui.SetItemDefaultFocus();
+			SetItemDefaultFocus();
 
 		// Draw our own selection outline, tight around the button. ImGui's built-in nav
 		// cursor (suppressed via a transparent NavCursor color) expands the rect several
 		// pixels and spills into the next button's gap. The full-screen clip lets the
 		// 1px outset draw past the window edge on the first/last buttons (WindowPadding
 		// is 0, so those edges sit on the window bounds and would otherwise be clipped).
-		if (ImGui.IsItemFocused())
+		if (IsItemFocused())
 		{
-			var min = ImGui.GetItemRectMin() - Vector2.One;
-			var max = ImGui.GetItemRectMax() + Vector2.One;
-			var draw = ImGui.GetWindowDrawList();
+			var min = GetItemRectMin() - Vector2.One;
+			var max = GetItemRectMax() + Vector2.One;
+			var draw = GetWindowDrawList();
 			draw.PushClipRectFullScreen();
-			draw.AddRect(min, max, ImGui.ColorConvertFloat4ToU32(ImColor(0x5fcde4, gameMenuLayoutEase)), 0f, ImDrawFlags.None, 1f);
+			draw.AddRect(min, max, ColorConvertFloat4ToU32(ImColor(0x5fcde4, gameMenuLayoutEase)), 0f, ImDrawFlags.None, 1f);
 			draw.PopClipRect();
 		}
 
-		if (ImGui.IsItemFocused() && menuFocusedIndex != menuButtonIndex)
+		if (IsItemFocused() && menuFocusedIndex != menuButtonIndex)
 		{
 			if (menuFocusedIndex >= 0)
 				MenuAudioEvent("menu/select");
@@ -361,18 +362,18 @@ public partial class Manager
 			};
 			// Center the (auto-sized) button block on screen; +7 matches the old layout nudge.
 			var blockCenter = origin + (Vector2)MenuBounds.Center + new Vector2(0, y) + gameMenuLayoutOffset;
-			ImGui.SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+			SetNextWindowPos(blockCenter, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
 
 			// Distinct id per page so switching pages makes the window "appear", which is
 			// when SetItemDefaultFocus (in MenuButton) takes effect and shows the selection.
-			ImGui.Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
+			Begin($"##gamemenu_{gameMenuLayoutPage}", MenuWindowFlags);
 			switch (gameMenuLayoutPage)
 			{
 				case GameMenuPage.Title: TitleMenu(); break;
 				case GameMenuPage.Pause: PauseMenu(); break;
 				case GameMenuPage.Options: OptionsMenu(); break;
 			}
-			ImGui.End();
+			End();
 		}
 
 #if EDITOR
@@ -395,23 +396,23 @@ public partial class Manager
 		// A couple px of window padding so each button's frame border (and the focus
 		// outline) has room inside the window's clip rect instead of being cut off on
 		// the outer edges.
-		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
-		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, MenuButtonGap));
-		ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
-		ImGui.PushStyleVar(ImGuiStyleVar.Alpha, gameMenuLayoutEase);
-		ImGui.PushStyleColor(ImGuiCol.Button, ImColor(0x1b102e));
-		ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImColor(0x323c39));
-		ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImColor(0x323c39));
-		ImGui.PushStyleColor(ImGuiCol.Border, ImColor(0x5b5274));
-		ImGui.PushStyleColor(ImGuiCol.Text, ImColor(0xc0cbdc));
+		PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(2, 2));
+		PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0, MenuButtonGap));
+		PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
+		PushStyleVar(ImGuiStyleVar.Alpha, gameMenuLayoutEase);
+		PushStyleColor(ImGuiCol.Button, ImColor(0x1b102e));
+		PushStyleColor(ImGuiCol.ButtonHovered, ImColor(0x323c39));
+		PushStyleColor(ImGuiCol.ButtonActive, ImColor(0x323c39));
+		PushStyleColor(ImGuiCol.Border, ImColor(0x5b5274));
+		PushStyleColor(ImGuiCol.Text, ImColor(0xc0cbdc));
 		// Suppress ImGui's built-in nav cursor; MenuButton draws a tighter one.
-		ImGui.PushStyleColor(ImGuiCol.NavCursor, new Vector4(0, 0, 0, 0));
+		PushStyleColor(ImGuiCol.NavCursor, new Vector4(0, 0, 0, 0));
 	}
 
 	void PopMenuStyle()
 	{
-		ImGui.PopStyleColor(6);
-		ImGui.PopStyleVar(4);
+		PopStyleColor(6);
+		PopStyleVar(4);
 	}
 
 	// Render phase: the preview background, dark scrim, and animated title. The button
