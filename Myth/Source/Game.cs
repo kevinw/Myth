@@ -1131,6 +1131,24 @@ public partial class Game : IDisposable
 		PlayAudioEvent("map/open");
 	}
 
+	// Whether "save point" belongs in the pause menu at all. Deliberately the cheap check -- the
+	// menu is immediate-mode, and confirming the save point still exists means walking every room's
+	// actors (ResolveSavePoint), which TryWarpToLastSavePoint does once, when it is actually asked.
+	public bool HasLastSavePoint => !string.IsNullOrWhiteSpace(Save.LastSavePoint);
+
+	// Pause-menu "save point": travel back to the one the player last touched, with the same warp
+	// the map's warp mode plays. Nothing happens without a save point, or when the one on record
+	// has since been deleted from the level.
+	public bool TryWarpToLastSavePoint()
+	{
+		if (room == null || SavePointWarpActive || Save.LastSavePoint is not { } id ||
+			ResolveSavePoint(id) is not { } target)
+			return false;
+
+		BeginSavePointWarp(new Minimap.WarpTarget(id, target.RoomId, target.Position));
+		return SavePointWarpActive;
+	}
+
 	// Travels to a chosen save point (from warp mode) and closes the map.
 	public void WarpToSavePoint(Minimap.WarpTarget target)
 	{

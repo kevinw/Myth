@@ -66,10 +66,13 @@ public class Controls(Input input)
 		.Add(Axes.RightTrigger, 1, 0.25f)
 	);
 
-	public readonly VirtualAction Zoom = new(input, "Zoom",
+	public readonly VirtualAction Zoom = new(input, "Zoom"
+		/*
+		// not sure this is useful, disabling it.
 		new ActionBindingSet()
 			.Add(Keys.X)
 			.Add(Buttons.LeftStick)
+			*/
 	);
 
 	public readonly VirtualAction Map = new(input, "Map",

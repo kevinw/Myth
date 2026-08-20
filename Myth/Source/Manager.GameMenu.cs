@@ -47,7 +47,14 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	float MenuButtonWidth => gameMenuLayoutPage == GameMenuPage.Options ? 100f : 50f;
+	// Sized to the longest label each page carries: "run in background: on" is 83px wide, and the
+	// pause page's "back to save" is 50px, both drawn from FramePadding.X and clipped to the button.
+	float MenuButtonWidth => gameMenuLayoutPage switch
+	{
+		GameMenuPage.Options => 100f,
+		GameMenuPage.Pause => 64f,
+		_ => 50f,
+	};
 	static float MenuButtonHeight => 14f;
 	static float MenuButtonGap => 3f;
 	static float MenuPanelWidth => 174f;
@@ -153,6 +160,10 @@ public partial class Manager
 			CloseGameMenu();
 		if (MenuButton("map"))
 			OpenMapFromMenu();
+		// Hidden rather than dead when there's nowhere to go: the label is only listed once the
+		// player has touched a save point.
+		if (game?.HasLastSavePoint == true && MenuButton("back to save"))
+			ReturnToSavePointFromMenu();
 		if (MenuButton("options"))
 			OpenOptionsPage();
 #if BROWSER
@@ -193,6 +204,14 @@ public partial class Manager
 	{
 		gameMenuReturnPage = gameMenuPage;
 		ShowGameMenuPage(GameMenuPage.Options);
+	}
+
+	// Close first: the warp's teleport cue plays on bus:/Gameplay, which the pause menu has paused
+	// until CloseGameMenu lets it go.
+	void ReturnToSavePointFromMenu()
+	{
+		CloseGameMenu();
+		game?.TryWarpToLastSavePoint();
 	}
 
 	void OpenMapFromMenu()

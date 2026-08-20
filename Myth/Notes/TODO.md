@@ -38,7 +38,6 @@ along with this.
 - start menu maybe needs "return to checkpoint"
 - lighting trap sfx stuck when the map opens; what is a general solution for this
 - make untakedn map exits more obvious than the current pulsating 1px line
-- left stick down still zooms, get rid of it
 - doors in the floater room are unclear
 - floater room shadows look like safe spots but they are not
 - health hud

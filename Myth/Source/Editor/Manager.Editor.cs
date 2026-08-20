@@ -65,6 +65,20 @@ public partial class Manager
 	bool editorShowBackgroundLayer = true;
 
 	bool editingRoomGeometry;
+	// What the room held when a resize drag began, in room-local tiles, plus the top-left it began
+	// at. Room.ResizeTo rebuilds the tile grids on every step of the drag, so what a shrink left
+	// behind can only be reported by measuring this against the bounds the drag ended on.
+	const string RoomResizeUndoName = "Resize Room";
+	readonly List<Point2> roomResizeForegroundTiles = [];
+	readonly List<Point2> roomResizeBackgroundTiles = [];
+	readonly List<Point2> roomResizeActorTiles = [];
+	string? roomResizeRoomId;
+	Point2 roomResizeOrigin;
+	Point2 roomResizeSize;
+	bool roomResizePopupRequested;
+	int roomResizeDiscardedForeground;
+	int roomResizeDiscardedBackground;
+	int roomResizeDiscardedActors;
 	bool slopePaint; // when set, a tile-rect drag lays a slope staircase instead of a solid block
 	RectInt? proposedRoomTiles;
 	// Snapshot of the proposal the context menu was opened on: proposedRoomTiles follows the
@@ -2265,9 +2279,80 @@ public partial class Manager
 
 	void CommitEditorDragState()
 	{
+		var resizedRoom = DragKind == EditorDragKind.RoomGeometry;
 		ClearEditorDragState();
 		undo.CommitPending(ActorMoveUndoSlot);
 		undo.CommitPending(RoomGeometryUndoSlot);
+		if (resizedRoom)
+			CheckRoomResizeDiscardedContent();
+	}
+
+	void CaptureRoomResizeContents(Room room)
+	{
+		roomResizeRoomId = room.Id;
+		roomResizeOrigin = room.TileSpacePosition;
+		roomResizeSize = room.Size;
+		roomResizeForegroundTiles.Clear();
+		roomResizeBackgroundTiles.Clear();
+		roomResizeActorTiles.Clear();
+
+		for (var x = 0; x < room.Size.X; x++)
+			for (var y = 0; y < room.Size.Y; y++)
+			{
+				if (room.Tiles[x, y] != '0')
+					roomResizeForegroundTiles.Add(new Point2(x, y));
+				if (room.BackgroundTiles[x, y] != '0')
+					roomResizeBackgroundTiles.Add(new Point2(x, y));
+			}
+
+		// Actors already outside the room aren't this resize's doing, so they don't get counted.
+		var bounds = new RectInt(Point2.Zero, room.Size);
+		foreach (var actor in room.Actors)
+		{
+			var tile = RoomActorTile(actor);
+			if (bounds.Contains(tile))
+				roomResizeActorTiles.Add(tile);
+		}
+	}
+
+	static Point2 RoomActorTile(JsonObject actor)
+	{
+		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+		return new Point2(
+			(int)MathF.Floor(position.X / (float)Game.TileSize),
+			(int)MathF.Floor(position.Y / (float)Game.TileSize));
+	}
+
+	// A shrink drops the tiles it reclaimed and leaves any actors there stranded outside the room,
+	// so measure what the drag started with against where it ended and ask before it stands. The
+	// gesture's undo entry was just committed, which is what Cancel rewinds.
+	void CheckRoomResizeDiscardedContent()
+	{
+		if (roomResizeRoomId is not { } roomId || Assets.GetRoom(roomId) is not { } room)
+			return;
+
+		roomResizeRoomId = null;
+		if (room.Size == roomResizeSize)
+			return; // the room only moved, and its contents moved with it
+
+		// Contents keep their world position across a resize, so their local coordinates shift by
+		// however far the room's top-left travelled.
+		var shift = roomResizeOrigin - room.TileSpacePosition;
+		var bounds = new RectInt(Point2.Zero, room.Size);
+		roomResizeDiscardedForeground = CountTilesOutside(roomResizeForegroundTiles, shift, bounds);
+		roomResizeDiscardedBackground = CountTilesOutside(roomResizeBackgroundTiles, shift, bounds);
+		roomResizeDiscardedActors = CountTilesOutside(roomResizeActorTiles, shift, bounds);
+		if (roomResizeDiscardedForeground + roomResizeDiscardedBackground + roomResizeDiscardedActors > 0)
+			roomResizePopupRequested = true;
+	}
+
+	static int CountTilesOutside(List<Point2> tiles, Point2 shift, RectInt bounds)
+	{
+		var count = 0;
+		foreach (var tile in tiles)
+			if (!bounds.Contains(tile + shift))
+				count++;
+		return count;
 	}
 
 	static Point2 SnapRoomActorLocalPosition(Vector2 local, Point2 offset)
@@ -2481,7 +2566,8 @@ public partial class Manager
 		if (handle != ResizeHandle.None)
 		{
 			editorDrag.Kind = EditorDragKind.RoomGeometry;
-			OpenPendingRoomUndo(RoomGeometryUndoSlot, "Resize Room", primary);
+			OpenPendingRoomUndo(RoomGeometryUndoSlot, RoomResizeUndoName, primary);
+			CaptureRoomResizeContents(primary);
 			editorDrag.RoomGeometryHandle = handle;
 			editorDrag.RoomGeometryOffset = WorldToRoomGeometryTile(worldMouse) - primary.TileSpacePosition;
 			return;
@@ -4747,6 +4833,42 @@ public partial class Manager
 		if (Button("Cancel", new Vector2(90, 0)) || !open)
 		{
 			pendingDeleteRoomId = null;
+			CloseCurrentPopup();
+		}
+
+		EndPopup();
+	}
+
+	void DrawResizeRoomPopup()
+	{
+		if (roomResizePopupRequested)
+		{
+			roomResizePopupRequested = false;
+			OpenPopup("Keep Resize?");
+		}
+
+		var open = true;
+		if (!BeginPopupModal("Keep Resize?", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+			return;
+
+		Text("Resizing the room reclaimed space that held:");
+		if (roomResizeDiscardedForeground > 0)
+			Text($"    {roomResizeDiscardedForeground} foreground tiles (discarded)");
+		if (roomResizeDiscardedBackground > 0)
+			Text($"    {roomResizeDiscardedBackground} background tiles (discarded)");
+		if (roomResizeDiscardedActors > 0)
+			Text($"    {roomResizeDiscardedActors} actors (now outside the room)");
+		Spacing();
+
+		if (Button("Keep", new Vector2(90, 0)))
+			CloseCurrentPopup();
+		SameLine();
+		if (Button("Cancel", new Vector2(90, 0)) || !open)
+		{
+			// The drag committed one entry as it ended, so cancelling is exactly an undo of it --
+			// checked by name in case something else landed on the stack while the popup was up.
+			if (undo.UndoName == RoomResizeUndoName)
+				undo.Undo();
 			CloseCurrentPopup();
 		}
 
