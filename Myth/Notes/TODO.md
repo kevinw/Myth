@@ -1,3 +1,16 @@
+# type-safe actor spec access (source-gen spec views)
+
+Editor + pre-instantiation code reads actor data from JsonObject specs via stringly-typed
+`ActorSpecs.ReadResolved*(spec, "Key")` (~65 sites / 14 files), losing compile-time + rename safety.
+Extend `Myth.SourceGen` to emit a typed read-only view per `[GameActor]` type (e.g. a
+`readonly struct CameraBlockerSpec(JsonObject)` exposing `Point2 Size => ...`), so spec reads are
+checked by the compiler with no per-read reflection, and scale to every registered actor.
+Interim mitigation already applied on the blocker path: prefer `ActorSpecs.GetTypeName`, `nameof`
+the keys, and hoist cross-cutting spec reads into a typed helper next to the type
+(`CameraBlocker.WorldRectFromSpec`). A broader `nameof` sweep of the remaining ~60 sites can ride
+along with this.
+
+
 # fer playtest
 
 - what is the guy responding to?

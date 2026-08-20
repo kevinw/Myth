@@ -276,12 +276,10 @@ public class Minimap
 
 		foreach (var actor in room.Actors)
 		{
-			if (ActorSpecs.ReadResolvedString(actor, "Type") != nameof(CameraBlocker) ||
+			if (ActorSpecs.GetTypeName(actor) != nameof(CameraBlocker) ||
 			    ActorSpecs.GetResolvedProperty(actor, nameof(CameraBlocker.HighlightOnMap))?.GetValue<bool>() == true)
 				continue;
-			var local = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
-			var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? CameraBlocker.DefaultSize;
-			ApplyCameraBlocker(room, new RectInt(room.WorldBounds.TopLeft + local, size), solid, hidden);
+			ApplyCameraBlocker(room, CameraBlocker.WorldRectFromSpec(room, actor), solid, hidden);
 		}
 	}
 
@@ -401,15 +399,15 @@ public class Minimap
 	{
 		foreach (var actor in room.Actors)
 		{
-				if (ActorSpecs.ReadResolvedString(actor, "Type") != "LinkedDoor")
+				if (ActorSpecs.GetTypeName(actor) != nameof(LinkedDoor))
 					continue;
-				var targetId = ActorSpecs.ReadResolvedString(actor, "TargetActorId");
+				var targetId = ActorSpecs.ReadResolvedString(actor, nameof(LinkedDoor.TargetActorId));
 				if (string.IsNullOrWhiteSpace(targetId))
 					continue;
 				if (Assets.FindActorById(targetId) is not { } target || visitedRoomIds.Contains(target.Room.Id))
 					continue;
 
-				var doorTile = (ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero) / Game.TileSize;
+				var doorTile = (ActorSpecs.ReadResolvedPosition(actor) ?? Point2.Zero) / Game.TileSize;
 				if (seen.Contains(doorTile))
 					exits.Add(new(room.TileSpacePosition + doorTile, Point2.Zero, 1));
 		}

@@ -262,7 +262,7 @@ public partial class Manager
 		if (game?.CurrentRoom is not { } current || current.Id != room.Id)
 			return;
 
-		var local = ActorSpecs.ReadResolvedPoint(authored, "Position") ?? Point2.Zero;
+		var local = ActorSpecs.ReadResolvedPosition(authored) ?? Point2.Zero;
 		ActorSpecs.Create(game, authored, current.WorldBounds.TopLeft + local);
 	}
 
@@ -393,7 +393,7 @@ public partial class Manager
 		var local = ActorSpecs.ReadPoint(authored, "Position") ?? Point2.Zero;
 		runtime.Position = (runtime.Room?.WorldBounds.TopLeft ?? authoredRoom.WorldBounds.TopLeft) + local;
 		runtime.Velocity = Vector2.Zero;
-		if (runtime is IResizable resizable && ActorSpecs.ReadResolvedPoint(authored, "Size") is { } size)
+		if (runtime is IResizable resizable && ActorSpecs.ReadResolvedPoint(authored, nameof(IResizable.Size)) is { } size)
 			resizable.Size = size;
 	}
 

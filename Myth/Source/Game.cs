@@ -822,13 +822,8 @@ public partial class Game : IDisposable
 	{
 		into.Clear();
 		foreach (var actor in forRoom.Actors)
-		{
-			if (ActorSpecs.ReadResolvedString(actor, "Type") != nameof(CameraBlocker))
-				continue;
-			var local = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
-			var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? CameraBlocker.DefaultSize;
-			into.Add(new RectInt(forRoom.WorldBounds.TopLeft + local, size));
-		}
+			if (ActorSpecs.GetTypeName(actor) == nameof(CameraBlocker))
+				into.Add(CameraBlocker.WorldRectFromSpec(forRoom, actor));
 		return into;
 	}
 
@@ -1098,7 +1093,7 @@ public partial class Game : IDisposable
 		if (Assets.FindActorById(actorId) is not { } found)
 			return null;
 
-		var local = ActorSpecs.ReadResolvedPoint(found.Actor, "Position") ?? Point2.Zero;
+		var local = ActorSpecs.ReadResolvedPosition(found.Actor) ?? Point2.Zero;
 		return new RespawnState(found.Room.Id, found.Room.WorldBounds.TopLeft + local);
 	}
 
@@ -1615,9 +1610,9 @@ public partial class Game : IDisposable
 		var playerPosition = FindFallbackPlayerPosition(target, direction);
 		foreach (var actor in target.Actors)
 		{
-			if (string.Equals(ActorSpecs.ReadResolvedString(actor, "Type"), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
+			if (string.Equals(ActorSpecs.GetTypeName(actor), nameof(PlayerStart), StringComparison.OrdinalIgnoreCase))
 			{
-				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero);
+				playerPosition = target.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPosition(actor) ?? Point2.Zero);
 				break;
 			}
 		}
@@ -1640,7 +1635,7 @@ public partial class Game : IDisposable
 		if (Assets.FindActorById(targetActorId) is not { } target)
 			return false;
 
-		if (!string.Equals(ActorSpecs.ReadResolvedString(target.Actor, "Type"), "LinkedDoor", StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(ActorSpecs.GetTypeName(target.Actor), nameof(LinkedDoor), StringComparison.OrdinalIgnoreCase))
 			return false;
 
 		ReadLinkedDoorDestination(target.Actor, out var localPosition, out var spawnOffset);
@@ -1665,8 +1660,8 @@ public partial class Game : IDisposable
 
 	static void ReadLinkedDoorDestination(JsonObject actor, out Point2 localPosition, out Point2 spawnOffset)
 	{
-		localPosition = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
-		spawnOffset = ActorSpecs.ReadResolvedPoint(actor, "SpawnOffset") ?? LinkedDoor.DefaultSpawnOffset;
+		localPosition = ActorSpecs.ReadResolvedPosition(actor) ?? Point2.Zero;
+		spawnOffset = ActorSpecs.ReadResolvedPoint(actor, nameof(LinkedDoor.SpawnOffset)) ?? LinkedDoor.DefaultSpawnOffset;
 	}
 
 	void ResolvePlayerRoomTransition(Point2 direction)

@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 
 namespace Myth;
@@ -33,6 +34,19 @@ public class CameraBlocker : Actor, IResizable
 	// World-space rect this blocker occupies (Position is the rect's top-left corner, matching
 	// how the editor authors resizable room rects).
 	public RectInt WorldRect => new(Position.X, Position.Y, Size.X, Size.Y);
+
+	// The world rect an authored blocker spec occupies, without instantiating it -- room
+	// transitions, the editor, and the minimap all need this before the blocker is a live actor.
+	// The spec's Position is room-local, so it's offset by the room origin (the live WorldRect's
+	// Position is already world-space). Keys are read by member name so a rename can't silently
+	// drift them. The single spec-space counterpart to WorldRect; prefer the live WorldRect when
+	// an instance exists.
+	public static RectInt WorldRectFromSpec(Room room, JsonObject spec)
+	{
+		var local = ActorSpecs.ReadResolvedPoint(spec, nameof(Position)) ?? Point2.Zero;
+		var size = ActorSpecs.ReadResolvedPoint(spec, nameof(Size)) ?? DefaultSize;
+		return new RectInt(room.WorldBounds.TopLeft + local, size);
+	}
 
 	public override void Update()
 	{

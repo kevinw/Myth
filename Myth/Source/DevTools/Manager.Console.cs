@@ -252,7 +252,7 @@ public partial class Manager
 			foreach (var actor in room.Actors)
 			{
 					var id = ActorSpecs.GetActorId(actor);
-					if (ActorSpecs.ReadResolvedString(actor, "Type") == nameof(SavePoint) &&
+					if (ActorSpecs.GetTypeName(actor) == nameof(SavePoint) &&
 						!string.IsNullOrWhiteSpace(id) && !game.Save.SavePoints.Contains(id))
 				{
 					game.Save.SavePoints.Add(id);

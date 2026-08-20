@@ -131,6 +131,12 @@ public static class ActorSpecs
 	public static Point2? ReadResolvedPoint(JsonObject spec, string key)
 		=> JsonUtil.ReadPoint(GetResolvedProperty(spec, key));
 
+	// An actor's placement. Position is a framework key (Actor.Position is [NoSerialize], so the key
+	// is not member-derived) -- read it through here rather than a literal or a nameof that would
+	// drift from the real key on rename.
+	public static Point2? ReadResolvedPosition(JsonObject spec)
+		=> ReadResolvedPoint(spec, PositionKey);
+
 	public static float ReadResolvedFloat(JsonObject spec, string key, float fallback = 0)
 		=> GetResolvedProperty(spec, key) is { } node && JsonUtil.TryReadFloat(node, out var value) ? value : fallback;
 

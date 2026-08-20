@@ -63,7 +63,7 @@ internal struct Gym
 			var starts = new List<(Point2 Position, string Label)>();
 			foreach (var actor in room.Actors)
 			{
-				var type = ActorSpecs.ReadResolvedString(actor, "Type");
+				var type = ActorSpecs.GetTypeName(actor);
 				var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 				if (string.Equals(type, "Goal", StringComparison.OrdinalIgnoreCase))
 				{
