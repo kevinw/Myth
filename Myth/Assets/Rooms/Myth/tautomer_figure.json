@@ -100,15 +100,6 @@
       "Position": [140, 132]
     },
     {
-      "Id": "a28f3d6982414d5e",
-      "Type": "TitleText",
-      "Position": [188, 72],
-      "Text": "the end for now",
-      "Emissive": true,
-      "OutlineWithShadow": true,
-      "dropShadow": 1
-    },
-    {
       "Id": "06c7ec4b372a3ce0",
       "Type": "LinkedDoor",
       "Position": [140, 160],

@@ -122,7 +122,8 @@ public partial class Game
 
 	private void TryBudStorylet(string trigger, StoryEventContext eventContext)
 	{
-		if (ActiveCutscene != null || budStorylets == null || GetFirst<Bud>() is not { } bud || !CanShowBudSpeech())
+		if (!Manager.BudStoryBarks || ActiveCutscene != null || budStorylets == null ||
+			GetFirst<Bud>() is not { } bud || !CanShowBudSpeech())
 			return;
 
 		RefreshStoryContext(trigger, eventContext);

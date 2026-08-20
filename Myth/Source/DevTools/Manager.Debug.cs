@@ -6,6 +6,7 @@ namespace Myth;
 public partial class Manager
 {
 	internal bool GodMode = false;
+	internal bool BudStoryBarks = true;
 	float renderTargetPreviewWidth = 400f;
 	float atlasZoom = 1f;
 	bool atlasFit = true;

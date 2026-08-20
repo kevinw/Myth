@@ -1516,7 +1516,13 @@ public partial class Manager : App
 #if !BROWSER && !IOS
 		if (!keyboardShortcutsBlocked)
 		{
-			if (debugControls.BudAI.Pressed) ToggleBudAI();
+			if (debugControls.BudAI.Pressed)
+			{
+				if (Input.Keyboard.Shift)
+					ToggleBudStoryBarks();
+				else
+					ToggleBudAI();
+			}
 #if !MYTHSHIP
 			if (debugControls.MovieRecording.Pressed) ToggleMovieRecording(Input.Keyboard.Shift);
 #endif
@@ -1585,6 +1591,12 @@ public partial class Manager : App
 	{
 		PerfToggles.BudAIEnabled = !PerfToggles.BudAIEnabled;
 		ShowPerfToggleMessage("BudAIEnabled", PerfToggles.BudAIEnabled);
+	}
+
+	void ToggleBudStoryBarks()
+	{
+		BudStoryBarks = !BudStoryBarks;
+		DisplayMessage($"Bud story barks {(BudStoryBarks ? "On" : "Off")}");
 	}
 
 

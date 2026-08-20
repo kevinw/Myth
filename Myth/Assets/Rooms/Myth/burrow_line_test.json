@@ -73,18 +73,10 @@
       "Type": "BurrowLine",
       "Position": [160, 128],
       "RenderProcedural": true,
-      "ProceduralInnerColor": "E0346F",
       "Points": [[32, 16],[32, 32],[8, 32],[-72, 32],[-88, 32],[-88, 16]
       ],
-      "ProceduralWidth": 2
-    },
-    {
-      "Id": "cec7127da47af981",
-      "Type": "BurrowLine",
-      "Position": [160, 88],
-      "Points": [[0, 56],[-32, 56]
-      ],
-      "RenderProcedural": true
+      "ProceduralWidth": 2.872,
+      "ProceduralInnerColor": "D26C8F"
     },
     {
       "Id": "b9cd3e250f89bd3a",
@@ -95,31 +87,6 @@
       "Intensity": 0.75
     },
     {
-      "Id": "8129f11b72ad0a7d",
-      "Type": "BurrowLine",
-      "Position": [80, 112],
-      "RenderProcedural": true,
-      "Points": [[240, 56],[168, 56],[168, 64],[88, 64],[88, 48]
-      ],
-      "ProceduralWidth": 2
-    },
-    {
-      "Id": "0b8edb8fead9f9f6",
-      "Type": "Button",
-      "Position": [72, 80],
-      "Direction": "Down",
-      "Mode": "PressesOnce",
-      "TargetActorId": "e881e782bef86b68",
-      "SurfaceId": ""
-    },
-    {
-      "Id": "e881e782bef86b68",
-      "Type": "Door",
-      "Position": [12, 144],
-      "Locked": true,
-      "StartsVisible": true
-    },
-    {
       "Id": "94c9146545ef3f04",
       "Type": "Light",
       "Position": [244, 92],
@@ -128,39 +95,21 @@
       "Radius": 62.09
     },
     {
-      "Id": "adbee2db933e9bc1",
-      "Type": "Bramble",
-      "Position": [20, 120]
+      "Id": "6ecad61fffd349bc",
+      "Type": "Prop",
+      "Position": [244, 104],
+      "SpriteName": "Props/server"
     },
     {
-      "Id": "1ccd1e4ae173f11b",
-      "Type": "Bramble",
-      "Position": [19, 111]
+      "Id": "5b3e00baf8833ec3",
+      "Type": "Prop",
+      "Position": [224, 115],
+      "SpriteName": "Props/chair"
     },
     {
-      "Id": "4d72d8449edc21c7",
-      "Type": "Bramble",
-      "Position": [20, 103]
-    },
-    {
-      "Id": "ea3037752486612e",
-      "Type": "Bramble",
-      "Position": [20, 94]
-    },
-    {
-      "Id": "ab1f021ebcb4acc5",
-      "Type": "Bramble",
-      "Position": [20, 85]
-    },
-    {
-      "Id": "4964f3ee1e566c46",
-      "Type": "Bramble",
-      "Position": [135, 128]
-    },
-    {
-      "Id": "7b99c42759fcc820",
-      "Type": "Bramble",
-      "Position": [139, 116]
+      "Id": "81bd6f45ecd44ca7",
+      "Type": "Stalker",
+      "Position": [309, 48]
     }
   ]
 }

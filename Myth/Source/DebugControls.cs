@@ -66,7 +66,7 @@ public class DebugControls
 			"F4", "Fullscreen", Context.Anywhere);
 		BudAI = Make("DebugBudAI",
 			new ActionBindingSet().Add(Keys.B),
-			"B", "Toggle Bud AI", Context.Anywhere);
+			"B / Shift+B", "Toggle Bud AI / Bud story barks", Context.Anywhere);
 		MovieRecording = Make("DebugMovieRecording",
 			new ActionBindingSet().Add(Keys.M),
 			"M / Shift+M", "Movie recording", Context.Anywhere);
