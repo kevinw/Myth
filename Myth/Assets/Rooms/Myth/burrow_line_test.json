@@ -73,10 +73,10 @@
       "Type": "BurrowLine",
       "Position": [160, 128],
       "RenderProcedural": true,
-      "Points": [[32, 16],[32, 32],[8, 32],[-72, 32],[-88, 32],[-88, 16]
-      ],
       "ProceduralWidth": 2.872,
-      "ProceduralInnerColor": "D26C8F"
+      "ProceduralInnerColor": "D26C8F",
+      "Points": [[32, 16],[32, 32],[8, 32],[8, 48],[-72, 48],[-72, 32],[-88, 32],[-88, 16]
+      ]
     },
     {
       "Id": "b9cd3e250f89bd3a",
@@ -109,7 +109,7 @@
     {
       "Id": "81bd6f45ecd44ca7",
       "Type": "Stalker",
-      "Position": [309, 48]
+      "Position": [296, 56]
     }
   ]
 }

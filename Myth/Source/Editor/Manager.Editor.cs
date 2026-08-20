@@ -80,6 +80,11 @@ public partial class Manager
 	bool actorSpecInspectorOpen;
 	bool actorSelectTool = true;
 	int selectedRoomActorIndex = -1;
+	// The selected point of the selected path actor, plus the actor it was selected on. Actor
+	// selection is reassigned from a couple dozen places, so rather than clear this at each of them,
+	// SelectedPathPoint validates it on read and a stale selection simply reads as "none".
+	int selectedPathPointActorIndex = -1;
+	int selectedPathPointIndex = -1;
 	const string ActorContextMenuPopup = "##ActorContextMenu";
 	string? actorContextMenuRoomId;
 	int actorContextMenuIndex = -1;
@@ -1840,13 +1845,17 @@ public partial class Manager
 			if (!selected)
 				continue;
 			var radius = PointPathHandleRadius(lineWeight);
+			var selectedPoint = SelectedPathPoint(room);
 			for (var i = 0; i < count; i++)
 			{
 				var point = origin + PointPathPoint(points, i);
 				if (typeName == nameof(BurrowLine) && BurrowLinePointConnected(room, actorIndex, i, point))
 					batcher.CircleLine(point, radius * 1.65f, lineWeight * 2, 16, color);
-				batcher.Circle(point, radius, 12, color);
-				batcher.CircleLine(point, radius, lineWeight, 12, Color.White);
+				// The selected point wears the fill and ring the other way round: Backspace means
+				// "delete this point" while one is selected, so which one that is has to be obvious.
+				var pointSelected = i == selectedPoint;
+				batcher.Circle(point, radius, 12, pointSelected ? Color.White : color);
+				batcher.CircleLine(point, radius, lineWeight, 12, pointSelected ? color : Color.White);
 			}
 		}
 	}
@@ -1885,6 +1894,128 @@ public partial class Manager
 			if (Vector2.DistanceSquared(world, origin + PointPathPoint(points, i)) <= radius * radius)
 				return i;
 		return -1;
+	}
+
+	int SelectedPathPoint(Room room)
+	{
+		if (selectedPathPointIndex < 0 || selectedPathPointActorIndex != selectedRoomActorIndex ||
+			selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count ||
+			!IsPointPathActor(room.Actors[selectedRoomActorIndex]))
+			return -1;
+
+		var count = PointPathPointCount(PointPathNodes(room.Actors[selectedRoomActorIndex]));
+		return selectedPathPointIndex < count ? selectedPathPointIndex : -1;
+	}
+
+	void SelectPathPoint(int pointIndex)
+	{
+		selectedPathPointActorIndex = selectedRoomActorIndex;
+		selectedPathPointIndex = pointIndex;
+	}
+
+	void ClearSelectedPathPoint() => selectedPathPointIndex = -1;
+
+	// Nearest path segment under the cursor: its index (a new point goes right after it) plus where
+	// on the line the cursor landed, so inserting there leaves the path's shape untouched.
+	int HitTestPointPathSegment(Room room, int actorIndex, Vector2 world, float lineWeight, out Vector2 onLine)
+	{
+		onLine = world;
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count || !IsPointPathActor(room.Actors[actorIndex]))
+			return -1;
+
+		var actor = room.Actors[actorIndex];
+		var nodes = PointPathNodes(actor);
+		var count = PointPathPointCount(nodes);
+		var origin = PointPathOrigin(room, actor);
+		var tolerance = PointPathHandleRadius(lineWeight) * 1.5f;
+		var best = -1;
+		var bestDistance = tolerance * tolerance;
+		for (var i = 1; i < count; i++)
+		{
+			var line = new Line(origin + PointPathPoint(nodes, i - 1), origin + PointPathPoint(nodes, i));
+			var distance = line.DistanceSquared(world);
+			if (distance > bestDistance)
+				continue;
+
+			bestDistance = distance;
+			best = i - 1;
+			onLine = line.ClosestPoint(world);
+		}
+		return best;
+	}
+
+	// Double-clicking the selected path adds a point: on a segment it lands where you clicked (so
+	// the path keeps its shape), and on an end handle the path grows one more segment continuing the
+	// direction it already ends in. An interior handle has no free end to grow from, so it does
+	// nothing and the click stays a plain selection.
+	bool TryInsertPointPathPoint(Room room, int actorIndex, Vector2 world, float lineWeight)
+	{
+		if (actorIndex < 0 || actorIndex >= room.Actors.Count || !IsPointPathActor(room.Actors[actorIndex]))
+			return false;
+
+		var actor = room.Actors[actorIndex];
+		var points = PointPathPoints(actor);
+		if (points.Length < 2)
+			return false;
+
+		var handle = HitTestPointPathHandle(room, actorIndex, world, lineWeight);
+		int insertAt;
+		Point2 local;
+		if (handle == 0 || handle == points.Length - 1)
+		{
+			var neighbor = handle == 0 ? 1 : points.Length - 2;
+			var delta = points[handle] - points[neighbor];
+			if (delta == Point2.Zero)
+				delta = new Point2(Game.TileSize, 0);
+			local = points[handle] + delta;
+			insertAt = handle == 0 ? 0 : points.Length;
+		}
+		else if (handle >= 0)
+			return false;
+		else
+		{
+			var segment = HitTestPointPathSegment(room, actorIndex, world, lineWeight, out var onLine);
+			if (segment < 0)
+				return false;
+
+			insertAt = segment + 1;
+			local = (onLine - PointPathOrigin(room, actor)).RoundToPoint2();
+		}
+
+		using (CaptureRoomUndo("Insert Path Point", room))
+		{
+			var next = new Point2[points.Length + 1];
+			Array.Copy(points, next, insertAt);
+			next[insertAt] = local;
+			Array.Copy(points, insertAt, next, insertAt + 1, points.Length - insertAt);
+			ActorSpecs.SetProperty(actor, nameof(IPointPath.Points), ActorSpecs.ToJsonNode(next));
+			SelectPathPoint(insertAt);
+			editorGameDirty = true;
+		}
+		return true;
+	}
+
+	// Two points is the floor: every segment lookup is Points[i] -> Points[i + 1], so dropping below
+	// that leaves a path that is no longer a line rather than a shorter one.
+	void DeleteSelectedPathPoint(Room room, int pointIndex)
+	{
+		var actor = room.Actors[selectedRoomActorIndex];
+		var points = PointPathPoints(actor);
+		if (points.Length <= 2)
+		{
+			DisplayMessage("Path needs at least two points");
+			return;
+		}
+
+		using (CaptureRoomUndo("Delete Path Point", room))
+		{
+			var next = new Point2[points.Length - 1];
+			Array.Copy(points, next, pointIndex);
+			Array.Copy(points, pointIndex + 1, next, pointIndex, next.Length - pointIndex);
+			ActorSpecs.SetProperty(actor, nameof(IPointPath.Points), ActorSpecs.ToJsonNode(next));
+			SelectPathPoint(Math.Clamp(pointIndex - 1, 0, next.Length - 1));
+			editorGameDirty = true;
+		}
 	}
 
 	static Vector2 PointPathOrigin(Room room, JsonObject actor)
@@ -3706,6 +3837,20 @@ public partial class Manager
 			if (worldMouseBlocked)
 				CancelTilePaint();
 
+			// Double-clicking the selected path adds a point (on a segment, or off either end); any
+			// other press in the room drops the point selection, so Backspace goes back to meaning
+			// "delete the actor".
+			if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame &&
+				IsMouseDoubleClicked(ImGuiMouseButton.Left) &&
+				TryInsertPointPathPoint(editing, selectedRoomActorIndex, worldMouse, gridWeight))
+			{
+				ClearEditorDragState();
+				CancelTilePaint();
+				worldMouseBlocked = true;
+			}
+			else if (!worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredPathPoint < 0)
+				ClearSelectedPathPoint();
+
 			if (editingRoomGeometry && !worldMouseBlocked && !roomActivationClickConsumed && Input.Mouse.LeftPressed)
 			{
 				BeginRoomSelectPress(editing, worldMouse, hoveredRoomGeometryHandle);
@@ -3716,6 +3861,7 @@ public partial class Manager
 				editorDrag.Kind = EditorDragKind.ActorPathPoint;
 				editorDrag.PathPointIndex = hoveredPathPoint;
 				editorDrag.ActorSnapsByDefault = true;
+				SelectPathPoint(hoveredPathPoint);
 				editorSelectionRect = null;
 				CancelTilePaint();
 			}
@@ -3928,7 +4074,13 @@ public partial class Manager
 			}
 
 			if (!keyboardBlocked && actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
-				DeleteSelectedActor();
+			{
+				var selectedPathPoint = SelectedPathPoint(editing);
+				if (selectedPathPoint >= 0)
+					DeleteSelectedPathPoint(editing, selectedPathPoint);
+				else
+					DeleteSelectedActor();
+			}
 
 			if (!editingRoomGeometry && !worldMouseBlocked && (!actorSelectTool || eyedropper) && overGame)
 			{
