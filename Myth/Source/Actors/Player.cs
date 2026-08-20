@@ -708,6 +708,8 @@ public abstract class Pawn : Actor
 			jumpPressed = true;
 		if (!inWater && jumpPressed && (canGroundJump || canWallJump))
 		{
+			var jumpingDownThroughJumpthru = input.MoveY > 0 && HitTestUnderneath()?.Actor is Jumpthru;
+			
 			jumpBufferTimer = 0;
 			JumpUpSquish = 0;
 			Squish = new Vector2(0.65f, 1.4f);
@@ -732,7 +734,19 @@ public abstract class Pawn : Actor
 				dashCooldownTimer = 0;
 				EndDashRun();
 			}
-			StartJump(JumpForce, JumpTime);
+
+			if (jumpingDownThroughJumpthru)
+			{
+				StartJump(0, 0);
+				Velocity.Y = 4;
+				Position.Y += 2;
+			}
+			else
+			{
+				StartJump(JumpForce, JumpTime);
+			}
+				
+				
 			OnPawnJump();
 		}
 
@@ -1134,13 +1148,16 @@ public abstract class Pawn : Actor
 		return true;
 	}
 
-	bool GetSlopeUnderneath(out Vector2 normal)
-	{
-		normal = Vector2.Zero;
+	SurfaceHit? HitTestUnderneath() {
 		var bounds = Hitbox.Rect + Position;
-		if (!Game.TryFindSurface(this, bounds, Vector2.UnitY, 2, out var hit) || !hit.Slope.HasValue)
-			return false;
+		if (!Game.TryFindSurface(this, bounds, Vector2.UnitY, 2, out var hit))
+			return null;
+		return hit;
+	}
 
+	bool GetSlopeUnderneath(out Vector2 normal) {
+		normal = Vector2.Zero;
+		if (HitTestUnderneath() is not { } hit || !hit.Slope.HasValue) return false;
 		normal = hit.Normal;
 		return true;
 	}

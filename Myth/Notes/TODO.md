@@ -18,7 +18,6 @@
 - carry is confusing
 - burrowing through a save doesn't save
 - lightning trap wall jump room isn't clear
-- down jump on wall through?
 - should we be able to burrow on a jumpthru?
 - he thought the duck would hurt you
 - duck death sound played on leave
