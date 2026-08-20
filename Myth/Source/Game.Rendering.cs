@@ -166,6 +166,7 @@ public sealed partial class GameView
 			{
 				DrawMinimap(output);
 				mapOverlayVisible = minimapOpacity > 0.001f;
+				DrawContextPrompt(output, mapOverlayVisible);
 			}
 		}
 		if (debugView == DebugView.ShadowSegments)

@@ -444,10 +444,14 @@ public sealed partial class GameView
 	static int MinimapEdgeShadeSteps => 2;
 	static float MinimapEdgeShadeAlpha => 0.36f;
 	static float MinimapWorldColorOpacity => 1f; // how strongly the baked world map reads as the room fill
-	const string WarpHelp = "{Move} Move    {Confirm} Teleport    {Back} Back";
-	const string WarpHelpNoMovement = "{Confirm} Teleport    {Back} Back";
+	const string WarpHelp = "{Move} Move    {Confirm} Warp    {Back} Back";
+	const string WarpHelpNoMovement = "{Confirm} Warp    {Back} Back";
 
 	float minimapOpacity;
+
+	// Set by actors each Update to request a world-space contextual prompt on the bottom line
+	// (drawn by DrawContextPrompt while the map overlay is down). Consumed once per frame.
+	internal string? contextPrompt = null;
 
 	// Drawn into the 320x180 output target before the final composite, so the map shares the
 	// game's pixel grid (and CRT).
@@ -548,21 +552,49 @@ public sealed partial class GameView
 			Batcher.Rect(new Rect(position, Point2.One * 2), Color.White * minimapOpacity);
 		}
 
-		if (game.Minimap.WarpMode && Manager.InputPrompts is { } prompts && (Assets.SpeechFont ?? Assets.Font) is { } font)
-			prompts.DrawText(
-				Batcher,
-				font,
-				game.Minimap.WarpPoints.Count > 1 ? WarpHelp : WarpHelpNoMovement,
-				new Vector2(Width * 0.5f, Height - 4),
-				font.Size,
-				new Vector2(0.5f, 1),
-				Color.White * minimapOpacity,
-				deferredGlyphs: InputPromptGlyphs,
-				drawGlyphs: false,
-				mapOverlay: true);
+		if (game.Minimap.WarpMode)
+		{
+			var color = Color.White * minimapOpacity;
+			var text = game.Minimap.WarpPoints.Count > 1 ? WarpHelp : WarpHelpNoMovement;
+			DrawPromptText(text, color);
+		}
 
 		Batcher.Render(output);
 		Batcher.Clear();
+	}
+
+	// A world-space contextual prompt (e.g. the save point's "press up to warp") that takes the
+	// bottom-of-screen line while the map overlay is down. The field is consumed every frame
+	// regardless of visibility, so a prompt set the instant before the map opens can't linger.
+	// Glyphs are tagged mapOverlay: false so they pass the DrawInputPromptGlyphs gate.
+	internal void DrawContextPrompt(Target output, bool mapOverlayVisible)
+	{
+		var prompt = contextPrompt;
+		contextPrompt = null;
+		if (mapOverlayVisible || prompt is not { } text)
+			return;
+
+		DrawPromptText(text, mapOverlay: false);
+		Batcher.Render(output);
+		Batcher.Clear();
+	}
+
+	internal void DrawPromptText(string text, Color? color = null, bool mapOverlay = true)
+	{
+		if ((Assets.SpeechFont ?? Assets.Font) is not { } font)
+			return;
+
+		Manager.InputPrompts?.DrawText(
+			Batcher,
+			font,
+			text,
+			new Vector2(Width * 0.5f, Height - 4),
+			font.Size,
+			new Vector2(0.5f, 1),
+			color ?? Color.White,
+			deferredGlyphs: InputPromptGlyphs,
+			drawGlyphs: false,
+			mapOverlay: mapOverlay);
 	}
 
 	void DrawMinimapEdgeShade(Vector2 origin, Minimap.EdgeShade edge, float scale, float opacity)

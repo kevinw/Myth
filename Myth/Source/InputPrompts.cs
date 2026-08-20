@@ -7,6 +7,10 @@ enum InputPromptAction
 {
 	Jump,
 	Move,
+	MoveUp,
+	MoveDown,
+	MoveLeft,
+	MoveRight,
 	Confirm,
 	Back
 }
@@ -42,12 +46,12 @@ sealed class InputPrompts : IDisposable
 	{
 		this.input = input;
 		activeSet = isSteamDeck ? GlyphSet.SteamDeck : GlyphSet.Keyboard;
-		keyboard = LoadFont(graphics, "Fonts/kenney-input-keyboard-mouse.ttf", [0xE025, 0xE05E, 0xE062, 0xE0CC]);
-		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE01B]);
-		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE064]);
-		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE04F]);
-		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE05A]);
-		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE030]);
+		keyboard = LoadFont(graphics, "Fonts/kenney-input-keyboard-mouse.ttf", [0xE025, 0xE023, 0xE01D, 0xE01F, 0xE021, 0xE05E, 0xE062, 0xE0CC]);
+		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE01B, 0xE01C, 0xE01E, 0xE01F, 0xE020]);
+		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE064, 0xE065, 0xE067, 0xE068, 0xE069]);
+		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE04F, 0xE050, 0xE052, 0xE053, 0xE054]);
+		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE05A, 0xE05B, 0xE05D, 0xE05E, 0xE05F]);
+		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE030, 0xE031, 0xE033, 0xE034, 0xE035]);
 	}
 
 	public void Update(TimeSpan elapsed)
@@ -226,46 +230,69 @@ sealed class InputPrompts : IDisposable
 			GlyphSet.Keyboard => (keyboard, action switch
 			{
 				InputPromptAction.Move => 0xE025,
+				InputPromptAction.MoveUp => 0xE023,
+				InputPromptAction.MoveDown => 0xE01D,
+				InputPromptAction.MoveLeft => 0xE01F,
+				InputPromptAction.MoveRight => 0xE021,
 				InputPromptAction.Confirm => 0xE05E,
 				InputPromptAction.Back => 0xE062,
 				_ => 0xE0CC
 			}),
 			GlyphSet.PlayStation => (playStation, action switch
 			{
-				InputPromptAction.Move => 0xE064,
 				InputPromptAction.Back => 0xE041,
-				_ => 0xE04B
+				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE04B,
+				_ => Stick(0xE064, action)
 			}),
 			GlyphSet.Xbox => (xbox, action switch
 			{
-				InputPromptAction.Move => 0xE04F,
 				InputPromptAction.Back => 0xE006,
-				_ => 0xE004
+				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE004,
+				_ => Stick(0xE04F, action)
 			}),
 			GlyphSet.Nintendo => (nintendo, action switch
 			{
-				InputPromptAction.Move => 0xE05A,
 				InputPromptAction.Back => 0xE004,
-				_ => 0xE006
+				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE006,
+				_ => Stick(0xE05A, action)
 			}),
 			GlyphSet.SteamDeck => (steamDeck, action switch
 			{
-				InputPromptAction.Move => 0xE030,
 				InputPromptAction.Back => 0xE003,
-				_ => 0xE001
+				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE001,
+				_ => Stick(0xE030, action)
 			}),
 			_ => (generic, action switch
 			{
-				InputPromptAction.Move => 0xE01B,
 				InputPromptAction.Back => 0xE001,
-				_ => 0xE000
+				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE000,
+				_ => Stick(0xE01B, action)
 			})
 		};
+
+	// Kenney controller fonts lay out the left-stick directions at a fixed offset
+	// from the neutral stick glyph: down +1, left +3, up +4, right +5.
+	static int Stick(int neutral, InputPromptAction action) => neutral + action switch
+	{
+		InputPromptAction.MoveDown => 1,
+		InputPromptAction.MoveLeft => 3,
+		InputPromptAction.MoveUp => 4,
+		InputPromptAction.MoveRight => 5,
+		_ => 0
+	};
 
 	static bool TryReadAction(ReadOnlySpan<char> text, out InputPromptAction action, out int length)
 	{
 		if (text.StartsWith("{Jump}", StringComparison.OrdinalIgnoreCase))
 			return Found(InputPromptAction.Jump, 6, out action, out length);
+		if (text.StartsWith("{MoveUp}", StringComparison.OrdinalIgnoreCase))
+			return Found(InputPromptAction.MoveUp, 8, out action, out length);
+		if (text.StartsWith("{MoveDown}", StringComparison.OrdinalIgnoreCase))
+			return Found(InputPromptAction.MoveDown, 10, out action, out length);
+		if (text.StartsWith("{MoveLeft}", StringComparison.OrdinalIgnoreCase))
+			return Found(InputPromptAction.MoveLeft, 10, out action, out length);
+		if (text.StartsWith("{MoveRight}", StringComparison.OrdinalIgnoreCase))
+			return Found(InputPromptAction.MoveRight, 11, out action, out length);
 		if (text.StartsWith("{Move}", StringComparison.OrdinalIgnoreCase))
 			return Found(InputPromptAction.Move, 6, out action, out length);
 		if (text.StartsWith("{Confirm}", StringComparison.OrdinalIgnoreCase))

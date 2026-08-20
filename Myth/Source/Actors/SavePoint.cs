@@ -62,6 +62,8 @@ public class SavePoint : Actor
 		if (overlapping)
 		{
 			showInteract = true;
+			
+			Game.View?.contextPrompt = "Press {MoveUp} to warp.";
 			interactTime += Time.Delta;
 
 			// Rising edge: pulse and record the save (idempotent).
@@ -121,6 +123,7 @@ public class SavePoint : Actor
 
 		if (!showInteract)
 			return;
+
 
 		if (Assets.GetSprite("interact") is { Animations.Count: > 0 } interactSprite)
 		{
