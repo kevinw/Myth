@@ -105,6 +105,17 @@ public partial class Manager
 	Point2 editorSelectionFrom;
 	Point2 editorSelectionTo;
 	EditorDragState editorDrag = EditorDragState.None;
+	// Multi-room selection, meaningful only in room-select (zoomed-out) mode. The "primary" room
+	// stays selectedRoomId/CurrentRoom (inspector + tile editing); this is the set moved together.
+	readonly HashSet<string> selectedRoomIds = [];
+	Vector2 roomPressCursor;              // screen-space press point, for the drag deadzone
+	bool roomDragStarted;                 // a room press only becomes a move once past the deadzone
+	Point2 roomMoveAnchorTile;            // world tile under the cursor at press
+	readonly Dictionary<string, Point2> roomMoveOrigins = []; // per-room tile position at press
+	Vector2 roomMarqueeFromWorld;
+	Vector2 roomMarqueeToWorld;
+	const float RoomDragDeadzone = 4f;    // UI pixels a room press must travel before it moves rooms
+	const float RoomSnapScreenPx = 6f;    // magnetic snap threshold, screen pixels
 	string? pickingLinkedDoorTargetForActorId;
 	// Neural texture mask painting: which room actor is being painted, and the brush.
 	string? maskPaintActorId;
@@ -3683,6 +3694,311 @@ public partial class Manager
 			(int)MathF.Round((float)tile.Y / lattice.Y) * lattice.Y);
 	}
 
+	static Room? RoomById(string id) => Assets.RoomsById.GetValueOrDefault(id);
+
+	// ---- Multi-room selection (room-select / zoomed-out mode) ------------------------------------
+
+	// Makes `room` the primary (inspector + editor game focus). Same save/select/sync dance the
+	// old single-click room switch used; does not touch the multi-selection set.
+	void SelectPrimaryRoom(Room room)
+	{
+		if (room.Id == selectedRoomId)
+			return;
+		using (CaptureSelectionUndo("Select Room"))
+		{
+			if (CurrentRoom is { } previous)
+				editorRoomEntryDirection = GetEditorEntryDirection(previous, room);
+			CurrentRoom?.Save();
+			SelectRoom(room);
+			selectedRoomActorIndex = -1;
+			SyncEditorGame();
+		}
+	}
+
+	void SetRoomSelection(Room room)
+	{
+		selectedRoomIds.Clear();
+		selectedRoomIds.Add(room.Id);
+		SelectPrimaryRoom(room);
+	}
+
+	void ToggleRoomSelection(Room room)
+	{
+		if (selectedRoomIds.Add(room.Id))
+			SelectPrimaryRoom(room);
+		else
+		{
+			selectedRoomIds.Remove(room.Id);
+			// Removing the primary repoints it at any remaining selected room.
+			if (room.Id == selectedRoomId)
+				foreach (var id in selectedRoomIds)
+					if (RoomById(id) is { } remaining)
+					{
+						SelectPrimaryRoom(remaining);
+						break;
+					}
+		}
+	}
+
+	// ---- Room-select mode press dispatch ---------------------------------------------------------
+
+	// One entry point for a left-press while zoomed out: resize handle -> resize the primary; over a
+	// room -> select (Shift toggles) and arm a group move; empty space -> marquee (Shift adds).
+	void BeginRoomSelectPress(Room primary, Vector2 worldMouse, ResizeHandle handle)
+	{
+		var shift = Input.Keyboard.Shift;
+		ClearEditorDragState();
+		CancelTilePaint();
+		roomPressCursor = Cursor;
+
+		if (handle != ResizeHandle.None)
+		{
+			editorDrag.Kind = EditorDragKind.RoomGeometry;
+			OpenPendingRoomUndo(RoomGeometryUndoSlot, "Resize Room", primary);
+			editorDrag.RoomGeometryHandle = handle;
+			editorDrag.RoomGeometryOffset = WorldToRoomGeometryTile(worldMouse) - primary.TileSpacePosition;
+			return;
+		}
+
+		var room = GetRoomAtWorld(worldMouse);
+		if (room == null)
+		{
+			if (!shift)
+				selectedRoomIds.Clear();
+			editorDrag.Kind = EditorDragKind.RoomMarquee;
+			roomMarqueeFromWorld = worldMouse;
+			roomMarqueeToWorld = worldMouse;
+			return;
+		}
+
+		if (shift)
+		{
+			ToggleRoomSelection(room);
+			return;
+		}
+
+		if (!selectedRoomIds.Contains(room.Id))
+			SetRoomSelection(room);
+		else if (room.Id != selectedRoomId)
+			SelectPrimaryRoom(room);
+
+		BeginRoomGroupMove(worldMouse);
+	}
+
+	void BeginRoomGroupMove(Vector2 worldMouse)
+	{
+		editorDrag.Kind = EditorDragKind.RoomMove;
+		roomDragStarted = false;
+		roomMoveAnchorTile = WorldToRoomGeometryTile(worldMouse);
+		roomMoveOrigins.Clear();
+		foreach (var id in selectedRoomIds)
+			if (RoomById(id) is { } r)
+				roomMoveOrigins[id] = r.TileSpacePosition;
+	}
+
+	void OpenPendingRoomGroupUndo(string name)
+	{
+		if (undo.HasPending(RoomGeometryUndoSlot))
+			return;
+		var targets = new List<IJsonUndoTarget>();
+		foreach (var id in selectedRoomIds)
+			if (RoomById(id) is { } r)
+				targets.Add(CurrentRoomUndoTarget(r));
+		targets.Add(EditorSelectionUndoTarget());
+		undo.OpenPending(RoomGeometryUndoSlot, name, targets.ToArray());
+	}
+
+	void UpdateRoomGroupMove(Vector2 worldMouse)
+	{
+		if (!roomDragStarted)
+		{
+			if (Vector2.DistanceSquared(Cursor, roomPressCursor) <= RoomDragDeadzone * RoomDragDeadzone)
+				return;
+			roomDragStarted = true;
+			OpenPendingRoomGroupUndo("Move Rooms");
+		}
+
+		var desired = WorldToRoomGeometryTile(worldMouse) - roomMoveAnchorTile;
+		if (!Input.Keyboard.Alt)
+			desired = SnapGroupDelta(desired);
+		ApplyGroupDelta(ClampGroupDelta(desired));
+	}
+
+	void FinishRoomGroupMove()
+	{
+		if (!roomDragStarted)
+			return;
+		var moved = 0;
+		foreach (var (id, origin) in roomMoveOrigins)
+			if (RoomById(id) is { } r && r.TileSpacePosition != origin)
+			{
+				r.Save();
+				moved++;
+			}
+		if (moved > 0)
+		{
+			editorGameDirty = true;
+			SyncEditorGame();
+			DisplayMessage($"{moved} room{(moved == 1 ? "" : "s")} moved");
+		}
+	}
+
+	void FinishRoomMarquee()
+	{
+		var rect = RectFromCorners(roomMarqueeFromWorld, roomMarqueeToWorld);
+		Room? firstHit = null;
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (room.Sublayer != editorSublayer)
+				continue;
+			var b = room.WorldBounds;
+			if (rect.GetIntersection(new Rect(b.X, b.Y, b.Width, b.Height)).Area > 0)
+			{
+				selectedRoomIds.Add(room.Id);
+				firstHit ??= room;
+			}
+		}
+		if (firstHit != null && (selectedRoomId == null || !selectedRoomIds.Contains(selectedRoomId)))
+			SelectPrimaryRoom(firstHit);
+	}
+
+	static Rect RectFromCorners(Vector2 a, Vector2 b)
+		=> new(MathF.Min(a.X, b.X), MathF.Min(a.Y, b.Y), MathF.Abs(a.X - b.X), MathF.Abs(a.Y - b.Y));
+
+	// ---- Group snap + collision ------------------------------------------------------------------
+
+	RectInt GroupOriginBounds()
+	{
+		var min = new Point2(int.MaxValue, int.MaxValue);
+		var max = new Point2(int.MinValue, int.MinValue);
+		foreach (var (id, origin) in roomMoveOrigins)
+			if (RoomById(id) is { } r)
+			{
+				min = Point2.Min(min, origin);
+				max = Point2.Max(max, origin + r.Size);
+			}
+		return max.X >= min.X ? new RectInt(min, max - min) : default;
+	}
+
+	// Collects the X (left/right) and Y (top/bottom) tile edges of every room not in the selection,
+	// so the drag can snap the moving group flush against neighbors as well as the screen lattice.
+	(List<int> X, List<int> Y) NonSelectedRoomEdges()
+	{
+		var xs = new List<int>();
+		var ys = new List<int>();
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (room.Sublayer != editorSublayer || selectedRoomIds.Contains(room.Id))
+				continue;
+			var p = room.TileSpacePosition;
+			xs.Add(p.X);
+			xs.Add(p.X + room.Size.X);
+			ys.Add(p.Y);
+			ys.Add(p.Y + room.Size.Y);
+		}
+		return (xs, ys);
+	}
+
+	Point2 SnapGroupDelta(Point2 desired)
+	{
+		var bounds = GroupOriginBounds();
+		if (bounds.Width <= 0)
+			return desired;
+		var lattice = RoomLatticeTiles;
+		var threshold = Math.Max(1, (int)MathF.Round(RoomSnapScreenPx / (editorZoom * Game.TileSize)));
+		var (edgesX, edgesY) = NonSelectedRoomEdges();
+		return new(
+			desired.X + SnapAxis(bounds.Left, bounds.Right, desired.X, lattice.X, edgesX, threshold),
+			desired.Y + SnapAxis(bounds.Top, bounds.Bottom, desired.Y, lattice.Y, edgesY, threshold));
+	}
+
+	// Smallest nudge that lands the group's near or far edge on a snap line (nearest lattice
+	// multiple, or a neighbor edge) within `threshold` tiles; 0 if nothing is close enough.
+	static int SnapAxis(int lo, int hi, int desired, int latticeStep, List<int> roomEdges, int threshold)
+	{
+		var movedLo = lo + desired;
+		var movedHi = hi + desired;
+		var best = 0;
+		var bestDist = threshold + 1;
+		Consider(movedLo, (int)MathF.Round((float)movedLo / latticeStep) * latticeStep);
+		Consider(movedHi, (int)MathF.Round((float)movedHi / latticeStep) * latticeStep);
+		foreach (var edge in roomEdges)
+		{
+			Consider(movedLo, edge);
+			Consider(movedHi, edge);
+		}
+		return best;
+
+		void Consider(int edge, int line)
+		{
+			var dist = Math.Abs(line - edge);
+			if (dist < bestDist)
+			{
+				bestDist = dist;
+				best = line - edge;
+			}
+		}
+	}
+
+	// Furthest collision-free delta toward `desired`, resolved per axis so the group slides along a
+	// blocking neighbor instead of stopping dead.
+	Point2 ClampGroupDelta(Point2 desired)
+	{
+		var dx = ClampAxisMarch(Point2.Zero, desired.X, horizontal: true);
+		var dy = ClampAxisMarch(new Point2(dx, 0), desired.Y, horizontal: false);
+		return new(dx, dy);
+	}
+
+	int ClampAxisMarch(Point2 baseDelta, int target, bool horizontal)
+	{
+		if (target == 0)
+			return 0;
+		var step = Math.Sign(target);
+		var last = 0;
+		for (var v = step; Math.Abs(v) <= Math.Abs(target); v += step)
+		{
+			var delta = horizontal ? new Point2(v, baseDelta.Y) : new Point2(baseDelta.X, v);
+			if (GroupCollides(delta))
+				break;
+			last = v;
+		}
+		return last;
+	}
+
+	bool GroupCollides(Point2 delta)
+	{
+		foreach (var (id, origin) in roomMoveOrigins)
+		{
+			if (RoomById(id) is not { } r)
+				continue;
+			var rect = new RectInt(origin + delta, r.Size);
+			foreach (var room in Assets.RoomsById.Values)
+			{
+				if (room.Sublayer != editorSublayer || selectedRoomIds.Contains(room.Id))
+					continue;
+				if (rect.Overlaps(new RectInt(room.TileSpacePosition, room.Size)))
+					return true;
+			}
+		}
+		return false;
+	}
+
+	// Translation only: no InvalidateRoomPreview, since room contents are unchanged and previews are
+	// drawn at room.WorldBounds — the cached (including NeuralTextureActor) textures are reused.
+	void ApplyGroupDelta(Point2 delta)
+	{
+		foreach (var (id, origin) in roomMoveOrigins)
+			if (RoomById(id) is { } r)
+			{
+				var target = origin + delta;
+				if (r.TileSpacePosition != target)
+					MoveRoomGeometry(r, target);
+			}
+		if (CurrentRoom is { } primary)
+			roomCreatePosition = primary.TileSpacePosition;
+		editorGameDirty = true;
+	}
+
 	static RectInt ResizeRoomGeometryBounds(RectInt bounds, ResizeHandle handle, Point2 mouseTile)
 	{
 		var left = bounds.Left;
@@ -4259,12 +4575,16 @@ public partial class Manager
 			{
 				editingRoomGeometry = false;
 				CommitEditorDragState();
+				selectedRoomIds.Clear(); // multi-select is a zoomed-out concept; collapse to the primary
 			}
 		}
 		else if (fraction < RoomEditEnterFraction)
 		{
 			editingRoomGeometry = true;
 			ClearEditorDragState();
+			selectedRoomIds.Clear();
+			if (selectedRoomId is { } id)
+				selectedRoomIds.Add(id);
 		}
 	}
 
@@ -4292,7 +4612,14 @@ public partial class Manager
 		else
 			DrawEditorRoomBackdrop(room, bounds, tint);
 		batcher.RectLine(bounds, MathF.Max(1.0f / editorZoom, LineWeight / editorZoom), outline);
+		if (editingRoomGeometry && selectedRoomIds.Contains(room.Id))
+		{
+			batcher.Rect(bounds, RoomSelectionColor * 0.14f);
+			batcher.RectLine(bounds, MathF.Max(1.0f / editorZoom, (LineWeight + 1f) / editorZoom), RoomSelectionColor);
+		}
 	}
+
+	static Color RoomSelectionColor => new(0x5ac8fa);
 
 	void DrawEditorRoomBackdrop(Room room, RectInt bounds, Color tint)
 	{
@@ -4655,15 +4982,16 @@ public partial class Manager
 		if (!worldMouseBlocked && inner.Contains(Cursor) && !eyedropper)
 		{
 			var doubleClick = IsMouseDoubleClicked(ImGuiMouseButton.Left);
-			if ((editingRoomGeometry && Input.Mouse.LeftPressed) || doubleClick)
+			// Single-click selection + drag in room-select mode is handled by BeginRoomSelectPress
+			// below (so it can select-and-drag in one gesture); here we only handle the zoom gesture.
+			// A plain double-click outside room-select mode still switches+zooms to the clicked room.
+			if (doubleClick)
 			{
 				var worldMouse = ScreenToEditorWorld(Cursor, inner);
 				if (GetRoomAtWorld(worldMouse) is { } selected)
 				{
 					var switching = selected != CurrentRoom;
-					// Double-click zooms when switching rooms or arranging (room-edit mode); double-clicking
-					// the current room while zoomed in does nothing, so it can't disrupt tile editing.
-					var zoomTo = doubleClick && (switching || editingRoomGeometry);
+					var zoomTo = switching || editingRoomGeometry;
 					if (switching || zoomTo)
 					{
 						using (CaptureSelectionUndo("Select Room"))
@@ -4682,6 +5010,12 @@ public partial class Manager
 								TweenEditorCameraToRoom(selected);
 							roomActivationClickConsumed = true;
 						}
+					}
+					// Keep the multi-selection consistent with the primary after a zoom-select.
+					if (editingRoomGeometry)
+					{
+						selectedRoomIds.Clear();
+						selectedRoomIds.Add(selected.Id);
 					}
 				}
 			}
@@ -4777,15 +5111,9 @@ public partial class Manager
 			if (worldMouseBlocked)
 				CancelTilePaint();
 
-			if (editingRoomGeometry && !worldMouseBlocked && Input.Mouse.LeftPressed && (overGame || hoveredRoomGeometryHandle != ResizeHandle.None))
+			if (editingRoomGeometry && !worldMouseBlocked && !roomActivationClickConsumed && Input.Mouse.LeftPressed)
 			{
-				ClearEditorDragState();
-				editorDrag.Kind = EditorDragKind.RoomGeometry;
-				OpenPendingRoomUndo(RoomGeometryUndoSlot, "Edit Room Geometry", editing);
-				editorDrag.RoomGeometryHandle = hoveredRoomGeometryHandle;
-				var mouseTile = WorldToRoomGeometryTile(worldMouse);
-				editorDrag.RoomGeometryOffset = mouseTile - editing.TileSpacePosition;
-				CancelTilePaint();
+				BeginRoomSelectPress(editing, worldMouse, hoveredRoomGeometryHandle);
 			}
 			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredPathPoint >= 0)
 			{
@@ -4951,6 +5279,14 @@ public partial class Manager
 			{
 				ApplyRoomGeometryDrag(editing, worldMouse);
 			}
+			else if (!worldMouseBlocked && DragKind == EditorDragKind.RoomMove && Input.Mouse.LeftDown)
+			{
+				UpdateRoomGroupMove(worldMouse);
+			}
+			else if (DragKind == EditorDragKind.RoomMarquee && Input.Mouse.LeftDown)
+			{
+				roomMarqueeToWorld = worldMouse;
+			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorPathPoint && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Path Point", editing);
@@ -4988,6 +5324,10 @@ public partial class Manager
 				if (DragKind == EditorDragKind.RoomActor && actorPressCanCycle && !editorDrag.ActorDragStarted &&
 					!ActorPressPassedDragThreshold && !worldMouseBlocked && actorSelectActive)
 					CycleRoomActorSelection(editing, editorDrag.ActorPressWorld);
+				if (DragKind == EditorDragKind.RoomMove)
+					FinishRoomGroupMove();
+				else if (DragKind == EditorDragKind.RoomMarquee)
+					FinishRoomMarquee();
 				actorPressCanCycle = false;
 				CommitEditorDragState();
 			}
@@ -5069,6 +5409,12 @@ public partial class Manager
 			}
 			if (editingRoomGeometry)
 				DrawRoomGeometryHandles(editing, gridWeight);
+			if (DragKind == EditorDragKind.RoomMarquee)
+			{
+				var marquee = RectFromCorners(roomMarqueeFromWorld, roomMarqueeToWorld);
+				batcher.Rect(marquee, RoomSelectionColor * 0.15f);
+				batcher.RectLine(marquee, MathF.Max(1f, gridWeight), RoomSelectionColor);
+			}
 			DrawPlaytestPlayerMarker(editing);
 			DrawRevealDoorMarkers(editing, gridWeight);
 			DrawPointPaths(editing, gridWeight);

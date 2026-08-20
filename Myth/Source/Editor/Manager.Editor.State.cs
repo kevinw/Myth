@@ -31,6 +31,8 @@ public partial class Manager
 		SelectionRect,
 		SelectionMove,
 		RoomGeometry,
+		RoomMove,
+		RoomMarquee,
 		TilePaint
 	}
 
