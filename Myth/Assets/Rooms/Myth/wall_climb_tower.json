@@ -223,6 +223,11 @@
       "Id": "02433f1441588a63",
       "Type": "Chest",
       "Position": [35, 208]
+    },
+    {
+      "Id": "db7667f160c6550a",
+      "Type": "SavePoint",
+      "Position": [56, 80]
     }
   ]
 }
