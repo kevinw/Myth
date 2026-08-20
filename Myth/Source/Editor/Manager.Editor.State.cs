@@ -5,6 +5,8 @@ using Foster.Framework;
 
 namespace Myth;
 
+// Editor state types shared across the Manager.Editor.* partials: RoomSettings, the drag-state
+// machine (EditorDragKind/EditorDragState), selection snapshots, and the actor gizmo helpers.
 public partial class Manager
 {
 	readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, string BackdropSurfaceId, Color AmbientColor, float AmbientIntensity, float LightNoise, bool PlayerLightEnabled, float SporeFogStrength, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection, bool LightingDitherEnabled, float LightingDitherScale, float LightingDitherStrength, float NormalDitherSlopeBoost, bool NormalDitherQuantization);

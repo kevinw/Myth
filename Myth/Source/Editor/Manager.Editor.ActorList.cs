@@ -7,6 +7,8 @@ using System.Text.Json.Nodes;
 
 namespace Myth;
 
+// The Actor Instances tool window: searches every actor instance across all rooms and jumps the
+// editor to the one you pick.
 public partial class Manager
 {
 	readonly record struct ActorInstanceSearchResult(string RoomId, string ActorId, string Position, string Modified);
