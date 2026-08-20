@@ -813,6 +813,25 @@ public partial class Game : IDisposable
 		return cameraBlockerBuffer;
 	}
 
+	// A room's camera-blocker world rects, read straight from its actor specs. At a fresh room load
+	// every blocker is Active (Active is [NoSerialize] and resets, and nothing has been crossed or
+	// revealed yet), so this is exactly the set the camera must respect the instant the room appears
+	// -- used to aim a transition's ease instead of the live actor list, which isn't populated for
+	// the incoming room yet.
+	static List<RectInt> CameraBlockerRects(Room forRoom, List<RectInt> into)
+	{
+		into.Clear();
+		foreach (var actor in forRoom.Actors)
+		{
+			if (ActorSpecs.ReadResolvedString(actor, "Type") != nameof(CameraBlocker))
+				continue;
+			var local = ActorSpecs.ReadResolvedPoint(actor, "Position") ?? Point2.Zero;
+			var size = ActorSpecs.ReadResolvedPoint(actor, "Size") ?? CameraBlocker.DefaultSize;
+			into.Add(new RectInt(forRoom.WorldBounds.TopLeft + local, size));
+		}
+		return into;
+	}
+
 	Point2 FindFallbackPlayerPosition(Room forRoom, Point2? direction)
 	{
 		var fromLeft = direction?.X > 0;
@@ -887,15 +906,18 @@ public partial class Game : IDisposable
 
 		var unclamped = easedPlayerCameraTarget + cameraLookAhead - new Vector2(Width, Height) / 2;
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+		return ClampCameraToRoomAndBlockersFb(unclamped, padding, room.WorldBounds, easedPlayerCameraTarget, ActiveCameraBlockers());
+	}
 
-		var blockers = ActiveCameraBlockers();
+	// Clamp a zoomed camera top-left against a room (with its active blockers bitten out), then
+	// convert back to a Camera top-left. Works for any room's bounds/blockers, not just the current
+	// room, so a transition can aim its ease at the same place live control will hold the camera.
+	Vector2 ClampCameraToRoomAndBlockersFb(Vector2 cameraTopLeft, Vector2 padding, RectInt bounds, Vector2 player, List<RectInt> blockers)
+	{
 		if (blockers.Count == 0)
-			return ClampCameraToRoomFb(unclamped, padding);
-
-		// Clamp the zoomed view (Camera + padding) against the room minus the active blockers,
-		// then convert back to the Camera top-left.
+			return ClampCameraToRoomFb(cameraTopLeft, padding, bounds);
 		var viewSize = new Vector2(FbZoomedWidth, FbZoomedHeight);
-		return ClampViewToRoomAndBlockers(unclamped + padding, viewSize, easedPlayerCameraTarget, blockers) - padding;
+		return ClampViewToRoomAndBlockers(cameraTopLeft + padding, viewSize, player, blockers, bounds) - padding;
 	}
 
 	// Confine the zoomed view to the room with edge-anchored "bites" removed. A bite caps the
@@ -903,12 +925,8 @@ public partial class Game : IDisposable
 	// axis. That way a bite only ever hides its own interior -- which the player can't stand in
 	// (entering deactivates it) -- so it can never trap the camera away from the player in a
 	// narrow arm beside it, regardless of orientation or exact arm width.
-	Vector2 ClampViewToRoomAndBlockers(Vector2 viewPos, Vector2 viewSize, Vector2 player, List<RectInt> blockers)
+	Vector2 ClampViewToRoomAndBlockers(Vector2 viewPos, Vector2 viewSize, Vector2 player, List<RectInt> blockers, RectInt bounds)
 	{
-		if (room == null)
-			return viewPos;
-
-		var bounds = room.WorldBounds;
 		var minX = (float)bounds.Left;
 		var maxX = bounds.Right - viewSize.X;
 		var minY = (float)bounds.Top;
@@ -1551,7 +1569,17 @@ public partial class Game : IDisposable
 
 				transitionCameraFrom = Camera;
 				var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-				transitionCameraTo = ClampCameraToRoomFb(exitPosition - new Vector2(Width, Height) / 2, fbPad, nextRoom.WorldBounds);
+				// Aim the ease where live control will hold the camera: clamp against the new room's
+				// camera blockers (all active on a fresh load) so we never glide into a blocked bite
+				// and then snap out of it the frame control resumes. The blocker Y/X gating keys off
+				// the player's predicted entry -- the exit position clamped into the new room.
+				var nextBounds = nextRoom.WorldBounds;
+				var entry = new Vector2(
+					Math.Clamp(exitPosition.X, (float)nextBounds.Left, nextBounds.Right - 1f),
+					Math.Clamp(exitPosition.Y, (float)nextBounds.Top, nextBounds.Bottom - 1f));
+				transitionCameraTo = ClampCameraToRoomAndBlockersFb(
+					exitPosition - new Vector2(Width, Height) / 2, fbPad, nextBounds, entry,
+					CameraBlockerRects(nextRoom, cameraBlockerBuffer));
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
