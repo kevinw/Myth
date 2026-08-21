@@ -49,7 +49,6 @@ along with this.
 
 - mark gettable items with a color or pattern in the editor map; add an editor map feature for showing colors or patterns over rooms showing what is accessible with a given item set
 - burrow sound effect
-- chat about how spectral color mixing might help
 - axiom verge thoughts
   - upgrades to projectile size, distance
 - try render-target-space screenshake on gameplay beats: hits, landings, chest opens, boss impacts, burrow pops, door/portal transfers.
@@ -64,7 +63,6 @@ along with this.
 - use the chair prop as an existence proof and as a pump for a drawing exercise: new props!
   - church pews
   - a pulpit which tumbles when you step on it
-- render animation into the dither field (around an enemy, or as part of a room's vibe)
 - maybe you start in a treehouse, makeshift, there is some incredible danger flowing like a river beneath you in intervals
 - a burrowline teleporter
 - how many petabytes per cubit? (writing)
@@ -76,7 +74,6 @@ along with this.
 - Spend an entire day making bud more interesting
   - More barks.
   - Fix idle animation.
-- make this todo into a plan with time estimates; or make a google spreadsheet; or use a time tracker
 - save points are more fun in hubs where you have somewhere else to go than where you died
 - Make the burrow moving platform have a mode where when you're on it, it moves, so it's more fun if you miss it
 - take all Blobs/Foster sample actors out; comment out the code
