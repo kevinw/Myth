@@ -131,9 +131,9 @@
       "GlowColor": "35F5BD"
     },
     {
-      "Id": "ff0499341543f1a1",
-      "Type": "Blob",
-      "Position": [236, 104]
+      "Id": "9797c839c06fe944",
+      "Type": "RigPuppet",
+      "Position": [256, 80]
     }
   ]
 }
