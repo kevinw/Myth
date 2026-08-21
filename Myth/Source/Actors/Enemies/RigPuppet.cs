@@ -6,8 +6,19 @@ namespace Myth;
 [GameActor(Sprite = "player", Tags = ActorTag.Enemy, BoundsX = -12, BoundsY = -40, BoundsW = 24, BoundsH = 40)]
 public class RigPuppet : Actor
 {
+	enum StepTraversal { None, Up, Down }
+
 	readonly record struct BoneSpec(string From, string To, float Width);
 	readonly record struct Bone(int From, int To, float Width);
+	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe);
+
+	struct FootPlant
+	{
+		public Vector2 Position;
+		public float Strength;
+		public float Cooldown;
+		public bool Planted;
+	}
 
 	static readonly BoneSpec[] BoneSpecs =
 	[
@@ -36,6 +47,9 @@ public class RigPuppet : Actor
 
 	public string AnimationName = "Zombie_Walk_Fwd_Loop";
 	[I(0.1f, 3)] public float PlaybackSpeed = 1;
+	[I(1, 60)] public float VisualFPS = 20;
+	[I(1, 4)] public int StepUp = 2;
+	[I(1, 4)] public int StepDown = 2;
 	[I(12, 40)] public float PixelsPerMeter = 25;
 	[I(-45, 45)] public float ProjectionYaw;
 	[I(1, 20)] public int Health = 8;
@@ -48,7 +62,10 @@ public class RigPuppet : Actor
 	SampledRig rig = null!;
 	SampledRig.Clip activeClip = null!;
 	SampledRig.Clip hitClip = null!;
+	SampledRig.Clip recoveryClip = null!;
+	SampledRig.Clip idleClip = null!;
 	Vector3[] sampledPose = [];
+	Vector3[] blendFromPose = [];
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
 	Vector2[] recoil = [];
@@ -56,16 +73,46 @@ public class RigPuppet : Actor
 	Vector2[] inheritedRecoil = [];
 	Bone[] bones = [];
 	int[] boneOrder = [];
+	Leg leftLeg;
+	Leg rightLeg;
+	FootPlant leftFoot;
+	FootPlant rightFoot;
 	int head;
 	int pelvis;
 	float rigTime;
+	float blendRemaining;
+	StepTraversal stepTraversal;
+	Vector2 stepStartOffset;
+	Vector2 stepVisualOffset;
+	float stepTime;
+	float stepDuration;
 	bool hitReacting;
+	bool recovering;
+	bool walking;
 
 	static float Gravity => 360f;
 	static float GroundFriction => 420f;
+	static float WalkSpeed => 22f;
+	static float WalkAcceleration => 180f;
+	static float StopDistance => 18f;
+	static int GroundLookahead => 7;
+	static float HitKnockbackSpeed => 64f;
+	static float HitLiftSpeed => 28f;
+	static float ClipBlendDuration => 0.2f;
+	static float StepBaseDuration => 0.22f;
+	static float StepDurationPerPixel => 0.016f;
+	static float StepArcHeight => 3f;
+	static float InterruptedStepCatchupSpeed => 80f;
 	static float RecoilSpring => 74f;
 	static float RecoilDamping => 10f;
 	static float RecoilInheritance => 0.58f;
+	static float FootProbeAbove => 4f;
+	static float FootProbeDistance => 12f;
+	static float FootPlantDistance => 5f;
+	static float FootReleaseDistance => 8f;
+	static float FootLiftDistance => 4f;
+	static float FootBlendSpeed => 12f;
+	static float FootReplantDelay => 0.08f;
 
 	public RigPuppet()
 	{
@@ -84,6 +131,7 @@ public class RigPuppet : Actor
 	{
 		rig = sharedRig ??= LoadRig();
 		sampledPose = new Vector3[rig.JointCount];
+		blendFromPose = new Vector3[rig.JointCount];
 		projectedPose = new Vector2[rig.JointCount];
 		jointDepth = new float[rig.JointCount];
 		recoil = new Vector2[rig.JointCount];
@@ -99,8 +147,12 @@ public class RigPuppet : Actor
 		}
 		head = RequiredJoint("Head");
 		pelvis = RequiredJoint("pelvis");
+		leftLeg = RequiredLeg("l");
+		rightLeg = RequiredLeg("r");
 		hitClip = rig.GetClip("Hit_Knockback");
-		activeClip = LocomotionClip();
+		recoveryClip = rig.GetClip("LayToIdle");
+		idleClip = rig.GetClip("Zombie_Idle_Loop");
+		activeClip = idleClip;
 		UpdatePose();
 	}
 
@@ -116,38 +168,191 @@ public class RigPuppet : Actor
 		return index >= 0 ? index : throw new InvalidDataException($"UAL2 rig is missing joint '{name}'.");
 	}
 
+	Leg RequiredLeg(string side)
+		=> new(RequiredJoint($"thigh_{side}"), RequiredJoint($"calf_{side}"),
+			RequiredJoint($"foot_{side}"), RequiredJoint($"ball_{side}"));
+
 	SampledRig.Clip LocomotionClip()
 		=> rig.TryGetClip(AnimationName, out var clip) ? clip : rig.GetClip("Zombie_Walk_Fwd_Loop");
 
 	public override void Update()
 	{
-		Velocity.Y += Gravity * Time.Delta;
+		EnsureRigState();
+		if (stepTraversal == StepTraversal.None)
+			Velocity.Y += Gravity * Time.Delta;
+		else
+			Velocity = Vector2.Zero;
 		base.Update();
-		if (Grounded())
+		var grounded = Grounded();
+		if (grounded)
 		{
-			Velocity.X = Calc.Approach(Velocity.X, 0, GroundFriction * Time.Delta);
 			if (Velocity.Y > 0)
 				Velocity.Y = 0;
 		}
 
-		if (Game.GetFirst<Player>() is { } player && MathF.Abs(player.Position.X - Position.X) > 1)
+		walking = stepTraversal != StepTraversal.None;
+		if (stepTraversal == StepTraversal.None && Game.GetFirst<Player>() is { } player &&
+			MathF.Abs(player.Position.X - Position.X) > 1)
+		{
 			Facing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
+			if (grounded && !hitReacting && !recovering && MathF.Abs(player.Position.X - Position.X) > StopDistance)
+			{
+				walking = HasGroundAhead();
+				if (!walking)
+					TryStartStepDown((int)Facing);
+			}
+		}
+		if (stepTraversal == StepTraversal.None && grounded)
+			Velocity.X = Calc.Approach(Velocity.X, walking ? (int)Facing * WalkSpeed : 0,
+				(walking ? WalkAcceleration : GroundFriction) * Time.Delta);
+		UpdateStepTraversal();
 
 		rigTime += Time.Delta * PlaybackSpeed;
-		if (hitReacting && rigTime >= activeClip.Duration)
+		if (hitReacting && grounded && rigTime >= activeClip.Duration)
 		{
 			hitReacting = false;
-			activeClip = LocomotionClip();
-			rigTime = 0;
+			recovering = true;
+			StartClip(recoveryClip);
 		}
-		else if (!hitReacting && LocomotionClip() != activeClip)
+		else if (recovering && rigTime >= activeClip.Duration)
 		{
-			activeClip = LocomotionClip();
-			rigTime = 0;
+			recovering = false;
+			StartClip(idleClip);
 		}
+		else if (!hitReacting && !recovering &&
+			(walking ? LocomotionClip() : idleClip) is { } desiredClip && desiredClip != activeClip)
+			StartClip(desiredClip);
 
 		UpdateRecoil();
 		UpdatePose();
+	}
+
+	void EnsureRigState()
+	{
+		if (leftLeg.Hip == leftLeg.Toe || rightLeg.Hip == rightLeg.Toe)
+		{
+			leftLeg = RequiredLeg("l");
+			rightLeg = RequiredLeg("r");
+			leftFoot = default;
+			rightFoot = default;
+		}
+		if (idleClip == null)
+			idleClip = rig.GetClip("Zombie_Idle_Loop");
+		if (recoveryClip == null)
+			recoveryClip = rig.GetClip("LayToIdle");
+		if (blendFromPose.Length != rig.JointCount)
+			blendFromPose = new Vector3[rig.JointCount];
+		if (VisualFPS <= 0)
+			VisualFPS = 20;
+		if (StepUp <= 0)
+			StepUp = 2;
+		if (StepDown <= 0)
+			StepDown = 2;
+	}
+
+	void StartClip(SampledRig.Clip clip, bool blend = true)
+	{
+		if (clip == activeClip)
+			return;
+
+		if (blend && sampledPose.Length == blendFromPose.Length)
+		{
+			sampledPose.CopyTo(blendFromPose, 0);
+			blendRemaining = ClipBlendDuration;
+		}
+		else
+			blendRemaining = 0;
+		activeClip = clip;
+		rigTime = 0;
+	}
+
+	bool HasGroundAhead()
+	{
+		var bounds = Hitbox.Rect + Position + new Point2((int)Facing * GroundLookahead, 0);
+		return Game.TryFindSurface(this, bounds, Vector2.UnitY, 2, out _);
+	}
+
+	bool TryStartStepDown(int direction)
+	{
+		var forward = new Point2(direction * GroundLookahead, 0);
+		var bounds = Hitbox.Rect + Position + forward;
+		if (!Game.TryFindSurface(this, bounds, Vector2.UnitY, StepDown * Game.TileSize + 1, out var hit))
+			return false;
+
+		var drop = (int)hit.Distance - 1;
+		var step = forward + Point2.Down * drop;
+		if (drop <= 1 || drop > StepDown * Game.TileSize || OverlapsAny(step, Masks.Solid))
+			return false;
+
+		BeginStep(step, StepTraversal.Down);
+		return true;
+	}
+
+	public override void OnCollideX()
+	{
+		var direction = Math.Sign(Velocity.X);
+		if (direction == 0 || !Grounded())
+		{
+			base.OnCollideX();
+			return;
+		}
+
+		for (var rise = 1; rise <= StepUp * Game.TileSize; rise++)
+		{
+			var up = Point2.Up * rise;
+			if (OverlapsAny(up, Masks.Solid))
+				break;
+
+			var step = up + Point2.UnitX * direction;
+			if (!OverlapsAny(step, Masks.Solid) && OverlapsAny(step + Point2.Down, Masks.Solid))
+			{
+				for (var forward = 2; forward <= GroundLookahead; forward++)
+				{
+					var candidate = up + Point2.UnitX * direction * forward;
+					if (OverlapsAny(candidate, Masks.Solid) || !OverlapsAny(candidate + Point2.Down, Masks.Solid))
+						break;
+					step = candidate;
+				}
+				BeginStep(step, StepTraversal.Up);
+				return;
+			}
+		}
+
+		base.OnCollideX();
+	}
+
+	void BeginStep(Point2 step, StepTraversal traversal)
+	{
+		Position += step;
+		stepTraversal = traversal;
+		stepStartOffset = -(Vector2)step;
+		stepVisualOffset = stepStartOffset;
+		stepTime = 0;
+		stepDuration = StepBaseDuration + Math.Abs(step.Y) * StepDurationPerPixel;
+		Velocity = Vector2.Zero;
+		walking = true;
+		leftFoot = default;
+		rightFoot = default;
+		StartClip(LocomotionClip());
+	}
+
+	void UpdateStepTraversal()
+	{
+		if (stepTraversal == StepTraversal.None)
+		{
+			stepVisualOffset = Calc.Approach(stepVisualOffset, Vector2.Zero, InterruptedStepCatchupSpeed * Time.Delta);
+			return;
+		}
+
+		stepTime = MathF.Min(stepTime + Time.Delta, stepDuration);
+		var progress = stepTime / stepDuration;
+		var eased = progress * progress * (3 - 2 * progress);
+		stepVisualOffset = stepStartOffset * (1 - eased) - Vector2.UnitY * MathF.Sin(progress * MathF.PI) * StepArcHeight;
+		if (stepTime < stepDuration)
+			return;
+
+		stepTraversal = StepTraversal.None;
+		stepVisualOffset = Vector2.Zero;
 	}
 
 	void UpdateRecoil()
@@ -164,20 +369,33 @@ public class RigPuppet : Actor
 
 	void UpdatePose()
 	{
-		rig.Sample(activeClip, rigTime, loop: !hitReacting, sampledPose);
+		var visualTime = MathF.Floor(rigTime * VisualFPS) / VisualFPS;
+		rig.Sample(activeClip, visualTime, loop: !hitReacting && !recovering, sampledPose);
+		if (blendRemaining > 0)
+		{
+			blendRemaining = MathF.Max(0, blendRemaining - Time.Delta);
+			var blend = 1 - blendRemaining / ClipBlendDuration;
+			blend = blend * blend * (3 - 2 * blend);
+			for (var i = 0; i < sampledPose.Length; i++)
+				sampledPose[i] = Vector3.Lerp(blendFromPose[i], sampledPose[i], blend);
+		}
 		var angle = ProjectionYaw * MathF.PI / 180f;
 		var cos = MathF.Cos(angle);
 		var sin = MathF.Sin(angle);
 		for (var i = 0; i < sampledPose.Length; i++)
 		{
 			var joint = sampledPose[i];
-			projectedPose[i] = new Vector2((-joint.Z * cos + joint.X * sin) * (int)Facing,
+			projectedPose[i] = new Vector2((-joint.Z * cos + joint.X * sin) * -(int)Facing,
 				-joint.Y) * PixelsPerMeter + new Vector2(0, 2.5f);
 			jointDepth[i] = joint.X * cos + joint.Z * sin;
 			var parent = rig.JointParents[i];
 			inheritedRecoil[i] = recoil[i] + (parent >= 0 ? inheritedRecoil[parent] * RecoilInheritance : Vector2.Zero);
-			projectedPose[i] += inheritedRecoil[i];
+			projectedPose[i] += inheritedRecoil[i] + stepVisualOffset;
 		}
+
+		var grounded = Grounded();
+		UpdateFoot(ref leftFoot, leftLeg, grounded);
+		UpdateFoot(ref rightFoot, rightLeg, grounded);
 
 		for (var i = 1; i < boneOrder.Length; i++)
 		{
@@ -191,6 +409,64 @@ public class RigPuppet : Actor
 			}
 			boneOrder[at] = value;
 		}
+	}
+
+	void UpdateFoot(ref FootPlant plant, Leg leg, bool grounded)
+	{
+		var animatedToe = Position + projectedPose[leg.Toe];
+		plant.Cooldown = MathF.Max(0, plant.Cooldown - Time.Delta);
+
+		if (!grounded || hitReacting || recovering || stepTraversal != StepTraversal.None || plant.Planted &&
+			(MathF.Abs(animatedToe.X - plant.Position.X) > FootReleaseDistance ||
+			animatedToe.Y < plant.Position.Y - FootLiftDistance))
+		{
+			if (plant.Planted)
+				plant.Cooldown = FootReplantDelay;
+			plant.Planted = false;
+		}
+
+		if (!plant.Planted && plant.Cooldown <= 0 && grounded)
+		{
+			var probeCenter = (animatedToe - Vector2.UnitY * FootProbeAbove).RoundToPoint2();
+			var probe = new RectInt(probeCenter.X - 1, probeCenter.Y - 1, 2, 2);
+			if (Game.TryFindSurface(this, probe, Vector2.UnitY, FootProbeDistance, out var hit) &&
+				hit.Normal.Y < -0.5f && Vector2.DistanceSquared(animatedToe, hit.Point) <= FootPlantDistance * FootPlantDistance)
+			{
+				plant.Position = hit.Point;
+				plant.Planted = true;
+			}
+		}
+
+		plant.Strength = Calc.Approach(plant.Strength, plant.Planted ? 1 : 0, FootBlendSpeed * Time.Delta);
+		if (plant.Strength <= 0)
+			return;
+
+		var animatedFoot = projectedPose[leg.Ankle];
+		var footOffset = projectedPose[leg.Toe] - animatedFoot;
+		var plantedToe = Vector2.Lerp(animatedToe, plant.Position, plant.Strength) - Position;
+		SolveLeg(leg, plantedToe - footOffset);
+		projectedPose[leg.Toe] = projectedPose[leg.Ankle] + footOffset;
+	}
+
+	void SolveLeg(Leg leg, Vector2 ankleTarget)
+	{
+		var hip = projectedPose[leg.Hip];
+		var animatedKnee = projectedPose[leg.Knee];
+		var upperLength = Vector2.Distance(hip, animatedKnee);
+		var lowerLength = Vector2.Distance(animatedKnee, projectedPose[leg.Ankle]);
+		var towardTarget = ankleTarget - hip;
+		var distance = towardTarget.Length();
+		if (distance <= 0.001f || upperLength <= 0.001f || lowerLength <= 0.001f)
+			return;
+
+		var direction = towardTarget / distance;
+		distance = Math.Clamp(distance, MathF.Abs(upperLength - lowerLength) + 0.001f, upperLength + lowerLength - 0.001f);
+		var along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2 * distance);
+		var height = MathF.Sqrt(MathF.Max(0, upperLength * upperLength - along * along));
+		var perpendicular = new Vector2(-direction.Y, direction.X);
+		var bend = Calc.Cross(direction, animatedKnee - hip) < 0 ? -1 : 1;
+		projectedPose[leg.Knee] = hip + direction * along + perpendicular * height * bend;
+		projectedPose[leg.Ankle] = hip + direction * distance;
 	}
 
 	float BoneDepth(Bone bone) => (jointDepth[bone.From] + jointDepth[bone.To]) * 0.5f;
@@ -216,10 +492,13 @@ public class RigPuppet : Actor
 			var depthKick = MathF.Sign(jointDepth[i]) * 7 * height;
 			recoilVelocity[i] += new Vector2(away * (18 + 52 * height) + depthKick, -15 * height);
 		}
-		Velocity += new Vector2(away * 48, -28);
-		activeClip = hitClip;
-		rigTime = 0;
+		Velocity = new Vector2(away * HitKnockbackSpeed, -HitLiftSpeed);
+		stepTraversal = StepTraversal.None;
+		leftFoot = default;
+		rightFoot = default;
+		StartClip(hitClip, blend: false);
 		hitReacting = true;
+		recovering = false;
 	}
 
 	public override void Render(Batcher batcher)

@@ -28,7 +28,7 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "00000000000TT000000000000000000000000000",
-    "GGGGGGGGG00TT000000000000000000000000000",
+    "GGGGGGGGG00TT00000000000TT00000000000000",
     "GGGRRRRRRR0TTTTTTTT0000TTTT0000TTTTTTTTT",
     "GGGGGGGGG00TTTTTTTTwwwwTTTTwwwwTTTTTTTTT",
     "RGGG0000000TTTTTTTjwwwwTTTTwwwwTTTTTTTTT",
@@ -133,7 +133,23 @@
     {
       "Id": "9797c839c06fe944",
       "Type": "RigPuppet",
-      "Position": [256, 80]
+      "Position": [256, 80],
+      "VisualFPS": 11.688
+    },
+    {
+      "Id": "1a738b978c37e009",
+      "Type": "RigPuppet",
+      "Position": [200, 88],
+      "VisualFPS": 11.688
+    },
+    {
+      "Id": "ff33298028412e1a",
+      "Type": "RigPuppet",
+      "Position": [32, 96],
+      "VisualFPS": 11.688,
+      "ProjectionYaw": 43.696,
+      "PixelsPerMeter": 36.551,
+      "NearColor": "90D814"
     }
   ]
 }
