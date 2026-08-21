@@ -48,6 +48,7 @@ along with this.
 
 # TODO
 
+- mark gettable items with a color or pattern in the editor map; add an editor map feature for showing colors or patterns over rooms showing what is accessible with a given item set
 - burrow sound effect
 - duck room needs a bassy sound effect
 - chat about how spectral color mixing might help
@@ -136,6 +137,7 @@ steam notes
 - integrate Dear ImGui Test Engine so automated editor scenarios can identify, drive, and assert docked, scrolling, and popup UI directly
 - consider using a C++ build of Dear ImGui's SDL_GPU backend so we don't have to compile our ImGui backend each time
 - Change Content.zip extension and add some simple byte level change
+- a debug hotkey for switching back to the previous version of a shader after a change for A/B testing them live and visually
 - windows Myth.exe doesn't have an icon
 
 - fmod 2.4 will have better browser perf
