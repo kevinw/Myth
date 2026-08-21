@@ -38,10 +38,16 @@ along with this.
 - save point after the floater "boss"
 - thought tower was a new room because he came down and the hidden wall was revealed immediately
 - remove LinkedDoors that warp you across the map; respect the player's understanding of spatial relations
+- ambient server sfx
 
 
 # TODO
 
+- an upwards tube with wind that is initially one way
+- draw arms up for carrying
+- idea: invisible tiles which you touch for NCA
+- duck on tower needs SFX setup
+- hitting a wall needs particles
 - mark gettable items with a color or pattern in the editor map; add an editor map feature for showing colors or patterns over rooms showing what is accessible with a given item set
 - burrow sound effect
 - axiom verge thoughts
