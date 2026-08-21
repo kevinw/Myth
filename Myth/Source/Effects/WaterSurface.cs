@@ -28,6 +28,7 @@ public sealed class WaterSurface
 	static float MaxSplashVel => 90f;
 	static int SpongeSamples => 8;     // width of the edge absorption layer, in samples (~1 tile)
 	static float SpongeStrength => 10f; // extra per-second attenuation at the very edge, easing to 0 inward
+	static float MaxSimulationStep => 1f / 60f;
 
 	// Ambient idle motion, added at render time only (kept out of the sim so still water
 	// keeps drifting instead of decaying dead-flat).
@@ -93,6 +94,14 @@ public sealed class WaterSurface
 	}
 
 	public void Update(float dt)
+	{
+		var steps = Math.Max(1, (int)MathF.Ceiling(dt / MaxSimulationStep));
+		var step = dt / steps;
+		for (var i = 0; i < steps; i++)
+			Step(step);
+	}
+
+	void Step(float dt)
 	{
 		var n = SampleCount;
 		// Accumulate forces into velocity, reading the (unchanged) heights.

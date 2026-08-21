@@ -229,6 +229,18 @@ public partial class Manager
 		ReloadAssets(false);
 	}
 
+	[ConsoleCommand("fps")]
+	void SetFps(string argument)
+	{
+		if (!int.TryParse(argument, out var fps))
+			throw new InvalidOperationException("Usage: fps <1-1000>, or fps 0 to reset");
+		if (fps is < 0 or > 1000)
+			throw new InvalidOperationException("FPS must be between 1 and 1000, or 0 to reset");
+
+		UpdateMode = fps == 0 ? UpdateMode.UnlockedStep() : UpdateMode.FixedStep(fps, waitForNextUpdate: !OperatingSystem.IsBrowser());
+		DisplayMessage(fps == 0 ? "Artificial slowdown disabled" : $"Artificial slowdown: {fps} FPS");
+	}
+
 	[ConsoleCommand("head_slide")]
 	void ToggleHatSlide(string _)
 	{
