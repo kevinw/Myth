@@ -1191,6 +1191,12 @@ public sealed partial class GameView
 		tileFieldStampColor ??= worldTile => TileFieldColor(tileFieldStampTile, worldTile, tileFieldStampAnchor);
 		foreach (var actor in rendering)
 		{
+			if (actor is DitherCorruption { Active: true } corruption)
+			{
+				corruption.RenderTileField(Batcher, Time.SecondsF);
+				continue;
+			}
+
 			if (actor is HiddenCoverGrid { Visible: true } hiddenCover)
 			{
 				Batcher.PushMatrix(hiddenCover.Position);

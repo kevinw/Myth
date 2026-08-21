@@ -38,6 +38,7 @@ public class Stalker : Pawn
 	static float TelegraphTime => 0.9f;
 
 	readonly Navigator nav;
+	DitherCorruption? corruption;
 	bool hunting;
 	string? homeRoomId;
 	Point2 homePosition;
@@ -80,12 +81,22 @@ public class Stalker : Pawn
 			}
 
 		KeepOnRoomTransition = true;
+		corruption = Game.Create<DitherCorruption>(Position, it =>
+		{
+			it.Owner = this;
+			it.KeepOnRoomTransition = true;
+		});
 		homeRoomId = Room?.Id;
 		homePosition = Position;
 		Game.RoomChanged += OnRoomChanged;
 	}
 
-	public override void Destroyed() => Game.RoomChanged -= OnRoomChanged;
+	public override void Destroyed()
+	{
+		Game.RoomChanged -= OnRoomChanged;
+		if (corruption != null)
+			Game.Destroy(corruption);
+	}
 
 	// Unkillable: strikes land (and sound) but nothing happens.
 	public override void OnWasHit(Actor by) { }
