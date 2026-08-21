@@ -92,24 +92,10 @@
       "Position": [72, 64]
     },
     {
-      "Id": "2ba8baff83d5138e",
-      "Type": "RevealDoor",
-      "Position": [136, 96],
-      "Size": [8, 24],
-      "Direction": "Left"
-    },
-    {
       "Id": "ab9389a29f25694e",
       "Type": "Light",
       "Position": [244, 156],
       "Height": 5.6
-    },
-    {
-      "Id": "3f4d2e698535ff39",
-      "Type": "RevealDoor",
-      "Position": [216, 144],
-      "Size": [8, 24],
-      "Direction": "Left"
     },
     {
       "Id": "9ad70104c1bde6a4",

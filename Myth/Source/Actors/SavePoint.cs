@@ -54,26 +54,16 @@ public class SavePoint : Actor
 		showInteract = false;
 
 		var player = Game.GetFirst<Player>();
-		var overlapping = player != null
-			&& player.State == Player.States.Normal
-			&& player.IsGrounded
-			&& OverlapsAny(Point2.Zero, player);
+		var touching = player != null && OverlapsAny(Point2.Zero, player);
+		var canWarp = touching && player is { State: Player.States.Normal, IsGrounded: true };
+		var activating = canWarp || touching && player?.State == Player.States.Burrow;
 
-		if (overlapping)
+		if (canWarp)
 		{
 			showInteract = true;
 			
 			Game.View?.contextPrompt = "Press {MoveUp} to warp.";
 			interactTime += Time.Delta;
-
-			// Rising edge: pulse and record the save (idempotent).
-			if (!playerWasOverlapping)
-			{
-				pulse = 1f;
-				savedTextTime = SavedTextDuration;
-				Game.ActivateSavePoint(this);
-				AudioEvent("save_point/activate");
-			}
 
 			var moveInt = Game.Controls.Move.IntValue;
 			if (moveInt.Y < 0 && moveInt.X == 0)
@@ -84,7 +74,17 @@ public class SavePoint : Actor
 			interactTime = 0;
 		}
 
-		playerWasOverlapping = overlapping;
+		// Rising edge: pulse and record the save (idempotent). Burrowing activates the
+		// point too, but only a grounded normal player gets the warp interaction above.
+		if (activating && !playerWasOverlapping)
+		{
+			pulse = 1f;
+			savedTextTime = SavedTextDuration;
+			Game.ActivateSavePoint(this);
+			AudioEvent("save_point/activate");
+		}
+
+		playerWasOverlapping = activating;
 	}
 
 	float LightIntensity => (Activated ? 0.76f : 0.56f) + pulse * 0.5f;

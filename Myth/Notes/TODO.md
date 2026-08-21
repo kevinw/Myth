@@ -27,7 +27,6 @@ along with this.
 - rope up from one room w/ save point leads nowhere
 - visual hierarchy: what is the path?
 - making sure that either all gaps which lead to an adjacent room are obvious, or that there are no pits? not sure
-- first dark room in the tower--fer didn't find the hidden wall
 - carry is confusing
 - burrowing through a save doesn't save
 - lightning trap wall jump room isn't clear
@@ -48,9 +47,8 @@ along with this.
 
 # TODO
 
+- mark gettable items with a color or pattern in the editor map; add an editor map feature for showing colors or patterns over rooms showing what is accessible with a given item set
 - burrow sound effect
-- duck room needs a bassy sound effect
-- chat about how spectral color mixing might help
 - axiom verge thoughts
   - upgrades to projectile size, distance
 - try render-target-space screenshake on gameplay beats: hits, landings, chest opens, boss impacts, burrow pops, door/portal transfers.
@@ -62,15 +60,13 @@ along with this.
 - make a glass tube. the lights go out. all you illuminate is the tube.
 - add a shortcut for opening in the xcode graphics debugger; have a look and see if we're doing anything dumb.
 - go back to the original two inspo images (multicolored dither cliff and cathedral) and try to make a room more like them; color variety!
-- recognizable evolved company logos
 - use the chair prop as an existence proof and as a pump for a drawing exercise: new props!
   - church pews
   - a pulpit which tumbles when you step on it
-- render animation into the dither field (around an enemy, or as part of a room's vibe)
 - maybe you start in a treehouse, makeshift, there is some incredible danger flowing like a river beneath you in intervals
-- a burrowline teleporter
 - how many petabytes per cubit? (writing)
 - Bud projects a light hologram map from his mouth
+- a note in every room describing the new thing it introduces
 - One of the characters speaks with curated chain of thought messages from an open model
 - burrow sound needs to be the best sound in the entire game
 - actor search needs a close button to clear the text.
@@ -78,7 +74,6 @@ along with this.
 - Spend an entire day making bud more interesting
   - More barks.
   - Fix idle animation.
-- make this todo into a plan with time estimates; or make a google spreadsheet; or use a time tracker
 - save points are more fun in hubs where you have somewhere else to go than where you died
 - Make the burrow moving platform have a mode where when you're on it, it moves, so it's more fun if you miss it
 - take all Blobs/Foster sample actors out; comment out the code
@@ -136,6 +131,7 @@ steam notes
 - integrate Dear ImGui Test Engine so automated editor scenarios can identify, drive, and assert docked, scrolling, and popup UI directly
 - consider using a C++ build of Dear ImGui's SDL_GPU backend so we don't have to compile our ImGui backend each time
 - Change Content.zip extension and add some simple byte level change
+- a debug hotkey for switching back to the previous version of a shader after a change for A/B testing them live and visually
 - windows Myth.exe doesn't have an icon
 
 - fmod 2.4 will have better browser perf

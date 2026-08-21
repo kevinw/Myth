@@ -106,7 +106,7 @@ public class Minimap
 	public void NoteRoomChange(Room? from, Room to, RoomChangeKind kind)
 	{
 		var changed = visitedRoomIds.Add(to.Id);
-		if (from != null && kind is RoomChangeKind.EdgeTransition or RoomChangeKind.LinkedDoor)
+		if (from != null && kind is RoomChangeKind.EdgeTransition or RoomChangeKind.LinkedDoor or RoomChangeKind.BurrowDoor)
 			changed |= takenExits.Add(ExitKey(from.Id, to.Id));
 		if (changed)
 			Changed?.Invoke();
