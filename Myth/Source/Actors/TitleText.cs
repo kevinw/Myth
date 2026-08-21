@@ -12,7 +12,7 @@ public class TitleText : Actor
 	internal const string EmptyEditorText = "<empty>";
 
 	[Multiline(3)] public string Text = string.Empty;
-	[I(0.5f, 30)] public float RevealSpeed = 7.0f;
+	[I(0.0f, 30)] public float RevealSpeed = 7.0f;
 	[I(0.5f, 2)] public float LineHeightMultiplier = 1f;
 	public Color Color = Color.WhiteSmoke;
 
@@ -27,7 +27,8 @@ public class TitleText : Actor
 	public override void Update()
 	{
 		base.Update();
-		stateDuration += Time.Delta * RevealSpeed;
+		if (RevealSpeed > 0)
+			stateDuration += Time.Delta * RevealSpeed;
 	}
 
 	SpriteFont? ShouldRenderWithFont() => Game.Simulating ? null : Assets.SpeechFont ?? Assets.Font;
@@ -58,7 +59,7 @@ public class TitleText : Actor
 		if (font == null) return;
 		if (Game.Manager.InputPrompts is not { } inputPrompts) return;
 		var text = Game.Editing ? EditorText(Text) : Text;
-		int visibleElements = Game.Editing ? int.MaxValue : (int)stateDuration;
+		int visibleElements = (Game.Editing || RevealSpeed == 0) ? int.MaxValue : (int)stateDuration;
 
 		var pos = new Vector2();
 		var justify = new Vector2(0.5f);

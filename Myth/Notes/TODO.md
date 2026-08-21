@@ -50,7 +50,6 @@ along with this.
 
 - mark gettable items with a color or pattern in the editor map; add an editor map feature for showing colors or patterns over rooms showing what is accessible with a given item set
 - burrow sound effect
-- duck room needs a bassy sound effect
 - chat about how spectral color mixing might help
 - axiom verge thoughts
   - upgrades to projectile size, distance

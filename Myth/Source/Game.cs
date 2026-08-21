@@ -580,7 +580,7 @@ public partial class Game : IDisposable
 					var actor = Actors[i];
 					actor.Update();
 					DestroyFallenEnemy(actor);
-					if (roomSwappedThisFrame)
+					if (roomSwappedThisFrame || nextRoom != null) // note: we stop .Update()ing actors once we're transitioning to a new room
 						break;
 				}
 				PostUpdateSystems();

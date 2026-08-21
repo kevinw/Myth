@@ -470,15 +470,30 @@ public partial class Manager
 			return;
 		}
 
+		var inspectorAction = false;
 		if (ActorSpecs.ReadString(actor, "From") is { } specId && ActorSpecs.Get(specId) != null)
 		{
-			if (Button("Jump to Prefab"))
+			if (Button(EditorIcons.Cube + "##JumpToPrefab"))
 			{
 				selectedActorSpecId = specId;
 				actorSpecInspectorOpen = true;
 			}
-			Separator();
+			if (IsItemHovered())
+				SetTooltip("Jump to Prefab.");
+			inspectorAction = true;
 		}
+		if (ActorZedLauncher.ActorSourceFilename(actor) is { } sourceFilename)
+		{
+			if (inspectorAction)
+				SameLine();
+			if (Button(EditorIcons.Code + "##OpenActorSource"))
+				ActorZedLauncher.OpenActor(actor);
+			if (IsItemHovered())
+				SetTooltip($"Open {sourceFilename}");
+			inspectorAction = true;
+		}
+		if (inspectorAction)
+			Separator();
 
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
