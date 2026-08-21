@@ -64,9 +64,9 @@ along with this.
   - church pews
   - a pulpit which tumbles when you step on it
 - maybe you start in a treehouse, makeshift, there is some incredible danger flowing like a river beneath you in intervals
-- a burrowline teleporter
 - how many petabytes per cubit? (writing)
 - Bud projects a light hologram map from his mouth
+- a note in every room describing the new thing it introduces
 - One of the characters speaks with curated chain of thought messages from an open model
 - burrow sound needs to be the best sound in the entire game
 - actor search needs a close button to clear the text.

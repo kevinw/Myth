@@ -11,13 +11,24 @@ namespace Myth;
 	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
 public class BurrowLine : PointPathActor
 {
+	// First and Last identify Points[0] and Points[^1]; burrow doors are bidirectional.
+	[Flags]
+	public enum BurrowDoorPoints
+	{
+		None = 0,
+		First = 1 << 0,
+		Last = 1 << 1,
+	}
+
 	public static float JunctionDistance => 1f;
 	internal const int MaxJunctionTransfers = 8;
 
+	public BurrowDoorPoints BurrowDoors;
 	public bool RenderProcedural;
 	[I(0.5f, 12)] public float ProceduralWidth = 3f;
 	public Color ProceduralOuterColor = new(0x454a52);
 	public Color ProceduralInnerColor = new(0x959ba5);
+	float ProceduralDoorRadius => MathF.Max(2f, ProceduralWidth);
 
 	public BurrowLine()
 	{
@@ -32,6 +43,12 @@ public class BurrowLine : PointPathActor
 
 		RenderRoundedPath(batcher, ProceduralWidth, ProceduralOuterColor);
 		RenderRoundedPath(batcher, ProceduralWidth * 0.45f, ProceduralInnerColor);
+		if (Points.Length == 0)
+			return;
+		if ((BurrowDoors & BurrowDoorPoints.First) != 0)
+			batcher.Circle(Points[0], ProceduralDoorRadius, 12, new Color(0x17191d));
+		if ((BurrowDoors & BurrowDoorPoints.Last) != 0)
+			batcher.Circle(Points[^1], ProceduralDoorRadius, 12, new Color(0x17191d));
 	}
 
 	public override void RenderNormals(Batcher batcher)
@@ -44,6 +61,12 @@ public class BurrowLine : PointPathActor
 			RenderSegmentNormals(batcher, Points[i - 1], Points[i], radius);
 		for (var i = 0; i < Points.Length; i++)
 			RenderRoundNormals(batcher, Points[i], radius);
+		if (Points.Length == 0)
+			return;
+		if ((BurrowDoors & BurrowDoorPoints.First) != 0)
+			RenderRoundNormals(batcher, Points[0], ProceduralDoorRadius, concave: true);
+		if ((BurrowDoors & BurrowDoorPoints.Last) != 0)
+			RenderRoundNormals(batcher, Points[^1], ProceduralDoorRadius, concave: true);
 	}
 
 	void RenderRoundedPath(Batcher batcher, float width, Color color)
@@ -71,7 +94,7 @@ public class BurrowLine : PointPathActor
 		batcher.Quad(from, from - offset, to - offset, to, flat, edgeB, edgeB, flat);
 	}
 
-	static void RenderRoundNormals(Batcher batcher, Vector2 center, float radius)
+	static void RenderRoundNormals(Batcher batcher, Vector2 center, float radius, bool concave = false)
 	{
 		const int steps = 12;
 		var flat = new Color(0x8080ff);
@@ -80,7 +103,7 @@ public class BurrowLine : PointPathActor
 			var a = Calc.AngleToVector(i / (float)steps * Calc.TAU);
 			var b = Calc.AngleToVector((i + 1) / (float)steps * Calc.TAU);
 			batcher.Triangle(center, center + a * radius, center + b * radius,
-				flat, NormalColor(a), NormalColor(b));
+				flat, NormalColor(concave ? -a : a), NormalColor(concave ? -b : b));
 		}
 	}
 
@@ -122,6 +145,10 @@ public class BurrowLine : PointPathActor
 	public bool NearEndpoint(Vector2 point, float distance)
 		=> Points.Length > 0 &&
 			(MathF.Min(Vector2.DistanceSquared(point, WorldPoint(0)), Vector2.DistanceSquared(point, WorldPoint(Points.Length - 1))) <= distance * distance);
+
+	public bool IsDoorPoint(int pointIndex)
+		=> pointIndex == 0 && (BurrowDoors & BurrowDoorPoints.First) != 0 ||
+			pointIndex == Points.Length - 1 && (BurrowDoors & BurrowDoorPoints.Last) != 0;
 
 	public bool Advance(ref int segment, ref float t, int direction, float distance,
 		out Vector2 point, out Vector2 heading, out float remaining, out int junctionPoint)

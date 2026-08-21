@@ -415,6 +415,26 @@ public partial class Player : Pawn
 					if (Game.BurrowTraceEnabled)
 						Game.TraceBurrow(
 							$"line endpoint reached id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading} intent={intent}");
+					if (junctionPointIndex >= 0 && burrowLine.IsDoorPoint(junctionPointIndex) &&
+						Game.TransitionToBurrowDoor(burrowLine, junctionPointIndex, out var doorLine, out var doorPoint))
+					{
+						burrowLine = doorLine;
+						burrowLineSegment = doorPoint == 0 ? 0 : burrowLine.Points.Length - 2;
+						burrowLineT = doorPoint == 0 ? 0 : 1;
+						burrowLineDirection = doorPoint == 0 ? 1 : -1;
+						burrowLineHeading = burrowLine.SegmentHeading(burrowLineSegment, burrowLineDirection);
+						Position = (Point2)burrowLine.WorldPoint(doorPoint);
+						burrowLineExit = null;
+						burrowExitBlocked = false;
+						burrowOnJumpthru = false;
+						burrowMoveRemainder += remaining;
+						UpdateBurrowShift();
+						UpdateBurrowGlow();
+						if (Game.BurrowTraceEnabled)
+							Game.TraceBurrow(
+								$"line sublayer handoff id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+						return;
+					}
 					if (junctionPointIndex >= 0 && Game.TryContinueBurrowLine(burrowLine, junctionPointIndex,
 						burrowLineSegment, burrowLineDirection, burrowLineHeading, intent,
 						out var nextLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,

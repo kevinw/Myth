@@ -11,6 +11,7 @@ public enum RoomChangeKind
 	InitialLoad,
 	EdgeTransition,
 	LinkedDoor,
+	BurrowDoor,
 	Reload
 }
 
@@ -1674,6 +1675,72 @@ public partial class Game : IDisposable
 		if (!crossLayer)
 			PulseDitherGlitch();
 		return true;
+	}
+
+	public bool TransitionToBurrowDoor(BurrowLine source, int sourcePoint,
+		[NotNullWhen(true)] out BurrowLine? targetLine, out int targetPoint)
+	{
+		targetLine = null;
+		targetPoint = -1;
+		if (room == null || nextRoom != null || GetFirst<Player>() is not { } player ||
+			!source.IsDoorPoint(sourcePoint) || !TryFindBurrowDoorDestination(source, sourcePoint, out var target))
+			return false;
+
+		var targetRoom = target.Room.CloneRuntime();
+		var oldCamera = Camera;
+		View?.BeginLayerTransition(player.Position);
+		ActivateRoomImmediately(targetRoom, player, target.Position, RoomChangeKind.BurrowDoor, Point2.Zero);
+		Camera = oldCamera;
+		layerTransitionTime = LayerTransitionDuration;
+		targetLine = GetActorById(target.ActorId) as BurrowLine;
+		targetPoint = target.Point;
+		return targetLine != null;
+	}
+
+	readonly record struct BurrowDoorDestination(Room Room, string ActorId, int Point, Point2 Position);
+
+	bool TryFindBurrowDoorDestination(BurrowLine source, int sourcePoint, out BurrowDoorDestination destination)
+	{
+		destination = default;
+		if (room == null)
+			return false;
+
+		var worldPoint = (Point2)source.WorldPoint(sourcePoint);
+		var matches = 0;
+		foreach (var candidateRoom in Assets.RoomsById.Values)
+		{
+			if (candidateRoom.Sublayer == room.Sublayer)
+				continue;
+
+			foreach (var actor in candidateRoom.Actors)
+			{
+				if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase) ||
+					ActorSpecs.GetActorId(actor) is not { } actorId)
+					continue;
+
+				var nodes = ActorSpecs.GetResolvedProperty(actor, nameof(IPointPath.Points)) as JsonArray;
+				var pointCount = nodes?.Count ?? 2;
+				if (pointCount < 2 ||
+					!Enum.TryParse<BurrowLine.BurrowDoorPoints>(ActorSpecs.ReadResolvedString(actor, nameof(BurrowLine.BurrowDoors)), true, out var doors))
+					continue;
+
+				var origin = candidateRoom.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPosition(actor) ?? Point2.Zero);
+				var first = nodes != null ? ActorSpecs.ReadPoint(nodes[0]) ?? Point2.Zero : Point2.Zero;
+				var last = nodes != null ? ActorSpecs.ReadPoint(nodes[^1]) ?? Point2.Zero : Point2.Right * (TileSize * 8);
+				if ((doors & BurrowLine.BurrowDoorPoints.First) != 0 && origin + first == worldPoint)
+				{
+					destination = new(candidateRoom, actorId, 0, worldPoint);
+					matches++;
+				}
+				if ((doors & BurrowLine.BurrowDoorPoints.Last) != 0 && origin + last == worldPoint)
+				{
+					destination = new(candidateRoom, actorId, pointCount - 1, worldPoint);
+					matches++;
+				}
+			}
+		}
+
+		return matches == 1;
 	}
 
 	static void ReadLinkedDoorDestination(JsonObject actor, out Point2 localPosition, out Point2 spawnOffset)

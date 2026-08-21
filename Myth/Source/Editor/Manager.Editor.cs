@@ -102,6 +102,7 @@ public partial class Manager
 	const string ActorContextMenuPopup = "##ActorContextMenu";
 	string? actorContextMenuRoomId;
 	int actorContextMenuIndex = -1;
+	int actorContextMenuPathPoint = -1;
 	bool actorContextMenuRequested;
 	bool createPrefabPopupRequested;
 	string? createPrefabRoomId;
@@ -295,6 +296,11 @@ public partial class Manager
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return;
+		if (cut && HasBurrowDoor(room.Actors[selectedRoomActorIndex]))
+		{
+			DisplayMessage("Remove burrow door links before cutting this line");
+			return;
+		}
 
 		actorClipboard = ActorSpecs.CloneObject(room.Actors[selectedRoomActorIndex]);
 		actorClipboardPreservesId = cut;
@@ -315,6 +321,11 @@ public partial class Manager
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return;
+		if (HasBurrowDoor(room.Actors[selectedRoomActorIndex]))
+		{
+			DisplayMessage("Remove burrow door links before deleting this line");
+			return;
+		}
 
 		using (CaptureRoomUndo("Delete Actor", room))
 		{
@@ -330,6 +341,11 @@ public partial class Manager
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return false;
+		if (HasBurrowDoor(room.Actors[selectedRoomActorIndex]))
+		{
+			DisplayMessage("Remove burrow door links before moving this line");
+			return false;
+		}
 
 		using (CaptureRoomUndo("Nudge Actor", room))
 		{
@@ -344,13 +360,16 @@ public partial class Manager
 		return true;
 	}
 
-	void OpenActorContextMenu(Room room, int actorIndex)
+	void OpenActorContextMenu(Room room, int actorIndex, int pathPoint = -1)
 	{
 		if (selectedRoomActorIndex != actorIndex)
 			using (CaptureSelectionUndo("Select Actor"))
 				selectedRoomActorIndex = actorIndex;
+		if (pathPoint >= 0)
+			SelectPathPoint(pathPoint);
 		actorContextMenuRoomId = room.Id;
 		actorContextMenuIndex = actorIndex;
+		actorContextMenuPathPoint = pathPoint;
 		ClearEditorDragState();
 		editorSelectionRect = null;
 		CancelTilePaint();
@@ -372,6 +391,7 @@ public partial class Manager
 		{
 			selectedRoomActorIndex = actorContextMenuIndex;
 			var actor = room.Actors[actorContextMenuIndex];
+			DrawBurrowDoorContextMenu(room, actor, actorContextMenuPathPoint);
 			var sourceFilename = ActorZedLauncher.ActorSourceFilename(actor);
 			var commandKey = OperatingSystem.IsMacOS() ? "Cmd" : "Ctrl";
 			if (MenuItem(EditorIcons.DuplicateMenuItem, $"{commandKey}+D"))
@@ -398,6 +418,115 @@ public partial class Manager
 			CloseCurrentPopup();
 
 		EndPaddedPopup();
+	}
+
+	void DrawBurrowDoorContextMenu(Room room, JsonObject actor, int pointIndex)
+	{
+		var count = PointPathPointCount(PointPathNodes(actor));
+		if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase) ||
+			pointIndex != 0 && pointIndex != count - 1)
+			return;
+
+		var marked = IsBurrowDoorPoint(actor, pointIndex);
+		if (MenuItem("Burrow Door", null, marked))
+		{
+			using (CaptureRoomUndo(marked ? "Unmark Burrow Door" : "Mark Burrow Door", room))
+			{
+				SetBurrowDoorPoint(actor, pointIndex, !marked);
+				editorGameDirty = true;
+				SyncEditorGame();
+			}
+			CloseCurrentPopup();
+		}
+
+		var worldPoint = (Point2)(PointPathOrigin(room, actor) + PointPathPoint(PointPathNodes(actor), pointIndex));
+		EditorBurrowDoor match = default;
+		var matches = marked ? FindBurrowDoorMatches(room, worldPoint, out match) : 0;
+		if (!marked && MenuItem("Create Link to Sublayer"))
+		{
+			CreateBurrowDoorLink(room, actor, pointIndex, worldPoint);
+			CloseCurrentPopup();
+		}
+		else if (marked)
+		{
+			if (MenuItem("Go to Linked Endpoint", null, false, matches == 1))
+			{
+				SelectRoom(match.Room);
+				selectedRoomActorIndex = match.ActorIndex;
+				SelectPathPoint(match.PointIndex);
+				TweenEditorCameraToRoom(match.Room);
+				CloseCurrentPopup();
+			}
+			if (MenuItem("Remove Sublayer Link"))
+			{
+				RemoveBurrowDoorLink(room, actor, pointIndex, matches == 1 ? match : null);
+				CloseCurrentPopup();
+			}
+		}
+		Separator();
+	}
+
+	void CreateBurrowDoorLink(Room sourceRoom, JsonObject sourceActor, int sourcePoint, Point2 worldPoint)
+	{
+		var targetRoom = FindNextSublayerRoom(sourceRoom, worldPoint);
+		var createdRoom = targetRoom == null;
+		targetRoom ??= NewSublayerRoom(sourceRoom);
+
+		var targets = createdRoom
+			? new IJsonUndoTarget[] { CurrentRoomUndoTarget(sourceRoom), new RoomExistenceUndoTarget(this, targetRoom), EditorSelectionUndoTarget() }
+			: new IJsonUndoTarget[] { CurrentRoomUndoTarget(sourceRoom), CurrentRoomUndoTarget(targetRoom), EditorSelectionUndoTarget() };
+		using (undo.Capture("Create Burrow Door Link", targets))
+		{
+			if (createdRoom)
+				AddRoomToWorld(targetRoom);
+
+			var sourcePoints = PointPathPoints(sourceActor);
+			var neighbor = sourcePoint == 0 ? 1 : sourcePoints.Length - 2;
+			var continuation = sourcePoints[sourcePoint] - sourcePoints[neighbor];
+			if (continuation == Point2.Zero)
+				continuation = Point2.Right * Game.TileSize;
+
+			targetRoom.AddActorType(nameof(BurrowLine), worldPoint);
+			var targetActor = targetRoom.Actors[^1];
+			ActorSpecs.SetProperty(targetActor, nameof(IPointPath.Points),
+				ActorSpecs.ToJsonNode(new Point2[] { Point2.Zero, continuation }));
+			SetBurrowDoorPoint(sourceActor, sourcePoint, true);
+			SetBurrowDoorPoint(targetActor, 0, true);
+			SelectRoom(targetRoom);
+			selectedRoomActorIndex = targetRoom.Actors.Count - 1;
+			SelectPathPoint(0);
+			editorGameDirty = true;
+			SyncEditorGame();
+		}
+		TweenEditorCameraToRoom(targetRoom);
+	}
+
+	void RemoveBurrowDoorLink(Room room, JsonObject actor, int pointIndex, EditorBurrowDoor? match)
+	{
+		using var capture = match is { } linked
+			? CaptureRoomUndo("Remove Burrow Door Link", room, linked.Room)
+			: CaptureRoomUndo("Remove Burrow Door Link", room);
+		SetBurrowDoorPoint(actor, pointIndex, false);
+		if (match is { } target)
+			SetBurrowDoorPoint(target.Actor, target.PointIndex, false);
+		editorGameDirty = true;
+		SyncEditorGame();
+	}
+
+	static Room? FindNextSublayerRoom(Room source, Point2 worldPoint)
+	{
+		Room? next = null;
+		Room? wrapped = null;
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (room.Sublayer == source.Sublayer || !room.WorldBounds.Inflate(1).Contains(worldPoint))
+				continue;
+			if (room.Sublayer > source.Sublayer && (next == null || room.Sublayer < next.Sublayer))
+				next = room;
+			if (wrapped == null || room.Sublayer < wrapped.Sublayer)
+				wrapped = room;
+		}
+		return next ?? wrapped;
 	}
 
 	void RequestCreatePrefab(Room room, JsonObject actor)
@@ -1644,6 +1773,72 @@ public partial class Manager
 			? ActorSpecs.ReadPoint(nodes[index]) ?? Point2.Zero
 			: index == 0 ? Point2.Zero : new Point2(Game.TileSize * 8, 0);
 
+	static BurrowLine.BurrowDoorPoints BurrowDoorFlags(JsonObject actor)
+		=> Enum.TryParse<BurrowLine.BurrowDoorPoints>(
+			ActorSpecs.ReadResolvedString(actor, nameof(BurrowLine.BurrowDoors)), true, out var flags) ? flags : 0;
+
+	static bool IsBurrowDoorPoint(JsonObject actor, int pointIndex)
+	{
+		if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase))
+			return false;
+		var count = PointPathPointCount(PointPathNodes(actor));
+		var flag = pointIndex == 0 ? BurrowLine.BurrowDoorPoints.First
+			: pointIndex == count - 1 ? BurrowLine.BurrowDoorPoints.Last
+			: BurrowLine.BurrowDoorPoints.None;
+		return flag != 0 && BurrowDoorFlags(actor).HasFlag(flag);
+	}
+
+	static bool HasBurrowDoor(JsonObject actor)
+		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase) &&
+			BurrowDoorFlags(actor) != 0;
+
+	static void SetBurrowDoorPoint(JsonObject actor, int pointIndex, bool enabled)
+	{
+		var count = PointPathPointCount(PointPathNodes(actor));
+		var flag = pointIndex == 0 ? BurrowLine.BurrowDoorPoints.First
+			: pointIndex == count - 1 ? BurrowLine.BurrowDoorPoints.Last
+			: BurrowLine.BurrowDoorPoints.None;
+		if (flag == 0)
+			return;
+		var flags = BurrowDoorFlags(actor);
+		flags = enabled ? flags | flag : flags & ~flag;
+		ActorSpecs.SetProperty(actor, nameof(BurrowLine.BurrowDoors), JsonValue.Create(flags.ToString()));
+	}
+
+	readonly record struct EditorBurrowDoor(Room Room, JsonObject Actor, int ActorIndex, int PointIndex, Point2 Position);
+
+	int FindBurrowDoorMatches(Room sourceRoom, Point2 worldPoint, out EditorBurrowDoor match)
+	{
+		match = default;
+		var count = 0;
+		foreach (var room in Assets.RoomsById.Values)
+		{
+			if (room.Sublayer == sourceRoom.Sublayer)
+				continue;
+			for (var actorIndex = 0; actorIndex < room.Actors.Count; actorIndex++)
+			{
+				var actor = room.Actors[actorIndex];
+				if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase))
+					continue;
+				var points = PointPathNodes(actor);
+				var pointCount = PointPathPointCount(points);
+				var origin = PointPathOrigin(room, actor);
+				if (IsBurrowDoorPoint(actor, 0) && (Point2)(origin + PointPathPoint(points, 0)) == worldPoint)
+				{
+					match = new(room, actor, actorIndex, 0, worldPoint);
+					count++;
+				}
+				if (IsBurrowDoorPoint(actor, pointCount - 1) &&
+					(Point2)(origin + PointPathPoint(points, pointCount - 1)) == worldPoint)
+				{
+					match = new(room, actor, actorIndex, pointCount - 1, worldPoint);
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
 	// Actor types that author as a tile-snapped room rect, sharing the resize-handle UI: every
 	// actor implementing IResizable, mapped to the default size of a freshly placed instance (its
 	// public static DefaultSize). Built once from the actor type registry, so a new resizable
@@ -1865,6 +2060,12 @@ public partial class Manager
 				var point = origin + PointPathPoint(points, i);
 				if (typeName == nameof(BurrowLine) && BurrowLinePointConnected(room, actorIndex, i, point))
 					batcher.CircleLine(point, radius * 1.65f, lineWeight * 2, 16, color);
+				if (IsBurrowDoorPoint(actor, i))
+				{
+					var matches = FindBurrowDoorMatches(room, (Point2)point, out _);
+					batcher.CircleLine(point, radius * 2.2f, lineWeight * 3, 16,
+						matches == 1 ? new Color(0xb77cff) : Color.Red);
+				}
 				// The selected point wears the fill and ring the other way round: Backspace means
 				// "delete this point" while one is selected, so which one that is has to be obvious.
 				var pointSelected = i == selectedPoint;
@@ -1973,6 +2174,11 @@ public partial class Manager
 			return false;
 
 		var handle = HitTestPointPathHandle(room, actorIndex, world, lineWeight);
+		if (handle >= 0 && IsBurrowDoorPoint(actor, handle))
+		{
+			DisplayMessage("Unmark the burrow door before extending this endpoint");
+			return true;
+		}
 		int insertAt;
 		Point2 local;
 		if (handle == 0 || handle == points.Length - 1)
@@ -2015,6 +2221,11 @@ public partial class Manager
 	{
 		var actor = room.Actors[selectedRoomActorIndex];
 		var points = PointPathPoints(actor);
+		if (IsBurrowDoorPoint(actor, pointIndex))
+		{
+			DisplayMessage("Unmark the burrow door before deleting this endpoint");
+			return;
+		}
 		if (points.Length <= 2)
 		{
 			DisplayMessage("Path needs at least two points");
@@ -2196,6 +2407,8 @@ public partial class Manager
 			return;
 
 		var actor = room.Actors[actorIndex];
+		if (HasBurrowDoor(actor))
+			return;
 		var offset = GetRoomActorPaletteOffset(actor);
 		EditorFor(actor)?.BeforeMove(new EditorActor(room, actor));
 
@@ -2217,6 +2430,8 @@ public partial class Manager
 		var actor = room.Actors[actorIndex];
 		var points = PointPathPoints(actor);
 		if (pointIndex < 0 || pointIndex >= points.Length)
+			return;
+		if (IsBurrowDoorPoint(actor, pointIndex))
 			return;
 
 		var local = world - PointPathOrigin(room, actor);
@@ -3913,7 +4128,10 @@ public partial class Manager
 				(Input.Keyboard.Down(Keys.LeftControl) || Input.Keyboard.Down(Keys.RightControl));
 			if (!editingRoomGeometry && !worldMouseBlocked && overGame && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
 			{
-				OpenActorContextMenu(editing, hoveredActorIndex);
+				var contextActor = hoveredPathPoint >= 0 ? selectedRoomActorIndex : hoveredActorIndex;
+				var contextPoint = hoveredPathPoint >= 0 ? hoveredPathPoint
+					: HitTestPointPathHandle(editing, contextActor, worldMouse, gridWeight);
+				OpenActorContextMenu(editing, contextActor, contextPoint);
 				worldMouseBlocked = true;
 			}
 
@@ -3944,10 +4162,13 @@ public partial class Manager
 			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredPathPoint >= 0)
 			{
 				ClearEditorDragState();
-				editorDrag.Kind = EditorDragKind.ActorPathPoint;
-				editorDrag.PathPointIndex = hoveredPathPoint;
-				editorDrag.ActorSnapsByDefault = true;
 				SelectPathPoint(hoveredPathPoint);
+				if (!IsBurrowDoorPoint(editing.Actors[selectedRoomActorIndex], hoveredPathPoint))
+				{
+					editorDrag.Kind = EditorDragKind.ActorPathPoint;
+					editorDrag.PathPointIndex = hoveredPathPoint;
+					editorDrag.ActorSnapsByDefault = true;
+				}
 				editorSelectionRect = null;
 				CancelTilePaint();
 			}
@@ -4586,6 +4807,20 @@ public partial class Manager
 
 	void AddSublayer(Room source)
 	{
+		var room = NewSublayerRoom(source);
+		CurrentRoom?.Save();
+		using (CaptureRoomExistenceUndo("Add Sublayer", room))
+		{
+			AddRoomToWorld(room);
+			SelectRoom(room);
+			selectedRoomActorIndex = -1;
+			editorRoomEntryDirection = null;
+			SyncEditorGame();
+		}
+	}
+
+	Room NewSublayerRoom(Room source)
+	{
 		var sublayer = 1;
 		while (RoomGeometryOverlaps(source.TileSpacePosition, source.Size, sublayer, null))
 			sublayer++;
@@ -4596,17 +4831,9 @@ public partial class Manager
 		for (var suffix = 2; Assets.RoomsById.ContainsKey(id); suffix++)
 			id = $"{baseRoom.Id}_sub{sublayer}_{suffix}";
 
-		CurrentRoom?.Save();
 		var room = new Room(id, source.TileSpacePosition, source.Size) { Sublayer = sublayer };
 		ApplyRoomSettings(room, CaptureRoomSettings(source));
-		using (CaptureRoomExistenceUndo("Add Sublayer", room))
-		{
-			AddRoomToWorld(room);
-			SelectRoom(room);
-			selectedRoomActorIndex = -1;
-			editorRoomEntryDirection = null;
-			SyncEditorGame();
-		}
+		return room;
 	}
 
 	void SelectEditorSublayer(int sublayer)
