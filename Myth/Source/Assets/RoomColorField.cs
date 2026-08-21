@@ -140,6 +140,8 @@ public sealed class RoomColorField
 	{
 		if (string.IsNullOrEmpty(encoded))
 		{
+			if (Size == expectedSize && !HasPaint)
+				return;
 			Size = expectedSize;
 			pixels = new Color[Math.Max(1, expectedSize.X * expectedSize.Y)];
 			HasPaint = false;
@@ -148,8 +150,16 @@ public sealed class RoomColorField
 			return;
 		}
 
-		Load(Convert.FromBase64String(encoded), expectedSize, SourcePath);
+		var restored = new RoomColorField(expectedSize);
+		restored.Load(Convert.FromBase64String(encoded), expectedSize, SourcePath);
+		if (Size == restored.Size && pixels.AsSpan().SequenceEqual(restored.pixels))
+			return;
+
+		Size = restored.Size;
+		pixels = restored.pixels;
+		HasPaint = restored.HasPaint;
 		Dirty = true;
+		Version++;
 	}
 
 	public byte[] WritePng()

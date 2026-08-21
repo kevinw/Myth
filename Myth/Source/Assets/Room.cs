@@ -263,6 +263,11 @@ public class Room
 			ForegroundColorField.Deserialize(JsonUtil.ReadString(colorFields, "foreground"), Size);
 			BackgroundColorField.Deserialize(JsonUtil.ReadString(colorFields, "background"), Size);
 		}
+		else
+		{
+			ForegroundColorField.Deserialize(null, Size);
+			BackgroundColorField.Deserialize(null, Size);
+		}
 		MusicArea = JsonUtil.ReadString(json, "musicArea");
 		if (string.IsNullOrWhiteSpace(MusicArea))
 			MusicArea = null;
@@ -1637,9 +1642,6 @@ public class Room
 			backgroundTileEntries = new Factory.Entry?[Size.X, Size.Y];
 			tileFlags = new TileFlags[Size.X, Size.Y];
 		}
-		ForegroundColorField.Deserialize(null, Size);
-		BackgroundColorField.Deserialize(null, Size);
-
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
 			{
