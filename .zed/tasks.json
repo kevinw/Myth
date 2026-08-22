@@ -18,22 +18,18 @@
     "label": "dotnet watch (HQ)",
     "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
-    "allow_concurrent_runs": true,
-    "use_new_terminal": false
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true
   },
   {
     "label": "dotnet run (HQ)",
     "command": "dotnet run --no-restore --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
-    "allow_concurrent_runs": true,
-    "use_new_terminal": false
   },
   {
     "label": "dotnet watch (Sokoban)",
     "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Sokoban",
-    "allow_concurrent_runs": true,
-    "use_new_terminal": false
   },
   {
     "label": "open in browser",

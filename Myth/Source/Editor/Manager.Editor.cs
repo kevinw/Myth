@@ -227,6 +227,7 @@ public partial class Manager
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();
 		TransitionViewerImGui();
+		RigAnimationViewerImGui();
 		PreferencesImGui();
 		if (imguiDemoOpen)
 			ShowDemoWindow(ref imguiDemoOpen);

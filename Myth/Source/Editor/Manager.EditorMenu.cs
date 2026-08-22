@@ -162,6 +162,7 @@ public partial class Manager
 			if (ImGui.MenuItem("Particles", null, particleEditor.PinnedWindowOpen))
 				particleEditor.TogglePinnedWindow();
 			ImGui.MenuItem("Music Regions", null, ref musicRegionsOpen);
+			ImGui.MenuItem("Rig Animations", null, ref rigAnimationViewerOpen);
 #if !BROWSER
 			ImGui.MenuItem("SFX", null, ref proceduralSoundEditor.Open);
 #endif

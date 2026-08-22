@@ -3,7 +3,8 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "player", Tags = ActorTag.Enemy, BoundsX = -12, BoundsY = -40, BoundsW = 24, BoundsH = 40)]
+[GameActor(Sprite = "player", Tags = ActorTag.Enemy, BoundsX = -12, BoundsY = -40, BoundsW = 24, BoundsH = 40,
+	LivePositionEditable = true)]
 public class RigPuppet : Actor
 {
 	enum StepTraversal { None, Up, Down }
@@ -12,12 +13,9 @@ public class RigPuppet : Actor
 	readonly record struct Bone(int From, int To, float Width);
 	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe);
 
-	struct FootPlant
+	struct FootIK
 	{
-		public Vector2 Position;
-		public float Strength;
-		public float Cooldown;
-		public bool Planted;
+		public float OffsetY;
 	}
 
 	static readonly BoneSpec[] BoneSpecs =
@@ -46,12 +44,13 @@ public class RigPuppet : Actor
 	];
 
 	public string AnimationName = "Zombie_Walk_Fwd_Loop";
+	public bool Performance;
 	[I(0.1f, 3)] public float PlaybackSpeed = 1;
 	[I(1, 60)] public float VisualFPS = 20;
 	[I(1, 4)] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
 	[I(12, 40)] public float PixelsPerMeter = 25;
-	[I(-45, 45)] public float ProjectionYaw;
+	[I(-180, 180)] public float ProjectionYaw;
 	[I(1, 20)] public int Health = 8;
 	public Color FarColor = new(0x435263);
 	public Color NearColor = new(0xb7cdd0);
@@ -75,8 +74,8 @@ public class RigPuppet : Actor
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
-	FootPlant leftFoot;
-	FootPlant rightFoot;
+	FootIK leftFoot;
+	FootIK rightFoot;
 	int head;
 	int pelvis;
 	float rigTime;
@@ -89,6 +88,14 @@ public class RigPuppet : Actor
 	bool hitReacting;
 	bool recovering;
 	bool walking;
+#if EDITOR
+	internal bool AnimationPreviewEnabled;
+	internal bool AnimationPreviewPaused;
+	internal bool AnimationPreviewLooping = true;
+	internal bool AnimationPreviewBlend = true;
+	internal bool AnimationPreviewIK = true;
+	internal int AnimationPreviewClipIndex;
+#endif
 
 	static float Gravity => 360f;
 	static float GroundFriction => 420f;
@@ -109,10 +116,7 @@ public class RigPuppet : Actor
 	static float FootProbeAbove => 4f;
 	static float FootProbeDistance => 12f;
 	static float FootPlantDistance => 5f;
-	static float FootReleaseDistance => 8f;
-	static float FootLiftDistance => 4f;
-	static float FootBlendSpeed => 12f;
-	static float FootReplantDelay => 0.08f;
+	static float FootIKSpeed => 40f;
 
 	public RigPuppet()
 	{
@@ -152,7 +156,7 @@ public class RigPuppet : Actor
 		hitClip = rig.GetClip("Hit_Knockback");
 		recoveryClip = rig.GetClip("LayToIdle");
 		idleClip = rig.GetClip("Zombie_Idle_Loop");
-		activeClip = idleClip;
+		activeClip = Performance ? LocomotionClip() : idleClip;
 		UpdatePose();
 	}
 
@@ -178,6 +182,13 @@ public class RigPuppet : Actor
 	public override void Update()
 	{
 		EnsureRigState();
+#if EDITOR
+		if (AnimationPreviewEnabled)
+		{
+			UpdateAnimationPreview();
+			return;
+		}
+#endif
 		if (stepTraversal == StepTraversal.None)
 			Velocity.Y += Gravity * Time.Delta;
 		else
@@ -190,8 +201,8 @@ public class RigPuppet : Actor
 				Velocity.Y = 0;
 		}
 
-		walking = stepTraversal != StepTraversal.None;
-		if (stepTraversal == StepTraversal.None && Game.GetFirst<Player>() is { } player &&
+		walking = !Performance && stepTraversal != StepTraversal.None;
+		if (!Performance && stepTraversal == StepTraversal.None && Game.GetFirst<Player>() is { } player &&
 			MathF.Abs(player.Position.X - Position.X) > 1)
 		{
 			Facing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
@@ -217,15 +228,106 @@ public class RigPuppet : Actor
 		else if (recovering && rigTime >= activeClip.Duration)
 		{
 			recovering = false;
-			StartClip(idleClip);
+			StartClip(Performance ? LocomotionClip() : idleClip);
 		}
 		else if (!hitReacting && !recovering &&
-			(walking ? LocomotionClip() : idleClip) is { } desiredClip && desiredClip != activeClip)
+			(Performance || walking ? LocomotionClip() : idleClip) is { } desiredClip &&
+			desiredClip != activeClip)
 			StartClip(desiredClip);
 
 		UpdateRecoil();
 		UpdatePose();
 	}
+
+#if EDITOR
+	internal IReadOnlyList<SampledRig.Clip> AnimationClips => rig.Clips;
+	internal SampledRig.Clip AnimationPreviewClip => rig.Clips[AnimationPreviewClipIndex];
+	internal float AnimationPreviewTime
+	{
+		get => rigTime;
+		set
+		{
+			rigTime = Math.Clamp(value, 0, AnimationPreviewClip.Duration);
+			blendRemaining = 0;
+		}
+	}
+
+	internal void BeginAnimationPreview()
+	{
+		if (AnimationPreviewEnabled)
+			return;
+
+		AnimationPreviewEnabled = true;
+		AnimationPreviewClipIndex = 0;
+		for (var i = 0; i < rig.Clips.Count; i++)
+			if (rig.Clips[i] == activeClip)
+			{
+				AnimationPreviewClipIndex = i;
+				break;
+			}
+		hitReacting = false;
+		recovering = false;
+		stepTraversal = StepTraversal.None;
+		stepVisualOffset = Vector2.Zero;
+		Velocity = Vector2.Zero;
+		leftFoot = default;
+		rightFoot = default;
+	}
+
+	internal void EndAnimationPreview()
+	{
+		if (!AnimationPreviewEnabled)
+			return;
+
+		AnimationPreviewEnabled = false;
+		AnimationPreviewPaused = false;
+		StartClip(idleClip);
+	}
+
+	internal void PreviewAnimation(int index)
+	{
+		AnimationPreviewClipIndex = Math.Clamp(index, 0, rig.Clips.Count - 1);
+		var clip = AnimationPreviewClip;
+		if (clip == activeClip)
+		{
+			rigTime = 0;
+			blendRemaining = 0;
+		}
+		else
+			StartClip(clip, AnimationPreviewBlend);
+		leftFoot = default;
+		rightFoot = default;
+	}
+
+	internal void SetAnimationPreviewIK(bool enabled)
+	{
+		AnimationPreviewIK = enabled;
+		if (!enabled)
+		{
+			leftFoot = default;
+			rightFoot = default;
+		}
+	}
+
+	void UpdateAnimationPreview()
+	{
+		Velocity.X = 0;
+		Velocity.Y += Gravity * Time.Delta;
+		base.Update();
+		if (Grounded() && Velocity.Y > 0)
+			Velocity.Y = 0;
+
+		if (!AnimationPreviewPaused)
+			rigTime += Time.Delta * PlaybackSpeed;
+		var duration = AnimationPreviewClip.Duration;
+		if (AnimationPreviewLooping)
+			rigTime = ((rigTime % duration) + duration) % duration;
+		else
+			rigTime = Math.Clamp(rigTime, 0, duration);
+		UpdateRecoil();
+		UpdatePose();
+	}
+#endif
 
 	void EnsureRigState()
 	{
@@ -370,7 +472,12 @@ public class RigPuppet : Actor
 	void UpdatePose()
 	{
 		var visualTime = MathF.Floor(rigTime * VisualFPS) / VisualFPS;
-		rig.Sample(activeClip, visualTime, loop: !hitReacting && !recovering, sampledPose);
+		var loop = !hitReacting && !recovering;
+#if EDITOR
+		if (AnimationPreviewEnabled)
+			loop = AnimationPreviewLooping;
+#endif
+		rig.Sample(activeClip, visualTime, loop, sampledPose);
 		if (blendRemaining > 0)
 		{
 			blendRemaining = MathF.Max(0, blendRemaining - Time.Delta);
@@ -393,9 +500,19 @@ public class RigPuppet : Actor
 			projectedPose[i] += inheritedRecoil[i] + stepVisualOffset;
 		}
 
-		var grounded = Grounded();
-		UpdateFoot(ref leftFoot, leftLeg, grounded);
-		UpdateFoot(ref rightFoot, rightLeg, grounded);
+		if (!Performance)
+		{
+		var updateFeet = true;
+#if EDITOR
+		updateFeet = !AnimationPreviewEnabled || AnimationPreviewIK;
+#endif
+		if (updateFeet)
+		{
+			var grounded = Grounded();
+			UpdateFoot(ref leftFoot, leftLeg, grounded);
+			UpdateFoot(ref rightFoot, rightLeg, grounded);
+		}
+		}
 
 		for (var i = 1; i < boneOrder.Length; i++)
 		{
@@ -411,40 +528,26 @@ public class RigPuppet : Actor
 		}
 	}
 
-	void UpdateFoot(ref FootPlant plant, Leg leg, bool grounded)
+	void UpdateFoot(ref FootIK plant, Leg leg, bool grounded)
 	{
 		var animatedToe = Position + projectedPose[leg.Toe];
-		plant.Cooldown = MathF.Max(0, plant.Cooldown - Time.Delta);
-
-		if (!grounded || hitReacting || recovering || stepTraversal != StepTraversal.None || plant.Planted &&
-			(MathF.Abs(animatedToe.X - plant.Position.X) > FootReleaseDistance ||
-			animatedToe.Y < plant.Position.Y - FootLiftDistance))
-		{
-			if (plant.Planted)
-				plant.Cooldown = FootReplantDelay;
-			plant.Planted = false;
-		}
-
-		if (!plant.Planted && plant.Cooldown <= 0 && grounded)
+		var targetOffset = 0f;
+		if (grounded && !hitReacting && !recovering && stepTraversal == StepTraversal.None)
 		{
 			var probeCenter = (animatedToe - Vector2.UnitY * FootProbeAbove).RoundToPoint2();
 			var probe = new RectInt(probeCenter.X - 1, probeCenter.Y - 1, 2, 2);
 			if (Game.TryFindSurface(this, probe, Vector2.UnitY, FootProbeDistance, out var hit) &&
-				hit.Normal.Y < -0.5f && Vector2.DistanceSquared(animatedToe, hit.Point) <= FootPlantDistance * FootPlantDistance)
-			{
-				plant.Position = hit.Point;
-				plant.Planted = true;
-			}
+				hit.Normal.Y < -0.5f && MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance)
+				targetOffset = hit.Point.Y - animatedToe.Y;
 		}
 
-		plant.Strength = Calc.Approach(plant.Strength, plant.Planted ? 1 : 0, FootBlendSpeed * Time.Delta);
-		if (plant.Strength <= 0)
+		plant.OffsetY = Calc.Approach(plant.OffsetY, targetOffset, FootIKSpeed * Time.Delta);
+		if (MathF.Abs(plant.OffsetY) <= 0.001f)
 			return;
 
 		var animatedFoot = projectedPose[leg.Ankle];
 		var footOffset = projectedPose[leg.Toe] - animatedFoot;
-		var plantedToe = Vector2.Lerp(animatedToe, plant.Position, plant.Strength) - Position;
-		SolveLeg(leg, plantedToe - footOffset);
+		SolveLeg(leg, projectedPose[leg.Toe] + Vector2.UnitY * plant.OffsetY - footOffset);
 		projectedPose[leg.Toe] = projectedPose[leg.Ankle] + footOffset;
 	}
 
@@ -473,6 +576,10 @@ public class RigPuppet : Actor
 
 	public override void OnWasHit(Actor by)
 	{
+#if EDITOR
+		if (AnimationPreviewEnabled)
+			return;
+#endif
 		if (Health <= 0)
 			return;
 
