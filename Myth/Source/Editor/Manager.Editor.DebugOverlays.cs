@@ -517,6 +517,9 @@ public partial class Manager
 		{
 			var vsb = new ValueStringBuilder(stackalloc char[256]);
 			vsb.Append(APPLICATION_NAME);
+			if (Manager.DOTNET_WATCH) {
+				vsb.Append(" (watch)");
+			}
 			vsb.Append(" - ");
 			vsb.Append((int)MathF.Round(fps));
 			vsb.Append(" FPS");

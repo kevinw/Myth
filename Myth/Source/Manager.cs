@@ -351,6 +351,8 @@ public partial class Manager : App
 		Exit();
 	}
 
+	internal static bool DOTNET_WATCH = Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1";
+
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false, bool? fullscreen = null)
 	{
 		const string windowTitle = APPLICATION_NAME;

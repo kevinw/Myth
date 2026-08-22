@@ -65,11 +65,13 @@ public class RigPuppet : Actor
 	SampledRig.Clip idleClip = null!;
 	Vector3[] sampledPose = [];
 	Vector3[] blendFromPose = [];
+	Vector3[] ragdollPose = [];
+	Vector3[] ragdollPreviousPose = [];
+	Vector3[] ragdollVelocity = [];
+	bool[] ragdollJoints = [];
+	float[] boneLengths = [];
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
-	Vector2[] recoil = [];
-	Vector2[] recoilVelocity = [];
-	Vector2[] inheritedRecoil = [];
 	Bone[] bones = [];
 	int[] boneOrder = [];
 	Leg leftLeg;
@@ -85,6 +87,16 @@ public class RigPuppet : Actor
 	Vector2 stepVisualOffset;
 	float stepTime;
 	float stepDuration;
+	float pendingLandingSpeed;
+	Signs turnTargetFacing;
+	float visualYaw;
+	float turnFromYaw;
+	float turnToYaw;
+	float turnTime;
+	float turnAmount;
+	bool ragdollReady;
+	bool turnReady;
+	bool turning;
 	bool hitReacting;
 	bool recovering;
 	bool walking;
@@ -110,9 +122,15 @@ public class RigPuppet : Actor
 	static float StepDurationPerPixel => 0.016f;
 	static float StepArcHeight => 3f;
 	static float InterruptedStepCatchupSpeed => 80f;
-	static float RecoilSpring => 74f;
-	static float RecoilDamping => 10f;
-	static float RecoilInheritance => 0.58f;
+	static float RagdollSpring => 160f;
+	static float RagdollDamping => 11f;
+	static float RagdollMaxSpeed => 10f;
+	static float LandingMinSpeed => 32f;
+	static float LandingInertia => 1f;
+	static float LandingCompressionTime => 0.0225f;
+	static int RagdollConstraintIterations => 4;
+	static float TurnDuration => 0.28f;
+	static float TurnStartSpeed => 2f;
 	static float FootProbeAbove => 4f;
 	static float FootProbeDistance => 12f;
 	static float FootPlantDistance => 5f;
@@ -136,17 +154,21 @@ public class RigPuppet : Actor
 		rig = sharedRig ??= LoadRig();
 		sampledPose = new Vector3[rig.JointCount];
 		blendFromPose = new Vector3[rig.JointCount];
+		ragdollPose = new Vector3[rig.JointCount];
+		ragdollPreviousPose = new Vector3[rig.JointCount];
+		ragdollVelocity = new Vector3[rig.JointCount];
+		ragdollJoints = new bool[rig.JointCount];
+		boneLengths = new float[BoneSpecs.Length];
 		projectedPose = new Vector2[rig.JointCount];
 		jointDepth = new float[rig.JointCount];
-		recoil = new Vector2[rig.JointCount];
-		recoilVelocity = new Vector2[rig.JointCount];
-		inheritedRecoil = new Vector2[rig.JointCount];
 		bones = new Bone[BoneSpecs.Length];
 		boneOrder = new int[bones.Length];
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var spec = BoneSpecs[i];
 			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width);
+			ragdollJoints[bones[i].From] = true;
+			ragdollJoints[bones[i].To] = true;
 			boneOrder[i] = i;
 		}
 		head = RequiredJoint("Head");
@@ -157,6 +179,7 @@ public class RigPuppet : Actor
 		recoveryClip = rig.GetClip("LayToIdle");
 		idleClip = rig.GetClip("Zombie_Idle_Loop");
 		activeClip = Performance ? LocomotionClip() : idleClip;
+		InitializeTurn();
 		UpdatePose();
 	}
 
@@ -205,8 +228,11 @@ public class RigPuppet : Actor
 		if (!Performance && stepTraversal == StepTraversal.None && Game.GetFirst<Player>() is { } player &&
 			MathF.Abs(player.Position.X - Position.X) > 1)
 		{
-			Facing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
-			if (grounded && !hitReacting && !recovering && MathF.Abs(player.Position.X - Position.X) > StopDistance)
+			var desiredFacing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
+			if (!turning && desiredFacing != Facing && grounded && !hitReacting && !recovering)
+				BeginTurn(desiredFacing);
+			if (!turning && desiredFacing == Facing && grounded && !hitReacting && !recovering &&
+				MathF.Abs(player.Position.X - Position.X) > StopDistance)
 			{
 				walking = HasGroundAhead();
 				if (!walking)
@@ -216,6 +242,7 @@ public class RigPuppet : Actor
 		if (stepTraversal == StepTraversal.None && grounded)
 			Velocity.X = Calc.Approach(Velocity.X, walking ? (int)Facing * WalkSpeed : 0,
 				(walking ? WalkAcceleration : GroundFriction) * Time.Delta);
+		UpdateTurn(grounded);
 		UpdateStepTraversal();
 
 		rigTime += Time.Delta * PlaybackSpeed;
@@ -235,7 +262,6 @@ public class RigPuppet : Actor
 			desiredClip != activeClip)
 			StartClip(desiredClip);
 
-		UpdateRecoil();
 		UpdatePose();
 	}
 
@@ -270,6 +296,8 @@ public class RigPuppet : Actor
 		stepTraversal = StepTraversal.None;
 		stepVisualOffset = Vector2.Zero;
 		Velocity = Vector2.Zero;
+		turning = false;
+		InitializeTurn();
 		leftFoot = default;
 		rightFoot = default;
 	}
@@ -324,7 +352,6 @@ public class RigPuppet : Actor
 			rigTime = ((rigTime % duration) + duration) % duration;
 		else
 			rigTime = Math.Clamp(rigTime, 0, duration);
-		UpdateRecoil();
 		UpdatePose();
 	}
 #endif
@@ -344,12 +371,77 @@ public class RigPuppet : Actor
 			recoveryClip = rig.GetClip("LayToIdle");
 		if (blendFromPose.Length != rig.JointCount)
 			blendFromPose = new Vector3[rig.JointCount];
+		if (ragdollPose == null || ragdollPreviousPose == null || ragdollVelocity == null ||
+			ragdollJoints == null || boneLengths == null || ragdollPose.Length != rig.JointCount ||
+			ragdollPreviousPose.Length != rig.JointCount || ragdollVelocity.Length != rig.JointCount ||
+			ragdollJoints.Length != rig.JointCount || boneLengths.Length != bones.Length)
+		{
+			ragdollPose = new Vector3[rig.JointCount];
+			ragdollPreviousPose = new Vector3[rig.JointCount];
+			ragdollVelocity = new Vector3[rig.JointCount];
+			ragdollJoints = new bool[rig.JointCount];
+			boneLengths = new float[bones.Length];
+			for (var i = 0; i < bones.Length; i++)
+			{
+				ragdollJoints[bones[i].From] = true;
+				ragdollJoints[bones[i].To] = true;
+			}
+			ragdollReady = false;
+		}
 		if (VisualFPS <= 0)
 			VisualFPS = 20;
 		if (StepUp <= 0)
 			StepUp = 2;
 		if (StepDown <= 0)
 			StepDown = 2;
+		if (!turnReady)
+			InitializeTurn();
+		else if (!turning)
+			visualYaw = FacingYaw(Facing);
+	}
+
+	float FacingYaw(Signs facing)
+		=> facing == Signs.Negative ? 0 : ProjectionYaw >= 0 ? -MathF.PI : MathF.PI;
+
+	void InitializeTurn()
+	{
+		turnTargetFacing = Facing;
+		visualYaw = FacingYaw(Facing);
+		turnFromYaw = turnToYaw = visualYaw;
+		turnTime = 0;
+		turnAmount = 0;
+		turnReady = true;
+	}
+
+	void BeginTurn(Signs target)
+	{
+		turnTargetFacing = target;
+		turnFromYaw = visualYaw;
+		turnToYaw = FacingYaw(target);
+		turnTime = 0;
+		turnAmount = 0;
+		turning = true;
+		leftFoot = default;
+		rightFoot = default;
+	}
+
+	void UpdateTurn(bool grounded)
+	{
+		if (!turning || !grounded || hitReacting || recovering || MathF.Abs(Velocity.X) > TurnStartSpeed)
+			return;
+
+		turnTime = MathF.Min(turnTime + Time.Delta, TurnDuration);
+		var progress = turnTime / TurnDuration;
+		var eased = progress * progress * (3 - 2 * progress);
+		turnAmount = eased;
+		visualYaw = float.Lerp(turnFromYaw, turnToYaw, eased);
+		if (turnTime < TurnDuration)
+			return;
+
+		Facing = turnTargetFacing;
+		visualYaw = FacingYaw(Facing);
+		turnAmount = 0;
+		turning = false;
 	}
 
 	void StartClip(SampledRig.Clip clip, bool blend = true)
@@ -457,16 +549,11 @@ public class RigPuppet : Actor
 		stepVisualOffset = Vector2.Zero;
 	}
 
-	void UpdateRecoil()
+	public override void OnCollideY()
 	{
-		var dt = MathF.Min(Time.Delta, 0.05f);
-		var damping = MathF.Exp(-RecoilDamping * dt);
-		for (var i = 0; i < recoil.Length; i++)
-		{
-			recoilVelocity[i] -= recoil[i] * RecoilSpring * dt;
-			recoilVelocity[i] *= damping;
-			recoil[i] += recoilVelocity[i] * dt;
-		}
+		if (Velocity.Y >= LandingMinSpeed)
+			pendingLandingSpeed = MathF.Max(pendingLandingSpeed, Velocity.Y);
+		base.OnCollideY();
 	}
 
 	void UpdatePose()
@@ -486,32 +573,41 @@ public class RigPuppet : Actor
 			for (var i = 0; i < sampledPose.Length; i++)
 				sampledPose[i] = Vector3.Lerp(blendFromPose[i], sampledPose[i], blend);
 		}
+		UpdateRagdoll();
 		var angle = ProjectionYaw * MathF.PI / 180f;
 		var cos = MathF.Cos(angle);
 		var sin = MathF.Sin(angle);
+		var turnCos = MathF.Cos(visualYaw);
+		var turnSin = MathF.Sin(visualYaw);
+		var pivot = ragdollPose[pelvis];
+		var pivotX = -pivot.Z * cos + pivot.X * sin;
+		var mirror = turning
+			? float.Lerp(-(int)Facing, -(int)turnTargetFacing, turnAmount)
+			: -(int)Facing;
 		for (var i = 0; i < sampledPose.Length; i++)
 		{
-			var joint = sampledPose[i];
-			projectedPose[i] = new Vector2((-joint.Z * cos + joint.X * sin) * -(int)Facing,
-				-joint.Y) * PixelsPerMeter + new Vector2(0, 2.5f);
+			var joint = ragdollJoints[i] ? ragdollPose[i] : sampledPose[i];
+			var offset = joint - pivot;
+			var turned = new Vector3(offset.X * turnCos + offset.Z * turnSin, offset.Y,
+				-offset.X * turnSin + offset.Z * turnCos);
+			projectedPose[i] = new Vector2(pivotX * mirror - turned.Z * cos + turned.X * sin, -joint.Y) * PixelsPerMeter +
+				new Vector2(0, 2.5f);
 			jointDepth[i] = joint.X * cos + joint.Z * sin;
-			var parent = rig.JointParents[i];
-			inheritedRecoil[i] = recoil[i] + (parent >= 0 ? inheritedRecoil[parent] * RecoilInheritance : Vector2.Zero);
-			projectedPose[i] += inheritedRecoil[i] + stepVisualOffset;
+			projectedPose[i] += stepVisualOffset;
 		}
 
 		if (!Performance)
 		{
-		var updateFeet = true;
+			var updateFeet = true;
 #if EDITOR
-		updateFeet = !AnimationPreviewEnabled || AnimationPreviewIK;
+			updateFeet = !AnimationPreviewEnabled || AnimationPreviewIK;
 #endif
-		if (updateFeet)
-		{
-			var grounded = Grounded();
-			UpdateFoot(ref leftFoot, leftLeg, grounded);
-			UpdateFoot(ref rightFoot, rightLeg, grounded);
-		}
+			if (updateFeet)
+			{
+				var grounded = Grounded();
+				UpdateFoot(ref leftFoot, leftLeg, grounded);
+				UpdateFoot(ref rightFoot, rightLeg, grounded);
+			}
 		}
 
 		for (var i = 1; i < boneOrder.Length; i++)
@@ -526,6 +622,73 @@ public class RigPuppet : Actor
 			}
 			boneOrder[at] = value;
 		}
+	}
+
+	void UpdateRagdoll()
+	{
+		if (!ragdollReady)
+		{
+			sampledPose.CopyTo(ragdollPose, 0);
+			Array.Clear(ragdollVelocity);
+			for (var i = 0; i < bones.Length; i++)
+				boneLengths[i] = Vector3.Distance(sampledPose[bones[i].From], sampledPose[bones[i].To]);
+			ragdollReady = true;
+			pendingLandingSpeed = 0;
+			return;
+		}
+
+		if (pendingLandingSpeed > 0)
+		{
+			var impactSpeed = pendingLandingSpeed / PixelsPerMeter;
+			for (var i = 0; i < ragdollPose.Length; i++)
+				if (ragdollJoints[i])
+				{
+					var height = Math.Clamp(sampledPose[i].Y / 1.55f, 0, 1);
+					ragdollPose[i].Y -= impactSpeed * LandingCompressionTime * height;
+					ragdollVelocity[i].Y -= impactSpeed * LandingInertia * height;
+				}
+			pendingLandingSpeed = 0;
+		}
+
+		var dt = MathF.Min(Time.Delta, 1 / 30f);
+		if (dt <= 0)
+			return;
+		var damping = MathF.Exp(-RagdollDamping * dt);
+		for (var i = 0; i < ragdollPose.Length; i++)
+			if (ragdollJoints[i])
+			{
+				ragdollPreviousPose[i] = ragdollPose[i];
+				ragdollVelocity[i] += (sampledPose[i] - ragdollPose[i]) * RagdollSpring * dt;
+				ragdollVelocity[i] *= damping;
+				if (ragdollVelocity[i].LengthSquared() > RagdollMaxSpeed * RagdollMaxSpeed)
+					ragdollVelocity[i] = Vector3.Normalize(ragdollVelocity[i]) * RagdollMaxSpeed;
+				ragdollPose[i] += ragdollVelocity[i] * dt;
+			}
+
+		for (var iteration = 0; iteration < RagdollConstraintIterations; iteration++)
+			for (var i = 0; i < bones.Length; i++)
+			{
+				var bone = bones[i];
+				var delta = ragdollPose[bone.To] - ragdollPose[bone.From];
+				var length = delta.Length();
+				if (length <= 0.0001f)
+					continue;
+				var correction = delta * ((length - boneLengths[i]) / length * 0.5f);
+				ragdollPose[bone.From] += correction;
+				ragdollPose[bone.To] -= correction;
+			}
+
+		for (var i = 0; i < ragdollPose.Length; i++)
+			if (ragdollJoints[i])
+				ragdollVelocity[i] = (ragdollPose[i] - ragdollPreviousPose[i]) / dt;
+	}
+
+	Vector3 RigVelocity(Vector2 screenVelocity)
+	{
+		var angle = ProjectionYaw * MathF.PI / 180f + visualYaw;
+		var alongProjection = screenVelocity.X / PixelsPerMeter;
+		return new(MathF.Sin(angle) * alongProjection, -screenVelocity.Y / PixelsPerMeter,
+			-MathF.Cos(angle) * alongProjection);
 	}
 
 	void UpdateFoot(ref FootIK plant, Leg leg, bool grounded)
@@ -593,11 +756,13 @@ public class RigPuppet : Actor
 		}
 
 		var away = Position.X < by.Position.X ? -1f : 1f;
-		for (var i = 0; i < recoil.Length; i++)
+		for (var i = 0; i < ragdollVelocity.Length; i++)
 		{
+			if (!ragdollJoints[i])
+				continue;
 			var height = Math.Clamp(sampledPose[i].Y / 1.55f, 0, 1);
 			var depthKick = MathF.Sign(jointDepth[i]) * 7 * height;
-			recoilVelocity[i] += new Vector2(away * (18 + 52 * height) + depthKick, -15 * height);
+			ragdollVelocity[i] += RigVelocity(new(away * (18 + 52 * height) + depthKick, -15 * height));
 		}
 		Velocity = new Vector2(away * HitKnockbackSpeed, -HitLiftSpeed);
 		stepTraversal = StepTraversal.None;
@@ -648,7 +813,7 @@ public class RigPuppet : Actor
 		batcher.Circle(headPosition, 3.9f, 14, shadow ? tint : NearColor);
 		if (!shadow)
 		{
-			var look = new Vector2((int)Facing * 2.4f, 0.2f);
+			var look = new Vector2(-MathF.Cos(visualYaw) * 2.4f, 0.2f);
 			batcher.Circle(headPosition + look, 1.1f, 8, new Color(0xd92240));
 		}
 	}
