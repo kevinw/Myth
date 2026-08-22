@@ -4,16 +4,26 @@ namespace Kit;
 
 public sealed class OzzAnimator : IDisposable
 {
+	const int MaxLayers = 4;
+
 	readonly OzzRigInstance instance;
-	readonly int[] clipIndices = new int[2];
-	readonly float[] times = new float[2];
-	readonly float[] weights = new float[2];
+	readonly int[] clipIndices = new int[MaxLayers];
+	readonly float[] times = new float[MaxLayers];
+	readonly float[] weights = new float[MaxLayers];
+	readonly byte[] additive = new byte[MaxLayers];
+	readonly byte[] masked = new byte[MaxLayers];
+	readonly float[] jointWeights;
 	OzzRig.Clip? outgoingClip;
+	OzzRig.Clip? layerClip;
+	OzzJointMask? layerMask;
 	float outgoingTime;
+	float layerTime;
+	float layerWeight;
 	float blendDuration;
 	float blendRemaining;
 	bool outgoingLoop = true;
 	bool loop = true;
+	bool layerAdditive;
 
 	public OzzRig Rig { get; }
 	public OzzRig.Clip ActiveClip { get; private set; }
@@ -23,8 +33,31 @@ public sealed class OzzAnimator : IDisposable
 	{
 		Rig = rig;
 		instance = rig.CreateInstance();
+		jointWeights = new float[MaxLayers * rig.JointCount];
 		ActiveClip = rig.GetClip(initialClip);
 	}
+
+	public void SetAdditive(string name, float time, float weight, OzzJointMask mask)
+		=> SetLayer(Rig.GetClip(name), time, weight, mask, additive: true);
+
+	public void SetAdditive(OzzRig.Clip clip, float time, float weight, OzzJointMask mask)
+		=> SetLayer(clip, time, weight, mask, additive: true);
+
+	public void SetLayer(string name, float time, float weight, OzzJointMask mask, bool additive = false)
+		=> SetLayer(Rig.GetClip(name), time, weight, mask, additive);
+
+	public void SetLayer(OzzRig.Clip clip, float time, float weight, OzzJointMask mask, bool additive = false)
+	{
+		if (!ReferenceEquals(mask.Rig, Rig))
+			throw new ArgumentException("Joint mask belongs to a different rig.", nameof(mask));
+		layerClip = clip;
+		layerTime = Math.Clamp(time, 0, layerClip.Duration);
+		layerWeight = weight;
+		layerMask = mask;
+		layerAdditive = additive;
+	}
+
+	public void ClearLayer() => layerClip = null;
 
 	public void Play(string name, float transitionDuration, bool restart = false)
 	{
@@ -66,26 +99,43 @@ public sealed class OzzAnimator : IDisposable
 			outgoingClip = null;
 	}
 
-	public void Sample(Span<Vector3> pose)
+	public void Sample(Span<Vector3> pose, Span<Quaternion> rotations)
 	{
+		var layerCount = 1;
+		Array.Clear(additive);
+		Array.Clear(masked);
 		if (outgoingClip == null)
 		{
 			clipIndices[0] = ActiveClip.Index;
 			times[0] = Time;
 			weights[0] = 1;
-			instance.Sample(clipIndices.AsSpan(0, 1), times.AsSpan(0, 1), weights.AsSpan(0, 1), pose);
-			return;
+		}
+		else
+		{
+			var amount = 1 - blendRemaining / blendDuration;
+			amount = amount * amount * (3 - 2 * amount);
+			clipIndices[0] = outgoingClip.Index;
+			clipIndices[1] = ActiveClip.Index;
+			times[0] = outgoingTime;
+			times[1] = Time;
+			weights[0] = 1 - amount;
+			weights[1] = amount;
+			layerCount = 2;
 		}
 
-		var amount = 1 - blendRemaining / blendDuration;
-		amount = amount * amount * (3 - 2 * amount);
-		clipIndices[0] = outgoingClip.Index;
-		clipIndices[1] = ActiveClip.Index;
-		times[0] = outgoingTime;
-		times[1] = Time;
-		weights[0] = 1 - amount;
-		weights[1] = amount;
-		instance.Sample(clipIndices, times, weights, pose);
+		if (layerClip != null && layerMask != null && layerWeight != 0)
+		{
+			clipIndices[layerCount] = layerClip.Index;
+			times[layerCount] = layerTime;
+			weights[layerCount] = layerWeight;
+			additive[layerCount] = layerAdditive ? (byte)1 : (byte)0;
+			masked[layerCount] = 1;
+			layerMask.Weights.CopyTo(jointWeights, layerCount * Rig.JointCount);
+			layerCount++;
+		}
+		instance.Sample(clipIndices.AsSpan(0, layerCount), times.AsSpan(0, layerCount),
+			weights.AsSpan(0, layerCount), additive.AsSpan(0, layerCount), masked.AsSpan(0, layerCount),
+			jointWeights.AsSpan(0, layerCount * Rig.JointCount), pose, rotations);
 	}
 
 	static float AdvanceTime(float time, float delta, float duration, bool loop)

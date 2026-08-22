@@ -15,6 +15,7 @@ public sealed partial class OzzRig : IDisposable
 
 	readonly nint handle;
 	readonly string[] jointNames;
+	readonly short[] jointParents;
 	readonly Clip[] clips;
 	readonly Dictionary<string, int> jointsByName;
 	readonly Dictionary<string, Clip> clipsByName;
@@ -27,11 +28,13 @@ public sealed partial class OzzRig : IDisposable
 	{
 		this.handle = handle;
 		jointNames = new string[Native.RigJointCount(handle)];
+		jointParents = new short[jointNames.Length];
 		jointsByName = new(jointNames.Length, StringComparer.OrdinalIgnoreCase);
 		for (var i = 0; i < jointNames.Length; i++)
 		{
 			jointNames[i] = Marshal.PtrToStringUTF8(Native.RigJointName(handle, i))
 				?? throw new InvalidDataException($"Ozz rig joint {i} has no name.");
+			jointParents[i] = checked((short)Native.RigJointParent(handle, i));
 			jointsByName.Add(jointNames[i], i);
 		}
 
@@ -76,6 +79,7 @@ public sealed partial class OzzRig : IDisposable
 	}
 
 	public int FindJoint(string name) => jointsByName.TryGetValue(name, out var index) ? index : -1;
+	public OzzJointMask CreateMask() => new(this, jointParents);
 	public Clip GetClip(string name) => clipsByName.TryGetValue(name, out var clip)
 		? clip : throw new KeyNotFoundException($"Rig clip '{name}' does not exist.");
 	public bool TryGetClip(string name, out Clip clip) => clipsByName.TryGetValue(name, out clip!);
@@ -110,6 +114,8 @@ public sealed partial class OzzRig : IDisposable
 		internal static partial int RigClipCount(nint rig);
 		[LibraryImport(Library, EntryPoint = "myth_ozz_rig_joint_name")]
 		internal static partial nint RigJointName(nint rig, int index);
+		[LibraryImport(Library, EntryPoint = "myth_ozz_rig_joint_parent")]
+		internal static partial int RigJointParent(nint rig, int index);
 		[LibraryImport(Library, EntryPoint = "myth_ozz_rig_clip_name")]
 		internal static partial nint RigClipName(nint rig, int index);
 		[LibraryImport(Library, EntryPoint = "myth_ozz_rig_clip_duration")]
@@ -120,8 +126,44 @@ public sealed partial class OzzRig : IDisposable
 		internal static partial void InstanceDestroy(nint instance);
 		[LibraryImport(Library, EntryPoint = "myth_ozz_instance_sample")]
 		internal static unsafe partial int InstanceSample(nint instance, int layerCount, int* clips,
-			float* times, float* weights, Vector3* positions);
+			float* times, float* weights, byte* additive, byte* masked, float* jointWeights,
+			Vector3* positions, Quaternion* rotations);
 	}
+}
+
+public sealed class OzzJointMask
+{
+	readonly OzzRig rig;
+	readonly short[] parents;
+	internal readonly float[] Weights;
+	internal OzzRig Rig => rig;
+
+	internal OzzJointMask(OzzRig rig, short[] parents)
+	{
+		this.rig = rig;
+		this.parents = parents;
+		Weights = new float[rig.JointCount];
+	}
+
+	public void Set(string joint, float weight, bool descendants = false)
+	{
+		var root = rig.FindJoint(joint);
+		if (root < 0)
+			throw new KeyNotFoundException($"Rig joint '{joint}' does not exist.");
+		weight = Math.Clamp(weight, 0, 1);
+		Weights[root] = weight;
+		if (!descendants)
+			return;
+		for (var i = root + 1; i < parents.Length; i++)
+			for (var parent = parents[i]; parent >= 0; parent = parents[parent])
+				if (parent == root)
+				{
+					Weights[i] = weight;
+					break;
+				}
+	}
+
+	internal float this[int joint] => Weights[joint];
 }
 
 public sealed class OzzRigInstance : IDisposable
@@ -137,17 +179,25 @@ public sealed class OzzRigInstance : IDisposable
 	}
 
 	public unsafe void Sample(ReadOnlySpan<int> clips, ReadOnlySpan<float> times,
-		ReadOnlySpan<float> weights, Span<Vector3> positions)
+		ReadOnlySpan<float> weights, ReadOnlySpan<byte> additive, ReadOnlySpan<byte> masked,
+		ReadOnlySpan<float> jointWeights, Span<Vector3> positions, Span<Quaternion> rotations)
 	{
 		ObjectDisposedException.ThrowIf(disposed, this);
 		if (clips.Length == 0 || clips.Length != times.Length || clips.Length != weights.Length ||
-			positions.Length < rig.JointCount)
+			clips.Length != additive.Length || clips.Length != masked.Length ||
+			jointWeights.Length < clips.Length * rig.JointCount || positions.Length < rig.JointCount ||
+			rotations.Length < rig.JointCount)
 			throw new ArgumentException("Invalid ozz sample buffers.");
 		fixed (int* clipsPtr = clips)
 		fixed (float* timesPtr = times)
 		fixed (float* weightsPtr = weights)
+		fixed (byte* additivePtr = additive)
+		fixed (byte* maskedPtr = masked)
+		fixed (float* jointWeightsPtr = jointWeights)
 		fixed (Vector3* positionsPtr = positions)
-			if (OzzRig.Native.InstanceSample(handle, clips.Length, clipsPtr, timesPtr, weightsPtr, positionsPtr) == 0)
+		fixed (Quaternion* rotationsPtr = rotations)
+			if (OzzRig.Native.InstanceSample(handle, clips.Length, clipsPtr, timesPtr, weightsPtr,
+				additivePtr, maskedPtr, jointWeightsPtr, positionsPtr, rotationsPtr) == 0)
 				throw new InvalidOperationException("Ozz pose evaluation failed.");
 	}
 

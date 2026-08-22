@@ -49,6 +49,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public float PixelsPerMeter = 25;
 	public float ProjectionYaw;
 	public float BootThickness = 2.5f;
+	public float TrackingLean;
+	public float UpperBodyHitStrength = 0.8f;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
 	public bool Decorated;
@@ -67,6 +69,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	OzzRig rig = null!;
 	OzzAnimator animator = null!;
 	Vector3[] sampledPose = [];
+	Quaternion[] sampledRotations = [];
 	Vector3[] ragdollPose = [];
 	Vector3[] ragdollPreviousPose = [];
 	Vector3[] ragdollVelocity = [];
@@ -75,6 +78,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
 	Bone[] bones = [];
+	OzzJointMask upperBodyMask = null!;
+	OzzRig.Clip upperBodyHitClip = null!;
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
@@ -87,6 +92,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
+	float layeredHitTime = -1;
 	Signs visualFacing;
 	Signs targetFacing;
 	float visualYaw;
@@ -121,6 +127,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	static float HeelLength => 4f;
 	static float CoatSpring => 75f;
 	static float CoatDamping => 10f;
+	static float LayeredHitDuration => 0.42f;
+	static float TrackingLeanDistance => 3f;
 
 	public IReadOnlyList<OzzRig.Clip> Clips => rig.Clips;
 	public OzzRig.Clip ActiveClip => animator.ActiveClip;
@@ -144,6 +152,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		var initialClip = rig.TryGetClip(clip, out _) ? clip : "Zombie_Idle_Loop";
 		animator = new(rig, initialClip);
 		sampledPose = new Vector3[rig.JointCount];
+		sampledRotations = new Quaternion[rig.JointCount];
 		ragdollPose = new Vector3[rig.JointCount];
 		ragdollPreviousPose = new Vector3[rig.JointCount];
 		ragdollVelocity = new Vector3[rig.JointCount];
@@ -167,6 +176,11 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
 		rightLeg = RequiredLeg("r");
+		upperBodyMask = rig.CreateMask();
+		upperBodyMask.Set("spine_01", 1, descendants: true);
+		upperBodyMask.Set("spine_01", 0.25f);
+		upperBodyMask.Set("spine_02", 0.6f);
+		upperBodyHitClip = rig.GetClip("Hit_Knockback_Additive");
 		ResetTurn();
 		visualDelta = 1 / VisualFPS;
 		UpdatePose(grounded: false, footIK: false);
@@ -246,8 +260,10 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			pendingLandingSpeed = MathF.Max(pendingLandingSpeed, speed);
 	}
 
-	public void Hit(float away)
+	public void Hit(float away, bool animateUpperBody = false)
 	{
+		if (animateUpperBody)
+			layeredHitTime = 0;
 		for (var i = 0; i < ragdollVelocity.Length; i++)
 		{
 			if (!ragdollJoints[i])
@@ -303,7 +319,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 
 	void UpdatePose(bool grounded, bool footIK)
 	{
-		animator.Sample(sampledPose);
+		UpdateAnimationLayers();
+		animator.Sample(sampledPose, sampledRotations);
+		ApplyTrackingLean();
 		UpdateRagdoll();
 		ProjectPose();
 		if (footIK)
@@ -318,6 +336,38 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		lookDirection = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
 			: new Vector2(-MathF.Cos(visualYaw), 0);
+	}
+
+	void UpdateAnimationLayers()
+	{
+		if (layeredHitTime < 0)
+		{
+			animator.ClearLayer();
+			return;
+		}
+
+		layeredHitTime += visualDelta;
+		var progress = layeredHitTime / LayeredHitDuration;
+		if (progress >= 1)
+		{
+			layeredHitTime = -1;
+			animator.ClearLayer();
+			return;
+		}
+		animator.SetAdditive(upperBodyHitClip, MathF.Min(upperBodyHitClip.Duration, layeredHitTime * 1.6f),
+			MathF.Sin(progress * MathF.PI) * UpperBodyHitStrength, upperBodyMask);
+	}
+
+	void ApplyTrackingLean()
+	{
+		if (TrackingLean <= 0 || LookTarget is not { } target)
+			return;
+		var toward = target - owner.Position;
+		var screenOffset = new Vector2(Math.Clamp(toward.X / 64f, -1, 1),
+			Math.Clamp(toward.Y / 96f, -0.5f, 0.5f)) * TrackingLeanDistance * TrackingLean;
+		var rigOffset = RigVelocity(screenOffset);
+		for (var i = 0; i < sampledPose.Length; i++)
+			sampledPose[i] += rigOffset * upperBodyMask[i];
 	}
 
 	public void Dispose() => animator?.Dispose();

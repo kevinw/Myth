@@ -35,6 +35,8 @@ public class Stalker : Pawn
 	[I(-60, 60)] public float RigProjectionYaw = 18f;
 	[I(1, 60)] public float RigVisualFPS = 16f;
 	[I(0.5f, 8)] public float RigBootThickness = 2.5f;
+	[I(0, 2)] public float RigTrackingLean = 1;
+	[I(0, 2)] public float RigHitReactionStrength = 0.8f;
 
 	static float TelegraphTime => 0.9f;
 
@@ -121,7 +123,7 @@ public class Stalker : Pawn
 	public override void OnWasHit(Actor by)
 	{
 		if (rigReady)
-			rigVisual.Hit(Position.X < by.Position.X ? -1 : 1);
+			rigVisual.Hit(Position.X < by.Position.X ? -1 : 1, animateUpperBody: true);
 	}
 
 	public override PawnInput GetInput()
@@ -209,6 +211,7 @@ public class Stalker : Pawn
 		rigVisual.ProjectionYaw = RigProjectionYaw;
 		rigVisual.VisualFPS = RigVisualFPS;
 		rigVisual.BootThickness = RigBootThickness;
+		rigVisual.UpperBodyHitStrength = RigHitReactionStrength;
 	}
 
 	void UpdateRig()
@@ -219,6 +222,7 @@ public class Stalker : Pawn
 		rigVisual.LookTarget = hunting && Game.GetFirst<Player>() is { } player
 			? player.Position + new Vector2(0, -6)
 			: null;
+		rigVisual.TrackingLean = hunting ? RigTrackingLean : 0;
 		var speed = MathF.Abs(Velocity.X);
 		var clip = !IsGrounded
 			? "NinjaJump_Idle_Loop"
