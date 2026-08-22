@@ -15,8 +15,8 @@
         -37
       ],
       "Scroll": [
-        -5,
-        -6
+        -7,
+        -9.2
       ],
       "Rotation": "Cw90",
       "FlipX": false,
@@ -40,8 +40,8 @@
         -29
       ],
       "Scroll": [
-        4,
-        7
+        6.5,
+        9.8
       ],
       "Rotation": "Cw270",
       "FlipX": true,
@@ -65,8 +65,8 @@
         -13
       ],
       "Scroll": [
-        2,
-        6
+        4.8,
+        11
       ],
       "Rotation": "None",
       "FlipX": false,
