@@ -112,6 +112,7 @@ public class Stalker : Pawn
 	public override void Destroyed()
 	{
 		Game.RoomChanged -= OnRoomChanged;
+		rigVisual.Dispose();
 		if (corruption != null)
 			Game.Destroy(corruption);
 	}

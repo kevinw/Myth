@@ -77,7 +77,7 @@ public partial class Manager
 		var clip = rig.AnimationPreviewClip;
 		ImGui.TextUnformatted($"{rig.AnimationPreviewClipIndex + 1} / {clips.Count}");
 		ImGui.SameLine();
-		ImGui.TextDisabled($"{clip.Duration:0.###} s  •  {clip.FrameCount} baked frames");
+		ImGui.TextDisabled($"{clip.Duration:0.###} s  •  compressed ozz clip");
 
 		ImGui.SetNextItemWidth(-1);
 		if (ImGui.BeginCombo("##RigAnimationClip", clip.Name))

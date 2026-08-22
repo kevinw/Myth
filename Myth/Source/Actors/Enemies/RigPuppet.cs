@@ -169,8 +169,8 @@ public class RigPuppet : Actor
 	}
 
 #if EDITOR
-	internal IReadOnlyList<SampledRig.Clip> AnimationClips => visual.Clips;
-	internal SampledRig.Clip AnimationPreviewClip => visual.Clips[AnimationPreviewClipIndex];
+	internal IReadOnlyList<OzzRig.Clip> AnimationClips => visual.Clips;
+	internal OzzRig.Clip AnimationPreviewClip => visual.Clips[AnimationPreviewClipIndex];
 	internal float AnimationPreviewTime
 	{
 		get => visual.Time;
@@ -319,6 +319,8 @@ public class RigPuppet : Actor
 		visual?.Land(Velocity.Y);
 		base.OnCollideY();
 	}
+
+	public override void Destroyed() => visual?.Dispose();
 
 	public override void OnWasHit(Actor by)
 	{

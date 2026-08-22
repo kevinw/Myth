@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-sealed class HumanoidRigVisual(Actor owner)
+sealed class HumanoidRigVisual(Actor owner) : IDisposable
 {
 	enum Part { Core, Cloth, Skin, Boot }
 
@@ -63,11 +63,10 @@ sealed class HumanoidRigVisual(Actor owner)
 	public Color BootColor = new(0x17141d);
 	public Color AccentColor = new(0xd92240);
 
-	static SampledRig? sharedRig;
-	SampledRig rig = null!;
-	SampledRig.Clip activeClip = null!;
+	static OzzRig? sharedRig;
+	OzzRig rig = null!;
+	OzzAnimator animator = null!;
 	Vector3[] sampledPose = [];
-	Vector3[] blendFromPose = [];
 	Vector3[] ragdollPose = [];
 	Vector3[] ragdollPreviousPose = [];
 	Vector3[] ragdollVelocity = [];
@@ -85,8 +84,6 @@ sealed class HumanoidRigVisual(Actor owner)
 	int neck;
 	int chest;
 	int pelvis;
-	float time;
-	float blendRemaining;
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
@@ -125,15 +122,14 @@ sealed class HumanoidRigVisual(Actor owner)
 	static float CoatSpring => 75f;
 	static float CoatDamping => 10f;
 
-	public IReadOnlyList<SampledRig.Clip> Clips => rig.Clips;
-	public SampledRig.Clip ActiveClip => activeClip;
+	public IReadOnlyList<OzzRig.Clip> Clips => rig.Clips;
+	public OzzRig.Clip ActiveClip => animator.ActiveClip;
 	public float Time
 	{
-		get => time;
+		get => animator.Time;
 		set
 		{
-			time = Math.Clamp(value, 0, activeClip.Duration);
-			blendRemaining = 0;
+			animator.SetTime(value);
 			poseDirty = true;
 		}
 	}
@@ -145,8 +141,9 @@ sealed class HumanoidRigVisual(Actor owner)
 		if (VisualFPS <= 0)
 			VisualFPS = 20;
 		rig = sharedRig ??= LoadRig();
+		var initialClip = rig.TryGetClip(clip, out _) ? clip : "Zombie_Idle_Loop";
+		animator = new(rig, initialClip);
 		sampledPose = new Vector3[rig.JointCount];
-		blendFromPose = new Vector3[rig.JointCount];
 		ragdollPose = new Vector3[rig.JointCount];
 		ragdollPreviousPose = new Vector3[rig.JointCount];
 		ragdollVelocity = new Vector3[rig.JointCount];
@@ -170,16 +167,15 @@ sealed class HumanoidRigVisual(Actor owner)
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
 		rightLeg = RequiredLeg("r");
-		activeClip = rig.TryGetClip(clip, out var found) ? found : rig.GetClip("Zombie_Idle_Loop");
 		ResetTurn();
 		visualDelta = 1 / VisualFPS;
 		UpdatePose(grounded: false, footIK: false);
 	}
 
-	static SampledRig LoadRig()
+	static OzzRig LoadRig()
 	{
-		using var stream = Assets.Content.OpenRead("Rigs/ual2.mrig");
-		return SampledRig.Load(stream);
+		using var stream = Assets.Content.OpenRead("Rigs/ual2.ozzpack");
+		return OzzRig.Load(stream);
 	}
 
 	int RequiredJoint(string name)
@@ -192,24 +188,11 @@ sealed class HumanoidRigVisual(Actor owner)
 		=> new(RequiredJoint($"thigh_{side}"), RequiredJoint($"calf_{side}"),
 			RequiredJoint($"foot_{side}"), RequiredJoint($"ball_{side}"), RequiredJoint($"ball_leaf_{side}"));
 
-	public bool TryGetClip(string name, out SampledRig.Clip clip) => rig.TryGetClip(name, out clip);
-	public SampledRig.Clip GetClip(string name) => rig.GetClip(name);
+	public bool TryGetClip(string name, out OzzRig.Clip clip) => rig.TryGetClip(name, out clip);
+	public OzzRig.Clip GetClip(string name) => rig.GetClip(name);
 
 	public void Play(string name, bool blend = true, bool restart = false)
-	{
-		var clip = rig.GetClip(name);
-		if (clip == activeClip && !restart)
-			return;
-		if (blend && sampledPose.Length == blendFromPose.Length)
-		{
-			sampledPose.CopyTo(blendFromPose, 0);
-			blendRemaining = ClipBlendDuration;
-		}
-		else
-			blendRemaining = 0;
-		activeClip = clip;
-		time = 0;
-	}
+		=> animator.Play(name, blend ? ClipBlendDuration : 0, restart);
 
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true)
 	{
@@ -223,7 +206,7 @@ sealed class HumanoidRigVisual(Actor owner)
 			{
 				visualDelta = step;
 				poseDirty = false;
-				UpdatePose(grounded, footIK, loop);
+				UpdatePose(grounded, footIK);
 			}
 			return;
 		}
@@ -236,13 +219,8 @@ sealed class HumanoidRigVisual(Actor owner)
 		for (var i = 0; i < ticks; i++)
 		{
 			UpdateTurn(grounded);
-			if (advance)
-			{
-				time += step * PlaybackSpeed;
-				time = loop ? ((time % activeClip.Duration) + activeClip.Duration) % activeClip.Duration
-					: MathF.Min(time, activeClip.Duration);
-			}
-			UpdatePose(grounded, footIK, loop);
+			animator.Advance(advance ? step * PlaybackSpeed : 0, step, loop);
+			UpdatePose(grounded, footIK);
 		}
 	}
 
@@ -323,17 +301,9 @@ sealed class HumanoidRigVisual(Actor owner)
 		turning = false;
 	}
 
-	void UpdatePose(bool grounded, bool footIK, bool loop = true)
+	void UpdatePose(bool grounded, bool footIK)
 	{
-		rig.Sample(activeClip, time, loop, sampledPose);
-		if (blendRemaining > 0)
-		{
-			blendRemaining = MathF.Max(0, blendRemaining - visualDelta);
-			var blend = 1 - blendRemaining / ClipBlendDuration;
-			blend = blend * blend * (3 - 2 * blend);
-			for (var i = 0; i < sampledPose.Length; i++)
-				sampledPose[i] = Vector3.Lerp(blendFromPose[i], sampledPose[i], blend);
-		}
+		animator.Sample(sampledPose);
 		UpdateRagdoll();
 		ProjectPose();
 		if (footIK)
@@ -349,6 +319,8 @@ sealed class HumanoidRigVisual(Actor owner)
 			? (target - owner.Position - projectedPose[head]).Normalized()
 			: new Vector2(-MathF.Cos(visualYaw), 0);
 	}
+
+	public void Dispose() => animator?.Dispose();
 
 	void ProjectPose()
 	{

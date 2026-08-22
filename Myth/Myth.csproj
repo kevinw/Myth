@@ -314,4 +314,23 @@
     <Copy SourceFiles="../native/MythCapture/libMythCapture.dylib" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' != 'browser-wasm'">
+    <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.dylib</OzzRuntimeLibrary>
+  </PropertyGroup>
+
+  <Target Name="BuildOzzRuntime"
+          BeforeTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' != 'browser-wasm'"
+          Inputs="tools/rig-baker/ozz_runtime.cc;tools/rig-baker/CMakeLists.txt;tools/rig-baker/build-runtime.sh;tools/ozz-animation/CMakeLists.txt"
+          Outputs="$(OzzRuntimeLibrary)">
+    <Exec Command="tools/rig-baker/build-runtime.sh '$(BaseIntermediateOutputPath)ozz-runtime'" />
+  </Target>
+
+  <Target Name="CopyOzzRuntime"
+          AfterTargets="Build"
+          DependsOnTargets="BuildOzzRuntime"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' != 'browser-wasm' And Exists('$(OzzRuntimeLibrary)')">
+    <Copy SourceFiles="$(OzzRuntimeLibrary)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

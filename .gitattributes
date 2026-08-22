@@ -28,7 +28,7 @@ Myth/Platforms/iOS/Native/SDL3.xcframework/*/SDL3.framework/SDL3 filter=lfs diff
 *.gif filter=lfs diff=lfs merge=lfs -text
 *.webp filter=lfs diff=lfs merge=lfs -text
 *.bin filter=lfs diff=lfs merge=lfs -text
-*.mrig filter=lfs diff=lfs merge=lfs -text
+*.ozzpack filter=lfs diff=lfs merge=lfs -text
 # Text formats the tools regenerate: pin to LF so they don't churn CRLF/LF diffs
 # across Windows/macOS. The serializer also emits LF (see ActorSpecs.JsonOptions).
 *.json text eol=lf
