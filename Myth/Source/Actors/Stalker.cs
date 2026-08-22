@@ -21,24 +21,27 @@ public class Stalker : Pawn
 	public static readonly RectInt NavProbe = new(-8, -24, 16, 24);
 	public static readonly RectInt NavDuckingProbe = new(-8, -12, 16, 12);
 
-	static readonly Color Tint = new(0x2a1030);
-	const float RenderScale = 2f;
-
 	// Slower than the player on purpose: in-room it can always be outrun. The threat is that
 	// it never stops, not that it wins a footrace.
 	[I(0.25f, 1.5f)] public float SpeedMultiplier = 0.75f;
 	[I(32, 320)] public float SightRange = 160f;
 	// Off-screen pursuit speed, px/sec, used to turn distance-to-exit into an arrival delay.
-	[I(10, 120)] public float TravelSpeed = 45f;
+	[I(10, 120)] public float TravelSpeed = 35f;
 	[I(0, 4)] public float MinArrivalDelay = 1.5f;
 	[I(5, 24)] public float MaxArrivalDelay = 12f;
 	// Never materialize right on top of the player; hold the arrival until there's room to react.
 	[I(16, 160)] public float MinArrivalDistance = 56f;
+	[I(12, 40)] public float RigPixelsPerMeter = 23f;
+	[I(-60, 60)] public float RigProjectionYaw = 18f;
+	[I(1, 60)] public float RigVisualFPS = 16f;
+	[I(0.5f, 8)] public float RigBootThickness = 2.5f;
 
 	static float TelegraphTime => 0.9f;
 
 	readonly Navigator nav;
+	readonly HumanoidRigVisual rigVisual;
 	DitherCorruption? corruption;
+	bool rigReady;
 	bool hunting;
 	string? homeRoomId;
 	Point2 homePosition;
@@ -60,6 +63,18 @@ public class Stalker : Pawn
 	public Stalker()
 	{
 		nav = new(this);
+		rigVisual = new(this)
+		{
+			Decorated = true,
+			TurnWhileMoving = true,
+			CoreColor = new(0x4b334f),
+			ClothColor = new(0x17131f),
+			ClothHighlightColor = new(0x4a354f),
+			SkinColor = new(0x8f7777),
+			BootColor = new(0x0d0b12),
+			OutlineColor = new(0x09070d),
+			AccentColor = new(0xf02245),
+		};
 		Sprite = Assets.GetSprite(nameof(Bud));
 		Hitbox = new(NavProbe);
 		Mask = Masks.Enemy;
@@ -74,12 +89,15 @@ public class Stalker : Pawn
 		// The persistent instance outlives room changes, so re-entering the room it was
 		// authored in would spawn a second one. First one wins.
 		foreach (var actor in Game.Actors)
-			if (actor is Stalker other && other != this)
+			if (actor is Stalker other && other != this && !Game.destroying.Contains(other))
 			{
 				Game.Destroy(this);
 				return;
 			}
 
+		SyncRigSettings();
+		rigVisual.Initialize("Zombie_Idle_Loop");
+		rigReady = true;
 		KeepOnRoomTransition = true;
 		corruption = Game.Create<DitherCorruption>(Position, it =>
 		{
@@ -98,8 +116,12 @@ public class Stalker : Pawn
 			Game.Destroy(corruption);
 	}
 
-	// Unkillable: strikes land (and sound) but nothing happens.
-	public override void OnWasHit(Actor by) { }
+	// Unkillable, but the body still yields to the strike.
+	public override void OnWasHit(Actor by)
+	{
+		if (rigReady)
+			rigVisual.Hit(Position.X < by.Position.X ? -1 : 1);
+	}
 
 	public override PawnInput GetInput()
 	{
@@ -177,6 +199,39 @@ public class Stalker : Pawn
 		}
 
 		base.Update();
+		UpdateRig();
+	}
+
+	void SyncRigSettings()
+	{
+		rigVisual.PixelsPerMeter = RigPixelsPerMeter;
+		rigVisual.ProjectionYaw = RigProjectionYaw;
+		rigVisual.VisualFPS = RigVisualFPS;
+		rigVisual.BootThickness = RigBootThickness;
+	}
+
+	void UpdateRig()
+	{
+		if (!rigReady)
+			return;
+		SyncRigSettings();
+		rigVisual.LookTarget = hunting && Game.GetFirst<Player>() is { } player
+			? player.Position + new Vector2(0, -6)
+			: null;
+		var speed = MathF.Abs(Velocity.X);
+		var clip = !IsGrounded
+			? "NinjaJump_Idle_Loop"
+			: speed > 2 ? "Zombie_Walk_Fwd_Loop" : "Zombie_Idle_Loop";
+		rigVisual.Play(clip);
+		rigVisual.PlaybackSpeed = clip == "Zombie_Walk_Fwd_Loop" ? Math.Clamp(speed / 22f, 0.65f, 1.8f) : 1;
+		rigVisual.Update(IsGrounded, footIK: IsGrounded && !rigVisual.Turning);
+	}
+
+	protected override void OnLanded(Vector2 previousVelocity)
+	{
+		base.OnLanded(previousVelocity);
+		if (rigReady)
+			rigVisual.Land(previousVelocity.Y);
 	}
 
 	void BeginHunt()
@@ -342,11 +397,28 @@ public class Stalker : Pawn
 
 	public override void Render(Batcher batcher)
 	{
-		batcher.PushMatrix(Matrix3x2.CreateScale(RenderScale));
-		RenderSpriteSubtexture(batcher, Tint);
-		batcher.PopMatrix();
+		if (rigReady && !SpriteBlinkHidden)
+			rigVisual.Draw(batcher, Color.White, silhouette: false);
+	}
+
+	public override void RenderShadow(Batcher batcher, Color color)
+	{
+		if (rigReady)
+			rigVisual.Draw(batcher, color, silhouette: true);
+	}
+
+	public override void RenderReflection(Batcher batcher, Color color)
+	{
+		if (rigReady)
+			rigVisual.Draw(batcher, color, silhouette: true);
+	}
+
+	public override void RenderNormals(Batcher batcher)
+	{
+		if (rigReady)
+			rigVisual.Draw(batcher, new Color(0x8080ff), silhouette: true);
 	}
 
 	public override Rect GetVisualBounds()
-		=> new(Position.X + NavProbe.X, Position.Y + NavProbe.Y, NavProbe.Width, NavProbe.Height);
+		=> new(Position.X - 38, Position.Y - 46, 76, 56);
 }

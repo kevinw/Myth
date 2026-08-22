@@ -1,3 +1,8 @@
+# pseudoregalia
+- it's VERY fun to have two little jumps after the main jump. wiggle room + expressivity.
+- switch which moves platforms is fun
+- more 3D in and out of spaces
+
 # type-safe actor spec access (source-gen spec views)
 
 Editor + pre-instantiation code reads actor data from JsonObject specs via stringly-typed
