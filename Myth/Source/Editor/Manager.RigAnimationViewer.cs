@@ -6,7 +6,7 @@ namespace Myth;
 
 public partial class Manager
 {
-	bool rigAnimationViewerOpen = true;
+	bool rigAnimationViewerOpen = false;
 	bool rigAnimationViewerInitialized;
 	string rigAnimationSearch = "";
 	RigPuppet? rigAnimationPreviewActor;
