@@ -33,6 +33,25 @@
           "enable": false
         }
       }
+    },
+    {
+      "clip": "Hit_Knockback",
+      "filename": "Hit_Knockback_Additive.ozz",
+      "raw": false,
+      "additive": true,
+      "additive_reference": "animation",
+      "sampling_rate": 30,
+      "optimize": true,
+      "optimization_settings": {
+        "tolerance": 0.001,
+        "distance": 0.1
+      },
+      "tracks": {
+        "properties": [],
+        "motion": {
+          "enable": false
+        }
+      }
     }
   ]
 }

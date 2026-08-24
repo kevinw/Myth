@@ -36,7 +36,7 @@ along with this.
 - the bg NCT should disintegrate when you kill the duck
 - start menu maybe needs "return to checkpoint"
 - lighting trap sfx stuck when the map opens; what is a general solution for this
-- make untakedn map exits more obvious than the current pulsating 1px line
+- make untaken map exits more obvious than the current pulsating 1px line
 - doors in the floater room are unclear
 - floater room shadows look like safe spots but they are not
 - health hud

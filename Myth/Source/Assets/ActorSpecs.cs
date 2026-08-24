@@ -308,6 +308,38 @@ public static class ActorSpecs
 		}
 	}
 
+	public static IEnumerable<EditableProperty> GetEditableProperties(Actor actor)
+	{
+		if (!actorNames.TryGetValue(actor.GetType(), out var typeName) || !actorTypes.TryGetValue(typeName, out var type))
+			yield break;
+
+		foreach (var member in GetSerializableMembers(type.Type))
+		{
+			if (!type.ShowFacing && member.Name == nameof(Actor.Facing))
+				continue;
+			yield return new EditableProperty(member.Name, member.Name, GetMemberType(member), member.DeclaringType ?? type.Type,
+				ToJsonNode(GetMemberValue(member, actor)), null, false,
+				GetMemberAttribute<IAttribute>(member),
+				GetMemberAttribute<MultilineAttribute>(member),
+				GetMemberAttribute<ActorRefAttribute>(member));
+		}
+	}
+
+	public static bool SetEditableProperty(Actor actor, string name, JsonNode? node)
+	{
+		if (node == null || !actorNames.TryGetValue(actor.GetType(), out var typeName) ||
+			!actorTypes.TryGetValue(typeName, out var type))
+			return false;
+
+		foreach (var member in GetSerializableMembers(type.Type))
+			if (member.Name == name && TryReadValue(node, GetMemberType(member), out var value))
+			{
+				SetMemberValue(member, actor, value);
+				return true;
+			}
+		return false;
+	}
+
 	static T? GetMemberAttribute<T>(MemberInfo member) where T : Attribute
 	{
 		var key = (member, typeof(T));

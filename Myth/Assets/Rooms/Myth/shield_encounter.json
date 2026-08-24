@@ -8,6 +8,7 @@
     "(": "back-nw",
     ")": "back-ne",
     "-": "back-right",
+    "1": "castle",
     "G": "grass",
     "R": "ruin",
     "T": "stone",
@@ -24,7 +25,7 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000",
+    "0000000001111100000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "00000000000TT000000000000000000000000000",
@@ -73,7 +74,7 @@
     {
       "Id": "6aa30cf3668a43c1",
       "Type": "Light",
-      "Position": [97, 47],
+      "Position": [185, 52],
       "FlickerFrequency": 0.65,
       "Height": 11.7
     },
@@ -86,7 +87,7 @@
     {
       "Id": "1d40b931814f83e2",
       "Type": "Light",
-      "Position": [200, 69],
+      "Position": [248, 57],
       "Radius": 61.3,
       "FlickerFrequency": 2.25,
       "Intensity": 0.8,
@@ -95,7 +96,7 @@
     {
       "Id": "ae7e8b2447b7830c",
       "Type": "PlayerStart",
-      "Position": [132, 104]
+      "Position": [172, 136]
     },
     {
       "Id": "270889d43489462d",
@@ -127,29 +128,47 @@
       "Position": [114, -6],
       "Size": [64, 112],
       "Resonance": 0.9,
-      "MetalColor": "B85886",
-      "GlowColor": "35F5BD"
+      "GlowColor": "35F5BD",
+      "MetalColor": "74724D"
     },
     {
       "Id": "9797c839c06fe944",
       "Type": "RigPuppet",
-      "Position": [256, 80],
-      "VisualFPS": 11.688
-    },
-    {
-      "Id": "1a738b978c37e009",
-      "Type": "RigPuppet",
-      "Position": [200, 88],
-      "VisualFPS": 11.688
+      "Position": [144, 72],
+      "AnimationName": "Pose2Sim_Performance",
+      "Performance": true,
+      "VisualFPS": 11.688,
+      "ProjectionYaw": -6.522
     },
     {
       "Id": "ff33298028412e1a",
       "Type": "RigPuppet",
-      "Position": [32, 96],
-      "VisualFPS": 11.688,
+      "Position": [48, 40],
       "ProjectionYaw": 43.696,
       "PixelsPerMeter": 36.551,
-      "NearColor": "90D814"
+      "NeuralJostleStrength": 0.786,
+      "NearColor": "F7F9F5",
+      "NeuralColorAmount": 0.906,
+      "NeuralNormalAmount": 0.704,
+      "HeadSize": 3.834,
+      "TorsoSize": 10,
+      "BicepSize": 7.241,
+      "ForearmSize": 7.724,
+      "ThighSize": 5.173,
+      "NeuralWeightsFile": "bubbles_circular.bin",
+      "NeuralJostleRadius": 5.008,
+      "NeuralFireRate": 0.724,
+      "NeuralContrast": 1.055,
+      "VisualFPS": 12.118
+    },
+    {
+      "Id": "a11e0b090e97c4d3",
+      "Type": "AlienBug",
+      "Position": [288, 48],
+      "VisualFPS": 16.021,
+      "BodySize": 7.218,
+      "NeuralSaturation": 0.214,
+      "NeuralWeightsFile": "crowd_circular.bin"
     }
   ]
 }

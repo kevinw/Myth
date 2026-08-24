@@ -3,12 +3,15 @@ using Foster.Framework;
 
 namespace Myth;
 
+public enum RigSkinMode { Solid, Surface, NCA }
+
 sealed class HumanoidRigVisual(Actor owner) : IDisposable
 {
-	enum Part { Core, Cloth, Skin, Boot }
+	enum Part { Torso, Bicep, Forearm, Thigh, Other }
 
 	readonly record struct BoneSpec(string From, string To, float Width, Part Part);
 	readonly record struct Bone(int From, int To, float Width, Part Part);
+	readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
 	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe, int Tip);
 
 	struct FootIK
@@ -19,53 +22,65 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 
 	static readonly BoneSpec[] BoneSpecs =
 	[
-		new("pelvis", "spine_01", 5, Part.Core),
-		new("spine_01", "spine_02", 5, Part.Core),
-		new("spine_02", "spine_03", 5, Part.Core),
-		new("spine_03", "neck_01", 4, Part.Skin),
-		new("neck_01", "Head", 3, Part.Skin),
-		new("spine_03", "clavicle_l", 3, Part.Cloth),
-		new("clavicle_l", "upperarm_l", 3, Part.Cloth),
-		new("upperarm_l", "lowerarm_l", 3, Part.Cloth),
-		new("lowerarm_l", "hand_l", 2.5f, Part.Skin),
-		new("spine_03", "clavicle_r", 3, Part.Cloth),
-		new("clavicle_r", "upperarm_r", 3, Part.Cloth),
-		new("upperarm_r", "lowerarm_r", 3, Part.Cloth),
-		new("lowerarm_r", "hand_r", 2.5f, Part.Skin),
-		new("pelvis", "thigh_l", 4, Part.Cloth),
-		new("thigh_l", "calf_l", 4, Part.Cloth),
-		new("calf_l", "foot_l", 3, Part.Boot),
-		new("foot_l", "ball_l", 2, Part.Boot),
-		new("ball_l", "ball_leaf_l", 2, Part.Boot),
-		new("pelvis", "thigh_r", 4, Part.Cloth),
-		new("thigh_r", "calf_r", 4, Part.Cloth),
-		new("calf_r", "foot_r", 3, Part.Boot),
-		new("foot_r", "ball_r", 2, Part.Boot),
-		new("ball_r", "ball_leaf_r", 2, Part.Boot),
+		new("pelvis", "spine_01", 5, Part.Torso),
+		new("spine_01", "spine_02", 5, Part.Torso),
+		new("spine_02", "spine_03", 5, Part.Torso),
+		new("spine_03", "neck_01", 4, Part.Other),
+		new("neck_01", "Head", 3, Part.Other),
+		new("spine_03", "clavicle_l", 3, Part.Bicep),
+		new("clavicle_l", "upperarm_l", 3, Part.Bicep),
+		new("upperarm_l", "lowerarm_l", 3, Part.Bicep),
+		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm),
+		new("spine_03", "clavicle_r", 3, Part.Bicep),
+		new("clavicle_r", "upperarm_r", 3, Part.Bicep),
+		new("upperarm_r", "lowerarm_r", 3, Part.Bicep),
+		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm),
+		new("pelvis", "thigh_l", 4, Part.Thigh),
+		new("thigh_l", "calf_l", 4, Part.Thigh),
+		new("calf_l", "foot_l", 3, Part.Other),
+		new("foot_l", "ball_l", 2, Part.Other),
+		new("ball_l", "ball_leaf_l", 2, Part.Other),
+		new("pelvis", "thigh_r", 4, Part.Thigh),
+		new("thigh_r", "calf_r", 4, Part.Thigh),
+		new("calf_r", "foot_r", 3, Part.Other),
+		new("foot_r", "ball_r", 2, Part.Other),
+		new("ball_r", "ball_leaf_r", 2, Part.Other),
 	];
 
 	public float PlaybackSpeed = 1;
 	public float VisualFPS = 20;
 	public float PixelsPerMeter = 25;
 	public float ProjectionYaw;
-	public float BootThickness = 2.5f;
+	public float HeadSize = 3.9f;
+	public float TorsoSize = 5;
+	public float BicepSize = 3;
+	public float ForearmSize = 2.5f;
+	public float ThighSize = 4;
+	public RigSkinMode SkinMode = RigSkinMode.NCA;
+	public string SurfaceId = "";
 	public float TrackingLean;
 	public float UpperBodyHitStrength = 0.8f;
+	public string NeuralWeightsFile = "rock035_pair_circular_screen.bin";
+	public float NeuralColorAmount = 0.25f;
+	public float NeuralNormalAmount = 0.55f;
+	public float NeuralFPS = 20;
+	public float NeuralFireRate = 0.5f;
+	public float NeuralContrast = 1f;
+	public float NeuralSaturation = 1.1f;
+	public float NeuralBrightness = 0.3f;
+	public float NeuralHitStrength = 0.55f;
+	public float NeuralJostleInterval = 0.45f;
+	public float NeuralJostleStrength = 0.22f;
+	public float NeuralJostleRadius = 5;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
-	public bool Decorated;
 	public bool TurnWhileMoving;
 	public Color FarColor = new(0x435263);
 	public Color NearColor = new(0xb7cdd0);
 	public Color CoreColor = new(0x708b94);
 	public Color OutlineColor = new(0x171d27);
-	public Color ClothColor = new(0x35263e);
-	public Color ClothHighlightColor = new(0x66506f);
-	public Color SkinColor = new(0x9b817a);
-	public Color BootColor = new(0x17141d);
 	public Color AccentColor = new(0xd92240);
 
-	static OzzRig? sharedRig;
 	OzzRig rig = null!;
 	OzzAnimator animator = null!;
 	Vector3[] sampledPose = [];
@@ -78,21 +93,28 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
 	Bone[] bones = [];
+	BoneUV[] neuralBoneUVs = [];
+	Vector2 neuralHeadUV;
+	Vector2 neuralHeadUVRadius;
+	Vector2 surfaceMaterialOrigin;
 	OzzJointMask upperBodyMask = null!;
 	OzzRig.Clip upperBodyHitClip = null!;
+	NeuralTextureActor? neuralSurface;
+	string activeNeuralWeightsFile = "";
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
 	FootIK leftFoot;
 	FootIK rightFoot;
 	int head;
-	int neck;
-	int chest;
 	int pelvis;
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
 	float layeredHitTime = -1;
+	float neuralHitRemaining;
+	float neuralJostleAt;
+	float neuralJostlePhase;
 	Signs visualFacing;
 	Signs targetFacing;
 	float visualYaw;
@@ -100,12 +122,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	float turnToYaw;
 	float turnTime;
 	float turnAmount;
-	Vector2 coatTail;
-	Vector2 coatTailVelocity;
 	bool ragdollReady;
 	bool turnReady;
 	bool turning;
-	bool coatReady;
 	bool poseDirty;
 	Vector2 lookDirection;
 
@@ -124,11 +143,10 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	static float FootPlantDistance => 5f;
 	static float FootIKSpeed => 40f;
 	static float LegExtensionSlack => 0.4f;
-	static float HeelLength => 4f;
-	static float CoatSpring => 75f;
-	static float CoatDamping => 10f;
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
+	static Point2 NeuralSize => new(64, 80);
+	static Point2 NeuralOrigin => new(-32, -72);
 
 	public IReadOnlyList<OzzRig.Clip> Clips => rig.Clips;
 	public OzzRig.Clip ActiveClip => animator.ActiveClip;
@@ -148,7 +166,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	{
 		if (VisualFPS <= 0)
 			VisualFPS = 20;
-		rig = sharedRig ??= LoadRig();
+		rig = RigLibrary.Get("ual2");
 		var initialClip = rig.TryGetClip(clip, out _) ? clip : "Zombie_Idle_Loop";
 		animator = new(rig, initialClip);
 		sampledPose = new Vector3[rig.JointCount];
@@ -161,6 +179,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		projectedPose = new Vector2[rig.JointCount];
 		jointDepth = new float[rig.JointCount];
 		bones = new Bone[BoneSpecs.Length];
+		neuralBoneUVs = new BoneUV[BoneSpecs.Length];
 		boneOrder = new int[bones.Length];
 		for (var i = 0; i < bones.Length; i++)
 		{
@@ -171,8 +190,6 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			boneOrder[i] = i;
 		}
 		head = RequiredJoint("Head");
-		neck = RequiredJoint("neck_01");
-		chest = RequiredJoint("spine_03");
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
 		rightLeg = RequiredLeg("r");
@@ -184,12 +201,40 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		ResetTurn();
 		visualDelta = 1 / VisualFPS;
 		UpdatePose(grounded: false, footIK: false);
+		CaptureNeuralUVs();
+		surfaceMaterialOrigin = owner.Position;
+		neuralJostlePhase = (owner.ActorId?.GetHashCode() ?? owner.Position.GetHashCode()) * 0.0001f;
+		neuralJostleAt = owner.Time.SecondsF + NeuralJostleInterval * 0.5f;
+		CreateNeuralSurface();
 	}
 
-	static OzzRig LoadRig()
+	void CreateNeuralSurface()
 	{
-		using var stream = Assets.Content.OpenRead("Rigs/ual2.ozzpack");
-		return OzzRig.Load(stream);
+		activeNeuralWeightsFile = NeuralWeightsFile;
+		neuralSurface = owner.Game.Create<NeuralTextureActor>(owner.Position + NeuralOrigin, it =>
+		{
+			it.Visible = false;
+			it.Size = NeuralSize;
+			it.SimulationSize = NeuralSize;
+			it.WeightsFile = activeNeuralWeightsFile;
+			it.NearestStateSampling = true;
+			it.EdgeTrim = 1;
+		});
+		SyncNeuralSurface();
+		neuralSurface.SimulateFromSeed(65);
+	}
+
+	void SyncNeuralSurface()
+	{
+		if (neuralSurface == null)
+			return;
+		neuralSurface.Position = owner.Position + NeuralOrigin;
+		neuralSurface.KeepOnRoomTransition = owner.KeepOnRoomTransition;
+		neuralSurface.StepsPerSecond = SkinMode == RigSkinMode.NCA ? NeuralFPS : 0;
+		neuralSurface.FireRate = NeuralFireRate;
+		neuralSurface.Contrast = NeuralContrast;
+		neuralSurface.Saturation = NeuralSaturation;
+		neuralSurface.Brightness = NeuralBrightness;
 	}
 
 	int RequiredJoint(string name)
@@ -211,6 +256,13 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true)
 	{
 		EnsureState();
+		if (neuralSurface != null && activeNeuralWeightsFile != NeuralWeightsFile)
+		{
+			owner.Game.Destroy(neuralSurface);
+			neuralSurface = null;
+			CreateNeuralSurface();
+		}
+		SyncNeuralSurface();
 		var step = 1 / VisualFPS;
 		visualAccumulator += owner.Time.Delta;
 		var ticks = Math.Min((int)(visualAccumulator / step), 4);
@@ -262,6 +314,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 
 	public void Hit(float away, bool animateUpperBody = false)
 	{
+		neuralHitRemaining = 0.18f;
 		if (animateUpperBody)
 			layeredHitTime = 0;
 		for (var i = 0; i < ragdollVelocity.Length; i++)
@@ -332,7 +385,6 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		else
 			ResetFeet();
 		SortBones();
-		UpdateCoat();
 		lookDirection = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
 			: new Vector2(-MathF.Cos(visualYaw), 0);
@@ -340,6 +392,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 
 	void UpdateAnimationLayers()
 	{
+		neuralHitRemaining = MathF.Max(0, neuralHitRemaining - visualDelta);
 		if (layeredHitTime < 0)
 		{
 			animator.ClearLayer();
@@ -358,6 +411,23 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			MathF.Sin(progress * MathF.PI) * UpperBodyHitStrength, upperBodyMask);
 	}
 
+	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
+	{
+		if (SkinMode != RigSkinMode.NCA || context.Texture != neuralSurface)
+			return;
+		var center = (Vector2)owner.Position + (projectedPose[pelvis] + projectedPose[head]) * 0.5f;
+		if (neuralHitRemaining > 0)
+			context.AddStamp(center, center, 7, NeuralHitStrength);
+
+		var now = owner.Time.SecondsF;
+		if (NeuralJostleInterval <= 0 || NeuralJostleStrength <= 0 || NeuralJostleRadius <= 0 || now < neuralJostleAt)
+			return;
+		neuralJostleAt = now + NeuralJostleInterval;
+		var phase = now * 2.3f + neuralJostlePhase;
+		var offset = new Vector2(MathF.Sin(phase) * 8, MathF.Cos(phase * 0.73f) * 14);
+		context.AddStamp(center + offset, center + offset, NeuralJostleRadius, NeuralJostleStrength);
+	}
+
 	void ApplyTrackingLean()
 	{
 		if (TrackingLean <= 0 || LookTarget is not { } target)
@@ -370,7 +440,13 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			sampledPose[i] += rigOffset * upperBodyMask[i];
 	}
 
-	public void Dispose() => animator?.Dispose();
+	public void Dispose()
+	{
+		animator?.Dispose();
+		if (neuralSurface != null && !owner.Game.destroying.Contains(neuralSurface))
+			owner.Game.Destroy(neuralSurface);
+		neuralSurface = null;
+	}
 
 	void ProjectPose()
 	{
@@ -533,141 +609,186 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		}
 	}
 
-	void UpdateCoat()
-	{
-		if (!Decorated)
-			return;
-		var target = projectedPose[pelvis] + Vector2.UnitY * 12 - owner.Velocity * 0.025f;
-		if (!coatReady)
-		{
-			coatTail = target;
-			coatReady = true;
-		}
-		for (var remaining = visualDelta; remaining > 0;)
-		{
-			var dt = MathF.Min(remaining, 1 / 30f);
-			remaining -= dt;
-			coatTailVelocity += (target - coatTail) * CoatSpring * dt;
-			coatTailVelocity *= MathF.Exp(-CoatDamping * dt);
-			coatTail += coatTailVelocity * dt;
-		}
-	}
-
 	float BoneDepth(Bone bone) => (jointDepth[bone.From] + jointDepth[bone.To]) * 0.5f;
 
 	Color BoneColor(Bone bone, float depth)
+		=> bone.From == pelvis || bone.To == pelvis ? CoreColor : Color.Lerp(FarColor, NearColor, depth);
+
+	float BoneWidth(Bone bone) => bone.Part switch
 	{
-		if (!Decorated)
-			return bone.From == pelvis || bone.To == pelvis ? CoreColor : Color.Lerp(FarColor, NearColor, depth);
-		return bone.Part switch
+		Part.Torso => TorsoSize,
+		Part.Bicep => BicepSize,
+		Part.Forearm => ForearmSize,
+		Part.Thigh => ThighSize,
+		_ => bone.Width,
+	};
+
+	void CaptureNeuralUVs()
+	{
+		for (var i = 0; i < bones.Length; i++)
 		{
-			Part.Core => CoreColor,
-			Part.Cloth => Color.Lerp(ClothColor, ClothHighlightColor, depth),
-			Part.Skin => SkinColor,
-			_ => BootColor,
-		};
+			var bone = bones[i];
+			BoneQuad(projectedPose[bone.From], projectedPose[bone.To], BoneWidth(bone),
+				out var a, out var b, out var c, out var d);
+			neuralBoneUVs[i] = new(NeuralUV(a), NeuralUV(b), NeuralUV(c), NeuralUV(d));
+		}
+		neuralHeadUV = NeuralUV(projectedPose[head]);
+		neuralHeadUVRadius = new Vector2(HeadSize) / (Vector2)NeuralSize;
 	}
 
 	public void Draw(Batcher batcher, Color tint, bool silhouette)
 	{
-		if (Decorated)
-			DrawCoat(batcher, tint, silhouette);
+		var surface = !silhouette && SkinMode == RigSkinMode.Surface ? Assets.GetSurface(SurfaceId) : null;
+		var neuralTexture = !silhouette && SkinMode == RigSkinMode.NCA && NeuralColorAmount > 0
+			? neuralSurface?.OutputTexture : null;
+		if (neuralTexture != null)
+			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
 		{
 			var bone = bones[boneOrder[sortedIndex]];
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
+			var width = BoneWidth(bone);
 			if (silhouette)
 			{
-				batcher.Line(from, to, bone.Width + 2, tint);
+				batcher.Line(from, to, width + 2, tint);
 				continue;
 			}
 
 			var depth = Math.Clamp(BoneDepth(bone) + 0.5f, 0, 1);
 			var color = BoneColor(bone, depth);
-			batcher.Line(from, to, bone.Width + 2, OutlineColor);
-			batcher.Line(from, to, bone.Width, color);
-			batcher.Circle(to, MathF.Max(1.2f, bone.Width * 0.42f), 8, color);
+			batcher.Line(from, to, width + 2, OutlineColor);
+			batcher.Line(from, to, width, color);
+			if (surface != null)
+				DrawSurfaceBone(batcher, surface, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]], normals: false);
+			else if (neuralTexture != null)
+				DrawNeuralBone(batcher, neuralTexture, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]],
+					color * NeuralColorAmount);
+			batcher.Circle(to, MathF.Max(1.2f, width * 0.42f), 8, color);
 		}
-		if (jointDepth[leftLeg.Toe] < jointDepth[rightLeg.Toe])
+
+		var headPosition = projectedPose[head];
+		batcher.Circle(headPosition, HeadSize + 1.4f, 14, silhouette ? tint : OutlineColor);
+		batcher.Circle(headPosition, HeadSize, 14, silhouette ? tint : NearColor);
+		if (surface != null)
+			DrawSurfaceCircle(batcher, surface, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius, normals: false);
+		else if (neuralTexture != null)
 		{
-			DrawBoot(batcher, tint, silhouette, leftFoot, leftLeg);
-			DrawBoot(batcher, tint, silhouette, rightFoot, rightLeg);
+			DrawNeuralCircle(batcher, neuralTexture, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
+				NearColor * NeuralColorAmount);
+			batcher.PopSampler();
 		}
+		if (!silhouette)
+			batcher.Circle(headPosition + lookDirection * 2.4f, 1.1f, 8, AccentColor);
+	}
+
+	public void DrawNormals(Batcher batcher)
+	{
+		var flat = new Color(0x8080ff);
+		var surface = SkinMode == RigSkinMode.Surface && Assets.GetSurface(SurfaceId) is { HasNormal: true } foundSurface
+			? foundSurface : null;
+		var neuralNormals = SkinMode == RigSkinMode.NCA && NeuralNormalAmount > 0
+			? neuralSurface?.OutputNormalTexture : null;
+		if (neuralNormals != null)
+			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
+		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
+		{
+			var bone = bones[boneOrder[sortedIndex]];
+			var from = projectedPose[bone.From];
+			var to = projectedPose[bone.To];
+			var width = BoneWidth(bone);
+			batcher.Line(from, to, width + 2, flat);
+			if (surface != null)
+				DrawSurfaceBone(batcher, surface, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]], normals: true);
+			else if (neuralNormals != null)
+				DrawNeuralBone(batcher, neuralNormals, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]],
+					Color.White * NeuralNormalAmount);
+		}
+		var headPosition = projectedPose[head];
+		batcher.Circle(headPosition, HeadSize + 1.4f, 14, flat);
+		if (surface != null)
+			DrawSurfaceCircle(batcher, surface, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius, normals: true);
+		else if (neuralNormals != null)
+		{
+			DrawNeuralCircle(batcher, neuralNormals, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
+				Color.White * NeuralNormalAmount);
+			batcher.PopSampler();
+		}
+	}
+
+	static void BoneQuad(Vector2 from, Vector2 to, float width,
+		out Vector2 a, out Vector2 b, out Vector2 c, out Vector2 d)
+	{
+		var along = (to - from).Normalized(Vector2.UnitY);
+		var across = along.TurnLeft() * width * 0.5f;
+		a = from + across;
+		b = from - across;
+		c = to - across;
+		d = to + across;
+	}
+
+	static void DrawNeuralBone(Batcher batcher, Texture texture, Vector2 from, Vector2 to, float width, BoneUV uv, Color color)
+	{
+		BoneQuad(from, to, width, out var a, out var b, out var c, out var d);
+		batcher.Quad(texture, a, b, c, d, uv.A, uv.B, uv.C, uv.D, color);
+	}
+
+	void DrawSurfaceBone(Batcher batcher, Surface surface, Vector2 from, Vector2 to, float width, BoneUV uv, bool normals)
+	{
+		BoneQuad(from, to, width, out var a, out var b, out var c, out var d);
+		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[]
+		{
+			new(a, SurfaceWorld(uv.A)), new(b, SurfaceWorld(uv.B)), new(c, SurfaceWorld(uv.C)),
+			new(a, SurfaceWorld(uv.A)), new(c, SurfaceWorld(uv.C)), new(d, SurfaceWorld(uv.D)),
+		};
+		if (normals)
+			surface.RenderNormals(batcher, triangles, owner.Time.SecondsF);
 		else
-		{
-			DrawBoot(batcher, tint, silhouette, rightFoot, rightLeg);
-			DrawBoot(batcher, tint, silhouette, leftFoot, leftLeg);
-		}
-
-		var headPosition = projectedPose[head];
-		batcher.Circle(headPosition, 5.3f, 14, silhouette ? tint : OutlineColor);
-		batcher.Circle(headPosition, 3.9f, 14, silhouette ? tint : Decorated ? SkinColor : NearColor);
-		if (Decorated)
-			DrawHat(batcher, tint, silhouette);
-		if (!silhouette)
-		{
-			batcher.Circle(headPosition + lookDirection * 2.4f, Decorated ? 1.35f : 1.1f, 8, AccentColor);
-		}
+			surface.Render(batcher, triangles, owner.Time.SecondsF);
 	}
 
-	void DrawBoot(Batcher batcher, Color tint, bool silhouette, FootIK plant, Leg leg)
+	void DrawSurfaceCircle(Batcher batcher, Surface surface, Vector2 center, float radius,
+		Vector2 uvCenter, Vector2 uvRadius, bool normals)
 	{
-		var ball = projectedPose[leg.Toe];
-		var forward = plant.Planted
-			? Vector2.UnitX * (int)visualFacing
-			: (projectedPose[leg.Tip] - ball).Normalized(Vector2.UnitX * (int)visualFacing);
-		var up = forward.TurnLeft();
-		if (Vector2.Dot(up, -Vector2.UnitY) < 0)
-			up = -up;
-		var heel = ball - forward * HeelLength;
-		var toe = projectedPose[leg.Tip];
-		var top = up * BootThickness;
-		var color = silhouette ? tint : Decorated ? BootColor : NearColor;
-		batcher.Quad(heel, toe, toe + top, heel + top, color);
-		if (!silhouette)
-			batcher.QuadLine(heel, toe, toe + top, heel + top, 1.5f, OutlineColor);
+		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[14 * 3];
+		var previous = center + Vector2.UnitX * radius;
+		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
+		for (var i = 1; i <= 14; i++)
+		{
+			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
+			var next = center + direction * radius;
+			var nextUV = uvCenter + direction * uvRadius;
+			var at = (i - 1) * 3;
+			triangles[at] = new(center, SurfaceWorld(uvCenter));
+			triangles[at + 1] = new(previous, SurfaceWorld(previousUV));
+			triangles[at + 2] = new(next, SurfaceWorld(nextUV));
+			previous = next;
+			previousUV = nextUV;
+		}
+		if (normals)
+			surface.RenderNormals(batcher, triangles, owner.Time.SecondsF);
+		else
+			surface.Render(batcher, triangles, owner.Time.SecondsF);
 	}
 
-	void DrawCoat(Batcher batcher, Color tint, bool silhouette)
+	Vector2 SurfaceWorld(Vector2 uv)
+		=> surfaceMaterialOrigin + uv * (Vector2)NeuralSize + (Vector2)NeuralOrigin;
+
+	static void DrawNeuralCircle(Batcher batcher, Texture texture, Vector2 center, float radius,
+		Vector2 uvCenter, Vector2 uvRadius, Color color)
 	{
-		var torso = projectedPose[chest];
-		var hips = projectedPose[pelvis];
-		var down = (hips - torso).Normalized();
-		var side = new Vector2(-down.Y, down.X);
-		var shoulderLeft = torso - side * 6.5f;
-		var shoulderRight = torso + side * 6.5f;
-		var hipLeft = hips - side * 6;
-		var hipRight = hips + side * 6;
-		var tailLeft = coatTail - side * 4.5f;
-		var tailRight = coatTail + side * 4.5f;
-		var color = silhouette ? tint : ClothColor;
-		batcher.Quad(shoulderLeft, shoulderRight, hipRight, hipLeft, color);
-		batcher.Quad(hipLeft, hipRight, tailRight, tailLeft, color);
-		if (!silhouette)
+		var previous = center + Vector2.UnitX * radius;
+		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
+		for (var i = 1; i <= 14; i++)
 		{
-			batcher.QuadLine(shoulderLeft, shoulderRight, hipRight, hipLeft, 1.5f, OutlineColor);
-			batcher.QuadLine(hipLeft, hipRight, tailRight, tailLeft, 1.5f, OutlineColor);
-			batcher.Line(torso, coatTail, 1, ClothHighlightColor * 0.55f);
+			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
+			var next = center + direction * radius;
+			var nextUV = uvCenter + direction * uvRadius;
+			batcher.Triangle(texture, center, previous, next, uvCenter, previousUV, nextUV, color);
+			previous = next;
+			previousUV = nextUV;
 		}
 	}
 
-	void DrawHat(Batcher batcher, Color tint, bool silhouette)
-	{
-		var headPosition = projectedPose[head];
-		var up = (headPosition - projectedPose[neck]).Normalized();
-		var side = new Vector2(-up.Y, up.X);
-		var brim = headPosition + up * 3.2f;
-		var top = brim + up * 5;
-		var left = brim - side * 4;
-		var right = brim + side * 4;
-		var color = silhouette ? tint : ClothColor;
-		batcher.Quad(left, right, top + side * 2.5f, top - side * 2.5f, color);
-		batcher.Line(brim - side * 6, brim + side * 6, 2.5f, silhouette ? tint : OutlineColor);
-		if (!silhouette)
-		{
-			batcher.QuadLine(left, right, top + side * 2.5f, top - side * 2.5f, 1.5f, OutlineColor);
-			batcher.Line(left, right, 1.2f, AccentColor);
-		}
-	}
+	static Vector2 NeuralUV(Vector2 position) => (position - (Vector2)NeuralOrigin) / (Vector2)NeuralSize;
 }

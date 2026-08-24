@@ -76,6 +76,14 @@ struct Reader {
     at += *size;
     return true;
   }
+
+  bool String(std::string* value) {
+    uint32_t size;
+    if (!U32(&size) || size > 4096 || static_cast<uint64_t>(end - at) < size) return false;
+    value->assign(reinterpret_cast<const char*>(at), size);
+    at += size;
+    return true;
+  }
 };
 
 template <typename T>
@@ -96,6 +104,7 @@ void Error(char* output, int capacity, const char* message) {
 struct Rig {
   ozz::animation::Skeleton skeleton;
   std::vector<ozz::animation::Animation> clips;
+  std::vector<std::string> clip_names;
 };
 
 struct Instance {
@@ -104,12 +113,14 @@ struct Instance {
     for (int i = 0; i < kMaxLayers; ++i) {
       contexts[i] = std::make_unique<ozz::animation::SamplingJob::Context>(rig->skeleton.num_joints());
       locals[i].resize(rig->skeleton.num_soa_joints());
+      masks[i].resize(rig->skeleton.num_soa_joints());
     }
   }
 
   Rig* rig;
   std::array<std::unique_ptr<ozz::animation::SamplingJob::Context>, kMaxLayers> contexts;
   std::array<ozz::vector<ozz::math::SoaTransform>, kMaxLayers> locals;
+  std::array<ozz::vector<ozz::math::SimdFloat4>, kMaxLayers> masks;
   ozz::vector<ozz::math::SoaTransform> blended;
   ozz::vector<ozz::math::Float4x4> models;
 };
@@ -124,7 +135,7 @@ MYTH_OZZ_EXPORT Rig* myth_ozz_rig_load(const uint8_t* data, int size, char* erro
   try {
   Reader reader{data, data + size};
   uint32_t magic, version;
-  if (!reader.U32(&magic) || magic != 0x50525a4f || !reader.U32(&version) || version != 1) {
+  if (!reader.U32(&magic) || magic != 0x50525a4f || !reader.U32(&version) || version != 2) {
     Error(error, error_capacity, "Unsupported ozz rig pack.");
     return nullptr;
   }
@@ -142,8 +153,10 @@ MYTH_OZZ_EXPORT Rig* myth_ozz_rig_load(const uint8_t* data, int size, char* erro
     return nullptr;
   }
   rig->clips.resize(clip_count);
+  rig->clip_names.resize(clip_count);
   for (uint32_t i = 0; i < clip_count; ++i)
-    if (!reader.Blob(&blob, &blob_size) || !Load(blob, blob_size, &rig->clips[i]) ||
+    if (!reader.String(&rig->clip_names[i]) || !reader.Blob(&blob, &blob_size) ||
+        !Load(blob, blob_size, &rig->clips[i]) ||
         rig->clips[i].num_tracks() != rig->skeleton.num_joints()) {
       Error(error, error_capacity, "Unable to load ozz animation.");
       return nullptr;
@@ -169,8 +182,13 @@ MYTH_OZZ_EXPORT int myth_ozz_rig_clip_count(const Rig* rig) {
 MYTH_OZZ_EXPORT const char* myth_ozz_rig_joint_name(const Rig* rig, int index) {
   return rig && index >= 0 && index < rig->skeleton.num_joints() ? rig->skeleton.joint_names()[index] : nullptr;
 }
+MYTH_OZZ_EXPORT int myth_ozz_rig_joint_parent(const Rig* rig, int index) {
+  return rig && index >= 0 && index < rig->skeleton.num_joints()
+      ? rig->skeleton.joint_parents()[index] : -1;
+}
 MYTH_OZZ_EXPORT const char* myth_ozz_rig_clip_name(const Rig* rig, int index) {
-  return rig && index >= 0 && index < static_cast<int>(rig->clips.size()) ? rig->clips[index].name() : nullptr;
+  return rig && index >= 0 && index < static_cast<int>(rig->clip_names.size())
+      ? rig->clip_names[index].c_str() : nullptr;
 }
 MYTH_OZZ_EXPORT float myth_ozz_rig_clip_duration(const Rig* rig, int index) {
   return rig && index >= 0 && index < static_cast<int>(rig->clips.size()) ? rig->clips[index].duration() : 0.f;
@@ -182,11 +200,16 @@ MYTH_OZZ_EXPORT Instance* myth_ozz_instance_create(Rig* rig) {
 MYTH_OZZ_EXPORT void myth_ozz_instance_destroy(Instance* instance) { delete instance; }
 
 MYTH_OZZ_EXPORT int myth_ozz_instance_sample(Instance* instance, int layer_count,
-    const int* clip_indices, const float* times, const float* weights, float* positions) {
+    const int* clip_indices, const float* times, const float* weights,
+    const uint8_t* additive, const uint8_t* masked, const float* joint_weights,
+    float* positions, float* rotations) {
   if (!instance || layer_count <= 0 || layer_count > kMaxLayers || !clip_indices ||
-      !times || !weights || !positions) return 0;
+      !times || !weights || !additive || !masked || !joint_weights || !positions || !rotations) return 0;
 
   std::array<ozz::animation::BlendingJob::Layer, kMaxLayers> layers;
+  std::array<ozz::animation::BlendingJob::Layer, kMaxLayers> additive_layers;
+  int normal_count = 0;
+  int additive_count = 0;
   for (int i = 0; i < layer_count; ++i) {
     const auto clip_index = clip_indices[i];
     if (clip_index < 0 || clip_index >= static_cast<int>(instance->rig->clips.size())) return 0;
@@ -197,12 +220,28 @@ MYTH_OZZ_EXPORT int myth_ozz_instance_sample(Instance* instance, int layer_count
     sample.ratio = clip.duration() > 0 ? times[i] / clip.duration() : 0;
     sample.output = ozz::make_span(instance->locals[i]);
     if (!sample.Run()) return 0;
-    layers[i].weight = weights[i];
-    layers[i].transform = ozz::make_span(instance->locals[i]);
+    auto& layer = additive[i] ? additive_layers[additive_count++] : layers[normal_count++];
+    layer.weight = weights[i];
+    layer.transform = ozz::make_span(instance->locals[i]);
+    if (masked[i]) {
+      const auto offset = i * instance->rig->skeleton.num_joints();
+      layer.joint_weights = {};
+      for (int joint = 0; joint < instance->rig->skeleton.num_soa_joints(); ++joint) {
+        const auto at = joint * 4;
+        instance->masks[i][joint] = ozz::math::simd_float4::Load(
+            at < instance->rig->skeleton.num_joints() ? joint_weights[offset + at] : 0.f,
+            at + 1 < instance->rig->skeleton.num_joints() ? joint_weights[offset + at + 1] : 0.f,
+            at + 2 < instance->rig->skeleton.num_joints() ? joint_weights[offset + at + 2] : 0.f,
+            at + 3 < instance->rig->skeleton.num_joints() ? joint_weights[offset + at + 3] : 0.f);
+      }
+      layer.joint_weights = ozz::make_span(instance->masks[i]);
+    }
   }
+  if (normal_count == 0) return 0;
 
   ozz::animation::BlendingJob blend;
-  blend.layers = {layers.data(), static_cast<size_t>(layer_count)};
+  blend.layers = {layers.data(), static_cast<size_t>(normal_count)};
+  blend.additive_layers = {additive_layers.data(), static_cast<size_t>(additive_count)};
   blend.rest_pose = instance->rig->skeleton.joint_rest_poses();
   blend.output = ozz::make_span(instance->blended);
   if (!blend.Run()) return 0;
@@ -214,9 +253,16 @@ MYTH_OZZ_EXPORT int myth_ozz_instance_sample(Instance* instance, int layer_count
   if (!local_to_model.Run()) return 0;
 
   for (int i = 0; i < instance->rig->skeleton.num_joints(); ++i) {
-    positions[i * 3] = ozz::math::GetX(instance->models[i].cols[3]);
-    positions[i * 3 + 1] = ozz::math::GetY(instance->models[i].cols[3]);
-    positions[i * 3 + 2] = ozz::math::GetZ(instance->models[i].cols[3]);
+    ozz::math::Float3 position, scale;
+    ozz::math::Quaternion rotation;
+    if (!ozz::math::ToAffine(instance->models[i], &position, &rotation, &scale)) return 0;
+    positions[i * 3] = position.x;
+    positions[i * 3 + 1] = position.y;
+    positions[i * 3 + 2] = position.z;
+    rotations[i * 4] = rotation.x;
+    rotations[i * 4 + 1] = rotation.y;
+    rotations[i * 4 + 2] = rotation.z;
+    rotations[i * 4 + 3] = rotation.w;
   }
   return 1;
 }

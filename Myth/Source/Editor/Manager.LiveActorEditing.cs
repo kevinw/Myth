@@ -14,6 +14,8 @@ public partial class Manager
 	const string LiveActorDeleteUndoName = "Delete Actor While Playing";
 	const float LiveActorDragThreshold = 4;
 	const float LiveActorHandleRadius = 6;
+	static float LiveActorDoubleClickSeconds => 0.35f;
+	static float LiveActorDoubleClickRadius => 6;
 
 	enum LiveActorDragKind
 	{
@@ -36,6 +38,14 @@ public partial class Manager
 
 	string? liveSelectedActorId;
 	string? liveHoveredActorId;
+	string? liveInspectedActorId;
+	bool liveActorInspectorOpen;
+	Actor? livePropertyTarget;
+	readonly Dictionary<string, JsonNode?> liveInspectorOriginalValues = [];
+	readonly Dictionary<string, JsonNode?> liveInspectorEdits = [];
+	string? liveActorLastClickId;
+	TimeSpan liveActorLastClickTime;
+	Vector2 liveActorLastClickCursor;
 	LiveActorDragKind liveActorDragKind;
 	ResizeHandle liveActorResizeHandle;
 	Point2 liveActorStartPosition;
@@ -126,6 +136,23 @@ public partial class Manager
 		{
 			liveHoveredActorId = null;
 			return false;
+		}
+
+		var inspected = HitTestLiveActor(liveGame, runtimeRoom, worldMouse, positionEditableOnly: false);
+		var clickTime = Input.Mouse.PressedTimestamp(MouseButtons.Left);
+		var doubleClick = inspected?.ActorId is { } inspectedId && inspectedId == liveActorLastClickId &&
+			(clickTime - liveActorLastClickTime).TotalSeconds <= LiveActorDoubleClickSeconds &&
+			Vector2.DistanceSquared(Cursor, liveActorLastClickCursor) <= LiveActorDoubleClickRadius * LiveActorDoubleClickRadius;
+		liveActorLastClickId = inspected?.ActorId;
+		liveActorLastClickTime = clickTime;
+		liveActorLastClickCursor = Cursor;
+		if (doubleClick)
+		{
+			var inspectedActor = inspected!;
+			if (Factory.LivePositionEditable(inspectedActor.GetType()))
+				liveSelectedActorId = inspectedActor.ActorId;
+			OpenLiveActorInspector(inspectedActor);
+			return true;
 		}
 
 		if (hoveredHandle != ResizeHandle.None && TryGetSelectedLiveActor(liveGame, runtimeRoom, out var selected, out var selectedRoom, out var selectedJson))
@@ -277,6 +304,34 @@ public partial class Manager
 		EndLiveActorDrag(restoreDrag);
 		liveSelectedActorId = null;
 		liveHoveredActorId = null;
+		liveInspectedActorId = null;
+		liveActorInspectorOpen = false;
+		livePropertyTarget = null;
+		liveInspectorOriginalValues.Clear();
+		liveInspectorEdits.Clear();
+		liveActorLastClickId = null;
+		liveActorLastClickTime = default;
+		liveActorLastClickCursor = default;
+	}
+
+	void OpenLiveActorInspector(Actor actor)
+	{
+		if (liveInspectedActorId != actor.ActorId)
+		{
+			if (liveInspectedActorId is { } previousId && game?.GetActorById(previousId) is { } previous)
+				ResetLiveInspectorEdits(previous);
+			liveInspectedActorId = actor.ActorId;
+			CaptureLiveInspectorValues(actor);
+		}
+		liveActorInspectorOpen = true;
+	}
+
+	void CaptureLiveInspectorValues(Actor actor)
+	{
+		liveInspectorOriginalValues.Clear();
+		liveInspectorEdits.Clear();
+		foreach (var property in ActorSpecs.GetEditableProperties(actor))
+			liveInspectorOriginalValues[property.Name] = property.Value?.DeepClone();
 	}
 
 	bool UpdateLiveActorUndoShortcut()
@@ -305,14 +360,14 @@ public partial class Manager
 		return false;
 	}
 
-	Actor? HitTestLiveActor(Game liveGame, Room runtimeRoom, Vector2 world)
+	Actor? HitTestLiveActor(Game liveGame, Room runtimeRoom, Vector2 world, bool positionEditableOnly = true)
 	{
 		Actor? best = null;
 		long bestArea = long.MaxValue;
 		for (var i = liveGame.Actors.Count - 1; i >= 0; i--)
 		{
 			var candidate = liveGame.Actors[i];
-			if (!TryGetLiveActorSource(liveGame, runtimeRoom, candidate, out var room, out var actor))
+			if (!TryGetLiveActorSource(liveGame, runtimeRoom, candidate, positionEditableOnly, out var room, out var actor))
 				continue;
 			var bounds = LiveActorBounds(candidate, room, actor);
 			if (!bounds.Contains(world))
@@ -327,7 +382,8 @@ public partial class Manager
 
 		// Keep the current selection when it is at least as specific as the best hit. A light
 		// inside a room-sized Wind/CameraBlocker still wins over that large selected region.
-		if (TryGetSelectedLiveActor(liveGame, runtimeRoom, out var selected, out var selectedRoom, out var selectedJson))
+		if (liveSelectedActorId is { } selectedId && liveGame.GetActorById(selectedId) is { } selected &&
+			TryGetLiveActorSource(liveGame, runtimeRoom, selected, positionEditableOnly, out var selectedRoom, out var selectedJson))
 		{
 			var bounds = LiveActorBounds(selected, selectedRoom, selectedJson);
 			if (bounds.Contains(world) && (long)bounds.Width * bounds.Height <= bestArea)
@@ -346,11 +402,15 @@ public partial class Manager
 
 	static bool TryGetLiveActorSource(Game liveGame, Room runtimeRoom, Actor runtime,
 		out Room authoredRoom, out JsonObject authored)
+		=> TryGetLiveActorSource(liveGame, runtimeRoom, runtime, positionEditableOnly: true, out authoredRoom, out authored);
+
+	static bool TryGetLiveActorSource(Game liveGame, Room runtimeRoom, Actor runtime, bool positionEditableOnly,
+		out Room authoredRoom, out JsonObject authored)
 	{
 		authoredRoom = null!;
 		authored = null!;
 		if (runtime.ActorId is not { } id || runtime.Room?.Id != runtimeRoom.Id ||
-			liveGame.destroying.Contains(runtime) || !Factory.LivePositionEditable(runtime.GetType()) ||
+			liveGame.destroying.Contains(runtime) || positionEditableOnly && !Factory.LivePositionEditable(runtime.GetType()) ||
 			Assets.GetRoom(runtimeRoom.Id) is not { } room)
 			return false;
 
@@ -478,6 +538,8 @@ public partial class Manager
 		label.Append(", ");
 		label.Append(local.Y);
 		label.Append(')');
+		if (hasHovered)
+			label.Append("  ·  double-click to inspect");
 		DebugOverlayLabelImGui(
 			"LiveActorEditingStatus",
 			viewport.TopLeft + new Vector2(viewport.Width * 0.5f, viewport.Height - 6),

@@ -44,7 +44,7 @@ public partial class Manager
 			changed |= DrawRandomizeActorPropertiesButton(selectedActorSpecId, null, spec);
 		foreach (var property in actorPropertyScratch)
 		{
-			if (spec != null && HideInactiveLightProperty(spec, property))
+			if (spec != null && HideInactiveActorProperty(spec, property))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
@@ -247,7 +247,7 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (NeuralTextureWeightsSlot(property.Name) is >= 0 and var weightsSlot && IsNeuralTextureActor(actor))
+		else if (NeuralTextureWeightsSlot(actor, property.Name) is >= 0 and var weightsSlot)
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (NeuralTextureCatalog.DrawCombo(ref value, allowNone: weightsSlot > 0))
@@ -370,6 +370,12 @@ public partial class Manager
 
 	void SetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, JsonNode? value, bool continuous)
 	{
+		if (livePropertyTarget != null)
+		{
+			if (ActorSpecs.SetEditableProperty(livePropertyTarget, property.Name, value))
+				liveInspectorEdits[property.Name] = value?.DeepClone();
+			return;
+		}
 		if (specId != null)
 		{
 			BeginPrefabUndo(specId);
@@ -389,6 +395,12 @@ public partial class Manager
 
 	void SetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, JsonNode? value, string undoName)
 	{
+		if (livePropertyTarget != null)
+		{
+			if (ActorSpecs.SetEditableProperty(livePropertyTarget, property.Name, value))
+				liveInspectorEdits[property.Name] = value?.DeepClone();
+			return;
+		}
 		if (specId != null)
 		{
 			using (CapturePrefabUndo(undoName, specId))
@@ -403,6 +415,13 @@ public partial class Manager
 
 	void SetActorEnumProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, string value)
 	{
+		if (livePropertyTarget != null)
+		{
+			var node = JsonValue.Create(value);
+			if (ActorSpecs.SetEditableProperty(livePropertyTarget, property.Name, node))
+				liveInspectorEdits[property.Name] = node;
+			return;
+		}
 		if (specId != null)
 		{
 			BeginPrefabUndo(specId);
@@ -420,6 +439,13 @@ public partial class Manager
 
 	void ResetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
+		if (livePropertyTarget != null)
+		{
+			if (liveInspectorOriginalValues.TryGetValue(property.Name, out var original))
+				ActorSpecs.SetEditableProperty(livePropertyTarget, property.Name, original);
+			liveInspectorEdits.Remove(property.Name);
+			return;
+		}
 		if (specId != null)
 		{
 			using (CapturePrefabUndo("Reset Prefab Property", specId))
@@ -499,7 +525,7 @@ public partial class Manager
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
 		foreach (var property in actorPropertyScratch)
 		{
-			if (HideInactiveLightProperty(actor, property))
+			if (HideInactiveActorProperty(actor, property))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorInstanceProperty(room, actor, property);
@@ -519,6 +545,86 @@ public partial class Manager
 			particleEditor.DrawActorInspectorBox(game, actor);
 
 		End();
+	}
+
+	void LiveActorInspectorImGui()
+	{
+		if (!playing || !liveActorInspectorOpen || liveInspectedActorId == null || game?.GetActorById(liveInspectedActorId) is not { } runtime ||
+			game.destroying.Contains(runtime) || game.CurrentRoom is not { } runtimeRoom ||
+			!TryGetLiveActorSource(game, runtimeRoom, runtime, positionEditableOnly: false, out var room, out var authored))
+			return;
+
+		var title = $"Live: {runtime.GetType().Name}";
+		SetNextWindowSize(new Vector2(300, 0), ImGuiCond.FirstUseEver);
+		var open = liveActorInspectorOpen;
+		if (!Begin($"{title}###LiveActorInspector", ref open))
+		{
+			liveActorInspectorOpen = open;
+			End();
+			return;
+		}
+		liveActorInspectorOpen = open;
+		if (!open)
+		{
+			End();
+			return;
+		}
+
+		if (IsWindowDocked())
+			DrawDockedInspectorTitle(title, runtime.ActorId);
+		else if (runtime.ActorId != null)
+			DrawActorIdInWindowTitle(title, runtime.ActorId);
+
+		TextDisabled("Editing the running actor. Changes are session-only until applied.");
+		Separator();
+
+		actorPropertyScratch.Clear();
+		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(runtime));
+		livePropertyTarget = runtime;
+		foreach (var source in actorPropertyScratch)
+		{
+			var property = source with
+			{
+				HasLocalValue = liveInspectorEdits.ContainsKey(source.Name),
+				ResetValue = liveInspectorOriginalValues.GetValueOrDefault(source.Name)?.DeepClone()
+			};
+			if (HideInactiveActorProperty(authored, property))
+				continue;
+			PushID(property.JsonName);
+			DrawActorProperty(null, null, authored, property);
+			PopID();
+		}
+		livePropertyTarget = null;
+
+		Separator();
+		BeginDisabled(liveInspectorEdits.Count == 0);
+		if (Button("Apply to Room"))
+			ApplyLiveInspectorEdits(runtime, room, authored);
+		SameLine();
+		if (Button("Reset Live Changes"))
+			ResetLiveInspectorEdits(runtime);
+		EndDisabled();
+		End();
+	}
+
+	void ApplyLiveInspectorEdits(Actor runtime, Room room, JsonObject authored)
+	{
+		using (CaptureRoomUndo("Apply Live Actor Properties", room))
+			foreach (var (name, value) in liveInspectorEdits)
+				ActorSpecs.SetProperty(authored, name, value);
+		room.Save();
+		MarkRoomPreviewDirty(room);
+		editorGameDirty = true;
+		CaptureLiveInspectorValues(runtime);
+		DisplayMessage($"Applied live {runtime.GetType().Name} properties");
+	}
+
+	void ResetLiveInspectorEdits(Actor runtime)
+	{
+		foreach (var (name, _) in liveInspectorEdits)
+			if (liveInspectorOriginalValues.TryGetValue(name, out var original))
+				ActorSpecs.SetEditableProperty(runtime, name, original);
+		liveInspectorEdits.Clear();
 	}
 
 	static void DrawDockedInspectorTitle(string title, string? detail = null, Action? sameLineCallback = null)
@@ -561,9 +667,26 @@ public partial class Manager
 		draw.PopClipRect();
 	}
 
-	static bool HideInactiveLightProperty(JsonObject actor, ActorSpecs.EditableProperty property)
+	bool HideInactiveActorProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 	{
-		if (ActorSpecs.GetTypeName(actor) != nameof(Light))
+		var typeName = ActorSpecs.GetTypeName(actor);
+		if (typeName is nameof(RigPuppet) or nameof(Stalker))
+		{
+			var mode = RigSkinMode.NCA;
+			for (var i = 0; i < actorPropertyScratch.Count; i++)
+				if (actorPropertyScratch[i].Name == nameof(RigPuppet.SkinMode))
+				{
+					Enum.TryParse(ActorSpecs.ReadStringValue(actorPropertyScratch[i].Value), true, out mode);
+					break;
+				}
+			if (property.Name == nameof(RigPuppet.SurfaceId))
+				return mode != RigSkinMode.Surface;
+			if (property.Name.StartsWith("Neural", StringComparison.Ordinal) ||
+				property.Name.StartsWith("RigNeural", StringComparison.Ordinal))
+				return mode != RigSkinMode.NCA;
+		}
+
+		if (typeName != nameof(Light))
 			return false;
 
 		// The Cookie* knobs only mean something once a cookie is chosen; the Tint* ones only
@@ -922,14 +1045,19 @@ public partial class Manager
 		TextDisabled("Drag in the room to paint. Release to resimulate.\nRight-drag erases. Esc stops.");
 	}
 
-	static int NeuralTextureWeightsSlot(string propertyName) => propertyName switch
+	static int NeuralTextureWeightsSlot(JsonObject actor, string propertyName)
 	{
-		nameof(NeuralTextureActor.WeightsFile) => 0,
-		nameof(NeuralTextureActor.WeightsFile1) => 1,
-		nameof(NeuralTextureActor.WeightsFile2) => 2,
-		nameof(NeuralTextureActor.WeightsFile3) => 3,
-		_ => -1,
-	};
+		if (IsNeuralTextureActor(actor))
+			return propertyName switch
+			{
+				nameof(NeuralTextureActor.WeightsFile) => 0,
+				nameof(NeuralTextureActor.WeightsFile1) => 1,
+				nameof(NeuralTextureActor.WeightsFile2) => 2,
+				nameof(NeuralTextureActor.WeightsFile3) => 3,
+				_ => -1,
+			};
+		return propertyName is nameof(RigPuppet.NeuralWeightsFile) or nameof(Stalker.RigNeuralWeightsFile) ? 0 : -1;
+	}
 
 	static bool IsRevealDoorTileTypeProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 		=> IsRevealDoorActor(actor) && property.Type == typeof(string) && property.JsonName == nameof(RevealDoor.TileType);

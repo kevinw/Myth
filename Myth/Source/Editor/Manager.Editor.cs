@@ -223,6 +223,7 @@ public partial class Manager
 		BudDebugOverlayImGui();
 		LiveTileEditingImGui();
 		LiveActorEditingImGui();
+		LiveActorInspectorImGui();
 		LiveRoomEditingImGui();
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();

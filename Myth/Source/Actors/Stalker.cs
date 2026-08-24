@@ -16,7 +16,7 @@ namespace Myth;
 // duplicate created by re-entering its home room removes itself in Added.
 [GameActor(Sprite = "Editor/stalker", Tags = ActorTag.Enemy, Anchor = SpriteAnchor.BottomCenter,
 	LivePositionEditable = true)]
-public class Stalker : Pawn
+public class Stalker : Pawn, INeuralTextureAgent
 {
 	public static readonly RectInt NavProbe = new(-8, -24, 16, 24);
 	public static readonly RectInt NavDuckingProbe = new(-8, -12, 16, 12);
@@ -34,9 +34,27 @@ public class Stalker : Pawn
 	[I(12, 40)] public float RigPixelsPerMeter = 23f;
 	[I(-60, 60)] public float RigProjectionYaw = 18f;
 	[I(1, 60)] public float RigVisualFPS = 16f;
-	[I(0.5f, 8)] public float RigBootThickness = 2.5f;
+	[I(2, 12)] public float RigHeadSize = 3.9f;
+	[I(2, 12)] public float RigTorsoSize = 5;
+	[I(1, 10)] public float RigBicepSize = 3;
+	[I(1, 10)] public float RigForearmSize = 2.5f;
+	[I(1, 12)] public float RigThighSize = 4;
 	[I(0, 2)] public float RigTrackingLean = 1;
 	[I(0, 2)] public float RigHitReactionStrength = 0.8f;
+	public RigSkinMode SkinMode = RigSkinMode.NCA;
+	public string SurfaceId = "";
+	public string RigNeuralWeightsFile = "rock035_pair_circular_screen.bin";
+	[I(0, 1)] public float RigNeuralColorAmount = 0.25f;
+	[I(0, 1)] public float RigNeuralNormalAmount = 0.55f;
+	[I(1, 60)] public float RigNeuralFPS = 20;
+	[I(0, 1)] public float RigNeuralFireRate = 0.5f;
+	[I(0, 3)] public float RigNeuralContrast = 1f;
+	[I(0, 3)] public float RigNeuralSaturation = 1.1f;
+	[I(-1, 1)] public float RigNeuralBrightness = 0.3f;
+	[I(0, 1)] public float RigNeuralHitStrength = 0.55f;
+	[I(0, 3)] public float RigNeuralJostleInterval = 0.45f;
+	[I(0, 1)] public float RigNeuralJostleStrength = 0.22f;
+	[I(1, 12)] public float RigNeuralJostleRadius = 5;
 
 	static float TelegraphTime => 0.9f;
 
@@ -67,13 +85,10 @@ public class Stalker : Pawn
 		nav = new(this);
 		rigVisual = new(this)
 		{
-			Decorated = true,
 			TurnWhileMoving = true,
 			CoreColor = new(0x4b334f),
-			ClothColor = new(0x17131f),
-			ClothHighlightColor = new(0x4a354f),
-			SkinColor = new(0x8f7777),
-			BootColor = new(0x0d0b12),
+			FarColor = new(0x17131f),
+			NearColor = new(0x8f7777),
 			OutlineColor = new(0x09070d),
 			AccentColor = new(0xf02245),
 		};
@@ -210,8 +225,26 @@ public class Stalker : Pawn
 		rigVisual.PixelsPerMeter = RigPixelsPerMeter;
 		rigVisual.ProjectionYaw = RigProjectionYaw;
 		rigVisual.VisualFPS = RigVisualFPS;
-		rigVisual.BootThickness = RigBootThickness;
+		rigVisual.HeadSize = RigHeadSize;
+		rigVisual.TorsoSize = RigTorsoSize;
+		rigVisual.BicepSize = RigBicepSize;
+		rigVisual.ForearmSize = RigForearmSize;
+		rigVisual.ThighSize = RigThighSize;
 		rigVisual.UpperBodyHitStrength = RigHitReactionStrength;
+		rigVisual.SkinMode = SkinMode;
+		rigVisual.SurfaceId = SurfaceId;
+		rigVisual.NeuralWeightsFile = RigNeuralWeightsFile;
+		rigVisual.NeuralColorAmount = RigNeuralColorAmount;
+		rigVisual.NeuralNormalAmount = RigNeuralNormalAmount;
+		rigVisual.NeuralFPS = RigNeuralFPS;
+		rigVisual.NeuralFireRate = RigNeuralFireRate;
+		rigVisual.NeuralContrast = RigNeuralContrast;
+		rigVisual.NeuralSaturation = RigNeuralSaturation;
+		rigVisual.NeuralBrightness = RigNeuralBrightness;
+		rigVisual.NeuralHitStrength = RigNeuralHitStrength;
+		rigVisual.NeuralJostleInterval = RigNeuralJostleInterval;
+		rigVisual.NeuralJostleStrength = RigNeuralJostleStrength;
+		rigVisual.NeuralJostleRadius = RigNeuralJostleRadius;
 	}
 
 	void UpdateRig()
@@ -421,8 +454,11 @@ public class Stalker : Pawn
 	public override void RenderNormals(Batcher batcher)
 	{
 		if (rigReady)
-			rigVisual.Draw(batcher, new Color(0x8080ff), silhouette: true);
+			rigVisual.DrawNormals(batcher);
 	}
+
+	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
+		=> rigVisual.PerturbNeuralTexture(context);
 
 	public override Rect GetVisualBounds()
 		=> new(Position.X - 38, Position.Y - 46, 76, 56);

@@ -5,7 +5,7 @@ namespace Myth;
 
 [GameActor(Sprite = "player", Tags = ActorTag.Enemy, BoundsX = -12, BoundsY = -40, BoundsW = 24, BoundsH = 40,
 	LivePositionEditable = true)]
-public class RigPuppet : Actor
+public class RigPuppet : Actor, INeuralTextureAgent
 {
 	enum StepTraversal { None, Up, Down }
 
@@ -17,7 +17,25 @@ public class RigPuppet : Actor
 	[I(1, 4)] public int StepDown = 2;
 	[I(12, 40)] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
-	[I(0.5f, 8)] public float BootThickness = 2.5f;
+	[I(2, 12)] public float HeadSize = 3.9f;
+	[I(2, 12)] public float TorsoSize = 5;
+	[I(1, 10)] public float BicepSize = 3;
+	[I(1, 10)] public float ForearmSize = 2.5f;
+	[I(1, 12)] public float ThighSize = 4;
+	public RigSkinMode SkinMode = RigSkinMode.NCA;
+	public string SurfaceId = "";
+	public string NeuralWeightsFile = "rock035_pair_circular_screen.bin";
+	[I(0, 1)] public float NeuralColorAmount = 0.25f;
+	[I(0, 1)] public float NeuralNormalAmount = 0.55f;
+	[I(1, 60)] public float NeuralFPS = 20;
+	[I(0, 1)] public float NeuralFireRate = 0.5f;
+	[I(0, 3)] public float NeuralContrast = 1f;
+	[I(0, 3)] public float NeuralSaturation = 1.1f;
+	[I(-1, 1)] public float NeuralBrightness = 0.3f;
+	[I(0, 1)] public float NeuralHitStrength = 0.55f;
+	[I(0, 3)] public float NeuralJostleInterval = 0.45f;
+	[I(0, 1)] public float NeuralJostleStrength = 0.22f;
+	[I(1, 12)] public float NeuralJostleRadius = 5;
 	[I(1, 20)] public int Health = 8;
 	public Color FarColor = new(0x435263);
 	public Color NearColor = new(0xb7cdd0);
@@ -87,7 +105,25 @@ public class RigPuppet : Actor
 		visual.VisualFPS = VisualFPS;
 		visual.PixelsPerMeter = PixelsPerMeter;
 		visual.ProjectionYaw = ProjectionYaw;
-		visual.BootThickness = BootThickness;
+		visual.HeadSize = HeadSize;
+		visual.TorsoSize = TorsoSize;
+		visual.BicepSize = BicepSize;
+		visual.ForearmSize = ForearmSize;
+		visual.ThighSize = ThighSize;
+		visual.SkinMode = SkinMode;
+		visual.SurfaceId = SurfaceId;
+		visual.NeuralWeightsFile = NeuralWeightsFile;
+		visual.NeuralColorAmount = NeuralColorAmount;
+		visual.NeuralNormalAmount = NeuralNormalAmount;
+		visual.NeuralFPS = NeuralFPS;
+		visual.NeuralFireRate = NeuralFireRate;
+		visual.NeuralContrast = NeuralContrast;
+		visual.NeuralSaturation = NeuralSaturation;
+		visual.NeuralBrightness = NeuralBrightness;
+		visual.NeuralHitStrength = NeuralHitStrength;
+		visual.NeuralJostleInterval = NeuralJostleInterval;
+		visual.NeuralJostleStrength = NeuralJostleStrength;
+		visual.NeuralJostleRadius = NeuralJostleRadius;
 		visual.Offset = stepVisualOffset;
 		visual.FarColor = FarColor;
 		visual.NearColor = NearColor;
@@ -358,7 +394,10 @@ public class RigPuppet : Actor
 	public override void RenderShadow(Batcher batcher, Color color) => visual?.Draw(batcher, color, silhouette: true);
 	public override void RenderReflection(Batcher batcher, Color color) => visual?.Draw(batcher, color, silhouette: true);
 	public override void RenderNormals(Batcher batcher)
-		=> visual?.Draw(batcher, new Color(0x8080ff), silhouette: true);
+		=> visual?.DrawNormals(batcher);
+
+	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
+		=> visual?.PerturbNeuralTexture(context);
 
 	public override Rect GetVisualBounds() => new(Position.X - 42, Position.Y - 48, 84, 58);
 }

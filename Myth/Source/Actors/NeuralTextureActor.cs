@@ -256,6 +256,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
+	public Texture? OutputTexture => supported ? output : null;
+	public Texture? OutputNormalTexture => supported && normalSlots != 0 ? normalOutput : null;
 
 	readonly UniformBuffer updateUniforms = new();
 	readonly UniformBuffer decodeUniforms = new();

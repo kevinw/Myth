@@ -1,0 +1,36 @@
+{
+  "skeleton": {
+    "filename": "skeleton.ozz",
+    "import": {
+      "enable": true,
+      "raw": false,
+      "types": {
+        "skeleton": true,
+        "marker": false,
+        "camera": false,
+        "geometry": false,
+        "light": false,
+        "null": false,
+        "any": false
+      }
+    }
+  },
+  "animations": [
+    {
+      "clip": "*",
+      "filename": "*.ozz",
+      "raw": false,
+      "additive": false,
+      "sampling_rate": 30,
+      "optimize": true,
+      "optimization_settings": {
+        "tolerance": 0.001,
+        "distance": 0.1
+      },
+      "tracks": {
+        "properties": [],
+        "motion": { "enable": false }
+      }
+    }
+  ]
+}

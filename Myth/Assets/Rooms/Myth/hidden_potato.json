@@ -1,6 +1,7 @@
 {
   "position": [160, -23],
   "size": [40, 23],
+  "ambientColor": "C9C9CD",
   "reverb": 0.526,
   "legend": {
     "#": "back",
@@ -100,7 +101,8 @@
       "Id": "b06f7a3017e52607",
       "Type": "Light",
       "Position": [168, 16],
-      "Height": 5.05
+      "Height": 5.05,
+      "Radius": 167.677
     },
     {
       "Id": "92d290abc5d40fe2",
@@ -135,7 +137,13 @@
     {
       "Id": "eaaf5f7f9eabc432",
       "Type": "Stalker",
-      "Position": [284, 72]
+      "Position": [268, 72],
+      "RigProjectionYaw": 60,
+      "RigPixelsPerMeter": 30.028,
+      "TravelSpeed": 17.703,
+      "SpeedMultiplier": 0.391,
+      "RigVisualFPS": 13.083,
+      "RigBootThickness": 0.5
     }
   ]
 }

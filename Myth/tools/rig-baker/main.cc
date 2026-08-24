@@ -37,6 +37,19 @@ bool Append(std::ofstream& output, const char* path) {
   return true;
 }
 
+bool AppendAnimation(std::ofstream& output, const char* path) {
+  std::string name(path);
+  const auto slash = name.find_last_of("/\\");
+  if (slash != std::string::npos)
+    name.erase(0, slash + 1);
+  const auto extension = name.rfind('.');
+  if (extension != std::string::npos)
+    name.erase(extension);
+  WriteU32(output, static_cast<uint32_t>(name.size()));
+  output.write(name.data(), static_cast<std::streamsize>(name.size()));
+  return Append(output, path);
+}
+
 }  // namespace
 
 int main(int argc, const char** argv) {
@@ -51,11 +64,11 @@ int main(int argc, const char** argv) {
     return 1;
   }
   WriteU32(output, 0x50525a4f);  // OZRP
-  WriteU32(output, 1);
+  WriteU32(output, 2);
   if (!Append(output, argv[2])) return 1;
   WriteU32(output, static_cast<uint32_t>(argc - 3));
   for (int argument = 3; argument < argc; ++argument)
-    if (!Append(output, argv[argument])) return 1;
+    if (!AppendAnimation(output, argv[argument])) return 1;
 
   std::cout << "Wrote " << argv[1] << " with " << argc - 3 << " clips.\n";
 }
