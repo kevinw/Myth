@@ -87,7 +87,8 @@
       "VisualFPS": 12.118,
       "ArticulatedCombatBounds": true,
       "PixelsPerMeter": 51.955,
-      "StraddlesPlayerDepth": true
+      "StraddlesPlayerDepth": true,
+      "SecondaryMotion": 1.207
     }
   ]
 }

@@ -21,6 +21,15 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	{
 		public float OffsetY;
 		public bool Planted;
+		public float ContactRemaining;
+		public Vector2 ContactPosition;
+	}
+
+	struct SecondaryPoint
+	{
+		public Vector2 Position;
+		public Vector2 Velocity;
+		public bool Ready;
 	}
 
 	static readonly BoneSpec[] BoneSpecs =
@@ -77,6 +86,10 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public float NeuralJostleInterval = 0.45f;
 	public float NeuralJostleStrength = 0.22f;
 	public float NeuralJostleRadius = 5;
+	public float NeuralFootContactStrength;
+	public float NeuralFootContactRadius = 4;
+	public bool SeedAnimationPhase;
+	public float SecondaryMotion;
 	public float CombatBoundsPadding = 1;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
@@ -113,8 +126,17 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	LegSide backLeg;
 	FootIK leftFoot;
 	FootIK rightFoot;
+	SecondaryPoint headMotion;
+	SecondaryPoint leftHandMotion;
+	SecondaryPoint rightHandMotion;
 	int head;
+	int neck;
+	int leftHand;
+	int leftPalm;
+	int rightHand;
+	int rightPalm;
 	int pelvis;
+	float animationPhase;
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
@@ -152,6 +174,14 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	static float LegExtensionSlack => 0.4f;
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
+	static float HeadMotionSpring => 105f;
+	static float HeadMotionDamping => 16f;
+	static float HeadMotionMaxOffset => 2.5f;
+	static float HandMotionSpring => 65f;
+	static float HandMotionDamping => 10f;
+	static float HandMotionMaxOffset => 4.5f;
+	static float SecondaryTeleportDistance => 24f;
+	static float NeuralFootContactDuration => 0.14f;
 	static Point2 NeuralSize => new(64, 80);
 	static Point2 NeuralOrigin => new(-32, -72);
 
@@ -176,6 +206,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		rig = RigLibrary.Get("ual2");
 		var initialClip = rig.TryGetClip(clip, out _) ? clip : "Zombie_Idle_Loop";
 		animator = new(rig, initialClip);
+		animationPhase = SeededPhase();
+		if (SeedAnimationPhase)
+			animator.SetTime(animator.ActiveClip.Duration * animationPhase);
 		sampledPose = new Vector3[rig.JointCount];
 		sampledRotations = new Quaternion[rig.JointCount];
 		ragdollPose = new Vector3[rig.JointCount];
@@ -197,6 +230,11 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			boneOrder[i] = i;
 		}
 		head = RequiredJoint("Head");
+		neck = RequiredJoint("neck_01");
+		leftHand = RequiredJoint("hand_l");
+		leftPalm = RequiredJoint("middle_01_l");
+		rightHand = RequiredJoint("hand_r");
+		rightPalm = RequiredJoint("middle_01_r");
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
 		rightLeg = RequiredLeg("r");
@@ -250,6 +288,20 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		return index >= 0 ? index : throw new InvalidDataException($"UAL2 rig is missing joint '{name}'.");
 	}
 
+	float SeededPhase()
+	{
+		var hash = 2166136261u;
+		if (!string.IsNullOrEmpty(owner.ActorId))
+			for (var i = 0; i < owner.ActorId.Length; i++)
+				hash = unchecked((hash ^ owner.ActorId[i]) * 16777619u);
+		else
+		{
+			hash = unchecked((hash ^ (uint)owner.Position.X) * 16777619u);
+			hash = unchecked((hash ^ (uint)owner.Position.Y) * 16777619u);
+		}
+		return (hash & 0xffff) / 65536f;
+	}
+
 	Leg RequiredLeg(string side)
 		=> new(RequiredJoint($"thigh_{side}"), RequiredJoint($"calf_{side}"),
 			RequiredJoint($"foot_{side}"), RequiredJoint($"ball_{side}"), RequiredJoint($"ball_leaf_{side}"));
@@ -257,8 +309,12 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public bool TryGetClip(string name, out OzzRig.Clip clip) => rig.TryGetClip(name, out clip);
 	public OzzRig.Clip GetClip(string name) => rig.GetClip(name);
 
-	public void Play(string name, bool blend = true, bool restart = false)
-		=> animator.Play(name, blend ? ClipBlendDuration : 0, restart);
+	public void Play(string name, bool blend = true, bool restart = false, bool seededPhase = false)
+	{
+		var startTime = seededPhase && !string.Equals(animator.ActiveClip.Name, name, StringComparison.OrdinalIgnoreCase)
+			? rig.GetClip(name).Duration * animationPhase : 0;
+		animator.Play(name, blend ? ClipBlendDuration : 0, restart, startTime);
+	}
 
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true)
 	{
@@ -384,6 +440,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		ApplyTrackingLean();
 		UpdateRagdoll();
 		ProjectPose();
+		UpdateSecondaryMotion();
 		if (footIK)
 		{
 			UpdateFoot(ref leftFoot, leftLeg, grounded);
@@ -395,6 +452,45 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		lookDirection = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
 			: new Vector2(-MathF.Cos(visualYaw), 0);
+	}
+
+	void UpdateSecondaryMotion()
+	{
+		var headOffset = UpdateSecondaryPoint(ref headMotion, owner.Position + projectedPose[head],
+			HeadMotionSpring, HeadMotionDamping, HeadMotionMaxOffset) * SecondaryMotion;
+		var leftOffset = UpdateSecondaryPoint(ref leftHandMotion, owner.Position + projectedPose[leftHand],
+			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * SecondaryMotion;
+		var rightOffset = UpdateSecondaryPoint(ref rightHandMotion, owner.Position + projectedPose[rightHand],
+			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * SecondaryMotion;
+		projectedPose[neck] += headOffset * 0.25f;
+		projectedPose[head] += headOffset;
+		projectedPose[leftHand] += leftOffset;
+		projectedPose[leftPalm] += leftOffset;
+		projectedPose[rightHand] += rightOffset;
+		projectedPose[rightPalm] += rightOffset;
+	}
+
+	Vector2 UpdateSecondaryPoint(ref SecondaryPoint point, Vector2 target, float spring, float damping, float maxOffset)
+	{
+		if (!point.Ready || Vector2.DistanceSquared(point.Position, target) > SecondaryTeleportDistance * SecondaryTeleportDistance)
+		{
+			point.Position = target;
+			point.Velocity = Vector2.Zero;
+			point.Ready = true;
+			return Vector2.Zero;
+		}
+
+		var dt = MathF.Min(visualDelta, 1 / 30f);
+		point.Velocity += (target - point.Position) * spring * dt;
+		point.Velocity *= MathF.Exp(-damping * dt);
+		point.Position += point.Velocity * dt;
+		var offset = point.Position - target;
+		if (offset.LengthSquared() <= maxOffset * maxOffset)
+			return offset;
+		var direction = Vector2.Normalize(offset);
+		point.Position = target + direction * maxOffset;
+		point.Velocity -= direction * MathF.Max(0, Vector2.Dot(point.Velocity, direction));
+		return direction * maxOffset;
 	}
 
 	void UpdateAnimationLayers()
@@ -425,6 +521,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		var center = (Vector2)owner.Position + (projectedPose[pelvis] + projectedPose[head]) * 0.5f;
 		if (neuralHitRemaining > 0)
 			context.AddStamp(center, center, 7, NeuralHitStrength);
+		AddFootContactStamp(context, leftFoot);
+		AddFootContactStamp(context, rightFoot);
 
 		var now = owner.Time.SecondsF;
 		if (NeuralJostleInterval <= 0 || NeuralJostleStrength <= 0 || NeuralJostleRadius <= 0 || now < neuralJostleAt)
@@ -433,6 +531,13 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		var phase = now * 2.3f + neuralJostlePhase;
 		var offset = new Vector2(MathF.Sin(phase) * 8, MathF.Cos(phase * 0.73f) * 14);
 		context.AddStamp(center + offset, center + offset, NeuralJostleRadius, NeuralJostleStrength);
+	}
+
+	void AddFootContactStamp(NeuralTextureActor.PerturbContext context, FootIK foot)
+	{
+		if (foot.ContactRemaining > 0 && NeuralFootContactStrength > 0 && NeuralFootContactRadius > 0)
+			context.AddStamp(foot.ContactPosition, foot.ContactPosition, NeuralFootContactRadius,
+				NeuralFootContactStrength * Math.Clamp(foot.ContactRemaining / NeuralFootContactDuration, 0, 1));
 	}
 
 	void ApplyTrackingLean()
@@ -555,6 +660,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 
 	void UpdateFoot(ref FootIK plant, Leg leg, bool grounded)
 	{
+		var wasPlanted = plant.Planted;
+		plant.ContactRemaining = MathF.Max(0, plant.ContactRemaining - visualDelta);
 		var animatedToe = owner.Position + projectedPose[leg.Toe];
 		var targetOffset = 0f;
 		plant.Planted = false;
@@ -580,8 +687,15 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			projectedPose[leg.Tip] += projectedPose[leg.Toe] - oldToe;
 		}
 		if (plant.Planted)
+		{
 			projectedPose[leg.Tip] = projectedPose[leg.Toe] + Vector2.UnitX * (int)visualFacing *
 				Vector2.Distance(projectedPose[leg.Toe], projectedPose[leg.Tip]);
+			if (!wasPlanted)
+			{
+				plant.ContactRemaining = NeuralFootContactDuration;
+				plant.ContactPosition = owner.Position + projectedPose[leg.Toe];
+			}
+		}
 	}
 
 	void SolveLeg(Leg leg, Vector2 ankleTarget)

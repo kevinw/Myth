@@ -59,7 +59,7 @@ public sealed class OzzAnimator : IDisposable
 
 	public void ClearLayer() => layerClip = null;
 
-	public void Play(string name, float transitionDuration, bool restart = false)
+	public void Play(string name, float transitionDuration, bool restart = false, float startTime = 0)
 	{
 		var clip = Rig.GetClip(name);
 		if (clip == ActiveClip && !restart)
@@ -77,7 +77,7 @@ public sealed class OzzAnimator : IDisposable
 			blendDuration = blendRemaining = 0;
 		}
 		ActiveClip = clip;
-		Time = 0;
+		Time = Math.Clamp(startTime, 0, clip.Duration);
 	}
 
 	public void SetTime(float value)
