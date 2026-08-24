@@ -489,6 +489,8 @@ public class Actor
 	public virtual void OnPerformHit(Actor hitting) { }
 
 	public virtual bool BlocksAttack(Actor attacker, in RectInt attackPath) => false;
+	internal virtual bool OverlapsCombatBounds(in RectInt bounds) => Hitbox.Overlaps(bounds - Position);
+	internal virtual void RenderCollisionDebug(Batcher batcher) { }
 
 	/// Called ones per frame, updates our Sprite and Timer
 	public virtual void Update()

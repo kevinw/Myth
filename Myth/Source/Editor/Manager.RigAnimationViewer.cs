@@ -16,7 +16,7 @@ public partial class Manager
 		if (!rigAnimationViewerInitialized)
 		{
 			rigAnimationViewerInitialized = true;
-			rigAnimationViewerOpen = true;
+			rigAnimationViewerOpen = false;
 		}
 		if (!rigAnimationViewerOpen)
 		{

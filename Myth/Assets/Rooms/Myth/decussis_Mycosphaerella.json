@@ -67,14 +67,27 @@
       "Intensity": 0.35
     },
     {
-      "Id": "5be46e7e344570ef",
-      "Type": "ShieldKnight",
-      "Position": [356, 144]
-    },
-    {
-      "Id": "0d0f20c3faffd0a3",
-      "Type": "Drone",
-      "Position": [212, 96]
+      "Id": "79ca3193f6281d40",
+      "Type": "RigPuppet",
+      "Position": [245, 137],
+      "ProjectionYaw": 43.696,
+      "NeuralJostleStrength": 0.786,
+      "NearColor": "F7F9F5",
+      "NeuralColorAmount": 0.906,
+      "NeuralNormalAmount": 0.704,
+      "HeadSize": 3.834,
+      "TorsoSize": 10,
+      "BicepSize": 7.241,
+      "ForearmSize": 7.724,
+      "ThighSize": 5.173,
+      "NeuralWeightsFile": "bubbles_circular.bin",
+      "NeuralJostleRadius": 5.008,
+      "NeuralFireRate": 0.724,
+      "NeuralContrast": 1.055,
+      "VisualFPS": 12.118,
+      "ArticulatedCombatBounds": true,
+      "PixelsPerMeter": 51.955,
+      "StraddlesPlayerDepth": true
     }
   ]
 }

@@ -1848,6 +1848,14 @@ public partial class Game : IDisposable
 		return null;
 	}
 
+	public Actor? OverlapsFirstCombat(in RectInt rect, Actor.Masks mask)
+	{
+		foreach (var actor in Actors)
+			if (!destroying.Contains(actor) && actor.Mask.Has(mask) && actor.OverlapsCombatBounds(rect))
+				return actor;
+		return null;
+	}
+
 	public bool OverlapsRoomCollision(Actor actor, Point2 offset)
 	{
 		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)

@@ -1644,7 +1644,7 @@ public partial class Player : Pawn
 		{
 			// invulnerable while underground
 		}
-		else if (OverlapsFirst(Masks.Enemy | Masks.Hazard) is { } hit)
+		else if (Game.OverlapsFirstCombat(Hitbox.Rect + Position, Masks.Enemy | Masks.Hazard) is { } hit)
 			hit.Hit(this);
 
 		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
@@ -1959,7 +1959,7 @@ public partial class Player : Pawn
 		var hitSomething = false;
 		if (!blockedByShield)
 		{
-			var hit = Game.OverlapsFirst(it, Masks.Enemy | Masks.Hazard | Masks.Destructible);
+			var hit = Game.OverlapsFirstCombat(it, Masks.Enemy | Masks.Hazard | Masks.Destructible);
 			if (hit != null)
 			{
 				Hit(hit);

@@ -56,11 +56,9 @@ public partial class Player
 		{
 			if (actor == this || !actor.Mask.Has(Masks.Enemy))
 				continue;
-			if (actor.Hitbox.Shape != Hitbox.Shapes.Rect)
-				continue;
 
 			var bounds = actor.Hitbox.Rect + actor.Position;
-			if (!beam.Overlaps(bounds))
+			if (!actor.OverlapsCombatBounds(beam))
 				continue;
 			var distance = Facing == Signs.Positive ? bounds.Left - origin.X : origin.X - bounds.Right;
 			if (distance < bestDistance)

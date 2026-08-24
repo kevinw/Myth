@@ -143,7 +143,7 @@
     {
       "Id": "ff33298028412e1a",
       "Type": "RigPuppet",
-      "Position": [48, 40],
+      "Position": [200, 56],
       "ProjectionYaw": 43.696,
       "PixelsPerMeter": 36.551,
       "NeuralJostleStrength": 0.786,
@@ -159,7 +159,8 @@
       "NeuralJostleRadius": 5.008,
       "NeuralFireRate": 0.724,
       "NeuralContrast": 1.055,
-      "VisualFPS": 12.118
+      "VisualFPS": 12.118,
+      "ArticulatedCombatBounds": true
     },
     {
       "Id": "a11e0b090e97c4d3",

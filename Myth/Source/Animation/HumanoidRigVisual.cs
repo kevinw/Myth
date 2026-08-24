@@ -8,9 +8,12 @@ public enum RigSkinMode { Solid, Surface, NCA }
 sealed class HumanoidRigVisual(Actor owner) : IDisposable
 {
 	enum Part { Torso, Bicep, Forearm, Thigh, Other }
+	enum LegSide { None, Left, Right }
+	enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
 
-	readonly record struct BoneSpec(string From, string To, float Width, Part Part);
-	readonly record struct Bone(int From, int To, float Width, Part Part);
+	readonly record struct BoneSpec(string From, string To, float Width, Part Part, bool Combat = false,
+		LegSide Leg = LegSide.None);
+	readonly record struct Bone(int From, int To, float Width, Part Part, bool Combat, LegSide Leg);
 	readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
 	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe, int Tip);
 
@@ -22,31 +25,31 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 
 	static readonly BoneSpec[] BoneSpecs =
 	[
-		new("pelvis", "spine_01", 5, Part.Torso),
-		new("spine_01", "spine_02", 5, Part.Torso),
-		new("spine_02", "spine_03", 5, Part.Torso),
-		new("spine_03", "neck_01", 4, Part.Other),
-		new("neck_01", "Head", 3, Part.Other),
-		new("spine_03", "clavicle_l", 3, Part.Bicep),
-		new("clavicle_l", "upperarm_l", 3, Part.Bicep),
-		new("upperarm_l", "lowerarm_l", 3, Part.Bicep),
-		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm),
-		new("hand_l", "middle_01_l", 2.5f, Part.Forearm),
-		new("spine_03", "clavicle_r", 3, Part.Bicep),
-		new("clavicle_r", "upperarm_r", 3, Part.Bicep),
-		new("upperarm_r", "lowerarm_r", 3, Part.Bicep),
-		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm),
-		new("hand_r", "middle_01_r", 2.5f, Part.Forearm),
-		new("pelvis", "thigh_l", 4, Part.Thigh),
-		new("thigh_l", "calf_l", 4, Part.Thigh),
-		new("calf_l", "foot_l", 3, Part.Other),
-		new("foot_l", "ball_l", 2, Part.Other),
-		new("ball_l", "ball_leaf_l", 2, Part.Other),
-		new("pelvis", "thigh_r", 4, Part.Thigh),
-		new("thigh_r", "calf_r", 4, Part.Thigh),
-		new("calf_r", "foot_r", 3, Part.Other),
-		new("foot_r", "ball_r", 2, Part.Other),
-		new("ball_r", "ball_leaf_r", 2, Part.Other),
+		new("pelvis", "spine_01", 5, Part.Torso, true),
+		new("spine_01", "spine_02", 5, Part.Torso, true),
+		new("spine_02", "spine_03", 5, Part.Torso, true),
+		new("spine_03", "neck_01", 4, Part.Other, true),
+		new("neck_01", "Head", 3, Part.Other, true),
+		new("spine_03", "clavicle_l", 3, Part.Bicep, true),
+		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true),
+		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true),
+		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true),
+		new("hand_l", "middle_01_l", 2.5f, Part.Forearm, true),
+		new("spine_03", "clavicle_r", 3, Part.Bicep, true),
+		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true),
+		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true),
+		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true),
+		new("hand_r", "middle_01_r", 2.5f, Part.Forearm, true),
+		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: LegSide.Left),
+		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: LegSide.Left),
+		new("calf_l", "foot_l", 3, Part.Other, Leg: LegSide.Left),
+		new("foot_l", "ball_l", 2, Part.Other, Leg: LegSide.Left),
+		new("ball_l", "ball_leaf_l", 2, Part.Other, Leg: LegSide.Left),
+		new("pelvis", "thigh_r", 4, Part.Thigh, Leg: LegSide.Right),
+		new("thigh_r", "calf_r", 4, Part.Thigh, Leg: LegSide.Right),
+		new("calf_r", "foot_r", 3, Part.Other, Leg: LegSide.Right),
+		new("foot_r", "ball_r", 2, Part.Other, Leg: LegSide.Right),
+		new("ball_r", "ball_leaf_r", 2, Part.Other, Leg: LegSide.Right),
 	];
 
 	public float PlaybackSpeed = 1;
@@ -74,6 +77,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public float NeuralJostleInterval = 0.45f;
 	public float NeuralJostleStrength = 0.22f;
 	public float NeuralJostleRadius = 5;
+	public float CombatBoundsPadding = 1;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
 	public bool TurnWhileMoving;
@@ -106,6 +110,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
+	LegSide backLeg;
 	FootIK leftFoot;
 	FootIK rightFoot;
 	int head;
@@ -186,7 +191,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var spec = BoneSpecs[i];
-			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Part);
+			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Part, spec.Combat, spec.Leg);
 			ragdollJoints[bones[i].From] = true;
 			ragdollJoints[bones[i].To] = true;
 			boneOrder[i] = i;
@@ -472,7 +477,12 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 				PixelsPerMeter + new Vector2(0, 2.5f) + Offset;
 			jointDepth[i] = joint.X * cos + joint.Z * sin;
 		}
+		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? LegSide.Left : LegSide.Right;
 	}
+
+	float LegDepth(Leg leg)
+		=> (jointDepth[leg.Hip] + jointDepth[leg.Knee] + jointDepth[leg.Ankle] +
+			jointDepth[leg.Toe] + jointDepth[leg.Tip]) / 5;
 
 	void UpdateRagdoll()
 	{
@@ -638,7 +648,64 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		neuralHeadUVRadius = new Vector2(HeadSize) / (Vector2)NeuralSize;
 	}
 
-	public void Draw(Batcher batcher, Color tint, bool silhouette)
+	public bool OverlapsCombatBounds(in RectInt worldBounds)
+	{
+		var bounds = (Rect)(worldBounds - owner.Position);
+		for (var i = 0; i < bones.Length; i++)
+		{
+			var bone = bones[i];
+			if (bone.Combat && CapsuleOverlaps(bounds, projectedPose[bone.From], projectedPose[bone.To],
+				BoneWidth(bone) * 0.5f + CombatBoundsPadding))
+				return true;
+		}
+		return bounds.Overlaps(new Circle(projectedPose[head], HeadSize + CombatBoundsPadding), out _);
+	}
+
+	static bool CapsuleOverlaps(in Rect bounds, Vector2 from, Vector2 to, float radius)
+	{
+		var segment = new Line(from, to);
+		if (bounds.Overlaps(segment))
+			return true;
+		var radiusSquared = radius * radius;
+		return segment.ClosestDistanceSquared(bounds.TopLine) <= radiusSquared ||
+			segment.ClosestDistanceSquared(bounds.RightLine) <= radiusSquared ||
+			segment.ClosestDistanceSquared(bounds.BottomLine) <= radiusSquared ||
+			segment.ClosestDistanceSquared(bounds.LeftLine) <= radiusSquared;
+	}
+
+	public void DrawCombatBounds(Batcher batcher)
+	{
+		var color = new Color(0x39e6c5);
+		for (var i = 0; i < bones.Length; i++)
+		{
+			var bone = bones[i];
+			if (!bone.Combat)
+				continue;
+			var from = owner.Position + projectedPose[bone.From];
+			var to = owner.Position + projectedPose[bone.To];
+			var radius = BoneWidth(bone) * 0.5f + CombatBoundsPadding;
+			batcher.Line(from, to, radius * 2, color * 0.2f);
+			batcher.CircleLine(from, radius, 1, 10, color);
+			batcher.CircleLine(to, radius, 1, 10, color);
+		}
+		batcher.CircleLine(owner.Position + projectedPose[head], HeadSize + CombatBoundsPadding, 1, 14, color);
+	}
+
+	public void Draw(Batcher batcher, Color tint, bool silhouette) => Draw(batcher, tint, silhouette, DrawParts.All);
+	public void DrawBehindPlayer(Batcher batcher, Color tint, bool silhouette)
+		=> Draw(batcher, tint, silhouette, DrawParts.BehindPlayer);
+	public void DrawInFrontOfPlayer(Batcher batcher, Color tint, bool silhouette)
+		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer);
+
+	bool Includes(Bone bone, DrawParts parts)
+		=> parts switch
+		{
+			DrawParts.All => true,
+			DrawParts.BehindPlayer => bone.Leg == backLeg,
+			_ => bone.Leg != backLeg,
+		};
+
+	void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
 	{
 		var surface = !silhouette && SkinMode == RigSkinMode.Surface ? Assets.GetSurface(SurfaceId) : null;
 		var neuralTexture = !silhouette && SkinMode == RigSkinMode.NCA && NeuralColorAmount > 0
@@ -648,6 +715,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
 		{
 			var bone = bones[boneOrder[sortedIndex]];
+			if (!Includes(bone, parts))
+				continue;
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
 			var width = BoneWidth(bone);
@@ -669,22 +738,28 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			batcher.Circle(to, MathF.Max(1.2f, width * 0.42f), 8, color);
 		}
 
-		var headPosition = projectedPose[head];
-		batcher.Circle(headPosition, HeadSize + 1.4f, 14, silhouette ? tint : OutlineColor);
-		batcher.Circle(headPosition, HeadSize, 14, silhouette ? tint : NearColor);
-		if (surface != null)
-			DrawSurfaceCircle(batcher, surface, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius, normals: false);
-		else if (neuralTexture != null)
+		if (parts != DrawParts.BehindPlayer)
 		{
-			DrawNeuralCircle(batcher, neuralTexture, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
-				NearColor * NeuralColorAmount);
-			batcher.PopSampler();
+			var headPosition = projectedPose[head];
+			batcher.Circle(headPosition, HeadSize + 1.4f, 14, silhouette ? tint : OutlineColor);
+			batcher.Circle(headPosition, HeadSize, 14, silhouette ? tint : NearColor);
+			if (surface != null)
+				DrawSurfaceCircle(batcher, surface, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius, normals: false);
+			else if (neuralTexture != null)
+				DrawNeuralCircle(batcher, neuralTexture, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
+					NearColor * NeuralColorAmount);
+			if (!silhouette)
+				batcher.Circle(headPosition + lookDirection * 2.4f, 1.1f, 8, AccentColor);
 		}
-		if (!silhouette)
-			batcher.Circle(headPosition + lookDirection * 2.4f, 1.1f, 8, AccentColor);
+		if (neuralTexture != null)
+			batcher.PopSampler();
 	}
 
-	public void DrawNormals(Batcher batcher)
+	public void DrawNormals(Batcher batcher) => DrawNormals(batcher, DrawParts.All);
+	public void DrawNormalsBehindPlayer(Batcher batcher) => DrawNormals(batcher, DrawParts.BehindPlayer);
+	public void DrawNormalsInFrontOfPlayer(Batcher batcher) => DrawNormals(batcher, DrawParts.InFrontOfPlayer);
+
+	void DrawNormals(Batcher batcher, DrawParts parts)
 	{
 		var flat = new Color(0x8080ff);
 		var surface = SkinMode == RigSkinMode.Surface && Assets.GetSurface(SurfaceId) is { HasNormal: true } foundSurface
@@ -696,6 +771,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
 		{
 			var bone = bones[boneOrder[sortedIndex]];
+			if (!Includes(bone, parts))
+				continue;
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
 			var width = BoneWidth(bone);
@@ -706,16 +783,18 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 				DrawNeuralBone(batcher, neuralNormals, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]],
 					Color.White * NeuralNormalAmount);
 		}
-		var headPosition = projectedPose[head];
-		batcher.Circle(headPosition, HeadSize + 1.4f, 14, flat);
-		if (surface != null)
-			DrawSurfaceCircle(batcher, surface, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius, normals: true);
-		else if (neuralNormals != null)
+		if (parts != DrawParts.BehindPlayer)
 		{
-			DrawNeuralCircle(batcher, neuralNormals, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
-				Color.White * NeuralNormalAmount);
-			batcher.PopSampler();
+			var headPosition = projectedPose[head];
+			batcher.Circle(headPosition, HeadSize + 1.4f, 14, flat);
+			if (surface != null)
+				DrawSurfaceCircle(batcher, surface, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius, normals: true);
+			else if (neuralNormals != null)
+				DrawNeuralCircle(batcher, neuralNormals, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
+					Color.White * NeuralNormalAmount);
 		}
+		if (neuralNormals != null)
+			batcher.PopSampler();
 	}
 
 	static void BoneQuad(Vector2 from, Vector2 to, float width,

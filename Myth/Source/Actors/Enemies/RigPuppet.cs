@@ -15,7 +15,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	[I(1, 60)] public float VisualFPS = 20;
 	[I(1, 4)] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
-	[I(12, 40)] public float PixelsPerMeter = 25;
+	[I(12, 60)] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
 	[I(2, 12)] public float HeadSize = 3.9f;
 	[I(2, 12)] public float TorsoSize = 5;
@@ -36,6 +36,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	[I(0, 3)] public float NeuralJostleInterval = 0.45f;
 	[I(0, 1)] public float NeuralJostleStrength = 0.22f;
 	[I(1, 12)] public float NeuralJostleRadius = 5;
+	public bool ArticulatedCombatBounds;
+	[I(0, 8)] public float CombatBoundsPadding = 1;
+	public bool StraddlesPlayerDepth;
 	[I(1, 20)] public int Health = 8;
 	public Color FarColor = new(0x435263);
 	public Color NearColor = new(0xb7cdd0);
@@ -43,6 +46,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public Color OutlineColor = new(0x171d27);
 
 	HumanoidRigVisual visual = null!;
+	RigPuppetBackLegRenderer? backLegRenderer;
 	StepTraversal stepTraversal;
 	Vector2 stepStartOffset;
 	Vector2 stepVisualOffset;
@@ -124,12 +128,28 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.NeuralJostleInterval = NeuralJostleInterval;
 		visual.NeuralJostleStrength = NeuralJostleStrength;
 		visual.NeuralJostleRadius = NeuralJostleRadius;
+		visual.CombatBoundsPadding = CombatBoundsPadding;
 		visual.Offset = stepVisualOffset;
 		visual.FarColor = FarColor;
 		visual.NearColor = NearColor;
 		visual.CoreColor = CoreColor;
 		visual.OutlineColor = OutlineColor;
 		visual.LookTarget = Game.GetFirst<Player>()?.Position;
+		SyncBackLegRenderer();
+	}
+
+	void SyncBackLegRenderer()
+	{
+		if (!StraddlesPlayerDepth)
+		{
+			if (backLegRenderer != null)
+				Game.Destroy(backLegRenderer);
+			backLegRenderer = null;
+			return;
+		}
+		backLegRenderer ??= Game.Create<RigPuppetBackLegRenderer>(Position, it => it.Owner = this);
+		backLegRenderer.Position = Position;
+		backLegRenderer.KeepOnRoomTransition = KeepOnRoomTransition;
 	}
 
 	string LocomotionName()
@@ -356,7 +376,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		base.OnCollideY();
 	}
 
-	public override void Destroyed() => visual?.Dispose();
+	public override void Destroyed()
+	{
+		visual?.Dispose();
+		if (backLegRenderer != null)
+			Game.Destroy(backLegRenderer);
+		backLegRenderer = null;
+	}
 
 	public override void OnWasHit(Actor by)
 	{
@@ -388,16 +414,89 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public override void Render(Batcher batcher)
 	{
 		if (!SpriteBlinkHidden)
-			visual?.Draw(batcher, Color.White, silhouette: false);
+		{
+			if (StraddlesPlayerDepth)
+				visual?.DrawInFrontOfPlayer(batcher, Color.White, silhouette: false);
+			else
+				visual?.Draw(batcher, Color.White, silhouette: false);
+		}
 	}
 
-	public override void RenderShadow(Batcher batcher, Color color) => visual?.Draw(batcher, color, silhouette: true);
-	public override void RenderReflection(Batcher batcher, Color color) => visual?.Draw(batcher, color, silhouette: true);
+	public override void RenderShadow(Batcher batcher, Color color)
+	{
+		if (StraddlesPlayerDepth)
+			visual?.DrawInFrontOfPlayer(batcher, color, silhouette: true);
+		else
+			visual?.Draw(batcher, color, silhouette: true);
+	}
+
+	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
 	public override void RenderNormals(Batcher batcher)
-		=> visual?.DrawNormals(batcher);
+	{
+		if (StraddlesPlayerDepth)
+			visual?.DrawNormalsInFrontOfPlayer(batcher);
+		else
+			visual?.DrawNormals(batcher);
+	}
+
+	internal void RenderBehindPlayer(Batcher batcher)
+	{
+		if (Visible && StraddlesPlayerDepth && !SpriteBlinkHidden)
+			visual?.DrawBehindPlayer(batcher, Color.White, silhouette: false);
+	}
+
+	internal void RenderShadowBehindPlayer(Batcher batcher, Color color)
+	{
+		if (Visible && StraddlesPlayerDepth)
+			visual?.DrawBehindPlayer(batcher, color, silhouette: true);
+	}
+
+	internal void RenderNormalsBehindPlayer(Batcher batcher)
+	{
+		if (Visible && StraddlesPlayerDepth)
+			visual?.DrawNormalsBehindPlayer(batcher);
+	}
 
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
 		=> visual?.PerturbNeuralTexture(context);
 
+	internal override bool OverlapsCombatBounds(in RectInt bounds)
+		=> !ArticulatedCombatBounds || visual == null
+			? base.OverlapsCombatBounds(bounds)
+			: visual.OverlapsCombatBounds(bounds);
+
+	internal override void RenderCollisionDebug(Batcher batcher)
+	{
+		if (ArticulatedCombatBounds)
+			visual?.DrawCombatBounds(batcher);
+	}
+
 	public override Rect GetVisualBounds() => new(Position.X - 42, Position.Y - 48, 84, 58);
+}
+
+sealed class RigPuppetBackLegRenderer : Actor
+{
+	public RigPuppet Owner = null!;
+
+	public RigPuppetBackLegRenderer()
+	{
+		Sprite = null;
+		Depth = Depths.BehindPlayer;
+	}
+
+	public override bool CastsSpriteShadow => Owner.CastsSpriteShadow;
+	public override bool CastsReflection => Owner.CastsReflection;
+	public override bool LightingDithered => Owner.LightingDithered;
+
+	public override void Update()
+	{
+		Position = Owner.Position;
+		KeepOnRoomTransition = Owner.KeepOnRoomTransition;
+	}
+
+	public override void Render(Batcher batcher) => Owner.RenderBehindPlayer(batcher);
+	public override void RenderShadow(Batcher batcher, Color color) => Owner.RenderShadowBehindPlayer(batcher, color);
+	public override void RenderReflection(Batcher batcher, Color color) => Owner.RenderShadowBehindPlayer(batcher, color);
+	public override void RenderNormals(Batcher batcher) => Owner.RenderNormalsBehindPlayer(batcher);
+	public override Rect GetVisualBounds() => Owner.GetVisualBounds();
 }

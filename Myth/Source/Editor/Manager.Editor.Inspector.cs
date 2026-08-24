@@ -575,7 +575,6 @@ public partial class Manager
 		else if (runtime.ActorId != null)
 			DrawActorIdInWindowTitle(title, runtime.ActorId);
 
-		TextDisabled("Editing the running actor. Changes are session-only until applied.");
 		Separator();
 
 		actorPropertyScratch.Clear();

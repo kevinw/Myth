@@ -215,8 +215,11 @@ public sealed partial class GameView : IDisposable
 			Batcher.RectLine(rect, 1, Color.Red);
 		foreach (var it in Actors)
 			if (!game.destroying.Contains(it))
+			{
 				if (it.Hitbox.Rect != new RectInt())
 					Batcher.RectLine(it.Hitbox.Rect + it.Position, 1, Color.Red);
+				it.RenderCollisionDebug(Batcher);
+			}
 	}
 
 	private void DrawStorySpeech(Target target)
