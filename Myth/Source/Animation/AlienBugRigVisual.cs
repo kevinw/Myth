@@ -6,7 +6,9 @@ namespace Myth;
 sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 {
 	readonly record struct BoneSpec(string From, string To, float Width);
+	readonly record struct TerminalBoneSpec(string Previous, string From, float Width, float LengthScale = 1);
 	readonly record struct Bone(int From, int To, float Width);
+	readonly record struct TerminalBone(int Previous, int From, int To, float LengthScale);
 	readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
 
 	static readonly BoneSpec[] BoneSpecs =
@@ -18,6 +20,12 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		new("Body", "LegB_R.000", 5), new("LegB_R.000", "LegB_R.001", 4), new("LegB_R.001", "LegB_R.002", 2.5f),
 		new("Body", "Tail.000", 7), new("Tail.000", "Tail.001", 6),
 		new("Tail.001", "Tail.002", 4.5f), new("Tail.002", "Tail.003", 2.5f),
+	];
+	static readonly TerminalBoneSpec[] TerminalBoneSpecs =
+	[
+		new("LegF_L.001", "LegF_L.002", 2), new("LegB_L.001", "LegB_L.002", 2),
+		new("LegF_R.001", "LegF_R.002", 2), new("LegB_R.001", "LegB_R.002", 2),
+		new("Tail.002", "Tail.003", 1.5f, 0.8f),
 	];
 
 	static Point2 NeuralSize => new(56, 48);
@@ -31,6 +39,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 	Vector2[] projected = [];
 	float[] depth = [];
 	Bone[] bones = [];
+	TerminalBone[] terminalBones = [];
 	BoneUV[] boneUVs = [];
 	int[] boneOrder = [];
 	int body;
@@ -53,16 +62,26 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		animator = new(rig, "Idle");
 		pose = new Vector3[rig.JointCount];
 		rotations = new Quaternion[rig.JointCount];
-		projected = new Vector2[rig.JointCount];
-		depth = new float[rig.JointCount];
-		bones = new Bone[BoneSpecs.Length];
-		boneUVs = new BoneUV[BoneSpecs.Length];
-		boneOrder = new int[BoneSpecs.Length];
-		for (var i = 0; i < bones.Length; i++)
+		projected = new Vector2[rig.JointCount + TerminalBoneSpecs.Length];
+		depth = new float[projected.Length];
+		bones = new Bone[BoneSpecs.Length + TerminalBoneSpecs.Length];
+		terminalBones = new TerminalBone[TerminalBoneSpecs.Length];
+		boneUVs = new BoneUV[bones.Length];
+		boneOrder = new int[bones.Length];
+		for (var i = 0; i < BoneSpecs.Length; i++)
 		{
 			var spec = BoneSpecs[i];
 			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width);
 			boneOrder[i] = i;
+		}
+		for (var i = 0; i < TerminalBoneSpecs.Length; i++)
+		{
+			var spec = TerminalBoneSpecs[i];
+			var terminal = terminalBones[i] = new(RequiredJoint(spec.Previous), RequiredJoint(spec.From),
+				rig.JointCount + i, spec.LengthScale);
+			var bone = BoneSpecs.Length + i;
+			bones[bone] = new(terminal.From, terminal.To, spec.Width);
+			boneOrder[bone] = bone;
 		}
 		body = RequiredJoint("Body");
 		head = RequiredJoint("Head");
@@ -111,6 +130,14 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		{
 			projected[i] = new Vector2((-pose[i].Z * cos + pose[i].X * sin) * mirror, -pose[i].Y) * owner.PixelsPerMeter;
 			depth[i] = pose[i].X * cos + pose[i].Z * sin;
+		}
+		for (var i = 0; i < terminalBones.Length; i++)
+		{
+			var terminal = terminalBones[i];
+			var length = Vector3.Distance(pose[terminal.Previous], pose[terminal.From]) * terminal.LengthScale;
+			var tip = pose[terminal.From] + Vector3.Transform(Vector3.UnitY * length, rotations[terminal.From]);
+			projected[terminal.To] = new Vector2((-tip.Z * cos + tip.X * sin) * mirror, -tip.Y) * owner.PixelsPerMeter;
+			depth[terminal.To] = tip.X * cos + tip.Z * sin;
 		}
 		SortBones();
 	}
