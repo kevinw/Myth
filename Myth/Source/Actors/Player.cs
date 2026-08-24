@@ -2224,20 +2224,22 @@ public partial class Player : Pawn
 
 	void RenderHat(Batcher batcher, Subtexture subtexture, Color color)
 	{
-		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0 || Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
+		if (SpriteBlinkHidden || hatSprite == null || hatSprite.Frames.Count == 0 || CurrentSpriteFrame is not { } playerFrame ||
+			Sprite?.TryGetSocket("hat", AnimationFrameIndex, out var socket) != true)
 			return;
 
 		var hatSpriteOrigin = hatSprite.ResolveOrigin(SpriteAnchor.BottomCenter);
 		var socketPosition = socket.Position + new Vector2(1f, 2f);
 		var playerScale = new Vector2((int)Facing * Squish.X, Squish.Y);
-		var rootPosition = (Shift + socketPosition - Origin) * playerScale;
+		var skewTransform = SpriteSkewMatrix(playerFrame);
+		var rootPosition = Vector2.Transform((Shift + socketPosition - Origin) * playerScale, skewTransform);
 
 		Vector2 position;
 		float rotation;
 		if (PerfToggles.HatPhysics)
 		{
 			position = rootPosition + (PerfToggles.HatPhysics ? hatOffset : new());
-			var normal = socket.Normal * playerScale;
+			var normal = Vector2.TransformNormal(socket.Normal * playerScale, skewTransform);
 			rotation = MathF.Atan2(normal.Y, normal.X) - MathF.PI * 0.5f + (PerfToggles.HatPhysics ? hatAngle : new());
 		}
 		else

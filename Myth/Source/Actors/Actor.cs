@@ -626,7 +626,7 @@ public class Actor
 		// pass -- color, normals, emissive, shadow, reflection -- comes through here together.
 		var transform = Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y);
 		if (Skew != 0)
-			transform *= SkewMatrix(SpriteBaseY(frame) * Squish.Y);
+			transform *= SpriteSkewMatrix(frame);
 		batcher.PushMatrix(transform);
 		batcher.Image(subtexture, Shift, Origin, Vector2.One, 0, color);
 		batcher.PopMatrix();
@@ -636,7 +636,8 @@ public class Actor
 	float SpriteBaseY(Sprite.Frame frame) => Shift.Y - Origin.Y + frame.Subtexture.Height;
 
 	// x' = x + Skew * (baseY - y): zero displacement at the base, growing toward the top.
-	Matrix3x2 SkewMatrix(float baseY) => new(1, 0, -Skew, 1, Skew * baseY, 0);
+	protected Matrix3x2 SpriteSkewMatrix(Sprite.Frame frame)
+		=> new(1, 0, -Skew, 1, Skew * SpriteBaseY(frame) * Squish.Y, 0);
 
 	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 

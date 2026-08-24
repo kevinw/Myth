@@ -8,6 +8,7 @@ public partial class Player
 {
 	static string DashEdgeEffect => "edge_sheen";
 	static int DashEdgeCount => 2;
+	static float DashSpriteSkew => 0.13f;
 
 	int dashEdgeSlot = -1;
 
@@ -15,6 +16,12 @@ public partial class Player
 
 	void UpdateDashFx(float dt)
 	{
+		if (IsDashRunning() || DashBursting)
+		{
+			var direction = DashBursting ? dashDirection : dashRunDirection;
+			Skew = direction * DashSpriteSkew;
+		}
+
 		if (Game.Particles is not { Supported: true } particles || Sprite is not { } sprite)
 			return;
 
