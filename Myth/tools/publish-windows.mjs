@@ -20,6 +20,7 @@ function run(cmd, args) {
 }
 
 checkFmodBankMtimes(root, "Desktop");
+run(process.execPath, ["tools/check-world-map-bake.mjs"]);
 
 const contentZip = path.join(outRoot, "Content.zip");
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "--",

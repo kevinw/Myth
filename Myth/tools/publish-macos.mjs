@@ -40,6 +40,7 @@ function capture(cmd, args) {
 }
 
 checkFmodBankMtimes(root, "Desktop");
+run(process.execPath, ["tools/check-world-map-bake.mjs"]);
 
 // --- 1. Fresh visual asset pack (the bundle ships no Assets/Sources, so everything
 // visual — including tile kit registrations — must be current in the pack), then a
