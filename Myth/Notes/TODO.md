@@ -28,8 +28,6 @@ along with this.
 - could use arrows next to your location on the map indicating where you can go
 - making sure that either all gaps which lead to an adjacent room are obvious, or that there are no pits? not sure
 - carry is confusing
-- burrowing through a save doesn't save
-- lightning trap wall jump room isn't clear
 - should we be able to burrow on a jumpthru?
 - he thought the duck would hurt you
 - duck death sound played on leave
@@ -39,7 +37,6 @@ along with this.
 - make untaken map exits more obvious than the current pulsating 1px line
 - doors in the floater room are unclear
 - floater room shadows look like safe spots but they are not
-- health hud
 - save point after the floater "boss"
 - thought tower was a new room because he came down and the hidden wall was revealed immediately
 - remove LinkedDoors that warp you across the map; respect the player's understanding of spatial relations
