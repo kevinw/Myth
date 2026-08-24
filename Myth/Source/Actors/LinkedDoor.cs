@@ -57,7 +57,7 @@ public class LinkedDoor : Actor
 		interactTime += Time.Delta;
 
 		var moveInt = Game.Controls.Move.IntValue;
-		if (moveInt.Y < 0 && moveInt.X == 0)
+		if (Game.Controls.Move.PressedUp && moveInt.X == 0)
 			Game.TransitionToLinkedDoor(TargetActorId);
 	}
 
