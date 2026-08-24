@@ -1143,7 +1143,7 @@ public abstract class Pawn : Actor
 			Velocity.Y = 0;
 			Play("jump");
 		}
-		if (PlayerSpecificAudioEvents)
+		if (!DashEngagesRunOnly && PlayerSpecificAudioEvents)
 			AudioEvent("player/dash_start");
 		return true;
 	}

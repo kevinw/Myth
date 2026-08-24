@@ -167,6 +167,7 @@ public sealed partial class GameView
 				DrawMinimap(output);
 				mapOverlayVisible = minimapOpacity > 0.001f;
 				DrawContextPrompt(output, mapOverlayVisible);
+				DrawPlayerHud(output);
 			}
 		}
 		if (debugView == DebugView.ShadowSegments)
@@ -222,9 +223,6 @@ public sealed partial class GameView
 
 		if (debugView is DebugView.None or DebugView.CollisionRects)
 			DrawInputPromptGlyphs(destination, present, output.Bounds.Size, scale, clip, mapOverlayVisible);
-
-		if (false && showHud && debugView is DebugView.None or DebugView.CollisionRects)
-			DrawPlayerHud(destination, viewport, scissor);
 
 		if (showHud && game.ActiveCutscene == null && debugView is (DebugView.None or DebugView.CollisionRects))
 			DrawCurrencyHud(destination, viewport, scissor);
@@ -548,35 +546,34 @@ public sealed partial class GameView
 		Batcher.PopMatrix();
 	}
 
-	void DrawPlayerHud(IDrawableTarget target, in RectInt viewport, RectInt? scissor)
+	void DrawPlayerHud(Target target)
 	{
-		var scale = viewport.Height / (float)Height;
-		Batcher.PushMatrix(
-			Matrix3x2.CreateScale(scale) *
-			Matrix3x2.CreateTranslation(viewport.Left, viewport.Bottom - Height * scale));
+		var rectColor = new Color(30, 30, 30, 30);
+
+		var healthColor = Color.Gray;
+		healthColor.A = 40;
+
 		var atlasWander = PushAtlasWanderMaterial();
 		if (game.GetFirst<Player>() is { } player)
 		{
 #if BROWSER
 			Point2 pos = new(0, 0);
 #else
-			Point2 pos = new(0, Height - 16);
+			Point2 pos = new(0, Height - 14);
 #endif
-			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 48, 4), Color.Black);
+			Batcher.Rect(new Rect(pos.X, pos.Y + 7, 40, 3), rectColor);
 
 			for (var i = 0; i < Player.MaxHealth; i++)
 			{
-				Batcher.Image(
-					player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1"), pos,
-					Color.White);
-				pos.X += 12;
+				var subTexture = player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1");
+				Batcher.Image(subTexture, pos, healthColor);
+				pos.X += 10;
 			}
 		}
 		if (atlasWander)
 			Batcher.PopMaterial();
-		Batcher.PopMatrix();
 
-		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
+		Batcher.Render(target);
 		Batcher.Clear();
 	}
 
