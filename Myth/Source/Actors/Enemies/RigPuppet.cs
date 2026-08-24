@@ -15,6 +15,11 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public bool SyncGaitToSpeed = true;
 	public bool SeedAnimationPhase = true;
 	[I(0, 2)] public float SecondaryMotion = 1;
+	[I(0, 1)] public float GaitAsymmetry = 0.35f;
+	[I(0, 2)] public float PlantResponse = 0.65f;
+	[I(0, 1)] public float TrackingLean = 0.45f;
+	[I(0, 1)] public float TurnInertia = 0.6f;
+	[I(0, 1)] public float EyeMotion = 0.65f;
 	[I(1, 60)] public float VisualFPS = 20;
 	[I(1, 4)] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
@@ -25,6 +30,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	[I(1, 10)] public float BicepSize = 3;
 	[I(1, 10)] public float ForearmSize = 2.5f;
 	[I(1, 12)] public float ThighSize = 4;
+	[I(0, 0.75f)] public float LimbTaper = 0.18f;
+	[I(0, 3)] public float DepthColorContrast = 1.25f;
+	[I(0, 0.3f)] public float DepthWidthAmount = 0.08f;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public string SurfaceId = "";
 	public string NeuralWeightsFile = "rock035_pair_circular_screen.bin";
@@ -115,6 +123,12 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.PlaybackSpeed = PlaybackSpeed * gaitScale;
 		visual.SeedAnimationPhase = SeedAnimationPhase;
 		visual.SecondaryMotion = SecondaryMotion;
+		visual.GaitAsymmetry = GaitAsymmetry;
+		visual.GaitActive = walking;
+		visual.PlantResponse = PlantResponse;
+		visual.TrackingLean = TrackingLean;
+		visual.TurnInertia = TurnInertia;
+		visual.EyeMotion = EyeMotion;
 		visual.VisualFPS = VisualFPS;
 		visual.PixelsPerMeter = PixelsPerMeter;
 		visual.ProjectionYaw = ProjectionYaw;
@@ -123,6 +137,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.BicepSize = BicepSize;
 		visual.ForearmSize = ForearmSize;
 		visual.ThighSize = ThighSize;
+		visual.LimbTaper = LimbTaper;
+		visual.DepthColorContrast = DepthColorContrast;
+		visual.DepthWidthAmount = DepthWidthAmount;
 		visual.SkinMode = SkinMode;
 		visual.SurfaceId = SurfaceId;
 		visual.NeuralWeightsFile = NeuralWeightsFile;

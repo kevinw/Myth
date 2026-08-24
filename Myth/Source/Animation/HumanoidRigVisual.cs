@@ -70,9 +70,14 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public float BicepSize = 3;
 	public float ForearmSize = 2.5f;
 	public float ThighSize = 4;
+	public float LimbTaper;
+	public float DepthColorContrast = 1;
+	public float DepthWidthAmount;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public string SurfaceId = "";
 	public float TrackingLean;
+	public float TurnInertia;
+	public float EyeMotion;
 	public float UpperBodyHitStrength = 0.8f;
 	public string NeuralWeightsFile = "rock035_pair_circular_screen.bin";
 	public float NeuralColorAmount = 0.25f;
@@ -90,6 +95,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public float NeuralFootContactRadius = 4;
 	public bool SeedAnimationPhase;
 	public float SecondaryMotion;
+	public float GaitAsymmetry;
+	public bool GaitActive;
+	public float PlantResponse;
 	public float CombatBoundsPadding = 1;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
@@ -117,6 +125,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	Vector2 neuralHeadUVRadius;
 	Vector2 surfaceMaterialOrigin;
 	OzzJointMask upperBodyMask = null!;
+	OzzJointMask leftArmMask = null!;
+	OzzJointMask rightArmMask = null!;
 	OzzRig.Clip upperBodyHitClip = null!;
 	NeuralTextureActor? neuralSurface;
 	string activeNeuralWeightsFile = "";
@@ -137,6 +147,11 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	int rightPalm;
 	int pelvis;
 	float animationPhase;
+	float gaitHeadBias;
+	float gaitShoulderBias;
+	float gaitStrideBias;
+	float plantRemaining;
+	LegSide plantedSide;
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
@@ -156,6 +171,10 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	bool turning;
 	bool poseDirty;
 	Vector2 lookDirection;
+	bool eyeReady;
+	float eyeScale = 1;
+	float eyeReactionRemaining;
+	float eyeReactionStrength;
 
 	static float ClipBlendDuration => 0.2f;
 	static float RagdollSpring => 160f;
@@ -182,6 +201,17 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	static float HandMotionMaxOffset => 4.5f;
 	static float SecondaryTeleportDistance => 24f;
 	static float NeuralFootContactDuration => 0.14f;
+	static float PlantResponseDuration => 0.2f;
+	static float PlantCompression => 1.5f;
+	static float PlantShoulderLift => 1.1f;
+	static float GaitHeadOffset => 1.1f;
+	static float GaitShoulderOffset => 0.8f;
+	static float GaitStrideOffset => 1.25f;
+	static float TurnInertiaDelay => 0.35f;
+	static float EyeTrackingSpeed => 8f;
+	static float EyeSaccadeInterval => 0.55f;
+	static float EyeSaccadeAmount => 0.12f;
+	static float EyeReactionDuration => 0.18f;
 	static Point2 NeuralSize => new(64, 80);
 	static Point2 NeuralOrigin => new(-32, -72);
 
@@ -207,6 +237,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		var initialClip = rig.TryGetClip(clip, out _) ? clip : "Zombie_Idle_Loop";
 		animator = new(rig, initialClip);
 		animationPhase = SeededPhase();
+		gaitHeadBias = SeededSigned(1.7f);
+		gaitShoulderBias = SeededSigned(4.3f);
+		gaitStrideBias = SeededSigned(8.1f);
 		if (SeedAnimationPhase)
 			animator.SetTime(animator.ActiveClip.Duration * animationPhase);
 		sampledPose = new Vector3[rig.JointCount];
@@ -242,6 +275,10 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		upperBodyMask.Set("spine_01", 1, descendants: true);
 		upperBodyMask.Set("spine_01", 0.25f);
 		upperBodyMask.Set("spine_02", 0.6f);
+		leftArmMask = rig.CreateMask();
+		leftArmMask.Set("clavicle_l", 1, descendants: true);
+		rightArmMask = rig.CreateMask();
+		rightArmMask.Set("clavicle_r", 1, descendants: true);
 		upperBodyHitClip = rig.GetClip("Hit_Knockback_Additive");
 		ResetTurn();
 		visualDelta = 1 / VisualFPS;
@@ -301,6 +338,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		}
 		return (hash & 0xffff) / 65536f;
 	}
+
+	float SeededSigned(float salt) => MathF.Sin((animationPhase + salt) * 12.9898f) * 0.5f +
+		MathF.Sin((animationPhase + salt) * 31.416f) * 0.5f;
 
 	Leg RequiredLeg(string side)
 		=> new(RequiredJoint($"thigh_{side}"), RequiredJoint($"calf_{side}"),
@@ -367,6 +407,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	{
 		leftFoot = default;
 		rightFoot = default;
+		plantRemaining = 0;
 	}
 
 	public void Land(float speed)
@@ -378,6 +419,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 	public void Hit(float away, bool animateUpperBody = false)
 	{
 		neuralHitRemaining = 0.18f;
+		TriggerEyeReaction(0.45f);
 		if (animateUpperBody)
 			layeredHitTime = 0;
 		for (var i = 0; i < ragdollVelocity.Length; i++)
@@ -440,18 +482,113 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		ApplyTrackingLean();
 		UpdateRagdoll();
 		ProjectPose();
+		ApplyGaitAsymmetry();
+		ApplyPlantResponse();
 		UpdateSecondaryMotion();
 		if (footIK)
 		{
-			UpdateFoot(ref leftFoot, leftLeg, grounded);
-			UpdateFoot(ref rightFoot, rightLeg, grounded);
+			UpdateFoot(ref leftFoot, leftLeg, LegSide.Left, grounded);
+			UpdateFoot(ref rightFoot, rightLeg, LegSide.Right, grounded);
 		}
 		else
 			ResetFeet();
 		SortBones();
-		lookDirection = LookTarget is { } target
+		UpdateEye();
+	}
+
+	void UpdateEye()
+	{
+		var desired = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
 			: new Vector2(-MathF.Cos(visualYaw), 0);
+		if (EyeMotion > 0)
+		{
+			var tick = (uint)MathF.Floor((owner.Time.SecondsF + animationPhase * EyeSaccadeInterval) /
+				EyeSaccadeInterval);
+			var seed = (uint)(animationPhase * uint.MaxValue);
+			desired = (desired + new Vector2(HashSigned(tick ^ seed), HashSigned((tick + 1) ^ seed)) *
+				EyeSaccadeAmount * EyeMotion).Normalized(desired);
+		}
+		if (!eyeReady || EyeMotion <= 0)
+		{
+			lookDirection = desired;
+			eyeReady = true;
+		}
+		else
+			lookDirection = Vector2.Lerp(lookDirection, desired,
+				1 - MathF.Exp(-EyeTrackingSpeed * visualDelta)).Normalized(desired);
+
+		if (eyeReactionRemaining > 0)
+		{
+			var progress = 1 - eyeReactionRemaining / EyeReactionDuration;
+			eyeScale = 1 - MathF.Sin(progress * MathF.PI) * eyeReactionStrength * EyeMotion;
+			eyeReactionRemaining = MathF.Max(0, eyeReactionRemaining - visualDelta);
+		}
+		else
+		{
+			eyeScale = 1;
+			eyeReactionStrength = 0;
+		}
+	}
+
+	static float HashSigned(uint value)
+	{
+		value ^= value >> 16;
+		value *= 0x7feb352du;
+		value ^= value >> 15;
+		value *= 0x846ca68bu;
+		value ^= value >> 16;
+		return (value & 0xffff) / 32767.5f - 1;
+	}
+
+	void TriggerEyeReaction(float strength)
+	{
+		eyeReactionRemaining = EyeReactionDuration;
+		eyeReactionStrength = MathF.Max(eyeReactionStrength, strength);
+	}
+
+	void ApplyGaitAsymmetry()
+	{
+		if (GaitAsymmetry <= 0)
+			return;
+
+		projectedPose[head] += Vector2.UnitX * gaitHeadBias * GaitHeadOffset * GaitAsymmetry;
+		OffsetMasked(leftArmMask, Vector2.UnitY * gaitShoulderBias * GaitShoulderOffset * GaitAsymmetry);
+		OffsetMasked(rightArmMask, -Vector2.UnitY * gaitShoulderBias * GaitShoulderOffset * GaitAsymmetry);
+		if (!GaitActive || animator.ActiveClip.Duration <= 0)
+			return;
+
+		var stride = MathF.Sin(animator.Time / animator.ActiveClip.Duration * MathF.Tau) * gaitStrideBias *
+			GaitStrideOffset * GaitAsymmetry * (int)visualFacing;
+		OffsetLeg(leftLeg, Vector2.UnitX * stride);
+		OffsetLeg(rightLeg, -Vector2.UnitX * stride * 0.65f);
+	}
+
+	void ApplyPlantResponse()
+	{
+		if (plantRemaining <= 0)
+			return;
+		var progress = 1 - plantRemaining / PlantResponseDuration;
+		var amount = MathF.Sin(progress * MathF.PI) * PlantResponse;
+		plantRemaining = MathF.Max(0, plantRemaining - visualDelta);
+		projectedPose[pelvis] += Vector2.UnitY * PlantCompression * amount;
+		OffsetMasked(upperBodyMask, Vector2.UnitY * PlantCompression * amount);
+		OffsetMasked(plantedSide == LegSide.Left ? rightArmMask : leftArmMask,
+			-Vector2.UnitY * PlantShoulderLift * amount);
+	}
+
+	void OffsetMasked(OzzJointMask mask, Vector2 offset)
+	{
+		for (var i = 0; i < projectedPose.Length; i++)
+			projectedPose[i] += offset * mask[i];
+	}
+
+	void OffsetLeg(Leg leg, Vector2 offset)
+	{
+		projectedPose[leg.Knee] += offset * 0.35f;
+		projectedPose[leg.Ankle] += offset;
+		projectedPose[leg.Toe] += offset;
+		projectedPose[leg.Tip] += offset;
 	}
 
 	void UpdateSecondaryMotion()
@@ -565,19 +702,34 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		var angle = ProjectionYaw * MathF.PI / 180f;
 		var cos = MathF.Cos(angle);
 		var sin = MathF.Sin(angle);
-		var turnCos = MathF.Cos(visualYaw);
-		var turnSin = MathF.Sin(visualYaw);
+		var upperBodyYaw = visualYaw;
+		var inertiaActive = turning && TurnInertia > 0;
+		if (inertiaActive)
+		{
+			var delay = TurnInertiaDelay * Math.Clamp(TurnInertia, 0, 1);
+			var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
+			progress = progress * progress * (3 - 2 * progress);
+			upperBodyYaw = float.Lerp(turnFromYaw, turnToYaw, progress);
+		}
 		var pivot = ragdollPose[pelvis];
 		var pivotX = -pivot.Z * cos + pivot.X * sin;
 		var mirror = turning
 			? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount)
 			: -(int)visualFacing;
+		var turnCos = MathF.Cos(visualYaw);
+		var turnSin = MathF.Sin(visualYaw);
+		var upperTurnCos = MathF.Cos(upperBodyYaw);
+		var upperTurnSin = MathF.Sin(upperBodyYaw);
 		for (var i = 0; i < sampledPose.Length; i++)
 		{
 			var joint = ragdollJoints[i] ? ragdollPose[i] : sampledPose[i];
 			var offset = joint - pivot;
-			var turned = new Vector3(offset.X * turnCos + offset.Z * turnSin, offset.Y,
-				-offset.X * turnSin + offset.Z * turnCos);
+			var weight = inertiaActive ? upperBodyMask[i] : 0;
+			var jointYaw = float.Lerp(visualYaw, upperBodyYaw, weight);
+			var jointTurnCos = weight <= 0 ? turnCos : weight >= 1 ? upperTurnCos : MathF.Cos(jointYaw);
+			var jointTurnSin = weight <= 0 ? turnSin : weight >= 1 ? upperTurnSin : MathF.Sin(jointYaw);
+			var turned = new Vector3(offset.X * jointTurnCos + offset.Z * jointTurnSin, offset.Y,
+				-offset.X * jointTurnSin + offset.Z * jointTurnCos);
 			projectedPose[i] = new Vector2(pivotX * mirror - turned.Z * cos + turned.X * sin, -joint.Y) *
 				PixelsPerMeter + new Vector2(0, 2.5f) + Offset;
 			jointDepth[i] = joint.X * cos + joint.Z * sin;
@@ -658,7 +810,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			-MathF.Cos(angle) * alongProjection);
 	}
 
-	void UpdateFoot(ref FootIK plant, Leg leg, bool grounded)
+	void UpdateFoot(ref FootIK plant, Leg leg, LegSide side, bool grounded)
 	{
 		var wasPlanted = plant.Planted;
 		plant.ContactRemaining = MathF.Max(0, plant.ContactRemaining - visualDelta);
@@ -694,6 +846,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			{
 				plant.ContactRemaining = NeuralFootContactDuration;
 				plant.ContactPosition = owner.Position + projectedPose[leg.Toe];
+				plantRemaining = PlantResponseDuration;
+				plantedSide = side;
+				TriggerEyeReaction(0.18f);
 			}
 		}
 	}
@@ -749,12 +904,25 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		_ => bone.Width,
 	};
 
+	float BoneRenderDepth(Bone bone)
+		=> Math.Clamp(BoneDepth(bone) * MathF.Max(0, DepthColorContrast) + 0.5f, 0, 1);
+
+	void BoneWidths(Bone bone, out float fromWidth, out float toWidth)
+	{
+		var depthScale = 1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * DepthWidthAmount;
+		fromWidth = BoneWidth(bone) * depthScale;
+		toWidth = bone.Leg != LegSide.None || bone.Part is Part.Bicep or Part.Forearm
+			? fromWidth * (1 - Math.Clamp(LimbTaper, 0, 0.75f))
+			: fromWidth;
+	}
+
 	void CaptureNeuralUVs()
 	{
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
-			BoneQuad(projectedPose[bone.From], projectedPose[bone.To], BoneWidth(bone),
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			BoneQuad(projectedPose[bone.From], projectedPose[bone.To], fromWidth, toWidth,
 				out var a, out var b, out var c, out var d);
 			neuralBoneUVs[i] = new(NeuralUV(a), NeuralUV(b), NeuralUV(c), NeuralUV(d));
 		}
@@ -768,8 +936,9 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
+			BoneWidths(bone, out var fromWidth, out var toWidth);
 			if (bone.Combat && CapsuleOverlaps(bounds, projectedPose[bone.From], projectedPose[bone.To],
-				BoneWidth(bone) * 0.5f + CombatBoundsPadding))
+				MathF.Max(fromWidth, toWidth) * 0.5f + CombatBoundsPadding))
 				return true;
 		}
 		return bounds.Overlaps(new Circle(projectedPose[head], HeadSize + CombatBoundsPadding), out _);
@@ -797,7 +966,8 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 				continue;
 			var from = owner.Position + projectedPose[bone.From];
 			var to = owner.Position + projectedPose[bone.To];
-			var radius = BoneWidth(bone) * 0.5f + CombatBoundsPadding;
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			var radius = MathF.Max(fromWidth, toWidth) * 0.5f + CombatBoundsPadding;
 			batcher.Line(from, to, radius * 2, color * 0.2f);
 			batcher.CircleLine(from, radius, 1, 10, color);
 			batcher.CircleLine(to, radius, 1, 10, color);
@@ -833,23 +1003,24 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 				continue;
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
-			var width = BoneWidth(bone);
+			BoneWidths(bone, out var fromWidth, out var toWidth);
 			if (silhouette)
 			{
-				batcher.Line(from, to, width + 2, tint);
+				DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, tint);
 				continue;
 			}
 
-			var depth = Math.Clamp(BoneDepth(bone) + 0.5f, 0, 1);
+			var depth = BoneRenderDepth(bone);
 			var color = BoneColor(bone, depth);
-			batcher.Line(from, to, width + 2, OutlineColor);
-			batcher.Line(from, to, width, color);
+			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, OutlineColor);
+			DrawBoneQuad(batcher, from, to, fromWidth, toWidth, color);
 			if (surface != null)
-				DrawSurfaceBone(batcher, surface, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]], normals: false);
+				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth,
+					neuralBoneUVs[boneOrder[sortedIndex]], normals: false);
 			else if (neuralTexture != null)
-				DrawNeuralBone(batcher, neuralTexture, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]],
-					color * NeuralColorAmount);
-			batcher.Circle(to, MathF.Max(1.2f, width * 0.42f), 8, color);
+				DrawNeuralBone(batcher, neuralTexture, from, to, fromWidth, toWidth,
+					neuralBoneUVs[boneOrder[sortedIndex]], color * NeuralColorAmount);
+			batcher.Circle(to, MathF.Max(1.2f, toWidth * 0.42f), 8, color);
 		}
 
 		if (parts != DrawParts.BehindPlayer)
@@ -863,7 +1034,7 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 				DrawNeuralCircle(batcher, neuralTexture, headPosition, HeadSize, neuralHeadUV, neuralHeadUVRadius,
 					NearColor * NeuralColorAmount);
 			if (!silhouette)
-				batcher.Circle(headPosition + lookDirection * 2.4f, 1.1f, 8, AccentColor);
+				batcher.Circle(headPosition + lookDirection * 2.4f, 1.1f * eyeScale, 8, AccentColor);
 		}
 		if (neuralTexture != null)
 			batcher.PopSampler();
@@ -889,13 +1060,14 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 				continue;
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
-			var width = BoneWidth(bone);
-			batcher.Line(from, to, width + 2, flat);
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, flat);
 			if (surface != null)
-				DrawSurfaceBone(batcher, surface, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]], normals: true);
+				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth,
+					neuralBoneUVs[boneOrder[sortedIndex]], normals: true);
 			else if (neuralNormals != null)
-				DrawNeuralBone(batcher, neuralNormals, from, to, width, neuralBoneUVs[boneOrder[sortedIndex]],
-					Color.White * NeuralNormalAmount);
+				DrawNeuralBone(batcher, neuralNormals, from, to, fromWidth, toWidth,
+					neuralBoneUVs[boneOrder[sortedIndex]], Color.White * NeuralNormalAmount);
 		}
 		if (parts != DrawParts.BehindPlayer)
 		{
@@ -911,26 +1083,34 @@ sealed class HumanoidRigVisual(Actor owner) : IDisposable
 			batcher.PopSampler();
 	}
 
-	static void BoneQuad(Vector2 from, Vector2 to, float width,
+	static void BoneQuad(Vector2 from, Vector2 to, float fromWidth, float toWidth,
 		out Vector2 a, out Vector2 b, out Vector2 c, out Vector2 d)
 	{
 		var along = (to - from).Normalized(Vector2.UnitY);
-		var across = along.TurnLeft() * width * 0.5f;
-		a = from + across;
-		b = from - across;
-		c = to - across;
-		d = to + across;
+		var across = along.TurnLeft();
+		a = from + across * fromWidth * 0.5f;
+		b = from - across * fromWidth * 0.5f;
+		c = to - across * toWidth * 0.5f;
+		d = to + across * toWidth * 0.5f;
 	}
 
-	static void DrawNeuralBone(Batcher batcher, Texture texture, Vector2 from, Vector2 to, float width, BoneUV uv, Color color)
+	static void DrawBoneQuad(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth, Color color)
 	{
-		BoneQuad(from, to, width, out var a, out var b, out var c, out var d);
+		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
+		batcher.Quad(a, b, c, d, color);
+	}
+
+	static void DrawNeuralBone(Batcher batcher, Texture texture, Vector2 from, Vector2 to,
+		float fromWidth, float toWidth, BoneUV uv, Color color)
+	{
+		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
 		batcher.Quad(texture, a, b, c, d, uv.A, uv.B, uv.C, uv.D, color);
 	}
 
-	void DrawSurfaceBone(Batcher batcher, Surface surface, Vector2 from, Vector2 to, float width, BoneUV uv, bool normals)
+	void DrawSurfaceBone(Batcher batcher, Surface surface, Vector2 from, Vector2 to,
+		float fromWidth, float toWidth, BoneUV uv, bool normals)
 	{
-		BoneQuad(from, to, width, out var a, out var b, out var c, out var d);
+		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
 		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[]
 		{
 			new(a, SurfaceWorld(uv.A)), new(b, SurfaceWorld(uv.B)), new(c, SurfaceWorld(uv.C)),
