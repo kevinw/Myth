@@ -1513,6 +1513,7 @@ public partial class Manager : App
 
 	bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
 	{
+#if !MYTHSHIP
 #if !BROWSER && !IOS
 		if (!keyboardShortcutsBlocked)
 		{
@@ -1523,9 +1524,7 @@ public partial class Manager : App
 				else
 					ToggleBudAI();
 			}
-#if !MYTHSHIP
 			if (debugControls.MovieRecording.Pressed) ToggleMovieRecording(Input.Keyboard.Shift);
-#endif
 		}
 #endif
 
@@ -1543,10 +1542,15 @@ public partial class Manager : App
 		}
 
 		return chordActive;
+#else
+		return false;
+#endif
 	}
 
+#if !MYTHSHIP
 	static bool PerfModifierDown(ControllerState controller)
-		=> !controller.IsGamepad && controller.Down(4);
+		=> !controller.IsGamepad && controller.Down(4); // Left shoulder (LB/L1) in the intended raw joystick mapping.
+#endif
 
 #if !EDITOR
 	Point2 shipRoomCheatDirection;
