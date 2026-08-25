@@ -7,6 +7,7 @@ namespace Myth;
 sealed class GpuLighting : IDisposable
 {
 	public const int MaxLights = 64;
+	const int MaxSporeFogVolumes = 64;
 	const int ShadowSamples = 512;
 	const int ShadowRows = MaxLights + 1;
 
@@ -27,6 +28,13 @@ sealed class GpuLighting : IDisposable
 	{
 		public readonly Vector4 Coordinates = coordinates;
 		public readonly Vector4 Properties = properties;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	readonly struct GpuSporeFogVolume(RectInt rect, float strength, float feather)
+	{
+		public readonly Vector4 Rect = new(rect.X, rect.Y, rect.Width, rect.Height);
+		public readonly Vector4 Settings = new(strength, feather, 0, 0);
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -81,20 +89,24 @@ sealed class GpuLighting : IDisposable
 		public float SporeFogContrast;
 		public float SporeFogPointStrength;
 		public float SporeFogSunStrength;
+		public Vector4 SporeFogVolumeData;
 	}
 
 	readonly GraphicsDevice graphicsDevice;
 	readonly StorageBuffer<GpuLight> lightBuffer;
 	readonly StorageBuffer<GpuSegment> segmentBuffer;
+	readonly StorageBuffer<GpuSporeFogVolume> sporeFogVolumeBuffer;
 	readonly ComputeStorageBuffer<Vector2> shadowDepthBuffer;
 	readonly UniformBuffer depthUniforms = new();
 	readonly UniformBuffer maskUniforms = new();
 	readonly GpuLight[] lights = new GpuLight[MaxLights];
+	readonly GpuSporeFogVolume[] sporeFogVolumes = new GpuSporeFogVolume[MaxSporeFogVolumes];
 	GpuSegment[] segments = new GpuSegment[256];
 	Shader? depthShader;
 	Shader? maskShader;
 	int lightCount;
 	int segmentCount;
+	int sporeFogVolumeCount;
 
 	public bool Supported => depthShader != null && maskShader != null;
 
@@ -103,9 +115,11 @@ sealed class GpuLighting : IDisposable
 		this.graphicsDevice = graphicsDevice;
 		lightBuffer = new(graphicsDevice, "LightData");
 		segmentBuffer = new(graphicsDevice, "LightOccluderSegments");
+		sporeFogVolumeBuffer = new(graphicsDevice, "SporeFogVolumes");
 		shadowDepthBuffer = new(graphicsDevice, "LightShadowDepth");
 		lightBuffer.Upload(lights);
 		segmentBuffer.Upload(segments.AsSpan(0, 1));
+		sporeFogVolumeBuffer.Upload(sporeFogVolumes.AsSpan(0, 1));
 		shadowDepthBuffer.Upload(new Vector2[ShadowRows * ShadowSamples]);
 		LoadShaders();
 	}
@@ -114,6 +128,14 @@ sealed class GpuLighting : IDisposable
 	{
 		lightCount = 0;
 		segmentCount = 0;
+		sporeFogVolumeCount = 0;
+	}
+
+	public void AddSporeFogVolume(RectInt rect, float strength, float feather)
+	{
+		if (sporeFogVolumeCount >= sporeFogVolumes.Length || rect.Width <= 0 || rect.Height <= 0 || strength <= 0)
+			return;
+		sporeFogVolumes[sporeFogVolumeCount++] = new(rect, Math.Clamp(strength, 0, 4), MathF.Max(0, feather));
 	}
 
 	public void AddLight(Vector2 position, float radius, float intensity, float height, Color color)
@@ -190,6 +212,7 @@ sealed class GpuLighting : IDisposable
 
 		lightBuffer.Upload(lights.AsSpan(0, Math.Max(1, lightCount)));
 		segmentBuffer.Upload(segments.AsSpan(0, Math.Max(1, segmentCount)));
+		sporeFogVolumeBuffer.Upload(sporeFogVolumes.AsSpan(0, Math.Max(1, sporeFogVolumeCount)));
 
 		var perpendicular = new Vector2(-sunDirection.Y, sunDirection.X);
 		GetSunBounds(camera, new(normalBuffer.Width, normalBuffer.Height), zoom, sunDirection, perpendicular,
@@ -254,6 +277,7 @@ sealed class GpuLighting : IDisposable
 			SporeFogContrast = Manager.SporeFogContrast,
 			SporeFogPointStrength = Manager.SporeFogPointStrength,
 			SporeFogSunStrength = Manager.SporeFogSunStrength,
+			SporeFogVolumeData = new(sporeNoise != null ? sporeFogVolumeCount : 0, 0, 0, 0),
 		});
 		new ComputeCommand(maskShader!)
 		{
@@ -262,7 +286,7 @@ sealed class GpuLighting : IDisposable
 				new(normalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp)),
 				new(sporeNoise ?? normalBuffer.Attachments[0], new(TextureFilter.Linear, TextureWrap.Repeat, TextureWrap.Repeat)),
 			],
-			ReadOnlyStorageBuffers = [lightBuffer, shadowDepthBuffer],
+			ReadOnlyStorageBuffers = [lightBuffer, shadowDepthBuffer, sporeFogVolumeBuffer],
 			ReadWriteStorageTextures =
 			[
 				backgroundMask.Attachments[0],
@@ -356,7 +380,7 @@ sealed class GpuLighting : IDisposable
 				graphicsDevice, ShaderStage.Compute, maskCode,
 				samplerCount: 2,
 				uniformBufferCount: 1,
-				readOnlyStorageBufferCount: 2,
+				readOnlyStorageBufferCount: 3,
 				readWriteStorageTextureCount: 3,
 				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 				entryPoint: "compute_main", name: "LightMasks");
@@ -388,6 +412,7 @@ sealed class GpuLighting : IDisposable
 		maskShader?.Dispose();
 		lightBuffer.Dispose();
 		segmentBuffer.Dispose();
+		sporeFogVolumeBuffer.Dispose();
 		shadowDepthBuffer.Dispose();
 	}
 }

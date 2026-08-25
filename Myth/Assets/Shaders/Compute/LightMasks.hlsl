@@ -15,12 +15,19 @@ struct Light
     float4 Shadow;
 };
 
+struct SporeFogVolume
+{
+    float4 Rect;
+    float4 Settings;
+};
+
 Texture2D NormalTexture : register(t0, space0);
 SamplerState NormalSampler : register(s0, space0);
 Texture2D SporeNoise : register(t1, space0);
 SamplerState SporeNoiseSampler : register(s1, space0);
 StructuredBuffer<Light> Lights : register(t2, space0);
 StructuredBuffer<float2> ShadowDepth : register(t3, space0);
+StructuredBuffer<SporeFogVolume> SporeFogVolumes : register(t4, space0);
 
 #if BROWSER
 [[vk::image_format("rgba8")]]
@@ -68,6 +75,7 @@ cbuffer Params : register(b0, space2)
     float SporeFogContrast;
     float SporeFogPointStrength;
     float SporeFogSunStrength;
+    float4 SporeFogVolumeData;
 };
 
 float normal_response(float3 normal, float normalStrength, float3 lightDirection)
@@ -217,9 +225,6 @@ float sun_visibility(float2 world)
 
 float spore_density(float2 world)
 {
-    if (SporeFogStrength <= 0.0)
-        return 0.0;
-
     float2 drift = SporeFogDrift * Time;
     float coarse = SporeNoise.SampleLevel(SporeNoiseSampler, (world + drift) * SporeFogScale, 0.0).r;
     float2 rotatedWorld = float2(-world.y, world.x);
@@ -229,6 +234,23 @@ float spore_density(float2 world)
         0.0).g;
     float density = coarse * lerp(0.75, 1.25, fine);
     return saturate((density - 0.5) * SporeFogContrast + 0.5);
+}
+
+float spore_strength(float2 world)
+{
+    float strength = SporeFogStrength;
+    for (uint i = 0; i < (uint)SporeFogVolumeData.x; i++)
+    {
+        SporeFogVolume volume = SporeFogVolumes[i];
+        float2 halfSize = volume.Rect.zw * 0.5;
+        float distanceToEdge = box_distance(world - volume.Rect.xy - halfSize, halfSize);
+        float feather = min(volume.Settings.y, min(halfSize.x, halfSize.y));
+        float mask = feather > 0.0
+            ? 1.0 - smoothstep(-feather, 0.0, distanceToEdge)
+            : distanceToEdge <= 0.0 ? 1.0 : 0.0;
+        strength = max(strength, volume.Settings.x * mask);
+    }
+    return strength;
 }
 
 [numthreads(8, 8, 1)]
@@ -276,7 +298,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         sporeFog += light.ColorIntensity.rgb * light.ColorIntensity.a * fogAttenuation * SporeFogPointStrength * visibility;
     }
 
-    sporeFog *= spore_density(world) * SporeFogStrength * SporeFogTint.rgb;
+    sporeFog *= spore_density(world) * spore_strength(world) * SporeFogTint.rgb;
     sporeFog = 1.0 - exp(-sporeFog);
     BackgroundMask[id.xy] = saturate(shadowed);
     ForegroundMask[id.xy] = saturate(unshadowed);
