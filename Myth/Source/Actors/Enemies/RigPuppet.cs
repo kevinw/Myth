@@ -9,54 +9,35 @@ public class RigPuppet : Actor, INeuralTextureAgent
 {
 	enum StepTraversal { None, Up, Down }
 
-	public string AnimationName = "Zombie_Walk_Fwd_Loop";
+	[InspectorGroup("Animation")] public string AnimationName = "Zombie_Walk_Fwd_Loop";
 	public bool Performance;
 	[I(0.1f, 3)] public float PlaybackSpeed = 1;
 	public bool SyncGaitToSpeed = true;
-	public bool SeedAnimationPhase = true;
-	[I(0, 2)] public float SecondaryMotion = 1;
-	[I(0, 1)] public float GaitAsymmetry = 0.35f;
-	[I(0, 2)] public float PlantResponse = 0.65f;
-	[I(0, 1)] public float TrackingLean = 0.45f;
-	[I(0, 1)] public float TurnInertia = 0.6f;
-	[I(0, 1)] public float EyeMotion = 0.65f;
-	[I(1, 60)] public float VisualFPS = 20;
-	[I(1, 4)] public int StepUp = 2;
+	[ActorSettings(typeof(HumanoidRigSettings))] public readonly HumanoidRigSettings Rig = new()
+	{
+		SeedAnimationPhase = true,
+		SecondaryMotion = 1,
+		GaitAsymmetry = 0.35f,
+		PlantResponse = 0.65f,
+		TrackingLean = 0.45f,
+		TurnInertia = 0.6f,
+		EyeMotion = 0.65f,
+		LimbTaper = 0.18f,
+		DepthColorContrast = 1.25f,
+		DepthWidthAmount = 0.08f,
+	};
+	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
+	public readonly NeuralSurfaceSettings Neural = new();
+	[ActorSettings(typeof(HumanoidNeuralReactionSettings), "Neural Reactions", "Neural")]
+	public readonly HumanoidNeuralReactionSettings NeuralReactions = new()
+	{
+		NeuralFootContactStrength = 0.3f,
+	};
+	[I(1, 4), InspectorGroup("Gameplay")] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
-	[I(12, 60)] public float PixelsPerMeter = 25;
-	[I(-180, 180)] public float ProjectionYaw;
-	[I(2, 12)] public float HeadSize = 3.9f;
-	[I(2, 12)] public float TorsoSize = 5;
-	[I(1, 10)] public float BicepSize = 3;
-	[I(1, 10)] public float ForearmSize = 2.5f;
-	[I(1, 12)] public float ThighSize = 4;
-	[I(0, 0.75f)] public float LimbTaper = 0.18f;
-	[I(0, 3)] public float DepthColorContrast = 1.25f;
-	[I(0, 0.3f)] public float DepthWidthAmount = 0.08f;
-	public RigSkinMode SkinMode = RigSkinMode.NCA;
-	public string SurfaceId = "";
-	public string NeuralWeightsFile = "rock035_pair_circular_screen.bin";
-	[I(0, 1)] public float NeuralColorAmount = 0.25f;
-	[I(0, 1)] public float NeuralNormalAmount = 0.55f;
-	[I(1, 60)] public float NeuralFPS = 20;
-	[I(0, 1)] public float NeuralFireRate = 0.5f;
-	[I(0, 3)] public float NeuralContrast = 1f;
-	[I(0, 3)] public float NeuralSaturation = 1.1f;
-	[I(-1, 1)] public float NeuralBrightness = 0.3f;
-	[I(0, 1)] public float NeuralHitStrength = 0.55f;
-	[I(0, 3)] public float NeuralJostleInterval = 0.45f;
-	[I(0, 1)] public float NeuralJostleStrength = 0.22f;
-	[I(1, 12)] public float NeuralJostleRadius = 5;
-	[I(0, 1)] public float NeuralFootContactStrength = 0.3f;
-	[I(1, 12)] public float NeuralFootContactRadius = 4;
 	public bool ArticulatedCombatBounds;
-	[I(0, 8)] public float CombatBoundsPadding = 1;
 	public bool StraddlesPlayerDepth;
 	[I(1, 20)] public int Health = 8;
-	public Color FarColor = new(0x435263);
-	public Color NearColor = new(0xb7cdd0);
-	public Color CoreColor = new(0x708b94);
-	public Color OutlineColor = new(0x171d27);
 
 	HumanoidRigVisual visual = null!;
 	RigPuppetBackLegRenderer? backLegRenderer;
@@ -111,7 +92,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	void CreateVisual()
 	{
-		visual = new(this);
+		visual = new(this, Rig, Neural, NeuralReactions);
 		SyncVisual();
 		visual.Initialize(Performance ? AnimationName : "Zombie_Idle_Loop");
 	}
@@ -121,47 +102,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		var gaitScale = SyncGaitToSpeed && !Performance && walking && stepTraversal == StepTraversal.None
 			? MathF.Abs(Velocity.X) / WalkSpeed : 1;
 		visual.PlaybackSpeed = PlaybackSpeed * gaitScale;
-		visual.SeedAnimationPhase = SeedAnimationPhase;
-		visual.SecondaryMotion = SecondaryMotion;
-		visual.GaitAsymmetry = GaitAsymmetry;
 		visual.GaitActive = walking;
-		visual.PlantResponse = PlantResponse;
-		visual.TrackingLean = TrackingLean;
-		visual.TurnInertia = TurnInertia;
-		visual.EyeMotion = EyeMotion;
-		visual.VisualFPS = VisualFPS;
-		visual.PixelsPerMeter = PixelsPerMeter;
-		visual.ProjectionYaw = ProjectionYaw;
-		visual.HeadSize = HeadSize;
-		visual.TorsoSize = TorsoSize;
-		visual.BicepSize = BicepSize;
-		visual.ForearmSize = ForearmSize;
-		visual.ThighSize = ThighSize;
-		visual.LimbTaper = LimbTaper;
-		visual.DepthColorContrast = DepthColorContrast;
-		visual.DepthWidthAmount = DepthWidthAmount;
-		visual.SkinMode = SkinMode;
-		visual.SurfaceId = SurfaceId;
-		visual.NeuralWeightsFile = NeuralWeightsFile;
-		visual.NeuralColorAmount = NeuralColorAmount;
-		visual.NeuralNormalAmount = NeuralNormalAmount;
-		visual.NeuralFPS = NeuralFPS;
-		visual.NeuralFireRate = NeuralFireRate;
-		visual.NeuralContrast = NeuralContrast;
-		visual.NeuralSaturation = NeuralSaturation;
-		visual.NeuralBrightness = NeuralBrightness;
-		visual.NeuralHitStrength = NeuralHitStrength;
-		visual.NeuralJostleInterval = NeuralJostleInterval;
-		visual.NeuralJostleStrength = NeuralJostleStrength;
-		visual.NeuralJostleRadius = NeuralJostleRadius;
-		visual.NeuralFootContactStrength = NeuralFootContactStrength;
-		visual.NeuralFootContactRadius = NeuralFootContactRadius;
-		visual.CombatBoundsPadding = CombatBoundsPadding;
 		visual.Offset = stepVisualOffset;
-		visual.FarColor = FarColor;
-		visual.NearColor = NearColor;
-		visual.CoreColor = CoreColor;
-		visual.OutlineColor = OutlineColor;
 		visual.LookTarget = Game.GetFirst<Player>()?.Position;
 		SyncBackLegRenderer();
 	}
@@ -230,10 +172,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		else if (recovering && visual.Time >= visual.ActiveClip.Duration)
 		{
 			recovering = false;
-			visual.Play(Performance ? LocomotionName() : "Zombie_Idle_Loop", seededPhase: SeedAnimationPhase);
+			visual.Play(Performance ? LocomotionName() : "Zombie_Idle_Loop", seededPhase: Rig.SeedAnimationPhase);
 		}
 		else if (!hitReacting && !recovering)
-			visual.Play(Performance || walking ? LocomotionName() : "Zombie_Idle_Loop", seededPhase: SeedAnimationPhase);
+			visual.Play(Performance || walking ? LocomotionName() : "Zombie_Idle_Loop", seededPhase: Rig.SeedAnimationPhase);
 
 		SyncVisual();
 		visual.Update(grounded, !Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
@@ -244,8 +186,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		if (visual == null)
 			CreateVisual();
-		if (VisualFPS <= 0)
-			VisualFPS = 20;
+		if (Rig.VisualFPS <= 0)
+			Rig.VisualFPS = 20;
 		if (StepUp <= 0)
 			StepUp = 2;
 		if (StepDown <= 0)
@@ -378,7 +320,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		Velocity = Vector2.Zero;
 		walking = true;
 		visual.ResetFeet();
-		visual.Play(LocomotionName(), seededPhase: SeedAnimationPhase);
+		visual.Play(LocomotionName(), seededPhase: Rig.SeedAnimationPhase);
 	}
 
 	void UpdateStepTraversal()

@@ -47,8 +47,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 	Vector2 bodyUV;
 	Vector2 headUV;
 	Vector2 materialOrigin;
-	NeuralTextureActor? neuralSurface;
-	string activeWeightsFile = "";
+	NeuralSkinRuntime neuralSkin = null!;
 	float accumulator;
 	float neuralHitRemaining;
 	float nextJostle;
@@ -88,7 +87,8 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		Sample();
 		CaptureReference();
 		materialOrigin = owner.Position;
-		CreateNeuralSurface();
+		neuralSkin = new(owner, owner.Neural, NeuralSize, NeuralOrigin, 31);
+		neuralSkin.Initialize(owner.SkinMode);
 	}
 
 	int RequiredJoint(string name)
@@ -102,7 +102,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 
 	public void Update(bool loop)
 	{
-		EnsureNeuralSurface();
+		neuralSkin.Update(owner.SkinMode);
 		var step = 1 / MathF.Max(1, owner.VisualFPS);
 		accumulator += owner.Time.Delta;
 		var ticks = Math.Min((int)(accumulator / step), 4);
@@ -173,68 +173,28 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		headUV = NeuralUV(projected[head]);
 	}
 
-	void CreateNeuralSurface()
-	{
-		activeWeightsFile = owner.NeuralWeightsFile;
-		neuralSurface = owner.Game.Create<NeuralTextureActor>(owner.Position + NeuralOrigin, it =>
-		{
-			it.Visible = false;
-			it.Size = NeuralSize;
-			it.SimulationSize = NeuralSize;
-			it.WeightsFile = activeWeightsFile;
-			it.NearestStateSampling = true;
-			it.EdgeTrim = 1;
-		});
-		SyncNeuralSurface();
-		neuralSurface.SimulateFromSeed(31);
-	}
-
-	void EnsureNeuralSurface()
-	{
-		if (neuralSurface != null && activeWeightsFile != owner.NeuralWeightsFile)
-		{
-			owner.Game.Destroy(neuralSurface);
-			neuralSurface = null;
-		}
-		if (neuralSurface == null)
-			CreateNeuralSurface();
-		SyncNeuralSurface();
-	}
-
-	void SyncNeuralSurface()
-	{
-		if (neuralSurface == null)
-			return;
-		neuralSurface.Position = owner.Position + NeuralOrigin;
-		neuralSurface.KeepOnRoomTransition = owner.KeepOnRoomTransition;
-		neuralSurface.StepsPerSecond = owner.SkinMode == RigSkinMode.NCA ? owner.NeuralFPS : 0;
-		neuralSurface.FireRate = owner.NeuralFireRate;
-		neuralSurface.Contrast = owner.NeuralContrast;
-		neuralSurface.Saturation = owner.NeuralSaturation;
-		neuralSurface.Brightness = owner.NeuralBrightness;
-	}
-
 	public void Hit() => neuralHitRemaining = 0.24f;
 
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
 	{
-		if (owner.SkinMode != RigSkinMode.NCA || context.Texture != neuralSurface)
+		if (owner.SkinMode != RigSkinMode.NCA || context.Texture != neuralSkin.Texture)
 			return;
 		var center = (Vector2)owner.Position + projected[body];
 		if (neuralHitRemaining > 0)
-			context.AddStamp(center, center, 8, owner.NeuralHitStrength);
-		if (owner.NeuralJostleInterval <= 0 || owner.NeuralJostleStrength <= 0 || owner.Time.SecondsF < nextJostle)
+			context.AddStamp(center, center, 8, owner.NeuralReactions.NeuralHitStrength);
+		if (owner.NeuralReactions.NeuralJostleInterval <= 0 || owner.NeuralReactions.NeuralJostleStrength <= 0 ||
+			owner.Time.SecondsF < nextJostle)
 			return;
-		nextJostle = owner.Time.SecondsF + owner.NeuralJostleInterval;
+		nextJostle = owner.Time.SecondsF + owner.NeuralReactions.NeuralJostleInterval;
 		var tip = projected[bones[boneOrder[(int)(owner.Time.SecondsF * 13) % boneOrder.Length]].To];
 		context.AddStamp((Vector2)owner.Position + tip, (Vector2)owner.Position + tip,
-			owner.NeuralJostleRadius, owner.NeuralJostleStrength);
+			owner.NeuralReactions.NeuralJostleRadius, owner.NeuralReactions.NeuralJostleStrength);
 	}
 
 	public void Draw(Batcher batcher, Color tint, bool silhouette)
 	{
 		var surface = !silhouette && owner.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(owner.SurfaceId) : null;
-		var texture = !silhouette && owner.SkinMode == RigSkinMode.NCA ? neuralSurface?.OutputTexture : null;
+		var texture = !silhouette && owner.SkinMode == RigSkinMode.NCA ? neuralSkin.OutputTexture : null;
 		if (texture != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
 		for (var sorted = 0; sorted < boneOrder.Length; sorted++)
@@ -250,7 +210,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 				DrawSurfaceBone(batcher, surface, projected[bone.From], projected[bone.To], width, boneUVs[index], normals: false);
 			else if (texture != null)
 				DrawNeuralBone(batcher, texture, projected[bone.From], projected[bone.To], width, boneUVs[index],
-					color * owner.NeuralColorAmount);
+					color * owner.Neural.NeuralColorAmount);
 		}
 		DrawBody(batcher, surface, texture, body, owner.BodySize, bodyUV, silhouette ? tint : owner.CoreColor, silhouette);
 		DrawBody(batcher, surface, texture, head, owner.HeadSize, headUV, silhouette ? tint : owner.NearColor, silhouette);
@@ -272,7 +232,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 				new Vector2(radius) / (Vector2)NeuralSize, normals: false);
 		else if (texture != null)
 			DrawNeuralCircle(batcher, texture, projected[joint], radius, uv,
-				new Vector2(radius) / (Vector2)NeuralSize, color * owner.NeuralColorAmount);
+				new Vector2(radius) / (Vector2)NeuralSize, color * owner.Neural.NeuralColorAmount);
 	}
 
 	public void DrawNormals(Batcher batcher)
@@ -280,7 +240,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		var flat = new Color(0x8080ff);
 		var surface = owner.SkinMode == RigSkinMode.Surface && Assets.GetSurface(owner.SurfaceId) is { HasNormal: true } found
 			? found : null;
-		var texture = owner.SkinMode == RigSkinMode.NCA ? neuralSurface?.OutputNormalTexture : null;
+		var texture = owner.SkinMode == RigSkinMode.NCA ? neuralSkin.OutputNormalTexture : null;
 		if (texture != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
 		for (var sorted = 0; sorted < boneOrder.Length; sorted++)
@@ -293,7 +253,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 				DrawSurfaceBone(batcher, surface, projected[bone.From], projected[bone.To], width, boneUVs[index], normals: true);
 			else if (texture != null)
 				DrawNeuralBone(batcher, texture, projected[bone.From], projected[bone.To], width, boneUVs[index],
-					Color.White * owner.NeuralNormalAmount);
+					Color.White * owner.Neural.NeuralNormalAmount);
 		}
 		batcher.Circle(projected[body], owner.BodySize + 1.5f, 14, flat);
 		batcher.Circle(projected[head], owner.HeadSize + 1.5f, 14, flat);
@@ -386,8 +346,6 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 	public void Dispose()
 	{
 		animator?.Dispose();
-		if (neuralSurface != null && !owner.Game.destroying.Contains(neuralSurface))
-			owner.Game.Destroy(neuralSurface);
-		neuralSurface = null;
+		neuralSkin?.Dispose();
 	}
 }

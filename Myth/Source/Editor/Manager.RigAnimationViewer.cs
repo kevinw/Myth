@@ -126,9 +126,9 @@ public partial class Manager
 		var playbackSpeed = rig.PlaybackSpeed;
 		if (ImGui.SliderFloat("Speed", ref playbackSpeed, 0.1f, 3, "%.2fx"))
 			rig.PlaybackSpeed = playbackSpeed;
-		var visualFps = rig.VisualFPS;
+		var visualFps = rig.Rig.VisualFPS;
 		if (ImGui.SliderFloat("Visual FPS", ref visualFps, 1, 60, "%.0f"))
-			rig.VisualFPS = visualFps;
+			rig.Rig.VisualFPS = visualFps;
 
 		ImGui.SeparatorText("Procedural layers");
 		var blend = rig.AnimationPreviewBlend;

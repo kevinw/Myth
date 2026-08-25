@@ -42,9 +42,13 @@ public partial class Manager
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(selectedActorSpecId));
 		if (spec != null)
 			changed |= DrawRandomizeActorPropertiesButton(selectedActorSpecId, null, spec);
+		string? propertyGroup = null;
+		var propertyGroupOpen = true;
 		foreach (var property in actorPropertyScratch)
 		{
 			if (spec != null && HideInactiveActorProperty(spec, property))
+				continue;
+			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorSpecProperty(selectedActorSpecId, property);
@@ -134,7 +138,7 @@ public partial class Manager
 
 	bool DrawActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
-		var row = BeginPropertyRow(property.Name, property.HasLocalValue,
+		var row = BeginPropertyRow(property.DisplayName, property.HasLocalValue,
 			additionalTrailingButtons: property.Inspector != null ? 1 : 0);
 		if (BeginPopupContextItem("##PropertyContext"))
 		{
@@ -523,9 +527,13 @@ public partial class Manager
 
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
+		string? propertyGroup = null;
+		var propertyGroupOpen = true;
 		foreach (var property in actorPropertyScratch)
 		{
 			if (HideInactiveActorProperty(actor, property))
+				continue;
+			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
 				continue;
 			PushID(property.JsonName);
 			changed |= DrawActorInstanceProperty(room, actor, property);
@@ -580,6 +588,8 @@ public partial class Manager
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(runtime));
 		livePropertyTarget = runtime;
+		string? propertyGroup = null;
+		var propertyGroupOpen = true;
 		foreach (var source in actorPropertyScratch)
 		{
 			var property = source with
@@ -588,6 +598,8 @@ public partial class Manager
 				ResetValue = liveInspectorOriginalValues.GetValueOrDefault(source.Name)?.DeepClone()
 			};
 			if (HideInactiveActorProperty(authored, property))
+				continue;
+			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
 				continue;
 			PushID(property.JsonName);
 			DrawActorProperty(null, null, authored, property);
@@ -604,6 +616,15 @@ public partial class Manager
 			ResetLiveInspectorEdits(runtime);
 		EndDisabled();
 		End();
+	}
+
+	static bool PropertyGroupVisible(ActorSpecs.EditableProperty property, ref string? currentGroup, ref bool open)
+	{
+		if (property.Group == currentGroup)
+			return open;
+		currentGroup = property.Group;
+		open = currentGroup == null || CollapsingHeader(currentGroup);
+		return open;
 	}
 
 	void ApplyLiveInspectorEdits(Actor runtime, Room room, JsonObject authored)
@@ -673,12 +694,12 @@ public partial class Manager
 		{
 			var mode = RigSkinMode.NCA;
 			for (var i = 0; i < actorPropertyScratch.Count; i++)
-				if (actorPropertyScratch[i].Name == nameof(RigPuppet.SkinMode))
+				if (actorPropertyScratch[i].Name == nameof(HumanoidRigSettings.SkinMode))
 				{
 					Enum.TryParse(ActorSpecs.ReadStringValue(actorPropertyScratch[i].Value), true, out mode);
 					break;
 				}
-			if (property.Name == nameof(RigPuppet.SurfaceId))
+			if (property.Name == nameof(HumanoidRigSettings.SurfaceId))
 				return mode != RigSkinMode.Surface;
 			if (property.Name.StartsWith("Neural", StringComparison.Ordinal) ||
 				property.Name.StartsWith("RigNeural", StringComparison.Ordinal))
@@ -742,7 +763,7 @@ public partial class Manager
 	bool DrawParticleEffectNameProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
+		var row = BeginPropertyRow(property.DisplayName, property.HasLocalValue);
 		PushID("Value");
 
 		var current = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
@@ -774,7 +795,7 @@ public partial class Manager
 	bool DrawLinkedDoorTargetProperty(Room room, JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		var changed = false;
-		var row = BeginPropertyRow(property.Name, property.HasLocalValue);
+		var row = BeginPropertyRow(property.DisplayName, property.HasLocalValue);
 		var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 		var target = Assets.FindActorById(value);
 		var sourceId = ActorSpecs.ReadString(actor, "Id") ?? "";
@@ -1055,7 +1076,8 @@ public partial class Manager
 				nameof(NeuralTextureActor.WeightsFile3) => 3,
 				_ => -1,
 			};
-		return propertyName is nameof(RigPuppet.NeuralWeightsFile) or nameof(Stalker.RigNeuralWeightsFile) ? 0 : -1;
+		return propertyName is nameof(NeuralSurfaceSettings.NeuralWeightsFile) or
+			nameof(Stalker.RigNeuralWeightsFile) ? 0 : -1;
 	}
 
 	static bool IsRevealDoorTileTypeProperty(JsonObject actor, ActorSpecs.EditableProperty property)

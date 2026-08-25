@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Foster.Framework;
 
 namespace Myth;
@@ -49,4 +50,27 @@ public sealed class MultilineAttribute(int lines = 4) : Attribute
 public sealed class ActorRefAttribute(Type? kind = null) : Attribute
 {
 	public Type? Kind => kind;
+}
+
+// Flattens a settings object's editable members into its owning actor's existing JSON shape.
+// Group controls the inspector header; TrimPrefix shortens labels without changing JSON keys.
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class ActorSettingsAttribute(
+	[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
+		DynamicallyAccessedMemberTypes.PublicProperties)] Type settingsType,
+	string? group = null, string? trimPrefix = null) : Attribute
+{
+	[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
+		DynamicallyAccessedMemberTypes.PublicProperties)]
+	public Type SettingsType => settingsType;
+	public string? Group => group;
+	public string? TrimPrefix => trimPrefix;
+}
+
+// Starts an inspector group for this and subsequent editable fields in the declaring type.
+// Use [InspectorGroup] to return subsequent fields to the ungrouped section.
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class InspectorGroupAttribute(string? name = null) : Attribute
+{
+	public string? Name => name;
 }

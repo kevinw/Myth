@@ -83,15 +83,13 @@ public class Stalker : Pawn, INeuralTextureAgent
 	public Stalker()
 	{
 		nav = new(this);
-		rigVisual = new(this)
-		{
-			TurnWhileMoving = true,
-			CoreColor = new(0x4b334f),
-			FarColor = new(0x17131f),
-			NearColor = new(0x8f7777),
-			OutlineColor = new(0x09070d),
-			AccentColor = new(0xf02245),
-		};
+		rigVisual = new(this);
+		rigVisual.Settings.TurnWhileMoving = true;
+		rigVisual.Settings.CoreColor = new(0x4b334f);
+		rigVisual.Settings.FarColor = new(0x17131f);
+		rigVisual.Settings.NearColor = new(0x8f7777);
+		rigVisual.Settings.OutlineColor = new(0x09070d);
+		rigVisual.Settings.AccentColor = new(0xf02245);
 		Sprite = Assets.GetSprite(nameof(Bud));
 		Hitbox = new(NavProbe);
 		Mask = Masks.Enemy;
@@ -222,29 +220,29 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	void SyncRigSettings()
 	{
-		rigVisual.PixelsPerMeter = RigPixelsPerMeter;
-		rigVisual.ProjectionYaw = RigProjectionYaw;
-		rigVisual.VisualFPS = RigVisualFPS;
-		rigVisual.HeadSize = RigHeadSize;
-		rigVisual.TorsoSize = RigTorsoSize;
-		rigVisual.BicepSize = RigBicepSize;
-		rigVisual.ForearmSize = RigForearmSize;
-		rigVisual.ThighSize = RigThighSize;
-		rigVisual.UpperBodyHitStrength = RigHitReactionStrength;
-		rigVisual.SkinMode = SkinMode;
-		rigVisual.SurfaceId = SurfaceId;
-		rigVisual.NeuralWeightsFile = RigNeuralWeightsFile;
-		rigVisual.NeuralColorAmount = RigNeuralColorAmount;
-		rigVisual.NeuralNormalAmount = RigNeuralNormalAmount;
-		rigVisual.NeuralFPS = RigNeuralFPS;
-		rigVisual.NeuralFireRate = RigNeuralFireRate;
-		rigVisual.NeuralContrast = RigNeuralContrast;
-		rigVisual.NeuralSaturation = RigNeuralSaturation;
-		rigVisual.NeuralBrightness = RigNeuralBrightness;
-		rigVisual.NeuralHitStrength = RigNeuralHitStrength;
-		rigVisual.NeuralJostleInterval = RigNeuralJostleInterval;
-		rigVisual.NeuralJostleStrength = RigNeuralJostleStrength;
-		rigVisual.NeuralJostleRadius = RigNeuralJostleRadius;
+		rigVisual.Settings.PixelsPerMeter = RigPixelsPerMeter;
+		rigVisual.Settings.ProjectionYaw = RigProjectionYaw;
+		rigVisual.Settings.VisualFPS = RigVisualFPS;
+		rigVisual.Settings.HeadSize = RigHeadSize;
+		rigVisual.Settings.TorsoSize = RigTorsoSize;
+		rigVisual.Settings.BicepSize = RigBicepSize;
+		rigVisual.Settings.ForearmSize = RigForearmSize;
+		rigVisual.Settings.ThighSize = RigThighSize;
+		rigVisual.Settings.UpperBodyHitStrength = RigHitReactionStrength;
+		rigVisual.Settings.SkinMode = SkinMode;
+		rigVisual.Settings.SurfaceId = SurfaceId;
+		rigVisual.Neural.NeuralWeightsFile = RigNeuralWeightsFile;
+		rigVisual.Neural.NeuralColorAmount = RigNeuralColorAmount;
+		rigVisual.Neural.NeuralNormalAmount = RigNeuralNormalAmount;
+		rigVisual.Neural.NeuralFPS = RigNeuralFPS;
+		rigVisual.Neural.NeuralFireRate = RigNeuralFireRate;
+		rigVisual.Neural.NeuralContrast = RigNeuralContrast;
+		rigVisual.Neural.NeuralSaturation = RigNeuralSaturation;
+		rigVisual.Neural.NeuralBrightness = RigNeuralBrightness;
+		rigVisual.NeuralReactions.NeuralHitStrength = RigNeuralHitStrength;
+		rigVisual.NeuralReactions.NeuralJostleInterval = RigNeuralJostleInterval;
+		rigVisual.NeuralReactions.NeuralJostleStrength = RigNeuralJostleStrength;
+		rigVisual.NeuralReactions.NeuralJostleRadius = RigNeuralJostleRadius;
 	}
 
 	void UpdateRig()
@@ -255,7 +253,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 		rigVisual.LookTarget = hunting && Game.GetFirst<Player>() is { } player
 			? player.Position + new Vector2(0, -6)
 			: null;
-		rigVisual.TrackingLean = hunting ? RigTrackingLean : 0;
+		rigVisual.Settings.TrackingLean = hunting ? RigTrackingLean : 0;
 		var speed = MathF.Abs(Velocity.X);
 		var clip = !IsGrounded
 			? "NinjaJump_Idle_Loop"

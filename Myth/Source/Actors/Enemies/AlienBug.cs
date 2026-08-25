@@ -24,18 +24,25 @@ public class AlienBug : Actor, INeuralTextureAgent
 	[I(8, 80)] public float RunSpeed = 30;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public string SurfaceId = "";
-	public string NeuralWeightsFile = "bubbles_circular.bin";
-	[I(0, 1)] public float NeuralColorAmount = 0.8f;
-	[I(0, 1)] public float NeuralNormalAmount = 0.65f;
-	[I(1, 60)] public float NeuralFPS = 20;
-	[I(0, 1)] public float NeuralFireRate = 0.6f;
-	[I(0, 3)] public float NeuralContrast = 1.2f;
-	[I(0, 3)] public float NeuralSaturation = 1.25f;
-	[I(-1, 1)] public float NeuralBrightness = 0.12f;
-	[I(0, 1)] public float NeuralHitStrength = 0.7f;
-	[I(0, 2)] public float NeuralJostleInterval = 0.3f;
-	[I(0, 1)] public float NeuralJostleStrength = 0.3f;
-	[I(1, 12)] public float NeuralJostleRadius = 4;
+	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
+	public readonly NeuralSurfaceSettings Neural = new()
+	{
+		NeuralWeightsFile = "bubbles_circular.bin",
+		NeuralColorAmount = 0.8f,
+		NeuralNormalAmount = 0.65f,
+		NeuralFireRate = 0.6f,
+		NeuralContrast = 1.2f,
+		NeuralSaturation = 1.25f,
+		NeuralBrightness = 0.12f,
+	};
+	[ActorSettings(typeof(NeuralReactionSettings), "Neural Reactions", "Neural")]
+	public readonly NeuralReactionSettings NeuralReactions = new()
+	{
+		NeuralHitStrength = 0.7f,
+		NeuralJostleInterval = 0.3f,
+		NeuralJostleStrength = 0.3f,
+		NeuralJostleRadius = 4,
+	};
 	public Color FarColor = new(0x293d30);
 	public Color NearColor = new(0x9bc764);
 	public Color CoreColor = new(0x526d38);

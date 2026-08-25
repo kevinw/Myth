@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Foster.Framework;
+using LinkDotNet.StringBuilder;
 
 namespace Myth;
 
@@ -49,6 +50,7 @@ public static class ActorSpecs
 	private static readonly Dictionary<string, ActorType> actorTypes = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<Type, string> actorNames = new();
 	static readonly Dictionary<(MemberInfo Member, Type Attribute), Attribute?> memberAttributes = [];
+	static readonly Dictionary<Type, SerializableMember[]> serializableMembers = [];
 #if EDITOR
 	static readonly Dictionary<string, string> savedSpecJson = new(StringComparer.OrdinalIgnoreCase);
 	static readonly HashSet<string> dirtySpecs = new(StringComparer.OrdinalIgnoreCase);
@@ -62,7 +64,9 @@ public static class ActorSpecs
 		actorTypes.Select(it => new KeyValuePair<string, Type>(it.Key, it.Value.Type));
 	public readonly record struct EditableProperty(
 		string Name,
+		string DisplayName,
 		string JsonName,
+		string? Group,
 		Type Type,
 		Type DeclaringType,
 		JsonNode? Value,
@@ -71,6 +75,19 @@ public static class ActorSpecs
 		IAttribute? Inspector,
 		MultilineAttribute? Multiline,
 		ActorRefAttribute? ActorRef);
+
+	readonly record struct SerializableMember(MemberInfo Member, MemberInfo? Settings, string DisplayName, string? Group)
+	{
+		public string Name => Member.Name;
+		public Type Type => GetMemberType(Member);
+		public Type DeclaringType => Member.DeclaringType ?? throw new InvalidOperationException();
+
+		public object? GetValue(Actor actor)
+			=> ActorSpecs.GetMemberValue(Member, Settings == null ? actor : ActorSpecs.GetMemberValue(Settings, actor)!);
+
+		public void SetValue(Actor actor, object? value)
+			=> ActorSpecs.SetMemberValue(Member, Settings == null ? actor : ActorSpecs.GetMemberValue(Settings, actor)!, value);
+	}
 
 	public static void ClearSpecs()
 	{
@@ -87,6 +104,7 @@ public static class ActorSpecs
 		actorTypes.Clear();
 		actorNames.Clear();
 		memberAttributes.Clear();
+		serializableMembers.Clear();
 	}
 
 	public static void RegisterActor<[DynamicallyAccessedMembers(RegisteredActorMembers)] T>(string name, bool showFacing) where T : Actor
@@ -300,11 +318,12 @@ public static class ActorSpecs
 			else if (JsonUtil.TryGetProperty(defaults, jsonName, out var resetDefaultValue))
 				resetValue = resetDefaultValue;
 
-			yield return new EditableProperty(member.Name, jsonName, GetMemberType(member), member.DeclaringType ?? type.Type,
+			yield return new EditableProperty(member.Name, member.DisplayName, jsonName, member.Group,
+				member.Type, member.DeclaringType,
 				value, resetValue, hasLocal,
-				GetMemberAttribute<IAttribute>(member),
-				GetMemberAttribute<MultilineAttribute>(member),
-				GetMemberAttribute<ActorRefAttribute>(member));
+				GetMemberAttribute<IAttribute>(member.Member),
+				GetMemberAttribute<MultilineAttribute>(member.Member),
+				GetMemberAttribute<ActorRefAttribute>(member.Member));
 		}
 	}
 
@@ -317,11 +336,11 @@ public static class ActorSpecs
 		{
 			if (!type.ShowFacing && member.Name == nameof(Actor.Facing))
 				continue;
-			yield return new EditableProperty(member.Name, member.Name, GetMemberType(member), member.DeclaringType ?? type.Type,
-				ToJsonNode(GetMemberValue(member, actor)), null, false,
-				GetMemberAttribute<IAttribute>(member),
-				GetMemberAttribute<MultilineAttribute>(member),
-				GetMemberAttribute<ActorRefAttribute>(member));
+			yield return new EditableProperty(member.Name, member.DisplayName, member.Name, member.Group,
+				member.Type, member.DeclaringType, ToJsonNode(member.GetValue(actor)), null, false,
+				GetMemberAttribute<IAttribute>(member.Member),
+				GetMemberAttribute<MultilineAttribute>(member.Member),
+				GetMemberAttribute<ActorRefAttribute>(member.Member));
 		}
 	}
 
@@ -332,9 +351,9 @@ public static class ActorSpecs
 			return false;
 
 		foreach (var member in GetSerializableMembers(type.Type))
-			if (member.Name == name && TryReadValue(node, GetMemberType(member), out var value))
+			if (member.Name == name && TryReadValue(node, member.Type, out var value))
 			{
-				SetMemberValue(member, actor, value);
+				member.SetValue(actor, value);
 				return true;
 			}
 		return false;
@@ -554,8 +573,8 @@ public static class ActorSpecs
 			if (!JsonUtil.TryGetProperty(spec, member.Name, out var node) || node == null)
 				continue;
 
-			if (TryReadValue(node, GetMemberType(member), out var value))
-				SetMemberValue(member, actor, value);
+			if (TryReadValue(node, member.Type, out var value))
+				member.SetValue(actor, value);
 		}
 	}
 
@@ -577,7 +596,7 @@ public static class ActorSpecs
 		var json = new JsonObject();
 		foreach (var member in GetSerializableMembers(type))
 		{
-			var value = GetMemberValue(member, actor);
+			var value = member.GetValue(actor);
 			if (ToJsonNode(value) is { } node)
 			{
 				json[member.Name] = node;
@@ -586,11 +605,11 @@ public static class ActorSpecs
 		return json;
 	}
 
-	private static object? GetMemberValue(MemberInfo member, Actor actor)
+	private static object? GetMemberValue(MemberInfo member, object target)
 		=> member switch
 		{
-			FieldInfo field => field.GetValue(actor),
-			PropertyInfo property => property.GetValue(actor),
+			FieldInfo field => field.GetValue(target),
+			PropertyInfo property => property.GetValue(target),
 			_ => null
 		};
 
@@ -606,16 +625,39 @@ public static class ActorSpecs
 		   string.Equals(key, TypeKey, StringComparison.OrdinalIgnoreCase) ||
 		   string.Equals(key, PositionKey, StringComparison.OrdinalIgnoreCase);
 
-	private static IEnumerable<MemberInfo> GetSerializableMembers([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
+	private static SerializableMember[] GetSerializableMembers(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
 	{
-		const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
+		if (serializableMembers.TryGetValue(type, out var cached))
+			return cached;
 
+		var members = new List<SerializableMember>();
+		AddSerializableMembers(members, type);
+		return serializableMembers[type] = [.. members];
+	}
+
+	static void AddSerializableMembers(List<SerializableMember> members,
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
+			DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
+	{
+		if (type.BaseType is { } baseType)
+			AddSerializableMembers(members, baseType);
+
+		const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly;
+		string? group = null;
 		foreach (var field in type.GetFields(flags))
 		{
-			if (field.IsInitOnly || field.IsStatic || field.GetCustomAttribute<NoSerializeAttribute>() != null)
+			if (GetMemberAttribute<InspectorGroupAttribute>(field) is { } groupBoundary)
+				group = groupBoundary.Name;
+			if (field.IsStatic || field.GetCustomAttribute<NoSerializeAttribute>() != null)
 				continue;
 			if (IsSupportedType(field.FieldType))
-				yield return field;
+			{
+				if (!field.IsInitOnly)
+					members.Add(new(field, null, field.Name, group));
+			}
+			else if (GetMemberAttribute<ActorSettingsAttribute>(field) is { } settings)
+				AddSettingsMembers(members, field, settings.SettingsType, settings);
 		}
 
 		foreach (var property in type.GetProperties(flags))
@@ -625,8 +667,67 @@ public static class ActorSpecs
 			if (!property.CanRead || !property.CanWrite || property.GetIndexParameters().Length > 0 || property.GetCustomAttribute<NoSerializeAttribute>() != null)
 				continue;
 			if (IsSupportedType(property.PropertyType))
-				yield return property;
+				members.Add(new(property, null, property.Name, null));
 		}
+	}
+
+	static void AddSettingsMembers(List<SerializableMember> destination, MemberInfo settingsMember,
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
+			DynamicallyAccessedMemberTypes.PublicProperties)] Type settingsType, ActorSettingsAttribute settings)
+	{
+		if (GetMemberType(settingsMember) != settingsType)
+			throw new InvalidOperationException($"Actor settings member '{settingsMember.Name}' must be {settingsType.Name}.");
+		AddSettingsMembers(destination, settingsMember, settingsType, settings, settings.Group);
+	}
+
+	static void AddSettingsMembers(List<SerializableMember> destination, MemberInfo settingsMember,
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
+			DynamicallyAccessedMemberTypes.PublicProperties)] Type settingsType, ActorSettingsAttribute settings,
+		string? defaultGroup)
+	{
+		if (settingsType.BaseType is { } baseType)
+			AddSettingsMembers(destination, settingsMember, baseType, settings, defaultGroup);
+
+		const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly;
+		var group = defaultGroup;
+		foreach (var field in settingsType.GetFields(flags))
+		{
+			if (GetMemberAttribute<InspectorGroupAttribute>(field) is { } groupBoundary)
+				group = groupBoundary.Name;
+			if (!field.IsInitOnly && !field.IsStatic && field.GetCustomAttribute<NoSerializeAttribute>() == null &&
+				IsSupportedType(field.FieldType))
+				AddSettingsMember(destination, settingsMember, field, settings, group);
+		}
+		foreach (var property in settingsType.GetProperties(flags))
+			if (property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0 &&
+				property.GetCustomAttribute<NoSerializeAttribute>() == null && IsSupportedType(property.PropertyType))
+				AddSettingsMember(destination, settingsMember, property, settings, defaultGroup);
+	}
+
+	static void AddSettingsMember(List<SerializableMember> destination, MemberInfo settingsMember, MemberInfo member,
+		ActorSettingsAttribute settings, string? group)
+	{
+		if (destination.Exists(it => string.Equals(it.Name, member.Name, StringComparison.OrdinalIgnoreCase)))
+			throw new InvalidOperationException($"Actor setting '{member.Name}' is exposed more than once.");
+		destination.Add(new(member, settingsMember, SettingsDisplayName(member.Name, settings.TrimPrefix), group));
+	}
+
+	static string SettingsDisplayName(string name, string? trimPrefix)
+	{
+		var value = trimPrefix != null && name.StartsWith(trimPrefix, StringComparison.Ordinal) && name.Length > trimPrefix.Length
+			? name.AsSpan(trimPrefix.Length)
+			: name.AsSpan();
+		var label = new ValueStringBuilder(stackalloc char[value.Length * 2]);
+		for (var i = 0; i < value.Length; i++)
+		{
+			if (i > 0 && char.IsUpper(value[i]) && (!char.IsUpper(value[i - 1]) ||
+				i + 1 < value.Length && char.IsLower(value[i + 1])))
+				label.Append(' ');
+			label.Append(value[i]);
+		}
+		var result = label.ToString();
+		label.Dispose();
+		return result;
 	}
 
 	private static bool IsSupportedType(Type type)
@@ -651,15 +752,15 @@ public static class ActorSpecs
 			_ => throw new NotSupportedException(member.MemberType.ToString())
 		};
 
-	private static void SetMemberValue(MemberInfo member, Actor actor, object? value)
+	private static void SetMemberValue(MemberInfo member, object target, object? value)
 	{
 		switch (member)
 		{
 			case FieldInfo field:
-				field.SetValue(actor, value);
+				field.SetValue(target, value);
 				break;
 			case PropertyInfo property:
-				property.SetValue(actor, value);
+				property.SetValue(target, value);
 				break;
 		}
 	}
