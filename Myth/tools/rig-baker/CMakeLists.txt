@@ -15,6 +15,7 @@ add_subdirectory(../ozz-animation ozz)
 
 add_executable(myth_rig_pack main.cc)
 target_compile_features(myth_rig_pack PRIVATE cxx_std_17)
+target_link_libraries(myth_rig_pack PRIVATE ozz_animation)
 
 add_library(myth_ozz SHARED ozz_runtime.cc)
 target_compile_features(myth_ozz PRIVATE cxx_std_17)

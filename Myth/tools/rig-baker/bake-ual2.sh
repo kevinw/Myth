@@ -5,6 +5,7 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 myth_dir="$(cd "$script_dir/../.." && pwd)"
 source_glb="$myth_dir/tools/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb"
 performance_glb="$script_dir/Pose2Sim_Performance_Rokoko_MatchedPose.glb"
+mixamo_dir="$script_dir/mixamo"
 build_dir="$(mktemp -d "${TMPDIR:-/tmp}/myth-rig-baker.XXXXXX")"
 trap 'rm -rf "$build_dir"' EXIT
 
@@ -22,8 +23,19 @@ if [[ -f "$performance_glb" ]]; then
 	(
 		cd "$build_dir/ozz/pose2sim"
 		"$build_dir/build/ozz/src/animation/offline/gltf/gltf2ozz" \
-			--file="$performance_glb" --config_file="$script_dir/ual2.json" --endian=little
+			--file="$performance_glb" --config_file="$script_dir/ual2-animation.json" --endian=little
 	)
+fi
+if [[ -d "$mixamo_dir" ]]; then
+	while IFS= read -r -d '' mixamo_glb; do
+		name="$(basename "$mixamo_glb" .glb)"
+		mkdir -p "$build_dir/ozz/$name"
+		(
+			cd "$build_dir/ozz/$name"
+			"$build_dir/build/ozz/src/animation/offline/gltf/gltf2ozz" \
+				--file="$mixamo_glb" --config_file="$script_dir/ual2-animation.json" --endian=little
+		)
+	done < <(find "$mixamo_dir" -name '*.glb' -print0 | sort -z)
 fi
 
 animations=()

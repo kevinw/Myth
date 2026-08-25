@@ -154,13 +154,25 @@ MYTH_OZZ_EXPORT Rig* myth_ozz_rig_load(const uint8_t* data, int size, char* erro
   }
   rig->clips.resize(clip_count);
   rig->clip_names.resize(clip_count);
-  for (uint32_t i = 0; i < clip_count; ++i)
-    if (!reader.String(&rig->clip_names[i]) || !reader.Blob(&blob, &blob_size) ||
-        !Load(blob, blob_size, &rig->clips[i]) ||
-        rig->clips[i].num_tracks() != rig->skeleton.num_joints()) {
-      Error(error, error_capacity, "Unable to load ozz animation.");
+  for (uint32_t i = 0; i < clip_count; ++i) {
+    if (!reader.String(&rig->clip_names[i]) || !reader.Blob(&blob, &blob_size)) {
+      const auto message = "Unable to read ozz animation " + std::to_string(i) + ".";
+      Error(error, error_capacity, message.c_str());
       return nullptr;
     }
+    if (!Load(blob, blob_size, &rig->clips[i])) {
+      const auto message = "Unable to load ozz animation '" + rig->clip_names[i] + "'.";
+      Error(error, error_capacity, message.c_str());
+      return nullptr;
+    }
+    if (rig->clips[i].num_tracks() != rig->skeleton.num_joints()) {
+      const auto message = "Ozz animation '" + rig->clip_names[i] + "' has " +
+          std::to_string(rig->clips[i].num_tracks()) + " tracks; expected " +
+          std::to_string(rig->skeleton.num_joints()) + ".";
+      Error(error, error_capacity, message.c_str());
+      return nullptr;
+    }
+  }
   if (reader.at != reader.end) {
     Error(error, error_capacity, "Rig pack has trailing data.");
     return nullptr;
