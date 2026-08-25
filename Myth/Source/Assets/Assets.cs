@@ -391,8 +391,8 @@ public static partial class Assets
 		return stream.Read(buffer) == buffer.Length && Encoding.ASCII.GetString(buffer) == signature;
 	}
 
-	// Weight files named by NCT tile specs and NeuralTextureActor instances in the shipped world,
-	// seeded with the constructor default so a freshly placed actor still resolves.
+	// Weight files named by NCT tile specs and neural settings on any actor in the shipped world,
+	// seeded with code defaults so freshly placed actors still resolve.
 	// Case-insensitive to match the zip's own lookups. Room references come from loose files
 	// because this only runs while building the pack.
 	static HashSet<string> CollectReferencedNeuralTextureWeights(string worldId)
@@ -400,6 +400,8 @@ public static partial class Assets
 		var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
 			NeuralTextureActor.DefaultWeightsFile,
+			NeuralSurfaceSettings.DefaultWeightsFile,
+			AlienBug.DefaultNeuralWeightsFile,
 		};
 		foreach (var spec in NctTiles.Specs)
 		{
@@ -412,7 +414,24 @@ public static partial class Assets
 		if (!Directory.Exists(worldRoomsPath))
 			return referenced;
 
-		string[] fields = ["WeightsFile", "WeightsFile1", "WeightsFile2", "WeightsFile3"];
+		string[] fields =
+		[
+			nameof(NeuralTextureActor.WeightsFile),
+			nameof(NeuralTextureActor.WeightsFile1),
+			nameof(NeuralTextureActor.WeightsFile2),
+			nameof(NeuralTextureActor.WeightsFile3),
+			nameof(NeuralSurfaceSettings.NeuralWeightsFile),
+			nameof(Stalker.RigNeuralWeightsFile),
+		];
+		void AddActor(JsonObject actor)
+		{
+			foreach (var field in fields)
+				if (ActorSpecs.ReadResolvedString(actor, field) is { Length: > 0 } value)
+					referenced.Add(value);
+		}
+		foreach (var (_, spec) in ActorSpecs.Specs)
+			AddActor(spec);
+
 		foreach (var file in Directory.EnumerateFiles(worldRoomsPath, "*.json", SearchOption.AllDirectories))
 		{
 			JsonNode? root;
@@ -433,13 +452,8 @@ public static partial class Assets
 				continue;
 
 			foreach (var actor in actors)
-			{
-				if (actor?["Type"]?.GetValue<string>() != nameof(NeuralTextureActor))
-					continue;
-				foreach (var field in fields)
-					if (actor[field]?.GetValue<string>() is { Length: > 0 } value)
-						referenced.Add(value);
-			}
+				if (actor is JsonObject spec)
+					AddActor(spec);
 		}
 
 		return referenced;

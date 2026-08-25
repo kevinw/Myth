@@ -8,6 +8,7 @@ namespace Myth;
 public class AlienBug : Actor, INeuralTextureAgent
 {
 	enum States { Idle, Running, Attacking, Stunned }
+	public static string DefaultNeuralWeightsFile => "bubbles_circular.bin";
 
 	public string Rig = "alien-bug";
 	[I(1, 60)] public float VisualFPS = 20;
@@ -27,7 +28,7 @@ public class AlienBug : Actor, INeuralTextureAgent
 	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
 	public readonly NeuralSurfaceSettings Neural = new()
 	{
-		NeuralWeightsFile = "bubbles_circular.bin",
+		NeuralWeightsFile = DefaultNeuralWeightsFile,
 		NeuralColorAmount = 0.8f,
 		NeuralNormalAmount = 0.65f,
 		NeuralFireRate = 0.6f,

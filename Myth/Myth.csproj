@@ -318,19 +318,30 @@
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.dylib</OzzRuntimeLibrary>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'win-x64')">
+    <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/MinSizeRel/myth_ozz.dll</OzzRuntimeLibrary>
+  </PropertyGroup>
+
   <Target Name="BuildOzzRuntime"
           BeforeTargets="Build"
-          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' != 'browser-wasm'"
-          Inputs="tools/rig-baker/ozz_runtime.cc;tools/rig-baker/CMakeLists.txt;tools/rig-baker/build-runtime.sh;tools/ozz-animation/CMakeLists.txt"
+          Condition="'$(OzzRuntimeLibrary)' != ''"
+          Inputs="tools/rig-baker/ozz_runtime.cc;tools/rig-baker/CMakeLists.txt;tools/rig-baker/build-runtime.mjs;tools/ozz-animation/CMakeLists.txt"
           Outputs="$(OzzRuntimeLibrary)">
-    <Exec Command="tools/rig-baker/build-runtime.sh '$(BaseIntermediateOutputPath)ozz-runtime'" />
+    <Exec Command="node tools/rig-baker/build-runtime.mjs &quot;$(BaseIntermediateOutputPath)ozz-runtime&quot;" />
   </Target>
 
   <Target Name="CopyOzzRuntime"
           AfterTargets="Build"
           DependsOnTargets="BuildOzzRuntime"
-          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' != 'browser-wasm' And Exists('$(OzzRuntimeLibrary)')">
+          Condition="'$(OzzRuntimeLibrary)' != '' And Exists('$(OzzRuntimeLibrary)')">
     <Copy SourceFiles="$(OzzRuntimeLibrary)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyOzzRuntimeToPublish"
+          AfterTargets="Publish"
+          DependsOnTargets="BuildOzzRuntime"
+          Condition="'$(OzzRuntimeLibrary)' != '' And '$(PublishDir)' != '' And Exists('$(OzzRuntimeLibrary)')">
+    <Copy SourceFiles="$(OzzRuntimeLibrary)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

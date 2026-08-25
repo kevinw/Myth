@@ -41,7 +41,8 @@ public sealed class HumanoidRigSettings
 
 public sealed class NeuralSurfaceSettings
 {
-	public string NeuralWeightsFile = "rock035_pair_circular_screen.bin";
+	public static string DefaultWeightsFile => "rock035_pair_circular_screen.bin";
+	public string NeuralWeightsFile = DefaultWeightsFile;
 	[I(0, 1)] public float NeuralColorAmount = 0.25f;
 	[I(0, 1)] public float NeuralNormalAmount = 0.55f;
 	[I(1, 60)] public float NeuralFPS = 20;

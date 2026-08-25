@@ -261,7 +261,8 @@ public partial class Manager : App
 		return new(args);
 	}
 
-	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled, fullscreen: args.fullscreen))
+	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
+		offscreen: args.bakeWorldMap, fullscreen: args.fullscreen))
 	{
 #if EDITOR
 		particleEditor = new(undo);
@@ -353,7 +354,8 @@ public partial class Manager : App
 
 	internal static bool DOTNET_WATCH = Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1";
 
-	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false, bool? fullscreen = null)
+	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false,
+		bool offscreen = false, bool? fullscreen = null)
 	{
 		const string windowTitle = APPLICATION_NAME;
 		Point2 windowSize = new(1280, 720);
@@ -382,6 +384,13 @@ public partial class Manager : App
 			resizable = false;
 			updateMode = UpdateMode.FixedStep(60);
 			appFlags |= AppFlags.Headless;
+		}
+		else if (offscreen)
+		{
+			windowSize = new(1, 1);
+			fullscreen = false;
+			resizable = false;
+			appFlags |= AppFlags.Offscreen;
 		}
 		if (unthrottled)
 		{

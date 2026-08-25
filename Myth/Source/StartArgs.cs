@@ -153,6 +153,8 @@ public struct StartArgs
 			headless = true;
 			audio = false;
 		}
+		if (bakeWorldMap)
+			audio = false;
 		unthrottled |= gymCli;
 		gymExitAfterAll |= gymCli;
 		traceNav |= traceJsonPath != null;
