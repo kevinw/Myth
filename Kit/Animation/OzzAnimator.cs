@@ -17,6 +17,8 @@ public sealed class OzzAnimator : IDisposable
 	OzzRig.Clip? layerClip;
 	OzzJointMask? layerMask;
 	float outgoingTime;
+	float outgoingStart;
+	float outgoingEnd;
 	float layerTime;
 	float layerWeight;
 	float blendDuration;
@@ -24,10 +26,15 @@ public sealed class OzzAnimator : IDisposable
 	bool outgoingLoop = true;
 	bool loop = true;
 	bool layerAdditive;
+	float rangeStart;
+	float rangeEnd;
 
 	public OzzRig Rig { get; }
 	public OzzRig.Clip ActiveClip { get; private set; }
 	public float Time { get; private set; }
+	public float RangeStart => rangeStart;
+	public float RangeEnd => rangeEnd;
+	public bool Finished => !loop && Time >= rangeEnd;
 
 	public OzzAnimator(OzzRig rig, string initialClip)
 	{
@@ -35,6 +42,7 @@ public sealed class OzzAnimator : IDisposable
 		instance = rig.CreateInstance();
 		jointWeights = new float[MaxLayers * rig.JointCount];
 		ActiveClip = rig.GetClip(initialClip);
+		rangeEnd = ActiveClip.Duration;
 	}
 
 	public void SetAdditive(string name, float time, float weight, OzzJointMask mask)
@@ -60,14 +68,22 @@ public sealed class OzzAnimator : IDisposable
 	public void ClearLayer() => layerClip = null;
 
 	public void Play(string name, float transitionDuration, bool restart = false, float startTime = 0)
+		=> Play(name, 0, Rig.GetClip(name).Duration, transitionDuration, restart, startTime);
+
+	public void Play(string name, float rangeStart, float rangeEnd, float transitionDuration,
+		bool restart = false, float? startTime = null)
 	{
 		var clip = Rig.GetClip(name);
-		if (clip == ActiveClip && !restart)
+		rangeStart = Math.Clamp(rangeStart, 0, clip.Duration);
+		rangeEnd = Math.Clamp(rangeEnd, rangeStart, clip.Duration);
+		if (clip == ActiveClip && this.rangeStart == rangeStart && this.rangeEnd == rangeEnd && !restart)
 			return;
 		if (transitionDuration > 0)
 		{
 			outgoingClip = ActiveClip;
 			outgoingTime = Time;
+			outgoingStart = this.rangeStart;
+			outgoingEnd = this.rangeEnd;
 			outgoingLoop = loop;
 			blendDuration = blendRemaining = transitionDuration;
 		}
@@ -77,12 +93,14 @@ public sealed class OzzAnimator : IDisposable
 			blendDuration = blendRemaining = 0;
 		}
 		ActiveClip = clip;
-		Time = Math.Clamp(startTime, 0, clip.Duration);
+		this.rangeStart = rangeStart;
+		this.rangeEnd = rangeEnd;
+		Time = Math.Clamp(startTime ?? rangeStart, rangeStart, rangeEnd);
 	}
 
 	public void SetTime(float value)
 	{
-		Time = Math.Clamp(value, 0, ActiveClip.Duration);
+		Time = Math.Clamp(value, rangeStart, rangeEnd);
 		outgoingClip = null;
 		blendDuration = blendRemaining = 0;
 	}
@@ -90,10 +108,10 @@ public sealed class OzzAnimator : IDisposable
 	public void Advance(float animationDelta, float transitionDelta, bool loop)
 	{
 		this.loop = loop;
-		Time = AdvanceTime(Time, animationDelta, ActiveClip.Duration, loop);
+		Time = AdvanceTime(Time, animationDelta, rangeStart, rangeEnd, loop);
 		if (outgoingClip == null)
 			return;
-		outgoingTime = AdvanceTime(outgoingTime, animationDelta, outgoingClip.Duration, outgoingLoop);
+		outgoingTime = AdvanceTime(outgoingTime, animationDelta, outgoingStart, outgoingEnd, outgoingLoop);
 		blendRemaining = MathF.Max(0, blendRemaining - transitionDelta);
 		if (blendRemaining <= 0)
 			outgoingClip = null;
@@ -138,10 +156,13 @@ public sealed class OzzAnimator : IDisposable
 			jointWeights.AsSpan(0, layerCount * Rig.JointCount), pose, rotations);
 	}
 
-	static float AdvanceTime(float time, float delta, float duration, bool loop)
+	static float AdvanceTime(float time, float delta, float start, float end, bool loop)
 	{
 		time += delta;
-		return loop ? ((time % duration) + duration) % duration : Math.Clamp(time, 0, duration);
+		var duration = end - start;
+		return loop && duration > 0
+			? start + ((time - start) % duration + duration) % duration
+			: Math.Clamp(time, start, end);
 	}
 
 	public void Dispose() => instance.Dispose();

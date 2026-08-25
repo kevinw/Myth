@@ -1,0 +1,34 @@
+{
+  "EyeLaserCharge": {
+    "Clip": "Eye_Laser_Attack",
+    "Start": 0,
+    "End": 1.3333334,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true
+  },
+  "EyeLaserFire": {
+    "Clip": "Eye_Laser_Attack",
+    "Start": 1.4,
+    "End": 1.9333333,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": true
+  },
+  "EyeLaserRecover": {
+    "Clip": "Eye_Laser_Attack",
+    "Start": 1.9333333,
+    "End": 2.6,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": true
+  },
+  "KneelDown": {
+    "Clip": "Kneeling_Down",
+    "Start": 0,
+    "End": 2.8,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false
+  }
+}

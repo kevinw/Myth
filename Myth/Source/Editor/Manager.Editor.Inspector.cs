@@ -14,6 +14,7 @@ namespace Myth;
 // ImGui side panels -- value widgets plus the pickers for surfaces, platform materials, and refs.
 public partial class Manager
 {
+	string rigAnimationPickerSearch = "";
 
 	void ActorSpecInspectorImGui()
 	{
@@ -246,6 +247,16 @@ public partial class Manager
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawSpriteCombo(ref value))
+			{
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+				return true;
+			}
+		}
+		else if (property.DeclaringType == typeof(RigPuppet) &&
+			property.Name is nameof(RigPuppet.IdleAnimationName) or nameof(RigPuppet.WalkAnimationName))
+		{
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
+			if (DrawRigAnimationCombo(ref value))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
 				return true;
@@ -927,6 +938,43 @@ public partial class Manager
 		return changed;
 	}
 
+	bool DrawRigAnimationCombo(ref string value)
+	{
+		var changed = false;
+		var clips = RigLibrary.Get("ual2").Clips;
+		if (BeginCombo("##Value", value))
+		{
+			if (IsWindowAppearing())
+			{
+				rigAnimationPickerSearch = "";
+				SetKeyboardFocusHere();
+			}
+			SetNextItemWidth(-1);
+			InputTextWithHint("##Search", "Search clips", ref rigAnimationPickerSearch, 128);
+			Separator();
+			for (var i = 0; i < clips.Count; i++)
+			{
+				var clip = clips[i];
+				if (rigAnimationPickerSearch.Length > 0 &&
+					!clip.Name.Contains(rigAnimationPickerSearch, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				var selected = string.Equals(value, clip.Name, StringComparison.OrdinalIgnoreCase);
+				if (Selectable(clip.Name, selected))
+				{
+					value = clip.Name;
+					changed = true;
+				}
+				if (IsItemHovered())
+					SetTooltip($"{clip.Duration:0.###} s");
+				if (selected)
+					SetItemDefaultFocus();
+			}
+			EndCombo();
+		}
+		return changed;
+	}
+
 	void DrawMaskPaintControls(Room room, JsonObject actor)
 	{
 		if (ActorSpecs.ReadString(actor, "Id") is not { } actorId)
@@ -1148,7 +1196,7 @@ public partial class Manager
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
 
 	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && property.Name == "SurfaceId";
+		=> property.Type == typeof(string) && property.Name.EndsWith("SurfaceId", StringComparison.Ordinal);
 
 	static bool IsProceduralWallTextureProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(string) && ActorSpecs.GetTypeName(actor) is { } typeName &&

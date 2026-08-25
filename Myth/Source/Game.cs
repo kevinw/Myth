@@ -636,7 +636,7 @@ public partial class Game : IDisposable
 			shake = Point2.Zero;
 	}
 
-	static float RenderTargetShakeAmount => 4f.T(0, 4);
+	static float RenderTargetShakeAmount => 15f;
 	static float RenderTargetShakeFrequency => 88.9570007f.T(1, 120);
 	static float DebugRenderTargetShakeSeconds => 0.226999998f.T(0, 2);
 

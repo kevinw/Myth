@@ -66,6 +66,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public readonly NeuralSurfaceSettings Neural = configuredNeural ?? new();
 	public readonly HumanoidNeuralReactionSettings NeuralReactions = configuredReactions ?? new();
 	public float PlaybackSpeed = 1;
+	public float PoseModifierWeight = 1;
 	public bool GaitActive;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
@@ -178,6 +179,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	public IReadOnlyList<OzzRig.Clip> Clips => rig.Clips;
 	public OzzRig.Clip ActiveClip => animator.ActiveClip;
+	public float RangeStart => animator.RangeStart;
+	public float RangeEnd => animator.RangeEnd;
+	public bool AnimationFinished => animator.Finished;
 	public float Time
 	{
 		get => animator.Time;
@@ -189,6 +193,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 	public bool Turning => turning;
 	public bool FacingMatches => !turning && visualFacing == owner.Facing;
+	public Vector2 EyeOffset => projectedPose[head] + lookDirection * 2.4f;
+	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
 
 	public void Initialize(string clip)
 	{
@@ -282,11 +288,22 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public bool TryGetClip(string name, out OzzRig.Clip clip) => rig.TryGetClip(name, out clip);
 	public OzzRig.Clip GetClip(string name) => rig.GetClip(name);
 
-	public void Play(string name, bool blend = true, bool restart = false, bool seededPhase = false)
+	public void Play(string name, bool blend = true, bool restart = false, bool seededPhase = false,
+		float blendDuration = -1)
 	{
 		var startTime = seededPhase && !string.Equals(animator.ActiveClip.Name, name, StringComparison.OrdinalIgnoreCase)
 			? rig.GetClip(name).Duration * animationPhase : 0;
-		animator.Play(name, blend ? ClipBlendDuration : 0, restart, startTime);
+		var transition = blend ? (blendDuration >= 0 ? blendDuration : ClipBlendDuration) : 0;
+		animator.Play(name, transition, restart, startTime);
+	}
+
+	public void Play(RigTake take, float blendDuration = -1, bool restart = true)
+	{
+		var clip = rig.GetClip(take.Clip);
+		var start = Math.Clamp(take.Start, 0, clip.Duration);
+		var end = Math.Clamp(take.End, start, clip.Duration);
+		PlaybackSpeed = Math.Max(0.01f, take.Speed);
+		animator.Play(take.Clip, start, end, blendDuration >= 0 ? blendDuration : ClipBlendDuration, restart);
 	}
 
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true)
@@ -476,17 +493,18 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	void ApplyGaitAsymmetry()
 	{
-		if (Settings.GaitAsymmetry <= 0)
+		var amount = Settings.GaitAsymmetry * PoseModifierWeight;
+		if (amount <= 0)
 			return;
 
-		projectedPose[head] += Vector2.UnitX * gaitHeadBias * GaitHeadOffset * Settings.GaitAsymmetry;
-		OffsetMasked(leftArmMask, Vector2.UnitY * gaitShoulderBias * GaitShoulderOffset * Settings.GaitAsymmetry);
-		OffsetMasked(rightArmMask, -Vector2.UnitY * gaitShoulderBias * GaitShoulderOffset * Settings.GaitAsymmetry);
+		projectedPose[head] += Vector2.UnitX * gaitHeadBias * GaitHeadOffset * amount;
+		OffsetMasked(leftArmMask, Vector2.UnitY * gaitShoulderBias * GaitShoulderOffset * amount);
+		OffsetMasked(rightArmMask, -Vector2.UnitY * gaitShoulderBias * GaitShoulderOffset * amount);
 		if (!GaitActive || animator.ActiveClip.Duration <= 0)
 			return;
 
 		var stride = MathF.Sin(animator.Time / animator.ActiveClip.Duration * MathF.Tau) * gaitStrideBias *
-			GaitStrideOffset * Settings.GaitAsymmetry * (int)visualFacing;
+			GaitStrideOffset * amount * (int)visualFacing;
 		OffsetLeg(leftLeg, Vector2.UnitX * stride);
 		OffsetLeg(rightLeg, -Vector2.UnitX * stride * 0.65f);
 	}
@@ -496,7 +514,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		if (plantRemaining <= 0)
 			return;
 		var progress = 1 - plantRemaining / PlantResponseDuration;
-		var amount = MathF.Sin(progress * MathF.PI) * Settings.PlantResponse;
+		var amount = MathF.Sin(progress * MathF.PI) * Settings.PlantResponse * PoseModifierWeight;
 		plantRemaining = MathF.Max(0, plantRemaining - visualDelta);
 		projectedPose[pelvis] += Vector2.UnitY * PlantCompression * amount;
 		OffsetMasked(upperBodyMask, Vector2.UnitY * PlantCompression * amount);
@@ -520,12 +538,13 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	void UpdateSecondaryMotion()
 	{
+		var secondaryMotion = Settings.SecondaryMotion * PoseModifierWeight;
 		var headOffset = UpdateSecondaryPoint(ref headMotion, owner.Position + projectedPose[head],
-			HeadMotionSpring, HeadMotionDamping, HeadMotionMaxOffset) * Settings.SecondaryMotion;
+			HeadMotionSpring, HeadMotionDamping, HeadMotionMaxOffset) * secondaryMotion;
 		var leftOffset = UpdateSecondaryPoint(ref leftHandMotion, owner.Position + projectedPose[leftHand],
-			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * Settings.SecondaryMotion;
+			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * secondaryMotion;
 		var rightOffset = UpdateSecondaryPoint(ref rightHandMotion, owner.Position + projectedPose[rightHand],
-			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * Settings.SecondaryMotion;
+			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * secondaryMotion;
 		projectedPose[neck] += headOffset * 0.25f;
 		projectedPose[head] += headOffset;
 		projectedPose[leftHand] += leftOffset;
@@ -610,11 +629,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	void ApplyTrackingLean()
 	{
-		if (Settings.TrackingLean <= 0 || LookTarget is not { } target)
+		var amount = Settings.TrackingLean * PoseModifierWeight;
+		if (amount <= 0 || LookTarget is not { } target)
 			return;
 		var toward = target - owner.Position;
 		var screenOffset = new Vector2(Math.Clamp(toward.X / 64f, -1, 1),
-			Math.Clamp(toward.Y / 96f, -0.5f, 0.5f)) * TrackingLeanDistance * Settings.TrackingLean;
+			Math.Clamp(toward.Y / 96f, -0.5f, 0.5f)) * TrackingLeanDistance * amount;
 		var rigOffset = RigVelocity(screenOffset);
 		for (var i = 0; i < sampledPose.Length; i++)
 			sampledPose[i] += rigOffset * upperBodyMask[i];
