@@ -169,6 +169,10 @@ public abstract class Pawn : Actor
 	protected float jumpBufferTimer;
 	protected bool grounded;
 	protected bool inWater;
+	
+	bool canAirHop = false;
+	float lastGroundedJumpTimer = 0;
+	
 	bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
 	protected bool atWaterSurface; // torso submerged but head is above the waterline
 	bool rollingOnWater;
@@ -242,6 +246,7 @@ public abstract class Pawn : Actor
 		: 1;
 
 	public abstract PawnInput GetInput();
+	PawnInput prevInput = new();
 
 	public override void Update()
 	{
@@ -257,6 +262,7 @@ public abstract class Pawn : Actor
 			StopWaterRoll();
 		windInfluence = Wind.ApplyTo(this);
 		wallJumpDirectionCached = false;
+		prevInput = input;
 		input = ScriptedInput ?? GetInput();
 		if (!input.DashDown)
 			EndDashRun();
@@ -716,49 +722,67 @@ public abstract class Pawn : Actor
 		var jumpPressed = input.JumpPressed;
 		if (!jumpPressed && canGroundJump && jumpBufferTimer > 0)
 			jumpPressed = true;
-		if (!inWater && jumpPressed && (canGroundJump || canWallJump))
-		{
-			var jumpingDownThroughJumpthru = input.MoveY > 0 && HitTestUnderneath()?.Actor is Jumpthru;
-			
-			jumpBufferTimer = 0;
-			JumpUpSquish = 0;
-			Squish = new Vector2(0.65f, 1.4f);
-			if (canGroundJump)
-			{
-				if (canCoyoteJump)
-					Position.Y = coyoteJumpY;
-				coyoteJumpTimer = 0;
-				if (wasGroundedJump)
-					EmitJumpParticles(Position);
-			}
-			else
-			{
-				wallJumpDirection = wallJump;
-				wallJumpInputLockTimer = WallJumpInputLockTime;
-				facing = wallJumpDirection;
-				Facing = wallJumpDirection;
-				Velocity.X = wallJumpDirection * WallJumpSpeed;
-				EmitJumpParticles(Position - Vector2.UnitX * wallJumpDirection * Hitbox.Rect.Width / 2);
-				wallJumpCoyoteTimer = 0;
-				wallJumpCoyoteDirection = 0;
-				dashCooldownTimer = 0;
-				EndDashRun();
-			}
 
-			if (jumpingDownThroughJumpthru)
+		lastGroundedJumpTimer = Calc.Approach(lastGroundedJumpTimer, 0, Time.Delta);
+
+		if (!inWater && jumpPressed)
+		{
+			if (canGroundJump || canWallJump)
 			{
-				StartJump(0, 0);
-				Velocity.Y = 4;
-				Position.Y += 2;
+				var jumpingDownThroughJumpthru = input.MoveY > 0 && HitTestUnderneath()?.Actor is Jumpthru;
+
+
+				jumpBufferTimer = 0;
+				JumpUpSquish = 0;
+				Squish = new Vector2(0.65f, 1.4f);
+				if (canGroundJump)
+				{
+					lastGroundedJumpTimer = 0.1f;
+					if (canCoyoteJump)
+						Position.Y = coyoteJumpY;
+					coyoteJumpTimer = 0;
+					canAirHop = true;
+					if (wasGroundedJump)
+						EmitJumpParticles(Position);
+				}
+				else
+				{
+					wallJumpDirection = wallJump;
+					wallJumpInputLockTimer = WallJumpInputLockTime;
+					facing = wallJumpDirection;
+					Facing = wallJumpDirection;
+					Velocity.X = wallJumpDirection * WallJumpSpeed;
+					EmitJumpParticles(Position - Vector2.UnitX * wallJumpDirection * Hitbox.Rect.Width / 2);
+					wallJumpCoyoteTimer = 0;
+					wallJumpCoyoteDirection = 0;
+					dashCooldownTimer = 0;
+					EndDashRun();
+				}
+
+				if (jumpingDownThroughJumpthru)
+				{
+					StartJump(0, 0);
+					Velocity.Y = 4;
+					Position.Y += 2;
+				}
+				else
+				{
+					StartJump(JumpForce, JumpTime);
+				}
+
+
+				OnPawnJump();
 			}
-			else
+			else if (this is Player && input.JumpPressed && !prevInput.JumpPressed && canAirHop && !grounded && lastGroundedJumpTimer == 0)
 			{
-				StartJump(JumpForce, JumpTime);
+				Console.WriteLine("Air hop! " + Time.SecondsF);
+				canAirHop = false;
+				Velocity.Y = -100;
+				Velocity.X = input.MoveX * 50;
 			}
-				
-				
-			OnPawnJump();
 		}
+
+
 
 		// Dive plays while holding jump and falling toward the ground (the burrow approach).
 		// Use JumpDown (held), not jumpPressed — jumpPressed is only true the single frame
