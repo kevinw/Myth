@@ -91,7 +91,7 @@ public class Boss : Pawn
 		// Sometimes bail out over the player when cornered against a wall
 		if (escapeCooldownTimer <= 0 && ShouldStartWallJumpEscape(player, out var fleeDir, out var wallSide))
 		{
-			if (Random.Shared.NextSingle() < WallJumpStartChance)
+			if (Game.rng.Chance(WallJumpStartChance))
 			{
 				StartWallJumpEscape(fleeDir, wallSide);
 				return UpdateWallJumpEscape();
@@ -190,7 +190,7 @@ public class Boss : Pawn
 		if (count == 0)
 			return null;
 
-		var pick = Random.Shared.Next(count);
+		var pick = Game.rng.Int(count);
 		var i = 0;
 		foreach (var node in graph.Nodes)
 		{
@@ -247,7 +247,7 @@ public class Boss : Pawn
 		escapePhase = EscapePhase.None;
 		escapeCooldownTimer = aborted
 			? WallJumpAbortCooldown
-			: WallJumpCooldownMin + Random.Shared.NextSingle() * (WallJumpCooldownMax - WallJumpCooldownMin);
+			: Game.rng.Float(WallJumpCooldownMin, WallJumpCooldownMax);
 	}
 
 	private PawnInput UpdateWallJumpEscape()

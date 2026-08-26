@@ -39,7 +39,7 @@ public class Pickup : Actor
 		{
 			var t = count > 1 ? i / (float)(count - 1) : 0.5f;
 			var angle = up - spreadArc / 2f + spreadArc * t;
-			var speed = 60f + Random.Shared.NextSingle() * 40f;
+			var speed = game.rng.Float(60f, 100f);
 			var velocity = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
 			game.Create<Pickup>(position, p =>
 			{

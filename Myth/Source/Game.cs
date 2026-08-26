@@ -70,7 +70,13 @@ public partial class Game : IDisposable
 
 	public readonly List<Actor> Actors = [];
 
-	public Time Time => Manager.Time.MultiplyDelta(timeScale);
+	// The sim reads time only through this. Normally it's the wall clock (scaled by timeScale);
+	// during replay playback it's a clock advanced by the recording's per-frame dt, which
+	// decouples the sim from the display framerate. See AdvanceReplayClock / EndReplayClock.
+	public Time Time => replayClock ?? Manager.Time.MultiplyDelta(timeScale);
+	Time? replayClock;
+	internal void AdvanceReplayClock(float dt) => replayClock = (replayClock ?? default).Advance(TimeSpan.FromSeconds(dt));
+	internal void EndReplayClock() => replayClock = null;
 
 	internal Room? room;
 	internal Room? nextRoom;
@@ -120,7 +126,11 @@ public partial class Game : IDisposable
 	internal bool ShakeInRenderTargetSpace;
 	float renderTargetShaking;
 	float renderTargetShakeStepTimer;
+	// The one deterministic RNG stream the sim draws from (actors + camera shake). Seed it at the
+	// start of a recording/replay clip and the whole run reproduces. Editor/authoring code uses its
+	// own Random.Shared and stays out of this stream.
 	internal Rng rng = new();
+	internal ulong RngSeed { get => rng.Seed; set => rng = new Rng(value); }
 	internal Cutscene? ActiveCutscene;
 
 

@@ -14,7 +14,6 @@ public readonly record struct PawnInput(
 	bool AllowWallJump = true);
 
 
-
 public abstract class Pawn : Actor
 {
 	protected int jumpParticlesEffect = -1;
@@ -1310,10 +1309,10 @@ public abstract class Pawn : Actor
 		airBubbleTimer -= Time.Delta;
 		if (airBubbleTimer > 0)
 			return;
-		airBubbleTimer = AirBubbleIntervalMin + Random.Shared.NextSingle() * (AirBubbleIntervalMax - AirBubbleIntervalMin);
+		airBubbleTimer = Game.rng.Float(AirBubbleIntervalMin, AirBubbleIntervalMax);
 
 		var bounds = Hitbox.Rect + Position;
-		var spawn = new Point2(bounds.Center.X + Random.Shared.Next(-2, 3), bounds.Top + 2);
+		var spawn = new Point2(bounds.Center.X + Game.rng.Int(-2, 3), bounds.Top + 2);
 		if (Game.IsWaterAt(spawn))
 			Game.Create<AirBubble>(spawn);
 	}

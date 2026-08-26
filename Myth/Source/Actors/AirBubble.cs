@@ -35,7 +35,7 @@ public class AirBubble : Actor
 			if (driftTimer <= 0)
 			{
 				driftTimer = DriftInterval;
-				Velocity.X = (Random.Shared.NextSingle() * 2f - 1f) * DriftSpeed;
+				Velocity.X = Game.rng.Float(-1f, 1f) * DriftSpeed;
 			}
 			Velocity.Y = -RiseSpeed;
 		}

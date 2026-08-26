@@ -101,7 +101,8 @@ public sealed class EyeLaserPuppet : RigPuppet
 				SetAbilityPoseModifierWeight(0);
 				SetAbilityLookTarget(lockedTarget);
 				eyeGlow = Calc.Lerp(0.15f, 1, Ease.Cube.In(AbilityAnimationProgress));
-				EmitChargeParticles();
+				if (AbilityAnimationProgress > 0.36f && AbilityAnimationProgress < 0.9f)
+					EmitChargeParticles();
 				UpdateSound(AbilityAnimationProgress, 0);
 				if (AbilityAnimationFinished)
 					BeginFire();
