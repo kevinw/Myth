@@ -1,3 +1,5 @@
+- RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
+
 # pseudoregalia
 - it's VERY fun to have two little jumps after the main jump. wiggle room + expressivity.
 - switch which moves platforms is fun
