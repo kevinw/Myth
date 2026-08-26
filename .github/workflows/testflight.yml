@@ -41,7 +41,8 @@ jobs:
       - name: Build visual assets and shaders
         working-directory: Myth
         run: >-
-          dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=mac --
+          dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=mac
+          -p:EnableOzzRuntime=false --
           --build-asset-pack Assets/Packed/Visuals
           --build-content-zip Assets/Content.zip
           --content-target ios

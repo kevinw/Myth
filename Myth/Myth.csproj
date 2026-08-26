@@ -314,19 +314,25 @@
     <Copy SourceFiles="../native/MythCapture/libMythCapture.dylib" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' != 'browser-wasm'">
+  <PropertyGroup>
+    <EnableOzzRuntime Condition="'$(EnableOzzRuntime)' == ''">true</EnableOzzRuntime>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('OSX')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64')">
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.dylib</OzzRuntimeLibrary>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'win-x64')">
+  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('Windows')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'win-x64')">
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/MinSizeRel/myth_ozz.dll</OzzRuntimeLibrary>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('Linux')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64')">
+    <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.so</OzzRuntimeLibrary>
   </PropertyGroup>
 
   <Target Name="BuildOzzRuntime"
           BeforeTargets="Build"
-          Condition="'$(OzzRuntimeLibrary)' != ''"
-          Inputs="tools/rig-baker/ozz_runtime.cc;tools/rig-baker/CMakeLists.txt;tools/rig-baker/build-runtime.mjs;tools/ozz-animation/CMakeLists.txt"
-          Outputs="$(OzzRuntimeLibrary)">
+          Condition="'$(OzzRuntimeLibrary)' != ''">
     <Exec Command="node tools/rig-baker/build-runtime.mjs &quot;$(BaseIntermediateOutputPath)ozz-runtime&quot;" />
   </Target>
 
