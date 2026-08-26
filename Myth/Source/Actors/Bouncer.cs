@@ -25,7 +25,7 @@ public class Bouncer : Actor, IResizable
 
 	// Surface asset (Sources/Surfaces/<id>.json) filling the blob interior, tiled in
 	// world space and lit via its normal map. Null/empty = solid FillColor.
-	public string? SurfaceId;
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 
 	// Membrane spring: accel per px of displacement from rest, and per-second velocity bleed.
 	static float Stiffness => 3280f;

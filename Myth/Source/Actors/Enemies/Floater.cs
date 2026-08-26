@@ -17,7 +17,7 @@ public class Floater : Actor
 	[I(0, 3)] public float LaserLightIntensity = 1.2f;
 	[I(0, 32)] public float LaserLightHeight = 8;
 	public Color LaserLightColor = 0x5fcde4;
-	public string? SurfaceId;
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 
 	static float FireEndTime => 3.0f; // how long the lasers stay live once they're up
 

@@ -6,6 +6,9 @@ namespace Myth;
 	LivePositionEditable = true, LiveResizable = true)]
 public class HyphaWall : ProceduralWall
 {
+	internal static ContentRef<VisualTextureContent> HyphaPatternTexture => new("patterns/pattern_68");
+	internal static ContentRef<VisualTextureContent> HyphaDetailTexture => new("patterns/noise/Noise_036");
+
 	public Color SurfaceColor = new(0x31463a);
 	public Color PlateColor = new(0x596b50);
 	public Color VeinColor = new(0x9ba47b);
@@ -28,8 +31,8 @@ public class HyphaWall : ProceduralWall
 
 	public HyphaWall()
 	{
-		PatternTexture = "patterns/pattern_68";
-		DetailTexture = "patterns/noise/Noise_036";
+		PatternTexture = HyphaPatternTexture;
+		DetailTexture = HyphaDetailTexture;
 		TextureScale = 0.8f;
 		DetailScale = 1.4f;
 		Specular = 0.65f;

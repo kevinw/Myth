@@ -27,7 +27,7 @@ public sealed class HumanoidRigSettings
 	[I(0, 0.3f)] public float DepthWidthAmount;
 
 	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
-	public string SurfaceId = "";
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 
 	[I(0, 8), InspectorGroup("Combat")] public float CombatBoundsPadding = 1;
 	[NoSerialize] public float UpperBodyHitStrength = 0.8f;
@@ -41,8 +41,7 @@ public sealed class HumanoidRigSettings
 
 public sealed class NeuralSurfaceSettings
 {
-	public static string DefaultWeightsFile => "rock035_pair_circular_screen.bin";
-	public string NeuralWeightsFile = DefaultWeightsFile;
+	public ContentRef<NeuralWeightsContent> NeuralWeightsFile = NeuralWeightsContent.RigDefault;
 	[I(0, 1)] public float NeuralColorAmount = 0.25f;
 	[I(0, 1)] public float NeuralNormalAmount = 0.55f;
 	[I(1, 60)] public float NeuralFPS = 20;

@@ -23,7 +23,6 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	const int FinalBiasOffset = 3464;
 	const int MaxPerturbations = 64;
 	public const string WeightsFolder = "NCA/DynamicTexture";
-	public const string DefaultWeightsFile = "chequered_0050_circular.bin";
 	static readonly ConditionalWeakTable<GraphicsDevice, SharedGpuResources> SharedResources = new();
 
 	// The three NCT compute shaders are weight-independent and shared across every
@@ -223,10 +222,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public Point2 SimulationSize = new(StateWidth, StateHeight);
 	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
 	[I(0, 8)] public float StatePixelsPerCell;
-	public string WeightsFile = DefaultWeightsFile;
-	public string WeightsFile1 = "";
-	public string WeightsFile2 = "";
-	public string WeightsFile3 = "";
+	public ContentRef<NeuralWeightsContent> WeightsFile = NeuralWeightsContent.NeuralTextureDefault;
+	public ContentRef<NeuralWeightsContent> WeightsFile1 = new("");
+	public ContentRef<NeuralWeightsContent> WeightsFile2 = new("");
+	public ContentRef<NeuralWeightsContent> WeightsFile3 = new("");
 	[I(0, 1)] public float FireRate = 0.5f;
 	[I(1, 120)] public float StepsPerSecond = 30.0f;
 	[I(0, 3)] public float Contrast = 1f;
@@ -385,7 +384,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			SimulateFromSeed(EditorPreviewSteps);
 	}
 
-	public string[] SlotWeightsFiles => [WeightsFile, WeightsFile1, WeightsFile2, WeightsFile3];
+	public string[] SlotWeightsFiles => [WeightsFile.Name, WeightsFile1.Name, WeightsFile2.Name, WeightsFile3.Name];
 
 	void DecodeMaskData()
 	{

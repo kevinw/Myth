@@ -52,6 +52,11 @@ run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "--",
   "--content-target", "mac",
   "--content-world", "Myth",
 ]);
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "-p:MythTestShip=true", "--",
+  "--check-rooms",
+  "--content-zip", contentZip,
+  "--asset-pack",
+]);
 
 // --- 2. NativeAOT publish, play-only.
 run("dotnet", [

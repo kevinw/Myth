@@ -35,6 +35,12 @@ public sealed class ActorRegistrationGenerator : IIncrementalGenerator
 			foreach (var name in names.Distinct().OrderBy(n => n, System.StringComparer.Ordinal))
 				sb.AppendLine($"\t\tFactory.Register<{name}>();");
 			sb.AppendLine("\t}");
+			sb.AppendLine();
+			sb.AppendLine("\tpublic static void RegisterActorSpecs()");
+			sb.AppendLine("\t{");
+			foreach (var name in names.Distinct().OrderBy(n => n, System.StringComparer.Ordinal))
+				sb.AppendLine($"\t\tFactory.RegisterActorSpec<{name}>();");
+			sb.AppendLine("\t}");
 			sb.AppendLine("}");
 			spc.AddSource("GeneratedActors.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
 		});

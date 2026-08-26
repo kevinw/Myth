@@ -16,7 +16,7 @@ public class Button : Actor
 	public ButtonMode Mode;
 	public bool Persistent;
 	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
-	public string? SurfaceId;
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 
 	static int HousingDepth => 3;
 	static int HousingHalfWidth => 5;

@@ -29,6 +29,11 @@ run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "
   "--content-target", "windows",
   "--content-world", "Myth",
 ]);
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "-p:MythTestShip=true", "--",
+  "--check-rooms",
+  "--content-zip", contentZip,
+  "--asset-pack",
+]);
 run("dotnet", [
   "publish", "Myth.csproj",
   "-c", "Release",

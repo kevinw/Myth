@@ -8,7 +8,7 @@ sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Poin
 	: IDisposable
 {
 	NeuralTextureActor? texture;
-	string activeWeightsFile = "";
+	ContentRef<NeuralWeightsContent> activeWeightsFile = new("");
 
 	public NeuralTextureActor? Texture => texture;
 	public Texture? OutputTexture => texture?.OutputTexture;
@@ -38,7 +38,7 @@ sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Poin
 			it.Visible = false;
 			it.Size = size;
 			it.SimulationSize = size;
-			it.WeightsFile = activeWeightsFile;
+			it.WeightsFile = activeWeightsFile.Name;
 			it.NearestStateSampling = true;
 			it.EdgeTrim = 1;
 		});

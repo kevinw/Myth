@@ -262,7 +262,7 @@ public partial class Manager : App
 	}
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
-		offscreen: args.bakeWorldMap, fullscreen: args.fullscreen))
+		offscreen: args.bakeWorldMap || args.checkRooms, fullscreen: args.fullscreen))
 	{
 #if EDITOR
 		particleEditor = new(undo);
@@ -296,7 +296,7 @@ public partial class Manager : App
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
 		noWarmup = args.noWarmup;
-		skipStartupMenu = args.play || args.gym || args.headless;
+		skipStartupMenu = args.play || args.gym || args.headless || args.checkRooms;
 		screenshotPath = args.screenshotPath;
 		screenshotFrame = args.screenshotFrame;
 		screenshotInterval = args.screenshotInterval;
@@ -467,13 +467,13 @@ public partial class Manager : App
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
+		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
 		if (checkRooms)
 		{
 			CheckRooms();
 			Exit();
 			return;
 		}
-		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
 		if (AudioEnabled)
 			LoadAudioBanks();
 
@@ -532,12 +532,18 @@ public partial class Manager : App
 	{
 		var timer = Stopwatch.StartNew();
 		var loaded = 0;
+		using var target = new Target(GraphicsDevice, Game.Width, Game.Height, name: "CheckRooms");
+		var pixels = new Color[Game.Width * Game.Height];
 		foreach (var room in Assets.RoomsById.Values.OrderBy(static room => room.Id, StringComparer.Ordinal))
 		{
 			try
 			{
 				using var game = new Game(this, room, audioEventsEnabled: false, spawnBud: false,
-					enableParticles: false, loadGoals: true, save: new());
+					enableParticles: true, loadGoals: true, save: new());
+				var bounds = room.WorldBounds;
+				target.Clear(Color.Transparent);
+				game.RenderWorldToTarget(target, new Rect(bounds.X, bounds.Y, Game.Width, Game.Height));
+				target.Attachments[0].GetData<Color>(pixels);
 			}
 			catch (Exception exception)
 			{
@@ -545,7 +551,7 @@ public partial class Manager : App
 			}
 			loaded++;
 		}
-		Console.WriteLine($"[CheckRooms] Loaded {loaded}/{Assets.RoomsById.Count} rooms in {timer.Elapsed.TotalSeconds:F2}s.");
+		Console.WriteLine($"[CheckRooms] Loaded and rendered {loaded}/{Assets.RoomsById.Count} rooms in {timer.Elapsed.TotalSeconds:F2}s.");
 	}
 
 	// Enters the first on-screen state after boot/warmup: the title menu, immediate play, or a

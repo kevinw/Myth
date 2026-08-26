@@ -359,10 +359,9 @@ public static class Factory
 	// [GameActor] via GeneratedActors.RegisterAll().
 	public static void Register<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] T>() where T : Actor
 	{
-		var attr = typeof(T).GetCustomAttribute<GameActorAttribute>();
+		var attr = RegisterActorSpec<T>();
 		var name = attr?.Name ?? typeof(T).Name;
 		var tags = attr?.Tags ?? ActorTag.None;
-		ActorSpecs.RegisterActor<T>(name, attr?.ShowFacing ?? true);
 		actorTags[name] = tags;
 		actorTypeTags[typeof(T)] = tags;
 		if (attr?.LivePositionEditable == true)
@@ -416,6 +415,15 @@ public static class Factory
 
 		paletteLooks[name] = new PaletteLook(null, iconName, offset, attr?.EditorBounds);
 		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None, anchor));
+	}
+
+	internal static GameActorAttribute? RegisterActorSpec<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor |
+			DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] T>() where T : Actor
+	{
+		var attr = typeof(T).GetCustomAttribute<GameActorAttribute>();
+		ActorSpecs.RegisterActor<T>(attr?.Name ?? typeof(T).Name, attr?.ShowFacing ?? true);
+		return attr;
 	}
 
 	// How a registered actor type's palette button looks, captured while registering the type

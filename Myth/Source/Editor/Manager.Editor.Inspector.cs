@@ -192,7 +192,7 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (IsProceduralWallTextureProperty(actor, property))
+		else if (property.Type == typeof(ContentRef<VisualTextureContent>))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawSurfaceTexturePicker(ref value, controlWidth))
@@ -262,7 +262,7 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (NeuralTextureWeightsSlot(actor, property.Name) is >= 0 and var weightsSlot)
+		else if (NeuralTextureWeightsSlot(actor, property) is >= 0 and var weightsSlot)
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (NeuralTextureCatalog.DrawCombo(ref value, allowNone: weightsSlot > 0))
@@ -278,7 +278,7 @@ public partial class Manager
 			else
 				TextDisabled("(painted per room instance)");
 		}
-		else if (property.Type == typeof(string))
+		else if (property.Type == typeof(string) || ActorSpecs.IsContentReference(property.Type))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (property.ActorRef is { } actorRef && room != null)
@@ -1113,10 +1113,10 @@ public partial class Manager
 		TextDisabled("Drag in the room to paint. Release to resimulate.\nRight-drag erases. Esc stops.");
 	}
 
-	static int NeuralTextureWeightsSlot(JsonObject actor, string propertyName)
+	static int NeuralTextureWeightsSlot(JsonObject actor, ActorSpecs.EditableProperty property)
 	{
 		if (IsNeuralTextureActor(actor))
-			return propertyName switch
+			return property.Name switch
 			{
 				nameof(NeuralTextureActor.WeightsFile) => 0,
 				nameof(NeuralTextureActor.WeightsFile1) => 1,
@@ -1124,8 +1124,7 @@ public partial class Manager
 				nameof(NeuralTextureActor.WeightsFile3) => 3,
 				_ => -1,
 			};
-		return propertyName is nameof(NeuralSurfaceSettings.NeuralWeightsFile) or
-			nameof(Stalker.RigNeuralWeightsFile) ? 0 : -1;
+		return property.Type == typeof(ContentRef<NeuralWeightsContent>) ? 0 : -1;
 	}
 
 	static bool IsRevealDoorTileTypeProperty(JsonObject actor, ActorSpecs.EditableProperty property)
@@ -1196,12 +1195,7 @@ public partial class Manager
 		=> property.Type == typeof(string) && string.Equals(property.JsonName, "Material", StringComparison.OrdinalIgnoreCase);
 
 	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && property.Name.EndsWith("SurfaceId", StringComparison.Ordinal);
-
-	static bool IsProceduralWallTextureProperty(JsonObject actor, ActorSpecs.EditableProperty property)
-		=> property.Type == typeof(string) && ActorSpecs.GetTypeName(actor) is { } typeName &&
-			ActorSpecs.GetActorType(typeName) is { } actorType && typeof(ProceduralWall).IsAssignableFrom(actorType) &&
-			property.Name is nameof(ProceduralWall.PatternTexture) or nameof(ProceduralWall.DetailTexture);
+		=> property.Type == typeof(ContentRef<SurfaceContent>);
 
 	// A "color picker"-style surface selector: a preview button that opens a grid of
 	// surface previews. Returns true (and updates value) when a surface is chosen; an

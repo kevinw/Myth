@@ -37,7 +37,7 @@ public class MagneticCrawler : Actor
 	}
 
 	public Point2 InitialSurfaceDirection = Point2.Down;
-	public string SurfaceId = "";
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 	public bool RequiresMetal = true;
 	public bool ClimbsWallsAndCeilings = true;
 	[I(1, 12)] public int Health = 4;
@@ -620,7 +620,7 @@ public class MagneticCrawler : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		if (SpriteBlinkHidden || AssemblyProgress <= 0 && string.IsNullOrEmpty(SurfaceId))
+		if (SpriteBlinkHidden || AssemblyProgress <= 0 && string.IsNullOrEmpty(SurfaceId.Name))
 			return;
 		DrawRig(batcher, Color.White, shadow: false);
 	}
@@ -687,7 +687,7 @@ public class MagneticCrawler : Actor
 			sourceSurface.Render(batcher, triangles, Time.SecondsF, 1 - final);
 		}
 
-		var fill = MetalColor * MathF.Max(final, string.IsNullOrEmpty(SurfaceId) ? 0.28f : 0);
+		var fill = MetalColor * MathF.Max(final, string.IsNullOrEmpty(SurfaceId.Name) ? 0.28f : 0);
 		batcher.Quad(corners[0], corners[1], corners[2], corners[3], fill);
 		batcher.Line(corners[0], corners[1], 2, MetalEdgeColor * MathF.Max(final, 0.25f));
 		batcher.Line(corners[1], corners[2], 2, MetalEdgeColor * MathF.Max(final, 0.25f));

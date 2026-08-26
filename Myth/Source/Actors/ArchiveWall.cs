@@ -6,6 +6,9 @@ namespace Myth;
 	LivePositionEditable = true, LiveResizable = true)]
 public class ArchiveWall : ProceduralWall
 {
+	internal static ContentRef<VisualTextureContent> ArchivePatternTexture => new("patterns/pattern_57");
+	internal static ContentRef<VisualTextureContent> ArchiveDetailTexture => new("patterns/noise/Noise_041");
+
 	public Color CabinetColor = new(0x293332);
 	public Color ShelfColor = new(0x59625b);
 	public Color LabelColor = new(0xd6c99d);
@@ -29,8 +32,8 @@ public class ArchiveWall : ProceduralWall
 
 	public ArchiveWall()
 	{
-		PatternTexture = "patterns/pattern_57";
-		DetailTexture = "patterns/noise/Noise_041";
+		PatternTexture = ArchivePatternTexture;
+		DetailTexture = ArchiveDetailTexture;
 		TextureScale = 0.75f;
 		DetailScale = 1.25f;
 		Specular = 0.24f;

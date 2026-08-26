@@ -8,8 +8,6 @@ namespace Myth;
 public class AlienBug : Actor, INeuralTextureAgent
 {
 	enum States { Idle, Running, Attacking, Stunned }
-	public static string DefaultNeuralWeightsFile => "bubbles_circular.bin";
-
 	public string Rig = "alien-bug";
 	[I(1, 60)] public float VisualFPS = 20;
 	[I(0.1f, 3)] public float PlaybackSpeed = 1;
@@ -24,11 +22,11 @@ public class AlienBug : Actor, INeuralTextureAgent
 	[I(8, 64)] public float AttackRange = 24;
 	[I(8, 80)] public float RunSpeed = 30;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;
-	public string SurfaceId = "";
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
 	public readonly NeuralSurfaceSettings Neural = new()
 	{
-		NeuralWeightsFile = DefaultNeuralWeightsFile,
+		NeuralWeightsFile = NeuralWeightsContent.AlienBugDefault,
 		NeuralColorAmount = 0.8f,
 		NeuralNormalAmount = 0.65f,
 		NeuralFireRate = 0.6f,

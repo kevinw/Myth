@@ -6,6 +6,9 @@ namespace Myth;
 	LivePositionEditable = true, LiveResizable = true)]
 public class FleshWall : ProceduralWall
 {
+	internal static ContentRef<VisualTextureContent> FleshPatternTexture => new("patterns/pattern_34");
+	internal static ContentRef<VisualTextureContent> FleshDetailTexture => new("patterns/noise/Noise_069");
+
 	public Color MembraneColor = new(0x703743);
 	public Color MuscleColor1 = new(0xc86772);
 	public Color MuscleColor2 = new(0x974451);
@@ -30,8 +33,8 @@ public class FleshWall : ProceduralWall
 
 	public FleshWall()
 	{
-		PatternTexture = "patterns/pattern_34";
-		DetailTexture = "patterns/noise/Noise_069";
+		PatternTexture = FleshPatternTexture;
+		DetailTexture = FleshDetailTexture;
 		TextureScale = 0.75f;
 		DetailScale = 1.5f;
 		Specular = 0.72f;

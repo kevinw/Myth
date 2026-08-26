@@ -6,6 +6,9 @@ namespace Myth;
 	LivePositionEditable = true, LiveResizable = true)]
 public class CircuitWall : ProceduralWall
 {
+	internal static ContentRef<VisualTextureContent> CircuitPatternTexture => new("patterns/pattern_12");
+	internal static ContentRef<VisualTextureContent> CircuitDetailTexture => new("patterns/noise/Noise_003");
+
 	public Color BoardColor = new(0x173a35);
 	public Color ModuleColor = new(0x344a48);
 	public Color TraceColor1 = new(0xb98b42);
@@ -27,8 +30,8 @@ public class CircuitWall : ProceduralWall
 
 	public CircuitWall()
 	{
-		PatternTexture = "patterns/pattern_12";
-		DetailTexture = "patterns/noise/Noise_003";
+		PatternTexture = CircuitPatternTexture;
+		DetailTexture = CircuitDetailTexture;
 		TextureScale = 0.65f;
 		DetailScale = 1.8f;
 		Specular = 0.42f;

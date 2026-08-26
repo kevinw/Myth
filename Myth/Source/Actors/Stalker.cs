@@ -42,8 +42,8 @@ public class Stalker : Pawn, INeuralTextureAgent
 	[I(0, 2)] public float RigTrackingLean = 1;
 	[I(0, 2)] public float RigHitReactionStrength = 0.8f;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;
-	public string SurfaceId = "";
-	public string RigNeuralWeightsFile = "rock035_pair_circular_screen.bin";
+	public ContentRef<SurfaceContent> SurfaceId = new("");
+	public ContentRef<NeuralWeightsContent> RigNeuralWeightsFile = NeuralWeightsContent.RigDefault;
 	[I(0, 1)] public float RigNeuralColorAmount = 0.25f;
 	[I(0, 1)] public float RigNeuralNormalAmount = 0.55f;
 	[I(1, 60)] public float RigNeuralFPS = 20;

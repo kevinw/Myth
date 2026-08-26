@@ -106,7 +106,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 	[I(32, 192)] public int GridHeight = 96;
 	[I(0, 1)] public float FireRate = 0.5f;
 	[I(1, 120)] public float StepsPerSecond = 30.0f;
-	public string WeightsFile = "lizard_weights.bin";
+	public ContentRef<NcaWeightsContent> WeightsFile = NcaWeightsContent.NeuralCellularDefault;
 
 	/// <summary>
 	/// When true, uses NCAUpdateDirectional.hlsl, which feeds a normalized
@@ -269,7 +269,7 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 
 	private void LoadWeights()
 	{
-		var bytes = Assets.Content.ReadAllBytes($"NCA/{WeightsFile}");
+		var bytes = Assets.Content.ReadAllBytes(WeightsFile.ContentKey);
 		var floats = MemoryMarshal.Cast<byte, float>(bytes.AsSpan());
 		weights!.Upload(floats);
 	}

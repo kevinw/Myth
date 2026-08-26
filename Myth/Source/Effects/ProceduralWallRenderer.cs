@@ -15,9 +15,6 @@ sealed class ProceduralWallRenderer : IDisposable
 		ActorTileField,
 	}
 
-	public const string DefaultPatternTexture = "patterns/pattern_59";
-	public const string DefaultDetailTexture = "patterns/noise/Noise_014";
-
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	struct Vertex(Vector3 position, Vector3 normal, Vector2 texCoord, Vector3 tangent) : IVertex
 	{

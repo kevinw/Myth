@@ -11,7 +11,7 @@ public class PatternProjectile : Actor
 	[I(1, 12)] public float Radius = 3;
 	public Color Color = new(0x88e7ff);
 	public Color EdgeColor = new(0x264a64);
-	public string SurfaceId = "bouncer";
+	public ContentRef<SurfaceContent> SurfaceId = SurfaceContent.BouncerDefault;
 	public Vector2 Direction = Vector2.UnitX;
 	[I(5, 160)] public float Speed = 36;
 	[I(0, 1)] public float StartSpeedScale = 0.25f;

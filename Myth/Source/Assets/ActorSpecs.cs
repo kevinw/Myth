@@ -195,6 +195,20 @@ public static class ActorSpecs
 		}
 	}
 
+	[UnconditionalSuppressMessage("Trimming", "IL2072", Justification =
+		"ContentRef<T> is a value type; creating its zero value does not require preserved constructors.")]
+	public static void CollectContentReferences(JsonObject spec, ContentDependencyCollector collector, string origin)
+	{
+		var resolved = Resolve(spec);
+		if (ReadString(resolved, TypeKey) is not { } typeName || !actorTypes.TryGetValue(typeName, out var type))
+			return;
+		foreach (var member in GetSerializableMembers(type.Type))
+			if (member.Type.IsValueType && typeof(IContentReference).IsAssignableFrom(member.Type) &&
+				ReadStringValue(GetResolvedProperty(resolved, member.Name)) is { Length: > 0 } name &&
+				Activator.CreateInstance(member.Type) is IContentReference reference)
+				reference.WithName(name).Collect(collector, $"{origin} field {member.Name}");
+	}
+
 	public static JsonObject? Get(string id)
 		=> specs.GetValueOrDefault(id);
 
@@ -351,7 +365,7 @@ public static class ActorSpecs
 			return false;
 
 		foreach (var member in GetSerializableMembers(type.Type))
-			if (member.Name == name && TryReadValue(node, member.Type, out var value))
+			if (member.Name == name && TryReadValue(node, member.Type, member.GetValue(actor), out var value))
 			{
 				member.SetValue(actor, value);
 				return true;
@@ -475,6 +489,7 @@ public static class ActorSpecs
 			int it => JsonValue.Create(it),
 			float it => JsonValue.Create(it),
 			string it => StringToJson(it),
+			IContentReference it => StringToJson(it.Name),
 			Point2 it => new JsonArray(it.X, it.Y),
 			Point2[] it => PointArrayToJson(it),
 			Vector2 it => new JsonArray(it.X, it.Y),
@@ -573,7 +588,7 @@ public static class ActorSpecs
 			if (!JsonUtil.TryGetProperty(spec, member.Name, out var node) || node == null)
 				continue;
 
-			if (TryReadValue(node, member.Type, out var value))
+			if (TryReadValue(node, member.Type, member.GetValue(actor), out var value))
 				member.SetValue(actor, value);
 		}
 	}
@@ -742,7 +757,10 @@ public static class ActorSpecs
 		   type == typeof(Color) ||
 		   type == typeof(Signs) ||
 		   type == typeof(Cardinal) ||
+		   typeof(IContentReference).IsAssignableFrom(type) ||
 		   type.IsEnum;
+
+	public static bool IsContentReference(Type type) => typeof(IContentReference).IsAssignableFrom(type);
 
 	private static Type GetMemberType(MemberInfo member)
 		=> member switch
@@ -765,7 +783,7 @@ public static class ActorSpecs
 		}
 	}
 
-	private static bool TryReadValue(JsonNode node, Type type, out object? value)
+	private static bool TryReadValue(JsonNode node, Type type, object? currentValue, out object? value)
 	{
 		value = null;
 
@@ -779,6 +797,8 @@ public static class ActorSpecs
 				value = node.GetValue<float>();
 			else if (type == typeof(string))
 				value = ReadStringValue(node);
+			else if (currentValue is IContentReference reference && ReadStringValue(node) is { } name)
+				value = reference.WithName(name);
 			else if (type == typeof(Point2))
 				value = ReadPoint(node);
 			else if (type == typeof(Point2?))

@@ -175,7 +175,7 @@ public static class NctTiles
 	public static NctTileSpec CreateDefault(string name) => new()
 	{
 		Name = name,
-		Interior = $"{NeuralTextureActor.DefaultWeightsFile}",
+		Interior = NeuralWeightsContent.NeuralTextureDefault.Name,
 	};
 
 	static string SpecPath(string name) => Path.Join(Assets.SourcesPath, "Tilesets", $"{name}{Extension}");

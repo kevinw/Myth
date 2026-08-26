@@ -6,6 +6,9 @@ namespace Myth;
 	LivePositionEditable = true, LiveResizable = true)]
 public class RuinsWall : ProceduralWall
 {
+	internal static ContentRef<VisualTextureContent> RuinsPatternTexture => new("patterns/pattern_68");
+	internal static ContentRef<VisualTextureContent> RuinsDetailTexture => new("patterns/noise/Noise_055");
+
 	public Color MortarColor = new(0x343936);
 	public Color StoneColor1 = new(0x667069);
 	public Color StoneColor2 = new(0x858477);
@@ -28,8 +31,8 @@ public class RuinsWall : ProceduralWall
 
 	public RuinsWall()
 	{
-		PatternTexture = "patterns/pattern_68";
-		DetailTexture = "patterns/noise/Noise_055";
+		PatternTexture = RuinsPatternTexture;
+		DetailTexture = RuinsDetailTexture;
 		TextureScale = 0.7f;
 		DetailScale = 1.45f;
 		Specular = 0.16f;

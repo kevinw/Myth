@@ -100,7 +100,7 @@ public class NCALayer : Actor
 	/// </summary>
 	public float[]? GrowthMask;
 
-	public string WeightsFile = "fungus_weights.bin";
+	public ContentRef<NcaWeightsContent> WeightsFile = NcaWeightsContent.LayerDefault;
 	public float FireRate = 0.5f;
 	public float StepsPerSecond = 30.0f;
 	public float RippleWaveSpeed = 0.7f;
@@ -252,7 +252,7 @@ public class NCALayer : Actor
 
 	private void LoadWeights()
 	{
-		var bytes = Assets.Content.ReadAllBytes($"NCA/{WeightsFile}");
+		var bytes = Assets.Content.ReadAllBytes(WeightsFile.ContentKey);
 		var floats = MemoryMarshal.Cast<byte, float>(bytes.AsSpan());
 		weights!.Upload(floats);
 	}

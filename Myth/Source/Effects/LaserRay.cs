@@ -14,7 +14,7 @@ public sealed class LaserRay
 	public float GlowThickness = 2;
 	public Color Color = 0x5fcde4;
 	public Color GlowColor = Color.White;
-	public string? SurfaceId;
+	public ContentRef<SurfaceContent> SurfaceId = new("");
 
 	public Vector2 Origin { get; private set; }
 	public Vector2 Direction { get; private set; } = Vector2.UnitX;

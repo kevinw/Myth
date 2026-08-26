@@ -6,6 +6,9 @@ namespace Myth;
 	LivePositionEditable = true, LiveResizable = true)]
 public class StrataWall : ProceduralWall
 {
+	internal static ContentRef<VisualTextureContent> StrataPatternTexture => new("patterns/pattern_37");
+	internal static ContentRef<VisualTextureContent> StrataDetailTexture => new("patterns/noise/Noise_022");
+
 	public Color RockColor = new(0x57534a);
 	public Color LayerColor = new(0x918674);
 	public Color FaultColor = new(0x252724);
@@ -25,8 +28,8 @@ public class StrataWall : ProceduralWall
 
 	public StrataWall()
 	{
-		PatternTexture = "patterns/pattern_37";
-		DetailTexture = "patterns/noise/Noise_022";
+		PatternTexture = StrataPatternTexture;
+		DetailTexture = StrataDetailTexture;
 		TextureScale = 0.7f;
 		DetailScale = 1.6f;
 		Specular = 0.18f;

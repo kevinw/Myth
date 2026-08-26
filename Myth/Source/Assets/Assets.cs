@@ -176,7 +176,10 @@ public static partial class Assets
 	/// </summary>
 	public static void BuildContentZip(string outputPath, string target, string? worldId = null)
 	{
+		ActorSpecs.ClearActorTypes();
+		GeneratedActors.RegisterActorSpecs();
 		ActorSpecs.LoadSpecs();
+		NctTiles.LoadSpecs(Path.Join(SourcesPath, "Tilesets"));
 		var manifestPath = Path.Join(DefaultVisualAssetPackPath, packedVisualsManifestName);
 		if (!File.Exists(manifestPath))
 			throw new InvalidOperationException("Visual asset pack is missing. Build it with --build-asset-pack before building Content.zip.");
@@ -206,14 +209,12 @@ public static partial class Assets
 		if (Path.GetDirectoryName(outputPath) is { Length: > 0 } outputDirectory)
 			Directory.CreateDirectory(outputDirectory);
 
-		// The DynamicTexture folder holds tens of MB of NCA weights, almost all unused; a
-		// packaged build only needs models referenced by rooms or registered NCT tile specs.
-		var referencedWeights = CollectReferencedNeuralTextureWeights(worldId);
+		var dependencies = CollectContentDependencies(worldId);
+		dependencies.Validate(AssetsPath);
 		var packedWeights = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-		// Only the surfaces (and their textures) referenced by the shipped world's rooms.
-		CollectReferencedSurfaceAssets(worldId, out var referencedSurfaces, out var referencedTextures);
-		ValidateReferencedSurfaceAssets(referencedSurfaces, referencedTextures);
+		var packedSurfaces = 0;
+		var packedSurfaceTextures = 0;
 		var skippedSurfaceAssets = 0;
 		long skippedSurfaceBytes = 0;
 
@@ -229,17 +230,22 @@ public static partial class Assets
 			if (!ContentZipIncludes(key, shaderExtension, worldId))
 				continue;
 
-			if ((IsPackSurfaceFile(key, out var surfaceId) && !referencedSurfaces.Contains(surfaceId))
-				|| (IsPackTextureFile(key, out var textureKey) && !referencedTextures.Contains(textureKey)))
+			var surface = IsPackSurfaceFile(key, out _);
+			var surfaceTexture = IsPackTextureFile(key, out _);
+			if ((surface || surfaceTexture) && !dependencies.Includes(key))
 			{
 				skippedSurfaceAssets++;
 				skippedSurfaceBytes += new FileInfo(file).Length;
 				continue;
 			}
+			if (surface)
+				packedSurfaces++;
+			else if (surfaceTexture)
+				packedSurfaceTextures++;
 
 			if (IsDynamicTextureWeight(key, out var weightName))
 			{
-				if (!referencedWeights.Contains(weightName))
+				if (!dependencies.Includes(key))
 				{
 					skippedWeights++;
 					skippedWeightBytes += new FileInfo(file).Length;
@@ -259,92 +265,15 @@ public static partial class Assets
 			count++;
 		}
 
-		var missingWeights = referencedWeights.Where(name => !packedWeights.Contains(name)).ToArray();
+		var missingWeights = dependencies.Files
+			.Where(key => IsDynamicTextureWeight(key, out var name) && !packedWeights.Contains(name))
+			.ToArray();
 		if (missingWeights.Length > 0)
 			throw new InvalidOperationException($"Missing referenced neural texture models: {string.Join(", ", missingWeights)}. Run 'git lfs pull' and check the room/NCT spec references.");
 
 		Console.WriteLine($"Wrote {target}/{worldId} content zip: {outputPath} ({count} entries, {new FileInfo(outputPath).Length / 1024} KB); "
 			+ $"packed {packedWeights.Count} neural texture models, skipped {skippedWeights} unreferenced ({skippedWeightBytes / 1024} KB); "
-			+ $"surfaces: kept {referencedSurfaces.Count} + {referencedTextures.Count} textures, skipped {skippedSurfaceAssets} unreferenced ({skippedSurfaceBytes / 1024} KB).");
-	}
-
-	// Surfaces referenced by actors in the shipped world, and the texture keys those
-	// surfaces use. Surface specs are read from the baked pack (their shipping location).
-	static void CollectReferencedSurfaceAssets(string worldId, out HashSet<string> surfaces, out HashSet<string> textures)
-	{
-		surfaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		textures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-		var worldRoomsPath = Path.Join(RoomsPath, worldId);
-		if (Directory.Exists(worldRoomsPath))
-			foreach (var file in Directory.EnumerateFiles(worldRoomsPath, "*.json", SearchOption.AllDirectories))
-			{
-				JsonNode? root;
-				try { root = JsonUtil.Parse(File.ReadAllText(file)); }
-				catch (Exception e)
-				{
-					Console.WriteLine($"Warning: could not parse room '{file}' collecting surface references ({e.Message}); surfaces it uses may be dropped.");
-					continue;
-				}
-				if (root?["backdropSurface"]?.GetValue<string>() is { Length: > 0 } backdropSurface)
-					surfaces.Add(backdropSurface);
-				if (root?["actors"] is JsonArray actors)
-					foreach (var actor in actors)
-					{
-						if (actor?["SurfaceId"]?.GetValue<string>() is { Length: > 0 } id)
-							surfaces.Add(id);
-						if (actor is JsonObject proceduralWall && ActorSpecs.GetTypeName(proceduralWall) is { } wallTypeName &&
-							ProceduralWallDefaultTextures(wallTypeName) is { } defaults)
-						{
-							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.PatternTexture)) is { Length: > 0 } pattern
-								? pattern : defaults.Pattern);
-							textures.Add(ActorSpecs.ReadResolvedString(proceduralWall, nameof(ProceduralWall.DetailTexture)) is { Length: > 0 } detail
-								? detail : defaults.Detail);
-						}
-					}
-			}
-
-		var surfacesDir = Path.Join(DefaultVisualAssetPackPath, "surfaces");
-		foreach (var id in surfaces)
-		{
-			var specPath = Path.Join(surfacesDir, $"{id}.json");
-			if (!File.Exists(specPath))
-				continue;
-			try
-			{
-				foreach (var key in SurfaceSpec.Parse(File.ReadAllText(specPath), id).ReferencedTextures())
-					textures.Add(key);
-			}
-			catch (Exception e)
-			{
-				Console.WriteLine($"Warning: could not parse surface '{specPath}' ({e.Message}); its textures may be dropped.");
-			}
-		}
-	}
-
-	static (string Pattern, string Detail)? ProceduralWallDefaultTextures(string typeName) => typeName.ToLowerInvariant() switch
-	{
-		"machinewall" => (ProceduralWallRenderer.DefaultPatternTexture, ProceduralWallRenderer.DefaultDetailTexture),
-		"hyphawall" => ("patterns/pattern_68", "patterns/noise/Noise_036"),
-		"stratawall" => ("patterns/pattern_37", "patterns/noise/Noise_022"),
-		"circuitwall" => ("patterns/pattern_12", "patterns/noise/Noise_003"),
-		"archivewall" => ("patterns/pattern_57", "patterns/noise/Noise_041"),
-		"fleshwall" => ("patterns/pattern_34", "patterns/noise/Noise_069"),
-		"ruinswall" => ("patterns/pattern_68", "patterns/noise/Noise_055"),
-		_ => null,
-	};
-
-	static void ValidateReferencedSurfaceAssets(HashSet<string> surfaces, HashSet<string> textures)
-	{
-		var surfacesDir = Path.Join(DefaultVisualAssetPackPath, "surfaces");
-		foreach (var id in surfaces)
-			if (!File.Exists(Path.Join(surfacesDir, $"{id}.json")))
-				throw new InvalidOperationException($"Missing referenced surface '{id}'. Rebuild the visual asset pack and check room SurfaceId references.");
-
-		var texturesDir = Path.Join(DefaultVisualAssetPackPath, "textures");
-		foreach (var key in textures)
-			if (!File.Exists(Path.Join(texturesDir, key + ".png")))
-				throw new InvalidOperationException($"Missing texture '{key}' referenced by a shipped surface. Rebuild the visual asset pack and check the Surface spec.");
+			+ $"surfaces: kept {packedSurfaces} + {packedSurfaceTextures} textures, skipped {skippedSurfaceAssets} unreferenced ({skippedSurfaceBytes / 1024} KB).");
 	}
 
 	// key = "Packed/Visuals/surfaces/<id>.json" -> id
@@ -391,46 +320,25 @@ public static partial class Assets
 		return stream.Read(buffer) == buffer.Length && Encoding.ASCII.GetString(buffer) == signature;
 	}
 
-	// Weight files named by NCT tile specs and neural settings on any actor in the shipped world,
-	// seeded with code defaults so freshly placed actors still resolve.
-	// Case-insensitive to match the zip's own lookups. Room references come from loose files
-	// because this only runs while building the pack.
-	static HashSet<string> CollectReferencedNeuralTextureWeights(string worldId)
+	// Generated declarations cover code defaults; resolved prefab/room JSON covers authored
+	// overrides. Kinds expand typed references into files (and later transitive dependencies).
+	static ContentDependencyCollector CollectContentDependencies(string worldId)
 	{
-		var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-		{
-			NeuralTextureActor.DefaultWeightsFile,
-			NeuralSurfaceSettings.DefaultWeightsFile,
-			AlienBug.DefaultNeuralWeightsFile,
-		};
+		var collector = new ContentDependencyCollector();
+		GeneratedContentReferences.Collect(collector);
 		foreach (var spec in NctTiles.Specs)
 		{
-			referenced.Add(spec.Interior);
+			collector.Add(new ContentRef<NeuralWeightsContent>(spec.Interior), $"NCT tile '{spec.Name}' Interior");
 			if (!string.IsNullOrEmpty(spec.Edge))
-				referenced.Add(spec.Edge);
+				collector.Add(new ContentRef<NeuralWeightsContent>(spec.Edge), $"NCT tile '{spec.Name}' Edge");
 		}
 
 		var worldRoomsPath = Path.Join(RoomsPath, worldId);
 		if (!Directory.Exists(worldRoomsPath))
-			return referenced;
+			return collector;
 
-		string[] fields =
-		[
-			nameof(NeuralTextureActor.WeightsFile),
-			nameof(NeuralTextureActor.WeightsFile1),
-			nameof(NeuralTextureActor.WeightsFile2),
-			nameof(NeuralTextureActor.WeightsFile3),
-			nameof(NeuralSurfaceSettings.NeuralWeightsFile),
-			nameof(Stalker.RigNeuralWeightsFile),
-		];
-		void AddActor(JsonObject actor)
-		{
-			foreach (var field in fields)
-				if (ActorSpecs.ReadResolvedString(actor, field) is { Length: > 0 } value)
-					referenced.Add(value);
-		}
-		foreach (var (_, spec) in ActorSpecs.Specs)
-			AddActor(spec);
+		foreach (var (id, spec) in ActorSpecs.Specs)
+			ActorSpecs.CollectContentReferences(spec, collector, $"actor prefab '{id}'");
 
 		foreach (var file in Directory.EnumerateFiles(worldRoomsPath, "*.json", SearchOption.AllDirectories))
 		{
@@ -441,22 +349,24 @@ public static partial class Assets
 			}
 			catch (Exception exception)
 			{
-				// A room we can't parse might reference anything, so we can't prove a model is
-				// unused. Warn loudly — these are machine-written files, so this signals real
-				// corruption — but keep going.
-				Console.WriteLine($"Warning: could not parse room '{file}' while collecting neural texture references ({exception.Message}); models it uses may be dropped from the pack.");
-				continue;
+				throw new InvalidDataException($"Could not parse room '{file}' while collecting content dependencies.", exception);
 			}
+
+			var room = Path.GetRelativePath(worldRoomsPath, file).Replace(Path.DirectorySeparatorChar, '/');
+			if (root?["backdropSurface"]?.GetValue<string>() is { Length: > 0 } backdrop)
+				collector.Add(new ContentRef<SurfaceContent>(backdrop), $"room '{room}' backdropSurface");
 
 			if (root?["actors"] is not JsonArray actors)
 				continue;
 
-			foreach (var actor in actors)
-				if (actor is JsonObject spec)
-					AddActor(spec);
+			for (var index = 0; index < actors.Count; index++)
+				if (actors[index] is JsonObject spec)
+				{
+					var actor = ActorSpecs.GetActorId(spec) ?? ActorSpecs.GetTypeName(spec) ?? index.ToString();
+					ActorSpecs.CollectContentReferences(spec, collector, $"room '{room}' actor '{actor}'");
+				}
 		}
-
-		return referenced;
+		return collector;
 	}
 
 	static bool ContentZipIncludes(string key, string shaderExtension, string worldId)

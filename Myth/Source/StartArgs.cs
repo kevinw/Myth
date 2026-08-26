@@ -150,7 +150,6 @@ public struct StartArgs
 		headless |= gymCli;
 		if (checkRooms)
 		{
-			headless = true;
 			audio = false;
 		}
 		if (bakeWorldMap)

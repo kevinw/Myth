@@ -22,7 +22,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	[I(4, 64)] public float LaserLightRadius = 24;
 	[I(0, 3)] public float LaserLightIntensity = 1.35f;
 	public Color LaserColor = 0x5fcde4;
-	public string LaserSurfaceId = "";
+	public ContentRef<SurfaceContent> LaserSurfaceId = new("");
 	public string SoundEvent = "lightning_trap";
 
 	const string ChargeTake = "EyeLaserCharge";
@@ -210,7 +210,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 		laser.Range = LaserRange;
 		laser.Thickness = LaserThickness;
 		laser.Color = LaserColor;
-		laser.SurfaceId = string.IsNullOrWhiteSpace(LaserSurfaceId) ? null : LaserSurfaceId;
+		laser.SurfaceId = LaserSurfaceId;
 	}
 
 	void EmitChargeParticles()

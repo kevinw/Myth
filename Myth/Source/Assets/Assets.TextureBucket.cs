@@ -37,6 +37,7 @@ public static partial class Assets
 
 		public BucketTexture? Get(string? key)
 			=> key != null && Textures.TryGetValue(key, out var t) ? t : null;
+		public BucketTexture? Get(ContentRef<VisualTextureContent> reference) => Get(reference.Name);
 
 		public void Dispose()
 		{
@@ -55,6 +56,7 @@ public static partial class Assets
 
 	public static Surface? GetSurface(string? id)
 		=> id != null && Surfaces.TryGetValue(id, out var s) ? s : null;
+	public static Surface? GetSurface(ContentRef<SurfaceContent> reference) => GetSurface(reference.Name);
 
 	internal static void SetSurface(GraphicsDevice gfx, SurfaceSpec spec)
 	{
