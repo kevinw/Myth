@@ -49,3 +49,4 @@ Myth/Platforms/iOS/Native/SDL3.xcframework/macos-arm64_x86_64/SDL3.framework/SDL
 *.so.* filter=lfs diff=lfs merge=lfs -text
 *.fbx filter=lfs diff=lfs merge=lfs -text
 *.glb filter=lfs diff=lfs merge=lfs -text
+*.blend filter=lfs diff=lfs merge=lfs -text

@@ -9,7 +9,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 {
 	enum StepTraversal { None, Up, Down }
 
-	[InspectorGroup("Animation")] public string AnimationName = "Zombie_Walk_Fwd_Loop";
+	[InspectorGroup("Animation")] public string IdleAnimationName = "Zombie_Idle_Loop";
+	public string WalkAnimationName = "Zombie_Walk_Fwd_Loop";
 	public bool Performance;
 	[I(0.1f, 3)] public float PlaybackSpeed = 1;
 	public bool SyncGaitToSpeed = true;
@@ -49,6 +50,24 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool hitReacting;
 	bool recovering;
 	bool walking;
+	bool abilityActive;
+	bool abilityLoop = true;
+	bool abilityFootIK = true;
+	float abilityPlaybackSpeed = 1;
+	float abilityPoseModifierWeight = 1;
+	Vector2? abilityLookTarget;
+	bool scripted;
+	bool scriptedArrived;
+	bool scriptedLoop = true;
+	bool scriptedFootIK = true;
+	float scriptedPlaybackSpeed = 1;
+	float scriptedWait;
+	float scriptedWalkOffsetX;
+	float scriptedStopDistance;
+	float? scriptedWalkTargetX;
+	Actor? scriptedWalkTargetActor;
+	IEnumerator<float>? scriptedRoutine;
+	Game.StorySpeechBubble? scriptedSpeech;
 #if EDITOR
 	internal bool AnimationPreviewEnabled;
 	internal bool AnimationPreviewPaused;
@@ -70,6 +89,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	static float StepDurationPerPixel => 0.016f;
 	static float StepArcHeight => 3f;
 	static float InterruptedStepCatchupSpeed => 80f;
+	static float ScriptWalkTimeout => 10f;
+	static float GreetingDistance => 18f;
 
 	public RigPuppet()
 	{
@@ -94,17 +115,18 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		visual = new(this, Rig, Neural, NeuralReactions);
 		SyncVisual();
-		visual.Initialize(Performance ? AnimationName : "Zombie_Idle_Loop");
+		visual.Initialize(IdleAnimationName);
 	}
 
 	void SyncVisual()
 	{
-		var gaitScale = SyncGaitToSpeed && !Performance && walking && stepTraversal == StepTraversal.None
+		var gaitScale = SyncGaitToSpeed && (!Performance || scripted) && walking && stepTraversal == StepTraversal.None
 			? MathF.Abs(Velocity.X) / WalkSpeed : 1;
-		visual.PlaybackSpeed = PlaybackSpeed * gaitScale;
+		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed : scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset;
-		visual.LookTarget = Game.GetFirst<Player>()?.Position;
+		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
+		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		SyncBackLegRenderer();
 	}
 
@@ -122,8 +144,11 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		backLegRenderer.KeepOnRoomTransition = KeepOnRoomTransition;
 	}
 
-	string LocomotionName()
-		=> visual.TryGetClip(AnimationName, out _) ? AnimationName : "Zombie_Walk_Fwd_Loop";
+	string IdleName()
+		=> visual.TryGetClip(IdleAnimationName, out _) ? IdleAnimationName : "Zombie_Idle_Loop";
+
+	string WalkName()
+		=> visual.TryGetClip(WalkAnimationName, out _) ? WalkAnimationName : "Zombie_Walk_Fwd_Loop";
 
 	public override void Update()
 	{
@@ -135,6 +160,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			return;
 		}
 #endif
+		UpdateScriptRoutine();
 		if (stepTraversal == StepTraversal.None)
 			Velocity.Y += Gravity * Time.Delta;
 		else
@@ -144,8 +170,18 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		if (grounded && Velocity.Y > 0)
 			Velocity.Y = 0;
 
-		walking = !Performance && stepTraversal != StepTraversal.None;
-		if (!Performance && stepTraversal == StepTraversal.None && Game.GetFirst<Player>() is { } player &&
+		var player = Game.GetFirst<Player>();
+		var wasAbilityActive = abilityActive;
+		abilityActive = !Performance && !scripted && !hitReacting && !recovering && player != null &&
+			UpdateAbility(player, grounded);
+		if (wasAbilityActive && !abilityActive)
+			ResetAbilityControl();
+		walking = (!Performance || scripted) && stepTraversal != StepTraversal.None;
+		if (abilityActive)
+			walking = false;
+		else if (scripted)
+			UpdateScriptedMovement(grounded);
+		else if (!Performance && stepTraversal == StepTraversal.None && player != null &&
 			MathF.Abs(player.Position.X - Position.X) > 1)
 		{
 			var desiredFacing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
@@ -163,24 +199,244 @@ public class RigPuppet : Actor, INeuralTextureAgent
 				(walking ? WalkAcceleration : GroundFriction) * Time.Delta);
 		UpdateStepTraversal();
 
-		if (hitReacting && grounded && visual.Time >= visual.ActiveClip.Duration)
+		if (!abilityActive)
 		{
-			hitReacting = false;
-			recovering = true;
-			visual.Play("LayToIdle");
+			if (scripted)
+			{
+				if (walking)
+					visual.Play(WalkName(), seededPhase: Rig.SeedAnimationPhase);
+			}
+			else if (hitReacting && grounded && visual.Time >= visual.ActiveClip.Duration)
+			{
+				hitReacting = false;
+				recovering = true;
+				visual.Play("LayToIdle");
+			}
+			else if (recovering && visual.Time >= visual.ActiveClip.Duration)
+			{
+				recovering = false;
+				visual.Play(IdleName(), seededPhase: Rig.SeedAnimationPhase);
+			}
+			else if (!hitReacting && !recovering)
+				visual.Play(walking ? WalkName() : IdleName(), seededPhase: Rig.SeedAnimationPhase);
 		}
-		else if (recovering && visual.Time >= visual.ActiveClip.Duration)
-		{
-			recovering = false;
-			visual.Play(Performance ? LocomotionName() : "Zombie_Idle_Loop", seededPhase: Rig.SeedAnimationPhase);
-		}
-		else if (!hitReacting && !recovering)
-			visual.Play(Performance || walking ? LocomotionName() : "Zombie_Idle_Loop", seededPhase: Rig.SeedAnimationPhase);
 
 		SyncVisual();
-		visual.Update(grounded, !Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
-			loop: !hitReacting && !recovering);
+		visual.Update(grounded,
+			abilityActive ? abilityFootIK : scripted ? scriptedFootIK :
+				!Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
+			loop: abilityActive ? abilityLoop : scripted ? scriptedLoop : !hitReacting && !recovering);
 	}
+
+	protected virtual bool UpdateAbility(Player player, bool grounded) => false;
+	protected virtual void InterruptAbility() { }
+
+	protected bool RigFacingMatches => visual.FacingMatches;
+	protected Vector2 RigEyePosition => visual.EyeWorldPosition;
+	protected Vector2 RigEyeOffset => visual.EyeOffset;
+	protected bool AbilityAnimationFinished => visual.AnimationFinished;
+	protected float AbilityAnimationProgress => Math.Clamp(
+		(visual.Time - visual.RangeStart) / MathF.Max(0.0001f, visual.RangeEnd - visual.RangeStart), 0, 1);
+
+	protected void PlayAbilityIdle()
+	{
+		abilityLoop = abilityFootIK = true;
+		abilityPlaybackSpeed = PlaybackSpeed;
+		visual.Play(IdleName());
+	}
+
+	protected void PlayAbilityTake(string name, float blendDuration = 0.2f)
+	{
+		var take = RigTakes.Get(name);
+		abilityLoop = take.Loop;
+		abilityFootIK = take.FootIK;
+		abilityPlaybackSpeed = take.Speed;
+		visual.Play(take, blendDuration);
+		if (!take.FootIK)
+			visual.ResetFeet();
+	}
+
+	protected void SetAbilityLookTarget(Vector2? target) => abilityLookTarget = target;
+	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
+
+	void ResetAbilityControl()
+	{
+		abilityLoop = abilityFootIK = true;
+		abilityPlaybackSpeed = PlaybackSpeed;
+		abilityPoseModifierWeight = 1;
+		abilityLookTarget = null;
+		visual.PoseModifierWeight = 1;
+	}
+
+	void UpdateScriptedMovement(bool grounded)
+	{
+		if (scriptedWalkTargetActor != null)
+			scriptedWalkTargetX = scriptedWalkTargetActor.Position.X + scriptedWalkOffsetX;
+		if (scriptedWalkTargetX is not { } target)
+			return;
+
+		var distance = target - Position.X;
+		if (MathF.Abs(distance) <= scriptedStopDistance && stepTraversal == StepTraversal.None)
+		{
+			scriptedWalkTargetActor = null;
+			scriptedWalkTargetX = null;
+			scriptedArrived = true;
+			walking = false;
+			Velocity.X = 0;
+			return;
+		}
+
+		Facing = distance < 0 ? Signs.Negative : Signs.Positive;
+		if (stepTraversal == StepTraversal.None && visual.FacingMatches && grounded)
+		{
+			walking = HasGroundAhead();
+			if (!walking)
+				TryStartStepDown((int)Facing);
+		}
+	}
+
+	void UpdateScriptRoutine()
+	{
+		if (scriptedRoutine == null)
+			return;
+		if (scriptedWait > 0)
+		{
+			scriptedWait -= Time.Delta;
+			return;
+		}
+		if (scriptedRoutine.MoveNext())
+			scriptedWait = scriptedRoutine.Current;
+		else
+			EndScript();
+	}
+
+	public void BeginScript()
+	{
+		if (scripted)
+			return;
+		if (abilityActive)
+		{
+			InterruptAbility();
+			abilityActive = false;
+			ResetAbilityControl();
+		}
+		scripted = true;
+		scriptedPlaybackSpeed = PlaybackSpeed;
+		hitReacting = recovering = false;
+	}
+
+	public void StartScript(IEnumerator<float> routine)
+	{
+		ArgumentNullException.ThrowIfNull(routine);
+		EndScript();
+		BeginScript();
+		scriptedRoutine = routine;
+	}
+
+	public void EndScript()
+	{
+		if (!scripted && scriptedRoutine == null)
+			return;
+		scriptedRoutine?.Dispose();
+		scriptedRoutine = null;
+		Game.CancelSpeech(scriptedSpeech);
+		scriptedSpeech = null;
+		scripted = false;
+		scriptedWait = 0;
+		scriptedWalkTargetActor = null;
+		scriptedWalkTargetX = null;
+		scriptedArrived = false;
+		scriptedLoop = true;
+		scriptedFootIK = true;
+		scriptedPlaybackSpeed = PlaybackSpeed;
+		walking = false;
+		Velocity.X = 0;
+		visual?.Play(IdleName());
+	}
+
+	public void WalkTo(Point2 target, float stoppingDistance = 2)
+	{
+		BeginScript();
+		scriptedWalkTargetActor = null;
+		scriptedWalkTargetX = target.X;
+		BeginScriptWalk(stoppingDistance);
+	}
+
+	public void WalkTo(Actor target, float offsetX = 0, float stoppingDistance = 2)
+	{
+		BeginScript();
+		scriptedWalkTargetActor = target;
+		scriptedWalkOffsetX = offsetX;
+		scriptedWalkTargetX = target.Position.X + offsetX;
+		BeginScriptWalk(stoppingDistance);
+	}
+
+	void BeginScriptWalk(float stoppingDistance)
+	{
+		scriptedStopDistance = Math.Max(0, stoppingDistance);
+		scriptedArrived = false;
+		scriptedLoop = true;
+		scriptedFootIK = true;
+		scriptedPlaybackSpeed = PlaybackSpeed;
+		visual.Play(WalkName(), seededPhase: Rig.SeedAnimationPhase);
+	}
+
+	public void PlayTake(string name, float blendDuration = 0.2f)
+	{
+		BeginScript();
+		var take = RigTakes.Get(name);
+		scriptedWalkTargetActor = null;
+		scriptedWalkTargetX = null;
+		scriptedArrived = false;
+		scriptedLoop = take.Loop;
+		scriptedFootIK = take.FootIK;
+		scriptedPlaybackSpeed = take.Speed;
+		walking = false;
+		Velocity.X = 0;
+		visual.Play(take, blendDuration);
+		if (!take.FootIK)
+			visual.ResetFeet();
+	}
+
+	public bool AnimationFinished => visual.AnimationFinished;
+	public bool ScriptedArrived => scriptedArrived;
+
+	public void GreetPlayer(string text)
+		=> StartScript(WalkToPlayerKneelAndSay(text));
+
+	public IEnumerator<float> WalkToPlayerKneelAndSay(string text)
+	{
+		Player? player;
+		while ((player = Game.GetFirst<Player>()) == null)
+			yield return 0;
+
+		var side = Position.X < player.Position.X ? -1 : 1;
+		WalkTo(player, side * GreetingDistance);
+		var timeout = ScriptWalkTimeout;
+		while (!ScriptedArrived && timeout > 0)
+		{
+			timeout -= Time.Delta;
+			yield return 0;
+		}
+		if (!ScriptedArrived)
+			yield break;
+		Facing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
+
+		PlayTake("KneelDown");
+		while (!AnimationFinished)
+			yield return 0;
+
+		while (!Game.CanShowSpeech())
+			yield return 0;
+		scriptedSpeech = Say(text);
+		while (scriptedSpeech is { Finished: false })
+			yield return 0;
+		scriptedSpeech = null;
+	}
+
+	internal Game.StorySpeechBubble? Say(string text)
+		=> Game.ShowSpeech(this, new Vector2(0, -44), text, Game.PlayerVoiceProfile, Color.White,
+			voice: Game.PlayerVoiceName);
 
 	void EnsureState()
 	{
@@ -202,11 +458,20 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		get => visual.Time;
 		set => visual.Time = value;
 	}
+	internal float AnimationPreviewStart => visual.RangeStart;
+	internal float AnimationPreviewEnd => visual.RangeEnd;
 
 	internal void BeginAnimationPreview()
 	{
 		if (AnimationPreviewEnabled)
 			return;
+		EndScript();
+		if (abilityActive)
+		{
+			InterruptAbility();
+			abilityActive = false;
+			ResetAbilityControl();
+		}
 		AnimationPreviewEnabled = true;
 		AnimationPreviewClipIndex = 0;
 		for (var i = 0; i < visual.Clips.Count; i++)
@@ -229,7 +494,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			return;
 		AnimationPreviewEnabled = false;
 		AnimationPreviewPaused = false;
-		visual.Play("Zombie_Idle_Loop");
+		visual.Play(IdleName());
 	}
 
 	internal void PreviewAnimation(int index)
@@ -237,6 +502,20 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		AnimationPreviewClipIndex = Math.Clamp(index, 0, visual.Clips.Count - 1);
 		visual.Play(AnimationPreviewClip.Name, AnimationPreviewBlend, restart: true);
 		visual.ResetFeet();
+	}
+
+	internal void PreviewTake(RigTake take)
+	{
+		for (var i = 0; i < visual.Clips.Count; i++)
+			if (string.Equals(visual.Clips[i].Name, take.Clip, StringComparison.OrdinalIgnoreCase))
+			{
+				AnimationPreviewClipIndex = i;
+				break;
+			}
+		AnimationPreviewLooping = take.Loop;
+		PlaybackSpeed = take.Speed;
+		SetAnimationPreviewIK(take.FootIK);
+		visual.Play(take, AnimationPreviewBlend ? 0.2f : 0);
 	}
 
 	internal void SetAnimationPreviewIK(bool enabled)
@@ -320,7 +599,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		Velocity = Vector2.Zero;
 		walking = true;
 		visual.ResetFeet();
-		visual.Play(LocomotionName(), seededPhase: Rig.SeedAnimationPhase);
+		visual.Play(WalkName(), seededPhase: Rig.SeedAnimationPhase);
 	}
 
 	void UpdateStepTraversal()
@@ -348,6 +627,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	public override void Destroyed()
 	{
+		if (abilityActive)
+			InterruptAbility();
+		EndScript();
 		visual?.Dispose();
 		if (backLegRenderer != null)
 			Game.Destroy(backLegRenderer);
@@ -360,8 +642,14 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		if (AnimationPreviewEnabled)
 			return;
 #endif
-		if (Health <= 0)
+		if (scripted || Health <= 0)
 			return;
+		if (abilityActive)
+		{
+			InterruptAbility();
+			abilityActive = false;
+			ResetAbilityControl();
+		}
 		Health--;
 		if (Health <= 0)
 		{

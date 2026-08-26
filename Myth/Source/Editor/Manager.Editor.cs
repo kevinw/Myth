@@ -4128,7 +4128,8 @@ public partial class Manager
 			var ctrlClick =
 				Input.Mouse.LeftPressed &&
 				(Input.Keyboard.Down(Keys.LeftControl) || Input.Keyboard.Down(Keys.RightControl));
-			if (!editingRoomGeometry && !worldMouseBlocked && overGame && Input.Mouse.RightPressed && hoveredActorIndex >= 0)
+			if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame &&
+				Input.Mouse.RightPressed && hoveredActorIndex >= 0)
 			{
 				var contextActor = hoveredPathPoint >= 0 ? selectedRoomActorIndex : hoveredActorIndex;
 				var contextPoint = hoveredPathPoint >= 0 ? hoveredPathPoint

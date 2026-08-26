@@ -135,7 +135,7 @@
       "Id": "9797c839c06fe944",
       "Type": "RigPuppet",
       "Position": [144, 72],
-      "AnimationName": "Pose2Sim_Performance",
+      "IdleAnimationName": "Pose2Sim_Performance",
       "Performance": true,
       "VisualFPS": 11.688,
       "ProjectionYaw": -6.522

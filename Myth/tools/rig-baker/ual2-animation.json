@@ -1,0 +1,15 @@
+{
+  "skeleton": {
+    "filename": "../ual2/skeleton.ozz",
+    "import": {
+      "enable": false
+    }
+  },
+  "animations": [
+    {
+      "clip": "*",
+      "filename": "*.ozz",
+      "sampling_rate": 30
+    }
+  ]
+}

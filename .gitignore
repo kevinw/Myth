@@ -24,3 +24,4 @@ Myth/Platforms/Web/Native/cimgui-build
 Myth/profile-output
 tmp
 profile-output
+*.blend1

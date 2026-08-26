@@ -1547,6 +1547,8 @@ public sealed partial class GameView
 		gpuSegmentScratch.Clear();
 		foreach (var actor in Actors)
 		{
+			if (actor is SporeFogVolume fog)
+				renderer.AddSporeFogVolume(fog.WorldRect, fog.Strength, fog.Feather);
 			if (actor is DualGrid { Layer: Factory.TileLayer.Foreground } dualGrid)
 				dualGrid.AppendAllShadowSegments(gpuSegmentScratch);
 			if (actor is HiddenCoverGrid hiddenCover)
