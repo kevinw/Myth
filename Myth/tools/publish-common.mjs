@@ -1,6 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// FMOD opens banks by real path, so the Desktop banks ship as loose files beside
+// Content.zip rather than inside it. Timestamps carry over: tools/deploy-deck.sh rsyncs the
+// result, and fresh mtimes would resend every bank on every publish.
+export function copyDesktopFmodBanks(root, destAssets) {
+  const rel = path.join("Sounds", "FMOD", "Build", "Desktop");
+  const bankDir = path.join(root, "Assets", rel);
+  fs.mkdirSync(path.join(destAssets, rel), { recursive: true });
+  for (const bank of fs.readdirSync(bankDir))
+    if (bank.endsWith(".bank") && !bank.startsWith("."))
+      fs.cpSync(path.join(bankDir, bank), path.join(destAssets, rel, bank), { preserveTimestamps: true });
+}
+
 export function checkFmodBankMtimes(root, platform) {
   return; // This needs a rethink. Not all banks get rebuilt; FMOD is "smart" about changes.
 

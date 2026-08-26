@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkFmodBankMtimes } from "./publish-common.mjs";
+import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outRoot = path.join(root, "bin", "publish");
@@ -39,6 +39,8 @@ run("dotnet", ["run", "--project", "Myth.csproj", "--",
   "--content-world", "Myth",
 ]);
 
+// No --check-rooms pass when cross-building: it loads the target's shaders out of the zip,
+// which a macOS host cannot create a pipeline from.
 run("dotnet", [
   "publish", "Myth.csproj",
   "-c", "Release",
@@ -50,27 +52,16 @@ run("dotnet", [
 ]);
 
 // The game dir is the executable, the shared libraries it dlopens, and content. The AOT
-// publish also drops Myth.dbg (26 MB of symbols); it stays behind.
+// publish also drops Myth.dbg (26 MB of symbols); it stays behind. Timestamps carry over so
+// deploy-deck.sh only resends what actually changed.
+const copy = (src, dest) => fs.cpSync(src, dest, { preserveTimestamps: true });
 fs.rmSync(gameDir, { recursive: true, force: true });
 fs.mkdirSync(path.join(gameDir, "Assets"), { recursive: true });
 for (const entry of fs.readdirSync(publishDir))
   if (entry === "Myth" || entry.includes(".so"))
-    fs.copyFileSync(path.join(publishDir, entry), path.join(gameDir, entry));
-fs.chmodSync(path.join(gameDir, "Myth"), 0o755);
-fs.copyFileSync(contentZip, path.join(gameDir, "Assets", "Content.zip"));
-fs.copyFileSync(acknowledgements, path.join(gameDir, "ACKNOWLEDGEMENTS.txt"));
-
-// FMOD opens banks by real path, so they ship as loose files rather than in the zip.
-const assetsRoot = path.join(root, "Assets");
-for (const entry of fs.readdirSync(assetsRoot, { recursive: true, withFileTypes: true })) {
-  if (!entry.isFile()) continue;
-  const rel = path.relative(assetsRoot, path.join(entry.parentPath, entry.name));
-  if (rel.split(path.sep).some((part) => part.startsWith(".")) ||
-      !rel.startsWith(path.join("Sounds", "FMOD", "Build", "Desktop") + path.sep) ||
-      !rel.endsWith(".bank")) continue;
-  const dest = path.join(gameDir, "Assets", rel);
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.copyFileSync(path.join(assetsRoot, rel), dest);
-}
+    copy(path.join(publishDir, entry), path.join(gameDir, entry));
+copy(contentZip, path.join(gameDir, "Assets", "Content.zip"));
+copy(acknowledgements, path.join(gameDir, "ACKNOWLEDGEMENTS.txt"));
+copyDesktopFmodBanks(root, path.join(gameDir, "Assets"));
 
 console.log(`\nBuilt unsigned Linux x64 release: ${gameDir}`);

@@ -335,13 +335,11 @@
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/MinSizeRel/myth_ozz.dll</OzzRuntimeLibrary>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('Linux')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64')">
+  <!-- A Linux RID targets Linux from any host; a bare RID means whatever the host is.
+       Building it from elsewhere hands the RID to the CMake toolchain as a cross target. -->
+  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And ('$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64' Or ($([MSBuild]::IsOSPlatform('Linux')) And '$(RuntimeIdentifier)' == ''))">
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.so</OzzRuntimeLibrary>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' == 'linux-x64'">
-    <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.so</OzzRuntimeLibrary>
-    <OzzRuntimeCrossTarget>linux-x64</OzzRuntimeCrossTarget>
+    <OzzRuntimeCrossTarget Condition="!$([MSBuild]::IsOSPlatform('Linux'))">$(RuntimeIdentifier)</OzzRuntimeCrossTarget>
   </PropertyGroup>
 
   <Target Name="BuildOzzRuntime"

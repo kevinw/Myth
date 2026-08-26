@@ -21,7 +21,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkFmodBankMtimes } from "./publish-common.mjs";
+import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const rid = process.arch === "arm64" ? "osx-arm64" : "osx-x64";
@@ -88,22 +88,9 @@ for (const entry of fs.readdirSync(publishDir))
 // just Content.zip (everything the game reads through Assets.Content) plus the built
 // Desktop FMOD banks as loose files — FMOD opens banks by real path, so they can't
 // live inside the zip.
-function assetShips(rel) {
-  if (rel.split(path.sep).some((part) => part.startsWith("."))) return false;
-  return rel.startsWith(path.join("Sounds", "FMOD", "Build", "Desktop") + path.sep) && rel.endsWith(".bank");
-}
-
-const assetsRoot = path.join(root, "Assets");
 fs.mkdirSync(path.join(resources, "Assets"), { recursive: true });
 fs.copyFileSync(contentZip, path.join(resources, "Assets", "Content.zip"));
-for (const entry of fs.readdirSync(assetsRoot, { recursive: true, withFileTypes: true })) {
-  if (!entry.isFile()) continue;
-  const rel = path.relative(assetsRoot, path.join(entry.parentPath, entry.name));
-  if (!assetShips(rel)) continue;
-  const dest = path.join(resources, "Assets", rel);
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.copyFileSync(path.join(assetsRoot, rel), dest);
-}
+copyDesktopFmodBanks(root, path.join(resources, "Assets"));
 fs.copyFileSync(acknowledgements, path.join(resources, "ACKNOWLEDGEMENTS.txt"));
 
 // Icon: AppIcon.png -> AppIcon.icns via sips/iconutil.

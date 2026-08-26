@@ -9,21 +9,22 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const mythDir = path.resolve(scriptDir, "../..");
 const buildDir = path.resolve(process.argv[2] ?? path.join(mythDir, "obj", "ozz-runtime"));
 const windows = process.platform === "win32";
-// Optional cross target, from Myth.csproj when publishing the Linux game on macOS.
-// llvm's ar/ranlib are required, not preferred: Apple's index ELF archives as empty, and
-// the linker then silently drops most of Ozz, leaving a .so that only fails at dlopen.
-const llvm = "/opt/homebrew/opt/llvm/bin";
-const cross = process.argv[3] === "linux-x64" ? [
+// Optional cross target (a RID), passed by Myth.csproj when the host isn't the target.
+// ar/ranlib have to be llvm's: Apple's index ELF archives as empty, and the linker then
+// drops most of Ozz into a .so that only fails at dlopen.
+const target = process.argv[3];
+if (target && target !== "linux-x64")
+	throw new Error(`No cross toolchain for ${target}; tools/linux-cross-cc.sh targets linux-x64.`);
+const brewLlvm = "/opt/homebrew/opt/llvm/bin";
+const llvmTool = (name) => fs.existsSync(`${brewLlvm}/${name}`) ? `${brewLlvm}/${name}` : name;
+const cross = target ? [
 	"-DCMAKE_SYSTEM_NAME=Linux",
 	"-DCMAKE_SYSTEM_PROCESSOR=x86_64",
 	`-DCMAKE_C_COMPILER=${path.join(mythDir, "tools", "linux-cross-cc.sh")}`,
 	`-DCMAKE_CXX_COMPILER=${path.join(mythDir, "tools", "linux-cross-cxx.sh")}`,
-	`-DCMAKE_AR=${llvm}/llvm-ar`,
-	`-DCMAKE_RANLIB=${llvm}/llvm-ranlib`,
+	`-DCMAKE_AR=${llvmTool("llvm-ar")}`,
+	`-DCMAKE_RANLIB=${llvmTool("llvm-ranlib")}`,
 ] : [];
-
-if (cross.length && !fs.existsSync(`${llvm}/llvm-ar`))
-	throw new Error(`Cross-building the Ozz runtime needs llvm-ar in ${llvm} — run: brew install llvm`);
 
 function run(args) {
 	execFileSync("cmake", args, { stdio: "inherit" });
