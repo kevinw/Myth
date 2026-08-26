@@ -33,6 +33,9 @@ public partial class Manager
 
 	bool UpdateLiveRoomEditing(Game liveGame, bool inputBlocked)
 	{
+		if (AttractMode) // the attract demo isn't an editable session
+			return false;
+
 		if (!inputBlocked && debugControls.ToggleLiveRoomEditing.Pressed)
 			ToggleLiveRoomEditing();
 		if (!inputBlocked && LiveRoomEditingControllerTogglePressed())
@@ -103,7 +106,7 @@ public partial class Manager
 
 	void LiveRoomEditingImGui()
 	{
-		if (!playing || imgui == null)
+		if (!playing || AttractMode || imgui == null)
 			return;
 
 		if (liveCreateRoomTiles is { } proposal)
@@ -112,7 +115,7 @@ public partial class Manager
 
 	void LiveRoomEditingMenuImGui()
 	{
-		if (!playing)
+		if (!playing || AttractMode)
 			return;
 		if (liveCreateRoomPopupRequested)
 		{

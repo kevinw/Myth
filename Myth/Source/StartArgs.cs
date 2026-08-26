@@ -29,6 +29,9 @@ public struct StartArgs
 	// (--bake-world-map). Needs a real graphics device, so it runs windowed rather than
 	// through the headless --build-asset-pack.
 	public bool bakeWorldMap;
+	// Boot straight to the title screen even in editor builds (which normally open the editor),
+	// so the attract demo can be tested without a shipped build (--title).
+	public bool title;
 	public bool useAssetPack;
 	public string? assetPackPath;
 	// Load bundled content from this zip instead of the Assets folder (--content-zip).
@@ -89,6 +92,7 @@ public struct StartArgs
 				case "--aspect-four-three": aspectFourThree = true; break;
 				case "--no-warmup": noWarmup = true; break;
 				case "--play": play = true; break;
+				case "--title": title = true; break;
 				case "--bake-world-map": bakeWorldMap = true; break;
 
 				case "--max-frames":

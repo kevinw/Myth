@@ -78,6 +78,11 @@ public partial class Manager : App
 	internal event Action<Manager>? ScenarioUpdate;
 	internal event Action<Manager>? ScenarioRender;
 	bool playOnStartup;
+	readonly bool startAtTitle;
+	bool titleAttractMode; // --title: hold "play mode" at the title so editor builds don't draw the editor
+	// The attract demo runs with playing==true; live editing/ tooling must treat this as "not a real
+	// play session" and stay out of it.
+	bool AttractMode => attract != null || titleAttractMode;
 	readonly bool skipStartupMenu;
 	readonly bool checkRooms;
 	bool startingPlay;
@@ -295,6 +300,7 @@ public partial class Manager : App
 		maxTimeSeconds = args.maxTimeSeconds;
 		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
+		startAtTitle = args.title;
 		noWarmup = args.noWarmup;
 		skipStartupMenu = args.play || args.gym || args.headless || args.checkRooms;
 		screenshotPath = args.screenshotPath;
@@ -564,6 +570,13 @@ public partial class Manager : App
 		else
 			playOnStartup = true; // explicit play/test runs still boot straight into play
 #endif
+		if (startAtTitle) // --title: force the title screen even in editor builds
+		{
+			playOnStartup = false;
+			ShowTitleMenu();
+			titleAttractMode = true; // treat the title as play mode so the editor UI stays hidden
+			playing = true;
+		}
 		if (playOnStartup)
 			StartGame(immediate: playRoomId != null);
 #if !BROWSER
@@ -1166,11 +1179,18 @@ public partial class Manager : App
 		)
 			UpdateGameMenuInput();
 
+		UpdateAttract();
+
 		var gameMenuPausesGame = GameMenuPausesGame;
 
 #if EDITOR
-		if (!gameMenuPausesGame && ToggleEditorPressed(keyboardShortcutsBlocked))
-			ToggleGame();
+		if (ToggleEditorPressed(keyboardShortcutsBlocked))
+		{
+			if (titleAttractMode || attract != null)
+				ExitAttractToEditor(); // Tab at the title demo → stop replay, leave title mode, edit
+			else if (!gameMenuPausesGame)
+				ToggleGame();
+		}
 #endif
 
 #if !EDITOR
@@ -1266,10 +1286,22 @@ public partial class Manager : App
 									if (keyboardShortcutsBlocked)
 										controls.Clear();
 #endif
+									replay?.DriveBeforeUpdate(g);
 									using (PerfStats.Time(PerfDetail.GameUpdate))
 										UpdateGameWithAllocationProfile(g);
 								}
 								CompleteGameFrame();
+								if (replay is { } rp)
+								{
+									rp.DriveAfterUpdate();
+									if (rp.Done)
+									{
+										if (attract is { } reel) { reel.Advance(); PlayAttractCurrent(); }
+										else StartReplay(rp.Clip); // loop the single clip
+									}
+									else if (attract == null && rp.Cursor % 5 == 0)
+										game?.DisplayMessage($"replay frame {rp.Cursor}", 0.25f, print: false); // authoring readout
+								}
 							}
 					}
 				}
@@ -1381,6 +1413,9 @@ public partial class Manager : App
 
 	void CompleteGameFrame()
 	{
+#if DEBUG
+		game?.Recorder.Tick();
+#endif
 		if (maxFrames != int.MaxValue && ++completedGameFrames >= maxFrames)
 			Exit();
 	}
@@ -1542,6 +1577,10 @@ public partial class Manager : App
 					ToggleBudAI();
 			}
 			if (debugControls.MovieRecording.Pressed) ToggleMovieRecording(Input.Keyboard.Shift);
+#if DEBUG
+			if (debugControls.RecordReplay.Pressed) game?.Recorder.Toggle();
+#endif
+			if (debugControls.PlayReplay.Pressed) { if (Input.Keyboard.Shift) ToggleAttract(); else ToggleReplay(); }
 		}
 #endif
 
@@ -1702,7 +1741,7 @@ public partial class Manager : App
 		if (startingPlay)
 			RenderPlayTransition();
 		else if (playing)
-			game?.Render((RectInt)(GameViewRect * Scale), showHud: true);
+			game?.Render((RectInt)(GameViewRect * Scale), showHud: attract == null); // no gameplay HUD behind the title
 		else {
 			#if !EDITOR
 			// we render an in progress game
@@ -1995,6 +2034,167 @@ public partial class Manager : App
 			FlushSaveState();
 	}
 
+	// Playback is available in all builds (the title-screen demo ships in Release); only recording
+	// (ReplayRecorder, F7) is dev-only.
+	ReplayPlayer? replay;
+	AttractReel? attract;
+
+	// F8: play the newest recorded clip (dev convenience). Toggles off if already playing.
+	void ToggleReplay()
+	{
+		if (replay != null) { StopReplay(); return; }
+		if (ReplayPlayer.NewestClipPath(UserPath) is not { } path)
+		{
+			game?.DisplayMessage("No replays recorded");
+			return;
+		}
+		try { StartReplay(ReplayClip.Load(path)); }
+		catch (Exception e) { game?.DisplayMessage($"Replay load failed: {e.Message}"); }
+	}
+
+	// Shift+F8: play the authored attract playlist (Assets/Attract/attract.json), looping.
+	void ToggleAttract()
+	{
+		if (attract != null) { attract = null; StopReplay(); return; }
+		attract = AttractReel.Load();
+		if (attract == null) { game?.DisplayMessage("Attract playlist empty or missing"); return; }
+		PlayAttractCurrent();
+	}
+
+	void PlayAttractCurrent()
+	{
+		var entry = attract!.Current;
+		if (string.IsNullOrWhiteSpace(entry.Clip))
+		{
+			DisplayMessage("Attract entry is missing a 'clip' name");
+			attract = null;
+			return;
+		}
+		try
+		{
+			var clip = AttractReel.LoadClip(entry.Clip);
+			clip.VisibleFromFrame = entry.Start;
+			StartReplay(clip, entry.End);
+		}
+		catch (Exception e)
+		{
+			DisplayMessage($"Attract clip '{entry.Clip}' failed: {e.Message}");
+			attract = null;
+		}
+	}
+
+	void StartReplay(ReplayClip clip, int playUntil = -1)
+	{
+		if (Assets.GetRoom(clip.RoomId) is not { } room)
+		{
+			game?.DisplayMessage($"Replay room not found: {clip.RoomId}");
+			replay = null;
+			return;
+		}
+		game?.Dispose();
+		game = new Game(this, room, spawnFallbackPlayer: true,
+			initialPlayerPosition: clip.Start.Position, save: SaveState.FromJsonString(clip.SaveJson));
+		if (game.GetFirst<Player>() is { } player)
+			clip.Start.ApplyTo(player);
+		game.RngSeed = clip.Seed;
+		replay = new ReplayPlayer(clip, playUntil);
+
+		// Fast-forward warmup: silently re-simulate frames 0..VisibleFromFrame so the visible
+		// playback begins mid-action in a fully-correct sim state. AudioMuted (not Simulating,
+		// which would diverge the RNG stream) keeps the burst silent; no render happens here.
+		if (clip.VisibleFromFrame > 0)
+		{
+			var wasMuted = game.AudioMuted;
+			game.AudioMuted = true;
+			var target = Math.Min(clip.VisibleFromFrame, clip.Frames.Count);
+			for (var i = 0; i < target; i++)
+			{
+				replay.DriveBeforeUpdate(game);
+				game.Update(controls);
+				replay.DriveAfterUpdate();
+			}
+			game.AudioMuted = wasMuted;
+			game.SnapCameraToGameplayTarget();
+		}
+
+		playing = true;
+		startingPlay = false;
+		gameEase = 1f;
+		game.DisplayMessage($"Replay: {clip.RoomId} ({clip.Frames.Count}f{(clip.VisibleFromFrame > 0 ? $", from {clip.VisibleFromFrame}" : "")})");
+	}
+
+	void StopReplay()
+	{
+		replay = null;
+		attract = null;
+		if (game?.GetFirst<Player>() is { } player)
+			player.ScriptedInput = null;
+		game?.EndReplayClock();
+		game?.DisplayMessage("Replay: stopped");
+	}
+
+	// Seconds of no input on the title before the attract demo starts. 0 = immediately.
+	static float AttractIdleSeconds => 0f;
+	// When true, any input stops the demo (arcade attract). When false (default), the demo keeps
+	// playing behind the title so you can navigate the menu over it. (Tab-to-editor always exits.)
+	static bool AttractInterruptOnInput => false;
+	float titleIdleTimer;
+	bool attractUnavailable; // playlist missing/empty this title visit; don't re-load every frame
+
+	// Runs the attract reel behind the title: start it after the idle timeout; optionally dismiss on input.
+	void UpdateAttract()
+	{
+		if (gameMenuPage != GameMenuPage.Title)
+		{
+			titleIdleTimer = 0;
+			attractUnavailable = false;
+			return;
+		}
+		var interrupt = AttractInterruptOnInput && AttractInterrupted();
+		if (attract != null)
+		{
+			if (interrupt) { StopAttract(); titleIdleTimer = 0; }
+			return;
+		}
+		if (attractUnavailable) return;
+		if (interrupt) { titleIdleTimer = 0; return; }
+		titleIdleTimer += Time.Delta;
+		if (titleIdleTimer >= AttractIdleSeconds) StartAttract();
+	}
+
+	// Tab (or right-stick) while the attract demo is up: stop it, leave title/play mode, and drop
+	// into the editor as usual.
+	void ExitAttractToEditor()
+	{
+		titleAttractMode = false;
+		StopAttract();     // disposes the demo game; playing = titleAttractMode (now false)
+		CloseGameMenu();   // leave the title menu so the editor is visible
+	}
+
+	void StartAttract()
+	{
+		attract = AttractReel.Load();
+		if (attract == null) { attractUnavailable = true; return; }
+		PlayAttractCurrent();
+	}
+
+	void StopAttract()
+	{
+		replay = null;
+		attract = null;
+		game?.EndReplayClock();
+		game?.Dispose();
+		game = null;
+		playing = titleAttractMode; // stay in play mode at the title (--title) so the editor stays hidden
+	}
+
+	bool AttractInterrupted()
+		=> Input.Mouse.Delta != default
+		|| Input.Mouse.Down(MouseButtons.Left) || Input.Mouse.Down(MouseButtons.Right)
+		|| controls.Move.IntValue != Point2.Zero
+		|| controls.Jump.Down || controls.Dash.Down || controls.Attack.Down || controls.Map.Down
+		|| Input.Keyboard.Down(Keys.Enter, Keys.Space, Keys.Escape);
+
 	internal void FlushSaveState()
 	{
 		if (!saveDirty)
@@ -2009,6 +2209,9 @@ public partial class Manager : App
 
 	void StartGame(bool immediate = false)
 	{
+		replay = null; // never let attract/replay drive a real play session
+		attract = null;
+		titleAttractMode = false;
 #if EDITOR
 		ClearEditorStateForEnteringPlayMode();
 #endif

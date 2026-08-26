@@ -441,7 +441,9 @@ public partial class Manager
 		if (!GameMenuOpen || Window == null)
 			return;
 
-		if (previewTarget != null)
+		// The glitched room snapshot is the title backdrop when nothing else plays behind it; the
+		// attract demo (a live game rendered before this) takes precedence when it's running.
+		if (previewTarget != null && attract == null)
 		{
 			batcher.PushMatrix(MenuMatrix);
 			batcher.Image(previewTarget, Vector2.Zero, Color.White);

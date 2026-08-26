@@ -1,4 +1,11 @@
+- chain roll attack into a hop 
+- try player tiny second hop
+- the generic Pop is starting to feel a bit overused/generic
+  - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
+- dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
+- dotnet 11
+- improve editor spawn pick player location: not in a reveal door (burrow_secret)
 
 # pseudoregalia
 - it's VERY fun to have two little jumps after the main jump. wiggle room + expressivity.
@@ -138,6 +145,7 @@ steam notes
 - Change Content.zip extension and add some simple byte level change
 - a debug hotkey for switching back to the previous version of a shader after a change for A/B testing them live and visually
 - windows Myth.exe doesn't have an icon
+- see if there's a "free" or lightweight way to coalesce a bunch of ValueStringBuilder.Appends at compile time
 
 - fmod 2.4 will have better browser perf
 

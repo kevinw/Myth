@@ -61,6 +61,9 @@ public partial class Manager
 
 	bool UpdateLiveActorEditing(Game liveGame, bool inputBlocked)
 	{
+		if (AttractMode) // the attract demo isn't an editable session
+			return false;
+
 		if (liveTileBrushArmed)
 			return true;
 
@@ -486,7 +489,7 @@ public partial class Manager
 
 	void LiveActorEditingImGui()
 	{
-		if (!playing || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
+		if (!playing || AttractMode || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
 			return;
 
 		TryGetSelectedLiveActor(game, runtimeRoom, out var selected, out var selectedRoom, out var selectedJson);
@@ -538,8 +541,6 @@ public partial class Manager
 		label.Append(", ");
 		label.Append(local.Y);
 		label.Append(')');
-		if (hasHovered)
-			label.Append("  ·  double-click to inspect");
 		DebugOverlayLabelImGui(
 			"LiveActorEditingStatus",
 			viewport.TopLeft + new Vector2(viewport.Width * 0.5f, viewport.Height - 6),

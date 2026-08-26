@@ -131,6 +131,9 @@ public partial class Game : IDisposable
 	// own Random.Shared and stays out of this stream.
 	internal Rng rng = new();
 	internal ulong RngSeed { get => rng.Seed; set => rng = new Rng(value); }
+#if DEBUG
+	internal readonly ReplayRecorder Recorder = null!;
+#endif
 	internal Cutscene? ActiveCutscene;
 
 
@@ -374,6 +377,10 @@ public partial class Game : IDisposable
 	{
 		rewinder = new(this);
 		Manager = manager;
+#if DEBUG
+		Recorder = new ReplayRecorder(this);
+		RoomChanged += Recorder.OnRoomChanged;
+#endif
 		UseSaveState(save ?? new());
 		AudioEventsEnabled = audioEventsEnabled && Manager.AudioEnabled;
 		// A previous Game (the prior gym run) may hand off its still-playing

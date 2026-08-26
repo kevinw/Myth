@@ -11,7 +11,8 @@ public readonly record struct PawnInput(
 	bool JumpDown,
 	bool DashPressed,
 	bool DashDown = false,
-	bool AllowWallJump = true);
+	bool AllowWallJump = true,
+	bool AttackPressed = false);
 
 
 public abstract class Pawn : Actor
@@ -212,6 +213,7 @@ public abstract class Pawn : Actor
 	float groundLocomotionAnimationTimer;
 	Wind.PawnInfluence windInfluence;
 	internal PawnInput? ScriptedInput;
+	internal PawnInput ConsumedInput => input; // the input this pawn acted on this frame (for replay recording)
 	internal float ScriptedClimbSpeed = 1;
 
 	public States State
@@ -543,7 +545,16 @@ public abstract class Pawn : Actor
 			if (ducking)
 				Play(animateGroundLocomotion ? "crawl" : "duck");
 			else if (!animateGroundLocomotion)
-				Play("idle");
+			{
+				if (input.MoveY < 0)
+				{
+					Play("look_up");
+				}
+				else
+				{
+					Play("idle");
+				}
+			}
 			else if (Velocity.X > 0 && moveX < 0 || Velocity.X < 0 && moveX > 0)
 			{
 				facing *= -1;
@@ -1336,7 +1347,8 @@ public partial class Player : Pawn
 			JumpPressed: Controls.Jump.Pressed,
 			JumpDown: Controls.Jump.Down,
 			DashPressed: Controls.Dash.Pressed,
-			DashDown: Controls.Dash.Down
+			DashDown: Controls.Dash.Down,
+			AttackPressed: Controls.Attack.Pressed
 		);
 	}
 
@@ -1720,9 +1732,9 @@ public partial class Player : Pawn
 
 	protected override bool TryStartPawnAction(int moveX)
 	{
-		if (ScriptedInput.HasValue)
-			return false;
-
+		// Attack flows through PawnInput (recorded/replayable). BlinkStrike/Saw still read the
+		// device directly, but both are disabled bindings — route them through PawnInput too if
+		// ever re-enabled.
 		if (carried == null && Controls.BlinkStrike.ConsumePress())
 		{
 			blinkStrikeTarget = FindBlinkStrikeTarget();
@@ -1736,7 +1748,7 @@ public partial class Player : Pawn
 				return true;
 			}
 		}
-		else if (Controls.Attack.ConsumePress())
+		else if (input.AttackPressed)
 		{
 			if (carried != null)
 			{
@@ -1813,10 +1825,7 @@ public partial class Player : Pawn
 
 	protected override bool TryRollCancel()
 	{
-		if (ScriptedInput.HasValue)
-			return false;
-
-		if (Controls.Attack.ConsumePress() && duckAttackCooldownTimer <= 0)
+		if (input.AttackPressed && duckAttackCooldownTimer <= 0)
 		{
 			duckAttack = true;
 			attackBlocked = IsAttackBlocked(duckAttack);

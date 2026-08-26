@@ -23,6 +23,8 @@ public class DebugControls
 	public readonly VirtualAction MovieRecording;
 	public readonly VirtualAction AllocationTrace;
 	public readonly VirtualAction ReloadRoom;
+	public readonly VirtualAction RecordReplay;
+	public readonly VirtualAction PlayReplay;
 	public readonly VirtualAction CollisionView;
 	public readonly VirtualAction NormalsView;
 	public readonly VirtualAction RenderTargets;
@@ -80,6 +82,12 @@ public class DebugControls
 		ReloadRoom = Make("DebugReloadRoom",
 			new ActionBindingSet().Add(Keys.R),
 			"R", "Reload room", Context.Playing);
+		RecordReplay = Make("DebugRecordReplay",
+			new ActionBindingSet().Add(Keys.F7),
+			"F7", "Record replay clips", Context.Playing);
+		PlayReplay = Make("DebugPlayReplay",
+			new ActionBindingSet().Add(Keys.F8),
+			"F8 / Shift+F8", "Play newest replay / attract playlist", Context.Anywhere);
 		CollisionView = Make("DebugCollisionView",
 			new ActionBindingSet().Add(Keys.C),
 			"C", "Collision rects view", Context.Playing);
