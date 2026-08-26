@@ -37,6 +37,15 @@
     </ItemGroup>
   </Target>
 
+  <!-- Cross-building the Linux game from macOS (tools/publish-linux.mjs). ILC emits a
+       linux-x64 object file on any host; only the link is host-specific, and zig supplies
+       the ELF linker plus a glibc sysroot. Homebrew's llvm has the matching objcopy. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'linux-x64' and $([MSBuild]::IsOSPlatform('OSX'))">
+    <CppCompilerAndLinker Condition="'$(CppCompilerAndLinker)' == ''">$(MSBuildProjectDirectory)/tools/linux-cross-cc.sh</CppCompilerAndLinker>
+    <ObjCopyName Condition="'$(ObjCopyName)' == '' and Exists('/opt/homebrew/opt/llvm/bin/llvm-objcopy')">/opt/homebrew/opt/llvm/bin/llvm-objcopy</ObjCopyName>
+    <ObjCopyName Condition="'$(ObjCopyName)' == ''">llvm-objcopy</ObjCopyName>
+  </PropertyGroup>
+
   <PropertyGroup>
     <NoWarn>$(NoWarn);IDE0130</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -330,10 +339,15 @@
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.so</OzzRuntimeLibrary>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('OSX')) And '$(RuntimeIdentifier)' == 'linux-x64'">
+    <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.so</OzzRuntimeLibrary>
+    <OzzRuntimeCrossTarget>linux-x64</OzzRuntimeCrossTarget>
+  </PropertyGroup>
+
   <Target Name="BuildOzzRuntime"
           BeforeTargets="Build"
           Condition="'$(OzzRuntimeLibrary)' != ''">
-    <Exec Command="node tools/rig-baker/build-runtime.mjs &quot;$(BaseIntermediateOutputPath)ozz-runtime&quot;" />
+    <Exec Command="node tools/rig-baker/build-runtime.mjs &quot;$(BaseIntermediateOutputPath)ozz-runtime&quot; $(OzzRuntimeCrossTarget)" />
   </Target>
 
   <Target Name="CopyOzzRuntime"
