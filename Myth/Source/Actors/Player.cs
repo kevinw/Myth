@@ -416,10 +416,12 @@ public abstract class Pawn : Actor
 			: Calc.Approach(OutOfBreath, 0, OutOfBreathRecoveryRate * Time.Delta);
 	}
 
+	internal bool JumpButtonDown => input.JumpDown;
+
 	protected virtual void AfterActorUpdate(Vector2 previousVelocity) { }
 	protected virtual void OnLanded(Vector2 previousVelocity)
 	{
-		Squish = new Vector2(1.5f, 0.70f);
+		Squish = new (1.5f, 0.70f);
 		TryStartRoll(previousVelocity);
 	}
 	protected virtual void AfterStateUpdate(Vector2 previousVelocity) { }
@@ -629,21 +631,13 @@ public abstract class Pawn : Actor
 		var dashRunning = IsDashRunning();
 		float maxSpeed;
 		if (grounded)
-		{
 			maxSpeed = (dashRunning ? DashRunGroundSpeed : MaxGroundSpeed) * GroundSpeedMultiplier;
-		}
 		else
-		{
 			maxSpeed = (dashRunning ? DashRunAirSpeed : MaxAirSpeed) * AirSpeedMultiplier;
-		}
 		if (ducking)
-		{
 			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
-		}
 		if (inWater)
-		{
 			maxSpeed *= WaterHorizontalSpeedMultiplier;
-		}
 
 		var lastFacing = Facing;
 
@@ -777,7 +771,9 @@ public abstract class Pawn : Actor
 			{
 				Console.WriteLine("Air hop! " + Time.SecondsF);
 				canAirHop = false;
-				Velocity.Y = -100;
+				if (input.MoveY > 0) Velocity.Y = 100;
+				else if (input.MoveY < 0) Velocity.Y = -70;
+				else Velocity.Y *= 0.2f;
 				Velocity.X = input.MoveX * 50;
 			}
 		}
@@ -1831,7 +1827,10 @@ public partial class Player : Pawn
 		if (brakeFromDash)
 			BeginDashCancelBrake();
 		else if (grounded)
-			StopX();
+		{
+			// @PlayerAttackDoesntStop
+			//StopX();
+		}
 	}
 
 	protected override void OnPawnJump()
@@ -1894,8 +1893,15 @@ public partial class Player : Pawn
 
 	void StopRollSound(bool immediate) => StopAndReleaseSound(ref rollSound, immediate);
 
-	static float ATTACK_WINDUP => 0.09f;
-	static float ATTACK_DURATION => 0.41f;
+	float ATTACK_WINDUP
+	{
+		get
+		{
+			if (Sprite == null) return 0;
+			var frameStart = Sprite.GetAnimation("attack")?.FrameStart ?? 0;
+			return Sprite.Frames[frameStart].Duration;
+		}
+	}
 
 	void UpdateFootsteps()
 	{
@@ -1946,8 +1952,9 @@ public partial class Player : Pawn
 
 		if (Grounded())
 		{
-			Velocity.X = Calc.Approach(Velocity.X, 0,
-				(dashCancelBraking ? DashCancelFriction : AttackFriction) * Time.Delta);
+			// @PlayerAttackDoesntStop
+			//Velocity.X = Calc.Approach(Velocity.X, 0,
+				//(dashCancelBraking ? DashCancelFriction : AttackFriction) * Time.Delta);
 			if (Velocity.X == 0)
 				dashCancelBraking = false;
 		}

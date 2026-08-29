@@ -132,7 +132,11 @@ public class Bouncer : Actor, IResizable
 		if (hasX) actor.Velocity.X = 0.0f;
 		if (hasY) actor.Velocity.Y = 0.0f;
 
-		actor.Velocity += direction * Strength;
+		float extraFactor = 1f;
+		if (hasY && actor is Player player && player.JumpButtonDown)
+			extraFactor = 1.35f;
+
+		actor.Velocity += direction * Strength * extraFactor;
 
 		recoilOffset = -direction * VisualRecoilOffset;
 		recoilVelocity = Vector2.Zero;
@@ -148,6 +152,7 @@ public class Bouncer : Actor, IResizable
 		}
 
 		AudioEvent("bounce");
+		actor.Squish = new(1.5f, 0.7f);
 	}
 
 	Vector2 BounceDirection(Actor actor)

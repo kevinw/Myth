@@ -191,6 +191,25 @@
            Text="UseFosterDll=true requires ../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll. Build Foster once for this configuration, or omit UseFosterDll." />
   </Target>
 
+  <!-- The tools/ helper projects reference Foster as a project, so their bin/ carries its own copy of
+       Foster.Framework.dll. Under UseFosterDll=true, MSBuild's assembly resolver can pick that copy
+       over our HintPath DLL; if a tool wasn't rebuilt after Foster changed, it links a *stale* Foster
+       (e.g. missing a new AppFlags) and the Myth compile fails with a confusing "no definition"
+       error. We can't just delete the shadow (the resolver latches it as a candidate at evaluation
+       time, then errors when it's missing), so instead overwrite each shadow with the current DLL —
+       whichever copy the resolver picks is then up to date. -->
+  <Target Name="_RefreshShadowingFosterDlls" BeforeTargets="ResolveReferences" Condition="'$(UseFosterDll)' == 'true'">
+    <ItemGroup>
+      <_ShadowFosterDll Include="tools/**/bin/**/Foster.Framework.dll" />
+    </ItemGroup>
+    <Copy Condition="'@(_ShadowFosterDll)' != ''"
+          SourceFiles="@(_ShadowFosterDll->'$(MSBuildProjectDirectory)/../Foster/Framework/bin/$(Configuration)/net10.0/Foster.Framework.dll')"
+          DestinationFiles="@(_ShadowFosterDll)"
+          SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
+    <Message Importance="high" Condition="'@(_ShadowFosterDll)' != ''"
+             Text="Refreshed shadowing Foster.Framework.dll in tools/ from ../Foster/Framework/bin/$(Configuration): @(_ShadowFosterDll)" />
+  </Target>
+
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
   </ItemGroup>

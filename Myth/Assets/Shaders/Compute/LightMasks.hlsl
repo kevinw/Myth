@@ -131,8 +131,15 @@ float light_cookie(Light light, float2 delta)
     else if (mode == 4)
     {
         float halfAngle = clamp(0.78 / max(abs(light.Cookie.w), 0.01), 0.08, 1.5);
-        float direction = localPosition.x / max(radius, 0.0001);
-        mask = smoothstep(cos(halfAngle) - feather, cos(halfAngle) + feather, direction);
+        // Cut off the cone's tip and pull the beam back up to the source: measure the cone from a
+        // virtual apex 'cutoff' behind the source, then clamp it to start at the source line. So the
+        // beam emanates from a line (wider with more cutoff) at the source instead of a point.
+        float cutoff = light.CookieShape.z;
+        float2 fromApex = localPosition + float2(cutoff, 0.0);
+        float direction = fromApex.x / max(length(fromApex), 0.0001);
+        float coneMask = smoothstep(cos(halfAngle) - feather, cos(halfAngle) + feather, direction);
+        float startMask = smoothstep(-feather, feather, localPosition.x);
+        mask = coneMask * startMask;
     }
     else if (mode == 5)
     {

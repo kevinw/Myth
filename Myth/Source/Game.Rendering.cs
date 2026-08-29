@@ -1585,6 +1585,7 @@ public sealed partial class GameView
 					light.CookieScale,
 					light.CookieStrength,
 					light.CookieFeather,
+					light.CookieCutoff,
 					light.ShadowSourceRadius,
 					light.ShadowSoftness,
 					light.ShadowNoise,

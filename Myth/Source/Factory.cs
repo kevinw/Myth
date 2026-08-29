@@ -530,6 +530,11 @@ public static class Factory
 
 			if (look.SpriteName is { } spriteName)
 			{
+				// A prefab can override the type's palette sprite with its own SpriteName, so the
+				// palette icon matches what it actually spawns (e.g. FloLight -> "flobulb"). Fall back
+				// to the type sprite if the override names a sprite that doesn't exist.
+				if (ActorSpecs.ReadResolvedString(spec, "SpriteName") is { } specSprite && Assets.GetSprite(specSprite) != null)
+					spriteName = specSprite;
 				ActorPalette.Add(ActorPaletteEntry.FromActorSpec(id, spriteName, look.Offset, look.EditorBounds));
 				continue;
 			}

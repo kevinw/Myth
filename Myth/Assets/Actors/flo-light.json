@@ -1,0 +1,12 @@
+{
+  "Name": "FloLight",
+  "From": "BlueMemoryLight",
+  "Radius": 108,
+  "Intensity": 0.75,
+  "CookieAngleDegrees": 90.55,
+  "DrawSprite": true,
+  "SpriteName": "flobulb",
+  "TintSprite": false,
+  "Cookie": "Cone",
+  "CookieCutoff": 0.033
+}

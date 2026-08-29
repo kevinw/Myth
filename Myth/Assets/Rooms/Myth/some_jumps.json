@@ -69,14 +69,8 @@
   "actors": [
     {
       "Id": "26cd2b355922a6bc",
-      "From": "BlueMemoryLight",
-      "Position": [120, 28],
-      "SpriteName": "fire",
-      "Radius": 108,
-      "Intensity": 0.75,
-      "Cookie": "Cone",
-      "CookieAngleDegrees": 90.55,
-      "DrawSprite": false
+      "From": "FloLight",
+      "Position": [120, 28]
     },
     {
       "Id": "d55b9e3b8ba59435",

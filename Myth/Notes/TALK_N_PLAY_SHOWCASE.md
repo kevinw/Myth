@@ -1,5 +1,11 @@
 # Talk n Play Showcase
 
+# TODO
+
+- record title screen demos 
+- on 2 mins inactivity, reset to title screen with warning
+
+
 ## User "Story"
 
 "Sarah" walks by. She sees someone 

@@ -24,17 +24,24 @@ public class Light : Actor, IHitByHitbox
 	[I(0, 64)] public float Height = 16;
 	[I(0, 20)] public float FlickerFrequency = 4;
 	[I(0, 0.5f)] public float FlickerIntensity = 0.08f;
+	[InspectorGroup("Cookie")]
 	public LightCookie Cookie;
 	[I(-180, 180)] public float CookieAngleDegrees;
 	[I(-360, 360)] public float CookieSpeedDegrees;
 	[I(0.1f, 4)] public float CookieScale = 1.0f;
 	[I(0, 2)] public float CookieStrength = 1.0f;
 	[I(0, 1)] public float CookieFeather = 0.12f;
+	// Cone cookie only: pushes the cone's apex down its axis (fraction of the radius) so the cone
+	// begins below the source -- e.g. a horizontal bulb casting a cutoff cone. 0 = apex at the source.
+	[I(0, 1)] public float CookieCutoff = 0f;
+	[InspectorGroup("Shadow")]
 	[I(0, 16)] public float ShadowSourceRadius = DefaultShadowSourceRadius;
 	[I(0, 3)] public float ShadowSoftness = 1.0f;
 	[I(0, 1)] public float ShadowNoise;
 	[I(0, 40)] public float ShadowNoiseSpeed = 8.0f;
-	readonly float FlickerRandomOffset = 0;
+
+	
+	[InspectorGroup("Sprite")]
 	public bool DrawSprite = true;
 	// Multiplies the sprite by LightColor, so one neutral sprite (fire_greyscale) can stand in
 	// for a flame of any colour. The normals pass stays untinted -- it carries directions, not
@@ -42,12 +49,14 @@ public class Light : Actor, IHitByHitbox
 	public bool TintSprite;
 	[I(0, 2)] public float TintSaturation = 1;
 	[I(0, 1)] public float TintVividness = 0;
-	internal Actor? SpriteShadowOwner;
 
 	// Multiplying a grey sprite by a colour hands every pixel that colour's saturation exactly
 	// -- the grey cancels out of 1 - min/max -- so the flame is only ever as vivid as LightColor
 	// is. These two reshape the tint before the multiply; the light it casts still uses LightColor.
 	Color SpriteTint => TintSprite ? Saturate(PureHue(LightColor, TintVividness), TintSaturation) : Color.White;
+	
+	readonly float FlickerRandomOffset = 0;
+	internal Actor? SpriteShadowOwner;
 
 	// Pulls a colour toward its own hue at full saturation and value. Pale light colours
 	// (DDEBFF is 13% saturated) have almost no hue for TintSaturation to scale, so this is

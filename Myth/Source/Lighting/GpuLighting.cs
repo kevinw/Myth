@@ -139,7 +139,7 @@ sealed class GpuLighting : IDisposable
 	}
 
 	public void AddLight(Vector2 position, float radius, float intensity, float height, Color color)
-		=> AddLight(position, radius, intensity, height, color, LightCookie.None, 0, 0, 1, 1, 0.12f, Light.DefaultShadowSourceRadius, 1, 0, 0);
+		=> AddLight(position, radius, intensity, height, color, LightCookie.None, 0, 0, 1, 1, 0.12f, 0, Light.DefaultShadowSourceRadius, 1, 0, 0);
 
 	public void AddLight(
 		Vector2 position,
@@ -153,6 +153,7 @@ sealed class GpuLighting : IDisposable
 		float cookieScale,
 		float cookieStrength,
 		float cookieFeather,
+		float cookieCutoff,
 		float shadowSourceRadius,
 		float shadowSoftness,
 		float shadowNoise,
@@ -168,7 +169,7 @@ sealed class GpuLighting : IDisposable
 			height,
 			new(value.X, value.Y, value.Z, intensity),
 			new((float)cookie, cookieAngleDegrees * MathF.PI / 180, cookieSpeedDegrees * MathF.PI / 180, cookieScale),
-			new(cookieStrength, cookieFeather, 0, 0),
+			new(cookieStrength, cookieFeather, cookieCutoff, 0),
 			new(shadowSourceRadius, shadowSoftness, shadowNoise, shadowNoiseSpeed));
 	}
 
