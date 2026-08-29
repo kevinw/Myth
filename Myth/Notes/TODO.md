@@ -1,3 +1,4 @@
+- you still slow down when attacking. maybe get "rid" of attack state, or share the movement code update with it
 - lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
 - show "speaking" lines like a comic book bubble with individual syllables
 - show a currency hud for ducks
