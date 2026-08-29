@@ -1,3 +1,11 @@
+- lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
+- show "speaking" lines like a comic book bubble with individual syllables
+- show a currency hud for ducks
+- wall jump teach room early where Bud tells you
+- import the bg brick as our custom tile kit and make it more varied
+- try a variant of HitStun which is more of a ramp
+- when loading barks from a baked asset that is older than Game.BudStory.cs 
+- door is rendering normals behind the hidden wall cover
 - test the player controller online in a simple room
 - put some inbetween frames in the player sprite
 - really really prioritize a TNP list

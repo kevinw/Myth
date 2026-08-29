@@ -566,7 +566,7 @@ public abstract class Pawn : Actor
 			else if (Velocity.X > 0 && moveX < 0 || Velocity.X < 0 && moveX > 0)
 			{
 				facing *= -1;
-				Play("skid");
+				Play("skid", looping: false);
 				if (PlayerSpecificAudioEvents)
 					AudioEventDebounced("player/skid", 0.5f);
 				RunStartTimer = 0;
@@ -588,7 +588,7 @@ public abstract class Pawn : Actor
 				if (RunStartTimer < 0.35f)
 				{
 					if (RunStartTimer < 0.15f && RunStartSkid)
-						Play("skid");
+						Play("skid", looping: false);
 					else
 						Play("run_start");
 				}
@@ -769,12 +769,15 @@ public abstract class Pawn : Actor
 			}
 			else if (this is Player && input.JumpPressed && !prevInput.JumpPressed && canAirHop && !grounded && lastGroundedJumpTimer == 0)
 			{
-				Console.WriteLine("Air hop! " + Time.SecondsF);
 				canAirHop = false;
-				if (input.MoveY > 0) Velocity.Y = 100;
+				if (input.MoveY > 0)
+				{
+					Squish = new Vector2(0.75f, 1.25f);
+					Velocity.Y = 100;
+				}
 				else if (input.MoveY < 0) Velocity.Y = -70;
 				else Velocity.Y *= 0.2f;
-				Velocity.X = input.MoveX * 50;
+				Velocity.X += input.MoveX * 50;
 			}
 		}
 
@@ -1953,8 +1956,7 @@ public partial class Player : Pawn
 		if (Grounded())
 		{
 			// @PlayerAttackDoesntStop
-			//Velocity.X = Calc.Approach(Velocity.X, 0,
-				//(dashCancelBraking ? DashCancelFriction : AttackFriction) * Time.Delta);
+			Velocity.X = Calc.Approach(Velocity.X, 0, (dashCancelBraking ? DashCancelFriction : AttackFriction) * Time.Delta);
 			if (Velocity.X == 0)
 				dashCancelBraking = false;
 		}

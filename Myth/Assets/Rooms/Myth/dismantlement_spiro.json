@@ -111,6 +111,14 @@
         "to jump higher"
       ],
       "LineHeightMultiplier": 0.859
+    },
+    {
+      "Id": "ae05fbbd13cd9fee",
+      "Type": "SporeFogVolume",
+      "Position": [96, 120],
+      "Size": [136, 72],
+      "Feather": 25.049,
+      "Strength": 0.549
     }
   ]
 }

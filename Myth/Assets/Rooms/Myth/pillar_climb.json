@@ -2,7 +2,8 @@
   "position": [120, -23],
   "size": [40, 23],
   "lightNoise": 0.392,
-  "reverb": 0.73,
+  "sporeFogStrength": 0.328,
+  "reverb": 0.728,
   "legend": {
     "#": "back",
     "%": "crosshatch",
@@ -15,12 +16,12 @@
   },
   "tiles": [
     "TTTTTTTTTTTTTTTTTTTTT000TTTTTTTTTTTTTTTT",
-    "TTTTTT000TTTTTTTTTTTT000TTTTTTTTTTTTTTTT",
-    "TTTTTT000TTTTTTTTTTTT000TTTTTTTTT0000000",
-    "TTTTTT000TTTTTT0TTTTT000TTwTT00000000000",
+    "TTTTTT000T00000TTTTTT000TTTTTTTTTTTTTTTT",
+    "TTTTTT00000000TTTTTTT000TTTTTTTTT0000000",
+    "TT0TTT0000000TT0TTTTT000TTwTT00000000000",
     "TT00TT000TTRTT00TTTTT000TTwTT00000000000",
     "TT00TT000TTTRT00TTTTT000TTwTT00000000000",
-    "TT00TT000TTTTT00TTTRR000TTwTT000000000TT",
+    "TT00TT000TTT0T00TTTRR000TTwTT000000000TT",
     "TT00T0000TT00000TRRRR000TTwTT000000000TT",
     "TT00T0000TT00000TRRRR000TTwTT000000000TT",
     "TT0000000T000000RRRRR000TTwTT000000000TT",
@@ -65,7 +66,7 @@
   ],
   "fungal": [[1, 3],[1, 8],[1, 9],[1, 13],[1, 14],[1, 15]
   ],
-  "slopes": [[31, 2],[32, 2],[9, 10]
+  "slopes": [[31, 2],[32, 2],[9, 10],[20, 11],[24, 14],[16, 18],[20, 18],[24, 21]
   ],
   "actors": [
     {
@@ -73,18 +74,6 @@
       "Type": "Jumpthru",
       "Position": [280, 168],
       "Size": [26, 8]
-    },
-    {
-      "Id": "281afeb3b91ea43f",
-      "From": "BlueMemoryLight",
-      "Position": [212, 116],
-      "Height": 4.6
-    },
-    {
-      "Id": "0d3b8cb6ad6e5eb5",
-      "From": "BlueMemoryLight",
-      "Position": [148, 92],
-      "Height": 6.6
     },
     {
       "Id": "a5a6ff90c2a9c2ab",
@@ -103,6 +92,32 @@
       "Id": "a8a4a0b29351e7ed",
       "Type": "Mosquito",
       "Position": [68, 116]
+    },
+    {
+      "Id": "cf0dc8e3019a4b74",
+      "From": "FloLight",
+      "Position": [148, 92]
+    },
+    {
+      "Id": "3c6f893b64259da4",
+      "From": "FloLight",
+      "Position": [212, 116]
+    },
+    {
+      "Id": "8690f3f33da35d4c",
+      "Type": "Rope",
+      "Position": [60, 4],
+      "Size": [8, 164]
+    },
+    {
+      "Id": "df0b806bb56ced0b",
+      "From": "FloLight",
+      "Position": [45, 57]
+    },
+    {
+      "Id": "06928e3f21647f3f",
+      "Type": "RevealDoor",
+      "Position": [80, 16]
     }
   ]
 }

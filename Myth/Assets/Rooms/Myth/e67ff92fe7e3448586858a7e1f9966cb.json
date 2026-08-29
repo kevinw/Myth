@@ -104,7 +104,7 @@
     {
       "Id": "a3a306d498d41eef",
       "Type": "ParticleEmitter",
-      "Position": [115, 41],
+      "Position": [117, 69],
       "EffectName": "smoke"
     },
     {

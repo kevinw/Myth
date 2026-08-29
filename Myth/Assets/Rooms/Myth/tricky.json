@@ -1,6 +1,7 @@
 {
   "position": [120, 0],
   "size": [40, 23],
+  "sporeFogStrength": 0.097,
   "legend": {
     "#": "back",
     "(": "back-nw",
