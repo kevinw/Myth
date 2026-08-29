@@ -2,7 +2,6 @@
 - put some inbetween frames in the player sprite
 - really really prioritize a TNP list
 - chain roll attack into a hop 
-- try player tiny second hop
 - the generic Pop is starting to feel a bit overused/generic
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
 - dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better

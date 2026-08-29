@@ -1198,6 +1198,9 @@ public partial class Manager : App
 #else
 		const bool shipRoomCheatChordActive = false;
 #endif
+#if !MYTHSHIP
+		UpdatePlayRoomSwipe(gameMenuPausesGame);
+#endif
 
 		if (!keyboardShortcutsBlocked && playing && !gameMenuPausesGame && GymLoop && debugControls.AdvanceGym.Pressed)
 			AdvanceGym(failureReason: "manual");
@@ -1644,6 +1647,51 @@ public partial class Manager : App
 		return MathF.Abs(stick.X) > MathF.Abs(stick.Y)
 			? new(Math.Sign(stick.X), 0)
 			: new(0, Math.Sign(stick.Y));
+	}
+#endif
+
+#if !MYTHSHIP
+	// Non-shipped dev aid: a two-finger trackpad swipe during play jumps to the adjacent room, like
+	// WASD in the editor. Trackpad-only (a notched mouse wheel is ignored), one room per swipe.
+	Vector2 playRoomSwipeAccum;
+	bool playRoomSwipeArmed = true;
+	static float PlayRoomSwipeThreshold => 20f; // accumulated wheel units before a room step fires
+	static int PlayRoomSwipeSign => 1;          // 1 = natural (matches the editor's content-follows-fingers pan); -1 = page-turn
+
+	void UpdatePlayRoomSwipe(bool gameMenuPausesGame)
+	{
+		if (!playing || gameMenuPausesGame || game?.AcceptsLiveInput != true)
+		{
+			playRoomSwipeAccum = Vector2.Zero;
+			playRoomSwipeArmed = true;
+			return;
+		}
+
+		var wheel = Input.Mouse.Wheel;
+		// Re-arm once the swipe (including trackpad momentum) settles, so it's one room per gesture.
+		if (wheel == Vector2.Zero)
+		{
+			playRoomSwipeAccum = Vector2.Zero;
+			playRoomSwipeArmed = true;
+			return;
+		}
+
+		var precise = wheel.X != 0 || wheel.Y != MathF.Truncate(wheel.Y); // trackpad two-finger swipe, not a mouse wheel
+		if (!precise || !playRoomSwipeArmed)
+			return;
+
+		playRoomSwipeAccum += wheel;
+		if (MathF.Max(MathF.Abs(playRoomSwipeAccum.X), MathF.Abs(playRoomSwipeAccum.Y)) < PlayRoomSwipeThreshold)
+			return;
+
+		// Natural (editor pan) direction is (+X, -Y) of the raw wheel; PlayRoomSwipeSign flips both
+		// together for page-turn. If only one axis feels inverted, split the sign per axis.
+		var direction = MathF.Abs(playRoomSwipeAccum.X) > MathF.Abs(playRoomSwipeAccum.Y)
+			? new Point2(Math.Sign(playRoomSwipeAccum.X) * PlayRoomSwipeSign, 0)
+			: new Point2(0, -Math.Sign(playRoomSwipeAccum.Y) * PlayRoomSwipeSign);
+		game?.CheatShiftRoom(direction);
+		playRoomSwipeArmed = false;
+		playRoomSwipeAccum = Vector2.Zero;
 	}
 #endif
 
