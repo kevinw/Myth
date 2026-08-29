@@ -1,3 +1,6 @@
+- test the player controller online in a simple room
+- put some inbetween frames in the player sprite
+- really really prioritize a TNP list
 - chain roll attack into a hop 
 - try player tiny second hop
 - the generic Pop is starting to feel a bit overused/generic

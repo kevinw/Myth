@@ -4,11 +4,12 @@ using Foster.Framework;
 
 namespace Myth;
 
-// One recorded sim step: the dt the sim saw (post-timeScale, via Game.Time) and the input the
-// player consumed that frame. Blittable so a whole clip's frames serialize as one memory blob.
-struct ReplayFrame
+// One input change-point: the recorded input held from this frame until the next change-point.
+// Clips are recorded at a fixed timestep (ReplayHz), so a frame index is exact time and dt never
+// needs storing — the whole clip is just its starting state + the frames where input changed.
+struct InputChange
 {
-	public float Dt;
+	public int Frame;
 	public PawnInput Input;
 }
 
@@ -27,14 +28,16 @@ readonly record struct ReplayStart(Point2 Position, Vector2 Velocity, Signs Faci
 	}
 }
 
-// A self-contained recording of one room visit: seed + starting room/progression + the input
-// stream. On playback the room loads deterministically and the recorded input regenerates
-// everything (AI, transitions). VisibleFromFrame is the in-point for the (later) fast-forward
-// warmup; 0 means "show from the clip's start".
+// A self-contained recording of one room visit, captured and replayed at a fixed ReplayHz timestep.
+// On playback the room loads deterministically and the recorded input regenerates everything (AI,
+// physics, transitions). VisibleFromFrame is the in-point for the fast-forward warmup; 0 = start.
 sealed class ReplayClip
 {
+	public const int ReplayHz = 60;
+	public const float ReplayDelta = 1f / ReplayHz;
+
 	const uint Magic = 0x5052_594D; // "MYRP"
-	public const int CurrentVersion = 1;
+	public const int CurrentVersion = 2; // v2: fixed timestep, input change-points (no per-frame dt)
 
 	public int Version = CurrentVersion;
 	public ulong Seed;
@@ -42,12 +45,10 @@ sealed class ReplayClip
 	public ReplayStart Start;
 	public string SaveJson = "";
 	public int VisibleFromFrame;
-	public readonly List<ReplayFrame> Frames = [];
+	public int FrameCount;
+	public readonly List<InputChange> Changes = [];
 
-	public float DurationSeconds
-	{
-		get { var s = 0f; foreach (var f in Frames) s += f.Dt; return s; }
-	}
+	public float DurationSeconds => FrameCount * ReplayDelta;
 
 	public void Write(Stream stream)
 	{
@@ -62,8 +63,9 @@ sealed class ReplayClip
 		w.Write((int)Start.State);
 		w.Write(SaveJson);
 		w.Write(VisibleFromFrame);
-		w.Write(Frames.Count);
-		w.Write(MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(Frames)));
+		w.Write(FrameCount);
+		w.Write(Changes.Count);
+		w.Write(MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(Changes)));
 	}
 
 	public static ReplayClip Read(Stream stream)
@@ -81,10 +83,11 @@ sealed class ReplayClip
 			(Player.States)r.ReadInt32());
 		clip.SaveJson = r.ReadString();
 		clip.VisibleFromFrame = r.ReadInt32();
+		clip.FrameCount = r.ReadInt32();
 		var count = r.ReadInt32();
-		var frames = new ReplayFrame[count];
-		r.BaseStream.ReadExactly(MemoryMarshal.AsBytes(frames.AsSpan()));
-		clip.Frames.AddRange(frames);
+		var changes = new InputChange[count];
+		r.BaseStream.ReadExactly(MemoryMarshal.AsBytes(changes.AsSpan()));
+		clip.Changes.AddRange(changes);
 		return clip;
 	}
 

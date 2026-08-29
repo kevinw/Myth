@@ -2098,6 +2098,7 @@ public partial class Manager : App
 			clip.Start.ApplyTo(player);
 		game.RngSeed = clip.Seed;
 		replay = new ReplayPlayer(clip, playUntil);
+		EnterReplayFixedStep(); // pace playback to the fixed replay rate (real-time on any display)
 
 		// Fast-forward warmup: silently re-simulate frames 0..VisibleFromFrame so the visible
 		// playback begins mid-action in a fully-correct sim state. AudioMuted (not Simulating,
@@ -2106,7 +2107,7 @@ public partial class Manager : App
 		{
 			var wasMuted = game.AudioMuted;
 			game.AudioMuted = true;
-			var target = Math.Min(clip.VisibleFromFrame, clip.Frames.Count);
+			var target = Math.Min(clip.VisibleFromFrame, clip.FrameCount);
 			for (var i = 0; i < target; i++)
 			{
 				replay.DriveBeforeUpdate(game);
@@ -2120,7 +2121,7 @@ public partial class Manager : App
 		playing = true;
 		startingPlay = false;
 		gameEase = 1f;
-		game.DisplayMessage($"Replay: {clip.RoomId} ({clip.Frames.Count}f{(clip.VisibleFromFrame > 0 ? $", from {clip.VisibleFromFrame}" : "")})");
+		game.DisplayMessage($"Replay: {clip.RoomId} ({clip.FrameCount}f{(clip.VisibleFromFrame > 0 ? $", from {clip.VisibleFromFrame}" : "")})");
 	}
 
 	void StopReplay()
@@ -2130,7 +2131,26 @@ public partial class Manager : App
 		if (game?.GetFirst<Player>() is { } player)
 			player.ScriptedInput = null;
 		game?.EndReplayClock();
+		ExitReplayFixedStep();
 		game?.DisplayMessage("Replay: stopped");
+	}
+
+	// Replays are captured and played at a fixed timestep (ReplayClip.ReplayHz) so dt never needs
+	// storing; this holds the app at that rate during record/playback and restores the prior mode
+	// (unlocked vsync) afterward. Idempotent via savedUpdateMode so the reel's per-clip restarts and
+	// the various teardown paths can call these freely.
+	UpdateMode? savedUpdateMode;
+	internal void EnterReplayFixedStep()
+	{
+		if (savedUpdateMode != null) return;
+		savedUpdateMode = UpdateMode;
+		UpdateMode = UpdateMode.FixedStep(ReplayClip.ReplayHz);
+	}
+	internal void ExitReplayFixedStep()
+	{
+		if (savedUpdateMode is not { } mode) return;
+		UpdateMode = mode;
+		savedUpdateMode = null;
 	}
 
 	// Seconds of no input on the title before the attract demo starts. 0 = immediately.
@@ -2183,6 +2203,7 @@ public partial class Manager : App
 		replay = null;
 		attract = null;
 		game?.EndReplayClock();
+		ExitReplayFixedStep();
 		game?.Dispose();
 		game = null;
 		playing = titleAttractMode; // stay in play mode at the title (--title) so the editor stays hidden
@@ -2212,6 +2233,7 @@ public partial class Manager : App
 		replay = null; // never let attract/replay drive a real play session
 		attract = null;
 		titleAttractMode = false;
+		ExitReplayFixedStep(); // real gameplay runs at unlocked vsync, not the replay's fixed rate
 #if EDITOR
 		ClearEditorStateForEnteringPlayMode();
 #endif

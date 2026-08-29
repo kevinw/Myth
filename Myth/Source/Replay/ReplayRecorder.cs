@@ -1,10 +1,11 @@
 namespace Myth;
 
-// Records real play into per-room ReplayClips. While armed, each room load starts a fresh clip at
-// that clean boundary (capturing the player's entry state + the live RNG stream position + starting
-// progression), then every sim frame appends dt + the player's consumed input. Leaving a room
-// auto-saves the finished clip and begins the next. Recording is pure observation — it never
-// perturbs the live game (the seed is captured, not reseeded).
+// Records real play into per-room ReplayClips. While armed, the app runs a fixed ReplayHz timestep
+// (so dt is a constant we never store), and each room load starts a fresh clip at that clean
+// boundary (capturing the player's entry state + the live RNG stream position + starting progression).
+// Every sim frame the frame count advances and a change-point is appended only when the input
+// differs from the previous frame. Leaving a room auto-saves and begins the next. Recording is pure
+// observation — it never perturbs the live game (the seed is captured, not reseeded).
 sealed class ReplayRecorder(Game game)
 {
 	static int MinFrames => 30; // drop sub-second fragments (transient rooms you pass straight through)
@@ -15,7 +16,13 @@ sealed class ReplayRecorder(Game game)
 	public void Toggle()
 	{
 		Recording = !Recording;
-		if (!Recording) Flush();
+		if (Recording)
+			game.Manager.EnterReplayFixedStep(); // capture at a fixed 60fps cadence; display drops to 60 while armed
+		else
+		{
+			Flush();
+			game.Manager.ExitReplayFixedStep();
+		}
 		game.DisplayMessage(Recording ? "Replay: armed (press R to start a clean take)" : "Replay: stopped");
 	}
 
@@ -45,12 +52,15 @@ sealed class ReplayRecorder(Game game)
 	{
 		if (!Recording || clip == null || game.Simulating) return;
 		if (game.GetFirst<Player>() is not { } player) return;
-		clip.Frames.Add(new ReplayFrame { Dt = game.Time.Delta, Input = player.ConsumedInput });
+		var input = player.ConsumedInput;
+		if (clip.Changes.Count == 0 || !input.Equals(clip.Changes[^1].Input))
+			clip.Changes.Add(new InputChange { Frame = clip.FrameCount, Input = input });
+		clip.FrameCount++;
 	}
 
 	void Flush()
 	{
-		if (clip is { } c && c.Frames.Count >= MinFrames)
+		if (clip is { } c && c.FrameCount >= MinFrames)
 		{
 			var dir = Path.Join(game.Manager.UserPath, "replays");
 			var secs = (int)MathF.Round(c.DurationSeconds);
@@ -58,7 +68,7 @@ sealed class ReplayRecorder(Game game)
 			var path = Path.Join(dir, $"{baseName}.myrp");
 			for (var n = 2; File.Exists(path); n++) // don't clobber a same-room, same-length take
 				path = Path.Join(dir, $"{baseName}_{n}.myrp");
-			try { c.Save(path); game.DisplayMessage($"Replay saved: {Path.GetFileName(path)} ({c.Frames.Count}f)"); }
+			try { c.Save(path); game.DisplayMessage($"Replay saved: {Path.GetFileName(path)} ({c.FrameCount}f, {c.Changes.Count} changes)"); }
 			catch (Exception e) { game.DisplayMessage($"Replay save failed: {e.Message}"); }
 		}
 		clip = null;

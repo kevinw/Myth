@@ -2130,12 +2130,6 @@ public partial class Player : Pawn
 		}
 	}
 
-	public void StartState()
-	{
-		if (state.Time >= 1.0f)
-			State = States.Normal;
-	}
-
 	public override void OnWasHit(Actor by)
 	{
 		int healthDelta = -by.DamageValue;
