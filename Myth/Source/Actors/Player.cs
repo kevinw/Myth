@@ -1713,14 +1713,8 @@ public partial class Player : Pawn
 		hatAngularVelocity -= velocityDelta.X * HatAngularMotionResponse;
 
 		var dt = Math.Min(Time.Delta, 1f / 30f);
-		hatOffsetVelocity.X += -hatOffset.X * HatSpring.X * dt;
-		hatOffsetVelocity.Y += -hatOffset.Y * HatSpring.Y * dt;
-		hatOffsetVelocity.X *= MathF.Exp(-HatDamping.X * dt);
-		hatOffsetVelocity.Y *= MathF.Exp(-HatDamping.Y * dt);
-		hatOffset += hatOffsetVelocity * dt;
-		hatAngularVelocity += -hatAngle * HatAngularSpring * dt;
-		hatAngularVelocity *= MathF.Exp(-HatAngularDamping * dt);
-		hatAngle += hatAngularVelocity * dt;
+		Spring.Step(ref hatOffset, ref hatOffsetVelocity, Vector2.Zero, HatSpring, HatDamping, dt);
+		Spring.Step(ref hatAngle, ref hatAngularVelocity, 0, HatAngularSpring, HatAngularDamping, dt);
 
 		if (hatOffset.LengthSquared() > HatMaxOffset * HatMaxOffset)
 		{

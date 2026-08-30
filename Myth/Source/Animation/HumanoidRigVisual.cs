@@ -96,6 +96,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public bool GaitActive;
 	public Vector2 Offset;
 	public Vector2? LookTarget;
+	public float? YawOverride;
+	public float YawOverrideWeight;
 
 	OzzRig rig = null!;
 	OzzAnimator animator = null!;
@@ -495,7 +497,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		var desired = LookTarget is { } target
 			? (target - owner.Position - projectedPose[head]).Normalized()
-			: new Vector2(-MathF.Cos(visualYaw), 0);
+			: new Vector2(-MathF.Cos(RigYaw()), 0);
 		if (Settings.EyeMotion > 0)
 		{
 			var tick = (uint)MathF.Floor((owner.Time.SecondsF + animationPhase * EyeSaccadeInterval) /
@@ -608,9 +610,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		}
 
 		var dt = MathF.Min(visualDelta, 1 / 30f);
-		point.Velocity += (target - point.Position) * spring * dt;
-		point.Velocity *= MathF.Exp(-damping * dt);
-		point.Position += point.Velocity * dt;
+		Spring.Step(ref point.Position, ref point.Velocity, target, spring, damping, dt);
 		var offset = point.Position - target;
 		if (offset.LengthSquared() <= maxOffset * maxOffset)
 			return offset;
@@ -686,13 +686,23 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	float UpperBodyYaw()
 	{
-		if (!turning || Settings.TurnInertia <= 0)
-			return visualYaw;
-		var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
-		var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
-		progress = progress * progress * (3 - 2 * progress);
-		return float.Lerp(turnFromYaw, turnToYaw, progress);
+		var yaw = visualYaw;
+		if (turning && Settings.TurnInertia > 0)
+		{
+			var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
+			var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
+			progress = progress * progress * (3 - 2 * progress);
+			yaw = float.Lerp(turnFromYaw, turnToYaw, progress);
+		}
+		return OverrideYaw(yaw);
 	}
+
+	float RigYaw() => OverrideYaw(visualYaw);
+
+	float OverrideYaw(float yaw)
+		=> YawOverride is { } target
+			? yaw + MathF.IEEERemainder(target - yaw, MathF.Tau) * Math.Clamp(YawOverrideWeight, 0, 1)
+			: yaw;
 
 	public void Dispose()
 	{
@@ -712,8 +722,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		var mirror = turning
 			? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount)
 			: -(int)visualFacing;
-		var turnCos = MathF.Cos(visualYaw);
-		var turnSin = MathF.Sin(visualYaw);
+		var rigYaw = RigYaw();
+		var turnCos = MathF.Cos(rigYaw);
+		var turnSin = MathF.Sin(rigYaw);
 		var upperTurnCos = MathF.Cos(upperBodyYaw);
 		var upperTurnSin = MathF.Sin(upperBodyYaw);
 		for (var i = 0; i < sampledPose.Length; i++)
@@ -721,7 +732,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var joint = i == head ? HeadPosition3D() : ragdollJoints[i] ? ragdollPose[i] : sampledPose[i];
 			var offset = joint - pivot;
 			var weight = inertiaActive ? upperBodyMask[i] : 0;
-			var jointYaw = float.Lerp(visualYaw, upperBodyYaw, weight);
+			var jointYaw = float.Lerp(rigYaw, upperBodyYaw, weight);
 			var jointTurnCos = weight <= 0 ? turnCos : weight >= 1 ? upperTurnCos : MathF.Cos(jointYaw);
 			var jointTurnSin = weight <= 0 ? turnSin : weight >= 1 ? upperTurnSin : MathF.Sin(jointYaw);
 			var turned = new Vector3(offset.X * jointTurnCos + offset.Z * jointTurnSin, offset.Y,
@@ -777,16 +788,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		{
 			var dt = MathF.Min(remaining, 1 / 30f);
 			remaining -= dt;
-			var damping = MathF.Exp(-RagdollDamping * dt);
 			for (var i = 0; i < ragdollPose.Length; i++)
 				if (ragdollJoints[i])
 				{
 					ragdollPreviousPose[i] = ragdollPose[i];
-					ragdollVelocity[i] += (sampledPose[i] - ragdollPose[i]) * RagdollSpring * dt;
-					ragdollVelocity[i] *= damping;
-					if (ragdollVelocity[i].LengthSquared() > RagdollMaxSpeed * RagdollMaxSpeed)
-						ragdollVelocity[i] = Vector3.Normalize(ragdollVelocity[i]) * RagdollMaxSpeed;
-					ragdollPose[i] += ragdollVelocity[i] * dt;
+					Spring.Step(ref ragdollPose[i], ref ragdollVelocity[i], sampledPose[i],
+						RagdollSpring, RagdollDamping, dt, RagdollMaxSpeed);
 				}
 
 			for (var iteration = 0; iteration < RagdollConstraintIterations; iteration++)
@@ -810,7 +817,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	Vector3 RigVelocity(Vector2 screenVelocity)
 	{
-		var angle = Settings.ProjectionYaw * MathF.PI / 180f + visualYaw;
+		var angle = Settings.ProjectionYaw * MathF.PI / 180f + RigYaw();
 		var alongProjection = screenVelocity.X / Settings.PixelsPerMeter;
 		return new(MathF.Sin(angle) * alongProjection, -screenVelocity.Y / Settings.PixelsPerMeter,
 			-MathF.Cos(angle) * alongProjection);

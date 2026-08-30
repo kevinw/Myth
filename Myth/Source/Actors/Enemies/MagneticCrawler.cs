@@ -360,9 +360,7 @@ public class MagneticCrawler : Actor
 	void UpdateBody()
 	{
 		var dt = MathF.Min(Time.Delta, 0.05f);
-		bodyVelocity += (ActiveBodyTarget() - bodyPosition) * BodySpring * dt;
-		bodyVelocity *= MathF.Exp(-BodyDamping * dt);
-		bodyPosition += bodyVelocity * dt;
+		Spring.Step(ref bodyPosition, ref bodyVelocity, ActiveBodyTarget(), BodySpring, BodyDamping, dt);
 		bodyAngle = Calc.AngleApproach(bodyAngle, Calc.Angle(surface.Tangent), 7 * dt);
 	}
 
@@ -375,9 +373,7 @@ public class MagneticCrawler : Actor
 			part.Detached = Calc.Approach(part.Detached, 0, dt);
 			var spring = part.Detached > 0 ? 13 : PartSpring;
 			var damping = part.Detached > 0 ? 3.5f : PartDamping;
-			part.Velocity += (PartTarget(i) - part.Position) * spring * dt;
-			part.Velocity *= MathF.Exp(-damping * dt);
-			part.Position += part.Velocity * dt;
+			Spring.Step(ref part.Position, ref part.Velocity, PartTarget(i), spring, damping, dt);
 			part.AngularVelocity += AngleDelta(part.Angle, PartTargetAngle(i)) * spring * 0.18f * dt;
 			part.AngularVelocity *= MathF.Exp(-damping * dt);
 			part.Angle += part.AngularVelocity * dt;

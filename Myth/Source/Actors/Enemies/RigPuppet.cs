@@ -59,17 +59,18 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	float abilityPlaybackSpeed = 1;
 	float abilityPoseModifierWeight = 1;
 	Vector2? abilityLookTarget;
+	float? abilityYaw;
+	float abilityYawWeight;
 	bool scripted;
 	bool scriptedArrived;
 	bool scriptedLoop = true;
 	bool scriptedFootIK = true;
 	float scriptedPlaybackSpeed = 1;
-	float scriptedWait;
 	float scriptedWalkOffsetX;
 	float scriptedStopDistance;
 	float? scriptedWalkTargetX;
 	Actor? scriptedWalkTargetActor;
-	IEnumerator<float>? scriptedRoutine;
+	readonly Coroutine scriptedRoutine = new();
 	Game.StorySpeechBubble? scriptedSpeech;
 #if EDITOR
 	internal bool AnimationPreviewEnabled;
@@ -132,6 +133,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.Offset = stepVisualOffset;
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
+		visual.YawOverride = abilityActive ? abilityYaw : null;
+		visual.YawOverrideWeight = abilityActive ? abilityYawWeight : 0;
 		SyncBackLegRenderer();
 		SyncRuff();
 	}
@@ -180,7 +183,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		}
 #endif
 		UpdateScriptRoutine();
-		if (stepTraversal == StepTraversal.None)
+		if (stepTraversal == StepTraversal.None && !AbilityControlsMovement)
 			Velocity.Y += Gravity * Time.Delta;
 		else
 			Velocity = Vector2.Zero;
@@ -249,6 +252,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	protected virtual bool UpdateAbility(Player player, bool grounded) => false;
 	protected virtual void InterruptAbility() { }
+	protected virtual bool AbilityControlsMovement => false;
+	protected virtual bool SuppressKnockdownOnHit => false;
 
 	protected bool RigFacingMatches => visual.FacingMatches;
 	protected Vector2 RigEyePosition => visual.EyeWorldPosition;
@@ -277,6 +282,27 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	protected void SetAbilityLookTarget(Vector2? target) => abilityLookTarget = target;
 	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
+	protected void SetAbilityYaw(float? yaw, float weight = 1)
+	{
+		abilityYaw = yaw;
+		abilityYawWeight = Math.Clamp(weight, 0, 1);
+	}
+	protected float CameraFacingYaw => MathF.PI * 0.5f - Rig.ProjectionYaw * MathF.PI / 180f;
+	protected void SetRuffSpin(float radiansPerSecond)
+	{
+		if (ruff != null)
+			ruff.SpinSpeed = radiansPerSecond;
+	}
+	protected bool TryGetRuffOrbitPoint(float angle, float radius, out Vector2 worldPoint)
+	{
+		if (ruff == null)
+		{
+			worldPoint = default;
+			return false;
+		}
+		worldPoint = Position + ruff.ProjectOrbitPoint(angle, radius);
+		return true;
+	}
 
 	void ResetAbilityControl()
 	{
@@ -284,7 +310,11 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		abilityPlaybackSpeed = PlaybackSpeed;
 		abilityPoseModifierWeight = 1;
 		abilityLookTarget = null;
+		abilityYaw = null;
+		abilityYawWeight = 0;
 		visual.PoseModifierWeight = 1;
+		visual.YawOverride = null;
+		visual.YawOverrideWeight = 0;
 	}
 
 	void UpdateScriptedMovement(bool grounded)
@@ -316,16 +346,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	void UpdateScriptRoutine()
 	{
-		if (scriptedRoutine == null)
+		if (!scriptedRoutine.Active)
 			return;
-		if (scriptedWait > 0)
-		{
-			scriptedWait -= Time.Delta;
-			return;
-		}
-		if (scriptedRoutine.MoveNext())
-			scriptedWait = scriptedRoutine.Current;
-		else
+		if (!scriptedRoutine.Update(Time.Delta))
 			EndScript();
 	}
 
@@ -333,7 +356,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		if (scripted)
 			return;
-		if (abilityActive)
+		if (abilityActive && !SuppressKnockdownOnHit)
 		{
 			InterruptAbility();
 			abilityActive = false;
@@ -349,19 +372,17 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		ArgumentNullException.ThrowIfNull(routine);
 		EndScript();
 		BeginScript();
-		scriptedRoutine = routine;
+		scriptedRoutine.Start(routine);
 	}
 
 	public void EndScript()
 	{
-		if (!scripted && scriptedRoutine == null)
+		if (!scripted && !scriptedRoutine.Active)
 			return;
-		scriptedRoutine?.Dispose();
-		scriptedRoutine = null;
+		scriptedRoutine.Stop();
 		Game.CancelSpeech(scriptedSpeech);
 		scriptedSpeech = null;
 		scripted = false;
-		scriptedWait = 0;
 		scriptedWalkTargetActor = null;
 		scriptedWalkTargetX = null;
 		scriptedArrived = false;
@@ -684,6 +705,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 		var away = Position.X < by.Position.X ? -1f : 1f;
 		visual.Hit(away);
+		if (SuppressKnockdownOnHit)
+			return;
 		Velocity = new Vector2(away * HitKnockbackSpeed, -HitLiftSpeed);
 		stepTraversal = StepTraversal.None;
 		visual.ResetFeet();

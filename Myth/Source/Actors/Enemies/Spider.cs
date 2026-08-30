@@ -236,9 +236,7 @@ public class Spider : Actor
 	{
 		var dt = MathF.Min(Time.Delta, 0.05f);
 		var target = (Vector2)Position - surface.TowardSurface * BodyHeight * Scale;
-		bodyVelocity += (target - bodyPosition) * BodySpring * dt;
-		bodyVelocity *= MathF.Exp(-BodyDamping * dt);
-		bodyPosition += bodyVelocity * dt;
+		Spring.Step(ref bodyPosition, ref bodyVelocity, target, BodySpring, BodyDamping, dt);
 		bodyAngle = Calc.AngleApproach(bodyAngle, Calc.Angle(surface.Tangent), TurnSpeed * dt);
 	}
 

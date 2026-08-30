@@ -84,7 +84,7 @@ public sealed partial class GameView
 		{
 			NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
 		}
-		if (PerfToggles.DitherAndTileField)
+		if (PerfToggles.DitherAndTileField || game.AirFlashAmount > 0)
 		{
 			using (PerfStats.Time(PerfStat.TileDither))
 			{
@@ -157,6 +157,8 @@ public sealed partial class GameView
 				particleSystem.Render(output, BackgroundLightMask, RenderCamera, zoomLevel, PerfToggles.Lighting,
 					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 		}
+		if (debugView == DebugView.None && game.AirFlashAmount > 0)
+			output = ApplyAirFlash(output);
 		DrawLayerTransition(output);
 		var mapOverlayVisible = false;
 		if (debugView is DebugView.None or DebugView.CollisionRects)
@@ -886,6 +888,29 @@ public sealed partial class GameView
 		return GlitchScreen;
 	}
 
+	Target ApplyAirFlash(Target input)
+	{
+		if (airFlashMaterial == null)
+			return input;
+		var output = input == GlitchScreen ? Screen : GlitchScreen;
+		output.Clear(Color.Transparent);
+		var color = (Vector4)game.airFlashColor;
+		airFlashMaterial.Material.Fragment.SetUniformBuffer([
+			color.X, color.Y, color.Z, game.AirFlashAmount,
+			Time.SecondsF, 0, 0, 0,
+		]);
+		airFlashMaterial.Material.Fragment.Samplers[1] = new(TileField,
+			new(TextureFilter.Nearest, TextureWrap.Clamp));
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(airFlashMaterial.Material);
+		Batcher.Image(input, input.Bounds.Center, input.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(output);
+		Batcher.Clear();
+		return output;
+	}
+
 	void CompositeLighting(float aoStrength)
 	{
 		var material = lightingCompositeMaterial!.Material;
@@ -1135,10 +1160,10 @@ public sealed partial class GameView
 		if (!roomTileFieldCaches.TryGetValue(renderRoom, out var cache) ||
 			cache.Target.Width != bounds.Width ||
 			cache.Target.Height != bounds.Height ||
-			cache.Target.Attachments[0].Format != TextureFormat.R8G8)
+			cache.Target.Attachments[0].Format != TextureFormat.R8G8B8A8)
 		{
 			cache?.Dispose();
-			cache = new(renderRoom, CreateRenderTarget(bounds.Width, bounds.Height, TextureFormat.R8G8, $"RoomTileField:{renderRoom.Id}"));
+			cache = new(renderRoom, CreateRenderTarget(bounds.Width, bounds.Height, TextureFormat.R8G8B8A8, $"RoomTileField:{renderRoom.Id}"));
 			roomTileFieldCaches[renderRoom] = cache;
 		}
 
@@ -1379,7 +1404,8 @@ public sealed partial class GameView
 		var hash = TileFieldHash(tile, worldTile);
 		var variant = (hash & 255) / 255.0f;
 		var family = TileFieldFamily(tile);
-		return new Color(variant, ((family << 5) | anchor) / 255.0f, 0.0f, 1.0f);
+		var solid = Factory.Find(tile) is { BlocksMovement: true } ? 1 : 0;
+		return new Color(variant, ((family << 5) | anchor) / 255.0f, solid, 1.0f);
 	}
 
 	static int TileFieldFamily(char tile)
@@ -2072,7 +2098,7 @@ public sealed partial class GameView
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
-		TileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "TileField"));
+		TileField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "TileField"));
 		ActorTileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "ActorTileField"));
 		ActorTileField.Clear(Color.Transparent);
 		actorTileFieldPopulated = false;
@@ -2308,7 +2334,7 @@ public sealed partial class GameView
 	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
-		BlendMask.Red | BlendMask.Green, Color.White);
+		BlendMask.Red | BlendMask.Green | BlendMask.Blue, Color.White);
 	static readonly BlendMode NormalBufferBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
@@ -2370,6 +2396,7 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? tileFieldStampMaterial;
 	readonly ReloadableMaterial? tileFieldDebugMaterial;
 	readonly ReloadableMaterial? pixelSortGlitchMaterial;
+	readonly ReloadableMaterial? airFlashMaterial;
 	readonly ReloadableMaterial? blurMaterial;
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;

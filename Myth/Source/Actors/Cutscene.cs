@@ -14,8 +14,7 @@ public class Cutscene : Actor
 	static float PupilScale => 80f;
 	static Vector2 PortraitPupilOffset => new(1, -9);
 
-	IEnumerator<float>? routine;
-	float routineWait;
+	readonly Coroutine routine = new();
 	float previousTimeScale;
 	float previousDitherGlitch;
 	float previousDitherGlitchTarget;
@@ -56,25 +55,17 @@ public class Cutscene : Actor
 		previousDitherGlitchPosition = Game.ditherGlitchPosition;
 		Game.ActiveCutscene = this;
 		Game.Minimap.Open = false;
-		routine = PlayCutscene();
+		routine.Start(PlayCutscene());
 	}
 
 	public override void Update()
 	{
 		base.Update();
-		if (!active || routine == null)
+		if (!active || !routine.Active)
 			return;
 
 		var delta = Game.Manager.Time.Delta;
-		if (routineWait > 0)
-		{
-			routineWait -= delta;
-			return;
-		}
-
-		if (routine.MoveNext())
-			routineWait = routine.Current;
-		else
+		if (!routine.Update(delta))
 			EndCutscene();
 	}
 
@@ -244,7 +235,7 @@ public class Cutscene : Actor
 			return;
 
 		active = false;
-		routine = null;
+		routine.Stop();
 		if (player != null)
 		{
 			player.ScriptedInput = null;

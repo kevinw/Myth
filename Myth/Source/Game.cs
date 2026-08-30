@@ -52,6 +52,13 @@ public partial class Game : IDisposable
 	public float SdfAuraScrollTime => View?.SdfAuraScrollTime ?? 0f;
 	public Vector2 ViewCenterWorld => View?.ViewCenterWorld ?? default;
 	public Target Screen => View!.Screen;
+	public void FlashAir(Color color, float hold = 0.05f, float fade = 0.22f)
+	{
+		airFlashColor = color;
+		airFlashStartedAt = Time.SecondsF;
+		airFlashHold = Math.Max(0, hold);
+		airFlashFade = Math.Max(0.001f, fade);
+	}
 	public bool ShowForegroundLayer
 	{
 		get => View?.ShowForegroundLayer ?? true;
@@ -121,6 +128,19 @@ public partial class Game : IDisposable
 	internal float ditherGlitchTarget;
 	internal Vector2 ditherGlitchAxis = Vector2.UnitX;
 	internal Vector2? ditherGlitchPosition;
+	internal Color airFlashColor;
+	internal float airFlashStartedAt = float.NegativeInfinity;
+	internal float airFlashHold;
+	internal float airFlashFade;
+	internal float AirFlashAmount
+	{
+		get
+		{
+			var age = Time.SecondsF - airFlashStartedAt;
+			return age < 0 || age >= airFlashHold + airFlashFade ? 0 :
+				age <= airFlashHold ? 1 : Ease.Cube.Out(1 - (age - airFlashHold) / airFlashFade);
+		}
+	}
 	internal Point2 shake;
 	internal Vector2 renderTargetShake;
 	internal bool ShakeInRenderTargetSpace;

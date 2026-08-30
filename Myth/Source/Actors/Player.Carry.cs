@@ -127,11 +127,7 @@ public partial class Player : Pawn
 		carryShiftVelocity -= velocityDelta * CarryMotionResponse;
 
 		var dt = Math.Min(Time.Delta, 1f / 30f);
-		carryShiftVelocity.X += -carryShift.X * CarrySpring.X * dt;
-		carryShiftVelocity.Y += -carryShift.Y * CarrySpring.Y * dt;
-		carryShiftVelocity.X *= MathF.Exp(-CarryDamping.X * dt);
-		carryShiftVelocity.Y *= MathF.Exp(-CarryDamping.Y * dt);
-		carryShift += carryShiftVelocity * dt;
+		Spring.Step(ref carryShift, ref carryShiftVelocity, Vector2.Zero, CarrySpring, CarryDamping, dt);
 
 		if (carryShift.LengthSquared() > CarryMaxOffset * CarryMaxOffset)
 		{

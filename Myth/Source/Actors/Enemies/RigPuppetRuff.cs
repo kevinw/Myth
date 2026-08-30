@@ -11,6 +11,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 	readonly record struct Face(Vector2 A, Vector2 B, Vector2 C, Vector2 D, float Depth, Color Color);
 
 	public RigPuppet Owner = null!;
+	public float SpinSpeed;
 
 	readonly float[] compression = new float[FoldCount];
 	readonly float[] compressionVelocity = new float[FoldCount];
@@ -18,6 +19,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 	readonly float[] targets = new float[FoldCount];
 	readonly Face[] faces = new Face[FoldCount * FacesPerFold];
 	HumanoidRigVisual.RuffPose pose;
+	float spin;
 
 	static float InnerRadius => 3.5f;
 	static float OuterRadius => 13;
@@ -49,6 +51,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		}
 
 		SyncOwner();
+		spin = MathF.IEEERemainder(spin + SpinSpeed * Time.Delta, MathF.Tau);
 		UpdateFolds();
 		BuildFaces();
 	}
@@ -70,7 +73,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		var armRadius = MathF.Max(CollisionRadius, Owner.Rig.BicepSize * 0.45f) / scale;
 		for (var i = 0; i < FoldCount; i++)
 		{
-			var angle = (i + 0.5f) * MathF.Tau / FoldCount;
+			var angle = (i + 0.5f) * MathF.Tau / FoldCount + spin;
 			var from = RuffPoint(pose.Neck, side, forward, angle, innerRadius);
 			var to = RuffPoint(pose.Neck, side, forward, angle, outerRadius);
 			var distance = MathF.Sqrt(MathF.Min(
@@ -85,13 +88,11 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 				MathF.Max(contacts[Wrap(i - 2)], contacts[Wrap(i + 2)]) * 0.15f));
 
 		var dt = MathF.Min(Time.Delta, 1 / 30f);
-		var damping = MathF.Exp(-FoldDamping * dt);
 		for (var i = 0; i < FoldCount; i++)
 		{
-			compressionVelocity[i] += (targets[i] - compression[i]) * FoldSpring * dt;
-			compressionVelocity[i] *= damping;
-			compression[i] = Math.Clamp(compression[i] + compressionVelocity[i] * dt, -0.1f,
-				MaximumCompression);
+			Spring.Step(ref compression[i], ref compressionVelocity[i], targets[i],
+				FoldSpring, FoldDamping, dt);
+			compression[i] = Math.Clamp(compression[i], -0.1f, MaximumCompression);
 		}
 	}
 
@@ -120,7 +121,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		var at = 0;
 		for (var i = 0; i < FoldCount; i++)
 		{
-			var start = i * step;
+			var start = i * step + spin;
 			var end = start + step;
 			var startCompression = (compression[Wrap(i - 1)] + compression[i]) * 0.5f;
 			var endCompression = (compression[i] + compression[Wrap(i + 1)]) * 0.5f;
@@ -181,6 +182,13 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		var shoulders = pose.RightUpperArm - pose.LeftUpperArm;
 		side = Normalize(shoulders - up * Vector3.Dot(shoulders, up), Vector3.UnitX);
 		forward = Normalize(Vector3.Cross(up, side), Vector3.UnitZ);
+	}
+
+	public Vector2 ProjectOrbitPoint(float angle, float radius)
+	{
+		RuffAxes(out _, out var side, out var forward);
+		return pose.Projection.Project(RuffPoint(pose.Neck, side, forward, angle + spin,
+			radius / Owner.Rig.PixelsPerMeter), out _);
 	}
 
 	static Vector3 Normalize(Vector3 value, Vector3 fallback)

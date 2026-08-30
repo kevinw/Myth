@@ -6,8 +6,7 @@ public abstract class SequenceActor : Actor
 {
 	public bool Once;
 
-	IEnumerator<float>? routine;
-	float wait;
+	readonly Coroutine routine = new();
 	bool started;
 	bool ended;
 
@@ -25,25 +24,18 @@ public abstract class SequenceActor : Actor
 	{
 		base.Added();
 		if (!Game.IsEditorPreview)
-			routine = Sequence();
+			routine.Start(Sequence());
 	}
 
 	public override void Update()
 	{
 		base.Update();
-		if (routine == null || ended)
+		if (!routine.Active || ended)
 			return;
-		if (wait > 0)
-		{
-			wait -= Time.Delta;
-			return;
-		}
 
 		try
 		{
-			if (routine.MoveNext())
-				wait = routine.Current;
-			else
+			if (!routine.Update(Time.Delta))
 				EndSequence(completed: true);
 		}
 		catch (Exception e)
@@ -71,8 +63,7 @@ public abstract class SequenceActor : Actor
 		if (ended)
 			return;
 		ended = true;
-		routine?.Dispose();
-		routine = null;
+		routine.Stop();
 		SequenceEnded(completed);
 	}
 

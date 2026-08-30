@@ -30,5 +30,13 @@
     "Loop": false,
     "Speed": 1,
     "FootIK": false
+  },
+  "FloatingFlashPose": {
+    "Clip": "Male_Sitting_Pose",
+    "Start": 0,
+    "End": 0,
+    "Loop": true,
+    "Speed": 1,
+    "FootIK": false
   }
 }

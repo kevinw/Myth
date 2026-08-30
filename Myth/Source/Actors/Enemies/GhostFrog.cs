@@ -31,8 +31,7 @@ public class GhostFrog : Actor
 	private Point2 home;
 	private Point2 lastPosition;
 	private Point2 playerPosition;
-	private IEnumerator<float>? routine;
-	private float routineWait;
+	private readonly Coroutine routine = new();
 	private readonly Func<IEnumerator<float>>[] stateRoutines;
 	private Rng rng;
 
@@ -285,17 +284,7 @@ public class GhostFrog : Actor
 		if (friction > 0 && CollidesWithSolids && Grounded())
 			Velocity.X = Calc.Approach(Velocity.X, 0, friction * Time.Delta);
 
-		// run our routine
-		if (routine != null)
-		{
-			var was = routine;
-			if (routineWait > 0)
-				routineWait -= Time.Delta;
-			else if (routine.MoveNext())
-				routineWait = routine.Current;
-			else if (was == routine)
-				routine = null;
-		}
+		routine.Update(Time.Delta);
 
 		// floaty visual behavior
 		if (state is States.Floating or States.Shoot or States.Reflect)
@@ -309,9 +298,10 @@ public class GhostFrog : Actor
 	private void SetState(States nextState)
 	{
 		state = nextState;
-		routineWait = 0;
-		routine = stateRoutines[(int)state]();
+		routine.Start(stateRoutines[(int)state]());
 	}
+
+	public override void Destroyed() => routine.Stop();
 
 	public override void OnWasHit(Actor by)
 	{

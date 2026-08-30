@@ -116,6 +116,7 @@ def retarget(source_path, target_path, output_dir):
         scene.frame_set(frame)
         for bone in target.pose.bones:
             bone.matrix_basis.identity()
+        bpy.context.view_layer.update()
 
         for target_name, source_base_name in BONE_MAP.items():
             source_name = source_bones[source_base_name]
@@ -128,6 +129,7 @@ def retarget(source_path, target_path, output_dir):
                 source_head = source.matrix_world @ source.pose.bones[source_name].head
                 head = target_pelvis_origin + (source_head - source_pelvis_origin) * translation_scale
             pose_bone.matrix = Matrix.Translation(head) @ desired.to_matrix().to_4x4()
+            bpy.context.view_layer.update()
             pose_bone.keyframe_insert("rotation_quaternion", frame=frame)
             if target_name == "pelvis":
                 pose_bone.keyframe_insert("location", frame=frame)

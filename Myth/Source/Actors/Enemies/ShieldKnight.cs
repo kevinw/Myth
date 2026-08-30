@@ -21,12 +21,13 @@ public class ShieldKnight : Actor
 		SetState(PatrolRoutine());
 	}
 
+	public override void Destroyed() => routine.Stop();
+
 	// A state is just its running routine. Transition by handing SetState a fresh one;
 	// the routine's own body is the state's per-frame behavior.
 	void SetState(IEnumerator<float> next) {
-		routineWait = 0;
 		fireCharge = 0;
-		routine = next;
+		routine.Start(next);
 	}
 
 	static RectInt ShieldHitbox => new(4, -18, 2, 18);
@@ -49,8 +50,7 @@ public class ShieldKnight : Actor
 	Point2 playerPosition;
 	Vector2 toPlayer;
 	float fireCharge;
-	float routineWait;
-	IEnumerator<float>? routine;
+	readonly Coroutine routine = new();
 
 	bool CheckForTurnAround() {
 		if (Facing != Math.Sign(toPlayer.X)) return false;
@@ -209,19 +209,6 @@ public class ShieldKnight : Actor
 		SetState(PatrolRoutine());
 	}
 
-	void RunCurrentRoutine()
-	{
-		if (routine == null)
-			return;
-		var was = routine;
-		if (routineWait > 0)
-			routineWait -= Time.Delta;
-		else if (routine.MoveNext())
-			routineWait = routine.Current;
-		else if (was == routine)
-			routine = null;
-	}
-
 	public override void OnCollideY() {
 		base.OnCollideY();
 	}
@@ -240,7 +227,7 @@ public class ShieldKnight : Actor
 		wasGrounded = grounded;
 		grounded = Grounded();
 
-		RunCurrentRoutine();
+		routine.Update(Time.Delta);
 
 		Velocity.Y += Gravity * Time.Delta;
 		if (grounded)

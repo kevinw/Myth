@@ -7,7 +7,7 @@ namespace Myth;
 	LivePositionEditable = true)]
 public sealed class EyeLaserPuppet : RigPuppet
 {
-	enum Phase { None, Turning, Charge, Fire, Recover }
+	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash }
 
 	[I(24, 160), InspectorGroup("Eye Laser")] public float MinimumRange = 48;
 	[I(48, 320)] public float MaximumRange = 176;
@@ -24,11 +24,16 @@ public sealed class EyeLaserPuppet : RigPuppet
 	public Color LaserColor = 0x5fcde4;
 	public ContentRef<SurfaceContent> LaserSurfaceId = new("");
 	public string SoundEvent = "lightning_trap";
+	[I(0, 1), InspectorGroup("Floating Flash")] public float FloatingFlashChance = 0.55f;
+	[I(4, 40)] public float FloatingFlashHeight = 14;
+	public Color FloatingFlashColor = 0xffd7f2;
 
 	const string ChargeTake = "EyeLaserCharge";
 	const string FireTake = "EyeLaserFire";
 	const string RecoverTake = "EyeLaserRecover";
+	const string FloatingFlashTake = "FloatingFlashPose";
 	const string ChargeEffect = "eye_laser_charge";
+	const string FloatingFlashEffect = "floating_flash_charge";
 	const string WarmupParameter = "Warmup";
 	const string FireDurationParameter = "FireDuration";
 
@@ -46,18 +51,38 @@ public sealed class EyeLaserPuppet : RigPuppet
 	float particleTimer;
 	float endpointPopTimer;
 	int chargeEffect = -1;
+	int floatingFlashEffect = -1;
 	SoundInstance? sound;
+	float flashParticleTimer;
+	bool floating;
+	readonly Coroutine floatingFlash = new();
 
 	static float ChargeParticleRate => 42;
 	static float ChargeParticleRadius => 18;
 	static float EndpointPopInterval => 0.08f;
 	static float FireGrowTime => 0.07f;
 	static float FireShakeTime => 0.08f;
+	static float FlashSettleTime => 0.2f;
+	static float FlashTurnTime => 0.4f;
+	static float FlashTurnHoldTime => 0.15f;
+	static float FlashRiseTime => 0.75f;
+	static float FlashHoverHoldTime => 0.25f;
+	static float FlashChargeTime => 2;
+	static float FlashImpactTime => 0.1f;
+	static float FlashAftershockTime => 0.25f;
+	static float FlashDescentTime => 0.55f;
+	static float FlashLandHoldTime => 0.15f;
+	static float FlashRecoverTime => 0.35f;
+	static float FlashCooldown => 4;
+	static float FlashParticleRate => 54;
+	static float FlashParticleRadius => 24;
+	static float FlashRuffSpeed => MathF.Tau * 3.8f;
 
 	public override void Added()
 	{
 		base.Added();
 		chargeEffect = Game.Particles?.AcquireEffect(ChargeEffect) ?? -1;
+		floatingFlashEffect = Game.Particles?.AcquireEffect(FloatingFlashEffect) ?? -1;
 		ConfigureLaser();
 	}
 
@@ -78,7 +103,10 @@ public sealed class EyeLaserPuppet : RigPuppet
 			SetAbilityLookTarget(player.Position);
 			if (cooldown > 0)
 				return true;
-			phase = Phase.Turning;
+			if (Ruff && Game.rng.Chance(FloatingFlashChance))
+				BeginFloatingFlash(player);
+			else
+				phase = Phase.Turning;
 		}
 
 		Velocity.X = 0;
@@ -120,9 +148,123 @@ public sealed class EyeLaserPuppet : RigPuppet
 				if (AbilityAnimationFinished)
 					FinishAttack();
 				break;
+
+			case Phase.FloatingFlash:
+				if (!floatingFlash.Update(Time.Delta))
+					FinishFloatingFlash();
+				break;
 		}
 
 		return true;
+	}
+
+	protected override bool AbilityControlsMovement => floating;
+	protected override bool SuppressKnockdownOnHit => floating;
+
+	void BeginFloatingFlash(Player player)
+	{
+		phase = Phase.FloatingFlash;
+		floatingFlash.Start(FloatingFlashRoutine(player));
+	}
+
+	IEnumerator<float> FloatingFlashRoutine(Player player)
+	{
+		PlayAbilityIdle();
+		SetAbilityLookTarget(null);
+		SetAbilityPoseModifierWeight(0);
+		SetAbilityYaw(CameraFacingYaw, 0);
+		yield return FlashSettleTime;
+
+		for (var time = 0f; time < FlashTurnTime; time += Time.Delta)
+		{
+			SetAbilityYaw(CameraFacingYaw, Ease.Cube.InOut(Math.Clamp(time / FlashTurnTime, 0, 1)));
+			yield return 0;
+		}
+		SetAbilityYaw(CameraFacingYaw);
+		yield return FlashTurnHoldTime;
+
+		PlayAbilityTake(FloatingFlashTake, FlashRiseTime);
+		floating = true;
+		Velocity.Y = -FloatingFlashHeight / FlashRiseTime;
+		yield return FlashRiseTime;
+		Velocity = Vector2.Zero;
+		yield return FlashHoverHoldTime;
+
+		flashParticleTimer = 0;
+		for (var time = 0f; time < FlashChargeTime; time += Time.Delta)
+		{
+			var progress = Math.Clamp(time / FlashChargeTime, 0, 1);
+			SetRuffSpin(FlashRuffSpeed * Ease.Cube.In(progress));
+			EmitFloatingFlashParticles(progress);
+			yield return 0;
+		}
+
+		SetRuffSpin(FlashRuffSpeed);
+		Game.FlashAir(FloatingFlashColor);
+		Game.ShakeRenderTarget(FlashImpactTime);
+		if (player.State != Player.States.Burrow)
+			Hit(player);
+		yield return FlashImpactTime;
+
+		for (var time = 0f; time < FlashAftershockTime; time += Time.Delta)
+		{
+			SetRuffSpin(FlashRuffSpeed * (1 - Math.Clamp(time / FlashAftershockTime, 0, 1)));
+			yield return 0;
+		}
+		SetRuffSpin(0);
+
+		Velocity.Y = FloatingFlashHeight / FlashDescentTime;
+		for (var time = 0f; time < FlashDescentTime || !Grounded(); time += Time.Delta)
+		{
+			if (time >= FlashDescentTime * 3)
+				break;
+			yield return 0;
+		}
+		Velocity = Vector2.Zero;
+		floating = false;
+		yield return FlashLandHoldTime;
+
+		PlayAbilityIdle();
+		for (var time = 0f; time < FlashRecoverTime; time += Time.Delta)
+		{
+			SetAbilityYaw(CameraFacingYaw, 1 - Ease.Cube.InOut(Math.Clamp(time / FlashRecoverTime, 0, 1)));
+			yield return 0;
+		}
+	}
+
+	void EmitFloatingFlashParticles(float progress)
+	{
+		if (floatingFlashEffect < 0 || Game.Particles is not { } particles)
+			return;
+		flashParticleTimer -= Time.Delta;
+		var interval = 1 / FlashParticleRate;
+		for (var emitted = 0; flashParticleTimer <= 0 && emitted < 4; emitted++, flashParticleTimer += interval)
+		{
+			var angle = Game.rng.Angle();
+			var radius = Calc.Lerp(FlashParticleRadius, 16, progress);
+			if (!TryGetRuffOrbitPoint(angle, radius, out var origin) ||
+				!TryGetRuffOrbitPoint(angle, 0, out var center) ||
+				!TryGetRuffOrbitPoint(angle + 0.12f, radius, out var next))
+				return;
+			var inward = (center - origin).Normalized();
+			var tangent = (next - origin).Normalized();
+			var direction = (inward + tangent * Calc.Lerp(0.35f, 0.8f, progress)).Normalized(inward);
+			particles.Emit(floatingFlashEffect, origin, 1, MathF.Atan2(direction.Y, direction.X),
+				Calc.Lerp(0.7f, 1.3f, progress), 0.08f);
+		}
+	}
+
+	void FinishFloatingFlash()
+	{
+		floatingFlash.Stop();
+		floating = false;
+		phase = Phase.None;
+		cooldown = FlashCooldown;
+		Velocity = Vector2.Zero;
+		SetRuffSpin(0);
+		SetAbilityYaw(null);
+		SetAbilityLookTarget(null);
+		SetAbilityPoseModifierWeight(1);
 	}
 
 	void BeginCharge(Player player)
@@ -200,9 +342,13 @@ public sealed class EyeLaserPuppet : RigPuppet
 
 	void CancelAttack(float nextCooldown)
 	{
+		floatingFlash.Stop();
+		floating = false;
 		phase = Phase.None;
 		beamAlpha = eyeGlow = 0;
 		cooldown = MathF.Max(cooldown, nextCooldown);
+		SetRuffSpin(0);
+		SetAbilityYaw(null);
 		StopAndReleaseSound(ref sound, true);
 	}
 
@@ -272,6 +418,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	{
 		base.Destroyed();
 		Game.Particles?.ReleaseEffect(ref chargeEffect);
+		Game.Particles?.ReleaseEffect(ref floatingFlashEffect);
 	}
 
 	public override void Render(Batcher batcher)

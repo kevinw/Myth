@@ -54,10 +54,10 @@ public class Drone : Actor
 	float turretAngle;
 	float shootTimer;
 
-	float routineWait;
-	IEnumerator<float>? routine;
+	readonly Coroutine routine = new();
 
 	public override void Destroyed() {
+		routine.Stop();
 		Game.Particles?.ReleaseEffect(ref sparkEffect);
 	}
 
@@ -78,10 +78,7 @@ public class Drone : Actor
 	// A state is just its running routine (see ShieldKnight): transition by handing SetState a
 	// fresh one; the routine's own body is the state's per-frame behavior.
 	void SetState(IEnumerator<float> next)
-	{
-		routineWait = 0;
-		routine = next;
-	}
+		=> routine.Start(next);
 
 	IEnumerator<float> HoverRoutine()
 	{
@@ -140,19 +137,6 @@ public class Drone : Actor
 		Velocity -= dir * RecoilSpeed; // physical kick backward
 	}
 
-	void RunCurrentRoutine()
-	{
-		if (routine == null)
-			return;
-		var was = routine;
-		if (routineWait > 0)
-			routineWait -= Time.Delta;
-		else if (routine.MoveNext())
-			routineWait = routine.Current;
-		else if (was == routine)
-			routine = null;
-	}
-
 	public override void Update()
 	{
 		base.Update();
@@ -173,7 +157,7 @@ public class Drone : Actor
 		if (toPlayerDir.LengthSquared() > 0.0001f)
 			turretAngle = Calc.AngleApproach(turretAngle, Calc.Angle(toPlayerDir), TurretTurnSpeed * Time.Delta);
 
-		RunCurrentRoutine();
+		routine.Update(Time.Delta);
 
 		Velocity = Calc.Approach(Velocity, Vector2.Zero, friction * Time.Delta);
 	}
