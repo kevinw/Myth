@@ -91,6 +91,7 @@
       "NeuralContrast": 1.055,
       "VisualFPS": 12.118,
       "ArticulatedCombatBounds": true,
+      "Ruff": true,
       "PixelsPerMeter": 51.955,
       "StraddlesPlayerDepth": true,
       "SecondaryMotion": 1.207,

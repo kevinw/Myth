@@ -8,6 +8,9 @@ public enum RigSkinMode { Solid, Surface, NCA }
 sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
 	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null) : IDisposable
 {
+	public readonly record struct RuffPose(Vector2 Neck, Vector2 Head,
+		Vector2 LeftUpperArm, Vector2 LeftLowerArm, Vector2 RightUpperArm, Vector2 RightLowerArm);
+
 	enum Part { Torso, Bicep, Forearm, Thigh, Other }
 	enum LegSide { None, Left, Right }
 	enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
@@ -107,6 +110,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	int leftPalm;
 	int rightHand;
 	int rightPalm;
+	int leftUpperArm;
+	int leftLowerArm;
+	int rightUpperArm;
+	int rightLowerArm;
 	int pelvis;
 	float animationPhase;
 	float gaitHeadBias;
@@ -235,6 +242,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		leftPalm = RequiredJoint("middle_01_l");
 		rightHand = RequiredJoint("hand_r");
 		rightPalm = RequiredJoint("middle_01_r");
+		leftUpperArm = RequiredJoint("upperarm_l");
+		leftLowerArm = RequiredJoint("lowerarm_l");
+		rightUpperArm = RequiredJoint("upperarm_r");
+		rightLowerArm = RequiredJoint("lowerarm_r");
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
 		rightLeg = RequiredLeg("r");
@@ -287,6 +298,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	public bool TryGetClip(string name, out OzzRig.Clip clip) => rig.TryGetClip(name, out clip);
 	public OzzRig.Clip GetClip(string name) => rig.GetClip(name);
+	public RuffPose GetRuffPose() => new(projectedPose[neck], projectedPose[head],
+		projectedPose[leftUpperArm], projectedPose[leftLowerArm],
+		projectedPose[rightUpperArm], projectedPose[rightLowerArm]);
 
 	public void Play(string name, bool blend = true, bool restart = false, bool seededPhase = false,
 		float blendDuration = -1)

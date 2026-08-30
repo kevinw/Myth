@@ -38,10 +38,12 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	[I(1, 4)] public int StepDown = 2;
 	public bool ArticulatedCombatBounds;
 	public bool StraddlesPlayerDepth;
+	[InspectorGroup("Costume")] public bool Ruff;
 	[I(1, 20)] public int Health = 8;
 
 	HumanoidRigVisual visual = null!;
 	RigPuppetBackLegRenderer? backLegRenderer;
+	RigPuppetRuff? ruff;
 	StepTraversal stepTraversal;
 	Vector2 stepStartOffset;
 	Vector2 stepVisualOffset;
@@ -51,6 +53,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool recovering;
 	bool walking;
 	bool abilityActive;
+	bool visualReady;
 	bool abilityLoop = true;
 	bool abilityFootIK = true;
 	float abilityPlaybackSpeed = 1;
@@ -116,6 +119,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual = new(this, Rig, Neural, NeuralReactions);
 		SyncVisual();
 		visual.Initialize(IdleAnimationName);
+		visualReady = true;
+		SyncRuff();
 	}
 
 	void SyncVisual()
@@ -128,6 +133,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		SyncBackLegRenderer();
+		SyncRuff();
 	}
 
 	void SyncBackLegRenderer()
@@ -142,6 +148,19 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		backLegRenderer ??= Game.Create<RigPuppetBackLegRenderer>(Position, it => it.Owner = this);
 		backLegRenderer.Position = Position;
 		backLegRenderer.KeepOnRoomTransition = KeepOnRoomTransition;
+	}
+
+	void SyncRuff()
+	{
+		if (!Ruff || !visualReady)
+		{
+			if (ruff != null)
+				Game.Destroy(ruff);
+			ruff = null;
+			return;
+		}
+		ruff ??= Game.Create<RigPuppetRuff>(Position, it => it.Owner = this);
+		ruff.KeepOnRoomTransition = KeepOnRoomTransition;
 	}
 
 	string IdleName()
@@ -631,9 +650,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			InterruptAbility();
 		EndScript();
 		visual?.Dispose();
+		visualReady = false;
 		if (backLegRenderer != null)
 			Game.Destroy(backLegRenderer);
 		backLegRenderer = null;
+		if (ruff != null)
+			Game.Destroy(ruff);
+		ruff = null;
 	}
 
 	public override void OnWasHit(Actor by)
@@ -673,28 +696,34 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		if (!SpriteBlinkHidden)
 		{
+			ruff?.DrawBack(batcher, null);
 			if (StraddlesPlayerDepth)
 				visual?.DrawInFrontOfPlayer(batcher, Color.White, silhouette: false);
 			else
 				visual?.Draw(batcher, Color.White, silhouette: false);
+			ruff?.DrawFront(batcher, null);
 		}
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color)
 	{
+		ruff?.DrawBack(batcher, color);
 		if (StraddlesPlayerDepth)
 			visual?.DrawInFrontOfPlayer(batcher, color, silhouette: true);
 		else
 			visual?.Draw(batcher, color, silhouette: true);
+		ruff?.DrawFront(batcher, color);
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
 	public override void RenderNormals(Batcher batcher)
 	{
+		ruff?.DrawBack(batcher, new Color(0x8080ff));
 		if (StraddlesPlayerDepth)
 			visual?.DrawNormalsInFrontOfPlayer(batcher);
 		else
 			visual?.DrawNormals(batcher);
+		ruff?.DrawFront(batcher, new Color(0x8080ff));
 	}
 
 	internal void RenderBehindPlayer(Batcher batcher)
@@ -717,6 +746,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
 		=> visual?.PerturbNeuralTexture(context);
+
+	internal HumanoidRigVisual.RuffPose RuffPose => visual.GetRuffPose();
+	internal bool RuffVisible => Ruff && Visible && !SpriteBlinkHidden;
 
 	internal override bool OverlapsCombatBounds(in RectInt bounds)
 		=> !ArticulatedCombatBounds || visual == null
