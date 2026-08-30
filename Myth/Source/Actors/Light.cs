@@ -159,10 +159,8 @@ public class Light : Actor, IHitByHitbox
 
 	public void HitByHitbox(RectInt hitbox)
 	{
-		if (!hitbox.Overlaps(Hitbox.Rect + Position))
+		if (!hitbox.Overlaps(Hitbox.Rect + Position) || !DrawSprite)
 			return;
-
-
 
 		AudioEvent("torch_hit");
 		hitFlickerAge = 0;

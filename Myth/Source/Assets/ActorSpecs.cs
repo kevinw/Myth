@@ -245,7 +245,7 @@ public static class ActorSpecs
 		return Create(game, spec, position);
 	}
 
-	public static Actor? Create(Game game, JsonObject spec, Point2? position = null)
+	public static Actor? Create(Game game, JsonObject spec, Point2? position = null, string? sessionDestroyKey = null)
 	{
 		var resolved = Resolve(spec);
 		var typeName = ReadString(resolved, TypeKey);
@@ -258,6 +258,7 @@ public static class ActorSpecs
 		var actorPosition = position ?? ReadPoint(resolved, PositionKey) ?? Point2.Zero;
 		return game.Create(type.Type, actorPosition, actor =>
 		{
+			actor.SessionDestroyKey = sessionDestroyKey;
 			Apply(actor, type.Type, resolved);
 #if EDITOR
 			actor.AuthoredSpec = spec;

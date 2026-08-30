@@ -257,6 +257,10 @@ public sealed partial class GameView : IDisposable
 			size.X,
 			size.Y);
 		box = DodgeSpeechObstacles(box, screen);
+		var speakerBounds = StorySpeechSpeakerBounds(bubble);
+		box = NudgeStorySpeechForLeader(font, layout, box, screen, speakerBounds);
+		DrawStorySpeechLeader(bubble, speakerBounds, ClippedStorySpeechGlyphPoint(font, layout, box,
+			speakerBounds.Center - RenderCamera));
 
 		// Reveal characters over the canonical (whitespace-normalized) text: lines join
 		// back into it with one space each, so a per-line budget with a -1 per join is exact.
@@ -279,6 +283,93 @@ public sealed partial class GameView : IDisposable
 			if (remaining <= 0)
 				break;
 		}
+	}
+
+	static bool SpeechLineFollowsSpeaker => true;
+	static float SpeechLineSpeakerGap => 1.5f;
+	static float SpeechLineTextGap => 1f;
+	static float SpeechLineMinimumLength => 10f;
+	static float SpeechLineMaxTextNudge => 8f;
+	static float SpeechLineWeight => 2f;
+
+	Rect StorySpeechSpeakerBounds(Game.StorySpeechBubble bubble)
+		=> SpeechLineFollowsSpeaker && Actors.Contains(bubble.Speaker) && !game.destroying.Contains(bubble.Speaker)
+			? bubble.Speaker.GetVisualBounds()
+			: bubble.SpeakerBounds;
+
+	static Rect StorySpeechGlyphRun(SpriteFont font, in Game.StorySpeechLayout layout, Rect box, int index)
+	{
+		var width = MathF.Ceiling(font.WidthOf(layout.Lines[index]));
+		return new(
+			MathF.Round(box.Left + layout.Padding.X + (layout.Width - width) * 0.5f),
+			MathF.Round(box.Top + layout.Padding.Y + index * layout.LineHeight),
+			width,
+			MathF.Ceiling(font.LineHeight));
+	}
+
+	static Vector2 ClippedStorySpeechGlyphPoint(SpriteFont font, in Game.StorySpeechLayout layout, Rect box,
+		Vector2 speakerCenter)
+	{
+		var glyphBounds = StorySpeechGlyphRun(font, layout, box, 0);
+		for (var i = 1; i < layout.Lines.Count; i++)
+			glyphBounds = glyphBounds.Conflate(StorySpeechGlyphRun(font, layout, box, i));
+
+		var direction = (glyphBounds.Center - speakerCenter).Normalized(-Vector2.UnitY);
+		var ray = new Line(speakerCenter, glyphBounds.Center + direction * box.Size.Length());
+		var closest = glyphBounds.Center;
+		var closestDistance = float.MaxValue;
+		for (var i = 0; i < layout.Lines.Count; i++)
+		{
+			var run = StorySpeechGlyphRun(font, layout, box, i);
+			foreach (var edge in run.Edges)
+				if (ray.Intersects(edge, out var point))
+				{
+					var distance = Vector2.DistanceSquared(point, speakerCenter);
+					if (distance < closestDistance)
+					{
+						closest = point;
+						closestDistance = distance;
+					}
+				}
+		}
+		return closest;
+	}
+
+	Rect NudgeStorySpeechForLeader(SpriteFont font, in Game.StorySpeechLayout layout, Rect box, Point2 screen,
+		Rect speakerBounds)
+	{
+		var speakerCenter = speakerBounds.Center - RenderCamera;
+		var text = ClippedStorySpeechGlyphPoint(font, layout, box, speakerCenter);
+		var speaker = speakerBounds.ClosestPointOnEdges(text + RenderCamera) - RenderCamera;
+		var shortfall = SpeechLineSpeakerGap + SpeechLineTextGap + SpeechLineMinimumLength -
+			Vector2.Distance(speaker, text);
+		if (shortfall <= 0)
+			return box;
+
+		var away = (box.Center - speakerCenter).Normalized(-Vector2.UnitY);
+		var offset = away * MathF.Min(shortfall, SpeechLineMaxTextNudge);
+		box.X = ClampToScreen(box.X + offset.X, box.Width, screen.X);
+		box.Y = ClampToScreen(box.Y + offset.Y, box.Height, screen.Y);
+		return box;
+	}
+
+	void DrawStorySpeechLeader(Game.StorySpeechBubble bubble, Rect speakerBounds, Vector2 text)
+	{
+		if (bubble.VoiceLevel <= 0)
+			return;
+
+		var speaker = speakerBounds.ClosestPointOnEdges(text + RenderCamera) - RenderCamera;
+		var delta = text - speaker;
+		var length = delta.Length();
+		if (length <= SpeechLineSpeakerGap + SpeechLineTextGap)
+			return;
+
+		var direction = delta / length;
+		var from = speaker + direction * SpeechLineSpeakerGap;
+		var to = text - direction * SpeechLineTextGap;
+		var opacity = MathF.Sqrt(bubble.VoiceLevel);
+		Batcher.Line(from + Vector2.One, to + Vector2.One, SpeechLineWeight, SpeechShadowColor * opacity);
+		Batcher.Line(from, to, SpeechLineWeight, bubble.Color * opacity);
 	}
 
 	private const int SpeechShadowOffset = 1;

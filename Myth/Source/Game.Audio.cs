@@ -104,6 +104,7 @@ public partial class Game
 		try
 		{
 			using var instance = Audio.CreateEvent($"event:/{path}");
+			instance.SetVolume(Math.Clamp(gain, 0, 1));
 			// Labeled "syllable" parameter ("ba", "scho", …) so clips are legible in FMOD;
 			// fall back to the raw index if names weren't baked.
 			if (voiceClipNames is { } names && syllable >= 0 && syllable < names.Length)

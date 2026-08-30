@@ -11,7 +11,6 @@ public class Chest : Actor
 	[I(1, 8), VisibleWhen(nameof(Loot), ChestLoot.Mycelon)]
 	public int MycelonDrop = 3; // coins scattered when a Mycelon chest is broken
 
-	bool restored; // one-time open-husk restore ran (SessionDestroyKey isn't set until after Added)
 	bool opened;   // now an open husk; blocks re-breaking
 
 	public Chest()
@@ -23,17 +22,10 @@ public class Chest : Actor
 	public override void Added()
 	{
 		base.Added();
-		Play("closed");
-	}
-
-	public override void Update()
-	{
-		base.Update();
-		if (restored)
-			return;
-		restored = true;
 		if (SessionDestroyKey is { } key && Game.Save.OpenedChests.Contains(key))
 			Open(spawnLoot: true); // reload of an already-opened chest: re-place missed loot
+		else
+			Play("closed");
 	}
 
 	public override void OnWasHit(Actor by)
@@ -98,6 +90,6 @@ public class Chest : Actor
 	{
 		const int spacing = 7;
 		var x = Position.X + (int)MathF.Round((index - (count - 1) / 2f) * spacing);
-		return new Point2(x, Position.Y - Game.TileSize);
+		return new Point2(x, Position.Y - Game.TileSize + 1);
 	}
 }

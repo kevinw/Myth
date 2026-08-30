@@ -26,6 +26,9 @@ internal static partial class BrowserFmod
 	[JSImport("setEventPaused", "MythBrowserFmod")]
 	internal static partial void SetEventPaused(int id, bool paused);
 
+	[JSImport("setEventVolume", "MythBrowserFmod")]
+	internal static partial void SetEventVolume(int id, float volume);
+
 	[JSImport("getTimelinePosition", "MythBrowserFmod")]
 	internal static partial int GetTimelinePosition(int id);
 

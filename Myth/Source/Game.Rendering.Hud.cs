@@ -137,7 +137,6 @@ public sealed partial class GameView
 		float sineStart = Time.SecondsF * 7.5f;
 		float sineStep = 0.14f;
 		Vector2 sineOffset = new (1f, 4f);
-
 		font.DrawSineWave(Batcher, BurrowUpgradeLabel, position + Vector2.One, justify, font.Size, shadowColor, sineStart, sineStep, sineOffset);
 		font.DrawSineWave(Batcher, BurrowUpgradeLabel, position, justify, font.Size, color, sineStart, sineStep, sineOffset);
 	}

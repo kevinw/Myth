@@ -210,6 +210,12 @@ export function setEventPaused(id, paused) {
 		check(instance.setPaused(paused), `Failed to ${paused ? "pause" : "resume"} FMOD event instance`);
 }
 
+export function setEventVolume(id, volume) {
+	const instance = getInstance(id);
+	if (instance)
+		check(instance.setVolume(volume), "Failed to set FMOD event volume");
+}
+
 export function getTimelinePosition(id) {
 	const instance = getInstance(id);
 	if (!instance)

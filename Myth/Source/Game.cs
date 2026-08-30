@@ -2337,8 +2337,7 @@ public partial class Game : IDisposable
 			if (Save.PersistentDestroyedActors.Contains(sessionDestroyKey) || Save.Session.DestroyedActors.Contains(sessionDestroyKey))
 				continue;
 
-			if (ActorSpecs.Create(this, actor, offset + localPosition) is { } created)
-				created.SessionDestroyKey = sessionDestroyKey;
+			ActorSpecs.Create(this, actor, offset + localPosition, sessionDestroyKey);
 		}
 
 		hiddenCover.Build(forRoom);

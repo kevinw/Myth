@@ -1,5 +1,7 @@
 namespace Myth;
 
+using System.Numerics;
+
 // The quick, fully-modal beat when a burrow upgrade is collected: freezes the world (TimeScale 0)
 // scales up the HUD, grows the stamina bar, then scales the HUD back down before restoring time.
 // Spawned by Pickup.Grant after the capacity has already increased.
@@ -27,6 +29,8 @@ public class BurrowUpgradeGet : Actor
 		base.Added();
 		previousTimeScale = Game.TimeScale;
 		Game.TimeScale = 0; // fully modal
+		// if the player was squished when we pause time, it looks weird
+		Game.GetFirst<Player>()?.Squish = Vector2.One;
 		SetHud(0);
 	}
 

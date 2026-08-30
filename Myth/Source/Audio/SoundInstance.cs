@@ -31,6 +31,12 @@ public sealed class SoundInstance : IDisposable
 		BrowserFmod.SetEventPaused(instance, paused);
 	}
 
+	public void SetVolume(float volume)
+	{
+		ThrowIfReleased();
+		BrowserFmod.SetEventVolume(instance, volume);
+	}
+
 	public int GetTimelinePosition()
 	{
 		ThrowIfReleased();
@@ -95,6 +101,12 @@ public sealed class SoundInstance : IDisposable
 	{
 		ThrowIfReleased();
 		Audio.Check(instance.setPaused(paused), $"Failed to {(paused ? "pause" : "resume")} FMOD event instance");
+	}
+
+	public void SetVolume(float volume)
+	{
+		ThrowIfReleased();
+		Audio.Check(instance.setVolume(volume), "Failed to set FMOD event volume");
 	}
 
 	public int GetTimelinePosition()

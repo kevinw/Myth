@@ -7,20 +7,41 @@ namespace Myth;
 public partial class Game
 {
 	// The line is pinned to where it was spoken: the speaker walks on, the words stay put.
-	internal sealed class StorySpeechBubble(Vector2 position, string text, Color color, float duration, Utterance utterance, ISyllableSink sink)
+	internal sealed class StorySpeechBubble(Actor speaker, Vector2 position, string text, Color color, float duration,
+		Utterance utterance, ISyllableSink sink) : ISyllableSink
 	{
+		static float VoiceAttackRate => 24f;
+		static float VoiceHoldTime => 0.08f;
+		static float VoiceReleaseRate => 3.5f;
+
+		public readonly Actor Speaker = speaker;
+		public readonly Rect SpeakerBounds = speaker.GetVisualBounds();
 		public readonly Vector2 Position = position;
 		public readonly string Text = text;
 		public readonly Color Color = color; // whose voice this is, at a glance
 		public readonly float Duration = duration;
 		public float Age;
 		public int VisibleLength;
+		public float VoiceLevel;
 		public bool Finished;
+		float voiceGain;
+		float voiceHold;
 
 		public void Tick(float dt)
 		{
 			Age += dt;
-			VisibleLength = utterance.Advance(Age, sink);
+			VisibleLength = utterance.Advance(Age, this);
+			voiceHold = MathF.Max(0, voiceHold - dt);
+			var active = voiceHold > 0;
+			VoiceLevel = Calc.Approach(VoiceLevel, active ? voiceGain : 0,
+				(active ? VoiceAttackRate : VoiceReleaseRate) * dt);
+		}
+
+		void ISyllableSink.Play(int syllable, float pitch, float gain)
+		{
+			voiceGain = Math.Clamp(gain, 0, 1);
+			voiceHold = VoiceHoldTime;
+			sink.Play(syllable, pitch, gain);
 		}
 	}
 
@@ -201,7 +222,8 @@ public partial class Game
 		// Snapshot where the speaker stood: both the bubble and the voice stay at that spot
 		// for the whole line rather than trailing the speaker around.
 		var origin = (Vector2)speaker.Position + offset;
-		var bubble = new StorySpeechBubble(origin, text, color, duration, utterance, CreateVoiceSink(origin, voice ?? BudVoiceName));
+		var bubble = new StorySpeechBubble(speaker, origin, text, color, duration, utterance,
+			CreateVoiceSink(origin, voice ?? BudVoiceName));
 		storySpeechBubbles.Add(bubble);
 		return bubble;
 	}
