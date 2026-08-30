@@ -139,6 +139,8 @@ public partial class Game : IDisposable
 	{
 		public float Emphasis;
 		public float Particles;
+		public float LabelTravel;
+		public Point2 LabelWorldOrigin;
 		public bool Active;
 		public bool Growing;
 	}

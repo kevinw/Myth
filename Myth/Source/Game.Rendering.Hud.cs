@@ -116,21 +116,30 @@ public sealed partial class GameView
 			return;
 
 #if BROWSER
-		var position = new Vector2(finalBarEnd, 14 * BurrowUpgradeHudScale + 2);
-		var justify = new Vector2(0.5f, 0);
+		var finalPosition = new Vector2(finalBarEnd, 14 * BurrowUpgradeHudScale + 2);
+		var finalJustify = new Vector2(0.5f, 0);
 #else
-		var position = new Vector2(finalBarEnd, Height - 14 * BurrowUpgradeHudScale - 2);
-		var justify = new Vector2(0.5f, 1);
+		var finalPosition = new Vector2(finalBarEnd, Height - 14 * BurrowUpgradeHudScale - 2);
+		var finalJustify = new Vector2(0.5f, 1);
 #endif
+		var travel = Ease.Cube.Out(game.BurrowUpgradeHud.LabelTravel);
+		var position = Vector2.Lerp(((Vector2)game.BurrowUpgradeHud.LabelWorldOrigin - RenderCamera) * zoomLevel,
+			finalPosition, travel);
+		var justify = Vector2.Lerp(new Vector2(0.5f), finalJustify, travel);
 		var alpha = game.BurrowUpgradeHud.Emphasis;
 		var pulseTime = game.Manager.Time.SecondsF - burrowLabelPulseStart;
 		var pulse = pulseTime < BurrowLabelPulseDuration
 			? (1 - MathF.Cos(pulseTime * MathF.Tau * BurrowLabelPulseFrequency)) * 0.5f
 			: 0;
 		var color = Color.Lerp(Color.White, new Color(90, 205, 120, 255), pulse) * alpha;
-		Batcher.Text(font, BurrowUpgradeLabel, position + Vector2.One, justify, font.Size,
-			new Color(0x000000, (byte)170) * alpha);
-		Batcher.Text(font, BurrowUpgradeLabel, position, justify, font.Size, color);
+		var shadowColor = new Color(0x000000, 170) * alpha;
+
+		float sineStart = Time.SecondsF * 7.5f;
+		float sineStep = 0.14f;
+		Vector2 sineOffset = new (1f, 4f);
+
+		font.DrawSineWave(Batcher, BurrowUpgradeLabel, position + Vector2.One, justify, font.Size, shadowColor, sineStart, sineStep, sineOffset);
+		font.DrawSineWave(Batcher, BurrowUpgradeLabel, position, justify, font.Size, color, sineStart, sineStep, sineOffset);
 	}
 
 	void DrawBurrowGrowthParticles(Vector2 barEnd, float time, float amount)

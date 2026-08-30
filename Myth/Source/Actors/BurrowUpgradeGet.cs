@@ -9,6 +9,7 @@ public class BurrowUpgradeGet : Actor
 	static float ScaleTime => 0.7f;
 	static float HoldTime => 0.35f;
 	static float GrowTime => 0.95f;
+	static float LabelTravelTime => 0.7f;
 	static float Duration => ScaleTime * 2 + HoldTime + GrowTime;
 
 	float timer;
@@ -26,7 +27,7 @@ public class BurrowUpgradeGet : Actor
 		base.Added();
 		previousTimeScale = Game.TimeScale;
 		Game.TimeScale = 0; // fully modal
-		Game.BurrowUpgradeHud = new() { Active = true };
+		SetHud(0);
 	}
 
 	public override void Update()
@@ -34,20 +35,15 @@ public class BurrowUpgradeGet : Actor
 		base.Update();
 		timer += Game.Manager.Time.Delta; // real time; the sim is frozen
 		if (timer < ScaleTime)
-			Game.BurrowUpgradeHud = new() { Active = true, Emphasis = timer / ScaleTime };
+			SetHud(timer / ScaleTime);
 		else if (timer < ScaleTime + HoldTime)
-			Game.BurrowUpgradeHud = new()
-			{
-				Active = true,
-				Emphasis = 1,
-				Particles = (timer - ScaleTime) / HoldTime,
-			};
+			SetHud(1, (timer - ScaleTime) / HoldTime);
 		else if (timer < ScaleTime + HoldTime + GrowTime)
-			Game.BurrowUpgradeHud = new() { Active = true, Emphasis = 1, Particles = 1, Growing = true };
+			SetHud(1, 1, growing: true);
 		else
 		{
 			var emphasis = 1 - Math.Clamp((timer - ScaleTime - HoldTime - GrowTime) / ScaleTime, 0f, 1f);
-			Game.BurrowUpgradeHud = new() { Active = true, Emphasis = emphasis, Particles = emphasis };
+			SetHud(emphasis, emphasis);
 		}
 
 		if (timer >= Duration)
@@ -57,4 +53,15 @@ public class BurrowUpgradeGet : Actor
 			Game.Destroy(this);
 		}
 	}
+
+	void SetHud(float emphasis, float particles = 0, bool growing = false)
+		=> Game.BurrowUpgradeHud = new()
+		{
+			Active = true,
+			Emphasis = emphasis,
+			Particles = particles,
+			Growing = growing,
+			LabelWorldOrigin = Position,
+			LabelTravel = Math.Clamp(timer / LabelTravelTime, 0f, 1f),
+		};
 }
