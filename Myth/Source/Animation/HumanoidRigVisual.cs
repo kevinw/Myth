@@ -5,11 +5,34 @@ namespace Myth;
 
 public enum RigSkinMode { Solid, Surface, NCA }
 
+interface IHumanoidRigAccessoryVisual
+{
+	int DrawItemCount { get; }
+	float GetDrawItemDepth(int index);
+	void DrawItem(Batcher batcher, int index, Color? tint);
+}
+
 sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
 	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null) : IDisposable
 {
-	public readonly record struct RuffPose(Vector2 Neck, Vector2 Head,
-		Vector2 LeftUpperArm, Vector2 LeftLowerArm, Vector2 RightUpperArm, Vector2 RightLowerArm);
+	public readonly record struct RuffProjection(Vector3 Pivot, float PivotX, float Mirror,
+		float TurnCos, float TurnSin, float CameraCos, float CameraSin, float PixelsPerMeter,
+		Vector2 ScreenOffset, Vector2 Correction)
+	{
+		public Vector2 Project(Vector3 point, out float depth)
+		{
+			var offset = point - Pivot;
+			var turned = new Vector3(offset.X * TurnCos + offset.Z * TurnSin, offset.Y,
+				-offset.X * TurnSin + offset.Z * TurnCos);
+			depth = point.X * CameraCos + point.Z * CameraSin;
+			return new Vector2(PivotX * Mirror - turned.Z * CameraCos + turned.X * CameraSin, -point.Y) *
+				PixelsPerMeter + ScreenOffset + Correction;
+		}
+	}
+
+	public readonly record struct RuffPose(Vector3 Neck, Vector3 Head,
+		Vector3 LeftUpperArm, Vector3 LeftLowerArm, Vector3 RightUpperArm, Vector3 RightLowerArm,
+		RuffProjection Projection);
 
 	enum Part { Torso, Bicep, Forearm, Thigh, Other }
 	enum LegSide { None, Left, Right }
@@ -298,9 +321,23 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	public bool TryGetClip(string name, out OzzRig.Clip clip) => rig.TryGetClip(name, out clip);
 	public OzzRig.Clip GetClip(string name) => rig.GetClip(name);
-	public RuffPose GetRuffPose() => new(projectedPose[neck], projectedPose[head],
-		projectedPose[leftUpperArm], projectedPose[leftLowerArm],
-		projectedPose[rightUpperArm], projectedPose[rightLowerArm]);
+	public RuffPose GetRuffPose()
+	{
+		var angle = Settings.ProjectionYaw * MathF.PI / 180f;
+		var pivot = ragdollPose[pelvis];
+		var cameraCos = MathF.Cos(angle);
+		var cameraSin = MathF.Sin(angle);
+		var yaw = UpperBodyYaw();
+		var projection = new RuffProjection(pivot, -pivot.Z * cameraCos + pivot.X * cameraSin,
+			turning ? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount) : -(int)visualFacing,
+			MathF.Cos(yaw), MathF.Sin(yaw), cameraCos, cameraSin, Settings.PixelsPerMeter,
+			new Vector2(0, 2.5f) + Offset, Vector2.Zero);
+		var neck3D = ragdollPose[neck];
+		var projectedNeck = projection.Project(neck3D, out _);
+		projection = projection with { Correction = projectedPose[neck] - projectedNeck };
+		return new(neck3D, HeadPosition3D(), ragdollPose[leftUpperArm], ragdollPose[leftLowerArm],
+			ragdollPose[rightUpperArm], ragdollPose[rightLowerArm], projection);
+	}
 
 	public void Play(string name, bool blend = true, bool restart = false, bool seededPhase = false,
 		float blendDuration = -1)
@@ -547,7 +584,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		var secondaryMotion = Settings.SecondaryMotion * PoseModifierWeight;
 		var headOffset = UpdateSecondaryPoint(ref headMotion, owner.Position + projectedPose[head],
-			HeadMotionSpring, HeadMotionDamping, HeadMotionMaxOffset) * secondaryMotion;
+			HeadMotionSpring, HeadMotionDamping, HeadMotionMaxOffset) * secondaryMotion * Settings.HeadSecondaryMotion;
 		var leftOffset = UpdateSecondaryPoint(ref leftHandMotion, owner.Position + projectedPose[leftHand],
 			HandMotionSpring, HandMotionDamping, HandMotionMaxOffset) * secondaryMotion;
 		var rightOffset = UpdateSecondaryPoint(ref rightHandMotion, owner.Position + projectedPose[rightHand],
@@ -647,6 +684,16 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			sampledPose[i] += rigOffset * upperBodyMask[i];
 	}
 
+	float UpperBodyYaw()
+	{
+		if (!turning || Settings.TurnInertia <= 0)
+			return visualYaw;
+		var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
+		var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
+		progress = progress * progress * (3 - 2 * progress);
+		return float.Lerp(turnFromYaw, turnToYaw, progress);
+	}
+
 	public void Dispose()
 	{
 		animator?.Dispose();
@@ -658,15 +705,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		var angle = Settings.ProjectionYaw * MathF.PI / 180f;
 		var cos = MathF.Cos(angle);
 		var sin = MathF.Sin(angle);
-		var upperBodyYaw = visualYaw;
 		var inertiaActive = turning && Settings.TurnInertia > 0;
-		if (inertiaActive)
-		{
-			var delay = TurnInertiaDelay * Math.Clamp(Settings.TurnInertia, 0, 1);
-			var progress = Math.Clamp((turnTime / TurnDuration - delay) / (1 - delay), 0, 1);
-			progress = progress * progress * (3 - 2 * progress);
-			upperBodyYaw = float.Lerp(turnFromYaw, turnToYaw, progress);
-		}
+		var upperBodyYaw = UpperBodyYaw();
 		var pivot = ragdollPose[pelvis];
 		var pivotX = -pivot.Z * cos + pivot.X * sin;
 		var mirror = turning
@@ -678,7 +718,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		var upperTurnSin = MathF.Sin(upperBodyYaw);
 		for (var i = 0; i < sampledPose.Length; i++)
 		{
-			var joint = ragdollJoints[i] ? ragdollPose[i] : sampledPose[i];
+			var joint = i == head ? HeadPosition3D() : ragdollJoints[i] ? ragdollPose[i] : sampledPose[i];
 			var offset = joint - pivot;
 			var weight = inertiaActive ? upperBodyMask[i] : 0;
 			var jointYaw = float.Lerp(visualYaw, upperBodyYaw, weight);
@@ -691,6 +731,16 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			jointDepth[i] = joint.X * cos + joint.Z * sin;
 		}
 		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? LegSide.Left : LegSide.Right;
+	}
+
+	Vector3 HeadPosition3D()
+	{
+		var from = ragdollPose[neck];
+		var to = ragdollPose[head];
+		var direction = to - from;
+		return direction.LengthSquared() > 0.000001f
+			? to + Vector3.Normalize(direction) * (Settings.NeckExtension / Settings.PixelsPerMeter)
+			: to;
 	}
 
 	float LegDepth(Leg leg)
@@ -934,11 +984,18 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			1, 14, color);
 	}
 
-	public void Draw(Batcher batcher, Color tint, bool silhouette) => Draw(batcher, tint, silhouette, DrawParts.All);
+	public void Draw(Batcher batcher, Color tint, bool silhouette)
+		=> Draw(batcher, tint, silhouette, DrawParts.All, null);
+	public void DrawWithAccessory(Batcher batcher, Color tint, bool silhouette,
+		IHumanoidRigAccessoryVisual accessory)
+		=> Draw(batcher, tint, silhouette, DrawParts.All, accessory);
 	public void DrawBehindPlayer(Batcher batcher, Color tint, bool silhouette)
-		=> Draw(batcher, tint, silhouette, DrawParts.BehindPlayer);
+		=> Draw(batcher, tint, silhouette, DrawParts.BehindPlayer, null);
 	public void DrawInFrontOfPlayer(Batcher batcher, Color tint, bool silhouette)
-		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer);
+		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer, null);
+	public void DrawInFrontOfPlayerWithAccessory(Batcher batcher, Color tint, bool silhouette,
+		IHumanoidRigAccessoryVisual accessory)
+		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer, accessory);
 
 	bool Includes(Bone bone, DrawParts parts)
 		=> parts switch
@@ -948,7 +1005,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			_ => bone.Leg != backLeg,
 		};
 
-	void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
+	void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts,
+		IHumanoidRigAccessoryVisual? accessory)
 	{
 		var surface = !silhouette && Settings.SkinMode == RigSkinMode.Surface
 			? Assets.GetSurface(Settings.SurfaceId) : null;
@@ -956,11 +1014,24 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			? neuralSkin.OutputTexture : null;
 		if (neuralTexture != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var accessoryIndex = 0;
+		var headDrawn = parts == DrawParts.BehindPlayer;
+		var headDepth = jointDepth[head];
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
 		{
 			var bone = bones[boneOrder[sortedIndex]];
 			if (!Includes(bone, parts))
 				continue;
+			var boneDepth = BoneDepth(bone);
+			if (accessory != null && !headDrawn && headDepth <= boneDepth)
+			{
+				DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth,
+					silhouette ? tint : null);
+				DrawHead(batcher, tint, silhouette, surface, neuralTexture);
+				headDrawn = true;
+			}
+			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, boneDepth,
+				silhouette ? tint : null);
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
 			BoneWidths(bone, out var fromWidth, out var toWidth);
@@ -983,30 +1054,47 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			batcher.Circle(to, MathF.Max(1.2f, toWidth * 0.42f), 8, color);
 		}
 
-		if (parts != DrawParts.BehindPlayer)
+		if (!headDrawn)
 		{
-			var headPosition = projectedPose[head];
-			batcher.Circle(headPosition, Settings.HeadSize + 1.4f, 14,
-				silhouette ? tint : Settings.OutlineColor);
-			batcher.Circle(headPosition, Settings.HeadSize, 14, silhouette ? tint : Settings.NearColor);
-			if (surface != null)
-				DrawSurfaceCircle(batcher, surface, headPosition, Settings.HeadSize,
-					neuralHeadUV, neuralHeadUVRadius, normals: false);
-			else if (neuralTexture != null)
-				DrawNeuralCircle(batcher, neuralTexture, headPosition, Settings.HeadSize,
-					neuralHeadUV, neuralHeadUVRadius, Settings.NearColor * Neural.NeuralColorAmount);
-			if (!silhouette)
-				batcher.Circle(headPosition + lookDirection * 2.4f, 1.1f * eyeScale, 8, Settings.AccentColor);
+			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth,
+				silhouette ? tint : null);
+			DrawHead(batcher, tint, silhouette, surface, neuralTexture);
 		}
+		DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, float.PositiveInfinity,
+			silhouette ? tint : null);
 		if (neuralTexture != null)
 			batcher.PopSampler();
 	}
 
-	public void DrawNormals(Batcher batcher) => DrawNormals(batcher, DrawParts.All);
-	public void DrawNormalsBehindPlayer(Batcher batcher) => DrawNormals(batcher, DrawParts.BehindPlayer);
-	public void DrawNormalsInFrontOfPlayer(Batcher batcher) => DrawNormals(batcher, DrawParts.InFrontOfPlayer);
+	void DrawHead(Batcher batcher, Color tint, bool silhouette, Surface? surface, Texture? neuralTexture)
+	{
+		var position = projectedPose[head];
+		batcher.Circle(position, Settings.HeadSize + 1.4f, 14,
+			silhouette ? tint : Settings.OutlineColor);
+		batcher.Circle(position, Settings.HeadSize, 14, silhouette ? tint : Settings.NearColor);
+		if (surface != null)
+			DrawSurfaceCircle(batcher, surface, position, Settings.HeadSize,
+				neuralHeadUV, neuralHeadUVRadius, normals: false);
+		else if (neuralTexture != null)
+			DrawNeuralCircle(batcher, neuralTexture, position, Settings.HeadSize,
+				neuralHeadUV, neuralHeadUVRadius, Settings.NearColor * Neural.NeuralColorAmount);
+		if (!silhouette)
+			batcher.Circle(position + lookDirection * 2.4f, 1.1f * eyeScale, 8, Settings.AccentColor);
+	}
 
-	void DrawNormals(Batcher batcher, DrawParts parts)
+	public void DrawNormals(Batcher batcher)
+		=> DrawNormals(batcher, DrawParts.All, null);
+	public void DrawNormalsWithAccessory(Batcher batcher, IHumanoidRigAccessoryVisual accessory)
+		=> DrawNormals(batcher, DrawParts.All, accessory);
+	public void DrawNormalsBehindPlayer(Batcher batcher)
+		=> DrawNormals(batcher, DrawParts.BehindPlayer, null);
+	public void DrawNormalsInFrontOfPlayer(Batcher batcher)
+		=> DrawNormals(batcher, DrawParts.InFrontOfPlayer, null);
+	public void DrawNormalsInFrontOfPlayerWithAccessory(Batcher batcher,
+		IHumanoidRigAccessoryVisual accessory)
+		=> DrawNormals(batcher, DrawParts.InFrontOfPlayer, accessory);
+
+	void DrawNormals(Batcher batcher, DrawParts parts, IHumanoidRigAccessoryVisual? accessory)
 	{
 		var flat = new Color(0x8080ff);
 		var surface = Settings.SkinMode == RigSkinMode.Surface &&
@@ -1016,11 +1104,22 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			? neuralSkin.OutputNormalTexture : null;
 		if (neuralNormals != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var accessoryIndex = 0;
+		var headDrawn = parts == DrawParts.BehindPlayer;
+		var headDepth = jointDepth[head];
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
 		{
 			var bone = bones[boneOrder[sortedIndex]];
 			if (!Includes(bone, parts))
 				continue;
+			var boneDepth = BoneDepth(bone);
+			if (accessory != null && !headDrawn && headDepth <= boneDepth)
+			{
+				DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth, flat);
+				DrawHeadNormals(batcher, flat, surface, neuralNormals);
+				headDrawn = true;
+			}
+			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, boneDepth, flat);
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
 			BoneWidths(bone, out var fromWidth, out var toWidth);
@@ -1032,19 +1131,38 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				DrawNeuralBone(batcher, neuralNormals, from, to, fromWidth, toWidth,
 					neuralBoneUVs[boneOrder[sortedIndex]], Color.White * Neural.NeuralNormalAmount);
 		}
-		if (parts != DrawParts.BehindPlayer)
+		if (!headDrawn)
 		{
-			var headPosition = projectedPose[head];
-			batcher.Circle(headPosition, Settings.HeadSize + 1.4f, 14, flat);
-			if (surface != null)
-				DrawSurfaceCircle(batcher, surface, headPosition, Settings.HeadSize,
-					neuralHeadUV, neuralHeadUVRadius, normals: true);
-			else if (neuralNormals != null)
-				DrawNeuralCircle(batcher, neuralNormals, headPosition, Settings.HeadSize,
-					neuralHeadUV, neuralHeadUVRadius, Color.White * Neural.NeuralNormalAmount);
+			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth, flat);
+			DrawHeadNormals(batcher, flat, surface, neuralNormals);
 		}
+		DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, float.PositiveInfinity, flat);
 		if (neuralNormals != null)
 			batcher.PopSampler();
+	}
+
+	void DrawHeadNormals(Batcher batcher, Color flat, Surface? surface, Texture? neuralNormals)
+	{
+		var position = projectedPose[head];
+		batcher.Circle(position, Settings.HeadSize + 1.4f, 14, flat);
+		if (surface != null)
+			DrawSurfaceCircle(batcher, surface, position, Settings.HeadSize,
+				neuralHeadUV, neuralHeadUVRadius, normals: true);
+		else if (neuralNormals != null)
+			DrawNeuralCircle(batcher, neuralNormals, position, Settings.HeadSize,
+				neuralHeadUV, neuralHeadUVRadius, Color.White * Neural.NeuralNormalAmount);
+	}
+
+	static void DrawAccessoryThrough(Batcher batcher, IHumanoidRigAccessoryVisual? accessory,
+		ref int index, float depth, Color? tint)
+	{
+		if (accessory == null)
+			return;
+		while (index < accessory.DrawItemCount && accessory.GetDrawItemDepth(index) <= depth)
+		{
+			accessory.DrawItem(batcher, index, tint);
+			index++;
+		}
 	}
 
 	static void BoneQuad(Vector2 from, Vector2 to, float fromWidth, float toWidth,

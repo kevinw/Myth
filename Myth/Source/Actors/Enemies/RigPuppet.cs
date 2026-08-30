@@ -694,36 +694,50 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	public override void Render(Batcher batcher)
 	{
-		if (!SpriteBlinkHidden)
+		if (SpriteBlinkHidden)
+			return;
+		if (ruff != null)
 		{
-			ruff?.DrawBack(batcher, null);
 			if (StraddlesPlayerDepth)
-				visual?.DrawInFrontOfPlayer(batcher, Color.White, silhouette: false);
+				visual.DrawInFrontOfPlayerWithAccessory(batcher, Color.White, silhouette: false, ruff);
 			else
-				visual?.Draw(batcher, Color.White, silhouette: false);
-			ruff?.DrawFront(batcher, null);
+				visual.DrawWithAccessory(batcher, Color.White, silhouette: false, ruff);
 		}
+		else if (StraddlesPlayerDepth)
+			visual?.DrawInFrontOfPlayer(batcher, Color.White, silhouette: false);
+		else
+			visual?.Draw(batcher, Color.White, silhouette: false);
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color)
 	{
-		ruff?.DrawBack(batcher, color);
-		if (StraddlesPlayerDepth)
+		if (ruff != null)
+		{
+			if (StraddlesPlayerDepth)
+				visual.DrawInFrontOfPlayerWithAccessory(batcher, color, silhouette: true, ruff);
+			else
+				visual.DrawWithAccessory(batcher, color, silhouette: true, ruff);
+		}
+		else if (StraddlesPlayerDepth)
 			visual?.DrawInFrontOfPlayer(batcher, color, silhouette: true);
 		else
 			visual?.Draw(batcher, color, silhouette: true);
-		ruff?.DrawFront(batcher, color);
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
 	public override void RenderNormals(Batcher batcher)
 	{
-		ruff?.DrawBack(batcher, new Color(0x8080ff));
-		if (StraddlesPlayerDepth)
+		if (ruff != null)
+		{
+			if (StraddlesPlayerDepth)
+				visual.DrawNormalsInFrontOfPlayerWithAccessory(batcher, ruff);
+			else
+				visual.DrawNormalsWithAccessory(batcher, ruff);
+		}
+		else if (StraddlesPlayerDepth)
 			visual?.DrawNormalsInFrontOfPlayer(batcher);
 		else
 			visual?.DrawNormals(batcher);
-		ruff?.DrawFront(batcher, new Color(0x8080ff));
 	}
 
 	internal void RenderBehindPlayer(Batcher batcher)
@@ -748,7 +762,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		=> visual?.PerturbNeuralTexture(context);
 
 	internal HumanoidRigVisual.RuffPose RuffPose => visual.GetRuffPose();
-	internal bool RuffVisible => Ruff && Visible && !SpriteBlinkHidden;
 
 	internal override bool OverlapsCombatBounds(in RectInt bounds)
 		=> !ArticulatedCombatBounds || visual == null

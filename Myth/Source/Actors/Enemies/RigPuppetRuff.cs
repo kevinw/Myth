@@ -3,9 +3,12 @@ using Foster.Framework;
 
 namespace Myth;
 
-sealed class RigPuppetRuff : Actor
+sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 {
 	const int FoldCount = 12;
+	const int FacesPerFold = 4;
+
+	readonly record struct Face(Vector2 A, Vector2 B, Vector2 C, Vector2 D, float Depth, Color Color);
 
 	public RigPuppet Owner = null!;
 
@@ -13,12 +16,12 @@ sealed class RigPuppetRuff : Actor
 	readonly float[] compressionVelocity = new float[FoldCount];
 	readonly float[] contacts = new float[FoldCount];
 	readonly float[] targets = new float[FoldCount];
+	readonly Face[] faces = new Face[FoldCount * FacesPerFold];
 	HumanoidRigVisual.RuffPose pose;
 
-	static float InnerRadiusX => 3.5f;
-	static float InnerRadiusY => 1.5f;
-	static float OuterRadiusX => 13;
-	static float OuterRadiusY => 5;
+	static float InnerRadius => 3.5f;
+	static float OuterRadius => 13;
+	static float Thickness => 2.5f;
 	static float CollisionRadius => 2;
 	static float MaximumCompression => 0.72f;
 	static float FoldSpring => 110;
@@ -34,6 +37,7 @@ sealed class RigPuppetRuff : Actor
 	{
 		base.Added();
 		SyncOwner();
+		BuildFaces();
 	}
 
 	public override void Update()
@@ -46,6 +50,7 @@ sealed class RigPuppetRuff : Actor
 
 		SyncOwner();
 		UpdateFolds();
+		BuildFaces();
 	}
 
 	void SyncOwner()
@@ -58,18 +63,19 @@ sealed class RigPuppetRuff : Actor
 	void UpdateFolds()
 	{
 		Array.Clear(contacts);
-		var up = (pose.Head - pose.Neck).Normalized(Vector2.UnitY);
-		var across = up.TurnLeft();
-		var leftArm = new Line(pose.LeftUpperArm, pose.LeftLowerArm);
-		var rightArm = new Line(pose.RightUpperArm, pose.RightLowerArm);
-		var armRadius = MathF.Max(CollisionRadius, Owner.Rig.BicepSize * 0.45f);
+		RuffAxes(out _, out var side, out var forward);
+		var scale = Owner.Rig.PixelsPerMeter;
+		var innerRadius = InnerRadius / scale;
+		var outerRadius = OuterRadius / scale;
+		var armRadius = MathF.Max(CollisionRadius, Owner.Rig.BicepSize * 0.45f) / scale;
 		for (var i = 0; i < FoldCount; i++)
 		{
 			var angle = (i + 0.5f) * MathF.Tau / FoldCount;
-			var fold = new Line(Ellipse(pose.Neck, across, up, angle, InnerRadiusX, InnerRadiusY),
-				Ellipse(pose.Neck, across, up, angle, OuterRadiusX, OuterRadiusY));
-			var distance = MathF.Sqrt(MathF.Min(fold.ClosestDistanceSquared(leftArm),
-				fold.ClosestDistanceSquared(rightArm)));
+			var from = RuffPoint(pose.Neck, side, forward, angle, innerRadius);
+			var to = RuffPoint(pose.Neck, side, forward, angle, outerRadius);
+			var distance = MathF.Sqrt(MathF.Min(
+				SegmentDistanceSquared(from, to, pose.LeftUpperArm, pose.LeftLowerArm),
+				SegmentDistanceSquared(from, to, pose.RightUpperArm, pose.RightLowerArm)));
 			contacts[i] = Math.Clamp((armRadius - distance) / armRadius, 0, 1) * MaximumCompression;
 		}
 
@@ -89,44 +95,149 @@ sealed class RigPuppetRuff : Actor
 		}
 	}
 
-	internal void DrawBack(Batcher batcher, Color? tint) => Draw(batcher, tint, front: false);
-	internal void DrawFront(Batcher batcher, Color? tint) => Draw(batcher, tint, front: true);
-
-	void Draw(Batcher batcher, Color? tint, bool front)
+	int IHumanoidRigAccessoryVisual.DrawItemCount => faces.Length;
+	float IHumanoidRigAccessoryVisual.GetDrawItemDepth(int index) => faces[index].Depth;
+	void IHumanoidRigAccessoryVisual.DrawItem(Batcher batcher, int index, Color? tint)
 	{
-		if ((!Owner.RuffVisible && tint == null) || !Owner.Visible || !Owner.Ruff)
-			return;
-		pose = Owner.RuffPose;
-		var up = (pose.Head - pose.Neck).Normalized(Vector2.UnitY);
-		var across = up.TurnLeft();
+		var face = faces[index];
+		batcher.Quad(face.A, face.B, face.C, face.D, tint ?? face.Color);
+		if (tint == null)
+		{
+			DrawEdge(batcher, face.A, face.B);
+			DrawEdge(batcher, face.B, face.C);
+			DrawEdge(batcher, face.C, face.D);
+			DrawEdge(batcher, face.D, face.A);
+		}
+	}
+
+	void BuildFaces()
+	{
+		RuffAxes(out var up, out var side, out var forward);
+		var scale = Owner.Rig.PixelsPerMeter;
+		var innerRadius = InnerRadius / scale;
+		var halfThickness = up * (Thickness / scale * 0.5f);
 		var step = MathF.Tau / FoldCount;
+		var at = 0;
 		for (var i = 0; i < FoldCount; i++)
 		{
 			var start = i * step;
 			var end = start + step;
-			if (MathF.Sin(start + step * 0.5f) < 0 != front)
-				continue;
 			var startCompression = (compression[Wrap(i - 1)] + compression[i]) * 0.5f;
 			var endCompression = (compression[i] + compression[Wrap(i + 1)]) * 0.5f;
-			var a = Ellipse(pose.Neck, across, up, start, InnerRadiusX, InnerRadiusY);
-			var b = OuterPoint(pose.Neck, across, up, start, startCompression);
-			var c = OuterPoint(pose.Neck, across, up, end, endCompression);
-			var d = Ellipse(pose.Neck, across, up, end, InnerRadiusX, InnerRadiusY);
-			var color = tint ?? (i % 2 == 0 ? Owner.Rig.NearColor :
-				Color.Lerp(Owner.Rig.NearColor, Owner.Rig.FarColor, 0.28f));
-			batcher.Quad(a, b, c, d, color);
-			if (tint == null)
-				batcher.QuadLine(a, b, c, d, 0.65f, Owner.Rig.OutlineColor);
+			var innerStart = RuffPoint(pose.Neck, side, forward, start, innerRadius);
+			var outerStart = OuterPoint(pose.Neck, side, forward, start, startCompression, scale);
+			var outerEnd = OuterPoint(pose.Neck, side, forward, end, endCompression, scale);
+			var innerEnd = RuffPoint(pose.Neck, side, forward, end, innerRadius);
+			var color = i % 2 == 0 ? Owner.Rig.NearColor :
+				Color.Lerp(Owner.Rig.NearColor, Owner.Rig.FarColor, 0.28f);
+			var underside = Color.Lerp(color, Owner.Rig.FarColor, 0.45f);
+			var outerWall = Color.Lerp(color, Owner.Rig.FarColor, 0.65f);
+			var innerWall = Color.Lerp(Owner.Rig.FarColor, Owner.Rig.OutlineColor, 0.45f);
+			faces[at++] = ProjectFace(innerStart + halfThickness, outerStart + halfThickness,
+				outerEnd + halfThickness, innerEnd + halfThickness, color);
+			faces[at++] = ProjectFace(innerEnd - halfThickness, outerEnd - halfThickness,
+				outerStart - halfThickness, innerStart - halfThickness, underside);
+			faces[at++] = ProjectFace(outerStart - halfThickness, outerStart + halfThickness,
+				outerEnd + halfThickness, outerEnd - halfThickness, outerWall);
+			faces[at++] = ProjectFace(innerEnd - halfThickness, innerEnd + halfThickness,
+				innerStart + halfThickness, innerStart - halfThickness, innerWall);
+		}
+		SortFaces();
+	}
+
+	Face ProjectFace(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color)
+	{
+		var pa = pose.Projection.Project(a, out var da);
+		var pb = pose.Projection.Project(b, out var db);
+		var pc = pose.Projection.Project(c, out var dc);
+		var pd = pose.Projection.Project(d, out var dd);
+		return new(pa, pb, pc, pd, (da + db + dc + dd) * 0.25f, color);
+	}
+
+	void SortFaces()
+	{
+		for (var i = 1; i < faces.Length; i++)
+		{
+			var face = faces[i];
+			var at = i;
+			while (at > 0 && faces[at - 1].Depth > face.Depth)
+			{
+				faces[at] = faces[at - 1];
+				at--;
+			}
+			faces[at] = face;
 		}
 	}
 
-	Vector2 OuterPoint(Vector2 center, Vector2 across, Vector2 up, float angle, float amount)
-		=> Ellipse(center, across, up, angle,
-			float.Lerp(OuterRadiusX, InnerRadiusX + 1, amount / MaximumCompression),
-			float.Lerp(OuterRadiusY, InnerRadiusY + 0.5f, amount / MaximumCompression));
+	void DrawEdge(Batcher batcher, Vector2 from, Vector2 to)
+	{
+		if (Vector2.DistanceSquared(from, to) > 0.01f)
+			batcher.Line(from, to, 0.65f, Owner.Rig.OutlineColor);
+	}
 
-	static Vector2 Ellipse(Vector2 center, Vector2 across, Vector2 up, float angle, float radiusX, float radiusY)
-		=> center + across * MathF.Cos(angle) * radiusX + up * MathF.Sin(angle) * radiusY;
+	void RuffAxes(out Vector3 up, out Vector3 side, out Vector3 forward)
+	{
+		up = Normalize(pose.Head - pose.Neck, Vector3.UnitY);
+		var shoulders = pose.RightUpperArm - pose.LeftUpperArm;
+		side = Normalize(shoulders - up * Vector3.Dot(shoulders, up), Vector3.UnitX);
+		forward = Normalize(Vector3.Cross(up, side), Vector3.UnitZ);
+	}
+
+	static Vector3 Normalize(Vector3 value, Vector3 fallback)
+		=> value.LengthSquared() > 0.000001f ? Vector3.Normalize(value) : fallback;
+
+	static Vector3 OuterPoint(Vector3 center, Vector3 side, Vector3 forward, float angle, float amount, float scale)
+		=> RuffPoint(center, side, forward, angle,
+			float.Lerp(OuterRadius, InnerRadius + 1, amount / MaximumCompression) / scale);
+
+	static Vector3 RuffPoint(Vector3 center, Vector3 side, Vector3 forward, float angle, float radius)
+		=> center + (side * MathF.Cos(angle) + forward * MathF.Sin(angle)) * radius;
+
+	static float SegmentDistanceSquared(Vector3 p1, Vector3 q1, Vector3 p2, Vector3 q2)
+	{
+		var d1 = q1 - p1;
+		var d2 = q2 - p2;
+		var r = p1 - p2;
+		var a = Vector3.Dot(d1, d1);
+		var e = Vector3.Dot(d2, d2);
+		var f = Vector3.Dot(d2, r);
+		float s;
+		float t;
+		if (a <= 0.000001f && e <= 0.000001f)
+			return Vector3.DistanceSquared(p1, p2);
+		if (a <= 0.000001f)
+		{
+			s = 0;
+			t = Math.Clamp(f / e, 0, 1);
+		}
+		else
+		{
+			var c = Vector3.Dot(d1, r);
+			if (e <= 0.000001f)
+			{
+				t = 0;
+				s = Math.Clamp(-c / a, 0, 1);
+			}
+			else
+			{
+				var b = Vector3.Dot(d1, d2);
+				var denominator = a * e - b * b;
+				s = denominator != 0 ? Math.Clamp((b * f - c * e) / denominator, 0, 1) : 0;
+				t = (b * s + f) / e;
+				if (t < 0)
+				{
+					t = 0;
+					s = Math.Clamp(-c / a, 0, 1);
+				}
+				else if (t > 1)
+				{
+					t = 1;
+					s = Math.Clamp((b - c) / a, 0, 1);
+				}
+			}
+		}
+		return Vector3.DistanceSquared(p1 + d1 * s, p2 + d2 * t);
+	}
 
 	static int Wrap(int index) => (index + FoldCount) % FoldCount;
 

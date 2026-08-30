@@ -6,6 +6,7 @@ public sealed class HumanoidRigSettings
 {
 	[InspectorGroup("Animation")] public bool SeedAnimationPhase;
 	[I(0, 2)] public float SecondaryMotion;
+	[I(0, 2)] public float HeadSecondaryMotion = 1;
 	[I(1, 60)] public float VisualFPS = 20;
 
 	[I(0, 1), InspectorGroup("Motion")] public float GaitAsymmetry;
@@ -18,6 +19,7 @@ public sealed class HumanoidRigSettings
 	[I(12, 60), InspectorGroup("Body")] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
 	[I(2, 12)] public float HeadSize = 3.9f;
+	[I(-4, 12)] public float NeckExtension;
 	[I(2, 12)] public float TorsoSize = 5;
 	[I(1, 10)] public float BicepSize = 3;
 	[I(1, 10)] public float ForearmSize = 2.5f;

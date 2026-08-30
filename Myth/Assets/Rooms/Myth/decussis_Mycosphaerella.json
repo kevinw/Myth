@@ -74,13 +74,12 @@
     {
       "Id": "79ca3193f6281d40",
       "Type": "EyeLaserPuppet",
-      "Position": [80, 134],
+      "Position": [79, 141],
       "ProjectionYaw": 43.696,
       "NeuralJostleStrength": 0.786,
       "NearColor": "F7F9F5",
       "NeuralColorAmount": 0.906,
       "NeuralNormalAmount": 0.704,
-      "HeadSize": 3.834,
       "TorsoSize": 10,
       "BicepSize": 7.241,
       "ForearmSize": 7.724,
@@ -95,6 +94,8 @@
       "PixelsPerMeter": 51.955,
       "StraddlesPlayerDepth": true,
       "SecondaryMotion": 1.207,
+      "HeadSecondaryMotion": 0.55,
+      "NeckExtension": 2,
       "LaserSurfaceId": "allegation_pleach"
     },
     {
