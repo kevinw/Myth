@@ -98,20 +98,7 @@ public class DualGrid : Actor
 		=> StableVariantSeed(room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y), tileType);
 
 	internal static int StableVariantSeed(Point2 worldTile, char tileType)
-	{
-		unchecked
-		{
-			var hash = (uint)worldTile.X * 0x8da6b343u;
-			hash ^= (uint)worldTile.Y * 0xd8163841u;
-			hash ^= tileType * 0xcb1ab31fu;
-			hash ^= hash >> 16;
-			hash *= 0x7feb352du;
-			hash ^= hash >> 15;
-			hash *= 0x846ca68bu;
-			hash ^= hash >> 16;
-			return (int)hash;
-		}
-	}
+		=> Hash32.TileVariantSeed(worldTile, tileType);
 
 	public override void Render(Batcher batcher)
 		=> RenderTiles(batcher, static command => command.Tile);

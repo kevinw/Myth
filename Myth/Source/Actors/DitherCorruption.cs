@@ -73,11 +73,7 @@ public sealed class DitherCorruption : Actor
 			var hash = (uint)tile.X * 0x8da6b343u;
 			hash ^= (uint)tile.Y * 0xd8163841u;
 			hash ^= (uint)frame * 0xcb1ab31fu;
-			hash ^= hash >> 16;
-			hash *= 0x7feb352du;
-			hash ^= hash >> 15;
-			hash *= 0x846ca68bu;
-			return hash ^ hash >> 16;
+			return Hash32.Mix(hash);
 		}
 	}
 }

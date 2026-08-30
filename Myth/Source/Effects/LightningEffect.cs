@@ -24,7 +24,7 @@ public static class LightningEffect
 		var blend = animation - frame;
 		blend *= blend * (3 - 2 * blend);
 		for (var i = 1; i < points.Length; i++)
-			RenderSegment(batcher, points[i - 1], points[i], frame, blend, Hash((uint)seed ^ (uint)i * 0x9e3779b9u));
+			RenderSegment(batcher, points[i - 1], points[i], frame, blend, Hash32.Mix((uint)seed ^ (uint)i * 0x9e3779b9u));
 	}
 
 	// Fills a 1-tile-thick band from `from` to `to` with several weaving, crossing filaments over a
@@ -57,7 +57,7 @@ public static class LightningEffect
 		const int filaments = 5;
 		for (var s = 0; s < filaments; s++)
 			RenderFilament(batcher, from, tangent, normal, length, halfWidth, frame, blend,
-				Hash((uint)seed ^ (uint)(s + 1) * 0x9e3779b9u),
+				Hash32.Mix((uint)seed ^ (uint)(s + 1) * 0x9e3779b9u),
 				intensity, reachFromStart, reachFromEnd, startGlow, endGlow);
 	}
 
@@ -185,14 +185,5 @@ public static class LightningEffect
 		return Calc.Lerp(a, b, blend);
 	}
 
-	static float SignedNoise(uint value) => (Hash(value) & 0xffff) / 32767.5f - 1f;
-
-	static uint Hash(uint value)
-	{
-		value ^= value >> 16;
-		value *= 0x7feb352du;
-		value ^= value >> 15;
-		value *= 0x846ca68bu;
-		return value ^ value >> 16;
-	}
+	static float SignedNoise(uint value) => (Hash32.Mix(value) & 0xffff) / 32767.5f - 1f;
 }

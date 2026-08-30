@@ -476,14 +476,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 
 	static float HashSigned(uint value)
-	{
-		value ^= value >> 16;
-		value *= 0x7feb352du;
-		value ^= value >> 15;
-		value *= 0x846ca68bu;
-		value ^= value >> 16;
-		return (value & 0xffff) / 32767.5f - 1;
-	}
+		=> (Hash32.Mix(value) & 0xffff) / 32767.5f - 1;
 
 	void TriggerEyeReaction(float strength)
 	{

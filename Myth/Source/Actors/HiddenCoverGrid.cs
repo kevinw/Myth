@@ -725,21 +725,7 @@ public class HiddenCoverGrid : Actor
 	}
 
 	static int StableVariantSeed(Room room, char tileType, int x, int y)
-	{
-		unchecked
-		{
-			var worldTile = room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y);
-			var hash = (uint)worldTile.X * 0x8da6b343u;
-			hash ^= (uint)worldTile.Y * 0xd8163841u;
-			hash ^= tileType * 0xcb1ab31fu;
-			hash ^= hash >> 16;
-			hash *= 0x7feb352du;
-			hash ^= hash >> 15;
-			hash *= 0x846ca68bu;
-			hash ^= hash >> 16;
-			return (int)hash;
-		}
-	}
+		=> Hash32.TileVariantSeed(room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y), tileType);
 
 	static bool IsAxisAligned(ShadowSegment segment)
 		=> NearlyEqual(segment.A.X, segment.B.X) || NearlyEqual(segment.A.Y, segment.B.Y);

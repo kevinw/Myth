@@ -302,12 +302,7 @@ public static class Factory
 			hash ^= (uint)worldTile.Y * 0xd8163841u;
 			foreach (var c in key)
 				hash = (hash ^ c) * 0xcb1ab31fu;
-			hash ^= hash >> 16;
-			hash *= 0x7feb352du;
-			hash ^= hash >> 15;
-			hash *= 0x846ca68bu;
-			hash ^= hash >> 16;
-			return (int)hash;
+			return (int)Hash32.Mix(hash);
 		}
 	}
 

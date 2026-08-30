@@ -147,15 +147,15 @@ public class Wind : Actor, IResizable
 		var travel = Time.SecondsF * StreakSpeed;
 		for (var i = 0; i < count; i++)
 		{
-			var seed = Hash((uint)i ^ (uint)Position.X * 0x9e3779b9u ^ (uint)Position.Y * 0x85ebca6bu);
-			var origin = new Vector2(Unit(seed) * Size.X, Unit(Hash(seed)) * Size.Y);
-			var offset = travel + Unit(Hash(seed ^ 0xc2b2ae35u)) * MathF.Max(Size.X, Size.Y);
+			var seed = Hash32.Mix((uint)i ^ (uint)Position.X * 0x9e3779b9u ^ (uint)Position.Y * 0x85ebca6bu);
+			var origin = new Vector2(Unit(seed) * Size.X, Unit(Hash32.Mix(seed)) * Size.Y);
+			var offset = travel + Unit(Hash32.Mix(seed ^ 0xc2b2ae35u)) * MathF.Max(Size.X, Size.Y);
 			var head = new Vector2(
 				Wrap(origin.X + direction.X * offset, Size.X),
 				Wrap(origin.Y + direction.Y * offset, Size.Y));
-			var length = 4 + Unit(Hash(seed ^ 0x27d4eb2du)) * 8;
+			var length = 4 + Unit(Hash32.Mix(seed ^ 0x27d4eb2du)) * 8;
 			var tail = Vector2.Clamp(head - direction * length, Vector2.Zero, Size);
-			var alpha = 0.16f + Unit(Hash(seed ^ 0x165667b1u)) * 0.22f;
+			var alpha = 0.16f + Unit(Hash32.Mix(seed ^ 0x165667b1u)) * 0.22f;
 			batcher.Line(tail.Round(), head.Round(), 1, StreakColor * alpha);
 		}
 	}
@@ -167,15 +167,6 @@ public class Wind : Actor, IResizable
 	}
 
 	static float Unit(uint value) => (value & 0xffff) / 65535f;
-
-	static uint Hash(uint value)
-	{
-		value ^= value >> 16;
-		value *= 0x7feb352du;
-		value ^= value >> 15;
-		value *= 0x846ca68bu;
-		return value ^ value >> 16;
-	}
 
 #if EDITOR
 	sealed class Editor : Manager.ActorEditor<Wind>
