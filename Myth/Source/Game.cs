@@ -135,6 +135,14 @@ public partial class Game : IDisposable
 	internal readonly ReplayRecorder Recorder = null!;
 #endif
 	internal Cutscene? ActiveCutscene;
+	internal struct BurrowUpgradeHudState
+	{
+		public float Emphasis;
+		public float Particles;
+		public bool Active;
+		public bool Growing;
+	}
+	internal BurrowUpgradeHudState BurrowUpgradeHud;
 
 
 #if DEBUG

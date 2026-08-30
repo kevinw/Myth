@@ -700,6 +700,9 @@ public partial class Manager
 
 	bool HideInactiveActorProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 	{
+		if (property.VisibleWhen is { } visibleWhen && !visibleWhen.IsVisibleForActor(actor))
+			return true;
+
 		var typeName = ActorSpecs.GetTypeName(actor);
 		if (typeName is nameof(RigPuppet) or nameof(Stalker))
 		{

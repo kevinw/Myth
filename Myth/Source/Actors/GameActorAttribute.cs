@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Foster.Framework;
+using System.Text.Json.Nodes;
 
 namespace Myth;
 
@@ -41,6 +42,15 @@ public sealed class IAttribute(float min, float max) : Attribute
 public sealed class MultilineAttribute(int lines = 4) : Attribute
 {
 	public int Lines => Math.Max(1, lines);
+}
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class VisibleWhenAttribute(string member, object value) : Attribute
+{
+	public string Member => member;
+	public string Value => value.ToString()!;
+	public bool IsVisibleForActor(JsonObject actor)
+		=> string.Equals(ActorSpecs.ReadResolvedString(actor, member), Value, StringComparison.OrdinalIgnoreCase);
 }
 
 // A string field holding another actor's Id: the inspector offers the room's actors by

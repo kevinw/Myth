@@ -11,6 +11,9 @@ namespace Myth;
 public enum PickupKind
 {
 	Mycelon,
+	// Permanently extends burrow time. Burrow duration is derived from how many of these the save
+	// has collected (see Player.MaxBurrowDuration), so the pickup list is the only state.
+	BurrowUpgrade,
 }
 
 // A collectible that pops out of a broken container, arcs under gravity, settles, then is drawn
@@ -32,7 +35,10 @@ public class Pickup : Actor
 
 	// Fan `count` pickups across an upward arc, evenly spaced and centered on straight up —
 	// the standard broken-container burst (Chest, breakable Crate).
-	public static void Scatter(Game game, Point2 position, PickupKind kind, int count, float spreadArc = 1.4f)
+	// baseKey (when non-null) makes each scattered pickup persistent: it takes the key
+	// "{baseKey}:{i}", so collecting it is recorded and it won't respawn. Uncollected ones are
+	// re-placed (as FloatingPickups) by their owner (e.g. a Chest) on reload.
+	public static void Scatter(Game game, Point2 position, PickupKind kind, int count, float spreadArc = 1.4f, string? baseKey = null)
 	{
 		var up = -MathF.PI / 2f;
 		for (var i = 0; i < count; i++)
@@ -41,12 +47,28 @@ public class Pickup : Actor
 			var angle = up - spreadArc / 2f + spreadArc * t;
 			var speed = game.rng.Float(60f, 100f);
 			var velocity = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * speed;
+			var key = baseKey != null ? $"{baseKey}:{i}" : null;
 			game.Create<Pickup>(position, p =>
 			{
 				p.Kind = kind;
 				p.Velocity = velocity;
+				p.SessionDestroyKey = key;
 			});
 		}
+	}
+
+	// Adds a pickup to the save, fires the burrow-upgrade modal when relevant, and removes the
+	// collectible — persistently (so it stays collected) when it carries a SessionDestroyKey,
+	// otherwise a plain destroy. Shared by Pickup and FloatingPickup.
+	public static void Grant(Game game, PickupKind kind, Actor collectible)
+	{
+		game.AddPickup(kind);
+		if (kind == PickupKind.BurrowUpgrade)
+			game.Create<BurrowUpgradeGet>(collectible.Position);
+		if (string.IsNullOrEmpty(collectible.SessionDestroyKey))
+			game.Destroy(collectible);
+		else
+			game.DestroyPersistently(collectible);
 	}
 
 	public Pickup()
@@ -68,6 +90,7 @@ public class Pickup : Actor
 
 	static string SpriteNameFor(PickupKind kind) => kind switch
 	{
+		PickupKind.BurrowUpgrade => "burrow_upgrade",
 		_ => "mycelon",
 	};
 
@@ -104,15 +127,16 @@ public class Pickup : Actor
 
 		base.Update(); // integrates Velocity, stops against solids via OnCollideX/Y
 
-		if (life <= 0)
+		// Keyed (chest) pickups persist, so they don't LifeTime-despawn — their owner re-places any
+		// left uncollected on reload. Only fire-and-forget (keyless) ones expire.
+		if (life <= 0 && string.IsNullOrEmpty(SessionDestroyKey))
 			Game.Destroy(this);
 	}
 
 	void Collect()
 	{
-		Game.AddPickup(Kind);
 		AudioEvent("pickup"); // authored in FMOD later; no-op until then
-		Game.Destroy(this);
+		Grant(Game, Kind, this);
 	}
 
 	public override void RenderNormals(Batcher batcher) { }

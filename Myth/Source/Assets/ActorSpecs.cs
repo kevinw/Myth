@@ -74,7 +74,8 @@ public static class ActorSpecs
 		bool HasLocalValue,
 		IAttribute? Inspector,
 		MultilineAttribute? Multiline,
-		ActorRefAttribute? ActorRef);
+		ActorRefAttribute? ActorRef,
+		VisibleWhenAttribute? VisibleWhen);
 
 	readonly record struct SerializableMember(MemberInfo Member, MemberInfo? Settings, string DisplayName, string? Group)
 	{
@@ -337,7 +338,8 @@ public static class ActorSpecs
 				value, resetValue, hasLocal,
 				GetMemberAttribute<IAttribute>(member.Member),
 				GetMemberAttribute<MultilineAttribute>(member.Member),
-				GetMemberAttribute<ActorRefAttribute>(member.Member));
+				GetMemberAttribute<ActorRefAttribute>(member.Member),
+				GetMemberAttribute<VisibleWhenAttribute>(member.Member));
 		}
 	}
 
@@ -354,7 +356,8 @@ public static class ActorSpecs
 				member.Type, member.DeclaringType, ToJsonNode(member.GetValue(actor)), null, false,
 				GetMemberAttribute<IAttribute>(member.Member),
 				GetMemberAttribute<MultilineAttribute>(member.Member),
-				GetMemberAttribute<ActorRefAttribute>(member.Member));
+				GetMemberAttribute<ActorRefAttribute>(member.Member),
+				GetMemberAttribute<VisibleWhenAttribute>(member.Member));
 		}
 	}
 

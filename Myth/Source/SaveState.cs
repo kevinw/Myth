@@ -8,6 +8,9 @@ public sealed class SaveState
 {
 	public int Version = 1;
 	public HashSet<string> PersistentDestroyedActors = [];
+	// Chests that have been opened. They persist as open husks (not destroyed); their individual loot
+	// items ride PersistentDestroyedActors via keys derived from the chest's SessionDestroyKey.
+	public HashSet<string> OpenedChests = [];
 	public HashSet<string> PressedButtons = [];
 	public HashSet<string> RevealedDoors = [];
 	public Dictionary<PickupKind, int> Pickups = [];

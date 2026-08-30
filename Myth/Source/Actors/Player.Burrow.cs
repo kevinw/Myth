@@ -7,6 +7,16 @@ namespace Myth;
 public partial class Player : Pawn
 {
 	static float BurrowDuration => 1.133f;
+	static float BurrowUpgradeSeconds => 0.5f; // each BurrowUpgrade pickup adds this much burrow time
+
+	// Max burrow time, derived from the collected BurrowUpgrade pickups (no summed save state).
+	internal float MaxBurrowDuration => BurrowDuration + Game.PickupCount(PickupKind.BurrowUpgrade) * BurrowUpgradeSeconds;
+
+	// HUD readouts for the stamina bar: capacity drives its width, while fill stays depleted and
+	// dimmed after a burrow until the existing CanBurrow gate says the ability has re-armed.
+	internal float BurrowCapacitySeconds => MaxBurrowDuration;
+	internal float BurrowFill => burrowHudFill;
+	internal float BurrowBarOpacity => burrowHudSpent ? 0.5f : 1f;
 	static float BurrowMaxSpeed => 150f;
 	static float DashBurrowSpeedMultiplier => 1.3f;
 	static float BurrowAccel => 500f;            // ease up to speed instead of snapping
@@ -26,7 +36,6 @@ public partial class Player : Pawn
 	static float BurrowGlowWeight => 1.5f;
 	static float BurrowGlowCycleSpeed => 0.6f; // rainbow hue cycles per second
 	static float BurrowGlowHueScale => 0.03f;  // hue shift per world px along the line
-	static float BudBurrowDurationMultiplier => 2f;
 	static float BudBurrowDotRadius => 2.25f;
 	static int BurrowIntervals => 3;           // burrow time is split into this many countdown intervals
 	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
@@ -43,6 +52,8 @@ public partial class Player : Pawn
 	float burrowEnterTimer;
 	float burrowExitTimer;
 	float burrowDuration;
+	float burrowHudFill = 1;
+	bool burrowHudSpent;
 	Bud? burrowPassenger;
 	Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
 	bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
@@ -99,8 +110,10 @@ public partial class Player : Pawn
 
 		Velocity = Vector2.Zero;
 		burrowPassenger = Game.GetFirst<Bud>() is { } bud && bud.TryEnterPlayerBurrow(this) ? bud : null;
-		burrowDuration = BurrowDuration * (burrowPassenger != null ? BudBurrowDurationMultiplier : 1f);
+		burrowDuration = MaxBurrowDuration;
 		burrowTimer = burrowDuration;
+		burrowHudFill = 1;
+		burrowHudSpent = false;
 		burrowIntervalIndex = 0;
 		burrowPulseTimer = BurrowPulseTime; // flash the first interval's start too (the line igniting)
 		burrowExitBlocked = false;
@@ -539,6 +552,7 @@ public partial class Player : Pawn
 			Facing = Math.Sign(input.MoveX);
 
 		burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
+		burrowHudFill = burrowDuration > 0 ? burrowTimer / burrowDuration : 0;
 		var wantsExit = burrowTimer <= 0 || !input.JumpDown;
 		if (burrowExitBlocked && (burrowLine == null || CanExitBurrowLine(out _)))
 			burrowExitBlocked = false;
@@ -657,6 +671,7 @@ public partial class Player : Pawn
 		burrowExitTimer = BurrowExitGrace;
 		burrowExitOutward = -exitDir; // away from the surface; bias the unstick nudge this way
 		burrowTimer = -BurrowCooldown;
+		burrowHudSpent = true;
 		burrowGlowExitTimer = BurrowGlowExitTime;
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		burrowExitBlocked = false;

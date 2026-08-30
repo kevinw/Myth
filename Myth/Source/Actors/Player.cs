@@ -1523,6 +1523,11 @@ public partial class Player : Pawn
 			burrowTimer += Time.Delta;
 			if (burrowTimer > 0) burrowTimer = 0;
 		}
+		if (burrowHudSpent && CanBurrow())
+		{
+			burrowHudFill = 1;
+			burrowHudSpent = false;
+		}
 	}
 
 	void ClampPositionToRoomOrTransitionRooms()

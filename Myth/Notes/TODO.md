@@ -1,4 +1,5 @@
 - you still slow down when attacking. maybe get "rid" of attack state, or share the movement code update with it
+- some machine ambience music for the tower tunnel
 - lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
 - show "speaking" lines like a comic book bubble with individual syllables
 - show a currency hud for ducks
@@ -88,7 +89,6 @@ along with this.
   - a pulpit which tumbles when you step on it
 - maybe you start in a treehouse, makeshift, there is some incredible danger flowing like a river beneath you in intervals
 - how many petabytes per cubit? (writing)
-- Bud projects a light hologram map from his mouth
 - a note in every room describing the new thing it introduces
 - One of the characters speaks with curated chain of thought messages from an open model
 - burrow sound needs to be the best sound in the entire game
@@ -148,7 +148,7 @@ steam notes
 - consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
 
 - i get a feeling watching metroidvania videos on twitter: bleh. boss fight. grapple hook. it's all so samey. we should do ___ instead.
-- water ambience for water tile rooms
+- water ambience sfx for water tile rooms
 - make a youtube account for the game. post the head bug as a youtube short.
 - cimgui.dll is 1.4MB; can it be statically linked?
 - integrate Dear ImGui Test Engine so automated editor scenarios can identify, drive, and assert docked, scrolling, and popup UI directly

@@ -134,7 +134,8 @@
       "Type": "Light",
       "Position": [156, 60],
       "Intensity": 0.6,
-      "Radius": 399.45
+      "Radius": 399.45,
+      "DrawSprite": false
     },
     {
       "Id": "tower_duck",
@@ -151,7 +152,8 @@
     {
       "Id": "bb6a55ff425a13bf",
       "Type": "Chest",
-      "Position": [196, 80]
+      "Position": [196, 80],
+      "Loot": "BurrowUpgrade"
     },
     {
       "Id": "b03060131cecb80a",
