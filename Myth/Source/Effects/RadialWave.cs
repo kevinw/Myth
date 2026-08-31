@@ -106,6 +106,13 @@ public sealed class RadialWave : Actor
 	static float PreEchoBandOffset => 3.5f;
 	static float PreEchoBandThickness => 5;
 	static float PreEchoDistortionStrength => 0.52f;
+	static float ElectricRefreshRate => 60;
+	static int ElectricCellSize => 1;
+	static float ElectricRadialWobble => 1.2f;
+	static float ElectricTangentialWobble => 0.65f;
+	static float ElectricSolidMultiplier => 0.7f;
+	static float ElectricFilamentChance => 0.62f;
+	static float ElectricFilamentOpacity => 0.55f;
 
 	public RadialWave()
 	{
@@ -593,8 +600,8 @@ public sealed class RadialWave : Actor
 			var contact = blocked[i] || blocked[next];
 			var interference = Interference(i, time);
 			var packet = MathF.Pow(interference, 5);
-			var frontFrom = directions[i] * FrontRadius(i);
-			var frontTo = directions[next] * FrontRadius(next);
+			var frontFrom = ElectricHurtPoint(i, time);
+			var frontTo = ElectricHurtPoint(next, time);
 			var shimmer = MathF.Sin(time * 15 + i * 0.73f) * 0.65f;
 			var bodyFrom = directions[i] * MathF.Max(0, SpokeRadius(i) + shimmer);
 			var bodyTo = directions[next] * MathF.Max(0, SpokeRadius(next) - shimmer * 0.45f);
@@ -610,6 +617,8 @@ public sealed class RadialWave : Actor
 			else
 				batcher.Line(frontFrom, frontTo, 2.1f + packet * 1.1f,
 					Color * (hurtLineAlpha * Calc.Lerp(0.85f, 1, packet)));
+			if (!contact)
+				RenderElectricFilament(batcher, emissive, i, next, frontFrom, frontTo, hurtLineAlpha, time);
 
 			if (!contact)
 			{
@@ -707,6 +716,85 @@ public sealed class RadialWave : Actor
 		var stable = 0.5f + MathF.Sin(group * 2.17f + offset * 0.91f) * 0.5f;
 		var traveling = 0.5f + MathF.Sin(group * 0.83f - time * 6.2f + offset) * 0.5f;
 		return stable * 0.55f + traveling * 0.45f;
+	}
+
+	Vector2 ElectricHurtPoint(int spoke, float time)
+	{
+		var direction = directions[spoke];
+		var point = direction * FrontRadius(spoke);
+		var contactScale = ElectricContactScale(spoke);
+		if (contactScale <= 0)
+			return point;
+
+		var noise = ElectricNoise(spoke, time);
+		var envelope = MathF.Max(0, (Thickness - 2.9f) * 0.5f);
+		var mediumScale = Medium == RadialWaveMedium.Solid ? ElectricSolidMultiplier : 1;
+		var radial = noise.X * MathF.Min(ElectricRadialWobble, envelope);
+		var tangential = noise.Y * MathF.Min(ElectricTangentialWobble, envelope);
+		var offset = direction * radial + direction.TurnLeft() * tangential;
+		if (offset.LengthSquared() > envelope * envelope)
+			offset = offset.Normalized() * envelope;
+		return point + offset * mediumScale * contactScale;
+	}
+
+	float ElectricContactScale(int spoke)
+	{
+		if (blocked[spoke])
+			return 0;
+		for (var distance = 1; distance <= 2; distance++)
+			if (blocked[(spoke + distance) % SpokeCount] || blocked[(spoke - distance + SpokeCount) % SpokeCount])
+				return distance == 1 ? 0.25f : 0.6f;
+		return 1;
+	}
+
+	Vector2 ElectricNoise(int spoke, float time)
+	{
+		var cell = spoke / ElectricCellSize;
+		var progress = spoke % ElectricCellSize / (float)ElectricCellSize;
+		return Vector2.Lerp(ElectricAnchor(cell, time), ElectricAnchor(cell + 1, time), progress);
+	}
+
+	Vector2 ElectricAnchor(int cell, float time)
+	{
+		var cellCount = SpokeCount / ElectricCellSize;
+		cell %= cellCount;
+		var tick = ElectricTick(cell, time);
+		return new(ElectricSigned(cell, tick, 0), ElectricSigned(cell, tick, 1));
+	}
+
+	int ElectricTick(int cell, float time)
+		=> (int)MathF.Floor(time * ElectricRefreshRate + Electric01(cell, 0, 7));
+
+	static float ElectricSigned(int cell, int tick, int channel)
+		=> Electric01(cell, tick, channel) * 2 - 1;
+
+	static float Electric01(int cell, int tick, int channel)
+		=> (ElectricHash(cell, tick, channel) & 0x00ffffff) / 16777215f;
+
+	static uint ElectricHash(int cell, int tick, int channel)
+	{
+		unchecked
+		{
+			var value = (uint)cell * 0x9e3779b9u ^ (uint)tick * 0x85ebca6bu ^ (uint)channel * 0xc2b2ae35u;
+			value ^= value >> 16;
+			value *= 0x7feb352du;
+			value ^= value >> 15;
+			value *= 0x846ca68bu;
+			return value ^ value >> 16;
+		}
+	}
+
+	void RenderElectricFilament(Batcher batcher, bool emissive, int spoke, int next,
+		Vector2 from, Vector2 to, float alpha, float time)
+	{
+		var cell = spoke / ElectricCellSize;
+		var tick = ElectricTick(cell, time);
+		if (Electric01(cell, tick, 3) >= ElectricFilamentChance)
+			return;
+		var offset = Calc.Lerp(1, 2, Electric01(cell, tick, 4)) *
+			(Electric01(cell, tick, 5) < 0.5f ? -1 : 1);
+		var color = (emissive ? Color : CoreColor) * (alpha * ElectricFilamentOpacity);
+		batcher.Line(from + directions[spoke] * offset, to + directions[next] * offset, 0.85f, color);
 	}
 
 	void RenderSurfaceWake(Batcher batcher, bool emissive)
