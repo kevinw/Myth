@@ -3396,7 +3396,15 @@ public partial class Manager
 			return;
 
 		// Middle-mouse drag pans.
-		if (canInteract && Input.Mouse.MiddleDown)
+		var setPlaytestPosition = canInteract && Input.Mouse.MiddlePressed &&
+			IsMouseDoubleClicked(ImGuiMouseButton.Middle);
+		if (setPlaytestPosition && CurrentRoom is { } playtestRoom)
+		{
+			var world = ScreenToEditorWorld(cursor, inner).RoundToPoint2();
+			if (playtestRoom.WorldBounds.Contains(world))
+				playtestPlayerPosition = (playtestRoom.Id, world);
+		}
+		else if (canInteract && Input.Mouse.MiddleDown)
 		{
 			editorCameraTween = 1.0f;
 			editorZoomTarget = editorZoom;
