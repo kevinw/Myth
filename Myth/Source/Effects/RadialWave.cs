@@ -87,7 +87,7 @@ public sealed class RadialWave : Actor
 	static float Irregularity => 1.6f;
 	static float TrailDistance => 7;
 	static float EndFadeDistance => 58;
-	static float SurfaceWakeParticleInterval => 0.045f;
+	static float SurfaceWakeParticleInterval => 0.015f;
 	static float NearEchoDistance => 5;
 	static float FarEchoDistance => 11;
 	static float SurfaceVoiceGraceTime => 0.1f;
