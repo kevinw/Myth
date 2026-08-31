@@ -16,8 +16,12 @@ public class RigGreetingSequence : SequenceActor
 	RigPuppet? rig;
 	Game.StorySpeechBubble? speech;
 
+	static bool IsEnabled => false;
+
 	protected override IEnumerator<float> Sequence()
 	{
+		if (!IsEnabled) yield break;
+
 		if (string.IsNullOrWhiteSpace(RigId))
 			throw new InvalidOperationException("RigGreetingSequence requires a RigId.");
 		Player? player;
@@ -41,13 +45,17 @@ public class RigGreetingSequence : SequenceActor
 		rig.Facing = player.Position.X < rig.Position.X ? Signs.Negative : Signs.Positive;
 		rig.PlayTake(Take, BlendDuration);
 		while (!rig.AnimationFinished)
+		{
 			yield return 0;
+		}
 
 		while (!Game.CanShowSpeech())
 			yield return 0;
 		speech = rig.Say(Line);
 		while (speech is { Finished: false })
+		{
 			yield return 0;
+		}
 		speech = null;
 	}
 

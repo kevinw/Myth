@@ -59,6 +59,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	float abilityPlaybackSpeed = 1;
 	float abilityPoseModifierWeight = 1;
 	float abilityPoseJostle;
+	Vector2 abilityVisualOffset;
 	Vector2? abilityLookTarget;
 	float? abilityYaw;
 	float abilityYawWeight;
@@ -131,7 +132,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			? MathF.Abs(Velocity.X) / WalkSpeed : 1;
 		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed : scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale;
 		visual.GaitActive = walking;
-		visual.Offset = stepVisualOffset;
+		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
@@ -260,15 +261,17 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected bool RigFacingMatches => visual.FacingMatches;
 	protected Vector2 RigEyePosition => visual.EyeWorldPosition;
 	protected Vector2 RigEyeOffset => visual.EyeOffset;
+	protected Vector2 RigLeftToePosition => visual.LeftToeWorldPosition;
+	protected Vector2 RigRightToePosition => visual.RightToeWorldPosition;
 	protected bool AbilityAnimationFinished => visual.AnimationFinished;
 	protected float AbilityAnimationProgress => Math.Clamp(
 		(visual.Time - visual.RangeStart) / MathF.Max(0.0001f, visual.RangeEnd - visual.RangeStart), 0, 1);
 
-	protected void PlayAbilityIdle()
+	protected void PlayAbilityIdle(float blendDuration = -1)
 	{
 		abilityLoop = abilityFootIK = true;
 		abilityPlaybackSpeed = PlaybackSpeed;
-		visual.Play(IdleName());
+		visual.Play(IdleName(), blendDuration: blendDuration);
 	}
 
 	protected void PlayAbilityTake(string name, float blendDuration = 0.2f)
@@ -285,6 +288,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected void SetAbilityLookTarget(Vector2? target) => abilityLookTarget = target;
 	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
 	protected void SetAbilityPoseJostle(float pixels) => abilityPoseJostle = MathF.Max(0, pixels);
+	protected void SetAbilityVisualOffset(Vector2 offset) => abilityVisualOffset = offset;
+	protected void FreezeAbilityPose(float duration) => visual.Freeze(duration);
+	protected void RecoilAbilityPose(Vector2 screenVelocity, float spread) => visual.Recoil(screenVelocity, spread);
 	protected void SetAbilityYaw(float? yaw, float weight = 1)
 	{
 		abilityYaw = yaw;
@@ -313,11 +319,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		abilityPlaybackSpeed = PlaybackSpeed;
 		abilityPoseModifierWeight = 1;
 		abilityPoseJostle = 0;
+		abilityVisualOffset = Vector2.Zero;
 		abilityLookTarget = null;
 		abilityYaw = null;
 		abilityYawWeight = 0;
 		visual.PoseModifierWeight = 1;
 		visual.PoseJostlePixels = 0;
+		visual.Resume();
 		visual.YawOverride = null;
 		visual.YawOverrideWeight = 0;
 	}

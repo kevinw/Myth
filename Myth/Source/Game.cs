@@ -143,8 +143,12 @@ public partial class Game : IDisposable
 	}
 	internal Point2 shake;
 	internal Vector2 renderTargetShake;
+	Vector2 renderTargetNoise;
+	Vector2 renderTargetKick;
+	Vector2 renderTargetKickVelocity;
 	internal bool ShakeInRenderTargetSpace;
 	float renderTargetShaking;
+	float renderTargetShakeIntensity;
 	float renderTargetShakeStepTimer;
 	// The one deterministic RNG stream the sim draws from (actors + camera shake). Seed it at the
 	// start of a recording/replay clip and the whole run reproduces. Editor/authoring code uses its
@@ -685,24 +689,32 @@ public partial class Game : IDisposable
 
 	static float RenderTargetShakeAmount => 15f;
 	static float RenderTargetShakeFrequency => 88.9570007f.T(1, 120);
+	static float RenderTargetKickSpring => 180f;
+	static float RenderTargetKickDamping => 18f;
 	static float DebugRenderTargetShakeSeconds => 0.226999998f.T(0, 2);
 
 	void UpdateRenderTargetShake()
 	{
 		if (renderTargetShaking <= 0)
 		{
-			renderTargetShake = Vector2.Zero;
+			renderTargetNoise = Vector2.Zero;
+			renderTargetShakeIntensity = 0;
 			renderTargetShakeStepTimer = 0;
-			return;
+		}
+		else
+		{
+			renderTargetShaking -= Time.Delta;
+			renderTargetShakeStepTimer -= Time.Delta;
+			if (renderTargetShakeStepTimer <= 0)
+			{
+				renderTargetShakeStepTimer += 1.0f / RenderTargetShakeFrequency;
+				renderTargetNoise = rng.Vec2() * (RenderTargetShakeAmount * renderTargetShakeIntensity);
+			}
 		}
 
-		renderTargetShaking -= Time.Delta;
-		renderTargetShakeStepTimer -= Time.Delta;
-		if (renderTargetShakeStepTimer > 0)
-			return;
-
-		renderTargetShakeStepTimer += 1.0f / RenderTargetShakeFrequency;
-		renderTargetShake = rng.Vec2() * RenderTargetShakeAmount;
+		Spring.Step(ref renderTargetKick, ref renderTargetKickVelocity, Vector2.Zero,
+			RenderTargetKickSpring, RenderTargetKickDamping, MathF.Min(Time.Delta, 1 / 30f));
+		renderTargetShake = renderTargetNoise + renderTargetKick;
 	}
 
 	internal void ChangeTimeScale(int direction)
@@ -2832,7 +2844,12 @@ public partial class Game : IDisposable
 			shaking = MathF.Max(shaking, time);
 	}
 
-	public void ShakeRenderTarget(float time) => renderTargetShaking = MathF.Max(renderTargetShaking, time);
+	public void ShakeRenderTarget(float time, float intensity = 1)
+	{
+		renderTargetShaking = MathF.Max(renderTargetShaking, time);
+		renderTargetShakeIntensity = MathF.Max(renderTargetShakeIntensity, Math.Clamp(intensity, 0, 1));
+	}
+	public void KickRenderTarget(Vector2 impulse) => renderTargetKickVelocity += impulse;
 
 	internal void DebugShakeRenderTarget() => ShakeRenderTarget(DebugRenderTargetShakeSeconds);
 

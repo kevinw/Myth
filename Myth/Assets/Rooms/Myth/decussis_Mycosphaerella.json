@@ -4,12 +4,13 @@
   "ambientColor": "5F5E5E",
   "lightNoise": 0.404,
   "sporeFogStrength": 0.396,
-  "reverb": 0.156,
+  "reverb": 0.145,
   "legend": {
     "#": "back",
     "1": "castle",
     "R": "ruin",
-    "v": "Myth Vines"
+    "v": "Myth Vines",
+    "w": "water"
   },
   "tiles": [
     "000000000000000RRRR000000RRRRRR00000000001111111111",
@@ -32,9 +33,9 @@
     "000000000000000000000000000000000000000000000000001",
     "00000000RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0000000001",
     "00000000RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0000000001",
-    "00000000RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0000000001",
-    "00000000RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0000000001",
-    "00000000RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR0000000001"
+    "00000000RRRRRRRRRRRRRRRRRRRRRRRRwwRRRRRRR0000000001",
+    "00000000RRRRRRRRRRRRRRRRRRRRRRRRwwRRRRRRR0000000001",
+    "00000000RRRRRwwwwRRRRRRRRRRRRRRRRRRRRRRRR0000000001"
   ],
   "backgroundTiles": [
     "000000000000000000000000000000000000000000000000000",
@@ -96,7 +97,12 @@
       "SecondaryMotion": 1.207,
       "HeadSecondaryMotion": 0.55,
       "NeckExtension": 2,
-      "LaserSurfaceId": "allegation_pleach"
+      "LaserSurfaceId": "allegation_pleach",
+      "HeadSize": 6,
+      "FloatingFlashChance": 0.302,
+      "FloatingWaveSpeed": 164.558,
+      "FloatingWaveThickness": 6.343,
+      "StompWaveSpeed": 163.761
     },
     {
       "Id": "4711b2d5aa015603",
@@ -110,6 +116,13 @@
       "Type": "Jumpthru",
       "Position": [384, 64],
       "Size": [19, 8]
+    },
+    {
+      "Id": "454bcb96003de266",
+      "Type": "Light",
+      "Position": [100, 36],
+      "Radius": 150,
+      "Intensity": 0.35
     }
   ]
 }

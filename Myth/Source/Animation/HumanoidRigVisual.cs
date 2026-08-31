@@ -59,6 +59,16 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		public bool Ready;
 	}
 
+	enum ImpulseGroup { Head, Torso, LeftArm, RightArm, LeftHand, RightHand }
+
+	struct PendingImpulse
+	{
+		public ImpulseGroup Group;
+		public Vector2 Velocity;
+		public float Delay;
+		public bool Active;
+	}
+
 	static readonly BoneSpec[] BoneSpecs =
 	[
 		new("pelvis", "spine_01", 5, Part.Torso, true),
@@ -94,7 +104,20 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public float PlaybackSpeed = 1;
 	public float PoseModifierWeight = 1;
 	public bool GaitActive;
-	public Vector2 Offset;
+	Vector2 offset;
+	public Vector2 Offset
+	{
+		get => offset;
+		set
+		{
+			var delta = value - offset;
+			offset = value;
+			if (delta == Vector2.Zero)
+				return;
+			for (var i = 0; i < projectedPose.Length; i++)
+				projectedPose[i] += delta;
+		}
+	}
 	public Vector2? LookTarget;
 	public float? YawOverride;
 	public float YawOverrideWeight;
@@ -115,6 +138,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	Vector2 neuralHeadUV;
 	Vector2 neuralHeadUVRadius;
 	Vector2 surfaceMaterialOrigin;
+	readonly PendingImpulse[] pendingImpulses = new PendingImpulse[12];
 	OzzJointMask upperBodyMask = null!;
 	OzzJointMask leftArmMask = null!;
 	OzzJointMask rightArmMask = null!;
@@ -139,6 +163,11 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	int leftLowerArm;
 	int rightUpperArm;
 	int rightLowerArm;
+	int spine1;
+	int spine2;
+	int spine3;
+	int leftClavicle;
+	int rightClavicle;
 	int pelvis;
 	float animationPhase;
 	float gaitHeadBias;
@@ -169,6 +198,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float eyeScale = 1;
 	float eyeReactionRemaining;
 	float eyeReactionStrength;
+	float freezeRemaining;
 
 	static float ClipBlendDuration => 0.2f;
 	static float RagdollSpring => 160f;
@@ -227,6 +257,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public bool Turning => turning;
 	public bool FacingMatches => !turning && visualFacing == owner.Facing;
 	public Vector2 EyeOffset => projectedPose[head] + lookDirection * 2.4f;
+	public Vector2 LeftToeWorldPosition => owner.Position + projectedPose[leftLeg.Toe];
+	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[rightLeg.Toe];
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
 	public float PoseJostlePixels;
 
@@ -273,6 +305,11 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		leftLowerArm = RequiredJoint("lowerarm_l");
 		rightUpperArm = RequiredJoint("upperarm_r");
 		rightLowerArm = RequiredJoint("lowerarm_r");
+		spine1 = RequiredJoint("spine_01");
+		spine2 = RequiredJoint("spine_02");
+		spine3 = RequiredJoint("spine_03");
+		leftClavicle = RequiredJoint("clavicle_l");
+		rightClavicle = RequiredJoint("clavicle_r");
 		pelvis = RequiredJoint("pelvis");
 		leftLeg = RequiredLeg("l");
 		rightLeg = RequiredLeg("r");
@@ -365,6 +402,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		EnsureState();
 		neuralSkin.Update(Settings.SkinMode);
+		if (freezeRemaining > 0)
+		{
+			freezeRemaining = MathF.Max(0, freezeRemaining - owner.Time.Delta);
+			visualAccumulator = 0;
+			return;
+		}
 		var step = 1 / Settings.VisualFPS;
 		visualAccumulator += owner.Time.Delta;
 		var ticks = Math.Min((int)(visualAccumulator / step), 4);
@@ -413,6 +456,38 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		if (speed >= LandingMinSpeed)
 			pendingLandingSpeed = MathF.Max(pendingLandingSpeed, speed);
+	}
+
+	public void Freeze(float duration) => freezeRemaining = MathF.Max(freezeRemaining, duration);
+	public void Resume() => freezeRemaining = 0;
+
+	public void Recoil(Vector2 screenVelocity, float spread)
+	{
+		QueueImpulse(ImpulseGroup.Head, screenVelocity * 1.05f, 0);
+		QueueImpulse(ImpulseGroup.Torso, screenVelocity * 0.55f, 0.001f);
+		QueueImpulse(ImpulseGroup.LeftArm, screenVelocity * 0.72f - Vector2.UnitX * spread, 0.025f);
+		QueueImpulse(ImpulseGroup.RightArm, screenVelocity * 0.72f + Vector2.UnitX * spread, 0.025f);
+		QueueImpulse(ImpulseGroup.LeftHand, screenVelocity * 0.95f - Vector2.UnitX * spread * 1.5f, 0.055f);
+		QueueImpulse(ImpulseGroup.RightHand, screenVelocity * 0.95f + Vector2.UnitX * spread * 1.5f, 0.055f);
+		if (ragdollReady)
+		{
+			var lead = RigVelocity(screenVelocity) * 0.012f;
+			ragdollPose[head] += lead;
+			ragdollPose[neck] += lead * 0.5f;
+			ragdollPose[spine3] += lead * 0.18f;
+			ProjectPose();
+			SortBones();
+		}
+	}
+
+	void QueueImpulse(ImpulseGroup group, Vector2 velocity, float delay)
+	{
+		for (var i = 0; i < pendingImpulses.Length; i++)
+			if (!pendingImpulses[i].Active)
+			{
+				pendingImpulses[i] = new() { Group = group, Velocity = velocity, Delay = delay, Active = true };
+				return;
+			}
 	}
 
 	public void Hit(float away, bool animateUpperBody = false)
@@ -773,6 +848,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			return;
 		}
 
+		UpdatePendingImpulses();
+
 		if (pendingLandingSpeed > 0)
 		{
 			var impactSpeed = pendingLandingSpeed / Settings.PixelsPerMeter;
@@ -815,6 +892,58 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			for (var i = 0; i < ragdollPose.Length; i++)
 				if (ragdollJoints[i])
 					ragdollVelocity[i] = (ragdollPose[i] - ragdollPreviousPose[i]) / dt;
+		}
+	}
+
+	void UpdatePendingImpulses()
+	{
+		for (var i = 0; i < pendingImpulses.Length; i++)
+		{
+			ref var impulse = ref pendingImpulses[i];
+			if (!impulse.Active)
+				continue;
+			if (impulse.Delay > 0)
+			{
+				impulse.Delay -= visualDelta;
+				continue;
+			}
+			ApplyImpulse(impulse.Group, RigVelocity(impulse.Velocity));
+			impulse.Active = false;
+		}
+	}
+
+	void ApplyImpulse(ImpulseGroup group, Vector3 velocity)
+	{
+		switch (group)
+		{
+			case ImpulseGroup.Head:
+				ragdollVelocity[head] += velocity;
+				ragdollVelocity[neck] += velocity * 0.45f;
+				break;
+			case ImpulseGroup.Torso:
+				ragdollVelocity[spine1] += velocity * 0.35f;
+				ragdollVelocity[spine2] += velocity * 0.65f;
+				ragdollVelocity[spine3] += velocity;
+				ragdollVelocity[neck] += velocity * 0.8f;
+				ragdollVelocity[leftClavicle] += velocity;
+				ragdollVelocity[rightClavicle] += velocity;
+				break;
+			case ImpulseGroup.LeftArm:
+				ragdollVelocity[leftUpperArm] += velocity * 0.6f;
+				ragdollVelocity[leftLowerArm] += velocity;
+				break;
+			case ImpulseGroup.RightArm:
+				ragdollVelocity[rightUpperArm] += velocity * 0.6f;
+				ragdollVelocity[rightLowerArm] += velocity;
+				break;
+			case ImpulseGroup.LeftHand:
+				ragdollVelocity[leftHand] += velocity;
+				ragdollVelocity[leftPalm] += velocity;
+				break;
+			case ImpulseGroup.RightHand:
+				ragdollVelocity[rightHand] += velocity;
+				ragdollVelocity[rightPalm] += velocity;
+				break;
 		}
 	}
 

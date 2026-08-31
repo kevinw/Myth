@@ -54,8 +54,10 @@ public sealed class LaserRay
 
 	// localOrigin is Origin in the caller's current batcher space: Vector2.Zero for an actor whose
 	// Position is the ray origin, or an eye offset for a ray attached to a rig joint.
-	public void Render(Batcher batcher, Vector2 localOrigin, float scale, float alpha, float time)
+	public void Render(Batcher batcher, Vector2 localOrigin, float scale, float alpha, float time,
+		float thicknessScale = 1)
 	{
+		var thickness = Thickness * thicknessScale;
 		var startOffset = Direction * StartPadding;
 		var endOffset = (End + Direction * EndPadding - Origin) * scale;
 		if (Vector2.DistanceSquared(startOffset, endOffset) <= 0.001f)
@@ -63,18 +65,18 @@ public sealed class LaserRay
 
 		var start = localOrigin + startOffset;
 		var end = localOrigin + endOffset;
-		batcher.Line(start, end, Thickness + GlowThickness, GlowColor * 0.75f * alpha);
+		batcher.Line(start, end, thickness + GlowThickness, GlowColor * 0.75f * alpha);
 		if (Assets.GetSurface(SurfaceId) is { } surface)
-			RenderSurface(batcher, surface, start, end, startOffset, endOffset, alpha, time);
+			RenderSurface(batcher, surface, start, end, startOffset, endOffset, alpha, time, thickness);
 		else
-			batcher.Line(start, end, Thickness, Color * alpha);
-		batcher.Circle(end, Thickness * 0.5f, 12, Color * alpha);
+			batcher.Line(start, end, thickness, Color * alpha);
+		batcher.Circle(end, thickness * 0.5f, 12, Color * alpha);
 	}
 
 	void RenderSurface(Batcher batcher, Surface surface, Vector2 start, Vector2 end,
-		Vector2 startOffset, Vector2 endOffset, float alpha, float time)
+		Vector2 startOffset, Vector2 endOffset, float alpha, float time, float thickness)
 	{
-		var side = new Vector2(-Direction.Y, Direction.X) * (Thickness * 0.5f);
+		var side = new Vector2(-Direction.Y, Direction.X) * (thickness * 0.5f);
 		var a = start - side;
 		var b = start + side;
 		var c = end + side;
