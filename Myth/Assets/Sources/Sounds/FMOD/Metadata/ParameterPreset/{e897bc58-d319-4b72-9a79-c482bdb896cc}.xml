@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="ParameterPreset" id="{e897bc58-d319-4b72-9a79-c482bdb896cc}">
+		<property name="name">
+			<value>Medium</value>
+		</property>
+		<relationship name="folder">
+			<destination>{7e497789-617e-4b80-943f-641a506a9760}</destination>
+		</relationship>
+		<relationship name="parameter">
+			<destination>{854b4303-7138-4b1c-b1d5-980a0369d7d0}</destination>
+		</relationship>
+	</object>
+	<object class="GameParameter" id="{854b4303-7138-4b1c-b1d5-980a0369d7d0}" />
+</objects>

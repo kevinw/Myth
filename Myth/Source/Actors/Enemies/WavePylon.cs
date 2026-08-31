@@ -22,12 +22,13 @@ public sealed class WavePylon : Actor
 	[I(0, 12)] public float SolidTargetReach = 4;
 	public Color AirColor = 0xff8fcf;
 	public Color SolidColor = 0xd9903d;
-	public string SoundEvent = "lightning_trap";
+	public string ChargeSoundEvent = "wave_pylon/charge";
+	public string ReleaseSoundEvent = "wave_pylon/release";
 
 	const string AirChargeEffect = "wave_pylon_air_charge";
 	const string SolidChargeEffect = "wave_pylon_solid_charge";
-	const string WarmupParameter = "Warmup";
-	const string FireDurationParameter = "FireDuration";
+	const string ChargeParameter = "Charge";
+	const string MediumParameter = "Medium";
 
 	static readonly Vector2[] SurfaceDirections =
 	[
@@ -44,7 +45,7 @@ public sealed class WavePylon : Actor
 	SurfaceHit? solidSurface;
 	SoundInstance? sound;
 
-	static float ReleaseShakeTime => 0.045f;
+	static float ReleaseShakeTime => 0.145f;
 	static float ParticleRadius => 19;
 
 	public WavePylon()
@@ -75,7 +76,7 @@ public sealed class WavePylon : Actor
 		if (charging)
 		{
 			UpdateChargeParticles();
-			UpdateSound(ChargeProgress, 0);
+			UpdateChargeSound();
 		}
 		if (cycleTime < CycleInterval)
 			return;
@@ -95,8 +96,8 @@ public sealed class WavePylon : Actor
 		if (Medium == RadialWaveMedium.Solid)
 			TryFindSolidSurface(out solidSurface);
 		StopAndReleaseSound(ref sound, true);
-		sound = Game.CreateAudioEvent(SoundEvent, Position);
-		UpdateSound(0, 0);
+		sound = Game.CreateAudioEvent(ChargeSoundEvent, Position);
+		UpdateChargeSound();
 		sound?.Start();
 	}
 
@@ -107,7 +108,7 @@ public sealed class WavePylon : Actor
 		{
 			if (!TryFindSolidSurface(out solidSurface) || solidSurface is not { } surface)
 			{
-				FinishSound();
+				StopAndReleaseSound(ref sound);
 				return;
 			}
 			origin = surface.Point - surface.Normal * SolidInset;
@@ -133,8 +134,10 @@ public sealed class WavePylon : Actor
 			wave.ImpactSoundEvent = "";
 		}
 
-		Game.ShakeRenderTarget(ReleaseShakeTime, 0.28f);
-		FinishSound();
+		Game.ShakeRenderTarget(ReleaseShakeTime, 9.28f);
+		Game.SetAudioEventParameter(sound, ChargeParameter, 1);
+		StopAndReleaseSound(ref sound);
+		Game.PlayAudioEvent(ReleaseSoundEvent, MediumParameter, (float)Medium, Position);
 	}
 
 	bool TryFindSolidSurface(out SurfaceHit? surface)
@@ -172,17 +175,11 @@ public sealed class WavePylon : Actor
 		}
 	}
 
-	void FinishSound()
-	{
-		UpdateSound(1, 1);
-		StopAndReleaseSound(ref sound);
-	}
-
-	void UpdateSound(float warmup, float fireDuration)
+	void UpdateChargeSound()
 	{
 		Game.SetAudioEventPosition(sound, Position);
-		Game.SetAudioEventParameter(sound, WarmupParameter, warmup);
-		Game.SetAudioEventParameter(sound, FireDurationParameter, fireDuration);
+		Game.SetAudioEventParameter(sound, ChargeParameter, ChargeProgress);
+		Game.SetAudioEventParameter(sound, MediumParameter, (float)Medium);
 	}
 
 	float CycleInterval => MathF.Max(ChargeDuration + 0.05f, Interval);

@@ -154,7 +154,7 @@ public partial class Manager
 		if (specId != null && undo.HasPending(PrefabUndoSlot, specId) && IsItemDeactivatedAfterEdit())
 			CommitPrefabUndo();
 		if (property.Inspector is { } range && IsItemHovered())
-			SetTooltip($"Drag range: {range.Min:g} to {range.Max:g}\nCtrl-click to enter any value");
+			SetTooltip($"Drag range: {range.Min:g} to {range.Max:g}\nRight-click to enter any value");
 
 		if (property.Inspector is { } inspector)
 		{
@@ -205,7 +205,7 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<float>() ?? 0;
 			var edited = property.Inspector is { } inspector
-				? SliderFloat("##Value", ref value, inspector.Min, inspector.Max, "%.3f")
+				? RangedFloat("##Value", ref value, inspector.Min, inspector.Max)
 				: DragFloat("##Value", ref value, 0.05f);
 			if (edited)
 			{
@@ -217,7 +217,7 @@ public partial class Manager
 		{
 			var value = property.Value?.GetValue<int>() ?? 0;
 			var edited = property.Inspector is { } inspector
-				? SliderInt("##Value", ref value, (int)inspector.Min, (int)inspector.Max, "%d")
+				? RangedInt("##Value", ref value, (int)inspector.Min, (int)inspector.Max)
 				: DragInt("##Value", ref value);
 			if (edited)
 			{
@@ -381,6 +381,34 @@ public partial class Manager
 		}
 
 		return false;
+	}
+
+	static bool RangedFloat(string label, ref float value, float min, float max)
+	{
+		var changed = SliderFloat(label, ref value, min, max, "%.3f");
+		if (BeginPopupContextItem("##ExactValue"))
+		{
+			if (IsWindowAppearing())
+				SetKeyboardFocusHere();
+			SetNextItemWidth(140);
+			changed |= InputFloat("##ExactValueInput", ref value, 0, 0, "%.3f");
+			EndPopup();
+		}
+		return changed;
+	}
+
+	static bool RangedInt(string label, ref int value, int min, int max)
+	{
+		var changed = SliderInt(label, ref value, min, max);
+		if (BeginPopupContextItem("##ExactValue"))
+		{
+			if (IsWindowAppearing())
+				SetKeyboardFocusHere();
+			SetNextItemWidth(140);
+			changed |= InputInt("##ExactValueInput", ref value, 0);
+			EndPopup();
+		}
+		return changed;
 	}
 
 	void SetActorProperty(string? specId, Room? room, JsonObject actor, ActorSpecs.EditableProperty property, JsonNode? value, bool continuous)

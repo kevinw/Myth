@@ -9,12 +9,19 @@ public sealed class RadialWave : Actor
 {
 	const int SpokeCount = 192;
 	const int ImpactBucketCount = 48;
+	const int MaxSurfaceClusters = SpokeCount / 2;
+	const int MaxSurfaceVoices = 6;
 	const string ImpactEffect = "radial_wave_impact";
 	const string BirthEffect = "radial_wave_birth";
 	const string SolidImpactEffect = "underground_wave_impact";
 	const string SolidBirthEffect = "underground_wave_birth";
+	const string SurfaceTravelEvent = "radial_wave/surface_travel";
 	const string WarmupParameter = "Warmup";
 	const string FireDurationParameter = "FireDuration";
+	const string SpeedParameter = "Speed";
+	const string IntensityParameter = "Intensity";
+	const string SurfaceNormalYParameter = "SurfaceNormalY";
+	const string VariationParameter = "Variation";
 
 	public Actor? Source;
 	public Actor? Target;
@@ -37,7 +44,13 @@ public sealed class RadialWave : Actor
 	readonly float[] terminalRadius = new float[SpokeCount];
 	readonly float[] contactRemaining = new float[SpokeCount];
 	readonly float[] irregularity = new float[SpokeCount];
+	readonly bool[] surfaceWake = new bool[SpokeCount];
+	readonly float[] surfaceWakeRadius = new float[SpokeCount];
+	readonly Vector2[] surfaceWakeNormal = new Vector2[SpokeCount];
 	readonly bool[] impactBuckets = new bool[ImpactBucketCount];
+	readonly SurfaceAudioCluster[] surfaceClusters = new SurfaceAudioCluster[MaxSurfaceClusters];
+	readonly bool[] surfaceClusterClaimed = new bool[MaxSurfaceClusters];
+	readonly SurfaceAudioVoice[] surfaceVoices = new SurfaceAudioVoice[MaxSurfaceVoices];
 	float radius;
 	float travelTime;
 	bool hitTarget;
@@ -47,13 +60,37 @@ public sealed class RadialWave : Actor
 	int birthEffect = -1;
 	int impactsThisFrame;
 	float impactRumble;
+	float surfaceWakeParticleTimer;
+	float currentSpeed;
+	int surfaceWakeParticleCursor;
 	SoundInstance? impactSound;
+
+	struct SurfaceAudioCluster
+	{
+		public Vector2 Position;
+		public Vector2 Normal;
+	}
+
+	struct SurfaceAudioVoice
+	{
+		public SoundInstance? Sound;
+		public Vector2 Position;
+		public Vector2 Normal;
+		public float MissingTime;
+		public float Variation;
+		public bool Active;
+		public bool Matched;
+	}
 
 	static float CollisionStep => 2;
 	static float ContactHoldTime => 0.16f;
 	static float Irregularity => 1.6f;
 	static float TrailDistance => 7;
 	static float EndFadeDistance => 58;
+	static float SurfaceWakeParticleInterval => 0.045f;
+	static float NearEchoDistance => 5;
+	static float FarEchoDistance => 11;
+	static float SurfaceVoiceGraceTime => 0.1f;
 
 	public RadialWave()
 	{
@@ -102,15 +139,25 @@ public sealed class RadialWave : Actor
 		}
 
 		impactsThisFrame = 0;
+		var advanced = false;
 		if (radius < MaxRadius && activeSpokes > 0)
 		{
 			var previousRadius = radius;
 			travelTime += delta;
 			var acceleration = AccelerationTime <= 0 ? 1 :
 				Ease.Cube.Out(Math.Clamp(travelTime / AccelerationTime, 0, 1));
-			var speed = Speed * float.Lerp(InitialSpeedMultiplier, 1, acceleration);
-			radius = MathF.Min(radius + speed * delta, MaxRadius);
+			currentSpeed = Speed * float.Lerp(InitialSpeedMultiplier, 1, acceleration);
+			radius = MathF.Min(radius + currentSpeed * delta, MaxRadius);
 			Advance(previousRadius, radius);
+			advanced = true;
+			if (Medium == RadialWaveMedium.Solid)
+				UpdateSurfaceWakeParticles(delta);
+		}
+		if (Medium == RadialWaveMedium.Solid)
+		{
+			if (!advanced)
+				ClearSurfaceWake();
+			UpdateSurfaceAudio(delta);
 		}
 		var contactsAlive = UpdateContacts();
 		UpdateImpactSound();
@@ -151,6 +198,7 @@ public sealed class RadialWave : Actor
 	{
 		for (var i = 0; i < directions.Length; i++)
 		{
+			surfaceWake[i] = false;
 			if (blocked[i])
 				continue;
 			var direction = directions[i];
@@ -173,6 +221,16 @@ public sealed class RadialWave : Actor
 				}
 				TryHitTarget(sample);
 			}
+			if (!blocked[i] && Medium == RadialWaveMedium.Solid)
+			{
+				var point = (Vector2)Position + direction * toRadius;
+				if (TrySolidOutwardNormal(point, MathF.Max(1, Thickness * 0.5f + 1), out var outward))
+				{
+					surfaceWake[i] = true;
+					surfaceWakeRadius[i] = toRadius;
+					surfaceWakeNormal[i] = outward;
+				}
+			}
 		}
 	}
 
@@ -186,12 +244,22 @@ public sealed class RadialWave : Actor
 
 	Vector2 SolidOutwardNormal(Vector2 point, Vector2 fallback)
 	{
-		var distance = MathF.Max(1, Thickness * 0.5f);
+		return TrySolidOutwardNormal(point, MathF.Max(1, Thickness * 0.5f), out var normal)
+			? normal
+			: fallback;
+	}
+
+	bool TrySolidOutwardNormal(Vector2 point, float distance, out Vector2 normal)
+	{
 		var horizontal = (IsSolid(SamplePoint(point - Vector2.UnitX * distance)) ? 1 : 0) -
 			(IsSolid(SamplePoint(point + Vector2.UnitX * distance)) ? 1 : 0);
 		var vertical = (IsSolid(SamplePoint(point - Vector2.UnitY * distance)) ? 1 : 0) -
 			(IsSolid(SamplePoint(point + Vector2.UnitY * distance)) ? 1 : 0);
-		return new Vector2(horizontal, vertical).Normalized(fallback);
+		normal = new Vector2(horizontal, vertical);
+		if (normal.LengthSquared() <= 0.001f)
+			return false;
+		normal = Vector2.Normalize(normal);
+		return true;
 	}
 
 	static RectInt SamplePoint(Vector2 point)
@@ -217,6 +285,206 @@ public sealed class RadialWave : Actor
 		Game.Particles?.Emit(impactEffect, point, 3, Calc.Angle(outward), 1, 0.45f);
 	}
 
+	void UpdateSurfaceWakeParticles(float delta)
+	{
+		if (impactEffect < 0 || Game.Particles is not { } particles)
+			return;
+		surfaceWakeParticleTimer -= delta;
+		if (surfaceWakeParticleTimer > 0)
+			return;
+		surfaceWakeParticleTimer += SurfaceWakeParticleInterval;
+		for (int scanned = 0, emitted = 0; scanned < surfaceWake.Length && emitted < 2; scanned++)
+		{
+			var spoke = surfaceWakeParticleCursor++;
+			if (surfaceWakeParticleCursor >= surfaceWake.Length)
+				surfaceWakeParticleCursor = 0;
+			if (!surfaceWake[spoke])
+				continue;
+			var outward = surfaceWakeNormal[spoke];
+			var point = (Vector2)Position + directions[spoke] * surfaceWakeRadius[spoke] + outward;
+			particles.Emit(impactEffect, point, 1, Calc.Angle(outward), 0.7f, 0.32f);
+			emitted++;
+		}
+	}
+
+	void ClearSurfaceWake()
+	{
+		for (var i = 0; i < surfaceWake.Length; i++)
+			surfaceWake[i] = false;
+	}
+
+	void UpdateSurfaceAudio(float delta)
+	{
+		var clusterCount = BuildSurfaceAudioClusters();
+		for (var i = 0; i < surfaceClusterClaimed.Length; i++)
+			surfaceClusterClaimed[i] = false;
+		for (var i = 0; i < surfaceVoices.Length; i++)
+			surfaceVoices[i].Matched = false;
+
+		var matchDistance = MathF.Max(14, currentSpeed * delta * 4 + 4);
+		var matchDistanceSquared = matchDistance * matchDistance;
+		for (var clusterIndex = 0; clusterIndex < clusterCount; clusterIndex++)
+		{
+			ref var cluster = ref surfaceClusters[clusterIndex];
+			var bestVoice = -1;
+			var bestDistance = matchDistanceSquared;
+			for (var voiceIndex = 0; voiceIndex < surfaceVoices.Length; voiceIndex++)
+			{
+				ref var voice = ref surfaceVoices[voiceIndex];
+				if (!voice.Active || voice.Matched || Vector2.Dot(voice.Normal, cluster.Normal) < -0.25f)
+					continue;
+				var distance = Vector2.DistanceSquared(voice.Position, cluster.Position);
+				if (distance < bestDistance)
+				{
+					bestDistance = distance;
+					bestVoice = voiceIndex;
+				}
+			}
+			if (bestVoice >= 0)
+			{
+				MatchSurfaceVoice(ref surfaceVoices[bestVoice], cluster, delta);
+				surfaceClusterClaimed[clusterIndex] = true;
+			}
+		}
+
+		for (var voiceIndex = 0; voiceIndex < surfaceVoices.Length; voiceIndex++)
+		{
+			ref var voice = ref surfaceVoices[voiceIndex];
+			if (voice.Active)
+				continue;
+			var clusterIndex = ClosestUnclaimedCluster(clusterCount);
+			if (clusterIndex < 0)
+				break;
+			StartSurfaceVoice(ref voice, surfaceClusters[clusterIndex]);
+			surfaceClusterClaimed[clusterIndex] = true;
+		}
+
+		for (var i = 0; i < surfaceVoices.Length; i++)
+		{
+			ref var voice = ref surfaceVoices[i];
+			if (!voice.Active)
+				continue;
+			if (!voice.Matched)
+			{
+				voice.MissingTime += delta;
+				if (voice.MissingTime >= SurfaceVoiceGraceTime)
+				{
+					StopSurfaceVoice(ref voice);
+					continue;
+				}
+			}
+			UpdateSurfaceVoice(voice);
+		}
+	}
+
+	int BuildSurfaceAudioClusters()
+	{
+		var breakAt = -1;
+		for (var i = 0; i < surfaceWake.Length; i++)
+			if (!surfaceWake[i])
+			{
+				breakAt = i;
+				break;
+			}
+
+		var clusterCount = 0;
+		var position = Vector2.Zero;
+		var normal = Vector2.Zero;
+		var count = 0;
+		var steps = breakAt < 0 ? surfaceWake.Length : surfaceWake.Length + 1;
+		for (var step = 0; step < steps; step++)
+		{
+			var spoke = breakAt < 0 ? step : (breakAt + step) % surfaceWake.Length;
+			if (spoke >= 0 && surfaceWake[spoke])
+			{
+				position += (Vector2)Position + directions[spoke] * surfaceWakeRadius[spoke];
+				normal += surfaceWakeNormal[spoke];
+				count++;
+				continue;
+			}
+			if (count > 0 && clusterCount < surfaceClusters.Length)
+			{
+				surfaceClusters[clusterCount++] = new()
+				{
+					Position = position / count,
+					Normal = normal.Normalized(Vector2.UnitY),
+				};
+			}
+			position = normal = Vector2.Zero;
+			count = 0;
+		}
+		if (count > 0 && clusterCount < surfaceClusters.Length)
+			surfaceClusters[clusterCount++] = new()
+			{
+				Position = position / count,
+				Normal = normal.Normalized(Vector2.UnitY),
+			};
+		return clusterCount;
+	}
+
+	int ClosestUnclaimedCluster(int clusterCount)
+	{
+		var origin = Target?.Position ?? Position;
+		var closest = -1;
+		var closestDistance = float.MaxValue;
+		for (var i = 0; i < clusterCount; i++)
+		{
+			if (surfaceClusterClaimed[i])
+				continue;
+			var distance = Vector2.DistanceSquared(origin, surfaceClusters[i].Position);
+			if (distance < closestDistance)
+			{
+				closest = i;
+				closestDistance = distance;
+			}
+		}
+		return closest;
+	}
+
+	void MatchSurfaceVoice(ref SurfaceAudioVoice voice, in SurfaceAudioCluster cluster, float delta)
+	{
+		var blend = 1 - MathF.Exp(-delta * 24);
+		voice.Position = Vector2.Lerp(voice.Position, cluster.Position, blend);
+		voice.Normal = Vector2.Lerp(voice.Normal, cluster.Normal, blend).Normalized(cluster.Normal);
+		voice.MissingTime = 0;
+		voice.Matched = true;
+	}
+
+	void StartSurfaceVoice(ref SurfaceAudioVoice voice, in SurfaceAudioCluster cluster)
+	{
+		voice = new()
+		{
+			Sound = Game.CreateAudioEvent(SurfaceTravelEvent, cluster.Position),
+			Position = cluster.Position,
+			Normal = cluster.Normal,
+			Variation = Game.rng.Float(),
+			Active = true,
+			Matched = true,
+		};
+		UpdateSurfaceVoice(voice);
+		voice.Sound?.Start();
+	}
+
+	void UpdateSurfaceVoice(in SurfaceAudioVoice voice)
+	{
+		var fade = 1 - Math.Clamp(voice.MissingTime / SurfaceVoiceGraceTime, 0, 1);
+		Game.SetAudioEventPosition(voice.Sound, voice.Position);
+		Game.SetAudioEventParameter(voice.Sound, SpeedParameter, Math.Clamp(currentSpeed / 360, 0, 1));
+		Game.SetAudioEventParameter(voice.Sound, IntensityParameter, SurfaceAudioIntensity * fade);
+		Game.SetAudioEventParameter(voice.Sound, SurfaceNormalYParameter, voice.Normal.Y);
+		Game.SetAudioEventParameter(voice.Sound, VariationParameter, voice.Variation);
+	}
+
+	float SurfaceAudioIntensity => MathF.Min(
+		Ease.Cube.Out(Math.Clamp(radius / 18, 0, 1)),
+		Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / EndFadeDistance, 0, 1)));
+
+	static void StopSurfaceVoice(ref SurfaceAudioVoice voice, bool immediate = false)
+	{
+		StopAndReleaseSound(ref voice.Sound, immediate);
+		voice = default;
+	}
+
 	RectInt SampleRect(Vector2 point)
 	{
 		var size = Math.Max(1, (int)MathF.Ceiling(Thickness));
@@ -232,7 +500,7 @@ public sealed class RadialWave : Actor
 		if (Finished || radius <= 0)
 			return;
 		var birth = 1 - Ease.Cube.Out(Math.Clamp(radius / 24, 0, 1));
-		var thickness = Thickness + birth * 4;
+		var time = Time.SecondsF;
 		for (var i = 0; i < directions.Length; i++)
 		{
 			var next = (i + 1) % directions.Length;
@@ -240,27 +508,134 @@ public sealed class RadialWave : Actor
 			if (alpha <= 0)
 				continue;
 			var contact = blocked[i] || blocked[next];
-			var from = directions[i] * SpokeRadius(i);
-			var to = directions[next] * SpokeRadius(next);
-			var contactPulse = contact ? MathF.Sin(alpha * MathF.PI) : 0;
-			var lineThickness = thickness + contactPulse * 2.5f;
+			var interference = Interference(i, time);
+			var packet = MathF.Pow(interference, 5);
+			var frontFrom = directions[i] * FrontRadius(i);
+			var frontTo = directions[next] * FrontRadius(next);
+			var shimmer = MathF.Sin(time * 15 + i * 0.73f) * 0.65f;
+			var bodyFrom = directions[i] * MathF.Max(0, SpokeRadius(i) + shimmer);
+			var bodyTo = directions[next] * MathF.Max(0, SpokeRadius(next) - shimmer * 0.45f);
+			var haloThickness = (Medium == RadialWaveMedium.Air ? Thickness + 1.5f : Thickness * 0.65f) +
+				birth * 3 + packet * 1.8f;
 			if (!emissive)
-				batcher.Line(from, to, lineThickness + 2.5f, Color * (alpha * 0.32f));
-			batcher.Line(from, to, emissive ? lineThickness + 1 : lineThickness,
-				(emissive ? Color : CoreColor) * alpha);
-			if (!contact && radius > TrailDistance)
 			{
-				var trailFrom = directions[i] * (SpokeRadius(i) - TrailDistance);
-				var trailTo = directions[next] * (SpokeRadius(next) - TrailDistance);
-				batcher.Line(trailFrom, trailTo, MathF.Max(1, Thickness * 0.55f),
-					(emissive ? Color : CoreColor) * (alpha * 0.22f));
+				batcher.Line(bodyFrom, bodyTo, haloThickness,
+					Color * (alpha * Calc.Lerp(0.1f, 0.28f, interference)));
+				batcher.Line(frontFrom, frontTo, 1.35f + packet * 0.55f,
+					CoreColor * (alpha * Calc.Lerp(0.78f, 1, packet)));
 			}
+			else
+				batcher.Line(frontFrom, frontTo, 1.4f + packet * 1.25f,
+					Color * (alpha * Calc.Lerp(0.58f, 1, packet)));
+
+			if (!contact)
+			{
+				if (Medium == RadialWaveMedium.Air)
+					RenderAirWake(batcher, emissive, i, next, alpha, time);
+				else
+					RenderSolidFracture(batcher, emissive, i, frontFrom, frontTo, alpha, time);
+			}
+
+			if (packet > 0.72f && (i & 1) == 0)
+				batcher.Circle((frontFrom + frontTo) * 0.5f, Calc.Lerp(0.8f, 2.2f, packet), 8,
+					(emissive ? Color : CoreColor) * (alpha * packet * (emissive ? 0.9f : 0.7f)));
+		}
+		if (Medium == RadialWaveMedium.Solid)
+			RenderSurfaceWake(batcher, emissive);
+	}
+
+	void RenderAirWake(Batcher batcher, bool emissive, int spoke, int next, float alpha, float time)
+	{
+		RenderEcho(batcher, emissive, spoke, next, alpha, time, NearEchoDistance, 0, 0.5f, 3.5f);
+		RenderEcho(batcher, emissive, spoke, next, alpha, time, FarEchoDistance, 11, 0.3f, 2.5f);
+		var cell = CellStrength(spoke, time, 3);
+		if (cell < 0.66f || spoke % 7 != 0 || radius <= TrailDistance)
+			return;
+		var point = directions[spoke] * MathF.Max(0, SpokeRadius(spoke) - 2);
+		var tangent = new Vector2(-directions[spoke].Y, directions[spoke].X);
+		var tail = point - directions[spoke] * Calc.Lerp(5, 9, cell) +
+			tangent * MathF.Sin(spoke * 2.1f + time * 5) * 2.5f;
+		batcher.Line(point, tail, emissive ? 1.2f : 2.4f,
+			(emissive ? Color : CoreColor) * (alpha * cell * (emissive ? 0.38f : 0.15f)));
+	}
+
+	void RenderEcho(Batcher batcher, bool emissive, int spoke, int next, float alpha, float time,
+		float distance, int offset, float opacity, float thickness)
+	{
+		if (radius <= distance || CellStrength(spoke, time, offset) < 0.48f)
+			return;
+		var from = directions[spoke] * MathF.Max(0, SpokeRadius(spoke) - distance);
+		var to = directions[next] * MathF.Max(0, SpokeRadius(next) - distance);
+		batcher.Line(from, to, emissive ? thickness : thickness + 1,
+			(emissive ? Color : CoreColor) * (alpha * opacity * (emissive ? 1 : 0.7f)));
+	}
+
+	void RenderSolidFracture(Batcher batcher, bool emissive, int spoke, Vector2 frontFrom,
+		Vector2 frontTo, float alpha, float time)
+	{
+		var cell = CellStrength(spoke, time, 7);
+		if (cell > 0.4f && radius > NearEchoDistance)
+		{
+			var from = directions[spoke] * MathF.Max(0, SpokeRadius(spoke) - NearEchoDistance);
+			var to = directions[(spoke + 1) % directions.Length] *
+				MathF.Max(0, SpokeRadius((spoke + 1) % directions.Length) - NearEchoDistance);
+			batcher.Line(from, to, emissive ? 1.2f : 2.2f,
+				(emissive ? Color : CoreColor) * (alpha * cell * (emissive ? 0.32f : 0.16f)));
+		}
+		if (spoke % 6 != 0 || cell < 0.58f)
+			return;
+		var point = (frontFrom + frontTo) * 0.5f;
+		var direction = directions[spoke];
+		var tangent = new Vector2(-direction.Y, direction.X) * ((spoke / 6 & 1) == 0 ? 1 : -1);
+		var branch = point - direction * Calc.Lerp(4, 8, cell) + tangent * Calc.Lerp(1.5f, 4, cell);
+		if (!emissive)
+			batcher.Line(point, branch, 3, Color * (alpha * cell * 0.18f));
+		batcher.Line(point, branch, emissive ? 1.25f : 1,
+			(emissive ? Color : CoreColor) * (alpha * cell * (emissive ? 0.48f : 0.72f)));
+	}
+
+	float Interference(int spoke, float time)
+	{
+		var angle = spoke * MathF.Tau / directions.Length;
+		return 0.5f + MathF.Sin(angle * 5 - time * 7.5f) *
+			MathF.Sin(angle * 8 + time * 5.2f) * 0.5f;
+	}
+
+	static float CellStrength(int spoke, float time, int offset)
+	{
+		var group = (spoke + offset) / 4;
+		var stable = 0.5f + MathF.Sin(group * 2.17f + offset * 0.91f) * 0.5f;
+		var traveling = 0.5f + MathF.Sin(group * 0.83f - time * 6.2f + offset) * 0.5f;
+		return stable * 0.55f + traveling * 0.45f;
+	}
+
+	void RenderSurfaceWake(Batcher batcher, bool emissive)
+	{
+		var height = MathF.Max(5, TargetReach + 2);
+		for (var i = 0; i < surfaceWake.Length; i++)
+		{
+			if (!surfaceWake[i])
+				continue;
+			var alpha = SpokeAlpha(i);
+			var normal = surfaceWakeNormal[i];
+			var tangent = new Vector2(-normal.Y, normal.X);
+			var pulse = 0.72f + MathF.Abs(MathF.Sin(Time.SecondsF * 31 + i * 1.7f)) * 0.28f;
+			var width = 2.2f + pulse * 1.4f;
+			var point = directions[i] * surfaceWakeRadius[i];
+			var tip = point + normal * height * pulse;
+			if (!emissive)
+				batcher.Triangle(point - tangent * width, point + tangent * width, tip,
+					Color * (alpha * 0.48f));
+			batcher.Line(point, tip, emissive ? 1.8f : 1.2f,
+				(emissive ? Color : CoreColor) * (alpha * pulse));
 		}
 	}
 
 	float SpokeRadius(int spoke)
 		=> blocked[spoke] ? terminalRadius[spoke] :
 			radius + irregularity[spoke] * Irregularity * Ease.Cube.Out(Math.Clamp(radius / 40, 0, 1));
+
+	float FrontRadius(int spoke) => blocked[spoke] ? terminalRadius[spoke] : radius;
 
 	float SpokeAlpha(int spoke)
 		=> blocked[spoke] ? Ease.Cube.Out(contactRemaining[spoke] / ContactHoldTime) :
@@ -269,6 +644,8 @@ public sealed class RadialWave : Actor
 	public override void Destroyed()
 	{
 		Finished = true;
+		for (var i = 0; i < surfaceVoices.Length; i++)
+			StopSurfaceVoice(ref surfaceVoices[i], true);
 		Game.Particles?.ReleaseEffect(ref impactEffect);
 		Game.Particles?.ReleaseEffect(ref birthEffect);
 		StopAndReleaseSound(ref impactSound, true);
@@ -277,5 +654,7 @@ public sealed class RadialWave : Actor
 	public override void RenderNormals(Batcher batcher) { }
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
-	public override Rect GetVisualBounds() => new(Position.X - radius, Position.Y - radius, radius * 2, radius * 2);
+	public override Rect GetVisualBounds()
+		=> new Rect(Position.X - radius, Position.Y - radius, radius * 2, radius * 2)
+			.Inflate(MathF.Max(5, TargetReach + 2));
 }
