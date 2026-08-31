@@ -29,6 +29,7 @@ public sealed class RadialWave : Actor
 	public float Speed = 220;
 	public float MaxRadius = 320;
 	public float Thickness = 3.5f;
+	public float CollisionInset = 0.5f;
 	public float StartDelay;
 	public float AccelerationTime = 0.16f;
 	public float InitialSpeedMultiplier = 0.42f;
@@ -43,6 +44,9 @@ public sealed class RadialWave : Actor
 	readonly bool[] blocked = new bool[SpokeCount];
 	readonly float[] terminalRadius = new float[SpokeCount];
 	readonly float[] contactRemaining = new float[SpokeCount];
+	readonly bool[] preEchoBlocked = new bool[SpokeCount];
+	readonly float[] preEchoTerminalRadius = new float[SpokeCount];
+	readonly float[] preEchoContactRemaining = new float[SpokeCount];
 	readonly float[] irregularity = new float[SpokeCount];
 	readonly bool[] surfaceWake = new bool[SpokeCount];
 	readonly float[] surfaceWakeRadius = new float[SpokeCount];
@@ -52,10 +56,13 @@ public sealed class RadialWave : Actor
 	readonly bool[] surfaceClusterClaimed = new bool[MaxSurfaceClusters];
 	readonly SurfaceAudioVoice[] surfaceVoices = new SurfaceAudioVoice[MaxSurfaceVoices];
 	float radius;
+	float preEchoRadius;
+	float preEchoFade;
 	float travelTime;
 	bool hitTarget;
 	bool birthEmitted;
 	int activeSpokes = SpokeCount;
+	int preEchoActiveSpokes = SpokeCount;
 	int impactEffect = -1;
 	int birthEffect = -1;
 	int impactsThisFrame;
@@ -82,7 +89,7 @@ public sealed class RadialWave : Actor
 		public bool Matched;
 	}
 
-	static float CollisionStep => 2;
+	static float CollisionStep => 1;
 	static float ContactHoldTime => 0.16f;
 	static float Irregularity => 1.6f;
 	static float TrailDistance => 7;
@@ -91,6 +98,12 @@ public sealed class RadialWave : Actor
 	static float NearEchoDistance => 5;
 	static float FarEchoDistance => 11;
 	static float SurfaceVoiceGraceTime => 0.1f;
+	static float PreEchoSpeedMultiplier => 2.75f;
+	static float PreEchoContactHoldTime => 0.09f;
+	static float PreEchoFadeTime => 0.11f;
+	static float PreEchoBandOffset => 3.5f;
+	static float PreEchoBandThickness => 5;
+	static float PreEchoDistortionStrength => 0.52f;
 
 	public RadialWave()
 	{
@@ -132,6 +145,7 @@ public sealed class RadialWave : Actor
 		if (!birthEmitted)
 		{
 			birthEmitted = true;
+			preEchoFade = 1;
 			impactEffect = Game.Particles?.AcquireEffect(Medium == RadialWaveMedium.Solid ? SolidImpactEffect : ImpactEffect) ?? -1;
 			birthEffect = Game.Particles?.AcquireEffect(Medium == RadialWaveMedium.Solid ? SolidBirthEffect : BirthEffect) ?? -1;
 			if (birthEffect >= 0)
@@ -153,6 +167,7 @@ public sealed class RadialWave : Actor
 			if (Medium == RadialWaveMedium.Solid)
 				UpdateSurfaceWakeParticles(delta);
 		}
+		UpdatePreEcho(delta);
 		if (Medium == RadialWaveMedium.Solid)
 		{
 			if (!advanced)
@@ -165,6 +180,44 @@ public sealed class RadialWave : Actor
 			return;
 		Finished = true;
 		Game.Destroy(this);
+	}
+
+	void UpdatePreEcho(float delta)
+	{
+		if (preEchoFade <= 0)
+			return;
+
+		if (preEchoRadius < MaxRadius && preEchoActiveSpokes > 0)
+		{
+			var previousRadius = preEchoRadius;
+			preEchoRadius = MathF.Min(preEchoRadius + currentSpeed * PreEchoSpeedMultiplier * delta, MaxRadius);
+			AdvancePreEcho(previousRadius, preEchoRadius);
+		}
+		if (preEchoRadius >= MaxRadius || preEchoActiveSpokes <= 0)
+			preEchoFade = MathF.Max(0, preEchoFade - delta / PreEchoFadeTime);
+		for (var i = 0; i < preEchoContactRemaining.Length; i++)
+			preEchoContactRemaining[i] = MathF.Max(0, preEchoContactRemaining[i] - delta);
+	}
+
+	void AdvancePreEcho(float fromRadius, float toRadius)
+	{
+		for (var i = 0; i < directions.Length; i++)
+		{
+			if (preEchoBlocked[i])
+				continue;
+			var direction = directions[i];
+			for (var distance = fromRadius; distance < toRadius;)
+			{
+				distance = MathF.Min(distance + CollisionStep, toRadius);
+				if (!BlocksWave(SamplePoint((Vector2)Position + direction * distance)))
+					continue;
+				preEchoBlocked[i] = true;
+				preEchoTerminalRadius[i] = CollisionRadius(distance);
+				preEchoContactRemaining[i] = PreEchoContactHoldTime;
+				preEchoActiveSpokes--;
+				break;
+			}
+		}
 	}
 
 	bool UpdateContacts()
@@ -206,11 +259,10 @@ public sealed class RadialWave : Actor
 			{
 				distance = MathF.Min(distance + CollisionStep, toRadius);
 				var point = (Vector2)Position + direction * distance;
-				var sample = SampleRect(point);
-				if (BlocksWave(sample))
+				if (BlocksWave(SamplePoint(point)))
 				{
 					blocked[i] = true;
-					terminalRadius[i] = MathF.Max(0, distance - CollisionStep);
+					terminalRadius[i] = CollisionRadius(distance);
 					contactRemaining[i] = ContactHoldTime;
 					activeSpokes--;
 					impactsThisFrame++;
@@ -219,7 +271,7 @@ public sealed class RadialWave : Actor
 					EmitImpact(i, contact, outward);
 					break;
 				}
-				TryHitTarget(sample);
+				TryHitTarget(SampleRect(point));
 			}
 			if (!blocked[i] && Medium == RadialWaveMedium.Solid)
 			{
@@ -241,6 +293,9 @@ public sealed class RadialWave : Actor
 	bool IsSolid(RectInt sample)
 		=> Room is { } room && room.WorldBounds.Contains(sample) &&
 			(Game.OverlapsRoomCollision(sample) || Game.OverlapsFirst(sample, Masks.Solid) != null);
+
+	float CollisionRadius(float distance)
+		=> MathF.Max(0, distance - Thickness * 0.5f - CollisionInset);
 
 	Vector2 SolidOutwardNormal(Vector2 point, Vector2 fallback)
 	{
@@ -494,6 +549,31 @@ public sealed class RadialWave : Actor
 
 	public override void Render(Batcher batcher) => RenderWave(batcher, false);
 	public override void RenderEmissive(Batcher batcher) => RenderWave(batcher, true);
+	public override bool HasWorldDistortion => !Finished && birthEmitted && preEchoRadius > 0 && preEchoFade > 0;
+
+	public override void RenderWorldDistortion(Batcher batcher)
+	{
+		if (!HasWorldDistortion)
+			return;
+		for (var i = 0; i < directions.Length; i++)
+		{
+			var next = (i + 1) % directions.Length;
+			var alpha = MathF.Min(PreEchoSpokeAlpha(i), PreEchoSpokeAlpha(next));
+			if (alpha <= 0)
+				continue;
+			var strength = alpha * PreEchoDistortionStrength;
+			var innerFrom = directions[i] * MathF.Max(0, PreEchoSpokeRadius(i) - PreEchoBandOffset);
+			var innerTo = directions[next] * MathF.Max(0, PreEchoSpokeRadius(next) - PreEchoBandOffset);
+			var outerFrom = directions[i] * (PreEchoSpokeRadius(i) + PreEchoBandOffset);
+			var outerTo = directions[next] * (PreEchoSpokeRadius(next) + PreEchoBandOffset);
+			batcher.Line(innerFrom, innerTo, PreEchoBandThickness,
+				EncodeWorldDistortion(-directions[i], strength),
+				EncodeWorldDistortion(-directions[next], strength));
+			batcher.Line(outerFrom, outerTo, PreEchoBandThickness,
+				EncodeWorldDistortion(directions[i], strength),
+				EncodeWorldDistortion(directions[next], strength));
+		}
+	}
 
 	void RenderWave(Batcher batcher, bool emissive)
 	{
@@ -542,6 +622,23 @@ public sealed class RadialWave : Actor
 		}
 		if (Medium == RadialWaveMedium.Solid)
 			RenderSurfaceWake(batcher, emissive);
+		if (!emissive)
+			RenderPreEchoFringe(batcher);
+	}
+
+	void RenderPreEchoFringe(Batcher batcher)
+	{
+		if (!HasWorldDistortion)
+			return;
+		for (var i = 0; i < directions.Length; i++)
+		{
+			var next = (i + 1) % directions.Length;
+			var alpha = MathF.Min(PreEchoSpokeAlpha(i), PreEchoSpokeAlpha(next));
+			if (alpha <= 0)
+				continue;
+			batcher.Line(directions[i] * PreEchoSpokeRadius(i), directions[next] * PreEchoSpokeRadius(next),
+				1.2f, Color * (alpha * 0.09f));
+		}
 	}
 
 	void RenderAirWake(Batcher batcher, bool emissive, int spoke, int next, float alpha, float time)
@@ -637,6 +734,14 @@ public sealed class RadialWave : Actor
 
 	float FrontRadius(int spoke) => blocked[spoke] ? terminalRadius[spoke] : radius;
 
+	float PreEchoSpokeRadius(int spoke)
+		=> preEchoBlocked[spoke] ? preEchoTerminalRadius[spoke] : preEchoRadius;
+
+	float PreEchoSpokeAlpha(int spoke)
+		=> preEchoBlocked[spoke]
+			? Ease.Cube.Out(preEchoContactRemaining[spoke] / PreEchoContactHoldTime)
+			: MathF.Min(preEchoFade, Ease.Cube.Out(Math.Clamp((MaxRadius - preEchoRadius) / EndFadeDistance, 0, 1)));
+
 	float SpokeAlpha(int spoke)
 		=> blocked[spoke] ? Ease.Cube.Out(contactRemaining[spoke] / ContactHoldTime) :
 			Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / EndFadeDistance, 0, 1));
@@ -655,6 +760,9 @@ public sealed class RadialWave : Actor
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 	public override Rect GetVisualBounds()
-		=> new Rect(Position.X - radius, Position.Y - radius, radius * 2, radius * 2)
+	{
+		var visualRadius = MathF.Max(radius, preEchoRadius);
+		return new Rect((Vector2)Position - Vector2.One * visualRadius, Vector2.One * visualRadius * 2)
 			.Inflate(MathF.Max(5, TargetReach + 2));
+	}
 }

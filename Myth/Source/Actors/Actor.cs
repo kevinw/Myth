@@ -646,6 +646,14 @@ public class Actor
 	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
 	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
+	public virtual bool HasWorldDistortion => false;
+	public virtual void RenderWorldDistortion(Batcher batcher) { }
+	protected static Color EncodeWorldDistortion(Vector2 direction, float strength)
+	{
+		var encoded = direction * 0.5f + Vector2.One * 0.5f;
+		return new(encoded.X * strength, encoded.Y * strength, 0, strength);
+	}
+
 	public virtual void RenderNormals(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Normals);
 	public virtual void RenderShadow(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
 	public virtual void RenderReflection(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);

@@ -719,7 +719,7 @@ public partial class Game : IDisposable
 
 	internal void ChangeTimeScale(int direction)
 	{
-		ReadOnlySpan<float> scales = [0.05f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f];
+		ReadOnlySpan<float> scales = [0.00001f, 0.05f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f];
 
 		var index = 0;
 		var bestDistance = float.MaxValue;

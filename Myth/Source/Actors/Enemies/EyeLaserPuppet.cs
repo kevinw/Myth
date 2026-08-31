@@ -34,6 +34,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	[I(80, 360)] public float FloatingWaveSpeed = 200;
 	[I(64, 640)] public float FloatingWaveRange = 520;
 	[I(1, 8)] public float FloatingWaveThickness = 5.5f;
+	[I(-2, 8)] public float FloatingWaveCollisionInset = 0.5f;
 	[I(0, 0.4f)] public float FloatingWaveAccelerationTime = 0.16f;
 	[I(0.1f, 1)] public float FloatingWaveInitialSpeed = 0.42f;
 	public Color FloatingFlashColor = 0xffd7f2;
@@ -43,6 +44,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	[I(80, 360)] public float StompWaveSpeed = 180;
 	[I(64, 640)] public float StompWaveRange = 360;
 	[I(1, 8)] public float StompWaveThickness = 5.5f;
+	[I(-2, 8)] public float StompWaveCollisionInset = 0.5f;
 	[I(0, 0.4f)] public float StompWaveAccelerationTime = 0.12f;
 	[I(0.1f, 1)] public float StompWaveInitialSpeed = 0.5f;
 	[I(0, 12)] public float StompWaveTargetReach = 4;
@@ -273,6 +275,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 		wave.Speed = StompWaveSpeed;
 		wave.MaxRadius = StompWaveRange;
 		wave.Thickness = StompWaveThickness;
+		wave.CollisionInset = StompWaveCollisionInset;
 		wave.AccelerationTime = StompWaveAccelerationTime;
 		wave.InitialSpeedMultiplier = StompWaveInitialSpeed;
 		wave.TargetReach = StompWaveTargetReach;
@@ -383,6 +386,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 		wave.Speed = FloatingWaveSpeed;
 		wave.MaxRadius = FloatingWaveRange;
 		wave.Thickness = FloatingWaveThickness;
+		wave.CollisionInset = FloatingWaveCollisionInset;
 		wave.AccelerationTime = FloatingWaveAccelerationTime;
 		wave.InitialSpeedMultiplier = FloatingWaveInitialSpeed;
 		wave.Color = Color.Lerp(FloatingFlashColor, new Color(0xff5fb7), 0.35f);

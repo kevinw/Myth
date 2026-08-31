@@ -15,6 +15,7 @@ public sealed class WavePylon : Actor
 	[I(80, 360), InspectorGroup("Wave")] public float WaveSpeed = 200;
 	[I(64, 640)] public float WaveRange = 320;
 	[I(1, 8)] public float WaveThickness = 5.5f;
+	[I(-2, 8)] public float WaveCollisionInset = 0.5f;
 	[I(0, 0.4f)] public float WaveAccelerationTime = 0.12f;
 	[I(0.1f, 1)] public float WaveInitialSpeed = 0.5f;
 	[I(8, 320), InspectorGroup("Solid Wave")] public float SolidProbeRange = 96;
@@ -126,6 +127,7 @@ public sealed class WavePylon : Actor
 			wave.Speed = WaveSpeed;
 			wave.MaxRadius = WaveRange;
 			wave.Thickness = WaveThickness;
+			wave.CollisionInset = WaveCollisionInset;
 			wave.AccelerationTime = WaveAccelerationTime;
 			wave.InitialSpeedMultiplier = WaveInitialSpeed;
 			wave.TargetReach = Medium == RadialWaveMedium.Solid ? SolidTargetReach : 0;

@@ -1,3 +1,4 @@
+- comment out unused light cookies
 - play pong with projectiles
 - try some sound effects from the BOOM library https://artlist.io/sfx/artist/boom-library/845
 - you still slow down when attacking. maybe get "rid" of attack state, or share the movement code update with it

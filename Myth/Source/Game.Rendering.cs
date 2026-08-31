@@ -159,6 +159,8 @@ public sealed partial class GameView
 		}
 		if (debugView == DebugView.None && game.AirFlashAmount > 0)
 			output = ApplyAirFlash(output);
+		if (debugView == DebugView.None)
+			output = ApplyWorldDistortion(output);
 		DrawLayerTransition(output);
 		var mapOverlayVisible = false;
 		if (debugView is DebugView.None or DebugView.CollisionRects)
@@ -909,6 +911,56 @@ public sealed partial class GameView
 		Batcher.Render(output);
 		Batcher.Clear();
 		return output;
+	}
+
+	Target ApplyWorldDistortion(Target input)
+	{
+		if (worldDistortionMaterial == null || !DrawWorldDistortionMask())
+			return input;
+
+		var output = input == GlitchScreen ? Screen : GlitchScreen;
+		output.Clear(Color.Transparent);
+		worldDistortionMaterial.Material.Fragment.SetUniformBuffer([
+			input.Width, input.Height, MaxWorldDistortionPixels, 0,
+		]);
+		worldDistortionMaterial.Material.Fragment.Samplers[1] = new(DistortionMask,
+			new(TextureFilter.Linear, TextureWrap.Clamp));
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.PushMaterial(worldDistortionMaterial.Material);
+		Batcher.Image(input, input.Bounds.Center, input.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopMaterial();
+		Batcher.PopSampler();
+		Batcher.Render(output);
+		Batcher.Clear();
+		return output;
+	}
+
+	bool DrawWorldDistortionMask()
+	{
+		var hasDistortion = false;
+		for (var i = 0; i < rendering.Count; i++)
+			if (rendering[i].Visible && rendering[i].HasWorldDistortion)
+			{
+				hasDistortion = true;
+				break;
+			}
+		if (!hasDistortion)
+			return false;
+
+		DistortionMask.Clear(Color.Transparent);
+		PushWorldMatrix();
+		foreach (var actor in rendering)
+		{
+			if (!actor.Visible || !actor.HasWorldDistortion)
+				continue;
+			Batcher.PushMatrix(actor.Position);
+			actor.RenderWorldDistortion(Batcher);
+			Batcher.PopMatrix();
+		}
+		Batcher.PopMatrix();
+		Batcher.Render(DistortionMask);
+		Batcher.Clear();
+		return true;
 	}
 
 	void CompositeLighting(float aoStrength)
@@ -2096,6 +2148,7 @@ public sealed partial class GameView
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
+		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
 		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "TileField"));
@@ -2345,6 +2398,7 @@ public sealed partial class GameView
 		BlendMask.Blue, Color.White);
 
 	static float DitherGlitchRadius => 150.0f;
+	static float MaxWorldDistortionPixels => 3;
 	static float NormalDitherLevels => 4.0f;
 	static Vector2 AtlasWanderSpeed => new(13.0f, 7.0f);
 	static float AtlasWanderInitialSpeed => 0.1f;
@@ -2369,6 +2423,7 @@ public sealed partial class GameView
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
+	Target DistortionMask { get; set; } = null!;
 	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;
@@ -2397,6 +2452,7 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? tileFieldDebugMaterial;
 	readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	readonly ReloadableMaterial? airFlashMaterial;
+	readonly ReloadableMaterial? worldDistortionMaterial;
 	readonly ReloadableMaterial? blurMaterial;
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;
