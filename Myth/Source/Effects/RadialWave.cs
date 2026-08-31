@@ -93,7 +93,9 @@ public sealed class RadialWave : Actor
 	static float ContactHoldTime => 0.16f;
 	static float Irregularity => 1.6f;
 	static float TrailDistance => 7;
-	static float EndFadeDistance => 58;
+	static float HurtLineEndFadeDistance => 18;
+	static float DecorativeEndFadeDistance => 58;
+	static float PreEchoEndFadeDistance => 58;
 	static float SurfaceWakeParticleInterval => 0.015f;
 	static float NearEchoDistance => 5;
 	static float FarEchoDistance => 11;
@@ -532,7 +534,7 @@ public sealed class RadialWave : Actor
 
 	float SurfaceAudioIntensity => MathF.Min(
 		Ease.Cube.Out(Math.Clamp(radius / 18, 0, 1)),
-		Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / EndFadeDistance, 0, 1)));
+		Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / DecorativeEndFadeDistance, 0, 1)));
 
 	static void StopSurfaceVoice(ref SurfaceAudioVoice voice, bool immediate = false)
 	{
@@ -584,8 +586,9 @@ public sealed class RadialWave : Actor
 		for (var i = 0; i < directions.Length; i++)
 		{
 			var next = (i + 1) % directions.Length;
-			var alpha = MathF.Min(SpokeAlpha(i), SpokeAlpha(next));
-			if (alpha <= 0)
+			var decorativeAlpha = MathF.Min(DecorativeSpokeAlpha(i), DecorativeSpokeAlpha(next));
+			var hurtLineAlpha = MathF.Min(HurtLineSpokeAlpha(i), HurtLineSpokeAlpha(next));
+			if (decorativeAlpha <= 0 && hurtLineAlpha <= 0)
 				continue;
 			var contact = blocked[i] || blocked[next];
 			var interference = Interference(i, time);
@@ -600,25 +603,25 @@ public sealed class RadialWave : Actor
 			if (!emissive)
 			{
 				batcher.Line(bodyFrom, bodyTo, haloThickness,
-					Color * (alpha * Calc.Lerp(0.1f, 0.28f, interference)));
-				batcher.Line(frontFrom, frontTo, 1.35f + packet * 0.55f,
-					CoreColor * (alpha * Calc.Lerp(0.78f, 1, packet)));
+					Color * (decorativeAlpha * Calc.Lerp(0.2f, 0.42f, interference)));
+				batcher.Line(frontFrom, frontTo, 2.25f + packet * 0.65f,
+					CoreColor * hurtLineAlpha);
 			}
 			else
-				batcher.Line(frontFrom, frontTo, 1.4f + packet * 1.25f,
-					Color * (alpha * Calc.Lerp(0.58f, 1, packet)));
+				batcher.Line(frontFrom, frontTo, 2.1f + packet * 1.1f,
+					Color * (hurtLineAlpha * Calc.Lerp(0.85f, 1, packet)));
 
 			if (!contact)
 			{
 				if (Medium == RadialWaveMedium.Air)
-					RenderAirWake(batcher, emissive, i, next, alpha, time);
+					RenderAirWake(batcher, emissive, i, next, decorativeAlpha, time);
 				else
-					RenderSolidFracture(batcher, emissive, i, frontFrom, frontTo, alpha, time);
+					RenderSolidFracture(batcher, emissive, i, frontFrom, frontTo, decorativeAlpha, time);
 			}
 
 			if (packet > 0.72f && (i & 1) == 0)
 				batcher.Circle((frontFrom + frontTo) * 0.5f, Calc.Lerp(0.8f, 2.2f, packet), 8,
-					(emissive ? Color : CoreColor) * (alpha * packet * (emissive ? 0.9f : 0.7f)));
+					(emissive ? Color : CoreColor) * (decorativeAlpha * packet * (emissive ? 0.9f : 0.7f)));
 		}
 		if (Medium == RadialWaveMedium.Solid)
 			RenderSurfaceWake(batcher, emissive);
@@ -713,7 +716,7 @@ public sealed class RadialWave : Actor
 		{
 			if (!surfaceWake[i])
 				continue;
-			var alpha = SpokeAlpha(i);
+			var alpha = DecorativeSpokeAlpha(i);
 			var normal = surfaceWakeNormal[i];
 			var tangent = new Vector2(-normal.Y, normal.X);
 			var pulse = 0.72f + MathF.Abs(MathF.Sin(Time.SecondsF * 31 + i * 1.7f)) * 0.28f;
@@ -740,11 +743,16 @@ public sealed class RadialWave : Actor
 	float PreEchoSpokeAlpha(int spoke)
 		=> preEchoBlocked[spoke]
 			? Ease.Cube.Out(preEchoContactRemaining[spoke] / PreEchoContactHoldTime)
-			: MathF.Min(preEchoFade, Ease.Cube.Out(Math.Clamp((MaxRadius - preEchoRadius) / EndFadeDistance, 0, 1)));
+			: MathF.Min(preEchoFade,
+				Ease.Cube.Out(Math.Clamp((MaxRadius - preEchoRadius) / PreEchoEndFadeDistance, 0, 1)));
 
-	float SpokeAlpha(int spoke)
+	float HurtLineSpokeAlpha(int spoke)
 		=> blocked[spoke] ? Ease.Cube.Out(contactRemaining[spoke] / ContactHoldTime) :
-			Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / EndFadeDistance, 0, 1));
+			Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / HurtLineEndFadeDistance, 0, 1));
+
+	float DecorativeSpokeAlpha(int spoke)
+		=> blocked[spoke] ? Ease.Cube.Out(contactRemaining[spoke] / ContactHoldTime) :
+			Ease.Cube.Out(Math.Clamp((MaxRadius - radius) / DecorativeEndFadeDistance, 0, 1));
 
 	public override void Destroyed()
 	{
