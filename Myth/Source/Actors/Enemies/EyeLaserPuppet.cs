@@ -26,6 +26,12 @@ public sealed class EyeLaserPuppet : RigPuppet
 	public string SoundEvent = "lightning_trap";
 	[I(0, 1), InspectorGroup("Floating Flash")] public float FloatingFlashChance = 0.55f;
 	[I(4, 40)] public float FloatingFlashHeight = 14;
+	[I(0, 2)] public float FloatingPoseJostle = 1.3f;
+	[I(0, 16)] public float FloatingWanderRadius = 8;
+	[I(0.1f, 2)] public float FloatingWanderRate = 0.7f;
+	[I(80, 360)] public float FloatingWaveSpeed = 220;
+	[I(64, 480)] public float FloatingWaveRange = 320;
+	[I(1, 8)] public float FloatingWaveThickness = 3.5f;
 	public Color FloatingFlashColor = 0xffd7f2;
 
 	const string ChargeTake = "EyeLaserCharge";
@@ -55,6 +61,8 @@ public sealed class EyeLaserPuppet : RigPuppet
 	SoundInstance? sound;
 	float flashParticleTimer;
 	bool floating;
+	uint floatingWanderSeed;
+	RadialWave? floatingWave;
 	readonly Coroutine floatingFlash = new();
 
 	static float ChargeParticleRate => 42;
@@ -69,6 +77,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	static float FlashHoverHoldTime => 0.25f;
 	static float FlashChargeTime => 2;
 	static float FlashImpactTime => 0.1f;
+	static float FlashWaveEndHoldTime => 0.15f;
 	static float FlashAftershockTime => 0.25f;
 	static float FlashDescentTime => 0.55f;
 	static float FlashLandHoldTime => 0.15f;
@@ -164,6 +173,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	void BeginFloatingFlash(Player player)
 	{
 		phase = Phase.FloatingFlash;
+		floatingWanderSeed = Game.rng.U32();
 		floatingFlash.Start(FloatingFlashRoutine(player));
 	}
 
@@ -185,39 +195,88 @@ public sealed class EyeLaserPuppet : RigPuppet
 
 		PlayAbilityTake(FloatingFlashTake, FlashRiseTime);
 		floating = true;
-		Velocity.Y = -FloatingFlashHeight / FlashRiseTime;
-		yield return FlashRiseTime;
-		Velocity = Vector2.Zero;
-		yield return FlashHoverHoldTime;
+		var groundPosition = (Vector2)Position;
+		var riseTarget = groundPosition - Vector2.UnitY * FloatingFlashHeight;
+		for (var time = 0f; time < FlashRiseTime; time += Time.Delta)
+		{
+			var progress = Ease.Cube.InOut(Math.Clamp(time / FlashRiseTime, 0, 1));
+			MoveFloating(Vector2.Lerp(groundPosition, riseTarget, progress));
+			SetAbilityPoseJostle(FloatingPoseJostle * progress);
+			yield return 0;
+		}
+		MoveFloating(riseTarget);
+		var hoverCenter = (Vector2)Position;
+		var wanderTime = 0f;
+		for (var time = 0f; time < FlashHoverHoldTime; time += Time.Delta)
+		{
+			wanderTime += Time.Delta;
+			MoveFloating(hoverCenter + FloatingWander(wanderTime));
+			SetAbilityPoseJostle(FloatingPoseJostle);
+			yield return 0;
+		}
 
 		flashParticleTimer = 0;
 		for (var time = 0f; time < FlashChargeTime; time += Time.Delta)
 		{
 			var progress = Math.Clamp(time / FlashChargeTime, 0, 1);
+			wanderTime += Time.Delta;
+			MoveFloating(hoverCenter + FloatingWander(wanderTime));
 			SetRuffSpin(FlashRuffSpeed * Ease.Cube.In(progress));
 			EmitFloatingFlashParticles(progress);
 			yield return 0;
 		}
 
 		SetRuffSpin(FlashRuffSpeed);
-		Game.FlashAir(FloatingFlashColor);
 		Game.ShakeRenderTarget(FlashImpactTime);
-		if (player.State != Player.States.Burrow)
-			Hit(player);
-		yield return FlashImpactTime;
+		var wave = floatingWave = Game.Create<RadialWave>(RigEyePosition.RoundToPoint2());
+		wave.Source = this;
+		wave.Target = player;
+		wave.CanHit = static target => target is not Player { State: Player.States.Burrow };
+		wave.Speed = FloatingWaveSpeed;
+		wave.MaxRadius = FloatingWaveRange;
+		wave.Thickness = FloatingWaveThickness;
+		wave.Color = Color.Lerp(FloatingFlashColor, new Color(0xff5fb7), 0.35f);
+		wave.CoreColor = FloatingFlashColor;
+		for (var time = 0f; time < FlashImpactTime; time += Time.Delta)
+		{
+			wanderTime += Time.Delta;
+			MoveFloating(hoverCenter + FloatingWander(wanderTime));
+			yield return 0;
+		}
+		while (!wave.Finished)
+		{
+			wanderTime += Time.Delta;
+			MoveFloating(hoverCenter + FloatingWander(wanderTime));
+			yield return 0;
+		}
+		floatingWave = null;
+		for (var time = 0f; time < FlashWaveEndHoldTime; time += Time.Delta)
+			yield return 0;
 
 		for (var time = 0f; time < FlashAftershockTime; time += Time.Delta)
 		{
-			SetRuffSpin(FlashRuffSpeed * (1 - Math.Clamp(time / FlashAftershockTime, 0, 1)));
+			var remaining = 1 - Math.Clamp(time / FlashAftershockTime, 0, 1);
+			wanderTime += Time.Delta;
+			MoveFloating(hoverCenter + FloatingWander(wanderTime) * remaining);
+			SetAbilityPoseJostle(FloatingPoseJostle * remaining);
+			SetRuffSpin(FlashRuffSpeed * remaining);
 			yield return 0;
 		}
 		SetRuffSpin(0);
+		SetAbilityPoseJostle(0);
+		MoveFloating(hoverCenter);
 
-		Velocity.Y = FloatingFlashHeight / FlashDescentTime;
-		for (var time = 0f; time < FlashDescentTime || !Grounded(); time += Time.Delta)
+		var descentFrom = (Vector2)Position;
+		for (var time = 0f; time < FlashDescentTime; time += Time.Delta)
 		{
-			if (time >= FlashDescentTime * 3)
-				break;
+			var progress = Ease.Cube.InOut(Math.Clamp(time / FlashDescentTime, 0, 1));
+			MoveFloating(Vector2.Lerp(descentFrom, groundPosition, progress));
+			yield return 0;
+		}
+		MoveFloating(groundPosition);
+		for (var time = 0f; !Grounded() && time < FlashDescentTime * 2; time += Time.Delta)
+		{
+			MovePixel(Point2.Down);
 			yield return 0;
 		}
 		Velocity = Vector2.Zero;
@@ -231,6 +290,24 @@ public sealed class EyeLaserPuppet : RigPuppet
 			yield return 0;
 		}
 	}
+
+	Vector2 FloatingWander(float time)
+	{
+		var position = time * FloatingWanderRate;
+		var offset = new Vector2(
+			SmoothNoise.Signed(position, floatingWanderSeed),
+			SmoothNoise.Signed(position * 0.83f, floatingWanderSeed ^ 0x9e3779b9u));
+		offset += new Vector2(
+			SmoothNoise.Signed(position * 1.91f, floatingWanderSeed ^ 0x85ebca6bu),
+			SmoothNoise.Signed(position * 1.67f, floatingWanderSeed ^ 0xc2b2ae35u)) * 0.3f;
+		offset *= FloatingWanderRadius / 1.3f;
+		var radiusSquared = FloatingWanderRadius * FloatingWanderRadius;
+		return offset.LengthSquared() > radiusSquared
+			? Vector2.Normalize(offset) * FloatingWanderRadius
+			: offset;
+	}
+
+	void MoveFloating(Vector2 target) => MovePixels(target.RoundToPoint2() - Position);
 
 	void EmitFloatingFlashParticles(float progress)
 	{
@@ -257,11 +334,13 @@ public sealed class EyeLaserPuppet : RigPuppet
 	void FinishFloatingFlash()
 	{
 		floatingFlash.Stop();
+		DestroyFloatingWave();
 		floating = false;
 		phase = Phase.None;
 		cooldown = FlashCooldown;
 		Velocity = Vector2.Zero;
 		SetRuffSpin(0);
+		SetAbilityPoseJostle(0);
 		SetAbilityYaw(null);
 		SetAbilityLookTarget(null);
 		SetAbilityPoseModifierWeight(1);
@@ -343,13 +422,22 @@ public sealed class EyeLaserPuppet : RigPuppet
 	void CancelAttack(float nextCooldown)
 	{
 		floatingFlash.Stop();
+		DestroyFloatingWave();
 		floating = false;
 		phase = Phase.None;
 		beamAlpha = eyeGlow = 0;
 		cooldown = MathF.Max(cooldown, nextCooldown);
 		SetRuffSpin(0);
+		SetAbilityPoseJostle(0);
 		SetAbilityYaw(null);
 		StopAndReleaseSound(ref sound, true);
+	}
+
+	void DestroyFloatingWave()
+	{
+		if (floatingWave != null && !Game.destroying.Contains(floatingWave))
+			Game.Destroy(floatingWave);
+		floatingWave = null;
 	}
 
 	void ConfigureLaser()

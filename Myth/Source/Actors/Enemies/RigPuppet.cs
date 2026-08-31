@@ -58,6 +58,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool abilityFootIK = true;
 	float abilityPlaybackSpeed = 1;
 	float abilityPoseModifierWeight = 1;
+	float abilityPoseJostle;
 	Vector2? abilityLookTarget;
 	float? abilityYaw;
 	float abilityYawWeight;
@@ -133,6 +134,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.Offset = stepVisualOffset;
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
+		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
 		visual.YawOverride = abilityActive ? abilityYaw : null;
 		visual.YawOverrideWeight = abilityActive ? abilityYawWeight : 0;
 		SyncBackLegRenderer();
@@ -282,6 +284,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	protected void SetAbilityLookTarget(Vector2? target) => abilityLookTarget = target;
 	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
+	protected void SetAbilityPoseJostle(float pixels) => abilityPoseJostle = MathF.Max(0, pixels);
 	protected void SetAbilityYaw(float? yaw, float weight = 1)
 	{
 		abilityYaw = yaw;
@@ -309,10 +312,12 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		abilityLoop = abilityFootIK = true;
 		abilityPlaybackSpeed = PlaybackSpeed;
 		abilityPoseModifierWeight = 1;
+		abilityPoseJostle = 0;
 		abilityLookTarget = null;
 		abilityYaw = null;
 		abilityYawWeight = 0;
 		visual.PoseModifierWeight = 1;
+		visual.PoseJostlePixels = 0;
 		visual.YawOverride = null;
 		visual.YawOverrideWeight = 0;
 	}
@@ -688,7 +693,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 #endif
 		if (scripted || Health <= 0)
 			return;
-		if (abilityActive)
+		var suppressKnockdown = SuppressKnockdownOnHit;
+		if (abilityActive && !suppressKnockdown)
 		{
 			InterruptAbility();
 			abilityActive = false;
@@ -705,7 +711,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 		var away = Position.X < by.Position.X ? -1f : 1f;
 		visual.Hit(away);
-		if (SuppressKnockdownOnHit)
+		if (suppressKnockdown)
 			return;
 		Velocity = new Vector2(away * HitKnockbackSpeed, -HitLiftSpeed);
 		stepTraversal = StepTraversal.None;

@@ -174,6 +174,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	static float RagdollSpring => 160f;
 	static float RagdollDamping => 11f;
 	static float RagdollMaxSpeed => 10f;
+	static float PoseJostleRate => 0.85f;
 	static float LandingMinSpeed => 32f;
 	static float LandingInertia => 1f;
 	static float LandingCompressionTime => 0.0225f;
@@ -227,6 +228,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public bool FacingMatches => !turning && visualFacing == owner.Facing;
 	public Vector2 EyeOffset => projectedPose[head] + lookDirection * 2.4f;
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
+	public float PoseJostlePixels;
 
 	public void Initialize(string clip)
 	{
@@ -792,7 +794,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				if (ragdollJoints[i])
 				{
 					ragdollPreviousPose[i] = ragdollPose[i];
-					Spring.Step(ref ragdollPose[i], ref ragdollVelocity[i], sampledPose[i],
+					var target = sampledPose[i] + PoseJostleOffset(i);
+					Spring.Step(ref ragdollPose[i], ref ragdollVelocity[i], target,
 						RagdollSpring, RagdollDamping, dt, RagdollMaxSpeed);
 				}
 
@@ -813,6 +816,19 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				if (ragdollJoints[i])
 					ragdollVelocity[i] = (ragdollPose[i] - ragdollPreviousPose[i]) / dt;
 		}
+	}
+
+	Vector3 PoseJostleOffset(int joint)
+	{
+		if (PoseJostlePixels <= 0 || joint == pelvis)
+			return Vector3.Zero;
+		var time = owner.Time.SecondsF * PoseJostleRate;
+		var seed = unchecked((uint)joint * 0x85ebca6bu ^ (uint)(animationPhase * uint.MaxValue));
+		return new Vector3(
+			SmoothNoise.Signed(time, seed),
+			SmoothNoise.Signed(time * 0.91f, seed ^ 0xc2b2ae35u),
+			SmoothNoise.Signed(time * 1.07f, seed ^ 0x27d4eb2du)) *
+			(PoseJostlePixels / Settings.PixelsPerMeter);
 	}
 
 	Vector3 RigVelocity(Vector2 screenVelocity)
