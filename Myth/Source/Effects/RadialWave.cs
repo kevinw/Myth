@@ -5,7 +5,7 @@ namespace Myth;
 
 public enum RadialWaveMedium { Air, Solid }
 
-public sealed class RadialWave : Actor
+public sealed class RadialWave : Actor, INeuralTextureAgent
 {
 	const int SpokeCount = 192;
 	const int ImpactBucketCount = 48;
@@ -34,6 +34,7 @@ public sealed class RadialWave : Actor
 	public float AccelerationTime = 0.16f;
 	public float InitialSpeedMultiplier = 0.42f;
 	public float TargetReach;
+	public float NeuralPerturbStrength;
 	public RadialWaveMedium Medium;
 	public Color Color = new(0xff8fcf);
 	public Color CoreColor = new(0xfff4fb);
@@ -113,6 +114,8 @@ public sealed class RadialWave : Actor
 	static float ElectricSolidMultiplier => 0.7f;
 	static float ElectricFilamentChance => 0.62f;
 	static float ElectricFilamentOpacity => 0.55f;
+	static int NeuralPerturbStampCount => 32;
+	static float NeuralPerturbStampRadiusMultiplier => 1.1f;
 
 	public RadialWave()
 	{
@@ -190,6 +193,11 @@ public sealed class RadialWave : Actor
 		Finished = true;
 		Game.Destroy(this);
 	}
+
+	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
+		=> NeuralTextureRippleActor.PerturbRing(context, Position, radius, MaxRadius,
+			NeuralPerturbStrength, Thickness, NeuralPerturbStampCount,
+			fadeWithRadius: false, stampRadiusMultiplier: NeuralPerturbStampRadiusMultiplier);
 
 	void UpdatePreEcho(float delta)
 	{

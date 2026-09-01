@@ -293,7 +293,11 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	protected override bool AbilityControlsMovement => floating;
 	protected override bool SuppressKnockdownOnHit => floating;
 	protected override float PlayerStopDistance => walkStopDistance > 0 ? walkStopDistance : base.PlayerStopDistance;
-	protected override void OnFootstep() => Game.Shake(0.05f);
+	protected override void OnFootstep()
+	{
+		Game.Shake(0.05f);
+		AudioEvent("boss/footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
+	}
 	internal override bool ContactDamageEnabled => contactDamageGrace <= 0;
 
 	void BeginStomp()
@@ -369,6 +373,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.AccelerationTime = StompWaveAccelerationTime;
 		wave.InitialSpeedMultiplier = StompWaveInitialSpeed;
 		wave.TargetReach = StompWaveTargetReach;
+		wave.NeuralPerturbStrength = 1;
 		wave.Color = StompWaveColor;
 		wave.CoreColor = Color.Lerp(StompWaveColor, Color.White, 0.55f);
 		Game.Shake(0.13f);
@@ -484,6 +489,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.CollisionInset = FloatingWaveCollisionInset;
 		wave.AccelerationTime = FloatingWaveAccelerationTime;
 		wave.InitialSpeedMultiplier = FloatingWaveInitialSpeed;
+		wave.NeuralPerturbStrength = 1;
 		wave.Color = Color.Lerp(FloatingFlashColor, new Color(0xff5fb7), 0.35f);
 		wave.CoreColor = FloatingFlashColor;
 		wave.StartDelay = FlashReleaseHoldTime + Time.Delta;

@@ -67,31 +67,38 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 		var leadRadius = sourceStoppedAt < 0
 			? (now * RingSpeed) % RingSpacing
 			: sourceStoppedLeadRadius + (now - sourceStoppedAt) * RingSpeed;
-		var step = MathF.Tau / StampsPerRing;
 
 		for (var radius = leadRadius; radius <= MaxRadius; radius += RingSpacing)
 		{
-			if (radius <= 0.5f)
-				continue;
+			PerturbRing(context, center, radius, MaxRadius, Strength, Thickness, StampsPerRing);
+			if (context.IsFull)
+				return;
+		}
+	}
 
-			var fade = 1f - radius / MaxRadius; // dissipate as the ring expands
-			var strength = Strength * fade;
-			if (strength <= 0.001f)
-				continue;
+	public static void PerturbRing(NeuralTextureActor.PerturbContext context, Vector2 center,
+		float radius, float maxRadius, float strength, float thickness, int stampCount,
+		bool fadeWithRadius = true, float stampRadiusMultiplier = 0.6f)
+	{
+		if (radius <= 0.5f || radius >= maxRadius || strength <= 0 || thickness <= 0 || stampCount <= 0 ||
+			!context.Texture.GetVisualBounds().Inflate(maxRadius).Contains(center))
+			return;
 
-			// Keep the ring continuous as its circumference grows.
-			var gap = MathF.Tau * radius / StampsPerRing;
-			var stampRadius = MathF.Max(Thickness, gap * 0.6f);
-			// Offset each ring's spokes so successive rings don't line up radially.
-			var phase = radius * 0.05f;
+		if (fadeWithRadius)
+			strength *= 1 - radius / maxRadius;
+		if (strength <= 0.001f)
+			return;
 
-			for (var i = 0; i < StampsPerRing; i++)
-			{
-				var angle = i * step + phase;
-				var point = center + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius;
-				if (!context.AddStamp(point, point, stampRadius, strength))
-					return; // budget exhausted
-			}
+		var step = MathF.Tau / stampCount;
+		var gap = MathF.Tau * radius / stampCount;
+		var stampRadius = MathF.Max(thickness, gap * stampRadiusMultiplier);
+		var phase = radius * 0.05f;
+		for (var i = 0; i < stampCount; i++)
+		{
+			var angle = i * step + phase;
+			var point = center + Calc.AngleToVector(angle) * radius;
+			if (!context.AddStamp(point, point, stampRadius, strength))
+				return;
 		}
 	}
 
