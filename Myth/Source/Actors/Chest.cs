@@ -28,7 +28,7 @@ public class Chest : Actor
 			Play("closed");
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (opened)
 			return;

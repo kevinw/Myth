@@ -157,7 +157,7 @@ public class ShieldKnight : Actor
 			{
 				var hurtBox = Hitbox.FromSlice(this, "spear").Rect + Position;
 				if (Game.OverlapsFirst(hurtBox, Masks.Player) is { } hit)
-					Hit(hit);
+					Hit(hit, new(hurtBox));
 			}
 
 			yield return 0;
@@ -275,7 +275,7 @@ public class ShieldKnight : Actor
 		return blocks;
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (health <= 0) return;
 

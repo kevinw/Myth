@@ -100,7 +100,7 @@ public class LedgePatrol : Actor
 		TurnAround();
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 		if (Health <= 0)
@@ -110,7 +110,7 @@ public class LedgePatrol : Actor
 			return;
 		}
 
-		Facing = MathF.Sign(Position.X - by.Position.X) is { } sign && sign != 0 ? sign : -Facing;
+		Facing = MathF.Sign(Position.X - hitInfo.By.Position.X) is { } sign && sign != 0 ? sign : -Facing;
 		Velocity.X = Facing * 90;
 		Squish = new Vector2(1.35f, 0.70f);
 		SetState(States.Stunned);

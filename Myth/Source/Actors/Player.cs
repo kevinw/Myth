@@ -169,10 +169,10 @@ public abstract class Pawn : Actor
 	protected float jumpBufferTimer;
 	protected bool grounded;
 	protected bool inWater;
-	
+
 	bool canAirHop = false;
 	float lastGroundedJumpTimer = 0;
-	
+
 	bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
 	protected bool atWaterSurface; // torso submerged but head is above the waterline
 	bool rollingOnWater;
@@ -512,6 +512,62 @@ public abstract class Pawn : Actor
 	bool CanAutoRunOnNeutralStick
 		=> !DashEngagesRunOnly || MathF.Abs(Velocity.X) >= DashRunAutoRunSpeed;
 
+	protected int GetHorizontalMovementInput(out float movementInput)
+	{
+		// Digital projection (with a deadzone) drives facing and the friction gate, while the
+		// raw analog value scales horizontal thrust.
+		var moveX = MathF.Abs(horizontalInput) < MoveInputDeadzone ? 0 : Math.Sign(horizontalInput);
+		movementInput = moveX == 0 ? 0 : horizontalInput;
+		if (!grounded && wallJumpInputLockTimer > 0)
+			movementInput = wallJumpDirection;
+		return moveX;
+	}
+
+	protected void UpdateHorizontalMovement(int moveX, float movementInput)
+	{
+		var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
+		var dashRunning = IsDashRunning();
+		var dashBursting = State == States.Normal && DashBursting;
+		float maxSpeed;
+		if (grounded)
+			maxSpeed = (dashRunning ? DashRunGroundSpeed : MaxGroundSpeed) * GroundSpeedMultiplier;
+		else
+			maxSpeed = (dashRunning ? DashRunAirSpeed : MaxAirSpeed) * AirSpeedMultiplier;
+		if (ducking)
+			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
+		if (inWater)
+			maxSpeed *= WaterHorizontalSpeedMultiplier;
+
+		var acceleration = grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier;
+		if (dashRunning && DashEngagesRunOnly)
+			acceleration *= DashRunAccelMultiplier;
+		if (dashRunning && wallJumpInputLockTimer <= 0 && movementInput != 0 && Velocity.X != 0 &&
+			Math.Sign(movementInput) != Math.Sign(Velocity.X))
+			acceleration *= DashRunReverseAccelMultiplier;
+		Velocity.X += movementInput * acceleration * Time.Delta;
+		if (dashBursting)
+			Velocity.X = dashDirection * DashSpeed;
+		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
+		if (dashCancelBraking)
+			maxSpeed = MathF.Max(maxSpeed, MathF.Abs(Velocity.X));
+		if (!grounded && wallJumpInputLockTimer > 0)
+			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
+		if (!grounded && rollJumpCarryTimer > 0)
+			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
+		if (MathF.Abs(Velocity.X) > maxSpeed)
+			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
+		if (dashCancelBraking)
+		{
+			var target = ducking ? movementInput * CrawlSpeed * GroundSpeedMultiplier : 0;
+			Velocity.X = Calc.Approach(Velocity.X, target, DashCancelFriction * Time.Delta);
+			dashCancelBraking = Velocity.X != target;
+		}
+		else if (moveX == 0 && grounded && !dashBursting)
+			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
+		else if (moveX == 0 && inWater)
+			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
+	}
+
 	protected void NormalState()
 	{
 		if (input.MoveY < 0 && TryGrabRope())
@@ -528,10 +584,7 @@ public abstract class Pawn : Actor
 		else if (ducking)
 			EndDashRun();
 
-		var moveXAnalog = horizontalInput;
-		// Digital projection (with a deadzone) drives facing, the friction gate, and wall-jump,
-		// while the raw analog value scales horizontal thrust.
-		var moveX = MathF.Abs(moveXAnalog) < MoveInputDeadzone ? 0 : Math.Sign(moveXAnalog);
+		var moveX = GetHorizontalMovementInput(out var movementInput);
 		if (!ducking && moveX != 0)
 			dashCancelBraking = false;
 		if (grounded && (moveX != 0 || MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed))
@@ -541,9 +594,6 @@ public abstract class Pawn : Actor
 		var animateGroundLocomotion = groundLocomotionAnimationTimer > 0;
 
 		int facing = moveX;
-		float movementInput = moveX == 0 ? 0f : moveXAnalog;
-		if (!grounded && wallJumpInputLockTimer > 0)
-			movementInput = wallJumpDirection;
 
 		var didRun = false;
 		var didStartRunning = false;
@@ -627,48 +677,8 @@ public abstract class Pawn : Actor
 			RunStartSkid = false;
 		}
 
-		var speedMultiplier = grounded ? GroundSpeedMultiplier : AirSpeedMultiplier;
-		var dashRunning = IsDashRunning();
-		float maxSpeed;
-		if (grounded)
-			maxSpeed = (dashRunning ? DashRunGroundSpeed : MaxGroundSpeed) * GroundSpeedMultiplier;
-		else
-			maxSpeed = (dashRunning ? DashRunAirSpeed : MaxAirSpeed) * AirSpeedMultiplier;
-		if (ducking)
-			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
-		if (inWater)
-			maxSpeed *= WaterHorizontalSpeedMultiplier;
-
 		var lastFacing = Facing;
-
-		var acceleration = grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier;
-		if (dashRunning && DashEngagesRunOnly)
-			acceleration *= DashRunAccelMultiplier;
-		if (dashRunning && wallJumpInputLockTimer <= 0 && movementInput != 0 && Velocity.X != 0 &&
-			Math.Sign(movementInput) != Math.Sign(Velocity.X))
-			acceleration *= DashRunReverseAccelMultiplier;
-		Velocity.X += movementInput * acceleration * Time.Delta;
-		if (DashBursting)
-			Velocity.X = dashDirection * DashSpeed;
-		maxSpeed = windInfluence.HorizontalSpeedLimit(maxSpeed, Velocity.X);
-		if (dashCancelBraking)
-			maxSpeed = MathF.Max(maxSpeed, MathF.Abs(Velocity.X));
-		if (!grounded && wallJumpInputLockTimer > 0)
-			maxSpeed = MathF.Max(maxSpeed, WallJumpSpeed * speedMultiplier);
-		if (!grounded && rollJumpCarryTimer > 0)
-			maxSpeed = MathF.Max(maxSpeed, RollJumpSpeed * AirSpeedMultiplier);
-		if (MathF.Abs(Velocity.X) > maxSpeed)
-			Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * maxSpeed, 2000 * Time.Delta);
-		if (dashCancelBraking)
-		{
-			var target = ducking ? movementInput * CrawlSpeed * GroundSpeedMultiplier : 0;
-			Velocity.X = Calc.Approach(Velocity.X, target, DashCancelFriction * Time.Delta);
-			dashCancelBraking = Velocity.X != target;
-		}
-		else if (moveX == 0 && grounded && !DashBursting)
-			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
-		else if (moveX == 0 && inWater)
-			Velocity.X = Calc.Approach(Velocity.X, 0, WaterHorizontalDrag * Time.Delta);
+		UpdateHorizontalMovement(moveX, movementInput);
 		if (grounded && moveX != 0)
 		{
 			Facing = facing;
@@ -1679,13 +1689,15 @@ public partial class Player : Pawn
 		UpdateDeathRecovery();
 		ClampPositionToRoomOrTransitionRooms();
 
+		var hitRect = Hitbox.Rect + Position;
+
 		if (State == States.Burrow)
 		{
 			// invulnerable while underground
 		}
-		else if (Game.OverlapsFirstCombat(Hitbox.Rect + Position, Masks.Enemy | Masks.Hazard,
+		else if (Game.OverlapsFirstCombat(hitRect, Masks.Enemy | Masks.Hazard,
 			contactDamageOnly: true) is { } hit)
-			hit.Hit(this);
+			hit.Hit(this, new(hitRect));
 
 		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
 		// burrow inside a slope/wall), nudge to the nearest free spot. The follower
@@ -1935,6 +1947,9 @@ public partial class Player : Pawn
 		if (duckAttack)
 			ducking = true;
 
+		var moveX = GetHorizontalMovementInput(out var movementInput);
+		UpdateHorizontalMovement(moveX, movementInput);
+
 		Play(GetAttackAnimation(), false);
 
 		if (state.JustCrossedTime(ATTACK_WINDUP))
@@ -1951,14 +1966,6 @@ public partial class Player : Pawn
 				AudioEvent(duckAttack ? "sword_crouched" : "sword");
 				EmitPlasmaStrike(duckingAttack: duckAttack, attackUp: attackUp);
 			}
-		}
-
-		if (Grounded())
-		{
-			// @PlayerAttackDoesntStop
-			Velocity.X = Calc.Approach(Velocity.X, 0, (dashCancelBraking ? DashCancelFriction : AttackFriction) * Time.Delta);
-			if (Velocity.X == 0)
-				dashCancelBraking = false;
 		}
 
 		var attackFinished = attackBlocked
@@ -2003,7 +2010,7 @@ public partial class Player : Pawn
 			var hit = Game.OverlapsFirstCombat(it, Masks.Enemy | Masks.Hazard | Masks.Destructible);
 			if (hit != null)
 			{
-				Hit(hit);
+				Hit(hit, new(it));
 				hitSomething = true;
 			}
 		}
@@ -2139,8 +2146,9 @@ public partial class Player : Pawn
 		}
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
+		var by = hitInfo.By;
 		int healthDelta = -by.DamageValue;
 		if (!Game.Manager.GodMode)
 			ApplyHurt(healthDelta, fromActor: by);

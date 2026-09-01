@@ -53,7 +53,7 @@ public class Bullet : Actor
 	}
 
 	public override void OnPerformHit(Actor hitting) => Pop();
-	public override void OnWasHit(Actor by) => Pop();
+	internal override void OnWasHit(HitInfo hitInfo) => Pop();
 
 	void Pop()
 	{

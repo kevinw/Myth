@@ -113,8 +113,9 @@ public class GhostFrog : Actor
 			if (Facing < 0)
 				rect.X = -(rect.X + rect.Width);
 
-			if (Game.OverlapsFirst(Position + rect, Masks.Player) is { } hit)
-				Hit(hit);
+			var attackBox = Position + rect;
+			if (Game.OverlapsFirst(attackBox, Masks.Player) is { } hit)
+				Hit(hit, new(attackBox));
 
 			yield return 0;
 		}
@@ -224,7 +225,7 @@ public class GhostFrog : Actor
 					yield return 0.1f;
 
 					orb.Speed = was;
-					Hit(orb);
+					Hit(orb, new (Hitbox.Rect + Position));
 					reflect_count++;
 					yield return 0.4f;
 
@@ -235,7 +236,7 @@ public class GhostFrog : Actor
 			else
 			{
 				if (distance < 8)
-					orb.Hit(this);
+					orb.Hit(this, new(Hitbox.Rect + Position));
 			}
 
 			yield return 0;
@@ -303,7 +304,7 @@ public class GhostFrog : Actor
 
 	public override void Destroyed() => routine.Stop();
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (health <= 0) return;
 

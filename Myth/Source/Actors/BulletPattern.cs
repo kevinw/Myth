@@ -73,7 +73,7 @@ public class PatternProjectile : Actor
 	public override void OnCollideX() => Pop();
 	public override void OnCollideY() => Pop();
 	public override void OnPerformHit(Actor hitting) => Pop();
-	public override void OnWasHit(Actor by) => Pop();
+	internal override void OnWasHit(HitInfo hitInfo) => Pop();
 
 	void Pop()
 	{

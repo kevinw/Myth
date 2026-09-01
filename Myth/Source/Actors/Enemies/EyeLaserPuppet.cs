@@ -151,7 +151,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float StompHoldDuration => 0.35f;
 	static float StompHoldMinimumSpeed => 0.05f;
 	static float StompGatherRadius => 18;
-	static float ContactDamageGraceTime => 0.5f;
+	static float ContactDamageGraceTime => 1.0f;
 	float StompHoldProgress => MathF.Max(0, StompImpactProgress - StompHoldLead);
 
 	public override void Update()
@@ -196,7 +196,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			SetAbilityLookTarget(player.Position);
 			if (cooldown > 0)
 				return true;
-			var roll = Game.rng.Int(3);
+			var roll = Game.rng.Int(canLaser ? 4 : 3);
 			switch (roll)
 			{
 				case 0:
@@ -207,11 +207,15 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 					LogLiveStatus($"Roll {roll}: stomp at {distance:0.0}px");
 					phase = Phase.StompTurning;
 					break;
-				default:
+				case 2:
 					var walkFraction = Game.rng.Float(0.5f, 0.9f);
 					walkStopDistance = distance * (1 - walkFraction);
 					LogLiveStatus($"Roll {roll}: walk {walkFraction:P0}, {distance:0.0}px → {walkStopDistance:0.0}px");
 					return false;
+				default:
+					LogLiveStatus($"Roll {roll}: eye laser at {distance:0.0}px");
+					phase = Phase.Turning;
+					break;
 			}
 		}
 
@@ -292,6 +296,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	protected override bool AbilityControlsMovement => floating;
 	protected override bool SuppressKnockdownOnHit => floating;
+	protected override bool DeathIsPersistent => true;
 	protected override float PlayerStopDistance => walkStopDistance > 0 ? walkStopDistance : base.PlayerStopDistance;
 	protected override void OnFootstep()
 	{
@@ -687,8 +692,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		}
 		laserContacting = laser.HitObstacle;
 		SetAbilityLookTarget(aimTarget);
-		if (laser.FirstOverlap(Game, Masks.Player, beamScale) is { } player)
-			Hit(player);
+		if (laser.FirstOverlap(Game, Masks.Player, out RectInt hitRect, beamScale) is { } player)
+			Hit(player, new(hitRect));
 		UpdateEndpointPops();
 		UpdateSound(1, progress);
 		if (progress >= 1)
@@ -957,18 +962,39 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	}
 #endif
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
-		if (by is Player)
+		if (hitInfo.By is Player)
 		{
 			contactDamageGrace = ContactDamageGraceTime;
 			LogLiveStatus($"Contact damage disabled for {ContactDamageGraceTime:0.0}s");
 		}
-		base.OnWasHit(by);
+
+		Point2 popPos = new();
+		if (hitInfo.By.Position.X > Position.X) {
+			popPos = hitInfo.AttackBox.Rect.CenterLeft;
+		} else if (hitInfo.By.Position.X < Position.X) {
+			popPos = hitInfo.AttackBox.Rect.CenterRight;
+		} else {
+			popPos = hitInfo.AttackBox.Rect.Center;
+		}
+		Game.Create<Pop>(popPos, (pop) =>
+		{
+			pop.SpriteName = "impact";
+			pop.AnimationName = "star_hit";
+			pop.Flags |= Pop.PopFlags.AnimateDuringHitStun;
+			pop.Flags |= Pop.PopFlags.Emissive;
+		});
+		base.OnWasHit(hitInfo);
 	}
 
 	public override void Destroyed()
 	{
+		if (Health <= 0 && ActorId != null)
+			foreach (var actor in Game.Actors)
+				if (actor is NeuralTextureActor texture && texture.Room == Room &&
+					string.Equals(texture.ShutdownSourceActorId, ActorId, StringComparison.OrdinalIgnoreCase))
+					texture.BeginShutdown();
 		base.Destroyed();
 		Game.Particles?.ReleaseEffect(ref chargeEffect);
 		Game.Particles?.ReleaseEffect(ref floatingFlashEffect);

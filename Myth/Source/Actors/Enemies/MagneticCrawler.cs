@@ -534,10 +534,12 @@ public class MagneticCrawler : Actor
 	void EmitSparks(Vector2 position, int count)
 		=> Game.Particles?.Emit(sparkEffect, position, count, Calc.Angle(-surface.TowardSurface), 1, MathF.PI * 0.8f);
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (state is State.Dormant or State.Assembling or State.Dying)
 			return;
+
+		var by = hitInfo.By;
 
 		Health--;
 		if (Health <= 0)

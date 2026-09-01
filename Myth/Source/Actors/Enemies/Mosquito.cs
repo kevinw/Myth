@@ -59,7 +59,7 @@ public class Mosquito : Actor
 		Game.SetAudioEventPosition(buzz, Position, relativeTo);
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 
@@ -74,7 +74,7 @@ public class Mosquito : Actor
 		else
 		{
 			AudioEvent("fly/hurt");
-			var sign = MathF.Sign(Position.X - by.Position.X);
+			var sign = MathF.Sign(Position.X - hitInfo.By.Position.X);
 			Velocity.X = sign * 140;
 		}
 	}

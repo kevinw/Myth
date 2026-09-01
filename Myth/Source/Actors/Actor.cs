@@ -453,7 +453,7 @@ public class Actor
 
 	/// Tries to Hit another Actor.
 	/// What a "Hit" is, is up to the Actors
-	public bool Hit(Actor actor)
+	public bool Hit(Actor actor, Hitbox attackBox)
 	{
 		if (actor.hitCooldown > 0)
 			return false;
@@ -465,7 +465,7 @@ public class Actor
 			if (!string.IsNullOrEmpty(hitSoundType))
 				AudioEvent("player/sword_hit", "hit_destination", hitSoundType);
 		}
-		actor.OnWasHit(this);
+		actor.OnWasHit(new HitInfo{By=this, AttackBox=attackBox});
 		OnPerformHit(actor);
 		return true;
 	}
@@ -483,8 +483,13 @@ public class Actor
 	/// What to do when we collide with a wall while moving vertically
 	public virtual void OnCollideY() => StopY();
 
+	internal struct HitInfo {
+		internal Actor By;
+		internal Hitbox AttackBox;
+	}
+
 	/// Called when we were hit by another actor
-	public virtual void OnWasHit(Actor by) { }
+	internal virtual void OnWasHit(HitInfo hitInfo) { }
 
 	/// Called when we perform a hit on another actor
 	public virtual void OnPerformHit(Actor hitting) { }

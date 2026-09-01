@@ -118,7 +118,7 @@ public class Pouncer : Actor
 			SetState(States.Recovering);
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 		if (Health <= 0)
@@ -128,7 +128,7 @@ public class Pouncer : Actor
 			return;
 		}
 
-		Velocity.X = MathF.Sign(Position.X - by.Position.X) * 120;
+		Velocity.X = MathF.Sign(Position.X - hitInfo.By.Position.X) * 120;
 		Velocity.Y = -60;
 		SetState(States.Recovering);
 	}

@@ -133,10 +133,10 @@ public class Stalker : Pawn, INeuralTextureAgent
 	}
 
 	// Unkillable, but the body still yields to the strike.
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (rigReady)
-			rigVisual.Hit(Position.X < by.Position.X ? -1 : 1, animateUpperBody: true);
+			rigVisual.Hit(Position.X < hitInfo.By.Position.X ? -1 : 1, animateUpperBody: true);
 	}
 
 	public override PawnInput GetInput()

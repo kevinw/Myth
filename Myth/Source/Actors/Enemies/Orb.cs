@@ -42,7 +42,7 @@ public class Orb : Actor
 		Game.Create<Pop>(Position);
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		TowardsPlayer = !TowardsPlayer;
 		Speed += 40;

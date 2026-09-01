@@ -167,7 +167,7 @@ public class Drone : Actor
 	public override void OnCollideX() => Velocity.X = -Velocity.X * WallRestitution;
 	public override void OnCollideY() => Velocity.Y = -Velocity.Y * WallRestitution;
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (health <= 0)
 			return;
@@ -182,7 +182,7 @@ public class Drone : Actor
 			return;
 		}
 
-		var away = (Vector2)(Position - by.Position);
+		var away = (Vector2)(Position - hitInfo.By.Position);
 		var len = away.Length();
 		away = len > 0.01f ? away / len : new Vector2(0, -1);
 

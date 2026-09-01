@@ -13,7 +13,7 @@ public class Bramble : Actor
 	}
 
 	public override void OnPerformHit(Actor hitting) => Pop();
-	public override void OnWasHit(Actor by) => Pop();
+	internal override void OnWasHit(HitInfo hitInfo) => Pop();
 
 	public void Pop()
 	{

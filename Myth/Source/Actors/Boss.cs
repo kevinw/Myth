@@ -136,7 +136,7 @@ public class Boss : Pawn
 		RenderSpriteSubtexture(batcher, Tint);
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (health <= 0)
 			return;

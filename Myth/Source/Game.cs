@@ -638,7 +638,13 @@ public partial class Game : IDisposable
 				PostUpdateSystems();
 			}
 			else
+			{
+				// Some actors ask to be updated during hitStun
+				for (var i = 0; i < HitStunActors.Count; i++)
+					HitStunActors[i].Update();
+
 				hitStun -= Time.Delta;
+			}
 		}
 		// Lerp the Camera to the new Room
 		else if (nextRoomEase < 1.0f)
@@ -664,6 +670,8 @@ public partial class Game : IDisposable
 		UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
 #endif
 	}
+
+	internal List<Actor> HitStunActors = [];
 
 	void PreUpdateSystems()
 	{
@@ -1494,6 +1502,9 @@ public partial class Game : IDisposable
 		if (!string.IsNullOrEmpty(actor.SessionDestroyKey) && Save.PersistentDestroyedActors.Add(actor.SessionDestroyKey))
 			MarkSaveDirty();
 	}
+
+	internal bool WasActorDestroyedPersistently(Room? actorRoom, string actorId)
+		=> actorRoom != null && Save.PersistentDestroyedActors.Contains($"{actorRoom.Id}:id:{actorId}");
 
 	void RemoveDestroyedActors()
 	{

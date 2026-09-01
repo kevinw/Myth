@@ -86,7 +86,7 @@ public partial class Player
 		EmitPlasmaStrike(from, to);
 		Position = placement.Value;
 		Facing = target.Position.X >= Position.X ? Signs.Positive : Signs.Negative;
-		Hit(target);
+		Hit(target, new(Hitbox.Rect + Position));
 		return true;
 	}
 

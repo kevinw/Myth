@@ -107,8 +107,9 @@ public class AlienBug : Actor, INeuralTextureAgent
 			{
 				attackHit = true;
 				var x = Facing == Signs.Positive ? 0 : -30;
-				if (Game.OverlapsFirst(new RectInt(Position.X + x, Position.Y - 18, 30, 18), Masks.Player) is { } hit)
-					Hit(hit);
+				var attackBox = new RectInt(Position.X + x, Position.Y - 18, 30, 18);
+				if (Game.OverlapsFirst(attackBox, Masks.Player) is { } hit)
+					Hit(hit, new(attackBox));
 			}
 			if (visual.Time >= visual.ActiveClip.Duration - 0.02f)
 				SetState(States.Idle);
@@ -156,7 +157,7 @@ public class AlienBug : Actor, INeuralTextureAgent
 			SetState(States.Idle);
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 		if (Health <= 0)
@@ -166,6 +167,7 @@ public class AlienBug : Actor, INeuralTextureAgent
 			Game.DestroyForThisSession(this);
 			return;
 		}
+		var by = hitInfo.By;
 		Facing = by.Position.X < Position.X ? Signs.Negative : Signs.Positive;
 		Velocity = new Vector2(MathF.Sign(Position.X - by.Position.X) * Knockback, -32);
 		visual.Hit();

@@ -189,8 +189,8 @@ public class Floater : Actor
 		for (var i = 0; i < 4; i ++)
 		{
 			var laser = lasers[i];
-			if (laser.FirstOverlap(Game, Masks.Player, scale) is { } player)
-				Hit(player);
+			if (laser.FirstOverlap(Game, Masks.Player, out RectInt hitRect, scale) is { } player)
+				Hit(player, new(hitRect));
 			if (spawnPops && laser.HitObstacle)
 				SpawnLaserPop(laser.End);
 		}
@@ -218,14 +218,14 @@ public class Floater : Actor
 	static int FloaterHealth => 2;
 	int health = FloaterHealth;
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		health--;
 		if (health <= 0)
 		{
 			Game.DestroyEnemy(this);
 		} else {
-			var sign = MathF.Sign(Position.X - by.Position.X);
+			var sign = MathF.Sign(Position.X - hitInfo.By.Position.X);
 			Velocity.X = sign * 100;
 		}
 	}

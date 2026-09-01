@@ -70,7 +70,7 @@ public class Blob : Actor
 
 	Rng rng = new();
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 
@@ -81,7 +81,7 @@ public class Blob : Actor
 		}
 		else
 		{
-			var sign = MathF.Sign(Position.X - by.Position.X);
+			var sign = MathF.Sign(Position.X - hitInfo.By.Position.X);
 			Velocity.X = sign * 120;
 		}
 	}

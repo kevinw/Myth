@@ -78,12 +78,12 @@ public class Splitter : Actor
 		batcher.PopMatrix();
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 		if (Health > 0)
 		{
-			Velocity.X = MathF.Sign(Position.X - by.Position.X) * 120;
+			Velocity.X = MathF.Sign(Position.X - hitInfo.By.Position.X) * 120;
 			return;
 		}
 

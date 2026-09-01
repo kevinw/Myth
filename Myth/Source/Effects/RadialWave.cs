@@ -343,7 +343,7 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 		if (hitTarget || Source == null || Target == null || Game.destroying.Contains(Source) ||
 			Game.destroying.Contains(Target) || !Target.OverlapsCombatBounds(targetSample) || CanHit?.Invoke(Target) == false)
 			return;
-		hitTarget = Source.Hit(Target);
+		hitTarget = Source.Hit(Target, new(sample));
 	}
 
 	void EmitImpact(int spoke, Vector2 point, Vector2 outward)

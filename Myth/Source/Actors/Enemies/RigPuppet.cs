@@ -264,6 +264,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual void InterruptAbility() { }
 	protected virtual bool AbilityControlsMovement => false;
 	protected virtual bool SuppressKnockdownOnHit => false;
+	protected virtual bool DeathIsPersistent => false;
 	protected virtual float PlayerStopDistance => StopDistance;
 	protected virtual void OnFootstep() { }
 
@@ -708,8 +709,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		ruff = null;
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
+		var by = hitInfo.By;
 #if EDITOR
 		if (AnimationPreviewEnabled)
 			return;
@@ -731,7 +733,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			Game.Shake(0.1f);
 			for (var i = 0; i < 3; i++)
 				Game.Create<Pop>(Position + new Point2(0, -8 - i * 9));
-			Game.DestroyForThisSession(this);
+			if (DeathIsPersistent)
+				Game.DestroyPersistently(this);
+			else
+				Game.DestroyForThisSession(this);
 			return;
 		}
 		else

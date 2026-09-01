@@ -39,7 +39,7 @@ public class Spitter : Actor
 			Play("idle");
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Game.HitStun(0.1f);
 		Game.Destroy(this);

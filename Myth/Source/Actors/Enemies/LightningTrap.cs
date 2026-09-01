@@ -254,7 +254,7 @@ public class LightningTrap : Actor
 				continue;
 			if (Game.OverlapsFirst(rect, Masks.Player) is { } player)
 			{
-				Hit(player);
+				Hit(player, new(rect));
 				return;
 			}
 		}

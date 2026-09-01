@@ -114,8 +114,9 @@ public class Shellback : Actor
 		SetState(States.Stunned);
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
+		var by = hitInfo.By;
 		var hitFromFront = MathF.Sign(by.Position.X - Position.X) == Facing;
 		if (hitFromFront && state != States.Stunned)
 		{

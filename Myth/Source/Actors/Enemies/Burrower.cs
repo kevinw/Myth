@@ -114,7 +114,7 @@ public class Burrower : Actor
 		}
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (state == States.Hidden)
 		{
@@ -130,7 +130,7 @@ public class Burrower : Actor
 			return;
 		}
 
-		Velocity.X = MathF.Sign(Position.X - by.Position.X) * 120;
+		Velocity.X = MathF.Sign(Position.X - hitInfo.By.Position.X) * 120;
 		SetState(States.Tired);
 	}
 }

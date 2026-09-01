@@ -14,8 +14,9 @@ class PotatoMan : Actor
 		Mask = Masks.Enemy;
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
+		var by = hitInfo.By;
 		if (state.Current == State.Idle && by is Player)
 		{
 			state.Change(State.ReadyingAttack);

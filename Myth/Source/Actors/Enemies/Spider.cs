@@ -584,7 +584,7 @@ public class Spider : Actor
 	static Color RimNormalColor(Vector2 direction)
 		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1);
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 		if (Health <= 0)
@@ -596,7 +596,7 @@ public class Spider : Actor
 			return;
 		}
 
-		var recoil = ((Vector2)(Position - by.Position)).Normalized(-surface.TowardSurface);
+		var recoil = ((Vector2)(Position - hitInfo.By.Position)).Normalized(-surface.TowardSurface);
 		bodyVelocity += recoil * 90;
 		layCooldown = MathF.Max(layCooldown, 0.6f);
 	}

@@ -65,7 +65,7 @@ public class WallSpitter : WallFollowerActor
 		AudioEvent("bubble");
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
 		if (Health <= 0)

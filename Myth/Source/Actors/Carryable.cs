@@ -82,7 +82,7 @@ public abstract class Carryable : Actor, ICarryable
 			// In flight we're a projectile: Hit what we pass through, so a throw can
 			// trigger a Switch (or break a Destructible) beyond sword reach.
 			if (OverlapsFirst(Masks.Destructible) is { } target)
-				Hit(target);
+				Hit(target, new(Hitbox.Rect + Position));
 
 			Velocity.Y += Pawn.Gravity * Time.Delta;
 			if (Velocity.Y > Pawn.TerminalVelocity)

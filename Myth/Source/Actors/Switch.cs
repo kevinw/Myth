@@ -26,7 +26,7 @@ public class Switch : PointPathActor
 		Play("top-off");
 	}
 
-	public override void OnWasHit(Actor by)
+	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		if (triggered)
 			return;

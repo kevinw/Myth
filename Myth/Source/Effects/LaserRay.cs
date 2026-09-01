@@ -41,14 +41,19 @@ public sealed class LaserRay
 
 	public Vector2 ScaledEnd(float scale) => Origin + (End - Origin) * scale;
 
-	public Actor? FirstOverlap(Game game, Actor.Masks mask, float scale = 1)
+	public Actor? FirstOverlap(Game game, Actor.Masks mask, out RectInt hitRect, float scale = 1)
 	{
 		var end = ScaledEnd(scale);
 		var length = Vector2.Distance(Origin, end);
 		var step = MathF.Max(1, Thickness);
 		for (var distance = 0f; distance <= length; distance += step)
-			if (game.OverlapsFirst(SampleRect(Origin + Direction * distance), mask) is { } actor)
+		{
+			hitRect = SampleRect(Origin + Direction * distance);
+			if (game.OverlapsFirst(hitRect, mask) is { } actor)
 				return actor;
+		}
+
+		hitRect = default;
 		return null;
 	}
 

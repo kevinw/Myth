@@ -231,6 +231,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[I(0, 3)] public float Contrast = 1f;
 	[I(0, 3)] public float Saturation = 1f;
 	[I(-1, 1)] public float Brightness;
+	public string ShutdownSourceActorId = "";
 	public Color Tint = Color.White;
 	[I(0, 4)] public float NormalStrength = 1f;
 	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
@@ -291,7 +292,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	bool supported;
 	bool settledFromSeed;
 	float stepAccumulator;
+	float shutdownTime = -1;
+	float shutdownStartStepsPerSecond;
+	float shutdownStartSaturation;
+	float shutdownStartBrightness;
 	uint seed = 1;
+	static float ShutdownDuration => 5;
+	static float ShutdownBrightnessDrop => 0.2f;
 
 	// Base64 of a PNG-compressed 128x128 RGBA8 image; each channel is one slot's
 	// blend weight. Empty means slot 0 painted everywhere (the classic full-rect actor).
@@ -323,6 +330,9 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Added()
 	{
 		base.Added();
+		if (!string.IsNullOrWhiteSpace(ShutdownSourceActorId) &&
+			Game.WasActorDestroyedPersistently(Room, ShutdownSourceActorId))
+			BeginShutdown(immediate: true);
 		graphicsDevice = Game.Manager.GraphicsDevice;
 
 		var shared = GetSharedResources(graphicsDevice);
@@ -629,8 +639,15 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Update()
 	{
 		base.Update();
-		if (!supported || StepsPerSecond <= 0)
+		var shutdownChanged = UpdateShutdown();
+		if (!supported)
 			return;
+		if (StepsPerSecond <= 0)
+		{
+			if (shutdownChanged)
+				Decode();
+			return;
+		}
 
 		var interval = 1.0f / StepsPerSecond;
 		stepAccumulator = MathF.Min(stepAccumulator + Time.Delta, interval);
@@ -638,7 +655,39 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		{
 			stepAccumulator -= interval;
 			Step();
+			shutdownChanged = false;
 		}
+		if (shutdownChanged)
+			Decode();
+	}
+
+	internal void BeginShutdown(bool immediate = false)
+	{
+		if (shutdownTime >= 0)
+			return;
+		shutdownStartStepsPerSecond = StepsPerSecond;
+		shutdownStartSaturation = Saturation;
+		shutdownStartBrightness = Brightness;
+		shutdownTime = immediate ? ShutdownDuration : 0;
+		ApplyShutdown();
+	}
+
+	bool UpdateShutdown()
+	{
+		if (shutdownTime < 0 || shutdownTime >= ShutdownDuration)
+			return false;
+		shutdownTime = MathF.Min(shutdownTime + Time.Delta, ShutdownDuration);
+		ApplyShutdown();
+		return true;
+	}
+
+	void ApplyShutdown()
+	{
+		var progress = Ease.Cube.InOut(shutdownTime / ShutdownDuration);
+		StepsPerSecond = float.Lerp(shutdownStartStepsPerSecond, 0, progress);
+		Saturation = float.Lerp(shutdownStartSaturation, 0, progress);
+		Brightness = float.Lerp(shutdownStartBrightness,
+			MathF.Max(-1, shutdownStartBrightness - ShutdownBrightnessDrop), progress);
 	}
 
 	void Step()

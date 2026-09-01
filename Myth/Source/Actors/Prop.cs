@@ -53,7 +53,7 @@ public class Prop : Actor
 		}
 	}
 
-	public override void OnWasHit(Actor by) {
+	internal override void OnWasHit(HitInfo hitInfo) {
 		Game.Create<Pop>(Position);
 		if (propFlags.HasFlag(PropFlags.DestroyPersists))
 		{
