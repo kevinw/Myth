@@ -29,7 +29,7 @@ public sealed class Audio
 	public SoundInstance CreateEvent(string path)
 	{
 		Initialize();
-		return new SoundInstance(BrowserFmod.CreateEvent(path));
+		return new SoundInstance(BrowserFmod.CreateEvent(path), path);
 	}
 
 	public bool EventExists(string path) => false;
@@ -145,7 +145,7 @@ public sealed class Audio
 
 		var description = GetEventDescription(path);
 		Check(description.createInstance(out var instance), "Failed to create FMOD event instance", path);
-		return new SoundInstance(instance);
+		return new SoundInstance(instance, path);
 	}
 
 	public bool EventExists(string path)

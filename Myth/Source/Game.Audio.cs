@@ -232,7 +232,7 @@ public partial class Game
 		catch (Exception e)
 		{
 			if (audioFailures.Add($"param:{name}"))
-				Console.Error.WriteLine($"Failed to set FMOD parameter '{name} on instance {instance}': {e}");
+				Console.Error.WriteLine($"Failed to set FMOD parameter '{name}' for event {instance.EventPath}': {e}");
 		}
 	}
 

@@ -4,13 +4,16 @@ namespace Myth;
 
 public sealed class SoundInstance : IDisposable
 {
+	string eventPath;
+	public string EventPath => eventPath;
 #if BROWSER_JS_FMOD
 	readonly int instance;
 	bool released;
 
-	internal SoundInstance(int instance)
+	internal SoundInstance(int instance, string path)
 	{
 		this.instance = instance;
+		this.eventPath = path;
 	}
 
 	public void Start()
@@ -79,9 +82,10 @@ public sealed class SoundInstance : IDisposable
 	FMOD.Studio.EventInstance instance;
 	bool released;
 
-	internal SoundInstance(FMOD.Studio.EventInstance instance)
+	internal SoundInstance(FMOD.Studio.EventInstance instance, string path)
 	{
 		this.instance = instance;
+		this.eventPath = path;
 	}
 
 	public void Start()
