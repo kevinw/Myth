@@ -104,6 +104,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public float PlaybackSpeed = 1;
 	public float PoseModifierWeight = 1;
 	public bool GaitActive;
+	public Action? Footstep;
 	Vector2 offset;
 	public Vector2 Offset
 	{
@@ -175,6 +176,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float gaitStrideBias;
 	float plantRemaining;
 	LegSide plantedSide;
+	LegSide gaitStepSide;
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
@@ -199,6 +201,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float eyeReactionRemaining;
 	float eyeReactionStrength;
 	float freezeRemaining;
+	float? lockedAnimationYaw;
 
 	static float ClipBlendDuration => 0.2f;
 	static float RagdollSpring => 160f;
@@ -214,6 +217,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	static float FootProbeAbove => 4f;
 	static float FootProbeDistance => 12f;
 	static float FootPlantDistance => 5f;
+	static float FootstepHeightThreshold => 0.5f;
 	static float FootIKSpeed => 40f;
 	static float LegExtensionSlack => 0.4f;
 	static float LayeredHitDuration => 0.42f;
@@ -245,6 +249,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public float RangeStart => animator.RangeStart;
 	public float RangeEnd => animator.RangeEnd;
 	public bool AnimationFinished => animator.Finished;
+	public float CurrentFacingYaw => FacingYaw(owner.Facing);
 	public float Time
 	{
 		get => animator.Time;
@@ -450,6 +455,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		leftFoot = default;
 		rightFoot = default;
 		plantRemaining = 0;
+		gaitStepSide = LegSide.None;
 	}
 
 	public void Land(float speed)
@@ -460,6 +466,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	public void Freeze(float duration) => freezeRemaining = MathF.Max(freezeRemaining, duration);
 	public void Resume() => freezeRemaining = 0;
+	public void LockAnimationYaw() => lockedAnimationYaw = PelvisYaw();
+	public void UnlockAnimationYaw() => lockedAnimationYaw = null;
 
 	public void Recoil(Vector2 screenVelocity, float spread)
 	{
@@ -559,6 +567,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		ApplyGaitAsymmetry();
 		ApplyPlantResponse();
 		UpdateSecondaryMotion();
+		UpdateGaitFootstep(grounded && footIK);
 		if (footIK)
 		{
 			UpdateFoot(ref leftFoot, leftLeg, LegSide.Left, grounded);
@@ -771,10 +780,20 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			progress = progress * progress * (3 - 2 * progress);
 			yaw = float.Lerp(turnFromYaw, turnToYaw, progress);
 		}
-		return OverrideYaw(yaw);
+		return OverrideYaw(yaw) - AnimationYawOffset;
 	}
 
-	float RigYaw() => OverrideYaw(visualYaw);
+	float RigYaw() => OverrideYaw(visualYaw) - AnimationYawOffset;
+
+	float AnimationYawOffset => lockedAnimationYaw is { } locked
+		? MathF.IEEERemainder(PelvisYaw() - locked, MathF.Tau) : 0;
+
+	float PelvisYaw()
+	{
+		var rotation = sampledRotations[pelvis];
+		return MathF.Atan2(2 * (rotation.W * rotation.Y + rotation.X * rotation.Z),
+			1 - 2 * (rotation.X * rotation.X + rotation.Y * rotation.Y));
+	}
 
 	float OverrideYaw(float yaw)
 		=> YawOverride is { } target
@@ -1009,6 +1028,23 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				TriggerEyeReaction(0.18f);
 			}
 		}
+	}
+
+	void UpdateGaitFootstep(bool grounded)
+	{
+		if (!GaitActive || !grounded)
+		{
+			gaitStepSide = LegSide.None;
+			return;
+		}
+
+		var height = projectedPose[leftLeg.Toe].Y - projectedPose[rightLeg.Toe].Y;
+		var side = height > FootstepHeightThreshold ? LegSide.Left :
+			height < -FootstepHeightThreshold ? LegSide.Right : gaitStepSide;
+		if (side == LegSide.None || side == gaitStepSide)
+			return;
+		gaitStepSide = side;
+		Footstep?.Invoke();
 	}
 
 	void SolveLeg(Leg leg, Vector2 ankleTarget)

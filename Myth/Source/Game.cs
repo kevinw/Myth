@@ -1907,10 +1907,11 @@ public partial class Game : IDisposable
 		return null;
 	}
 
-	public Actor? OverlapsFirstCombat(in RectInt rect, Actor.Masks mask)
+	public Actor? OverlapsFirstCombat(in RectInt rect, Actor.Masks mask, bool contactDamageOnly = false)
 	{
 		foreach (var actor in Actors)
-			if (!destroying.Contains(actor) && actor.Mask.Has(mask) && actor.OverlapsCombatBounds(rect))
+			if (!destroying.Contains(actor) && (!contactDamageOnly || actor.ContactDamageEnabled) &&
+				actor.Mask.Has(mask) && actor.OverlapsCombatBounds(rect))
 				return actor;
 		return null;
 	}

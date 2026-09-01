@@ -96,10 +96,13 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	bool Interruptible => CarriedBy == null && Visible && !ridingPlayerBurrow
 		&& burrowPopDelayTimer <= 0 && pendingRoomChange == null && State == States.Normal;
 
+	// In the future, we'll animate Bud to ask for a carry in specific places maybe? Right now carrying Bud is too annoying and interrupts you too often.
+	static bool BudWantsToBeCarried => false; 
+
 	// The carry and the burrow-ride are separate relationships: a Bud riding the player's
 	// burrow (position-synced to the player, invisible) must not be "caught" by the pop
 	// that ends the ride.
-	public bool CanBeCaught => Interruptible;
+	public bool CanBeCaught => Interruptible && BudWantsToBeCarried;
 
 	// One-line state summary for the Game.Show carry-debug overlay (Player.Carry.cs).
 	internal string CarryDebugState =>

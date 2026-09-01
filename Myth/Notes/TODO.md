@@ -1,3 +1,4 @@
+- ELP boss:make him fall down only after 3 hits. make him have a phase two where his head gets bigger and maybe his body grows in size a bit. add a "swipe away" animation where he makes space if you're too close
 - comment out unused light cookies
 - play pong with projectiles
 - try some sound effects from the BOOM library https://artlist.io/sfx/artist/boom-library/845

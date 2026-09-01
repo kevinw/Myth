@@ -549,6 +549,21 @@ public partial class Manager
 		label.Dispose();
 	}
 
+	void LiveStatusImGui()
+	{
+		if (!playing || liveSelectedActorId is not { } id || game?.GetActorById(id) is not ILiveStatus status)
+			return;
+
+		DockNextToolWindow("Live Status");
+		ImGui.SetNextWindowSize(new Vector2(360, 420), ImGuiCond.FirstUseEver);
+		if (ImGui.Begin("Live Status"))
+		{
+			NoteDockedWindow();
+			status.LiveStatusImGui();
+		}
+		ImGui.End();
+	}
+
 	static void DrawLiveActorBounds(ImDrawListPtr draw, Rect viewport, Game game, RectInt bounds, bool selected)
 	{
 		var topLeft = GameWorldToImGui(viewport, game, bounds.TopLeft);

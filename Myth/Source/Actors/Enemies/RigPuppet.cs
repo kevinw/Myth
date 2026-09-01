@@ -57,6 +57,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool abilityLoop = true;
 	bool abilityFootIK = true;
 	float abilityPlaybackSpeed = 1;
+	float abilityPlaybackSpeedMultiplier = 1;
 	float abilityPoseModifierWeight = 1;
 	float abilityPoseJostle;
 	Vector2 abilityVisualOffset;
@@ -120,6 +121,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	void CreateVisual()
 	{
 		visual = new(this, Rig, Neural, NeuralReactions);
+		visual.Footstep = OnFootstep;
 		SyncVisual();
 		visual.Initialize(IdleAnimationName);
 		visualReady = true;
@@ -130,7 +132,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		var gaitScale = SyncGaitToSpeed && (!Performance || scripted) && walking && stepTraversal == StepTraversal.None
 			? MathF.Abs(Velocity.X) / WalkSpeed : 1;
-		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed : scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale;
+		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed * abilityPlaybackSpeedMultiplier :
+			scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
@@ -212,7 +215,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			var desiredFacing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
 			Facing = desiredFacing;
 			if (visual.FacingMatches && grounded && !hitReacting && !recovering &&
-				MathF.Abs(player.Position.X - Position.X) > StopDistance)
+				MathF.Abs(player.Position.X - Position.X) > PlayerStopDistance)
 			{
 				walking = HasGroundAhead();
 				if (!walking)
@@ -257,12 +260,15 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual void InterruptAbility() { }
 	protected virtual bool AbilityControlsMovement => false;
 	protected virtual bool SuppressKnockdownOnHit => false;
+	protected virtual float PlayerStopDistance => StopDistance;
+	protected virtual void OnFootstep() { }
 
 	protected bool RigFacingMatches => visual.FacingMatches;
 	protected Vector2 RigEyePosition => visual.EyeWorldPosition;
 	protected Vector2 RigEyeOffset => visual.EyeOffset;
 	protected Vector2 RigLeftToePosition => visual.LeftToeWorldPosition;
 	protected Vector2 RigRightToePosition => visual.RightToeWorldPosition;
+	protected float RigFacingYaw => visual.CurrentFacingYaw;
 	protected bool AbilityAnimationFinished => visual.AnimationFinished;
 	protected float AbilityAnimationProgress => Math.Clamp(
 		(visual.Time - visual.RangeStart) / MathF.Max(0.0001f, visual.RangeEnd - visual.RangeStart), 0, 1);
@@ -290,6 +296,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected void SetAbilityPoseJostle(float pixels) => abilityPoseJostle = MathF.Max(0, pixels);
 	protected void SetAbilityVisualOffset(Vector2 offset) => abilityVisualOffset = offset;
 	protected void FreezeAbilityPose(float duration) => visual.Freeze(duration);
+	protected void SetAbilityPlaybackSpeedMultiplier(float multiplier)
+		=> abilityPlaybackSpeedMultiplier = MathF.Max(0, multiplier);
+	protected void LockAbilityAnimationYaw() => visual.LockAnimationYaw();
+	protected void UnlockAbilityAnimationYaw() => visual.UnlockAnimationYaw();
 	protected void RecoilAbilityPose(Vector2 screenVelocity, float spread) => visual.Recoil(screenVelocity, spread);
 	protected void SetAbilityYaw(float? yaw, float weight = 1)
 	{
@@ -299,8 +309,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected float CameraFacingYaw => MathF.PI * 0.5f - Rig.ProjectionYaw * MathF.PI / 180f;
 	protected void SetRuffSpin(float radiansPerSecond)
 	{
-		if (ruff != null)
-			ruff.SpinSpeed = radiansPerSecond;
+		ruff?.SpinSpeed = radiansPerSecond;
 	}
 	protected bool TryGetRuffOrbitPoint(float angle, float radius, out Vector2 worldPoint)
 	{
@@ -317,6 +326,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		abilityLoop = abilityFootIK = true;
 		abilityPlaybackSpeed = PlaybackSpeed;
+		abilityPlaybackSpeedMultiplier = 1;
 		abilityPoseModifierWeight = 1;
 		abilityPoseJostle = 0;
 		abilityVisualOffset = Vector2.Zero;
@@ -326,6 +336,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.PoseModifierWeight = 1;
 		visual.PoseJostlePixels = 0;
 		visual.Resume();
+		visual.UnlockAnimationYaw();
 		visual.YawOverride = null;
 		visual.YawOverrideWeight = 0;
 	}
@@ -711,10 +722,16 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		Health--;
 		if (Health <= 0)
 		{
+			Game.HitStun(0.3f);
+			Game.Shake(0.1f);
 			for (var i = 0; i < 3; i++)
 				Game.Create<Pop>(Position + new Point2(0, -8 - i * 9));
 			Game.DestroyForThisSession(this);
 			return;
+		}
+		else
+		{
+			Game.HitStun(0.25f);
 		}
 
 		var away = Position.X < by.Position.X ? -1f : 1f;

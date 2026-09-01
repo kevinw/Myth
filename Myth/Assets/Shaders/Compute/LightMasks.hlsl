@@ -110,10 +110,18 @@ float light_cookie(Light light, float2 delta)
 
     if (mode == 1)
     {
-        float cap = length((localPosition - float2(0.18, 0.0)) * float2(1.0, 1.75)) - 0.62;
-        float stem = box_distance(localPosition + float2(0.28, 0.0), float2(0.34, 0.13));
-        mask = 1.0 - smoothstep(-feather, feather, min(cap, stem));
+        float halfAngle = clamp(0.78 / max(abs(light.Cookie.w), 0.01), 0.08, 1.5);
+        // Cut off the cone's tip and pull the beam back up to the source: measure the cone from a
+        // virtual apex 'cutoff' behind the source, then clamp it to start at the source line. So the
+        // beam emanates from a line (wider with more cutoff) at the source instead of a point.
+        float cutoff = light.CookieShape.z;
+        float2 fromApex = localPosition + float2(cutoff, 0.0);
+        float direction = fromApex.x / max(length(fromApex), 0.0001);
+        float coneMask = smoothstep(cos(halfAngle) - feather, cos(halfAngle) + feather, direction);
+        float startMask = smoothstep(-feather, feather, localPosition.x);
+        mask = coneMask * startMask;
     }
+    /*
     else if (mode == 2)
     {
         float lobes = max(1.0, 5.0 * abs(light.Cookie.w));
@@ -130,16 +138,9 @@ float light_cookie(Light light, float2 delta)
     }
     else if (mode == 4)
     {
-        float halfAngle = clamp(0.78 / max(abs(light.Cookie.w), 0.01), 0.08, 1.5);
-        // Cut off the cone's tip and pull the beam back up to the source: measure the cone from a
-        // virtual apex 'cutoff' behind the source, then clamp it to start at the source line. So the
-        // beam emanates from a line (wider with more cutoff) at the source instead of a point.
-        float cutoff = light.CookieShape.z;
-        float2 fromApex = localPosition + float2(cutoff, 0.0);
-        float direction = fromApex.x / max(length(fromApex), 0.0001);
-        float coneMask = smoothstep(cos(halfAngle) - feather, cos(halfAngle) + feather, direction);
-        float startMask = smoothstep(-feather, feather, localPosition.x);
-        mask = coneMask * startMask;
+        float cap = length((localPosition - float2(0.18, 0.0)) * float2(1.0, 1.75)) - 0.62;
+        float stem = box_distance(localPosition + float2(0.28, 0.0), float2(0.34, 0.13));
+        mask = 1.0 - smoothstep(-feather, feather, min(cap, stem));
     }
     else if (mode == 5)
     {
@@ -148,6 +149,7 @@ float light_cookie(Light light, float2 delta)
         float radial = sin(radius * 14.0 * frequency - angle * 2.0);
         mask = smoothstep(-feather, feather, angular * 0.65 + radial * 0.35 - 0.1);
     }
+    */
 
     return lerp(1.0, mask, saturate(light.CookieShape.x));
 }

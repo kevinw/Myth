@@ -1,20 +1,23 @@
+using System.Diagnostics;
 using System.Numerics;
 using Foster.Framework;
+#if EDITOR
+using ImGuiNET;
+using LinkDotNet.StringBuilder;
+#endif
 
 namespace Myth;
 
 [GameActor(Sprite = "player", Tags = ActorTag.Enemy, BoundsX = -12, BoundsY = -40, BoundsW = 24, BoundsH = 40,
 	LivePositionEditable = true)]
-public sealed class EyeLaserPuppet : RigPuppet
+public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 {
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp }
 
-	static bool DoIntroKneel => false;
-
 	[I(24, 160), InspectorGroup("Eye Laser")] public float MinimumRange = 48;
-	[I(48, 320)] public float MaximumRange = 176;
+	[I(48, 320)] public float MaximumRange = 376;
 	[I(8, 128)] public float VerticalRange = 48;
-	[I(0.1f, 8)] public float Cooldown = 2.5f;
+	static float Cooldown => 0.45f;
 	[I(0.1f, 3)] public float SweepDuration = 0.85f;
 	[I(0, 96)] public float SweepBeforePlayer = 36;
 	[I(0, 96)] public float SweepBeyondPlayer = 48;
@@ -26,8 +29,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	public Color LaserColor = 0x5fcde4;
 	public ContentRef<SurfaceContent> LaserSurfaceId = new("");
 	public string SoundEvent = "lightning_trap";
-	[I(0, 1), InspectorGroup("Floating Flash")] public float FloatingFlashChance = 0.55f;
-	[I(4, 40)] public float FloatingFlashHeight = 14;
+	[I(4, 40), InspectorGroup("Floating Flash")] public float FloatingFlashHeight = 14;
 	[I(0, 2)] public float FloatingPoseJostle = 1.3f;
 	[I(0, 16)] public float FloatingWanderRadius = 8;
 	[I(0.1f, 2)] public float FloatingWanderRate = 0.7f;
@@ -38,11 +40,11 @@ public sealed class EyeLaserPuppet : RigPuppet
 	[I(0, 0.4f)] public float FloatingWaveAccelerationTime = 0.16f;
 	[I(0.1f, 1)] public float FloatingWaveInitialSpeed = 0.42f;
 	public Color FloatingFlashColor = 0xffd7f2;
-	[I(48, 480), InspectorGroup("Stomp")] public float StompRange = 280;
-	[I(0, 160)] public float StompVerticalRange = 96;
+	static float StompRange => 1280f;
+	static float StompVerticalRange => 150f;
 	[I(0.1f, 8)] public float StompCooldown = 3;
-	[I(80, 360)] public float StompWaveSpeed = 180;
-	[I(64, 640)] public float StompWaveRange = 360;
+	[I(80, 360)] public float StompWaveSpeed = 120;
+	[I(64, 640)] public float StompWaveRange = 460;
 	[I(1, 8)] public float StompWaveThickness = 5.5f;
 	[I(-2, 8)] public float StompWaveCollisionInset = 0.5f;
 	[I(0, 0.4f)] public float StompWaveAccelerationTime = 0.12f;
@@ -59,6 +61,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	const string StompTake = "Stomp";
 	const string ChargeEffect = "eye_laser_charge";
 	const string FloatingFlashEffect = "floating_flash_charge";
+	const string StompGatherEffect = "wave_pylon_solid_charge";
 	const string WarmupParameter = "Warmup";
 	const string FireDurationParameter = "FireDuration";
 
@@ -77,6 +80,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 	float endpointPopTimer;
 	int chargeEffect = -1;
 	int floatingFlashEffect = -1;
+	int stompGatherEffect = -1;
 	SoundInstance? sound;
 	float flashParticleTimer;
 	bool floating;
@@ -85,9 +89,23 @@ public sealed class EyeLaserPuppet : RigPuppet
 	Vector2 previousLaserEnd;
 	bool laserContacting;
 	bool stomped;
+	bool stompHolding;
+	bool stompHeld;
+	bool stompLeftFoot;
+	float stompHoldTime;
+	float stompParticleTimer;
+	float walkStopDistance;
+	float contactDamageGrace;
 	readonly LaserContactMark[] laserContactMarks = new LaserContactMark[8];
 	int nextLaserContactMark;
 	readonly Coroutine floatingFlash = new();
+#if EDITOR
+	readonly string?[] liveStatusLog = new string[24];
+	int liveStatusLogStart;
+	int liveStatusLogCount;
+	int liveStatusLogVersion;
+	int liveStatusDrawnLogVersion;
+#endif
 
 	struct LaserContactMark
 	{
@@ -129,9 +147,16 @@ public sealed class EyeLaserPuppet : RigPuppet
 	static float LaserPoseRecoilSpeed => 82;
 	static float LaserPoseRecoilLift => 8;
 	static float LaserPoseRecoilSpread => 12;
+	static float StompHoldLead => 0.22f;
+	static float StompHoldDuration => 0.35f;
+	static float StompHoldMinimumSpeed => 0.05f;
+	static float StompGatherRadius => 18;
+	static float ContactDamageGraceTime => 0.5f;
+	float StompHoldProgress => MathF.Max(0, StompImpactProgress - StompHoldLead);
 
 	public override void Update()
 	{
+		contactDamageGrace = MathF.Max(0, contactDamageGrace - Time.Delta);
 		base.Update();
 		for (var i = 0; i < laserContactMarks.Length; i++)
 			laserContactMarks[i].Remaining = MathF.Max(0, laserContactMarks[i].Remaining - Time.Delta);
@@ -142,6 +167,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 		base.Added();
 		chargeEffect = Game.Particles?.AcquireEffect(ChargeEffect) ?? -1;
 		floatingFlashEffect = Game.Particles?.AcquireEffect(FloatingFlashEffect) ?? -1;
+		stompGatherEffect = Game.Particles?.AcquireEffect(StompGatherEffect) ?? -1;
 		ConfigureLaser();
 	}
 
@@ -152,9 +178,15 @@ public sealed class EyeLaserPuppet : RigPuppet
 			cooldown = MathF.Max(0, cooldown - Time.Delta);
 			var toPlayer = player.Position - Position;
 			var distance = MathF.Abs(toPlayer.X);
-			var canStomp = player.State == Player.States.Burrow && distance <= StompRange && MathF.Abs(toPlayer.Y) <= StompVerticalRange;
-			var canLaser = distance >= MinimumRange && distance <= MaximumRange &&
-				MathF.Abs(toPlayer.Y) <= VerticalRange;
+			if (walkStopDistance > 0)
+			{
+				if (distance > walkStopDistance)
+					return false;
+				LogLiveStatus($"Walk complete at {distance:0.0}px");
+				walkStopDistance = 0;
+			}
+			var canStomp = distance <= StompRange && MathF.Abs(toPlayer.Y) <= StompVerticalRange;
+			var canLaser = distance >= MinimumRange && distance <= MaximumRange && MathF.Abs(toPlayer.Y) <= VerticalRange;
 			if (!grounded || !canStomp && !canLaser)
 				return false;
 
@@ -164,12 +196,23 @@ public sealed class EyeLaserPuppet : RigPuppet
 			SetAbilityLookTarget(player.Position);
 			if (cooldown > 0)
 				return true;
-			if (canStomp)
-				phase = Phase.StompTurning;
-			else if (Ruff && Game.rng.Chance(FloatingFlashChance))
-				BeginFloatingFlash(player);
-			else
-				phase = Phase.Turning;
+			var roll = Game.rng.Int(3);
+			switch (roll)
+			{
+				case 0:
+					LogLiveStatus($"Roll {roll}: floating radial wave at {distance:0.0}px");
+					BeginFloatingFlash(player);
+					break;
+				case 1:
+					LogLiveStatus($"Roll {roll}: stomp at {distance:0.0}px");
+					phase = Phase.StompTurning;
+					break;
+				default:
+					var walkFraction = Game.rng.Float(0.5f, 0.9f);
+					walkStopDistance = distance * (1 - walkFraction);
+					LogLiveStatus($"Roll {roll}: walk {walkFraction:P0}, {distance:0.0}px → {walkStopDistance:0.0}px");
+					return false;
+			}
 		}
 
 		Velocity.X = 0;
@@ -233,7 +276,11 @@ public sealed class EyeLaserPuppet : RigPuppet
 			case Phase.Stomp:
 				SetAbilityLookTarget(null);
 				SetAbilityPoseModifierWeight(1);
-				if (!stomped && AbilityAnimationProgress >= StompImpactProgress)
+				if (!stompHeld && AbilityAnimationProgress >= StompHoldProgress)
+					BeginStompHold();
+				if (stompHolding)
+					UpdateStompHold();
+				if (!stompHolding && !stomped && AbilityAnimationProgress >= StompImpactProgress)
 					ReleaseStomp(player);
 				if (AbilityAnimationFinished)
 					FinishStomp();
@@ -245,19 +292,62 @@ public sealed class EyeLaserPuppet : RigPuppet
 
 	protected override bool AbilityControlsMovement => floating;
 	protected override bool SuppressKnockdownOnHit => floating;
+	protected override float PlayerStopDistance => walkStopDistance > 0 ? walkStopDistance : base.PlayerStopDistance;
+	protected override void OnFootstep() => Game.Shake(0.05f);
+	internal override bool ContactDamageEnabled => contactDamageGrace <= 0;
 
 	void BeginStomp()
 	{
-		stomped = false;
+		stomped = stompHolding = stompHeld = false;
+		SetAbilityPlaybackSpeedMultiplier(1);
+		SetAbilityYaw(RigFacingYaw);
+		LockAbilityAnimationYaw();
 		PlayAbilityTake(StompTake);
 		SetAbilityLookTarget(null);
 		phase = Phase.Stomp;
 	}
 
+	void BeginStompHold()
+	{
+		stompHolding = stompHeld = true;
+		stompLeftFoot = RigLeftToePosition.Y < RigRightToePosition.Y;
+		stompHoldTime = stompParticleTimer = 0;
+		LogLiveStatus($"Stomp gather: {(stompLeftFoot ? "left" : "right")} foot");
+	}
+
+	void UpdateStompHold()
+	{
+		stompHoldTime = MathF.Min(stompHoldTime + Time.Delta, StompHoldDuration);
+		var progress = stompHoldTime / StompHoldDuration;
+		SetAbilityPlaybackSpeedMultiplier(Calc.Lerp(StompHoldMinimumSpeed, 1,
+			Ease.Cube.InOut(MathF.Abs(progress * 2 - 1))));
+		EmitStompGatherParticles(progress);
+		stompHolding = stompHoldTime < StompHoldDuration;
+		if (!stompHolding)
+			SetAbilityPlaybackSpeedMultiplier(1);
+	}
+
+	void EmitStompGatherParticles(float progress)
+	{
+		if (stompGatherEffect < 0 || Game.Particles is not { } particles)
+			return;
+		stompParticleTimer -= Time.Delta;
+		var interval = 1 / Calc.Lerp(18, 62, Ease.Cube.In(progress));
+		var foot = stompLeftFoot ? RigLeftToePosition : RigRightToePosition;
+		for (var emitted = 0; stompParticleTimer <= 0 && emitted < 4; emitted++, stompParticleTimer += interval)
+		{
+			var direction = Game.rng.Vec2().Normalized(Vector2.UnitX);
+			var origin = foot + direction * Calc.Lerp(StompGatherRadius, 8, progress);
+			particles.Emit(stompGatherEffect, origin, 1, Calc.Angle(-direction),
+				Calc.Lerp(0.8f, 1.35f, progress), 0.12f);
+		}
+	}
+
 	void ReleaseStomp(Player player)
 	{
 		stomped = true;
-		var toe = RigLeftToePosition.Y > RigRightToePosition.Y ? RigLeftToePosition : RigRightToePosition;
+		var toe = stompLeftFoot ? RigLeftToePosition : RigRightToePosition;
+		LogLiveStatus($"Stomp impact at ({toe.X:0.0}, {toe.Y:0.0})");
 		var probeCenter = (toe - Vector2.UnitY * 4).RoundToPoint2();
 		var probe = new RectInt(probeCenter.X - 1, probeCenter.Y - 1, 2, 2);
 		if (!Game.TryFindSurface(this, probe, Vector2.UnitY, 12, out var surface) ||
@@ -281,13 +371,16 @@ public sealed class EyeLaserPuppet : RigPuppet
 		wave.TargetReach = StompWaveTargetReach;
 		wave.Color = StompWaveColor;
 		wave.CoreColor = Color.Lerp(StompWaveColor, Color.White, 0.55f);
-		Game.ShakeRenderTarget(0.08f, 0.5f);
+		Game.Shake(0.13f);
 		Game.KickRenderTarget(Vector2.UnitY * 52);
 		RecoilAbilityPose(-Vector2.UnitY * 58, 18);
 	}
 
 	void FinishStomp()
 	{
+		SetAbilityPlaybackSpeedMultiplier(1);
+		SetAbilityYaw(null);
+		UnlockAbilityAnimationYaw();
 		phase = Phase.None;
 		cooldown = StompCooldown;
 		SetAbilityLookTarget(null);
@@ -334,7 +427,9 @@ public sealed class EyeLaserPuppet : RigPuppet
 		for (var time = 0f; time < FlashHoverHoldTime; time += Time.Delta)
 		{
 			wanderTime += Time.Delta;
-			MoveFloating(hoverCenter + FloatingWander(wanderTime));
+
+			float influence = time / FlashHoverHoldTime;
+			MoveFloating(hoverCenter + influence * FloatingWander(wanderTime));
 			SetAbilityPoseJostle(FloatingPoseJostle);
 			yield return 0;
 		}
@@ -347,7 +442,7 @@ public sealed class EyeLaserPuppet : RigPuppet
 		{
 			var progress = Math.Clamp(time / FlashChargeTime, 0, 1);
 			wanderTime += Time.Delta;
-			var wanderAmount = 1 - Ease.Cube.In(Math.Clamp((progress - 0.78f) / 0.22f, 0, 1));
+			var wanderAmount = Ease.Cube.Out(progress);
 			MoveFloating(hoverCenter + FloatingWander(wanderTime) * wanderAmount);
 			SetRuffSpin(FlashRuffSpeed * Ease.Cube.In(progress));
 			SetAbilityPoseJostle(FloatingPoseJostle * Calc.Lerp(1, 0.25f, 1 - wanderAmount));
@@ -704,11 +799,166 @@ public sealed class EyeLaserPuppet : RigPuppet
 		Game.SetAudioEventParameter(sound, FireDurationParameter, fireDuration);
 	}
 
+	[Conditional("EDITOR")]
+	void LogLiveStatus(string message)
+	{
+#if EDITOR
+		var index = (liveStatusLogStart + liveStatusLogCount) % liveStatusLog.Length;
+		if (liveStatusLogCount == liveStatusLog.Length)
+		{
+			index = liveStatusLogStart;
+			liveStatusLogStart = (liveStatusLogStart + 1) % liveStatusLog.Length;
+		}
+		else
+			liveStatusLogCount++;
+		liveStatusLog[index] = $"{Time.SecondsF,6:0.0}s  {message}";
+		liveStatusLogVersion++;
+#endif
+	}
+
+	public void LiveStatusImGui()
+	{
+#if EDITOR
+		var value = new ValueStringBuilder(stackalloc char[128]);
+		var action = phase switch
+		{
+			Phase.None when walkStopDistance > 0 => "Walking",
+			Phase.None when cooldown > 0 => "Cooldown",
+			Phase.None => "Choosing",
+			Phase.Turning => "Turning for eye laser",
+			Phase.Charge => "Charging eye laser",
+			Phase.Fire => "Firing eye laser",
+			Phase.Recover => "Recovering from eye laser",
+			Phase.FloatingFlash => "Floating radial wave",
+			Phase.StompTurning => "Turning for stomp",
+			Phase.Stomp when stompHolding => "Holding stomp",
+			Phase.Stomp => "Stomping",
+			_ => "Unknown"
+		};
+
+		ImGui.SeparatorText("State");
+		if (ImGui.BeginTable("##EyeLaserPuppetState", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg))
+		{
+			LiveStatusRow("Action", action);
+			LiveStatusRow("Phase enum", phase switch
+			{
+				Phase.None => nameof(Phase.None),
+				Phase.Turning => nameof(Phase.Turning),
+				Phase.Charge => nameof(Phase.Charge),
+				Phase.Fire => nameof(Phase.Fire),
+				Phase.Recover => nameof(Phase.Recover),
+				Phase.FloatingFlash => nameof(Phase.FloatingFlash),
+				Phase.StompTurning => nameof(Phase.StompTurning),
+				Phase.Stomp => nameof(Phase.Stomp),
+				_ => "Unknown"
+			});
+
+			value.Append($"({Position.X}, {Position.Y})");
+			LiveStatusRow("Position", value.AsSpan());
+			value.Clear();
+			value.Append($"({Velocity.X:0.0}, {Velocity.Y:0.0})");
+			LiveStatusRow("Velocity", value.AsSpan());
+			value.Clear();
+			LiveStatusRow("Grounded", Grounded() ? "Yes" : "No");
+			LiveStatusRow("Facing", Facing == Signs.Negative ? "Left" : "Right");
+			LiveStatusRow("Rig facing ready", RigFacingMatches ? "Yes" : "No");
+
+			if (Game.GetFirst<Player>() is { } player)
+			{
+				var toPlayer = player.Position - Position;
+				var horizontalDistance = MathF.Abs(toPlayer.X);
+				var verticalDistance = MathF.Abs(toPlayer.Y);
+				value.Append($"{horizontalDistance:0.0}px horizontal, {verticalDistance:0.0}px vertical, {toPlayer.Length():0.0}px total");
+				LiveStatusRow("Player distance", value.AsSpan());
+				value.Clear();
+				LiveStatusRow("Can stomp", horizontalDistance <= StompRange && verticalDistance <= StompVerticalRange ? "Yes" : "No");
+				LiveStatusRow("Can eye laser", horizontalDistance >= MinimumRange && horizontalDistance <= MaximumRange && verticalDistance <= VerticalRange ? "Yes" : "No");
+			}
+			else
+				LiveStatusRow("Player", "Missing");
+
+			value.Append($"{cooldown:0.00}s");
+			LiveStatusRow("Cooldown", value.AsSpan());
+			value.Clear();
+			if (contactDamageGrace > 0)
+			{
+				value.Append($"Harmless for {contactDamageGrace:0.00}s");
+				LiveStatusRow("Contact damage", value.AsSpan());
+				value.Clear();
+			}
+			else
+				LiveStatusRow("Contact damage", "Active");
+			if (walkStopDistance > 0)
+			{
+				value.Append($"{walkStopDistance:0.0}px from player");
+				LiveStatusRow("Walk target", value.AsSpan());
+				value.Clear();
+			}
+			if (phase is not Phase.None and not Phase.FloatingFlash)
+			{
+				value.Append($"{AbilityAnimationProgress:P0}");
+				LiveStatusRow("Animation", value.AsSpan());
+				value.Clear();
+			}
+			if (stompHolding)
+			{
+				value.Append($"{stompHoldTime / StompHoldDuration:P0} ({stompHoldTime:0.00}s / {StompHoldDuration:0.00}s)");
+				LiveStatusRow("Stomp hold", value.AsSpan());
+			}
+			ImGui.EndTable();
+		}
+		value.Dispose();
+
+		ImGui.SeparatorText("Decision Log");
+		ImGui.SameLine();
+		if (ImGui.SmallButton("Clear"))
+		{
+			Array.Clear(liveStatusLog);
+			liveStatusLogStart = liveStatusLogCount = 0;
+			liveStatusLogVersion++;
+		}
+		var scrollToLatest = liveStatusDrawnLogVersion != liveStatusLogVersion;
+		if (ImGui.BeginChild("##EyeLaserPuppetLog", new Vector2(0, 0), ImGuiChildFlags.Borders, ImGuiWindowFlags.None))
+		{
+			if (liveStatusLogCount == 0)
+				ImGui.TextDisabled("No decisions yet.");
+			for (var i = 0; i < liveStatusLogCount; i++)
+				ImGui.TextUnformatted(liveStatusLog[(liveStatusLogStart + i) % liveStatusLog.Length]);
+			if (scrollToLatest)
+				ImGui.SetScrollHereY(1);
+		}
+		ImGui.EndChild();
+		liveStatusDrawnLogVersion = liveStatusLogVersion;
+#endif
+	}
+
+#if EDITOR
+	static void LiveStatusRow(string label, ReadOnlySpan<char> value)
+	{
+		ImGui.TableNextRow();
+		ImGui.TableNextColumn();
+		ImGui.TextDisabled(label);
+		ImGui.TableNextColumn();
+		ImGui.TextUnformatted(value);
+	}
+#endif
+
+	public override void OnWasHit(Actor by)
+	{
+		if (by is Player)
+		{
+			contactDamageGrace = ContactDamageGraceTime;
+			LogLiveStatus($"Contact damage disabled for {ContactDamageGraceTime:0.0}s");
+		}
+		base.OnWasHit(by);
+	}
+
 	public override void Destroyed()
 	{
 		base.Destroyed();
 		Game.Particles?.ReleaseEffect(ref chargeEffect);
 		Game.Particles?.ReleaseEffect(ref floatingFlashEffect);
+		Game.Particles?.ReleaseEffect(ref stompGatherEffect);
 	}
 
 	public override void Render(Batcher batcher)

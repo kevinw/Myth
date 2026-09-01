@@ -1683,7 +1683,8 @@ public partial class Player : Pawn
 		{
 			// invulnerable while underground
 		}
-		else if (Game.OverlapsFirstCombat(Hitbox.Rect + Position, Masks.Enemy | Masks.Hazard) is { } hit)
+		else if (Game.OverlapsFirstCombat(Hitbox.Rect + Position, Masks.Enemy | Masks.Hazard,
+			contactDamageOnly: true) is { } hit)
 			hit.Hit(this);
 
 		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a

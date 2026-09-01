@@ -59,6 +59,7 @@ public class Actor
 	public virtual string? SurfaceSubstance => null;
 
 	internal virtual int DamageValue => 1;
+	internal virtual bool ContactDamageEnabled => true;
 
 	public Time Time => Game.Time;
 	internal virtual List<Actor> CollisionActors => Game.Actors;

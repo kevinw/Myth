@@ -5,11 +5,13 @@ namespace Myth;
 public enum LightCookie
 {
 	None,
-	Mushroom,
+	Cone,
+	/*
 	Tendrils,
 	Flame,
-	Cone,
+	Mushroom,
 	Broken
+	*/
 }
 
 [GameActor(Sprite = "fire", OffsetX = 4, OffsetY = 4, Tags = ActorTag.Light, LivePositionEditable = true)]
