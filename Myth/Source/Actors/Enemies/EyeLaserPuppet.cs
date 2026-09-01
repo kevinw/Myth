@@ -376,6 +376,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.NeuralPerturbStrength = 1;
 		wave.Color = StompWaveColor;
 		wave.CoreColor = Color.Lerp(StompWaveColor, Color.White, 0.55f);
+		AudioEvent("boss/stomp");
 		Game.Shake(0.13f);
 		Game.KickRenderTarget(Vector2.UnitY * 52);
 		RecoilAbilityPose(-Vector2.UnitY * 58, 18);
@@ -419,6 +420,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		floating = true;
 		var groundPosition = (Vector2)Position;
 		var riseTarget = groundPosition - Vector2.UnitY * FloatingFlashHeight;
+		var riseSound = Game.CreateAudioEvent("boss/start_float", Position, start: true);
 		for (var time = 0f; time < FlashRiseTime; time += Time.Delta)
 		{
 			var progress = Ease.Cube.InOut(Math.Clamp(time / FlashRiseTime, 0, 1));
@@ -475,6 +477,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		Game.ShakeRenderTarget(FlashReleaseShakeTime, 0.45f);
 		Game.KickRenderTarget(releaseDirection * 58);
 		UpdateSound(1, 0.01f);
+		riseSound?.Stop();
+		AudioEvent("boss/emit_floating_wave");
 		EmitFloatingFlashBurst();
 		RecoilAbilityPose(-releaseDirection * FlashPoseRecoilSpeed - Vector2.UnitY * FlashPoseRecoilLift,
 			FlashPoseRecoilSpread);
@@ -936,6 +940,10 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		ImGui.EndChild();
 		liveStatusDrawnLogVersion = liveStatusLogVersion;
 #endif
+	}
+
+	internal override void OnWasHurt() {
+		AudioEvent("boss/hurt");
 	}
 
 #if EDITOR

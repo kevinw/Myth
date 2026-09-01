@@ -186,7 +186,7 @@ public partial class Game
 		}
 	}
 
-	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null)
+	public SoundInstance? CreateAudioEvent(string path, Vector2? position = null, bool start = false)
 	{
 		if (NoAudio) return null;
 
@@ -197,7 +197,14 @@ public partial class Game
 			MissingAudioEvents.Remove(path);
 #endif
 			if (position is { } pos)
+			{
 				SetAudioEventPosition(instance, pos);
+			}
+
+			if (start)
+			{
+				instance.Start();
+			}
 			return instance;
 		}
 		catch (Exception e)

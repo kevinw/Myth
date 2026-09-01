@@ -9,6 +9,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 {
 	enum StepTraversal { None, Up, Down }
 
+	internal virtual void OnWasHurt() {
+
+	}
+
 	[InspectorGroup("Animation")] public string IdleAnimationName = "Zombie_Idle_Loop";
 	public string WalkAnimationName = "Zombie_Walk_Fwd_Loop";
 	public bool Performance;
@@ -720,6 +724,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			ResetAbilityControl();
 		}
 		Health--;
+		OnWasHurt();
 		if (Health <= 0)
 		{
 			Game.HitStun(0.3f);
