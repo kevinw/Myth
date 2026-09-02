@@ -2,7 +2,6 @@
 
 # TODO
 
-- if you die when burrowing, the burrow sound doesn't stop
 - record title screen demos 
 - make an itch page, so people can follow its development/playtest when it's ready
 - on 2 mins inactivity, reset to title screen with warning

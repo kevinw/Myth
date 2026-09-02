@@ -1413,6 +1413,7 @@ public partial class Player : Pawn
 	float duckAttackCooldownTimer;
 	bool duckAttack;
 	bool attackBlocked;
+	bool attackDown;
 	int plasmaStrikeEffect = -1;
 	Light? light;
 	SoundInstance? rollSound;
@@ -1776,6 +1777,7 @@ public partial class Player : Pawn
 			if (blinkStrikeTarget != null)
 			{
 				duckAttack = false;
+				attackDown = false;
 				attackBlocked = false;
 				blinkStrikeResolved = false;
 				State = States.BlinkStrike;
@@ -1838,7 +1840,8 @@ public partial class Player : Pawn
 	{
 		var brakeFromDash = grounded && dashRunArmed;
 		State = States.Attack;
-		attackUp = input.MoveY < 0;
+		attackDown = !grounded && input.MoveY > 0;
+		attackUp = !attackDown && input.MoveY < 0;
 		if (brakeFromDash)
 			BeginDashCancelBrake();
 		else if (grounded)
@@ -1866,6 +1869,7 @@ public partial class Player : Pawn
 		if (input.AttackPressed && duckAttackCooldownTimer <= 0)
 		{
 			duckAttack = true;
+			attackDown = false;
 			attackBlocked = IsAttackBlocked(duckAttack);
 			duckAttackCooldownTimer = DuckAttackCooldown;
 			OnRollStopped(false);
@@ -1964,7 +1968,27 @@ public partial class Player : Pawn
 			else
 			{
 				AudioEvent(duckAttack ? "sword_crouched" : "sword");
-				EmitPlasmaStrike(duckingAttack: duckAttack, attackUp: attackUp);
+				if (attackDown)
+				{
+					var position = Position;
+					position.Y -= 5;
+					Game.Create<Pop>(position, pop => {
+						pop.SpriteName = "strike_down_sm";
+						pop.Facing = Facing;
+						pop.Anchor = SpriteAnchor.Pivot;
+					});
+				}
+				else if (!duckAttack && !attackUp)
+				{
+					// EmitPlasmaStrike(duckingAttack: false);
+					Game.Create<Pop>(Position + new Point2(Facing, -7), pop => {
+						pop.SpriteName = "strike_right_sm";
+						pop.Facing = Facing;
+						pop.Anchor = SpriteAnchor.Pivot;
+					});
+				}
+				else
+					EmitPlasmaStrike(duckingAttack: duckAttack, attackUp: attackUp);
 			}
 		}
 
@@ -1975,6 +1999,7 @@ public partial class Player : Pawn
 		if (attackFinished)
 		{
 			attackBlocked = false;
+			attackDown = false;
 			attackUp = false;
 			if (duckAttack)
 			{
@@ -2068,8 +2093,10 @@ public partial class Player : Pawn
 	{
 		if (duckingAttack)
 			return new(3, -6, 13, 6);
+		else if (attackDown)
+			return new(-24, 0, 48, 12);
 		else if (attackUp)
-			return new(0, -20, 6, -13);
+			return new(0, -20, 6, 13);
 
 		return new(8, -9, 19, 9);
 	}
@@ -2102,6 +2129,9 @@ public partial class Player : Pawn
 	{
 		if (duckAttack)
 			return attackBlocked ? "duck_attack_block" : "duck_attack";
+
+		else if (attackDown)
+			return "attack_down";
 
 		else if (attackUp)
 			return "attack_up";
