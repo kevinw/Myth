@@ -2,10 +2,11 @@
   "position": [-131, -46],
   "size": [51, 23],
   "musicArea": "HQ",
-  "ambientColor": "797979",
+  "ambientColor": "5E5E5E",
   "lightNoise": 0.404,
   "sporeFogStrength": 0.396,
   "reverb": 0.145,
+  "ditherStrength": 0.111,
   "legend": {
     "#": "back",
     "1": "castle",

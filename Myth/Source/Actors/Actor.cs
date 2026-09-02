@@ -37,6 +37,7 @@ public class Actor
 	public Signs Facing = Signs.Positive;
 	public ActorInversion Invert = ActorInversion.Both;
 	[NoSerialize] public SpriteAnchor Anchor = SpriteAnchor.Auto;
+	[NoSerialize] public bool FlipY;
 
 	// The resolved draw/flip/hitbox origin for this actor's sprite + anchor, in sprite-local
 	// pixels. Render, GetVisualBounds and Hitbox.FromSprite all key off this so they agree.
@@ -641,7 +642,7 @@ public class Actor
 		// Scale first, then shear about the sprite's base: the shear sits outside the Facing
 		// flip so a lean stays world-space (a left-facing actor still leans right), and every
 		// pass -- color, normals, emissive, shadow, reflection -- comes through here together.
-		var transform = Matrix3x2.CreateScale(Facing * Squish.X, Squish.Y);
+		var transform = Matrix3x2.CreateScale(Facing * Squish.X, (FlipY ? -1 : 1) * Squish.Y);
 		if (Skew != 0)
 			transform *= SpriteSkewMatrix(frame);
 		batcher.PushMatrix(transform);
@@ -689,7 +690,7 @@ public class Actor
 		var localRight = localLeft + frame.Subtexture.Width;
 		var localBottom = localTop + frame.Subtexture.Height;
 		var scaleX = (int)Facing * Squish.X;
-		var scaleY = Squish.Y;
+		var scaleY = (FlipY ? -1 : 1) * Squish.Y;
 
 		var x0 = Position.X + localLeft * scaleX;
 		var x1 = Position.X + localRight * scaleX;

@@ -1968,9 +1968,10 @@ public partial class Player : Pawn
 			else
 			{
 				AudioEvent(duckAttack ? "sword_crouched" : "sword");
+				var position = Position;
+				position.X += (int)(Velocity.X * Time.Delta * 15.0);
 				if (attackDown)
 				{
-					var position = Position;
 					position.Y -= 5;
 					Game.Create<Pop>(position, pop => {
 						pop.SpriteName = "strike_down_sm";
@@ -1978,10 +1979,19 @@ public partial class Player : Pawn
 						pop.Anchor = SpriteAnchor.Pivot;
 					});
 				}
-				else if (!duckAttack && !attackUp)
+				else if (attackUp)
+				{
+					Game.Create<Pop>(position + new Point2(0, -5), pop => {
+						pop.SpriteName = "strike_down_sm";
+						pop.Facing = Facing;
+						pop.FlipY = true;
+						pop.Anchor = SpriteAnchor.Pivot;
+					});
+				}
+				else if (!duckAttack)
 				{
 					// EmitPlasmaStrike(duckingAttack: false);
-					Game.Create<Pop>(Position + new Point2(Facing, -7), pop => {
+					Game.Create<Pop>(position + new Point2(Facing, -7), pop => {
 						pop.SpriteName = "strike_right_sm";
 						pop.Facing = Facing;
 						pop.Anchor = SpriteAnchor.Pivot;
