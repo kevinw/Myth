@@ -1969,10 +1969,12 @@ public partial class Player : Pawn
 			{
 				AudioEvent(duckAttack ? "sword_crouched" : "sword");
 				var position = Position;
-				position.X += (int)(Velocity.X * Time.Delta * 15.0);
+				var velocityAddition = (Point2)(Velocity * Time.Delta * 15.0f);
+				position.X += velocityAddition.X;
 				if (attackDown)
 				{
 					position.Y -= 5;
+					position.Y += velocityAddition.Y;
 					Game.Create<Pop>(position, pop => {
 						pop.SpriteName = "strike_down_sm";
 						pop.Facing = Facing;
@@ -1981,7 +1983,8 @@ public partial class Player : Pawn
 				}
 				else if (attackUp)
 				{
-					Game.Create<Pop>(position + new Point2(0, -5), pop => {
+					position.Y += velocityAddition.Y;
+					Game.Create<Pop>(position + new Point2(0, -9), pop => {
 						pop.SpriteName = "strike_down_sm";
 						pop.Facing = Facing;
 						pop.FlipY = true;
@@ -2031,7 +2034,7 @@ public partial class Player : Pawn
 
 		it += Position;
 
-		Game.CollisionRectsThisFrame.Add(it);
+		Game.AddCollisionRectForThisFrame(it);
 
 		var blockedByShield = IsAttackBlocked(it, checkOnlyForStrongActorBlock: true);
 		if (blockedByShield)
@@ -2104,9 +2107,9 @@ public partial class Player : Pawn
 		if (duckingAttack)
 			return new(3, -6, 13, 6);
 		else if (attackDown)
-			return new(-24, 0, 48, 12);
+			return new(-20, 0, 40, 12);
 		else if (attackUp)
-			return new(0, -20, 6, 13);
+			return new(0, -25, 6, 13);
 
 		return new(8, -9, 19, 9);
 	}

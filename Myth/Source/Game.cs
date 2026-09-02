@@ -557,7 +557,14 @@ public partial class Game : IDisposable
 
 		GymBudDied = false;
 		roomSwappedThisFrame = false;
-		CollisionRectsThisFrame.Clear();
+
+		for (var i = 0; i < CollisionRectsThisFrame.Count; i++) {
+			var (rect, time) = CollisionRectsThisFrame[i];
+			if (Time.SecondsF - time > 0.1f) {
+				CollisionRectsThisFrame.RemoveAt(i--);
+			}
+		}
+
 		UpdatePlayerHitSnapshot();
 		UpdateRoomTransitionGc();
 		UpdateCrumbleTiles();

@@ -234,7 +234,7 @@ public class ShieldKnight : Actor
 			Velocity.X = Calc.Approach(Velocity.X, 0, Friction * Time.Delta);
 #if DEBUG
 		if (IsBlockingWithShield)
-			Game.CollisionRectsThisFrame.Add(WorldSpaceShieldHitbox);
+			Game.AddCollisionRectForThisFrame(WorldSpaceShieldHitbox);
 #endif
 	}
 

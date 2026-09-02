@@ -212,7 +212,7 @@ public sealed partial class GameView : IDisposable
 			for (var i = 0; i < polygon.Count; i++)
 				Batcher.Line(polygon[i], polygon[(i + 1) % polygon.Count], 1, Color.Red);
 		}
-		foreach (var rect in game.CollisionRectsThisFrame)
+		foreach (var (rect, time) in game.CollisionRectsThisFrame)
 			Batcher.RectLine(rect, 1, Color.Red);
 		foreach (var it in Actors)
 			if (!game.destroying.Contains(it))

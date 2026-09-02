@@ -123,7 +123,12 @@ public partial class Game
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
-	public List<RectInt> CollisionRectsThisFrame = [];
+	public List<(RectInt, float)> CollisionRectsThisFrame = [];
+
+	internal void AddCollisionRectForThisFrame(RectInt rect)
+	{
+		CollisionRectsThisFrame.Add((rect, Time.SecondsF));
+	}
 
 	// Render-target inspector overlay, drawn by Manager as an ImGui window at full
 	// window resolution. Toggled with G.
