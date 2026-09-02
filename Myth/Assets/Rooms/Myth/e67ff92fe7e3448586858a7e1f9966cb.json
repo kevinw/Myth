@@ -138,6 +138,16 @@
       "Id": "c0a82f0ad6641e9d",
       "Type": "Rope",
       "Position": [172, -20]
+    },
+    {
+      "Id": "209cdacb3e840cb1",
+      "Type": "Goal",
+      "Position": [8, 136]
+    },
+    {
+      "Id": "2238e19e9baf9fcb",
+      "Type": "PlayerStart",
+      "Position": [148, 176]
     }
   ]
 }

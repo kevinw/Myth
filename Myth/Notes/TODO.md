@@ -1,3 +1,6 @@
+- Press "Lup" to warp icon looks wrong, it looks like you're pressing in on the stick
+- new attack hitbox logic needs to have HitVisualActors consume the attack
+  - or better yet; attackConsumed is instead a Set<Actor> 
 - find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.
 - better attack swipe sprite + down swipe + mini pogo
 - use Dropper; draw a sprite; more "easy" enemy variety wins

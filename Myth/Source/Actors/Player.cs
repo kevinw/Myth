@@ -1798,16 +1798,12 @@ public partial class Player : Pawn
 
 			if (ducking && duckAttackCooldownTimer <= 0)
 			{
-				duckAttack = true;
-				duckAttackCooldownTimer = DuckAttackCooldown;
-				StartAttack();
+				StartAttack(duck: true);
 				return true;
 			}
 			else if (!ducking)
 			{
-				duckAttack = false;
-				attackBlocked = false;
-				StartAttack();
+				StartAttack(duck: false);
 				return true;
 			}
 		}
@@ -1836,8 +1832,14 @@ public partial class Player : Pawn
 		return false;
 	}
 
-	void StartAttack()
+	void StartAttack(bool duck)
 	{
+		duckAttack = duck;
+		if (duck) {
+			duckAttackCooldownTimer = DuckAttackCooldown;
+		}
+		consumedAttack = false;
+		attackBlocked = false;
 		var brakeFromDash = grounded && dashRunArmed;
 		State = States.Attack;
 		attackDown = !grounded && input.MoveY > 0;
@@ -1945,64 +1947,78 @@ public partial class Player : Pawn
 	}
 
 	bool attackUp = false;
+	bool consumedAttack = false;
 
 	public void AttackState()
 	{
 		if (duckAttack)
+		{
 			ducking = true;
+		}
 
 		var moveX = GetHorizontalMovementInput(out var movementInput);
 		UpdateHorizontalMovement(moveX, movementInput);
 
 		Play(GetAttackAnimation(), false);
 
-		if (state.JustCrossedTime(ATTACK_WINDUP))
+		var hitbox = GetAttackHitbox(duckAttack);
+		if (state.Time < 0.2f && !consumedAttack)
 		{
-			var hitbox = GetAttackHitbox(duckAttack);
-			attackBlocked = AttackThisFrame(hitbox);
+			var hitSomething = AttackThisFrame(hitbox, canPogo: attackDown);
+			if (hitSomething)
+			{
+				consumedAttack = true;
+			}
 			if (attackBlocked)
 			{
 				Play(GetAttackAnimation(), false);
 				AudioEvent("player/sword_block");
+				consumedAttack = true;
+			}
+		}
+		if (state.JustCrossedTime(0.001f) && !attackBlocked)
+		{
+			AudioEvent(duckAttack ? "sword_crouched" : "sword");
+			var position = Position + hitbox.Center;
+
+			// because we actually try to hit over several frames, try to adjust based on our velocity. note this is a purely visual offset and the hitbox is always based on the player's position
+			// each frame.
+			position += (Point2)(Velocity * Time.Delta * 14.0f);
+
+			if (attackDown)
+			{
+				position.Y -= 8;
+				Game.Create<Pop>(position, pop =>
+				{
+					pop.SpriteName = "strike_down_sm";
+					pop.Facing = Facing;
+					pop.Anchor = SpriteAnchor.Pivot;
+				});
+			}
+			else if (attackUp)
+			{
+				position.Y += 12;
+				Game.Create<Pop>(position, pop =>
+				{
+					pop.SpriteName = "strike_down_sm";
+					pop.Facing = Facing;
+					pop.FlipY = true;
+					pop.Anchor = SpriteAnchor.Pivot;
+				});
+			}
+			else if (!duckAttack)
+			{
+				position.X -= Facing < 0 ? 17 : 17;
+				// EmitPlasmaStrike(duckingAttack: false);
+				Game.Create<Pop>(position, pop =>
+				{
+					pop.SpriteName = "strike_right_sm";
+					pop.Facing = Facing;
+					pop.Anchor = SpriteAnchor.Pivot;
+				});
 			}
 			else
-			{
-				AudioEvent(duckAttack ? "sword_crouched" : "sword");
-				var position = Position;
-				var velocityAddition = (Point2)(Velocity * Time.Delta * 15.0f);
-				position.X += velocityAddition.X;
-				if (attackDown)
-				{
-					position.Y -= 5;
-					position.Y += velocityAddition.Y;
-					Game.Create<Pop>(position, pop => {
-						pop.SpriteName = "strike_down_sm";
-						pop.Facing = Facing;
-						pop.Anchor = SpriteAnchor.Pivot;
-					});
-				}
-				else if (attackUp)
-				{
-					position.Y += velocityAddition.Y;
-					Game.Create<Pop>(position + new Point2(0, -9), pop => {
-						pop.SpriteName = "strike_down_sm";
-						pop.Facing = Facing;
-						pop.FlipY = true;
-						pop.Anchor = SpriteAnchor.Pivot;
-					});
-				}
-				else if (!duckAttack)
-				{
-					// EmitPlasmaStrike(duckingAttack: false);
-					Game.Create<Pop>(position + new Point2(Facing, -7), pop => {
-						pop.SpriteName = "strike_right_sm";
-						pop.Facing = Facing;
-						pop.Anchor = SpriteAnchor.Pivot;
-					});
-				}
-				else
-					EmitPlasmaStrike(duckingAttack: duckAttack, attackUp: attackUp);
-			}
+				EmitPlasmaStrike(duckingAttack: duckAttack, attackUp: attackUp);
 		}
 
 		var attackFinished = attackBlocked
@@ -2027,7 +2043,7 @@ public partial class Player : Pawn
 		}
 	}
 
-	bool AttackThisFrame(RectInt it)
+	bool AttackThisFrame(RectInt it, bool canPogo)
 	{
 		if (Facing == Signs.Negative)
 			it.X = -(it.X + it.Width);
@@ -2050,6 +2066,12 @@ public partial class Player : Pawn
 			{
 				Hit(hit, new(it));
 				hitSomething = true;
+				if (canPogo)
+				{
+					Velocity.Y = -125f;
+					burrowNeedsGrounding = false;
+					burrowTimer = 0f;
+				}
 			}
 		}
 
@@ -2066,7 +2088,7 @@ public partial class Player : Pawn
 			Game.HitVisualActors(it);
 		}
 
-		return attackBlocked;
+		return hitSomething;
 	}
 
 	bool IsAttackBlocked(bool duckingAttack, bool checkOnlyForStrongActorBlock = false)
@@ -2104,14 +2126,18 @@ public partial class Player : Pawn
 
 	RectInt GetAttackHitbox(bool duckingAttack)
 	{
-		if (duckingAttack)
-			return new(3, -6, 13, 6);
-		else if (attackDown)
-			return new(-20, 0, 40, 12);
-		else if (attackUp)
-			return new(0, -25, 6, 13);
 
-		return new(8, -9, 19, 9);
+		RectInt _GetAttackHitbox(bool duckingAttack)
+		{
+			if (duckingAttack)   return new(3, -6, 13, 6);
+			else if (attackDown) return new(-19, 0, 39, 14);
+			else if (attackUp)   return new(-12, -27, 24, 12);
+			                     return new(6, -16, 20, 16);
+		}
+
+
+		var velocityAddition = new Point2(); //(Point2)(Velocity * Time.Delta * 14.0f);
+		return _GetAttackHitbox(duckingAttack) + velocityAddition;
 	}
 
 	void EmitPlasmaStrike(bool duckingAttack, bool attackUp = false)

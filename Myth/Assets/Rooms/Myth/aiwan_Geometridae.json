@@ -69,6 +69,12 @@
       "Strength": 0.929,
       "SpeedForDoubleStrength": 176.715,
       "Radius": 16.018
+    },
+    {
+      "Id": "a5f0b44b059bf555",
+      "Type": "Blob",
+      "Position": [188, 176],
+      "Health": 10
     }
   ]
 }
