@@ -5,7 +5,7 @@ namespace Myth;
 
 public enum RadialWaveMedium { Air, Solid }
 
-public sealed class RadialWave : Actor, INeuralTextureAgent
+public sealed class RadialWave : Actor, INeuralTextureAgent, IRoomInversionListener
 {
 	const int SpokeCount = 192;
 	const int ImpactBucketCount = 48;
@@ -29,7 +29,7 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 	public float Speed = 220;
 	public float MaxRadius = 320;
 	public float Thickness = 3.5f;
-	public float CollisionInset = 0.5f;
+	static float CollisionInset => -2f;
 	public float StartDelay;
 	public float AccelerationTime = 0.16f;
 	public float InitialSpeedMultiplier = 0.42f;
@@ -118,6 +118,9 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 	static float ElectricSolidMultiplier => 0.7f;
 	static float ElectricFilamentChance => 0.62f;
 	static float ElectricFilamentOpacity => 0.55f;
+	static int ClipFeatherSpokes => 2;
+	static float ClipFeatherMinimum => 0.7f;
+	static float ClipTailLength => 7;
 	static int NeuralPerturbStampCount => 32;
 	static float NeuralPerturbStampRadiusMultiplier => 1.1f;
 
@@ -206,7 +209,7 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 		roomInverseTargetReach = targetReach;
 	}
 
-	internal void InvertRoomMedium()
+	void IRoomInversionListener.RoomInverted()
 	{
 		if (Finished)
 			return;
@@ -611,7 +614,10 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 		for (var i = 0; i < directions.Length; i++)
 		{
 			var next = (i + 1) % directions.Length;
-			var alpha = MathF.Min(PreEchoSpokeAlpha(i), PreEchoSpokeAlpha(next));
+			if (preEchoBlocked[i] != preEchoBlocked[next])
+				continue;
+			var alpha = MathF.Min(PreEchoSpokeAlpha(i), PreEchoSpokeAlpha(next)) *
+				SegmentClipFade(preEchoBlocked, i, next);
 			if (alpha <= 0)
 				continue;
 			var strength = alpha * PreEchoDistortionStrength;
@@ -637,7 +643,13 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 		for (var i = 0; i < directions.Length; i++)
 		{
 			var next = (i + 1) % directions.Length;
-			var decorativeAlpha = MathF.Min(DecorativeSpokeAlpha(i), DecorativeSpokeAlpha(next));
+			if (blocked[i] != blocked[next])
+			{
+				RenderClipEdge(batcher, emissive, blocked[i] ? next : i, blocked[i] ? i : next, time);
+				continue;
+			}
+			var clipFade = SegmentClipFade(blocked, i, next);
+			var decorativeAlpha = MathF.Min(DecorativeSpokeAlpha(i), DecorativeSpokeAlpha(next)) * clipFade;
 			var hurtLineAlpha = MathF.Min(HurtLineSpokeAlpha(i), HurtLineSpokeAlpha(next));
 			if (decorativeAlpha <= 0 && hurtLineAlpha <= 0)
 				continue;
@@ -689,12 +701,55 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 		for (var i = 0; i < directions.Length; i++)
 		{
 			var next = (i + 1) % directions.Length;
-			var alpha = MathF.Min(PreEchoSpokeAlpha(i), PreEchoSpokeAlpha(next));
+			if (preEchoBlocked[i] != preEchoBlocked[next])
+				continue;
+			var alpha = MathF.Min(PreEchoSpokeAlpha(i), PreEchoSpokeAlpha(next)) *
+				SegmentClipFade(preEchoBlocked, i, next);
 			if (alpha <= 0)
 				continue;
 			batcher.Line(directions[i] * PreEchoSpokeRadius(i), directions[next] * PreEchoSpokeRadius(next),
 				1.2f, Color * (alpha * 0.09f));
 		}
+	}
+
+	void RenderClipEdge(Batcher batcher, bool emissive, int liveSpoke, int blockedSpoke, float time)
+	{
+		var alpha = HurtLineSpokeAlpha(liveSpoke);
+		if (alpha <= 0)
+			return;
+
+		var direction = directions[liveSpoke];
+		var point = ElectricHurtPoint(liveSpoke, time);
+		var tail = point - direction * ClipTailLength;
+		var contact = directions[blockedSpoke] * terminalRadius[blockedSpoke];
+		var forkDirection = (contact - point).Normalized(-direction);
+		var fork = point + forkDirection * ClipTailLength * 0.5f +
+			direction.TurnLeft() * MathF.Sin(time * 29 + liveSpoke * 1.7f);
+		var color = emissive ? Color : CoreColor;
+		var strength = alpha * (emissive ? 0.65f : 0.45f);
+
+		if (!emissive)
+			batcher.Line(point, tail, Thickness + 1, Color * (alpha * 0.14f), Color * 0);
+		batcher.Line(point, tail, emissive ? 1.8f : 1.25f, color * strength, color * 0);
+		batcher.Line(point, fork, emissive ? 1 : 0.75f, color * (strength * 0.4f), color * 0);
+	}
+
+	static float SegmentClipFade(bool[] clipped, int from, int to)
+	{
+		if (clipped[from])
+			return 1;
+
+		var distance = Math.Min(NearestClipDistance(clipped, from), NearestClipDistance(clipped, to));
+		return Calc.Lerp(ClipFeatherMinimum, 1, distance / (float)(ClipFeatherSpokes + 1));
+	}
+
+	static int NearestClipDistance(bool[] clipped, int spoke)
+	{
+		for (var distance = 1; distance <= ClipFeatherSpokes; distance++)
+			if (clipped[(spoke - distance + clipped.Length) % clipped.Length] ||
+				clipped[(spoke + distance) % clipped.Length])
+				return distance;
+		return ClipFeatherSpokes + 1;
 	}
 
 	void RenderAirWake(Batcher batcher, bool emissive, int spoke, int next, float alpha, float time)

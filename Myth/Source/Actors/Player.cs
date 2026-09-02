@@ -2182,6 +2182,7 @@ public partial class Player : Pawn
 		}
 		Velocity = new Vector2(signDirection * 100, -80) * bounceMultiplier;
 		hurtStateDuration = HurtDuration * hurtDurationMultiplier;
+		StopAndReleaseSound(ref burrowSound);
 		State = States.Hurt;
 
 		var wasHealth = Health;
@@ -2329,6 +2330,7 @@ public partial class Player : Pawn
 	public override void Destroyed()
 	{
 		StopRollSound(true);
+		StopAndReleaseSound(ref burrowSound, true);
 		if (light != null)
 		{
 			Game.Destroy(light);

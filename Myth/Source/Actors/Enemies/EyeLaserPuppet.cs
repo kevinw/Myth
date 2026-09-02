@@ -46,7 +46,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	[I(80, 360)] public float StompWaveSpeed = 120;
 	[I(64, 640)] public float StompWaveRange = 460;
 	[I(1, 8)] public float StompWaveThickness = 5.5f;
-	[I(-2, 8)] public float StompWaveCollisionInset = 0.5f;
 	[I(0, 0.4f)] public float StompWaveAccelerationTime = 0.12f;
 	[I(0.1f, 1)] public float StompWaveInitialSpeed = 0.5f;
 	[I(0, 12)] public float StompWaveTargetReach = 4;
@@ -375,7 +374,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.Speed = StompWaveSpeed;
 		wave.MaxRadius = StompWaveRange;
 		wave.Thickness = StompWaveThickness;
-		wave.CollisionInset = StompWaveCollisionInset;
 		wave.AccelerationTime = StompWaveAccelerationTime;
 		wave.InitialSpeedMultiplier = StompWaveInitialSpeed;
 		wave.TargetReach = StompWaveTargetReach;
@@ -499,7 +497,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.Speed = FloatingWaveSpeed;
 		wave.MaxRadius = FloatingWaveRange;
 		wave.Thickness = FloatingWaveThickness;
-		wave.CollisionInset = FloatingWaveCollisionInset;
 		wave.AccelerationTime = FloatingWaveAccelerationTime;
 		wave.InitialSpeedMultiplier = FloatingWaveInitialSpeed;
 		wave.NeuralPerturbStrength = 1;

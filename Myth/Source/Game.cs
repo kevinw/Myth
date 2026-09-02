@@ -18,6 +18,11 @@ public enum RoomChangeKind
 public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
 public readonly record struct RoomGeoChange(Room Room, RectInt? DirtyWorldBounds = null);
 
+interface IRoomInversionListener
+{
+	void RoomInverted();
+}
+
 public partial class Game : IDisposable
 {
 
@@ -76,6 +81,7 @@ public partial class Game : IDisposable
 	public Controls Controls { get; private set; } = null!;
 
 	public readonly List<Actor> Actors = [];
+	readonly List<Actor> parkedActors = [];
 
 	// The sim reads time only through this. Normally it's the wall clock (scaled by timeScale);
 	// during replay playback it's a clock advanced by the recording's per-frame dt, which
@@ -123,7 +129,36 @@ public partial class Game : IDisposable
 	// Visual feedback state, but sim-owned: decayed each frame in Update and set by the
 	// HitStun/Shake/PulseDitherGlitch APIs; GameView only reads it (via forwarding).
 	internal float hitStun;
-	internal float shaking;
+
+	internal struct FX {
+		internal float shaking;
+		internal float blooming;
+
+		internal Point2 shake;
+
+		internal void Bloom() {
+			blooming = 2.3f;
+		}
+
+		internal void Update(Rng rng, Time time)
+		{
+			// screen shaking
+			if (shaking > 0)
+			{
+				shaking -= time.Delta;
+				if (time.OnInterval(0.05f))
+					shake = new(rng.Sign(), rng.Sign());
+			}
+			else
+				shake = Point2.Zero;
+
+			// screen blooming
+			blooming = Calc.Approach(blooming, 0, time.Delta * 20f);
+		}
+
+	}
+	internal FX fx;
+
 	internal float ditherGlitch;
 	internal float ditherGlitchTarget;
 	internal Vector2 ditherGlitchAxis = Vector2.UnitX;
@@ -141,7 +176,6 @@ public partial class Game : IDisposable
 				age <= airFlashHold ? 1 : Ease.Cube.Out(1 - (age - airFlashHold) / airFlashFade);
 		}
 	}
-	internal Point2 shake;
 	internal Vector2 renderTargetShake;
 	Vector2 renderTargetNoise;
 	Vector2 renderTargetKick;
@@ -219,7 +253,7 @@ public partial class Game : IDisposable
 	RoomChangeKind browserDebugLastGcKind;
 
 	public Vector2 Camera { get; internal set; }
-	internal Vector2 RenderCamera => (Point2)Camera - shake;
+	internal Vector2 RenderCamera => (Point2)Camera - fx.shake;
 	// The camera hard-follows the player, except a discontinuity in the clamp target (a blocker
 	// cap toggling as you cross a bite's span, or a blocker revealing) is absorbed into a
 	// decaying error so the view glides over the jump instead of snapping.
@@ -500,11 +534,15 @@ public partial class Game : IDisposable
 			if (stopped.Add(actor))
 				actor.Destroyed();
 		foreach (var actor in destroying)
-			if (stopped.Add(actor))
+			if (actor.AddedOnce && stopped.Add(actor))
+				actor.Destroyed();
+		foreach (var actor in parkedActors)
+			if (actor.AddedOnce && stopped.Add(actor))
 				actor.Destroyed();
 
 		Actors.Clear();
 		destroying.Clear();
+		parkedActors.Clear();
 		View?.Dispose();
 	}
 
@@ -684,15 +722,8 @@ public partial class Game : IDisposable
 		UpdateCamera();
 		UpdateStory();
 		rewinder.UpdateDebugPlayerRewind();
-		// screen shaking
-		if (shaking > 0)
-		{
-			shaking -= Time.Delta;
-			if (Time.OnInterval(0.05f))
-				shake = new(rng.Sign(), rng.Sign());
-		}
-		else
-			shake = Point2.Zero;
+
+		fx.Update(rng, Time);
 	}
 
 	static float RenderTargetShakeAmount => 15f;
@@ -1421,8 +1452,7 @@ public partial class Game : IDisposable
 			Anchor = Factory.AnchorForType(typeof(T).Name)
 		};
 		init?.Invoke(instance);
-		instance.Added();
-		Actors.Add(instance);
+		AddOrParkActor(instance);
 		return instance;
 	}
 
@@ -1439,10 +1469,28 @@ public partial class Game : IDisposable
 		instance.Tags = Factory.TagsForType(type);
 		instance.Anchor = Factory.AnchorForType(type.Name);
 		init?.Invoke(instance);
-		instance.Added();
-		Actors.Add(instance);
+		AddOrParkActor(instance);
 		return instance;
 	}
+
+	void AddOrParkActor(Actor actor)
+	{
+		if (!ActorActiveForRoomInversion(actor))
+		{
+			parkedActors.Add(actor);
+			return;
+		}
+
+		if (!actor.AddedOnce)
+		{
+			actor.Added();
+			actor.AddedOnce = true;
+		}
+		Actors.Add(actor);
+	}
+
+	bool ActorActiveForRoomInversion(Actor actor)
+		=> actor.Invert == ActorInversion.Both || invertedNow == (actor.Invert == ActorInversion.InvertedOnly);
 
 	public T? GetFirst<T>() where T : Actor
 	{
@@ -1510,8 +1558,11 @@ public partial class Game : IDisposable
 	{
 		for (var i = 0; i < destroying.Count; i++)
 		{
-			destroying[i].Destroyed();
-			Actors.Remove(destroying[i]);
+			var actor = destroying[i];
+			if (actor.AddedOnce)
+				actor.Destroyed();
+			Actors.Remove(actor);
+			parkedActors.Remove(actor);
 		}
 		destroying.Clear();
 	}
@@ -2292,20 +2343,68 @@ public partial class Game : IDisposable
 		View?.MarkRoomTileFieldCacheDirty(room);
 	}
 
+	bool invertedNow;
+	internal bool RoomInverted => invertedNow;
+
 	internal bool ToggleBurrowRoomInverse()
+	{
+		if (!ToggleRoomInverse())
+			return false;
+
+		//Shake(0.1f);
+		HitStun(0.05f);
+		fx.Bloom();
+		PlayAudioEvent("invert", "Enabled", invertedNow ? 1.0f : 0.0f);
+		return true;
+	}
+
+	internal bool SetEditorRoomInverted(bool inverted)
+		=> IsEditorPreview && invertedNow != inverted && ToggleRoomInverse();
+
+	bool ToggleRoomInverse()
 	{
 		if (room?.ToggleBurrowInverse() != true)
 			return false;
 
-
-		//Shake(0.1f);
+		invertedNow = !invertedNow;
+		ActivateParkedActors(room);
 
 		for (var i = 0; i < Actors.Count; i++)
-			if (Actors[i] is RadialWave wave && wave.Room == room && !destroying.Contains(wave))
-				wave.InvertRoomMedium();
+			if (Actors[i] is IRoomInversionListener listener && Actors[i].Room == room && !destroying.Contains(Actors[i]))
+				listener.RoomInverted();
+		ParkInactiveActors(room);
 
 		RefreshRoomTiles();
 		return true;
+	}
+
+	void ActivateParkedActors(Room forRoom)
+	{
+		for (var i = 0; i < parkedActors.Count;)
+		{
+			var actor = parkedActors[i];
+			if (actor.Room != forRoom || destroying.Contains(actor) || !ActorActiveForRoomInversion(actor))
+			{
+				i++;
+				continue;
+			}
+
+			parkedActors.RemoveAt(i);
+			AddOrParkActor(actor);
+		}
+	}
+
+	void ParkInactiveActors(Room forRoom)
+	{
+		for (var i = Actors.Count - 1; i >= 0; i--)
+		{
+			var actor = Actors[i];
+			if (actor.Room != forRoom || destroying.Contains(actor) || ActorActiveForRoomInversion(actor))
+				continue;
+
+			Actors.RemoveAt(i);
+			parkedActors.Add(actor);
+		}
 	}
 
 	void BuildDualTiles(Room forRoom, DualGrid dual, Factory.TileLayer layer)
@@ -2326,6 +2425,8 @@ public partial class Game : IDisposable
 
 	public void LoadRoom(Room forRoom)
 	{
+		DiscardParkedActors();
+		invertedNow = false;
 		var previousLoadingRoom = loadingRoom;
 		loadingRoom = forRoom;
 		try
@@ -2336,6 +2437,14 @@ public partial class Game : IDisposable
 		{
 			loadingRoom = previousLoadingRoom;
 		}
+	}
+
+	void DiscardParkedActors()
+	{
+		foreach (var actor in parkedActors)
+			if (actor.AddedOnce)
+				actor.Destroyed();
+		parkedActors.Clear();
 	}
 
 	void LoadRoomContents(Room forRoom)
@@ -2869,7 +2978,7 @@ public partial class Game : IDisposable
 		if (ShakeInRenderTargetSpace)
 			ShakeRenderTarget(time);
 		else
-			shaking = MathF.Max(shaking, time);
+			fx.shaking = MathF.Max(fx.shaking, time);
 	}
 
 	public void ShakeRenderTarget(float time, float intensity = 1)

@@ -1,3 +1,5 @@
+- find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.
+- better attack swipe sprite + down swipe + mini pogo
 - use Dropper; draw a sprite; more "easy" enemy variety wins
 - OnWasHit is very repetitive across our actors. we should refactor it into a shared method with a knockback param
 - ELP boss:make him fall down only after 3 hits. make him have a phase two where his head gets bigger and maybe his body grows in size a bit. add a "swipe away" animation where he makes space if you're too close

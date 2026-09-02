@@ -213,7 +213,8 @@ public sealed partial class GameView
 					BloomAmount,
 					VignetteAmount,
 					RgbOffset,
-					0, 0, 0,
+					game.fx.blooming,
+					0, 0,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}

@@ -86,7 +86,8 @@
     {
       "Id": "41bac4dbb54c73fc",
       "Type": "WavePylon",
-      "Position": [56, 136]
+      "Position": [56, 136],
+      "WaveCollisionInset": -2
     }
   ]
 }

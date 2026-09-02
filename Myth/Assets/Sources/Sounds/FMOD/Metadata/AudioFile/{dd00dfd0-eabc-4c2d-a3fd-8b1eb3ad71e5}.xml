@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{dd00dfd0-eabc-4c2d-a3fd-8b1eb3ad71e5}">
+		<property name="assetPath">
+			<value>WHOOSH_SciFi_Small_10_mono.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>0.66160997732426308</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{0c477f3c-ca46-455a-aecc-567ce41f5eab}</destination>
+		</relationship>
+	</object>
+</objects>

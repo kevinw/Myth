@@ -5,6 +5,13 @@ using Foster.Framework;
 
 namespace Myth;
 
+public enum ActorInversion
+{
+	Both,
+	InvertedOnly,
+	UninvertedOnly,
+}
+
 public class Actor
 {
 	public static bool TransitionsEnabled = true;
@@ -28,6 +35,7 @@ public class Actor
 	[NoSerialize] public Hitbox Hitbox;
 	[NoSerialize] public Masks Mask = Masks.None;
 	public Signs Facing = Signs.Positive;
+	public ActorInversion Invert = ActorInversion.Both;
 	[NoSerialize] public SpriteAnchor Anchor = SpriteAnchor.Auto;
 
 	// The resolved draw/flip/hitbox origin for this actor's sprite + anchor, in sprite-local
@@ -49,6 +57,7 @@ public class Actor
 #endif
 	internal ActorTag Tags;
 	[NoSerialize] internal string? SessionDestroyKey;
+	[NoSerialize] internal bool AddedOnce;
 	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;

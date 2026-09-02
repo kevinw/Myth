@@ -11,7 +11,7 @@ namespace Myth;
 [GameActor(Sprite = "Editor/particles", Tags = ActorTag.Hazard,
 	BoundsX = -6, BoundsY = -6, BoundsW = 12, BoundsH = 12, Anchor = SpriteAnchor.Center,
 	LivePositionEditable = true)]
-public class LightningTrap : Actor
+public class LightningTrap : Actor, IRoomInversionListener
 {
 	public Cardinal Direction = Cardinal.Right;
 	[I(0.1f, 5)] public float WaitDelay = 1.5f;   // idle time between fires
@@ -22,7 +22,6 @@ public class LightningTrap : Actor
 	static float FireRampTime => 0.07f; // visual ramp to full intensity when the hurtbox turns on
 	static float FireTailTime => 0.08f; // quick visual fade as the window closes
 	static int HalfWidth => Game.TileSize / 2;
-	static int MouthOffset => Game.TileSize / 2; // beam starts at the edge of the trap's own tile
 	static int MaxScan => Game.TileSize * 64;    // per-segment safety cap
 	static int MaxBounces => 8;                  // reflections before the beam gives up
 	static float SparkInterval => 0.05f;         // cadence of the trickle of impact sparks
@@ -77,8 +76,16 @@ public class LightningTrap : Actor
 	}
 
 	Vector2 Dir => DirectionVector(Direction);
+	Vector2 HousingScale => Direction.Horizontal ? new Vector2(0.5f, 1) : new Vector2(1, 0.5f);
 
 	static Vector2 DirectionVector(Cardinal direction) => direction.Normal;
+
+	void IRoomInversionListener.RoomInverted()
+	{
+		Direction = Direction.Reverse;
+		if (phase != Phase.Wait)
+			TraceBeam();
+	}
 
 	public override void Update()
 	{
@@ -148,7 +155,7 @@ public class LightningTrap : Actor
 		var dir = Dir;
 		// Keep the beam centered on its authored housing. The collision probe still snaps to the
 		// tile lane so a boundary-aligned ray doesn't straddle a solid and miss the slope it targets.
-		var visualStart = (Vector2)Position + dir * MouthOffset;
+		var visualStart = (Vector2)Position;
 		// The trap is mounted inside a wall, so search from the first pixel clear of solid; otherwise
 		// the ray hits the very tile it's embedded in and the beam collapses to zero length.
 		var rayStart = AdvancePastSolid(SnapToLane(visualStart, dir), dir);
@@ -273,7 +280,7 @@ public class LightningTrap : Actor
 
 		sparkTimer += SparkInterval;
 		foreach (var impact in impacts)
-			particles.Emit(sparkEffect, impact.Point, 2, impact.Angle, 1f, SparkSpread);
+			particles.Emit(sparkEffect, impact.Point, 8, impact.Angle, 1f, SparkSpread);
 	}
 
 	void ClearHurtbox() => Hitbox = new(new RectInt(0, 0, 0, 0));
@@ -394,10 +401,11 @@ public class LightningTrap : Actor
 
 	void DrawHousing(Batcher batcher)
 	{
-		var center = -Dir * 2;
-		batcher.Circle(center, 6, 16, new Color(0x171319));
-		batcher.Circle(center, 5, 16, new Color(0x2a2140));
-		batcher.Circle(center, 2.5f, 12, new Color(0x3d2f5c));
+		batcher.PushMatrix(Matrix3x2.CreateScale(HousingScale));
+		batcher.Circle(Vector2.Zero, 6, 16, new Color(0x171319));
+		batcher.Circle(Vector2.Zero, 5, 16, new Color(0x2a2140));
+		batcher.Circle(Vector2.Zero, 2.5f, 12, new Color(0x3d2f5c));
+		batcher.PopMatrix();
 		DrawElectrodes(batcher, emissive: false);
 	}
 
@@ -412,7 +420,7 @@ public class LightningTrap : Actor
 			? new Color(0x79cfff) * glow
 			: Color.Lerp(new Color(0x3a3550), new Color(0x79cfff), glow);
 		for (var s = -1; s <= 1; s += 2)
-			batcher.Circle(Dir * (MouthOffset - 1) + perp * (s * 2.5f), emissive ? 1.6f : 1.4f, 8, color);
+			batcher.Circle(perp * (s * 2.5f), emissive ? 1.6f : 1.4f, 8, color);
 	}
 
 #if EDITOR

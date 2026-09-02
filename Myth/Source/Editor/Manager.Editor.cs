@@ -61,6 +61,7 @@ public partial class Manager
 
 	char brush = '0'; // The current Type we're painting in the Editor
 	Factory.TileLayer activeTileLayer = Factory.TileLayer.Foreground;
+	Factory.TileLayer? tilePaletteLayer;
 	bool editorShowForegroundLayer = true;
 	bool editorShowBackgroundLayer = true;
 
@@ -1027,15 +1028,32 @@ public partial class Manager
 		PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.One);
 		PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 1));
 		var columns = PaletteColumnsForWidth(TileButtonSpacing);
+		if (tilePaletteLayer is { } layer)
+			DrawTilePaletteLayer(layer, columns);
+		else
+		{
+			DrawTilePaletteLayer(Factory.TileLayer.Foreground, columns);
+			Dummy(new Vector2(0, 5));
+			DrawTilePaletteLayer(Factory.TileLayer.Background, columns);
+		}
+		PopStyleColor();
+		PopStyleVar();
+		DrawAddTilePopup();
+	}
+
+	void DrawTilePaletteLayer(Factory.TileLayer layer, int columns)
+	{
+		PushID((int)layer);
 		var index = 0;
 		ValueStringBuilder vsb = new(stackalloc char[30]);
 		foreach (var (id, entry) in Factory.Entries)
 		{
+			if (entry.Layer != layer)
+				continue;
+
 			vsb.Clear();
 			vsb.Append("Palette_Tiles_");
 			vsb.Append(id);
-
-			if (entry.Layer != activeTileLayer) continue;
 
 			if (index > 0 && index % columns != 0)
 				SameLine();
@@ -1045,11 +1063,7 @@ public partial class Manager
 			if (ImGuiSubtextureButton(vsb.AsSpan(), entry.Image, entry.Name, dualPreview,
 				selectedActorPaletteIndex < 0 && brush == id, new Vector2(ButtonSize, ButtonSize),
 				imagePadding: 0, drawBorder: false))
-			{
-				brush = id;
-				selectedActorPaletteIndex = -1;
-				actorSelectTool = false;
-			}
+				SelectTileBrush(entry.Layer, id);
 			if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				OpenTileSourceEditor(entry);
 
@@ -1078,12 +1092,10 @@ public partial class Manager
 		if (ImGuiSubtextureButton("##AddTile", Assets.GetSubtexture(EditorButtonSubtexture_Plus), "Add a new tile",
 			false, new Vector2(ButtonSize, ButtonSize), true, 4))
 		{
-			newTileLayer = activeTileLayer;
+			newTileLayer = layer;
 			addTilePopupRequested = true;
 		}
-		PopStyleColor();
-		PopStyleVar();
-		DrawAddTilePopup();
+		PopID();
 	}
 
 	const string EditorButtonSubtexture_Plus = "buttons/18";
@@ -1104,12 +1116,15 @@ public partial class Manager
 		PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(framePadding.X, 1));
 		BeginGroup();
 		var buttonWidth = TileLayerButtonWidth();
+		if (DrawTileLayerButton("All", null, TileLayerAllButtonWidth()))
+			SelectTileLayer(null);
+		SameLine();
 		if (DrawTileLayerVisibilityButton("Background", editorShowBackgroundLayer))
 			editorShowBackgroundLayer = !editorShowBackgroundLayer;
 		SameLine();
 		if (DrawTileLayerButton("Background", Factory.TileLayer.Background, buttonWidth))
 			SelectTileLayer(Factory.TileLayer.Background);
-
+		SameLine();
 		if (DrawTileLayerVisibilityButton("Foreground", editorShowForegroundLayer))
 			editorShowForegroundLayer = !editorShowForegroundLayer;
 		SameLine();
@@ -1121,12 +1136,14 @@ public partial class Manager
 
 	static float TileLayerButtonWidth()
 		=> CalcTextSize("Foreground").X + GetStyle().FramePadding.X * 2;
+	static float TileLayerAllButtonWidth()
+		=> CalcTextSize("All").X + GetStyle().FramePadding.X * 2;
 
 	static float TileLayerSelectorWidth()
 	{
 		var style = GetStyle();
 		var iconWidth = MathF.Max(CalcTextSize(EditorIcons.Visible).X, CalcTextSize(EditorIcons.Hidden).X) + style.FramePadding.X * 2;
-		return iconWidth + style.ItemSpacing.X + TileLayerButtonWidth();
+		return TileLayerAllButtonWidth() + (iconWidth + TileLayerButtonWidth()) * 2 + style.ItemSpacing.X * 4;
 	}
 
 	static bool DrawTileLayerVisibilityButton(string id, bool visible)
@@ -1143,9 +1160,9 @@ public partial class Manager
 		return pressed;
 	}
 
-	bool DrawTileLayerButton(string label, Factory.TileLayer layer, float width)
+	bool DrawTileLayerButton(string label, Factory.TileLayer? layer, float width)
 	{
-		var selected = activeTileLayer == layer;
+		var selected = tilePaletteLayer == layer;
 		if (selected)
 			PushStyleColor(ImGuiCol.Button, GetStyle().Colors[(int)ImGuiCol.ButtonActive]);
 		var pressed = Button(label, new Vector2(width, 0));
@@ -1154,9 +1171,13 @@ public partial class Manager
 		return pressed;
 	}
 
-	void SelectTileLayer(Factory.TileLayer layer)
+	void SelectTileLayer(Factory.TileLayer? layer)
 	{
-		activeTileLayer = layer;
+		tilePaletteLayer = layer;
+		if (layer is not { } selectedLayer)
+			return;
+
+		activeTileLayer = selectedLayer;
 		if (Factory.Find(brush) is { } entry && entry.Layer == activeTileLayer)
 			return;
 
@@ -2834,6 +2855,23 @@ public partial class Manager
 		foreach (var id in selectedRoomIds)
 			if (RoomById(id) is { } r)
 				roomMoveOrigins[id] = r.TileSpacePosition;
+		foreach (var candidate in Assets.RoomsById.Values)
+		{
+			if (roomMoveOrigins.ContainsKey(candidate.Id))
+				continue;
+			foreach (var id in selectedRoomIds)
+				if (RoomById(id) is { } parent && candidate.Sublayer > parent.Sublayer && RoomContains(parent, candidate))
+				{
+					roomMoveOrigins[candidate.Id] = candidate.TileSpacePosition;
+					break;
+				}
+		}
+	}
+
+	static bool RoomContains(Room parent, Room candidate)
+	{
+		var candidateBounds = new RectInt(candidate.TileSpacePosition, candidate.Size);
+		return new RectInt(parent.TileSpacePosition, parent.Size).GetIntersection(candidateBounds) == candidateBounds;
 	}
 
 	void OpenPendingRoomGroupUndo(string name)
@@ -2841,7 +2879,7 @@ public partial class Manager
 		if (undo.HasPending(RoomGeometryUndoSlot))
 			return;
 		var targets = new List<IJsonUndoTarget>();
-		foreach (var id in selectedRoomIds)
+		foreach (var id in roomMoveOrigins.Keys)
 			if (RoomById(id) is { } r)
 				targets.Add(CurrentRoomUndoTarget(r));
 		targets.Add(EditorSelectionUndoTarget());
@@ -2928,7 +2966,7 @@ public partial class Manager
 		var ys = new List<int>();
 		foreach (var room in Assets.RoomsById.Values)
 		{
-			if (room.Sublayer != editorSublayer || selectedRoomIds.Contains(room.Id))
+			if (room.Sublayer != editorSublayer || roomMoveOrigins.ContainsKey(room.Id))
 				continue;
 			var p = room.TileSpacePosition;
 			xs.Add(p.X);
@@ -3014,7 +3052,7 @@ public partial class Manager
 			var rect = new RectInt(origin + delta, r.Size);
 			foreach (var room in Assets.RoomsById.Values)
 			{
-				if (room.Sublayer != editorSublayer || selectedRoomIds.Contains(room.Id))
+				if (room.Sublayer != r.Sublayer || roomMoveOrigins.ContainsKey(room.Id))
 					continue;
 				if (rect.Overlaps(new RectInt(room.TileSpacePosition, room.Size)))
 					return true;
@@ -3978,6 +4016,10 @@ public partial class Manager
 		var keyboardBlocked = ImGuiWantsKeyboard;
 		var roomActivationClickConsumed = false;
 		UpdateEditorShortcuts();
+		if (game?.SetEditorRoomInverted(!keyboardBlocked && Input.Keyboard.Down(Keys.I)) == true)
+			activeRoomPreviewVersion = -1;
+		if (game?.RoomInverted == true)
+			worldMouseBlocked = true;
 		// Shoulder buttons cycle worlds in edit mode (same as time speed in play mode)
 		if (!worldMouseBlocked)
 		{

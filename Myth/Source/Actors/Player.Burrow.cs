@@ -557,9 +557,10 @@ public partial class Player : Pawn
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);
 
-		burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
+		if (burrowLine == null)
+			burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
 		burrowHudFill = burrowDuration > 0 ? burrowTimer / burrowDuration : 0;
-		var wantsExit = burrowTimer <= 0 || !input.JumpDown;
+		var wantsExit = burrowLine == null && (burrowTimer <= 0 || !input.JumpDown);
 		if (burrowExitBlocked && (burrowLine == null || CanExitBurrowLine(out _)))
 			burrowExitBlocked = false;
 		if (wantsExit)

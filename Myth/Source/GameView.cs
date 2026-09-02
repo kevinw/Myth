@@ -61,7 +61,7 @@ public sealed partial class GameView : IDisposable
 	Vector2 RenderTargetShake => game.renderTargetShake;
 	float ditherGlitch => game.ditherGlitch;
 	Vector2 ditherGlitchAxis => game.ditherGlitchAxis;
-	Point2 shake { get => game.shake; set => game.shake = value; }
+	Point2 shake { get => game.fx.shake; set => game.fx.shake = value; }
 	float ZoomedWidth => Width / zoomLevel;
 	float ZoomedHeight => Height / zoomLevel;
 	Game.DebugView debugView => game.debugView;

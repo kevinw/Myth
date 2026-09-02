@@ -129,6 +129,7 @@ public partial class Manager
 				["actorSelectTool"] = manager.actorSelectTool,
 				["brush"] = manager.brush.ToString(),
 				["tileLayer"] = manager.activeTileLayer.ToString(),
+				["tilePaletteLayer"] = manager.tilePaletteLayer?.ToString() ?? "All",
 				["showForegroundLayer"] = manager.editorShowForegroundLayer,
 				["showBackgroundLayer"] = manager.editorShowBackgroundLayer,
 				["actorPaletteIndex"] = manager.selectedActorPaletteIndex,
@@ -153,6 +154,9 @@ public partial class Manager
 				manager.brush = brush[0];
 			if (Enum.TryParse<Factory.TileLayer>(JsonUtil.ReadString(json, "tileLayer"), out var layer))
 				manager.activeTileLayer = layer;
+			manager.tilePaletteLayer = Enum.TryParse<Factory.TileLayer>(JsonUtil.ReadString(json, "tilePaletteLayer"), out var paletteLayer)
+				? paletteLayer
+				: null;
 			manager.editorShowForegroundLayer = JsonUtil.ReadBool(json, "showForegroundLayer", true);
 			manager.editorShowBackgroundLayer = JsonUtil.ReadBool(json, "showBackgroundLayer", true);
 			manager.selectedActorPaletteIndex = JsonUtil.ReadInt(json, "actorPaletteIndex", -1);

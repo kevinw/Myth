@@ -11,7 +11,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float BloomAmount;
     float VignetteAmount;
     float RgbOffset;
-    float Padding0;
+    float ExtraGlow;
     float Padding1;
     float Padding2;
 };
@@ -77,8 +77,9 @@ float4 fragment_main(VsOutput input) : SV_Target0
     glow += sample_color(uv + texel * float2(-1.0, -1.0)) * 0.5;
     glow /= 4.5;
 
-    float brightness = max(max(glow.r, glow.g), glow.b);
-    color += glow * smoothstep(0.35, 1.0, brightness) * BloomAmount;
+
+    float brightness = max(max(glow.r, glow.g), glow.b) + glow * ExtraGlow;
+    color += glow * smoothstep(0.35, 1.0, brightness) * BloomAmount * (ExtraGlow * 3.0);
 
     float vignette = smoothstep(1.25, 0.35, radius);
     color *= lerp(1.0, vignette, VignetteAmount);

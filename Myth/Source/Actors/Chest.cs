@@ -83,6 +83,7 @@ public class Chest : Actor
 		{
 			p.Kind = kind;
 			p.SessionDestroyKey = itemKey;
+			p.Invert = Invert;
 		});
 
 	// A tidy row centered above the chest — deterministic so reload placement is stable.
