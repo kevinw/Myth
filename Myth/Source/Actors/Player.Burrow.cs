@@ -126,9 +126,15 @@ public partial class Player : Pawn
 		burrowReverseQueued = false;
 		burrowLine = null;
 		burrowLineExit = null;
-		// Initialize the walk state: heading = +tangent, solid on the right (matches +tangent).
+		// Complementing the room preserves the boundary in place, but moves its solid to the
+		// other side. Keep the tangent heading so the burrow continues along the same contour.
 		burrowSolidLeft = false;
 		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
+		if (Game.ToggleBurrowRoomInverse())
+		{
+			burrowToward = -burrowToward;
+			burrowSolidLeft = true;
+		}
 
 		// Carry the landing's horizontal momentum into the burrow. Head the way we were
 		// moving (reversing heading + handedness keeps the normal pointing into the solid),

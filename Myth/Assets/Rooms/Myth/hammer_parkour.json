@@ -4,6 +4,7 @@
   "ambientColor": "868686",
   "sporeFogStrength": 0.293,
   "reverb": 0.748,
+  "BurrowInverts": true,
   "legend": {
     "#": "back",
     "1": "castle",

@@ -165,7 +165,11 @@ public class Room
 	public float LightingDitherStrength = DefaultLightingDitherStrength;
 	public float NormalDitherSlopeBoost = DefaultNormalDitherSlopeBoost;
 	public bool NormalDitherQuantization = DefaultNormalDitherQuantization;
+	public bool BurrowInverts;
 	public string Notes = "";
+
+	char[,]? burrowInverseTiles;
+	TileFlags[,]? burrowInverseTileFlags;
 
 	/// Bounds in World Space in Pixels
 	public RectInt WorldBounds => new(TileSpacePosition.X * Game.TileSize, TileSpacePosition.Y * Game.TileSize, Size.X * Game.TileSize, Size.Y * Game.TileSize);
@@ -205,6 +209,7 @@ public class Room
 			LightingDitherStrength = LightingDitherStrength,
 			NormalDitherSlopeBoost = NormalDitherSlopeBoost,
 			NormalDitherQuantization = NormalDitherQuantization,
+			BurrowInverts = BurrowInverts,
 			ForegroundColorField = ForegroundColorField.Clone(),
 			BackgroundColorField = BackgroundColorField.Clone()
 		};
@@ -220,6 +225,7 @@ public class Room
 			clone.Actors.Add(ActorSpecs.CloneObject(actor));
 
 		clone.RebuildGeometry();
+		clone.PrepareBurrowInverse();
 		return clone;
 	}
 
@@ -287,6 +293,7 @@ public class Room
 		LightingDitherStrength = JsonUtil.ReadFloat(json, "ditherStrength", DefaultLightingDitherStrength);
 		NormalDitherSlopeBoost = JsonUtil.ReadFloat(json, "ditherSlopeBoost", DefaultNormalDitherSlopeBoost);
 		NormalDitherQuantization = JsonUtil.ReadBool(json, "ditherQuantization", DefaultNormalDitherQuantization);
+		BurrowInverts = JsonUtil.ReadBool(json, nameof(BurrowInverts));
 		SunColor = DefaultSunColor;
 		SunStrength = 0.0f;
 		SunDirection = DefaultSunDirection;
@@ -553,6 +560,64 @@ public class Room
 			Reverb = InferReverb();
 
 		RoomGeoChanged?.Invoke(new(this, dirtyWorldBounds));
+	}
+
+	void PrepareBurrowInverse()
+	{
+		if (!BurrowInverts)
+			return;
+
+		burrowInverseTiles = new char[Size.X, Size.Y];
+		burrowInverseTileFlags = new TileFlags[Size.X, Size.Y];
+		var reached = new bool[Size.X, Size.Y];
+		var frontier = new Queue<(Point2 Tile, char Source)>();
+
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				var tile = new Point2(x, y);
+				burrowInverseTiles[x, y] = '0';
+				burrowInverseTileFlags[x, y] = tileFlags[x, y] & (TileFlags.Fungal | TileFlags.BackgroundSlope);
+				if (GetEntry(tile) is not { BlocksMovement: true })
+					continue;
+
+				reached[x, y] = true;
+				frontier.Enqueue((tile, Tiles[x, y]));
+				if (IsSlope(tile))
+				{
+					burrowInverseTiles[x, y] = Tiles[x, y];
+					burrowInverseTileFlags[x, y] |= TileFlags.Slope;
+				}
+			}
+
+		while (frontier.TryDequeue(out var next))
+		{
+			Spread(next.Tile + Point2.Left, next.Source);
+			Spread(next.Tile + Point2.Right, next.Source);
+			Spread(next.Tile + Point2.Up, next.Source);
+			Spread(next.Tile + Point2.Down, next.Source);
+		}
+
+		void Spread(Point2 tile, char source)
+		{
+			if (!ContainsTile(tile.X, tile.Y) || reached[tile.X, tile.Y])
+				return;
+
+			reached[tile.X, tile.Y] = true;
+			burrowInverseTiles[tile.X, tile.Y] = source;
+			frontier.Enqueue((tile, source));
+		}
+	}
+
+	internal bool ToggleBurrowInverse()
+	{
+		if (burrowInverseTiles == null || burrowInverseTileFlags == null)
+			return false;
+
+		(Tiles, burrowInverseTiles) = (burrowInverseTiles, Tiles);
+		(tileFlags, burrowInverseTileFlags) = (burrowInverseTileFlags, tileFlags);
+		RebuildGeometry();
+		return true;
 	}
 
 	static bool HasBakedDualOccluders(Factory.Entry entry)
@@ -1497,6 +1562,8 @@ public class Room
 			writer.WriteNumber("ditherSlopeBoost", NormalDitherSlopeBoost);
 		if (NormalDitherQuantization != DefaultNormalDitherQuantization)
 			writer.WriteBoolean("ditherQuantization", NormalDitherQuantization);
+		if (BurrowInverts)
+			writer.WriteBoolean(nameof(BurrowInverts), true);
 
 		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
 		{
@@ -1629,6 +1696,8 @@ public class Room
 
 	public void LoadJsonState(string jsonText)
 	{
+		burrowInverseTiles = null;
+		burrowInverseTileFlags = null;
 		var json = JsonUtil.NormalizeStringValues(JsonUtil.Parse(jsonText)?.AsObject() ?? []);
 		TileSpacePosition = JsonUtil.ReadPoint(json, "position") ?? TileSpacePosition;
 		if (JsonUtil.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)

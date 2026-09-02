@@ -2292,6 +2292,22 @@ public partial class Game : IDisposable
 		View?.MarkRoomTileFieldCacheDirty(room);
 	}
 
+	internal bool ToggleBurrowRoomInverse()
+	{
+		if (room?.ToggleBurrowInverse() != true)
+			return false;
+
+
+		//Shake(0.1f);
+
+		for (var i = 0; i < Actors.Count; i++)
+			if (Actors[i] is RadialWave wave && wave.Room == room && !destroying.Contains(wave))
+				wave.InvertRoomMedium();
+
+		RefreshRoomTiles();
+		return true;
+	}
+
 	void BuildDualTiles(Room forRoom, DualGrid dual, Factory.TileLayer layer)
 	{
 		dual.Clear();

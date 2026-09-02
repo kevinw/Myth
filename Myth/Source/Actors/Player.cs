@@ -1426,7 +1426,7 @@ public partial class Player : Pawn
 
 	public Player()
 	{
-		Sprite = Assets.GetSprite("player");
+		Sprite = Assets.GetSprite("player_tall");
 		hatSprite = Assets.GetSprite("hat");
 		Hitbox = new(StandingHitboxRect);
 		Mask = Masks.Player;

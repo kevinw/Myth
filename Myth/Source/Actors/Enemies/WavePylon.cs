@@ -8,11 +8,10 @@ namespace Myth;
 	LivePositionEditable = true)]
 public sealed class WavePylon : Actor
 {
-	public RadialWaveMedium Medium = RadialWaveMedium.Air;
 	[I(0.5f, 12)] public float Interval = 3;
 	[I(0, 12)] public float PhaseOffset;
 	[I(0.15f, 2)] public float ChargeDuration = 0.75f;
-	[I(80, 360), InspectorGroup("Wave")] public float WaveSpeed = 200;
+	[I(80, 360), InspectorGroup("Wave")] public float WaveSpeed = 100;
 	[I(64, 640)] public float WaveRange = 320;
 	[I(1, 8)] public float WaveThickness = 5.5f;
 	[I(-2, 8)] public float WaveCollisionInset = 0.5f;
@@ -43,6 +42,7 @@ public sealed class WavePylon : Actor
 	float particleTimer;
 	bool charging;
 	int chargeEffect = -1;
+	RadialWaveMedium medium;
 	SurfaceHit? solidSurface;
 	SoundInstance? sound;
 
@@ -64,13 +64,13 @@ public sealed class WavePylon : Actor
 		cycleTime = PhaseOffset % interval;
 		if (cycleTime < 0)
 			cycleTime += interval;
-		chargeEffect = Game.Particles?.AcquireEffect(
-			Medium == RadialWaveMedium.Solid ? SolidChargeEffect : AirChargeEffect) ?? -1;
+		UpdateMedium(true);
 	}
 
 	public override void Update()
 	{
 		base.Update();
+		UpdateMedium();
 		cycleTime += Time.Delta;
 		if (!charging && cycleTime >= ChargeStart)
 			BeginCharge();
@@ -94,7 +94,7 @@ public sealed class WavePylon : Actor
 	{
 		charging = true;
 		particleTimer = 0;
-		if (Medium == RadialWaveMedium.Solid)
+		if (medium == RadialWaveMedium.Solid)
 			TryFindSolidSurface(out solidSurface);
 		StopAndReleaseSound(ref sound, true);
 		sound = Game.CreateAudioEvent(ChargeSoundEvent, Position);
@@ -105,7 +105,7 @@ public sealed class WavePylon : Actor
 	void ReleaseWave()
 	{
 		var origin = (Vector2)Position;
-		if (Medium == RadialWaveMedium.Solid)
+		if (medium == RadialWaveMedium.Solid)
 		{
 			if (!TryFindSolidSurface(out solidSurface) || solidSurface is not { } surface)
 			{
@@ -120,26 +120,46 @@ public sealed class WavePylon : Actor
 			var wave = Game.Create<RadialWave>(origin.RoundToPoint2());
 			wave.Source = this;
 			wave.Target = player;
-			wave.Medium = Medium;
-			wave.CanHit = Medium == RadialWaveMedium.Solid
-				? static target => target is Player p && (p.State == Player.States.Burrow || p.Grounded())
-				: static target => target is not Player { State: Player.States.Burrow };
+			wave.Medium = medium;
+			wave.CanHit = static (wave, target) => wave.Medium == RadialWaveMedium.Solid
+				? target is Player p && (p.State == Player.States.Burrow || p.Grounded())
+				: target is not Player { State: Player.States.Burrow };
 			wave.Speed = WaveSpeed;
 			wave.MaxRadius = WaveRange;
 			wave.Thickness = WaveThickness;
 			wave.CollisionInset = WaveCollisionInset;
 			wave.AccelerationTime = WaveAccelerationTime;
 			wave.InitialSpeedMultiplier = WaveInitialSpeed;
-			wave.TargetReach = Medium == RadialWaveMedium.Solid ? SolidTargetReach : 0;
+			wave.TargetReach = medium == RadialWaveMedium.Solid ? SolidTargetReach : 0;
 			wave.Color = WaveColor;
 			wave.CoreColor = Color.Lerp(WaveColor, Color.White, 0.55f);
+			var inverseColor = medium == RadialWaveMedium.Solid ? AirColor : SolidColor;
+			wave.SetRoomInverseProfile(inverseColor, Color.Lerp(inverseColor, Color.White, 0.55f),
+				medium == RadialWaveMedium.Solid ? 0 : SolidTargetReach);
 			wave.ImpactSoundEvent = "";
 		}
 
 		Game.ShakeRenderTarget(ReleaseShakeTime, 9.28f);
 		Game.SetAudioEventParameter(sound, ChargeParameter, 1);
 		StopAndReleaseSound(ref sound);
-		Game.PlayAudioEvent(ReleaseSoundEvent, MediumParameter, (float)Medium, Position);
+		Game.PlayAudioEvent(ReleaseSoundEvent, MediumParameter, (float)medium, Position);
+	}
+
+	void UpdateMedium(bool force = false)
+	{
+		var next = Game.OverlapsRoomCollision(new RectInt(Position, Point2.One))
+			? RadialWaveMedium.Solid
+			: RadialWaveMedium.Air;
+		if (!force && medium == next)
+			return;
+
+		medium = next;
+		Game.Particles?.ReleaseEffect(ref chargeEffect);
+		chargeEffect = Game.Particles?.AcquireEffect(
+			medium == RadialWaveMedium.Solid ? SolidChargeEffect : AirChargeEffect) ?? -1;
+		solidSurface = null;
+		if (charging && medium == RadialWaveMedium.Solid)
+			TryFindSolidSurface(out solidSurface);
 	}
 
 	bool TryFindSolidSurface(out SurfaceHit? surface)
@@ -181,14 +201,14 @@ public sealed class WavePylon : Actor
 	{
 		Game.SetAudioEventPosition(sound, Position);
 		Game.SetAudioEventParameter(sound, ChargeParameter, ChargeProgress);
-		Game.SetAudioEventParameter(sound, MediumParameter, (float)Medium);
+		Game.SetAudioEventParameter(sound, MediumParameter, (float)medium);
 	}
 
 	float CycleInterval => MathF.Max(ChargeDuration + 0.05f, Interval);
 	float ChargeStart => CycleInterval - MathF.Min(ChargeDuration, CycleInterval - 0.05f);
 	float ChargeProgress => charging ? Math.Clamp((cycleTime - ChargeStart) /
 		MathF.Max(0.0001f, CycleInterval - ChargeStart), 0, 1) : 0;
-	Color WaveColor => Medium == RadialWaveMedium.Solid ? SolidColor : AirColor;
+	Color WaveColor => medium == RadialWaveMedium.Solid ? SolidColor : AirColor;
 
 	public override void Render(Batcher batcher) => DrawPylon(batcher, false);
 	public override void RenderEmissive(Batcher batcher) => DrawPylon(batcher, true);
@@ -222,7 +242,7 @@ public sealed class WavePylon : Actor
 			batcher.CircleLine(Vector2.Zero, gatheringRadius, emissive ? 2 : 1, 28,
 				color * glow * (emissive ? 0.75f : 0.45f));
 		}
-		if (charging && Medium == RadialWaveMedium.Solid && solidSurface is { } surface)
+		if (charging && medium == RadialWaveMedium.Solid && solidSurface is { } surface)
 		{
 			var contact = surface.Point - Position;
 			batcher.Line(Vector2.Zero, contact, emissive ? 2.5f : 1.5f,
@@ -249,7 +269,7 @@ public sealed class WavePylon : Actor
 	public override void RenderReflection(Batcher batcher, Color color) { }
 
 	public override Rect GetVisualBounds()
-		=> charging && Medium == RadialWaveMedium.Solid && solidSurface is { } surface
+		=> charging && medium == RadialWaveMedium.Solid && solidSurface is { } surface
 			? base.GetVisualBounds().Conflate(surface.Point)
 			: base.GetVisualBounds().Inflate(20);
 }

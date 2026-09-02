@@ -25,7 +25,7 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 
 	public Actor? Source;
 	public Actor? Target;
-	public Func<Actor, bool>? CanHit;
+	public Func<RadialWave, Actor, bool>? CanHit;
 	public float Speed = 220;
 	public float MaxRadius = 320;
 	public float Thickness = 3.5f;
@@ -72,6 +72,10 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 	float currentSpeed;
 	int surfaceWakeParticleCursor;
 	SoundInstance? impactSound;
+	bool hasRoomInverseProfile;
+	Color roomInverseColor;
+	Color roomInverseCoreColor;
+	float roomInverseTargetReach;
 
 	struct SurfaceAudioCluster
 	{
@@ -192,6 +196,38 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 			return;
 		Finished = true;
 		Game.Destroy(this);
+	}
+
+	public void SetRoomInverseProfile(Color color, Color coreColor, float targetReach)
+	{
+		hasRoomInverseProfile = true;
+		roomInverseColor = color;
+		roomInverseCoreColor = coreColor;
+		roomInverseTargetReach = targetReach;
+	}
+
+	internal void InvertRoomMedium()
+	{
+		if (Finished)
+			return;
+
+		Medium = Medium == RadialWaveMedium.Air ? RadialWaveMedium.Solid : RadialWaveMedium.Air;
+		if (hasRoomInverseProfile)
+		{
+			(Color, roomInverseColor) = (roomInverseColor, Color);
+			(CoreColor, roomInverseCoreColor) = (roomInverseCoreColor, CoreColor);
+			(TargetReach, roomInverseTargetReach) = (roomInverseTargetReach, TargetReach);
+		}
+
+		ClearSurfaceWake();
+		for (var i = 0; i < surfaceVoices.Length; i++)
+			StopSurfaceVoice(ref surfaceVoices[i], true);
+		if (!birthEmitted)
+			return;
+
+		Game.Particles?.ReleaseEffect(ref impactEffect);
+		impactEffect = Game.Particles?.AcquireEffect(
+			Medium == RadialWaveMedium.Solid ? SolidImpactEffect : ImpactEffect) ?? -1;
 	}
 
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
@@ -341,7 +377,7 @@ public sealed class RadialWave : Actor, INeuralTextureAgent
 	{
 		var targetSample = TargetReach <= 0 ? sample : sample.Inflate((int)MathF.Ceiling(TargetReach));
 		if (hitTarget || Source == null || Target == null || Game.destroying.Contains(Source) ||
-			Game.destroying.Contains(Target) || !Target.OverlapsCombatBounds(targetSample) || CanHit?.Invoke(Target) == false)
+			Game.destroying.Contains(Target) || !Target.OverlapsCombatBounds(targetSample) || CanHit?.Invoke(this, Target) == false)
 			return;
 		hitTarget = Source.Hit(Target, new(sample));
 	}

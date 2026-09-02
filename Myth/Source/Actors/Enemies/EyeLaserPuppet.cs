@@ -368,8 +368,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		var wave = Game.Create<RadialWave>(origin.RoundToPoint2());
 		wave.Source = this;
 		wave.Target = player;
-		wave.CanHit = static target => target is Player p &&
-			(p.State == Player.States.Burrow || p.Grounded());
+		wave.CanHit = static (wave, target) => wave.Medium == RadialWaveMedium.Solid
+			? target is Player p && (p.State == Player.States.Burrow || p.Grounded())
+			: target is not Player { State: Player.States.Burrow };
 		wave.Medium = RadialWaveMedium.Solid;
 		wave.Speed = StompWaveSpeed;
 		wave.MaxRadius = StompWaveRange;
@@ -381,6 +382,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.NeuralPerturbStrength = 1;
 		wave.Color = StompWaveColor;
 		wave.CoreColor = Color.Lerp(StompWaveColor, Color.White, 0.55f);
+		wave.SetRoomInverseProfile(wave.Color, wave.CoreColor, 0);
 		AudioEvent("boss/stomp");
 		Game.Shake(0.13f);
 		Game.KickRenderTarget(Vector2.UnitY * 52);
@@ -491,7 +493,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		var wave = Game.Create<RadialWave>(RigEyePosition.RoundToPoint2());
 		wave.Source = this;
 		wave.Target = player;
-		wave.CanHit = static target => target is not Player { State: Player.States.Burrow };
+		wave.CanHit = static (wave, target) => wave.Medium == RadialWaveMedium.Solid
+			? target is Player p && (p.State == Player.States.Burrow || p.Grounded())
+			: target is not Player { State: Player.States.Burrow };
 		wave.Speed = FloatingWaveSpeed;
 		wave.MaxRadius = FloatingWaveRange;
 		wave.Thickness = FloatingWaveThickness;
@@ -501,6 +505,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		wave.NeuralPerturbStrength = 1;
 		wave.Color = Color.Lerp(FloatingFlashColor, new Color(0xff5fb7), 0.35f);
 		wave.CoreColor = FloatingFlashColor;
+		wave.SetRoomInverseProfile(wave.Color, wave.CoreColor, StompWaveTargetReach);
 		wave.StartDelay = FlashReleaseHoldTime + Time.Delta;
 		yield return 0;
 		SetRuffSpin(0);

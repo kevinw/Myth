@@ -2,6 +2,7 @@
   "position": [10, -81],
   "size": [40, 23],
   "ambientColor": "727272",
+  "BurrowInverts": true,
   "legend": {
     "#": "back",
     "E": "ember",
@@ -81,6 +82,11 @@
       "Id": "6aee20ffa2dfe22d",
       "Type": "Chest",
       "Position": [284, 120]
+    },
+    {
+      "Id": "41bac4dbb54c73fc",
+      "Type": "WavePylon",
+      "Position": [56, 136]
     }
   ]
 }

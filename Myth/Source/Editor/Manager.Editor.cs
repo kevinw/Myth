@@ -1314,6 +1314,15 @@ public partial class Manager
 			}
 		}
 
+		var burrowInverts = room.BurrowInverts;
+		BeginPropertyRow("Burrow Inverts");
+		if (Checkbox("##RoomBurrowInverts", ref burrowInverts))
+		{
+			using (CaptureRoomUndo("Toggle Burrow Inversion", room))
+				room.BurrowInverts = burrowInverts;
+			changed = true;
+		}
+
 		/*
 		var controlWidth = BeginPropertyRow("Notes").ControlWidth;
 		// Local copy so the undo scope captures the room *before* the first keystroke lands.
