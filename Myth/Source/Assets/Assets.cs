@@ -81,7 +81,7 @@ public static partial class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 13; // v13: browser PNG decode, surface textures packed PNG
+	const int visualAssetPackVersion = 14; // v14: per-frame sprite socket visibility
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string defaultStartRoomId = "start";
@@ -1062,6 +1062,7 @@ public static partial class Assets
 				{
 					WritePackedVector(writer, pose.Position);
 					WritePackedVector(writer, pose.Normal);
+					writer.Write(pose.Visible);
 				}
 			}
 		}
@@ -1198,7 +1199,12 @@ public static partial class Assets
 				var poseCount = ReadCount(reader, $"{sprite.Name} {socketName} socket poses");
 				var poses = new List<PackedSocketPose>(poseCount);
 				for (var poseIndex = 0; poseIndex < poseCount; poseIndex++)
-					poses.Add(new() { Position = ReadPackedVector(reader), Normal = ReadPackedVector(reader) });
+					poses.Add(new()
+					{
+						Position = ReadPackedVector(reader),
+						Normal = ReadPackedVector(reader),
+						Visible = reader.ReadBoolean()
+					});
 				sprite.Sockets[socketName] = poses;
 			}
 
@@ -1929,7 +1935,6 @@ public static partial class Assets
 
 		var result = new Sprite.Socket[ase.Frames.Length];
 		var previous = default(Sprite.Socket);
-		var hasPrevious = false;
 		Span<Point2> positions = stackalloc Point2[2];
 		Span<Color> colors = stackalloc Color[2];
 		for (var frameIndex = 0; frameIndex < ase.Frames.Length; frameIndex++)
@@ -1963,9 +1968,7 @@ public static partial class Assets
 
 			if (markerCount == 0)
 			{
-				if (!hasPrevious)
-					throw SocketError(spriteName, layer, frameIndex, "the first frame must define a socket marker");
-				result[frameIndex] = previous;
+				result[frameIndex] = previous with { Visible = false };
 				continue;
 			}
 
@@ -1986,7 +1989,6 @@ public static partial class Assets
 				previous = new(positions[dark], Vector2.Normalize(positions[light] - positions[dark]));
 			}
 
-			hasPrevious = true;
 			result[frameIndex] = previous;
 		}
 
@@ -2002,7 +2004,8 @@ public static partial class Assets
 		var toAngle = MathF.Atan2(to.Normal.Y, to.Normal.X);
 		var delta = MathF.Atan2(MathF.Sin(toAngle - fromAngle), MathF.Cos(toAngle - fromAngle));
 		var angle = fromAngle + delta * t;
-		return new(Vector2.Lerp(from.Position, to.Position, t), new Vector2(MathF.Cos(angle), MathF.Sin(angle)));
+		return new(Vector2.Lerp(from.Position, to.Position, t),
+			new Vector2(MathF.Cos(angle), MathF.Sin(angle)), from.Visible && to.Visible);
 	}
 
 	static Aseprite.Tag? FindTag(Aseprite ase, string name)

@@ -16,6 +16,12 @@ public class Blob : Actor
 		Mask = Masks.Enemy;
 		Depth = -5;
 		Play("fly");
+
+	}
+
+	public override void Added() {
+		JumpTimer -= Game.rng.Float(0, 1);
+		if (JumpTimer < 0) JumpTimer = 0;
 	}
 
 	public override void Update()
@@ -46,8 +52,8 @@ public class Blob : Actor
 		{
 			Play("jump");
 			AudioEvent("blob/jump");
-			JumpTimer = rng.Chance(0.4f) ? 2.8f : 2f;
-			if (rng.Chance(0.20f))
+			JumpTimer = Game.rng.Chance(0.4f) ? Game.rng.Float(2.4f, 2.9f) : Game.rng.Float(1.5f, 2.1f);
+			if (Game.rng.Chance(0.20f))
 			{
 				Velocity.Y = -130;
 			}
@@ -68,11 +74,10 @@ public class Blob : Actor
 		}
 	}
 
-	Rng rng = new();
-
 	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
+		Game.HitStun(0.09f);
 
 		if (Health <= 0)
 		{

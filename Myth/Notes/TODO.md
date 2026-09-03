@@ -1,11 +1,11 @@
-# Monday
-- record title screen demos 
-      - burrowing, interesting enemy encounter, interesting NPC encounter, beautiful room reveals, secret reveal
-- make an itch page, so people can follow its development/playtest when it's ready
-- decide on which computer(s) and/or monitor(s) to take and prepare their packing 
-
+- ABSOLUTELY new attack hitbox logic needs to have HitVisualActors consume the attack
+  - or better yet; attackConsumed is instead a Set<Actor>
+  - HITTING MULTIPLE ENEMIES AT ONCE IS BROKEN TILL WE FIX THIS
+- make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
+- make a "ducks destroyed" and "robot overlords tamed" scoreboard in the hub
+- focus the camera more on the RigPuppet during the kneel cutscene
+- make the eyelaserpuppet sit down and talk to you after you beat him. use a deep voice.
 - MYTH_SHIP add a "demo mode on" in options which, on 2 mins inactivity, reset to title screen with warning
-
 - door is rendering normals behind the hidden wall cover
 - show "speaking" lines like a comic book bubble with individual syllables
 - show a rigpuppet in the second room.
@@ -13,12 +13,7 @@
    - either you talk to it, or you attack it and it runs away.
 - server prop needs a no-lights variant that goes to it when you unpower the duck-machine
   - maybe also some smoke particles after
-- consider adding second controller support: good for the demo! but requires some actual gameplay; camera; more
-
-- focus the camera more on the RigPuppet during the kneel cutscene
 - Press "Lup" to warp icon looks wrong, it looks like you're pressing in on the stick
-- new attack hitbox logic needs to have HitVisualActors consume the attack
-  - or better yet; attackConsumed is instead a Set<Actor> 
 - find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.
 - use Dropper; draw a sprite; more "easy" enemy variety wins
 - ELP boss:make him fall down only after 3 hits. make him have a phase two where his head gets bigger and maybe his body grows in size a bit. add a "swipe away" animation where he makes space if you're too close
@@ -30,14 +25,22 @@
 - import the bg brick as our custom tile kit and make it more varied
 - when loading barks from a baked asset that is older than Game.BudStory.cs 
 - test the player controller online in a simple room
-- put some inbetween frames in the player sprite
 - the generic Pop is starting to feel a bit overused/generic
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
 - dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
 
+# Monday
+- record title screen demos 
+    - burrowing, interesting enemy encounter, interesting NPC encounter, beautiful room reveals, secret reveal
+- make an itch page, so people can follow its development/playtest when it's ready
+- decide on which computer(s) and/or monitor(s) to take and prepare their packing 
+
 
 LATER
+- an enemy or area which speeds up or slows down time
+- put some inbetween frames in the player sprite
+- make our Aseprite loader able to load indexed files
 - OnWasHit is very repetitive across our actors. we should refactor it into a shared method with a knockback param
 - try some sound effects from the BOOM library https://artlist.io/sfx/artist/boom-library/845
 - improve editor spawn pick player location: not in a reveal door (burrow_secret)

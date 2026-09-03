@@ -110,6 +110,14 @@
       "Id": "81bd6f45ecd44ca7",
       "Type": "Stalker",
       "Position": [296, 56]
+    },
+    {
+      "Id": "f6610cc8df40df2a",
+      "Type": "Light",
+      "Position": [252, 92],
+      "Height": 2.1,
+      "Intensity": 0.75,
+      "Radius": 62.09
     }
   ]
 }

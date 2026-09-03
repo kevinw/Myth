@@ -1055,7 +1055,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 				batcher.Circle(position, 1.1f, 8, LaserColor * (alpha * 0.7f));
 			}
 		}
-		if (eyeGlow <= 0)
+		if (eyeGlow <= 0 || !RigEyeVisible)
 			return;
 		var pulse = 0.85f + MathF.Abs(MathF.Sin(Time.SecondsF * 31)) * 0.35f;
 		batcher.Circle(RigEyeOffset, (1.3f + eyeGlow * 1.8f) * pulse, 12, glowColor * eyeGlow);
@@ -1063,7 +1063,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
-		if (eyeGlow > 0)
+		if (eyeGlow > 0 && RigEyeVisible)
 			action(RigEyePosition, LaserLightRadius * eyeGlow, LaserLightIntensity * eyeGlow, 8,
 				phase == Phase.FloatingFlash ? FloatingFlashColor : LaserColor);
 		if (beamAlpha > 0)

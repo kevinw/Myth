@@ -44,6 +44,7 @@ public sealed class PackedSocketPose
 {
 	public PackedVector Position { get; set; } = new();
 	public PackedVector Normal { get; set; } = new();
+	public bool Visible { get; set; } = true;
 }
 
 public sealed class PackedSpriteFrame
@@ -193,7 +194,12 @@ public static class AsepriteSpriteBaker
 				throw new InvalidOperationException($"Sprite '{name}' socket '{socketName}' has {poses.Length} poses for {packed.Frames.Count} frames");
 			var packedPoses = new List<PackedSocketPose>(poses.Length);
 			foreach (var pose in poses)
-				packedPoses.Add(new() { Position = PackedVector.From(pose.Position), Normal = PackedVector.From(pose.Normal) });
+				packedPoses.Add(new()
+				{
+					Position = PackedVector.From(pose.Position),
+					Normal = PackedVector.From(pose.Normal),
+					Visible = pose.Visible
+				});
 			packed.Sockets[socketName] = packedPoses;
 		}
 
@@ -268,7 +274,7 @@ public static class PackedSpriteLoader
 			{
 				var poses = new Sprite.Socket[packedPoses.Count];
 				for (var i = 0; i < poses.Length; i++)
-					poses[i] = new(packedPoses[i].Position.ToVector2(), packedPoses[i].Normal.ToVector2());
+				poses[i] = new(packedPoses[i].Position.ToVector2(), packedPoses[i].Normal.ToVector2(), packedPoses[i].Visible);
 				sockets[socketName] = poses;
 			}
 

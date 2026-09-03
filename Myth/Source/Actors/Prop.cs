@@ -7,6 +7,7 @@ namespace Myth;
 public class Prop : Actor
 {
 	const SpriteAnchor PropSpriteAnchor = SpriteAnchor.TopLeft;
+	public Color PropColor = Color.White;
 
 	[Flags]
 	public enum PropFlags
@@ -34,6 +35,10 @@ public class Prop : Actor
 	{
 		Anchor = SpriteAnchor.TopLeft;
 		CollidesWithSolids = false;
+	}
+
+	public override void Render(Batcher batcher) {
+		RenderSpriteSubtexture(batcher, SubtextureType.Color, PropColor);
 	}
 
 	public override void Added()

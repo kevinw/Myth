@@ -157,6 +157,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	OzzJointMask rightArmMask = null!;
 	OzzRig.Clip upperBodyHitClip = null!;
 	NeuralSkinRuntime neuralSkin = null!;
+	Sprite? headSprite;
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
@@ -274,7 +275,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 	public bool Turning => turning;
 	public bool FacingMatches => !turning && visualFacing == owner.Facing;
-	public Vector2 EyeOffset => projectedPose[head] + lookDirection * 2.4f;
+	public bool EyeVisible => headSprite == null || TryHeadSpriteEyeOffset(out _);
+	public Vector2 EyeOffset => TryHeadSpriteEyeOffset(out var position)
+		? position
+		: projectedPose[head] + (headSprite == null ? lookDirection * 2.4f : Vector2.Zero);
 	public Vector2 LeftToeWorldPosition => owner.Position + projectedPose[leftLeg.Toe];
 	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[rightLeg.Toe];
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
@@ -349,6 +353,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		neuralJostleAt = owner.Time.SecondsF + NeuralReactions.NeuralJostleInterval * 0.5f;
 		neuralSkin = new(owner, Neural, NeuralSize, NeuralOrigin, 65);
 		neuralSkin.Initialize(Settings.SkinMode);
+		headSprite = string.IsNullOrWhiteSpace(Settings.HeadSpriteName)
+			? null
+			: Assets.GetSprite(Settings.HeadSpriteName);
 	}
 
 	int RequiredJoint(string name)
@@ -388,7 +395,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		var cameraSin = MathF.Sin(angle);
 		var yaw = UpperBodyYaw();
 		var projection = new RuffProjection(pivot, -pivot.Z * cameraCos + pivot.X * cameraSin,
-			turning ? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount) : -(int)visualFacing,
+			PresentationMirror(),
 			MathF.Cos(yaw), MathF.Sin(yaw), cameraCos, cameraSin, Settings.PixelsPerMeter,
 			new Vector2(0, 2.5f) + Offset, Vector2.Zero);
 		var neck3D = ragdollPose[neck];
@@ -542,6 +549,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	float FacingYaw(Signs facing)
 		=> facing == Signs.Negative ? 0 : Settings.ProjectionYaw >= 0 ? -MathF.PI : MathF.PI;
+
+	float PresentationMirror()
+		=> turning ? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount) : -(int)visualFacing;
 
 	void UpdateTurn(bool grounded)
 	{
@@ -828,9 +838,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		var upperBodyYaw = UpperBodyYaw();
 		var pivot = ragdollPose[pelvis];
 		var pivotX = -pivot.Z * cos + pivot.X * sin;
-		var mirror = turning
-			? float.Lerp(-(int)visualFacing, -(int)targetFacing, turnAmount)
-			: -(int)visualFacing;
+		var mirror = PresentationMirror();
 		var rigYaw = RigYaw();
 		var turnCos = MathF.Cos(rigYaw);
 		var turnSin = MathF.Sin(rigYaw);
@@ -1269,6 +1277,14 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	void DrawHead(Batcher batcher, Color tint, bool silhouette, Surface? surface, Texture? neuralTexture)
 	{
+		if (TryGetHeadSpriteFrame(out var frame, out _))
+		{
+			DrawHeadSprite(batcher, frame.Subtexture, silhouette ? tint : Color.White);
+			if (!silhouette && TryHeadSpriteEyeOffset(out var eye))
+				batcher.Circle(eye, VisualEyeScale * eyeScale, 8, Settings.AccentColor);
+			return;
+		}
+
 		var position = projectedPose[head];
 		batcher.Circle(position, Settings.HeadSize + 1.4f, 14,
 			silhouette ? tint : Settings.OutlineColor);
@@ -1344,6 +1360,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	void DrawHeadNormals(Batcher batcher, Color flat, Surface? surface, Texture? neuralNormals)
 	{
+		if (TryGetHeadSpriteFrame(out var frame, out _))
+		{
+			DrawHeadSprite(batcher, frame.NormalSubtexture, Color.White);
+			return;
+		}
+
 		var position = projectedPose[head];
 		batcher.Circle(position, Settings.HeadSize + 1.4f, 14, flat);
 		if (surface != null)
@@ -1352,6 +1374,52 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		else if (neuralNormals != null)
 			DrawNeuralCircle(batcher, neuralNormals, position, Settings.HeadSize,
 				neuralHeadUV, neuralHeadUVRadius, Color.White * Neural.NeuralNormalAmount);
+	}
+
+	bool TryGetHeadSpriteFrame(out Sprite.Frame frame, out int frameIndex)
+	{
+		if (headSprite is not { Frames.Count: > 0 } sprite)
+		{
+			frame = default;
+			frameIndex = -1;
+			return false;
+		}
+
+		var cameraYaw = MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
+		var yaw = UpperBodyYaw();
+		var cameraOpenYaw = MathF.Atan2(MathF.Sin(yaw), MathF.Abs(MathF.Cos(yaw)));
+		var theta = Calc.AngleWrap((cameraYaw - cameraOpenYaw) * PresentationMirror());
+		// Frames sample yaw clockwise: front, front-left, left, back-left, back, ...
+		frameIndex = (int)MathF.Floor(theta / MathF.Tau * sprite.Frames.Count + 0.5f)
+			% sprite.Frames.Count;
+		frame = sprite.Frames[frameIndex];
+		return true;
+	}
+
+	float HeadSpriteRoll()
+	{
+		var axis = projectedPose[head] - projectedPose[neck];
+		return axis.LengthSquared() > 0.0001f ? axis.Angle() + MathF.PI * 0.5f : 0;
+	}
+
+	void DrawHeadSprite(Batcher batcher, Subtexture subtexture, Color color)
+	{
+		var origin = headSprite!.ResolveOrigin(SpriteAnchor.Center);
+		batcher.Image(subtexture, projectedPose[head], origin,
+			new Vector2(Settings.HeadSpriteScale), HeadSpriteRoll(), color);
+	}
+
+	bool TryHeadSpriteEyeOffset(out Vector2 position)
+	{
+		position = default;
+		if (!TryGetHeadSpriteFrame(out _, out var frameIndex) ||
+			headSprite!.TryGetVisibleSocket("eye", frameIndex, out var socket) == false)
+			return false;
+
+		var origin = headSprite.ResolveOrigin(SpriteAnchor.Center);
+		var local = (socket.Position - origin) * Settings.HeadSpriteScale;
+		position = projectedPose[head] + Vector2.Transform(local, Matrix3x2.CreateRotation(HeadSpriteRoll()));
+		return true;
 	}
 
 	static void DrawAccessoryThrough(Batcher batcher, IHumanoidRigAccessoryVisual? accessory,

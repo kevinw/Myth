@@ -24,7 +24,7 @@ public class Sprite(string name, Vector2 origin)
 {
 	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, Subtexture EmissiveSubtexture, float Duration, string? UserData = null);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
-	public readonly record struct Socket(Vector2 Position, Vector2 Normal);
+	public readonly record struct Socket(Vector2 Position, Vector2 Normal, bool Visible = true);
 
 	public string Name { get; } = name;
 	public Vector2 Origin { get; private set; } = origin;
@@ -52,6 +52,9 @@ public class Sprite(string name, Vector2 origin)
 		socket = default;
 		return false;
 	}
+
+	public bool TryGetVisibleSocket(string name, int frameIndex, out Socket socket)
+		=> TryGetSocket(name, frameIndex, out socket) && socket.Visible;
 
 	// The cel userdata label authored on a frame (e.g. "impact"), or null. Pair with
 	// AnimationFrameIndex to react on the exact frame an artist tagged.

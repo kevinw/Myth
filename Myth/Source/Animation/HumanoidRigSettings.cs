@@ -30,6 +30,8 @@ public sealed class HumanoidRigSettings
 
 	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public ContentRef<SurfaceContent> SurfaceId = new("");
+	public string HeadSpriteName = "";
+	[I(0.25f, 2)] public float HeadSpriteScale = 1;
 
 	[I(0, 8), InspectorGroup("Combat")] public float CombatBoundsPadding = 1;
 	[NoSerialize] public float UpperBodyHitStrength = 0.8f;

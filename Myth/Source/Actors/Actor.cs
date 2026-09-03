@@ -597,22 +597,19 @@ public class Actor
 		=> AnimationEntered(userData)
 		|| (sprite is { } s && AnimationFrameIndex is var cur && cur >= 0 && cur < s.Frames.Count && s.Frames[cur].UserData == userData);
 
-	enum SubtextureType
+	public enum SubtextureType
 	{
 		Color,
 		Normals,
 		Emissive
 	}
 
-	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType) =>
-		RenderSpriteSubtexture(batcher, subtextureType, Color.White);
-
-	protected void RenderSpriteSubtexture(Batcher batcher, Color color) =>
-		RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
+	protected void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType) => RenderSpriteSubtexture(batcher, subtextureType, Color.White);
+	protected void RenderSpriteSubtexture(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
 
 	protected Sprite.Frame? CurrentSpriteFrame => sprite?.GetFrameAt(Animation, animationTime, animationLooping);
 
-	void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
+	protected void RenderSpriteSubtexture(Batcher batcher, SubtextureType subtextureType, Color color)
 	{
 		if (SpriteBlinkHidden)
 			return;

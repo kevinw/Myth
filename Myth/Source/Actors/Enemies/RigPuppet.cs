@@ -271,6 +271,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected bool RigFacingMatches => visual.FacingMatches;
 	protected Vector2 RigEyePosition => visual.EyeWorldPosition;
 	protected Vector2 RigEyeOffset => visual.EyeOffset;
+	protected bool RigEyeVisible => visual.EyeVisible;
 	protected Vector2 RigLeftToePosition => visual.LeftToeWorldPosition;
 	protected Vector2 RigRightToePosition => visual.RightToeWorldPosition;
 	protected float RigFacingYaw => visual.CurrentFacingYaw;
