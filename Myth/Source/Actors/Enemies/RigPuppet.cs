@@ -752,8 +752,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		stepTraversal = StepTraversal.None;
 		visual.ResetFeet();
 		visual.Play("Hit_Knockback", blend: false, restart: true);
+		OnEvent("knockback");
 		hitReacting = true;
 		recovering = false;
+	}
+
+	internal virtual void OnEvent(string eventName)
+	{
 	}
 
 	public override void Render(Batcher batcher)

@@ -161,6 +161,15 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			laserContactMarks[i].Remaining = MathF.Max(0, laserContactMarks[i].Remaining - Time.Delta);
 	}
 
+	internal override void OnEvent(string eventName)
+	{
+		switch (eventName) {
+			case "knockback":
+				AudioEvent("boss/knockback");
+				break;
+		}
+	}
+
 	public override void Added()
 	{
 		base.Added();
@@ -392,10 +401,17 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		SetAbilityPlaybackSpeedMultiplier(1);
 		SetAbilityYaw(null);
 		UnlockAbilityAnimationYaw();
-		phase = Phase.None;
-		cooldown = StompCooldown;
-		SetAbilityLookTarget(null);
-		SetAbilityPoseModifierWeight(1);
+		if (Game.rng.Chance(0.5f)) {
+			// a chance to stomp again
+			phase = Phase.StompTurning;
+			LogLiveStatus("Stomping again");
+			return;
+		} else {
+			phase = Phase.None;
+			cooldown = StompCooldown;
+			SetAbilityLookTarget(null);
+			SetAbilityPoseModifierWeight(1);
+		}
 	}
 
 	void BeginFloatingFlash(Player player)
@@ -998,9 +1014,12 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 					string.Equals(texture.ShutdownSourceActorId, ActorId, StringComparison.OrdinalIgnoreCase))
 					texture.BeginShutdown();
 		base.Destroyed();
-		Game.Particles?.ReleaseEffect(ref chargeEffect);
-		Game.Particles?.ReleaseEffect(ref floatingFlashEffect);
-		Game.Particles?.ReleaseEffect(ref stompGatherEffect);
+		if (Game.Particles is { } particles)
+		{
+			particles.ReleaseEffect(ref chargeEffect);
+			particles.ReleaseEffect(ref floatingFlashEffect);
+			particles.ReleaseEffect(ref stompGatherEffect);
+		}
 	}
 
 	public override void Render(Batcher batcher)
