@@ -24,7 +24,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var offset = point - Pivot;
 			var turned = new Vector3(offset.X * TurnCos + offset.Z * TurnSin, offset.Y,
 				-offset.X * TurnSin + offset.Z * TurnCos);
-			depth = point.X * CameraCos + point.Z * CameraSin;
+			var depthTurnCos = MathF.Abs(TurnCos);
+			var turnedPoint = Pivot + new Vector3(offset.X * depthTurnCos + offset.Z * TurnSin, offset.Y,
+				-offset.X * TurnSin + offset.Z * depthTurnCos);
+			depth = turnedPoint.X * CameraCos + turnedPoint.Z * CameraSin;
 			return new Vector2(PivotX * Mirror - turned.Z * CameraCos + turned.X * CameraSin, -point.Y) *
 				PixelsPerMeter + ScreenOffset + Correction;
 		}
@@ -835,7 +838,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				-offset.X * jointTurnSin + offset.Z * jointTurnCos);
 			projectedPose[i] = new Vector2(pivotX * mirror - turned.Z * cos + turned.X * sin, -joint.Y) *
 				Settings.PixelsPerMeter + new Vector2(0, 2.5f) + Offset;
-			jointDepth[i] = joint.X * cos + joint.Z * sin;
+			var depthTurnCos = MathF.Abs(jointTurnCos);
+			var turnedJoint = pivot + new Vector3(offset.X * depthTurnCos + offset.Z * jointTurnSin, offset.Y,
+				-offset.X * jointTurnSin + offset.Z * depthTurnCos);
+			jointDepth[i] = turnedJoint.X * cos + turnedJoint.Z * sin;
 		}
 		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? LegSide.Left : LegSide.Right;
 	}
