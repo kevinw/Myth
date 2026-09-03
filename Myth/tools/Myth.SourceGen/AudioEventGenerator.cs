@@ -14,7 +14,9 @@ public sealed class AudioEventGenerator : IIncrementalGenerator
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
 		var events = context.SyntaxProvider.CreateSyntaxProvider(
-				static (node, _) => node is InvocationExpressionSyntax { ArgumentList.Arguments.Count: > 0 },
+				static (node, _) => node is InvocationExpressionSyntax { ArgumentList.Arguments.Count: > 0 } invocation &&
+					InvocationName(invocation.Expression) is "PlayAudioEvent" or "CreateAudioEvent" or
+						"AudioEvent" or "AudioEventDebounced" or "MenuAudioEvent",
 				static (ctx, _) => GetAudioEventPath(ctx))
 			.Where(static path => path != null)
 			.Collect();
@@ -36,6 +38,14 @@ public sealed class AudioEventGenerator : IIncrementalGenerator
 			spc.AddSource("GeneratedAudioEvents.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
 		});
 	}
+
+	static string? InvocationName(ExpressionSyntax expression) => expression switch
+	{
+		IdentifierNameSyntax name => name.Identifier.ValueText,
+		MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+		MemberBindingExpressionSyntax member => member.Name.Identifier.ValueText,
+		_ => null,
+	};
 
 	static string? GetAudioEventPath(GeneratorSyntaxContext context)
 	{
