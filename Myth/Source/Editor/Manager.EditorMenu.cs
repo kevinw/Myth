@@ -155,6 +155,7 @@ public partial class Manager
 			ImGui.MenuItem("Actors", null, ref actorsPanelOpen);
 			ImGui.MenuItem("Actor List", null, ref actorListPanelOpen);
 			ImGui.MenuItem("Room", null, ref roomPanelOpen);
+			ImGui.MenuItem("Visuals", null, ref visualsOpen);
 			ImGui.Separator();
 			ImGui.MenuItem("Tile Kits", null, ref tileKitEditorOpen);
 			ImGui.MenuItem("Surfaces", null, ref surfaceEditorOpen);

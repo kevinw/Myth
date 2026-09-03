@@ -62,11 +62,11 @@ cbuffer Params : register(b0, space2)
     float SunAlongMin;
     float SunAlongMax;
     float SunSoftness;
-    float PointShadowPadding;
+    float NormalLightFloor;
     float SpriteShadowStrength;
     float SpriteShadowMinLength;
     float SpriteShadowMaxLength;
-    float SpriteShadowPadding;
+    float NormalLightGain;
     float4 SporeFogTint;
     float2 SporeFogDrift;
     float Time;
@@ -81,7 +81,7 @@ cbuffer Params : register(b0, space2)
 float normal_response(float3 normal, float normalStrength, float3 lightDirection)
 {
     float diffuse = saturate(dot(normal, normalize(lightDirection)));
-    return lerp(1.0, 0.12 + diffuse * 2.15, normalStrength);
+    return lerp(1.0, NormalLightFloor + diffuse * NormalLightGain, normalStrength);
 }
 
 float box_distance(float2 localPosition, float2 halfSize)

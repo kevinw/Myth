@@ -205,6 +205,7 @@ public partial class Manager
 			undo.CommitPending(RoomSettingsUndoSlot);
 			undo.CommitPending(ActorPropertyUndoSlot);
 			undo.CommitPending(SurfaceUndoSlot);
+			undo.CommitPending(VisualsUndoSlot);
 		}
 
 		if (gameEase < 1.0f && !startingPlay)
@@ -232,6 +233,7 @@ public partial class Manager
 		TransitionViewerImGui();
 		RigAnimationViewerImGui();
 		PreferencesImGui();
+		VisualsImGui();
 		if (imguiDemoOpen)
 			ShowDemoWindow(ref imguiDemoOpen);
 		if (particleEditor.PinnedWindowOpen)
@@ -1593,33 +1595,6 @@ public partial class Manager
 			editorGameDirty = true;
 			SyncEditorGame();
 		}
-	}
-
-	void DrawAmbientOcclusionSection()
-	{
-		SeparatorText("Ambient Occlusion");
-
-		BeginPropertyRow("Enabled");
-		editorGameDirty |= Checkbox("##AmbientOcclusionEnabled", ref PerfToggles.AmbientOcclusion);
-
-		BeginPropertyRow("Strength");
-		editorGameDirty |= SliderFloat("##AmbientOcclusionStrength", ref AmbientOcclusionStrength, 0.0f, 4.0f);
-
-		BeginPropertyRow("Blur");
-		editorGameDirty |= SliderFloat("##AmbientOcclusionBlur", ref AmbientOcclusionBlur, 0.0f, 32.0f);
-
-		BeginPropertyRow("Offset (px)");
-		editorGameDirty |= SliderFloat2("##AmbientOcclusionOffset", ref AmbientOcclusionOffset, -16.0f, 16.0f);
-
-		BeginPropertyRow("Min Visibility");
-		editorGameDirty |= SliderFloat("##AmbientOcclusionMinVisibility", ref AmbientOcclusionMinVisibility, 0.0f, 1.0f);
-	}
-
-	void DrawSoftShadowSection()
-	{
-		SeparatorText("Soft Shadows");
-		BeginPropertyRow("Enabled");
-		editorGameDirty |= Checkbox("##SoftShadowsEnabled", ref PerfToggles.SoftShadows);
 	}
 
 #if false

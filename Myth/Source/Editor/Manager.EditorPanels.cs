@@ -44,8 +44,6 @@ public partial class Manager
 			if (CurrentRoom is { } room)
 				DrawRoomIdentitySection(room);
 			DrawRoomPaletteSection();
-			DrawAmbientOcclusionSection();
-			DrawSoftShadowSection();
 		});
 
 		// These rode along at the end of the old single palette window and are not panels

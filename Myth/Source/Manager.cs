@@ -48,29 +48,7 @@ public partial class Manager : App
 	(string RoomId, Point2 Position)? playtestPlayerPosition;
 	bool preservePlaytestSaveState;
 #endif
-	// Dither is authored per-room (Room.LightingDither*/NormalDither*). This global scale is
-	// multiplied onto each room's lighting dither strength so performance paths (PerfToggles,
-	// --simple) can suppress dither without touching authored values.
-	public float DitherPerfScale = 1.0f;
-
-	// Ambient occlusion: background tiles darken beneath foreground overhangs.
-	public float AmbientOcclusionStrength = 1.0f;
-	public float AmbientOcclusionBlur = 8.0f;
-	public Vector2 AmbientOcclusionOffset = new(0, -3);
-	public float AmbientOcclusionMinVisibility = 0.35f;
-
-	public static float SunShadowSoftness => 2.3f;
-	public static float SpriteShadowStrength => 0.5f;
-	public static float SpriteShadowMinLength => 4.0f;
-	public static float SpriteShadowMaxLength => 28.0f;
-
-	// Illuminated spore fog: world-space participating medium between the background and foreground.
-	public static float SporeFogScale => 1.0f / 80.0f;
-	public static Vector2 SporeFogDrift => new(2.0f, -0.5f);
-	public static float SporeFogContrast => 1.8f;
-	public static Color SporeFogTint => new(0.72f, 1.0f, 0.78f, 1.0f);
-	public static float SporeFogPointStrength => 0.65f;
-	public static float SporeFogSunStrength => 0.3f;
+	internal VisualTuning Visuals = new();
 
 	/// The room renderer / simulation.
 	internal Game? game;
@@ -319,7 +297,7 @@ public partial class Manager : App
 		if (args.simple)
 		{
 			PerfToggles.UseSimpleDefaults();
-			DitherPerfScale = 0;
+			Visuals.DitherStrength = 0;
 		}
 
 		batcher = new(GraphicsDevice);

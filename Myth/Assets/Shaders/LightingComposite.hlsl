@@ -24,7 +24,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
-    float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated
+    float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -340,7 +340,7 @@ float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pix
 {
     light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
-    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * 0.18;
+    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
     color = lerp(color, emissive.rgb, emissive.a);
     return float4(saturate(color), scene.a);

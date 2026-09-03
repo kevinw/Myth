@@ -59,14 +59,14 @@ internal static class PerfToggles
 			() => Set(ref AmbientOcclusion, nameof(AmbientOcclusion)),
 			() => {
 				if (reveal) {
-					if (game.Manager.DitherPerfScale != 1.0f) {
-						game.Manager.DitherPerfScale = 1.0f;
-						return nameof(game.Manager.DitherPerfScale);
+					if (game.Manager.Visuals.DitherStrength != 1.0f) {
+						game.Manager.Visuals.DitherStrength = 1.0f;
+						return nameof(game.Manager.Visuals.DitherStrength);
 					}
 				} else {
-					if (game.Manager.DitherPerfScale != 0f) {
-						game.Manager.DitherPerfScale = 0f;
-						return nameof(game.Manager.DitherPerfScale);
+					if (game.Manager.Visuals.DitherStrength != 0f) {
+						game.Manager.Visuals.DitherStrength = 0f;
+						return nameof(game.Manager.Visuals.DitherStrength);
 					}
 				}
 				return "";

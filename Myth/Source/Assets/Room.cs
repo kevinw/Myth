@@ -60,7 +60,7 @@ public class Room
 	public const bool DefaultPlayerLightEnabled = true;
 	public const float DefaultSporeFogStrength = 0.0f;
 	public const float DefaultReverb = 0.0f;
-	// Per-room dither, overriding the engine defaults. Manager.DitherPerfScale still gates
+	// Per-room dither, overriding the engine defaults. Manager.Visuals.DitherStrength still gates
 	// lighting strength globally for performance.
 	public const bool DefaultLightingDitherEnabled = true;
 	public const float DefaultLightingDitherScale = 1.0f;

@@ -12,8 +12,8 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float VignetteAmount;
     float RgbOffset;
     float ExtraGlow;
-    float Padding1;
-    float Padding2;
+    float BloomThreshold;
+    float ScanlineStrength;
 };
 
 Texture2D Texture : register(t0, space2);
@@ -79,13 +79,13 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
 
     float brightness = max(max(glow.r, glow.g), glow.b) + glow * ExtraGlow;
-    color += glow * smoothstep(0.35, 1.0, brightness) * BloomAmount * (ExtraGlow * 3.0);
+    color += glow * smoothstep(BloomThreshold, 1.0, brightness) * BloomAmount * (ExtraGlow * 3.0);
 
     float vignette = smoothstep(1.25, 0.35, radius);
     color *= lerp(1.0, vignette, VignetteAmount);
 
     float scanline = 0.5 + 0.5 * cos((uv.y * TextureSize.y) * 3.14159265 * 2.0);
-    color *= 1.0 - scanline * 0.1;
+    color *= 1.0 - scanline * ScanlineStrength;
 
     return float4(saturate(color), 1.0) * input.Color;
 }

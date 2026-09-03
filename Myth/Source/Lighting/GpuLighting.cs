@@ -76,11 +76,11 @@ sealed class GpuLighting : IDisposable
 		public float SunAlongMin;
 		public float SunAlongMax;
 		public float SunSoftness;
-		public float PointShadowPadding;
+		public float NormalLightFloor;
 		public float SpriteShadowStrength;
 		public float SpriteShadowMinLength;
 		public float SpriteShadowMaxLength;
-		public float SpriteShadowPadding;
+		public float NormalLightGain;
 		public Vector4 SporeFogTint;
 		public Vector2 SporeFogDrift;
 		public float Time;
@@ -206,7 +206,8 @@ sealed class GpuLighting : IDisposable
 		Vector2 sunDirection,
 		Color sunColor,
 		float sunStrength,
-		bool softenShadows)
+		bool softenShadows,
+		VisualTuning visuals)
 	{
 		if (!Supported)
 			return;
@@ -255,7 +256,7 @@ sealed class GpuLighting : IDisposable
 			SunEnabled = sunEnabled ? 1u : 0u,
 			Camera = camera,
 			Zoom = zoom,
-			ShadowBias = 0.5f,
+			ShadowBias = visuals.ShadowBias,
 			Ambient = ambient,
 			SunDirection = sunDirection,
 			SunStrength = sunStrength,
@@ -266,18 +267,20 @@ sealed class GpuLighting : IDisposable
 			SunPerpendicularMax = perpendicularMax,
 			SunAlongMin = alongMin,
 			SunAlongMax = alongMax,
-			SunSoftness = softenShadows ? Manager.SunShadowSoftness : 0,
-			SpriteShadowStrength = Manager.SpriteShadowStrength,
-			SpriteShadowMinLength = Manager.SpriteShadowMinLength,
-			SpriteShadowMaxLength = Manager.SpriteShadowMaxLength,
-			SporeFogTint = (Vector4)Manager.SporeFogTint,
-			SporeFogDrift = Manager.SporeFogDrift,
+			SunSoftness = softenShadows ? visuals.SunShadowSoftness : 0,
+			NormalLightFloor = visuals.NormalLightFloor,
+			SpriteShadowStrength = visuals.SpriteShadowStrength,
+			SpriteShadowMinLength = visuals.SpriteShadowMinLength,
+			SpriteShadowMaxLength = visuals.SpriteShadowMaxLength,
+			NormalLightGain = visuals.NormalLightGain,
+			SporeFogTint = (Vector4)visuals.SporeFogTint,
+			SporeFogDrift = visuals.SporeFogDrift,
 			Time = time,
 			SporeFogStrength = sporeNoise != null ? sporeFogStrength : 0,
-			SporeFogScale = Manager.SporeFogScale,
-			SporeFogContrast = Manager.SporeFogContrast,
-			SporeFogPointStrength = Manager.SporeFogPointStrength,
-			SporeFogSunStrength = Manager.SporeFogSunStrength,
+			SporeFogScale = visuals.SporeFogScale,
+			SporeFogContrast = visuals.SporeFogContrast,
+			SporeFogPointStrength = visuals.SporeFogPointStrength,
+			SporeFogSunStrength = visuals.SporeFogSunStrength,
 			SporeFogVolumeData = new(sporeNoise != null ? sporeFogVolumeCount : 0, 0, 0, 0),
 		});
 		new ComputeCommand(maskShader!)

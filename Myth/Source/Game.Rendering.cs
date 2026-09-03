@@ -204,17 +204,15 @@ public sealed partial class GameView
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
 			{
-				const float BloomAmount = 0.09f;
-				const float VignetteAmount = 0.06f;
-				const float RgbOffset = 0.35f;
 				crt!.Material.Fragment.SetUniformBuffer([
 					output.Width,
 					output.Height,
-					BloomAmount,
-					VignetteAmount,
-					RgbOffset,
+					Manager.Visuals.CrtBloomAmount,
+					Manager.Visuals.CrtVignetteAmount,
+					Manager.Visuals.CrtRgbOffset,
 					game.fx.blooming,
-					0, 0,
+					Manager.Visuals.CrtBloomThreshold,
+					Manager.Visuals.CrtScanlineStrength,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
@@ -817,7 +815,7 @@ public sealed partial class GameView
 		{
 			using (GraphicsDevice.DebugGroup("Myth/ambient occlusion mask"))
 				BuildAoMask();
-			aoStrength = Manager.AmbientOcclusionStrength;
+			aoStrength = Manager.Visuals.AmbientOcclusionStrength;
 		}
 
 		CompositeLighting(aoStrength);
@@ -922,7 +920,7 @@ public sealed partial class GameView
 		var output = input == GlitchScreen ? Screen : GlitchScreen;
 		output.Clear(Color.Transparent);
 		worldDistortionMaterial.Material.Fragment.SetUniformBuffer([
-			input.Width, input.Height, MaxWorldDistortionPixels, 0,
+			input.Width, input.Height, Manager.Visuals.WorldDistortionPixels, 0,
 		]);
 		worldDistortionMaterial.Material.Fragment.Samplers[1] = new(DistortionMask,
 			new(TextureFilter.Linear, TextureWrap.Clamp));
@@ -982,7 +980,7 @@ public sealed partial class GameView
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
-		var aoOffset = Manager.AmbientOcclusionOffset;
+		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
 		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
@@ -991,7 +989,7 @@ public sealed partial class GameView
 		uniforms[i++] = renderCamera.Y;
 		uniforms[i++] = CurrentDitherEnabled() ? 1.0f : 0.0f;
 		uniforms[i++] = CurrentDitherScale();
-		uniforms[i++] = CurrentDitherStrength() * Manager.DitherPerfScale;
+		uniforms[i++] = CurrentDitherStrength() * Manager.Visuals.DitherStrength;
 		uniforms[i++] = ditherGlitch;
 		uniforms[i++] = glitchPosition.X;
 		uniforms[i++] = glitchPosition.Y;
@@ -1004,11 +1002,11 @@ public sealed partial class GameView
 		uniforms[i++] = aoStrength;
 		uniforms[i++] = aoOffset.X;
 		uniforms[i++] = aoOffset.Y;
-		uniforms[i++] = Manager.AmbientOcclusionMinVisibility;
+		uniforms[i++] = Manager.Visuals.AmbientOcclusionMinVisibility;
 		uniforms[i++] = CurrentDitherSlopeBoost();
-		uniforms[i++] = CurrentDitherQuantization() ? NormalDitherLevels : 0;
+		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
-		uniforms[i++] = 0;
+		uniforms[i++] = Manager.Visuals.RimLightStrength;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
 
@@ -1058,7 +1056,7 @@ public sealed partial class GameView
 	// background composite samples to darken tiles beneath foreground overhangs.
 	void BuildAoMask()
 	{
-		var radius = Manager.AmbientOcclusionBlur;
+		var radius = Manager.Visuals.AmbientOcclusionBlur;
 		RunBlurPass(ForegroundScreen, AoBlurScratch, new Vector2(1, 0), radius, sourceAlpha: true);
 		RunBlurPass(AoBlurScratch, AoMask, new Vector2(0, 1), radius, sourceAlpha: false);
 	}
@@ -1575,7 +1573,8 @@ public sealed partial class GameView
 			CurrentSunDirection(),
 			CurrentSunColor(),
 			CurrentSunStrength(),
-			PerfToggles.SoftShadows);
+			PerfToggles.SoftShadows,
+			Manager.Visuals);
 	}
 
 	void DrawGpuSpriteShadowMask()
@@ -2399,8 +2398,6 @@ public sealed partial class GameView
 		BlendMask.Blue, Color.White);
 
 	static float DitherGlitchRadius => 150.0f;
-	static float MaxWorldDistortionPixels => 3;
-	static float NormalDitherLevels => 4.0f;
 	static Vector2 AtlasWanderSpeed => new(13.0f, 7.0f);
 	static float AtlasWanderInitialSpeed => 0.1f;
 	static float AtlasWanderRampDuration => 10.0f;
