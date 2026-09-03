@@ -1,3 +1,6 @@
+- players arms when he jumps are down and look weird
+- "Playground" world
+- make Shift run instead of F
 - ABSOLUTELY new attack hitbox logic needs to have HitVisualActors consume the attack
   - or better yet; attackConsumed is instead a Set<Actor>
   - HITTING MULTIPLE ENEMIES AT ONCE IS BROKEN TILL WE FIX THIS

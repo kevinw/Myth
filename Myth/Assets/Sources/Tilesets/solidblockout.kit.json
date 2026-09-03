@@ -1,0 +1,61 @@
+{
+  "substance": "Brick",
+  "mask": "stone-kit",
+  "seed": 719653389,
+  "edgeWidth": "2",
+  "wobble": 0.6,
+  "palette": {
+    "a": "DC8A2C",
+    "b": "C1AC70"
+  },
+  "heights": {
+    "a": 0.67,
+    "b": 0.67
+  },
+  "fills": [
+    [
+      "aaabaaaa",
+      "bbabbbbb",
+      "aaaaabaa",
+      "aaaaabaa",
+      "babbbbab",
+      "aabaaaaa",
+      "aabaaaaa",
+      "aaaaabaa"
+    ]
+  ],
+  "edge": [
+    [
+      "9BADB7",
+      45
+    ],
+    [
+      "847E87",
+      40
+    ],
+    [
+      "595652",
+      15
+    ]
+  ],
+  "edgeTop": [
+    [
+      "B12626",
+      20
+    ],
+    [
+      "D24E4E",
+      20
+    ],
+    [
+      "FD8C8C",
+      20
+    ]
+  ],
+  "edgeBottom": [
+    [
+      "5D5B5B",
+      20
+    ]
+  ]
+}
