@@ -14,6 +14,7 @@
 - server prop needs a no-lights variant that goes to it when you unpower the duck-machine
   - maybe also some smoke particles after
 - consider adding second controller support: good for the demo! but requires some actual gameplay; camera; more
+
 - focus the camera more on the RigPuppet during the kneel cutscene
 - Press "Lup" to warp icon looks wrong, it looks like you're pressing in on the stick
 - new attack hitbox logic needs to have HitVisualActors consume the attack

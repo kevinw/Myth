@@ -4,6 +4,7 @@ namespace Myth;
 
 public class Bud : Pawn, ICarryable, IHitByHitbox
 {
+	public static bool SecondControllerControlEnabled = true;
 	internal static readonly Color Tint = new(0x7fb6ff);
 	// His speech reads as his own blue, lifted toward white so it stays legible over dark rooms.
 	internal static readonly Color SpeechColor = Color.Lerp(Tint, Color.White, 0.45f);
@@ -53,6 +54,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	Vector2 burrowPopOutward;
 	Signs burrowPopFacing;
 	float burrowPopJumpTime;
+	bool secondControllerControlling;
 	protected override float GroundSpeedMultiplier => 1.0f;
 	protected override float AirSpeedMultiplier => 1.0f;
 	protected override float IdleBreathingRate => 0.7f;
@@ -211,12 +213,23 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 	public override PawnInput GetInput()
 	{
-		if (!PerfToggles.BudAIEnabled) return new();
 		if (State == States.BackDash) return new();
-		if (lingerTimer > 0 && State == States.Normal)
-			return new(); // lingering where the carry launch landed us
 		if (burrowPopInputMirrorTimer > 0 && Game.GetFirst<Player>() is { } burrowPlayer)
 			return burrowPlayer.GetInput();
+		if (Game.GetFirst<Player>()?.ScriptedInput == null &&
+			Game.Controls.TryGetBudControllerInput(Game.Manager.Time.Elapsed, out var controllerInput))
+		{
+			if (!secondControllerControlling)
+				nav.ClearActiveEdge("controller 2");
+			secondControllerControlling = true;
+			nav.SetDebugNavState("controller 2");
+			return controllerInput;
+		}
+		secondControllerControlling = false;
+
+		if (!PerfToggles.BudAIEnabled) return new();
+		if (lingerTimer > 0 && State == States.Normal)
+			return new(); // lingering where the carry launch landed us
 
 		// On a rope: climb toward the player's height, then hop off toward them.
 		if (State == States.Climb && !nav.ActiveEdgeIsRope && Game.GetFirst<Player>() is { } climbTarget)

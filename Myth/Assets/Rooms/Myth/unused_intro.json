@@ -1,13 +1,13 @@
 {
   "position": [-320, -161],
   "size": [120, 23],
-  "backdropColor": "F647FD",
+  "backdropColor": "8C8C8C",
   "backdropColor2": "756A89",
   "backdropSurface": "foobarmeep",
-  "ambientColor": "FFFFFF",
+  "ambientColor": "C0C0C0",
   "ambientIntensity": 0.683,
   "lightNoise": 0,
-  "sporeFogStrength": 0.578,
+  "sporeFogStrength": 0.562,
   "sun": {
     "strength": 0.884,
     "color": "FFE5B7",

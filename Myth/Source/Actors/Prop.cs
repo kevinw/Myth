@@ -54,7 +54,7 @@ public class Prop : Actor
 	}
 
 	internal override void OnWasHit(HitInfo hitInfo) {
-		Game.Create<Pop>(Position);
+		Game.Create<Pop>(Position + Hitbox.Rect.Center);
 		if (propFlags.HasFlag(PropFlags.DestroyPersists))
 		{
 			AudioEvent("prop_break_temp");

@@ -3,7 +3,7 @@
     {
       "Texture": "patterns/noise/Noise_054",
       "Blend": "Over",
-      "Tint": "9e5519ff",
+      "Tint": "19769eff",
       "BlackColor": "010101ff",
       "Opacity": 0.64,
       "Tiling": [
@@ -28,7 +28,7 @@
     {
       "Texture": "patterns/pattern_45",
       "Blend": "Over",
-      "Tint": "17bbd3ff",
+      "Tint": "d3bc12ff",
       "BlackColor": "73f5d5ff",
       "Opacity": 0.09,
       "Tiling": [
@@ -53,7 +53,7 @@
     {
       "Texture": "patterns/noise/Noise_006",
       "Blend": "Difference",
-      "Tint": "40476bff",
+      "Tint": "e13688ff",
       "BlackColor": "b25116ff",
       "Opacity": 0,
       "Tiling": [

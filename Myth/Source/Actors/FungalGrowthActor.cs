@@ -60,11 +60,13 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 
 	/// Peak strength of the sympathetic shimmer other islands feel when this one
 	/// is struck (at zero distance; falls off linearly to SympatheticRadius).
-	public float SympatheticStrength = 0.18f;
+	public float SympatheticStrength = 0.26f;
 
 	/// World distance beyond which a struck island produces no sympathetic glow,
 	/// keeping the response local-dominant rather than a flat screen-wide flash.
-	public float SympatheticRadius = 140.0f;
+	static float SympatheticRadius => 40.0f;
+	static float SympatheticWaveSpeed => 48.0f;
+	static float SympatheticWaveWidth => 10.0f;
 
 	// Fungal colour ramp, fresh tip -> mature core. Cells dither between
 	// adjacent entries by age, giving a classic pixel-art shaded look.
@@ -117,8 +119,9 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	private float stepAccumulator;
 	private bool dirty;
 	private bool glowActive;
-
-
+	Vector2 sympatheticWaveOrigin;
+	float sympatheticWaveRadius;
+	bool sympatheticWaveActive;
 
 	public override void Added()
 	{
@@ -225,6 +228,8 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 
 		if (glowActive)
 			DecayGlow();
+		if (sympatheticWaveActive)
+			UpdateSympatheticWave();
 	}
 
 	private void Step()
@@ -366,9 +371,9 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		dirty = true;
 	}
 
-	// A hit here makes every fungus island shimmer in sympathy, strongest at the
-	// impact and fading with distance so the response reads as local, not global.
-	// The struck island is included, so its untouched reaches also glow faintly.
+	// A hit here sends a radial glow through nearby fungus, including untouched
+	// reaches of the struck island. Each island receives the original world-space
+	// impact so disconnected growth still follows one continuous wavefront.
 	private void BroadcastSympathy(Vector2 hitWorld)
 	{
 		foreach (var actor in Game.Actors)
@@ -379,9 +384,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 			var dist = DistanceToBounds(island.GetVisualBounds(), hitWorld);
 			if (dist >= SympatheticRadius)
 				continue;
-
-			var strength = SympatheticStrength * (1.0f - dist / SympatheticRadius);
-			island.SympatheticPulse(strength);
+			island.BeginSympatheticWave(hitWorld);
 		}
 	}
 
@@ -392,27 +395,44 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		return MathF.Sqrt(dx * dx + dy * dy);
 	}
 
-	/// Uniformly brightens every live cell of this island by `strength` (clamped),
-	/// producing a whole-island shimmer without touching the growth simulation.
-	public void SympatheticPulse(float strength)
+	void BeginSympatheticWave(Vector2 origin)
 	{
-		if (strength <= 0.0f)
-			return;
+		sympatheticWaveOrigin = origin;
+		sympatheticWaveRadius = 0;
+		sympatheticWaveActive = true;
+	}
 
+	void UpdateSympatheticWave()
+	{
+		sympatheticWaveRadius += SympatheticWaveSpeed * Time.Delta;
+		var halfWidth = SympatheticWaveWidth * 0.5f;
 		var any = false;
-		for (var i = 0; i < age.Length; i++)
-		{
-			if (age[i] == 0)
-				continue;
-			glow[i] = MathF.Min(1.0f, glow[i] + strength);
-			any = true;
-		}
+		for (var y = 0; y < RegionHeight; y++)
+			for (var x = 0; x < RegionWidth; x++)
+			{
+				var i = y * RegionWidth + x;
+				if (age[i] == 0)
+					continue;
+
+				var cell = (Vector2)Position + new Vector2(x + 0.5f, y + 0.5f);
+				var distance = Vector2.Distance(cell, sympatheticWaveOrigin);
+				var wave = 1.0f - MathF.Abs(distance - sympatheticWaveRadius) / halfWidth;
+				if (wave <= 0.0f || distance >= SympatheticRadius)
+					continue;
+
+				var falloff = 1.0f - distance / SympatheticRadius;
+				glow[i] = MathF.Max(glow[i], SympatheticStrength * falloff * wave);
+				any = true;
+			}
 
 		if (any)
 		{
 			glowActive = true;
 			dirty = true;
 		}
+
+		if (sympatheticWaveRadius >= SympatheticRadius + halfWidth)
+			sympatheticWaveActive = false;
 	}
 
 	private void DecayGlow()

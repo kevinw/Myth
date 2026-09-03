@@ -474,8 +474,11 @@ public static class Factory
 		Register('P', AsDualTile("dirt", "dirt-dual", GRASS_SUBSTANCE, acousticReflectivity: 0.15f, hasSlope: true));
 		RegisterLegacySlope('J', "Dirt Slope", 'P');
 		Register('g', AsTile("plants", false, GRASS_SUBSTANCE, acousticReflectivity: 0.20f));
+		Register('f', AsTile("flowers", false, GRASS_SUBSTANCE, acousticReflectivity: 0.20f));
+		Register('d', AsTile("debris", false, acousticReflectivity: 0.20f));
 		Register('i', AsTile("gates", isFg: false, substance: BRICK_SUBSTANCE, acousticReflectivity: 0.05f));
 		Register('r', AsTile("rocks", false, acousticReflectivity: 0.75f));
+		Register('s', AsTile("glow-shells", false, acousticReflectivity: 0.35f, name: "Glow Shells"));
 		Register('w', AsTile("water", false, WaterSubstance, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f, drawsVisual: false));
 		Register('#', AsTile("back", false, layer: TileLayer.Background));
 		Register('-', AsTile("back-right", false, layer: TileLayer.Background));

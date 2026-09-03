@@ -1982,7 +1982,7 @@ public partial class Player : Pawn
 
 			// because we actually try to hit over several frames, try to adjust based on our velocity. note this is a purely visual offset and the hitbox is always based on the player's position
 			// each frame.
-			position += (Point2)(Velocity * Time.Delta * 14.0f);
+			position += (Point2)(Velocity * new Vector2(14f, 9f) * Time.Delta);
 
 			if (attackDown)
 			{

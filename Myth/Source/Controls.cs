@@ -6,6 +6,9 @@ namespace Myth;
 
 public class Controls(Input input)
 {
+	const int BudControllerIndex = 1;
+	static float BudControllerIdleTimeout => 15f;
+
 	public readonly VirtualAction Rewind = new(input, "Rewind",
 		new ActionBindingSet()
 			.Add(Keys.Backslash)
@@ -84,6 +87,39 @@ public class Controls(Input input)
 	public readonly VirtualAction Die = new(input, "Die",
 		new ActionBindingSet()
 	);
+
+	readonly VirtualStick budMove = new(input, "BudMove",
+		new StickBindingSet()
+			.AddDPad()
+			.Add(Axes.LeftX, 0.25f, Axes.LeftY, 0.50f, 0.25f),
+		BudControllerIndex
+	);
+
+	readonly VirtualAction budJump = new(input, "BudJump",
+		new ActionBindingSet()
+			.Add(Buttons.South),
+		BudControllerIndex
+	);
+
+	internal bool TryGetBudControllerInput(TimeSpan now, out PawnInput value)
+	{
+		var controller = input.Controllers[BudControllerIndex];
+		if (!Bud.SecondControllerControlEnabled || !controller.Connected || controller.InputTimestamp == TimeSpan.Zero ||
+			(now - controller.InputTimestamp).TotalSeconds >= BudControllerIdleTimeout)
+		{
+			value = default;
+			return false;
+		}
+
+		value = new(
+			MoveX: budMove.IntValue.X,
+			MoveY: budMove.IntValue.Y,
+			JumpPressed: budJump.Pressed,
+			JumpDown: budJump.Down,
+			DashPressed: false
+		);
+		return true;
+	}
 
 #if EDITOR
 	static readonly FieldInfo[] ClearableFields = GetClearableFields();

@@ -228,6 +228,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public ContentRef<NeuralWeightsContent> WeightsFile3 = new("");
 	[I(0, 1)] public float FireRate = 0.5f;
 	[I(1, 120)] public float StepsPerSecond = 30.0f;
+	[I(0, 256)] public int PrewarmSteps = 20;
 	[I(0, 3)] public float Contrast = 1f;
 	[I(0, 3)] public float Saturation = 1f;
 	[I(-1, 1)] public float Brightness;
@@ -378,7 +379,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		RebuildSilhouette();
 
 		supported = true;
-		Decode();
+		if (PrewarmSteps > 0)
+			SimulateFromSeed(PrewarmSteps);
+		else
+			Decode();
 		Game.EditorPreviewSync += SettleForEditorPreview;
 	}
 

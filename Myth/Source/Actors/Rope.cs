@@ -11,6 +11,10 @@ namespace Myth;
 [GameActor(Tags = ActorTag.Obstacle, Anchor = SpriteAnchor.TopLeft)]
 public class Rope : Actor, IResizable
 {
+	static readonly Color ColorDark = new(0x3a2416);
+	static readonly Color ColorMain = new(0x8a5e36);
+	static readonly Color ColorLight = new(0xb5885a);
+
 	public class Chain
 	{
 		public Vector2[] Points = [];
@@ -359,10 +363,6 @@ public class Rope : Actor, IResizable
 		chain.RiderIndex = Math.Clamp((int)MathF.Round(index), chain.Pinned ? waiting : 0, LastIndex(chain));
 		chain.SwingAccel = pumpDirection * PumpAccel / Weight;
 	}
-
-	static readonly Color ColorDark = new(0x3a2416);
-	static readonly Color ColorMain = new(0x8a5e36);
-	static readonly Color ColorLight = new(0xb5885a);
 
 	public override void Render(Batcher batcher)
 	{
