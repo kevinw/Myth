@@ -2683,6 +2683,7 @@ public partial class Game : IDisposable
 
 		var region = Create<NeuralTextureActor>(position, a =>
 		{
+			a.AutoPerturb = false;
 			a.Size = outputSize;
 			a.SimulationSize = simulationSize;
 			a.StatePixelsPerCell = spec.FeatureScale;

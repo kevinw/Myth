@@ -209,6 +209,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	bool poseDirty;
 	Vector2 lookDirection;
 	bool eyeReady;
+	static float VisualEyeScale => 2.0f;
 	float eyeScale = 1;
 	float eyeReactionRemaining;
 	float eyeReactionStrength;
@@ -1279,7 +1280,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			DrawNeuralCircle(batcher, neuralTexture, position, Settings.HeadSize,
 				neuralHeadUV, neuralHeadUVRadius, Settings.NearColor * Neural.NeuralColorAmount);
 		if (!silhouette)
-			batcher.Circle(position + lookDirection * 2.4f, 1.1f * eyeScale, 8, Settings.AccentColor);
+			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * eyeScale, 8, Settings.AccentColor);
 	}
 
 	public void DrawNormals(Batcher batcher)

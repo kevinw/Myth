@@ -95,14 +95,6 @@
       "PrewarmSteps": 21
     },
     {
-      "Id": "772ca23743ef9a3e",
-      "Type": "NeuralTexturePerturbActor",
-      "Position": [-5, 0],
-      "Radius": 11.95,
-      "Size": [312, 168],
-      "Strength": 6
-    },
-    {
       "Id": "dc4c3733f809df85",
       "Type": "NeuralTextureRippleActor",
       "Position": [128, 128],

@@ -173,14 +173,6 @@
       "PrewarmSteps": 28,
       "Contrast": 1.456,
       "Saturation": 1.376
-    },
-    {
-      "Id": "738d25faa61af29b",
-      "Type": "NeuralTexturePerturbActor",
-      "Position": [0, 0],
-      "Size": [368, 72],
-      "Strength": 0.637,
-      "Radius": 12.498
     }
   ]
 }

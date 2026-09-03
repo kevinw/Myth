@@ -25,6 +25,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	// them; turn this off for a one-way lift that parks at the far end.
 	public bool ReturnsWhenUnweighted = true;
 	public bool RenderActivationLights;
+	[ActorRef] public string AppearAfterActorDestroyed = "";
 
 	public enum MovementMode
 	{
@@ -48,6 +49,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
 	RectInt routeBounds;
+	PersistentDestructionGate? appearanceGate;
 
 	internal bool SupportsPlatformNav => Mode == MovementMode.Horizontal && TravelDistance > 0 && ActorId != null;
 	internal Point2 NavStartPosition => routeBounds.TopLeft;
@@ -92,10 +94,29 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		circleCenterOffset = CircleCenter is { } center
 			? (Vector2)(Room?.WorldBounds.TopLeft ?? Point2.Zero) + center - platformCenter
 			: DefaultCircleCenterOffset;
+		if (!string.IsNullOrWhiteSpace(AppearAfterActorDestroyed))
+		{
+			appearanceGate = new(this, AppearAfterActorDestroyed);
+			if (!appearanceGate.IsOpen)
+			{
+				Visible = false;
+				Mask = Masks.None;
+			}
+		}
 	}
 
 	public override void Update()
 	{
+		if (appearanceGate is { IsOpen: false })
+		{
+			if (!appearanceGate.TryOpen())
+				return;
+			Visible = true;
+			Mask = Masks.Solid;
+			for (var x = Game.TileSize / 2; x < Size.X; x += Game.TileSize)
+				Game.Create<Pop>(Position + new Point2(x, Size.Y / 2));
+		}
+
 		if (ActivatedByWeight && Mode != MovementMode.Circle)
 		{
 			// Weight sends us out along the route, losing it brings us home: the leg we're on is
@@ -270,7 +291,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	// Occlude light like the dual tiles it's skinned with: DualGrid traces occluder segments from the
 	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
-	public bool CastsShadow => true;
+	public bool CastsShadow => Visible;
 
 	public void AppendOccluderSegments(List<ShadowSegment> segments)
 	{
@@ -369,9 +390,9 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	static readonly Color ActivationLightColor = new(0x79cfff);
 
 	bool CanRenderActivationLights
-		=> RenderActivationLights && Size.X >= ActivationLightInset * 2 + ActivationLightRadius * 2 && Size.Y >= ActivationLightInset + ActivationLightRadius;
+		=> RenderActivationLights && MaterialSize.X >= ActivationLightInset * 2 + ActivationLightRadius * 2 && MaterialSize.Y >= ActivationLightInset + ActivationLightRadius;
 	Vector2 NorthwestActivationLight => new(ActivationLightInset, ActivationLightInset);
-	Vector2 NortheastActivationLight => new(Size.X - ActivationLightInset, ActivationLightInset);
+	Vector2 NortheastActivationLight => new(MaterialSize.X - ActivationLightInset, ActivationLightInset);
 
 	void RenderActivationLightColor(Batcher batcher, float opacity)
 	{
@@ -417,6 +438,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	int TileColumns => Math.Max(1, Size.X / Game.TileSize);
 	int TileRows => Math.Max(1, Size.Y / Game.TileSize);
+	Point2 MaterialSize => new(TileColumns * Game.TileSize, TileRows * Game.TileSize);
 
 #if EDITOR
 	sealed class Editor : Manager.ActorEditor<MovingPlatform>

@@ -1448,6 +1448,15 @@ public partial class Manager
 			changed = true;
 		}
 
+		BeginPropertyRow("Spore Color");
+		var sporeFogColor = room.SporeFogColor.ToVector3();
+		if (ColorEdit3("##RoomSporeFogColor", ref sporeFogColor, ImGuiColorEditFlags.NoInputs))
+		{
+			OpenRoomSettingsUndo("Edit Room Lighting", room);
+			room.SporeFogColor = new Color(Vector3.Clamp(sporeFogColor, Vector3.Zero, Vector3.One));
+			changed = true;
+		}
+
 		var reverbAuto = room.ReverbAuto;
 		BeginPropertyRow("Auto Reverb");
 		if (Checkbox("##RoomAutoReverb", ref reverbAuto))
@@ -1615,7 +1624,7 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.SporeFogColor, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -1628,6 +1637,7 @@ public partial class Manager
 		room.LightNoise = settings.LightNoise;
 		room.PlayerLightEnabled = settings.PlayerLightEnabled;
 		room.SporeFogStrength = settings.SporeFogStrength;
+		room.SporeFogColor = settings.SporeFogColor;
 		room.ReverbAuto = settings.ReverbAuto;
 		room.Reverb = settings.Reverb;
 		room.SunColor = settings.SunColor;

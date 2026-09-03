@@ -189,12 +189,6 @@
       "SourceActorId": "tower_duck"
     },
     {
-      "Id": "65e868a076c49de2",
-      "Type": "NeuralTexturePerturbActor",
-      "Position": [32, 0],
-      "Size": [176, 104]
-    },
-    {
       "Id": "9f641a8921bcc939",
       "Type": "Prop",
       "Position": [66, 67],

@@ -25,7 +25,7 @@ public class SporeFogVolume : Actor, IResizable
 	public override void Render(Batcher batcher)
 	{
 		if (Game.Editing)
-			batcher.Rect(new Rect(Vector2.Zero, Size), Game.Manager.Visuals.SporeFogTint * 0.18f);
+			batcher.Rect(new Rect(Vector2.Zero, Size), (Room?.SporeFogColor ?? Myth.Room.DefaultSporeFogColor) * 0.18f);
 	}
 
 	public override void RenderNormals(Batcher batcher) { }

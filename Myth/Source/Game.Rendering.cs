@@ -1568,6 +1568,7 @@ public sealed partial class GameView
 			zoomLevel,
 			Time.SecondsF,
 			CurrentSporeFogStrength(),
+			CurrentSporeFogColor(),
 			CurrentAmbientColor(),
 			CurrentAmbientIntensity(),
 			CurrentSunDirection(),
@@ -1645,6 +1646,14 @@ public sealed partial class GameView
 			return room?.SporeFogStrength ?? Room.DefaultSporeFogStrength;
 
 		return float.Lerp(room!.SporeFogStrength, nextRoom.SporeFogStrength, Ease.Cube.InOut(nextRoomEase));
+	}
+
+	Color CurrentSporeFogColor()
+	{
+		if (nextRoom == null)
+			return room?.SporeFogColor ?? Room.DefaultSporeFogColor;
+
+		return Color.Lerp(room!.SporeFogColor, nextRoom.SporeFogColor, Ease.Cube.InOut(nextRoomEase));
 	}
 
 	// Dither floats blend across a room transition like the other lighting params; the two bools

@@ -9,7 +9,7 @@ namespace Myth;
 // machine (EditorDragKind/EditorDragState), selection snapshots, and the actor gizmo helpers.
 public partial class Manager
 {
-	readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, string BackdropSurfaceId, Color AmbientColor, float AmbientIntensity, float LightNoise, bool PlayerLightEnabled, float SporeFogStrength, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection, bool LightingDitherEnabled, float LightingDitherScale, float LightingDitherStrength, float NormalDitherSlopeBoost, bool NormalDitherQuantization);
+	readonly record struct RoomSettings(string? MusicArea, Color BackdropColor, Color? BackdropColor2, string BackdropSurfaceId, Color AmbientColor, float AmbientIntensity, float LightNoise, bool PlayerLightEnabled, float SporeFogStrength, Color SporeFogColor, bool ReverbAuto, float Reverb, Color SunColor, float SunStrength, Vector2 SunDirection, bool LightingDitherEnabled, float LightingDitherScale, float LightingDitherStrength, float NormalDitherSlopeBoost, bool NormalDitherQuantization);
 
 	private sealed class EditorSelectionSnapshot
 	{

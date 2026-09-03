@@ -59,6 +59,7 @@ public class Room
 	public const float DefaultLightNoise = 0.30f;
 	public const bool DefaultPlayerLightEnabled = true;
 	public const float DefaultSporeFogStrength = 0.0f;
+	public static readonly Color DefaultSporeFogColor = new(0.72f, 1.0f, 0.78f, 1.0f);
 	public const float DefaultReverb = 0.0f;
 	// Per-room dither, overriding the engine defaults. Manager.Visuals.DitherStrength still gates
 	// lighting strength globally for performance.
@@ -154,6 +155,7 @@ public class Room
 	public float LightNoise = DefaultLightNoise;
 	public bool PlayerLightEnabled = DefaultPlayerLightEnabled;
 	public float SporeFogStrength = DefaultSporeFogStrength;
+	public Color SporeFogColor = DefaultSporeFogColor;
 	public bool ReverbAuto = true;
 	public float Reverb = DefaultReverb;
 	[I(0, 1)] public float MusicMuffle = 0f;
@@ -198,6 +200,7 @@ public class Room
 			LightNoise = LightNoise,
 			PlayerLightEnabled = PlayerLightEnabled,
 			SporeFogStrength = SporeFogStrength,
+			SporeFogColor = SporeFogColor,
 			ReverbAuto = ReverbAuto,
 			Reverb = Reverb,
 			MusicMuffle = MusicMuffle,
@@ -285,6 +288,7 @@ public class Room
 		LightNoise = JsonUtil.ReadFloat(json, "lightNoise", DefaultLightNoise);
 		PlayerLightEnabled = JsonUtil.ReadBool(json, "playerLight", DefaultPlayerLightEnabled);
 		SporeFogStrength = Clamp01(JsonUtil.ReadFloat(json, "sporeFogStrength", DefaultSporeFogStrength));
+		SporeFogColor = JsonUtil.ReadColor(json, "sporeFogColor") ?? DefaultSporeFogColor;
 		ReverbAuto = JsonUtil.ReadBool(json, "reverbAuto", true);
 		Reverb = Clamp01(JsonUtil.ReadFloat(json, "reverb", DefaultReverb));
 		MusicMuffle = Clamp01(JsonUtil.ReadFloat(json, "musicMuffle", 0f));
@@ -1546,6 +1550,8 @@ public class Room
 			writer.WriteBoolean("playerLight", PlayerLightEnabled);
 		if (SporeFogStrength != DefaultSporeFogStrength)
 			writer.WriteNumber("sporeFogStrength", SporeFogStrength);
+		if (SporeFogColor != DefaultSporeFogColor)
+			writer.WriteString("sporeFogColor", JsonUtil.ColorToHex(SporeFogColor));
 		if (!ReverbAuto)
 			writer.WriteBoolean("reverbAuto", false);
 		if (Reverb != DefaultReverb || !ReverbAuto)

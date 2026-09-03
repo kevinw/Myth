@@ -191,12 +191,6 @@
       "Tint": "362F56"
     },
     {
-      "Id": "10fae174df02215a",
-      "Type": "NeuralTexturePerturbActor",
-      "Position": [72, -8],
-      "Size": [112, 180]
-    },
-    {
       "Id": "b60f333a66b0bb0f",
       "Type": "NeuralTextureRippleActor",
       "Position": [128, 112],

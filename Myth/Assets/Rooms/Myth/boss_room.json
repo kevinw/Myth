@@ -76,13 +76,6 @@
       "Size": [320, 184],
       "StepsPerSecond": 60,
       "WeightsFile": "bubbly_0101_circular_screen.bin"
-    },
-    {
-      "Id": "4ae1defec06a25b0",
-      "Type": "NeuralTexturePerturbActor",
-      "Position": [0, 0],
-      "Size": [320, 184],
-      "Radius": 10.4
     }
   ]
 }

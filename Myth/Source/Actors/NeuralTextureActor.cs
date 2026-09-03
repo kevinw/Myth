@@ -229,6 +229,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[I(0, 1)] public float FireRate = 0.5f;
 	[I(1, 120)] public float StepsPerSecond = 30.0f;
 	[I(0, 256)] public int PrewarmSteps = 20;
+	public bool AutoPerturb = true;
 	[I(0, 3)] public float Contrast = 1f;
 	[I(0, 3)] public float Saturation = 1f;
 	[I(-1, 1)] public float Brightness;
@@ -268,6 +269,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	int perturbStampCount;
 	readonly Dictionary<Pawn, PawnSample> pawnSamples = [];
 	readonly List<Pawn> stalePawnSamples = [];
+	NeuralTexturePerturbActor? autoPerturb;
 	GraphicsDevice graphicsDevice = null!;
 	ComputeStorageBuffer<CellState>? bufferA;
 	ComputeStorageBuffer<CellState>? bufferB;
@@ -383,6 +385,12 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			SimulateFromSeed(PrewarmSteps);
 		else
 			Decode();
+		if (AutoPerturb)
+			autoPerturb = Game.Create<NeuralTexturePerturbActor>(Position, it =>
+			{
+				it.Size = Size;
+				it.KeepOnRoomTransition = KeepOnRoomTransition;
+			});
 		Game.EditorPreviewSync += SettleForEditorPreview;
 	}
 
@@ -643,6 +651,12 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Update()
 	{
 		base.Update();
+		if (autoPerturb != null)
+		{
+			autoPerturb.Position = Position;
+			autoPerturb.Size = Size;
+			autoPerturb.KeepOnRoomTransition = KeepOnRoomTransition;
+		}
 		var shutdownChanged = UpdateShutdown();
 		if (!supported)
 			return;
@@ -961,6 +975,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Destroyed()
 	{
 		base.Destroyed();
+		if (autoPerturb != null && !Game.destroying.Contains(autoPerturb))
+			Game.Destroy(autoPerturb);
 		Game.EditorPreviewSync -= SettleForEditorPreview;
 		bufferA?.Dispose();
 		bufferB?.Dispose();

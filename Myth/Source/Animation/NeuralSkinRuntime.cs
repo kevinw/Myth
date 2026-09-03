@@ -35,6 +35,7 @@ sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Poin
 		activeWeightsFile = settings.NeuralWeightsFile;
 		texture = owner.Game.Create<NeuralTextureActor>(owner.Position + origin, it =>
 		{
+			it.AutoPerturb = false;
 			it.Visible = false;
 			it.Size = size;
 			it.SimulationSize = size;

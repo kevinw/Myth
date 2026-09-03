@@ -35,7 +35,6 @@ sealed class VisualTuning
 	public float SporeFogScale = 1.0f / 80.0f;
 	public Vector2 SporeFogDrift = new(2.0f, -0.5f);
 	public float SporeFogContrast = 1.8f;
-	public Color SporeFogTint = new(0.72f, 1.0f, 0.78f, 1.0f);
 	public float SporeFogPointStrength = 0.65f;
 	public float SporeFogSunStrength = 0.3f;
 	public float WorldDistortionPixels = 3.0f;
@@ -150,7 +149,6 @@ public partial class Manager
 		if (CollapsingHeader("Spore Fog"))
 		{
 			PushID("SporeFog");
-			VisualRow("Tint", ref Visuals.SporeFogTint, VisualDefaults.SporeFogTint);
 			VisualRow("Scale", ref Visuals.SporeFogScale, VisualDefaults.SporeFogScale, 0.001f, 0.1f);
 			VisualRow("Drift", ref Visuals.SporeFogDrift, VisualDefaults.SporeFogDrift, -10, 10);
 			VisualRow("Contrast", ref Visuals.SporeFogContrast, VisualDefaults.SporeFogContrast, 0.1f, 5);
