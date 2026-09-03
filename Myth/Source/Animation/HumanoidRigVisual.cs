@@ -24,10 +24,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var offset = point - Pivot;
 			var turned = new Vector3(offset.X * TurnCos + offset.Z * TurnSin, offset.Y,
 				-offset.X * TurnSin + offset.Z * TurnCos);
-			var depthTurnCos = MathF.Abs(TurnCos);
-			var turnedPoint = Pivot + new Vector3(offset.X * depthTurnCos + offset.Z * TurnSin, offset.Y,
-				-offset.X * TurnSin + offset.Z * depthTurnCos);
-			depth = turnedPoint.X * CameraCos + turnedPoint.Z * CameraSin;
+			depth = CameraOpenDepth(point, Pivot, TurnCos, TurnSin, CameraCos, CameraSin);
 			return new Vector2(PivotX * Mirror - turned.Z * CameraCos + turned.X * CameraSin, -point.Y) *
 				PixelsPerMeter + ScreenOffset + Correction;
 		}
@@ -36,6 +33,18 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public readonly record struct RuffPose(Vector3 Neck, Vector3 Head,
 		Vector3 LeftUpperArm, Vector3 LeftLowerArm, Vector3 RightUpperArm, Vector3 RightLowerArm,
 		RuffProjection Projection);
+
+	// Left/right facing is a 2D presentation choice, not permission to show the rig's back.
+	// Fold sorting yaw across 90 degrees while leaving screen projection free to use the full yaw.
+	static float CameraOpenDepth(Vector3 point, Vector3 pivot, float turnCos, float turnSin,
+		float cameraCos, float cameraSin)
+	{
+		var offset = point - pivot;
+		turnCos = MathF.Abs(turnCos);
+		var turnedPoint = pivot + new Vector3(offset.X * turnCos + offset.Z * turnSin, offset.Y,
+			-offset.X * turnSin + offset.Z * turnCos);
+		return turnedPoint.X * cameraCos + turnedPoint.Z * cameraSin;
+	}
 
 	enum Part { Torso, Bicep, Forearm, Thigh, Other }
 	enum LegSide { None, Left, Right }
@@ -838,10 +847,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				-offset.X * jointTurnSin + offset.Z * jointTurnCos);
 			projectedPose[i] = new Vector2(pivotX * mirror - turned.Z * cos + turned.X * sin, -joint.Y) *
 				Settings.PixelsPerMeter + new Vector2(0, 2.5f) + Offset;
-			var depthTurnCos = MathF.Abs(jointTurnCos);
-			var turnedJoint = pivot + new Vector3(offset.X * depthTurnCos + offset.Z * jointTurnSin, offset.Y,
-				-offset.X * jointTurnSin + offset.Z * depthTurnCos);
-			jointDepth[i] = turnedJoint.X * cos + turnedJoint.Z * sin;
+			jointDepth[i] = CameraOpenDepth(joint, pivot, jointTurnCos, jointTurnSin, cos, sin);
 		}
 		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? LegSide.Left : LegSide.Right;
 	}
