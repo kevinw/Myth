@@ -1,3 +1,18 @@
+# Monday
+- record title screen demos 
+      - burrowing, interesting enemy encounter, interesting NPC encounter, beautiful room reveals, secret reveal
+- make an itch page, so people can follow its development/playtest when it's ready
+- decide on which computer(s) and/or monitor(s) to take and prepare their packing 
+
+- MYTH_SHIP add a "demo mode on" in options which, on 2 mins inactivity, reset to title screen with warning
+
+- show a rigpuppet in the second room.
+   - what is it doing?
+   - either you talk to it, or you attack it and it runs away.
+- server prop needs a no-lights variant that goes to it when you unpower the duck-machine
+  - maybe also some smoke particles after
+- consider adding second controller support: good for the demo! but requires some actual gameplay; camera; more
+- focus the camera more on the RigPuppet during the kneel cutscene
 - Press "Lup" to warp icon looks wrong, it looks like you're pressing in on the stick
 - new attack hitbox logic needs to have HitVisualActors consume the attack
   - or better yet; attackConsumed is instead a Set<Actor> 
@@ -14,7 +29,6 @@
 - show a currency hud for ducks
 - wall jump teach room early where Bud tells you
 - import the bg brick as our custom tile kit and make it more varied
-- try a variant of HitStun which is more of a ramp
 - when loading barks from a baked asset that is older than Game.BudStory.cs 
 - door is rendering normals behind the hidden wall cover
 - test the player controller online in a simple room
@@ -27,6 +41,10 @@
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
 - dotnet 11
 - improve editor spawn pick player location: not in a reveal door (burrow_secret)
+
+
+LATER
+- try a variant of HitStun which is more of a ramp
 
 # pseudoregalia
 - it's VERY fun to have two little jumps after the main jump. wiggle room + expressivity.
