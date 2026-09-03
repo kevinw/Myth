@@ -671,6 +671,8 @@ public partial class Manager : App
 		Assets.Unload();
 		SpriteSdf.Unload();
 		Factory.Clear();
+		GameView.ClearDeviceResources(GraphicsDevice);
+		RenderTargetPool.Clear(GraphicsDevice);
 	}
 
 	static string WindowSettingsPath => Path.Join(UserPathForApplicationName(APPLICATION_NAME), WindowSettingsFileName);

@@ -2012,8 +2012,8 @@ public sealed partial class GameView
 		// Fragment shaders are precompiled, room- and game-independent programs, so compile
 		// each one once per process and share it across every Game/GameView. Rebuilding a
 		// Game (e.g. an editor room change) reuses the cached shaders instead of re-reading
-		// and re-creating ~10 of them. Keyed by name (single GraphicsDevice per process).
-		static readonly Dictionary<string, Shader> SharedShaders = [];
+		// and re-creating ~10 of them.
+		static readonly Dictionary<(GraphicsDevice Device, string Name), Shader> SharedShaders = [];
 
 		readonly GraphicsDevice graphicsDevice;
 		readonly string name;
@@ -2042,7 +2042,7 @@ public sealed partial class GameView
 			{
 				var next = CompileShader();
 				Material.Fragment.Shader = next;
-				SharedShaders[name] = next; // newly built Games pick up the reloaded shader
+				SharedShaders[(graphicsDevice, name)] = next; // newly built Games pick up the reloaded shader
 				Console.WriteLine($"Reloaded {name} shader.");
 			}
 			catch (Exception e)
@@ -2054,11 +2054,24 @@ public sealed partial class GameView
 
 		Shader GetOrCreateShader()
 		{
-			if (SharedShaders.TryGetValue(name, out var cached))
+			if (SharedShaders.TryGetValue((graphicsDevice, name), out var cached))
 				return cached;
 			var shader = CompileShader();
-			SharedShaders[name] = shader;
+			SharedShaders[(graphicsDevice, name)] = shader;
 			return shader;
+		}
+
+		public static void Clear(GraphicsDevice graphicsDevice)
+		{
+			var keys = new List<(GraphicsDevice Device, string Name)>();
+			foreach (var entry in SharedShaders)
+				if (ReferenceEquals(entry.Key.Device, graphicsDevice))
+				{
+					entry.Value.Dispose();
+					keys.Add(entry.Key);
+				}
+			foreach (var key in keys)
+				SharedShaders.Remove(key);
 		}
 
 		Shader CompileShader()

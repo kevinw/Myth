@@ -2,12 +2,12 @@ using Foster.Framework;
 
 namespace Myth;
 
-// Process-wide pool of render Targets keyed by size + attachment format, so reconstructing
-// a Game / GameView reuses the previous targets instead of reallocating them. All targets here
-// are single-attachment with Flags.None, and there is one GraphicsDevice per process.
+// Process-wide pool of render Targets keyed by device + size + attachment format, so
+// reconstructing a Game / GameView reuses the previous targets instead of reallocating them.
+// All targets here are single-attachment with Flags.None.
 public static class RenderTargetPool
 {
-	private readonly record struct Key(int Width, int Height, TextureFormat Format, SampleCount SampleCount);
+	private readonly record struct Key(GraphicsDevice GraphicsDevice, int Width, int Height, TextureFormat Format, SampleCount SampleCount);
 
 	private sealed class Entry(Target target, Key key, long bytes)
 	{
@@ -26,12 +26,12 @@ public static class RenderTargetPool
 	private const long MaxPooledBytes = 256L * 1024 * 1024;
 
 	public static Target RentColor(GraphicsDevice graphicsDevice, int width, int height, string name)
-		=> Rent(new Key(width, height, TextureFormat.Color, SampleCount.One))
+		=> Rent(new Key(graphicsDevice, width, height, TextureFormat.Color, SampleCount.One))
 			?? new Target(graphicsDevice, width, height, name);
 
 	public static Target RentFormat(GraphicsDevice graphicsDevice, int width, int height, TextureFormat format, string name)
 	{
-		if (Rent(new Key(width, height, format, SampleCount.One)) is { } reused)
+		if (Rent(new Key(graphicsDevice, width, height, format, SampleCount.One)) is { } reused)
 			return reused;
 		ReadOnlySpan<TextureFormat> attachments = [format];
 		return new Target(graphicsDevice, width, height, attachments, name: name);
@@ -40,7 +40,7 @@ public static class RenderTargetPool
 	public static void Return(Target target)
 	{
 		var attachment = target.Attachments[0];
-		var key = new Key(target.Width, target.Height, attachment.Format, attachment.SampleCount);
+		var key = new Key(target.GraphicsDevice, target.Width, target.Height, attachment.Format, attachment.SampleCount);
 		var bytes = (long)target.Width * target.Height * attachment.Format.Size() * Samples(attachment.SampleCount);
 		lock (pool)
 		{
@@ -63,6 +63,24 @@ public static class RenderTargetPool
 			pooledBytes += bytes;
 			while (pooledBytes > MaxPooledBytes)
 				EvictOldest();
+		}
+	}
+
+	public static void Clear(GraphicsDevice graphicsDevice)
+	{
+		lock (pool)
+		{
+			for (var node = lru.First; node != null;)
+			{
+				var next = node.Next;
+				var entry = node.Value;
+				if (ReferenceEquals(entry.Key.GraphicsDevice, graphicsDevice))
+				{
+					Remove(entry);
+					entry.Target.Dispose();
+				}
+				node = next;
+			}
 		}
 	}
 

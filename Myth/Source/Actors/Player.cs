@@ -1,6 +1,5 @@
 using System.Numerics;
 using Foster.Framework;
-
 namespace Myth;
 
 public readonly record struct PawnInput(

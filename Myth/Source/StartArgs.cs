@@ -15,6 +15,8 @@ public struct StartArgs
 	public bool traceNavFrames;
 	public bool simple;
 	public bool bench;
+	public bool devHost;
+	public string? devCommand;
 	public bool? fullscreen;
 	// Force the 4:3 portrait-style presentation on desktop for testing (--aspect-four-three):
 	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
@@ -88,6 +90,8 @@ public struct StartArgs
 				case "--trace-nav-frames": traceNavFrames = true; break;
 				case "--simple": simple = true; break;
 				case "--bench": bench = true; break;
+				case "--dev-host": devHost = true; break;
+				case "--dev-command": devCommand = ReadValue(args, ref i, option); break;
 				case "--fullscreen": fullscreen = true; break;
 				case "--aspect-four-three": aspectFourThree = true; break;
 				case "--no-warmup": noWarmup = true; break;

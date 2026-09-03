@@ -16,6 +16,13 @@ catch (ArgumentException e)
 	return;
 }
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);
+#if !BROWSER && !IOS
+if (startArgs.devCommand != null)
+{
+	Environment.ExitCode = DevHost.Send(startArgs.devCommand) ? 0 : 1;
+	return;
+}
+#endif
 if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
 {
 	if (startArgs.buildAssetPack)
@@ -36,6 +43,13 @@ if (!startArgs.headless && !startArgs.checkRooms)
 
 try
 {
+#if !BROWSER && !IOS
+	if (startArgs.devHost)
+	{
+		DevHost.Run(startArgs);
+		return;
+	}
+#endif
 	var manager = Manager.Create(startArgs);
 	PlatformSpecific.ManagerSetup(manager);
 	manager.Run();

@@ -6,6 +6,8 @@
 
 - MYTH_SHIP add a "demo mode on" in options which, on 2 mins inactivity, reset to title screen with warning
 
+- door is rendering normals behind the hidden wall cover
+- show "speaking" lines like a comic book bubble with individual syllables
 - show a rigpuppet in the second room.
    - what is it doing?
    - either you talk to it, or you attack it and it runs away.
@@ -18,36 +20,31 @@
   - or better yet; attackConsumed is instead a Set<Actor> 
 - find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.
 - use Dropper; draw a sprite; more "easy" enemy variety wins
-- OnWasHit is very repetitive across our actors. we should refactor it into a shared method with a knockback param
 - ELP boss:make him fall down only after 3 hits. make him have a phase two where his head gets bigger and maybe his body grows in size a bit. add a "swipe away" animation where he makes space if you're too close
-- comment out unused light cookies
-- play pong with projectiles
-- try some sound effects from the BOOM library https://artlist.io/sfx/artist/boom-library/845
+- play pong with projectiles in a clear arkanoid room
 - some machine ambience music for the tower tunnel
 - lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
-- show "speaking" lines like a comic book bubble with individual syllables
 - show a currency hud for ducks
 - wall jump teach room early where Bud tells you
 - import the bg brick as our custom tile kit and make it more varied
 - when loading barks from a baked asset that is older than Game.BudStory.cs 
-- door is rendering normals behind the hidden wall cover
 - test the player controller online in a simple room
 - put some inbetween frames in the player sprite
-- really really prioritize a TNP list
-- chain roll attack into a hop 
 - the generic Pop is starting to feel a bit overused/generic
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
 - dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
-- dotnet 11
-- improve editor spawn pick player location: not in a reveal door (burrow_secret)
 
 
 LATER
+- OnWasHit is very repetitive across our actors. we should refactor it into a shared method with a knockback param
+- try some sound effects from the BOOM library https://artlist.io/sfx/artist/boom-library/845
+- improve editor spawn pick player location: not in a reveal door (burrow_secret)
+- dotnet 11
+- chain roll attack into a hop 
 - try a variant of HitStun which is more of a ramp
 
 # pseudoregalia
-- it's VERY fun to have two little jumps after the main jump. wiggle room + expressivity.
 - switch which moves platforms is fun
 - more 3D in and out of spaces
 
@@ -78,7 +75,6 @@ along with this.
 - carry is confusing
 - should we be able to burrow on a jumpthru?
 - he thought the duck would hurt you
-- duck death sound played on leave
 - the bg NCT should disintegrate when you kill the duck
 - start menu maybe needs "return to checkpoint"
 - lighting trap sfx stuck when the map opens; what is a general solution for this
@@ -89,7 +85,6 @@ along with this.
 - thought tower was a new room because he came down and the hidden wall was revealed immediately
 - remove LinkedDoors that warp you across the map; respect the player's understanding of spatial relations
 - ambient server sfx
-
 
 # TODO
 

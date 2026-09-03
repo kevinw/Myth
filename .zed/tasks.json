@@ -15,14 +15,16 @@
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
-    "label": "dotnet watch (HQ)",
-    "command": "dotnet watch run --non-interactive --no-restore --property:RunAnalyzers=false --property:UseFosterDll=true",
-    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth"
-  },
-  {
-    "label": "dotnet run (HQ)",
-    "command": "dotnet run --no-restore --property:UseFosterDll=true",
+    "label": "Play",
+    "command": "./tools/dev-play.sh",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+    "save": "all",
+    "reveal": "never",
+    "hide": "on_success",
+    "show_summary": false,
+    "show_command": false,
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
   },
   {
     "label": "dotnet watch (Sokoban)",

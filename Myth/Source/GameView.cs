@@ -10,6 +10,9 @@ namespace Myth;
 // no GameView. See memory: game-gameview-split.
 public sealed partial class GameView : IDisposable
 {
+	internal static void ClearDeviceResources(GraphicsDevice graphicsDevice)
+		=> ReloadableMaterial.Clear(graphicsDevice);
+
 	internal readonly Game game;
 	private readonly List<Actor> rendering = [];
 
