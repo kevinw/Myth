@@ -2,7 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration,
+[GameActor(Sprite = "Editor/particles", Icon = "layer-group", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration,
 	LivePositionEditable = true, LiveResizable = true)]
 public class StrataWall : ProceduralWall
 {

@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/particles", Tags = ActorTag.Hazard,
+[GameActor(Sprite = "Editor/particles", Icon = "wave-square", Tags = ActorTag.Hazard,
 	BoundsX = -8, BoundsY = -8, BoundsW = 16, BoundsH = 16, Anchor = SpriteAnchor.Center,
 	LivePositionEditable = true)]
 public sealed class WavePylon : Actor

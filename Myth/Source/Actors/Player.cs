@@ -156,6 +156,7 @@ public abstract class Pawn : Actor
 	static float RopeJumpKick => 55f.T();
 	static float RopeGrabMomentumTransfer => 0.7f.T();
 	static float RopePumpReversalSpeed => 2f;
+	static float RopePumpSkew => 0.1f;
 	static float RopeDetachSnapDistance => 24f; // rope yanked further than this in one frame (rewind, teleport) -> let go
 
 	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
@@ -783,13 +784,6 @@ public abstract class Pawn : Actor
 			else if (this is Player && input.JumpPressed && !prevInput.JumpPressed && canAirHop && !grounded && lastGroundedJumpTimer == 0)
 			{
 				canAirHop = false;
-				if (input.MoveY > 0)
-				{
-					Squish = new Vector2(0.75f, 1.25f);
-					Velocity.Y = 100;
-				}
-				else if (input.MoveY < 0) Velocity.Y = -70;
-				else Velocity.Y *= 0.2f;
 				Velocity.X += input.MoveX * 50;
 			}
 		}
@@ -1115,6 +1109,8 @@ public abstract class Pawn : Actor
 		else if (ropePumpStarted && pumpVelocity < -RopePumpReversalSpeed)
 			ropePumpDirection = 0;
 		rope.SetRider(chain, climbIndex, ropePumpDirection);
+		if (ropePumpDirection != 0)
+			Skew = ropePumpDirection * RopePumpSkew;
 
 		// Hang with the chest at the rope point; step there collision-aware so a swing scrapes
 		// along walls instead of clipping. A one-frame yank beyond the snap distance (rewind,

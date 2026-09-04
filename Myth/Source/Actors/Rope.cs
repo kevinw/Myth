@@ -40,10 +40,14 @@ public class Rope : Actor, IResizable
 	public const float SegmentLength = 4f;
 	static float RopeGravity => 260f;
 	static float DampingRate => 1.1f;           // per-second velocity bleed at Weight 1
+	static float RiddenDampingRate => 0.15f;    // retain momentum while a rider pumps the rope
 	static float SwayAccel => 5.5f;             // px/s² ambient drift at Weight 1
 	static float SwayFrequency => 0.35f;        // sway cycles per second
 	static float SwayPointPhase => 0.09f;       // phase shift per point, so the rope bows instead of shifting rigidly
 	public static float PumpAccel => 340f;      // active rider pump, at Weight 1
+	static float PumpSpeedForFullBoost => 90f;
+	static float PumpMaxSpeedBoost => 0.55f;
+	static float TangentialPumpFraction => 0.65f;
 	static float RiderExtraGravity => 500f;     // the hanging pawn's weight pulls the rope taut
 	static float RiderConstraintShare => 0.15f; // ridden point moves this fraction in the solve (it's heavy)
 	const int ConstraintIterations = 4;
@@ -65,13 +69,11 @@ public class Rope : Actor, IResizable
 
 	public Rope()
 	{
+		Sprite = null; // rope.ase is the editor preview; the in-game visual is procedural
 		Mask = Masks.None;
 		CollidesWithSolids = false;
 		Depth = 1000;
 	}
-
-	public override bool CastsSpriteShadow => false;
-	public override bool CastsReflection => false;
 
 	Point2 TopAnchor => Position + new Point2(Size.X / 2, 0);
 
@@ -95,6 +97,18 @@ public class Rope : Actor, IResizable
 		}
 		waiting = StartCoiled ? count - 1 : 1;
 		chains.Add(chain);
+	}
+
+	internal override void OnAttachmentMoved(Point2 delta)
+	{
+		if (PinnedChain is not { } chain)
+			return;
+
+		// Move the held anchor, not the hanging span: the remaining points trail and swing from
+		// the platform naturally instead of the entire rope translating rigidly with it.
+		for (var i = 0; i < waiting; i++)
+			chain.Points[i] = chain.Prev[i] = TopAnchor;
+		Constrain(chain, waiting, preserveVelocity: true);
 	}
 
 	public override void Update()
@@ -133,7 +147,6 @@ public class Rope : Actor, IResizable
 
 	void SimulateStep(float dt, float displacementScale)
 	{
-		var damp = MathF.Exp(-DampingRate * Weight * dt);
 		swayPhase += dt * SwayFrequency * MathF.Tau;
 		if (swayPhase >= MathF.Tau)
 			swayPhase -= MathF.Tau;
@@ -141,7 +154,9 @@ public class Rope : Actor, IResizable
 		foreach (var chain in chains)
 		{
 			var held = chain.Pinned ? waiting : 0;
-			Integrate(chain, held, dt, displacementScale, damp);
+			var damp = MathF.Exp(-DampingRate * Weight * dt);
+			var riddenDamp = chain.RiderIndex >= 0 ? MathF.Exp(-RiddenDampingRate * Weight * dt) : damp;
+			Integrate(chain, held, dt, displacementScale, damp, riddenDamp);
 			Constrain(chain, held);
 			Collide(chain, held);
 		}
@@ -159,7 +174,7 @@ public class Rope : Actor, IResizable
 			waiting--;
 	}
 
-	void Integrate(Chain chain, int held, float dt, float displacementScale, float damp)
+	void Integrate(Chain chain, int held, float dt, float displacementScale, float damp, float riddenDamp)
 	{
 		var points = chain.Points;
 		var prev = chain.Prev;
@@ -186,17 +201,31 @@ public class Rope : Actor, IResizable
 				accel.X += push;
 			}
 			if (i == chain.RiderIndex)
-				accel += new Vector2(chain.SwingAccel, RiderExtraGravity);
+				accel += PumpDirection(chain, i) * MathF.Abs(chain.SwingAccel) + Vector2.UnitY * RiderExtraGravity;
 
 			var p = points[i];
-			points[i] = p + (p - prev[i]) * displacementScale * damp + accel * (dt * dt);
+			var pointDamp = i <= chain.RiderIndex ? riddenDamp : damp;
+			points[i] = p + (p - prev[i]) * displacementScale * pointDamp + accel * (dt * dt);
 			prev[i] = p;
 		}
 	}
 
-	void Constrain(Chain chain, int held)
+	static Vector2 PumpDirection(Chain chain, int riderIndex)
+	{
+		if (chain.SwingAccel == 0)
+			return Vector2.Zero;
+		var horizontal = Vector2.UnitX * MathF.Sign(chain.SwingAccel);
+		var radial = chain.Points[riderIndex] - chain.Points[0];
+		if (radial.LengthSquared() <= 0.0001f)
+			return horizontal;
+		var tangent = Vector2.Normalize(new Vector2(radial.Y, -radial.X)) * MathF.Sign(chain.SwingAccel);
+		return Vector2.Normalize(Vector2.Lerp(horizontal, tangent, TangentialPumpFraction));
+	}
+
+	void Constrain(Chain chain, int held, bool preserveVelocity = false)
 	{
 		var points = chain.Points;
+		var prev = chain.Prev;
 		for (var it = 0; it < ConstraintIterations; it++)
 		{
 			for (var i = Math.Max(held, 1); i < points.Length; i++)
@@ -210,8 +239,15 @@ public class Rope : Actor, IResizable
 				// Inverse-mass weights: pinned/held anchor points never move, the ridden point barely.
 				var wa = i - 1 < held ? 0f : i - 1 == chain.RiderIndex ? RiderConstraintShare : 1f;
 				var wb = i == chain.RiderIndex ? RiderConstraintShare : 1f;
-				points[i - 1] += correction * (wa / (wa + wb));
-				points[i] -= correction * (wb / (wa + wb));
+				var moveA = correction * (wa / (wa + wb));
+				var moveB = correction * (wb / (wa + wb));
+				points[i - 1] += moveA;
+				points[i] -= moveB;
+				if (preserveVelocity)
+				{
+					prev[i - 1] += moveA;
+					prev[i] -= moveB;
+				}
 			}
 			if (chain.Pinned)
 				points[0] = TopAnchor;
@@ -361,29 +397,29 @@ public class Rope : Actor, IResizable
 	public void SetRider(Chain chain, float index, float pumpDirection)
 	{
 		chain.RiderIndex = Math.Clamp((int)MathF.Round(index), chain.Pinned ? waiting : 0, LastIndex(chain));
-		chain.SwingAccel = pumpDirection * PumpAccel / Weight;
+		var speed = MathF.Abs(PointVelocity(chain, index).X);
+		var speedBoost = 1 + Math.Clamp(speed / PumpSpeedForFullBoost, 0, 1) * PumpMaxSpeedBoost;
+		chain.SwingAccel = pumpDirection * PumpAccel * speedBoost / Weight;
 	}
 
 	public override void Render(Batcher batcher)
 	{
 		if (builtSize != Size)
 			BuildChains(); // editor drag-resize renders without Update running
-		RenderChains(batcher, null);
+		RenderChains(batcher);
 	}
-	public override void RenderShadow(Batcher batcher, Color color) => RenderChains(batcher, color);
-	public override void RenderReflection(Batcher batcher, Color color) => RenderChains(batcher, color);
 
-	void RenderChains(Batcher batcher, Color? flat)
+	void RenderChains(Batcher batcher)
 	{
 		// Render happens in actor-local space; points are world.
 		foreach (var chain in chains)
 			for (var i = 1; i < chain.Points.Length; i++)
 			{
-				var color = flat ?? (i % 2 == 0 ? ColorMain : ColorLight);
+				var color = i % 2 == 0 ? ColorMain : ColorLight;
 				batcher.Line(((Point2)chain.Points[i - 1]) - Position, ((Point2)chain.Points[i]) - Position, 1, color);
 			}
 		if (PinnedChain != null)
-			batcher.Rect(new Rect(TopAnchor.X - Position.X - 1, TopAnchor.Y - Position.Y, 3, 2), flat ?? ColorDark);
+			batcher.Rect(new Rect(TopAnchor.X - Position.X - 1, TopAnchor.Y - Position.Y, 3, 2), ColorDark);
 	}
 
 	public override Rect GetVisualBounds()

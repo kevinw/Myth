@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/text", Tags = ActorTag.Decoration,
+[GameActor(Sprite = "Editor/text", Icon = "magnifying-glass", Tags = ActorTag.Decoration,
 	BoundsX = -12, BoundsY = -24, BoundsW = 24, BoundsH = 24,
 	LivePositionEditable = true, ShowFacing = false)]
 public sealed class InspectPoint : Actor

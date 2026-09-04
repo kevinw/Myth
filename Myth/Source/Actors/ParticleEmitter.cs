@@ -9,7 +9,7 @@ namespace Myth;
 /// position; continuous effects stream, burst effects fire once. Previews when
 /// selected in the editor.
 /// </summary>
-[GameActor(Sprite = "Editor/particles", OffsetX = 4, OffsetY = 4, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
+[GameActor(Sprite = "Editor/particles", Icon = "wand-magic-sparkles", OffsetX = 4, OffsetY = 4, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
 	Tags = ActorTag.System, ShowFacing = false, LivePositionEditable = true)]
 public class ParticleEmitter : Actor
 {

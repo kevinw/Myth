@@ -955,6 +955,12 @@ public partial class Manager
 				{
 					ActorSpecs.EnsureActorId(candidate);
 					ActorSpecs.SetProperty(actor, property.JsonName, JsonValue.Create(ActorSpecs.GetActorId(candidate)));
+					if (property.JsonName == nameof(Actor.AttachedToActorId))
+					{
+						var actorPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+						var targetPosition = ActorSpecs.ReadPoint(candidate, "Position") ?? Point2.Zero;
+						ActorSpecs.SetProperty(actor, nameof(Actor.AttachmentOffset), ActorSpecs.ToJsonNode(actorPosition - targetPosition));
+					}
 				}
 				changed = true;
 			}

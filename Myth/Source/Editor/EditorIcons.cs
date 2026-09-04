@@ -26,6 +26,23 @@ static class EditorIcons
 	public const string SourceFile = "\uf1c9";
 	public const string Delete = "\uf1f8";
 	public const string Duplicate = "\uf24d";
+	public const string BoltLightning = "\ue0b7";
+	public const string Clapperboard = "\ue131";
+	public const string Timeline = "\ue29c";
+	public const string WandMagicSparkles = "\ue2ca";
+	public const string Font = "\uf031";
+	public const string Gears = "\uf085";
+	public const string BoxArchive = "\uf187";
+	public const string HeartPulse = "\uf21e";
+	public const string CommentDots = "\uf27b";
+	public const string Microchip = "\uf2db";
+	public const string Seedling = "\uf4d8";
+	public const string Archway = "\uf557";
+	public const string LayerGroup = "\uf5fd";
+	public const string Wind = "\uf72e";
+	public const string Smog = "\uf75f";
+	public const string WaveSquare = "\uf83e";
+	public const string Fan = "\uf863";
 	public const string SearchActors = Search + "  Actors";
 	public const string CutMenuItem = Cut + "  Cut";
 	public const string CopyMenuItem = Copy + "  Copy";
@@ -37,25 +54,42 @@ static class EditorIcons
 
 	public static readonly ushort[] GlyphRanges =
 	[
+		0xe0b7, 0xe0b7,
+		0xe131, 0xe131,
+		0xe29c, 0xe29c,
+		0xe2ca, 0xe2ca,
 		0xf002, 0xf002,
 		0xf00d, 0xf00d,
 		0xf067, 0xf067,
 		0xf023, 0xf023,
 		0xf028, 0xf028,
+		0xf031, 0xf031,
 		0xf040, 0xf040,
 		0xf062, 0xf063,
 		0xf06e, 0xf06e,
 		0xf070, 0xf070,
 		0xf074, 0xf074,
+		0xf085, 0xf085,
 		0xf09c, 0xf09c,
 		0xf0c4, 0xf0c5,
 		0xf0e2, 0xf0e2,
 		0xf121, 0xf121,
+		0xf187, 0xf187,
 		0xf1b2, 0xf1b2,
 		0xf1c9, 0xf1c9,
 		0xf1de, 0xf1de,
 		0xf1f8, 0xf1f8,
+		0xf21e, 0xf21e,
 		0xf24d, 0xf24d,
+		0xf27b, 0xf27b,
+		0xf2db, 0xf2db,
+		0xf4d8, 0xf4d8,
+		0xf557, 0xf557,
+		0xf5fd, 0xf5fd,
+		0xf72e, 0xf72e,
+		0xf75f, 0xf75f,
+		0xf83e, 0xf83e,
+		0xf863, 0xf863,
 		0
 	];
 
@@ -84,6 +118,24 @@ static class EditorIcons
 		var codepoint = name switch
 		{
 			"speaker" => Speaker[0],
+			"bolt-lightning" => BoltLightning[0],
+			"clapperboard" => Clapperboard[0],
+			"timeline" => Timeline[0],
+			"wand-magic-sparkles" => WandMagicSparkles[0],
+			"font" => Font[0],
+			"gears" => Gears[0],
+			"box-archive" => BoxArchive[0],
+			"heart-pulse" => HeartPulse[0],
+			"comment-dots" => CommentDots[0],
+			"microchip" => Microchip[0],
+			"seedling" => Seedling[0],
+			"archway" => Archway[0],
+			"layer-group" => LayerGroup[0],
+			"wind" => Wind[0],
+			"smog" => Smog[0],
+			"wave-square" => WaveSquare[0],
+			"fan" => Fan[0],
+			"magnifying-glass" => Search[0],
 			_ => 0
 		};
 		icon = paletteFont?[codepoint].Subtexture ?? default;

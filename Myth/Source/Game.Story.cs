@@ -135,7 +135,7 @@ public partial class Game
 	private void ReloadStory()
 	{
 		LoadStory();
-		Console.WriteLine("Reloaded story.");
+		// Console.WriteLine("Reloaded story.");
 	}
 
 	internal void TryBudStorylet(string trigger)

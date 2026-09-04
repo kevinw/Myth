@@ -117,11 +117,12 @@ public static class Factory
 		}
 
 #if EDITOR
-		public static ActorPaletteEntry FromActorIcon(string typeName, Subtexture icon, Point2 offset, RectInt editorBounds, ActorTag tags)
+		public static ActorPaletteEntry FromActorIcon(string typeName, Subtexture icon, Point2 offset,
+			RectInt defaultEditorBounds, RectInt? editorBounds, ActorTag tags)
 		{
 			var origin = icon.Size / 2;
 			var previewScale = Game.TileSize / MathF.Max(icon.Width, icon.Height);
-			return new ActorPaletteEntry(typeName, icon, origin, offset, editorBounds, typeName, null,
+			return new ActorPaletteEntry(typeName, icon, origin, offset, defaultEditorBounds, typeName, null,
 				editorBounds, tags, previewImage: icon, previewScale: previewScale);
 		}
 #endif
@@ -129,14 +130,15 @@ public static class Factory
 #if EDITOR
 		// FromActorIcon's counterpart for a spec: an actor type drawn with an editor icon
 		// lends it to its prefabs, which place and preview at the same size.
-		public static ActorPaletteEntry FromActorSpecIcon(string specId, Subtexture icon, Point2 offset, RectInt editorBounds)
+		public static ActorPaletteEntry FromActorSpecIcon(string specId, Subtexture icon, Point2 offset,
+			RectInt defaultEditorBounds, RectInt? editorBounds)
 		{
 			var spec = ActorSpecs.Get(specId)
 				?? throw new InvalidOperationException($"Actor palette spec entry '{specId}' references missing actor spec.");
 			var typeName = ActorSpecs.GetTypeName(spec);
 			var origin = icon.Size / 2;
 			var previewScale = Game.TileSize / MathF.Max(icon.Width, icon.Height);
-			return new ActorPaletteEntry(specId, icon, origin, offset, editorBounds, typeName, specId,
+			return new ActorPaletteEntry(specId, icon, origin, offset, defaultEditorBounds, typeName, specId,
 				editorBounds, TagsForType(typeName), previewImage: icon, previewScale: previewScale);
 		}
 #endif
@@ -378,13 +380,17 @@ public static class Factory
 		if (attr?.Icon is { } editorIconName)
 		{
 #if EDITOR
-			if (attr.EditorBounds is not { } editorBounds)
-				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' uses Icon without explicit editor bounds.");
 			if (!EditorIcons.TryGetPaletteIcon(editorIconName, out var icon))
 				throw new InvalidOperationException($"[GameActor] on '{typeof(T).Name}' references unknown editor icon '{editorIconName}'.");
-			var iconOffset = attr.OffsetX != 0 || attr.OffsetY != 0 ? attr.Offset : Point2.Zero;
-			paletteLooks[name] = new PaletteLook(editorIconName, null, iconOffset, editorBounds);
-			ActorPalette.Add(ActorPaletteEntry.FromActorIcon(name, icon, iconOffset, editorBounds, tags));
+			var fallbackSprite = Assets.GetSprite(attr.Sprite ?? typeof(T).Name, logMissing: false);
+			var iconDefaultBounds = fallbackSprite != null
+				? ActorPaletteEntry.GetDefaultEditorBounds(fallbackSprite, fallbackSprite.ResolveOrigin(anchor))
+				: attr.EditorBounds ?? new RectInt(-4, -4, 8, 8);
+			var iconOffset = attr.OffsetX != 0 || attr.OffsetY != 0 ? attr.Offset
+				: attr.EditorBounds != null || fallbackSprite == null ? Point2.Zero
+				: DeriveTileOffset(fallbackSprite, anchor);
+			paletteLooks[name] = new PaletteLook(editorIconName, null, iconOffset, iconDefaultBounds, attr.EditorBounds);
+			ActorPalette.Add(ActorPaletteEntry.FromActorIcon(name, icon, iconOffset, iconDefaultBounds, attr.EditorBounds, tags));
 #endif
 			return;
 		}
@@ -408,7 +414,8 @@ public static class Factory
 			: attr?.EditorBounds != null ? Point2.Zero
 			: DeriveTileOffset(sprite, anchor);
 
-		paletteLooks[name] = new PaletteLook(null, iconName, offset, attr?.EditorBounds);
+		var defaultEditorBounds = ActorPaletteEntry.GetDefaultEditorBounds(sprite, sprite.ResolveOrigin(anchor));
+		paletteLooks[name] = new PaletteLook(null, iconName, offset, defaultEditorBounds, attr?.EditorBounds);
 		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None, anchor));
 	}
 
@@ -424,7 +431,8 @@ public static class Factory
 	// How a registered actor type's palette button looks, captured while registering the type
 	// so its specs (prefabs) can wear the same one. Types that skip the palette record nothing,
 	// which keeps their prefabs out of it as well.
-	readonly record struct PaletteLook(string? IconName, string? SpriteName, Point2 Offset, RectInt? EditorBounds);
+	readonly record struct PaletteLook(string? IconName, string? SpriteName, Point2 Offset,
+		RectInt DefaultEditorBounds, RectInt? EditorBounds);
 	static readonly Dictionary<string, PaletteLook> paletteLooks = new(StringComparer.OrdinalIgnoreCase);
 
 	// Where the resolved origin should land within a clicked tile: centered horizontally, and
@@ -482,6 +490,7 @@ public static class Factory
 		Register('w', AsTile("water", false, WaterSubstance, reflection: ReflectionMode.Distorted, reflectionOpacity: 0.5f, acousticReflectivity: 0.55f, drawsVisual: false));
 		Register('#', AsTile("back", false, layer: TileLayer.Background));
 		Register('-', AsTile("back-right", false, layer: TileLayer.Background));
+		Register('?', AsTile("back-left", false, layer: TileLayer.Background));
 		Register(')', AsTile("back-ne", false, layer: TileLayer.Background));
 		Register('(', AsTile("back-nw", false, layer: TileLayer.Background));
 		Register('m', AsTile("myth-back", false, "Background", name: "Myth Back", layer: TileLayer.Background, acousticReflectivity: 0.35f));
@@ -538,9 +547,9 @@ public static class Factory
 			}
 
 #if EDITOR
-			if (look.IconName is { } iconName && look.EditorBounds is { } bounds &&
-				EditorIcons.TryGetPaletteIcon(iconName, out var icon))
-				ActorPalette.Add(ActorPaletteEntry.FromActorSpecIcon(id, icon, look.Offset, bounds));
+			if (look.IconName is { } iconName && EditorIcons.TryGetPaletteIcon(iconName, out var icon))
+				ActorPalette.Add(ActorPaletteEntry.FromActorSpecIcon(id, icon, look.Offset,
+					look.DefaultEditorBounds, look.EditorBounds));
 #endif
 		}
 	}

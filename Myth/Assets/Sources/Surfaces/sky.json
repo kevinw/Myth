@@ -1,0 +1,80 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/brushstrokes/28",
+      "Blend": "Over",
+      "Tint": "0f5878ff",
+      "Opacity": 0.22,
+      "Tiling": [
+        155,
+        155
+      ],
+      "Offset": [
+        0,
+        0
+      ],
+      "Scroll": [
+        1.5,
+        0.5
+      ],
+      "Rotation": "Cw90",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": 0.31,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/noise/Noise_013",
+      "Blend": "Add",
+      "Tint": "daccffff",
+      "Opacity": 0.1,
+      "Tiling": [
+        48,
+        48
+      ],
+      "Offset": [
+        0,
+        0
+      ],
+      "Scroll": [
+        0.05,
+        0
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": 0,
+      "Quantize": 0
+    },
+    {
+      "Texture": "patterns/brushstrokes/15",
+      "Blend": "Add",
+      "Tint": "e8007d41",
+      "Opacity": 0.77,
+      "Tiling": [
+        154,
+        154
+      ],
+      "Offset": [
+        0,
+        0
+      ],
+      "Scroll": [
+        0.5,
+        0
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": 0,
+      "Quantize": 0
+    }
+  ],
+  "NormalFromHeight": false,
+  "NormalTexture": null,
+  "NormalStrength": 1,
+  "HeightFromLayer": 0
+}

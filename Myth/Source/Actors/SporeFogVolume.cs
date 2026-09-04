@@ -3,7 +3,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System,
+[GameActor(Sprite = "Editor/particles", Icon = "smog", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.System,
 	BoundsW = Game.TileSize * 8, BoundsH = Game.TileSize * 5, LivePositionEditable = true, LiveResizable = true)]
 public class SporeFogVolume : Actor, IResizable
 {

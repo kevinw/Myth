@@ -8,6 +8,20 @@ supervisor_pid_file=obj/myth-dev-watch.pid
 run_request=obj/myth-dev-run.request
 watch_pid=
 marker=
+watch_output_pid=
+watch_output_fd=
+watch_log=obj/myth-dev-watch-last.log
+
+finish_watch_output() {
+	if [[ -n "$watch_output_fd" ]]; then
+		exec {watch_output_fd}>&-
+		watch_output_fd=
+	fi
+	if [[ -n "$watch_output_pid" ]]; then
+		wait "$watch_output_pid" 2>/dev/null
+		watch_output_pid=
+	fi
+}
 
 stop() {
 	trap - INT TERM EXIT
@@ -15,6 +29,7 @@ stop() {
 		kill -TERM "$watch_pid" 2>/dev/null
 		wait "$watch_pid" 2>/dev/null
 	fi
+	finish_watch_output
 	[[ -z "$marker" ]] || rm -f "$marker"
 	rm -f "$pid_file"
 	if [[ -f "$supervisor_pid_file" ]] && [[ "$(< "$supervisor_pid_file")" == "$$" ]]; then
@@ -57,11 +72,19 @@ wait_for_trigger() {
 	marker=
 }
 
+watch_failed_internally() {
+	grep -q "An unexpected error occurred:" "$watch_log" &&
+		grep -Eq "Microsoft\.CodeAnalysis\.(Emit|EditAndContinue)" "$watch_log"
+}
+
 while true; do
 	restarting=false
 	rm -f "$pid_file"
+	: > "$watch_log"
+	exec {watch_output_fd}> >(tee "$watch_log")
+	watch_output_pid=$!
 	dotnet watch run --non-interactive --no-restore \
-		--property:RunAnalyzers=false --property:UseFosterDll=true -- --dev-host "$@" &
+		--property:RunAnalyzers=false --property:UseFosterDll=true -- --dev-host "$@" >&"$watch_output_fd" &
 	watch_pid=$!
 
 	while kill -0 "$watch_pid" 2>/dev/null && ! host_is_alive; do sleep 0.1; done
@@ -76,10 +99,16 @@ while true; do
 	wait "$watch_pid" 2>/dev/null
 	watch_status=$?
 	watch_pid=
+	finish_watch_output
 	if [[ "$restarting" == false && "$watch_status" -ge 128 ]]; then
 		exit
 	fi
 	if [[ "$restarting" == true ]]; then
+		continue
+	fi
+	if watch_failed_internally; then
+		echo "dotnet watch hot reload failed internally; restarting immediately."
+		sleep 0.1
 		continue
 	fi
 

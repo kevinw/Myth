@@ -37,6 +37,8 @@ public class Actor
 	public Signs Facing = Signs.Positive;
 	public ActorInversion Invert = ActorInversion.Both;
 	public EditorFlags editorFlags = EditorFlags.None;
+	[InspectorGroup("Attachment"), ActorRef] public string AttachedToActorId = "";
+	public Point2 AttachmentOffset;
 
 	// The resolved draw/flip/hitbox origin for this actor's sprite + anchor, in sprite-local
 	// pixels. Render, GetVisualBounds and Hitbox.FromSprite all key off this so they agree.
@@ -65,6 +67,7 @@ public class Actor
 	internal bool AddedOnce;
 	internal bool FlipY;
 	internal bool KeepOnRoomTransition;
+	[NoSerialize] internal Actor? AttachmentTarget;
 
 	[NoSerialize] public string? ActorId;
 #if EDITOR
@@ -303,6 +306,7 @@ public class Actor
 		}
 
 		Position += sign;
+		Game.ActorMoved(this, sign);
 		return true;
 	}
 
@@ -397,6 +401,7 @@ public class Actor
 			return false;
 
 		Position += step;
+		Game.ActorMoved(this, step);
 		return true;
 	}
 
@@ -406,6 +411,7 @@ public class Actor
 			return false;
 
 		Position += Point2.Down;
+		Game.ActorMoved(this, Point2.Down);
 		return true;
 	}
 
@@ -456,6 +462,7 @@ public class Actor
 			if (found)
 			{
 				Position += best;
+				Game.ActorMoved(this, best);
 				return true;
 			}
 		}
@@ -507,6 +514,17 @@ public class Actor
 		// Console.WriteLine($"Actor added: {this}");
 		Play();
 	}
+
+	internal void ApplyAttachmentMovement(Point2 delta)
+	{
+		Position += delta;
+		OnAttachmentMoved(delta);
+		Game.ActorMoved(this, delta);
+	}
+
+	// Lets simulated children respond to their anchor moving without treating it as their own
+	// velocity. Most actors need only the Position change above.
+	internal virtual void OnAttachmentMoved(Point2 delta) { }
 
 	/// What to do when we collide with a wall while moving horizontally
 	public virtual void OnCollideX() => StopX();

@@ -117,6 +117,7 @@ public partial class Manager
 	// so hidden ones are reachable. Scratch + press state drive it.
 	readonly List<int> actorPickScratch = [];
 	readonly List<ActorSpecs.EditableProperty> actorPropertyScratch = [];
+	readonly HashSet<string> movedAttachmentIds = [];
 	Vector2 actorPressCursor;
 	bool actorPressCanCycle;
 	const float ActorPickCycleThreshold = 4f; // UI pixels: a release within this of the press is a click, not a drag
@@ -2452,10 +2453,51 @@ public partial class Manager
 		var local = snap
 			? SnapRoomActorLocalPosition(targetLocal, offset)
 			: (Point2)targetLocal;
+		var delta = local - (ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero);
 		actor["Position"] = new JsonArray(local.X, local.Y);
+		var attachedTo = ActorSpecs.GetResolvedProperty(actor, nameof(Actor.AttachedToActorId))?.GetValue<string>();
+		if (!string.IsNullOrWhiteSpace(attachedTo) && FindRoomActorById(room, attachedTo) is { } attachmentTarget)
+		{
+			var targetPosition = ActorSpecs.ReadPoint(attachmentTarget, "Position") ?? Point2.Zero;
+			ActorSpecs.SetProperty(actor, nameof(Actor.AttachmentOffset), ActorSpecs.ToJsonNode(local - targetPosition));
+		}
+		if (ActorSpecs.GetActorId(actor) is { } movedId)
+		{
+			movedAttachmentIds.Clear();
+			movedAttachmentIds.Add(movedId);
+			MoveAttachedRoomActors(room, movedId, delta);
+		}
 		if (game is { IsEditorPreview: true } && ActorSpecs.GetActorId(actor) is { } actorId && game.GetActorById(actorId) is { } live)
-			live.Position = room.WorldBounds.TopLeft + local;
+		{
+			var liveDelta = room.WorldBounds.TopLeft + local - live.Position;
+			live.Position += liveDelta;
+			game.ActorMoved(live, liveDelta);
+		}
 		editorGameDirty = true;
+	}
+
+	static JsonObject? FindRoomActorById(Room room, string actorId)
+	{
+		foreach (var actor in room.Actors)
+			if (string.Equals(ActorSpecs.GetActorId(actor), actorId, StringComparison.OrdinalIgnoreCase))
+				return actor;
+		return null;
+	}
+
+	void MoveAttachedRoomActors(Room room, string targetId, Point2 delta)
+	{
+		if (delta == Point2.Zero)
+			return;
+		foreach (var candidate in room.Actors)
+		{
+			var attachedTo = ActorSpecs.GetResolvedProperty(candidate, nameof(Actor.AttachedToActorId))?.GetValue<string>();
+			if (!string.Equals(attachedTo, targetId, StringComparison.OrdinalIgnoreCase))
+				continue;
+			var position = ActorSpecs.ReadPoint(candidate, "Position") ?? Point2.Zero;
+			ActorSpecs.SetProperty(candidate, "Position", ActorSpecs.ToJsonNode(position + delta));
+			if (ActorSpecs.GetActorId(candidate) is { } childId && movedAttachmentIds.Add(childId))
+				MoveAttachedRoomActors(room, childId, delta);
+		}
 	}
 
 	void MovePointPathPoint(Room room, int actorIndex, int pointIndex, Vector2 world, bool snap)

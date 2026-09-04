@@ -262,6 +262,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		Mask = Masks.None;
 
 		Position += step;
+		Game.ActorMoved(this, step);
 
 		foreach (var actor in Game.Actors) if (CanRidePlatform(actor))
 		{
@@ -284,7 +285,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	}
 
 	bool CanRidePlatform(Actor actor)
-		=> IsCarryable(actor) || actor is ICarryable { CarriedBy: null };
+		=> actor.AttachmentTarget != this && (IsCarryable(actor) || actor is ICarryable { CarriedBy: null });
 
 	bool IsStandingOnPlatform(Actor actor)
 		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);

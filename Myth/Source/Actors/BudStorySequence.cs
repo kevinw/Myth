@@ -10,7 +10,7 @@ public enum BudStorySequenceTrigger
 	SourceDestroyed
 }
 
-[GameActor(Sprite = "Editor/text", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
+[GameActor(Sprite = "Editor/text", Icon = "timeline", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
 	Tags = ActorTag.System, LivePositionEditable = true)]
 public class BudStorySequence : Actor
 {

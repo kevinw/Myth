@@ -10,7 +10,7 @@ public enum MachineWallDitherPattern
 	Noise,
 }
 
-[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration,
+[GameActor(Sprite = "Editor/particles", Icon = "gears", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration,
 	LivePositionEditable = true, LiveResizable = true)]
 public class MachineWall : ProceduralWall
 {

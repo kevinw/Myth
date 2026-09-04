@@ -4,7 +4,7 @@ using Foster.Framework;
 namespace Myth;
 
 // A hanging pipe shrine: the Aeolian area's recurring background silhouette.
-[GameActor(Sprite = "Editor/particles", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration, LivePositionEditable = true)]
+[GameActor(Sprite = "Editor/particles", Icon = "fan", Anchor = SpriteAnchor.TopLeft, Tags = ActorTag.Decoration, LivePositionEditable = true)]
 public class WindReliquary : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(64, 80);

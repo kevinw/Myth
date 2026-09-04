@@ -4,7 +4,7 @@ using OutLoud;
 
 namespace Myth;
 
-[GameActor(Sprite = "Editor/text", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System,
+[GameActor(Sprite = "Editor/text", Icon = "clapperboard", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System,
 	LivePositionEditable = true)]
 public class Cutscene : Actor
 {

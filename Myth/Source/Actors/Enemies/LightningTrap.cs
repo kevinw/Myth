@@ -8,7 +8,7 @@ namespace Myth;
 // of axis-aligned segments. It gathers for a moment (light sparking in from both ends of the whole
 // path) as a telegraph, then the full path becomes a lethal hurtbox for FireTime.
 // Indestructible: the player can't hit it, only avoid the beam window.
-[GameActor(Sprite = "Editor/particles", Tags = ActorTag.Hazard,
+[GameActor(Sprite = "Editor/particles", Icon = "bolt-lightning", Tags = ActorTag.Hazard,
 	BoundsX = -6, BoundsY = -6, BoundsW = 12, BoundsH = 12, Anchor = SpriteAnchor.Center,
 	LivePositionEditable = true)]
 public class LightningTrap : Actor, IRoomInversionListener

@@ -81,6 +81,7 @@ public partial class Game : IDisposable
 	public Controls Controls { get; private set; } = null!;
 
 	public readonly List<Actor> Actors = [];
+	readonly List<Actor> attachedActors = [];
 	readonly List<Actor> parkedActors = [];
 
 	// The sim reads time only through this. Normally it's the wall clock (scaled by timeScale);
@@ -720,7 +721,50 @@ public partial class Game : IDisposable
 
 	void PreUpdateSystems()
 	{
+		ResolveActorAttachments();
 		View?.UpdateParticles(Time.Delta);
+	}
+
+	void ResolveActorAttachments()
+	{
+		attachedActors.Clear();
+		foreach (var actor in Actors)
+			actor.AttachmentTarget = string.IsNullOrWhiteSpace(actor.AttachedToActorId)
+				? null
+				: GetActorById(actor.AttachedToActorId);
+
+		foreach (var actor in Actors)
+		{
+			if (actor.AttachmentTarget == null || AttachmentCreatesCycle(actor))
+			{
+				actor.AttachmentTarget = null;
+				continue;
+			}
+			attachedActors.Add(actor);
+		}
+
+		foreach (var actor in attachedActors)
+		{
+			var desired = actor.AttachmentTarget!.Position + actor.AttachmentOffset;
+			if (desired != actor.Position)
+				actor.ApplyAttachmentMovement(desired - actor.Position);
+		}
+	}
+
+	bool AttachmentCreatesCycle(Actor actor)
+	{
+		var target = actor.AttachmentTarget;
+		for (var i = 0; i < Actors.Count && target != null; i++, target = target.AttachmentTarget)
+			if (target == actor)
+				return true;
+		return false;
+	}
+
+	internal void ActorMoved(Actor actor, Point2 delta)
+	{
+		foreach (var attached in attachedActors)
+			if (attached.AttachmentTarget == actor)
+				attached.ApplyAttachmentMovement(delta);
 	}
 
 	void PostUpdateSystems()

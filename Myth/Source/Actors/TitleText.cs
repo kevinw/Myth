@@ -6,7 +6,7 @@ namespace Myth;
 using Color = Foster.Framework.Color;
 
 // Shows text placed as actor metadata.
-[GameActor(Sprite = "Editor/text", Tags = ActorTag.System, LivePositionEditable = true)]
+[GameActor(Sprite = "Editor/text", Icon = "font", Tags = ActorTag.System, LivePositionEditable = true)]
 public class TitleText : Actor
 {
 	internal const string EmptyEditorText = "<empty>";
