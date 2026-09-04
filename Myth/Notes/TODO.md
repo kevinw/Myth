@@ -1,3 +1,4 @@
+- let you choose a hat at the beginning?
 - ABSOLUTELY new attack hitbox logic needs to have HitVisualActors consume the attack
   - or better yet; attackConsumed is instead a Set<Actor>
   - HITTING MULTIPLE ENEMIES AT ONCE IS BROKEN TILL WE FIX THIS

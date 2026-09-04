@@ -179,9 +179,14 @@
       <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))) or '$(RuntimeIdentifier)' == 'linux-x64'">PreserveNewest</CopyToPublishDirectory>
       <Link>%(Filename)%(Extension)</Link>
     </Content>
-    <Content Include="../Foster/Framework/Internal/Native/osx/**" Visible="false">
-      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))) or '$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))) or '$(RuntimeIdentifier)' == 'osx-x64' or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToPublishDirectory>
+    <Content Include="../Foster/Framework/Internal/Native/osx-arm64/**" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX')) and '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64') or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX')) and '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64') or '$(RuntimeIdentifier)' == 'osx-arm64'">PreserveNewest</CopyToPublishDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="../Foster/Framework/Internal/Native/osx-x64/**" Visible="false">
+      <CopyToOutputDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX')) and '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'X64') or '$(RuntimeIdentifier)' == 'osx-x64'">PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX')) and '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'X64') or '$(RuntimeIdentifier)' == 'osx-x64'">PreserveNewest</CopyToPublishDirectory>
       <Link>%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>

@@ -57,6 +57,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	const string FireTake = "EyeLaserFire";
 	const string RecoverTake = "EyeLaserRecover";
 	const string FloatingFlashTake = "FloatingFlashPose";
+	const string FloatingFlashLandTake = "FloatingFlashLand";
 	const string StompTake = "Stomp";
 	const string ChargeEffect = "eye_laser_charge";
 	const string FloatingFlashEffect = "floating_flash_charge";
@@ -128,6 +129,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float FlashReleaseHoldTime => 0.045f;
 	static float FlashAftershockTime => 0.25f;
 	static float FlashDescentTime => 0.55f;
+	static float FlashLandAnimationLeadTime => 0.35f;
+	static float FlashLandAnimationBlendTime => 0.12f;
+	static float FlashLandAnimationSpeed => 1;
 	static float FlashLandHoldTime => 0.15f;
 	static float FlashRecoverTime => 0.35f;
 	static float FlashRecoverBlendTime => 0.6f;
@@ -552,11 +556,23 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		MoveFloating(hoverCenter);
 
 		var descentFrom = (Vector2)Position;
+		var landingAnimationStarted = false;
 		for (var time = 0f; time < FlashDescentTime; time += Time.Delta)
 		{
+			if (!landingAnimationStarted && time >= MathF.Max(0, FlashDescentTime - FlashLandAnimationLeadTime))
+			{
+				PlayAbilityTake(FloatingFlashLandTake, FlashLandAnimationBlendTime);
+				SetAbilityPlaybackSpeedMultiplier(FlashLandAnimationSpeed);
+				landingAnimationStarted = true;
+			}
 			var progress = Ease.Cube.InOut(Math.Clamp(time / FlashDescentTime, 0, 1));
 			MoveFloating(Vector2.Lerp(descentFrom, groundPosition, progress));
 			yield return 0;
+		}
+		if (!landingAnimationStarted)
+		{
+			PlayAbilityTake(FloatingFlashLandTake, FlashLandAnimationBlendTime);
+			SetAbilityPlaybackSpeedMultiplier(FlashLandAnimationSpeed);
 		}
 		MoveFloating(groundPosition);
 		for (var time = 0f; !Grounded() && time < FlashDescentTime * 2; time += Time.Delta)
@@ -568,6 +584,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		floating = false;
 		yield return FlashLandHoldTime;
 
+		SetAbilityPlaybackSpeedMultiplier(1);
 		PlayAbilityIdle(FlashRecoverBlendTime);
 		for (var time = 0f; time < FlashRecoverBlendTime; time += Time.Delta)
 		{

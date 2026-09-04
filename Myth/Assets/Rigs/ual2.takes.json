@@ -39,6 +39,13 @@
     "Speed": 1,
     "FootIK": false
   },
+  "FloatingFlashLand": {
+    "Clip": "NinjaJump_Land",
+    "Start": 0,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false
+  },
   "Stomp": {
     "Clip": "Stomping",
     "Start": 0,

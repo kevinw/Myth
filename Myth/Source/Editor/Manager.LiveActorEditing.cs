@@ -412,6 +412,10 @@ public partial class Manager
 	{
 		authoredRoom = null!;
 		authored = null!;
+
+		if (runtime.editorFlags.Has(Actor.EditorFlags.Locked))
+			return false;
+
 		if (runtime.ActorId is not { } id || runtime.Room?.Id != runtimeRoom.Id ||
 			liveGame.destroying.Contains(runtime) || positionEditableOnly && !Factory.LivePositionEditable(runtime.GetType()) ||
 			Assets.GetRoom(runtimeRoom.Id) is not { } room)
@@ -568,9 +572,9 @@ public partial class Manager
 	{
 		var topLeft = GameWorldToImGui(viewport, game, bounds.TopLeft);
 		var bottomRight = GameWorldToImGui(viewport, game, bounds.BottomRight);
-		var color = selected ? ImGuiColor(0.45f, 1, 0.72f, 0.95f) : ImGuiColor(1, 1, 1, 0.42f);
-		if (selected)
-			draw.AddRectFilled(topLeft, bottomRight, ImGuiColor(0.35f, 1, 0.62f, 0.05f));
+		var color = selected ? ImGuiColor(0.45f, 1, 0.72f, 0.45f) : ImGuiColor(1, 1, 1, 0.22f);
+		//if (selected)
+			//draw.AddRectFilled(topLeft, bottomRight, ImGuiColor(0.35f, 1, 0.62f, 0.05f));
 		draw.AddRect(topLeft, bottomRight, color, 0, ImDrawFlags.None, selected ? 2 : 1.25f);
 	}
 

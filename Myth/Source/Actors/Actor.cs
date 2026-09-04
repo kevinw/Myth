@@ -14,7 +14,7 @@ public enum ActorInversion
 
 public class Actor
 {
-	public static bool TransitionsEnabled = true;
+	internal static bool TransitionsEnabled = true;
 
 	[Flags]
 	public enum Masks
@@ -25,41 +25,53 @@ public class Actor
 		Player = 1 << 2,
 		Enemy = 1 << 3,
 		Hazard = 1 << 4,
-		Destructible = 1 << 5,
+		Destructible = 1 << 5
 	}
 
-	[NoSerialize] public Game Game = null!;
-	[NoSerialize] internal Room? Room;
-	[NoSerialize] public Point2 Position;
-	[NoSerialize] public Vector2 Velocity;
-	[NoSerialize] public Hitbox Hitbox;
-	[NoSerialize] public Masks Mask = Masks.None;
+	[Flags]
+	public enum EditorFlags {
+		None = 0,
+		Locked = 1, // no live edit
+	}
+
 	public Signs Facing = Signs.Positive;
 	public ActorInversion Invert = ActorInversion.Both;
-	[NoSerialize] public SpriteAnchor Anchor = SpriteAnchor.Auto;
-	[NoSerialize] public bool FlipY;
+	public EditorFlags editorFlags = EditorFlags.None;
 
 	// The resolved draw/flip/hitbox origin for this actor's sprite + anchor, in sprite-local
 	// pixels. Render, GetVisualBounds and Hitbox.FromSprite all key off this so they agree.
 	public Vector2 Origin => sprite?.ResolveOrigin(Anchor) ?? Vector2.Zero;
-	[NoSerialize] public Vector2 Squish = Vector2.One;
-	[NoSerialize] public Vector2 Shift = Vector2.Zero;
+
+	internal Vector2 Squish = Vector2.One;
+	internal Vector2 Shift = Vector2.Zero;
 	// Horizontal lean of the sprite as x-per-y: 0.3 slides the top edge a third of the sprite's
 	// height to the right, with the base planted. Set it and it eases back to zero like Squish.
-	[NoSerialize] public float Skew = 0;
-	[NoSerialize] public int Depth = 0;
-	[NoSerialize] public float Timer = 0;
-	[NoSerialize] public bool Visible = true;
-	[NoSerialize] public float IFrameTime = 0.50f;
-	[NoSerialize] public bool CollidesWithSolids = true;
+	internal float Skew = 0;
+	internal int Depth = 0;
+	internal float Timer = 0;
+	internal float IFrameTime = 0.50f;
+
+	internal Game Game = null!;
+	internal Room? Room;
+	internal Point2 Position;
+	internal Vector2 Velocity;
+	internal Hitbox Hitbox;
+	internal Masks Mask = Masks.None;
+	internal SpriteAnchor Anchor = SpriteAnchor.Auto;
+
+
+	internal bool Visible = true;
+	internal bool CollidesWithSolids = true;
+	internal bool AddedOnce;
+	internal bool FlipY;
+	internal bool KeepOnRoomTransition;
+
 	[NoSerialize] public string? ActorId;
 #if EDITOR
 	[NoSerialize] internal JsonObject? AuthoredSpec;
 #endif
 	internal ActorTag Tags;
 	[NoSerialize] internal string? SessionDestroyKey;
-	[NoSerialize] internal bool AddedOnce;
-	internal bool KeepOnRoomTransition;
 	public virtual bool CastsSpriteShadow => sprite != null;
 	public virtual bool CastsReflection => sprite != null;
 	public virtual bool LightingDithered => !Mask.Has(Masks.Player | Masks.Enemy);
