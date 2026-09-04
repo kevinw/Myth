@@ -78,7 +78,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     glow /= 4.5;
 
 
-    float brightness = max(max(glow.r, glow.g), glow.b) + glow * ExtraGlow;
+    float brightness = max(max(glow.r, glow.g), glow.b) + ExtraGlow;
     color += glow * smoothstep(BloomThreshold, 1.0, brightness) * BloomAmount * (ExtraGlow * 3.0);
 
     float vignette = smoothstep(1.25, 0.35, radius);

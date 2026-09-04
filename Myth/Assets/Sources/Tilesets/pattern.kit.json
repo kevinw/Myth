@@ -1,0 +1,70 @@
+{
+  "substance": "Brick",
+  "layer": "Background",
+  "mask": "stone-kit",
+  "seed": 220812139,
+  "edgeWidth": "4",
+  "wobble": 1,
+  "palette": {
+    "a": "125168",
+    "b": "5C3D3D",
+    "c": "7C441E"
+  },
+  "heights": {
+    "a": 0.67,
+    "b": 0,
+    "c": 0.67
+  },
+  "fills": [
+    [
+      "aaaabaaa",
+      "aaababaa",
+      "abbacabb",
+      "bcbabbaa",
+      "cacbacac",
+      "abaaaacb",
+      "bbbaaaba",
+      "aaabbbaa"
+    ],
+    [
+      "abaaaaaa",
+      "babaaaaa",
+      "baababab",
+      "abbababa",
+      "aaabaaaa",
+      "bababaab",
+      "abaaabba",
+      "aaaaaaaa"
+    ]
+  ],
+  "edge": [
+    [
+      "4B4231",
+      31
+    ],
+    [
+      "464149",
+      15
+    ],
+    [
+      "312F2C",
+      15
+    ]
+  ],
+  "edgeTop": [
+    [
+      "B52C2C",
+      20
+    ],
+    [
+      "812020",
+      20
+    ]
+  ],
+  "edgeBottom": [
+    [
+      "4D2929",
+      20
+    ]
+  ]
+}
