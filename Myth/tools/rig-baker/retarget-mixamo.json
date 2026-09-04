@@ -1,0 +1,14 @@
+{
+  "GroundReferenceClip": "Zombie_Idle_Loop",
+  "Clips": {
+    "Kick_Soccerball": {
+      "Ground": true
+    },
+    "Leg_Sweep": {
+      "Ground": true
+    },
+    "Mutant_Swiping": {
+      "Ground": true
+    }
+  }
+}

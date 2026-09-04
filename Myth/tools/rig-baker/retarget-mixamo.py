@@ -1,4 +1,5 @@
 import argparse
+import json
 import math
 import os
 import re
@@ -45,6 +46,7 @@ def arguments():
     parser.add_argument("source_fbx", nargs="+")
     parser.add_argument("--target", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--profiles", required=True)
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
@@ -56,7 +58,11 @@ def clip_name(path):
     return re.sub(r"[^A-Za-z0-9]+", "_", os.path.splitext(os.path.basename(path))[0]).strip("_")
 
 
-def retarget(source_path, target_path, output_dir):
+def ground_height(armature):
+    return min(armature.pose.bones[name].head.z for name in ("ball_leaf_l", "ball_leaf_r"))
+
+
+def retarget(source_path, target_path, output_dir, profile, ground_reference_clip):
     name = clip_name(source_path)
     if not name:
         raise RuntimeError(f"Cannot derive a clip name from {source_path}")
@@ -64,6 +70,16 @@ def retarget(source_path, target_path, output_dir):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=target_path)
     target = next(obj for obj in bpy.data.objects if obj.type == "ARMATURE")
+    grounded = profile.get("Ground", False)
+    target_ground_height = None
+    if grounded:
+        reference_action = bpy.data.actions.get(ground_reference_clip)
+        if reference_action is None:
+            raise RuntimeError(f"Ground reference clip '{ground_reference_clip}' does not exist")
+        target.animation_data.action = reference_action
+        bpy.context.scene.frame_set(round(reference_action.frame_range[0]))
+        bpy.context.view_layer.update()
+        target_ground_height = ground_height(target)
     target.animation_data_clear()
     for action in list(bpy.data.actions):
         bpy.data.actions.remove(action)
@@ -112,6 +128,7 @@ def retarget(source_path, target_path, output_dir):
         bone.rotation_mode = "QUATERNION"
 
     endpoints = []
+    ground_offset = None
     for frame in range(first_frame, last_frame + 1):
         scene.frame_set(frame)
         for bone in target.pose.bones:
@@ -130,6 +147,18 @@ def retarget(source_path, target_path, output_dir):
                 head = target_pelvis_origin + (source_head - source_pelvis_origin) * translation_scale
             pose_bone.matrix = Matrix.Translation(head) @ desired.to_matrix().to_4x4()
             bpy.context.view_layer.update()
+
+        if grounded:
+            if ground_offset is None:
+                ground_offset = target_ground_height - ground_height(target)
+            pelvis = target.pose.bones["pelvis"]
+            matrix = pelvis.matrix.copy()
+            matrix.translation.z += ground_offset
+            pelvis.matrix = matrix
+            bpy.context.view_layer.update()
+
+        for target_name in BONE_MAP:
+            pose_bone = target.pose.bones[target_name]
             pose_bone.keyframe_insert("rotation_quaternion", frame=frame)
             if target_name == "pelvis":
                 pose_bone.keyframe_insert("location", frame=frame)
@@ -174,12 +203,20 @@ def retarget(source_path, target_path, output_dir):
     print(
         f"Exported {name}: {last_frame - first_frame + 1} frames at {fps:.3f} fps to {output}\n"
         f"  Loop delta: {pelvis_delta * 100:.2f} cm pelvis, "
-        f"{max_rotation_delta * 57.2957795:.1f} degrees at {max_rotation_bone}"
+        f"{max_rotation_delta * 57.2957795:.1f} degrees at {max_rotation_bone}" +
+        (f"\n  Ground offset: {ground_offset * 100:.2f} cm against {ground_reference_clip}"
+         if grounded else "")
     )
 
 
 args = arguments()
 target_path = os.path.abspath(args.target)
 output_dir = os.path.abspath(args.output_dir)
+with open(args.profiles, "r", encoding="utf-8") as file:
+    profiles = json.load(file)
+ground_reference_clip = profiles["GroundReferenceClip"]
+clip_profiles = profiles.get("Clips", {})
 for source_fbx in args.source_fbx:
-    retarget(os.path.abspath(source_fbx), target_path, output_dir)
+    name = clip_name(source_fbx)
+    retarget(os.path.abspath(source_fbx), target_path, output_dir,
+             clip_profiles.get(name, {}), ground_reference_clip)

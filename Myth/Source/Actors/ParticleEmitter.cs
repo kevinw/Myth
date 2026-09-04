@@ -39,11 +39,7 @@ public class ParticleEmitter : Actor
 	}
 
 	public override void Destroyed()
-	{
-		if (effectIndex >= 0 && Game.Particles is { } system)
-			system.ReleaseEffect(effectIndex);
-		effectIndex = -1;
-	}
+		=> ReleaseParticleEffect(ref effectIndex);
 
 	public override void Update()
 	{

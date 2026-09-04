@@ -12,7 +12,7 @@ namespace Myth;
 	LivePositionEditable = true)]
 public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 {
-	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp }
+	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
 
 	[I(24, 160), InspectorGroup("Eye Laser")] public float MinimumRange = 48;
 	[I(48, 320)] public float MaximumRange = 376;
@@ -42,7 +42,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	public Color FloatingFlashColor = 0xffd7f2;
 	static float StompRange => 1280f;
 	static float StompVerticalRange => 150f;
-	[I(0.1f, 8)] public float StompCooldown = 3;
+
+
 	[I(80, 360)] public float StompWaveSpeed = 120;
 	[I(64, 640)] public float StompWaveRange = 460;
 	[I(1, 8)] public float StompWaveThickness = 5.5f;
@@ -59,6 +60,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	const string FloatingFlashTake = "FloatingFlashPose";
 	const string FloatingFlashLandTake = "FloatingFlashLand";
 	const string StompTake = "Stomp";
+	const string SwipeTake = "Swipe";
 	const string ChargeEffect = "eye_laser_charge";
 	const string FloatingFlashEffect = "floating_flash_charge";
 	const string StompGatherEffect = "wave_pylon_solid_charge";
@@ -135,7 +137,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float FlashLandHoldTime => 0.15f;
 	static float FlashRecoverTime => 0.35f;
 	static float FlashRecoverBlendTime => 0.6f;
-	static float FlashCooldown => 4;
 	static float FlashParticleRate => 54;
 	static float FlashParticleRadius => 24;
 	static float FlashRuffSpeed => MathF.Tau * 3.8f;
@@ -154,6 +155,13 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float StompHoldDuration => 0.35f;
 	static float StompHoldMinimumSpeed => 0.05f;
 	static float StompGatherRadius => 18;
+	static float SwipeRange => 50;
+	static float SwipeChance => 0.5f;
+
+	static float SwipeCooldown => 0.55f;
+	static float StompCooldown => 1.2f;
+	static float FlashCooldown => 1.5f;
+
 	static float ContactDamageGraceTime => 1.0f;
 	float StompHoldProgress => MathF.Max(0, StompImpactProgress - StompHoldLead);
 
@@ -177,9 +185,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	public override void Added()
 	{
 		base.Added();
-		chargeEffect = Game.Particles?.AcquireEffect(ChargeEffect) ?? -1;
-		floatingFlashEffect = Game.Particles?.AcquireEffect(FloatingFlashEffect) ?? -1;
-		stompGatherEffect = Game.Particles?.AcquireEffect(StompGatherEffect) ?? -1;
+		chargeEffect = AcquireParticleEffect(ChargeEffect);
+		floatingFlashEffect = AcquireParticleEffect(FloatingFlashEffect);
+		stompGatherEffect = AcquireParticleEffect(StompGatherEffect);
 		ConfigureLaser();
 	}
 
@@ -199,6 +207,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			}
 			var canStomp = distance <= StompRange && MathF.Abs(toPlayer.Y) <= StompVerticalRange;
 			var canLaser = distance >= MinimumRange && distance <= MaximumRange && MathF.Abs(toPlayer.Y) <= VerticalRange;
+			var canSwipe = toPlayer.LengthSquared() < SwipeRange * SwipeRange &&
+				Vector2.Dot(toPlayer, Vector2.UnitX * (int)Facing) > 0 && RigFacingMatches;
 			if (!grounded || !canStomp && !canLaser)
 				return false;
 
@@ -208,6 +218,12 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			SetAbilityLookTarget(player.Position);
 			if (cooldown > 0)
 				return true;
+			if (canSwipe && Game.rng.Chance(SwipeChance))
+			{
+				LogLiveStatus($"Swipe at {toPlayer.Length():0.0}px");
+				BeginSwipe();
+				return true;
+			}
 			var roll = Game.rng.Int(canLaser ? 4 : 3);
 			switch (roll)
 			{
@@ -301,6 +317,13 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 				if (AbilityAnimationFinished)
 					FinishStomp();
 				break;
+
+			case Phase.Swipe:
+				SetAbilityLookTarget(null);
+				SetAbilityPoseModifierWeight(1);
+				if (AbilityAnimationFinished)
+					FinishSwipe();
+				break;
 		}
 
 		return true;
@@ -316,6 +339,23 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		AudioEvent("boss/footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
 	}
 	internal override bool ContactDamageEnabled => contactDamageGrace <= 0;
+
+	void BeginSwipe()
+	{
+		SetAbilityYaw(RigFacingYaw);
+		PlayAbilityTake(SwipeTake);
+		SetAbilityLookTarget(null);
+		phase = Phase.Swipe;
+	}
+
+	void FinishSwipe()
+	{
+		SetAbilityYaw(null);
+		phase = Phase.None;
+		cooldown = SwipeCooldown;
+		SetAbilityLookTarget(null);
+		SetAbilityPoseModifierWeight(1);
+	}
 
 	void BeginStomp()
 	{
@@ -774,6 +814,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		SetAbilityPoseJostle(0);
 		SetAbilityVisualOffset(Vector2.Zero);
 		SetAbilityYaw(null);
+		UnlockAbilityAnimationYaw();
 		StopAndReleaseSound(ref sound, true);
 	}
 
@@ -883,6 +924,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			Phase.StompTurning => "Turning for stomp",
 			Phase.Stomp when stompHolding => "Holding stomp",
 			Phase.Stomp => "Stomping",
+			Phase.Swipe => "Swiping",
 			_ => "Unknown"
 		};
 
@@ -900,6 +942,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 				Phase.FloatingFlash => nameof(Phase.FloatingFlash),
 				Phase.StompTurning => nameof(Phase.StompTurning),
 				Phase.Stomp => nameof(Phase.Stomp),
+				Phase.Swipe => nameof(Phase.Swipe),
 				_ => "Unknown"
 			});
 
@@ -1031,12 +1074,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 					string.Equals(texture.ShutdownSourceActorId, ActorId, StringComparison.OrdinalIgnoreCase))
 					texture.BeginShutdown();
 		base.Destroyed();
-		if (Game.Particles is { } particles)
-		{
-			particles.ReleaseEffect(ref chargeEffect);
-			particles.ReleaseEffect(ref floatingFlashEffect);
-			particles.ReleaseEffect(ref stompGatherEffect);
-		}
+		ReleaseParticleEffect(ref chargeEffect);
+		ReleaseParticleEffect(ref floatingFlashEffect);
+		ReleaseParticleEffect(ref stompGatherEffect);
 	}
 
 	public override void Render(Batcher batcher)

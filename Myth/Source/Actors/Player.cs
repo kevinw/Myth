@@ -23,13 +23,17 @@ public abstract class Pawn : Actor
 	{
 		base.Added();
 
-		if (Game.Particles is { Supported: true } particles)
-		{
-			jumpParticlesEffect = particles.AcquireEffect("jump");
-			splashParticlesEffect = particles.AcquireEffect("splash");
-		}
+		jumpParticlesEffect = AcquireParticleEffect("jump");
+		splashParticlesEffect = AcquireParticleEffect("splash");
 
 		Game.RoomChanged += OnRoomChanged;
+	}
+
+	public override void Destroyed()
+	{
+		Game.RoomChanged -= OnRoomChanged;
+		ReleaseParticleEffect(ref jumpParticlesEffect);
+		ReleaseParticleEffect(ref splashParticlesEffect);
 	}
 
 	void OnRoomChanged(RoomChange change) {
@@ -1457,11 +1461,8 @@ public partial class Player : Pawn
 		});
 		UpdateLightPosition();
 
-		if (Game.Particles is { Supported: true } particles)
-		{
-			burrowSparkEffect = particles.AcquireEffect("sparks");
-			plasmaStrikeEffect = particles.AcquireEffect("plasma_strike");
-		}
+		burrowSparkEffect = AcquireParticleEffect("sparks");
+		plasmaStrikeEffect = AcquireParticleEffect("plasma_strike");
 	}
 
 	public override void OnCollideY()
@@ -2397,6 +2398,7 @@ public partial class Player : Pawn
 
 	public override void Destroyed()
 	{
+		base.Destroyed();
 		StopRollSound(true);
 		StopAndReleaseSound(ref burrowSound, true);
 		if (light != null)
@@ -2405,9 +2407,7 @@ public partial class Player : Pawn
 			light = null;
 		}
 		ReleaseBurrowParticles();
-		if (plasmaStrikeEffect >= 0 && Game.Particles is { } particles)
-			particles.ReleaseEffect(plasmaStrikeEffect);
-		plasmaStrikeEffect = -1;
+		ReleaseParticleEffect(ref plasmaStrikeEffect);
 		ReleaseDashFx();
 		ReleaseShield();
 	}

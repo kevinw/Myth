@@ -41,7 +41,7 @@ public class PatternProjectile : Actor
 	public override void Added()
 	{
 		base.Added();
-		sparkEffect = Game.Particles?.AcquireEffect("sparks") ?? -1;
+		sparkEffect = AcquireParticleEffect("sparks");
 	}
 
 	public override void Update()
@@ -90,7 +90,7 @@ public class PatternProjectile : Actor
 		AudioEvent("bubble");
 	}
 
-	public override void Destroyed() => Game.Particles?.ReleaseEffect(ref sparkEffect);
+	public override void Destroyed() => ReleaseParticleEffect(ref sparkEffect);
 
 	public override void Render(Batcher batcher)
 	{

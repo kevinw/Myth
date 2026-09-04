@@ -18,7 +18,6 @@
     "label": "Play",
     "command": "./tools/dev-play.sh",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
-    "save": "all",
     "reveal": "never",
     "hide": "on_success",
     "show_summary": false,

@@ -212,6 +212,15 @@ public class Actor
 	public void AudioEvent(string name, string parameterName, float parameterFloat)
 		=> Game.PlayAudioEvent(name, parameterName, parameterFloat, Position);
 
+	protected int AcquireParticleEffect(string name)
+		=> Game.Particles?.AcquireEffect(name) ?? -1;
+
+	protected void ReleaseParticleEffect(ref int slot)
+	{
+		Game.Particles?.ReleaseEffect(slot);
+		slot = -1;
+	}
+
 	/// Checks to see if we overlap any actors of the given mask
 	public bool OverlapsAny(Masks mask) => OverlapsAny(Point2.Zero, mask);
 

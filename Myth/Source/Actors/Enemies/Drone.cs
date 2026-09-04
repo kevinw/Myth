@@ -58,7 +58,7 @@ public class Drone : Actor
 
 	public override void Destroyed() {
 		routine.Stop();
-		Game.Particles?.ReleaseEffect(ref sparkEffect);
+		ReleaseParticleEffect(ref sparkEffect);
 	}
 
 	public Drone()
@@ -72,7 +72,7 @@ public class Drone : Actor
 	public override void Added()
 	{
 		SetState(HoverRoutine());
-		sparkEffect = Game.Particles?.AcquireEffect("sparks") ?? -1;
+		sparkEffect = AcquireParticleEffect("sparks");
 	}
 
 	// A state is just its running routine (see ShieldKnight): transition by handing SetState a

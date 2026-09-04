@@ -35,9 +35,5 @@ public partial class Player
 	}
 
 	void ReleaseDashFx()
-	{
-		if (Game.Particles is not { } particles)
-			return;
-		particles.ReleaseEffect(ref dashEdgeSlot);
-	}
+		=> ReleaseParticleEffect(ref dashEdgeSlot);
 }

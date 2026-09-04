@@ -152,9 +152,9 @@ public sealed class WavePylon : Actor
 			return;
 
 		medium = next;
-		Game.Particles?.ReleaseEffect(ref chargeEffect);
-		chargeEffect = Game.Particles?.AcquireEffect(
-			medium == RadialWaveMedium.Solid ? SolidChargeEffect : AirChargeEffect) ?? -1;
+		ReleaseParticleEffect(ref chargeEffect);
+		chargeEffect = AcquireParticleEffect(
+			medium == RadialWaveMedium.Solid ? SolidChargeEffect : AirChargeEffect);
 		solidSurface = null;
 		if (charging && medium == RadialWaveMedium.Solid)
 			TryFindSolidSurface(out solidSurface);
@@ -258,7 +258,7 @@ public sealed class WavePylon : Actor
 
 	public override void Destroyed()
 	{
-		Game.Particles?.ReleaseEffect(ref chargeEffect);
+		ReleaseParticleEffect(ref chargeEffect);
 		StopAndReleaseSound(ref sound, true);
 	}
 

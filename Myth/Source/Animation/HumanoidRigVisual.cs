@@ -46,7 +46,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		return turnedPoint.X * cameraCos + turnedPoint.Z * cameraSin;
 	}
 
-	enum Part { Torso, Bicep, Forearm, Thigh, Other }
+	enum Part { Torso, Bicep, Forearm, Hand, Thigh, Other }
 	enum LegSide { None, Left, Right }
 	enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
 
@@ -92,12 +92,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true),
 		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true),
 		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true),
-		new("hand_l", "middle_01_l", 2.5f, Part.Forearm, true),
+		new("hand_l", "middle_01_l", 2.5f, Part.Hand, true),
 		new("spine_03", "clavicle_r", 3, Part.Bicep, true),
 		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true),
 		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true),
 		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true),
-		new("hand_r", "middle_01_r", 2.5f, Part.Forearm, true),
+		new("hand_r", "middle_01_r", 2.5f, Part.Hand, true),
 		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: LegSide.Left),
 		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: LegSide.Left),
 		new("calf_l", "foot_l", 3, Part.Other, Leg: LegSide.Left),
@@ -212,12 +212,19 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	bool eyeReady;
 	static float VisualEyeScale => 2.0f;
 	float eyeScale = 1;
+	float upperBodyLeanDegrees;
+	float targetUpperBodyLeanDegrees;
+	float armWidthScale = 1;
+	float targetArmWidthScale = 1;
+	float handWidthScale = 1;
+	float targetHandWidthScale = 1;
 	float eyeReactionRemaining;
 	float eyeReactionStrength;
 	float freezeRemaining;
 	float? lockedAnimationYaw;
 
 	static float ClipBlendDuration => 0.2f;
+	static float TakeModifierResponse => 12;
 	static float RagdollSpring => 160f;
 	static float RagdollDamping => 11f;
 	static float RagdollMaxSpeed => 10f;
@@ -408,6 +415,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public void Play(string name, bool blend = true, bool restart = false, bool seededPhase = false,
 		float blendDuration = -1)
 	{
+		SetTakeModifierTargets(0, 1, 1);
 		var startTime = seededPhase && !string.Equals(animator.ActiveClip.Name, name, StringComparison.OrdinalIgnoreCase)
 			? rig.GetClip(name).Duration * animationPhase : 0;
 		var transition = blend ? (blendDuration >= 0 ? blendDuration : ClipBlendDuration) : 0;
@@ -416,6 +424,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	public void Play(RigTake take, float blendDuration = -1, bool restart = true)
 	{
+		SetTakeModifierTargets(take.UpperBodyLeanDegrees, take.ArmWidthScale, take.HandWidthScale);
 		var clip = rig.GetClip(take.Clip);
 		var start = Math.Clamp(take.Start, 0, clip.Duration);
 		var end = Math.Clamp(take.End, start, clip.Duration);
@@ -455,9 +464,25 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		for (var i = 0; i < ticks; i++)
 		{
 			UpdateTurn(grounded);
+			UpdateTakeModifiers();
 			animator.Advance(advance ? step * PlaybackSpeed : 0, step, loop);
 			UpdatePose(grounded, footIK);
 		}
+	}
+
+	void SetTakeModifierTargets(float leanDegrees, float arms, float hands)
+	{
+		targetUpperBodyLeanDegrees = leanDegrees;
+		targetArmWidthScale = Math.Clamp(arms, 0.1f, 3);
+		targetHandWidthScale = Math.Clamp(hands, 0.1f, 3);
+	}
+
+	void UpdateTakeModifiers()
+	{
+		var amount = 1 - MathF.Exp(-TakeModifierResponse * visualDelta);
+		upperBodyLeanDegrees = float.Lerp(upperBodyLeanDegrees, targetUpperBodyLeanDegrees, amount);
+		armWidthScale = float.Lerp(armWidthScale, targetArmWidthScale, amount);
+		handWidthScale = float.Lerp(handWidthScale, targetHandWidthScale, amount);
 	}
 
 	public void ResetTurn()
@@ -587,6 +612,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		ApplyTrackingLean();
 		UpdateRagdoll();
 		ProjectPose();
+		ApplyTakePoseModifiers();
 		ApplyGaitAsymmetry();
 		ApplyPlantResponse();
 		UpdateSecondaryMotion();
@@ -600,6 +626,22 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			ResetFeet();
 		SortBones();
 		UpdateEye();
+	}
+
+	void ApplyTakePoseModifiers()
+	{
+		if (MathF.Abs(upperBodyLeanDegrees) < 0.001f)
+			return;
+		var pivot = projectedPose[pelvis];
+		var rotation = Matrix3x2.CreateRotation(
+			upperBodyLeanDegrees * MathF.PI / 180 * (int)visualFacing);
+		for (var i = 0; i < projectedPose.Length; i++)
+		{
+			var weight = upperBodyMask[i];
+			if (weight > 0)
+				projectedPose[i] = Vector2.Lerp(projectedPose[i],
+					pivot + Vector2.Transform(projectedPose[i] - pivot, rotation), weight);
+		}
 	}
 
 	void UpdateEye()
@@ -1115,8 +1157,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float BoneWidth(Bone bone) => bone.Part switch
 	{
 		Part.Torso => Settings.TorsoSize,
-		Part.Bicep => Settings.BicepSize,
-		Part.Forearm => Settings.ForearmSize,
+		Part.Bicep => Settings.BicepSize * armWidthScale,
+		Part.Forearm => Settings.ForearmSize * armWidthScale,
+		Part.Hand => Settings.ForearmSize * handWidthScale,
 		Part.Thigh => Settings.ThighSize,
 		_ => bone.Width,
 	};
@@ -1128,7 +1171,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		var depthScale = 1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * Settings.DepthWidthAmount;
 		fromWidth = BoneWidth(bone) * depthScale;
-		toWidth = bone.Leg != LegSide.None || bone.Part is Part.Bicep or Part.Forearm
+		toWidth = bone.Leg != LegSide.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand
 			? fromWidth * (1 - Math.Clamp(Settings.LimbTaper, 0, 0.75f))
 			: fromWidth;
 	}

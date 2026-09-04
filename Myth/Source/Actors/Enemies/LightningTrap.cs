@@ -66,12 +66,12 @@ public class LightningTrap : Actor, IRoomInversionListener
 		phase = Phase.Wait;
 		phaseTime = -MathF.Max(0, StartDelay); // stagger the first fire
 		ClearHurtbox();
-		sparkEffect = Game.Particles?.AcquireEffect("lightning_spark") ?? -1;
+		sparkEffect = AcquireParticleEffect("lightning_spark");
 	}
 
 	public override void Destroyed()
 	{
-		Game.Particles?.ReleaseEffect(ref sparkEffect);
+		ReleaseParticleEffect(ref sparkEffect);
 		StopAndReleaseSound(ref sound, true);
 	}
 

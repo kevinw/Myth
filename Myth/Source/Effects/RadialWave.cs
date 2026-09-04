@@ -165,8 +165,8 @@ public sealed class RadialWave : Actor, INeuralTextureAgent, IRoomInversionListe
 		{
 			birthEmitted = true;
 			preEchoFade = 1;
-			impactEffect = Game.Particles?.AcquireEffect(Medium == RadialWaveMedium.Solid ? SolidImpactEffect : ImpactEffect) ?? -1;
-			birthEffect = Game.Particles?.AcquireEffect(Medium == RadialWaveMedium.Solid ? SolidBirthEffect : BirthEffect) ?? -1;
+			impactEffect = AcquireParticleEffect(Medium == RadialWaveMedium.Solid ? SolidImpactEffect : ImpactEffect);
+			birthEffect = AcquireParticleEffect(Medium == RadialWaveMedium.Solid ? SolidBirthEffect : BirthEffect);
 			if (birthEffect >= 0)
 				Game.Particles?.Emit(birthEffect, Position, 24);
 		}
@@ -228,9 +228,9 @@ public sealed class RadialWave : Actor, INeuralTextureAgent, IRoomInversionListe
 		if (!birthEmitted)
 			return;
 
-		Game.Particles?.ReleaseEffect(ref impactEffect);
-		impactEffect = Game.Particles?.AcquireEffect(
-			Medium == RadialWaveMedium.Solid ? SolidImpactEffect : ImpactEffect) ?? -1;
+		ReleaseParticleEffect(ref impactEffect);
+		impactEffect = AcquireParticleEffect(
+			Medium == RadialWaveMedium.Solid ? SolidImpactEffect : ImpactEffect);
 	}
 
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
@@ -946,8 +946,8 @@ public sealed class RadialWave : Actor, INeuralTextureAgent, IRoomInversionListe
 		Finished = true;
 		for (var i = 0; i < surfaceVoices.Length; i++)
 			StopSurfaceVoice(ref surfaceVoices[i], true);
-		Game.Particles?.ReleaseEffect(ref impactEffect);
-		Game.Particles?.ReleaseEffect(ref birthEffect);
+		ReleaseParticleEffect(ref impactEffect);
+		ReleaseParticleEffect(ref birthEffect);
 		StopAndReleaseSound(ref impactSound, true);
 	}
 

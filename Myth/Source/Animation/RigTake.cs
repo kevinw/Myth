@@ -9,7 +9,10 @@ public readonly record struct RigTake(
 	float End,
 	bool Loop = false,
 	float Speed = 1,
-	bool FootIK = false);
+	bool FootIK = false,
+	float UpperBodyLeanDegrees = 0,
+	float ArmWidthScale = 1,
+	float HandWidthScale = 1);
 
 static class RigTakes
 {
@@ -56,7 +59,10 @@ static class RigTakes
 						value["End"]?.GetValue<float>() ?? float.MaxValue,
 						value["Loop"]?.GetValue<bool>() ?? false,
 						value["Speed"]?.GetValue<float>() ?? 1,
-						value["FootIK"]?.GetValue<bool>() ?? false);
+						value["FootIK"]?.GetValue<bool>() ?? false,
+						value["UpperBodyLeanDegrees"]?.GetValue<float>() ?? 0,
+						value["ArmWidthScale"]?.GetValue<float>() ?? 1,
+						value["HandWidthScale"]?.GetValue<float>() ?? 1);
 		}
 		catch (Exception e)
 		{
@@ -87,6 +93,9 @@ static class RigTakes
 				["Loop"] = item.Loop,
 				["Speed"] = item.Speed,
 				["FootIK"] = item.FootIK,
+				["UpperBodyLeanDegrees"] = item.UpperBodyLeanDegrees,
+				["ArmWidthScale"] = item.ArmWidthScale,
+				["HandWidthScale"] = item.HandWidthScale,
 			};
 		}
 		var path = Path.Join(Assets.AssetsPath, AssetPath);

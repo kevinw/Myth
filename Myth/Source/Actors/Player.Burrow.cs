@@ -895,9 +895,5 @@ public partial class Player : Pawn
 
 
 	void ReleaseBurrowParticles()
-	{
-		if (burrowSparkEffect >= 0 && Game.Particles is { } particles)
-			particles.ReleaseEffect(burrowSparkEffect);
-		burrowSparkEffect = -1;
-	}
+		=> ReleaseParticleEffect(ref burrowSparkEffect);
 }

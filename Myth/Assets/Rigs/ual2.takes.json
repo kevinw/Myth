@@ -53,5 +53,15 @@
     "Loop": false,
     "Speed": 1,
     "FootIK": false
+  },
+  "Swipe": {
+    "Clip": "Mutant_Swiping",
+    "Start": 0,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false,
+    "UpperBodyLeanDegrees": 8,
+    "ArmWidthScale": 1.25,
+    "HandWidthScale": 1.4
   }
 }

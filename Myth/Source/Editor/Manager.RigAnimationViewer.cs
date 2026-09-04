@@ -18,6 +18,9 @@ public partial class Manager
 	float rigTakeStart;
 	float rigTakeEnd;
 	float rigTakeSpeed = 1;
+	float rigTakeUpperBodyLeanDegrees;
+	float rigTakeArmWidthScale = 1;
+	float rigTakeHandWidthScale = 1;
 	bool rigTakeLoop;
 	bool rigTakeFootIK;
 
@@ -190,6 +193,25 @@ public partial class Manager
 		if (ImGui.Checkbox("Take foot IK", ref rigTakeFootIK))
 			rig.SetAnimationPreviewIK(rigTakeFootIK);
 
+		var lean = rigTakeUpperBodyLeanDegrees;
+		if (ImGui.SliderFloat("Upper-body lean", ref lean, -20, 20, "%.1f deg"))
+		{
+			rigTakeUpperBodyLeanDegrees = lean;
+			PreviewRigTakeDraft(rig);
+		}
+		var armScale = rigTakeArmWidthScale;
+		if (ImGui.SliderFloat("Arm width", ref armScale, 0.5f, 2, "%.2fx"))
+		{
+			rigTakeArmWidthScale = armScale;
+			PreviewRigTakeDraft(rig);
+		}
+		var handScale = rigTakeHandWidthScale;
+		if (ImGui.SliderFloat("Hand width", ref handScale, 0.5f, 2, "%.2fx"))
+		{
+			rigTakeHandWidthScale = handScale;
+			PreviewRigTakeDraft(rig);
+		}
+
 		if (ImGui.Button("Preview take"))
 			PreviewRigTakeDraft(rig);
 		ImGui.SameLine();
@@ -234,6 +256,8 @@ public partial class Manager
 		rigTakeStart = 0;
 		rigTakeEnd = clip.Duration;
 		rigTakeSpeed = 1;
+		rigTakeUpperBodyLeanDegrees = 0;
+		rigTakeArmWidthScale = rigTakeHandWidthScale = 1;
 		rigTakeLoop = clip.Name.EndsWith("_Loop", StringComparison.OrdinalIgnoreCase);
 		rigTakeFootIK = false;
 		rigTakeStatus = "";
@@ -244,6 +268,9 @@ public partial class Manager
 			rigTakeSpeed = saved.Speed;
 			rigTakeLoop = saved.Loop;
 			rigTakeFootIK = saved.FootIK;
+			rigTakeUpperBodyLeanDegrees = saved.UpperBodyLeanDegrees;
+			rigTakeArmWidthScale = saved.ArmWidthScale;
+			rigTakeHandWidthScale = saved.HandWidthScale;
 		}
 	}
 
@@ -254,6 +281,9 @@ public partial class Manager
 		rigTakeStart = take.Start;
 		rigTakeEnd = take.End;
 		rigTakeSpeed = take.Speed;
+		rigTakeUpperBodyLeanDegrees = take.UpperBodyLeanDegrees;
+		rigTakeArmWidthScale = take.ArmWidthScale;
+		rigTakeHandWidthScale = take.HandWidthScale;
 		rigTakeLoop = take.Loop;
 		rigTakeFootIK = take.FootIK;
 		rigTakeStatus = "";
@@ -264,6 +294,7 @@ public partial class Manager
 
 	RigTake RigTakeDraft()
 		=> new(rigTakeName, rigTakeDraftClip!, rigTakeStart, rigTakeEnd,
-			rigTakeLoop, rigTakeSpeed, rigTakeFootIK);
+			rigTakeLoop, rigTakeSpeed, rigTakeFootIK, rigTakeUpperBodyLeanDegrees,
+			rigTakeArmWidthScale, rigTakeHandWidthScale);
 }
 #endif

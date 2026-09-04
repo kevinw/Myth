@@ -111,11 +111,11 @@ public class MagneticCrawler : Actor
 		bodyPosition = DormantBodyPosition();
 		InitializeParts();
 		PlantAllFeet();
-		sparkEffect = Game.Particles?.AcquireEffect("sparks") ?? -1;
+		sparkEffect = AcquireParticleEffect("sparks");
 		SetState(State.Dormant);
 	}
 
-	public override void Destroyed() => Game.Particles?.ReleaseEffect(ref sparkEffect);
+	public override void Destroyed() => ReleaseParticleEffect(ref sparkEffect);
 
 	public override void Update()
 	{

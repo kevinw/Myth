@@ -49,5 +49,5 @@ public partial class Player
 	}
 
 	void ReleaseShield()
-		=> Game.Particles?.ReleaseEffect(ref shieldSlot);
+		=> ReleaseParticleEffect(ref shieldSlot);
 }

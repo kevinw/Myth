@@ -10,4 +10,5 @@ if (( $# == 0 )); then
 fi
 
 blender --factory-startup --background --python "$script_dir/retarget-mixamo.py" -- \
-	--target "$target" --output-dir "$script_dir/mixamo" "$@"
+	--target "$target" --output-dir "$script_dir/mixamo" \
+	--profiles "$script_dir/retarget-mixamo.json" "$@"
