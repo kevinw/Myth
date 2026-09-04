@@ -121,6 +121,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		base.Added();
 		CreateVisual();
+#if EDITOR
+		if (Game.IsEditorPreview)
+			Game.EditorPreviewSync += SyncEditorPreviewPose;
+#endif
 	}
 
 	void CreateVisual()
@@ -130,7 +134,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		SyncVisual();
 		visual.Initialize(IdleAnimationName);
 		visualReady = true;
-		SyncRuff();
+		if (UsesFrozenPose)
+			SampleFrozenPose(resetDynamics: true);
+		else
+			SyncRuff();
 	}
 
 	void SyncVisual()
@@ -143,7 +150,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.BackArmCombatEnabled = BackArmCombatEnabled;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
-		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
+		visual.LookTarget = abilityActive ? abilityLookTarget : TracksPlayer ? Game.GetFirst<Player>()?.Position : null;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
 		visual.YawOverride = abilityActive ? abilityYaw : null;
@@ -195,6 +202,11 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			return;
 		}
 #endif
+		if (UsesFrozenPose)
+		{
+			UpdateFrozenPose();
+			return;
+		}
 		UpdateScriptRoutine();
 		if (stepTraversal == StepTraversal.None && !AbilityControlsMovement)
 			Velocity.Y += Gravity * Time.Delta;
@@ -264,6 +276,25 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			seekGround: abilityActive && abilityFootIKGrounded);
 	}
 
+	void UpdateFrozenPose()
+	{
+		Velocity = Vector2.Zero;
+		base.Update();
+		SampleFrozenPose();
+	}
+
+	void SampleFrozenPose(bool resetDynamics = false)
+	{
+		walking = false;
+		var animation = visual.TryGetClip(FrozenPoseAnimationName, out _) ? FrozenPoseAnimationName : IdleName();
+		visual.Play(animation, blend: false);
+		visual.Time = visual.ActiveClip.Duration * Math.Clamp(FrozenPoseProgress, 0, 1);
+		if (resetDynamics)
+			visual.ResetPoseDynamics();
+		SyncVisual();
+		visual.Update(FrozenPoseFootIK, FrozenPoseFootIK, advance: false, seekGround: FrozenPoseFootIK);
+	}
+
 	protected virtual bool UpdateAbility(Player player, bool grounded) => false;
 	protected virtual void InterruptAbility() { }
 	protected virtual bool AbilityControlsMovement => false;
@@ -272,6 +303,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual float PlayerStopDistance => StopDistance;
 	protected virtual float AnimationSpeedMultiplier => 1;
 	protected virtual float HitLimbReactionStrength => 1;
+	protected virtual bool UsesFrozenPose => false;
+	protected virtual string FrozenPoseAnimationName => IdleAnimationName;
+	protected virtual float FrozenPoseProgress => 0;
+	protected virtual bool FrozenPoseFootIK => false;
+	protected virtual Color RigTint => Color.White;
+	protected virtual bool TracksPlayer => true;
+	protected virtual bool ShowsHitBlink => true;
 	protected virtual Color RigHeadTint => Color.White;
 	protected virtual bool BackArmCombatEnabled => true;
 	protected virtual void OnFootstep(Vector2 position) { }
@@ -586,7 +624,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			return;
 		AnimationPreviewEnabled = false;
 		AnimationPreviewPaused = false;
-		visual.Play(IdleName());
+		if (UsesFrozenPose)
+			SampleFrozenPose(resetDynamics: true);
+		else
+			visual.Play(IdleName());
 	}
 
 	internal void PreviewAnimation(int index)
@@ -627,6 +668,21 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			Velocity.Y = 0;
 		SyncVisual();
 		visual.Update(grounded, AnimationPreviewIK, AnimationPreviewLooping, advance: !AnimationPreviewPaused);
+	}
+
+	internal void UpdateAnimationPreviewInEditor()
+	{
+		if (!AnimationPreviewEnabled)
+			return;
+		SyncVisual();
+		visual.Update(AnimationPreviewIK, AnimationPreviewIK, AnimationPreviewLooping,
+			advance: !AnimationPreviewPaused, seekGround: AnimationPreviewIK);
+	}
+
+	void SyncEditorPreviewPose()
+	{
+		if (UsesFrozenPose && !AnimationPreviewEnabled)
+			SampleFrozenPose(resetDynamics: true);
 	}
 #endif
 
@@ -719,6 +775,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	public override void Destroyed()
 	{
+#if EDITOR
+		if (Game.IsEditorPreview)
+			Game.EditorPreviewSync -= SyncEditorPreviewPose;
+#endif
 		if (abilityActive)
 			InterruptAbility();
 		EndScript();
@@ -739,6 +799,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		if (AnimationPreviewEnabled)
 			return;
 #endif
+		if (UsesFrozenPose)
+		{
+			var propAway = Position.X < by.Position.X ? -1f : 1f;
+			visual.Hit(((Vector2)(Position - by.Position)).Normalized(Vector2.UnitX * propAway),
+				HitLimbReactionStrength);
+			return;
+		}
 		if (scripted || Health <= 0)
 			return;
 		var suppressKnockdown = SuppressKnockdownOnHit;
@@ -787,19 +854,19 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	public override void Render(Batcher batcher)
 	{
-		if (SpriteBlinkHidden)
+		if (ShowsHitBlink && SpriteBlinkHidden)
 			return;
 		if (ruff != null)
 		{
 			if (StraddlesPlayerDepth)
-				visual.DrawInFrontOfPlayerWithAccessory(batcher, Color.White, silhouette: false, ruff);
+				visual.DrawInFrontOfPlayerWithAccessory(batcher, RigTint, silhouette: false, ruff);
 			else
-				visual.DrawWithAccessory(batcher, Color.White, silhouette: false, ruff);
+				visual.DrawWithAccessory(batcher, RigTint, silhouette: false, ruff);
 		}
 		else if (StraddlesPlayerDepth)
-			visual?.DrawInFrontOfPlayer(batcher, Color.White, silhouette: false);
+			visual?.DrawInFrontOfPlayer(batcher, RigTint, silhouette: false);
 		else
-			visual?.Draw(batcher, Color.White, silhouette: false);
+			visual?.Draw(batcher, RigTint, silhouette: false);
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color)
@@ -835,8 +902,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	internal void RenderBehindPlayer(Batcher batcher)
 	{
-		if (Visible && StraddlesPlayerDepth && !SpriteBlinkHidden)
-			visual?.DrawBehindPlayer(batcher, Color.White, silhouette: false);
+		if (Visible && StraddlesPlayerDepth && (!ShowsHitBlink || !SpriteBlinkHidden))
+			visual?.DrawBehindPlayer(batcher, RigTint, silhouette: false);
 	}
 
 	internal void RenderShadowBehindPlayer(Batcher batcher, Color color)
@@ -867,7 +934,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			visual?.DrawCombatBounds(batcher);
 	}
 
-	public override Rect GetVisualBounds() => new(Position.X - 42, Position.Y - 48, 84, 58);
+	public override Rect GetVisualBounds()
+		=> visual?.GetVisualBounds() ?? new(Position.X - 42, Position.Y - 48, 84, 58);
 }
 
 sealed class RigPuppetBackLegRenderer : Actor

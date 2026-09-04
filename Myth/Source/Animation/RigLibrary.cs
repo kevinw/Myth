@@ -13,4 +13,11 @@ static class RigLibrary
 		using var stream = Assets.Content.OpenRead($"Rigs/{name}.ozzpack");
 		return rigs[name] = OzzRig.Load(stream);
 	}
+
+	public static void Clear()
+	{
+		foreach (var rig in rigs.Values)
+			rig.Dispose();
+		rigs.Clear();
+	}
 }

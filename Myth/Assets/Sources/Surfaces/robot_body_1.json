@@ -1,0 +1,32 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/noise/Noise_043",
+      "Blend": "Over",
+      "Tint": "577773ff",
+      "Opacity": 1,
+      "Tiling": [
+        118,
+        118
+      ],
+      "Offset": [
+        -5,
+        0
+      ],
+      "Scroll": [
+        0,
+        0
+      ],
+      "Rotation": "None",
+      "FlipX": false,
+      "FlipY": false,
+      "Contrast": 1,
+      "Bias": 0.25,
+      "Quantize": 0
+    }
+  ],
+  "NormalFromHeight": false,
+  "NormalTexture": null,
+  "NormalStrength": 1,
+  "HeightFromLayer": 0
+}

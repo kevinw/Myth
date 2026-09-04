@@ -222,6 +222,7 @@ public partial class Manager
 		editorZoomTweenFrom = editorZoom;
 		editorZoomTweenTo = editorZoom;
 		editorCameraTween = 0.0f;
+		editorCameraTweenSpeed = 4;
 		editorViewInitialized = true;
 	}
 }

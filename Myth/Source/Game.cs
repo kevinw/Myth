@@ -2214,7 +2214,7 @@ public partial class Game : IDisposable
 		}
 	}
 
-	public void ReloadRoom(bool restartMusic = false)
+	public void ReloadRoom(bool restartMusic = false, bool reloadRigs = false)
 	{
 		if (room == null) return;
 
@@ -2225,6 +2225,11 @@ public partial class Game : IDisposable
 		var reloaded = Assets.GetRoom(room.Id)?.CloneRuntime() ?? room.CloneRuntime();
 		foreach (var actor in Actors)
 			Destroy(actor);
+		if (reloadRigs)
+		{
+			RemoveDestroyedActors();
+			RigLibrary.Clear();
+		}
 
 		room.RoomGeoChanged -= OnRoomGeoChanged;
 		room = reloaded;

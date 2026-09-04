@@ -67,6 +67,7 @@ public partial class Manager
 	// feedback loop when a center-docked window occupies the same screen-space strip.
 	int paletteDockedLastFrame;
 	int paletteDockedThisFrame;
+	bool paletteDockVisibleLastFrame;
 
 	/// The right region stays where the user left it. Hidden dock nodes are kept alive below, so
 	/// collapsing and reopening does not undock their windows.
@@ -103,14 +104,15 @@ public partial class Manager
 		Math.Max(1, WorkRect.Width - EditorPaletteReservedWidth - EditorDockReservedWidth),
 		WorkRect.Height);
 
-	/// The palette region, eased off the left edge as the game opens (what PaletteSlideRect used
-	/// to do for the palette window itself; a docked window rides along with its host).
+	/// The palette slides away when play begins, but returns immediately when editing resumes.
 	Rect EditorPaletteDockRect
 	{
 		get
 		{
 			var open = new Rect(WorkRect.X, WorkRect.Y, editorPaletteWidth, WorkRect.Height);
-			return open - Vector2.UnitX * Ease.Cube.InOut(gameEase) * open.Right;
+			return !playing && !startingPlay
+				? open
+				: open - Vector2.UnitX * Ease.Cube.InOut(gameEase) * open.Right;
 		}
 	}
 
@@ -151,12 +153,16 @@ public partial class Manager
 		if (editorDockResetFrames > 0)
 			editorDockResetFrames--;
 
-		paletteDockedLastFrame = paletteDockedThisFrame;
+		// Hidden dock windows are not submitted during play, so a zero from those frames says
+		// nothing about whether the region should return when edit mode resumes.
+		if (paletteDockVisibleLastFrame)
+			paletteDockedLastFrame = paletteDockedThisFrame;
 		paletteDockedThisFrame = 0;
 
 		var paletteVisible = EditorPaletteDockVisible;
 		var toolVisible = EditorDockVisible;
 		var centreVisible = paletteVisible || toolVisible || gameEase < 1.0f;
+		paletteDockVisibleLastFrame = paletteVisible;
 
 		if (paletteVisible)
 			EditorDockHostImGui("##EditorPaletteDockHost", "EditorPaletteDock", EditorPaletteDockRect, ref editorPaletteDockId, rightSide: false);

@@ -236,6 +236,37 @@
       "Contrast": 1.822,
       "Saturation": 1.937,
       "PrewarmSteps": 31
+    },
+    {
+      "Id": "f7c84eb70a8eed28",
+      "Type": "RigPuppetProp",
+      "Position": [179, 288],
+      "NeckExtension": 6.185,
+      "TorsoSize": 10.854,
+      "PixelsPerMeter": 34.946,
+      "HeadSize": 4.854,
+      "PoseAnimationName": "Male_Sitting_Pose",
+      "PoseProgress": 0.75,
+      "ProjectionYaw": 62.341,
+      "NeuralFireRate": 0,
+      "NeuralFPS": 1,
+      "NeuralColorAmount": 0.485,
+      "NeuralWeightsFile": "bricks096_pair_circular_screen.bin",
+      "ForearmSize": 3.508,
+      "BicepSize": 1.844,
+      "DepthColorContrast": 1.914,
+      "DepthWidthAmount": 0.175,
+      "EyeSize": 0,
+      "Tint": "B5B3B3",
+      "SkinMode": "Surface",
+      "SurfaceId": "robot_body_1",
+      "HeadSpriteScale": 0.909
+    },
+    {
+      "Id": "d04525a9a576ac82",
+      "Type": "InspectPoint",
+      "Position": [184, 256],
+      "Text": "Bud: It seems dead."
     }
   ]
 }

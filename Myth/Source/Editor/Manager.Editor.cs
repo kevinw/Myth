@@ -31,6 +31,7 @@ public partial class Manager
 
 	bool editorGameDirty;
 	bool editorViewInitialized;
+	bool showTileGrid;
 	bool showFungalMarkers;
 	Vector2 editorCamera;
 	float editorZoom = 1.0f;
@@ -42,7 +43,9 @@ public partial class Manager
 	float editorZoomTweenFrom;
 	float editorZoomTweenTo;
 	float editorCameraTween = 1.0f;
+	float editorCameraTweenSpeed = 4;
 	Vector2? previousStableGameViewCenter;
+	static float PlayToEditorCameraTweenSpeed => 9f;
 
 	// Seconds left where wheel events are treated as a trackpad two-finger swipe (pan) rather than a
 	// mouse wheel (zoom). A trackpad sends precise/fractional deltas; we latch on those so the stray
@@ -174,9 +177,6 @@ public partial class Manager
 	/// overlay (see Manager.EditorMenu.cs), which floats over the game view and costs no layout.
 	Rect WorkRect => View;
 
-	/// Palette View when the Editor is Open
-	Rect PaletteOpenRect => new(WorkRect.X, WorkRect.Y, PaletteWidth, WorkRect.Height);
-
 	/// Edit Workspace when the Editor is Open: the Game dock window's content rect, which the
 	/// dock layout decides. Falls back to the plain centre region before the window exists.
 	Rect EditorOpenRect
@@ -265,10 +265,6 @@ public partial class Manager
 		FlushSaveState();
 	}
 #endif
-
-	/// Eases the PaletteView out/in as the Game opens/closes
-	Rect PaletteSlideRect =>
-		PaletteOpenRect - Vector2.UnitX * Ease.Cube.InOut(gameEase) * PaletteOpenRect.Right;
 
 	void ClearEditorStateForEnteringPlayMode()
 	{
@@ -862,6 +858,7 @@ public partial class Manager
 		editorCameraTweenFrom = editorCamera;
 		editorZoomTweenFrom = editorZoom;
 		editorCameraTween = 0.0f;
+		editorCameraTweenSpeed = 4;
 		editorViewInitialized = true;
 	}
 
@@ -882,7 +879,7 @@ public partial class Manager
 		if (editorCameraTween >= 1.0f)
 			return;
 
-		editorCameraTween = Calc.Approach(editorCameraTween, 1.0f, Time.Delta * 4.0f);
+		editorCameraTween = Calc.Approach(editorCameraTween, 1.0f, Time.Delta * editorCameraTweenSpeed);
 		var t = Ease.Cube.InOut(editorCameraTween);
 		editorCamera = Vector2.Lerp(editorCameraTweenFrom, editorCameraTweenTo, t);
 		editorZoom = float.Lerp(editorZoomTweenFrom, editorZoomTweenTo, t);
@@ -920,11 +917,21 @@ public partial class Manager
 		if (game == null)
 			return;
 
-		editorCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
-		var view = EditorOpenRect;
-		editorZoom = Math.Clamp(Math.Min(view.Width / Game.Width, view.Height / Game.Height), 0.15f, 8.0f);
+		var playCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
+		// StopGame calls this before ImGui has submitted the newly visible dock windows, so
+		// gameViewWindowRect still describes play mode. The computed dock centre is already exact.
+		var view = EditorCenterRect;
+		var playView = GameOpenRect;
+		var playZoom = Math.Clamp(Math.Min(playView.Width / Game.Width, playView.Height / Game.Height), 0.15f, 8.0f);
+		editorCameraTweenFrom = playCamera + (view.Center - playView.Center) / playZoom;
+		editorCameraTweenTo = playCamera;
+		editorZoomTweenFrom = playZoom;
+		editorZoomTweenTo = Math.Clamp(Math.Min(view.Width / Game.Width, view.Height / Game.Height), 0.15f, 8.0f);
+		editorCamera = editorCameraTweenFrom;
+		editorZoom = editorZoomTweenFrom;
 		editorZoomTarget = editorZoom;
-		editorCameraTween = 1.0f;
+		editorCameraTween = 0;
+		editorCameraTweenSpeed = PlayToEditorCameraTweenSpeed;
 		editorViewInitialized = true;
 	}
 
@@ -1675,6 +1682,17 @@ public partial class Manager
 		return new RectInt(position.X - 4, position.Y - 4, 8, 8);
 	}
 
+	RectInt EditorRoomActorBounds(Room room, JsonObject actor)
+	{
+		if (game?.CurrentRoom?.Id == room.Id && ActorSpecs.GetActorId(actor) is { } id &&
+			game.GetActorById(id) is RigPuppet rig)
+		{
+			var bounds = rig.GetVisualBounds();
+			return RectInt.Between(bounds.TopLeft.FloorToPoint2(), -(-bounds.BottomRight).FloorToPoint2());
+		}
+		return RoomActorBounds(room, actor);
+	}
+
 	/// Moves an actor so its whole footprint sits inside the room. The clamp is applied to the
 	/// actor's bounds rather than its Position, since the two differ by the sprite/palette origin;
 	/// an actor larger than the room pins to the top-left corner.
@@ -1939,7 +1957,7 @@ public partial class Manager
 
 	bool RoomActorContains(Room room, JsonObject actor, Vector2 world)
 	{
-		if (RoomActorBounds(room, actor).Contains(world))
+		if (EditorRoomActorBounds(room, actor).Contains(world))
 			return true;
 		if (!IsPointPathActor(actor))
 			return false;
@@ -1979,9 +1997,9 @@ public partial class Manager
 		return selectedRoomActorIndex;
 	}
 
-	static long RoomActorPickArea(Room room, int index)
+	long RoomActorPickArea(Room room, int index)
 	{
-		var bounds = RoomActorBounds(room, room.Actors[index]);
+		var bounds = EditorRoomActorBounds(room, room.Actors[index]);
 		return (long)bounds.Width * bounds.Height;
 	}
 
@@ -2039,7 +2057,7 @@ public partial class Manager
 				continue;
 
 			var hovered = i == hoveredIndex;
-			var bounds = RoomActorBounds(room, room.Actors[i]);
+			var bounds = EditorRoomActorBounds(room, room.Actors[i]);
 			if (!selected && !hovered && !bounds.Inflate(bounds.Width * 1.5f, bounds.Height * 1.5f).Contains(worldMouse))
 				continue;
 
@@ -4151,10 +4169,13 @@ public partial class Manager
 				DragKind == EditorDragKind.ActorResize ? editorDrag.ResizeHandle :
 				hoveredHiddenWallHandle);
 
-			for (int x = 1; x < editing.Size.X; x++)
-				batcher.Line(roomTopLeft + new Vector2(x * Game.TileSize, 0), roomTopLeft + new Vector2(x * Game.TileSize, height), gridWeight, (x - 1) % 4 == 0 ? gridColorHeavy : gridColor);
-			for (int y = 1; y < editing.Size.Y; y++)
-				batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize), roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, (y - 1) % 4 == 0 ? gridColorHeavy : gridColor);
+			if (showTileGrid)
+			{
+				for (int x = 1; x < editing.Size.X; x++)
+					batcher.Line(roomTopLeft + new Vector2(x * Game.TileSize, 0), roomTopLeft + new Vector2(x * Game.TileSize, height), gridWeight, (x - 1) % 4 == 0 ? gridColorHeavy : gridColor);
+				for (int y = 1; y < editing.Size.Y; y++)
+					batcher.Line(roomTopLeft + new Vector2(0, y * Game.TileSize), roomTopLeft + new Vector2(width, y * Game.TileSize), gridWeight, (y - 1) % 4 == 0 ? gridColorHeavy : gridColor);
+			}
 			DrawBreakableTileMarkers(editing, roomTopLeft, gridWeight);
 			DrawCrumbleTileMarkers(editing, roomTopLeft, gridWeight);
 			if (showFungalMarkers)
@@ -5209,6 +5230,8 @@ public partial class Manager
 			SaveWindowSettings();
 		if (IsItemHovered())
 			SetTooltip("On: a pasted actor lands in the middle of the editor view.\nOff: it keeps the position it was copied from.\nEither way it is clamped inside the room.");
+		if (Checkbox("Show tile grid", ref showTileGrid))
+			SaveWindowSettings();
 		if (Button(EditorIcons.ResetToolWindowLayout))
 			ResetEditorToolWindowLayout();
 		if (IsItemHovered())

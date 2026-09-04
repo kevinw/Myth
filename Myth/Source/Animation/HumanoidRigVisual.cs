@@ -302,7 +302,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 	public bool Turning => turning;
 	public bool FacingMatches => !turning && visualFacing == owner.Facing;
-	public bool EyeVisible => headSprite == null || TryHeadSpriteEyeOffset(out _);
+	public bool EyeVisible => Settings.EyeSize > 0 && (headSprite == null || TryHeadSpriteEyeOffset(out _));
 	public Vector2 EyeOffset => TryHeadSpriteEyeOffset(out var position)
 		? position
 		: projectedPose[head] + (headSprite == null ? lookDirection * 2.4f : Vector2.Zero);
@@ -544,6 +544,15 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		rightFoot = default;
 		plantRemaining = 0;
 		gaitStepSide = Side.None;
+	}
+
+	public void ResetPoseDynamics()
+	{
+		ragdollReady = false;
+		headMotion = leftHandMotion = rightHandMotion = default;
+		Array.Clear(pendingImpulses);
+		pendingLandingSpeed = 0;
+		ResetFeet();
 	}
 
 	public void Land(float speed)
@@ -1341,6 +1350,24 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			1, 14, color);
 	}
 
+	public Rect GetVisualBounds()
+	{
+		var headRadius = Settings.HeadSize + 1.4f;
+		if (TryGetHeadSpriteFrame(out var frame, out _))
+			headRadius = new Vector2(frame.Subtexture.Width, frame.Subtexture.Height).Length() *
+				Settings.HeadSpriteScale * 0.5f;
+		var bounds = new Rect(projectedPose[head] - Vector2.One * headRadius, Vector2.One * headRadius * 2);
+		for (var i = 0; i < bones.Length; i++)
+		{
+			var bone = bones[i];
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			BoneQuad(projectedPose[bone.From], projectedPose[bone.To], fromWidth + 2, toWidth + 2,
+				out var a, out var b, out var c, out var d);
+			bounds = bounds.Conflate(a).Conflate(b).Conflate(c).Conflate(d);
+		}
+		return bounds + owner.Position;
+	}
+
 	public void Draw(Batcher batcher, Color tint, bool silhouette)
 		=> Draw(batcher, tint, silhouette, DrawParts.All, null);
 	public void DrawWithAccessory(Batcher batcher, Color tint, bool silhouette,
@@ -1403,8 +1430,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				}
 
 				var handDepth = BoneRenderDepth(bone);
-				var handColor = BoneColor(bone, handDepth);
-				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 2, Settings.OutlineColor);
+				var handColor = Multiply(BoneColor(bone, handDepth), tint);
+				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 2, Multiply(Settings.OutlineColor, tint));
 				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 0, handColor);
 				DrawHandPalmSkin(batcher, boneOrder[sortedIndex], from, to, fromWidth, toWidth,
 					handColor, surface, neuralTexture, normals: false);
@@ -1417,8 +1444,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			}
 
 			var depth = BoneRenderDepth(bone);
-			var color = BoneColor(bone, depth);
-			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, Settings.OutlineColor);
+			var color = Multiply(BoneColor(bone, depth), tint);
+			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, Multiply(Settings.OutlineColor, tint));
 			DrawBoneQuad(batcher, from, to, fromWidth, toWidth, color);
 			if (surface != null)
 				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth,
@@ -1445,25 +1472,31 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
-			DrawHeadSprite(batcher, frame.Subtexture, silhouette ? tint : HeadTint);
-			if (!silhouette && TryHeadSpriteEyeOffset(out var eye))
-				batcher.Circle(eye, VisualEyeScale * eyeScale, 8, Settings.AccentColor);
+			DrawHeadSprite(batcher, frame.Subtexture, silhouette ? tint : Multiply(HeadTint, tint));
+			if (!silhouette && Settings.EyeSize > 0 && TryHeadSpriteEyeOffset(out var eye))
+				batcher.Circle(eye, VisualEyeScale * Settings.EyeSize * eyeScale, 8,
+					Multiply(Settings.AccentColor, tint));
 			return;
 		}
 
 		var position = projectedPose[head];
 		batcher.Circle(position, Settings.HeadSize + 1.4f, 14,
-			silhouette ? tint : Settings.OutlineColor);
-		batcher.Circle(position, Settings.HeadSize, 14, silhouette ? tint : Settings.NearColor);
+			silhouette ? tint : Multiply(Settings.OutlineColor, tint));
+		batcher.Circle(position, Settings.HeadSize, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
 		if (surface != null)
 			DrawSurfaceCircle(batcher, surface, position, Settings.HeadSize,
 				neuralHeadUV, neuralHeadUVRadius, normals: false);
 		else if (neuralTexture != null)
 			DrawNeuralCircle(batcher, neuralTexture, position, Settings.HeadSize,
-				neuralHeadUV, neuralHeadUVRadius, Settings.NearColor * Neural.NeuralColorAmount);
-		if (!silhouette)
-			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * eyeScale, 8, Settings.AccentColor);
+				neuralHeadUV, neuralHeadUVRadius, Multiply(Settings.NearColor, tint) * Neural.NeuralColorAmount);
+		if (!silhouette && Settings.EyeSize > 0)
+			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * Settings.EyeSize * eyeScale, 8,
+				Multiply(Settings.AccentColor, tint));
 	}
+
+	static Color Multiply(Color color, Color tint) => new(
+		(byte)(color.R * tint.R / 255), (byte)(color.G * tint.G / 255),
+		(byte)(color.B * tint.B / 255), (byte)(color.A * tint.A / 255));
 
 	public void DrawNormals(Batcher batcher)
 		=> DrawNormals(batcher, DrawParts.All, null);

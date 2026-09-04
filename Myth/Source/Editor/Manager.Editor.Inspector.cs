@@ -253,7 +253,8 @@ public partial class Manager
 			}
 		}
 		else if (property.DeclaringType == typeof(RigPuppet) &&
-			property.Name is nameof(RigPuppet.IdleAnimationName) or nameof(RigPuppet.WalkAnimationName))
+			property.Name is nameof(RigPuppet.IdleAnimationName) or nameof(RigPuppet.WalkAnimationName) ||
+			property.DeclaringType == typeof(RigPuppetProp) && property.Name == nameof(RigPuppetProp.PoseAnimationName))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			if (DrawRigAnimationCombo(ref value))
@@ -540,8 +541,21 @@ public partial class Manager
 		}
 
 		var inspectorAction = false;
+		if (actorId is not null && game?.GetActorById(actorId) is RigPuppet)
+		{
+			if (Button("Rig Animations"))
+			{
+				rigAnimationViewerInitialized = true;
+				rigAnimationViewerOpen = true;
+			}
+			if (IsItemHovered())
+				SetTooltip("Open the Rig Animations window for this puppet.");
+			inspectorAction = true;
+		}
 		if (ActorSpecs.ReadString(actor, "From") is { } specId && ActorSpecs.Get(specId) != null)
 		{
+			if (inspectorAction)
+				SameLine();
 			if (Button(EditorIcons.Cube + "##JumpToPrefab"))
 			{
 				selectedActorSpecId = specId;
@@ -732,7 +746,7 @@ public partial class Manager
 			return true;
 
 		var typeName = ActorSpecs.GetTypeName(actor);
-		if (typeName is nameof(RigPuppet) or nameof(Stalker))
+		if (typeName is nameof(RigPuppet) or nameof(RigPuppetProp) or nameof(Stalker))
 		{
 			var mode = RigSkinMode.NCA;
 			for (var i = 0; i < actorPropertyScratch.Count; i++)
@@ -747,6 +761,16 @@ public partial class Manager
 				property.Name.StartsWith("RigNeural", StringComparison.Ordinal))
 				return mode != RigSkinMode.NCA;
 		}
+
+		if (typeName == nameof(RigPuppetProp) && property.Name is
+			nameof(RigPuppet.IdleAnimationName) or nameof(RigPuppet.WalkAnimationName) or
+			nameof(RigPuppet.Performance) or nameof(RigPuppet.PlaybackSpeed) or nameof(RigPuppet.SyncGaitToSpeed) or
+			nameof(RigPuppet.StepUp) or nameof(RigPuppet.StepDown) or nameof(RigPuppet.Health) or
+			nameof(RigPuppet.ArticulatedCombatBounds) or nameof(RigPuppet.StraddlesPlayerDepth))
+			return true;
+		if (typeName == nameof(RigPuppetProp) && property.Name == nameof(RigPuppetProp.JostleStrength) &&
+			ActorSpecs.GetResolvedProperty(actor, nameof(RigPuppetProp.Reactive))?.GetValue<bool>() != true)
+			return true;
 
 		if (typeName != nameof(Light))
 			return false;

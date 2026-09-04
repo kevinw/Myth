@@ -119,6 +119,13 @@
       "Position": [24, 160],
       "Points": [[-16, 8],[8, 8]
       ]
+    },
+    {
+      "Id": "315f32c8a38f1d4e",
+      "Type": "RigPuppetProp",
+      "Position": [168, 136],
+      "PixelsPerMeter": 60,
+      "ProjectionYaw": 100.976
     }
   ]
 }

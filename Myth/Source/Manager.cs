@@ -915,6 +915,7 @@ public partial class Manager : App
 			preservePlaytestSaveState = settings.PreservePlaytestSaveState;
 			editorGameRunInBackground = settings.EditorGameRunInBackground;
 			pasteActorAtViewCenter = settings.PasteActorAtViewCenter;
+			showTileGrid = settings.ShowTileGrid;
 			editorDockOpen = settings.EditorDockOpen;
 			editorDockWidth = settings.EditorDockWidth > 0
 				? Math.Clamp(settings.EditorDockWidth, EditorDockMinWidth, EditorDockMaxWidth)
@@ -943,6 +944,7 @@ public partial class Manager : App
 			PreservePlaytestSaveState = preservePlaytestSaveState,
 			EditorGameRunInBackground = editorGameRunInBackground,
 			PasteActorAtViewCenter = pasteActorAtViewCenter,
+			ShowTileGrid = showTileGrid,
 			EditorDockOpen = editorDockOpen,
 			EditorDockWidth = editorDockWidth,
 			EditorPaletteWidth = editorPaletteWidth,
@@ -965,6 +967,7 @@ public partial class Manager : App
 		public bool PreservePlaytestSaveState { get; init; }
 		public bool EditorGameRunInBackground { get; init; } = true;
 		public bool PasteActorAtViewCenter { get; init; } = true;
+		public bool ShowTileGrid { get; init; }
 		public bool EditorDockOpen { get; init; } = true;
 		public float EditorDockWidth { get; init; } = DefaultToolDockWidth;
 		public float EditorPaletteWidth { get; init; } = DefaultPaletteDockWidth;
@@ -1135,6 +1138,7 @@ public partial class Manager : App
 		UpdateShaderReload();
 		UpdateParticleEffectReload();
 		UpdateAudioBankReload();
+		UpdateRigReload();
 #endif
 
 #if EDITOR
@@ -1308,8 +1312,8 @@ public partial class Manager : App
 			string? selectedEmitterId = null;
 			if (CurrentRoom is { } previewRoom && selectedRoomActorIndex >= 0 && selectedRoomActorIndex < previewRoom.Actors.Count)
 				selectedEmitterId = ActorSpecs.GetActorId(previewRoom.Actors[selectedRoomActorIndex]);
-			// Particles animate the active-room preview, so it must re-render each frame while one is selected.
-			activeRoomPreviewAnimating = selectedEmitterId != null;
+			// Live editor previews must re-render while particles or a rig animation are advancing.
+			activeRoomPreviewAnimating = selectedEmitterId != null || UpdateRigAnimationPreviewInEditor();
 			game?.PreviewParticlesInEditor(Time.Delta, selectedEmitterId);
 			particleEditor.Update(Time.Delta);
 #endif
@@ -2612,14 +2616,15 @@ public partial class Manager : App
 			}
 #endif
 		}
+		startingPlay = false;
+		playing = false;
+		gameEase = 0;
 		MatchEditorCameraToGame();
 		#if EDITOR
 		EnteringEditor();
 		#endif
 		game?.Dispose();
 		game = null;
-		startingPlay = false;
-		playing = false;
 		if (gym.runs != null)
 		{
 			gym.runs = null;

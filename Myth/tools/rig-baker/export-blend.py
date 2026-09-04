@@ -8,7 +8,8 @@ import bpy
 def arguments():
     parser = argparse.ArgumentParser(description="Export selected actions from a Blender rig to GLB")
     parser.add_argument("--output", required=True)
-    parser.add_argument("--action", action="append", required=True)
+    parser.add_argument("--action", action="append", default=[])
+    parser.add_argument("--action-prefix", action="append", default=[])
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
@@ -22,6 +23,13 @@ if missing:
 
 armature = armatures[0]
 selected_actions = [bpy.data.actions[name] for name in args.action]
+selected_actions.extend(
+    action for action in sorted(bpy.data.actions, key=lambda item: item.name.casefold())
+    if any(action.name.startswith(prefix) for prefix in args.action_prefix)
+    and action not in selected_actions
+)
+if not selected_actions:
+    raise RuntimeError("No actions matched the requested names or prefixes")
 for action in list(bpy.data.actions):
     if action not in selected_actions:
         bpy.data.actions.remove(action)
@@ -46,4 +54,4 @@ bpy.ops.export_scene.gltf(
     export_force_sampling=True,
     export_def_bones=True,
 )
-print(f"Exported {', '.join(args.action)} from {bpy.data.filepath} to {output}")
+print(f"Exported {', '.join(action.name for action in selected_actions)} from {bpy.data.filepath} to {output}")

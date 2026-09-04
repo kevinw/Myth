@@ -26,6 +26,9 @@ public partial class Manager
 	readonly Lock audioBankReloadLock = new();
 	bool audioBankReloadRequested;
 	float audioBankReloadTimer;
+	readonly Lock rigReloadLock = new();
+	bool rigReloadRequested;
+	float rigReloadTimer;
 	readonly Lock roomReloadLock = new();
 	readonly HashSet<string> changedRoomPaths = new(StringComparer.OrdinalIgnoreCase);
 	readonly HashSet<string> deletedRoomPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -47,6 +50,7 @@ public partial class Manager
 		assetWatcher.Filters.Add("*.json");
 		assetWatcher.Filters.Add("*.hlsl");
 		assetWatcher.Filters.Add("*.bank");
+		assetWatcher.Filters.Add("*.ozzpack");
 
 		assetWatcher.Changed += (_, e) => RouteAssetChange(e.FullPath);
 		assetWatcher.Created += (_, e) => RouteAssetChange(e.FullPath);
@@ -78,6 +82,35 @@ public partial class Manager
 			RequestShaderReload();
 		else if (AudioEnabled && extension.Equals(".bank", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sounds", "FMOD")))
 			RequestAudioBankReload();
+		else if (extension.Equals(".ozzpack", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, "Rigs"))
+			RequestRigReload();
+	}
+
+	void RequestRigReload()
+	{
+		lock (rigReloadLock)
+		{
+			rigReloadRequested = true;
+			rigReloadTimer = AssetReloadDelay;
+		}
+	}
+
+	void UpdateRigReload()
+	{
+		var reload = false;
+		lock (rigReloadLock)
+		{
+			if (rigReloadRequested && (rigReloadTimer -= Time.Delta) <= 0)
+			{
+				rigReloadRequested = false;
+				reload = true;
+			}
+		}
+		if (!reload || game == null)
+			return;
+		StopRigAnimationPreview();
+		game.ReloadRoom(reloadRigs: true);
+		Game.NotifyHotReload("Reloaded rig pack");
 	}
 
 	static bool IsAssetDirectory(string relative, string directory)

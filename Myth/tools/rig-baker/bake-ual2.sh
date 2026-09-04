@@ -17,7 +17,7 @@ for action in "${authored_actions[@]}"; do
 	authored_action_args+=(--action "$action")
 done
 blender --factory-startup --background "$authored_blend" --python "$script_dir/export-blend.py" -- \
-	--output "$authored_glb" "${authored_action_args[@]}"
+	--output "$authored_glb" "${authored_action_args[@]}" --action-prefix Pose_
 
 cmake -S "$script_dir" -B "$build_dir/build" -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build "$build_dir/build" --target gltf2ozz myth_rig_pack
@@ -59,5 +59,7 @@ while IFS= read -r -d '' animation; do
 	animations+=("$animation")
 done < <(find "$build_dir/ozz" -name '*.ozz' ! -name skeleton.ozz -print0 | sort -z)
 
-"$build_dir/build/myth_rig_pack" "$myth_dir/Assets/Rigs/ual2.ozzpack" \
+pack="$build_dir/ual2.ozzpack"
+"$build_dir/build/myth_rig_pack" "$pack" \
 	"$build_dir/ozz/ual2/skeleton.ozz" "${animations[@]}"
+mv "$pack" "$myth_dir/Assets/Rigs/ual2.ozzpack"

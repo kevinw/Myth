@@ -1,5 +1,7 @@
 #if EDITOR
+using System.Diagnostics;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using ImGuiNET;
 using Kit;
 
@@ -42,7 +44,7 @@ public partial class Manager
 		var selected = SelectedRigPuppet();
 		var previewGone = rigAnimationPreviewActor != null &&
 			(game == null || game.destroying.Contains(rigAnimationPreviewActor) || !game.Actors.Contains(rigAnimationPreviewActor));
-		if (!playing || previewGone || liveSelectedActorId != null && selected == null)
+		if (previewGone || rigAnimationPreviewActor != null && selected == null)
 			StopRigAnimationPreview();
 		else if (selected != null && selected != rigAnimationPreviewActor)
 		{
@@ -57,9 +59,7 @@ public partial class Manager
 				DrawRigAnimationControls(rig);
 			else
 			{
-				ImGui.TextWrapped(playing
-					? "Select a RigPuppet in the game view."
-					: "Enter play mode, then select a RigPuppet in the game view.");
+				ImGui.TextWrapped("Select a RigPuppet in the game view.");
 				ImGui.Spacing();
 				ImGui.TextDisabled("The preview runs on the live actor so projection, lighting, IK, and blending match the game.");
 			}
@@ -72,10 +72,23 @@ public partial class Manager
 
 	RigPuppet? SelectedRigPuppet()
 	{
-		if (!playing || game?.CurrentRoom is not { } room ||
-			!TryGetSelectedLiveActor(game, room, out var actor, out _, out _))
+		if (game?.CurrentRoom is not { } room)
 			return null;
-		return actor as RigPuppet;
+		if (playing)
+			return TryGetSelectedLiveActor(game, room, out var actor, out _, out _) ? actor as RigPuppet : null;
+		if (CurrentRoom is not { } authoredRoom || authoredRoom.Id != room.Id || selectedRoomActorIndex < 0 ||
+			selectedRoomActorIndex >= authoredRoom.Actors.Count ||
+			ActorSpecs.GetActorId(authoredRoom.Actors[selectedRoomActorIndex]) is not { } id)
+			return null;
+		return game.GetActorById(id) as RigPuppet;
+	}
+
+	bool UpdateRigAnimationPreviewInEditor()
+	{
+		if (playing || rigAnimationPreviewActor is not { AnimationPreviewEnabled: true } rig)
+			return false;
+		rig.UpdateAnimationPreviewInEditor();
+		return true;
 	}
 
 	void StopRigAnimationPreview()
@@ -139,6 +152,15 @@ public partial class Manager
 		if (ImGui.SliderFloat("##RigAnimationTime", ref time,
 			rig.AnimationPreviewStart, rig.AnimationPreviewEnd, "%.3f s"))
 			rig.AnimationPreviewTime = time;
+		if (rig is RigPuppetProp prop)
+		{
+			if (ImGui.Button("Use current frame as pose"))
+				SaveRigPuppetPropPose(prop);
+			ImGui.SameLine();
+			if (ImGui.Button(prop.PoseAnimationName.StartsWith("Pose_", StringComparison.Ordinal)
+				? "Edit in Blender" : "New Blender pose"))
+				OpenRigPuppetPropPoseInBlender(prop);
+		}
 
 		DrawRigTakeControls(rig, clip);
 
@@ -157,6 +179,59 @@ public partial class Manager
 		var ik = rig.AnimationPreviewIK;
 		if (ImGui.Checkbox("Foot IK", ref ik))
 			rig.SetAnimationPreviewIK(ik);
+	}
+
+	void SaveRigPuppetPropPose(RigPuppetProp prop)
+	{
+		var clip = prop.AnimationPreviewClip;
+		var progress = clip.Duration > 0 ? prop.AnimationPreviewTime / clip.Duration : 0;
+		prop.PoseAnimationName = clip.Name;
+		prop.PoseProgress = Math.Clamp(progress, 0, 1);
+		if (game?.CurrentRoom is not { } runtimeRoom ||
+			!TryGetLiveActorSource(game, runtimeRoom, prop, positionEditableOnly: false,
+				out var room, out var authored))
+			return;
+
+		using (CaptureRoomUndo("Set Rig Puppet Prop Pose", room))
+		{
+			ActorSpecs.SetProperty(authored, nameof(RigPuppetProp.PoseAnimationName),
+				JsonValue.Create(prop.PoseAnimationName));
+			ActorSpecs.SetProperty(authored, nameof(RigPuppetProp.PoseProgress),
+				JsonValue.Create(prop.PoseProgress));
+		}
+		room.Save();
+		MarkRoomPreviewDirty(room);
+		editorGameDirty = true;
+		DisplayMessage($"Pose set to {clip.Name} at {prop.PoseProgress:P0}");
+	}
+
+	void OpenRigPuppetPropPoseInBlender(RigPuppetProp prop)
+	{
+		var action = prop.PoseAnimationName.StartsWith("Pose_", StringComparison.Ordinal)
+			? prop.PoseAnimationName
+			: $"Pose_{prop.ActorId ?? "Statue"}";
+		var blend = Path.GetFullPath(Path.Join(Assets.AssetsPath, "Sources", "Models", "UAL2_Standard.blend"));
+		var script = Path.GetFullPath(Path.Join(Assets.AssetsPath, "..", "tools", "rig-baker", "edit-pose.py"));
+		var macBlender = "/Applications/Blender.app/Contents/MacOS/Blender";
+		var info = new ProcessStartInfo(File.Exists(macBlender) ? macBlender : "blender")
+		{
+			UseShellExecute = false,
+		};
+		info.ArgumentList.Add(blend);
+		info.ArgumentList.Add("--python");
+		info.ArgumentList.Add(script);
+		info.ArgumentList.Add("--");
+		info.ArgumentList.Add("--action");
+		info.ArgumentList.Add(action);
+		try
+		{
+			Process.Start(info);
+			rigTakeStatus = $"Opened {action}. Save in Blender to bake it, then select it here.";
+		}
+		catch (Exception e)
+		{
+			rigTakeStatus = $"Unable to open Blender: {e.Message}";
+		}
 	}
 
 	void DrawRigTakeControls(RigPuppet rig, OzzRig.Clip clip)

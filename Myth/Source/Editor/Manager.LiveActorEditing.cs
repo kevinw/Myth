@@ -451,6 +451,11 @@ public partial class Manager
 
 	static RectInt LiveActorBounds(Actor runtime, Room authoredRoom, JsonObject authored)
 	{
+		if (runtime is RigPuppet)
+		{
+			var bounds = runtime.GetVisualBounds();
+			return RectInt.Between(bounds.TopLeft.FloorToPoint2(), -(-bounds.BottomRight).FloorToPoint2());
+		}
 		var authoredPosition = authoredRoom.WorldBounds.TopLeft + (ActorSpecs.ReadPoint(authored, "Position") ?? Point2.Zero);
 		return RoomActorBounds(authoredRoom, authored) + runtime.Position - authoredPosition;
 	}

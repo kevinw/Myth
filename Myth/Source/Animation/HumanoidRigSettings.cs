@@ -16,9 +16,10 @@ public sealed class HumanoidRigSettings
 	[I(0, 1)] public float EyeMotion;
 	[NoSerialize] public bool TurnWhileMoving;
 
-	[I(12, 60), InspectorGroup("Body")] public float PixelsPerMeter = 25;
+	[I(12, 120), InspectorGroup("Body")] public float PixelsPerMeter = 25;
 	[I(-180, 180)] public float ProjectionYaw;
 	[I(2, 12)] public float HeadSize = 3.9f;
+	[I(0, 2)] public float EyeSize = 1;
 	[I(-4, 12)] public float NeckExtension;
 	[I(2, 12)] public float TorsoSize = 5;
 	[I(1, 10)] public float BicepSize = 3;

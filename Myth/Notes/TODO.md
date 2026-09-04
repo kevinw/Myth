@@ -1,10 +1,10 @@
+- add a giant rigpuppet somewhere
+- specific level ideas
+  - 
 - players arms when he jumps are down and look weird
 - make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
 - make a "ducks destroyed" and "robot overlords tamed" scoreboard in the hub
 - boss needs bigger Pop / longer death like GhostFrog
-- show a rigpuppet in the second room.
-   - what is it doing?
-   - either you talk to it, or you attack it and it runs away.
 - server prop needs a no-lights variant that goes to it when you unpower the duck-machine
   - maybe also some smoke particles after
 - Press "Lup" to warp icon looks wrong, it looks like you're pressing in on the stick
