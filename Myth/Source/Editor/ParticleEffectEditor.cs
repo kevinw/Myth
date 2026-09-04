@@ -260,6 +260,8 @@ public struct ParticleEffectEditor(JsonUndoManager undo)
 
 		ImGui.SeparatorText("Collision");
 		FxCollision("Collision", name, ref e.Collision);
+		if (e.Collision != ParticleCollisionMode.None)
+			FxCheckbox("Collide With Actors", name, ref e.CollideWithActors);
 		if (e.Collision == ParticleCollisionMode.Bounce)
 			FxFloat("Bounciness", name, ref e.Bounciness, 0.0f, 1.0f);
 	}

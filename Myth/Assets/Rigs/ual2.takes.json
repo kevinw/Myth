@@ -60,8 +60,8 @@
     "Loop": false,
     "Speed": 1,
     "FootIK": false,
-    "UpperBodyLeanDegrees": 8,
+    "UpperBodyLeanDegrees": 11,
     "ArmWidthScale": 1.25,
-    "HandWidthScale": 1.4
+    "HandWidthScale": 1
   }
 }

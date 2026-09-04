@@ -48,7 +48,7 @@ public sealed class ParticleSystem : IDisposable
 		public float Gravity, Drag, NoiseAmount, NoiseScale;
 		public float SizeStart, SizeEnd, CollisionMode, Bounciness;
 		public float Style, TrailSeconds, TrailWidthStart, TrailWidthEnd;
-		public float LightResponse, Pad0, Pad1, Pad2;
+		public float LightResponse, CollideWithActors, Pad1, Pad2;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -618,6 +618,7 @@ public sealed class ParticleSystem : IDisposable
 					TrailWidthStart = e.TrailWidthStart,
 					TrailWidthEnd = e.TrailWidthEnd,
 					LightResponse = e.LightResponse,
+					CollideWithActors = e.CollideWithActors ? 1 : 0,
 				};
 			}
 			else

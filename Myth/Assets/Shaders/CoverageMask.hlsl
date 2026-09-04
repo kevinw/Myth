@@ -36,5 +36,5 @@ float4 fragment_main(VsOutput input) : SV_Target0
 {
     float sampled = Texture.Sample(Sampler, input.TexCoord).a;
     float coverage = (input.Type.x + input.Type.y) * sampled * input.Color.a + input.Type.z * input.Color.a;
-    return coverage.xxxx;
+    return float4(input.Color.rgb * coverage, coverage);
 }

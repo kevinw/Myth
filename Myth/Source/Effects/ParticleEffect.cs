@@ -83,6 +83,7 @@ public sealed class ParticleEffect
 
 	// Collision (against the foreground solid mask)
 	public ParticleCollisionMode Collision = ParticleCollisionMode.None;
+	public bool CollideWithActors = true;
 	public float Bounciness = 0.4f;
 
 	// Trail (a ribbon of recent positions behind each particle; 0 = no trail)

@@ -60,6 +60,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool visualReady;
 	bool abilityLoop = true;
 	bool abilityFootIK = true;
+	bool abilityFootIKGrounded;
 	float abilityPlaybackSpeed = 1;
 	float abilityPlaybackSpeedMultiplier = 1;
 	float abilityPoseModifierWeight = 1;
@@ -137,7 +138,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		var gaitScale = SyncGaitToSpeed && (!Performance || scripted) && walking && stepTraversal == StepTraversal.None
 			? MathF.Abs(Velocity.X) / WalkSpeed : 1;
 		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed * abilityPlaybackSpeedMultiplier :
-			scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale;
+			scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale * AnimationSpeedMultiplier;
+		visual.HeadTint = RigHeadTint;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
@@ -257,7 +259,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.Update(grounded,
 			abilityActive ? abilityFootIK : scripted ? scriptedFootIK :
 				!Performance && !hitReacting && !recovering && stepTraversal == StepTraversal.None,
-			loop: abilityActive ? abilityLoop : scripted ? scriptedLoop : !hitReacting && !recovering);
+			loop: abilityActive ? abilityLoop : scripted ? scriptedLoop : !hitReacting && !recovering,
+			seekGround: abilityActive && abilityFootIKGrounded);
 	}
 
 	protected virtual bool UpdateAbility(Player player, bool grounded) => false;
@@ -266,7 +269,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual bool SuppressKnockdownOnHit => false;
 	protected virtual bool DeathIsPersistent => false;
 	protected virtual float PlayerStopDistance => StopDistance;
-	protected virtual void OnFootstep() { }
+	protected virtual float AnimationSpeedMultiplier => 1;
+	protected virtual float HitLimbReactionStrength => 1;
+	protected virtual Color RigHeadTint => Color.White;
+	protected virtual void OnFootstep(Vector2 position) { }
 
 	protected bool RigFacingMatches => visual.FacingMatches;
 	protected Vector2 RigEyePosition => visual.EyeWorldPosition;
@@ -274,6 +280,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected bool RigEyeVisible => visual.EyeVisible;
 	protected Vector2 RigLeftToePosition => visual.LeftToeWorldPosition;
 	protected Vector2 RigRightToePosition => visual.RightToeWorldPosition;
+	protected Vector2 RigLeftHandPosition => visual.LeftHandWorldPosition;
 	protected float RigFacingYaw => visual.CurrentFacingYaw;
 	protected bool AbilityAnimationFinished => visual.AnimationFinished;
 	protected float AbilityAnimationProgress => Math.Clamp(
@@ -282,6 +289,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected void PlayAbilityIdle(float blendDuration = -1)
 	{
 		abilityLoop = abilityFootIK = true;
+		abilityFootIKGrounded = false;
 		abilityPlaybackSpeed = PlaybackSpeed;
 		visual.Play(IdleName(), blendDuration: blendDuration);
 	}
@@ -291,6 +299,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		var take = RigTakes.Get(name);
 		abilityLoop = take.Loop;
 		abilityFootIK = take.FootIK;
+		abilityFootIKGrounded = false;
 		abilityPlaybackSpeed = take.Speed;
 		visual.Play(take, blendDuration);
 		if (!take.FootIK)
@@ -301,12 +310,21 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
 	protected void SetAbilityPoseJostle(float pixels) => abilityPoseJostle = MathF.Max(0, pixels);
 	protected void SetAbilityVisualOffset(Vector2 offset) => abilityVisualOffset = offset;
+	protected void SetAbilityFootIK(bool enabled, bool seekGround = false)
+	{
+		abilityFootIK = enabled;
+		abilityFootIKGrounded = enabled && seekGround;
+	}
 	protected void FreezeAbilityPose(float duration) => visual.Freeze(duration);
 	protected void SetAbilityPlaybackSpeedMultiplier(float multiplier)
 		=> abilityPlaybackSpeedMultiplier = MathF.Max(0, multiplier);
 	protected void LockAbilityAnimationYaw() => visual.LockAnimationYaw();
 	protected void UnlockAbilityAnimationYaw() => visual.UnlockAnimationYaw();
 	protected void RecoilAbilityPose(Vector2 screenVelocity, float spread) => visual.Recoil(screenVelocity, spread);
+	protected void SetAbilityFingerSpin(bool enabled, bool leftHandOnly = false)
+		=> visual.SetFingerSpin(enabled, leftHandOnly);
+	protected void SetAbilityHandWidthScale(float scale, bool leftHandOnly = false)
+		=> visual.SetHandWidthScale(scale, leftHandOnly);
 	protected void SetAbilityYaw(float? yaw, float weight = 1)
 	{
 		abilityYaw = yaw;
@@ -331,6 +349,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	void ResetAbilityControl()
 	{
 		abilityLoop = abilityFootIK = true;
+		abilityFootIKGrounded = false;
 		abilityPlaybackSpeed = PlaybackSpeed;
 		abilityPlaybackSpeedMultiplier = 1;
 		abilityPoseModifierWeight = 1;
@@ -342,6 +361,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.PoseModifierWeight = 1;
 		visual.PoseJostlePixels = 0;
 		visual.Resume();
+		visual.SetHandWidthScale(1, false);
 		visual.UnlockAnimationYaw();
 		visual.YawOverride = null;
 		visual.YawOverrideWeight = 0;
@@ -746,7 +766,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		}
 
 		var away = Position.X < by.Position.X ? -1f : 1f;
-		visual.Hit(away);
+		var hitDirection = ((Vector2)(Position - by.Position)).Normalized(Vector2.UnitX * away);
+		visual.Hit(hitDirection, HitLimbReactionStrength);
 		if (suppressKnockdown)
 			return;
 		Velocity = new Vector2(away * HitKnockbackSpeed, -HitLiftSpeed);

@@ -40,7 +40,7 @@ struct EffectParams
 	float trailWidthStart;
     float trailWidthEnd;
     float lightResponse;
-    float _effectPad0;
+    float collideWithActors;
     float _effectPad1;
     float _effectPad2;
 };
@@ -163,21 +163,22 @@ float2 curl(float2 p)
 
 // Solidity (0..1) sampled from the foreground mask at a world position.
 // Off-screen reads as empty so particles don't collide outside the view.
-float solid_at(float2 worldPos)
+float solid_at(float2 worldPos, float collideWithActors)
 {
     float2 uv = target_uv((worldPos - float2(CameraX, CameraY)) * Zoom / float2(TargetW, TargetH));
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
         return 0.0;
-    return SolidMask.SampleLevel(SolidSampler, uv, 0.0).r;
+    float2 solid = SolidMask.SampleLevel(SolidSampler, uv, 0.0).rg;
+    return lerp(solid.g, solid.r, collideWithActors);
 }
 
-float2 solid_normal(float2 worldPos)
+float2 solid_normal(float2 worldPos, float collideWithActors)
 {
     const float e = 2.0;
-    float l = solid_at(worldPos - float2(e, 0.0));
-    float r = solid_at(worldPos + float2(e, 0.0));
-    float u = solid_at(worldPos - float2(0.0, e));
-    float d = solid_at(worldPos + float2(0.0, e));
+    float l = solid_at(worldPos - float2(e, 0.0), collideWithActors);
+    float r = solid_at(worldPos + float2(e, 0.0), collideWithActors);
+    float u = solid_at(worldPos - float2(0.0, e), collideWithActors);
+    float d = solid_at(worldPos + float2(0.0, e), collideWithActors);
     float2 grad = float2(r - l, d - u); // toward more solid
     if (dot(grad, grad) < 1e-6)
         return float2(0.0, -1.0); // default: up
@@ -324,7 +325,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
         float2 nextPos = p.pos + p.vel * Dt;
 
-        if (mode > 0u && solid_at(nextPos) > 0.5)
+        if (mode > 0u && solid_at(nextPos, fx.collideWithActors) > 0.5)
         {
             if (mode == 1u) // kill (the trail still drains)
             {
@@ -337,7 +338,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
             }
             else // bounce
             {
-                float2 n = solid_normal(nextPos);
+                float2 n = solid_normal(nextPos, fx.collideWithActors);
                 p.vel = reflect(p.vel, n) * fx.bounciness;
             }
             // stay at the last free position regardless of response

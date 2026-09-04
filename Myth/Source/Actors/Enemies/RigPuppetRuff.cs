@@ -20,10 +20,13 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 	readonly Face[] faces = new Face[FoldCount * FacesPerFold];
 	HumanoidRigVisual.RuffPose pose;
 	float spin;
+	float breathPhase;
 
 	static float InnerRadius => 3.5f;
 	static float OuterRadius => 13;
 	static float Thickness => 2.5f;
+	static float BreathAmount => 0.055f;
+	static float BreathSpeed => 1.35f;
 	static float CollisionRadius => 2;
 	static float MaximumCompression => 0.72f;
 	static float FoldSpring => 110;
@@ -38,6 +41,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 	public override void Added()
 	{
 		base.Added();
+		breathPhase = Position.X * 0.173f + Position.Y * 0.317f;
 		SyncOwner();
 		BuildFaces();
 	}
@@ -118,6 +122,7 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 		var innerRadius = InnerRadius / scale;
 		var halfThickness = up * (Thickness / scale * 0.5f);
 		var step = MathF.Tau / FoldCount;
+		var breath = 1 + MathF.Sin(Time.SecondsF * BreathSpeed + breathPhase) * BreathAmount;
 		var at = 0;
 		for (var i = 0; i < FoldCount; i++)
 		{
@@ -126,8 +131,8 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 			var startCompression = (compression[Wrap(i - 1)] + compression[i]) * 0.5f;
 			var endCompression = (compression[i] + compression[Wrap(i + 1)]) * 0.5f;
 			var innerStart = RuffPoint(pose.Neck, side, forward, start, innerRadius);
-			var outerStart = OuterPoint(pose.Neck, side, forward, start, startCompression, scale);
-			var outerEnd = OuterPoint(pose.Neck, side, forward, end, endCompression, scale);
+			var outerStart = OuterPoint(pose.Neck, side, forward, start, startCompression, breath, scale);
+			var outerEnd = OuterPoint(pose.Neck, side, forward, end, endCompression, breath, scale);
 			var innerEnd = RuffPoint(pose.Neck, side, forward, end, innerRadius);
 			var color = i % 2 == 0 ? Owner.Rig.NearColor :
 				Color.Lerp(Owner.Rig.NearColor, Owner.Rig.FarColor, 0.28f);
@@ -194,9 +199,10 @@ sealed class RigPuppetRuff : Actor, IHumanoidRigAccessoryVisual
 	static Vector3 Normalize(Vector3 value, Vector3 fallback)
 		=> value.LengthSquared() > 0.000001f ? Vector3.Normalize(value) : fallback;
 
-	static Vector3 OuterPoint(Vector3 center, Vector3 side, Vector3 forward, float angle, float amount, float scale)
+	static Vector3 OuterPoint(Vector3 center, Vector3 side, Vector3 forward, float angle, float amount,
+		float breath, float scale)
 		=> RuffPoint(center, side, forward, angle,
-			float.Lerp(OuterRadius, InnerRadius + 1, amount / MaximumCompression) / scale);
+			(InnerRadius + (float.Lerp(OuterRadius, InnerRadius + 1, amount / MaximumCompression) - InnerRadius) * breath) / scale);
 
 	static Vector3 RuffPoint(Vector3 center, Vector3 side, Vector3 forward, float angle, float radius)
 		=> center + (side * MathF.Cos(angle) + forward * MathF.Sin(angle)) * radius;

@@ -1299,11 +1299,11 @@ public sealed partial class GameView
 				continue;
 			if (actor.Mask.Has(Actor.Masks.Jumpthru))
 			{
-				Batcher.Rect(actor.Hitbox.Rect + actor.Position, Color.White);
+				Batcher.Rect(actor.Hitbox.Rect + actor.Position, Color.Red);
 				continue;
 			}
 			Batcher.PushMatrix(actor.Position);
-			actor.RenderShadow(Batcher, Color.White);
+			actor.RenderShadow(Batcher, Color.Red);
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
@@ -2177,7 +2177,7 @@ public sealed partial class GameView
 		ActorTileField = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "ActorTileField"));
 		ActorTileField.Clear(Color.Transparent);
 		actorTileFieldPopulated = false;
-		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ParticleSolidMask"));
+		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "ParticleSolidMask"));
 		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
 		ReflectionMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ReflectionMask"));

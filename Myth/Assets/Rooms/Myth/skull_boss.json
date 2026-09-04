@@ -95,7 +95,6 @@
       "ThighSize": 5.173,
       "NeuralJostleRadius": 5.008,
       "NeuralContrast": 1.055,
-      "VisualFPS": 12.118,
       "ArticulatedCombatBounds": true,
       "Ruff": true,
       "StraddlesPlayerDepth": true,
@@ -115,7 +114,8 @@
       "DepthWidthAmount": 0.218,
       "DepthColorContrast": 2.4,
       "NearColor": "C2F2FB",
-      "Health": 2
+      "Health": 20,
+      "VisualFPS": 15.246
     },
     {
       "Id": "4711b2d5aa015603",
@@ -168,32 +168,32 @@
     {
       "Id": "2059f0fe71bf6ce5",
       "Type": "MovingPlatform",
-      "Position": [28, 124],
-      "Size": [28, 32],
+      "Position": [22, 124],
+      "Size": [32, 32],
       "Mode": "Vertical",
       "Facing": "-",
       "ActivatedByWeight": true,
-      "AppearAfterActorDestroyed": "79ca3193f6281d40",
       "TravelDistance": 64,
       "Speed": 97.854,
       "WaitTime": 0.578,
       "RenderActivationLights": true,
-      "StartFriction": 18
+      "StartFriction": 18,
+      "AppearAfterActorDestroyed": "79ca3193f6281d40"
     },
     {
       "Id": "81f159abbb6f9793",
       "Type": "MovingPlatform",
       "Position": [344, 125],
-      "Size": [28, 32],
+      "Size": [32, 32],
       "Mode": "Vertical",
       "Facing": "-",
       "ActivatedByWeight": true,
-      "AppearAfterActorDestroyed": "79ca3193f6281d40",
       "TravelDistance": 64,
       "Speed": 97.854,
       "WaitTime": 0.578,
       "RenderActivationLights": true,
-      "StartFriction": 18
+      "StartFriction": 18,
+      "AppearAfterActorDestroyed": "79ca3193f6281d40"
     }
   ]
 }

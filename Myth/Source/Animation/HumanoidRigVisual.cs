@@ -47,12 +47,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 
 	enum Part { Torso, Bicep, Forearm, Hand, Thigh, Other }
-	enum LegSide { None, Left, Right }
+	enum Side { None, Left, Right }
 	enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
 
 	readonly record struct BoneSpec(string From, string To, float Width, Part Part, bool Combat = false,
-		LegSide Leg = LegSide.None);
-	readonly record struct Bone(int From, int To, float Width, Part Part, bool Combat, LegSide Leg);
+		Side Leg = Side.None, Side Arm = Side.None);
+	readonly record struct Bone(int From, int To, float Width, Part Part, bool Combat, Side Leg, Side Arm);
 	readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
 	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe, int Tip);
 
@@ -71,7 +71,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		public bool Ready;
 	}
 
-	enum ImpulseGroup { Head, Torso, LeftArm, RightArm, LeftHand, RightHand }
+	enum ImpulseGroup { Head, Torso, LeftArm, RightArm, LeftHand, RightHand, LeftLeg, RightLeg }
 
 	struct PendingImpulse
 	{
@@ -88,26 +88,26 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		new("spine_02", "spine_03", 5, Part.Torso, true),
 		new("spine_03", "neck_01", 4, Part.Other, true),
 		new("neck_01", "Head", 3, Part.Other, true),
-		new("spine_03", "clavicle_l", 3, Part.Bicep, true),
-		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true),
-		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true),
-		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true),
-		new("hand_l", "middle_01_l", 2.5f, Part.Hand, true),
-		new("spine_03", "clavicle_r", 3, Part.Bicep, true),
-		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true),
-		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true),
-		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true),
-		new("hand_r", "middle_01_r", 2.5f, Part.Hand, true),
-		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: LegSide.Left),
-		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: LegSide.Left),
-		new("calf_l", "foot_l", 3, Part.Other, Leg: LegSide.Left),
-		new("foot_l", "ball_l", 2, Part.Other, Leg: LegSide.Left),
-		new("ball_l", "ball_leaf_l", 2, Part.Other, Leg: LegSide.Left),
-		new("pelvis", "thigh_r", 4, Part.Thigh, Leg: LegSide.Right),
-		new("thigh_r", "calf_r", 4, Part.Thigh, Leg: LegSide.Right),
-		new("calf_r", "foot_r", 3, Part.Other, Leg: LegSide.Right),
-		new("foot_r", "ball_r", 2, Part.Other, Leg: LegSide.Right),
-		new("ball_r", "ball_leaf_r", 2, Part.Other, Leg: LegSide.Right),
+		new("spine_03", "clavicle_l", 3, Part.Bicep, true, Arm: Side.Left),
+		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true, Arm: Side.Left),
+		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true, Arm: Side.Left),
+		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true, Arm: Side.Left),
+		new("hand_l", "middle_01_l", 2.5f, Part.Hand, true, Arm: Side.Left),
+		new("spine_03", "clavicle_r", 3, Part.Bicep, true, Arm: Side.Right),
+		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true, Arm: Side.Right),
+		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true, Arm: Side.Right),
+		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true, Arm: Side.Right),
+		new("hand_r", "middle_01_r", 2.5f, Part.Hand, true, Arm: Side.Right),
+		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: Side.Left),
+		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: Side.Left),
+		new("calf_l", "foot_l", 3, Part.Other, Leg: Side.Left),
+		new("foot_l", "ball_l", 2, Part.Other, Leg: Side.Left),
+		new("ball_l", "ball_leaf_l", 2, Part.Other, Leg: Side.Left),
+		new("pelvis", "thigh_r", 4, Part.Thigh, Leg: Side.Right),
+		new("thigh_r", "calf_r", 4, Part.Thigh, Leg: Side.Right),
+		new("calf_r", "foot_r", 3, Part.Other, Leg: Side.Right),
+		new("foot_r", "ball_r", 2, Part.Other, Leg: Side.Right),
+		new("ball_r", "ball_leaf_r", 2, Part.Other, Leg: Side.Right),
 	];
 
 	public readonly HumanoidRigSettings Settings = configuredSettings ?? new();
@@ -115,8 +115,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public readonly HumanoidNeuralReactionSettings NeuralReactions = configuredReactions ?? new();
 	public float PlaybackSpeed = 1;
 	public float PoseModifierWeight = 1;
+	public Color HeadTint = Color.White;
 	public bool GaitActive;
-	public Action? Footstep;
+	public Action<Vector2>? Footstep;
 	Vector2 offset;
 	public Vector2 Offset
 	{
@@ -151,7 +152,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	Vector2 neuralHeadUV;
 	Vector2 neuralHeadUVRadius;
 	Vector2 surfaceMaterialOrigin;
-	readonly PendingImpulse[] pendingImpulses = new PendingImpulse[12];
+	readonly PendingImpulse[] pendingImpulses = new PendingImpulse[16];
 	OzzJointMask upperBodyMask = null!;
 	OzzJointMask leftArmMask = null!;
 	OzzJointMask rightArmMask = null!;
@@ -161,7 +162,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	int[] boneOrder = [];
 	Leg leftLeg;
 	Leg rightLeg;
-	LegSide backLeg;
+	Side backLeg;
+	Side backArm;
 	FootIK leftFoot;
 	FootIK rightFoot;
 	SecondaryPoint headMotion;
@@ -188,8 +190,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float gaitShoulderBias;
 	float gaitStrideBias;
 	float plantRemaining;
-	LegSide plantedSide;
-	LegSide gaitStepSide;
+	Side plantedSide;
+	Side gaitStepSide;
 	float visualAccumulator;
 	float visualDelta;
 	float pendingLandingSpeed;
@@ -218,13 +220,30 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float targetArmWidthScale = 1;
 	float handWidthScale = 1;
 	float targetHandWidthScale = 1;
+	float runtimeHandWidthScale = 1;
+	bool scaleLeftHandOnly;
 	float eyeReactionRemaining;
 	float eyeReactionStrength;
 	float freezeRemaining;
 	float? lockedAnimationYaw;
+	float fingerSpinAngle;
+	float fingerSpinSpeed;
+	bool fingerSpinTarget;
+	bool spinLeftHandOnly;
 
 	static float ClipBlendDuration => 0.2f;
 	static float TakeModifierResponse => 12;
+	static float HandPalmRatio => 0.5f;
+	static float HandFingerExtension => 0.38f;
+	static float HandFingerRootSpread => 0.2f;
+	static float HandFingerTipSpread => 0.38f;
+	static float HandFingerWidth => 0.44f;
+	static float HandFingerTipWidth => 0.22f;
+	static float FingerSpinTargetSpeed => MathF.Tau * 7;
+	static float FingerSpinAcceleration => MathF.Tau * 28;
+	static float FingerSpinBlendSpeed => MathF.Tau;
+	static float HitPoseKick => 4.5f;
+	static float HitPoseSpread => 2.2f;
 	static float RagdollSpring => 160f;
 	static float RagdollDamping => 11f;
 	static float RagdollMaxSpeed => 10f;
@@ -288,6 +307,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		: projectedPose[head] + (headSprite == null ? lookDirection * 2.4f : Vector2.Zero);
 	public Vector2 LeftToeWorldPosition => owner.Position + projectedPose[leftLeg.Toe];
 	public Vector2 RightToeWorldPosition => owner.Position + projectedPose[rightLeg.Toe];
+	public Vector2 LeftHandWorldPosition => owner.Position + projectedPose[leftPalm];
 	public Vector2 EyeWorldPosition => owner.Position + EyeOffset;
 	public float PoseJostlePixels;
 
@@ -319,7 +339,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var spec = BoneSpecs[i];
-			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Part, spec.Combat, spec.Leg);
+			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Part,
+				spec.Combat, spec.Leg, spec.Arm);
 			ragdollJoints[bones[i].From] = true;
 			ragdollJoints[bones[i].To] = true;
 			boneOrder[i] = i;
@@ -432,10 +453,11 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		animator.Play(take.Clip, start, end, blendDuration >= 0 ? blendDuration : ClipBlendDuration, restart);
 	}
 
-	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true)
+	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true, bool seekGround = false)
 	{
 		EnsureState();
 		neuralSkin.Update(Settings.SkinMode);
+		UpdateFingerSpin(owner.Time.Delta);
 		if (freezeRemaining > 0)
 		{
 			freezeRemaining = MathF.Max(0, freezeRemaining - owner.Time.Delta);
@@ -451,7 +473,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			{
 				visualDelta = step;
 				poseDirty = false;
-				UpdatePose(grounded, footIK);
+				UpdatePose(grounded, footIK, seekGround);
 			}
 			return;
 		}
@@ -466,8 +488,28 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			UpdateTurn(grounded);
 			UpdateTakeModifiers();
 			animator.Advance(advance ? step * PlaybackSpeed : 0, step, loop);
-			UpdatePose(grounded, footIK);
+			UpdatePose(grounded, footIK, seekGround);
 		}
+	}
+
+	public void SetFingerSpin(bool enabled, bool leftHandOnly)
+	{
+		fingerSpinTarget = enabled;
+		if (enabled)
+			spinLeftHandOnly = leftHandOnly;
+	}
+
+	public void SetHandWidthScale(float scale, bool leftHandOnly)
+	{
+		runtimeHandWidthScale = Math.Clamp(scale, 0.1f, 3);
+		scaleLeftHandOnly = leftHandOnly;
+	}
+
+	void UpdateFingerSpin(float dt)
+	{
+		fingerSpinSpeed = Calc.Approach(fingerSpinSpeed,
+			fingerSpinTarget ? FingerSpinTargetSpeed : 0, FingerSpinAcceleration * dt);
+		fingerSpinAngle = MathF.IEEERemainder(fingerSpinAngle + fingerSpinSpeed * dt, MathF.Tau);
 	}
 
 	void SetTakeModifierTargets(float leanDegrees, float arms, float hands)
@@ -500,7 +542,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		leftFoot = default;
 		rightFoot = default;
 		plantRemaining = 0;
-		gaitStepSide = LegSide.None;
+		gaitStepSide = Side.None;
 	}
 
 	public void Land(float speed)
@@ -544,18 +586,54 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 
 	public void Hit(float away, bool animateUpperBody = false)
+		=> Hit(Vector2.UnitX * away, animateUpperBody: animateUpperBody);
+
+	public void Hit(Vector2 direction, float limbStrength = 1, bool animateUpperBody = false)
 	{
 		neuralHitRemaining = 0.18f;
 		TriggerEyeReaction(0.45f);
 		if (animateUpperBody)
 			layeredHitTime = 0;
+		direction = direction.Normalized(Vector2.UnitX);
 		for (var i = 0; i < ragdollVelocity.Length; i++)
 		{
 			if (!ragdollJoints[i])
 				continue;
 			var height = Math.Clamp(sampledPose[i].Y / 1.55f, 0, 1);
 			var depthKick = MathF.Sign(jointDepth[i]) * 7 * height;
-			ragdollVelocity[i] += RigVelocity(new(away * (18 + 52 * height) + depthKick, -15 * height));
+			ragdollVelocity[i] += RigVelocity(
+				direction * (18 + 52 * height) + Vector2.UnitX * depthKick - Vector2.UnitY * 15 * height);
+		}
+
+		var across = direction.TurnLeft();
+		QueueImpulse(ImpulseGroup.LeftArm, (direction * 54 - across * 18) * limbStrength, 0.015f);
+		QueueImpulse(ImpulseGroup.RightArm, (direction * 54 + across * 18) * limbStrength, 0.015f);
+		QueueImpulse(ImpulseGroup.LeftHand, (direction * 82 - across * 30) * limbStrength, 0.05f);
+		QueueImpulse(ImpulseGroup.RightHand, (direction * 82 + across * 30) * limbStrength, 0.05f);
+		QueueImpulse(ImpulseGroup.LeftLeg, (direction * 34 - across * 12) * limbStrength, 0.035f);
+		QueueImpulse(ImpulseGroup.RightLeg, (direction * 34 + across * 12) * limbStrength, 0.035f);
+		if (ragdollReady)
+		{
+			var kick = RigVelocity(direction * HitPoseKick * limbStrength);
+			var spread = RigVelocity(across * HitPoseSpread * limbStrength);
+			ragdollPose[head] += kick * 0.7f;
+			ragdollPose[neck] += kick * 0.3f;
+			ragdollPose[leftLowerArm] += kick * 0.65f - spread * 0.45f;
+			ragdollPose[rightLowerArm] += kick * 0.65f + spread * 0.45f;
+			ragdollPose[leftHand] += kick - spread;
+			ragdollPose[leftPalm] += kick - spread;
+			ragdollPose[rightHand] += kick + spread;
+			ragdollPose[rightPalm] += kick + spread;
+			ragdollPose[leftLeg.Knee] += kick * 0.18f - spread * 0.15f;
+			ragdollPose[rightLeg.Knee] += kick * 0.18f + spread * 0.15f;
+			ragdollPose[leftLeg.Ankle] += kick * 0.32f - spread * 0.3f;
+			ragdollPose[rightLeg.Ankle] += kick * 0.32f + spread * 0.3f;
+			ragdollPose[leftLeg.Toe] += kick * 0.42f - spread * 0.4f;
+			ragdollPose[leftLeg.Tip] += kick * 0.42f - spread * 0.4f;
+			ragdollPose[rightLeg.Toe] += kick * 0.42f + spread * 0.4f;
+			ragdollPose[rightLeg.Tip] += kick * 0.42f + spread * 0.4f;
+			ProjectPose();
+			SortBones();
 		}
 	}
 
@@ -605,7 +683,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		turning = false;
 	}
 
-	void UpdatePose(bool grounded, bool footIK)
+	void UpdatePose(bool grounded, bool footIK, bool seekGround = false)
 	{
 		UpdateAnimationLayers();
 		animator.Sample(sampledPose, sampledRotations);
@@ -619,8 +697,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		UpdateGaitFootstep(grounded && footIK);
 		if (footIK)
 		{
-			UpdateFoot(ref leftFoot, leftLeg, LegSide.Left, grounded);
-			UpdateFoot(ref rightFoot, rightLeg, LegSide.Right, grounded);
+			UpdateFoot(ref leftFoot, leftLeg, Side.Left, grounded, seekGround);
+			UpdateFoot(ref rightFoot, rightLeg, Side.Right, grounded, seekGround);
 		}
 		else
 			ResetFeet();
@@ -715,7 +793,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		plantRemaining = MathF.Max(0, plantRemaining - visualDelta);
 		projectedPose[pelvis] += Vector2.UnitY * PlantCompression * amount;
 		OffsetMasked(upperBodyMask, Vector2.UnitY * PlantCompression * amount);
-		OffsetMasked(plantedSide == LegSide.Left ? rightArmMask : leftArmMask,
+		OffsetMasked(plantedSide == Side.Left ? rightArmMask : leftArmMask,
 			-Vector2.UnitY * PlantShoulderLift * amount);
 	}
 
@@ -900,7 +978,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				Settings.PixelsPerMeter + new Vector2(0, 2.5f) + Offset;
 			jointDepth[i] = CameraOpenDepth(joint, pivot, jointTurnCos, jointTurnSin, cos, sin);
 		}
-		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? LegSide.Left : LegSide.Right;
+		backLeg = LegDepth(leftLeg) < LegDepth(rightLeg) ? Side.Left : Side.Right;
+		backArm = ArmDepth(leftClavicle, leftUpperArm, leftLowerArm, leftHand, leftPalm) <
+			ArmDepth(rightClavicle, rightUpperArm, rightLowerArm, rightHand, rightPalm)
+			? Side.Left : Side.Right;
 	}
 
 	Vector3 HeadPosition3D()
@@ -916,6 +997,10 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	float LegDepth(Leg leg)
 		=> (jointDepth[leg.Hip] + jointDepth[leg.Knee] + jointDepth[leg.Ankle] +
 			jointDepth[leg.Toe] + jointDepth[leg.Tip]) / 5;
+
+	float ArmDepth(int clavicle, int upperArm, int lowerArm, int hand, int palm)
+		=> (jointDepth[clavicle] + jointDepth[upperArm] + jointDepth[lowerArm] +
+			jointDepth[hand] + jointDepth[palm]) / 5;
 
 	void UpdateRagdoll()
 	{
@@ -1026,7 +1111,21 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				ragdollVelocity[rightHand] += velocity;
 				ragdollVelocity[rightPalm] += velocity;
 				break;
+			case ImpulseGroup.LeftLeg:
+				ApplyLegImpulse(leftLeg, velocity);
+				break;
+			case ImpulseGroup.RightLeg:
+				ApplyLegImpulse(rightLeg, velocity);
+				break;
 		}
+	}
+
+	void ApplyLegImpulse(Leg leg, Vector3 velocity)
+	{
+		ragdollVelocity[leg.Knee] += velocity * 0.45f;
+		ragdollVelocity[leg.Ankle] += velocity * 0.75f;
+		ragdollVelocity[leg.Toe] += velocity;
+		ragdollVelocity[leg.Tip] += velocity;
 	}
 
 	Vector3 PoseJostleOffset(int joint)
@@ -1050,19 +1149,21 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			-MathF.Cos(angle) * alongProjection);
 	}
 
-	void UpdateFoot(ref FootIK plant, Leg leg, LegSide side, bool grounded)
+	void UpdateFoot(ref FootIK plant, Leg leg, Side side, bool grounded, bool seekGround)
 	{
 		var wasPlanted = plant.Planted;
 		plant.ContactRemaining = MathF.Max(0, plant.ContactRemaining - visualDelta);
 		var animatedToe = owner.Position + projectedPose[leg.Toe];
 		var targetOffset = 0f;
 		plant.Planted = false;
-		if (grounded)
+		if (grounded || seekGround)
 		{
-			var probeCenter = (animatedToe - Vector2.UnitY * FootProbeAbove).RoundToPoint2();
+			var probeOrigin = seekGround ? new Vector2(animatedToe.X, owner.Position.Y) : animatedToe;
+			var probeCenter = (probeOrigin - Vector2.UnitY * FootProbeAbove).RoundToPoint2();
 			var probe = new RectInt(probeCenter.X - 1, probeCenter.Y - 1, 2, 2);
 			if (owner.Game.TryFindSurface(owner, probe, Vector2.UnitY, FootProbeDistance, out var hit) &&
-				hit.Normal.Y < -0.5f && MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance)
+				hit.Normal.Y < -0.5f &&
+				(seekGround || MathF.Abs(animatedToe.Y - hit.Point.Y) <= FootPlantDistance))
 			{
 				targetOffset = hit.Point.Y - animatedToe.Y;
 				plant.Planted = true;
@@ -1097,17 +1198,17 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		if (!GaitActive || !grounded)
 		{
-			gaitStepSide = LegSide.None;
+			gaitStepSide = Side.None;
 			return;
 		}
 
 		var height = projectedPose[leftLeg.Toe].Y - projectedPose[rightLeg.Toe].Y;
-		var side = height > FootstepHeightThreshold ? LegSide.Left :
-			height < -FootstepHeightThreshold ? LegSide.Right : gaitStepSide;
-		if (side == LegSide.None || side == gaitStepSide)
+		var side = height > FootstepHeightThreshold ? Side.Left :
+			height < -FootstepHeightThreshold ? Side.Right : gaitStepSide;
+		if (side == Side.None || side == gaitStepSide)
 			return;
 		gaitStepSide = side;
-		Footstep?.Invoke();
+		Footstep?.Invoke(owner.Position + projectedPose[side == Side.Left ? leftLeg.Toe : rightLeg.Toe]);
 	}
 
 	void SolveLeg(Leg leg, Vector2 ankleTarget)
@@ -1159,7 +1260,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		Part.Torso => Settings.TorsoSize,
 		Part.Bicep => Settings.BicepSize * armWidthScale,
 		Part.Forearm => Settings.ForearmSize * armWidthScale,
-		Part.Hand => Settings.ForearmSize * handWidthScale,
+		Part.Hand => Settings.ForearmSize * handWidthScale *
+			(!scaleLeftHandOnly || bone.Arm == Side.Left ? runtimeHandWidthScale : 1),
 		Part.Thigh => Settings.ThighSize,
 		_ => bone.Width,
 	};
@@ -1171,7 +1273,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		var depthScale = 1 + MathF.Max(0, BoneRenderDepth(bone) - 0.5f) * 2 * Settings.DepthWidthAmount;
 		fromWidth = BoneWidth(bone) * depthScale;
-		toWidth = bone.Leg != LegSide.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand
+		toWidth = bone.Leg != Side.None || bone.Part is Part.Bicep or Part.Forearm or Part.Hand
 			? fromWidth * (1 - Math.Clamp(Settings.LimbTaper, 0, 0.75f))
 			: fromWidth;
 	}
@@ -1250,12 +1352,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer, accessory);
 
 	bool Includes(Bone bone, DrawParts parts)
-		=> parts switch
-		{
-			DrawParts.All => true,
-			DrawParts.BehindPlayer => bone.Leg == backLeg,
-			_ => bone.Leg != backLeg,
-		};
+	{
+		if (parts == DrawParts.All)
+			return true;
+		var behindPlayer = bone.Leg == backLeg || bone.Arm == backArm;
+		return parts == DrawParts.BehindPlayer ? behindPlayer : !behindPlayer;
+	}
 
 	void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts,
 		IHumanoidRigAccessoryVisual? accessory)
@@ -1287,6 +1389,24 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
 			BoneWidths(bone, out var fromWidth, out var toWidth);
+			if (bone.Part == Part.Hand)
+			{
+				var spinAmount = !spinLeftHandOnly || bone.Arm == Side.Left
+					? Math.Clamp(fingerSpinSpeed / FingerSpinBlendSpeed, 0, 1) : 0;
+				if (silhouette)
+				{
+					DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 2, tint);
+					continue;
+				}
+
+				var handDepth = BoneRenderDepth(bone);
+				var handColor = BoneColor(bone, handDepth);
+				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 2, Settings.OutlineColor);
+				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 0, handColor);
+				DrawHandPalmSkin(batcher, boneOrder[sortedIndex], from, to, fromWidth, toWidth,
+					handColor, surface, neuralTexture, normals: false);
+				continue;
+			}
 			if (silhouette)
 			{
 				DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, tint);
@@ -1322,7 +1442,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
-			DrawHeadSprite(batcher, frame.Subtexture, silhouette ? tint : Color.White);
+			DrawHeadSprite(batcher, frame.Subtexture, silhouette ? tint : HeadTint);
 			if (!silhouette && TryHeadSpriteEyeOffset(out var eye))
 				batcher.Circle(eye, VisualEyeScale * eyeScale, 8, Settings.AccentColor);
 			return;
@@ -1383,6 +1503,15 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
 			BoneWidths(bone, out var fromWidth, out var toWidth);
+			if (bone.Part == Part.Hand)
+			{
+				var spinAmount = !spinLeftHandOnly || bone.Arm == Side.Left
+					? Math.Clamp(fingerSpinSpeed / FingerSpinBlendSpeed, 0, 1) : 0;
+				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 2, flat);
+				DrawHandPalmSkin(batcher, boneOrder[sortedIndex], from, to, fromWidth, toWidth,
+					flat, surface, neuralNormals, normals: true);
+				continue;
+			}
 			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, flat);
 			if (surface != null)
 				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth,
@@ -1492,6 +1621,57 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
 		batcher.Quad(a, b, c, d, color);
+	}
+
+	void DrawHand(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth,
+		float spinAmount, float inflate, Color color)
+	{
+		var along = (to - from).Normalized(Vector2.UnitY);
+		var across = along.TurnLeft();
+		var width = MathF.Max(fromWidth, toWidth);
+		var palmEnd = Vector2.Lerp(from, to, HandPalmRatio);
+		var fingerTip = to + along * (width * HandFingerExtension);
+		var spin = fingerSpinAngle;
+		var fingerRootWidth = width * HandFingerWidth;
+		var fingerTipWidth = width * HandFingerTipWidth;
+		DrawBoneQuad(batcher, from, palmEnd, fromWidth * 0.72f + inflate, width + inflate, color);
+		for (var side = -1; side <= 1; side += 2)
+		{
+			var rootOffset = across * (width * HandFingerRootSpread * side);
+			var tipOffset = fingerTip - palmEnd + across * (width * HandFingerTipSpread * side);
+			if (spinAmount > 0)
+			{
+				rootOffset = Vector2.Lerp(rootOffset, Rotate(rootOffset, spin), spinAmount);
+				tipOffset = Vector2.Lerp(tipOffset, Rotate(tipOffset, spin), spinAmount);
+			}
+			DrawBoneQuad(batcher,
+				palmEnd + rootOffset, palmEnd + tipOffset,
+				fingerRootWidth + inflate, fingerTipWidth + inflate, color);
+		}
+	}
+
+	static Vector2 Rotate(Vector2 value, float radians)
+	{
+		var cos = MathF.Cos(radians);
+		var sin = MathF.Sin(radians);
+		return new(value.X * cos - value.Y * sin, value.X * sin + value.Y * cos);
+	}
+
+	void DrawHandPalmSkin(Batcher batcher, int boneIndex, Vector2 from, Vector2 to,
+		float fromWidth, float toWidth, Color color, Surface? surface, Texture? neuralTexture, bool normals)
+	{
+		if (surface == null && neuralTexture == null)
+			return;
+		var width = MathF.Max(fromWidth, toWidth);
+		var palmEnd = Vector2.Lerp(from, to, HandPalmRatio);
+		var uv = neuralBoneUVs[boneIndex];
+		var palmUV = new BoneUV(uv.A, uv.B,
+			Vector2.Lerp(uv.B, uv.C, HandPalmRatio), Vector2.Lerp(uv.A, uv.D, HandPalmRatio));
+		if (surface != null)
+			DrawSurfaceBone(batcher, surface, from, palmEnd, fromWidth * 0.72f, width, palmUV, normals);
+		else
+			DrawNeuralBone(batcher, neuralTexture!, from, palmEnd, fromWidth * 0.72f, width, palmUV,
+				color * (normals ? Neural.NeuralNormalAmount : Neural.NeuralColorAmount));
 	}
 
 	static void DrawNeuralBone(Batcher batcher, Texture texture, Vector2 from, Vector2 to,
