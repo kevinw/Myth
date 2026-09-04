@@ -123,7 +123,7 @@
     {
       "Id": "315f32c8a38f1d4e",
       "Type": "RigPuppetProp",
-      "Position": [168, 136],
+      "Position": [200, 168],
       "PixelsPerMeter": 60,
       "ProjectionYaw": 100.976
     }

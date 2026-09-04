@@ -11,9 +11,10 @@ namespace Myth;
 [GameActor(Tags = ActorTag.Obstacle, Anchor = SpriteAnchor.TopLeft)]
 public class Rope : Actor, IResizable
 {
-	static readonly Color ColorDark = new(0x3a2416);
-	static readonly Color ColorMain = new(0x8a5e36);
-	static readonly Color ColorLight = new(0xb5885a);
+	static readonly Color ColorDark = new(0x50321f);
+	static readonly Color ColorMain = new(0xa87543);
+	static readonly Color ColorLight = new(0xd0a06a);
+	public override bool LightingDithered => false;
 
 	public class Chain
 	{

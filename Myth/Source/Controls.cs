@@ -8,6 +8,8 @@ public class Controls(Input input)
 {
 	const int BudControllerIndex = 1;
 	static float BudControllerIdleTimeout => 15f;
+	static float MoveStickDeadzone => 0.25f;
+	static float MoveStickFullSpeed => 0.75f;
 
 	public readonly VirtualAction Rewind = new(input, "Rewind",
 		new ActionBindingSet()
@@ -19,7 +21,7 @@ public class Controls(Input input)
 			.AddArrowKeys()
 			.AddWasd()
 			.AddDPad()
-			.Add(Axes.LeftX, 0.25f, Axes.LeftY, 0.50f, 0.25f)
+			.Add(Axes.LeftX, MoveStickDeadzone, Axes.LeftY, 0.50f, MoveStickDeadzone)
 	);
 
 	public readonly VirtualStick Look = new(input, "Look",
@@ -92,7 +94,7 @@ public class Controls(Input input)
 	readonly VirtualStick budMove = new(input, "BudMove",
 		new StickBindingSet()
 			.AddDPad()
-			.Add(Axes.LeftX, 0.25f, Axes.LeftY, 0.50f, 0.25f),
+			.Add(Axes.LeftX, MoveStickDeadzone, Axes.LeftY, 0.50f, MoveStickDeadzone),
 		BudControllerIndex
 	);
 
@@ -113,7 +115,7 @@ public class Controls(Input input)
 		}
 
 		value = new(
-			MoveX: budMove.IntValue.X,
+			MoveX: ShapeMoveX(budMove.Value.X),
 			MoveY: budMove.IntValue.Y,
 			JumpPressed: budJump.Pressed,
 			JumpDown: budJump.Down,
@@ -121,6 +123,11 @@ public class Controls(Input input)
 		);
 		return true;
 	}
+
+	// The binding has already remapped the physical deadzone to zero. Saturating its remaining
+	// range early makes 75% physical stick travel reliably produce full-speed movement.
+	internal static float ShapeMoveX(float value)
+		=> Math.Clamp(value / ((MoveStickFullSpeed - MoveStickDeadzone) / (1 - MoveStickDeadzone)), -1, 1);
 
 #if EDITOR
 	static readonly FieldInfo[] ClearableFields = GetClearableFields();

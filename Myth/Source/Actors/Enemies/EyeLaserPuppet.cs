@@ -12,6 +12,8 @@ namespace Myth;
 	LivePositionEditable = true)]
 public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 {
+	public override RumbleEffect? AttackHitRumble => new(0.70f, 0.85f, 0.14f);
+
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
 
 	[I(24, 160), InspectorGroup("Eye Laser")] public float MinimumRange = 48;

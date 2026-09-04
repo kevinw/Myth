@@ -4,6 +4,7 @@
   "backdropColor": "000000",
   "ambientColor": "454242",
   "reverb": 0.297,
+  "musicMuffle": 0.341,
   "legend": {
     "#": "back",
     "R": "ruin"

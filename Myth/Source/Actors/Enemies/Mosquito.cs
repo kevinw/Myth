@@ -63,6 +63,8 @@ public class Mosquito : Actor
 	{
 		Health--;
 
+		Game.HitStun(0.1f);
+
 		if (Health <= 0)
 		{
 			AudioEvent("fly/die");

@@ -215,12 +215,13 @@ public class Floater : Actor
 		});
 	}
 
-	static int FloaterHealth => 2;
+	static int FloaterHealth => 3;
 	int health = FloaterHealth;
 
 	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		health--;
+		Game.HitStun(0.15f);
 		if (health <= 0)
 		{
 			Game.DestroyEnemy(this);

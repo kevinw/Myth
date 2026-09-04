@@ -126,6 +126,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	public override void Destroyed()
 	{
+		base.Destroyed();
 		Game.RoomChanged -= OnRoomChanged;
 		rigVisual.Dispose();
 		if (corruption != null)

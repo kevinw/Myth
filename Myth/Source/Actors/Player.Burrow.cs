@@ -39,6 +39,12 @@ public partial class Player : Pawn
 	static float BudBurrowDotRadius => 2.25f;
 	static int BurrowIntervals => 3;           // burrow time is split into this many countdown intervals
 	static float BurrowPulseTime => 0.22f;     // how long the line flashes brighter at each interval boundary
+	static float BurrowRumbleIdle => 0.025f;
+	static float BurrowRumbleSpeed => 0.04f;
+	static float BurrowRumbleClimb => 0.015f;
+	static float BurrowRumblePulse => 0.025f;
+	static float BurrowRumblePulseStep => 0.0125f;
+	static float BurrowRumbleDuration => 0.05f;
 	static float BurrowStuckPulseSpeed => 3.5f;
 	static float BurrowStuckPulseScale => 0.55f;
 	static float BurrowMinSpread => 0.4f;      // arc shrinks to this fraction of full by the final interval
@@ -551,6 +557,7 @@ public partial class Player : Pawn
 		UpdateBurrowIntervals();
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
+		UpdateBurrowRumble();
 		EmitBurrowSparks();
 		if (!PerfToggles.HeadSlide) Play("burrow");
 
@@ -781,6 +788,23 @@ public partial class Player : Pawn
 		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
 		Game.SetAudioEventParameter(burrowSound, "Speed", speed01);
 		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
+	}
+
+	// A quiet low-motor bed sells contact with the ground. The high motor shares the visual/audio
+	// countdown pulse, making the three intervals readable by feel without becoming a metronome.
+	void UpdateBurrowRumble()
+	{
+		if (RumbleControllerIndex is not { } controller)
+			return;
+
+		var speed = Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0, 1);
+		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
+		var low = BurrowRumbleIdle + speed * BurrowRumbleSpeed + climb * BurrowRumbleClimb;
+		var pulse = BurrowPulseTime > 0
+			? burrowPulseTimer / BurrowPulseTime *
+				(BurrowRumblePulse + burrowIntervalIndex * BurrowRumblePulseStep)
+			: 0;
+		Game.Manager.Input.Rumble(controller, low, pulse, BurrowRumbleDuration);
 	}
 
 	static Rng rng = new Rng();

@@ -12,6 +12,8 @@ public enum ActorInversion
 	UninvertedOnly,
 }
 
+public readonly record struct RumbleEffect(float Low, float High, float Duration);
+
 public class Actor
 {
 	internal static bool TransitionsEnabled = true;
@@ -79,6 +81,7 @@ public class Actor
 	public virtual bool CastsReflection => sprite != null;
 	public virtual bool LightingDithered => !Mask.Has(Masks.Player | Masks.Enemy);
 	public virtual string HitSoundType => "flesh";
+	public virtual RumbleEffect? AttackHitRumble => new(0.27f, 0.45f, 0.075f);
 	// Substance landing/footstep audio reports for anything standing on this actor (see
 	// Game.GetSubstanceBelow). Null means the actor isn't a walkable surface of its own.
 	public virtual string? SurfaceSubstance => null;
@@ -505,6 +508,11 @@ public class Actor
 		}
 		actor.OnWasHit(new HitInfo{By=this, AttackBox=attackBox});
 		OnPerformHit(actor);
+		if (this is Pawn pawn && actor.AttackHitRumble is { } rumble)
+		{
+			Game.Show(rumble);
+			pawn.Rumble(rumble);
+		}
 		return true;
 	}
 

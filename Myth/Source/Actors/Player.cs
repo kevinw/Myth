@@ -4,7 +4,7 @@ namespace Myth;
 
 public readonly record struct PawnInput(
 	float MoveX,          // analog horizontal thrust in [-1, 1]; AI can output fractional values for
-	                      // precise steering/braking. Human/sim producers emit -1/0/1 as before.
+	                      // precise steering/braking; human sticks saturate before full travel.
 	int MoveY,
 	bool JumpPressed,
 	bool JumpDown,
@@ -34,6 +34,7 @@ public abstract class Pawn : Actor
 		Game.RoomChanged -= OnRoomChanged;
 		ReleaseParticleEffect(ref jumpParticlesEffect);
 		ReleaseParticleEffect(ref splashParticlesEffect);
+		StopAndReleaseSound(ref wallSlideSound, true);
 	}
 
 	void OnRoomChanged(RoomChange change) {
@@ -75,6 +76,12 @@ public abstract class Pawn : Actor
 	static float MoveInputDeadzone => 0.1f;
 	static float GroundLocomotionAnimationHold => 0.1f;
 	static float GroundLocomotionAnimationSpeed => 2.0f;
+	static float LandingRumbleMinSpeed => 60f;
+	static float LandingRumbleFullSpeed => 300f;
+	static float LandingRumbleMinIntensity => 0.03f;
+	static float LandingRumbleMaxIntensity => 0.22f;
+	static float LandingRumbleMinDuration => 0.05f;
+	static float LandingRumbleMaxDuration => 0.11f;
 	static float RunningOutOfBreathRate => 0.14f;
 	static float JumpOutOfBreath => 0.16f;
 	static float OutOfBreathRecoveryRate => 0.08f;
@@ -93,7 +100,7 @@ public abstract class Pawn : Actor
 	// The frame you break the surface, velocity is multiplied by this once to simulate
 	// surface tension grabbing you as you plunge in (a sharper slowdown than the ongoing
 	// water drag/sink cap that follow on later frames).
-	public static float WaterSurfaceTensionMultiplier => 0.55f.T();
+	public static float WaterSurfaceTensionMultiplier => 0.5501f.T();
 	// Horizontal water resistance: lower top speed, plus a drag that bleeds off speed when
 	// no direction is held (even airborne, unlike the grounded-only dry friction).
 	public static float WaterHorizontalSpeedMultiplier => 0.6f.T();
@@ -110,6 +117,16 @@ public abstract class Pawn : Actor
 	protected static float WallHugGravityMultiplier => 0.25f;
 	protected static float WallSlideMaxFallSpeed => 80f;  // capped, slower descent while wall sliding
 	protected static float WallSlideFallDamping => 320f;  // eases a fast fall down to the slide cap
+	static float WallSlideFeedbackMinSpeed => 15f;
+	static float WallSlideRumbleIdle => 0.0075f;
+	static float WallSlideRumbleSpeed => 0.0125f;
+	static float WallSlideRumbleDuration => 0.05f;
+	static float WallContactRumbleLow => 0.08f;
+	static float WallContactRumbleHigh => 0.025f;
+	static float WallContactRumbleDuration => 0.06f;
+	static float WallJumpRumbleLow => 0.055f;
+	static float WallJumpRumbleHigh => 0.04f;
+	static float WallJumpRumbleDuration => 0.06f;
 	static float WallJumpCoyoteTime => 0.08f;
 	public static float JumpForce => -139;
 	public static float JumpTime => 0.22f;
@@ -157,6 +174,12 @@ public abstract class Pawn : Actor
 	static float RopeGrabMomentumTransfer => 0.7f.T();
 	static float RopePumpReversalSpeed => 2f;
 	static float RopePumpSkew => 0.1f;
+	static float RopeCreakCenterThreshold => 1.5f;
+	static float RopeCreakMinSpeed => 12f;
+	static float RopeCreakFullRumbleSpeed => 120f;
+	static float RopeCreakMinRumble => 0.08f;
+	static float RopeCreakMaxRumble => 0.25f;
+	static float RopeCreakRumbleDuration => 0.08f;
 	static float RopeDetachSnapDistance => 24f; // rope yanked further than this in one frame (rewind, teleport) -> let go
 
 	protected static RectInt StandingHitboxRect => new(-4, -12, 8, 12);
@@ -192,6 +215,9 @@ public abstract class Pawn : Actor
 	int wallJumpCoyoteDirection;
 	float wallJumpCoyoteTimer;
 	protected bool ducking;
+	SoundInstance? wallSlideSound;
+	bool wasWallSliding;
+	float wallSlidePulseTimer;
 	protected float wallJumpInputLockTimer;
 	protected int wallJumpDirection;
 	protected int dashDirection;
@@ -214,6 +240,7 @@ public abstract class Pawn : Actor
 	int ropePumpInputDirection;
 	int ropePumpDirection;
 	bool ropePumpStarted;
+	int ropeCreakSide;
 	float regrabTimer;
 	protected float JumpUpSquish;
 	protected float RunStartTimer;
@@ -247,7 +274,11 @@ public abstract class Pawn : Actor
 	protected override float AnimationRate
 		=> IsPlaying("idle") ? IdleBreathingRate * (1 + OutOfBreath * OutOfBreathAnimationBoost)
 		: IsDashRunning() && (IsPlaying("run") || IsPlaying("run_start")) ? DashRunAnimationRate
+		: IsPlaying("walk") || IsPlaying("run") || IsPlaying("run_start") || IsPlaying("crawl") ? GroundLocomotionAnimationRate
 		: 1;
+	float GroundLocomotionAnimationRate
+		=> Math.Clamp(MathF.Abs(Velocity.X) /
+			((IsPlaying("crawl") ? CrawlSpeed : MaxGroundSpeed) * GroundSpeedMultiplier), 0, 1);
 
 	public abstract PawnInput GetInput();
 	PawnInput prevInput = new();
@@ -405,15 +436,43 @@ public abstract class Pawn : Actor
 				JumpUpSquish = 0;
 		}
 
+		UpdateWallSlideFeedback();
 		AfterMovementUpdate(previousVelocity);
 		UpdateOutOfBreath();
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
 	}
 
+	void UpdateWallSlideFeedback()
+	{
+		wallSlidePulseTimer = Calc.Approach(wallSlidePulseTimer, 0, Time.Delta);
+		var started = wallSliding && !wasWallSliding;
+		wasWallSliding = wallSliding;
+		if (started && RumbleControllerIndex is { } contactController)
+		{
+			Game.Manager.Input.Rumble(contactController, WallContactRumbleLow,
+				WallContactRumbleHigh, WallContactRumbleDuration);
+			wallSlidePulseTimer = WallContactRumbleDuration;
+		}
+
+		if (!wallSliding || Velocity.Y < WallSlideFeedbackMinSpeed)
+		{
+			StopAndReleaseSound(ref wallSlideSound);
+			return;
+		}
+
+		wallSlideSound ??= Game.CreateAudioEvent("player/wall_slide", Position, start: true);
+		Game.SetAudioEventPosition(wallSlideSound, Position);
+		if (wallSlidePulseTimer <= 0 && RumbleControllerIndex is { } controller)
+			Game.Manager.Input.Rumble(controller,
+				WallSlideRumbleIdle + Calc.ClampedMap(Velocity.Y,
+					WallSlideFeedbackMinSpeed, WallSlideMaxFallSpeed) * WallSlideRumbleSpeed,
+				0, WallSlideRumbleDuration);
+	}
+
 	void UpdateOutOfBreath()
 	{
 		var running = grounded && State == States.Normal && !ducking &&
-			MathF.Abs(horizontalInput) >= MoveInputDeadzone &&
+			MathF.Abs(horizontalInput) >= 1 &&
 			MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed;
 		OutOfBreath = running
 			? Calc.Approach(OutOfBreath, 1, RunningOutOfBreathRate * Time.Delta)
@@ -425,8 +484,20 @@ public abstract class Pawn : Actor
 	protected virtual void AfterActorUpdate(Vector2 previousVelocity) { }
 	protected virtual void OnLanded(Vector2 previousVelocity)
 	{
+		RumbleLanding(previousVelocity.Y);
 		Squish = new (1.5f, 0.70f);
 		TryStartRoll(previousVelocity);
+	}
+
+	void RumbleLanding(float speed)
+	{
+		if (inWater || speed < LandingRumbleMinSpeed || RumbleControllerIndex is not { } controller)
+			return;
+		var intensity = Calc.ClampedMap(speed, LandingRumbleMinSpeed, LandingRumbleFullSpeed,
+			LandingRumbleMinIntensity, LandingRumbleMaxIntensity);
+		var duration = Calc.ClampedMap(speed, LandingRumbleMinSpeed, LandingRumbleFullSpeed,
+			LandingRumbleMinDuration, LandingRumbleMaxDuration);
+		Game.Manager.Input.Rumble(controller, intensity, 0, duration);
 	}
 	protected virtual void AfterStateUpdate(Vector2 previousVelocity) { }
 	protected virtual void AfterMovementUpdate(Vector2 previousVelocity) { }
@@ -450,6 +521,13 @@ public abstract class Pawn : Actor
 	protected virtual void UpdateRollAudioPosition() { }
 	protected virtual float GroundSpeedMultiplier => 1.0f;
 	protected virtual float AirSpeedMultiplier => 1.0f;
+	protected virtual int? RumbleControllerIndex => null;
+	internal void Rumble(float lowFrequency, float highFrequency, float duration)
+	{
+		if (RumbleControllerIndex is { } controller)
+			Game.Manager.Input.Rumble(controller, lowFrequency, highFrequency, duration);
+	}
+	internal void Rumble(RumbleEffect effect) => Rumble(effect.Low, effect.High, effect.Duration);
 
 	public override void OnCollideX()
 	{
@@ -541,6 +619,8 @@ public abstract class Pawn : Actor
 			maxSpeed = CrawlSpeed * GroundSpeedMultiplier;
 		if (inWater)
 			maxSpeed *= WaterHorizontalSpeedMultiplier;
+		if (grounded && movementInput != 0 && !dashBursting)
+			maxSpeed *= MathF.Abs(movementInput);
 
 		var acceleration = grounded ? GroundAccel * GroundSpeedMultiplier : AirAccel * AirSpeedMultiplier;
 		if (dashRunning && DashEngagesRunOnly)
@@ -591,7 +671,9 @@ public abstract class Pawn : Actor
 		var moveX = GetHorizontalMovementInput(out var movementInput);
 		if (!ducking && moveX != 0)
 			dashCancelBraking = false;
-		if (grounded && (moveX != 0 || MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed))
+		if (grounded && moveX == 0 && MathF.Abs(Velocity.X) <= GroundLocomotionAnimationSpeed)
+			groundLocomotionAnimationTimer = 0;
+		else if (grounded && (moveX != 0 || MathF.Abs(Velocity.X) > GroundLocomotionAnimationSpeed))
 			groundLocomotionAnimationTimer = GroundLocomotionAnimationHold;
 		else
 			groundLocomotionAnimationTimer = Calc.Approach(groundLocomotionAnimationTimer, 0, Time.Delta);
@@ -647,7 +729,7 @@ public abstract class Pawn : Actor
 						Play("run_start");
 				}
 				else
-					Play("run");
+					Play(MathF.Abs(movementInput) < 1 ? "walk" : "run");
 			}
 		}
 		else
@@ -756,6 +838,7 @@ public abstract class Pawn : Actor
 				else
 				{
 					wallJumpDirection = wallJump;
+					wallSliding = false;
 					wallJumpInputLockTimer = WallJumpInputLockTime;
 					facing = wallJumpDirection;
 					Facing = wallJumpDirection;
@@ -765,6 +848,9 @@ public abstract class Pawn : Actor
 					wallJumpCoyoteDirection = 0;
 					dashCooldownTimer = 0;
 					EndDashRun();
+					if (RumbleControllerIndex is { } controller)
+						Game.Manager.Input.Rumble(controller, WallJumpRumbleLow,
+							WallJumpRumbleHigh, WallJumpRumbleDuration);
 				}
 
 				if (jumpingDownThroughJumpthru)
@@ -819,7 +905,7 @@ public abstract class Pawn : Actor
 			worldPosition: position,
 			count: count,
 			directionRadians: MathF.PI / 2.0f,
-			speedScale: 2.5f,
+			speedScale: 2.51f,
 			spreadRadians: 59.0f * Calc.DegToRad);
 
 	protected float burrowTimer = 0;
@@ -1023,6 +1109,7 @@ public abstract class Pawn : Actor
 			climbRope = rope;
 			climbChain = chain;
 			climbIndex = index;
+			ropeCreakSide = 0;
 			Stop();
 			ducking = false;
 			jumpTimer = 0;
@@ -1115,7 +1202,9 @@ public abstract class Pawn : Actor
 		// Hang with the chest at the rope point; step there collision-aware so a swing scrapes
 		// along walls instead of clipping. A one-frame yank beyond the snap distance (rewind,
 		// room teleport) means the attachment is no longer sane -- let go.
-		var target = rope.Sample(chain, climbIndex) - Hitbox.Rect.Center;
+		var riderPoint = rope.Sample(chain, climbIndex);
+		UpdateRopeCreak(rope, chain, riderPoint);
+		var target = riderPoint - Hitbox.Rect.Center;
 		if ((target - Position).LengthSquared() > RopeDetachSnapDistance * RopeDetachSnapDistance)
 		{
 			ExitClimb();
@@ -1133,6 +1222,31 @@ public abstract class Pawn : Actor
 		}
 	}
 
+	void UpdateRopeCreak(Rope rope, Rope.Chain chain, Vector2 riderPoint)
+	{
+		if (!chain.Pinned)
+		{
+			ropeCreakSide = 0;
+			return;
+		}
+
+		var offset = riderPoint.X - chain.Points[0].X;
+		if (MathF.Abs(offset) < RopeCreakCenterThreshold)
+			return;
+
+		var side = Math.Sign(offset);
+		var speed = MathF.Abs(rope.PointVelocity(chain, climbIndex).X);
+		if (ropeCreakSide != 0 && side != ropeCreakSide && speed >= RopeCreakMinSpeed)
+		{
+			Game.PlayAudioEvent("rope/creak", position: riderPoint);
+			if (RumbleControllerIndex is { } controller)
+				Game.Manager.Input.Rumble(controller,
+					Calc.ClampedMap(speed, RopeCreakMinSpeed, RopeCreakFullRumbleSpeed,
+						RopeCreakMinRumble, RopeCreakMaxRumble), 0, RopeCreakRumbleDuration);
+		}
+		ropeCreakSide = side;
+	}
+
 	void ExitClimb()
 	{
 		ropeIsFalling = false;
@@ -1140,6 +1254,7 @@ public abstract class Pawn : Actor
 		climbChain = null;
 		ropePumpInputDirection = ropePumpDirection = 0;
 		ropePumpStarted = false;
+		ropeCreakSide = 0;
 		regrabTimer = RopeRegrabTime;
 		if (State == States.Climb)
 			State = States.Normal;
@@ -1296,7 +1411,8 @@ public abstract class Pawn : Actor
 		=> IsWallHugging(GetWallJumpDirection());
 
 	bool IsWallHugging(int wallJumpDirection)
-		=> !IsCarrying && wallJumpDirection != 0 && horizontalInput == -wallJumpDirection;
+		=> !IsCarrying && wallJumpDirection != 0 && MathF.Abs(horizontalInput) >= MoveInputDeadzone &&
+			Math.Sign(horizontalInput) == -wallJumpDirection;
 
 	// Splash droplet burst tuning (the surface ripple itself is scaled in WaterSurface).
 	const float SplashDropletSpeedRef = 60f; // plunge speed that maps to ~1x droplet speed
@@ -1364,6 +1480,8 @@ public abstract class Pawn : Actor
 [GameActor(HideFromPalette = true)]
 public partial class Player : Pawn
 {
+	protected override int? RumbleControllerIndex => 0;
+
 	// The body pink out of player.ase, lifted toward white the same way Bud's blue is.
 	internal static readonly Color BodyColor = new(0xc2698d);
 	internal static readonly Color SpeechColor = Color.Lerp(BodyColor, Color.White, 0.45f);
@@ -1374,7 +1492,7 @@ public partial class Player : Pawn
 	public override PawnInput GetInput()
 	{
 		return new(
-			MoveX: Controls.Move.IntValue.X,
+			MoveX: Controls.ShapeMoveX(Controls.Move.Value.X),
 			MoveY: Controls.Move.IntValue.Y,
 			JumpPressed: Controls.Jump.Pressed,
 			JumpDown: Controls.Jump.Down,
@@ -1387,6 +1505,9 @@ public partial class Player : Pawn
 	public const int MaxHealth = 5;
 
 	static float AttackFriction => 150;
+	static float AttackBlockRumbleLow => 0.45f;
+	static float AttackBlockRumbleHigh => 0.65f;
+	static float AttackBlockRumbleDuration => 0.11f;
 	static float HurtFriction => 200;
 	static float DuckAttackCooldown => 0.4f;
 	static float AttackBlockOverlapThreshold => 0.5f;
@@ -1412,7 +1533,9 @@ public partial class Player : Pawn
 	float duckAttackCooldownTimer;
 	bool duckAttack;
 	bool attackBlocked;
+	bool attackHitTarget;
 	bool attackDown;
+	Pop? attackSwipe;
 	readonly HashSet<Actor> attackConsumed = [];
 	int plasmaStrikeEffect = -1;
 	Light? light;
@@ -1837,6 +1960,8 @@ public partial class Player : Pawn
 		}
 		attackConsumed.Clear();
 		attackBlocked = false;
+		attackHitTarget = false;
+		attackSwipe = null;
 		var brakeFromDash = grounded && dashRunArmed;
 		State = States.Attack;
 		attackDown = !grounded && input.MoveY > 0;
@@ -1870,7 +1995,9 @@ public partial class Player : Pawn
 			duckAttack = true;
 			attackDown = false;
 			attackConsumed.Clear();
-			attackBlocked = IsAttackBlocked(duckAttack);
+			attackBlocked = false;
+			attackHitTarget = false;
+			attackSwipe = null;
 			duckAttackCooldownTimer = DuckAttackCooldown;
 			OnRollStopped(false);
 			Squish = new(0.65f, 1.4f);
@@ -1924,7 +2051,7 @@ public partial class Player : Pawn
 
 	void UpdateFootsteps()
 	{
-		if (State != States.Normal || !grounded || !IsPlaying("run") && !IsPlaying("run_start"))
+		if (State != States.Normal || !grounded || !IsPlaying("walk") && !IsPlaying("run") && !IsPlaying("run_start"))
 		{
 			footstepFrame = -1;
 			return;
@@ -1960,14 +2087,7 @@ public partial class Player : Pawn
 
 		var hitbox = GetAttackHitbox(duckAttack);
 		if (state.Time < 0.2f && !attackBlocked)
-		{
 			AttackThisFrame(hitbox, canPogo: attackDown);
-			if (attackBlocked)
-			{
-				Play(GetAttackAnimation(), false);
-				AudioEvent("player/sword_block");
-			}
-		}
 		if (state.JustCrossedTime(0.001f) && !attackBlocked)
 		{
 			AudioEvent(duckAttack ? "sword_crouched" : "sword");
@@ -1980,7 +2100,7 @@ public partial class Player : Pawn
 			if (attackDown)
 			{
 				position.Y -= 8;
-				Game.Create<Pop>(position, pop =>
+				attackSwipe = Game.Create<Pop>(position, pop =>
 				{
 					pop.SpriteName = "strike_down_sm";
 					pop.Facing = Facing;
@@ -1990,7 +2110,7 @@ public partial class Player : Pawn
 			else if (attackUp)
 			{
 				position.Y += 12;
-				Game.Create<Pop>(position, pop =>
+				attackSwipe = Game.Create<Pop>(position, pop =>
 				{
 					pop.SpriteName = "strike_down_sm";
 					pop.Facing = Facing;
@@ -2002,7 +2122,7 @@ public partial class Player : Pawn
 			{
 				position.X -= Facing < 0 ? 17 : 17;
 				// EmitPlasmaStrike(duckingAttack: false);
-				Game.Create<Pop>(position, pop =>
+				attackSwipe = Game.Create<Pop>(position, pop =>
 				{
 					pop.SpriteName = "strike_right_sm";
 					pop.Facing = Facing;
@@ -2021,8 +2141,10 @@ public partial class Player : Pawn
 		{
 			attackConsumed.Clear();
 			attackBlocked = false;
+			attackHitTarget = false;
 			attackDown = false;
 			attackUp = false;
+			attackSwipe = null;
 			if (duckAttack)
 			{
 				duckAttack = false;
@@ -2047,9 +2169,7 @@ public partial class Player : Pawn
 
 		var blockedByShield = IsAttackBlocked(it, checkOnlyForStrongActorBlock: true);
 		if (blockedByShield)
-		{
-			attackBlocked = true;
-		}
+			BlockAttack();
 
 		var hitSomething = false;
 		if (!blockedByShield)
@@ -2057,8 +2177,11 @@ public partial class Player : Pawn
 			for (int i = 0, count = Game.Actors.Count; i < count; i++)
 			{
 				var hit = Game.Actors[i];
-				if (Game.destroying.Contains(hit) || attackConsumed.Contains(hit) ||
+				if (Game.destroying.Contains(hit) ||
 					!hit.Mask.Has(Masks.Enemy | Masks.Hazard | Masks.Destructible) || !hit.OverlapsCombatBounds(it))
+					continue;
+				attackHitTarget = true;
+				if (attackConsumed.Contains(hit))
 					continue;
 
 				attackConsumed.Add(hit);
@@ -2074,12 +2197,8 @@ public partial class Player : Pawn
 			}
 		}
 
-		if (!hitSomething && !attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
-		{
-			attackBlocked = true;
-			Play(GetAttackAnimation(), false);
-			AudioEvent("player/sword_block");
-		}
+		if (!attackHitTarget && !attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
+			BlockAttack();
 
 		if (!attackBlocked)
 		{
@@ -2088,16 +2207,22 @@ public partial class Player : Pawn
 		}
 	}
 
-	bool IsAttackBlocked(bool duckingAttack, bool checkOnlyForStrongActorBlock = false)
+	void BlockAttack()
 	{
-		//
-		// TODO: make this false if we would have hit a breakable block or enemy
-		//
-		var hitbox = GetAttackHitbox(duckingAttack);
-		if (Facing == Signs.Negative)
-			hitbox.X = -(hitbox.X + hitbox.Width);
-		hitbox += Position;
-		return IsAttackBlocked(hitbox, checkOnlyForStrongActorBlock);
+		if (attackBlocked)
+			return;
+		attackBlocked = true;
+		if (attackSwipe != null && Game.Actors.Contains(attackSwipe) && !Game.destroying.Contains(attackSwipe))
+		{
+			attackSwipe.Visible = false;
+			Game.Destroy(attackSwipe);
+		}
+		attackSwipe = null;
+		Play(GetAttackAnimation(), false);
+		AudioEvent("player/sword_block");
+		if (RumbleControllerIndex is { } controller)
+			Game.Manager.Input.Rumble(controller, AttackBlockRumbleLow,
+				AttackBlockRumbleHigh, AttackBlockRumbleDuration);
 	}
 
 	bool IsAttackBlocked(in RectInt hitbox, bool checkOnlyForStrongActorBlock = false)

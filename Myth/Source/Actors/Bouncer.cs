@@ -32,6 +32,9 @@ public class Bouncer : Actor, IResizable
 	static float DampingRate => 11f;
 	static float MaxSimStep => 1f / 30f;
 	static float VisualRecoilOffset => 4f;
+	static float RumbleLow => 0.3f;
+	static float RumbleHigh => 0.15f;
+	static float RumbleDuration => 0.1f;
 
 	// Whole-body recoil spring: kicks 2px opposite the launch direction on a bounce.
 	static float RecoilStiffness => 900f;
@@ -153,6 +156,8 @@ public class Bouncer : Actor, IResizable
 
 		AudioEvent("bounce");
 		actor.Squish = new(1.5f, 0.7f);
+		if (actor is Pawn pawn)
+			pawn.Rumble(RumbleLow, RumbleHigh, RumbleDuration);
 	}
 
 	Vector2 BounceDirection(Actor actor)

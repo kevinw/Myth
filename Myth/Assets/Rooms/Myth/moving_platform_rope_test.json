@@ -1,6 +1,7 @@
 {
-  "position": [414, -22],
+  "position": [-171, -73],
   "size": [40, 37],
+  "musicArea": "Resting",
   "backdropColor": "FFFFFF",
   "backdropColor2": "C4BBFF",
   "backdropSurface": "sky",
@@ -64,10 +65,10 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
-    "0ff0f000gggggg0g0ggffff00000f0g00gg00g00",
-    "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGGGTGGGGGGGGGGGGGGGGGGGGGG",
-    "GGGGGGGGGGGGGGGTTTGTTTGGTGGGGGGGGGGGGGGG"
+    "0000000000000g0g0ggffff00000f0g00gg00g00",
+    "0000000000000GGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    "0000000000000GGGGTGGGGGGGGGGGGGGGGGGGGGG",
+    "0000000000000GGTTTGTTTGGTGGGGGGGGGGGGGGG"
   ],
   "backgroundTiles": [
     "00000000000000000m##mmm00000000000000000",
@@ -103,12 +104,12 @@
     "00000000000000000mm###-00000000000000000",
     "00000000000000000?#####00000000000000000",
     "00000000000000000?##mmm00000000000000000",
-    "000000000cccc0000?##mmm000000cc00cccc000",
-    "000000000cccc0000mmmmmm000000cc00cccc000",
+    "00000000000000000?##mmm000000cc00cccc000",
+    "00000000000000000mmmmmm000000cc00cccc000",
     "0000000000000000ppppppm000000cc000000000",
     "0000000000000000pppppp000000000000000000"
   ],
-  "fungal": [[12, 34],[14, 34],[16, 35],[17, 35],[18, 35],[15, 36],[19, 36],[20, 36],[22, 36],[24, 36],[25, 36]
+  "fungal": [[16, 35],[17, 35],[18, 35],[15, 36],[19, 36],[20, 36],[22, 36],[24, 36],[25, 36]
   ],
   "actors": [
     {
@@ -166,6 +167,40 @@
       "FishCount": 0,
       "BugCount": 7,
       "FlyCount": 8
+    },
+    {
+      "Id": "8641aa127415074e",
+      "Type": "HyphaWall",
+      "Position": [135, 0],
+      "Size": [48, 275],
+      "PatternTexture": "patterns/brushstrokes/35",
+      "NormalStrength": 1.212,
+      "Wetness": 0.713,
+      "RootDetail": 0.583,
+      "Taper": 0.67,
+      "Curl": 2.899,
+      "PlateSize": 2.237,
+      "PlateDepth": 0,
+      "GrowthScale": 1.169,
+      "GlowDensity": 0,
+      "GlowColor2": "252525",
+      "GlowColor1": "2E302E",
+      "VeinColor": "333333",
+      "DitherScale": 0.757,
+      "Specular": 0.619,
+      "DetailTexture": "patterns/pattern_25",
+      "TextureScale": 2.119,
+      "DetailScale": 1.633,
+      "Seed": 2046,
+      "BranchWidthMin": 2.552,
+      "BranchDensity": 1.322,
+      "BreathingAmount": 1.889,
+      "GlowPulse": 1.737
+    },
+    {
+      "Id": "64e9dbc74f117947",
+      "Type": "PlayerStart",
+      "Position": [228, 272]
     }
   ]
 }

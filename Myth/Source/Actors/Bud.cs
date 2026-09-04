@@ -58,6 +58,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	protected override float GroundSpeedMultiplier => 1.0f;
 	protected override float AirSpeedMultiplier => 1.0f;
 	protected override float IdleBreathingRate => 0.7f;
+	protected override int? RumbleControllerIndex => secondControllerControlling ? 1 : null;
 	public bool CanSay => Game.CanShowBudSpeech();
 
 	// Forwarded for editor nav debug visualization
@@ -85,6 +86,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 	public override void Destroyed()
 	{
+		base.Destroyed();
 		Game.RoomChanged -= OnRoomChanged;
 	}
 
