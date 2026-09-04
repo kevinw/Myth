@@ -159,10 +159,10 @@ public class Light : Actor, IHitByHitbox
 	[I(0, 1)] public float HitSkew = 0.35f;
 	int hitSkewDirection;
 
-	public void HitByHitbox(RectInt hitbox)
+	public bool HitByHitbox(RectInt hitbox)
 	{
 		if (!hitbox.Overlaps(Hitbox.Rect + Position) || !DrawSprite)
-			return;
+			return false;
 
 		AudioEvent("torch_hit");
 		hitFlickerAge = 0;
@@ -171,6 +171,7 @@ public class Light : Actor, IHitByHitbox
 		hitSkewDirection = Math.Sign(Position.X - hitbox.Center.X);
 		if (hitSkewDirection == 0)
 			hitSkewDirection = Game.GetFirst<Player>() is { } player ? (int)player.Facing : 1;
+		return true;
 	}
 
 	public override void Update()

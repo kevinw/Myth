@@ -1388,7 +1388,7 @@ public partial class Player : Pawn
 		);
 	}
 
-	public const int MaxHealth = 4;
+	public const int MaxHealth = 5;
 
 	static float AttackFriction => 150;
 	static float HurtFriction => 200;
@@ -1417,6 +1417,7 @@ public partial class Player : Pawn
 	bool duckAttack;
 	bool attackBlocked;
 	bool attackDown;
+	readonly HashSet<Actor> attackConsumed = [];
 	int plasmaStrikeEffect = -1;
 	Light? light;
 	SoundInstance? rollSound;
@@ -1838,7 +1839,7 @@ public partial class Player : Pawn
 		if (duck) {
 			duckAttackCooldownTimer = DuckAttackCooldown;
 		}
-		consumedAttack = false;
+		attackConsumed.Clear();
 		attackBlocked = false;
 		var brakeFromDash = grounded && dashRunArmed;
 		State = States.Attack;
@@ -1872,6 +1873,7 @@ public partial class Player : Pawn
 		{
 			duckAttack = true;
 			attackDown = false;
+			attackConsumed.Clear();
 			attackBlocked = IsAttackBlocked(duckAttack);
 			duckAttackCooldownTimer = DuckAttackCooldown;
 			OnRollStopped(false);
@@ -1947,7 +1949,6 @@ public partial class Player : Pawn
 	}
 
 	bool attackUp = false;
-	bool consumedAttack = false;
 
 	public void AttackState()
 	{
@@ -1962,18 +1963,13 @@ public partial class Player : Pawn
 		Play(GetAttackAnimation(), false);
 
 		var hitbox = GetAttackHitbox(duckAttack);
-		if (state.Time < 0.2f && !consumedAttack)
+		if (state.Time < 0.2f && !attackBlocked)
 		{
-			var hitSomething = AttackThisFrame(hitbox, canPogo: attackDown);
-			if (hitSomething)
-			{
-				consumedAttack = true;
-			}
+			AttackThisFrame(hitbox, canPogo: attackDown);
 			if (attackBlocked)
 			{
 				Play(GetAttackAnimation(), false);
 				AudioEvent("player/sword_block");
-				consumedAttack = true;
 			}
 		}
 		if (state.JustCrossedTime(0.001f) && !attackBlocked)
@@ -2027,6 +2023,7 @@ public partial class Player : Pawn
 
 		if (attackFinished)
 		{
+			attackConsumed.Clear();
 			attackBlocked = false;
 			attackDown = false;
 			attackUp = false;
@@ -2043,7 +2040,7 @@ public partial class Player : Pawn
 		}
 	}
 
-	bool AttackThisFrame(RectInt it, bool canPogo)
+	void AttackThisFrame(RectInt it, bool canPogo)
 	{
 		if (Facing == Signs.Negative)
 			it.X = -(it.X + it.Width);
@@ -2061,17 +2058,23 @@ public partial class Player : Pawn
 		var hitSomething = false;
 		if (!blockedByShield)
 		{
-			var hit = Game.OverlapsFirstCombat(it, Masks.Enemy | Masks.Hazard | Masks.Destructible);
-			if (hit != null)
+			for (int i = 0, count = Game.Actors.Count; i < count; i++)
 			{
+				var hit = Game.Actors[i];
+				if (Game.destroying.Contains(hit) || attackConsumed.Contains(hit) ||
+					!hit.Mask.Has(Masks.Enemy | Masks.Hazard | Masks.Destructible) || !hit.OverlapsCombatBounds(it))
+					continue;
+
+				attackConsumed.Add(hit);
 				Hit(hit, new(it));
 				hitSomething = true;
-				if (canPogo)
-				{
-					Velocity.Y = -125f;
-					burrowNeedsGrounding = false;
-					burrowTimer = 0f;
-				}
+			}
+
+			if (hitSomething && canPogo)
+			{
+				Velocity.Y = -125f;
+				burrowNeedsGrounding = false;
+				burrowTimer = 0f;
 			}
 		}
 
@@ -2085,10 +2088,8 @@ public partial class Player : Pawn
 		if (!attackBlocked)
 		{
 			Game.BreakTiles(it);
-			Game.HitVisualActors(it);
+			Game.HitVisualActors(it, attackConsumed);
 		}
-
-		return hitSomething;
 	}
 
 	bool IsAttackBlocked(bool duckingAttack, bool checkOnlyForStrongActorBlock = false)

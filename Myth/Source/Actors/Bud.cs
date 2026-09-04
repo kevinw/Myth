@@ -99,7 +99,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		&& burrowPopDelayTimer <= 0 && pendingRoomChange == null && State == States.Normal;
 
 	// In the future, we'll animate Bud to ask for a carry in specific places maybe? Right now carrying Bud is too annoying and interrupts you too often.
-	static bool BudWantsToBeCarried => false; 
+	static bool BudWantsToBeCarried => false;
 
 	// The carry and the burrow-ride are separate relationships: a Bud riding the player's
 	// burrow (position-synced to the player, invisible) must not be "caught" by the pop
@@ -154,12 +154,13 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 	// Caught by a swing of the player's sword (the attack hitbox, not a damage source --
 	// Bud has no health). He rounds on whoever swung and hops out of reach.
-	public void HitByHitbox(RectInt hitbox)
+	public bool HitByHitbox(RectInt hitbox)
 	{
 		if (!Interruptible || backDashCooldownTimer > 0 || !hitbox.Overlaps(Hitbox.Rect + Position))
-			return;
+			return false;
 
 		StartBackDash(Game.GetFirst<Player>()?.Position.X ?? hitbox.Center.X);
+		return true;
 	}
 
 	void StartBackDash(float attackerX)
@@ -177,8 +178,10 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		State = States.BackDash;
 		Play("back_dash", looping: false);
 		AudioEvent("hurt");
-		if (!EnemyNearby())
-			Game.TryBudStorylet("bud_struck");
+
+		// enable to have Bud say something when you attack him
+		//if (!EnemyNearby())
+			//Game.TryBudStorylet("bud_struck");
 	}
 
 	// A swing that catches him mid-fight was aimed at the enemy, not at him, so he ducks out of the

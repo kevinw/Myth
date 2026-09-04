@@ -2203,13 +2203,14 @@ public partial class Game : IDisposable
 			? room.WorldBounds.TopLeft + new Point2(tile.X * TileSize + TileSize / 2, tile.Y * TileSize + TileSize / 2)
 			: Point2.Zero;
 
-	public void HitVisualActors(RectInt hitbox)
+	public void HitVisualActors(RectInt hitbox, HashSet<Actor> consumed)
 	{
 		for (int i = 0, count = Actors.Count; i < count; i++)
 		{
 			var actor = Actors[i];
-			if (actor is IHitByHitbox { } hittable)
-				hittable.HitByHitbox(hitbox);
+			if (!destroying.Contains(actor) && !consumed.Contains(actor) &&
+				actor is IHitByHitbox { } hittable && hittable.HitByHitbox(hitbox))
+				consumed.Add(actor);
 		}
 	}
 

@@ -5,15 +5,16 @@ namespace Myth;
 
 public class FungalGrowthActor : Actor, IHitByHitbox
 {
-	public void HitByHitbox(RectInt rectInt)
+	public bool HitByHitbox(RectInt rectInt)
 	{
 		Rect rect = new(rectInt.X, rectInt.Y, rectInt.Width, rectInt.Height);
-		if (GetVisualBounds().Overlaps(rect))
-		{
-			Cut(rectInt);
-			Hit(rectInt.Center);
-			BroadcastSympathy(rectInt.Center);
-		}
+		if (!GetVisualBounds().Overlaps(rect))
+			return false;
+
+		Cut(rectInt);
+		Hit(rectInt.Center);
+		BroadcastSympathy(rectInt.Center);
+		return true;
 	}
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;

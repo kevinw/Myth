@@ -1,17 +1,7 @@
-- let you choose a hat at the beginning?
 - players arms when he jumps are down and look weird
-- "Playground" world
-- make Shift run instead of F
-- ABSOLUTELY new attack hitbox logic needs to have HitVisualActors consume the attack
-  - or better yet; attackConsumed is instead a Set<Actor>
-  - HITTING MULTIPLE ENEMIES AT ONCE IS BROKEN TILL WE FIX THIS
 - make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
 - make a "ducks destroyed" and "robot overlords tamed" scoreboard in the hub
-- focus the camera more on the RigPuppet during the kneel cutscene
-- make the eyelaserpuppet sit down and talk to you after you beat him. use a deep voice.
-- MYTH_SHIP add a "demo mode on" in options which, on 2 mins inactivity, reset to title screen with warning
-- door is rendering normals behind the hidden wall cover
-- show "speaking" lines like a comic book bubble with individual syllables
+- boss needs bigger Pop / longer death like GhostFrog
 - show a rigpuppet in the second room.
    - what is it doing?
    - either you talk to it, or you attack it and it runs away.
@@ -20,16 +10,12 @@
 - Press "Lup" to warp icon looks wrong, it looks like you're pressing in on the stick
 - find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.
 - use Dropper; draw a sprite; more "easy" enemy variety wins
-- ELP boss:make him fall down only after 3 hits. make him have a phase two where his head gets bigger and maybe his body grows in size a bit. add a "swipe away" animation where he makes space if you're too close
-- play pong with projectiles in a clear arkanoid room
 - some machine ambience music for the tower tunnel
-- lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
 - show a currency hud for ducks
 - wall jump teach room early where Bud tells you
 - import the bg brick as our custom tile kit and make it more varied
-- when loading barks from a baked asset that is older than Game.BudStory.cs 
-- test the player controller online in a simple room
 - the generic Pop is starting to feel a bit overused/generic
+- door is rendering normals behind the hidden wall cover
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
 - dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
@@ -42,6 +28,14 @@
 
 
 LATER
+- when loading barks from a baked asset that is older than Game.BudStory.cs 
+- lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
+- play pong with projectiles in a clear arkanoid room
+- MYTH_SHIP add a "demo mode on" in options which, on 2 mins inactivity, reset to title screen with warning
+- make the eyelaserpuppet sit down and talk to you after you beat him. use a deep voice.
+- "Playground" world
+  - test the player controller online in a simple room
+- let you choose a hat at the beginning?
 - an enemy or area which speeds up or slows down time
 - put some inbetween frames in the player sprite
 - make our Aseprite loader able to load indexed files

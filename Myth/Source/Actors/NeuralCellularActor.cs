@@ -7,7 +7,7 @@ namespace Myth;
 
 public interface IHitByHitbox
 {
-	public void HitByHitbox(RectInt rectInt);
+	public bool HitByHitbox(RectInt rectInt);
 
 }
 
@@ -19,14 +19,15 @@ public interface IHitByHitbox
 [GameActor(HideFromPalette = true)]
 public class NeuralCellularActor : Actor, IHitByHitbox
 {
-	public void HitByHitbox(RectInt rectInt)
+	public bool HitByHitbox(RectInt rectInt)
 	{
 		Rect rect = new(rectInt.X, rectInt.Y, rectInt.Width, rectInt.Height);
-		if (GetVisualBounds().Overlaps(rect))
-		{
-			Cut(rectInt);
-			Hit(rectInt.Center);
-		}
+		if (!GetVisualBounds().Overlaps(rect))
+			return false;
+
+		Cut(rectInt);
+		Hit(rectInt.Center);
+		return true;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
