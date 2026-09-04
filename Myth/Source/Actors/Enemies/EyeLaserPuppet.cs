@@ -67,6 +67,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	const string StompGatherEffect = "wave_pylon_solid_charge";
 	const string HitSparkEffect = "elp_hit_sparks";
 	const string GroundDustEffect = "elp_ground_dust";
+	const string GreetingLine = "Sorry about this.";
 	const string WarmupParameter = "Warmup";
 	const string FireDurationParameter = "FireDuration";
 
@@ -107,6 +108,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	float walkTime;
 	float contactDamageGrace;
 	float swipeStrength;
+	bool greetingStarted;
+	bool greeted;
 	readonly LaserContactMark[] laserContactMarks = new LaserContactMark[8];
 	int nextLaserContactMark;
 	readonly Coroutine floatingFlash = new();
@@ -167,7 +170,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float StompGatherRadius => 18;
 	static float SwipeRange => 50;
 	static float SwipeChance => 0.5f;
-	static float SwipeFingerScale => 1.6f;
+	static float SwipeFingerScale => 3.6f;
 	static float SwipeWindupEnd => 0.42f;
 	static float SwipeRecoveryStart => 0.72f;
 	static float SwipeLightRadius => 28;
@@ -225,6 +228,24 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	protected override bool UpdateAbility(Player player, bool grounded)
 	{
+		if (!greeted)
+		{
+			if (greetingStarted)
+				greeted = true;
+			else
+			{
+				Velocity.X = 0;
+				PlayAbilityIdle();
+				SetAbilityLookTarget(player.Position);
+				var view = new Rect(Game.Camera, new Vector2(Game.ZoomedWidth, Game.ZoomedHeight));
+				if (!view.Overlaps(GetVisualBounds()))
+					return true;
+				greetingStarted = true;
+				GreetPlayer(GreetingLine);
+				return false;
+			}
+		}
+
 		if (phase == Phase.None)
 		{
 			cooldown = MathF.Max(0, cooldown - Time.Delta * AnimationSpeedMultiplier);
@@ -378,6 +399,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	protected override float AnimationSpeedMultiplier => LowHealth ? SpeedupFactor : 1;
 	protected override float HitLimbReactionStrength => HitLimbMotionStrength;
 	protected override Color RigHeadTint => LowHealth ? LowHealthSkullTint : Color.White;
+	protected override bool BackArmCombatEnabled => false;
 	protected override void OnFootstep(Vector2 position)
 	{
 		Game.Particles?.Emit(groundDustEffect, position, StepDustCount);
@@ -1165,6 +1187,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 				if (actor is NeuralTextureActor texture && texture.Room == Room &&
 					string.Equals(texture.ShutdownSourceActorId, ActorId, StringComparison.OrdinalIgnoreCase))
 					texture.BeginShutdown();
+
 		base.Destroyed();
 		ReleaseParticleEffect(ref chargeEffect);
 		ReleaseParticleEffect(ref floatingFlashEffect);

@@ -117,6 +117,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public float PoseModifierWeight = 1;
 	public Color HeadTint = Color.White;
 	public bool GaitActive;
+	public bool BackArmCombatEnabled = true;
 	public Action<Vector2>? Footstep;
 	Vector2 offset;
 	public Vector2 Offset
@@ -1298,6 +1299,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
+			if (!BackArmCombatEnabled && bone.Arm == backArm)
+				continue;
 			BoneWidths(bone, out var fromWidth, out var toWidth);
 			if (bone.Combat && CapsuleOverlaps(bounds, projectedPose[bone.From], projectedPose[bone.To],
 				MathF.Max(fromWidth, toWidth) * 0.5f + Settings.CombatBoundsPadding))
@@ -1324,7 +1327,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
-			if (!bone.Combat)
+			if (!bone.Combat || !BackArmCombatEnabled && bone.Arm == backArm)
 				continue;
 			var from = owner.Position + projectedPose[bone.From];
 			var to = owner.Position + projectedPose[bone.To];

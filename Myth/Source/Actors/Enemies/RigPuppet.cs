@@ -140,6 +140,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.PlaybackSpeed = (abilityActive ? abilityPlaybackSpeed * abilityPlaybackSpeedMultiplier :
 			scripted ? scriptedPlaybackSpeed : PlaybackSpeed) * gaitScale * AnimationSpeedMultiplier;
 		visual.HeadTint = RigHeadTint;
+		visual.BackArmCombatEnabled = BackArmCombatEnabled;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
 		visual.LookTarget = abilityActive ? abilityLookTarget : Game.GetFirst<Player>()?.Position;
@@ -272,6 +273,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual float AnimationSpeedMultiplier => 1;
 	protected virtual float HitLimbReactionStrength => 1;
 	protected virtual Color RigHeadTint => Color.White;
+	protected virtual bool BackArmCombatEnabled => true;
 	protected virtual void OnFootstep(Vector2 position) { }
 
 	protected bool RigFacingMatches => visual.FacingMatches;

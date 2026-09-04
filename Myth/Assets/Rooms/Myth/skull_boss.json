@@ -84,7 +84,7 @@
     {
       "Id": "79ca3193f6281d40",
       "Type": "EyeLaserPuppet",
-      "Position": [135, 144],
+      "Position": [88, 143],
       "ProjectionYaw": 43.696,
       "NeuralJostleStrength": 0.786,
       "NeuralColorAmount": 0.906,
@@ -116,13 +116,6 @@
       "NearColor": "C2F2FB",
       "Health": 20,
       "VisualFPS": 15.246
-    },
-    {
-      "Id": "4711b2d5aa015603",
-      "Type": "RigGreetingSequence",
-      "Position": [120, 104],
-      "RigId": "79ca3193f6281d40",
-      "Distance": 32.759
     },
     {
       "Id": "cdee73111a7e4ba8",
