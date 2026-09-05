@@ -383,7 +383,7 @@ public partial class Player : Pawn
 		// Descending counts as flat, so you keep momentum going down. A queued reversal
 		// targets zero speed (friction) so a direction switch decelerates before flipping.
 		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
-		var maxSpeed = BurrowMaxSpeed * (dashBurrowing ? DashBurrowSpeedMultiplier : 1f);
+		var maxSpeed = BurrowMaxSpeed * (dashBurrowing ? DashBurrowSpeedMultiplier : 1f) * (burrowLine?.SpeedScale ?? 1f);
 		var targetSpeed = move && !burrowReverseQueued ? maxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
 		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
 		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
