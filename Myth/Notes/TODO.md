@@ -19,11 +19,9 @@
 - some machine ambience music for the tower tunnel
 - show a currency hud for ducks
 - wall jump teach room early where Bud tells you
-- import the bg brick as our custom tile kit and make it more varied
 - the generic Pop is starting to feel a bit overused/generic
 - door is rendering normals behind the hidden wall cover
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
-- dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
 
 # Monday
@@ -34,6 +32,8 @@
 
 
 LATER
+- import the bg brick as our custom tile kit and make it more varied
+- dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - when loading barks from a baked asset that is older than Game.BudStory.cs 
 - lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
 - play pong with projectiles in a clear arkanoid room
