@@ -1,0 +1,122 @@
+{
+  "position": [40, 46],
+  "size": [40, 23],
+  "backdropColor": "12151D",
+  "backdropColor2": "343D52",
+  "ambientColor": "A9C5F2",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.19,
+  "reverb": 0.889,
+  "ditherStrength": 0.22,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00TTTTTTTTTT000000000000000000000000TT",
+    "TT00TT00000000000000000000000000000000TT",
+    "TT00TT00000000000000000000000000000000TT",
+    "TT00TT000000000000000000000000g0000000TT",
+    "TT00TT0000000000000000000TTTTTTTTTTd00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "0000000000000000000000000000000000TT0000",
+    "0000000000000000000000000000000000TT0000",
+    "0000000000000000000000000000000000TT0000",
+    "0000000000000000000000000000000000TT0000",
+    "TTTTTTTTTTTTTTTTTTdrGTTTTTTTTTTTTTTTTdTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000000000v000000000000000000v00000000",
+    "000000000000v000000000000000000v00000000",
+    "000000000000v000000000000000000v00000000",
+    "000000000000v000000000000000000v00000000",
+    "00RRR0000000v000000000000000000v0RRR0000",
+    "00RRR0000000v000000000000000000v0RRR0000",
+    "00RRR00m00000000m00000000m0000000RRR0000",
+    "m0RRR00m0m000000m0muuu000m0m00000RRRm000",
+    "m0mRR00m0m000000m0mumu000m0m0m000RRRm0m0",
+    "m0mRm00m0m000000m0mumum00m0m0m000RRRm0m0",
+    "m0mRm0mm0m00000mm0m0m0m0mm0m0m000RRRm0m0",
+    "m0mRm0mmmm00000mmmm0m0m0mmmm0m000RRmm0m0",
+    "mmmRm0mmmm00000mmmmmm0m0mmmmmm000RRmmmm0",
+    "mmmmm0mmmm00000mmmmmmmm0mmmmmm000RRmmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_archive_w",
+      "Type": "ArchiveWall",
+      "Position": [24, 24],
+      "Size": [272, 120],
+      "GlowDensity": 0.1
+    },
+    {
+      "Id": "coil_rope_w",
+      "Type": "Rope",
+      "Position": [160, 16],
+      "Size": [8, 128],
+      "StartCoiled": true
+    },
+    {
+      "Id": "coil_cover_w",
+      "Type": "CameraBlocker",
+      "Position": [208, 80],
+      "Size": [88, 72],
+      "HighlightOnMap": true
+    },
+    {
+      "Id": "coil_reveal_w",
+      "Type": "RevealDoor",
+      "Position": [208, 120],
+      "Size": [24, 48],
+      "TileType": "stone"
+    },
+    {
+      "Id": "coil_chest_w",
+      "Type": "Chest",
+      "Position": [264, 152],
+      "MycelonDrop": 5
+    },
+    {
+      "Id": "coil_inspect_w",
+      "Type": "InspectPoint",
+      "Position": [72, 168],
+      "Text": "The station listened for departures long after the last train had become a root."
+    },
+    {
+      "Id": "coil_light_w",
+      "Type": "Light",
+      "Position": [156, 84],
+      "Radius": 170,
+      "Color": "A8C7F2",
+      "Intensity": 0.9
+    }
+  ]
+}

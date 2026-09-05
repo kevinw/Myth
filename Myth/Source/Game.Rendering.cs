@@ -1530,7 +1530,7 @@ public sealed partial class GameView
 		};
 		foreach (var actor in Actors)
 		{
-			if (actor is Light { Intensity: > 0 } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
+			if (actor is Light { Intensity: > 0, Enabled: true } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
 			{
 				renderer.AddLight(
 					light.Position,

@@ -1,0 +1,110 @@
+{
+  "position": [0, 0],
+  "size": [40, 23],
+  "backdropColor": "0B1715",
+  "backdropColor2": "21483F",
+  "ambientColor": "73D8BC",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.12,
+  "reverb": 0.876,
+  "ditherStrength": 0.16,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000g00000000TT",
+    "TT00000000000000000000000TTTTTTT000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000g000000000000000000000000000000TT",
+    "TT0000TTTTTTT0000000000000000000000000TT",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "TTTTTTTTTTTTdrGTTTTTTTTTTTTTTTTdrGTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000000000v000000000000000000v00000000",
+    "000000000000v000000000000000000v00000000",
+    "000000000000v000000000000000000v00000000",
+    "000000000000v000000000000000000v00000000",
+    "00RRR0000000v000000000000000000v000RRR00",
+    "00RRR0000000v000000uuu000000000v000RRR00",
+    "00RRR0m00000000m000u0u000000000v0m0RRR00",
+    "00RRR0m0m000000m0m0uuu0000m0000v0m0mRR00",
+    "00RRR0m0m0m0000m0m0m000000m0m00v0m0mRm00",
+    "00RRR0m0m0m0m00m0m0m000000m0m0mv0m0mRm0m",
+    "00RRRmm0m0m0m0mm0m0m000000m0m0mvmm0mRm0m",
+    "00RRRmmmm0m0m0mmmm0m00000mm0m0mvmmmmRm0m",
+    "00RRRmmmmmm0m0mmmmmm00000mmmm0m0mmmmmm0m",
+    "00RRRmmmmmmmm0mmmmmm00000mmmmmm0mmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_roots_return_door",
+      "Type": "LinkedDoor",
+      "Position": [48, 168],
+      "TargetActorId": "coil_surface_roots_door"
+    },
+    {
+      "Id": "coil_nca_ra",
+      "Type": "NeuralTextureActor",
+      "Position": [80, 32],
+      "Size": [208, 112],
+      "Tint": "4B8E7D",
+      "Brightness": 0.65
+    },
+    {
+      "Id": "coil_wild_ra",
+      "Type": "Wildlife",
+      "Position": [190, 128],
+      "FishCount": 0,
+      "BugCount": 8,
+      "FlyCount": 12
+    },
+    {
+      "Id": "coil_light_ra",
+      "Type": "Light",
+      "Position": [160, 88],
+      "Radius": 180,
+      "Color": "70D8BA",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_inspect_ra",
+      "Type": "InspectPoint",
+      "Position": [104, 168],
+      "Text": "Below the station, the route is still dreaming."
+    }
+  ]
+}

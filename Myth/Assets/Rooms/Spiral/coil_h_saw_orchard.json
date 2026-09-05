@@ -1,0 +1,115 @@
+{
+  "position": [40, 23],
+  "size": [40, 23],
+  "backdropColor": "171318",
+  "backdropColor2": "4B343F",
+  "ambientColor": "E6A0B8",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.225,
+  "reverb": 0.898,
+  "ditherStrength": 0.22,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000drG000000TT",
+    "TT000000000000000000000000000TTT000000TT",
+    "TT000000000000000000000000000TTT000000TT",
+    "TT000000000000000000000000000TTT000000TT",
+    "TT00000000000000000TTT0000000TTT000000TT",
+    "TT00000000000000000TTT0000000TTT000000TT",
+    "TT00000000000000000TTT0000000TTT000000TT",
+    "TT00000000000000000TTT0000000TTT000000TT",
+    "TT0000000rGT0000000TTT0000000TTT000000TT",
+    "TT0000000TTT0000000TTT0000000TTT000000TT",
+    "TT0000000TTT0000000TTT0000000TTT000000TT",
+    "000000000TTT0000000TTT0000000TTT00000000",
+    "000000000TTT0000000TTT0000000TTT00000000",
+    "000000000TTT0000000TTT0000000TTT00000000",
+    "000000000TTT0000000TTT0000000TTT00000000",
+    "TTTTTTTTTTTTrGTTTTTTTTTTTTTTTTTTGTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000v000000000000000000000v00000000000",
+    "000000v000000000000000000000v00000000000",
+    "000000v000000000000000000000v00000000000",
+    "000000v000000000000000000000v00000000000",
+    "000RRRv000000000000000000000v00000RRR000",
+    "000RRRv000000000000000000000000000RRR000",
+    "0m0RRRv000m00000000m00000000000000RRRm00",
+    "0m0mRRv000m0m000000mum00000000m000RRRm0m",
+    "0m0mRRv000m0m0m0000m0m0m000000m0m0RRRm0m",
+    "0m0mRRv000m0m0m0m00mum0m000000m0m0mRRm0m",
+    "mm0mRRv000m0m0m0m0mm0m0m000000m0m0mRmm0m",
+    "mmmmRR0000mmm0m0m0mmmm0m000000m0m0mRmmmm",
+    "mmmmmR0000mmmmm0m0mmmmmm000000mmm0mRmmmm",
+    "mmmmmR0000mmmmmmm0mmmmmmm00000mmmmmRmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_spider_h",
+      "Type": "Spider",
+      "Position": [84, 160],
+      "ClimbsWallsAndCeilings": true,
+      "LayInterval": 2.5,
+      "WalkSpeed": 22
+    },
+    {
+      "Id": "coil_bouncer_h1",
+      "Type": "Bouncer",
+      "Position": [144, 136],
+      "Size": [24, 24],
+      "Strength": 245,
+      "SurfaceId": "bouncer"
+    },
+    {
+      "Id": "coil_bouncer_h2",
+      "Type": "Bouncer",
+      "Position": [232, 96],
+      "Size": [24, 24],
+      "Strength": 245,
+      "SurfaceId": "bouncer"
+    },
+    {
+      "Id": "coil_bramble_h1",
+      "Type": "Bramble",
+      "Position": [188, 120]
+    },
+    {
+      "Id": "coil_bramble_h2",
+      "Type": "Bramble",
+      "Position": [268, 80]
+    },
+    {
+      "Id": "coil_light_h",
+      "Type": "Light",
+      "Position": [172, 80],
+      "Radius": 155,
+      "Color": "F2A6C1",
+      "Intensity": 0.9
+    }
+  ]
+}

@@ -63,6 +63,7 @@ public partial class Manager : App
 	bool AttractMode => attract != null || titleAttractMode;
 	readonly bool skipStartupMenu;
 	readonly bool checkRooms;
+	readonly string? requestedWorldId;
 	bool startingPlay;
 	// Boot loading screen: warm GPU pipelines a step at a time while showing "Loading...", then
 	// call EnterInitialScreen(). See UpdateBootWarmup/RenderBootWarmup and ShaderWarmup.
@@ -258,6 +259,7 @@ public partial class Manager : App
 		gymMode = args.gym;
 		headless = args.headless;
 		checkRooms = args.checkRooms;
+		requestedWorldId = args.worldId;
 		unthrottled = args.unthrottled;
 		gym = new()
 		{
@@ -412,6 +414,8 @@ public partial class Manager : App
 #if !BROWSER
 		LoadWindowSettings();
 #endif
+		if (requestedWorldId != null)
+			Assets.SelectWorld(requestedWorldId);
 
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 

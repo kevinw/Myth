@@ -53,6 +53,7 @@ public struct StartArgs
 	public float maxTimeSeconds = float.PositiveInfinity;
 	// Start play immediately in this room (by Room.Id) on startup.
 	public string? playRoomId;
+	public string? worldId;
 	public string? traceJsonPath;
 	public string? traceRoomId;
 	public string? traceGoalId;
@@ -123,6 +124,7 @@ public struct StartArgs
 				case "--max-time": maxTimeSeconds = ReadFloat(args, ref i, option, minimum: 0); break;
 				case "--play-room":
 				case "--room": playRoomId = ReadValue(args, ref i, option); break;
+				case "--world": worldId = ReadValue(args, ref i, option); break;
 				case "--trace-json": traceJsonPath = ReadValue(args, ref i, option); break;
 				case "--trace-room": traceRoomId = ReadValue(args, ref i, option); break;
 				case "--trace-goal": traceGoalId = ReadValue(args, ref i, option); break;

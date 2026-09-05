@@ -1,0 +1,157 @@
+{
+  "position": [
+    40,
+    -46
+  ],
+  "size": [
+    40,
+    23
+  ],
+  "backdropColor": "1A1215",
+  "backdropColor2": "5B343B",
+  "ambientColor": "FF9B8B",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.12,
+  "reverb": 0.43,
+  "ditherStrength": 0.16,
+  "legend": {
+    "#": "stone",
+    "m": "metal",
+    "w": "water",
+    "b": "Myth Back",
+    "G": "grass",
+    "g": "plants",
+    "r": "rocks",
+    "d": "debris",
+    "v": "Myth Vines",
+    "u": "Myth Runes",
+    "R": "ruin"
+  },
+  "tiles": [
+    "########################################",
+    "########################################",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000###drG#00000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##0000g0000000000000000000000000000000##",
+    "##000########000000000000000#######000##",
+    "##000000000000000000000000000000000000##",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "########drG################drG##########",
+    "########################################"
+  ],
+  "backgroundTiles": [
+    "000000000000v000000000000v00000000000000",
+    "000000000000v000000000000v00000000000000",
+    "000000000000v000000000000v00000000000000",
+    "000000000000v000000000000v00000000000000",
+    "00RRR0000000v00000000000000000000RRR0000",
+    "00RRR0000000v00000000000000000000RRR0000",
+    "00RRR0000000v00000000000000000b00RRR000b",
+    "00RRRb000000v0b000uuu000000000b0bRRR000b",
+    "00RRRb0b0000b0b0b0u0u0000b0000b0bRbR000b",
+    "00RRRb0b0b00b0b0b0buu0000b0b00b0bRbRb00b",
+    "00RRRb0b0b0bb0b0b0b000000b0b0bb0bRbRb0bb",
+    "00RRRb0b0b0bbbb0b0b000000b0b0bbbbRbRb0bb",
+    "00RRRbbb0b0bbbbbb0b000000b0b0bbbbbbRb0bb",
+    "00RRRbbbbb0bbbbbbbb000000bbb0bbbbbbbb0bb",
+    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
+    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
+    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
+    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "actors": [
+    {
+      "Id": "coil_canopy_m1",
+      "Type": "MovingPlatform",
+      "Position": [
+        48,
+        80
+      ],
+      "Size": [
+        56,
+        16
+      ],
+      "TravelDistance": 176,
+      "Speed": 46,
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_canopy_m2",
+      "Type": "MovingPlatform",
+      "Position": [
+        216,
+        120
+      ],
+      "Size": [
+        48,
+        16
+      ],
+      "TravelDistance": 128,
+      "Speed": 38,
+      "Facing": "-",
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_drop_m1",
+      "Type": "Dropper",
+      "Position": [
+        88,
+        24
+      ],
+      "TriggerWidth": 50,
+      "TriggerHeight": 150,
+      "StartDelay": 0.2
+    },
+    {
+      "Id": "coil_drop_m2",
+      "Type": "Dropper",
+      "Position": [
+        164,
+        24
+      ],
+      "TriggerWidth": 44,
+      "TriggerHeight": 150,
+      "WarningTime": 0.5
+    },
+    {
+      "Id": "coil_drop_m3",
+      "Type": "Dropper",
+      "Position": [
+        240,
+        24
+      ],
+      "TriggerWidth": 50,
+      "TriggerHeight": 150,
+      "WarningTime": 0.25
+    },
+    {
+      "Id": "coil_light_m",
+      "Type": "Light",
+      "Position": [
+        160,
+        88
+      ],
+      "Radius": 170,
+      "Color": "FF9A86",
+      "Intensity": 0.9
+    }
+  ]
+}

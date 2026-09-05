@@ -1,18 +1,33 @@
+using System.Numerics;
 using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Tags = ActorTag.Door, LivePositionEditable = true)]
-public class Door : Actor, IActivatable
+[GameActor(Tags = ActorTag.Door, LivePositionEditable = true, LiveResizable = true)]
+public class Door : Actor, IActivatable, IResizable
 {
+	public static readonly Point2 DefaultSize = new(12, 16);
+
 	public bool StartsVisible;
 	public bool Locked;
+	// A persistent PressesOnce Button may live in another room; its saved latch keeps this shortcut open.
+	public string PersistentButtonId = "";
+	Point2 size = DefaultSize;
+	public Point2 Size
+	{
+		get => size;
+		set
+		{
+			size = value;
+			Hitbox = new(DoorRect);
+		}
+	}
 	float delay;
 	bool activationOpen;
 	bool pendingClose;
 	HashSet<Actor>? activationSources;
 
-	static RectInt DoorHitbox => new(-6, -16, 12, 16);
+	RectInt DoorRect => new(-Size.X / 2, -Size.Y, Size.X, Size.Y);
 
 	public Door()
 	{
@@ -24,8 +39,8 @@ public class Door : Actor, IActivatable
 	public override void Added()
 	{
 		base.Added();
-		Hitbox = new(DoorHitbox);
-		if (StartsVisible || Locked)
+		Hitbox = new(DoorRect);
+		if ((StartsVisible || Locked) && !PersistentlyOpened)
 			Appear();
 	}
 
@@ -44,6 +59,17 @@ public class Door : Actor, IActivatable
 	public override void Update()
 	{
 		base.Update();
+		if (PersistentlyOpened)
+		{
+			if (Visible)
+			{
+				Game.Create<Pop>(Position + new Point2(0, -8));
+				AudioEvent("door/unlock");
+			}
+			Mask = Masks.None;
+			Visible = false;
+			return;
+		}
 		if (activationOpen)
 			return;
 		if (pendingClose)
@@ -86,6 +112,32 @@ public class Door : Actor, IActivatable
 			}
 		}
 	}
+
+	bool PersistentlyOpened => !string.IsNullOrWhiteSpace(PersistentButtonId) && Game.IsButtonPressed(PersistentButtonId);
+
+	public override void Render(Batcher batcher) => RenderSized(batcher, SubtextureType.Color, Color.White);
+	public override void RenderNormals(Batcher batcher) => RenderSized(batcher, SubtextureType.Normals, Color.White);
+	public override void RenderEmissive(Batcher batcher) => RenderSized(batcher, SubtextureType.Emissive, Color.White);
+	public override void RenderShadow(Batcher batcher, Color color) => RenderSized(batcher, SubtextureType.Color, color);
+	public override void RenderReflection(Batcher batcher, Color color) => RenderSized(batcher, SubtextureType.Color, color);
+
+	void RenderSized(Batcher batcher, SubtextureType type, Color color)
+	{
+		if (CurrentSpriteFrame is not { } frame)
+			return;
+		var texture = type switch
+		{
+			SubtextureType.Color => frame.Subtexture,
+			SubtextureType.Normals => frame.NormalSubtexture,
+			SubtextureType.Emissive => frame.EmissiveSubtexture,
+			_ => default
+		};
+		if (texture.IsEmpty || texture.Size == Vector2.Zero)
+			return;
+		batcher.Image(texture, Vector2.Zero, Origin, (Vector2)Size / texture.Size, 0, color);
+	}
+
+	public override Rect GetVisualBounds() => new(Position + DoorRect.Position, DoorRect.Size);
 
 	public void SetActive(Actor source, bool active)
 	{

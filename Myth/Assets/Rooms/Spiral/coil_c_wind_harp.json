@@ -1,0 +1,132 @@
+{
+  "position": [40, -23],
+  "size": [40, 23],
+  "backdropColor": "0D1822",
+  "backdropColor2": "244E5A",
+  "ambientColor": "9EDFFF",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.19,
+  "reverb": 0.86,
+  "ditherStrength": 0.28,
+  "legend": {
+    "#": "back",
+    "G": "grass",
+    "T": "stone",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines",
+    "w": "water"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000TTTTTT000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000g00000000000000000000g00000000TT",
+    "TT00000GGrTTG00000000000000GGrTG000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "0000T00g00000000T000000T0000000g000T0000",
+    "0000TwwwwwwwwwwwT000000TwwwwwwwwwwwT0000",
+    "0000TwwwwwwwwwwwT000000TwwwwwwwwwwwT0000",
+    "0000TwwwwwwwwwwwT000000TwwwwwwwwwwwT0000",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000000v000000000000000000v00000000000",
+    "000000000v000000000000000000v00000000000",
+    "000000000v000000000000000000v00000000000",
+    "000000000v000000000000000000v00000000000",
+    "000###000v000000000000000000v00000###000",
+    "000###000v00000000uuu0000000v00000###000",
+    "000###00mv0000000mu0u00000m0v00000###000",
+    "0m0###00mv0000000muuu00000m0v00000###m00",
+    "0m0###00mv0000000m0m0m0000m0v00000###m0m",
+    "0m0###00mv0000000m0m0m0m00m0v00000###m0m",
+    "0m0###0mmv000000mm0m0m0m0mm0v00000###m0m",
+    "mm0###0mmm000000mmmm0m0m0mmmm00000###m0m",
+    "mmm###0mmm000000mmmmmm0m0mmmmm0000###mmm",
+    "mmm###0mmm000000mmmmmmmm0mmmmm0000###mmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_wind_c",
+      "Type": "Wind",
+      "Position": [24, 24],
+      "Size": [272, 128],
+      "Direction": [1, 0],
+      "Acceleration": 310,
+      "MaxSpeed": 90,
+      "Targets": "Ropes",
+      "StreakColor": "87D9ED",
+      "StreakSpacing": 20
+    },
+    {
+      "Id": "coil_rope_c1",
+      "Type": "Rope",
+      "Position": [116, 16],
+      "Size": [8, 120]
+    },
+    {
+      "Id": "coil_rope_c2",
+      "Type": "Rope",
+      "Position": [212, 8],
+      "Size": [8, 144]
+    },
+    {
+      "Id": "coil_platform_c",
+      "Type": "MovingPlatform",
+      "Position": [132, 72],
+      "Size": [40, 16],
+      "TravelDistance": 84,
+      "Speed": 26,
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_wild_c",
+      "Type": "Wildlife",
+      "Position": [160, 120],
+      "FishCount": 8,
+      "BugCount": 1,
+      "FlyCount": 3
+    },
+    {
+      "Id": "coil_light_c",
+      "Type": "Light",
+      "Position": [160, 80],
+      "Radius": 175,
+      "Color": "7ED9F2",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_gate_c_to_k",
+      "Type": "Door",
+      "Position": [312, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_button_k"
+    }
+  ]
+}

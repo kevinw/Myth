@@ -1,0 +1,128 @@
+{
+  "position": [-40, -23],
+  "size": [40, 23],
+  "backdropColor": "111A17",
+  "backdropColor2": "315041",
+  "ambientColor": "A1E0AE",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.225,
+  "reverb": 0.736,
+  "ditherStrength": 0.16,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000g00000000TT",
+    "TT0000rGTTTTTTTT00000000drGTTTTTTT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT00000TTTTTTTTTTTTTT00000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "TT0000TT000000000000000000000000TT0000TT",
+    "000000TT000000000000000000000000TT000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "TTrGTTTTTTTTTTTTTTTTdrGTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000000v000000000000000000v0000000",
+    "0000000000000v000000000000000000v0000000",
+    "0000000000000v000000000000000000v0000000",
+    "0000000000000v000000000000000000v0000000",
+    "00RRR00000000v000000000000000000v00RRR00",
+    "00RRR00000000v000000000000000000v00RRR00",
+    "00RRR00000000vumu0000000m0000000vm0RRR00",
+    "00RRR00000000vumum000000m00000000m0mRR00",
+    "0mRRR00000m000umum0m0000m00000000m0mRm00",
+    "0mRmR00000m0m00m0m0m0m00m00000m00m0mRm0m",
+    "0mRmR00000m0m0mm0m0m0m0mm00000m0mm0mRm0m",
+    "0mRmR00000m0m0mmmm0m0m0mm00000m0mmmmRm0m",
+    "mmRmR00000m0m0mmmmmm0m0mm00000m0mmmmmm0m",
+    "mmmmR00000mmm0mmmmmmmm0mm00000m0mmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_line_p",
+      "Type": "BurrowLine",
+      "Position": [0, 0],
+      "Points": [[16, 152],[56, 48],[160, 24],[264, 48],[304, 152]
+      ],
+      "RenderProcedural": true,
+      "ProceduralWidth": 2.2,
+      "SpeedScale": 1.25,
+      "ProceduralOuterColor": "315A45",
+      "ProceduralInnerColor": "A8E5B2"
+    },
+    {
+      "Id": "coil_spider_p",
+      "Type": "Spider",
+      "Position": [160, 24],
+      "ClimbsWallsAndCeilings": true,
+      "LaysSaws": false,
+      "WalkSpeed": 28,
+      "BodyColor": "375C47",
+      "LegColor": "70A87E"
+    },
+    {
+      "Id": "coil_gate_p",
+      "Type": "Door",
+      "Position": [312, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_button_p"
+    },
+    {
+      "Id": "coil_button_p",
+      "Type": "Button",
+      "Position": [48, 168],
+      "Mode": "PressesOnce",
+      "Persistent": true,
+      "TargetActorId": "coil_gate_p"
+    },
+    {
+      "Id": "coil_wild_p",
+      "Type": "Wildlife",
+      "Position": [160, 104],
+      "FishCount": 0,
+      "FlyCount": 4
+    },
+    {
+      "Id": "coil_light_p",
+      "Type": "Light",
+      "Position": [160, 88],
+      "Radius": 170,
+      "Color": "9DE0AF",
+      "Intensity": 0.9
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "position": [80, -46],
+  "size": [40, 23],
+  "backdropColor": "171523",
+  "backdropColor2": "3D365C",
+  "ambientColor": "C8B9FF",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.225,
+  "reverb": 0.87,
+  "ditherStrength": 0.28,
+  "legend": {
+    "T": "stone",
+    "m": "Myth Back",
+    "G": "grass",
+    "g": "plants",
+    "r": "rocks",
+    "d": "debris",
+    "v": "Myth Vines",
+    "u": "Myth Runes",
+    "R": "ruin"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000000000000TTdrGTT000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000TTTTTTd0000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "TTTTTTdrGTTTTTTTT000000TTdrGTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000v00000000000000000000v00000000000",
+    "0000000v00000000000000000000v00000000000",
+    "0000000v00000000000000000000v00000000000",
+    "0000000v00000000000000000000v00000000000",
+    "000RRR0v00000000000000000000v000000RRR00",
+    "000RRR0v00000000uuu000000000v000000RRR00",
+    "000RRR0v00000000umu000000000v000000mRR00",
+    "0m0RRR0v00m00000umum00000000v000000mRm00",
+    "0m0mRR0v00m0m0000m0m0m000000v0m0000mRm0m",
+    "0m0mRR0v00m0m0m00m0m0m0m0000v0m0m00mRm0m",
+    "0m0mRR0000m0m0m0mm0m0m0m0000v0m0m0mmRm0m",
+    "mm0mRR0000m0m0m0mmmm0m0m0000v0m0m0mmmm0m",
+    "mmmmRR0000mmm0m0mmmmmm0m000000m0m0mmmmmm",
+    "mmmmmR0000mmmmm0mmmmmmmm000000mmm0mmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_save_l",
+      "Type": "SavePoint",
+      "Position": [232, 168]
+    },
+    {
+      "Id": "coil_surface_roots_door",
+      "Type": "LinkedDoor",
+      "Position": [128, 168],
+      "TargetActorId": "coil_roots_return_door"
+    },
+    {
+      "Id": "coil_inspect_l",
+      "Type": "InspectPoint",
+      "Position": [196, 168],
+      "Text": "TRANSIT LOG 19: The root accepted the destination, but rejected the shortest route."
+    },
+    {
+      "Id": "coil_nca_l",
+      "Type": "NeuralTextureActor",
+      "Position": [24, 24],
+      "Size": [272, 112],
+      "Tint": "6E5FA0",
+      "Brightness": 0.65,
+      "Saturation": 0.8
+    },
+    {
+      "Id": "coil_wild_l",
+      "Type": "Wildlife",
+      "Position": [80, 128],
+      "FishCount": 0,
+      "BugCount": 3,
+      "FlyCount": 10
+    },
+    {
+      "Id": "coil_light_l",
+      "Type": "Light",
+      "Position": [160, 92],
+      "Radius": 165,
+      "Color": "BFAEFF",
+      "Intensity": 0.9
+    }
+  ]
+}

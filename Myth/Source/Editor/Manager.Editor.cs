@@ -1713,14 +1713,31 @@ public partial class Manager
 
 	/// Puts the actor's bounds under the middle of the editor view (which is editorCamera in
 	/// world space), so a paste lands where you are looking instead of where it was copied from.
-	void CenterRoomActorOnEditorCamera(Room room, JsonObject actor)
+	void CenterRoomActorOnEditorCamera(Room room, JsonObject actor) => CenterRoomActorAt(room, actor, editorCamera);
+
+	static void CenterRoomActorAt(Room room, JsonObject actor, Vector2 center)
 	{
 		var local = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var bounds = RoomActorBounds(room, actor);
-		var target = (editorCamera - (Vector2)bounds.Size / 2).RoundToPoint2();
+		var target = (center - (Vector2)bounds.Size / 2).RoundToPoint2();
 		actor["Position"] = new JsonArray(
 			local.X + target.X - bounds.X,
 			local.Y + target.Y - bounds.Y);
+	}
+
+	static void AddActorPaletteEntry(Room room, Factory.ActorPaletteEntry entry, Point2 position)
+	{
+		if (entry.PropSpriteName is { } propSpriteName)
+		{
+			room.AddActorType(nameof(Prop), position);
+			room.Actors[^1][nameof(Prop.SpriteName)] = propSpriteName;
+		}
+		else if (entry.ActorSpecId is { } specId)
+			room.AddActorSpec(specId, position);
+		else if (entry.ActorTypeName is { } typeName)
+			room.AddActorType(typeName, position);
+		else
+			throw new InvalidOperationException($"Actor cannot be added: {entry.Name}");
 	}
 
 	static bool IsHiddenWallActor(JsonObject actor)
@@ -4398,15 +4415,7 @@ public partial class Manager
 				{
 					var position = actorBrushPosition;
 					var before = editing.Actors.Count;
-					if (actorEntry.PropSpriteName is { } propSpriteName)
-					{
-						editing.AddActorType(nameof(Prop), position);
-						editing.Actors[^1][nameof(Prop.SpriteName)] = propSpriteName;
-					}
-					else if (actorEntry.ActorSpecId != null)
-						editing.AddActorSpec(actorEntry.ActorSpecId, position);
-					else if (actorEntry.ActorTypeName != null)
-						editing.AddActorType(actorEntry.ActorTypeName, position);
+					AddActorPaletteEntry(editing, actorEntry, position);
 					// Select the just-placed actor so its inspector opens immediately.
 					if (editing.Actors.Count == before + 1)
 					{

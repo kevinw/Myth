@@ -1,0 +1,128 @@
+{
+  "position": [-80, -23],
+  "size": [40, 23],
+  "backdropColor": "130F20",
+  "backdropColor2": "453467",
+  "ambientColor": "D29BFF",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.12,
+  "reverb": 0.871,
+  "ditherStrength": 0.22,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000000000000000TTTTTT0000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000000000000000000TTTTT000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000g00000000000000000000000TT",
+    "TT000000000000rGTTT0000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000TTTTTTT00000000000000000000000000TT",
+    "TT00000000000000000000000000000000000000",
+    "TT00000000000000000000000000000000000000",
+    "TT00000000000000000000000000000000000000",
+    "TT00000000000000000000000000000000000000",
+    "TTTTTTdrGTTTTTTTT000000TTdrGTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000000000v0000000000000v0000000000000",
+    "000000000000v0000000000000v0000000000000",
+    "000000000000v0000000000000v0000000000000",
+    "000000000000v0000000000000v0000000000000",
+    "0000RRR00000v0000000000000v000000RRR0000",
+    "0000RRR0000000000000000000v000000RRR0000",
+    "0000RRR000m00000000m000000v0m0000RRR0m00",
+    "0000RRR000m0m000000m000000v0m0m00RRR0m0m",
+    "0000RmR000m0m0m0000m000000v0m0m0mRRR0m0m",
+    "0000RmRm00m0m0m0m00m000uum00m0m0mRmR0m0m",
+    "0000RmRm0mm0m0m0m0mm000u0m0mm0m0mRmRmm0m",
+    "0000RmRm0mmmm0m0m0mm000uum0mmmm0mRmRmmmm",
+    "0000RmRm0mmmmmm0m0mm00000m0mmmmmmRmRmmmm",
+    "0000Rmmm0mmmmmmmm0mm00000m0mmmmmmmmRmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_line_q",
+      "Type": "BurrowLine",
+      "Position": [0, 0],
+      "Points": [[24, 152],[88, 88],[160, 40],[232, 88],[296, 152]
+      ],
+      "RenderProcedural": true,
+      "ProceduralWidth": 2.2,
+      "ProceduralOuterColor": "51366F",
+      "ProceduralInnerColor": "D5A3FF"
+    },
+    {
+      "Id": "coil_platform_q1",
+      "Type": "MovingPlatform",
+      "Position": [72, 120],
+      "Size": [48, 16],
+      "Mode": "Vertical",
+      "Facing": "-",
+      "TravelDistance": 72,
+      "Speed": 38,
+      "Invert": "UninvertedOnly",
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_platform_q2",
+      "Type": "MovingPlatform",
+      "Position": [200, 48],
+      "Size": [48, 16],
+      "Mode": "Vertical",
+      "TravelDistance": 72,
+      "Speed": 38,
+      "Invert": "InvertedOnly",
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_blob_q1",
+      "Type": "Blob",
+      "Position": [112, 168],
+      "Invert": "UninvertedOnly"
+    },
+    {
+      "Id": "coil_blob_q2",
+      "Type": "Blob",
+      "Position": [208, 40],
+      "Invert": "InvertedOnly"
+    },
+    {
+      "Id": "coil_light_q",
+      "Type": "Light",
+      "Position": [160, 92],
+      "Radius": 180,
+      "Color": "D1A0FF",
+      "Intensity": 0.9
+    }
+  ]
+}

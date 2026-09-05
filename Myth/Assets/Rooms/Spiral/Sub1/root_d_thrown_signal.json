@@ -1,0 +1,124 @@
+{
+  "position": [0, -23],
+  "size": [40, 23],
+  "backdropColor": "17130D",
+  "backdropColor2": "53441E",
+  "ambientColor": "F4D06A",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.225,
+  "reverb": 0.874,
+  "ditherStrength": 0.16,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000g00000000000000TT",
+    "TT000000000000000000000TTTTTd000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000drGTT00000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "TTdrGTTTTTTTTTTTTTTTTdrGTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000v00000000000000000000v000000000000",
+    "000000v00000000000000000000v000000000000",
+    "000000v00000000000000000000v000000000000",
+    "000000v00000000000000000000v000000000000",
+    "00RRR0v00000000000000000000v0000000RRR00",
+    "00RRR0v00000000uuu000000000v0000000RRR00",
+    "m0RRR0v00000000u0um00000000v0000000RmR00",
+    "m0mRR0v0000m000uuum0m000000v0000000RmRm0",
+    "m0mRm0v0000m0m0000m0m0m0000v000m000RmRm0",
+    "m0mRm0v0000m0m0m00m0m0m0m00v000m0m0RmRm0",
+    "m0mRm0v0000m0m0m0mm0m0m0m000000m0m0mmRm0",
+    "mmmRm00000mm0m0m0mmmm0m0m000000m0m0mmmm0",
+    "mmmmm00000mmmm0m0mmmmmm0m00000mm0m0mmmmm",
+    "mmmmm00000mmmmmm0mmmmmmmm00000mmmm0mmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_crate_rd",
+      "Type": "Crate",
+      "Position": [56, 160]
+    },
+    {
+      "Id": "coil_bounce_rd",
+      "Type": "Bouncer",
+      "Position": [88, 144],
+      "Size": [24, 24],
+      "Directional": true,
+      "Direction": [1, -1],
+      "Strength": 285
+    },
+    {
+      "Id": "coil_switch_rd",
+      "Type": "Switch",
+      "Position": [248, 80],
+      "TargetActorId": "coil_gate_rd",
+      "Points": [[0, 0],[-64, 36],[-128, 36]
+      ]
+    },
+    {
+      "Id": "coil_gate_rd",
+      "Type": "Door",
+      "Position": [232, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true
+    },
+    {
+      "Id": "coil_chest_rd",
+      "Type": "Chest",
+      "Position": [272, 168],
+      "MycelonDrop": 5
+    },
+    {
+      "Id": "coil_watcher_rd",
+      "Type": "Watcher",
+      "Position": [176, 168],
+      "ShootRange": 180
+    },
+    {
+      "Id": "coil_light_rd",
+      "Type": "Light",
+      "Position": [160, 84],
+      "Radius": 165,
+      "Color": "F1CF68",
+      "Intensity": 0.9
+    }
+  ]
+}

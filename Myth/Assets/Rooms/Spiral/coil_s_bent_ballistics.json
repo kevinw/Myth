@@ -1,0 +1,152 @@
+{
+  "position": [
+    -80,
+    23
+  ],
+  "size": [
+    40,
+    23
+  ],
+  "backdropColor": "14141C",
+  "backdropColor2": "3B3D59",
+  "ambientColor": "AEB8FF",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.19,
+  "reverb": 0.52,
+  "ditherStrength": 0.16,
+  "legend": {
+    "#": "stone",
+    "m": "metal",
+    "w": "water",
+    "b": "Myth Back",
+    "G": "grass",
+    "g": "plants",
+    "r": "rocks",
+    "d": "debris",
+    "v": "Myth Vines",
+    "u": "Myth Runes",
+    "R": "ruin"
+  },
+  "tiles": [
+    "#################000000#################",
+    "#################000000#################",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##00000000000000000000000000000000g000##",
+    "##00000000000000000000000000######d000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##00000000000000###drG##00000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##00drG#####00000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "############drG##000000########drG######",
+    "#################000000#################"
+  ],
+  "backgroundTiles": [
+    "0000000v0000000000000000000v000000000000",
+    "0000000v0000000000000000000v000000000000",
+    "0000000v0000000000000000000v000000000000",
+    "0000000v0000000000000000000v000000000000",
+    "000RRR0v0000000000000000000v000000RRR000",
+    "000RRR000000000000000000000v000000RRR000",
+    "b00RRR000b00000000b00000000v000000RRb000",
+    "b0bRRR000b00000000b0b000000v0b0000RRb0b0",
+    "b0bRbR000b00000000b0b0buuu0v0b0000RRb0b0",
+    "b0bRbRb00b00000b00b0b0bubu0v0b0000RRb0b0",
+    "b0bRbRb0bb00000b0bb0b0bububv0b0000Rbb0b0",
+    "bbbRbRb0bb00000b0bbbb0b0b0bvbb0000Rbbbb0",
+    "bbbbbRb0bb00000b0bbbbbb0b0bbbb0000Rbbbbb",
+    "bbbbbbb0bb00000b0bbbbbbbb0bbbb0000Rbbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "actors": [
+    {
+      "Id": "coil_wind_s",
+      "Type": "Wind",
+      "Position": [
+        32,
+        32
+      ],
+      "Size": [
+        256,
+        120
+      ],
+      "Direction": [
+        0,
+        -1
+      ],
+      "Acceleration": 420,
+      "MaxSpeed": 130,
+      "Targets": "Projectiles",
+      "StreakColor": "9EAFFF"
+    },
+    {
+      "Id": "coil_spitter_s1",
+      "Type": "Spitter",
+      "Position": [
+        64,
+        168
+      ]
+    },
+    {
+      "Id": "coil_watcher_s",
+      "Type": "Watcher",
+      "Position": [
+        160,
+        120
+      ],
+      "ShootRange": 220,
+      "WakeRange": 180
+    },
+    {
+      "Id": "coil_spitter_s2",
+      "Type": "Spitter",
+      "Position": [
+        264,
+        168
+      ],
+      "Facing": "-"
+    },
+    {
+      "Id": "coil_rope_s",
+      "Type": "Rope",
+      "Position": [
+        156,
+        16
+      ],
+      "Size": [
+        8,
+        104
+      ]
+    },
+    {
+      "Id": "coil_light_s",
+      "Type": "Light",
+      "Position": [
+        160,
+        84
+      ],
+      "Radius": 170,
+      "Color": "AAB5FF",
+      "Intensity": 0.9
+    }
+  ]
+}

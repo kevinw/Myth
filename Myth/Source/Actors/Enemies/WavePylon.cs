@@ -78,6 +78,12 @@ public sealed class WavePylon : Actor
 			UpdateChargeParticles();
 			UpdateChargeSound();
 		}
+		
+		if (ChargeProgress > easedChargeProgress)
+			easedChargeProgress = ChargeProgress;
+		else
+			easedChargeProgress = Calc.Approach(easedChargeProgress, ChargeProgress, Time.Delta * 0.6f);
+		Game.Show(easedChargeProgress);
 		if (cycleTime < CycleInterval)
 			return;
 
@@ -204,6 +210,8 @@ public sealed class WavePylon : Actor
 
 	float CycleInterval => MathF.Max(ChargeDuration + 0.05f, Interval);
 	float ChargeStart => CycleInterval - MathF.Min(ChargeDuration, CycleInterval - 0.05f);
+	float easedChargeProgress;
+	float EasedChargeProgress => MathF.Max(easedChargeProgress, ChargeProgress);
 	float ChargeProgress => charging ? Math.Clamp((cycleTime - ChargeStart) /
 		MathF.Max(0.0001f, CycleInterval - ChargeStart), 0, 1) : 0;
 	Color WaveColor => medium == RadialWaveMedium.Solid ? SolidColor : AirColor;
@@ -213,7 +221,7 @@ public sealed class WavePylon : Actor
 
 	void DrawPylon(Batcher batcher, bool emissive)
 	{
-		var progress = ChargeProgress;
+		var progress = EasedChargeProgress;
 		var pulse = 0.82f + MathF.Abs(MathF.Sin(Time.SecondsF * Calc.Lerp(7, 34, progress))) * 0.18f;
 		var color = WaveColor;
 		if (!emissive)
@@ -251,9 +259,12 @@ public sealed class WavePylon : Actor
 
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{
+		//action(Position, 100, 1.0f, 16, 0xffffff);
 		if (charging)
+		{
 			action(Position, Calc.Lerp(24, 48, ChargeProgress), Calc.Lerp(0.2f, 1.2f, ChargeProgress), 8,
 				WaveColor);
+		}
 	}
 
 	public override void Destroyed()

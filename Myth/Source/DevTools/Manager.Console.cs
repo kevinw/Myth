@@ -163,6 +163,78 @@ public partial class Manager
 		return space < 0 ? input : input[..space];
 	}
 
+	[ConsoleCommand("add", Completer = nameof(CompleteActor))]
+	void AddActor(string name)
+	{
+		#if EDITOR
+		if (FindActorPaletteEntry(name) is not { } entry)
+			throw new InvalidOperationException(string.IsNullOrWhiteSpace(name) ? "Usage: add <actor>" : $"Actor not found: {name}");
+
+		var live = playing || startingPlay;
+		if (live && game?.CurrentRoom == null)
+			throw new InvalidOperationException("No room is currently playing");
+		var center = live ? GameImGuiToWorld(GameViewRect, game!, GameViewRect.Center) : editorCamera;
+		var room = live ? Assets.GetRoom(game!.CurrentRoom!.Id) : GetRoomAtWorld(center) ?? CurrentRoom;
+		if (room == null)
+			throw new InvalidOperationException("No room at the center of the screen");
+
+		using (CaptureRoomUndo("Add Actor", room))
+		{
+			AddActorPaletteEntry(room, entry, center.RoundToPoint2());
+			var actor = room.Actors[^1];
+			CenterRoomActorAt(room, actor, center);
+			ClampRoomActorToRoom(room, actor);
+
+			if (live)
+			{
+				var position = room.WorldBounds.TopLeft + (ActorSpecs.ReadResolvedPosition(actor) ?? Point2.Zero);
+				if (ActorSpecs.Create(game!, actor, position) is { } runtime)
+				{
+					liveSelectedActorId = runtime.ActorId;
+					OpenLiveActorInspector(runtime);
+				}
+				room.Save();
+				MarkRoomPreviewDirty(room);
+			}
+			else
+			{
+				SelectRoom(room);
+				selectedRoomActorIndex = room.Actors.Count - 1;
+				SelectEditorActorTool();
+				ClearEditorDragState();
+				editorSelectionRect = null;
+			}
+			editorGameDirty = true;
+		}
+
+		if (!live)
+			SyncEditorGame();
+		DisplayMessage($"Added {entry.Name}");
+		#else
+		throw new InvalidOperationException("The add command requires an editor build");
+		#endif
+	}
+
+	void CompleteActor(string filter, List<ConsoleCompletion> result)
+	{
+		#if EDITOR
+		foreach (var entry in Factory.ActorPalette)
+			if (string.IsNullOrEmpty(filter) || entry.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+				result.Add(new(entry.Name, entry.Name));
+		result.Sort(static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Label, b.Label));
+		#endif
+	}
+
+	#if EDITOR
+	static Factory.ActorPaletteEntry? FindActorPaletteEntry(string name)
+	{
+		foreach (var entry in Factory.ActorPalette)
+			if (string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase))
+				return entry;
+		return null;
+	}
+	#endif
+
 	[ConsoleCommand("go", Completer = nameof(CompleteRoom))]
 	void Go(string target)
 	{

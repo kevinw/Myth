@@ -1,3 +1,5 @@
+- eyelaserpuppet needs a buzzsaw effect for the hand
+- eyelaserpuppet needs to wait until you come within a certain distance before starting kneel
 - Bosonic Time + needs SFX
 - really listen and pay attention to lack of landing sound effects on grass etc
 - mosquito death needs robot sound layer
@@ -6,6 +8,7 @@
   - 
 - players arms when he jumps are down and look weird
 - make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
+- i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
 - make a "ducks destroyed" and "robot overlords tamed" scoreboard in the hub
 - boss needs bigger Pop / longer death like GhostFrog
 - server prop needs a no-lights variant that goes to it when you unpower the duck-machine

@@ -1,0 +1,135 @@
+{
+  "position": [80, 46],
+  "size": [40, 23],
+  "backdropColor": "0F1016",
+  "backdropColor2": "3A2A34",
+  "ambientColor": "FF748E",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.225,
+  "reverb": 0.894,
+  "ditherStrength": 0.28,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000TTTTT0000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000000000000000000TTTTTT00000000000TT",
+    "TT0000000000000g0000000000000000000000TT",
+    "TT000000000000TTT000000000000000000000TT",
+    "TT000000000000TTT000000000000000000000TT",
+    "TT000000000000TTT000000000000000000000TT",
+    "00000000000000TTT000000000000000000000TT",
+    "00000000000000TTT000000000000000000000TT",
+    "00000000000000TTT000000000000000000000TT",
+    "00000000000000TTT000000000000000000000TT",
+    "TTTTTTTdrGTTTTTTTTTTTTTTTTdrGTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000000v000000000000000000v00000000000",
+    "000000000v000000000000000000v00000000000",
+    "000000000v000000000000000000v00000000000",
+    "000000000v000000000000000000v00000000000",
+    "000RRR000v000000000000000000v00000RRR000",
+    "000RRR000v000000000000000000v00000RRR000",
+    "00mRRR000v0m00000000m00uuu00v00000RRR0m0",
+    "00mRmR000v0m0m000000m0mu0u00v00m00RRR0m0",
+    "00mRmR00000m0m0m0000m0mumu00v00m0mRRR0m0",
+    "00mRmR00000m0m0m0m00m0m0m000v00m0mRmR0m0",
+    "0mmRmR0000mm0m0m0m0mm0m0m000v00m0mRmRmm0",
+    "0mmmmR0000mmmm0m0m0mmmm0m000v0mm0mRmRmmm",
+    "0mmmmR0000mmmmmm0m0mmmmmm00000mmmmRmRmmm",
+    "0mmmmR0000mmmmmmmm0mmmmmm00000mmmmmmRmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmm00000mmmmmmmmmmmmmmm00000mmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_eye_x",
+      "Type": "EyeLaserPuppet",
+      "Position": [196, 168],
+      "MaximumRange": 320,
+      "VerticalRange": 80,
+      "SweepDuration": 1.1
+    },
+    {
+      "Id": "coil_bouncer_x",
+      "Type": "Bouncer",
+      "Position": [72, 144],
+      "Size": [24, 24],
+      "Directional": true,
+      "Direction": [1, -1],
+      "Strength": 260,
+      "FillColor": "612E43",
+      "RimColor": "FF718E"
+    },
+    {
+      "Id": "coil_escape_x",
+      "Type": "BurrowLine",
+      "Position": [0, 0],
+      "Points": [[240, 152],[272, 112],[296, 48]
+      ],
+      "RenderProcedural": true,
+      "ProceduralWidth": 2.2,
+      "SpeedScale": 2,
+      "ProceduralOuterColor": "5D2D42",
+      "ProceduralInnerColor": "FF879A"
+    },
+    {
+      "Id": "coil_reward_x",
+      "Type": "Chest",
+      "Position": [288, 168],
+      "Loot": "BurrowUpgrade"
+    },
+    {
+      "Id": "coil_save_x",
+      "Type": "SavePoint",
+      "Position": [48, 168]
+    },
+    {
+      "Id": "coil_inspect_x",
+      "Type": "InspectPoint",
+      "Position": [116, 168],
+      "Text": "The conductor has no timetable. It only knows that you arrived."
+    },
+    {
+      "Id": "coil_light_x",
+      "Type": "Light",
+      "Position": [184, 82],
+      "Radius": 190,
+      "Color": "FF718E",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_embers_x",
+      "Type": "ParticleEmitter",
+      "Position": [288, 132]
+    }
+  ]
+}

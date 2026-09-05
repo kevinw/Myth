@@ -2,7 +2,7 @@
   "position": [-80, 0],
   "size": [40, 45],
   "ambientColor": "606060",
-  "reverb": 0.352,
+  "reverb": 0.346,
   "legend": {
     "#": "back",
     "(": "back-nw",
@@ -35,14 +35,14 @@
     "T000000000000000000000000000000000000000",
     "T000000000000000000000000000000000000000",
     "T0000000000000000000000000000000000000g0",
-    "T000000000000000000000000000000000000GGG",
-    "T000000000000000000000000000000000000GRR",
-    "T000000000000000000000000000000000000RRR",
-    "000g00g000000000000000000000000000000RRR",
-    "GGGGGGGGG0000000000000000000000000000RRR",
-    "PPPPPPPPG0000000000000000000000000000RRR",
-    "PPPPPPPPP0000000000000000000000000000RRR",
-    "PPPPPPPPP00000000000000000000000000gfRRR",
+    "T000000000000000000000000000000000GGGGGG",
+    "T000000000000000000000000000000000GGGGRR",
+    "T000000000000000000000000000000000GGGRRR",
+    "000g00g000000000000000000000000000GGGRRR",
+    "GGGGGGGGG0000000000000000000000000GGGRRR",
+    "PPPPPPPPG00000000000000000000000000GGRRR",
+    "PPPPPPPPP00000000000000000000000000GGRRR",
+    "PPPPPPPPP00000000000000000000000000GGRRR",
     "PPPPPPPPP000000000000000000000000GGGGRRR",
     "PPPPPPPPP000000000000000000000000GRRRRRR",
     "PPPPPPPPP000000000000000000000000RRRRRRR",
@@ -153,7 +153,7 @@
     {
       "Id": "c3d52eaaf4406d05",
       "Type": "Light",
-      "Position": [176, 244],
+      "Position": [177, 244],
       "Radius": 65.0,
       "Height": 5.8
     },
@@ -187,11 +187,13 @@
     {
       "Id": "c3c0b88e85233b43",
       "From": "TutorialText",
-      "Position": [217, 330],
+      "Position": [217, 333],
       "Text": [
-        "hold {Jump} to engage your Bosonic Transmutation Cap",
-        "climb walls, dodge enemies"
-      ]
+        "hold {Jump} - use your linearization hat",
+        "climb walls, dodge enemies, travel wires",
+        "escape the curse of dimensionality"
+      ],
+      "LineHeightMultiplier": 0.854
     },
     {
       "Id": "d5b6f3147c909268",
@@ -267,6 +269,29 @@
       "Type": "InspectPoint",
       "Position": [184, 256],
       "Text": "Bud: It seems dead."
+    },
+    {
+      "Id": "dfe01cf1fe074c03",
+      "Type": "BurrowLine",
+      "Position": [248, 184],
+      "Points": [[32, -8],[48, -8],[48, -72]
+      ],
+      "RenderProcedural": true
+    },
+    {
+      "Id": "e87fc039cb2f2d3e",
+      "Type": "BurrowLine",
+      "Position": [208, 216],
+      "Points": [[56, 0],[88, 0],[88, -40]
+      ],
+      "RenderProcedural": true
+    },
+    {
+      "Id": "243750f75e03faac",
+      "From": "BlueMemoryLight",
+      "Position": [308, 212],
+      "Radius": 90.0,
+      "Intensity": 0.75
     }
   ]
 }

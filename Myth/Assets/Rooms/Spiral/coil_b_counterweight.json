@@ -1,0 +1,125 @@
+{
+  "position": [40, 0],
+  "size": [40, 23],
+  "backdropColor": "151522",
+  "backdropColor2": "44354C",
+  "ambientColor": "D6A5B5",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.155,
+  "reverb": 0.822,
+  "ditherStrength": 0.22,
+  "legend": {
+    "#": "back",
+    "G": "grass",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000000000000000g0000000000000000000TT",
+    "TT000000000000000GGrTTG000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000000000000000000000g0000000000000TT",
+    "TT0000000000000000000TGGrTTG0000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000g00000000000000000000000TT",
+    "TT00000000000GGrTTG0000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "00000TTTTTT00000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "000000000000r0000000d0000000r00000000000",
+    "TTTTTTTTrTTTTTTTT000000TTTTdTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000000v00000000000000000000000000",
+    "0000000000000v00000000000000000000000000",
+    "0000000000000v00000000000000000000000000",
+    "0000###000000v000000000000000000###00000",
+    "0000###000000v000000000000000000###00000",
+    "0000###000000v000000000000000000###00000",
+    "0000###000000v00000000m0uuu0000m###00000",
+    "0000###000000v00000000m0u0u0000m###00000",
+    "0000###0m0000v00000000m0uuu0000m###00000",
+    "0m00###0m0m00m00000000m0m0m0m00m###00000",
+    "0m0m###0m0m0mm0000000mm0m0m0m0mm###00000",
+    "0m0m###0m0m0mmm000000mmmm0m0m0mm###00000",
+    "0m0m###mm0m0mmm000000mmmmmm0m0mm###00000",
+    "mm0m###mmmm0mmm000000mmmmmmmm0mm###00000",
+    "mmmm###mmmmmmmm00000mmmmmmmmmmmm###00000",
+    "mmmm###mmmmmmmm00000mmmmmmmmmmmm###00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "slopes": [[12, 20],[28, 20]
+  ],
+  "actors": [
+    {
+      "Id": "coil_crate_b",
+      "Type": "Crate",
+      "Position": [68, 160]
+    },
+    {
+      "Id": "coil_lift_b",
+      "Type": "MovingPlatform",
+      "Position": [116, 144],
+      "Size": [48, 16],
+      "Mode": "Vertical",
+      "Facing": "-",
+      "TravelDistance": 104,
+      "Speed": 42,
+      "ActivatedByWeight": true,
+      "ReturnsWhenUnweighted": false,
+      "RenderActivationLights": true,
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_drop_b",
+      "Type": "Dropper",
+      "Position": [244, 48],
+      "TriggerWidth": 36,
+      "TriggerHeight": 120
+    },
+    {
+      "Id": "coil_light_b",
+      "Type": "Light",
+      "Position": [144, 92],
+      "Radius": 150,
+      "Color": "F0A7C2",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_inspect_b",
+      "Type": "InspectPoint",
+      "Position": [262, 168],
+      "Text": "A freight mark: ONE BODY UP. ONE MEMORY DOWN."
+    },
+    {
+      "Id": "coil_gate_b_to_j",
+      "Type": "Door",
+      "Position": [312, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_button_j"
+    }
+  ]
+}

@@ -84,7 +84,7 @@
     {
       "Id": "79ca3193f6281d40",
       "Type": "EyeLaserPuppet",
-      "Position": [88, 143],
+      "Position": [78, 140],
       "ProjectionYaw": 43.696,
       "NeuralJostleStrength": 0.786,
       "NeuralColorAmount": 0.906,
@@ -167,26 +167,26 @@
       "Facing": "-",
       "ActivatedByWeight": true,
       "TravelDistance": 64,
-      "Speed": 97.854,
-      "WaitTime": 0.578,
       "RenderActivationLights": true,
-      "StartFriction": 18,
-      "AppearAfterActorDestroyed": "79ca3193f6281d40"
+      "AppearAfterActorDestroyed": "79ca3193f6281d40",
+      "StartFriction": 21.949,
+      "Speed": 111.645,
+      "WaitTime": 0.214
     },
     {
-      "Id": "81f159abbb6f9793",
+      "Id": "a83697e0aac1eeee",
       "Type": "MovingPlatform",
-      "Position": [344, 125],
+      "Position": [347, 128],
       "Size": [32, 32],
       "Mode": "Vertical",
       "Facing": "-",
       "ActivatedByWeight": true,
       "TravelDistance": 64,
-      "Speed": 97.854,
-      "WaitTime": 0.578,
       "RenderActivationLights": true,
-      "StartFriction": 18,
-      "AppearAfterActorDestroyed": "79ca3193f6281d40"
+      "AppearAfterActorDestroyed": "79ca3193f6281d40",
+      "StartFriction": 21.949,
+      "Speed": 111.645,
+      "WaitTime": 0.214
     }
   ]
 }

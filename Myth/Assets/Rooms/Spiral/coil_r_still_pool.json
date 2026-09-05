@@ -1,0 +1,119 @@
+{
+  "position": [-80, 0],
+  "size": [40, 23],
+  "backdropColor": "0C1820",
+  "backdropColor2": "214A54",
+  "ambientColor": "78DCE8",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.155,
+  "reverb": 0.712,
+  "ditherStrength": 0.28,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines",
+    "w": "water"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000000000g000000000000000TT",
+    "TT000000000000TTTTTTTTTTTT000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000wwwwwwwwwwwwwwwwwwwwwwwwww0000000",
+    "TT00000wwwwwwwwwwwwwwwwwwwwwwwwww0000000",
+    "TT00000wwwwwwwwwwwwwwwwwwwwwwwwww0000000",
+    "TT00000wwwwwwwwwwwwwwwwwwwwwwwwww0000000",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTdrGTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000000v0000000000000000000v000000",
+    "0000000000000v0000000000000000000v000000",
+    "0000000000000v0000000000000000000v000000",
+    "0000000000000v0000000000000000000v000000",
+    "000RRR0000000v0000000000000000000vRR0000",
+    "000RRR0000000v0000000000000000000vRR0000",
+    "000RRm0000000vm00000000m00000000mvRR0000",
+    "000RRm0m00000vm00000000mum000000mRmR0000",
+    "m00RRm0m0m0000m00000000m0m0m0000mRmR0000",
+    "m0mRRm0m0m0m00m00000m00mum0m0m00mRmR0000",
+    "m0mRmm0m0m0m0mm00000m0mm0m0m0m0mmRmR0000",
+    "m0mRmmmm0m0m0mm00000m0mmmm0m0m0mmmmR0000",
+    "m0mRmmmmmm0m0mm00000m0mmmmmm0m0mmmmR0000",
+    "mmmRmmmmmmmm0mm00000m0mmmmmmmm0mmmmR0000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_gate_r",
+      "Type": "Door",
+      "Position": [312, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_button_r"
+    },
+    {
+      "Id": "coil_button_r",
+      "Type": "Button",
+      "Position": [64, 168],
+      "Mode": "PressesOnce",
+      "Persistent": true,
+      "TargetActorId": "coil_gate_r"
+    },
+    {
+      "Id": "coil_wild_r",
+      "Type": "Wildlife",
+      "Position": [164, 132],
+      "FishCount": 14,
+      "BugCount": 4,
+      "FlyCount": 3
+    },
+    {
+      "Id": "coil_save_r",
+      "Type": "SavePoint",
+      "Position": [248, 168]
+    },
+    {
+      "Id": "coil_inspect_r",
+      "Type": "InspectPoint",
+      "Position": [104, 168],
+      "Text": "In the quiet pools, every route looks like a circle."
+    },
+    {
+      "Id": "coil_light_r",
+      "Type": "Light",
+      "Position": [160, 80],
+      "Radius": 185,
+      "Color": "79DCE8",
+      "Intensity": 0.9
+    }
+  ]
+}

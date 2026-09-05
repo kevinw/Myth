@@ -1,0 +1,134 @@
+{
+  "position": [-40, 0],
+  "size": [40, 23],
+  "backdropColor": "121A19",
+  "backdropColor2": "294C43",
+  "ambientColor": "A6E3C1",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.12,
+  "reverb": 0.867,
+  "ditherStrength": 0.22,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000g000000000000000000000000000000TT",
+    "TT00TTTdrGTTTT000000000000000000000000TT",
+    "TT00TT00000000000000000000000000000000TT",
+    "TT00TT00000000000000000000000000000000TT",
+    "TT00TT0000000000000000000000000000g000TT",
+    "TT00TT0000000000000000000drGTTTTTTTT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "TT00TT0000000000000000000000000000TT00TT",
+    "0000000000000000000000000000000000TT0000",
+    "0000000000000000000000000000000000TT0000",
+    "0000000000000000000000000000000000TT0000",
+    "0000000000000000000000000000000000TT0000",
+    "TTTTTTTTdrGTTTTTT000000TTTTdrGTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000v000000000000000000v00000000000000",
+    "000000v000000000000000000v00000000000000",
+    "000000v000000000000000000v00000000000000",
+    "000000v000000000000000000v00000000000000",
+    "0000RRv000000000000000000v00000000RRR000",
+    "0000RRv0000000uuu00000000v00000000RRR000",
+    "0000RRvm000000u0m00000000v00000000mRR000",
+    "0000RRvm0m0000uum0m000000v0m000000mRm000",
+    "0000RRvm0m0m0000m0m000000v0m0m0000mRm0m0",
+    "0000RRvm0m0m0m00m0m000000m0m0m0m00mRm0m0",
+    "0000RRvm0m0m0m0mm0m000000m0m0m0m0mmRm0m0",
+    "0000RRvmmm0m0m0mmmm000000mmm0m0m0mmmm0m0",
+    "0000RRmmmmmm0m0mmmmm00000mmmmm0m0mmmmmm0",
+    "0000RRmmmmmmmm0mmmmm00000mmmmmmm0mmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_gate_e_to_r",
+      "Type": "Door",
+      "Position": [8, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_button_r"
+    },
+    {
+      "Id": "coil_gate_e_to_a",
+      "Type": "Door",
+      "Position": [312, 168],
+      "Size": [16, 32],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_latch_d"
+    },
+    {
+      "Id": "coil_cover_e",
+      "Type": "CameraBlocker",
+      "Position": [24, 32],
+      "Size": [112, 96],
+      "HighlightOnMap": true
+    },
+    {
+      "Id": "coil_reveal_e",
+      "Type": "RevealDoor",
+      "Position": [112, 112],
+      "Size": [16, 48],
+      "Direction": "Left",
+      "TileType": "stone"
+    },
+    {
+      "Id": "coil_chest_e",
+      "Type": "Chest",
+      "Position": [72, 168],
+      "MycelonDrop": 4
+    },
+    {
+      "Id": "coil_wild_e",
+      "Type": "Wildlife",
+      "Position": [212, 132],
+      "FishCount": 0,
+      "BugCount": 8
+    },
+    {
+      "Id": "coil_light_e",
+      "Type": "Light",
+      "Position": [84, 96],
+      "Radius": 135,
+      "Color": "9FE5BF",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_ruins_e",
+      "Type": "RuinsWall",
+      "Position": [200, 24],
+      "Size": [96, 136]
+    }
+  ]
+}

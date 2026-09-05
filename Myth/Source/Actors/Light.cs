@@ -21,6 +21,7 @@ public class Light : Actor, IHitByHitbox
 
 	[I(8, 256)] public float Radius = 48;
 	public string SpriteName = "fire";
+	public string EnabledByPersistentButtonId = "";
 	public Color LightColor = 0xffd37a;
 	[I(0, 3)] public float Intensity = 1.0f;
 	[I(0, 64)] public float Height = 16;
@@ -107,6 +108,7 @@ public class Light : Actor, IHitByHitbox
 
 	public float FlickerScale => 1 + CurrentFlicker * FlickerIntensity;
 	public float FlickerScaleMax => 1 + FlickerIntensity;
+	public bool Enabled => string.IsNullOrWhiteSpace(EnabledByPersistentButtonId) || Game.IsButtonPressed(EnabledByPersistentButtonId);
 	float CurrentFlicker => MathF.Sin(Timer * FlickerFrequency * MathF.Tau + FlickerRandomOffset);
 
 	// Struck by a sword swing: the light flares and shudders, settling back over HitFlickerTime.
@@ -161,7 +163,7 @@ public class Light : Actor, IHitByHitbox
 
 	public bool HitByHitbox(RectInt hitbox)
 	{
-		if (!hitbox.Overlaps(Hitbox.Rect + Position) || !DrawSprite)
+		if (!hitbox.Overlaps(Hitbox.Rect + Position) || !DrawSprite || !Enabled)
 			return false;
 
 		AudioEvent("torch_hit");
@@ -188,7 +190,7 @@ public class Light : Actor, IHitByHitbox
 	}
 
 	public override bool CastsSpriteShadow => false;
-	public override bool CastsReflection => DrawSprite;
+	public override bool CastsReflection => DrawSprite && Enabled;
 
 	static Rng rng = new();
 
@@ -213,25 +215,25 @@ public class Light : Actor, IHitByHitbox
 
 	public override void Render(Batcher batcher)
 	{
-		if (DrawSprite)
+		if (DrawSprite && Enabled)
 			RenderSpriteSubtexture(batcher, SpriteTint);
 	}
 
 	public override void RenderNormals(Batcher batcher)
 	{
-		if (DrawSprite)
+		if (DrawSprite && Enabled)
 			base.RenderNormals(batcher);
 	}
 
 	public override void RenderEmissive(Batcher batcher)
 	{
-		if (DrawSprite)
+		if (DrawSprite && Enabled)
 			base.RenderEmissive(batcher);
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color)
 	{
-		if (DrawSprite)
+		if (DrawSprite && Enabled)
 			base.RenderReflection(batcher, Multiply(color, SpriteTint));
 	}
 

@@ -510,7 +510,6 @@ public class Actor
 		OnPerformHit(actor);
 		if (this is Pawn pawn && actor.AttackHitRumble is { } rumble)
 		{
-			Game.Show(rumble);
 			pawn.Rumble(rumble);
 		}
 		return true;

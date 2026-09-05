@@ -1,0 +1,119 @@
+{
+  "position": [-40, 46],
+  "size": [40, 23],
+  "backdropColor": "121A16",
+  "backdropColor2": "34513F",
+  "ambientColor": "A9E6B4",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.12,
+  "reverb": 0.88,
+  "ditherStrength": 0.28,
+  "legend": {
+    "T": "stone",
+    "m": "Myth Back",
+    "G": "grass",
+    "g": "plants",
+    "r": "rocks",
+    "d": "debris",
+    "v": "Myth Vines",
+    "u": "Myth Runes",
+    "R": "ruin"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000000000000000000g000000TT",
+    "TT000000000000000000000000000TTTTd0000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000000000000000000TTTTTT00000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000TTTTdr0000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000TTTTTT000000000000000000000000000TT",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "TTTTTTTTTTTTTTTdrGTTTTTTTTTTTTTTTTdrGTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000v00000000000000000000v00000000",
+    "0000000000v00000000000000000000v00000000",
+    "0000000000v00000000000000000000v00000000",
+    "0000000000v00000000000000000000v00000000",
+    "00RRR00000v00000000000000000000000RRR000",
+    "00RRR000000000000000000uuu00000000RRR000",
+    "00RRR000m00000000m00000u0um0000000RmR000",
+    "00RRR000m0m000000m0m000uuum0m00000RmRm00",
+    "00RRR000m0m0m0000m0m000000m0m0m000RmRm0m",
+    "00RRRm00m0m0m0m00m0m000000m0m0m0m0RmRm0m",
+    "00RRRm0mm0m0m0m0mm0m00000mm0m0m0m0mmRm0m",
+    "00RRRm0mmmm0m0m0mmmm00000mmmm0m0m0mmmm0m",
+    "00RRRm0mmmmmm0m0mmmm00000mmmmmm0m0mmmmmm",
+    "00RRRm0mmmmmmmm0mmmm00000mmmmmmmm0mmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_line_u",
+      "Type": "BurrowLine",
+      "Position": [0, 0],
+      "Points": [[16, 152],[72, 120],[112, 56],[176, 104],[232, 48],[304, 152]
+      ],
+      "RenderProcedural": true,
+      "SpeedScale": 2.4,
+      "ProceduralOuterColor": "284B37",
+      "ProceduralInnerColor": "B7EDBC"
+    },
+    {
+      "Id": "coil_trap_u1",
+      "Type": "LightningTrap",
+      "Position": [36, 124],
+      "WaitDelay": 1.9,
+      "GatherTime": 0.7
+    },
+    {
+      "Id": "coil_trap_u2",
+      "Type": "LightningTrap",
+      "Position": [284, 68],
+      "Direction": "Left",
+      "WaitDelay": 1.9,
+      "GatherTime": 0.7,
+      "StartDelay": 1
+    },
+    {
+      "Id": "coil_bramble_u1",
+      "Type": "Bramble",
+      "Position": [144, 112]
+    },
+    {
+      "Id": "coil_bramble_u2",
+      "Type": "Bramble",
+      "Position": [216, 64]
+    },
+    {
+      "Id": "coil_light_u",
+      "Type": "Light",
+      "Position": [160, 88],
+      "Radius": 175,
+      "Color": "A7E5AF",
+      "Intensity": 0.9
+    }
+  ]
+}

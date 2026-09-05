@@ -1,0 +1,115 @@
+{
+  "position": [80, 23],
+  "size": [40, 23],
+  "backdropColor": "10171D",
+  "backdropColor2": "27434C",
+  "ambientColor": "8BE7EB",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.12,
+  "reverb": 0.733,
+  "ditherStrength": 0.28,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000000000000000000000000000g0000000TT",
+    "TT0000000000000000000000000TTTTTT00000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000TTTTTT000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000TTTTdr000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "00000000000000000000000000000000000000TT",
+    "TTrGTTTTTTTTTTTTTTTTdrGTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "000000v0000000000000000000000v0000000000",
+    "000000v0000000000000000000000v0000000000",
+    "000000v0000000000000000000000v0000000000",
+    "000000v0000000000000000000000v0000000000",
+    "0000RRv000000000000000000000000000RRR000",
+    "0000RRv000000000000000000000000000RRR000",
+    "0000Rmv0000000m00000000000000000m0RRR000",
+    "0000Rmvm000000m0m00000000m000000m0mRR000",
+    "0000Rmvm0m0000m0m0m000000m0m0000m0mRm000",
+    "0000Rmvm0m0m00m0m0muuu000m0m0m00m0mRm0m0",
+    "0000RmRm0m0m0mm0m0mu0u000m0m0m0mm0mRm0m0",
+    "0000Rmmm0m0m0mmmm0muuu000m0m0m0mmmmRm0m0",
+    "0000Rmmmmm0m0mmmmmm000000mmm0m0mmmmmm0m0",
+    "0000Rmmmmmmm0mmmmmmm00000mmmmm0mmmmmmmm0",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_wind_i",
+      "Type": "Wind",
+      "Position": [48, 40],
+      "Size": [240, 112],
+      "Direction": [-1, 0],
+      "Acceleration": 150,
+      "MaxSpeed": 52,
+      "Targets": "Player, Enemies, Projectiles, Ropes",
+      "StreakColor": "70E5E2"
+    },
+    {
+      "Id": "coil_drone_i",
+      "Type": "Drone",
+      "Position": [220, 76]
+    },
+    {
+      "Id": "coil_mosquito_i",
+      "Type": "Mosquito",
+      "Position": [128, 68]
+    },
+    {
+      "Id": "coil_rope_i",
+      "Type": "Rope",
+      "Position": [276, 16],
+      "Size": [8, 104]
+    },
+    {
+      "Id": "coil_light_i",
+      "Type": "Light",
+      "Position": [160, 88],
+      "Radius": 175,
+      "Color": "72E7DF",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_inspect_i",
+      "Type": "InspectPoint",
+      "Position": [64, 168],
+      "Text": "The air here is going somewhere in a hurry."
+    }
+  ]
+}

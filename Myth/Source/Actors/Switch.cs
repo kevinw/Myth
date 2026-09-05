@@ -8,10 +8,12 @@ namespace Myth;
 public class Switch : PointPathActor
 {
 	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
+	public bool Persistent;
 	[I(20, 240)] public float PulseSpeed = 85f;
 	[I(8, 192)] public float PulseLength = 64f;
 
 	bool triggered;
+	bool targetActive;
 	float effectDistance;
 	LightningEffectPoint[] pulsePoints = [];
 	Light? pulseLight;
@@ -26,9 +28,20 @@ public class Switch : PointPathActor
 		Play("top-off");
 	}
 
+	public override void Added()
+	{
+		base.Added();
+		if (!PersistentlyTriggered)
+			return;
+		Mask &= ~Masks.Destructible;
+		Play("top-on");
+	}
+
+	bool PersistentlyTriggered => Persistent && Game.IsButtonPressed(ActorId);
+
 	internal override void OnWasHit(HitInfo hitInfo)
 	{
-		if (triggered)
+		if (triggered || PersistentlyTriggered)
 			return;
 
 		triggered = true;
@@ -42,6 +55,12 @@ public class Switch : PointPathActor
 	public override void Update()
 	{
 		base.Update();
+		if (PersistentlyTriggered)
+		{
+			if (!targetActive)
+				ActivateTarget();
+			return;
+		}
 		if (!triggered)
 			return;
 
@@ -52,10 +71,19 @@ public class Switch : PointPathActor
 		if (effectDistance < length)
 			return;
 
-		if (Game.GetActorById(TargetActorId) is IActivatable target)
-			target.SetActive(this, true);
+		if (Persistent)
+			Game.PressButtonPersistently(ActorId);
+		ActivateTarget();
 		triggered = false;
 		DestroyPulseLight();
+	}
+
+	void ActivateTarget()
+	{
+		if (Game.GetActorById(TargetActorId) is not IActivatable target)
+			return;
+		target.SetActive(this, true);
+		targetActive = true;
 	}
 
 	public override void Destroyed() => DestroyPulseLight();

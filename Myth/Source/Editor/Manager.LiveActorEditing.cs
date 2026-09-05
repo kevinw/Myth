@@ -501,12 +501,16 @@ public partial class Manager
 		if (!playing || AttractMode || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
 			return;
 
-		TryGetSelectedLiveActor(game, runtimeRoom, out var selected, out var selectedRoom, out var selectedJson);
+		var selected = liveSelectedActorId is { } selectedId ? game.GetActorById(selectedId) : null;
+		Room selectedRoom = null!;
+		JsonObject selectedJson = null!;
+		var hasSelected = selected != null && TryGetLiveActorSource(game, runtimeRoom, selected,
+			positionEditableOnly: false, out selectedRoom, out selectedJson);
 		var hovered = liveHoveredActorId is { } hoveredId ? game.GetActorById(hoveredId) : null;
 		Room hoveredRoom = null!;
 		JsonObject hoveredJson = null!;
 		var hasHovered = hovered != null && TryGetLiveActorSource(game, runtimeRoom, hovered, out hoveredRoom, out hoveredJson);
-		if (selected == null && !hasHovered)
+		if (!hasSelected && !hasHovered)
 			return;
 
 		var viewport = GameViewRect;
@@ -516,11 +520,11 @@ public partial class Manager
 		if (hasHovered && hovered != selected)
 			DrawLiveActorBounds(draw, viewport, game, LiveActorBounds(hovered!, hoveredRoom, hoveredJson), selected: false);
 
-		if (selected != null)
+		if (hasSelected)
 		{
-			var bounds = LiveActorBounds(selected, selectedRoom, selectedJson);
+			var bounds = LiveActorBounds(selected!, selectedRoom, selectedJson);
 			DrawLiveActorBounds(draw, viewport, game, bounds, selected: true);
-			if (Factory.LiveResizable(selected.GetType()))
+			if (Factory.LiveResizable(selected!.GetType()))
 			{
 				var axes = ResizableRoomRectInfo(selectedJson).Axes;
 				foreach (var handle in LiveActorResizeHandles)

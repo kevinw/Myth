@@ -1,0 +1,164 @@
+{
+  "position": [
+    -80,
+    46
+  ],
+  "size": [
+    40,
+    23
+  ],
+  "backdropColor": "1A101A",
+  "backdropColor2": "573552",
+  "ambientColor": "FF9FDF",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.225,
+  "reverb": 0.61,
+  "ditherStrength": 0.22,
+  "legend": {
+    "#": "stone",
+    "m": "metal",
+    "w": "water",
+    "b": "Myth Back",
+    "G": "grass",
+    "g": "plants",
+    "r": "rocks",
+    "d": "debris",
+    "v": "Myth Vines",
+    "u": "Myth Runes",
+    "R": "ruin"
+  },
+  "tiles": [
+    "#################000000#################",
+    "#################000000#################",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##0000000000000000000000000###drG00000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000######000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000#drG##000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##00000000000000000000000000000000000000",
+    "##00000000000000000000000000000000000000",
+    "##00000000000000000000000000000000000000",
+    "##00000000000000000000000000000000000000",
+    "#################drG################dr##",
+    "########################################"
+  ],
+  "backgroundTiles": [
+    "0000000v000000000000000000000v0000000000",
+    "0000000v000000000000000000000v0000000000",
+    "0000000v000000000000000000000v0000000000",
+    "0000000v000000000000000000000v0000000000",
+    "000RRR0v000000000000000000000v0000RRR000",
+    "000RRR0v000000000000000000000v0000RRR000",
+    "000RbR0v00000b00000000buu000000b00RRR000",
+    "000RbR0v00000b0b000000b0b000000b0bRRR000",
+    "000RbR0v00000b0b0b0000bub000000b0bRbR000",
+    "0b0RbR0000b00b0b0b0b00b0b000000b0bRbRb00",
+    "0b0bbR0000b0bb0b0b0b0bb0b00000bb0bRbRb0b",
+    "0b0bbR0000b0bbbb0b0b0bbbb00000bbbbRbRb0b",
+    "0b0bbR0000b0bbbbbb0b0bbbb00000bbbbbbRb0b",
+    "bb0bbR0000b0bbbbbbbb0bbbb00000bbbbbbbb0b",
+    "bbbbb00000bbbbbbbbbbbbbbb00000bbbbbbbbbb",
+    "bbbbb00000bbbbbbbbbbbbbbb00000bbbbbbbbbb",
+    "bbbbb00000bbbbbbbbbbbbbbb00000bbbbbbbbbb",
+    "bbbbb00000bbbbbbbbbbbbbbb00000bbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "actors": [
+    {
+      "Id": "coil_carrier_t",
+      "Type": "MovingPlatform",
+      "Position": [
+        72,
+        112
+      ],
+      "Size": [
+        48,
+        16
+      ],
+      "Mode": "Circle",
+      "CircleCenter": [
+        160,
+        104
+      ],
+      "Speed": 34,
+      "Material": "stone-dual"
+    },
+    {
+      "Id": "coil_bouncer_t",
+      "Type": "Bouncer",
+      "Position": [
+        84,
+        88
+      ],
+      "Size": [
+        24,
+        24
+      ],
+      "AttachedToActorId": "coil_carrier_t",
+      "AttachmentOffset": [
+        12,
+        -24
+      ],
+      "Directional": true,
+      "Direction": [
+        0,
+        -1
+      ],
+      "Strength": 275,
+      "FillColor": "743A69",
+      "RimColor": "FF9FE5"
+    },
+    {
+      "Id": "coil_drop_t",
+      "Type": "Dropper",
+      "Position": [
+        224,
+        32
+      ],
+      "TriggerWidth": 64,
+      "TriggerHeight": 144
+    },
+    {
+      "Id": "coil_mosquito_t",
+      "Type": "Mosquito",
+      "Position": [
+        264,
+        72
+      ]
+    },
+    {
+      "Id": "coil_surface_roots_exit",
+      "Type": "LinkedDoor",
+      "Position": [
+        288,
+        168
+      ],
+      "TargetActorId": "coil_roots_exit_door"
+    },
+    {
+      "Id": "coil_light_t",
+      "Type": "Light",
+      "Position": [
+        160,
+        88
+      ],
+      "Radius": 175,
+      "Color": "FF9EDC",
+      "Intensity": 0.9
+    }
+  ]
+}

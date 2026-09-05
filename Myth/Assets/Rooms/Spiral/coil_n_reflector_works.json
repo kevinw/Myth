@@ -1,0 +1,113 @@
+{
+  "position": [0, -46],
+  "size": [40, 23],
+  "backdropColor": "12171B",
+  "backdropColor2": "344950",
+  "ambientColor": "8FE9F2",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.155,
+  "reverb": 0.884,
+  "ditherStrength": 0.22,
+  "legend": {
+    "G": "grass",
+    "M": "metal",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000000000000000000MM00000TT",
+    "TT00000000000000000000000000000MM00000TT",
+    "TT000000000000000MMMMM000000000MM00000TT",
+    "TT00000000000000000000000000000MM00000TT",
+    "TT00000000000000000000000000000MM00000TT",
+    "TT00000000000000000000000000000MM00000TT",
+    "TT0000000000000000000000MMMMM00MM00000TT",
+    "TT0000MMMMMMMM00000000000000000MM00000TT",
+    "TT00000000000000000000000000000MM00000TT",
+    "0000000000000000000000000000000MM0000000",
+    "0000000000000000000000000000000MM0000000",
+    "0000000000000000000000000000000MM0000000",
+    "0000000000000000000000000000000MM0000000",
+    "TTTTTTTTdrGTTTTTTTTTTTTTTTTdrGTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000000v000000000000v0000000000000",
+    "0000000000000v000000000000v0000000000000",
+    "0000000000000v000000000000v0000000000000",
+    "0000000000000v000000000000v0000000000000",
+    "0000RRR000000v000000000000v0000000RRR000",
+    "0000RRR000000v0000uuu00000v0000000RRR000",
+    "0000RRRm00000v0000u0u0000mv0000000mRR000",
+    "m000RRRm0m00000000uuu0000mvm000000mRR000",
+    "m0m0RRRm0m0m00000000m0000mvm0m0000mRR000",
+    "m0m0mRRm0m0m0m000000m0m00m0m0m0m00mRR000",
+    "m0m0mRmm0m0m0m000000m0m0mm0m0m0m0mmRR000",
+    "m0m0mRmmmm0m0m000000m0m0mmmm0m0m0mmRR000",
+    "mmm0mRmmmmmm0m000000m0m0mmmmmm0m0mmRR000",
+    "mmmmmRmmmmmmmm000000mmm0mmmmmmmm0mmRR000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "slopes": [[19, 10],[26, 14]
+  ],
+  "actors": [
+    {
+      "Id": "coil_trap_n",
+      "Type": "LightningTrap",
+      "Position": [28, 84],
+      "WaitDelay": 2.1,
+      "GatherTime": 0.65,
+      "FireTime": 0.75
+    },
+    {
+      "Id": "coil_trap_n2",
+      "Type": "LightningTrap",
+      "Position": [292, 132],
+      "Direction": "Left",
+      "WaitDelay": 2.1,
+      "GatherTime": 0.65,
+      "StartDelay": 1.2
+    },
+    {
+      "Id": "coil_spitter_n",
+      "Type": "Spitter",
+      "Position": [220, 168],
+      "Facing": "-"
+    },
+    {
+      "Id": "coil_light_n",
+      "Type": "Light",
+      "Position": [160, 88],
+      "Radius": 180,
+      "Color": "86E2EA",
+      "Intensity": 0.9
+    },
+    {
+      "Id": "coil_inspect_n",
+      "Type": "InspectPoint",
+      "Position": [72, 168],
+      "Text": "Polished corners taught lightning to turn. The roots learned by watching."
+    }
+  ]
+}

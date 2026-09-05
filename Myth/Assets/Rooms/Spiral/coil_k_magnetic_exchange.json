@@ -1,0 +1,161 @@
+{
+  "position": [
+    80,
+    -23
+  ],
+  "size": [
+    40,
+    23
+  ],
+  "backdropColor": "111419",
+  "backdropColor2": "37414B",
+  "ambientColor": "B8CAD8",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.19,
+  "reverb": 0.25,
+  "ditherStrength": 0.22,
+  "legend": {
+    "#": "stone",
+    "m": "metal",
+    "w": "water",
+    "b": "Myth Back",
+    "G": "grass",
+    "g": "plants",
+    "r": "rocks",
+    "d": "debris",
+    "v": "Myth Vines",
+    "u": "Myth Runes",
+    "R": "ruin"
+  },
+  "tiles": [
+    "#################000000#################",
+    "#################000000#################",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000000000000000##",
+    "##000000000000000000000000mmmmmmmm0000##",
+    "##000000000000000000000000000mmm000000##",
+    "##000000000000000000000000000mmm000000##",
+    "##000000000000000000000000000mmm000000##",
+    "##00000000000000mmmmmmmm00000mmm000000##",
+    "##000000000000000000000000000mmm000000##",
+    "##000000000000000000000000000mmm000000##",
+    "##000000000000000000000000000mmm000000##",
+    "##0000mmmmmmmm000000000000000mmm000000##",
+    "00000000000000000000000000000mmm000000##",
+    "00000000000000000000000000000mmm000000##",
+    "00000000000000000000000000000mmm000000##",
+    "00000000000000000000000000000mmm000000##",
+    "#################000000##############d##",
+    "#################000000#################"
+  ],
+  "backgroundTiles": [
+    "0000000000v0000000000000000v000000000000",
+    "0000000000v0000000000000000v000000000000",
+    "0000000000v0000000000000000v000000000000",
+    "0000000000v0000000000000000v000000000000",
+    "000RRR0000v0000000000000000v000000RRR000",
+    "000RRR0000v0000000000000000v000000RRR000",
+    "000RbR0000v00000000000b0000v000000RRR000",
+    "000RbRb00000000b000000b0b00v000000RRR000",
+    "000RbRb0b000000b0b0000b0b0bv000000RbR000",
+    "0b0RbRb0b000000b0b0b00bubub0b00000RbRb00",
+    "0b0bbRb0b000000b0b0b0bbubub0b00000RbRb0b",
+    "0b0bbbb0b000000b0b0b0bbbbub0b00000RbRb0b",
+    "0b0bbbbbb000000bbb0b0bbbbbb0b00000RbRb0b",
+    "bb0bbbbbbb00000bbbbb0bbbbbbbb00000Rbbb0b",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "actors": [
+    {
+      "Id": "coil_crawler_k",
+      "Type": "MagneticCrawler",
+      "Position": [
+        184,
+        128
+      ],
+      "RequiresMetal": true,
+      "InitialSurfaceDirection": [
+        0,
+        1
+      ]
+    },
+    {
+      "Id": "coil_belt_k1",
+      "Type": "ConveyorBelt",
+      "Position": [
+        72,
+        120
+      ],
+      "Size": [
+        80,
+        8
+      ],
+      "Speed": 46,
+      "JumpThrough": true
+    },
+    {
+      "Id": "coil_belt_k2",
+      "Type": "ConveyorBelt",
+      "Position": [
+        192,
+        80
+      ],
+      "Size": [
+        72,
+        8
+      ],
+      "Facing": "-",
+      "Speed": 50,
+      "JumpThrough": true
+    },
+    {
+      "Id": "coil_gate_k",
+      "Type": "Door",
+      "Position": [
+        8,
+        168
+      ],
+      "Size": [
+        16,
+        32
+      ],
+      "StartsVisible": true,
+      "Locked": true,
+      "PersistentButtonId": "coil_button_k"
+    },
+    {
+      "Id": "coil_button_k",
+      "Type": "Button",
+      "Position": [
+        268,
+        168
+      ],
+      "Mode": "PressesOnce",
+      "Persistent": true,
+      "TargetActorId": "coil_gate_k"
+    },
+    {
+      "Id": "coil_light_k",
+      "Type": "Light",
+      "Position": [
+        176,
+        84
+      ],
+      "Radius": 155,
+      "Color": "B9D2DC",
+      "Intensity": 0.9
+    }
+  ]
+}

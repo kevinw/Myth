@@ -2,7 +2,7 @@
   "position": [-40, 0],
   "size": [40, 23],
   "ambientColor": "606060",
-  "reverb": 0.355,
+  "reverb": 0.388,
   "legend": {
     "#": "back",
     "G": "grass",
@@ -11,7 +11,8 @@
     "T": "stone",
     "f": "flowers",
     "g": "plants",
-    "v": "Myth Vines"
+    "v": "Myth Vines",
+    "w": "water"
   },
   "tiles": [
     "TTT0000000RRRRRRR0RRRRRR0RRRRRR000000000",
@@ -29,14 +30,14 @@
     "0000000g0g0f000000000000000GGGGGGGGGGGGG",
     "00gGGGGGGGGGGG0000000000000GGGGGGGGGGGGG",
     "GGGGGGGGGGGGGG0000000000000RRGRRGGGGGGGG",
-    "RRRGGGRRRRGRRR0000000000000RRRRRPPPPPPPP",
-    "RRRGGGRRRRRRRR0000000000000RRRRRPRPPPPPP",
-    "RRRRRRRRRRRRRR0000000000000RRRRRRPPPRRRR",
-    "RRRRRRRRRRRRRR0000000000000RRRRRPPPPRRRR",
-    "RRRRRRRRRRRRRR0000000000000RRRRRPPPPRRRR",
-    "RRRRRRRRRRRRRR0000000000000RRRRRRRRRRRRR",
-    "RRRRRRRRRRRRRR0000000000000RRRRRRRRRRRRR",
-    "RRRRRRRRRRRRRR0000000000000RRRRRRRRRRRRR"
+    "RRRGGGRRRRGRRRwwwwwwwwwwwwwRRRRRPPPPPPPP",
+    "RRRGGGRRRRRRRRwwwwwwwwwwwwwRRRRRPRPPPPPP",
+    "RRRRRRRRRRRRRRwwwwwwwwwwwwwRRRRRRPPPRRRR",
+    "RRRRRRRRRRRRRRwwwwwwwwwwwwwRRRRRPPPPRRRR",
+    "RRRRRRRRRRRRRRwwwwwwwwwwwwwRRRRRPPPPRRRR",
+    "RRRRRRRRRRRRRRwwwwwwwwwwwwwRRRRRRRRRRRRR",
+    "RRRRRRRRRRRRRRwwwwwwwwwwwwwRRRRRRRRRRRRR",
+    "RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR"
   ],
   "backgroundTiles": [
     "00000###0000000000000000v000000000000000",
@@ -105,13 +106,12 @@
     {
       "Id": "6e3e410f8d0f59fd",
       "From": "TutorialText",
-      "Position": [156, 24],
+      "Position": [156, 29],
+      "LineHeightMultiplier": 0.859,
       "Text": [
         "hold {Jump} and release",
-        "emerge from bosonic",
-        "to jump higher"
-      ],
-      "LineHeightMultiplier": 0.859
+        "emerge from linear to jump higher"
+      ]
     },
     {
       "Id": "ae05fbbd13cd9fee",

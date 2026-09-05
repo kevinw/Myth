@@ -1,0 +1,119 @@
+{
+  "position": [-40, 0],
+  "size": [40, 23],
+  "backdropColor": "13131D",
+  "backdropColor2": "393952",
+  "ambientColor": "C3C6F4",
+  "ambientIntensity": 0.48,
+  "lightNoise": 0.155,
+  "reverb": 0.732,
+  "ditherStrength": 0.28,
+  "legend": {
+    "G": "grass",
+    "R": "ruin",
+    "T": "stone",
+    "d": "debris",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
+    "u": "Myth Runes",
+    "v": "Myth Vines"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000g00000000000TT",
+    "TT00000000000000000000000TTTTTTT000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000GTTTTTT0000000000000000000000000TT",
+    "TT00000000000000000000000000000000000000",
+    "TT00000000000000000000000000000000000000",
+    "TT00000000000000000000000000000000000000",
+    "TT00000000000000000000000000000000000000",
+    "TTTTTTTTTTTTTTTTTdrGTTTTTTTTTTTTTTTTdrTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "0000000000000v00000000000000000v00000000",
+    "0000000000000v00000000000000000v00000000",
+    "0000000000000v00000000000000000v00000000",
+    "0000000000000v00000000000000000v00000000",
+    "000RRR0000000v00000000000000000v000RRR00",
+    "000RRR0000000v00000000000000000v000RRR00",
+    "000RRR00m0000v000000000000m0000v000RRR00",
+    "0m0RRR00m0m00v000000000000m0m00v000RRR00",
+    "0m0mRR00m0m0m00000000m0000m0m0m0000RRR00",
+    "0m0mRm00m0m0m0m000uuum0m00m0m0m0m00RRR00",
+    "0m0mRm0mm0m0m0m000u0um0m0mm0m0m0m0mRRR00",
+    "mm0mRm0mmmm0m0m000uuum0m0mmmm0m0m0mRRR00",
+    "mmmmRm0mmmmmm0m00000mm0m0mmmmmm0m0mRRR00",
+    "mmmmmm0mmmmmmmm00000mmmm0mmmmmmmm0mRRR00",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm00000",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+  ],
+  "actors": [
+    {
+      "Id": "coil_roots_exit_door",
+      "Type": "LinkedDoor",
+      "Position": [264, 168],
+      "TargetActorId": "coil_surface_roots_exit"
+    },
+    {
+      "Id": "coil_reward_rf",
+      "Type": "Chest",
+      "Position": [160, 168],
+      "Loot": "BurrowUpgrade"
+    },
+    {
+      "Id": "coil_save_rf",
+      "Type": "SavePoint",
+      "Position": [104, 168]
+    },
+    {
+      "Id": "coil_strata_rf",
+      "Type": "StrataWall",
+      "Position": [24, 24],
+      "Size": [272, 120]
+    },
+    {
+      "Id": "coil_wild_rf",
+      "Type": "Wildlife",
+      "Position": [208, 128],
+      "FishCount": 0,
+      "BugCount": 3,
+      "FlyCount": 9
+    },
+    {
+      "Id": "coil_inspect_rf",
+      "Type": "InspectPoint",
+      "Position": [56, 168],
+      "Text": "FINAL ROUTE: Not the shortest. Not the safest. The one that returns with a different traveler."
+    },
+    {
+      "Id": "coil_light_rf",
+      "Type": "Light",
+      "Position": [160, 80],
+      "Radius": 175,
+      "Color": "BDC2F5",
+      "Intensity": 0.9
+    }
+  ]
+}
