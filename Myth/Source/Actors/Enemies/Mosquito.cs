@@ -1,12 +1,26 @@
 using Foster.Framework;
+using System.Numerics;
 
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Enemy | ActorTag.Flying)]
 public class Mosquito : Actor
 {
+	static float FireRange => 160f.T();
+	static float FireIntervalMin => 2.5f.T();
+	static float FireIntervalMax => 4f.T();
+	static float FireProjectileSpeed => 36f.T();
+	static float FireArcRadians => 1.2f.T();
+	static float FireStagger => 0.055f.T();
+	static float FireProjectileLaunchDelay => 0.12f.T();
+	static float FireProjectileWobble => 0.174999997f.T();
+	static int FireProjectileCount => 5;
+
 	int Health = 2;
 	private SoundInstance? buzz;
+	float fireTimer;
+	float pauseAfterFiring;
+	readonly Coroutine shots = new();
 
 	public Mosquito()
 	{
@@ -19,20 +33,10 @@ public class Mosquito : Actor
 
 	public override void Added()
 	{
-		if (!Game.AudioEventsEnabled)
-			return;
+		fireTimer = Game.rng.Float(FireIntervalMin, FireIntervalMax);
 
-		try
-		{
-			buzz = Game.CreateAudioEvent("fly/idle", Position);
-			buzz?.Start();
-		}
-		catch(Exception e)
-		{
-			Console.WriteLine(e);
-			buzz?.Release();
-			buzz = null;
-		}
+		if (!Game.AudioEventsEnabled) return;
+		buzz = Game.CreateAudioEvent("fly/idle", Position, start: true);
 	}
 
 	public override void Update()
@@ -41,7 +45,8 @@ public class Mosquito : Actor
 
 		if (Game.GetFirst(Masks.Player) is {} player)
 		{
-			var diff = player.Position.X - Position.X;
+			var toPlayer = (Vector2)(player.Position - Position);
+			var diff = toPlayer.X;
 			var dist = MathF.Abs(diff);
 			var sign = MathF.Sign(diff);
 
@@ -52,11 +57,40 @@ public class Mosquito : Actor
 
 			if (MathF.Abs(Velocity.X) > 50)
 				Velocity.X = Calc.Approach(Velocity.X, MathF.Sign(Velocity.X) * 50, 800 * Time.Delta);
+
+			fireTimer -= Time.Delta;
+			if (fireTimer <= 0 && !shots.Active && toPlayer.LengthSquared() < FireRange * FireRange)
+			{
+				Squish.X = 1.18f;
+				shots.Start(BulletPattern.FireArcStaggered(
+					Game,
+					Position,
+					toPlayer,
+					FireProjectileCount,
+					FireArcRadians,
+					FireProjectileSpeed,
+					FireStagger,
+					static bullet =>
+					{
+						bullet.LaunchDelay = FireProjectileLaunchDelay;
+						bullet.WobbleAmplitude = FireProjectileWobble;
+					}));
+				AudioEvent("bubble");
+				pauseAfterFiring = 0.8f;
+				fireTimer = Game.rng.Float(FireIntervalMin, FireIntervalMax);
+			}
 		}
 
+		shots.Update(Time.Delta);
 		Velocity.Y = MathF.Sin(Timer * 4) * 10;
 		var relativeTo = Game.GetFirst(Masks.Player)?.Position;
 		Game.SetAudioEventPosition(buzz, Position, relativeTo);
+
+		if (pauseAfterFiring > 0)
+		{
+			pauseAfterFiring = Calc.Approach(pauseAfterFiring, 0, Time.Delta);
+			Velocity = Vector2.Zero;
+		}
 	}
 
 	internal override void OnWasHit(HitInfo hitInfo)
@@ -83,6 +117,7 @@ public class Mosquito : Actor
 
 	public override void Destroyed()
 	{
+		shots.Stop();
 		StopBuzz(true);
 	}
 

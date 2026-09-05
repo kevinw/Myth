@@ -14,7 +14,7 @@ watch_log=obj/myth-dev-watch-last.log
 
 finish_watch_output() {
 	if [[ -n "$watch_output_fd" ]]; then
-		exec {watch_output_fd}>&-
+		exec 3>&-
 		watch_output_fd=
 	fi
 	if [[ -n "$watch_output_pid" ]]; then
@@ -81,10 +81,11 @@ while true; do
 	restarting=false
 	rm -f "$pid_file"
 	: > "$watch_log"
-	exec {watch_output_fd}> >(tee "$watch_log")
+	exec 3> >(tee "$watch_log")
+	watch_output_fd=3
 	watch_output_pid=$!
 	dotnet watch run --non-interactive --no-restore \
-		--property:RunAnalyzers=false --property:UseFosterDll=true -- --dev-host "$@" >&"$watch_output_fd" &
+		--property:RunAnalyzers=false --property:UseFosterDll=true -- --dev-host "$@" >&3 &
 	watch_pid=$!
 
 	while kill -0 "$watch_pid" 2>/dev/null && ! host_is_alive; do sleep 0.1; done

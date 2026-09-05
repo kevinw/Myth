@@ -42,6 +42,7 @@ public class PatternProjectile : Actor
 	{
 		base.Added();
 		sparkEffect = AcquireParticleEffect("sparks");
+		DrawScale = 0.01f;
 	}
 
 	public override void Update()
@@ -68,6 +69,7 @@ public class PatternProjectile : Actor
 		base.Update();
 		if (Timer > LifeTime)
 			Game.Destroy(this);
+		DrawScale = Calc.Approach(DrawScale, 1.0f, Time.Delta * 1.5f);
 	}
 
 	public override void OnCollideX() => Pop();
@@ -94,11 +96,14 @@ public class PatternProjectile : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		batcher.Circle(Vector2.Zero, Radius + 1, CircleSegments, EdgeColor);
+		batcher.Circle(Vector2.Zero, DrawRadius + 1, CircleSegments, EdgeColor);
 		if (Assets.GetSurface(SurfaceId) == null)
-			batcher.Circle(Vector2.Zero, Radius, CircleSegments, Color);
+			batcher.Circle(Vector2.Zero, DrawRadius, CircleSegments, Color);
 	}
 
+	float DrawRadius => Radius * DrawScale;
+	float DrawScale = 1.0f;
+	
 	public override void RenderEmissive(Batcher batcher)
 	{
 		var launch = Math.Clamp(flightTimer / 0.18f, 0, 1);
@@ -107,12 +112,12 @@ public class PatternProjectile : Actor
 		if (Assets.GetSurface(SurfaceId) is { } surface)
 		{
 			Span<Surface.Vertex> fan = stackalloc Surface.Vertex[CircleSegments * 3];
-			BuildFan(fan, Radius, stretch, squash);
+			BuildFan(fan, DrawRadius, stretch, squash);
 			surface.Render(batcher, fan, Time.SecondsF);
 		}
 		else
 		{
-			batcher.Circle(Vector2.Zero, Radius, CircleSegments, Color);
+			batcher.Circle(Vector2.Zero, DrawRadius, CircleSegments, Color);
 		}
 	}
 
