@@ -111,6 +111,8 @@ public partial class Game : IDisposable
 
 	// Playthrough-durable state. Manager owns saving it; Game owns mutating it while playing.
 	public SaveState Save { get; private set; } = new();
+	internal int DucksDestroyed { get; private set; }
+	internal Vector2 DuckHudWorldOrigin { get; private set; }
 	public int PickupCount(PickupKind kind) => Save.Pickups.TryGetValue(kind, out var count) ? count : 0;
 	public void AddPickup(PickupKind kind, int amount = 1)
 	{
@@ -388,6 +390,7 @@ public partial class Game : IDisposable
 	internal void UseSaveState(SaveState save)
 	{
 		Save = save;
+		DucksDestroyed = CountPersistentlyDestroyedProps("duck");
 		Minimap.ApplyState(Save.Map);
 		Minimap.ApplyRevealedDoors(Save.RevealedDoors);
 		Minimap.Changed = () => MarkSaveDirty();
@@ -1586,14 +1589,42 @@ public partial class Game : IDisposable
 		Destroy(actor);
 	}
 
-	public void DestroyPersistently(Actor actor)
+	public bool DestroyPersistently(Actor actor)
 	{
+		var newlyDestroyed = false;
 		if (!string.IsNullOrEmpty(actor.SessionDestroyKey))
 		{
-			Save.PersistentDestroyedActors.Add(actor.SessionDestroyKey);
-			MarkSaveDirty();
+			newlyDestroyed = Save.PersistentDestroyedActors.Add(actor.SessionDestroyKey);
+			if (newlyDestroyed)
+				MarkSaveDirty();
 		}
 		Destroy(actor);
+		return newlyDestroyed;
+	}
+
+	internal void DuckDestroyed(Vector2 worldOrigin)
+	{
+		DuckHudWorldOrigin = worldOrigin;
+		DucksDestroyed++;
+	}
+
+	int CountPersistentlyDestroyedProps(string category)
+	{
+		if (Save.PersistentDestroyedActors.Count == 0)
+			return 0;
+
+		var count = 0;
+		foreach (var room in Assets.RoomsById.Values)
+			foreach (var actor in room.Actors)
+			{
+				if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(Prop), StringComparison.OrdinalIgnoreCase) ||
+					!string.Equals(ActorSpecs.ReadResolvedString(actor, nameof(Prop.Category)), category, StringComparison.OrdinalIgnoreCase))
+					continue;
+				var localPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+				if (Save.PersistentDestroyedActors.Contains(SessionDestroyKey(room, actor, localPosition)))
+					count++;
+			}
+		return count;
 	}
 
 	internal void PreventActorRespawn(Actor actor)
@@ -1603,7 +1634,7 @@ public partial class Game : IDisposable
 	}
 
 	internal bool WasActorDestroyedPersistently(Room? actorRoom, string actorId)
-		=> actorRoom != null && Save.PersistentDestroyedActors.Contains($"{actorRoom.Id}:id:{actorId}");
+		=> actorRoom != null && Save.PersistentDestroyedActors.Contains(SessionDestroyKey(actorRoom, actorId));
 
 	void RemoveDestroyedActors()
 	{
@@ -3023,11 +3054,13 @@ public partial class Game : IDisposable
 	{
 		var id = ActorSpecs.ReadString(actor, "Id");
 		if (!string.IsNullOrWhiteSpace(id))
-			return $"{room.Id}:id:{id}";
+			return SessionDestroyKey(room, id);
 
 		var source = ActorSpecs.ReadString(actor, "From") ?? ActorSpecs.ReadString(actor, "Type") ?? "Actor";
 		return $"{room.Id}:{source}:{localPosition.X},{localPosition.Y}";
 	}
+
+	static string SessionDestroyKey(Room room, string actorId) => $"{room.Id}:id:{actorId}";
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
 

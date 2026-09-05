@@ -8,7 +8,7 @@ public class Controls(Input input)
 {
 	const int BudControllerIndex = 1;
 	static float BudControllerIdleTimeout => 15f;
-	static float MoveStickDeadzone => 0.25f;
+	internal static float MoveStickDeadzone => 0.25f;
 	static float MoveStickFullSpeed => 0.75f;
 
 	public readonly VirtualAction Rewind = new(input, "Rewind",

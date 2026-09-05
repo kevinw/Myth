@@ -201,6 +201,11 @@
       "Id": "64e9dbc74f117947",
       "Type": "PlayerStart",
       "Position": [228, 272]
+    },
+    {
+      "Id": "3ef6f5e259eef3f9",
+      "Type": "SavePoint",
+      "Position": [160, 272]
     }
   ]
 }

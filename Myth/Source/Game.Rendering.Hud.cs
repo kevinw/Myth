@@ -131,7 +131,7 @@ public sealed partial class GameView
 		var pulse = pulseTime < BurrowLabelPulseDuration
 			? (1 - MathF.Cos(pulseTime * MathF.Tau * BurrowLabelPulseFrequency)) * 0.5f
 			: 0;
-		var color = Color.Lerp(Color.White, new Color(90, 205, 120, 255), pulse) * alpha;
+		var color = Color.Lerp(Color.White, new Color(150, 205, 120, 255), pulse) * alpha;
 		var shadowColor = new Color(0x000000, 170) * alpha;
 
 		float sineStart = Time.SecondsF * 7.5f;
@@ -165,21 +165,41 @@ public sealed partial class GameView
 	float currencyReveal;                     // 0 = fully hidden above the top edge, 1 = fully revealed
 	float currencyHold;                       // seconds left to stay revealed after the last count change
 	int currencyLastCount;                    // last count seen, to detect pickups/spends
+	int duckLastCount;
+	CountIncreaseHudEffect duckCountIncrease;
+	Vector2 duckHudStartCenter;
 	static float CurrencyRevealSpeed => 3.5f; // reveal/hide eases over ~0.3s
 	static float CurrencyHoldTime => 2f;      // stay revealed this long after a change, then ease back up
+	static float DuckHudScale => 0.5f;
+	static float DuckHudExtraHoldTime => 3f;
 
 	void DrawCurrencyHud(IDrawableTarget target, in RectInt viewport, RectInt? scissor)
 	{
 		var count = game.PickupCount(PickupKind.Mycelon);
+		var duckCount = game.DucksDestroyed;
 		if (count != currencyLastCount)
 		{
-			currencyHold = CurrencyHoldTime; // a pickup (or spend) re-reveals and restarts the timer
+			currencyHold = CurrencyHoldTime;
 			currencyLastCount = count;
 		}
-		currencyHold = Calc.Approach(currencyHold, 0, Time.Delta);
+		if (duckCount != duckLastCount)
+		{
+			if (duckCount > duckLastCount)
+			{
+				duckCountIncrease.Begin(duckLastCount, duckCount);
+				duckHudStartCenter = (game.DuckHudWorldOrigin - RenderCamera) * zoomLevel - Vector2.UnitY * 6;
+				currencyHold = MathF.Max(currencyHold, duckCountIncrease.HudHoldTime + DuckHudExtraHoldTime);
+			}
+			else
+				currencyHold = CurrencyHoldTime;
+			duckLastCount = duckCount;
+		}
+		duckCountIncrease.Update(Manager.Time.Delta);
+		currencyHold = Calc.Approach(currencyHold, 0, Manager.Time.Delta);
 
 		// The map overlay doubles as a status screen, so the count stays revealed while it's up.
-		currencyReveal = Calc.Approach(currencyReveal, currencyHold > 0 || game.MinimapOpen ? 1f : 0f, CurrencyRevealSpeed * Time.Delta);
+		currencyReveal = Calc.Approach(currencyReveal, currencyHold > 0 || game.MinimapOpen ? 1f : 0f,
+			CurrencyRevealSpeed * Manager.Time.Delta);
 		if (currencyReveal <= 0.001f)
 			return;
 
@@ -205,10 +225,110 @@ public sealed partial class GameView
 
 		var font = Assets.Font;
 		if (font != null)
-			Batcher.Text(font, count.ToString(), new Vector2(x, y), font.Size, tint);
+		{
+			Span<char> text = stackalloc char[11];
+			count.TryFormat(text, out var length);
+			var countText = text[..length];
+			Batcher.Text(font, countText, new Vector2(x, y), font.Size, tint);
+			x += font.WidthOf(countText) + 8;
+		}
+
+		var duckDestination = new Vector2(x, y);
+		var duckIconWidth = 0f;
+		var duckHeight = 0f;
+		Subtexture? duckSubtexture = null;
+		if (Assets.GetSprite("Props/duck") is { Frames.Count: > 0 } duck)
+		{
+			var subtexture = duck.Frames[0].Subtexture;
+			duckSubtexture = subtexture;
+			duckIconWidth = subtexture.Width * DuckHudScale;
+			duckHeight = subtexture.Height * DuckHudScale;
+		}
+		var duckCountX = duckIconWidth > 0 ? duckIconWidth + 3 : 0;
+		var duckWidth = duckCountX;
+		if (font != null)
+		{
+			Span<char> text = stackalloc char[11];
+			duckCountIncrease.DisplayedValue(duckCount).TryFormat(text, out var length);
+			var shown = text[..length];
+			duckWidth += font.WidthOf(shown);
+			duckHeight = MathF.Max(duckHeight, font.HeightOf(shown));
+		}
+		var duckStart = duckHudStartCenter - new Vector2(duckWidth, duckHeight) * 0.5f;
+		var duckPosition = Vector2.Lerp(duckStart,
+			duckDestination, Ease.Cube.InOut(duckCountIncrease.SettleProgress));
+		if (duckSubtexture is { } duckSub)
+			Batcher.Image(duckSub, duckPosition, Vector2.Zero, Vector2.One * DuckHudScale, 0, tint);
+		if (font != null)
+			duckCountIncrease.Draw(Batcher, font, duckCount, duckPosition + Vector2.UnitX * duckCountX, tint);
 
 		Batcher.PopMatrix();
 		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
 		Batcher.Clear();
 	}
+}
+
+struct CountIncreaseHudEffect
+{
+	int from;
+	int to;
+	float elapsed;
+	public bool Active { get; private set; }
+
+	static float LeadInTime => 0.25f;
+	static float GrowTime => 0.3f;
+	static float PauseTime => 1f;
+	static float SettleTime => 0.55f;
+	static float NormalHoldTime => 0.3f;
+	static float ChangeTime => LeadInTime + GrowTime + PauseTime;
+	static float Duration => ChangeTime + SettleTime;
+	public float HudHoldTime => Duration + NormalHoldTime;
+
+	public void Begin(int from, int to)
+	{
+		this.from = from;
+		this.to = to;
+		elapsed = 0;
+		Active = true;
+	}
+
+	public void Update(float delta)
+	{
+		if (!Active)
+			return;
+		elapsed += delta;
+		if (elapsed >= Duration)
+			Active = false;
+	}
+
+	public readonly void Draw(Batcher batcher, SpriteFont font, int value, Vector2 position, Color tint)
+	{
+		Span<char> text = stackalloc char[11];
+		DisplayedValue(value).TryFormat(text, out var length);
+		var shown = text[..length];
+		if (!Active || elapsed < LeadInTime)
+		{
+			batcher.Text(font, shown, position, font.Size, tint);
+			return;
+		}
+
+		var growing = elapsed < LeadInTime + GrowTime;
+		var progress = growing
+			? Ease.Cube.Out((elapsed - LeadInTime) / GrowTime)
+			: elapsed < ChangeTime
+				? 1f
+				: 1 - Ease.Cube.Out((elapsed - ChangeTime) / SettleTime);
+		var size = font.Size * Calc.Lerp(1, 2, progress);
+		var color = Color.Lerp(tint, Color.HotPink * (tint.A / 255f), progress);
+		var center = position + new Vector2(font.WidthOf(shown), font.HeightOf(shown)) * 0.5f;
+		var sineSpeed = elapsed < ChangeTime ? 8f : 24f;
+		font.DrawSineWave(batcher, shown, center, new Vector2(0.5f), size, color,
+			elapsed * sineSpeed, 0.3f, new Vector2(0, 2 * progress));
+	}
+
+	public readonly int DisplayedValue(int value)
+		=> Active && elapsed < ChangeTime ? from : Active ? to : value;
+
+	public readonly float SettleProgress
+		=> !Active ? 1 : elapsed <= ChangeTime ? 0 : Math.Clamp((elapsed - ChangeTime) / SettleTime, 0, 1);
 }

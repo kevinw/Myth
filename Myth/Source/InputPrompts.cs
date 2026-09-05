@@ -40,6 +40,9 @@ sealed class InputPrompts : IDisposable
 	readonly SpriteFont steamDeck;
 	readonly bool isSteamDeck = Environment.GetEnvironmentVariable("SteamDeck") == "1";
 	TimeSpan mouseWheelTimestamp;
+	ControllerID movementGlyphController;
+	TimeSpan movementGlyphTimestamp;
+	bool movementGlyphsUseDPad;
 	GlyphSet activeSet;
 
 	public InputPrompts(GraphicsDevice graphics, Input input)
@@ -47,11 +50,11 @@ sealed class InputPrompts : IDisposable
 		this.input = input;
 		activeSet = isSteamDeck ? GlyphSet.SteamDeck : GlyphSet.Keyboard;
 		keyboard = LoadFont(graphics, "Fonts/kenney-input-keyboard-mouse.ttf", [0xE025, 0xE023, 0xE01D, 0xE01F, 0xE021, 0xE05E, 0xE062, 0xE0CC]);
-		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE01B, 0xE01C, 0xE01E, 0xE01F, 0xE020]);
-		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE064, 0xE065, 0xE067, 0xE068, 0xE069]);
-		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE04F, 0xE050, 0xE052, 0xE053, 0xE054]);
-		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE05A, 0xE05B, 0xE05D, 0xE05E, 0xE05F]);
-		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE030, 0xE031, 0xE033, 0xE034, 0xE035]);
+		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE01B, 0xE01C, 0xE01E, 0xE020, 0xE021]);
+		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE055, 0xE058, 0xE05C, 0xE05F, 0xE061, 0xE064, 0xE065, 0xE067, 0xE069, 0xE06A]);
+		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE022, 0xE025, 0xE029, 0xE02C, 0xE036, 0xE04F, 0xE050, 0xE052, 0xE054, 0xE055]);
+		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE031, 0xE034, 0xE038, 0xE03B, 0xE03D, 0xE05A, 0xE05B, 0xE05D, 0xE05F, 0xE060]);
+		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE021, 0xE024, 0xE028, 0xE02B, 0xE02D, 0xE030, 0xE031, 0xE033, 0xE035, 0xE036]);
 	}
 
 	public void Update(TimeSpan elapsed)
@@ -79,6 +82,7 @@ sealed class InputPrompts : IDisposable
 			return;
 		}
 
+		UpdateMovementGlyphSource(latest);
 		activeSet = isSteamDeck
 			? GlyphSet.SteamDeck
 			: latest.GamepadProvider switch
@@ -242,25 +246,25 @@ sealed class InputPrompts : IDisposable
 			{
 				InputPromptAction.Back => 0xE041,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE04B,
-				_ => Stick(0xE064, action)
+				_ => movementGlyphsUseDPad ? DPad(0xE055, action) : Stick(0xE064, action)
 			}),
 			GlyphSet.Xbox => (xbox, action switch
 			{
 				InputPromptAction.Back => 0xE006,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE004,
-				_ => Stick(0xE04F, action)
+				_ => movementGlyphsUseDPad ? DPad(0xE022, action) : Stick(0xE04F, action)
 			}),
 			GlyphSet.Nintendo => (nintendo, action switch
 			{
 				InputPromptAction.Back => 0xE004,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE006,
-				_ => Stick(0xE05A, action)
+				_ => movementGlyphsUseDPad ? DPad(0xE031, action) : Stick(0xE05A, action)
 			}),
 			GlyphSet.SteamDeck => (steamDeck, action switch
 			{
 				InputPromptAction.Back => 0xE003,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE001,
-				_ => Stick(0xE030, action)
+				_ => movementGlyphsUseDPad ? DPad(0xE021, action) : Stick(0xE030, action)
 			}),
 			_ => (generic, action switch
 			{
@@ -270,13 +274,52 @@ sealed class InputPrompts : IDisposable
 			})
 		};
 
+	void UpdateMovementGlyphSource(ControllerState controller)
+	{
+		var dpad = controller.Timestamp(Buttons.Up);
+		if (controller.Timestamp(Buttons.Down) > dpad) dpad = controller.Timestamp(Buttons.Down);
+		if (controller.Timestamp(Buttons.Left) > dpad) dpad = controller.Timestamp(Buttons.Left);
+		if (controller.Timestamp(Buttons.Right) > dpad) dpad = controller.Timestamp(Buttons.Right);
+		var stick = controller.Timestamp(Axes.LeftX);
+		if (controller.Timestamp(Axes.LeftY) > stick) stick = controller.Timestamp(Axes.LeftY);
+
+		if (controller.ID != movementGlyphController)
+		{
+			movementGlyphController = controller.ID;
+			movementGlyphsUseDPad = dpad > stick;
+			movementGlyphTimestamp = dpad > stick ? dpad : stick;
+		}
+		if (dpad > movementGlyphTimestamp)
+		{
+			movementGlyphsUseDPad = true;
+			movementGlyphTimestamp = dpad;
+		}
+		if (controller.LeftStick.LengthSquared() > Controls.MoveStickDeadzone * Controls.MoveStickDeadzone &&
+			stick > movementGlyphTimestamp)
+		{
+			movementGlyphsUseDPad = false;
+			movementGlyphTimestamp = stick;
+		}
+	}
+
+	// The outline variants visibly fill the requested arm; the solid directional glyphs
+	// are indistinguishable from the neutral D-pad in these monochrome fonts.
+	static int DPad(int neutral, InputPromptAction action) => neutral + action switch
+	{
+		InputPromptAction.MoveDown => 3,
+		InputPromptAction.MoveLeft => 7,
+		InputPromptAction.MoveRight => 10,
+		InputPromptAction.MoveUp => 12,
+		_ => 0
+	};
+
 	// Kenney controller fonts lay out the left-stick directions at a fixed offset
-	// from the neutral stick glyph: down +1, left +3, up +4, right +5.
+	// from the neutral stick glyph: down +1, left +3, right +5, up +6.
 	static int Stick(int neutral, InputPromptAction action) => neutral + action switch
 	{
 		InputPromptAction.MoveDown => 1,
 		InputPromptAction.MoveLeft => 3,
-		InputPromptAction.MoveUp => 4,
+		InputPromptAction.MoveUp => 6,
 		InputPromptAction.MoveRight => 5,
 		_ => 0
 	};

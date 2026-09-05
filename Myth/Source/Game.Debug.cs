@@ -196,23 +196,24 @@ public partial class Game
 		=> Manager.DisplayMessage(message, duration, print);
 
 	// Show(x) displays "x: <value>" using the source text of the argument, so
-	// Game.Show(Velocity) reads as "Velocity: <1, 2>". The expr parameters are
-	// filled in by the compiler at each call site (CallerArgumentExpression);
-	// each named value needs its own parameter, hence the arity overloads.
+	// Game.Show(Velocity) reads as "Velocity: <1, 2>". Every call made during the
+	// current update gets its own line. The expr parameters are filled in by the
+	// compiler at each call site (CallerArgumentExpression); each named value needs
+	// its own parameter, hence the arity overloads.
 	public void Show<T>(T value,
 		[CallerArgumentExpression(nameof(value))] string expr = "")
-		=> DisplayMessage($"{expr}: {value}", print: false);
+		=> Manager.ShowDebugValue($"{expr}: {value}");
 
 	public void Show<T1, T2>(T1 a, T2 b,
 		[CallerArgumentExpression(nameof(a))] string exprA = "",
 		[CallerArgumentExpression(nameof(b))] string exprB = "")
-		=> DisplayMessage($"{exprA}: {a}   {exprB}: {b}", print: false);
+		=> Manager.ShowDebugValue($"{exprA}: {a}   {exprB}: {b}");
 
 	public void Show<T1, T2, T3>(T1 a, T2 b, T3 c,
 		[CallerArgumentExpression(nameof(a))] string exprA = "",
 		[CallerArgumentExpression(nameof(b))] string exprB = "",
 		[CallerArgumentExpression(nameof(c))] string exprC = "")
-		=> DisplayMessage($"{exprA}: {a}   {exprB}: {b}   {exprC}: {c}", print: false);
+		=> Manager.ShowDebugValue($"{exprA}: {a}   {exprB}: {b}   {exprC}: {c}");
 
 	static string DebugViewName(DebugView view)
 		=> view switch

@@ -1082,6 +1082,7 @@ public partial class Manager : App
 
 	protected override void Update()
 	{
+		debugShowValues.Clear();
 		UpdateGame();
 		ScenarioUpdate?.Invoke(this);
 		Audio.Update();
@@ -1701,6 +1702,7 @@ public partial class Manager : App
 	// shown as a gym run ends persists into the next run).
 	public string? DebugViewMessage { get; private set; }
 	float debugViewMessageTimer;
+	readonly List<string> debugShowValues = [];
 
 	public void DisplayMessage(string message, float duration = 1.85f, bool print = true)
 	{
@@ -1708,6 +1710,8 @@ public partial class Manager : App
 		DebugViewMessage = message;
 		debugViewMessageTimer = duration;
 	}
+
+	internal void ShowDebugValue(string value) => debugShowValues.Add(value);
 
 	void ToggleLighting()
 	{
@@ -2382,13 +2386,28 @@ public partial class Manager : App
 
 	void DebugViewMessageImGui()
 	{
-		if (DebugViewMessage is not { } message || message == "")
+		var message = DebugViewMessage;
+		if (string.IsNullOrEmpty(message) && debugShowValues.Count == 0)
 			return;
 
 		const float FONT_SCALE = 1.5f;
 
 		var viewport = ImGui.GetMainViewport().Size;
-		var textSize = ImGui.CalcTextSize(message) * FONT_SCALE;
+		var textSize = Vector2.Zero;
+		var lineCount = 0;
+		if (!string.IsNullOrEmpty(message))
+		{
+			textSize = ImGui.CalcTextSize(message) * FONT_SCALE;
+			lineCount++;
+		}
+		for (var i = 0; i < debugShowValues.Count; i++)
+		{
+			var lineSize = ImGui.CalcTextSize(debugShowValues[i]) * FONT_SCALE;
+			textSize.X = MathF.Max(textSize.X, lineSize.X);
+			textSize.Y += lineSize.Y;
+			lineCount++;
+		}
+		textSize.Y += Math.Max(0, lineCount - 1) * ImGui.GetStyle().ItemSpacing.Y;
 		var padding = new Vector2(10, 6);
 		var size = textSize + padding * 2;
 		var CenterX = viewport.X * 0.5f;
@@ -2429,7 +2448,10 @@ public partial class Manager : App
 			ImGuiWindowFlags.NoFocusOnAppearing |
 			ImGuiWindowFlags.NoNav);
 		ImGui.SetWindowFontScale(FONT_SCALE);
-		ImGui.TextUnformatted(message);
+		if (!string.IsNullOrEmpty(message))
+			ImGui.TextUnformatted(message);
+		for (var i = 0; i < debugShowValues.Count; i++)
+			ImGui.TextUnformatted(debugShowValues[i]);
 		ImGui.SetWindowFontScale(1.0f);
 		ImGui.End();
 		ImGui.PopStyleColor();

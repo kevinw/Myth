@@ -344,7 +344,13 @@ public partial class Manager
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return false;
-		if (HasBurrowDoor(room.Actors[selectedRoomActorIndex]))
+		var actor = room.Actors[selectedRoomActorIndex];
+		if (RoomActorIsLocked(actor))
+		{
+			DisplayMessage("Actor is locked");
+			return false;
+		}
+		if (HasBurrowDoor(actor))
 		{
 			DisplayMessage("Remove burrow door links before moving this line");
 			return false;
@@ -352,7 +358,6 @@ public partial class Manager
 
 		using (CaptureRoomUndo("Nudge Actor", room))
 		{
-			var actor = room.Actors[selectedRoomActorIndex];
 			var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 			ActorSpecs.SetProperty(actor, "Position", ActorSpecs.ToJsonNode(position + offset));
 			ClearEditorDragState();
@@ -1956,22 +1961,35 @@ public partial class Manager
 
 	int HitTestRoomActor(Room room, Vector2 world)
 	{
+		var locked = -1;
 		for (var i = room.Actors.Count - 1; i >= 0; i--)
 			if (RoomActorContains(room, room.Actors[i], world))
-				return i;
+			{
+				if (!RoomActorIsLocked(room.Actors[i]))
+					return i;
+				if (locked < 0)
+					locked = i;
+			}
 
-		return -1;
+		return locked;
 	}
 
-	// Fills `into` with every actor whose bounds contain `world`, topmost first (higher indices
-	// render on top), so click-to-cycle can walk the whole overlapping stack.
+	// Fills `into` with every actor whose bounds contain `world`: unlocked actors first, then
+	// locked actors, preserving topmost-first room order within each group.
 	void HitTestRoomActors(Room room, Vector2 world, List<int> into)
 	{
 		into.Clear();
 		for (var i = room.Actors.Count - 1; i >= 0; i--)
-			if (RoomActorContains(room, room.Actors[i], world))
+			if (!RoomActorIsLocked(room.Actors[i]) && RoomActorContains(room, room.Actors[i], world))
+				into.Add(i);
+		for (var i = room.Actors.Count - 1; i >= 0; i--)
+			if (RoomActorIsLocked(room.Actors[i]) && RoomActorContains(room, room.Actors[i], world))
 				into.Add(i);
 	}
+
+	static bool RoomActorIsLocked(JsonObject actor)
+		=> Enum.TryParse<Actor.EditorFlags>(ActorSpecs.ReadResolvedString(actor, nameof(Actor.editorFlags)), true, out var flags) &&
+			(flags & Actor.EditorFlags.Locked) != 0;
 
 	bool RoomActorContains(Room room, JsonObject actor, Vector2 world)
 	{
@@ -3383,15 +3401,23 @@ public partial class Manager
 		if (snapshot.IncludeActors)
 		{
 			var worldRect = TileRectToRoomWorldRect(room, rect);
+			var skippedLocked = false;
 			for (var i = 0; i < room.Actors.Count; i++)
 			{
 				if (!RoomActorBounds(room, room.Actors[i]).Overlaps(worldRect))
 					continue;
+				if (RoomActorIsLocked(room.Actors[i]))
+				{
+					skippedLocked = true;
+					continue;
+				}
 
 				var actor = ActorSpecs.CloneObject(room.Actors[i]);
 				var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 				snapshot.Actors.Add((i, actor, position));
 			}
+			if (skippedLocked)
+				DisplayMessage("Locked actors are excluded");
 		}
 
 		return snapshot;
@@ -4457,18 +4483,42 @@ public partial class Manager
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorPathPoint && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
-				OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Path Point", editing);
-				MovePointPathPoint(editing, selectedRoomActorIndex, editorDrag.PathPointIndex, worldMouse, RoomActorDragShouldSnap());
+				if (RoomActorIsLocked(editing.Actors[selectedRoomActorIndex]))
+				{
+					DisplayMessage("Actor is locked");
+					ClearEditorDragState();
+				}
+				else
+				{
+					OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Path Point", editing);
+					MovePointPathPoint(editing, selectedRoomActorIndex, editorDrag.PathPointIndex, worldMouse, RoomActorDragShouldSnap());
+				}
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.ActorResize && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
-				OpenPendingRoomUndo(ActorMoveUndoSlot, "Resize Actor", editing);
-				ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, tileOver, !Input.Keyboard.Shift);
+				if (RoomActorIsLocked(editing.Actors[selectedRoomActorIndex]))
+				{
+					DisplayMessage("Actor is locked");
+					ClearEditorDragState();
+				}
+				else
+				{
+					OpenPendingRoomUndo(ActorMoveUndoSlot, "Resize Actor", editing);
+					ResizeHiddenWallActor(editing, selectedRoomActorIndex, editorDrag.ResizeHandle, worldMouse, tileOver, !Input.Keyboard.Shift);
+				}
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.RoomActor && selectedRoomActorIndex >= 0 && Input.Mouse.LeftDown)
 			{
 				if (!editorDrag.ActorDragStarted && ActorPressPassedDragThreshold)
-					editorDrag.ActorDragStarted = true;
+				{
+					if (RoomActorIsLocked(editing.Actors[selectedRoomActorIndex]))
+					{
+						DisplayMessage("Actor is locked");
+						ClearEditorDragState();
+					}
+					else
+						editorDrag.ActorDragStarted = true;
+				}
 				if (editorDrag.ActorDragStarted)
 				{
 					OpenPendingRoomUndo(ActorMoveUndoSlot, "Move Actor", editing);

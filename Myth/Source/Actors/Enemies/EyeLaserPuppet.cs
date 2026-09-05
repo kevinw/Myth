@@ -13,6 +13,7 @@ namespace Myth;
 public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 {
 	public override RumbleEffect? AttackHitRumble => new(0.70f, 0.85f, 0.14f);
+	public override float HitKnockback => 100f;
 
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
 
@@ -1184,12 +1185,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	public override void Destroyed()
 	{
-		if (Health <= 0 && ActorId != null)
-			foreach (var actor in Game.Actors)
-				if (actor is NeuralTextureActor texture && texture.Room == Room &&
-					string.Equals(texture.ShutdownSourceActorId, ActorId, StringComparison.OrdinalIgnoreCase))
-					texture.BeginShutdown();
-
 		base.Destroyed();
 		ReleaseParticleEffect(ref chargeEffect);
 		ReleaseParticleEffect(ref floatingFlashEffect);

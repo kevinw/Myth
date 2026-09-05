@@ -233,7 +233,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[I(0, 3)] public float Contrast = 1f;
 	[I(0, 3)] public float Saturation = 1f;
 	[I(-1, 1)] public float Brightness;
-	public string ShutdownSourceActorId = "";
+	[ActorRef] public string ShutdownSourceActorId = "";
 	public Color Tint = Color.White;
 	[I(0, 4)] public float NormalStrength = 1f;
 	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
@@ -296,6 +296,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	bool settledFromSeed;
 	float stepAccumulator;
 	float shutdownTime = -1;
+	ActorDestructionTrigger? shutdownTrigger;
 	float shutdownStartStepsPerSecond;
 	float shutdownStartSaturation;
 	float shutdownStartBrightness;
@@ -333,9 +334,12 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Added()
 	{
 		base.Added();
-		if (!string.IsNullOrWhiteSpace(ShutdownSourceActorId) &&
-			Game.WasActorDestroyedPersistently(Room, ShutdownSourceActorId))
-			BeginShutdown(immediate: true);
+		if (!string.IsNullOrWhiteSpace(ShutdownSourceActorId))
+		{
+			shutdownTrigger = new(this, ShutdownSourceActorId);
+			if (shutdownTrigger.Triggered)
+				BeginShutdown(immediate: true);
+		}
 		graphicsDevice = Game.Manager.GraphicsDevice;
 
 		var shared = GetSharedResources(graphicsDevice);
@@ -651,6 +655,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Update()
 	{
 		base.Update();
+
+		if (shutdownTrigger?.Update() == true)
+			BeginShutdown();
+
 		if (autoPerturb != null)
 		{
 			autoPerturb.Position = Position;

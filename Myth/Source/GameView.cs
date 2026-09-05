@@ -20,6 +20,7 @@ public sealed partial class GameView : IDisposable
 	public GameView(Game game, bool enableParticles)
 	{
 		this.game = game;
+		duckLastCount = game.DucksDestroyed;
 		var gd = game.Manager.GraphicsDevice;
 		Batcher = new(gd, name: "GameBatcher");
 		EnsureRenderTargets(Width, Height);

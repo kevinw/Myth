@@ -156,7 +156,8 @@
       "Id": "53a966a078e9ed99",
       "Type": "Prop",
       "Position": [160, 120],
-      "SpriteName": "Props/server"
+      "SpriteName": "Props/server",
+      "ChangeOnActorDestroyed": "79ca3193f6281d40"
     },
     {
       "Id": "2059f0fe71bf6ce5",

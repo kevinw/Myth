@@ -145,6 +145,7 @@
       "Type": "Prop",
       "Position": [114, 67],
       "SpriteName": "Props/duck",
+      "Category": "duck",
       "propFlags": "Destroyable, DestroyPersists"
     },
     {

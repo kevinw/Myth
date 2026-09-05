@@ -1,13 +1,13 @@
 namespace Myth;
 
-sealed class PersistentDestructionGate(Actor owner, string sourceActorId)
+sealed class ActorDestructionTrigger(Actor owner, string sourceActorId)
 {
-	public bool IsOpen { get; private set; } = owner.Game.WasActorDestroyedPersistently(owner.Room, sourceActorId);
+	public bool Triggered { get; private set; } = owner.Game.WasActorDestroyedPersistently(owner.Room, sourceActorId);
 	bool sourceSeen = owner.Game.GetActorById(sourceActorId) != null;
 
-	public bool TryOpen()
+	public bool Update()
 	{
-		if (IsOpen)
+		if (Triggered)
 			return false;
 		if (owner.Game.GetActorById(sourceActorId) != null)
 		{
@@ -16,7 +16,7 @@ sealed class PersistentDestructionGate(Actor owner, string sourceActorId)
 		}
 		if (!sourceSeen)
 			return false;
-		IsOpen = true;
+		Triggered = true;
 		return true;
 	}
 }

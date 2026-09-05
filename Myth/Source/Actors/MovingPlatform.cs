@@ -49,7 +49,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
 	RectInt routeBounds;
-	PersistentDestructionGate? appearanceGate;
+	ActorDestructionTrigger? appearanceTrigger;
 
 	internal bool SupportsPlatformNav => Mode == MovementMode.Horizontal && TravelDistance > 0 && ActorId != null;
 	internal Point2 NavStartPosition => routeBounds.TopLeft;
@@ -96,8 +96,8 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			: DefaultCircleCenterOffset;
 		if (!string.IsNullOrWhiteSpace(AppearAfterActorDestroyed))
 		{
-			appearanceGate = new(this, AppearAfterActorDestroyed);
-			if (!appearanceGate.IsOpen)
+			appearanceTrigger = new(this, AppearAfterActorDestroyed);
+			if (!appearanceTrigger.Triggered)
 			{
 				Visible = false;
 				Mask = Masks.None;
@@ -107,9 +107,9 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	public override void Update()
 	{
-		if (appearanceGate is { IsOpen: false })
+		if (appearanceTrigger is { Triggered: false })
 		{
-			if (!appearanceGate.TryOpen())
+			if (!appearanceTrigger.Update())
 				return;
 			Visible = true;
 			Mask = Masks.Solid;

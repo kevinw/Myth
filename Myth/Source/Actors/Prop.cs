@@ -17,18 +17,36 @@ public class Prop : Actor
 		DestroyPersists = 1 << 1,
 	}
 
+	[Flags]
+	internal enum RuntimePropFlags
+	{
+		RenderEmissive = 1 << 0,
+	}
+	internal RuntimePropFlags runtimePropFlags = RuntimePropFlags.RenderEmissive;
+
 	public PropFlags propFlags = PropFlags.None;
+
+	[ActorRef] public string ChangeOnActorDestroyed = "";
+	public enum PropChangeType
+	{
+		EmissiveOff,
+	}
+	public PropChangeType propChangeType = PropChangeType.EmissiveOff;
+
 
 	static Rng rng = new();
 
 	public string SpriteName = "fire";
+	public string Category = "";
 	public Factory.TileLayer Layer;
 	public bool Decal;
+	public int Health = 1;
 	[I(0, 1)] public float AnimationSpeedRandomness;
 	float animationRate = 1;
 
 	public override bool CastsSpriteShadow => !Decal;
 	public override bool CastsReflection => !Decal;
+	public override float HitKnockback => 10f;
 	protected override float AnimationRate => animationRate;
 
 	public Prop()
@@ -41,9 +59,36 @@ public class Prop : Actor
 		RenderSpriteSubtexture(batcher, SubtextureType.Color, PropColor);
 	}
 
+	public override void RenderEmissive(Batcher batcher)
+	{
+		if (runtimePropFlags.HasFlag(RuntimePropFlags.RenderEmissive))
+			RenderSpriteSubtexture(batcher, SubtextureType.Emissive, PropColor);
+	}
+
+	ActorDestructionTrigger? destroyTrigger;
+
+	public override void Update()
+	{
+		base.Update();
+		if (destroyTrigger?.Update() == true)
+			UpdateRuntimeFlags();
+	}
+
+	void UpdateRuntimeFlags()
+	{
+		if (destroyTrigger?.Triggered ?? false)
+			if (propChangeType == PropChangeType.EmissiveOff)
+				runtimePropFlags &= ~RuntimePropFlags.RenderEmissive;
+	}
+
 	public override void Added()
 	{
 		base.Added();
+
+		if (!string.IsNullOrWhiteSpace(ChangeOnActorDestroyed))
+			destroyTrigger = new(this, ChangeOnActorDestroyed);
+		UpdateRuntimeFlags();
+
 		Sprite = Assets.GetSprite(SpriteName);
 		if (Facing == Signs.Negative && Sprite?.Frames.Count > 0)
 			Shift.X = -Sprite.Frames[0].Subtexture.Source.Width;
@@ -60,16 +105,25 @@ public class Prop : Actor
 
 	internal override void OnWasHit(HitInfo hitInfo) {
 		Game.Create<Pop>(Position + Hitbox.Rect.Center);
-		if (propFlags.HasFlag(PropFlags.DestroyPersists))
+		if (--Health > 0)
 		{
-			AudioEvent("prop_break_temp");
-			Game.DestroyPersistently(this);
-			Game.HitStun(0.4f);
+			Game.HitStun(0.1f);
+			return;
 		}
 		else
 		{
-			Game.Destroy(this);
-			Game.HitStun(0.1f);
+			if (propFlags.HasFlag(PropFlags.DestroyPersists))
+			{
+				AudioEvent("prop_break_temp");
+				if (Game.DestroyPersistently(this) && string.Equals(Category, "duck", StringComparison.OrdinalIgnoreCase))
+					Game.DuckDestroyed(GetVisualBounds().TopCenter);
+				Game.HitStun(0.4f);
+			}
+			else
+			{
+				Game.Destroy(this);
+				Game.HitStun(0.1f);
+			}
 		}
 	}
 }

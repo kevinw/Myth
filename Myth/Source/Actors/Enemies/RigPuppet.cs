@@ -102,7 +102,6 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	static float StepArcHeight => 3f;
 	static float InterruptedStepCatchupSpeed => 80f;
 	static float ScriptWalkTimeout => 10f;
-	static float GreetingDistance => 18f;
 
 	public RigPuppet()
 	{
@@ -541,6 +540,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			yield return 0;
 
 		var side = Position.X < player.Position.X ? -1 : 1;
+		const float GreetingDistance = 40f;
 		WalkTo(player, side * GreetingDistance);
 		var timeout = ScriptWalkTimeout;
 		while (!ScriptedArrived && timeout > 0)
