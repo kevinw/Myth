@@ -192,6 +192,14 @@
       "Type": "Jumpthru",
       "Position": [60, 112],
       "Size": [11, 8]
+    },
+    {
+      "Id": "91ddbf802747fca7",
+      "Type": "Prop",
+      "Position": [32, 147],
+      "SpriteName": "Props/computer_terminal",
+      "ChangeOnActorDestroyed": "574c49f8e2ee020d",
+      "Layer": "Background"
     }
   ]
 }
