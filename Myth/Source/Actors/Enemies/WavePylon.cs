@@ -83,7 +83,6 @@ public sealed class WavePylon : Actor
 			easedChargeProgress = ChargeProgress;
 		else
 			easedChargeProgress = Calc.Approach(easedChargeProgress, ChargeProgress, Time.Delta * 0.6f);
-		Game.Show(easedChargeProgress);
 		if (cycleTime < CycleInterval)
 			return;
 
@@ -226,9 +225,30 @@ public sealed class WavePylon : Actor
 		var color = WaveColor;
 		if (!emissive)
 		{
-			batcher.Circle(Vector2.Zero, 8, 20, new Color(0x171319));
-			batcher.Circle(Vector2.Zero, 6.5f, 20, new Color(0x30263b));
+			batcher.Circle(Vector2.Zero, 8, 20, new Color(0x191521));
+			batcher.Circle(Vector2.Zero, 6.5f, 20, new Color(0x35293e));
 			batcher.CircleLine(Vector2.Zero, 8.5f, 1.5f, 20, Color.Lerp(new Color(0x574661), color, progress));
+		}
+		else
+		{
+			var pulseFactor = (MathF.Sin(Time.SecondsF * CycleInterval * 2.0f) + 1.0f) * 0.5f * 0.4f;
+			batcher.CircleLine(Vector2.Zero, 8.5f, 1.5f, 20, new Color(0x574661) * pulseFactor);
+			
+				float cycleProgress = cycleTime / CycleInterval;
+				var steps = 12;
+				for (var i = 0; i < steps; ++i)
+				{
+					float done = (float)i / (float)steps;
+					if (done > cycleProgress) break;
+
+					float rad = 5.5f;
+					float x = rad * MathF.Cos(done * MathF.Tau - MathF.PI * 0.5f);
+					float y = rad * MathF.Sin(done * MathF.Tau - MathF.PI * 0.5f);
+	
+					var ledColor = Color.Pink;
+					ledColor *= 0.5f;
+					batcher.Rect(new (x, y, 1f, 1f), ledColor);
+				}
 		}
 
 		var glow = charging ? Calc.Lerp(0.18f, 1, Ease.Cube.In(progress)) * pulse : 0.12f;
