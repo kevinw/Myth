@@ -38,6 +38,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		NeuralFootContactStrength = 0.3f,
 	};
+	[ActorSettings(typeof(HumanoidRigWireSettings), "Connecting Wires", "Costume")]
+	public readonly HumanoidRigWireSettings Wires = new();
 	[I(1, 4), InspectorGroup("Gameplay")] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
 	public bool ArticulatedCombatBounds;
@@ -128,7 +130,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	void CreateVisual()
 	{
-		visual = new(this, Rig, Neural, NeuralReactions);
+		visual = new(this, Rig, Neural, NeuralReactions, Wires, RigWireLayout);
 		visual.Footstep = OnFootstep;
 		SyncVisual();
 		visual.Initialize(IdleAnimationName);
@@ -311,6 +313,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual bool ShowsHitBlink => true;
 	protected virtual Color RigHeadTint => Color.White;
 	protected virtual bool BackArmCombatEnabled => true;
+	protected virtual IReadOnlyList<HumanoidRigWireSpec> RigWireLayout => Array.Empty<HumanoidRigWireSpec>();
 	protected virtual void OnFootstep(Vector2 position) { }
 
 	protected bool RigFacingMatches => visual.FacingMatches;

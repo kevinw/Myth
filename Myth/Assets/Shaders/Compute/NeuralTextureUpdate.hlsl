@@ -27,7 +27,11 @@ cbuffer Params : register(b0, space2)
     uint DispatchHeight;
     float2 WorldStateOrigin;
     float StatePixelsPerCell;
-    uint Padding;
+    float SmokeBlend;
+    uint SmokeSlot;
+    uint Pad0;
+    uint Pad1;
+    uint Pad2;
 };
 
 #define NCA_W1_OFFSET 0
@@ -75,11 +79,15 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     uint index = pos.y * Width + pos.x;
     CellState self = SourceState[index];
     uint mask = Mask[index];
-    float total = float(
-        (mask & 0xFFu) +
-        ((mask >> 8u) & 0xFFu) +
-        ((mask >> 16u) & 0xFFu) +
-        ((mask >> 24u) & 0xFFu)) / 255.0;
+    float4 slotAlpha = float4(
+        float(mask & 0xFFu),
+        float((mask >> 8u) & 0xFFu),
+        float((mask >> 16u) & 0xFFu),
+        float((mask >> 24u) & 0xFFu)) / 255.0;
+    // Shutdown eases the whole grid toward a single "just smoke" model.
+    if (SmokeBlend > 0.0)
+        slotAlpha = lerp(slotAlpha, float4(SmokeSlot == 0u, SmokeSlot == 1u, SmokeSlot == 2u, SmokeSlot == 3u), SmokeBlend);
+    float total = dot(slotAlpha, float4(1.0, 1.0, 1.0, 1.0));
     float keep = lerp(EMPTY_DECAY, 1.0, saturate(total));
     bool update = total > 0.0 && hash(pos.x, pos.y, Seed) <= FireRate;
     if (!update)
@@ -160,7 +168,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
     for (uint slot = 0; slot < 4; slot++)
     {
-        float alpha = float((mask >> (slot * 8u)) & 0xFFu) / 255.0;
+        float alpha = slotAlpha[slot];
         if (alpha <= 0.0)
             continue;
         int base = (int)slot * MODEL_STRIDE;
@@ -188,6 +196,13 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     [unroll]
     for (int group = 0; group < 4; group++)
         result.c[group] = self.c[group] + delta[group];
+
+    // Backstop against runaway growth in the fullscreen smoke regime, where a synchronous model
+    // has no dissipative margin to bleed off the high frequencies a player erase introduces.
+    if (SmokeBlend > 0.0)
+        [unroll]
+        for (int clampGroup = 0; clampGroup < 4; clampGroup++)
+            result.c[clampGroup] = clamp(result.c[clampGroup], -4.0, 4.0);
 
     DestState[index] = result;
 }

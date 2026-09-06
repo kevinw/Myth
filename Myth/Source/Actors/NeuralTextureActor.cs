@@ -135,7 +135,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public uint DispatchHeight;
 		public Vector2 WorldStateOrigin;
 		public float StatePixelsPerCell;
-		public uint Padding;
+		public float SmokeBlend;
+		public uint SmokeSlot;
+		public uint Pad0;
+		public uint Pad1;
+		public uint Pad2;
 	}
 
 	struct DecodeParams
@@ -158,7 +162,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public float LatentBias;
 		public uint NearestStateSampling;
 		public float StatePixelsPerCell;
-		public uint Pad0, Pad1;
+		public float SmokeBlend;
+		public uint SmokeSlot;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -234,6 +239,14 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[I(0, 3)] public float Saturation = 1f;
 	[I(-1, 1)] public float Brightness;
 	[ActorRef] public string ShutdownSourceActorId = "";
+	// A/B toggle for what happens on shutdown. Passive (default): sim rate eases to zero and the
+	// field greys out. Active: a strong ripple sweeps out, the painted mask dissolves toward
+	// SmokeSlot across the whole rect, and the sim keeps running slow and dim ("just smoke").
+	public bool ActiveShutdown;
+	// Which model slot the active shutdown dissolves toward. Slot 1 here is the smoke plume.
+	[I(0, 3)] public int SmokeSlot = 1;
+	// Peak erase strength of the one-shot active-shutdown wave (clamped to 1 in the shader).
+	[I(0, 3)] public float ShutdownWaveStrength = 1.5f;
 	public Color Tint = Color.White;
 	[I(0, 4)] public float NormalStrength = 1f;
 	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
@@ -300,9 +313,22 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	float shutdownStartStepsPerSecond;
 	float shutdownStartSaturation;
 	float shutdownStartBrightness;
+	float smokeBlend;
+	Vector2 shutdownSourceWorld;
+	bool haveShutdownSourceWorld;
 	uint seed = 1;
 	static float ShutdownDuration => 5;
 	static float ShutdownBrightnessDrop => 0.2f;
+	// Active shutdown slows the sim to this instead of stopping it dead.
+	static float ShutdownSlowStepsPerSecond => 30;
+	// Fullscreen smoke fires asynchronously (rate < 1); synchronous updates amplify the sharp
+	// edges the player's erase carves into a diverging checkerboard. See EMPTY_DECAY notes.
+	static float ShutdownFireRate => 0.5f;
+	// How long the active-shutdown wave takes to cross the field.
+	static float ShutdownWaveDuration => 3.6f;
+	// True from the moment an active shutdown starts: the smoke fills the whole rect, so the
+	// update pass has to dispatch every cell, not just the painted footprint.
+	bool SmokeActive => ActiveShutdown && shutdownTime >= 0;
 
 	// Base64 of a PNG-compressed 128x128 RGBA8 image; each channel is one slot's
 	// blend weight. Empty means slot 0 painted everywhere (the classic full-rect actor).
@@ -656,8 +682,18 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	{
 		base.Update();
 
-		if (shutdownTrigger?.Update() == true)
-			BeginShutdown();
+		if (shutdownTrigger != null)
+		{
+			// Cache the source's position while it still exists; it's gone by the time the
+			// destruction trigger fires, and the active-shutdown wave originates from it.
+			if (shutdownTime < 0 && Game.GetActorById(ShutdownSourceActorId) is { } source)
+			{
+				shutdownSourceWorld = source.GetVisualBounds().Center;
+				haveShutdownSourceWorld = true;
+			}
+			if (shutdownTrigger.Update())
+				BeginShutdown();
+		}
 
 		if (autoPerturb != null)
 		{
@@ -710,10 +746,20 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	void ApplyShutdown()
 	{
 		var progress = Ease.Cube.InOut(shutdownTime / ShutdownDuration);
+		var dimmed = float.Lerp(shutdownStartBrightness,
+			MathF.Max(-1, shutdownStartBrightness - ShutdownBrightnessDrop), progress);
+		if (ActiveShutdown)
+		{
+			// Slow but alive; dissolve to smoke everywhere; keep the color, just dim it.
+			StepsPerSecond = float.Lerp(shutdownStartStepsPerSecond,
+				MathF.Min(shutdownStartStepsPerSecond, ShutdownSlowStepsPerSecond), progress);
+			smokeBlend = progress;
+			Brightness = dimmed;
+			return;
+		}
 		StepsPerSecond = float.Lerp(shutdownStartStepsPerSecond, 0, progress);
 		Saturation = float.Lerp(shutdownStartSaturation, 0, progress);
-		Brightness = float.Lerp(shutdownStartBrightness,
-			MathF.Max(-1, shutdownStartBrightness - ShutdownBrightnessDrop), progress);
+		Brightness = dimmed;
 	}
 
 	void Step()
@@ -725,7 +771,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 	void StepState()
 	{
-		if (updateSize.X <= 0 || updateSize.Y <= 0)
+		// Smoke fills the rect, so the painted footprint no longer bounds the update.
+		var origin = SmokeActive ? Point2.Zero : updateOrigin;
+		var size = SmokeActive ? SimulationSize : updateSize;
+		if (size.X <= 0 || size.Y <= 0)
 			return;
 
 		var source = currentIsB ? bufferB! : bufferA!;
@@ -735,16 +784,20 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			Width = (uint)SimulationSize.X,
 			Height = (uint)SimulationSize.Y,
 			Seed = seed++,
-			FireRate = FireRate,
-			OriginX = (uint)updateOrigin.X,
-			OriginY = (uint)updateOrigin.Y,
-			DispatchWidth = (uint)updateSize.X,
-			DispatchHeight = (uint)updateSize.Y,
+			FireRate = float.Lerp(FireRate, ShutdownFireRate, smokeBlend),
+			OriginX = (uint)origin.X,
+			OriginY = (uint)origin.Y,
+			DispatchWidth = (uint)size.X,
+			DispatchHeight = (uint)size.Y,
 			StatePixelsPerCell = StatePixelsPerCell,
 			WorldStateOrigin = StatePixelsPerCell > 0
 				? ((Vector2)Position + (Vector2)Size * 0.5f) / StatePixelsPerCell - ((Vector2)SimulationSize - Vector2.One) * 0.5f
 				: Vector2.Zero,
-			Padding = 0,
+			SmokeBlend = smokeBlend,
+			SmokeSlot = (uint)SmokeSlot,
+			Pad0 = 0,
+			Pad1 = 0,
+			Pad2 = 0,
 		});
 
 		new ComputeCommand(updateShader!)
@@ -752,8 +805,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			ReadOnlyStorageBuffers = [source, weights!, maskBuffer!],
 			ReadWriteStorageBuffers = [destination],
 			UniformBuffers = [updateUniforms],
-			GroupCountX = (updateSize.X + 7) / 8,
-			GroupCountY = (updateSize.Y + 7) / 8,
+			GroupCountX = (size.X + 7) / 8,
+			GroupCountY = (size.Y + 7) / 8,
 		}.Submit(graphicsDevice);
 
 		currentIsB = !currentIsB;
@@ -873,6 +926,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				agent.PerturbNeuralTexture(perturbContext);
 		}
 
+		EmitShutdownWave();
+
 		var stampCount = perturbStampCount;
 		if (stampCount == 0)
 			return;
@@ -897,6 +952,25 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			GroupCountY = (SimulationSize.Y + 7) / 8,
 		}.Submit(graphicsDevice);
 		currentIsB = !currentIsB;
+	}
+
+	// One expanding ring that sweeps outward from the destroyed source (the duck) as the active
+	// shutdown begins, at ShutdownWaveStrength; the CA heals behind it so steps read as a wave.
+	void EmitShutdownWave()
+	{
+		if (!SmokeActive || shutdownTime >= ShutdownWaveDuration)
+			return;
+		var bounds = GetVisualBounds();
+		var center = haveShutdownSourceWorld ? shutdownSourceWorld : bounds.Center;
+		// Reach the farthest corner so the wave crosses the whole field even off-center.
+		var tl = bounds.TopLeft;
+		var br = bounds.BottomRight;
+		var maxRadius = MathF.Max(
+			MathF.Max(Vector2.Distance(center, tl), Vector2.Distance(center, br)),
+			MathF.Max(Vector2.Distance(center, new Vector2(br.X, tl.Y)), Vector2.Distance(center, new Vector2(tl.X, br.Y))));
+		var radius = shutdownTime / ShutdownWaveDuration * maxRadius;
+		NeuralTextureRippleActor.PerturbRing(perturbContext, center, radius, maxRadius,
+			ShutdownWaveStrength, thickness: 6f, stampCount: 24);
 	}
 
 	int StateCellCount => SimulationSize.X * SimulationSize.Y;
@@ -949,8 +1023,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			LatentBias = LatentBias,
 			NearestStateSampling = NearestStateSampling ? 1u : 0u,
 			StatePixelsPerCell = StatePixelsPerCell,
-			Pad0 = 0,
-			Pad1 = 0,
+			SmokeBlend = smokeBlend,
+			SmokeSlot = (uint)SmokeSlot,
 		});
 
 		new ComputeCommand(decodeShader!)

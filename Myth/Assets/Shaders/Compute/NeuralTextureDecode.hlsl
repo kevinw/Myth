@@ -44,8 +44,8 @@ cbuffer Params : register(b0, space2)
     float LatentBias;
     uint NearestStateSampling;
     float StatePixelsPerCell;
-    uint Pad0;
-    uint Pad1;
+    float SmokeBlend;
+    uint SmokeSlot;
 };
 
 // Models are packed at a fixed stride in the six-channel layout.
@@ -107,6 +107,9 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float4 m01 = load_mask(maskCellPos + int2(0, 1));
     float4 m11 = load_mask(maskCellPos + int2(1, 1));
     float4 slotAlpha = lerp(lerp(m00, m10, maskBlend.x), lerp(m01, m11, maskBlend.x), maskBlend.y);
+    // Shutdown eases the whole grid toward a single "just smoke" model.
+    if (SmokeBlend > 0.0)
+        slotAlpha = lerp(slotAlpha, float4(SmokeSlot == 0u, SmokeSlot == 1u, SmokeSlot == 2u, SmokeSlot == 3u), SmokeBlend);
     float total = dot(slotAlpha, 1.0);
 
     if (total < 1.0 / 512.0)

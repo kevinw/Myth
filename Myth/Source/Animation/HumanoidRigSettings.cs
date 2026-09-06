@@ -2,6 +2,23 @@ using Foster.Framework;
 
 namespace Myth;
 
+public readonly record struct HumanoidRigWireSpec(
+	string From, string To, float Bend, float DepthOffset = 0, float WidthScale = 1);
+
+public sealed class HumanoidRigWireSettings
+{
+	[I(0.5f, 4), InspectorGroup("Shape")] public float WireWidth = 1.35f;
+	[I(0, 2)] public float WireOutlineWidth = 0.75f;
+	[I(0, 2)] public float WireBendScale = 1;
+	[I(0, 2)] public float WireMotion = 1;
+	[I(0, 1)] public float WireIrregularity = 0.16f;
+	[I(10, 300), InspectorGroup("Motion")] public float WireSpring = 90;
+	[I(1, 40)] public float WireDamping = 14;
+	[I(0, 1), InspectorGroup("Lighting")] public float WireNormalRoundness = 0.55f;
+	[InspectorGroup("Palette")] public Color WireColor = new(0xb7cdd0);
+	public Color WireOutlineColor = new(0x171d27);
+}
+
 public sealed class HumanoidRigSettings
 {
 	[InspectorGroup("Animation")] public bool SeedAnimationPhase;
@@ -28,6 +45,8 @@ public sealed class HumanoidRigSettings
 	[I(0, 0.75f)] public float LimbTaper;
 	[I(0, 3)] public float DepthColorContrast = 1;
 	[I(0, 0.3f)] public float DepthWidthAmount;
+	[I(0, 1), InspectorGroup("Lighting")] public float NormalRoundness;
+	[I(0, 1)] public float NormalIrregularity;
 
 	[InspectorGroup("Skin")] public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public ContentRef<SurfaceContent> SurfaceId = new("");

@@ -13,7 +13,9 @@ interface IHumanoidRigAccessoryVisual
 }
 
 sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
-	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null) : IDisposable
+	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null,
+	HumanoidRigWireSettings? configuredWires = null,
+	IReadOnlyList<HumanoidRigWireSpec>? configuredWireLayout = null) : IDisposable
 {
 	public readonly record struct RuffProjection(Vector3 Pivot, float PivotX, float Mirror,
 		float TurnCos, float TurnSin, float CameraCos, float CameraSin, float PixelsPerMeter,
@@ -71,6 +73,15 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		public bool Ready;
 	}
 
+	readonly record struct RigWire(int From, int To, float Bend, float DepthOffset, float WidthScale, uint Seed);
+
+	struct WireMotion
+	{
+		public Vector2 Control;
+		public Vector2 Velocity;
+		public bool Ready;
+	}
+
 	enum ImpulseGroup { Head, Torso, LeftArm, RightArm, LeftHand, RightHand, LeftLeg, RightLeg }
 
 	struct PendingImpulse
@@ -113,6 +124,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	public readonly HumanoidRigSettings Settings = configuredSettings ?? new();
 	public readonly NeuralSurfaceSettings Neural = configuredNeural ?? new();
 	public readonly HumanoidNeuralReactionSettings NeuralReactions = configuredReactions ?? new();
+	public readonly HumanoidRigWireSettings Wires = configuredWires ?? new();
 	public float PlaybackSpeed = 1;
 	public float PoseModifierWeight = 1;
 	public Color HeadTint = Color.White;
@@ -149,6 +161,9 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	Vector2[] projectedPose = [];
 	float[] jointDepth = [];
 	Bone[] bones = [];
+	RigWire[] wires = [];
+	WireMotion[] wireMotion = [];
+	int[] wireOrder = [];
 	BoneUV[] neuralBoneUVs = [];
 	Vector2 neuralHeadUV;
 	Vector2 neuralHeadUVRadius;
@@ -282,6 +297,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	static float EyeSaccadeInterval => 0.55f;
 	static float EyeSaccadeAmount => 0.12f;
 	static float EyeReactionDuration => 0.18f;
+	static int WireSegments => 8;
+	static int NormalFacets => 3;
 	static Point2 NeuralSize => new(64, 80);
 	static Point2 NeuralOrigin => new(-32, -72);
 
@@ -345,6 +362,20 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			ragdollJoints[bones[i].From] = true;
 			ragdollJoints[bones[i].To] = true;
 			boneOrder[i] = i;
+		}
+		if (configuredWireLayout is { Count: > 0 })
+		{
+			wires = new RigWire[configuredWireLayout.Count];
+			wireMotion = new WireMotion[wires.Length];
+			wireOrder = new int[wires.Length];
+			for (var i = 0; i < wires.Length; i++)
+			{
+				var spec = configuredWireLayout[i];
+				wires[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Bend,
+					spec.DepthOffset, spec.WidthScale,
+					Hash32.Mix((uint)(animationPhase * uint.MaxValue) ^ (uint)i * 0x9e3779b9u));
+				wireOrder[i] = i;
+			}
 		}
 		head = RequiredJoint("Head");
 		neck = RequiredJoint("neck_01");
@@ -550,6 +581,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		ragdollReady = false;
 		headMotion = leftHandMotion = rightHandMotion = default;
+		Array.Clear(wireMotion);
 		Array.Clear(pendingImpulses);
 		pendingLandingSpeed = 0;
 		ResetFeet();
@@ -713,6 +745,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		else
 			ResetFeet();
 		SortBones();
+		UpdateWires();
 		UpdateEye();
 	}
 
@@ -1258,7 +1291,53 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		}
 	}
 
+	void UpdateWires()
+	{
+		var scale = Settings.PixelsPerMeter / 25f;
+		var maxOffset = 10 * scale;
+		var teleportDistance = SecondaryTeleportDistance * scale;
+		for (var i = 0; i < wires.Length; i++)
+		{
+			var wire = wires[i];
+			var from = projectedPose[wire.From];
+			var to = projectedPose[wire.To];
+			var control = (from + to) * 0.5f + (to - from).Normalized(Vector2.UnitY).TurnLeft() *
+				(wire.Bend * Wires.WireBendScale * scale * PresentationMirror());
+			ref var motion = ref wireMotion[i];
+			if (!motion.Ready || Vector2.DistanceSquared(motion.Control, control) > teleportDistance * teleportDistance)
+			{
+				motion.Control = control;
+				motion.Velocity = Vector2.Zero;
+				motion.Ready = true;
+				continue;
+			}
+			Spring.Step(ref motion.Control, ref motion.Velocity, control,
+				Wires.WireSpring, Wires.WireDamping, MathF.Min(visualDelta, 1 / 30f));
+			var offset = motion.Control - control;
+			if (offset.LengthSquared() > maxOffset * maxOffset)
+			{
+				var direction = Vector2.Normalize(offset);
+				motion.Control = control + direction * maxOffset;
+				motion.Velocity -= direction * MathF.Max(0, Vector2.Dot(motion.Velocity, direction));
+			}
+		}
+
+		for (var i = 1; i < wireOrder.Length; i++)
+		{
+			var value = wireOrder[i];
+			var depth = WireDepth(wires[value]);
+			var at = i;
+			while (at > 0 && WireDepth(wires[wireOrder[at - 1]]) > depth)
+			{
+				wireOrder[at] = wireOrder[at - 1];
+				at--;
+			}
+			wireOrder[at] = value;
+		}
+	}
+
 	float BoneDepth(Bone bone) => (jointDepth[bone.From] + jointDepth[bone.To]) * 0.5f;
+	float WireDepth(RigWire wire) => (jointDepth[wire.From] + jointDepth[wire.To]) * 0.5f + wire.DepthOffset;
 
 	Color BoneColor(Bone bone, float depth)
 		=> bone.From == pelvis || bone.To == pelvis
@@ -1365,6 +1444,15 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 				out var a, out var b, out var c, out var d);
 			bounds = bounds.Conflate(a).Conflate(b).Conflate(c).Conflate(d);
 		}
+		for (var i = 0; i < wires.Length; i++)
+		{
+			var radius = Wires.WireWidth * wires[i].WidthScale + Wires.WireOutlineWidth + 1;
+			for (var segment = 0; segment <= WireSegments; segment++)
+			{
+				var point = WirePoint(i, segment / (float)WireSegments);
+				bounds = bounds.Conflate(point - Vector2.One * radius).Conflate(point + Vector2.One * radius);
+			}
+		}
 		return bounds + owner.Position;
 	}
 
@@ -1399,6 +1487,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		if (neuralTexture != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var accessoryIndex = 0;
+		var wireIndex = parts == DrawParts.BehindPlayer ? wireOrder.Length : 0;
 		var headDrawn = parts == DrawParts.BehindPlayer;
 		var headDepth = jointDepth[head];
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
@@ -1409,11 +1498,13 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var boneDepth = BoneDepth(bone);
 			if (accessory != null && !headDrawn && headDepth <= boneDepth)
 			{
+				DrawWiresThrough(batcher, ref wireIndex, headDepth, tint, silhouette);
 				DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth,
 					silhouette ? tint : null);
 				DrawHead(batcher, tint, silhouette, surface, neuralTexture);
 				headDrawn = true;
 			}
+			DrawWiresThrough(batcher, ref wireIndex, boneDepth, tint, silhouette);
 			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, boneDepth,
 				silhouette ? tint : null);
 			var from = projectedPose[bone.From];
@@ -1458,10 +1549,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 		if (!headDrawn)
 		{
+			DrawWiresThrough(batcher, ref wireIndex, headDepth, tint, silhouette);
 			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth,
 				silhouette ? tint : null);
 			DrawHead(batcher, tint, silhouette, surface, neuralTexture);
 		}
+		DrawWiresThrough(batcher, ref wireIndex, float.PositiveInfinity, tint, silhouette);
 		DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, float.PositiveInfinity,
 			silhouette ? tint : null);
 		if (neuralTexture != null)
@@ -1521,6 +1614,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		if (neuralNormals != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
 		var accessoryIndex = 0;
+		var wireIndex = parts == DrawParts.BehindPlayer ? wireOrder.Length : 0;
 		var headDrawn = parts == DrawParts.BehindPlayer;
 		var headDepth = jointDepth[head];
 		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
@@ -1531,10 +1625,12 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			var boneDepth = BoneDepth(bone);
 			if (accessory != null && !headDrawn && headDepth <= boneDepth)
 			{
+				DrawWireNormalsThrough(batcher, ref wireIndex, headDepth);
 				DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth, flat);
 				DrawHeadNormals(batcher, flat, surface, neuralNormals);
 				headDrawn = true;
 			}
+			DrawWireNormalsThrough(batcher, ref wireIndex, boneDepth);
 			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, boneDepth, flat);
 			var from = projectedPose[bone.From];
 			var to = projectedPose[bone.To];
@@ -1548,19 +1644,28 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 					flat, surface, neuralNormals, normals: true);
 				continue;
 			}
-			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, flat);
+			if (Settings.NormalRoundness > 0)
+				DrawBoneNormals(batcher, boneOrder[sortedIndex], from, to, fromWidth + 2, toWidth + 2);
+			else
+				DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, flat);
 			if (surface != null)
 				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth,
 					neuralBoneUVs[boneOrder[sortedIndex]], normals: true);
 			else if (neuralNormals != null)
 				DrawNeuralBone(batcher, neuralNormals, from, to, fromWidth, toWidth,
 					neuralBoneUVs[boneOrder[sortedIndex]], Color.White * Neural.NeuralNormalAmount);
+			if (Settings.NormalRoundness > 0)
+				DrawSphereNormals(batcher, to, MathF.Max(1.2f, toWidth * 0.42f), 8,
+					Settings.NormalRoundness, Settings.NormalIrregularity,
+					(uint)boneOrder[sortedIndex] * 0x9e3779b9u);
 		}
 		if (!headDrawn)
 		{
+			DrawWireNormalsThrough(batcher, ref wireIndex, headDepth);
 			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth, flat);
 			DrawHeadNormals(batcher, flat, surface, neuralNormals);
 		}
+		DrawWireNormalsThrough(batcher, ref wireIndex, float.PositiveInfinity);
 		DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, float.PositiveInfinity, flat);
 		if (neuralNormals != null)
 			batcher.PopSampler();
@@ -1575,7 +1680,11 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		}
 
 		var position = projectedPose[head];
-		batcher.Circle(position, Settings.HeadSize + 1.4f, 14, flat);
+		if (Settings.NormalRoundness > 0)
+			DrawSphereNormals(batcher, position, Settings.HeadSize + 1.4f, 14,
+				Settings.NormalRoundness, Settings.NormalIrregularity, 0x68bc21ebu);
+		else
+			batcher.Circle(position, Settings.HeadSize + 1.4f, 14, flat);
 		if (surface != null)
 			DrawSurfaceCircle(batcher, surface, position, Settings.HeadSize,
 				neuralHeadUV, neuralHeadUVRadius, normals: true);
@@ -1630,6 +1739,83 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		return true;
 	}
 
+	void DrawWiresThrough(Batcher batcher, ref int index, float depth, Color tint, bool silhouette)
+	{
+		while (index < wireOrder.Length && WireDepth(wires[wireOrder[index]]) <= depth)
+		{
+			DrawWire(batcher, wireOrder[index], tint, silhouette);
+			index++;
+		}
+	}
+
+	void DrawWireNormalsThrough(Batcher batcher, ref int index, float depth)
+	{
+		while (index < wireOrder.Length && WireDepth(wires[wireOrder[index]]) <= depth)
+		{
+			DrawWireNormals(batcher, wireOrder[index]);
+			index++;
+		}
+	}
+
+	void DrawWire(Batcher batcher, int index, Color tint, bool silhouette)
+	{
+		var wire = wires[index];
+		var width = Wires.WireWidth * wire.WidthScale * MathF.Sqrt(Settings.PixelsPerMeter / 25f);
+		var previous = WirePoint(index, 0);
+		for (var segment = 1; segment <= WireSegments; segment++)
+		{
+			var next = WirePoint(index, segment / (float)WireSegments);
+			var variation = 1 + HashSigned(wire.Seed ^ (uint)segment * 0x85ebca6bu) *
+				Wires.WireIrregularity * 0.18f;
+			var segmentWidth = width * variation;
+			if (silhouette)
+				batcher.Line(previous, next, segmentWidth + Wires.WireOutlineWidth * 2, tint);
+			else
+			{
+				batcher.Line(previous, next, segmentWidth + Wires.WireOutlineWidth * 2,
+					Multiply(Wires.WireOutlineColor, tint));
+				batcher.Line(previous, next, segmentWidth, Multiply(Wires.WireColor, tint));
+			}
+			previous = next;
+		}
+	}
+
+	void DrawWireNormals(Batcher batcher, int index)
+	{
+		var wire = wires[index];
+		var width = Wires.WireWidth * wire.WidthScale * MathF.Sqrt(Settings.PixelsPerMeter / 25f) +
+			Wires.WireOutlineWidth * 2;
+		var previous = WirePoint(index, 0);
+		for (var segment = 1; segment <= WireSegments; segment++)
+		{
+			var next = WirePoint(index, segment / (float)WireSegments);
+			var variation = 1 + HashSigned(wire.Seed ^ (uint)segment * 0x85ebca6bu) *
+				Wires.WireIrregularity * 0.18f;
+			DrawCylinderNormals(batcher, previous, next, width * variation,
+				Wires.WireNormalRoundness, Wires.WireIrregularity * 0.35f,
+				wire.Seed ^ (uint)segment * 0xc2b2ae35u);
+			previous = next;
+		}
+	}
+
+	Vector2 WirePoint(int index, float progress)
+	{
+		var wire = wires[index];
+		var from = projectedPose[wire.From];
+		var to = projectedPose[wire.To];
+		var along = (to - from).Normalized(Vector2.UnitY);
+		var targetControl = (from + to) * 0.5f + along.TurnLeft() *
+			(wire.Bend * Wires.WireBendScale * Settings.PixelsPerMeter / 25f * PresentationMirror());
+		var control = Vector2.Lerp(targetControl, wireMotion[index].Control, Math.Clamp(Wires.WireMotion, 0, 1));
+		var inverse = 1 - progress;
+		var point = from * (inverse * inverse) + control * (2 * inverse * progress) + to * (progress * progress);
+		var phase = (wire.Seed & 0xffff) / 65535f * MathF.Tau;
+		var noise = MathF.Sin(progress * MathF.Tau * 2 + phase) * 0.65f +
+			MathF.Sin(progress * MathF.Tau * 5 + phase * 1.7f) * 0.35f;
+		return point + along.TurnLeft() * (noise * MathF.Sin(progress * MathF.PI) *
+			Wires.WireIrregularity * Wires.WireWidth * 0.55f);
+	}
+
 	static void DrawAccessoryThrough(Batcher batcher, IHumanoidRigAccessoryVisual? accessory,
 		ref int index, float depth, Color? tint)
 	{
@@ -1657,6 +1843,68 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
 		batcher.Quad(a, b, c, d, color);
+	}
+
+	void DrawBoneNormals(Batcher batcher, int boneIndex, Vector2 from, Vector2 to,
+		float fromWidth, float toWidth)
+	{
+		var seed = Hash32.Mix((uint)(animationPhase * uint.MaxValue) ^ (uint)boneIndex * 0x9e3779b9u);
+		for (var facet = 0; facet < NormalFacets; facet++)
+		{
+			var start = facet / (float)NormalFacets;
+			var end = (facet + 1) / (float)NormalFacets;
+			DrawCylinderNormals(batcher, Vector2.Lerp(from, to, start), Vector2.Lerp(from, to, end),
+				float.Lerp(fromWidth, toWidth, (start + end) * 0.5f),
+				Settings.NormalRoundness, Settings.NormalIrregularity,
+				seed ^ (uint)facet * 0x85ebca6bu);
+		}
+	}
+
+	static void DrawCylinderNormals(Batcher batcher, Vector2 from, Vector2 to, float width,
+		float roundness, float irregularity, uint seed)
+	{
+		var along = (to - from).Normalized(Vector2.UnitY);
+		var across = along.TurnLeft();
+		var halfWidth = width * 0.5f;
+		var leftFrom = from + across * halfWidth;
+		var leftTo = to + across * halfWidth;
+		var rightFrom = from - across * halfWidth;
+		var rightTo = to - across * halfWidth;
+		var startTilt = along * (HashSigned(seed) * irregularity * 0.28f);
+		var endTilt = along * (HashSigned(seed ^ 0xc2b2ae35u) * irregularity * 0.28f);
+		var centerFrom = NormalColor(startTilt * 0.32f);
+		var centerTo = NormalColor(endTilt * 0.32f);
+		var leftStart = NormalColor((across + startTilt).Normalized(across) * roundness);
+		var leftEnd = NormalColor((across + endTilt).Normalized(across) * roundness);
+		var rightStart = NormalColor((-across + startTilt).Normalized(-across) * roundness);
+		var rightEnd = NormalColor((-across + endTilt).Normalized(-across) * roundness);
+		batcher.Quad(leftFrom, from, to, leftTo, leftStart, centerFrom, centerTo, leftEnd);
+		batcher.Quad(from, rightFrom, rightTo, to, centerFrom, rightStart, rightEnd, centerTo);
+	}
+
+	static void DrawSphereNormals(Batcher batcher, Vector2 center, float radius, int steps,
+		float roundness, float irregularity, uint seed)
+	{
+		var centerNormal = NormalColor(new Vector2(HashSigned(seed), HashSigned(seed ^ 0x27d4eb2du)) *
+			(irregularity * 0.08f));
+		for (var i = 0; i < steps; i++)
+		{
+			var a = Calc.AngleToVector(i / (float)steps * MathF.Tau);
+			var b = Calc.AngleToVector((i + 1) / (float)steps * MathF.Tau);
+			var aAmount = roundness * (1 + HashSigned(seed ^ (uint)i * 0x85ebca6bu) * irregularity * 0.12f);
+			var bAmount = roundness * (1 + HashSigned(seed ^ (uint)(i + 1) * 0x85ebca6bu) * irregularity * 0.12f);
+			batcher.Triangle(center, center + a * radius, center + b * radius,
+				centerNormal, NormalColor(a * aAmount), NormalColor(b * bAmount));
+		}
+	}
+
+	static Color NormalColor(Vector2 lateral)
+	{
+		var length = lateral.Length();
+		if (length > 0.999f)
+			lateral *= 0.999f / length;
+		var normal = new Vector3(lateral, MathF.Sqrt(MathF.Max(0, 1 - lateral.LengthSquared())));
+		return new(normal.X * 0.5f + 0.5f, normal.Y * 0.5f + 0.5f, normal.Z * 0.5f + 0.5f, 1);
 	}
 
 	void DrawHand(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth,

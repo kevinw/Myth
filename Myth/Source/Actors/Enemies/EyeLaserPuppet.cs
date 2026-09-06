@@ -14,6 +14,16 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 {
 	public override RumbleEffect? AttackHitRumble => new(0.70f, 0.85f, 0.14f);
 	public override float HitKnockback => 100f;
+	static readonly HumanoidRigWireSpec[] WireLayout =
+	[
+		new("Head", "spine_03", -8, -0.06f, 1.05f),
+		new("Head", "spine_03", 11, 0.05f),
+		new("neck_01", "clavicle_l", -8, -0.04f, 0.9f),
+		new("neck_01", "clavicle_r", 10, 0.04f, 0.9f),
+		new("spine_03", "pelvis", 8, 0.06f, 1.1f),
+	];
+	
+	//protected override IReadOnlyList<HumanoidRigWireSpec> RigWireLayout => WireLayout;
 
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
 
@@ -199,6 +209,12 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float NonKnockdownContactDamageGraceTime => 0.3f;
 	float StompHoldProgress => MathF.Max(0, StompImpactProgress - StompHoldLead);
 	bool LowHealth => Health > 0 && Health <= maxHealth * LowHealthThreshold;
+
+	public EyeLaserPuppet()
+	{
+		Rig.NormalRoundness = 0.78f;
+		Rig.NormalIrregularity = 0.16f;
+	}
 
 	public override void Update()
 	{
