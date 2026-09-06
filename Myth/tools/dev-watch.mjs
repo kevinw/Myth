@@ -52,6 +52,7 @@ let watchClosed = null;
 let sourceRevision = 0;
 let notificationTimer = null;
 let failureNotified = false;
+let hotReloadWedged = false;
 const sourceWatchers = [];
 let cleaned = false;
 
@@ -143,11 +144,30 @@ function watchDirectory(directory, recursive, accepts) {
 		const watcher = fs.watch(directory, { recursive }, (_, filename) => {
 			if (accepts(filename)) sourceChanged();
 		});
-		watcher.on("error", (error) => console.error(`Source watcher failed for ${directory}: ${error.message}`));
+		// A watcher that errors is done delivering events. Without re-arming, that whole tree goes
+		// dark for the rest of the session and edits under it stop waking a stopped watcher.
+		watcher.on("error", (error) => {
+			console.error(`Source watcher failed for ${directory}: ${error.message}; re-arming.`);
+			rearmWatcher(watcher, directory, recursive, accepts);
+		});
 		sourceWatchers.push(watcher);
 	} catch (error) {
 		console.error(`Could not watch ${directory}: ${error.message}`);
 	}
+}
+
+function rearmWatcher(watcher, directory, recursive, accepts) {
+	const index = sourceWatchers.indexOf(watcher);
+	if (index >= 0) sourceWatchers.splice(index, 1);
+	try {
+		watcher.close();
+	} catch {
+		// already gone
+	}
+	if (stopping || cleaned) return;
+	setTimeout(() => {
+		if (!stopping && !cleaned) watchDirectory(directory, recursive, accepts);
+	}, 1000).unref();
 }
 
 for (const directory of ["Source", "tools/Myth.SourceGen", "../Kit", "../Foster/Framework"])
@@ -183,11 +203,17 @@ async function waitForTrigger(revision = sourceRevision) {
 		await sleep(200);
 }
 
+// Hot reload dying inside Roslyn leaves dotnet watch running but no longer applying edits, so
+// this has to be caught in the live stream too -- by the time the process exits we've already
+// spent however long wondering why saving does nothing.
+function looksLikeHotReloadFailure(text) {
+	return text.includes("An unexpected error occurred:") &&
+		/Microsoft\.CodeAnalysis\.(Emit|EditAndContinue)/.test(text);
+}
+
 function watchFailedInternally() {
 	try {
-		const log = fs.readFileSync(watchLog, "utf8");
-		return log.includes("An unexpected error occurred:") &&
-			/Microsoft\.CodeAnalysis\.(Emit|EditAndContinue)/.test(log);
+		return looksLikeHotReloadFailure(fs.readFileSync(watchLog, "utf8"));
 	} catch {
 		return false;
 	}
@@ -200,11 +226,14 @@ function inspectOutput(chunk) {
 		failureNotified = true;
 		notify("Build failed");
 	}
+	if (!hotReloadWedged && looksLikeHotReloadFailure(outputTail))
+		hotReloadWedged = true;
 }
 
 async function startWatch() {
 	fs.rmSync(hostPidFile, { force: true });
 	outputTail = "";
+	hotReloadWedged = false;
 	notifyBuilding();
 	const log = fs.openSync(watchLog, "w");
 	const child = spawn("dotnet", [
@@ -217,7 +246,8 @@ async function startWatch() {
 		stdio: ["inherit", "pipe", "pipe"],
 	});
 	watch = child;
-	watchClosed = new Promise((resolve) => child.once("close", (code, signal) => resolve({ code, signal })));
+	watchClosed = new Promise((resolve) =>
+		child.once("close", (code, signal) => resolve({ code, signal, revision: sourceRevision })));
 
 	const forward = (stream, target) => stream.on("data", (chunk) => {
 		target.write(chunk);
@@ -230,12 +260,18 @@ async function startWatch() {
 
 	const cycleRevision = sourceRevision;
 	while (!stopping && child.exitCode === null && child.signalCode === null && !hostIsAlive()) await sleep(100);
-	while (!stopping && child.exitCode === null && child.signalCode === null && hostIsAlive()) await sleep(200);
+	while (!stopping && child.exitCode === null && child.signalCode === null && hostIsAlive() && !hotReloadWedged)
+		await sleep(200);
 
 	let restarting = false;
 	if (!stopping && child.exitCode === null && child.signalCode === null) {
-		console.log("Myth dev host stopped; a source change or Run request will start a fresh watcher.");
-		await waitForTrigger(cycleRevision);
+		if (hotReloadWedged) {
+			console.log("dotnet watch hot reload failed internally; restarting the watcher.");
+			notifyBuilding("Hot reload failed; restarting…");
+		} else {
+			console.log("Myth dev host stopped; a source change or Run request will start a fresh watcher.");
+			await waitForTrigger(cycleRevision);
+		}
 		if (!stopping) {
 			terminateWatch(child);
 			restarting = true;
@@ -264,7 +300,7 @@ async function main() {
 		}
 		if (!fs.existsSync(runRequest)) {
 			console.log("dotnet watch stopped; waiting for a source change or Run request.");
-			await waitForTrigger();
+			await waitForTrigger(result.revision);
 		}
 	}
 }

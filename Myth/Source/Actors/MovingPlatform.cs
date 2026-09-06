@@ -20,6 +20,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	[I(0, 24)] public float StartFriction = 8f;
 	float currentSpeed;
 	[I(8, 512)] public int TravelDistance = 80;
+	[I(1f, 5f)] public float ReverseSpeedMultiplier = 1f;
 	public bool ActivatedByWeight;
 	// Weight-activated platforms travel back to where they started once nothing is standing on
 	// them; turn this off for a one-way lift that parks at the far end.
@@ -149,7 +150,8 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			return;
 		}
 
-		currentSpeed = Calc.Approach(currentSpeed, Speed, StartFriction * Time.Delta);
+		float mult = direction == -1 ? ReverseSpeedMultiplier : 1f;
+		currentSpeed = Calc.Approach(currentSpeed, Speed * mult, StartFriction * Time.Delta * mult);
 		switch (Mode) {
 			case MovementMode.Circle:
 				MoveCircle(currentSpeed * Time.Delta);

@@ -694,6 +694,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			return;
 		AnimationPreviewEnabled = false;
 		AnimationPreviewPaused = false;
+		if (!visualReady)
+			return;
 		if (UsesFrozenPose)
 			SampleFrozenPose(resetDynamics: true);
 		else
@@ -730,10 +732,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 	void UpdateAnimationPreview()
 	{
-		Velocity.X = 0;
-		Velocity.Y += Gravity * Time.Delta;
+		Velocity = UsesFrozenPose ? Vector2.Zero : new(0, Velocity.Y + Gravity * Time.Delta);
 		base.Update();
-		var grounded = Grounded();
+		var grounded = UsesFrozenPose ? AnimationPreviewIK : Grounded();
 		if (grounded && Velocity.Y > 0)
 			Velocity.Y = 0;
 		SyncVisual();

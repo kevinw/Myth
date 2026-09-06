@@ -59,6 +59,8 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	protected override float AirSpeedMultiplier => 1.0f;
 	protected override float IdleBreathingRate => 0.7f;
 	protected override int? RumbleControllerIndex => secondControllerControlling ? 1 : null;
+	protected override PawnAbilities Abilities =>
+		secondControllerControlling ? PawnAbilities.Burrow : PawnAbilities.None;
 	public bool CanSay => Game.CanShowBudSpeech();
 
 	// Forwarded for editor nav debug visualization
@@ -423,7 +425,9 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 	public override void Render(Batcher batcher)
 	{
-		RenderSpriteSubtexture(batcher, Tint);
+		if (!BurrowHidesSprite)
+			RenderSpriteSubtexture(batcher, Tint);
+		RenderBurrowLine(batcher);
 	}
 
 	internal Game.StorySpeechBubble? Say(string text, OutLoud.Emotion emotion = OutLoud.Emotion.Neutral)
@@ -432,6 +436,8 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	internal bool TryEnterPlayerBurrow(Player player)
 	{
 		if (!Visible || pendingRoomChange != null || ridingPlayerBurrow || burrowPopDelayTimer > 0 || State != States.Normal)
+			return false;
+		if (secondControllerControlling)
 			return false;
 		if (Vector2.DistanceSquared(Position, player.Position) > BurrowRideRadius * BurrowRideRadius)
 			return false;

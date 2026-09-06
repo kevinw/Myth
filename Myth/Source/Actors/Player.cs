@@ -14,8 +14,18 @@ public readonly record struct PawnInput(
 	bool AttackPressed = false);
 
 
-public abstract class Pawn : Actor
+// What a pawn is capable of at all, as opposed to what it can do right now (CanBurrow()).
+[Flags]
+public enum PawnAbilities
 {
+	None = 0,
+	Burrow = 1 << 0,
+}
+
+public abstract partial class Pawn : Actor
+{
+	protected virtual PawnAbilities Abilities => PawnAbilities.None;
+
 	protected int jumpParticlesEffect = -1;
 	int splashParticlesEffect = -1;
 
@@ -34,7 +44,9 @@ public abstract class Pawn : Actor
 		Game.RoomChanged -= OnRoomChanged;
 		ReleaseParticleEffect(ref jumpParticlesEffect);
 		ReleaseParticleEffect(ref splashParticlesEffect);
+		ReleaseBurrowParticles();
 		StopAndReleaseSound(ref wallSlideSound, true);
+		StopAndReleaseSound(ref burrowSound, true);
 	}
 
 	void OnRoomChanged(RoomChange change) {
@@ -306,7 +318,7 @@ public abstract class Pawn : Actor
 		// While burrowing the player rides the surface as a point; skip the normal
 		// grounded/landing machinery so it doesn't re-trigger landings mid-burrow.
 		var nowGrounded = State != States.Burrow && State != States.Climb && Velocity.Y >= 0 && Grounded();
-		if (nowGrounded && !grounded)
+		if (nowGrounded && !grounded && !TryBurrowOnLanding(previousVelocity))
 			OnLanded(previousVelocity);
 		grounded = nowGrounded;
 		if (grounded)
@@ -376,11 +388,15 @@ public abstract class Pawn : Actor
 			case States.Climb:
 				ClimbState();
 				break;
+			case States.Burrow:
+				BurrowState();
+				break;
 			default:
 				CustomState();
 				break;
 		}
 
+		UpdateBurrowRecharge();
 		AfterStateUpdate(previousVelocity);
 
 		if (ducking && State != States.Normal && State != States.Roll && !AllowDuckingInState())
@@ -430,6 +446,12 @@ public abstract class Pawn : Actor
 		}
 
 		UpdateWallSlideFeedback();
+		UpdateBurrowAlways();
+		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
+		// burrow inside a slope/wall), nudge to the nearest free spot. The follower
+		// keeps us off surfaces during burrow, so skip it there.
+		if (State != States.Burrow)
+			TryUnstick(burrowExitTimer > 0 ? burrowExitOutward : new Vector2(0, -1));
 		AfterMovementUpdate(previousVelocity);
 		UpdateOutOfBreath();
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
@@ -905,6 +927,7 @@ public abstract class Pawn : Actor
 	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
 	protected bool CanBurrow()
 	{
+		if (!Abilities.Has(PawnAbilities.Burrow)) return false;
 		if (inWater) return false;
 		if (IsCarrying) return false;
 		if (wallSliding) return false;
@@ -1574,7 +1597,6 @@ public partial class Player : Pawn
 		});
 		UpdateLightPosition();
 
-		burrowSparkEffect = AcquireParticleEffect("sparks");
 		plasmaStrikeEffect = AcquireParticleEffect("plasma_strike");
 	}
 
@@ -1597,10 +1619,6 @@ public partial class Player : Pawn
 
 	protected override void OnLanded(Vector2 previousVelocity)
 	{
-		if (input.JumpDown && !burrowNeedsGrounding && TryStartBurrow(previousVelocity)) {
-			return;
-		}
-
 		// A horizontal wall-pop lands grounded immediately; keep the pop squish
 		// rather than stamping the flat landing squish over it.
 		if (burrowExitTimer > 0)
@@ -1628,7 +1646,6 @@ public partial class Player : Pawn
 	{
 		if (grounded)
 		{
-			burrowNeedsGrounding = false;
 			dashNeedsGrounding = false;
 			Game.TriggerCrumbleBelow(this);
 		}
@@ -1640,18 +1657,6 @@ public partial class Player : Pawn
 		UpdateFootsteps();
 		if (duckAttackCooldownTimer > 0)
 			duckAttackCooldownTimer = Calc.Approach(duckAttackCooldownTimer, 0, Time.Delta);
-		if (burrowExitTimer > 0)
-			burrowExitTimer = Calc.Approach(burrowExitTimer, 0, Time.Delta);
-		if (burrowTimer < 0)
-		{
-			burrowTimer += Time.Delta;
-			if (burrowTimer > 0) burrowTimer = 0;
-		}
-		if (burrowHudSpent && CanBurrow())
-		{
-			burrowHudFill = 1;
-			burrowHudSpent = false;
-		}
 	}
 
 	void ClampPositionToRoomOrTransitionRooms()
@@ -1697,7 +1702,10 @@ public partial class Player : Pawn
 	{
 		Game.HitStun(0.4f);
 		if (!Game.TryRespawnPlayerAtSafeGroundedRespawn(this))
-			Position = InsetRespawnPoint();
+		{
+			TryInsetRespawnPoint(Game.RoomEntryPosition, out var inset);
+			Position = inset;
+		}
 		Stop();
 		ApplyHurt(-CliffFallDamage);
 		if (Health > 0)
@@ -1707,18 +1715,18 @@ public partial class Player : Pawn
 		}
 	}
 
-	// Walks inward from the room-entry point (toward room center) along the ground, one
-	// pixel at a time, stopping at the last spot with fully-supported footing before a gap
-	// or wall. Falls back to the raw entry point if it isn't itself on footing.
-	Point2 InsetRespawnPoint()
+	// Walks inward from a room-entry point (toward room center) along the ground, one pixel at
+	// a time, stopping at the last spot with fully-supported footing before a gap or wall.
+	// False when the entry isn't on footing at all; `result` is then the raw entry point.
+	internal bool TryInsetRespawnPoint(Point2 entry, out Point2 result)
 	{
-		var entry = Game.RoomEntryPosition;
+		result = entry;
 		var inwardX = Math.Sign(Game.Bounds.Center.X - entry.X);
 		if (inwardX == 0)
 			inwardX = 1;
 
 		if (!TrySnapToFooting(entry, out var best))
-			return entry;
+			return false;
 
 		var y = best.Y;
 		for (var i = 1; i <= RespawnInset; i++)
@@ -1728,7 +1736,8 @@ public partial class Player : Pawn
 			best = landed;
 			y = landed.Y;
 		}
-		return best;
+		result = best;
+		return true;
 	}
 
 	// Scans a short vertical window around `from` for a standing spot that's clear of solids
@@ -1813,12 +1822,6 @@ public partial class Player : Pawn
 			contactDamageOnly: true) is { } hit)
 			hit.Hit(this, new(hitRect));
 
-		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
-		// burrow inside a slope/wall), nudge to the nearest free spot. The follower
-		// keeps us off surfaces during burrow, so skip it there.
-		if (State != States.Burrow)
-			TryUnstick(burrowExitTimer > 0 ? burrowExitOutward : new Vector2(0, -1));
-
 		// TODO: invert this maybe, it probably belongs in FungalGrowthActor with some
 		// centralized / efficient "sensor" logic
 		var footPosition = new Vector2(Position.X, Position.Y);
@@ -1826,7 +1829,6 @@ public partial class Player : Pawn
 			if (actor is FungalGrowthActor fungus && fungus.GetVisualBounds().Contains(footPosition))
 				fungus.OnPlayerStep(footPosition);
 
-		UpdateBurrowAlways();
 		UpdateCarriedPosition(previousVelocity);
 		// ShowCarryDebug();
 		UpdateHat(previousVelocity);
@@ -1870,12 +1872,15 @@ public partial class Player : Pawn
 			case States.Hurt:
 				HurtState();
 				break;
-			case States.Burrow:
-				BurrowState();
-				break;
 		}
 
 	}
+
+	protected override PawnAbilities Abilities => PawnAbilities.Burrow;
+	protected override Bud? TryTakeBurrowPassenger()
+		=> Game.GetFirst<Bud>() is { } bud && bud.TryEnterPlayerBurrow(this) ? bud : null;
+	protected override bool TryToggleBurrowRoomInverse() => Game.ToggleBurrowRoomInverse();
+	protected override bool TryCatchBurrowPopCarryable() => TryCatchCarryable();
 
 	protected override bool AllowDuckingInState() => State == States.Attack && duckAttack;
 
@@ -2515,13 +2520,11 @@ public partial class Player : Pawn
 	{
 		base.Destroyed();
 		StopRollSound(true);
-		StopAndReleaseSound(ref burrowSound, true);
 		if (light != null)
 		{
 			Game.Destroy(light);
 			light = null;
 		}
-		ReleaseBurrowParticles();
 		ReleaseParticleEffect(ref plasmaStrikeEffect);
 		ReleaseDashFx();
 		ReleaseShield();

@@ -4,7 +4,7 @@ using Foster.Framework;
 namespace Myth;
 
 // Burrow-specific logic
-public partial class Player : Pawn
+public abstract partial class Pawn
 {
 	static float BurrowDuration => 1.133f;
 	static float BurrowUpgradeSeconds => 0.5f; // each BurrowUpgrade pickup adds this much burrow time
@@ -56,18 +56,18 @@ public partial class Player : Pawn
 	const float BurrowTangentDeadzone = 0.3f;  // |input·tangent| below this counts as orthogonal to the line
 
 	float burrowEnterTimer;
-	float burrowExitTimer;
+	protected float burrowExitTimer;
 	float burrowDuration;
-	float burrowHudFill = 1;
-	bool burrowHudSpent;
-	Bud? burrowPassenger;
+	protected float burrowHudFill = 1;
+	protected bool burrowHudSpent;
+	protected Bud? burrowPassenger;
 	Point2 burrowHeading = new(1, 0);   // current world travel direction along the surface
 	bool burrowSolidLeft;               // walk handedness (= orbit direction); only flips on a fresh press
 	Vector2 burrowIntent;
 	Vector2 burrowLastIntent;           // last frame's input; a change re-decides the orbit (even without a zero gap)
 	bool burrowOrbiting;                // latched movement: started by a tangential press, held through corners, dropped on release
 	bool burrowReverseQueued;           // a reversal is pending: brake to a stop, then flip heading
-	Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
+	protected Vector2 burrowExitOutward;          // away-from-surface dir at the last pop, biases the unstick nudge
 	Vector2 burrowToward = Vector2.UnitY; // surface normal (into solid) at the burrow point
 	float burrowMoveRemainder;          // sub-pixel accumulator for boundary advancement
 	float burrowSpeed;                  // current travel speed; eases via accel/friction
@@ -81,10 +81,10 @@ public partial class Player : Pawn
 	readonly List<Vector2> glowPoints = [];
 	readonly List<Vector2> burrowLineGlowBack = [];
 	Point2 burrowGlowAnchor;
-	int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
+	protected int burrowSparkEffect = -1;         // particle effect slot for the digging sparks
 	float burrowSparkAccumulator;
 	const float BurrowSparkRate = 160f; // sparks/sec at full burrow speed
-	SoundInstance? burrowSound;
+	protected SoundInstance? burrowSound;
 
 	float burrowGlowExitTimer; // current visual burrow glow exit timer
 	static float BurrowGlowExitTime => 0.13f; // how long to render the line after you pop out of burrowing
@@ -100,7 +100,17 @@ public partial class Player : Pawn
 	static float BurrowLeapCoyoteTime => 0.12f;
 	Vector2 BurrowTravelHeading => burrowLine != null ? burrowLineHeading : burrowHeading;
 
-	bool TryStartBurrow(Vector2 previousVelocity)
+	// Only the player drags Bud along and flips the room's plane, and only the player has hands
+	// to catch a Carryable on the way out; Bud burrows without any of it.
+	protected virtual Bud? TryTakeBurrowPassenger() => null;
+	protected virtual bool TryToggleBurrowRoomInverse() => false;
+	protected virtual bool TryCatchBurrowPopCarryable() => false;
+
+	// Landing with jump held dives straight into a burrow, ahead of the normal landing.
+	protected bool TryBurrowOnLanding(Vector2 previousVelocity)
+		=> input.JumpDown && !burrowNeedsGrounding && TryStartBurrow(previousVelocity);
+
+	protected bool TryStartBurrow(Vector2 previousVelocity)
 	{
 		if (!CanBurrow()) return false;
 
@@ -115,7 +125,7 @@ public partial class Player : Pawn
 		}
 
 		Velocity = Vector2.Zero;
-		burrowPassenger = Game.GetFirst<Bud>() is { } bud && bud.TryEnterPlayerBurrow(this) ? bud : null;
+		burrowPassenger = TryTakeBurrowPassenger();
 		burrowDuration = MaxBurrowDuration;
 		burrowTimer = burrowDuration;
 		burrowHudFill = 1;
@@ -136,7 +146,7 @@ public partial class Player : Pawn
 		// other side. Keep the tangent heading so the burrow continues along the same contour.
 		burrowSolidLeft = false;
 		burrowHeading = new Point2((int)MathF.Round(burrowToward.Y), -(int)MathF.Round(burrowToward.X));
-		if (Game.ToggleBurrowRoomInverse())
+		if (TryToggleBurrowRoomInverse())
 		{
 			burrowToward = -burrowToward;
 			burrowSolidLeft = true;
@@ -164,6 +174,8 @@ public partial class Player : Pawn
 		UpdateBurrowShift();
 		UpdateBurrowGlow();
 
+		if (burrowSparkEffect < 0)
+			burrowSparkEffect = AcquireParticleEffect("sparks");
 		StopAndReleaseSound(ref burrowSound);
 		burrowSound = Game.CreateAudioEvent("player/burrow", Position);
 		burrowSound?.Start();
@@ -184,7 +196,7 @@ public partial class Player : Pawn
 	}
 
 	// True once the entry squish has finished and the player is fully submerged.
-	private bool BurrowHidesSprite
+	protected bool BurrowHidesSprite
 	{
 		get
 		{
@@ -312,7 +324,7 @@ public partial class Player : Pawn
 		return atEdge && Game.Transition(direction);
 	}
 
-	private void BurrowState()
+	protected void BurrowState()
 	{
 		Velocity = Vector2.Zero;
 
@@ -636,7 +648,7 @@ public partial class Player : Pawn
 		// lift verb. Resolved before the launch so the catch can soften it (dampened below,
 		// like the hold-Down pop), and before AfterMovementUpdate's TryUnstick sees the
 		// swollen carry hitbox.
-		var caught = exitDir.Y > 0.5f && TryCatchCarryable();
+		var caught = exitDir.Y > 0.5f && TryCatchBurrowPopCarryable();
 
 		// Climbing straight up a vertical wall pops into a wall slide instead of launching
 		// off it: drop the outward push, keep hugging the wall, and carry strong upward
@@ -665,7 +677,7 @@ public partial class Player : Pawn
 			// clearly wasn't a committed launch, so don't fling the player.
 			Velocity = -exitDir * popMagnitude + travel;
 			var shortBurrow = burrowDuration - burrowTimer < ShortBurrowDampenTime;
-			if (Velocity.Y < 50 && (shortBurrow || caught || Controls.Move.IntValue.Y == 1))
+			if (Velocity.Y < 50 && (shortBurrow || caught || input.MoveY > 0))
 				Velocity.Y *= 0.5f;
 
 			// Burrow glide can exceed normal air speed; let the carried horizontal
@@ -762,7 +774,27 @@ public partial class Player : Pawn
 		}
 	}
 
-	void UpdateBurrowAlways()
+	// Re-arms the ability after a pop: the cooldown counts back up, and touching ground clears
+	// the "must land first" latch. Without this a pawn burrows exactly once.
+	protected void UpdateBurrowRecharge()
+	{
+		if (grounded)
+			burrowNeedsGrounding = false;
+		if (burrowExitTimer > 0)
+			burrowExitTimer = Calc.Approach(burrowExitTimer, 0, Time.Delta);
+		if (burrowTimer < 0)
+		{
+			burrowTimer += Time.Delta;
+			if (burrowTimer > 0) burrowTimer = 0;
+		}
+		if (burrowHudSpent && CanBurrow())
+		{
+			burrowHudFill = 1;
+			burrowHudSpent = false;
+		}
+	}
+
+	protected void UpdateBurrowAlways()
 	{
 		if (burrowGlowExitTimer > 0)
 			UpdateBurrowGlow(); // called here also so we update outside of the burrow state
@@ -842,7 +874,7 @@ public partial class Player : Pawn
 		particles.Emit(burrowSparkEffect, origin, count, direction, 0.4f + 0.6f * speed01);
 	}
 
-	void RenderBurrowLine(Batcher batcher)
+	protected void RenderBurrowLine(Batcher batcher)
 	{
 		if (!PerfToggles.BurrowParticles) return;
 
@@ -918,6 +950,6 @@ public partial class Player : Pawn
 	}
 
 
-	void ReleaseBurrowParticles()
+	protected void ReleaseBurrowParticles()
 		=> ReleaseParticleEffect(ref burrowSparkEffect);
 }

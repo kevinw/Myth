@@ -67,7 +67,10 @@
       "Id": "8d8092ad7396d8ef",
       "Type": "MovingPlatform",
       "Position": [72, 120],
-      "TravelDistance": 183
+      "TravelDistance": 183,
+      "StartFriction": 8.839,
+      "Speed": 38.951,
+      "WaitTime": 1.103
     },
     {
       "Id": "78606cf2b8e010a8",

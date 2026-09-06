@@ -241,8 +241,7 @@
       "Position": [336, 192],
       "Points": [[0, 8],[-16, 8]
       ],
-      "BurrowDoors": "Last",
-      "RenderProcedural": true
+      "BurrowDoors": "Last"
     },
     {
       "Id": "93ffd15df23a49a5",

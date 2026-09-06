@@ -4,7 +4,7 @@
   "ambientColor": "838383",
   "lightNoise": 0.336,
   "sporeFogStrength": 0.405,
-  "reverb": 0.763,
+  "reverb": 0.762,
   "legend": {
     "R": "ruin",
     "T": "stone",
@@ -26,9 +26,9 @@
     "RRRRRRRRRRRRRRTTwwTTwwwwwwwwwwwwwwwwwTTT",
     "RRRRRRRRRRRRRRTTTTTTwwwTTTTTTTTTTTTTTTTT",
     "RRRRRRRRRRRRRRTTTTTTwwwTTTTTTTTTTTTTTTTT",
-    "RRRRRRRRRRRRRRTTTTTTwwwTTTTTTTTTTTTTTTwT",
-    "RRRRRRRRRRRRRRTTTTTTwwwTTTTTTTTTTTTTTTTT",
-    "RRRRRRRRTTRRRTTTTTTTwwwTTTTTTTTTTTTTTTTT",
+    "RRRRRRRRRRRRRRTTTTTTwwwTTTTTTTTTTTTT000T",
+    "RRRRRRRRRRRRRRTTTTTTwwwTTTTTTTTTTTTT000T",
+    "RRRRRRRRTTRRRTTTTTTTwwwTTTTTTTTTTTTTTT0T",
     "RRRRRRRRTTRRRTTT00TTTTTTTTwwTTTTTTTwTT00",
     "RRRRRRRRTTRRRTTT00TTTTTTTTwwTTTTTTTwTT00",
     "RRRRRRRRTTTTTTTT00TTTTTTTTwwTTTTTTTwTTTT",
@@ -73,6 +73,21 @@
       "Id": "e44182e22004015d",
       "From": "FloLight",
       "Position": [246, 24]
+    },
+    {
+      "Id": "52a3b3f58afb0d39",
+      "Type": "BurrowLine",
+      "Position": [145, 39],
+      "Points": [[0, 112],[48, 112],[48, 136],[104, 136],[104, 88],[144, 88]
+      ]
+    },
+    {
+      "Id": "28639a23d80bb65c",
+      "Type": "BurrowLine",
+      "Position": [112, 120],
+      "Points": [[16, 40],[-40, 40],[-40, 16]
+      ],
+      "BurrowDoors": "Last"
     }
   ]
 }

@@ -79,6 +79,20 @@
       "Id": "c92390ea3590ec8c",
       "Type": "Chest",
       "Position": [138, 144]
+    },
+    {
+      "Id": "d9dba1587452079f",
+      "Type": "RigPuppetProp",
+      "Position": [323, 151],
+      "Facing": "-",
+      "NeuralFPS": 1,
+      "PoseAnimationName": "Hit_To_Side_Of_Body",
+      "PoseProgress": 0.646,
+      "PixelsPerMeter": 49.668,
+      "HeadSize": 6.959,
+      "EyeSize": 0,
+      "NeckExtension": -4,
+      "BicepSize": 9.527
     }
   ]
 }

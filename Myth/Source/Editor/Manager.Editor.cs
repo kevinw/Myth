@@ -698,6 +698,9 @@ public partial class Manager
 		}
 	}
 
+	bool CommandModifierDown =>
+		Input.Keyboard.Down([Keys.LeftControl, Keys.RightControl, Keys.LeftOS, Keys.RightOS]);
+
 	bool UpdateEditorShortcuts()
 	{
 		if (OperatingSystem.IsMacOS() && Input.Keyboard.CtrlOrCommand && Input.Keyboard.Pressed(Keys.Comma))
@@ -705,11 +708,7 @@ public partial class Manager
 			preferencesOpen = true;
 			return true;
 		}
-		var modifier =
-			Input.Keyboard.Down(Keys.LeftControl) ||
-			Input.Keyboard.Down(Keys.RightControl) ||
-			Input.Keyboard.Down(Keys.LeftOS) ||
-			Input.Keyboard.Down(Keys.RightOS);
+		var modifier = CommandModifierDown;
 		if (modifier && Input.Keyboard.Pressed(Keys.S) && SaveSelectedActorSpec())
 			return true;
 		if (ImGuiWantsKeyboard)
@@ -947,6 +946,9 @@ public partial class Manager
 
 	void UpdateEditorNavigation()
 	{
+		if (CommandModifierDown)
+			return;
+
 		var keyMove = WasdDirection(down: true);
 		// Keyboard Shift + WASD moves the camera around incrementally.
 		if (Input.Keyboard.Shift && keyMove != Point2.Zero)

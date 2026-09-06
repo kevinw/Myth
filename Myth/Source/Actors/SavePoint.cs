@@ -80,6 +80,7 @@ public class SavePoint : Actor
 		{
 			pulse = 1f;
 			savedTextTime = SavedTextDuration;
+			player!.Health = Player.MaxHealth;
 			Game.ActivateSavePoint(this);
 			AudioEvent("save_point/activate");
 		}

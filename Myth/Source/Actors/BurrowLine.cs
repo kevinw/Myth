@@ -25,7 +25,7 @@ public class BurrowLine : PointPathActor
 
 	public BurrowDoorPoints BurrowDoors;
 	public float SpeedScale = 1f;
-	public bool RenderProcedural;
+	public bool RenderProcedural = true;
 	[I(0.5f, 12)] public float ProceduralWidth = 3f;
 	public Color ProceduralOuterColor = new(0x454a52);
 	public Color ProceduralInnerColor = new(0x959ba5);

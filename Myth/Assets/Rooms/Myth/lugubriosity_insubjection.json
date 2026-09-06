@@ -1,7 +1,8 @@
 {
-  "position": [160, -53],
+  "position": [120, -53],
   "size": [40, 30],
-  "ambientColor": "1D1D1D",
+  "backdropColor": "290E43",
+  "ambientColor": "4A4A4A",
   "lightNoise": 0.568,
   "reverb": 0.212,
   "musicMuffle": 0.515,

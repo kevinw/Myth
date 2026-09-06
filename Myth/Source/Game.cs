@@ -15,6 +15,15 @@ public enum RoomChangeKind
 	Reload
 }
 
+// Where death puts the player back. SavePoint is the real game; NearWhereYouDied keeps a
+// timed demo moving: the start of the room you died in, then the last safe ground, then the
+// save point.
+public enum DeathRespawnMode
+{
+	SavePoint,
+	NearWhereYouDied
+}
+
 public readonly record struct RoomChange(Room? From, Room To, RoomChangeKind Kind, Point2 Direction, Vector2 PlayerPosition);
 public readonly record struct RoomGeoChange(Room Room, RectInt? DirtyWorldBounds = null);
 
@@ -228,6 +237,14 @@ public partial class Game : IDisposable
 	// initial room's spawn), this is refreshed on every room activation — including edge
 	// transitions, which reuse this Game instance — so it always points at the way back in.
 	Point2 roomEntryPosition;
+	// roomEntryPosition as of the last genuine entry into the room. Death respawns reload the
+	// room and would otherwise overwrite it with the spot they just placed the player, walking
+	// the respawn deeper into the room with every death.
+	RespawnState? roomRespawnPoint;
+	// First safe footing found since entering the room. Save.LastGrounded trails the player, so
+	// it would put a pit death right back on the lip of the pit; this is where the room started
+	// being survivable, and it's what a mid-air arrival falls back to.
+	RespawnState? firstGroundedInRoom;
 	Point2 roomEntryDirection;
 	readonly bool spawnBud;
 	readonly bool loadGoals;
@@ -511,7 +528,11 @@ public partial class Game : IDisposable
 			}
 			EnsureBudForPlayer(repositionExisting: true, atPlayerPosition: spawnBudAtPlayer);
 			if (GetFirst<Player>() is { } initialPlayer)
+			{
 				roomEntryPosition = initialPlayer.Position;
+				roomRespawnPoint = new RespawnState(room.Id, roomEntryPosition);
+				firstGroundedInRoom = null;
+			}
 			RaiseRoomChanged(null, room, RoomChangeKind.InitialLoad, Point2.Zero);
 			if (AudioEventsEnabled)
 			{
@@ -1153,7 +1174,14 @@ public partial class Game : IDisposable
 		ResetPlatformNavGraphRoomState();
 		// The player has been placed into the (new) room by now, so this is the way back in.
 		if (GetFirst<Player>() is { } player)
+		{
 			roomEntryPosition = player.Position;
+			if (room is { } entered && (kind != RoomChangeKind.Reload || roomRespawnPoint?.RoomId != entered.Id))
+			{
+				roomRespawnPoint = new RespawnState(entered.Id, roomEntryPosition);
+				firstGroundedInRoom = null;
+			}
+		}
 		roomEntryDirection = kind == RoomChangeKind.EdgeTransition ? transitionDirection : Point2.Zero;
 		RemoveDestroyedActors();
 		for (var i = 0; i < Actors.Count; i++)
@@ -1167,10 +1195,9 @@ public partial class Game : IDisposable
 	{
 		if (room == null || nextRoom != null || Simulating)
 			return;
-#if EDITOR
 		deathsWithoutSafeGround = 0;
-#endif
 		var respawn = new RespawnState(room.Id, position);
+		firstGroundedInRoom ??= respawn;
 		if (Save.LastGrounded == respawn)
 			return;
 		Save.LastGrounded = respawn;
@@ -1179,64 +1206,99 @@ public partial class Game : IDisposable
 
 	public bool TryRespawnPlayerAtSafeGroundedRespawn(Player player)
 	{
-		if (room == null || roomEntryDirection.Y == 0 || Save.LastGrounded is not { } respawn)
+		if (room == null)
+			return false;
+
+		var target = RespawnsAtRoomStart
+			? RoomStartRespawn()
+			: roomEntryDirection.Y != 0 ? Save.LastGrounded : null;
+		if (target is not { } respawn)
 			return false;
 
 		RespawnPlayerAt(player, respawn, reloadRoom: false);
 		return true;
 	}
 
+	// The demo is deliberately forgiving; flip this back for the real game.
+	static DeathRespawnMode DeathRespawn => DeathRespawnMode.NearWhereYouDied;
+
 	public void RespawnPlayerAtLastGrounded(bool restartMusic = false)
 	{
 		if (restartMusic)
 			StopMusic(true);
 
-		// On death, return to the last activated save point; fall back to the last safe
-		// grounded spot for the early game (or if that save point no longer exists).
-		var target = (Save.LastSavePoint is { } lastId ? ResolveSavePoint(lastId) : null) ?? Save.LastGrounded;
+		var target = RespawnsAtRoomStart
+			? RoomStartRespawn() ?? SavePointRespawn()
+			: SavePointRespawn() ?? Save.LastGrounded;
 
 		if (GetFirst<Player>() is { } player && target is { } respawn && RespawnPlayerAt(player, respawn, reloadRoom: true))
 		{
-			player.Health = Player.MaxHealth;
-			player.State = Player.States.Normal;
-			player.Stop();
-			EnsureBudForPlayer(repositionExisting: true);
+			RestorePlayerAfterRespawn(player);
 			if (restartMusic)
 				MusicWasRestarted();
 		}
 		else
 			ReloadRoom(restartMusic);
 
-#if EDITOR
-		EditorDeathLoopRescue();
-#endif
+		DeathLoopRescue();
 	}
 
-#if EDITOR
-	// Editing a room out from under the player can leave every respawn target hanging over a
-	// pit, so each respawn falls straight back to its death and the loop never breaks on its
-	// own. Deaths with no safe grounding in between count up (NoteSafeGroundedRespawn resets);
-	// after a few, move the player to the nearest supported footing in the room and make that
-	// the new grounded respawn.
-	int deathsWithoutSafeGround;
-	const int DeathLoopRescueThreshold = 3;
+	// The gym scores runs against the shipping rules, so it always respawns at the save point.
+	bool RespawnsAtRoomStart => !Simulating && DeathRespawn == DeathRespawnMode.NearWhereYouDied;
 
-	void EditorDeathLoopRescue()
+	RespawnState? SavePointRespawn()
+		=> Save.LastSavePoint is { } lastId ? ResolveSavePoint(lastId) : null;
+
+	// The start of the room the player is in: where they came in, pulled inward to solid footing.
+	// A mid-air arrival (fell in, or came through a burrow door) has no footing to inset from, so
+	// it falls back to the first ground they found in the room.
+	RespawnState? RoomStartRespawn()
+	{
+		if (room is not { } current)
+			return null;
+		if (roomRespawnPoint is { } entry && entry.RoomId == current.Id &&
+			GetFirst<Player>() is { } player && player.TryInsetRespawnPoint(entry.Position, out var inset))
+			return new RespawnState(current.Id, inset);
+		return firstGroundedInRoom is { } grounded && grounded.RoomId == current.Id ? grounded : null;
+	}
+
+	void RestorePlayerAfterRespawn(Player player)
+	{
+		player.Health = Player.MaxHealth;
+		player.State = Player.States.Normal;
+		player.Stop();
+		EnsureBudForPlayer(repositionExisting: true);
+	}
+
+	// Every respawn target can end up hanging over a pit -- a room edited out from under the
+	// player, or a room start the player can no longer survive -- so each respawn falls straight
+	// back to its death and the loop never breaks on its own. Deaths with no safe grounding in
+	// between count up (NoteSafeGroundedRespawn resets); after a few, break out. The editor moves
+	// the player to the nearest supported footing (the room is being edited, so that is the fix);
+	// anywhere else, fall back to the save point.
+	int deathsWithoutSafeGround;
+	const int DeathLoopRescueThreshold = 4;
+
+	void DeathLoopRescue()
 	{
 		if (++deathsWithoutSafeGround < DeathLoopRescueThreshold || GetFirst<Player>() is not { } player)
 			return;
 
 		deathsWithoutSafeGround = 0;
-		if (!player.TryFindSafeFootingNear(player.Position, out var safe))
+#if EDITOR
+		if (player.TryFindSafeFootingNear(player.Position, out var safe))
+		{
+			player.Position = safe;
+			player.Stop();
+			NoteSafeGroundedRespawn(safe);
+			EnsureBudForPlayer(repositionExisting: true);
+			DisplayMessage("death loop detected: moved player to safe ground");
 			return;
-
-		player.Position = safe;
-		player.Stop();
-		NoteSafeGroundedRespawn(safe);
-		EnsureBudForPlayer(repositionExisting: true);
-		DisplayMessage("death loop detected: moved player to safe ground");
-	}
+		}
 #endif
+		if (SavePointRespawn() is { } savePoint && RespawnPlayerAt(player, savePoint, reloadRoom: true))
+			RestorePlayerAfterRespawn(player);
+	}
 
 	// Resolves an activated save point's actor id to a concrete respawn location by
 	// reading its current position from the live room spec. Returns null if the save

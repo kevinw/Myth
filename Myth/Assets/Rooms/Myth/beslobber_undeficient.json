@@ -1,5 +1,5 @@
 {
-  "position": [200, 23],
+  "position": [160, 23],
   "size": [40, 23],
   "reverb": 0.242,
   "legend": {
@@ -68,7 +68,6 @@
       "Position": [192, 168],
       "Points": [[-72, 8],[0, 8]
       ],
-      "RenderProcedural": true,
       "ProceduralInnerColor": "FF0093",
       "ProceduralOuterColor": "7E195A"
     },

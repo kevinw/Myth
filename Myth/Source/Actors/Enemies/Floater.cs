@@ -186,16 +186,23 @@ public class Floater : Actor
 	private void UpdateLasers(float scale)
 	{
 		var spawnPops = scale >= 1.0f && laserPopTimer <= 0;
+		var needShake = false;
 		for (var i = 0; i < 4; i ++)
 		{
 			var laser = lasers[i];
 			if (laser.FirstOverlap(Game, Masks.Player, out RectInt hitRect, scale) is { } player)
 				Hit(player, new(hitRect));
 			if (spawnPops && laser.HitObstacle)
+			{
 				SpawnLaserPop(laser.End);
+				needShake = true;
+			}
 		}
 		if (spawnPops)
 			laserPopTimer = LaserPopInterval;
+		if (needShake) {
+			Game.Shake(0.15f);
+		}
 	}
 
 	private float LaserVisibleScale()

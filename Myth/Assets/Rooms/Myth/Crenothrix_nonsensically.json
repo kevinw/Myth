@@ -30,7 +30,7 @@
     "T000000TTT0000000000000000000d000000GGGG",
     "T000000TTT00000000000000000TTTTTTTTTGGGG",
     "T000000TTT00000000000000000TTTTTGGGGGGGG",
-    "T000000TTT000gggf00000g0000TTTTTGGGGGGGG",
+    "T000000TTT000gggf0TTTTg0000TTTTTGGGGGGGG",
     "TTT0000TTTTTTTPPPTTTTTTTTTTTTTTTGGGGGGGG",
     "TT00000TTTTTTTTTTPTTTTTTTTTTTTTTTTGGGGGG",
     "TT00000TTTTTTTTTTTTTTTTTTTTTTTTTTTGGGGGG",
@@ -68,7 +68,7 @@
   ],
   "fungal": [[13, 14],[14, 15],[15, 15],[16, 15],[18, 15],[20, 15]
   ],
-  "slopes": [[27, 11]
+  "slopes": [[27, 11],[18, 13],[21, 13]
   ],
   "actors": [
     {
@@ -123,8 +123,20 @@
       "Type": "BurrowLine",
       "Position": [80, 112],
       "Points": [[0, 0],[-24, 0]
-      ],
-      "RenderProcedural": true
+      ]
+    },
+    {
+      "Id": "a5206b0490b5128f",
+      "Type": "Blob",
+      "Position": [15, 111]
+    },
+    {
+      "Id": "7903bc17866e082d",
+      "Type": "BurrowLine",
+      "Position": [81, 48],
+      "BurrowDoors": "First",
+      "Points": [[0, 0],[0, 0]
+      ]
     }
   ]
 }

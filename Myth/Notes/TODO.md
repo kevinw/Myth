@@ -1,6 +1,23 @@
+- dev-watch: Foster edits never hot reload -- dev-watch runs dotnet watch with UseFosterDll=true,
+  which references a prebuilt Foster.Framework.dll instead of the project, so Foster sources aren't
+  in the watch graph and nothing rebuilds the dll. Wants a --foster-project mode for sessions
+  spent in Foster/.
+- burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
+  is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame
+  TryUnstick now rescues it, but the pop should pick an unblocked direction itself.
+- burrow lines: SOMETHING to make them a bit more visually interesting
+- lore rewards alongside chests
+- does steam deck do 120fps?
+- acknowledgements on itch page
+- train fer's tshirt
+- paint more NCA backgrounds.
+- try a simple fluid sim that acts as the paint mask for an NCA
+- take 30 mins to make sure you can explain NCA
+- redraw spitter; test other actors and draw for them
 - for builds for fer
   - screenshot button
   - tilde console
+  - add an itch page
 - either disable all bud voice barks or make them never ever repeat
 - POSSIBLY use alien bug for one of our existing behaviours?
 - update voice-de.json
@@ -14,7 +31,6 @@ SFX
   - really listen and pay attention to lack of landing sound effects on grass etc
 - go through a decoration hour
 - eyelaserpuppet needs to wait until you come within a certain distance before starting kneel
-- add a giant rigpuppet somewhere
 - make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
 - i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
 - boss needs bigger Pop / longer death like GhostFrog

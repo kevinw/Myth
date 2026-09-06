@@ -10,7 +10,7 @@ public enum ButtonMode { MustHold, PressesOnce }
 // remembers that latch in the save. MustHold mirrors its physical state to the target.
 [GameActor(Sprite = "buttons", BoundsX = -5, BoundsY = -5, BoundsW = 10, BoundsH = 10,
 	Tags = ActorTag.System, Anchor = SpriteAnchor.Center, ShowFacing = false, LivePositionEditable = true)]
-public class Button : Actor
+public class Button : Actor, IActivationSource
 {
 	public Cardinal Direction = Cardinal.Up;
 	public ButtonMode Mode;
@@ -41,6 +41,10 @@ public class Button : Actor
 		Depth = -2;
 	}
 
+	bool PersistentlyPressed => LatchesPress && Game.IsButtonPressed(ActorId);
+	bool LatchesPress => Mode == ButtonMode.PressesOnce && Persistent;
+	bool IActivationSource.ActivationIsPersistent => LatchesPress;
+
 	public override bool CastsSpriteShadow => true;
 	public override bool LightingDithered => false;
 
@@ -49,12 +53,16 @@ public class Button : Actor
 		base.Added();
 		builtDirection = Direction;
 		Hitbox = new(SensorRect);
-		pressed = Mode == ButtonMode.PressesOnce && Persistent && Game.IsButtonPressed(ActorId);
+		pressed = PersistentlyPressed;
 	}
 
 	public override void Update()
 	{
 		base.Update();
+		if (nextFrameHitStun) {
+			Game.HitStun(0.15f);
+			nextFrameHitStun = false;
+		}
 		if (builtDirection != Direction)
 		{
 			builtDirection = Direction;
@@ -75,9 +83,12 @@ public class Button : Actor
 		pressed = down;
 		SetTarget(pressed);
 		AudioEvent("button", "Action", pressed ? "Press" : "Unpress");
-		if (pressed && Mode == ButtonMode.PressesOnce && Persistent)
+		if (pressed && LatchesPress)
 			Game.PressButtonPersistently(ActorId);
+		nextFrameHitStun = true;
 	}
+
+	bool nextFrameHitStun = false;
 
 	bool IsPressed()
 	{

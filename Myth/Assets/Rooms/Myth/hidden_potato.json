@@ -1,5 +1,5 @@
 {
-  "position": [160, -23],
+  "position": [120, -23],
   "size": [40, 23],
   "ambientColor": "626262",
   "reverb": 0.526,
@@ -81,8 +81,8 @@
     {
       "Id": "426a13cac19fad21",
       "Type": "Jumpthru",
-      "Position": [96, 144],
-      "Size": [40, 8]
+      "Position": [93, 144],
+      "Size": [43, 8]
     },
     {
       "Id": "1eb1a5da67153219",

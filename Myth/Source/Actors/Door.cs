@@ -61,13 +61,7 @@ public class Door : Actor, IActivatable, IResizable
 		base.Update();
 		if (PersistentlyOpened)
 		{
-			if (Visible)
-			{
-				Game.Create<Pop>(Position + new Point2(0, -8));
-				AudioEvent("door/unlock");
-			}
-			Mask = Masks.None;
-			Visible = false;
+			OpenForGood();
 			return;
 		}
 		if (activationOpen)
@@ -113,6 +107,20 @@ public class Door : Actor, IActivatable, IResizable
 		}
 	}
 
+	// Opened by something that latches in the save: the door is gone for good, so it retires
+	// itself and LoadRoom skips it on every later visit -- no spawn, no pop, no solid frame.
+	void OpenForGood()
+	{
+		if (Visible)
+		{
+			Game.Create<Pop>(Position + new Point2(0, -8));
+			AudioEvent("door/unlock");
+		}
+		Mask = Masks.None;
+		Visible = false;
+		Game.DestroyPersistently(this);
+	}
+
 	bool PersistentlyOpened => !string.IsNullOrWhiteSpace(PersistentButtonId) && Game.IsButtonPressed(PersistentButtonId);
 
 	public override void Render(Batcher batcher) => RenderSized(batcher, SubtextureType.Color, Color.White);
@@ -151,6 +159,11 @@ public class Door : Actor, IActivatable, IResizable
 			return;
 
 		pendingClose = false;
+		if (source is IActivationSource { ActivationIsPersistent: true })
+		{
+			OpenForGood();
+			return;
+		}
 		if (Visible)
 			Game.Create<Pop>(Position + new Point2(0, -8));
 		Mask = Masks.None;

@@ -164,11 +164,6 @@
       "ChangeOnActorDestroyed": "574c49f8e2ee020d"
     },
     {
-      "Id": "a8887dd91e3c3f05",
-      "Type": "SavePoint",
-      "Position": [216, 160]
-    },
-    {
       "Id": "fb87b8221a829aff",
       "Type": "Light",
       "Position": [20, 36]
@@ -202,7 +197,7 @@
     {
       "Id": "340209a4b5a7fa2f",
       "Type": "RigPuppetProp",
-      "Position": [163, 199],
+      "Position": [25, 190],
       "NeckExtension": 6.185,
       "TorsoSize": 10.854,
       "PixelsPerMeter": 34.946,

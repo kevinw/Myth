@@ -5,7 +5,7 @@ namespace Myth;
 
 [GameActor(Sprite = "buttons", BoundsX = -8, BoundsY = -8, BoundsW = 16, BoundsH = 16, Tags = ActorTag.System,
 	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
-public class Switch : PointPathActor
+public class Switch : PointPathActor, IActivationSource
 {
 	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
 	public bool Persistent;
@@ -38,6 +38,7 @@ public class Switch : PointPathActor
 	}
 
 	bool PersistentlyTriggered => Persistent && Game.IsButtonPressed(ActorId);
+	bool IActivationSource.ActivationIsPersistent => Persistent;
 
 	internal override void OnWasHit(HitInfo hitInfo)
 	{

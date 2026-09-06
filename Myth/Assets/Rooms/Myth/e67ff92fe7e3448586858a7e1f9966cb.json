@@ -1,5 +1,5 @@
 {
-  "position": [120, -46],
+  "position": [80, -46],
   "size": [40, 23],
   "lightNoise": 0.492,
   "reverb": 0.863,
@@ -116,11 +116,6 @@
       "Position": [300, 112]
     },
     {
-      "Id": "b64074511dc56a2a",
-      "Type": "SavePoint",
-      "Position": [213, 176]
-    },
-    {
       "Id": "b7aaef8c1b5cfdd0",
       "Type": "Light",
       "Position": [302, 59]
@@ -134,8 +129,8 @@
     {
       "Id": "2f3ece143b676b38",
       "Type": "Jumpthru",
-      "Position": [256, 64],
-      "Size": [24, 8]
+      "Position": [240, 64],
+      "Size": [40, 8]
     },
     {
       "Id": "c0a82f0ad6641e9d",

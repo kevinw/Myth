@@ -189,6 +189,16 @@
       "StartFriction": 21.949,
       "Speed": 111.645,
       "WaitTime": 0.214
+    },
+    {
+      "Id": "ee89b0b4238ca038",
+      "From": "StrongFireLight",
+      "Position": [1, 29],
+      "LightColor": "FDE7BB",
+      "Radius": 62.907,
+      "Intensity": 0.871,
+      "Height": 22.517,
+      "DrawSprite": false
     }
   ]
 }
