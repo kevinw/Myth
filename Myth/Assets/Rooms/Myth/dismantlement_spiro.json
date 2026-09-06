@@ -101,7 +101,8 @@
     {
       "Id": "42c3dc56c473bf3b",
       "Type": "Wildlife",
-      "Position": [112, 56]
+      "Position": [112, 56],
+      "FishCount": 3
     },
     {
       "Id": "6e3e410f8d0f59fd",

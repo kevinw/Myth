@@ -3,7 +3,7 @@ namespace OutLoud;
 // "Talk box" voice synthesis, Tux-and-Fanny style: a spoken line becomes a
 // deterministic sequence of baked syllable blips, played one per spoken-syllable
 // as the text reveals. Engine-agnostic: it produces a plan and asks an
-// ISyllableSink to make sound. See OutLoud/README.md.
+// IBlipSink to make sound. See OutLoud/README.md.
 
 public enum Emotion { Neutral, Excited, Sad, Disappointed }
 
@@ -12,11 +12,11 @@ public enum Emotion { Neutral, Excited, Sad, Disappointed }
 // the nearest: ä→E, ö→O, ü→U.
 public enum Vowel { A, E, I, O, U }
 
-// Implemented per engine. syllable indexes the baked clip set [0, SyllableCount);
+// Implemented per engine. clip indexes the baked voice set when the plan is spoken;
 // pitch is a semitone offset (0 = unshifted); gain is linear 0..1 volume.
-public interface ISyllableSink
+public interface IBlipSink
 {
-	void Play(int syllable, float pitch, float gain);
+	void Play(int clip, float pitch, float gain);
 }
 
 // Per-speaker voice character. SyllableCount must match the number of baked clips the
@@ -37,7 +37,7 @@ public sealed class Utterance
 	public readonly string Text;
 	public readonly float RevealSeconds; // elapsed time at which the last char shows
 
-	readonly record struct Blip(int CharIndex, int Syllable, float Pitch, float Gain);
+	readonly record struct Blip(int CharIndex, int Clip, float Pitch, float Gain);
 
 	readonly float[] revealAt; // revealAt[i] = elapsed seconds when char i becomes visible
 	readonly Blip[] blips;     // ascending by CharIndex
@@ -64,13 +64,13 @@ public sealed class Utterance
 	}
 
 	// Play any blips newly revealed since the last call; returns the visible char count.
-	public int Advance(float elapsed, ISyllableSink sink)
+	public int Advance(float elapsed, IBlipSink sink)
 	{
 		var visible = VisibleLength(elapsed);
 		while (fired < blips.Length && blips[fired].CharIndex < visible)
 		{
 			var b = blips[fired++];
-			sink.Play(b.Syllable, b.Pitch, b.Gain);
+			sink.Play(b.Clip, b.Pitch, b.Gain);
 		}
 		return visible;
 	}
@@ -80,15 +80,7 @@ public sealed class Utterance
 	public static Utterance Build(string text, Emotion emotion, in VoiceProfile profile, string? german = null)
 	{
 		var n = text.Length;
-		var revealAt = new float[n];
-		var step = 1f / Math.Max(1f, profile.CharsPerSecond * RateScale(emotion));
-
-		var t = 0f;
-		for (var i = 0; i < n; i++)
-		{
-			revealAt[i] = t;
-			t += step + PauseAfter(text[i]);
-		}
+		var revealAt = BuildRevealTimes(text, profile.CharsPerSecond * RateScale(emotion));
 
 		var rng = new Rng(Hash(text));
 		var basePitch = profile.BasePitch + EmotionPitch(emotion);
@@ -115,6 +107,30 @@ public sealed class Utterance
 
 		ApplyIntonation(list, EndsWithQuestion(text));
 		return new Utterance(text, revealAt, [.. list]);
+	}
+
+	public static Utterance BuildTextReveal(string text, float charsPerSecond)
+	{
+		var revealAt = BuildRevealTimes(text, charsPerSecond);
+		var list = new List<Blip>(text.Length / 2 + 1);
+		var printable = 0;
+		for (var i = 0; i < text.Length; i++)
+			if (char.IsLetterOrDigit(text[i]) && (printable++ & 1) == 0)
+				list.Add(new Blip(i, 0, 0, 0.4f));
+		return new Utterance(text, revealAt, [.. list]);
+	}
+
+	static float[] BuildRevealTimes(string text, float charsPerSecond)
+	{
+		var revealAt = new float[text.Length];
+		var step = 1f / Math.Max(1f, charsPerSecond);
+		var time = 0f;
+		for (var i = 0; i < text.Length; i++)
+		{
+			revealAt[i] = time;
+			time += step + PauseAfter(text[i]);
+		}
+		return revealAt;
 	}
 
 	static List<int>[]? BuildBuckets(Vowel[]? clipVowels)

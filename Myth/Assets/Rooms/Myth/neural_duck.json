@@ -117,8 +117,7 @@
       "SpriteName": "Props/duck",
       "Category": "duck",
       "propFlags": "DestroyPersists",
-      "Facing": "-",
-      "Health": 2
+      "Facing": "-"
     },
     {
       "Id": "16a646b9f65965f8",
@@ -133,7 +132,10 @@
       "Type": "BudStorySequence",
       "Position": [108, 124],
       "Once": true,
-      "Script": "Uhh. What is this?\n[pause 5]\nI think we should get out of here.\nThis thing icks me out."
+      "Script": [
+        "[pause 1]",
+        "Woah."
+      ]
     },
     {
       "Id": "8b6ba75a776d7803",
@@ -141,7 +143,10 @@
       "Position": [140, 124],
       "Trigger": "SourceDestroyed",
       "SourceActorId": "574c49f8e2ee020d",
-      "Script": "Woah! Why did you do that?\n[pause 3]\nLet's go."
+      "Script": [
+        "[pause 2]",
+        "Uhhh....."
+      ]
     },
     {
       "Id": "54e2bb64b2489fac",
@@ -196,10 +201,16 @@
     {
       "Id": "91ddbf802747fca7",
       "Type": "Prop",
-      "Position": [32, 147],
-      "SpriteName": "Props/computer_terminal",
+      "Position": [33, 153],
       "ChangeOnActorDestroyed": "574c49f8e2ee020d",
-      "Layer": "Background"
+      "Layer": "Background",
+      "SpriteName": "Props/computer_terminal_sm"
+    },
+    {
+      "Id": "eb47f55e7ac57f5a",
+      "Type": "InspectPoint",
+      "Position": [41, 168],
+      "Text": "RESEARCH_NOTE_409: Surprisingly, the best shape for nucular fusion has proven to be waterfowl"
     }
   ]
 }

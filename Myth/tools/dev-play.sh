@@ -32,4 +32,4 @@ fi
 # The first Play owns the long-lived task terminal, so it doubles as the server log.
 # Later Plays see this supervisor, signal it from a short-lived terminal, and disappear.
 request_run &
-exec ./tools/dev-watch.sh "$@"
+exec node ./tools/dev-watch.mjs "$@"

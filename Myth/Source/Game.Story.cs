@@ -8,7 +8,7 @@ public partial class Game
 {
 	// The line is pinned to where it was spoken: the speaker walks on, the words stay put.
 	internal sealed class StorySpeechBubble(Actor speaker, Vector2 position, string text, Color color, float duration,
-		Utterance utterance, ISyllableSink sink) : ISyllableSink
+		Utterance utterance, IBlipSink sink) : IBlipSink
 	{
 		static float VoiceAttackRate => 24f;
 		static float VoiceHoldTime => 0.08f;
@@ -37,7 +37,7 @@ public partial class Game
 				(active ? VoiceAttackRate : VoiceReleaseRate) * dt);
 		}
 
-		void ISyllableSink.Play(int syllable, float pitch, float gain)
+		void IBlipSink.Play(int syllable, float pitch, float gain)
 		{
 			voiceGain = Math.Clamp(gain, 0, 1);
 			voiceHold = VoiceHoldTime;
@@ -53,6 +53,7 @@ public partial class Game
 		float? Duration = null);
 
 	private const float StorySpeechMaxWidth = 120.0f;
+	private static float InspectTextCharsPerSecond => 22f;
 	private const int StorySpeechRoomSlack = 24; // a line spoken at the room's lip still counts as inside
 	private const float StoryIdleSeconds = 10.0f;
 	private const float StoryIdleMovementTolerance = 0.5f;
@@ -218,12 +219,26 @@ public partial class Game
 		if (!Game.VoiceEnabled) return null;
 		text = NormalizeSpeech(text);
 		var utterance = Utterance.Build(text, emotion, profile, GermanFor(text));
+		var origin = (Vector2)speaker.Position + offset;
+		return AddStorySpeech(speaker, origin, text, color, utterance, CreateVoiceSink(origin, voice ?? BudVoiceName));
+	}
+
+	internal StorySpeechBubble? ShowInspectText(Actor speaker, Vector2 offset, string text, Color color)
+	{
+		if (!Game.VoiceEnabled) return null;
+		text = NormalizeSpeech(text);
+		var utterance = Utterance.BuildTextReveal(text, InspectTextCharsPerSecond);
+		var origin = (Vector2)speaker.Position + offset;
+		return AddStorySpeech(speaker, origin, text, color, utterance, CreateTextRevealSink(origin));
+	}
+
+	StorySpeechBubble AddStorySpeech(Actor speaker, Vector2 origin, string text, Color color,
+		Utterance utterance, IBlipSink sink)
+	{
 		var duration = utterance.RevealSeconds + Math.Clamp(text.Length * 0.04f, 1.2f, 3f);
 		// Snapshot where the speaker stood: both the bubble and the voice stay at that spot
 		// for the whole line rather than trailing the speaker around.
-		var origin = (Vector2)speaker.Position + offset;
-		var bubble = new StorySpeechBubble(speaker, origin, text, color, duration, utterance,
-			CreateVoiceSink(origin, voice ?? BudVoiceName));
+		var bubble = new StorySpeechBubble(speaker, origin, text, color, duration, utterance, sink);
 		storySpeechBubbles.Add(bubble);
 		return bubble;
 	}
@@ -233,10 +248,12 @@ public partial class Game
 	internal static string NormalizeSpeech(string text)
 		=> string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
+	static float LineHeightMultiplier => 0.7f;
+
 	internal static StorySpeechLayout MeasureStorySpeech(SpriteFont font, string text)
 	{
 		var lines = WrapStorySpeech(font, text, StorySpeechMaxWidth);
-		var lineHeight = MathF.Ceiling(font.LineHeight) + 1;
+		var lineHeight = MathF.Ceiling(font.LineHeight * LineHeightMultiplier) + 1;
 		var width = 0.0f;
 		foreach (var line in lines)
 			width = MathF.Max(width, MathF.Ceiling(font.WidthOf(line)));

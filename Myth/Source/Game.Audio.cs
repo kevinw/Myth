@@ -86,12 +86,17 @@ public partial class Game
 	};
 
 	// Captures a speaker's voice + position so OutLoud can stay engine-agnostic; one per spoken line.
-	sealed class VoiceSink(Game game, Vector2 position, string voice) : ISyllableSink
+	sealed class VoiceSink(Game game, Vector2 position, string voice) : IBlipSink
 	{
 		public void Play(int syllable, float pitch, float gain) => game.PlayVoiceSyllable(voice, syllable, pitch, gain, position);
 	}
+	sealed class TextRevealSink(Game game, Vector2 position) : IBlipSink
+	{
+		public void Play(int syllable, float pitch, float gain) => game.PlayTextReveal(gain, position);
+	}
 
-	public ISyllableSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
+	public IBlipSink CreateVoiceSink(Vector2 position, string voice) => new VoiceSink(this, position, voice);
+	public IBlipSink CreateTextRevealSink(Vector2 position) => new TextRevealSink(this, position);
 
 	static bool VoiceEnabled = true;
 
@@ -119,6 +124,23 @@ public partial class Game
 		{
 			if (audioFailures.Add(path))
 				Console.Error.WriteLine($"Failed to play voice syllable: {e}");
+		}
+	}
+
+	void PlayTextReveal(float gain, Vector2 position)
+	{
+		const string path = "story/text_reveal";
+		try
+		{
+			using var instance = CreateAudioEvent(path, position);
+			if (instance == null) return;
+			instance.SetVolume(Math.Clamp(gain, 0, 1));
+			instance.Start();
+		}
+		catch (Exception e)
+		{
+			if (audioFailures.Add(path))
+				Console.Error.WriteLine($"Failed to play text reveal: {e}");
 		}
 	}
 

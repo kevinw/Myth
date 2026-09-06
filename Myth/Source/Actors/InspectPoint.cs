@@ -13,8 +13,9 @@ public sealed class InspectPoint : Actor
 	bool consumed;
 	bool showInteract;
 	float interactTime;
+	Game.StorySpeechBubble? speech;
 
-	static readonly Color TextColor = Color.Gray;
+	static readonly Color TextColor = Color.FloralWhite;
 	static RectInt InteractionBounds => new(-12, -24, 24, 24);
 
 	public InspectPoint()
@@ -39,32 +40,30 @@ public sealed class InspectPoint : Actor
 			return;
 		}
 
-		if (consumed || player.State != Player.States.Normal || !player.IsGrounded ||
+		if (consumed || speech is { Finished: false } || player.State != Player.States.Normal || !player.IsGrounded ||
 			string.IsNullOrWhiteSpace(Text))
 			return;
 
 		showInteract = true;
 		interactTime += Time.Delta;
-		if (Game.Controls.Move.PressedUp && Game.Controls.Move.IntValue.X == 0 && Speak())
+		if (Game.Controls.Move.PressedUp && Game.Controls.Move.IntValue.X == 0 && (speech = Speak()) != null)
 		{
 			consumed = true;
 			showInteract = false;
 		}
 	}
 
-	bool Speak()
+	Game.StorySpeechBubble? Speak()
 	{
-		if (!Game.CanShowSpeech())
-			return false;
-
 		var text = Text.Trim();
 		const string budPrefix = "Bud:";
-		if (text.StartsWith(budPrefix, StringComparison.OrdinalIgnoreCase) &&
-			Game.GetFirst<Bud>() is { } bud)
-			return bud.Say(text[budPrefix.Length..].TrimStart()) != null;
+		if (text.StartsWith(budPrefix, StringComparison.OrdinalIgnoreCase))
+			return Game.GetFirst<Bud>()?.Say(text[budPrefix.Length..].TrimStart());
+		const string playerPrefix = "Player:";
+		if (text.StartsWith(playerPrefix, StringComparison.OrdinalIgnoreCase))
+			return Game.GetFirst<Player>()?.Say(text[playerPrefix.Length..].TrimStart());
 
-		return Game.ShowSpeech(this, new Vector2(0, InteractionBounds.Top), text,
-			Game.PlayerVoiceProfile, TextColor, voice: Game.PlayerVoiceName) != null;
+		return Game.ShowInspectText(this, new Vector2(0, InteractionBounds.Top), text, TextColor);
 	}
 
 	public override void RenderEmissive(Batcher batcher)
