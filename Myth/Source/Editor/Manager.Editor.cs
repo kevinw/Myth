@@ -2979,7 +2979,7 @@ public partial class Manager
 		var desired = WorldToRoomGeometryTile(worldMouse) - roomMoveAnchorTile;
 		if (!Input.Keyboard.Alt)
 			desired = SnapGroupDelta(desired);
-		ApplyGroupDelta(ClampGroupDelta(desired));
+		ApplyGroupDelta(ResolveGroupDelta(desired));
 	}
 
 	void FinishRoomGroupMove()
@@ -2987,9 +2987,11 @@ public partial class Manager
 		if (!roomDragStarted)
 			return;
 		var moved = 0;
+		var roomIds = "";
 		foreach (var (id, origin) in roomMoveOrigins)
 			if (RoomById(id) is { } r && r.TileSpacePosition != origin)
 			{
+				roomIds += $"{id}, ";
 				r.Save();
 				moved++;
 			}
@@ -2997,7 +2999,8 @@ public partial class Manager
 		{
 			editorGameDirty = true;
 			SyncEditorGame();
-			DisplayMessage($"{moved} room{(moved == 1 ? "" : "s")} moved");
+			
+			DisplayMessage($"{moved} room{(moved == 1 ? "" : "s")} moved: {roomIds}");
 		}
 	}
 
@@ -3097,6 +3100,14 @@ public partial class Manager
 			}
 		}
 	}
+
+	// If the whole desired move lands in free space, take it directly; otherwise slide along the
+	// blocking neighbor. The direct case lets a room fully enclosed by others be dragged out to a
+	// gap it fits — the march alone can't, since every first step off an enclosed room collides.
+	// Either way the result never overlaps: the direct branch is collision-free by the check, and
+	// the slide branch stops before its first collision.
+	Point2 ResolveGroupDelta(Point2 desired)
+		=> GroupCollides(desired) ? ClampGroupDelta(desired) : desired;
 
 	// Furthest collision-free delta toward `desired`, resolved per axis so the group slides along a
 	// blocking neighbor instead of stopping dead.

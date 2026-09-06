@@ -1,3 +1,9 @@
+- for builds for fer
+  - screenshot button
+  - tilde console
+- either disable all bud voice barks or make them never ever repeat
+- POSSIBLY use alien bug for one of our existing behaviours?
+- update voice-de.json
 - specific level ideas
   - rearrange what we have at first 
   - reveal map and look at the silhouette

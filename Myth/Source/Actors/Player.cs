@@ -2247,7 +2247,7 @@ public partial class Player : Pawn
 			if (duckingAttack)   return new(3, -6, 13, 6);
 			else if (attackDown) return new(-19, 0, 39, 14);
 			else if (attackUp)   return new(-12, -27, 24, 12);
-			                     return new(6, -16, 20, 16);
+			                     return new(6, -19, 20, 22);
 		}
 
 

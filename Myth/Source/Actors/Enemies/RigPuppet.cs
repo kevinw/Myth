@@ -42,10 +42,13 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public readonly HumanoidRigWireSettings Wires = new();
 	[I(1, 4), InspectorGroup("Gameplay")] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
+	[I(1, 20)] public int Health = 3;
+	// Starts him pacing back and forth near his spawn, ignoring the player until he has a clear
+	// sightline toward the side he's facing; then he wakes into normal behaviour for good.
+	public bool IdlePatrol;
 	public bool ArticulatedCombatBounds;
 	public bool StraddlesPlayerDepth;
 	[InspectorGroup("Costume")] public bool Ruff;
-	[I(1, 20)] public int Health = 8;
 
 	HumanoidRigVisual visual = null!;
 	RigPuppetBackLegRenderer? backLegRenderer;
@@ -58,6 +61,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	bool hitReacting;
 	bool recovering;
 	bool walking;
+	bool patrolling;
+	float patrolOriginX;
+	float patrolSightTimer;
 	bool abilityActive;
 	bool visualReady;
 	bool abilityLoop = true;
@@ -104,6 +110,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	static float StepArcHeight => 3f;
 	static float InterruptedStepCatchupSpeed => 80f;
 	static float ScriptWalkTimeout => 10f;
+	static float PatrolReach => 80f;              // how far he paces each way from spawn
+	static float PatrolSightInterval => 0.1f;     // seconds between line-of-sight checks
+	static float PatrolSightHeight => 26f;         // eye height above the origin for the sightline
 
 	public RigPuppet()
 	{
@@ -122,6 +131,8 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 		base.Added();
 		CreateVisual();
+		patrolOriginX = Position.X;
+		patrolling = IdlePatrol && !Game.IsEditorPreview;
 #if EDITOR
 		if (Game.IsEditorPreview)
 			Game.EditorPreviewSync += SyncEditorPreviewPose;
@@ -151,7 +162,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.BackArmCombatEnabled = BackArmCombatEnabled;
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
-		visual.LookTarget = abilityActive ? abilityLookTarget : TracksPlayer ? Game.GetFirst<Player>()?.Position : null;
+		visual.LookTarget = abilityActive ? abilityLookTarget : !patrolling && TracksPlayer ? Game.GetFirst<Player>()?.Position : null;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
 		visual.YawOverride = abilityActive ? abilityYaw : null;
@@ -220,13 +231,15 @@ public class RigPuppet : Actor, INeuralTextureAgent
 
 		var player = Game.GetFirst<Player>();
 		var wasAbilityActive = abilityActive;
-		abilityActive = !Performance && !scripted && !hitReacting && !recovering && player != null &&
+		abilityActive = !patrolling && !Performance && !scripted && !hitReacting && !recovering && player != null &&
 			UpdateAbility(player, grounded);
 		if (wasAbilityActive && !abilityActive)
 			ResetAbilityControl();
-		walking = (!Performance || scripted) && stepTraversal != StepTraversal.None;
+		walking = (!Performance || scripted || patrolling) && stepTraversal != StepTraversal.None;
 		if (abilityActive)
 			walking = false;
+		else if (patrolling)
+			UpdatePatrol(grounded, player);
 		else if (scripted)
 			UpdateScriptedMovement(grounded);
 		else if (!Performance && stepTraversal == StepTraversal.None && player != null &&
@@ -434,6 +447,60 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			if (!walking)
 				TryStartStepDown((int)Facing);
 		}
+	}
+
+	void UpdatePatrol(bool grounded, Player? player)
+	{
+		// Spot the player only when the sightline toward the side he's pacing is clear; once seen
+		// he wakes for good (OnWasHit also wakes him). Throttled to a few frames a second.
+		patrolSightTimer -= Time.Delta;
+		if (patrolSightTimer <= 0)
+		{
+			patrolSightTimer = PatrolSightInterval;
+			if (player != null && Math.Sign(player.Position.X - Position.X) == (int)Facing && CanSeePlayer(player))
+			{
+				patrolling = false;
+				return;
+			}
+		}
+
+		if (stepTraversal != StepTraversal.None || !grounded || hitReacting || recovering)
+			return;
+
+		// Reverse at the ends of the patrol band, then walk unless a ledge stops him — pacing the
+		// platform rather than descending it.
+		var dir = (int)Facing;
+		if (dir > 0 && Position.X >= patrolOriginX + PatrolReach)
+			dir = -1;
+		else if (dir < 0 && Position.X <= patrolOriginX - PatrolReach)
+			dir = 1;
+		Facing = dir < 0 ? Signs.Negative : Signs.Positive;
+
+		if (!visual.FacingMatches)
+			return;
+		walking = HasGroundAhead();
+		if (!walking)
+			Facing = dir < 0 ? Signs.Positive : Signs.Negative; // ledge ahead: turn back next frame
+	}
+
+	// Clear line from his eye to the player's midsection, blocked only by real solids (room
+	// geometry and solid actors); jumpthru platforms don't count.
+	bool CanSeePlayer(Player player)
+	{
+		var from = (Vector2)Position - Vector2.UnitY * PatrolSightHeight;
+		var to = (Vector2)player.Position - Vector2.UnitY * (PatrolSightHeight * 0.5f);
+		var delta = to - from;
+		var distance = delta.Length();
+		if (distance < 1)
+			return true;
+		var direction = delta / distance;
+		for (var t = 4f; t < distance; t += 4f)
+		{
+			var point = from + direction * t;
+			if (Game.OverlapsSolid(this, new RectInt((int)MathF.Floor(point.X), (int)MathF.Floor(point.Y), 1, 1)))
+				return false;
+		}
+		return true;
 	}
 
 	void UpdateScriptRoutine()
@@ -811,6 +878,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		}
 		if (scripted || Health <= 0)
 			return;
+		patrolling = false;
 		var suppressKnockdown = SuppressKnockdownOnHit;
 		if (abilityActive && !suppressKnockdown)
 		{

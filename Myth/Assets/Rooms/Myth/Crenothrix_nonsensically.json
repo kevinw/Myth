@@ -1,0 +1,130 @@
+{
+  "position": [80, 23],
+  "size": [40, 23],
+  "sporeFogStrength": 0.097,
+  "legend": {
+    "#": "back",
+    "1": "castle",
+    "E": "ember",
+    "G": "grass",
+    "P": "dirt",
+    "T": "stone",
+    "d": "debris",
+    "f": "flowers",
+    "g": "plants",
+    "m": "Myth Back",
+    "v": "Myth Vines",
+    "w": "water"
+  },
+  "tiles": [
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT00000000000000000000000000GGGG",
+    "T000000TTT0000000000000000000d000000GGGG",
+    "T000000TTT00000000000000000TTTTTTTTTGGGG",
+    "T000000TTT00000000000000000TTTTTGGGGGGGG",
+    "T000000TTT000gggf00000g0000TTTTTGGGGGGGG",
+    "TTT0000TTTTTTTPPPTTTTTTTTTTTTTTTGGGGGGGG",
+    "TT00000TTTTTTTTTTPTTTTTTTTTTTTTTTTGGGGGG",
+    "TT00000TTTTTTTTTTTTTTTTTTTTTTTTTTTGGGGGG",
+    "0000000TTTTPPPTTTTTTTTwwwwwTTGGTTTGGGGGG",
+    "0000000TTTTPPPTTTTTTTTwwwwwTTGGGGGGGGGGG",
+    "TTTTTTTTTTTPPPPTETTTTTwwwwwTTTTTGGGGGGGG",
+    "TTTTTTTTTTTPPPEEETETTTwwwwwTTTTTGGGGGGGG",
+    "TTTTTTTTTTTPPPEEEETTTTwwwwwTTTTTTTGGGGGG",
+    "T11TTTTTTTTTPPPPPETTTTwwwwwTTTTTTTTTGGGG"
+  ],
+  "backgroundTiles": [
+    "000000v0000000000mm0000000mmm00000000000",
+    "000000v0000000000#m0000000mmm00000000000",
+    "00000000000000000mm0000000m#m00000000000",
+    "00000000000000000mm0000000mmm00000000000",
+    "00000000000000000mm000000vmm#00000000000",
+    "00000000000000000m#0000000mmm00000000000",
+    "00000000000000000mm0000000mmm00000000000",
+    "00000000000000000mm0000000mmv00000000000",
+    "00000000000000000#m0000000#mv00000000000",
+    "00000000000000000##0000000mmm00000000000",
+    "00000000000000000##0000000mm#00000000000",
+    "00000000000000000##0000000##m00000000000",
+    "00000000000000000##0000000#0000000000000",
+    "00000000000000000##0000000#0000000000000",
+    "00000000000000000#0000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000"
+  ],
+  "fungal": [[13, 14],[14, 15],[15, 15],[16, 15],[18, 15],[20, 15]
+  ],
+  "slopes": [[27, 11]
+  ],
+  "actors": [
+    {
+      "Id": "2266e424dde8483d",
+      "From": "StrongFireLight",
+      "Position": [196, 10],
+      "Intensity": 1.05,
+      "DrawSprite": false,
+      "Radius": 187.35,
+      "FlickerIntensity": 0.07,
+      "FlickerFrequency": 0.15
+    },
+    {
+      "Id": "c8369f90834d51b8",
+      "Type": "Jumpthru",
+      "Position": [193, 10],
+      "Size": [56, 8]
+    },
+    {
+      "Id": "aeb5f012aa1e0cd1",
+      "Type": "Jumpthru",
+      "Position": [193, 32],
+      "Size": [56, 8]
+    },
+    {
+      "Id": "bceb79b0bb1b8195",
+      "Type": "Jumpthru",
+      "Position": [208, 54],
+      "Size": [24, 8]
+    },
+    {
+      "Id": "b2776f8ac4d58af3",
+      "Type": "Rope",
+      "Position": [268, -9],
+      "Size": [8, 72]
+    },
+    {
+      "Id": "6364856f9403691a",
+      "Type": "Mosquito",
+      "Position": [92, 68]
+    },
+    {
+      "Id": "92c92d055da49402",
+      "Type": "Wildlife",
+      "Position": [48, 40],
+      "FishCount": 5,
+      "BugCount": 6,
+      "FlyCount": 5
+    },
+    {
+      "Id": "67c151622e3edf3c",
+      "Type": "BurrowLine",
+      "Position": [80, 112],
+      "Points": [[0, 0],[-24, 0]
+      ],
+      "RenderProcedural": true
+    }
+  ]
+}

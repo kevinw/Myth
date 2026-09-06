@@ -15,6 +15,7 @@ public class Mosquito : Actor
 	static float FireProjectileLaunchDelay => 0.12f.T();
 	static float FireProjectileWobble => 0.174999997f.T();
 	static int FireProjectileCount => 5;
+	public override float HitKnockback => 20f;
 
 	int Health = 2;
 	private SoundInstance? buzz;

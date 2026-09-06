@@ -13,6 +13,7 @@ public partial class Game
 				 "OK..."
 			));
 
+		/*
 		story.BudBarks("bud_room_arrival", s => s
 			.On(StoryTrigger.BudEntered)
 			.Redraw(4)
@@ -23,6 +24,7 @@ public partial class Game
 				"Smells weird in here.",
 				"What's that?"
 			));
+			*/
 
 		story.BudBarks("bud_reveal_door", s => s
 			.OnRevealDoorEntered()
@@ -73,8 +75,7 @@ public partial class Game
 			.Redraw(3)
 			.Priority(1)
 			.Say(
-				"Are we waiting for something?",
-				"It's quiet.",
-				"I can wait too."));
+				"I'm hungry. I told you we should have packed a lunch."
+			));
 	}
 }

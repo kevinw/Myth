@@ -1,11 +1,11 @@
 {
-  "position": [-80, -46],
+  "position": [0, 0],
   "size": [40, 23],
   "musicArea": "Silence",
   "ambientColor": "3E3E3E",
   "ambientIntensity": 1.428,
   "lightNoise": 0,
-  "reverb": 0.155,
+  "reverb": 0.141,
   "ditherStrength": 0.061,
   "sun": {
     "strength": 0,
@@ -24,8 +24,6 @@
     "T": "stone",
     "d": "debris",
     "f": "flowers",
-    "r": "rocks",
-    "s": "Glow Shells",
     "v": "Myth Vines"
   },
   "tiles": [
@@ -36,11 +34,11 @@
     "1100000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
-    "rrs0000000000000000000000000000000000000",
-    "110000000000000000000000000000000000000T",
-    "110000000000000000000000000000000000000T",
-    "111100000000000000000000000000000000000T",
-    "11110000000000000000000000000000000000TT",
+    "0000000000000000000000000000000000000000",
+    "000000000000000000000000000000000000000T",
+    "000000000000000000000000000000000000000T",
+    "000000000000000000000000000000000000000T",
+    "00f00000000000000000000000000000000000TT",
     "11111100000000000000000000000000000000TT",
     "1EEE11f000000000000000000000000000000TTT",
     "EEE%111100000000000000000000000000000TTT",
@@ -135,7 +133,7 @@
       "Once": true,
       "Script": [
         "[pause 1]",
-        "Woah."
+        "Smells weird in here."
       ]
     },
     {
@@ -176,18 +174,6 @@
       "Position": [20, 36]
     },
     {
-      "Id": "6fd9e6460506b3eb",
-      "Type": "Jumpthru",
-      "Position": [13, 64],
-      "Size": [11, 8]
-    },
-    {
-      "Id": "5fd2aa480073b558",
-      "Type": "Jumpthru",
-      "Position": [27, 80],
-      "Size": [11, 8]
-    },
-    {
       "Id": "75a0b95eff8c2bf5",
       "Type": "Jumpthru",
       "Position": [43, 96],
@@ -212,6 +198,30 @@
       "Type": "InspectPoint",
       "Position": [41, 168],
       "Text": "RESEARCH_NOTE_409: Surprisingly, the best shape for nucular fusion has proven to be waterfowl"
+    },
+    {
+      "Id": "340209a4b5a7fa2f",
+      "Type": "RigPuppetProp",
+      "Position": [163, 199],
+      "NeckExtension": 6.185,
+      "TorsoSize": 10.854,
+      "PixelsPerMeter": 34.946,
+      "HeadSize": 4.854,
+      "ProjectionYaw": 62.341,
+      "NeuralFireRate": 0,
+      "NeuralFPS": 1,
+      "NeuralColorAmount": 0.485,
+      "NeuralWeightsFile": "bricks096_pair_circular_screen.bin",
+      "ForearmSize": 3.508,
+      "BicepSize": 1.844,
+      "DepthColorContrast": 1.914,
+      "DepthWidthAmount": 0.175,
+      "EyeSize": 0,
+      "Tint": "B5B3B3",
+      "SkinMode": "Surface",
+      "SurfaceId": "robot_body_1",
+      "HeadSpriteScale": 0.909,
+      "PoseAnimationName": "Kneeling_Down"
     }
   ]
 }

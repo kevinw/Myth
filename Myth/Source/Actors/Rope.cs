@@ -8,7 +8,7 @@ namespace Myth;
 // swing-jump momentum all come from the one simulation. Break() snips the chain: the upper part
 // stays pinned, the lower part becomes an unpinned chain that falls and drapes over the tiles
 // as set dressing (not re-climbable).
-[GameActor(Tags = ActorTag.Obstacle, Anchor = SpriteAnchor.TopLeft)]
+[GameActor(Tags = ActorTag.Obstacle, Anchor = SpriteAnchor.TopLeft,LivePositionEditable =true)]
 public class Rope : Actor, IResizable
 {
 	static readonly Color ColorDark = new(0x50321f);

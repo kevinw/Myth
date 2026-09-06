@@ -1,5 +1,5 @@
 {
-  "position": [0, 0],
+  "position": [40, 0],
   "size": [40, 23],
   "ambientColor": "838383",
   "lightNoise": 0.336,
@@ -12,9 +12,12 @@
     "G": "grass",
     "R": "ruin",
     "T": "stone",
+    "g": "plants",
+    "i": "gates",
     "j": "junk",
     "m": "Myth Back",
     "s": "Glow Shells",
+    "v": "Myth Vines",
     "w": "water"
   },
   "tiles": [
@@ -26,12 +29,12 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
     "00000000000TT000000000000000000000000000",
     "00000000000TT000000000000000000000000000",
-    "00000000000TT000000000000000000000000000",
-    "00000000000TT000000000000000000000000000",
-    "GGGGGGGGG00TT00000000000TT0000000s0000s0",
-    "GGGRRRRRRR0TTTTTTTT0000TTTT0000TTTTTTTTT",
+    "00g00g0g00TTT000000000000000000000000000",
+    "GGGGGGGGGGGGT0000000000giiiiiii00s0000s0",
+    "GGGRRRRRRRRGTTTTTTT0000TTTT0000TTTTTTTTT",
     "GGGGGGGGG00TTTTTTTTwwwwTTTTwwwwTTTTTTTTT",
     "RGGG0000000TTTTTTTjwwwwTTTTwwwwTTTTTTTTT",
     "RRGG0000000TTTTTTTTwwwwTTTTwwwwTTTTTTTTT",
@@ -43,8 +46,8 @@
     "RRR00000000TTTTT00TTwTTT00TTTTTT00TTTTTT"
   ],
   "backgroundTiles": [
-    "00000000000000mmmmmmmmm00000000000000000",
-    "00000000000000mmmmmmmmm00000000000000000",
+    "0000000000v000mmmmmmmmm000000000000v0000",
+    "0000000000v000mmmmmmmmm00000000000000000",
     "00000000000000mmmmmmmmm00000000000000000",
     "00000000000000mmmmmmmmm00000000000000000",
     "00000000000000mmmmmmmmm00000000000000000",
@@ -67,7 +70,7 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000"
   ],
-  "fungal": [[34, 10],[32, 11],[33, 11],[34, 11],[21, 12],[22, 12],[32, 12],[11, 13],[22, 13],[23, 13],[10, 14],[10, 15],[10, 16],[18, 16],[19, 16],[20, 16],[26, 16],[11, 17],[18, 17],[19, 17],[26, 17],[27, 17],[14, 18],[15, 18],[16, 18],[17, 18],[18, 18],[23, 18],[24, 18],[25, 18],[26, 18],[31, 18],[32, 18],[11, 19],[15, 19],[18, 19],[23, 19],[27, 19],[28, 19],[11, 20],[15, 20],[18, 20],[11, 21],[12, 21],[15, 21],[18, 21],[11, 22],[12, 22],[15, 22],[18, 22]
+  "fungal": [[34, 10],[32, 11],[33, 11],[34, 11],[21, 12],[22, 12],[32, 12],[22, 13],[23, 13],[10, 14],[10, 15],[10, 16],[18, 16],[19, 16],[20, 16],[26, 16],[11, 17],[18, 17],[19, 17],[26, 17],[27, 17],[14, 18],[15, 18],[16, 18],[17, 18],[18, 18],[23, 18],[24, 18],[25, 18],[26, 18],[31, 18],[32, 18],[11, 19],[15, 19],[18, 19],[23, 19],[27, 19],[28, 19],[11, 20],[15, 20],[18, 20],[11, 21],[12, 21],[15, 21],[18, 21],[11, 22],[12, 22],[15, 22],[18, 22]
   ],
   "actors": [
     {
@@ -109,11 +112,6 @@
       "Size": [48, 8]
     },
     {
-      "Id": "3b99c7625fde0a5f",
-      "Type": "SavePoint",
-      "Position": [54, 96]
-    },
-    {
       "Id": "ce84d5e75227081e",
       "Type": "Wildlife",
       "Position": [128, 48],
@@ -133,33 +131,27 @@
     {
       "Id": "ff33298028412e1a",
       "Type": "RigPuppet",
-      "Position": [200, 56],
+      "Position": [208, 101],
       "ProjectionYaw": 43.696,
-      "PixelsPerMeter": 36.551,
       "NeuralJostleStrength": 0.786,
       "NearColor": "F7F9F5",
       "NeuralColorAmount": 0.906,
       "NeuralNormalAmount": 0.704,
-      "HeadSize": 3.834,
-      "TorsoSize": 10,
-      "BicepSize": 7.241,
-      "ForearmSize": 7.724,
       "ThighSize": 5.173,
       "NeuralWeightsFile": "bubbles_circular.bin",
       "NeuralJostleRadius": 5.008,
       "NeuralFireRate": 0.724,
       "NeuralContrast": 1.055,
       "VisualFPS": 12.118,
-      "ArticulatedCombatBounds": true
-    },
-    {
-      "Id": "a11e0b090e97c4d3",
-      "Type": "AlienBug",
-      "Position": [224, 32],
-      "VisualFPS": 16.021,
-      "BodySize": 7.218,
-      "NeuralSaturation": 0.214,
-      "NeuralWeightsFile": "crowd_circular.bin"
+      "ArticulatedCombatBounds": true,
+      "EyeSize": 0.521,
+      "PixelsPerMeter": 32.859,
+      "NeckExtension": 3.179,
+      "ForearmSize": 3.339,
+      "BicepSize": 3.049,
+      "TorsoSize": 5.547,
+      "HeadSize": 4.094,
+      "IdlePatrol": true
     },
     {
       "Id": "e760d8d447f5958c",
@@ -167,6 +159,30 @@
       "Position": [16, 136],
       "Size": [80, 56],
       "Strength": 1.657
+    },
+    {
+      "Id": "1b88acc88c8270c4",
+      "From": "TutorialText",
+      "Position": [196, 16],
+      "Text": [
+        "remember to hold {Jump} to slip by",
+        "if you're feeling shy "
+      ],
+      "LineHeightMultiplier": 0.946,
+      "Color": "309446"
+    },
+    {
+      "Id": "31352fd51b045235",
+      "Type": "Prop",
+      "Position": [48, 80],
+      "SpriteName": "Props/computer_terminal_sm",
+      "Layer": "Background"
+    },
+    {
+      "Id": "30faf85c34ccda25",
+      "Type": "InspectPoint",
+      "Position": [56, 96],
+      "Text": "REMINDER_3214: Who's in charge of maintance on the old guardian dones?"
     }
   ]
 }
