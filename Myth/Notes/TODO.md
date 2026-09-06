@@ -1,21 +1,20 @@
-- eyelaserpuppet needs a buzzsaw effect for the hand
+SFX
+  - eyelaserpuppet needs a buzzsaw effect for the hand
+  - Bosonic Time + upgrade needs SFX
+  - mosquito death needs robot sound layer
+  - really listen and pay attention to lack of landing sound effects on grass etc
 - go through a decoration hour
 - eyelaserpuppet needs to wait until you come within a certain distance before starting kneel
-- Bosonic Time + needs SFX
-- really listen and pay attention to lack of landing sound effects on grass etc
-- mosquito death needs robot sound layer
 - add a giant rigpuppet somewhere
 - specific level ideas
-  - 
+  - rearrange what we have at first 
+  - reveal map and look at the silhouette
 - make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
 - i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
 - boss needs bigger Pop / longer death like GhostFrog
-- server prop needs a no-lights variant that goes to it when you unpower the duck-machine
-  - maybe also some smoke particles after
 - find a way to limit Bud's presence. his abilities don't naturally follow you into many areas.
 - use Dropper; draw a sprite; more "easy" enemy variety wins
 - some machine ambience music for the tower tunnel
-- show a currency hud for ducks
 - wall jump teach room early where Bud tells you
 - the generic Pop is starting to feel a bit overused/generic
 - door is rendering normals behind the hidden wall cover
