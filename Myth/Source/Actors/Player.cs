@@ -195,13 +195,10 @@ public abstract class Pawn : Actor
 	protected int coyoteJumpY;
 	protected float jumpBufferTimer;
 	protected bool grounded;
-	protected bool inWater;
 
 	bool canAirHop = false;
 	float lastGroundedJumpTimer = 0;
 
-	bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
-	protected bool atWaterSurface; // torso submerged but head is above the waterline
 	bool rollingOnWater;
 	float waterRollSplashDistance;
 	float airBubbleTimer;
@@ -265,9 +262,7 @@ public abstract class Pawn : Actor
 		}
 	}
 	public bool IsGrounded => grounded;
-	public bool InWater => inWater;
-	public bool AtWaterSurface => atWaterSurface;
-	public bool IsDucking => ducking;
+	public bool IsDucking=> ducking;
 	public bool IsWallJumpLocked => wallJumpInputLockTimer > 0;
 	[NoSerialize] public float OutOfBreath { get; private set; }
 	protected virtual float IdleBreathingRate => 1;
@@ -341,10 +336,8 @@ public abstract class Pawn : Actor
 		if (regrabTimer > 0)
 			regrabTimer = Calc.Approach(regrabTimer, 0, Time.Delta);
 
-		var waterBounds = Hitbox.Rect + Position;
-		waterBounds = waterBounds.Inflate(8);
-		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center, continuePastTopEdge: true);
-		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top), continuePastTopEdge: true);
+		UpdateWaterState();
+
 		if (!rollingOnWater && State == States.Roll)
 			TryStartWaterRoll();
 		if (rollingOnWater)

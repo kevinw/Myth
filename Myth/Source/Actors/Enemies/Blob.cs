@@ -3,10 +3,10 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Tags = ActorTag.Enemy)]
+[GameActor(Tags = ActorTag.Enemy, LivePositionEditable = true)]
 public class Blob : Actor
 {
-	[I(1, 10)] public int Health = 3;
+	[I(1, 10)] public int Health = 2;
 	[I(0.25f, 5)] public float JumpTimer = 2;
 	private bool grounded = true;
 
@@ -27,8 +27,15 @@ public class Blob : Actor
 	public override void Update()
 	{
 		base.Update();
+		UpdateWaterState();
 
-		Velocity.Y += 300 * Time.Delta;
+		float gravity = 300;
+		if (InWater)
+		{
+			gravity *= 0.3f;
+		}
+
+		Velocity.Y += gravity * Time.Delta;
 
 		if (Grounded())
 		{
@@ -78,6 +85,7 @@ public class Blob : Actor
 	{
 		Health--;
 		Game.HitStun(0.09f);
+		Squish = new Vector2(0.5f, 1.00f);
 
 		if (Health <= 0)
 		{

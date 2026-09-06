@@ -6,6 +6,7 @@ namespace Myth;
 enum InputPromptAction
 {
 	Jump,
+	Attack,
 	Move,
 	MoveUp,
 	MoveDown,
@@ -49,12 +50,12 @@ sealed class InputPrompts : IDisposable
 	{
 		this.input = input;
 		activeSet = isSteamDeck ? GlyphSet.SteamDeck : GlyphSet.Keyboard;
-		keyboard = LoadFont(graphics, "Fonts/kenney-input-keyboard-mouse.ttf", [0xE025, 0xE023, 0xE01D, 0xE01F, 0xE021, 0xE05E, 0xE062, 0xE0CC]);
-		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE01B, 0xE01C, 0xE01E, 0xE020, 0xE021]);
-		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE055, 0xE058, 0xE05C, 0xE05F, 0xE061, 0xE064, 0xE065, 0xE067, 0xE069, 0xE06A]);
-		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE022, 0xE025, 0xE029, 0xE02C, 0xE036, 0xE04F, 0xE050, 0xE052, 0xE054, 0xE055]);
-		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE031, 0xE034, 0xE038, 0xE03B, 0xE03D, 0xE05A, 0xE05B, 0xE05D, 0xE05F, 0xE060]);
-		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE021, 0xE024, 0xE028, 0xE02B, 0xE02D, 0xE030, 0xE031, 0xE033, 0xE035, 0xE036]);
+		keyboard = LoadFont(graphics, "Fonts/kenney-input-keyboard-mouse.ttf", [0xE025, 0xE023, 0xE01D, 0xE01F, 0xE021, 0xE05A, 0xE05E, 0xE062, 0xE0CC]);
+		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE007, 0xE01B, 0xE01C, 0xE01E, 0xE020, 0xE021]);
+		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE051, 0xE055, 0xE058, 0xE05C, 0xE05F, 0xE061, 0xE064, 0xE065, 0xE067, 0xE069, 0xE06A]);
+		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE01E, 0xE022, 0xE025, 0xE029, 0xE02C, 0xE036, 0xE04F, 0xE050, 0xE052, 0xE054, 0xE055]);
+		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE01A, 0xE031, 0xE034, 0xE038, 0xE03B, 0xE03D, 0xE05A, 0xE05B, 0xE05D, 0xE05F, 0xE060]);
+		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE01D, 0xE021, 0xE024, 0xE028, 0xE02B, 0xE02D, 0xE030, 0xE031, 0xE033, 0xE035, 0xE036]);
 	}
 
 	public void Update(TimeSpan elapsed)
@@ -240,36 +241,42 @@ sealed class InputPrompts : IDisposable
 				InputPromptAction.MoveRight => 0xE021,
 				InputPromptAction.Confirm => 0xE05E,
 				InputPromptAction.Back => 0xE062,
+				InputPromptAction.Attack => 0xE05A,
 				_ => 0xE0CC
 			}),
 			GlyphSet.PlayStation => (playStation, action switch
 			{
 				InputPromptAction.Back => 0xE041,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE04B,
+				InputPromptAction.Attack => 0xE051,
 				_ => movementGlyphsUseDPad ? DPad(0xE055, action) : Stick(0xE064, action)
 			}),
 			GlyphSet.Xbox => (xbox, action switch
 			{
 				InputPromptAction.Back => 0xE006,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE004,
+				InputPromptAction.Attack => 0xE01E,
 				_ => movementGlyphsUseDPad ? DPad(0xE022, action) : Stick(0xE04F, action)
 			}),
 			GlyphSet.Nintendo => (nintendo, action switch
 			{
 				InputPromptAction.Back => 0xE004,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE006,
+				InputPromptAction.Attack => 0xE01A,
 				_ => movementGlyphsUseDPad ? DPad(0xE031, action) : Stick(0xE05A, action)
 			}),
 			GlyphSet.SteamDeck => (steamDeck, action switch
 			{
 				InputPromptAction.Back => 0xE003,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE001,
+				InputPromptAction.Attack => 0xE01D,
 				_ => movementGlyphsUseDPad ? DPad(0xE021, action) : Stick(0xE030, action)
 			}),
 			_ => (generic, action switch
 			{
 				InputPromptAction.Back => 0xE001,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE000,
+				InputPromptAction.Attack => 0xE007,
 				_ => Stick(0xE01B, action)
 			})
 		};
@@ -328,6 +335,8 @@ sealed class InputPrompts : IDisposable
 	{
 		if (text.StartsWith("{Jump}", StringComparison.OrdinalIgnoreCase))
 			return Found(InputPromptAction.Jump, 6, out action, out length);
+		if (text.StartsWith("{Attack}", StringComparison.OrdinalIgnoreCase))
+			return Found(InputPromptAction.Attack, 8, out action, out length);
 		if (text.StartsWith("{MoveUp}", StringComparison.OrdinalIgnoreCase))
 			return Found(InputPromptAction.MoveUp, 8, out action, out length);
 		if (text.StartsWith("{MoveDown}", StringComparison.OrdinalIgnoreCase))

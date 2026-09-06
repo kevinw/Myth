@@ -31,9 +31,24 @@ public class Actor
 	}
 
 	[Flags]
-	public enum EditorFlags {
+	public enum EditorFlags
+	{
 		None = 0,
 		Locked = 1, // no live edit
+	}
+
+	protected bool inWater;
+	protected bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
+	protected bool atWaterSurface; // torso submerged but head is above the waterline
+	public bool InWater => inWater;
+	public bool AtWaterSurface => atWaterSurface;
+
+	internal void UpdateWaterState()
+	{
+		var waterBounds = Hitbox.Rect + Position;
+		waterBounds = waterBounds.Inflate(8);
+		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center, continuePastTopEdge: true);
+		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top), continuePastTopEdge: true);
 	}
 
 	public Signs Facing = Signs.Positive;

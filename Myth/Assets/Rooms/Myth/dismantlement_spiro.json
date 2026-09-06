@@ -2,7 +2,7 @@
   "position": [-40, 0],
   "size": [40, 23],
   "ambientColor": "606060",
-  "reverb": 0.388,
+  "reverb": 0.385,
   "legend": {
     "#": "back",
     "G": "grass",
@@ -27,7 +27,7 @@
     "T000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000f00ff0f00",
-    "0000000g0g0f000000000000000GGGGGGGGGGGGG",
+    "0000000g0GGGG00000000000000GGGGGGGGGGGGG",
     "00gGGGGGGGGGGG0000000000000GGGGGGGGGGGGG",
     "GGGGGGGGGGGGGG0000000000000RRGRRGGGGGGGG",
     "RRRGGGRRRRGRRRwwwwwwwwwwwwwRRRRRPPPPPPPP",
@@ -105,22 +105,27 @@
       "FishCount": 3
     },
     {
-      "Id": "6e3e410f8d0f59fd",
-      "From": "TutorialText",
-      "Position": [156, 29],
-      "LineHeightMultiplier": 0.859,
-      "Text": [
-        "hold {Jump} and release",
-        "emerge from linear to jump higher"
-      ]
-    },
-    {
       "Id": "ae05fbbd13cd9fee",
       "Type": "SporeFogVolume",
       "Position": [96, 120],
       "Size": [136, 72],
       "Feather": 25.049,
       "Strength": 0.549
+    },
+    {
+      "Id": "df89ca9b75bd7c89",
+      "Type": "Blob",
+      "Position": [196, 64]
+    },
+    {
+      "Id": "4873e44e899decfa",
+      "From": "TutorialText",
+      "Position": [164, 24],
+      "Text": [
+        "press {Attack} to swing your cap wildly",
+        "at anything meanacing looking"
+      ],
+      "LineHeightMultiplier": 0.855
     }
   ]
 }
