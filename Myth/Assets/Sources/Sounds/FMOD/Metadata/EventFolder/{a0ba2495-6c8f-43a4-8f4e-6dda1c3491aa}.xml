@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="EventFolder" id="{a0ba2495-6c8f-43a4-8f4e-6dda1c3491aa}">
+		<property name="name">
+			<value>magnetic_crawler</value>
+		</property>
+		<relationship name="folder">
+			<destination>{3d76e6d2-590f-484d-9b34-afe228ab3da1}</destination>
+		</relationship>
+	</object>
+</objects>

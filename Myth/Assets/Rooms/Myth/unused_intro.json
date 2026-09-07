@@ -1,5 +1,5 @@
 {
-  "position": [-360, -207],
+  "position": [664, -118],
   "size": [120, 23],
   "backdropColor": "8C8C8C",
   "backdropColor2": "756A89",
@@ -141,6 +141,41 @@
       "Id": "351b8f9f8e000c69",
       "Type": "Rope",
       "Position": [900, 36]
+    },
+    {
+      "Id": "198f7e0b6dfbd016",
+      "Type": "HyphaWall",
+      "Position": [31, -58],
+      "Size": [48, 275],
+      "PatternTexture": "patterns/brushstrokes/35",
+      "NormalStrength": 1.212,
+      "Wetness": 0.713,
+      "RootDetail": 0.583,
+      "Taper": 0.67,
+      "Curl": 2.899,
+      "PlateSize": 2.237,
+      "PlateDepth": 0,
+      "GrowthScale": 1.169,
+      "GlowDensity": 0,
+      "GlowColor2": "252525",
+      "GlowColor1": "2E302E",
+      "VeinColor": "333333",
+      "DitherScale": 0.757,
+      "Specular": 0.619,
+      "DetailTexture": "patterns/pattern_25",
+      "TextureScale": 2.119,
+      "DetailScale": 1.633,
+      "Seed": 2046,
+      "BranchWidthMin": 2.552,
+      "BranchDensity": 1.322,
+      "BreathingAmount": 1.889,
+      "GlowPulse": 1.737
+    },
+    {
+      "Id": "a82eb58133c8a7ca",
+      "Type": "Jumpthru",
+      "Position": [31, 163],
+      "Size": [48, 8]
     }
   ]
 }

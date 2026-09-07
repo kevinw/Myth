@@ -15,6 +15,7 @@ public sealed class SurfaceFollower
 	public float CornerProbeDistance = 4;
 	public float MaxSurfaceSnapDistance = 1;
 	public bool ClimbsWallsAndCeilings = true;
+	public bool CanWalkOnMovingPlatforms = true;
 
 	/// Local rect (relative to actor.Position) used for surface probing. Lets an
 	/// actor keep a ground-locked follow point separate from a hitbox that has
@@ -39,10 +40,10 @@ public sealed class SurfaceFollower
 		if (!actor.Game.TryFindSurface(actor, bounds, TowardSurface, distance, out var hit))
 			return false;
 
-		var nextSurface = -hit.Normal;
-		if (!CanUseSurface(nextSurface))
+		if (!CanUseSurface(hit))
 			return false;
 
+		var nextSurface = -hit.Normal;
 		TowardSurface = nextSurface;
 		if (hit.Slope.HasValue)
 		{
@@ -93,7 +94,7 @@ public sealed class SurfaceFollower
 			if (actor.Game.TryFindSurface(actor, bounds, (Vector2)step, 1, out var surfaceHit))
 			{
 				var nextSurface = -surfaceHit.Normal;
-				if (!CanUseSurface(nextSurface))
+				if (!CanUseSurface(surfaceHit))
 					return false;
 				TowardSurface = nextSurface;
 				if (surfaceHit.Slope.HasValue)
@@ -193,6 +194,9 @@ public sealed class SurfaceFollower
 	}
 
 	private RectInt Bounds() => (ProbeRect.Width == 0 ? actor.Hitbox.Rect : ProbeRect) + actor.Position;
+
+	bool CanUseSurface(in SurfaceHit hit)
+		=> (CanWalkOnMovingPlatforms || hit.Actor is not MovingPlatform) && CanUseSurface(-hit.Normal);
 
 	bool CanUseSurface(Vector2 direction) => ClimbsWallsAndCeilings || direction.Y > 0.5f;
 

@@ -1,5 +1,5 @@
 {
-  "position": [-272, 23],
+  "position": [-496, 201],
   "size": [32, 23],
   "backdropColor": "100D1C",
   "backdropColor2": "17293A",
@@ -83,7 +83,6 @@
       "Position": [0, 104],
       "Points": [[0, 0],[72, 0],[72, 48],[160, 48],[160, -104]
       ],
-      "RenderProcedural": true,
       "ProceduralOuterColor": "303842",
       "ProceduralInnerColor": "75D6DA"
     },

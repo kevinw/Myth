@@ -42,7 +42,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public readonly HumanoidRigWireSettings Wires = new();
 	[I(1, 4), InspectorGroup("Gameplay")] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
-	[I(1, 20)] public int Health = 3;
+	[I(1, 25)] public int Health = 25;
 	// Starts him pacing back and forth near his spawn, ignoring the player until he has a clear
 	// sightline toward the side he's facing; then he wakes into normal behaviour for good.
 	public bool IdlePatrol;
@@ -50,7 +50,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public bool StraddlesPlayerDepth;
 	[InspectorGroup("Costume")] public bool Ruff;
 
-	HumanoidRigVisual visual = null!;
+	internal HumanoidRigVisual visual = null!;
 	RigPuppetBackLegRenderer? backLegRenderer;
 	RigPuppetRuff? ruff;
 	StepTraversal stepTraversal;
@@ -75,6 +75,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	float abilityPoseJostle;
 	Vector2 abilityVisualOffset;
 	Vector2? abilityLookTarget;
+	float abilityLookPoseWeight;
 	float? abilityYaw;
 	float abilityYawWeight;
 	bool scripted;
@@ -163,6 +164,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		visual.GaitActive = walking;
 		visual.Offset = stepVisualOffset + (abilityActive ? abilityVisualOffset : Vector2.Zero);
 		visual.LookTarget = abilityActive ? abilityLookTarget : !patrolling && TracksPlayer ? Game.GetFirst<Player>()?.Position : null;
+		visual.LookPoseWeight = abilityActive ? abilityLookPoseWeight : 0;
 		visual.PoseModifierWeight = abilityActive ? abilityPoseModifierWeight : 1;
 		visual.PoseJostlePixels = abilityActive ? abilityPoseJostle : 0;
 		visual.YawOverride = abilityActive ? abilityYaw : null;
@@ -362,6 +364,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	}
 
 	protected void SetAbilityLookTarget(Vector2? target) => abilityLookTarget = target;
+	protected void SetAbilityLookPoseWeight(float weight) => abilityLookPoseWeight = Math.Clamp(weight, 0, 1);
 	protected void SetAbilityPoseModifierWeight(float weight) => abilityPoseModifierWeight = Math.Clamp(weight, 0, 1);
 	protected void SetAbilityPoseJostle(float pixels) => abilityPoseJostle = MathF.Max(0, pixels);
 	protected void SetAbilityVisualOffset(Vector2 offset) => abilityVisualOffset = offset;
@@ -411,10 +414,12 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		abilityPoseJostle = 0;
 		abilityVisualOffset = Vector2.Zero;
 		abilityLookTarget = null;
+		abilityLookPoseWeight = 0;
 		abilityYaw = null;
 		abilityYawWeight = 0;
 		visual.PoseModifierWeight = 1;
 		visual.PoseJostlePixels = 0;
+		visual.LookPoseWeight = 0;
 		visual.Resume();
 		visual.SetHandWidthScale(1, false);
 		visual.UnlockAnimationYaw();

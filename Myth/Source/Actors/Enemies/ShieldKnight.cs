@@ -45,7 +45,7 @@ public class ShieldKnight : Actor
 
 	Rng rng = new();
 	double lastBlockTime = 0;
-	int health = 2;
+	int health = 4;
 	float turnTimer = 2.0f;
 	Point2 playerPosition;
 	Vector2 toPlayer;

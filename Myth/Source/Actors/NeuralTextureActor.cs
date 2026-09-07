@@ -6,6 +6,12 @@ using Foster.Framework;
 
 namespace Myth;
 
+public enum DynamismMode
+{
+	PaintedMask,
+	ProceduralCurlAdvection,
+}
+
 [GameActor(Sprite = "Editor/neural_texture_actor", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3,
 	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true)]
 public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
@@ -24,6 +30,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	const int MaxPerturbations = 64;
 	public const string WeightsFolder = "NCA/DynamicTexture";
 	static readonly ConditionalWeakTable<GraphicsDevice, SharedGpuResources> SharedResources = new();
+	static readonly ConditionalWeakTable<GraphicsDevice, Shader> CurlAdvectionShaders = new();
 
 	// The three NCT compute shaders are weight-independent and shared across every
 	// NeuralTextureActor on a device. Creating a compute Shader eagerly compiles its GPU
@@ -51,6 +58,24 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	// Pre-builds the shared compute pipelines so the first neural room doesn't stall. Safe to
 	// call before any NeuralTextureActor exists; a no-op if already warmed. See ShaderWarmup.
 	public static void WarmPipelines(GraphicsDevice graphicsDevice) => GetSharedResources(graphicsDevice);
+
+	// Procedural mask actors are uncommon, so don't add this pipeline's compilation cost to the
+	// boot warmup or to rooms containing only the classic painted-mask actor.
+	static Shader? GetCurlAdvectionShader(GraphicsDevice graphicsDevice)
+	{
+		if (graphicsDevice.Driver == GraphicsDriver.Headless)
+			return null;
+		if (CurlAdvectionShaders.TryGetValue(graphicsDevice, out var existing))
+			return existing;
+
+		var ext = graphicsDevice.Driver.GetShaderExtension();
+		var code = Assets.TryReadCompiledShader($"NeuralTextureCurlAdvection.compute.{ext}");
+		return code == null ? null : CurlAdvectionShaders.GetValue(graphicsDevice, _ => new(
+			graphicsDevice, ShaderStage.Compute, code,
+			uniformBufferCount: 1, readOnlyStorageBufferCount: 3, readWriteStorageBufferCount: 3,
+			threadCountX: 8, threadCountY: 8, threadCountZ: 1,
+			entryPoint: "compute_main", name: "NeuralTextureCurlAdvection"));
+	}
 
 	sealed class SharedGpuResources
 	{
@@ -183,6 +208,18 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public uint Padding;
 	}
 
+	struct CurlAdvectionParams
+	{
+		public uint Width;
+		public uint Height;
+		public float Time;
+		public float DeltaTime;
+		public float CurlScale;
+		public float CurlSpeed;
+		public float BoundarySharpness;
+		public float Padding;
+	}
+
 	readonly record struct PawnSample(Point2 Position, float Time);
 
 	// Handed to INeuralTextureAgent implementers during a step so they can disturb this texture
@@ -225,6 +262,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	// Simulation size is independent from output Size. Standalone actors retain the trained
 	// 128x128 state by default; generated tile regions choose dimensions from FeatureScale.
 	public Point2 SimulationSize = new(StateWidth, StateHeight);
+	public DynamismMode Dynamism = DynamismMode.PaintedMask;
+	[I(0.1f, 8)] public float CurlScale = 2f;
+	[I(0, 32)] public float CurlSpeed = 6f;
+	[I(1, 8)] public float BoundarySharpness = 2f;
 	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
 	[I(0, 8)] public float StatePixelsPerCell;
 	public ContentRef<NeuralWeightsContent> WeightsFile = NeuralWeightsContent.NeuralTextureDefault;
@@ -277,6 +318,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	readonly UniformBuffer updateUniforms = new();
 	readonly UniformBuffer decodeUniforms = new();
 	readonly UniformBuffer perturbUniforms = new();
+	readonly UniformBuffer curlAdvectionUniforms = new();
 	readonly PerturbStamp[] perturbStamps = new PerturbStamp[MaxPerturbations];
 	readonly PerturbContext perturbContext;
 	int perturbStampCount;
@@ -294,10 +336,16 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	Shader? updateShader;
 	Shader? decodeShader;
 	Shader? perturbShader;
+	Shader? curlAdvectionShader;
 	StorageBuffer<uint>? maskBuffer;
 	StorageBuffer<uint>? decodeMaskBuffer;
+	ComputeStorageBuffer<Vector4>? ownershipA;
+	ComputeStorageBuffer<Vector4>? ownershipB;
+	ComputeStorageBuffer<uint>? proceduralUpdateMask;
+	ComputeStorageBuffer<uint>? proceduralDecodeMask;
 	uint[] maskCells = [];
 	uint[] decodeMaskCells = [];
+	Vector4[] ownershipCells = [];
 	CellState[] emptyState = [];
 	Point2 updateOrigin;
 	Point2 updateSize;
@@ -305,7 +353,9 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	string maskData = "";
 	uint normalSlots;
 	bool currentIsB;
+	bool ownershipCurrentIsB;
 	bool supported;
+	bool curlAdvectionUnavailable;
 	bool settledFromSeed;
 	float stepAccumulator;
 	float shutdownTime = -1;
@@ -314,6 +364,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	float shutdownStartSaturation;
 	float shutdownStartBrightness;
 	float smokeBlend;
+	float curlTime;
 	Vector2 shutdownSourceWorld;
 	bool haveShutdownSourceWorld;
 	uint seed = 1;
@@ -344,6 +395,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				maskBuffer!.Upload(maskCells);
 				RebuildUpdateBounds();
 				RebuildDecodeMask();
+				ResetProceduralOwnership();
 				RebuildSilhouette();
 			}
 		}
@@ -390,6 +442,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		RebuildUpdateBounds();
 		maskBuffer.Upload(maskCells);
 		RebuildDecodeMask();
+		if (Dynamism == DynamismMode.ProceduralCurlAdvection)
+			EnsureProceduralDynamism();
 		output = new(
 			graphicsDevice,
 			Math.Max(1, Size.X),
@@ -518,6 +572,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		maskBuffer!.Upload(maskCells);
 		RebuildUpdateBounds();
 		RebuildDecodeMask();
+		ResetProceduralOwnership();
 		RebuildSilhouette();
 		Decode();
 	}
@@ -765,6 +820,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	void Step()
 	{
 		ApplyPerturbations();
+		AdvanceDynamism();
 		StepState();
 		Decode();
 	}
@@ -802,7 +858,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		new ComputeCommand(updateShader!)
 		{
-			ReadOnlyStorageBuffers = [source, weights!, maskBuffer!],
+			ReadOnlyStorageBuffers = [source, weights!, ActiveUpdateMask],
 			ReadWriteStorageBuffers = [destination],
 			UniformBuffers = [updateUniforms],
 			GroupCountX = (size.X + 7) / 8,
@@ -864,6 +920,98 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		decodeMaskBuffer ??= new(graphicsDevice, "NeuralTextureDecodeMask");
 		decodeMaskBuffer.Upload(decodeMaskCells);
+	}
+
+	StorageBuffer ActiveUpdateMask
+		=> Dynamism == DynamismMode.ProceduralCurlAdvection && proceduralUpdateMask != null
+			? proceduralUpdateMask
+			: maskBuffer!;
+
+	StorageBuffer ActiveDecodeMask
+		=> Dynamism == DynamismMode.ProceduralCurlAdvection && proceduralDecodeMask != null
+			? proceduralDecodeMask
+			: decodeMaskBuffer ?? maskBuffer!;
+
+	bool EnsureProceduralDynamism()
+	{
+		if (ownershipA != null)
+			return true;
+		if (curlAdvectionUnavailable)
+			return false;
+
+		curlAdvectionShader = GetCurlAdvectionShader(graphicsDevice);
+		if (curlAdvectionShader == null)
+		{
+			curlAdvectionUnavailable = true;
+			Log.Warning("Procedural neural-texture mask unavailable; using the painted mask.");
+			return false;
+		}
+
+		ownershipA = new(graphicsDevice, "NeuralTextureOwnershipA");
+		ownershipB = new(graphicsDevice, "NeuralTextureOwnershipB");
+		proceduralUpdateMask = new(graphicsDevice, "NeuralTextureProceduralUpdateMask");
+		proceduralDecodeMask = new(graphicsDevice, "NeuralTextureProceduralDecodeMask");
+		ResetProceduralOwnership();
+		return true;
+	}
+
+	void ResetProceduralOwnership()
+	{
+		if (ownershipA == null)
+			return;
+		if (ownershipCells.Length != maskCells.Length)
+			ownershipCells = new Vector4[maskCells.Length];
+
+		for (var i = 0; i < maskCells.Length; i++)
+		{
+			var packed = maskCells[i];
+			var ownership = new Vector4(
+				packed & 0xFF,
+				(packed >> 8) & 0xFF,
+				(packed >> 16) & 0xFF,
+				packed >> 24);
+			var total = Vector4.Dot(ownership, Vector4.One);
+			ownershipCells[i] = total > 0 ? ownership / total : Vector4.Zero;
+		}
+
+		ownershipA.Upload(ownershipCells);
+		ownershipB!.Upload(ownershipCells);
+		proceduralUpdateMask!.Upload(maskCells);
+		proceduralDecodeMask!.Upload(decodeMaskCells);
+		ownershipCurrentIsB = false;
+		curlTime = 0;
+	}
+
+	void AdvanceDynamism()
+	{
+		if (Dynamism != DynamismMode.ProceduralCurlAdvection || !EnsureProceduralDynamism())
+			return;
+
+		var deltaTime = 1f / StepsPerSecond;
+		curlAdvectionUniforms.Set(new CurlAdvectionParams
+		{
+			Width = (uint)SimulationSize.X,
+			Height = (uint)SimulationSize.Y,
+			Time = curlTime,
+			DeltaTime = deltaTime,
+			CurlScale = CurlScale,
+			CurlSpeed = CurlSpeed,
+			BoundarySharpness = BoundarySharpness,
+			Padding = 0,
+		});
+
+		var source = ownershipCurrentIsB ? ownershipB! : ownershipA!;
+		var destination = ownershipCurrentIsB ? ownershipA! : ownershipB!;
+		new ComputeCommand(curlAdvectionShader!)
+		{
+			ReadOnlyStorageBuffers = [source, maskBuffer!, decodeMaskBuffer ?? maskBuffer!],
+			ReadWriteStorageBuffers = [destination, proceduralUpdateMask!, proceduralDecodeMask!],
+			UniformBuffers = [curlAdvectionUniforms],
+			GroupCountX = (SimulationSize.X + 7) / 8,
+			GroupCountY = (SimulationSize.Y + 7) / 8,
+		}.Submit(graphicsDevice);
+		ownershipCurrentIsB = !ownershipCurrentIsB;
+		curlTime += deltaTime;
 	}
 
 	void ApplyPerturbations()
@@ -1029,7 +1177,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		new ComputeCommand(decodeShader!)
 		{
-			ReadOnlyStorageBuffers = [source, weights!, decodeMaskBuffer ?? maskBuffer!],
+			ReadOnlyStorageBuffers = [source, weights!, ActiveDecodeMask],
 			ReadWriteStorageTextures = [output, normalOutput!],
 			UniformBuffers = [decodeUniforms],
 			GroupCountX = (output.Width + 7) / 8,
@@ -1065,6 +1213,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		perturbations?.Dispose();
 		maskBuffer?.Dispose();
 		decodeMaskBuffer?.Dispose();
+		ownershipA?.Dispose();
+		ownershipB?.Dispose();
+		proceduralUpdateMask?.Dispose();
+		proceduralDecodeMask?.Dispose();
 		output?.Dispose();
 		normalOutput?.Dispose();
 		silhouetteNormalOutput?.Dispose();

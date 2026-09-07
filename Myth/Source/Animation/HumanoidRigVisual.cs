@@ -12,7 +12,7 @@ interface IHumanoidRigAccessoryVisual
 	void DrawItem(Batcher batcher, int index, Color? tint);
 }
 
-sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
+internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSettings = null,
 	NeuralSurfaceSettings? configuredNeural = null, HumanoidNeuralReactionSettings? configuredReactions = null,
 	HumanoidRigWireSettings? configuredWires = null,
 	IReadOnlyList<HumanoidRigWireSpec>? configuredWireLayout = null) : IDisposable
@@ -146,6 +146,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		}
 	}
 	public Vector2? LookTarget;
+	public float LookPoseWeight;
 	public float? YawOverride;
 	public float YawOverrideWeight;
 
@@ -227,6 +228,7 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	bool turning;
 	bool poseDirty;
 	Vector2 lookDirection;
+	float lookPoseAmount;
 	bool eyeReady;
 	static float VisualEyeScale => 2.0f;
 	float eyeScale = 1;
@@ -278,6 +280,11 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	static float LegExtensionSlack => 0.4f;
 	static float LayeredHitDuration => 0.42f;
 	static float TrackingLeanDistance => 3f;
+	static float LookPoseResponse => 6f;
+	static float LookPoseOpenYaw => 12f * MathF.PI / 180f;
+	static Vector2 LookPoseTargetRange => new(64, 96);
+	static Vector2 LookPoseHeadOffset => new(20, 3);
+	static float LookPoseNeckWeight => 0.35f;
 	static float HeadMotionSpring => 105f;
 	static float HeadMotionDamping => 16f;
 	static float HeadMotionMaxOffset => 2.5f;
@@ -487,6 +494,8 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 
 	public void Update(bool grounded, bool footIK, bool loop = true, bool advance = true, bool seekGround = false)
 	{
+		ExtraHeadSpriteRollLerped = Calc.Approach(ExtraHeadSpriteRollLerped, ExtraHeadSpriteRoll, owner.Time.Delta);
+
 		EnsureState();
 		neuralSkin.Update(Settings.SkinMode);
 		UpdateFingerSpin(owner.Time.Delta);
@@ -729,9 +738,11 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	{
 		UpdateAnimationLayers();
 		animator.Sample(sampledPose, sampledRotations);
+		UpdateLookPose();
 		ApplyTrackingLean();
 		UpdateRagdoll();
 		ProjectPose();
+		ApplyLookPose();
 		ApplyTakePoseModifiers();
 		ApplyGaitAsymmetry();
 		ApplyPlantResponse();
@@ -956,6 +967,24 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 			sampledPose[i] += rigOffset * upperBodyMask[i];
 	}
 
+	void UpdateLookPose()
+	{
+		var target = LookTarget is not null ? Math.Clamp(LookPoseWeight, 0, 1) : 0;
+		lookPoseAmount = float.Lerp(lookPoseAmount, target,
+			1 - MathF.Exp(-LookPoseResponse * visualDelta));
+	}
+
+	void ApplyLookPose()
+	{
+		if (lookPoseAmount <= 0.001f || LookTarget is not { } target)
+			return;
+		var toward = target - owner.Position - projectedPose[head];
+		var direction = Vector2.Clamp(toward / LookPoseTargetRange, -Vector2.One, Vector2.One);
+		var offset = direction * LookPoseHeadOffset * lookPoseAmount;
+		projectedPose[neck] += offset * LookPoseNeckWeight;
+		projectedPose[head] += offset;
+	}
+
 	float UpperBodyYaw()
 	{
 		var yaw = visualYaw;
@@ -982,9 +1011,13 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 	}
 
 	float OverrideYaw(float yaw)
-		=> YawOverride is { } target
-			? yaw + MathF.IEEERemainder(target - yaw, MathF.Tau) * Math.Clamp(YawOverrideWeight, 0, 1)
-			: yaw;
+	{
+		if (YawOverride is { } target)
+			yaw += MathF.IEEERemainder(target - yaw, MathF.Tau) * Math.Clamp(YawOverrideWeight, 0, 1);
+		var cameraYaw = MathF.PI * 0.5f - Settings.ProjectionYaw * MathF.PI / 180f;
+		return yaw + Math.Clamp(MathF.IEEERemainder(cameraYaw - yaw, MathF.Tau),
+			-LookPoseOpenYaw, LookPoseOpenYaw) * lookPoseAmount;
+	}
 
 	public void Dispose()
 	{
@@ -1713,10 +1746,15 @@ sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? configuredSetti
 		return true;
 	}
 
+	internal float ExtraHeadSpriteRoll; // MathF.PI * 0.39f;
+	float ExtraHeadSpriteRollLerped;
+
 	float HeadSpriteRoll()
 	{
 		var axis = projectedPose[head] - projectedPose[neck];
-		return axis.LengthSquared() > 0.0001f ? axis.Angle() + MathF.PI * 0.5f : 0;
+		var final = axis.LengthSquared() > 0.0001f ? axis.Angle() + MathF.PI * 0.5f : 0;
+		final += ExtraHeadSpriteRollLerped;
+		return final;
 	}
 
 	void DrawHeadSprite(Batcher batcher, Subtexture subtexture, Color color)

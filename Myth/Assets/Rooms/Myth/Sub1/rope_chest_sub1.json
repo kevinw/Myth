@@ -1,5 +1,5 @@
 {
-  "position": [400, 92],
+  "position": [320, -32],
   "size": [68, 59],
   "backdropColor": "000000",
   "ambientColor": "454242",
@@ -138,8 +138,7 @@
       "Position": [320, 200],
       "BurrowDoors": "First",
       "Points": [[0, 0],[-16, 0]
-      ],
-      "RenderProcedural": true
+      ]
     },
     {
       "Id": "604abd60e3346282",

@@ -157,6 +157,19 @@
       "Id": "bc0d2e82bbe15cc9",
       "Type": "SavePoint",
       "Position": [62, 111]
+    },
+    {
+      "Id": "d3bb9ebb2798ac5d",
+      "From": "FloLight",
+      "Position": [316, 96]
+    },
+    {
+      "Id": "dbfd5c530048d663",
+      "From": "FloLight",
+      "Position": [290, -11],
+      "DrawSprite": false,
+      "Radius": 60.521,
+      "Intensity": 1.721
     }
   ]
 }

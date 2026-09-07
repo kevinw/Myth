@@ -1,5 +1,5 @@
 {
-  "position": [-166, 0],
+  "position": [-224, 0],
   "size": [46, 23],
   "ambientColor": "545454",
   "legend": {
@@ -173,6 +173,18 @@
       "PrewarmSteps": 28,
       "Contrast": 1.456,
       "Saturation": 1.376
+    },
+    {
+      "Id": "ebb1a1ee87c10cc5",
+      "From": "TutorialText",
+      "Position": [223, 45],
+      "Text": "hold {Dash} to dash"
+    },
+    {
+      "Id": "a2801aaac79d56d5",
+      "From": "TutorialText",
+      "Position": [167, 21],
+      "Text": "press {Jump} to jump"
     }
   ]
 }

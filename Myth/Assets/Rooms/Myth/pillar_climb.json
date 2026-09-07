@@ -144,6 +144,11 @@
       "TargetActorId": "dc15f257c5697a18",
       "Persistent": true,
       "Mode": "PressesOnce"
+    },
+    {
+      "Id": "ea39a19efe2961d7",
+      "From": "FloLight",
+      "Position": [292, 171]
     }
   ]
 }

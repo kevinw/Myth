@@ -22,12 +22,13 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		new("neck_01", "clavicle_r", 10, 0.04f, 0.9f),
 		new("spine_03", "pelvis", 8, 0.06f, 1.1f),
 	];
-	
+
 	//protected override IReadOnlyList<HumanoidRigWireSpec> RigWireLayout => WireLayout;
 
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
 
 	[I(24, 160), InspectorGroup("Eye Laser")] public float MinimumRange = 48;
+	[InspectorGroup("Encounter")] public bool WaitForPlayerOnSamePlatform;
 	[I(48, 320)] public float MaximumRange = 376;
 	[I(8, 128)] public float VerticalRange = 48;
 	static float Cooldown => 0.45f;
@@ -123,6 +124,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	float swipeStrength;
 	bool greetingStarted;
 	bool greeted;
+	bool playerReachedPlatform;
 	readonly LaserContactMark[] laserContactMarks = new LaserContactMark[8];
 	int nextLaserContactMark;
 	readonly Coroutine floatingFlash = new();
@@ -247,6 +249,21 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	protected override bool UpdateAbility(Player player, bool grounded)
 	{
+		if (WaitForPlayerOnSamePlatform && !playerReachedPlatform)
+		{
+			Velocity.X = 0;
+			PlayAbilityIdle();
+			SetAbilityLookTarget(player.Position);
+			SetAbilityLookPoseWeight(1);
+			visual.ExtraHeadSpriteRoll = MathF.PI * 0.39f;
+			if (!grounded || !PlayerSharesGroundSupport(player))
+				return true;
+			visual.ExtraHeadSpriteRoll = 0;
+			playerReachedPlatform = true;
+			SetAbilityLookPoseWeight(0);
+			LogLiveStatus("Player landed on boss platform");
+		}
+
 		if (!greeted)
 		{
 			if (greetingStarted)
@@ -410,6 +427,22 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 		return true;
 	}
+
+	bool PlayerSharesGroundSupport(Player player)
+	{
+		if (!player.Grounded() || !TryGetGroundSupport(this, out var bossSupport) ||
+			!TryGetGroundSupport(player, out var playerSupport))
+			return false;
+		if (bossSupport.Actor != null || playerSupport.Actor != null)
+			return bossSupport.Actor != null && bossSupport.Actor == playerSupport.Actor;
+		if (bossSupport.Slope.HasValue || playerSupport.Slope.HasValue)
+			return bossSupport.Slope.HasValue && bossSupport.Slope == playerSupport.Slope;
+		return bossSupport.Rect.HasValue && bossSupport.Rect == playerSupport.Rect;
+	}
+
+	bool TryGetGroundSupport(Actor actor, out SurfaceHit support)
+		=> Game.TryFindSurface(actor, actor.Hitbox.Rect + actor.Position, Vector2.UnitY, 2, out support) &&
+			support.Normal.Y < -0.5f;
 
 	protected override bool AbilityControlsMovement => floating;
 	protected override bool SuppressKnockdownOnHit => hitsTaken % HitsPerKnockdown != HitsPerKnockdown - 1;
@@ -1173,6 +1206,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	{
 		if (hitInfo.By is Player)
 		{
+			Game.KickRenderTarget(new Vector2(1f, 0.5f));
 			contactDamageGrace = SuppressKnockdownOnHit
 				? NonKnockdownContactDamageGraceTime : ContactDamageGraceTime;
 			LogLiveStatus($"Contact damage disabled for {contactDamageGrace:0.0}s");

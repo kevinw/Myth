@@ -1,5 +1,5 @@
 {
-  "position": [-240, -207],
+  "position": [784, -118],
   "size": [40, 23],
   "backdropColor": "A12CA5",
   "backdropColor2": "3A3543",
@@ -92,9 +92,17 @@
       "Direction": [-1, 0],
       "Size": [140, 32],
       "MaxSpeed": 118.095,
-      "StreakSpeed": 102.476,
-      "Acceleration": 168.095,
-      "StreakSpacing": 39
+      "StreakSpacing": 18,
+      "StreakSpeed": 173.159,
+      "Acceleration": 1102.144
+    },
+    {
+      "Id": "a22a9ae8a101c9b6",
+      "Type": "TitleText",
+      "Position": [212, 128],
+      "Text": "the demo is over...thanks for playing!",
+      "Emissive": true,
+      "dropShadow": 1
     }
   ]
 }

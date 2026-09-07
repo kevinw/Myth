@@ -78,6 +78,7 @@ public abstract partial class Pawn
 	float burrowLineT;
 	int burrowLineDirection;
 	Vector2 burrowLineHeading;
+	Point2 burrowRoomTransitionDirection;
 	readonly List<Vector2> glowPoints = [];
 	readonly List<Vector2> burrowLineGlowBack = [];
 	Point2 burrowGlowAnchor;
@@ -142,6 +143,7 @@ public abstract partial class Pawn
 		burrowReverseQueued = false;
 		burrowLine = null;
 		burrowLineExit = null;
+		burrowRoomTransitionDirection = Point2.Zero;
 		// Complementing the room preserves the boundary in place, but moves its solid to the
 		// other side. Keep the tangent heading so the burrow continues along the same contour.
 		burrowSolidLeft = false;
@@ -311,12 +313,19 @@ public abstract partial class Pawn
 	// can a surface or authored line plausibly continue in the adjacent room. Room bounds are
 	// half-open [Left, Right) / [Top, Bottom); a small tolerance covers ending a pixel shy.
 	const int BurrowRoomEdgeTolerance = 2;
+	static int BurrowRoomEntryInset => BurrowRoomEdgeTolerance + 1;
 	bool TryBurrowRoomTransition(Vector2 travelHeading)
 	{
 		var bounds = Game.Bounds;
 		var direction = MathF.Abs(travelHeading.X) >= MathF.Abs(travelHeading.Y)
 			? new Point2(Math.Sign(travelHeading.X), 0)
 			: new Point2(0, Math.Sign(travelHeading.Y));
+		if (burrowRoomTransitionDirection != Point2.Zero && direction == -burrowRoomTransitionDirection)
+		{
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow($"reverse room transition guarded position={Position} direction={direction}");
+			return false;
+		}
 		var atEdge = direction.X > 0 ? Position.X >= bounds.Right - BurrowRoomEdgeTolerance
 			: direction.X < 0 ? Position.X <= bounds.Left + BurrowRoomEdgeTolerance
 			: direction.Y > 0 ? Position.Y >= bounds.Bottom - BurrowRoomEdgeTolerance
@@ -324,9 +333,23 @@ public abstract partial class Pawn
 		return atEdge && Game.Transition(direction);
 	}
 
+	void UpdateBurrowRoomTransitionGuard()
+	{
+		if (burrowRoomTransitionDirection == Point2.Zero)
+			return;
+
+		var bounds = Game.Bounds;
+		if (burrowRoomTransitionDirection.X > 0 && Position.X > bounds.Left + BurrowRoomEdgeTolerance ||
+			burrowRoomTransitionDirection.X < 0 && Position.X < bounds.Right - BurrowRoomEdgeTolerance ||
+			burrowRoomTransitionDirection.Y > 0 && Position.Y > bounds.Top + BurrowRoomEdgeTolerance ||
+			burrowRoomTransitionDirection.Y < 0 && Position.Y < bounds.Bottom - BurrowRoomEdgeTolerance)
+			burrowRoomTransitionDirection = Point2.Zero;
+	}
+
 	protected void BurrowState()
 	{
 		Velocity = Vector2.Zero;
+		UpdateBurrowRoomTransitionGuard();
 
 		// Ramp the squash UP toward peak as the entry window elapses, overriding the
 		// base per-frame decay so it intensifies right up until the sprite vanishes.
@@ -701,6 +724,7 @@ public abstract partial class Pawn
 		burrowGlowExitTimer = BurrowGlowExitTime;
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		burrowExitBlocked = false;
+		burrowRoomTransitionDirection = Point2.Zero;
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
 
@@ -728,48 +752,57 @@ public abstract partial class Pawn
 	{
 		if (State != States.Burrow)
 			return;
-		if (burrowLine != null)
-		{
-			var previousLine = burrowLine;
-			if (Game.TryEnterBurrowLine(Position, burrowLineHeading, previousLine, BurrowLine.JunctionDistance,
-				burrowIntent, out var nextLine, out burrowLineSegment, out burrowLineT,
-				out burrowLineDirection, out var entryPoint, out burrowLineHeading))
-			{
-				burrowLine = nextLine;
-				burrowLineExit = null;
-				Position = (Point2)entryPoint;
-				burrowExitBlocked = false;
-				burrowOnJumpthru = false;
-				UpdateBurrowShift();
-				UpdateBurrowGlow();
-				if (Game.BurrowTraceEnabled)
-					Game.TraceBurrow(
-						$"line room handoff {previousLine.ActorId ?? "?"} -> {burrowLine?.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
-				return;
-			}
 
+		var incomingHeading = BurrowTravelHeading;
+		var previousLine = burrowLine;
+		var bounds = Game.Bounds;
+		var arrival = Position + direction * BurrowRoomEntryInset;
+		if (direction.X > 0) arrival.X = Math.Max(arrival.X, bounds.Left + BurrowRoomEntryInset);
+		if (direction.X < 0) arrival.X = Math.Min(arrival.X, bounds.Right - 1 - BurrowRoomEntryInset);
+		if (direction.Y > 0) arrival.Y = Math.Max(arrival.Y, bounds.Top + BurrowRoomEntryInset);
+		if (direction.Y < 0) arrival.Y = Math.Min(arrival.Y, bounds.Bottom - 1 - BurrowRoomEntryInset);
+		arrival = arrival.Clamp(bounds.TopLeft, bounds.BottomRight - Point2.One);
+		burrowRoomTransitionDirection = direction;
+
+		if (previousLine != null && Game.TryAttachBurrowLineAcrossRoom(arrival, incomingHeading, BurrowAttachProbe,
+			out var nextLine, out burrowLineSegment, out burrowLineT, out burrowLineDirection,
+			out var entryPoint, out burrowLineHeading))
+		{
+			burrowLine = nextLine;
+			burrowLineExit = null;
+			Position = (Point2)entryPoint;
+			burrowExitBlocked = false;
+			burrowOnJumpthru = false;
+			UpdateBurrowShift();
+			UpdateBurrowGlow();
 			if (Game.BurrowTraceEnabled)
 				Game.TraceBurrow(
-					$"line room handoff missing id={previousLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
-			burrowLine = null;
-			burrowLineExit = null;
+					$"line room handoff {previousLine.ActorId ?? "?"} -> {burrowLine?.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
+			return;
 		}
 
-		// Step one pixel into the new room along the heading before re-snapping. Room bounds
-		// are half-open ([Left, Right)/[Top, Bottom)), so when exiting the left/top edge our
-		// position lands exactly on the next room's exclusive Right/Bottom edge, where it reads
-		// as out-of-room and the snap would fail (this is why left/up transitions popped out).
-		Position += direction;
-
-		if (Game.SnapToSurface(ref Position, ref burrowToward, BurrowAttachProbe))
+		burrowLine = null;
+		burrowLineExit = null;
+		if (Game.TryAttachBurrowSurface(arrival, incomingHeading, burrowIntent, BurrowAttachProbe,
+			out var surfacePosition, out burrowHeading, out burrowSolidLeft, out burrowToward) &&
+			bounds.Contains(surfacePosition))
 		{
+			Position = surfacePosition;
 			burrowOnJumpthru = Game.SurfaceIsJumpthru(Position, burrowToward);
 			UpdateBurrowShift();
 			UpdateBurrowGlow();
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow(
+					$"surface room handoff position={Position} heading={burrowHeading} solidLeft={burrowSolidLeft} normal={burrowToward}");
 		}
 		else
 		{
-			// The surface didn't continue in the new room — pop out where we arrived.
+			// The route really ended. Pop inward from a point safely inside the destination room.
+			Position = arrival;
+			burrowHeading = direction;
+			burrowToward = -(Vector2)direction;
+			if (Game.BurrowTraceEnabled)
+				Game.TraceBurrow($"room handoff has no line or surface; popping inward at={Position}");
 			PopOutOfBurrow();
 		}
 	}

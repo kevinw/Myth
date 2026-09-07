@@ -302,7 +302,7 @@ public abstract class WallFollowerActor : Actor
 
 	private bool OutsideRoom(in RectInt bounds)
 	{
-		var roomBounds = Game.Bounds;
+		var roomBounds = Room?.WorldBounds ?? Game.Bounds;
 		return roomBounds.Width > 0 &&
 			(bounds.Left < roomBounds.Left ||
 				bounds.Right > roomBounds.Right ||
@@ -312,7 +312,7 @@ public abstract class WallFollowerActor : Actor
 
 	private bool IsRoomEdgeSurface(in SurfaceHit hit)
 	{
-		var roomBounds = Game.Bounds;
+		var roomBounds = Room?.WorldBounds ?? Game.Bounds;
 		if (roomBounds.Width <= 0 || roomBounds.Height <= 0)
 			return false;
 
@@ -352,7 +352,7 @@ public abstract class WallFollowerActor : Actor
 			Position += step;
 		}
 
-		if (!Game.Bounds.Overlaps(GetVisualBounds()))
+		if (!(Room?.WorldBounds ?? Game.Bounds).Overlaps(GetVisualBounds()))
 			Game.Destroy(this);
 	}
 

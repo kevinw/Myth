@@ -1,5 +1,5 @@
 {
-  "position": [-200, 0],
+  "position": [-424, 178],
   "size": [24, 23],
   "backdropColor": "100D1C",
   "backdropColor2": "17293A",
@@ -77,13 +77,6 @@
       "MetalColor": "B0875C",
       "GlowColor": "F2C777",
       "Resonance": 1.25
-    },
-    {
-      "Id": "ae00000000000064",
-      "Type": "BudStoryBark",
-      "Position": [8, 32],
-      "Size": [96, 72],
-      "Text": "It kept a little weather for itself."
     },
     {
       "Id": "ae00000000000065",

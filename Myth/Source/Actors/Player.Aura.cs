@@ -13,7 +13,7 @@ public partial class Player
 	static float AuraStripe => 2.5f;      // rainbow band width (px)
 	static float AuraDistScale => 255f; // R8 -> px
 	static float AuraK => 10f;          // smooth-min blob roundness / bridge thickness
-	static float AuraEnterTime => 1.9f;
+	static float AuraEnterTime => 8.9f;
 
 	float auraAmount; // eased 0..1
 	float auraEnterTimer;

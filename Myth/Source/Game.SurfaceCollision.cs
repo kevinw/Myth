@@ -198,6 +198,74 @@ public partial class Game
 		return line != null;
 	}
 
+	// Room seams do not necessarily join line endpoints exactly: each room can author its guide
+	// a few pixels across the shared edge. Reconnect to the closest interior point on a destination
+	// segment while preserving the direction of travel.
+	internal bool TryAttachBurrowLineAcrossRoom(Point2 near, Vector2 travelHeading, float maxDistance,
+		out BurrowLine? line, out int segment, out float t, out int direction, out Vector2 point,
+		out Vector2 heading)
+	{
+		line = null;
+		segment = 0;
+		t = 0;
+		direction = 1;
+		point = near;
+		heading = travelHeading;
+		if (room == null)
+			return false;
+
+		travelHeading = travelHeading.LengthSquared() > 0 ? Vector2.Normalize(travelHeading) : Vector2.UnitX;
+		var bestDistance = maxDistance * maxDistance;
+		var bestAlignment = float.MinValue;
+		foreach (var actor in Actors)
+		{
+			if (actor is not BurrowLine candidate || destroying.Contains(candidate))
+				continue;
+
+			for (var candidateSegment = 0; candidateSegment < candidate.Points.Length - 1; candidateSegment++)
+			{
+				var from = candidate.WorldPoint(candidateSegment);
+				var delta = candidate.WorldPoint(candidateSegment + 1) - from;
+				var lengthSquared = delta.LengthSquared();
+				if (lengthSquared <= 0.001f)
+					continue;
+
+				var candidateT = Math.Clamp(Vector2.Dot(near - from, delta) / lengthSquared, 0, 1);
+				var candidatePoint = from + delta * candidateT;
+				var roundedPoint = candidatePoint.RoundToPoint2();
+				if (!room.WorldBounds.Contains(roundedPoint))
+					continue;
+
+				var distance = Vector2.DistanceSquared(near, candidatePoint);
+				if (distance > bestDistance + 0.001f)
+					continue;
+
+				var forward = Vector2.Normalize(delta);
+				var candidateDirection = Vector2.Dot(forward, travelHeading) >= 0 ? 1 : -1;
+				var candidateHeading = forward * candidateDirection;
+				var alignment = Vector2.Dot(candidateHeading, travelHeading);
+				if (alignment <= BurrowLineSteerThreshold ||
+					MathF.Abs(distance - bestDistance) <= 0.001f && alignment <= bestAlignment)
+					continue;
+
+				bestDistance = distance;
+				bestAlignment = alignment;
+				line = candidate;
+				segment = candidateSegment;
+				t = candidateT;
+				direction = candidateDirection;
+				point = roundedPoint;
+				heading = candidateHeading;
+			}
+		}
+
+		if (BurrowTraceEnabled)
+			TraceBurrow(line != null
+				? $"room line attach id={line.ActorId ?? "?"} near={near} point={point} segment={segment} t={t:0.###} direction={direction} heading={heading}"
+				: $"room line attach failed near={near} travel={travelHeading} reach={maxDistance:0.##}");
+		return line != null;
+	}
+
 	internal bool BurrowLinePointConnected(BurrowLine source, int sourcePoint)
 	{
 		var point = source.WorldPoint(sourcePoint);
@@ -500,12 +568,14 @@ public partial class Game
 
 	public bool OverlapsSolid(Actor actor, in RectInt bounds)
 	{
-		if (OverlapsRoomCollision(bounds))
+		if (OverlapsRoomCollision(actor, bounds))
 			return true;
 
+		var actorRoom = CollisionRoomFor(actor);
 		foreach (var other in Actors)
 		{
-			if (other == actor || other is Grid || !other.Mask.Has(Actor.Masks.Solid))
+			if (other == actor || other is Grid || destroying.Contains(other) ||
+				other.Room != actorRoom || !other.Mask.Has(Actor.Masks.Solid))
 				continue;
 
 			if (other.Hitbox.Overlaps(bounds - other.Position))
@@ -542,18 +612,19 @@ public partial class Game
 
 	bool TryGetSurfaceAt(Actor actor, in RectInt bounds, Vector2 searchDirection, Point2 offset, float distance, out SurfaceHit hit)
 	{
-		if (room != null)
+		var actorRoom = CollisionRoomFor(actor);
+		if (actorRoom != null)
 		{
-			foreach (var slope in room.SlopeTiles) if (OverlapsSlope(bounds, room, slope))
+			foreach (var slope in actorRoom.SlopeTiles) if (OverlapsSlope(bounds, actorRoom, slope))
 			{
-				room.GetSlopeSurface(slope, out var left, out var right);
+				actorRoom.GetSlopeSurface(slope, out var left, out var right);
 				var normal = SlopeNormal(left, right, slope.Fill);
 				var correction = (Vector2)offset + SlopeCorrection(bounds, left, normal);
 				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, slope, null, correction);
 				return true;
 			}
 
-			foreach (var rect in room.CollisionRects) if (bounds.Overlaps(rect))
+			foreach (var rect in actorRoom.CollisionRects) if (bounds.Overlaps(rect))
 			{
 				var normal = AxisNormal(searchDirection);
 				hit = new SurfaceHit(SurfacePoint(bounds, normal), normal, distance, null, null, rect, Vector2.Zero);
@@ -563,7 +634,8 @@ public partial class Game
 
 		foreach (var other in Actors)
 		{
-			if (other == actor || other is Grid || !other.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru))
+			if (other == actor || other is Grid || destroying.Contains(other) ||
+				other.Room != actorRoom || !other.Mask.Has(Actor.Masks.Solid | Actor.Masks.Jumpthru))
 				continue;
 
 			if (!other.Hitbox.Overlaps(bounds - other.Position))

@@ -1,5 +1,5 @@
 {
-  "position": [-120, 0],
+  "position": [-178, 0],
   "size": [40, 23],
   "ambientColor": "6D6B6B",
   "reverb": 0.002,
@@ -136,12 +136,6 @@
       "PrewarmSteps": 19,
       "Saturation": 1.588,
       "Contrast": 1.632
-    },
-    {
-      "Id": "ebb1a1ee87c10cc5",
-      "From": "TutorialText",
-      "Position": [96, 143],
-      "Text": "hold {Dash} to dash"
     },
     {
       "Id": "45ec3cc22cd0dc97",

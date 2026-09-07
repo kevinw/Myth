@@ -4,7 +4,7 @@ namespace Myth;
 
 // Owns the hidden simulation actor used by rig skins. Authored settings stay on the visible
 // actor; this is the single boundary that translates them to NeuralTextureActor runtime state.
-sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Point2 size, Point2 origin, int seed)
+sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Point2 size, Point2 origin, int prewarmSteps)
 	: IDisposable
 {
 	NeuralTextureActor? texture;
@@ -44,7 +44,7 @@ sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Poin
 			it.EdgeTrim = 1;
 		});
 		Sync(mode);
-		texture.SimulateFromSeed(seed);
+		texture.SimulateFromSeed(prewarmSteps);
 	}
 
 	void Sync(RigSkinMode mode)

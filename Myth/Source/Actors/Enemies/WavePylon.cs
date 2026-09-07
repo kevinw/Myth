@@ -150,7 +150,7 @@ public sealed class WavePylon : Actor
 
 	void UpdateMedium(bool force = false)
 	{
-		var next = Game.OverlapsRoomCollision(new RectInt(Position, Point2.One))
+		var next = Game.OverlapsRoomCollision(this, new RectInt(Position, Point2.One))
 			? RadialWaveMedium.Solid
 			: RadialWaveMedium.Air;
 		if (!force && medium == next)

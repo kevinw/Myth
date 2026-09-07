@@ -1,17 +1,13 @@
-- show invert faster
-- dev-watch: Foster edits never hot reload -- dev-watch runs dotnet watch with UseFosterDll=true,
-  which references a prebuilt Foster.Framework.dll instead of the project, so Foster sources aren't
-  in the watch graph and nothing rebuilds the dll. Wants a --foster-project mode for sessions
-  spent in Foster/.
-- burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
-  is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame
-  TryUnstick now rescues it, but the pop should pick an unblocked direction itself.
+- show mycelon count and duck count at the end
+- implement "demo go to" menu option
+- don't let ELP fall down when he's doing the airborne move
+- make drone not notice you within a distance
 - burrow lines: SOMETHING to make them a bit more visually interesting
+- remove aura
 - lore rewards alongside chests
 - acknowledgements on itch page
-- paint more NCA backgrounds.
 - try a simple fluid sim that acts as the paint mask for an NCA
-- take 30 mins to make sure you can explain NCA
+- take 30 mins to make sure you can explain NCA, and also IK in crawler, and also the RigPuppet
 - redraw spitter; test other actors and draw for them
 - redraw bubble
 - for builds for fer
@@ -25,10 +21,11 @@
   - rearrange what we have at first 
   - reveal map and look at the silhouette
 SFX
-  - eyelaserpuppet needs a buzzsaw effect for the hand
+  - eyelaserpuppet needs a buzzsaw effect for the hand, and a strong effect for the eye laser
   - Bosonic Time + upgrade needs SFX
   - mosquito death needs robot sound layer
   - really listen and pay attention to lack of landing sound effects on grass etc
+  - drone
 - go through a decoration hour
 - eyelaserpuppet needs to wait until you come within a certain distance before starting kneel
 - make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
@@ -40,6 +37,7 @@ SFX
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
 
 # Monday
+- turn index.html into a character controller world
 - record title screen demos 
     - burrowing, interesting enemy encounter, interesting NPC encounter, beautiful room reveals, secret reveal
 - make an itch page, so people can follow its development/playtest when it's ready
@@ -47,6 +45,19 @@ SFX
 
 
 LATER
+- burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
+  is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame
+  TryUnstick now rescues it, but the pop should pick an unblocked direction itself.
+- dev-watch: Foster edits never hot reload -- dev-watch runs dotnet watch with UseFosterDll=true,
+  which references a prebuilt Foster.Framework.dll instead of the project, so Foster sources aren't
+  in the watch graph and nothing rebuilds the dll. Wants a --foster-project mode for sessions
+  spent in Foster/.
+- a textual undo log
+- live reload can lose changes
+- have rope repaint itself on editor drag
+- the introduction of a new enemy is itself a payoff; new area, new enemies
+- R1/R2 change sublayers instead of worlds
+- P with a NCT actor selected should be equivalent to pressing its Paint Mask button
 - downloaded horse model on 
 - door is rendering normals behind the hidden wall cover
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse

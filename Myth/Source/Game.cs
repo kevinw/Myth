@@ -217,14 +217,10 @@ public partial class Game : IDisposable
 	internal BurrowUpgradeHudState BurrowUpgradeHud;
 
 
-#if DEBUG
 	internal bool draggingPlayer;
 	internal bool DraggingPlayer => draggingPlayer;
-#else
-	internal bool DraggingPlayer => false;
-#endif
 	// True when the sim is in a room and not mid-transition: when Manager applies live
-	// debug shortcuts / editor mouse-drag (matches the old in-Update gating).
+	// input such as mouse-dragging the player (matches the old in-Update gating).
 	internal bool AcceptsLiveInput => room != null && nextRoom == null && !SavePointWarpActive && !LayerTransitionActive;
 	float timeScale = 1.0f;
 	internal float TimeScale
@@ -284,7 +280,7 @@ public partial class Game : IDisposable
 	static float CameraEaseRate => 10f;
 	static float CameraLookAheadEdgeInset => 0.15f;
 	static float CameraLookAheadEaseRate => 8f;
-	static float DebugPlayerDragCameraEaseRate => 2.5539999f.T();
+	static float PlayerDragCameraEaseRate => 2.5539999f.T();
 	const float CameraEaseTriggerEpsilon = 2f;
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
@@ -889,13 +885,11 @@ public partial class Game : IDisposable
 			return;
 		}
 
-#if DEBUG
 		if (DraggingPlayer && GetFirst<Player>() is { } draggedPlayer)
 		{
 			UpdateDraggedPlayerCamera(draggedPlayer);
 			return;
 		}
-#endif
 
 		// In 4:3 crop mode the Zoom control un-crops (reveals the cut-off sides) instead of the
 		// usual 2x magnify, so the two never fight: suppress fbZoom whenever cropping is active.
@@ -947,7 +941,6 @@ public partial class Game : IDisposable
 		previousCameraFocus = cameraFocus;
 	}
 
-#if DEBUG
 	void UpdateDraggedPlayerCamera(Player player)
 	{
 		easedPlayerCameraTarget = player.Position;
@@ -956,13 +949,12 @@ public partial class Game : IDisposable
 		cameraLookAhead = Vector2.Zero;
 
 		var target = GetGameplayCameraTarget();
-		var amount = 1 - MathF.Exp(-Time.Delta * DebugPlayerDragCameraEaseRate);
+		var amount = 1 - MathF.Exp(-Time.Delta * PlayerDragCameraEaseRate);
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
 		Camera = ClampCameraToRoomFb(Vector2.Lerp(Camera, target, amount), padding);
 		previousCameraTarget = null;
 		previousCameraFocus = easedPlayerCameraTarget;
 	}
-#endif
 
 	// Deactivate any active camera blocker whose rect the just-revealed area overlaps, so a
 	// RevealDoor opening also opens the camera over the secret it uncovered.
@@ -2124,11 +2116,17 @@ public partial class Game : IDisposable
 
 	public bool OverlapsRoomCollision(Actor actor, Point2 offset)
 	{
-		if (room == null || actor.Hitbox.Shape != Hitbox.Shapes.Rect)
+		if (actor.Hitbox.Shape != Hitbox.Shapes.Rect)
 			return false;
 
-		return OverlapsRoomCollision(actor.Hitbox.Rect + actor.Position + offset);
+		return OverlapsRoomCollision(actor, actor.Hitbox.Rect + actor.Position + offset);
 	}
+
+	internal bool OverlapsRoomCollision(Actor actor, in RectInt bounds)
+		=> CollisionRoomFor(actor) is { } actorRoom && OverlapsRoomCollision(actorRoom, bounds);
+
+	internal Room? CollisionRoomFor(Actor actor)
+		=> loadingRoom != null && actor.Room == loadingRoom ? loadingRoom : room ?? actor.Room;
 
 	internal bool OverlapsEnemyRoomBoundary(Actor actor, Point2 offset)
 	{

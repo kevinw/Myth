@@ -1,8 +1,9 @@
 {
-  "position": [280, 115],
+  "position": [240, 23],
   "size": [40, 23],
-  "ambientColor": "8D8D8D",
-  "reverb": 0.846,
+  "ambientColor": "535252",
+  "sporeFogStrength": 0.565,
+  "reverb": 0.843,
   "legend": {
     "#": "back",
     "E": "ember",
@@ -26,7 +27,7 @@
     "T00TT00000000000R00000000000000000000000",
     "T000T00000000000R00000000000000000000000",
     "T000T000000000R0R00000000000000000000000",
-    "T00TT000000000RRRR000000000000000000000T",
+    "T00TT000000000RRRR0000000000000000000000",
     "T00TT000000000RRRRR00000000000000000000T",
     "TTTTT000000000RRRRR00000000000000000000T",
     "TTTTT00000000RRRRRR00000000000000000000T",
@@ -93,6 +94,21 @@
       "Position": [8, 8],
       "Direction": "Up",
       "Size": [16, 8]
+    },
+    {
+      "Id": "baa2f3b39c785ddc",
+      "From": "SoftFireLight",
+      "Position": [148, 28],
+      "Radius": 148.562
+    },
+    {
+      "Id": "570056394b284f4d",
+      "From": "SoftFireLight",
+      "Position": [319, 108],
+      "Radius": 38.151,
+      "LightColor": "7997FF",
+      "Intensity": 0.609,
+      "DrawSprite": false
     }
   ]
 }

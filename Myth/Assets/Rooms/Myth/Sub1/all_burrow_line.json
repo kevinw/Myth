@@ -1,0 +1,76 @@
+{
+  "position": [280, 69],
+  "size": [40, 23],
+  "ambientColor": "727272",
+  "reverb": 0.864,
+  "legend": {
+    "%": "crosshatch",
+    "E": "ember",
+    "N": "embermoss"
+  },
+  "tiles": [
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%NN%%%%%",
+    "%%%%%%EEE%%%%%%%%%%%EEEE%%%%%%%%%NNNN%%%",
+    "%%%%%%EEE%%%%%%%%%%%EEEE%%%%%%%%%%NNN%%%",
+    "%%%%%%EEE%%%%%%%%%%%EEEE%%%%EEEE%%NNN%%%",
+    "%%%%%%%%%%%%%%%%%%%%EEEE%%%%EEEE%%NNNNN%",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%EEEE%%%NNNN%",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%E%%%%%%%%%NNNNN",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%NNN%NNN",
+    "%%%%EEEE%%%%%%%%%%%%%%%%%EEE%%%%NNNNNNNN",
+    "%%%%EEEE%%%%%%%%%%%%%%%%%EEE%%%%NNNNNNNN",
+    "%%%%EEEE%%%%%%%%%%%%%%%%%%%%%%%%NNNNNNNN",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%NNNNN%%%",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%NNNNNN%%",
+    "%%%%%%%%%%%%%%%%%%EEEEEEE%%%%%%%NNNNNN%%",
+    "%%%%%%%%%%%%%%%E%%EEEEEEE%%%%%%%NNNNNN%%",
+    "%%%%%%%%%%%%%%%%%%EEEEEEE%NNNNNNNNNNNN%%",
+    "%%%%%%%%%%%%%%%%%%EEEEEEE%NNNNNNNEE%%%%%",
+    "%%%%%%%%%%%%%%%%%%EEEEEEE%NNNNNNNEE%%%%%",
+    "%%%%%%%%%EEE%%%%%%EEEEEEE%NNNNNEEEE%%%%%",
+    "%%%%%%%%%EEE%%%%%%EEEEEEE%NNNNNNN%%%%%%%",
+    "%%%%%%%%%%%%%%%%%%EEEEEEE%%%NNNNNNNNN%%%",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%NNNNNNNNN%%%",
+    "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%NNNNN%%%"
+  ],
+  "actors": [
+    {
+      "Id": "ed490f3b430ec0ab",
+      "Type": "BurrowLine",
+      "Position": [47, 120],
+      "BurrowDoors": "First",
+      "Points": [[-24, 0],[-40, 0],[-40, -24],[-16, -24],[-16, -16],[56, -16],[56, -40],[88, -40],[144, -40],[144, -72],[88, -72],[88, -104],[56, -104],[56, -72],[-48, -72]
+      ]
+    },
+    {
+      "Id": "a2359f27710f2226",
+      "Type": "Light",
+      "Position": [285, 55],
+      "LightColor": "00FF3F",
+      "Radius": 140.918,
+      "DrawSprite": false,
+      "FlickerIntensity": 0.299,
+      "FlickerFrequency": 0.411,
+      "Intensity": 0.712
+    },
+    {
+      "Id": "4ac0795da05f05a4",
+      "Type": "Light",
+      "Position": [257, 160],
+      "LightColor": "00FF3F",
+      "Radius": 140.918,
+      "DrawSprite": false,
+      "FlickerIntensity": 0.299,
+      "FlickerFrequency": 0.411,
+      "Intensity": 0.712
+    },
+    {
+      "Id": "814f54fabf326c58",
+      "Type": "Light",
+      "Position": [23, 120],
+      "DrawSprite": false,
+      "Intensity": 0.539,
+      "Radius": 20.315
+    }
+  ]
+}

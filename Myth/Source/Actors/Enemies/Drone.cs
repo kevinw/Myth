@@ -6,6 +6,11 @@ namespace Myth;
 [GameActor(Sprite = "fire", Tags = ActorTag.Enemy | ActorTag.Flying)]
 public class Drone : Actor
 {
+	static float IdleRadius => 24f;
+	static float IdleAcceleration => 190f;
+	static float IdleMaxSpeed => 22f;
+	static float NoticeRange => Game.Width * 0.75f;
+
 	// Kiting: hover this far from the player, backing off when closer, closing when farther.
 	static float PreferredDistance => 72f;
 	static float DistanceDeadzone => 14f;
@@ -53,6 +58,8 @@ public class Drone : Actor
 	float bladeSpin;
 	float turretAngle;
 	float shootTimer;
+	Vector2 idleOrigin;
+	bool noticedPlayer;
 
 	readonly Coroutine routine = new();
 
@@ -71,7 +78,9 @@ public class Drone : Actor
 
 	public override void Added()
 	{
-		SetState(HoverRoutine());
+		rng = new(Position.X * 73856093 ^ Position.Y * 19349663);
+		idleOrigin = Position;
+		SetState(IdleRoutine());
 		sparkEffect = AcquireParticleEffect("sparks");
 	}
 
@@ -79,6 +88,34 @@ public class Drone : Actor
 	// fresh one; the routine's own body is the state's per-frame behavior.
 	void SetState(IEnumerator<float> next)
 		=> routine.Start(next);
+
+	IEnumerator<float> IdleRoutine()
+	{
+		var target = idleOrigin;
+		var retargetTimer = 0f;
+		while (true)
+		{
+			retargetTimer -= Time.Delta;
+			var fromOrigin = (Vector2)Position - idleOrigin;
+			if (fromOrigin.LengthSquared() > IdleRadius * IdleRadius)
+			{
+				target = idleOrigin;
+				retargetTimer = 0.25f;
+			}
+			else if (retargetTimer <= 0 || Vector2.DistanceSquared(Position, target) < 4)
+			{
+				target = idleOrigin + rng.Vec2() * rng.Float(IdleRadius * 0.35f, IdleRadius);
+				retargetTimer = rng.Float(0.45f, 1.1f);
+			}
+
+			var direction = (target - (Vector2)Position).Normalized();
+			Velocity += direction * IdleAcceleration * Time.Delta;
+			var speed = Velocity.Length();
+			if (speed > IdleMaxSpeed)
+				Velocity *= IdleMaxSpeed / speed;
+			yield return 0;
+		}
+	}
 
 	IEnumerator<float> HoverRoutine()
 	{
@@ -146,6 +183,11 @@ public class Drone : Actor
 		{
 			playerPosition = player.Position;
 			toPlayer = Position - playerPosition;
+			if (!noticedPlayer && CanNotice(player))
+			{
+				noticedPlayer = true;
+				SetState(HoverRoutine());
+			}
 		}
 
 		bladeSpin += BladeSpinSpeed * Time.Delta;
@@ -153,14 +195,20 @@ public class Drone : Actor
 		var targetTilt = Math.Clamp(Velocity.X * TiltPerSpeed, -MaxTilt, MaxTilt);
 		tilt = Calc.Approach(tilt, targetTilt, TiltApproach * Time.Delta);
 
-		var toPlayerDir = -toPlayer; // turret aims at the player; toPlayer points away from them
-		if (toPlayerDir.LengthSquared() > 0.0001f)
-			turretAngle = Calc.AngleApproach(turretAngle, Calc.Angle(toPlayerDir), TurretTurnSpeed * Time.Delta);
+		if (noticedPlayer)
+		{
+			var toPlayerDir = -toPlayer; // turret aims at the player; toPlayer points away from them
+			if (toPlayerDir.LengthSquared() > 0.0001f)
+				turretAngle = Calc.AngleApproach(turretAngle, Calc.Angle(toPlayerDir), TurretTurnSpeed * Time.Delta);
+		}
 
 		routine.Update(Time.Delta);
 
 		Velocity = Calc.Approach(Velocity, Vector2.Zero, friction * Time.Delta);
 	}
+
+	bool CanNotice(Player player)
+		=> Vector2.DistanceSquared(player.Position, Position) <= NoticeRange * NoticeRange;
 
 
 	// Bounce instead of the base Stop, so knockback ricochets off walls.
@@ -171,6 +219,9 @@ public class Drone : Actor
 	{
 		if (health <= 0)
 			return;
+		noticedPlayer = true;
+
+		Game.HitStun(0.15f);
 
 		health--;
 		if (health <= 0)

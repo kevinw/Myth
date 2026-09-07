@@ -3532,17 +3532,17 @@ public partial class Manager
 			}
 	}
 
-	void UpdateEditorWorldView(Rect inner)
+	bool UpdateEditorWorldView(Rect inner)
 	{
 		var cursor = Cursor;
 		if (UpdateEditorTouchView(inner))
-			return;
+			return true;
 
 		var canInteract = (!imgui.WantsMouseInput || gameViewHovered) && inner.Contains(cursor);
 
 		// Music-region drawing/resizing owns the mouse while the regions window is engaged.
 		if (UpdateMusicRegionInteraction(canInteract, cursor, inner))
-			return;
+			return true;
 
 		// Middle-mouse drag pans.
 		var setPlaytestPosition = canInteract && Input.Mouse.MiddlePressed &&
@@ -3617,6 +3617,7 @@ public partial class Manager
 			trackpadScrollLatch -= Time.Delta;
 
 		UpdateEditorZoomSmoothing(canInteract ? cursor : inner.Center, inner);
+		return false;
 	}
 
 	// A trackpad swipe sends precise deltas: fractional vertical, or any horizontal component (a notched
@@ -4139,7 +4140,7 @@ public partial class Manager
 			FocusEditorOnCurrentRoom();
 		UpdateEditorCameraTween();
 		PreserveEditorViewAcrossLayoutChanges(inner);
-		UpdateEditorWorldView(inner);
+		worldMouseBlocked |= UpdateEditorWorldView(inner);
 		UpdateRoomEditModeFromZoom(inner);
 		if (!editingRoomGeometry)
 			UpdateAutoSelectedRoomFromEditorCamera(inner);

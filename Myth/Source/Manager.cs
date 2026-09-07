@@ -986,14 +986,13 @@ public partial class Manager : App
 #endif
 	partial class WindowSettingsJsonContext : JsonSerializerContext;
 
-#if DEBUG
 	Point2 playerDragStartPosition;
 	Vector2 playerDragPressWorld;
 	Vector2 playerDragPressCursor;
 	bool playerDragStarted;
 	const float PlayerDragThreshold = 4;
 
-	// Debug mouse-drag of the player: a direct press selects, then movement begins only after
+	// Mouse-dragging the player: a direct press selects, then movement begins only after
 	// crossing the same small threshold used by authored actors.
 	bool UpdatePlayerMouseDrag(Game g)
 	{
@@ -1015,8 +1014,10 @@ public partial class Manager : App
 				playerDragPressCursor = Cursor;
 				playerDragStarted = false;
 			}
+#if DEBUG
 			else if (Input.Keyboard.Shift)
 				g.CutRopes(mouse);
+#endif
 		}
 
 		if (!Input.Mouse.LeftDown)
@@ -1038,7 +1039,6 @@ public partial class Manager : App
 		}
 		return true;
 	}
-#endif
 
 	void HeadlessUpdate()
 	{
@@ -1254,11 +1254,9 @@ public partial class Manager : App
 							editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
 						if (!editorOwnsPlayMouse)
 							editorOwnsPlayMouse = UpdateLiveActorEditing(g, keyboardShortcutsBlocked);
-#if DEBUG
 						if (!editorOwnsPlayMouse)
 							editorOwnsPlayMouse = UpdatePlayerMouseDrag(g);
-#endif
-#elif DEBUG
+#else
 						UpdatePlayerMouseDrag(g);
 #endif
 						if (!keyboardShortcutsBlocked && !perfToggleChordActive && !shipRoomCheatChordActive)

@@ -1,6 +1,7 @@
 {
-  "position": [240, -81],
+  "position": [-325, 189],
   "size": [40, 12],
+  "reverb": 0.504,
   "legend": {
     "G": "grass",
     "R": "ruin",

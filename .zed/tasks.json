@@ -1,7 +1,7 @@
 [
   {
     "label": "simple",
-    "command": "dotnet watch run --no-restore --property:UseFosterDll=true -- --simple",
+    "command": "dotnet watch run --no-restore --non-interactive --property:UseFosterDll=true -- --simple",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {
@@ -12,6 +12,11 @@
   {
     "label": "gym (unthrottled)",
     "command": "dotnet watch run -c Release --no-restore --property:UseFosterDll=true -- --gym --unthrottled",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
+  },
+  {
+    "label": "dotnet watch",
+    "command": "dotnet watch run --no-restore --non-interactive --property:UseFosterDll=true",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth",
   },
   {

@@ -1,12 +1,11 @@
 {
-  "position": [-171, -73],
+  "position": [651, -95],
   "size": [40, 37],
-  "musicArea": "Resting",
   "backdropColor": "FFFFFF",
-  "backdropColor2": "C4BBFF",
+  "backdropColor2": "C5BBFF",
   "backdropSurface": "sky",
   "ambientColor": "FFFFFF",
-  "ambientIntensity": 0.533,
+  "ambientIntensity": 0.725,
   "lightNoise": 0,
   "playerLight": false,
   "ditherEnabled": false,
@@ -65,10 +64,10 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
-    "0000000000000g0g0ggffff00000f0g00gg00g00",
-    "0000000000000GGGGGGGGGGGGGGGGGGGGGGGGGGG",
-    "0000000000000GGGGTGGGGGGGGGGGGGGGGGGGGGG",
-    "0000000000000GGTTTGTTTGGTGGGGGGGGGGGGGGG"
+    "000000ggg0000g0g0ggffff00000000000000000",
+    "GGGGGGGGGGGGGGGGGGGGGGGGGG00000000000000",
+    "GGGGGGGGGGGGGGGGGTGGGGGGGG00000000000000",
+    "GGGGGGGGGGGGGGGTTTGTTTGGTG00000000000000"
   ],
   "backgroundTiles": [
     "00000000000000000m##mmm00000000000000000",
@@ -104,9 +103,9 @@
     "00000000000000000mm###-00000000000000000",
     "00000000000000000?#####00000000000000000",
     "00000000000000000?##mmm00000000000000000",
-    "00000000000000000?##mmm000000cc00cccc000",
-    "00000000000000000mmmmmm000000cc00cccc000",
-    "0000000000000000ppppppm000000cc000000000",
+    "0000cc0000ccccc00?##mmm00000000000000000",
+    "0000c00000ccccc00mmmmmm00000000000000000",
+    "0000000000ccccc0ppppppm00000000000000000",
     "0000000000000000pppppp000000000000000000"
   ],
   "fungal": [[16, 35],[17, 35],[18, 35],[15, 36],[19, 36],[20, 36],[22, 36],[24, 36],[25, 36]
@@ -200,12 +199,25 @@
     {
       "Id": "64e9dbc74f117947",
       "Type": "PlayerStart",
-      "Position": [228, 272]
+      "Position": [20, 272]
     },
     {
       "Id": "3ef6f5e259eef3f9",
       "Type": "SavePoint",
       "Position": [160, 272]
+    },
+    {
+      "Id": "101b8718bd6d2bc1",
+      "From": "TutorialText",
+      "Position": [291, 151],
+      "Color": "344336",
+      "dropShadow": 0,
+      "Text": [
+        "congrats.",
+        "ze demo",
+        "ist almost",
+        "ovah."
+      ]
     }
   ]
 }

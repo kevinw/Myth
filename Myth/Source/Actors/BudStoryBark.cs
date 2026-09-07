@@ -10,6 +10,13 @@ public class BudStoryBark : Actor, IResizable
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 4, Game.TileSize * 2);
 
 	public Point2 Size { get; set; } = DefaultSize;
+	public enum TriggerType
+	{
+		WhenBudTouches,
+		WhenPlayerTouches
+	}
+	public TriggerType triggerType = TriggerType.WhenBudTouches;
+
 	[Multiline(3)] public string Text = "What's this place?";
 	bool spoken;
 
@@ -27,10 +34,24 @@ public class BudStoryBark : Actor, IResizable
 
 	public override void Update()
 	{
+		if (spoken) return;
+		if (string.IsNullOrWhiteSpace(Text)) return;
+		if (!Game.CanShowBudSpeech()) return;
+		var bud = Game.GetFirst<Bud>();
+		if (bud == null) return;
+		var player = Game.GetFirst<Player>();
+		if (player == null) return;
+
 		base.Update();
-		if (!spoken && !string.IsNullOrWhiteSpace(Text) && Game.CanShowBudSpeech() && Game.GetFirst<Bud>() is { } bud && OverlapsAny(Point2.Zero, bud))
+
+		if ((triggerType == TriggerType.WhenBudTouches && OverlapsAny(Point2.Zero, bud)) ||
+			(triggerType == TriggerType.WhenPlayerTouches && OverlapsAny(Point2.Zero, player)))
 		{
-			bud.Say(Text);
+			if (triggerType == TriggerType.WhenBudTouches)
+				bud.Say(Text);
+			else
+				player.Say(Text);
+
 			spoken = true;
 		}
 	}

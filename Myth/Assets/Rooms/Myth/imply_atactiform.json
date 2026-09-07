@@ -1,5 +1,5 @@
 {
-  "position": [240, 46],
+  "position": [200, 46],
   "size": [40, 23],
   "ambientColor": "868686",
   "sporeFogStrength": 0.293,
@@ -90,7 +90,7 @@
     {
       "Id": "6ad67bdcdce2184d",
       "Type": "RevealDoor",
-      "Position": [80, 96],
+      "Position": [72, 96],
       "Size": [8, 8]
     }
   ]

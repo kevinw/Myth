@@ -1,5 +1,5 @@
 {
-  "position": [-304, 23],
+  "position": [-528, 201],
   "size": [32, 23],
   "backdropColor": "100D1C",
   "backdropColor2": "17293A",
@@ -85,7 +85,6 @@
       "Position": [88, 0],
       "Points": [[0, 0],[0, 104],[128, 104],[168, 104]
       ],
-      "RenderProcedural": true,
       "ProceduralOuterColor": "342F35",
       "ProceduralInnerColor": "74CED0"
     },
@@ -95,7 +94,6 @@
       "Position": [88, 80],
       "Points": [[0, 0],[64, 0],[64, -40],[112, -40]
       ],
-      "RenderProcedural": true,
       "ProceduralOuterColor": "342F35",
       "ProceduralInnerColor": "D7A966"
     },

@@ -1,5 +1,5 @@
 {
-  "position": [0, 0],
+  "position": [-40, 0],
   "size": [40, 23],
   "musicArea": "Silence",
   "ambientColor": "3E3E3E",
@@ -96,7 +96,9 @@
       "editorFlags": "Locked",
       "ShutdownSourceActorId": "574c49f8e2ee020d",
       "ActiveShutdown": true,
-      "StepsPerSecond": 60
+      "StepsPerSecond": 60,
+      "Dynamism": "ProceduralCurlAdvection",
+      "CurlSpeed": 1.151
     },
     {
       "Id": "dc4c3733f809df85",
@@ -132,7 +134,7 @@
       "Position": [108, 124],
       "Once": true,
       "Script": [
-        "[pause 1]",
+        "[pause 3]",
         "Smells weird in here."
       ]
     },
