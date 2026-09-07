@@ -3124,10 +3124,10 @@ public partial class Game : IDisposable
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
 
-	public void Shake(float time)
+	public void Shake(float time, float intensity = 1)
 	{
 		if (ShakeInRenderTargetSpace)
-			ShakeRenderTarget(time);
+			ShakeRenderTarget(time, intensity);
 		else
 			fx.shaking = MathF.Max(fx.shaking, time);
 	}

@@ -1528,6 +1528,7 @@ public partial class Player : Pawn
 	static float DuckAttackCooldown => 0.4f;
 	static float AttackBlockOverlapThreshold => 0.5f;
 	static float HurtDuration => 0.5f;
+	static bool DashImpactStun => false;
 	static float DashImpactHurtDurationMultiplier => 0.7f;
 	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
@@ -1981,10 +1982,14 @@ public partial class Player : Pawn
 			AudioEvent("jump");
 	}
 
-	protected override void OnDashImpact() => ApplyHurt(0,
-		bounceMultiplier: 0.5f,
-		hurtDurationMultiplier: DashImpactHurtDurationMultiplier,
-		glitch: false);
+	protected override void OnDashImpact()
+	{
+		if (DashImpactStun)
+			ApplyHurt(0,
+				bounceMultiplier: 0.5f,
+				hurtDurationMultiplier: DashImpactHurtDurationMultiplier,
+				glitch: false);
+	}
 
 	protected override bool TryRollCancel()
 	{

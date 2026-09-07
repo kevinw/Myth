@@ -114,6 +114,12 @@
       "Type": "LinkedDoor",
       "Position": [208, 88],
       "TargetActorId": "06c7ec4b372a3ce0"
+    },
+    {
+      "Id": "458ab915c5cce6b6",
+      "Type": "LinkedSound",
+      "Position": [140, 20],
+      "EventName": "background_ambience/hum"
     }
   ]
 }

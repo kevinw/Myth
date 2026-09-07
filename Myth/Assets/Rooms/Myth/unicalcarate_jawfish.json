@@ -140,6 +140,12 @@
       "FishCount": 2,
       "BugCount": 4,
       "FlyCount": 4
+    },
+    {
+      "Id": "cf17e24de825299e",
+      "Type": "LinkedSound",
+      "Position": [152, 52],
+      "EventName": "background_ambience/underwater_deep"
     }
   ]
 }

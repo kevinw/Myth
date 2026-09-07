@@ -13,6 +13,7 @@ remote="devkit-game/$gameid"
 
 [ -x "$game/Myth" ] || { echo "No Linux build in $game — run: node tools/publish-linux.mjs" >&2; exit 1; }
 
+echo rsync -az --delete "$game/" "$deck:$remote/"
 rsync -az --delete "$game/" "$deck:$remote/"
 
 # The launcher reads the two json files; a game folder without them is ignored. steam_play 0

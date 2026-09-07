@@ -49,6 +49,13 @@ public class Drone : Actor
 
 	static float BodyRadius => 7f;
 
+	// The buzz loop's "Intensity" (0-1) tracks speed, smoothed so the drone's constant jitter
+	// doesn't chatter the parameter. start/stop_move use hysteresis around the same speed, set
+	// above IdleMaxSpeed so drifting on the spot stays silent and only real darts announce.
+	static float BuzzIntensityApproach => 3.5f;
+	static float MoveSoundStartSpeed => 34f;
+	static float MoveSoundStopSpeed => 14f;
+
 	Rng rng = new();
 	int health = 3;
 	Point2 playerPosition;
@@ -60,12 +67,16 @@ public class Drone : Actor
 	float shootTimer;
 	Vector2 idleOrigin;
 	bool noticedPlayer;
+	SoundInstance? buzz;
+	float buzzIntensity;
+	bool moving;
 
 	readonly Coroutine routine = new();
 
 	public override void Destroyed() {
 		routine.Stop();
 		ReleaseParticleEffect(ref sparkEffect);
+		StopAndReleaseSound(ref buzz, true);
 	}
 
 	public Drone()
@@ -82,6 +93,8 @@ public class Drone : Actor
 		idleOrigin = Position;
 		SetState(IdleRoutine());
 		sparkEffect = AcquireParticleEffect("sparks");
+		if (Game.AudioEventsEnabled)
+			buzz = Game.CreateAudioEvent("enemies/drone/buzz", Position, start: true);
 	}
 
 	// A state is just its running routine (see ShieldKnight): transition by handing SetState a
@@ -172,6 +185,7 @@ public class Drone : Actor
 
 		Game.Create<Bullet>(muzzle, b => b.Velocity = dir * BulletSpeed);
 		Velocity -= dir * RecoilSpeed; // physical kick backward
+		AudioEvent("enemies/drone/fire");
 	}
 
 	public override void Update()
@@ -205,6 +219,22 @@ public class Drone : Actor
 		routine.Update(Time.Delta);
 
 		Velocity = Calc.Approach(Velocity, Vector2.Zero, friction * Time.Delta);
+		UpdateBuzz(player);
+	}
+
+	void UpdateBuzz(Player? player)
+	{
+		var speed = Velocity.Length();
+		buzzIntensity = Calc.Approach(buzzIntensity,
+			Calc.ClampedMap(speed, 0, MaxSpeed), BuzzIntensityApproach * Time.Delta);
+		Game.SetAudioEventPosition(buzz, Position, player?.Position);
+		Game.SetAudioEventParameter(buzz, "Intensity", buzzIntensity);
+
+		if (moving ? speed < MoveSoundStopSpeed : speed > MoveSoundStartSpeed)
+		{
+			moving = !moving;
+			AudioEvent(moving ? "enemies/drone/start_move" : "enemies/drone/stop_move");
+		}
 	}
 
 	bool CanNotice(Player player)
@@ -229,9 +259,11 @@ public class Drone : Actor
 			for (int i = 0; i < 3; i++)
 				Game.Create<Pop>(Position + new Point2(rng.Int(-6, 6), rng.Int(-8, 4)));
 			Game.HitStun(0.2f);
+			AudioEvent("enemies/drone/death");
 			Game.DestroyForThisSession(this);
 			return;
 		}
+		AudioEvent("enemies/drone/hurt");
 
 		var away = (Vector2)(Position - hitInfo.By.Position);
 		var len = away.Length();

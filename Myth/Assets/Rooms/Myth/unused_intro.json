@@ -176,6 +176,12 @@
       "Type": "Jumpthru",
       "Position": [31, 163],
       "Size": [48, 8]
+    },
+    {
+      "Id": "f3205dbf8fb703bb",
+      "Type": "InspectPoint",
+      "Position": [140, 120],
+      "Text": "Bud: That was a lot. You OK?"
     }
   ]
 }

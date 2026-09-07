@@ -5,7 +5,7 @@
 			<value>eye_laser_charge</value>
 		</property>
 		<property name="outputFormat">
-			<value>0</value>
+			<value>2</value>
 		</property>
 		<relationship name="folder">
 			<destination>{447e7987-9b22-4b8c-9060-042bea85790e}</destination>
@@ -97,9 +97,11 @@
 	<object class="MixerBusEffectChain" id="{f433e0c0-86b4-4955-9631-69cb746e4220}">
 		<relationship name="effects">
 			<destination>{bf7e41a8-8d2d-43cc-971b-1cdad34eaead}</destination>
+			<destination>{6f5508b4-cfe5-427b-8093-2da63334e48a}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{19199aa3-cc52-4433-90e4-19c7697265b5}" />
 	<object class="MixerBusFader" id="{e949ce75-f6a6-45f6-ac0c-16c73cc2e00e}" />
 	<object class="MixerBusFader" id="{bf7e41a8-8d2d-43cc-971b-1cdad34eaead}" />
+	<object class="SpatialiserEffect" id="{6f5508b4-cfe5-427b-8093-2da63334e48a}" />
 </objects>

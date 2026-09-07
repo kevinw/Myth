@@ -78,6 +78,8 @@
   ],
   "fungal": [[21, 20],[22, 20],[25, 21],[27, 21]
   ],
+  "crumble": [[15, 8]
+  ],
   "actors": [
     {
       "Id": "1c433a9ad08f1332",
@@ -109,6 +111,12 @@
       "Type": "LinkedDoor",
       "Position": [140, 160],
       "TargetActorId": "045996c72fb5203a"
+    },
+    {
+      "Id": "5df64c84044777c8",
+      "Type": "LinkedSound",
+      "Position": [171, 17],
+      "EventName": "background_ambience/underwater_deep"
     }
   ]
 }

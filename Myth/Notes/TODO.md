@@ -45,6 +45,7 @@ SFX
 
 
 LATER
+- for things like LinkedSound in the editor, show their icon at half opacity?
 - burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
   is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame
   TryUnstick now rescues it, but the pop should pick an unblocked direction itself.

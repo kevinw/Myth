@@ -267,6 +267,12 @@
       "Id": "aad57e2771c75a00",
       "Type": "SavePoint",
       "Position": [118, 344]
+    },
+    {
+      "Id": "dfd615ff8bf68851",
+      "Type": "LinkedSound",
+      "Position": [290, 162],
+      "EventName": "background_ambience/lava"
     }
   ]
 }
