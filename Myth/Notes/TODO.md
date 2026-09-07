@@ -1,3 +1,4 @@
+- show invert faster
 - dev-watch: Foster edits never hot reload -- dev-watch runs dotnet watch with UseFosterDll=true,
   which references a prebuilt Foster.Framework.dll instead of the project, so Foster sources aren't
   in the watch graph and nothing rebuilds the dll. Wants a --foster-project mode for sessions
@@ -7,13 +8,12 @@
   TryUnstick now rescues it, but the pop should pick an unblocked direction itself.
 - burrow lines: SOMETHING to make them a bit more visually interesting
 - lore rewards alongside chests
-- does steam deck do 120fps?
 - acknowledgements on itch page
-- train fer's tshirt
 - paint more NCA backgrounds.
 - try a simple fluid sim that acts as the paint mask for an NCA
 - take 30 mins to make sure you can explain NCA
 - redraw spitter; test other actors and draw for them
+- redraw bubble
 - for builds for fer
   - screenshot button
   - tilde console

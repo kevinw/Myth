@@ -131,7 +131,7 @@
     {
       "Id": "ff33298028412e1a",
       "Type": "RigPuppet",
-      "Position": [208, 101],
+      "Position": [208, 103],
       "ProjectionYaw": 43.696,
       "NeuralJostleStrength": 0.786,
       "NearColor": "F7F9F5",
@@ -174,7 +174,7 @@
     {
       "Id": "31352fd51b045235",
       "Type": "Prop",
-      "Position": [48, 80],
+      "Position": [48, 76],
       "SpriteName": "Props/computer_terminal_sm"
     },
     {
@@ -182,6 +182,20 @@
       "Type": "InspectPoint",
       "Position": [56, 96],
       "Text": "REMINDER_3214: Who's in charge of maintance on the old guardian drones?"
+    },
+    {
+      "Id": "3c42699e916b86a6",
+      "Type": "Prop",
+      "Position": [59, 75],
+      "SpriteName": "Props/server",
+      "Layer": "Background"
+    },
+    {
+      "Id": "c1b0a15919beab8a",
+      "Type": "Prop",
+      "Position": [41, 72],
+      "SpriteName": "Props/server",
+      "Layer": "Background"
     }
   ]
 }

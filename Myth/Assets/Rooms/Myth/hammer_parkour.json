@@ -77,11 +77,6 @@
       "Position": [12, 128]
     },
     {
-      "Id": "2a99b2fe6ec9ca8c",
-      "Type": "RevealDoor",
-      "Position": [280, 152]
-    },
-    {
       "Id": "c1d39331910f6d27",
       "Type": "Jumpthru",
       "Position": [14, 88],

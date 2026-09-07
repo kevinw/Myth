@@ -644,9 +644,9 @@ public partial class Manager
 					row[x - rect.Left] = layer == Factory.TileLayer.Foreground
 						? room.Tiles[x, y]
 						: room.BackgroundTiles[x, y];
-					flags.Add((int)room.GetTileFlags(tile));
+					flags.Add((JsonNode)JsonValue.Create((int)room.GetTileFlags(tile)));
 				}
-				rows.Add(new string(row));
+				rows.Add((JsonNode)JsonValue.Create(new string(row)));
 			}
 			return new JsonObject { ["tiles"] = rows, ["flags"] = flags };
 		}

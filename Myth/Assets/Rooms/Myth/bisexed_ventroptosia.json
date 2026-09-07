@@ -84,12 +84,14 @@
     {
       "Id": "2daf143344ca13d9",
       "Type": "Jumpthru",
-      "Position": [8, 152]
+      "Position": [7, 152],
+      "Size": [9, 8]
     },
     {
       "Id": "daad4e405f88857d",
       "Type": "Jumpthru",
-      "Position": [8, 128]
+      "Position": [7, 128],
+      "Size": [9, 8]
     },
     {
       "Id": "7b739d70e7165088",

@@ -122,6 +122,11 @@
       "Type": "Jumpthru",
       "Position": [167, 96],
       "Size": [33, 8]
+    },
+    {
+      "Id": "8679bfc3fb8a1153",
+      "Type": "Wildlife",
+      "Position": [160, 92]
     }
   ]
 }

@@ -185,7 +185,6 @@
       "Type": "Prop",
       "Position": [33, 153],
       "ChangeOnActorDestroyed": "574c49f8e2ee020d",
-      "Layer": "Background",
       "SpriteName": "Props/computer_terminal_sm"
     },
     {

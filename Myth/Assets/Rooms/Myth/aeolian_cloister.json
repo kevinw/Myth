@@ -285,7 +285,6 @@
       "Id": "ae00000000000015",
       "Type": "BurrowLine",
       "Position": [88, 336],
-      "RenderProcedural": true,
       "ProceduralWidth": 2.5,
       "ProceduralOuterColor": "303943",
       "ProceduralInnerColor": "7CD6D8",
@@ -298,7 +297,6 @@
       "Position": [416, 336],
       "Points": [[0, 0],[0, 32]
       ],
-      "RenderProcedural": true,
       "ProceduralWidth": 2.5,
       "ProceduralOuterColor": "303943",
       "ProceduralInnerColor": "7CD6D8"

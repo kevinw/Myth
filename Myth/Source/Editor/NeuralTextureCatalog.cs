@@ -12,7 +12,7 @@ static class NeuralTextureCatalog
 
 	static readonly List<Model> models = [];
 	static readonly List<string> images = [];
-	static readonly string[] motionSuffixes = ["right_acc_down", "right_acc_right", "2block_x", "2block_y", "3block", "4block", "circular", "concentrate", "diverge", "hyperbolic", "right", "up"];
+	static readonly string[] motionSuffixes = ["right_acc_down", "right_acc_right", "2block_x", "2block_y", "3block", "4block", "circular", "concentrate", "converge", "diverge", "hyperbolic", "right", "up"];
 
 	public static bool DrawCombo(ref string value, bool allowNone = false)
 	{
@@ -127,13 +127,14 @@ static class NeuralTextureCatalog
 		"4block" => 3,
 		"circular" => 4,
 		"concentrate" => 5,
-		"diverge" => 6,
-		"hyperbolic" => 7,
-		"right" => 8,
-		"right_acc_down" => 9,
-		"right_acc_right" => 10,
-		"up" => 11,
-		_ => 12,
+		"converge" => 6,
+		"diverge" => 7,
+		"hyperbolic" => 8,
+		"right" => 9,
+		"right_acc_down" => 10,
+		"right_acc_right" => 11,
+		"up" => 12,
+		_ => 13,
 	};
 
 	static int FindModel(string fileName)

@@ -10,7 +10,6 @@ from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "Platforms/Web/dashboard/data.json"
 HISTORY_PATHS = ["Assets/Rooms", "Assets/Actors", "Assets/Sources/Tilesets", "Source", "tools/Myth.SourceGen", "Platforms/iOS"]

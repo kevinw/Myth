@@ -106,7 +106,8 @@
       "Id": "e4e8eacaee941703",
       "Type": "Prop",
       "Position": [110, 67],
-      "SpriteName": "Props/chair"
+      "SpriteName": "Props/chair",
+      "propFlags": "Destroyable"
     },
     {
       "Id": "a5c519eea3622476",
@@ -118,6 +119,26 @@
       "Id": "7603f4402ca67cd0",
       "Type": "Mosquito",
       "Position": [76, 28]
+    },
+    {
+      "Id": "9d6b73484770e19e",
+      "Type": "Wind",
+      "Position": [28, 64],
+      "Size": [64, 120]
+    },
+    {
+      "Id": "7854d9489783433d",
+      "Type": "WindReliquary",
+      "Position": [204, 4],
+      "Size": [64, 164]
+    },
+    {
+      "Id": "9d12b269350c7b9e",
+      "Type": "Wildlife",
+      "Position": [160, 92],
+      "BugCount": 1,
+      "FishCount": 0,
+      "FlyCount": 4
     }
   ]
 }
