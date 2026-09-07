@@ -142,7 +142,8 @@
       "Position": [380, 44],
       "Radius": 98.434,
       "LightColor": "CB25C4",
-      "TintSprite": true
+      "TintSprite": true,
+      "Intensity": 0.667
     },
     {
       "Id": "53509810e0ccecda",
@@ -162,6 +163,15 @@
       "Type": "Jumpthru",
       "Position": [360, 88],
       "Size": [27, 8]
+    },
+    {
+      "Id": "47800173988e0a83",
+      "Type": "Light",
+      "Position": [420, 44],
+      "Radius": 98.434,
+      "LightColor": "CB25C4",
+      "TintSprite": true,
+      "Intensity": 0.487
     }
   ]
 }

@@ -121,6 +121,7 @@ public class Pouncer : Actor
 	internal override void OnWasHit(HitInfo hitInfo)
 	{
 		Health--;
+		Game.HitStun(0.1f);
 		if (Health <= 0)
 		{
 			Game.Create<Pop>(Position + new Point2(0, -4));

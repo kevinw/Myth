@@ -104,7 +104,7 @@ public sealed partial class GameView
 	static float BurrowBarOpacityRate => 8f;
 	static float BurrowUpgradeHudScale => 4f;
 	static int BurrowGrowthParticleCount => 24;
-	const string BurrowUpgradeLabel = "+ Bosonic Time";
+	const string BurrowUpgradeLabel = "+ Line Time";
 	static float BurrowLabelPulseDuration => 0.5f;
 	static float BurrowLabelPulseFrequency => 8f;
 	float burrowLabelPulseStart = float.NegativeInfinity;

@@ -6,7 +6,9 @@
     "#": "back",
     "1": "castle",
     "T": "stone",
+    "j": "junk",
     "t": "testjunkbg1",
+    "u": "Myth Runes",
     "w": "water"
   },
   "tiles": [
@@ -19,7 +21,7 @@
     "Twwwwwwwwwwwwww111111111000000000000TTTT",
     "Twwwwwwwwwwwwww111111111000000000000TTTT",
     "Twwwwwwwwwwwwww111111111000000000000TTTT",
-    "Twwwwwwwwwwwwww111111111000000000000TTTT",
+    "Twwjwwwwwwwwwww111111111000000000000TTTT",
     "Twwwwwwwwwwwwww111111111000000000000TTTT",
     "Twwwwwwwwwwwwww111111111000000000000TTTT",
     "Twwwwwwwwwwwwww111111111000000000000TTTT",
@@ -56,7 +58,7 @@
     "000000000000000000000000000000##tttt0000",
     "000000000000000000000000#####ttttttt0000",
     "000000000000000000000000#####tttttttt000",
-    "000000000000000000000000#####tttttttt000",
+    "000000000000000000000000uu###tttttttt000",
     "000000000000000000000000####0tttttttt000"
   ],
   "fungal": [[23, 16],[16, 17],[22, 17],[16, 18],[23, 18],[16, 19],[17, 19],[23, 19],[17, 20],[20, 20],[17, 21]
@@ -75,6 +77,14 @@
       "Id": "3d673250060ac538",
       "From": "BlueMemoryLight",
       "Position": [220, 148]
+    },
+    {
+      "Id": "9b4b9f66caec512d",
+      "Type": "Wildlife",
+      "Position": [72, 96],
+      "FishCount": 8,
+      "BugCount": 0,
+      "FlyCount": 2
     }
   ]
 }

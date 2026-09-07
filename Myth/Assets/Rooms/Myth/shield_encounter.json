@@ -37,13 +37,13 @@
     "GGGRRRRRRRRGTTTTTTT0000TTTT0000TTTTTTTTT",
     "GGGGGGGGG00TTTTTTTTwwwwTTTTwwwwTTTTTTTTT",
     "RGGG0000000TTTTTTTjwwwwTTTTwwwwTTTTTTTTT",
-    "RRGG0000000TTTTTTTTwwwwTTTTwwwwTTTTTTTTT",
-    "RRG00000000TTTTTTTTTwTTTTTTTTTTTTTTTTTTT",
-    "RRR00000000TTTTTTTTTwTTTTTTTTTTTTTTTTTTT",
-    "RRR00000000TTTTT00TTwTTT00TTTTTT00TTTTTT",
-    "RRR00000000TTTTT00TTwTTT00TTTTTT00TTTTTT",
-    "RRR00000000TTTTT00TTwTTT00TTTTTT00TTTTTT",
-    "RRR00000000TTTTT00TTwTTT00TTTTTT00TTTTTT"
+    "RRGG0000000TTTjTTTTwwwwTTTTwwwwTTTTTTTTT",
+    "RRG00000000TjjjTTTTTwTTTTTTTTTTTTTTTTTTT",
+    "RRR00000000TjjjTTTTTwTTTTTTTTTTTTTTTTTTT",
+    "RRR00000000TjjjT00TTwTTT00TTTTTT00TTTTTT",
+    "RRR00000000TjjjT00TTwTTT00TTTTTT00TTTTTT",
+    "RRR00000000TjjjT00TTwTjT00TjjjTT00TTTTTT",
+    "RRR00000000TjjjT00TTwTjT00TjjjTT00TTTTTT"
   ],
   "backgroundTiles": [
     "0000000000v000mmmmmmmmm000000000000v0000",
@@ -70,7 +70,7 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000"
   ],
-  "fungal": [[34, 10],[32, 11],[33, 11],[34, 11],[21, 12],[22, 12],[32, 12],[22, 13],[23, 13],[10, 14],[10, 15],[10, 16],[18, 16],[19, 16],[20, 16],[26, 16],[11, 17],[18, 17],[19, 17],[26, 17],[27, 17],[14, 18],[15, 18],[16, 18],[17, 18],[18, 18],[23, 18],[24, 18],[25, 18],[26, 18],[31, 18],[32, 18],[11, 19],[15, 19],[18, 19],[23, 19],[27, 19],[28, 19],[11, 20],[15, 20],[18, 20],[11, 21],[12, 21],[15, 21],[18, 21],[11, 22],[12, 22],[15, 22],[18, 22]
+  "fungal": [[34, 10],[32, 11],[33, 11],[34, 11],[21, 12],[22, 12],[32, 12],[22, 13],[23, 13],[10, 14],[10, 15],[13, 15],[14, 15],[10, 16],[13, 16],[14, 16],[15, 16],[18, 16],[19, 16],[20, 16],[26, 16],[11, 17],[12, 17],[18, 17],[19, 17],[26, 17],[27, 17],[12, 18],[15, 18],[16, 18],[17, 18],[18, 18],[23, 18],[24, 18],[25, 18],[26, 18],[31, 18],[32, 18],[11, 19],[14, 19],[15, 19],[18, 19],[23, 19],[27, 19],[28, 19],[11, 20],[13, 20],[15, 20],[18, 20],[11, 21],[15, 21],[18, 21],[11, 22],[15, 22],[18, 22]
   ],
   "actors": [
     {
@@ -175,14 +175,13 @@
       "Id": "31352fd51b045235",
       "Type": "Prop",
       "Position": [48, 80],
-      "SpriteName": "Props/computer_terminal_sm",
-      "Layer": "Background"
+      "SpriteName": "Props/computer_terminal_sm"
     },
     {
       "Id": "30faf85c34ccda25",
       "Type": "InspectPoint",
       "Position": [56, 96],
-      "Text": "REMINDER_3214: Who's in charge of maintance on the old guardian dones?"
+      "Text": "REMINDER_3214: Who's in charge of maintance on the old guardian drones?"
     }
   ]
 }
