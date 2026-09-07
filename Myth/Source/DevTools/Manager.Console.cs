@@ -382,4 +382,31 @@ public partial class Manager
 		best.Break(player.Position);
 		game.DisplayMessage("Rope cut");
 	}
+
+	// Clears the screen so death sequences can be watched without fighting through the room.
+	[ConsoleCommand("kill_all")]
+	void KillAll(string _)
+	{
+		if (game?.GetFirst<Player>() is not { } player)
+			throw new InvalidOperationException("Start the game first");
+
+		var view = new Rect(game.Camera, new System.Numerics.Vector2(game.ZoomedWidth, game.ZoomedHeight));
+		List<Actor> targets = [];
+		foreach (var actor in game.Actors)
+			if (actor.Mask.Has(Actor.Masks.Enemy) && view.Overlaps(actor.GetVisualBounds()))
+				targets.Add(actor);
+
+		foreach (var actor in targets)
+		{
+			// Puppets go through their own Die() so death sequences play out; the rest just vanish.
+			if (actor is RigPuppet puppet)
+			{
+				puppet.Health = 1;
+				if (player.Hit(actor, new(actor.Hitbox.Rect + actor.Position)))
+					continue;
+			}
+			game.Destroy(actor);
+		}
+		game.DisplayMessage($"Killed {targets.Count} on screen");
+	}
 }

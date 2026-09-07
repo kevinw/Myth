@@ -244,21 +244,25 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			UpdatePatrol(grounded, player);
 		else if (scripted)
 			UpdateScriptedMovement(grounded);
-		else if (!Performance && stepTraversal == StepTraversal.None && player != null &&
-			MathF.Abs(player.Position.X - Position.X) > 1)
+		else if (!Performance && stepTraversal == StepTraversal.None && player != null)
 		{
-			var desiredFacing = player.Position.X < Position.X ? Signs.Negative : Signs.Positive;
-			Facing = desiredFacing;
-			if (visual.FacingMatches && grounded && !hitReacting && !recovering &&
-				MathF.Abs(player.Position.X - Position.X) > PlayerStopDistance)
+			var targetX = WalkTargetX ?? player.Position.X;
+			var stopDistance = WalkTargetX.HasValue ? 0 : PlayerStopDistance;
+			if (MathF.Abs(targetX - Position.X) > 1)
 			{
-				walking = HasGroundAhead();
-				if (!walking)
-					TryStartStepDown((int)Facing);
+				Facing = targetX < Position.X ? Signs.Negative : Signs.Positive;
+				if (visual.FacingMatches && grounded && !hitReacting && !recovering &&
+					MathF.Abs(targetX - Position.X) > stopDistance)
+				{
+					walking = HasGroundAhead();
+					if (!walking)
+						TryStartStepDown((int)Facing);
+				}
 			}
 		}
 		if (stepTraversal == StepTraversal.None && grounded)
-			Velocity.X = Calc.Approach(Velocity.X, walking ? (int)Facing * WalkSpeed : 0,
+			Velocity.X = Calc.Approach(Velocity.X,
+				walking ? (int)Facing * WalkSpeed * (scripted ? 1 : WalkSpeedMultiplier) : 0,
 				(walking ? WalkAcceleration : GroundFriction) * Time.Delta);
 		UpdateStepTraversal();
 
@@ -317,6 +321,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual bool SuppressKnockdownOnHit => false;
 	protected virtual bool DeathIsPersistent => false;
 	protected virtual float PlayerStopDistance => StopDistance;
+	/// Where non-scripted movement walks to. Null chases the player, stopping at PlayerStopDistance.
+	protected virtual float? WalkTargetX => null;
+	/// Scales WalkSpeed for non-scripted movement only; scripted walks keep the base pace.
+	protected virtual float WalkSpeedMultiplier => 1;
 	protected virtual float AnimationSpeedMultiplier => 1;
 	protected virtual float HitLimbReactionStrength => 1;
 	protected virtual bool UsesFrozenPose => false;
@@ -329,6 +337,24 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual Color RigHeadTint => Color.White;
 	protected virtual bool BackArmCombatEnabled => true;
 	protected virtual IReadOnlyList<HumanoidRigWireSpec> RigWireLayout => Array.Empty<HumanoidRigWireSpec>();
+
+	protected virtual void Die()
+	{
+		Game.HitStun(0.3f);
+		Game.Shake(0.1f);
+		for (var i = 0; i < 3; i++)
+			Game.Create<Pop>(Position + new Point2(0, -8 - i * 9));
+		DestroyOnDeath();
+	}
+
+	protected void DestroyOnDeath()
+	{
+		if (DeathIsPersistent)
+			Game.DestroyPersistently(this);
+		else
+			Game.DestroyForThisSession(this);
+	}
+
 	protected virtual void OnFootstep(Vector2 position) { }
 
 	protected bool RigFacingMatches => visual.FacingMatches;
@@ -896,20 +922,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		OnWasHurt();
 		if (Health <= 0)
 		{
-			Game.HitStun(0.3f);
-			Game.Shake(0.1f);
-			for (var i = 0; i < 3; i++)
-				Game.Create<Pop>(Position + new Point2(0, -8 - i * 9));
-			if (DeathIsPersistent)
-				Game.DestroyPersistently(this);
-			else
-				Game.DestroyForThisSession(this);
+			Die();
 			return;
 		}
-		else
-		{
-			Game.HitStun(0.25f);
-		}
+		Game.HitStun(0.25f);
 
 		var away = Position.X < by.Position.X ? -1f : 1f;
 		var hitDirection = ((Vector2)(Position - by.Position)).Normalized(Vector2.UnitX * away);

@@ -63,5 +63,12 @@
     "UpperBodyLeanDegrees": 11,
     "ArmWidthScale": 1.25,
     "HandWidthScale": 1
+  },
+  "Death": {
+    "Clip": "Hit_Knockback",
+    "Start": 0,
+    "Loop": false,
+    "Speed": 1,
+    "FootIK": false
   }
 }

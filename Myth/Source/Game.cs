@@ -192,7 +192,7 @@ public partial class Game : IDisposable
 	Vector2 renderTargetNoise;
 	Vector2 renderTargetKick;
 	Vector2 renderTargetKickVelocity;
-	internal bool ShakeInRenderTargetSpace;
+	internal bool ShakeInRenderTargetSpace = true;
 	float renderTargetShaking;
 	float renderTargetShakeIntensity;
 	float renderTargetShakeStepTimer;

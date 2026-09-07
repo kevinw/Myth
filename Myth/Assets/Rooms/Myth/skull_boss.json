@@ -83,7 +83,7 @@
     {
       "Id": "79ca3193f6281d40",
       "Type": "EyeLaserPuppet",
-      "Position": [301, 142],
+      "Position": [320, 142],
       "WaitForPlayerOnSamePlatform": true,
       "ProjectionYaw": 43.696,
       "NeuralJostleStrength": 0.786,
@@ -109,14 +109,14 @@
       "StompWaveSpeed": 163.761,
       "NeuralFPS": 48.234,
       "NeuralFireRate": 0.769,
-      "NeuralWeightsFile": "interlaced_0081_circular.bin",
       "PixelsPerMeter": 55.584,
       "DepthWidthAmount": 0.218,
       "DepthColorContrast": 2.4,
       "NearColor": "C2F2FB",
       "Health": 20,
       "VisualFPS": 15.246,
-      "Facing": "-"
+      "Facing": "-",
+      "NeuralWeightsFile": "crowd_circular.bin"
     },
     {
       "Id": "cdee73111a7e4ba8",

@@ -26,6 +26,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	//protected override IReadOnlyList<HumanoidRigWireSpec> RigWireLayout => WireLayout;
 
 	enum Phase { None, Turning, Charge, Fire, Recover, FloatingFlash, StompTurning, Stomp, Swipe }
+	enum Decision { FloatingFlash, Stomp, Walk, EyeLaser, Swipe }
 
 	[I(24, 160), InspectorGroup("Eye Laser")] public float MinimumRange = 48;
 	[InspectorGroup("Encounter")] public bool WaitForPlayerOnSamePlatform;
@@ -53,10 +54,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	[I(0, 0.4f)] public float FloatingWaveAccelerationTime = 0.16f;
 	[I(0.1f, 1)] public float FloatingWaveInitialSpeed = 0.42f;
 	public Color FloatingFlashColor = 0xffd7f2;
-	static float StompRange => 1280f;
-	static float StompVerticalRange => 150f;
-
-
 	[I(80, 360)] public float StompWaveSpeed = 120;
 	[I(64, 640)] public float StompWaveRange = 460;
 	[I(1, 8)] public float StompWaveThickness = 5.5f;
@@ -75,6 +72,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	const string FloatingFlashLandTake = "FloatingFlashLand";
 	const string StompTake = "Stomp";
 	const string SwipeTake = "Swipe";
+	const string DeathTake = "Death";
 	const string ChargeEffect = "eye_laser_charge";
 	const string FloatingFlashEffect = "floating_flash_charge";
 	const string StompGatherEffect = "wave_pylon_solid_charge";
@@ -116,8 +114,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	bool stompLeftFoot;
 	float stompHoldTime;
 	float stompParticleTimer;
-	float walkStopDistance;
+	float? walkTargetX;
 	float walkTime;
+	WeightedEnumSelector<Decision> decisions;
 	float contactDamageGrace;
 	float swipeStrength;
 	bool greetingStarted;
@@ -182,7 +181,24 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float StompHoldMinimumSpeed => 0.05f;
 	static float StompGatherRadius => 18;
 	static float SwipeRange => 50;
-	static float SwipeChance => 0.5f;
+	static float DecisionPriorityPerMiss => 0.4f;
+	static int DecisionMaximumMisses => 5;
+	static float FloatingDecisionWeight => 1.6f;
+	static float CloseStompDecisionWeight => 1.8f;
+	static float FarStompDecisionWeight => 0.5f;
+	static float CloseLaserDecisionWeight => 0.25f;
+	static float FarLaserDecisionWeight => 2.5f;
+	static float SwipeDecisionWeight => 2.4f;
+	static float CloseWalkDecisionWeight => 0.6f;
+	static float FarWalkDecisionWeight => 1.4f;
+	static float OutOfRangeWalkDecisionWeight => 2.5f;
+	static float WalkSpeedup => 1.5f;
+	static float LowHealthWalkSpeedup => 3f;
+	static float WalkArriveDistance => 2;
+	static float RetreatChance => 0.3f;
+	static float RetreatDistance => 60f;
+	static float DeathPopDuration => 3f;
+	static float DeathPopInterval => 0.22f;
 	static float SwipeFingerScale => 3.6f;
 	static float SwipeWindupEnd => 0.42f;
 	static float SwipeRecoveryStart => 0.72f;
@@ -285,28 +301,26 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			cooldown = MathF.Max(0, cooldown - Time.Delta * AnimationSpeedMultiplier);
 			var toPlayer = player.Position - Position;
 			var distance = MathF.Abs(toPlayer.X);
-			if (walkStopDistance > 0)
+			if (walkTargetX is { } walkTarget)
 			{
 				walkTime += Time.Delta;
 				if (walkTime >= WalkGiveUpTime)
 				{
 					LogLiveStatus($"Walk abandoned after {walkTime:0.0}s");
-					walkStopDistance = walkTime = 0;
+					walkTargetX = null;
 					cooldown = Cooldown;
 				}
+				else if (MathF.Abs(walkTarget - Position.X) > WalkArriveDistance)
+					return false;
 				else
 				{
-					if (distance > walkStopDistance)
-						return false;
 					LogLiveStatus($"Walk complete at {distance:0.0}px");
-					walkStopDistance = walkTime = 0;
+					walkTargetX = null;
 				}
 			}
-			var canStomp = distance <= StompRange && MathF.Abs(toPlayer.Y) <= StompVerticalRange;
-			var canLaser = distance >= MinimumRange && distance <= MaximumRange && MathF.Abs(toPlayer.Y) <= VerticalRange;
-			var canSwipe = toPlayer.LengthSquared() < SwipeRange * SwipeRange &&
-				Vector2.Dot(toPlayer, Vector2.UnitX * (int)Facing) > 0 && RigFacingMatches;
-			if (!grounded || !canStomp && !canLaser)
+			var canLaser = CanLaser(toPlayer);
+			var canSwipe = CanSwipe(toPlayer);
+			if (!grounded)
 				return false;
 
 			Facing = toPlayer.X < 0 ? Signs.Negative : Signs.Positive;
@@ -315,32 +329,23 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			SetAbilityLookTarget(player.Position);
 			if (cooldown > 0)
 				return true;
-			if (canSwipe && Game.rng.Chance(SwipeChance))
+			var decision = ChooseAction(distance, canLaser, canSwipe);
+			switch (decision)
 			{
-				LogLiveStatus($"Swipe at {toPlayer.Length():0.0}px");
-				BeginSwipe();
-				return true;
-			}
-			var roll = Game.rng.Int(canLaser ? 4 : 3);
-			switch (roll)
-			{
-				case 0:
-					LogLiveStatus($"Roll {roll}: floating radial wave at {distance:0.0}px");
+				case Decision.FloatingFlash:
 					BeginFloatingFlash(player);
 					break;
-				case 1:
-					LogLiveStatus($"Roll {roll}: stomp at {distance:0.0}px");
+				case Decision.Stomp:
 					phase = Phase.StompTurning;
 					break;
-				case 2:
-					var walkFraction = Game.rng.Float(0.5f, 0.9f);
-					walkStopDistance = distance * (1 - walkFraction);
-					walkTime = 0;
-					LogLiveStatus($"Roll {roll}: walk {walkFraction:P0}, {distance:0.0}px → {walkStopDistance:0.0}px");
+				case Decision.Walk:
+					BeginWalk(player, toPlayer.X);
 					return false;
-				default:
-					LogLiveStatus($"Roll {roll}: eye laser at {distance:0.0}px");
+				case Decision.EyeLaser:
 					phase = Phase.Turning;
+					break;
+				case Decision.Swipe:
+					BeginSwipe();
 					break;
 			}
 		}
@@ -393,7 +398,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			case Phase.StompTurning:
 				SetAbilityPoseModifierWeight(1);
 				SetAbilityLookTarget(player.Position);
-				if (!grounded || MathF.Abs(player.Position.X - Position.X) > StompRange * 1.25f)
+				if (!grounded)
 				{
 					CancelAttack(StompCooldown * 0.25f);
 					return false;
@@ -426,6 +431,58 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		return true;
 	}
 
+	void BeginWalk(Player player, float toPlayerX)
+	{
+		walkTime = 0;
+		if (Game.rng.Chance(RetreatChance) && TryGetRetreatTarget(player, out var retreat))
+		{
+			walkTargetX = retreat;
+			LogLiveStatus($"Retreat {RetreatDistance:0}px from {MathF.Abs(toPlayerX):0.0}px");
+			return;
+		}
+		var closed = Game.rng.Float(0.5f, 0.9f);
+		walkTargetX = Position.X + toPlayerX * closed;
+		LogLiveStatus($"Walk {closed:P0} closer: {MathF.Abs(toPlayerX):0.0}px → {MathF.Abs(toPlayerX) * (1 - closed):0.0}px");
+	}
+
+	bool TryGetRetreatTarget(Player player, out float targetX)
+	{
+		var away = new Point2(player.Position.X < Position.X ? (int)RetreatDistance : -(int)RetreatDistance, 0);
+		targetX = Position.X + away.X;
+		return !OverlapsAny(away, Masks.Solid) &&
+			Game.TryFindSurface(this, Hitbox.Rect + Position + away, Vector2.UnitY, 2, out _);
+	}
+
+	bool CanLaser(Vector2 toPlayer) => MathF.Abs(toPlayer.X) >= MinimumRange &&
+		MathF.Abs(toPlayer.X) <= MaximumRange && MathF.Abs(toPlayer.Y) <= VerticalRange;
+
+	bool CanSwipe(Vector2 toPlayer) => toPlayer.LengthSquared() < SwipeRange * SwipeRange &&
+		Vector2.Dot(toPlayer, Vector2.UnitX * (int)Facing) > 0 && RigFacingMatches;
+
+	void SetDecisionWeights(float distance, bool canLaser, bool canSwipe)
+	{
+		var distanceBias = Calc.ClampedMap(distance, SwipeRange, MaximumRange);
+		decisions.Begin(DecisionPriorityPerMiss, DecisionMaximumMisses);
+		decisions.Set(Decision.FloatingFlash, FloatingDecisionWeight);
+		decisions.Set(Decision.Stomp, Calc.Lerp(CloseStompDecisionWeight, FarStompDecisionWeight, distanceBias));
+		decisions.Set(Decision.EyeLaser,
+			canLaser ? Calc.Lerp(CloseLaserDecisionWeight, FarLaserDecisionWeight, distanceBias) : 0);
+		decisions.Set(Decision.Swipe, canSwipe ? SwipeDecisionWeight : 0);
+		decisions.Set(Decision.Walk, distance > MaximumRange
+			? OutOfRangeWalkDecisionWeight
+			: Calc.Lerp(CloseWalkDecisionWeight, FarWalkDecisionWeight, distanceBias),
+			increasePriorityWhenMissed: false);
+	}
+
+	Decision ChooseAction(float distance, bool canLaser, bool canSwipe)
+	{
+		SetDecisionWeights(distance, canLaser, canSwipe);
+		if (!decisions.TryChoose(ref Game.rng, out var decision))
+			throw new InvalidOperationException("Eye laser puppet has no available action");
+		LogLiveStatus($"Picked {decision} at {distance:0.0}px (weight {decisions.Weight(decision):0.00})");
+		return decision;
+	}
+
 	bool PlayerSharesGroundSupport(Player player)
 	{
 		if (!player.Grounded() || !TryGetGroundSupport(this, out var bossSupport) ||
@@ -443,9 +500,11 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			support.Normal.Y < -0.5f;
 
 	protected override bool AbilityControlsMovement => floating;
-	protected override bool SuppressKnockdownOnHit => hitsTaken % HitsPerKnockdown != HitsPerKnockdown - 1;
+	protected override bool SuppressKnockdownOnHit =>
+		phase == Phase.FloatingFlash || hitsTaken % HitsPerKnockdown != HitsPerKnockdown - 1;
 	protected override bool DeathIsPersistent => true;
-	protected override float PlayerStopDistance => walkStopDistance > 0 ? walkStopDistance : base.PlayerStopDistance;
+	protected override float? WalkTargetX => walkTargetX;
+	protected override float WalkSpeedMultiplier => LowHealth ? LowHealthWalkSpeedup : WalkSpeedup;
 	protected override float AnimationSpeedMultiplier => LowHealth ? SpeedupFactor : 1;
 	protected override float HitLimbReactionStrength => HitLimbMotionStrength;
 	protected override Color RigHeadTint => LowHealth ? LowHealthSkullTint : Color.White;
@@ -456,7 +515,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		Game.Shake(0.05f);
 		AudioEvent("boss/footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
 	}
-	internal override bool ContactDamageEnabled => contactDamageGrace <= 0;
+	internal override bool ContactDamageEnabled => contactDamageGrace <= 0 && Health > 0;
 
 	void BeginSwipe()
 	{
@@ -467,18 +526,12 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		SetAbilityFingerSpin(SwipeFingerSpin, leftHandOnly: true);
 		SetAbilityHandWidthScale(1, leftHandOnly: true);
 		phase = Phase.Swipe;
+		swipeSound = Game.CreateAudioEvent("boss/saw", RigLeftHandPosition, start: true);
 	}
-
-	bool startedSwipe;
-	SoundInstance? swipeSound = null;
 
 	void UpdateSwipe()
 	{
-		if (!startedSwipe) {
-			startedSwipe = true;
-			var todoGetActualHandPosition = Position;
-			swipeSound = Game.CreateAudioEvent("boss/saw", todoGetActualHandPosition, start: true);
-		}
+		Game.SetAudioEventPosition(swipeSound, RigLeftHandPosition);
 		SetAbilityLookTarget(null);
 		SetAbilityPoseModifierWeight(1);
 		SetAbilityFingerSpin(SwipeFingerSpin, leftHandOnly: true);
@@ -492,9 +545,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	void FinishSwipe()
 	{
-		swipeSound?.Stop();
-		swipeSound = null;
-		startedSwipe = false;
+		StopAbilitySounds();
 		swipeStrength = 0;
 		SetAbilityYaw(null);
 		SetAbilityFingerSpin(false);
@@ -633,7 +684,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		floating = true;
 		var groundPosition = (Vector2)Position;
 		var riseTarget = groundPosition - Vector2.UnitY * FloatingFlashHeight;
-		var riseSound = Game.CreateAudioEvent("boss/start_float", Position, start: true);
+		riseSound = Game.CreateAudioEvent("boss/start_float", Position, start: true);
 		for (var time = 0f; time < FlashRiseTime; time += Time.Delta)
 		{
 			var progress = Ease.Cube.InOut(Math.Clamp(time / FlashRiseTime, 0, 1));
@@ -690,7 +741,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		Game.ShakeRenderTarget(FlashReleaseShakeTime, 0.45f);
 		Game.KickRenderTarget(releaseDirection * 58);
 		UpdateSound(1, 0.01f);
-		riseSound?.Stop();
+		StopAndReleaseSound(ref riseSound);
 		AudioEvent("boss/emit_floating_wave");
 		EmitFloatingFlashBurst();
 		RecoilAbilityPose(-releaseDirection * FlashPoseRecoilSpeed - Vector2.UnitY * FlashPoseRecoilLift,
@@ -972,7 +1023,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		cooldown = Cooldown;
 		SetAbilityLookTarget(null);
 		SetAbilityPoseModifierWeight(1);
-		StopAndReleaseSound(ref sound);
+		StopAbilitySounds();
 	}
 
 	protected override void InterruptAbility() => CancelAttack(Cooldown * 0.5f);
@@ -992,8 +1043,38 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		SetAbilityHandWidthScale(1);
 		swipeStrength = 0;
 		UnlockAbilityAnimationYaw();
-		StopAndReleaseSound(ref sound, true);
+		StopAbilitySounds(true);
 	}
+
+	protected override void Die()
+	{
+		CancelAttack(0);
+		AudioEvent("boss/death");
+		StartScript(DeathRoutine());
+	}
+
+	IEnumerator<float> DeathRoutine()
+	{
+		PlayTake(DeathTake);
+		for (var time = 0f; time < DeathPopDuration; time += Time.Delta)
+		{
+			Game.Shake(1);
+			if (Time.OnInterval(DeathPopInterval))
+				Game.Create<Pop>(RandomPointIn(GetVisualBounds()));
+			yield return 0;
+		}
+		var bounds = GetVisualBounds();
+		for (var x = 0; x < 3; x++)
+			for (var y = 0; y < 3; y++)
+				Game.Create<Pop>((bounds.TopLeft + bounds.Size * new Vector2(x, y) / 2).RoundToPoint2());
+		Game.HitStun(0.3f);
+		Game.Shake(0.1f);
+		DestroyOnDeath();
+	}
+
+	Point2 RandomPointIn(Rect bounds)
+		=> (bounds.TopLeft + Game.rng.Float(bounds.Width) * Vector2.UnitX +
+			Game.rng.Float(bounds.Height) * Vector2.UnitY).RoundToPoint2();
 
 	void ConfigureLaser()
 	{
@@ -1053,6 +1134,17 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	}
 
 	SoundInstance? sound;
+	SoundInstance? swipeSound;
+	SoundInstance? riseSound;
+
+	void StopAbilitySounds(bool immediate = false)
+	{
+		StopAndReleaseSound(ref sound, immediate);
+		StopAndReleaseSound(ref laserSound, immediate);
+		StopAndReleaseSound(ref swipeSound, immediate);
+		StopAndReleaseSound(ref riseSound, immediate);
+	}
+
 	void StartSound()
 	{
 		StopAndReleaseSound(ref sound, true);
@@ -1093,7 +1185,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		var value = new ValueStringBuilder(stackalloc char[128]);
 		var action = phase switch
 		{
-			Phase.None when walkStopDistance > 0 => "Walking",
+			Phase.None when walkTargetX.HasValue => "Walking",
 			Phase.None when cooldown > 0 => "Cooldown",
 			Phase.None => "Choosing",
 			Phase.Turning => "Turning for eye laser",
@@ -1144,8 +1236,17 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 				value.Append($"{horizontalDistance:0.0}px horizontal, {verticalDistance:0.0}px vertical, {toPlayer.Length():0.0}px total");
 				LiveStatusRow("Player distance", value.AsSpan());
 				value.Clear();
-				LiveStatusRow("Can stomp", horizontalDistance <= StompRange && verticalDistance <= StompVerticalRange ? "Yes" : "No");
-				LiveStatusRow("Can eye laser", horizontalDistance >= MinimumRange && horizontalDistance <= MaximumRange && verticalDistance <= VerticalRange ? "Yes" : "No");
+				SetDecisionWeights(horizontalDistance, CanLaser(toPlayer), CanSwipe(toPlayer));
+				foreach (var choice in WeightedEnumSelector<Decision>.Choices)
+				{
+					var weight = decisions.Weight(choice);
+					if (weight > 0)
+						value.Append($"{weight / decisions.TotalWeight:P0} (weight {weight:0.00}, missed {decisions.Misses(choice)})");
+					else
+						value.Append("Unavailable");
+					LiveStatusRow(WeightedEnumSelector<Decision>.Name(choice), value.AsSpan());
+					value.Clear();
+				}
 			}
 			else
 				LiveStatusRow("Player", "Missing");
@@ -1161,9 +1262,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			}
 			else
 				LiveStatusRow("Contact damage", "Active");
-			if (walkStopDistance > 0)
+			if (walkTargetX is { } walkTarget)
 			{
-				value.Append($"{walkStopDistance:0.0}px from player");
+				value.Append($"x={walkTarget:0.0} ({walkTarget - Position.X:+0.0;-0.0}px)");
 				LiveStatusRow("Walk target", value.AsSpan());
 				value.Clear();
 			}
@@ -1256,6 +1357,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	public override void Destroyed()
 	{
 		base.Destroyed();
+		StopAbilitySounds(true);
 		ReleaseParticleEffect(ref chargeEffect);
 		ReleaseParticleEffect(ref floatingFlashEffect);
 		ReleaseParticleEffect(ref stompGatherEffect);
