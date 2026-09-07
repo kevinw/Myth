@@ -42,7 +42,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	[I(0, 3)] public float LaserLightIntensity = 1.35f;
 	public Color LaserColor = 0x5fcde4;
 	public ContentRef<SurfaceContent> LaserSurfaceId = new("");
-	public string SoundEvent = "lightning_trap";
 	[I(4, 40), InspectorGroup("Floating Flash")] public float FloatingFlashHeight = 14;
 	[I(0, 2)] public float FloatingPoseJostle = 1.3f;
 	[I(0, 16)] public float FloatingWanderRadius = 8;
@@ -105,7 +104,6 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	int stompGatherEffect = -1;
 	int hitSparkEffect = -1;
 	int groundDustEffect = -1;
-	SoundInstance? sound;
 	float flashParticleTimer;
 	bool floating;
 	uint floatingWanderSeed;
@@ -471,8 +469,16 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		phase = Phase.Swipe;
 	}
 
+	bool startedSwipe;
+	SoundInstance? swipeSound = null;
+
 	void UpdateSwipe()
 	{
+		if (!startedSwipe) {
+			startedSwipe = true;
+			var todoGetActualHandPosition = Position;
+			swipeSound = Game.CreateAudioEvent("boss/saw", todoGetActualHandPosition, start: true);
+		}
 		SetAbilityLookTarget(null);
 		SetAbilityPoseModifierWeight(1);
 		SetAbilityFingerSpin(SwipeFingerSpin, leftHandOnly: true);
@@ -486,6 +492,9 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	void FinishSwipe()
 	{
+		swipeSound?.Stop();
+		swipeSound = null;
+		startedSwipe = false;
 		swipeStrength = 0;
 		SetAbilityYaw(null);
 		SetAbilityFingerSpin(false);
@@ -907,10 +916,15 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		EmitChargeBurst();
 	}
 
+	SoundInstance? laserSound;
+
 	void UpdateFire()
 	{
 		fireTime += Time.Delta;
 		var progress = Math.Clamp(fireTime / MathF.Max(0.0001f, SweepDuration), 0, 1);
+		if (progress < 1 && laserSound == null) {
+			laserSound = Game.CreateAudioEvent("boss/eye_laser_emit", RigEyePosition, start: true);
+		}
 		beamScale = Ease.Cube.Out(Math.Clamp(fireTime / FireGrowTime, 0, 1));
 		beamAlpha = eyeGlow = 1;
 		SetAbilityPoseModifierWeight(0);
@@ -919,8 +933,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		TraceLaser(Ease.Cube.InOut(progress));
 		if (laser.HitObstacle && !laserContacting)
 		{
-			Game.ShakeRenderTarget(FireShakeTime * 0.3f, 0.2f);
-			Game.KickRenderTarget(laser.Direction * 12);
+			Game.ShakeRenderTarget(FireShakeTime * 0.3f, 0.5f);
+			Game.KickRenderTarget(laser.Direction * 22);
 		}
 		laserContacting = laser.HitObstacle;
 		SetAbilityLookTarget(aimTarget);
@@ -929,7 +943,10 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		UpdateEndpointPops();
 		UpdateSound(1, progress);
 		if (progress >= 1)
+		{
+			StopAndReleaseSound(ref laserSound);
 			BeginRecover();
+		}
 	}
 
 	void TraceLaser(float progress)
@@ -1035,10 +1052,12 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		previousLaserEnd = laser.End;
 	}
 
+	SoundInstance? sound;
 	void StartSound()
 	{
 		StopAndReleaseSound(ref sound, true);
-		sound = Game.CreateAudioEvent(SoundEvent, RigEyePosition);
+		string EyeLaserSound = "boss/eye_laser";
+		sound = Game.CreateAudioEvent(EyeLaserSound, RigEyePosition);
 		UpdateSound(0, 0);
 		sound?.Start();
 	}
@@ -1048,6 +1067,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		Game.SetAudioEventPosition(sound, RigEyePosition);
 		Game.SetAudioEventParameter(sound, WarmupParameter, warmup);
 		Game.SetAudioEventParameter(sound, FireDurationParameter, fireDuration);
+		Game.Show(warmup, fireDuration);
 	}
 
 	[Conditional("EDITOR")]
