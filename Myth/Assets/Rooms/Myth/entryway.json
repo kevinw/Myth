@@ -127,6 +127,14 @@
       "Id": "8679bfc3fb8a1153",
       "Type": "Wildlife",
       "Position": [160, 92]
+    },
+    {
+      "Id": "3d77845896a11777",
+      "From": "BlueMemoryLight",
+      "Position": [241, 183],
+      "DrawSprite": false,
+      "Radius": 111.434,
+      "Intensity": 0.607
     }
   ]
 }

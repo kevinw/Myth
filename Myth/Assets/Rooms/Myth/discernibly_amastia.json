@@ -104,6 +104,13 @@
       "FishCount": 0,
       "BugCount": 3,
       "FlyCount": 2
+    },
+    {
+      "Id": "0a0e71f10fdd9aa4",
+      "Type": "Prop",
+      "Position": [263, 114],
+      "SpriteName": "Props/server",
+      "Layer": "Background"
     }
   ]
 }
