@@ -19,6 +19,8 @@ public class Goal : Actor
 		Hitbox = Hitbox.FromSprite(Sprite, Anchor);
 	}
 
+	public bool DemoTeleportTarget;
+
 	public bool ReachedBy(Actor actor)
 		=> (Hitbox.Rect + Position).Inflate(1).Overlaps(actor.Hitbox.Rect + actor.Position);
 

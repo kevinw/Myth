@@ -1,40 +1,25 @@
+- first thing bud says is "You OK" -- write something better
+- fall from start room?
+- animate tutorial text a bit on room load
+- rooms need a "don't spawn bud" flag
+- check depth of burrowline vs player
+- first rigpuppet needs sfx and screenshake on footstep
 - show mycelon count and duck count at the end
-- implement "demo go to" menu option
-- don't let ELP fall down when he's doing the airborne move
-- make drone not notice you within a distance
 - burrow lines: SOMETHING to make them a bit more visually interesting
-- remove aura
+- magnetic crawler gets borked by the moving platform
 - lore rewards alongside chests
+  - MAKE BUD react to computer text
 - acknowledgements on itch page
-- try a simple fluid sim that acts as the paint mask for an NCA
 - take 30 mins to make sure you can explain NCA, and also IK in crawler, and also the RigPuppet
 - redraw spitter; test other actors and draw for them
-- redraw bubble
-- for builds for fer
-  - screenshot button
-  - tilde console
-  - add an itch page
 - either disable all bud voice barks or make them never ever repeat
-- POSSIBLY use alien bug for one of our existing behaviours?
-- update voice-de.json
-- specific level ideas
-  - rearrange what we have at first 
-  - reveal map and look at the silhouette
 SFX
-  - eyelaserpuppet needs a buzzsaw effect for the hand, and a strong effect for the eye laser
+  - burrow time sfx SO IMPORTANT
   - Bosonic Time + upgrade needs SFX
-  - mosquito death needs robot sound layer
   - really listen and pay attention to lack of landing sound effects on grass etc
-  - drone
 - go through a decoration hour
-- eyelaserpuppet needs to wait until you come within a certain distance before starting kneel
-- make something nice after the boss room; a very hard challenge room with text which says the demo is over; no really the demo is over
 - i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
-- boss needs bigger Pop / longer death like GhostFrog
 - use Dropper; draw a sprite; more "easy" enemy variety wins
-- some machine ambience music for the tower tunnel
-- wall jump teach room early where Bud tells you
-- RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
 
 # Monday
 - turn index.html into a character controller world
@@ -45,6 +30,17 @@ SFX
 
 
 LATER
+- show git sha on pause
+- foster logo at startup
+- POSSIBLY use alien bug for one of our existing behaviours?
+- update voice-de.json
+- wall jump teach room early where Bud tells you
+- RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
+- for builds for fer
+  - screenshot button
+  - tilde console
+  - add an itch page
+- redraw bubble
 - for things like LinkedSound in the editor, show their icon at half opacity?
 - burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
   is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame

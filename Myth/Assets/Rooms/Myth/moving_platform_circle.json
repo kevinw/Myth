@@ -138,7 +138,10 @@
       "Mode": "Circle",
       "CircleCenter": [320, 184],
       "Size": [25, 16],
-      "Material": "stone-dual"
+      "Material": "stone-dual",
+      "StartFriction": 14.753,
+      "WaitTime": 5,
+      "Speed": 21.421
     },
     {
       "Id": "3a0754e306dca549",

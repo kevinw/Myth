@@ -57,7 +57,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
 	public readonly NeuralSurfaceSettings Neural = new()
 	{
-		NeuralWeightsFile = new("pseudocamo_tight_converge.bin"),
+		NeuralWeightsFile = NeuralWeightsContent.MagneticCrawlerDefault,
 		NeuralColorAmount = 0.42f,
 		NeuralNormalAmount = 0.5f,
 		NeuralFireRate = 0.55f,

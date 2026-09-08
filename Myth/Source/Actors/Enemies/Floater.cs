@@ -201,7 +201,7 @@ public class Floater : Actor
 		if (spawnPops)
 			laserPopTimer = LaserPopInterval;
 		if (needShake) {
-			Game.Shake(0.15f);
+			Game.Shake(0.15f, intensity: 0.5f);
 		}
 	}
 

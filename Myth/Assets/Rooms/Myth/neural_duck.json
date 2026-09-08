@@ -218,6 +218,13 @@
       "SurfaceId": "robot_body_1",
       "HeadSpriteScale": 0.909,
       "PoseAnimationName": "Kneeling_Down"
+    },
+    {
+      "Id": "012ae95d96b1cd7c",
+      "Type": "Goal",
+      "Position": [58, 148],
+      "Name": "Duck Power",
+      "DemoTeleportTarget": true
     }
   ]
 }

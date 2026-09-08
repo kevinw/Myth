@@ -146,6 +146,13 @@
       "Type": "LinkedSound",
       "Position": [152, 52],
       "EventName": "background_ambience/underwater_deep"
+    },
+    {
+      "Id": "c2759d61eb17b18c",
+      "Type": "Goal",
+      "Position": [102, 142],
+      "DemoTeleportTarget": true,
+      "Name": "Boss"
     }
   ]
 }

@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Foster.Framework;
 using ImGuiNET;
 using static ImGuiNET.ImGui;
@@ -12,8 +13,12 @@ public partial class Manager
 		Closed,
 		Title,
 		Pause,
-		Options
+		Options,
+		DemoTeleport
 	}
+
+	readonly record struct DemoTeleportSpot(string Label, string RoomId, Point2 Position);
+	readonly List<DemoTeleportSpot> demoTeleportSpots = [];
 
 	Game? previewGame;
 
@@ -51,7 +56,7 @@ public partial class Manager
 	// pause page's "back to save" is 50px, both drawn from FramePadding.X and clipped to the button.
 	float MenuButtonWidth => gameMenuLayoutPage switch
 	{
-		GameMenuPage.Options => 100f,
+		GameMenuPage.Options or GameMenuPage.DemoTeleport => 100f,
 		GameMenuPage.Pause => 64f,
 		_ => 50f,
 	};
@@ -96,8 +101,9 @@ public partial class Manager
 	{
 		if (gameMenuPage != page)
 		{
-			gameMenuEnterDirection = page == GameMenuPage.Options ? Vector2.UnitX :
-				gameMenuPage == GameMenuPage.Options ? -Vector2.UnitX : Vector2.UnitY;
+			var deeper = MenuPageDepth(page) - MenuPageDepth(gameMenuPage);
+			gameMenuEnterDirection = deeper > 0 ? Vector2.UnitX :
+				deeper < 0 ? -Vector2.UnitX : Vector2.UnitY;
 			gameMenuPageTransition = 0;
 		}
 		gameMenuPage = page;
@@ -105,6 +111,15 @@ public partial class Manager
 		confirmRestart = false;
 		menuFocusDirty = true;
 	}
+
+	// How far a page sits from the top level: transitions slide toward the deeper page, and the
+	// title/hint layout treats anything below the top level as a sub-page.
+	static int MenuPageDepth(GameMenuPage page) => page switch
+	{
+		GameMenuPage.Options => 1,
+		GameMenuPage.DemoTeleport => 2,
+		_ => 0,
+	};
 
 	void ApplyGameplayAudioPause() => Audio.SetBusPaused("bus:/Gameplay", GameMenuPausesGame);
 
@@ -128,7 +143,9 @@ public partial class Manager
 		if (Input.Keyboard.Pressed(Keys.Escape) || ControllerPressed(Buttons.East) || pausePressed)
 		{
 			MenuAudioEvent("menu/back");
-			if (gameMenuPage == GameMenuPage.Options)
+			if (gameMenuPage == GameMenuPage.DemoTeleport)
+				ShowGameMenuPage(GameMenuPage.Options);
+			else if (gameMenuPage == GameMenuPage.Options)
 				ShowGameMenuPage(gameMenuReturnPage);
 			else if (gameMenuPage == GameMenuPage.Pause)
 				CloseGameMenu();
@@ -188,10 +205,56 @@ public partial class Manager
 				window.Fullscreen = !window.Fullscreen;
 		}
 #endif
+		// Hidden rather than dead: nothing to teleport to from the title, or with no goals marked.
+		if (game != null && demoTeleportSpots.Count > 0 && MenuButton("demo teleport"))
+			ShowGameMenuPage(GameMenuPage.DemoTeleport);
 		if (MenuButton(confirmRestart ? "you sure?" : "erase game"))
 			EraseGameStep();
 		if (MenuButton("back", "menu/back"))
 			ShowGameMenuPage(gameMenuReturnPage);
+	}
+
+	void DemoTeleportMenu()
+	{
+		foreach (var spot in demoTeleportSpots)
+			if (MenuButton(spot.Label))
+				DemoTeleportTo(spot);
+		if (MenuButton("back", "menu/back"))
+			ShowGameMenuPage(GameMenuPage.Options);
+	}
+
+	// Goals are only spawned as actors in goal-loading games (Game.loadGoals), so the list comes
+	// from the authored rooms rather than anything live. Rebuilt whenever options opens, which
+	// keeps it current with live room edits.
+	void RefreshDemoTeleportSpots()
+	{
+		demoTeleportSpots.Clear();
+		foreach (var room in Assets.RoomsById.Values)
+			foreach (var actor in room.Actors)
+			{
+				if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(Goal), StringComparison.OrdinalIgnoreCase) ||
+					ActorSpecs.GetResolvedProperty(actor, nameof(Goal.DemoTeleportTarget)) is not JsonValue flag ||
+					!flag.TryGetValue<bool>(out var enabled) || !enabled)
+					continue;
+
+				var name = ActorSpecs.ReadStringValue(ActorSpecs.GetResolvedProperty(actor, nameof(Goal.Name)));
+				var local = ActorSpecs.ReadResolvedPosition(actor) ?? Point2.Zero;
+				demoTeleportSpots.Add(new(
+					string.IsNullOrWhiteSpace(name) ? room.Id : name,
+					room.Id,
+					room.WorldBounds.TopLeft + local));
+			}
+		// World X order: the menu reads left-to-right across the map, which is roughly progression.
+		demoTeleportSpots.Sort(static (a, b) => a.Position.X.CompareTo(b.Position.X));
+	}
+
+	// Close first: the warp's teleport cue plays on bus:/Gameplay, which the pause menu paused.
+	void DemoTeleportTo(DemoTeleportSpot spot)
+	{
+		CloseGameMenu();
+		if (game?.GetFirst<Player>() is { } player)
+			player.Health = Player.MaxHealth;
+		game?.TryWarpTo(spot.RoomId, spot.Position);
 	}
 
 	void StartFromMenu()
@@ -202,6 +265,7 @@ public partial class Manager
 
 	void OpenOptionsPage()
 	{
+		RefreshDemoTeleportSpots();
 		gameMenuReturnPage = gameMenuPage;
 		ShowGameMenuPage(GameMenuPage.Options);
 	}
@@ -391,6 +455,7 @@ public partial class Manager
 				case GameMenuPage.Title: TitleMenu(); break;
 				case GameMenuPage.Pause: PauseMenu(); break;
 				case GameMenuPage.Options: OptionsMenu(); break;
+				case GameMenuPage.DemoTeleport: DemoTeleportMenu(); break;
 			}
 			End();
 		}
@@ -502,12 +567,13 @@ public partial class Manager
 		{
 			GameMenuPage.Title => "Human Questions",
 			GameMenuPage.Options => "options",
+			GameMenuPage.DemoTeleport => "demo teleport",
 			_ => "paused"
 		};
 
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
-		if (gameMenuLayoutPage != GameMenuPage.Options && Assets.GetSprite("logo2", logMissing: false) is { Frames.Count: > 0 } logo)
+		if (MenuPageDepth(gameMenuLayoutPage) == 0 && Assets.GetSprite("logo2", logMissing: false) is { Frames.Count: > 0 } logo)
 			DrawDistortedLogo(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Color.White * gameMenuLayoutEase);
 		else
 		{
@@ -520,7 +586,7 @@ public partial class Manager
 		InputPrompts?.DrawGlyphCentered(
 			batcher,
 			hint,
-			new Vector2(panel.Center.X, panel.Bottom - (gameMenuLayoutPage == GameMenuPage.Title || gameMenuLayoutPage == GameMenuPage.Pause ? 0f : 17f)),
+			new Vector2(panel.Center.X, panel.Bottom - (MenuPageDepth(gameMenuLayoutPage) == 0 ? 0f : 17f)),
 			12,
 			new Color(0x8b81b5) * gameMenuLayoutEase);
 	}

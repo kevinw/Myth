@@ -127,6 +127,13 @@
         "BINDING_ENERGY",
         "WARNING"
       ]
+    },
+    {
+      "Id": "b5ed78cb2c5e3f36",
+      "Type": "Goal",
+      "Position": [158, 132],
+      "DemoTeleportTarget": true,
+      "Name": "Inverted World"
     }
   ]
 }

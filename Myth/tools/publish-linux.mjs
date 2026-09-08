@@ -39,8 +39,29 @@ run("dotnet", ["run", "--project", "Myth.csproj", "--",
   "--content-world", "Myth",
 ]);
 
-// No --check-rooms pass when cross-building: it loads the target's shaders out of the zip,
-// which a macOS host cannot create a pipeline from.
+// --check-rooms creates real GPU pipelines, so it can only read a zip built for the host's
+// shader flavor -- the Linux zip's SPIR-V is unusable on a macOS host. The content graph is
+// target-independent (only the Shaders/Compiled extension differs), so a host-flavored zip
+// validates the same rooms, actors and neural weights the Linux zip carries. Cross-building
+// without this is how a room referencing an uncollected NCA model reached the Deck.
+const hostTarget = process.platform === "linux" ? "linux" : "mac";
+const checkZip = hostTarget === "linux" ? contentZip : path.join(outRoot, "Content-check.zip");
+if (checkZip !== contentZip)
+  run("dotnet", ["run", "--project", "Myth.csproj", "--",
+    "--build-content-zip", checkZip,
+    "--content-target", hostTarget,
+    "--content-world", "Myth",
+  ]);
+run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythTestShip=true", "--",
+  "--check-rooms",
+  "--content-zip", checkZip,
+  "--asset-pack",
+]);
+// Only reached when the check passed (run throws otherwise), so a failure leaves the zip
+// on disk to inspect. Never the shipping zip -- on a Linux host checkZip is contentZip.
+if (checkZip !== contentZip)
+  fs.rmSync(checkZip, { force: true });
+
 run("dotnet", [
   "publish", "Myth.csproj",
   "-c", "Release",

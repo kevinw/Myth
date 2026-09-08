@@ -159,14 +159,14 @@
     {
       "Id": "123bcea46474b806",
       "Type": "Prop",
-      "Position": [266, 76],
+      "Position": [276, 78],
       "SpriteName": "Props/computer_terminal_sm",
       "Layer": "Background"
     },
     {
       "Id": "793c2c366569b442",
       "Type": "InspectPoint",
-      "Position": [274, 96],
+      "Position": [283, 96],
       "Text": [
         "STAFF_BROADCAST_8492:",
         "Team 9 seal_d off the comXXtronium",

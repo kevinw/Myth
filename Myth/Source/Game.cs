@@ -1356,6 +1356,17 @@ public partial class Game : IDisposable
 		return SavePointWarpActive;
 	}
 
+	// Travels to an arbitrary world position with the save-point warp (the demo teleport menu).
+	// The destination is not a save point, so it carries no actor id.
+	public bool TryWarpTo(string roomId, Point2 position)
+	{
+		if (room == null || SavePointWarpActive || (room.Id != roomId && Assets.GetRoom(roomId) == null))
+			return false;
+
+		BeginSavePointWarp(new Minimap.WarpTarget("", roomId, position));
+		return SavePointWarpActive;
+	}
+
 	// Travels to a chosen save point (from warp mode) and closes the map.
 	public void WarpToSavePoint(Minimap.WarpTarget target)
 	{

@@ -3,7 +3,7 @@
   "size": [40, 23],
   "ambientColor": "535252",
   "sporeFogStrength": 0.565,
-  "reverb": 0.843,
+  "reverb": 0.844,
   "legend": {
     "#": "back",
     "E": "ember",
@@ -28,8 +28,8 @@
     "T000T00000000000R00000000000000000000000",
     "T000T000000000R0R00000000000000000000000",
     "T00TT000000000RRRR0000000000000000000000",
-    "T00TT000000000RRRRR00000000000000000000T",
-    "TTTTT000000000RRRRR00000000000000000000T",
+    "T00TT000000000RRRRR000000000000000000TTT",
+    "TTTTT000000000RRRRR0000000000000000000TT",
     "TTTTT00000000RRRRRR00000000000000000000T",
     "TTTTT00000000RRRRRR000000000000000R0000T",
     "TTTTT00000000RR0RRR00000000000000RRRR00T",
@@ -109,6 +109,16 @@
       "LightColor": "7997FF",
       "Intensity": 0.609,
       "DrawSprite": false
+    },
+    {
+      "Id": "2fa198ee7b3b1c43",
+      "Type": "WavePylon",
+      "Position": [257, 24]
+    },
+    {
+      "Id": "205386d9980035db",
+      "Type": "WavePylon",
+      "Position": [130, 143]
     }
   ]
 }

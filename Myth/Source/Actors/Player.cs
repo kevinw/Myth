@@ -1530,7 +1530,6 @@ public partial class Player : Pawn
 	static float HurtDuration => 0.5f;
 	static bool DashImpactStun => false;
 	static float DashImpactHurtDurationMultiplier => 0.7f;
-	static float DeathDuration => 1.5f;
 	static float InvincibleDuration => 1.5f;
 	static Vector2 HatSpring => new(130f, 100f);
 	static Vector2 HatDamping => new(32f, 12f);
@@ -2310,7 +2309,7 @@ public partial class Player : Pawn
 			foreach (var actor in Game.Actors)
 				if (actor != this)
 					Game.Destroy(actor);
-			Game.Shake(0.1f);
+			Game.Shake(0.4f);
 		}
 
 		Velocity.X = Calc.Approach(Velocity.X, 0, HurtFriction * Time.Delta);
@@ -2333,6 +2332,7 @@ public partial class Player : Pawn
 		}
 
 		deathTimer += Time.Delta;
+		const float DeathDuration = 2.2f;
 		if (deathTimer >= DeathDuration)
 		{
 			deathTimer = 0;
