@@ -1518,7 +1518,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		);
 	}
 
-	public const int MaxHealth = 5;
+	public const int MaxHealth = 6;
 
 	static float AttackFriction => 150;
 	static float AttackWaveDuration => 0.39f;
@@ -1595,7 +1595,14 @@ public partial class Player : Pawn, INeuralTextureAgent
 	{
 		base.Added();
 
-		light = Game.Create<Light>(Position, it =>
+		light = CreatePlayerLight(this);
+		UpdateLightPosition();
+
+		plasmaStrikeEffect = AcquireParticleEffect("plasma_strike");
+	}
+
+	internal static Light CreatePlayerLight(Actor owner)
+		=> owner.Game.Create<Light>(owner.Position, it =>
 		{
 			it.IsStatic = false;
 			it.Radius = 37.5f;
@@ -1606,12 +1613,8 @@ public partial class Player : Pawn, INeuralTextureAgent
 			it.FlickerIntensity = 0.02f;
 			it.DrawSprite = false;
 			it.KeepOnRoomTransition = true;
-			it.SpriteShadowOwner = this;
+			it.SpriteShadowOwner = owner;
 		});
-		UpdateLightPosition();
-
-		plasmaStrikeEffect = AcquireParticleEffect("plasma_strike");
-	}
 
 	public override void OnCollideY()
 	{

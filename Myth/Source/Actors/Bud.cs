@@ -56,6 +56,13 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	Signs burrowPopFacing;
 	float burrowPopJumpTime;
 	bool secondControllerControlling;
+	Light? playerLight;
+	float burrowLightBlend;
+	static float BaseLightIntensity => 0.45f;
+	static float BurrowLightIntensity => 0.85f;
+	static Color BaseLightColor => 0xffcfa0;
+	static Color BurrowLightColor => 0xb98cff;
+	static float BurrowLightBlendRate => 6f;
 	protected override float GroundSpeedMultiplier => 1.0f;
 	protected override float AirSpeedMultiplier => 1.0f;
 	protected override float IdleBreathingRate => 0.7f;
@@ -92,6 +99,11 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	{
 		base.Destroyed();
 		Game.RoomChanged -= OnRoomChanged;
+		if (playerLight != null)
+		{
+			Game.Destroy(playerLight);
+			playerLight = null;
+		}
 	}
 
 	// While carried the standing height defines the combined body — the live hitbox may be
@@ -354,6 +366,10 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 	public override void Update()
 	{
+		// Early returns below suspend Bud's control as well as his light.
+		if (playerLight != null)
+			playerLight.Intensity = 0;
+
 		if (CarriedBy != null)
 			return; // in the player's hands: AI + physics suspended, the carrier syncs position
 
@@ -426,6 +442,21 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		}
 
 		Game.NavTrace?.Frame(Game, this);
+		UpdatePlayerLight();
+	}
+
+	void UpdatePlayerLight()
+	{
+		burrowLightBlend = Calc.Approach(burrowLightBlend, State == States.Burrow ? 1f : 0f,
+			BurrowLightBlendRate * Time.Delta);
+		if (!Visible || !secondControllerControlling || Game.CurrentRoom?.PlayerLightEnabled != true ||
+			!Game.Controls.TryGetBudControllerInput(Game.Manager.Time.Elapsed, out _))
+			return;
+
+		playerLight ??= Player.CreatePlayerLight(this);
+		playerLight.Position = Position + new Point2(0, -6);
+		playerLight.Intensity = float.Lerp(BaseLightIntensity, BurrowLightIntensity, burrowLightBlend);
+		playerLight.LightColor = Color.Lerp(BaseLightColor, BurrowLightColor, burrowLightBlend);
 	}
 
 	public override void Render(Batcher batcher)

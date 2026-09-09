@@ -24,6 +24,7 @@
     "T": "stone",
     "d": "debris",
     "f": "flowers",
+    "g": "plants",
     "v": "Myth Vines"
   },
   "tiles": [
@@ -46,7 +47,7 @@
     "111100000000000000f0000000000000000TTTTT",
     "111000000000000NNNN0000000000000000TTT0T",
     "111000000000000NNNN00000000000000T0TTT0T",
-    "111000000000000NNNN0000000000000TT0TT0TT",
+    "111000000000000NNNN00000000gg000TT0TT0TT",
     "111000000000000NNNN00d0d0NNNN0d0TT0TT0TT",
     "111111111111111NNNN111111NNNN1111TTTT1TT",
     "111111111111111NNNN111111NNNN11111TTT1TT"
@@ -225,6 +226,14 @@
       "Position": [58, 148],
       "Name": "Duck Power",
       "DemoTeleportTarget": true
+    },
+    {
+      "Id": "ffb9cdfc3ddf2b22",
+      "From": "BlueMemoryLight",
+      "Position": [319, 47],
+      "DrawSprite": false,
+      "Radius": 65.329,
+      "Intensity": 0.622
     }
   ]
 }
