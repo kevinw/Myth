@@ -355,7 +355,10 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			Game.DestroyForThisSession(this);
 	}
 
-	protected virtual void OnFootstep(Vector2 position) { }
+	protected virtual void OnFootstep(Vector2 position) { 
+		Game.Shake(0.03f);
+		AudioEvent("rig_puppet/footstep");
+	}
 
 	protected bool RigFacingMatches => visual.FacingMatches;
 	protected Vector2 RigEyePosition => visual.EyeWorldPosition;

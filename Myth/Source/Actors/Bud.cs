@@ -29,6 +29,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	private float enterTimer;
 	private Point2? enterWalkTarget;
 	private bool enterWalkDucking;
+	private bool roomSpawnSkipped;
 	private bool enteredRoom;
 	private Point2 entryPosition;
 	private float mirrorPlayerCrawlTimer;
@@ -369,6 +370,9 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 				CompletePlayerBurrowPop();
 			return;
 		}
+
+		if (roomSpawnSkipped)
+			return;
 
 		if (fallRespawnTimer > 0)
 		{
@@ -906,24 +910,48 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	private void OnRoomChanged(RoomChange change)
 	{
 		if (change.Kind == RoomChangeKind.InitialLoad)
+		{
+			if ((change.To.BudSpawn & Room.BudSpawnFlags.SkipThisRoom) != 0)
+				SkipRoomSpawn();
 			return;
+		}
 		if (ridingPlayerBurrow || burrowPopDelayTimer > 0 || CarriedBy != null)
 		{
+			roomSpawnSkipped = false;
 			pendingRoomChange = null;
 			enterWalkTarget = null;
 			enterWalkDucking = false;
 			nav.ClearBlockedPathEdges();
 			return;
 		}
+		if ((change.To.BudSpawn & Room.BudSpawnFlags.SkipThisRoom) != 0)
+		{
+			SkipRoomSpawn();
+			return;
+		}
 
 		if (State == States.BackDash)
 			EndBackDash(); // the entry Update path never reaches CustomState to finish it
 
+		roomSpawnSkipped = false;
 		pendingRoomChange = change;
 		fallRespawnTimer = 0; // EnterRoom places (and unhides) him; an armed respawn would yank him back
 		enterWalkTarget = null;
 		enterWalkDucking = false;
 		enterTimer = EnterDelay;
+		Visible = false;
+		CollidesWithSolids = false;
+		Velocity = Vector2.Zero;
+		nav.ClearBlockedPathEdges();
+	}
+
+	private void SkipRoomSpawn()
+	{
+		roomSpawnSkipped = true;
+		pendingRoomChange = null;
+		fallRespawnTimer = 0;
+		enterWalkTarget = null;
+		enterWalkDucking = false;
 		Visible = false;
 		CollidesWithSolids = false;
 		Velocity = Vector2.Zero;

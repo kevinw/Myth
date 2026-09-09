@@ -1,7 +1,7 @@
 {
   "position": [-224, 0],
   "size": [46, 23],
-  "ambientColor": "545454",
+  "ambientColor": "6D6D6D",
   "legend": {
     "#": "back",
     "(": "back-nw",
@@ -81,7 +81,7 @@
     {
       "Id": "a1f30c88d21e4b01",
       "Type": "PlayerStart",
-      "Position": [72, 136]
+      "Position": [85, 7]
     },
     {
       "Id": "a1f30c88d21e4b02",
@@ -185,6 +185,11 @@
       "From": "TutorialText",
       "Position": [167, 21],
       "Text": "press {Jump} to jump"
+    },
+    {
+      "Id": "6d2b5d40353c3030",
+      "Type": "Blob",
+      "Position": [208, 96]
     }
   ]
 }

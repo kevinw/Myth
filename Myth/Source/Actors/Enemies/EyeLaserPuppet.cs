@@ -521,6 +521,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	protected override bool BackArmCombatEnabled => false;
 	protected override void OnFootstep(Vector2 position)
 	{
+		// explicitly not calling base.OnFootstep(position)
 		Game.Particles?.Emit(groundDustEffect, position, StepDustCount);
 		Game.Shake(0.05f);
 		AudioEvent("boss/footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));

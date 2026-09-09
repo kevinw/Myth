@@ -1,9 +1,13 @@
 using System.Numerics;
 using Foster.Framework;
+#if EDITOR
+using LinkDotNet.StringBuilder;
+using ImGuiNET;
+#endif
 
 namespace Myth;
 
-[GameActor(Sprite = "saw", Tags = ActorTag.Enemy)]
+[GameActor(Sprite = "saw", Tags = ActorTag.Enemy, LivePositionEditable = true)]
 public class MagneticCrawler : Actor, INeuralTextureAgent
 {
 	enum State
@@ -137,7 +141,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		surface.ClimbsWallsAndCeilings = ClimbsWallsAndCeilings;
 		surface.CanWalkOnMovingPlatforms = CanWalkOnMovingPlatforms;
 		surface.TowardSurface = InitialSurfaceDirection == Point2.Zero ? Vector2.UnitY : InitialSurfaceDirection.Normalized();
-		attached = surface.Attach((int)MathF.Ceiling(18 * Scale));
+		attached = AttachToSurface();
 		bodyAngle = Calc.Angle(surface.Tangent);
 		bodyPosition = DormantBodyPosition();
 		InitializeParts();
@@ -204,7 +208,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	{
 		Mask = Masks.None;
 		if (!attached)
-			attached = surface.Attach((int)MathF.Ceiling(18 * Scale));
+			attached = AttachToSurface();
 		bodyPosition = DormantBodyPosition();
 		if (player == null || !attached || Vector2.DistanceSquared(player.Position, Position) > WakeRange * WakeRange)
 			return;
@@ -348,10 +352,14 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		stuckTimer += Time.Delta;
 		if (stuckTimer > 0.2f)
 		{
+			if (!surface.Attach(surface.CornerProbeDistance, surface.MaxSurfaceSnapDistance) && AttachToSurface())
+				PlantAllFeet();
 			Facing = -Facing;
 			stuckTimer = 0;
 		}
 	}
+
+	bool AttachToSurface() => surface.Attach((int)MathF.Ceiling(18 * Scale));
 
 	void FacePlayer(Player player)
 	{
@@ -1030,5 +1038,24 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		return delta - MathF.Round(delta / Calc.TAU) * Calc.TAU;
 	}
 
-	public override Rect GetVisualBounds() => new(Position.X - 40 * Scale, Position.Y - 40 * Scale, 80 * Scale, 80 * Scale);
+	public override Rect GetVisualBounds()
+	{
+		var bounds = new Rect(bodyPosition, Vector2.Zero);
+		for (var i = 0; i < parts.Length; i++)
+			bounds = bounds.Conflate(parts[i].Position);
+		if (state != State.Dying && AssemblyProgress > 0.55f)
+			for (var i = 0; i < legs.Length; i++)
+				bounds = bounds.Conflate(legs[i].Foot);
+		return bounds.Inflate(8 * Scale);
+	}
+	
+	public void LiveStatusImGui()
+	{
+#if EDITOR
+		ImGui.SeparatorText("State");
+		var value = new ValueStringBuilder(stackalloc char[128]);
+		value.Append(state.ToString());
+		ImGui.Text(value.AsSpan());
+#endif
+	}
 }

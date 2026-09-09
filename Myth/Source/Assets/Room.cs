@@ -29,6 +29,13 @@ public class Room
 		BackgroundSlope = 1 << 5
 	}
 
+	[Flags]
+	public enum BudSpawnFlags
+	{
+		None = 0,
+		SkipThisRoom = 1 << 0
+	}
+
 	public enum SlopeDirection
 	{
 		DownRight,
@@ -168,6 +175,7 @@ public class Room
 	public float NormalDitherSlopeBoost = DefaultNormalDitherSlopeBoost;
 	public bool NormalDitherQuantization = DefaultNormalDitherQuantization;
 	public bool BurrowInverts;
+	public BudSpawnFlags BudSpawn;
 	public string Notes = "";
 
 	char[,]? burrowInverseTiles;
@@ -213,6 +221,7 @@ public class Room
 			NormalDitherSlopeBoost = NormalDitherSlopeBoost,
 			NormalDitherQuantization = NormalDitherQuantization,
 			BurrowInverts = BurrowInverts,
+			BudSpawn = BudSpawn,
 			ForegroundColorField = ForegroundColorField.Clone(),
 			BackgroundColorField = BackgroundColorField.Clone()
 		};
@@ -298,6 +307,7 @@ public class Room
 		NormalDitherSlopeBoost = JsonUtil.ReadFloat(json, "ditherSlopeBoost", DefaultNormalDitherSlopeBoost);
 		NormalDitherQuantization = JsonUtil.ReadBool(json, "ditherQuantization", DefaultNormalDitherQuantization);
 		BurrowInverts = JsonUtil.ReadBool(json, nameof(BurrowInverts));
+		BudSpawn = Enum.TryParse<BudSpawnFlags>(JsonUtil.ReadString(json, nameof(BudSpawn)), true, out var budSpawn) ? budSpawn : BudSpawnFlags.None;
 		SunColor = DefaultSunColor;
 		SunStrength = 0.0f;
 		SunDirection = DefaultSunDirection;
@@ -1570,6 +1580,8 @@ public class Room
 			writer.WriteBoolean("ditherQuantization", NormalDitherQuantization);
 		if (BurrowInverts)
 			writer.WriteBoolean(nameof(BurrowInverts), true);
+		if (BudSpawn != BudSpawnFlags.None)
+			writer.WriteString(nameof(BudSpawn), BudSpawn.ToString());
 
 		if (SunStrength > 0.0f || SunColor != DefaultSunColor || SunDirection != DefaultSunDirection)
 		{

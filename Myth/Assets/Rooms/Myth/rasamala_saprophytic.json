@@ -4,6 +4,7 @@
   "ambientColor": "868686",
   "sporeFogStrength": 0.293,
   "reverb": 0.622,
+  "BudSpawn": "SkipThisRoom",
   "legend": {
     "#": "back",
     "%": "crosshatch",
