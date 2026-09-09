@@ -1,5 +1,5 @@
 {
-  "position": [784, -118],
+  "position": [811, -130],
   "size": [40, 23],
   "backdropColor": "A12CA5",
   "backdropColor2": "3A3543",
@@ -103,6 +103,22 @@
       "Text": "the demo is over...thanks for playing!",
       "Emissive": true,
       "dropShadow": 1
+    },
+    {
+      "Id": "8779a2ad52c177fd",
+      "Type": "Prop",
+      "Position": [98, 43],
+      "SpriteName": "Props/duck",
+      "Category": "duck",
+      "propFlags": "Destroyable, DestroyPersists"
+    },
+    {
+      "Id": "3c9bd71c27a2d80c",
+      "Type": "Prop",
+      "Position": [157, 83],
+      "SpriteName": "Props/duck",
+      "Category": "duck",
+      "propFlags": "Destroyable, DestroyPersists"
     }
   ]
 }

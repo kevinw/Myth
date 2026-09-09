@@ -145,6 +145,16 @@
       "SpeedMultiplier": 0.391,
       "RigVisualFPS": 13.083,
       "RigBootThickness": 0.5
+    },
+    {
+      "Id": "acaad7395d6e3be7",
+      "Type": "MagneticCrawler",
+      "Position": [173, 64],
+      "SurfaceId": "crawler-metal",
+      "Scale": 0.687,
+      "Health": 1,
+      "PatrolSpeed": 10.687,
+      "HuntSpeed": 40.329
     }
   ]
 }

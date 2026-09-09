@@ -67,10 +67,8 @@
     {
       "Id": "d524568dc6884098",
       "Type": "MagneticCrawler",
-      "Position": [128, 140],
-      "SurfaceId": "crawler-metal",
-      "WakeRange": 160,
-      "NoticeRange": 64
+      "Position": [136, 127],
+      "SurfaceId": "crawler-metal"
     },
     {
       "Id": "1eceb699ac70b995",

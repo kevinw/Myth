@@ -249,7 +249,8 @@ public partial class Manager
 		CloseGameMenu();
 		if (game?.GetFirst<Player>() is { } player)
 			player.Health = Player.MaxHealth;
-		game?.TryWarpTo(spot.RoomId, spot.Position);
+		if (game?.TryWarpTo(spot.RoomId, spot.Position) == true)
+			EraseSaveGame();
 	}
 
 	void StartFromMenu()

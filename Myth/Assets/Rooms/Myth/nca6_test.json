@@ -1,5 +1,5 @@
 {
-  "position": [944, -118],
+  "position": [971, -130],
   "size": [40, 23],
   "musicArea": "Intense",
   "backdropColor": "777777",
@@ -89,18 +89,18 @@
     {
       "Id": "038defed76237f49",
       "Type": "TitleText",
-      "Position": [153, 26],
+      "Position": [162, 36],
       "Emissive": true,
-      "dropShadow": 1,
       "OutlineWithShadow": true,
       "LineHeightMultiplier": 0.702,
+      "dropShadow": 4,
+      "Color": "A099AC",
+      "RevealSpeed": 0,
       "Text": [
-        "it's really truly INDUBITABLY",
-        "the end. for now...",
-        "thanks for playing!"
-      ],
-      "Color": "26900A",
-      "RevealSpeed": 8.913
+        "the end",
+        "the end",
+        "the end"
+      ]
     },
     {
       "Id": "38feae1062a285a1",

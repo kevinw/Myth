@@ -234,10 +234,9 @@
     {
       "Id": "d528b98ee34258cb",
       "Type": "MagneticCrawler",
-      "Position": [276, 260],
+      "Position": [276, 236],
       "SurfaceId": "robot_body_1",
       "Scale": 1.709,
-      "WakeRange": 157.561,
       "SkinMode": "NCA",
       "NeuralColorAmount": 0.762,
       "NeuralNormalAmount": 0.122,

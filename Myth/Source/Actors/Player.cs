@@ -2347,7 +2347,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (state.Time <= 0 && Health <= 0)
 		{
 			foreach (var actor in Game.Actors)
-				if (actor != this)
+				if (actor != this && actor != light)
 					Game.Destroy(actor);
 			Game.Shake(0.4f);
 		}

@@ -343,7 +343,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	protected virtual void Die()
 	{
 		Game.HitStun(0.3f);
-		Game.Shake(0.1f);
+		Game.Shake(0.13f, intensity: 1.3f);
 		for (var i = 0; i < 3; i++)
 			Game.Create<Pop>(Position + new Point2(0, -8 - i * 9));
 		DestroyOnDeath();
@@ -358,7 +358,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	}
 
 	protected virtual void OnFootstep(Vector2 position) {
-		Game.Shake(0.03f);
+		Game.Shake(0.1f, intensity: 1.5f);
 		AudioEvent("rig_puppet/footstep");
 	}
 

@@ -192,7 +192,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float RetreatDistance => 60f;
 	static float DeathPopDuration => 3f;
 	// Every step of a boss this size shakes, so it has to stay well under an impact.
-	static float FootstepShakeIntensity => 0.22f;
+	static float FootstepShakeIntensity => 1.5f;
 	// The death shake builds across the three seconds instead of holding flat at full.
 	static float DeathShakeStartIntensity => 0.15f;
 	static float DeathShakeEndIntensity => 0.7f;
@@ -529,7 +529,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	{
 		// explicitly not calling base.OnFootstep(position)
 		Game.Particles?.Emit(groundDustEffect, position, StepDustCount);
-		Game.Shake(0.05f, FootstepShakeIntensity);
+		Game.Shake(0.06f, FootstepShakeIntensity);
 		AudioEvent("boss/footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
 	}
 	internal override bool ContactDamageEnabled => contactDamageGrace <= 0 && Health > 0;
@@ -777,8 +777,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 			SetRuffSpin(FlashRuffSpeed);
 			var releaseDirection = (player.Position - RigEyePosition).Normalized(Vector2.UnitY);
 			Game.FlashAir(FloatingFlashColor, 0.025f, 0.12f);
-			Game.ShakeRenderTarget(FlashReleaseShakeTime, 0.45f);
-			Game.KickRenderTarget(releaseDirection * 58);
+			Game.Shake(0.1f, intensity: 1.5f);
 			UpdateSound(1, 0.01f);
 			StopAndReleaseSound(ref riseSound);
 			AudioEvent("boss/emit_floating_wave");
@@ -1012,8 +1011,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		RecoilAbilityPose(-laser.Direction * LaserPoseRecoilSpeed - Vector2.UnitY * LaserPoseRecoilLift,
 			LaserPoseRecoilSpread);
 		SetAbilityVisualOffset(-laser.Direction * 2.5f);
-		Game.ShakeRenderTarget(LaserIgnitionShakeTime, 0.35f);
-		Game.KickRenderTarget(laser.Direction * LaserIgnitionKick);
+		Game.Shake(0.15f, intensity: 2.0f);
 		EmitChargeBurst();
 	}
 

@@ -265,6 +265,25 @@
       "FlyCount": 19,
       "BugCount": 5,
       "FishCount": 0
+    },
+    {
+      "Id": "c61286d161505fb3",
+      "Type": "RigPuppetProp",
+      "Position": [383, 151],
+      "ProjectionYaw": 100.976,
+      "PoseAnimationName": "Hit_To_Side_Of_Body",
+      "PoseProgress": 0.868,
+      "NeuralFPS": 1,
+      "PixelsPerMeter": 65.075,
+      "HeadSize": 4.14,
+      "NeckExtension": 2.329,
+      "TorsoSize": 10.582,
+      "BicepSize": 6.348,
+      "ThighSize": 7.536,
+      "DepthWidthAmount": 0.235,
+      "DepthColorContrast": 0,
+      "SkinMode": "Surface",
+      "SurfaceId": "sky"
     }
   ]
 }

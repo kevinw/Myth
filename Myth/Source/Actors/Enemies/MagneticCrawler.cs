@@ -12,10 +12,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 {
 	enum State
 	{
-		Dormant,
-		Assembling,
 		Patrol,
-		Notice,
 		Hunting,
 		Dying
 	}
@@ -26,7 +23,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		public Vector2 Velocity;
 		public float Angle;
 		public float AngularVelocity;
-		public float Phase;
 		public float Detached;
 	}
 
@@ -47,8 +43,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	public bool CanWalkOnMovingPlatforms;
 	[I(1, 12)] public int Health = 4;
 	[I(0.5f, 2)] public float Scale = 1;
-	[I(112, 180)] public float WakeRange = 136;
-	[I(48, 112)] public float NoticeRange = 104;
 	[I(5, 32)] public float PatrolSpeed = 15;
 	[I(32, 100)] public float HuntSpeed = 48;
 	public Color MetalColor = new(0x858d9a);
@@ -80,11 +74,11 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	[I(0, 1), InspectorGroup("Neural")] public float NeuralFootContactStrength = 0.32f;
 	[I(1, 12)] public float NeuralFootContactRadius = 3;
 
-	static float AssemblyDuration => 1.65f;
-	static float NoticeDuration => 0.82f;
-	static float HuntWindup => 0.42f;
-	static float HuntBurst => 0.58f;
-	static float HuntRecover => 0.34f;
+	static float HuntWindup => 0.12f;
+	static float HuntBurst => 0.95f;
+	static float HuntRecover => 0.12f;
+	static float RoamRadius => 96f;
+	static float RouteSearchInterval => 0.5f;
 	static float BodyHeight => 9f;
 	static float BodySpring => 90f;
 	static float BodyDamping => 12f;
@@ -110,17 +104,19 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	float bodyAngle;
 	Vector2 bodyPosition;
 	Vector2 bodyVelocity;
-	bool attached;
 	bool huntBurstStarted;
-	int latchedParts;
+	Vector2 spawnPosition;
+	Vector2? walkTarget;
+	float walkTargetTime;
+	float routeSearchTimer;
 	int sparkEffect = -1;
 	uint visualSeed;
 	float neuralHitRemaining;
 	float nextNeuralJostle;
 	NeuralSkinRuntime? neuralSkin;
 
-	public override bool CastsSpriteShadow => state != State.Dormant;
-	public override bool CastsReflection => state != State.Dormant;
+	public override bool CastsSpriteShadow => true;
+	public override bool CastsReflection => true;
 	public override bool LightingDithered => false;
 	public override string HitSoundType => "metal";
 
@@ -141,13 +137,16 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		surface.ClimbsWallsAndCeilings = ClimbsWallsAndCeilings;
 		surface.CanWalkOnMovingPlatforms = CanWalkOnMovingPlatforms;
 		surface.TowardSurface = InitialSurfaceDirection == Point2.Zero ? Vector2.UnitY : InitialSurfaceDirection.Normalized();
-		attached = AttachToSurface();
+		spawnPosition = Position;
+		AttachToSurface();
 		bodyAngle = Calc.Angle(surface.Tangent);
-		bodyPosition = DormantBodyPosition();
-		InitializeParts();
+		bodyPosition = (Vector2)Position - surface.TowardSurface * BodyHeight * Scale;
 		PlantAllFeet();
+		InitializeParts();
+		UpdateHitbox();
 		sparkEffect = AcquireParticleEffect("sparks");
-		SetState(State.Dormant);
+		Mask = Masks.Enemy;
+		SetState(State.Patrol);
 		SyncNeuralSkin();
 	}
 
@@ -176,95 +175,32 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		}
 
 		var player = Game.GetFirst<Player>();
-		switch (state)
+		var roaming = player == null || Vector2.DistanceSquared(player.Position, Position) > Game.Width * Game.Width;
+		var next = roaming ? State.Patrol : State.Hunting;
+		if (state != next)
 		{
-			case State.Dormant:
-				UpdateDormant(player);
-				break;
-			case State.Assembling:
-				UpdateAssembly();
-				break;
-			case State.Patrol:
-				UpdatePatrol(player);
-				break;
-			case State.Notice:
-				UpdateNotice(player);
-				break;
-			case State.Hunting:
-				UpdateHunt(player);
-				break;
+			walkTarget = null;
+			SetState(next);
 		}
-
-		if (state is State.Patrol or State.Notice or State.Hunting)
+		routeSearchTimer = MathF.Max(0, routeSearchTimer - Time.Delta);
+		walkTargetTime -= Time.Delta;
+		if (walkTarget is { } target && (walkTargetTime <= 0 || Vector2.DistanceSquared(Position, target) < 36))
+			walkTarget = null;
+		if (roaming)
 		{
-			UpdateLegs();
-			UpdateBody();
-			UpdateParts();
-			UpdateHitbox();
+			if (walkTarget == null && routeSearchTimer <= 0)
+				FindWalkTarget(spawnPosition + rng.Vec2() * rng.Float(RoamRadius), roaming: true);
+			MoveAlongSurface((int)Facing, PatrolSpeed);
 		}
-	}
+		else
+			UpdateHunt(player);
 
-	void UpdateDormant(Player? player)
-	{
-		Mask = Masks.None;
-		if (!attached)
-			attached = AttachToSurface();
-		bodyPosition = DormantBodyPosition();
-		if (player == null || !attached || Vector2.DistanceSquared(player.Position, Position) > WakeRange * WakeRange)
-			return;
-		SetState(State.Assembling);
-	}
-
-	void UpdateAssembly()
-	{
-		var progress = Math.Clamp(stateTimer / AssemblyDuration, 0, 1);
-		var eased = Ease.Cube.InOut(progress);
-		bodyPosition = Vector2.Lerp(DormantBodyPosition(), ActiveBodyTarget(), eased);
-		bodyAngle = Calc.Angle(surface.Tangent);
-		for (var i = 0; i < parts.Length; i++)
-		{
-			ref var part = ref parts[i];
-			var t = Math.Clamp((progress - part.Phase) / MathF.Max(0.01f, 1 - part.Phase), 0, 1);
-			var target = PartTarget(i);
-			var side = (i & 1) == 0 ? -1 : 1;
-			part.Position = Vector2.Lerp(SourcePosition(i), target, Ease.Back.Out(t))
-				- surface.TowardSurface * MathF.Sin(t * MathF.PI) * (5 + i % 3 * 2) * Scale
-				+ surface.Tangent * MathF.Sin(t * MathF.PI) * side * 3 * Scale;
-			part.Angle = float.Lerp(SourceAngle(i), PartTargetAngle(i), Ease.Cube.InOut(t));
-			if (t >= 0.82f && (latchedParts & (1 << i)) == 0)
-			{
-				latchedParts |= 1 << i;
-				bodyVelocity -= surface.TowardSurface * 9;
-				EmitSparks(part.Position, 5);
-			}
-		}
-
-		if (progress >= 0.72f)
-			Mask = Masks.Enemy;
-		if (progress < 1)
-			return;
-
-		PlantAllFeet();
-		SetState(State.Patrol);
-	}
-
-	void UpdatePatrol(Player? player)
-	{
-		if (player != null && Vector2.DistanceSquared(player.Position, bodyPosition) <= NoticeRange * NoticeRange)
-		{
-			SetState(State.Notice);
-			return;
-		}
-		MoveAlongSurface((int)Facing, PatrolSpeed);
-	}
-
-	void UpdateNotice(Player? player)
-	{
-		walkSign = 0;
-		if (player != null && stateTimer > NoticeDuration * 0.38f)
-			FacePlayer(player);
-		if (stateTimer >= NoticeDuration)
-			SetState(State.Hunting);
+		UpdateLegs();
+		UpdateBody();
+		UpdateParts();
+		UpdateHitbox();
+		if (Environment.GetEnvironmentVariable("CRAWLER_TRACE") != null)
+			Console.WriteLine($"CRAWLER {ActorId} pos={Position} state={state} roam={roaming} target={walkTarget} stuck={stuckTimer:0.00} face={(int)Facing}");
 	}
 
 	void UpdateHunt(Player? player)
@@ -272,10 +208,10 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		var phase = stateTimer % HuntCycle;
 		if (phase < HuntWindup)
 		{
-			walkSign = 0;
 			huntBurstStarted = false;
-			if (player != null)
+			if (player != null && walkTarget == null)
 				FacePlayer(player);
+			MoveAlongSurface((int)Facing, PatrolSpeed);
 		}
 		else if (phase < HuntWindup + HuntBurst)
 		{
@@ -288,7 +224,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 			MoveAlongSurface((int)Facing, HuntSpeed);
 		}
 		else
-			walkSign = 0;
+			MoveAlongSurface((int)Facing, PatrolSpeed);
 	}
 
 	float HuntCycle => HuntWindup + HuntBurst + HuntRecover;
@@ -336,7 +272,9 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		if (Game.OverlapsEnemyRoomBoundary(this, lookahead))
 		{
 			Facing = -Facing;
-			stuckTimer = 0;
+			walkTarget = null;
+			stuckTimer += Time.Delta;
+			SearchWhenStuck();
 			return;
 		}
 
@@ -350,13 +288,98 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		}
 
 		stuckTimer += Time.Delta;
-		if (stuckTimer > 0.2f)
+		SearchWhenStuck();
+	}
+
+	void SearchWhenStuck()
+	{
+		if (stuckTimer < 0.2f || routeSearchTimer > 0)
+			return;
+		walkTarget = null;
+		var player = Game.GetFirst<Player>();
+		var roaming = player == null || Vector2.DistanceSquared(player.Position, Position) > Game.Width * Game.Width;
+		var focus = roaming ? spawnPosition + rng.Vec2() * rng.Float(RoamRadius) : (Vector2)player!.Position;
+		if (!FindWalkTarget(focus, roaming))
 		{
-			if (!surface.Attach(surface.CornerProbeDistance, surface.MaxSurfaceSnapDistance) && AttachToSurface())
-				PlantAllFeet();
+			// A lost attachment may need a different surface normal before either route can work.
+			var previousToward = surface.TowardSurface;
+			for (var i = 0; i < 4; i++)
+			{
+				var toward = Calc.AngleToVector(i * MathF.PI * 0.5f);
+				if (!ClimbsWallsAndCeilings && toward.Y < 0.5f)
+					continue;
+				surface.TowardSurface = toward;
+				if (surface.Attach(surface.SurfaceProbeDistance, surface.MaxSurfaceSnapDistance))
+				{
+					PlantAllFeet();
+					break;
+				}
+				surface.TowardSurface = previousToward;
+			}
 			Facing = -Facing;
-			stuckTimer = 0;
 		}
+		stuckTimer = 0;
+	}
+
+	bool FindWalkTarget(Vector2 focus, bool roaming)
+	{
+		routeSearchTimer = RouteSearchInterval;
+		var origin = Position;
+		var toward = surface.TowardSurface;
+		var remainder = surface.Remainder;
+		var movingPlatforms = surface.CanWalkOnMovingPlatforms;
+		var bestScore = float.PositiveInfinity;
+		var bestDirection = (int)Facing;
+		Vector2? best = null;
+		// Probe the same surface follower used for movement; restore all its state afterward.
+		try
+		{
+			surface.CanWalkOnMovingPlatforms = false;
+			for (var attempt = 0; attempt < 8; attempt++)
+			{
+				Position = origin;
+				surface.TowardSurface = toward;
+				surface.Remainder = Vector2.Zero;
+				var direction = (attempt & 1) == 0 ? 1 : -1;
+				var distance = rng.Float(24, RoamRadius);
+				for (var traveled = 0f; traveled < distance; traveled += 4)
+				{
+					var before = Position;
+					surface.Follow(direction, MathF.Min(4, distance - traveled));
+					if (Position == before || Game.OverlapsEnemyRoomBoundary(this, Point2.Zero))
+					{
+						Position = before;
+						break;
+					}
+				}
+				if (Vector2.DistanceSquared(Position, origin) < 144 ||
+					!surface.Attach(surface.CornerProbeDistance, 0))
+					continue;
+				var spawnDistance = Vector2.DistanceSquared(Position, spawnPosition);
+				if (roaming && spawnDistance > RoamRadius * RoamRadius &&
+					spawnDistance >= Vector2.DistanceSquared(origin, spawnPosition))
+					continue;
+				var score = Vector2.DistanceSquared(Position, focus);
+				if (score >= bestScore)
+					continue;
+				bestScore = score;
+				best = Position;
+				bestDirection = direction;
+			}
+		}
+		finally
+		{
+			Position = origin;
+			surface.TowardSurface = toward;
+			surface.Remainder = remainder;
+			surface.CanWalkOnMovingPlatforms = movingPlatforms;
+		}
+		if (best == null)
+			return false;
+		walkTarget = best;
+		walkTargetTime = RoamRadius / MathF.Max(1, state == State.Patrol ? PatrolSpeed : HuntSpeed) + 1;
+		Facing = bestDirection;
+		return true;
 	}
 
 	bool AttachToSurface() => surface.Attach((int)MathF.Ceiling(18 * Scale));
@@ -372,31 +395,21 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	{
 		state = next;
 		stateTimer = 0;
-		if (next == State.Assembling)
-		{
-			latchedParts = 0;
-			EmitSparks(Position, 10);
-		}
-		if (next == State.Notice)
-		{
-			bodyVelocity += surface.TowardSurface * 28;
-			EmitSparks(Position, 4);
-		}
 		if (next == State.Hunting)
+		{
+			stateTimer = HuntWindup;
 			huntBurstStarted = false;
+		}
 	}
 
 	void InitializeParts()
 	{
 		for (var i = 0; i < parts.Length; i++)
 		{
-			parts[i].Position = SourcePosition(i);
-			parts[i].Angle = SourceAngle(i);
-			parts[i].Phase = i switch { 4 => 0.02f, 5 => 0.14f, _ => 0.22f + i * 0.085f };
+			parts[i].Position = PartTarget(i);
+			parts[i].Angle = PartTargetAngle(i);
 		}
 	}
-
-	Vector2 DormantBodyPosition() => (Vector2)Position + surface.TowardSurface * 3 * Scale;
 
 	Vector2 ActiveBodyTarget()
 	{
@@ -412,8 +425,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	float CrouchAmount()
 	{
-		if (state == State.Notice)
-			return MathF.Sin(Math.Clamp(stateTimer / NoticeDuration, 0, 1) * MathF.PI);
 		if (state != State.Hunting)
 			return 0;
 		var phase = stateTimer % HuntCycle;
@@ -476,8 +487,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	float ArmorFlare()
 	{
-		if (state == State.Notice)
-			return Ease.Back.Out(Math.Clamp(stateTimer / NoticeDuration, 0, 1));
 		if (state == State.Hunting)
 		{
 			var phase = stateTimer % HuntCycle;
@@ -585,14 +594,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		return false;
 	}
 
-	Vector2 SourcePosition(int index)
-	{
-		var offsets = (ReadOnlySpan<float>)[-13, -8, -3, 3, 8, 13];
-		return (Vector2)Position + surface.Tangent * offsets[index] * Scale + surface.TowardSurface * (2 + index % 2) * Scale;
-	}
-
-	float SourceAngle(int index) => Calc.Angle(surface.Tangent) + ((index & 1) == 0 ? -0.18f : 0.18f);
-
 	void UpdateHitbox()
 	{
 		var half = Math.Max(4, (int)MathF.Round(6 * Scale));
@@ -605,7 +606,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	internal override void OnWasHit(HitInfo hitInfo)
 	{
-		if (state is State.Dormant or State.Assembling or State.Dying)
+		if (state == State.Dying)
 			return;
 
 		var by = hitInfo.By;
@@ -628,7 +629,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		part.AngularVelocity += rng.Float(-12, 12);
 		eyeHitFlash = 1;
 		EmitSparks(part.Position, 12);
-		SetState(State.Notice);
+		SetState(State.Hunting);
 	}
 	public override float HitKnockback => 70f;
 
@@ -664,13 +665,6 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 			Game.DestroyForThisSession(this);
 	}
 
-	float AssemblyProgress => state switch
-	{
-		State.Dormant => 0,
-		State.Assembling => Math.Clamp(stateTimer / AssemblyDuration, 0, 1),
-		_ => 1
-	};
-
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
 	{
 		if (SkinMode != RigSkinMode.NCA || context.Texture != neuralSkin?.Texture)
@@ -682,7 +676,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 				context.AddStamp(legs[i].Foot, legs[i].Foot, NeuralFootContactRadius * Scale,
 					NeuralFootContactStrength * legs[i].Contact / NeuralFootContactDuration);
 
-		if (state is State.Dormant or State.Dying || NeuralReactions.NeuralJostleInterval <= 0 ||
+		if (state == State.Dying || NeuralReactions.NeuralJostleInterval <= 0 ||
 			NeuralReactions.NeuralJostleStrength <= 0 || Time.SecondsF < nextNeuralJostle)
 			return;
 		nextNeuralJostle = Time.SecondsF + NeuralReactions.NeuralJostleInterval;
@@ -695,12 +689,8 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	{
 		get
 		{
-			if (state is State.Dormant or State.Dying)
+			if (state == State.Dying)
 				return 0;
-			if (state == State.Assembling)
-				return Math.Clamp((AssemblyProgress - 0.76f) / 0.24f, 0, 1);
-			if (state == State.Notice)
-				return 0.3f + Ease.Back.Out(Math.Clamp(stateTimer / NoticeDuration, 0, 1)) * 0.9f;
 			if (state == State.Hunting)
 			{
 				var phase = stateTimer % HuntCycle;
@@ -712,7 +702,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	public override void Render(Batcher batcher)
 	{
-		if (SpriteBlinkHidden || AssemblyProgress <= 0 && string.IsNullOrEmpty(SurfaceId.Name))
+		if (SpriteBlinkHidden)
 			return;
 		DrawRig(batcher, Color.White, shadow: false);
 	}
@@ -721,12 +711,11 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	void DrawRig(Batcher batcher, Color tint, bool shadow)
 	{
-		var assembly = AssemblyProgress;
 		var sourceSurface = Assets.GetSurface(SurfaceId);
 		var neuralTexture = !shadow && SkinMode == RigSkinMode.NCA ? neuralSkin?.OutputTexture : null;
 		if (neuralTexture != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
-		if (state != State.Dying && assembly > 0.55f)
+		if (state != State.Dying)
 			for (var i = 0; i < legs.Length; i++)
 			{
 				var hip = Hip(i) - Position;
@@ -744,26 +733,23 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		for (var i = 0; i < parts.Length; i++)
 			DrawPart(batcher, i, tint, shadow, sourceSurface, neuralTexture);
 
-		if (assembly > 0.68f)
+		var center = bodyPosition - Position;
+		batcher.Circle(center, 6.2f * Scale, 18, shadow ? tint : MetalEdgeColor);
+		var coreColor = Color.Lerp(new Color(0x30343d), MetalColor, 0.16f);
+		batcher.Circle(center, 4.8f * Scale, 18, shadow ? tint : coreColor);
+		if (!shadow && SkinMode == RigSkinMode.Surface && sourceSurface != null)
+			DrawSurfaceCircle(batcher, sourceSurface, center, 4.8f * Scale, bodyPosition);
+		else if (!shadow && neuralTexture != null)
+			DrawNeuralCircle(batcher, neuralTexture, center, 4.8f * Scale,
+				NeuralUV(new Vector2(0, -BodyHeight)), coreColor * Neural.NeuralColorAmount);
+		if (!shadow)
 		{
-			var center = bodyPosition - Position;
-			batcher.Circle(center, 6.2f * Scale, 18, shadow ? tint : MetalEdgeColor);
-			var coreColor = Color.Lerp(new Color(0x30343d), MetalColor, 0.16f);
-			batcher.Circle(center, 4.8f * Scale, 18, shadow ? tint : coreColor);
-			if (!shadow && SkinMode == RigSkinMode.Surface && sourceSurface != null)
-				DrawSurfaceCircle(batcher, sourceSurface, center, 4.8f * Scale, bodyPosition);
-			else if (!shadow && neuralTexture != null)
-				DrawNeuralCircle(batcher, neuralTexture, center, 4.8f * Scale,
-					NeuralUV(new Vector2(0, -BodyHeight)), coreColor * Neural.NeuralColorAmount);
-			if (!shadow)
-			{
-				var seam = Calc.AngleToVector(bodyAngle + MathF.PI * 0.25f) * 4.8f * Scale;
-				batcher.Line(center - seam, center - seam * 0.72f, 1, MetalColor);
-				batcher.Line(center + seam * 0.72f, center + seam, 1, MetalEdgeColor);
-			}
-			if (!shadow && state != State.Dying)
-				DrawEye(batcher, emissive: false);
+			var seam = Calc.AngleToVector(bodyAngle + MathF.PI * 0.25f) * 4.8f * Scale;
+			batcher.Line(center - seam, center - seam * 0.72f, 1, MetalColor);
+			batcher.Line(center + seam * 0.72f, center + seam, 1, MetalEdgeColor);
 		}
+		if (!shadow && state != State.Dying)
+			DrawEye(batcher, emissive: false);
 		if (neuralTexture != null)
 			batcher.PopSampler();
 	}
@@ -782,25 +768,20 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 			return;
 		}
 
-		var final = AssemblyProgress;
-		if (state == State.Assembling)
-			final = Math.Clamp((AssemblyProgress - part.Phase) / MathF.Max(0.01f, 1 - part.Phase), 0, 1);
 		var plateColor = Color.Lerp(MetalColor, MetalEdgeColor, 0.05f + ShapeUnit(index, 8) * 0.12f);
-		var opacity = MathF.Max(final, string.IsNullOrEmpty(SurfaceId.Name) ? 0.28f : 0);
-		DrawPolygon(batcher, vertices, plateColor * opacity);
-		if (sourceSurface != null && (final < 1 || SkinMode == RigSkinMode.Surface))
-			DrawSurfacePlate(batcher, sourceSurface, part, half, index, vertices,
-				SkinMode == RigSkinMode.Surface ? 1 : 1 - final);
-		if (neuralTexture != null && final > 0)
+		DrawPolygon(batcher, vertices, plateColor);
+		if (sourceSurface != null && SkinMode == RigSkinMode.Surface)
+			DrawSurfacePlate(batcher, sourceSurface, part, half, index, vertices, 1);
+		if (neuralTexture != null)
 			DrawNeuralPlate(batcher, neuralTexture, index, half, vertices,
-				plateColor * (Neural.NeuralColorAmount * final));
+				plateColor * Neural.NeuralColorAmount);
 
-		var edge = MetalEdgeColor * MathF.Max(final, 0.25f);
+		var edge = MetalEdgeColor;
 		for (var i = 0; i < vertices.Length; i++)
 			batcher.Line(vertices[i], vertices[(i + 1) % vertices.Length], 1.6f * Scale, edge);
-		var highlight = Color.Lerp(plateColor, Color.White, 0.28f) * final;
+		var highlight = Color.Lerp(plateColor, Color.White, 0.28f);
 		batcher.Line(vertices[1], vertices[2], 0.7f * Scale, highlight);
-		if (index >= 4 && final > 0.5f)
+		if (index >= 4)
 		{
 			var center = PolygonCenter(vertices);
 			var rivet = Calc.AngleToVector(part.Angle) * half.X * 0.38f;
@@ -983,7 +964,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 
 	public override void RenderNormals(Batcher batcher)
 	{
-		if (state == State.Dormant || SpriteBlinkHidden)
+		if (SpriteBlinkHidden)
 			return;
 		var flat = new Color(0x8080ff);
 		var surfaceMaterial = SkinMode == RigSkinMode.Surface ? Assets.GetSurface(SurfaceId) : null;
@@ -1043,7 +1024,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 		var bounds = new Rect(bodyPosition, Vector2.Zero);
 		for (var i = 0; i < parts.Length; i++)
 			bounds = bounds.Conflate(parts[i].Position);
-		if (state != State.Dying && AssemblyProgress > 0.55f)
+		if (state != State.Dying)
 			for (var i = 0; i < legs.Length; i++)
 				bounds = bounds.Conflate(legs[i].Foot);
 		return bounds.Inflate(8 * Scale);

@@ -235,6 +235,24 @@
       "Id": "9419f23fcbffe21e",
       "Type": "Blob",
       "Position": [196, 192]
+    },
+    {
+      "Id": "14fd6be4a95450e8",
+      "Type": "RigPuppetProp",
+      "Position": [212, 108],
+      "ProjectionYaw": 100.976,
+      "NeuralFPS": 1,
+      "PixelsPerMeter": 65.075,
+      "HeadSize": 4.14,
+      "NeckExtension": 2.329,
+      "TorsoSize": 10.582,
+      "BicepSize": 6.348,
+      "ThighSize": 7.536,
+      "DepthWidthAmount": 0.235,
+      "DepthColorContrast": 0,
+      "SkinMode": "Solid",
+      "PoseAnimationName": "Kick_Soccerball",
+      "PoseProgress": 0.539
     }
   ]
 }

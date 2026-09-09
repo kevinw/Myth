@@ -1,5 +1,5 @@
 {
-  "position": [651, -95],
+  "position": [771, -107],
   "size": [40, 37],
   "backdropColor": "FFFFFF",
   "backdropColor2": "C5BBFF",
@@ -201,11 +201,6 @@
       "Id": "64e9dbc74f117947",
       "Type": "PlayerStart",
       "Position": [20, 272]
-    },
-    {
-      "Id": "3ef6f5e259eef3f9",
-      "Type": "SavePoint",
-      "Position": [48, 272]
     }
   ]
 }

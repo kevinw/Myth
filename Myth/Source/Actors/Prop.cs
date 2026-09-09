@@ -116,7 +116,10 @@ public class Prop : Actor
 			{
 				AudioEvent("prop_break_temp");
 				if (Game.DestroyPersistently(this) && string.Equals(Category, "duck", StringComparison.OrdinalIgnoreCase))
+				{
 					Game.DuckDestroyed(GetVisualBounds().TopCenter);
+				}
+				Game.Shake(0.6f, intensity: 2.0f);
 				Game.HitStun(0.4f);
 			}
 			else

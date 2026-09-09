@@ -135,9 +135,10 @@ public partial class Game
 		if (GetFirst<Player>() is not { } player)
 			return;
 
+		// Demo destinations have no save-point actor id; reload even this room after clearing progress.
 		RespawnPlayerAt(player,
 			new RespawnState(savePointWarpTarget.RoomId, savePointWarpTarget.Position),
-			reloadRoom: room?.Id != savePointWarpTarget.RoomId);
+			reloadRoom: room?.Id != savePointWarpTarget.RoomId || string.IsNullOrEmpty(savePointWarpTarget.ActorId));
 		// The map (and so warp mode) opens during the death animation, so a warp can land here
 		// with no health left. State goes back to Normal below, which would otherwise leave a
 		// dead player walking around.

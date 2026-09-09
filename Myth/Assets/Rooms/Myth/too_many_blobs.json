@@ -166,8 +166,8 @@
       "From": "TutorialText",
       "Position": [229, 139],
       "Text": [
-        "hold down and press {Attack} while",
-        "jumping to pogo"
+        "hold down and press {Attack} to",
+        "strike downwards"
       ],
       "LineHeightMultiplier": 0.881,
       "Color": "339949"

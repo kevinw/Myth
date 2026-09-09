@@ -2,7 +2,8 @@
   "position": [120, 69],
   "size": [40, 23],
   "musicArea": "Silence",
-  "ambientColor": "262626",
+  "backdropColor2": "ED4545",
+  "ambientColor": "303030",
   "reverb": 0.808,
   "legend": {
     "#": "back",

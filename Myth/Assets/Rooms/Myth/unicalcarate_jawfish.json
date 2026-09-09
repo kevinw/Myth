@@ -153,6 +153,29 @@
       "Position": [102, 142],
       "DemoTeleportTarget": true,
       "Name": "Boss"
+    },
+    {
+      "Id": "7a0dc3aca5573b16",
+      "Type": "RigPuppetProp",
+      "Position": [192, 134],
+      "ProjectionYaw": 100.976,
+      "PoseAnimationName": "Hit_To_Side_Of_Body",
+      "PixelsPerMeter": 65.075,
+      "HeadSize": 4.14,
+      "NeckExtension": 2.329,
+      "TorsoSize": 10.582,
+      "BicepSize": 6.348,
+      "ThighSize": 7.536,
+      "DepthWidthAmount": 0.235,
+      "DepthColorContrast": 0,
+      "SurfaceId": "sky",
+      "PoseProgress": 0.399,
+      "NeuralBrightness": -0.024,
+      "NeuralColorAmount": 1,
+      "NeuralNormalAmount": 0.891,
+      "NeuralFPS": 46.967,
+      "NeuralFireRate": 0.467,
+      "NeuralWeightsFile": "sand_circular.bin"
     }
   ]
 }
