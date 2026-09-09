@@ -190,6 +190,11 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static float RetreatChance => 0.3f;
 	static float RetreatDistance => 60f;
 	static float DeathPopDuration => 3f;
+	// Every step of a boss this size shakes, so it has to stay well under an impact.
+	static float FootstepShakeIntensity => 0.22f;
+	// The death shake builds across the three seconds instead of holding flat at full.
+	static float DeathShakeStartIntensity => 0.15f;
+	static float DeathShakeEndIntensity => 0.7f;
 	static float SwipeFingerScale => 3.6f;
 	static float SwipeWindupEnd => 0.42f;
 	static float SwipeRecoveryStart => 0.72f;
@@ -522,7 +527,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	protected override void OnFootstep(Vector2 position)
 	{
 		Game.Particles?.Emit(groundDustEffect, position, StepDustCount);
-		Game.Shake(0.05f);
+		Game.Shake(0.05f, FootstepShakeIntensity);
 		AudioEvent("boss/footstep", "Type", Factory.SubstanceSoundType(Game.GetSubstanceBelow(this)));
 	}
 	internal override bool ContactDamageEnabled => contactDamageGrace <= 0 && Health > 0;
@@ -1113,7 +1118,8 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 		PlayTake(DeathTake);
 		for (var time = 0f; time < DeathPopDuration; time += Time.Delta)
 		{
-			Game.Shake(1);
+			Game.Shake(0.2f, Calc.Lerp(DeathShakeStartIntensity, DeathShakeEndIntensity,
+				time / DeathPopDuration));
 			if (Time.OnInterval(DeathPopInterval))
 				Game.Create<Pop>(RandomPointIn(GetVisualBounds()));
 			yield return 0;

@@ -119,6 +119,25 @@ public partial class Manager : App
 	/// Sprite Batcher for general Editor visuals
 	readonly Batcher batcher;
 	readonly Controls controls;
+
+	// Steam only exports SteamDeck=1 for titles it launches itself, so a devkit build started
+	// any other way would look like a desktop. The DMI vendor is the hardware talking.
+	internal static readonly bool IsSteamDeck =
+		Environment.GetEnvironmentVariable("SteamDeck") == "1" || DmiVendorIsValve();
+
+	static bool DmiVendorIsValve()
+	{
+		try
+		{
+			return OperatingSystem.IsLinux() &&
+				File.ReadAllText("/sys/class/dmi/id/sys_vendor").Trim() == "Valve";
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
 	internal readonly DebugControls debugControls;
 	internal InputPrompts? InputPrompts { get; private set; }
 
@@ -1103,6 +1122,8 @@ public partial class Manager : App
 			HeadlessUpdate();
 			return;
 		}
+
+		controls.UpdateControllerAssignment();
 
 #if !IOS && !BROWSER
 		if (UpdateBackgroundSuspension())

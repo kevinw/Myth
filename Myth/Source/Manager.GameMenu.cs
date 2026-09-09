@@ -65,7 +65,6 @@ public partial class Manager
 	static float MenuPanelWidth => 174f;
 	static float MenuEnterDuration => 0.16f;
 	static float MenuEnterDistance => 5f;
-	static readonly bool isSteamDeck = Environment.GetEnvironmentVariable("SteamDeck") == "1";
 
 	void ShowTitleMenu()
 	{
@@ -197,7 +196,7 @@ public partial class Manager
 		if (MenuButton(musicEnabled ? "music: on" : "music: off"))
 			MusicEnabled = !MusicEnabled;
 #if !IOS && !BROWSER
-		if (!isSteamDeck)
+		if (!IsSteamDeck)
 		{
 			if (MenuButton(runInBackground ? "run in background: on" : "run in background: off"))
 				runInBackground = !runInBackground;

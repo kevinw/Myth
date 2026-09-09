@@ -40,7 +40,7 @@ sealed class InputPrompts : IDisposable
 	readonly SpriteFont xbox;
 	readonly SpriteFont nintendo;
 	readonly SpriteFont steamDeck;
-	readonly bool isSteamDeck = Environment.GetEnvironmentVariable("SteamDeck") == "1";
+	readonly bool isSteamDeck = Manager.IsSteamDeck;
 	TimeSpan mouseWheelTimestamp;
 	ControllerID movementGlyphController;
 	TimeSpan movementGlyphTimestamp;
@@ -85,7 +85,9 @@ sealed class InputPrompts : IDisposable
 		}
 
 		UpdateMovementGlyphSource(latest);
-		activeSet = isSteamDeck
+		// Deck glyphs only for the Deck's own controls. A pad someone plugged in shows its own
+		// buttons even on a Deck, which is the whole point of holding a DualSense.
+		activeSet = Controls.IsDeckControls(latest)
 			? GlyphSet.SteamDeck
 			: latest.GamepadProvider switch
 			{

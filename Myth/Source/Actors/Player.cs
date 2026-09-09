@@ -1496,7 +1496,7 @@ public abstract partial class Pawn : Actor
 [GameActor(HideFromPalette = true)]
 public partial class Player : Pawn
 {
-	protected override int? RumbleControllerIndex => 0;
+	protected override int? RumbleControllerIndex => Game.Controls.PlayerControllerIndex;
 
 	// The body pink out of player.ase, lifted toward white the same way Bud's blue is.
 	internal static readonly Color BodyColor = new(0xc2698d);
