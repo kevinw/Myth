@@ -10,7 +10,9 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	enum StepTraversal { None, Up, Down }
 
 	internal virtual void OnWasHurt() {
-
+		Game.Shake(0.15f);
+		Game.HitStun(0.11f);
+		AudioEvent(Health <= 0 ? "rig_puppet/die" : "rig_puppet/hurt");
 	}
 
 	[InspectorGroup("Animation")] public string IdleAnimationName = "Zombie_Idle_Loop";
@@ -42,7 +44,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	public readonly HumanoidRigWireSettings Wires = new();
 	[I(1, 4), InspectorGroup("Gameplay")] public int StepUp = 2;
 	[I(1, 4)] public int StepDown = 2;
-	[I(1, 25)] public int Health = 25;
+	[I(1, 40)] public int Health = 3;
 	// Starts him pacing back and forth near his spawn, ignoring the player until he has a clear
 	// sightline toward the side he's facing; then he wakes into normal behaviour for good.
 	public bool IdlePatrol;
@@ -355,7 +357,7 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			Game.DestroyForThisSession(this);
 	}
 
-	protected virtual void OnFootstep(Vector2 position) { 
+	protected virtual void OnFootstep(Vector2 position) {
 		Game.Shake(0.03f);
 		AudioEvent("rig_puppet/footstep");
 	}
@@ -668,9 +670,11 @@ public class RigPuppet : Actor, INeuralTextureAgent
 		scriptedSpeech = null;
 	}
 
+	protected virtual string VoiceName => Game.PlayerVoiceName;
+
 	internal Game.StorySpeechBubble? Say(string text)
 		=> Game.ShowSpeech(this, new Vector2(0, -44), text, Game.PlayerVoiceProfile, Color.White,
-			voice: Game.PlayerVoiceName);
+			voice: VoiceName);
 
 	void EnsureState()
 	{

@@ -1,10 +1,6 @@
-- BOSS VOICE
-- publish itch page
-- rooms need a "don't spawn bud" flag
 - check depth of burrowline vs player
 - show mycelon count and duck count at the end
 - burrow lines: SOMETHING to make them a bit more visually interesting
-- magnetic crawler gets borked by the moving platform
 - lore rewards alongside chests
   - MAKE BUD react to computer text
 - take 30 mins to make sure you can explain NCA, and also IK in crawler, and also the RigPuppet
@@ -38,6 +34,22 @@ SFX
 
 
 LATER
+- "ur fumpossibly icked"
+- dissolution mentor
+- vision pro build: paint, place tiles, tweak multidimensional values, rig puppets...
+- "dark rooms aren't for me"
+- "how to expand the scope of what i think about?"
+- handstand animation
+- does this feel like post abundance 2 u
+- metagenomic beehives
+- it's a jeff koons. that's fiunny.
+- a burrow door which activates a swarm of text--partially chain of thought partially journal junk
+- bezier curves
+- train a model which reproduces doodles
+- measure the map connectivity by some different graph theoretic measures--visualize rooms to get a sense of their relation to others
+map shouldn't show the squares of room boundaries--instead an expanded SDF of their solid edges
+what instead of computes?
+- a rig puppet in every lore spot instead of a computer
 - animate tutorial text a bit on room load
 - show git sha on pause
 - foster logo at startup

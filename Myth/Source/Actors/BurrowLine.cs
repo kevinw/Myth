@@ -33,6 +33,7 @@ public class BurrowLine : PointPathActor
 
 	public BurrowLine()
 	{
+		Depth = Depths.Ambient;
 		Sprite = null;
 		CollidesWithSolids = false;
 	}

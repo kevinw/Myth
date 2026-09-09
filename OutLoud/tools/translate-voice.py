@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """OutLoud voice-translation bake.
 
-Collects every English story line (bud.json `text` fields + C# `.Say(...)` literals),
+Collects English story lines (bud.json `text` fields + C# Say/GreetPlayer calls,
+including references to string constants declared in the same source file),
 translates the new ones to German via the free MyMemory API, and writes an incremental
 English->German cache to Myth/Assets/Voice/voice-de.json. Only the German *vowel melody*
 is used at runtime to colour the babble; the screen still shows the English.
@@ -20,12 +21,16 @@ OUT = ROOT / "Myth" / "Assets" / "Voice" / "voice-de.json"
 LANG = "en|de"
 EMAIL = None
 
-# C# string literal (handles \" and \\ escapes), scanned only inside .Say(...) calls.
+# C# string literal (handles \" and \\ escapes).
 STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
 
 def say_strings(source: str):
-	for m in re.finditer(r"\.Say\s*\(", source):
+	constants = {
+		m.group(1): m.group(2).encode().decode("unicode_escape")
+		for m in re.finditer(r'\bconst\s+string\s+(\w+)\s*=\s*' + STRING.pattern, source)
+	}
+	for m in re.finditer(r"\b(?:Say|GreetPlayer)\s*\(", source):
 		depth, i, n = 1, m.end(), len(source)
 		while i < n and depth:
 			c = source[i]
@@ -39,6 +44,12 @@ def say_strings(source: str):
 				depth += 1
 			elif c == ")":
 				depth -= 1
+			elif c.isalpha() or c == "_":
+				identifier = re.match(r"\w+", source[i:]).group()
+				if depth == 1 and identifier in constants and re.match(r"\s*[,)]", source[i + len(identifier):]):
+					yield constants[identifier]
+				i += len(identifier)
+				continue
 			i += 1
 
 
@@ -59,7 +70,12 @@ def translate(text: str) -> str:
 	q = urllib.parse.urlencode({"q": text, "langpair": LANG, **({"de": EMAIL} if EMAIL else {})})
 	with urllib.request.urlopen(f"https://api.mymemory.translated.net/get?{q}", timeout=20) as r:
 		data = json.load(r)
-	return data["responseData"]["translatedText"]
+	if str(data.get("responseStatus")) != "200":
+		raise RuntimeError(data.get("responseDetails") or "Translation service failed")
+	translated = data["responseData"]["translatedText"]
+	if not isinstance(translated, str) or not translated.strip():
+		raise ValueError("Translation service returned empty text")
+	return translated
 
 
 def main(argv):

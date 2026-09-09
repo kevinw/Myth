@@ -78,6 +78,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	const string StompGatherEffect = "wave_pylon_solid_charge";
 	const string HitSparkEffect = "elp_hit_sparks";
 	const string GroundDustEffect = "elp_ground_dust";
+	protected override string VoiceName => "RuffBot";
 	const string GreetingLine = "I need to eat your brain. Sorry.";
 	const string WarmupParameter = "Warmup";
 	const string FireDurationParameter = "FireDuration";
@@ -207,7 +208,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	static Color LowHealthSkullTint => new(0x686868);
 	static float WalkGiveUpTime => 2;
 	static float HitLimbMotionStrength => 1.65f;
-	static int HitsPerKnockdown => 5;
+	static int HitsPerKnockdown => 8;
 	static int HitSparkCount => 25;
 	static float HitSparkUpwardBias => 0.65f;
 	static int StepDustCount => 8;
@@ -622,7 +623,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	void ReleaseStomp(Player player)
 	{
 		stomped = true;
-		Game.Shake(0.13f);
+		Game.Shake(0.19f, intensity: 3.5f);
 		var toe = stompLeftFoot ? RigLeftToePosition : RigRightToePosition;
 		LogLiveStatus($"Stomp impact at ({toe.X:0.0}, {toe.Y:0.0})");
 		var probeCenter = (toe - Vector2.UnitY * 4).RoundToPoint2();
@@ -1373,6 +1374,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 
 	internal override void OnWasHurt() {
 		Game.Shake(0.3f);
+		Game.HitStun(0.15f);
 		hitsTaken++;
 		cooldown = 0;
 		AudioEvent("boss/hurt");

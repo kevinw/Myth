@@ -113,11 +113,11 @@
       "DepthWidthAmount": 0.218,
       "DepthColorContrast": 2.4,
       "NearColor": "C2F2FB",
-      "Health": 20,
       "VisualFPS": 15.246,
       "Facing": "-",
       "NeuralWeightsFile": "crowd_circular.bin",
-      "MinimumRange": 24
+      "MinimumRange": 24,
+      "Health": 32
     },
     {
       "Id": "cdee73111a7e4ba8",
