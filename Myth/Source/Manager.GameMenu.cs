@@ -52,13 +52,12 @@ public partial class Manager
 	bool GameMenuOpen => gameMenuPage != GameMenuPage.Closed;
 	bool GameMenuPausesGame => GameMenuOpen && gameMenuPage != GameMenuPage.Title;
 
-	// Sized to the longest label each page carries: "run in background: on" is 83px wide, and the
-	// pause page's "back to save" is 50px, both drawn from FramePadding.X and clipped to the button.
+	// Leave room for each page's longest label and horizontal padding.
 	float MenuButtonWidth => gameMenuLayoutPage switch
 	{
 		GameMenuPage.Options or GameMenuPage.DemoTeleport => 100f,
-		GameMenuPage.Pause => 64f,
-		_ => 50f,
+		GameMenuPage.Pause => 80f,
+		_ => 64f,
 	};
 	static float MenuButtonHeight => 14f;
 	static float MenuButtonGap => 3f;
@@ -78,6 +77,7 @@ public partial class Manager
 
 	void ShowPauseMenu()
 	{
+		RefreshDemoTeleportSpots();
 		MenuAudioEvent("menu/show");
 		gameMenuReturnPage = GameMenuPage.Pause;
 		ShowGameMenuPage(GameMenuPage.Pause);
@@ -115,8 +115,7 @@ public partial class Manager
 	// title/hint layout treats anything below the top level as a sub-page.
 	static int MenuPageDepth(GameMenuPage page) => page switch
 	{
-		GameMenuPage.Options => 1,
-		GameMenuPage.DemoTeleport => 2,
+		GameMenuPage.Options or GameMenuPage.DemoTeleport => 1,
 		_ => 0,
 	};
 
@@ -142,9 +141,7 @@ public partial class Manager
 		if (Input.Keyboard.Pressed(Keys.Escape) || ControllerPressed(Buttons.East) || pausePressed)
 		{
 			MenuAudioEvent("menu/back");
-			if (gameMenuPage == GameMenuPage.DemoTeleport)
-				ShowGameMenuPage(GameMenuPage.Options);
-			else if (gameMenuPage == GameMenuPage.Options)
+			if (gameMenuPage is GameMenuPage.DemoTeleport or GameMenuPage.Options)
 				ShowGameMenuPage(gameMenuReturnPage);
 			else if (gameMenuPage == GameMenuPage.Pause)
 				CloseGameMenu();
@@ -162,6 +159,8 @@ public partial class Manager
 	{
 		if (MenuButton(hasStartedGame ? "continue" : "start", "menu/show"))
 			StartFromMenu();
+		if (MenuButton(confirmRestart ? "you sure?" : "start over"))
+			EraseGameStep();
 		if (MenuButton("options"))
 			OpenOptionsPage();
 #if !BROWSER
@@ -174,12 +173,12 @@ public partial class Manager
 	{
 		if (MenuButton("resume", "menu/show"))
 			CloseGameMenu();
-		if (MenuButton("map"))
-			OpenMapFromMenu();
-		// Hidden rather than dead when there's nowhere to go: the label is only listed once the
-		// player has touched a save point.
-		if (game?.HasLastSavePoint == true && MenuButton("back to save"))
-			ReturnToSavePointFromMenu();
+		// if (MenuButton("map"))
+		// 	OpenMapFromMenu();
+		if (MenuButton(confirmRestart ? "you sure?" : "start over"))
+			EraseGameStep();
+		if (game != null && demoTeleportSpots.Count > 0 && MenuButton("demo teleport"))
+			ShowGameMenuPage(GameMenuPage.DemoTeleport);
 		if (MenuButton("options"))
 			OpenOptionsPage();
 #if BROWSER
@@ -204,11 +203,8 @@ public partial class Manager
 				window.Fullscreen = !window.Fullscreen;
 		}
 #endif
-		// Hidden rather than dead: nothing to teleport to from the title, or with no goals marked.
-		if (game != null && demoTeleportSpots.Count > 0 && MenuButton("demo teleport"))
-			ShowGameMenuPage(GameMenuPage.DemoTeleport);
-		if (MenuButton(confirmRestart ? "you sure?" : "erase game"))
-			EraseGameStep();
+		if (gameMenuReturnPage == GameMenuPage.Pause && game?.HasLastSavePoint == true && MenuButton("back to save"))
+			ReturnToSavePointFromMenu();
 		if (MenuButton("back", "menu/back"))
 			ShowGameMenuPage(gameMenuReturnPage);
 	}
@@ -219,11 +215,11 @@ public partial class Manager
 			if (MenuButton(spot.Label))
 				DemoTeleportTo(spot);
 		if (MenuButton("back", "menu/back"))
-			ShowGameMenuPage(GameMenuPage.Options);
+			ShowGameMenuPage(gameMenuReturnPage);
 	}
 
 	// Goals are only spawned as actors in goal-loading games (Game.loadGoals), so the list comes
-	// from the authored rooms rather than anything live. Rebuilt whenever options opens, which
+	// from the authored rooms rather than anything live. Rebuilt whenever the pause menu opens, which
 	// keeps it current with live room edits.
 	void RefreshDemoTeleportSpots()
 	{
@@ -264,7 +260,6 @@ public partial class Manager
 
 	void OpenOptionsPage()
 	{
-		RefreshDemoTeleportSpots();
 		gameMenuReturnPage = gameMenuPage;
 		ShowGameMenuPage(GameMenuPage.Options);
 	}
@@ -287,7 +282,7 @@ public partial class Manager
 		CloseGameMenu();
 	}
 
-	// "erase game" is a two-step confirm: the first press arms it (the label becomes
+	// "start over" is a two-step confirm: the first press arms it (the label becomes
 	// "you sure?"), the second erases the save and restarts.
 	void EraseGameStep()
 	{

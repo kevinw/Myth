@@ -1,5 +1,4 @@
-- first thing bud says is "You OK" -- write something better
-- fall from start room?
+- BOSS VOICE
 - publish itch page
 - rooms need a "don't spawn bud" flag
 - check depth of burrowline vs player

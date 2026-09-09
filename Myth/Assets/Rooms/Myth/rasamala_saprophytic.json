@@ -96,6 +96,21 @@
       "From": "StrongFireLight",
       "Position": [292, 100],
       "Intensity": 0.522
+    },
+    {
+      "Id": "e867ff4239c699e4",
+      "Type": "Prop",
+      "Position": [63, 148],
+      "SpriteName": "Props/computer_terminal_sm"
+    },
+    {
+      "Id": "e988fc32842c09c5",
+      "Type": "InspectPoint",
+      "Position": [71, 169],
+      "Text": [
+        "WARNTEAM: Cavern below exhibits",
+        "signs of ontological instability."
+      ]
     }
   ]
 }

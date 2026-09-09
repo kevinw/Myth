@@ -278,7 +278,7 @@ public partial class Game : IDisposable
 	Vector2? previousCameraTarget;
 	Vector2 previousCameraFocus;
 	Vector2 cameraLookAhead;
-	static float CameraEaseRate => 10f;
+	static float CameraEaseRate => 7f;
 	static float CameraLookAheadEdgeInset => 0.15f;
 	static float CameraLookAheadEaseRate => 8f;
 	static float PlayerDragCameraEaseRate => 2.5539999f.T();

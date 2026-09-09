@@ -198,6 +198,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public Vector2 To;
 		public float Radius;
 		public float Strength;
+		public Vector2 Push;
 	}
 
 	struct PerturbParams
@@ -232,25 +233,27 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		// The texture being disturbed, so agents can cull against its bounds before stamping.
 		public NeuralTextureActor Texture => texture;
+		public float PreviousStepTime { get; internal set; } = float.NegativeInfinity;
 
 		// True once the per-step stamp buffer is full; stop adding.
 		public bool IsFull => texture.perturbStampCount >= texture.perturbStamps.Length;
 
-		// Stamps a disturbance sweeping from one world point to another. A zero/negative strength
-		// or radius is ignored. Returns false once the buffer is full. The stamp type stays
+		// Stamps a disturbance sweeping from one world point to another, optionally pushing state
+		// by a world-space displacement. Returns false once the buffer is full. The stamp type stays
 		// private to the actor: agents only ever speak world coordinates.
-		public bool AddStamp(Vector2 fromWorld, Vector2 toWorld, float worldRadius, float strength)
+		public bool AddStamp(Vector2 fromWorld, Vector2 toWorld, float worldRadius, float strength, Vector2 push = default)
 		{
 			var stamps = texture.perturbStamps;
 			if (texture.perturbStampCount >= stamps.Length)
 				return false;
-			if (strength > 0 && worldRadius > 0)
+			if ((strength > 0 || push != Vector2.Zero) && worldRadius > 0)
 				stamps[texture.perturbStampCount++] = new PerturbStamp
 				{
 					From = texture.WorldToState(fromWorld),
 					To = texture.WorldToState(toWorld),
 					Radius = MathF.Max(worldRadius * texture.StateScale, 0.5f),
 					Strength = strength,
+					Push = push * texture.StateScale,
 				};
 			return texture.perturbStampCount < stamps.Length;
 		}
@@ -1018,6 +1021,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	{
 		perturbStampCount = 0;
 		var now = Time.SecondsF;
+		if (float.IsNegativeInfinity(perturbContext.PreviousStepTime))
+			perturbContext.PreviousStepTime = now - Time.Delta;
 		var textureBounds = GetVisualBounds();
 
 		foreach (var actor in Game.Actors)
@@ -1075,6 +1080,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		}
 
 		EmitShutdownWave();
+		perturbContext.PreviousStepTime = now;
 
 		var stampCount = perturbStampCount;
 		if (stampCount == 0)

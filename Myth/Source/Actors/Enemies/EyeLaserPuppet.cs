@@ -78,7 +78,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	const string StompGatherEffect = "wave_pylon_solid_charge";
 	const string HitSparkEffect = "elp_hit_sparks";
 	const string GroundDustEffect = "elp_ground_dust";
-	const string GreetingLine = "Sorry about this.";
+	const string GreetingLine = "I need to eat your brain. Sorry.";
 	const string WarmupParameter = "Warmup";
 	const string FireDurationParameter = "FireDuration";
 

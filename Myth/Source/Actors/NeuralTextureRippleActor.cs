@@ -78,26 +78,35 @@ public class NeuralTextureRippleActor : Actor, INeuralTextureAgent
 
 	public static void PerturbRing(NeuralTextureActor.PerturbContext context, Vector2 center,
 		float radius, float maxRadius, float strength, float thickness, int stampCount,
-		bool fadeWithRadius = true, float stampRadiusMultiplier = 0.6f)
+		bool fadeWithRadius = true, float stampRadiusMultiplier = 0.6f,
+		float arcAngle = MathF.Tau, float direction = 0, float? previousRadius = null, float push = 0)
 	{
-		if (radius <= 0.5f || radius >= maxRadius || strength <= 0 || thickness <= 0 || stampCount <= 0 ||
+		if (radius <= 0.5f || radius > maxRadius || (radius == maxRadius && !previousRadius.HasValue) ||
+			(strength <= 0 && push <= 0) || thickness <= 0 || stampCount <= 0 ||
 			!context.Texture.GetVisualBounds().Inflate(maxRadius).Contains(center))
 			return;
 
 		if (fadeWithRadius)
+		{
 			strength *= 1 - radius / maxRadius;
-		if (strength <= 0.001f)
+			push *= 1 - radius / maxRadius;
+		}
+		if (strength <= 0.001f && push <= 0.001f)
 			return;
 
-		var step = MathF.Tau / stampCount;
-		var gap = MathF.Tau * radius / stampCount;
+		var arc = arcAngle < MathF.Tau;
+		var step = arcAngle / stampCount;
+		var gap = step * radius;
 		var stampRadius = MathF.Max(thickness, gap * stampRadiusMultiplier);
-		var phase = radius * 0.05f;
+		var phase = arc ? direction - arcAngle * 0.5f + step * 0.5f : radius * 0.05f;
 		for (var i = 0; i < stampCount; i++)
 		{
 			var angle = i * step + phase;
-			var point = center + Calc.AngleToVector(angle) * radius;
-			if (!context.AddStamp(point, point, stampRadius, strength))
+			var ray = Calc.AngleToVector(angle);
+			var point = center + ray * radius;
+			var from = center + ray * (previousRadius ?? radius);
+			var taper = arc ? MathF.Sin((i + 0.5f) / stampCount * MathF.PI) : 1f;
+			if (!context.AddStamp(from, point, stampRadius, strength * taper * taper, ray * (push * taper * taper)))
 				return;
 		}
 	}

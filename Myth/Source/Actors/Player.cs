@@ -1494,7 +1494,7 @@ public abstract partial class Pawn : Actor
 }
 
 [GameActor(HideFromPalette = true)]
-public partial class Player : Pawn
+public partial class Player : Pawn, INeuralTextureAgent
 {
 	protected override int? RumbleControllerIndex => Game.Controls.PlayerControllerIndex;
 
@@ -1521,6 +1521,16 @@ public partial class Player : Pawn
 	public const int MaxHealth = 5;
 
 	static float AttackFriction => 150;
+	static float AttackWaveDuration => 0.39f;
+	static float AttackWaveStartRadius => 1f;
+	static float AttackWaveMaxRadius => 95f;
+	static float AttackWaveArcAngle => 100f * MathF.PI / 180f;
+	static float AttackWaveStrength => 0.59f;
+	static float AttackWavePush => 18.5f; // Simulation cells of outward displacement per step.
+	// Falloff exponents: 1 = linear; higher fades sooner, lower carries farther (keep > 0).
+	static float AttackWavePushFalloff => 3f;
+	static float AttackWaveStrengthFalloff => 0.75f;
+	static float AttackWaveThickness => 1f;
 	static float AttackBlockRumbleLow => 0.45f;
 	static float AttackBlockRumbleHigh => 0.65f;
 	static float AttackBlockRumbleDuration => 0.11f;
@@ -1552,6 +1562,9 @@ public partial class Player : Pawn
 	bool attackHitTarget;
 	bool attackDown;
 	Pop? attackSwipe;
+	float attackWaveStartedAt = float.NegativeInfinity;
+	Vector2 attackWaveOrigin;
+	float attackWaveDirection;
 	readonly HashSet<Actor> attackConsumed = [];
 	int plasmaStrikeEffect = -1;
 	Light? light;
@@ -2092,6 +2105,10 @@ public partial class Player : Pawn
 			AttackThisFrame(hitbox, canPogo: attackDown);
 		if (state.JustCrossedTime(0.001f) && !attackBlocked)
 		{
+			attackWaveStartedAt = Time.SecondsF;
+			attackWaveOrigin = Position + Hitbox.Rect.Center;
+			attackWaveDirection = attackDown ? MathF.PI * 0.5f :
+				attackUp ? -MathF.PI * 0.5f : Facing < 0 ? MathF.PI : 0f;
 			AudioEvent(duckAttack ? "sword_crouched" : "sword");
 			var position = Position + hitbox.Center;
 
@@ -2158,6 +2175,26 @@ public partial class Player : Pawn
 			}
 			State = States.Normal;
 		}
+	}
+
+	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)
+	{
+		var elapsed = Time.SecondsF - attackWaveStartedAt;
+		var previousElapsed = context.PreviousStepTime - attackWaveStartedAt;
+		if (elapsed < 0 || previousElapsed >= AttackWaveDuration || AttackWaveDuration <= 0)
+			return;
+
+		var progress = Math.Clamp(elapsed / AttackWaveDuration, 0f, 1f);
+		var previousProgress = Math.Clamp(previousElapsed / AttackWaveDuration, 0f, 1f);
+		var radius = Calc.Lerp(AttackWaveStartRadius, AttackWaveMaxRadius, progress);
+		var previousRadius = Calc.Lerp(AttackWaveStartRadius, AttackWaveMaxRadius, previousProgress);
+		// Sample the fade halfway through the sweep, including the final segment past expiry.
+		var fade = 1f - (previousProgress + progress) * 0.5f;
+		var strength = AttackWaveStrength * MathF.Pow(fade, AttackWaveStrengthFalloff);
+		var push = AttackWavePush * MathF.Pow(fade, AttackWavePushFalloff) / context.Texture.StateScale;
+		NeuralTextureRippleActor.PerturbRing(context, attackWaveOrigin, radius, AttackWaveMaxRadius,
+			strength, AttackWaveThickness, stampCount: 12, fadeWithRadius: false,
+			arcAngle: AttackWaveArcAngle, direction: attackWaveDirection, previousRadius: previousRadius, push: push);
 	}
 
 	void AttackThisFrame(RectInt it, bool canPogo)

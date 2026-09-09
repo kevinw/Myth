@@ -29,7 +29,10 @@ public class Drone : Actor
 	static float ShootInterval => 2.5f;
 	static float ShootRange => 180f;
 	static float BulletSpeed => 135f;
-	static float RecoilSpeed => 40f;
+	static float RecoilSpeed => 49f;
+	static float RepositionChance => 0.5f;
+	static float RepositionMinDistance => 32f;
+	static float RepositionTimeout => 4f;
 
 	// Turret: a short barrel that rotates toward the player at a fixed rate (so it lags and
 	// reads as mechanical) and fires bullets from its muzzle tip.
@@ -132,13 +135,24 @@ public class Drone : Actor
 
 	IEnumerator<float> HoverRoutine()
 	{
+		Vector2? destination = null;
+		var repositionTime = 0f;
 		while (true)
 		{
 			var dist = toPlayer.Length();
 			var awayDir = dist > 0.01f ? toPlayer / dist : new Vector2(0, -1);
 
 			var desired = Vector2.Zero;
-			if (dist < PreferredDistance - DistanceDeadzone)
+			if (destination is { } target)
+			{
+				var offset = target - (Vector2)Position;
+				repositionTime -= Time.Delta;
+				if (offset.LengthSquared() < 36f || repositionTime <= 0)
+					destination = null;
+				else
+					Velocity = Calc.Approach(Velocity, offset.Normalized() * MathF.Min(MaxSpeed, offset.Length() * 4f), Acceleration * Time.Delta);
+			}
+			else if (dist < PreferredDistance - DistanceDeadzone)
 				desired = awayDir;
 			else if (dist > PreferredDistance + DistanceDeadzone)
 				desired = -awayDir;
@@ -152,11 +166,51 @@ public class Drone : Actor
 			if (shootTimer <= 0 && dist < ShootRange)
 			{
 				Shoot();
-				shootTimer = ShootInterval;
+				yield return 0.3f;
+				shootTimer = Game.rng.Chance(0.1f) ? ShootInterval * 0.5f : ShootInterval;
+				if (rng.Chance(RepositionChance) && TryPickFiringSpot(out var spot))
+				{
+					destination = spot;
+					repositionTime = RepositionTimeout;
+				}
 			}
 
 			yield return 0;
 		}
+	}
+
+	bool TryPickFiringSpot(out Vector2 spot)
+	{
+		spot = default;
+		if (Room == null || Game.GetFirst<Player>() is not { } player || player.Room != Room)
+			return false;
+		var playerCenter = player.Position + player.Hitbox.Rect.Center;
+		for (var i = 0; i < 8; i++)
+		{
+			var candidate = ((Vector2)playerCenter + rng.Vec2() * rng.Float(PreferredDistance * 0.75f, PreferredDistance * 1.5f)).FloorToPoint2();
+			if (Vector2.DistanceSquared(candidate, Position) < RepositionMinDistance * RepositionMinDistance ||
+				!Room.WorldBounds.Contains(Hitbox.Rect + candidate) ||
+				!ClearPath(candidate, playerCenter, new RectInt(0, 0, 1, 1)) ||
+				!ClearPath(Position, candidate, Hitbox.Rect))
+				continue;
+			spot = candidate;
+			return true;
+		}
+		return false;
+	}
+
+	bool ClearPath(Point2 from, Point2 to, RectInt bounds)
+	{
+		var steps = Math.Max(1, (int)MathF.Ceiling(Vector2.Distance(from, to) / 4f));
+		var previous = bounds + from;
+		for (var i = 1; i <= steps; i++)
+		{
+			var current = bounds + Vector2.Lerp(from, to, i / (float)steps).FloorToPoint2();
+			if (Game.OverlapsSolid(this, previous.Conflate(current)))
+				return false;
+			previous = current;
+		}
+		return true;
 	}
 
 	// Hit sends us here: coast with almost no drag (set in OnWasHit) while it ramps back to
@@ -277,7 +331,7 @@ public class Drone : Actor
 	public override void Render(Batcher batcher)
 	{
 		if (SpriteBlinkHidden) return;
-		RenderShapes(batcher, Color.White);
+		RenderShapes(batcher);
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color) {
@@ -306,15 +360,15 @@ public class Drone : Actor
 		DrawEye(batcher);
 	}
 
-	void RenderShapes(Batcher batcher, Color color)
+	void RenderShapes(Batcher batcher, Color? color = null)
 	{
 		if (SpriteBlinkHidden)
 			return;
 
-		DrawRotor(batcher, new Color(0x2a2e38), new Color(0xc0c6d0));
-		DrawTurret(batcher, new Color(0x23262e), new Color(0x8a90a0));
+		DrawRotor(batcher, color ?? new Color(0x2a2e38), color ?? new Color(0xc0c6d0));
+		DrawTurret(batcher, color ?? new Color(0x23262e), color ?? new Color(0x8a90a0));
 		batcher.PushMatrix(Matrix3x2.CreateScale(1.0f, 0.95f));
-		batcher.Circle(Vector2.Zero, BodyRadius, 16, Color.Violet);
+		batcher.Circle(Vector2.Zero, BodyRadius, 16, color ?? Color.Violet);
 		DrawEye(batcher);
 		batcher.PopMatrix();
 	}

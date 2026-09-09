@@ -25,8 +25,9 @@ public class Spitter : Actor
 		timer -= Time.Delta;
 		if (timer <= 0)
 		{
+			AudioEvent("bubble");
 			Play("shoot", false);
-			timer = 3.0f;
+			timer = Game.rng.Float(2.0f, 3.0f);
 
 			var bullet = Game.Create<Bullet>(Position + new Point2(-8 * Facing, -8), (actor) =>
 			{

@@ -185,11 +185,6 @@
       "From": "TutorialText",
       "Position": [167, 21],
       "Text": "press {Jump} to jump"
-    },
-    {
-      "Id": "6d2b5d40353c3030",
-      "Type": "Blob",
-      "Position": [208, 96]
     }
   ]
 }

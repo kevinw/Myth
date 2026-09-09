@@ -27,7 +27,7 @@ public sealed partial class GameView : IDisposable
 		var loadVisualShaders = gd.Driver != GraphicsDriver.Headless;
 		gpuLighting = loadVisualShaders ? new(gd) : null;
 		proceduralWallRenderer = loadVisualShaders ? new(gd) : null;
-		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 1, uniformBufferCount: 1) : null;
+		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 2, uniformBufferCount: 1) : null;
 		atlasWanderMaterial = loadVisualShaders ? CreateFragmentMaterial("AtlasWander", samplerCount: 1, uniformBufferCount: 1) : null;
 		colorFieldMaterial = loadVisualShaders ? CreateFragmentMaterial("ColorField", samplerCount: 2, uniformBufferCount: 1) : null;
 		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 12, uniformBufferCount: 1) : null;

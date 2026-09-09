@@ -204,6 +204,7 @@ public sealed partial class GameView
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
 			{
+				crt!.Material.Fragment.Samplers[1] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 				crt!.Material.Fragment.SetUniformBuffer([
 					output.Width,
 					output.Height,
