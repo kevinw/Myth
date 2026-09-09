@@ -42,7 +42,7 @@ run([
 	"--log-level=WARNING",
 	"-S", scriptDir,
 	"-B", buildDir,
-	...(windows ? ["-G", "Visual Studio 17 2022", "-A", "x64"] : ["-G", "Ninja", "-DCMAKE_BUILD_TYPE=MinSizeRel"]),
+	...(windows ? ["-A", "x64"] : ["-G", "Ninja", "-DCMAKE_BUILD_TYPE=MinSizeRel"]),
 	...cross,
 	"-Dozz_build_tools=OFF",
 	"-Dozz_build_gltf=OFF",
