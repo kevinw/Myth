@@ -138,8 +138,8 @@
     {
       "Id": "288b6714d6dfe158",
       "Type": "MovingPlatform",
-      "Position": [216, 24],
-      "Size": [40, 32],
+      "Position": [216, 40],
+      "Size": [40, 16],
       "TravelDistance": 160,
       "Speed": 48,
       "WaitTime": 0.4,
@@ -152,7 +152,7 @@
       "Position": [233, 53],
       "Size": [8, 88],
       "AttachedToActorId": "288b6714d6dfe158",
-      "AttachmentOffset": [17, 29]
+      "AttachmentOffset": [17, 13]
     },
     {
       "Id": "e0c3a98724e86a05",

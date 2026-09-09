@@ -130,10 +130,7 @@
       "Type": "BudStoryBark",
       "Position": [48, 8],
       "Size": [21, 48],
-      "Text": [
-        "Time for your hat trick.",
-        "I'll find a way through."
-      ]
+      "Text": "Time for your hat trick."
     },
     {
       "Id": "a46619a21398fcd4",
@@ -141,11 +138,6 @@
       "Position": [31, 153],
       "PixelsPerMeter": 60,
       "ProjectionYaw": 100.976
-    },
-    {
-      "Id": "f4302388097cb904",
-      "Type": "SavePoint",
-      "Position": [312, 40]
     }
   ]
 }
