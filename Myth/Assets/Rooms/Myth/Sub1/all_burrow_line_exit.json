@@ -3,6 +3,7 @@
   "size": [40, 23],
   "ambientColor": "727272",
   "reverb": 0.685,
+  "BudSpawn": "SkipThisRoom",
   "legend": {
     "%": "crosshatch",
     "E": "ember"

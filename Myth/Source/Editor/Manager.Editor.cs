@@ -1361,6 +1361,15 @@ public partial class Manager
 			changed = true;
 		}
 
+		var budSpawn = room.BudSpawn;
+		BeginPropertyRow("Bud Spawn");
+		if (EditorGui.CheckboxFlags("Skip This Room", ref budSpawn, Room.BudSpawnFlags.SkipThisRoom))
+		{
+			using (CaptureRoomUndo("Toggle Bud Spawn", room))
+				room.BudSpawn = budSpawn;
+			changed = true;
+		}
+
 		/*
 		var controlWidth = BeginPropertyRow("Notes").ControlWidth;
 		// Local copy so the undo scope captures the room *before* the first keystroke lands.

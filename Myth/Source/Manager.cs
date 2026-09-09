@@ -2070,6 +2070,9 @@ public partial class Manager : App
 		saveFlushScheduled = false;
 		saveTimer = 0;
 		selectedRoomId = "start";
+#if EDITOR
+		playtestPlayerPosition = null;
+#endif
 		game?.UseSaveState(saveState);
 		SaveStateStore.Delete(this);
 	}

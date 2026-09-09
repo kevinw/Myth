@@ -96,7 +96,7 @@ public partial class Game : IDisposable
 	// The sim reads time only through this. Normally it's the wall clock (scaled by timeScale);
 	// during replay playback it's a clock advanced by the recording's per-frame dt, which
 	// decouples the sim from the display framerate. See AdvanceReplayClock / EndReplayClock.
-	public Time Time => replayClock ?? Manager.Time.MultiplyDelta(timeScale);
+	public Time Time => replayClock ?? Manager.Time.MultiplyDelta(timeScale * MathF.Max(timeSlowdown, 0));
 	Time? replayClock;
 	internal void AdvanceReplayClock(float dt) => replayClock = (replayClock ?? default).Advance(TimeSpan.FromSeconds(dt));
 	internal void EndReplayClock() => replayClock = null;
@@ -141,6 +141,7 @@ public partial class Game : IDisposable
 	// Visual feedback state, but sim-owned: decayed each frame in Update and set by the
 	// HitStun/Shake/PulseDitherGlitch APIs; GameView only reads it (via forwarding).
 	internal float hitStun;
+	internal float timeSlowdown = 1f;
 
 	internal struct FX {
 		internal float shaking;
@@ -571,6 +572,8 @@ public partial class Game : IDisposable
 	// live device. A headless Game receives Controls bound to a headless Input (no input).
 	public void Update(Controls controls)
 	{
+		timeSlowdown = Calc.Approach(timeSlowdown, 1f, Manager.Time.Delta);
+		
 		Controls = controls;
 #if BROWSER
 		var browserDebugFrameStartAllocated = GC.GetAllocatedBytesForCurrentThread();
@@ -979,17 +982,19 @@ public partial class Game : IDisposable
 		return cameraBlockerBuffer;
 	}
 
-	// A room's camera-blocker world rects, read straight from its actor specs. At a fresh room load
-	// every blocker is Active (Active is [NoSerialize] and resets, and nothing has been crossed or
-	// revealed yet), so this is exactly the set the camera must respect the instant the room appears
-	// -- used to aim a transition's ease instead of the live actor list, which isn't populated for
-	// the incoming room yet.
-	static List<RectInt> CameraBlockerRects(Room forRoom, List<RectInt> into)
+	// A room's camera-blocker world rects, read straight from its actor specs. Used to aim a
+	// transition's ease before the incoming room's live actor list is populated. Omit blockers the
+	// predicted entry has already crossed, matching the deactivation their first Update will perform.
+	static List<RectInt> CameraBlockerRects(Room forRoom, Vector2 entry, List<RectInt> into)
 	{
 		into.Clear();
 		foreach (var actor in forRoom.Actors)
 			if (ActorSpecs.GetTypeName(actor) == nameof(CameraBlocker))
-				into.Add(CameraBlocker.WorldRectFromSpec(forRoom, actor));
+			{
+				var rect = CameraBlocker.WorldRectFromSpec(forRoom, actor);
+				if (!rect.Contains(entry))
+					into.Add(rect);
+			}
 		return into;
 	}
 
@@ -1852,16 +1857,16 @@ public partial class Game : IDisposable
 				transitionCameraFrom = Camera;
 				var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
 				// Aim the ease where live control will hold the camera: clamp against the new room's
-				// camera blockers (all active on a fresh load) so we never glide into a blocked bite
-				// and then snap out of it the frame control resumes. The blocker Y/X gating keys off
-				// the player's predicted entry -- the exit position clamped into the new room.
+				// camera blockers, except any the player crosses on entry, so we never glide into a
+				// stale blocked bite and snap out when control resumes. Blocker gating keys off the
+				// predicted entry -- the exit position clamped into the new room.
 				var nextBounds = nextRoom.WorldBounds;
 				var entry = new Vector2(
 					Math.Clamp(exitPosition.X, (float)nextBounds.Left, nextBounds.Right - 1f),
 					Math.Clamp(exitPosition.Y, (float)nextBounds.Top, nextBounds.Bottom - 1f));
 				transitionCameraTo = ClampCameraToRoomAndBlockersFb(
 					exitPosition - new Vector2(Width, Height) / 2, fbPad, nextBounds, entry,
-					CameraBlockerRects(nextRoom, cameraBlockerBuffer));
+					CameraBlockerRects(nextRoom, entry, cameraBlockerBuffer));
 				nextRoomEase = 0.0f;
 				LoadRoom(nextRoom);
 				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
@@ -3134,6 +3139,7 @@ public partial class Game : IDisposable
 	static string SessionDestroyKey(Room room, string actorId) => $"{room.Id}:id:{actorId}";
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
+	public void TimeSlowdown(float slowdown) => timeSlowdown = MathF.Min(timeSlowdown, slowdown);
 
 	public void Shake(float time, float intensity = 1)
 	{

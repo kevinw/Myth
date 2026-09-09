@@ -1,15 +1,13 @@
 - first thing bud says is "You OK" -- write something better
 - fall from start room?
-- animate tutorial text a bit on room load
+- publish itch page
 - rooms need a "don't spawn bud" flag
 - check depth of burrowline vs player
-- first rigpuppet needs sfx and screenshake on footstep
 - show mycelon count and duck count at the end
 - burrow lines: SOMETHING to make them a bit more visually interesting
 - magnetic crawler gets borked by the moving platform
 - lore rewards alongside chests
   - MAKE BUD react to computer text
-- acknowledgements on itch page
 - take 30 mins to make sure you can explain NCA, and also IK in crawler, and also the RigPuppet
 - redraw spitter; test other actors and draw for them
 - either disable all bud voice barks or make them never ever repeat
@@ -21,6 +19,17 @@ SFX
 - i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
 - use Dropper; draw a sprite; more "easy" enemy variety wins
 
+# other notes
+- some lightweight anim for the rigpuppet
+- variable rewards in chests
+- NCAs could default to cell-per-screen-pixel
+- a few subtle optional diversions off the main path
+- wires on static rig puppets
+- smoke NCA in FRONT of the sprites, with transparency
+- health pots as a minor diversion
+- swimming hub roomm
+- a few long dark hallways separating existing rooms
+
 # Monday
 - turn index.html into a character controller world
 - record title screen demos 
@@ -30,6 +39,7 @@ SFX
 
 
 LATER
+- animate tutorial text a bit on room load
 - show git sha on pause
 - foster logo at startup
 - POSSIBLY use alien bug for one of our existing behaviours?
