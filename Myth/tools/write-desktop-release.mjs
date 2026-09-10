@@ -20,6 +20,7 @@ const shortSha = sha.slice(0, 8);
 const downloads = [
   { platform: "macOS", architecture: "Apple silicon", file: `Myth-${shortSha}-mac.zip` },
   { platform: "Windows", architecture: "x64", file: `Myth-${shortSha}-windows-x64.zip`, unsigned: true },
+  { platform: "Linux", architecture: "x64", file: `Myth-${shortSha}-linux-x64.zip` },
 ].filter(({ file }) => fs.existsSync(path.join(artifacts, file)));
 if (!downloads.length)
   throw new Error(`No desktop archives found in ${artifacts}`);

@@ -7,6 +7,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const world = process.argv[2]?.trim();
+if (!world || process.argv.length !== 3)
+  throw new Error("Usage: node tools/check-world-map-bake.mjs <world>");
+if (/[\\/]/.test(world) || !fs.existsSync(path.join(root, "Assets", "Rooms", world)))
+  throw new Error(`Unknown world '${world}'.`);
 const pack = path.join(root, "Assets", "Packed", "Visuals");
 const image = path.join(pack, "world-map.qoi");
 const bounds = path.join(pack, "world-map.json");
@@ -19,7 +24,7 @@ const inputs = [
   "Assets/NCA",
   "Assets/Particles",
   "Assets/Rigs",
-  "Assets/Rooms",
+  `Assets/Rooms/${world}`,
   "Assets/Shaders",
   "Assets/Sources/Sprites",
   "Assets/Sources/Surfaces",
@@ -61,6 +66,7 @@ files.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
 
 const hash = createHash("sha256");
 hash.update("myth-world-map-inputs-v1\0");
+hash.update(`${world}\0`);
 for (const file of files) {
   hash.update(path.relative(root, file).replaceAll(path.sep, "/"));
   hash.update("\0");
@@ -71,12 +77,12 @@ const fingerprint = hash.digest("hex");
 const previous = fs.existsSync(fingerprintFile) ? fs.readFileSync(fingerprintFile, "utf8").trim() : "";
 
 if (fs.existsSync(image) && fs.existsSync(bounds) && previous === fingerprint) {
-  console.log("World map bake is current.");
+  console.log(`World map bake for ${world} is current.`);
   process.exit(0);
 }
 
 console.log(previous ? "World map inputs changed; rebaking." : "World map bake or fingerprint is missing; baking.");
-execFileSync("dotnet", ["run", "--project", "Myth.csproj", "--", "--bake-world-map"], {
+execFileSync("dotnet", ["run", "--project", "Myth.csproj", "--", "--bake-world-map", "--world", world], {
   cwd: root,
   stdio: "inherit",
 });

@@ -9,7 +9,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: desktop-build
+  cancel-in-progress: false
+
 env:
+  MYTH_WORLD: Myth
   DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
   R2_BUCKET: myth-downloads
   MYTH_NOTARY_PROFILE: myth-notary
@@ -269,12 +274,117 @@ jobs:
             --content-disposition "attachment; filename=\"$name\"" \
             --cache-control "public, max-age=31536000, immutable"
 
+  publish-linux:
+    name: Publish Linux (x64)
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+          submodules: false
+
+      - name: Update desktop submodules
+        run: git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Linux cross toolchain
+        run: brew install zig llvm
+
+      - name: Force fresh Foster shader compilation
+        run: find Foster/Framework/Content/Shaders/Compiled \( -name '*.msl' -o -name '*.spv' \) -delete
+
+      - name: Publish Linux build
+        run: node Myth/tools/publish-linux.mjs
+
+      - name: Package Linux build
+        id: archive
+        run: |
+          set -euo pipefail
+          file="$RUNNER_TEMP/Myth-${GITHUB_SHA:0:8}-linux-x64.zip"
+          cd Myth/bin/publish
+          zip -r -y "$file" Myth-linux
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux build to R2
+        working-directory: Myth/Platforms/Web
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          FILE: ${{ steps.archive.outputs.file }}
+        run: |
+          set -euo pipefail
+          name="$(basename "$FILE")"
+          npx wrangler@latest r2 object put "$R2_BUCKET/$name" \
+            --remote \
+            --file "$FILE" \
+            --content-type application/zip \
+            --content-disposition "attachment; filename=\"$name\"" \
+            --cache-control "public, max-age=31536000, immutable"
+
+  publish-itch:
+    name: itch.io (${{ matrix.channel }})
+    if: ${{ !cancelled() }}
+    needs: [publish-macos, publish-windows, publish-linux]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: mac-demo
+            archive: mac
+            result: ${{ needs.publish-macos.result }}
+          - channel: windows-demo
+            archive: windows-x64
+            result: ${{ needs.publish-windows.result }}
+          - channel: linux-demo
+            archive: linux-x64
+            result: ${{ needs.publish-linux.result }}
+
+    steps:
+      - name: Install butler
+        if: matrix.result == 'success'
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default -o "$RUNNER_TEMP/butler.zip"
+          unzip -q "$RUNNER_TEMP/butler.zip" -d "$RUNNER_TEMP/butler"
+          chmod +x "$RUNNER_TEMP/butler/butler"
+          "$RUNNER_TEMP/butler/butler" version
+
+      - name: Download build from R2
+        if: matrix.result == 'success'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          set -euo pipefail
+          npx wrangler@latest r2 object get "$R2_BUCKET/Myth-${GITHUB_SHA:0:8}-$ARCHIVE.zip" \
+            --remote --file "$RUNNER_TEMP/game.zip"
+
+      - name: Upload to itch.io
+        if: matrix.result == 'success'
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          set -euo pipefail
+          : "${BUTLER_API_KEY:?Missing GitHub secret BUTLER_API_KEY}"
+          "$RUNNER_TEMP/butler/butler" push "$RUNNER_TEMP/game.zip" "keelo/humanquestions:$CHANNEL" \
+            --userversion "${GITHUB_SHA:0:8}"
+
   publish-release:
     name: Publish desktop downloads
     if: ${{ always() && needs.publish-macos.result == 'success' }}
     needs:
       - publish-macos
       - publish-windows
+      - publish-linux
     runs-on: ubuntu-latest
 
     steps:
@@ -307,6 +417,7 @@ jobs:
         env:
           BEFORE_SHA: ${{ github.event.before }}
           WINDOWS_RESULT: ${{ needs.publish-windows.result }}
+          LINUX_RESULT: ${{ needs.publish-linux.result }}
         run: |
           set -euo pipefail
           short_sha="${GITHUB_SHA:0:8}"
@@ -314,6 +425,9 @@ jobs:
           touch "$RUNNER_TEMP/release/Myth-$short_sha-mac.zip"
           if [[ "$WINDOWS_RESULT" == success ]]; then
             touch "$RUNNER_TEMP/release/Myth-$short_sha-windows-x64.zip"
+          fi
+          if [[ "$LINUX_RESULT" == success ]]; then
+            touch "$RUNNER_TEMP/release/Myth-$short_sha-linux-x64.zip"
           fi
           published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           previous_sha=""

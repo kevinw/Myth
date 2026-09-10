@@ -10,6 +10,7 @@ permissions:
   contents: read
 
 env:
+  MYTH_WORLD: Playground
   DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
 
 jobs:
@@ -79,7 +80,7 @@ jobs:
 
       - name: Build visual asset pack + content zip
         working-directory: Myth
-        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip --content-target browser --content-world Playground
+        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip --content-target browser --content-world "$MYTH_WORLD"
 
       # use --aot for WebAssembly AOT for better runtime perf
       - name: Publish browser app (AOT)

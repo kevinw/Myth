@@ -437,6 +437,8 @@ public partial class Manager : App
 			Assets.SelectWorld(requestedWorldId);
 		else if (Assets.ContentIsZip)
 			Assets.SelectPackagedWorld();
+		if (bakeWorldMap && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
+			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 

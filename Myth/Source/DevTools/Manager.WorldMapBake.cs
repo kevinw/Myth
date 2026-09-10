@@ -39,7 +39,7 @@ public partial class Manager
 		}
 
 		WriteWorldMapBake(target, bounds);
-		Console.WriteLine($"World map bake: {baked} rooms -> {size.X}x{size.Y} ({scale:0.###} px per world px) in {timer.ElapsedMilliseconds}ms");
+		Console.WriteLine($"World map bake ({Assets.CurrentWorldId}): {baked} rooms -> {size.X}x{size.Y} ({scale:0.###} px per world px) in {timer.ElapsedMilliseconds}ms");
 
 		// Pick the fresh files up immediately so the map shows the new bake without a restart.
 		Assets.ReloadWorldMap(GraphicsDevice);
@@ -87,6 +87,8 @@ public partial class Manager
 		target.Attachments[0].GetData<Color>(pixels);
 
 		Directory.CreateDirectory(WorldMapBakeDirectory);
+		// A manual editor bake can replace a different world's cached release bake.
+		File.Delete(Path.Join(WorldMapBakeDirectory, "world-map.inputs.sha256"));
 		using (var image = new Image(target.Width, target.Height, pixels))
 			image.WriteQoi(Path.Join(WorldMapBakeDirectory, WorldMap.ImageFile));
 		File.WriteAllBytes(Path.Join(WorldMapBakeDirectory, WorldMap.BoundsFile), WorldMap.WriteBounds(bounds));

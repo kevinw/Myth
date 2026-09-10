@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
 
+const world = process.env.MYTH_WORLD ?? "Myth";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outRoot = path.join(root, "bin", "publish");
 const publishDir = path.join(outRoot, "linux-x64");
@@ -24,7 +25,7 @@ function run(cmd, args) {
 }
 
 checkFmodBankMtimes(root, "Desktop");
-run(process.execPath, ["tools/check-world-map-bake.mjs"]);
+run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 
 // Content.zip carries the target's compiled shaders, so the SPIR-V has to exist before it
 // is packed. The steps that follow run the game as a host tool, so they build for the host
@@ -36,7 +37,7 @@ run("dotnet", ["run", "--project", "Myth.csproj", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
   "--content-target", "linux",
-  "--content-world", "Myth",
+  "--content-world", world,
 ]);
 
 // --check-rooms creates real GPU pipelines, so it can only read a zip built for the host's
@@ -50,7 +51,7 @@ if (checkZip !== contentZip)
   run("dotnet", ["run", "--project", "Myth.csproj", "--",
     "--build-content-zip", checkZip,
     "--content-target", hostTarget,
-    "--content-world", "Myth",
+    "--content-world", world,
   ]);
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythTestShip=true", "--",
   "--check-rooms",

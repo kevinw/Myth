@@ -8,6 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createConnection } from "node:net";
 import { platform } from "node:os";
 
+const world = process.env.MYTH_WORLD ?? "Playground";
 const isWindows = platform() === "win32";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoDir = resolve(scriptDir, "..");
@@ -117,7 +118,7 @@ function buildAssets() {
       "--content-target",
       "browser",
       "--content-world",
-      "Playground",
+      world,
     ],
     { stdio: "inherit", cwd: repoDir },
   );

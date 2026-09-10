@@ -7,6 +7,7 @@ permissions:
   contents: read
 
 env:
+  MYTH_WORLD: Myth
   DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
   IOS_PROJECT: Myth/Platforms/iOS/MythIos/MythIos.csproj
   IOS_BUNDLE_ID: com.kevinwatters.myth
@@ -46,7 +47,7 @@ jobs:
           --build-asset-pack Assets/Packed/Visuals
           --build-content-zip Assets/Content.zip
           --content-target ios
-          --content-world Myth
+          --content-world "$MYTH_WORLD"
 
       - name: Select Xcode 26.5
         shell: bash

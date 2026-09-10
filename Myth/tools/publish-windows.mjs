@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
 
+const world = process.env.MYTH_WORLD ?? "Myth";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outRoot = path.join(root, "bin", "publish");
 const publishDir = path.join(outRoot, "win-x64");
@@ -20,14 +21,14 @@ function run(cmd, args) {
 }
 
 checkFmodBankMtimes(root, "Desktop");
-run(process.execPath, ["tools/check-world-map-bake.mjs"]);
+run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 
 const contentZip = path.join(outRoot, "Content.zip");
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
   "--content-target", "windows",
-  "--content-world", "Myth",
+  "--content-world", world,
 ]);
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "-p:MythTestShip=true", "--",
   "--check-rooms",

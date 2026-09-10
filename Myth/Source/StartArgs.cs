@@ -163,7 +163,11 @@ public struct StartArgs
 			audio = false;
 		}
 		if (bakeWorldMap)
+		{
+			if (worldId == null)
+				throw Invalid("--bake-world-map", "requires --world <world>");
 			audio = false;
+		}
 		unthrottled |= gymCli;
 		gymExitAfterAll |= gymCli;
 		traceNav |= traceJsonPath != null;

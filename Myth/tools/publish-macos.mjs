@@ -23,6 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
 
+const world = process.env.MYTH_WORLD ?? "Myth";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const rid = process.arch === "arm64" ? "osx-arm64" : "osx-x64";
 const outRoot = path.join(root, "bin", "publish");
@@ -40,7 +41,7 @@ function capture(cmd, args) {
 }
 
 checkFmodBankMtimes(root, "Desktop");
-run(process.execPath, ["tools/check-world-map-bake.mjs"]);
+run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 
 // --- 1. Fresh visual asset pack (the bundle ships no Assets/Sources, so everything
 // visual — including tile kit registrations — must be current in the pack), then a
@@ -50,7 +51,7 @@ run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
   "--build-content-zip", contentZip,
   "--content-target", "mac",
-  "--content-world", "Myth",
+  "--content-world", world,
 ]);
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "-p:MythTestShip=true", "--",
   "--check-rooms",
