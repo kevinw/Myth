@@ -69,12 +69,15 @@
     {
       "Id": "401c3f08fa07ce16",
       "Type": "Light",
-      "Position": [68, 76]
+      "Position": [68, 76],
+      "Height": 3.592
     },
     {
       "Id": "eb17a3bd78a2788e",
       "Type": "Light",
-      "Position": [242, 79]
+      "Position": [242, 79],
+      "Intensity": 0.694,
+      "Height": 4.898
     },
     {
       "Id": "14037cef7b8fc351",
@@ -149,7 +152,9 @@
     {
       "Id": "fe250b02f5c722ca",
       "Type": "Light",
-      "Position": [148, 100]
+      "Position": [148, 100],
+      "Intensity": 1.163,
+      "Height": 4.898
     },
     {
       "Id": "a6a56bbb347ec4ee",
