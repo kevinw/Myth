@@ -435,6 +435,8 @@ public partial class Manager : App
 #endif
 		if (requestedWorldId != null)
 			Assets.SelectWorld(requestedWorldId);
+		else if (Assets.ContentIsZip)
+			Assets.SelectPackagedWorld();
 
 		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
 

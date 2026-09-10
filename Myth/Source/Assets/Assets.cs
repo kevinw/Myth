@@ -84,6 +84,7 @@ public static partial class Assets
 	const int visualAssetPackVersion = 14; // v14: per-frame sprite socket visibility
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
+	const string worldManifestName = "world.json";
 	const string defaultStartRoomId = "start";
 	const string deletedRoomsFolderName = ".deleted";
 	static string? path = null;
@@ -220,8 +221,15 @@ public static partial class Assets
 
 		using var stream = File.Create(outputPath);
 		using var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create);
+		using (var worldStream = zip.CreateEntry(worldManifestName).Open())
+		using (var writer = new Utf8JsonWriter(worldStream))
+		{
+			writer.WriteStartObject();
+			writer.WriteString("world", worldId);
+			writer.WriteEndObject();
+		}
 
-		var count = 0;
+		var count = 1;
 		var skippedWeights = 0;
 		long skippedWeightBytes = 0;
 		foreach (var file in Directory.EnumerateFiles(AssetsPath, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
@@ -387,7 +395,7 @@ public static partial class Assets
 		if (key.StartsWith("Shaders/", StringComparison.OrdinalIgnoreCase))
 			return key.StartsWith("Shaders/Compiled/", StringComparison.OrdinalIgnoreCase)
 				&& key.EndsWith($".{shaderExtension}", StringComparison.OrdinalIgnoreCase);
-		if (key.Equals(contentZipName, StringComparison.OrdinalIgnoreCase))
+		if (key.Equals(contentZipName, StringComparison.OrdinalIgnoreCase) || key.Equals(worldManifestName, StringComparison.OrdinalIgnoreCase))
 			return false;
 
 		return true;
@@ -461,6 +469,16 @@ public static partial class Assets
 
 		currentWorldId = worldId;
 		bundledRoomsWritable = null;
+	}
+
+	public static void SelectPackagedWorld()
+	{
+		if (!Content.FileExists(worldManifestName))
+			throw new InvalidDataException("Content.zip is missing world.json. Rebuild the content zip.");
+		var worldId = JsonUtil.Parse(Content.ReadAllBytes(worldManifestName))?["world"]?.GetValue<string>();
+		if (string.IsNullOrWhiteSpace(worldId) || worldId.IndexOfAny(['/', '\\']) >= 0)
+			throw new InvalidDataException("Content.zip has an invalid world in world.json.");
+		SelectWorld(worldId);
 	}
 
 	public static void Load(GraphicsDevice gfx, bool dumpPackedAtlases = false)
@@ -2882,7 +2900,11 @@ public static partial class Assets
 			}
 
 		if (RoomsById.Count == 0)
+		{
+			if (ContentIsZip)
+				throw new InvalidDataException($"World '{currentWorldId}' has no rooms in Content.zip.");
 			CreateDefaultStartRoom();
+		}
 	}
 
 	static Room LoadRoomJson(string id, ReadOnlySpan<byte> json)

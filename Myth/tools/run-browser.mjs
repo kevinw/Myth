@@ -117,7 +117,7 @@ function buildAssets() {
       "--content-target",
       "browser",
       "--content-world",
-      "Myth",
+      "Playground",
     ],
     { stdio: "inherit", cwd: repoDir },
   );

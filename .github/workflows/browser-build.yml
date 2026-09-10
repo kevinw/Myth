@@ -79,7 +79,7 @@ jobs:
 
       - name: Build visual asset pack + content zip
         working-directory: Myth
-        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip --content-target browser --content-world Myth
+        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --build-asset-pack Assets/Packed/Visuals --build-content-zip Assets/Content.zip --content-target browser --content-world Playground
 
       # use --aot for WebAssembly AOT for better runtime perf
       - name: Publish browser app (AOT)
