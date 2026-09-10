@@ -13,14 +13,6 @@ SFX
   - Bosonic Time + upgrade needs SFX
   - really listen and pay attention to lack of landing sound effects on grass etc
 
-
-# Monday
-- turn index.html into a character controller world
-- record title screen demos 
-    - burrowing, interesting enemy encounter, interesting NPC encounter, beautiful room reveals, secret reveal
-- make an itch page, so people can follow its development/playtest when it's ready
-- decide on which computer(s) and/or monitor(s) to take and prepare their packing 
-
 TALK AND PLAY FEEDBACK
 - consider NOT cancelling the attack direction
 - the player character art reads as unfinished vs the backgrounds
@@ -80,7 +72,6 @@ what instead of computes?
   in the watch graph and nothing rebuilds the dll. Wants a --foster-project mode for sessions
   spent in Foster/.
 - a textual undo log
-- live reload can lose changes
 - have rope repaint itself on editor drag
 - the introduction of a new enemy is itself a payoff; new area, new enemies
 - R1/R2 change sublayers instead of worlds

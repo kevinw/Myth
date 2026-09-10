@@ -921,7 +921,6 @@ public partial class Game : IDisposable
 	void UpdateDraggedPlayerCamera(Player player)
 	{
 		easedPlayerCameraTarget = player.Position;
-		easedPlayerVelocity = Vector2.Zero;
 		cameraError = Vector2.Zero;
 		cameraLookAhead = Vector2.Zero;
 
@@ -1009,34 +1008,11 @@ public partial class Game : IDisposable
 		=> room.GetEntry(new Point2(x, y)) is { BlocksMovement: true };
 
 	Vector2 easedPlayerCameraTarget; // TODO: use nullable and clear on room switch or load
-	Vector2 easedPlayerVelocity;
-
-#if BROWSER
-	bool hardCameraLock = false;
-#else
-	bool hardCameraLock = true;
-#endif
 
 	void UpdatePlayerCameraTarget()
 	{
-		if (GetFirst<Player>() is not { } player)
-			return;
-
-		if (hardCameraLock)
-		{
+		if (GetFirst<Player>() is { } player)
 			easedPlayerCameraTarget = player.Position;
-		}
-		else
-		{
-			if (Vector2.Distance(easedPlayerCameraTarget, player.Position) > 50.0f)
-			{
-				easedPlayerCameraTarget = player.Position;
-			}
-			easedPlayerVelocity = Vector2.Lerp(easedPlayerVelocity, player.Velocity, Time.Delta * 1.5f);
-			Vector2 newTarget = player.Position + new Vector2(easedPlayerVelocity.X * 0.5f, 0);
-			easedPlayerCameraTarget = Vector2.Lerp(easedPlayerCameraTarget, newTarget, Time.Delta * 4.0f);
-			easedPlayerCameraTarget = Vector2.Round(easedPlayerCameraTarget);
-		}
 	}
 
 	public Vector2 GetGameplayCameraTarget()

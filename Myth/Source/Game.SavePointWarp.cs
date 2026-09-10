@@ -149,7 +149,6 @@ public partial class Game
 		EnsureBudForPlayer(repositionExisting: true);
 		GetFirst<Bud>()?.Stop();
 		easedPlayerCameraTarget = player.Position;
-		easedPlayerVelocity = Vector2.Zero;
 		cameraLookAhead = Vector2.Zero;
 		SnapCameraToGameplayTarget();
 		ApplySavePointWarpPose(0, exiting: false);
