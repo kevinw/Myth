@@ -1,4 +1,7 @@
-- Game should own "death", not Player. Today Player.HurtState() mass-destroys every actor except itself/light on death; Transition() does the same on room change. It's fragile (e.g. it could strand a live modal like BurrowUpgradeGet, leaving TimeScale frozen). Make death an atomic Game-level reset that notices the player died, instead of the player iterating and destroying actors.
+- redraw hurt sprite
+- make a pitch deck https://brightgambit.com/checkmate/
+- a "fast motion" NCA impact frame for boss death
+- Game should own "death", not Player. Today Player.HurtState() mass-destroys every actor except itself/light on death; Transition() does the same on room change. It's fragile. Make death an atomic Game-level reset that notices the player died, instead of the player iterating and destroying actors. (The TimeScale strand-a-frozen-modal symptom of this is already handled: see Game.TimeScale.cs -- time bending is now a registry of composable factors, each optionally owned by an actor and auto-dropped when that actor is destroyed, so a mass-destroy can no longer leave the sim frozen. Same pattern is worth reaching for anytime a future death/reset path needs to be robust against half-torn-down state.)
 - i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
 - smoke NCA in FRONT of the sprites, with transparency
 - NCAs could default to cell-per-screen-pixel
@@ -17,12 +20,18 @@ SFX
 - make an itch page, so people can follow its development/playtest when it's ready
 - decide on which computer(s) and/or monitor(s) to take and prepare their packing 
 
-
 TALK AND PLAY FEEDBACK
+- consider NOT cancelling the attack direction
 - the player character art reads as unfinished vs the backgrounds
 - use the NCA for gameplay
 - which pits are navigable and which are death is unclear 
-- PROTOTYPE/MEASURE: dash button and then jump into a wall 
+- PROTOTYPE/MEASURE: 
+  - slow burrow clock a bit until you move. or make moving cost "more" than "idling" and tune that.
+  - lay a bomb while burrowing
+  - dash button and then jump into a wall 
+  - separate burrow button
+  - NCA poison cloud
+  - NCA unstable collider/platform (can you burrow along its fractal edge? pushing off scatters it?)
 - if i can't "one wall jump" somehow it's a bit unclear; it almost feels possible
 - dpad only, stick doesn't work in warp, despite help text
 - fer's feedback, echoed: the shadow in the floater room looks "safe" but it is not. one idea that comes to mind: the floater itself could cast a very big warning light ahead of time. then the shadows WOULD be safe

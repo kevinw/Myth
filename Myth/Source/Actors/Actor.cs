@@ -776,4 +776,6 @@ public class Actor
 		sound.Dispose();
 		sound = null;
 	}
+
+	protected void PushTimeFactor(float factor) => Game.PushTimeFactor(factor, owner: this);
 }

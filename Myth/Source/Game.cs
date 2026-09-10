@@ -93,10 +93,11 @@ public partial class Game : IDisposable
 	readonly List<Actor> attachedActors = [];
 	readonly List<Actor> parkedActors = [];
 
-	// The sim reads time only through this. Normally it's the wall clock (scaled by timeScale);
-	// during replay playback it's a clock advanced by the recording's per-frame dt, which
-	// decouples the sim from the display framerate. See AdvanceReplayClock / EndReplayClock.
-	public Time Time => replayClock ?? Manager.Time.MultiplyDelta(timeScale * MathF.Max(timeSlowdown, 0));
+	// The sim reads time only through this. Normally it's the wall clock scaled by TimeScale (the
+	// product of all live time factors -- see Game.TimeScale.cs); during replay playback it's a
+	// clock advanced by the recording's per-frame dt, which decouples the sim from the display
+	// framerate. See AdvanceReplayClock / EndReplayClock.
+	public Time Time => replayClock ?? Manager.Time.MultiplyDelta(TimeScale);
 	Time? replayClock;
 	internal void AdvanceReplayClock(float dt) => replayClock = (replayClock ?? default).Advance(TimeSpan.FromSeconds(dt));
 	internal void EndReplayClock() => replayClock = null;
@@ -141,7 +142,6 @@ public partial class Game : IDisposable
 	// Visual feedback state, but sim-owned: decayed each frame in Update and set by the
 	// HitStun/Shake/PulseDitherGlitch APIs; GameView only reads it (via forwarding).
 	internal float hitStun;
-	internal float timeSlowdown = 1f;
 
 	internal struct FX {
 		internal float shaking;
@@ -223,12 +223,6 @@ public partial class Game : IDisposable
 	// True when the sim is in a room and not mid-transition: when Manager applies live
 	// input such as mouse-dragging the player (matches the old in-Update gating).
 	internal bool AcceptsLiveInput => room != null && nextRoom == null && !SavePointWarpActive && !LayerTransitionActive;
-	float timeScale = 1.0f;
-	internal float TimeScale
-	{
-		get => timeScale;
-		set => timeScale = Math.Max(0, value);
-	}
 	readonly Point2? respawnPosition;
 	// Where the player entered the *current* room. Unlike respawnPosition (readonly, the
 	// initial room's spawn), this is refreshed on every room activation — including edge
@@ -572,8 +566,8 @@ public partial class Game : IDisposable
 	// live device. A headless Game receives Controls bound to a headless Input (no input).
 	public void Update(Controls controls)
 	{
-		timeSlowdown = Calc.Approach(timeSlowdown, 1f, Manager.Time.Delta);
-		
+		UpdateTimeFactors();
+
 		Controls = controls;
 #if BROWSER
 		var browserDebugFrameStartAllocated = GC.GetAllocatedBytesForCurrentThread();
@@ -830,26 +824,6 @@ public partial class Game : IDisposable
 		renderTargetShake = renderTargetNoise + renderTargetKick;
 	}
 
-	internal void ChangeTimeScale(int direction)
-	{
-		ReadOnlySpan<float> scales = [0.00001f, 0.05f, 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f];
-
-		var index = 0;
-		var bestDistance = float.MaxValue;
-		for (var i = 0; i < scales.Length; i++)
-		{
-			var distance = MathF.Abs(scales[i] - timeScale);
-			if (distance < bestDistance)
-			{
-				bestDistance = distance;
-				index = i;
-			}
-		}
-
-		index = Math.Clamp(index + direction, 0, scales.Length - 1);
-		timeScale = scales[index];
-		DisplayMessage($"Time x{timeScale:0.##}");
-	}
 
 	// The world-tile span the camera currently frames, honoring fbZoom / 4:3 crop.
 	RectInt VisibleCameraTileBounds()
@@ -1715,6 +1689,7 @@ public partial class Game : IDisposable
 				actor.Destroyed();
 			Actors.Remove(actor);
 			parkedActors.Remove(actor);
+			DropTimeFactorsOwnedBy(actor);
 		}
 		destroying.Clear();
 	}
@@ -3139,7 +3114,6 @@ public partial class Game : IDisposable
 	static string SessionDestroyKey(Room room, string actorId) => $"{room.Id}:id:{actorId}";
 
 	public void HitStun(float time) => hitStun = MathF.Max(hitStun, time);
-	public void TimeSlowdown(float slowdown) => timeSlowdown = MathF.Min(timeSlowdown, slowdown);
 
 	public void Shake(float time, float intensity = 1)
 	{

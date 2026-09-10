@@ -15,8 +15,6 @@ public class BurrowUpgradeGet : Actor
 	static float Duration => ScaleTime * 2 + HoldTime + GrowTime;
 
 	float timer;
-	float previousTimeScale;
-	bool restored;
 
 	public BurrowUpgradeGet()
 	{
@@ -28,11 +26,10 @@ public class BurrowUpgradeGet : Actor
 	public override void Added()
 	{
 		base.Added();
-		previousTimeScale = Game.TimeScale;
-		Game.TimeScale = 0; // fully modal
+		PushTimeFactor(0);
 		// Freezing time zeroes Game.Time.Delta, so a hit-stun in progress can never drain and the
-		// normal actor loop stops running -- we'd never advance to restore time. Update through the
-		// hit-stun list instead, on real time, so the modal always completes.
+		// normal actor loop stops running -- we'd never advance. Update through the hit-stun list
+		// instead, on real time, so the modal always completes and releases the freeze.
 		Game.HitStunActors.Add(this);
 		// if the player was squished when we pause time, it looks weird
 		Game.GetFirst<Player>()?.Squish = Vector2.One;
@@ -56,30 +53,14 @@ public class BurrowUpgradeGet : Actor
 		}
 
 		if (timer >= Duration)
-		{
-			// Restore inline (not just in Destroyed): a hit-stun can only drain once time is
-			// running again, and RemoveDestroyedActors -- which invokes Destroyed -- doesn't run
-			// while hit-stun is active. Unfreezing here lets the destroy actually get processed.
-			Restore();
 			Game.Destroy(this);
-		}
 	}
 
-	// Safety net for the abnormal paths: player death and room transitions both mass-destroy every
-	// other actor, and any of those could otherwise leave the sim frozen at TimeScale 0 -- stuck.
 	public override void Destroyed()
 	{
 		base.Destroyed();
-		Restore();
-	}
-
-	void Restore()
-	{
-		if (restored)
-			return;
-		restored = true;
+		// TimeScale is released automatically (we owned the factor); just clean up our own state.
 		Game.BurrowUpgradeHud = default;
-		Game.TimeScale = previousTimeScale;
 		Game.HitStunActors.Remove(this);
 	}
 

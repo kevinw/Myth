@@ -247,6 +247,12 @@
       "SkinMode": "Solid",
       "PoseAnimationName": "Kick_Soccerball",
       "PoseProgress": 0.539
+    },
+    {
+      "Id": "89317620468f5b2d",
+      "Type": "Chest",
+      "Position": [193, 80],
+      "Loot": "BurrowUpgrade"
     }
   ]
 }

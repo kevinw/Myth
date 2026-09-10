@@ -15,7 +15,7 @@ public class Cutscene : Actor
 	static Vector2 PortraitPupilOffset => new(1, -9);
 
 	readonly Coroutine routine = new();
-	float previousTimeScale;
+	Game.TimeFactor? timeFactor;
 	float previousDitherGlitch;
 	float previousDitherGlitchTarget;
 	Vector2 previousDitherGlitchAxis;
@@ -48,7 +48,7 @@ public class Cutscene : Actor
 			return;
 
 		active = true;
-		previousTimeScale = Game.TimeScale;
+		timeFactor = Game.PushTimeFactor(1f, owner: this);
 		previousDitherGlitch = Game.ditherGlitch;
 		previousDitherGlitchTarget = Game.ditherGlitchTarget;
 		previousDitherGlitchAxis = Game.ditherGlitchAxis;
@@ -125,7 +125,8 @@ public class Cutscene : Actor
 		while (elapsed < 0.45f)
 		{
 			elapsed += Game.Manager.Time.Delta;
-			Game.TimeScale = float.Lerp(previousTimeScale, SlowTimeScale, Ease.Cube.Out(Math.Clamp(elapsed / 0.45f, 0, 1)));
+			// Lerp our own factor down from neutral; it composes with anything else bending time.
+			timeFactor?.Factor = float.Lerp(1f, SlowTimeScale, Ease.Cube.Out(Math.Clamp(elapsed / 0.45f, 0, 1)));
 			yield return 0;
 		}
 
@@ -171,7 +172,7 @@ public class Cutscene : Actor
 			yield return 0;
 		}
 
-		Game.TimeScale = 0;
+		timeFactor?.Factor = 0;
 		Game.ditherGlitch = 0;
 		Game.ditherGlitchTarget = 0;
 		Game.ditherGlitchPosition = null;
@@ -248,7 +249,7 @@ public class Cutscene : Actor
 			bud.ScriptedClimbSpeed = 1;
 			bud.Visible = budWasVisible;
 		}
-		Game.TimeScale = previousTimeScale;
+		Game.ReleaseAndSetNull(ref timeFactor);
 		Game.ditherGlitch = previousDitherGlitch;
 		Game.ditherGlitchTarget = previousDitherGlitchTarget;
 		Game.ditherGlitchAxis = previousDitherGlitchAxis;
