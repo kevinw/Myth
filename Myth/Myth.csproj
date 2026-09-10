@@ -288,7 +288,6 @@
     <MakeDir Directories="$(WasmAppDir)acknowledgements" />
     <MakeDir Directories="$(WasmAppDir)Assets/Shaders/Compiled" Condition="'@(_BrowserShader)' != ''" />
     <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
-    <Copy SourceFiles="Platforms/Web/wwwroot/download.html" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="$(IntermediateOutputPath)acknowledgements/index.html" DestinationFolder="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />

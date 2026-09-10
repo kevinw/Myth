@@ -25,16 +25,16 @@ async function releases(bucket, cursor) {
     });
 }
 
-export async function onRequest({ env, params, request, next }) {
+export async function onRequest({ env, params, request }) {
     if (request.method !== "GET" && request.method !== "HEAD")
         return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
 
     const path = Array.isArray(params.path) ? params.path.join("/") : params.path;
     if (!path)
-        return next();
+        return new Response("Not found", { status: 404 });
     if (path === "releases.json")
         return releases(env.MYTH_DOWNLOADS, new URL(request.url).searchParams.get("cursor"));
-    if (!/^Myth-[0-9a-f]{8}(?:-(?:mac|windows-x64))?\.zip$/.test(path))
+    if (!/^Myth-[0-9a-f]{8}(?:-(?:mac|windows-x64|linux-x64))?\.zip$/.test(path))
         return new Response("Not found", { status: 404 });
 
     const object = request.method === "HEAD"
