@@ -30,7 +30,7 @@ public class Bouncer : Actor, IResizable
 	// Membrane spring: accel per px of displacement from rest, and per-second velocity bleed.
 	static float Stiffness => 3280f;
 	static float DampingRate => 11f;
-	static float MaxSimStep => 1f / 30f;
+	static float MaxSimStep => 1f / 60f;
 	static float VisualRecoilOffset => 4f;
 	static float RumbleLow => 0.3f;
 	static float RumbleHigh => 0.15f;
@@ -47,6 +47,7 @@ public class Bouncer : Actor, IResizable
 	Vector2[] prev = [];
 	Vector2[] rest = [];
 	Point2 builtSize;
+	float lastDelta = 1f / 60f;
 	HashSet<Actor> inside = [];
 	HashSet<Actor> insideNow = [];
 
@@ -93,11 +94,19 @@ public class Bouncer : Actor, IResizable
 		if (builtSize != Size)
 			BuildRing();
 
-		Simulate(MathF.Min(Time.Delta, MaxSimStep));
-
-		var recoilAccel = -recoilOffset * RecoilStiffness - recoilVelocity * RecoilDamping;
-		recoilVelocity += recoilAccel * Time.Delta;
-		recoilOffset += recoilVelocity * Time.Delta;
+		var frameDelta = Time.Delta;
+		if (frameDelta > 0)
+		{
+			var stepCount = Math.Max(1, (int)MathF.Ceiling(frameDelta / MaxSimStep - 0.0001f));
+			var dt = frameDelta / stepCount;
+			var displacementScale = dt / lastDelta;
+			for (var step = 0; step < stepCount; step++)
+			{
+				SimulateStep(dt, displacementScale);
+				displacementScale = 1;
+			}
+			lastDelta = dt;
+		}
 
 		insideNow.Clear();
 		foreach (var actor in Game.Actors)
@@ -111,18 +120,20 @@ public class Bouncer : Actor, IResizable
 		(inside, insideNow) = (insideNow, inside);
 	}
 
-	void Simulate(float dt)
+	void SimulateStep(float dt, float displacementScale)
 	{
-		if (dt <= 0)
-			return;
 		var damp = MathF.Exp(-DampingRate * dt);
 		for (var i = 0; i < points.Length; i++)
 		{
 			var accel = (rest[i] - points[i]) * Stiffness;
 			var p = points[i];
-			points[i] = p + (p - prev[i]) * damp + accel * (dt * dt);
+			points[i] = p + (p - prev[i]) * displacementScale * damp + accel * (dt * dt);
 			prev[i] = p;
 		}
+
+		var recoilAccel = -recoilOffset * RecoilStiffness - recoilVelocity * RecoilDamping;
+		recoilVelocity += recoilAccel * dt;
+		recoilOffset += recoilVelocity * dt;
 	}
 
 	void Bounce(Actor actor)
@@ -151,7 +162,9 @@ public class Bouncer : Actor, IResizable
 		for (var i = 0; i < points.Length; i++)
 		{
 			var weight = MathF.Max(0, Vector2.Dot((rest[i] - LocalCenter).Normalized(), side));
-			points[i] -= side * (weight * weight * dent);
+			var offset = side * (weight * weight * dent);
+			points[i] -= offset;
+			prev[i] -= offset;
 		}
 
 		AudioEvent("bounce");

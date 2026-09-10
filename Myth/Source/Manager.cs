@@ -65,6 +65,10 @@ public partial class Manager : App
 	readonly bool checkRooms;
 	readonly string? requestedWorldId;
 	bool startingPlay;
+	static float PlayMouseHideDelay => 3f;
+	float playMouseIdleTimer;
+	bool mousePlayMode;
+	bool mouseVisible = true;
 	// Boot loading screen: warm GPU pipelines a step at a time while showing "Loading...", then
 	// call EnterInitialScreen(). See UpdateBootWarmup/RenderBootWarmup and ShaderWarmup.
 	bool bootWarming;
@@ -1233,6 +1237,8 @@ public partial class Manager : App
 		}
 #endif
 
+		UpdateMouseVisibility();
+
 #if !EDITOR
 		var shipRoomCheatChordActive = UpdateShipRoomCheat(gameMenuPausesGame);
 #else
@@ -1450,6 +1456,25 @@ public partial class Manager : App
 
 		imgui?.EndLayout();
 		ApplyImGuiMouseCursor();
+	}
+
+	void UpdateMouseVisibility()
+	{
+		var playMode = playing || startingPlay;
+		if (playMode && !mousePlayMode)
+			playMouseIdleTimer = PlayMouseHideDelay;
+		else if (!playMode || Input.Mouse.Delta != Vector2.Zero || Input.Mouse.Wheel != Vector2.Zero ||
+			Input.Mouse.Down(MouseButtons.Left) || Input.Mouse.Down(MouseButtons.Middle) || Input.Mouse.Down(MouseButtons.Right))
+			playMouseIdleTimer = 0;
+		else
+			playMouseIdleTimer += Time.Delta;
+		mousePlayMode = playMode;
+
+		var visible = !playMode || playMouseIdleTimer < PlayMouseHideDelay;
+		if (visible == mouseVisible)
+			return;
+		mouseVisible = visible;
+		SetMouseVisible(visible);
 	}
 
 	void CompleteGameFrame()

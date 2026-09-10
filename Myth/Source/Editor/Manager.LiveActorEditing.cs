@@ -501,7 +501,7 @@ public partial class Manager
 
 	void LiveActorEditingImGui()
 	{
-		if (!playing || AttractMode || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
+		if (!playing || !mouseVisible || AttractMode || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
 			return;
 
 		var selected = liveSelectedActorId is { } selectedId ? game.GetActorById(selectedId) : null;

@@ -176,6 +176,12 @@ public class Light : Actor, IHitByHitbox
 		return true;
 	}
 
+	internal void FlickerFromBurrow(RectInt path)
+	{
+		if (hitFlickerAge < 0)
+			HitByHitbox(path);
+	}
+
 	public override void Update()
 	{
 		base.Update();

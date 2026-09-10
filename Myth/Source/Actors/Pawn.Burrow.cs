@@ -23,6 +23,7 @@ public abstract partial class Pawn
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
 	static float BurrowJunctionSeekDistance => 8f;
+	static int BurrowTorchFlickerRadius => 4;
 	static float BurrowSwitchMagnetDistance => 7f;
 	static float BurrowSwitchMagnetSpeed => 42f;
 	static float BurrowClimbSpeedMultiplier => 0.59f; // straight-up wall climb is half speed; 45° lands in between
@@ -354,6 +355,7 @@ public abstract partial class Pawn
 	protected void BurrowState()
 	{
 		Velocity = Vector2.Zero;
+		var previousPosition = Position;
 		UpdateBurrowRoomTransitionGuard();
 
 		// Ramp the squash UP toward peak as the entry window elapses, overriding the
@@ -598,6 +600,7 @@ public abstract partial class Pawn
 				}
 			}
 		}
+		FlickerTorchesAlongBurrow(previousPosition);
 
 		if (burrowLineExit != null && !burrowLineExit.NearEndpoint(Position, 4))
 		{
@@ -642,6 +645,17 @@ public abstract partial class Pawn
 				AudioEvent("player/burrow_tick", "Interval", (float)BurrowIntervals);
 			PopOutOfBurrow();
 		}
+	}
+
+	void FlickerTorchesAlongBurrow(Point2 previousPosition)
+	{
+		if (this is not Player || Position == previousPosition)
+			return;
+
+		var path = RectInt.Between(previousPosition, Position).Inflate(BurrowTorchFlickerRadius);
+		foreach (var actor in Game.Actors)
+			if (actor is Light light)
+				light.FlickerFromBurrow(path);
 	}
 
 	bool CanExitBurrowLine(out bool exitDucking)

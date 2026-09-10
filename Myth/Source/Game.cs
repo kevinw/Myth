@@ -1331,20 +1331,20 @@ public partial class Game : IDisposable
 			BeginSavePointWarp(target);
 	}
 
-	// Warp-mode map controls: dpad picks a save point, South/X confirms the warp,
+	// Warp-mode map controls: movement picks a save point, South/X confirms the warp,
 	// East/Circle (or Escape) cancels.
 	void UpdateWarpModeInput()
 	{
 		var input = Manager.Input;
 
 		var moved = false;
-		if (input.AnyControllerButtonPressed(Buttons.Up) || input.Keyboard.Pressed(Keys.Up, Keys.W))
+		if (Controls.Move.PressedUp)
 			moved = Minimap.MoveWarpSelection(Point2.Up);
-		else if (input.AnyControllerButtonPressed(Buttons.Down) || input.Keyboard.Pressed(Keys.Down, Keys.S))
+		else if (Controls.Move.PressedDown)
 			moved = Minimap.MoveWarpSelection(Point2.Down);
-		else if (input.AnyControllerButtonPressed(Buttons.Left) || input.Keyboard.Pressed(Keys.Left, Keys.A))
+		else if (Controls.Move.PressedLeft)
 			moved = Minimap.MoveWarpSelection(Point2.Left);
-		else if (input.AnyControllerButtonPressed(Buttons.Right) || input.Keyboard.Pressed(Keys.Right, Keys.D))
+		else if (Controls.Move.PressedRight)
 			moved = Minimap.MoveWarpSelection(Point2.Right);
 
 		if (moved)
