@@ -442,6 +442,22 @@ public partial class Manager
 			using (CaptureRoomUndo(marked ? "Unmark Burrow Door" : "Mark Burrow Door", room))
 			{
 				SetBurrowDoorPoint(actor, pointIndex, !marked);
+				if (!marked)
+					SetBurrowSwitchPoint(actor, pointIndex, false);
+				editorGameDirty = true;
+				SyncEditorGame();
+			}
+			CloseCurrentPopup();
+		}
+
+		var switchMarked = IsBurrowSwitchPoint(actor, pointIndex);
+		if (MenuItem("Burrow Switch", null, switchMarked))
+		{
+			using (CaptureRoomUndo(switchMarked ? "Unmark Burrow Switch" : "Mark Burrow Switch", room))
+			{
+				SetBurrowSwitchPoint(actor, pointIndex, !switchMarked);
+				if (!switchMarked)
+					SetBurrowDoorPoint(actor, pointIndex, false);
 				editorGameDirty = true;
 				SyncEditorGame();
 			}
@@ -451,7 +467,7 @@ public partial class Manager
 		var worldPoint = (Point2)(PointPathOrigin(room, actor) + PointPathPoint(PointPathNodes(actor), pointIndex));
 		EditorBurrowDoor match = default;
 		var matches = marked ? FindBurrowDoorMatches(room, worldPoint, out match) : 0;
-		if (!marked && MenuItem("Create Link to Sublayer"))
+		if (!marked && !switchMarked && MenuItem("Create Link to Sublayer"))
 		{
 			CreateBurrowDoorLink(room, actor, pointIndex, worldPoint);
 			CloseCurrentPopup();
@@ -1688,6 +1704,8 @@ public partial class Manager
 		if (ResizableRoomRectTypes.TryGetValue(type, out var info))
 		{
 			var size = ActorSpecs.ReadResolvedPoint(actor, nameof(IResizable.Size)) ?? info.DefaultSize;
+			if (string.Equals(type, nameof(Door), StringComparison.OrdinalIgnoreCase))
+				return new RectInt(position - new Point2(size.X / 2, size.Y), size);
 			return new RectInt(position.X, position.Y, size.X, size.Y);
 		}
 		if (string.Equals(type, nameof(Prop), StringComparison.OrdinalIgnoreCase) &&
@@ -1862,6 +1880,34 @@ public partial class Manager
 	static bool HasBurrowDoor(JsonObject actor)
 		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase) &&
 			BurrowDoorFlags(actor) != 0;
+
+	static BurrowLine.BurrowDoorPoints BurrowSwitchFlags(JsonObject actor)
+		=> Enum.TryParse<BurrowLine.BurrowDoorPoints>(
+			ActorSpecs.ReadResolvedString(actor, nameof(BurrowLine.BurrowSwitches)), true, out var flags) ? flags : 0;
+
+	static bool IsBurrowSwitchPoint(JsonObject actor, int pointIndex)
+	{
+		if (!string.Equals(ActorSpecs.GetTypeName(actor), nameof(BurrowLine), StringComparison.OrdinalIgnoreCase))
+			return false;
+		var count = PointPathPointCount(PointPathNodes(actor));
+		var flag = pointIndex == 0 ? BurrowLine.BurrowDoorPoints.First
+			: pointIndex == count - 1 ? BurrowLine.BurrowDoorPoints.Last
+			: BurrowLine.BurrowDoorPoints.None;
+		return flag != 0 && BurrowSwitchFlags(actor).HasFlag(flag);
+	}
+
+	static void SetBurrowSwitchPoint(JsonObject actor, int pointIndex, bool enabled)
+	{
+		var count = PointPathPointCount(PointPathNodes(actor));
+		var flag = pointIndex == 0 ? BurrowLine.BurrowDoorPoints.First
+			: pointIndex == count - 1 ? BurrowLine.BurrowDoorPoints.Last
+			: BurrowLine.BurrowDoorPoints.None;
+		if (flag == 0)
+			return;
+		var flags = BurrowSwitchFlags(actor);
+		flags = enabled ? flags | flag : flags & ~flag;
+		ActorSpecs.SetProperty(actor, nameof(BurrowLine.BurrowSwitches), JsonValue.Create(flags.ToString()));
+	}
 
 	static void SetBurrowDoorPoint(JsonObject actor, int pointIndex, bool enabled)
 	{
@@ -2163,6 +2209,8 @@ public partial class Manager
 					batcher.CircleLine(point, radius * 2.2f, lineWeight * 3, 16,
 						matches == 1 ? new Color(0xb77cff) : Color.Red);
 				}
+				else if (IsBurrowSwitchPoint(actor, i))
+					batcher.CircleLine(point, radius * 2.2f, lineWeight * 3, 16, new Color(0x8de4d1));
 				// The selected point wears the fill and ring the other way round: Backspace means
 				// "delete this point" while one is selected, so which one that is has to be obvious.
 				var pointSelected = i == selectedPoint;
@@ -2732,11 +2780,12 @@ public partial class Manager
 		var position = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
 		var size = ActorSpecs.ReadResolvedPoint(actor, nameof(IResizable.Size)) ?? ResizableRoomRectDefaultSize(actor);
 		var cursor = snap ? tile * Game.TileSize : (Point2)(world - (Vector2)room.WorldBounds.TopLeft);
+		var bottomCenter = string.Equals(ActorSpecs.GetTypeName(actor), nameof(Door), StringComparison.OrdinalIgnoreCase);
 
-		var left = position.X;
-		var top = position.Y;
-		var right = position.X + size.X;
-		var bottom = position.Y + size.Y;
+		var left = bottomCenter ? position.X - size.X / 2 : position.X;
+		var top = bottomCenter ? position.Y - size.Y : position.Y;
+		var right = left + size.X;
+		var bottom = top + size.Y;
 
 		switch (handle)
 		{
@@ -2806,8 +2855,9 @@ public partial class Manager
 			bottom = Math.Clamp(bottom, top + Game.TileSize, roomHeight);
 		}
 
-		actor["Position"] = new JsonArray(left, top);
-		actor["Size"] = new JsonArray(right - left, bottom - top);
+		var resized = new Point2(right - left, bottom - top);
+		actor["Position"] = bottomCenter ? new JsonArray(left + resized.X / 2, bottom) : new JsonArray(left, top);
+		actor["Size"] = new JsonArray(resized.X, resized.Y);
 		editorGameDirty = true;
 	}
 

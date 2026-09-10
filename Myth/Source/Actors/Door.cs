@@ -3,15 +3,20 @@ using Foster.Framework;
 
 namespace Myth;
 
+public enum DoorMode { Vanish, Raise }
+
 [GameActor(Tags = ActorTag.Door, LivePositionEditable = true, LiveResizable = true)]
 public class Door : Actor, IActivatable, IResizable
 {
 	public static readonly Point2 DefaultSize = new(12, 16);
 
-	public bool StartsVisible;
-	public bool Locked;
+	public DoorMode Mode;
+	[VisibleWhen(nameof(Mode), DoorMode.Raise), I(0.1f, 5)] public float RaiseTime = 1.25f;
+	[VisibleWhen(nameof(Mode), DoorMode.Raise), I(0.1f, 8)] public float LowerTime = 2.5f;
+	[VisibleWhen(nameof(Mode), DoorMode.Vanish)] public bool StartsVisible;
+	[VisibleWhen(nameof(Mode), DoorMode.Vanish)] public bool Locked;
 	// A persistent PressesOnce Button may live in another room; its saved latch keeps this shortcut open.
-	public string PersistentButtonId = "";
+	[VisibleWhen(nameof(Mode), DoorMode.Vanish)] public string PersistentButtonId = "";
 	Point2 size = DefaultSize;
 	public Point2 Size
 	{
@@ -26,6 +31,8 @@ public class Door : Actor, IActivatable, IResizable
 	bool activationOpen;
 	bool pendingClose;
 	HashSet<Actor>? activationSources;
+	Point2 closedPosition;
+	float openness;
 
 	RectInt DoorRect => new(-Size.X / 2, -Size.Y, Size.X, Size.Y);
 
@@ -40,6 +47,12 @@ public class Door : Actor, IActivatable, IResizable
 	{
 		base.Added();
 		Hitbox = new(DoorRect);
+		closedPosition = Position;
+		if (Mode == DoorMode.Raise)
+		{
+			Appear();
+			return;
+		}
 		if ((StartsVisible || Locked) && !PersistentlyOpened)
 			Appear();
 	}
@@ -59,6 +72,11 @@ public class Door : Actor, IActivatable, IResizable
 	public override void Update()
 	{
 		base.Update();
+		if (Mode == DoorMode.Raise)
+		{
+			UpdateRaise();
+			return;
+		}
 		if (PersistentlyOpened)
 		{
 			OpenForGood();
@@ -155,6 +173,12 @@ public class Door : Actor, IActivatable, IResizable
 
 		activationOpen = activationSources.Count > 0;
 		pendingClose = !activationOpen;
+		if (Mode == DoorMode.Raise)
+		{
+			if (active && activationSources.Count == 1)
+				AudioEvent("door/unlock");
+			return;
+		}
 		if (!activationOpen)
 			return;
 
@@ -170,10 +194,33 @@ public class Door : Actor, IActivatable, IResizable
 		Visible = false;
 	}
 
-	bool CanClose()
+	void UpdateRaise()
+	{
+		var target = activationOpen ? 1 : 0;
+		var duration = activationOpen ? RaiseTime : LowerTime;
+		var next = Calc.Approach(openness, target, Time.Delta / MathF.Max(0.01f, duration));
+		var desired = closedPosition + Point2.Up * (int)MathF.Round(Size.Y * next);
+		var direction = Math.Sign(desired.Y - Position.Y);
+		var reachedDesired = true;
+		while (Position.Y != desired.Y)
+		{
+			var step = Point2.Down * direction;
+			if (direction > 0 && !CanClose(step))
+			{
+				reachedDesired = false;
+				break;
+			}
+			Position += step;
+			Game.ActorMoved(this, step);
+		}
+		openness = reachedDesired ? next :
+			Size.Y > 0 ? Math.Clamp((closedPosition.Y - Position.Y) / (float)Size.Y, 0, 1) : target;
+	}
+
+	bool CanClose(Point2 doorStep = default)
 	{
 		foreach (var actor in Game.Actors)
-			if ((actor is Pawn || actor is ICarryable { CarriedBy: null }) && actor.OverlapsAny(Point2.Zero, this))
+			if ((actor is Pawn || actor is ICarryable { CarriedBy: null }) && actor.OverlapsAny(-doorStep, this))
 				return false;
 		return true;
 	}

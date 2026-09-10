@@ -144,7 +144,7 @@
     {
       "Id": "fa3639299483b508",
       "Type": "RigPuppetProp",
-      "Position": [86, 110],
+      "Position": [90, 120],
       "NeuralFPS": 1,
       "TorsoSize": 10.582,
       "BicepSize": 6.348,
@@ -167,8 +167,8 @@
       "Id": "69e8e7e82ee272c9",
       "Type": "BudStoryBark",
       "Position": [79, 64],
-      "Size": [65, 48],
-      "Text": "I think you can squeeze through this wire down here."
+      "Text": "I think you can squeeze through this wire down here.",
+      "Size": [65, 48]
     }
   ]
 }

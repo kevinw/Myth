@@ -1,5 +1,6 @@
+- draw one new pixel art sprite a day; find an exercise list, an intuition pump, or a walkthrough
 - the blob behaviour still needs to change a lot, and its look
-- redraw hurt sprite
+- redraw hurt sprite, bubble
 - make a pitch deck https://brightgambit.com/checkmate/
 - a "fast motion" NCA impact frame for boss death
 - Game should own "death", not Player. Today Player.HurtState() mass-destroys every actor except itself/light on death; Transition() does the same on room change. It's fragile. Make death an atomic Game-level reset that notices the player died, instead of the player iterating and destroying actors. (The TimeScale strand-a-frozen-modal symptom of this is already handled: see Game.TimeScale.cs -- time bending is now a registry of composable factors, each optionally owned by an actor and auto-dropped when that actor is destroyed, so a mass-destroy can no longer leave the sim frozen. Same pattern is worth reaching for anytime a future death/reset path needs to be robust against half-torn-down state.)
@@ -30,16 +31,10 @@ TALK AND PLAY FEEDBACK
 
 LATER
 - the moving platform puzzle is too slow
-- a big water well, where the lighting gets darker and darker
 - health pots as a minor diversion
 - wires on static rig puppets
 - use Dropper; draw a sprite; more "easy" enemy variety wins
 - show mycelon count and duck count at the end
-- "ur fumpossibly icked"
-- dissolution mentor
-- vision pro build: paint, place tiles, tweak multidimensional values, rig puppets...
-- "dark rooms aren't for me"
-- "how to expand the scope of what i think about?"
 - handstand animation
 - a burrow door which activates a swarm of text--partially chain of thought partially journal junk
 - bezier curves
@@ -49,7 +44,6 @@ map shouldn't show the squares of room boundaries--instead an expanded SDF of th
 what instead of computes?
 - a rig puppet in every lore spot instead of a computer
 - animate tutorial text a bit on room load
-- show git sha on pause
 - foster logo at startup
 - POSSIBLY use alien bug for one of our existing behaviours?
 - wall jump teach room early where Bud tells you
@@ -58,7 +52,6 @@ what instead of computes?
   - screenshot button
   - tilde console
   - add an itch page
-- redraw bubble
 - burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
   is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame
   TryUnstick now rescues it, but the pop should pick an unblocked direction itself.
@@ -80,21 +73,16 @@ what instead of computes?
 - dig into VirtualAction.buffer and see if we could use it anywhere to make the game feel better
 - when loading barks from a baked asset that is older than Game.BudStory.cs 
 - lightning trap landing spot could a) paint black in the foreground mask and/or b) have more impact sprites
-- play pong with projectiles in a clear arkanoid room
-- MYTH_SHIP add a "demo mode on" in options which, on 2 mins inactivity, reset to title screen with warning
 - make the eyelaserpuppet sit down and talk to you after you beat him. use a deep voice.
-- "Playground" world
-  - test the player controller online in a simple room
-- let you choose a hat at the beginning?
 - an enemy or area which speeds up or slows down time
 - put some inbetween frames in the player sprite
-- make our Aseprite loader able to load indexed files
+- make our Aseprite loader able to load indexed color files
 - OnWasHit is very repetitive across our actors. we should refactor it into a shared method with a knockback param
 - try some sound effects from the BOOM library https://artlist.io/sfx/artist/boom-library/845
 - improve editor spawn pick player location: not in a reveal door (burrow_secret)
-- dotnet 11
+- dotnet 11 (slower compile, but maybe something is improved?)
 - chain roll attack into a hop 
-- try a variant of HitStun which is more of a ramp
+- try a variant of HitStun which is more of a timescale ramp
 
 # pseudoregalia
 - switch which moves platforms is fun
@@ -329,6 +317,8 @@ adjust rope springiness as a mechanic or challenge
 - trying to put out all the torches in a room, but bugs are trying to light them
 - a room where Bud gets stuck; you hear him from the other room, or talk on a radio
 - boss rush storylets: like Hades, each time you face off against one, you get new dialog. but winning doesn't mean they won't come back and that you are "punished" with less dialog; maybe they come back stronger!
+- vision pro build: paint, place tiles, tweak multidimensional values, rig puppets...
+- play pong with projectiles in a clear arkanoid room
 
 ### platformer elements
 - fan block: solid tile projecting a toggleable short Wind column (updraft elevator; blow ropes sideways)

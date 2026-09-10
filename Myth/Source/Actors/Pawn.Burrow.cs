@@ -23,6 +23,8 @@ public abstract partial class Pawn
 	static float BurrowFriction => 600f;         // glide to a stop when the stick is released
 	static float BurrowReverseFlipSpeed => 8f;   // brake below this before flipping heading on a reversal
 	static float BurrowJunctionSeekDistance => 8f;
+	static float BurrowSwitchMagnetDistance => 7f;
+	static float BurrowSwitchMagnetSpeed => 42f;
 	static float BurrowClimbSpeedMultiplier => 0.59f; // straight-up wall climb is half speed; 45° lands in between
 													 // The burrow pop is meant to read as stronger than a full held jump: a bigger launch
 													 // velocity, plus a longer reduced-gravity float window (jumpTimer) than a normal jump.
@@ -100,6 +102,9 @@ public abstract partial class Pawn
 	float burrowLeapTravelX;              // remembered horizontal glide so the coyote leap keeps its arc
 	static float BurrowLeapCoyoteTime => 0.12f;
 	Vector2 BurrowTravelHeading => burrowLine != null ? burrowLineHeading : burrowHeading;
+	internal bool AtBurrowLineEndpoint(BurrowLine line, int pointIndex)
+		=> State == States.Burrow && burrowLine == line &&
+			Vector2.DistanceSquared(Position, line.WorldPoint(pointIndex)) <= 0.25f;
 
 	// Only the player drags Bud along and flips the room's plane, and only the player has hands
 	// to catch a Carryable on the way out; Bud burrows without any of it.
@@ -420,6 +425,15 @@ public abstract partial class Pawn
 		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
 		var maxSpeed = BurrowMaxSpeed * (dashBurrowing ? DashBurrowSpeedMultiplier : 1f) * (burrowLine?.SpeedScale ?? 1f);
 		var targetSpeed = move && !burrowReverseQueued ? maxSpeed * (1f - (1f - BurrowClimbSpeedMultiplier) * climb) : 0f;
+		if (!burrowReverseQueued && burrowLine?.TryGetSwitchDistance(
+			burrowLineSegment, burrowLineT, burrowLineDirection, out var switchDistance) == true)
+		{
+			if (switchDistance <= 0.01f)
+				targetSpeed = 0;
+			else if (switchDistance <= BurrowSwitchMagnetDistance)
+				targetSpeed = MathF.Max(targetSpeed, Calc.Lerp(12, BurrowSwitchMagnetSpeed,
+					1 - switchDistance / BurrowSwitchMagnetDistance));
+		}
 		var rate = targetSpeed > burrowSpeed ? BurrowAccel : BurrowFriction;
 		burrowSpeed = Calc.Approach(burrowSpeed, targetSpeed, rate * Time.Delta);
 
@@ -494,6 +508,12 @@ public abstract partial class Pawn
 							Game.TraceBurrow(
 								$"line sublayer handoff id={burrowLine.ActorId ?? "?"} position={Position} heading={burrowLineHeading}");
 						return;
+					}
+					if (junctionPointIndex >= 0 && burrowLine.IsSwitchPoint(junctionPointIndex))
+					{
+						burrowSpeed = 0;
+						burrowMoveRemainder = 0;
+						break;
 					}
 					if (junctionPointIndex >= 0 && Game.TryContinueBurrowLine(burrowLine, junctionPointIndex,
 						burrowLineSegment, burrowLineDirection, burrowLineHeading, intent,
@@ -968,6 +988,20 @@ public abstract partial class Pawn
 		Vector2 origin = Position;
 		for (var i = 0; i + 1 < glowPoints.Count; i++)
 			batcher.Line(glowPoints[i] - origin, glowPoints[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(glowPoints[i]), BurrowGlowColorAt(glowPoints[i + 1]));
+
+		if (State == States.Burrow && burrowLine?.TryGetSwitchNear(Position, 0.5f, out var switchPointIndex, out var switchPoint) == true)
+		{
+			var fill = burrowLine.SwitchFill(switchPointIndex);
+			var previous = switchPoint;
+			for (var i = 1; i <= 28; i++)
+			{
+				var t = i / 28f;
+				var point = switchPoint + Calc.AngleToVector(t * MathF.Tau * (2.5f + fill) - Time.SecondsF * (3 + fill * 4)) * t * Calc.Lerp(4, 9, fill);
+				batcher.Line(previous - origin, point - origin, BurrowGlowWeight,
+					BurrowGlowColorAt(previous), BurrowGlowColorAt(point));
+				previous = point;
+			}
+		}
 
 		if (burrowPassenger != null)
 			batcher.Circle(burrowGlowAnchor - origin, BudBurrowDotRadius, 12, Color.White, Color.Transparent);

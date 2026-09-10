@@ -9,7 +9,7 @@ namespace Myth;
 
 [GameActor(Sprite = "Editor/burrow_line", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8, Tags = ActorTag.System,
 	Anchor = SpriteAnchor.Center, LivePositionEditable = true)]
-public class BurrowLine : PointPathActor
+public class BurrowLine : PointPathActor, IActivationSource
 {
 	// First and Last identify Points[0] and Points[^1]; burrow doors are bidirectional.
 	[Flags]
@@ -24,12 +24,20 @@ public class BurrowLine : PointPathActor
 	internal const int MaxJunctionTransfers = 8;
 
 	public BurrowDoorPoints BurrowDoors;
+	public BurrowDoorPoints BurrowSwitches;
+	[ActorRef(typeof(IActivatable))] public string TargetActorId = "";
 	public float SpeedScale = 1f;
 	public bool RenderProcedural = true;
 	[I(0.5f, 12)] public float ProceduralWidth = 3f;
 	public Color ProceduralOuterColor = new(0x454a52);
 	public Color ProceduralInnerColor = new(0x959ba5);
 	float ProceduralDoorRadius => MathF.Max(2f, ProceduralWidth);
+	static float SwitchFillTime => 1.25f;
+	static float SwitchReleaseTime => 0.35f;
+	float firstSwitchFill;
+	float lastSwitchFill;
+	bool targetActive;
+	bool IActivationSource.ActivationIsPersistent => false;
 
 	public BurrowLine()
 	{
@@ -51,6 +59,57 @@ public class BurrowLine : PointPathActor
 			batcher.Circle(Points[0], ProceduralDoorRadius, 12, new Color(0x17191d));
 		if ((BurrowDoors & BurrowDoorPoints.Last) != 0)
 			batcher.Circle(Points[^1], ProceduralDoorRadius, 12, new Color(0x17191d));
+		if ((BurrowSwitches & BurrowDoorPoints.First) != 0)
+			RenderSwitch(batcher, Points[0], firstSwitchFill);
+		if ((BurrowSwitches & BurrowDoorPoints.Last) != 0)
+			RenderSwitch(batcher, Points[^1], lastSwitchFill);
+	}
+
+	public override void Update()
+	{
+		base.Update();
+		var player = Game.GetFirst<Player>();
+		var firstActive = player?.AtBurrowLineEndpoint(this, 0) == true && IsSwitchPoint(0);
+		var last = Points.Length - 1;
+		var lastActive = last > 0 && player?.AtBurrowLineEndpoint(this, last) == true && IsSwitchPoint(last);
+		firstSwitchFill = Calc.Approach(firstSwitchFill, firstActive ? 1 : 0,
+			Time.Delta / (firstActive ? SwitchFillTime : SwitchReleaseTime));
+		lastSwitchFill = Calc.Approach(lastSwitchFill, lastActive ? 1 : 0,
+			Time.Delta / (lastActive ? SwitchFillTime : SwitchReleaseTime));
+
+		var active = firstActive || lastActive;
+		if (active == targetActive)
+			return;
+		targetActive = active;
+		if (Game.GetActorById(TargetActorId) is IActivatable target)
+			target.SetActive(this, active);
+	}
+
+	public override void Destroyed()
+	{
+		if (targetActive && Game.GetActorById(TargetActorId) is IActivatable target)
+			target.SetActive(this, false);
+	}
+
+	void RenderSwitch(Batcher batcher, Vector2 center, float fill)
+	{
+		var radius = ProceduralDoorRadius + 1;
+		var color = Color.Lerp(new Color(0x50606a), new Color(0x8de4d1), fill);
+		batcher.Circle(center, radius, 16, new Color(0x17191d));
+		batcher.CircleLine(center, radius, 1, 16, color * 0.8f);
+		if (fill <= 0)
+			return;
+
+		batcher.Circle(center, Calc.Lerp(0.75f, radius - 1, Ease.Cube.Out(fill)), 16, color * (0.35f + fill * 0.45f));
+		var turns = 1.25f + fill * 1.5f;
+		var previous = center;
+		for (var i = 1; i <= 18; i++)
+		{
+			var t = i / 18f;
+			var point = center + Calc.AngleToVector(t * MathF.Tau * turns - Time.SecondsF * (2 + fill * 3)) * (radius - 1) * t;
+			batcher.Line(previous, point, 0.75f + fill * 0.5f, Color.White * fill * (1 - t * 0.55f));
+			previous = point;
+		}
 	}
 
 	public override void RenderNormals(Batcher batcher)
@@ -69,6 +128,10 @@ public class BurrowLine : PointPathActor
 			RenderRoundNormals(batcher, Points[0], ProceduralDoorRadius, concave: true);
 		if ((BurrowDoors & BurrowDoorPoints.Last) != 0)
 			RenderRoundNormals(batcher, Points[^1], ProceduralDoorRadius, concave: true);
+		if ((BurrowSwitches & BurrowDoorPoints.First) != 0)
+			RenderRoundNormals(batcher, Points[0], ProceduralDoorRadius + 1, concave: true);
+		if ((BurrowSwitches & BurrowDoorPoints.Last) != 0)
+			RenderRoundNormals(batcher, Points[^1], ProceduralDoorRadius + 1, concave: true);
 	}
 
 	void RenderRoundedPath(Batcher batcher, float width, Color color)
@@ -151,6 +214,47 @@ public class BurrowLine : PointPathActor
 	public bool IsDoorPoint(int pointIndex)
 		=> pointIndex == 0 && (BurrowDoors & BurrowDoorPoints.First) != 0 ||
 			pointIndex == Points.Length - 1 && (BurrowDoors & BurrowDoorPoints.Last) != 0;
+
+	public bool IsSwitchPoint(int pointIndex)
+		=> pointIndex == 0 && (BurrowSwitches & BurrowDoorPoints.First) != 0 ||
+			pointIndex == Points.Length - 1 && (BurrowSwitches & BurrowDoorPoints.Last) != 0;
+
+	public bool TryGetSwitchDistance(int segment, float t, int direction, out float distance)
+	{
+		distance = 0;
+		var point = direction > 0 ? Points.Length - 1 : 0;
+		if (!IsSwitchPoint(point))
+			return false;
+
+		while (segment >= 0 && segment < Points.Length - 1)
+		{
+			var length = Vector2.Distance(Points[segment], Points[segment + 1]);
+			distance += (direction > 0 ? 1 - t : t) * length;
+			if (!NextSegment(ref segment, ref t, direction))
+				return true;
+		}
+		return false;
+	}
+
+	public bool TryGetSwitchNear(Vector2 world, float distance, out int pointIndex, out Vector2 point)
+	{
+		pointIndex = -1;
+		point = default;
+		if (Points.Length == 0)
+			return false;
+		if (IsSwitchPoint(0) && Vector2.DistanceSquared(world, WorldPoint(0)) <= distance * distance)
+			pointIndex = 0;
+		else if (IsSwitchPoint(Points.Length - 1) &&
+			Vector2.DistanceSquared(world, WorldPoint(Points.Length - 1)) <= distance * distance)
+			pointIndex = Points.Length - 1;
+		if (pointIndex < 0)
+			return false;
+		point = WorldPoint(pointIndex);
+		return true;
+	}
+
+	public float SwitchFill(int pointIndex)
+		=> pointIndex == 0 ? firstSwitchFill : lastSwitchFill;
 
 	public bool Advance(ref int segment, ref float t, int direction, float distance,
 		out Vector2 point, out Vector2 heading, out float remaining, out int junctionPoint)
