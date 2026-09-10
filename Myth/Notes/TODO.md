@@ -59,7 +59,6 @@ what instead of computes?
   - tilde console
   - add an itch page
 - redraw bubble
-- for things like LinkedSound in the editor, show their icon at half opacity?
 - burrow pop in a corner: PopOutOfBurrow launches along -exitDir without checking the destination
   is clear, so a vertical wall meeting the ground fires you into the solid. Pawn's per-frame
   TryUnstick now rescues it, but the pop should pick an unblocked direction itself.
@@ -70,7 +69,6 @@ what instead of computes?
 - a textual undo log
 - have rope repaint itself on editor drag
 - the introduction of a new enemy is itself a payoff; new area, new enemies
-- R1/R2 change sublayers instead of worlds
 - P with a NCT actor selected should be equivalent to pressing its Paint Mask button
 - downloaded horse model on 
 - door is rendering normals behind the hidden wall cover

@@ -4145,18 +4145,18 @@ public partial class Manager
 			activeRoomPreviewVersion = -1;
 		if (game?.RoomInverted == true)
 			worldMouseBlocked = true;
-		// Shoulder buttons cycle worlds in edit mode (same as time speed in play mode)
+		// Shoulder buttons move between rooms on adjacent sublayers at the camera position.
 		if (!worldMouseBlocked)
 		{
-			int worldSwitch = 0;
+			var sublayerChange = 0;
 			foreach (var controller in Input.Controllers) if (controller.Connected)
 			{
-				if (controller.Pressed(Buttons.LeftShoulder)) worldSwitch -= 1;
-				if (controller.Pressed(Buttons.RightShoulder)) worldSwitch += 1;
+				if (controller.Pressed(Buttons.LeftShoulder)) sublayerChange -= 1;
+				if (controller.Pressed(Buttons.RightShoulder)) sublayerChange += 1;
 			}
 
-			if (worldSwitch != 0)
-				SwitchWorld(worldSwitch);
+			if (sublayerChange != 0)
+				ChangeEditorSublayerAtCamera(sublayerChange);
 		}
 
 		if (!editorViewInitialized)
@@ -5068,6 +5068,30 @@ public partial class Manager
 
 		CurrentRoom?.Save();
 		SelectRoom(nearest);
+		selectedRoomActorIndex = -1;
+		editorRoomEntryDirection = null;
+		SyncEditorGame();
+	}
+
+	void ChangeEditorSublayerAtCamera(int change)
+	{
+		var target = editorSublayer + change;
+		Room? room = null;
+		foreach (var candidate in Assets.RoomsById.Values)
+			if (candidate.Sublayer == target && candidate.WorldBounds.Contains(editorCamera))
+			{
+				room = candidate;
+				break;
+			}
+
+		if (room == null)
+		{
+			DisplayMessage("No room at sublayer");
+			return;
+		}
+
+		CurrentRoom?.Save();
+		SelectRoom(room);
 		selectedRoomActorIndex = -1;
 		editorRoomEntryDirection = null;
 		SyncEditorGame();
