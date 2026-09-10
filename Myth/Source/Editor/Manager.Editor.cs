@@ -2096,6 +2096,19 @@ public partial class Manager
 			batcher.Line(new Vector2(left, y), new Vector2(right, y), weight, color);
 	}
 
+	void DrawRoomActorMarkers(Room room)
+	{
+		foreach (var actor in room.Actors)
+		{
+			if (!Factory.HasEditorMarker(ActorSpecs.GetTypeName(actor)) || FindRoomActorEntry(actor) is not { } entry)
+				continue;
+
+			var position = room.WorldBounds.TopLeft + (ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero);
+			batcher.Image(entry.PreviewImage, position, entry.PreviewImage.Size / 2,
+				new Vector2(entry.PreviewScale), 0, Color.White * 0.5f);
+		}
+	}
+
 	void DrawRoomActorOverlays(Room room, float lineWeight, int hoveredIndex, Vector2 worldMouse)
 	{
 		for (var i = 0; i < room.Actors.Count; i++)
@@ -4664,6 +4677,7 @@ public partial class Manager
 				batcher.RectLine(marquee, MathF.Max(1f, gridWeight), RoomSelectionColor);
 			}
 			DrawPlaytestPlayerMarker(editing);
+			DrawRoomActorMarkers(editing);
 			DrawRevealDoorMarkers(editing, gridWeight);
 			DrawPointPaths(editing, gridWeight);
 			RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,

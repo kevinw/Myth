@@ -389,7 +389,7 @@ public static class Factory
 			var iconOffset = attr.OffsetX != 0 || attr.OffsetY != 0 ? attr.Offset
 				: attr.EditorBounds != null || fallbackSprite == null ? Point2.Zero
 				: DeriveTileOffset(fallbackSprite, anchor);
-			paletteLooks[name] = new PaletteLook(editorIconName, null, iconOffset, iconDefaultBounds, attr.EditorBounds);
+			paletteLooks[name] = new PaletteLook(editorIconName, null, iconOffset, iconDefaultBounds, attr.EditorBounds, attr.EditorMarker);
 			ActorPalette.Add(ActorPaletteEntry.FromActorIcon(name, icon, iconOffset, iconDefaultBounds, attr.EditorBounds, tags));
 #endif
 			return;
@@ -415,7 +415,7 @@ public static class Factory
 			: DeriveTileOffset(sprite, anchor);
 
 		var defaultEditorBounds = ActorPaletteEntry.GetDefaultEditorBounds(sprite, sprite.ResolveOrigin(anchor));
-		paletteLooks[name] = new PaletteLook(null, iconName, offset, defaultEditorBounds, attr?.EditorBounds);
+		paletteLooks[name] = new PaletteLook(null, iconName, offset, defaultEditorBounds, attr?.EditorBounds, attr?.EditorMarker == true);
 		ActorPalette.Add(ActorPaletteEntry.FromActor<T>(iconName, offset, attr?.EditorBounds, attr?.Tags ?? ActorTag.None, anchor));
 	}
 
@@ -432,8 +432,10 @@ public static class Factory
 	// so its specs (prefabs) can wear the same one. Types that skip the palette record nothing,
 	// which keeps their prefabs out of it as well.
 	readonly record struct PaletteLook(string? IconName, string? SpriteName, Point2 Offset,
-		RectInt DefaultEditorBounds, RectInt? EditorBounds);
+		RectInt DefaultEditorBounds, RectInt? EditorBounds, bool EditorMarker);
 	static readonly Dictionary<string, PaletteLook> paletteLooks = new(StringComparer.OrdinalIgnoreCase);
+	public static bool HasEditorMarker(string? typeName)
+		=> typeName != null && paletteLooks.TryGetValue(typeName, out var look) && look.EditorMarker;
 
 	// Where the resolved origin should land within a clicked tile: centered horizontally, and
 	// sitting on the tile bottom when the origin is in the sprite's lower half (a grounded

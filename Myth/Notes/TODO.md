@@ -41,9 +41,6 @@ LATER
 - "dark rooms aren't for me"
 - "how to expand the scope of what i think about?"
 - handstand animation
-- does this feel like post abundance 2 u
-- metagenomic beehives
-- it's a jeff koons. that's fiunny.
 - a burrow door which activates a swarm of text--partially chain of thought partially journal junk
 - bezier curves
 - train a model which reproduces doodles
@@ -55,7 +52,6 @@ what instead of computes?
 - show git sha on pause
 - foster logo at startup
 - POSSIBLY use alien bug for one of our existing behaviours?
-- update voice-de.json
 - wall jump teach room early where Bud tells you
 - RigPuppet: size and size of limbs as animated effect. see if there's a way to attach lfos or target values to any field.
 - for builds for fer

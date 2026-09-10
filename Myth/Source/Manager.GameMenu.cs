@@ -544,7 +544,7 @@ public partial class Manager
 
 			byte alpha = 80;
 			Draw(new Vector2(-70, 50), alpha: alpha, hat: true);
-			Draw(new Vector2(430, 50), -1, Bud.Tint, alpha: alpha);
+			Draw(new Vector2(430, 51), -1, Bud.Tint, alpha: alpha);
 		}
 		batcher.PopMatrix();
 	}
@@ -572,7 +572,7 @@ public partial class Manager
 		{
 			DrawDistortedLogo(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Color.White * gameMenuLayoutEase);
 
-			if (Assets.CurrentWorldId == "Playground" || true) // a hack to make the web build show a subtitle
+			if (Assets.CurrentWorldId == "Playground") // a hack to make the web build show a subtitle
 			{
 				var text = "Character Controller Test";
 				var subtitlePos = pos + new Vector2(0, 23f);

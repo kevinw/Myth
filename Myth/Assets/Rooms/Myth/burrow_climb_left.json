@@ -273,7 +273,9 @@
     {
       "Id": "586acdfdb3140afd",
       "Type": "Light",
-      "Position": [164, 108]
+      "Position": [164, 108],
+      "Radius": 16.918,
+      "TintSprite": true
     },
     {
       "Id": "4fa5f2fbffccefc3",

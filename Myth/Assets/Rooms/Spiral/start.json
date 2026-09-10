@@ -157,8 +157,7 @@
     {
       "Id": "coil_blob_d",
       "Type": "Blob",
-      "Position": [184, 168],
-      "Health": 2
+      "Position": [184, 168]
     },
     {
       "Id": "coil_pouncer_d",

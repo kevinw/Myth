@@ -2,7 +2,7 @@ using Foster.Framework;
 
 namespace Myth;
 
-[GameActor(Icon = "speaker", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
+[GameActor(Icon = "speaker", EditorMarker = true, BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
 	Anchor = SpriteAnchor.Center, Tags = ActorTag.System, LivePositionEditable = true)]
 public class LinkedSound : Actor
 {
