@@ -593,6 +593,7 @@ public abstract partial class Pawn
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
 		UpdateBurrowRumble();
+		UpdateBurrowBomb();
 		EmitBurrowSparks();
 		if (!PerfToggles.HeadSlide) Play("burrow");
 
@@ -853,6 +854,14 @@ public abstract partial class Pawn
 		var climb = MathF.Max(0, -BurrowTravelHeading.Y);
 		Game.SetAudioEventParameter(burrowSound, "Speed", speed01);
 		Game.SetAudioEventParameter(burrowSound, "Climb", climb);
+	}
+
+	void UpdateBurrowBomb()
+	{
+		if (input.AttackPressed)
+		{
+			Game.Create<BurrowBomb>(Position);
+		}
 	}
 
 	// A quiet low-motor bed sells contact with the ground. The high motor shares the visual/audio

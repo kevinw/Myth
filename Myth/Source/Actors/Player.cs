@@ -1536,7 +1536,6 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static float AttackBlockRumbleDuration => 0.11f;
 	static float HurtFriction => 200;
 	static float DuckAttackCooldown => 0.4f;
-	static float AttackBlockOverlapThreshold => 0.5f;
 	static float HurtDuration => 0.5f;
 	static bool DashImpactStun => false;
 	static float DashImpactHurtDurationMultiplier => 0.7f;
@@ -1559,6 +1558,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	float duckAttackCooldownTimer;
 	bool duckAttack;
 	bool attackBlocked;
+	// True once this swing has overlapped any target (even one already consumed on an earlier
+	// frame); suppresses the wall-block check so landing on an enemy in front of a wall doesn't
+	// also register as a blocked attack. Distinct from a per-frame "newly hit" (which drives pogo).
 	bool attackHitTarget;
 	bool attackDown;
 	Pop? attackSwipe;
@@ -2204,42 +2206,34 @@ public partial class Player : Pawn, INeuralTextureAgent
 	{
 		if (Facing == Signs.Negative)
 			it.X = -(it.X + it.Width);
+			
+		var hitSomething = AttackThisHitBoxThisFrame(it + Position);
+		
+		if (hitSomething && canPogo)
+		{
+			Velocity.Y = -125f;
+			burrowNeedsGrounding = false;
+			burrowTimer = 0f;
+		}
+	}
 
-		it += Position;
-
+	bool AttackThisHitBoxThisFrame(RectInt it) {
 		Game.AddCollisionRectForThisFrame(it);
 
-		var blockedByShield = IsAttackBlocked(it, checkOnlyForStrongActorBlock: true);
+		var blockedByShield = Game.IsAttackBlocked(this, it, checkOnlyForStrongActorBlock: true);
 		if (blockedByShield)
 			BlockAttack();
 
-		var hitSomething = false;
+		var attackHitActor = false;
 		if (!blockedByShield)
 		{
-			for (int i = 0, count = Game.Actors.Count; i < count; i++)
-			{
-				var hit = Game.Actors[i];
-				if (Game.destroying.Contains(hit) ||
-					!hit.Mask.Has(Masks.Enemy | Masks.Hazard | Masks.Destructible) || !hit.OverlapsCombatBounds(it))
-					continue;
-				attackHitTarget = true;
-				if (attackConsumed.Contains(hit))
-					continue;
-
-				attackConsumed.Add(hit);
-				Hit(hit, new(it));
-				hitSomething = true;
-			}
-
-			if (hitSomething && canPogo)
-			{
-				Velocity.Y = -125f;
-				burrowNeedsGrounding = false;
-				burrowTimer = 0f;
-			}
+			var hitCount = Game.DamageActors(this, it, attackConsumed, out var overlappedTarget);
+			attackHitActor = hitCount > 0; // newly hit this frame → drives the pogo
+			if (overlappedTarget)
+				attackHitTarget = true; // any overlap this swing → don't also count a wall as a block
 		}
 
-		if (!attackHitTarget && !attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && IsAttackBlocked(it))
+		if (!attackHitTarget && !attackBlocked && (duckAttack || state.Time >= ATTACK_WINDUP) && Game.IsAttackBlocked(this, it))
 			BlockAttack();
 
 		if (!attackBlocked)
@@ -2247,6 +2241,8 @@ public partial class Player : Pawn, INeuralTextureAgent
 			Game.BreakTiles(it);
 			Game.HitVisualActors(it, attackConsumed);
 		}
+
+		return attackHitActor;
 	}
 
 	void BlockAttack()
@@ -2265,27 +2261,6 @@ public partial class Player : Pawn, INeuralTextureAgent
 		if (RumbleControllerIndex is { } controller)
 			Game.Manager.Input.Rumble(controller, AttackBlockRumbleLow,
 				AttackBlockRumbleHigh, AttackBlockRumbleDuration);
-	}
-
-	bool IsAttackBlocked(in RectInt hitbox, bool checkOnlyForStrongActorBlock = false)
-	{
-		var attackPath = hitbox.Conflate(Position);
-		foreach (var actor in Game.Actors)
-		{
-			if (actor != this && !Game.destroying.Contains(actor))
-			{
-				if (actor.BlocksAttack(this, attackPath))
-					return true;
-			}
-		}
-
-		if (checkOnlyForStrongActorBlock)
-			return false;
-
-		if (Game.GetRoomCollisionOverlapRatio(hitbox, includeBreakableTiles: false) >= AttackBlockOverlapThreshold)
-			return true;
-
-		return false;
 	}
 
 	RectInt GetAttackHitbox(bool duckingAttack)

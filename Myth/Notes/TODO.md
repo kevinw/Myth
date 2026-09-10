@@ -1,3 +1,4 @@
+- the blob behaviour still needs to change a lot, and its look
 - redraw hurt sprite
 - make a pitch deck https://brightgambit.com/checkmate/
 - a "fast motion" NCA impact frame for boss death
