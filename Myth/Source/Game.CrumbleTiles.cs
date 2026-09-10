@@ -78,6 +78,14 @@ public partial class Game
 
 	void UpdateCrumbleTiles()
 	{
+		// During a transition both the outgoing and incoming rooms' tile grids are live at once,
+		// and `room` is still the outgoing room. A collapse now would run RefreshRoomTiles and fill
+		// the incoming grids from the outgoing room -- you'd play the new room's collision while
+		// seeing the old room's tiles. Crumble state is keyed to the room we're leaving and gets
+		// cleared on arrival, so just pause until the transition settles.
+		if (nextRoom != null || LayerTransitionActive)
+			return;
+
 		// State is keyed by room-local tile coords; a room change orphans all of it.
 		if (crumbleRoom != room)
 		{

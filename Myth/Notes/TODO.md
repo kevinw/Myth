@@ -1,29 +1,14 @@
-- check depth of burrowline vs player
-- show mycelon count and duck count at the end
+- Game should own "death", not Player. Today Player.HurtState() mass-destroys every actor except itself/light on death; Transition() does the same on room change. It's fragile (e.g. it could strand a live modal like BurrowUpgradeGet, leaving TimeScale frozen). Make death an atomic Game-level reset that notices the player died, instead of the player iterating and destroying actors.
+- i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
+- smoke NCA in FRONT of the sprites, with transparency
+- NCAs could default to cell-per-screen-pixel
 - burrow lines: SOMETHING to make them a bit more visually interesting
-- lore rewards alongside chests
-  - MAKE BUD react to computer text
-- take 30 mins to make sure you can explain NCA, and also IK in crawler, and also the RigPuppet
-- redraw spitter; test other actors and draw for them
-- either disable all bud voice barks or make them never ever repeat
+- lore rewards alongside chests (MAKE BUD react to computer text, too)
 SFX
-  - burrow time sfx SO IMPORTANT
+  - burrow time 
   - Bosonic Time + upgrade needs SFX
   - really listen and pay attention to lack of landing sound effects on grass etc
-- go through a decoration hour
-- i edited some text in play mode; then pressing tab loses all my work; live edit unsaved changes should set a flag, which causes a modal with checkboxes of actors to keep
-- use Dropper; draw a sprite; more "easy" enemy variety wins
 
-# other notes
-- some lightweight anim for the rigpuppet
-- variable rewards in chests
-- NCAs could default to cell-per-screen-pixel
-- a few subtle optional diversions off the main path
-- wires on static rig puppets
-- smoke NCA in FRONT of the sprites, with transparency
-- health pots as a minor diversion
-- swimming hub roomm
-- a few long dark hallways separating existing rooms
 
 # Monday
 - turn index.html into a character controller world
@@ -33,7 +18,22 @@ SFX
 - decide on which computer(s) and/or monitor(s) to take and prepare their packing 
 
 
+TALK AND PLAY FEEDBACK
+- the player character art reads as unfinished vs the backgrounds
+- use the NCA for gameplay
+- which pits are navigable and which are death is unclear 
+- PROTOTYPE/MEASURE: dash button and then jump into a wall 
+- if i can't "one wall jump" somehow it's a bit unclear; it almost feels possible
+- dpad only, stick doesn't work in warp, despite help text
+- fer's feedback, echoed: the shadow in the floater room looks "safe" but it is not. one idea that comes to mind: the floater itself could cast a very big warning light ahead of time. then the shadows WOULD be safe
+
 LATER
+- the moving platform puzzle is too slow
+- a big water well, where the lighting gets darker and darker
+- health pots as a minor diversion
+- wires on static rig puppets
+- use Dropper; draw a sprite; more "easy" enemy variety wins
+- show mycelon count and duck count at the end
 - "ur fumpossibly icked"
 - dissolution mentor
 - vision pro build: paint, place tiles, tweak multidimensional values, rig puppets...
