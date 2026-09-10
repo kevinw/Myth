@@ -353,6 +353,16 @@ public partial class Manager : App
 
 	internal void RequestQuit()
 	{
+#if EDITOR
+		if (playing && HasPendingLiveEdits && liveEditReviewAction == LiveEditReviewAction.None &&
+			BeginLiveEditReview(LiveEditReviewAction.Quit))
+			return;
+#endif
+		QuitNow();
+	}
+
+	void QuitNow()
+	{
 		UserQuitRequested = true;
 		Exit();
 	}
@@ -1198,12 +1208,21 @@ public partial class Manager : App
 		var gameMenuPausesGame = GameMenuPausesGame;
 
 #if EDITOR
+		ResolveDeferredLiveEditReview();
 		if (ToggleEditorPressed(keyboardShortcutsBlocked))
 		{
 			if (titleAttractMode || attract != null)
 				ExitAttractToEditor(); // Tab at the title demo → stop replay, leave title mode, edit
+			else if (liveEditReviewAction != LiveEditReviewAction.None)
+			{ } // review modal already up; ignore the toggle
 			else if (!gameMenuPausesGame)
-				ToggleGame();
+			{
+				// Going play → editor with unsaved inspector edits: review them first.
+				if (playing && HasPendingLiveEdits && BeginLiveEditReview(LiveEditReviewAction.EnterEditor))
+				{ }
+				else
+					ToggleGame();
+			}
 		}
 #endif
 

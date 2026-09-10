@@ -228,6 +228,7 @@ public partial class Manager
 		LiveActorEditingImGui();
 		LiveStatusImGui();
 		LiveActorInspectorImGui();
+		LiveEditReviewImGui();
 		LiveRoomEditingImGui();
 		using (PerfStats.Time(PerfDetail.FpsOverlayImGui))
 			FpsOverlayImGui();

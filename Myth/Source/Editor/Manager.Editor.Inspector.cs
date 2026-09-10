@@ -688,6 +688,8 @@ public partial class Manager
 		room.Save();
 		MarkRoomPreviewDirty(room);
 		editorGameDirty = true;
+		if (runtime.ActorId is { } actorId)
+			ForgetLiveEditRecord(room.Id, actorId);
 		CaptureLiveInspectorValues(runtime);
 		DisplayMessage($"Applied live {runtime.GetType().Name} properties");
 	}
@@ -698,6 +700,9 @@ public partial class Manager
 			if (liveInspectorOriginalValues.TryGetValue(name, out var original))
 				ActorSpecs.SetEditableProperty(runtime, name, original);
 		liveInspectorEdits.Clear();
+		if (runtime.ActorId is { } actorId && game?.CurrentRoom is { } runtimeRoom &&
+			TryGetLiveActorSource(game, runtimeRoom, runtime, positionEditableOnly: false, out var room, out _))
+			ForgetLiveEditRecord(room.Id, actorId);
 	}
 
 	static void DrawDockedInspectorTitle(string title, string? detail = null, Action? sameLineCallback = null)

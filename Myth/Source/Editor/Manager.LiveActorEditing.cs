@@ -312,6 +312,7 @@ public partial class Manager
 		livePropertyTarget = null;
 		liveInspectorOriginalValues.Clear();
 		liveInspectorEdits.Clear();
+		liveEditLedger.Clear();
 		liveActorLastClickId = null;
 		liveActorLastClickTime = default;
 		liveActorLastClickCursor = default;
@@ -321,10 +322,12 @@ public partial class Manager
 	{
 		if (liveInspectedActorId != actor.ActorId)
 		{
-			if (liveInspectedActorId is { } previousId && game?.GetActorById(previousId) is { } previous)
-				ResetLiveInspectorEdits(previous);
+			// Keep the previous actor's unsaved edits (live on the runtime and in the ledger) instead
+			// of reverting -- the save-review modal is where they get kept or dropped.
+			StashInspectedLiveEdits();
 			liveInspectedActorId = actor.ActorId;
 			CaptureLiveInspectorValues(actor);
+			RestoreInspectedLiveEdits(actor);
 		}
 		liveActorInspectorOpen = true;
 	}
