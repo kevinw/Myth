@@ -28,7 +28,6 @@ TALK AND PLAY FEEDBACK
 - which pits are navigable and which are death is unclear 
 - PROTOTYPE/MEASURE: 
   - slow burrow clock a bit until you move. or make moving cost "more" than "idling" and tune that.
-  - lay a bomb while burrowing
   - dash button and then jump into a wall 
   - separate burrow button
   - NCA poison cloud

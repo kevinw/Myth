@@ -569,7 +569,19 @@ public partial class Manager
 		var pos = new Vector2(panel.Center.X, panel.Top + 25);
 
 		if (MenuPageDepth(gameMenuLayoutPage) == 0 && Assets.GetSprite("logo2", logMissing: false) is { Frames.Count: > 0 } logo)
+		{
 			DrawDistortedLogo(logo.Frames[0].Subtexture, pos, logo.ResolveOrigin(SpriteAnchor.Center), Color.White * gameMenuLayoutEase);
+
+			if (Assets.CurrentWorldId == "Playground" || true) // a hack to make the web build show a subtitle
+			{
+				var text = "Character Controller Test";
+				var subtitlePos = pos + new Vector2(0, 23f);
+				var subtitleCol = new Color(0x5ea531);
+				var subtitleSize = font.Size * 1.4f;
+				DrawCenteredText(font, text, subtitlePos + Vector2.One, subtitleSize, Color.Lerp(subtitleCol, Color.Black, 0.8f) * gameMenuLayoutEase, sine: true);
+				DrawCenteredText(font, text, subtitlePos, subtitleSize, subtitleCol * gameMenuLayoutEase, sine: true);
+			}
+		}
 		else
 		{
 			var useSineWave = false; // TODO: looks bad after the game has been running awhile
