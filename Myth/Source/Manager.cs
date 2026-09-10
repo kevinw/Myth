@@ -439,6 +439,13 @@ public partial class Manager : App
 	{
 #if !IOS && !BROWSER
 		windowFocused = Window?.Focused == true;
+#if !MYTHSHIP
+		if (OperatingSystem.IsMacOS() && Window is { } window)
+		{
+			using var icon = new Image(Path.Join(AppContext.BaseDirectory, "AppIcon.png"));
+			window.SetIcon(icon);
+		}
+#endif
 #endif
 #if !BROWSER
 		LoadWindowSettings();
