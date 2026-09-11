@@ -113,7 +113,10 @@ zero keeps only relief, while reducing detail emphasizes the scene:
 ```
 
 `--strength` controls normal slope, `--detail-radius` controls the scene/detail
-split, and `--smooth` suppresses depth noise. Use `--invert` if the inferred
+split, and `--smooth` suppresses depth noise. The depth model sees the whole
+image at 518x392 and misses fine relief; `--detail-source luminance` takes the
+detail band from the photo's brightness instead (CrazyBump-style), keeping the
+depth estimate for scene shape. Albedo changes emboss as relief in that mode. Use `--invert` if the inferred
 near/far direction is wrong for the image, `--seamless` for wrapping textures,
 and `--save-depth` to inspect the normalized estimate. Generated color and
 normal files use the exact same square crop. `--normal auto` pairs every
@@ -166,14 +169,16 @@ The pinned trainer is the `myth` branch of the
 [kevinw/Cells2Pixels](https://github.com/kevinw/Cells2Pixels) fork. On top of
 the upstream revision it freezes the pretrained VGG and optical-flow loss
 network parameters (their operations still propagate gradients into the
-generated texture) and carries three changes that keep training numerics
+generated texture) and carries four changes that keep training numerics
 identical while trimming overhead: PENCA's positional-encoding grid is
 actually cached across steps (the upstream cache condition never hit), the
 optical-flow net's symmetric-padding index maps are built once per shape
-instead of per call, and the per-epoch loss log is materialized with a single
-device sync instead of one `.item()` per sub-loss. Measured together on MPS
-they are worth a few percent; the loop is GPU-bound in the 32-128 step rollout
-backward, and compiling the NCA rollout / fp16 autocast were measured slower or
+instead of per call, the per-epoch loss log is materialized with a single
+device sync instead of one `.item()` per sub-loss, and the optical-flow net's
+two-frame `Conv3d` runs as the equivalent `Conv2d`. On MPS the first three
+together are worth a few percent, while the `Conv3d` swap cuts the motion loss
+from about 115 ms to 17 ms per epoch. The rest of the loop is GPU-bound in the
+32-128 step rollout backward, and compiling the NCA rollout / fp16 autocast were measured slower or
 neutral there. Compiling only the SIREN remains opt-in because its benefit is
 CUDA- and workload-dependent.
 

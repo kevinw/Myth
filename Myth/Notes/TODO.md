@@ -1,10 +1,11 @@
+- make a pitch deck https://brightgambit.com/checkmate/
+ USE LATEX AND BEAMER TO MAKE THEM LOL https://www.overleaf.com/learn/latex/Beamer
 - gameplay NCA ideas
   - an otherwise emtpy room with a toxic barrel. you strike it, and it explodes, emitting swimmable yet poison gas.
 - draw one new pixel art sprite a day; find an exercise list, an intuition pump, or a walkthrough
 - NCAs could default to cell-per-screen-pixel
 - the blob behaviour still needs to change a lot, and its look
 - redraw hurt sprite, bubble
-- make a pitch deck https://brightgambit.com/checkmate/
 - a "fast motion" NCA impact frame for boss death
 - burrow lines: SOMETHING to make them a bit more visually interesting
 - lore rewards alongside chests (MAKE BUD react to computer text, too)

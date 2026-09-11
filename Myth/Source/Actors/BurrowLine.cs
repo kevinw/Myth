@@ -32,10 +32,23 @@ public class BurrowLine : PointPathActor, IActivationSource
 	public Color ProceduralOuterColor = new(0x454a52);
 	public Color ProceduralInnerColor = new(0x959ba5);
 	float ProceduralDoorRadius => MathF.Max(2f, ProceduralWidth);
+	static float ChannelWidthScale => 1.55f;
+	static float ChannelOpacity => 0.55f;
+	static float StitchSpacing => 14f;
+	static float StitchInset => 5f;
+	static float GlintSpeed => 18f;
+	static float MouthWidth => 10f;
+	static int MouthDepth => 4;
+	static float TerminalSampleInterval => 0.25f;
 	static float SwitchFillTime => 1.25f;
 	static float SwitchReleaseTime => 0.35f;
 	float firstSwitchFill;
 	float lastSwitchFill;
+	float terminalSampleTimer;
+	Vector2 firstTerminalNormal;
+	Vector2 lastTerminalNormal;
+	bool firstConnected;
+	bool lastConnected;
 	bool targetActive;
 	bool IActivationSource.ActivationIsPersistent => false;
 
@@ -51,8 +64,13 @@ public class BurrowLine : PointPathActor, IActivationSource
 		if (!RenderProcedural || ProceduralWidth <= 0)
 			return;
 
+		RenderRoundedPath(batcher, ProceduralWidth * ChannelWidthScale,
+			Color.Lerp(ProceduralOuterColor, new Color(0x111318), 0.65f) * ChannelOpacity);
 		RenderRoundedPath(batcher, ProceduralWidth, ProceduralOuterColor);
 		RenderRoundedPath(batcher, ProceduralWidth * 0.45f, ProceduralInnerColor);
+		RenderStitches(batcher);
+		RenderGlint(batcher);
+		RenderTerminals(batcher);
 		if (Points.Length == 0)
 			return;
 		if ((BurrowDoors & BurrowDoorPoints.First) != 0)
@@ -68,6 +86,12 @@ public class BurrowLine : PointPathActor, IActivationSource
 	public override void Update()
 	{
 		base.Update();
+		terminalSampleTimer -= Time.Delta;
+		if (terminalSampleTimer <= 0)
+		{
+			terminalSampleTimer = TerminalSampleInterval;
+			RefreshTerminals();
+		}
 		var player = Game.GetFirst<Player>();
 		var firstActive = player?.AtBurrowLineEndpoint(this, 0) == true && IsSwitchPoint(0);
 		var last = Points.Length - 1;
@@ -110,6 +134,158 @@ public class BurrowLine : PointPathActor, IActivationSource
 			batcher.Line(previous, point, 0.75f + fill * 0.5f, Color.White * fill * (1 - t * 0.55f));
 			previous = point;
 		}
+	}
+
+	void RenderTerminals(Batcher batcher)
+	{
+		if (Points.Length < 2)
+			return;
+
+		RenderTerminal(batcher, 0, firstConnected, firstTerminalNormal);
+		RenderTerminal(batcher, Points.Length - 1, lastConnected, lastTerminalNormal);
+	}
+
+	void RenderTerminal(Batcher batcher, int pointIndex, bool connected, Vector2 normal)
+	{
+		if (connected || normal == Vector2.Zero || IsDoorPoint(pointIndex) || IsSwitchPoint(pointIndex))
+			return;
+
+		var tangent = normal.TurnLeft();
+		var center = (Vector2)Points[pointIndex];
+		var dark = new Color(0x111318);
+		for (var depth = 0; depth < MouthDepth; depth++)
+		{
+			var halfWidth = MouthWidth * 0.5f - depth;
+			var at = center + normal * (depth + 0.5f);
+			batcher.Line(at - tangent * halfWidth, at + tangent * halfWidth, 1.25f, dark * (0.9f - depth * 0.12f));
+		}
+
+		var front = tangent * MouthWidth * 0.5f;
+		var back = normal * MouthDepth;
+		var backSide = tangent * (MouthWidth * 0.5f - MouthDepth + 1);
+		var rim = Color.Lerp(ProceduralOuterColor, ProceduralInnerColor, 0.55f);
+		batcher.Line(center - front, center + front, 1, rim);
+		batcher.Line(center - front, center + back - backSide, 1, rim * 0.8f);
+		batcher.Line(center + front, center + back + backSide, 1, rim * 0.8f);
+		batcher.Line(center + back - backSide, center + back + backSide, 1, ProceduralInnerColor * 0.7f);
+	}
+
+	void RefreshTerminals()
+	{
+		if (Points.Length < 2)
+		{
+			firstTerminalNormal = lastTerminalNormal = Vector2.Zero;
+			firstConnected = lastConnected = false;
+			return;
+		}
+
+		firstConnected = Game.BurrowLinePointConnected(this, 0);
+		lastConnected = Game.BurrowLinePointConnected(this, Points.Length - 1);
+		firstTerminalNormal = firstConnected || IsDoorPoint(0) || IsSwitchPoint(0)
+			? Vector2.Zero : FindTerminalNormal(0, 1);
+		lastTerminalNormal = lastConnected || IsDoorPoint(Points.Length - 1) || IsSwitchPoint(Points.Length - 1)
+			? Vector2.Zero : FindTerminalNormal(Points.Length - 1, -1);
+	}
+
+	Vector2 FindTerminalNormal(int pointIndex, int direction)
+	{
+		var neighbor = pointIndex + direction;
+		while (neighbor >= 0 && neighbor < Points.Length && Points[neighbor] == Points[pointIndex])
+			neighbor += direction;
+		if (neighbor < 0 || neighbor >= Points.Length)
+			return Vector2.Zero;
+
+		var inward = ((Vector2)(Points[neighbor] - Points[pointIndex])).Normalized();
+		var center = (Vector2)Points[pointIndex];
+		var normal = Vector2.Zero;
+		var bestScore = 0;
+		var bestAlignment = float.NegativeInfinity;
+		ConsiderTerminalNormal(center, inward, Vector2.UnitX, ref normal, ref bestScore, ref bestAlignment);
+		ConsiderTerminalNormal(center, inward, -Vector2.UnitX, ref normal, ref bestScore, ref bestAlignment);
+		ConsiderTerminalNormal(center, inward, Vector2.UnitY, ref normal, ref bestScore, ref bestAlignment);
+		ConsiderTerminalNormal(center, inward, -Vector2.UnitY, ref normal, ref bestScore, ref bestAlignment);
+		return normal;
+	}
+
+	void ConsiderTerminalNormal(Vector2 center, Vector2 inward, Vector2 candidate,
+		ref Vector2 normal, ref int bestScore, ref float bestAlignment)
+	{
+		var score = TerminalSolidScore(center, candidate);
+		if (score <= 0)
+			return;
+		var alignment = Vector2.Dot(candidate, inward);
+		if (score > bestScore || score == bestScore && alignment > bestAlignment)
+		{
+			normal = candidate;
+			bestScore = score;
+			bestAlignment = alignment;
+		}
+	}
+
+	int TerminalSolidScore(Vector2 center, Vector2 normal)
+	{
+		var score = 0;
+		var tangent = normal.TurnLeft();
+		for (var depth = 1; depth <= 4; depth++)
+			for (var across = -2; across <= 2; across += 2)
+				if (Game.BurrowLineSolidAt(Position + center + normal * depth + tangent * across))
+					score++;
+		return score;
+	}
+
+	void RenderStitches(Batcher batcher)
+	{
+		var distance = 0f;
+		var stitch = 0;
+		var next = StitchSpacing * Calc.Lerp(0.85f, 1.15f, StitchUnit(stitch, 0));
+		for (var i = 1; i < Points.Length; i++)
+		{
+			var from = (Vector2)Points[i - 1];
+			var delta = (Vector2)(Points[i] - Points[i - 1]);
+			var length = delta.Length();
+			if (length <= 0)
+				continue;
+
+			var heading = delta / length;
+			var side = heading.TurnLeft() * (ProceduralWidth + 2f) * 0.5f;
+			while (next < distance + length)
+			{
+				var along = next - distance;
+				if (along >= StitchInset && length - along >= StitchInset)
+				{
+					var center = from + heading * along;
+					var scaledSide = side * Calc.Lerp(0.85f, 1.15f, StitchUnit(stitch, 1));
+					var lean = heading * Calc.Lerp(-0.65f, 0.65f, StitchUnit(stitch, 2));
+					var weight = Calc.Lerp(1.25f, 1.65f, StitchUnit(stitch, 3));
+					batcher.Line(center - scaledSide - lean, center + scaledSide + lean, weight,
+						Color.Lerp(ProceduralOuterColor, new Color(0x111318), 0.35f));
+					batcher.Line(center - scaledSide * 0.72f - lean, center + scaledSide * 0.72f + lean, 0.6f,
+						Color.Lerp(ProceduralOuterColor, ProceduralInnerColor, 0.45f));
+				}
+				stitch++;
+				next += StitchSpacing * Calc.Lerp(0.82f, 1.18f, StitchUnit(stitch, 0));
+			}
+			distance += length;
+		}
+	}
+
+	float StitchUnit(int stitch, uint salt)
+		=> (Hash32.Mix((uint)Position.X * 0x9e3779b9u ^ (uint)Position.Y * 0x85ebca6bu ^
+			(uint)(stitch + 1) * 0xc2b2ae35u ^ salt * 0x27d4eb2du) & 0xffff) / 65535f;
+
+	void RenderGlint(Batcher batcher)
+	{
+		var length = PathLength();
+		if (length <= 0)
+			return;
+
+		var distance = (Time.SecondsF * GlintSpeed + Position.X * 0.37f + Position.Y * 0.19f) % length;
+		if (distance < 0)
+			distance += length;
+		var center = PointAtDistance(distance) - Position;
+		var color = Color.Lerp(ProceduralInnerColor, Color.White, 0.7f);
+		batcher.Circle(center, MathF.Max(2, ProceduralWidth), 10, color * 0.28f, color * 0f);
+		batcher.Circle(center, MathF.Max(0.65f, ProceduralWidth * 0.22f), 8, color * 0.9f);
 	}
 
 	public override void RenderNormals(Batcher batcher)

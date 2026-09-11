@@ -138,7 +138,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float4 input[5];
     float latentEnergy = 0.0;
     float2 latentEnergyGradient = 0.0;
-    float2 patch = (frac(latentStatePos + 0.5) - 0.5) * 2.0 * PatchFrequency;
+    float2 patch = (frac(latentStatePos * PatchFrequency + 0.5) - 0.5) * 2.0;
     // PyTorch meshgrid order is row, column: Y precedes X.
     input[0] = float4(
         sin(3.14159265359 * patch.y),

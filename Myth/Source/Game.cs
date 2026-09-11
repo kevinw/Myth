@@ -2117,8 +2117,8 @@ public partial class Game : IDisposable
 			return;
 
 #if DEBUG
-		var local = actor.Position - actorRoom.WorldBounds.TopLeft;
-		Console.WriteLine($"[RoomBounds] {actor.GetType().Name} fell out of {actorRoom.Id} at local {local}, world {actor.Position}");
+		//var local = actor.Position - actorRoom.WorldBounds.TopLeft;
+		//Console.WriteLine($"[RoomBounds] {actor.GetType().Name} fell out of {actorRoom.Id} at local {local}, world {actor.Position}");
 #endif
 		DestroyForThisSession(actor);
 	}

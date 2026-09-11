@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 UPSTREAM = ROOT / ".cells2pixels"
 UPSTREAM_URL = "https://github.com/kevinw/Cells2Pixels.git"
-UPSTREAM_REVISION = "c5637337d25d518ad1e86c1151a38f3698171605"  # myth branch
+UPSTREAM_REVISION = "193458973b58b09a507546a1b79d9ab146ee66ee"  # myth branch
 TARGET_REVISION = "29342e2f92b2fd63133b985d34a41c20634248cd"
 DEFAULT_TARGET = ROOT / "targets" / "bubbly_0101.jpg"
 DEFAULT_TARGET_URL = (

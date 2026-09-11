@@ -70,10 +70,15 @@ def normalize_depth(depth):
     return np.clip((depth - low) / (high - low), 0, 1)
 
 
-def depth_to_normal(depth, args):
+def depth_to_normal(depth, color, args):
     depth = gaussian_blur(depth, args.smooth, args.seamless)
     scene = gaussian_blur(depth, args.detail_radius, args.seamless)
-    height = args.scene_weight * scene + args.detail_weight * (depth - scene)
+    if args.detail_source == "luminance":
+        luminance = gaussian_blur(np.asarray(color.convert("L"), dtype=np.float32) / 255, args.smooth, args.seamless)
+        detail = luminance - gaussian_blur(luminance, args.detail_radius, args.seamless)
+    else:
+        detail = depth - scene
+    height = args.scene_weight * scene + args.detail_weight * detail
     if args.seamless:
         dx = (np.roll(height, -1, axis=1) - np.roll(height, 1, axis=1)) * 0.5
         dy = (np.roll(height, -1, axis=0) - np.roll(height, 1, axis=0)) * 0.5
@@ -111,6 +116,12 @@ def main():
     parser.add_argument("--scene-weight", type=float, default=1, help="Large-scale scene depth contribution (default: 1)")
     parser.add_argument("--detail-weight", type=float, default=1, help="Local surface relief contribution (default: 1)")
     parser.add_argument("--detail-radius", type=float, default=24, help="Scene/detail split radius in output pixels (default: 24)")
+    parser.add_argument(
+        "--detail-source",
+        choices=["depth", "luminance"],
+        default="depth",
+        help="Local relief from estimated depth, or from photo luminance for fine detail the depth model misses (default: depth)",
+    )
     parser.add_argument("--smooth", type=float, default=1, help="Depth denoising radius in output pixels (default: 1)")
     parser.add_argument("--invert", action="store_true", help="Reverse near and far before generating normals")
     parser.add_argument("--seamless", action="store_true", help="Wrap filtering and gradients across image edges")
@@ -149,7 +160,7 @@ def main():
             color = ImageOps.fit(ImageOps.exif_transpose(source).convert("RGB"), (args.size, args.size), Image.Resampling.LANCZOS)
         depth = infer_depth(model, color, args.size, args.invert)
         color.save(color_output)
-        Image.fromarray(depth_to_normal(depth, args)).save(normal_output)
+        Image.fromarray(depth_to_normal(depth, color, args)).save(normal_output)
         if args.save_depth:
             Image.fromarray((depth * 255).round().astype(np.uint8)).save(args.output / f"{target.stem}_depth.png")
         print(f"[{position}/{len(pending)}] {target.name} -> {color_output.name} + {normal_output.name}")
