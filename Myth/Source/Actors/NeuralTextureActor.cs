@@ -12,8 +12,21 @@ public enum DynamismMode
 	ProceduralCurlAdvection,
 }
 
+public enum NeuralTextureOpacityMode
+{
+	Mask,
+	LatentActivity,
+}
+
+public enum NeuralTextureNormalMode
+{
+	Decoded,
+	Flat,
+	DensityGradient,
+}
+
 [GameActor(Sprite = "Editor/neural_texture_actor", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3,
-	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true)]
+	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true, ShowFacing = false)]
 public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 {
 	readonly static bool doLog = false;
@@ -31,6 +44,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public const string WeightsFolder = "NCA/DynamicTexture";
 	static readonly ConditionalWeakTable<GraphicsDevice, SharedGpuResources> SharedResources = new();
 	static readonly ConditionalWeakTable<GraphicsDevice, Shader> CurlAdvectionShaders = new();
+	static readonly ConditionalWeakTable<GraphicsDevice, Shader> DensityQueryShaders = new();
 
 	// The three NCT compute shaders are weight-independent and shared across every
 	// NeuralTextureActor on a device. Creating a compute Shader eagerly compiles its GPU
@@ -75,6 +89,22 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			uniformBufferCount: 1, readOnlyStorageBufferCount: 3, readWriteStorageBufferCount: 3,
 			threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 			entryPoint: "compute_main", name: "NeuralTextureCurlAdvection"));
+	}
+
+	static Shader? GetDensityQueryShader(GraphicsDevice graphicsDevice)
+	{
+		if (graphicsDevice.Driver == GraphicsDriver.Headless)
+			return null;
+		if (DensityQueryShaders.TryGetValue(graphicsDevice, out var existing))
+			return existing;
+
+		var ext = graphicsDevice.Driver.GetShaderExtension();
+		var code = Assets.TryReadCompiledShader($"NeuralTextureDensityQuery.compute.{ext}");
+		return code == null ? null : DensityQueryShaders.GetValue(graphicsDevice, _ => new(
+			graphicsDevice, ShaderStage.Compute, code,
+			uniformBufferCount: 1, readOnlyStorageBufferCount: 2, readWriteStorageBufferCount: 1,
+			threadCountX: 1, threadCountY: 1, threadCountZ: 1,
+			entryPoint: "compute_main", name: "NeuralTextureDensityQuery"));
 	}
 
 	sealed class SharedGpuResources
@@ -189,6 +219,14 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public float StatePixelsPerCell;
 		public float SmokeBlend;
 		public uint SmokeSlot;
+		public uint OpacityMode;
+		public float Opacity;
+		public float DensityLow;
+		public float DensityHigh;
+		public uint NormalMode;
+		public uint Padding0;
+		public uint Padding1;
+		public uint Padding2;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -221,7 +259,24 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public float Padding;
 	}
 
+	struct DensityQueryParams
+	{
+		public uint Width;
+		public uint Height;
+		public float DensityLow;
+		public float DensityHigh;
+		public float SmokeBlend;
+		public uint Padding0;
+		public uint Padding1;
+		public uint Padding2;
+		public Vector2 Head;
+		public Vector2 Torso;
+		public Vector2 Feet;
+		public Vector2 BelowFeet;
+	}
+
 	readonly record struct PawnSample(Point2 Position, float Time);
+	readonly record struct FluidCrossing(Vector2 Position, Vector2 Velocity, bool Entering);
 
 	// Handed to INeuralTextureAgent implementers during a step so they can disturb this texture
 	// in world space; it owns the world->state transform and the shared per-step stamp buffer.
@@ -262,27 +317,71 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);
 
 	public Point2 Size { get; set; } = DefaultSize;
+
+	[InspectorGroup("Simulation")]
 	// Simulation size is independent from output Size. Standalone actors retain the trained
 	// 128x128 state by default; generated tile regions choose dimensions from FeatureScale.
 	public Point2 SimulationSize = new(StateWidth, StateHeight);
+	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
+	[I(0, 8)] public float StatePixelsPerCell;
+	[I(0, 1)] public float FireRate = 0.5f;
+	[I(1, 120)] public float StepsPerSecond = 30.0f;
+	[I(0, 256)] public int PrewarmSteps = 20;
 	public DynamismMode Dynamism = DynamismMode.PaintedMask;
 	[I(0.1f, 8)] public float CurlScale = 2f;
 	[I(0, 32)] public float CurlSpeed = 6f;
 	[I(1, 8)] public float BoundarySharpness = 2f;
-	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
-	[I(0, 8)] public float StatePixelsPerCell;
+
+	[InspectorGroup("Models & Mask")]
 	public ContentRef<NeuralWeightsContent> WeightsFile = NeuralWeightsContent.NeuralTextureDefault;
 	public ContentRef<NeuralWeightsContent> WeightsFile1 = new("");
 	public ContentRef<NeuralWeightsContent> WeightsFile2 = new("");
 	public ContentRef<NeuralWeightsContent> WeightsFile3 = new("");
-	[I(0, 1)] public float FireRate = 0.5f;
-	[I(1, 120)] public float StepsPerSecond = 30.0f;
-	[I(0, 256)] public int PrewarmSteps = 20;
-	public bool AutoPerturb = true;
+	// Hides the outermost painted cells, which simulate against partly-empty neighborhoods and
+	// decode to an off-palette rim. Measured in simulation cells; see RebuildDecodeMask.
+	[I(0, 4)] public int EdgeTrim;
+
+	[InspectorGroup("Appearance")]
 	[I(0, 3)] public float Contrast = 1f;
 	[I(0, 3)] public float Saturation = 1f;
 	[I(-1, 1)] public float Brightness;
-	[ActorRef] public string ShutdownSourceActorId = "";
+	public Color Tint = Color.White;
+	public NeuralTextureOpacityMode OpacityMode;
+	[I(0, 1)] public float Opacity = 1f;
+	[I(0, 4)] public float DensityLow = 0.1f;
+	[I(0, 4)] public float DensityHigh = 0.6f;
+	public NeuralTextureNormalMode NormalMode;
+	[I(0, 4)] public float NormalStrength = 1f;
+	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
+
+	[InspectorGroup("Decoder")]
+	[I(0.1f, 4)] public float DetailScale = 1f;
+	public Vector2 DetailPhase;
+	[I(0, 4)] public float PatchFrequency = 1f;
+	[I(0, 30)] public float SirenFrequency = 10f;
+	[I(0, 3)] public float LatentGain = 1f;
+	[I(-2, 2)] public float LatentBias;
+	public bool NearestStateSampling;
+
+	[InspectorGroup("Interaction")]
+	public bool AutoPerturb = true;
+	public NeuralTexturePerturbEffect AutoPerturbEffect;
+	public bool ActsAsFluid;
+	public bool BuoyantSurface;
+	public bool Suffocates;
+	public bool PerturbOnFluidCrossing = true;
+	[I(0, 1)] public float GameplayDensityThreshold = 0.5f;
+	[I(0, 0.5f)] public float GameplayDensityHysteresis = 0.08f;
+	[I(0, 1000)] public float Buoyancy = 500f;
+	[I(0.1f, 30)] public float SuffocationSeconds = 4f;
+	[I(0.1f, 10)] public float SuffocationRecoverySeconds = 1.5f;
+	[I(1, 32)] public float FluidCrossingRadius = 12f;
+	[I(0, 1)] public float FluidCrossingEraseStrength = 0.02f;
+	[I(0, 32)] public float FluidEnterPush = 6f;
+	[I(0, 32)] public float FluidExitPush = 3f;
+
+	[InspectorGroup("Shutdown"), ActorRef]
+	public string ShutdownSourceActorId = "";
 	// A/B toggle for what happens on shutdown. Passive (default): sim rate eases to zero and the
 	// field greys out. Active: a strong ripple sweeps out, the painted mask dissolves toward
 	// SmokeSlot across the whole rect, and the sim keeps running slow and dim ("just smoke").
@@ -291,20 +390,14 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[I(0, 3)] public int SmokeSlot = 1;
 	// Peak erase strength of the one-shot active-shutdown wave (clamped to 1 in the shader).
 	[I(0, 3)] public float ShutdownWaveStrength = 1.5f;
-	public Color Tint = Color.White;
-	[I(0, 4)] public float NormalStrength = 1f;
-	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
-	// Hides the outermost painted cells, which simulate against partly-empty neighborhoods and
-	// decode to an off-palette rim. Measured in simulation cells; see RebuildDecodeMask.
-	[I(0, 4)] public int EdgeTrim;
-	[I(0.1f, 4)] public float DetailScale = 1f;
-	public Vector2 DetailPhase;
-	[I(0, 4)] public float PatchFrequency = 1f;
-	[I(0, 30)] public float SirenFrequency = 10f;
-	[I(0, 3)] public float LatentGain = 1f;
-	[I(-2, 2)] public float LatentBias;
-	public bool NearestStateSampling;
+
+	[InspectorGroup("World")]
 	public Factory.TileLayer Layer = Factory.TileLayer.Background;
+	public int RenderDepth
+	{
+		get => Depth;
+		set => Depth = value;
+	}
 	public char MaterialTile;
 	public bool CastsMaskShadow;
 
@@ -316,12 +409,14 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
 	public Texture? OutputTexture => supported ? output : null;
-	public Texture? OutputNormalTexture => supported && normalSlots != 0 ? normalOutput : null;
+	public Texture? OutputNormalTexture => supported && HasNormalOutput ? normalOutput : null;
 
 	readonly UniformBuffer updateUniforms = new();
 	readonly UniformBuffer decodeUniforms = new();
 	readonly UniformBuffer perturbUniforms = new();
 	readonly UniformBuffer curlAdvectionUniforms = new();
+	readonly UniformBuffer densityQueryUniforms = new();
+	readonly Vector4[] densityReadback = new Vector4[1];
 	readonly PerturbStamp[] perturbStamps = new PerturbStamp[MaxPerturbations];
 	readonly PerturbContext perturbContext;
 	int perturbStampCount;
@@ -340,12 +435,15 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	Shader? decodeShader;
 	Shader? perturbShader;
 	Shader? curlAdvectionShader;
+	Shader? densityQueryShader;
 	StorageBuffer<uint>? maskBuffer;
 	StorageBuffer<uint>? decodeMaskBuffer;
 	ComputeStorageBuffer<Vector4>? ownershipA;
 	ComputeStorageBuffer<Vector4>? ownershipB;
 	ComputeStorageBuffer<uint>? proceduralUpdateMask;
 	ComputeStorageBuffer<uint>? proceduralDecodeMask;
+	ComputeStorageBuffer<Vector4>? densityProbe;
+	BufferDownload<Vector4> densityDownload;
 	uint[] maskCells = [];
 	uint[] decodeMaskCells = [];
 	Vector4[] ownershipCells = [];
@@ -355,6 +453,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	readonly List<ShadowSegment> occluderSegments = [];
 	string maskData = "";
 	uint normalSlots;
+	bool HasNormalOutput => normalSlots != 0 || NormalMode != NeuralTextureNormalMode.Decoded;
 	bool currentIsB;
 	bool ownershipCurrentIsB;
 	bool supported;
@@ -368,6 +467,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	float shutdownStartBrightness;
 	float smokeBlend;
 	float curlTime;
+	float densityProbeTimer;
+	float suffocation;
+	Vector4 latestDensity;
+	Player? probedPlayer;
+	bool densityReady;
+	bool playerSubmerged;
+	FluidCrossing? pendingFluidCrossing;
 	Vector2 shutdownSourceWorld;
 	bool haveShutdownSourceWorld;
 	uint seed = 1;
@@ -380,6 +486,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	static float ShutdownFireRate => 0.5f;
 	// How long the active-shutdown wave takes to cross the field.
 	static float ShutdownWaveDuration => 3.6f;
+	static float DensityProbeInterval => 1f / 20f;
 	// True from the moment an active shutdown starts: the smoke fills the whole rect, so the
 	// update pass has to dispatch every cell, not just the painted footprint.
 	bool SmokeActive => ActiveShutdown && shutdownTime >= 0;
@@ -454,11 +561,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			TextureFormat.Color,
 			TextureFlags.ComputeWrite,
 			"NeuralTextureOutput");
-		// The decode shader statically binds a normal target, so color-only actors get a 1x1 stub.
+		// The decode shader statically binds a normal target, so actors without any normal mode get a 1x1 stub.
 		normalOutput = new(
 			graphicsDevice,
-			normalSlots != 0 ? Math.Max(1, Size.X) : 1,
-			normalSlots != 0 ? Math.Max(1, Size.Y) : 1,
+			HasNormalOutput ? Math.Max(1, Size.X) : 1,
+			HasNormalOutput ? Math.Max(1, Size.Y) : 1,
 			TextureFormat.Color,
 			TextureFlags.ComputeWrite,
 			"NeuralTextureNormalOutput");
@@ -476,6 +583,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			autoPerturb = Game.Create<NeuralTexturePerturbActor>(Position, it =>
 			{
 				it.Size = Size;
+				it.Effect = AutoPerturbEffect;
 				it.KeepOnRoomTransition = KeepOnRoomTransition;
 			});
 		Game.EditorPreviewSync += SettleForEditorPreview;
@@ -762,6 +870,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		var shutdownChanged = UpdateShutdown();
 		if (!supported)
 			return;
+		UpdateDensityProbe();
 		if (StepsPerSecond <= 0)
 		{
 			if (shutdownChanged)
@@ -779,6 +888,99 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		}
 		if (shutdownChanged)
 			Decode();
+	}
+
+	void UpdateDensityProbe()
+	{
+		if (!ActsAsFluid && !BuoyantSurface && !Suffocates)
+			return;
+
+		if (densityDownload.TryRead(densityReadback))
+		{
+			latestDensity = densityReadback[0];
+			densityReady = true;
+		}
+
+		densityProbeTimer -= Time.Delta;
+		if (densityProbeTimer > 0)
+			return;
+		densityProbeTimer = DensityProbeInterval;
+
+		probedPlayer = null;
+		foreach (var actor in Game.Actors)
+			if (actor is Player player && GetVisualBounds().Overlaps(player.Hitbox.Rect + player.Position))
+			{
+				probedPlayer = player;
+				break;
+			}
+		if (probedPlayer == null)
+		{
+			latestDensity = Vector4.Zero;
+			densityReady = false;
+			return;
+		}
+
+		densityQueryShader ??= GetDensityQueryShader(graphicsDevice);
+		if (densityQueryShader == null)
+			return;
+		if (densityProbe == null)
+		{
+			densityProbe = new(graphicsDevice, "NeuralTextureDensityProbe");
+			densityProbe.Upload([Vector4.Zero]);
+		}
+
+		var bounds = probedPlayer.Hitbox.Rect + probedPlayer.Position;
+		var x = bounds.CenterX;
+		densityQueryUniforms.Set(new DensityQueryParams
+		{
+			Width = (uint)SimulationSize.X,
+			Height = (uint)SimulationSize.Y,
+			DensityLow = DensityLow,
+			DensityHigh = DensityHigh,
+			SmokeBlend = smokeBlend,
+			Padding0 = 0,
+			Padding1 = 0,
+			Padding2 = 0,
+			Head = WorldToState(new Vector2(x, bounds.Top + 1)),
+			Torso = WorldToState(bounds.Center),
+			Feet = WorldToState(new Vector2(x, bounds.Bottom - 1)),
+			BelowFeet = WorldToState(new Vector2(x, bounds.Bottom + 3)),
+		});
+
+		var source = currentIsB ? bufferB! : bufferA!;
+		new ComputeCommand(densityQueryShader)
+		{
+			ReadOnlyStorageBuffers = [source, ActiveDecodeMask],
+			ReadWriteStorageBuffers = [densityProbe],
+			UniformBuffers = [densityQueryUniforms],
+			GroupCountX = 1,
+			GroupCountY = 1,
+		}.Submit(graphicsDevice);
+		densityDownload = densityProbe.RequestDownload(0, 1, densityDownload);
+	}
+
+	internal void ApplyGameplay(Player player, ref FluidContact contact, ref bool headSubmerged)
+	{
+		var overlaps = probedPlayer == player && GetVisualBounds().Overlaps(player.Hitbox.Rect + player.Position);
+		var threshold = Calc.Clamp(GameplayDensityThreshold, 0, 0.999f);
+		var fluidThreshold = MathF.Max(0, threshold - (playerSubmerged ? GameplayDensityHysteresis : 0));
+		var wasSubmerged = playerSubmerged;
+		playerSubmerged = ActsAsFluid && densityReady && overlaps && latestDensity.Y >= fluidThreshold;
+		if (playerSubmerged)
+		{
+			contact |= FluidContact.NeuralTexture;
+			headSubmerged |= latestDensity.X >= fluidThreshold;
+		}
+		if (PerturbOnFluidCrossing && playerSubmerged != wasSubmerged)
+			pendingFluidCrossing = new((player.Hitbox.Rect + player.Position).Center, player.Velocity, playerSubmerged);
+		if (BuoyantSurface && densityReady && overlaps && latestDensity.W >= threshold)
+			player.ApplyNeuralBuoyancy(Buoyancy * Calc.ClampedMap(latestDensity.W, threshold, 1, 0, 1));
+
+		var suffocating = Suffocates && densityReady && overlaps && latestDensity.X >= threshold;
+		var rate = suffocating ? 1f / MathF.Max(SuffocationSeconds, 0.1f) : -1f / MathF.Max(SuffocationRecoverySeconds, 0.1f);
+		suffocation = Calc.Clamp(suffocation + rate * Time.Delta, 0, 1);
+		if (suffocation >= 1 && player.HurtFromEnvironment(this))
+			suffocation = 0;
 	}
 
 	internal void BeginShutdown(bool immediate = false)
@@ -1020,6 +1222,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	void ApplyPerturbations()
 	{
 		perturbStampCount = 0;
+		ApplyPendingFluidCrossing();
 		var now = Time.SecondsF;
 		if (float.IsNegativeInfinity(perturbContext.PreviousStepTime))
 			perturbContext.PreviousStepTime = now - Time.Delta;
@@ -1045,23 +1248,26 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 					break;
 				if (other is not NeuralTexturePerturbActor { Mode: NeuralTexturePerturbMode.Pawns } perturb ||
 					!perturb.WorldRect.Overlaps(textureBounds) ||
-					(!perturb.DisturbStationary && !moved))
+					((perturb.Effect == NeuralTexturePerturbEffect.Wake || !perturb.DisturbStationary) && !moved))
 					continue;
 
 				var radius = MathF.Max(0, perturb.Radius);
 				if (!currentBounds.Conflate(previousBounds).Inflate((int)MathF.Ceiling(radius)).Overlaps(perturb.WorldRect))
 					continue;
 
-				var strength = MathF.Max(0, perturb.Strength);
-				if (perturb.ScaleStrengthWithSpeed && perturb.SpeedForDoubleStrength > 0)
+				var wake = perturb.Effect == NeuralTexturePerturbEffect.Wake;
+				var strength = MathF.Max(0, wake ? perturb.WakeEraseStrength : perturb.Strength);
+				if (!wake && perturb.ScaleStrengthWithSpeed && perturb.SpeedForDoubleStrength > 0)
 					strength *= 1 + speed / perturb.SpeedForDoubleStrength;
+				var push = wake ? Calc.Approach(Vector2.Zero, movement * perturb.WakePush, radius) : Vector2.Zero;
 
 				var centerOffset = (Vector2)pawn.Hitbox.Rect.Center;
 				perturbContext.AddStamp(
 					(Vector2)previous.Position + centerOffset,
 					(Vector2)position + centerOffset,
 					radius,
-					strength);
+					strength,
+					push);
 			}
 
 			pawnSamples[pawn] = new(position, now);
@@ -1106,6 +1312,20 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			GroupCountY = (SimulationSize.Y + 7) / 8,
 		}.Submit(graphicsDevice);
 		currentIsB = !currentIsB;
+	}
+
+	void ApplyPendingFluidCrossing()
+	{
+		if (pendingFluidCrossing is not { } crossing)
+			return;
+		pendingFluidCrossing = null;
+
+		var speed = crossing.Velocity.Length();
+		var direction = speed > 0.001f ? crossing.Velocity / speed : Vector2.UnitY;
+		var halfSweep = direction * (FluidCrossingRadius * 0.5f);
+		var push = direction * (crossing.Entering ? FluidEnterPush : FluidExitPush);
+		perturbContext.AddStamp(crossing.Position - halfSweep, crossing.Position + halfSweep,
+			FluidCrossingRadius, FluidCrossingEraseStrength, push);
 	}
 
 	// One expanding ring that sweeps outward from the destroyed source (the duck) as the active
@@ -1179,6 +1399,14 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			StatePixelsPerCell = StatePixelsPerCell,
 			SmokeBlend = smokeBlend,
 			SmokeSlot = (uint)SmokeSlot,
+			OpacityMode = (uint)OpacityMode,
+			Opacity = Opacity,
+			DensityLow = DensityLow,
+			DensityHigh = DensityHigh,
+			NormalMode = (uint)NormalMode,
+			Padding0 = 0,
+			Padding1 = 0,
+			Padding2 = 0,
 		});
 
 		new ComputeCommand(decodeShader!)
@@ -1201,7 +1429,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	{
 		if (supported && silhouetteNormalOutput != null)
 			batcher.Image(silhouetteNormalOutput, Vector2.Zero, Color.White);
-		if (supported && normalSlots != 0 && normalOutput != null)
+		if (supported && HasNormalOutput && normalOutput != null)
 			batcher.Image(normalOutput, Vector2.Zero, Color.White);
 	}
 
@@ -1223,6 +1451,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		ownershipB?.Dispose();
 		proceduralUpdateMask?.Dispose();
 		proceduralDecodeMask?.Dispose();
+		densityProbe?.Dispose();
 		output?.Dispose();
 		normalOutput?.Dispose();
 		silhouetteNormalOutput?.Dispose();

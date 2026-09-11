@@ -14,6 +14,14 @@ public enum ActorInversion
 
 public readonly record struct RumbleEffect(float Low, float High, float Duration);
 
+[Flags]
+public enum FluidContact
+{
+	None = 0,
+	Water = 1 << 0,
+	NeuralTexture = 1 << 1,
+}
+
 public class Actor
 {
 	internal static bool TransitionsEnabled = true;
@@ -38,7 +46,8 @@ public class Actor
 	}
 
 	protected bool inWater;
-	protected bool wasInWater; // previous frame's inWater, to catch the surface-entry transition
+	protected FluidContact fluidContact;
+	protected FluidContact previousFluidContact;
 	protected bool atWaterSurface; // torso submerged but head is above the waterline
 	public bool InWater => inWater;
 	public bool AtWaterSurface => atWaterSurface;
@@ -47,8 +56,15 @@ public class Actor
 	{
 		var waterBounds = Hitbox.Rect + Position;
 		waterBounds = waterBounds.Inflate(8);
-		inWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center, continuePastTopEdge: true);
-		atWaterSurface = inWater && !Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top), continuePastTopEdge: true);
+		var inTileWater = Game.HasWater && Game.IsWaterAt(waterBounds.Center, continuePastTopEdge: true);
+		fluidContact = inTileWater ? FluidContact.Water : FluidContact.None;
+		var headSubmerged = inTileWater && Game.IsWaterAt(new Point2(waterBounds.Center.X, waterBounds.Top), continuePastTopEdge: true);
+		if (this is Player player)
+			foreach (var actor in Game.Actors)
+				if (actor is NeuralTextureActor texture)
+					texture.ApplyGameplay(player, ref fluidContact, ref headSubmerged);
+		inWater = fluidContact != FluidContact.None;
+		atWaterSurface = inWater && !headSubmerged;
 	}
 
 	public Signs Facing = Signs.Positive;
@@ -507,6 +523,7 @@ public class Actor
 	/// seconds, defaulting to IFrameTime. Same cooldown Hit() sets, so it gates the same
 	/// damage checks — use it for hurt sources that bypass Hit(), like a respawn.
 	protected void GrantIFrames(float? duration = null) => hitCooldown = duration ?? IFrameTime;
+	protected bool HasIFrames => hitCooldown > 0;
 
 	/// Tries to Hit another Actor.
 	/// What a "Hit" is, is up to the Actors

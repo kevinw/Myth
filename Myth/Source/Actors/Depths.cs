@@ -31,6 +31,7 @@ public static class Depths
 	public const int Button = -2;
 	public const int Character = -4;
 	public const int Enemy = -5;
+	public const int ForegroundSmoke = -10;
 	public const int Pickup = -20;
 	public const int Goal = -100;
 	public const int HiddenCover = -1000;

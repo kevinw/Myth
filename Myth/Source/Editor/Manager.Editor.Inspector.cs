@@ -1051,14 +1051,7 @@ public partial class Manager
 
 		var painting = maskPaintActorId == actorId;
 		if (Button(painting ? "Stop Painting" : "Paint Mask"))
-		{
-			EndMaskPainting();
-			if (!painting)
-			{
-				EndRoomColorFieldPainting();
-				maskPaintActorId = actorId;
-			}
-		}
+			ToggleMaskPainting(actorId);
 	}
 
 	void DrawPaintOverlay()
@@ -1176,7 +1169,7 @@ public partial class Manager
 			}
 			MarkRoomPreviewDirty(room);
 		}
-		TextDisabled("Drag in the room to paint. Release to resimulate.\nRight-drag erases. Esc stops.");
+		TextDisabled("Drag in the room to paint. Release to resimulate.\nRight-drag erases. P or Esc stops.");
 	}
 
 	static int NeuralTextureWeightsSlot(JsonObject actor, ActorSpecs.EditableProperty property)

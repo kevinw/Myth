@@ -740,6 +740,13 @@ public partial class Manager
 		{
 			if (Input.Keyboard.Pressed(Keys.P) && CurrentRoom is { } room)
 			{
+				if (selectedRoomActorIndex >= 0 && selectedRoomActorIndex < room.Actors.Count &&
+					IsNeuralTextureActor(room.Actors[selectedRoomActorIndex]) &&
+					ActorSpecs.ReadString(room.Actors[selectedRoomActorIndex], "Id") is { } actorId)
+				{
+					ToggleMaskPainting(actorId);
+					return true;
+				}
 				if (roomColorFieldPainter.IsActive(room))
 					EndRoomColorFieldPainting();
 				else
@@ -4028,6 +4035,15 @@ public partial class Manager
 			CommitMaskStroke(live);
 		maskPaintActorId = null;
 		maskPaintStroke = false;
+	}
+
+	void ToggleMaskPainting(string actorId)
+	{
+		var painting = maskPaintActorId == actorId;
+		EndMaskPainting();
+		EndRoomColorFieldPainting();
+		if (!painting)
+			maskPaintActorId = actorId;
 	}
 
 	void CommitMaskStroke(NeuralTextureActor live)

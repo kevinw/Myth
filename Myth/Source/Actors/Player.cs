@@ -354,24 +354,27 @@ public abstract partial class Pawn : Actor
 			TryStartWaterRoll();
 		if (rollingOnWater)
 		{
+			fluidContact |= FluidContact.Water;
 			inWater = true;
 			atWaterSurface = true;
 		}
-		// Crossing the surface (either direction) kicks it into a splash + droplets scaled by
-		// the crossing speed. On entry, surface tension also gives an extra one-time slowdown.
-		if (inWater && !wasInWater)
+		var enteredFluid = fluidContact & ~previousFluidContact;
+		var exitedFluid = previousFluidContact & ~fluidContact;
+		// Only tile water owns the splash presentation and surface tension. Neural fields still
+		// use the same swim physics, but their actors handle their own crossing feedback.
+		if ((enteredFluid & FluidContact.Water) != 0)
 		{
 			OnCrossedWaterSurface(Velocity.Y, exiting: false); // downward plunge -> dip
 			if (!rollingOnWater)
 				Velocity *= WaterSurfaceTensionMultiplier;
 			AudioEventDebounced("player/splash", 0.2f);
 		}
-		else if (!inWater && wasInWater)
+		if ((exitedFluid & FluidContact.Water) != 0)
 		{
 			OnCrossedWaterSurface(-Velocity.Y, exiting: true); // upward exit -> crown
 			AudioEventDebounced("player/splash", 0.2f);
 		}
-		wasInWater = inWater;
+		previousFluidContact = fluidContact;
 		if (inWater)
 			EndDashRun();
 		UpdateAirBubbles();
@@ -1478,7 +1481,7 @@ public abstract partial class Pawn : Actor
 	{
 		// The nav-graph build steps throwaway pawns through Pawn.Update; don't spawn real
 		// bubbles into the room during that simulation.
-		if (!inWater || rollingOnWater || Game.Simulating)
+		if ((fluidContact & FluidContact.Water) == 0 || rollingOnWater || Game.Simulating)
 			return;
 
 		airBubbleTimer -= Time.Delta;
@@ -2408,6 +2411,21 @@ public partial class Player : Pawn, INeuralTextureAgent
 				Game.TriggerPlayerHitSnapshot();
 			AudioEvent("hurt");
 		}
+	}
+
+	internal bool HurtFromEnvironment(Actor source)
+	{
+		if (Health <= 0 || Game.Manager.GodMode || Game.Simulating || HasIFrames)
+			return false;
+		GrantIFrames();
+		ApplyHurt(-1, source, bounceMultiplier: 0, hurtDurationMultiplier: 0.5f);
+		return true;
+	}
+
+	internal void ApplyNeuralBuoyancy(float acceleration)
+	{
+		if (State is States.Normal or States.Roll && Velocity.Y > 0)
+			Velocity.Y = Calc.Approach(Velocity.Y, 0, acceleration * Time.Delta);
 	}
 
 	Vector2 HurtGlitchAxis(Actor? fromActor)

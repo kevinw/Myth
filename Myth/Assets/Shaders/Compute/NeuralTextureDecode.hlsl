@@ -46,6 +46,14 @@ cbuffer Params : register(b0, space2)
     float StatePixelsPerCell;
     float SmokeBlend;
     uint SmokeSlot;
+    uint OpacityMode;
+    float Opacity;
+    float DensityLow;
+    float DensityHigh;
+    uint NormalMode;
+    uint Padding0;
+    uint Padding1;
+    uint Padding2;
 };
 
 // Models are packed at a fixed stride in the six-channel layout.
@@ -128,6 +136,8 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     CellState c11 = load_cell(cellPos + int2(1, 1));
 
     float4 input[5];
+    float latentEnergy = 0.0;
+    float2 latentEnergyGradient = 0.0;
     float2 patch = (frac(latentStatePos + 0.5) - 0.5) * 2.0 * PatchFrequency;
     // PyTorch meshgrid order is row, column: Y precedes X.
     input[0] = float4(
@@ -140,7 +150,13 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     {
         float4 top = lerp(c00.c[group], c10.c[group], blend.x);
         float4 bottom = lerp(c01.c[group], c11.c[group], blend.x);
-        input[1 + group] = lerp(top, bottom, blend.y) * LatentGain + LatentBias;
+        float4 latent = lerp(top, bottom, blend.y);
+        latentEnergy += dot(latent, latent);
+        if (NormalMode == 2u)
+            latentEnergyGradient += float2(
+                dot(latent, lerp(c10.c[group] - c00.c[group], c11.c[group] - c01.c[group], blend.y)),
+                dot(latent, lerp(c01.c[group] - c00.c[group], c11.c[group] - c10.c[group], blend.x)));
+        input[1 + group] = latent * LatentGain + LatentBias;
     }
 
     float3 color = 0.0;
@@ -202,21 +218,34 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         normalTotal += alpha * slotNormal;
     }
 
-    float coverage = saturate(total);
+    float activity = sqrt(latentEnergy / CHANNEL_N);
+    float densityHigh = max(DensityHigh, DensityLow + 0.0001);
+    float density = OpacityMode == 1u
+        ? smoothstep(DensityLow, densityHigh, activity)
+        : 1.0;
+    float coverage = saturate(total) * density * Opacity;
     float3 graded = color / max(total, 1.0 / 512.0);
     float luminance = dot(graded, float3(0.2126, 0.7152, 0.0722));
     graded = lerp(luminance.xxx, graded, Saturation);
     graded = (graded - 0.5) * Contrast + 0.5 + Brightness;
     graded *= Tint.rgb;
 
-    float normalCoverage = saturate(normalTotal);
+    float normalCoverage = NormalMode == 0u ? saturate(normalTotal) * density * Opacity : coverage;
     float3 decodedNormal = normal / max(normalTotal, 1.0 / 512.0) * 2.0 - 1.0;
     decodedNormal.xy *= NormalStrength;
     decodedNormal /= max(length(decodedNormal), 0.0001);
 
+    float densityT = saturate((activity - DensityLow) / (densityHigh - DensityLow));
+    float densityDerivative = 6.0 * densityT * (1.0 - densityT) / (densityHigh - DensityLow);
+    float2 activityGradient = latentEnergyGradient / max(CHANNEL_N * activity, 0.0001);
+    float3 generatedNormal = NormalMode == 2u
+        ? normalize(float3(-activityGradient * densityDerivative * NormalStrength, 1.0))
+        : float3(0.0, 0.0, 1.0);
+
     // The batcher blends premultiplied alpha.
     Output[id.xy] = float4(saturate(graded) * coverage, coverage);
-    NormalOutput[id.xy] = normalTotal > 0.0
-        ? float4((decodedNormal * 0.5 + 0.5) * normalCoverage, normalCoverage)
+    float3 outputNormal = NormalMode == 0u ? decodedNormal : generatedNormal;
+    NormalOutput[id.xy] = normalCoverage > 0.0
+        ? float4((outputNormal * 0.5 + 0.5) * normalCoverage, normalCoverage)
         : 0.0;
 }

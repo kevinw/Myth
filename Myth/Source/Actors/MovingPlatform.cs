@@ -122,7 +122,12 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		{
 			// Weight sends us out along the route, losing it brings us home: the leg we're on is
 			// decided fresh every frame, so stepping off mid-travel turns us around where we are.
-			activationLightsOn = HasStandingWeight();
+			// 
+			bool hasWeightThisFrame = HasStandingWeight();
+			standingWeightValue = Calc.Approach(standingWeightValue, hasWeightThisFrame ? 1 : 0, Time.Delta * (hasWeightThisFrame ? 2.0f : 0.5f));
+			Game.Show(standingWeightValue);
+			activationLightsOn = standingWeightValue > 0;
+			
 			var forward = (int)Facing;
 			var heading = activationLightsOn ? forward : ReturnsWhenUnweighted ? -forward : 0;
 			if (heading == 0 || IsAtRouteEnd(heading))
@@ -278,12 +283,31 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		Mask = savedMask;
 	}
 
+	float standingWeightValue = 0;
+
 	bool HasStandingWeight()
 	{
+		var standing = false;
+		var burrowing = false;
+		var hasWeight = false;
 		foreach (var actor in Game.Actors)
-			if (CanRidePlatform(actor) && IsStandingOnPlatform(actor))
-				return true;
-		return false;
+		{
+			if (!CanRidePlatform(actor)) continue;
+			if (IsStandingOnPlatform(actor))
+			{
+				hasWeight = true;
+				standing = true;
+				break;
+			}
+			if (IsBurrowingOnPlatform(actor))
+			{
+				hasWeight = true;
+				burrowing = true;
+				break;
+			}
+		}
+		Game.Show(standing, burrowing);
+		return hasWeight;
 	}
 
 	bool CanRidePlatform(Actor actor)
@@ -291,6 +315,15 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	bool IsStandingOnPlatform(Actor actor)
 		=> actor.OverlapsAny(Point2.Down, this) && !actor.OverlapsAny(Point2.Zero, this);
+
+	bool IsBurrowingOnPlatform(Actor actor) {
+		var rect = Hitbox.Rect.Inflate(2) + Position; // not sure about this
+		if (actor is Pawn pawn)
+		{
+			return pawn.State == Pawn.States.Burrow && rect.Contains(actor.Position);
+		}
+		return false;
+	}
 
 	// Occlude light like the dual tiles it's skinned with: DualGrid traces occluder segments from the
 	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
@@ -321,10 +354,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	}
 	public override void RenderEmissive(Batcher batcher)
 	{
-		if (CanRenderActivationLights && activationLightsOn)
+		if (CanRenderActivationLights)
 		{
-			batcher.Circle(NorthwestActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * 0.7f);
-			batcher.Circle(NortheastActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * 0.7f);
+			var alpha = MathF.Min(1f, standingWeightValue + 0.2f);
+			batcher.Circle(NorthwestActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * alpha);
+			batcher.Circle(NortheastActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * alpha);
 		}
 	}
 	// Stamp the platform into the TileField with per-tile field colors (so its dither variation matches
