@@ -47,7 +47,7 @@ public sealed partial class GameView : IDisposable
 		tileFieldDebugMaterial = loadVisualShaders ? CreateFragmentMaterial("TileFieldDebug", samplerCount: 1, uniformBufferCount: 1) : null;
 		pixelSortGlitchMaterial = loadVisualShaders ? CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1) : null;
 		airFlashMaterial = loadVisualShaders ? CreateFragmentMaterial("AirFlash", samplerCount: 2, uniformBufferCount: 1) : null;
-		worldDistortionMaterial = loadVisualShaders ? CreateFragmentMaterial("WorldDistortion", samplerCount: 2, uniformBufferCount: 1) : null;
+		worldDistortionMaterial = loadVisualShaders ? CreateFragmentMaterial("WorldDistortion", samplerCount: 3, uniformBufferCount: 1) : null;
 
 	}
 

@@ -84,7 +84,7 @@ public sealed partial class GameView
 		{
 			NormalBuffer.Clear(new Color(0.5f, 0.5f, 1.0f, 0.0f));
 		}
-		if (PerfToggles.DitherAndTileField || game.AirFlashAmount > 0)
+		if (PerfToggles.DitherAndTileField || game.AirFlashAmount > 0 || game.RoomInversionEffectActive)
 		{
 			using (PerfStats.Time(PerfStat.TileDither))
 			{
@@ -917,16 +917,26 @@ public sealed partial class GameView
 
 	Target ApplyWorldDistortion(Target input)
 	{
-		if (worldDistortionMaterial == null || !DrawWorldDistortionMask())
+		if (worldDistortionMaterial == null)
 			return input;
+		var hasActorDistortion = DrawWorldDistortionMask();
+		if (!hasActorDistortion && !game.RoomInversionEffectActive)
+			return input;
+		if (!hasActorDistortion)
+			DistortionMask.Clear(Color.Transparent);
 
 		var output = input == GlitchScreen ? Screen : GlitchScreen;
 		output.Clear(Color.Transparent);
+		var inversionOrigin = (game.RoomInversionOrigin - RenderCamera) * zoomLevel;
 		worldDistortionMaterial.Material.Fragment.SetUniformBuffer([
-			input.Width, input.Height, Manager.Visuals.WorldDistortionPixels, 0,
+			input.Width, input.Height, Manager.Visuals.WorldDistortionPixels, RoomInversionDistortionPixels,
+			inversionOrigin.X, inversionOrigin.Y, game.RoomInversionEffectProgress,
+			game.RoomInversionEffectActive ? 1 : 0,
 		]);
 		worldDistortionMaterial.Material.Fragment.Samplers[1] = new(DistortionMask,
 			new(TextureFilter.Linear, TextureWrap.Clamp));
+		worldDistortionMaterial.Material.Fragment.Samplers[2] = new(TileField,
+			new(TextureFilter.Nearest, TextureWrap.Clamp));
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.PushMaterial(worldDistortionMaterial.Material);
 		Batcher.Image(input, input.Bounds.Center, input.Bounds.Size / 2, Vector2.One, 0, Color.White);
@@ -964,6 +974,8 @@ public sealed partial class GameView
 		Batcher.Clear();
 		return true;
 	}
+
+	static float RoomInversionDistortionPixels => 4.0f;
 
 	void CompositeLighting(float aoStrength)
 	{

@@ -2460,12 +2460,19 @@ public partial class Game : IDisposable
 
 	bool invertedNow;
 	internal bool RoomInverted => invertedNow;
+	internal Vector2 RoomInversionOrigin { get; private set; }
+	internal float RoomInversionEffectProgress => Math.Clamp((Time.SecondsF - roomInversionStartedAt) / RoomInversionEffectDuration, 0, 1);
+	internal bool RoomInversionEffectActive => Time.SecondsF - roomInversionStartedAt < RoomInversionEffectDuration;
+	static float RoomInversionEffectDuration => 0.7f;
+	float roomInversionStartedAt = float.NegativeInfinity;
 
-	internal bool ToggleBurrowRoomInverse()
+	internal bool ToggleBurrowRoomInverse(Vector2 origin)
 	{
 		if (!ToggleRoomInverse())
 			return false;
 
+		RoomInversionOrigin = origin;
+		roomInversionStartedAt = Time.SecondsF;
 		//Shake(0.1f);
 		HitStun(0.05f);
 		fx.Bloom();

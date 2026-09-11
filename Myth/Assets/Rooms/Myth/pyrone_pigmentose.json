@@ -1,6 +1,8 @@
 {
   "position": [240, 92],
   "size": [40, 23],
+  "backdropColor": "3F1C59",
+  "backdropColor2": "5A1F7B",
   "ambientColor": "727272",
   "BurrowInverts": true,
   "legend": {

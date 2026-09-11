@@ -349,10 +349,11 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (property.Type == typeof(Signs))
+		else if (property.Type == typeof(Signs) && property.Name == "Facing")
 		{
 			var value = ActorSpecs.ReadSigns(property.Value);
-			if (ImGuiSubtextureButton("##Value", Assets.GetSubtexture("buttons/15"), FacingTooltip(value), false, new Vector2(ButtonSize, ButtonSize), true))
+			const string facingTooltip = "Click to face the other direction.";
+			if (ImGuiSubtextureButton("##Value", Assets.GetSubtexture("buttons/15"), facingTooltip, false, new Vector2(ButtonSize, ButtonSize), true))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create((-value).ToString()), continuous: false);
 				return true;
@@ -826,7 +827,6 @@ public partial class Manager
 		return changed;
 	}
 
-	static string FacingTooltip(Signs value) => "Click to face the other direction.";
 
 	static bool IsParticleEmitterActor(JsonObject actor)
 		=> string.Equals(ActorSpecs.ReadString(actor, "Type"), "ParticleEmitter", StringComparison.OrdinalIgnoreCase);

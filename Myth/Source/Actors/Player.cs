@@ -1900,7 +1900,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	protected override PawnAbilities Abilities => PawnAbilities.Burrow;
 	protected override Bud? TryTakeBurrowPassenger()
 		=> Game.GetFirst<Bud>() is { } bud && bud.TryEnterPlayerBurrow(this) ? bud : null;
-	protected override bool TryToggleBurrowRoomInverse() => Game.ToggleBurrowRoomInverse();
+	protected override bool TryToggleBurrowRoomInverse() => Game.ToggleBurrowRoomInverse(Position);
 	protected override bool TryCatchBurrowPopCarryable() => TryCatchCarryable();
 
 	protected override bool AllowDuckingInState() => State == States.Attack && duckAttack;
