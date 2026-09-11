@@ -112,7 +112,19 @@
     {
       "Id": "704111f9d6f9b8c6",
       "Type": "Rope",
-      "Position": [464, -37]
+      "Position": [463, -6],
+      "Size": [8, 56]
+    },
+    {
+      "Id": "de7a0bcb7051da00",
+      "From": "StrongFireLight",
+      "Position": [468, 4],
+      "Invert": "UninvertedOnly",
+      "Height": 10.623,
+      "DrawSprite": false,
+      "LightColor": "947BFF",
+      "Radius": 88.261,
+      "Intensity": 0.344
     }
   ]
 }

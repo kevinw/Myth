@@ -160,7 +160,10 @@ public sealed partial class GameView
 		if (debugView == DebugView.None && game.AirFlashAmount > 0)
 			output = ApplyAirFlash(output);
 		if (debugView == DebugView.None)
+		{
+			CaptureInversionSnapshot(output);
 			output = ApplyWorldDistortion(output);
+		}
 		DrawLayerTransition(output);
 		var mapOverlayVisible = false;
 		if (debugView is DebugView.None or DebugView.CollisionRects)
@@ -915,11 +918,38 @@ public sealed partial class GameView
 		return output;
 	}
 
+	// Keep last frame's composited world so the inversion morph can cross-dissolve out of the
+	// pre-swap image (option C). The swap lands between two renders, so the frame it lands on
+	// promotes the previous frame's capture to InversionSnapshot and keeps writing the scratch
+	// -- a re-burrow chained inside the 0.7s effect then morphs out of the room it just made.
+	void CaptureInversionSnapshot(Target world)
+	{
+		if (!game.RoomSupportsInversion)
+			return;
+		if (game.RoomInversionStartedAt != inversionSnapshotStartedAt)
+		{
+			inversionSnapshotStartedAt = game.RoomInversionStartedAt;
+			(InversionSnapshot, InversionSnapshotScratch) = (InversionSnapshotScratch, InversionSnapshot);
+			inversionSnapshotCamera = inversionSnapshotScratchCamera;
+			inversionSnapshotValid = inversionSnapshotScratchValid;
+		}
+
+		InversionSnapshotScratch.Clear(Color.Transparent);
+		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+		Batcher.Image(world, world.Bounds.Center, world.Bounds.Size / 2, Vector2.One, 0, Color.White);
+		Batcher.PopSampler();
+		Batcher.Render(InversionSnapshotScratch);
+		Batcher.Clear();
+		inversionSnapshotScratchCamera = RenderCamera;
+		inversionSnapshotScratchValid = true;
+	}
+
 	Target ApplyWorldDistortion(Target input)
 	{
 		if (worldDistortionMaterial == null)
 			return input;
 		var hasActorDistortion = DrawWorldDistortionMask();
+		var morphing = game.RoomInversionEffectActive && inversionSnapshotValid;
 		if (!hasActorDistortion && !game.RoomInversionEffectActive)
 			return input;
 		if (!hasActorDistortion)
@@ -928,14 +958,18 @@ public sealed partial class GameView
 		var output = input == GlitchScreen ? Screen : GlitchScreen;
 		output.Clear(Color.Transparent);
 		var inversionOrigin = (game.RoomInversionOrigin - RenderCamera) * zoomLevel;
+		var snapshotOffset = (RenderCamera - inversionSnapshotCamera) * zoomLevel;
 		worldDistortionMaterial.Material.Fragment.SetUniformBuffer([
 			input.Width, input.Height, Manager.Visuals.WorldDistortionPixels, RoomInversionDistortionPixels,
 			inversionOrigin.X, inversionOrigin.Y, game.RoomInversionEffectProgress,
 			game.RoomInversionEffectActive ? 1 : 0,
+			snapshotOffset.X, snapshotOffset.Y, morphing ? 1 : 0, 0,
 		]);
 		worldDistortionMaterial.Material.Fragment.Samplers[1] = new(DistortionMask,
 			new(TextureFilter.Linear, TextureWrap.Clamp));
 		worldDistortionMaterial.Material.Fragment.Samplers[2] = new(TileField,
+			new(TextureFilter.Nearest, TextureWrap.Clamp));
+		worldDistortionMaterial.Material.Fragment.Samplers[3] = new(InversionSnapshot,
 			new(TextureFilter.Nearest, TextureWrap.Clamp));
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 		Batcher.PushMaterial(worldDistortionMaterial.Material);
@@ -976,6 +1010,11 @@ public sealed partial class GameView
 	}
 
 	static float RoomInversionDistortionPixels => 4.0f;
+	Vector2 inversionSnapshotCamera;
+	Vector2 inversionSnapshotScratchCamera;
+	bool inversionSnapshotValid;
+	bool inversionSnapshotScratchValid;
+	float inversionSnapshotStartedAt = float.NegativeInfinity;
 
 	void CompositeLighting(float aoStrength)
 	{
@@ -2186,6 +2225,9 @@ public sealed partial class GameView
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
+		InversionSnapshot = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "InversionSnapshot"));
+		InversionSnapshotScratch = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "InversionSnapshotScratch"));
+		inversionSnapshotValid = inversionSnapshotScratchValid = false;
 		LayerTransitionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "LayerTransitionScreen"));
 		NormalBuffer = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "NormalBuffer"));
 		TileField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "TileField"));
@@ -2461,6 +2503,8 @@ public sealed partial class GameView
 	Target SporeFogMask { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target DistortionMask { get; set; } = null!;
+	Target InversionSnapshot { get; set; } = null!;
+	Target InversionSnapshotScratch { get; set; } = null!;
 	Target LayerTransitionScreen { get; set; } = null!;
 	Target NormalBuffer { get; set; } = null!;
 	Target TileField { get; set; } = null!;

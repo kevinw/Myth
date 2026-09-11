@@ -623,6 +623,8 @@ public class Room
 		}
 	}
 
+	internal bool SupportsBurrowInverse => burrowInverseTiles != null;
+
 	internal bool ToggleBurrowInverse()
 	{
 		if (burrowInverseTiles == null || burrowInverseTileFlags == null)

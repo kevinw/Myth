@@ -129,6 +129,10 @@ public abstract partial class Pawn : Actor
 	protected static float WallHugGravityMultiplier => 0.25f;
 	protected static float WallSlideMaxFallSpeed => 80f;  // capped, slower descent while wall sliding
 	protected static float WallSlideFallDamping => 320f;  // eases a fast fall down to the slide cap
+	// Playtesters holding jump beside a wall expected to dive into the floor and burrow, but the
+	// wall slide caught them on the way down and they slid instead. Holding the burrow button
+	// drops the slide, so the fall reaches the floor and the landing burrow takes.
+	static bool BurrowButtonDisablesWallSlide => true;
 	static float WallSlideFeedbackMinSpeed => 15f;
 	static float WallSlideRumbleIdle => 0.0075f;
 	static float WallSlideRumbleSpeed => 0.0125f;
@@ -928,12 +932,15 @@ public abstract partial class Pawn : Actor
 
 	protected float burrowTimer = 0;
 	protected bool burrowNeedsGrounding; // after a pop, must touch ground again before it can re-arm
-	protected bool CanBurrow()
+	protected bool CanBurrow() => !wallSliding && BurrowAvailable();
+
+	// Every burrow condition except the wall slide, so the slide suppression above can ask
+	// whether a burrow would follow without depending on the state it is about to prevent.
+	bool BurrowAvailable()
 	{
 		if (!Abilities.Has(PawnAbilities.Burrow)) return false;
 		if (inWater) return false;
 		if (IsCarrying) return false;
-		if (wallSliding) return false;
 		if (burrowNeedsGrounding) return false;
 		if (burrowTimer < 0) return false; // the ability is still cooling down
 		if (State != States.Normal) return false;
@@ -1429,9 +1436,13 @@ public abstract partial class Pawn : Actor
 	bool IsWallHugging()
 		=> IsWallHugging(GetWallJumpDirection());
 
+	// Every caller is wall-slide behaviour (hug gravity, the fall cap, the slide anim/state), so
+	// the burrow-button suppression lives here instead of at each call site. Wall jumping reads
+	// GetWallJumpDirection directly and is untouched.
 	bool IsWallHugging(int wallJumpDirection)
 		=> !IsCarrying && wallJumpDirection != 0 && MathF.Abs(horizontalInput) >= MoveInputDeadzone &&
-			Math.Sign(horizontalInput) == -wallJumpDirection;
+			Math.Sign(horizontalInput) == -wallJumpDirection &&
+			!(BurrowButtonDisablesWallSlide && input.JumpDown && BurrowAvailable());
 
 	// Splash droplet burst tuning (the surface ripple itself is scaled in WaterSurface).
 	const float SplashDropletSpeedRef = 60f; // plunge speed that maps to ~1x droplet speed

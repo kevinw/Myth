@@ -109,13 +109,13 @@
       "Id": "5d68979e29d3d88e",
       "From": "TutorialText",
       "Position": [61, 34],
+      "Invert": "UninvertedOnly",
+      "LineHeightMultiplier": 0.83,
       "Text": [
-        "some rooms react",
+        "some rooms INVERT",
         "when you use your hat",
         "hold {Jump}"
-      ],
-      "Invert": "UninvertedOnly",
-      "LineHeightMultiplier": 0.83
+      ]
     },
     {
       "Id": "b5ed78cb2c5e3f36",
@@ -123,6 +123,12 @@
       "Position": [158, 132],
       "DemoTeleportTarget": true,
       "Name": "Inverted World"
+    },
+    {
+      "Id": "54c43089b5ff4e0b",
+      "From": "FloLight",
+      "Position": [125, -18],
+      "Intensity": 1.433
     }
   ]
 }

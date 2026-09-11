@@ -2463,6 +2463,8 @@ public partial class Game : IDisposable
 	internal Vector2 RoomInversionOrigin { get; private set; }
 	internal float RoomInversionEffectProgress => Math.Clamp((Time.SecondsF - roomInversionStartedAt) / RoomInversionEffectDuration, 0, 1);
 	internal bool RoomInversionEffectActive => Time.SecondsF - roomInversionStartedAt < RoomInversionEffectDuration;
+	internal bool RoomSupportsInversion => room?.SupportsBurrowInverse == true;
+	internal float RoomInversionStartedAt => roomInversionStartedAt;
 	static float RoomInversionEffectDuration => 0.7f;
 	float roomInversionStartedAt = float.NegativeInfinity;
 
