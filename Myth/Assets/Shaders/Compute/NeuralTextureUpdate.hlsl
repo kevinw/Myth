@@ -25,13 +25,12 @@ cbuffer Params : register(b0, space2)
     uint OriginY;
     uint DispatchWidth;
     uint DispatchHeight;
-    float2 WorldStateOrigin;
-    float StatePixelsPerCell;
+    float2 FlowOrigin;
+    float SimulationScale;
     float SmokeBlend;
     uint SmokeSlot;
-    uint Pad0;
-    uint Pad1;
-    uint Pad2;
+    float Pad0;
+    float2 FlowSize;
 };
 
 #define NCA_W1_OFFSET 0
@@ -55,12 +54,11 @@ float hash(uint x, uint y, uint seed)
     return float(h & 0x00FFFFFFu) / float(0x01000000u);
 }
 
-// Repeat the model's trained [-1, 1] coordinate domain at a fixed 128-cell wavelength.
-// Mirroring alternate spans keeps the coordinate field continuous at patch boundaries.
-float fixed_coordinate(float cell)
+// Repeat the flow domain with continuous mirrored boundaries.
+float2 flow_coordinate(float2 position)
 {
-    float phase = frac((cell + 64.0) / 256.0) * 256.0;
-    return 1.0 - abs(phase - 128.0) / 64.0;
+    float2 phase = frac((position - FlowOrigin) / FlowSize * 0.5);
+    return 1.0 - abs(phase * 4.0 - 2.0);
 }
 
 CellState load_cell(int2 pos)
@@ -149,17 +147,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
     // PENCA appends normalized row then column coordinates. The JSON export pads
     // the two inputs to a vec4, so the last two values remain zero.
-    perception[16] = StatePixelsPerCell > 0.0
-        ? float4(
-            fixed_coordinate(WorldStateOrigin.y + float(pos.y)),
-            fixed_coordinate(WorldStateOrigin.x + float(pos.x)),
-            0.0,
-            0.0)
-        : float4(
-            2.0 * ((float(pos.y) + 0.5) / float(Height) - 0.5),
-            2.0 * ((float(pos.x) + 0.5) / float(Width) - 0.5),
-            0.0,
-            0.0);
+    perception[16] = float4(flow_coordinate((float2(pos) + 0.5) / SimulationScale).yx, 0.0, 0.0);
 
     float4 delta[4];
     [unroll]

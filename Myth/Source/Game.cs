@@ -2793,17 +2793,17 @@ public partial class Game : IDisposable
 		var padding = (int)MathF.Ceiling(MathF.Max(0, spec.OutsetPixels));
 		var position = forRoom.WorldBounds.TopLeft + tileOrigin * TileSize - new Point2(padding, padding);
 		var outputSize = new Point2(tileW * TileSize, tileH * TileSize) + new Point2(padding * 2, padding * 2);
-		var simulationSize = new Point2(
-			AlignToComputeGroup((int)MathF.Ceiling(outputSize.X / spec.FeatureScale)),
-			AlignToComputeGroup((int)MathF.Ceiling(outputSize.Y / spec.FeatureScale)));
+		var simulationSize = Point2.Max(Point2.One, (outputSize * (1f / spec.FeatureScale)).CeilingToPoint2());
 		var mask = BuildNctRegionMask(member, spec, forRoom, tileOrigin, position, outputSize, simulationSize);
 
 		var region = Create<NeuralTextureActor>(position, a =>
 		{
 			a.AutoPerturb = false;
 			a.Size = outputSize;
-			a.SimulationSize = simulationSize;
-			a.StatePixelsPerCell = spec.FeatureScale;
+			a.SimulationScale = 1f / spec.FeatureScale;
+			a.FlowOrigin = -new Vector2(64 * spec.FeatureScale) - position;
+			a.FlowSize = new Vector2(128 * spec.FeatureScale);
+			a.DetailOrigin = (Vector2)outputSize * 0.5f;
 			a.Layer = spec.Layer;
 			a.MaterialTile = id;
 			a.CastsMaskShadow = spec.Solid;
@@ -2832,8 +2832,6 @@ public partial class Game : IDisposable
 
 		if (spec.Frozen)
 			region.SimulateFromSeed(spec.FreezeSteps);
-
-		static int AlignToComputeGroup(int value) => Math.Max(8, (value + 7) / 8 * 8);
 	}
 
 	/// Builds the per-slot blend mask for one island at its fixed world-space simulation scale: the interior model
@@ -2846,13 +2844,12 @@ public partial class Game : IDisposable
 		var height = simulationSize.Y;
 		var clipSlopes = spec.Layer == Factory.TileLayer.Foreground;
 
-		// Invert the decoder's centered fixed-scale mapping exactly. Compute-group alignment adds
-		// a few state cells around the output; those remain dead and are never displayed.
+		// Sample the same actor-local world positions as the simulation and decoder.
 		var region = new bool[width * height];
 		for (var cy = 0; cy < height; cy++)
 			for (var cx = 0; cx < width; cx++)
 			{
-				var outputPoint = (new Vector2(cx + 0.5f, cy + 0.5f) - (Vector2)simulationSize * 0.5f) * spec.FeatureScale + (Vector2)outputSize * 0.5f;
+				var outputPoint = new Vector2(cx + 0.5f, cy + 0.5f) * spec.FeatureScale;
 				if (outputPoint.X < 0 || outputPoint.Y < 0 || outputPoint.X >= outputSize.X || outputPoint.Y >= outputSize.Y)
 					continue;
 				region[cy * width + cx] = NctShapeContains(member, room, tileOrigin, (Vector2)position + outputPoint, clipSlopes, spec.RoundingPixels);

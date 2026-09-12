@@ -1,4 +1,5 @@
 using Foster.Framework;
+using System.Numerics;
 
 namespace Myth;
 
@@ -38,7 +39,9 @@ sealed class NeuralSkinRuntime(Actor owner, NeuralSurfaceSettings settings, Poin
 			it.AutoPerturb = false;
 			it.Visible = false;
 			it.Size = size;
-			it.SimulationSize = size;
+			it.FlowSize = new Vector2(Math.Max(size.X, size.Y));
+			it.FlowOrigin = ((Vector2)size - it.FlowSize) * 0.5f;
+			it.DetailOrigin = (Vector2)size * 0.5f;
 			it.WeightsFile = activeWeightsFile.Name;
 			it.NearestStateSampling = true;
 			it.EdgeTrim = 1;

@@ -15,6 +15,7 @@ StructuredBuffer<CellState> SourceState : register(t0, space0);
 StructuredBuffer<float4> Weights : register(t1, space0);
 // Per-cell blend weights for up to four models, one byte per slot.
 StructuredBuffer<uint> Mask : register(t2, space0);
+StructuredBuffer<uint> OutputMask : register(t3, space0);
 #if BROWSER
 [[vk::image_format("rgba8")]]
 #endif
@@ -43,7 +44,7 @@ cbuffer Params : register(b0, space2)
     float LatentGain;
     float LatentBias;
     uint NearestStateSampling;
-    float StatePixelsPerCell;
+    float SimulationScale;
     float SmokeBlend;
     uint SmokeSlot;
     uint OpacityMode;
@@ -51,9 +52,8 @@ cbuffer Params : register(b0, space2)
     float DensityLow;
     float DensityHigh;
     uint NormalMode;
-    uint Padding0;
-    uint Padding1;
-    uint Padding2;
+    uint ProceduralMask;
+    float2 DetailOrigin;
 };
 
 // Models are packed at a fixed stride in the six-channel layout.
@@ -83,15 +83,19 @@ CellState load_cell(int2 pos)
     return SourceState[pos.y * Width + pos.x];
 }
 
-float4 load_mask(int2 pos)
+float4 unpack_mask(uint mask)
 {
-    pos = clamp_cell(pos);
-    uint mask = Mask[pos.y * Width + pos.x];
     return float4(
         float(mask & 0xFFu),
         float((mask >> 8u) & 0xFFu),
         float((mask >> 16u) & 0xFFu),
         float((mask >> 24u) & 0xFFu)) / 255.0;
+}
+
+float4 load_mask(int2 pos)
+{
+    pos = clamp_cell(pos);
+    return unpack_mask(Mask[pos.y * Width + pos.x]);
 }
 
 [numthreads(8, 8, 1)]
@@ -100,13 +104,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     if (id.x >= OutputWidth || id.y >= OutputHeight)
         return;
 
-    float2 outputSize = float2(OutputWidth, OutputHeight);
-    float2 stateSize = float2(Width, Height);
-    float2 stateCenter = stateSize * 0.5 - 0.5;
-    float2 outputFromCenter = float2(id.xy) + 0.5 - outputSize * 0.5;
-    float2 statePos = StatePixelsPerCell > 0.0
-        ? outputFromCenter / StatePixelsPerCell + stateCenter
-        : outputFromCenter / max(outputSize.x, outputSize.y) * stateSize + stateCenter;
+    float2 statePos = (float2(id.xy) + 0.5) * SimulationScale - 0.5;
     int2 maskCellPos = int2(floor(statePos));
     float2 maskBlend = frac(statePos);
 
@@ -115,6 +113,10 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float4 m01 = load_mask(maskCellPos + int2(0, 1));
     float4 m11 = load_mask(maskCellPos + int2(1, 1));
     float4 slotAlpha = lerp(lerp(m00, m10, maskBlend.x), lerp(m01, m11, maskBlend.x), maskBlend.y);
+    float4 authored = unpack_mask(OutputMask[id.y * OutputWidth + id.x]);
+    slotAlpha = ProceduralMask != 0u
+        ? slotAlpha / max(dot(slotAlpha, 1.0), 0.00001) * dot(authored, 1.0)
+        : authored;
     // Shutdown eases the whole grid toward a single "just smoke" model.
     if (SmokeBlend > 0.0)
         slotAlpha = lerp(slotAlpha, float4(SmokeSlot == 0u, SmokeSlot == 1u, SmokeSlot == 2u, SmokeSlot == 3u), SmokeBlend);
@@ -127,7 +129,8 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    float2 latentStatePos = (statePos - stateCenter) * DetailScale + stateCenter + DetailPhase;
+    float2 detailCenter = DetailOrigin * SimulationScale - 0.5;
+    float2 latentStatePos = (statePos - detailCenter) * DetailScale + detailCenter + DetailPhase;
     int2 cellPos = NearestStateSampling != 0u ? int2(round(latentStatePos)) : int2(floor(latentStatePos));
     float2 blend = NearestStateSampling != 0u ? 0.0 : frac(latentStatePos);
     CellState c00 = load_cell(cellPos);

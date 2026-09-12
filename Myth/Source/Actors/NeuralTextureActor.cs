@@ -63,10 +63,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		var updateCode = Assets.TryReadCompiledShader($"NeuralTextureUpdate.compute.{ext}");
 		var decodeCode = Assets.TryReadCompiledShader($"NeuralTextureDecode.compute.{ext}");
 		var perturbCode = Assets.TryReadCompiledShader($"NeuralTexturePerturb.compute.{ext}");
-		if (updateCode == null || decodeCode == null || perturbCode == null)
+		var resizeCode = Assets.TryReadCompiledShader($"NeuralTextureResize.compute.{ext}");
+		if (updateCode == null || decodeCode == null || perturbCode == null || resizeCode == null)
 			return null;
 
-		return SharedResources.GetValue(graphicsDevice, _ => new(graphicsDevice, updateCode, decodeCode, perturbCode));
+		return SharedResources.GetValue(graphicsDevice, _ => new(graphicsDevice, updateCode, decodeCode, perturbCode, resizeCode));
 	}
 
 	// Pre-builds the shared compute pipelines so the first neural room doesn't stall. Safe to
@@ -112,10 +113,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public readonly Shader UpdateShader;
 		public readonly Shader DecodeShader;
 		public readonly Shader PerturbShader;
+		public readonly Shader ResizeShader;
 		readonly GraphicsDevice graphicsDevice;
 		readonly Dictionary<string, (StorageBuffer<Vector4> Buffer, uint NormalSlots)> weights = [];
 
-		public SharedGpuResources(GraphicsDevice graphicsDevice, byte[] updateCode, byte[] decodeCode, byte[] perturbCode)
+		public SharedGpuResources(GraphicsDevice graphicsDevice, byte[] updateCode, byte[] decodeCode, byte[] perturbCode, byte[] resizeCode)
 		{
 			this.graphicsDevice = graphicsDevice;
 			UpdateShader = new(
@@ -125,7 +127,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				entryPoint: "compute_main", name: "NeuralTextureUpdate");
 			DecodeShader = new(
 				graphicsDevice, ShaderStage.Compute, decodeCode,
-				uniformBufferCount: 1, readOnlyStorageBufferCount: 3, readWriteStorageTextureCount: 2,
+				uniformBufferCount: 1, readOnlyStorageBufferCount: 4, readWriteStorageTextureCount: 2,
 				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 				entryPoint: "compute_main", name: "NeuralTextureDecode");
 			PerturbShader = new(
@@ -133,6 +135,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				uniformBufferCount: 1, readOnlyStorageBufferCount: 2, readWriteStorageBufferCount: 1,
 				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 				entryPoint: "compute_main", name: "NeuralTexturePerturb");
+			ResizeShader = new(
+				graphicsDevice, ShaderStage.Compute, resizeCode,
+				uniformBufferCount: 1, readOnlyStorageBufferCount: 1, readWriteStorageBufferCount: 1,
+				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
+				entryPoint: "compute_main", name: "NeuralTextureResize");
 		}
 
 		public (StorageBuffer<Vector4> Buffer, uint NormalSlots) GetWeights(string[] files)
@@ -188,13 +195,21 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public uint OriginY;
 		public uint DispatchWidth;
 		public uint DispatchHeight;
-		public Vector2 WorldStateOrigin;
-		public float StatePixelsPerCell;
+		public Vector2 FlowOrigin;
+		public float SimulationScale;
 		public float SmokeBlend;
 		public uint SmokeSlot;
-		public uint Pad0;
-		public uint Pad1;
-		public uint Pad2;
+		public float Pad0;
+		public Vector2 FlowSize;
+	}
+
+	struct ResizeParams
+	{
+		public Point2 SourceSize;
+		public Point2 DestinationSize;
+		public Vector2 Offset;
+		public float Scale;
+		public float Padding;
 	}
 
 	struct DecodeParams
@@ -216,7 +231,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public float LatentGain;
 		public float LatentBias;
 		public uint NearestStateSampling;
-		public float StatePixelsPerCell;
+		public float SimulationScale;
 		public float SmokeBlend;
 		public uint SmokeSlot;
 		public uint OpacityMode;
@@ -224,9 +239,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public float DensityLow;
 		public float DensityHigh;
 		public uint NormalMode;
-		public uint Padding0;
-		public uint Padding1;
-		public uint Padding2;
+		public uint ProceduralMask;
+		public Vector2 DetailOrigin;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -316,14 +330,36 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 	public static readonly Point2 DefaultSize = new(Game.Width, Game.Height);
 
-	public Point2 Size { get; set; } = DefaultSize;
+	Point2 size = DefaultSize;
+	public Point2 Size
+	{
+		get => size;
+		set => ResizeWindow(Point2.Max(value, Point2.One), Point2.Zero);
+	}
 
 	[InspectorGroup("Simulation")]
-	// Simulation size is independent from output Size. Standalone actors retain the trained
-	// 128x128 state by default; generated tile regions choose dimensions from FeatureScale.
-	public Point2 SimulationSize = new(StateWidth, StateHeight);
-	// Zero preserves the classic fit-to-output mapping. Positive values use a fixed world scale.
-	[I(0, 8)] public float StatePixelsPerCell;
+	float simulationScale = 1;
+	// Cells per world pixel. Painting is stored independently at one pixel per world pixel.
+	[I(0.1f, 4)] public float SimulationScale
+	{
+		get => simulationScale;
+		set
+		{
+			if (!float.IsFinite(value) || value <= 0)
+				throw new ArgumentOutOfRangeException(nameof(value));
+			if (simulationScale == value)
+				return;
+			var oldSize = SimulationSize;
+			var oldScale = simulationScale;
+			simulationScale = value;
+			if (supported)
+				ResizeSimulation(oldSize, oldScale, Point2.Zero);
+		}
+	}
+	public Point2 SimulationSize => Point2.Max(Point2.One, (Size * SimulationScale).CeilingToPoint2());
+	// Actor-local bounds of one [-1, 1] flow domain; repeated with mirrored edges.
+	public Vector2 FlowOrigin;
+	public Vector2 FlowSize = new(StateWidth, StateHeight);
 	[I(0, 1)] public float FireRate = 0.5f;
 	[I(1, 120)] public float StepsPerSecond = 30.0f;
 	[I(0, 256)] public int PrewarmSteps = 20;
@@ -357,6 +393,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[InspectorGroup("Decoder")]
 	[I(0.1f, 4)] public float DetailScale = 1f;
 	public Vector2 DetailPhase;
+	public Vector2 DetailOrigin;
 	[I(0, 4)] public float PatchFrequency = 1f;
 	[I(0, 30)] public float SirenFrequency = 10f;
 	[I(0, 3)] public float LatentGain = 1f;
@@ -438,6 +475,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	Shader? densityQueryShader;
 	StorageBuffer<uint>? maskBuffer;
 	StorageBuffer<uint>? decodeMaskBuffer;
+	StorageBuffer<uint>? outputMaskBuffer;
 	ComputeStorageBuffer<Vector4>? ownershipA;
 	ComputeStorageBuffer<Vector4>? ownershipB;
 	ComputeStorageBuffer<uint>? proceduralUpdateMask;
@@ -452,6 +490,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	Point2 updateSize;
 	readonly List<ShadowSegment> occluderSegments = [];
 	string maskData = "";
+	Image? paintedImage;
 	uint normalSlots;
 	bool HasNormalOutput => normalSlots != 0 || NormalMode != NeuralTextureNormalMode.Decoded;
 	bool currentIsB;
@@ -491,14 +530,15 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	// update pass has to dispatch every cell, not just the painted footprint.
 	bool SmokeActive => ActiveShutdown && shutdownTime >= 0;
 
-	// Base64 of a PNG-compressed 128x128 RGBA8 image; each channel is one slot's
-	// blend weight. Empty means slot 0 painted everywhere (the classic full-rect actor).
+	// Actor-local RGBA slot weights at one pixel per world pixel. Empty fills the window.
 	public string PaintedMask
 	{
 		get => maskData;
 		set
 		{
 			maskData = value ?? "";
+			paintedImage?.Dispose();
+			paintedImage = null;
 			if (supported)
 			{
 				DecodeMaskData();
@@ -507,6 +547,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				RebuildDecodeMask();
 				ResetProceduralOwnership();
 				RebuildSilhouette();
+				Decode();
 			}
 		}
 	}
@@ -546,7 +587,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		(weights, normalSlots) = shared.GetWeights(SlotWeightsFiles);
 		emptyState = new CellState[StateCellCount];
 		if (InitialMaskCells is { Length: var length } injected && length == StateCellCount)
+		{
 			maskCells = injected;
+			paintedImage = new Image(Size.X, Size.Y);
+			for (var y = 0; y < Size.Y; y++)
+				for (var x = 0; x < Size.X; x++)
+					paintedImage[x, y] = SampleMask(maskCells, OutputToState(new Vector2(x + 0.5f, y + 0.5f)));
+		}
 		else
 			DecodeMaskData();
 		RebuildUpdateBounds();
@@ -606,41 +653,123 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	void DecodeMaskData()
 	{
 		maskCells = new uint[StateCellCount];
-		if (string.IsNullOrEmpty(maskData))
+		if (paintedImage == null && string.IsNullOrEmpty(maskData))
 		{
 			Array.Fill(maskCells, 0xFFu); // slot 0 fully painted
 			return;
 		}
+		paintedImage ??= new Image(Convert.FromBase64String(maskData));
+		for (var y = 0; y < SimulationSize.Y; y++)
+			for (var x = 0; x < SimulationSize.X; x++)
+				maskCells[y * SimulationSize.X + x] = PackMask(SamplePainting((new Vector2(x, y) + new Vector2(0.5f)) / SimulationScale - new Vector2(0.5f)));
+	}
 
-		try
+	static uint PackMask(Color color) => color.R | ((uint)color.G << 8) | ((uint)color.B << 16) | ((uint)color.A << 24);
+
+	Color SamplePainting(Vector2 point)
+	{
+		var cell = point.FloorToPoint2();
+		var blend = point - cell;
+		return Color.Lerp(
+			Color.Lerp(Pixel(cell), Pixel(cell + Point2.UnitX), blend.X),
+			Color.Lerp(Pixel(cell + Point2.UnitY), Pixel(cell + Point2.One), blend.X), blend.Y);
+
+		Color Pixel(Point2 at) => paintedImage!.Bounds.Contains(at) ? paintedImage[at.X, at.Y] : default;
+	}
+
+	Color SampleMask(uint[] cells, Vector2 point)
+	{
+		var cell = point.FloorToPoint2();
+		var blend = point - cell;
+		return Color.Lerp(
+			Color.Lerp(Pixel(cell), Pixel(cell + Point2.UnitX), blend.X),
+			Color.Lerp(Pixel(cell + Point2.UnitY), Pixel(cell + Point2.One), blend.X), blend.Y);
+
+		Color Pixel(Point2 at)
 		{
-			using var stream = new MemoryStream(Convert.FromBase64String(maskData));
-			var image = new Image(stream);
-			if (image.Width != SimulationSize.X || image.Height != SimulationSize.Y)
-				throw new InvalidDataException($"mask is {image.Width}x{image.Height}; expected {SimulationSize.X}x{SimulationSize.Y}");
-			var pixels = image.Data;
-			for (var i = 0; i < maskCells.Length; i++)
-				maskCells[i] = pixels[i].R | ((uint)pixels[i].G << 8) | ((uint)pixels[i].B << 16) | ((uint)pixels[i].A << 24);
-		}
-		catch (Exception exception)
-		{
-			Log.Warning($"Neural texture mask could not be decoded ({exception.Message}); painting slot 0 everywhere.");
-			Array.Fill(maskCells, 0xFFu);
+			at = Point2.Min(Point2.Max(at, Point2.Zero), SimulationSize - Point2.One);
+			var packed = cells[at.Y * SimulationSize.X + at.X];
+			return new Color((byte)packed, (byte)(packed >> 8), (byte)(packed >> 16), (byte)(packed >> 24));
 		}
 	}
 
 	public string SerializeMask()
 	{
-		var image = new Image(SimulationSize.X, SimulationSize.Y);
-		var pixels = image.Data;
-		for (var i = 0; i < maskCells.Length; i++)
-			pixels[i] = new Color(
-				(byte)(maskCells[i] & 0xFF),
-				(byte)((maskCells[i] >> 8) & 0xFF),
-				(byte)((maskCells[i] >> 16) & 0xFF),
-				(byte)((maskCells[i] >> 24) & 0xFF));
-		maskData = Convert.ToBase64String(image.WritePng());
+		if (paintedImage != null)
+			maskData = Convert.ToBase64String(paintedImage.WritePng());
 		return maskData;
+	}
+
+	public static string ReframeMask(string data, Point2 newSize, Point2 offset)
+	{
+		if (string.IsNullOrEmpty(data))
+			return data;
+		using var original = new Image(Convert.FromBase64String(data));
+		using var cropped = new Image(newSize.X, newSize.Y);
+		cropped.CopyPixels(original, original.Bounds, -offset);
+		return Convert.ToBase64String(cropped.WritePng());
+	}
+
+	public void ResizeWindow(Point2 newSize, Point2 offset)
+	{
+		newSize = Point2.Max(newSize, Point2.One);
+		if (newSize == size && offset == Point2.Zero)
+			return;
+		var oldSize = SimulationSize;
+		size = newSize;
+		FlowOrigin -= (Vector2)offset;
+		DetailOrigin -= (Vector2)offset;
+		if (!supported)
+			return;
+		maskData = ReframeMask(SerializeMask(), newSize, offset);
+		paintedImage?.Dispose();
+		paintedImage = null;
+		ResizeSimulation(oldSize, SimulationScale, offset);
+	}
+
+	void ResizeSimulation(Point2 oldSize, float oldScale, Point2 offset)
+	{
+		var oldA = bufferA!;
+		var oldB = bufferB!;
+		bufferA = new(graphicsDevice, "NeuralTextureStateA");
+		bufferB = new(graphicsDevice, "NeuralTextureStateB");
+		emptyState = new CellState[StateCellCount];
+		bufferA.Upload(emptyState);
+		bufferB.Upload(emptyState);
+		var uniforms = new UniformBuffer();
+		uniforms.Set(new ResizeParams
+		{
+			SourceSize = oldSize,
+			DestinationSize = SimulationSize,
+			Offset = offset * oldScale,
+			Scale = oldScale / SimulationScale,
+			Padding = 0,
+		});
+		new ComputeCommand(GetSharedResources(graphicsDevice)!.ResizeShader)
+		{
+			ReadOnlyStorageBuffers = [currentIsB ? oldB : oldA],
+			ReadWriteStorageBuffers = [bufferA],
+			UniformBuffers = [uniforms],
+			GroupCountX = (SimulationSize.X + 7) / 8,
+			GroupCountY = (SimulationSize.Y + 7) / 8,
+		}.Submit(graphicsDevice);
+		currentIsB = false;
+		oldA.Dispose();
+		oldB.Dispose();
+		DecodeMaskData();
+		maskBuffer!.Upload(maskCells);
+		RebuildUpdateBounds();
+		RebuildDecodeMask();
+		ResetProceduralOwnership();
+		output?.Dispose();
+		normalOutput?.Dispose();
+		silhouetteNormalOutput?.Dispose();
+		silhouetteNormalOutput = null;
+		output = new(graphicsDevice, Size.X, Size.Y, TextureFormat.Color, TextureFlags.ComputeWrite, "NeuralTextureOutput");
+		normalOutput = new(graphicsDevice, HasNormalOutput ? Size.X : 1, HasNormalOutput ? Size.Y : 1,
+			TextureFormat.Color, TextureFlags.ComputeWrite, "NeuralTextureNormalOutput");
+		RebuildSilhouette();
+		Decode();
 	}
 
 	public void PaintMask(Vector2 worldCenter, float worldRadius, float softness, float strength, int slot)
@@ -648,13 +777,23 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		if (!supported)
 			return;
 
-		var center = WorldToState(worldCenter);
-		var radius = MathF.Max(worldRadius * StateScale, 0.5f);
+		if (paintedImage == null || paintedImage.Size != Size)
+		{
+			var canvas = new Image(Size.X, Size.Y);
+			if (paintedImage != null)
+				canvas.CopyPixels(paintedImage, paintedImage.Bounds, Point2.Zero);
+			else
+				canvas.Data.Fill(new Color(255, 0, 0, 0));
+			paintedImage?.Dispose();
+			paintedImage = canvas;
+		}
+		var center = worldCenter - Position - new Vector2(0.5f);
+		var radius = MathF.Max(worldRadius, 0.5f);
 		var falloff = MathF.Max(softness, 0.01f);
 		var minX = Math.Max((int)(center.X - radius * 2), 0);
-		var maxX = Math.Min((int)(center.X + radius * 2) + 1, SimulationSize.X - 1);
+		var maxX = Math.Min((int)(center.X + radius * 2) + 1, Size.X - 1);
 		var minY = Math.Max((int)(center.Y - radius * 2), 0);
-		var maxY = Math.Min((int)(center.Y + radius * 2) + 1, SimulationSize.Y - 1);
+		var maxY = Math.Min((int)(center.Y + radius * 2) + 1, Size.Y - 1);
 
 		for (var y = minY; y <= maxY; y++)
 			for (var x = minX; x <= maxX; x++)
@@ -667,8 +806,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				if (weight <= 0.001f)
 					continue;
 
-				var index = y * SimulationSize.X + x;
-				var cell = maskCells[index];
+				var index = y * Size.X + x;
+				var cell = PackMask(paintedImage[index]);
 				var next = 0u;
 				for (var s = 0; s < MaxSlots; s++)
 				{
@@ -677,9 +816,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 					var blended = (uint)Math.Clamp(value + (target - value) * weight, 0.0f, 255.0f);
 					next |= blended << (s * 8);
 				}
-				maskCells[index] = next;
+				paintedImage[index] = new Color((byte)next, (byte)(next >> 8), (byte)(next >> 16), (byte)(next >> 24));
 			}
 
+		DecodeMaskData();
 		maskBuffer!.Upload(maskCells);
 		RebuildUpdateBounds();
 		RebuildDecodeMask();
@@ -705,10 +845,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		occluderSegments.Clear();
 		var width = Math.Max(1, Size.X);
 		var height = Math.Max(1, Size.Y);
-		var solid = Trace(decodeMaskCells);
+		var outputMask = new uint[width * height];
+		var solid = Trace(true);
+		outputMaskBuffer ??= new(graphicsDevice, "NeuralTextureOutputMask");
+		outputMaskBuffer.Upload(outputMask);
 		// What the painter drew, before EdgeTrim shaved the visible edge back: the bevel below
 		// follows this, so trimming hides cells without carving a fresh lit edge into the shape.
-		var painted = ReferenceEquals(decodeMaskCells, maskCells) ? solid : Trace(maskCells);
+		var painted = EdgeTrim <= 0 ? solid : Trace(false);
 
 		for (var y = 0; y < height; y++)
 		{
@@ -739,28 +882,29 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		else
 			silhouetteNormalOutput.SetData<Color>(normalPixels);
 
-		bool[] Trace(uint[] cells)
+		bool[] Trace(bool trim)
 		{
 			var map = new bool[width * height];
 			for (var y = 0; y < height; y++)
 				for (var x = 0; x < width; x++)
 				{
 					var state = OutputToState(new Vector2(x + 0.5f, y + 0.5f));
-					var cell = state.FloorToPoint2();
-					var blend = state - (Vector2)cell;
-					var top = float.Lerp(MaskAlpha(cells, cell), MaskAlpha(cells, cell + Point2.UnitX), blend.X);
-					var bottom = float.Lerp(MaskAlpha(cells, cell + Point2.UnitY), MaskAlpha(cells, cell + Point2.One), blend.X);
-					map[y * width + x] = float.Lerp(top, bottom, blend.Y) >= 1f / 512f;
+					var color = paintedImage != null
+						? (paintedImage.Bounds.Contains(new Point2(x, y)) ? paintedImage[x, y] : default)
+						: SampleMask(maskCells, state);
+					if (trim && EdgeTrim > 0)
+					{
+						var coverage = Coverage(color);
+						color *= coverage > 0 ? Math.Min(1, Coverage(SampleMask(decodeMaskCells, state)) / coverage) : 0;
+					}
+					if (trim)
+						outputMask[y * width + x] = PackMask(color);
+					map[y * width + x] = Coverage(color) >= 1f / 512f;
 				}
 			return map;
 		}
 
-		float MaskAlpha(uint[] cells, Point2 cell)
-		{
-			cell = new(Math.Clamp(cell.X, 0, SimulationSize.X - 1), Math.Clamp(cell.Y, 0, SimulationSize.Y - 1));
-			var packed = cells[cell.Y * SimulationSize.X + cell.X];
-			return ((packed & 0xFF) + ((packed >> 8) & 0xFF) + ((packed >> 16) & 0xFF) + (packed >> 24)) / 255f;
-		}
+		static float Coverage(Color color) => (color.R + color.G + color.B + color.A) / 255f;
 
 		bool IsSolid(int x, int y) => x >= 0 && y >= 0 && x < width && y < height && solid[y * width + x];
 		// Off-image neighbors count as solid: the image border is where the texture stops, not a
@@ -1050,15 +1194,12 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			OriginY = (uint)origin.Y,
 			DispatchWidth = (uint)size.X,
 			DispatchHeight = (uint)size.Y,
-			StatePixelsPerCell = StatePixelsPerCell,
-			WorldStateOrigin = StatePixelsPerCell > 0
-				? ((Vector2)Position + (Vector2)Size * 0.5f) / StatePixelsPerCell - ((Vector2)SimulationSize - Vector2.One) * 0.5f
-				: Vector2.Zero,
+			SimulationScale = SimulationScale,
+			FlowOrigin = FlowOrigin,
+			FlowSize = Vector2.Max(FlowSize, Vector2.One),
 			SmokeBlend = smokeBlend,
 			SmokeSlot = (uint)SmokeSlot,
 			Pad0 = 0,
-			Pad1 = 0,
-			Pad2 = 0,
 		});
 
 		new ComputeCommand(updateShader!)
@@ -1097,7 +1238,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	{
 		decodeMaskCells = maskCells;
 		if (EdgeTrim <= 0)
+		{
+			decodeMaskBuffer?.Dispose();
+			decodeMaskBuffer = null;
 			return;
+		}
 
 		var (width, height) = (SimulationSize.X, SimulationSize.Y);
 		// Separable erosion: a cell survives only if every cell within EdgeTrim of it is painted,
@@ -1349,20 +1494,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 	int StateCellCount => SimulationSize.X * SimulationSize.Y;
 
-	public float StateScale => StatePixelsPerCell > 0 ? 1f / StatePixelsPerCell : SimulationSize.X / (float)Math.Max(Size.X, Size.Y);
+	public float StateScale => SimulationScale;
 
 	Vector2 WorldToState(Vector2 world)
 		=> OutputToState(world - (Vector2)Position);
 
 	Vector2 OutputToState(Vector2 output)
-	{
-		var outputSize = (Vector2)Size;
-		var stateSize = (Vector2)SimulationSize;
-		if (StatePixelsPerCell > 0)
-			return (output - outputSize * 0.5f) / StatePixelsPerCell + (stateSize - Vector2.One) * 0.5f;
-		var extent = Math.Max(Size.X, Size.Y);
-		return (output - outputSize * 0.5f) / extent * stateSize + (stateSize - Vector2.One) * 0.5f;
-	}
+		=> output * SimulationScale - new Vector2(0.5f);
 
 	void RemoveStalePawnSamples()
 	{
@@ -1396,7 +1534,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			LatentGain = LatentGain,
 			LatentBias = LatentBias,
 			NearestStateSampling = NearestStateSampling ? 1u : 0u,
-			StatePixelsPerCell = StatePixelsPerCell,
+			SimulationScale = SimulationScale,
 			SmokeBlend = smokeBlend,
 			SmokeSlot = (uint)SmokeSlot,
 			OpacityMode = (uint)OpacityMode,
@@ -1404,14 +1542,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			DensityLow = DensityLow,
 			DensityHigh = DensityHigh,
 			NormalMode = (uint)NormalMode,
-			Padding0 = 0,
-			Padding1 = 0,
-			Padding2 = 0,
+			ProceduralMask = Dynamism == DynamismMode.ProceduralCurlAdvection && proceduralDecodeMask != null ? 1u : 0u,
+			DetailOrigin = DetailOrigin,
 		});
 
 		new ComputeCommand(decodeShader!)
 		{
-			ReadOnlyStorageBuffers = [source, weights!, ActiveDecodeMask],
+			ReadOnlyStorageBuffers = [source, weights!, ActiveDecodeMask, outputMaskBuffer!],
 			ReadWriteStorageTextures = [output, normalOutput!],
 			UniformBuffers = [decodeUniforms],
 			GroupCountX = (output.Width + 7) / 8,
@@ -1439,6 +1576,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public override void Destroyed()
 	{
 		base.Destroyed();
+		paintedImage?.Dispose();
 		if (autoPerturb != null && !Game.destroying.Contains(autoPerturb))
 			Game.Destroy(autoPerturb);
 		Game.EditorPreviewSync -= SettleForEditorPreview;
@@ -1447,6 +1585,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		perturbations?.Dispose();
 		maskBuffer?.Dispose();
 		decodeMaskBuffer?.Dispose();
+		outputMaskBuffer?.Dispose();
 		ownershipA?.Dispose();
 		ownershipB?.Dispose();
 		proceduralUpdateMask?.Dispose();

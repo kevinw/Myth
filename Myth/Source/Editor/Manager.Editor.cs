@@ -2863,6 +2863,18 @@ public partial class Manager
 		}
 
 		var resized = new Point2(right - left, bottom - top);
+		if (IsNeuralTextureActor(actor) && (resized != size || new Point2(left, top) != position))
+		{
+			var offset = new Point2(left, top) - position;
+			var mask = ActorSpecs.GetResolvedProperty(actor, nameof(NeuralTextureActor.PaintedMask))?.GetValue<string>() ?? "";
+			ActorSpecs.SetProperty(actor, nameof(NeuralTextureActor.PaintedMask),
+				JsonValue.Create(NeuralTextureActor.ReframeMask(mask, resized, offset)));
+			foreach (var property in new[] { nameof(NeuralTextureActor.FlowOrigin), nameof(NeuralTextureActor.DetailOrigin) })
+			{
+				var origin = JsonUtil.ReadVector2(ActorSpecs.GetResolvedProperty(actor, property)) ?? Vector2.Zero;
+				ActorSpecs.SetProperty(actor, property, ActorSpecs.ToJsonNode(origin - offset));
+			}
+		}
 		actor["Position"] = bottomCenter ? new JsonArray(left + resized.X / 2, bottom) : new JsonArray(left, top);
 		actor["Size"] = new JsonArray(resized.X, resized.Y);
 		editorGameDirty = true;

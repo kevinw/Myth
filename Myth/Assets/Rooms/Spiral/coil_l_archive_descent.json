@@ -90,6 +90,10 @@
     {
       "Id": "coil_nca_l",
       "Type": "NeuralTextureActor",
+      "SimulationScale": 0.47058824,
+      "FlowOrigin": [0.0, -80.0],
+      "FlowSize": [272, 272],
+      "DetailOrigin": [136.0, 56.0],
       "Position": [24, 24],
       "Size": [272, 112],
       "Tint": "6E5FA0",

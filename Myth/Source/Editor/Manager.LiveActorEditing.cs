@@ -466,7 +466,10 @@ public partial class Manager
 	static void SyncLiveActorFromAuthored(Actor runtime, Room authoredRoom, JsonObject authored)
 	{
 		var local = ActorSpecs.ReadPoint(authored, "Position") ?? Point2.Zero;
-		runtime.Position = (runtime.Room?.WorldBounds.TopLeft ?? authoredRoom.WorldBounds.TopLeft) + local;
+		var position = (runtime.Room?.WorldBounds.TopLeft ?? authoredRoom.WorldBounds.TopLeft) + local;
+		if (runtime is NeuralTextureActor texture && ActorSpecs.ReadResolvedPoint(authored, nameof(IResizable.Size)) is { } textureSize && textureSize != texture.Size)
+			texture.ResizeWindow(textureSize, position - runtime.Position);
+		runtime.Position = position;
 		runtime.Velocity = Vector2.Zero;
 		if (runtime is IResizable resizable && ActorSpecs.ReadResolvedPoint(authored, nameof(IResizable.Size)) is { } size)
 			resizable.Size = size;
@@ -642,6 +645,7 @@ public partial class Manager
 
 	sealed class LiveActorUndoTarget(Manager manager, string roomId, string actorId) : IJsonUndoTarget
 	{
+		static readonly string[] NeuralWindowProperties = [nameof(NeuralTextureActor.PaintedMask), nameof(NeuralTextureActor.FlowOrigin), nameof(NeuralTextureActor.DetailOrigin)];
 		public string RoomId => roomId;
 		public string UndoId => $"live-actor:{roomId}:{actorId}";
 
@@ -653,6 +657,13 @@ public partial class Manager
 			JsonNode? size = null;
 			var hasPosition = authored != null && JsonUtil.TryGetProperty(authored, "Position", out position);
 			var hasSize = authored != null && JsonUtil.TryGetProperty(authored, "Size", out size);
+			JsonObject? neuralWindow = null;
+			if (authored != null && IsNeuralTextureActor(authored))
+			{
+				neuralWindow = new JsonObject();
+				foreach (var property in NeuralWindowProperties)
+					neuralWindow[property] = ActorSpecs.GetResolvedProperty(authored, property)?.DeepClone();
+			}
 			return ActorSpecs.ToJsonString(new JsonObject
 			{
 				["hasPosition"] = hasPosition,
@@ -660,6 +671,7 @@ public partial class Manager
 				["hasSize"] = hasSize,
 				["size"] = hasSize ? size?.DeepClone() : null,
 				["runtimePosition"] = runtime != null ? ActorSpecs.ToJsonNode(runtime.Position) : null,
+				["neuralWindow"] = neuralWindow,
 				["runtimeSize"] = runtime is IResizable resizable ? ActorSpecs.ToJsonNode(resizable.Size) : null
 			});
 		}
@@ -672,6 +684,9 @@ public partial class Manager
 
 			ApplyProperty(authored, "Position", JsonUtil.ReadBool(state, "hasPosition"), state["position"]);
 			ApplyProperty(authored, "Size", JsonUtil.ReadBool(state, "hasSize"), state["size"]);
+			if (state["neuralWindow"] is JsonObject neuralWindow)
+				foreach (var property in NeuralWindowProperties)
+					ApplyProperty(authored, property, neuralWindow[property] != null, neuralWindow[property]);
 			room.Save();
 			manager.MarkRoomPreviewDirty(room);
 			manager.editorGameDirty = true;
@@ -682,6 +697,12 @@ public partial class Manager
 					runtime.Position = position;
 				if (runtime is IResizable resizable && ActorSpecs.ReadPoint(state["runtimeSize"]) is { } size)
 					resizable.Size = size;
+				if (runtime is NeuralTextureActor texture && state["neuralWindow"] is JsonObject window)
+				{
+					texture.PaintedMask = window[nameof(NeuralTextureActor.PaintedMask)]?.GetValue<string>() ?? "";
+					texture.FlowOrigin = JsonUtil.ReadVector2(window[nameof(NeuralTextureActor.FlowOrigin)]) ?? Vector2.Zero;
+					texture.DetailOrigin = JsonUtil.ReadVector2(window[nameof(NeuralTextureActor.DetailOrigin)]) ?? Vector2.Zero;
+				}
 				runtime.Velocity = Vector2.Zero;
 			}
 		}
