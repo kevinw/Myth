@@ -1,4 +1,5 @@
 - make a pitch deck https://brightgambit.com/checkmate/ - DOC HERE https://www.overleaf.com/project/6aa4fbad2d448d1b3405a4a7
+- no pits, seamless loading
  USE LATEX AND BEAMER TO MAKE THEM LOL https://www.overleaf.com/learn/latex/Beamer
 - gameplay NCA ideas
   - an otherwise emtpy room with a toxic barrel. you strike it, and it explodes, emitting swimmable yet poison gas.
