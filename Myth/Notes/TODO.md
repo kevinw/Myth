@@ -13,6 +13,7 @@ SFX
   - burrow time 
   - Bosonic Time + upgrade needs SFX
   - really listen and pay attention to lack of landing sound effects on grass etc
+- NCA conference talks https://www.youtube.com/watch?v=mjHh2-HB58M&list=PLEt5M_lIDJdlVYeByo116YMdMPD-qcCak&index=4
 
 TALK AND PLAY FEEDBACK
 - show a dot on the map early
