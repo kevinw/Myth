@@ -682,6 +682,7 @@ public partial class Game : IDisposable
 		// Run Game normally when not moving to a new room
 		if (nextRoom == null)
 		{
+			UpdateSeamlessRooms();
 			// Debug shortcuts and editor mouse-drag are host concerns; Manager reads input
 			// and drives them (see Manager.HandleGameDebugShortcuts / UpdatePlayerMouseDrag).
 
@@ -909,11 +910,10 @@ public partial class Game : IDisposable
 		if (cameraError.LengthSquared() < 0.25f)
 			cameraError = Vector2.Zero;
 
-		// The room edge is the hard outer limit: re-clamp after adding the easing offset so the
-		// camera can never show outside the room (easing overflow falls into the dead/blocker
-		// space, never past a room edge).
+		// Re-clamp after adding the easing offset so it cannot expose space beyond the current
+		// camera domain (the room normally, or the connected world's outer bounds in seamless play).
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		Camera = ClampCameraToRoomFb(target + cameraError, padding);
+		Camera = ClampCameraToGameplayBoundsFb(target + cameraError, padding);
 		previousCameraTarget = target;
 		previousCameraFocus = cameraFocus;
 	}
@@ -927,7 +927,7 @@ public partial class Game : IDisposable
 		var target = GetGameplayCameraTarget();
 		var amount = 1 - MathF.Exp(-Time.Delta * PlayerDragCameraEaseRate);
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		Camera = ClampCameraToRoomFb(Vector2.Lerp(Camera, target, amount), padding);
+		Camera = ClampCameraToGameplayBoundsFb(Vector2.Lerp(Camera, target, amount), padding);
 		previousCameraTarget = null;
 		previousCameraFocus = easedPlayerCameraTarget;
 	}
@@ -1022,7 +1022,9 @@ public partial class Game : IDisposable
 
 		var unclamped = easedPlayerCameraTarget + cameraLookAhead - new Vector2(Width, Height) / 2;
 		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		return ClampCameraToRoomAndBlockersFb(unclamped, padding, room.WorldBounds, easedPlayerCameraTarget, ActiveCameraBlockers());
+		return SeamlessRoomsActive
+			? ClampCameraToRoomFb(unclamped, padding, SeamlessCameraBounds)
+			: ClampCameraToRoomAndBlockersFb(unclamped, padding, room.WorldBounds, easedPlayerCameraTarget, ActiveCameraBlockers());
 	}
 
 	// Clamp a zoomed camera top-left against a room (with its active blockers bitten out), then
@@ -1564,7 +1566,8 @@ public partial class Game : IDisposable
 	}
 
 	bool ActorActiveForRoomInversion(Actor actor)
-		=> actor.Invert == ActorInversion.Both || invertedNow == (actor.Invert == ActorInversion.InvertedOnly);
+		=> actor.Invert == ActorInversion.Both ||
+			(loadingRoom != null && actor.Room == loadingRoom ? false : invertedNow) == (actor.Invert == ActorInversion.InvertedOnly);
 
 	public T? GetFirst<T>() where T : Actor
 	{
@@ -1728,18 +1731,37 @@ public partial class Game : IDisposable
 
 	// True when the given world point falls inside a water tile. Water is a non-solid
 	// tile (Factory 'w'); pawns sample their torso here to drive swim physics.
-	public bool HasWater => room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
+	public bool HasWater
+	{
+		get
+		{
+			if (!SeamlessRoomsActive)
+				return room is { } && (room.WaterSurfaces.Count > 0 || room.CappedWaterRects.Count > 0);
+			foreach (var candidate in residentRooms.Values)
+				if (candidate.WaterSurfaces.Count > 0 || candidate.CappedWaterRects.Count > 0)
+					return true;
+			return false;
+		}
+	}
 	public bool IsWaterAt(Point2 worldPoint, bool continuePastTopEdge = false)
 	{
-		if (room == null)
+		var waterRoom = room;
+		if (SeamlessRoomsActive)
+			foreach (var candidate in residentRooms.Values)
+				if (candidate.WorldBounds.Contains(worldPoint))
+				{
+					waterRoom = candidate;
+					break;
+				}
+		if (waterRoom == null)
 			return false;
-		var local = worldPoint - room.WorldBounds.TopLeft;
+		var local = worldPoint - waterRoom.WorldBounds.TopLeft;
 		var tile = new Point2(
 			(int)MathF.Floor(local.X / (float)TileSize),
 			(int)MathF.Floor(local.Y / (float)TileSize));
-		if (continuePastTopEdge && tile.Y < 0 && tile.X >= 0 && tile.X < room.Size.X)
+		if (continuePastTopEdge && tile.Y < 0 && tile.X >= 0 && tile.X < waterRoom.Size.X)
 			tile.Y = 0;
-		return room.IsWaterTile(tile);
+		return waterRoom.IsWaterTile(tile);
 	}
 
 	// Kicks the water surface under worldX (if any) into a splash. impulseSpeed is signed:
@@ -1769,10 +1791,15 @@ public partial class Game : IDisposable
 
 	void UpdateWaterSurfaces()
 	{
-		if (room == null)
-			return;
-		foreach (var surface in room.WaterSurfaces)
-			surface.Update(Time.Delta);
+		if (SeamlessRoomsActive)
+		{
+			foreach (var candidate in visibleResidentRooms)
+				foreach (var surface in candidate.WaterSurfaces)
+					surface.Update(Time.Delta);
+		}
+		else if (room != null)
+			foreach (var surface in room.WaterSurfaces)
+				surface.Update(Time.Delta);
 	}
 
 	bool TryGetSubstanceOutwardFromBottom(RectInt bounds, out string substance)
@@ -1793,6 +1820,9 @@ public partial class Game : IDisposable
 
 	public bool Transition(Point2 direction)
 	{
+		if (TrySeamlessTransition(direction))
+			return true;
+
 		if (room != null && nextRoom == null)
 		{
 			var fromRoom = room;
@@ -2090,10 +2120,12 @@ public partial class Game : IDisposable
 	}
 
 	internal bool OverlapsRoomCollision(Actor actor, in RectInt bounds)
-		=> CollisionRoomFor(actor) is { } actorRoom && OverlapsRoomCollision(actorRoom, bounds);
+		=> SeamlessRoomsActive && (actor is Player || actor.KeepOnRoomTransition)
+			? OverlapsSeamlessRoomCollision(bounds)
+			: CollisionRoomFor(actor) is { } actorRoom && OverlapsRoomCollision(actorRoom, bounds);
 
 	internal Room? CollisionRoomFor(Actor actor)
-		=> loadingRoom != null && actor.Room == loadingRoom ? loadingRoom : room ?? actor.Room;
+		=> loadingRoom != null && actor.Room == loadingRoom ? loadingRoom : actor.Room ?? room;
 
 	internal bool OverlapsEnemyRoomBoundary(Actor actor, Point2 offset)
 	{
@@ -2124,7 +2156,7 @@ public partial class Game : IDisposable
 	}
 
 	public bool OverlapsRoomCollision(in RectInt bounds)
-		=> room != null && OverlapsRoomCollision(room, bounds);
+		=> SeamlessRoomsActive ? OverlapsSeamlessRoomCollision(bounds) : room != null && OverlapsRoomCollision(room, bounds);
 
 	// Pure room-geometry collision: depends only on the room's tile data, so it is safe
 	// to call off the main thread (e.g. the nav-graph worker build via NavWorld).
@@ -2487,16 +2519,18 @@ public partial class Game : IDisposable
 
 	bool ToggleRoomInverse()
 	{
-		if (room?.ToggleBurrowInverse() != true)
+		if (room is not { } activeRoom || !activeRoom.ToggleBurrowInverse())
 			return false;
 
 		invertedNow = !invertedNow;
-		ActivateParkedActors(room);
+		if (SeamlessRoomsActive)
+			residentRoomInversions[activeRoom] = invertedNow;
+		ActivateParkedActors(activeRoom);
 
 		for (var i = 0; i < Actors.Count; i++)
-			if (Actors[i] is IRoomInversionListener listener && Actors[i].Room == room && !destroying.Contains(Actors[i]))
+			if (Actors[i] is IRoomInversionListener listener && Actors[i].Room == activeRoom && !destroying.Contains(Actors[i]))
 				listener.RoomInverted();
-		ParkInactiveActors(room);
+		ParkInactiveActors(activeRoom);
 
 		RefreshRoomTiles();
 		return true;
@@ -2549,8 +2583,9 @@ public partial class Game : IDisposable
 
 	public void LoadRoom(Room forRoom)
 	{
-		DiscardParkedActors();
-		invertedNow = false;
+		DiscardParkedActors(forRoom);
+		if (forRoom == room)
+			invertedNow = false;
 		var previousLoadingRoom = loadingRoom;
 		loadingRoom = forRoom;
 		try
@@ -2563,12 +2598,17 @@ public partial class Game : IDisposable
 		}
 	}
 
-	void DiscardParkedActors()
+	void DiscardParkedActors(Room forRoom)
 	{
-		foreach (var actor in parkedActors)
+		for (var i = parkedActors.Count - 1; i >= 0; i--)
+		{
+			var actor = parkedActors[i];
+			if (actor.Room != forRoom)
+				continue;
 			if (actor.AddedOnce)
 				actor.Destroyed();
-		parkedActors.Clear();
+			parkedActors.RemoveAt(i);
+		}
 	}
 
 	void LoadRoomContents(Room forRoom)

@@ -99,7 +99,7 @@ public abstract class Carryable : Actor, ICarryable
 
 			// Fell out of the room (thrown off a cliff edge): reset to spawn so the puzzle
 			// can't soft-lock.
-			if (Position.Y > Game.Bounds.Bottom + OutOfRoomResetMargin)
+			if (Position.Y > (Room?.WorldBounds.Bottom ?? Game.Bounds.Bottom) + OutOfRoomResetMargin)
 			{
 				Position = spawnPosition;
 				Stop();

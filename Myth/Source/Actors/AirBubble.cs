@@ -49,7 +49,7 @@ public class AirBubble : Actor
 		}
 		else if (!Game.IsWaterAt(Position))
 			Pop(); // broke the surface (or drifted out of the water)
-		else if (Position.Y < Game.Bounds.Top)
+		else if (Position.Y < (Room?.WorldBounds.Top ?? Game.Bounds.Top))
 			Game.Destroy(this); // safety: rose out the top while still in water
 	}
 

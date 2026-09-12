@@ -222,7 +222,7 @@ public class LightningTrap : Actor, IRoomInversionListener
 
 	bool IsReflective(Room.SlopeTile slope)
 	{
-		if (Game.CurrentRoom is not { } room)
+		if (Room is not { } room)
 			return false;
 		var t = slope.Tile;
 		if (t.X < 0 || t.Y < 0 || t.X >= room.Size.X || t.Y >= room.Size.Y)

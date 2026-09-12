@@ -463,12 +463,19 @@ public sealed partial class GameView
 	// (mid-transition) next room correctly; the wave sim itself ticks in Game.PostUpdateSystems.
 	void DrawWaterBodies(Target target)
 	{
-		if (!HasWaterBody(room) && !HasWaterBody(nextRoom))
+		var hasWater = false;
+		foreach (var visibleRoom in VisibleRooms())
+			if (HasWaterBody(visibleRoom))
+			{
+				hasWater = true;
+				break;
+			}
+		if (!hasWater)
 			return;
 
 		PushWorldMatrix();
-		DrawRoomWaterBody(room);
-		DrawRoomWaterBody(nextRoom);
+		foreach (var visibleRoom in VisibleRooms())
+			DrawRoomWaterBody(visibleRoom);
 		Batcher.PopMatrix();
 		Batcher.Render(target);
 		Batcher.Clear();
@@ -1147,20 +1154,15 @@ public sealed partial class GameView
 	void DrawTileField()
 	{
 		Array.Clear(ditherAnchorOffsets);
-		RoomTileFieldCache? currentRoomTileFieldCache = null;
-		RoomTileFieldCache? nextRoomTileFieldCache = null;
-		if (room != null)
-			currentRoomTileFieldCache = GetRoomTileFieldCache(room);
-		if (nextRoom != null && nextRoom != room)
-			nextRoomTileFieldCache = GetRoomTileFieldCache(nextRoom);
+		roomTileFieldCacheScratch.Clear();
+		foreach (var visibleRoom in VisibleRooms())
+			roomTileFieldCacheScratch.Add(GetRoomTileFieldCache(visibleRoom));
 
 		TileField.Clear(Color.Transparent);
 		PushWorldMatrix();
 		Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
-		if (currentRoomTileFieldCache != null)
-			DrawCachedRoomTileField(currentRoomTileFieldCache);
-		if (nextRoomTileFieldCache != null)
-			DrawCachedRoomTileField(nextRoomTileFieldCache);
+		foreach (var cache in roomTileFieldCacheScratch)
+			DrawCachedRoomTileField(cache);
 		DrawDynamicTileFields();
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
@@ -1780,19 +1782,26 @@ public sealed partial class GameView
 	static Color LerpColor(Color from, Color to, float amount)
 		=> new(Vector4.Lerp(from, to, amount));
 
-	internal VisibleRoomsEnumerable VisibleRooms() => new(room, nextRoom);
+	internal VisibleRoomsEnumerable VisibleRooms() => new(room, nextRoom, game.VisibleResidentRooms);
 
-	internal readonly struct VisibleRoomsEnumerable(Room? room, Room? nextRoom)
+	internal readonly struct VisibleRoomsEnumerable(Room? room, Room? nextRoom, List<Room>? residentRooms)
 	{
-		public Enumerator GetEnumerator() => new(room, nextRoom);
+		public Enumerator GetEnumerator() => new(room, nextRoom, residentRooms);
 
-		public struct Enumerator(Room? room, Room? nextRoom)
+		public struct Enumerator(Room? room, Room? nextRoom, List<Room>? residentRooms)
 		{
 			int index = -1;
 			public Room Current { get; private set; } = null!;
 
 			public bool MoveNext()
 			{
+				if (residentRooms != null)
+				{
+					if (++index >= residentRooms.Count)
+						return false;
+					Current = residentRooms[index];
+					return true;
+				}
 				while (++index < 2)
 				{
 					var candidate = index == 0 ? room : nextRoom;
@@ -1812,16 +1821,10 @@ public sealed partial class GameView
 		if (ShowBackgroundLayer && hasProceduralWalls)
 			proceduralWallRenderer?.Render(NormalBuffer, rendering, RenderCamera, zoomLevel, Time.SecondsF,
 				ProceduralWallRenderer.Pass.Normals);
-		RoomNormalCache? currentRoomNormalCache = null;
-		RoomNormalCache? nextRoomNormalCache = null;
+		roomNormalCacheScratch.Clear();
 		if (ShowForegroundLayer)
-		{
-			if (room != null)
-				currentRoomNormalCache = GetRoomNormalCache(room);
-			if (nextRoom != null && nextRoom != room)
-				nextRoomNormalCache = GetRoomNormalCache(nextRoom);
-		}
-
+			foreach (var visibleRoom in VisibleRooms())
+				roomNormalCacheScratch.Add(GetRoomNormalCache(visibleRoom));
 		Batcher.PushBlend(NormalBufferBlend);
 		PushWorldMatrix();
 		foreach (var actor in rendering)
@@ -1836,12 +1839,8 @@ public sealed partial class GameView
 		}
 
 		if (ShowForegroundLayer)
-		{
-			if (currentRoomNormalCache != null)
-				DrawCachedRoomNormals(currentRoomNormalCache);
-			if (nextRoomNormalCache != null)
-				DrawCachedRoomNormals(nextRoomNormalCache);
-		}
+			foreach (var cache in roomNormalCacheScratch)
+				DrawCachedRoomNormals(cache);
 
 		foreach (var actor in rendering)
 		{
@@ -2301,6 +2300,8 @@ public sealed partial class GameView
 	readonly Dictionary<Room, RoomNormalCache> roomNormalCaches = [];
 	readonly Dictionary<Room, RoomTileFieldCache> roomTileFieldCaches = [];
 	readonly Dictionary<RoomColorField, RoomColorFieldTextureCache> roomColorFieldCaches = [];
+	readonly List<RoomNormalCache> roomNormalCacheScratch = [];
+	readonly List<RoomTileFieldCache> roomTileFieldCacheScratch = [];
 
 	internal void PruneInactiveRoomCaches()
 	{
@@ -2309,8 +2310,7 @@ public sealed partial class GameView
 		PruneInactiveRoomColorFieldCaches();
 	}
 
-	bool IsActiveRoomCache(Room cachedRoom)
-		=> cachedRoom == room || cachedRoom == nextRoom;
+	bool IsActiveRoomCache(Room cachedRoom) => game.RoomIsVisible(cachedRoom);
 
 	void PruneInactiveRoomNormalCaches()
 	{

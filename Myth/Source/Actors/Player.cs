@@ -1695,6 +1695,9 @@ public partial class Player : Pawn, INeuralTextureAgent
 	{
 		if (Health <= 0) return;
 
+		if (Game.SeamlessMovementActive && Position.Y > Game.Bounds.Bottom && Game.Transition(Point2.Down))
+			return;
+
 		// Resolve a fall before horizontal edges: otherwise continued outward velocity at a
 		// bottom corner can cross and re-clamp X every frame, starving this check forever.
 		if (Position.Y > Game.Bounds.Bottom + 12)
