@@ -65,7 +65,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: Myth/obj/desktop/ozz-runtime
-          key: myth-ozz-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
+          key: myth-ozz-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
 
       # An exact source-key hit is safe to reuse. Checkout gives sources fresh timestamps;
       # refresh the cached build tree so Ninja can still recognize it as up to date.

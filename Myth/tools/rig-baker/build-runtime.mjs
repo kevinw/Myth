@@ -38,6 +38,17 @@ function run(args, quietStdout = false) {
 	}
 }
 
+// CMake build trees aren't relocatable: a CI cache restored at a different absolute
+// path fails every reconfigure ("CMakeCache.txt directory is different..."). Discard it.
+const cacheFile = path.join(buildDir, "CMakeCache.txt");
+const cachedSource = fs.existsSync(cacheFile)
+	? fs.readFileSync(cacheFile, "utf8").match(/^CMAKE_HOME_DIRECTORY(?::\w+)?=(.*)$/m)?.[1]?.trim()
+	: null;
+if (cachedSource && path.resolve(cachedSource) !== scriptDir) {
+	console.log(`Discarding cmake build tree configured for ${cachedSource} (this tree is ${scriptDir}).`);
+	fs.rmSync(buildDir, { recursive: true, force: true });
+}
+
 run([
 	"--log-level=WARNING",
 	"-S", scriptDir,

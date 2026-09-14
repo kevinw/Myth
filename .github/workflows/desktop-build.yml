@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: Myth/obj/desktop/ozz-runtime
-          key: myth-ozz-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.macos-ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
+          key: myth-ozz-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.macos-ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
 
       - name: Restore myth_ozz timestamps
         if: steps.cache-macos-ozz.outputs.cache-hit == 'true'
@@ -214,7 +214,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: Myth/obj/desktop/ozz-runtime
-          key: myth-ozz-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.windows-ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
+          key: myth-ozz-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.windows-ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
 
       - name: Restore myth_ozz timestamps
         if: steps.cache-windows-ozz.outputs.cache-hit == 'true'
