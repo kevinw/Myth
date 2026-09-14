@@ -95,7 +95,6 @@
       "Position": [0, 0],
       "Points": [[240, 152],[272, 112],[296, 48]
       ],
-      "RenderProcedural": true,
       "ProceduralWidth": 2.2,
       "SpeedScale": 2,
       "ProceduralOuterColor": "5D2D42",

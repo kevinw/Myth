@@ -196,10 +196,14 @@ public class RigPuppet : Actor, INeuralTextureAgent
 			if (ruff != null)
 				Game.Destroy(ruff);
 			ruff = null;
-			return;
 		}
-		ruff ??= Game.Create<RigPuppetRuff>(Position, it => it.Owner = this);
-		ruff.KeepOnRoomTransition = KeepOnRoomTransition;
+		else
+		{
+			ruff ??= Game.Create<RigPuppetRuff>(Position, it => it.Owner = this);
+			ruff.KeepOnRoomTransition = KeepOnRoomTransition;
+		}
+		if (visualReady)
+			visual.Accessory = ruff;
 	}
 
 	string IdleName()
@@ -952,70 +956,37 @@ public class RigPuppet : Actor, INeuralTextureAgent
 	{
 	}
 
+	HumanoidRigVisual.DrawParts VisualParts
+		=> StraddlesPlayerDepth ? HumanoidRigVisual.DrawParts.InFrontOfPlayer : HumanoidRigVisual.DrawParts.All;
+
 	public override void Render(Batcher batcher)
 	{
-		if (ShowsHitBlink && SpriteBlinkHidden)
-			return;
-		if (ruff != null)
-		{
-			if (StraddlesPlayerDepth)
-				visual.DrawInFrontOfPlayerWithAccessory(batcher, RigTint, silhouette: false, ruff);
-			else
-				visual.DrawWithAccessory(batcher, RigTint, silhouette: false, ruff);
-		}
-		else if (StraddlesPlayerDepth)
-			visual?.DrawInFrontOfPlayer(batcher, RigTint, silhouette: false);
-		else
-			visual?.Draw(batcher, RigTint, silhouette: false);
+		if (!ShowsHitBlink || !SpriteBlinkHidden)
+			visual?.Draw(batcher, RigTint, silhouette: false, VisualParts);
 	}
 
 	public override void RenderShadow(Batcher batcher, Color color)
-	{
-		if (ruff != null)
-		{
-			if (StraddlesPlayerDepth)
-				visual.DrawInFrontOfPlayerWithAccessory(batcher, color, silhouette: true, ruff);
-			else
-				visual.DrawWithAccessory(batcher, color, silhouette: true, ruff);
-		}
-		else if (StraddlesPlayerDepth)
-			visual?.DrawInFrontOfPlayer(batcher, color, silhouette: true);
-		else
-			visual?.Draw(batcher, color, silhouette: true);
-	}
+		=> visual?.Draw(batcher, color, silhouette: true, VisualParts);
 
 	public override void RenderReflection(Batcher batcher, Color color) => RenderShadow(batcher, color);
-	public override void RenderNormals(Batcher batcher)
-	{
-		if (ruff != null)
-		{
-			if (StraddlesPlayerDepth)
-				visual.DrawNormalsInFrontOfPlayerWithAccessory(batcher, ruff);
-			else
-				visual.DrawNormalsWithAccessory(batcher, ruff);
-		}
-		else if (StraddlesPlayerDepth)
-			visual?.DrawNormalsInFrontOfPlayer(batcher);
-		else
-			visual?.DrawNormals(batcher);
-	}
+	public override void RenderNormals(Batcher batcher) => visual?.DrawNormals(batcher, VisualParts);
 
 	internal void RenderBehindPlayer(Batcher batcher)
 	{
 		if (Visible && StraddlesPlayerDepth && (!ShowsHitBlink || !SpriteBlinkHidden))
-			visual?.DrawBehindPlayer(batcher, RigTint, silhouette: false);
+			visual?.Draw(batcher, RigTint, silhouette: false, HumanoidRigVisual.DrawParts.BehindPlayer);
 	}
 
 	internal void RenderShadowBehindPlayer(Batcher batcher, Color color)
 	{
 		if (Visible && StraddlesPlayerDepth)
-			visual?.DrawBehindPlayer(batcher, color, silhouette: true);
+			visual?.Draw(batcher, color, silhouette: true, HumanoidRigVisual.DrawParts.BehindPlayer);
 	}
 
 	internal void RenderNormalsBehindPlayer(Batcher batcher)
 	{
 		if (Visible && StraddlesPlayerDepth)
-			visual?.DrawNormalsBehindPlayer(batcher);
+			visual?.DrawNormals(batcher, HumanoidRigVisual.DrawParts.BehindPlayer);
 	}
 
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context)

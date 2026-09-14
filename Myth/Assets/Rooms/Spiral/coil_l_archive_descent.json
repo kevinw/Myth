@@ -6,18 +6,17 @@
   "ambientColor": "C8B9FF",
   "ambientIntensity": 0.48,
   "lightNoise": 0.225,
-  "reverb": 0.87,
+  "reverb": 0.868,
   "ditherStrength": 0.28,
   "legend": {
-    "T": "stone",
-    "m": "Myth Back",
     "G": "grass",
-    "g": "plants",
-    "r": "rocks",
+    "R": "ruin",
+    "T": "stone",
     "d": "debris",
-    "v": "Myth Vines",
+    "m": "Myth Back",
+    "r": "rocks",
     "u": "Myth Runes",
-    "R": "ruin"
+    "v": "Myth Vines"
   },
   "tiles": [
     "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
@@ -90,11 +89,17 @@
     {
       "Id": "coil_nca_l",
       "Type": "NeuralTextureActor",
-      "SimulationScale": 0.47058824,
-      "FlowOrigin": [0.0, -80.0],
-      "FlowSize": [272, 272],
-      "DetailOrigin": [136.0, 56.0],
       "Position": [24, 24],
+      "SimulationScale": 0.47058824,
+      "FlowOrigin": [
+        0.0,
+        -80.0
+      ],
+      "FlowSize": [272, 272],
+      "DetailOrigin": [
+        136.0,
+        56.0
+      ],
       "Size": [272, 112],
       "Tint": "6E5FA0",
       "Brightness": 0.65,

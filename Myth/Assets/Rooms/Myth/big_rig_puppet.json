@@ -165,6 +165,11 @@
       "SkinMode": "Surface",
       "SurfaceId": "robot_body_1",
       "HeadSpriteScale": 0.909
+    },
+    {
+      "Id": "05828de26da30f54",
+      "Type": "AlienBug",
+      "Position": [266, 168]
     }
   ]
 }

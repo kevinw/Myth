@@ -50,7 +50,18 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	enum Part { Torso, Bicep, Forearm, Hand, Thigh, Other }
 	enum Side { None, Left, Right }
-	enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
+	internal enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
+	enum DrawItemKind { Bone, Hand, Head, Wire, Accessory }
+	[Flags] enum JointRings { None = 0, From = 1, To = 2 }
+
+	// One depth-ordered piece of the rig. Bones and hands carry resolved geometry and untinted color;
+	// Index is the bone, wire, or accessory item; Rings marks which bone ends draw an outline ring.
+	readonly record struct DrawItem(DrawItemKind Kind, int Index, bool BehindPlayer,
+		Vector2 From = default, Vector2 To = default, float FromWidth = 0, float ToWidth = 0,
+		Color Color = default, JointRings Rings = JointRings.None);
+
+	public IHumanoidRigAccessoryVisual? Accessory;
+	readonly List<DrawItem> drawItems = [];
 
 	readonly record struct BoneSpec(string From, string To, float Width, Part Part, bool Combat = false,
 		Side Leg = Side.None, Side Arm = Side.None);
@@ -1506,119 +1517,177 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		return bounds + owner.Position;
 	}
 
-	public void Draw(Batcher batcher, Color tint, bool silhouette)
-		=> Draw(batcher, tint, silhouette, DrawParts.All, null);
-	public void DrawWithAccessory(Batcher batcher, Color tint, bool silhouette,
-		IHumanoidRigAccessoryVisual accessory)
-		=> Draw(batcher, tint, silhouette, DrawParts.All, accessory);
-	public void DrawBehindPlayer(Batcher batcher, Color tint, bool silhouette)
-		=> Draw(batcher, tint, silhouette, DrawParts.BehindPlayer, null);
-	public void DrawInFrontOfPlayer(Batcher batcher, Color tint, bool silhouette)
-		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer, null);
-	public void DrawInFrontOfPlayerWithAccessory(Batcher batcher, Color tint, bool silhouette,
-		IHumanoidRigAccessoryVisual accessory)
-		=> Draw(batcher, tint, silhouette, DrawParts.InFrontOfPlayer, accessory);
-
-	bool Includes(Bone bone, DrawParts parts)
+	// Each pass rebuilds the rig's depth-ordered item list, then draws from it.
+	public void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts = DrawParts.All)
 	{
-		if (parts == DrawParts.All)
-			return true;
-		var behindPlayer = bone.Leg == backLeg || bone.Arm == backArm;
-		return parts == DrawParts.BehindPlayer ? behindPlayer : !behindPlayer;
+		BuildDrawList();
+		DrawItems(batcher, tint, silhouette, parts);
 	}
 
-	void Draw(Batcher batcher, Color tint, bool silhouette, DrawParts parts,
-		IHumanoidRigAccessoryVisual? accessory)
+	void BuildDrawList()
 	{
-		var surface = !silhouette && Settings.SkinMode == RigSkinMode.Surface
-			? Assets.GetSurface(Settings.SurfaceId) : null;
-		var neuralTexture = !silhouette && Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralColorAmount > 0
+		drawItems.Clear();
+		var wireIndex = 0;
+		var accessoryIndex = 0;
+		var headAdded = false;
+		var headDepth = jointDepth[head];
+		Span<bool> added = stackalloc bool[bones.Length];
+		foreach (var boneIndex in boneOrder)
+		{
+			var bone = bones[boneIndex];
+			var boneDepth = BoneDepth(bone);
+			if (Accessory != null && !headAdded && headDepth <= boneDepth)
+			{
+				AddItemsThrough(ref wireIndex, ref accessoryIndex, headDepth);
+				drawItems.Add(new(DrawItemKind.Head, -1, false));
+				headAdded = true;
+			}
+			AddItemsThrough(ref wireIndex, ref accessoryIndex, boneDepth);
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			var rings = JointRings.None;
+			if (bone.Part != Part.Hand)
+			{
+				if (bone.Parent >= 0 && !added[bone.Parent])
+					rings |= JointRings.From;
+				if (!ChildDrawn(boneIndex, added))
+					rings |= JointRings.To;
+			}
+			added[boneIndex] = true;
+			drawItems.Add(new(bone.Part == Part.Hand ? DrawItemKind.Hand : DrawItemKind.Bone, boneIndex,
+				bone.Leg == backLeg || bone.Arm == backArm, projectedPose[bone.From], projectedPose[bone.To],
+				fromWidth, toWidth, BoneColor(bone, BoneRenderDepth(bone)), rings));
+		}
+		if (!headAdded)
+		{
+			AddItemsThrough(ref wireIndex, ref accessoryIndex, headDepth);
+			drawItems.Add(new(DrawItemKind.Head, -1, false));
+		}
+		AddItemsThrough(ref wireIndex, ref accessoryIndex, float.PositiveInfinity);
+	}
+
+	void AddItemsThrough(ref int wireIndex, ref int accessoryIndex, float depth)
+	{
+		while (wireIndex < wireOrder.Length && WireDepth(wires[wireOrder[wireIndex]]) <= depth)
+			drawItems.Add(new(DrawItemKind.Wire, wireOrder[wireIndex++], false));
+		while (Accessory != null && accessoryIndex < Accessory.DrawItemCount &&
+			Accessory.GetDrawItemDepth(accessoryIndex) <= depth)
+			drawItems.Add(new(DrawItemKind.Accessory, accessoryIndex++, false));
+	}
+
+	static bool Includes(DrawItem item, DrawParts parts) => parts switch
+	{
+		DrawParts.All => true,
+		DrawParts.BehindPlayer => item.BehindPlayer,
+		_ => !item.BehindPlayer,
+	};
+
+	void DrawItems(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
+	{
+		if (silhouette)
+		{
+			DrawSilhouette(batcher, tint, parts);
+			return;
+		}
+
+		var surface = Settings.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(Settings.SurfaceId) : null;
+		var neuralTexture = Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralColorAmount > 0
 			? neuralSkin.OutputTexture : null;
 		if (neuralTexture != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
-		var accessoryIndex = 0;
-		var wireIndex = parts == DrawParts.BehindPlayer ? wireOrder.Length : 0;
-		var headDrawn = parts == DrawParts.BehindPlayer;
-		var headDepth = jointDepth[head];
-		if (silhouette)
-			DrawOutlines(batcher, tint, parts);
 		var outline = Multiply(Settings.OutlineColor, tint);
-		Span<bool> drawn = stackalloc bool[bones.Length];
-		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
+		foreach (var item in drawItems)
 		{
-			var boneIndex = boneOrder[sortedIndex];
-			var bone = bones[boneIndex];
-			if (!Includes(bone, parts))
+			if (!Includes(item, parts))
 				continue;
-			var boneDepth = BoneDepth(bone);
-			if (accessory != null && !headDrawn && headDepth <= boneDepth)
+			switch (item.Kind)
 			{
-				DrawWiresThrough(batcher, ref wireIndex, headDepth, tint, silhouette);
-				DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth,
-					silhouette ? tint : null);
-				DrawHead(batcher, tint, silhouette, surface, neuralTexture);
-				headDrawn = true;
+				case DrawItemKind.Bone:
+					DrawBoneItem(batcher, item, Multiply(item.Color, tint), outline, surface, neuralTexture);
+					break;
+				case DrawItemKind.Hand:
+					var color = Multiply(item.Color, tint);
+					var spinAmount = HandSpinAmount(bones[item.Index]);
+					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 2, outline);
+					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 0, color);
+					DrawHandPalmSkin(batcher, item.Index, item.From, item.To, item.FromWidth, item.ToWidth,
+						color, surface, neuralTexture, normals: false);
+					break;
+				case DrawItemKind.Head:
+					DrawHead(batcher, tint, silhouette: false, surface, neuralTexture);
+					break;
+				case DrawItemKind.Wire:
+					DrawWire(batcher, item.Index, tint, silhouette: false);
+					break;
+				case DrawItemKind.Accessory:
+					Accessory!.DrawItem(batcher, item.Index, null);
+					break;
 			}
-			DrawWiresThrough(batcher, ref wireIndex, boneDepth, tint, silhouette);
-			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, boneDepth,
-				silhouette ? tint : null);
-			if (silhouette)
-				continue;
-
-			var from = projectedPose[bone.From];
-			var to = projectedPose[bone.To];
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			var color = Multiply(BoneColor(bone, BoneRenderDepth(bone)), tint);
-			drawn[boneIndex] = true;
-			if (bone.Part == Part.Hand)
-			{
-				var spinAmount = HandSpinAmount(bone);
-				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 2, outline);
-				DrawHand(batcher, from, to, fromWidth, toWidth, spinAmount, 0, color);
-				DrawHandPalmSkin(batcher, boneIndex, from, to, fromWidth, toWidth,
-					color, surface, neuralTexture, normals: false);
-				continue;
-			}
-
-			// A joint's outline ring comes from whichever of its two bones draws first; both bones
-			// fill a disc there, so the second covers the first's outline where they meet.
-			var joinsParent = bone.Parent >= 0;
-			var fromRadius = JointRadius(fromWidth);
-			var toRadius = JointRadius(toWidth);
-			DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, outline);
-			if (joinsParent && !drawn[bone.Parent])
-				batcher.Circle(from, fromRadius + 1, 14, outline);
-			if (!ChildDrawn(boneIndex, drawn))
-				batcher.Circle(to, toRadius + 1, 14, outline);
-			DrawBoneQuad(batcher, from, to, fromWidth, toWidth, color);
-			if (joinsParent)
-				batcher.Circle(from, fromRadius, 14, color);
-			batcher.Circle(to, toRadius, 14, color);
-			var uv = neuralBoneUVs[boneIndex];
-			var skinColor = color * Neural.NeuralColorAmount;
-			if (surface != null)
-				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth, uv, normals: false);
-			else if (neuralTexture != null)
-				DrawNeuralBone(batcher, neuralTexture, from, to, fromWidth, toWidth, uv, skinColor);
-			if (joinsParent)
-				DrawJointSkin(batcher, from, fromRadius, (uv.A + uv.B) * 0.5f, surface, neuralTexture, skinColor,
-					normals: false);
-			DrawJointSkin(batcher, to, toRadius, (uv.C + uv.D) * 0.5f, surface, neuralTexture, skinColor,
-				normals: false);
 		}
-
-		if (!headDrawn)
-		{
-			DrawWiresThrough(batcher, ref wireIndex, headDepth, tint, silhouette);
-			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth,
-				silhouette ? tint : null);
-			DrawHead(batcher, tint, silhouette, surface, neuralTexture);
-		}
-		DrawWiresThrough(batcher, ref wireIndex, float.PositiveInfinity, tint, silhouette);
-		DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, float.PositiveInfinity,
-			silhouette ? tint : null);
 		if (neuralTexture != null)
 			batcher.PopSampler();
+	}
+
+	void DrawBoneItem(Batcher batcher, DrawItem item, Color color, Color outline, Surface? surface,
+		Texture? neuralTexture)
+	{
+		var joinsParent = bones[item.Index].Parent >= 0;
+		var fromRadius = JointRadius(item.FromWidth);
+		var toRadius = JointRadius(item.ToWidth);
+		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, outline);
+		if (item.Rings.HasFlag(JointRings.From))
+			batcher.Circle(item.From, fromRadius + 1, 14, outline);
+		if (item.Rings.HasFlag(JointRings.To))
+			batcher.Circle(item.To, toRadius + 1, 14, outline);
+		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth, item.ToWidth, color);
+		if (joinsParent)
+			batcher.Circle(item.From, fromRadius, 14, color);
+		batcher.Circle(item.To, toRadius, 14, color);
+		var uv = neuralBoneUVs[item.Index];
+		var skinColor = color * Neural.NeuralColorAmount;
+		if (surface != null)
+			DrawSurfaceBone(batcher, surface, item.From, item.To, item.FromWidth, item.ToWidth, uv, normals: false);
+		else if (neuralTexture != null)
+			DrawNeuralBone(batcher, neuralTexture, item.From, item.To, item.FromWidth, item.ToWidth, uv, skinColor);
+		if (joinsParent)
+			DrawJointSkin(batcher, item.From, fromRadius, (uv.A + uv.B) * 0.5f, surface, neuralTexture, skinColor,
+				normals: false);
+		DrawJointSkin(batcher, item.To, toRadius, (uv.C + uv.D) * 0.5f, surface, neuralTexture, skinColor,
+			normals: false);
+	}
+
+	// Bone and hand outline shapes go down first so the silhouette is their union; the other items follow in order.
+	void DrawSilhouette(Batcher batcher, Color tint, DrawParts parts)
+	{
+		foreach (var item in drawItems)
+		{
+			if (!Includes(item, parts))
+				continue;
+			if (item.Kind == DrawItemKind.Hand)
+				DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
+					HandSpinAmount(bones[item.Index]), 2, tint);
+			else if (item.Kind == DrawItemKind.Bone)
+			{
+				DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, tint);
+				batcher.Circle(item.To, JointRadius(item.ToWidth) + 1, 14, tint);
+			}
+		}
+		foreach (var item in drawItems)
+		{
+			if (!Includes(item, parts))
+				continue;
+			switch (item.Kind)
+			{
+				case DrawItemKind.Head:
+					DrawHead(batcher, tint, silhouette: true, null, null);
+					break;
+				case DrawItemKind.Wire:
+					DrawWire(batcher, item.Index, tint, silhouette: true);
+					break;
+				case DrawItemKind.Accessory:
+					Accessory!.DrawItem(batcher, item.Index, tint);
+					break;
+			}
+		}
 	}
 
 	void DrawHead(Batcher batcher, Color tint, bool silhouette, Surface? surface, Texture? neuralTexture)
@@ -1651,19 +1720,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		(byte)(color.R * tint.R / 255), (byte)(color.G * tint.G / 255),
 		(byte)(color.B * tint.B / 255), (byte)(color.A * tint.A / 255));
 
-	public void DrawNormals(Batcher batcher)
-		=> DrawNormals(batcher, DrawParts.All, null);
-	public void DrawNormalsWithAccessory(Batcher batcher, IHumanoidRigAccessoryVisual accessory)
-		=> DrawNormals(batcher, DrawParts.All, accessory);
-	public void DrawNormalsBehindPlayer(Batcher batcher)
-		=> DrawNormals(batcher, DrawParts.BehindPlayer, null);
-	public void DrawNormalsInFrontOfPlayer(Batcher batcher)
-		=> DrawNormals(batcher, DrawParts.InFrontOfPlayer, null);
-	public void DrawNormalsInFrontOfPlayerWithAccessory(Batcher batcher,
-		IHumanoidRigAccessoryVisual accessory)
-		=> DrawNormals(batcher, DrawParts.InFrontOfPlayer, accessory);
+	public void DrawNormals(Batcher batcher, DrawParts parts = DrawParts.All)
+	{
+		BuildDrawList();
+		DrawItemNormals(batcher, parts);
+	}
 
-	void DrawNormals(Batcher batcher, DrawParts parts, IHumanoidRigAccessoryVisual? accessory)
+	void DrawItemNormals(Batcher batcher, DrawParts parts)
 	{
 		var flat = new Color(0x8080ff);
 		var surface = Settings.SkinMode == RigSkinMode.Surface &&
@@ -1673,78 +1736,69 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			? neuralSkin.OutputNormalTexture : null;
 		if (neuralNormals != null)
 			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
-		var accessoryIndex = 0;
-		var wireIndex = parts == DrawParts.BehindPlayer ? wireOrder.Length : 0;
-		var headDrawn = parts == DrawParts.BehindPlayer;
-		var headDepth = jointDepth[head];
-		for (var sortedIndex = 0; sortedIndex < boneOrder.Length; sortedIndex++)
+		foreach (var item in drawItems)
 		{
-			var bone = bones[boneOrder[sortedIndex]];
-			if (!Includes(bone, parts))
+			if (!Includes(item, parts))
 				continue;
-			var boneDepth = BoneDepth(bone);
-			if (accessory != null && !headDrawn && headDepth <= boneDepth)
+			switch (item.Kind)
 			{
-				DrawWireNormalsThrough(batcher, ref wireIndex, headDepth);
-				DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth, flat);
-				DrawHeadNormals(batcher, flat, surface, neuralNormals);
-				headDrawn = true;
+				case DrawItemKind.Bone:
+					DrawBoneItemNormals(batcher, item, flat, surface, neuralNormals);
+					break;
+				case DrawItemKind.Hand:
+					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
+						HandSpinAmount(bones[item.Index]), 2, flat);
+					DrawHandPalmSkin(batcher, item.Index, item.From, item.To, item.FromWidth, item.ToWidth,
+						flat, surface, neuralNormals, normals: true);
+					break;
+				case DrawItemKind.Head:
+					DrawHeadNormals(batcher, flat, surface, neuralNormals);
+					break;
+				case DrawItemKind.Wire:
+					DrawWireNormals(batcher, item.Index);
+					break;
+				case DrawItemKind.Accessory:
+					Accessory!.DrawItem(batcher, item.Index, flat);
+					break;
 			}
-			DrawWireNormalsThrough(batcher, ref wireIndex, boneDepth);
-			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, boneDepth, flat);
-			var boneIndex = boneOrder[sortedIndex];
-			var from = projectedPose[bone.From];
-			var to = projectedPose[bone.To];
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			if (bone.Part == Part.Hand)
-			{
-				DrawHand(batcher, from, to, fromWidth, toWidth, HandSpinAmount(bone), 2, flat);
-				DrawHandPalmSkin(batcher, boneIndex, from, to, fromWidth, toWidth,
-					flat, surface, neuralNormals, normals: true);
-				continue;
-			}
-			var joinsParent = bone.Parent >= 0;
-			var fromRadius = JointRadius(fromWidth);
-			var toRadius = JointRadius(toWidth);
-			var seed = (uint)boneIndex * 0x9e3779b9u;
-			if (Settings.NormalRoundness > 0)
-			{
-				DrawBoneNormals(batcher, boneIndex, from, to, fromWidth + 2, toWidth + 2);
-				if (joinsParent)
-					DrawSphereNormals(batcher, from, fromRadius + 1, 14, Settings.NormalRoundness,
-						Settings.NormalIrregularity, seed);
-				DrawSphereNormals(batcher, to, toRadius + 1, 14, Settings.NormalRoundness,
-					Settings.NormalIrregularity, seed);
-			}
-			else
-			{
-				DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, flat);
-				if (joinsParent)
-					batcher.Circle(from, fromRadius + 1, 14, flat);
-				batcher.Circle(to, toRadius + 1, 14, flat);
-			}
-			var uv = neuralBoneUVs[boneIndex];
-			var skinColor = Color.White * Neural.NeuralNormalAmount;
-			if (surface != null)
-				DrawSurfaceBone(batcher, surface, from, to, fromWidth, toWidth, uv, normals: true);
-			else if (neuralNormals != null)
-				DrawNeuralBone(batcher, neuralNormals, from, to, fromWidth, toWidth, uv, skinColor);
-			if (joinsParent)
-				DrawJointSkin(batcher, from, fromRadius, (uv.A + uv.B) * 0.5f, surface, neuralNormals, skinColor,
-					normals: true);
-			DrawJointSkin(batcher, to, toRadius, (uv.C + uv.D) * 0.5f, surface, neuralNormals, skinColor,
-				normals: true);
 		}
-		if (!headDrawn)
-		{
-			DrawWireNormalsThrough(batcher, ref wireIndex, headDepth);
-			DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, headDepth, flat);
-			DrawHeadNormals(batcher, flat, surface, neuralNormals);
-		}
-		DrawWireNormalsThrough(batcher, ref wireIndex, float.PositiveInfinity);
-		DrawAccessoryThrough(batcher, accessory, ref accessoryIndex, float.PositiveInfinity, flat);
 		if (neuralNormals != null)
 			batcher.PopSampler();
+	}
+
+	void DrawBoneItemNormals(Batcher batcher, DrawItem item, Color flat, Surface? surface, Texture? neuralNormals)
+	{
+		var joinsParent = bones[item.Index].Parent >= 0;
+		var fromRadius = JointRadius(item.FromWidth);
+		var toRadius = JointRadius(item.ToWidth);
+		var seed = (uint)item.Index * 0x9e3779b9u;
+		if (Settings.NormalRoundness > 0)
+		{
+			DrawBoneNormals(batcher, item.Index, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2);
+			if (joinsParent)
+				DrawSphereNormals(batcher, item.From, fromRadius + 1, 14, Settings.NormalRoundness,
+					Settings.NormalIrregularity, seed);
+			DrawSphereNormals(batcher, item.To, toRadius + 1, 14, Settings.NormalRoundness,
+				Settings.NormalIrregularity, seed);
+		}
+		else
+		{
+			DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, flat);
+			if (joinsParent)
+				batcher.Circle(item.From, fromRadius + 1, 14, flat);
+			batcher.Circle(item.To, toRadius + 1, 14, flat);
+		}
+		var uv = neuralBoneUVs[item.Index];
+		var skinColor = Color.White * Neural.NeuralNormalAmount;
+		if (surface != null)
+			DrawSurfaceBone(batcher, surface, item.From, item.To, item.FromWidth, item.ToWidth, uv, normals: true);
+		else if (neuralNormals != null)
+			DrawNeuralBone(batcher, neuralNormals, item.From, item.To, item.FromWidth, item.ToWidth, uv, skinColor);
+		if (joinsParent)
+			DrawJointSkin(batcher, item.From, fromRadius, (uv.A + uv.B) * 0.5f, surface, neuralNormals, skinColor,
+				normals: true);
+		DrawJointSkin(batcher, item.To, toRadius, (uv.C + uv.D) * 0.5f, surface, neuralNormals, skinColor,
+			normals: true);
 	}
 
 	void DrawHeadNormals(Batcher batcher, Color flat, Surface? surface, Texture? neuralNormals)
@@ -1820,24 +1874,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		return true;
 	}
 
-	void DrawWiresThrough(Batcher batcher, ref int index, float depth, Color tint, bool silhouette)
-	{
-		while (index < wireOrder.Length && WireDepth(wires[wireOrder[index]]) <= depth)
-		{
-			DrawWire(batcher, wireOrder[index], tint, silhouette);
-			index++;
-		}
-	}
-
-	void DrawWireNormalsThrough(Batcher batcher, ref int index, float depth)
-	{
-		while (index < wireOrder.Length && WireDepth(wires[wireOrder[index]]) <= depth)
-		{
-			DrawWireNormals(batcher, wireOrder[index]);
-			index++;
-		}
-	}
-
 	void DrawWire(Batcher batcher, int index, Color tint, bool silhouette)
 	{
 		var wire = wires[index];
@@ -1895,39 +1931,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			MathF.Sin(progress * MathF.Tau * 5 + phase * 1.7f) * 0.35f;
 		return point + along.TurnLeft() * (noise * MathF.Sin(progress * MathF.PI) *
 			Wires.WireIrregularity * Wires.WireWidth * 0.55f);
-	}
-
-	static void DrawAccessoryThrough(Batcher batcher, IHumanoidRigAccessoryVisual? accessory,
-		ref int index, float depth, Color? tint)
-	{
-		if (accessory == null)
-			return;
-		while (index < accessory.DrawItemCount && accessory.GetDrawItemDepth(index) <= depth)
-		{
-			accessory.DrawItem(batcher, index, tint);
-			index++;
-		}
-	}
-
-	// Every bone's outline shape in one color: the combined silhouette used for shadows and reflections.
-	void DrawOutlines(Batcher batcher, Color color, DrawParts parts)
-	{
-		foreach (var boneIndex in boneOrder)
-		{
-			var bone = bones[boneIndex];
-			if (!Includes(bone, parts))
-				continue;
-			var from = projectedPose[bone.From];
-			var to = projectedPose[bone.To];
-			BoneWidths(bone, out var fromWidth, out var toWidth);
-			if (bone.Part == Part.Hand)
-				DrawHand(batcher, from, to, fromWidth, toWidth, HandSpinAmount(bone), 2, color);
-			else
-			{
-				DrawBoneQuad(batcher, from, to, fromWidth + 2, toWidth + 2, color);
-				batcher.Circle(to, JointRadius(toWidth) + 1, 14, color);
-			}
-		}
 	}
 
 	float HandSpinAmount(Bone bone)
