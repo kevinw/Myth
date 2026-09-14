@@ -1,4 +1,5 @@
 - attach a burrow line to a moving platform
+- what would it look like to be able to create your own burrow line? 
 - make a pitch deck https://brightgambit.com/checkmate/ - DOC HERE https://www.overleaf.com/project/6aa4fbad2d448d1b3405a4a7
 - no pits, seamless loading
  USE LATEX AND BEAMER TO MAKE THEM LOL https://www.overleaf.com/learn/latex/Beamer
@@ -29,6 +30,7 @@ TALK AND PLAY FEEDBACK
   - separate burrow button
   - NCA poison cloud
   - NCA unstable collider/platform (can you burrow along its fractal edge? pushing off scatters it?)
+  - surface slam: slamming down sends a shockwave along the surface's contour (reuse burrow's contour follower), knocking off whatever stands or clings further along. fall height/roll speed sets strength; ride your own wave by burrowing behind it; stops at water
 - if i can't "one wall jump" somehow it's a bit unclear; it almost feels possible
 - fer's feedback, echoed: the shadow in the floater room looks "safe" but it is not. one idea that comes to mind: the floater itself could cast a very big warning light ahead of time. then the shadows WOULD be safe
 
