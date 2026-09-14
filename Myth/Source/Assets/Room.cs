@@ -180,6 +180,8 @@ public class Room
 
 	char[,]? burrowInverseTiles;
 	TileFlags[,]? burrowInverseTileFlags;
+	char[,]? burrowOriginalTiles;
+	TileFlags[,]? burrowOriginalTileFlags;
 
 	/// Bounds in World Space in Pixels
 	public RectInt WorldBounds => new(TileSpacePosition.X * Game.TileSize, TileSpacePosition.Y * Game.TileSize, Size.X * Game.TileSize, Size.Y * Game.TileSize);
@@ -237,7 +239,6 @@ public class Room
 			clone.Actors.Add(ActorSpecs.CloneObject(actor));
 
 		clone.RebuildGeometry();
-		clone.PrepareBurrowInverse();
 		return clone;
 	}
 
@@ -578,9 +579,11 @@ public class Room
 
 	void PrepareBurrowInverse()
 	{
-		if (!BurrowInverts)
+		if (burrowInverseTiles != null)
 			return;
 
+		burrowOriginalTiles = (char[,])Tiles.Clone();
+		burrowOriginalTileFlags = (TileFlags[,])tileFlags.Clone();
 		burrowInverseTiles = new char[Size.X, Size.Y];
 		burrowInverseTileFlags = new TileFlags[Size.X, Size.Y];
 		var reached = new bool[Size.X, Size.Y];
@@ -623,15 +626,39 @@ public class Room
 		}
 	}
 
-	internal bool SupportsBurrowInverse => burrowInverseTiles != null;
+	internal bool SupportsBurrowInverse => BurrowInverts;
 
-	internal bool ToggleBurrowInverse()
+	internal bool ToggleBurrowInverse(bool inverted, List<InvertPin> pins)
 	{
-		if (burrowInverseTiles == null || burrowInverseTileFlags == null)
+		if (!SupportsBurrowInverse)
 			return false;
 
-		(Tiles, burrowInverseTiles) = (burrowInverseTiles, Tiles);
-		(tileFlags, burrowInverseTileFlags) = (burrowInverseTileFlags, tileFlags);
+		PrepareBurrowInverse();
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				var center = WorldBounds.TopLeft + (new Vector2(x, y) + new Vector2(0.5f)) * Game.TileSize;
+				var freeze = false;
+				var original = !inverted;
+				foreach (var pin in pins)
+				{
+					if (pin.Radius <= 0 || Vector2.DistanceSquared(center, pin.Position) > pin.Radius * pin.Radius)
+						continue;
+					if (pin.Mode == InvertPin.PinMode.OriginalTerrain)
+					{
+						// Original terrain wins where different pin modes overlap.
+						original = true;
+						freeze = false;
+						break;
+					}
+					freeze = true;
+				}
+				if (freeze)
+					continue;
+
+				Tiles[x, y] = original ? burrowOriginalTiles![x, y] : burrowInverseTiles![x, y];
+				tileFlags[x, y] = original ? burrowOriginalTileFlags![x, y] : burrowInverseTileFlags![x, y];
+			}
 		RebuildGeometry();
 		return true;
 	}
@@ -1718,6 +1745,8 @@ public class Room
 	{
 		burrowInverseTiles = null;
 		burrowInverseTileFlags = null;
+		burrowOriginalTiles = null;
+		burrowOriginalTileFlags = null;
 		var json = JsonUtil.NormalizeStringValues(JsonUtil.Parse(jsonText)?.AsObject() ?? []);
 		TileSpacePosition = JsonUtil.ReadPoint(json, "position") ?? TileSpacePosition;
 		if (JsonUtil.ReadPoint(json, "size") is { } size && size.X > 0 && size.Y > 0 && size != Size)

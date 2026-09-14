@@ -2459,6 +2459,7 @@ public partial class Game : IDisposable
 	}
 
 	bool invertedNow;
+	readonly List<InvertPin> inversionPins = [];
 	internal bool RoomInverted => invertedNow;
 	internal Vector2 RoomInversionOrigin { get; private set; }
 	internal float RoomInversionEffectProgress => Math.Clamp((Time.SecondsF - roomInversionStartedAt) / RoomInversionEffectDuration, 0, 1);
@@ -2487,7 +2488,15 @@ public partial class Game : IDisposable
 
 	bool ToggleRoomInverse()
 	{
-		if (room?.ToggleBurrowInverse() != true)
+		if (room?.SupportsBurrowInverse != true)
+			return false;
+
+		inversionPins.Clear();
+		foreach (var actor in Actors)
+			if (actor is InvertPin pin && pin.Room == room && !destroying.Contains(pin))
+				inversionPins.Add(pin);
+
+		if (!room.ToggleBurrowInverse(!invertedNow, inversionPins))
 			return false;
 
 		invertedNow = !invertedNow;
