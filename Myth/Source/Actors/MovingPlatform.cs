@@ -122,12 +122,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		{
 			// Weight sends us out along the route, losing it brings us home: the leg we're on is
 			// decided fresh every frame, so stepping off mid-travel turns us around where we are.
-			// 
+			//
 			bool hasWeightThisFrame = HasStandingWeight();
 			standingWeightValue = Calc.Approach(standingWeightValue, hasWeightThisFrame ? 1 : 0, Time.Delta * (hasWeightThisFrame ? 2.0f : 0.5f));
-			Game.Show(standingWeightValue);
 			activationLightsOn = standingWeightValue > 0;
-			
+
 			var forward = (int)Facing;
 			var heading = activationLightsOn ? forward : ReturnsWhenUnweighted ? -forward : 0;
 			if (heading == 0 || IsAtRouteEnd(heading))
@@ -287,8 +286,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	bool HasStandingWeight()
 	{
-		var standing = false;
-		var burrowing = false;
 		var hasWeight = false;
 		foreach (var actor in Game.Actors)
 		{
@@ -296,17 +293,14 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			if (IsStandingOnPlatform(actor))
 			{
 				hasWeight = true;
-				standing = true;
 				break;
 			}
 			if (IsBurrowingOnPlatform(actor))
 			{
 				hasWeight = true;
-				burrowing = true;
 				break;
 			}
 		}
-		Game.Show(standing, burrowing);
 		return hasWeight;
 	}
 
