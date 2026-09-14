@@ -25,6 +25,12 @@ public enum NeuralTextureNormalMode
 	DensityGradient,
 }
 
+public enum NeuralTextureSupersampling
+{
+	X1 = 1,
+	X2 = 2,
+}
+
 [GameActor(Sprite = "Editor/neural_texture_actor", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 3,
 	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true, ShowFacing = false)]
 public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
@@ -241,6 +247,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		public uint NormalMode;
 		public uint ProceduralMask;
 		public Vector2 DetailOrigin;
+		public uint DecodeSupersampling;
+		public uint Padding0;
+		public uint Padding1;
+		public uint Padding2;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -391,6 +401,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	[I(0, 4)] public float SilhouetteNormalStrength = 1f;
 
 	[InspectorGroup("Decoder")]
+	public NeuralTextureSupersampling DecodeSupersampling = NeuralTextureSupersampling.X1;
 	[I(0.1f, 4)] public float DetailScale = 1f;
 	public Vector2 DetailPhase;
 	public Vector2 DetailOrigin;
@@ -1544,6 +1555,10 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			NormalMode = (uint)NormalMode,
 			ProceduralMask = Dynamism == DynamismMode.ProceduralCurlAdvection && proceduralDecodeMask != null ? 1u : 0u,
 			DetailOrigin = DetailOrigin,
+			DecodeSupersampling = (uint)DecodeSupersampling,
+			Padding0 = 0,
+			Padding1 = 0,
+			Padding2 = 0,
 		});
 
 		new ComputeCommand(decodeShader!)

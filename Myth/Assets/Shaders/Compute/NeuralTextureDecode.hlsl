@@ -54,6 +54,10 @@ cbuffer Params : register(b0, space2)
     uint NormalMode;
     uint ProceduralMask;
     float2 DetailOrigin;
+    uint DecodeSupersampling;
+    uint Padding0;
+    uint Padding1;
+    uint Padding2;
 };
 
 // Models are packed at a fixed stride in the six-channel layout.
@@ -98,13 +102,9 @@ float4 load_mask(int2 pos)
     return unpack_mask(Mask[pos.y * Width + pos.x]);
 }
 
-[numthreads(8, 8, 1)]
-void compute_main(uint3 id : SV_DispatchThreadID)
+void decode_sample(uint2 pixel, float2 samplePosition, out float4 sampleColor, out float4 sampleNormal)
 {
-    if (id.x >= OutputWidth || id.y >= OutputHeight)
-        return;
-
-    float2 statePos = (float2(id.xy) + 0.5) * SimulationScale - 0.5;
+    float2 statePos = samplePosition * SimulationScale - 0.5;
     int2 maskCellPos = int2(floor(statePos));
     float2 maskBlend = frac(statePos);
 
@@ -113,7 +113,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float4 m01 = load_mask(maskCellPos + int2(0, 1));
     float4 m11 = load_mask(maskCellPos + int2(1, 1));
     float4 slotAlpha = lerp(lerp(m00, m10, maskBlend.x), lerp(m01, m11, maskBlend.x), maskBlend.y);
-    float4 authored = unpack_mask(OutputMask[id.y * OutputWidth + id.x]);
+    float4 authored = unpack_mask(OutputMask[pixel.y * OutputWidth + pixel.x]);
     slotAlpha = ProceduralMask != 0u
         ? slotAlpha / max(dot(slotAlpha, 1.0), 0.00001) * dot(authored, 1.0)
         : authored;
@@ -124,8 +124,8 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
     if (total < 1.0 / 512.0)
     {
-        Output[id.xy] = 0.0;
-        NormalOutput[id.xy] = 0.0;
+        sampleColor = 0.0;
+        sampleNormal = 0.0;
         return;
     }
 
@@ -246,9 +246,43 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         : float3(0.0, 0.0, 1.0);
 
     // The batcher blends premultiplied alpha.
-    Output[id.xy] = float4(saturate(graded) * coverage, coverage);
+    sampleColor = float4(saturate(graded) * coverage, coverage);
     float3 outputNormal = NormalMode == 0u ? decodedNormal : generatedNormal;
-    NormalOutput[id.xy] = normalCoverage > 0.0
+    sampleNormal = normalCoverage > 0.0
         ? float4((outputNormal * 0.5 + 0.5) * normalCoverage, normalCoverage)
         : 0.0;
+}
+
+[numthreads(8, 8, 1)]
+void compute_main(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= OutputWidth || id.y >= OutputHeight)
+        return;
+
+    uint sampleCount = DecodeSupersampling == 2u ? 4u : 1u;
+    float4 color = 0.0;
+    float4 normal = 0.0;
+    [loop]
+    for (uint i = 0u; i < sampleCount; i++)
+    {
+        float2 offset = sampleCount == 1u ? float2(0.5, 0.5)
+            : (float2(i & 1u, i >> 1u) + 0.5) * 0.5;
+        float4 sampleColor, sampleNormal;
+        decode_sample(id.xy, float2(id.xy) + offset, sampleColor, sampleNormal);
+        color += sampleColor;
+        normal += sampleNormal;
+    }
+    Output[id.xy] = color / float(sampleCount);
+
+    if (sampleCount == 1u)
+        NormalOutput[id.xy] = normal;
+    else
+    {
+        // Decode the coverage-weighted vectors before normalizing their average.
+        float3 direction = normal.rgb * 2.0 - normal.a;
+        float magnitude = length(direction);
+        direction = magnitude > 0.0001 ? direction / magnitude : float3(0.0, 0.0, 1.0);
+        float coverage = normal.a * 0.25;
+        NormalOutput[id.xy] = float4((direction * 0.5 + 0.5) * coverage, coverage);
+    }
 }
