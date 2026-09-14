@@ -43,6 +43,8 @@ public sealed class HumanoidRigSettings
 	[I(1, 10)] public float ForearmSize = 2.5f;
 	[I(1, 12)] public float ThighSize = 4;
 	[I(0, 0.75f)] public float LimbTaper;
+	// 0 = each limb bone starts at its own width; 1 = it starts at the width its parent ended at.
+	[I(0, 1)] public float JointContinuity = 1;
 	[I(0, 3)] public float DepthColorContrast = 1;
 	[I(0, 0.3f)] public float DepthWidthAmount;
 	[I(0, 1), InspectorGroup("Lighting")] public float NormalRoundness;

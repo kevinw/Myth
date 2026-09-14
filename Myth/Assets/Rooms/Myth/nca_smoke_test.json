@@ -49,11 +49,17 @@
     {
       "Id": "c334f847774f2014",
       "Type": "NeuralTextureActor",
-      "SimulationScale": 0.34782609,
-      "FlowOrigin": [0.0, -92.0],
-      "FlowSize": [368, 368],
-      "DetailOrigin": [184.0, 92.0],
       "Position": [0, 0],
+      "SimulationScale": 0.34782609,
+      "FlowOrigin": [
+        0.0,
+        -92.0
+      ],
+      "FlowSize": [368, 368],
+      "DetailOrigin": [
+        184.0,
+        92.0
+      ],
       "Size": [368, 184],
       "Layer": "Foreground",
       "RenderDepth": -10,
@@ -87,11 +93,17 @@
     {
       "Id": "a424af3340c43c07",
       "Type": "NeuralTextureActor",
-      "SimulationScale": 0.34782609,
-      "FlowOrigin": [0.0, -92.0],
-      "FlowSize": [368, 368],
-      "DetailOrigin": [184.0, 92.0],
       "Position": [0, 0],
+      "SimulationScale": 0.34782609,
+      "FlowOrigin": [
+        0.0,
+        -92.0
+      ],
+      "FlowSize": [368, 368],
+      "DetailOrigin": [
+        184.0,
+        92.0
+      ],
       "Size": [368, 184],
       "Layer": "Foreground",
       "PrewarmSteps": 40,

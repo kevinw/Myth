@@ -84,11 +84,20 @@
     {
       "Id": "1c433a9ad08f1332",
       "Type": "NeuralTextureActor",
-      "SimulationScale": 0.36509675,
-      "FlowOrigin": [-4335.296, 376.704],
-      "FlowSize": [350.592, 350.592],
-      "DetailOrigin": [160.0, 92.0],
       "Position": [0, 0],
+      "SimulationScale": 0.36509675,
+      "FlowOrigin": [
+        -4335.296,
+        376.704
+      ],
+      "FlowSize": [
+        350.592,
+        350.592
+      ],
+      "DetailOrigin": [
+        160.0,
+        92.0
+      ],
       "SilhouetteNormalStrength": 1.429,
       "NormalStrength": 2.361325,
       "DetailScale": 1.037,
