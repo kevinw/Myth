@@ -25,3 +25,4 @@ Myth/profile-output
 tmp
 profile-output
 *.blend1
+.xwin-cache
