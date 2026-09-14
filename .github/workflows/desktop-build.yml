@@ -22,7 +22,7 @@ env:
 jobs:
   publish-macos:
     name: Publish macOS (Apple silicon)
-    runs-on: macos-26
+    runs-on: [self-hosted, local-mac]
 
     steps:
       - name: Check out repository
