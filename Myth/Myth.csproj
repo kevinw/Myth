@@ -46,6 +46,21 @@
     <ObjCopyName Condition="'$(ObjCopyName)' == ''">llvm-objcopy</ObjCopyName>
   </PropertyGroup>
 
+  <!-- Cross-linking the Windows game from macOS: the NativeAOT targets only find MSVC via
+       vcvarsall, so link with lld-link instead and point it at the CRT + Windows SDK import
+       libs xwin splatted to WindowsCrossSdkRoot (crt/lib/x86_64, sdk/lib/{um,ucrt}/x86_64).
+       Build with: dotnet publish -r win-x64 -p:MythShip=true -p:MythWindowsCross=true
+         -p:DisableUnsupportedError=true -p:IlcUseEnvironmentalTools=true
+         -p:WindowsCrossSdkRoot=~/.win-sdk -->
+  <PropertyGroup Condition="'$(MythWindowsCross)' == 'true'">
+    <CppLinker Condition="'$(CppLinker)' == ''">/opt/homebrew/opt/lld/bin/lld-link</CppLinker>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MythWindowsCross)' == 'true' and '$(WindowsCrossSdkRoot)' != ''">
+    <LinkerArg Include="/LIBPATH:&quot;$(WindowsCrossSdkRoot)/sdk/lib/um/x86_64&quot;" />
+    <LinkerArg Include="/LIBPATH:&quot;$(WindowsCrossSdkRoot)/sdk/lib/ucrt/x86_64&quot;" />
+    <LinkerArg Include="/LIBPATH:&quot;$(WindowsCrossSdkRoot)/crt/lib/x86_64&quot;" />
+  </ItemGroup>
+
   <PropertyGroup>
     <NoWarn>$(NoWarn);IDE0130</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -355,8 +370,9 @@
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/libmyth_ozz.dylib</OzzRuntimeLibrary>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And $([MSBuild]::IsOSPlatform('Windows')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'win-x64')">
+  <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And (($([MSBuild]::IsOSPlatform('Windows')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'win-x64')) Or ('$(RuntimeIdentifier)' == 'win-x64' And $([MSBuild]::IsOSPlatform('OSX'))))">
     <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/MinSizeRel/myth_ozz.dll</OzzRuntimeLibrary>
+    <OzzRuntimeCrossTarget Condition="!$([MSBuild]::IsOSPlatform('Windows'))">win-x64</OzzRuntimeCrossTarget>
   </PropertyGroup>
 
   <!-- A Linux RID targets Linux from any host; a bare RID means whatever the host is.

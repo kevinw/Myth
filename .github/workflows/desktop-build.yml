@@ -464,3 +464,22 @@ jobs:
             --file "$RUNNER_TEMP/release.json" \
             --content-type "application/json; charset=utf-8" \
             --cache-control "public, max-age=31536000, immutable"
+
+      - name: Summarize downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e '
+            const release = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const lines = [
+              `## Desktop build ${release.shortSha}`,
+              "",
+              "| Platform | Download |",
+              "| --- | --- |",
+              ...release.downloads.map(d =>
+                `| ${d.platform} (${d.architecture}${d.unsigned ? ", unsigned" : ""}) | [${d.file}](https://myth-game.pages.dev/download/${d.file}) |`),
+            ];
+            if (release.commits?.length)
+              lines.push("", "### Changes", ...release.commits.map(c => `- ${c}`));
+            console.log(lines.join("\n"));
+          ' "$RUNNER_TEMP/release.json" >> "$GITHUB_STEP_SUMMARY"

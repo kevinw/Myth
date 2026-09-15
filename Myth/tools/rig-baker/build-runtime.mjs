@@ -13,11 +13,29 @@ const windows = process.platform === "win32";
 // ar/ranlib have to be llvm's: Apple's index ELF archives as empty, and the linker then
 // drops most of Ozz into a .so that only fails at dlopen.
 const target = process.argv[3];
-if (target && target !== "linux-x64")
-	throw new Error(`No cross toolchain for ${target}; tools/linux-cross-cc.sh targets linux-x64.`);
+if (target && target !== "linux-x64" && target !== "win-x64")
+	throw new Error(`No cross toolchain for ${target}; tools/linux-cross-cc.sh targets linux-x64, win-x64 cross uses clang-cl + xwin.`);
 const brewLlvm = "/opt/homebrew/opt/llvm/bin";
 const llvmTool = (name) => fs.existsSync(`${brewLlvm}/${name}`) ? `${brewLlvm}/${name}` : name;
-const cross = target ? [
+const winSdk = process.env.MYTH_WIN_SDK_ROOT ?? path.join(process.env.HOME ?? "", "win-sdk");
+const winCrossIncludes = ["sdk/include/ucrt", "sdk/include/um", "sdk/include/shared", "crt/include"]
+	.map((p) => path.join(winSdk, p)).join(";");
+const winCrossLibs = ["crt/lib/x86_64", "sdk/lib/um/x86_64", "sdk/lib/ucrt/x86_64"]
+	.map((p) => path.join(winSdk, p)).join(";");
+const cross = target === "win-x64" ? [
+	"-DCMAKE_SYSTEM_NAME=Windows",
+	"-DCMAKE_SYSTEM_PROCESSOR=AMD64",
+	`-DCMAKE_CXX_COMPILER=${llvmTool("clang-cl")}`,
+	`-DCMAKE_C_COMPILER=${llvmTool("clang-cl")}`,
+	"-DCMAKE_CXX_FLAGS=--target=x86_64-pc-windows-msvc",
+	"-DCMAKE_C_FLAGS=--target=x86_64-pc-windows-msvc",
+	// MSVC's rc/mt don't exist off-Windows; llvm's stand-ins do the manifest step.
+	// Try-compiles default to Debug, which wants the debug CRT xwin doesn't carry.
+	`-DCMAKE_TRY_COMPILE_CONFIGURATION=Release`,
+	`-DCMAKE_RC_COMPILER=${llvmTool("llvm-rc")}`,
+	`-DCMAKE_MT=${llvmTool("llvm-mt")}`,
+	`-DCMAKE_AR=${llvmTool("llvm-lib")}`,
+] : target ? [
 	"-DCMAKE_SYSTEM_NAME=Linux",
 	"-DCMAKE_SYSTEM_PROCESSOR=x86_64",
 	`-DCMAKE_C_COMPILER=${path.join(mythDir, "tools", "linux-cross-cc.sh")}`,
@@ -25,12 +43,15 @@ const cross = target ? [
 	`-DCMAKE_AR=${llvmTool("llvm-ar")}`,
 	`-DCMAKE_RANLIB=${llvmTool("llvm-ranlib")}`,
 ] : [];
+// clang-cl and lld-link find the MSVC CRT + Windows SDK through INCLUDE/LIB.
+const crossEnv = target === "win-x64" ? { INCLUDE: winCrossIncludes, LIB: winCrossLibs } : undefined;
 
 function run(args, quietStdout = false) {
 	try {
 		execFileSync("cmake", args, {
 			stdio: quietStdout ? ["inherit", "pipe", "inherit"] : "inherit",
 			maxBuffer: 16 * 1024 * 1024,
+			env: crossEnv ? { ...process.env, ...crossEnv } : undefined,
 		});
 	} catch (error) {
 		if (quietStdout && error.stdout) process.stdout.write(error.stdout);

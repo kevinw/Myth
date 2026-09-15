@@ -1,0 +1,270 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Room Grid</title>
+<style>
+	:root { color-scheme: dark; --bg: #17151d; --panel: #211e2a; --line: #353045; --text: #e8dfcc; --dim: #8c8499; --accent: #f2a03d; }
+	* { box-sizing: border-box; }
+	body { margin: 0; font: 13px system-ui, sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 460px 1fr; height: 100vh; }
+	aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+	.controls { padding: 12px; display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 10px; align-items: center; border-bottom: 1px solid var(--line); }
+	.controls .row { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+	input, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+	input[type=checkbox] { width: auto; }
+	button { background: var(--line); color: var(--text); border: 0; border-radius: 4px; padding: 5px 10px; font: inherit; cursor: pointer; white-space: nowrap; }
+	button.primary { background: var(--accent); color: var(--bg); font-weight: 600; }
+	#status { color: var(--dim); white-space: pre-wrap; font-size: 11px; }
+	.rooms { overflow: auto; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: max-content; gap: 10px; }
+	.room { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+	.room.hover { border-color: var(--accent); }
+	.room img { display: block; width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; }
+	.room[data-w="0"] img { opacity: .25; }
+	.room .name { padding: 4px 6px 0; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.weights { display: flex; gap: 2px; padding: 4px 6px 6px; }
+	.weights button { flex: 1; padding: 2px 0; }
+	.weights button.on { background: var(--accent); color: var(--bg); }
+	main { overflow: auto; padding: 16px; min-width: 0; }
+	.stats { color: var(--dim); margin: 0 0 8px; }
+	canvas { max-width: 100%; display: block; image-rendering: pixelated; cursor: pointer; }
+</style>
+
+<aside>
+	<div class="controls">
+		<label for="seed">Seed</label>
+		<div class="row" style="grid-column: 2 / 3"><input id="seed" type="number"><button id="dice" title="Random seed">🎲</button></div>
+		<label for="columns">Columns</label><input id="columns" type="number" min="0" title="0 = fit to aspect">
+		<label for="aspect">Aspect</label><input id="aspect" type="number" step="0.05" min="0.5">
+		<label for="gutter">Gutter</label><input id="gutter" type="number" min="0" step="2">
+		<label for="background">Background</label><input id="background" type="color">
+		<label for="world">Show</label>
+		<select id="world"></select>
+		<div class="row"><label><input id="hideExcluded" type="checkbox"> hide weight 0</label></div>
+		<div class="row"><button class="primary" id="export">Export to deck</button><span id="status">Hover a room or tile and press 0–4. Click a tile: +1, shift-click: −1.</span></div>
+	</div>
+	<div class="rooms"></div>
+</aside>
+<main>
+	<p class="stats"></p>
+	<canvas></canvas>
+</main>
+
+<script type="module">
+	const $ = s => document.querySelector(s);
+	const cellW = 320, cellH = 180, maxWeight = 4;
+
+	const rooms = await (await fetch('/api/rooms')).json();
+	const state = { seed: 7, columns: 0, aspect: 2.25, gutter: 4, background: '#17151d', world: 'all', hideExcluded: false, weights: {}, ...await (await fetch('/api/state')).json() };
+	const weightOf = room => state.weights[room] ?? (room.startsWith('FrogWorld/') ? 0 : 1);
+
+	let saveTimer;
+	function save() {
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => fetch('/api/state', { method: 'PUT', body: JSON.stringify(state, null, '\t') }), 400);
+	}
+
+	function rng(seed) {
+		let a = seed >>> 0;
+		return () => {
+			a = a + 0x6D2B79F5 >>> 0;
+			let t = Math.imul(a ^ a >>> 15, a | 1);
+			t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+			return ((t ^ t >>> 14) >>> 0) / 4294967296;
+		};
+	}
+
+	function shuffle(list, random) {
+		for (let i = list.length - 1; i > 0; i--) {
+			const j = Math.floor(random() * (i + 1));
+			[list[i], list[j]] = [list[j], list[i]];
+		}
+		return list;
+	}
+
+	// Weight n = an n×n tile. Big tiles go first at random spots (preferring ones that don't touch
+	// other big tiles), 1×1s fill random free cells, and leftover holes stretch a 1×1 neighbor.
+	function layout() {
+		const random = rng(state.seed);
+		const items = shuffle(rooms.filter(r => weightOf(r) > 0), random);
+		const area = items.reduce((sum, r) => sum + weightOf(r) ** 2, 0);
+		const maxSpan = Math.max(1, ...items.map(weightOf));
+		const cols = state.columns || Math.max(maxSpan, Math.round(Math.sqrt(area * state.aspect * cellH / cellW)));
+		let rows = Math.max(maxSpan, Math.ceil(area / cols));
+		const owner = new Array(rows * cols).fill(null);
+		const tiles = [];
+		const inside = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
+		const fits = (x, y, s) => {
+			for (let j = y; j < y + s; j++)
+				for (let i = x; i < x + s; i++)
+					if (owner[j * cols + i]) return false;
+			return true;
+		};
+		const touchesBig = (x, y, s) => {
+			for (let j = y - 1; j <= y + s; j++)
+				for (let i = x - 1; i <= x + s; i++)
+					if (inside(i, j) && owner[j * cols + i]?.w > 1) return true;
+			return false;
+		};
+		const claim = tile => {
+			for (let j = tile.y; j < tile.y + tile.h; j++)
+				for (let i = tile.x; i < tile.x + tile.w; i++)
+					owner[j * cols + i] = tile;
+			tiles.push(tile);
+		};
+
+		const smalls = [];
+		let demoted = 0;
+		for (const room of [...items].sort((a, b) => weightOf(b) - weightOf(a))) {
+			const s = weightOf(room);
+			if (s === 1) { smalls.push(room); continue; }
+			const spots = [];
+			for (let y = 0; y + s <= rows; y++)
+				for (let x = 0; x + s <= cols; x++)
+					if (fits(x, y, s)) spots.push([x, y]);
+			const apart = spots.filter(([x, y]) => !touchesBig(x, y, s));
+			const pool = apart.length ? apart : spots;
+			if (!pool.length) { smalls.push(room); demoted++; continue; }
+			const [x, y] = pool[Math.floor(random() * pool.length)];
+			claim({ room, x, y, w: s, h: s });
+		}
+
+		const freeCells = () => owner.flatMap((t, k) => t ? [] : [k]);
+		while (freeCells().length < smalls.length) {
+			rows++;
+			owner.push(...new Array(cols).fill(null));
+		}
+		shuffle(freeCells(), random).slice(0, smalls.length)
+			.forEach((k, n) => claim({ room: smalls[n], x: k % cols, y: Math.floor(k / cols), w: 1, h: 1 }));
+
+		let holes = 0;
+		for (const k of freeCells()) {
+			const x = k % cols, y = Math.floor(k / cols);
+			const neighbors = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]
+				.filter(([i, j]) => inside(i, j))
+				.map(([i, j]) => owner[j * cols + i])
+				.filter(t => t && t.w === 1 && t.h === 1);
+			if (!neighbors.length) { holes++; continue; }
+			const t = neighbors[Math.floor(random() * neighbors.length)];
+			if (t.y === y) { t.x = Math.min(t.x, x); t.w = 2; }
+			else { t.y = Math.min(t.y, y); t.h = 2; }
+			owner[k] = t;
+		}
+		return { tiles, owner, cols, rows, holes, demoted, count: items.length };
+	}
+
+	const canvas = $('canvas'), ctx = canvas.getContext('2d');
+	const images = Object.fromEntries(rooms.map(room => {
+		const img = new Image();
+		img.onload = scheduleRender;
+		img.src = `/shots/${room}.png`;
+		return [room, img];
+	}));
+
+	let current, renderQueued = false;
+	function scheduleRender() {
+		if (renderQueued) return;
+		renderQueued = true;
+		requestAnimationFrame(() => { renderQueued = false; render(); });
+	}
+
+	function render() {
+		current = layout();
+		const g = state.gutter;
+		canvas.width = current.cols * cellW;
+		canvas.height = current.rows * cellH;
+		ctx.fillStyle = state.background;
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.imageSmoothingEnabled = false;
+		for (const t of current.tiles) {
+			const img = images[t.room];
+			if (!img.naturalWidth) continue;
+			// cells share the screenshot's aspect, so max(w, h) is an integer cover scale; the gutter crops rather than rescales
+			const scale = Math.max(t.w, t.h);
+			const dw = t.w * cellW - g, dh = t.h * cellH - g;
+			const sw = dw / scale, sh = dh / scale;
+			ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, t.x * cellW + g / 2, t.y * cellH + g / 2, dw, dh);
+		}
+		$('.stats').textContent = [
+			`${current.count} rooms`, `${current.cols}×${current.rows} cells`, `${canvas.width}×${canvas.height}px`,
+			current.demoted && `${current.demoted} big tiles didn't fit`, current.holes && `${current.holes} holes`,
+		].filter(Boolean).join(' · ');
+	}
+
+	// sidebar
+	const cards = {};
+	const worlds = [...new Set(rooms.map(r => r.split('/')[0]))];
+	$('#world').innerHTML = ['all', ...worlds].map(w => `<option value="${w}">${w === 'all' ? 'All worlds' : w}</option>`).join('');
+	let hovered = null;
+
+	for (const room of rooms) {
+		const card = document.createElement('div');
+		card.className = 'room';
+		card.innerHTML = `<img loading="lazy" src="/shots/${room}.png"><div class="name" title="${room}">${room}</div><div class="weights">${
+			Array.from({ length: maxWeight + 1 }, (_, w) => `<button data-w="${w}">${w}</button>`).join('')}</div>`;
+		card.querySelector('.weights').onclick = e => e.target.dataset.w && setWeight(room, Number(e.target.dataset.w));
+		card.onmouseenter = () => hovered = room;
+		card.onmouseleave = () => hovered = null;
+		cards[room] = card;
+		$('.rooms').append(card);
+	}
+
+	function refreshCard(room) {
+		const card = cards[room], w = weightOf(room);
+		card.dataset.w = w;
+		card.querySelectorAll('.weights button').forEach(b => b.classList.toggle('on', Number(b.dataset.w) === w));
+		card.hidden = (state.world !== 'all' && !room.startsWith(state.world + '/')) || (state.hideExcluded && w === 0);
+	}
+
+	function setWeight(room, w) {
+		state.weights[room] = Math.max(0, Math.min(maxWeight, w));
+		refreshCard(room);
+		save();
+		scheduleRender();
+	}
+
+	// controls
+	for (const key of ['seed', 'columns', 'aspect', 'gutter']) {
+		$(`#${key}`).value = state[key];
+		$(`#${key}`).oninput = e => { state[key] = Number(e.target.value) || 0; save(); scheduleRender(); };
+	}
+	$('#background').value = state.background;
+	$('#background').oninput = e => { state.background = e.target.value; save(); scheduleRender(); };
+	$('#world').value = state.world;
+	$('#hideExcluded').checked = state.hideExcluded;
+	const refilter = () => { rooms.forEach(refreshCard); save(); };
+	$('#world').onchange = e => { state.world = e.target.value; refilter(); };
+	$('#hideExcluded').onchange = e => { state.hideExcluded = e.target.checked; refilter(); };
+	$('#dice').onclick = () => { state.seed = Math.floor(Math.random() * 1e6); $('#seed').value = state.seed; save(); scheduleRender(); };
+
+	const tileAt = e => {
+		const x = Math.floor(e.offsetX * canvas.width / canvas.clientWidth / cellW);
+		const y = Math.floor(e.offsetY * canvas.height / canvas.clientHeight / cellH);
+		return current.owner[y * current.cols + x];
+	};
+	canvas.onmousemove = e => {
+		const room = tileAt(e)?.room ?? null;
+		if (room === hovered) return;
+		cards[hovered]?.classList.remove('hover');
+		hovered = room;
+		canvas.title = room ?? '';
+		cards[room]?.classList.add('hover');
+	};
+	canvas.onmouseleave = () => { cards[hovered]?.classList.remove('hover'); hovered = null; };
+	canvas.onclick = e => {
+		const tile = tileAt(e);
+		if (tile) setWeight(tile.room, weightOf(tile.room) + (e.shiftKey ? -1 : 1));
+	};
+	addEventListener('keydown', e => {
+		if (hovered && /^[0-4]$/.test(e.key) && !(e.target instanceof HTMLInputElement))
+			setWeight(hovered, Number(e.key));
+	});
+
+	$('#export').onclick = () => {
+		$('#status').textContent = 'Exporting…';
+		canvas.toBlob(async blob => {
+			const result = await (await fetch('/api/export', { method: 'POST', body: blob })).json();
+			$('#status').textContent = result.code === 0 ? `Exported ${canvas.width}×${canvas.height}; deck rebuilt.` : `Deck build failed:\n${result.log}`;
+		}, 'image/jpeg', 0.92);
+	};
+
+	rooms.forEach(refreshCard);
+	render();
+</script>

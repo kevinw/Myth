@@ -204,6 +204,17 @@
       "Type": "Jumpthru",
       "Position": [375, 105],
       "Size": [18, 8]
+    },
+    {
+      "Id": "189a1a2947807a4e",
+      "From": "TutorialText",
+      "Position": [344, 115],
+      "LineHeightMultiplier": 0.855,
+      "Text": [
+        "or at",
+        "suspicious",
+        "looking terrain"
+      ]
     }
   ]
 }

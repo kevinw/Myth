@@ -26,3 +26,5 @@ tmp
 profile-output
 *.blend1
 .xwin-cache
+Myth/Production/Pitch Deck/.wrangler
+.wrangler

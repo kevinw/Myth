@@ -105,6 +105,12 @@
       "Position": [222, 84],
       "Intensity": 0.95,
       "Radius": 111.1
+    },
+    {
+      "Id": "2ab8c96b3ee3e8b2",
+      "Type": "Jumpthru",
+      "Position": [152, 176],
+      "Size": [64, 8]
     }
   ]
 }

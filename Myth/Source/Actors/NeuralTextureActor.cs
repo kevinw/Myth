@@ -1431,13 +1431,22 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		RemoveStalePawnSamples();
 
+		// Player attacks take priority over ambient agents when the shared stamp buffer fills.
+		foreach (var actor in Game.Actors)
+		{
+			if (perturbContext.IsFull)
+				break;
+			if (actor is Player player && !Game.destroying.Contains(actor))
+				player.PerturbNeuralTexture(perturbContext);
+		}
+
 		// Any actor can disturb the field it overlaps by implementing INeuralTextureAgent; the
 		// context maps its world-space stamps into this texture's state grid.
 		foreach (var actor in Game.Actors)
 		{
 			if (perturbContext.IsFull)
 				break;
-			if (actor is INeuralTextureAgent agent && !Game.destroying.Contains(actor))
+			if (actor is INeuralTextureAgent agent && actor is not Player && !Game.destroying.Contains(actor))
 				agent.PerturbNeuralTexture(perturbContext);
 		}
 
