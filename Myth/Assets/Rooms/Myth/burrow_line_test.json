@@ -128,11 +128,11 @@
     {
       "Id": "dd8ebdea84d260fe",
       "Type": "NeuralTextureActor",
+      "Position": [200, 72],
       "SimulationScale": 1.7211704,
       "FlowOrigin": [-1517.184, -661.184],
       "FlowSize": [74.368, 74.368],
       "DetailOrigin": [48.0, 48.0],
-      "Position": [200, 72],
       "Size": [96, 96],
       "FireRate": 0.765,
       "StepsPerSecond": 59.991,

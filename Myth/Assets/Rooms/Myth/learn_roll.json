@@ -125,11 +125,11 @@
     {
       "Id": "93c4c82294cc8db0",
       "Type": "NeuralTextureActor",
+      "Position": [-6, -3],
       "SimulationScale": 0.34877384,
       "FlowOrigin": [0.0, -147.5],
       "FlowSize": [367, 367],
       "DetailOrigin": [183.5, 36.0],
-      "Position": [-6, -3],
       "Size": [367, 72],
       "EdgeTrim": 1,
       "Tint": "9D8BD9",

@@ -88,15 +88,9 @@
       "Id": "bd7f0dbf9e382554",
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
-      "FlowOrigin": [
-        0.0,
-        -68.0
-      ],
+      "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
-      "DetailOrigin": [
-        160.0,
-        92.0
-      ],
+      "DetailOrigin": [160.0, 92.0],
       "WeightsFile1": "smoke_plume_2_hyperbolic.bin",
       "WeightsFile2": "spiralled_0112_concentrate.bin",
       "WeightsFile": "interlaced_0191_concentrate.bin",
@@ -251,15 +245,9 @@
       "Id": "b3acf4fbbc117d0d",
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
-      "FlowOrigin": [
-        0.0,
-        -68.0
-      ],
+      "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
-      "DetailOrigin": [
-        160.0,
-        92.0
-      ],
+      "DetailOrigin": [160.0, 92.0],
       "WeightsFile1": "smoke_plume_2_hyperbolic.bin",
       "WeightsFile2": "spiralled_0112_concentrate.bin",
       "WeightsFile": "interlaced_0191_concentrate.bin",
@@ -280,15 +268,9 @@
       "Id": "e11d073e97fba6c9",
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
-      "FlowOrigin": [
-        0.0,
-        -68.0
-      ],
+      "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
-      "DetailOrigin": [
-        160.0,
-        92.0
-      ],
+      "DetailOrigin": [160.0, 92.0],
       "WeightsFile1": "smoke_plume_2_hyperbolic.bin",
       "WeightsFile2": "spiralled_0112_concentrate.bin",
       "WeightsFile": "interlaced_0191_concentrate.bin",
@@ -309,15 +291,9 @@
       "Id": "282c21345b5681ee",
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
-      "FlowOrigin": [
-        0.0,
-        -68.0
-      ],
+      "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
-      "DetailOrigin": [
-        160.0,
-        92.0
-      ],
+      "DetailOrigin": [160.0, 92.0],
       "WeightsFile1": "smoke_plume_2_hyperbolic.bin",
       "WeightsFile2": "spiralled_0112_concentrate.bin",
       "WeightsFile": "interlaced_0191_concentrate.bin",
@@ -333,32 +309,6 @@
       "PrewarmSteps": 27,
       "Size": [320, 184],
       "SimulationScale": 0.401
-    },
-    {
-      "Id": "97ef6d7c469430f6",
-      "Type": "RigPuppetProp",
-      "Position": [271, 200],
-      "NeckExtension": 6.185,
-      "ProjectionYaw": 62.341,
-      "NeuralFireRate": 0,
-      "NeuralFPS": 1,
-      "NeuralColorAmount": 0.485,
-      "NeuralWeightsFile": "bricks096_pair_circular_screen.bin",
-      "DepthWidthAmount": 0.175,
-      "EyeSize": 0,
-      "Tint": "B5B3B3",
-      "SkinMode": "Surface",
-      "SurfaceId": "robot_body_1",
-      "HeadSpriteScale": 0.909,
-      "PixelsPerMeter": 120,
-      "HeadSize": 9.243,
-      "TorsoSize": 12,
-      "BicepSize": 10,
-      "DepthColorContrast": 1.423,
-      "ForearmSize": 9.615,
-      "ThighSize": 12,
-      "PoseAnimationName": "Chest_Open",
-      "PoseProgress": 1
     }
   ]
 }

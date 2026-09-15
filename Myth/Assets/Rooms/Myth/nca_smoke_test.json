@@ -51,15 +51,9 @@
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
       "SimulationScale": 0.34782609,
-      "FlowOrigin": [
-        0.0,
-        -92.0
-      ],
+      "FlowOrigin": [0.0, -92.0],
       "FlowSize": [368, 368],
-      "DetailOrigin": [
-        184.0,
-        92.0
-      ],
+      "DetailOrigin": [184.0, 92.0],
       "Size": [368, 184],
       "Layer": "Foreground",
       "RenderDepth": -10,
@@ -95,15 +89,9 @@
       "Type": "NeuralTextureActor",
       "Position": [0, 0],
       "SimulationScale": 0.34782609,
-      "FlowOrigin": [
-        0.0,
-        -92.0
-      ],
+      "FlowOrigin": [0.0, -92.0],
       "FlowSize": [368, 368],
-      "DetailOrigin": [
-        184.0,
-        92.0
-      ],
+      "DetailOrigin": [184.0, 92.0],
       "Size": [368, 184],
       "Layer": "Foreground",
       "PrewarmSteps": 40,
