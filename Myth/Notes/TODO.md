@@ -1,3 +1,4 @@
+- "Start Over" needs to not show if you haven't started.
 - ACTOR_UPDATE_LIFECYLE.md
 - FRAME_RATE_LIMIT.md
 - Catch unsupported SDL calls during browser compilation: [plan](BROWSER_PLATFORM_CHECKS.md)

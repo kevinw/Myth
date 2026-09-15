@@ -1,0 +1,292 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usepackage{booktabs}
+\usepackage{tikz}
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{navigation symbols}{}
+\setbeamerfont{title}{size=\huge}
+\setbeamerfont{subtitle}{size=\small}
+
+\definecolor{void}{HTML}{17151D}
+\definecolor{bone}{HTML}{E8DFCC}
+
+% A page-sized 16:9 poster for #1.mp4 behind the slide. build-html.sh renders these pages again
+% with \hidevideoposters defined, for a transparent background the video can play beneath.
+% The page-sized link is a raw annotation: hyperref links are dropped inside beamer backgrounds.
+\newcommand\fullbleedvideo[1]{\setbeamertemplate{background}{%
+  \special{pdf:ann width \the\paperwidth\space height \the\paperheight\space depth 0pt
+    <</Type/Annot/Subtype/Link/Border[0 0 0]/A<</S/URI/URI(#1.mp4?fullbleed)>>>>}%
+  \begin{tikzpicture}
+    \useasboundingbox (0,0) rectangle (\paperwidth,\paperheight);
+    \ifdefined\hidevideoposters\else
+      \node[anchor=south west,inner sep=0] {\includegraphics[width=\paperwidth,height=\paperheight]{#1-poster}};
+    \fi
+  \end{tikzpicture}}}
+\ifdefined\hidevideoposters\setbeamercolor{background canvas}{bg=}\fi
+
+% A poster frame linking to #2.mp4; build-html.sh swaps the link for an autoplaying video.
+\newcommand\video[2][]{\href{#2.mp4}{\includegraphics[#1]{#2-poster}}}
+
+% A text link with a light gray dotted underline; the text defaults to the URL.
+\newcommand\weblink[2][]{\href{#2}{\tikz[baseline=(t.base)]{%
+  \node[inner sep=0pt](t){\ifx\relax#1\relax\nolinkurl{#2}\else#1\fi};
+  \draw[black!25,line width=.4pt,dash pattern=on .4pt off .8pt]([yshift=-1.2pt]t.base west)--([yshift=-1.2pt]t.base east);}}}
+
+\newcommand\subfig[3]{%
+  #1\\[.05em]
+  {\tiny{\usebeamercolor[fg]{caption name}Figure #2:} #3}\par\smallskip}
+
+%------------------------------------------------------------
+\title[Human Questions]{Human Questions}
+\subtitle{Toward an Appetizer-Sized,\\Knowledge-Gated Exploration Game}
+\author[K.~T.~Watters]{K.~T.~Watters\inst{1,2,3,4,5,6}}
+\institute[{\weblink[kev.town]{https://kev.town}}]{%
+  \inst{1}Picea Abies Institute for Engine Technology, Indiana \quad
+  \inst{2}Conservatorio Nocturno de Música, Buenos Aires \\
+  \inst{3}Berliner Institut für Pixelkunst e.\,V. \quad
+  \inst{4}Kyoto Center for Garden and Level Design \\
+  \inst{5}Arbeitsgruppe Neuronale Grafik, Berlin \quad
+  \inst{6}Office of Finance (vacant)}
+\date[CHECKMATE 2.0]{September 2026}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+{
+\fullbleedvideo{figures/looping_duck}
+\begin{frame}{Graphical Abstract}
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[anchor=north east,fill=void,fill opacity=.8,text opacity=1,text=bone,
+          inner sep=10pt,text width=7.2cm,align=left,font=\Large\bfseries]
+      at ([shift={(-.6cm,-1.7cm)}]current page.north east)
+      {Just humans asking questions in an ancient datacenter.};
+  \end{tikzpicture}
+\end{frame}
+}
+
+\begin{frame}{Abstract}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+    \small
+    We present \emph{Human Questions}, an ancient datacenter dive with a partner in crime:
+    an appetizer-sized, knowledge-gated exploration game with juicy combat and
+    unconventional traversal mechanics.
+
+    \medskip
+    We propose to finish and release the single-player game on Steam by Q2~2027 with a single author ($n=1$)
+    and a budget of \$50{,}000.
+
+    \medskip
+    Preliminary results from an in-person showcase%
+    \footnote[frame]{Showcased at \weblink[Talk \& Play \#57]{https://www.meetup.com/de-de/berlingamescene/events/316056617/} in Berlin.}
+    suggest that gliding along walls as a stream of photons is fun ($p<0.05$). One test subject had to be dragged away from the gamepad.
+
+    \medskip
+    \textbf{Keywords:} metroidbrainia; burrowing; neural cellular automata; ducks
+
+    \column{0.42\textwidth}
+    \begin{figure}
+      \video[width=\linewidth]{figures/player_and_bud}
+      \caption{A partner in crime (left) and the protagonist (right).}
+    \end{figure}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Results}
+  \centering
+  \vspace{-.4em}
+  \includegraphics[width=\textwidth,height=6.4cm,keepaspectratio]{figures/rooms}\\[.2em]
+  {\scriptsize{\usebeamercolor[fg]{caption name}Figure S1:} Rooms sampled uniformly at random. (They were not.)}
+\end{frame}
+
+\begin{frame}{Inclusion and Exclusion Criteria}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{What Stays}
+    \footnotesize
+    \begin{itemize}\setlength\itemsep{.15em}
+      \item Dense, intricately connected world demanding attention~[1,\,2]
+      \item Mood, mystery, atmosphere, a certain lightness~[3]
+      \item Music at the emotional core (composed in-house, $n=1$)
+      \item Respect for: player's time and intelligence
+    \end{itemize}
+
+    \column{0.48\textwidth}
+    \textbf{Non-goals}
+    \footnotesize
+    \begin{itemize}\setlength\itemsep{.15em}
+      \item Hand-drawn vector-style visuals~[2]
+      \item Lock-and-key ability gating~[4]. The key to the ``door'' is you, noticing.
+      \item Busy parallax; instead favoring flat, painterly compositions: lo-fi 2D, glammed up for 2027
+    \end{itemize}
+  \end{columns}
+
+  \medskip
+  \centering
+  \includegraphics[height=1.45cm]{figures/flat-1}\hspace{.3em}%
+  \video[height=1.45cm]{figures/crawler}\hspace{.3em}%
+  \includegraphics[height=1.45cm]{figures/flat-3}\\[.3em]
+  {\scriptsize Criteria were established prior to data collection, which consisted of playing a very large number of games.}\\[.2em]
+  {\tiny [1] Nigoro, \emph{La-Mulana} (2012) \quad [2] Team Cherry, \emph{Hollow Knight} (2017) \quad
+  [3] Mobius Digital, \emph{Outer Wilds} (2019) \quad [4] Shared Memory, \emph{Animal Well} (2024)}
+\end{frame}
+
+\begin{frame}{Methods}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \footnotesize
+    \textbf{North star:} the character controller. Hit-stun and i-frames millisecond-tuned; expressive moves chain into each other; approachable, with a high skill ceiling.
+    Everything flows from that!
+
+    \begin{description}[Notice]
+      \item[Burrow] Dive into any surface and swim through it; pop out with momentum.
+      \item[Ride] Burrow lines are express tunnels. Some invert the room's geometry.
+      \item[Move] Ropes, conveyors, contraptions, bouncers.
+      \item[Fight] Readable combat and bosses which test your grasp of the expressive moveset.
+      \item[Notice] Knowledge gates: the way forward is on screen before you understand it.
+    \end{description}
+
+    \textbf{Apparatus:} a custom engine and in-game editor for that ``and now for something (mostly) different'' vibe
+
+    \column{0.44\textwidth}
+    \centering
+    \subfig{\video[height=2.8cm]{figures/burrowing}}{2a}{Burrowing.}
+    \subfig{\video[height=2.8cm]{figures/boss}}{2b}{Combat, when necessary.}
+    \stepcounter{figure}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Materials}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+    \small
+    The datacenter is alive. Its surfaces are painted by hand and grown by
+    \alert{neural cellular automata}: grids of tiny cells, each running the same small learned rule.
+
+    \medskip
+    Nobody animates them. Hit one, and it has to heal. The cells are part of the gameplay: swim through them, find a way to use them against your foes...
+
+    \medskip
+    \textbf{Instruments:} live textures, dynamic lighting, shaders everywhere.
+
+    \medskip
+    \footnotesize
+    Trained in-house on rented GPUs, building on Cells$^2$Pixels%
+    \footnote[frame]{Pajouheshgar et al., \emph{From Cells to Pixels}, SIGGRAPH 2026. \weblink{https://cells2pixels.github.io/}}
+    (used with the authors' permission).
+
+    \column{0.42\textwidth}
+    \begin{figure}
+      \video[width=0.85\linewidth]{figures/neural_bg}
+      \caption{A self-organizing material. No two frames alike.}
+    \end{figure}
+  \end{columns}
+
+  \centering
+  \includegraphics[width=\textwidth,height=1.35cm,keepaspectratio]{figures/world-map}\\[.1em]
+  {\scriptsize{\usebeamercolor[fg]{caption name}Figure 4:} The study site, as currently surveyed.}
+\end{frame}
+
+\begin{frame}{Author Contributions}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \footnotesize
+    \begin{tabular}{@{}ll@{}}
+      \toprule
+      Role & Contributor \\
+      \midrule
+      Conceptualization & K.T.W. \\
+      Engine, editor \& tools & K.T.W. \\
+      Music & K.T.W. \\
+      Pixel art, tiles \& backgrounds & K.T.W. \\
+      Level design & K.T.W. \\
+      Neural textures & K.T.W., Cells$^2$Pixels \\
+      Sound design & K.T.W., freesound.org \\
+      Funding acquisition & \emph{this slide} \\
+      \bottomrule
+    \end{tabular}
+
+    \medskip
+    \alert{Since May 2026:} 1{,}033 commits, 99 rooms, one level editor, a public showcase.
+
+    \medskip
+    \alert{Experience:} programming since 199X; games played, $n \gg 1$.
+
+    \column{0.48\textwidth}
+    \footnotesize
+    \textbf{Selected prior work}
+    \begin{itemize}
+      \item[{[1]}] \emph{Zero Days VR}. With Scatter. Emmy winner.
+      \item[{[2]}] \emph{GodotVision}. Godot on Apple Vision Pro.
+      \item[{[3]}] \emph{Threezy}. 3D art on your phone.
+      \item[{[4]}] \emph{Content Creator Simulator}; \emph{A Very Holographic Aquarium}. Looking Glass.
+      \item[{[5]}] \emph{Raymarching Toolkit for Unity}.
+      \item[{[6]}] \emph{Strange Dates}. Queerness and Games Conference, 2018.
+      \item[{[7]}] \emph{Wish U Were Here}. With R.~Yang, E.~Cameron, F.~Ramallo.
+      \item[] More at \weblink{https://kev.town}
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Response to Reviewers}
+  \small
+  \textbf{Reviewer 2:} ``The player character art reads as unfinished vs the backgrounds.''\\
+  \emph{Response:} Agreed. A character art pass is scheduled.
+
+  \medskip
+  \textbf{Reviewer 3:} ``Which pits are navigable and which are death is unclear.''\\
+  \emph{Response:} We are removing the pits. You can go everywhere.
+
+  \medskip
+  \textbf{Reviewer 4:} ``He thought the duck would hurt you.''\\
+  \emph{Response:} We stand by the duck.
+
+  \vfill
+  \textbf{Limitations.} Scope is one world, single-digit-hour-count sized.
+\end{frame}
+
+\begin{frame}{Budget \& Declarations}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \footnotesize
+    \begin{table}
+      \caption{Proposed budget.}
+      \begin{tabular}{@{}lr@{}}
+        \toprule
+        Salary \& living expenses (9 months) & \$50{,}000 \\
+        \midrule
+        \textbf{Total} & \textbf{\$50{,}000} \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+
+    \begin{tabular}{@{}ll@{}}
+      Sep 2026 & Public prototype (done) \\
+      Q4 2026 & First area complete; Steam page \\
+      Q1 2027 & Content complete; demo \\
+      Q2 2027 & Launch on Steam \\
+    \end{tabular}
+
+    \column{0.46\textwidth}
+    \footnotesize
+    \textbf{Funding.} This work is not currently supported by any grant. (Yet.)
+
+    \medskip
+    \textbf{Conflicts of interest.} The author would very much like to make this game.
+
+    \medskip
+    \textbf{Data availability.} \weblink{https://keelo.itch.io/humanquestions}
+
+    \medskip
+    \textbf{Correspondence.} \weblink[kevinwatters@gmail.com]{mailto:kevinwatters@gmail.com}
+
+    \medskip
+    \centering
+    \subfig{\video[width=0.68\linewidth]{figures/invert}}{5}{Robustness check: results hold inside out.}
+  \end{columns}
+\end{frame}
+
+\end{document}
