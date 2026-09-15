@@ -57,5 +57,10 @@
     "command": "./Myth/tools/install-steam-deck-art.sh",
     "cwd": "$ZED_MAIN_GIT_WORKTREE",
     "use_new_terminal": true,
+  },
+  {
+    "label": "Pitch deck: build HTML",
+    "command": "./build-html.sh",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth/Production/Pitch Deck",
   }
 ]
