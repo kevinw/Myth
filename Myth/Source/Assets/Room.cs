@@ -1701,7 +1701,7 @@ public class Room
 	}
 
 	// Writes a pruned actor node, keeping the same inline-point convention for any
-	// two-int arrays (e.g. Position) it contains, and deferring everything else to the node.
+	// two-number arrays (e.g. Position or FlowOrigin) it contains.
 	static void WriteActorNode(Utf8JsonWriter writer, JsonNode? node)
 	{
 		switch (node)
@@ -1715,8 +1715,9 @@ public class Room
 				}
 				writer.WriteEndObject();
 				break;
-			case JsonArray array when IsIntPair(array, out var x, out var y):
-				WriteIntPairValue(writer, x, y);
+			case JsonArray { Count: 2 } array when
+				array[0]?.GetValueKind() == JsonValueKind.Number && array[1]?.GetValueKind() == JsonValueKind.Number:
+				writer.WriteRawValue($"[{array[0]!.ToJsonString()}, {array[1]!.ToJsonString()}]", skipInputValidation: true);
 				break;
 			case JsonArray array:
 				writer.WriteStartArray();
@@ -1731,14 +1732,6 @@ public class Room
 				node.WriteTo(writer);
 				break;
 		}
-	}
-
-	static bool IsIntPair(JsonArray array, out int x, out int y)
-	{
-		x = y = 0;
-		return array.Count == 2
-			&& array[0] is JsonValue a && a.TryGetValue(out x)
-			&& array[1] is JsonValue b && b.TryGetValue(out y);
 	}
 
 	public void LoadJsonState(string jsonText)
