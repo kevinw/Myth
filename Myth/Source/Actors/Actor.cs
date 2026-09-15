@@ -592,8 +592,18 @@ public class Actor
 	/// Called ones per frame, updates our Sprite and Timer
 	public virtual void Update()
 	{
+		MoveByVelocity();
+		AdvanceFrame();
+	}
+
+	protected void MoveByVelocity()
+	{
 		if (Velocity != Vector2.Zero)
 			Move(Velocity * Time.Delta);
+	}
+
+	protected void AdvanceFrame()
+	{
 		Squish = Calc.Approach(Squish, Vector2.One, Time.Delta * 4.0f);
 		Skew = Calc.Approach(Skew, 0, Time.Delta * 4.0f);
 		hitCooldown = Calc.Approach(hitCooldown, 0, Time.Delta);

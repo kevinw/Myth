@@ -19,6 +19,8 @@ public struct StartArgs
 	public bool devHost;
 	public string? devCommand;
 	public bool? fullscreen;
+	public bool? vsync;
+	public int framesInFlight = 1;
 	// Force the 4:3 portrait-style presentation on desktop for testing (--aspect-four-three):
 	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
 	public bool aspectFourThree;
@@ -96,6 +98,12 @@ public struct StartArgs
 				case "--dev-host": devHost = true; break;
 				case "--dev-command": devCommand = ReadValue(args, ref i, option); break;
 				case "--fullscreen": fullscreen = true; break;
+				case "--vsync": vsync = ReadOnOff(args, ref i, option); break;
+				case "--frames-in-flight":
+					framesInFlight = ReadInt(args, ref i, option, minimum: 1);
+					if (framesInFlight > 3)
+						throw Invalid(option, "expected 1, 2, or 3");
+					break;
 				case "--aspect-four-three": aspectFourThree = true; break;
 				case "--no-warmup": noWarmup = true; break;
 				case "--play": play = true; break;
@@ -224,6 +232,16 @@ public struct StartArgs
 		if (!float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !float.IsFinite(value) || value < minimum)
 			throw Invalid(option, $"expected a finite number greater than or equal to {minimum}, got '{text}'");
 		return value;
+	}
+
+	static bool ReadOnOff(string[] args, ref int index, string option)
+	{
+		var value = ReadValue(args, ref index, option);
+		if (string.Equals(value, "on", StringComparison.OrdinalIgnoreCase))
+			return true;
+		if (string.Equals(value, "off", StringComparison.OrdinalIgnoreCase))
+			return false;
+		throw Invalid(option, $"expected on or off, got '{value}'");
 	}
 
 	static bool IsOption(string value) => value.StartsWith("--", StringComparison.Ordinal);

@@ -195,6 +195,11 @@ public partial class Manager
 		if (MenuButton(musicEnabled ? "music: on" : "music: off"))
 			MusicEnabled = !MusicEnabled;
 #if !IOS && !BROWSER
+		if (MenuButton(vSyncEnabled ? "vsync: on" : "vsync: off"))
+		{
+			vSyncEnabled = !vSyncEnabled;
+			GraphicsDevice.VSync = vSyncEnabled;
+		}
 		if (!IsSteamDeck)
 		{
 			if (MenuButton(runInBackground ? "run in background: on" : "run in background: off"))

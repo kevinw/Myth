@@ -220,8 +220,8 @@ public abstract partial class Pawn : Actor
 	float airBubbleTimer;
 	// GetWallJumpDirection runs two solid-overlap probes and is called up to 3x per
 	// Update (gravity wall-hug, NormalState wall-slide, jump handling). Position is
-	// fixed for the whole Update after Move() runs, and each pawn only queries it from
-	// a single phase (Player after grounded is set, Boss during GetInput), so the
+	// fixed for the state/physics phase, and each pawn only queries it from a single
+	// phase (Player after grounded is set, Boss during GetInput), so the
 	// result is invariant within a frame. Cache it, invalidated once per Update.
 	int wallJumpDirectionCache;
 	bool wallJumpDirectionCached;
@@ -303,7 +303,7 @@ public abstract partial class Pawn : Actor
 		if (Game.GymMode && this is Player) return;
 
 		var previousVelocity = Velocity;
-		base.Update();
+		AdvanceFrame();
 		if (rollingOnWater && State != States.Roll)
 			StopWaterRoll();
 		windInfluence = Wind.ApplyTo(this);
@@ -317,24 +317,9 @@ public abstract partial class Pawn : Actor
 			: input.MoveX;
 		if (input.JumpPressed)
 			jumpBufferTimer = JumpBufferTime;
-		AfterActorUpdate(previousVelocity);
 
-		// While burrowing the player rides the surface as a point; skip the normal
-		// grounded/landing machinery so it doesn't re-trigger landings mid-burrow.
-		var nowGrounded = State != States.Burrow && State != States.Climb && Velocity.Y >= 0 && Grounded();
-		if (nowGrounded && !grounded && !TryBurrowOnLanding(previousVelocity))
-			OnLanded(previousVelocity);
-		grounded = nowGrounded;
-		if (grounded)
-		{
-			coyoteJumpTimer = CoyoteJumpTime;
-			coyoteJumpY = Position.Y;
-			wallJumpInputLockTimer = 0;
-			wallJumpCoyoteTimer = 0;
-			wallJumpCoyoteDirection = 0;
-			rollJumpCarryTimer = 0;
-		}
-		else
+		RefreshGrounded(previousVelocity);
+		if (!grounded)
 		{
 			if (coyoteJumpTimer > 0)
 				coyoteJumpTimer = Calc.Approach(coyoteJumpTimer, 0, Time.Delta);
@@ -383,6 +368,7 @@ public abstract partial class Pawn : Actor
 			EndDashRun();
 		UpdateAirBubbles();
 
+		var integratesVelocity = State is not (States.Burrow or States.Climb);
 		wallSliding = false;
 		switch (State)
 		{
@@ -404,16 +390,10 @@ public abstract partial class Pawn : Actor
 		}
 
 		UpdateBurrowRecharge();
-		AfterStateUpdate(previousVelocity);
 
 		if (ducking && State != States.Normal && State != States.Roll && !AllowDuckingInState())
 			ducking = false;
-		if (State == States.Burrow)
-			Hitbox = new(BurrowHitboxRect);
-		else if (ducking || State == States.Roll)
-			Hitbox = new(CurrentDuckingHitboxRect);
-		else
-			Hitbox = new(CurrentStandingHitboxRect);
+		UpdateHitbox();
 
 		if (jumpTimer > 0)
 		{
@@ -452,6 +432,14 @@ public abstract partial class Pawn : Actor
 				JumpUpSquish = 0;
 		}
 
+		var movementState = State;
+		if (integratesVelocity)
+			MoveByVelocity();
+		RefreshGrounded(previousVelocity);
+		if (State != movementState)
+			UpdateHitbox();
+		AfterActorUpdate(previousVelocity);
+		AfterStateUpdate(previousVelocity);
 		UpdateWallSlideFeedback();
 		UpdateBurrowAlways();
 		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
@@ -462,6 +450,35 @@ public abstract partial class Pawn : Actor
 		AfterMovementUpdate(previousVelocity);
 		UpdateOutOfBreath();
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
+	}
+
+	void RefreshGrounded(Vector2 previousVelocity)
+	{
+		// While burrowing the player rides the surface as a point; skip the normal
+		// grounded/landing machinery so it doesn't re-trigger landings mid-burrow.
+		var nowGrounded = State != States.Burrow && State != States.Climb && Velocity.Y >= 0 && Grounded();
+		if (nowGrounded && !grounded && !TryBurrowOnLanding(previousVelocity))
+			OnLanded(previousVelocity);
+		grounded = nowGrounded;
+		if (!grounded)
+			return;
+
+		coyoteJumpTimer = CoyoteJumpTime;
+		coyoteJumpY = Position.Y;
+		wallJumpInputLockTimer = 0;
+		wallJumpCoyoteTimer = 0;
+		wallJumpCoyoteDirection = 0;
+		rollJumpCarryTimer = 0;
+	}
+
+	void UpdateHitbox()
+	{
+		if (State == States.Burrow)
+			Hitbox = new(BurrowHitboxRect);
+		else if (ducking || State == States.Roll)
+			Hitbox = new(CurrentDuckingHitboxRect);
+		else
+			Hitbox = new(CurrentStandingHitboxRect);
 	}
 
 	void UpdateWallSlideFeedback()
