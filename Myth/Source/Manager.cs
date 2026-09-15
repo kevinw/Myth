@@ -206,7 +206,9 @@ public partial class Manager : App
 	readonly bool bakeWorldMap;
 	readonly bool useAssetPack;
 	readonly string? assetPackPath;
+	readonly bool? requestedVSync;
 	bool musicEnabled = true;
+	bool vSyncEnabled = true;
 	bool alwaysOnTop;
 #if !IOS && !BROWSER
 	bool runInBackground;
@@ -269,7 +271,8 @@ public partial class Manager : App
 	}
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
-		offscreen: args.bakeWorldMap || args.checkRooms, fullscreen: args.fullscreen))
+		offscreen: args.bakeWorldMap || args.checkRooms, fullscreen: args.fullscreen,
+		framesInFlight: args.framesInFlight))
 	{
 #if EDITOR
 		particleEditor = new(undo);
@@ -278,6 +281,7 @@ public partial class Manager : App
 #endif
 #endif
 		AudioEnabled = args.audio;
+		requestedVSync = args.vsync;
 		dumpAtlases = args.dumpAtlases;
 		gymMode = args.gym;
 		headless = args.headless;
@@ -374,7 +378,7 @@ public partial class Manager : App
 	internal static bool DOTNET_WATCH = Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1";
 
 	static AppConfig CreateAppConfig(bool gym = false, bool headless = false, bool unthrottled = false,
-		bool offscreen = false, bool? fullscreen = null)
+		bool offscreen = false, bool? fullscreen = null, int framesInFlight = 1)
 	{
 		const string windowTitle = APPLICATION_NAME;
 		Point2 windowSize = new(1280, 720);
@@ -433,7 +437,8 @@ public partial class Manager : App
 			Resizable: resizable,
 			UpdateMode: updateMode,
 			PreferredGraphicsDriver: graphicsDriver,
-			Flags: appFlags
+			Flags: appFlags,
+			FramesInFlight: framesInFlight
 		);
 	}
 
@@ -454,6 +459,7 @@ public partial class Manager : App
 #if !BROWSER
 		LoadWindowSettings();
 #endif
+		vSyncEnabled = requestedVSync ?? vSyncEnabled;
 		if (requestedWorldId != null)
 			Assets.SelectWorld(requestedWorldId);
 		else if (Assets.ContentIsZip)
@@ -461,7 +467,7 @@ public partial class Manager : App
 		if (bakeWorldMap && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
-		GraphicsDevice.VSync = true; // Make this an option? SDL3 crashes my Mac when I fullscreen the window... @kev 2026
+		GraphicsDevice.VSync = vSyncEnabled;
 
 #if !BROWSER
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
@@ -864,6 +870,7 @@ public partial class Manager : App
 			if (!string.IsNullOrWhiteSpace(settings.WorldId))
 				Assets.SelectWorld(settings.WorldId);
 #endif
+			alwaysOnTop = settings.AlwaysOnTop;
 			if (Window != null)
 			{
 				if (settings is { Width: > 0, Height: > 0 })
@@ -876,7 +883,7 @@ public partial class Manager : App
 			hasStartedGame = settings.RoomId != null;
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
-			alwaysOnTop = settings.AlwaysOnTop;
+			vSyncEnabled = settings.VSyncEnabled;
 #if !IOS && !BROWSER
 			runInBackground = settings.RunInBackground;
 #endif
@@ -911,6 +918,7 @@ public partial class Manager : App
 				WorldId = Assets.CurrentWorldId,
 				RoomId = currentRoom?.Id ?? selectedRoomId,
 				MusicEnabled = musicEnabled,
+				VSyncEnabled = vSyncEnabled,
 				AlwaysOnTop = alwaysOnTop,
 #if !IOS && !BROWSER
 				RunInBackground = runInBackground,
@@ -937,6 +945,7 @@ public partial class Manager : App
 		public int RoomX { get; init; }
 		public int RoomY { get; init; }
 		public bool MusicEnabled { get; init; } = true;
+		public bool VSyncEnabled { get; init; } = true;
 		public bool AlwaysOnTop { get; init; }
 #if !IOS && !BROWSER
 		public bool RunInBackground { get; init; }
