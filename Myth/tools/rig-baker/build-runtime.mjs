@@ -42,6 +42,8 @@ const cross = target === "win-x64" ? [
 	`-DCMAKE_CXX_COMPILER=${path.join(mythDir, "tools", "linux-cross-cxx.sh")}`,
 	`-DCMAKE_AR=${llvmTool("llvm-ar")}`,
 	`-DCMAKE_RANLIB=${llvmTool("llvm-ranlib")}`,
+	// zig's linker segfaults on the -Xlinker --dependency-file CMake adds for Ninja link depfiles.
+	"-DCMAKE_LINK_DEPENDS_USE_LINKER=OFF",
 ] : [];
 // clang-cl and lld-link find the MSVC CRT + Windows SDK through INCLUDE/LIB.
 const crossEnv = target === "win-x64" ? { INCLUDE: winCrossIncludes, LIB: winCrossLibs } : undefined;

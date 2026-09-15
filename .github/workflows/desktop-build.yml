@@ -276,7 +276,7 @@ jobs:
 
   publish-linux:
     name: Publish Linux (x64)
-    runs-on: [self-hosted, local-mac]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
@@ -286,21 +286,37 @@ jobs:
           submodules: false
 
       - name: Update desktop submodules
-        run: git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
+        run: |
+          set -euo pipefail
+          git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
+          chmod +x Foster/tools/linux/shadercross
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
-      - name: Install Linux cross toolchain
-        run: brew install zig llvm
+      # Native AOT links with clang; publish-linux.mjs runs --check-rooms, which needs a (software) GPU.
+      - name: Install native AOT and offscreen graphics dependencies
+        run: |
+          missing=()
+          for package in clang zlib1g-dev xvfb xauth mesa-vulkan-drivers; do
+            dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'ok installed' || missing+=("$package")
+          done
+          if (( ${#missing[@]} )); then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y "${missing[@]}"
+          fi
 
       - name: Force fresh Foster shader compilation
-        run: find Foster/Framework/Content/Shaders/Compiled \( -name '*.msl' -o -name '*.spv' \) -delete
+        run: find Foster/Framework/Content/Shaders/Compiled -name '*.spv' -delete
 
       - name: Publish Linux build
-        run: node Myth/tools/publish-linux.mjs
+        env:
+          SDL_VIDEODRIVER: x11
+          MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: xvfb-run -a -s "-screen 0 1280x720x24" node Myth/tools/publish-linux.mjs
 
       - name: Package Linux build
         id: archive
