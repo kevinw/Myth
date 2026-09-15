@@ -54,6 +54,7 @@ public sealed class HumanoidRigSettings
 	public ContentRef<SurfaceContent> SurfaceId = new("");
 	public string HeadSpriteName = "";
 	[I(0.25f, 2)] public float HeadSpriteScale = 1;
+	[InspectorGroup("Costume")] public ContentRef<CostumeContent> CostumeId = new("");
 
 	[I(0, 8), InspectorGroup("Combat")] public float CombatBoundsPadding = 1;
 	[NoSerialize] public float UpperBodyHitStrength = 0.8f;

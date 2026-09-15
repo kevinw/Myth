@@ -192,6 +192,29 @@ public partial class Manager
 				return true;
 			}
 		}
+		else if (property.Type == typeof(ContentRef<CostumeContent>))
+		{
+			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
+			var changed = false;
+			if (BeginCombo("##Value", value == "" ? "(none)" : value))
+			{
+				if (Selectable("(none)", value == ""))
+				{
+					value = "";
+					changed = true;
+				}
+				foreach (var name in Assets.Costumes.Keys)
+					if (Selectable(name, value == name))
+					{
+						value = name;
+						changed = true;
+					}
+				EndCombo();
+			}
+			if (changed)
+				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
+			return changed;
+		}
 		else if (property.Type == typeof(ContentRef<VisualTextureContent>))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
@@ -677,7 +700,9 @@ public partial class Manager
 		if (property.Group == currentGroup)
 			return open;
 		currentGroup = property.Group;
+		PushID(property.JsonName);
 		open = currentGroup == null || CollapsingHeader(currentGroup);
+		PopID();
 		return open;
 	}
 

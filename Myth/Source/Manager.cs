@@ -123,6 +123,7 @@ public partial class Manager : App
 	/// Sprite Batcher for general Editor visuals
 	readonly Batcher batcher;
 	readonly Controls controls;
+	readonly bool showControllerInputs;
 
 	// Steam only exports SteamDeck=1 for titles it launches itself, so a devkit build started
 	// any other way would look like a desktop. The DMI vendor is the hardware talking.
@@ -281,6 +282,7 @@ public partial class Manager : App
 		dumpAtlases = args.dumpAtlases;
 		gymMode = args.gym;
 		headless = args.headless;
+		showControllerInputs = args.showControllerInputs;
 		checkRooms = args.checkRooms;
 		requestedWorldId = args.worldId;
 		unthrottled = args.unthrottled;
@@ -1190,6 +1192,7 @@ public partial class Manager : App
 		UpdateParticleEffectReload();
 		UpdateAudioBankReload();
 		UpdateRigReload();
+		UpdateCostumeReload();
 #endif
 
 #if EDITOR
@@ -1863,6 +1866,7 @@ public partial class Manager : App
 			#endif
 		}
 		DrawGameMenu();
+		DrawControllerInputs();
 
 		batcher.Render(Window);
 		batcher.Clear();
@@ -1877,6 +1881,18 @@ public partial class Manager : App
 		if (movieTracksPlayer)
 			RecordMoviePlayerSample();
 #endif
+	}
+
+	void DrawControllerInputs()
+	{
+		if (!showControllerInputs || !playing || game == null || Window == null)
+			return;
+		var viewport = (RectInt)(GameViewRect * Scale);
+		var present = game.PresentRect(viewport);
+		var size = new Vector2(game.Screen.Width, game.Screen.Height);
+		var framebuffer = Rect.CenteredAt(present.Center, size * game.PresentScale(present, size.X, size.Y));
+		var bounds = ControllerInputDisplay.Bounds(viewport, framebuffer);
+		ControllerInputDisplay.Draw(batcher, Input.Controllers[controls.PlayerControllerIndex], bounds, Assets.Font);
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after

@@ -23,6 +23,7 @@ public class AlienBug : Actor, INeuralTextureAgent
 	[I(8, 80)] public float RunSpeed = 30;
 	public RigSkinMode SkinMode = RigSkinMode.NCA;
 	public ContentRef<SurfaceContent> SurfaceId = new("");
+	public ContentRef<CostumeContent> CostumeId = new("");
 	[ActorSettings(typeof(NeuralSurfaceSettings), "Neural Surface", "Neural")]
 	public readonly NeuralSurfaceSettings Neural = new()
 	{
@@ -180,5 +181,5 @@ public class AlienBug : Actor, INeuralTextureAgent
 	public override void RenderReflection(Batcher batcher, Color color) => visual?.Draw(batcher, color, silhouette: true);
 	public override void RenderNormals(Batcher batcher) => visual?.DrawNormals(batcher);
 	public void PerturbNeuralTexture(NeuralTextureActor.PerturbContext context) => visual?.PerturbNeuralTexture(context);
-	public override Rect GetVisualBounds() => new(Position.X - 30, Position.Y - 42, 60, 46);
+	public override Rect GetVisualBounds() => visual?.GetVisualBounds() ?? new(Position.X - 30, Position.Y - 42, 60, 46);
 }

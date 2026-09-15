@@ -186,7 +186,7 @@ public sealed class Surface : IDisposable
 		return new Surface(spec.Id, layers.ToArray(), normal, ownsNormal, normalTiling, normalScroll, spec.NormalStrength);
 	}
 
-	public void Render(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time, float opacity = 1)
+	public void Render(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time, float opacity = 1, Color? tint = null)
 	{
 		if (layers.Length == 0 || triangles.Length < 3)
 			return;
@@ -203,9 +203,9 @@ public sealed class Surface : IDisposable
 			u[cfg + 1] = layer.Tiling.Y;
 			u[cfg + 2] = (float)layer.Blend;
 			u[cfg + 3] = (float)layer.Texture.Swizzle;
-			var tint = (Vector4)layer.Tint;
+			var layerTint = (Vector4)layer.Tint;
 			var t = 4 + SurfaceSpec.MaxLayers * 4 + i * 4;
-			u[t + 0] = tint.X; u[t + 1] = tint.Y; u[t + 2] = tint.Z; u[t + 3] = tint.W;
+			u[t + 0] = layerTint.X; u[t + 1] = layerTint.Y; u[t + 2] = layerTint.Z; u[t + 3] = layerTint.W;
 			var m = 4 + SurfaceSpec.MaxLayers * 8 + i * 4;
 			u[m + 0] = layer.Scroll.X; u[m + 1] = layer.Scroll.Y; u[m + 2] = layer.Offset.X; u[m + 3] = layer.Offset.Y;
 			var black = (Vector4)layer.BlackColor;
@@ -221,7 +221,7 @@ public sealed class Surface : IDisposable
 		material.Fragment.SetUniformBuffer(u);
 
 		batcher.PushMaterial(material);
-		DrawTriangles(batcher, layers[0].Texture.Texture, triangles, Color.White * opacity);
+		DrawTriangles(batcher, layers[0].Texture.Texture, triangles, (tint ?? Color.White) * opacity);
 		batcher.PopMaterial();
 	}
 

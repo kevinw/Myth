@@ -553,6 +553,7 @@ public static partial class Assets
 		var textures2D = Assets.LoadTextureBucket(gfx, Content, "Sources/Textures/Patterns", "patterns");
 		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, BuildVisualAssetPackManifest(bake, "", null));
 		BuildSurfaces(gfx, Content, "Sources/Surfaces");
+		LoadCostumes(Content, "Sources/Costumes");
 
 		if (buildPackPath != null)
 			WriteVisualAssetPack(buildPackPath, bake);
@@ -782,6 +783,7 @@ public static partial class Assets
 		var textures2D = Assets.LoadTextureBucket(gfx, pack, "textures", "");
 		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, manifest);
 		BuildSurfaces(gfx, pack, "surfaces");
+		LoadCostumes(pack, "costumes");
 		// Registration data ships inside the pack (baked with the images), so pack mode
 		// never depends on spec files being present or current.
 		TileKits.SetRegistrations(manifest.TileKits);
@@ -859,6 +861,17 @@ public static partial class Assets
 			Directory.CreateDirectory(surfacesDir);
 			foreach (var file in Directory.EnumerateFiles(sourceSurfaces, "*.json"))
 				File.Copy(file, Path.Join(surfacesDir, Path.GetFileName(file)), overwrite: true);
+		}
+
+		var costumesDir = Path.Join(directory, "costumes");
+		if (Directory.Exists(costumesDir))
+			Directory.Delete(costumesDir, recursive: true);
+		var sourceCostumes = Path.Join(SourcesPath, "Costumes");
+		if (Directory.Exists(sourceCostumes))
+		{
+			Directory.CreateDirectory(costumesDir);
+			foreach (var file in Directory.EnumerateFiles(sourceCostumes, "*.json"))
+				File.Copy(file, Path.Join(costumesDir, Path.GetFileName(file)), overwrite: true);
 		}
 	}
 

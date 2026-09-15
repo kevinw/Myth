@@ -1,0 +1,8 @@
+{
+  "Pieces": [
+    { "Bones": "Shin", "From": 0.4, "Width": 1.5, "Color": "72563b", "Surface": "crawler-metal" },
+    { "Bones": "Foot", "Width": 1.5, "Color": "72563b", "Surface": "crawler-metal" },
+    { "Kind": "Stud", "Bones": "Shin", "From": 0.45, "To": 0.95, "Count": 3, "Width": 0.5, "Color": "ffcf70" },
+    { "Bones": "Forearm", "From": 0.65, "Width": 1.4, "Color": "e6aa51" }
+  ]
+}

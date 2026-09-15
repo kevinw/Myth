@@ -1,31 +1,31 @@
 using System.Numerics;
 using Foster.Framework;
+using static Myth.RigDraw;
 
 namespace Myth;
 
 sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 {
-	readonly record struct BoneSpec(string From, string To, float Width);
-	readonly record struct TerminalBoneSpec(string Previous, string From, float Width, float LengthScale = 1);
-	readonly record struct Bone(int From, int To, float Width);
+	readonly record struct BoneSpec(string From, string To, float Width, RigTags Tags);
+	readonly record struct TerminalBoneSpec(string Previous, string From, float Width, RigTags Tags, float LengthScale = 1);
+	readonly record struct Bone(int From, int To, float Width, RigTags Tags, int Parent = -1) : IRigBone;
 	readonly record struct TerminalBone(int Previous, int From, int To, float LengthScale);
-	readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
 
 	static readonly BoneSpec[] BoneSpecs =
 	[
-		new("Body", "Head", 11),
-		new("Body", "LegF_L.000", 5), new("LegF_L.000", "LegF_L.001", 4), new("LegF_L.001", "LegF_L.002", 2.5f),
-		new("Body", "LegB_L.000", 5), new("LegB_L.000", "LegB_L.001", 4), new("LegB_L.001", "LegB_L.002", 2.5f),
-		new("Body", "LegF_R.000", 5), new("LegF_R.000", "LegF_R.001", 4), new("LegF_R.001", "LegF_R.002", 2.5f),
-		new("Body", "LegB_R.000", 5), new("LegB_R.000", "LegB_R.001", 4), new("LegB_R.001", "LegB_R.002", 2.5f),
-		new("Body", "Tail.000", 7), new("Tail.000", "Tail.001", 6),
-		new("Tail.001", "Tail.002", 4.5f), new("Tail.002", "Tail.003", 2.5f),
+		new("Body", "Head", 11, RigTags.Neck),
+		new("Body", "LegF_L.000", 5, RigTags.Hip | RigTags.Left), new("LegF_L.000", "LegF_L.001", 4, RigTags.Thigh | RigTags.Left), new("LegF_L.001", "LegF_L.002", 2.5f, RigTags.Shin | RigTags.Left),
+		new("Body", "LegB_L.000", 5, RigTags.Hip | RigTags.Left), new("LegB_L.000", "LegB_L.001", 4, RigTags.Thigh | RigTags.Left), new("LegB_L.001", "LegB_L.002", 2.5f, RigTags.Shin | RigTags.Left),
+		new("Body", "LegF_R.000", 5, RigTags.Hip | RigTags.Right), new("LegF_R.000", "LegF_R.001", 4, RigTags.Thigh | RigTags.Right), new("LegF_R.001", "LegF_R.002", 2.5f, RigTags.Shin | RigTags.Right),
+		new("Body", "LegB_R.000", 5, RigTags.Hip | RigTags.Right), new("LegB_R.000", "LegB_R.001", 4, RigTags.Thigh | RigTags.Right), new("LegB_R.001", "LegB_R.002", 2.5f, RigTags.Shin | RigTags.Right),
+		new("Body", "Tail.000", 7, RigTags.Tail), new("Tail.000", "Tail.001", 6, RigTags.Tail),
+		new("Tail.001", "Tail.002", 4.5f, RigTags.Tail), new("Tail.002", "Tail.003", 2.5f, RigTags.Tail),
 	];
 	static readonly TerminalBoneSpec[] TerminalBoneSpecs =
 	[
-		new("LegF_L.001", "LegF_L.002", 2), new("LegB_L.001", "LegB_L.002", 2),
-		new("LegF_R.001", "LegF_R.002", 2), new("LegB_R.001", "LegB_R.002", 2),
-		new("Tail.002", "Tail.003", 1.5f, 0.8f),
+		new("LegF_L.001", "LegF_L.002", 2, RigTags.Foot | RigTags.Left), new("LegB_L.001", "LegB_L.002", 2, RigTags.Foot | RigTags.Left),
+		new("LegF_R.001", "LegF_R.002", 2, RigTags.Foot | RigTags.Right), new("LegB_R.001", "LegB_R.002", 2, RigTags.Foot | RigTags.Right),
+		new("Tail.002", "Tail.003", 1.5f, RigTags.Tail, 0.8f),
 	];
 
 	static Point2 NeuralSize => new(56, 48);
@@ -42,6 +42,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 	TerminalBone[] terminalBones = [];
 	BoneUV[] boneUVs = [];
 	int[] boneOrder = [];
+	readonly List<RigDrawItem> drawItems = [];
 	int body;
 	int head;
 	Vector2 bodyUV;
@@ -70,7 +71,7 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 		for (var i = 0; i < BoneSpecs.Length; i++)
 		{
 			var spec = BoneSpecs[i];
-			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width);
+			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Tags);
 			boneOrder[i] = i;
 		}
 		for (var i = 0; i < TerminalBoneSpecs.Length; i++)
@@ -79,8 +80,13 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 			var terminal = terminalBones[i] = new(RequiredJoint(spec.Previous), RequiredJoint(spec.From),
 				rig.JointCount + i, spec.LengthScale);
 			var bone = BoneSpecs.Length + i;
-			bones[bone] = new(terminal.From, terminal.To, spec.Width);
+			bones[bone] = new(terminal.From, terminal.To, spec.Width, spec.Tags);
 			boneOrder[bone] = bone;
+		}
+		for (var i = 0; i < bones.Length; i++)
+		{
+			var bone = bones[i];
+			bones[i] = bone with { Parent = Array.FindIndex(bones, it => it.To == bone.From) };
 		}
 		body = RequiredJoint("Body");
 		head = RequiredJoint("Head");
@@ -160,12 +166,20 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 
 	float BoneDepth(Bone bone) => (depth[bone.From] + depth[bone.To]) * 0.5f;
 
+	// Each bone tapers from the width its parent ends at to its own.
+	void BoneWidths(Bone bone, out float fromWidth, out float toWidth)
+	{
+		toWidth = bone.Width * owner.Thickness;
+		fromWidth = bone.Parent >= 0 ? bones[bone.Parent].Width * owner.Thickness : toWidth;
+	}
+
 	void CaptureReference()
 	{
 		for (var i = 0; i < bones.Length; i++)
 		{
 			var bone = bones[i];
-			BoneQuad(projected[bone.From], projected[bone.To], bone.Width * owner.Thickness,
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			BoneQuad(projected[bone.From], projected[bone.To], fromWidth, toWidth,
 				out var a, out var b, out var c, out var d);
 			boneUVs[i] = new(NeuralUV(a), NeuralUV(b), NeuralUV(c), NeuralUV(d));
 		}
@@ -191,157 +205,122 @@ sealed class AlienBugRigVisual(AlienBug owner) : IDisposable
 			owner.NeuralReactions.NeuralJostleRadius, owner.NeuralReactions.NeuralJostleStrength);
 	}
 
-	public void Draw(Batcher batcher, Color tint, bool silhouette)
+	void BuildDrawList()
 	{
-		var surface = !silhouette && owner.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(owner.SurfaceId) : null;
-		var texture = !silhouette && owner.SkinMode == RigSkinMode.NCA ? neuralSkin.OutputTexture : null;
-		if (texture != null)
-			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
-		for (var sorted = 0; sorted < boneOrder.Length; sorted++)
+		drawItems.Clear();
+		var costume = Assets.GetCostume(owner.CostumeId);
+		Span<bool> drawn = stackalloc bool[bones.Length];
+		drawn.Clear();
+		foreach (var index in boneOrder)
 		{
-			var index = boneOrder[sorted];
 			var bone = bones[index];
-			var width = bone.Width * owner.Thickness;
-			var amount = Math.Clamp(BoneDepth(bone) * 2 + 0.5f, 0, 1);
-			var color = silhouette ? tint : Color.Lerp(owner.FarColor, owner.NearColor, amount);
-			batcher.Line(projected[bone.From], projected[bone.To], width + 2, silhouette ? tint : owner.OutlineColor);
-			batcher.Line(projected[bone.From], projected[bone.To], width, color);
-			if (surface != null)
-				DrawSurfaceBone(batcher, surface, projected[bone.From], projected[bone.To], width, boneUVs[index], normals: false);
-			else if (texture != null)
-				DrawNeuralBone(batcher, texture, projected[bone.From], projected[bone.To], width, boneUVs[index],
-					color * owner.Neural.NeuralColorAmount);
+			BoneWidths(bone, out var fromWidth, out var toWidth);
+			drawItems.Add(new(RigDrawKind.Bone, index, false, projected[bone.From], projected[bone.To],
+				fromWidth, toWidth, Color.Lerp(owner.FarColor, owner.NearColor, Math.Clamp(BoneDepth(bone) * 2 + 0.5f, 0, 1)),
+				Rings<Bone>(bones, index, drawn), bone.Parent >= 0));
+			AddCostumeItems(drawItems, costume, bone.Tags);
+			drawn[index] = true;
 		}
-		DrawBody(batcher, surface, texture, body, owner.BodySize, bodyUV, silhouette ? tint : owner.CoreColor, silhouette);
-		DrawBody(batcher, surface, texture, head, owner.HeadSize, headUV, silhouette ? tint : owner.NearColor, silhouette);
-		if (texture != null)
-			batcher.PopSampler();
-		if (!silhouette)
-		{
-			var look = (owner.Game.GetFirst<Player>()?.Position - owner.Position - projected[head])?.Normalized() ?? Vector2.UnitX;
-			batcher.Circle(projected[head] + look * owner.HeadSize * 0.55f, 1.2f, 8, owner.EyeColor);
-		}
+		drawItems.Add(new(RigDrawKind.Body, body, From: projected[body], Color: owner.CoreColor));
+		drawItems.Add(new(RigDrawKind.Head, head, From: projected[head], Color: owner.NearColor));
 	}
 
-	void DrawBody(Batcher batcher, Surface? surface, Texture? texture, int joint, float radius, Vector2 uv, Color color, bool silhouette)
+	RigSkin Skin(Surface? surface, Texture? texture, float amount, bool normals)
+		=> new(surface, texture, amount, normals, NeuralSize, NeuralOrigin, materialOrigin, owner.Time.SecondsF);
+
+	float BallRadius(in RigDrawItem item) => item.Kind == RigDrawKind.Body ? owner.BodySize : owner.HeadSize;
+	Vector2 BallUV(in RigDrawItem item) => item.Kind == RigDrawKind.Body ? bodyUV : headUV;
+
+	// Each pass rebuilds the rig's depth-ordered item list, then draws from it.
+	public void Draw(Batcher batcher, Color tint, bool silhouette)
 	{
-		batcher.Circle(projected[joint], radius + 1.5f, 14, silhouette ? color : owner.OutlineColor);
-		batcher.Circle(projected[joint], radius, 14, color);
-		if (surface != null)
-			DrawSurfaceCircle(batcher, surface, projected[joint], radius, uv,
-				new Vector2(radius) / (Vector2)NeuralSize, normals: false);
-		else if (texture != null)
-			DrawNeuralCircle(batcher, texture, projected[joint], radius, uv,
-				new Vector2(radius) / (Vector2)NeuralSize, color * owner.Neural.NeuralColorAmount);
+		BuildDrawList();
+		if (silhouette)
+		{
+			foreach (var item in drawItems)
+				if (item.Kind == RigDrawKind.Costume)
+					DrawCostume(batcher, item, default, tint, tint, default, silhouette: true);
+				else if (item.Kind == RigDrawKind.Bone)
+					DrawBoneSilhouette(batcher, item, tint);
+				else
+					batcher.Circle(item.From, BallRadius(item) + 1.5f, 14, tint);
+			return;
+		}
+
+		var skin = Skin(owner.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(owner.SurfaceId) : null,
+			owner.SkinMode == RigSkinMode.NCA && owner.Neural.NeuralColorAmount > 0 ? neuralSkin.OutputTexture : null,
+			owner.Neural.NeuralColorAmount, normals: false);
+		skin.Push(batcher);
+		var outline = Multiply(owner.OutlineColor, tint);
+		foreach (var item in drawItems)
+		{
+			if (item.Kind == RigDrawKind.Costume)
+			{
+				DrawCostume(batcher, item, boneUVs[item.Index], tint, owner.OutlineColor, skin);
+				continue;
+			}
+			var color = Multiply(item.Color, tint);
+			if (item.Kind == RigDrawKind.Bone)
+			{
+				DrawBone(batcher, item, boneUVs[item.Index], color, outline, skin);
+				continue;
+			}
+			var radius = BallRadius(item);
+			batcher.Circle(item.From, radius + 1.5f, 14, outline);
+			batcher.Circle(item.From, radius, 14, color);
+			skin.Joint(batcher, item.From, radius, BallUV(item), color);
+			if (item.Kind == RigDrawKind.Head)
+			{
+				var look = (owner.Game.GetFirst<Player>()?.Position - owner.Position - item.From)?.Normalized() ?? Vector2.UnitX;
+				batcher.Circle(item.From + look * radius * 0.55f, 1.2f, 8, Multiply(owner.EyeColor, tint));
+			}
+		}
+		skin.Pop(batcher);
 	}
 
 	public void DrawNormals(Batcher batcher)
 	{
-		var flat = new Color(0x8080ff);
-		var surface = owner.SkinMode == RigSkinMode.Surface && Assets.GetSurface(owner.SurfaceId) is { HasNormal: true } found
-			? found : null;
-		var texture = owner.SkinMode == RigSkinMode.NCA ? neuralSkin.OutputNormalTexture : null;
-		if (texture != null)
-			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
-		for (var sorted = 0; sorted < boneOrder.Length; sorted++)
+		BuildDrawList();
+		var skin = Skin(owner.SkinMode == RigSkinMode.Surface &&
+			Assets.GetSurface(owner.SurfaceId) is { HasNormal: true } found ? found : null,
+			owner.SkinMode == RigSkinMode.NCA && owner.Neural.NeuralNormalAmount > 0 ? neuralSkin.OutputNormalTexture : null,
+			owner.Neural.NeuralNormalAmount, normals: true);
+		skin.Push(batcher);
+		foreach (var item in drawItems)
 		{
-			var index = boneOrder[sorted];
-			var bone = bones[index];
-			var width = bone.Width * owner.Thickness;
-			batcher.Line(projected[bone.From], projected[bone.To], width + 2, flat);
-			if (surface != null)
-				DrawSurfaceBone(batcher, surface, projected[bone.From], projected[bone.To], width, boneUVs[index], normals: true);
-			else if (texture != null)
-				DrawNeuralBone(batcher, texture, projected[bone.From], projected[bone.To], width, boneUVs[index],
-					Color.White * owner.Neural.NeuralNormalAmount);
+			if (item.Kind == RigDrawKind.Costume)
+			{
+				DrawCostume(batcher, item, boneUVs[item.Index], Color.White, owner.OutlineColor, skin);
+				continue;
+			}
+			if (item.Kind == RigDrawKind.Bone)
+			{
+				DrawBoneNormals(batcher, item, boneUVs[item.Index], 0, 0, 0, skin);
+				continue;
+			}
+			batcher.Circle(item.From, BallRadius(item) + 1.5f, 14, new Color(0x8080ff));
+			skin.Joint(batcher, item.From, BallRadius(item), BallUV(item), Color.White);
 		}
-		batcher.Circle(projected[body], owner.BodySize + 1.5f, 14, flat);
-		batcher.Circle(projected[head], owner.HeadSize + 1.5f, 14, flat);
-		if (surface != null)
-		{
-			DrawSurfaceCircle(batcher, surface, projected[body], owner.BodySize, bodyUV,
-				new Vector2(owner.BodySize) / (Vector2)NeuralSize, normals: true);
-			DrawSurfaceCircle(batcher, surface, projected[head], owner.HeadSize, headUV,
-				new Vector2(owner.HeadSize) / (Vector2)NeuralSize, normals: true);
-		}
-		if (texture != null)
-			batcher.PopSampler();
-	}
-
-	static void BoneQuad(Vector2 from, Vector2 to, float width,
-		out Vector2 a, out Vector2 b, out Vector2 c, out Vector2 d)
-	{
-		var along = (to - from).Normalized(Vector2.UnitY);
-		var across = along.TurnLeft() * width * 0.5f;
-		a = from + across;
-		b = from - across;
-		c = to - across;
-		d = to + across;
-	}
-
-	static void DrawNeuralBone(Batcher batcher, Texture texture, Vector2 from, Vector2 to, float width, BoneUV uv, Color color)
-	{
-		BoneQuad(from, to, width, out var a, out var b, out var c, out var d);
-		batcher.Quad(texture, a, b, c, d, uv.A, uv.B, uv.C, uv.D, color);
-	}
-
-	void DrawSurfaceBone(Batcher batcher, Surface surface, Vector2 from, Vector2 to, float width, BoneUV uv, bool normals)
-	{
-		BoneQuad(from, to, width, out var a, out var b, out var c, out var d);
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[]
-		{
-			new(a, SurfaceWorld(uv.A)), new(b, SurfaceWorld(uv.B)), new(c, SurfaceWorld(uv.C)),
-			new(a, SurfaceWorld(uv.A)), new(c, SurfaceWorld(uv.C)), new(d, SurfaceWorld(uv.D)),
-		};
-		if (normals)
-			surface.RenderNormals(batcher, triangles, owner.Time.SecondsF);
-		else
-			surface.Render(batcher, triangles, owner.Time.SecondsF);
-	}
-
-	void DrawSurfaceCircle(Batcher batcher, Surface surface, Vector2 center, float radius,
-		Vector2 uvCenter, Vector2 uvRadius, bool normals)
-	{
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[14 * 3];
-		var previous = center + Vector2.UnitX * radius;
-		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
-		for (var i = 1; i <= 14; i++)
-		{
-			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
-			var next = center + direction * radius;
-			var nextUV = uvCenter + direction * uvRadius;
-			var at = (i - 1) * 3;
-			triangles[at] = new(center, SurfaceWorld(uvCenter));
-			triangles[at + 1] = new(previous, SurfaceWorld(previousUV));
-			triangles[at + 2] = new(next, SurfaceWorld(nextUV));
-			previous = next;
-			previousUV = nextUV;
-		}
-		if (normals)
-			surface.RenderNormals(batcher, triangles, owner.Time.SecondsF);
-		else
-			surface.Render(batcher, triangles, owner.Time.SecondsF);
-	}
-
-	Vector2 SurfaceWorld(Vector2 uv) => materialOrigin + uv * (Vector2)NeuralSize + (Vector2)NeuralOrigin;
-
-	static void DrawNeuralCircle(Batcher batcher, Texture texture, Vector2 center, float radius,
-		Vector2 uvCenter, Vector2 uvRadius, Color color)
-	{
-		var previous = center + Vector2.UnitX * radius;
-		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
-		for (var i = 1; i <= 14; i++)
-		{
-			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
-			var next = center + direction * radius;
-			var nextUV = uvCenter + direction * uvRadius;
-			batcher.Triangle(texture, center, previous, next, uvCenter, previousUV, nextUV, color);
-			previous = next;
-			previousUV = nextUV;
-		}
+		skin.Pop(batcher);
 	}
 
 	static Vector2 NeuralUV(Vector2 position) => (position - (Vector2)NeuralOrigin) / (Vector2)NeuralSize;
+
+	public Rect GetVisualBounds()
+	{
+		BuildDrawList();
+		var bounds = new Rect(projected[body], Vector2.Zero);
+		foreach (var item in drawItems)
+		{
+			if (item.Kind == RigDrawKind.Costume)
+				bounds = bounds.Conflate(CostumeBounds(item));
+			else if (item.Kind == RigDrawKind.Bone)
+				bounds = bounds.Conflate(Rect.Between(item.From, item.To).Inflate(MathF.Max(item.FromWidth, item.ToWidth) * 0.5f + 2));
+			else
+				bounds = bounds.Conflate(new Rect(item.From, Vector2.Zero).Inflate(BallRadius(item) + 2));
+		}
+		return bounds + owner.Position;
+	}
 
 	public void Dispose()
 	{

@@ -1,0 +1,7 @@
+{
+  "Pieces": [
+    { "Bones": "UpperArm, Forearm, Thigh, Shin", "Count": 4, "Width": 1.2, "Color": "f07eac" },
+    { "Bones": "Waist", "From": 0.1, "To": 0.5, "Width": 1.7, "Color": "71e4d5" },
+    { "Kind": "Stud", "Bones": "Shoulder", "From": 0.5, "Width": 1.4, "Color": "ffe7a0" }
+  ]
+}

@@ -84,6 +84,19 @@ public partial class Manager
 			RequestAudioBankReload();
 		else if (extension.Equals(".ozzpack", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, "Rigs"))
 			RequestRigReload();
+		else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sources", "Costumes")))
+			costumeReloadRequested = true;
+	}
+
+	volatile bool costumeReloadRequested;
+
+	void UpdateCostumeReload()
+	{
+		if (!costumeReloadRequested)
+			return;
+		costumeReloadRequested = false;
+		Assets.LoadCostumes(Assets.Content, "Sources/Costumes");
+		Game.NotifyHotReload("Reloaded costumes");
 	}
 
 	void RequestRigReload()

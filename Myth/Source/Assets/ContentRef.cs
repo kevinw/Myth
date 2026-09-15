@@ -75,6 +75,20 @@ public readonly struct SurfaceContent : IContentKind
 	public static ContentRef<SurfaceContent> BouncerDefault => new("bouncer");
 }
 
+public readonly struct CostumeContent : IContentKind
+{
+	public static string ContentKey(string name) => $"Packed/Visuals/costumes/{name}.json";
+
+	public static void Collect(ContentDependencyCollector collector, string name, string origin)
+	{
+		if (!collector.IncludeFile(ContentKey(name), origin) || Assets.GetCostume(name) is not { } costume)
+			return;
+		foreach (var piece in costume.Pieces)
+			if (piece.Surface != "")
+				collector.Add(new ContentRef<SurfaceContent>(piece.Surface), $"{origin} -> costume '{name}'");
+	}
+}
+
 public readonly struct VisualTextureContent : IContentKind
 {
 	public static string ContentKey(string name) => $"Packed/Visuals/textures/{name}.png";

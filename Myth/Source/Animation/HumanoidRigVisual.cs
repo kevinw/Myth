@@ -1,5 +1,6 @@
 using System.Numerics;
 using Foster.Framework;
+using static Myth.RigDraw;
 
 namespace Myth;
 
@@ -51,22 +52,14 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	enum Part { Torso, Bicep, Forearm, Hand, Thigh, Other }
 	enum Side { None, Left, Right }
 	internal enum DrawParts { All, BehindPlayer, InFrontOfPlayer }
-	enum DrawItemKind { Bone, Hand, Head, Wire, Accessory }
-	[Flags] enum JointRings { None = 0, From = 1, To = 2 }
-
-	// One depth-ordered piece of the rig. Bones and hands carry resolved geometry and untinted color;
-	// Index is the bone, wire, or accessory item; Rings marks which bone ends draw an outline ring.
-	readonly record struct DrawItem(DrawItemKind Kind, int Index, bool BehindPlayer,
-		Vector2 From = default, Vector2 To = default, float FromWidth = 0, float ToWidth = 0,
-		Color Color = default, JointRings Rings = JointRings.None);
 
 	public IHumanoidRigAccessoryVisual? Accessory;
-	readonly List<DrawItem> drawItems = [];
+	readonly List<RigDrawItem> drawItems = [];
 
 	readonly record struct BoneSpec(string From, string To, float Width, Part Part, bool Combat = false,
-		Side Leg = Side.None, Side Arm = Side.None);
-	readonly record struct Bone(int From, int To, float Width, Part Part, bool Combat, Side Leg, Side Arm, int Parent = -1);
-	readonly record struct BoneUV(Vector2 A, Vector2 B, Vector2 C, Vector2 D);
+		Side Leg = Side.None, Side Arm = Side.None, RigTags Tags = RigTags.None);
+	readonly record struct Bone(int From, int To, float Width, Part Part, bool Combat, Side Leg, Side Arm, RigTags Tags, int Parent = -1)
+		: IRigBone;
 	readonly record struct Leg(int Hip, int Knee, int Ankle, int Toe, int Tip);
 
 	struct FootIK
@@ -105,31 +98,31 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 
 	static readonly BoneSpec[] BoneSpecs =
 	[
-		new("pelvis", "spine_01", 5, Part.Torso, true),
-		new("spine_01", "spine_02", 5, Part.Torso, true),
-		new("spine_02", "spine_03", 5, Part.Torso, true),
-		new("spine_03", "neck_01", 4, Part.Other, true),
-		new("neck_01", "Head", 3, Part.Other, true),
-		new("spine_03", "clavicle_l", 3, Part.Bicep, true, Arm: Side.Left),
-		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true, Arm: Side.Left),
-		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true, Arm: Side.Left),
-		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true, Arm: Side.Left),
-		new("hand_l", "middle_01_l", 2.5f, Part.Hand, true, Arm: Side.Left),
-		new("spine_03", "clavicle_r", 3, Part.Bicep, true, Arm: Side.Right),
-		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true, Arm: Side.Right),
-		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true, Arm: Side.Right),
-		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true, Arm: Side.Right),
-		new("hand_r", "middle_01_r", 2.5f, Part.Hand, true, Arm: Side.Right),
-		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: Side.Left),
-		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: Side.Left),
-		new("calf_l", "foot_l", 3, Part.Other, Leg: Side.Left),
-		new("foot_l", "ball_l", 2, Part.Other, Leg: Side.Left),
-		new("ball_l", "ball_leaf_l", 2, Part.Other, Leg: Side.Left),
-		new("pelvis", "thigh_r", 4, Part.Thigh, Leg: Side.Right),
-		new("thigh_r", "calf_r", 4, Part.Thigh, Leg: Side.Right),
-		new("calf_r", "foot_r", 3, Part.Other, Leg: Side.Right),
-		new("foot_r", "ball_r", 2, Part.Other, Leg: Side.Right),
-		new("ball_r", "ball_leaf_r", 2, Part.Other, Leg: Side.Right),
+		new("pelvis", "spine_01", 5, Part.Torso, true, Tags: RigTags.Waist),
+		new("spine_01", "spine_02", 5, Part.Torso, true, Tags: RigTags.Trunk),
+		new("spine_02", "spine_03", 5, Part.Torso, true, Tags: RigTags.Trunk),
+		new("spine_03", "neck_01", 4, Part.Other, true, Tags: RigTags.Trunk),
+		new("neck_01", "Head", 3, Part.Other, true, Tags: RigTags.Neck),
+		new("spine_03", "clavicle_l", 3, Part.Bicep, true, Arm: Side.Left, Tags: RigTags.Shoulder | RigTags.Left),
+		new("clavicle_l", "upperarm_l", 3, Part.Bicep, true, Arm: Side.Left, Tags: RigTags.Shoulder | RigTags.Left),
+		new("upperarm_l", "lowerarm_l", 3, Part.Bicep, true, Arm: Side.Left, Tags: RigTags.UpperArm | RigTags.Left),
+		new("lowerarm_l", "hand_l", 2.5f, Part.Forearm, true, Arm: Side.Left, Tags: RigTags.Forearm | RigTags.Left),
+		new("hand_l", "middle_01_l", 2.5f, Part.Hand, true, Arm: Side.Left, Tags: RigTags.Hand | RigTags.Left),
+		new("spine_03", "clavicle_r", 3, Part.Bicep, true, Arm: Side.Right, Tags: RigTags.Shoulder | RigTags.Right),
+		new("clavicle_r", "upperarm_r", 3, Part.Bicep, true, Arm: Side.Right, Tags: RigTags.Shoulder | RigTags.Right),
+		new("upperarm_r", "lowerarm_r", 3, Part.Bicep, true, Arm: Side.Right, Tags: RigTags.UpperArm | RigTags.Right),
+		new("lowerarm_r", "hand_r", 2.5f, Part.Forearm, true, Arm: Side.Right, Tags: RigTags.Forearm | RigTags.Right),
+		new("hand_r", "middle_01_r", 2.5f, Part.Hand, true, Arm: Side.Right, Tags: RigTags.Hand | RigTags.Right),
+		new("pelvis", "thigh_l", 4, Part.Thigh, Leg: Side.Left, Tags: RigTags.Hip | RigTags.Left),
+		new("thigh_l", "calf_l", 4, Part.Thigh, Leg: Side.Left, Tags: RigTags.Thigh | RigTags.Left),
+		new("calf_l", "foot_l", 3, Part.Other, Leg: Side.Left, Tags: RigTags.Shin | RigTags.Left),
+		new("foot_l", "ball_l", 2, Part.Other, Leg: Side.Left, Tags: RigTags.Foot | RigTags.Left),
+		new("ball_l", "ball_leaf_l", 2, Part.Other, Leg: Side.Left, Tags: RigTags.Foot | RigTags.Left),
+		new("pelvis", "thigh_r", 4, Part.Thigh, Leg: Side.Right, Tags: RigTags.Hip | RigTags.Right),
+		new("thigh_r", "calf_r", 4, Part.Thigh, Leg: Side.Right, Tags: RigTags.Thigh | RigTags.Right),
+		new("calf_r", "foot_r", 3, Part.Other, Leg: Side.Right, Tags: RigTags.Shin | RigTags.Right),
+		new("foot_r", "ball_r", 2, Part.Other, Leg: Side.Right, Tags: RigTags.Foot | RigTags.Right),
+		new("ball_r", "ball_leaf_r", 2, Part.Other, Leg: Side.Right, Tags: RigTags.Foot | RigTags.Right),
 	];
 
 	public readonly HumanoidRigSettings Settings = configuredSettings ?? new();
@@ -316,7 +309,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	static float EyeSaccadeAmount => 0.12f;
 	static float EyeReactionDuration => 0.18f;
 	static int WireSegments => 8;
-	static int NormalFacets => 3;
 	static Point2 NeuralSize => new(64, 80);
 	static Point2 NeuralOrigin => new(-32, -72);
 
@@ -376,7 +368,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		{
 			var spec = BoneSpecs[i];
 			bones[i] = new(RequiredJoint(spec.From), RequiredJoint(spec.To), spec.Width, spec.Part,
-				spec.Combat, spec.Leg, spec.Arm);
+				spec.Combat, spec.Leg, spec.Arm, spec.Tags);
 			ragdollJoints[bones[i].From] = true;
 			ragdollJoints[bones[i].To] = true;
 			boneOrder[i] = i;
@@ -827,9 +819,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			eyeReactionStrength = 0;
 		}
 	}
-
-	static float HashSigned(uint value)
-		=> (Hash32.Mix(value) & 0xffff) / 32767.5f - 1;
 
 	void TriggerEyeReaction(float strength)
 	{
@@ -1514,6 +1503,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				bounds = bounds.Conflate(point - Vector2.One * radius).Conflate(point + Vector2.One * radius);
 			}
 		}
+		if (Assets.GetCostume(Settings.CostumeId) != null)
+		{
+			BuildDrawList();
+			foreach (var item in drawItems)
+				if (item.Kind == RigDrawKind.Costume)
+					bounds = bounds.Conflate(CostumeBounds(item));
+		}
 		return bounds + owner.Position;
 	}
 
@@ -1531,7 +1527,9 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		var accessoryIndex = 0;
 		var headAdded = false;
 		var headDepth = jointDepth[head];
+		var costume = Assets.GetCostume(Settings.CostumeId);
 		Span<bool> added = stackalloc bool[bones.Length];
+		added.Clear();
 		foreach (var boneIndex in boneOrder)
 		{
 			var bone = bones[boneIndex];
@@ -1539,28 +1537,22 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			if (Accessory != null && !headAdded && headDepth <= boneDepth)
 			{
 				AddItemsThrough(ref wireIndex, ref accessoryIndex, headDepth);
-				drawItems.Add(new(DrawItemKind.Head, -1, false));
+				drawItems.Add(new(RigDrawKind.Head, -1, false));
 				headAdded = true;
 			}
 			AddItemsThrough(ref wireIndex, ref accessoryIndex, boneDepth);
 			BoneWidths(bone, out var fromWidth, out var toWidth);
-			var rings = JointRings.None;
-			if (bone.Part != Part.Hand)
-			{
-				if (bone.Parent >= 0 && !added[bone.Parent])
-					rings |= JointRings.From;
-				if (!ChildDrawn(boneIndex, added))
-					rings |= JointRings.To;
-			}
+			var rings = bone.Part == Part.Hand ? JointRings.None : Rings<Bone>(bones, boneIndex, added);
 			added[boneIndex] = true;
-			drawItems.Add(new(bone.Part == Part.Hand ? DrawItemKind.Hand : DrawItemKind.Bone, boneIndex,
+			drawItems.Add(new(bone.Part == Part.Hand ? RigDrawKind.Hand : RigDrawKind.Bone, boneIndex,
 				bone.Leg == backLeg || bone.Arm == backArm, projectedPose[bone.From], projectedPose[bone.To],
-				fromWidth, toWidth, BoneColor(bone, BoneRenderDepth(bone)), rings));
+				fromWidth, toWidth, BoneColor(bone, BoneRenderDepth(bone)), rings, bone.Parent >= 0));
+			AddCostumeItems(drawItems, costume, bone.Tags);
 		}
 		if (!headAdded)
 		{
 			AddItemsThrough(ref wireIndex, ref accessoryIndex, headDepth);
-			drawItems.Add(new(DrawItemKind.Head, -1, false));
+			drawItems.Add(new(RigDrawKind.Head, -1, false));
 		}
 		AddItemsThrough(ref wireIndex, ref accessoryIndex, float.PositiveInfinity);
 	}
@@ -1568,18 +1560,21 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	void AddItemsThrough(ref int wireIndex, ref int accessoryIndex, float depth)
 	{
 		while (wireIndex < wireOrder.Length && WireDepth(wires[wireOrder[wireIndex]]) <= depth)
-			drawItems.Add(new(DrawItemKind.Wire, wireOrder[wireIndex++], false));
+			drawItems.Add(new(RigDrawKind.Wire, wireOrder[wireIndex++], false));
 		while (Accessory != null && accessoryIndex < Accessory.DrawItemCount &&
 			Accessory.GetDrawItemDepth(accessoryIndex) <= depth)
-			drawItems.Add(new(DrawItemKind.Accessory, accessoryIndex++, false));
+			drawItems.Add(new(RigDrawKind.Accessory, accessoryIndex++, false));
 	}
 
-	static bool Includes(DrawItem item, DrawParts parts) => parts switch
+	static bool Includes(RigDrawItem item, DrawParts parts) => parts switch
 	{
 		DrawParts.All => true,
 		DrawParts.BehindPlayer => item.BehindPlayer,
 		_ => !item.BehindPlayer,
 	};
+
+	RigSkin Skin(Surface? surface, Texture? texture, float amount, bool normals)
+		=> new(surface, texture, amount, normals, NeuralSize, NeuralOrigin, surfaceMaterialOrigin, owner.Time.SecondsF);
 
 	void DrawItems(Batcher batcher, Color tint, bool silhouette, DrawParts parts)
 	{
@@ -1589,11 +1584,10 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 			return;
 		}
 
-		var surface = Settings.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(Settings.SurfaceId) : null;
-		var neuralTexture = Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralColorAmount > 0
-			? neuralSkin.OutputTexture : null;
-		if (neuralTexture != null)
-			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var skin = Skin(Settings.SkinMode == RigSkinMode.Surface ? Assets.GetSurface(Settings.SurfaceId) : null,
+			Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralColorAmount > 0 ? neuralSkin.OutputTexture : null,
+			Neural.NeuralColorAmount, normals: false);
+		skin.Push(batcher);
 		var outline = Multiply(Settings.OutlineColor, tint);
 		foreach (var item in drawItems)
 		{
@@ -1601,58 +1595,31 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				continue;
 			switch (item.Kind)
 			{
-				case DrawItemKind.Bone:
-					DrawBoneItem(batcher, item, Multiply(item.Color, tint), outline, surface, neuralTexture);
+				case RigDrawKind.Costume:
+					DrawCostume(batcher, item, neuralBoneUVs[item.Index], tint, Settings.OutlineColor, skin);
 					break;
-				case DrawItemKind.Hand:
+				case RigDrawKind.Bone:
+					DrawBone(batcher, item, neuralBoneUVs[item.Index], Multiply(item.Color, tint), outline, skin);
+					break;
+				case RigDrawKind.Hand:
 					var color = Multiply(item.Color, tint);
 					var spinAmount = HandSpinAmount(bones[item.Index]);
 					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 2, outline);
 					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth, spinAmount, 0, color);
-					DrawHandPalmSkin(batcher, item.Index, item.From, item.To, item.FromWidth, item.ToWidth,
-						color, surface, neuralTexture, normals: false);
+					DrawHandPalmSkin(batcher, item, color, skin);
 					break;
-				case DrawItemKind.Head:
-					DrawHead(batcher, tint, silhouette: false, surface, neuralTexture);
+				case RigDrawKind.Head:
+					DrawHead(batcher, tint, silhouette: false, skin);
 					break;
-				case DrawItemKind.Wire:
+				case RigDrawKind.Wire:
 					DrawWire(batcher, item.Index, tint, silhouette: false);
 					break;
-				case DrawItemKind.Accessory:
+				case RigDrawKind.Accessory:
 					Accessory!.DrawItem(batcher, item.Index, null);
 					break;
 			}
 		}
-		if (neuralTexture != null)
-			batcher.PopSampler();
-	}
-
-	void DrawBoneItem(Batcher batcher, DrawItem item, Color color, Color outline, Surface? surface,
-		Texture? neuralTexture)
-	{
-		var joinsParent = bones[item.Index].Parent >= 0;
-		var fromRadius = JointRadius(item.FromWidth);
-		var toRadius = JointRadius(item.ToWidth);
-		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, outline);
-		if (item.Rings.HasFlag(JointRings.From))
-			batcher.Circle(item.From, fromRadius + 1, 14, outline);
-		if (item.Rings.HasFlag(JointRings.To))
-			batcher.Circle(item.To, toRadius + 1, 14, outline);
-		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth, item.ToWidth, color);
-		if (joinsParent)
-			batcher.Circle(item.From, fromRadius, 14, color);
-		batcher.Circle(item.To, toRadius, 14, color);
-		var uv = neuralBoneUVs[item.Index];
-		var skinColor = color * Neural.NeuralColorAmount;
-		if (surface != null)
-			DrawSurfaceBone(batcher, surface, item.From, item.To, item.FromWidth, item.ToWidth, uv, normals: false);
-		else if (neuralTexture != null)
-			DrawNeuralBone(batcher, neuralTexture, item.From, item.To, item.FromWidth, item.ToWidth, uv, skinColor);
-		if (joinsParent)
-			DrawJointSkin(batcher, item.From, fromRadius, (uv.A + uv.B) * 0.5f, surface, neuralTexture, skinColor,
-				normals: false);
-		DrawJointSkin(batcher, item.To, toRadius, (uv.C + uv.D) * 0.5f, surface, neuralTexture, skinColor,
-			normals: false);
+		skin.Pop(batcher);
 	}
 
 	// Bone and hand outline shapes go down first so the silhouette is their union; the other items follow in order.
@@ -1662,14 +1629,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		{
 			if (!Includes(item, parts))
 				continue;
-			if (item.Kind == DrawItemKind.Hand)
+			if (item.Kind == RigDrawKind.Costume)
+				DrawCostume(batcher, item, default, tint, tint, default, silhouette: true);
+			else if (item.Kind == RigDrawKind.Hand)
 				DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
 					HandSpinAmount(bones[item.Index]), 2, tint);
-			else if (item.Kind == DrawItemKind.Bone)
-			{
-				DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, tint);
-				batcher.Circle(item.To, JointRadius(item.ToWidth) + 1, 14, tint);
-			}
+			else if (item.Kind == RigDrawKind.Bone)
+				DrawBoneSilhouette(batcher, item, tint);
 		}
 		foreach (var item in drawItems)
 		{
@@ -1677,20 +1643,20 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				continue;
 			switch (item.Kind)
 			{
-				case DrawItemKind.Head:
-					DrawHead(batcher, tint, silhouette: true, null, null);
+				case RigDrawKind.Head:
+					DrawHead(batcher, tint, silhouette: true, default);
 					break;
-				case DrawItemKind.Wire:
+				case RigDrawKind.Wire:
 					DrawWire(batcher, item.Index, tint, silhouette: true);
 					break;
-				case DrawItemKind.Accessory:
+				case RigDrawKind.Accessory:
 					Accessory!.DrawItem(batcher, item.Index, tint);
 					break;
 			}
 		}
 	}
 
-	void DrawHead(Batcher batcher, Color tint, bool silhouette, Surface? surface, Texture? neuralTexture)
+	void DrawHead(Batcher batcher, Color tint, bool silhouette, in RigSkin skin)
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
@@ -1705,20 +1671,12 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		batcher.Circle(position, Settings.HeadSize + 1.4f, 14,
 			silhouette ? tint : Multiply(Settings.OutlineColor, tint));
 		batcher.Circle(position, Settings.HeadSize, 14, silhouette ? tint : Multiply(Settings.NearColor, tint));
-		if (surface != null)
-			DrawSurfaceCircle(batcher, surface, position, Settings.HeadSize,
-				neuralHeadUV, neuralHeadUVRadius, normals: false);
-		else if (neuralTexture != null)
-			DrawNeuralCircle(batcher, neuralTexture, position, Settings.HeadSize,
-				neuralHeadUV, neuralHeadUVRadius, Multiply(Settings.NearColor, tint) * Neural.NeuralColorAmount);
+		skin.Circle(batcher, position, Settings.HeadSize, neuralHeadUV, neuralHeadUVRadius,
+			Multiply(Settings.NearColor, tint));
 		if (!silhouette && Settings.EyeSize > 0)
 			batcher.Circle(position + lookDirection * 2.4f, VisualEyeScale * Settings.EyeSize * eyeScale, 8,
 				Multiply(Settings.AccentColor, tint));
 	}
-
-	static Color Multiply(Color color, Color tint) => new(
-		(byte)(color.R * tint.R / 255), (byte)(color.G * tint.G / 255),
-		(byte)(color.B * tint.B / 255), (byte)(color.A * tint.A / 255));
 
 	public void DrawNormals(Batcher batcher, DrawParts parts = DrawParts.All)
 	{
@@ -1729,79 +1687,45 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	void DrawItemNormals(Batcher batcher, DrawParts parts)
 	{
 		var flat = new Color(0x8080ff);
-		var surface = Settings.SkinMode == RigSkinMode.Surface &&
-			Assets.GetSurface(Settings.SurfaceId) is { HasNormal: true } foundSurface
-			? foundSurface : null;
-		var neuralNormals = Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralNormalAmount > 0
-			? neuralSkin.OutputNormalTexture : null;
-		if (neuralNormals != null)
-			batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp));
+		var skin = Skin(Settings.SkinMode == RigSkinMode.Surface &&
+			Assets.GetSurface(Settings.SurfaceId) is { HasNormal: true } foundSurface ? foundSurface : null,
+			Settings.SkinMode == RigSkinMode.NCA && Neural.NeuralNormalAmount > 0 ? neuralSkin.OutputNormalTexture : null,
+			Neural.NeuralNormalAmount, normals: true);
+		skin.Push(batcher);
+		var phaseSeed = (uint)(animationPhase * uint.MaxValue);
 		foreach (var item in drawItems)
 		{
 			if (!Includes(item, parts))
 				continue;
 			switch (item.Kind)
 			{
-				case DrawItemKind.Bone:
-					DrawBoneItemNormals(batcher, item, flat, surface, neuralNormals);
+				case RigDrawKind.Costume:
+					DrawCostume(batcher, item, neuralBoneUVs[item.Index], Color.White, Settings.OutlineColor, skin);
 					break;
-				case DrawItemKind.Hand:
+				case RigDrawKind.Bone:
+					DrawBoneNormals(batcher, item, neuralBoneUVs[item.Index], Settings.NormalRoundness,
+						Settings.NormalIrregularity, phaseSeed, skin);
+					break;
+				case RigDrawKind.Hand:
 					DrawHand(batcher, item.From, item.To, item.FromWidth, item.ToWidth,
 						HandSpinAmount(bones[item.Index]), 2, flat);
-					DrawHandPalmSkin(batcher, item.Index, item.From, item.To, item.FromWidth, item.ToWidth,
-						flat, surface, neuralNormals, normals: true);
+					DrawHandPalmSkin(batcher, item, flat, skin);
 					break;
-				case DrawItemKind.Head:
-					DrawHeadNormals(batcher, flat, surface, neuralNormals);
+				case RigDrawKind.Head:
+					DrawHeadNormals(batcher, flat, skin);
 					break;
-				case DrawItemKind.Wire:
+				case RigDrawKind.Wire:
 					DrawWireNormals(batcher, item.Index);
 					break;
-				case DrawItemKind.Accessory:
+				case RigDrawKind.Accessory:
 					Accessory!.DrawItem(batcher, item.Index, flat);
 					break;
 			}
 		}
-		if (neuralNormals != null)
-			batcher.PopSampler();
+		skin.Pop(batcher);
 	}
 
-	void DrawBoneItemNormals(Batcher batcher, DrawItem item, Color flat, Surface? surface, Texture? neuralNormals)
-	{
-		var joinsParent = bones[item.Index].Parent >= 0;
-		var fromRadius = JointRadius(item.FromWidth);
-		var toRadius = JointRadius(item.ToWidth);
-		var seed = (uint)item.Index * 0x9e3779b9u;
-		if (Settings.NormalRoundness > 0)
-		{
-			DrawBoneNormals(batcher, item.Index, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2);
-			if (joinsParent)
-				DrawSphereNormals(batcher, item.From, fromRadius + 1, 14, Settings.NormalRoundness,
-					Settings.NormalIrregularity, seed);
-			DrawSphereNormals(batcher, item.To, toRadius + 1, 14, Settings.NormalRoundness,
-				Settings.NormalIrregularity, seed);
-		}
-		else
-		{
-			DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, flat);
-			if (joinsParent)
-				batcher.Circle(item.From, fromRadius + 1, 14, flat);
-			batcher.Circle(item.To, toRadius + 1, 14, flat);
-		}
-		var uv = neuralBoneUVs[item.Index];
-		var skinColor = Color.White * Neural.NeuralNormalAmount;
-		if (surface != null)
-			DrawSurfaceBone(batcher, surface, item.From, item.To, item.FromWidth, item.ToWidth, uv, normals: true);
-		else if (neuralNormals != null)
-			DrawNeuralBone(batcher, neuralNormals, item.From, item.To, item.FromWidth, item.ToWidth, uv, skinColor);
-		if (joinsParent)
-			DrawJointSkin(batcher, item.From, fromRadius, (uv.A + uv.B) * 0.5f, surface, neuralNormals, skinColor,
-				normals: true);
-		DrawJointSkin(batcher, item.To, toRadius, (uv.C + uv.D) * 0.5f, surface, neuralNormals, skinColor,
-			normals: true);
-	}
-
-	void DrawHeadNormals(Batcher batcher, Color flat, Surface? surface, Texture? neuralNormals)
+	void DrawHeadNormals(Batcher batcher, Color flat, in RigSkin skin)
 	{
 		if (TryGetHeadSpriteFrame(out var frame, out _))
 		{
@@ -1815,12 +1739,7 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 				Settings.NormalRoundness, Settings.NormalIrregularity, 0x68bc21ebu);
 		else
 			batcher.Circle(position, Settings.HeadSize + 1.4f, 14, flat);
-		if (surface != null)
-			DrawSurfaceCircle(batcher, surface, position, Settings.HeadSize,
-				neuralHeadUV, neuralHeadUVRadius, normals: true);
-		else if (neuralNormals != null)
-			DrawNeuralCircle(batcher, neuralNormals, position, Settings.HeadSize,
-				neuralHeadUV, neuralHeadUVRadius, Color.White * Neural.NeuralNormalAmount);
+		skin.Circle(batcher, position, Settings.HeadSize, neuralHeadUV, neuralHeadUVRadius, Color.White);
 	}
 
 	bool TryGetHeadSpriteFrame(out Sprite.Frame frame, out int frameIndex)
@@ -1936,105 +1855,6 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 	float HandSpinAmount(Bone bone)
 		=> !spinLeftHandOnly || bone.Arm == Side.Left ? Math.Clamp(fingerSpinSpeed / FingerSpinBlendSpeed, 0, 1) : 0;
 
-	static float JointRadiusScale => 0.5f;
-	static float JointRadius(float width) => MathF.Max(1.2f, width * JointRadiusScale);
-	bool ChildDrawn(int boneIndex, ReadOnlySpan<bool> drawn)
-	{
-		for (var i = 0; i < bones.Length; i++)
-			if (bones[i].Parent == boneIndex && drawn[i])
-				return true;
-		return false;
-	}
-
-	void DrawJointSkin(Batcher batcher, Vector2 center, float radius, Vector2 uvCenter, Surface? surface,
-		Texture? texture, Color color, bool normals)
-	{
-		var uvRadius = new Vector2(radius) / (Vector2)NeuralSize;
-		if (surface != null)
-			DrawSurfaceCircle(batcher, surface, center, radius, uvCenter, uvRadius, normals);
-		else if (texture != null)
-			DrawNeuralCircle(batcher, texture, center, radius, uvCenter, uvRadius, color);
-	}
-
-	static void BoneQuad(Vector2 from, Vector2 to, float fromWidth, float toWidth,
-		out Vector2 a, out Vector2 b, out Vector2 c, out Vector2 d)
-	{
-		var along = (to - from).Normalized(Vector2.UnitY);
-		var across = along.TurnLeft();
-		a = from + across * fromWidth * 0.5f;
-		b = from - across * fromWidth * 0.5f;
-		c = to - across * toWidth * 0.5f;
-		d = to + across * toWidth * 0.5f;
-	}
-
-	static void DrawBoneQuad(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth, Color color)
-	{
-		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
-		batcher.Quad(a, b, c, d, color);
-	}
-
-	void DrawBoneNormals(Batcher batcher, int boneIndex, Vector2 from, Vector2 to,
-		float fromWidth, float toWidth)
-	{
-		var seed = Hash32.Mix((uint)(animationPhase * uint.MaxValue) ^ (uint)boneIndex * 0x9e3779b9u);
-		for (var facet = 0; facet < NormalFacets; facet++)
-		{
-			var start = facet / (float)NormalFacets;
-			var end = (facet + 1) / (float)NormalFacets;
-			DrawCylinderNormals(batcher, Vector2.Lerp(from, to, start), Vector2.Lerp(from, to, end),
-				float.Lerp(fromWidth, toWidth, (start + end) * 0.5f),
-				Settings.NormalRoundness, Settings.NormalIrregularity,
-				seed ^ (uint)facet * 0x85ebca6bu);
-		}
-	}
-
-	static void DrawCylinderNormals(Batcher batcher, Vector2 from, Vector2 to, float width,
-		float roundness, float irregularity, uint seed)
-	{
-		var along = (to - from).Normalized(Vector2.UnitY);
-		var across = along.TurnLeft();
-		var halfWidth = width * 0.5f;
-		var leftFrom = from + across * halfWidth;
-		var leftTo = to + across * halfWidth;
-		var rightFrom = from - across * halfWidth;
-		var rightTo = to - across * halfWidth;
-		var startTilt = along * (HashSigned(seed) * irregularity * 0.28f);
-		var endTilt = along * (HashSigned(seed ^ 0xc2b2ae35u) * irregularity * 0.28f);
-		var centerFrom = NormalColor(startTilt * 0.32f);
-		var centerTo = NormalColor(endTilt * 0.32f);
-		var leftStart = NormalColor((across + startTilt).Normalized(across) * roundness);
-		var leftEnd = NormalColor((across + endTilt).Normalized(across) * roundness);
-		var rightStart = NormalColor((-across + startTilt).Normalized(-across) * roundness);
-		var rightEnd = NormalColor((-across + endTilt).Normalized(-across) * roundness);
-		batcher.Quad(leftFrom, from, to, leftTo, leftStart, centerFrom, centerTo, leftEnd);
-		batcher.Quad(from, rightFrom, rightTo, to, centerFrom, rightStart, rightEnd, centerTo);
-	}
-
-	static void DrawSphereNormals(Batcher batcher, Vector2 center, float radius, int steps,
-		float roundness, float irregularity, uint seed)
-	{
-		var centerNormal = NormalColor(new Vector2(HashSigned(seed), HashSigned(seed ^ 0x27d4eb2du)) *
-			(irregularity * 0.08f));
-		for (var i = 0; i < steps; i++)
-		{
-			var a = Calc.AngleToVector(i / (float)steps * MathF.Tau);
-			var b = Calc.AngleToVector((i + 1) / (float)steps * MathF.Tau);
-			var aAmount = roundness * (1 + HashSigned(seed ^ (uint)i * 0x85ebca6bu) * irregularity * 0.12f);
-			var bAmount = roundness * (1 + HashSigned(seed ^ (uint)(i + 1) * 0x85ebca6bu) * irregularity * 0.12f);
-			batcher.Triangle(center, center + a * radius, center + b * radius,
-				centerNormal, NormalColor(a * aAmount), NormalColor(b * bAmount));
-		}
-	}
-
-	static Color NormalColor(Vector2 lateral)
-	{
-		var length = lateral.Length();
-		if (length > 0.999f)
-			lateral *= 0.999f / length;
-		var normal = new Vector3(lateral, MathF.Sqrt(MathF.Max(0, 1 - lateral.LengthSquared())));
-		return new(normal.X * 0.5f + 0.5f, normal.Y * 0.5f + 0.5f, normal.Z * 0.5f + 0.5f, 1);
-	}
-
 	void DrawHand(Batcher batcher, Vector2 from, Vector2 to, float fromWidth, float toWidth,
 		float spinAmount, float inflate, Color color)
 	{
@@ -2069,86 +1889,13 @@ internal sealed class HumanoidRigVisual(Actor owner, HumanoidRigSettings? config
 		return new(value.X * cos - value.Y * sin, value.X * sin + value.Y * cos);
 	}
 
-	void DrawHandPalmSkin(Batcher batcher, int boneIndex, Vector2 from, Vector2 to,
-		float fromWidth, float toWidth, Color color, Surface? surface, Texture? neuralTexture, bool normals)
+	void DrawHandPalmSkin(Batcher batcher, in RigDrawItem item, Color color, in RigSkin skin)
 	{
-		if (surface == null && neuralTexture == null)
-			return;
-		var width = MathF.Max(fromWidth, toWidth);
-		var palmEnd = Vector2.Lerp(from, to, HandPalmRatio);
-		var uv = neuralBoneUVs[boneIndex];
+		var palmEnd = Vector2.Lerp(item.From, item.To, HandPalmRatio);
+		var uv = neuralBoneUVs[item.Index];
 		var palmUV = new BoneUV(uv.A, uv.B,
 			Vector2.Lerp(uv.B, uv.C, HandPalmRatio), Vector2.Lerp(uv.A, uv.D, HandPalmRatio));
-		if (surface != null)
-			DrawSurfaceBone(batcher, surface, from, palmEnd, fromWidth * 0.72f, width, palmUV, normals);
-		else
-			DrawNeuralBone(batcher, neuralTexture!, from, palmEnd, fromWidth * 0.72f, width, palmUV,
-				color * (normals ? Neural.NeuralNormalAmount : Neural.NeuralColorAmount));
-	}
-
-	static void DrawNeuralBone(Batcher batcher, Texture texture, Vector2 from, Vector2 to,
-		float fromWidth, float toWidth, BoneUV uv, Color color)
-	{
-		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
-		batcher.Quad(texture, a, b, c, d, uv.A, uv.B, uv.C, uv.D, color);
-	}
-
-	void DrawSurfaceBone(Batcher batcher, Surface surface, Vector2 from, Vector2 to,
-		float fromWidth, float toWidth, BoneUV uv, bool normals)
-	{
-		BoneQuad(from, to, fromWidth, toWidth, out var a, out var b, out var c, out var d);
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[]
-		{
-			new(a, SurfaceWorld(uv.A)), new(b, SurfaceWorld(uv.B)), new(c, SurfaceWorld(uv.C)),
-			new(a, SurfaceWorld(uv.A)), new(c, SurfaceWorld(uv.C)), new(d, SurfaceWorld(uv.D)),
-		};
-		if (normals)
-			surface.RenderNormals(batcher, triangles, owner.Time.SecondsF);
-		else
-			surface.Render(batcher, triangles, owner.Time.SecondsF);
-	}
-
-	void DrawSurfaceCircle(Batcher batcher, Surface surface, Vector2 center, float radius,
-		Vector2 uvCenter, Vector2 uvRadius, bool normals)
-	{
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[14 * 3];
-		var previous = center + Vector2.UnitX * radius;
-		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
-		for (var i = 1; i <= 14; i++)
-		{
-			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
-			var next = center + direction * radius;
-			var nextUV = uvCenter + direction * uvRadius;
-			var at = (i - 1) * 3;
-			triangles[at] = new(center, SurfaceWorld(uvCenter));
-			triangles[at + 1] = new(previous, SurfaceWorld(previousUV));
-			triangles[at + 2] = new(next, SurfaceWorld(nextUV));
-			previous = next;
-			previousUV = nextUV;
-		}
-		if (normals)
-			surface.RenderNormals(batcher, triangles, owner.Time.SecondsF);
-		else
-			surface.Render(batcher, triangles, owner.Time.SecondsF);
-	}
-
-	Vector2 SurfaceWorld(Vector2 uv)
-		=> surfaceMaterialOrigin + uv * (Vector2)NeuralSize + (Vector2)NeuralOrigin;
-
-	static void DrawNeuralCircle(Batcher batcher, Texture texture, Vector2 center, float radius,
-		Vector2 uvCenter, Vector2 uvRadius, Color color)
-	{
-		var previous = center + Vector2.UnitX * radius;
-		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
-		for (var i = 1; i <= 14; i++)
-		{
-			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
-			var next = center + direction * radius;
-			var nextUV = uvCenter + direction * uvRadius;
-			batcher.Triangle(texture, center, previous, next, uvCenter, previousUV, nextUV, color);
-			previous = next;
-			previousUV = nextUV;
-		}
+		skin.Bone(batcher, item.From, palmEnd, item.FromWidth * 0.72f, MathF.Max(item.FromWidth, item.ToWidth), palmUV, color);
 	}
 
 	static Vector2 NeuralUV(Vector2 position) => (position - (Vector2)NeuralOrigin) / (Vector2)NeuralSize;

@@ -57,6 +57,7 @@
       "Id": "59253f6347323ad6",
       "Type": "RigPuppetProp",
       "Position": [44, 81],
+      "CostumeId": "candy-bands",
       "NeuralFPS": 1,
       "TorsoSize": 10.582,
       "BicepSize": 6.348,
@@ -92,7 +93,7 @@
     {
       "Id": "d1f6e003cc376574",
       "Type": "RigPuppetProp",
-      "Position": [230, 203],
+      "Position": [232, 212],
       "NeckExtension": 6.185,
       "ProjectionYaw": 62.341,
       "NeuralFireRate": 0,
@@ -113,7 +114,8 @@
       "ForearmSize": 9.615,
       "ThighSize": 12,
       "PoseAnimationName": "Chest_Open",
-      "PoseProgress": 1
+      "PoseProgress": 1,
+      "CostumeId": "candy-bands"
     },
     {
       "Id": "05e44fdc65a46bcb",
@@ -169,7 +171,8 @@
     {
       "Id": "05828de26da30f54",
       "Type": "AlienBug",
-      "Position": [266, 168]
+      "Position": [266, 168],
+      "CostumeId": "thorn-tail"
     }
   ]
 }
