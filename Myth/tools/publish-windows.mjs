@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Publishes Myth as a self-contained, unsigned Windows x64 build.
-// Usage: node tools/publish-windows.mjs [--skip-fmod-mtime-check]
+// Usage: node tools/publish-windows.mjs [--skip-fmod-mtime-check] [--skip-check-rooms]
+//
+// CI passes --skip-check-rooms: the hosted runner renders in software (minutes, not seconds),
+// and the macOS publish already checks the same rooms and content.
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -30,11 +33,12 @@ run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "
   "--content-target", "windows",
   "--content-world", world,
 ]);
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "-p:MythTestShip=true", "--",
-  "--check-rooms",
-  "--content-zip", contentZip,
-  "--asset-pack",
-]);
+if (!process.argv.includes("--skip-check-rooms"))
+  run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "-p:MythTestShip=true", "--",
+    "--check-rooms",
+    "--content-zip", contentZip,
+    "--asset-pack",
+  ]);
 run("dotnet", [
   "publish", "Myth.csproj",
   "-c", "Release",

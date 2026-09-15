@@ -62,15 +62,18 @@ function collect(relative) {
 }
 
 for (const input of inputs) collect(input);
-files.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+// Keys and contents are normalized (/ separators, LF line endings) so every OS's checkout of
+// a commit fingerprints the same; CI bakes once on the Mac and the other platforms reuse it.
+const key = (file) => path.relative(root, file).replaceAll(path.sep, "/");
+files.sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
 
 const hash = createHash("sha256");
-hash.update("myth-world-map-inputs-v1\0");
+hash.update("myth-world-map-inputs-v2\0");
 hash.update(`${world}\0`);
 for (const file of files) {
-  hash.update(path.relative(root, file).replaceAll(path.sep, "/"));
+  hash.update(key(file));
   hash.update("\0");
-  hash.update(fs.readFileSync(file));
+  hash.update(fs.readFileSync(file, "latin1").replaceAll("\r\n", "\n"), "latin1");
   hash.update("\0");
 }
 const fingerprint = hash.digest("hex");
