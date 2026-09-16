@@ -15,9 +15,11 @@ concurrency:
 
 env:
   MYTH_WORLD: Myth
-  DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
   R2_BUCKET: myth-downloads
   MYTH_NOTARY_PROFILE: myth-notary
+  WRANGLER_VERSION: 4.133.0
+  # Hosted runners skip LFS objects no desktop build reads: iOS, authoring sources, tool inputs.
+  LFS_EXCLUDE: Myth/Platforms/iOS,Myth/Platforms/FMOD/Native/ios,Myth/Production,Myth/Assets/Sources/Sounds,Myth/tools
 
 jobs:
   # Baking renders every room: seconds on a real GPU, minutes on the hosted runners' software
@@ -54,32 +56,20 @@ jobs:
       - name: Force fresh Foster shader compilation
         run: find Foster/Framework/Content/Shaders/Compiled -name '*.msl' -delete
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
       - name: Bake world map
         run: node Myth/tools/check-world-map-bake.mjs "$MYTH_WORLD"
 
-      - name: Stage world map bake in R2
-        working-directory: Myth/Platforms/Web
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          tar -cf "$RUNNER_TEMP/world-map.tar" -C "$GITHUB_WORKSPACE/Myth" \
-            Assets/Packed/Visuals/world-map.qoi \
-            Assets/Packed/Visuals/world-map.json \
-            Assets/Packed/Visuals/world-map.inputs.sha256
-          npx wrangler@latest r2 object put "$R2_BUCKET/ci/world-map-$GITHUB_SHA.tar" \
-            --remote \
-            --file "$RUNNER_TEMP/world-map.tar"
+      - name: Upload world map bake
+        uses: actions/upload-artifact@v7
+        with:
+          name: world-map
+          path: Myth/Assets/Packed/Visuals/world-map.*
+          if-no-files-found: error
+          retention-days: 1
 
   publish-macos:
     name: Publish macOS (Apple silicon)
-    # after the bake: both jobs need the one self-hosted Mac runner, and the bake unblocks Windows and Linux
+    # after the bake: both jobs need the one self-hosted Mac runner, the bake unblocks Windows and Linux, and this job reuses it
     needs: bake-world-map
     runs-on: [self-hosted, local-mac]
 
@@ -114,10 +104,11 @@ jobs:
       - name: Force fresh Foster shader compilation
         run: find Foster/Framework/Content/Shaders/Compiled -name '*.msl' -delete
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v5
+      - name: Download world map bake
+        uses: actions/download-artifact@v8
         with:
-          dotnet-version: 10.0.x
+          name: world-map
+          path: Myth/Assets/Packed/Visuals
 
       - name: Check macOS release configuration
         shell: bash
@@ -195,7 +186,7 @@ jobs:
         run: |
           set -euo pipefail
           name="$(basename "$FILE")"
-          npx wrangler@latest r2 object put "$R2_BUCKET/$name" \
+          npx "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/$name" \
             --remote \
             --file "$FILE" \
             --content-type application/zip \
@@ -230,20 +221,16 @@ jobs:
           find Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -delete
           dotnet msbuild Foster/Framework/Foster.Framework.csproj -t:CompileShaders -p:ShaderPlatform=windows
           dotnet msbuild Myth/Myth.csproj -t:CompileShaders -p:ShaderPlatform=windows
-          tar -cf "$RUNNER_TEMP/windows-shaders.tar" \
-            Myth/Assets/Shaders/Compiled/*.dxil \
-            Foster/Framework/Content/Shaders/Compiled/*.dxil
 
-      - name: Stage Windows shaders in R2
-        working-directory: Myth/Platforms/Web
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          npx wrangler@latest r2 object put "$R2_BUCKET/ci/windows-shaders-$GITHUB_SHA.tar" \
-            --remote \
-            --file "$RUNNER_TEMP/windows-shaders.tar"
+      - name: Upload Windows shaders
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-shaders
+          path: |
+            Myth/Assets/Shaders/Compiled/*.dxil
+            Foster/Framework/Content/Shaders/Compiled/*.dxil
+          if-no-files-found: error
+          retention-days: 1
 
   publish-windows:
     name: Publish Windows (x64, unsigned)
@@ -254,13 +241,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          lfs: true
+          lfs: false
           submodules: false
 
-      - name: Update desktop submodules
+      - name: Fetch desktop LFS + submodules
         shell: bash
         run: |
           set -euo pipefail
+          git lfs pull --exclude="$LFS_EXCLUDE"
           git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
 
       - name: Identify Ozz runtime sources
@@ -280,28 +268,20 @@ jobs:
         shell: bash
         run: find Myth/obj/desktop/ozz-runtime -type f -exec touch {} +
 
-      - name: Restore compiled Windows shaders and world map bake
-        working-directory: Myth/Platforms/Web
-        shell: bash
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          npx wrangler@latest r2 object get "$R2_BUCKET/ci/windows-shaders-$GITHUB_SHA.tar" \
-            --remote \
-            --file "$RUNNER_TEMP/windows-shaders.tar"
-          npx wrangler@latest r2 object get "$R2_BUCKET/ci/world-map-$GITHUB_SHA.tar" \
-            --remote \
-            --file "$RUNNER_TEMP/world-map.tar"
+      - name: Download Windows shaders
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-shaders
 
-      - name: Install compiled Windows shaders and world map bake
+      - name: Mark Windows shaders up to date
         shell: bash
-        run: |
-          set -euo pipefail
-          tar -xf "$(cygpath -u "$RUNNER_TEMP")/windows-shaders.tar"
-          find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -exec touch {} +
-          tar -xf "$(cygpath -u "$RUNNER_TEMP")/world-map.tar" -C Myth
+        run: find Myth/Assets/Shaders/Compiled Foster/Framework/Content/Shaders/Compiled -name '*.dxil' -exec touch {} +
+
+      - name: Download world map bake
+        uses: actions/download-artifact@v8
+        with:
+          name: world-map
+          path: Myth/Assets/Packed/Visuals
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -330,7 +310,7 @@ jobs:
         run: |
           set -euo pipefail
           name="$(basename "$FILE")"
-          npx wrangler@latest r2 object put "$R2_BUCKET/$name" \
+          npx "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/$name" \
             --remote \
             --file "$FILE" \
             --content-type application/zip \
@@ -346,12 +326,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          lfs: true
+          lfs: false
           submodules: false
 
-      - name: Update desktop submodules
+      - name: Fetch desktop LFS + submodules
         run: |
           set -euo pipefail
+          git lfs pull --exclude="$LFS_EXCLUDE"
           git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
           chmod +x Foster/tools/linux/shadercross
 
@@ -360,11 +341,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # Native AOT links with clang; publish-linux.mjs runs --check-rooms, which needs a (software) GPU.
-      - name: Install native AOT and offscreen graphics dependencies
+      - name: Install native AOT dependencies
         run: |
           missing=()
-          for package in clang zlib1g-dev xvfb xauth mesa-vulkan-drivers; do
+          for package in clang zlib1g-dev; do
             dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'ok installed' || missing+=("$package")
           done
           if (( ${#missing[@]} )); then
@@ -375,24 +355,14 @@ jobs:
       - name: Force fresh Foster shader compilation
         run: find Foster/Framework/Content/Shaders/Compiled -name '*.spv' -delete
 
-      - name: Restore world map bake
-        working-directory: Myth/Platforms/Web
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          npx wrangler@latest r2 object get "$R2_BUCKET/ci/world-map-$GITHUB_SHA.tar" \
-            --remote \
-            --file "$RUNNER_TEMP/world-map.tar"
-          tar -xf "$RUNNER_TEMP/world-map.tar" -C "$GITHUB_WORKSPACE/Myth"
+      - name: Download world map bake
+        uses: actions/download-artifact@v8
+        with:
+          name: world-map
+          path: Myth/Assets/Packed/Visuals
 
       - name: Publish Linux build
-        env:
-          SDL_VIDEODRIVER: x11
-          MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
-        run: xvfb-run -a -s "-screen 0 1280x720x24" node Myth/tools/publish-linux.mjs
+        run: node Myth/tools/publish-linux.mjs --skip-check-rooms
 
       - name: Package Linux build
         id: archive
@@ -412,7 +382,7 @@ jobs:
         run: |
           set -euo pipefail
           name="$(basename "$FILE")"
-          npx wrangler@latest r2 object put "$R2_BUCKET/$name" \
+          npx "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/$name" \
             --remote \
             --file "$FILE" \
             --content-type application/zip \
@@ -456,7 +426,7 @@ jobs:
           ARCHIVE: ${{ matrix.archive }}
         run: |
           set -euo pipefail
-          npx wrangler@latest r2 object get "$R2_BUCKET/Myth-${GITHUB_SHA:0:8}-$ARCHIVE.zip" \
+          npx "wrangler@$WRANGLER_VERSION" r2 object get "$R2_BUCKET/Myth-${GITHUB_SHA:0:8}-$ARCHIVE.zip" \
             --remote --file "$RUNNER_TEMP/game.zip"
 
       - name: Upload to itch.io
@@ -550,9 +520,7 @@ jobs:
           DESCRIPTOR: ${{ steps.release.outputs.descriptor }}
         run: |
           set -euo pipefail
-          npx wrangler@latest r2 object delete "$R2_BUCKET/ci/windows-shaders-$GITHUB_SHA.tar" --remote || true
-          npx wrangler@latest r2 object delete "$R2_BUCKET/ci/world-map-$GITHUB_SHA.tar" --remote || true
-          npx wrangler@latest r2 object put "$R2_BUCKET/$DESCRIPTOR" \
+          npx "wrangler@$WRANGLER_VERSION" r2 object put "$R2_BUCKET/$DESCRIPTOR" \
             --remote \
             --file "$RUNNER_TEMP/release.json" \
             --content-type "application/json; charset=utf-8" \

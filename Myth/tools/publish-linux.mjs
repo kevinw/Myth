@@ -4,7 +4,10 @@
 // supplies the ELF linker and glibc sysroot the link needs. Cross-building therefore wants
 // `brew install zig llvm`. Push the result to a Steam Deck with tools/deploy-deck.sh.
 //
-// Usage: node tools/publish-linux.mjs [--skip-fmod-mtime-check]
+// Usage: node tools/publish-linux.mjs [--skip-fmod-mtime-check] [--skip-check-rooms]
+//
+// CI passes --skip-check-rooms: the hosted runner renders in software (minutes, not seconds),
+// and the macOS publish already checks the same rooms and content.
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -40,28 +43,30 @@ run("dotnet", ["run", "--project", "Myth.csproj", "--",
   "--content-world", world,
 ]);
 
-// --check-rooms creates real GPU pipelines, so it can only read a zip built for the host's
-// shader flavor -- the Linux zip's SPIR-V is unusable on a macOS host. The content graph is
-// target-independent (only the Shaders/Compiled extension differs), so a host-flavored zip
-// validates the same rooms, actors and neural weights the Linux zip carries. Cross-building
-// without this is how a room referencing an uncollected NCA model reached the Deck.
-const hostTarget = process.platform === "linux" ? "linux" : "mac";
-const checkZip = hostTarget === "linux" ? contentZip : path.join(outRoot, "Content-check.zip");
-if (checkZip !== contentZip)
-  run("dotnet", ["run", "--project", "Myth.csproj", "--",
-    "--build-content-zip", checkZip,
-    "--content-target", hostTarget,
-    "--content-world", world,
+if (!process.argv.includes("--skip-check-rooms")) {
+  // --check-rooms creates real GPU pipelines, so it can only read a zip built for the host's
+  // shader flavor -- the Linux zip's SPIR-V is unusable on a macOS host. The content graph is
+  // target-independent (only the Shaders/Compiled extension differs), so a host-flavored zip
+  // validates the same rooms, actors and neural weights the Linux zip carries. Cross-building
+  // without this is how a room referencing an uncollected NCA model reached the Deck.
+  const hostTarget = process.platform === "linux" ? "linux" : "mac";
+  const checkZip = hostTarget === "linux" ? contentZip : path.join(outRoot, "Content-check.zip");
+  if (checkZip !== contentZip)
+    run("dotnet", ["run", "--project", "Myth.csproj", "--",
+      "--build-content-zip", checkZip,
+      "--content-target", hostTarget,
+      "--content-world", world,
+    ]);
+  run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythTestShip=true", "--",
+    "--check-rooms",
+    "--content-zip", checkZip,
+    "--asset-pack",
   ]);
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythTestShip=true", "--",
-  "--check-rooms",
-  "--content-zip", checkZip,
-  "--asset-pack",
-]);
-// Only reached when the check passed (run throws otherwise), so a failure leaves the zip
-// on disk to inspect. Never the shipping zip -- on a Linux host checkZip is contentZip.
-if (checkZip !== contentZip)
-  fs.rmSync(checkZip, { force: true });
+  // Only reached when the check passed (run throws otherwise), so a failure leaves the zip
+  // on disk to inspect. Never the shipping zip -- on a Linux host checkZip is contentZip.
+  if (checkZip !== contentZip)
+    fs.rmSync(checkZip, { force: true });
+}
 
 run("dotnet", [
   "publish", "Myth.csproj",
