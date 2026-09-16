@@ -562,7 +562,10 @@ public partial class Manager : App
 		fpsLogTimer = Stopwatch.StartNew();
 #if BROWSER || !EDITOR
 		if (!skipStartupMenu)
-			ShowTitleMenu();
+		{
+			if (!args.title && !TryBeginStartupAttribution())
+				ShowTitleMenu();
+		}
 		else
 			playOnStartup = true; // explicit play/test runs still boot straight into play
 #endif
@@ -672,6 +675,7 @@ public partial class Manager : App
 		SaveWindowSettings();
 #endif
 		game?.Dispose();
+		DisposeStartupAttribution();
 		navTrace?.Dispose();
 		menuImgui?.Dispose();
 		InputPrompts?.Dispose();
@@ -1061,6 +1065,8 @@ public partial class Manager : App
 			if (bootWarming)
 				return;
 		}
+		if (UpdateStartupAttribution())
+			return;
 
 		InputPrompts?.Update(Time.Elapsed);
 
@@ -1748,6 +1754,13 @@ public partial class Manager : App
 		UpdateFpsOverlay();
 		using var renderPerf = PerfStats.Time(PerfStat.Render);
 		Window.Clear(WINDOW_CLEAR_COLOR);
+		if (startupAttributionPhase == StartupAttributionPhase.Logos)
+		{
+			DrawStartupAttribution();
+			batcher.Render(Window);
+			batcher.Clear();
+			return;
+		}
 
 		if (startingPlay)
 			RenderPlayTransition();
@@ -1771,6 +1784,11 @@ public partial class Manager : App
 		imgui?.Render();
 		if (menuLayoutBuiltThisFrame)
 			menuImgui.Render();
+		if (DrawStartupTitleFade())
+		{
+			batcher.Render(Window);
+			batcher.Clear();
+		}
 #if !MYTHSHIP && !BROWSER && !IOS
 		if (movieTracksPlayer)
 			RecordMoviePlayerSample();

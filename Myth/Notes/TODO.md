@@ -15,7 +15,6 @@ COSTUMES (rig puppet adornment, 2026-09-14): a shared Costume asset like Surface
 
 - attach a burrow line to a moving platform
 - what would it look like to be able to create your own burrow line? 
-- make a pitch deck https://brightgambit.com/checkmate/ - DOC HERE https://www.overleaf.com/project/6aa4fbad2d448d1b3405a4a7
 - no pits, seamless loading
  USE LATEX AND BEAMER TO MAKE THEM LOL https://www.overleaf.com/learn/latex/Beamer
 - gameplay NCA ideas

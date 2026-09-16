@@ -100,6 +100,12 @@ public static partial class Assets
 	const int BucketThumbColumns = 12;
 	static readonly string[] BucketImageExtensions = [".png", ".qoi"];
 
+	internal static Texture LoadTexture(GraphicsDevice gfx, StorageContainer storage, string path)
+	{
+		using var image = new Image(storage.ReadAllBytes(path));
+		return new(gfx, image, path);
+	}
+
 	// Loads a bucket from a storage container (the dev Assets folder or the baked pack),
 	// so the same code serves both. Keys are keyPrefix + the path relative to dir (minus
 	// the image extension); pass an empty prefix when the storage layout already encodes the key.
