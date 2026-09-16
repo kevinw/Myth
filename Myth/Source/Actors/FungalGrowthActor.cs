@@ -71,7 +71,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 
 	// Fungal colour ramp, fresh tip -> mature core. Cells dither between
 	// adjacent entries by age, giving a classic pixel-art shaded look.
-	private static readonly Color[] Palette =
+	static readonly Color[] Palette =
 	[
 		new Color(0.85f, 1.00f, 0.80f, 1.0f), // fresh luminous tip
 		new Color(0.55f, 0.95f, 0.45f, 1.0f), // young green
@@ -81,7 +81,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	];
 
 	// 4x4 ordered-dithering threshold matrix, normalised to [0,1).
-	private static readonly float[] Bayer4 =
+	static readonly float[] Bayer4 =
 	[
 		 0f / 16f,  8f / 16f,  2f / 16f, 10f / 16f,
 		12f / 16f,  4f / 16f, 14f / 16f,  6f / 16f,
@@ -90,44 +90,43 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	];
 
 	// 4-neighbourhood for sticking (thin dendrites); 8 for walker diffusion.
-	private static readonly int[] N4X = [1, -1, 0, 0];
-	private static readonly int[] N4Y = [0, 0, 1, -1];
-	private static readonly int[] N8X = [-1, 0, 1, -1, 1, -1, 0, 1];
-	private static readonly int[] N8Y = [-1, -1, -1, 0, 0, 1, 1, 1];
+	static readonly int[] N4X = [1, -1, 0, 0];
+	static readonly int[] N4Y = [0, 0, 1, -1];
+	static readonly int[] N8X = [-1, 0, 1, -1, 1, -1, 0, 1];
+	static readonly int[] N8Y = [-1, -1, -1, 0, 0, 1, 1, 1];
 
-	private Rng rng;
+	Rng rng;
 
-	private GraphicsDevice graphicsDevice = null!;
-	private Texture? texture;
-	private byte[] age = [];          // 0 = empty, else 1..AgeCap
-	private float[] glow = [];        // 0..1 transient brightening from hits
-	private Color[] pixels = [];
-	private bool[] growable = [];      // mask cached as bool
-	private readonly List<int> stuckCells = []; // indices of live cells, for spawning walkers nearby
+	GraphicsDevice graphicsDevice = null!;
+	Texture? texture;
+	byte[] age = [];          // 0 = empty, else 1..AgeCap
+	float[] glow = [];        // 0..1 transient brightening from hits
+	Color[] pixels = [];
+	bool[] growable = [];      // mask cached as bool
+	readonly List<int> stuckCells = []; // indices of live cells, for spawning walkers nearby
 
-	private int stuck;                 // live fungus cell count
+	int stuck;                 // live fungus cell count
 
 	// Growth budget is tracked per authored tile (TileSize x TileSize) rather
 	// than once per island, so a dense blob can't starve a thin painted run:
 	// every painted tile fills to ~MaxCoverage of its own growable cells.
-	private int tileSpan;              // == Game.TileSize
-	private int tilesX;                // authored-tile columns across the region
-	private int[] tileGrowable = [];   // growable cells per tile
-	private int[] tileCap = [];        // stuck target per tile (MaxCoverage of its cells)
-	private int[] tileStuck = [];      // current stuck cells per tile
-	private int underCapTiles;         // tiles still below their cap (0 => growth halts)
+	int tileSpan;              // == Game.TileSize
+	int tilesX;                // authored-tile columns across the region
+	int[] tileGrowable = [];   // growable cells per tile
+	int[] tileCap = [];        // stuck target per tile (MaxCoverage of its cells)
+	int[] tileStuck = [];      // current stuck cells per tile
+	int underCapTiles;         // tiles still below their cap (0 => growth halts)
 
-	private float stepAccumulator;
-	private bool dirty;
-	private bool glowActive;
+	float stepAccumulator;
+	bool dirty;
+	bool glowActive;
 	Vector2 sympatheticWaveOrigin;
 	float sympatheticWaveRadius;
 	bool sympatheticWaveActive;
 
 	public override void Added()
 	{
-		if (ActorId == null)
-			ActorId = ActorSpecs.GenerateActorId();
+		ActorId ??= ActorSpecs.GenerateActorId();
 		rng = new Rng(RandomSeed);
 		base.Added();
 
@@ -177,7 +176,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	// Seed one mature nucleus in every authored tile that has growable cells, so
 	// a painted run is always occupied and each tile has its own origin for the
 	// DLA to branch from (rather than a handful of random island-wide seeds).
-	private void SeedNuclei()
+	void SeedNuclei()
 	{
 		for (var ty = 0; ty < RegionHeight; ty += tileSpan)
 			for (var tx = 0; tx < RegionWidth; tx += tileSpan)
@@ -193,14 +192,14 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 				}
 	}
 
-	private int TileOf(int cellIndex)
+	int TileOf(int cellIndex)
 	{
 		var x = cellIndex % RegionWidth;
 		var y = cellIndex / RegionWidth;
 		return (y / tileSpan) * tilesX + (x / tileSpan);
 	}
 
-	private void Stick(int x, int y, byte startAge)
+	void Stick(int x, int y, byte startAge)
 	{
 		var i = y * RegionWidth + x;
 		age[i] = startAge;
@@ -233,7 +232,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 			UpdateSympatheticWave();
 	}
 
-	private void Step()
+	void Step()
 	{
 		MatureCells();
 		if (stuck == 0 || underCapTiles == 0)
@@ -243,7 +242,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	}
 
 	// Age every live cell one tick toward full maturity.
-	private void MatureCells()
+	void MatureCells()
 	{
 		for (var i = 0; i < age.Length; i++)
 			if (age[i] != 0 && age[i] < AgeCap)
@@ -257,7 +256,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	// it reliably finds the aggregate even when coverage is tiny), random-walk,
 	// and stick on first 4-neighbour contact. Sticking at the frontier of an
 	// irregular aggregate is what produces branching tendrils.
-	private void LaunchSpore()
+	void LaunchSpore()
 	{
 		if (stuckCells.Count == 0)
 			return;
@@ -313,7 +312,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 
 	// Prefer an anchor whose tile still has capacity, so walkers flow toward
 	// under-filled painted tiles (thin runs) instead of the densest blob.
-	private int PickAnchorUnderCap()
+	int PickAnchorUnderCap()
 	{
 		for (var attempt = 0; attempt < 8; attempt++)
 		{
@@ -325,7 +324,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		return stuckCells[rng.Int(stuckCells.Count)];
 	}
 
-	private bool HasFungus4(int x, int y)
+	bool HasFungus4(int x, int y)
 	{
 		for (var d = 0; d < 4; d++)
 		{
@@ -375,7 +374,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	// A hit here sends a radial glow through nearby fungus, including untouched
 	// reaches of the struck island. Each island receives the original world-space
 	// impact so disconnected growth still follows one continuous wavefront.
-	private void BroadcastSympathy(Vector2 hitWorld)
+	void BroadcastSympathy(Vector2 hitWorld)
 	{
 		foreach (var actor in Game.Actors)
 		{
@@ -389,7 +388,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		}
 	}
 
-	private static float DistanceToBounds(Rect bounds, Vector2 p)
+	static float DistanceToBounds(Rect bounds, Vector2 p)
 	{
 		var dx = MathF.Max(MathF.Max(bounds.X - p.X, p.X - (bounds.X + bounds.Width)), 0.0f);
 		var dy = MathF.Max(MathF.Max(bounds.Y - p.Y, p.Y - (bounds.Y + bounds.Height)), 0.0f);
@@ -436,7 +435,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 			sympatheticWaveActive = false;
 	}
 
-	private void DecayGlow()
+	void DecayGlow()
 	{
 		var step = GlowDecay * Time.Delta;
 		var any = false;
@@ -475,7 +474,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 
 	// Rescan the grid to rebuild the live-cell list + per-tile counts after a cut,
 	// reopening any tiles a cut dropped back below their cap so they regrow.
-	private void RebuildStuckList()
+	void RebuildStuckList()
 	{
 		stuckCells.Clear();
 		Array.Clear(tileStuck);
@@ -508,7 +507,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 			TryDropSpore(footWorldPos);
 	}
 
-	private void TryDropSpore(Vector2 footWorldPos)
+	void TryDropSpore(Vector2 footWorldPos)
 	{
 		var jitter = rng.Float(SeedJitterMin, SeedJitterMax);
 		var angle = rng.Float(0.0f, MathF.Tau);
@@ -523,7 +522,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 	}
 
 	// Map the age/glow grid through the dithered colour ramp into `pixels`.
-	private void Rebuild()
+	void Rebuild()
 	{
 		var last = Palette.Length - 1;
 		for (var y = 0; y < RegionHeight; y++)
@@ -555,7 +554,7 @@ public class FungalGrowthActor : Actor, IHitByHitbox
 		dirty = false;
 	}
 
-	private static float Hash01(int x, int y)
+	static float Hash01(int x, int y)
 	{
 		var h = (uint)(x * 374761393 + y * 668265263);
 		h = (h ^ (h >> 13)) * 1274126177u;
