@@ -155,9 +155,9 @@ internal struct Gym
 
 partial class Manager
 {
-	readonly bool gymMode;
-	readonly bool headless;
-	readonly bool unthrottled;
+	bool gymMode => args.gym;
+	bool headless => args.headless;
+	bool unthrottled => args.unthrottled;
 
 	// Unthrottled runs have no fixed wall-clock per frame, so a time-budgeted nav-graph
 	// rebuild finishes on a different game frame each run (non-deterministic gym results).

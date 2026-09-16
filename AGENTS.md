@@ -14,3 +14,4 @@
     - Documentation is good but we only need it if the code isn't self-documenting (which in itself is a goal: good naming, etc.)
     - Not lazy about: error handling that prevents data loss, anything explicitly requested.
     - If, during a session, you spot an obvious pattern which could make the pattern more robust or smaller or cleaner, please suggest it to the user.
+- Our philosophy of games is that rich interconnected learnable systems with feedback are a big aspect of the "fun"; if there are interesting ways to tie visuals or audio together, we try to do that on the first pass. For example, when adding an attack, we need a windup. The windup needs to be reflected visually or in audio; if there are cross-cutting ways to tie systems together (a floating point value here becomes a color opacity there, etc.) we do so. There is friction here with "clean code" but it's often where games shine.

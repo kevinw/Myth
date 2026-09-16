@@ -159,7 +159,7 @@ public partial class Manager
 	{
 		if (MenuButton(hasStartedGame ? "continue" : "start", "menu/show"))
 			StartFromMenu();
-		if (MenuButton(confirmRestart ? "you sure?" : "start over"))
+		if (hasStartedGame && MenuButton(confirmRestart ? "you sure?" : "start over"))
 			EraseGameStep();
 		if (MenuButton("options"))
 			OpenOptionsPage();

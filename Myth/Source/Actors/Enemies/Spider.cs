@@ -571,18 +571,7 @@ public class Spider : Actor
 	}
 
 	static void RenderSphereNormals(Batcher batcher, float radius, int steps)
-	{
-		var faceViewer = new Color(0x8080ff);
-		for (var i = 0; i < steps; i++)
-		{
-			var d0 = Calc.AngleToVector(i / (float)steps * Calc.TAU);
-			var d1 = Calc.AngleToVector((i + 1) / (float)steps * Calc.TAU);
-			batcher.Triangle(Vector2.Zero, d0 * radius, d1 * radius, faceViewer, RimNormalColor(d0), RimNormalColor(d1));
-		}
-	}
-
-	static Color RimNormalColor(Vector2 direction)
-		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1);
+		=> RigDraw.DrawSphereNormals(batcher, Vector2.Zero, radius, steps);
 
 	internal override void OnWasHit(HitInfo hitInfo)
 	{

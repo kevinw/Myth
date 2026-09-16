@@ -1,7 +1,16 @@
-- "Start Over" needs to not show if you haven't started.
-- ACTOR_UPDATE_LIFECYLE.md
+- put an evolving world map online with a timeline scrubber https://leafletjs.com
+- investigate gpu perf
+  - https://developer.apple.com/documentation/xcode/debugging-with-interactive-command-line-tools
+  - https://developer.apple.com/documentation/xcode/investigating-gpu-issues-with-ai-agents
+- --bake-world-map doesn't show the output path of the bake
+- show the gpu adapter in the startup log line
+- gameplay idea: jump to parry pops you into a burrow
+- consider dropping to 1 frame in flight if we can afford it? is there a dynamic way to do this?
+- profile the remaining cold-install hitch in the big first fall room: neural pipelines warm at boot, but room-specific weights, buffers, and seed simulation still initialize on entry
+- rename app bundle ID from com.fostergames.myth to something shipping-appropriate
+- consolidate app ID / bundle ID into one canonical file (Info.plist or a .props) so tools/clear-metal-cache.sh and any other consumers don't hardcode it separately
+- ACTOR_UPDATE_LIFECYCLE.md
 - FRAME_RATE_LIMIT.md
-- Catch unsupported SDL calls during browser compilation: [plan](BROWSER_PLATFORM_CHECKS.md)
 COSTUMES (rig puppet adornment, 2026-09-14): a shared Costume asset like Surface (Sources/Costumes/<id>.json + its own editor window; actors get one CostumeId picker plus seed/palette/tint). Small: per-part surfaces/tints (boots, gloves, vest); split a bone at a fraction for cuffs, sleeves, boot tops; bone-space wrapping UVs for stripes/bandages; width profiles (flared cuffs, boot bulge, sole quad). Medium: generalize the ruff into rings at any joint (cuffs, belt, skirt); author wire layouts as straps, tassels, antennae, ankle chains (allow free-hanging ends); rigid plates/pauldrons and sprite stamps (rivets, buckles) as depth-sorted accessories; neural costume (per-part mask into the skin NCA's 4 model slots; hits erode armor to reveal skin). Bigger: verlet cloth cape/coattails pinned to the shoulders (Wind pushes it, drapes on death); hair/tendrils/ribbons from the same solver. Infra: accessory list (Draw takes one), generic record-list inspector, click joints/bones in the viewport, turntable preview, attribute-based inspector drawers; check every knob in the big_rig_puppet gallery.
 
 - attach a burrow line to a moving platform
@@ -74,7 +83,6 @@ what instead of computes?
 - a textual undo log
 - have rope repaint itself on editor drag
 - the introduction of a new enemy is itself a payoff; new area, new enemies
-- P with a NCT actor selected should be equivalent to pressing its Paint Mask button
 - downloaded horse model on 
 - door is rendering normals behind the hidden wall cover
   - let's brainstorm some enemy-specific pops, or effects can we can tweak and resuse
@@ -166,7 +174,6 @@ along with this.
 - a note in every room describing the new thing it introduces
 - One of the characters speaks with curated chain of thought messages from an open model
 - burrow sound needs to be the best sound in the entire game
-- actor search needs a close button to clear the text.
 - memory pulse instead of a map; only in the radius around you?
 - Spend an entire day making bud more interesting
   - More barks.

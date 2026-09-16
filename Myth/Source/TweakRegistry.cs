@@ -164,17 +164,20 @@ static class TweakRegistry
 		@"(?:void|bool|byte|int|uint|long|float|double|string|var|const|Vector2|Vector3|Color|Point2|Rect|RectInt|[A-Z][A-Za-z0-9_<>?]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(|=>|=|\{)",
 		RegexOptions.Compiled);
 
+	static readonly Dictionary<string, string[]?> fileLineCache = [];
+
 	// Best-effort "name" for an inline literal: scan upward for the nearest enclosing member/local
 	// declaration and take its identifier. Falls back to empty (panel then shows file:line instead).
 	static string ResolveContext(string file, int line)
 	{
-		string[] lines;
-		try { lines = File.ReadAllLines(file); }
-		catch
+		if (!fileLineCache.TryGetValue(file, out var lines))
 		{
-			Console.WriteLine("ResolveContext: Error reading file: " + file);
-			return "";
+			try { lines = File.ReadAllLines(file); }
+			catch { lines = null; }
+			fileLineCache[file] = lines;
 		}
+		if (lines == null)
+			return "";
 		if (line < 1 || line > lines.Length)
 			return "";
 		for (var i = line - 1; i >= Math.Max(0, line - 40); i--)

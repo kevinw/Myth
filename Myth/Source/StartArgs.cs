@@ -20,7 +20,7 @@ public struct StartArgs
 	public string? devCommand;
 	public bool? fullscreen;
 	public bool? vsync;
-	public int framesInFlight = 1;
+	public int framesInFlight = 2;
 	// Force the 4:3 portrait-style presentation on desktop for testing (--aspect-four-three):
 	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
 	public bool aspectFourThree;
@@ -29,6 +29,7 @@ public struct StartArgs
 	// warmup against a cold driver shader cache: with this set, pipelines compile lazily on first
 	// room entry (the original hitch) instead of up front. See tools/windows/clear-system-shader-caches.mjs.
 	public bool noWarmup;
+	public bool noNav; // skip Bud spawn + navgraph (--no-nav); isolates per-frame allocs from nav work
 	public bool buildAssetPack;
 	// Render every room into the world map image the map overlay samples, then exit
 	// (--bake-world-map). Needs a real graphics device, so it runs windowed rather than
@@ -106,6 +107,7 @@ public struct StartArgs
 					break;
 				case "--aspect-four-three": aspectFourThree = true; break;
 				case "--no-warmup": noWarmup = true; break;
+			case "--no-nav": noNav = true; break;
 				case "--play": play = true; break;
 				case "--title": title = true; break;
 				case "--bake-world-map": bakeWorldMap = true; break;

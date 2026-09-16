@@ -1000,18 +1000,7 @@ public class MagneticCrawler : Actor, INeuralTextureAgent
 	}
 
 	static void RenderSphereNormals(Batcher batcher, Vector2 center, float radius, int steps)
-	{
-		var face = new Color(0x8080ff);
-		for (var i = 0; i < steps; i++)
-		{
-			var a = Calc.AngleToVector(i / (float)steps * Calc.TAU);
-			var b = Calc.AngleToVector((i + 1) / (float)steps * Calc.TAU);
-			batcher.Triangle(center, center + a * radius, center + b * radius, face, NormalColor(a), NormalColor(b));
-		}
-	}
-
-	static Color NormalColor(Vector2 direction)
-		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1);
+		=> RigDraw.DrawSphereNormals(batcher, center, radius, steps);
 
 	static float AngleDelta(float from, float to)
 	{

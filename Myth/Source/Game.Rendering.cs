@@ -2172,6 +2172,7 @@ public sealed partial class GameView
 
 		EnsureRenderTargets(Width, Height);
 		RenderCurrentView(window, viewport, showHud, scissor, applyCrt: true);
+		game.NoteRoomTransitionRendered();
 	}
 
 	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true)
