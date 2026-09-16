@@ -255,7 +255,7 @@ public partial class Manager : App
 	}
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
-		offscreen: args.bakeWorldMap || args.checkRooms, fullscreen: args.fullscreen,
+		offscreen: args.bakeWorldMap != null || args.writeAllRooms || args.checkRooms, fullscreen: args.fullscreen,
 		framesInFlight: args.framesInFlight))
 	{
 		this.args = args;
@@ -426,7 +426,7 @@ public partial class Manager : App
 			Assets.SelectWorld(args.worldId);
 		else if (Assets.ContentIsZip)
 			Assets.SelectPackagedWorld();
-		if (args.bakeWorldMap && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
+		if (args.bakeWorldMap != null && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
 		GraphicsDevice.VSync = vSyncEnabled;
@@ -478,9 +478,17 @@ public partial class Manager : App
 			LoadAudioBanks();
 
 #if EDITOR
-		if (args.bakeWorldMap)
+		if (args.bakeWorldMap is { } mode)
 		{
-			BakeWorldMap();
+			BakeWorldMap(mode);
+			Exit();
+			return;
+		}
+#endif
+#if !BROWSER && !IOS
+		if (args.writeAllRooms)
+		{
+			WriteAllRooms();
 			Exit();
 			return;
 		}

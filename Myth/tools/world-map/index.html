@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Human Questions — World Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+	:root { color-scheme: dark; --panel: #17151dcc; --line: #3b3547; --text: #eee5d1; }
+	* { box-sizing: border-box; }
+	body { margin: 0; background: #0d0c10; color: var(--text); font: 14px system-ui, sans-serif; }
+	#map { width: 100vw; height: 100vh; background: #0d0c10; }
+	.controls { position: fixed; z-index: 1000; top: 12px; right: 12px; min-width: 190px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); backdrop-filter: blur(8px); box-shadow: 0 4px 20px #0008; }
+	select { width: 100%; margin-bottom: 8px; padding: 4px 6px; color: inherit; background: #211e2a; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+	.layers { display: grid; gap: 5px; }
+	label { display: flex; gap: 7px; align-items: center; }
+	.leaflet-control-attribution { display: none; }
+	.leaflet-tile { image-rendering: pixelated; }
+</style>
+<div id="map"></div>
+<div class="controls"><select id="world"></select><div class="layers"></div></div>
+<script type="module">
+	const manifest = await (await fetch('map.json')).json();
+	const worldPicker = document.querySelector('#world');
+	const layerControls = document.querySelector('.layers');
+	const map = L.map('map', { crs: L.CRS.Simple, minZoom: -3, zoomSnap: 0.25 });
+	let tileLayers = [];
+
+	worldPicker.innerHTML = manifest.worlds.map((world, index) => `<option value="${index}">${world.id}</option>`).join('');
+	worldPicker.onchange = () => showWorld(manifest.worlds[Number(worldPicker.value)]);
+
+	function showWorld(world) {
+		tileLayers.forEach(layer => layer.remove());
+		tileLayers = [];
+		layerControls.replaceChildren();
+		const contentBounds = L.latLngBounds(
+			map.unproject([0, 0], world.maxZoom),
+			map.unproject([world.width, world.height], world.maxZoom));
+		const tileBounds = L.latLngBounds(
+			map.unproject([0, 0], world.maxZoom),
+			map.unproject([world.extent, world.extent], world.maxZoom));
+
+		for (const layer of world.layers) {
+			const tiles = L.tileLayer(layer.tiles, {
+				minZoom: 0,
+				maxZoom: world.maxZoom + 3,
+				maxNativeZoom: world.maxZoom,
+				noWrap: true,
+				bounds: tileBounds,
+				tileSize: 256,
+			});
+			tileLayers.push(tiles);
+			const toggle = document.createElement('input');
+			toggle.type = 'checkbox';
+			toggle.checked = layer.id === 0;
+			if (toggle.checked) tiles.addTo(map);
+			toggle.onchange = () => toggle.checked ? tiles.addTo(map) : tiles.remove();
+			const label = document.createElement('label');
+			label.append(toggle, layer.label);
+			layerControls.append(label);
+		}
+		map.setMaxBounds(tileBounds.pad(0.25));
+		map.fitBounds(contentBounds, { padding: [20, 20] });
+	}
+
+	showWorld(manifest.worlds[0]);
+</script>

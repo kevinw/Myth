@@ -31,10 +31,11 @@ public struct StartArgs
 	public bool noWarmup;
 	public bool noNav; // skip Bud spawn + navgraph (--no-nav); isolates per-frame allocs from nav work
 	public bool buildAssetPack;
+	public bool writeAllRooms;
 	// Render every room into the world map image the map overlay samples, then exit
 	// (--bake-world-map). Needs a real graphics device, so it runs windowed rather than
 	// through the headless --build-asset-pack.
-	public bool bakeWorldMap;
+	public WorldMap.Mode? bakeWorldMap = null;
 	// Boot straight to the title screen even in editor builds (which normally open the editor),
 	// so the attract demo can be tested without a shipped build (--title).
 	public bool title;
@@ -110,8 +111,8 @@ public struct StartArgs
 			case "--no-nav": noNav = true; break;
 				case "--play": play = true; break;
 				case "--title": title = true; break;
-				case "--bake-world-map": bakeWorldMap = true; break;
-
+				case "--bake-world-map": bakeWorldMap = WorldMap.Mode.LowResQoi; break;
+				case "--bake-hires-world-map": bakeWorldMap = WorldMap.Mode.HighResPng; break;
 				case "--max-frames":
 					maxFrames = ReadInt(args, ref i, option, minimum: 1);
 					break;
@@ -131,6 +132,7 @@ public struct StartArgs
 				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--content-zip": contentZipPath = ReadValue(args, ref i, option); break;
 				case "--build-content-zip": buildContentZipPath = ReadValue(args, ref i, option); break;
+				case "--write-all-rooms": writeAllRooms = true; break;
 				case "--content-target": contentTarget = ReadValue(args, ref i, option); break;
 				case "--content-world": contentWorld = ReadValue(args, ref i, option); break;
 				case "--max-time": maxTimeSeconds = ReadFloat(args, ref i, option, minimum: 0); break;
@@ -174,12 +176,14 @@ public struct StartArgs
 		{
 			audio = false;
 		}
-		if (bakeWorldMap)
+		if (bakeWorldMap != null)
 		{
 			if (worldId == null)
 				throw Invalid("--bake-world-map", "requires --world <world>");
 			audio = false;
 		}
+		if (writeAllRooms)
+			audio = false;
 		unthrottled |= gymCli;
 		gymExitAfterAll |= gymCli;
 		traceNav |= traceJsonPath != null;
