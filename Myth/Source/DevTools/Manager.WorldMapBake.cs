@@ -15,10 +15,11 @@ public partial class Manager
 {
 	string WorldMapBakeDirectory => args.assetPackPath ?? Assets.DefaultVisualAssetPackPath;
 
-	public void BakeWorldMap()
+
+	public void BakeWorldMap(WorldMap.Mode mode)
 	{
 		var bounds = WorldMap.WorldPixelBounds();
-		var (size, scale) = WorldMap.BakeSize(bounds);
+		var (size, scale) = WorldMap.BakeSize(bounds, mode);
 		if (size.X <= 0 || size.Y <= 0)
 		{
 			Console.WriteLine("World map bake: no rooms to bake.");
@@ -38,8 +39,8 @@ public partial class Manager
 				baked++;
 		}
 
-		WriteWorldMapBake(target, bounds);
-		Console.WriteLine($"World map bake ({Assets.CurrentWorldId}): {baked} rooms -> {size.X}x{size.Y} ({scale:0.###} px per world px) in {timer.ElapsedMilliseconds}ms");
+		var bakeInfo = WriteWorldMapBake(target, bounds, mode);
+		Console.WriteLine($"World map bake ({mode}) ({Assets.CurrentWorldId}): {baked} rooms to {bakeInfo.ImagePath} -> {size.X}x{size.Y} ({scale:0.###} px per world px) in {timer.ElapsedMilliseconds}ms");
 
 		// Pick the fresh files up immediately so the map shows the new bake without a restart.
 		Assets.ReloadWorldMap(GraphicsDevice);
@@ -81,17 +82,45 @@ public partial class Manager
 		return new RectInt(left, top, right - left, bottom - top);
 	}
 
-	void WriteWorldMapBake(Target target, RectInt bounds)
+	internal record BakeResult
+	{
+		internal required string ImagePath;
+		internal required string MetadataPath;
+	}
+
+	BakeResult WriteWorldMapBake(Target target, RectInt bounds, WorldMap.Mode mode)
 	{
 		var pixels = new Color[target.Width * target.Height];
 		target.Attachments[0].GetData<Color>(pixels);
 
 		Directory.CreateDirectory(WorldMapBakeDirectory);
-		// A manual editor bake can replace a different world's cached release bake.
-		File.Delete(Path.Join(WorldMapBakeDirectory, "world-map.inputs.sha256"));
+		string imageFileToWrite = mode switch
+		{
+			WorldMap.Mode.LowResQoi => WorldMap.ImageFileLowResQoi,
+			WorldMap.Mode.HighResPng => WorldMap.ImageFileHighResPng,
+			_ => throw new ArgumentException($"Invalid world map mode: {mode}"),
+		};
+		var imagePath = Path.Join(WorldMapBakeDirectory, imageFileToWrite);
 		using (var image = new Image(target.Width, target.Height, pixels))
-			image.WriteQoi(Path.Join(WorldMapBakeDirectory, WorldMap.ImageFile));
-		File.WriteAllBytes(Path.Join(WorldMapBakeDirectory, WorldMap.BoundsFile), WorldMap.WriteBounds(bounds));
+		{
+			if (mode == WorldMap.Mode.LowResQoi)
+			{
+				// A manual editor bake can replace a different world's cached release bake.
+				File.Delete(Path.Join(WorldMapBakeDirectory, "world-map.inputs.sha256"));
+				image.WriteQoi(imagePath);
+			}
+			else
+			{
+				image.WritePng(imagePath);
+			}
+		}
+
+		var path = Path.Join(WorldMapBakeDirectory, WorldMap.BoundsFile);
+		File.WriteAllBytes(path, WorldMap.WriteBounds(bounds));
+		return new BakeResult {
+			ImagePath = imagePath,
+			MetadataPath = path
+		};
 	}
 }
 #endif

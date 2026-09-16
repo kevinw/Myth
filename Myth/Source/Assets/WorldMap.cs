@@ -11,8 +11,10 @@ namespace Myth;
 /// at load, so moving a room only misplaces the map until the next bake instead of skewing it.
 public static class WorldMap
 {
-	public const string ImageFile = "world-map.qoi";
-	public const string BoundsFile = "world-map.json";
+	public const string ImageFileWithoutExtension = "world-map";
+	internal static string ImageFileLowResQoi => ImageFileWithoutExtension + ".qoi";
+	internal static string ImageFileHighResPng => ImageFileWithoutExtension + ".png";
+	public const string BoundsFile = ImageFileWithoutExtension + ".json";
 
 	/// Widest the bake is allowed to be; the world scales down to fit and keeps its aspect.
 	/// -1 sizes it so one texture pixel is one world tile, matching the map's own tile grid.
@@ -34,16 +36,27 @@ public static class WorldMap
 				bounds = bounds.Width <= 0 ? room.WorldBounds : bounds.Conflate(room.WorldBounds);
 		return bounds;
 	}
+	
+	public enum Mode
+	{
+		LowResQoi,
+		HighResPng,
+	}
 
 	/// Pixel size a bake of <paramref name="bounds"/> gets, and the scale it is rendered at.
-	public static (Point2 Size, float Scale) BakeSize(RectInt bounds)
+	public static (Point2 Size, float Scale) BakeSize(RectInt bounds, Mode mode = Mode.LowResQoi)
 	{
 		if (bounds.Width <= 0 || bounds.Height <= 0)
 			return (Point2.Zero, 0);
 
-		var scale = MaxWidth > 0
+		float scale;
+		scale = MaxWidth > 0
 			? Math.Min(1.0f, MaxWidth / (float)bounds.Width)
 			: 1.0f / Game.TileSize;
+		if (mode == Mode.HighResPng) {
+			scale *= Game.TileSize;
+		}
+		
 		return (new Point2(
 			Math.Max(1, (int)MathF.Round(bounds.Width * scale)),
 			Math.Max(1, (int)MathF.Round(bounds.Height * scale))), scale);
@@ -67,7 +80,8 @@ public static class WorldMap
 	public static void Load(GraphicsDevice gfx, StorageContainer pack)
 	{
 		Unload();
-		if (!pack.FileExists(ImageFile) || !pack.FileExists(BoundsFile))
+		
+		if (!pack.FileExists(ImageFileLowResQoi) || !pack.FileExists(BoundsFile))
 			return;
 
 		try
@@ -76,7 +90,7 @@ public static class WorldMap
 			if (bounds.Width <= 0 || bounds.Height <= 0)
 				return;
 
-			using var image = new Image(pack.ReadAllBytes(ImageFile));
+			using var image = new Image(pack.ReadAllBytes(ImageFileLowResQoi));
 			Texture = new Texture(gfx, image, name: "WorldMap");
 			Bounds = bounds;
 		}

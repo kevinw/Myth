@@ -185,7 +185,7 @@ public partial class Manager
 		ImGui.Separator();
 
 		if (ImGui.MenuItem("Bake World Map"))
-			BakeWorldMap();
+			BakeWorldMap(WorldMap.Mode.LowResQoi);
 #if !IOS
 		if (ImGui.MenuItem("Open FMOD Studio"))
 			FmodStudio.Open();

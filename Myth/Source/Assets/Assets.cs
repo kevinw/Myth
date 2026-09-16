@@ -504,10 +504,10 @@ public static partial class Assets
 	/// into the pack folder and never deleted by a rebuild, so a rebuilt pack keeps its map.
 	static void ReportWorldMapState(string directory)
 	{
-		var hasMap = File.Exists(Path.Join(directory, WorldMap.ImageFile))
+		var hasMap = File.Exists(Path.Join(directory, WorldMap.ImageFileLowResQoi))
 			&& File.Exists(Path.Join(directory, WorldMap.BoundsFile));
 		Console.WriteLine(hasMap
-			? $"World map: kept existing {WorldMap.ImageFile} (rebake it in the editor if rooms changed)."
+			? $"World map: kept existing {WorldMap.ImageFileLowResQoi} (rebake it in the editor if rooms changed)."
 			: $"World map: none in {directory}. Bake it from the editor toolbar (Bake Map).");
 	}
 
