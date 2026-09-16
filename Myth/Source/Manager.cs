@@ -116,7 +116,6 @@ public partial class Manager : App
 	/// Sprite Batcher for general Editor visuals
 	readonly Batcher batcher;
 	readonly Controls controls;
-	readonly bool showControllerInputs;
 
 	// Steam only exports SteamDeck=1 for titles it launches itself, so a devkit build started
 	// any other way would look like a desktop. The DMI vendor is the hardware talking.
@@ -267,7 +266,6 @@ public partial class Manager : App
 #endif
 #endif
 		AudioEnabled = args.audio;
-		showControllerInputs = args.showControllerInputs;
 		gym = new()
 		{
 			exitAfterAll = args.gymExitAfterAll
@@ -1870,7 +1868,7 @@ public partial class Manager : App
 
 	void DrawControllerInputs()
 	{
-		if (!showControllerInputs || !playing || game == null || Window == null)
+		if (!args.showControllerInputs ||!playing || game == null || Window == null)
 			return;
 		var viewport = (RectInt)(GameViewRect * Scale);
 		var present = game.PresentRect(viewport);
