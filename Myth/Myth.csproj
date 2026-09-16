@@ -84,6 +84,7 @@
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <DefineConstants>$(DefineConstants);BROWSER;BROWSER_JS_FMOD</DefineConstants>
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
     <MythBrowser>true</MythBrowser>
     <WasmEmitSymbolMap Condition="'$(Configuration)' == 'Release' and '$(WasmEmitSymbolMap)' == ''">false</WasmEmitSymbolMap>
     <MythBrowserThreads Condition="'$(MythBrowserThreads)' == ''">false</MythBrowserThreads>
@@ -97,6 +98,10 @@
          bundles never need any of it. One stable prefix, no per-file carve-outs. -->
     <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sources/**</MythBrowserRawVisualAssetExcludes>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
 
   <!-- Dear ImGui for the browser: link the prebuilt cimgui wasm archive into the
        runtime (built by tools/build-cimgui-web.sh). Linking native code forces a

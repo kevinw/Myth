@@ -708,9 +708,11 @@ public partial class Manager : App
 		menuImgui?.Dispose();
 		InputPrompts?.Dispose();
 		InputPrompts = null;
+#if !BROWSER
 		foreach (var cursor in imguiCursors.Values)
 			cursor.Dispose();
 		imguiCursors.Clear();
+#endif
 #if EDITOR
 		ClearRoomPreviewCache(deferDisposal: false);
 		ClearSurfacePreviewCache(deferDisposal: false);
@@ -1545,14 +1547,17 @@ public partial class Manager : App
 		Exit();
 	}
 
+#if !BROWSER
 	readonly Dictionary<Foster.Framework.Cursor.SystemTypes, Foster.Framework.Cursor> imguiCursors = [];
 	bool imguiCursorApplied;
+#endif
 
 	// Honor the cursor ImGui asked for this frame (resize arrows over window
 	// edges/corners, I-beam over text fields), restoring the default once it
 	// goes back to a plain arrow.
 	void ApplyImGuiMouseCursor()
 	{
+#if !BROWSER
 		if (imgui == null)
 			return;
 
@@ -1581,6 +1586,7 @@ public partial class Manager : App
 			imguiCursors[type] = cursor = new Foster.Framework.Cursor(type);
 		SetMouseCursor(cursor);
 		imguiCursorApplied = true;
+#endif
 	}
 
 #if EDITOR
