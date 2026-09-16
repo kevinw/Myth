@@ -13,7 +13,7 @@ namespace Myth;
 // --build-asset-pack; the files land in the pack folder and a pack rebuild leaves them alone.
 public partial class Manager
 {
-	string WorldMapBakeDirectory => assetPackPath ?? Assets.DefaultVisualAssetPackPath;
+	string WorldMapBakeDirectory => args.assetPackPath ?? Assets.DefaultVisualAssetPackPath;
 
 	public void BakeWorldMap()
 	{

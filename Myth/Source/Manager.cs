@@ -13,6 +13,7 @@ namespace Myth;
 public partial class Manager : App
 {
 	public readonly Audio Audio = new();
+	readonly StartArgs args;
 	readonly ImGuiRenderer imgui = null!;
 
 	// Dedicated ImGui context for the game menu. Unlike `imgui` (editor/browser
@@ -56,14 +57,11 @@ public partial class Manager : App
 	internal event Action<Manager>? ScenarioUpdate;
 	internal event Action<Manager>? ScenarioRender;
 	bool playOnStartup;
-	readonly bool startAtTitle;
 	bool titleAttractMode; // --title: hold "play mode" at the title so editor builds don't draw the editor
 	// The attract demo runs with playing==true; live editing/ tooling must treat this as "not a real
 	// play session" and stay out of it.
 	bool AttractMode => attract != null || titleAttractMode;
-	readonly bool skipStartupMenu;
-	readonly bool checkRooms;
-	readonly string? requestedWorldId;
+	bool skipStartupMenu => args.play || args.gym || args.headless || args.checkRooms;
 	bool startingPlay;
 	static float PlayMouseHideDelay => 3f;
 	float playMouseIdleTimer;
@@ -79,7 +77,6 @@ public partial class Manager : App
 	const int BootSettleFrames = 3;
 	Point2 bootLastSize = new(-1, -1);
 	int bootStableFrames;
-	readonly bool noWarmup;
 	SaveState saveState = new();
 	bool saveDirty;
 	bool saveFlushScheduled;
@@ -87,10 +84,6 @@ public partial class Manager : App
 	static float SaveDebounceDelay => 0.75f;
 
 	// Automated screenshot capture (see StartArgs / --screenshot).
-	readonly string? screenshotPath;
-	readonly int screenshotFrame;
-	readonly int screenshotInterval;
-	readonly int screenshotCount;
 	int screenshotsTaken;
 	int playingFrame;
 #if IOS
@@ -191,23 +184,14 @@ public partial class Manager : App
 	}
 
 	readonly List<string> musicAreas = [];
-	readonly bool dumpAtlases;
-	readonly int maxFrames;
-	readonly float maxTimeSeconds;
 	int completedGameFrames;
-	readonly int allocWarmupFrames;
-	readonly int allocMeasureFrames;
+	Stopwatch? fpsLogTimer;
+	ulong fpsLogStartFrame;
 	int allocProfileFrames;
 	int allocProfileMeasuredFrames;
 	long allocProfileBytes;
 	bool allocProfileStarted;
 	bool allocProfileComplete;
-	readonly string? playRoomId;
-	readonly bool buildAssetPack;
-	readonly bool bakeWorldMap;
-	readonly bool useAssetPack;
-	readonly string? assetPackPath;
-	readonly bool? requestedVSync;
 	bool musicEnabled = true;
 	bool vSyncEnabled = true;
 	bool alwaysOnTop;
@@ -238,7 +222,7 @@ public partial class Manager : App
 	{
 		// Automated captures run unattended and may never take focus, so they must keep
 		// stepping regardless of it -- otherwise the run suspends and never reaches its frame.
-		var runsInBackground = runInBackground || screenshotPath != null || gymMode;
+		var runsInBackground = runInBackground || args.screenshotPath != null || gymMode;
 #if EDITOR
 		runsInBackground |= editorGameRunInBackground;
 #endif
@@ -275,6 +259,7 @@ public partial class Manager : App
 		offscreen: args.bakeWorldMap || args.checkRooms, fullscreen: args.fullscreen,
 		framesInFlight: args.framesInFlight))
 	{
+		this.args = args;
 #if EDITOR
 		particleEditor = new(undo);
 #if !IOS && !BROWSER
@@ -282,40 +267,17 @@ public partial class Manager : App
 #endif
 #endif
 		AudioEnabled = args.audio;
-		requestedVSync = args.vsync;
-		dumpAtlases = args.dumpAtlases;
-		gymMode = args.gym;
-		headless = args.headless;
 		showControllerInputs = args.showControllerInputs;
-		checkRooms = args.checkRooms;
-		requestedWorldId = args.worldId;
-		unthrottled = args.unthrottled;
 		gym = new()
 		{
 			exitAfterAll = args.gymExitAfterAll
 		};
 		foreach (var goalId in args.gymGoalIds)
 			gym.goalIds.Add(goalId);
-		buildAssetPack = args.buildAssetPack;
-		bakeWorldMap = args.bakeWorldMap;
-		useAssetPack = args.useAssetPack;
-		assetPackPath = args.assetPackPath;
 		Assets.ConfigureContentZip(args.contentZipPath);
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.BenchSourceFrames = args.benchSourceFrames;
-		maxFrames = args.maxFrames;
-		allocWarmupFrames = args.allocWarmupFrames;
-		allocMeasureFrames = args.allocMeasureFrames;
-		maxTimeSeconds = args.maxTimeSeconds;
-		playRoomId = args.playRoomId;
 		playOnStartup = args.play;
-		startAtTitle = args.title;
-		noWarmup = args.noWarmup;
-		skipStartupMenu = args.play || args.gym || args.headless || args.checkRooms;
-		screenshotPath = args.screenshotPath;
-		screenshotFrame = args.screenshotFrame;
-		screenshotInterval = args.screenshotInterval;
-		screenshotCount = args.screenshotCount;
 		navTrace = NavTrace.Create(new(
 			args.traceNav,
 			args.traceJsonPath,
@@ -461,12 +423,12 @@ public partial class Manager : App
 #if !BROWSER
 		LoadWindowSettings();
 #endif
-		vSyncEnabled = requestedVSync ?? vSyncEnabled;
-		if (requestedWorldId != null)
-			Assets.SelectWorld(requestedWorldId);
+		vSyncEnabled = args.vsync ?? vSyncEnabled;
+		if (args.worldId != null)
+			Assets.SelectWorld(args.worldId);
 		else if (Assets.ContentIsZip)
 			Assets.SelectPackagedWorld();
-		if (bakeWorldMap && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
+		if (args.bakeWorldMap && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
 		GraphicsDevice.VSync = vSyncEnabled;
@@ -474,19 +436,19 @@ public partial class Manager : App
 #if !BROWSER
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
 #endif
-		if (buildAssetPack)
+		if (args.buildAssetPack)
 		{
-			Assets.BuildVisualAssetPack(GraphicsDevice, assetPackPath, dumpAtlases);
+			Assets.BuildVisualAssetPack(GraphicsDevice, args.assetPackPath, args.dumpAtlases);
 			Exit();
 			return;
 		}
 
 #if BROWSER
-		Assets.ConfigureVisualAssetPack(assetPackPath, true);
+		Assets.ConfigureVisualAssetPack(args.assetPackPath, true);
 #else
-		Assets.ConfigureVisualAssetPack(assetPackPath, useAssetPack);
+		Assets.ConfigureVisualAssetPack(args.assetPackPath, args.useAssetPack);
 #endif
-		Assets.Load(GraphicsDevice, dumpAtlases);
+		Assets.Load(GraphicsDevice, args.dumpAtlases);
 		if (Inbetweens.BenchMode)
 		{
 			Console.WriteLine("[Bench] complete — exiting");
@@ -500,15 +462,15 @@ public partial class Manager : App
 #else
 		saveState = SaveStateStore.Load(this);
 #endif
-		if (playRoomId != null)
-			selectedRoomId = playRoomId;
+		if (args.playRoomId != null)
+			selectedRoomId = args.playRoomId;
 		else if (saveState.LastGrounded is { } respawn && Assets.GetRoom(respawn.RoomId) != null)
 			selectedRoomId = respawn.RoomId;
 		ResolveSelectedRoom();
 		Factory.RegisterTypes();
 		Assets.RebuildRoomGeometry();
 		SpriteSdf.Generate(GraphicsDevice); // build the player + bud silhouette SDF atlas
-		if (checkRooms)
+		if (args.checkRooms)
 		{
 			CheckRooms();
 			Exit();
@@ -518,7 +480,7 @@ public partial class Manager : App
 			LoadAudioBanks();
 
 #if EDITOR
-		if (bakeWorldMap)
+		if (args.bakeWorldMap)
 		{
 			BakeWorldMap();
 			Exit();
@@ -532,11 +494,11 @@ public partial class Manager : App
 		// inline and enter immediately. EnterInitialScreen() runs once warmup finishes — see
 		// UpdateBootWarmup(). --no-warmup skips all of it so pipelines compile lazily on first
 		// room entry (baseline for A/B testing against a cold driver cache).
-		if (noWarmup)
+		if (args.noWarmup)
 		{
 			EnterInitialScreen();
 		}
-		else if (!headless && !gymMode && screenshotPath == null)
+		else if (!headless && !gymMode && args.screenshotPath == null)
 		{
 			bootWarming = true;
 			warmupIndex = 0;
@@ -598,13 +560,15 @@ public partial class Manager : App
 	// gym run. Extracted from Startup so the windowed build can defer it behind a loading screen.
 	void EnterInitialScreen()
 	{
+		fpsLogStartFrame = Time.RenderFrame;
+		fpsLogTimer = Stopwatch.StartNew();
 #if BROWSER || !EDITOR
 		if (!skipStartupMenu)
 			ShowTitleMenu();
 		else
 			playOnStartup = true; // explicit play/test runs still boot straight into play
 #endif
-		if (startAtTitle) // --title: force the title screen even in editor builds
+		if (args.title) // --title: force the title screen even in editor builds
 		{
 			playOnStartup = false;
 			ShowTitleMenu();
@@ -612,7 +576,7 @@ public partial class Manager : App
 			playing = true;
 		}
 		if (playOnStartup)
-			StartGame(immediate: playRoomId != null);
+			StartGame(immediate: args.playRoomId != null);
 #if !BROWSER
 		if (unthrottled)
 			Console.WriteLine("[Manager] unthrottled: running fixed 60fps steps as fast as possible (no wall-clock wait)");
@@ -621,7 +585,7 @@ public partial class Manager : App
 		// Gym mode: auto-start with rooms that have a Goal actor
 		if (gymMode)
 		{
-			if (!gym.CollectGymRooms(playRoomId))
+			if (!gym.CollectGymRooms(args.playRoomId))
 			{
 				Console.WriteLine("[Gym] no rooms with Goal found — exiting");
 				Environment.ExitCode = 1;
@@ -690,6 +654,12 @@ public partial class Manager : App
 
 	protected override void Shutdown()
 	{
+		if (fpsLogTimer is { } t && t.Elapsed.TotalSeconds >= 1)
+		{
+			var frames = Time.RenderFrame - fpsLogStartFrame;
+			var secs = t.Elapsed.TotalSeconds;
+			Console.WriteLine($"[FPS] {frames} frames in {secs:F2}s = {frames / secs:F1} fps");
+		}
 		ShutdownGame();
 		Audio.Shutdown();
 	}
@@ -1149,7 +1119,7 @@ public partial class Manager : App
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
 
-		if (Time.Seconds >= maxTimeSeconds)
+		if (Time.Seconds >= args.maxTimeSeconds)
 		{
 			Exit();
 			return;
@@ -1496,11 +1466,11 @@ public partial class Manager : App
 #if DEBUG
 		game?.Recorder.Tick();
 #endif
-		if (maxFrames != int.MaxValue && ++completedGameFrames >= maxFrames)
+		if (args.maxFrames != int.MaxValue && ++completedGameFrames >= args.maxFrames)
 			Exit();
 	}
 
-	bool AllocationProfileEnabled => allocMeasureFrames > 0;
+	bool AllocationProfileEnabled => args.allocMeasureFrames > 0;
 
 	void UpdateGameWithAllocationProfile(Game g)
 	{
@@ -1510,7 +1480,7 @@ public partial class Manager : App
 			return;
 		}
 
-		if (!allocProfileStarted && allocProfileFrames >= allocWarmupFrames)
+		if (!allocProfileStarted && allocProfileFrames >= args.allocWarmupFrames)
 			StartAllocationProfile();
 
 		if (allocProfileStarted)
@@ -1519,7 +1489,7 @@ public partial class Manager : App
 			g.Update(controls);
 			allocProfileBytes += GC.GetAllocatedBytesForCurrentThread() - before;
 			allocProfileMeasuredFrames++;
-			if (allocProfileMeasuredFrames >= allocMeasureFrames)
+			if (allocProfileMeasuredFrames >= args.allocMeasureFrames)
 				FinishAllocationProfile();
 		}
 		else
@@ -1543,7 +1513,7 @@ public partial class Manager : App
 		allocProfileComplete = true;
 		var bytesPerFrame = allocProfileBytes / (double)allocProfileMeasuredFrames;
 		Console.WriteLine(
-			$"ALLOC_PROFILE game_update warmup_frames={allocWarmupFrames} measure_frames={allocProfileMeasuredFrames} bytes={allocProfileBytes} bytes_per_frame={bytesPerFrame.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+			$"ALLOC_PROFILE game_update warmup_frames={args.allocWarmupFrames} measure_frames={allocProfileMeasuredFrames} bytes={allocProfileBytes} bytes_per_frame={bytesPerFrame.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
 		Exit();
 	}
 
@@ -1887,7 +1857,7 @@ public partial class Manager : App
 		batcher.Clear();
 		ScenarioRender?.Invoke(this);
 
-		if (screenshotPath != null && playing)
+		if (args.screenshotPath != null && playing)
 			UpdateScreenshotCapture();
 		imgui?.Render();
 		if (menuLayoutBuiltThisFrame)
@@ -1917,21 +1887,21 @@ public partial class Manager : App
 	{
 		playingFrame++;
 
-		var nextCaptureFrame = screenshotFrame + screenshotsTaken * screenshotInterval;
+		var nextCaptureFrame = args.screenshotFrame + screenshotsTaken * args.screenshotInterval;
 		if (playingFrame < nextCaptureFrame)
 			return;
 
 		CaptureScreenshot(ScreenshotPathFor(screenshotsTaken));
 		screenshotsTaken++;
 
-		if (screenshotsTaken >= screenshotCount)
+		if (screenshotsTaken >= args.screenshotCount)
 			Exit();
 	}
 
 	string ScreenshotPathFor(int index)
 	{
-		var path = screenshotPath!;
-		if (screenshotCount <= 1)
+		var path = args.screenshotPath!;
+		if (args.screenshotCount <= 1)
 			return path;
 
 		var dir = Path.GetDirectoryName(path) ?? string.Empty;
@@ -2412,7 +2382,7 @@ public partial class Manager : App
 		// can attempt each goal from each start. This wins over any remembered/editor position.
 		if (gymStartOverride is { } gymStart)
 			initialPlayerPosition = gymStart;
-		else if (initialPlayerPosition == null && playRoomId == null && saveState.LastGrounded is { } respawn && respawn.RoomId == room.Id)
+		else if (initialPlayerPosition == null && args.playRoomId == null && saveState.LastGrounded is { } respawn && respawn.RoomId == room.Id)
 			initialPlayerPosition = respawn.Position;
 
 		// In the gym, carry the live background music across the dispose/recreate so it
@@ -2428,7 +2398,7 @@ public partial class Manager : App
 			fallbackPlayerDirection: fallbackPlayerDirection,
 			spawnFallbackPlayer: true,
 			initialPlayerPosition: initialPlayerPosition,
-			spawnBud: true,
+			spawnBud: !args.noNav,
 			spawnBudAtPlayer: gymMode,
 			loadGoals: gymMode,
 			carryMusic: carriedMusic,

@@ -111,6 +111,7 @@ public partial class Game : IDisposable
 	Point2 transitionDirection;
 	Vector2 transitionCameraFrom;
 	Vector2 transitionCameraTo;
+	ulong? transitionPreparedRenderFrame;
 	float linkedDoorCooldown;
 	float layerTransitionTime;
 	static float LayerTransitionDuration => 0.25f;
@@ -710,21 +711,26 @@ public partial class Game : IDisposable
 			}
 		}
 		// Lerp the Camera to the new Room
-		else if (nextRoomEase < 1.0f)
+		// Room setup and its first draw can compile cold GPU pipelines. Fixed-step catch-up may
+		// otherwise advance this tween several times before that first frame is ever presented.
+		else if (transitionPreparedRenderFrame is { } preparedFrame && Time.RenderFrame != preparedFrame)
 		{
-			View?.UpdateParticles(Time.Delta);
-			Camera = Vector2.Lerp(transitionCameraFrom, transitionCameraTo, Ease.Cube.InOut(nextRoomEase));
-			nextRoomEase = Calc.Approach(nextRoomEase, 1.0f, Time.Delta * 4.0f);
-		}
-		// Finished Lerping the Camera to the new room, return to normal update
-		else
-		{
-			room = nextRoom;
-			nextRoom = null;
-			ResolvePlayerRoomTransition(transitionDirection);
-			ApplyMusicArea(room);
-			HitStun(0.1f);
-			FinishRoomActivation(RoomChangeKind.EdgeTransition);
+			if (nextRoomEase < 1.0f)
+			{
+				View?.UpdateParticles(Time.Delta);
+				Camera = Vector2.Lerp(transitionCameraFrom, transitionCameraTo, Ease.Cube.InOut(nextRoomEase));
+				nextRoomEase = Calc.Approach(nextRoomEase, 1.0f, Time.Delta * 4.0f);
+			}
+			// Finished Lerping the Camera to the new room, return to normal update
+			else
+			{
+				room = nextRoom;
+				nextRoom = null;
+				ResolvePlayerRoomTransition(transitionDirection);
+				ApplyMusicArea(room);
+				HitStun(0.1f);
+				FinishRoomActivation(RoomChangeKind.EdgeTransition);
+			}
 		}
 
 		UpdateRenderTargetShake();
@@ -1819,6 +1825,7 @@ public partial class Game : IDisposable
 					exitPosition - new Vector2(Width, Height) / 2, fbPad, nextBounds, entry,
 					CameraBlockerRects(nextRoom, entry, cameraBlockerBuffer));
 				nextRoomEase = 0.0f;
+				transitionPreparedRenderFrame = null;
 				LoadRoom(nextRoom);
 				RaiseRoomChanged(fromRoom, nextRoom, RoomChangeKind.EdgeTransition, transitionDirection);
 				ApplyMusicArea(nextRoom);
@@ -1833,6 +1840,12 @@ public partial class Game : IDisposable
 		}
 
 		return false;
+	}
+
+	internal void NoteRoomTransitionRendered()
+	{
+		if (nextRoom != null)
+			transitionPreparedRenderFrame ??= Time.RenderFrame;
 	}
 
 	public bool CheatShiftRoom(Point2 direction)
