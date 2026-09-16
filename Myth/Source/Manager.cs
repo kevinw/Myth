@@ -255,7 +255,7 @@ public partial class Manager : App
 	}
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
-		offscreen: args.bakeWorldMap != null || args.checkRooms, fullscreen: args.fullscreen,
+		offscreen: args.bakeWorldMap != null || args.writeAllRooms || args.checkRooms, fullscreen: args.fullscreen,
 		framesInFlight: args.framesInFlight))
 	{
 		this.args = args;
@@ -481,6 +481,14 @@ public partial class Manager : App
 		if (args.bakeWorldMap is { } mode)
 		{
 			BakeWorldMap(mode);
+			Exit();
+			return;
+		}
+#endif
+#if !BROWSER && !IOS
+		if (args.writeAllRooms)
+		{
+			WriteAllRooms();
 			Exit();
 			return;
 		}
