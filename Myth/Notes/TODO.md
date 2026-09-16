@@ -1,4 +1,7 @@
 - put an evolving world map online with a timeline scrubber https://leafletjs.com
+- investigate gpu perf
+  - https://developer.apple.com/documentation/xcode/debugging-with-interactive-command-line-tools
+  - https://developer.apple.com/documentation/xcode/investigating-gpu-issues-with-ai-agents
 - --bake-world-map doesn't show the output path of the bake
 - show the gpu adapter in the startup log line
 - gameplay idea: jump to parry pops you into a burrow
