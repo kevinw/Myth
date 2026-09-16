@@ -451,14 +451,18 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	static void DrawActivationLightInset(Batcher batcher, Vector2 center)
 	{
+		var fillMode = new Color(0, 0, 255, 0);
 		var flat = new Color(0x8080ff);
+		Span<BatcherVertex> verts = stackalloc BatcherVertex[ActivationLightSteps + 1];
+		Span<int> idxs = stackalloc int[ActivationLightSteps * 3];
+		verts[0] = new(center, flat, fillMode);
 		for (var i = 0; i < ActivationLightSteps; i++)
 		{
 			var a = Calc.AngleToVector(i / (float)ActivationLightSteps * Calc.TAU);
-			var b = Calc.AngleToVector((i + 1) / (float)ActivationLightSteps * Calc.TAU);
-			batcher.Triangle(center, center + a * ActivationLightRadius, center + b * ActivationLightRadius,
-				flat, ActivationLightInsetNormal(a), ActivationLightInsetNormal(b));
+			verts[i + 1] = new(center + a * ActivationLightRadius, ActivationLightInsetNormal(a), fillMode);
+			idxs[i * 3] = 0; idxs[i * 3 + 1] = i + 1; idxs[i * 3 + 2] = (i + 1) % ActivationLightSteps + 1;
 		}
+		batcher.Vertices(verts, idxs);
 	}
 
 	static Color ActivationLightInsetNormal(Vector2 direction)

@@ -48,16 +48,16 @@ readonly record struct RigSkin(Surface? Surface, Texture? Texture, float Amount,
 			batcher.Quad(Texture, a, b, c, d, uv.A, uv.B, uv.C, uv.D, color * Amount);
 	}
 
-	public void Circle(Batcher batcher, Vector2 center, float radius, Vector2 uvCenter, Vector2 uvRadius, Color color)
+	public void Circle(Batcher batcher, Vector2 center, float radius, Vector2 uvCenter, Vector2 uvRadius, Color color, int steps = 14)
 	{
 		if (Surface == null && Texture == null)
 			return;
-		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[14 * 3];
+		Span<Surface.Vertex> triangles = stackalloc Surface.Vertex[steps * 3];
 		var previous = center + Vector2.UnitX * radius;
 		var previousUV = uvCenter + Vector2.UnitX * uvRadius;
-		for (var i = 1; i <= 14; i++)
+		for (var i = 1; i <= steps; i++)
 		{
-			var direction = Calc.AngleToVector(i / 14f * MathF.Tau);
+			var direction = Calc.AngleToVector(i / (float)steps * MathF.Tau);
 			var next = center + direction * radius;
 			var nextUV = uvCenter + direction * uvRadius;
 			if (Surface != null)
@@ -77,7 +77,7 @@ readonly record struct RigSkin(Surface? Surface, Texture? Texture, float Amount,
 	}
 
 	public void Joint(Batcher batcher, Vector2 center, float radius, Vector2 uvCenter, Color color)
-		=> Circle(batcher, center, radius, uvCenter, new Vector2(radius) / (Vector2)Size, color);
+		=> Circle(batcher, center, radius, uvCenter, new Vector2(radius) / (Vector2)Size, color, RigDraw.JointSteps(radius));
 
 	public void Triangle(Batcher batcher, Vector2 a, Vector2 b, Vector2 c, Vector2 uvA, Vector2 uvB, Vector2 uvC)
 	{
@@ -102,6 +102,7 @@ static class RigDraw
 	static int NormalFacets => 3;
 
 	public static float JointRadius(float width) => MathF.Max(1.2f, width * JointRadiusScale);
+	public static int JointSteps(float radius) => Math.Clamp((int)(radius * MathF.Tau / 2f), 4, 14);
 
 	public static void AddCostumeItems(List<RigDrawItem> items, Costume? costume, RigTags tags)
 	{
@@ -193,22 +194,18 @@ static class RigDraw
 	{
 		var fromRadius = JointRadius(item.FromWidth);
 		var toRadius = JointRadius(item.ToWidth);
-		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, outline);
-		if (item.Rings.HasFlag(JointRings.From))
-			batcher.Circle(item.From, fromRadius + 1, 14, outline);
-		if (item.Rings.HasFlag(JointRings.To))
-			batcher.Circle(item.To, toRadius + 1, 14, outline);
-		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth, item.ToWidth, color);
-		if (item.JoinsParent)
-			batcher.Circle(item.From, fromRadius, 14, color);
-		batcher.Circle(item.To, toRadius, 14, color);
+		batcher.Capsule(item.From, item.To, fromRadius + 1, toRadius + 1, JointSteps(toRadius + 1), outline,
+			fromCap: item.Rings.HasFlag(JointRings.From), toCap: item.Rings.HasFlag(JointRings.To));
+		batcher.Capsule(item.From, item.To, fromRadius, toRadius, JointSteps(toRadius), color,
+			fromCap: item.JoinsParent);
 		DrawBoneSkin(batcher, item, uv, color, skin);
 	}
 
 	public static void DrawBoneSilhouette(Batcher batcher, in RigDrawItem item, Color tint)
 	{
-		DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, tint);
-		batcher.Circle(item.To, JointRadius(item.ToWidth) + 1, 14, tint);
+		var toRadius = JointRadius(item.ToWidth);
+		batcher.Capsule(item.From, item.To, JointRadius(item.FromWidth) + 1, toRadius + 1,
+			JointSteps(toRadius + 1), tint, fromCap: false);
 	}
 
 	public static void DrawBoneNormals(Batcher batcher, in RigDrawItem item, BoneUV uv, float roundness,
@@ -229,16 +226,14 @@ static class RigDraw
 					roundness, irregularity, facetSeed ^ (uint)facet * 0x85ebca6bu);
 			}
 			if (item.JoinsParent)
-				DrawSphereNormals(batcher, item.From, fromRadius + 1, 14, roundness, irregularity, seed);
-			DrawSphereNormals(batcher, item.To, toRadius + 1, 14, roundness, irregularity, seed);
+				DrawSphereNormals(batcher, item.From, fromRadius + 1, JointSteps(fromRadius + 1), roundness, irregularity, seed);
+			DrawSphereNormals(batcher, item.To, toRadius + 1, JointSteps(toRadius + 1), roundness, irregularity, seed);
 		}
 		else
 		{
 			var flat = new Color(0x8080ff);
-			DrawBoneQuad(batcher, item.From, item.To, item.FromWidth + 2, item.ToWidth + 2, flat);
-			if (item.JoinsParent)
-				batcher.Circle(item.From, fromRadius + 1, 14, flat);
-			batcher.Circle(item.To, toRadius + 1, 14, flat);
+			batcher.Capsule(item.From, item.To, fromRadius + 1, toRadius + 1, JointSteps(toRadius + 1), flat,
+				fromCap: item.JoinsParent);
 		}
 		DrawBoneSkin(batcher, item, uv, Color.White, skin);
 	}
@@ -302,17 +297,43 @@ static class RigDraw
 	public static void DrawSphereNormals(Batcher batcher, Vector2 center, float radius, int steps,
 		float roundness, float irregularity, uint seed)
 	{
+		var fillMode = new Color(0, 0, 255, 0);
 		var centerNormal = NormalColor(new Vector2(HashSigned(seed), HashSigned(seed ^ 0x27d4eb2du)) *
 			(irregularity * 0.08f));
+		Span<BatcherVertex> verts = stackalloc BatcherVertex[steps + 1];
+		Span<int> idxs = stackalloc int[steps * 3];
+		verts[0] = new(center, centerNormal, fillMode);
 		for (var i = 0; i < steps; i++)
 		{
 			var a = Calc.AngleToVector(i / (float)steps * MathF.Tau);
-			var b = Calc.AngleToVector((i + 1) / (float)steps * MathF.Tau);
 			var aAmount = roundness * (1 + HashSigned(seed ^ (uint)i * 0x85ebca6bu) * irregularity * 0.12f);
-			var bAmount = roundness * (1 + HashSigned(seed ^ (uint)(i + 1) * 0x85ebca6bu) * irregularity * 0.12f);
-			batcher.Triangle(center, center + a * radius, center + b * radius,
-				centerNormal, NormalColor(a * aAmount), NormalColor(b * bAmount));
+			verts[i + 1] = new(center + a * radius, NormalColor(a * aAmount), fillMode);
+			idxs[i * 3] = 0; idxs[i * 3 + 1] = i + 1; idxs[i * 3 + 2] = (i + 1) % steps + 1;
 		}
+		batcher.Vertices(verts, idxs);
+	}
+
+	// Screen-space lateral normal encoded as color: dir*0.5+0.5 for XY, z=0.5 (faces viewer).
+	// Use for flat-facing surfaces (rotors, blade discs, etc.). For curved surfaces where nz matters,
+	// use NormalColor() instead — it reconstructs z from the lateral length.
+	public static Color ScreenNormalColor(Vector2 dir)
+		=> new(dir.X * 0.5f + 0.5f, dir.Y * 0.5f + 0.5f, 0.5f, 1f);
+
+	// Sphere normals fan: center faces viewer, edge vertices encode screen-space outward normals.
+	// Pass concave=true to invert the rim normals (e.g. for an inset cup shape).
+	public static void DrawSphereNormals(Batcher batcher, Vector2 center, float radius, int steps, bool concave = false)
+	{
+		var fillMode = new Color(0, 0, 255, 0);
+		Span<BatcherVertex> verts = stackalloc BatcherVertex[steps + 1];
+		Span<int> idxs = stackalloc int[steps * 3];
+		verts[0] = new(center, new Color(0x8080ff), fillMode);
+		for (var i = 0; i < steps; i++)
+		{
+			var a = Calc.AngleToVector(i / (float)steps * MathF.Tau);
+			verts[i + 1] = new(center + a * radius, ScreenNormalColor(concave ? -a : a), fillMode);
+			idxs[i * 3] = 0; idxs[i * 3 + 1] = i + 1; idxs[i * 3 + 2] = (i + 1) % steps + 1;
+		}
+		batcher.Vertices(verts, idxs);
 	}
 
 	static Color NormalColor(Vector2 lateral)

@@ -336,20 +336,9 @@ public class BurrowLine : PointPathActor, IActivationSource
 	}
 
 	static void RenderRoundNormals(Batcher batcher, Vector2 center, float radius, bool concave = false)
-	{
-		const int steps = 12;
-		var flat = new Color(0x8080ff);
-		for (var i = 0; i < steps; i++)
-		{
-			var a = Calc.AngleToVector(i / (float)steps * Calc.TAU);
-			var b = Calc.AngleToVector((i + 1) / (float)steps * Calc.TAU);
-			batcher.Triangle(center, center + a * radius, center + b * radius,
-				flat, NormalColor(concave ? -a : a), NormalColor(concave ? -b : b));
-		}
-	}
+		=> RigDraw.DrawSphereNormals(batcher, center, radius, 12, concave);
 
-	static Color NormalColor(Vector2 direction)
-		=> new(direction.X * 0.5f + 0.5f, direction.Y * 0.5f + 0.5f, 0.5f, 1f);
+	static Color NormalColor(Vector2 direction) => RigDraw.ScreenNormalColor(direction);
 
 	public bool TryGetEndpoint(Vector2 near, float maxDistance, out int segment, out float t, out int direction, out Vector2 point, out Vector2 heading)
 	{

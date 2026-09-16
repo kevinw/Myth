@@ -428,21 +428,9 @@ public class Drone : Actor
 
 	// Body as a lit sphere: center normal faces the viewer, rim normals splay outward (nz~0).
 	static void RenderSphereNormals(Batcher batcher, Vector2 center, float radius, int steps)
-	{
-		var faceViewer = new Color(0x8080ff); // (0.5, 0.5, 1.0)
-		for (int i = 0; i < steps; i++)
-		{
-			var d0 = Calc.AngleToVector(i / (float)steps * Calc.TAU);
-			var d1 = Calc.AngleToVector((i + 1) / (float)steps * Calc.TAU);
-			batcher.Triangle(
-				center, center + d0 * radius, center + d1 * radius,
-				faceViewer, RimNormalColor(d0), RimNormalColor(d1));
-		}
-	}
+		=> RigDraw.DrawSphereNormals(batcher, center, radius, steps);
 
-	// Screen-space outward normal (x right, y down) encoded as color = normal * 0.5 + 0.5.
-	static Color RimNormalColor(Vector2 dir)
-		=> new(dir.X * 0.5f + 0.5f, dir.Y * 0.5f + 0.5f, 0.5f, 1.0f);
+	static Color RimNormalColor(Vector2 dir) => RigDraw.ScreenNormalColor(dir);
 
 	static void DrawEye(Batcher batcher) {
 		//batcher.Circle(new Vector2(0, -1), 1.6f, 8, new Color(0xff4040)); // eye

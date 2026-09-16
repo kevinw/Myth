@@ -1,3 +1,7 @@
+- put an evolving world map online with a timeline scrubber https://leafletjs.com
+- --bake-world-map doesn't show the output path of the bake
+- show the gpu adapter in the startup log line
+- gameplay idea: jump to parry pops you into a burrow
 - consider dropping to 1 frame in flight if we can afford it? is there a dynamic way to do this?
 - profile the remaining cold-install hitch in the big first fall room: neural pipelines warm at boot, but room-specific weights, buffers, and seed simulation still initialize on entry
 - rename app bundle ID from com.fostergames.myth to something shipping-appropriate
