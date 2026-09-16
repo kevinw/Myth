@@ -1,6 +1,6 @@
 // Serves /figures/* with HTTP byte ranges, which Pages static assets don't support and
 // Safari requires to play <video>. Deploy from this folder so Pages picks up functions/:
-//   npx wrangler pages deploy html --project-name human-questions-pitch --branch main
+//   ./deploy.sh
 export async function onRequest({ request, env }) {
 	const asset = await env.ASSETS.fetch(new URL(request.url));
 	const headers = new Headers(asset.headers);

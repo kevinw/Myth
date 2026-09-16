@@ -62,5 +62,10 @@
     "label": "Pitch deck: build HTML",
     "command": "./build-html.sh",
     "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth/Production/Pitch Deck",
+  },
+  {
+    "label": "Pitch deck: deploy",
+    "command": "./deploy.sh",
+    "cwd": "$ZED_MAIN_GIT_WORKTREE/Myth/Production/Pitch Deck",
   }
 ]
