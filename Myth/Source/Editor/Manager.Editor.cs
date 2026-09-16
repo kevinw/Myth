@@ -271,6 +271,7 @@ public partial class Manager
 
 	void ClearEditorStateForEnteringPlayMode()
 	{
+		WarnAboutExactDuplicateActors();
 		CancelLiveTileEditing();
 		CancelLiveActorEditing();
 		EndRoomColorFieldPainting();
@@ -282,19 +283,86 @@ public partial class Manager
 	{
 		if (CurrentRoom is not { } room || selectedRoomActorIndex < 0 || selectedRoomActorIndex >= room.Actors.Count)
 			return;
+		var actor = room.Actors[selectedRoomActorIndex];
+		if (RoomActorIsLocked(actor))
+		{
+			DisplayMessage("Actor is locked");
+			return;
+		}
+
+		var copy = ActorSpecs.CloneObject(actor);
+		var position = ActorSpecs.ReadPoint(copy, "Position") ?? Point2.Zero;
+		copy["Position"] = new JsonArray(position.X + Game.TileSize, position.Y);
+		ClampRoomActorToRoom(room, copy);
+		if ((ActorSpecs.ReadPoint(copy, "Position") ?? Point2.Zero) == position)
+		{
+			DisplayMessage("No room to offset duplicate");
+			return;
+		}
 
 		using (CaptureRoomUndo("Duplicate Actor", room))
 		{
-			var copy = ActorSpecs.CloneObject(room.Actors[selectedRoomActorIndex]);
-			var position = ActorSpecs.ReadPoint(copy, "Position") ?? Point2.Zero;
-			copy["Position"] = new JsonArray(position.X + Game.TileSize, position.Y);
 			ActorSpecs.AssignNewActorId(copy);
 			room.Actors.Add(copy);
-			ClampRoomActorToRoom(room, copy);
 			selectedRoomActorIndex = room.Actors.Count - 1;
 			ClearEditorDragState();
 			editorGameDirty = true;
 		}
+	}
+
+	void WarnAboutExactDuplicateActors()
+	{
+		if (CurrentRoom is not { } room)
+			return;
+
+		var duplicateGroups = 0;
+		var duplicateActors = 0;
+		var firstType = "actor";
+		var firstPosition = Point2.Zero;
+		var firstCount = 0;
+		var grouped = new bool[room.Actors.Count];
+		for (var i = 0; i < room.Actors.Count; i++)
+		{
+			if (grouped[i])
+				continue;
+			var count = 1;
+			for (var j = i + 1; j < room.Actors.Count; j++)
+				if (!grouped[j] && AuthoredActorsEqualExceptId(room.Actors[i], room.Actors[j]))
+				{
+					grouped[j] = true;
+					count++;
+				}
+			if (count <= 1)
+				continue;
+
+			duplicateGroups++;
+			duplicateActors += count;
+			var type = ActorSpecs.GetTypeName(room.Actors[i]) ?? "actor";
+			var position = ActorSpecs.ReadPoint(room.Actors[i], "Position") ?? Point2.Zero;
+			Log.Warning($"Room '{room.Id}' contains {count} identical {type} actors at ({position.X}, {position.Y})");
+			if (firstCount == 0)
+			{
+				firstType = type;
+				firstPosition = position;
+				firstCount = count;
+			}
+		}
+
+		if (duplicateGroups == 1)
+			DisplayMessage($"Warning: {firstCount} identical {firstType} actors at ({firstPosition.X}, {firstPosition.Y})", 5);
+		else if (duplicateGroups > 1)
+			DisplayMessage($"Warning: {duplicateActors} identical actors in {duplicateGroups} groups", 5);
+	}
+
+	static bool AuthoredActorsEqualExceptId(JsonObject a, JsonObject b)
+	{
+		foreach (var (name, value) in a)
+			if (name != "Id" && (!b.TryGetPropertyValue(name, out var other) || !JsonNode.DeepEquals(value, other)))
+				return false;
+		foreach (var (name, _) in b)
+			if (name != "Id" && !a.ContainsKey(name))
+				return false;
+		return true;
 	}
 
 	void CopySelectedActor(bool cut)
@@ -4645,7 +4713,8 @@ public partial class Manager
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.SelectionMove && editorDrag.SelectionSnapshot != null && Input.Mouse.LeftDown)
 			{
 				editorDrag.SelectionOffset = tileOver - editorDrag.SelectionAnchor;
-				ApplyEditorSelectionSnapshot(editing, editorDrag.SelectionSnapshot, editorDrag.SelectionOffset, editorDrag.DuplicateSelection);
+				ApplyEditorSelectionSnapshot(editing, editorDrag.SelectionSnapshot, editorDrag.SelectionOffset,
+					editorDrag.DuplicateSelection && editorDrag.SelectionOffset != Point2.Zero);
 			}
 			else if (!worldMouseBlocked && actorSelectActive && DragKind == EditorDragKind.SelectionRect && Input.Mouse.LeftDown)
 			{
