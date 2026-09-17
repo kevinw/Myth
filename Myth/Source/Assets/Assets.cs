@@ -86,12 +86,9 @@ public static partial class Assets
 	const string defaultWorldId = "Myth";
 	const string worldManifestName = "world.json";
 	const string defaultStartRoomId = "start";
-	const string deletedRoomsFolderName = ".deleted";
 	static string? path = null;
-	static string? userRoomsPath = null;
 	static string? visualAssetPackPath = null;
 	static bool useVisualAssetPack = false;
-	static bool? bundledRoomsWritable = null;
 	static string currentWorldId = defaultWorldId;
 
 	public static string AssetsPath
@@ -141,8 +138,8 @@ public static partial class Assets
 	/// Read-only bundled content, addressed by Assets-relative keys ("Rooms/Myth/x.json").
 	/// Packaged builds read Assets/Content.pak (the Assets folder then carries only the zip
 	/// plus loose FMOD banks); dev and editor builds read the Assets folder directly, so
-	/// authoring and file watching keep working. Writable flows (user rooms, editor room
-	/// saves, pack bakes) never go through here — they use the real file system.
+	/// authoring and file watching keep working. Writable flows (editor room saves, pack
+	/// bakes) never go through here — they use the real file system.
 	/// </summary>
 	public static StorageContainer Content => content ??= OpenContent();
 
@@ -578,15 +575,6 @@ public static partial class Assets
 	public static string DefaultVisualAssetPackPath => Path.Join(AssetsPath, packedVisualsFolderName);
 	public static string CurrentWorldId => currentWorldId;
 	public static string WorldRoomsPath => Path.Join(RoomsPath, currentWorldId);
-	public static string? UserRoomsPath => userRoomsPath;
-	public static string? UserWorldRoomsPath => userRoomsPath != null ? Path.Join(userRoomsPath, currentWorldId) : null;
-
-	public static void ConfigureUserRoomsPath(string path)
-	{
-		userRoomsPath = path;
-		bundledRoomsWritable = null;
-	}
-
 	public static void ConfigureVisualAssetPack(string? path, bool enabled)
 	{
 		visualAssetPackPath = string.IsNullOrWhiteSpace(path) ? null : path;
@@ -614,7 +602,6 @@ public static partial class Assets
 			worldId = defaultWorldId;
 
 		currentWorldId = worldId;
-		bundledRoomsWritable = null;
 	}
 
 	public static void SelectPackagedWorld()
@@ -3011,45 +2998,23 @@ public static partial class Assets
 	}
 
 
-	internal static bool UseUserRooms = false;
-
 	static void LoadRooms()
 	{
 		Rooms.Clear();
 		RoomsById.Clear();
 		MusicRegions.Load();
 
-		var deleted = UseUserRooms ? LoadUserRoomTombstones() : [];
-
 		var worldRoomsKey = $"{roomsFolderName}/{currentWorldId}";
 		if (Content.DirectoryExists(worldRoomsKey))
 			foreach (var key in Content.EnumerateDirectory(worldRoomsKey, "*.json", SearchOption.AllDirectories))
 			{
-				var id = Path.GetFileNameWithoutExtension(key);
-				if (deleted.Contains(id))
-					continue;
-
 				var json = Content.ReadAllBytes(key);
-				var room = LoadRoomJson(id, json);
+				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(key), json);
 				room.DiskRevision = RoomRevision(json);
 				room.Sublayer = RoomSublayerFromPath(worldRoomsKey, key);
-				room.Storage = Room.StorageKind.Bundled;
 				// Zip content has no per-room file to rename/delete; SourcePath stays null there.
 				room.SourcePath = ContentIsPak ? null : Path.Join(AssetsPath, key);
 				LoadRoomColorFields(room, key);
-				AddRoom(room);
-			}
-
-		if (UseUserRooms && UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath))
-			foreach (var file in Directory.EnumerateFiles(userWorldRoomsPath, "*.json", SearchOption.AllDirectories))
-			{
-				var json = File.ReadAllBytes(file);
-				var room = LoadRoomJson(Path.GetFileNameWithoutExtension(file), json);
-				room.DiskRevision = RoomRevision(json);
-				room.Sublayer = RoomSublayerFromPath(userWorldRoomsPath, file);
-				room.Storage = Room.StorageKind.User;
-				room.SourcePath = file;
-				LoadRoomColorFields(room, file, fromContent: false);
 				AddRoom(room);
 			}
 
@@ -3082,13 +3047,8 @@ public static partial class Assets
 
 	static void AddRoom(Room room)
 	{
-		if (RoomsById.TryGetValue(room.Id, out var duplicate) && duplicate.Storage == room.Storage)
+		if (RoomsById.TryGetValue(room.Id, out var duplicate))
 			throw new InvalidDataException($"Duplicate room id '{room.Id}' in '{duplicate.SourcePath}' and '{room.SourcePath}'.");
-
-		if (RoomsById.TryGetValue(room.Id, out var existing) &&
-			Rooms.TryGetValue((existing.Sublayer, existing.Cell), out var byOldCell) &&
-			byOldCell == existing)
-			Rooms.Remove((existing.Sublayer, existing.Cell));
 
 		Rooms[(room.Sublayer, room.Cell)] = room;
 		RoomsById[room.Id] = room;
@@ -3096,7 +3056,9 @@ public static partial class Assets
 
 	public static bool SaveRoom(Room room, ReadOnlySpan<byte> json, bool overwriteExternal = false)
 	{
-		var path = GetRoomSavePath(room);
+		if (ContentIsPak)
+			throw new InvalidOperationException($"Cannot save room '{room.Id}': rooms are read-only in Content.pak.");
+		var path = BundledRoomPath(room.Id, room.Sublayer);
 		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 		if (!overwriteExternal && room.SourcePath is { } sourcePath && PathsEqual(sourcePath, path) && room.DiskRevision != null &&
 			!RevisionEquals(room.DiskRevision, ReadRoomRevision(path)))
@@ -3107,11 +3069,8 @@ public static partial class Assets
 		}
 		File.WriteAllBytes(path, json);
 		room.DiskRevision = RoomRevision(json);
-		room.Storage = IsUserRoomPath(path) ? Room.StorageKind.User : Room.StorageKind.Bundled;
 		room.SourcePath = path;
 		SaveRoomColorFields(room, path);
-		if (room.Storage == Room.StorageKind.User)
-			ClearUserRoomTombstone(room.Id);
 		return true;
 	}
 
@@ -3167,8 +3126,6 @@ public static partial class Assets
 		var oldPath = room.SourcePath;
 		var oldForegroundColorPath = room.ForegroundColorField.SourcePath;
 		var oldBackgroundColorPath = room.BackgroundColorField.SourcePath;
-		var oldBundledPath = BundledRoomPath(oldId, room.Sublayer);
-		var oldHadBundledRoom = File.Exists(oldBundledPath);
 		room.Id = id;
 		RoomsById.Remove(oldId);
 		RoomsById[id] = room;
@@ -3185,13 +3142,11 @@ public static partial class Assets
 		}
 
 		if (!RenamedOntoItself(oldPath, room.SourcePath))
-			DeleteRoomFile(oldPath, oldId);
+			DeleteRoomFile(oldPath);
 		if (!RenamedOntoItself(oldForegroundColorPath, room.ForegroundColorField.SourcePath))
 			DeleteColorFieldFile(oldForegroundColorPath);
 		if (!RenamedOntoItself(oldBackgroundColorPath, room.BackgroundColorField.SourcePath))
 			DeleteColorFieldFile(oldBackgroundColorPath);
-		if (oldHadBundledRoom && !string.Equals(oldPath, oldBundledPath, StringComparison.Ordinal))
-			WriteUserRoomTombstone(oldId);
 
 		return true;
 	}
@@ -3224,66 +3179,33 @@ public static partial class Assets
 		if (Rooms.TryGetValue((room.Sublayer, room.Cell), out var byCell) && byCell == room)
 			Rooms.Remove((room.Sublayer, room.Cell));
 
-		var bundledPath = BundledRoomPath(room.Id, room.Sublayer);
-		var hadBundledRoom = File.Exists(bundledPath);
 		DeleteColorFieldFile(room.ForegroundColorField.SourcePath);
 		DeleteColorFieldFile(room.BackgroundColorField.SourcePath);
-		DeleteRoomFile(room.SourcePath, room.Id);
-		if (hadBundledRoom && !string.Equals(room.SourcePath, bundledPath, StringComparison.Ordinal))
-			WriteUserRoomTombstone(room.Id);
+		DeleteRoomFile(room.SourcePath);
 
 		return true;
-	}
-
-	static string GetRoomSavePath(Room room)
-	{
-		if (room.Storage == Room.StorageKind.User)
-			return UserRoomPath(room.Id, room.Sublayer);
-
-		var bundledPath = BundledRoomPath(room.Id, room.Sublayer);
-		if (CanWriteBundledRooms())
-			return bundledPath;
-
-		return UserRoomPath(room.Id, room.Sublayer);
 	}
 
 	static string BundledRoomPath(string id, int sublayer = 0)
 		=> Path.Join(WorldRoomsPath, RoomSublayerDirectory(sublayer), $"{id}.json");
 
-	static string UserRoomPath(string id, int sublayer = 0)
-	{
-		if (userRoomsPath == null)
-			throw new InvalidOperationException("User room path has not been configured.");
-
-		return Path.Join(userRoomsPath, currentWorldId, RoomSublayerDirectory(sublayer), $"{id}.json");
-	}
-
 	static string RoomSublayerDirectory(int sublayer) => sublayer > 0 ? $"Sub{sublayer}" : "";
 
-	static void LoadRoomColorFields(Room room, string roomPath, bool fromContent = true)
+	static void LoadRoomColorFields(Room room, string roomPath)
 	{
-		LoadRoomColorField(room.ForegroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Foreground), room.Size, fromContent);
-		LoadRoomColorField(room.BackgroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Background), room.Size, fromContent);
+		LoadRoomColorField(room.ForegroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Foreground), room.Size);
+		LoadRoomColorField(room.BackgroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Background), room.Size);
 	}
 
-	static void LoadRoomColorField(RoomColorField field, string path, Point2 size, bool fromContent)
+	static void LoadRoomColorField(RoomColorField field, string path, Point2 size)
 	{
 		var legacyPath = LegacyRoomColorFieldPath(path);
 		try
 		{
-			if (fromContent)
-			{
-				if (Content.FileExists(path))
-					field.Load(Content.ReadAllBytes(path), size, ContentIsPak ? null : Path.Join(AssetsPath, path));
-				else if (Content.FileExists(legacyPath))
-					field.Load(Content.ReadAllBytes(legacyPath), size, ContentIsPak ? null : Path.Join(AssetsPath, legacyPath));
-				else
-					return;
-			}
-			else if (File.Exists(path))
-				field.Load(File.ReadAllBytes(path), size, path);
-			else if (File.Exists(legacyPath))
-				field.Load(File.ReadAllBytes(legacyPath), size, legacyPath);
+			if (Content.FileExists(path))
+				field.Load(Content.ReadAllBytes(path), size, ContentIsPak ? null : Path.Join(AssetsPath, path));
+			else if (Content.FileExists(legacyPath))
+				field.Load(Content.ReadAllBytes(legacyPath), size, ContentIsPak ? null : Path.Join(AssetsPath, legacyPath));
 		}
 		catch (Exception exception)
 		{
@@ -3329,118 +3251,21 @@ public static partial class Assets
 
 	static void DeleteColorFieldFile(string? path)
 	{
-		if (path != null && File.Exists(path) && CanDeleteFile(path))
+		if (path != null && File.Exists(path))
 			File.Delete(path);
 	}
 
-	static bool IsUserRoomPath(string path)
-	{
-		if (UserWorldRoomsPath is not { } userWorldRoomsPath)
-			return false;
-
-		var relative = Path.GetRelativePath(Path.GetFullPath(userWorldRoomsPath), Path.GetFullPath(path));
-		return relative != ".." && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-	}
-
 	static bool RoomFileExists(string id)
-	{
-		if (Directory.Exists(WorldRoomsPath) && Directory.EnumerateFiles(WorldRoomsPath, $"{id}.json", SearchOption.AllDirectories).Any())
-			return true;
-		if (UserWorldRoomsPath is { } userWorldRoomsPath && Directory.Exists(userWorldRoomsPath) &&
-			Directory.EnumerateFiles(userWorldRoomsPath, $"{id}.json", SearchOption.AllDirectories).Any())
-			return true;
-		return false;
-	}
+		=> Directory.Exists(WorldRoomsPath) && Directory.EnumerateFiles(WorldRoomsPath, $"{id}.json", SearchOption.AllDirectories).Any();
 
-	static void DeleteRoomFile(string? path, string id)
+	static void DeleteRoomFile(string? path)
 	{
 		if (path == null || !File.Exists(path))
 			return;
 
-		if (CanDeleteFile(path))
-		{
-			File.Delete(path);
-			RoomFileDeleted?.Invoke(path);
-		}
-		else if (!IsUserRoomPath(path))
-			WriteUserRoomTombstone(id);
+		File.Delete(path);
+		RoomFileDeleted?.Invoke(path);
 	}
-
-	static bool CanDeleteFile(string path)
-	{
-		try
-		{
-			using (File.Open(path, FileMode.Open, FileAccess.Write))
-			{
-			}
-			return true;
-		}
-		catch
-		{
-			return false;
-		}
-	}
-
-	static bool CanWriteBundledRooms()
-	{
-		if (ContentIsPak)
-			return false;
-
-		if (bundledRoomsWritable is { } cached)
-			return cached;
-
-		try
-		{
-			Directory.CreateDirectory(WorldRoomsPath);
-			var testPath = Path.Join(WorldRoomsPath, $".write-test-{Guid.NewGuid():N}");
-			File.WriteAllText(testPath, string.Empty);
-			File.Delete(testPath);
-			bundledRoomsWritable = true;
-		}
-		catch
-		{
-			bundledRoomsWritable = false;
-		}
-
-		return bundledRoomsWritable.Value;
-	}
-
-	static HashSet<string> LoadUserRoomTombstones()
-	{
-		var deleted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var path = UserDeletedRoomsPath();
-		if (path == null || !Directory.Exists(path))
-			return deleted;
-
-		foreach (var file in Directory.EnumerateFiles(path))
-			deleted.Add(Path.GetFileName(file));
-
-		return deleted;
-	}
-
-	static void WriteUserRoomTombstone(string id)
-	{
-		var path = UserDeletedRoomsPath();
-		if (path == null)
-			return;
-
-		Directory.CreateDirectory(path);
-		File.WriteAllText(Path.Join(path, id), string.Empty);
-	}
-
-	static void ClearUserRoomTombstone(string id)
-	{
-		var path = UserDeletedRoomsPath();
-		if (path == null)
-			return;
-
-		var file = Path.Join(path, id);
-		if (File.Exists(file))
-			File.Delete(file);
-	}
-
-	static string? UserDeletedRoomsPath()
-		=> userRoomsPath != null ? Path.Join(userRoomsPath, currentWorldId, deletedRoomsFolderName) : null;
 
 	public static void RebuildRoomGeometry()
 	{

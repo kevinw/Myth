@@ -470,9 +470,6 @@ public partial class Manager : App
 		GraphicsDevice.VSync = vSyncEnabled;
 		ApplyLatencyMode();
 
-#if !BROWSER
-		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
-#endif
 		if (args.buildAssetPack)
 		{
 			Assets.BuildVisualAssetPack(GraphicsDevice, args.assetPackPath, args.dumpAtlases);

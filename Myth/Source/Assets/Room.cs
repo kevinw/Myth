@@ -11,12 +11,6 @@ namespace Myth;
 
 public class Room
 {
-	public enum StorageKind
-	{
-		Bundled,
-		User
-	}
-
 	[Flags]
 	public enum TileFlags
 	{
@@ -81,7 +75,6 @@ public class Room
 	/// Stable room identity, also used as the filename.
 	public string Id;
 
-	public StorageKind Storage { get; internal set; } = StorageKind.Bundled;
 	public string? SourcePath { get; internal set; }
 	internal byte[]? DiskRevision;
 	public int Sublayer;
