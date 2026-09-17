@@ -467,8 +467,10 @@ public partial class Manager : App
 		if (args.bakeWorldMap != null && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
+#if !BROWSER
 		GraphicsDevice.VSync = vSyncEnabled;
 		ApplyLatencyMode();
+#endif
 
 		if (args.buildAssetPack)
 		{
