@@ -510,6 +510,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	bool curlAdvectionUnavailable;
 	bool settledFromSeed;
 	float stepAccumulator;
+	int deferredFrames;
+	bool decodePending;
 	float shutdownTime = -1;
 	ActorDestructionTrigger? shutdownTrigger;
 	float shutdownStartStepsPerSecond;
@@ -1022,27 +1024,106 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			autoPerturb.Size = Size;
 			autoPerturb.KeepOnRoomTransition = KeepOnRoomTransition;
 		}
-		var shutdownChanged = UpdateShutdown();
-		if (!supported)
-			return;
-		UpdateDensityProbe();
-		if (StepsPerSecond <= 0)
+		decodePending |= UpdateShutdown();
+		if (supported)
+			UpdateDensityProbe();
+	}
+
+	static readonly List<NeuralTextureActor> dueTextures = [];
+	static readonly List<Pawn> perturbingPawns = [];
+	static readonly List<NeuralTexturePerturbActor> pawnPerturbers = [];
+	static readonly List<INeuralTextureAgent> perturbingAgents = [];
+	static float DecodeViewMargin => Game.TileSize * 4;
+
+	// Runs before actor updates, on last frame's actor state. A cell budget spreads due steps
+	// across frames so textures sharing a rate don't all land on one frame, and the recorded work
+	// is submitted right away so the GPU simulates while the CPU updates actors.
+	internal static void StepAll(Game game)
+	{
+		var delta = game.Time.Delta;
+		var expectedCost = 0f;
+		var largestCost = 0;
+		dueTextures.Clear();
+		foreach (var actor in game.Actors)
 		{
-			if (shutdownChanged)
-				Decode();
-			return;
+			if (actor is not NeuralTextureActor { supported: true, StepsPerSecond: > 0 } texture)
+				continue;
+			var interval = 1 / texture.StepsPerSecond;
+			texture.stepAccumulator = MathF.Min(texture.stepAccumulator + delta, interval);
+			expectedCost += texture.StepCost * MathF.Min(1, delta / interval);
+			largestCost = Math.Max(largestCost, texture.StepCost);
+			if (texture.stepAccumulator >= interval)
+				dueTextures.Add(texture);
 		}
 
-		var interval = 1.0f / StepsPerSecond;
-		stepAccumulator = MathF.Min(stepAccumulator + Time.Delta, interval);
-		if (stepAccumulator >= interval)
+		if (dueTextures.Count > 0)
 		{
-			stepAccumulator -= interval;
-			Step();
-			shutdownChanged = false;
+			GatherPerturbSources(game);
+			dueTextures.Sort(static (a, b) => b.deferredFrames - a.deferredFrames);
+			var budget = expectedCost + largestCost / 2f;
+			var spent = 0f;
+			foreach (var texture in dueTextures)
+			{
+				if (spent > 0 && spent + texture.StepCost > budget)
+				{
+					texture.deferredFrames++;
+					continue;
+				}
+				spent += texture.StepCost;
+				texture.deferredFrames = 0;
+				texture.stepAccumulator -= 1 / texture.StepsPerSecond;
+				texture.Step();
+			}
 		}
-		if (shutdownChanged)
-			Decode();
+
+		if (DecodeVisible(game.Actors, new Rect(game.Camera, new Vector2(Game.Width, Game.Height) / game.zoomLevel)) || dueTextures.Count > 0)
+			game.Manager.GraphicsDevice.SubmitPendingCommands();
+	}
+
+	// Offscreen textures keep simulating but only decode once a view overlaps them. Rendering calls
+	// this with its own view too, so a texture the camera reaches mid-frame still draws current state.
+	internal static bool DecodeVisible(List<Actor> actors, Rect view)
+	{
+		view = view.Inflate(DecodeViewMargin);
+		var decoded = false;
+		foreach (var actor in actors)
+			if (actor is NeuralTextureActor { supported: true, decodePending: true } texture && texture.GetVisualBounds().Overlaps(view))
+			{
+				texture.Decode();
+				decoded = true;
+			}
+		return decoded;
+	}
+
+	static void GatherPerturbSources(Game game)
+	{
+		perturbingPawns.Clear();
+		pawnPerturbers.Clear();
+		perturbingAgents.Clear();
+		var players = 0;
+		foreach (var actor in game.Actors)
+		{
+			if (actor is NeuralTexturePerturbActor { Mode: NeuralTexturePerturbMode.Pawns } perturber)
+				pawnPerturbers.Add(perturber);
+			if (game.destroying.Contains(actor))
+				continue;
+			if (actor is Pawn pawn)
+				perturbingPawns.Add(pawn);
+			// Player attacks take priority over ambient agents when a texture's stamp buffer fills.
+			if (actor is Player player)
+				perturbingAgents.Insert(players++, player);
+			else if (actor is INeuralTextureAgent agent)
+				perturbingAgents.Add(agent);
+		}
+	}
+
+	int StepCost
+	{
+		get
+		{
+			var cells = SmokeActive ? SimulationSize : updateSize;
+			return cells.X * cells.Y + Size.X * Size.Y;
+		}
 	}
 
 	void UpdateDensityProbe()
@@ -1182,7 +1263,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		ApplyPerturbations();
 		AdvanceDynamism();
 		StepState();
-		Decode();
+		decodePending = true;
 	}
 
 	void StepState()
@@ -1384,11 +1465,8 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			perturbContext.PreviousStepTime = now - Time.Delta;
 		var textureBounds = GetVisualBounds();
 
-		foreach (var actor in Game.Actors)
+		foreach (var pawn in perturbingPawns)
 		{
-			if (actor is not Pawn pawn || Game.destroying.Contains(pawn))
-				continue;
-
 			var position = pawn.Position;
 			var previous = pawnSamples.GetValueOrDefault(pawn, new(position, now));
 			var movement = (Vector2)(position - previous.Position);
@@ -1398,12 +1476,11 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 			var currentBounds = pawn.Hitbox.Rect + position;
 			var previousBounds = currentBounds + previous.Position - position;
 
-			foreach (var other in Game.Actors)
+			foreach (var perturb in pawnPerturbers)
 			{
 				if (perturbContext.IsFull)
 					break;
-				if (other is not NeuralTexturePerturbActor { Mode: NeuralTexturePerturbMode.Pawns } perturb ||
-					!perturb.WorldRect.Overlaps(textureBounds) ||
+				if (!perturb.WorldRect.Overlaps(textureBounds) ||
 					((perturb.Effect == NeuralTexturePerturbEffect.Wake || !perturb.DisturbStationary) && !moved))
 					continue;
 
@@ -1431,23 +1508,13 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 		RemoveStalePawnSamples();
 
-		// Player attacks take priority over ambient agents when the shared stamp buffer fills.
-		foreach (var actor in Game.Actors)
-		{
-			if (perturbContext.IsFull)
-				break;
-			if (actor is Player player && !Game.destroying.Contains(actor))
-				player.PerturbNeuralTexture(perturbContext);
-		}
-
 		// Any actor can disturb the field it overlaps by implementing INeuralTextureAgent; the
 		// context maps its world-space stamps into this texture's state grid.
-		foreach (var actor in Game.Actors)
+		foreach (var agent in perturbingAgents)
 		{
 			if (perturbContext.IsFull)
 				break;
-			if (actor is INeuralTextureAgent agent && actor is not Player && !Game.destroying.Contains(actor))
-				agent.PerturbNeuralTexture(perturbContext);
+			agent.PerturbNeuralTexture(perturbContext);
 		}
 
 		EmitShutdownWave();
@@ -1526,7 +1593,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	{
 		stalePawnSamples.Clear();
 		foreach (var pawn in pawnSamples.Keys)
-			if (!Game.Actors.Contains(pawn))
+			if (!perturbingPawns.Contains(pawn))
 				stalePawnSamples.Add(pawn);
 		foreach (var pawn in stalePawnSamples)
 			pawnSamples.Remove(pawn);
@@ -1534,6 +1601,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 
 	void Decode()
 	{
+		decodePending = false;
 		var source = currentIsB ? bufferB! : bufferA!;
 		decodeUniforms.Set(new DecodeParams
 		{

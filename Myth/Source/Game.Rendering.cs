@@ -30,6 +30,7 @@ public sealed partial class GameView
 			atlasWanderOffset += AtlasWanderSpeed * Calc.Lerp(AtlasWanderInitialSpeed, 1, ramp) * Time.Delta;
 		}
 		PrepareRenderingList();
+		NeuralTextureActor.DecodeVisible(Actors, new Rect(RenderCamera, new Vector2(Screen.Width, Screen.Height) / zoomLevel));
 		GetDecalLayers(out var hasBackgroundDecals, out var hasForegroundDecals);
 		var buildAo = debugView is not DebugView.TileFieldRed and not DebugView.TileFieldGreen and not DebugView.DitherMask &&
 			PerfToggles.Lighting && lightingCompositeMaterial != null && PerfToggles.AmbientOcclusion && blurMaterial != null;

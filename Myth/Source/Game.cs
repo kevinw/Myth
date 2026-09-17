@@ -691,6 +691,7 @@ public partial class Game : IDisposable
 			{
 				PreUpdateSystems();
 				RemoveDestroyedActors();
+				NeuralTextureActor.StepAll(this);
 				for (var i = 0; i < Actors.Count; i++)
 				{
 					var actor = Actors[i];

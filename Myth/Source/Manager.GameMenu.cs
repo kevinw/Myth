@@ -230,6 +230,11 @@ public partial class Manager
 			vSyncEnabled = !vSyncEnabled;
 			GraphicsDevice.VSync = vSyncEnabled;
 		}
+		if (MenuButton(lowLatency ? "low latency: on" : "low latency: off"))
+		{
+			lowLatency = !lowLatency;
+			ApplyLatencyMode();
+		}
 #endif
 		if (MenuButton("back", "menu/back"))
 			ShowGameMenuPage(GameMenuPage.Options);

@@ -20,7 +20,10 @@ public struct StartArgs
 	public string? devCommand;
 	public bool? fullscreen;
 	public bool? vsync;
-	public int framesInFlight = 2;
+	public bool runInBackground;
+	// Override the low latency option's frames in flight and swapchain wait (--gpu-wait start|end).
+	public int? framesInFlight;
+	public bool? gpuWaitBeforeUpdate;
 	// Force the 4:3 portrait-style presentation on desktop for testing (--aspect-four-three):
 	// pillarbox the 16:9 game into a centered 4:3 rect and crop the sides (tap/hold to un-crop).
 	public bool aspectFourThree;
@@ -102,6 +105,15 @@ public struct StartArgs
 				case "--dev-command": devCommand = ReadValue(args, ref i, option); break;
 				case "--fullscreen": fullscreen = true; break;
 				case "--vsync": vsync = ReadOnOff(args, ref i, option); break;
+				case "--run-in-bg": runInBackground = true; break;
+				case "--gpu-wait":
+					gpuWaitBeforeUpdate = ReadValue(args, ref i, option) switch
+					{
+						"start" => true,
+						"end" => false,
+						var value => throw Invalid(option, $"expected start or end, got '{value}'"),
+					};
+					break;
 				case "--frames-in-flight":
 					framesInFlight = ReadInt(args, ref i, option, minimum: 1);
 					if (framesInFlight > 3)

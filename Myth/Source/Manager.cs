@@ -181,6 +181,7 @@ public partial class Manager : App
 
 	readonly List<string> musicAreas = [];
 	int completedGameFrames;
+	long[]? frameTimestamps;
 	Stopwatch? fpsLogTimer;
 	ulong fpsLogStartFrame;
 	int allocProfileFrames;
@@ -193,6 +194,7 @@ public partial class Manager : App
 	int musicVolume = VolumeSteps;
 	int sfxVolume = VolumeSteps;
 	bool vSyncEnabled = true;
+	bool lowLatency;
 	internal readonly VideoSettings Video = new();
 	bool alwaysOnTop;
 #if !BROWSER
@@ -242,11 +244,19 @@ public partial class Manager : App
 	void WindowFocusGained() => windowFocused = true;
 	void WindowFocusLost() => windowFocused = false;
 
+	// The swapchain is acquired before input is polled; low latency also runs the CPU and GPU in
+	// lockstep with one frame in flight.
+	void ApplyLatencyMode()
+	{
+		GraphicsDevice.FramesInFlight = args.framesInFlight ?? (lowLatency ? 1 : 2);
+		GraphicsDevice.WaitBeforeUpdate = args.gpuWaitBeforeUpdate ?? true;
+	}
+
 	bool UpdateBackgroundSuspension()
 	{
 		// Automated captures run unattended and may never take focus, so they must keep
 		// stepping regardless of it -- otherwise the run suspends and never reaches its frame.
-		var runsInBackground = runInBackground || args.screenshotPath != null || gymMode;
+		var runsInBackground = runInBackground || args.runInBackground || args.screenshotPath != null || gymMode;
 #if EDITOR
 		runsInBackground |= editorGameRunInBackground;
 #endif
@@ -284,7 +294,7 @@ public partial class Manager : App
 
 	public Manager(StartArgs args) : base(CreateAppConfig(args.gym, args.headless, args.unthrottled,
 		offscreen: args.bakeWorldMap != null || args.writeAllRooms || args.checkRooms, fullscreen: args.fullscreen,
-		framesInFlight: args.framesInFlight))
+		framesInFlight: args.framesInFlight ?? 2))
 	{
 		this.args = args;
 #if EDITOR
@@ -458,6 +468,7 @@ public partial class Manager : App
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
 		GraphicsDevice.VSync = vSyncEnabled;
+		ApplyLatencyMode();
 
 #if !BROWSER
 		Assets.ConfigureUserRoomsPath(Path.Join(UserPath, "Rooms"));
@@ -697,6 +708,7 @@ public partial class Manager : App
 			var secs = t.Elapsed.TotalSeconds;
 			Console.WriteLine($"[FPS] {frames} frames in {secs:F2}s = {frames / secs:F1} fps");
 		}
+		LogFrameTimes();
 		ShutdownGame();
 		Audio.Shutdown();
 	}
@@ -934,6 +946,7 @@ public partial class Manager : App
 			musicVolume = Math.Clamp(settings.MusicVolume ?? VolumeSteps, 0, VolumeSteps);
 			sfxVolume = Math.Clamp(settings.SfxVolume ?? VolumeSteps, 0, VolumeSteps);
 			vSyncEnabled = settings.VSyncEnabled;
+			lowLatency = settings.LowLatency;
 			Video.ResolutionScale = settings.ResolutionScale;
 			// Settings saved before this option existed read back as 0.
 			Video.ScreenSizePercent = settings.ScreenSizePercent is >= 50 and <= 100 ? settings.ScreenSizePercent : 100;
@@ -974,6 +987,7 @@ public partial class Manager : App
 				MusicVolume = musicVolume,
 				SfxVolume = sfxVolume,
 				VSyncEnabled = vSyncEnabled,
+				LowLatency = lowLatency,
 				ResolutionScale = Video.ResolutionScale,
 				ScreenSizePercent = Video.ScreenSizePercent,
 				PixelPerfect = Video.PixelPerfect,
@@ -1006,6 +1020,7 @@ public partial class Manager : App
 		public int? MusicVolume { get; init; }
 		public int? SfxVolume { get; init; }
 		public bool VSyncEnabled { get; init; } = true;
+		public bool LowLatency { get; init; }
 		public int ResolutionScale { get; init; }
 		public int ScreenSizePercent { get; init; } = 100;
 		public bool PixelPerfect { get; init; }
@@ -1467,8 +1482,26 @@ public partial class Manager : App
 #if DEBUG
 		game?.Recorder.Tick();
 #endif
-		if (args.maxFrames != int.MaxValue && ++completedGameFrames >= args.maxFrames)
+		if (args.maxFrames == int.MaxValue)
+			return;
+		(frameTimestamps ??= new long[args.maxFrames])[completedGameFrames] = Stopwatch.GetTimestamp();
+		if (++completedGameFrames >= args.maxFrames)
 			Exit();
+	}
+
+	// --max-frames runs print steady-state frame times on exit, past the room-load frames.
+	void LogFrameTimes()
+	{
+		const int warmupFrames = 120;
+		if (frameTimestamps is not { } stamps || completedGameFrames < warmupFrames + 2)
+			return;
+		var times = new double[completedGameFrames - warmupFrames - 1];
+		for (var i = 0; i < times.Length; i++)
+			times[i] = Stopwatch.GetElapsedTime(stamps[warmupFrames + i], stamps[warmupFrames + i + 1]).TotalMilliseconds;
+		var average = Stopwatch.GetElapsedTime(stamps[warmupFrames], stamps[completedGameFrames - 1]).TotalMilliseconds / times.Length;
+		Array.Sort(times);
+		double Percentile(double p) => times[(int)(p * (times.Length - 1))];
+		Console.WriteLine($"[FrameTime] {times.Length} frames: avg {average:F2} ms ({1000 / average:F1} fps), p50 {Percentile(0.5):F2}, p95 {Percentile(0.95):F2}, p99 {Percentile(0.99):F2}, max {times[^1]:F2}");
 	}
 
 	bool AllocationProfileEnabled => args.allocMeasureFrames > 0;
