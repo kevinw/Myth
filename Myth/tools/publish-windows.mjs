@@ -26,17 +26,18 @@ function run(cmd, args) {
 checkFmodBankMtimes(root, "Desktop");
 run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 
-const contentZip = path.join(outRoot, "Content.zip");
+const contentPak = path.join(outRoot, "Content.pak");
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "--",
   "--build-asset-pack", "Assets/Packed/Visuals",
-  "--build-content-zip", contentZip,
+  "--build-content-pak", contentPak,
   "--content-target", "windows",
   "--content-world", world,
 ]);
+run(process.execPath, ["tools/check-content-pak.mjs", contentPak, "--target", "windows", "--world", world]);
 if (!process.argv.includes("--skip-check-rooms"))
   run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "-p:MythTestShip=true", "--",
     "--check-rooms",
-    "--content-zip", contentZip,
+    "--content-pak", contentPak,
     "--asset-pack",
   ]);
 run("dotnet", [
@@ -54,7 +55,7 @@ fs.mkdirSync(path.join(gameDir, "Assets"), { recursive: true });
 for (const entry of fs.readdirSync(publishDir))
   if (entry.endsWith(".exe") || entry.endsWith(".dll"))
     fs.copyFileSync(path.join(publishDir, entry), path.join(gameDir, entry));
-fs.copyFileSync(contentZip, path.join(gameDir, "Assets", "Content.zip"));
+fs.copyFileSync(contentPak, path.join(gameDir, "Assets", "Content.pak"));
 fs.copyFileSync(acknowledgements, path.join(gameDir, "ACKNOWLEDGEMENTS.txt"));
 
 copyDesktopFmodBanks(root, path.join(gameDir, "Assets"));

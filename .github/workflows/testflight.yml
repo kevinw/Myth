@@ -45,9 +45,13 @@ jobs:
           dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=mac
           -p:EnableOzzRuntime=false --
           --build-asset-pack Assets/Packed/Visuals
-          --build-content-zip Assets/Content.zip
+          --build-content-pak Assets/Content.pak
           --content-target ios
           --content-world "$MYTH_WORLD"
+
+      - name: Check content pak
+        working-directory: Myth
+        run: node tools/check-content-pak.mjs Assets/Content.pak --target ios --world "$MYTH_WORLD"
 
       - name: Select Xcode 26.5
         shell: bash

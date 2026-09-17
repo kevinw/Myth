@@ -285,8 +285,8 @@
          into the wasm FS in a single request instead of one fetch per asset file. When
          the zip is absent (plain dotnet build without the asset step), fall back to the
          old loose-file layout so the bundle still works. -->
-    <Content Include="Assets/Content.zip" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets/Content.zip')" />
-    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('Assets/Content.zip')" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
+    <Content Include="Assets/Content.pak" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets/Content.pak')" />
+    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('Assets/Content.pak')" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
     <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
@@ -299,7 +299,7 @@
   </Target>
 
   <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
-    <ItemGroup Condition="!Exists('Assets/Content.zip')">
+    <ItemGroup Condition="!Exists('Assets/Content.pak')">
       <!-- Evaluated here because these files may not exist until CompileShaders runs. -->
       <_BrowserShader Include="Assets/Shaders/Compiled/*.wgsl" />
     </ItemGroup>

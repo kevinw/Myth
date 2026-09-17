@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 // FMOD opens banks by real path, so the Desktop banks ship as loose files beside
-// Content.zip rather than inside it. Timestamps carry over: tools/deploy-deck.sh rsyncs the
+// Content.pak rather than inside it. Timestamps carry over: tools/deploy-deck.sh rsyncs the
 // result, and fresh mtimes would resend every bank on every publish.
 export function copyDesktopFmodBanks(root, destAssets) {
   const rel = path.join("Sounds", "FMOD", "Build", "Desktop");

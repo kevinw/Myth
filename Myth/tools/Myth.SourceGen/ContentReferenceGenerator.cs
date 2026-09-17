@@ -20,7 +20,7 @@ public sealed class ContentReferenceGenerator : IIncrementalGenerator
 		"Myth.Content",
 		DiagnosticSeverity.Error,
 		isEnabledByDefault: true,
-		description: "Static typed references are generated into Content.zip dependency collection.");
+		description: "Static typed references are generated into Content.pak dependency collection.");
 #pragma warning restore RS2008
 
 	public void Initialize(IncrementalGeneratorInitializationContext context)

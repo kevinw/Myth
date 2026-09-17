@@ -33,8 +33,8 @@
     <ImageAsset Include="Assets.xcassets/**/*" />
     <!-- run-ios-device.sh and TestFlight build this archive, including compiled shaders.
          FMOD banks stay loose because FMOD opens them by real path. -->
-    <BundleResource Include="../../../Assets/Content.zip">
-      <LogicalName>Assets/Content.zip</LogicalName>
+    <BundleResource Include="../../../Assets/Content.pak">
+      <LogicalName>Assets/Content.pak</LogicalName>
     </BundleResource>
     <BundleResource Include="../../../Assets/Sounds/FMOD/Build/Mobile/*.bank">
       <LogicalName>Assets/Sounds/FMOD/Build/Mobile/%(Filename)%(Extension)</LogicalName>
@@ -45,8 +45,8 @@
   </ItemGroup>
 
   <Target Name="RequireIosContent" BeforeTargets="BeforeBuild">
-    <Error Condition="!Exists('../../../Assets/Content.zip')"
-           Text="iOS content is missing. Build with tools/run-ios-device.sh, or generate Assets/Content.zip before building this project." />
+    <Error Condition="!Exists('../../../Assets/Content.pak')"
+           Text="iOS content is missing. Build with tools/run-ios-device.sh, or generate Assets/Content.pak before building this project." />
   </Target>
 
   <ItemGroup Condition="Exists('../Native/SDL3.xcframework')">

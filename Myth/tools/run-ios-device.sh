@@ -176,11 +176,11 @@ if [[ -z "$device_id" ]]; then
 fi
 
 if (( no_build == 0 )); then
-	echo "Building visual asset pack + content zip ..."
+	echo "Building visual asset pack + content pak ..."
 	assets_start_ms="$(now_ms)"
 	(cd "$repo_root" && dotnet run --project Myth.csproj -- \
 		--build-asset-pack Assets/Packed/Visuals \
-		--build-content-zip Assets/Content.zip \
+		--build-content-pak Assets/Content.pak \
 		--content-target ios \
 		--content-world Myth)
 	print_elapsed "Assets" "$assets_start_ms"

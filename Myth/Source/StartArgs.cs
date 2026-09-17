@@ -41,10 +41,10 @@ public struct StartArgs
 	public bool title;
 	public bool useAssetPack;
 	public string? assetPackPath;
-	// Load bundled content from this zip instead of the Assets folder (--content-zip).
-	public string? contentZipPath;
-	// Write a Content.zip of the runtime Assets slice to this path and exit (--build-content-zip).
-	public string? buildContentZipPath;
+	// Load bundled content from this zip instead of the Assets folder (--content-pak).
+	public string? contentPakPath;
+	// Write a Content.pak of the runtime Assets slice to this path and exit (--build-content-pak).
+	public string? buildContentPakPath;
 	public string? contentTarget;
 	public string? contentWorld;
 	// Exit after this many completed gameplay frames (excluding loading, editing, and pauses).
@@ -130,8 +130,8 @@ public struct StartArgs
 				case "--screenshot-frame": screenshotFrame = ReadInt(args, ref i, option, minimum: 0); break;
 				case "--screenshot-interval": screenshotInterval = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;
-				case "--content-zip": contentZipPath = ReadValue(args, ref i, option); break;
-				case "--build-content-zip": buildContentZipPath = ReadValue(args, ref i, option); break;
+				case "--content-pak": contentPakPath = ReadValue(args, ref i, option); break;
+				case "--build-content-pak": buildContentPakPath = ReadValue(args, ref i, option); break;
 				case "--write-all-rooms": writeAllRooms = true; break;
 				case "--content-target": contentTarget = ReadValue(args, ref i, option); break;
 				case "--content-world": contentWorld = ReadValue(args, ref i, option); break;
@@ -191,8 +191,8 @@ public struct StartArgs
 
 		if (benchSourceFramesProvided && !bench)
 			throw Invalid("--bench-source-frames", "only valid with --bench");
-		if (buildContentZipPath != null && string.IsNullOrWhiteSpace(contentTarget))
-			throw Invalid("--build-content-zip", "requires --content-target mac, ios, windows, linux, or browser");
+		if (buildContentPakPath != null && string.IsNullOrWhiteSpace(contentTarget))
+			throw Invalid("--build-content-pak", "requires --content-target mac, ios, windows, linux, or browser");
 	}
 
 	static string[] ParseList(string value)

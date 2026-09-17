@@ -186,7 +186,7 @@ public static class ActorSpecs
 				specs[name] = spec;
 				// Spec editing writes back to the source file; zip content has none, so the
 				// prefab editor's save path is simply absent there.
-				if (!Assets.ContentIsZip)
+				if (!Assets.ContentIsPak)
 					specPaths[name] = Path.Join(Assets.AssetsPath, key);
 			}
 			catch (Exception e)

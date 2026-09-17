@@ -14,7 +14,7 @@ sealed class AttractEntry
 }
 
 // The authored sequence of clips the title screen loops through. Lives in bundled content, so it
-// packs into Content.zip automatically (Assets/Attract/ isn't excluded by ContentZipIncludes).
+// packs into Content.pak automatically (Assets/Attract/ isn't excluded by ContentPakIncludes).
 sealed class AttractReel
 {
 	const string Folder = "Attract";

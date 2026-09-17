@@ -36,7 +36,7 @@ public static class ParticleEffectAssets
 					effects[name] = ParticleEffect.FromJson(json);
 					// The tuning window writes effects back to their source file; zip content
 					// has none, so saves there fall back to a fresh Assets/Particles path.
-					if (!Assets.ContentIsZip)
+					if (!Assets.ContentIsPak)
 						paths[name] = Path.Join(Assets.AssetsPath, key);
 				}
 				catch (Exception e)

@@ -272,7 +272,7 @@ public partial class Manager : App
 		};
 		foreach (var goalId in args.gymGoalIds)
 			gym.goalIds.Add(goalId);
-		Assets.ConfigureContentZip(args.contentZipPath);
+		Assets.ConfigureContentPak(args.contentPakPath);
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.BenchSourceFrames = args.benchSourceFrames;
 		playOnStartup = args.play;
@@ -424,7 +424,7 @@ public partial class Manager : App
 		vSyncEnabled = args.vsync ?? vSyncEnabled;
 		if (args.worldId != null)
 			Assets.SelectWorld(args.worldId);
-		else if (Assets.ContentIsZip)
+		else if (Assets.ContentIsPak)
 			Assets.SelectPackagedWorld();
 		if (args.bakeWorldMap != null && !Assets.Content.DirectoryExists($"Rooms/{Assets.CurrentWorldId}"))
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");

@@ -23,13 +23,13 @@ if (startArgs.devCommand != null)
 	return;
 }
 #endif
-if (startArgs.buildAssetPack || startArgs.buildContentZipPath != null)
+if (startArgs.buildAssetPack || startArgs.buildContentPakPath != null)
 {
 	if (startArgs.buildAssetPack)
 		Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
-	if (startArgs.buildContentZipPath != null)
+	if (startArgs.buildContentPakPath != null)
 	{
-		Assets.BuildContentZip(startArgs.buildContentZipPath, startArgs.contentTarget!, startArgs.contentWorld);
+		Assets.BuildContentPak(startArgs.buildContentPakPath, startArgs.contentTarget!, startArgs.contentWorld);
 	}
 	return;
 }

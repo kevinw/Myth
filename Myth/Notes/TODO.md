@@ -232,7 +232,6 @@ steam notes
 - cimgui.dll is 1.4MB; can it be statically linked?
 - integrate Dear ImGui Test Engine so automated editor scenarios can identify, drive, and assert docked, scrolling, and popup UI directly
 - consider using a C++ build of Dear ImGui's SDL_GPU backend so we don't have to compile our ImGui backend each time
-- Change Content.zip extension and add some simple byte level change
 - a debug hotkey for switching back to the previous version of a shader after a change for A/B testing them live and visually
 - windows Myth.exe doesn't have an icon
 - see if there's a "free" or lightweight way to coalesce a bunch of ValueStringBuilder.Appends at compile time
