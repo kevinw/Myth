@@ -1,4 +1,3 @@
-- input glyphs need to clip to the render bounds
 - put an evolving world map online with a timeline scrubber https://leafletjs.com
 - investigate gpu perf
   - https://developer.apple.com/documentation/xcode/debugging-with-interactive-command-line-tools

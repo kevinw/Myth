@@ -21,7 +21,10 @@ public sealed partial class GameView
 				prompts.DrawGlyphCentered(Batcher, glyph.Action, glyph.Center, glyph.Height, glyph.Color);
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
-		Batcher.Render(target, scissor: scissor);
+		// The glyphs draw at window resolution to stay readable, so clip them to the on-screen
+		// frame themselves; otherwise one scrolled past the camera's edge draws into the letterbox.
+		var frame = ((RectInt)Rect.CenteredAt(present.Center, outputSize * scale)).GetIntersection(present);
+		Batcher.Render(target, scissor: scissor?.GetIntersection(frame) ?? frame);
 		Batcher.Clear();
 	}
 
