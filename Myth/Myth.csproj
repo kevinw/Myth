@@ -5,6 +5,31 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
+  <!-- App identity lives in app.json, shared with tools/publish-macos.mjs and
+       tools/mac/clear-metal-cache.sh. It reaches C# as the generated Myth.AppInfo, the Windows
+       exe's version info, and the browser page title. -->
+  <PropertyGroup>
+    <MythAppJson>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/app.json'))</MythAppJson>
+    <MythAppName>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"name"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythAppName>
+    <MythAppCompany>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"company"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythAppCompany>
+    <MythAppBundleId>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"bundleId"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythAppBundleId>
+    <Product>$(MythAppName)</Product>
+    <AssemblyTitle>$(MythAppName)</AssemblyTitle>
+    <Company>$(MythAppCompany)</Company>
+  </PropertyGroup>
+
+  <!-- The name also names the settings/save folder, so a missing value fails the build instead of
+       silently moving everyone's saves. -->
+  <Target Name="MythGenerateAppInfo" BeforeTargets="CoreCompile">
+    <Error Condition="'$(MythAppName)' == '' or '$(MythAppCompany)' == '' or '$(MythAppBundleId)' == ''"
+           Text="app.json must set non-empty &quot;name&quot;, &quot;company&quot;, and &quot;bundleId&quot; (got name='$(MythAppName)', company='$(MythAppCompany)', bundleId='$(MythAppBundleId)')." />
+    <WriteLinesToFile File="$(IntermediateOutputPath)AppInfo.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="// Generated from app.json by Myth.csproj.;namespace Myth%3B;static class AppInfo;{;public const string Name = &quot;$(MythAppName)&quot;%3B;public const string Company = &quot;$(MythAppCompany)&quot;%3B;public const string BundleId = &quot;$(MythAppBundleId)&quot;%3B;}" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)AppInfo.g.cs" />
+    </ItemGroup>
+  </Target>
+
   <!-- Shipped Windows builds launch without a console window (GUI subsystem). Dev and CLI runs
        (dotnet run, gym, asset-pack builds) keep the console for their stdout. The subsystem flag
        only lives in the Windows PE header, so this is a no-op on macOS/Linux. Logs still go to
@@ -295,7 +320,11 @@
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
     <MakeDir Directories="$(WasmAppDir)FMOD" />
     <MakeDir Directories="$(WasmAppDir)acknowledgements" />
-    <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
+    <!-- index.html with the <title> from app.json. Escaped so WriteLinesToFile keeps it one item. -->
+    <PropertyGroup>
+      <_MythBrowserIndexHtml>$([System.Text.RegularExpressions.Regex]::Replace($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Platforms/Web/wwwroot/index.html')), '&lt;title&gt;[^&lt;]*&lt;/title&gt;', '&lt;title&gt;$(MythAppName)&lt;/title&gt;'))</_MythBrowserIndexHtml>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(WasmAppDir)index.html" Lines="$([MSBuild]::Escape($(_MythBrowserIndexHtml)))" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <Copy SourceFiles="$(IntermediateOutputPath)acknowledgements/index.html" DestinationFolder="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="Platforms/Web/wwwroot/virtual-gamepad.js" DestinationFolder="$(WasmAppDir)" />

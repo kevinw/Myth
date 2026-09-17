@@ -63,7 +63,7 @@ public partial class Manager
 	static float MenuButtonHeight => 14f;
 	static float MenuButtonGap => 3f;
 	static float MenuPanelWidth => 174f;
-	static float MenuEnterDuration => 0.16f;
+	static float MenuEnterDuration => 0.17f;
 	static float MenuEnterDistance => 5f;
 
 	void ShowTitleMenu()
@@ -638,7 +638,7 @@ public partial class Manager
 
 		var title = gameMenuLayoutPage switch
 		{
-			GameMenuPage.Title => "Human Questions",
+			GameMenuPage.Title => AppInfo.Name,
 			GameMenuPage.Options => "options",
 			GameMenuPage.Video => "video",
 			GameMenuPage.DemoTeleport => "demo teleport",

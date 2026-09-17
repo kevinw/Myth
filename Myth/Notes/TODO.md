@@ -5,8 +5,6 @@
 - gameplay idea: jump to parry pops you into a burrow
 - consider dropping to 1 frame in flight if we can afford it? is there a dynamic way to do this?
 - profile the remaining cold-install hitch in the big first fall room: neural pipelines warm at boot, but room-specific weights, buffers, and seed simulation still initialize on entry
-- rename app bundle ID from com.fostergames.myth to something shipping-appropriate
-- consolidate app ID / bundle ID into one canonical file (Info.plist or a .props) so tools/clear-metal-cache.sh and any other consumers don't hardcode it separately
 - ACTOR_UPDATE_LIFECYCLE.md
 - FRAME_RATE_LIMIT.md
 - BROWSER_MUSIC_ENCODING.md: try Vorbis for music on the FMOD Mobile platform to halve the browser download, once a browser room plays music

@@ -30,6 +30,10 @@ const outRoot = path.join(root, "bin", "publish");
 const publishDir = path.join(outRoot, rid);
 const appDir = path.join(outRoot, "Myth.app");
 const acknowledgements = path.join(root, "ACKNOWLEDGEMENTS.txt");
+const app = JSON.parse(fs.readFileSync(path.join(root, "app.json"), "utf8"));
+for (const key of ["bundleId", "name", "company"])
+  if (typeof app[key] !== "string" || !app[key].trim())
+    throw new Error(`app.json must set a non-empty "${key}".`);
 
 function run(cmd, args, opts = {}) {
   console.log(`\n> ${cmd} ${args.join(" ")}`);
@@ -99,9 +103,9 @@ fs.writeFileSync(path.join(appDir, "Contents", "Info.plist"), `<?xml version="1.
 <plist version="1.0">
 <dict>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleIdentifier</key><string>com.fostergames.myth</string>
-	<key>CFBundleName</key><string>Myth</string>
-	<key>CFBundleDisplayName</key><string>Myth</string>
+	<key>CFBundleIdentifier</key><string>${app.bundleId}</string>
+	<key>CFBundleName</key><string>${app.name}</string>
+	<key>CFBundleDisplayName</key><string>${app.name}</string>
 	<key>CFBundleExecutable</key><string>Myth</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundleShortVersionString</key><string>0.1.0</string>

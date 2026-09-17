@@ -347,7 +347,7 @@ public partial class Manager : App
 #endif
 	}
 
-	public const string APPLICATION_NAME = "Human Questions";
+	public const string APPLICATION_NAME = AppInfo.Name;
 
 	internal void RequestQuit()
 	{
