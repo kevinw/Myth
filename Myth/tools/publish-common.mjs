@@ -1,16 +1,26 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-// FMOD opens banks by real path, so the Desktop banks ship as loose files beside
-// Content.pak rather than inside it. Timestamps carry over: tools/deploy-deck.sh rsyncs the
-// result, and fresh mtimes would resend every bank on every publish.
-export function copyDesktopFmodBanks(root, destAssets) {
-  const rel = path.join("Sounds", "FMOD", "Build", "Desktop");
-  const bankDir = path.join(root, "Assets", rel);
-  fs.mkdirSync(path.join(destAssets, rel), { recursive: true });
-  for (const bank of fs.readdirSync(bankDir))
-    if (bank.endsWith(".bank") && !bank.startsWith("."))
-      fs.cpSync(path.join(bankDir, bank), path.join(destAssets, rel, bank), { preserveTimestamps: true });
+// Builds the visual pack and stages each target's shipped Assets folder (Content.pak + loose
+// FMOD banks) under obj/Content/<target>/Assets, audits each pak, and returns those folders.
+export function stageContent(root, targets, world, dotnetProps = []) {
+  const run = (args) => {
+    console.log(`\n> ${args.join(" ")}`);
+    execFileSync(args[0], args.slice(1), { cwd: root, stdio: "inherit" });
+  };
+  run(["dotnet", "run", "--project", "Myth.csproj", ...dotnetProps, "--", "--stage-content", targets.join(","), "--world", world]);
+  return targets.map((target) => {
+    const assets = path.join(root, "obj", "Content", target, "Assets");
+    run([process.execPath, "tools/check-content-pak.mjs", path.join(assets, "Content.pak"), "--target", target, "--world", world]);
+    return assets;
+  });
+}
+
+// Timestamps carry over: tools/deploy-deck.sh rsyncs the result, and fresh mtimes would
+// resend every bank on every publish.
+export function copyStagedAssets(stagedAssets, destAssets) {
+  fs.cpSync(stagedAssets, destAssets, { recursive: true, preserveTimestamps: true });
 }
 
 export function checkFmodBankMtimes(root, platform) {

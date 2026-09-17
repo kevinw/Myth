@@ -43,10 +43,9 @@ public struct StartArgs
 	public string? assetPackPath;
 	// Load bundled content from this zip instead of the Assets folder (--content-pak).
 	public string? contentPakPath;
-	// Write a Content.pak of the runtime Assets slice to this path and exit (--build-content-pak).
-	public string? buildContentPakPath;
-	public string? contentTarget;
-	public string? contentWorld;
+	// Build the visual pack, stage each target's shipped Assets folder under obj/Content, and exit
+	// (--stage-content mac,linux). Stages --world, or the default world.
+	public string[] stageContentTargets = [];
 	// Exit after this many completed gameplay frames (excluding loading, editing, and pauses).
 	public int maxFrames = int.MaxValue;
 	public int allocWarmupFrames;
@@ -131,10 +130,8 @@ public struct StartArgs
 				case "--screenshot-interval": screenshotInterval = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--content-pak": contentPakPath = ReadValue(args, ref i, option); break;
-				case "--build-content-pak": buildContentPakPath = ReadValue(args, ref i, option); break;
+				case "--stage-content": stageContentTargets = ParseList(ReadValue(args, ref i, option)); break;
 				case "--write-all-rooms": writeAllRooms = true; break;
-				case "--content-target": contentTarget = ReadValue(args, ref i, option); break;
-				case "--content-world": contentWorld = ReadValue(args, ref i, option); break;
 				case "--max-time": maxTimeSeconds = ReadFloat(args, ref i, option, minimum: 0); break;
 				case "--play-room":
 				case "--room": playRoomId = ReadValue(args, ref i, option); break;
@@ -191,8 +188,6 @@ public struct StartArgs
 
 		if (benchSourceFramesProvided && !bench)
 			throw Invalid("--bench-source-frames", "only valid with --bench");
-		if (buildContentPakPath != null && string.IsNullOrWhiteSpace(contentTarget))
-			throw Invalid("--build-content-pak", "requires --content-target mac, ios, windows, linux, or browser");
 	}
 
 	static string[] ParseList(string value)

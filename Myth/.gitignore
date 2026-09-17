@@ -3,6 +3,5 @@ AtlasDumps/
 artifacts/browser-smoke/
 chrome/
 node_modules/
-Assets/Content.pak
 /Assets/Packed/Visuals/
 /Assets/Shaders/Compiled/

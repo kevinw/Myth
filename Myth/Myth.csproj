@@ -91,12 +91,6 @@
     <WasmEnableThreads Condition="'$(MythBrowserThreads)' == 'true'">true</WasmEnableThreads>
     <InvariantGlobalization>true</InvariantGlobalization>
     <WasmMainJSPath>Platforms/Web/wwwroot/main.js</WasmMainJSPath>
-    <!-- Fonts are NOT in the visual pack — EnsureFonts rasterizes the TTFs at runtime
-         (Assets.Font/SpeechFont, and ImGui's Myna). Keep them in the browser bundle. -->
-    <!-- Assets/Sources holds authoring inputs (.ase, kit specs, bake config): the pack
-         carries everything baked from them, including tile kit registrations, so web
-         bundles never need any of it. One stable prefix, no per-file carve-outs. -->
-    <MythBrowserRawVisualAssetExcludes Condition="Exists('Assets/Packed/Visuals/manifest.bin')">Assets/Sources/**</MythBrowserRawVisualAssetExcludes>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
@@ -281,13 +275,6 @@
     <Content Include="Platforms/Web/wwwroot/**" CopyToOutputDirectory="PreserveNewest" />
     <NativeFileReference Include="../Foster/Framework/Internal/Native/browser/foster_png_decode.cpp" />
     <NativeFileReference Include="../Foster/Framework/Internal/Native/browser/lodepng/foster_lodepng.cpp" />
-    <!-- Bundled content ships as one zip (run-browser.mjs / publish builds it), fetched
-         into the wasm FS in a single request instead of one fetch per asset file. When
-         the zip is absent (plain dotnet build without the asset step), fall back to the
-         old loose-file layout so the bundle still works. -->
-    <Content Include="Assets/Content.pak" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets/Content.pak')" />
-    <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('Assets/Content.pak')" Exclude="Assets/**/.DS_Store;Assets/Sounds/**;Assets/Shaders/Compiled/**;$(MythBrowserRawVisualAssetExcludes)" />
-    <Content Include="Assets/Sounds/FMOD/Build/Mobile/*.bank" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="GenerateWebUiAssets"
@@ -299,14 +286,15 @@
   </Target>
 
   <Target Name="CopyBrowserShell" AfterTargets="WasmGenerateAppBundle" Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
-    <ItemGroup Condition="!Exists('Assets/Content.pak')">
-      <!-- Evaluated here because these files may not exist until CompileShaders runs. -->
-      <_BrowserShader Include="Assets/Shaders/Compiled/*.wgsl" />
+    <!-- The shipped Assets folder (Content.pak + FMOD banks), staged by run-browser.mjs or CI. -->
+    <Error Condition="!Exists('obj/Content/browser/Assets/Content.pak')"
+           Text="Browser content is missing. Build with tools/run-browser.mjs, or run the game with --stage-content browser first." />
+    <ItemGroup>
+      <_StagedContent Include="obj/Content/browser/Assets/**" />
     </ItemGroup>
     <MakeDir Directories="$(WasmAppDir)_framework/Content/Web" />
     <MakeDir Directories="$(WasmAppDir)FMOD" />
     <MakeDir Directories="$(WasmAppDir)acknowledgements" />
-    <MakeDir Directories="$(WasmAppDir)Assets/Shaders/Compiled" Condition="'@(_BrowserShader)' != ''" />
     <Copy SourceFiles="Platforms/Web/wwwroot/index.html" DestinationFolder="$(WasmAppDir)" />
     <Copy SourceFiles="$(IntermediateOutputPath)acknowledgements/index.html" DestinationFolder="$(WasmAppDir)acknowledgements" />
     <Copy SourceFiles="Platforms/Web/wwwroot/main.js" DestinationFolder="$(WasmAppDir)" />
@@ -320,7 +308,7 @@
     <Copy SourceFiles="Platforms/Web/FMOD/fmodstudioP.js" DestinationFolder="$(WasmAppDir)FMOD" />
     <Copy SourceFiles="Platforms/Web/FMOD/fmodstudioP.wasm" DestinationFolder="$(WasmAppDir)FMOD" />
     <Copy SourceFiles="@(Content)" DestinationFiles="@(Content->'$(WasmAppDir)%(Identity)')" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(_BrowserShader)" DestinationFolder="$(WasmAppDir)Assets/Shaders/Compiled" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_StagedContent)" DestinationFolder="$(WasmAppDir)Assets/%(RecursiveDir)" SkipUnchangedFiles="true" />
     <Exec Command="python3 tools/generate-browser-asset-manifest.py &quot;$(WasmAppDir)&quot;" />
   </Target>
 

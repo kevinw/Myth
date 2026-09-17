@@ -23,14 +23,11 @@ if (startArgs.devCommand != null)
 	return;
 }
 #endif
-if (startArgs.buildAssetPack || startArgs.buildContentPakPath != null)
+if (startArgs.buildAssetPack || startArgs.stageContentTargets.Length > 0)
 {
-	if (startArgs.buildAssetPack)
-		Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
-	if (startArgs.buildContentPakPath != null)
-	{
-		Assets.BuildContentPak(startArgs.buildContentPakPath, startArgs.contentTarget!, startArgs.contentWorld);
-	}
+	Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
+	foreach (var target in startArgs.stageContentTargets)
+		Assets.StageContent(target, startArgs.worldId);
 	return;
 }
 

@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
+import { checkFmodBankMtimes, copyStagedAssets, stageContent } from "./publish-common.mjs";
 
 const world = process.env.MYTH_WORLD ?? "Myth";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -35,39 +35,20 @@ run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 // and pick up the .spv purely as content — the two shader flavors coexist in Compiled/.
 run("dotnet", ["msbuild", "Myth.csproj", "-t:CompileShaders", "-p:ShaderPlatform=linux"]);
 
-const contentPak = path.join(outRoot, "Content.pak");
-run("dotnet", ["run", "--project", "Myth.csproj", "--",
-  "--build-asset-pack", "Assets/Packed/Visuals",
-  "--build-content-pak", contentPak,
-  "--content-target", "linux",
-  "--content-world", world,
-]);
-run(process.execPath, ["tools/check-content-pak.mjs", contentPak, "--target", "linux", "--world", world]);
-
-if (!process.argv.includes("--skip-check-rooms")) {
-  // --check-rooms creates real GPU pipelines, so it can only read a zip built for the host's
-  // shader flavor -- the Linux zip's SPIR-V is unusable on a macOS host. The content graph is
-  // target-independent (only the Shaders/Compiled extension differs), so a host-flavored zip
-  // validates the same rooms, actors and neural weights the Linux zip carries. Cross-building
-  // without this is how a room referencing an uncollected NCA model reached the Deck.
-  const hostTarget = process.platform === "linux" ? "linux" : "mac";
-  const checkPak = hostTarget === "linux" ? contentPak : path.join(outRoot, "Content-check.pak");
-  if (checkPak !== contentPak)
-    run("dotnet", ["run", "--project", "Myth.csproj", "--",
-      "--build-content-pak", checkPak,
-      "--content-target", hostTarget,
-      "--content-world", world,
-    ]);
+// --check-rooms creates real GPU pipelines, so it can only read a pak built for the host's
+// shader flavor -- the Linux pak's SPIR-V is unusable on a macOS host. The content graph is
+// target-independent (only the Shaders/Compiled extension differs), so a host-flavored pak
+// validates the same rooms, actors and neural weights the Linux pak carries. Cross-building
+// without this is how a room referencing an uncollected NCA model reached the Deck.
+const checkRooms = !process.argv.includes("--skip-check-rooms");
+const hostTarget = process.platform === "linux" ? "linux" : "mac";
+const [stagedAssets, hostAssets = stagedAssets] = stageContent(root, checkRooms && hostTarget !== "linux" ? ["linux", hostTarget] : ["linux"], world);
+if (checkRooms)
   run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythTestShip=true", "--",
     "--check-rooms",
-    "--content-pak", checkPak,
+    "--content-pak", path.join(hostAssets, "Content.pak"),
     "--asset-pack",
   ]);
-  // Only reached when the check passed (run throws otherwise), so a failure leaves the zip
-  // on disk to inspect. Never the shipping zip -- on a Linux host checkPak is contentPak.
-  if (checkPak !== contentPak)
-    fs.rmSync(checkPak, { force: true });
-}
 
 run("dotnet", [
   "publish", "Myth.csproj",
@@ -84,12 +65,10 @@ run("dotnet", [
 // deploy-deck.sh only resends what actually changed.
 const copy = (src, dest) => fs.cpSync(src, dest, { preserveTimestamps: true });
 fs.rmSync(gameDir, { recursive: true, force: true });
-fs.mkdirSync(path.join(gameDir, "Assets"), { recursive: true });
 for (const entry of fs.readdirSync(publishDir))
   if (entry === "Myth" || entry.includes(".so"))
     copy(path.join(publishDir, entry), path.join(gameDir, entry));
-copy(contentPak, path.join(gameDir, "Assets", "Content.pak"));
 copy(acknowledgements, path.join(gameDir, "ACKNOWLEDGEMENTS.txt"));
-copyDesktopFmodBanks(root, path.join(gameDir, "Assets"));
+copyStagedAssets(stagedAssets, path.join(gameDir, "Assets"));
 
 console.log(`\nBuilt unsigned Linux x64 release: ${gameDir}`);

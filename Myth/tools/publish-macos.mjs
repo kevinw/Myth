@@ -21,7 +21,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkFmodBankMtimes, copyDesktopFmodBanks } from "./publish-common.mjs";
+import { checkFmodBankMtimes, copyStagedAssets, stageContent } from "./publish-common.mjs";
 
 const world = process.env.MYTH_WORLD ?? "Myth";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,19 +44,12 @@ checkFmodBankMtimes(root, "Desktop");
 run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 
 // --- 1. Fresh visual asset pack (the bundle ships no Assets/Sources, so everything
-// visual — including tile kit registrations — must be current in the pack), then a
-// Content.pak of the shippable Assets slice built around it.
-const contentPak = path.join(outRoot, "Content.pak");
-run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "--",
-  "--build-asset-pack", "Assets/Packed/Visuals",
-  "--build-content-pak", contentPak,
-  "--content-target", "mac",
-  "--content-world", world,
-]);
-run(process.execPath, ["tools/check-content-pak.mjs", contentPak, "--target", "mac", "--world", world]);
+// visual — including tile kit registrations — must be current in the pack), then the
+// staged Assets folder (Content.pak + banks) built around it.
+const [stagedAssets] = stageContent(root, ["mac"], world, ["-p:ShaderPlatform=mac"]);
 run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=mac", "-p:MythTestShip=true", "--",
   "--check-rooms",
-  "--content-pak", contentPak,
+  "--content-pak", path.join(stagedAssets, "Content.pak"),
   "--asset-pack",
 ]);
 
@@ -86,13 +79,8 @@ for (const entry of fs.readdirSync(publishDir))
     fs.cpSync(path.join(publishDir, entry), path.join(macos, entry));
 
 // Assets go in Contents/Resources (codesign --deep rejects non-code under MacOS; the
-// game probes Resources/Assets from the executable dir). The bundled Assets folder is
-// just Content.pak (everything the game reads through Assets.Content) plus the built
-// Desktop FMOD banks as loose files — FMOD opens banks by real path, so they can't
-// live inside the zip.
-fs.mkdirSync(path.join(resources, "Assets"), { recursive: true });
-fs.copyFileSync(contentPak, path.join(resources, "Assets", "Content.pak"));
-copyDesktopFmodBanks(root, path.join(resources, "Assets"));
+// game probes Resources/Assets from the executable dir).
+copyStagedAssets(stagedAssets, path.join(resources, "Assets"));
 fs.copyFileSync(acknowledgements, path.join(resources, "ACKNOWLEDGEMENTS.txt"));
 
 // Icon: AppIcon.png -> AppIcon.icns via sips/iconutil.

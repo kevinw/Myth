@@ -79,13 +79,13 @@ jobs:
       - name: Force fresh Foster shader compilation
         run: find Foster/Framework/Content/Shaders/Compiled -name '*.wgsl' -delete
 
-      - name: Build visual asset pack + content pak
+      - name: Stage browser content
         working-directory: Myth
-        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --build-asset-pack Assets/Packed/Visuals --build-content-pak Assets/Content.pak --content-target browser --content-world "$MYTH_WORLD"
+        run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --stage-content browser --world "$MYTH_WORLD"
 
       - name: Check content pak
         working-directory: Myth
-        run: node tools/check-content-pak.mjs Assets/Content.pak --target browser --world "$MYTH_WORLD"
+        run: node tools/check-content-pak.mjs obj/Content/browser/Assets/Content.pak --target browser --world "$MYTH_WORLD"
 
       # use --aot for WebAssembly AOT for better runtime perf
       - name: Publish browser app (AOT)

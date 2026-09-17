@@ -31,13 +31,9 @@
 
   <ItemGroup>
     <ImageAsset Include="Assets.xcassets/**/*" />
-    <!-- run-ios-device.sh and TestFlight build this archive, including compiled shaders.
-         FMOD banks stay loose because FMOD opens them by real path. -->
-    <BundleResource Include="../../../Assets/Content.pak">
-      <LogicalName>Assets/Content.pak</LogicalName>
-    </BundleResource>
-    <BundleResource Include="../../../Assets/Sounds/FMOD/Build/Mobile/*.bank">
-      <LogicalName>Assets/Sounds/FMOD/Build/Mobile/%(Filename)%(Extension)</LogicalName>
+    <!-- The shipped Assets folder (Content.pak + FMOD banks), staged by run-ios-device.sh and TestFlight. -->
+    <BundleResource Include="../../../obj/Content/ios/Assets/**">
+      <LogicalName>Assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </BundleResource>
     <ProjectReference Include="../../../Source/Myth.Core.iOS.csproj" />
     <ProjectReference Include="../../../../Foster/Framework/Foster.Framework.csproj" />
@@ -45,8 +41,8 @@
   </ItemGroup>
 
   <Target Name="RequireIosContent" BeforeTargets="BeforeBuild">
-    <Error Condition="!Exists('../../../Assets/Content.pak')"
-           Text="iOS content is missing. Build with tools/run-ios-device.sh, or generate Assets/Content.pak before building this project." />
+    <Error Condition="!Exists('../../../obj/Content/ios/Assets/Content.pak')"
+           Text="iOS content is missing. Build with tools/run-ios-device.sh, or run the game with --stage-content ios first." />
   </Target>
 
   <ItemGroup Condition="Exists('../Native/SDL3.xcframework')">

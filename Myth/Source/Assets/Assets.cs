@@ -169,14 +169,43 @@ public static partial class Assets
 		content = null;
 	}
 
-	/// <summary>
-	/// Zips the runtime-loaded slice of the Assets folder into a Content.pak for packaged
-	/// builds. Keeps only the requested world and shader backend. Excluded: Sources/
-	/// (authoring; the visual pack replaces it), Sounds/ (FMOD opens banks by real path, so
-	/// banks ship as loose files), editor fonts, uncompiled shaders, and dot-prefixed litter.
-	/// Entry names are Assets-relative with forward slashes — the same keys Content serves.
-	/// </summary>
-	public static void BuildContentPak(string outputPath, string target, string? worldId = null)
+	// Writes a target's complete shipped Assets folder to obj/Content/<target>/Assets:
+	// Content.pak plus the loose FMOD banks (FMOD opens banks by real path). Publish scripts,
+	// the browser bundle and the iOS app copy that folder wholesale.
+	public static void StageContent(string target, string? worldId)
+	{
+		target = target.Trim().ToLowerInvariant();
+		var stage = Path.GetFullPath(Path.Join(AssetsPath, "..", "obj", "Content", target, assetsFolderName));
+		if (Directory.Exists(stage))
+			Directory.Delete(stage, recursive: true);
+		BuildContentPak(Path.Join(stage, contentPakName), target, worldId);
+
+		var banks = Path.Join("Sounds", "FMOD", "Build", target is "ios" or "browser" ? "Mobile" : "Desktop");
+		Directory.CreateDirectory(Path.Join(stage, banks));
+		var bankCount = 0;
+		foreach (var bank in Directory.EnumerateFiles(Path.Join(AssetsPath, banks), "*.bank"))
+		{
+			if (Path.GetFileName(bank).StartsWith('.'))
+				continue;
+			if (IsGitLfsPointer(bank))
+				throw new InvalidOperationException($"FMOD bank '{bank}' is still a Git LFS pointer. Run 'git lfs pull' before staging content.");
+			var dest = Path.Join(stage, banks, Path.GetFileName(bank));
+			File.Copy(bank, dest);
+			// deploy-deck.sh rsyncs the publish output; fresh mtimes would resend every bank.
+			File.SetLastWriteTimeUtc(dest, File.GetLastWriteTimeUtc(bank));
+			bankCount++;
+		}
+		if (bankCount == 0)
+			throw new InvalidOperationException($"No FMOD banks in {Path.Join(AssetsPath, banks)}. Build the FMOD project before staging content.");
+		Console.WriteLine($"Staged {target} content with {bankCount} banks: {stage}");
+	}
+
+	// Zips the runtime-loaded slice of the Assets folder into a Content.pak for packaged
+	// builds. Keeps only the requested world and shader backend. Excluded: Sources/
+	// (authoring; the visual pack replaces it), Sounds/ (banks ship loose, see StageContent),
+	// editor fonts, uncompiled shaders, and dot-prefixed litter.
+	// Entry names are Assets-relative with forward slashes — the same keys Content serves.
+	static void BuildContentPak(string outputPath, string target, string? worldId = null)
 	{
 		ActorSpecs.ClearActorTypes();
 		GeneratedActors.RegisterActorSpecs();
@@ -184,14 +213,14 @@ public static partial class Assets
 		NctTiles.LoadSpecs(Path.Join(SourcesPath, "Tilesets"));
 		var manifestPath = Path.Join(DefaultVisualAssetPackPath, packedVisualsManifestName);
 		if (!File.Exists(manifestPath))
-			throw new InvalidOperationException("Visual asset pack is missing. Build it with --build-asset-pack before building Content.pak.");
+			throw new InvalidOperationException("Visual asset pack is missing. Build it with --build-asset-pack first.");
 		using (var reader = new BinaryReader(File.OpenRead(manifestPath)))
 		{
 			if (reader.BaseStream.Length < sizeof(uint) + sizeof(int) || reader.ReadUInt32() != visualAssetPackMagic)
-				throw new InvalidOperationException("Visual asset pack manifest is invalid. Rebuild it with --build-asset-pack before building Content.pak.");
+				throw new InvalidOperationException("Visual asset pack manifest is invalid. Rebuild it with --build-asset-pack.");
 			var version = reader.ReadInt32();
 			if (version != visualAssetPackVersion)
-				throw new InvalidOperationException($"Visual asset pack is stale. Expected version {visualAssetPackVersion}, found {version}. Rebuild it with --build-asset-pack before building Content.pak.");
+				throw new InvalidOperationException($"Visual asset pack is stale. Expected version {visualAssetPackVersion}, found {version}. Rebuild it with --build-asset-pack.");
 		}
 
 		target = target.Trim().ToLowerInvariant();
@@ -397,7 +426,7 @@ public static partial class Assets
 		if (key.StartsWith("Shaders/", StringComparison.OrdinalIgnoreCase))
 			return key.StartsWith("Shaders/Compiled/", StringComparison.OrdinalIgnoreCase)
 				&& key.EndsWith($".{shaderExtension}", StringComparison.OrdinalIgnoreCase);
-		if (key.Equals(contentPakName, StringComparison.OrdinalIgnoreCase) || key.Equals(worldManifestName, StringComparison.OrdinalIgnoreCase))
+		if (key.Equals(worldManifestName, StringComparison.OrdinalIgnoreCase))
 			return false;
 
 		return true;
