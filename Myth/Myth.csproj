@@ -32,9 +32,9 @@
 
   <!-- Shipped Windows builds launch without a console window (GUI subsystem). Dev and CLI runs
        (dotnet run, gym, asset-pack builds) keep the console for their stdout. The subsystem flag
-       only lives in the Windows PE header, so this is a no-op on macOS/Linux. Logs still go to
-       %APPDATA%\Human Questions\logs via the tee installed in Program.cs. -->
-  <PropertyGroup Condition="'$(MythShip)' == 'true' and $([MSBuild]::IsOSPlatform('Windows'))">
+       only lives in the Windows PE header, so it applies to builds targeting Windows from any host.
+       Logs still go to %APPDATA%\Human Questions\logs via the tee installed in Program.cs. -->
+  <PropertyGroup Condition="'$(MythShip)' == 'true' and ('$(RuntimeIdentifier)' == 'win-x64' or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))))">
     <OutputType>WinExe</OutputType>
   </PropertyGroup>
 
@@ -71,16 +71,26 @@
     <ObjCopyName Condition="'$(ObjCopyName)' == ''">llvm-objcopy</ObjCopyName>
   </PropertyGroup>
 
-  <!-- Cross-linking the Windows game from macOS: the NativeAOT targets only find MSVC via
-       vcvarsall, so link with lld-link instead and point it at the CRT + Windows SDK import
-       libs xwin splatted to WindowsCrossSdkRoot (crt/lib/x86_64, sdk/lib/{um,ucrt}/x86_64).
-       Build with: dotnet publish -r win-x64 -p:MythShip=true -p:MythWindowsCross=true
-         -p:DisableUnsupportedError=true -p:IlcUseEnvironmentalTools=true
-         -p:WindowsCrossSdkRoot=~/.win-sdk -->
-  <PropertyGroup Condition="'$(MythWindowsCross)' == 'true'">
-    <CppLinker Condition="'$(CppLinker)' == ''">/opt/homebrew/opt/lld/bin/lld-link</CppLinker>
+  <!-- Cross-building the Windows game from macOS (tools/publish-windows.mjs). ILC emits a win-x64
+       object file on any host; the NativeAOT targets only find MSVC via vcvarsall, so link with
+       lld-link against the CRT + Windows SDK import libs `xwin splat` put in WindowsCrossSdkRoot
+       (crt/lib/x86_64, sdk/lib/{um,ucrt}/x86_64). Host setup is in tools/publish-windows.mjs. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'win-x64' and !$([MSBuild]::IsOSPlatform('Windows'))">
+    <MythWindowsCross>true</MythWindowsCross>
+    <WindowsCrossSdkRoot Condition="'$(WindowsCrossSdkRoot)' == ''">$(MYTH_WIN_SDK_ROOT)</WindowsCrossSdkRoot>
+    <WindowsCrossSdkRoot Condition="'$(WindowsCrossSdkRoot)' == ''">$(HOME)/win-sdk</WindowsCrossSdkRoot>
+    <DisableUnsupportedError>true</DisableUnsupportedError>
+    <IlcUseEnvironmentalTools>true</IlcUseEnvironmentalTools>
+    <!-- lld-link reads MSVC's /SOURCELINK option as an input file. -->
+    <EnableSourceLink>false</EnableSourceLink>
   </PropertyGroup>
-  <ItemGroup Condition="'$(MythWindowsCross)' == 'true' and '$(WindowsCrossSdkRoot)' != ''">
+  <!-- The Windows NativeAOT targets set CppLinker=link after the project's own properties. -->
+  <Target Name="MythUseLldLink" AfterTargets="SetupOSSpecificProps" Condition="'$(MythWindowsCross)' == 'true'">
+    <PropertyGroup>
+      <CppLinker>/opt/homebrew/opt/lld/bin/lld-link</CppLinker>
+    </PropertyGroup>
+  </Target>
+  <ItemGroup Condition="'$(MythWindowsCross)' == 'true'">
     <LinkerArg Include="/LIBPATH:&quot;$(WindowsCrossSdkRoot)/sdk/lib/um/x86_64&quot;" />
     <LinkerArg Include="/LIBPATH:&quot;$(WindowsCrossSdkRoot)/sdk/lib/ucrt/x86_64&quot;" />
     <LinkerArg Include="/LIBPATH:&quot;$(WindowsCrossSdkRoot)/crt/lib/x86_64&quot;" />
@@ -393,7 +403,8 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(EnableOzzRuntime)' == 'true' And (($([MSBuild]::IsOSPlatform('Windows')) And ('$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == 'win-x64')) Or ('$(RuntimeIdentifier)' == 'win-x64' And $([MSBuild]::IsOSPlatform('OSX'))))">
-    <OzzRuntimeLibrary>$(BaseIntermediateOutputPath)ozz-runtime/MinSizeRel/myth_ozz.dll</OzzRuntimeLibrary>
+    <OzzRuntimeLibrary Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(BaseIntermediateOutputPath)ozz-runtime/MinSizeRel/myth_ozz.dll</OzzRuntimeLibrary>
+    <OzzRuntimeLibrary Condition="!$([MSBuild]::IsOSPlatform('Windows'))">$(BaseIntermediateOutputPath)ozz-runtime/myth_ozz.dll</OzzRuntimeLibrary>
     <OzzRuntimeCrossTarget Condition="!$([MSBuild]::IsOSPlatform('Windows'))">win-x64</OzzRuntimeCrossTarget>
   </PropertyGroup>
 

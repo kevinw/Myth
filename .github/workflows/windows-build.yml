@@ -1,0 +1,53 @@
+name: Windows Build
+
+# Publishes the Windows build natively on a Windows machine, as an artifact. Manual only: releases
+# come from desktop-build.yml, which cross-builds Windows on the Mac runner.
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner label, e.g. windows-2025 or a self-hosted Windows machine's label
+        default: windows-2025
+
+permissions:
+  contents: read
+
+env:
+  MYTH_WORLD: Myth
+  # Skip LFS objects no desktop build reads: authoring sources, tool inputs.
+  LFS_EXCLUDE: Myth/Production,Myth/Assets/Sources/Sounds,Myth/tools
+
+jobs:
+  publish-windows:
+    name: Publish Windows (x64, native)
+    runs-on: ${{ inputs.runner }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          lfs: false
+          submodules: false
+
+      - name: Fetch desktop LFS + submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs pull --exclude="$LFS_EXCLUDE"
+          git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # Bakes the world map when needed, then publishes; room checks run in desktop-build.yml.
+      - name: Publish Windows build
+        run: node Myth/tools/publish-windows.mjs --skip-check-rooms
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64
+          path: Myth/bin/publish/Myth
+          if-no-files-found: error

@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Publishes Myth as a self-contained, unsigned Windows x64 build.
+// Publishes Myth as a self-contained, unsigned Windows x64 build. Runs on Windows, or cross-builds
+// on macOS (Myth.csproj, tools/rig-baker/build-runtime.mjs) after a one-time host setup:
+//   brew install llvm lld cmake ninja
+//   cargo install xwin && xwin --accept-license splat --output ~/win-sdk   (or set MYTH_WIN_SDK_ROOT)
 // Usage: node tools/publish-windows.mjs [--skip-fmod-mtime-check] [--skip-check-rooms]
 //
-// CI passes --skip-check-rooms: the hosted runner renders in software (minutes, not seconds),
-// and the macOS publish already checks the same rooms and content.
+// CI passes --skip-check-rooms: the macOS publish already checks the same rooms and content.
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -26,11 +28,19 @@ function run(cmd, args) {
 checkFmodBankMtimes(root, "Desktop");
 run(process.execPath, ["tools/check-world-map-bake.mjs", world]);
 
-const [stagedAssets] = stageContent(root, ["windows"], world, ["-p:ShaderPlatform=windows"]);
-if (!process.argv.includes("--skip-check-rooms"))
-  run("dotnet", ["run", "--project", "Myth.csproj", "-p:ShaderPlatform=windows", "-p:MythTestShip=true", "--",
+// Content.pak carries the target's DXIL, so compile it before packing; the host-flavored shaders
+// the staging and room-check runs use coexist with it in Compiled/.
+run("dotnet", ["msbuild", "Myth.csproj", "-t:CompileShaders", "-p:ShaderPlatform=windows"]);
+
+// --check-rooms creates real GPU pipelines, so off Windows it validates a host-flavored pak with the
+// same content graph (see publish-linux.mjs).
+const checkRooms = !process.argv.includes("--skip-check-rooms");
+const hostTarget = { win32: "windows", linux: "linux" }[process.platform] ?? "mac";
+const [stagedAssets, hostAssets = stagedAssets] = stageContent(root, checkRooms && hostTarget !== "windows" ? ["windows", hostTarget] : ["windows"], world);
+if (checkRooms)
+  run("dotnet", ["run", "--project", "Myth.csproj", "-p:MythTestShip=true", "--",
     "--check-rooms",
-    "--content-pak", path.join(stagedAssets, "Content.pak"),
+    "--content-pak", path.join(hostAssets, "Content.pak"),
     "--asset-pack",
   ]);
 run("dotnet", [

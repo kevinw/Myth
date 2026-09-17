@@ -12,89 +12,28 @@ on:
 permissions:
   contents: read
 
-env:
-  DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
-
 jobs:
   check-rooms:
     name: Load all rooms
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, local-mac]
     timeout-minutes: 10
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          lfs: false
+          lfs: true
           submodules: false
+          clean: false
 
-      - name: Fetch game assets and submodules
-        run: |
-          set -euo pipefail
-          git lfs pull --exclude="Myth/Production,Myth/Assets/Sources/Sounds,Myth/Assets/Sounds"
-          git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
-          chmod +x Foster/tools/linux/shadercross
+      # The runner's workspace persists, so native build trees stay incremental between runs.
+      - name: Clean workspace
+        run: git clean -ffdx -e ozz-runtime/
 
-      - name: Cache .NET SDK
-        uses: actions/cache@v5
-        with:
-          path: .dotnet
-          key: dotnet-sdk-v1-${{ runner.os }}-${{ runner.arch }}-10.0.x
+      - name: Update submodules
+        run: git submodule update --init --force Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v5
-        with:
-          path: .nuget/packages
-          key: nuget-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Myth/**/*.csproj', 'Foster/**/*.csproj') }}
-          restore-keys: |
-            nuget-v1-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Identify Ozz runtime sources
-        id: ozz
-        shell: bash
-        run: echo "revision=$(git -C Myth/tools/ozz-animation rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache myth_ozz
-        id: cache-ozz
-        uses: actions/cache@v5
-        with:
-          path: Myth/obj/desktop/ozz-runtime
-          key: myth-ozz-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.ozz.outputs.revision }}-${{ hashFiles('Myth/tools/rig-baker/ozz_runtime.cc', 'Myth/tools/rig-baker/CMakeLists.txt', 'Myth/tools/rig-baker/build-runtime.mjs') }}
-
-      # An exact source-key hit is safe to reuse. Checkout gives sources fresh timestamps;
-      # refresh the cached build tree so Ninja can still recognize it as up to date.
-      - name: Restore myth_ozz timestamps
-        if: steps.cache-ozz.outputs.cache-hit == 'true'
-        run: find Myth/obj/desktop/ozz-runtime -type f -exec touch {} +
-
-      - name: Install offscreen graphics dependencies
-        run: |
-          missing=()
-          for package in xvfb xauth mesa-vulkan-drivers; do
-            dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'ok installed' || missing+=("$package")
-          done
-          if (( ${#missing[@]} )); then
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends -y "${missing[@]}"
-          fi
-
-      - name: Build
-        run: dotnet build Myth/Myth.csproj -c Debug -p:MythTestShip=true
-
-      - name: Verify myth_ozz
-        run: |
-          test -f Myth/bin/Debug/net10.0/libmyth_ozz.so
-          ldd Myth/bin/Debug/net10.0/libmyth_ozz.so
-
+      # From Myth/, so the game's upward search for Assets can't find another folder first.
       - name: Check rooms
-        env:
-          SDL_VIDEODRIVER: x11
-          MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
-        run: xvfb-run -a -s "-screen 0 1280x720x24" dotnet run --project Myth/Myth.csproj -c Debug -p:MythTestShip=true --no-build -- --check-rooms
+        working-directory: Myth
+        run: dotnet run --project Myth.csproj -c Debug -p:MythTestShip=true -- --check-rooms

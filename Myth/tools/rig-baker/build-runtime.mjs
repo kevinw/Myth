@@ -27,8 +27,9 @@ const cross = target === "win-x64" ? [
 	"-DCMAKE_SYSTEM_PROCESSOR=AMD64",
 	`-DCMAKE_CXX_COMPILER=${llvmTool("clang-cl")}`,
 	`-DCMAKE_C_COMPILER=${llvmTool("clang-cl")}`,
-	"-DCMAKE_CXX_FLAGS=--target=x86_64-pc-windows-msvc",
-	"-DCMAKE_C_FLAGS=--target=x86_64-pc-windows-msvc",
+	// COMPILER_TARGET rather than *_FLAGS, which would replace CMake's MSVC defaults (/EHsc etc.).
+	"-DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc",
+	"-DCMAKE_C_COMPILER_TARGET=x86_64-pc-windows-msvc",
 	// MSVC's rc/mt don't exist off-Windows; llvm's stand-ins do the manifest step.
 	// Try-compiles default to Debug, which wants the debug CRT xwin doesn't carry.
 	`-DCMAKE_TRY_COMPILE_CONFIGURATION=Release`,
