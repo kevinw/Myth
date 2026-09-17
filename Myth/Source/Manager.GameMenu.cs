@@ -14,6 +14,7 @@ public partial class Manager
 		Title,
 		Pause,
 		Options,
+		Video,
 		DemoTeleport
 	}
 
@@ -55,7 +56,7 @@ public partial class Manager
 	// Leave room for each page's longest label and horizontal padding.
 	float MenuButtonWidth => gameMenuLayoutPage switch
 	{
-		GameMenuPage.Options or GameMenuPage.DemoTeleport => 100f,
+		GameMenuPage.Options or GameMenuPage.Video or GameMenuPage.DemoTeleport => 100f,
 		GameMenuPage.Pause => 80f,
 		_ => 64f,
 	};
@@ -116,6 +117,7 @@ public partial class Manager
 	static int MenuPageDepth(GameMenuPage page) => page switch
 	{
 		GameMenuPage.Options or GameMenuPage.DemoTeleport => 1,
+		GameMenuPage.Video => 2,
 		_ => 0,
 	};
 
@@ -141,7 +143,9 @@ public partial class Manager
 		if (Input.Keyboard.Pressed(Keys.Escape) || ControllerPressed(Buttons.East) || pausePressed)
 		{
 			MenuAudioEvent("menu/back");
-			if (gameMenuPage is GameMenuPage.DemoTeleport or GameMenuPage.Options)
+			if (gameMenuPage == GameMenuPage.Video)
+				ShowGameMenuPage(GameMenuPage.Options);
+			else if (gameMenuPage is GameMenuPage.DemoTeleport or GameMenuPage.Options)
 				ShowGameMenuPage(gameMenuReturnPage);
 			else if (gameMenuPage == GameMenuPage.Pause)
 				CloseGameMenu();
@@ -194,24 +198,39 @@ public partial class Manager
 	{
 		if (MenuButton(musicEnabled ? "music: on" : "music: off"))
 			MusicEnabled = !MusicEnabled;
+		if (MenuButton("video"))
+			ShowGameMenuPage(GameMenuPage.Video);
+#if !BROWSER
+		if (!IsSteamDeck && MenuButton(runInBackground ? "run in background: on" : "run in background: off"))
+			runInBackground = !runInBackground;
+#endif
+		if (gameMenuReturnPage == GameMenuPage.Pause && game?.HasLastSavePoint == true && MenuButton("back to save"))
+			ReturnToSavePointFromMenu();
+		if (MenuButton("back", "menu/back"))
+			ShowGameMenuPage(gameMenuReturnPage);
+	}
+
+	void VideoMenu()
+	{
+#if !BROWSER
+		if (!IsSteamDeck && MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
+			window.Fullscreen = !window.Fullscreen;
+#endif
+		if (MenuButton(Video.ResolutionMenuLabel) && Window is { } display)
+			Video.CycleResolution(display.DisplaySizeInPixels);
+		if (MenuButton(Video.ScreenSizeMenuLabel))
+			Video.CycleScreenSize();
+		if (MenuButton(Video.PixelPerfect ? "pixel perfect: on" : "pixel perfect: off"))
+			Video.PixelPerfect = !Video.PixelPerfect;
 #if !BROWSER
 		if (MenuButton(vSyncEnabled ? "vsync: on" : "vsync: off"))
 		{
 			vSyncEnabled = !vSyncEnabled;
 			GraphicsDevice.VSync = vSyncEnabled;
 		}
-		if (!IsSteamDeck)
-		{
-			if (MenuButton(runInBackground ? "run in background: on" : "run in background: off"))
-				runInBackground = !runInBackground;
-			if (MenuButton(Window?.Fullscreen == true ? "fullscreen" : "windowed") && Window is { } window)
-				window.Fullscreen = !window.Fullscreen;
-		}
 #endif
-		if (gameMenuReturnPage == GameMenuPage.Pause && game?.HasLastSavePoint == true && MenuButton("back to save"))
-			ReturnToSavePointFromMenu();
 		if (MenuButton("back", "menu/back"))
-			ShowGameMenuPage(gameMenuReturnPage);
+			ShowGameMenuPage(GameMenuPage.Options);
 	}
 
 	void DemoTeleportMenu()
@@ -455,6 +474,7 @@ public partial class Manager
 				case GameMenuPage.Title: TitleMenu(); break;
 				case GameMenuPage.Pause: PauseMenu(); break;
 				case GameMenuPage.Options: OptionsMenu(); break;
+				case GameMenuPage.Video: VideoMenu(); break;
 				case GameMenuPage.DemoTeleport: DemoTeleportMenu(); break;
 			}
 			End();
@@ -567,6 +587,7 @@ public partial class Manager
 		{
 			GameMenuPage.Title => "Human Questions",
 			GameMenuPage.Options => "options",
+			GameMenuPage.Video => "video",
 			GameMenuPage.DemoTeleport => "demo teleport",
 			_ => "paused"
 		};
@@ -677,8 +698,7 @@ public partial class Manager
 	{
 		get
 		{
-			var viewport = MenuViewport;
-			return MathF.Min(viewport.Width / (float)Game.Width, viewport.Height / (float)Game.Height);
+			return Video.FitScale(MenuViewport.Size, new(Game.Width, Game.Height));
 		}
 	}
 

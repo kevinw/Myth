@@ -205,6 +205,12 @@ public sealed partial class GameView
 			var shakeScale = (Vector2)present.Size / RenderTargetShakeReferenceSize;
 			var center = (Vector2)present.Center + RenderTargetShake * MathF.Min(shakeScale.X, shakeScale.Y);
 
+			// Windows get the frame composited (CRT included) at a whole multiple, then stretched
+			// linearly: every game pixel stays the same width at fractional scales, and the CRT's
+			// cost follows the resolution setting instead of the display (see VideoSettings).
+			var composite = destination is Window ? EnsureCompositeTarget(output, present) : null;
+			var compositeScale = composite == null ? 1 : composite.Width / output.Width;
+
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
 			if (useCrt)
 			{
@@ -221,10 +227,21 @@ public sealed partial class GameView
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
-			Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
+			if (composite != null)
+				Batcher.Image(output, Vector2.Zero, Vector2.Zero, Vector2.One * compositeScale, 0, Color.White);
+			else
+				Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
 			if (useCrt)
 				Batcher.PopMaterial();
 			Batcher.PopSampler();
+			if (composite != null)
+			{
+				Batcher.Render(composite);
+				Batcher.Clear();
+				Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+				Batcher.Image(composite, center, composite.Bounds.Size / 2, Vector2.One * (scale / compositeScale), 0, Color.White);
+				Batcher.PopSampler();
+			}
 			Batcher.Render(destination, scissor: clip);
 			Batcher.Clear();
 		}
@@ -2264,6 +2281,17 @@ public sealed partial class GameView
 		return new Target(GraphicsDevice, width, height, attachments, name: name);
 	}
 
+	Target EnsureCompositeTarget(Target output, in RectInt present)
+	{
+		var video = Manager.Video;
+		var size = output.Bounds.Size * video.CompositeScale(video.FitScale(present.Size, output.Bounds.Size));
+		if (compositeTarget != null && compositeTarget.Bounds.Size == size)
+			return compositeTarget;
+		if (compositeTarget != null)
+			RenderTargetPool.Return(compositeTarget);
+		return compositeTarget = RenderTargetPool.RentColor(GraphicsDevice, size.X, size.Y, "GameComposite");
+	}
+
 	// debugTargets holds exactly the render targets created by EnsureRenderTargets, so
 	// return them all to the pool for reuse. Clearing the list makes a repeat call a no-op
 	// (no double-return) and the property fields are always reassigned before next use.
@@ -2526,6 +2554,7 @@ public sealed partial class GameView
 	public bool ShowForegroundLayer { get; set; } = true;
 	public bool ShowBackgroundLayer { get; set; } = true;
 	readonly ReloadableMaterial? crtMaterial;
+	Target? compositeTarget;
 	readonly ReloadableMaterial? atlasWanderMaterial;
 	readonly ReloadableMaterial? colorFieldMaterial;
 	readonly ReloadableMaterial? lightingCompositeMaterial;

@@ -358,7 +358,7 @@ public partial class Game : IDisposable
 	// Total pixel scale the composite uses to draw the screen into the given viewport.
 	internal float PresentScale(in RectInt present, float outputWidth, float outputHeight)
 	{
-		var contain = Calc.Min(present.Width / outputWidth, present.Height / outputHeight);
+		var contain = Manager.Video.FitScale(present.Size, new(outputWidth, outputHeight));
 		if (!AspectCropActive)
 			return contain * fbZoom;
 		var cover = Calc.Max(present.Width / outputWidth, present.Height / outputHeight);

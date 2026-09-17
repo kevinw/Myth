@@ -189,6 +189,7 @@ public partial class Manager : App
 	bool allocProfileComplete;
 	bool musicEnabled = true;
 	bool vSyncEnabled = true;
+	internal readonly VideoSettings Video = new();
 	bool alwaysOnTop;
 #if !BROWSER
 	bool runInBackground;
@@ -221,7 +222,10 @@ public partial class Manager : App
 #if EDITOR
 		runsInBackground |= editorGameRunInBackground;
 #endif
-		var suspend = !runsInBackground && !windowFocused;
+		// Never before the title screen: alt-tabbing away during Loading... or the attribution
+		// logos shouldn't stall startup, so a player always comes back to a ready title.
+		var booting = bootWarming || startupAttributionPhase != StartupAttributionPhase.None;
+		var suspend = !runsInBackground && !windowFocused && !booting;
 		if (backgroundSuspended == suspend)
 		{
 			if (suspend)
@@ -350,7 +354,8 @@ public partial class Manager : App
 			fullscreen = true;
 #endif
 		}
-		AppFlags appFlags = AppFlags.None;
+		// 1280x720 is the same physical size on every platform, not tiny on a scaled Windows display.
+		AppFlags appFlags = AppFlags.ScaleWindowToDisplay;
 #if BROWSER
 		graphicsDriver = GraphicsDriver.WebGPU;
 #endif
@@ -401,7 +406,10 @@ public partial class Manager : App
 	protected override void Startup()
 	{
 #if !BROWSER
-		windowFocused = Window?.Focused == true;
+		// Assume focus until the OS says otherwise: the window starts hidden (so it can't report
+		// focus yet), and a launch that never grants focus (a launcher, a scheduled task) would
+		// otherwise suspend before the first frame.
+		windowFocused = true;
 #if !MYTHSHIP
 		if (OperatingSystem.IsMacOS() && Window is { } window)
 		{
@@ -860,6 +868,10 @@ public partial class Manager : App
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
 			vSyncEnabled = settings.VSyncEnabled;
+			Video.ResolutionScale = settings.ResolutionScale;
+			// Settings saved before this option existed read back as 0.
+			Video.ScreenSizePercent = settings.ScreenSizePercent is >= 50 and <= 100 ? settings.ScreenSizePercent : 100;
+			Video.PixelPerfect = settings.PixelPerfect;
 #if !BROWSER
 			runInBackground = settings.RunInBackground;
 #endif
@@ -895,6 +907,9 @@ public partial class Manager : App
 				RoomId = currentRoom?.Id ?? selectedRoomId,
 				MusicEnabled = musicEnabled,
 				VSyncEnabled = vSyncEnabled,
+				ResolutionScale = Video.ResolutionScale,
+				ScreenSizePercent = Video.ScreenSizePercent,
+				PixelPerfect = Video.PixelPerfect,
 				AlwaysOnTop = alwaysOnTop,
 #if !BROWSER
 				RunInBackground = runInBackground,
@@ -922,6 +937,9 @@ public partial class Manager : App
 		public int RoomY { get; init; }
 		public bool MusicEnabled { get; init; } = true;
 		public bool VSyncEnabled { get; init; } = true;
+		public int ResolutionScale { get; init; }
+		public int ScreenSizePercent { get; init; } = 100;
+		public bool PixelPerfect { get; init; }
 		public bool AlwaysOnTop { get; init; }
 #if !BROWSER
 		public bool RunInBackground { get; init; }
@@ -1745,6 +1763,7 @@ public partial class Manager : App
 		UpdateFpsOverlay();
 		using var renderPerf = PerfStats.Time(PerfStat.Render);
 		Window.Clear(WINDOW_CLEAR_COLOR);
+		Video.LogIfChanged(Window, (RectInt)(GameViewRect * Scale));
 		if (startupAttributionPhase == StartupAttributionPhase.Logos)
 		{
 			DrawStartupAttribution();

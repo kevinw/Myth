@@ -471,6 +471,8 @@ public sealed partial class GameView : IDisposable
 	{
 		rendering.Clear();
 		DisposeRenderTargets();
+		if (compositeTarget != null)
+			RenderTargetPool.Return(compositeTarget);
 		DisposeRoomNormalCaches();
 		DisposeRoomTileFieldCaches();
 		DisposeRoomColorFieldCaches();
