@@ -1,3 +1,4 @@
+- Tidal Cycles/Strudel port to C# for bullet patterns and music?
 - put an evolving world map online with a timeline scrubber https://leafletjs.com
 - investigate gpu perf
   - https://developer.apple.com/documentation/xcode/debugging-with-interactive-command-line-tools
