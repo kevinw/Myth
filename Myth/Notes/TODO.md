@@ -11,6 +11,7 @@
 - consolidate app ID / bundle ID into one canonical file (Info.plist or a .props) so tools/clear-metal-cache.sh and any other consumers don't hardcode it separately
 - ACTOR_UPDATE_LIFECYCLE.md
 - FRAME_RATE_LIMIT.md
+- BROWSER_MUSIC_ENCODING.md: try Vorbis for music on the FMOD Mobile platform to halve the browser download, once a browser room plays music
 COSTUMES (rig puppet adornment, 2026-09-14): a shared Costume asset like Surface (Sources/Costumes/<id>.json + its own editor window; actors get one CostumeId picker plus seed/palette/tint). Small: per-part surfaces/tints (boots, gloves, vest); split a bone at a fraction for cuffs, sleeves, boot tops; bone-space wrapping UVs for stripes/bandages; width profiles (flared cuffs, boot bulge, sole quad). Medium: generalize the ruff into rings at any joint (cuffs, belt, skirt); author wire layouts as straps, tassels, antennae, ankle chains (allow free-hanging ends); rigid plates/pauldrons and sprite stamps (rivets, buckles) as depth-sorted accessories; neural costume (per-part mask into the skin NCA's 4 model slots; hits erode armor to reveal skin). Bigger: verlet cloth cape/coattails pinned to the shoulders (Wind pushes it, drapes on death); hair/tendrils/ribbons from the same solver. Infra: accessory list (Draw takes one), generic record-list inspector, click joints/bones in the viewport, turntable preview, attribute-based inspector drawers; check every knob in the big_rig_puppet gallery.
 
 - attach a burrow line to a moving platform

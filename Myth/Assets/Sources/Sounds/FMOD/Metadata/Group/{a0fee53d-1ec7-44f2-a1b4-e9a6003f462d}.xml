@@ -4,6 +4,9 @@
 		<property name="name">
 			<value>SFX</value>
 		</property>
+		<relationship name="masters">
+			<destination>{b89e69d0-66ef-48cd-bc97-dc62f74c4419}</destination>
+		</relationship>
 		<relationship name="effectChain">
 			<destination>{961cfb82-aaf5-4bd5-9a2f-c5418bc4375c}</destination>
 		</relationship>

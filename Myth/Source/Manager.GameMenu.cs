@@ -196,8 +196,10 @@ public partial class Manager
 
 	void OptionsMenu()
 	{
-		if (MenuButton(musicEnabled ? "music: on" : "music: off"))
-			MusicEnabled = !MusicEnabled;
+		if (MenuSlider("music", MusicVolume, out var music))
+			MusicVolume = music;
+		if (MenuSlider("sfx", SfxVolume, out var sfx))
+			SfxVolume = sfx;
 		if (MenuButton("video"))
 			ShowGameMenuPage(GameMenuPage.Video);
 #if !BROWSER
@@ -390,6 +392,57 @@ public partial class Manager
 			menuActivated = true;
 		}
 		return pressed;
+	}
+
+	// A MenuButton with a VolumeSteps-block bar. Left/right (keys, D-pad, stick) nudge it while
+	// focused, activating steps up and wraps to 0, and clicking a block jumps to it. Every change
+	// plays the select cue, which the SFX VCA scales, so the sfx slider previews itself.
+	bool MenuSlider(string label, int value, out int changed)
+	{
+		changed = value;
+		// Activation already plays the select cue inside MenuButton; left/right plays it here.
+		if (MenuButton(label, "menu/select"))
+			changed = IsMouseReleased(ImGuiMouseButton.Left) && SliderBlockAt(GetMousePos().X) is { } block
+				? block + 1
+				: value >= VolumeSteps ? 0 : value + 1;
+		else if (IsItemFocused())
+		{
+			var step = (IsKeyPressed(ImGuiKey.RightArrow) || IsKeyPressed(ImGuiKey.GamepadDpadRight) ? 1 : 0)
+				- (IsKeyPressed(ImGuiKey.LeftArrow) || IsKeyPressed(ImGuiKey.GamepadDpadLeft) ? 1 : 0);
+			changed = Math.Clamp(value + step, 0, VolumeSteps);
+			if (changed != value)
+				MenuAudioEvent("menu/select");
+		}
+
+		var draw = GetWindowDrawList();
+		for (var i = 0; i < VolumeSteps; i++)
+		{
+			var min = SliderBlockMin(i);
+			var color = i < changed ? ImColor(0x5fcde4, gameMenuLayoutEase) : ImColor(0xc0cbdc, 0.25f * gameMenuLayoutEase);
+			draw.AddRectFilled(min, min + SliderBlockSize, ColorConvertFloat4ToU32(color));
+		}
+		return changed != value;
+	}
+
+	static Vector2 SliderBlockSize => new(3, 5);
+	static float SliderBlockGap => 1;
+
+	// Right-aligned in the button just drawn, vertically centered.
+	Vector2 SliderBlockMin(int index)
+	{
+		var max = GetItemRectMax();
+		var height = GetItemRectSize().Y;
+		var width = VolumeSteps * (SliderBlockSize.X + SliderBlockGap) - SliderBlockGap;
+		var left = max.X - GetStyle().FramePadding.X - width;
+		return new Vector2(left + index * (SliderBlockSize.X + SliderBlockGap), max.Y - height / 2 - SliderBlockSize.Y / 2).Floor();
+	}
+
+	int? SliderBlockAt(float x)
+	{
+		for (var i = 0; i < VolumeSteps; i++)
+			if (x >= SliderBlockMin(i).X - SliderBlockGap && x < SliderBlockMin(i).X + SliderBlockSize.X)
+				return i;
+		return null;
 	}
 
 	Target? previewTarget = null;

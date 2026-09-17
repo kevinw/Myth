@@ -59,6 +59,9 @@ internal static partial class BrowserFmod
 	[JSImport("setBusPaused", "MythBrowserFmod")]
 	internal static partial void SetBusPaused(string path, bool paused);
 
+	[JSImport("setVcaVolume", "MythBrowserFmod")]
+	internal static partial bool SetVcaVolume(string path, float volume);
+
 	[JSImport("update", "MythBrowserFmod")]
 	internal static partial void Update();
 

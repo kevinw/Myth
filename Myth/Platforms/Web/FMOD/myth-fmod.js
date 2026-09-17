@@ -280,6 +280,15 @@ export function setBusPaused(path, paused) {
 	check(out.val.setPaused(paused), `Failed to ${paused ? "pause" : "resume"} FMOD bus '${path}'`);
 }
 
+export function setVcaVolume(path, volume) {
+	ensureInitialized();
+	const out = {};
+	if (system.getVCA(path, out) !== fmod.OK)
+		return false;
+	check(out.val.setVolume(volume), `Failed to set FMOD VCA volume '${path}'`);
+	return true;
+}
+
 export function update() {
 	if (initialized)
 		check(system.update(), "FMOD Studio system update failed");

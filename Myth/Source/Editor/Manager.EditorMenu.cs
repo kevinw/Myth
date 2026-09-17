@@ -190,11 +190,8 @@ public partial class Manager
 			FmodStudio.Open();
 		ImGui.Separator();
 
-		if (ImGui.MenuItem("Music", null, musicEnabled))
-		{
-			musicEnabled = !musicEnabled;
-			game?.RefreshMusic();
-		}
+		if (ImGui.MenuItem("Music", null, MusicEnabled))
+			MusicVolume = MusicEnabled ? 0 : VolumeSteps;
 		if (ImGui.MenuItem("Always on Top", null, alwaysOnTop))
 		{
 			alwaysOnTop = !alwaysOnTop;

@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
 using Foster.Framework;
 using ImGuiNET;
 using Color = Foster.Framework.Color;
@@ -187,7 +188,10 @@ public partial class Manager : App
 	long allocProfileBytes;
 	bool allocProfileStarted;
 	bool allocProfileComplete;
-	bool musicEnabled = true;
+	// Volume steps, 0..VolumeSteps. Music at 0 doesn't start the music event at all.
+	const int VolumeSteps = 10;
+	int musicVolume = VolumeSteps;
+	int sfxVolume = VolumeSteps;
 	bool vSyncEnabled = true;
 	internal readonly VideoSettings Video = new();
 	bool alwaysOnTop;
@@ -200,15 +204,39 @@ public partial class Manager : App
 	internal bool PlatformNavDebugVisible { get; set; }
 	readonly NavTrace? navTrace;
 
-	public bool MusicEnabled {
-		get => musicEnabled;
-		set {
-			musicEnabled = value;
-			if (value)
+	public bool MusicEnabled => musicVolume > 0;
+
+	int MusicVolume
+	{
+		get => musicVolume;
+		set
+		{
+			var wasEnabled = MusicEnabled;
+			musicVolume = value;
+			ApplyVolumes();
+			if (MusicEnabled && !wasEnabled)
 				game?.MusicWasRestarted();
-			else
+			else if (!MusicEnabled && wasEnabled)
 				game?.StopMusic(true);
 		}
+	}
+
+	int SfxVolume
+	{
+		get => sfxVolume;
+		set
+		{
+			sfxVolume = value;
+			ApplyVolumes();
+		}
+	}
+
+	// The FMOD project assigns groups to these VCAs (UI sounds follow SFX). Squared, so each step
+	// sounds about as big as the last: 50% is roughly -12 dB.
+	void ApplyVolumes()
+	{
+		Audio.SetVcaVolume("vca:/Music", MathF.Pow(musicVolume / (float)VolumeSteps, 2));
+		Audio.SetVcaVolume("vca:/SFX", MathF.Pow(sfxVolume / (float)VolumeSteps, 2));
 	}
 #if !BROWSER
 	void WindowFocusGained() => windowFocused = true;
@@ -780,6 +808,10 @@ public partial class Manager : App
 			);
 			LoadMusicAreas();
 			ApplyGameplayAudioPause();
+			ApplyVolumes();
+#if DEBUG && !BROWSER
+			WarnAboutMisconfiguredEvents();
+#endif
 		}
 		catch (Exception e)
 		{
@@ -788,6 +820,39 @@ public partial class Manager : App
 			musicAreas.Add(DefaultMusicArea);
 		}
 	}
+
+#if DEBUG && !BROWSER
+	// FMOD Studio makes it easy to leave a new event misconfigured, and both mistakes fail
+	// quietly: routed straight to the master bus it skips the Gameplay group (the pause menu can't
+	// pause it) and the VCAs (the volume sliders don't reach it); in no bank it never ships. The
+	// runtime API can't see either, so read the Studio project's metadata. FMOD Studio's
+	// Myth > New SFX Event menu command creates events that avoid both.
+	static void WarnAboutMisconfiguredEvents()
+	{
+		var metadata = Path.Join(Assets.SourcesPath, "Sounds", "FMOD", "Metadata");
+		if (!File.Exists(Path.Join(metadata, "Master.xml")))
+			return;
+
+		var master = XDocument.Load(Path.Join(metadata, "Master.xml")).Root?.Elements("object")
+			.FirstOrDefault(o => (string?)o.Attribute("class") == "MixerMaster")?.Attribute("id")?.Value;
+		foreach (var file in Directory.EnumerateFiles(Path.Join(metadata, "Event"), "*.xml"))
+		{
+			var objects = XDocument.Load(file).Root?.Elements("object").ToArray() ?? [];
+			// A nested event's "folder" is its parent event, which it plays through.
+			if (objects.FirstOrDefault(o => (string?)o.Attribute("class") == "Event") is not { } ev
+				|| File.Exists(Path.Join(metadata, "Event", $"{Relationship(ev, "folder")}.xml")))
+				continue;
+			var name = ev.Element("property")?.Element("value")?.Value;
+			if (objects.Any(o => o.Elements("relationship").Any(r => (string?)r.Attribute("name") == "output" && r.Element("destination")?.Value == master)))
+				Console.Error.WriteLine($"Warning: FMOD event '{name}' routes straight to the master bus, so pausing and the volume sliders skip it.");
+			if (Relationship(ev, "banks") == null)
+				Console.Error.WriteLine($"Warning: FMOD event '{name}' isn't assigned to a bank, so it won't be built or shipped.");
+		}
+
+		static string? Relationship(XElement element, string name)
+			=> element.Elements("relationship").FirstOrDefault(r => (string?)r.Attribute("name") == name)?.Element("destination")?.Value;
+	}
+#endif
 
 	static string AudioBankRoot(string fmodPath)
 	{
@@ -866,7 +931,8 @@ public partial class Manager : App
 			}
 			hasStartedGame = settings.RoomId != null;
 			selectedRoomId = settings.RoomId;
-			musicEnabled = settings.MusicEnabled;
+			musicVolume = Math.Clamp(settings.MusicVolume ?? VolumeSteps, 0, VolumeSteps);
+			sfxVolume = Math.Clamp(settings.SfxVolume ?? VolumeSteps, 0, VolumeSteps);
 			vSyncEnabled = settings.VSyncEnabled;
 			Video.ResolutionScale = settings.ResolutionScale;
 			// Settings saved before this option existed read back as 0.
@@ -905,7 +971,8 @@ public partial class Manager : App
 				Fullscreen = Window.Fullscreen,
 				WorldId = Assets.CurrentWorldId,
 				RoomId = currentRoom?.Id ?? selectedRoomId,
-				MusicEnabled = musicEnabled,
+				MusicVolume = musicVolume,
+				SfxVolume = sfxVolume,
 				VSyncEnabled = vSyncEnabled,
 				ResolutionScale = Video.ResolutionScale,
 				ScreenSizePercent = Video.ScreenSizePercent,
@@ -935,7 +1002,9 @@ public partial class Manager : App
 		public string? RoomId { get; init; }
 		public int RoomX { get; init; }
 		public int RoomY { get; init; }
-		public bool MusicEnabled { get; init; } = true;
+		// Nullable: a key missing from an older settings file reads as null, not a silent 0.
+		public int? MusicVolume { get; init; }
+		public int? SfxVolume { get; init; }
 		public bool VSyncEnabled { get; init; } = true;
 		public int ResolutionScale { get; init; }
 		public int ScreenSizePercent { get; init; } = 100;

@@ -68,6 +68,12 @@ public sealed class Audio
 			BrowserFmod.SetBusPaused(path, paused);
 	}
 
+	public void SetVcaVolume(string path, float volume)
+	{
+		if (Initialized && !BrowserFmod.SetVcaVolume(path, volume))
+			WarnMissingVca(path);
+	}
+
 	public string[] GetEventParameterLabels(string eventPath, string parameterName)
 	{
 		Initialize();
@@ -187,6 +193,18 @@ public sealed class Audio
 
 		Check(system.getBus(path, out var bus), "Failed to get FMOD bus", path);
 		Check(bus.setPaused(paused), $"Failed to {(paused ? "pause" : "resume")} FMOD bus", path);
+	}
+
+	public void SetVcaVolume(string path, float volume)
+	{
+		if (!initialized)
+			return;
+		if (system.getVCA(path, out var vca) != FMOD.RESULT.OK)
+		{
+			WarnMissingVca(path);
+			return;
+		}
+		Check(vca.setVolume(volume), "Failed to set FMOD VCA volume", path);
 	}
 
 	public void PlayPcm16(byte[] pcm, int sampleRate, string busPath = "bus:/")
@@ -347,5 +365,15 @@ public sealed class Audio
 			y = vector.Y,
 			z = vector.Z
 		};
+	}
+
+	readonly HashSet<string> warnedMissingVcas = [];
+
+	// A renamed or unbuilt VCA shouldn't take audio down, but its slider silently doing nothing
+	// should still be noticed.
+	void WarnMissingVca(string path)
+	{
+		if (warnedMissingVcas.Add(path))
+			Console.Error.WriteLine($"Warning: FMOD VCA '{path}' not found; its volume setting does nothing.");
 	}
 }
