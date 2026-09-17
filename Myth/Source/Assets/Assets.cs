@@ -524,7 +524,7 @@ public static partial class Assets
 				|| key.Equals($"Rooms/{worldId}.regions.json", StringComparison.OrdinalIgnoreCase);
 		if (key.Equals("Fonts/Myna-Regular.ttf", StringComparison.OrdinalIgnoreCase))
 			return false;
-		// Only this world's map, and not the hi-res export or bake fingerprint beside it.
+		// Only this world's map, not other worlds' or the bake fingerprints.
 		if (key.StartsWith($"{packedVisualsFolderName}/{WorldMap.Folder}/", StringComparison.OrdinalIgnoreCase))
 			return key.Equals($"{packedVisualsFolderName}/{WorldMap.ImageFile(worldId)}", StringComparison.OrdinalIgnoreCase)
 				|| key.Equals($"{packedVisualsFolderName}/{WorldMap.BoundsFile(worldId)}", StringComparison.OrdinalIgnoreCase);

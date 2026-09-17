@@ -31,7 +31,6 @@ const inputs = [
   "Assets/Sources/Surfaces",
   "Assets/Sources/Textures",
   "Assets/Sources/Tilesets",
-  "Assets/Sprites",
   "Source/Actors",
   "Source/Assets",
   "Source/Lighting",

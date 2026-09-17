@@ -14,7 +14,7 @@ public static class WorldMap
 	// Keyed by world, so worlds keep their own bakes side by side and a content pak can carry
 	// exactly its world's map.
 	public const string Folder = "world-maps";
-	public static string ImageFile(string worldId, Mode mode = Mode.LowResQoi) => $"{Folder}/{worldId}.{(mode == Mode.HighResPng ? "png" : "qoi")}";
+	public static string ImageFile(string worldId) => $"{Folder}/{worldId}.qoi";
 	public static string BoundsFile(string worldId) => $"{Folder}/{worldId}.json";
 
 	/// Widest the bake is allowed to be; the world scales down to fit and keeps its aspect.

@@ -3,7 +3,6 @@ obj/
 .vs
 .vscode
 imgui.ini
-Myth/Assets/Sources/Sounds/Ableton/Sound Effects Project/Icon
 
 FosterSamples.sln.DotSettings.user
 .idea/
@@ -16,10 +15,6 @@ tmp/bench
 bitmapflow-cli/target
 .DS_Store
 Myth/tools/nca_train/targets
-tools/windows/
-Myth/Assets/Sources/Sounds/Myth/.cache
-Myth/Assets/Sources/Sounds/Myth/.unsaved
-Myth/Assets/Sources/Sounds/Myth/.user
 Myth/Platforms/Web/Native/cimgui-build
 Myth/profile-output
 tmp

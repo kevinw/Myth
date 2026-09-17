@@ -94,8 +94,15 @@ public partial class Manager
 		target.Attachments[0].GetData<Color>(pixels);
 
 		var worldId = Assets.CurrentWorldId;
-		Directory.CreateDirectory(Path.Join(WorldMapBakeDirectory, WorldMap.Folder));
-		var imagePath = Path.Join(WorldMapBakeDirectory, WorldMap.ImageFile(worldId, mode));
+		// The hi-res PNG is an export to look at, not game content, so it stays out of the pack.
+		var production = Path.GetFullPath(Path.Join(Assets.AssetsPath, "..", "Production", "World Map"));
+		var imagePath = mode == WorldMap.Mode.HighResPng
+			? Path.Join(production, $"{worldId}.png")
+			: Path.Join(WorldMapBakeDirectory, WorldMap.ImageFile(worldId));
+		var path = mode == WorldMap.Mode.HighResPng
+			? Path.Join(production, $"{worldId}.json")
+			: Path.Join(WorldMapBakeDirectory, WorldMap.BoundsFile(worldId));
+		Directory.CreateDirectory(Path.GetDirectoryName(imagePath)!);
 		using (var image = new Image(target.Width, target.Height, pixels))
 		{
 			if (mode == WorldMap.Mode.LowResQoi)
@@ -111,7 +118,6 @@ public partial class Manager
 			}
 		}
 
-		var path = Path.Join(WorldMapBakeDirectory, WorldMap.BoundsFile(worldId));
 		File.WriteAllBytes(path, WorldMap.WriteBounds(bounds));
 		return new BakeResult {
 			ImagePath = imagePath,
