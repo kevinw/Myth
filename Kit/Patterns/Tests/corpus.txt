@@ -1,0 +1,78 @@
+# Expressions checked against Strudel (see strudel-oracle.mjs). Each line is valid in both Strudel
+# and Mini.ParseExpression. Add a line, rerun the oracle, and commit the regenerated golden.json.
+
+# sequences and nesting
+"a"
+"a b c"
+"a [b c]"
+"a [b [c d]]"
+"a ~ b"
+"[a b] [c d e]"
+
+# alternation
+"<a b c>"
+"a <b c>"
+"<a <b c>>"
+"<a b@2>"
+"<a b, c d e>"
+"<a b>*2"
+"<a b>/3"
+
+# stacks
+"a, b c"
+"[a, b] c"
+
+# weights and replication
+"a@3 b"
+"a@1.5 b"
+"a _ b"
+"a _ _ b c"
+"a!3 b"
+"a ! ! b"
+"<a b>!2 c"
+"a!2*2 b"
+"a*2!2 b"
+
+# speed
+"a*2 b"
+"[a b]*1.5"
+"a/2 b"
+"[a b c]/2"
+"a*<1 2> b"
+"a b*0.5"
+"[a b]*[1 2]"
+
+# euclidean rhythms
+"x(3,8)"
+"x(3,8,2)"
+"x(5,8,-1)"
+"x(-3,8)"
+"[a b](3,8)"
+"<a b>(3,8)"
+
+# atoms
+"0 0.25 -1 1e2"
+"c#4 eb3 bd"
+
+# expressions
+"a b c".fast(2)
+"a b c".slow(3)
+"a b c".rev()
+"a [b c] <d e>".rev()
+"a b".late(0.25)
+"a b c d".early("<0 0.25>")
+"x ~ x x".fast("<1 2>")
+"a b".slow("1 2")
+"a b c".late("0 0.1")
+"a b c d".struct("x ~ x x")
+"[a b c]".struct("1 0 1 1")
+"a b".euclid(3, 8)
+"a b".euclidRot(3, 8, 1)
+"a b c".compress(0.25, 0.75)
+"<a b c>".repeatCycles(2)
+"a b".fast("<1 2 3>").rev()
+stack("a b", "c d e")
+cat("a b", "c", "d e f")
+seq("a", "b c", "<d e>")
+stack("a b".fast(2), "c".late(0.5))
+cat("a b".rev(), silence, "c")

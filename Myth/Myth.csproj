@@ -205,7 +205,7 @@
   <ItemGroup>
     <CoreCompileCache Include="$(DefineConstants)" />
     <Compile Include="Source/**/*.cs" Exclude="Source/**/bin/**;Source/**/obj/**;Source/External/StringBuilder/tests/**" />
-    <Compile Include="../Kit/**/*.cs" Exclude="../Kit/**/bin/**;../Kit/**/obj/**" Link="Kit/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../Kit/**/*.cs" Exclude="../Kit/**/bin/**;../Kit/**/obj/**;../Kit/**/Tests/**" Link="Kit/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- Build-time only: emits GeneratedActors.RegisterAll() from [GameActor]. -->
     <ProjectReference Include="tools/Myth.SourceGen/Myth.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
