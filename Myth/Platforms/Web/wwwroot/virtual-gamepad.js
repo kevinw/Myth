@@ -1,5 +1,4 @@
-// On-screen touch controller for the browser build — the web analog of the iOS
-// GCVirtualController (see Platforms/iOS/MythIos/Program.cs). It renders a left
+// On-screen touch controller for the browser build. It renders a left
 // analog stick + D-pad + A/B/X/Y face buttons and exposes itself to the game by merging
 // a synthetic "standard" Gamepad into navigator.getGamepads(). Foster's browser
 // input provider already polls navigator.getGamepads() every frame, so no engine

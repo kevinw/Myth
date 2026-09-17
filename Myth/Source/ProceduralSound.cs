@@ -1,4 +1,4 @@
-#if EDITOR && !IOS && !BROWSER
+#if EDITOR && !BROWSER
 namespace Myth;
 
 // Adapted from chr15m/jsfxr's public-domain sfxr.js, with additional synthesis

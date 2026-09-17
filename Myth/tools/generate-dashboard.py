@@ -12,11 +12,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "Platforms/Web/dashboard/data.json"
-HISTORY_PATHS = ["Assets/Rooms", "Assets/Actors", "Assets/Sources/Tilesets", "Source", "tools/Myth.SourceGen", "Platforms/iOS"]
+HISTORY_PATHS = ["Assets/Rooms", "Assets/Actors", "Assets/Sources/Tilesets", "Source", "tools/Myth.SourceGen"]
 PROJECT_NAMES = ("Myth", "TinyLink")
 SOLID_TILE_NAMES = {"castle", "grass", "metal", "stone", "crosshatch", "dirt"}
 SOLID_TILE_CHARS = set("1GSMTP%2SY$J")
-CODE_PREFIXES = ("Source/", "tools/Myth.SourceGen/", "Platforms/iOS/")
+CODE_PREFIXES = ("Source/", "tools/Myth.SourceGen/")
 CODE_EXCLUDES = ("Source/Audio/FMOD/", "Source/External/", "/bin/", "/obj/")
 INFRASTRUCTURE_ACTOR_TYPES = {
     "BudStoryBark", "CameraBlocker", "Cutscene", "Goal", "Light", "ParticleEmitter",

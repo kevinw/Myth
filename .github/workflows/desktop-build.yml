@@ -18,8 +18,8 @@ env:
   R2_BUCKET: myth-downloads
   MYTH_NOTARY_PROFILE: myth-notary
   WRANGLER_VERSION: 4.133.0
-  # Hosted runners skip LFS objects no desktop build reads: iOS, authoring sources, tool inputs.
-  LFS_EXCLUDE: Myth/Platforms/iOS,Myth/Platforms/FMOD/Native/ios,Myth/Production,Myth/Assets/Sources/Sounds,Myth/tools
+  # Hosted runners skip LFS objects no desktop build reads: authoring sources, tool inputs.
+  LFS_EXCLUDE: Myth/Production,Myth/Assets/Sources/Sounds,Myth/tools
 
 jobs:
   # Baking renders every room: seconds on a real GPU, minutes on the hosted runners' software
@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: world-map
-          path: Myth/Assets/Packed/Visuals/world-map.*
+          path: Myth/Assets/Packed/Visuals/world-maps/
           if-no-files-found: error
           retention-days: 1
 
@@ -108,7 +108,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: world-map
-          path: Myth/Assets/Packed/Visuals
+          path: Myth/Assets/Packed/Visuals/world-maps
 
       - name: Check macOS release configuration
         shell: bash
@@ -281,7 +281,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: world-map
-          path: Myth/Assets/Packed/Visuals
+          path: Myth/Assets/Packed/Visuals/world-maps
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -359,7 +359,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: world-map
-          path: Myth/Assets/Packed/Visuals
+          path: Myth/Assets/Packed/Visuals/world-maps
 
       - name: Publish Linux build
         run: node Myth/tools/publish-linux.mjs --skip-check-rooms

@@ -11,10 +11,11 @@ namespace Myth;
 /// at load, so moving a room only misplaces the map until the next bake instead of skewing it.
 public static class WorldMap
 {
-	public const string ImageFileWithoutExtension = "world-map";
-	internal static string ImageFileLowResQoi => ImageFileWithoutExtension + ".qoi";
-	internal static string ImageFileHighResPng => ImageFileWithoutExtension + ".png";
-	public const string BoundsFile = ImageFileWithoutExtension + ".json";
+	// Keyed by world, so worlds keep their own bakes side by side and a content pak can carry
+	// exactly its world's map.
+	public const string Folder = "world-maps";
+	public static string ImageFile(string worldId, Mode mode = Mode.LowResQoi) => $"{Folder}/{worldId}.{(mode == Mode.HighResPng ? "png" : "qoi")}";
+	public static string BoundsFile(string worldId) => $"{Folder}/{worldId}.json";
 
 	/// Widest the bake is allowed to be; the world scales down to fit and keeps its aspect.
 	/// -1 sizes it so one texture pixel is one world tile, matching the map's own tile grid.
@@ -77,20 +78,20 @@ public static class WorldMap
 			worldRect.Height * scaleY);
 	}
 
-	public static void Load(GraphicsDevice gfx, StorageContainer pack)
+	public static void Load(GraphicsDevice gfx, StorageContainer pack, string worldId)
 	{
 		Unload();
 		
-		if (!pack.FileExists(ImageFileLowResQoi) || !pack.FileExists(BoundsFile))
+		if (!pack.FileExists(ImageFile(worldId)) || !pack.FileExists(BoundsFile(worldId)))
 			return;
 
 		try
 		{
-			var bounds = ReadBounds(pack.ReadAllBytes(BoundsFile));
+			var bounds = ReadBounds(pack.ReadAllBytes(BoundsFile(worldId)));
 			if (bounds.Width <= 0 || bounds.Height <= 0)
 				return;
 
-			using var image = new Image(pack.ReadAllBytes(ImageFileLowResQoi));
+			using var image = new Image(pack.ReadAllBytes(ImageFile(worldId)));
 			Texture = new Texture(gfx, image, name: "WorldMap");
 			Bounds = bounds;
 		}
@@ -115,7 +116,7 @@ public static class WorldMap
 	static RectInt ReadBounds(ReadOnlySpan<byte> json)
 	{
 		var node = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Encoding.UTF8.GetString(json))?.AsObject()
-			?? throw new InvalidOperationException($"{BoundsFile} is not an object.");
+			?? throw new InvalidOperationException("World map bounds are not an object.");
 		return new RectInt(
 			JsonUtil.ReadInt(node, "x", 0),
 			JsonUtil.ReadInt(node, "y", 0),

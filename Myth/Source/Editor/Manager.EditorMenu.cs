@@ -62,7 +62,7 @@ public partial class Manager
 			DrawResizeRoomPopup();
 			DrawActorContextMenu();
 			DrawCreatePrefabPopup();
-#if DEBUG && !IOS
+#if DEBUG
 			DrawRoomSaveConflictPopup();
 #endif
 		}
@@ -186,10 +186,8 @@ public partial class Manager
 
 		if (ImGui.MenuItem("Bake World Map"))
 			BakeWorldMap(WorldMap.Mode.LowResQoi);
-#if !IOS
 		if (ImGui.MenuItem("Open FMOD Studio"))
 			FmodStudio.Open();
-#endif
 		ImGui.Separator();
 
 		if (ImGui.MenuItem("Music", null, musicEnabled))
@@ -197,13 +195,11 @@ public partial class Manager
 			musicEnabled = !musicEnabled;
 			game?.RefreshMusic();
 		}
-#if !IOS
 		if (ImGui.MenuItem("Always on Top", null, alwaysOnTop))
 		{
 			alwaysOnTop = !alwaysOnTop;
 			RequiredWindow.AlwaysOnTop = alwaysOnTop;
 		}
-#endif
 
 		EndPaddedPopup();
 	}

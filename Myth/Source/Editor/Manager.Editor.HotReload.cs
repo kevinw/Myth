@@ -1,4 +1,4 @@
-#if EDITOR && DEBUG && !IOS
+#if EDITOR && DEBUG
 using Foster.Framework;
 using ImGuiNET;
 using System.Numerics;

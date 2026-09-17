@@ -501,7 +501,7 @@ public partial class Manager
 		ImGui.PopStyleVar(2);
 	}
 
-#if DEBUG && !IOS
+#if DEBUG
 	int fpsFrames;
 	float fpsElapsed;
 

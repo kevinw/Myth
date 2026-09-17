@@ -278,7 +278,6 @@ adjust rope springiness as a mechanic or challenge
 
 ## mood: MINUTIA
 - separate "editingRoomId" and "playRoomId" and put them in editor.json and save.json
-- Build a custom SDL3 iOS xcframework with unused camera and Bluetooth/HIDAPI support disabled, then replace the bundled SDL3.xcframework so App Store uploads no longer need privacy purpose strings for APIs Myth does not use.
 
 ## mood: SOUND AND MUSIC
 - shieldknight needs sound effects, detect, player awareness squish

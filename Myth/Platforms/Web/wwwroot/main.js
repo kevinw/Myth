@@ -12,7 +12,7 @@ const [{ dotnet }, FosterWebGPU, MythBrowserFmod, VirtualGamepad] =
 globalThis.FosterWebGPU = FosterWebGPU;
 globalThis.MythBrowserFmod = MythBrowserFmod;
 
-// On-screen touch controller (web analog of the iOS GCVirtualController).
+// On-screen touch controller.
 VirtualGamepad.initialize();
 
 // Keep the canvas backing buffer's aspect matched to the CSS shell box (see index.html):

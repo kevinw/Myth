@@ -1,4 +1,4 @@
-#if !MYTHSHIP && !BROWSER && !IOS
+#if !MYTHSHIP && !BROWSER
 using Foster.Framework;
 using System.Runtime.InteropServices;
 

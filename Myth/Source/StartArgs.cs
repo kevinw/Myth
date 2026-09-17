@@ -46,6 +46,8 @@ public struct StartArgs
 	// Build the visual pack, stage each target's shipped Assets folder under obj/Content, and exit
 	// (--stage-content mac,linux). Stages --world, or the default world.
 	public string[] stageContentTargets = [];
+	// Write <pak>.zip, a plain zip of a scrambled Content.pak, and exit (--unscramble-pak <pak>).
+	public string? unscramblePakPath;
 	// Exit after this many completed gameplay frames (excluding loading, editing, and pauses).
 	public int maxFrames = int.MaxValue;
 	public int allocWarmupFrames;
@@ -131,6 +133,7 @@ public struct StartArgs
 				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--content-pak": contentPakPath = ReadValue(args, ref i, option); break;
 				case "--stage-content": stageContentTargets = ParseList(ReadValue(args, ref i, option)); break;
+				case "--unscramble-pak": unscramblePakPath = ReadValue(args, ref i, option); break;
 				case "--write-all-rooms": writeAllRooms = true; break;
 				case "--max-time": maxTimeSeconds = ReadFloat(args, ref i, option, minimum: 0); break;
 				case "--play-room":

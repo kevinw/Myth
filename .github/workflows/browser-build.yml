@@ -27,15 +27,14 @@ jobs:
           submodules: false
 
       # Fetch only the LFS objects and submodules the browser build needs. Skips
-      # ~137 MB of iOS-only binaries (xcframeworks, iOS FMOD libs), dev-only
-      # Production assets, audio authoring sources (the browser ships built Mobile
-      # banks, which live outside Sources), and the iOS cimgui-src submodule. This
+      # dev-only Production assets and audio authoring sources (the browser ships
+      # built Mobile banks, which live outside Sources). This
       # deliberately includes Assets/NCA/**/*.bin; the content-pack build below
       # selects the referenced models and fails if LFS left any of them as pointers.
       - name: Fetch browser LFS + submodules
         run: |
           set -euo pipefail
-          git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production,Myth/Assets/Sources/Sounds"
+          git lfs pull --exclude="Myth/Production,Myth/Assets/Sources/Sounds"
           git submodule update --init Foster
           git submodule update --init --remote Myth/Source/External/StringBuilder
 
@@ -79,13 +78,9 @@ jobs:
       - name: Force fresh Foster shader compilation
         run: find Foster/Framework/Content/Shaders/Compiled -name '*.wgsl' -delete
 
-      - name: Stage browser content
+      - name: Stage + audit browser content
         working-directory: Myth
         run: dotnet run --project Myth.csproj -c Release -p:ShaderPlatform=web -p:EnableOzzRuntime=false -- --stage-content browser --world "$MYTH_WORLD"
-
-      - name: Check content pak
-        working-directory: Myth
-        run: node tools/check-content-pak.mjs obj/Content/browser/Assets/Content.pak --target browser --world "$MYTH_WORLD"
 
       # use --aot for WebAssembly AOT for better runtime perf
       - name: Publish browser app (AOT)

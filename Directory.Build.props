@@ -1,5 +1,5 @@
 <Project>
-  <!-- Keep desktop/browser/iOS restore/build state separate. The shared default obj/
+  <!-- Keep desktop/browser restore/build state separate. The shared default obj/
        lets each flavor overwrite project.assets.json and other generated files, which
        breaks no-restore loops when switching targets. -->
   <PropertyGroup>

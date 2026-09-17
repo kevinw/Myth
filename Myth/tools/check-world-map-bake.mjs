@@ -12,10 +12,11 @@ if (!world || process.argv.length !== 3)
   throw new Error("Usage: node tools/check-world-map-bake.mjs <world>");
 if (/[\\/]/.test(world) || !fs.existsSync(path.join(root, "Assets", "Rooms", world)))
   throw new Error(`Unknown world '${world}'.`);
-const pack = path.join(root, "Assets", "Packed", "Visuals");
-const image = path.join(pack, "world-map.qoi");
-const bounds = path.join(pack, "world-map.json");
-const fingerprintFile = path.join(pack, "world-map.inputs.sha256");
+// Keep in sync with WorldMap.ImageFile/BoundsFile and Manager.WriteWorldMapBake.
+const maps = path.join(root, "Assets", "Packed", "Visuals", "world-maps");
+const image = path.join(maps, `${world}.qoi`);
+const bounds = path.join(maps, `${world}.json`);
+const fingerprintFile = path.join(maps, `${world}.inputs.sha256`);
 
 // Conservative list of inputs which can change a baked room's appearance. Generated packs,
 // compiled shaders, audio, editor UI, and gameplay-only systems deliberately stay out.
@@ -91,7 +92,7 @@ execFileSync("dotnet", ["run", "--project", "Myth.csproj", "--", "--bake-world-m
 });
 
 if (!fs.existsSync(image) || !fs.existsSync(bounds))
-  throw new Error("World map bake completed without producing world-map.qoi and world-map.json.");
+  throw new Error(`World map bake completed without producing ${image} and ${bounds}.`);
 
 fs.writeFileSync(fingerprintFile, `${fingerprint}\n`);
 console.log("World map bake updated.");

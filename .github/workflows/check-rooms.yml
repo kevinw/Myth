@@ -32,7 +32,7 @@ jobs:
       - name: Fetch game assets and submodules
         run: |
           set -euo pipefail
-          git lfs pull --exclude="Myth/Platforms/iOS,Myth/Production,Myth/Assets/Sources/Sounds,Myth/Assets/Sounds"
+          git lfs pull --exclude="Myth/Production,Myth/Assets/Sources/Sounds,Myth/Assets/Sounds"
           git submodule update --init Foster Myth/Source/External/StringBuilder Myth/tools/ozz-animation
           chmod +x Foster/tools/linux/shadercross
 

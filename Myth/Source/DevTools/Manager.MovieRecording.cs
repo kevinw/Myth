@@ -5,7 +5,7 @@ using Foster.Framework;
 using System.Text.Json;
 namespace Myth;
 
-#if !MYTHSHIP && !BROWSER && !IOS
+#if !MYTHSHIP && !BROWSER
 public partial class Manager : App
 {
 

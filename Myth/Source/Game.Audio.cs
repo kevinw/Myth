@@ -148,7 +148,7 @@ public partial class Game
 	public bool AudioEventsEnabled { get; }
 
 	readonly HashSet<string> audioFailures = [];
-#if EDITOR && !IOS && !BROWSER
+#if EDITOR && !BROWSER
 	internal static readonly HashSet<string> MissingAudioEvents = [];
 #endif
 	SoundInstance? music;
@@ -215,7 +215,7 @@ public partial class Game
 		try
 		{
 			var instance = Audio.CreateEvent($"event:/{path}");
-#if EDITOR && !IOS && !BROWSER
+#if EDITOR && !BROWSER
 			MissingAudioEvents.Remove(path);
 #endif
 			if (position is { } pos)
@@ -231,7 +231,7 @@ public partial class Game
 		}
 		catch (Exception e)
 		{
-#if EDITOR && !IOS && !BROWSER
+#if EDITOR && !BROWSER
 			MissingAudioEvents.Add(path);
 #endif
 			if (audioFailures.Add(path))

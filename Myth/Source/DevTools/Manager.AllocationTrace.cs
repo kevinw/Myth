@@ -1,4 +1,4 @@
-#if KIT_DIAGNOSTICS && !IOS && !BROWSER
+#if KIT_DIAGNOSTICS && !BROWSER
 using System.Diagnostics;
 
 namespace Myth;

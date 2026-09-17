@@ -18,8 +18,7 @@ public static partial class PlatformSpecific
 	}
 
 	public static void ManagerSetup(Manager manager) {
-		// Show/hide the on-screen touch controller (main.js / virtual-gamepad.js),
-		// mirroring the iOS GCVirtualController wiring in MythIos/Program.cs.
+		// Show/hide the on-screen touch controller (main.js / virtual-gamepad.js).
 		SetVirtualControllerVisible(manager.WantsVirtualGameController);
 		manager.VirtualGameControllerVisibilityChanged += SetVirtualControllerVisible;
 	}

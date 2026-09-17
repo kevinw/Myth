@@ -1,4 +1,4 @@
-#if !BROWSER && !IOS
+#if !BROWSER
 using System.Text.Json;
 using Foster.Framework;
 

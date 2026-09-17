@@ -2,19 +2,13 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-// Builds the visual pack and stages each target's shipped Assets folder (Content.pak + loose
-// FMOD banks) under obj/Content/<target>/Assets, audits each pak, and returns those folders.
+// Builds the visual pack, then stages and audits each target's shipped Assets folder
+// (Content.pak + loose FMOD banks) under obj/Content/<target>/Assets. Returns those folders.
 export function stageContent(root, targets, world, dotnetProps = []) {
-  const run = (args) => {
-    console.log(`\n> ${args.join(" ")}`);
-    execFileSync(args[0], args.slice(1), { cwd: root, stdio: "inherit" });
-  };
-  run(["dotnet", "run", "--project", "Myth.csproj", ...dotnetProps, "--", "--stage-content", targets.join(","), "--world", world]);
-  return targets.map((target) => {
-    const assets = path.join(root, "obj", "Content", target, "Assets");
-    run([process.execPath, "tools/check-content-pak.mjs", path.join(assets, "Content.pak"), "--target", target, "--world", world]);
-    return assets;
-  });
+  const args = ["run", "--project", "Myth.csproj", ...dotnetProps, "--", "--stage-content", targets.join(","), "--world", world];
+  console.log(`\n> dotnet ${args.join(" ")}`);
+  execFileSync("dotnet", args, { cwd: root, stdio: "inherit" });
+  return targets.map((target) => path.join(root, "obj", "Content", target, "Assets"));
 }
 
 // Timestamps carry over: tools/deploy-deck.sh rsyncs the result, and fresh mtimes would

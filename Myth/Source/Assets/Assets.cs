@@ -169,35 +169,141 @@ public static partial class Assets
 		content = null;
 	}
 
-	// Writes a target's complete shipped Assets folder to obj/Content/<target>/Assets:
-	// Content.pak plus the loose FMOD banks (FMOD opens banks by real path). Publish scripts,
-	// the browser bundle and the iOS app copy that folder wholesale.
+	// Writes a target's complete shipped Assets folder to obj/Content/<target>/Assets --
+	// Content.pak plus the loose FMOD banks (FMOD opens banks by real path) -- and audits it.
+	// Publish scripts and the browser bundle copy that folder wholesale.
 	public static void StageContent(string target, string? worldId)
 	{
 		target = target.Trim().ToLowerInvariant();
+		worldId = string.IsNullOrWhiteSpace(worldId) ? defaultWorldId : worldId.Trim();
 		var stage = Path.GetFullPath(Path.Join(AssetsPath, "..", "obj", "Content", target, assetsFolderName));
 		if (Directory.Exists(stage))
 			Directory.Delete(stage, recursive: true);
 		BuildContentPak(Path.Join(stage, contentPakName), target, worldId);
 
-		var banks = Path.Join("Sounds", "FMOD", "Build", target is "ios" or "browser" ? "Mobile" : "Desktop");
+		var banks = Path.Join("Sounds", "FMOD", "Build", BankFolder(target));
 		Directory.CreateDirectory(Path.Join(stage, banks));
-		var bankCount = 0;
 		foreach (var bank in Directory.EnumerateFiles(Path.Join(AssetsPath, banks), "*.bank"))
 		{
-			if (Path.GetFileName(bank).StartsWith('.'))
-				continue;
-			if (IsGitLfsPointer(bank))
-				throw new InvalidOperationException($"FMOD bank '{bank}' is still a Git LFS pointer. Run 'git lfs pull' before staging content.");
 			var dest = Path.Join(stage, banks, Path.GetFileName(bank));
 			File.Copy(bank, dest);
 			// deploy-deck.sh rsyncs the publish output; fresh mtimes would resend every bank.
 			File.SetLastWriteTimeUtc(dest, File.GetLastWriteTimeUtc(bank));
-			bankCount++;
 		}
-		if (bankCount == 0)
-			throw new InvalidOperationException($"No FMOD banks in {Path.Join(AssetsPath, banks)}. Build the FMOD project before staging content.");
-		Console.WriteLine($"Staged {target} content with {bankCount} banks: {stage}");
+
+		AuditStagedContent(stage, target, worldId);
+		Console.WriteLine($"Staged {target}/{worldId} content: {stage}");
+	}
+
+	static string ShaderExtension(string target) => target switch
+	{
+		"mac" => "msl",
+		"windows" => "dxil",
+		"linux" => "spv",
+		"browser" => "wgsl",
+		_ => throw new ArgumentException($"Unknown content target '{target}'; expected mac, windows, linux, or browser."),
+	};
+
+	static string BankFolder(string target) => target == "browser" ? "Mobile" : "Desktop";
+
+	// Allowlist audit of everything a target ships, so a content bug (authoring sources, another
+	// world's rooms, the wrong shader flavor, LFS pointers, stray build output) fails staging
+	// instead of shipping. A new content folder means adding a rule here. Reads the pak the way
+	// the runtime does, so it also proves the game can open it.
+	static void AuditStagedContent(string stage, string target, string worldId)
+	{
+		var world = System.Text.RegularExpressions.Regex.Escape(worldId);
+		(string Pattern, string[] Extensions)[] looseRules =
+		[
+			(@"^Content\.pak$", []),
+			($"^Sounds/FMOD/Build/{BankFolder(target)}/[^/]+$", ["bank"]),
+		];
+		(string Pattern, string[] Extensions)[] pakRules =
+		[
+			(@"^world\.json$", []),
+			(@"^(Actors|Attract|Particles|Storylets|Voice)/[^/]+$", ["json"]),
+			(@"^Attribution/[^/]+$", ["png"]),
+			(@"^Fonts/[^/]+$", ["ttf", "txt"]),
+			(@"^NCA/(DynamicTexture/)?[^/]+$", ["bin"]),
+			(@"^Packed/Visuals/(manifest\.bin|atlas\.qoi|lighting-noise\.qoi)$", []),
+			($@"^Packed/Visuals/{WorldMap.Folder}/{world}\.(qoi|json)$", []),
+			(@"^Packed/Visuals/textures/", ["png"]),
+			(@"^Packed/Visuals/(surfaces|costumes)/[^/]+$", ["json"]),
+			(@"^Rigs/[^/]+$", ["json", "ozzpack"]),
+			($@"^Rooms/{world}\.regions\.json$", []),
+			($"^Rooms/{world}/", ["json", "png"]),
+			(@"^Shaders/Compiled/[^/]+$", [ShaderExtension(target)]),
+		];
+
+		var problems = new List<string>();
+		var folders = new SortedDictionary<string, (int Count, long Size)>();
+		void Check(string name, long size, Func<Stream> open, (string Pattern, string[] Extensions)[] rules)
+		{
+			var extension = Path.GetExtension(name).TrimStart('.');
+			var rule = rules.FirstOrDefault(rule => System.Text.RegularExpressions.Regex.IsMatch(name, rule.Pattern));
+			if (name.Split('/').Any(part => part.StartsWith('.')))
+				problems.Add($"{name}: dot-prefixed file");
+			else if (rule.Pattern == null)
+				problems.Add($"{name}: not in an allowed location");
+			else if (rule.Extensions.Length > 0 && !rule.Extensions.Contains(extension))
+				problems.Add($"{name}: .{extension} not allowed here (expected {string.Join(", ", rule.Extensions)})");
+			if (size == 0)
+				problems.Add($"{name}: empty");
+			else if (size < 200)
+			{
+				using var stream = open();
+				if (IsGitLfsPointer(stream))
+					problems.Add($"{name}: Git LFS pointer, not content");
+			}
+			var folder = name.Contains('/') ? name[..name.IndexOf('/')] : "(root)";
+			var total = folders.GetValueOrDefault(folder);
+			folders[folder] = (total.Count + 1, total.Size + size);
+		}
+
+		foreach (var file in Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories))
+			if (Path.GetFileName(file) != contentPakName)
+				Check(Path.GetRelativePath(stage, file).Replace(Path.DirectorySeparatorChar, '/'), new FileInfo(file).Length, () => File.OpenRead(file), looseRules);
+		if (!folders.ContainsKey("Sounds"))
+			problems.Add("no FMOD banks; build the FMOD project");
+
+		var pakPath = Path.Join(stage, contentPakName);
+		using var pak = OpenContentPak(pakPath);
+		if ((pak is Kit.ScrambleStream) == (target == "browser"))
+			problems.Add(target == "browser" ? "browser pak is scrambled (the network tab exposes it anyway)" : $"{target} pak is not scrambled");
+		using var zip = new System.IO.Compression.ZipArchive(pak, System.IO.Compression.ZipArchiveMode.Read);
+		var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var entry in zip.Entries)
+		{
+			if (!seen.TryAdd(entry.FullName, entry.FullName))
+				problems.Add($"{entry.FullName}: collides with {seen[entry.FullName]} (content lookups ignore case)");
+			Check(entry.FullName, entry.Length, entry.Open, pakRules);
+		}
+		if (zip.GetEntry(worldManifestName) is not { } worldEntry)
+			problems.Add($"{worldManifestName} is missing");
+		else
+		{
+			using var worldStream = worldEntry.Open();
+			var packedWorld = JsonNode.Parse(worldStream)?["world"]?.GetValue<string>();
+			if (packedWorld != worldId)
+				problems.Add($"{worldManifestName} names '{packedWorld}', expected '{worldId}'");
+		}
+		if (!zip.Entries.Any(entry => entry.FullName.StartsWith($"Rooms/{worldId}/", StringComparison.Ordinal)))
+			problems.Add($"no rooms for world '{worldId}'");
+
+		Console.WriteLine($"Staged content audit ({target}/{worldId}), pak {new FileInfo(pakPath).Length / 1024} KB:");
+		foreach (var (folder, (count, size)) in folders.OrderByDescending(pair => pair.Value.Size))
+			Console.WriteLine($"  {size / 1024,7} KB  {count,4}  {folder}");
+		if (problems.Count > 0)
+			throw new InvalidOperationException($"Staged content audit failed ({problems.Count}):\n  {string.Join("\n  ", problems)}");
+	}
+
+	public static void UnscrambleContentPak(string pakPath)
+	{
+		var zipPath = Path.ChangeExtension(pakPath, ".zip");
+		using (var pak = OpenContentPak(pakPath))
+		using (var zip = File.Create(zipPath))
+			pak.CopyTo(zip);
+		Console.WriteLine($"Wrote unscrambled zip: {zipPath}");
 	}
 
 	// Zips the runtime-loaded slice of the Assets folder into a Content.pak for packaged
@@ -205,7 +311,7 @@ public static partial class Assets
 	// (authoring; the visual pack replaces it), Sounds/ (banks ship loose, see StageContent),
 	// editor fonts, uncompiled shaders, and dot-prefixed litter.
 	// Entry names are Assets-relative with forward slashes — the same keys Content serves.
-	static void BuildContentPak(string outputPath, string target, string? worldId = null)
+	static void BuildContentPak(string outputPath, string target, string worldId)
 	{
 		ActorSpecs.ClearActorTypes();
 		GeneratedActors.RegisterActorSpecs();
@@ -223,17 +329,7 @@ public static partial class Assets
 				throw new InvalidOperationException($"Visual asset pack is stale. Expected version {visualAssetPackVersion}, found {version}. Rebuild it with --build-asset-pack.");
 		}
 
-		target = target.Trim().ToLowerInvariant();
-		var shaderExtension = target switch
-		{
-			"mac" => "msl",
-			"ios" => "msl",
-			"windows" => "dxil",
-			"linux" => "spv",
-			"browser" => "wgsl",
-			_ => throw new ArgumentException($"Unknown content target '{target}'; expected mac, ios, windows, linux, or browser."),
-		};
-		worldId = string.IsNullOrWhiteSpace(worldId) ? defaultWorldId : worldId.Trim();
+		var shaderExtension = ShaderExtension(target);
 		if (worldId.IndexOfAny(['/', '\\']) >= 0 || !Directory.Exists(Path.Join(RoomsPath, worldId)))
 			throw new ArgumentException($"Unknown content world '{worldId}'.");
 
@@ -353,10 +449,15 @@ public static partial class Assets
 
 	static bool IsGitLfsPointer(string path)
 	{
+		using var stream = File.OpenRead(path);
+		return IsGitLfsPointer(stream);
+	}
+
+	static bool IsGitLfsPointer(Stream stream)
+	{
 		const string signature = "version https://git-lfs.github.com/spec/v1";
 		Span<byte> buffer = stackalloc byte[signature.Length];
-		using var stream = File.OpenRead(path);
-		return stream.Read(buffer) == buffer.Length && Encoding.ASCII.GetString(buffer) == signature;
+		return stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false) == buffer.Length && Encoding.ASCII.GetString(buffer) == signature;
 	}
 
 	// Generated declarations cover code defaults; resolved prefab/room JSON covers authored
@@ -423,6 +524,10 @@ public static partial class Assets
 				|| key.Equals($"Rooms/{worldId}.regions.json", StringComparison.OrdinalIgnoreCase);
 		if (key.Equals("Fonts/Myna-Regular.ttf", StringComparison.OrdinalIgnoreCase))
 			return false;
+		// Only this world's map, and not the hi-res export or bake fingerprint beside it.
+		if (key.StartsWith($"{packedVisualsFolderName}/{WorldMap.Folder}/", StringComparison.OrdinalIgnoreCase))
+			return key.Equals($"{packedVisualsFolderName}/{WorldMap.ImageFile(worldId)}", StringComparison.OrdinalIgnoreCase)
+				|| key.Equals($"{packedVisualsFolderName}/{WorldMap.BoundsFile(worldId)}", StringComparison.OrdinalIgnoreCase);
 		if (key.StartsWith("Shaders/", StringComparison.OrdinalIgnoreCase))
 			return key.StartsWith("Shaders/Compiled/", StringComparison.OrdinalIgnoreCase)
 				&& key.EndsWith($".{shaderExtension}", StringComparison.OrdinalIgnoreCase);
@@ -447,7 +552,7 @@ public static partial class Assets
 		var zipPath = contentPakOverride;
 		if (zipPath == null)
 		{
-			// Packaged builds (desktop .app, iOS bundle, browser wasm FS) carry
+			// Packaged builds (desktop .app, browser wasm FS) carry
 			// Assets/Content.pak and no loose Rooms folder. A dev tree always has Rooms/,
 			// so it keeps reading live files even when a stale zip is lying around; a zip
 			// can still be forced there with --content-pak.
@@ -531,10 +636,8 @@ public static partial class Assets
 	public static void BuildVisualAssetPack(string? path = null, bool dumpPackedAtlases = false)
 	{
 		using var bake = BakeVisualAssets();
-#if !IOS
 		if (dumpPackedAtlases)
 			DumpPackedAtlasPages(bake.Output);
-#endif
 		var directory = path ?? DefaultVisualAssetPackPath;
 		WriteVisualAssetPack(directory, bake);
 		ReportWorldMapState(directory);
@@ -545,11 +648,12 @@ public static partial class Assets
 	/// into the pack folder and never deleted by a rebuild, so a rebuilt pack keeps its map.
 	static void ReportWorldMapState(string directory)
 	{
-		var hasMap = File.Exists(Path.Join(directory, WorldMap.ImageFileLowResQoi))
-			&& File.Exists(Path.Join(directory, WorldMap.BoundsFile));
-		Console.WriteLine(hasMap
-			? $"World map: kept existing {WorldMap.ImageFileLowResQoi} (rebake it in the editor if rooms changed)."
-			: $"World map: none in {directory}. Bake it from the editor toolbar (Bake Map).");
+		var maps = Directory.Exists(Path.Join(directory, WorldMap.Folder))
+			? Directory.GetFiles(Path.Join(directory, WorldMap.Folder), "*.qoi").Select(Path.GetFileNameWithoutExtension).Order().ToArray()
+			: [];
+		Console.WriteLine(maps.Length > 0
+			? $"World maps: kept existing bakes for {string.Join(", ", maps)} (rebake in the editor if rooms changed)."
+			: $"World maps: none in {directory}. Bake one from the editor toolbar (Bake Map).");
 	}
 
 	public static void BuildVisualAssetPack(GraphicsDevice gfx, string? path = null, bool dumpPackedAtlases = false)
@@ -583,10 +687,8 @@ public static partial class Assets
 		EnsureFonts(gfx);
 #endif
 
-#if !IOS
 		if (dumpPackedAtlases)
 			DumpPackedAtlasPages(output);
-#endif
 
 		// create texture file
 		var atlas = new Texture(gfx, output.Pages[0], name: "Atlas");
@@ -794,7 +896,7 @@ public static partial class Assets
 	static void LoadWorldMap(GraphicsDevice gfx)
 	{
 		using var pack = OpenVisualAssetPack();
-		WorldMap.Load(gfx, pack);
+		WorldMap.Load(gfx, pack, CurrentWorldId);
 	}
 
 	static bool TryLoadVisualAssetPack(GraphicsDevice gfx, bool reloadRooms)
@@ -2884,7 +2986,6 @@ public static partial class Assets
 		};
 	}
 
-#if !IOS
 	static void DumpPackedAtlasPages(Packer.Output output)
 	{
 		try
@@ -2909,7 +3010,6 @@ public static partial class Assets
 		}
 	}
 
-#endif
 
 	internal static bool UseUserRooms = false;
 

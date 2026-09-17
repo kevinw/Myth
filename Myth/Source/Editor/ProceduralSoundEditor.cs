@@ -1,4 +1,4 @@
-#if EDITOR && !IOS && !BROWSER
+#if EDITOR && !BROWSER
 using System.Diagnostics;
 using System.Numerics;
 using System.Text.Json;

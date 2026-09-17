@@ -157,7 +157,7 @@ public partial class Manager
 	// Mutable struct on purpose: methods called through this field update its state in place.
 	// Assigned in the Manager constructor (it needs `undo`).
 	ParticleEffectEditor particleEditor;
-#if !IOS && !BROWSER
+#if !BROWSER
 	readonly ProceduralSoundEditor proceduralSoundEditor;
 #endif
 	readonly Dictionary<Cursor.SystemTypes, Cursor> editorCursors = [];
@@ -250,7 +250,7 @@ public partial class Manager
 			NctTileEditorImGui();
 			MusicRegionsImGui();
 		}
-#if !IOS && !BROWSER
+#if !BROWSER
 		if (proceduralSoundEditor.Open)
 			DockNextToolWindow("Procedural Sounds");
 		proceduralSoundEditor.Draw(NoteDockedWindow);
@@ -5594,6 +5594,7 @@ public partial class Manager
 		CurrentRoom?.Save();
 		Assets.SelectWorld(worldId);
 		Assets.ReloadRooms();
+		Assets.ReloadWorldMap(GraphicsDevice);
 		Assets.RebuildRoomGeometry();
 		ClearRoomPreviewCache();
 		undo.Clear();
@@ -5870,71 +5871,12 @@ public partial class Manager
 			StartGame(immediate: true);
 	}
 
-#if IOS
-	bool UpdatePlayModePinchIn()
-	{
-		if (!TryGetTwoFingerDistance(Input.Touch, out var distance))
-		{
-			playModePinchStartDistance = 0.0f;
-			return false;
-		}
-
-		if (playModePinchStartDistance <= 0.0f)
-		{
-			playModePinchStartDistance = distance;
-			return false;
-		}
-
-		if (distance > playModePinchStartDistance)
-			playModePinchStartDistance = distance;
-
-		if (playModePinchStartDistance <= 0.001f || distance / playModePinchStartDistance > PlayModePinchInThreshold)
-			return false;
-
-		playModePinchStartDistance = 0.0f;
-		StopGame();
-		return true;
-	}
-
-	static bool TryGetTwoFingerDistance(TouchState touch, out float distance)
-	{
-		TouchState.Finger? first = null;
-		TouchState.Finger? second = null;
-		for (var i = 0; i < touch.Count; i++)
-		{
-			var finger = touch[i];
-			if (!finger.Down)
-				continue;
-
-			if (first == null)
-			{
-				first = finger;
-				continue;
-			}
-
-			second = finger;
-			break;
-		}
-
-		if (first is not { } a || second is not { } b)
-		{
-			distance = 0.0f;
-			return false;
-		}
-
-		distance = Vector2.Distance(a.Position, b.Position);
-		return true;
-	}
-#endif
 
 	void StopGame()
 	{
 		var selectedLiveActorId = liveSelectedActorId;
 		CancelLiveTileEditing();
 		CancelLiveActorEditing(restoreDrag: false);
-#if IOS
-		playModePinchStartDistance = 0.0f;
-#endif
 		if (game?.CurrentRoom is { } room)
 		{
 			if (game.GetFirst<Player>() is { } player)

@@ -16,13 +16,18 @@ catch (ArgumentException e)
 	return;
 }
 PlatformSpecific.AdjustStartArgsFromEnvironment(ref startArgs);
-#if !BROWSER && !IOS
+#if !BROWSER
 if (startArgs.devCommand != null)
 {
 	Environment.ExitCode = DevHost.Send(startArgs.devCommand) ? 0 : 1;
 	return;
 }
 #endif
+if (startArgs.unscramblePakPath != null)
+{
+	Assets.UnscrambleContentPak(startArgs.unscramblePakPath);
+	return;
+}
 if (startArgs.buildAssetPack || startArgs.stageContentTargets.Length > 0)
 {
 	Assets.BuildVisualAssetPack(startArgs.assetPackPath, startArgs.dumpAtlases);
@@ -40,7 +45,7 @@ if (!startArgs.headless && !startArgs.checkRooms)
 
 try
 {
-#if !BROWSER && !IOS
+#if !BROWSER
 	if (startArgs.devHost)
 	{
 		DevHost.Run(startArgs);

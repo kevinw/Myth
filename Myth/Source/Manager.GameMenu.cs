@@ -194,7 +194,7 @@ public partial class Manager
 	{
 		if (MenuButton(musicEnabled ? "music: on" : "music: off"))
 			MusicEnabled = !MusicEnabled;
-#if !IOS && !BROWSER
+#if !BROWSER
 		if (MenuButton(vSyncEnabled ? "vsync: on" : "vsync: off"))
 		{
 			vSyncEnabled = !vSyncEnabled;

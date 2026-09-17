@@ -86,10 +86,6 @@ public partial class Manager : App
 	// Automated screenshot capture (see StartArgs / --screenshot).
 	int screenshotsTaken;
 	int playingFrame;
-#if IOS
-	const float PlayModePinchInThreshold = 0.82f;
-	float playModePinchStartDistance;
-#endif
 	const float PlayTransitionDuration = 0.25f;
 	float playTransition;
 	Rect playTransitionFrom, playTransitionTo;
@@ -194,7 +190,7 @@ public partial class Manager : App
 	bool musicEnabled = true;
 	bool vSyncEnabled = true;
 	bool alwaysOnTop;
-#if !IOS && !BROWSER
+#if !BROWSER
 	bool runInBackground;
 	bool windowFocused;
 	bool backgroundSuspended;
@@ -213,7 +209,7 @@ public partial class Manager : App
 				game?.StopMusic(true);
 		}
 	}
-#if !IOS && !BROWSER
+#if !BROWSER
 	void WindowFocusGained() => windowFocused = true;
 	void WindowFocusLost() => windowFocused = false;
 
@@ -261,7 +257,7 @@ public partial class Manager : App
 		this.args = args;
 #if EDITOR
 		particleEditor = new(undo);
-#if !IOS && !BROWSER
+#if !BROWSER
 		proceduralSoundEditor = new(Audio);
 #endif
 #endif
@@ -299,7 +295,7 @@ public partial class Manager : App
 		if (Window != null)
 		{
 			Window.OnCloseRequested = RequestQuit;
-#if !IOS && !BROWSER
+#if !BROWSER
 			Window.OnFocusGain += WindowFocusGained;
 			Window.OnFocusLost += WindowFocusLost;
 #endif
@@ -357,10 +353,6 @@ public partial class Manager : App
 		AppFlags appFlags = AppFlags.None;
 #if BROWSER
 		graphicsDriver = GraphicsDriver.WebGPU;
-#elif IOS
-		graphicsDriver = GraphicsDriver.Metal;
-		fullscreen = true;
-		resizable = false;
 #endif
 		if (headless)
 		{
@@ -408,7 +400,7 @@ public partial class Manager : App
 
 	protected override void Startup()
 	{
-#if !IOS && !BROWSER
+#if !BROWSER
 		windowFocused = Window?.Focused == true;
 #if !MYTHSHIP
 		if (OperatingSystem.IsMacOS() && Window is { } window)
@@ -485,7 +477,7 @@ public partial class Manager : App
 			return;
 		}
 #endif
-#if !BROWSER && !IOS
+#if !BROWSER
 		if (args.writeAllRooms)
 		{
 			WriteAllRooms();
@@ -522,7 +514,7 @@ public partial class Manager : App
 #if EDITOR
 
 // Watch development assets
-#if DEBUG && !IOS && !BROWSER
+#if DEBUG && !BROWSER
 		StartAssetWatcher();
 #endif
 
@@ -675,7 +667,7 @@ public partial class Manager : App
 
 	void ShutdownGame()
 	{
-#if !MYTHSHIP && !BROWSER && !IOS
+#if !MYTHSHIP && !BROWSER
 		try { if (MythCapture.IsRecording) StopMovieRecording(reveal: false); } catch { /* best-effort finalize */ }
 #endif
 		FlushSaveState();
@@ -701,7 +693,7 @@ public partial class Manager : App
 		DisposeEditorCursors();
 		imgui?.Dispose();
 		EditorIcons.UnloadPaletteFont();
-#if DEBUG && !IOS
+#if DEBUG
 		DisposeAssetWatchers();
 #endif
 #endif
@@ -772,7 +764,7 @@ public partial class Manager : App
 			Audio.ReloadBanks(
 				banks,
 				liveUpdate:
-#if DEBUG && !IOS
+#if DEBUG
 				true
 #else
 				false
@@ -792,7 +784,7 @@ public partial class Manager : App
 	static string AudioBankRoot(string fmodPath)
 	{
 		var buildPath = Path.Join(fmodPath, "Build");
-#if IOS || BROWSER
+#if BROWSER
 		var platformPath = Path.Join(buildPath, "Mobile");
 #else
 		var platformPath = Path.Join(buildPath, "Desktop");
@@ -868,7 +860,7 @@ public partial class Manager : App
 			selectedRoomId = settings.RoomId;
 			musicEnabled = settings.MusicEnabled;
 			vSyncEnabled = settings.VSyncEnabled;
-#if !IOS && !BROWSER
+#if !BROWSER
 			runInBackground = settings.RunInBackground;
 #endif
 		}
@@ -904,7 +896,7 @@ public partial class Manager : App
 				MusicEnabled = musicEnabled,
 				VSyncEnabled = vSyncEnabled,
 				AlwaysOnTop = alwaysOnTop,
-#if !IOS && !BROWSER
+#if !BROWSER
 				RunInBackground = runInBackground,
 #endif
 			};
@@ -931,7 +923,7 @@ public partial class Manager : App
 		public bool MusicEnabled { get; init; } = true;
 		public bool VSyncEnabled { get; init; } = true;
 		public bool AlwaysOnTop { get; init; }
-#if !IOS && !BROWSER
+#if !BROWSER
 		public bool RunInBackground { get; init; }
 #endif
 	}
@@ -1062,7 +1054,7 @@ public partial class Manager : App
 
 		controls.UpdateControllerAssignment();
 
-#if !IOS && !BROWSER
+#if !BROWSER
 		if (UpdateBackgroundSuspension())
 			return;
 #endif
@@ -1096,7 +1088,7 @@ public partial class Manager : App
 		using (PerfStats.Time(PerfDetail.DeferredRoomPreviewDisposal))
 			DisposeDeferredRoomPreviews();
 #endif
-#if EDITOR && DEBUG && !IOS
+#if EDITOR && DEBUG
 		UpdateWindowTitleFps();
 		UpdateAssetReload();
 		UpdateRoomReload();
@@ -1182,11 +1174,11 @@ public partial class Manager : App
 
 				if (debugControls.FpsOverlay.Pressed)
 					ToggleFpsOverlay();
-#if KIT_DIAGNOSTICS && !IOS && !BROWSER
+#if KIT_DIAGNOSTICS && !BROWSER
 				if (Input.Keyboard.Shift && debugControls.AllocationTrace.Pressed)
 					ToggleAllocationTrace();
 #endif
-#if !IOS && !BROWSER
+#if !BROWSER
 				if (Window is { } window && !keyboardShortcutsBlocked && debugControls.Fullscreen.Pressed)
 					window.Fullscreen = !window.Fullscreen;
 #endif
@@ -1214,58 +1206,53 @@ public partial class Manager : App
 			gameEase = Calc.Approach(gameEase, 1.0f, Time.Delta * 4.0f);
 			if (!gameMenuPausesGame)
 			{
-#if IOS
-				if (!UpdatePlayModePinchIn())
-#endif
+				if (game is { } g)
 				{
-					if (game is { } g)
-					{
 #if EDITOR
-						var editorOwnsPlayMouse = UpdateLiveRoomEditing(g, keyboardShortcutsBlocked);
-						if (!editorOwnsPlayMouse)
-							editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
-						if (!editorOwnsPlayMouse)
-							editorOwnsPlayMouse = UpdateLiveActorEditing(g, keyboardShortcutsBlocked);
-						if (!editorOwnsPlayMouse)
-							editorOwnsPlayMouse = UpdatePlayerMouseDrag(g);
+					var editorOwnsPlayMouse = UpdateLiveRoomEditing(g, keyboardShortcutsBlocked);
+					if (!editorOwnsPlayMouse)
+						editorOwnsPlayMouse = UpdateLiveTileEditing(g, keyboardShortcutsBlocked);
+					if (!editorOwnsPlayMouse)
+						editorOwnsPlayMouse = UpdateLiveActorEditing(g, keyboardShortcutsBlocked);
+					if (!editorOwnsPlayMouse)
+						editorOwnsPlayMouse = UpdatePlayerMouseDrag(g);
 #else
-						UpdatePlayerMouseDrag(g);
+					UpdatePlayerMouseDrag(g);
 #endif
-						if (!keyboardShortcutsBlocked && !perfToggleChordActive && !shipRoomCheatChordActive)
-							g.HandleGameDebugShortcuts(debugControls, Input);
+					if (!keyboardShortcutsBlocked && !perfToggleChordActive && !shipRoomCheatChordActive)
+						g.HandleGameDebugShortcuts(debugControls, Input);
 #if EDITOR
-							if (!commandConsoleOpen)
+						if (!commandConsoleOpen)
 #endif
+						{
+#if EDITOR
+							var updatePlayingGame = !LiveRoomCreationModalOpen && !LiveTileControllerModeOpen;
+#else
+							var updatePlayingGame = true;
+#endif
+							if (updatePlayingGame)
 							{
 #if EDITOR
-								var updatePlayingGame = !LiveRoomCreationModalOpen && !LiveTileControllerModeOpen;
-#else
-								var updatePlayingGame = true;
+								if (keyboardShortcutsBlocked)
+									controls.Clear();
 #endif
-								if (updatePlayingGame)
-								{
-#if EDITOR
-									if (keyboardShortcutsBlocked)
-										controls.Clear();
-#endif
-									replay?.DriveBeforeUpdate(g);
-									using (PerfStats.Time(PerfDetail.GameUpdate))
-										UpdateGameWithAllocationProfile(g);
-								}
-								CompleteGameFrame();
-								if (replay is { } rp)
-								{
-									rp.DriveAfterUpdate();
-									if (rp.Done)
-									{
-										if (attract is { } reel) { reel.Advance(); PlayAttractCurrent(); }
-										else StartReplay(rp.Clip); // loop the single clip
-									}
-									else if (attract == null && rp.Cursor % 5 == 0)
-										game?.DisplayMessage($"replay frame {rp.Cursor}", 0.25f, print: false); // authoring readout
-								}
+								replay?.DriveBeforeUpdate(g);
+								using (PerfStats.Time(PerfDetail.GameUpdate))
+									UpdateGameWithAllocationProfile(g);
 							}
-					}
+							CompleteGameFrame();
+							if (replay is { } rp)
+							{
+								rp.DriveAfterUpdate();
+								if (rp.Done)
+								{
+									if (attract is { } reel) { reel.Advance(); PlayAttractCurrent(); }
+									else StartReplay(rp.Clip); // loop the single clip
+								}
+								else if (attract == null && rp.Cursor % 5 == 0)
+									game?.DisplayMessage($"replay frame {rp.Cursor}", 0.25f, print: false); // authoring readout
+							}
+						}
 				}
 
 				GymTick();
@@ -1346,15 +1333,11 @@ public partial class Manager : App
 		{
 			using var imguiLayoutPerf = PerfStats.Time(PerfDetail.ImGuiLayout);
 			var window = RequiredWindow;
-#if IOS
-			window.StopTextInput();
-#else
 			if (!OperatingSystem.IsBrowser())
 			{
 				if (imgui.WantsTextInput) window.StartTextInput();
 				else window.StopTextInput();
 			}
-#endif
 #if EDITOR
 			EditorUI();
 			DrawCommandConsole();
@@ -1543,7 +1526,7 @@ public partial class Manager : App
 	bool UpdatePerfToggles(bool keyboardShortcutsBlocked)
 	{
 #if !MYTHSHIP
-#if !BROWSER && !IOS
+#if !BROWSER
 		if (!keyboardShortcutsBlocked)
 		{
 			if (debugControls.BudAI.Pressed)
@@ -1747,7 +1730,7 @@ public partial class Manager : App
 		if (Window == null)
 			return;
 
-#if !IOS && !BROWSER
+#if !BROWSER
 		if (backgroundSuspended)
 			return;
 #endif
@@ -1797,7 +1780,7 @@ public partial class Manager : App
 			batcher.Render(Window);
 			batcher.Clear();
 		}
-#if !MYTHSHIP && !BROWSER && !IOS
+#if !MYTHSHIP && !BROWSER
 		if (movieTracksPlayer)
 			RecordMoviePlayerSample();
 #endif
@@ -1906,7 +1889,7 @@ public partial class Manager : App
 		game.RenderWorldView((RectInt)(GameViewRect * Scale), worldView2, showHud: false);
 	}
 
-#if EDITOR && DEBUG && !IOS
+#if EDITOR && DEBUG
 	void ReloadAudioBanks()
 	{
 		try
@@ -2346,15 +2329,6 @@ public partial class Manager : App
 		if (reusableGymNavGraph != null)
 			game.ReusePlatformNavGraph(reusableGymNavGraph);
 		game.NavTrace?.Event(game, "gameStart");
-#if IOS
-		playTransition = 1.0f;
-		playTransitionFrom = new();
-		playTransitionTo = new();
-		gameEase = 1.0f;
-		startingPlay = false;
-		playing = true;
-		game.SnapCameraToGameplayTarget();
-#else
 		if (immediate)
 		{
 			playTransition = 1.0f;
@@ -2386,7 +2360,6 @@ public partial class Manager : App
 			playing = true;
 			game.SnapCameraToGameplayTarget();
 		}
-#endif
 #endif
 		VirtualGameControllerVisibilityChanged?.Invoke(WantsVirtualGameController);
 	}

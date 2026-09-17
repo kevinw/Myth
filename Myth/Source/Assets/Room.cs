@@ -553,7 +553,7 @@ public class Room
 		BuildSlopeTiles(Factory.TileLayer.Background);
 
 		// These passes each read only the prebuilt tile/slope caches and write a distinct
-		// output collection, so they run concurrently on desktop/iOS (serial on wasm).
+		// output collection, so they run concurrently on desktop (serial on wasm).
 		Par.Invoke(
 			BuildDualTerrainJoinMasks,
 			() => BuildRects(CollisionRects, static entry => entry.BlocksMovement, excludeSlopes: true),

@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 
 namespace Myth;
 
-// Small gate around data-parallel work: runs in parallel on desktop/iOS (multi-core,
+// Small gate around data-parallel work: runs in parallel on desktop (multi-core,
 // real threads) and falls back to serial on the browser (wasm has no guaranteed
 // threads). Use only for embarrassingly-parallel work whose tasks touch disjoint state.
 public static class Par
