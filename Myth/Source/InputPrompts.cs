@@ -14,7 +14,8 @@ enum InputPromptAction
 	MoveLeft,
 	MoveRight,
 	Confirm,
-	Back
+	Back,
+	Map
 }
 
 readonly record struct InputPromptGlyph(InputPromptAction Action, Vector2 Center, float Height, Color Color, bool MapOverlay);
@@ -53,10 +54,10 @@ sealed class InputPrompts : IDisposable
 		activeSet = isSteamDeck ? GlyphSet.SteamDeck : GlyphSet.Keyboard;
 		keyboard = LoadFont(graphics, "Fonts/kenney-input-keyboard-mouse.ttf", [0xE025, 0xE023, 0xE01D, 0xE01F, 0xE021, 0xE05A, 0xE05E, 0xE062, 0xE066, 0xE0CC]);
 		generic = LoadFont(graphics, "Fonts/kenney-input-generic.ttf", [0xE000, 0xE001, 0xE007, 0xE00D, 0xE01B, 0xE01C, 0xE01E, 0xE020, 0xE021]);
-		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE041, 0xE04B, 0xE051, 0xE055, 0xE058, 0xE05C, 0xE05F, 0xE061, 0xE064, 0xE065, 0xE067, 0xE069, 0xE06A, 0xE084]);
-		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE01E, 0xE022, 0xE025, 0xE029, 0xE02C, 0xE036, 0xE04D, 0xE04F, 0xE050, 0xE052, 0xE054, 0xE055]);
-		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE01A, 0xE01E, 0xE031, 0xE034, 0xE038, 0xE03B, 0xE03D, 0xE05A, 0xE05B, 0xE05D, 0xE05F, 0xE060]);
-		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE015, 0xE01D, 0xE021, 0xE024, 0xE028, 0xE02B, 0xE02D, 0xE030, 0xE031, 0xE033, 0xE035, 0xE036]);
+		playStation = LoadFont(graphics, "Fonts/kenney-input-playstation.ttf", [0xE01E, 0xE041, 0xE04B, 0xE051, 0xE055, 0xE058, 0xE05C, 0xE05F, 0xE061, 0xE064, 0xE065, 0xE067, 0xE069, 0xE06A, 0xE084]);
+		xbox = LoadFont(graphics, "Fonts/kenney-input-xbox.ttf", [0xE004, 0xE006, 0xE01C, 0xE01E, 0xE022, 0xE025, 0xE029, 0xE02C, 0xE036, 0xE04D, 0xE04F, 0xE050, 0xE052, 0xE054, 0xE055]);
+		nintendo = LoadFont(graphics, "Fonts/kenney-input-nintendo-switch.ttf", [0xE004, 0xE006, 0xE00C, 0xE01A, 0xE01E, 0xE031, 0xE034, 0xE038, 0xE03B, 0xE03D, 0xE05A, 0xE05B, 0xE05D, 0xE05F, 0xE060]);
+		steamDeck = LoadFont(graphics, "Fonts/kenney-input-steam-deck.ttf", [0xE001, 0xE003, 0xE015, 0xE01B, 0xE01D, 0xE021, 0xE024, 0xE028, 0xE02B, 0xE02D, 0xE030, 0xE031, 0xE033, 0xE035, 0xE036]);
 	}
 
 	public void Update(TimeSpan elapsed)
@@ -243,7 +244,7 @@ sealed class InputPrompts : IDisposable
 				InputPromptAction.MoveLeft => 0xE01F,
 				InputPromptAction.MoveRight => 0xE021,
 				InputPromptAction.Confirm => 0xE05E,
-				InputPromptAction.Back => 0xE062,
+				InputPromptAction.Back or InputPromptAction.Map => 0xE062,
 				InputPromptAction.Attack => 0xE05A,
 				InputPromptAction.Dash => 0xE066,
 				_ => 0xE0CC
@@ -251,6 +252,7 @@ sealed class InputPrompts : IDisposable
 			GlyphSet.PlayStation => (playStation, action switch
 			{
 				InputPromptAction.Back => 0xE041,
+				InputPromptAction.Map => 0xE01E,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE04B,
 				InputPromptAction.Attack => 0xE051,
 				InputPromptAction.Dash => 0xE084,
@@ -259,6 +261,7 @@ sealed class InputPrompts : IDisposable
 			GlyphSet.Xbox => (xbox, action switch
 			{
 				InputPromptAction.Back => 0xE006,
+				InputPromptAction.Map => 0xE01C,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE004,
 				InputPromptAction.Attack => 0xE01E,
 				InputPromptAction.Dash => 0xE04D,
@@ -267,6 +270,7 @@ sealed class InputPrompts : IDisposable
 			GlyphSet.Nintendo => (nintendo, action switch
 			{
 				InputPromptAction.Back => 0xE004,
+				InputPromptAction.Map => 0xE00C,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE006,
 				InputPromptAction.Attack => 0xE01A,
 				InputPromptAction.Dash => 0xE01E,
@@ -275,6 +279,7 @@ sealed class InputPrompts : IDisposable
 			GlyphSet.SteamDeck => (steamDeck, action switch
 			{
 				InputPromptAction.Back => 0xE003,
+				InputPromptAction.Map => 0xE01B,
 				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE001,
 				InputPromptAction.Attack => 0xE01D,
 				InputPromptAction.Dash => 0xE015,
@@ -283,7 +288,7 @@ sealed class InputPrompts : IDisposable
 			_ => (generic, action switch
 			{
 				InputPromptAction.Back => 0xE001,
-				InputPromptAction.Confirm or InputPromptAction.Jump => 0xE000,
+				InputPromptAction.Confirm or InputPromptAction.Jump or InputPromptAction.Map => 0xE000,
 				InputPromptAction.Attack => 0xE007,
 				InputPromptAction.Dash => 0xE00D,
 				_ => Stick(0xE01B, action)
@@ -362,6 +367,8 @@ sealed class InputPrompts : IDisposable
 			return Found(InputPromptAction.Confirm, 9, out action, out length);
 		if (text.StartsWith("{Back}", StringComparison.OrdinalIgnoreCase))
 			return Found(InputPromptAction.Back, 6, out action, out length);
+		if (text.StartsWith("{Map}", StringComparison.OrdinalIgnoreCase))
+			return Found(InputPromptAction.Map, 5, out action, out length);
 		action = default;
 		length = 0;
 		return false;

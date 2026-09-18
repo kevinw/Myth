@@ -222,6 +222,12 @@
         "[pause 3]",
         "Bud: Uh oh."
       ]
+    },
+    {
+      "Id": "ddb30cec6d1c460f",
+      "Type": "MapTarget",
+      "Position": [169, 87],
+      "Group": "boss"
     }
   ]
 }

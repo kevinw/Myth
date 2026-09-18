@@ -134,6 +134,7 @@ public partial class Game : IDisposable
 	// Playthrough-durable like Save.Pickups: exploration tracking plus the pause-map overlay.
 	public readonly Minimap Minimap = new();
 	public bool MinimapOpen => Minimap.Open;
+	internal bool CapturesMapButton => Minimap.Open || mapRevealBlocking;
 
 	public bool GymBudDied;
 	public bool GymMode;
@@ -623,6 +624,15 @@ public partial class Game : IDisposable
 		// every normal-play frame (skipping the mid-transition camera lerp).
 		if (nextRoom == null && !Simulating)
 			Minimap.NoteCameraView(room, VisibleCameraTileBounds());
+
+		if (UpdateMapReveal())
+		{
+			UpdateAudioListener();
+#if BROWSER
+			UpdateBrowserDebugStats(browserDebugFrameStartAllocated);
+#endif
+			return;
+		}
 
 		if (Minimap.Open && Minimap.WarpMode)
 		{

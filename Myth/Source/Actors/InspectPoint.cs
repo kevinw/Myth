@@ -9,6 +9,8 @@ namespace Myth;
 public sealed class InspectPoint : Actor
 {
 	[Multiline(4)] public string Text = "It seems dead.";
+	// Reading this lights every MapTarget with this Group on the map (see Game.ReadInspectPoint).
+	public string RevealsMapTargets = "";
 
 	bool consumed;
 	bool showInteract;
@@ -48,6 +50,7 @@ public sealed class InspectPoint : Actor
 		interactTime += Time.Delta;
 		if (Game.Controls.Move.PressedUp && Game.Controls.Move.IntValue.X == 0 && (speech = Speak()) != null)
 		{
+			Game.ReadInspectPoint(this, speech);
 			consumed = true;
 			showInteract = false;
 		}

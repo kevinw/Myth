@@ -132,7 +132,7 @@ public partial class Manager
 	{
 		if (!GameMenuOpen)
 		{
-			if (playing && !startingPlay && game?.MinimapOpen != true && controls.Map.ConsumePress())
+			if (playing && !startingPlay && game?.CapturesMapButton != true && controls.Map.ConsumePress())
 				ShowPauseMenu();
 			return;
 		}
@@ -309,6 +309,7 @@ public partial class Manager
 		if (game?.CurrentRoom is { } room)
 		{
 			game.Minimap.Open = true;
+			game.Minimap.ResetView();
 			game.Minimap.Rebuild(room, game);
 		}
 		CloseGameMenu();

@@ -6,6 +6,7 @@ namespace Myth;
 static class EditorIcons
 {
 	public const string Search = "\uf002";
+	public const string LocationDot = "\uf3c5";
 	public const string Speaker = "\uf028";
 	public const string Add = "\uf067";
 	public const string Lock = "\uf023";
@@ -83,6 +84,7 @@ static class EditorIcons
 		0xf24d, 0xf24d,
 		0xf27b, 0xf27b,
 		0xf2db, 0xf2db,
+		0xf3c5, 0xf3c5,
 		0xf4d8, 0xf4d8,
 		0xf557, 0xf557,
 		0xf5fd, 0xf5fd,
@@ -136,6 +138,7 @@ static class EditorIcons
 			"wave-square" => WaveSquare[0],
 			"fan" => Fan[0],
 			"magnifying-glass" => Search[0],
+			"location-dot" => LocationDot[0],
 			_ => 0
 		};
 		icon = paletteFont?[codepoint].Subtexture ?? default;

@@ -22,7 +22,13 @@ public class Minimap
 
 	public bool Open;
 	public Vector2 Pan;
+	// World-pixel point the map centers on (null: the current room's center). Warp mode and the
+	// map-pin reveal glide it around.
+	public Vector2? Focus;
 	public readonly List<MapRoom> Rooms = [];
+	public readonly List<Game.MapPin> Pins = [];
+	// Pins mid-reveal, by actor id: the Game.Time second they popped in, or +inf while still hidden.
+	public readonly Dictionary<string, float> PinPoppedAt = [];
 	public Action? Changed;
 
 	// A warp destination resolved for the current warp session: the save point's actor
@@ -36,9 +42,6 @@ public class Minimap
 	public readonly List<WarpTarget> WarpPoints = [];
 	public string? WarpOriginActorId;
 
-	// World-pixel point the warp map is centering on; lerps toward the selected target
-	// so changing selection glides the map over (see GameView.DrawMinimap).
-	public Vector2 WarpFocus;
 	public Vector2 WarpMarkerPosition;
 
 	public WarpTarget? SelectedWarp
@@ -52,14 +55,15 @@ public class Minimap
 		WarpMode = true;
 		Open = true;
 		WarpOriginActorId = currentActorId;
-		WarpFocus = WarpPoints.Count > 0 ? (Vector2)WarpPoints[WarpSelection].Position : Vector2.Zero;
-		WarpMarkerPosition = WarpFocus;
+		WarpMarkerPosition = WarpPoints.Count > 0 ? (Vector2)WarpPoints[WarpSelection].Position : Vector2.Zero;
+		Focus = WarpMarkerPosition;
 	}
 
 	public void CloseWarp()
 	{
 		WarpMode = false;
 		Open = false;
+		Focus = null;
 		WarpOriginActorId = null;
 	}
 
@@ -131,11 +135,18 @@ public class Minimap
 		Changed?.Invoke();
 	}
 
+	public bool HasSeen(Room room, Vector2 worldPosition)
+		=> seenTiles.TryGetValue(room.Id, out var seen) && seen.Contains((worldPosition / Game.TileSize).FloorToPoint2() - room.TileSpacePosition);
+
 	static (string, string) ExitKey(string a, string b)
 		=> string.CompareOrdinal(a, b) <= 0 ? (a, b) : (b, a);
 
 	public void ResetView()
-		=> Pan = Vector2.Zero;
+	{
+		Pan = Vector2.Zero;
+		Focus = null;
+		PinPoppedAt.Clear();
+	}
 
 	public void UpdateView(Vector2 move, float dt)
 	{
@@ -193,6 +204,8 @@ public class Minimap
 	public void Rebuild(Room currentRoom, Game? currentGame = null)
 	{
 		Rooms.Clear();
+		Pins.Clear();
+		currentGame?.CollectMapPins(Pins, currentRoom.Sublayer);
 		foreach (var id in visitedRoomIds)
 		{
 			var room = currentRoom.Id == id ? currentRoom : Assets.RoomsById.GetValueOrDefault(id);
@@ -460,20 +473,15 @@ public sealed partial class GameView
 			return;
 
 		var player = game.GetFirst<Player>();
-		var focusWorld = (Vector2)(game.CurrentRoom?.WorldBounds.Center ?? Point2.Zero);
-		var focus = focusWorld / TileSize;
-		var s = MinimapTileScale;
-		var origin = new Vector2(Width, Height) / 2 - focus * s + game.Minimap.Pan;
-
 		// In warp mode, glide the map so the selected save point sits at screen center.
 		if (game.Minimap.WarpMode && game.Minimap.SelectedWarp is { } sel)
 		{
-			game.Minimap.WarpFocus = Vector2.Lerp(game.Minimap.WarpFocus, (Vector2)sel.Position, 1f - MathF.Exp(-Time.Delta * WarpFocusLerpSpeed));
+			game.Minimap.Focus = Vector2.Lerp(game.Minimap.Focus ?? (Vector2)sel.Position, (Vector2)sel.Position, 1f - MathF.Exp(-Time.Delta * WarpFocusLerpSpeed));
 			game.Minimap.WarpMarkerPosition = Vector2.Lerp(game.Minimap.WarpMarkerPosition, (Vector2)sel.Position, 1f - MathF.Exp(-Time.Delta * WarpMarkerLerpSpeed));
-			origin += (focusWorld - game.Minimap.WarpFocus) / TileSize * s;
 		}
-
-		origin = origin.FloorToPoint2();
+		var focus = (game.Minimap.Focus ?? (Vector2)(game.CurrentRoom?.WorldBounds.Center ?? Point2.Zero)) / TileSize;
+		var s = MinimapTileScale;
+		var origin = (new Vector2(Width, Height) / 2 - focus * s + game.Minimap.Pan).FloorToPoint2();
 
 		Batcher.Rect(new Rect(0, 0, Width, Height), Color.Black * (MinimapDim * minimapOpacity));
 
@@ -525,6 +533,8 @@ public sealed partial class GameView
 					: new Rect(p.X + s, p.Y, 1, exit.Length * s);
 				Batcher.Rect(rect, pulse);
 			}
+
+		DrawMapPins(origin, s);
 
 		// Warp mode: every activated save point blinks; the selected one is steady and
 		// ringed. Dpad moves the selection, X/South warps there (see UpdateWarpModeInput).
@@ -593,6 +603,32 @@ public sealed partial class GameView
 			deferredGlyphs: InputPromptGlyphs,
 			drawGlyphs: false,
 			mapOverlay: mapOverlay);
+	}
+
+	static Color MapPinColor => new(0xf2c14e);
+	static float MapPinPopDuration => 0.45f;
+	static float MapPinPopScale => 5f;
+	static float MapPinBlinkDuration => 1.2f;
+
+	// A pin pops in large and transparent, shrinking into place, blinks for a moment, then
+	// settles into a slow pulse that's distinct from the white explore ticks.
+	void DrawMapPins(Vector2 origin, float scale)
+	{
+		foreach (var pin in game.Minimap.Pins)
+		{
+			var age = game.Minimap.PinPoppedAt.TryGetValue(pin.ActorId, out var poppedAt) ? Time.SecondsF - poppedAt : float.PositiveInfinity;
+			if (age < 0)
+				continue;
+			var pop = Ease.Cube.Out(Math.Clamp(age / MapPinPopDuration, 0, 1));
+			var blinking = age < MapPinPopDuration + MapPinBlinkDuration;
+			if (pop >= 1 && blinking && Time.BetweenInterval(0.08, 0.08, 0))
+				continue;
+			var alpha = pop * (blinking ? 1 : 0.7f + 0.3f * MathF.Sin(Time.SecondsF * 2.5f)) * minimapOpacity;
+			var half = float.Lerp(MapPinPopScale, 1, pop) * 1.5f;
+			var center = origin + pin.Position / TileSize * scale;
+			Batcher.Rect(Rect.Centered(center, Vector2.One * (half * 2 + 2)), Color.Black * (alpha * 0.6f));
+			Batcher.Rect(Rect.Centered(center, Vector2.One * half * 2), MapPinColor * alpha);
+		}
 	}
 
 	void DrawMinimapEdgeShade(Vector2 origin, Minimap.EdgeShade edge, float scale, float opacity)

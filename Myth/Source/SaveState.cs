@@ -13,6 +13,7 @@ public sealed class SaveState
 	public HashSet<string> OpenedChests = [];
 	public HashSet<string> PressedButtons = [];
 	public HashSet<string> RevealedDoors = [];
+	public HashSet<string> ReadInspectPoints = [];
 	public Dictionary<PickupKind, int> Pickups = [];
 	public MinimapState Map = new();
 	public RespawnState? LastGrounded;

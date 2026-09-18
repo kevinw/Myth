@@ -1,12 +1,11 @@
+- make ropes that span room boundaries more reliable
 - compress orthogonal burrow to launch or railgun 
-- quantum tunnel through 1tile walls
 - Tidal Cycles/Strudel port to C# for bullet patterns and music?
 - put an evolving world map online with a timeline scrubber https://leafletjs.com
 - investigate gpu perf
   - https://developer.apple.com/documentation/xcode/debugging-with-interactive-command-line-tools
   - https://developer.apple.com/documentation/xcode/investigating-gpu-issues-with-ai-agents
 - gameplay idea: jump to parry pops you into a burrow
-- consider dropping to 1 frame in flight if we can afford it? is there a dynamic way to do this?
 - profile the remaining cold-install hitch in the big first fall room: neural pipelines warm at boot, but room-specific weights, buffers, and seed simulation still initialize on entry
 - ACTOR_UPDATE_LIFECYCLE.md
 - FRAME_RATE_LIMIT.md
@@ -20,7 +19,6 @@ COSTUMES (rig puppet adornment, 2026-09-14): a shared Costume asset like Surface
 - gameplay NCA ideas
   - an otherwise emtpy room with a toxic barrel. you strike it, and it explodes, emitting swimmable yet poison gas.
 - draw one new pixel art sprite a day; find an exercise list, an intuition pump, or a walkthrough
-- NCAs could default to cell-per-screen-pixel
 - the blob behaviour still needs to change a lot, and its look
 - redraw hurt sprite, bubble
 - a "fast motion" NCA impact frame for boss death
