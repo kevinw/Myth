@@ -11,7 +11,8 @@ namespace Myth;
 	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true, LiveResizable = true)]
 class FlipBlock : Actor, IResizable
 {
-	public Point2 Size { get; set; } = new(Game.TileSize * 3, Game.TileSize);
+	public Point2 Size { get; set; } = DefaultSize;
+	public static readonly Point2 DefaultSize = new(Game.TileSize * 3, Game.TileSize);
 	[Multiline(2)] public string Phases = "1 0";
 	[I(0.05f, 4)] public float CyclesPerSecond = 0.5f;
 	[I(0, 1)] public float Telegraph = 0.4f;
@@ -123,8 +124,8 @@ class FlipBlock : Actor, IResizable
 	// A ghosted block glows as it is about to return, so the gap you are standing in announces itself.
 	public override void RenderEmissive(Batcher batcher)
 	{
-		if (!solid && charge > 0)
-			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), GhostGlowColor * (charge * 0.5f));
+		//if (!solid && charge > 0)
+			//batcher.Rect(new Rect(0, 0, Size.X, Size.Y), GhostGlowColor * (charge * 0.5f));
 	}
 
 	void RenderMaterial(Batcher batcher, bool normals, Color color)
