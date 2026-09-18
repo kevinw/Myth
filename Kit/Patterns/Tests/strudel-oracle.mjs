@@ -44,7 +44,10 @@ const core = await import(pathToFileURL(path.join(checkout, "packages", "core", 
 const { mini } = await import(pathToFileURL(path.join(checkout, "packages", "mini", "mini.mjs")));
 console.log = log;
 
-const scope = { mini, stack: core.stack, cat: core.cat, slowcat: core.slowcat, seq: core.seq, sequence: core.sequence, fastcat: core.fastcat, silence: core.silence, pure: core.pure };
+const names = ["stack", "cat", "slowcat", "seq", "sequence", "fastcat", "silence", "pure", "irand",
+  "sine", "cosine", "saw", "isaw", "square", "isquare", "tri", "rand", "perlin",
+  "rev", "palindrome", "degrade", "id"];
+const scope = { mini, ...Object.fromEntries(names.map((name) => [name, core[name]])) };
 const evaluate = (expression) => {
   const js = expression.replace(/"([^"]*)"/g, (_, text) => `mini(${JSON.stringify(text)})`);
   return new Function(...Object.keys(scope), `return ${js};`)(...Object.values(scope));

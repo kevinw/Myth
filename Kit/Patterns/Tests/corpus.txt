@@ -76,3 +76,61 @@ cat("a b", "c", "d e f")
 seq("a", "b c", "<d e>")
 stack("a b".fast(2), "c".late(0.5))
 cat("a b".rev(), silence, "c")
+
+# continuous signals
+sine.segment(4)
+sine.segment(8).range(0, 90)
+cosine.segment(4)
+saw.segment(4)
+isaw.segment(4)
+square.segment(4)
+isquare.segment(4)
+tri.segment(8)
+perlin.segment(4)
+rand.segment(4)
+irand(8).segment(4)
+"a b c d".struct("x*4")
+sine.range(-1, 1).segment(3)
+
+# randomness
+"x*8".degradeBy(0.5)
+"x*8".degradeBy(0.2)
+"x*8".undegradeBy(0.5)
+"x*8".degrade()
+"x*4 y*4".degradeBy(0.3)
+"x*8?"
+"x*8?0.2"
+"a? b? c? d?"
+"[a b]? c"
+"a | b | c"
+"a b | c d | e"
+"<a b> | c"
+"a? | b?"
+
+# combinators with functions
+"a b c".every(2, rev)
+"a b c d".every(3, x => x.fast(2))
+"a b c".lastOf(3, rev)
+"a b c".palindrome()
+"a b".off(0.25, x => x.fast(2))
+"a b".superimpose(x => x.late(0.125))
+"a b c d".iter(4)
+"a b c d".iterBack(4)
+"a b".ply(3)
+"a b c d".chunk(4, rev)
+"x*8".sometimesBy(0.5, x => x.fast(2))
+"x*4".often(rev)
+"x*4".rarely(x => x.late(0.1))
+"a b c".every(2, x => x.rev().fast(2))
+"a b".superimpose(x => x.every(2, rev))
+
+# polymeter
+"{a b, c d e}"
+"{a b c, d e}%4"
+"{a b c}%8"
+"{a b, c d e}%2"
+
+# patterned euclidean arguments
+"x(<3 5>,8)"
+"x(3,<8 16>)"
+"a b".euclid("<3 5>", 8)

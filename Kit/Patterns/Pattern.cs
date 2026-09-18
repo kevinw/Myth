@@ -25,8 +25,70 @@ public abstract class Pattern<T>
 	// Keeps this pattern's values, cut to the true steps of the structure pattern.
 	public Pattern<T> Struct(Pattern<bool> structure) => new StructPattern<T>(this, structure);
 
-	public Pattern<T> Euclid(int pulses, int steps, int rotation = 0)
-		=> Struct(Pattern.FastCat(Array.ConvertAll(Pattern.Bjorklund(pulses, steps, rotation), static step => Pattern.Pure(step))));
+	public Pattern<T> Euclid(int pulses, int steps, int rotation = 0) => new EuclidPattern<T>(this, new(pulses, steps, rotation));
+	public Pattern<T> Euclid(Pattern<EuclidArgs> args) => new PatternedPattern<T, EuclidArgs, EuclidOp<T>>(this, args);
+
+	// Samples a continuous pattern (or re-cuts a discrete one) into rate events per cycle.
+	public Pattern<T> Segment(Fraction rate) => Struct(Pattern.Pure(true).Fast(rate));
+
+	// Drops haps at random, deterministically: the same hap is dropped on every run.
+	public Pattern<T> DegradeBy(double amount) => new DegradePattern<T>(this, Signal.Rand, amount);
+	public Pattern<T> UndegradeBy(double amount) => new DegradePattern<T>(this, Signal.Rand.Select(static r => 1 - r), amount);
+	public Pattern<T> DegradeWith(Pattern<double> random, double amount) => new DegradePattern<T>(this, random, amount);
+
+	// Replaces this pattern with apply(this) on the first of every n cycles.
+	public Pattern<T> Every(int n, Func<Pattern<T>, Pattern<T>> apply) => CycleOf(n, 0, apply);
+	// ... and on the last of every n cycles.
+	public Pattern<T> LastOf(int n, Func<Pattern<T>, Pattern<T>> apply) => CycleOf(n, n - 1, apply);
+	public Pattern<T> Palindrome() => LastOf(2, static p => p.Rev());
+
+	Pattern<T> CycleOf(int n, int index, Func<Pattern<T>, Pattern<T>> apply)
+	{
+		if (n <= 1)
+			return apply(this);
+		var cycles = new Pattern<T>[n];
+		Array.Fill(cycles, this);
+		cycles[index] = apply(this);
+		return new SlowCatPrimePattern<T>(cycles);
+	}
+
+	// The pattern, plus a copy of it shifted later and transformed: echoes, harmonies, trails.
+	public Pattern<T> Off(Fraction offset, Func<Pattern<T>, Pattern<T>> apply) => Pattern.Stack(this, apply(Late(offset)));
+	public Pattern<T> Superimpose(Func<Pattern<T>, Pattern<T>> apply) => Pattern.Stack(this, apply(this));
+
+	// Shifts a step further forwards each cycle, so a sequence rotates through its steps.
+	public Pattern<T> Iter(int n, bool backwards = false)
+	{
+		if (n <= 1)
+			return this;
+		var cycles = new Pattern<T>[n];
+		for (var i = 0; i < n; i++)
+			cycles[i] = backwards ? Late(new Fraction(i, n)) : Early(new Fraction(i, n));
+		return Pattern.SlowCat(cycles);
+	}
+
+	// Repeats each hap n times inside its own span.
+	public Pattern<T> Ply(int n) => n <= 1 ? this : new PlyPattern<T>(this, n);
+
+	// Applies the function to one nth of the cycle, moving on to the next nth each cycle.
+	public Pattern<T> Chunk(int n, Func<Pattern<T>, Pattern<T>> apply)
+	{
+		if (n <= 1)
+			return apply(this);
+		var steps = new Pattern<bool>[n];
+		for (var i = 0; i < n; i++)
+			steps[i] = Pattern.Pure(i == 0);
+		return RepeatCycles(n).When(Pattern.FastCat(steps).Iter(n, backwards: true), apply);
+	}
+
+	// Applies the function while the condition pattern is true.
+	public Pattern<T> When(Pattern<bool> condition, Func<Pattern<T>, Pattern<T>> apply)
+		=> new WhenPattern<T>(condition, apply(this), this);
+
+	// Applies the function to a random share of the haps, leaving the rest alone.
+	// Split per cycle, because the amount is itself a pattern in Tidal, sampled once a cycle.
+	public Pattern<T> SometimesBy(double amount, Func<Pattern<T>, Pattern<T>> apply)
+		=> new SplitCyclesPattern<T>(Pattern.Stack(DegradeBy(amount), apply(UndegradeBy(1 - amount))));
 
 	public Pattern<TResult> Select<TResult>(Func<T, TResult> map) => new SelectPattern<T, TResult>(this, map);
 }
@@ -34,6 +96,10 @@ public abstract class Pattern<T>
 public static class Pattern
 {
 	public static Pattern<T> Pure<T>(T value) => new PurePattern<T>(value);
+
+	// Structure from the left pattern, values combined with the right pattern's value at that time.
+	public static Pattern<TResult> AppLeft<TLeft, TRight, TResult>(Pattern<TLeft> left, Pattern<TRight> right, Func<TLeft, TRight, TResult> combine)
+		=> new AppLeftPattern<TLeft, TRight, TResult>(left, right, combine);
 	public static Pattern<T> Silence<T>() => SilencePattern<T>.Instance;
 
 	public static Pattern<T> Stack<T>(params Pattern<T>[] patterns) => patterns.Length switch
@@ -74,6 +140,10 @@ public static class Pattern
 		}
 		return Stack(compressed.ToArray());
 	}
+
+	// One of the options per hap of the chooser, which is usually rand or rand.Segment(1).
+	public static Pattern<T> ChooseIn<T>(Pattern<double> chooser, params Pattern<T>[] options)
+		=> options.Length == 0 ? Silence<T>() : new ChoosePattern<T>(chooser, options);
 
 	// Euclidean rhythm: pulses spread as evenly as possible over steps, rotated right. Negative
 	// pulses invert the rhythm.
@@ -127,8 +197,42 @@ static class Scratch<T>
 	}
 }
 
+// How many pulses to spread over how many steps, and by how much to rotate them.
+public readonly record struct EuclidArgs(int Pulses, int Steps, int Rotation);
+
 static class Queries
 {
+	static readonly System.Collections.Concurrent.ConcurrentDictionary<EuclidArgs, bool[]> euclidRhythms = new();
+
+	// Structure from the euclidean rhythm, values from the source, without building a pattern per
+	// query: the argument can change every cycle.
+	public static void Euclid<T>(Pattern<T> source, EuclidArgs args, Arc span, List<Hap<T>> output)
+	{
+		var rhythm = euclidRhythms.GetOrAdd(args, static a => Pattern.Bjorklund(a.Pulses, a.Steps, a.Rotation));
+		if (rhythm.Length == 0)
+			return;
+		var values = Scratch<T>.Rent();
+		foreach (var cycle in span.Cycles())
+		{
+			var sam = cycle.Begin.Floor();
+			var first = (int)((cycle.Begin - sam) * rhythm.Length).FloorToLong();
+			for (var i = Math.Max(first, 0); i < rhythm.Length; i++)
+			{
+				var step = new Arc(sam + new Fraction(i, rhythm.Length), sam + new Fraction(i + 1, rhythm.Length));
+				if (step.Begin >= cycle.End && cycle.Begin != cycle.End)
+					break;
+				if (!rhythm[i] || !step.TryIntersect(cycle, out var part))
+					continue;
+				values.Clear();
+				source.Query(step, values);
+				foreach (var value in values)
+					if (value.Part.TryIntersect(part, out var overlap))
+						output.Add(new(step, overlap, value.Value));
+			}
+		}
+		Scratch<T>.Return(values);
+	}
+
 	public static void Fast<T>(Pattern<T> source, Fraction factor, Arc span, List<Hap<T>> output)
 	{
 		if (factor <= 0)
@@ -178,6 +282,84 @@ sealed class StackPattern<T>(Pattern<T>[] patterns) : Pattern<T>
 	}
 }
 
+// Like SlowCat, but the chosen pattern keeps the outer cycle count rather than its own.
+sealed class SlowCatPrimePattern<T>(Pattern<T>[] patterns) : Pattern<T>
+{
+	public override void Query(Arc span, List<Hap<T>> output)
+	{
+		foreach (var cycle in span.Cycles())
+		{
+			var index = cycle.Begin.Floor().Numerator % patterns.Length;
+			patterns[(int)((index + patterns.Length) % patterns.Length)].Query(cycle, output);
+		}
+	}
+}
+
+// Queries each cycle separately, so haps crossing a cycle boundary come back in pieces.
+sealed class SplitCyclesPattern<T>(Pattern<T> source) : Pattern<T>
+{
+	public override void Query(Arc span, List<Hap<T>> output)
+	{
+		foreach (var cycle in span.Cycles())
+			source.Query(cycle, output);
+	}
+}
+
+sealed class WhenPattern<T>(Pattern<bool> condition, Pattern<T> whenTrue, Pattern<T> whenFalse) : Pattern<T>
+{
+	public override void Query(Arc span, List<Hap<T>> output)
+	{
+		var conditions = Scratch<bool>.Rent();
+		condition.Query(span, conditions);
+		foreach (var hap in conditions)
+			(hap.Value ? whenTrue : whenFalse).Query(hap.Part, output);
+		Scratch<bool>.Return(conditions);
+	}
+}
+
+sealed class PlyPattern<T>(Pattern<T> source, int count) : Pattern<T>
+{
+	public override void Query(Arc span, List<Hap<T>> output)
+	{
+		var haps = Scratch<T>.Rent();
+		source.Query(span, haps);
+		foreach (var hap in haps)
+		{
+			if (hap.Whole is not { } whole)
+				continue;
+			var step = (whole.End - whole.Begin) / count;
+			for (var i = 0; i < count; i++)
+			{
+				var piece = new Arc(whole.Begin + step * i, whole.Begin + step * (i + 1));
+				if (piece.TryIntersect(hap.Part, out var part))
+					output.Add(new(piece, part, hap.Value));
+			}
+		}
+		Scratch<T>.Return(haps);
+	}
+}
+
+// Structure from the left pattern, values combined with whatever the right pattern holds then.
+sealed class AppLeftPattern<TLeft, TRight, TResult>(Pattern<TLeft> left, Pattern<TRight> right, Func<TLeft, TRight, TResult> combine) : Pattern<TResult>
+{
+	public override void Query(Arc span, List<Hap<TResult>> output)
+	{
+		var lefts = Scratch<TLeft>.Rent();
+		var rights = Scratch<TRight>.Rent();
+		left.Query(span, lefts);
+		foreach (var hap in lefts)
+		{
+			rights.Clear();
+			right.Query(hap.WholeOrPart, rights);
+			foreach (var other in rights)
+				if (other.Part.TryIntersect(hap.Part, out var part))
+					output.Add(new(hap.Whole, part, combine(hap.Value, other.Value)));
+		}
+		Scratch<TRight>.Return(rights);
+		Scratch<TLeft>.Return(lefts);
+	}
+}
+
 sealed class SlowCatPattern<T>(Pattern<T>[] patterns) : Pattern<T>
 {
 	public override void Query(Arc span, List<Hap<T>> output)
@@ -189,6 +371,16 @@ sealed class SlowCatPattern<T>(Pattern<T>[] patterns) : Pattern<T>
 			Queries.Late(patterns[index], sam - (cycle.Begin / patterns.Length).Floor(), cycle, output);
 		}
 	}
+}
+
+sealed class EuclidPattern<T>(Pattern<T> source, EuclidArgs args) : Pattern<T>
+{
+	public override void Query(Arc span, List<Hap<T>> output) => Queries.Euclid(source, args, span, output);
+}
+
+readonly struct EuclidOp<T> : IPatternedOp<T, EuclidArgs>
+{
+	public static void Query(Pattern<T> source, EuclidArgs args, Arc span, List<Hap<T>> output) => Queries.Euclid(source, args, span, output);
 }
 
 sealed class FastPattern<T>(Pattern<T> source, Fraction factor) : Pattern<T>

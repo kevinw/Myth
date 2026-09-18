@@ -5,8 +5,12 @@ namespace Kit.Patterns;
 // Exact rational time, in cycles. Pattern math stays exact so adjacent queries share boundaries.
 public readonly struct Fraction : IEquatable<Fraction>, IComparable<Fraction>
 {
-	public readonly long Numerator;
-	public readonly long Denominator;
+	readonly long numerator;
+	// Stored one below the real denominator, so default(Fraction) is 0/1 rather than 0/0.
+	readonly long denominatorMinusOne;
+
+	public long Numerator => numerator;
+	public long Denominator => denominatorMinusOne + 1;
 
 	public static readonly Fraction Zero = new(0);
 	public static readonly Fraction One = new(1);
@@ -16,8 +20,8 @@ public readonly struct Fraction : IEquatable<Fraction>, IComparable<Fraction>
 
 	Fraction(long numerator, long denominator, bool _)
 	{
-		Numerator = numerator;
-		Denominator = denominator;
+		this.numerator = numerator;
+		denominatorMinusOne = denominator - 1;
 	}
 
 	static Fraction Reduce(Int128 numerator, Int128 denominator)
@@ -90,11 +94,11 @@ public readonly struct Fraction : IEquatable<Fraction>, IComparable<Fraction>
 	public static bool operator >(Fraction a, Fraction b) => a.CompareTo(b) > 0;
 	public static bool operator <=(Fraction a, Fraction b) => a.CompareTo(b) <= 0;
 	public static bool operator >=(Fraction a, Fraction b) => a.CompareTo(b) >= 0;
-	public bool Equals(Fraction other) => Numerator == other.Numerator && Denominator == other.Denominator;
+	public bool Equals(Fraction other) => numerator == other.numerator && denominatorMinusOne == other.denominatorMinusOne;
 	public override bool Equals(object? obj) => obj is Fraction other && Equals(other);
 	public static bool operator ==(Fraction a, Fraction b) => a.Equals(b);
 	public static bool operator !=(Fraction a, Fraction b) => !a.Equals(b);
-	public override int GetHashCode() => HashCode.Combine(Numerator, Denominator);
+	public override int GetHashCode() => HashCode.Combine(numerator, denominatorMinusOne);
 
 	public override string ToString() => Denominator == 1
 		? Numerator.ToString(CultureInfo.InvariantCulture)

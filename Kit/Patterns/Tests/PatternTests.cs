@@ -131,9 +131,85 @@ public class PatternTests
 		return array;
 	}
 
+	[Fact]
+	public void ClockTriggersEveryOnsetOnceAcrossRaggedFrames()
+	{
+		var pattern = Mini.ParseExpression("\"x ~ x [x x]\".fast(\"<1 2>\")");
+		var clock = new PatternClock { Rate = 0.5 };
+		var random = new Random(12345);
+		var haps = new List<Hap<Value>>();
+		var fired = new List<string>();
+		// Ragged frame times, a pause, and a hitch longer than the clock will catch up on.
+		for (var frame = 0; frame < 2000 && clock.Position < 4; frame++)
+		{
+			haps.Clear();
+			clock.Advance(frame == 500 ? 0 : random.NextDouble() * 0.02);
+			clock.Triggers(pattern, haps);
+			fired.AddRange(haps.Select(Trigger));
+		}
+		var expected = new List<Hap<Value>>();
+		pattern.Query(new(0, clock.Position), expected);
+		AssertLines(Sorted(expected.Where(h => h.HasOnset).Select(Trigger)), Sorted(fired), "clock triggers");
+	}
+
+	// FlipBlock reads a pattern as state: what is true at this instant, not what just triggered.
+	[Theory]
+	[InlineData("\"1 0\"", 0.0, true)]
+	[InlineData("\"1 0\"", 0.25, true)]
+	[InlineData("\"1 0\"", 0.5, false)]
+	[InlineData("\"1 0\"", 0.75, false)]
+	[InlineData("\"1 1 1 0\"", 0.7, true)]
+	[InlineData("\"1 1 1 0\"", 0.8, false)]
+	[InlineData("\"1@3 0\"", 0.7, true)]
+	[InlineData("\"1@3 0\"", 0.8, false)]
+	public void ValuesNowReadsStateAtAnInstant(string expression, double at, bool expected)
+	{
+		var clock = new PatternClock { Rate = 1 };
+		clock.Reset(Fraction.FromDouble(at));
+		var haps = new List<Hap<Value>>();
+		clock.ValuesNow(Mini.ParseExpression(expression), haps);
+		Assert.Equal(expected, haps.Any(hap => hap.Value.IsTruthy));
+	}
+
+	[Fact]
+	public void ClockDoesNotAllocate()
+	{
+		var pattern = Mini.ParseExpression("\"x ~ x x\"");
+		var signal = Signal.Sine;
+		var clock = new PatternClock();
+		var haps = new List<Hap<Value>>(64);
+		void Frames()
+		{
+			for (var frame = 0; frame < 600; frame++)
+			{
+				haps.Clear();
+				clock.Advance(1.0 / 60);
+				clock.Triggers(pattern, haps);
+				clock.Sample(signal);
+			}
+		}
+		Frames();
+		var before = GC.GetAllocatedBytesForCurrentThread();
+		Frames();
+		Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+	}
+
+	// Times must match exactly; values only to within rounding, since Math.Sin and friends differ
+	// from JavaScript's by an ulp.
+	static bool LineEquals(string expected, string actual)
+	{
+		if (expected == actual)
+			return true;
+		int a = expected.LastIndexOf(' '), b = actual.LastIndexOf(' ');
+		return a > 0 && b > 0 && expected.AsSpan(0, a).SequenceEqual(actual.AsSpan(0, b)) &&
+			double.TryParse(expected[(a + 1)..], CultureInfo.InvariantCulture, out var x) &&
+			double.TryParse(actual[(b + 1)..], CultureInfo.InvariantCulture, out var y) &&
+			Math.Abs(x - y) <= 1e-9 * Math.Max(1, Math.Abs(x));
+	}
+
 	static void AssertLines(string[] expected, string[] actual, string what)
 	{
-		if (expected.SequenceEqual(actual))
+		if (expected.Length == actual.Length && expected.Zip(actual).All(pair => LineEquals(pair.First, pair.Second)))
 			return;
 		var missing = expected.Except(actual).Take(5);
 		var extra = actual.Except(expected).Take(5);
