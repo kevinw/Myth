@@ -60,8 +60,14 @@ public partial class Manager : App
 	bool playOnStartup;
 	bool titleAttractMode; // --title: hold "play mode" at the title so editor builds don't draw the editor
 	// The attract demo runs with playing==true; live editing/ tooling must treat this as "not a real
-	// play session" and stay out of it.
-	bool AttractMode => attract != null || titleAttractMode;
+	// play session" and stay out of it. So must a pak session, whose rooms are read-only.
+	bool UneditableSession => attract != null || titleAttractMode || EditorLocked;
+#if EDITOR
+	// Content.pak is read-only, so an editor build running from it is play-only.
+	static bool EditorLocked => Assets.ContentIsPak;
+#else
+	static bool EditorLocked => false;
+#endif
 	// --play-room runs from an empty save and never touches the one on disk.
 	internal bool EphemeralSave => args.playRoomId != null;
 	bool skipStartupMenu => args.play || args.gym || args.headless || args.checkRooms;
@@ -619,7 +625,7 @@ public partial class Manager : App
 		else
 			playOnStartup = true; // explicit play/test runs still boot straight into play
 #endif
-		if (args.title) // --title: force the title screen even in editor builds
+		if (args.title || EditorLocked && !playOnStartup) // --title: force the title screen even in editor builds
 		{
 			playOnStartup = false;
 			ShowTitleMenu();
@@ -1232,7 +1238,7 @@ public partial class Manager : App
 
 #if EDITOR
 		ResolveDeferredLiveEditReview();
-		if (ToggleEditorPressed(keyboardShortcutsBlocked))
+		if (!EditorLocked && ToggleEditorPressed(keyboardShortcutsBlocked))
 		{
 			if (titleAttractMode || attract != null)
 				ExitAttractToEditor(); // Tab at the title demo → stop replay, leave title mode, edit
@@ -2403,7 +2409,7 @@ public partial class Manager : App
 			return;
 		}
 #if EDITOR
-		if (!room.Save())
+		if (!EditorLocked && !room.Save())
 		{
 			Console.Error.WriteLine("Play cancelled: the current room changed on disk and is being reloaded.");
 			return;

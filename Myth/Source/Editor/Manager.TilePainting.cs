@@ -129,7 +129,7 @@ public partial class Manager
 
 	bool UpdateLiveTileEditing(Game liveGame, bool inputBlocked)
 	{
-		if (AttractMode) // the attract demo isn't an editable session
+		if (UneditableSession)
 			return false;
 
 		liveTileController.BlockGameUpdate = false;
@@ -490,7 +490,7 @@ public partial class Manager
 
 	void LiveTileEditingImGui()
 	{
-		if (!playing || AttractMode || game?.CurrentRoom is not { } room)
+		if (!playing || UneditableSession || game?.CurrentRoom is not { } room)
 			return;
 
 		var viewport = GameViewRect;

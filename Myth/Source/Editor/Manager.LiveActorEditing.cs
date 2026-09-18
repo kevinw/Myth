@@ -61,7 +61,7 @@ public partial class Manager
 
 	bool UpdateLiveActorEditing(Game liveGame, bool inputBlocked)
 	{
-		if (AttractMode) // the attract demo isn't an editable session
+		if (UneditableSession)
 			return false;
 
 		if (liveTileBrushArmed)
@@ -504,7 +504,7 @@ public partial class Manager
 
 	void LiveActorEditingImGui()
 	{
-		if (!playing || !mouseVisible || AttractMode || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
+		if (!playing || !mouseVisible || UneditableSession || liveTileBrushArmed || Input.Keyboard.Alt || game?.CurrentRoom is not { } runtimeRoom)
 			return;
 
 		var selected = liveSelectedActorId is { } selectedId ? game.GetActorById(selectedId) : null;
