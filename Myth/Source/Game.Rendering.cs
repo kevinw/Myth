@@ -687,9 +687,9 @@ public sealed partial class GameView
 		var any = false;
 		ReflectionScreen.Clear(Color.Transparent);
 		foreach (var actor in rendering)
-			if (actor is MovingPlatform { Visible: true } platform && platform.ReflectsSurface)
+			if (actor is IDualGridRect { Visible: true } skin && skin.ReflectsSurface())
 			{
-				DrawReflectedActors(platform.SurfaceReflectionBounds, platform.Position.Y, MovingPlatform.SurfaceReflectionOpacity, skip: platform);
+				DrawReflectedActors(skin.Bounds(), skin.Position.Y, DualGridRects.SurfaceReflectionOpacity, skip: actor);
 				any = true;
 			}
 
@@ -1255,22 +1255,24 @@ public sealed partial class GameView
 				continue;
 			}
 
-			if (actor is not MovingPlatform { Visible: true } platform)
+			if (actor is not IDualGridRect { Visible: true } skin)
 				continue;
 
-			var anchorId = anchor < MaxDitherAnchors ? anchor++ : 0;
+			// Anchor slots are limited, so only a skin that has travelled from where it was authored
+			// needs one; anything still in place dithers against the world grid like the tiles do.
+			var anchorId = skin.DitherAnchorOffset != Vector2.Zero && anchor < MaxDitherAnchors ? anchor++ : 0;
 			if (anchorId > 0)
 			{
-				var offset = platform.DitherAnchorOffset;
+				var offset = skin.DitherAnchorOffset;
 				var at = anchorId * 4;
 				ditherAnchorOffsets[at] = offset.X;
 				ditherAnchorOffsets[at + 1] = offset.Y;
 			}
 
-			tileFieldStampTile = platform.MaterialTile;
+			tileFieldStampTile = skin.MaterialTile();
 			tileFieldStampAnchor = anchorId;
-			Batcher.PushMatrix(platform.Position);
-			platform.RenderTileField(Batcher, tileFieldStampColor);
+			Batcher.PushMatrix(skin.Position);
+			skin.RenderTileField(Batcher, tileFieldStampColor);
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMaterial();

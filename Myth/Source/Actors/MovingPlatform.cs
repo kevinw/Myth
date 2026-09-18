@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Myth;
 
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/moving_platform", Anchor = SpriteAnchor.TopLeft)]
-class MovingPlatform : Actor, IResizable, IShapeOccluder
+class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 {
 	SoundInstance? moveSound;
 	public static readonly Point2 DefaultSize = new(48, 32);
@@ -323,13 +323,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 	// tileset art, so the shadow follows the rounded corners instead of a bare rectangle.
 	public bool CastsShadow => Visible;
 
-	public void AppendOccluderSegments(List<ShadowSegment> segments)
-	{
-		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.AppendRectOccluders(segments, tileset, TileColumns, TileRows, new Vector2(Position.X, Position.Y), VariantTileOrigin, MaterialTile);
-		else
-			OccluderShape.FromRect(new RectInt(Position.X, Position.Y, Size.X, Size.Y)).AppendSegments(segments);
-	}
+	public void AppendOccluderSegments(List<ShadowSegment> segments) => this.AppendOccluders(segments);
 
 	public override void Render(Batcher batcher)
 	{
@@ -355,35 +349,14 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 			batcher.Circle(NortheastActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * alpha);
 		}
 	}
-	// Stamp the platform into the TileField with per-tile field colors (so its dither variation matches
-	// neighboring stone) rather than one flat color. colorForTile maps a cell's anchored world tile to
-	// its field color; falls back to a flat fill when the material is missing.
-	internal void RenderTileField(Batcher batcher, Func<Point2, Color> colorForTile)
-	{
-		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.RenderRectTileField(batcher, tileset, TileColumns, TileRows, VariantTileOrigin, MaterialTile, colorForTile);
-		else
-			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), colorForTile(VariantTileOrigin));
-	}
-	internal Point2 DitherAnchorPosition => originalPosition;
-	internal Vector2 DitherAnchorOffset => originalPosition - Position;
-	internal Point2 VariantTileOrigin => originalPosition / Game.TileSize;
-	internal char MaterialTile
-	{
-		get
-		{
-			var found = false;
-			var result = '0';
-			foreach (var (tile, entry) in Factory.Entries)
-				if (entry.DualTilesetName == Material && (!found || tile < result))
-				{
-					found = true;
-					result = tile;
-				}
-			return result;
-		}
-	}
+	// Position, Visible and Material are Actor fields, which can't satisfy interface properties.
+	Point2 IDualGridRect.Position => Position;
+	bool IDualGridRect.Visible => Visible;
+	string IDualGridRect.Material => Material;
 
+	internal Point2 DitherAnchorPosition => originalPosition;
+	public Vector2 DitherAnchorOffset => originalPosition - Position;
+	public Point2 VariantTileOrigin => originalPosition / Game.TileSize;
 	public override bool CastsReflection => true;
 	public override void RenderReflection(Batcher batcher, Color color)
 	{
@@ -397,19 +370,9 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 
 	// When skinned with a reflective material the top face mirrors sprites like a metal floor would.
 	// See Game.Rendering DrawPlatformSurfaceReflections.
-	public const float SurfaceReflectionOpacity = 0.7f; // matches the metal tile's reflectionOpacity
-	public bool ReflectsSurface => Material == "metal-dual";
-	public RectInt SurfaceReflectionBounds => new(Position.X, Position.Y, Size.X, Size.Y);
+	public RectInt SurfaceReflectionBounds => this.Bounds();
 
-	// Skin the platform with its dual tileset (DualGrid renders the cols x rows blob); fall back to a
-	// flat fill if the material is missing.
-	void RenderMaterial(Batcher batcher, bool normals, Color color)
-	{
-		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.RenderRect(batcher, tileset, TileColumns, TileRows, normals, color, VariantTileOrigin, MaterialTile);
-		else
-			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
-	}
+	void RenderMaterial(Batcher batcher, bool normals, Color color) => this.Render(batcher, normals, color);
 
 	static float ActivationLightInset => 5;
 	static float ActivationLightRadius => 3;
@@ -471,9 +434,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder
 		return new(normal * 0.5f + Vector3.One * 0.5f);
 	}
 
-	int TileColumns => Math.Max(1, Size.X / Game.TileSize);
-	int TileRows => Math.Max(1, Size.Y / Game.TileSize);
-	Point2 MaterialSize => new(TileColumns * Game.TileSize, TileRows * Game.TileSize);
+	Point2 MaterialSize => new(this.TileColumns() * Game.TileSize, this.TileRows() * Game.TileSize);
 
 #if EDITOR
 	sealed class Editor : Manager.ActorEditor<MovingPlatform>

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Foster.Framework;
 using Kit.Patterns;
 
@@ -9,7 +10,7 @@ namespace Myth;
 // brightens as its next flip approaches, so the timing can be read before it lands.
 [GameActor(Tags = ActorTag.Obstacle, Sprite = "Editor/moving_platform", Icon = "wave-square",
 	Anchor = SpriteAnchor.TopLeft, LivePositionEditable = true, LiveResizable = true)]
-class FlipBlock : Actor, IResizable
+class FlipBlock : Actor, IResizable, IShapeOccluder, IDualGridRect
 {
 	public Point2 Size { get; set; } = DefaultSize;
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 3, Game.TileSize);
@@ -21,6 +22,13 @@ class FlipBlock : Actor, IResizable
 	static float GhostAlpha => 0.3f.T();
 	static Color WarningColor => new(0xff9d5c);
 	static Color GhostGlowColor => new(0x79cfff);
+
+	Point2 IDualGridRect.Position => Position;
+	bool IDualGridRect.Visible => Visible;
+	string IDualGridRect.Material => Material;
+	// Authored in place, so its tile variants and dither come from where it sits.
+	public Point2 VariantTileOrigin => Position / Game.TileSize;
+	public Vector2 DitherAnchorOffset => Vector2.Zero;
 
 	readonly PatternClock clock = new();
 	readonly List<Hap<Value>> haps = [];
@@ -128,26 +136,14 @@ class FlipBlock : Actor, IResizable
 			//batcher.Rect(new Rect(0, 0, Size.X, Size.Y), GhostGlowColor * (charge * 0.5f));
 	}
 
-	void RenderMaterial(Batcher batcher, bool normals, Color color)
-	{
-		if (Assets.GetTileset(Material) is { } tileset)
-			DualGrid.RenderRect(batcher, tileset, Math.Max(1, Size.X / Game.TileSize), Math.Max(1, Size.Y / Game.TileSize),
-				normals, color, Position / Game.TileSize, MaterialTile);
-		else
-			batcher.Rect(new Rect(0, 0, Size.X, Size.Y), color);
-	}
+	void RenderMaterial(Batcher batcher, bool normals, Color color) => this.Render(batcher, normals, color);
 
-	// The tile character whose dual tileset is this material, as MovingPlatform picks it.
-	char MaterialTile
-	{
-		get
-		{
-			var result = '0';
-			var found = false;
-			foreach (var (tile, entry) in Factory.Entries)
-				if (entry.DualTilesetName == Material && (!found || tile < result))
-					(found, result) = (true, tile);
-			return result;
-		}
-	}
+	// Only a solid block casts a shadow, occludes light, dithers into the tile field or reflects.
+	public bool CastsShadow => Visible && solid;
+	public void AppendOccluderSegments(List<ShadowSegment> segments) => this.AppendOccluders(segments);
+	public override bool CastsReflection => solid;
+	public override void RenderReflection(Batcher batcher, Color color) => RenderMaterial(batcher, normals: false, color);
+
+	// Spriteless, so the sprite-based default is a zero rect; report the real footprint.
+	public override Rect GetVisualBounds() => new(Position.X, Position.Y, Size.X, Size.Y);
 }

@@ -1864,7 +1864,7 @@ public partial class Manager : App
 		UpdateFpsOverlay();
 		using var renderPerf = PerfStats.Time(PerfStat.Render);
 		Window.Clear(WINDOW_CLEAR_COLOR);
-		Video.LogIfChanged(Window, (RectInt)(GameViewRect * Scale));
+		Video.LogIfChanged(Window, (RectInt)(GameOpenRect * Scale)); // the full window, not the editor's docked view, which eases on every play toggle
 		if (startupAttributionPhase == StartupAttributionPhase.Logos)
 		{
 			DrawStartupAttribution();
