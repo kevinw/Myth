@@ -72,11 +72,11 @@
     {
       "Id": "4ae1defec06a25af",
       "Type": "NeuralTextureActor",
+      "Position": [0, 0],
       "SimulationScale": 0.4,
       "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
       "DetailOrigin": [160.0, 92.0],
-      "Position": [0, 0],
       "Size": [320, 184],
       "StepsPerSecond": 60,
       "WeightsFile": "bubbly_0101_circular_screen.bin"

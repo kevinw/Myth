@@ -3,6 +3,11 @@
   "size": [40, 23],
   "ambientColor": "47474F",
   "reverb": 0.529,
+  "legend": {
+    "#": "back",
+    "1": "castle",
+    "G": "grass"
+  },
   "tiles": [
     "GGGGGGGGGGGGGGGGGGGGGGGGG1100011GGGGGGGG",
     "GGGGGGGGGGGGGGGGGGGGGGGGG1100011GGGGGGGG",

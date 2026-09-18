@@ -5,6 +5,10 @@
   "ambientIntensity": 0.282,
   "lightNoise": 0,
   "reverb": 0.16,
+  "legend": {
+    "#": "back",
+    "T": "stone"
+  },
   "tiles": [
     "00000000000TTTTTTTTTTTTTTTTTT00000000000",
     "00000000000TTTTTTTTTTTTTTTTTT00000000000",

@@ -49,11 +49,11 @@
     {
       "Id": "a1d472a0f4812134",
       "Type": "NeuralTextureActor",
+      "Position": [0, 0],
       "SimulationScale": 0.4,
       "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
       "DetailOrigin": [160.0, 92.0],
-      "Position": [0, 0],
       "WeightsFile": "interlaced_0081_circular.bin",
       "WeightsFile3": "interlaced_0163_circular.bin",
       "WeightsFile2": "interlaced_0172_circular.bin",

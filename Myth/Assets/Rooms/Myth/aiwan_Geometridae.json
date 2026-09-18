@@ -49,11 +49,11 @@
     {
       "Id": "f471d56dcfccb603",
       "Type": "NeuralTextureActor",
+      "Position": [0, 0],
       "SimulationScale": 0.4,
       "FlowOrigin": [0.0, -68.0],
       "FlowSize": [320, 320],
       "DetailOrigin": [160.0, 92.0],
-      "Position": [0, 0],
       "Size": [320, 184],
       "WeightsFile1": "dotted_0201_circular.bin",
       "SirenFrequency": 6.932,

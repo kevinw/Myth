@@ -4,6 +4,10 @@
   "ambientColor": "FFFFFF",
   "ambientIntensity": 2,
   "lightNoise": 0.082,
+  "legend": {
+    "1": "castle",
+    "T": "stone"
+  },
   "tiles": [
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",

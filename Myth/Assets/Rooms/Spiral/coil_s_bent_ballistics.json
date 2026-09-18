@@ -1,98 +1,79 @@
 {
-  "position": [
-    -80,
-    23
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [-80, 23],
+  "size": [40, 23],
   "backdropColor": "14141C",
   "backdropColor2": "3B3D59",
   "ambientColor": "AEB8FF",
   "ambientIntensity": 0.48,
   "lightNoise": 0.19,
-  "reverb": 0.52,
+  "reverb": 0.726,
   "ditherStrength": 0.16,
   "legend": {
-    "#": "stone",
-    "m": "metal",
-    "w": "water",
-    "b": "Myth Back",
     "G": "grass",
-    "g": "plants",
-    "r": "rocks",
+    "T": "stone",
     "d": "debris",
-    "v": "Myth Vines",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
     "u": "Myth Runes",
-    "R": "ruin"
+    "v": "Myth Vines"
   },
   "tiles": [
-    "#################000000#################",
-    "#################000000#################",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##00000000000000000000000000000000g000##",
-    "##00000000000000000000000000######d000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##00000000000000###drG##00000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##00drG#####00000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "############drG##000000########drG######",
-    "#################000000#################"
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000000000000000000000g000TT",
+    "TT00000000000000000000000000TTTTTTd000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00000000000000TTTdrGTT00000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT00drGTTTTT00000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TTTTTTTTTTTTdrGTT000000TTTTTTTTdrGTTTTTT",
+    "TTTTTTTTTTTTTTTTT000000TTTTTTTTTTTTTTTTT"
   ],
   "backgroundTiles": [
     "0000000v0000000000000000000v000000000000",
     "0000000v0000000000000000000v000000000000",
     "0000000v0000000000000000000v000000000000",
     "0000000v0000000000000000000v000000000000",
-    "000RRR0v0000000000000000000v000000RRR000",
-    "000RRR000000000000000000000v000000RRR000",
-    "b00RRR000b00000000b00000000v000000RRb000",
-    "b0bRRR000b00000000b0b000000v0b0000RRb0b0",
-    "b0bRbR000b00000000b0b0buuu0v0b0000RRb0b0",
-    "b0bRbRb00b00000b00b0b0bubu0v0b0000RRb0b0",
-    "b0bRbRb0bb00000b0bb0b0bububv0b0000Rbb0b0",
-    "bbbRbRb0bb00000b0bbbb0b0b0bvbb0000Rbbbb0",
-    "bbbbbRb0bb00000b0bbbbbb0b0bbbb0000Rbbbbb",
-    "bbbbbbb0bb00000b0bbbbbbbb0bbbb0000Rbbbbb",
-    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
-    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
-    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
-    "bbbbbbbbbb00000bbbbbbbbbbbbbbb00000bbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    "0000000v0000000000000000000v000000000000",
+    "000000000000000000000000000v000000000000",
+    "m00000000m00000000m00000000v00000000m000",
+    "m0m000000m00000000m0m000000v0m000000m0m0",
+    "m0m0m0000m00000000m0m0muuu0v0m000000m0m0",
+    "m0m0m0m00m00000m00m0m0mumu0v0m000000m0m0",
+    "m0m0m0m0mm00000m0mm0m0mumumv0m00000mm0m0",
+    "mmm0m0m0mm00000m0mmmm0m0m0mvmm00000mmmm0",
+    "mmmmm0m0mm00000m0mmmmmm0m0mmmm00000mmmmm",
+    "mmmmmmm0mm00000m0mmmmmmmm0mmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmm00000mmmmmmmmmmmmmmm00000mmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
   ],
   "actors": [
     {
       "Id": "coil_wind_s",
       "Type": "Wind",
-      "Position": [
-        32,
-        32
-      ],
-      "Size": [
-        256,
-        120
-      ],
-      "Direction": [
-        0,
-        -1
-      ],
+      "Position": [32, 32],
+      "Size": [256, 120],
       "Acceleration": 420,
       "MaxSpeed": 130,
       "Targets": "Projectiles",
@@ -101,49 +82,31 @@
     {
       "Id": "coil_spitter_s1",
       "Type": "Spitter",
-      "Position": [
-        64,
-        168
-      ]
+      "Position": [64, 168]
     },
     {
       "Id": "coil_watcher_s",
       "Type": "Watcher",
-      "Position": [
-        160,
-        120
-      ],
+      "Position": [160, 120],
       "ShootRange": 220,
       "WakeRange": 180
     },
     {
       "Id": "coil_spitter_s2",
       "Type": "Spitter",
-      "Position": [
-        264,
-        168
-      ],
+      "Position": [264, 168],
       "Facing": "-"
     },
     {
       "Id": "coil_rope_s",
       "Type": "Rope",
-      "Position": [
-        156,
-        16
-      ],
-      "Size": [
-        8,
-        104
-      ]
+      "Position": [156, 16],
+      "Size": [8, 104]
     },
     {
       "Id": "coil_light_s",
       "Type": "Light",
-      "Position": [
-        160,
-        84
-      ],
+      "Position": [160, 84],
       "Radius": 170,
       "Color": "AAB5FF",
       "Intensity": 0.9

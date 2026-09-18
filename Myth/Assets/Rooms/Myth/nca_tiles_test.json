@@ -82,11 +82,11 @@
     {
       "Id": "fbb291ab512dbccc",
       "Type": "NeuralTextureActor",
+      "Position": [280, 0],
       "SimulationScale": 0.4,
       "FlowOrigin": [0.0, -70.0],
       "FlowSize": [320, 320],
       "DetailOrigin": [160.0, 90.0],
-      "Position": [280, 0],
       "WeightsFile": "woven_0121_circular.bin"
     }
   ]

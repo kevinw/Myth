@@ -1,94 +1,79 @@
 {
-  "position": [
-    40,
-    -46
-  ],
-  "size": [
-    40,
-    23
-  ],
+  "position": [40, -46],
+  "size": [40, 23],
   "backdropColor": "1A1215",
   "backdropColor2": "5B343B",
   "ambientColor": "FF9B8B",
   "ambientIntensity": 0.48,
   "lightNoise": 0.12,
-  "reverb": 0.43,
+  "reverb": 0.877,
   "ditherStrength": 0.16,
   "legend": {
-    "#": "stone",
-    "m": "metal",
-    "w": "water",
-    "b": "Myth Back",
     "G": "grass",
-    "g": "plants",
-    "r": "rocks",
+    "T": "stone",
     "d": "debris",
-    "v": "Myth Vines",
+    "g": "plants",
+    "m": "Myth Back",
+    "r": "rocks",
     "u": "Myth Runes",
-    "R": "ruin"
+    "v": "Myth Vines"
   },
   "tiles": [
-    "########################################",
-    "########################################",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000###drG#00000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##000000000000000000000000000000000000##",
-    "##0000g0000000000000000000000000000000##",
-    "##000########000000000000000#######000##",
-    "##000000000000000000000000000000000000##",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000TTTdrGT00000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT000000000000000000000000000000000000TT",
+    "TT0000g0000000000000000000000000000000TT",
+    "TT000TTTTTTTT000000000000000TTTTTTT000TT",
+    "TT000000000000000000000000000000000000TT",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
-    "########drG################drG##########",
-    "########################################"
+    "TTTTTTTTdrGTTTTTTTTTTTTTTTTdrGTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
   ],
   "backgroundTiles": [
     "000000000000v000000000000v00000000000000",
     "000000000000v000000000000v00000000000000",
     "000000000000v000000000000v00000000000000",
     "000000000000v000000000000v00000000000000",
-    "00RRR0000000v00000000000000000000RRR0000",
-    "00RRR0000000v00000000000000000000RRR0000",
-    "00RRR0000000v00000000000000000b00RRR000b",
-    "00RRRb000000v0b000uuu000000000b0bRRR000b",
-    "00RRRb0b0000b0b0b0u0u0000b0000b0bRbR000b",
-    "00RRRb0b0b00b0b0b0buu0000b0b00b0bRbRb00b",
-    "00RRRb0b0b0bb0b0b0b000000b0b0bb0bRbRb0bb",
-    "00RRRb0b0b0bbbb0b0b000000b0b0bbbbRbRb0bb",
-    "00RRRbbb0b0bbbbbb0b000000b0b0bbbbbbRb0bb",
-    "00RRRbbbbb0bbbbbbbb000000bbb0bbbbbbbb0bb",
-    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
-    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
-    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
-    "00000bbbbbbbbbbbbbbb00000bbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    "000000000000v000000000000000000000000000",
+    "000000000000v000000000000000000000000000",
+    "000000000000v00000000000000000m00000000m",
+    "00000m000000v0m000uuu000000000m0m000000m",
+    "00000m0m0000m0m0m0u0u0000m0000m0m0m0000m",
+    "00000m0m0m00m0m0m0muu0000m0m00m0m0m0m00m",
+    "00000m0m0m0mm0m0m0m000000m0m0mm0m0m0m0mm",
+    "00000m0m0m0mmmm0m0m000000m0m0mmmm0m0m0mm",
+    "00000mmm0m0mmmmmm0m000000m0m0mmmmmm0m0mm",
+    "00000mmmmm0mmmmmmmm000000mmm0mmmmmmmm0mm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "00000mmmmmmmmmmmmmmm00000mmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+    "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
   ],
   "actors": [
     {
       "Id": "coil_canopy_m1",
       "Type": "MovingPlatform",
-      "Position": [
-        48,
-        80
-      ],
-      "Size": [
-        56,
-        16
-      ],
+      "Position": [48, 80],
+      "Size": [56, 16],
       "TravelDistance": 176,
       "Speed": 46,
       "Material": "stone-dual"
@@ -96,14 +81,8 @@
     {
       "Id": "coil_canopy_m2",
       "Type": "MovingPlatform",
-      "Position": [
-        216,
-        120
-      ],
-      "Size": [
-        48,
-        16
-      ],
+      "Position": [216, 120],
+      "Size": [48, 16],
       "TravelDistance": 128,
       "Speed": 38,
       "Facing": "-",
@@ -112,10 +91,7 @@
     {
       "Id": "coil_drop_m1",
       "Type": "Dropper",
-      "Position": [
-        88,
-        24
-      ],
+      "Position": [88, 24],
       "TriggerWidth": 50,
       "TriggerHeight": 150,
       "StartDelay": 0.2
@@ -123,10 +99,7 @@
     {
       "Id": "coil_drop_m2",
       "Type": "Dropper",
-      "Position": [
-        164,
-        24
-      ],
+      "Position": [164, 24],
       "TriggerWidth": 44,
       "TriggerHeight": 150,
       "WarningTime": 0.5
@@ -134,10 +107,7 @@
     {
       "Id": "coil_drop_m3",
       "Type": "Dropper",
-      "Position": [
-        240,
-        24
-      ],
+      "Position": [240, 24],
       "TriggerWidth": 50,
       "TriggerHeight": 150,
       "WarningTime": 0.25
@@ -145,10 +115,7 @@
     {
       "Id": "coil_light_m",
       "Type": "Light",
-      "Position": [
-        160,
-        88
-      ],
+      "Position": [160, 88],
       "Radius": 170,
       "Color": "FF9A86",
       "Intensity": 0.9

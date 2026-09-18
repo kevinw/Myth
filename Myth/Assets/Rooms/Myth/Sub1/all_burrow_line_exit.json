@@ -58,11 +58,11 @@
     {
       "Id": "a1d12427bc1b0349",
       "Type": "NeuralTextureActor",
+      "Position": [0, 1],
       "SimulationScale": 0.62438719,
       "FlowOrigin": [-11.5, 0.0],
       "FlowSize": [183, 183],
       "DetailOrigin": [80.0, 91.5],
-      "Position": [0, 1],
       "Size": [160, 183],
       "WeightsFile": "crowd_circular.bin",
       "WeightsFile1": "grid_0002_circular.bin",

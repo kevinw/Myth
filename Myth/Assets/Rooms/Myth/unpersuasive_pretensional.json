@@ -39,15 +39,9 @@
       "Id": "d2885b3720a03660",
       "Type": "NeuralTextureActor",
       "Position": [0, 2],
-      "FlowOrigin": [
-        0.0,
-        -70.0
-      ],
+      "FlowOrigin": [0.0, -70.0],
       "FlowSize": [320, 320],
-      "DetailOrigin": [
-        160.0,
-        90.0
-      ],
+      "DetailOrigin": [160.0, 90.0],
       "Dynamism": "ProceduralCurlAdvection",
       "NormalMode": "DensityGradient",
       "SirenFrequency": 9.075,

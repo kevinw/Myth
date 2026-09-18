@@ -166,15 +166,9 @@
       "Type": "NeuralTextureActor",
       "Position": [56, 0],
       "SimulationScale": 0.88888889,
-      "FlowOrigin": [
-        0.0,
-        -24.0
-      ],
+      "FlowOrigin": [0.0, -24.0],
       "FlowSize": [144, 144],
-      "DetailOrigin": [
-        72.0,
-        48.0
-      ],
+      "DetailOrigin": [72.0, 48.0],
       "Size": [144, 96],
       "DetailScale": 0.5,
       "WeightsFile": "veined_0106_concentrate.bin",
