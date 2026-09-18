@@ -62,6 +62,8 @@ public partial class Manager : App
 	// The attract demo runs with playing==true; live editing/ tooling must treat this as "not a real
 	// play session" and stay out of it.
 	bool AttractMode => attract != null || titleAttractMode;
+	// --play-room runs from an empty save and never touches the one on disk.
+	internal bool EphemeralSave => args.playRoomId != null;
 	bool skipStartupMenu => args.play || args.gym || args.headless || args.checkRooms;
 	bool startingPlay;
 	static float PlayMouseHideDelay => 3f;

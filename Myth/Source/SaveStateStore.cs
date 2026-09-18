@@ -12,6 +12,8 @@ static partial class SaveStateStore
 
 	public static SaveState Load(Manager manager)
 	{
+		if (manager.EphemeralSave)
+			return new();
 		var json = LoadJson(manager);
 		if (string.IsNullOrWhiteSpace(json))
 			return new();
@@ -29,6 +31,8 @@ static partial class SaveStateStore
 
 	public static void Save(Manager manager, SaveState state)
 	{
+		if (manager.EphemeralSave)
+			return;
 		try
 		{
 			SaveJson(manager, state.ToJsonString());
@@ -41,6 +45,8 @@ static partial class SaveStateStore
 
 	public static void Delete(Manager manager)
 	{
+		if (manager.EphemeralSave)
+			return;
 		try
 		{
 			DeleteJson(manager);
