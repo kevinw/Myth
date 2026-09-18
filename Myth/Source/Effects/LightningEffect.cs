@@ -13,8 +13,11 @@ public static class LightningEffect
 	static Color OuterColor => new(0x287cff);
 	static Color InnerColor => new(0x79cfff);
 
-	// Points are in the Batcher's current coordinate space. Pass Time.SecondsF for time.
-	public static void Render(Batcher batcher, ReadOnlySpan<LightningEffectPoint> points, float time, int seed = 0)
+	// Points are in the Batcher's current coordinate space. Pass Time.SecondsF for time. Set
+	// `emissive` when drawing into an emissive target: LightingComposite lerps the lit scene toward
+	// emissive.rgb by emissive.a, so there the strength has to land on alpha and the channels have
+	// to stay at full brightness -- scaling them just tints the wall a dimmer grey.
+	public static void Render(Batcher batcher, ReadOnlySpan<LightningEffectPoint> points, float time, int seed = 0, bool emissive = false)
 	{
 		if (points.Length < 2)
 			return;
@@ -24,7 +27,7 @@ public static class LightningEffect
 		var blend = animation - frame;
 		blend *= blend * (3 - 2 * blend);
 		for (var i = 1; i < points.Length; i++)
-			RenderSegment(batcher, points[i - 1], points[i], frame, blend, Hash32.Mix((uint)seed ^ (uint)i * 0x9e3779b9u));
+			RenderSegment(batcher, points[i - 1], points[i], frame, blend, Hash32.Mix((uint)seed ^ (uint)i * 0x9e3779b9u), emissive);
 	}
 
 	// Fills a 1-tile-thick band from `from` to `to` with several weaving, crossing filaments over a
@@ -126,7 +129,7 @@ public static class LightningEffect
 	}
 
 	static void RenderSegment(Batcher batcher, LightningEffectPoint start, LightningEffectPoint end,
-		int frame, float blend, uint seed)
+		int frame, float blend, uint seed, bool emissive = false)
 	{
 		var from = (Vector2)start.Position;
 		var to = (Vector2)end.Position;
@@ -155,13 +158,13 @@ public static class LightningEffect
 			}
 
 			RenderLine(batcher, previous, point, previousIntensity, intensity,
-				Calc.Lerp(0.86f, 1f, AnimatedNoise(seed, i, frame, blend, 2) * 0.5f + 0.5f));
+				Calc.Lerp(0.86f, 1f, AnimatedNoise(seed, i, frame, blend, 2) * 0.5f + 0.5f), emissive);
 			previous = point;
 			previousIntensity = intensity;
 		}
 	}
 
-	static void RenderLine(Batcher batcher, Vector2 from, Vector2 to, float fromIntensity, float toIntensity, float flicker)
+	static void RenderLine(Batcher batcher, Vector2 from, Vector2 to, float fromIntensity, float toIntensity, float flicker, bool emissive = false)
 	{
 		fromIntensity *= flicker;
 		toIntensity *= flicker;
@@ -170,12 +173,17 @@ public static class LightningEffect
 			return;
 
 		batcher.Line(from, to, Calc.Lerp(1.5f, 3.5f, intensity),
-			OuterColor * (fromIntensity * 0.52f), OuterColor * (toIntensity * 0.52f));
+			Fade(OuterColor, fromIntensity * 0.52f, emissive), Fade(OuterColor, toIntensity * 0.52f, emissive));
 		batcher.Line(from, to, Calc.Lerp(0.8f, 1.6f, intensity),
-			InnerColor * fromIntensity, InnerColor * toIntensity);
+			Fade(InnerColor, fromIntensity, emissive), Fade(InnerColor, toIntensity, emissive));
 		batcher.Line(from, to, Calc.Lerp(0.45f, 0.85f, intensity),
-			Color.White * fromIntensity, Color.White * toIntensity);
+			Fade(Color.White, fromIntensity, emissive), Fade(Color.White, toIntensity, emissive));
 	}
+
+	static Color Fade(Color color, float intensity, bool emissive)
+		=> emissive
+			? new Color(color.R, color.G, color.B, (byte)(Math.Clamp(intensity, 0, 1) * 255))
+			: color * intensity;
 
 	static float AnimatedNoise(uint seed, int point, int frame, float blend, int channel)
 	{

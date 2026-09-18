@@ -17,7 +17,7 @@ public abstract partial class Pawn
 	static float QuantumIntoWallDot => 0.85f;  // how square-on the hold has to be
 	static float QuantumSeedGlow => 0.18f;     // the far line appears the instant you press
 	static float QuantumRumble => 0.05f;
-	static float QuantumFlashTime => 0.18f;      // the arc left behind in the gap
+	static float QuantumFlashTime => 0.48f;      // the arc left behind in the gap
 	static float QuantumFlashIntensity => 0.7f;  // toned down from a lightning trap's full bolt
 	static float QuantumFlashOvershoot => 2f;    // pokes out of both faces so the gap reads
 	static float QuantumSparkSpacing => 2.5f;    // sub-bursts along the face, so it isn't a point source
@@ -25,6 +25,7 @@ public abstract partial class Pawn
 	static int QuantumMaxThickness => Game.TileSize;
 
 	float quantumCharge;
+	bool quantumArmed; // holding into a gap that can actually be crossed
 	Point2 quantumExit;
 	readonly List<Vector2> quantumGlowPoints = [];
 	int quantumSparkEffect = -1;
@@ -36,18 +37,18 @@ public abstract partial class Pawn
 
 	void UpdateQuantumTunnel(Vector2 intent)
 	{
-		var armed = QuantumTunnelEnabled && burrowLine == null && !burrowOrbiting
+		quantumArmed = QuantumTunnelEnabled && burrowLine == null && !burrowOrbiting
 			&& burrowSpeed <= QuantumStillSpeed && HoldingIntoSurface(intent) && TryFindQuantumExit(out quantumExit);
 
-		quantumCharge = Calc.Approach(quantumCharge, armed ? 1 : 0,
-			(armed ? 1f / QuantumTunnelTime : QuantumCollapseRate) * Time.Delta);
+		quantumCharge = Calc.Approach(quantumCharge, quantumArmed ? 1 : 0,
+			(quantumArmed ? 1f / QuantumTunnelTime : QuantumCollapseRate) * Time.Delta);
 
 		// The far line doubles as the check that there is a surface to arrive on: if the trace
 		// can't walk that boundary there's nothing to see and nothing to cross to.
 		quantumGlowPoints.Clear();
 		if (quantumCharge > 0 && !Game.TraceBurrowPathFromState(quantumExit, burrowHeading, !burrowSolidLeft, null,
 			BurrowGlowArc * burrowSpreadScale * Calc.Lerp(QuantumSeedGlow, 1f, quantumCharge), quantumGlowPoints))
-			quantumCharge = 0;
+			(quantumCharge, quantumArmed) = (0, false);
 		else if (quantumCharge >= 1)
 			TunnelThroughWall();
 	}
@@ -91,6 +92,7 @@ public abstract partial class Pawn
 		UpdateBurrowShift();
 		AudioEvent("player/burrow_tunnel"); // wants its own event; missing ones are logged once
 		AudioEvent("player/burrow_start");
+		Game.Shake(0.1f, intensity: 1.2f);
 	}
 
 	// Off the face, not along it: the digging sparks fire with zero spread, which on a flat wall
@@ -120,12 +122,13 @@ public abstract partial class Pawn
 			new((quantumFlashFrom - origin).RoundToPoint2(), fade * 0.3f),
 			new((quantumFlashTo - origin).RoundToPoint2(), fade),
 		];
-		LightningEffect.Render(batcher, gap, Time.SecondsF, (int)(quantumFlashFrom.X * 397) ^ (int)quantumFlashFrom.Y);
+		LightningEffect.Render(batcher, gap, Time.SecondsF, (int)(quantumFlashFrom.X * 397) ^ (int)quantumFlashFrom.Y, emissive: true);
 	}
 
 	void ResetQuantumTunnel()
 	{
 		quantumCharge = 0;
+		quantumArmed = false;
 		quantumGlowPoints.Clear();
 	}
 }

@@ -625,7 +625,8 @@ public abstract partial class Pawn
 		if (input.MoveX != 0)
 			Facing = Math.Sign(input.MoveX);
 
-		if (burrowLine == null)
+		// Charging a crossing holds the clock: lining one up shouldn't be the thing that ends the burrow.
+		if (burrowLine == null && !quantumArmed)
 			burrowTimer = MathF.Max(0, burrowTimer - Time.Delta);
 		burrowHudFill = burrowDuration > 0 ? burrowTimer / burrowDuration : 0;
 		var wantsExit = burrowLine == null && (burrowTimer <= 0 || !input.JumpDown);
