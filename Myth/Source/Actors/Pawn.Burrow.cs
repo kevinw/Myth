@@ -150,6 +150,7 @@ public abstract partial class Pawn
 		burrowLine = null;
 		burrowLineExit = null;
 		burrowRoomTransitionDirection = Point2.Zero;
+		ResetQuantumTunnel();
 		// Complementing the room preserves the boundary in place, but moves its solid to the
 		// other side. Keep the tangent heading so the burrow continues along the same contour.
 		burrowSolidLeft = false;
@@ -221,7 +222,7 @@ public abstract partial class Pawn
 		float arcLength;
 
 		if (State == States.Burrow) // currently burrowing
-			arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime) * burrowSpreadScale;
+			arcLength = BurrowGlowArc * (1f - burrowEnterTimer / BurrowEnterSquishTime) * burrowSpreadScale * QuantumGlowScale;
 		else if (burrowGlowExitTimer > 0)
 		{
 
@@ -613,6 +614,7 @@ public abstract partial class Pawn
 		UpdateBurrowLeapCoyote();
 		UpdateBurrowShift();
 		UpdateBurrowIntervals();
+		UpdateQuantumTunnel(intent);
 		UpdateBurrowGlow();
 		UpdateBurrowAudio();
 		UpdateBurrowRumble();
@@ -760,6 +762,7 @@ public abstract partial class Pawn
 		burrowNeedsGrounding = true; // must touch ground again before another burrow can arm
 		burrowExitBlocked = false;
 		burrowRoomTransitionDirection = Point2.Zero;
+		ResetQuantumTunnel();
 		UpdateBurrowShift();
 		StopAndReleaseSound(ref burrowSound);
 
@@ -787,6 +790,8 @@ public abstract partial class Pawn
 	{
 		if (State != States.Burrow)
 			return;
+
+		ResetQuantumTunnel();
 
 		var incomingHeading = BurrowTravelHeading;
 		var previousLine = burrowLine;
@@ -870,6 +875,7 @@ public abstract partial class Pawn
 		if (State != States.Burrow && burrowGlowExitTimer <= 0)
 			burrowLine = null;
 		burrowPulseTimer = Calc.Approach(burrowPulseTimer, 0, Time.Delta);
+		quantumFlashTimer = Calc.Approach(quantumFlashTimer, 0, Time.Delta);
 	}
 
 	// Drive the burrow loop from the motion every frame so it can breathe instead of
@@ -912,6 +918,7 @@ public abstract partial class Pawn
 			? burrowPulseTimer / BurrowPulseTime *
 				(BurrowRumblePulse + burrowIntervalIndex * BurrowRumblePulseStep)
 			: 0;
+		pulse += quantumCharge * quantumCharge * QuantumRumble;
 		Game.Manager.Input.Rumble(controller, low, pulse, BurrowRumbleDuration);
 	}
 
@@ -953,73 +960,81 @@ public abstract partial class Pawn
 	protected void RenderBurrowLine(Batcher batcher)
 	{
 		if (!PerfToggles.BurrowParticles) return;
-
-		var shouldRender = (State == States.Burrow || burrowGlowExitTimer > 0) && glowPoints.Count >= 2;
-
-		float start = glowPoints.ElementAtOrDefault(0).X;
-		float end = glowPoints.ElementAtOrDefault(glowPoints.Count - 1).X;
-		// Console.WriteLine($"{start} to {end} ({glowPoints.Count}) - {shouldRender}");
-		if (!shouldRender)
-			return;
-
-		// Farthest traced point sets the fade length, so the glow always fades to nothing at
-		// the current (possibly shortened) line ends rather than at the full-arc distance.
-		float halfLen = 0f;
-		foreach (var p in glowPoints)
-			halfLen = MathF.Max(halfLen, Vector2.Distance(p, burrowGlowAnchor));
-		if (halfLen < 0.001f) halfLen = BurrowGlowArc;
-
-		Color BurrowGlowColorAt(Vector2 worldPoint)
-		{
-			// Glow fades from full at the anchor (player's surface point) to nothing at the ends;
-			// its hue cycles along the line and scrolls over time for a rainbow shimmer.
-			var dist = Vector2.Distance(worldPoint, burrowGlowAnchor);
-			var alpha = Math.Clamp(1f - dist / halfLen, 0f, 1f);
-			var hue = dist * BurrowGlowHueScale - Time.SecondsF * BurrowGlowCycleSpeed;
-			var color = new Color(HueRgb(hue - MathF.Floor(hue)), alpha);
-
-			// At each interval boundary flash the whole line brighter/whiter, easing out.
-			if (burrowPulseTimer > 0)
-			{
-				var pulse = burrowPulseTimer / BurrowPulseTime;
-				pulse *= pulse; // ease-out flash
-				var flash = new Color(1f, 1f, 1f, MathF.Min(1f, alpha + (1f - alpha) * 0.6f));
-
-				pulse *= 0.5f;
-				color = Color.Lerp(color, flash, pulse);
-			}
-			if (burrowExitBlocked)
-			{
-				var pulse = 0.5f + 0.5f * MathF.Sin((Time.SecondsF * BurrowStuckPulseSpeed - dist * BurrowStuckPulseScale) * Calc.TAU);
-				var warning = new Color(1f, 0.08f, 0.16f, MathF.Min(1f, alpha + 0.25f));
-				color = Color.Lerp(color, warning, 0.45f + pulse * 0.5f);
-			}
-			return color;
-		}
+		if (State != States.Burrow && burrowGlowExitTimer <= 0)
+			return; // the near line can be empty mid-tunnel, when the far one has taken it over
 
 		// The traced points lie exactly on the solid/air boundary; draw them directly.
 		// The emissive pass pre-pushes a matrix at our Position, so draw in local space.
-		Vector2 origin = Position;
-		for (var i = 0; i + 1 < glowPoints.Count; i++)
-			batcher.Line(glowPoints[i] - origin, glowPoints[i + 1] - origin, BurrowGlowWeight, BurrowGlowColorAt(glowPoints[i]), BurrowGlowColorAt(glowPoints[i + 1]));
+		var origin = (Vector2)Position;
+		DrawGlowLine(batcher, glowPoints, burrowGlowAnchor, origin, hueShift: 0);
+		DrawGlowLine(batcher, quantumGlowPoints, quantumExit, origin, QuantumHueShift);
+		RenderQuantumFlash(batcher, origin);
 
 		if (State == States.Burrow && burrowLine?.TryGetSwitchNear(Position, 0.5f, out var switchPointIndex, out var switchPoint) == true)
 		{
 			var fill = burrowLine.SwitchFill(switchPointIndex);
+			var span = GlowSpan(glowPoints, burrowGlowAnchor);
 			var previous = switchPoint;
 			for (var i = 1; i <= 28; i++)
 			{
 				var t = i / 28f;
 				var point = switchPoint + Calc.AngleToVector(t * MathF.Tau * (2.5f + fill) - Time.SecondsF * (3 + fill * 4)) * t * Calc.Lerp(4, 9, fill);
 				batcher.Line(previous - origin, point - origin, BurrowGlowWeight,
-					BurrowGlowColorAt(previous), BurrowGlowColorAt(point));
+					GlowColorAt(previous, burrowGlowAnchor, span, 0), GlowColorAt(point, burrowGlowAnchor, span, 0));
 				previous = point;
 			}
 		}
 
 		if (burrowPassenger != null)
 			batcher.Circle(burrowGlowAnchor - origin, BudBurrowDotRadius, 12, Color.White, Color.Transparent);
+	}
 
+	// Farthest traced point sets the fade length, so a glow always fades to nothing at its
+	// current (possibly shortened) ends rather than at the full-arc distance.
+	static float GlowSpan(List<Vector2> points, Vector2 anchor)
+	{
+		var span = 0f;
+		foreach (var point in points)
+			span = MathF.Max(span, Vector2.Distance(point, anchor));
+		return span < 0.001f ? BurrowGlowArc : span;
+	}
+
+	void DrawGlowLine(Batcher batcher, List<Vector2> points, Vector2 anchor, Vector2 origin, float hueShift)
+	{
+		if (points.Count < 2)
+			return;
+		var span = GlowSpan(points, anchor);
+		for (var i = 0; i + 1 < points.Count; i++)
+			batcher.Line(points[i] - origin, points[i + 1] - origin, BurrowGlowWeight,
+				GlowColorAt(points[i], anchor, span, hueShift), GlowColorAt(points[i + 1], anchor, span, hueShift));
+	}
+
+	Color GlowColorAt(Vector2 worldPoint, Vector2 anchor, float span, float hueShift)
+	{
+		// Glow fades from full at the anchor (the surface point it grows from) to nothing at the
+		// ends; its hue cycles along the line and scrolls over time for a rainbow shimmer.
+		var dist = Vector2.Distance(worldPoint, anchor);
+		var alpha = Math.Clamp(1f - dist / span, 0f, 1f);
+		var hue = dist * BurrowGlowHueScale - Time.SecondsF * BurrowGlowCycleSpeed + hueShift;
+		var color = new Color(HueRgb(hue - MathF.Floor(hue)), alpha);
+
+		// At each interval boundary flash the whole line brighter/whiter, easing out.
+		if (burrowPulseTimer > 0)
+		{
+			var pulse = burrowPulseTimer / BurrowPulseTime;
+			pulse *= pulse; // ease-out flash
+			var flash = new Color(1f, 1f, 1f, MathF.Min(1f, alpha + (1f - alpha) * 0.6f));
+
+			pulse *= 0.5f;
+			color = Color.Lerp(color, flash, pulse);
+		}
+		if (burrowExitBlocked)
+		{
+			var pulse = 0.5f + 0.5f * MathF.Sin((Time.SecondsF * BurrowStuckPulseSpeed - dist * BurrowStuckPulseScale) * Calc.TAU);
+			var warning = new Color(1f, 0.08f, 0.16f, MathF.Min(1f, alpha + 0.25f));
+			color = Color.Lerp(color, warning, 0.45f + pulse * 0.5f);
+		}
+		return color;
 	}
 
 	// Packed 0xRRGGBB for a fully-saturated hue in [0,1); paired with an alpha at the call site.
@@ -1041,5 +1056,8 @@ public abstract partial class Pawn
 
 
 	protected void ReleaseBurrowParticles()
-		=> ReleaseParticleEffect(ref burrowSparkEffect);
+	{
+		ReleaseParticleEffect(ref burrowSparkEffect);
+		ReleaseParticleEffect(ref quantumSparkEffect);
+	}
 }
