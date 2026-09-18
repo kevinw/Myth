@@ -10,6 +10,9 @@
       0.7071068
     ]
   },
+  "colorFields": {
+    "foreground": "8865135d831d6886.png"
+  },
   "legend": {
     "G": "grass",
     "P": "dirt",

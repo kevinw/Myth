@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
+
 namespace Myth;
 
 public interface IContentKind
@@ -94,6 +97,48 @@ public readonly struct VisualTextureContent : IContentKind
 	public static string ContentKey(string name) => $"Packed/Visuals/textures/{name}.png";
 	public static void Collect(ContentDependencyCollector collector, string name, string origin)
 		=> collector.IncludeFile(ContentKey(name), origin);
+}
+
+// Editor-authored binary data, named by content hash ("<hash>.<ext>") so JSON holds a short
+// stable reference and identical data is stored once.
+public readonly struct BlobContent : IContentKind
+{
+	public static string Folder => "Blobs";
+	public static string ContentKey(string name) => $"{Folder}/{name}";
+	public static void Collect(ContentDependencyCollector collector, string name, string origin)
+		=> collector.IncludeFile(ContentKey(name), origin);
+
+	public static byte[] Read(ContentRef<BlobContent> blob) => Assets.Content.ReadAllBytes(blob.ContentKey);
+
+	public static ContentRef<BlobContent> Write(ReadOnlySpan<byte> data, string extension)
+	{
+		ContentRef<BlobContent> blob = $"{Convert.ToHexStringLower(SHA256.HashData(data))[..16]}.{extension}";
+		var path = Path.Join(Assets.AssetsPath, blob.ContentKey);
+		if (!File.Exists(path))
+		{
+			Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+			File.WriteAllBytes(path, data);
+		}
+		return blob;
+	}
+
+	// Blobs are written as they're authored (every paint stroke), so run this only when no
+	// in-memory undo history can still point at an unsaved one.
+	public static void DeleteUnreferenced()
+	{
+		var folder = Path.Join(Assets.AssetsPath, Folder);
+		if (!Directory.Exists(folder))
+			return;
+		var referenced = new HashSet<string>();
+		foreach (var file in Directory.EnumerateFiles(Assets.AssetsPath, "*.json", SearchOption.AllDirectories))
+			foreach (Match match in NamePattern.Matches(File.ReadAllText(file)))
+				referenced.Add(match.Value);
+		foreach (var file in Directory.EnumerateFiles(folder))
+			if (!referenced.Contains(Path.GetFileName(file)))
+				File.Delete(file);
+	}
+
+	static readonly Regex NamePattern = new(@"\b[0-9a-f]{16}\.[a-z0-9]+\b");
 }
 
 public sealed class ContentDependencyCollector

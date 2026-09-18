@@ -3,6 +3,9 @@
   "size": [68, 59],
   "ambientColor": "908E8E",
   "reverb": 0.64,
+  "colorFields": {
+    "foreground": "a94ff2ea3f22170e.png"
+  },
   "legend": {
     "#": "back",
     "E": "ember",

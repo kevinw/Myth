@@ -2,6 +2,9 @@
   "position": [80, 0],
   "size": [40, 23],
   "sporeFogStrength": 0.097,
+  "colorFields": {
+    "foreground": "084751e364bbc7c1.png"
+  },
   "legend": {
     "#": "back",
     "(": "back-nw",

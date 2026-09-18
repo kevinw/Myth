@@ -4,6 +4,9 @@
   "lightNoise": 0.392,
   "sporeFogStrength": 0.328,
   "reverb": 0.726,
+  "colorFields": {
+    "foreground": "e68fbfc8dedbe412.png"
+  },
   "legend": {
     "#": "back",
     "%": "crosshatch",

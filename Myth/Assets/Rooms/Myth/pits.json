@@ -1,6 +1,10 @@
 {
   "position": [-520, 345],
   "size": [40, 23],
+  "colorFields": {
+    "foreground": "0f79d04905312fa7.png",
+    "background": "9a2f8317c7e0b9fc.png"
+  },
   "legend": {
     "#": "back",
     "(": "back-nw",

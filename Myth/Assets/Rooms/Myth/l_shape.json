@@ -4,6 +4,10 @@
   "backdropColor2": "001C02",
   "ambientColor": "BBBBBB",
   "reverb": 0.798,
+  "colorFields": {
+    "foreground": "8f920af37a736019.png",
+    "background": "addb60f722e51ddd.png"
+  },
   "legend": {
     "#": "back",
     "1": "castle",

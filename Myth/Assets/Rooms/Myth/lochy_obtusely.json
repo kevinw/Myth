@@ -18,6 +18,9 @@
       0.99621457
     ]
   },
+  "colorFields": {
+    "foreground": "bb88c2380d523049.png"
+  },
   "legend": {
     "P": "dirt",
     "R": "ruin",

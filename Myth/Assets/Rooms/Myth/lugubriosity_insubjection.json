@@ -7,6 +7,9 @@
   "sporeFogStrength": 0.125,
   "reverb": 0.212,
   "musicMuffle": 0.515,
+  "colorFields": {
+    "foreground": "0af11ee3fd443fd8.png"
+  },
   "legend": {
     "#": "back",
     "1": "castle",

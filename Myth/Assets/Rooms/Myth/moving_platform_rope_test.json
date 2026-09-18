@@ -18,6 +18,10 @@
       0.99621457
     ]
   },
+  "colorFields": {
+    "foreground": "1ff5e330303a9611.png",
+    "background": "f05ee164faed053c.png"
+  },
   "legend": {
     "#": "back",
     "-": "back-right",

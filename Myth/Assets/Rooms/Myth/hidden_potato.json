@@ -3,6 +3,9 @@
   "size": [40, 23],
   "ambientColor": "626262",
   "reverb": 0.512,
+  "colorFields": {
+    "foreground": "b178b9b029b5eaf2.png"
+  },
   "legend": {
     "#": "back",
     "-": "back-right",

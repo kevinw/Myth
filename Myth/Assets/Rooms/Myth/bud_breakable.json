@@ -11,6 +11,9 @@
   "reverb": 0.183,
   "ditherScale": 1.955,
   "ditherStrength": 0.269,
+  "colorFields": {
+    "foreground": "cabf24062e48458b.png"
+  },
   "legend": {
     "R": "ruin"
   },

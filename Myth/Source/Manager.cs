@@ -493,6 +493,8 @@ public partial class Manager : App
 		}
 		InputPrompts = new(GraphicsDevice, Input);
 #if EDITOR
+		if (!Assets.ContentIsPak)
+			BlobContent.DeleteUnreferenced();
 		EditorIcons.LoadPaletteFont(GraphicsDevice);
 		saveState = preservePlaytestSaveState ? SaveStateStore.Load(this) : new();
 #else

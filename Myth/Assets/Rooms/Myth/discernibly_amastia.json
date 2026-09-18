@@ -2,6 +2,9 @@
   "position": [200, 0],
   "size": [40, 23],
   "reverb": 0.325,
+  "colorFields": {
+    "foreground": "0f839f6b915c40ed.png"
+  },
   "legend": {
     "#": "back",
     "G": "grass",

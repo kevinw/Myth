@@ -13,6 +13,9 @@
       0.7071068
     ]
   },
+  "colorFields": {
+    "foreground": "d14a16915b729643.png"
+  },
   "legend": {
     "E": "ember",
     "G": "grass",

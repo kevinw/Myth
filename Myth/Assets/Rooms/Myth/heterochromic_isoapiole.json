@@ -5,6 +5,9 @@
   "lightNoise": 0.336,
   "sporeFogStrength": 0.405,
   "reverb": 0.757,
+  "colorFields": {
+    "foreground": "954dc8ea30e66399.png"
+  },
   "legend": {
     "R": "ruin",
     "T": "stone",

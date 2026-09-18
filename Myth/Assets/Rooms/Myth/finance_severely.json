@@ -17,6 +17,9 @@
       0.7071068
     ]
   },
+  "colorFields": {
+    "foreground": "b12afb042169adcb.png"
+  },
   "legend": {
     "#": "back",
     "(": "back-nw",

@@ -2,6 +2,9 @@
   "position": [-520, 253],
   "size": [40, 23],
   "sporeFogStrength": 0.239,
+  "colorFields": {
+    "foreground": "fe6f51c97a513575.png"
+  },
   "legend": {
     "#": "back",
     "%": "crosshatch",

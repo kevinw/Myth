@@ -10,9 +10,9 @@ public sealed class RoomColorField
 	public Point2 Size { get; private set; }
 	public ReadOnlySpan<Color> Pixels => pixels;
 	public bool HasPaint { get; private set; }
-	public bool Dirty { get; private set; }
 	public int Version { get; private set; }
-	public string? SourcePath { get; private set; }
+	ContentRef<BlobContent> blob = new("");
+	int blobVersion = -1;
 
 	public RoomColorField(Point2 size)
 	{
@@ -37,7 +37,6 @@ public sealed class RoomColorField
 		}
 		source.pixels.CopyTo(pixels, 0);
 		HasPaint = source.HasPaint;
-		Dirty = source.Dirty;
 		Version++;
 	}
 
@@ -79,7 +78,6 @@ public sealed class RoomColorField
 			return;
 
 		RefreshHasPaint();
-		Dirty = true;
 		Version++;
 	}
 
@@ -89,7 +87,6 @@ public sealed class RoomColorField
 			return;
 		Array.Clear(pixels);
 		HasPaint = false;
-		Dirty = true;
 		Version++;
 	}
 
@@ -111,67 +108,49 @@ public sealed class RoomColorField
 			}
 
 		RefreshHasPaint();
-		Dirty = true;
 		Version++;
-	}
-
-	public void Load(ReadOnlySpan<byte> encoded, Point2 expectedSize, string? sourcePath)
-	{
-		using var image = new Image(encoded.ToArray());
-		Size = new(image.Width, image.Height);
-		pixels = image.Data.ToArray();
-		SourcePath = sourcePath;
-		Dirty = false;
-		RefreshHasPaint();
-		Version++;
-		if (Size != expectedSize)
-			Resize(expectedSize, Point2.Zero);
 	}
 
 	public string Serialize()
 	{
 		if (!HasPaint)
 			return "";
-		using var image = new Image(Size.X, Size.Y, pixels);
-		return Convert.ToBase64String(image.WritePng());
+		if (blobVersion != Version)
+		{
+			using var image = new Image(Size.X, Size.Y, pixels);
+			blob = BlobContent.Write(image.WritePng(), "png");
+			blobVersion = Version;
+		}
+		return blob.Name;
 	}
 
-	public void Deserialize(string? encoded, Point2 expectedSize)
+	public void Deserialize(string? blobName, Point2 expectedSize)
 	{
-		if (string.IsNullOrEmpty(encoded))
+		if (string.IsNullOrEmpty(blobName))
 		{
 			if (Size == expectedSize && !HasPaint)
 				return;
 			Size = expectedSize;
 			pixels = new Color[Math.Max(1, expectedSize.X * expectedSize.Y)];
 			HasPaint = false;
-			Dirty = true;
 			Version++;
 			return;
 		}
 
-		var restored = new RoomColorField(expectedSize);
-		restored.Load(Convert.FromBase64String(encoded), expectedSize, SourcePath);
-		if (Size == restored.Size && pixels.AsSpan().SequenceEqual(restored.pixels))
+		using var image = new Image(BlobContent.Read(blobName));
+		if (image.Size == Size && pixels.AsSpan().SequenceEqual(image.Data))
+		{
+			Resize(expectedSize, Point2.Zero);
 			return;
-
-		Size = restored.Size;
-		pixels = restored.pixels;
-		HasPaint = restored.HasPaint;
-		Dirty = true;
+		}
+		Size = image.Size;
+		pixels = image.Data.ToArray();
+		RefreshHasPaint();
 		Version++;
-	}
-
-	public byte[] WritePng()
-	{
-		using var image = new Image(Size.X, Size.Y, pixels);
-		return image.WritePng();
-	}
-
-	public void MarkSaved(string? sourcePath)
-	{
-		SourcePath = sourcePath;
-		Dirty = false;
+		if (Size == expectedSize)
+			(blob, blobVersion) = (blobName, Version);
+		else
+			Resize(expectedSize, Point2.Zero);
 	}
 
 	void RefreshHasPaint()

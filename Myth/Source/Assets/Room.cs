@@ -1497,14 +1497,14 @@ public class Room
 			Reverb = InferReverb();
 
 		var buffer = new ArrayBufferWriter<byte>();
-		WriteJson(buffer, includeColorFields: false);
+		WriteJson(buffer, includeSublayer: false);
 		return Assets.SaveRoom(this, buffer.WrittenSpan, overwriteExternal);
 	}
 
 	public string ToJsonString()
 	{
 		var buffer = new ArrayBufferWriter<byte>();
-		WriteJson(buffer, includeColorFields: true);
+		WriteJson(buffer, includeSublayer: true);
 		return Encoding.UTF8.GetString(buffer.WrittenSpan);
 	}
 
@@ -1547,7 +1547,7 @@ public class Room
 			writer.WriteEndObject();
 	}
 
-	void WriteJson(IBufferWriter<byte> output, bool includeColorFields)
+	void WriteJson(IBufferWriter<byte> output, bool includeSublayer)
 	{
 		using var writer = new Utf8JsonWriter(output, new JsonWriterOptions
 		{
@@ -1561,7 +1561,7 @@ public class Room
 
 		WriteIntPairProperty(writer, "position", TileSpacePosition.X, TileSpacePosition.Y);
 		WriteIntPairProperty(writer, "size", Size.X, Size.Y);
-		if (includeColorFields && Sublayer > 0)
+		if (includeSublayer && Sublayer > 0)
 			writer.WriteNumber("sublayer", Sublayer);
 
 		if (!string.IsNullOrEmpty(MusicArea))
@@ -1617,7 +1617,7 @@ public class Room
 			writer.WriteEndObject();
 		}
 
-		if (includeColorFields && (ForegroundColorField.HasPaint || BackgroundColorField.HasPaint))
+		if (ForegroundColorField.HasPaint || BackgroundColorField.HasPaint)
 		{
 			writer.WriteStartObject("colorFields");
 			if (ForegroundColorField.HasPaint)

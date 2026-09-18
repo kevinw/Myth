@@ -220,6 +220,7 @@ public static partial class Assets
 			(@"^world\.json$", []),
 			(@"^(Actors|Attract|Particles|Storylets|Voice)/[^/]+$", ["json"]),
 			(@"^Attribution/[^/]+$", ["png"]),
+			($"^{BlobContent.Folder}/[^/]+$", ["png"]),
 			(@"^Fonts/[^/]+$", ["ttf", "txt"]),
 			(@"^NCA/(DynamicTexture/)?[^/]+$", ["bin"]),
 			(@"^Packed/Visuals/(manifest\.bin|atlas\.qoi|lighting-noise\.qoi)$", []),
@@ -228,7 +229,7 @@ public static partial class Assets
 			(@"^Packed/Visuals/(surfaces|costumes)/[^/]+$", ["json"]),
 			(@"^Rigs/[^/]+$", ["json", "ozzpack"]),
 			($@"^Rooms/{world}\.regions\.json$", []),
-			($"^Rooms/{world}/", ["json", "png"]),
+			($"^Rooms/{world}/", ["json"]),
 			(@"^Shaders/Compiled/[^/]+$", [ShaderExtension(target)]),
 		];
 
@@ -361,6 +362,8 @@ public static partial class Assets
 			var key = Path.GetRelativePath(AssetsPath, file).Replace(Path.DirectorySeparatorChar, '/');
 			if (!ContentPakIncludes(key, shaderExtension, worldId))
 				continue;
+			if (key.StartsWith($"{BlobContent.Folder}/", StringComparison.Ordinal) && !dependencies.Includes(key))
+				continue;
 
 			var surface = IsPackSurfaceFile(key, out _);
 			var surfaceTexture = IsPackTextureFile(key, out _);
@@ -492,6 +495,9 @@ public static partial class Assets
 			var room = Path.GetRelativePath(worldRoomsPath, file).Replace(Path.DirectorySeparatorChar, '/');
 			if (root?["backdropSurface"]?.GetValue<string>() is { Length: > 0 } backdrop)
 				collector.Add(new ContentRef<SurfaceContent>(backdrop), $"room '{room}' backdropSurface");
+			if (root?["colorFields"] is JsonObject colorFields)
+				foreach (var (layer, blob) in colorFields)
+					collector.Add(new ContentRef<BlobContent>(blob!.GetValue<string>()), $"room '{room}' {layer} color field");
 
 			if (root?["actors"] is not JsonArray actors)
 				continue;
@@ -3014,7 +3020,6 @@ public static partial class Assets
 				room.Sublayer = RoomSublayerFromPath(worldRoomsKey, key);
 				// Zip content has no per-room file to rename/delete; SourcePath stays null there.
 				room.SourcePath = ContentIsPak ? null : Path.Join(AssetsPath, key);
-				LoadRoomColorFields(room, key);
 				AddRoom(room);
 			}
 
@@ -3070,7 +3075,6 @@ public static partial class Assets
 		File.WriteAllBytes(path, json);
 		room.DiskRevision = RoomRevision(json);
 		room.SourcePath = path;
-		SaveRoomColorFields(room, path);
 		return true;
 	}
 
@@ -3124,15 +3128,12 @@ public static partial class Assets
 			return true;
 
 		var oldPath = room.SourcePath;
-		var oldForegroundColorPath = room.ForegroundColorField.SourcePath;
-		var oldBackgroundColorPath = room.BackgroundColorField.SourcePath;
 		room.Id = id;
 		RoomsById.Remove(oldId);
 		RoomsById[id] = room;
-		// The save writes the room and its color-field pngs under the new id (SaveRoomColorFields
-		// derives their paths from the room's path), leaving the old files to clean up below. A
+		// The save writes the room under the new id, leaving the old file to clean up below. A
 		// refused save (see SaveRoom's disk-conflict check) wrote nothing, so put the id back
-		// instead of deleting the files it still lives in.
+		// instead of deleting the file it still lives in.
 		if (!room.Save())
 		{
 			room.Id = oldId;
@@ -3143,10 +3144,6 @@ public static partial class Assets
 
 		if (!RenamedOntoItself(oldPath, room.SourcePath))
 			DeleteRoomFile(oldPath);
-		if (!RenamedOntoItself(oldForegroundColorPath, room.ForegroundColorField.SourcePath))
-			DeleteColorFieldFile(oldForegroundColorPath);
-		if (!RenamedOntoItself(oldBackgroundColorPath, room.BackgroundColorField.SourcePath))
-			DeleteColorFieldFile(oldBackgroundColorPath);
 
 		return true;
 	}
@@ -3179,8 +3176,6 @@ public static partial class Assets
 		if (Rooms.TryGetValue((room.Sublayer, room.Cell), out var byCell) && byCell == room)
 			Rooms.Remove((room.Sublayer, room.Cell));
 
-		DeleteColorFieldFile(room.ForegroundColorField.SourcePath);
-		DeleteColorFieldFile(room.BackgroundColorField.SourcePath);
 		DeleteRoomFile(room.SourcePath);
 
 		return true;
@@ -3190,70 +3185,6 @@ public static partial class Assets
 		=> Path.Join(WorldRoomsPath, RoomSublayerDirectory(sublayer), $"{id}.json");
 
 	static string RoomSublayerDirectory(int sublayer) => sublayer > 0 ? $"Sub{sublayer}" : "";
-
-	static void LoadRoomColorFields(Room room, string roomPath)
-	{
-		LoadRoomColorField(room.ForegroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Foreground), room.Size);
-		LoadRoomColorField(room.BackgroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Background), room.Size);
-	}
-
-	static void LoadRoomColorField(RoomColorField field, string path, Point2 size)
-	{
-		var legacyPath = LegacyRoomColorFieldPath(path);
-		try
-		{
-			if (Content.FileExists(path))
-				field.Load(Content.ReadAllBytes(path), size, ContentIsPak ? null : Path.Join(AssetsPath, path));
-			else if (Content.FileExists(legacyPath))
-				field.Load(Content.ReadAllBytes(legacyPath), size, ContentIsPak ? null : Path.Join(AssetsPath, legacyPath));
-		}
-		catch (Exception exception)
-		{
-			Console.Error.WriteLine($"Could not load room color field '{path}': {exception.Message}");
-		}
-	}
-
-	static void SaveRoomColorFields(Room room, string roomPath)
-	{
-		SaveRoomColorField(room.ForegroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Foreground));
-		SaveRoomColorField(room.BackgroundColorField, RoomColorFieldPath(roomPath, Factory.TileLayer.Background));
-	}
-
-	static void SaveRoomColorField(RoomColorField field, string path)
-	{
-		if (!field.Dirty && string.Equals(field.SourcePath, path, StringComparison.Ordinal))
-			return;
-
-		if (!field.HasPaint)
-		{
-			DeleteColorFieldFile(field.SourcePath);
-			if (!string.Equals(field.SourcePath, path, StringComparison.Ordinal))
-				DeleteColorFieldFile(path);
-			field.MarkSaved(null);
-			return;
-		}
-
-		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-		File.WriteAllBytes(path, field.WritePng());
-		DeleteColorFieldFile(LegacyRoomColorFieldPath(path));
-		field.MarkSaved(path);
-	}
-
-	static string RoomColorFieldPath(string roomPath, Factory.TileLayer layer)
-	{
-		var extension = Path.GetExtension(roomPath);
-		var stem = extension.Length > 0 ? roomPath[..^extension.Length] : roomPath;
-		return $"{stem}.{(layer == Factory.TileLayer.Foreground ? "foreground" : "background")}-color.png";
-	}
-
-	static string LegacyRoomColorFieldPath(string path)
-		=> Path.ChangeExtension(path, ".qoi");
-
-	static void DeleteColorFieldFile(string? path)
-	{
-		if (path != null && File.Exists(path))
-			File.Delete(path);
-	}
 
 	static bool RoomFileExists(string id)
 		=> Directory.Exists(WorldRoomsPath) && Directory.EnumerateFiles(WorldRoomsPath, $"{id}.json", SearchOption.AllDirectories).Any();

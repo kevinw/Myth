@@ -5,6 +5,9 @@
   "sporeFogStrength": 0.293,
   "reverb": 0.622,
   "BudSpawn": "SkipThisRoom",
+  "colorFields": {
+    "foreground": "eceba8763055afb4.png"
+  },
   "legend": {
     "#": "back",
     "%": "crosshatch",

@@ -500,7 +500,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	Point2 updateOrigin;
 	Point2 updateSize;
 	readonly List<ShadowSegment> occluderSegments = [];
-	string maskData = "";
+	ContentRef<BlobContent> maskData = new("");
 	Image? paintedImage;
 	uint normalSlots;
 	bool HasNormalOutput => normalSlots != 0 || NormalMode != NeuralTextureNormalMode.Decoded;
@@ -544,12 +544,12 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	bool SmokeActive => ActiveShutdown && shutdownTime >= 0;
 
 	// Actor-local RGBA slot weights at one pixel per world pixel. Empty fills the window.
-	public string PaintedMask
+	public ContentRef<BlobContent> PaintedMask
 	{
 		get => maskData;
 		set
 		{
-			maskData = value ?? "";
+			maskData = value;
 			paintedImage?.Dispose();
 			paintedImage = null;
 			if (supported)
@@ -666,12 +666,12 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	void DecodeMaskData()
 	{
 		maskCells = new uint[StateCellCount];
-		if (paintedImage == null && string.IsNullOrEmpty(maskData))
+		if (paintedImage == null && string.IsNullOrEmpty(maskData.Name))
 		{
 			Array.Fill(maskCells, 0xFFu); // slot 0 fully painted
 			return;
 		}
-		paintedImage ??= new Image(Convert.FromBase64String(maskData));
+		paintedImage ??= new Image(BlobContent.Read(maskData));
 		for (var y = 0; y < SimulationSize.Y; y++)
 			for (var x = 0; x < SimulationSize.X; x++)
 				maskCells[y * SimulationSize.X + x] = PackMask(SamplePainting((new Vector2(x, y) + new Vector2(0.5f)) / SimulationScale - new Vector2(0.5f)));
@@ -709,18 +709,18 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	public string SerializeMask()
 	{
 		if (paintedImage != null)
-			maskData = Convert.ToBase64String(paintedImage.WritePng());
-		return maskData;
+			maskData = BlobContent.Write(paintedImage.WritePng(), "png");
+		return maskData.Name;
 	}
 
-	public static string ReframeMask(string data, Point2 newSize, Point2 offset)
+	public static string ReframeMask(string blob, Point2 newSize, Point2 offset)
 	{
-		if (string.IsNullOrEmpty(data))
-			return data;
-		using var original = new Image(Convert.FromBase64String(data));
+		if (string.IsNullOrEmpty(blob))
+			return blob;
+		using var original = new Image(BlobContent.Read(blob));
 		using var cropped = new Image(newSize.X, newSize.Y);
 		cropped.CopyPixels(original, original.Bounds, -offset);
-		return Convert.ToBase64String(cropped.WritePng());
+		return BlobContent.Write(cropped.WritePng(), "png").Name;
 	}
 
 	public void ResizeWindow(Point2 newSize, Point2 offset)

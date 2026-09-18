@@ -2,6 +2,9 @@
   "position": [160, 23],
   "size": [40, 23],
   "reverb": 0.242,
+  "colorFields": {
+    "foreground": "1cb8ede8e6a76539.png"
+  },
   "legend": {
     "#": "back",
     "1": "castle",
