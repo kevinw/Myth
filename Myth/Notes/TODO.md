@@ -1,3 +1,5 @@
+- compress orthogonal burrow to launch or railgun 
+- quantum tunnel through 1tile walls
 - Tidal Cycles/Strudel port to C# for bullet patterns and music?
 - put an evolving world map online with a timeline scrubber https://leafletjs.com
 - investigate gpu perf
