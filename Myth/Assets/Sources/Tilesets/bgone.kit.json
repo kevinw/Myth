@@ -1,0 +1,160 @@
+{
+  "substance": "Brick",
+  "layer": "Background",
+  "char": "W",
+  "mask": "stone-kit",
+  "seed": 2123081816,
+  "edgeWidth": "0-4",
+  "wobble": 0.925,
+  "fillTiles": 2,
+  "palette": {
+    "a": "5A5E41",
+    "b": "847658",
+    "c": "3E3832",
+    "d": "5F4C40",
+    "e": "265C42",
+    "f": "193C3E",
+    "g": "3E8948",
+    "h": "55AF61",
+    "i": "1A4846"
+  },
+  "heights": {
+    "a": 0.471,
+    "b": 0.643,
+    "c": 0.28,
+    "d": 0.417,
+    "e": 0.373,
+    "f": 0.236,
+    "g": 0.575,
+    "h": 0.764,
+    "i": 0.285
+  },
+  "fills": [
+    [
+      "aaaaaaaa",
+      "aaaaabab",
+      "acadabbb",
+      "ccddaabd",
+      "bcdbbaab",
+      "bbaabbbb",
+      "cbdababd",
+      "ccddbddd"
+    ],
+    [
+      "baddbccc",
+      "bbddbbcb",
+      "bbddbccc",
+      "bbdddcdd",
+      "bddddadd",
+      "ddaddddc",
+      "adadcccc",
+      "aaaabbcc"
+    ],
+    [
+      "bbdddddc",
+      "badddacc",
+      "aaaaddcd",
+      "acaddddd",
+      "cccddddd",
+      "ccadbdda",
+      "cbbabbda",
+      "dbbdbddd"
+    ],
+    [
+      "bbbbbddb",
+      "bdbddcca",
+      "ddbbddaa",
+      "dbbbaaaa",
+      "dbabcbaa",
+      "aaaacbaa",
+      "aaaaabab",
+      "aaaaaaab"
+    ],
+    [
+      "eeeeefff",
+      "egggeeff",
+      "ehgggeff",
+      "ehhggeee",
+      "eehhgegg",
+      "eeeeeggg",
+      "iiiiegge",
+      "iiiiegeh"
+    ],
+    [
+      "ffffffff",
+      "ffeeeeef",
+      "ffegggge",
+      "eeehgggg",
+      "ggehhegg",
+      "ghehhheg",
+      "hheehhhe",
+      "hheieeei"
+    ],
+    [
+      "eeeeiehh",
+      "ggggeeee",
+      "hggggeei",
+      "hheggeie",
+      "hhhegeie",
+      "ehhheeie",
+      "eeeeiiie",
+      "iiiiiiii"
+    ],
+    [
+      "heiiiiie",
+      "eeeeeeee",
+      "eggggeee",
+      "ggggheie",
+      "ggehheie",
+      "gehhheii",
+      "ehhheeii",
+      "ieeeeiii"
+    ]
+  ],
+  "edge": [
+    [
+      "5F4C40",
+      36
+    ],
+    [
+      "5A5E41",
+      34
+    ],
+    [
+      "847658",
+      30
+    ]
+  ],
+  "edgeTop": [
+    [
+      "847658",
+      55
+    ],
+    [
+      "5A5E41",
+      30
+    ],
+    [
+      "5F4C40",
+      15
+    ]
+  ],
+  "edgeBottom": [
+    [
+      "5F4C40",
+      55
+    ],
+    [
+      "5A5E41",
+      30
+    ],
+    [
+      "847658",
+      15
+    ],
+    [
+      "000000",
+      25
+    ]
+  ]
+}

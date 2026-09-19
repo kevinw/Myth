@@ -524,7 +524,7 @@ public class HiddenCoverGrid : Actor
 				if (materialMask == 0)
 					continue;
 
-				var art = DualGrid.LookupArt(tileset, MaskToTile[materialMask], room.TileSpacePosition + new Point2(x, y), tileType);
+				var art = DualGrid.LookupArt(room, Factory.TileLayer.Foreground, tileset, MaskToTile[materialMask], new Point2(x, y), tileType);
 				if (art.Tile.Texture == null)
 					continue;
 

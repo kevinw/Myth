@@ -98,6 +98,11 @@ public class Room
 	Factory.Entry?[,] backgroundTileEntries;
 	TileFlags[,] tileFlags;
 
+	/// Hand-picked dual-grid variant groups (see Tileset.VariantSlot), keyed by room-local dual
+	/// vertex. A multi-tile kit's pin sits on its fill block's top-left vertex and covers the block.
+	readonly Dictionary<Point2, int> foregroundVariantPins = [];
+	readonly Dictionary<Point2, int> backgroundVariantPins = [];
+
 	/// Actor specs placed directly in this room.
 	public readonly List<JsonObject> Actors = [];
 
@@ -232,6 +237,10 @@ public class Room
 				clone.BackgroundTiles[x, y] = BackgroundTiles[x, y];
 				clone.tileFlags[x, y] = tileFlags[x, y];
 			}
+		foreach (var (vertex, pin) in foregroundVariantPins)
+			clone.foregroundVariantPins[vertex] = pin;
+		foreach (var (vertex, pin) in backgroundVariantPins)
+			clone.backgroundVariantPins[vertex] = pin;
 		foreach (var actor in Actors)
 			clone.Actors.Add(ActorSpecs.CloneObject(actor));
 
@@ -386,6 +395,9 @@ public class Room
 					tileFlags[tile.X, tile.Y] |= TileFlags.Crumble;
 		}
 
+		ReadVariantPins(json, "variantPins", foregroundVariantPins);
+		ReadVariantPins(json, "backgroundVariantPins", backgroundVariantPins);
+
 		MigrateLegacyFungusTiles();
 
 		NormalizeTileLayers();
@@ -478,6 +490,7 @@ public class Room
 	{
 		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
 		{
+			ClearReplacedVariantPins(Factory.TileLayer.Foreground, tile, Tiles[tile.X, tile.Y], ch);
 			SetTileUnchecked(tile.X, tile.Y, ch);
 			if (rebuildGeometry)
 				RebuildGeometry();
@@ -488,6 +501,7 @@ public class Room
 	{
 		if (tile.X >= 0 && tile.Y >= 0 && tile.X < Size.X && tile.Y < Size.Y)
 		{
+			ClearReplacedVariantPins(Factory.TileLayer.Background, tile, BackgroundTiles[tile.X, tile.Y], ch);
 			SetBackgroundTileUnchecked(tile.X, tile.Y, ch);
 			if (rebuildGeometry)
 				RebuildGeometry();
@@ -778,6 +792,8 @@ public class Room
 			}
 
 		var actorOffset = previousPosition - TileSpacePosition;
+		ShiftVariantPins(foregroundVariantPins, actorOffset);
+		ShiftVariantPins(backgroundVariantPins, actorOffset);
 		if (actorOffset != Point2.Zero)
 		{
 			foreach (var actor in Actors)
@@ -1144,6 +1160,69 @@ public class Room
 	}
 
 	public void SetBreakable(Point2 tile, bool breakable) => SetTileFlag(tile, TileFlags.Breakable, breakable);
+
+	Dictionary<Point2, int> VariantPins(Factory.TileLayer layer)
+		=> layer == Factory.TileLayer.Foreground ? foregroundVariantPins : backgroundVariantPins;
+
+	public Point2 VariantPinVertex(Point2 vertex, int fillTiles)
+		=> Tileset.FillBlock(TileSpacePosition + vertex, fillTiles) * fillTiles - TileSpacePosition;
+
+	public int? GetVariantPin(Factory.TileLayer layer, Point2 vertex, int fillTiles)
+		=> VariantPins(layer).TryGetValue(VariantPinVertex(vertex, fillTiles), out var pin) ? pin : null;
+
+	public void SetVariantPin(Factory.TileLayer layer, Point2 vertex, int fillTiles, int? pin)
+	{
+		if (pin is { } value)
+			VariantPins(layer)[VariantPinVertex(vertex, fillTiles)] = value;
+		else
+			VariantPins(layer).Remove(VariantPinVertex(vertex, fillTiles));
+	}
+
+	public Dictionary<Point2, int>.KeyCollection VariantPinVertices(Factory.TileLayer layer) => VariantPins(layer).Keys;
+
+	// Erasing or repainting a tile drops the pins on its corners; painting into empty space keeps them.
+	void ClearReplacedVariantPins(Factory.TileLayer layer, Point2 tile, char previous, char next)
+	{
+		var pins = VariantPins(layer);
+		if (pins.Count == 0 || previous == '0' || previous == next)
+			return;
+
+		var fillTiles = Factory.Find(previous) is { DualTilesetName: { } name } && Assets.GetTileset(name) is { } tileset ? tileset.FillTiles : 1;
+		foreach (var corner in (ReadOnlySpan<Point2>)[new(0, 0), new(1, 0), new(0, 1), new(1, 1)])
+			pins.Remove(VariantPinVertex(tile + corner, fillTiles));
+	}
+
+	void ShiftVariantPins(Dictionary<Point2, int> pins, Point2 offset)
+	{
+		if (pins.Count == 0)
+			return;
+
+		// Block anchors can sit just outside the room, so the kept area pads by the largest block.
+		var keep = new RectInt(Size + Point2.One).Inflate(TileKits.MaxFillTiles);
+		var shifted = pins.Where(it => keep.Contains(it.Key + offset)).ToArray();
+		pins.Clear();
+		foreach (var (vertex, pin) in shifted)
+			pins[vertex + offset] = pin;
+	}
+
+	static void ReadVariantPins(JsonObject json, string name, Dictionary<Point2, int> pins)
+	{
+		if (json.TryGetPropertyValue(name, out var node) && node is JsonArray entries)
+			foreach (var entry in entries)
+				if (entry is JsonArray { Count: 3 } values)
+					pins[new Point2(values[0]!.GetValue<int>(), values[1]!.GetValue<int>())] = values[2]!.GetValue<int>();
+	}
+
+	void WriteVariantPins(Utf8JsonWriter writer, string name, Dictionary<Point2, int> pins)
+	{
+		if (pins.Count == 0)
+			return;
+
+		writer.WriteStartArray(name);
+		foreach (var (vertex, pin) in pins.OrderBy(it => it.Key.Y).ThenBy(it => it.Key.X))
+			WriteInlineInts(writer, vertex.X, vertex.Y, pin);
+		writer.WriteEndArray();
+	}
 
 	public bool IsSlope(Point2 tile) => ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & TileFlags.Slope) != 0;
 	public bool IsSlope(Point2 tile, Factory.TileLayer layer) => ContainsTile(tile.X, tile.Y) && (tileFlags[tile.X, tile.Y] & SlopeFlag(layer)) != 0;
@@ -1691,6 +1770,8 @@ public class Room
 		WriteFlaggedTiles(writer, "slopes", TileFlags.Slope);
 		WriteFlaggedTiles(writer, "backgroundSlopes", TileFlags.BackgroundSlope);
 		WriteFlaggedTiles(writer, "crumble", TileFlags.Crumble);
+		WriteVariantPins(writer, "variantPins", foregroundVariantPins);
+		WriteVariantPins(writer, "backgroundVariantPins", backgroundVariantPins);
 
 		if (Actors.Count > 0)
 		{
@@ -1709,20 +1790,26 @@ public class Room
 	static void WriteIntPairProperty(Utf8JsonWriter writer, string name, int x, int y)
 	{
 		writer.WritePropertyName(name);
-		WriteIntPairValue(writer, x, y);
+		WriteInlineInts(writer, x, y);
 	}
 
-	// Writes [x, y] inline even under indented formatting (WriteRawValue is not re-indented),
+	// Writes [a, b, ...] inline even under indented formatting (WriteRawValue is not re-indented),
 	// matching the previous regex-compacted output without allocating a string per point.
-	static void WriteIntPairValue(Utf8JsonWriter writer, int x, int y)
+	static void WriteInlineInts(Utf8JsonWriter writer, params ReadOnlySpan<int> values)
 	{
-		Span<char> buffer = stackalloc char[32];
+		Span<char> buffer = stackalloc char[64];
 		var length = 0;
 		buffer[length++] = '[';
-		x.TryFormat(buffer[length..], out var written); length += written;
-		buffer[length++] = ',';
-		buffer[length++] = ' ';
-		y.TryFormat(buffer[length..], out written); length += written;
+		for (var i = 0; i < values.Length; i++)
+		{
+			if (i > 0)
+			{
+				buffer[length++] = ',';
+				buffer[length++] = ' ';
+			}
+			values[i].TryFormat(buffer[length..], out var written);
+			length += written;
+		}
 		buffer[length++] = ']';
 		writer.WriteRawValue(buffer[..length], skipInputValidation: true);
 	}
@@ -1823,7 +1910,7 @@ public class Room
 		for (var y = 0; y < Size.Y; y++)
 			for (var x = 0; x < Size.X; x++)
 				if ((tileFlags[x, y] & flag) != 0)
-					WriteIntPairValue(writer, x, y);
+					WriteInlineInts(writer, x, y);
 		writer.WriteEndArray();
 	}
 }

@@ -81,7 +81,7 @@ public static partial class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 14; // v14: per-frame sprite socket visibility
+	const int visualAssetPackVersion = 15; // v15: tileset pinned variant groups
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string worldManifestName = "world.json";
@@ -1076,7 +1076,8 @@ public static partial class Assets
 				LoadSubtextureGroups(packed.NormalVariants, atlas),
 				LoadOccluders(packed.OccluderTiles),
 				LoadOccluderGroups(packed.OccluderVariants),
-				packed.FillTiles);
+				packed.FillTiles,
+				packed.PinnedGroups);
 		}
 
 		foreach (var (name, tileset) in Tilesets.ToArray())
@@ -1130,14 +1131,16 @@ public static partial class Assets
 	{
 		var columns = images[0].Width / Game.TileSize;
 		var rows = images[0].Height / Game.TileSize;
+		// Only a kit's generated dual tileset carries fill groups; its base tileset is the single
+		// fill that slopes are cut from.
+		var kit = TileKits.Specs.FirstOrDefault(it => it.DualName == name);
 		var packed = new PackedTileset
 		{
 			Name = name,
 			Columns = columns,
 			Rows = rows,
-			// Only a kit's generated dual tileset carries a multi-tile fill; its base tileset is
-			// the single fill that slopes are cut from.
-			FillTiles = TileKits.Specs.FirstOrDefault(it => it.DualName == name)?.FillTiles ?? 1,
+			FillTiles = kit?.FillTiles ?? 1,
+			PinnedGroups = kit?.PinnedGroups ?? 0,
 			Tiles = PackTileSubtextures(bake, $"tilesets/{name}", columns, rows)
 		};
 
@@ -1245,6 +1248,7 @@ public static partial class Assets
 			writer.Write(tileset.Columns);
 			writer.Write(tileset.Rows);
 			writer.Write(tileset.FillTiles);
+			writer.Write(tileset.PinnedGroups);
 			WritePackedSubtextures(writer, tileset.Tiles, $"{tileset.Name} tiles");
 			WritePackedSubtextureGroups(writer, tileset.Variants, $"{tileset.Name} variants");
 			WritePackedSubtextures(writer, tileset.NormalTiles, $"{tileset.Name} normal tiles");
@@ -1392,6 +1396,7 @@ public static partial class Assets
 				Columns = reader.ReadInt32(),
 				Rows = reader.ReadInt32(),
 				FillTiles = reader.ReadInt32(),
+				PinnedGroups = reader.ReadInt32(),
 				Tiles = ReadPackedSubtextures(reader, "tiles"),
 				Variants = ReadPackedSubtextureGroups(reader, "variants"),
 				NormalTiles = ReadPackedSubtextures(reader, "normal tiles"),
@@ -1746,6 +1751,7 @@ public static partial class Assets
 		public int Columns { get; set; }
 		public int Rows { get; set; }
 		public int FillTiles { get; set; } = 1;
+		public int PinnedGroups { get; set; }
 		public List<PackedSubtexture> Tiles { get; set; } = [];
 		public List<List<PackedSubtexture>> Variants { get; set; } = [];
 		public List<PackedSubtexture> NormalTiles { get; set; } = [];
@@ -1911,7 +1917,7 @@ public static partial class Assets
 		var edgeWidth = ParseEdgeWidthRange(kitName, edgeSlice);
 		var wobble = ParseMaskWobble(kitName, maskSlice);
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, 1, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, 1, 0, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
 	}
 
 	/// Generates the tileset outputs for a JSON kit spec: images come from the spec's
@@ -1942,7 +1948,7 @@ public static partial class Assets
 		var (edges, edgeTops, edgeBottoms) = TileKits.RasterizeEdges(spec);
 		var edgeWidth = ParseEdgeWidthValue(spec.Name, spec.EdgeWidth);
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, spec.FillTiles, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, spec.FillTiles, spec.PinnedGroups, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
 	}
 
 	// Shared dual-tileset generation. Takes ownership of every image list (disposed here);
@@ -1952,28 +1958,37 @@ public static partial class Assets
 	// this many groups, cycling the fills, so their edges still break up.
 	const int MinWobbleGroups = 4;
 
-	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, int pinnedGroups, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		static Image? Pick(List<Image> tiles, int i) => tiles.Count > 0 ? tiles[i % tiles.Count] : null;
 
 		// Variants are laid out group-major, phase-minor: the renderer hashes a world tile to a
 		// group and reads the phase straight off the tile's position, so one group's fills
-		// reassemble into their original multi-tile pattern on the ground.
+		// reassemble into their original multi-tile pattern on the ground. The kit's trailing
+		// pinned groups go last, unpadded, where the hash never reaches them.
 		var stride = fillTiles * fillTiles;
 		var sourceGroups = Math.Max(1, fills.Count / stride);
-		var groups = stride > 1 ? Math.Max(sourceGroups, MinWobbleGroups) : sourceGroups;
+		var randomSourceGroups = Math.Max(1, sourceGroups - pinnedGroups);
+		pinnedGroups = sourceGroups - randomSourceGroups;
+		var randomGroups = stride > 1 ? Math.Max(randomSourceGroups, MinWobbleGroups) : randomSourceGroups;
+		var groups = randomGroups + pinnedGroups;
 
 		for (var group = 0; group < groups; group++)
 		{
+			var pinned = group >= randomGroups;
+			var sourceGroup = pinned ? group - randomGroups + randomSourceGroups : group % randomSourceGroups;
+
 			// Group 0 keeps the authored silhouette; later groups get a jittered copy so the
 			// terrain contour doesn't repeat. Color, normals and occluders all derive from the
 			// same group mask, so lighting bevels and shadows follow the wobble -- and every
-			// phase in a group shares it, which keeps a macro block's outline coherent.
-			var groupMask = group > 0 && wobble > 0 ? WobbleMask(mask, group, wobble) : mask;
+			// phase in a group shares it, which keeps a macro block's outline coherent. Pinned
+			// groups seed off their own index, so growing the random pool leaves their contour be.
+			var wobbleSeed = pinned ? 1000 + group - randomGroups : group;
+			var groupMask = wobbleSeed > 0 && wobble > 0 ? WobbleMask(mask, wobbleSeed, wobble) : mask;
 
 			for (var phase = 0; phase < stride; phase++)
 			{
-				var fillIndex = group % sourceGroups * stride + phase;
+				var fillIndex = sourceGroup * stride + phase;
 				var variant = group * stride + phase;
 				var fill = fills[fillIndex];
 				if (variant == 0)
@@ -2027,7 +2042,7 @@ public static partial class Assets
 				var worldTile = new Point2(x, y);
 				var tile = DualGrid.MaskToTile[mask];
 				var seed = Kit.Hash32.TileVariantSeed(Tileset.FillBlock(worldTile, spec.FillTiles), spec.Name[0]);
-				var variant = dualVariants[Tileset.VariantSlot(seed, Tileset.FillPhase(worldTile, spec.FillTiles), dualVariants.Count, spec.FillTiles)];
+				var variant = dualVariants[Tileset.VariantSlot(seed, Tileset.FillPhase(worldTile, spec.FillTiles), dualVariants.Count, spec.FillTiles, spec.PinnedGroups)];
 				for (var py = 0; py < Game.TileSize; py++)
 					for (var px = 0; px < Game.TileSize; px++)
 					{

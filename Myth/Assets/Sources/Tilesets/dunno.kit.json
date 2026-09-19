@@ -1,0 +1,153 @@
+{
+  "substance": "Brick",
+  "char": "V",
+  "mask": "stone-kit",
+  "seed": 421042580,
+  "edgeWidth": "2-3",
+  "wobble": 0.6,
+  "fillTiles": 2,
+  "palette": {
+    "a": "191C10",
+    "b": "425121",
+    "c": "283113",
+    "d": "586930",
+    "e": "495925",
+    "f": "3C491E"
+  },
+  "heights": {
+    "a": 0,
+    "b": 0.669,
+    "c": 0.253,
+    "d": 1,
+    "e": 0.776,
+    "f": 0.568
+  },
+  "fills": [
+    [
+      "aabcaaad",
+      "eaacbdda",
+      "ceaaebdd",
+      "cbaceebe",
+      "bbaccebb",
+      "aacbbcaa",
+      "accbecae",
+      "cebddace"
+    ],
+    [
+      "dbeccacc",
+      "ddbaebbc",
+      "ccabcbec",
+      "acacbdda",
+      "aaabddac",
+      "eebccaaa",
+      "cbeaabbc",
+      "bddcaebb"
+    ],
+    [
+      "cbddaecb",
+      "aaaaddca",
+      "cbaddeea",
+      "bbcebeea",
+      "accbbcaa",
+      "baaacabb",
+      "eaeccaeb",
+      "cabcbadd"
+    ],
+    [
+      "ddaaaddb",
+      "aaeefadd",
+      "ceebeaac",
+      "aefdeaaa",
+      "cddeabbe",
+      "eaaaaebe",
+      "eeccaddb",
+      "becbeadd"
+    ],
+    [
+      "aaafefaa",
+      "afaacacf",
+      "fefcdfac",
+      "adecdefa",
+      "aaaaaeaa",
+      "facfaaac",
+      "aaeffade",
+      "acdecadf"
+    ],
+    [
+      "eefaacdd",
+      "fecafede",
+      "fcaaaaea",
+      "aaaddaac",
+      "acfedaef",
+      "fecdaaee",
+      "aeeaccae",
+      "faacedaa"
+    ],
+    [
+      "aaaaaacf",
+      "aeddafaa",
+      "ffeafeca",
+      "afcafeea",
+      "fcaacfda",
+      "addcadaf",
+      "adeeaaac",
+      "aaecfefa"
+    ],
+    [
+      "afcffeaa",
+      "fefafcca",
+      "ddaaacfe",
+      "aaeecaee",
+      "eafefcaf",
+      "eececfaa",
+      "efaceffa",
+      "ccaadeaa"
+    ]
+  ],
+  "edge": [
+    [
+      "191C10",
+      50
+    ],
+    [
+      "495925",
+      26
+    ],
+    [
+      "283113",
+      25
+    ]
+  ],
+  "edgeTop": [
+    [
+      "495925",
+      55
+    ],
+    [
+      "283113",
+      30
+    ],
+    [
+      "191C10",
+      15
+    ]
+  ],
+  "edgeBottom": [
+    [
+      "191C10",
+      55
+    ],
+    [
+      "283113",
+      30
+    ],
+    [
+      "495925",
+      15
+    ],
+    [
+      "000000",
+      25
+    ]
+  ]
+}

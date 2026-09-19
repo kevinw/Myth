@@ -4502,6 +4502,9 @@ public partial class Manager
 			if (eyedropper)
 				CancelTilePaint();
 
+			if (UpdateVariantPins(editing, localMouse, !editingRoomGeometry && !worldMouseBlocked && overGame && !keyboardBlocked))
+				worldMouseBlocked = true;
+
 			if (worldMouseBlocked)
 				CancelTilePaint();
 
@@ -4874,6 +4877,8 @@ public partial class Manager
 				if (core > 1.0f)
 					batcher.CircleLine(worldMouse, core, gridWeight, 48, brushColor * 0.4f);
 			}
+			if (!editingRoomGeometry)
+				DrawVariantPins(editing, roomTopLeft, worldMouse, gridWeight);
 
 			// Right-click an adjacent proposal or any empty world-grid cell to add a room there.
 			if (proposedRoomTiles is { } proposal && !worldMouseBlocked && inner.Contains(Cursor) && Input.Mouse.RightPressed && !eyedropper)

@@ -27,6 +27,9 @@ public sealed class TileKitSpec
 	// in 2x2 groups that reassemble into a 16px pattern across four tiles, 3 into a 24px one. Lets
 	// authored art bigger than a tile keep its native resolution instead of being downsampled.
 	public int FillTiles = 1;
+	// How many trailing fill groups are authored exceptions: the positional hash never picks them,
+	// only a room's variant pin (V in the room editor) does.
+	public int PinnedGroups;
 	public readonly Dictionary<char, Color> Palette = [];
 	public readonly Dictionary<char, float> Heights = [];
 	public readonly List<string[]> Fills = [];
@@ -43,6 +46,7 @@ public sealed class TileKitSpec
 	public bool HasEdges => Edge.Count > 0;
 	/// Fills per group: one per tile of the macro block.
 	public int FillStride => FillTiles * FillTiles;
+	public int FillGroups => Fills.Count / FillStride;
 }
 
 /// The Factory-facing subset of a kit spec: everything registration needs and nothing the
@@ -131,6 +135,7 @@ public static class TileKits
 		spec.AcousticReflectivity = JsonUtil.ReadFloat(json, "acousticReflectivity", spec.AcousticReflectivity);
 		spec.EdgeTileCount = Math.Max(1, JsonUtil.ReadInt(json, "edgeTiles", spec.EdgeTileCount));
 		spec.FillTiles = Math.Clamp(JsonUtil.ReadInt(json, "fillTiles", spec.FillTiles), 1, MaxFillTiles);
+		spec.PinnedGroups = Math.Max(0, JsonUtil.ReadInt(json, "pinnedGroups", spec.PinnedGroups));
 		if (JsonUtil.ReadString(json, "reflection") is { } reflection)
 			spec.Reflection = Enum.Parse<Factory.ReflectionMode>(reflection, ignoreCase: true);
 
@@ -157,6 +162,8 @@ public static class TileKits
 			throw new InvalidOperationException($"Tile kit '{name}': at least one fill tile is required.");
 		if (spec.Fills.Count % spec.FillStride != 0)
 			throw new InvalidOperationException($"Tile kit '{name}': fillTiles {spec.FillTiles} needs fills in groups of {spec.FillStride} (found {spec.Fills.Count}).");
+		if (spec.PinnedGroups >= spec.FillGroups)
+			throw new InvalidOperationException($"Tile kit '{name}': pinnedGroups {spec.PinnedGroups} leaves no fill group for the random pool (found {spec.FillGroups}).");
 
 		if (json.TryGetPropertyValue("heightMaps", out var mapsNode) && mapsNode is JsonArray maps)
 			foreach (var mapNode in maps)
@@ -234,6 +241,7 @@ public static class TileKits
 			AcousticReflectivity = spec.AcousticReflectivity,
 			EdgeTileCount = spec.EdgeTileCount,
 			FillTiles = spec.FillTiles,
+			PinnedGroups = spec.PinnedGroups,
 		};
 		foreach (var (key, value) in spec.Palette)
 			clone.Palette[key] = value;
@@ -302,6 +310,8 @@ public static class TileKits
 			writer.WriteNumber("edgeTiles", spec.EdgeTileCount);
 		if (spec.FillTiles != 1)
 			writer.WriteNumber("fillTiles", spec.FillTiles);
+		if (spec.PinnedGroups > 0)
+			writer.WriteNumber("pinnedGroups", spec.PinnedGroups);
 
 		writer.WriteStartObject("palette");
 		foreach (var (key, color) in spec.Palette.OrderBy(it => it.Key))
@@ -658,6 +668,7 @@ public static class TileKits
 			spec.Heights.Clear();
 			spec.HeightMaps.Clear();
 			spec.FillTiles = fillTiles;
+			spec.PinnedGroups = 0;
 		}
 
 		// Resolve each distinct color to a key once, against the palette as it stood before this
@@ -668,6 +679,8 @@ public static class TileKits
 			if (!keys.ContainsKey(color))
 				keys[color] = ResolveKey(spec, mergeInto, color);
 
+		// New variants join the random pool, ahead of the pinned-only groups.
+		var insertAt = (spec.FillGroups - spec.PinnedGroups) * stride;
 		for (var sub = 0; sub < stride; sub++)
 		{
 			var rows = new string[Game.TileSize];
@@ -678,7 +691,7 @@ public static class TileKits
 					row[x] = keys[pixels[sub * area + y * Game.TileSize + x]];
 				rows[y] = new string(row);
 			}
-			spec.Fills.Add(rows);
+			spec.Fills.Insert(insertAt + sub, rows);
 		}
 
 		// Heights must cover every palette key, and a relief map must cover every fill.

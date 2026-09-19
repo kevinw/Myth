@@ -410,8 +410,12 @@ public partial class Manager
 
 		// A group's fills are laid out the way they land in the world, so painting across the seam
 		// between two of them reads the same here as it will on the ground.
+		var randomGroups = groups - draft.PinnedGroups;
 		for (var group = 0; group < groups; group++)
 		{
+			var pinned = group >= randomGroups;
+			if (group == randomGroups)
+				ImGui.SeparatorText("pinned only: placed with V in the room editor");
 			ImGui.PushID(group);
 			ImGui.BeginGroup();
 			for (var row = 0; row < draft.FillTiles; row++)
@@ -433,22 +437,49 @@ public partial class Manager
 			{
 				for (var i = 0; i < stride; i++)
 					draft.Fills.Insert((group + 1) * stride + i, (string[])draft.Fills[group * stride + i].Clone());
+				if (pinned)
+					draft.PinnedGroups++;
 				MarkTileKitEdited();
 			}
-			ImGui.BeginDisabled(groups <= 1);
+			// The random pool always keeps at least one group.
+			ImGui.BeginDisabled(!pinned && randomGroups <= 1);
 			if (ImGui.SmallButton("x"))
 			{
 				draft.Fills.RemoveRange(group * stride, stride);
 				if (draft.HeightMaps.Count > 0)
 					draft.HeightMaps.RemoveRange(group * stride, stride);
+				if (pinned)
+					draft.PinnedGroups--;
 				MarkTileKitEdited();
 			}
+			if (ImGui.SmallButton(pinned ? "unpin" : "pin"))
+			{
+				// Pinned groups live at the tail, so toggling moves the group across the boundary.
+				MoveTileKitFillGroup(draft, group, pinned ? randomGroups : groups - 1);
+				draft.PinnedGroups += pinned ? -1 : 1;
+				MarkTileKitEdited();
+			}
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip(pinned ? "let the random scatter use this variant" : "only place this variant by hand (V in the room editor)");
 			ImGui.EndDisabled();
 			ImGui.EndGroup();
 			ImGui.PopID();
 
-			if (stride == 1 && (group + 1) % 2 != 0 && group + 1 < groups)
+			if (stride == 1 && (group - (pinned ? randomGroups : 0) + 1) % 2 != 0 && group + 1 < groups && group + 1 != randomGroups)
 				ImGui.SameLine(0, 18);
+		}
+	}
+
+	static void MoveTileKitFillGroup(TileKitSpec draft, int from, int to)
+	{
+		var stride = draft.FillStride;
+		foreach (var list in (List<string[]>[])[draft.Fills, draft.HeightMaps])
+		{
+			if (list.Count == 0)
+				continue;
+			var moved = list.GetRange(from * stride, stride);
+			list.RemoveRange(from * stride, stride);
+			list.InsertRange(to * stride, moved);
 		}
 	}
 
@@ -555,7 +586,6 @@ public partial class Manager
 
 		if (tileKitSheetCell.X < 0)
 		{
-			ImGui.TextDisabled("click a cell to pick it");
 			return;
 		}
 

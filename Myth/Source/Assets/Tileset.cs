@@ -13,6 +13,9 @@ public class Tileset
 	/// How many game tiles one fill pattern spans, per side (see TileKitSpec.FillTiles). 1 for an
 	/// ordinary tileset, where every variant is interchangeable and the phase is always 0.
 	public int FillTiles { get; private set; } = 1;
+	/// Trailing variant groups the positional hash never lands on; only a room's variant pin can
+	/// reach them (see TileKitSpec.PinnedGroups).
+	public int PinnedGroups { get; private set; }
 	public readonly List<Subtexture> Tiles = new();
 	public readonly List<List<Subtexture>> Variants = [];
 	public readonly List<Subtexture> NormalTiles = new();
@@ -29,11 +32,12 @@ public class Tileset
 			Tiles.Add(new());
 	}
 
-	public void Reload(int columns, int rows, List<Subtexture> tiles, List<List<Subtexture>>? variants = null, List<Subtexture>? normalTiles = null, List<List<Subtexture>>? normalVariants = null, List<OccluderSegment[]>? occluderTiles = null, List<List<OccluderSegment[]>>? occluderVariants = null, int fillTiles = 1)
+	public void Reload(int columns, int rows, List<Subtexture> tiles, List<List<Subtexture>>? variants = null, List<Subtexture>? normalTiles = null, List<List<Subtexture>>? normalVariants = null, List<OccluderSegment[]>? occluderTiles = null, List<List<OccluderSegment[]>>? occluderVariants = null, int fillTiles = 1, int pinnedGroups = 0)
 	{
 		Columns = columns;
 		Rows = rows;
 		FillTiles = fillTiles;
+		PinnedGroups = pinnedGroups;
 
 		Tiles.Clear();
 		Tiles.AddRange(tiles);
@@ -95,17 +99,29 @@ public class Tileset
 			: new Point2(FloorDiv(worldTile.X, fillTiles), FloorDiv(worldTile.Y, fillTiles));
 
 	/// Variants are laid out group-major, phase-minor. The seed picks the group (pseudorandom, so
-	/// contours vary); the phase is fixed by the tile's position, so one group's fills reassemble
-	/// into their original pattern on the ground.
+	/// contours vary) from all but the trailing pinned groups; the phase is fixed by the tile's
+	/// position, so one group's fills reassemble into their original pattern on the ground.
+	///
+	/// A room's variant pin overrides the seed: 0 and up names a random-pool group, -1 and down a
+	/// pinned-only one. The two count separately so adding a fill to either pool doesn't shift the
+	/// pins already authored against the other; an out-of-range pin wraps instead of failing.
 	///
 	/// These three are static because the Tile Creator previews a draft kit before anything is
 	/// packed into a Tileset, and has to land on the same variant the game will -- it used to carry
 	/// its own copy of this arithmetic, which then silently drifted.
-	public static int VariantSlot(int seed, int phase, int count, int fillTiles)
+	public static int VariantSlot(int seed, int phase, int count, int fillTiles, int pinnedGroups = 0, int? pin = null)
 	{
 		var stride = fillTiles * fillTiles;
 		var groups = Math.Max(1, count / stride);
-		return Math.Min((seed & int.MaxValue) % groups * stride + Math.Clamp(phase, 0, stride - 1), count - 1);
+		pinnedGroups = Math.Clamp(pinnedGroups, 0, groups - 1);
+		var randomGroups = groups - pinnedGroups;
+		var group = pin switch
+		{
+			>= 0 => pin.Value % randomGroups,
+			< 0 when pinnedGroups > 0 => randomGroups + (-pin.Value - 1) % pinnedGroups,
+			_ => (seed & int.MaxValue) % randomGroups,
+		};
+		return Math.Min(group * stride + Math.Clamp(phase, 0, stride - 1), count - 1);
 	}
 
 	static int FloorMod(int value, int size) => (value % size + size) % size;
@@ -113,14 +129,16 @@ public class Tileset
 
 	public int FillPhase(Point2 worldTile) => FillPhase(worldTile, FillTiles);
 	public Point2 FillBlock(Point2 worldTile) => FillBlock(worldTile, FillTiles);
-	int VariantIndex(int seed, int phase, int count) => VariantSlot(seed, phase, count, FillTiles);
+	public int VariantGroups => Math.Max(1, Variants.Count / (FillTiles * FillTiles));
+	public int RandomGroups => VariantGroups - Math.Clamp(PinnedGroups, 0, VariantGroups - 1);
+	int VariantIndex(int seed, int phase, int count, int? pin) => VariantSlot(seed, phase, count, FillTiles, PinnedGroups, pin);
 
-	public Subtexture GetVariantTile(int x, int y, int seed, int phase = 0)
+	public Subtexture GetVariantTile(int x, int y, int seed, int phase = 0, int? pin = null)
 	{
 		if (Variants.Count <= 0)
 			return GetTile(x, y);
 
-		var variant = Variants[VariantIndex(seed, phase, Variants.Count)];
+		var variant = Variants[VariantIndex(seed, phase, Variants.Count, pin)];
 		if (x < 0 || y < 0 || x >= Columns || y >= Rows)
 			return new();
 
@@ -143,12 +161,12 @@ public class Tileset
 		return NormalTiles[index];
 	}
 
-	public Subtexture GetVariantNormalTile(int x, int y, int seed, int phase = 0)
+	public Subtexture GetVariantNormalTile(int x, int y, int seed, int phase = 0, int? pin = null)
 	{
 		if (NormalVariants.Count <= 0)
 			return GetNormalTile(x, y);
 
-		var variant = NormalVariants[VariantIndex(seed, phase, NormalVariants.Count)];
+		var variant = NormalVariants[VariantIndex(seed, phase, NormalVariants.Count, pin)];
 		if (x < 0 || y < 0 || x >= Columns || y >= Rows)
 			return new();
 
@@ -159,12 +177,12 @@ public class Tileset
 		return variant[index];
 	}
 
-	public OccluderSegment[] GetVariantOccluders(int x, int y, int seed, int phase = 0)
+	public OccluderSegment[] GetVariantOccluders(int x, int y, int seed, int phase = 0, int? pin = null)
 	{
 		if (OccluderVariants.Count <= 0)
 			return GetOccluders(x, y);
 
-		var variant = OccluderVariants[VariantIndex(seed, phase, OccluderVariants.Count)];
+		var variant = OccluderVariants[VariantIndex(seed, phase, OccluderVariants.Count, pin)];
 		if (x < 0 || y < 0 || x >= Columns || y >= Rows)
 			return [];
 

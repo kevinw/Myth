@@ -58,7 +58,7 @@ public class DualGrid : Actor
 				if (mask == 0)
 					continue;
 
-				var art = LookupArt(tileset, MaskToTile[mask], room.TileSpacePosition + new Point2(x, y), tileType);
+				var art = LookupArt(room, layer, tileset, MaskToTile[mask], new Point2(x, y), tileType);
 				if (art.Tile.Texture == null)
 					continue;
 				var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
@@ -80,15 +80,18 @@ public class DualGrid : Actor
 	/// they cannot land on different ones for the same tile and disagree on screen.
 	internal readonly record struct DualArt(Subtexture Tile, Subtexture Normal, Tileset.OccluderSegment[] Occluders);
 
-	internal static DualArt LookupArt(Tileset tileset, Point2 dualCell, Point2 worldTile, char tileType)
+	internal static DualArt LookupArt(Tileset tileset, Point2 dualCell, Point2 worldTile, char tileType, int? pin = null)
 	{
 		var seed = StableVariantSeed(tileset.FillBlock(worldTile), tileType);
 		var phase = tileset.FillPhase(worldTile);
 		return new(
-			tileset.GetVariantTile(dualCell.X, dualCell.Y, seed, phase),
-			tileset.GetVariantNormalTile(dualCell.X, dualCell.Y, seed, phase),
-			tileset.GetVariantOccluders(dualCell.X, dualCell.Y, seed, phase));
+			tileset.GetVariantTile(dualCell.X, dualCell.Y, seed, phase, pin),
+			tileset.GetVariantNormalTile(dualCell.X, dualCell.Y, seed, phase, pin),
+			tileset.GetVariantOccluders(dualCell.X, dualCell.Y, seed, phase, pin));
 	}
+
+	internal static DualArt LookupArt(Room room, Factory.TileLayer layer, Tileset tileset, Point2 dualCell, Point2 vertex, char tileType)
+		=> LookupArt(tileset, dualCell, room.TileSpacePosition + vertex, tileType, room.GetVariantPin(layer, vertex, tileset.FillTiles));
 
 	public void Clear()
 	{

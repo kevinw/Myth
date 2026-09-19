@@ -1476,7 +1476,7 @@ public sealed partial class GameView
 						continue;
 
 					var worldTile = renderRoom.TileSpacePosition + new Point2(x, y);
-					var image = DualGrid.LookupArt(tileset, DualGrid.MaskToTile[joinMask], worldTile, tileType).Tile;
+					var image = DualGrid.LookupArt(renderRoom, layer, tileset, DualGrid.MaskToTile[joinMask], new Point2(x, y), tileType).Tile;
 					if (image.Texture == null)
 						continue;
 
