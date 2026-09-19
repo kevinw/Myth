@@ -28,6 +28,11 @@
 #define THREAD_LUSTER 0.35          // 0..1, silk highlights
 
 #define FILTER_TILE_VARIATION 0.65  // 0..1; 0 gives a uniform surface
+// Ceiling on the chroma fringe as a fraction of an art pixel, so a small window (where an art
+// pixel is only a couple of output pixels) can never turn misconvergence back into a bar. Kept
+// under half a frame pixel: at exactly half, a nearest tap at a pixel centre lands on the texel
+// boundary and snaps a whole pixel anyway.
+#define CHROMA_MAX_ART_PIXEL 0.2
 
 cbuffer VertexUniformBlock : register(b0, space1)
 {
@@ -44,6 +49,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float BloomThreshold;
     float ScanlineStrength;
     float Zoom;
+    float PixelScale;   // output pixels per frame pixel
 };
 
 Texture2D Texture : register(t0, space2);
@@ -92,10 +98,14 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float2 artSize = TextureSize / max(Zoom, 0.0001);
     float2 texel = 1.0 / artSize;
-    float2 rgb = float2(RgbOffset, 0.0) * texel;
+    // Misconvergence is a property of the tube, not of the signal: the fringe is RgbOffset
+    // OUTPUT pixels wide (capped above), so it stays a hairline at the edge of an art pixel
+    // instead of a hard bar a third of one wide -- at any room zoom or window size.
+    float2 chroma = min(RgbOffset / (TextureSize * max(PixelScale, 0.0001)), CHROMA_MAX_ART_PIXEL * texel);
+    float2 rgb = float2(chroma.x, 0.0);
 
 #if defined(CRT_ALIEN)
-    rgb = float2(0.65, -0.65) * RgbOffset * texel;
+    rgb = float2(0.65, -0.65) * chroma;
 #elif defined(CRT_PHOSPHOR_DOTS)
     rgb *= DOT_RGB_SPLIT;
 #endif

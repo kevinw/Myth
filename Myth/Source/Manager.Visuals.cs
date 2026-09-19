@@ -16,7 +16,8 @@ sealed class VisualTuning
 	public float CrtBloomAmount = 0.09f;
 	public float CrtBloomThreshold = 0.35f;
 	public float CrtVignetteAmount = 0.06f;
-	public float CrtRgbOffset = 0.35f;
+	// In output pixels: the fringe is a property of the display, not of the art.
+	public float CrtRgbOffset = 1.5f;
 	public float CrtScanlineStrength = 0.1f;
 	public float AmbientOcclusionStrength = 1.0f;
 	public float AmbientOcclusionBlur = 8.0f;
@@ -93,7 +94,7 @@ public partial class Manager
 		{
 			PushID("Crt");
 			VisualToggle("Enabled", ref PerfToggles.Crt);
-			VisualRow("RGB Separation", ref Visuals.CrtRgbOffset, VisualDefaults.CrtRgbOffset, 0, 2);
+			VisualRow("RGB Separation", ref Visuals.CrtRgbOffset, VisualDefaults.CrtRgbOffset, 0, 6);
 			VisualRow("Scanlines", ref Visuals.CrtScanlineStrength, VisualDefaults.CrtScanlineStrength, 0, 0.4f);
 			VisualRow("Vignette", ref Visuals.CrtVignetteAmount, VisualDefaults.CrtVignetteAmount, 0, 0.5f);
 			VisualRow("Bloom Response", ref Visuals.CrtBloomAmount, VisualDefaults.CrtBloomAmount, 0, 0.5f);

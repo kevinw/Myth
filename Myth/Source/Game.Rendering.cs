@@ -226,6 +226,7 @@ public sealed partial class GameView
 					Manager.Visuals.CrtBloomThreshold,
 					Manager.Visuals.CrtScanlineStrength,
 					zoomLevel,
+					composite != null ? compositeScale : scale,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
