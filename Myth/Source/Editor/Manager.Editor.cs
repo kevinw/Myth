@@ -1015,18 +1015,19 @@ public partial class Manager
 		if (game == null)
 			return;
 
-		var playCamera = game.WorldView.Center;
+		// Both ends of the tween frame the world the player was actually looking at, so it only
+		// slides from the full window to the dock -- a zoomed room stays the size it was in play
+		// instead of springing back to a fixed screen's worth of world.
+		var play = game.WorldView;
 		// StopGame calls this before ImGui has submitted the newly visible dock windows, so
 		// gameViewWindowRect still describes play mode. The computed dock centre is already exact.
 		var view = EditorCenterRect;
 		var playView = GameOpenRect;
-		// The room's zoom is part of how big the world looked in play, so the editor picks it up
-		// and tweens back out to its own fit zoom.
-		var playZoom = Math.Clamp(Math.Min(playView.Width / Game.Width, playView.Height / Game.Height) * game.ZoomLevel, 0.15f, 8.0f);
-		editorCameraTweenFrom = playCamera + (view.Center - playView.Center) / playZoom;
-		editorCameraTweenTo = playCamera;
+		var playZoom = Math.Clamp(Math.Min(playView.Width / play.Width, playView.Height / play.Height), 0.15f, 8.0f);
+		editorCameraTweenFrom = play.Center + (view.Center - playView.Center) / playZoom;
+		editorCameraTweenTo = play.Center;
 		editorZoomTweenFrom = playZoom;
-		editorZoomTweenTo = Math.Clamp(Math.Min(view.Width / Game.Width, view.Height / Game.Height), 0.15f, 8.0f);
+		editorZoomTweenTo = Math.Clamp(Math.Min(view.Width / play.Width, view.Height / play.Height), 0.15f, 8.0f);
 		editorCamera = editorCameraTweenFrom;
 		editorZoom = editorZoomTweenFrom;
 		editorZoomTarget = editorZoom;
