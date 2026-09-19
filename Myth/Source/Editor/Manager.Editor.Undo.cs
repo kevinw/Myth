@@ -36,6 +36,15 @@ public partial class Manager
 	JsonUndoScope CaptureRoomExistenceUndo(string name, Room room)
 		=> undo.Capture(name, new RoomExistenceUndoTarget(this, room), EditorSelectionUndoTarget());
 
+	JsonUndoScope CaptureRoomExistenceUndo(string name, List<Room> rooms)
+	{
+		var targets = new IJsonUndoTarget[rooms.Count + 1];
+		for (var i = 0; i < rooms.Count; i++)
+			targets[i] = new RoomExistenceUndoTarget(this, rooms[i]);
+		targets[^1] = EditorSelectionUndoTarget();
+		return undo.Capture(name, targets);
+	}
+
 	JsonUndoScope CapturePrefabUndo(string name, string specId)
 		=> undo.Capture(name, new ActorSpecUndoTarget(specId));
 

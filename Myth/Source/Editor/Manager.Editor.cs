@@ -173,7 +173,9 @@ public partial class Manager
 	bool focusRoomNameEditor;
 	string roomNameEditor = string.Empty;
 	string? roomNameEditingRoomId;
-	string? pendingDeleteRoomId;
+	readonly List<string> pendingDeleteRoomIds = [];
+	bool deleteRoomPopupRequested;
+	readonly List<Room> deleteRoomScratch = [];
 
 	/// Workspace: the whole view. The old toolbar strip is gone, replaced by the hamburger
 	/// overlay (see Manager.EditorMenu.cs), which floats over the game view and costs no layout.
@@ -807,6 +809,15 @@ public partial class Manager
 
 		if (!modifier)
 		{
+			// Zoomed out the rooms themselves are the objects being edited, so Delete asks to
+			// remove the selection -- the same split the clipboard shortcuts below make.
+			if (editingRoomGeometry && selectedRoomIds.Count > 0 &&
+				(Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
+			{
+				RequestDeleteRooms(selectedRoomIds);
+				return true;
+			}
+
 			if (Input.Keyboard.Pressed(Keys.P) && CurrentRoom is { } room)
 			{
 				if (selectedRoomActorIndex >= 0 && selectedRoomActorIndex < room.Actors.Count &&
@@ -4750,7 +4761,7 @@ public partial class Manager
 				CommitEditorDragState();
 			}
 
-			if (!keyboardBlocked && actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
+			if (!keyboardBlocked && !editingRoomGeometry && actorSelectTool && selectedRoomActorIndex >= 0 && (Input.Keyboard.Pressed(Keys.Delete) || Input.Keyboard.Pressed(Keys.Backspace)))
 			{
 				var selectedPathPoint = SelectedPathPoint(editing);
 				if (selectedPathPoint >= 0)
@@ -5434,27 +5445,47 @@ public partial class Manager
 		EndPaddedPopup();
 	}
 
+	// Records what the confirm modal is about to delete. The popup is submitted at root scope
+	// (see EditorMenuImGui), so opening it has to travel as a flag rather than an OpenPopup here.
+	void RequestDeleteRooms(IEnumerable<string> roomIds)
+	{
+		pendingDeleteRoomIds.Clear();
+		foreach (var id in roomIds)
+			if (Assets.GetRoom(id) != null)
+				pendingDeleteRoomIds.Add(id);
+		deleteRoomPopupRequested = pendingDeleteRoomIds.Count > 0;
+	}
+
 	void DrawDeleteRoomPopup()
 	{
+		if (deleteRoomPopupRequested)
+		{
+			deleteRoomPopupRequested = false;
+			OpenPopup("Delete Room?");
+		}
+
 		var open = true;
 		if (!BeginPopupModal("Delete Room?", ref open, ImGuiWindowFlags.AlwaysAutoResize))
 			return;
 
-		var room = pendingDeleteRoomId != null ? Assets.GetRoom(pendingDeleteRoomId) : null;
-		Text(room != null ? $"Delete room '{room.Id}'?" : "Room no longer exists.");
+		Text(pendingDeleteRoomIds.Count switch
+		{
+			0 => "Room no longer exists.",
+			1 => $"Delete room '{pendingDeleteRoomIds[0]}'?",
+			var count => $"Delete {count} rooms?"
+		});
 		Spacing();
 
 		if (Button("Delete", new Vector2(90, 0)))
 		{
-			if (room != null)
-				DeleteRoom(room);
-			pendingDeleteRoomId = null;
+			DeleteRooms(pendingDeleteRoomIds);
+			pendingDeleteRoomIds.Clear();
 			CloseCurrentPopup();
 		}
 		SameLine();
 		if (Button("Cancel", new Vector2(90, 0)) || !open)
 		{
-			pendingDeleteRoomId = null;
+			pendingDeleteRoomIds.Clear();
 			CloseCurrentPopup();
 		}
 
@@ -5501,6 +5532,25 @@ public partial class Manager
 	{
 		using (CaptureRoomExistenceUndo("Delete Room", room))
 			RemoveRoomFromWorld(room);
+	}
+
+	void DeleteRooms(List<string> roomIds)
+	{
+		deleteRoomScratch.Clear();
+		foreach (var id in roomIds)
+			if (Assets.GetRoom(id) is { } room)
+				deleteRoomScratch.Add(room);
+		if (deleteRoomScratch.Count == 0)
+			return;
+
+		// One entry for the whole selection, so a mis-aimed Delete is one undo away.
+		using (CaptureRoomExistenceUndo(deleteRoomScratch.Count == 1 ? "Delete Room" : "Delete Rooms", deleteRoomScratch))
+			foreach (var room in deleteRoomScratch)
+			{
+				selectedRoomIds.Remove(room.Id);
+				RemoveRoomFromWorld(room);
+			}
+		deleteRoomScratch.Clear();
 	}
 
 	bool ToggleEditorPressed(bool keyboardBlocked)
@@ -5617,7 +5667,7 @@ public partial class Manager
 		roomCreatePosition = Point2.Zero;
 		editorSelectionRect = null;
 		selectedRoomActorIndex = -1;
-		pendingDeleteRoomId = null;
+		pendingDeleteRoomIds.Clear();
 		ResolveSelectedRoom();
 		FocusEditorOnCurrentRoom();
 		SyncEditorGame();

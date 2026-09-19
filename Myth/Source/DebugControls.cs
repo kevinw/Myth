@@ -70,7 +70,7 @@ public class DebugControls
 			new ActionBindingSet().Add(Keys.B),
 			"B / Shift+B", "Toggle Bud AI / Bud story barks", Context.Anywhere);
 		MovieRecording = Make("DebugMovieRecording",
-			new ActionBindingSet().Add(Keys.M),
+			new ActionBindingSet().Add(Keys.Backslash),
 			"M / Shift+M", "Movie recording", Context.Anywhere);
 		AllocationTrace = Make("DebugAllocationTrace",
 			new ActionBindingSet().Add(Keys.F9),

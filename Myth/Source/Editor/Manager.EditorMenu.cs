@@ -60,6 +60,7 @@ public partial class Manager
 			// somewhere stable to be submitted now that the toolbar is gone.
 			DrawCreateRoomPopup();
 			DrawResizeRoomPopup();
+			DrawDeleteRoomPopup();
 			DrawActorContextMenu();
 			DrawCreatePrefabPopup();
 #if DEBUG
@@ -238,12 +239,8 @@ public partial class Manager
 				BeginRoomRename(room);
 			ImGui.SameLine();
 			if (ImGui.SmallButton("Delete"))
-			{
-				pendingDeleteRoomId = room.Id;
-				ImGui.OpenPopup("Delete Room?");
-			}
+				RequestDeleteRooms([room.Id]);
 		}
-		DrawDeleteRoomPopup();
 		ImGui.PopStyleVar();
 		ImGui.Separator();
 	}
