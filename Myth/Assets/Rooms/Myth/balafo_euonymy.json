@@ -54,8 +54,14 @@
     {
       "Id": "0b5fd2385483f108",
       "Type": "FlipBlock",
-      "Position": [236, 85],
+      "Position": [223, 85],
       "Phases": "0 1"
+    },
+    {
+      "Id": "2e343c86afb2387e",
+      "Type": "FlipBlock",
+      "Position": [250, 85],
+      "Phases": "1 <0 1>"
     }
   ]
 }
