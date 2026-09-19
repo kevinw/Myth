@@ -390,7 +390,7 @@ public partial class Manager
 		if (game?.GetFirst<Player>() is not { } player)
 			throw new InvalidOperationException("Start the game first");
 
-		var view = new Rect(game.Camera, new System.Numerics.Vector2(game.ZoomedWidth, game.ZoomedHeight));
+		var view = game.WorldView;
 		List<Actor> targets = [];
 		foreach (var actor in game.Actors)
 			if (actor.Mask.Has(Actor.Masks.Enemy) && view.Overlaps(actor.GetVisualBounds()))

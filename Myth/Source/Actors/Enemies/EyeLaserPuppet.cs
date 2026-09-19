@@ -284,7 +284,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 				Velocity.X = 0;
 				PlayAbilityIdle();
 				SetAbilityLookTarget(player.Position);
-				var view = new Rect(Game.Camera, new Vector2(Game.ZoomedWidth, Game.ZoomedHeight));
+				var view = Game.WorldView;
 				if (!view.Overlaps(GetVisualBounds()))
 					return true;
 				greetingStarted = true;

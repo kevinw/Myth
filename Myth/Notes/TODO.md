@@ -1,3 +1,5 @@
+- backspace/delete with room(s) selected should show existing room delete modal
+- screenshot cli capture should probably include CRT (?) with an option, maybe?
 - make ropes that span room boundaries more reliable
 - compress orthogonal burrow to launch or railgun 
 - Tidal Cycles/Strudel port to C# for bullet patterns and music?
@@ -13,7 +15,6 @@
 COSTUMES (rig puppet adornment, 2026-09-14): a shared Costume asset like Surface (Sources/Costumes/<id>.json + its own editor window; actors get one CostumeId picker plus seed/palette/tint). Small: per-part surfaces/tints (boots, gloves, vest); split a bone at a fraction for cuffs, sleeves, boot tops; bone-space wrapping UVs for stripes/bandages; width profiles (flared cuffs, boot bulge, sole quad). Medium: generalize the ruff into rings at any joint (cuffs, belt, skirt); author wire layouts as straps, tassels, antennae, ankle chains (allow free-hanging ends); rigid plates/pauldrons and sprite stamps (rivets, buckles) as depth-sorted accessories; neural costume (per-part mask into the skin NCA's 4 model slots; hits erode armor to reveal skin). Bigger: verlet cloth cape/coattails pinned to the shoulders (Wind pushes it, drapes on death); hair/tendrils/ribbons from the same solver. Infra: accessory list (Draw takes one), generic record-list inspector, click joints/bones in the viewport, turntable preview, attribute-based inspector drawers; check every knob in the big_rig_puppet gallery.
 
 - attach a burrow line to a moving platform
-- what would it look like to be able to create your own burrow line? 
 - no pits, seamless loading
  USE LATEX AND BEAMER TO MAKE THEM LOL https://www.overleaf.com/learn/latex/Beamer
 - gameplay NCA ideas
@@ -47,6 +48,7 @@ TALK AND PLAY FEEDBACK
 - fer's feedback, echoed: the shadow in the floater room looks "safe" but it is not. one idea that comes to mind: the floater itself could cast a very big warning light ahead of time. then the shadows WOULD be safe
 
 LATER
+- what would it look like to be able to create your own burrow line? 
 - Game should own "death", not Player. Today Player.HurtState() mass-destroys every actor except itself/light on death; Transition() does the same on room change. It's fragile. Make death an atomic Game-level reset that notices the player died, instead of the player iterating and destroying actors. (The TimeScale strand-a-frozen-modal symptom of this is already handled: see Game.TimeScale.cs -- time bending is now a registry of composable factors, each optionally owned by an actor and auto-dropped when that actor is destroyed, so a mass-destroy can no longer leave the sim frozen. Same pattern is worth reaching for anytime a future death/reset path needs to be robust against half-torn-down state.)
 - the moving platform puzzle is too slow
 - health pots as a minor diversion

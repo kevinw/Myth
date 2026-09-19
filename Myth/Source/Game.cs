@@ -56,7 +56,7 @@ public partial class Game : IDisposable
 	// Forwards to View, or no-ops/defaults when headless (View == null).
 	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null) => View?.Render(viewport, showHud, scissor);
 	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true) => View?.RenderWorldView(viewport, worldView, showHud, scissor, applyCrt);
-	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false) => View?.RenderWorldToTarget(target, worldView, showHud);
+	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false, float zoom = 1.0f) => View?.RenderWorldToTarget(target, worldView, showHud, zoom);
 	public void RenderSdfAura(Batcher batcher, Span<float> uniforms, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3) => View?.RenderSdfAura(batcher, uniforms, p0, p1, p2, p3);
 	public void PreviewParticlesInEditor(float dt, string? selectedActorId) => View?.PreviewParticlesInEditor(dt, selectedActorId);
 	public void SetPreviewEffect(string name) => View?.SetPreviewEffect(name);
@@ -111,6 +111,8 @@ public partial class Game : IDisposable
 	Point2 transitionDirection;
 	Vector2 transitionCameraFrom;
 	Vector2 transitionCameraTo;
+	float transitionZoomFrom;
+	float transitionZoomTo;
 	ulong? transitionPreparedRenderFrame;
 	float linkedDoorCooldown;
 	float layerTransitionTime;
@@ -279,17 +281,22 @@ public partial class Game : IDisposable
 	static float CameraLookAheadEaseRate => 8f;
 	static float PlayerDragCameraEaseRate => 2.5539999f.T();
 	const float CameraEaseTriggerEpsilon = 2f;
+	// The world is drawn at this scale into the fixed Width x Height frame, so the camera frames
+	// fewer world pixels as it grows. Rooms set it (Room.Zoom) and the Zoom control floors it at 2.
 	internal float zoomLevel = 1.0f;
 	public float ZoomLevel => zoomLevel;
-	internal float ZoomedWidth => Width / zoomLevel;
-	internal float ZoomedHeight => Height / zoomLevel;
-	internal float fbZoom = 1.0f;
-	public float FbZoom => fbZoom;
-	// The camera frames this "visible" view and clamps it to the room. It shrinks for the 2x
-	// magnify (fbZoom) and, in 4:3 crop mode, narrows horizontally to the cropped width so the
-	// player stays inside the actually-visible region rather than the full (partly cropped) frame.
-	internal float FbZoomedWidth => AspectCropActive ? VisibleCropWidth : Width / fbZoom;
-	internal float FbZoomedHeight => AspectCropActive ? Height : Height / fbZoom;
+	internal float ZoomedWidth => ZoomedSizeAt(zoomLevel).X;
+	internal float ZoomedHeight => ZoomedSizeAt(zoomLevel).Y;
+	internal Vector2 ZoomedSize => ZoomedSizeAt(zoomLevel);
+	// The world the camera actually frames. In 4:3 crop mode that is narrower than the frame,
+	// so the player stays inside the visible region rather than the partly-cropped whole.
+	Vector2 ZoomedSizeAt(float zoom) => new((AspectCropActive ? VisibleCropWidth : Width) / zoom, Height / zoom);
+	// World-space offset from the frame's top-left (the Camera) to that visible region's: zero
+	// unless the 4:3 crop is hiding a slice of each side.
+	Vector2 CropPadAt(float zoom) => new((Width - (AspectCropActive ? VisibleCropWidth : Width)) / (2 * zoom), 0);
+	static float RoomZoom(Room? forRoom) => MathF.Max(forRoom?.Zoom ?? 1.0f, 1.0f);
+	/// World rect the camera frames -- what the player actually sees, zoom and 4:3 crop included.
+	public Rect WorldView => new(Camera + CropPadAt(zoomLevel), ZoomedSize);
 
 	// The game renders at a fixed 16:9 (Width:Height). When presenting into a narrower 4:3
 	// region (desktop --aspect-four-three, or a portrait mobile-browser canvas) we crop the
@@ -361,19 +368,19 @@ public partial class Game : IDisposable
 	{
 		var contain = Manager.Video.FitScale(present.Size, new(outputWidth, outputHeight));
 		if (!AspectCropActive)
-			return contain * fbZoom;
+			return contain;
 		var cover = Calc.Max(present.Width / outputWidth, present.Height / outputHeight);
 		return cover + (contain - cover) * aspectUncrop;
 	}
 
 	// Inverse of the final composite: map a window-space point to a world position, honoring the
-	// present rect, fbZoom, and 4:3 cover-crop so touch/mouse picking lines up with what's drawn.
+	// present rect, world zoom, and 4:3 cover-crop so touch/mouse picking lines up with what's drawn.
 	public Vector2 WindowToWorld(Vector2 windowPoint, in RectInt viewport)
 	{
 		var present = PresentRect(viewport);
 		var scale = PresentScale(present, Screen.Width, Screen.Height);
 		var screenPixel = (windowPoint - (Vector2)present.Center) / scale + new Vector2(Screen.Width, Screen.Height) / 2;
-		return Camera + screenPixel;
+		return Camera + screenPixel / zoomLevel;
 	}
 
 	public RectInt Bounds => room?.WorldBounds ?? new();
@@ -485,6 +492,7 @@ public partial class Game : IDisposable
 		if (start != null)
 		{
 			room = start.CloneRuntime();
+			zoomLevel = RoomZoom(room);
 			Camera = ClampCameraToRoom(room.WorldBounds.TopLeft);
 			UpdateAudioListener();
 			LoadRoom(room);
@@ -729,7 +737,9 @@ public partial class Game : IDisposable
 			if (nextRoomEase < 1.0f)
 			{
 				View?.UpdateParticles(Time.Delta);
-				Camera = Vector2.Lerp(transitionCameraFrom, transitionCameraTo, Ease.Cube.InOut(nextRoomEase));
+				var ease = Ease.Cube.InOut(nextRoomEase);
+				Camera = Vector2.Lerp(transitionCameraFrom, transitionCameraTo, ease);
+				zoomLevel = float.Lerp(transitionZoomFrom, transitionZoomTo, ease);
 				nextRoomEase = Calc.Approach(nextRoomEase, 1.0f, Time.Delta * 4.0f);
 			}
 			// Finished Lerping the Camera to the new room, return to normal update
@@ -842,11 +852,10 @@ public partial class Game : IDisposable
 	}
 
 
-	// The world-tile span the camera currently frames, honoring fbZoom / 4:3 crop.
+	// The world-tile span the camera currently frames, honoring the zoom / 4:3 crop.
 	RectInt VisibleCameraTileBounds()
 	{
-		var pad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		var view = new Rect(Camera + pad, new Vector2(FbZoomedWidth, FbZoomedHeight));
+		var view = new Rect(Camera + CropPadAt(zoomLevel), ZoomedSize);
 		return RectInt.Between((view.TopLeft / TileSize).FloorToPoint2(), (view.BottomRight / TileSize).CeilingToPoint2());
 	}
 
@@ -861,7 +870,7 @@ public partial class Game : IDisposable
 		// Debug capture mode: keep the player dead-centre, ignoring room edges entirely.
 		if (DebugCenterCamera && GetFirst<Player>() is { } centerPlayer)
 		{
-			Camera = Vector2.Round((Vector2)centerPlayer.Position - new Vector2(Width, Height) / 2);
+			Camera = Vector2.Round((Vector2)centerPlayer.Position - ZoomedSize / 2);
 			previousCameraTarget = null;
 			cameraError = Vector2.Zero;
 			cameraLookAhead = Vector2.Zero;
@@ -886,12 +895,13 @@ public partial class Game : IDisposable
 		}
 
 		// In 4:3 crop mode the Zoom control un-crops (reveals the cut-off sides) instead of the
-		// usual 2x magnify, so the two never fight: suppress fbZoom whenever cropping is active.
+		// usual 2x magnify, so the two never fight: drop its floor whenever cropping is active.
+		// The room's own zoom still applies -- it is content, not presentation.
 		var cropActive = AspectCropActive;
-		var fbZoomTarget = !cropActive && Controls.Zoom.Down ? 2.0f : 1.0f;
-		fbZoom += (fbZoomTarget - fbZoom) * (1 - MathF.Exp(-Time.Delta * 12f));
-		if (MathF.Abs(fbZoom - fbZoomTarget) < 0.005f)
-			fbZoom = fbZoomTarget;
+		var zoomTarget = MathF.Max(RoomZoom(room), !cropActive && Controls.Zoom.Down ? 2.0f : 1.0f);
+		zoomLevel += (zoomTarget - zoomLevel) * (1 - MathF.Exp(-Time.Delta * 12f));
+		if (MathF.Abs(zoomLevel - zoomTarget) < 0.005f)
+			zoomLevel = zoomTarget;
 
 		var uncropTarget = cropActive && Controls.Zoom.Down ? 1.0f : 0.0f;
 		aspectUncrop += (uncropTarget - aspectUncrop) * (1 - MathF.Exp(-Time.Delta * 12f));
@@ -900,7 +910,7 @@ public partial class Game : IDisposable
 
 		UpdatePlayerCameraTarget();
 
-		var lookRange = new Vector2(FbZoomedWidth, FbZoomedHeight) * (0.5f - CameraLookAheadEdgeInset);
+		var lookRange = ZoomedSize * (0.5f - CameraLookAheadEdgeInset);
 		var lookTarget = ActiveCutscene == null ? Controls.Look.Value * lookRange : Vector2.Zero;
 		cameraLookAhead = Vector2.Lerp(cameraLookAhead, lookTarget, 1 - MathF.Exp(-Time.Delta * CameraLookAheadEaseRate));
 		if ((cameraLookAhead - lookTarget).LengthSquared() < 0.01f)
@@ -929,8 +939,7 @@ public partial class Game : IDisposable
 		// The room edge is the hard outer limit: re-clamp after adding the easing offset so the
 		// camera can never show outside the room (easing overflow falls into the dead/blocker
 		// space, never past a room edge).
-		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		Camera = ClampCameraToRoomFb(target + cameraError, padding);
+		Camera = ClampCameraToRoom(target + cameraError);
 		previousCameraTarget = target;
 		previousCameraFocus = cameraFocus;
 	}
@@ -943,8 +952,7 @@ public partial class Game : IDisposable
 
 		var target = GetGameplayCameraTarget();
 		var amount = 1 - MathF.Exp(-Time.Delta * PlayerDragCameraEaseRate);
-		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		Camera = ClampCameraToRoomFb(Vector2.Lerp(Camera, target, amount), padding);
+		Camera = ClampCameraToRoom(Vector2.Lerp(Camera, target, amount));
 		previousCameraTarget = null;
 		previousCameraFocus = easedPlayerCameraTarget;
 	}
@@ -1037,20 +1045,19 @@ public partial class Game : IDisposable
 		if (room == null)
 			return Camera;
 
-		var unclamped = easedPlayerCameraTarget + cameraLookAhead - new Vector2(Width, Height) / 2;
-		var padding = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		return ClampCameraToRoomAndBlockersFb(unclamped, padding, room.WorldBounds, easedPlayerCameraTarget, ActiveCameraBlockers());
+		var unclamped = easedPlayerCameraTarget + cameraLookAhead - ZoomedSize / 2;
+		return ClampCameraToRoomAndBlockers(unclamped, zoomLevel, room.WorldBounds, easedPlayerCameraTarget, ActiveCameraBlockers());
 	}
 
 	// Clamp a zoomed camera top-left against a room (with its active blockers bitten out), then
 	// convert back to a Camera top-left. Works for any room's bounds/blockers, not just the current
 	// room, so a transition can aim its ease at the same place live control will hold the camera.
-	Vector2 ClampCameraToRoomAndBlockersFb(Vector2 cameraTopLeft, Vector2 padding, RectInt bounds, Vector2 player, List<RectInt> blockers)
+	Vector2 ClampCameraToRoomAndBlockers(Vector2 cameraTopLeft, float zoom, RectInt bounds, Vector2 player, List<RectInt> blockers)
 	{
 		if (blockers.Count == 0)
-			return ClampCameraToRoomFb(cameraTopLeft, padding, bounds);
-		var viewSize = new Vector2(FbZoomedWidth, FbZoomedHeight);
-		return ClampViewToRoomAndBlockers(cameraTopLeft + padding, viewSize, player, blockers, bounds) - padding;
+			return ClampCameraToRoom(cameraTopLeft, zoom, bounds);
+		var padding = CropPadAt(zoom);
+		return ClampViewToRoomAndBlockers(cameraTopLeft + padding, ZoomedSizeAt(zoom), player, blockers, bounds) - padding;
 	}
 
 	// Confine the zoomed view to the room with edge-anchored "bites" removed. A bite caps the
@@ -1090,6 +1097,7 @@ public partial class Game : IDisposable
 
 	public void SnapCameraToGameplayTarget()
 	{
+		zoomLevel = RoomZoom(room);
 		cameraError = Vector2.Zero;
 		Camera = GetGameplayCameraTarget();
 		previousCameraTarget = Camera;
@@ -1097,31 +1105,17 @@ public partial class Game : IDisposable
 	}
 
 	Vector2 ClampCameraToRoom(Vector2 target)
-	{
-		if (room == null)
-			return target;
+		=> room == null ? target : ClampCameraToRoom(target, zoomLevel, room.WorldBounds);
 
-		return ClampCameraToRoom(target, room.WorldBounds);
-	}
-
-	Vector2 ClampCameraToRoom(Vector2 target, RectInt bounds)
+	// Clamps the visible view to the room and converts back to a Camera (frame) top-left. Takes
+	// the zoom rather than reading it, so a transition can aim at the room it is easing into.
+	Vector2 ClampCameraToRoom(Vector2 target, float zoom, RectInt bounds)
 	{
+		var view = ZoomedSizeAt(zoom);
+		var padding = CropPadAt(zoom);
 		return new Vector2(
-			ClampCameraAxis(target.X, bounds.Left, bounds.Right, ZoomedWidth),
-			ClampCameraAxis(target.Y, bounds.Top, bounds.Bottom, ZoomedHeight));
-	}
-
-	Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding)
-	{
-		if (room == null) return target;
-		return ClampCameraToRoomFb(target, padding, room.WorldBounds);
-	}
-
-	Vector2 ClampCameraToRoomFb(Vector2 target, Vector2 padding, RectInt bounds)
-	{
-		return new Vector2(
-			ClampCameraAxis(target.X + padding.X, bounds.Left, bounds.Right, FbZoomedWidth) - padding.X,
-			ClampCameraAxis(target.Y + padding.Y, bounds.Top, bounds.Bottom, FbZoomedHeight) - padding.Y);
+			ClampCameraAxis(target.X + padding.X, bounds.Left, bounds.Right, view.X) - padding.X,
+			ClampCameraAxis(target.Y + padding.Y, bounds.Top, bounds.Bottom, view.Y) - padding.Y);
 	}
 
 	static float ClampCameraAxis(float value, float min, float max, float viewportSize)
@@ -1419,8 +1413,8 @@ public partial class Game : IDisposable
 		LoadRoom(room);
 		player.Position = playerPosition;
 		player.Velocity = Vector2.Zero;
-		var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
-		Camera = ClampCameraToRoomFb(player.Position - new Vector2(Width, Height) / 2, fbPad);
+		zoomLevel = RoomZoom(room);
+		Camera = ClampCameraToRoom(player.Position - ZoomedSize / 2);
 		ApplyMusicArea(room);
 		ApplyRoomReverb(room);
 		ApplyRoomMusicMuffle(room);
@@ -1823,7 +1817,8 @@ public partial class Game : IDisposable
 						Destroy(it);
 
 				transitionCameraFrom = Camera;
-				var fbPad = new Vector2((Width - FbZoomedWidth) / 2, (Height - FbZoomedHeight) / 2);
+				transitionZoomFrom = zoomLevel;
+				transitionZoomTo = RoomZoom(nextRoom);
 				// Aim the ease where live control will hold the camera: clamp against the new room's
 				// camera blockers, except any the player crosses on entry, so we never glide into a
 				// stale blocked bite and snap out when control resumes. Blocker gating keys off the
@@ -1832,8 +1827,8 @@ public partial class Game : IDisposable
 				var entry = new Vector2(
 					Math.Clamp(exitPosition.X, (float)nextBounds.Left, nextBounds.Right - 1f),
 					Math.Clamp(exitPosition.Y, (float)nextBounds.Top, nextBounds.Bottom - 1f));
-				transitionCameraTo = ClampCameraToRoomAndBlockersFb(
-					exitPosition - new Vector2(Width, Height) / 2, fbPad, nextBounds, entry,
+				transitionCameraTo = ClampCameraToRoomAndBlockers(
+					exitPosition - ZoomedSizeAt(transitionZoomTo) / 2, transitionZoomTo, nextBounds, entry,
 					CameraBlockerRects(nextRoom, entry, cameraBlockerBuffer));
 				nextRoomEase = 0.0f;
 				transitionPreparedRenderFrame = null;

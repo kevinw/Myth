@@ -1,0 +1,58 @@
+{
+  "position": [-244, -5],
+  "size": [20, 11],
+  "ambientColor": "818181",
+  "reverb": 0.443,
+  "zoom": 2,
+  "legend": {
+    "#": "back",
+    "N": "embermoss",
+    "T": "stone",
+    "g": "plants"
+  },
+  "tiles": [
+    "TTTTTTTTTTTTTTTTTTTT",
+    "T000000000000000000T",
+    "T000000000000000000T",
+    "T000000000000000000T",
+    "T000000000000000000T",
+    "T000000000000000000T",
+    "T000000000000000000T",
+    "Tgg0000000000000000T",
+    "NNN00000000000000000",
+    "NNNgg000000000000000",
+    "NNNTTTTTTTTTTTTTTTTT"
+  ],
+  "backgroundTiles": [
+    "00000000000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "000000#0000000000000",
+    "00000000000000000000"
+  ],
+  "actors": [
+    {
+      "Id": "b25a5cd89e63a24a",
+      "From": "SoftFireLight",
+      "Position": [53, 44]
+    },
+    {
+      "Id": "8c758aa9cfe4fa2c",
+      "Type": "Prop",
+      "Position": [56, 60],
+      "SpriteName": "Props/computer_terminal_sm"
+    },
+    {
+      "Id": "739a8b723ede45cd",
+      "Type": "InspectPoint",
+      "Position": [64, 80],
+      "Text": "Subject showed successful quantum tunneling. They always had it. "
+    }
+  ]
+}

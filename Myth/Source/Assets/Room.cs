@@ -62,6 +62,7 @@ public class Room
 	public const float DefaultSporeFogStrength = 0.0f;
 	public static readonly Color DefaultSporeFogColor = new(0.72f, 1.0f, 0.78f, 1.0f);
 	public const float DefaultReverb = 0.0f;
+	public const float DefaultZoom = 1.0f;
 	// Per-room dither, overriding the engine defaults. Manager.Visuals.DitherStrength still gates
 	// lighting strength globally for performance.
 	public const bool DefaultLightingDitherEnabled = true;
@@ -167,6 +168,8 @@ public class Room
 	public float LightingDitherStrength = DefaultLightingDitherStrength;
 	public float NormalDitherSlopeBoost = DefaultNormalDitherSlopeBoost;
 	public bool NormalDitherQuantization = DefaultNormalDitherQuantization;
+	/// Camera magnification while this room is active; the transition into the room eases to it.
+	[I(1, 4)] public float Zoom = DefaultZoom;
 	public bool BurrowInverts;
 	public BudSpawnFlags BudSpawn;
 	public string Notes = "";
@@ -215,6 +218,7 @@ public class Room
 			LightingDitherStrength = LightingDitherStrength,
 			NormalDitherSlopeBoost = NormalDitherSlopeBoost,
 			NormalDitherQuantization = NormalDitherQuantization,
+			Zoom = Zoom,
 			BurrowInverts = BurrowInverts,
 			BudSpawn = BudSpawn,
 			ForegroundColorField = ForegroundColorField.Clone(),
@@ -300,6 +304,7 @@ public class Room
 		LightingDitherStrength = JsonUtil.ReadFloat(json, "ditherStrength", DefaultLightingDitherStrength);
 		NormalDitherSlopeBoost = JsonUtil.ReadFloat(json, "ditherSlopeBoost", DefaultNormalDitherSlopeBoost);
 		NormalDitherQuantization = JsonUtil.ReadBool(json, "ditherQuantization", DefaultNormalDitherQuantization);
+		Zoom = Math.Clamp(JsonUtil.ReadFloat(json, "zoom", DefaultZoom), 1.0f, 4.0f);
 		BurrowInverts = JsonUtil.ReadBool(json, nameof(BurrowInverts));
 		BudSpawn = Enum.TryParse<BudSpawnFlags>(JsonUtil.ReadString(json, nameof(BudSpawn)), true, out var budSpawn) ? budSpawn : BudSpawnFlags.None;
 		SunColor = DefaultSunColor;
@@ -1600,6 +1605,8 @@ public class Room
 			writer.WriteNumber("ditherSlopeBoost", NormalDitherSlopeBoost);
 		if (NormalDitherQuantization != DefaultNormalDitherQuantization)
 			writer.WriteBoolean("ditherQuantization", NormalDitherQuantization);
+		if (Zoom != DefaultZoom)
+			writer.WriteNumber("zoom", Zoom);
 		if (BurrowInverts)
 			writer.WriteBoolean(nameof(BurrowInverts), true);
 		if (BudSpawn != BudSpawnFlags.None)

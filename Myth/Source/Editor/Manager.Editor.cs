@@ -1015,12 +1015,14 @@ public partial class Manager
 		if (game == null)
 			return;
 
-		var playCamera = game.Camera + new Vector2(Game.Width, Game.Height) / 2;
+		var playCamera = game.WorldView.Center;
 		// StopGame calls this before ImGui has submitted the newly visible dock windows, so
 		// gameViewWindowRect still describes play mode. The computed dock centre is already exact.
 		var view = EditorCenterRect;
 		var playView = GameOpenRect;
-		var playZoom = Math.Clamp(Math.Min(playView.Width / Game.Width, playView.Height / Game.Height), 0.15f, 8.0f);
+		// The room's zoom is part of how big the world looked in play, so the editor picks it up
+		// and tweens back out to its own fit zoom.
+		var playZoom = Math.Clamp(Math.Min(playView.Width / Game.Width, playView.Height / Game.Height) * game.ZoomLevel, 0.15f, 8.0f);
 		editorCameraTweenFrom = playCamera + (view.Center - playView.Center) / playZoom;
 		editorCameraTweenTo = playCamera;
 		editorZoomTweenFrom = playZoom;
@@ -1597,6 +1599,17 @@ public partial class Manager
 			changed = true;
 		}
 
+		// Whole multiples only: at any other scale an art pixel spans a fractional number of
+		// frame pixels, so the doubling is permanently uneven.
+		BeginPropertyRow("Camera Zoom");
+		var zoom = (int)MathF.Round(room.Zoom);
+		if (SliderInt("##RoomZoom", ref zoom, 1, 4))
+		{
+			OpenRoomSettingsUndo("Edit Room Zoom", room);
+			room.Zoom = Math.Clamp(zoom, 1, 4);
+			changed = true;
+		}
+
 		BeginPropertyRow("Music Muffle");
 		var musicMuffle = room.MusicMuffle;
 		if (SliderFloat("##RoomMusicMuffle", ref musicMuffle, 0.0f, 1.0f))
@@ -1741,7 +1754,7 @@ public partial class Manager
 #endif
 
 	static RoomSettings CaptureRoomSettings(Room room)
-		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.SporeFogColor, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization);
+		=> new(room.MusicArea, room.BackdropColor, room.BackdropColor2, room.BackdropSurfaceId, room.AmbientColor, room.AmbientIntensity, room.LightNoise, room.PlayerLightEnabled, room.SporeFogStrength, room.SporeFogColor, room.ReverbAuto, room.Reverb, room.SunColor, room.SunStrength, room.SunDirection, room.LightingDitherEnabled, room.LightingDitherScale, room.LightingDitherStrength, room.NormalDitherSlopeBoost, room.NormalDitherQuantization, room.Zoom);
 
 	static void ApplyRoomSettings(Room room, RoomSettings settings)
 	{
@@ -1765,6 +1778,7 @@ public partial class Manager
 		room.LightingDitherStrength = settings.LightingDitherStrength;
 		room.NormalDitherSlopeBoost = settings.NormalDitherSlopeBoost;
 		room.NormalDitherQuantization = settings.NormalDitherQuantization;
+		room.Zoom = settings.Zoom;
 		if (room.ReverbAuto)
 			room.RebuildGeometry();
 	}

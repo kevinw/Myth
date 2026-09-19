@@ -43,6 +43,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float ExtraGlow;
     float BloomThreshold;
     float ScanlineStrength;
+    float Zoom;
 };
 
 Texture2D Texture : register(t0, space2);
@@ -89,7 +90,8 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float radius = dot(centered, centered);
     // uv += centered * radius * Curvature;
 
-    float2 texel = 1.0 / TextureSize;
+    float2 artSize = TextureSize / max(Zoom, 0.0001);
+    float2 texel = 1.0 / artSize;
     float2 rgb = float2(RgbOffset, 0.0) * texel;
 
 #if defined(CRT_ALIEN)
@@ -100,7 +102,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
 
     float3 color;
 #if defined(PIXEL_GLAZE) || defined(PIXEL_TAPESTRY)
-    color = sample_color((floor(uv * TextureSize) + 0.5) * texel);
+    color = sample_color((floor(uv * artSize) + 0.5) * texel);
 #else
     color.r = sample_color(uv + rgb).r;
     color.g = sample_color(uv).g;
@@ -123,7 +125,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     color += glow * smoothstep(BloomThreshold, 1.0, brightness) * BloomAmount * (ExtraGlow * 3.0);
 
 #if defined(CRT_PHOSPHOR_DOTS) || defined(CRT_ALIEN) || defined(PIXEL_GLAZE) || defined(PIXEL_TAPESTRY)
-    float2 pixel = uv * TextureSize;
+    float2 pixel = uv * artSize;
     float2 footprint = fwidth(pixel);
     float detail = 1.0 - smoothstep(0.25, 0.8, max(footprint.x, footprint.y));
     float aa = max(max(footprint.x, footprint.y) * 0.5, 0.001);
@@ -182,7 +184,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     color *= 1.0 + detail * THREAD_RELIEF * (stitch - 0.65);
     color += detail * THREAD_LUSTER * crown * stitch * color * (1.0 - saturate(color));
 #else
-    float scanline = 0.5 + 0.5 * cos((uv.y * TextureSize.y) * 3.14159265 * 2.0);
+    float scanline = 0.5 + 0.5 * cos((uv.y * artSize.y) * 3.14159265 * 2.0);
     color *= 1.0 - scanline * ScanlineStrength;
 #endif
 

@@ -1658,7 +1658,7 @@ public partial class Manager : App
 #if !BROWSER
 		if (!keyboardShortcutsBlocked)
 		{
-			if (debugControls.BudAI.Pressed)
+			if (debugControls.BudAI.Pressed && !playing)
 			{
 				if (Input.Keyboard.Shift)
 					ToggleBudStoryBarks();
@@ -1966,8 +1966,13 @@ public partial class Manager : App
 		// is internal scratch); applyCrt is skipped for a clean pixel image.
 		// Caller owns the returned target and must dispose it.
 		var target = new Target(GraphicsDevice, w, h, "ScreenshotCapture");
-		var worldView = new Rect(game.Camera, new Vector2(w, h));
-		game.RenderWorldToTarget(target, worldView, showHud: false);
+		// Default capture is what the player sees (the room's zoom included); an explicit size
+		// asks for that many world pixels instead.
+		// Default capture is what the player sees, rendered the way they see it (the room's zoom
+		// included); an explicit size asks for that many world pixels at 1:1.
+		var faithful = width < 0 && height < 0;
+		var worldView = faithful ? game.WorldView : new Rect(game.Camera, new Vector2(w, h));
+		game.RenderWorldToTarget(target, worldView, showHud: false, zoom: faithful ? game.ZoomLevel : 1.0f);
 
 		return target;
 	}
@@ -2475,7 +2480,7 @@ public partial class Manager : App
 			var target = game.GetGameplayCameraTarget();
 			playTransition = 0.0f;
 			playTransitionFrom = Rect.CenteredAt(editorCamera, GameViewRect.Size / editorZoom);
-			playTransitionTo = Rect.CenteredAt(target + new Vector2(Game.Width, Game.Height) / 2, new(Game.Width, Game.Height));
+			playTransitionTo = Rect.CenteredAt(target + new Vector2(Game.Width, Game.Height) / 2, new Vector2(Game.Width, Game.Height) / game.ZoomLevel);
 			startingPlay = true;
 			playing = false;
 		}

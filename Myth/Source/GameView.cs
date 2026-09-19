@@ -60,14 +60,14 @@ public sealed partial class GameView : IDisposable
 	Room? nextRoom => game.nextRoom;
 	Vector2 Camera { get => game.Camera; set => game.Camera = value; }
 	System.Collections.Generic.List<Actor> Actors => game.Actors;
-	float zoomLevel => game.zoomLevel;
+	float zoomLevel { get => game.zoomLevel; set => game.zoomLevel = value; }
 	Vector2 RenderCamera => game.RenderCamera;
 	Vector2 RenderTargetShake => game.renderTargetShake;
 	float ditherGlitch => game.ditherGlitch;
 	Vector2 ditherGlitchAxis => game.ditherGlitchAxis;
 	Point2 shake { get => game.fx.shake; set => game.fx.shake = value; }
-	float ZoomedWidth => Width / zoomLevel;
-	float ZoomedHeight => Height / zoomLevel;
+	Vector2 WorldToFrame(Vector2 world) => (world - RenderCamera) * zoomLevel;
+	Vector2 FrameToWorld(Vector2 frame) => frame / zoomLevel + RenderCamera;
 	Game.DebugView debugView => game.debugView;
 	float nextRoomEase => game.nextRoomEase;
 	Vector2 layerTransitionPivot;
@@ -253,7 +253,7 @@ public sealed partial class GameView : IDisposable
 
 		// The bubble hangs up and to the left of its world anchor, then slides back onto the
 		// screen so a line spoken at the view's edge is still readable in full.
-		var anchor = (Point2)(bubble.Position - RenderCamera);
+		var anchor = (Point2)WorldToFrame(bubble.Position);
 		var size = new Vector2(
 			layout.Width + layout.Padding.X * 2,
 			layout.Lines.Count * layout.LineHeight + layout.Padding.Y * 2);
@@ -266,7 +266,7 @@ public sealed partial class GameView : IDisposable
 		var speakerBounds = StorySpeechSpeakerBounds(bubble);
 		box = NudgeStorySpeechForLeader(font, layout, box, screen, speakerBounds);
 		DrawStorySpeechLeader(bubble, speakerBounds, ClippedStorySpeechGlyphPoint(font, layout, box,
-			speakerBounds.Center - RenderCamera));
+			WorldToFrame(speakerBounds.Center)));
 
 		// Reveal characters over the canonical (whitespace-normalized) text: lines join
 		// back into it with one space each, so a per-line budget with a -1 per join is exact.
@@ -344,9 +344,9 @@ public sealed partial class GameView : IDisposable
 	Rect NudgeStorySpeechForLeader(SpriteFont font, in Game.StorySpeechLayout layout, Rect box, Point2 screen,
 		Rect speakerBounds)
 	{
-		var speakerCenter = speakerBounds.Center - RenderCamera;
+		var speakerCenter = WorldToFrame(speakerBounds.Center);
 		var text = ClippedStorySpeechGlyphPoint(font, layout, box, speakerCenter);
-		var speaker = speakerBounds.ClosestPointOnEdges(text + RenderCamera) - RenderCamera;
+		var speaker = WorldToFrame(speakerBounds.ClosestPointOnEdges(FrameToWorld(text)));
 		var shortfall = SpeechLineSpeakerGap + SpeechLineTextGap + SpeechLineMinimumLength -
 			Vector2.Distance(speaker, text);
 		if (shortfall <= 0)
@@ -364,7 +364,7 @@ public sealed partial class GameView : IDisposable
 		if (bubble.VoiceLevel <= 0)
 			return;
 
-		var speaker = speakerBounds.ClosestPointOnEdges(text + RenderCamera) - RenderCamera;
+		var speaker = WorldToFrame(speakerBounds.ClosestPointOnEdges(FrameToWorld(text)));
 		var delta = text - speaker;
 		var length = delta.Length();
 		if (length <= SpeechLineSpeakerGap + SpeechLineTextGap)
@@ -406,7 +406,7 @@ public sealed partial class GameView : IDisposable
 				continue;
 
 			var bounds = TitleText.TextBounds(title.Position, title.Text, title.LineHeightMultiplier);
-			var rect = new Rect(bounds.X - RenderCamera.X, bounds.Y - RenderCamera.Y, bounds.Width, bounds.Height)
+			var rect = new Rect(WorldToFrame(bounds.TopLeft), bounds.Size * zoomLevel)
 				.Inflate(SpeechObstacleGap);
 			if (rect.Right > 0 && rect.Left < screen.X && rect.Bottom > 0 && rect.Top < screen.Y)
 				speechObstacles.Add(rect);

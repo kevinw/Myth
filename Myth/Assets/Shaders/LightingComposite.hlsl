@@ -351,7 +351,12 @@ float4 fragment_main(VsOutput input) : SV_Target0
     // Prevent optimizer from removing input.type - D3D12 requires matching signatures
     if (input.type.x < -1000) discard;
 
-    float2 sample = target_uv(input.tex_coord);
+    // The world is drawn at `zoom`, so several frame pixels can share one art pixel. Every
+    // lighting input is sampled at that art pixel's centre: otherwise the light varies within a
+    // single dither cell and the quantizer below splits it into fractions of a cell.
+    float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
+    float2 art_pixel = floor(screen_pixel(input.position, TextureSizeCamera.y) / zoom);
+    float2 sample = target_uv((art_pixel + 0.5) * zoom / TextureSizeCamera.xy);
     float4 background_scene = Texture.Sample(Sampler, sample) * input.color;
     float4 background_light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
@@ -359,8 +364,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
     float dither_mask = normal_data.b;
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
-    float zoom = DitherGlitchAxis.z > 0.0 ? DitherGlitchAxis.z : 1.0;
-    float2 world_pixel = screen_to_world(input.position, TextureSizeCamera.xy, TextureSizeCamera.zw, zoom);
+    float2 world_pixel = TextureSizeCamera.zw + art_pixel + 0.5;
     float2 pattern_pixel = world_pixel + DitherAnchorOffsets[tile_field_anchor(tile_field)].xy;
     float4 background_tile_field = tile_field;
     float2 background_pattern_pixel = pattern_pixel;

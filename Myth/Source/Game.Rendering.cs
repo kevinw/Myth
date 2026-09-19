@@ -225,6 +225,7 @@ public sealed partial class GameView
 					game.fx.blooming,
 					Manager.Visuals.CrtBloomThreshold,
 					Manager.Visuals.CrtScanlineStrength,
+					zoomLevel,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
@@ -2202,30 +2203,41 @@ public sealed partial class GameView
 
 		var oldCamera = Camera;
 		var oldShake = shake;
+		// This path frames the world rect it is handed at 1:1: the gameplay camera's zoom
+		// (Room.Zoom / the Zoom control) is not this view's to apply.
+		var oldZoom = zoomLevel;
 		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
 		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height));
 
 		EnsureRenderTargets(width, height);
 		Camera = worldView.TopLeft;
 		shake = Point2.Zero;
+		zoomLevel = 1.0f;
 		RenderCurrentView(window, viewport, showHud, scissor, applyCrt);
 		Camera = oldCamera;
 		shake = oldShake;
+		zoomLevel = oldZoom;
 	}
 
-	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false)
+	// Renders `worldView` into `target`. The default 1:1 zoom is the editor's (previews, bakes,
+	// exports): the rect it hands over is the picture it wants. Pass the game's own zoom to
+	// reproduce what a player sees, frame pixels and all.
+	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false, float zoom = 1.0f)
 	{
 		var oldCamera = Camera;
 		var oldShake = shake;
-		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width));
-		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height));
+		var oldZoom = zoomLevel;
+		var width = Math.Max(1, (int)MathF.Ceiling(worldView.Width * zoom));
+		var height = Math.Max(1, (int)MathF.Ceiling(worldView.Height * zoom));
 
 		EnsureRenderTargets(width, height);
 		Camera = worldView.TopLeft;
 		shake = Point2.Zero;
+		zoomLevel = zoom;
 		RenderCurrentView(target, target.Bounds, showHud, scissor: null, applyCrt: false);
 		Camera = oldCamera;
 		shake = oldShake;
+		zoomLevel = oldZoom;
 	}
 
 	void EnsureRenderTargets(int width, int height)
