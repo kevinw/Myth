@@ -237,6 +237,24 @@ public static class Factory
 	public static char? CharForName(string name)
 		=> charsByEntryName.TryGetValue(name, out var id) ? id : null;
 
+	/// Chars are handed out at registration, so adding or removing a tile type can hand the others
+	/// different ones. Rooms on disk survive that through their legend; rooms already in memory are
+	/// still holding the old chars, so a hot reload snapshots this beforehand and remaps them after
+	/// (see Manager.ReloadAssets). Without it a painted tile silently becomes whichever type
+	/// inherited its char.
+	public static Dictionary<string, char> SnapshotChars()
+		=> new(charsByEntryName, StringComparer.OrdinalIgnoreCase);
+
+	/// Old char -> new char for every tile type whose char moved since the snapshot.
+	public static Dictionary<char, char> RemapSince(Dictionary<string, char> snapshot)
+	{
+		var remap = new Dictionary<char, char>();
+		foreach (var (name, before) in snapshot)
+			if (charsByEntryName.TryGetValue(name, out var now) && now != before)
+				remap[before] = now;
+		return remap;
+	}
+
 	public static bool IsLegacySlopeName(string name)
 		=> legacySlopeNames.Contains(name);
 
@@ -251,14 +269,24 @@ public static class Factory
 		charsByEntryName[name] = baseTile;
 	}
 
+	/// A free char for a tile type that doesn't have one yet, so the Tile Creator can stamp it into
+	/// the spec at creation and the type keeps it for good (see SnapshotChars for what shifting
+	/// chars costs).
+	public static char PickCharFor(string name) => AssignChar('\0', name);
+
 	/// Picks a free char for a tile type: its preferred char if available, else the first
 	/// letter of its name (upper then lower), else the first free char in a fixed alphabet.
 	/// '0' means empty and 'f' is the legacy fungus tile; neither is ever assigned.
 	static char AssignChar(char preferred, string name)
 	{
 		const string reserved = "0f2SY$J";
-		bool Free(char c) => !reserved.Contains(c) && !Entries.ContainsKey(c)
-			&& !TileKits.Registrations.Exists(it => it.HasSlope && it.SlopePreferredChar == c);
+		// A char some other spec asks for by name is off limits even before that spec registers:
+		// registration order is alphabetical, so otherwise a type earlier in the alphabet with no
+		// declared char could take one out from under a later type that does declare it.
+		bool Spoken(char c)
+			=> TileKits.Registrations.Exists(it => (it.PreferredChar == c && c != preferred) || (it.HasSlope && it.SlopePreferredChar == c))
+			|| NctTiles.Specs.Exists(it => it.PreferredChar == c && c != preferred);
+		bool Free(char c) => !reserved.Contains(c) && !Entries.ContainsKey(c) && !Spoken(c);
 
 		if (preferred != '\0' && Free(preferred))
 			return preferred;

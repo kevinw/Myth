@@ -19,6 +19,19 @@ public partial class Manager
 	char tileKitPaintKey;
 	Texture? tileKitPreviewTexture;
 
+	// 0 leaves the authored heights alone, 1 clears them, 2+ is TileKits.HeightMode. Editor state
+	// only -- deriving writes concrete numbers into the spec, so nothing re-derives behind your back.
+	int tileKitHeightMode;
+	float tileKitHeightStrength = 1f;
+
+	string[]? tileKitSheetNames;
+	string? tileKitSheetName;
+	Image? tileKitSheetImage;
+	Texture? tileKitSheetTexture;
+	Point2 tileKitSheetCell = new(-1, -1);
+	int tileKitSheetCellSize = 16;
+	int tileKitSheetColors = 6;
+
 	// Demo terrain for the preview: a floating island, a bumpy floor, an overhang and a
 	// wall, so top/side/bottom rims, corners and wobble are all visible at once.
 	static readonly string[] TileKitPreviewMap =
@@ -94,7 +107,9 @@ public partial class Manager
 			ImGui.Separator();
 			DrawTileKitParams(draft);
 			DrawTileKitPalette(draft);
+			DrawTileKitLighting(draft);
 			DrawTileKitFills(draft);
+			DrawTileKitSheetImport(draft);
 			DrawTileKitEdgeWeights(draft, "Edge (sides + slopes)", draft.Edge);
 			DrawTileKitEdgeWeights(draft, "Edge Top", draft.EdgeTop);
 			DrawTileKitEdgeWeights(draft, "Edge Bottom", draft.EdgeBottom);
@@ -117,9 +132,11 @@ public partial class Manager
 	{
 		var draft = TileKits.CreateDefault(name);
 		draft.Layer = layer;
+		draft.PreferredChar = Factory.PickCharFor(name);
 		tileKitDraft = draft;
 		tileKitSelected = name;
 		tileKitPaintKey = 'a';
+		tileKitHeightMode = 0;
 		tileKitDirty = true;
 		tileKitPreviewStale = true;
 		return draft;
@@ -130,6 +147,7 @@ public partial class Manager
 		tileKitSelected = spec.Name;
 		tileKitDraft = TileKits.Clone(spec);
 		tileKitPaintKey = tileKitDraft.Palette.Keys.OrderBy(it => it).FirstOrDefault('a');
+		tileKitHeightMode = 0;
 		tileKitDirty = false;
 		tileKitPreviewStale = true;
 	}
@@ -293,30 +311,87 @@ public partial class Manager
 
 		if (ImGui.SmallButton("+ color"))
 		{
-			var key = "abcdefghijklmnopqrstuvwxyz".FirstOrDefault(c => !draft.Palette.ContainsKey(c), '\0');
+			var key = TileKits.PaletteKeys.FirstOrDefault(c => !draft.Palette.ContainsKey(c), '\0');
 			if (key != '\0')
 			{
 				draft.Palette[key] = new Color(128, 128, 128, 255);
 				if (hasHeights)
-					draft.Heights[key] = 0.67f;
+					draft.Heights[key] = TileKits.DefaultHeight;
 				MarkTileKitEdited();
 			}
 		}
-		ImGui.SameLine();
-		if (hasHeights)
+	}
+
+	// "as authored" and "none" bracket the derive modes so opening a kit never re-derives it, and
+	// clearing back to flat lighting stays one click away.
+	static readonly string[] TileKitHeightModes =
+		["as authored", "none (flat lighting)", "flat", "luminance", "local contrast", "seams", "top-lit", "relief (per-pixel)"];
+
+	void DrawTileKitLighting(TileKitSpec draft)
+	{
+		if (!ImGui.CollapsingHeader("Lighting"))
+			return;
+
+		ImGui.TextDisabled("heights bevel the normal map; deriving writes numbers into the spec");
+		ImGui.SetNextItemWidth(240);
+		var changed = ImGui.Combo("derive heights", ref tileKitHeightMode, TileKitHeightModes, TileKitHeightModes.Length);
+		if (tileKitHeightMode >= 2)
 		{
-			if (ImGui.SmallButton("- heights (flat lighting)"))
-			{
-				draft.Heights.Clear();
-				MarkTileKitEdited();
-			}
+			ImGui.SetNextItemWidth(240);
+			changed |= ImGui.SliderFloat("relief strength", ref tileKitHeightStrength, 0f, 2f);
 		}
-		else if (ImGui.SmallButton("+ heights (beveled lighting)"))
+		if (changed)
 		{
-			foreach (var key in draft.Palette.Keys.ToArray())
-				draft.Heights[key] = 0.67f;
+			ApplyTileKitHeightMode(draft);
 			MarkTileKitEdited();
 		}
+
+		if (draft.HeightMaps.Count == 0)
+			return;
+
+		ImGui.TextDisabled($"per-pixel relief, {draft.HeightMaps.Count} map(s) -- replaces the per-color heights");
+		for (var i = 0; i < draft.HeightMaps.Count; i++)
+		{
+			ImGui.PushID(i);
+			DrawHeightMapGrid(draft.HeightMaps[i]);
+			ImGui.PopID();
+			if ((i + 1) % 4 != 0 && i + 1 < draft.HeightMaps.Count)
+				ImGui.SameLine(0, 10);
+		}
+	}
+
+	static void DrawHeightMapGrid(string[] map)
+	{
+		const float PixelSize = 8f;
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.One);
+		ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 0);
+		ImGui.BeginGroup();
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
+			{
+				if (x > 0)
+					ImGui.SameLine(0, 1);
+				var level = (map[y][x] - '0') / 9f;
+				ImGui.PushID(y * Game.TileSize + x);
+				ImGui.ColorButton("##h", new Vector4(level, level, level, 1),
+					ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoBorder, new Vector2(PixelSize, PixelSize));
+				ImGui.PopID();
+			}
+		ImGui.EndGroup();
+		ImGui.PopStyleVar(2);
+	}
+
+	void ApplyTileKitHeightMode(TileKitSpec draft)
+	{
+		if (tileKitHeightMode == 0)
+			return;
+		if (tileKitHeightMode == 1)
+		{
+			draft.Heights.Clear();
+			draft.HeightMaps.Clear();
+			return;
+		}
+		TileKits.DeriveHeights(draft, (TileKits.HeightMode)(tileKitHeightMode - 2), tileKitHeightStrength);
 	}
 
 	void DrawTileKitFills(TileKitSpec draft)
@@ -376,6 +451,109 @@ public partial class Manager
 		}
 	}
 
+	// Pulls fills out of an authored pixel-art sheet. The sheet stays the source of truth on disk;
+	// what lands in the spec is a quantized, hand-editable copy of one cell.
+	void DrawTileKitSheetImport(TileKitSpec draft)
+	{
+		if (!ImGui.CollapsingHeader("Import from sheet"))
+			return;
+
+		tileKitSheetNames ??= [.. Directory.EnumerateFiles(Path.Join(Assets.SourcesPath, "Tilesets"), "*.png")
+			.Select(it => Path.GetFileNameWithoutExtension(it)!).Order(StringComparer.OrdinalIgnoreCase)];
+		if (tileKitSheetNames.Length == 0)
+		{
+			ImGui.TextDisabled("no .png sheets in Assets/Sources/Tilesets");
+			return;
+		}
+
+		var index = Math.Max(0, Array.IndexOf(tileKitSheetNames, tileKitSheetName));
+		ImGui.SetNextItemWidth(200);
+		if (ImGui.Combo("sheet", ref index, tileKitSheetNames, tileKitSheetNames.Length) || tileKitSheetName == null)
+			SelectTileKitSheet(tileKitSheetNames[index]);
+
+		var cellBlocks = tileKitSheetCellSize / Game.TileSize;
+		ImGui.SetNextItemWidth(160);
+		if (ImGui.SliderInt("cell size", ref cellBlocks, 1, 4, $"{tileKitSheetCellSize}px"))
+		{
+			tileKitSheetCellSize = cellBlocks * Game.TileSize;
+			tileKitSheetCell = new(-1, -1);
+		}
+		// The ceiling is the palette key alphabet: 52 single-char keys, against at most 64 distinct
+		// pixels in a tile. Most cells of a pixel-art sheet land well under it.
+		ImGui.SetNextItemWidth(160);
+		ImGui.SliderInt("colors", ref tileKitSheetColors, 2, TileKits.PaletteKeys.Length);
+
+		if (tileKitSheetTexture is not { } sheet)
+			return;
+
+		var cells = new Point2(sheet.Width, sheet.Height) / tileKitSheetCellSize;
+		ImGui.BeginChild("Sheet", new Vector2(0, 280), ImGuiChildFlags.Borders, ImGuiWindowFlags.HorizontalScrollbar);
+		var origin = ImGui.GetCursorScreenPos();
+		imgui.Image(new Subtexture(sheet), new Vector2(sheet.Width, sheet.Height));
+		var draw = ImGui.GetWindowDrawList();
+		if (ImGui.IsWindowHovered() && Rect.Between(ImGui.GetItemRectMin(), ImGui.GetItemRectMax()).Contains(ImGui.GetMousePos()))
+		{
+			var hovered = ((ImGui.GetMousePos() - origin) / tileKitSheetCellSize).FloorToPoint2();
+			if (hovered.X < cells.X && hovered.Y < cells.Y)
+			{
+				OutlineSheetCell(draw, origin, hovered, ImGuiColor(1, 1, 1, 0.45f));
+				if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+					tileKitSheetCell = hovered;
+			}
+		}
+		if (tileKitSheetCell.X >= 0)
+			OutlineSheetCell(draw, origin, tileKitSheetCell, ImGuiColor(1, 0.85f, 0.3f, 1));
+		ImGui.EndChild();
+
+		if (tileKitSheetCell.X < 0)
+		{
+			ImGui.TextDisabled("click a cell to pick it");
+			return;
+		}
+
+		imgui.Image(new Subtexture(sheet, new Rect(tileKitSheetCell * tileKitSheetCellSize, new Vector2(tileKitSheetCellSize))), new Vector2(56));
+		ImGui.SameLine();
+		ImGui.BeginGroup();
+		ImGui.TextDisabled($"cell {tileKitSheetCell.X},{tileKitSheetCell.Y}");
+		if (ImGui.Button("Replace fill"))
+			ImportTileKitSheetCell(draft, addVariant: false);
+		ImGui.SameLine();
+		if (ImGui.Button("Add as variant"))
+			ImportTileKitSheetCell(draft, addVariant: true);
+		ImGui.SameLine();
+		if (ImGui.Button("Edge from palette"))
+		{
+			TileKits.DeriveEdges(draft);
+			MarkTileKitEdited();
+		}
+		ImGui.EndGroup();
+	}
+
+	void OutlineSheetCell(ImDrawListPtr draw, Vector2 origin, Point2 cell, uint color)
+		=> draw.AddRect(origin + cell * tileKitSheetCellSize,
+			origin + (cell + Point2.One) * tileKitSheetCellSize, color, 0, ImDrawFlags.None, 1.5f);
+
+	void SelectTileKitSheet(string name)
+	{
+		tileKitSheetName = name;
+		tileKitSheetCell = new(-1, -1);
+		tileKitSheetImage?.Dispose();
+		tileKitSheetTexture?.Dispose();
+		tileKitSheetImage = new Image(Path.Join(Assets.SourcesPath, "Tilesets", $"{name}.png"));
+		tileKitSheetTexture = new Texture(GraphicsDevice, tileKitSheetImage, name: "TileKitSheet");
+	}
+
+	void ImportTileKitSheetCell(TileKitSpec draft, bool addVariant)
+	{
+		if (tileKitSheetImage is not { } sheet)
+			return;
+
+		TileKits.ImportSheetCell(draft, sheet, tileKitSheetCell, tileKitSheetCellSize, tileKitSheetColors, addVariant);
+		ApplyTileKitHeightMode(draft);
+		tileKitPaintKey = draft.Palette.Keys.OrderBy(it => it).FirstOrDefault('a');
+		MarkTileKitEdited();
+	}
+
 	void DrawTileKitEdgeWeights(TileKitSpec draft, string label, List<(Color Color, float Weight)> weights)
 	{
 		if (!ImGui.CollapsingHeader($"{label} ({(weights.Count == 0 ? "off" : weights.Count.ToString())})###{label}"))
@@ -422,6 +600,11 @@ public partial class Manager
 		ImGui.BeginDisabled(!tileKitDirty);
 		if (ImGui.Button(exists ? "Save + Reload" : "Create + Reload"))
 		{
+			// Freeze the char the kit is holding right now into the spec, so adding or removing
+			// other tile types later can't shuffle it and churn every room legend that names it.
+			// Kits authored before this stamp themselves the first time they are saved.
+			if (draft.PreferredChar == '\0')
+				draft.PreferredChar = Factory.CharForName(draft.Name) ?? Factory.PickCharFor(draft.Name);
 			TileKits.Save(draft);
 			ReloadAssets(false);
 			tileKitDirty = false;

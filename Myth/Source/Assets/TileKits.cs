@@ -26,6 +26,10 @@ public sealed class TileKitSpec
 	public readonly Dictionary<char, Color> Palette = [];
 	public readonly Dictionary<char, float> Heights = [];
 	public readonly List<string[]> Fills = [];
+	// Optional per-pixel relief, one '0'-'9' grid per fill tile. When present it replaces the
+	// per-color Heights (see RasterizeHeights) so a tile can bevel along its shapes -- per-color
+	// heights can only ever step between colors.
+	public readonly List<string[]> HeightMaps = [];
 	public readonly List<(Color Color, float Weight)> Edge = [];
 	public readonly List<(Color Color, float Weight)> EdgeTop = [];
 	public readonly List<(Color Color, float Weight)> EdgeBottom = [];
@@ -131,11 +135,7 @@ public static class TileKits
 		if (json.TryGetPropertyValue("fills", out var fillsNode) && fillsNode is JsonArray fills)
 			foreach (var fillNode in fills)
 			{
-				if (fillNode is not JsonArray rows)
-					throw new InvalidOperationException($"Tile kit '{name}': each fill must be an array of {Game.TileSize} row strings.");
-				var tile = rows.Select(row => row?.GetValue<string>() ?? "").ToArray();
-				if (tile.Length != Game.TileSize || tile.Any(row => row.Length != Game.TileSize))
-					throw new InvalidOperationException($"Tile kit '{name}': fill tiles must be {Game.TileSize} rows of {Game.TileSize} characters.");
+				var tile = ReadTileRows(fillNode, name, "fill");
 				foreach (var key in tile.SelectMany(row => row))
 					if (!spec.Palette.ContainsKey(key))
 						throw new InvalidOperationException($"Tile kit '{name}': fill uses '{key}' which is not in the palette.");
@@ -144,6 +144,18 @@ public static class TileKits
 
 		if (spec.Fills.Count == 0)
 			throw new InvalidOperationException($"Tile kit '{name}': at least one fill tile is required.");
+
+		if (json.TryGetPropertyValue("heightMaps", out var mapsNode) && mapsNode is JsonArray maps)
+			foreach (var mapNode in maps)
+			{
+				var tile = ReadTileRows(mapNode, name, "heightMap");
+				if (tile.Any(row => !row.All(char.IsAsciiDigit)))
+					throw new InvalidOperationException($"Tile kit '{name}': heightMap tiles must be digits '0'-'9'.");
+				spec.HeightMaps.Add(tile);
+			}
+		if (spec.HeightMaps.Count > 0 && spec.HeightMaps.Count != spec.Fills.Count)
+			throw new InvalidOperationException($"Tile kit '{name}': heightMaps needs one tile per fill ({spec.Fills.Count}).");
+
 		if (spec.Heights.Count > 0)
 			foreach (var key in spec.Palette.Keys)
 				if (!spec.Heights.ContainsKey(key))
@@ -153,6 +165,16 @@ public static class TileKits
 		ReadWeights(json, "edgeTop", spec.EdgeTop, name);
 		ReadWeights(json, "edgeBottom", spec.EdgeBottom, name);
 		return spec;
+	}
+
+	static string[] ReadTileRows(JsonNode? node, string kitName, string section)
+	{
+		if (node is not JsonArray rows)
+			throw new InvalidOperationException($"Tile kit '{kitName}': each {section} must be an array of {Game.TileSize} row strings.");
+		var tile = rows.Select(row => row?.GetValue<string>() ?? "").ToArray();
+		if (tile.Length != Game.TileSize || tile.Any(row => row.Length != Game.TileSize))
+			throw new InvalidOperationException($"Tile kit '{kitName}': {section} tiles must be {Game.TileSize} rows of {Game.TileSize} characters.");
+		return tile;
 	}
 
 	static char ReadChar(JsonObject json, string key)
@@ -205,6 +227,8 @@ public static class TileKits
 			clone.Heights[key] = value;
 		foreach (var fill in spec.Fills)
 			clone.Fills.Add((string[])fill.Clone());
+		foreach (var map in spec.HeightMaps)
+			clone.HeightMaps.Add((string[])map.Clone());
 		clone.Edge.AddRange(spec.Edge);
 		clone.EdgeTop.AddRange(spec.EdgeTop);
 		clone.EdgeBottom.AddRange(spec.EdgeBottom);
@@ -276,20 +300,27 @@ public static class TileKits
 			writer.WriteEndObject();
 		}
 
-		writer.WriteStartArray("fills");
-		foreach (var fill in spec.Fills)
-		{
-			writer.WriteStartArray();
-			foreach (var row in fill)
-				writer.WriteStringValue(row);
-			writer.WriteEndArray();
-		}
-		writer.WriteEndArray();
+		WriteTiles(writer, "fills", spec.Fills);
+		if (spec.HeightMaps.Count > 0)
+			WriteTiles(writer, "heightMaps", spec.HeightMaps);
 
 		WriteWeights(writer, "edge", spec.Edge);
 		WriteWeights(writer, "edgeTop", spec.EdgeTop);
 		WriteWeights(writer, "edgeBottom", spec.EdgeBottom);
 		writer.WriteEndObject();
+	}
+
+	static void WriteTiles(Utf8JsonWriter writer, string key, List<string[]> tiles)
+	{
+		writer.WriteStartArray(key);
+		foreach (var tile in tiles)
+		{
+			writer.WriteStartArray();
+			foreach (var row in tile)
+				writer.WriteStringValue(row);
+			writer.WriteEndArray();
+		}
+		writer.WriteEndArray();
 	}
 
 	static void WriteWeights(Utf8JsonWriter writer, string key, List<(Color Color, float Weight)> weights)
@@ -313,11 +344,16 @@ public static class TileKits
 		=> spec.Fills.Select(tile => RasterizeTile(tile, key => spec.Palette[key])).ToList();
 
 	public static List<Image> RasterizeHeights(TileKitSpec spec)
-		=> spec.Heights.Count == 0 ? [] : spec.Fills.Select(tile => RasterizeTile(tile, key =>
-		{
-			var value = (byte)Math.Round(spec.Heights[key] * 255);
-			return new Color(value, value, value, (byte)255);
-		})).ToList();
+		=> spec.HeightMaps.Count > 0
+			? spec.HeightMaps.Select(map => RasterizeTile(map, key => Grey((key - '0') / 9f))).ToList()
+			: spec.Heights.Count == 0 ? []
+			: spec.Fills.Select(tile => RasterizeTile(tile, key => Grey(spec.Heights[key]))).ToList();
+
+	static Color Grey(float value)
+	{
+		var level = (byte)Math.Round(Math.Clamp(value, 0f, 1f) * 255);
+		return new Color(level, level, level, (byte)255);
+	}
 
 	static Image RasterizeTile(string[] rows, Func<char, Color> colorFor)
 	{
@@ -372,5 +408,330 @@ public static class TileKits
 	{
 		state = (state * 1103515245 + 12345) % 2147483648;
 		return state / 2147483648f;
+	}
+
+	// -- height derivation -------------------------------------------------------------
+
+	/// How the Tile Creator reads heights (which become the normal map's bevel) out of a fill
+	/// pattern. Every mode is a one-shot authoring action that writes plain numbers into the spec,
+	/// so a kit nobody re-derives keeps exactly the heights it was authored with.
+	public enum HeightMode
+	{
+		Flat,
+		Luminance,
+		Contrast,
+		Seams,
+		TopLit,
+		Relief,
+	}
+
+	public const float DefaultHeight = 0.67f;
+
+	public static void DeriveHeights(TileKitSpec spec, HeightMode mode, float strength)
+	{
+		if (mode == HeightMode.Relief)
+		{
+			DeriveRelief(spec, strength);
+			return;
+		}
+
+		spec.HeightMaps.Clear();
+		WriteHeights(spec, mode switch
+		{
+			HeightMode.Luminance => ScorePixels(spec, (fill, x, y) => Luminance(spec, fill, x, y)),
+			// Local high pass. Bright-for-its-neighbourhood reads as raised, which stops a dark
+			// material reading as uniformly sunken the way raw luminance makes it.
+			HeightMode.Contrast => ScorePixels(spec, (fill, x, y) => Luminance(spec, fill, x, y) - Blurred(spec, fill, x, y)),
+			// Thin vs fat: mortar, cracks and plank gaps are 1px lines while the body is a blob.
+			// Reads shape instead of color, so it gets bright cracks right where luminance inverts.
+			HeightMode.Seams => ScorePixels(spec, (fill, x, y) => Neighbours(fill, x, y)),
+			// The art is already lit from above, so read the light back out: descending through a
+			// groove gets brighter, descending over a bump gets darker.
+			HeightMode.TopLit => ScorePixels(spec, (fill, x, y) => Luminance(spec, fill, x, y - 1) - Luminance(spec, fill, x, y + 1)),
+			_ => [],
+		}, strength);
+	}
+
+	/// Per-pixel relief: how deep inside its own color region each pixel sits, so mortar lines stay
+	/// low while the pads between them bulge. The one mode that can bevel a shape rather than just
+	/// step between colors -- it drops the per-color heights so there is a single source of truth.
+	static void DeriveRelief(TileKitSpec spec, float strength)
+	{
+		spec.Heights.Clear();
+		spec.HeightMaps.Clear();
+		// Depth maps to levels on a fixed scale rather than normalizing to the tile's own deepest
+		// pixel: a noise fill whose single interior pixel is one step in should read as a faint
+		// bump, not as a full-height spike.
+		const int LevelsPerStep = 3;
+		foreach (var fill in spec.Fills)
+		{
+			var depth = FloodDepth(fill);
+			var rows = new string[Game.TileSize];
+			for (var y = 0; y < Game.TileSize; y++)
+			{
+				var row = new char[Game.TileSize];
+				for (var x = 0; x < Game.TileSize; x++)
+					row[x] = (char)('0' + Math.Clamp((int)MathF.Round(LevelsPerStep * strength * depth[y * Game.TileSize + x]), 0, 9));
+				rows[y] = new string(row);
+			}
+			spec.HeightMaps.Add(rows);
+		}
+	}
+
+	static readonly Point2[] cardinals = [new(1, 0), new(-1, 0), new(0, 1), new(0, -1)];
+
+	// Wrapped multi-source BFS: 0 on every pixel touching a different color, growing inward. A fill
+	// that is pure noise has no interior at all and comes back flat, which is the honest answer.
+	static int[] FloodDepth(string[] fill)
+	{
+		var depth = new int[Game.TileSize * Game.TileSize];
+		Array.Fill(depth, -1);
+		var queue = new Queue<Point2>();
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
+				if (Neighbours(fill, x, y) < 1f)
+				{
+					depth[y * Game.TileSize + x] = 0;
+					queue.Enqueue(new Point2(x, y));
+				}
+
+		while (queue.Count > 0)
+		{
+			var at = queue.Dequeue();
+			foreach (var step in cardinals)
+			{
+				var next = new Point2(Wrap(at.X + step.X), Wrap(at.Y + step.Y));
+				var index = next.Y * Game.TileSize + next.X;
+				if (depth[index] >= 0)
+					continue;
+				depth[index] = depth[at.Y * Game.TileSize + at.X] + 1;
+				queue.Enqueue(next);
+			}
+		}
+
+		for (var i = 0; i < depth.Length; i++)
+			depth[i] = Math.Max(0, depth[i]);
+		return depth;
+	}
+
+	/// Seeds the rim noise from the fill itself: the three colors covering most of the tile, weighted
+	/// by coverage, with the top rim leaning light and the bottom rim leaning dark -- so an imported
+	/// material's edges belong to it instead of wearing the default grey.
+	public static void DeriveEdges(TileKitSpec spec)
+	{
+		var coverage = new Dictionary<char, int>();
+		foreach (var key in spec.Fills.SelectMany(fill => fill).SelectMany(row => row))
+			coverage[key] = coverage.GetValueOrDefault(key) + 1;
+
+		var top = coverage.OrderByDescending(it => it.Value).ThenBy(it => it.Key)
+			.Take(3).Select(it => (Color: spec.Palette[it.Key], Weight: (float)it.Value)).ToList();
+		if (top.Count == 0)
+			return;
+
+		spec.Edge.Clear();
+		spec.EdgeTop.Clear();
+		spec.EdgeBottom.Clear();
+		var total = top.Sum(it => it.Weight);
+		foreach (var (color, weight) in top)
+			spec.Edge.Add((color, MathF.Max(1, MathF.Round(weight / total * 100))));
+
+		var byLight = top.Select(it => it.Color).OrderByDescending(Luminance).ToList();
+		var ramp = (float[])[55, 30, 15];
+		for (var i = 0; i < byLight.Count; i++)
+		{
+			spec.EdgeTop.Add((byLight[i], ramp[i]));
+			spec.EdgeBottom.Add((byLight[^(i + 1)], ramp[i]));
+		}
+		spec.EdgeBottom.Add((Color.Black, 25));
+	}
+
+	static Dictionary<char, float> ScorePixels(TileKitSpec spec, Func<string[], int, int, float> score)
+	{
+		var totals = new Dictionary<char, (float Sum, int Count)>();
+		foreach (var fill in spec.Fills)
+			for (var y = 0; y < Game.TileSize; y++)
+				for (var x = 0; x < Game.TileSize; x++)
+				{
+					var (sum, count) = totals.GetValueOrDefault(fill[y][x]);
+					totals[fill[y][x]] = (sum + score(fill, x, y), count + 1);
+				}
+		return totals.ToDictionary(it => it.Key, it => it.Value.Sum / it.Value.Count);
+	}
+
+	// Scores are only ever compared against each other, so they normalize to the full 0-1 range and
+	// `strength` then pulls them back toward the middle. A palette whose keys all score the same
+	// (a flat derive, a one-color fill) sits at the neutral default instead of dividing by zero.
+	static void WriteHeights(TileKitSpec spec, Dictionary<char, float> scores, float strength)
+	{
+		spec.Heights.Clear();
+		var range = scores.Count > 0 ? scores.Values.Max() - scores.Values.Min() : 0f;
+		var lowest = scores.Count > 0 ? scores.Values.Min() : 0f;
+		foreach (var key in spec.Palette.Keys)
+			spec.Heights[key] = range > 0.0001f && scores.TryGetValue(key, out var score)
+				? Math.Clamp(0.5f + ((score - lowest) / range - 0.5f) * strength, 0f, 1f)
+				: DefaultHeight;
+	}
+
+	static float Luminance(Color color)
+		=> (color.R * 0.299f + color.G * 0.587f + color.B * 0.114f) / 255f;
+
+	static float Luminance(TileKitSpec spec, string[] fill, int x, int y)
+		=> Luminance(spec.Palette[fill[Wrap(y)][Wrap(x)]]);
+
+	static float Blurred(TileKitSpec spec, string[] fill, int x, int y)
+	{
+		var sum = 0f;
+		for (var dy = -1; dy <= 1; dy++)
+			for (var dx = -1; dx <= 1; dx++)
+				sum += Luminance(spec, fill, x + dx, y + dy);
+		return sum / 9f;
+	}
+
+	// Fraction of a pixel's 4 neighbours sharing its color: 1 deep inside a blob, 0.5 on a 1px line.
+	static float Neighbours(string[] fill, int x, int y)
+	{
+		var key = fill[y][x];
+		var count = 0;
+		foreach (var step in cardinals)
+			if (fill[Wrap(y + step.Y)][Wrap(x + step.X)] == key)
+				count++;
+		return count / 4f;
+	}
+
+	static int Wrap(int value) => (value + Game.TileSize) % Game.TileSize;
+
+	// -- sheet import ------------------------------------------------------------------
+
+	public const string PaletteKeys = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+	/// Pulls one cell of an authored pixel-art sheet (Assets/Sources/Tilesets/*.png) in as a fill
+	/// tile. Cells larger than a game tile are block-downsampled by majority vote -- which keeps the
+	/// pixels crisp where averaging would mush them -- then quantized to a few colors, so what lands
+	/// in the spec is a hand-editable kit rather than a photo.
+	public static void ImportSheetCell(TileKitSpec spec, Image sheet, Point2 cell, int cellSize, int colors, bool addVariant)
+	{
+		var block = Math.Max(1, cellSize / Game.TileSize);
+		var origin = cell * cellSize;
+		var pixels = new Color[Game.TileSize * Game.TileSize];
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
+				pixels[y * Game.TileSize + x] = MajorityColor(sheet, origin + new Point2(x, y) * block, block);
+		Quantize(pixels, colors);
+
+		// A replace starts the kit over from the cell; a variant keeps the palette and snaps into it,
+		// which is how several cells of one material end up sharing a single tile type (and one char).
+		if (!addVariant)
+		{
+			spec.Palette.Clear();
+			spec.Fills.Clear();
+			spec.Heights.Clear();
+			spec.HeightMaps.Clear();
+		}
+
+		// Resolve each distinct color to a key once, against the palette as it stood before this
+		// import -- see ResolveKey.
+		var mergeInto = spec.Palette.Select(it => (it.Key, it.Value)).ToArray();
+		var keys = new Dictionary<Color, char>();
+		foreach (var color in pixels)
+			if (!keys.ContainsKey(color))
+				keys[color] = ResolveKey(spec, mergeInto, color);
+
+		var rows = new string[Game.TileSize];
+		for (var y = 0; y < Game.TileSize; y++)
+		{
+			var row = new char[Game.TileSize];
+			for (var x = 0; x < Game.TileSize; x++)
+				row[x] = keys[pixels[y * Game.TileSize + x]];
+			rows[y] = new string(row);
+		}
+		spec.Fills.Add(rows);
+
+		// Heights must cover every palette key, and a relief map must cover every fill.
+		if (spec.Heights.Count > 0)
+			foreach (var key in spec.Palette.Keys.ToArray())
+				spec.Heights.TryAdd(key, DefaultHeight);
+		if (spec.HeightMaps.Count > 0)
+			DeriveRelief(spec, 1f);
+	}
+
+	// Most common color in the block, ties to the first seen: a downsampled cell keeps the source's
+	// own colors instead of inventing averaged ones. Alpha is dropped -- fills are always opaque.
+	static Color MajorityColor(Image sheet, Point2 origin, int block)
+	{
+		var counts = new Dictionary<Color, int>();
+		var best = Color.Black;
+		var bestCount = 0;
+		for (var y = 0; y < block; y++)
+			for (var x = 0; x < block; x++)
+			{
+				var at = origin + new Point2(x, y);
+				if (at.X < 0 || at.Y < 0 || at.X >= sheet.Width || at.Y >= sheet.Height)
+					continue;
+				var source = sheet[at.X, at.Y];
+				var color = new Color(source.R, source.G, source.B, (byte)255);
+				var count = counts[color] = counts.GetValueOrDefault(color) + 1;
+				if (count > bestCount)
+					(best, bestCount) = (color, count);
+			}
+		return best;
+	}
+
+	// Frequency-greedy: keep the colors covering the most pixels, snap the rest to the nearest
+	// keeper. These sheets are pixel art (a median of six colors a cell), so it is usually a no-op,
+	// and it can never invent a color the artist didn't use.
+	static void Quantize(Color[] pixels, int colors)
+	{
+		var counts = new Dictionary<Color, int>();
+		foreach (var pixel in pixels)
+			counts[pixel] = counts.GetValueOrDefault(pixel) + 1;
+		if (counts.Count <= colors)
+			return;
+
+		var keep = counts.OrderByDescending(it => it.Value).ThenBy(it => it.Key.RGBA).Take(colors).Select(it => it.Key).ToArray();
+		for (var i = 0; i < pixels.Length; i++)
+		{
+			var nearest = keep[0];
+			foreach (var option in keep)
+				if (Distance(option, pixels[i]) < Distance(nearest, pixels[i]))
+					nearest = option;
+			pixels[i] = nearest;
+		}
+	}
+
+	// Reuses a palette entry when the color is close enough -- variants of one material share most
+	// of their colors -- otherwise claims the next free key. Only `mergeInto` (the palette as it
+	// stood before this import) are merge candidates: snapping to a key this same import just added
+	// would undo the quantizer's decision and quietly hand back fewer colors than were asked for.
+	static char ResolveKey(TileKitSpec spec, (char Key, Color Color)[] mergeInto, Color color)
+	{
+		const int MergeDistance = 20;
+		var nearest = NearestKey(mergeInto, color);
+		if (nearest.Key != '\0' && nearest.Distance <= MergeDistance * MergeDistance)
+			return nearest.Key;
+
+		foreach (var free in PaletteKeys)
+			if (!spec.Palette.ContainsKey(free))
+			{
+				spec.Palette[free] = color;
+				return free;
+			}
+
+		// Out of keys: settle for the closest color the palette already has.
+		return NearestKey([.. spec.Palette.Select(it => (it.Key, it.Value))], color).Key;
+	}
+
+	static (char Key, int Distance) NearestKey((char Key, Color Color)[] palette, Color color)
+	{
+		(char Key, int Distance) best = ('\0', int.MaxValue);
+		foreach (var (key, existing) in palette)
+			if (Distance(existing, color) < best.Distance)
+				best = (key, Distance(existing, color));
+		return best;
+	}
+
+	static int Distance(Color a, Color b)
+	{
+		var (dr, dg, db) = (a.R - b.R, a.G - b.G, a.B - b.B);
+		return dr * dr + dg * dg + db * db;
 	}
 }

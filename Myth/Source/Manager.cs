@@ -2149,8 +2149,24 @@ public partial class Manager : App
 				Assets.Reload(GraphicsDevice);
 			}
 
+			// Registering hands out session chars in registration order, so a tile type appearing
+			// or disappearing shifts the chars of the ones after it. Every loaded room is still
+			// painted with the old chars (their legends were resolved against them), so rebind the
+			// grids before anything reads them -- otherwise a tile silently becomes whichever type
+			// inherited its char.
+			var charsBefore = Factory.SnapshotChars();
 			Factory.Clear();
 			Factory.RegisterTypes();
+			if (Factory.RemapSince(charsBefore) is { Count: > 0 } remap)
+			{
+				foreach (var room in Assets.RoomsById.Values)
+					room.RemapTiles(remap);
+#if EDITOR
+				// Undo entries hold the chars they were recorded with, so applying one now would
+				// paint the wrong tile type.
+				undo.Clear();
+#endif
+			}
 			Assets.RebuildRoomGeometry();
 #if EDITOR
 			ClearRoomPreviewCache();

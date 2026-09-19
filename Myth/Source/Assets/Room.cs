@@ -443,18 +443,29 @@ public class Room
 		if (remap.Count == 0 && legacySlopes.Count == 0)
 			return;
 
+		for (var x = 0; x < Size.X; x++)
+			for (var y = 0; y < Size.Y; y++)
+			{
+				if (legacySlopes.Contains(Tiles[x, y]))
+					tileFlags[x, y] |= TileFlags.Slope;
+				if (legacySlopes.Contains(BackgroundTiles[x, y]))
+					tileFlags[x, y] |= TileFlags.BackgroundSlope;
+			}
+		RemapTiles(remap);
+	}
+
+	/// Rebinds the grids after tile types were handed different session chars. A room loaded from
+	/// disk gets this by name through its legend; this is the same thing for a room already in
+	/// memory when a hot reload re-registers the Factory.
+	public void RemapTiles(Dictionary<char, char> remap)
+	{
 		// Write the grids directly: SetTileUnchecked would reset per-tile flags, which are
 		// already loaded by now. The entry cache is rebuilt from the remapped chars.
 		for (var x = 0; x < Size.X; x++)
 			for (var y = 0; y < Size.Y; y++)
 			{
-				var foreground = Tiles[x, y];
-				if (legacySlopes.Contains(foreground))
-					tileFlags[x, y] |= TileFlags.Slope;
-				if (legacySlopes.Contains(BackgroundTiles[x, y]))
-					tileFlags[x, y] |= TileFlags.BackgroundSlope;
-				if (remap.TryGetValue(foreground, out var tile))
-					Tiles[x, y] = tile;
+				if (remap.TryGetValue(Tiles[x, y], out var foreground))
+					Tiles[x, y] = foreground;
 				if (remap.TryGetValue(BackgroundTiles[x, y], out var background))
 					BackgroundTiles[x, y] = background;
 			}
