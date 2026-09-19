@@ -1008,6 +1008,22 @@ public class Room
 			? IsFullBlockTile(x, y)
 			: GetBackgroundEntry(new Point2(x, y)) is { DualTilesetName: not null } && !IsSlopeTile(layer, x, y);
 
+	/// Which of the four cells around a dual-grid vertex are this material. Every renderer that
+	/// marches a room's dual grid reads it from here, so they can't drift apart.
+	public int GetDualMaterialMask(char tileType, Factory.TileLayer layer, int vertexX, int vertexY)
+	{
+		var mask = 0;
+		if (IsDualMaterialFilled(tileType, layer, vertexX - 1, vertexY - 1))
+			mask |= TileQuadrants.TopLeft;
+		if (IsDualMaterialFilled(tileType, layer, vertexX - 1, vertexY))
+			mask |= TileQuadrants.BottomLeft;
+		if (IsDualMaterialFilled(tileType, layer, vertexX, vertexY - 1))
+			mask |= TileQuadrants.TopRight;
+		if (IsDualMaterialFilled(tileType, layer, vertexX, vertexY))
+			mask |= TileQuadrants.BottomRight;
+		return mask;
+	}
+
 	public bool IsDualMaterialFilled(char tileType, Factory.TileLayer layer, int x, int y)
 	{
 		if (Size.X <= 0 || Size.Y <= 0)

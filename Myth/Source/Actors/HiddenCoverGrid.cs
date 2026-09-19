@@ -524,22 +524,18 @@ public class HiddenCoverGrid : Actor
 				if (materialMask == 0)
 					continue;
 
-				var maskTile = MaskToTile[materialMask];
-				var seed = StableVariantSeed(room, tileType, x, y);
-				var subtexture = tileset.GetVariantTile(maskTile.X, maskTile.Y, seed);
-				if (subtexture.Texture == null)
+				var art = DualGrid.LookupArt(tileset, MaskToTile[materialMask], room.TileSpacePosition + new Point2(x, y), tileType);
+				if (art.Tile.Texture == null)
 					continue;
 
-				var normal = tileset.GetVariantNormalTile(maskTile.X, maskTile.Y, seed);
-				var occluders = tileset.GetVariantOccluders(maskTile.X, maskTile.Y, seed);
 				var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
 				var regionId = CoverRegionId(x, y);
 				if (regionId < 0)
 					continue;
 
-				var command = new DrawCommand(subtexture, normal, new Point2(x, y), position, tileType, materialMask, coverMask, regionId);
+				var command = new DrawCommand(art.Tile, art.Normal, new Point2(x, y), position, tileType, materialMask, coverMask, regionId);
 				drawCommands.Add(command);
-				AppendWorldShadowSegments(position, command, occluders);
+				AppendWorldShadowSegments(position, command, art.Occluders);
 			}
 		}
 
@@ -723,9 +719,6 @@ public class HiddenCoverGrid : Actor
 		if (current.End > current.Start)
 			merged.Add(createSegment(current));
 	}
-
-	static int StableVariantSeed(Room room, char tileType, int x, int y)
-		=> Hash32.TileVariantSeed(room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y), tileType);
 
 	static bool IsAxisAligned(ShadowSegment segment)
 		=> NearlyEqual(segment.A.X, segment.B.X) || NearlyEqual(segment.A.Y, segment.B.Y);

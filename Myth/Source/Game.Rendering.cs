@@ -1467,16 +1467,7 @@ public sealed partial class GameView
 			for (var y = 0; y <= renderRoom.Size.Y; y++)
 				for (var x = 0; x <= renderRoom.Size.X; x++)
 				{
-					var materialMask = 0;
-					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
-						materialMask |= TileQuadrants.TopLeft;
-					if (renderRoom.IsDualMaterialFilled(tileType, layer, x - 1, y))
-						materialMask |= TileQuadrants.BottomLeft;
-					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y - 1))
-						materialMask |= TileQuadrants.TopRight;
-					if (renderRoom.IsDualMaterialFilled(tileType, layer, x, y))
-						materialMask |= TileQuadrants.BottomRight;
-
+					var materialMask = renderRoom.GetDualMaterialMask(tileType, layer, x, y);
 					if (materialMask == 0)
 						continue;
 
@@ -1484,47 +1475,18 @@ public sealed partial class GameView
 					if (joinMask == 0)
 						continue;
 
-					var dualTile = DualGrid.MaskToTile[joinMask];
-					var seed = StableDualVariantSeed(renderRoom, tileType, x, y);
-					var image = tileset.GetVariantTile(dualTile.X, dualTile.Y, seed);
+					var worldTile = renderRoom.TileSpacePosition + new Point2(x, y);
+					var image = DualGrid.LookupArt(tileset, DualGrid.MaskToTile[joinMask], worldTile, tileType).Tile;
 					if (image.Texture == null)
 						continue;
 
 					var position = new Vector2(
 						renderRoom.WorldBounds.X + (x - 0.5f) * TileSize,
 						renderRoom.WorldBounds.Y + (y - 0.5f) * TileSize);
-					var color = TileFieldColor(tileType, renderRoom.TileSpacePosition + new Point2(x, y));
-					DrawDualTileFieldQuadrants(image, position, materialMask, color);
+					DualGrid.DrawTile(Batcher, image, position, materialMask, TileFieldColor(tileType, worldTile));
 				}
 		}
 	}
-
-	void DrawDualTileFieldQuadrants(Subtexture image, Vector2 position, int materialMask, Color color)
-	{
-		if (materialMask == TileQuadrants.All)
-		{
-			Batcher.Image(image, position, color);
-			return;
-		}
-
-		const int halfTileSize = (TileSize / 2);
-
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopLeft, new Rect(0, 0, halfTileSize, halfTileSize));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomLeft, new Rect(0, halfTileSize, halfTileSize, halfTileSize));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.TopRight, new Rect(halfTileSize, 0, halfTileSize, halfTileSize));
-		DrawDualTileFieldQuadrant(image, position, materialMask, color, TileQuadrants.BottomRight, new Rect(halfTileSize, halfTileSize, halfTileSize, halfTileSize));
-	}
-
-	void DrawDualTileFieldQuadrant(Subtexture image, Vector2 position, int materialMask, Color color, int mask, Rect clip)
-	{
-		if ((materialMask & mask) == 0)
-			return;
-
-		Batcher.Image(image, clip, position + clip.Position, Vector2.Zero, Vector2.One, 0, color);
-	}
-
-	static int StableDualVariantSeed(Room room, char tileType, int x, int y)
-		=> Hash32.TileVariantSeed(room.WorldBounds.TopLeft / TileSize + new Point2(x, y), tileType);
 
 	static Color TileFieldColor(char tile, Point2 worldTile, int anchor = 0)
 	{

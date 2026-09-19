@@ -50,16 +50,7 @@ public class DualGrid : Actor
 		for (var x = 0; x <= room.Size.X; x++)
 			for (var y = 0; y <= room.Size.Y; y++)
 			{
-				var materialMask = 0;
-				if (room.IsDualMaterialFilled(tileType, layer, x - 1, y - 1))
-					materialMask |= TileQuadrants.TopLeft;
-				if (room.IsDualMaterialFilled(tileType, layer, x - 1, y))
-					materialMask |= TileQuadrants.BottomLeft;
-				if (room.IsDualMaterialFilled(tileType, layer, x, y - 1))
-					materialMask |= TileQuadrants.TopRight;
-				if (room.IsDualMaterialFilled(tileType, layer, x, y))
-					materialMask |= TileQuadrants.BottomRight;
-
+				var materialMask = room.GetDualMaterialMask(tileType, layer, x, y);
 				if (materialMask == 0)
 					continue;
 
@@ -67,25 +58,36 @@ public class DualGrid : Actor
 				if (mask == 0)
 					continue;
 
-				var tile = MaskToTile[mask];
-				var seed = StableVariantSeed(room, tileType, x, y);
-				var subtexture = tileset.GetVariantTile(tile.X, tile.Y, seed);
-				if (subtexture.Texture == null)
+				var art = LookupArt(tileset, MaskToTile[mask], room.TileSpacePosition + new Point2(x, y), tileType);
+				if (art.Tile.Texture == null)
 					continue;
-				var normal = tileset.GetVariantNormalTile(tile.X, tile.Y, seed);
-				var occluders = tileset.GetVariantOccluders(tile.X, tile.Y, seed);
 				var position = new Vector2(x - 0.5f, y - 0.5f) * Game.TileSize;
 
 				drawCommands.Add(new DrawCommand(
-					subtexture,
-					normal,
+					art.Tile,
+					art.Normal,
 					position,
 					materialMask));
 
-				AppendWorldShadowSegments(position, materialMask, occluders);
+				AppendWorldShadowSegments(position, materialMask, art.Occluders);
 			}
 
 		MergeAxisAlignedShadowSegments();
+	}
+
+	/// The art one dual cell resolves to. Every renderer that marches a dual grid -- the room's
+	/// DualGrid actor, the tile-field pass, hidden cover -- resolves its variant through here, so
+	/// they cannot land on different ones for the same tile and disagree on screen.
+	internal readonly record struct DualArt(Subtexture Tile, Subtexture Normal, Tileset.OccluderSegment[] Occluders);
+
+	internal static DualArt LookupArt(Tileset tileset, Point2 dualCell, Point2 worldTile, char tileType)
+	{
+		var seed = StableVariantSeed(tileset.FillBlock(worldTile), tileType);
+		var phase = tileset.FillPhase(worldTile);
+		return new(
+			tileset.GetVariantTile(dualCell.X, dualCell.Y, seed, phase),
+			tileset.GetVariantNormalTile(dualCell.X, dualCell.Y, seed, phase),
+			tileset.GetVariantOccluders(dualCell.X, dualCell.Y, seed, phase));
 	}
 
 	public void Clear()
@@ -93,9 +95,6 @@ public class DualGrid : Actor
 		drawCommands.Clear();
 		shadowSegments.Clear();
 	}
-
-	private static int StableVariantSeed(Room room, char tileType, int x, int y)
-		=> StableVariantSeed(room.WorldBounds.TopLeft / Game.TileSize + new Point2(x, y), tileType);
 
 	internal static int StableVariantSeed(Point2 worldTile, char tileType)
 		=> Hash32.TileVariantSeed(worldTile, tileType);
@@ -149,8 +148,10 @@ public class DualGrid : Actor
 		foreach (var vertex in new RectVertices(cols, rows))
 		{
 			var cell = MaskToTile[vertex.Mask];
-			var seed = StableVariantSeed(variantTileOrigin + new Point2(vertex.X, vertex.Y), tileType);
-			var tile = normals ? tileset.GetVariantNormalTile(cell.X, cell.Y, seed) : tileset.GetVariantTile(cell.X, cell.Y, seed);
+			var worldTile = variantTileOrigin + new Point2(vertex.X, vertex.Y);
+			var seed = StableVariantSeed(tileset.FillBlock(worldTile), tileType);
+			var phase = tileset.FillPhase(worldTile);
+			var tile = normals ? tileset.GetVariantNormalTile(cell.X, cell.Y, seed, phase) : tileset.GetVariantTile(cell.X, cell.Y, seed, phase);
 			if (tile.Texture == null)
 				continue;
 
@@ -168,7 +169,7 @@ public class DualGrid : Actor
 		{
 			var cell = MaskToTile[vertex.Mask];
 			var worldTile = variantTileOrigin + new Point2(vertex.X, vertex.Y);
-			var tile = tileset.GetVariantTile(cell.X, cell.Y, StableVariantSeed(worldTile, tileType));
+			var tile = tileset.GetVariantTile(cell.X, cell.Y, StableVariantSeed(tileset.FillBlock(worldTile), tileType), tileset.FillPhase(worldTile));
 			if (tile.Texture == null)
 				continue;
 
@@ -184,8 +185,8 @@ public class DualGrid : Actor
 		{
 			var cell = MaskToTile[vertex.Mask];
 			var command = origin + VertexPosition(vertex);
-			var seed = StableVariantSeed(variantTileOrigin + new Point2(vertex.X, vertex.Y), tileType);
-			foreach (var local in tileset.GetVariantOccluders(cell.X, cell.Y, seed))
+			var worldTile = variantTileOrigin + new Point2(vertex.X, vertex.Y);
+			foreach (var local in tileset.GetVariantOccluders(cell.X, cell.Y, StableVariantSeed(tileset.FillBlock(worldTile), tileType), tileset.FillPhase(worldTile)))
 				if (OwnsOccluderSegment(vertex.Mask, local))
 					segments.Add(new(command + local.A, command + local.B));
 		}

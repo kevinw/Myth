@@ -1075,7 +1075,8 @@ public static partial class Assets
 				LoadSubtextures(packed.NormalTiles, atlas),
 				LoadSubtextureGroups(packed.NormalVariants, atlas),
 				LoadOccluders(packed.OccluderTiles),
-				LoadOccluderGroups(packed.OccluderVariants));
+				LoadOccluderGroups(packed.OccluderVariants),
+				packed.FillTiles);
 		}
 
 		foreach (var (name, tileset) in Tilesets.ToArray())
@@ -1134,6 +1135,9 @@ public static partial class Assets
 			Name = name,
 			Columns = columns,
 			Rows = rows,
+			// Only a kit's generated dual tileset carries a multi-tile fill; its base tileset is
+			// the single fill that slopes are cut from.
+			FillTiles = TileKits.Specs.FirstOrDefault(it => it.DualName == name)?.FillTiles ?? 1,
 			Tiles = PackTileSubtextures(bake, $"tilesets/{name}", columns, rows)
 		};
 
@@ -1240,6 +1244,7 @@ public static partial class Assets
 			writer.Write(tileset.Name);
 			writer.Write(tileset.Columns);
 			writer.Write(tileset.Rows);
+			writer.Write(tileset.FillTiles);
 			WritePackedSubtextures(writer, tileset.Tiles, $"{tileset.Name} tiles");
 			WritePackedSubtextureGroups(writer, tileset.Variants, $"{tileset.Name} variants");
 			WritePackedSubtextures(writer, tileset.NormalTiles, $"{tileset.Name} normal tiles");
@@ -1386,6 +1391,7 @@ public static partial class Assets
 				Name = reader.ReadString(),
 				Columns = reader.ReadInt32(),
 				Rows = reader.ReadInt32(),
+				FillTiles = reader.ReadInt32(),
 				Tiles = ReadPackedSubtextures(reader, "tiles"),
 				Variants = ReadPackedSubtextureGroups(reader, "variants"),
 				NormalTiles = ReadPackedSubtextures(reader, "normal tiles"),
@@ -1739,6 +1745,7 @@ public static partial class Assets
 		public string Name { get; set; } = "";
 		public int Columns { get; set; }
 		public int Rows { get; set; }
+		public int FillTiles { get; set; } = 1;
 		public List<PackedSubtexture> Tiles { get; set; } = [];
 		public List<List<PackedSubtexture>> Variants { get; set; } = [];
 		public List<PackedSubtexture> NormalTiles { get; set; } = [];
@@ -1904,7 +1911,7 @@ public static partial class Assets
 		var edgeWidth = ParseEdgeWidthRange(kitName, edgeSlice);
 		var wobble = ParseMaskWobble(kitName, maskSlice);
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, 1, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
 	}
 
 	/// Generates the tileset outputs for a JSON kit spec: images come from the spec's
@@ -1935,35 +1942,55 @@ public static partial class Assets
 		var (edges, edgeTops, edgeBottoms) = TileKits.RasterizeEdges(spec);
 		var edgeWidth = ParseEdgeWidthValue(spec.Name, spec.EdgeWidth);
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, spec.FillTiles, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
 	}
 
 	// Shared dual-tileset generation. Takes ownership of every image list (disposed here);
 	// the mask stays owned by the caller.
-	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	// Contour wobble is picked per group (a group is one macro block's worth of fills), so a kit
+	// with a single group would wear the same silhouette on every tile. Pad multi-tile kits out to
+	// this many groups, cycling the fills, so their edges still break up.
+	const int MinWobbleGroups = 4;
+
+	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		static Image? Pick(List<Image> tiles, int i) => tiles.Count > 0 ? tiles[i % tiles.Count] : null;
 
-		for (var i = 0; i < fills.Count; i++)
+		// Variants are laid out group-major, phase-minor: the renderer hashes a world tile to a
+		// group and reads the phase straight off the tile's position, so one group's fills
+		// reassemble into their original multi-tile pattern on the ground.
+		var stride = fillTiles * fillTiles;
+		var sourceGroups = Math.Max(1, fills.Count / stride);
+		var groups = stride > 1 ? Math.Max(sourceGroups, MinWobbleGroups) : sourceGroups;
+
+		for (var group = 0; group < groups; group++)
 		{
-			var fill = fills[i];
-			if (i == 0)
+			// Group 0 keeps the authored silhouette; later groups get a jittered copy so the
+			// terrain contour doesn't repeat. Color, normals and occluders all derive from the
+			// same group mask, so lighting bevels and shadows follow the wobble -- and every
+			// phase in a group shares it, which keeps a macro block's outline coherent.
+			var groupMask = group > 0 && wobble > 0 ? WobbleMask(mask, group, wobble) : mask;
+
+			for (var phase = 0; phase < stride; phase++)
 			{
-				baseTiles.Add(ExtractTile(fill, fill.Bounds));
-				if (edges.Count > 0)
-					baseSlopeEdges.Add(ExtractTile(edges[i % edges.Count], edges[i % edges.Count].Bounds));
+				var fillIndex = group % sourceGroups * stride + phase;
+				var variant = group * stride + phase;
+				var fill = fills[fillIndex];
+				if (variant == 0)
+				{
+					baseTiles.Add(ExtractTile(fill, fill.Bounds));
+					if (edges.Count > 0)
+						baseSlopeEdges.Add(ExtractTile(edges[0], edges[0].Bounds));
+				}
+				var edgeWidth = edgeWidthRange.Min + variant % (edgeWidthRange.Max - edgeWidthRange.Min + 1);
+				var side = Pick(edgeSides, variant) ?? Pick(edges, variant);
+				dualVariants.Add(GenerateDualTilesetVariant(fill, groupMask, Pick(edgeTops, variant) ?? side, side, Pick(edgeBottoms, variant) ?? side, edgeWidth));
+				dualNormals.Add(GenerateDualTilesetNormalVariant(groupMask, heights.Count > 0 ? heights[fillIndex] : null));
+				dualOccluders.Add(GenerateDualTilesetOccluderVariant(groupMask));
 			}
-			// Variant 0 keeps the authored silhouette; later variants get a jittered copy so
-			// the terrain contour doesn't repeat. Color, normals and occluders all derive from
-			// the same variant mask, so lighting bevels and shadows follow the wobble.
-			var variantMask = i > 0 && wobble > 0 ? WobbleMask(mask, i, wobble) : mask;
-			var edgeWidth = edgeWidthRange.Min + i % (edgeWidthRange.Max - edgeWidthRange.Min + 1);
-			var side = Pick(edgeSides, i) ?? Pick(edges, i);
-			dualVariants.Add(GenerateDualTilesetVariant(fill, variantMask, Pick(edgeTops, i) ?? side, side, Pick(edgeBottoms, i) ?? side, edgeWidth));
-			dualNormals.Add(GenerateDualTilesetNormalVariant(variantMask, heights.Count > 0 ? heights[i] : null));
-			dualOccluders.Add(GenerateDualTilesetOccluderVariant(variantMask));
-			if (variantMask != mask)
-				variantMask.Dispose();
+
+			if (groupMask != mask)
+				groupMask.Dispose();
 		}
 
 		foreach (var list in (List<Image>[])[fills, edges, heights, edgeTops, edgeSides, edgeBottoms])
@@ -1997,8 +2024,10 @@ public static partial class Assets
 				if (mask == 0)
 					continue;
 
-				var tile = MaskToDualTile(mask);
-				var variant = dualVariants[PreviewVariantIndex(x, y, dualVariants.Count)];
+				var worldTile = new Point2(x, y);
+				var tile = DualGrid.MaskToTile[mask];
+				var seed = Kit.Hash32.TileVariantSeed(Tileset.FillBlock(worldTile, spec.FillTiles), spec.Name[0]);
+				var variant = dualVariants[Tileset.VariantSlot(seed, Tileset.FillPhase(worldTile, spec.FillTiles), dualVariants.Count, spec.FillTiles)];
 				for (var py = 0; py < Game.TileSize; py++)
 					for (var px = 0; px < Game.TileSize; px++)
 					{
@@ -2012,16 +2041,6 @@ public static partial class Assets
 			foreach (var image in list)
 				image.Dispose();
 		return output;
-	}
-
-	static int PreviewVariantIndex(int x, int y, int count)
-	{
-		unchecked
-		{
-			var hash = (uint)(x * 374761393 + y * 668265263);
-			hash = (hash ^ (hash >> 13)) * 1274126177u;
-			return (int)(hash % (uint)count);
-		}
 	}
 
 	static List<Image> ExtractOptionalEdgeSlice(Image rendered, Dictionary<string, Aseprite.Slice> slices, string key, string kitName)
@@ -2414,7 +2433,7 @@ public static partial class Assets
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
 		{
-			var tile = MaskToDualTile(tileMask);
+			var tile = DualGrid.MaskToTile[tileMask];
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
 			GenerateDualTile(output, source, fill, tileMask, mask, edgeTop, edgeSide, edgeBottom, edgeWidth);
 		}
@@ -2426,7 +2445,7 @@ public static partial class Assets
 		var output = new Image(Game.TileSize * 4, Game.TileSize * 4);
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
 		{
-			var tile = MaskToDualTile(tileMask);
+			var tile = DualGrid.MaskToTile[tileMask];
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
 			if (height != null)
 				GenerateDualHeightNormalTile(output, source, mask, height);
@@ -2443,7 +2462,7 @@ public static partial class Assets
 
 		for (var tileMask = 1; tileMask < TileQuadrants.All + 1; tileMask++)
 		{
-			var tile = MaskToDualTile(tileMask);
+			var tile = DualGrid.MaskToTile[tileMask];
 			var source = new RectInt(tile.X, tile.Y, 1, 1) * Game.TileSize;
 			result[tile.X * 4 + tile.Y] = GenerateMaskOccluderSegments(mask, source);
 		}
@@ -2539,7 +2558,7 @@ public static partial class Assets
 
 	static void GenerateDualNormalTile(Image output, RectInt source, int mask, Image alphaMask)
 	{
-		var tile = MaskToDualTile(mask);
+		var tile = DualGrid.MaskToTile[mask];
 		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
 		const float bend = 1.25f;
 
@@ -2587,7 +2606,7 @@ public static partial class Assets
 
 	static void GenerateDualTile(Image output, RectInt source, Image fill, int mask, Image alphaMask, Image? edgeTop, Image? edgeSide, Image? edgeBottom, int edgeWidth)
 	{
-		var tile = MaskToDualTile(mask);
+		var tile = DualGrid.MaskToTile[mask];
 		var destination = new Point2(tile.X * Game.TileSize, tile.Y * Game.TileSize);
 		var hasEdge = edgeTop != null || edgeSide != null || edgeBottom != null;
 
@@ -2654,31 +2673,6 @@ public static partial class Assets
 		return EdgeDirection.Side;
 	}
 
-	static Point2 MaskToDualTile(int mask)
-	{
-		var index = Array.FindIndex(DualMaskToTile, it => it.Mask == mask);
-		return index >= 0 ? DualMaskToTile[index].Tile : Point2.Zero;
-	}
-
-	static readonly (int Mask, Point2 Tile)[] DualMaskToTile =
-	[
-		(0, new(0, 3)),
-		(TileQuadrants.TopLeft, new(3, 3)),
-		(TileQuadrants.BottomLeft, new(0, 0)),
-		(TileQuadrants.TopLeft | TileQuadrants.BottomLeft, new(3, 2)),
-		(TileQuadrants.TopRight, new(0, 2)),
-		(TileQuadrants.TopLeft | TileQuadrants.TopRight, new(1, 2)),
-		(TileQuadrants.BottomLeft | TileQuadrants.TopRight, new(2, 3)),
-		(TileQuadrants.TopLeft | TileQuadrants.BottomLeft | TileQuadrants.TopRight, new(3, 1)),
-		(TileQuadrants.BottomRight, new(1, 3)),
-		(TileQuadrants.TopLeft | TileQuadrants.BottomRight, new(0, 1)),
-		(TileQuadrants.BottomLeft | TileQuadrants.BottomRight, new(3, 0)),
-		(TileQuadrants.TopLeft | TileQuadrants.BottomLeft | TileQuadrants.BottomRight, new(2, 0)),
-		(TileQuadrants.TopRight | TileQuadrants.BottomRight, new(1, 0)),
-		(TileQuadrants.TopLeft | TileQuadrants.TopRight | TileQuadrants.BottomRight, new(2, 2)),
-		(TileQuadrants.BottomLeft | TileQuadrants.TopRight | TileQuadrants.BottomRight, new(1, 1)),
-		(TileQuadrants.All, new(2, 1)),
-	];
 
 	// Loads the in-betweens whitelist (within-animation + transitions) from
 	// inbetweens.json. This is the source of truth for what gets baked.

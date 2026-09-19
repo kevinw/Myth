@@ -31,6 +31,7 @@ public partial class Manager
 	Point2 tileKitSheetCell = new(-1, -1);
 	int tileKitSheetCellSize = 16;
 	int tileKitSheetColors = 6;
+	bool tileKitSheetNative = true;
 
 	// Demo terrain for the preview: a floating island, a bumpy floor, an overhang and a
 	// wall, so top/side/bottom rims, corners and wobble are all visible at once.
@@ -396,63 +397,91 @@ public partial class Manager
 
 	void DrawTileKitFills(TileKitSpec draft)
 	{
-		if (!ImGui.CollapsingHeader($"Fill variants ({draft.Fills.Count})", ImGuiTreeNodeFlags.DefaultOpen))
+		var stride = draft.FillStride;
+		var groups = draft.Fills.Count / stride;
+		var label = stride > 1
+			? $"Fill variants ({groups} x {draft.FillTiles}x{draft.FillTiles})"
+			: $"Fill variants ({draft.Fills.Count})";
+		if (!ImGui.CollapsingHeader($"{label}###Fills", ImGuiTreeNodeFlags.DefaultOpen))
 			return;
-		ImGui.TextDisabled("left-drag paints the selected palette color");
+		ImGui.TextDisabled(stride > 1
+			? "left-drag paints; each block spans several tiles in the world"
+			: "left-drag paints the selected palette color");
 
-		const float PixelSize = 15f;
-		for (var v = 0; v < draft.Fills.Count; v++)
+		// A group's fills are laid out the way they land in the world, so painting across the seam
+		// between two of them reads the same here as it will on the ground.
+		for (var group = 0; group < groups; group++)
 		{
-			ImGui.PushID(v);
-			var fill = draft.Fills[v];
-			ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.One);
-			ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 0);
+			ImGui.PushID(group);
 			ImGui.BeginGroup();
-			for (var y = 0; y < Game.TileSize; y++)
+			for (var row = 0; row < draft.FillTiles; row++)
 			{
-				for (var x = 0; x < Game.TileSize; x++)
+				ImGui.BeginGroup();
+				for (var column = 0; column < draft.FillTiles; column++)
 				{
-					if (x > 0)
+					if (column > 0)
 						ImGui.SameLine(0, 1);
-					var key = fill[y][x];
-					var color = draft.Palette.GetValueOrDefault(key, Color.Magenta).ToVector4();
-					ImGui.PushID(y * Game.TileSize + x);
-					ImGui.ColorButton("##px", color, ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoBorder, new Vector2(PixelSize, PixelSize));
-					if (ImGui.IsItemHovered() && ImGui.IsMouseDown(ImGuiMouseButton.Left) && key != tileKitPaintKey)
-					{
-						var row = fill[y].ToCharArray();
-						row[x] = tileKitPaintKey;
-						fill[y] = new string(row);
-						MarkTileKitEdited();
-					}
-					ImGui.PopID();
+					DrawTileKitFillGrid(draft, draft.Fills[group * stride + row * draft.FillTiles + column], row * draft.FillTiles + column);
 				}
+				ImGui.EndGroup();
 			}
 			ImGui.EndGroup();
-			ImGui.PopStyleVar(2);
+
 			ImGui.SameLine();
 			ImGui.BeginGroup();
 			if (ImGui.SmallButton("copy"))
 			{
-				draft.Fills.Insert(v + 1, (string[])fill.Clone());
+				for (var i = 0; i < stride; i++)
+					draft.Fills.Insert((group + 1) * stride + i, (string[])draft.Fills[group * stride + i].Clone());
 				MarkTileKitEdited();
 			}
-			ImGui.BeginDisabled(draft.Fills.Count <= 1);
+			ImGui.BeginDisabled(groups <= 1);
 			if (ImGui.SmallButton("x"))
 			{
-				draft.Fills.RemoveAt(v);
+				draft.Fills.RemoveRange(group * stride, stride);
+				if (draft.HeightMaps.Count > 0)
+					draft.HeightMaps.RemoveRange(group * stride, stride);
 				MarkTileKitEdited();
 			}
 			ImGui.EndDisabled();
 			ImGui.EndGroup();
 			ImGui.PopID();
-			if ((v + 1) % 2 != 0 && v + 1 < draft.Fills.Count)
+
+			if (stride == 1 && (group + 1) % 2 != 0 && group + 1 < groups)
 				ImGui.SameLine(0, 18);
 		}
 	}
 
-	// Pulls fills out of an authored pixel-art sheet. The sheet stays the source of truth on disk;
-	// what lands in the spec is a quantized, hand-editable copy of one cell.
+	void DrawTileKitFillGrid(TileKitSpec draft, string[] fill, int id)
+	{
+		const float PixelSize = 15f;
+		var pixelSize = PixelSize / Math.Max(1, draft.FillTiles);
+		ImGui.PushID(id);
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.One);
+		ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 0);
+		ImGui.BeginGroup();
+		for (var y = 0; y < Game.TileSize; y++)
+			for (var x = 0; x < Game.TileSize; x++)
+			{
+				if (x > 0)
+					ImGui.SameLine(0, 1);
+				var key = fill[y][x];
+				var color = draft.Palette.GetValueOrDefault(key, Color.Magenta).ToVector4();
+				ImGui.PushID(y * Game.TileSize + x);
+				ImGui.ColorButton("##px", color, ImGuiColorEditFlags.NoTooltip | ImGuiColorEditFlags.NoBorder, new Vector2(pixelSize, pixelSize));
+				if (ImGui.IsItemHovered() && ImGui.IsMouseDown(ImGuiMouseButton.Left) && key != tileKitPaintKey)
+				{
+					var row = fill[y].ToCharArray();
+					row[x] = tileKitPaintKey;
+					fill[y] = new string(row);
+					MarkTileKitEdited();
+				}
+				ImGui.PopID();
+			}
+		ImGui.EndGroup();
+		ImGui.PopStyleVar(2);
+		ImGui.PopID();
+	}
 	void DrawTileKitSheetImport(TileKitSpec draft)
 	{
 		if (!ImGui.CollapsingHeader("Import from sheet"))
@@ -471,12 +500,31 @@ public partial class Manager
 		if (ImGui.Combo("sheet", ref index, tileKitSheetNames, tileKitSheetNames.Length) || tileKitSheetName == null)
 			SelectTileKitSheet(tileKitSheetNames[index]);
 
+		// Variants have to match the group shape the kit already has, so a multi-tile kit pins the
+		// cell size to the size it was built at.
+		var locked = draft.FillTiles > 1;
+		if (locked)
+			tileKitSheetCellSize = draft.FillTiles * Game.TileSize;
 		var cellBlocks = tileKitSheetCellSize / Game.TileSize;
+		ImGui.BeginDisabled(locked);
 		ImGui.SetNextItemWidth(160);
-		if (ImGui.SliderInt("cell size", ref cellBlocks, 1, 4, $"{tileKitSheetCellSize}px"))
+		if (ImGui.SliderInt("cell size", ref cellBlocks, 1, TileKits.MaxFillTiles, $"{tileKitSheetCellSize}px"))
 		{
 			tileKitSheetCellSize = cellBlocks * Game.TileSize;
 			tileKitSheetCell = new(-1, -1);
+		}
+		ImGui.EndDisabled();
+		if (locked && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+			ImGui.SetTooltip($"pinned: this kit's fills span {draft.FillTiles}x{draft.FillTiles} tiles");
+
+		if (tileKitSheetCellSize > Game.TileSize)
+		{
+			ImGui.BeginDisabled(locked);
+			if (ImGui.Checkbox($"keep native size ({tileKitSheetCellSize / Game.TileSize}x{tileKitSheetCellSize / Game.TileSize} tiles)", ref tileKitSheetNative))
+				tileKitSheetCell = new(-1, -1);
+			ImGui.EndDisabled();
+			ImGui.SameLine();
+			ImGui.TextDisabled(tileKitSheetNative ? "(full resolution)" : "(downsampled to one tile)");
 		}
 		// The ceiling is the palette key alphabet: 52 single-char keys, against at most 64 distinct
 		// pixels in a tile. Most cells of a pixel-art sheet land well under it.
@@ -548,7 +596,8 @@ public partial class Manager
 		if (tileKitSheetImage is not { } sheet)
 			return;
 
-		TileKits.ImportSheetCell(draft, sheet, tileKitSheetCell, tileKitSheetCellSize, tileKitSheetColors, addVariant);
+		TileKits.ImportSheetCell(draft, sheet, tileKitSheetCell, tileKitSheetCellSize, tileKitSheetColors, addVariant,
+			tileKitSheetNative && tileKitSheetCellSize > Game.TileSize);
 		ApplyTileKitHeightMode(draft);
 		tileKitPaintKey = draft.Palette.Keys.OrderBy(it => it).FirstOrDefault('a');
 		MarkTileKitEdited();

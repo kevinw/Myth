@@ -23,6 +23,10 @@ public sealed class TileKitSpec
 	public float ReflectionOpacity = 0.5f;
 	public float AcousticReflectivity = 1.0f;
 	public int EdgeTileCount = 4;
+	// How many game tiles one fill pattern spans, per side. 1 is an ordinary kit; 2 means fills come
+	// in 2x2 groups that reassemble into a 16px pattern across four tiles, 3 into a 24px one. Lets
+	// authored art bigger than a tile keep its native resolution instead of being downsampled.
+	public int FillTiles = 1;
 	public readonly Dictionary<char, Color> Palette = [];
 	public readonly Dictionary<char, float> Heights = [];
 	public readonly List<string[]> Fills = [];
@@ -37,6 +41,8 @@ public sealed class TileKitSpec
 	public string DualName => $"{Name}-dual";
 	public string SlopeEntryName => $"{char.ToUpperInvariant(Name[0])}{Name[1..]} Slope";
 	public bool HasEdges => Edge.Count > 0;
+	/// Fills per group: one per tile of the macro block.
+	public int FillStride => FillTiles * FillTiles;
 }
 
 /// The Factory-facing subset of a kit spec: everything registration needs and nothing the
@@ -66,6 +72,10 @@ public sealed record TileKitRegistration(
 public static class TileKits
 {
 	public const string Extension = ".kit.json";
+
+	/// A 4x4 fill group is 32px of authored art across -- past that the palette and the fill editor
+	/// stop being workable, and the atlas cost grows with the square.
+	public const int MaxFillTiles = 4;
 
 	public static readonly List<TileKitSpec> Specs = [];
 
@@ -120,6 +130,7 @@ public static class TileKits
 		spec.ReflectionOpacity = JsonUtil.ReadFloat(json, "reflectionOpacity", spec.ReflectionOpacity);
 		spec.AcousticReflectivity = JsonUtil.ReadFloat(json, "acousticReflectivity", spec.AcousticReflectivity);
 		spec.EdgeTileCount = Math.Max(1, JsonUtil.ReadInt(json, "edgeTiles", spec.EdgeTileCount));
+		spec.FillTiles = Math.Clamp(JsonUtil.ReadInt(json, "fillTiles", spec.FillTiles), 1, MaxFillTiles);
 		if (JsonUtil.ReadString(json, "reflection") is { } reflection)
 			spec.Reflection = Enum.Parse<Factory.ReflectionMode>(reflection, ignoreCase: true);
 
@@ -144,6 +155,8 @@ public static class TileKits
 
 		if (spec.Fills.Count == 0)
 			throw new InvalidOperationException($"Tile kit '{name}': at least one fill tile is required.");
+		if (spec.Fills.Count % spec.FillStride != 0)
+			throw new InvalidOperationException($"Tile kit '{name}': fillTiles {spec.FillTiles} needs fills in groups of {spec.FillStride} (found {spec.Fills.Count}).");
 
 		if (json.TryGetPropertyValue("heightMaps", out var mapsNode) && mapsNode is JsonArray maps)
 			foreach (var mapNode in maps)
@@ -220,6 +233,7 @@ public static class TileKits
 			ReflectionOpacity = spec.ReflectionOpacity,
 			AcousticReflectivity = spec.AcousticReflectivity,
 			EdgeTileCount = spec.EdgeTileCount,
+			FillTiles = spec.FillTiles,
 		};
 		foreach (var (key, value) in spec.Palette)
 			clone.Palette[key] = value;
@@ -286,6 +300,8 @@ public static class TileKits
 			writer.WriteNumber("acousticReflectivity", MathF.Round(spec.AcousticReflectivity, 3));
 		if (spec.EdgeTileCount != 4)
 			writer.WriteNumber("edgeTiles", spec.EdgeTileCount);
+		if (spec.FillTiles != 1)
+			writer.WriteNumber("fillTiles", spec.FillTiles);
 
 		writer.WriteStartObject("palette");
 		foreach (var (key, color) in spec.Palette.OrderBy(it => it.Key))
@@ -604,18 +620,33 @@ public static class TileKits
 
 	public const string PaletteKeys = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-	/// Pulls one cell of an authored pixel-art sheet (Assets/Sources/Tilesets/*.png) in as a fill
-	/// tile. Cells larger than a game tile are block-downsampled by majority vote -- which keeps the
-	/// pixels crisp where averaging would mush them -- then quantized to a few colors, so what lands
-	/// in the spec is a hand-editable kit rather than a photo.
-	public static void ImportSheetCell(TileKitSpec spec, Image sheet, Point2 cell, int cellSize, int colors, bool addVariant)
+	/// Pulls one cell of an authored pixel-art sheet (Assets/Sources/Tilesets/*.png) in as fills.
+	/// With nativeSize the cell keeps its resolution and becomes an NxN group that reassembles across
+	/// that many game tiles; otherwise it is block-downsampled by majority vote into a single tile --
+	/// which keeps the pixels crisp where averaging would mush them. Either way the result is
+	/// quantized to a few colors, so what lands in the spec is a hand-editable kit, not a photo.
+	public static void ImportSheetCell(TileKitSpec spec, Image sheet, Point2 cell, int cellSize, int colors, bool addVariant, bool nativeSize)
 	{
-		var block = Math.Max(1, cellSize / Game.TileSize);
+		// A variant has to match the group shape the kit already has; only a replace can change it.
+		var fillTiles = addVariant ? spec.FillTiles
+			: nativeSize ? Math.Clamp(cellSize / Game.TileSize, 1, MaxFillTiles) : 1;
+		var stride = fillTiles * fillTiles;
+		// Native import reads one game tile per sub-tile (block 1, nothing lost); downsampling folds
+		// the whole cell into a single tile.
+		var block = Math.Max(1, cellSize / Game.TileSize / fillTiles);
 		var origin = cell * cellSize;
-		var pixels = new Color[Game.TileSize * Game.TileSize];
-		for (var y = 0; y < Game.TileSize; y++)
-			for (var x = 0; x < Game.TileSize; x++)
-				pixels[y * Game.TileSize + x] = MajorityColor(sheet, origin + new Point2(x, y) * block, block);
+		var area = Game.TileSize * Game.TileSize;
+
+		// Sample the whole group before quantizing, so its sub-tiles share one palette and the
+		// pattern stays coherent across the seams where they meet.
+		var pixels = new Color[stride * area];
+		for (var sub = 0; sub < stride; sub++)
+		{
+			var subOrigin = origin + new Point2(sub % fillTiles, sub / fillTiles) * (Game.TileSize * block);
+			for (var y = 0; y < Game.TileSize; y++)
+				for (var x = 0; x < Game.TileSize; x++)
+					pixels[sub * area + y * Game.TileSize + x] = MajorityColor(sheet, subOrigin + new Point2(x, y) * block, block);
+		}
 		Quantize(pixels, colors);
 
 		// A replace starts the kit over from the cell; a variant keeps the palette and snaps into it,
@@ -626,6 +657,7 @@ public static class TileKits
 			spec.Fills.Clear();
 			spec.Heights.Clear();
 			spec.HeightMaps.Clear();
+			spec.FillTiles = fillTiles;
 		}
 
 		// Resolve each distinct color to a key once, against the palette as it stood before this
@@ -636,15 +668,18 @@ public static class TileKits
 			if (!keys.ContainsKey(color))
 				keys[color] = ResolveKey(spec, mergeInto, color);
 
-		var rows = new string[Game.TileSize];
-		for (var y = 0; y < Game.TileSize; y++)
+		for (var sub = 0; sub < stride; sub++)
 		{
-			var row = new char[Game.TileSize];
-			for (var x = 0; x < Game.TileSize; x++)
-				row[x] = keys[pixels[y * Game.TileSize + x]];
-			rows[y] = new string(row);
+			var rows = new string[Game.TileSize];
+			for (var y = 0; y < Game.TileSize; y++)
+			{
+				var row = new char[Game.TileSize];
+				for (var x = 0; x < Game.TileSize; x++)
+					row[x] = keys[pixels[sub * area + y * Game.TileSize + x]];
+				rows[y] = new string(row);
+			}
+			spec.Fills.Add(rows);
 		}
-		spec.Fills.Add(rows);
 
 		// Heights must cover every palette key, and a relief map must cover every fill.
 		if (spec.Heights.Count > 0)
