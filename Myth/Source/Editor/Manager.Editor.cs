@@ -1976,7 +1976,7 @@ public partial class Manager
 		var flag = pointIndex == 0 ? BurrowLine.BurrowDoorPoints.First
 			: pointIndex == count - 1 ? BurrowLine.BurrowDoorPoints.Last
 			: BurrowLine.BurrowDoorPoints.None;
-		return flag != 0 && BurrowDoorFlags(actor).HasFlag(flag);
+		return flag != 0 && BurrowDoorFlags(actor).Has(flag);
 	}
 
 	static bool HasBurrowDoor(JsonObject actor)
@@ -1995,7 +1995,7 @@ public partial class Manager
 		var flag = pointIndex == 0 ? BurrowLine.BurrowDoorPoints.First
 			: pointIndex == count - 1 ? BurrowLine.BurrowDoorPoints.Last
 			: BurrowLine.BurrowDoorPoints.None;
-		return flag != 0 && BurrowSwitchFlags(actor).HasFlag(flag);
+		return flag != 0 && BurrowSwitchFlags(actor).Has(flag);
 	}
 
 	static void SetBurrowSwitchPoint(JsonObject actor, int pointIndex, bool enabled)

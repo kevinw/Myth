@@ -61,7 +61,7 @@ public class Prop : Actor
 
 	public override void RenderEmissive(Batcher batcher)
 	{
-		if (runtimePropFlags.HasFlag(RuntimePropFlags.RenderEmissive))
+		if (runtimePropFlags.Has(RuntimePropFlags.RenderEmissive))
 			RenderSpriteSubtexture(batcher, SubtextureType.Emissive, PropColor);
 	}
 
@@ -96,7 +96,7 @@ public class Prop : Actor
 		Play();
 		SetAnimationTime(rng.Float(Animation.Duration));
 		animationRate = MathF.Max(0.01f, 1 + rng.Float(-AnimationSpeedRandomness, AnimationSpeedRandomness));
-		if (propFlags.HasFlag(PropFlags.Destroyable) || propFlags.HasFlag(PropFlags.DestroyPersists))
+		if (propFlags.Has(PropFlags.Destroyable | PropFlags.DestroyPersists))
 		{
 			Mask |= Masks.Destructible;
 			Hitbox = Hitbox.FromSprite(Sprite, PropSpriteAnchor);
@@ -112,7 +112,7 @@ public class Prop : Actor
 		}
 		else
 		{
-			if (propFlags.HasFlag(PropFlags.DestroyPersists))
+			if (propFlags.Has(PropFlags.DestroyPersists))
 			{
 				AudioEvent("prop_break_temp");
 				if (Game.DestroyPersistently(this) && string.Equals(Category, "duck", StringComparison.OrdinalIgnoreCase))

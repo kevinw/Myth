@@ -12,6 +12,7 @@ using System.IO;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using ImGuiNET;
+using Foster.Framework;
 
 namespace Myth;
 
@@ -248,7 +249,7 @@ static class TweakRegistry
 		foreach (var (file, list) in ranges)
 		{
 			var attr = File.GetAttributes(file);
-			if (attr.HasFlag(FileAttributes.Directory)) {
+			if (attr.Has(FileAttributes.Directory)) {
 				continue;
 			}
 

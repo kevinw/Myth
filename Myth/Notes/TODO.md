@@ -1,3 +1,4 @@
+play all the metroidbrania games here https://note.com/opticalglass/n/n7de04c1e56c3
 Demo polish
 - need a "wall push walk"
 - bringing up the steam overlay pauses the game

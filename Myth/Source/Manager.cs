@@ -238,6 +238,8 @@ public partial class Manager : App
 	int allocProfileFrames;
 	int allocProfileMeasuredFrames;
 	long allocProfileBytes;
+	long allocProfileFrameBytes;
+	long allocProfileFrameMark = -1;
 	bool allocProfileStarted;
 	bool allocProfileComplete;
 	// Volume steps, 0..VolumeSteps. Music at 0 doesn't start the music event at all.
@@ -1588,6 +1590,11 @@ public partial class Manager : App
 		if (allocProfileStarted)
 		{
 			var before = GC.GetAllocatedBytesForCurrentThread();
+			// The before/after pair below only covers Game.Update; most of a frame's allocation can
+			// live in rendering. Differencing this same point frame to frame covers the whole frame.
+			if (allocProfileFrameMark >= 0)
+				allocProfileFrameBytes += before - allocProfileFrameMark;
+			allocProfileFrameMark = before;
 			g.Update(controls);
 			allocProfileBytes += GC.GetAllocatedBytesForCurrentThread() - before;
 			allocProfileMeasuredFrames++;
@@ -1613,9 +1620,12 @@ public partial class Manager : App
 	void FinishAllocationProfile()
 	{
 		allocProfileComplete = true;
-		var bytesPerFrame = allocProfileBytes / (double)allocProfileMeasuredFrames;
+		var frameSamples = Math.Max(1, allocProfileMeasuredFrames - 1);
 		Console.WriteLine(
-			$"ALLOC_PROFILE game_update warmup_frames={args.allocWarmupFrames} measure_frames={allocProfileMeasuredFrames} bytes={allocProfileBytes} bytes_per_frame={bytesPerFrame.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}");
+			$"ALLOC_PROFILE full_frame warmup_frames={args.allocWarmupFrames} measure_frames={frameSamples} bytes={allocProfileFrameBytes} bytes_per_frame={Round(allocProfileFrameBytes / (double)frameSamples)}\n" +
+			$"ALLOC_PROFILE game_update warmup_frames={args.allocWarmupFrames} measure_frames={allocProfileMeasuredFrames} bytes={allocProfileBytes} bytes_per_frame={Round(allocProfileBytes / (double)allocProfileMeasuredFrames)}");
+
+		static string Round(double value) => value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 		Exit();
 	}
 

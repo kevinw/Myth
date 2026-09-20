@@ -327,12 +327,18 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		}
 	}
 
+	// Uniform data is copied into the command buffer inside Submit, so one reusable buffer per
+	// shader is enough -- nothing retains it past the dispatch.
+	static readonly UniformBuffer updateUniforms = new();
+	static readonly UniformBuffer rippleUniforms = new();
+	static readonly UniformBuffer hitUniforms = new();
+	static readonly UniformBuffer cutUniforms = new();
+	static readonly UniformBuffer presentUniforms = new();
+
 	private void Step()
 	{
 		var src = currentIsB ? bufferB! : bufferA!;
 		var dst = currentIsB ? bufferA! : bufferB!;
-
-		var updateUniforms = new UniformBuffer();
 
 		if (DirectionAware)
 		{
@@ -381,7 +387,6 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		var src = rippleIsB ? rippleB! : rippleA!;
 		var dst = rippleIsB ? rippleA! : rippleB!;
 
-		var rippleUniforms = new UniformBuffer();
 		rippleUniforms.Set(new RippleUpdateParams
 		{
 			Width = (uint)GridWidth,
@@ -417,7 +422,6 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		var src = rippleIsB ? rippleB! : rippleA!;
 		var dst = rippleIsB ? rippleA! : rippleB!;
 
-		var hitUniforms = new UniformBuffer();
 		hitUniforms.Set(new RippleHitParams
 		{
 			Width = (uint)GridWidth,
@@ -498,7 +502,6 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		var cutWidth = x1 - x0;
 		var cutHeight = y1 - y0;
 
-		var cutUniforms = new UniformBuffer();
 		cutUniforms.Set(new CutParams
 		{
 			Width = (uint)GridWidth,
@@ -584,7 +587,6 @@ public class NeuralCellularActor : Actor, IHitByHitbox
 		var src = currentIsB ? bufferB! : bufferA!;
 		var ripple = rippleIsB ? rippleB! : rippleA!;
 
-		var presentUniforms = new UniformBuffer();
 		presentUniforms.Set(new PresentParams
 		{
 			Width = (uint)GridWidth,

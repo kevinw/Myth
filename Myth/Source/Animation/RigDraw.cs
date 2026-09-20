@@ -195,7 +195,7 @@ static class RigDraw
 		var fromRadius = JointRadius(item.FromWidth);
 		var toRadius = JointRadius(item.ToWidth);
 		batcher.Capsule(item.From, item.To, fromRadius + 1, toRadius + 1, JointSteps(toRadius + 1), outline,
-			fromCap: item.Rings.HasFlag(JointRings.From), toCap: item.Rings.HasFlag(JointRings.To));
+			fromCap: item.Rings.Has(JointRings.From), toCap: item.Rings.Has(JointRings.To));
 		batcher.Capsule(item.From, item.To, fromRadius, toRadius, JointSteps(toRadius), color,
 			fromCap: item.JoinsParent);
 		DrawBoneSkin(batcher, item, uv, color, skin);
