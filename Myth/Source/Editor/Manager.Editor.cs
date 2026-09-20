@@ -2267,7 +2267,15 @@ public partial class Manager
 
 			var hovered = i == hoveredIndex;
 			var bounds = EditorRoomActorBounds(room, room.Actors[i]);
-			if (!selected && !hovered && !bounds.Inflate(bounds.Width * 1.5f, bounds.Height * 1.5f).Contains(worldMouse))
+
+#if false
+			// hover nearby actors
+			var inflatedBounds = bounds.Inflate(bounds.Width * 1.5f, bounds.Height * 1.5f);
+#else
+			var inflatedBounds = bounds;
+#endif
+			
+			if (!selected && !hovered && !inflatedBounds.Contains(worldMouse))
 				continue;
 
 			var color = selected ? highlight : hovered ? Color.White : Color.Gray;
@@ -3917,7 +3925,7 @@ public partial class Manager
 			}
 		}
 
-		if (bestRoom == null || bestRoom == CurrentRoom || bestCoverage < 0.65f)
+		if (bestRoom == null || bestRoom == CurrentRoom) // || bestCoverage < 0.65f)
 			return;
 
 		CurrentRoom?.Save();
@@ -5844,6 +5852,45 @@ public partial class Manager
 
 	bool ImGuiIconButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected = false, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(ButtonSize, ButtonSize), false, imagePadding);
+
+	// Swatch grid popups (surfaces, neural materials) share their metrics: a cell half again the size
+	// of a normal button, no inner button padding, and hairline window/item spacing, so the popup is
+	// nearly all swatch instead of mostly gap.
+	static float SwatchGridCell => ButtonSize * 1.5f;
+	static float SwatchGridGap => 2f;
+
+	// Pushes the grid's popup style; pair with PopSwatchGridStyle. WindowPadding only takes effect if
+	// it's pushed before BeginPopup, so both calls sit outside the popup's if.
+	void PushSwatchGridStyle()
+	{
+		ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(SwatchGridGap));
+		ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(SwatchGridGap));
+	}
+
+	void PopSwatchGridStyle() => ImGui.PopStyleVar(2);
+
+	// Starts a new row every `columns` swatches; pass the running entry count.
+	static void SwatchGridWrap(ref int index, int columns)
+	{
+		if (index++ % columns != 0)
+			ImGui.SameLine();
+	}
+
+	bool SwatchGridButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected)
+		=> ImGuiSubtextureButton(id, icon, tooltip, selected, new Vector2(SwatchGridCell), true, 0f);
+
+	// A text button that reads as selected, for sitting alongside ImGuiSubtextureButton swatches.
+	bool ToggleButton(string label, bool selected, Vector2 size, string? tooltip = null)
+	{
+		if (selected)
+			ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.ButtonActive]);
+		var pressed = ImGui.Button(label, size);
+		if (selected)
+			ImGui.PopStyleColor();
+		if (ImGui.IsItemHovered() && !string.IsNullOrEmpty(tooltip))
+			ImGui.SetTooltip(tooltip);
+		return pressed;
+	}
 
 	bool ImGuiSubtextureButton(ReadOnlySpan<char> id, Subtexture icon, string? tooltip, bool selected, Vector2 size, float? imagePadding = null)
 		=> ImGuiSubtextureButton(id, icon, tooltip, selected, size, false, imagePadding);

@@ -95,10 +95,9 @@ public abstract partial class Pawn : Actor
 	static float WallPushHold => 0.1f;
 	static float LandingRumbleMinSpeed => 60f;
 	static float LandingRumbleFullSpeed => 300f;
-	static float LandingRumbleMinIntensity => 0.03f;
-	static float LandingRumbleMaxIntensity => 0.22f;
-	static float LandingRumbleMinDuration => 0.05f;
-	static float LandingRumbleMaxDuration => 0.11f;
+	// Impact speed lerps between these; only the low motor runs, so a landing stays a thud.
+	static RumbleEffect LandingRumbleSoft => new(0.03f, 0, 0.05f);
+	static RumbleEffect LandingRumbleHard => new(0.22f, 0, 0.11f);
 	static float RunningOutOfBreathRate => 0.14f;
 	static float JumpOutOfBreath => 0.16f;
 	static float OutOfBreathRecoveryRate => 0.08f;
@@ -142,12 +141,8 @@ public abstract partial class Pawn : Actor
 	static float WallSlideRumbleIdle => 0.0075f;
 	static float WallSlideRumbleSpeed => 0.0125f;
 	static float WallSlideRumbleDuration => 0.05f;
-	static float WallContactRumbleLow => 0.08f;
-	static float WallContactRumbleHigh => 0.025f;
-	static float WallContactRumbleDuration => 0.06f;
-	static float WallJumpRumbleLow => 0.055f;
-	static float WallJumpRumbleHigh => 0.04f;
-	static float WallJumpRumbleDuration => 0.06f;
+	static RumbleEffect WallContactRumble => new(0.08f, 0.025f, 0.06f);
+	static RumbleEffect WallJumpRumble => new(0.055f, 0.04f, 0.06f);
 	static float WallJumpCoyoteTime => 0.08f;
 	public static float JumpForce => -139;
 	public static float JumpTime => 0.22f;
@@ -494,11 +489,10 @@ public abstract partial class Pawn : Actor
 		wallSlidePulseTimer = Calc.Approach(wallSlidePulseTimer, 0, Time.Delta);
 		var started = wallSliding && !wasWallSliding;
 		wasWallSliding = wallSliding;
-		if (started && RumbleControllerIndex is { } contactController)
+		if (started)
 		{
-			Game.Manager.Input.Rumble(contactController, WallContactRumbleLow,
-				WallContactRumbleHigh, WallContactRumbleDuration);
-			wallSlidePulseTimer = WallContactRumbleDuration;
+			Rumble(WallContactRumble);
+			wallSlidePulseTimer = WallContactRumble.Duration;
 		}
 
 		if (!wallSliding || Velocity.Y < WallSlideFeedbackMinSpeed)
@@ -509,9 +503,8 @@ public abstract partial class Pawn : Actor
 
 		wallSlideSound ??= Game.CreateAudioEvent("player/wall_slide", Position, start: true);
 		Game.SetAudioEventPosition(wallSlideSound, Position);
-		if (wallSlidePulseTimer <= 0 && RumbleControllerIndex is { } controller)
-			Game.Manager.Input.Rumble(controller,
-				WallSlideRumbleIdle + Calc.ClampedMap(Velocity.Y,
+		if (wallSlidePulseTimer <= 0)
+			Rumble(WallSlideRumbleIdle + Calc.ClampedMap(Velocity.Y,
 					WallSlideFeedbackMinSpeed, WallSlideMaxFallSpeed) * WallSlideRumbleSpeed,
 				0, WallSlideRumbleDuration);
 	}
@@ -538,13 +531,10 @@ public abstract partial class Pawn : Actor
 
 	void RumbleLanding(float speed)
 	{
-		if (inWater || speed < LandingRumbleMinSpeed || RumbleControllerIndex is not { } controller)
+		if (inWater || speed < LandingRumbleMinSpeed)
 			return;
-		var intensity = Calc.ClampedMap(speed, LandingRumbleMinSpeed, LandingRumbleFullSpeed,
-			LandingRumbleMinIntensity, LandingRumbleMaxIntensity);
-		var duration = Calc.ClampedMap(speed, LandingRumbleMinSpeed, LandingRumbleFullSpeed,
-			LandingRumbleMinDuration, LandingRumbleMaxDuration);
-		Game.Manager.Input.Rumble(controller, intensity, 0, duration);
+		Rumble(RumbleEffect.Lerp(LandingRumbleSoft, LandingRumbleHard,
+			Calc.ClampedMap(speed, LandingRumbleMinSpeed, LandingRumbleFullSpeed)));
 	}
 	protected virtual void AfterStateUpdate(Vector2 previousVelocity) { }
 	protected virtual void AfterMovementUpdate(Vector2 previousVelocity) { }
@@ -897,9 +887,7 @@ public abstract partial class Pawn : Actor
 					wallJumpCoyoteDirection = 0;
 					dashCooldownTimer = 0;
 					EndDashRun();
-					if (RumbleControllerIndex is { } controller)
-						Game.Manager.Input.Rumble(controller, WallJumpRumbleLow,
-							WallJumpRumbleHigh, WallJumpRumbleDuration);
+					Rumble(WallJumpRumble);
 				}
 
 				if (jumpingDownThroughJumpthru)
@@ -1292,10 +1280,8 @@ public abstract partial class Pawn : Actor
 		if (ropeCreakSide != 0 && side != ropeCreakSide && speed >= RopeCreakMinSpeed)
 		{
 			Game.PlayAudioEvent("rope/creak", position: riderPoint);
-			if (RumbleControllerIndex is { } controller)
-				Game.Manager.Input.Rumble(controller,
-					Calc.ClampedMap(speed, RopeCreakMinSpeed, RopeCreakFullRumbleSpeed,
-						RopeCreakMinRumble, RopeCreakMaxRumble), 0, RopeCreakRumbleDuration);
+			Rumble(Calc.ClampedMap(speed, RopeCreakMinSpeed, RopeCreakFullRumbleSpeed,
+				RopeCreakMinRumble, RopeCreakMaxRumble), 0, RopeCreakRumbleDuration);
 		}
 		ropeCreakSide = side;
 	}
@@ -1572,9 +1558,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 	static float AttackWavePushFalloff => 3f;
 	static float AttackWaveStrengthFalloff => 0.75f;
 	static float AttackWaveThickness => 1f;
-	static float AttackBlockRumbleLow => 0.45f;
-	static float AttackBlockRumbleHigh => 0.65f;
-	static float AttackBlockRumbleDuration => 0.11f;
+	static RumbleEffect AttackBlockRumble => new(0.45f, 0.65f, 0.11f);
 	static float HurtFriction => 200;
 	static float DuckAttackCooldown => 0.4f;
 	static float HurtDuration => 0.5f;
@@ -2299,9 +2283,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 		attackSwipe = null;
 		Play(GetAttackAnimation(), false);
 		AudioEvent("player/sword_block");
-		if (RumbleControllerIndex is { } controller)
-			Game.Manager.Input.Rumble(controller, AttackBlockRumbleLow,
-				AttackBlockRumbleHigh, AttackBlockRumbleDuration);
+		Rumble(AttackBlockRumble);
 	}
 
 	RectInt GetAttackHitbox(bool duckingAttack)

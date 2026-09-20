@@ -909,7 +909,8 @@ public abstract partial class Pawn
 	// countdown pulse, making the three intervals readable by feel without becoming a metronome.
 	void UpdateBurrowRumble()
 	{
-		if (RumbleControllerIndex is not { } controller)
+		// Bail before the per-frame maths, not just at the Rumble call, since this runs all burrow.
+		if (RumbleControllerIndex is null)
 			return;
 
 		var speed = Math.Clamp(burrowSpeed / BurrowMaxSpeed, 0, 1);
@@ -920,7 +921,7 @@ public abstract partial class Pawn
 				(BurrowRumblePulse + burrowIntervalIndex * BurrowRumblePulseStep)
 			: 0;
 		pulse += quantumCharge * quantumCharge * QuantumRumble;
-		Game.Manager.Input.Rumble(controller, low, pulse, BurrowRumbleDuration);
+		Rumble(low, pulse, BurrowRumbleDuration);
 	}
 
 	static Rng rng = new Rng();

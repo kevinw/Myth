@@ -3,8 +3,8 @@
   "char": "O",
   "mask": "stone-kit",
   "seed": 452163682,
-  "edgeWidth": "2-4",
-  "wobble": 0.6,
+  "edgeWidth": "1",
+  "wobble": 0.936,
   "fillTiles": 2,
   "palette": {
     "a": "BD7C5E",
@@ -334,16 +334,20 @@
   ],
   "edge": [
     [
-      "7C473E",
+      "32320E",
       45
     ],
     [
-      "492D33",
+      "673A40",
       38
     ],
     [
-      "B27055",
+      "3A5616",
       18
+    ],
+    [
+      "9D4848",
+      20
     ]
   ],
   "edgeTop": [

@@ -1,4 +1,6 @@
+decoration layer tiles; dual grid can feed it for underhangs for example
 play all the metroidbrania games here https://note.com/opticalglass/n/n7de04c1e56c3
+bud and player both do a lot of blinking if you duck. make them signal to each other in morse code.
 Demo polish
 - need a "wall push walk"
 - bringing up the steam overlay pauses the game
@@ -31,7 +33,6 @@ COSTUMES (rig puppet adornment, 2026-09-14): a shared Costume asset like Surface
 - the blob behaviour still needs to change a lot, and its look
 - redraw hurt sprite, bubble
 - a "fast motion" NCA impact frame for boss death
-- burrow lines: SOMETHING to make them a bit more visually interesting
 - lore rewards alongside chests (MAKE BUD react to computer text, too)
 SFX
   - burrow time 

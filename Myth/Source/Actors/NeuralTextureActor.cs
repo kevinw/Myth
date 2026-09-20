@@ -155,6 +155,17 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				return cached;
 
 			var packed = new Vector4[MaxSlots * PairedWeightCount];
+			var normalSlots = PackWeights(files, packed);
+			var buffer = new StorageBuffer<Vector4>(graphicsDevice, $"NeuralTextureWeights:{key}");
+			buffer.Upload(packed);
+			return weights[key] = (buffer, normalSlots);
+		}
+
+		// Packs each slot's model into the shared weight layout, returning the bitmask of slots whose
+		// model carries normal channels. Split out so callers that supply their own buffer (the
+		// editor's thumbnail rig) don't add a 217KB entry to the cache for every model browsed.
+		public static uint PackWeights(string[] files, Span<Vector4> packed)
+		{
 			var normalSlots = 0u;
 			for (var slot = 0; slot < MaxSlots; slot++)
 			{
@@ -162,7 +173,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 					continue;
 				var bytes = Assets.Content.ReadAllBytes($"{WeightsFolder}/{files[slot]}");
 				var values = MemoryMarshal.Cast<byte, Vector4>(bytes.AsSpan());
-				var dest = packed.AsSpan(slot * PairedWeightCount, PairedWeightCount);
+				var dest = packed.Slice(slot * PairedWeightCount, PairedWeightCount);
 				if (values.Length == PairedWeightCount)
 				{
 					values.CopyTo(dest);
@@ -178,10 +189,7 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 				else
 					throw new InvalidDataException($"Neural texture model '{files[slot]}' has {values.Length} weight vectors; expected {ColorWeightCount} (color) or {PairedWeightCount} (color+normal).");
 			}
-
-			var buffer = new StorageBuffer<Vector4>(graphicsDevice, $"NeuralTextureWeights:{key}");
-			buffer.Upload(packed);
-			return weights[key] = (buffer, normalSlots);
+			return normalSlots;
 		}
 	}
 
@@ -652,6 +660,32 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 	// Steps run so the editor preview shows a settled texture instead of the near-blank seed
 	// decode; gameplay reaches this look on its own by stepping every frame.
 	const int EditorPreviewSteps = 95;
+
+#if EDITOR
+	// The decoded colour image, before any lighting or normal pass -- what the editor's model
+	// thumbnails show.
+	internal Texture? PreviewOutput => output;
+
+	StorageBuffer<Vector4>? previewWeights;
+	Vector4[]? previewPacked;
+
+	// Re-points slot 0 at another model and settles it, without rebuilding the actor. Packs into a
+	// buffer this actor owns so baking the whole catalogue doesn't grow the shared weights cache.
+	internal void SetPreviewModel(string fileName, int settleSteps)
+	{
+		if (!supported)
+			return;
+		WeightsFile = new(fileName);
+		previewWeights ??= new StorageBuffer<Vector4>(graphicsDevice, "NeuralTexturePreviewWeights");
+		previewPacked ??= new Vector4[MaxSlots * PairedWeightCount];
+		Array.Clear(previewPacked);
+		SharedGpuResources.PackWeights(SlotWeightsFiles, previewPacked);
+		previewWeights.Upload(previewPacked);
+		weights = previewWeights;
+		normalSlots = 0; // thumbnails are raw decode colour, so nothing reads the normal channels
+		SimulateFromSeed(settleSteps);
+	}
+#endif
 
 	// The editor doesn't tick this actor toward its attractor before rendering the preview, so
 	// fast-forward on the sync signal. See Game.EditorPreviewSync / Manager.SyncEditorGame.
@@ -1683,6 +1717,9 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		proceduralUpdateMask?.Dispose();
 		proceduralDecodeMask?.Dispose();
 		densityProbe?.Dispose();
+#if EDITOR
+		previewWeights?.Dispose();
+#endif
 		output?.Dispose();
 		normalOutput?.Dispose();
 		silhouetteNormalOutput?.Dispose();

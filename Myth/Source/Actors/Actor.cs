@@ -12,7 +12,14 @@ public enum ActorInversion
 	UninvertedOnly,
 }
 
-public readonly record struct RumbleEffect(float Low, float High, float Duration);
+public readonly record struct RumbleEffect(float Low, float High, float Duration)
+{
+	// For effects that scale with an impact: both motors and the duration ride the same 0-1 factor.
+	public static RumbleEffect Lerp(RumbleEffect from, RumbleEffect to, float t) => new(
+		float.Lerp(from.Low, to.Low, t),
+		float.Lerp(from.High, to.High, t),
+		float.Lerp(from.Duration, to.Duration, t));
+}
 
 [Flags]
 public enum FluidContact

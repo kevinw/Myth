@@ -1,75 +1,21 @@
 #if EDITOR
-using ImGuiNET;
-
 namespace Myth;
 
 /// The set of trained neural-texture weight files on disk, parsed out of their filenames into an
-/// image (the material) and a motion, plus the two-combo picker the inspectors share. Filenames
-/// look like `<image>[_pair][_<motion>][_screen].bin`.
+/// image (the material) and a motion. Filenames look like `<image>[_pair][_<motion>][_screen].bin`.
+/// The picker UI that reads this lives in Manager.NeuralModelPicker.
 static class NeuralTextureCatalog
 {
-	readonly record struct Model(string FileName, string Image, string ImageLabel, string Motion, string MotionLabel, int MotionOrder, bool Paired, bool Screen);
+	internal readonly record struct Model(string FileName, string Image, string ImageLabel, string Motion, string MotionLabel, int MotionOrder, bool Paired, bool Screen);
 
 	static readonly List<Model> models = [];
 	static readonly List<string> images = [];
+
+	internal static IReadOnlyList<Model> AllModels { get { EnsureCatalog(); return models; } }
+	// Distinct materials; each has one model per motion. The picker grids over these, not over all
+	// ~790 files, and shows one canonical motion per material.
+	internal static IReadOnlyList<string> Images { get { EnsureCatalog(); return images; } }
 	static readonly string[] motionSuffixes = ["right_acc_down", "right_acc_right", "2block_x", "2block_y", "3block", "4block", "circular", "concentrate", "converge", "diverge", "hyperbolic", "right", "up"];
-
-	public static bool DrawCombo(ref string value, bool allowNone = false)
-	{
-		EnsureCatalog();
-		var changed = false;
-		var width = ImGui.CalcItemWidth();
-		var currentIndex = FindModel(value);
-		var image = currentIndex >= 0 ? models[currentIndex].Image : "";
-		var imageLabel = currentIndex >= 0 ? models[currentIndex].ImageLabel : value.Length == 0 ? "(none)" : Path.GetFileNameWithoutExtension(value).Replace('_', ' ');
-		if (ImGui.BeginCombo("##Image", $"Image: {imageLabel}"))
-		{
-			if (allowNone && ImGui.Selectable("(none)", value.Length == 0))
-			{
-				value = "";
-				changed = true;
-			}
-			for (var i = 0; i < images.Count; i++)
-			{
-				var nextImage = images[i];
-				var selected = string.Equals(image, nextImage, StringComparison.OrdinalIgnoreCase);
-				var first = FirstModel(nextImage);
-				if (ImGui.Selectable(models[first].ImageLabel, selected))
-				{
-					value = BestModel(nextImage, currentIndex).FileName;
-					changed = true;
-				}
-				if (selected)
-					ImGui.SetItemDefaultFocus();
-			}
-			ImGui.EndCombo();
-		}
-
-		currentIndex = FindModel(value);
-		if (currentIndex < 0)
-			return changed;
-		var current = models[currentIndex];
-		ImGui.SetNextItemWidth(width);
-		if (ImGui.BeginCombo("##Motion", $"Motion: {current.MotionLabel}"))
-		{
-			for (var i = 0; i < models.Count; i++)
-			{
-				var model = models[i];
-				if (!string.Equals(model.Image, current.Image, StringComparison.OrdinalIgnoreCase))
-					continue;
-				var selected = i == currentIndex;
-				if (ImGui.Selectable(model.MotionLabel, selected))
-				{
-					value = model.FileName;
-					changed = true;
-				}
-				if (selected)
-					ImGui.SetItemDefaultFocus();
-			}
-			ImGui.EndCombo();
-		}
-		return changed;
-	}
 
 	static void EnsureCatalog()
 	{
@@ -137,7 +83,17 @@ static class NeuralTextureCatalog
 		_ => 13,
 	};
 
-	static int FindModel(string fileName)
+	// Display name for a material (the label its models share).
+	internal static string ImageLabel(string image)
+	{
+		var first = FirstModel(image);
+		return first >= 0 ? models[first].ImageLabel : image.Replace('_', ' ');
+	}
+
+	// The model a material's thumbnail is baked from -- its canonical motion.
+	internal static string ThumbnailModel(string image) => BestModel(image, -1).FileName;
+
+	internal static int FindModel(string fileName)
 	{
 		for (var i = 0; i < models.Count; i++)
 			if (string.Equals(models[i].FileName, fileName, StringComparison.OrdinalIgnoreCase))
@@ -145,7 +101,7 @@ static class NeuralTextureCatalog
 		return -1;
 	}
 
-	static int FirstModel(string image)
+	internal static int FirstModel(string image)
 	{
 		for (var i = 0; i < models.Count; i++)
 			if (string.Equals(models[i].Image, image, StringComparison.OrdinalIgnoreCase))
@@ -155,7 +111,7 @@ static class NeuralTextureCatalog
 
 	// Switching image keeps as much of the current motion as it can, falling back through
 	// progressively looser matches to "circular" and finally to whatever is first.
-	static Model BestModel(string image, int currentIndex)
+	internal static Model BestModel(string image, int currentIndex)
 	{
 		var first = FirstModel(image);
 		if (currentIndex < 0)

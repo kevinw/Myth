@@ -804,6 +804,7 @@ public partial class Manager : App
 		ClearRoomPreviewCache(deferDisposal: false);
 		ClearSurfacePreviewCache(deferDisposal: false);
 		surfacePreviewBatcher?.Dispose();
+		DisposeNeuralModelPreviews();
 		DisposeDeferredRoomPreviews();
 		DisposeEditorCursors();
 		imgui?.Dispose();

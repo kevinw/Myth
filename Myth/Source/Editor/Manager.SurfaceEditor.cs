@@ -19,7 +19,7 @@ public partial class Manager
 	static readonly string[] SurfaceBlendNames = Enum.GetNames<SurfaceBlend>();
 	static readonly string[] SurfaceRotationNames = Enum.GetNames<SurfaceRotation>();
 	const string SurfaceUndoSlot = "surface";
-	const int SurfacePreviewSize = 48;
+	const int SurfacePreviewSize = 64;
 	// Palette hex values from Lospec. Keep these local so randomization stays instant/offline.
 	static readonly SurfacePalette[] SurfacePalettes =
 	[
@@ -531,7 +531,7 @@ public partial class Manager
 		if (bucket.Get(value) is { } current)
 		{
 			if (ImGuiSubtextureButton("##Texture", current.Thumbnail, current.Key, false,
-				new Vector2(MathF.Min(ButtonSize, controlWidth), MathF.Min(ButtonSize, controlWidth)), true))
+				new Vector2(MathF.Min(ButtonSize, controlWidth), MathF.Min(ButtonSize, controlWidth)), true, 0f))
 				OpenPopup("##TextureGrid");
 		}
 		else if (Button("Missing##Texture", new Vector2(MathF.Min(ButtonSize, controlWidth), MathF.Min(ButtonSize, controlWidth))))
@@ -545,6 +545,7 @@ public partial class Manager
 		if (IsItemHovered())
 			SetTooltip("Randomize texture");
 
+		PushSwatchGridStyle();
 		if (BeginPopup("##TextureGrid"))
 		{
 			const int Columns = 6;
@@ -555,10 +556,8 @@ public partial class Manager
 				var texture = bucket.Textures[key];
 				if (normalOnly && texture.Swizzle != Assets.TextureSwizzle.Normal)
 					continue;
-				if (shown++ % Columns != 0)
-					SameLine();
-				if (ImGuiSubtextureButton($"##texture{i}", texture.Thumbnail, key, value == key,
-					new Vector2(ButtonSize, ButtonSize), true))
+				SwatchGridWrap(ref shown, Columns);
+				if (SwatchGridButton($"##texture{i}", texture.Thumbnail, key, value == key))
 				{
 					value = key;
 					changed = true;
@@ -567,6 +566,7 @@ public partial class Manager
 			}
 			EndPopup();
 		}
+		PopSwatchGridStyle();
 		return changed;
 	}
 

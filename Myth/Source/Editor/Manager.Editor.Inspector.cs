@@ -289,7 +289,7 @@ public partial class Manager
 		else if (NeuralTextureWeightsSlot(actor, property) is >= 0 and var weightsSlot)
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
-			if (NeuralTextureCatalog.DrawCombo(ref value, allowNone: weightsSlot > 0))
+			if (DrawNeuralModelPicker(ref value, allowNone: weightsSlot > 0))
 			{
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
 				return true;
@@ -1153,6 +1153,9 @@ public partial class Manager
 			return;
 		}
 
+		// Which material you're painting with reads far better as its own swatch than as a filename.
+		var swatch = new Vector2(ButtonSize, ButtonSize);
+		var painted = 0;
 		for (var slot = 0; slot < 4; slot++)
 		{
 			var file = ActorSpecs.ReadString(actor, slot switch
@@ -1167,10 +1170,17 @@ public partial class Manager
 			var name = string.IsNullOrEmpty(file)
 				? "(default)"
 				: Path.GetFileNameWithoutExtension(file)!.Replace('_', ' ');
-			if (RadioButton($"{name}##MaskSlot{slot}", maskPaintSlot == slot))
+			if (painted++ > 0)
+				SameLine();
+			var selected = maskPaintSlot == slot;
+			var picked = file != null && GetNeuralModelPreview(file) is { } slotSwatch
+				? ImGuiSubtextureButton($"##MaskSlot{slot}", slotSwatch, name, selected, swatch, true, 0f)
+				: ToggleButton($"{slot + 1}##MaskSlot{slot}", selected, swatch, name);
+			if (picked)
 				maskPaintSlot = slot;
 		}
-		if (RadioButton("Eraser##MaskSlot", maskPaintSlot < 0))
+		SameLine();
+		if (ToggleButton("Erase##MaskSlot", maskPaintSlot < 0, swatch, "Eraser"))
 			maskPaintSlot = -1;
 
 		SliderFloat("Radius", ref maskPaintRadius, 2.0f, 96.0f);
@@ -1294,7 +1304,7 @@ public partial class Manager
 
 		if (current != null)
 		{
-			var clicked = ImGuiSubtextureButton("##SurfacePreview", GetSurfacePreview(current), $"Surface '{value}' — click to change, double-click to edit", false, cell, true);
+			var clicked = ImGuiSubtextureButton("##SurfacePreview", GetSurfacePreview(current), $"Surface '{value}' — click to change, double-click to edit", false, cell, true, 0f);
 			if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				OpenSurfaceEditor(current.Id);
 			else if (clicked)
@@ -1313,28 +1323,29 @@ public partial class Manager
 			EndPopup();
 		}
 
+		PushSwatchGridStyle();
 		if (BeginPopup("##SurfaceGrid"))
 		{
+			var swatch = new Vector2(SwatchGridCell);
 			var canCreate = Assets.Textures2D?.Order.Count > 0;
+			var column = 0;
 			if (Assets.Surfaces.Count == 0)
 			{
 				TextDisabled("No surfaces loaded (Assets/Sources/Surfaces/*.json)");
 			}
 			else
 			{
-				if (Button("None", cell))
+				if (Button("None", swatch))
 				{
 					value = string.Empty;
 					changed = true;
 					CloseCurrentPopup();
 				}
-				var i = 0;
+				column = 1;
 				foreach (var (id, surface) in Assets.Surfaces)
 				{
-					if (i % SurfacePickerColumns != 0)
-						SameLine();
-					i++;
-					if (ImGuiSubtextureButton($"##surf{id}", GetSurfacePreview(surface), id, value == id, cell, true))
+					SwatchGridWrap(ref column, SurfacePickerColumns);
+					if (SwatchGridButton($"##surf{id}", GetSurfacePreview(surface), id, value == id))
 					{
 						value = id;
 						changed = true;
@@ -1342,10 +1353,9 @@ public partial class Manager
 					}
 				}
 			}
-			if (Assets.Surfaces.Count > 0 && Assets.Surfaces.Count % SurfacePickerColumns != 0)
-				SameLine();
+			SwatchGridWrap(ref column, SurfacePickerColumns);
 			BeginDisabled(!canCreate);
-			if (Button($"{EditorIcons.Add}##CreateRandomSurface", cell))
+			if (Button($"{EditorIcons.Add}##CreateRandomSurface", swatch))
 			{
 				value = CreateRandomSurface();
 				changed = true;
@@ -1356,6 +1366,7 @@ public partial class Manager
 				SetTooltip(canCreate ? "Create random surface" : "No surface textures loaded");
 			EndPopup();
 		}
+		PopSwatchGridStyle();
 
 		return changed;
 	}
