@@ -1052,10 +1052,12 @@ public sealed partial class GameView
 		material.Fragment.Samplers[9] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[12] = new(SpriteMask, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[13] = new(RimLightMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[28 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
 		uniforms[i++] = Screen.Height;
@@ -1081,6 +1083,10 @@ public sealed partial class GameView
 		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
 		uniforms[i++] = Manager.Visuals.RimLightStrength;
+		uniforms[i++] = Manager.Visuals.EdgeRimStrength;
+		uniforms[i++] = Manager.Visuals.EdgeRimWidth;
+		uniforms[i++] = Manager.Visuals.EdgeRimWrap;
+		uniforms[i++] = Manager.Visuals.EdgeRimFocus;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
 
@@ -1529,6 +1535,7 @@ public sealed partial class GameView
 			BackgroundLightMask.Clear(ambient);
 			ForegroundLightMask.Clear(ambient);
 			SporeFogMask.Clear(Color.Transparent);
+			RimLightMask.Clear(Color.Transparent);
 			return;
 		}
 
@@ -1585,7 +1592,8 @@ public sealed partial class GameView
 					light.ShadowSourceRadius,
 					light.ShadowSoftness,
 					light.ShadowNoise,
-					light.ShadowNoiseSpeed);
+					light.ShadowNoiseSpeed,
+					light.RimScale);
 				if (light.SpriteShadowOwner is { } owner)
 					gpuLightEmitters.Add(owner);
 			}
@@ -1593,15 +1601,16 @@ public sealed partial class GameView
 			actor.ForEachLight(gatherGpuLightAction);
 		}
 		gatheringGpuLightActor = null;
-		DrawGpuSpriteShadowMask();
+		DrawSpriteMasks();
 
 		renderer.Render(
 			NormalBuffer,
-			SpriteShadowMask,
+			SpriteMask,
 			Assets.LightingNoise,
 			BackgroundLightMask,
 			ForegroundLightMask,
 			SporeFogMask,
+			RimLightMask,
 			RenderCamera,
 			zoomLevel,
 			Time.SecondsF,
@@ -1616,19 +1625,31 @@ public sealed partial class GameView
 			Manager.Visuals);
 	}
 
-	void DrawGpuSpriteShadowMask()
+	// Red holds the sprite shadow casters; green holds every actor's silhouette, which the
+	// composite walks to find the edge its rim light runs along. One target, two passes.
+	void DrawSpriteMasks()
 	{
-		SpriteShadowMask.Clear(Color.Transparent);
+		SpriteMask.Clear(Color.Transparent);
+		DrawSpriteMaskChannel(SpriteMaskRedBlend,
+			actor => actor.CastsSpriteShadow && !gpuLightEmitters.Contains(actor));
+		// A flame doesn't need a rim of its own light, so light actors stay out of the silhouette.
+		DrawSpriteMaskChannel(SpriteMaskGreenBlend, static actor => actor is not Light);
+	}
+
+	void DrawSpriteMaskChannel(BlendMode blend, Func<Actor, bool> include)
+	{
+		Batcher.PushBlend(blend);
 		PushWorldMatrix();
 		foreach (var actor in Actors)
-			if (actor.Visible && actor.CastsSpriteShadow && actor is not Grid && !gpuLightEmitters.Contains(actor))
+			if (actor.Visible && actor is not Grid && include(actor))
 			{
 				Batcher.PushMatrix(actor.Position);
 				actor.RenderShadow(Batcher, Color.White);
 				Batcher.PopMatrix();
 			}
 		Batcher.PopMatrix();
-		Batcher.Render(SpriteShadowMask);
+		Batcher.PopBlend();
+		Batcher.Render(SpriteMask);
 		Batcher.Clear();
 	}
 
@@ -2219,6 +2240,7 @@ public sealed partial class GameView
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
+		RimLightMask = Track(CreateComputeTarget(width, height, "RimLightMask"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
 		InversionSnapshot = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "InversionSnapshot"));
@@ -2231,7 +2253,7 @@ public sealed partial class GameView
 		ActorTileField.Clear(Color.Transparent);
 		actorTileFieldPopulated = false;
 		ParticleSolidMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "ParticleSolidMask"));
-		SpriteShadowMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "SpriteShadowMask"));
+		SpriteMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8G8, "SpriteMask"));
 		ReflectionScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ReflectionScreen"));
 		ReflectionMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "ReflectionMask"));
 		AoMask = Track(RenderTargetPool.RentFormat(GraphicsDevice, width, height, TextureFormat.R8, "AoMask"));
@@ -2277,7 +2299,7 @@ public sealed partial class GameView
 	{
 		layerTransitionCaptured = false;
 		foreach (var target in debugTargets)
-			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask)
+			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask || target == RimLightMask)
 				target.Dispose();
 			else
 				RenderTargetPool.Return(target);
@@ -2476,6 +2498,14 @@ public sealed partial class GameView
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendMask.Red | BlendMask.Green | BlendMask.Blue, Color.White);
+	static readonly BlendMode SpriteMaskRedBlend = new(
+		BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Red, Color.White);
+	static readonly BlendMode SpriteMaskGreenBlend = new(
+		BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.OneMinusSrcAlpha,
+		BlendOp.Add, BlendFactor.SrcAlpha, BlendFactor.OneMinusSrcAlpha,
+		BlendMask.Green, Color.White);
 	static readonly BlendMode NormalBufferBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
@@ -2508,6 +2538,7 @@ public sealed partial class GameView
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
+	Target RimLightMask { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target DistortionMask { get; set; } = null!;
 	Target InversionSnapshot { get; set; } = null!;
@@ -2517,7 +2548,7 @@ public sealed partial class GameView
 	Target TileField { get; set; } = null!;
 	Target ActorTileField { get; set; } = null!;
 	Target ParticleSolidMask { get; set; } = null!;
-	Target SpriteShadowMask { get; set; } = null!;
+	Target SpriteMask { get; set; } = null!;
 	Target ReflectionScreen { get; set; } = null!;
 	Target ReflectionMask { get; set; } = null!;
 	Target AoMask { get; set; } = null!;

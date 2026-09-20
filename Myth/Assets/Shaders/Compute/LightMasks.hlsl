@@ -41,6 +41,14 @@ RWTexture2D<float4> ForegroundMask : register(u1, space1);
 [[vk::image_format("rgba8")]]
 #endif
 RWTexture2D<float4> SporeFogMask : register(u2, space1);
+#if BROWSER
+[[vk::image_format("rgba8")]]
+#endif
+// Where the light at this pixel comes from: rg = the direction lights are seen from (packed to
+// 0..1, shorter the more they disagree), b = how much light arrives. The composite turns it into
+// a rim along actor silhouettes; only lights that actually reach the pixel contribute, so a
+// shadowed light rims nothing.
+RWTexture2D<float4> RimLightMask : register(u3, space1);
 
 cbuffer Params : register(b0, space2)
 {
@@ -276,6 +284,8 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float4 shadowed = Ambient;
     float4 unshadowed = Ambient;
     float3 sporeFog = 0.0;
+    float2 rimDirection = 0.0;
+    float rimEnergy = 0.0;
 
     if (SunEnabled != 0)
     {
@@ -285,6 +295,9 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         unshadowed += contribution;
         shadowed += contribution * visibility;
         sporeFog += SunColor.rgb * SunStrength * SporeFogSunStrength * visibility;
+        float sunRim = SunStrength * visibility;
+        rimDirection += normalize(-SunDirection) * sunRim;
+        rimEnergy += sunRim;
     }
 
     for (uint i = 0; i < LightCount; i++)
@@ -305,6 +318,11 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         unshadowed += contribution;
         shadowed += contribution * visibility;
         sporeFog += light.ColorIntensity.rgb * light.ColorIntensity.a * fogAttenuation * SporeFogPointStrength * visibility;
+        // Linear falloff, not the squared one the light itself uses: a rim is the shape of an
+        // edge catching light, and it should still read from across a room.
+        float pointRim = light.ColorIntensity.a * fogAttenuation * visibility * light.CookieShape.w;
+        rimDirection += toLight / max(distanceToLight, 0.0001) * pointRim;
+        rimEnergy += pointRim;
     }
 
     sporeFog *= spore_density(world) * spore_strength(world) * SporeFogTint.rgb;
@@ -312,4 +330,5 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     BackgroundMask[id.xy] = saturate(shadowed);
     ForegroundMask[id.xy] = saturate(unshadowed);
     SporeFogMask[id.xy] = float4(saturate(sporeFog), saturate(max(max(sporeFog.r, sporeFog.g), sporeFog.b)));
+    RimLightMask[id.xy] = float4(saturate(rimDirection / max(rimEnergy, 0.0001) * 0.5 + 0.5), saturate(rimEnergy), 1.0);
 }

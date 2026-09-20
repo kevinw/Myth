@@ -25,6 +25,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
     float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
+    float4 EdgeRimSettings; // x = strength, y = width in art pixels, z = wrap, w = focus
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -63,6 +64,13 @@ SamplerState SporeFogSampler : register(s10, space2);
 
 Texture2D ActorTileFieldTexture : register(t11, space2);
 SamplerState ActorTileFieldSampler : register(s11, space2);
+
+// Actor silhouettes (the sprite shadow mask) and where their light comes from, for the edge rim.
+Texture2D SpriteMaskTexture : register(t12, space2);
+SamplerState SpriteMaskSampler : register(s12, space2);
+
+Texture2D RimLightTexture : register(t13, space2);
+SamplerState RimLightSampler : register(s13, space2);
 
 struct VsInput
 {
@@ -346,6 +354,51 @@ float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pix
     return float4(saturate(color), scene.a);
 }
 
+float sprite_coverage(float2 art_pixel, float zoom)
+{
+    return SpriteMaskTexture.Sample(SpriteMaskSampler, target_uv((art_pixel + 0.5) * zoom / TextureSizeCamera.xy)).g;
+}
+
+// A lit band inside an actor's silhouette, on the side its light comes from. The silhouette's
+// own gradient gives the outward direction, so the rim needs no per-sprite normals; how far the
+// empty space reaches back along it gives the band's falloff, one art pixel at a time.
+float3 edge_rim(float2 art_pixel, float zoom, float3 light_color)
+{
+    if (EdgeRimSettings.x <= 0.0 || sprite_coverage(art_pixel, zoom) < 0.5)
+        return 0.0;
+
+    float2 gradient = 0.0;
+    [unroll] for (int y = -1; y <= 1; y++)
+        [unroll] for (int x = -1; x <= 1; x++)
+        {
+            if (x == 0 && y == 0)
+                continue;
+            float2 offset = float2(x, y);
+            gradient += normalize(offset) * sprite_coverage(art_pixel + offset, zoom);
+        }
+
+    float reach = length(gradient);
+    if (reach < 0.0001)
+        return 0.0;
+
+    float2 outward = -gradient / reach;
+    int steps = clamp(int(round(EdgeRimSettings.y)), 1, 4);
+    float band = 0.0;
+    [unroll] for (int step = 1; step <= 4; step++)
+        if (step <= steps)
+            band += 1.0 - sprite_coverage(art_pixel + outward * float(step), zoom);
+    band /= float(steps);
+    if (band <= 0.0)
+        return 0.0;
+
+    float4 rim_light = RimLightTexture.Sample(RimLightSampler, target_uv((art_pixel + 0.5) * zoom / TextureSizeCamera.xy));
+    float2 light_direction = rim_light.rg * 2.0 - 1.0;
+    // Wrap keeps some rim on the far side, which is what makes a light behind an actor read as a
+    // halo rather than as nothing.
+    float facing = saturate(lerp(dot(outward, light_direction), 1.0, EdgeRimSettings.z));
+    return light_color * band * pow(facing, EdgeRimSettings.w) * rim_light.b * EdgeRimSettings.x;
+}
+
 float4 fragment_main(VsOutput input) : SV_Target0
 {
     // Prevent optimizer from removing input.type - D3D12 requires matching signatures
@@ -412,5 +465,12 @@ float4 fragment_main(VsOutput input) : SV_Target0
         dither_mask,
         normal_slope,
         0.5);
-    return saturate(foreground + background * (1.0 - foreground.a));
+    float4 composite = saturate(foreground + background * (1.0 - foreground.a));
+
+    // Rim in the hue of whichever layer's light the actor is standing in.
+    float4 rim_source_light = foreground.a > 0.5 ? ForegroundLightTexture.Sample(ForegroundLightSampler, sample) : background_light;
+    float3 rim_color = rim_source_light.rgb / max(max(max(rim_source_light.r, rim_source_light.g), rim_source_light.b), 0.0001);
+    float3 rim = edge_rim(art_pixel, zoom, rim_color);
+    composite.rgb = saturate(composite.rgb + rim * composite.a);
+    return composite;
 }

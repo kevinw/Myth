@@ -1647,6 +1647,7 @@ public partial class Player : Pawn, INeuralTextureAgent
 			it.DrawSprite = false;
 			it.KeepOnRoomTransition = true;
 			it.SpriteShadowOwner = owner;
+			it.RimScale = 0;
 		});
 
 	public override void OnCollideY()

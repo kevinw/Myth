@@ -1,8 +1,8 @@
+using System.Globalization;
 using System.Numerics;
+using System.Reflection;
 using Foster.Framework;
 #if EDITOR
-using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using ImGuiNET;
@@ -31,6 +31,11 @@ sealed class VisualTuning
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
+	// Edge rim: a lit band along actor silhouettes, on the side the light is on.
+	public float EdgeRimStrength = 1.0f;
+	public float EdgeRimWidth = 1.0f;
+	public float EdgeRimWrap = 0.25f;
+	public float EdgeRimFocus = 1.5f;
 	public float DitherStrength = 1.0f;
 	public int NormalDitherLevels = 4;
 	public float SporeFogScale = 1.0f / 80.0f;
@@ -39,6 +44,20 @@ sealed class VisualTuning
 	public float SporeFogPointStrength = 0.65f;
 	public float SporeFogSunStrength = 0.3f;
 	public float WorldDistortionPixels = 3.0f;
+
+	/// Applies a "Name=Value" override from --visual. Unknown names and unparsable values throw,
+	/// so a typo in a tuning run fails loudly instead of silently rendering the default look.
+	public void Override(string assignment)
+	{
+		var split = assignment.IndexOf('=');
+		var name = split > 0 ? assignment[..split].Trim() : "";
+		var field = typeof(VisualTuning).GetField(name, BindingFlags.Public | BindingFlags.Instance)
+			?? throw new ArgumentException($"--visual: no tuning field named '{name}'");
+		var value = assignment[(split + 1)..].Trim();
+		field.SetValue(this, field.FieldType == typeof(int)
+			? int.Parse(value, CultureInfo.InvariantCulture)
+			: float.Parse(value, CultureInfo.InvariantCulture));
+	}
 }
 
 #if EDITOR
@@ -125,6 +144,10 @@ public partial class Manager
 			VisualRow("Normal Floor", ref Visuals.NormalLightFloor, VisualDefaults.NormalLightFloor, 0, 1);
 			VisualRow("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4);
 			VisualRow("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f);
+			VisualRow("Edge Rim", ref Visuals.EdgeRimStrength, VisualDefaults.EdgeRimStrength, 0, 3);
+			VisualRow("Edge Rim Width", ref Visuals.EdgeRimWidth, VisualDefaults.EdgeRimWidth, 1, 4);
+			VisualRow("Edge Rim Wrap", ref Visuals.EdgeRimWrap, VisualDefaults.EdgeRimWrap, 0, 1);
+			VisualRow("Edge Rim Focus", ref Visuals.EdgeRimFocus, VisualDefaults.EdgeRimFocus, 0.25f, 4);
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2);
 			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16);
 			PopID();

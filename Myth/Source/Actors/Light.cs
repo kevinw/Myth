@@ -42,6 +42,9 @@ public class Light : Actor, IHitByHitbox
 	[I(0, 3)] public float ShadowSoftness = 1.0f;
 	[I(0, 1)] public float ShadowNoise;
 	[I(0, 40)] public float ShadowNoiseSpeed = 8.0f;
+	// How strongly this light rims actor silhouettes. A light an actor carries sets it to 0, so
+	// their own lantern doesn't outline them -- the rim is for light coming from the world.
+	[I(0, 2)] public float RimScale = 1.0f;
 
 	
 	[InspectorGroup("Sprite")]

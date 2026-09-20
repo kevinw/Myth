@@ -74,6 +74,10 @@ public struct StartArgs
 	// game plays immediately, captures Game.Screen at screenshotFrame and every
 	// screenshotInterval frames after, screenshotCount times, then exits.
 	public string? screenshotPath;
+
+	// --visual Name=Value, repeatable: overrides one VisualTuning field at startup, so a look can
+	// be tried from a screenshot run without a rebuild.
+	public string[] visualOverrides = [];
 	public int screenshotFrame = 60;
 	public int screenshotInterval = 60;
 	public int screenshotCount = 1;
@@ -140,6 +144,7 @@ public struct StartArgs
 					benchSourceFramesProvided = true;
 					break;
 				case "--screenshot": screenshotPath = ReadValue(args, ref i, option); break;
+				case "--visual": visualOverrides = [..visualOverrides, ReadValue(args, ref i, option)]; break;
 				case "--screenshot-frame": screenshotFrame = ReadInt(args, ref i, option, minimum: 0); break;
 				case "--screenshot-interval": screenshotInterval = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;

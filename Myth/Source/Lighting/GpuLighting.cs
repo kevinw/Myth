@@ -157,7 +157,8 @@ sealed class GpuLighting : IDisposable
 		float shadowSourceRadius,
 		float shadowSoftness,
 		float shadowNoise,
-		float shadowNoiseSpeed)
+		float shadowNoiseSpeed,
+		float rimScale = 1.0f)
 	{
 		if (lightCount >= lights.Length || radius <= 0 || intensity <= 0)
 			return;
@@ -169,7 +170,7 @@ sealed class GpuLighting : IDisposable
 			height,
 			new(value.X, value.Y, value.Z, intensity),
 			new((float)cookie, cookieAngleDegrees * MathF.PI / 180, cookieSpeedDegrees * MathF.PI / 180, cookieScale),
-			new(cookieStrength, cookieFeather, cookieCutoff, 0),
+			new(cookieStrength, cookieFeather, cookieCutoff, rimScale),
 			new(shadowSourceRadius, shadowSoftness, shadowNoise, shadowNoiseSpeed));
 	}
 
@@ -197,6 +198,7 @@ sealed class GpuLighting : IDisposable
 		Target backgroundMask,
 		Target foregroundMask,
 		Target sporeFogMask,
+		Target rimLightMask,
 		Vector2 camera,
 		float zoom,
 		float time,
@@ -297,6 +299,7 @@ sealed class GpuLighting : IDisposable
 				backgroundMask.Attachments[0],
 				foregroundMask.Attachments[0],
 				sporeFogMask.Attachments[0],
+				rimLightMask.Attachments[0],
 			],
 			UniformBuffers = [maskUniforms],
 			GroupCountX = (normalBuffer.Width + 7) / 8,
@@ -386,7 +389,7 @@ sealed class GpuLighting : IDisposable
 				samplerCount: 2,
 				uniformBufferCount: 1,
 				readOnlyStorageBufferCount: 3,
-				readWriteStorageTextureCount: 3,
+				readWriteStorageTextureCount: 4,
 				threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 				entryPoint: "compute_main", name: "LightMasks");
 		}

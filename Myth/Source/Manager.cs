@@ -336,6 +336,8 @@ public partial class Manager : App
 			PerfToggles.UseSimpleDefaults();
 			Visuals.DitherStrength = 0;
 		}
+		foreach (var assignment in args.visualOverrides)
+			Visuals.Override(assignment);
 
 		batcher = new(GraphicsDevice);
 		controls = new(Input);
