@@ -37,6 +37,8 @@ static class TweakRegistry
 		public bool Watched;          // pinned by the user
 		public bool InDiff;           // sits inside the current git diff
 		public bool Seen;             // executed at least once this session
+		public bool HasMarker;        // the literal carries `.T()`, so edits apply instantly
+		public bool FromScan;         // discovered by the source scan rather than by executing
 		public bool WritePending;     // source was edited; waiting for hot reload to run the new literal
 		public string PendingExpr = "";
 		public string ShortFile = "";
@@ -53,6 +55,7 @@ static class TweakRegistry
 	public static float ResolveFloat(string file, int line, string expr, float value, float? min, float? max)
 	{
 		var e = GetOrAdd(file, line, expr, value, isInt: false, min, max);
+		e.HasMarker = true;
 		if (!e.Seen)
 			e.Seen = true;
 		if (UpdatePendingWrite(e, expr, value))
@@ -65,6 +68,7 @@ static class TweakRegistry
 	public static int ResolveInt(string file, int line, string expr, int value, int? min, int? max)
 	{
 		var e = GetOrAdd(file, line, expr, value, isInt: true, min, max);
+		e.HasMarker = true;
 		if (!e.Seen)
 			e.Seen = true;
 		if (UpdatePendingWrite(e, expr, value))
@@ -74,7 +78,8 @@ static class TweakRegistry
 		return e.HasOverride ? (int)MathF.Round(e.Value) : value;
 	}
 
-	static Entry GetOrAdd(string file, int line, string expr, float value, bool isInt, float? min, float? max)
+	static Entry GetOrAdd(string file, int line, string expr, float value, bool isInt, float? min, float? max,
+		string? context = null)
 	{
 		var key = (file, line);
 		if (!entries.TryGetValue(key, out var e))
@@ -88,7 +93,7 @@ static class TweakRegistry
 				IsInt = isInt,
 				Default = value,
 				Value = value,
-				Context = ResolveContext(normalized, line),
+				Context = context ?? ResolveContext(normalized, line),
 				ShortFile = Path.GetFileName(normalized)
 			};
 			ApplyRange(e, value, isInt, min, max);
@@ -270,6 +275,7 @@ static class TweakRegistry
 						if (!TryParseLiteral(text, out var value, out var isInt))
 							continue;
 						var e = GetOrAdd(file, ln, text, value, isInt, null, null);
+						e.HasMarker = true;
 						e.InDiff = true;
 						if (!e.Seen)
 							e.Default = value; // unseen: trust the parsed source literal
@@ -307,6 +313,87 @@ static class TweakRegistry
 		catch { return null; }
 	}
 
+
+	// --- source scan: every `static float X => 9f;` getter, tweakable without an annotation ---
+
+	// The project's live-tuning convention (see CLAUDE.md): a literal-bodied static getter, so the
+	// value can be edited under `dotnet watch` without recompiling the call sites. There are ~800 of
+	// these against ~60 `.T()` markers, so the panel scans for them rather than waiting to be told.
+	static readonly Regex GetterRx = new(
+		@"^\s*(?:(?:public|private|protected|internal|new)\s+)*static\s+(float|int)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=>\s*(-?\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdD]?)\s*(\.\s*T\s*\([^)]*\))?\s*;",
+		RegexOptions.Compiled);
+
+	readonly record struct Scanned(string File, int Line, string Name, string Expr, float Value, bool IsInt, bool HasMarker);
+
+	static Task<List<Scanned>>? scanTask;
+	static bool scanRequested;
+
+	// Kicked off when the panel opens and merged on the main thread, so a few hundred files of IO and
+	// regex never land on a frame.
+	static void RequestScan()
+	{
+		if (scanTask != null)
+			return;
+		var root = RepoRoot();
+		if (root == null)
+			return;
+		scanTask = Task.Run(() => ScanSources(root));
+	}
+
+	static List<Scanned> ScanSources(string root)
+	{
+		var found = new List<Scanned>();
+		foreach (var folder in (string[])["Myth/Source", "Kit"])
+		{
+			var dir = Path.Combine(root, folder);
+			if (!Directory.Exists(dir))
+				continue;
+			foreach (var file in Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories))
+			{
+				if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+					file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+					continue;
+				string[] lines;
+				try { lines = File.ReadAllLines(file); }
+				catch { continue; }
+				for (var i = 0; i < lines.Length; i++)
+				{
+					var m = GetterRx.Match(lines[i]);
+					if (!m.Success)
+						continue;
+					var expr = m.Groups[3].Value;
+					if (!TryParseLiteral(expr, out var value, out _))
+						continue;
+					found.Add(new(Normalize(file), i + 1, m.Groups[2].Value, expr, value,
+						m.Groups[1].Value == "int", m.Groups[4].Success));
+				}
+			}
+		}
+		return found;
+	}
+
+	static void IntegrateScan()
+	{
+		if (scanTask is not { IsCompleted: true })
+			return;
+		var found = scanTask.IsCompletedSuccessfully ? scanTask.Result : [];
+		scanTask = null;
+		foreach (var it in found)
+		{
+			// An entry that has already run through `.T()` owns its own value; only adopt the name.
+			var e = GetOrAdd(it.File, it.Line, it.Expr, it.Value, it.IsInt, null, null, it.Name);
+			e.FromScan = true;
+			e.HasMarker |= it.HasMarker;
+			e.Context = it.Name;
+			if (!e.Seen && !e.HasOverride && !e.WritePending)
+			{
+				e.Expr = it.Expr;
+				e.Default = it.Value;
+				e.Value = it.Value;
+			}
+		}
+	}
+
 	// --- ImGui panel ---
 
 	static string search = "";
@@ -323,9 +410,18 @@ static class TweakRegistry
 
 		if (!Open)
 		{
+			scanRequested = false;
 			Hovered = false;
 			return;
 		}
+
+		// Scan on open rather than at startup: the cost is only paid by a session that tunes.
+		if (!scanRequested)
+		{
+			scanRequested = true;
+			RequestScan();
+		}
+		IntegrateScan();
 
 		// NoFocusOnAppearing: opening the panel (incl. via the T hotkey) must not steal keyboard focus,
 		// which is what would otherwise nav-focus the first item (the search box) and swallow keystrokes.
@@ -393,8 +489,11 @@ static class TweakRegistry
 			ImGui.OpenPopup("##tweakmenu");
 		if (ImGui.BeginPopup("##tweakmenu"))
 		{
-			if (ImGui.MenuItem("Rescan diff"))
+			if (ImGui.MenuItem("Rescan"))
+			{
 				ScanDiff();
+				RequestScan();
+			}
 			if (ImGui.MenuItem(RESET_ALL_TEXT))
 				ResetAll();
 			ImGui.EndPopup();
@@ -436,16 +535,29 @@ static class TweakRegistry
 		return count;
 	}
 
+	// The scan finds ~800 getters, so an unfiltered list is capped rather than clipped: past a
+	// screenful the useful move is to type, not to scroll.
+	const int MaxRows = 150;
+
 	static void DrawSection(List<Entry> ordered, Func<Entry, bool> include, bool filtered)
 	{
+		var drawn = 0;
+		var skipped = 0;
 		foreach (var e in ordered)
 		{
 			if (!include(e))
 				continue;
 			if (filtered && !SearchMatches(e))
 				continue;
+			if (drawn++ >= MaxRows)
+			{
+				skipped++;
+				continue;
+			}
 			DrawRow(e);
 		}
+		if (skipped > 0)
+			ImGui.TextDisabled($"{skipped} more — search to narrow");
 	}
 
 	static bool SearchMatches(Entry e)
@@ -490,7 +602,7 @@ static class TweakRegistry
 		var nameHovered = ImGui.IsItemHovered() || ImGui.IsWindowHovered();
 		ImGui.EndChild();
 		if (nameHovered)
-			ImGui.SetTooltip($"{e.ShortFile}:{e.Line}{(e.Seen ? "" : "  (not yet run)")}");
+			ImGui.SetTooltip($"{e.ShortFile}:{e.Line}{(e.Seen || !e.HasMarker ? "" : "  (not yet run)")}");
 		ImGui.SameLine();
 
 		var sliderWidth = Math.Max(MinSliderWidth, rowRight - ImGui.GetCursorPosX() - buttonsWidth);
@@ -514,9 +626,27 @@ static class TweakRegistry
 			}
 		}
 		DrawDefaultMarker(e);
+		// A `.T()` value is already live, so writing it is a deliberate act. A plain getter only
+		// changes anything once it's in the file, so releasing the slider commits it.
+		if (!e.HasMarker && e.HasOverride && ImGui.IsItemDeactivatedAfterEdit())
+			WriteBack(e);
 
 		ImGui.SameLine();
-		if (e.HasOverride)
+		if (e.FromScan)
+		{
+			if (DrawIconButton(
+#if EDITOR
+				e.HasMarker ? EditorIcons.BoltLightning : EditorIcons.Cube
+#else
+				e.HasMarker ? "!" : "."
+#endif
+				, e.HasMarker
+					? "Bake: write the value and drop .T()"
+					: "Make live: add .T() so the slider applies instantly",
+				e.HasMarker ? 1f : 0.3f))
+				SetMarker(e, !e.HasMarker);
+		}
+		else if (e.HasOverride)
 		{
 			if (DrawIconButton(
 #if EDITOR
@@ -603,34 +733,110 @@ static class TweakRegistry
 			return;
 
 		var line = lines[e.Line - 1];
-		var match = MarkerRx.Match(line);
-		while (match.Success)
-		{
-			if (match.Groups[1].Value == e.Expr)
-				break;
-			match = match.NextMatch();
-		}
-		if (!match.Success)
-		{
-			Console.WriteLine($"Tweak write skipped: {e.ShortFile}:{e.Line} no longer contains {e.Expr}.T(");
+		if (!LocateLiteral(e, line, out var at, out var length))
 			return;
-		}
 
 		var value = FormatValue(e);
-		lines[e.Line - 1] = line[..match.Groups[1].Index] + value + line[(match.Groups[1].Index + match.Groups[1].Length)..];
+		if (!WriteLine(e, lines, line[..at] + value + line[(at + length)..]))
+			return;
+
+		e.Expr = value;
+		e.Default = e.IsInt ? (int)MathF.Round(e.Value) : e.Value;
+		e.HasOverride = false;
+		e.InDiff = true;
+		// A marker entry re-runs and confirms the new literal; a plain getter has nothing to confirm
+		// it, so it just adopts the value and waits for hot reload to catch up.
+		if (e.HasMarker)
+		{
+			e.WritePending = true;
+			e.PendingExpr = value;
+		}
+	}
+
+	// The literal's span within its line: after `.T()` for marker entries, after `=>` for getters.
+	static bool LocateLiteral(Entry e, string line, out int at, out int length)
+	{
+		at = length = 0;
+		if (e.HasMarker)
+		{
+			var match = MarkerRx.Match(line);
+			while (match.Success && match.Groups[1].Value != e.Expr)
+				match = match.NextMatch();
+			if (!match.Success)
+			{
+				Console.WriteLine($"Tweak write skipped: {e.ShortFile}:{e.Line} no longer contains {e.Expr}.T(");
+				return false;
+			}
+			at = match.Groups[1].Index;
+			length = match.Groups[1].Length;
+			return true;
+		}
+
+		var getter = GetterRx.Match(line);
+		if (!getter.Success)
+		{
+			Console.WriteLine($"Tweak write skipped: {e.ShortFile}:{e.Line} is no longer a literal getter");
+			return false;
+		}
+		at = getter.Groups[3].Index;
+		length = getter.Groups[3].Length;
+		return true;
+	}
+
+	static bool WriteLine(Entry e, string[] lines, string replacement)
+	{
+		lines[e.Line - 1] = replacement;
 		try { File.WriteAllLines(e.File, lines); }
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Tweak write failed: {e.File}: {ex.Message}");
+			return false;
+		}
+		return true;
+	}
+
+	// Promote a plain getter to `.T()` so its slider applies instantly instead of via a ~2s hot
+	// reload -- and demote it again once the value is settled. Annotating becomes something the panel
+	// does for the value you're dialing right now, rather than something to predict in advance.
+	static void SetMarker(Entry e, bool live)
+	{
+		string[] lines;
+		try { lines = File.ReadAllLines(e.File); }
 		catch (Exception ex)
 		{
 			Console.WriteLine($"Tweak write failed: {e.File}: {ex.Message}");
 			return;
 		}
+		if (e.Line < 1 || e.Line > lines.Length)
+			return;
+
+		var line = lines[e.Line - 1];
+		var getter = GetterRx.Match(line);
+		if (!getter.Success)
+		{
+			Console.WriteLine($"Tweak {(live ? "promote" : "bake")} skipped: {e.ShortFile}:{e.Line} is no longer a literal getter");
+			return;
+		}
+
+		// Bake writes the dialed value out with the marker in one edit, so it costs one reload.
+		var literal = getter.Groups[3];
+		var value = !live && e.HasOverride ? FormatValue(e) : literal.Value;
+		var marker = getter.Groups[4];
+		var tail = marker.Success ? line[(marker.Index + marker.Length)..] : line[(literal.Index + literal.Length)..];
+		if (!WriteLine(e, lines, line[..literal.Index] + value + (live ? ".T()" : "") + tail))
+			return;
 
 		e.Expr = value;
-		e.Default = e.IsInt ? (int)MathF.Round(e.Value) : e.Value;
-		e.HasOverride = false;
-		e.WritePending = true;
-		e.PendingExpr = value;
+		e.HasMarker = live;
+		e.WritePending = false;
+		e.PendingExpr = "";
 		e.InDiff = true;
+		if (!live)
+		{
+			e.Default = e.IsInt ? (int)MathF.Round(e.Value) : e.Value;
+			e.HasOverride = false;
+			e.Seen = false;
+		}
 	}
 
 	static string FormatValue(Entry e)
@@ -638,8 +844,11 @@ static class TweakRegistry
 		if (e.IsInt)
 			return ((int)MathF.Round(e.Value)).ToString(CultureInfo.InvariantCulture);
 
-		var suffix = e.Expr.EndsWith('f') || e.Expr.EndsWith('F') ? "f" : "";
-		return e.Value.ToString("G9", CultureInfo.InvariantCulture) + suffix;
+		// Always suffix a float: the source literal may have had none (`=> -139;` is a valid float
+		// getter), and writing a fractional value back without one makes it a double -- CS0266.
+		// Default float formatting is the shortest string that round-trips, so a dialed 1.8 lands in
+		// source as "1.8f" rather than G9's "1.79999995f".
+		return e.Value.ToString(CultureInfo.InvariantCulture) + "f";
 	}
 }
 #endif
