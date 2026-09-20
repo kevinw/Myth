@@ -225,10 +225,10 @@ public partial class Manager
 		if (MenuButton(Video.PixelPerfect ? "pixel perfect: on" : "pixel perfect: off"))
 			Video.PixelPerfect = !Video.PixelPerfect;
 #if !BROWSER
-		if (MenuButton(vSyncEnabled ? "vsync: on" : "vsync: off"))
+		if (MenuButton(VSyncForced ? "vsync: on (locked)" : vSyncEnabled ? "vsync: on" : "vsync: off", enabled: !VSyncForced))
 		{
 			vSyncEnabled = !vSyncEnabled;
-			GraphicsDevice.VSync = vSyncEnabled;
+			ApplyVSync();
 		}
 		if (MenuButton(lowLatency ? "low latency: on" : "low latency: off"))
 		{
@@ -343,8 +343,9 @@ public partial class Manager
 
 	// Emits one menu button and returns true when it's activated (click or nav). Plays
 	// the move cue when nav focus lands on it, and `sound` when it fires.
-	bool MenuButton(string label, string sound = "menu/proceed")
+	bool MenuButton(string label, string sound = "menu/proceed", bool enabled = true)
 	{
+		BeginDisabled(!enabled);
 		// Use ### so the id is the slot index only: a button whose label toggles
 		// ("music on"/"music off", "fullscreen"/"windowed") keeps a stable id and so
 		// keeps nav focus, letting you re-toggle it with repeated South presses.
@@ -358,7 +359,7 @@ public partial class Manager
 			{
 				var x = font['x'];
 				var inkCenter = font.Ascent + x.Offset.Y + x.Subtexture.Height * 0.5f;
-				labelBatch.Text(font, label, new Vector2(GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), new Color(0xc0cbdc) * gameMenuLayoutEase);
+				labelBatch.Text(font, label, new Vector2(GetStyle().FramePadding.X, bounds.Center.Y - inkCenter), new Color(0xc0cbdc) * (gameMenuLayoutEase * (enabled ? 1f : 0.4f)));
 			}
 			menuImgui.EndBatch();
 		}
@@ -391,6 +392,7 @@ public partial class Manager
 		}
 
 		menuButtonIndex++;
+		EndDisabled();
 
 		if (pressed)
 		{

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
@@ -140,6 +141,47 @@ public partial class Manager : App
 		}
 	}
 
+#if !BROWSER
+	// This particular Mac Studio hard-locks the whole machine when it presents unthrottled to the
+	// 120Hz UltraGear, so vsync is pinned on (and its menu toggle disabled) while we're on that display.
+	const string LockedVSyncDisplayName = "LG ULTRAGEAR+";
+	const string LockedVSyncMachineModel = "Mac14,13";
+	static readonly bool IsLockedVSyncMachine = OperatingSystem.IsMacOS() && HardwareModel() == LockedVSyncMachineModel;
+
+	uint vSyncDisplayId = uint.MaxValue;
+	bool vSyncDisplayIsLocked, vSyncLockLogged;
+
+	bool VSyncForced
+	{
+		get
+		{
+			if (!IsLockedVSyncMachine || Window is not { DisplayRefreshRate: > 60 } window)
+				return false;
+			if (window.DisplayId != vSyncDisplayId)
+				(vSyncDisplayId, vSyncDisplayIsLocked) = (window.DisplayId, window.DisplayName == LockedVSyncDisplayName);
+			if (vSyncDisplayIsLocked && !vSyncLockLogged)
+			{
+				vSyncLockLogged = true;
+				Log.Warning($"vsync forced on: '{LockedVSyncDisplayName}' at {window.DisplayRefreshRate:0}Hz on a {LockedVSyncMachineModel} hard-locks the machine when we present unthrottled. The vsync toggle stays disabled until the window moves to another display.");
+			}
+			return vSyncDisplayIsLocked;
+		}
+	}
+
+	static unsafe string HardwareModel()
+	{
+		Span<byte> model = stackalloc byte[64];
+		nint length = model.Length;
+		fixed (byte* ptr = model)
+			return sysctlbyname("hw.model", ptr, ref length, null, 0) == 0 ? Marshal.PtrToStringUTF8((nint)ptr) ?? "" : "";
+	}
+
+	[LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8)]
+	private static unsafe partial int sysctlbyname(string name, byte* oldp, ref nint oldlenp, byte* newp, nint newlen);
+#else
+	const bool VSyncForced = false;
+#endif
+
 	internal readonly DebugControls debugControls;
 	internal InputPrompts? InputPrompts { get; private set; }
 
@@ -251,6 +293,13 @@ public partial class Manager : App
 #if !BROWSER
 	void WindowFocusGained() => windowFocused = true;
 	void WindowFocusLost() => windowFocused = false;
+
+	void ApplyVSync()
+	{
+		var enabled = vSyncEnabled || VSyncForced;
+		if (GraphicsDevice.VSync != enabled)
+			GraphicsDevice.VSync = enabled;
+	}
 
 	// The swapchain is acquired before input is polled; low latency also runs the CPU and GPU in
 	// lockstep with one frame in flight.
@@ -476,7 +525,7 @@ public partial class Manager : App
 			throw new InvalidDataException($"Cannot bake unknown world '{Assets.CurrentWorldId}'.");
 
 #if !BROWSER
-		GraphicsDevice.VSync = vSyncEnabled;
+		ApplyVSync();
 		ApplyLatencyMode();
 #endif
 
@@ -1166,6 +1215,7 @@ public partial class Manager : App
 		controls.UpdateControllerAssignment();
 
 #if !BROWSER
+		ApplyVSync();
 		if (UpdateBackgroundSuspension())
 			return;
 #endif
