@@ -1,3 +1,8 @@
+scripting console: Roslyn CSharpScript (Microsoft.CodeAnalysis.CSharp.Scripting) with the live Game as host object -- evaluate C# against the running room to poke actors, spawn things, run one-off measurements. No EnC needed, so it's a fraction of the machinery of live code reload and probably scratches most of the same itch.
+can we be smarter than dotnet watch? behaviour edits (not just tunable values) are where live reload earns its keep, and the round trip is ~1.1-1.8s. Measured facts before re-deriving them:
+- watch is ALREADY an in-process Roslyn host: no MSBuild, no csc in the edit loop. It keeps a Solution in memory, patches the document text, emits an EnC delta, calls MetadataUpdater.ApplyUpdate. Re-implementing it buys only the IPC hop.
+- consecutive edits warm up: 1758ms then 1110ms. RunAnalyzers=false is already set; all three source generators are already IIncrementalGenerator with clean pipelines.
+- unmeasured: where the remaining second goes (project-wide re-bind for diagnostics? rude-edit analysis? delta emit?). Cheap experiment first: time an edit to a small leaf file vs 2600-line Player.cs. If small files win, splitting hot-iteration code into smaller partials is a free win with no new machinery.
 decoration layer tiles; dual grid can feed it for underhangs for example
 play all the metroidbrania games here https://note.com/opticalglass/n/n7de04c1e56c3
 bud and player both do a lot of blinking if you duck. make them signal to each other in morse code.
