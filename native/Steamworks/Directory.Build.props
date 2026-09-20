@@ -1,0 +1,13 @@
+<Project>
+  <!-- Deliberately shadows the repo-root Directory.Build.props for this project only. That file
+       gives each RID/ship flavour its own obj/, which needs restore and build to agree on the
+       flavour; as a ProjectReference carrying AdditionalProperties, this project gets a different
+       global property set for each, so they disagree ("Assets file ... not found").
+
+       Nothing here is RID-specific (plain managed IL, no PackageReferences), so one
+       fixed obj/ is correct. The platform reaches the compiler through DefineConstants, and
+       CoreCompileCache in the csproj forces a rebuild when it changes. -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

@@ -1644,6 +1644,26 @@ public partial class Game : IDisposable
 		DucksDestroyed++;
 	}
 
+	// Whether a save records a kill of any actor of this type, anywhere. Walks the rooms because
+	// PersistentDestroyedActors holds placement keys, not types. Static so achievement rules can ask
+	// it about the save on disk without a session running.
+	internal static bool AnyPersistentlyDestroyedOfType(SaveState save, string typeName)
+	{
+		if (save.PersistentDestroyedActors.Count == 0)
+			return false;
+
+		foreach (var room in Assets.RoomsById.Values)
+			foreach (var actor in room.Actors)
+			{
+				if (!string.Equals(ActorSpecs.GetTypeName(actor), typeName, StringComparison.OrdinalIgnoreCase))
+					continue;
+				var localPosition = ActorSpecs.ReadPoint(actor, "Position") ?? Point2.Zero;
+				if (save.PersistentDestroyedActors.Contains(SessionDestroyKey(room, actor, localPosition)))
+					return true;
+			}
+		return false;
+	}
+
 	int CountPersistentlyDestroyedProps(string category)
 	{
 		if (Save.PersistentDestroyedActors.Count == 0)

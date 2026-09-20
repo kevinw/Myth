@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Steamworks.NET built from the vendored sources in src/ (see README.md). The upstream
+       prebuilt assemblies are net48 and stamped AMD64, so they cannot load in a .NET 10 arm64
+       process; building here also keeps the IL trimmable and NativeAOT-friendly. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Steamworks.NET</AssemblyName>
+    <RootNamespace>Steamworks</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Third-party source: its warnings are not ours to fix. -->
+    <NoWarn>$(NoWarn);CS0618;CS0612;CS1591;CA1416;SYSLIB1054;IDE0079</NoWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors></WarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Picks the calling convention and the native library name to P/Invoke, so the choice must
+       match the steam_api binary the game copies next to its executable. -->
+  <PropertyGroup>
+    <SteamworksPlatform Condition="'$(SteamworksPlatform)' == '' and (('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or $(RuntimeIdentifier.StartsWith('win')))">STEAMWORKS_WIN</SteamworksPlatform>
+    <SteamworksPlatform Condition="'$(SteamworksPlatform)' == ''">STEAMWORKS_LIN_OSX</SteamworksPlatform>
+    <DefineConstants>$(DefineConstants);$(SteamworksPlatform)</DefineConstants>
+    <!-- Only Windows reads this, and only to pick "steam_api64" over the 32-bit "steam_api";
+         without it a win-x64 build P/Invokes a steam_api.dll we do not ship. -->
+    <DefineConstants Condition="'$(SteamworksPlatform)' == 'STEAMWORKS_WIN'">$(DefineConstants);STEAMWORKS_X64</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The platform only shows up in DefineConstants, which is not a compile input MSBuild
+         tracks, so without this a mac build would happily reuse a Windows build's IL. -->
+    <CoreCompileCache Include="$(DefineConstants)" />
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+
+</Project>

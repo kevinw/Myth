@@ -13,6 +13,7 @@
     <MythAppName>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"name"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythAppName>
     <MythAppCompany>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"company"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythAppCompany>
     <MythAppBundleId>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"bundleId"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythAppBundleId>
+    <MythSteamAppId>$([System.Text.RegularExpressions.Regex]::Match($(MythAppJson), '"steamAppId"\s*:\s*"([^"]*)"').Groups[1].Value.Trim())</MythSteamAppId>
     <Product>$(MythAppName)</Product>
     <AssemblyTitle>$(MythAppName)</AssemblyTitle>
     <Company>$(MythAppCompany)</Company>
@@ -21,10 +22,10 @@
   <!-- The name also names the settings/save folder, so a missing value fails the build instead of
        silently moving everyone's saves. -->
   <Target Name="MythGenerateAppInfo" BeforeTargets="CoreCompile">
-    <Error Condition="'$(MythAppName)' == '' or '$(MythAppCompany)' == '' or '$(MythAppBundleId)' == ''"
-           Text="app.json must set non-empty &quot;name&quot;, &quot;company&quot;, and &quot;bundleId&quot; (got name='$(MythAppName)', company='$(MythAppCompany)', bundleId='$(MythAppBundleId)')." />
+    <Error Condition="'$(MythAppName)' == '' or '$(MythAppCompany)' == '' or '$(MythAppBundleId)' == '' or '$(MythSteamAppId)' == ''"
+           Text="app.json must set non-empty &quot;name&quot;, &quot;company&quot;, &quot;bundleId&quot;, and &quot;steamAppId&quot; (got name='$(MythAppName)', company='$(MythAppCompany)', bundleId='$(MythAppBundleId)')." />
     <WriteLinesToFile File="$(IntermediateOutputPath)AppInfo.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true"
-                      Lines="// Generated from app.json by Myth.csproj.;namespace Myth%3B;static class AppInfo;{;public const string Name = &quot;$(MythAppName)&quot;%3B;public const string Company = &quot;$(MythAppCompany)&quot;%3B;public const string BundleId = &quot;$(MythAppBundleId)&quot;%3B;}" />
+                      Lines="// Generated from app.json by Myth.csproj.;namespace Myth%3B;static class AppInfo;{;public const string Name = &quot;$(MythAppName)&quot;%3B;public const string Company = &quot;$(MythAppCompany)&quot;%3B;public const string BundleId = &quot;$(MythAppBundleId)&quot;%3B;public const uint SteamAppId = $(MythSteamAppId)%3B;}" />
     <ItemGroup>
       <Compile Include="$(IntermediateOutputPath)AppInfo.g.cs" />
     </ItemGroup>
@@ -300,6 +301,35 @@
       <Link>%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>
+
+  <!-- Steamworks (vendored in ../native/Steamworks, see its README). Desktop only: the browser has
+       no Steam. The steam_api binary is picked by RID, falling back to the host OS for plain builds,
+       and must agree with the Steamworks.NET project's own per-platform P/Invoke setup.
+       STEAM switches Kit's Steam wrapper from its no-op body to the real one. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <MythSteamDir>../native/Steamworks/</MythSteamDir>
+    <MythSteamFlavour Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">windows</MythSteamFlavour>
+    <MythSteamFlavour Condition="'$(MythSteamFlavour)' == ''">osx-linux</MythSteamFlavour>
+    <MythSteamNative Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or '$(RuntimeIdentifier)' == 'win-x64'">steam_api64.dll</MythSteamNative>
+    <MythSteamNative Condition="'$(MythSteamNative)' == '' and (('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))) or $(RuntimeIdentifier.StartsWith('linux')))">libsteam_api.so</MythSteamNative>
+    <MythSteamNative Condition="'$(MythSteamNative)' == ''">libsteam_api.dylib</MythSteamNative>
+    <MythSteamworksPlatform Condition="'$(MythSteamFlavour)' == 'windows'">STEAMWORKS_WIN</MythSteamworksPlatform>
+    <MythSteamworksPlatform Condition="'$(MythSteamworksPlatform)' == ''">STEAMWORKS_LIN_OSX</MythSteamworksPlatform>
+    <DefineConstants>$(DefineConstants);STEAM</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <ProjectReference Include="$(MythSteamDir)Steamworks.NET.csproj" AdditionalProperties="SteamworksPlatform=$(MythSteamworksPlatform)" />
+    <Content Include="$(MythSteamDir)$(MythSteamFlavour)/$(MythSteamNative)" Visible="false"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="$(MythSteamNative)" />
+  </ItemGroup>
+
+  <!-- Dev/test only: it makes an un-installed build report itself as MythSteamAppId. A real Steam
+       release must not ship it: Steam supplies the id to the launched process. -->
+  <Target Name="MythWriteSteamAppId" AfterTargets="Build;Publish" Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <WriteLinesToFile File="$(OutDir)steam_appid.txt" Lines="$(MythSteamAppId)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(PublishDir)steam_appid.txt" Lines="$(MythSteamAppId)" Overwrite="true" WriteOnlyWhenDifferent="true" Condition="'$(PublishDir)' != ''" />
+  </Target>
 
   <!-- Managed bindings only; the native cimgui wasm archive is linked above. -->
   <ItemGroup Condition="'$(MythBrowserImGui)' == 'true'">

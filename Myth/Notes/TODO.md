@@ -230,6 +230,7 @@ along with this.
 neural PARTICLE automata https://selforg-npa.github.io/#growing and https://noisenca.github.io
 
 steam notes
+- once we have a real appid: copy steam_appid.txt next to the steam_api binary in packaged builds. the build writes it (MythWriteSteamAppId, from app.json steamAppId) but publish-{macos,linux,windows}.mjs only copy the exe and the libs, so no package gets it today and Steam init fails there. for the .app it has to sit beside Contents/MacOS, and codesign rejects non-code under MacOS -- so check whether the cwd of a Steam-launched .app makes it unnecessary (Steam hands the id to a process it launches itself; the file is only for running a build outside Steam)
 - absolutely change the title to something weird for now
 - consider deck's aspect ratio as "the one" and resize all rooms? research this, maybe i have it wrong
 

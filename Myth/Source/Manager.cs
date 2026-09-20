@@ -88,6 +88,7 @@ public partial class Manager : App
 	Point2 bootLastSize = new(-1, -1);
 	int bootStableFrames;
 	SaveState saveState = new();
+	internal SaveState CurrentSave => saveState;
 	bool saveDirty;
 	bool saveFlushScheduled;
 	float saveTimer;
@@ -517,6 +518,11 @@ public partial class Manager : App
 		LoadWindowSettings();
 #endif
 		vSyncEnabled = args.vsync ?? vSyncEnabled;
+		if (!headless)
+		{
+			Steam.Init(AppInfo.SteamAppId);
+			MythAchievements.Register(this);
+		}
 		if (args.worldId != null)
 			Assets.SelectWorld(args.worldId);
 		else if (Assets.ContentIsPak)
@@ -768,6 +774,7 @@ public partial class Manager : App
 		}
 		LogFrameTimes();
 		ShutdownGame();
+		Steam.Shutdown();
 		Audio.Shutdown();
 	}
 
@@ -1213,6 +1220,8 @@ public partial class Manager : App
 		}
 
 		controls.UpdateControllerAssignment();
+
+		Steam.Update();
 
 #if !BROWSER
 		ApplyVSync();
@@ -2452,6 +2461,7 @@ public partial class Manager : App
 		if (game is { } g)
 			g.Save.Map = g.Minimap.CaptureState();
 		SaveStateStore.Save(this, saveState);
+		Achievements.Sweep();
 		saveDirty = false;
 		saveFlushScheduled = false;
 		saveTimer = 0;
