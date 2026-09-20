@@ -88,6 +88,11 @@ public abstract partial class Pawn : Actor
 	static float MoveInputDeadzone => 0.1f;
 	static float GroundLocomotionAnimationHold => 0.1f;
 	static float GroundLocomotionAnimationSpeed => 2.0f;
+	// Walking into a wall, OnCollideX zeroes Velocity.X every frame, so the achieved speed reads
+	// "stopped" while the legs are still working. Drive the cycle from the effort instead, a touch
+	// under full rate so it reads as strain, and shove a squish into the wall on each footfall.
+	static float WallPushAnimationRate => 0.9f;
+	static float WallPushHold => 0.1f;
 	static float LandingRumbleMinSpeed => 60f;
 	static float LandingRumbleFullSpeed => 300f;
 	static float LandingRumbleMinIntensity => 0.03f;
@@ -259,6 +264,7 @@ public abstract partial class Pawn : Actor
 	protected float RunStartTimer;
 	protected bool RunStartSkid;
 	float groundLocomotionAnimationTimer;
+	float wallPushTimer;
 	Wind.PawnInfluence windInfluence;
 	internal PawnInput? ScriptedInput;
 	internal PawnInput ConsumedInput => input; // the input this pawn acted on this frame (for replay recording)
@@ -288,7 +294,8 @@ public abstract partial class Pawn : Actor
 		: IsPlaying("walk") || IsPlaying("run") || IsPlaying("run_start") || IsPlaying("crawl") ? GroundLocomotionAnimationRate
 		: 1;
 	float GroundLocomotionAnimationRate
-		=> Math.Clamp(MathF.Abs(Velocity.X) /
+		=> wallPushTimer > 0 ? WallPushAnimationRate * MathF.Abs(horizontalInput)
+		: Math.Clamp(MathF.Abs(Velocity.X) /
 			((IsPlaying("crawl") ? CrawlSpeed : MaxGroundSpeed) * GroundSpeedMultiplier), 0, 1);
 
 	public abstract PawnInput GetInput();
@@ -441,6 +448,7 @@ public abstract partial class Pawn : Actor
 		AfterActorUpdate(previousVelocity);
 		AfterStateUpdate(previousVelocity);
 		UpdateWallSlideFeedback();
+		wallPushTimer = Calc.Approach(wallPushTimer, 0, Time.Delta);
 		UpdateBurrowAlways();
 		// Safety net: if the hitbox ended up embedded in solid (e.g. popping out of a
 		// burrow inside a slope/wall), nudge to the nearest free spot. The follower
@@ -570,6 +578,8 @@ public abstract partial class Pawn : Actor
 
 	public override void OnCollideX()
 	{
+		if (grounded && State == States.Normal && MathF.Abs(horizontalInput) >= MoveInputDeadzone)
+			wallPushTimer = WallPushHold;
 		var dashCollision = State != States.Burrow && (DashBursting || IsDashRunning());
 		var dashImpact = dashCollision && Grounded();
 		base.OnCollideX();

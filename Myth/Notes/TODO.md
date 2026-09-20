@@ -1,4 +1,5 @@
 Demo polish
+- need a "wall push walk"
 - bringing up the steam overlay pauses the game
 - demo has links to socials/support from the main menu (discord, steam discussions, etc)
 - demo doesn't soft-lock non querty players (e.g., azerty or qwertz)
