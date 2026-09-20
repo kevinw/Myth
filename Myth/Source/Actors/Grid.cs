@@ -46,20 +46,30 @@ public class Grid : Actor
 
 	public override void Render(Batcher batcher)
 	{
-		for (int x = 0; x < grid.GetLength(0); x++)
-			for (int y = 0; y < grid.GetLength(1); y++)
-			{
+		var visible = VisibleTiles();
+		for (var x = visible.X; x < visible.Right; x++)
+			for (var y = visible.Y; y < visible.Bottom; y++)
 				if (grid[x, y])
 					batcher.Image(tilemap[x, y], new Vector2(x, y) * Game.TileSize, Color.White * alpha[x, y]);
-			}
 	}
 
 	public override void RenderNormals(Batcher batcher)
 	{
-		for (var x = 0; x < grid.GetLength(0); x++)
-			for (var y = 0; y < grid.GetLength(1); y++)
+		var visible = VisibleTiles();
+		for (var x = visible.X; x < visible.Right; x++)
+			for (var y = visible.Y; y < visible.Bottom; y++)
 				if (grid[x, y] && normalmap[x, y].Texture != null)
 					batcher.Image(normalmap[x, y], new Vector2(x, y) * Game.TileSize, new Color(1, 1, 1, alpha[x, y]));
+	}
+
+	// The grid spans the whole room, so without this the tile loop costs room area rather than
+	// screen area -- three times a frame (color, emissive occluder, normals). One tile of slack
+	// covers tiles whose art overhangs their cell.
+	RectInt VisibleTiles()
+	{
+		var view = (Game.VisibleWorldBounds - Position) / Game.TileSize;
+		return RectInt.Between(view.TopLeft.FloorToPoint2() - Point2.One, view.BottomRight.CeilingToPoint2() + Point2.One)
+			.GetIntersection(new RectInt(0, 0, grid.GetLength(0), grid.GetLength(1)));
 	}
 
 	void EnsureSize(int width, int height)

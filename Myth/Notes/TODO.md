@@ -1,6 +1,12 @@
+Demo polish
+- bringing up the steam overlay pauses the game
+- demo has links to socials/support from the main menu (discord, steam discussions, etc)
+- demo doesn't soft-lock non querty players (e.g., azerty or qwertz)
+- sfx on button hover + button click
+- windows are tweened, not instant
+- demo has an ambient sound layer 
 - hitting tab to go editor mode on a zoomed in room doesn't preserve that zoom---we get zoomed out
 - walking into a wall, or against a conveyor belt looks bad: walk speed translates into a very slow walk cycle.
-- screenshot cli capture should probably include CRT (?) with an option, maybe?
 - make ropes that span room boundaries more reliable
 - compress orthogonal burrow to launch or railgun 
 - put an evolving world map online with a timeline scrubber https://leafletjs.com

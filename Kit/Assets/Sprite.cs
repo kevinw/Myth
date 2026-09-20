@@ -1,5 +1,6 @@
 
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Foster.Framework;
 
 namespace Kit;
@@ -127,6 +128,17 @@ public class Sprite(string name, Vector2 origin)
 		return index < 0 ? new() : Frames[index];
 	}
 
+	static readonly Frame[] noFrame = new Frame[1];
+
+	// By ref because a Frame is four Subtextures and a render pass wants exactly one of them:
+	// copying the whole struct out was the largest single cost in drawing sprites, and every
+	// actor pays it once per pass (color, normals, emissive, shadow, reflection).
+	public ref readonly Frame GetFrameRefAt(in Animation animation, float time, bool loop)
+	{
+		var index = GetFrameIndexAt(animation, time, loop);
+		return ref index < 0 ? ref noFrame[0] : ref CollectionsMarshal.AsSpan(Frames)[index];
+	}
+
 	public int GetFrameIndexAt(in Animation animation, float time, bool loop)
 	{
 		if (Frames.Count <= 0)
@@ -141,9 +153,12 @@ public class Sprite(string name, Vector2 origin)
 		if (animation.Duration > 0)
 			time %= animation.Duration;
 
-		for (int i = animation.FrameStart; i < animation.FrameStart + animation.FrameCount && i < Frames.Count; i++)
+		// Span, not Frames[i]: a Frame is four Subtextures, and copying one per step made this
+		// scan a measurable slice of every sprite draw (it runs per actor per render pass).
+		var frames = CollectionsMarshal.AsSpan(Frames);
+		for (int i = animation.FrameStart; i < animation.FrameStart + animation.FrameCount && i < frames.Length; i++)
 		{
-			time -= Frames[i].Duration;
+			time -= frames[i].Duration;
 			if (time <= 0)
 				return i;
 		}

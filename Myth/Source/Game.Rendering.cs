@@ -22,6 +22,7 @@ public sealed partial class GameView
 	void RenderCurrentView(IDrawableTarget destination, in RectInt viewport, bool showHud, RectInt? scissor, bool applyCrt)
 	{
 		InputPromptGlyphs.Clear();
+		hasRoomReflections = false;
 		if (game.AtlasWander)
 		{
 			atlasWanderElapsed += Time.Delta;
@@ -30,10 +31,12 @@ public sealed partial class GameView
 			atlasWanderOffset += AtlasWanderSpeed * Calc.Lerp(AtlasWanderInitialSpeed, 1, ramp) * Time.Delta;
 		}
 		PrepareRenderingList();
-		NeuralTextureActor.DecodeVisible(Actors, new Rect(RenderCamera, new Vector2(Screen.Width, Screen.Height) / zoomLevel));
+		game.VisibleWorldBounds = new Rect(RenderCamera, new Vector2(Screen.Width, Screen.Height) / zoomLevel);
+		NeuralTextureActor.DecodeVisible(Actors, game.VisibleWorldBounds);
 		GetDecalLayers(out var hasBackgroundDecals, out var hasForegroundDecals);
 		var buildAo = debugView is not DebugView.TileFieldRed and not DebugView.TileFieldGreen and not DebugView.DitherMask &&
-			PerfToggles.Lighting && lightingCompositeMaterial != null && PerfToggles.AmbientOcclusion && blurMaterial != null;
+			PerfToggles.Lighting && lightingCompositeMaterial != null && PerfToggles.AmbientOcclusion &&
+			Manager.Visuals.AmbientOcclusionStrength > 0 && blurMaterial != null;
 		if (hasForegroundDecals)
 			DrawParticleSolidMask();
 		if (hasBackgroundDecals || buildAo)
@@ -122,7 +125,7 @@ public sealed partial class GameView
 				using (PerfStats.Time(PerfStat.Lighting))
 				using (GraphicsDevice.DebugGroup("Myth/lighting"))
 				{
-					output = ApplyLighting();
+					output = ApplyLighting(buildAo);
 				}
 			}
 			else
@@ -138,7 +141,11 @@ public sealed partial class GameView
 			else if (debugView == DebugView.NormalBuffer)
 				output = NormalBuffer;
 			else if (debugView == DebugView.Reflection)
+			{
+				if (!hasRoomReflections)
+					ReflectionScreen.Clear(Color.Transparent);
 				output = ReflectionScreen;
+			}
 			else if (debugView == DebugView.None)
 			{
 				DrawCutsceneOverlay(output);
@@ -249,7 +256,7 @@ public sealed partial class GameView
 			Batcher.Clear();
 		}
 
-		if (debugView is DebugView.None or DebugView.CollisionRects)
+		if (showHud && debugView is (DebugView.None or DebugView.CollisionRects))
 			DrawInputPromptGlyphs(destination, present, output.Bounds.Size, scale, clip, mapOverlayVisible);
 
 		if (showHud && game.ActiveCutscene == null && debugView is (DebugView.None or DebugView.CollisionRects))
@@ -425,7 +432,6 @@ public sealed partial class GameView
 
 	bool DrawRoomColorField(Target target, bool background)
 	{
-		target.Clear(Color.Transparent);
 		if (background ? !ShowBackgroundLayer : !ShowForegroundLayer)
 			return false;
 		var drew = false;
@@ -437,6 +443,8 @@ public sealed partial class GameView
 			var field = background ? visibleRoom.BackgroundColorField : visibleRoom.ForegroundColorField;
 			if (!field.HasPaint)
 				continue;
+			if (!drew)
+				target.Clear(Color.Transparent);
 			var texture = GetRoomColorFieldTexture(field);
 			Batcher.Image(texture, visibleRoom.WorldBounds.TopLeft, Vector2.Zero, Vector2.One * Game.TileSize, 0, Color.White);
 			drew = true;
@@ -634,11 +642,21 @@ public sealed partial class GameView
 		if (room == null)
 			return;
 
-		ReflectionScreen.Clear(Color.Transparent);
 		EnsureReflectionSurfaceTops();
 		var reflectionRects = room.ReflectionRects;
 		for (var i = 0; i < reflectionRects.Count; i++)
-			DrawReflectedActors(reflectionRects[i].Bounds, reflectionSurfaceTops[i], reflectionRects[i].Opacity, skip: null);
+		{
+			var rect = reflectionRects[i];
+			var scissor = GetReflectionScissor(rect.Bounds);
+			if (rect.Opacity <= 0 || scissor.Width <= 0 || scissor.Height <= 0)
+				continue;
+			if (!hasRoomReflections)
+				ReflectionScreen.Clear(Color.Transparent);
+			hasRoomReflections = true;
+			DrawReflectedActors(ReflectionScreen, rect.Bounds, reflectionSurfaceTops[i], rect.Opacity, skip: null);
+		}
+		if (!hasRoomReflections)
+			return;
 
 		ReflectionMask.Clear(Color.Transparent);
 		foreach (var rect in room.ReflectionRects)
@@ -654,9 +672,9 @@ public sealed partial class GameView
 		CompositeReflections(target);
 	}
 
-	// Mirror every reflection-casting actor across a surface's top edge into ReflectionScreen,
+	// Mirror every reflection-casting actor across a surface's top edge into the target,
 	// clipped to the surface bounds. Shared by room reflection rects and reflective platforms.
-	void DrawReflectedActors(RectInt bounds, int surfaceTop, float opacity, Actor? skip)
+	void DrawReflectedActors(Target target, RectInt bounds, int surfaceTop, float opacity, Actor? skip)
 	{
 		var scissor = GetReflectionScissor(bounds);
 		if (scissor.Width <= 0 || scissor.Height <= 0)
@@ -677,7 +695,7 @@ public sealed partial class GameView
 			Batcher.PopMatrix();
 		}
 		Batcher.PopMatrix();
-		Batcher.Render(ReflectionScreen, scissor: scissor);
+		Batcher.Render(target, scissor: scissor);
 		Batcher.Clear();
 	}
 
@@ -686,22 +704,11 @@ public sealed partial class GameView
 	// pass, so the reflection lands over the platform's own skin.
 	void DrawPlatformSurfaceReflections(Target target)
 	{
-		var any = false;
-		ReflectionScreen.Clear(Color.Transparent);
+		// Flat reflections need no distortion pass. Draw directly so the room reflections
+		// survive until CompositeFlatReflections, after water has been drawn.
 		foreach (var actor in rendering)
 			if (actor is IDualGridRect { Visible: true } skin && skin.ReflectsSurface())
-			{
-				DrawReflectedActors(skin.Bounds(), skin.Position.Y, DualGridRects.SurfaceReflectionOpacity, skip: actor);
-				any = true;
-			}
-
-		if (!any)
-			return;
-
-		// Platforms are flat (never distorted); clear the mask the room pass left so the distort
-		// shader composites their reflection without picking up stale distorted regions.
-		ReflectionMask.Clear(Color.Transparent);
-		CompositeReflections(target);
+				DrawReflectedActors(target, skin.Bounds(), skin.Position.Y, DualGridRects.SurfaceReflectionOpacity, skip: actor);
 	}
 
 	RectInt GetReflectionScissor(RectInt rect)
@@ -727,7 +734,7 @@ public sealed partial class GameView
 
 	void CompositeFlatReflections(Target target)
 	{
-		if (room == null || !HasFlatReflectionRect())
+		if (!hasRoomReflections || !HasFlatReflectionRect())
 			return;
 		BlitReflections(target, flatOnly: 1.0f);
 	}
@@ -762,6 +769,7 @@ public sealed partial class GameView
 	// the static rect geometry, so it's cached per room and recomputed only when the rect list
 	// changes — the old per-frame-per-rect flood-fill allocated a bool[], a Stack, and a closure
 	// on every rect every frame, which dominated allocation in water-heavy rooms.
+	bool hasRoomReflections;
 	Room? reflectionSurfaceTopsRoom;
 	readonly List<int> reflectionSurfaceTops = [];
 	readonly Stack<int> reflectionFloodPending = new();
@@ -824,7 +832,7 @@ public sealed partial class GameView
 		return bounds.Bottom >= rect.Top - 64 && bounds.Top <= rect.Bottom + 64;
 	}
 
-	Target ApplyLighting()
+	Target ApplyLighting(bool buildAo)
 	{
 		if (lightingCompositeMaterial == null)
 			return ForegroundScreen;
@@ -837,7 +845,7 @@ public sealed partial class GameView
 		}
 
 		var aoStrength = 0.0f;
-		if (PerfToggles.AmbientOcclusion && blurMaterial != null)
+		if (buildAo)
 		{
 			using (GraphicsDevice.DebugGroup("Myth/ambient occlusion mask"))
 				BuildAoMask();
@@ -1532,7 +1540,7 @@ public sealed partial class GameView
 			return;
 		}
 
-		renderer.Begin();
+		renderer.Begin(game.VisibleWorldBounds);
 		foreach (var visibleRoom in VisibleRooms())
 			for (var i = 0; i < visibleRoom.ShadowSegments.Count; i++)
 			{
@@ -1879,28 +1887,61 @@ public sealed partial class GameView
 			cache.Dirty = true;
 	}
 
+	// Scratch for RebuildRoomNormalCache, reused across rooms. The solid mask is one byte per room
+	// pixel and the suppress mask one per room *tile* (what SuppressActorDrivenRoomNormals actually
+	// resolves to), both flat rather than bool[,] so the inner loop indexes without the
+	// multidimensional bounds check. Rebuilding allocated two room-pixel bool[,] every time --
+	// 4MB per entry on a 6x6-screen room, thrown away each frame the cache went dirty.
+	byte[] roomNormalMask = [];
+	byte[] roomNormalSuppress = [];
+
 	void RebuildRoomNormalCache(RoomNormalCache cache)
 	{
 		var renderRoom = cache.Room;
 		var target = cache.Target;
-		var mask = new bool[target.Width, target.Height];
-		var suppressMask = new bool[target.Width, target.Height];
+		int width = target.Width, height = target.Height;
 		var origin = renderRoom.WorldBounds.TopLeft;
+		var tileWidth = renderRoom.Size.X;
 
-		FillRoomNormalMask(mask, renderRoom, origin);
-		SuppressActorDrivenRoomNormals(suppressMask, renderRoom);
+		Grow(ref roomNormalMask, width * height);
+		Grow(ref roomNormalSuppress, tileWidth * renderRoom.Size.Y);
+		var mask = roomNormalMask;
+		var suppress = roomNormalSuppress;
+
+		FillRoomNormalMask(mask, width, height, renderRoom, origin);
+		SuppressActorDrivenRoomNormals(suppress, renderRoom);
 
 		var previousMatrix = Batcher.Matrix;
 		Batcher.Matrix = Matrix3x2.Identity;
 		target.Clear(Color.Transparent);
-		for (var y = 0; y < target.Height; y++)
+		for (var y = 0; y < height; y++)
 		{
+			var row = y * width;
+			var above = row - width;
+			var below = row + width;
+			var suppressRow = (y / Game.TileSize) * tileWidth;
 			var runStart = -1;
 			var runColor = Color.Transparent;
 
-			for (var x = 0; x < target.Width; x++)
+			// Slide the horizontal neighbours along the row instead of re-reading them per pixel:
+			// x's right neighbour is x+1's centre next step.
+			var solidLeft = false;
+			var solid = width > 0 && mask[row] != 0;
+
+			for (var x = 0; x < width; x++)
 			{
-				var color = RoomNormalColor(mask, suppressMask, x, y);
+				var solidRight = x + 1 < width && mask[row + x + 1] != 0;
+				var color = Color.Transparent;
+				if (solid)
+				{
+					var sx = (solidLeft ? 1 : 0) - (solidRight ? 1 : 0);
+					var sy = (y > 0 && mask[above + x] != 0 ? 1 : 0) - (y + 1 < height && mask[below + x] != 0 ? 1 : 0);
+					if ((sx != 0 || sy != 0) && suppress[suppressRow + x / Game.TileSize] == 0)
+						color = EncodeNormal(new Vector3(sx, sy, 1), 1);
+				}
+				solidLeft = solid;
+				solid = solidRight;
+
 				if (color.A > 0 && runStart >= 0 && color == runColor)
 					continue;
 
@@ -1919,38 +1960,32 @@ public sealed partial class GameView
 			}
 
 			if (runStart >= 0)
-				Batcher.Rect(new Rect(runStart, y, target.Width - runStart, 1), runColor);
+				Batcher.Rect(new Rect(runStart, y, width - runStart, 1), runColor);
 		}
 		Batcher.Render(target);
 		Batcher.Clear();
 		Batcher.Matrix = previousMatrix;
 		cache.Dirty = false;
+
+		static void Grow(ref byte[] buffer, int length)
+		{
+			if (buffer.Length < length)
+				buffer = new byte[length];
+			Array.Clear(buffer, 0, length);
+		}
 	}
 
-	static Color RoomNormalColor(bool[,] mask, bool[,] suppressMask, int x, int y)
-	{
-		if (!RoomNormalSolid(mask, x, y))
-			return Color.Transparent;
-
-		var sx = SolidValue(mask, x - 1, y) - SolidValue(mask, x + 1, y);
-		var sy = SolidValue(mask, x, y - 1) - SolidValue(mask, x, y + 1);
-		if (sx == 0 && sy == 0)
-			return Color.Transparent;
-		if (RoomNormalSuppressed(suppressMask, x, y))
-			return Color.Transparent;
-
-		return EncodeNormal(new Vector3(sx, sy, 1), 1);
-	}
-
-	void FillRoomNormalMask(bool[,] mask, Room renderRoom, Point2 origin)
+	void FillRoomNormalMask(byte[] mask, int width, int height, Room renderRoom, Point2 origin)
 	{
 		foreach (var rect in renderRoom.CollisionRects)
-			FillRoomNormalMask(mask, rect, origin);
+			FillRoomNormalMask(mask, width, height, rect, origin);
 		foreach (var polygon in renderRoom.LightOccluderPolygons)
-			FillRoomNormalMask(mask, polygon, origin);
+			FillRoomNormalMask(mask, width, height, polygon, origin);
 	}
 
-	static void SuppressActorDrivenRoomNormals(bool[,] suppressMask, Room renderRoom)
+	// One entry per tile, not per pixel: the source data is the tile's Factory entry, so the old
+	// per-pixel mask stored the same answer 64 times and cost 64x the fill.
+	static void SuppressActorDrivenRoomNormals(byte[] suppress, Room renderRoom)
 	{
 		for (var tileY = 0; tileY < renderRoom.Size.Y; tileY++)
 			for (var tileX = 0; tileX < renderRoom.Size.X; tileX++)
@@ -1959,45 +1994,37 @@ public sealed partial class GameView
 				var actorDrawsNormals = entry?.NeuralTexture != null ||
 					entry is { DualTilesetName: { } dualTilesetName } &&
 					Assets.GetTileset(dualTilesetName) is { NormalTiles.Count: > 0 } or { NormalVariants.Count: > 0 };
-				if (!actorDrawsNormals)
-					continue;
-
-				var left = Math.Clamp(tileX * Game.TileSize, 0, suppressMask.GetLength(0));
-				var right = Math.Clamp((tileX + 1) * Game.TileSize, 0, suppressMask.GetLength(0));
-				var top = Math.Clamp(tileY * Game.TileSize, 0, suppressMask.GetLength(1));
-				var bottom = Math.Clamp((tileY + 1) * Game.TileSize, 0, suppressMask.GetLength(1));
-
-				for (var y = top; y < bottom; y++)
-					for (var x = left; x < right; x++)
-						suppressMask[x, y] = true;
+				if (actorDrawsNormals)
+					suppress[tileY * renderRoom.Size.X + tileX] = 1;
 			}
 	}
 
-	static void FillRoomNormalMask(bool[,] mask, RectInt rect, Point2 origin)
+	static void FillRoomNormalMask(byte[] mask, int width, int height, RectInt rect, Point2 origin)
 	{
-		var left = Math.Clamp(rect.Left - origin.X, 0, mask.GetLength(0));
-		var right = Math.Clamp(rect.Right - origin.X, 0, mask.GetLength(0));
-		var top = Math.Clamp(rect.Top - origin.Y, 0, mask.GetLength(1));
-		var bottom = Math.Clamp(rect.Bottom - origin.Y, 0, mask.GetLength(1));
+		var left = Math.Clamp(rect.Left - origin.X, 0, width);
+		var right = Math.Clamp(rect.Right - origin.X, 0, width);
+		var top = Math.Clamp(rect.Top - origin.Y, 0, height);
+		var bottom = Math.Clamp(rect.Bottom - origin.Y, 0, height);
+		if (right <= left)
+			return;
 
 		for (var y = top; y < bottom; y++)
-			for (var x = left; x < right; x++)
-				mask[x, y] = true;
+			mask.AsSpan(y * width + left, right - left).Fill(1);
 	}
 
-	static void FillRoomNormalMask(bool[,] mask, Room.LightOccluderPolygon polygon, Point2 origin)
+	static void FillRoomNormalMask(byte[] mask, int width, int height, Room.LightOccluderPolygon polygon, Point2 origin)
 	{
-		var left = Math.Clamp(polygon.Bounds.Left - origin.X, 0, mask.GetLength(0));
-		var right = Math.Clamp(polygon.Bounds.Right - origin.X, 0, mask.GetLength(0));
-		var top = Math.Clamp(polygon.Bounds.Top - origin.Y, 0, mask.GetLength(1));
-		var bottom = Math.Clamp(polygon.Bounds.Bottom - origin.Y, 0, mask.GetLength(1));
+		var left = Math.Clamp(polygon.Bounds.Left - origin.X, 0, width);
+		var right = Math.Clamp(polygon.Bounds.Right - origin.X, 0, width);
+		var top = Math.Clamp(polygon.Bounds.Top - origin.Y, 0, height);
+		var bottom = Math.Clamp(polygon.Bounds.Bottom - origin.Y, 0, height);
 
 		for (var y = top; y < bottom; y++)
 			for (var x = left; x < right; x++)
 			{
 				var worldPoint = new Vector2(origin.X + x + 0.5f, origin.Y + y + 0.5f);
 				if (PointInPolygon(worldPoint, polygon.Points))
-					mask[x, y] = true;
+					mask[y * width + x] = 1;
 			}
 	}
 
@@ -2015,25 +2042,6 @@ public sealed partial class GameView
 
 		return inside;
 	}
-
-	static bool RoomNormalSolid(bool[,] mask, int x, int y)
-	{
-		if (x < 0 || y < 0 || x >= mask.GetLength(0) || y >= mask.GetLength(1))
-			return false;
-
-		return mask[x, y];
-	}
-
-	static bool RoomNormalSuppressed(bool[,] suppressMask, int x, int y)
-	{
-		if (x < 0 || y < 0 || x >= suppressMask.GetLength(0) || y >= suppressMask.GetLength(1))
-			return false;
-
-		return suppressMask[x, y];
-	}
-
-	static float SolidValue(bool[,] mask, int x, int y)
-		=> RoomNormalSolid(mask, x, y) ? 1 : 0;
 
 	static Color EncodeNormal(Vector3 normal, float strength)
 	{
@@ -2149,13 +2157,13 @@ public sealed partial class GameView
 		return value;
 	}
 
-	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null)
+	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null, bool applyCrt = true)
 	{
 		if (Manager.Window is not { } window)
 			return;
 
 		EnsureRenderTargets(Width, Height);
-		RenderCurrentView(window, viewport, showHud, scissor, applyCrt: true);
+		RenderCurrentView(window, viewport, showHud, scissor, applyCrt);
 		game.NoteRoomTransitionRendered();
 	}
 

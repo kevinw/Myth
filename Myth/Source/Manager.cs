@@ -1886,7 +1886,9 @@ public partial class Manager : App
 		if (startingPlay)
 			RenderPlayTransition();
 		else if (playing)
-			game?.Render((RectInt)(GameViewRect * Scale), showHud: attract == null); // no gameplay HUD behind the title
+			game?.Render((RectInt)(GameViewRect * Scale),
+				showHud: attract == null && (args.screenshotPath == null || args.screenshotHud),
+				applyCrt: args.screenshotPath == null || args.screenshotPostprocessing);
 		else {
 			#if !EDITOR
 			// we render an in progress game
@@ -1900,8 +1902,6 @@ public partial class Manager : App
 		batcher.Clear();
 		ScenarioRender?.Invoke(this);
 
-		if (args.screenshotPath != null && playing)
-			UpdateScreenshotCapture();
 		imgui?.Render();
 		if (menuLayoutBuiltThisFrame)
 			menuImgui.Render();
@@ -1910,6 +1910,8 @@ public partial class Manager : App
 			batcher.Render(Window);
 			batcher.Clear();
 		}
+		if (args.screenshotPath != null && playing)
+			UpdateScreenshotCapture();
 #if !MYTHSHIP && !BROWSER
 		if (movieTracksPlayer)
 			RecordMoviePlayerSample();
@@ -1929,7 +1931,7 @@ public partial class Manager : App
 	}
 
 	// Drives automated --screenshot capture: waits screenshotFrame frames after
-	// play begins, then captures Game.Screen every screenshotInterval frames,
+	// play begins, then captures the completed window every screenshotInterval frames,
 	// screenshotCount times, and exits.
 	void UpdateScreenshotCapture()
 	{
@@ -1979,28 +1981,18 @@ public partial class Manager : App
 
 	internal bool CaptureScreenshot(string path, int? frame = null)
 	{
-		if (game == null)
+		if (Window == null)
 			return false;
 
 		try
 		{
-			var w = Game.Width;
-			var h = Game.Height;
-
-			// Composite the current gameplay view into a fresh target (Game.Screen
-			// is internal scratch); applyCrt is skipped for a clean pixel image.
-			using var target = CaptureScreenshot(game);
-
-			var pixels = new Color[w * h];
-			target.Attachments[0].GetData<Color>(pixels);
-
-			var image = new Image(w, h, pixels);
+			using var image = GraphicsDevice.CaptureScreenshot(Window);
 			var full = Path.GetFullPath(path);
 			var dir = Path.GetDirectoryName(full);
 			if (!string.IsNullOrEmpty(dir))
 				Directory.CreateDirectory(dir);
 			image.WritePng(full);
-			Console.WriteLine($"[Screenshot] wrote {full} ({w}x{h}) at frame {frame ?? playingFrame}");
+			Console.WriteLine($"[Screenshot] wrote {full} ({image.Width}x{image.Height}) at frame {frame ?? playingFrame}");
 			return true;
 		}
 		catch (Exception e)

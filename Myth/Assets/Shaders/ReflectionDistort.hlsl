@@ -66,6 +66,6 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float2 waveUv = (floor((target_uv(input.TexCoord) + float2(wave / textureSize.x, 0.0)) * textureSize) + 0.5) / textureSize;
     float2 uv = lerp(baseUv, waveUv, distort);
     float4 color = Texture.Sample(Sampler, uv) * input.Color;
-    color.a *= lerp(1.0, 1.0 - distort, flatOnly);
-    return color;
+    // The reflection target is premultiplied: mask RGB along with alpha.
+    return color * lerp(1.0, 1.0 - distort, flatOnly);
 }

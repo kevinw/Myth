@@ -71,12 +71,14 @@ public struct StartArgs
 	public int? traceEdgeTo;
 
 	// Automated screenshot capture (desktop). When screenshotPath is set the
-	// game plays immediately, captures Game.Screen at screenshotFrame and every
+	// game plays immediately, captures the window at screenshotFrame and every
 	// screenshotInterval frames after, screenshotCount times, then exits.
 	public string? screenshotPath;
 	public int screenshotFrame = 60;
 	public int screenshotInterval = 60;
 	public int screenshotCount = 1;
+	public bool screenshotHud = true;
+	public bool screenshotPostprocessing = true;
 
 	public StartArgs(string[] args)
 	{
@@ -140,6 +142,20 @@ public struct StartArgs
 					benchSourceFramesProvided = true;
 					break;
 				case "--screenshot": screenshotPath = ReadValue(args, ref i, option); break;
+				case "--screenshot-opts":
+					foreach (var setting in ReadValue(args, ref i, option).Split(',', StringSplitOptions.TrimEntries))
+					{
+						var pair = setting.Split('=', StringSplitOptions.TrimEntries);
+						if (pair.Length != 2 || !bool.TryParse(pair[1], out var enabled))
+							throw Invalid(option, $"expected hud=true|false or postprocessing=true|false, got '{setting}'");
+						switch (pair[0])
+						{
+							case "hud": screenshotHud = enabled; break;
+							case "postprocessing": screenshotPostprocessing = enabled; break;
+							default: throw Invalid(option, $"unknown setting '{pair[0]}'");
+						}
+					}
+					break;
 				case "--screenshot-frame": screenshotFrame = ReadInt(args, ref i, option, minimum: 0); break;
 				case "--screenshot-interval": screenshotInterval = ReadInt(args, ref i, option, minimum: 1); break;
 				case "--screenshot-count": screenshotCount = ReadInt(args, ref i, option, minimum: 1); break;

@@ -54,7 +54,7 @@ public partial class Game : IDisposable
 
 	// Rendering facade: external callers (Manager, actors) reach the view through Game.
 	// Forwards to View, or no-ops/defaults when headless (View == null).
-	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null) => View?.Render(viewport, showHud, scissor);
+	public void Render(in RectInt viewport, bool showHud = true, RectInt? scissor = null, bool applyCrt = true) => View?.Render(viewport, showHud, scissor, applyCrt);
 	public void RenderWorldView(in RectInt viewport, Rect worldView, bool showHud = false, RectInt? scissor = null, bool applyCrt = true) => View?.RenderWorldView(viewport, worldView, showHud, scissor, applyCrt);
 	public void RenderWorldToTarget(Target target, Rect worldView, bool showHud = false, float zoom = 1.0f) => View?.RenderWorldToTarget(target, worldView, showHud, zoom);
 	public void RenderSdfAura(Batcher batcher, Span<float> uniforms, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3) => View?.RenderSdfAura(batcher, uniforms, p0, p1, p2, p3);
@@ -269,6 +269,11 @@ public partial class Game : IDisposable
 
 	public Vector2 Camera { get; internal set; }
 	internal Vector2 RenderCamera => (Point2)Camera - fx.shake;
+	// World rect the current render target covers, set by GameView each pass. Room-sized
+	// actors (DualGrid, Grid) cull their tiles against it -- without that, render cost
+	// scales with room area instead of screen area. Starts unbounded so any path that
+	// doesn't set it draws everything.
+	internal Rect VisibleWorldBounds = new(float.MinValue / 4, float.MinValue / 4, float.MaxValue / 2, float.MaxValue / 2);
 	// The camera hard-follows the player, except a discontinuity in the clamp target (a blocker
 	// cap toggling as you cross a bite's span, or a blocker revealing) is absorbed into a
 	// decaying error so the view glides over the jump instead of snapping.
@@ -2630,6 +2635,15 @@ public partial class Game : IDisposable
 		fg.Depth = 5;
 
 		var hiddenCover = Create<HiddenCoverGrid>(offset);
+
+		// Size to the room before filling. Grid.Set grows on demand to exactly the tile it was
+		// handed, so filling a room wider than the default 40x23 reallocated and copied all four
+		// backing arrays once per column -- quadratic in room width, and two of those arrays hold
+		// Subtextures, so every copy is a write-barrier bulk move. Matches RebuildGeometry, which
+		// already resizes up front.
+		bg.Resize(forRoom.Size);
+		fgVisual.Resize(forRoom.Size);
+		fg.Resize(forRoom.Size);
 
 		// loop over room grid placing objects
 		for (var x = 0; x < forRoom.Size.X; x++)

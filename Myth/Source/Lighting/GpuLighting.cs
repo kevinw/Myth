@@ -124,8 +124,12 @@ sealed class GpuLighting : IDisposable
 		LoadShaders();
 	}
 
-	public void Begin()
+	// World rect the masks cover. Lights that can't reach it are dropped in AddLight.
+	Rect visibleWorld;
+
+	public void Begin(in Rect visibleWorld)
 	{
+		this.visibleWorld = visibleWorld;
 		lightCount = 0;
 		segmentCount = 0;
 		sporeFogVolumeCount = 0;
@@ -160,6 +164,15 @@ sealed class GpuLighting : IDisposable
 		float shadowNoiseSpeed)
 	{
 		if (lightCount >= lights.Length || radius <= 0 || intensity <= 0)
+			return;
+
+		// Exact, not an approximation: LightMasks.hlsl attenuates by saturate(1 - distance/radius),
+		// which is zero at and beyond the radius, and the cookie only ever multiplies that down.
+		// So a light whose circle misses the view contributes nothing to any pixel. Culling here
+		// rather than at the call sites covers both gather paths (Light actors and ForEachLight)
+		// and leaves their own bookkeeping alone, and it makes the MaxLights cap mean "64 lights
+		// you can see" instead of "the first 64 actors".
+		if ((position - Vector2.Clamp(position, visibleWorld.TopLeft, visibleWorld.BottomRight)).LengthSquared() >= radius * radius)
 			return;
 
 		var value = (Vector4)color;

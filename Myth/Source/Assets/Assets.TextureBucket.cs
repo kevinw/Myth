@@ -1,3 +1,4 @@
+using System.Numerics;
 using Foster.Framework;
 
 namespace Myth;
@@ -27,6 +28,13 @@ public static partial class Assets
 		public readonly Texture Texture = texture;
 		public readonly TextureSwizzle Swizzle = swizzle;
 		public readonly Subtexture Thumbnail = thumbnail; // small RGBA preview for the editor
+
+		// Height-derived normal+albedo texture for procedural walls, built on first use (see
+		// ProceduralWallRenderer.GetMaterialTexture). It is a pure function of SourceImage, so it
+		// belongs to the bucket: cached on the renderer it was rebuilt per Game -- meaning a CPU
+		// Sobel over the whole image on entry to every room with a procedural wall. Living here it
+		// is also invalidated correctly, since a reload replaces the whole bucket.
+		public Texture? MaterialTexture;
 	}
 
 	public sealed class TextureBucket(Texture thumbnailAtlas, Dictionary<string, BucketTexture> textures, List<string> order) : IDisposable
@@ -43,7 +51,10 @@ public static partial class Assets
 		{
 			thumbnailAtlas.Dispose();
 			foreach (var t in Textures.Values)
+			{
 				t.Texture.Dispose();
+				t.MaterialTexture?.Dispose();
+			}
 		}
 	}
 
@@ -192,16 +203,65 @@ public static partial class Assets
 	// Builds a seamless tangent-space normal map from an image's brightness (the
 	// existing height->normal Sobel, whose height is luminance*alpha). Used for a
 	// Surface's "normal from height" option.
+	//
+	// Heights are resolved into a flat array first: sampling them through the Image indexer cost
+	// eight indexer reads and eight luminance conversions per pixel -- each re-fetching the pixel
+	// span -- to recompute values every neighbouring pixel needed again.
 	internal static Image GenerateNormalImage(Image source, bool wrap)
 	{
-		var bounds = new RectInt(0, 0, source.Width, source.Height);
-		var output = new Image(source.Width, source.Height);
-		for (var y = 0; y < source.Height; y++)
-			for (var x = 0; x < source.Width; x++)
+		int width = source.Width, height = source.Height;
+		var output = new Image(width, height);
+		var heights = HeightField(source, source.Bounds);
+		var target = output.Data;
+		for (var y = 0; y < height; y++)
+			for (var x = 0; x < width; x++)
 			{
-				var n = NormalFromHeight(source, bounds, x, y, wrap);
-				output[x, y] = new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, 1f);
+				var n = NormalFromHeights(heights, width, height, x, y, wrap);
+				target[y * width + x] = new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, 1f);
 			}
 		return output;
+	}
+
+	// Luminance*alpha heights for a region of an image. Every Sobel below reads each pixel eight
+	// times over (once per neighbour), so resolving heights once up front turns the kernel into
+	// plain array reads instead of eight Image indexer fetches plus eight luminance conversions.
+	internal static float[] HeightField(Image image, RectInt bounds)
+	{
+		var heights = new float[bounds.Width * bounds.Height];
+		var pixels = image.Data;
+		for (var y = 0; y < bounds.Height; y++)
+			for (var x = 0; x < bounds.Width; x++)
+			{
+				var color = pixels[(bounds.Y + y) * image.Width + bounds.X + x];
+				heights[y * bounds.Width + x] = (color.R * 0.2126f + color.G * 0.7152f + color.B * 0.0722f) * color.A / (255 * 255);
+			}
+		return heights;
+	}
+
+	internal static Vector3 NormalFromHeights(float[] heights, int width, int height, int x, int y, bool wrap)
+	{
+		var topLeft = HeightAt(heights, width, height, x - 1, y - 1, wrap);
+		var top = HeightAt(heights, width, height, x, y - 1, wrap);
+		var topRight = HeightAt(heights, width, height, x + 1, y - 1, wrap);
+		var left = HeightAt(heights, width, height, x - 1, y, wrap);
+		var right = HeightAt(heights, width, height, x + 1, y, wrap);
+		var bottomLeft = HeightAt(heights, width, height, x - 1, y + 1, wrap);
+		var bottom = HeightAt(heights, width, height, x, y + 1, wrap);
+		var bottomRight = HeightAt(heights, width, height, x + 1, y + 1, wrap);
+		var sx = topLeft + 2 * left + bottomLeft - topRight - 2 * right - bottomRight;
+		var sy = topLeft + 2 * top + topRight - bottomLeft - 2 * bottom - bottomRight;
+		return Vector3.Normalize(new Vector3(sx, sy, 4 / HeightNormalStrength));
+	}
+
+	static float HeightAt(float[] heights, int width, int height, int x, int y, bool wrap)
+	{
+		if (wrap)
+		{
+			x = (x + width) % width;
+			y = (y + height) % height;
+		}
+		else if (x < 0 || y < 0 || x >= width || y >= height)
+			return 0;
+		return heights[y * width + x];
 	}
 }

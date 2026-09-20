@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Foster.Framework;
 
 namespace Myth;
@@ -99,18 +100,20 @@ public class DualGrid : Actor
 	internal static int StableVariantSeed(Point2 worldTile, char tileType)
 		=> Hash32.TileVariantSeed(worldTile, tileType);
 
-	public override void Render(Batcher batcher)
-		=> RenderTiles(batcher, static command => command.Tile);
+	public override void Render(Batcher batcher) => RenderTiles(batcher, normals: false);
 
-	public override void RenderNormals(Batcher batcher)
-		=> RenderTiles(batcher, static command => command.Normal);
+	public override void RenderNormals(Batcher batcher) => RenderTiles(batcher, normals: true);
 
-	private void RenderTiles(Batcher batcher, Func<DrawCommand, Subtexture> getTile)
+	// drawCommands covers the whole room, so without culling a big room costs the same as a
+	// big screen -- and these tiles are drawn three times a frame (color, emissive occluder,
+	// normals). Cull to the view in the actor's local space.
+	private void RenderTiles(Batcher batcher, bool normals)
 	{
-		foreach (var command in drawCommands)
+		var view = Game.VisibleWorldBounds - Position;
+		foreach (var command in CollectionsMarshal.AsSpan(drawCommands))
 		{
-			var tile = getTile(command);
-			if (tile.Texture != null)
+			var tile = normals ? command.Normal : command.Tile;
+			if (tile.Texture != null && view.Overlaps(new Rect(command.Position, tile.Size)))
 				DrawTile(batcher, tile, command.Position, command.MaterialMask, Color.White);
 		}
 	}

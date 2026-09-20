@@ -608,6 +608,7 @@ public static partial class Assets
 			worldId = defaultWorldId;
 
 		currentWorldId = worldId;
+		Console.WriteLine($"Selected world: {worldId}");
 	}
 
 	public static void SelectPackagedWorld()
@@ -2286,6 +2287,7 @@ public static partial class Assets
 				if (HasOpaquePixel(height, tile) != HasOpaquePixel(color, tile))
 					throw new InvalidOperationException($"Tileset '{name}' height layer must match its color cells; cell {tileX},{tileY} differs.");
 
+				var tileHeights = HeightField(height, tile);
 				for (var y = 0; y < Game.TileSize; y++)
 					for (var x = 0; x < Game.TileSize; x++)
 					{
@@ -2294,7 +2296,7 @@ public static partial class Assets
 						if (heightAlpha <= 0 || colorAlpha <= 0)
 							continue;
 
-						var normal = NormalFromHeight(height, tile, x, y, wrap: true);
+						var normal = NormalFromHeights(tileHeights, tile.Width, tile.Height, x, y, wrap: true);
 						output[tile.X + x, tile.Y + y] = new Color(
 							normal.X * 0.5f + 0.5f,
 							normal.Y * 0.5f + 0.5f,
@@ -2539,6 +2541,7 @@ public static partial class Assets
 
 	static void GenerateDualHeightNormalTile(Image output, RectInt source, Image alphaMask, Image height)
 	{
+		var heights = HeightField(height, height.Bounds);
 		for (var y = 0; y < Game.TileSize; y++)
 			for (var x = 0; x < Game.TileSize; x++)
 			{
@@ -2547,7 +2550,7 @@ public static partial class Assets
 				if (maskAlpha <= 0 || heightAlpha <= 0)
 					continue;
 
-				var normal = NormalFromHeight(height, height.Bounds, x, y, wrap: true);
+				var normal = NormalFromHeights(heights, height.Width, height.Height, x, y, wrap: true);
 				output[source.X + x, source.Y + y] = new Color(
 					normal.X * 0.5f + 0.5f,
 					normal.Y * 0.5f + 0.5f,
@@ -3228,6 +3231,7 @@ public static partial class Assets
 	static Image GenerateNormalMap(Image height, Image source)
 	{
 		var normal = new Image(source.Width, source.Height);
+		var heights = HeightField(height, height.Bounds);
 		for (var y = 0; y < source.Height; y++)
 			for (var x = 0; x < source.Width; x++)
 			{
@@ -3235,7 +3239,7 @@ public static partial class Assets
 				if (alpha <= 0)
 					continue;
 
-				var n = NormalFromHeight(height, height.Bounds, x, y, wrap: false);
+				var n = NormalFromHeights(heights, height.Width, height.Height, x, y, wrap: false);
 				normal[x, y] = new Color(
 					n.X * 0.5f + 0.5f,
 					n.Y * 0.5f + 0.5f,
@@ -3243,34 +3247,6 @@ public static partial class Assets
 					alpha);
 			}
 		return normal;
-	}
-
-	static Vector3 NormalFromHeight(Image image, RectInt bounds, int x, int y, bool wrap)
-	{
-		var topLeft = HeightAt(image, bounds, x - 1, y - 1, wrap);
-		var top = HeightAt(image, bounds, x, y - 1, wrap);
-		var topRight = HeightAt(image, bounds, x + 1, y - 1, wrap);
-		var left = HeightAt(image, bounds, x - 1, y, wrap);
-		var right = HeightAt(image, bounds, x + 1, y, wrap);
-		var bottomLeft = HeightAt(image, bounds, x - 1, y + 1, wrap);
-		var bottom = HeightAt(image, bounds, x, y + 1, wrap);
-		var bottomRight = HeightAt(image, bounds, x + 1, y + 1, wrap);
-		var sx = topLeft + 2 * left + bottomLeft - topRight - 2 * right - bottomRight;
-		var sy = topLeft + 2 * top + topRight - bottomLeft - 2 * bottom - bottomRight;
-		return Vector3.Normalize(new Vector3(sx, sy, 4 / HeightNormalStrength));
-	}
-
-	static float HeightAt(Image image, RectInt bounds, int x, int y, bool wrap)
-	{
-		if (wrap)
-		{
-			x = (x + bounds.Width) % bounds.Width;
-			y = (y + bounds.Height) % bounds.Height;
-		}
-		else if (x < 0 || y < 0 || x >= bounds.Width || y >= bounds.Height)
-			return 0;
-		var color = image[bounds.X + x, bounds.Y + y];
-		return (color.R * 0.2126f + color.G * 0.7152f + color.B * 0.0722f) * color.A / (255 * 255);
 	}
 
 	static Image ExtractTile(Image source, RectInt sourceRect)

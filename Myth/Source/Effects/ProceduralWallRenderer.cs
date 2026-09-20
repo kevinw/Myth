@@ -128,7 +128,6 @@ sealed class ProceduralWallRenderer : IDisposable
 	readonly Mesh<PipeVertex, ushort> straightPipeMesh;
 	readonly Mesh<PipeVertex, ushort> elbowPipeMesh;
 	readonly Dictionary<ProceduralWall, WallData> walls = [];
-	readonly Dictionary<Assets.BucketTexture, Texture> materialTextures = [];
 	readonly List<ProceduralWall> staleWalls = [];
 	bool[] occupied = [];
 	Shader vertexShader;
@@ -280,17 +279,17 @@ sealed class ProceduralWallRenderer : IDisposable
 
 	Texture GetMaterialTexture(Assets.BucketTexture source)
 	{
-		if (materialTextures.TryGetValue(source, out var texture))
-			return texture;
+		if (source.MaterialTexture is { } cached)
+			return cached;
 
 		using var image = new Image(source.SourceImage);
 		using var normal = Assets.GenerateNormalImage(image, wrap: true);
 		using var packed = new Image(image.Width, image.Height);
-		for (var i = 0; i < packed.PixelCount; i++)
-			packed[i] = new Color(image[i].R, normal[i].R, normal[i].G, normal[i].B);
-		texture = new Texture(graphicsDevice, packed, name: $"MachineWallMaterial:{source.Key}");
-		materialTextures.Add(source, texture);
-		return texture;
+		Span<Color> packedPixels = packed.Data, sourcePixels = image.Data, normalPixels = normal.Data;
+		for (var i = 0; i < packedPixels.Length; i++)
+			packedPixels[i] = new Color(sourcePixels[i].R, normalPixels[i].R, normalPixels[i].G, normalPixels[i].B);
+		source.MaterialTexture = new Texture(graphicsDevice, packed, name: $"MachineWallMaterial:{source.Key}");
+		return source.MaterialTexture;
 	}
 
 	public bool Prepare(List<Actor> actors)
@@ -1419,8 +1418,6 @@ sealed class ProceduralWallRenderer : IDisposable
 	{
 		foreach (var data in walls.Values)
 			data.Dispose();
-		foreach (var texture in materialTextures.Values)
-			texture.Dispose();
 		mesh.Dispose();
 		straightPipeMesh.Dispose();
 		elbowPipeMesh.Dispose();

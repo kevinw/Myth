@@ -709,7 +709,7 @@ public class Actor
 			return;
 
 		var animation = Animation;
-		var frame = sprite.GetFrameAt(animation, animationTime, animationLooping);
+		ref readonly var frame = ref sprite.GetFrameRefAt(animation, animationTime, animationLooping);
 
 		Subtexture subtexture;
 		switch (subtextureType)
