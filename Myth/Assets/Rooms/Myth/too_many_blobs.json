@@ -45,7 +45,7 @@
     "TTTTTTTTwTTTTwTTTTTTTNNNTTTTTTTTTTRRRRwR",
     "TTTTTTTTwTTTTwTTTTwwTTTNNTTTTRRRRRRRRRwR",
     "TTwwwwTTwTTTTwTTTTwwTTTNNTTTTRRRRRTTTTwR",
-    "TTwwwwTTwTTTTwTTTTwwTTTNNTTTTTTTTTTTTT0T"
+    "TTwwwwTTwTTTTwTTTTwwTTTNNTTTTTTTTTTTTTwT"
   ],
   "backgroundTiles": [
     "0000000000000000000000000000000000000000",
@@ -184,30 +184,30 @@
     {
       "Id": "1fd85c79e444a02e",
       "From": "TutorialText",
-      "Position": [229, 187],
+      "Position": [173, 187],
+      "LineHeightMultiplier": 0.881,
       "Text": [
-        "hold down and press {Attack} to",
+        "midair, {MoveDown} and {Attack} to",
         "strike downwards"
-      ],
-      "LineHeightMultiplier": 0.881
+      ]
     },
     {
       "Id": "0f41005a5c861603",
       "From": "TutorialText",
-      "Position": [177, 58],
+      "Position": [177, 71],
       "LineHeightMultiplier": 0.881,
-      "Text": "hold up to climb ropes"
+      "Text": "hold {MoveUp} to climb ropes"
     },
     {
       "Id": "fdd4ace91c24bba7",
       "Type": "Light",
-      "Position": [319, 113]
+      "Position": [313, 110]
     },
     {
       "Id": "f1372be7de8e74a7",
       "Type": "CameraBlocker",
       "Position": [0, 0],
-      "Size": [319, 48]
+      "Size": [320, 48]
     },
     {
       "Id": "9866ed2b0824a2be",
@@ -215,6 +215,11 @@
       "Position": [132, 46],
       "Points": [[-13, -25],[-13, -45]
       ]
+    },
+    {
+      "Id": "8b242ed9eb56a2f4",
+      "From": "FloLight",
+      "Position": [92, 20]
     }
   ]
 }

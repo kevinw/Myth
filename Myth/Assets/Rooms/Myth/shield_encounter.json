@@ -5,6 +5,7 @@
   "lightNoise": 0.336,
   "sporeFogStrength": 0.405,
   "colorFields": {
+    "foreground": "adc5ae10c3680a58.png",
     "background": "120f72248e7512ea.png"
   },
   "legend": {

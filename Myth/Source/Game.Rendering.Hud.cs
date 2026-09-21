@@ -65,8 +65,8 @@ public sealed partial class GameView
 				// public float SineWave(float from, float to, double duration, float offsetPercent = 0);
 				burrowColor = Color.Lerp(burrowColor, towardsWhite, Time.SineWave(0, 1, 0.13f));
 			}
-			var burrowY = pos.Y + 7;
-			var burrowBarHeight = 3;
+			var burrowY = pos.Y + 11;
+			var burrowBarHeight = 2;
 			var burrowWidth = displayedBurrowCapacity * pixelsPerBurrowSecond;
 			displayedBurrowBarOpacity = Calc.Approach(displayedBurrowBarOpacity, player.BurrowBarOpacity,
 				BurrowBarOpacityRate * game.Manager.Time.Delta);
@@ -84,7 +84,7 @@ public sealed partial class GameView
 			{
 				var subTexture = player.Health >= i + 1 ? Assets.GetSubtexture("heart/0") : Assets.GetSubtexture("heart/1");
 				Batcher.Image(subTexture, pos, healthColor);
-				pos.X += 10;
+				pos.X += 7;
 			}
 		}
 		if (atlasWander)

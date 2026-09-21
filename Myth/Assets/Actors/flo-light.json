@@ -8,5 +8,7 @@
   "SpriteName": "flobulb",
   "TintSprite": false,
   "Cookie": "Cone",
-  "CookieCutoff": 0.033
+  "CookieCutoff": 0.033,
+  "HitFlickerTime": 0.05,
+  "HitFlickerStrength": 0
 }

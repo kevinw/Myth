@@ -192,8 +192,7 @@ public partial class Game
 	}
 
 	// Forwards to the Manager, which owns the message so it survives Game recreation.
-	public void DisplayMessage(string message, float duration = 1.85f, bool print = true)
-		=> Manager.DisplayMessage(message, duration, print);
+	public void DisplayMessage(string message, float duration = 1.85f, bool print = false) => Manager.DisplayMessage(message, duration, print);
 
 	// Show(x) displays "x: <value>" using the source text of the argument, so
 	// Game.Show(Velocity) reads as "Velocity: <1, 2>". Every call made during the

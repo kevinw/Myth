@@ -237,9 +237,19 @@ public partial class Manager
 			}
 			if ((hoveringName || ImGui.IsItemHovered()) && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				BeginRoomRename(room);
+			if (room.SourcePath is { } sourcePath)
+			{
+				ImGui.SameLine();
+				if (ImGui.SmallButton(EditorIcons.SourceFile + "##OpenRoomSource"))
+					ZedLauncher.OpenFile(sourcePath);
+				if (ImGui.IsItemHovered())
+					ImGui.SetTooltip($"Open {Path.GetFileName(sourcePath)}");
+			}
 			ImGui.SameLine();
-			if (ImGui.SmallButton("Delete"))
+			if (ImGui.SmallButton(EditorIcons.Delete + "##DeleteRoom"))
 				RequestDeleteRooms([room.Id]);
+			if (ImGui.IsItemHovered())
+				ImGui.SetTooltip("Delete Room.");
 		}
 		ImGui.PopStyleVar();
 		ImGui.Separator();

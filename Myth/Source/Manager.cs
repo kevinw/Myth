@@ -1241,7 +1241,7 @@ public partial class Manager : App
 		if (UpdateStartupAttribution())
 			return;
 
-		InputPrompts?.Update(Time.Elapsed);
+		InputPrompts?.Update(Time.Elapsed, controls);
 
 		if (debugViewMessageTimer > 0)
 		{

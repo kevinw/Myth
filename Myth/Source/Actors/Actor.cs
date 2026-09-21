@@ -170,6 +170,10 @@ public class Actor
 	bool targetAnimationLooping = true;
 	float hitCooldown = 0;
 
+	protected void Approach(ref float value, float target, float speed = 1.0f) {
+		value = Calc.Approach(value, target, Time.Delta * speed);
+	}
+
 	// Convention: an actor's sprite defaults to one named after its class (case-insensitive),
 	// so Mosquito uses mosquito.ase automatically. Assigning Sprite in a subclass ctor overrides
 	// this and marks a deliberate exception (e.g. the blob-family enemies reusing "blob").

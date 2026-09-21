@@ -1093,10 +1093,11 @@ public partial class Game : IDisposable
 			}
 		}
 
-		// If a bite leaves the arm narrower than the view on an axis, center on it (the
-		// "locked" feel) -- mirrors ClampCameraAxis's room-smaller-than-viewport case.
-		viewPos.X = minX <= maxX ? Math.Clamp(viewPos.X, minX, maxX) : (minX + maxX) * 0.5f;
-		viewPos.Y = minY <= maxY ? Math.Clamp(viewPos.Y, minY, maxY) : (minY + maxY) * 0.5f;
+		// An arm within a tile of the view centers on it and locks, the same slack ClampCameraAxis
+		// gives a room -- so a blocker biting a room down to one screen holds as still as a
+		// one-screen room does. A negative span (arm narrower than the view) falls out of the same test.
+		viewPos.X = CenterOrClamp(viewPos.X, minX, maxX);
+		viewPos.Y = CenterOrClamp(viewPos.Y, minY, maxY);
 		return viewPos;
 	}
 
@@ -1124,13 +1125,12 @@ public partial class Game : IDisposable
 	}
 
 	static float ClampCameraAxis(float value, float min, float max, float viewportSize)
-	{
-		var roomSize = max - min;
-		if (roomSize <= viewportSize + CameraSlackEpsilon)
-			return min + (roomSize - viewportSize) / 2;
+		=> CenterOrClamp(value, min, max - viewportSize);
 
-		return Math.Clamp(value, min, max - viewportSize);
-	}
+	// Clamp a view edge between its limits, or center between them when the slack left is within
+	// a tile -- the slop that lets a room built one tile taller than the screen still sit locked.
+	static float CenterOrClamp(float value, float min, float max)
+		=> max - min > CameraSlackEpsilon ? Math.Clamp(value, min, max) : (min + max) * 0.5f;
 
 	void FinishRoomActivation(RoomChangeKind kind)
 	{

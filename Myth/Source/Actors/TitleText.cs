@@ -16,6 +16,13 @@ public class TitleText : Actor
 	[I(0.5f, 2)] public float LineHeightMultiplier = 1f;
 	public Color Color = Color.WhiteSmoke;
 
+	[Flags]
+	public enum BehaviourFlags {
+		None = 0,
+		RevealOnBurrow = 1 << 0,
+	}
+	public BehaviourFlags behaviourFlags = BehaviourFlags.None;
+
 	public int dropShadow = 0;
 	public bool OutlineWithShadow = false;
 
@@ -27,11 +34,33 @@ public class TitleText : Actor
 	public override void Update()
 	{
 		base.Update();
+
+		if ((behaviourFlags & BehaviourFlags.RevealOnBurrow) != 0) {
+			// Fade in and out based on player burrow state
+			Approach(ref PlayerBurrowTimer, 0);
+			if (Game.GetFirst<Player>()?.State == Pawn.States.Burrow)
+				PlayerBurrowTimer = 1.5f;
+			OpacityTarget = PlayerBurrowTimer == 0 ? 0f : 1f;
+		}
+
+		Approach(ref Opacity, OpacityTarget);
+
 		if (RevealSpeed > 0)
 			stateDuration += Time.Delta * RevealSpeed;
 	}
 
-	SpriteFont? ShouldRenderWithFont() => Game.Simulating ? null : Assets.SpeechFont ?? Assets.Font;
+	float PlayerBurrowTimer = 0f;
+	float OpacityTarget = 1f;
+	float Opacity = 1f;
+
+	SpriteFont? ShouldRenderWithFont()
+	{
+		if (Game.Simulating)
+			return null;
+
+		return Assets.SpeechFont ?? Assets.Font;
+	}
+
 	internal static string EditorText(string? text) => string.IsNullOrEmpty(text) ? EmptyEditorText : text;
 
 	// World rect the text occupies, centered on position (blank text measures as the editor
@@ -67,7 +96,7 @@ public class TitleText : Actor
 		if (dropShadow != 0) {
 			var offset = new Vector2(dropShadow, dropShadow);
 			var shadowColor = Color.Black;
-			shadowColor.A = 170;
+			shadowColor.A = (byte)(170 * Opacity);
 			var shadowPos = pos + offset;
 			inputPrompts.DrawText(batcher, font, text, shadowPos, font.Size, justify, shadowColor, visibleElements, deferredGlyphs, drawGlyphs: false, lineHeightMultiplier: LineHeightMultiplier);
 
@@ -77,7 +106,7 @@ public class TitleText : Actor
 			}
 		}
 
-		inputPrompts.DrawText(batcher, font, text, pos, font.Size, justify, Color, visibleElements, deferredGlyphs, drawGlyphs: false, lineHeightMultiplier: LineHeightMultiplier);
+		inputPrompts.DrawText(batcher, font, text, pos, font.Size, justify, Color * Opacity, visibleElements, deferredGlyphs, drawGlyphs: false, lineHeightMultiplier: LineHeightMultiplier);
 
 	}
 }

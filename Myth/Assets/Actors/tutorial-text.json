@@ -3,7 +3,7 @@
   "Type": "TitleText",
   "Emissive": true,
   "LineHeightMultiplier": 0.7,
-  "Text": "hold down\nto crawl",
+  "Text": "hold {MoveDown}\nto crawl",
   "dropShadow": 1,
   "RevealSpeed": 0,
   "Color": "FCB3FF"

@@ -121,7 +121,7 @@
       "From": "TutorialText",
       "Position": [69, 121],
       "Text": [
-        "hold down and right",
+        "hold {MoveDown} and {MoveRight}",
         "to crawl"
       ]
     },
@@ -148,7 +148,7 @@
       "Id": "45ec3cc22cd0dc97",
       "From": "TutorialText",
       "Position": [152, 165],
-      "Text": "hold down when landing to roll"
+      "Text": "hold {MoveDown} when landing to roll"
     }
   ]
 }
