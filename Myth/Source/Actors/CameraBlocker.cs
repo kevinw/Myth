@@ -33,7 +33,27 @@ public class CameraBlocker : Actor, IResizable
 
 	// World-space rect this blocker occupies (Position is the rect's top-left corner, matching
 	// how the editor authors resizable room rects).
-	public RectInt WorldRect => new(Position.X, Position.Y, Size.X, Size.Y);
+	public RectInt WorldRect => SnapToRoomEdges(new(Position.X, Position.Y, Size.X, Size.Y), Room);
+
+	// A bite only bites when its edge is flush with the room's -- see Game.ClampViewToRoomAndBlockers,
+	// which tests `b.Top <= bounds.Top` and the like. Authoring is a drag, so a pixel of slop is easy
+	// to leave behind, and it produces a blocker that looks right in the editor and silently does
+	// nothing in game. Anything this close to an edge meant to touch it.
+	const int EdgeSnap = 2;
+
+	static RectInt SnapToRoomEdges(RectInt rect, Room? room)
+	{
+		if (room == null)
+			return rect;
+		var bounds = room.WorldBounds;
+		return RectInt.Between(
+			new Point2(
+				Math.Abs(rect.Left - bounds.Left) <= EdgeSnap ? bounds.Left : rect.Left,
+				Math.Abs(rect.Top - bounds.Top) <= EdgeSnap ? bounds.Top : rect.Top),
+			new Point2(
+				Math.Abs(rect.Right - bounds.Right) <= EdgeSnap ? bounds.Right : rect.Right,
+				Math.Abs(rect.Bottom - bounds.Bottom) <= EdgeSnap ? bounds.Bottom : rect.Bottom));
+	}
 
 	// The world rect an authored blocker spec occupies, without instantiating it -- room
 	// transitions, the editor, and the minimap all need this before the blocker is a live actor.
@@ -45,7 +65,7 @@ public class CameraBlocker : Actor, IResizable
 	{
 		var local = ActorSpecs.ReadResolvedPoint(spec, nameof(Position)) ?? Point2.Zero;
 		var size = ActorSpecs.ReadResolvedPoint(spec, nameof(Size)) ?? DefaultSize;
-		return new RectInt(room.WorldBounds.TopLeft + local, size);
+		return SnapToRoomEdges(new RectInt(room.WorldBounds.TopLeft + local, size), room);
 	}
 
 	public override void Update()

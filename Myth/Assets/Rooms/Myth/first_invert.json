@@ -105,7 +105,8 @@
     {
       "Id": "0b52dbe1e050e2f5",
       "Type": "Rope",
-      "Position": [140, -34]
+      "Position": [140, -34],
+      "Invert": "UninvertedOnly"
     },
     {
       "Id": "5d68979e29d3d88e",
