@@ -1876,7 +1876,7 @@ public partial class Manager : App
 	float debugViewMessageTimer;
 	readonly List<string> debugShowValues = [];
 
-	public void DisplayMessage(string message, float duration = 1.85f, bool print = true)
+	public void DisplayMessage(string message, float duration = 1.85f, bool print = false)
 	{
 		if (print) Console.WriteLine(message);
 		DebugViewMessage = message;
