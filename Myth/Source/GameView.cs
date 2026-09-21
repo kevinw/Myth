@@ -48,6 +48,9 @@ public sealed partial class GameView : IDisposable
 		pixelSortGlitchMaterial = loadVisualShaders ? CreateFragmentMaterial("PixelSortGlitch", samplerCount: 2, uniformBufferCount: 1) : null;
 		airFlashMaterial = loadVisualShaders ? CreateFragmentMaterial("AirFlash", samplerCount: 2, uniformBufferCount: 1) : null;
 		worldDistortionMaterial = loadVisualShaders ? CreateFragmentMaterial("WorldDistortion", samplerCount: 4, uniformBufferCount: 1) : null;
+#if !MYTHSHIP
+		blackAndWhiteMaterial = loadVisualShaders ? CreateFragmentMaterial("BlackAndWhite", samplerCount: 1) : null;
+#endif
 
 	}
 
@@ -457,6 +460,9 @@ public sealed partial class GameView : IDisposable
 		tileFieldDebugMaterial?.Reload();
 		pixelSortGlitchMaterial?.Reload();
 		worldDistortionMaterial?.Reload();
+#if !MYTHSHIP
+		blackAndWhiteMaterial?.Reload();
+#endif
 		blurMaterial?.Reload();
 		sdfAuraMaterial?.Reload();
 		backgroundDecalMaskMaterial?.Reload();
@@ -485,6 +491,9 @@ public sealed partial class GameView : IDisposable
 		tileFieldDebugMaterial?.Dispose();
 		pixelSortGlitchMaterial?.Dispose();
 		worldDistortionMaterial?.Dispose();
+#if !MYTHSHIP
+		blackAndWhiteMaterial?.Dispose();
+#endif
 		blurMaterial?.Dispose();
 		sdfAuraMaterial?.Dispose();
 		backgroundDecalMaskMaterial?.Dispose();

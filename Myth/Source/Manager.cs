@@ -50,12 +50,16 @@ public partial class Manager : App
 #if EDITOR
 	(string RoomId, Point2 Position)? playtestPlayerPosition;
 	bool preservePlaytestSaveState;
+	internal bool FullBright;
 #endif
 	internal VisualTuning Visuals = new();
 
 	/// The room renderer / simulation.
 	internal Game? game;
 	internal bool playing;
+#if !MYTHSHIP
+	internal bool BlackAndWhite;
+#endif
 	internal event Action<Manager>? ScenarioUpdate;
 	internal event Action<Manager>? ScenarioRender;
 	bool playOnStartup;
@@ -1440,6 +1444,7 @@ public partial class Manager : App
 			{
 				if (debugControls.UiScaleDown.Pressed) ChangeEditorUiScale(-0.1f);
 				if (debugControls.UiScaleUp.Pressed) ChangeEditorUiScale(0.1f);
+				if (debugControls.FullBright.Pressed) ToggleFullBright();
 				using (PerfStats.Time(PerfDetail.EditorNavigation))
 					UpdateEditorNavigation();
 			}
@@ -1885,6 +1890,15 @@ public partial class Manager : App
 		PerfToggles.Lighting = !PerfToggles.Lighting;
 		ShowPerfToggleMessage("Lighting", PerfToggles.Lighting);
 	}
+
+#if EDITOR
+	void ToggleFullBright()
+	{
+		FullBright = !FullBright;
+		ClearRoomPreviewCache();
+		DisplayMessage($"Full bright: {(FullBright ? "On" : "Off")}");
+	}
+#endif
 
 	void ToggleDitherAndTileField()
 	{

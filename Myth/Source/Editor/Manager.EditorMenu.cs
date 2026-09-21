@@ -132,6 +132,8 @@ public partial class Manager
 
 		if (ImGui.MenuItem("Play", "Tab"))
 			StartGame();
+		if (ImGui.MenuItem("Full Bright", "L", FullBright))
+			ToggleFullBright();
 		ImGui.Separator();
 		var commandKey = OperatingSystem.IsMacOS() ? "Cmd" : "Ctrl";
 		var undoLabel = undo.UndoName is { } undoName ? $"Undo {undoName}" : "Undo";

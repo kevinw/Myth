@@ -16,9 +16,18 @@ public sealed partial class GameView
 		var offset = (Vector2)present.Center - outputSize * scale * 0.5f;
 		Batcher.PushMatrix(Matrix3x2.CreateScale(scale) * Matrix3x2.CreateTranslation(offset));
 		Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+#if !MYTHSHIP
+		var blackAndWhite = Manager.BlackAndWhite ? blackAndWhiteMaterial : null;
+		if (blackAndWhite != null)
+			Batcher.PushMaterial(blackAndWhite.Material);
+#endif
 		foreach (var glyph in InputPromptGlyphs)
 			if (glyph.MapOverlay == mapOverlayVisible)
 				prompts.DrawGlyphCentered(Batcher, glyph.Action, glyph.Center, glyph.Height, glyph.Color);
+#if !MYTHSHIP
+		if (blackAndWhite != null)
+			Batcher.PopMaterial();
+#endif
 		Batcher.PopSampler();
 		Batcher.PopMatrix();
 		// The glyphs draw at window resolution to stay readable, so clip them to the on-screen
@@ -216,6 +225,11 @@ public sealed partial class GameView
 		Batcher.PushMatrix(
 			Matrix3x2.CreateScale(scale) *
 			Matrix3x2.CreateTranslation(viewport.Left, viewport.Top));
+#if !MYTHSHIP
+		var blackAndWhite = Manager.BlackAndWhite ? blackAndWhiteMaterial : null;
+		if (blackAndWhite != null)
+			Batcher.PushMaterial(blackAndWhite.Material);
+#endif
 
 		var x = 4f;
 		var icon = Assets.GetSprite("mycelon") ?? Assets.GetSprite("airbubble");
@@ -265,6 +279,10 @@ public sealed partial class GameView
 		if (font != null)
 			duckCountIncrease.Draw(Batcher, font, duckCount, duckPosition + Vector2.UnitX * duckCountX, tint);
 
+#if !MYTHSHIP
+		if (blackAndWhite != null)
+			Batcher.PopMaterial();
+#endif
 		Batcher.PopMatrix();
 		Batcher.Render(target, scissor: scissor?.GetIntersection(viewport) ?? viewport);
 		Batcher.Clear();

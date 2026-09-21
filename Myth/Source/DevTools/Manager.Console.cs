@@ -341,6 +341,20 @@ public partial class Manager
 		DisplayMessage(fps == 0 ? "Artificial slowdown disabled" : $"Artificial slowdown: {fps} FPS");
 	}
 
+#if !MYTHSHIP
+	[ConsoleCommand("blackandwhite")]
+	void ToggleBlackAndWhite(string _)
+	{
+		BlackAndWhite = !BlackAndWhite;
+		DisplayMessage($"Black and white: {(BlackAndWhite ? "On" : "Off")}");
+	}
+#endif
+
+#if EDITOR
+	[ConsoleCommand("fullbright")]
+	void ToggleFullBrightCommand(string _) => ToggleFullBright();
+#endif
+
 	[ConsoleCommand("head_slide")]
 	void ToggleHatSlide(string _)
 	{

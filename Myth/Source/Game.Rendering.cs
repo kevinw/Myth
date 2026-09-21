@@ -35,6 +35,9 @@ public sealed partial class GameView
 		NeuralTextureActor.DecodeVisible(Actors, game.VisibleWorldBounds);
 		GetDecalLayers(out var hasBackgroundDecals, out var hasForegroundDecals);
 		var buildAo = debugView is not DebugView.TileFieldRed and not DebugView.TileFieldGreen and not DebugView.DitherMask &&
+#if EDITOR
+			!Manager.FullBright &&
+#endif
 			PerfToggles.Lighting && lightingCompositeMaterial != null && PerfToggles.AmbientOcclusion &&
 			Manager.Visuals.AmbientOcclusionStrength > 0 && blurMaterial != null;
 		if (hasForegroundDecals)
@@ -60,7 +63,11 @@ public sealed partial class GameView
 			using (GraphicsDevice.DebugGroup("Myth/hidden covers"))
 				DrawHiddenCovers(ForegroundScreen);
 		}
-		if (PerfToggles.Emissive)
+		if (
+#if EDITOR
+			!Manager.FullBright &&
+#endif
+			PerfToggles.Emissive)
 		{
 			using (PerfStats.Time(PerfStat.Emissive))
 			{
@@ -76,7 +83,11 @@ public sealed partial class GameView
 			ForegroundEmissive.Clear(Color.Transparent);
 		}
 
-		if (PerfToggles.NormalBuffer)
+		if (
+#if EDITOR
+			!Manager.FullBright &&
+#endif
+			PerfToggles.NormalBuffer)
 		{
 			using (PerfStats.Time(PerfStat.Normal))
 			using (GraphicsDevice.DebugGroup("Myth/normal buffer"))
@@ -120,7 +131,11 @@ public sealed partial class GameView
 		}
 		else
 		{
-			if (PerfToggles.Lighting)
+			if (
+#if EDITOR
+				!Manager.FullBright &&
+#endif
+				PerfToggles.Lighting)
 			{
 				using (PerfStats.Time(PerfStat.Lighting))
 				using (GraphicsDevice.DebugGroup("Myth/lighting"))
@@ -162,7 +177,11 @@ public sealed partial class GameView
 		if (PerfToggles.Particles && particleSystem is { Supported: true })
 		{
 			using (GraphicsDevice.DebugGroup("Myth/particles"))
-				particleSystem.Render(output, BackgroundLightMask, RenderCamera, zoomLevel, PerfToggles.Lighting,
+				particleSystem.Render(output, BackgroundLightMask, RenderCamera, zoomLevel,
+#if EDITOR
+					!Manager.FullBright &&
+#endif
+					PerfToggles.Lighting,
 					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
 		}
 		if (debugView == DebugView.None && game.AirFlashAmount > 0)
@@ -220,6 +239,11 @@ public sealed partial class GameView
 			var compositeScale = composite == null ? 1 : composite.Width / output.Width;
 
 			Batcher.PushSampler(new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp));
+#if !MYTHSHIP
+			var blackAndWhite = Manager.BlackAndWhite ? blackAndWhiteMaterial : null;
+			if (composite == null && blackAndWhite != null)
+				Batcher.PushMaterial(blackAndWhite.Material);
+#endif
 			if (useCrt)
 			{
 				crt!.Material.Fragment.Samplers[1] = new(TileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
@@ -243,13 +267,25 @@ public sealed partial class GameView
 				Batcher.Image(output, center, output.Bounds.Size / 2, Vector2.One * scale, 0, Color.White);
 			if (useCrt)
 				Batcher.PopMaterial();
+#if !MYTHSHIP
+			if (composite == null && blackAndWhite != null)
+				Batcher.PopMaterial();
+#endif
 			Batcher.PopSampler();
 			if (composite != null)
 			{
 				Batcher.Render(composite);
 				Batcher.Clear();
 				Batcher.PushSampler(new(TextureFilter.Linear, TextureWrap.Clamp, TextureWrap.Clamp));
+#if !MYTHSHIP
+				if (blackAndWhite != null)
+					Batcher.PushMaterial(blackAndWhite.Material);
+#endif
 				Batcher.Image(composite, center, composite.Bounds.Size / 2, Vector2.One * (scale / compositeScale), 0, Color.White);
+#if !MYTHSHIP
+				if (blackAndWhite != null)
+					Batcher.PopMaterial();
+#endif
 				Batcher.PopSampler();
 			}
 			Batcher.Render(destination, scissor: clip);
@@ -2550,6 +2586,9 @@ public sealed partial class GameView
 	readonly ReloadableMaterial? pixelSortGlitchMaterial;
 	readonly ReloadableMaterial? airFlashMaterial;
 	readonly ReloadableMaterial? worldDistortionMaterial;
+#if !MYTHSHIP
+	readonly ReloadableMaterial? blackAndWhiteMaterial;
+#endif
 	readonly ReloadableMaterial? blurMaterial;
 	readonly ReloadableMaterial? sdfAuraMaterial;
 	readonly ReloadableMaterial? backgroundDecalMaskMaterial;

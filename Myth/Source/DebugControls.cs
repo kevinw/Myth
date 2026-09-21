@@ -39,6 +39,9 @@ public class DebugControls
 	public readonly VirtualAction AdvanceGym;
 	public readonly VirtualAction UiScaleDown;
 	public readonly VirtualAction UiScaleUp;
+#if EDITOR
+	public readonly VirtualAction FullBright;
+#endif
 	public readonly VirtualAction ToggleLiveRoomEditing;
 
 	public DebugControls(Input input)
@@ -144,6 +147,11 @@ public class DebugControls
 		UiScaleUp = Make("DebugUiScaleUp",
 			new ActionBindingSet().Add(Keys.Equals, Keys.KeypadPlus),
 			"=", "Editor UI scale up", Context.Editing);
+#if EDITOR
+		FullBright = Make("DebugFullBright",
+			new ActionBindingSet().Add(Keys.L),
+			"L", "Toggle full bright", Context.Editing);
+#endif
 		Note("Move keys", "Jump to adjacent room", Context.Editing);
 		Note("Shift+Move", "Pan camera", Context.Editing);
 		Note("Cmd+Z / Shift+Z / Y", "Undo / redo", Context.Editing);
