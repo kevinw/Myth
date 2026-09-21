@@ -39,6 +39,8 @@ static class TweakRegistry
 		public bool Seen;             // executed at least once this session
 		public bool HasMarker;        // the literal carries `.T()`, so edits apply instantly
 		public bool FromScan;         // discovered by the source scan rather than by executing
+		public bool HasBaseline;      // this getter is modified vs HEAD, so it can be reverted
+		public float Baseline;        // the literal HEAD has for it
 		public bool WritePending;     // source was edited; waiting for hot reload to run the new literal
 		public string PendingExpr = "";
 		public string ShortFile = "";
@@ -210,12 +212,19 @@ static class TweakRegistry
 
 	static readonly Regex HunkRx = new(@"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", RegexOptions.Compiled);
 	// A numeric literal immediately followed by `.T(` — the tweak marker.
-	static readonly Regex MarkerRx = new(@"(-?\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdD]?)\s*\.\s*T\s*\(", RegexOptions.Compiled);
+	static readonly Regex MarkerRx = new(
+		@"(?<open>\(\s*)?(?<lit>-?\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdD]?)(?<close>\s*\))?\s*\.\s*T\s*\(",
+		RegexOptions.Compiled);
+
+	// (file, getter name) -> the literal HEAD has. Keyed by name rather than line so it survives the
+	// line shifts that editing the file causes.
+	static readonly Dictionary<(string, string), float> baselines = [];
 
 	public static void ScanDiff()
 	{
 		foreach (var e in entries.Values)
 			e.InDiff = false;
+		baselines.Clear();
 
 		var root = RepoRoot();
 		if (root == null)
@@ -238,6 +247,13 @@ static class TweakRegistry
 			}
 			if (current == null)
 				continue;
+			// A removed line that was a literal getter is this session's revert target.
+			if (raw.StartsWith('-') && !raw.StartsWith("---", StringComparison.Ordinal))
+			{
+				var removed = GetterRx.Match(raw[1..]);
+				if (removed.Success && TryParseLiteral(removed.Groups["lit"].Value, out var was, out _))
+					baselines[(current, removed.Groups["name"].Value)] = was;
+			}
 			var m = HunkRx.Match(raw);
 			if (!m.Success)
 				continue;
@@ -253,6 +269,8 @@ static class TweakRegistry
 		// Pre-register / flag every `.T(` marker that falls inside a changed range.
 		foreach (var (file, list) in ranges)
 		{
+			if (IsTweakSystemFile(file))
+				continue;
 			var attr = File.GetAttributes(file);
 			if (attr.Has(FileAttributes.Directory)) {
 				continue;
@@ -269,9 +287,9 @@ static class TweakRegistry
 			foreach (var (start, end) in list)
 				for (var ln = start; ln <= end && ln <= lines.Length; ln++)
 				{
-					foreach (Match mk in MarkerRx.Matches(lines[ln - 1]))
+					foreach (Match mk in MarkerRx.Matches(CodeOnly(lines[ln - 1])))
 					{
-						var text = mk.Groups[1].Value;
+						var text = mk.Groups["lit"].Value;
 						if (!TryParseLiteral(text, out var value, out var isInt))
 							continue;
 						var e = GetOrAdd(file, ln, text, value, isInt, null, null);
@@ -283,6 +301,19 @@ static class TweakRegistry
 				}
 		}
 	}
+
+	// A `.T()` inside a comment is documentation, not a tweak. Cheap and good enough: everything from
+	// the first `//` is not code. (A `//` inside a string just costs us markers later on that line.)
+	static string CodeOnly(string line)
+	{
+		var comment = line.IndexOf("//", StringComparison.Ordinal);
+		return comment < 0 ? line : line[..comment];
+	}
+
+	// The tweak system's own source is full of example markers and literal getters in comments and
+	// test strings; nothing in it is a value worth tuning.
+	static bool IsTweakSystemFile(string file)
+		=> Path.GetFileName(file) is "TweakRegistry.cs" or "Tweak.cs";
 
 	static bool TryParseLiteral(string text, out float value, out bool isInt)
 	{
@@ -319,8 +350,13 @@ static class TweakRegistry
 	// The project's live-tuning convention (see CLAUDE.md): a literal-bodied static getter, so the
 	// value can be edited under `dotnet watch` without recompiling the call sites. There are ~800 of
 	// these against ~60 `.T()` markers, so the panel scans for them rather than waiting to be told.
+	// Groups: 1 type, 2 name, 3 the literal, 4 the `.T(...)` marker if present. The literal may be
+	// parenthesised -- `(-139f).T()` -- because `-139f.T()` would parse as `-(139f.T())`, handing the
+	// marker the magnitude and leaving the sign outside it.
 	static readonly Regex GetterRx = new(
-		@"^\s*(?:(?:public|private|protected|internal|new)\s+)*static\s+(float|int)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=>\s*(-?\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdD]?)\s*(\.\s*T\s*\([^)]*\))?\s*;",
+		@"(?<head>^\s*(?:(?:public|private|protected|internal|new)\s+)*static\s+(?<type>float|int)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=>\s*)" +
+		@"(?<open>\(\s*)?(?<lit>-?\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdD]?)(?<close>\s*\))?" +
+		@"(?<marker>\s*\.\s*T\s*\([^)]*\))?(?<tail>\s*;.*)$",
 		RegexOptions.Compiled);
 
 	readonly record struct Scanned(string File, int Line, string Name, string Expr, float Value, bool IsInt, bool HasMarker);
@@ -351,7 +387,8 @@ static class TweakRegistry
 			foreach (var file in Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories))
 			{
 				if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
-					file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+					file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") ||
+					IsTweakSystemFile(file))
 					continue;
 				string[] lines;
 				try { lines = File.ReadAllLines(file); }
@@ -361,11 +398,11 @@ static class TweakRegistry
 					var m = GetterRx.Match(lines[i]);
 					if (!m.Success)
 						continue;
-					var expr = m.Groups[3].Value;
+					var expr = m.Groups["lit"].Value;
 					if (!TryParseLiteral(expr, out var value, out _))
 						continue;
-					found.Add(new(Normalize(file), i + 1, m.Groups[2].Value, expr, value,
-						m.Groups[1].Value == "int", m.Groups[4].Success));
+					found.Add(new(Normalize(file), i + 1, m.Groups["name"].Value, expr, value,
+						m.Groups["type"].Value == "int", m.Groups["marker"].Success));
 				}
 			}
 		}
@@ -385,6 +422,8 @@ static class TweakRegistry
 			e.FromScan = true;
 			e.HasMarker |= it.HasMarker;
 			e.Context = it.Name;
+			e.HasBaseline = baselines.TryGetValue((it.File, it.Name), out var baseline);
+			e.Baseline = baseline;
 			if (!e.Seen && !e.HasOverride && !e.WritePending)
 			{
 				e.Expr = it.Expr;
@@ -396,6 +435,7 @@ static class TweakRegistry
 
 	// --- ImGui panel ---
 
+	static float WindowOpacity => 0.75f;
 	static string search = "";
 	static bool showAll;
 	public static bool Hovered { get; private set; }
@@ -419,12 +459,16 @@ static class TweakRegistry
 		if (!scanRequested)
 		{
 			scanRequested = true;
+			ScanDiff();
 			RequestScan();
 		}
 		IntegrateScan();
 
 		// NoFocusOnAppearing: opening the panel (incl. via the T hotkey) must not steal keyboard focus,
 		// which is what would otherwise nav-focus the first item (the search box) and swallow keystrokes.
+		// The panel floats over the game (NoDocking), and you're usually watching what the value does
+		// rather than reading the panel, so let the room show through it.
+		ImGui.SetNextWindowBgAlpha(WindowOpacity);
 		if (!ImGui.Begin("Tweaks", ref Open, ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoTitleBar))
 		{
 			Hovered = ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows);
@@ -543,6 +587,7 @@ static class TweakRegistry
 	{
 		var drawn = 0;
 		var skipped = 0;
+		var group = "";
 		foreach (var e in ordered)
 		{
 			if (!include(e))
@@ -553,6 +598,14 @@ static class TweakRegistry
 			{
 				skipped++;
 				continue;
+			}
+			// Entries are sorted by file, and a file is an actor here, so a header per file groups
+			// Player's values away from Bud's without needing to know anything about actors.
+			if (e.ShortFile != group)
+			{
+				group = e.ShortFile;
+				ImGui.SeparatorText(group.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+					? group[..^3] : group);
 			}
 			DrawRow(e);
 		}
@@ -662,6 +715,23 @@ static class TweakRegistry
 			ImGui.Dummy(new Vector2(IconButtonWidth, ImGui.GetFrameHeight()));
 		}
 		ImGui.SameLine();
+		// Reset drops a slider override; revert goes further and puts HEAD's literal back in source.
+		if (e.HasBaseline && MathF.Abs(e.Default - e.Baseline) > DefaultMarkerFloatEpsilon)
+		{
+			if (DrawIconButton(
+#if EDITOR
+				EditorIcons.SourceFile
+#else
+				"<"
+#endif
+				, $"Revert to {e.Baseline.ToString(CultureInfo.InvariantCulture)} (HEAD)"))
+			{
+				e.Value = e.Baseline;
+				e.HasOverride = true;
+				WriteBack(e);
+			}
+			ImGui.SameLine();
+		}
 		if (e.HasOverride || e.WritePending)
 		{
 			if (DrawIconButton(
@@ -736,7 +806,7 @@ static class TweakRegistry
 		if (!LocateLiteral(e, line, out var at, out var length))
 			return;
 
-		var value = FormatValue(e);
+		var value = e.HasMarker ? Wrap(FormatValue(e)) : FormatValue(e);
 		if (!WriteLine(e, lines, line[..at] + value + line[(at + length)..]))
 			return;
 
@@ -760,15 +830,22 @@ static class TweakRegistry
 		if (e.HasMarker)
 		{
 			var match = MarkerRx.Match(line);
-			while (match.Success && match.Groups[1].Value != e.Expr)
+			while (match.Success && match.Groups["lit"].Value != e.Expr)
 				match = match.NextMatch();
 			if (!match.Success)
 			{
 				Console.WriteLine($"Tweak write skipped: {e.ShortFile}:{e.Line} no longer contains {e.Expr}.T(");
 				return false;
 			}
-			at = match.Groups[1].Index;
-			length = match.Groups[1].Length;
+			// Replace any wrapping parens along with the literal, so Wrap can put the right ones back:
+			// a negative marker written bare is the `-(139f.T())` trap, and writes should repair it.
+			// Only a matched pair is ours -- a lone `(` belongs to an enclosing call like `Foo(3f.T())`.
+			var lit = match.Groups["lit"];
+			var open = match.Groups["open"];
+			var close = match.Groups["close"];
+			var wrapped = open.Success && close.Success;
+			at = wrapped ? open.Index : lit.Index;
+			length = (wrapped ? close.Index + close.Length : lit.Index + lit.Length) - at;
 			return true;
 		}
 
@@ -778,8 +855,8 @@ static class TweakRegistry
 			Console.WriteLine($"Tweak write skipped: {e.ShortFile}:{e.Line} is no longer a literal getter");
 			return false;
 		}
-		at = getter.Groups[3].Index;
-		length = getter.Groups[3].Length;
+		at = getter.Groups["lit"].Index;
+		length = getter.Groups["lit"].Length;
 		return true;
 	}
 
@@ -819,11 +896,15 @@ static class TweakRegistry
 		}
 
 		// Bake writes the dialed value out with the marker in one edit, so it costs one reload.
-		var literal = getter.Groups[3];
-		var value = !live && e.HasOverride ? FormatValue(e) : literal.Value;
-		var marker = getter.Groups[4];
-		var tail = marker.Success ? line[(marker.Index + marker.Length)..] : line[(literal.Index + literal.Length)..];
-		if (!WriteLine(e, lines, line[..literal.Index] + value + (live ? ".T()" : "") + tail))
+		// Rebuild the whole body between `=>` and `;`, so whichever form it had -- bare, wrapped,
+		// marked -- it lands in the one we want without any leftover parens.
+		var value = !live && e.HasOverride ? FormatValue(e) : getter.Groups["lit"].Value;
+		// `(-139).T()` would bind the int overload and give a float getter an integer slider, so a
+		// float's literal gets its suffix before the marker goes on.
+		if (live && !e.IsInt && !value.EndsWith('f') && !value.EndsWith('F'))
+			value += "f";
+		var body = live ? Wrap(value) + ".T()" : value;
+		if (!WriteLine(e, lines, getter.Groups["head"].Value + body + getter.Groups["tail"].Value))
 			return;
 
 		e.Expr = value;
@@ -838,6 +919,10 @@ static class TweakRegistry
 			e.Seen = false;
 		}
 	}
+
+	// `-139f.T()` binds as `-(139f.T())`, so the marker would track the magnitude and the slider would
+	// run 0..+4x while the game negated the result. Parenthesise so `.T()` receives the signed value.
+	static string Wrap(string literal) => literal.StartsWith('-') ? $"({literal})" : literal;
 
 	static string FormatValue(Entry e)
 	{

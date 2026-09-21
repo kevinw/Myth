@@ -4,7 +4,7 @@
   "Emissive": true,
   "LineHeightMultiplier": 0.7,
   "Text": "hold down\nto crawl",
-  "Color": "267437",
   "dropShadow": 1,
-  "RevealSpeed": 0
+  "RevealSpeed": 0,
+  "Color": "FCB3FF"
 }

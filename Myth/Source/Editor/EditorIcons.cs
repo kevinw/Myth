@@ -10,6 +10,11 @@ static class EditorIcons
 	public const string Speaker = "\uf028";
 	public const string Add = "\uf067";
 	public const string Lock = "\uf023";
+	public const string CircleHalfStroke = "\uf042";
+	public const string Sun = "\uf185";
+	public const string Moon = "\uf186";
+	public const string ArrowLeft = "\uf060";
+	public const string ArrowRight = "\uf061";
 	public const string Up = "\uf062";
 	public const string Down = "\uf063";
 	public const string Visible = "\uf06e";
@@ -65,8 +70,8 @@ static class EditorIcons
 		0xf023, 0xf023,
 		0xf028, 0xf028,
 		0xf031, 0xf031,
-		0xf040, 0xf040,
-		0xf062, 0xf063,
+		0xf040, 0xf042,
+		0xf060, 0xf063,
 		0xf06e, 0xf06e,
 		0xf070, 0xf070,
 		0xf074, 0xf074,
@@ -75,7 +80,7 @@ static class EditorIcons
 		0xf0c4, 0xf0c5,
 		0xf0e2, 0xf0e2,
 		0xf121, 0xf121,
-		0xf187, 0xf187,
+		0xf185, 0xf187,
 		0xf1b2, 0xf1b2,
 		0xf1c9, 0xf1c9,
 		0xf1de, 0xf1de,

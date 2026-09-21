@@ -1,8 +1,7 @@
 {
-  "position": [0, 0],
-  "size": [40, 23],
+  "position": [0, -6],
+  "size": [40, 28],
   "ambientColor": "606060",
-  "reverb": 0.178,
   "legend": {
     "#": "back",
     "E": "ember",
@@ -13,9 +12,16 @@
     "T": "stone",
     "f": "flowers",
     "g": "plants",
+    "v": "Myth Vines",
     "w": "water"
   },
   "tiles": [
+    "TTEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+    "TTEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+    "TTEEEEEEEEEEEEEEE00000000EEEEEEE0EEEEEEE",
+    "TTEEEEEE0000000EE0000000000EE0000000000E",
+    "TTTEEEEE0000000EE0000000000EE0000000000E",
+    "TTTTEEEE0000000EE0000000000EE0000000000E",
     "TTEEEEEE000000EEEE00000000EEEE0000000000",
     "TTTEE0EE00000000000000000000000000000000",
     "T000E00000000000000000000000000000000000",
@@ -37,10 +43,15 @@
     "TTTTTTTTwTTTTwwTTTTTTNNNTTTTTRRRRRRRRRTR",
     "TTTTTTTTwTTTTwTTTTTTTNNNTTTTTTTTTTRRRRwR",
     "TTTTTTTTwTTTTwTTTTwwTTTNNTTTTRRRRRRRRRwR",
-    "TTwwwwTTwTTTTwTTTTwwTTTNNTTTTRRRRRTTTTwR",
-    "TTwwwwTTwwwwwwTTTTwTTTwNNwwTTwwwwwTTTTwR"
+    "TTwwwwTTwTTTTwTTTTwwTTTNNTTTTRRRRRTTTTwR"
   ],
   "backgroundTiles": [
+    "0000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000",
+    "0000000000v00000000v00000000000v00vv0000",
+    "0000000000v00000000v00000000000v00vv0v00",
+    "0000000000000000000000000000000000v00v00",
+    "0000000000000000000000000000000000v00000",
     "00000000000000000000####0000000000000000",
     "00000000000000000000####0000000000000000",
     "00000000000000000000####0000000000000000",
@@ -62,133 +73,145 @@
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000",
-    "0000000000000000000000000000000000000000",
     "0000000000000000000000000000000000000000"
+  ],
+  "slopes": [[8, 2],[9, 2],[10, 2],[11, 2],[12, 2],[13, 2],[14, 2],[25, 2],[26, 2],[29, 2],[30, 2],[31, 2],[33, 2],[34, 2],[35, 2]
   ],
   "actors": [
     {
       "Id": "401c3f08fa07ce16",
       "Type": "Light",
-      "Position": [68, 76],
+      "Position": [68, 124],
       "Height": 3.592
     },
     {
       "Id": "eb17a3bd78a2788e",
       "Type": "Light",
-      "Position": [242, 79],
+      "Position": [242, 127],
       "Intensity": 0.694,
       "Height": 4.898
     },
     {
       "Id": "14037cef7b8fc351",
       "Type": "Blob",
-      "Position": [100, 120]
+      "Position": [100, 168]
     },
     {
       "Id": "70c2fc1628cf4906",
       "Type": "Blob",
-      "Position": [108, 120]
+      "Position": [108, 168]
     },
     {
       "Id": "1c7bee50527466f8",
       "Type": "Blob",
-      "Position": [116, 120]
+      "Position": [116, 168]
     },
     {
       "Id": "69c436571c8e5280",
       "Type": "Blob",
-      "Position": [124, 120]
+      "Position": [124, 168]
     },
     {
       "Id": "e8bc40803dc0d1e2",
       "Type": "Blob",
-      "Position": [132, 120]
+      "Position": [132, 168]
     },
     {
       "Id": "cdfd0886c00eafcc",
       "Type": "Blob",
-      "Position": [140, 120]
+      "Position": [140, 168]
     },
     {
       "Id": "ea260b6e7a8b185a",
       "Type": "Blob",
-      "Position": [148, 120]
+      "Position": [148, 168]
     },
     {
       "Id": "70158528afa9d1ab",
       "Type": "Blob",
-      "Position": [156, 120]
+      "Position": [156, 168]
     },
     {
       "Id": "fef2a5b6170f046e",
       "Type": "Blob",
-      "Position": [164, 120]
+      "Position": [164, 168]
     },
     {
       "Id": "1c54652101156827",
       "Type": "Blob",
-      "Position": [172, 120]
+      "Position": [172, 168]
     },
     {
       "Id": "80e276b49fbe84de",
       "Type": "Blob",
-      "Position": [180, 120]
+      "Position": [180, 168]
     },
     {
       "Id": "6c811f9fa5a927af",
       "Type": "Blob",
-      "Position": [188, 120]
+      "Position": [188, 168]
     },
     {
       "Id": "222f11ce6b7c8879",
       "Type": "Blob",
-      "Position": [196, 120]
+      "Position": [196, 168]
     },
     {
       "Id": "c249c567c1794b8f",
       "Type": "Blob",
-      "Position": [204, 120]
+      "Position": [204, 168]
     },
     {
       "Id": "fe250b02f5c722ca",
       "Type": "Light",
-      "Position": [148, 100],
+      "Position": [148, 148],
       "Intensity": 1.163,
       "Height": 4.898
     },
     {
       "Id": "a6a56bbb347ec4ee",
       "Type": "Rope",
-      "Position": [220, -12]
+      "Position": [220, 36]
     },
     {
       "Id": "8671f99f833c815f",
       "Type": "Rope",
-      "Position": [124, -6]
+      "Position": [124, 42]
     },
     {
       "Id": "1fd85c79e444a02e",
       "From": "TutorialText",
-      "Position": [229, 139],
+      "Position": [229, 187],
       "Text": [
         "hold down and press {Attack} to",
         "strike downwards"
       ],
-      "LineHeightMultiplier": 0.881,
-      "Color": "339949"
+      "LineHeightMultiplier": 0.881
     },
     {
       "Id": "0f41005a5c861603",
       "From": "TutorialText",
-      "Position": [177, 10],
+      "Position": [177, 58],
       "LineHeightMultiplier": 0.881,
-      "Color": "339949",
       "Text": "hold up to climb ropes"
     },
     {
       "Id": "fdd4ace91c24bba7",
       "Type": "Light",
-      "Position": [319, 65]
+      "Position": [319, 113]
+    },
+    {
+      "Id": "f1372be7de8e74a7",
+      "Type": "CameraBlocker",
+      "Position": [0, 0],
+      "Size": [319, 48]
+    },
+    {
+      "Id": "9866ed2b0824a2be",
+      "Type": "BurrowLine",
+      "Position": [132, 46],
+      "Points": [[-13, -25],[-13, -45]
+      ]
     }
   ]
 }

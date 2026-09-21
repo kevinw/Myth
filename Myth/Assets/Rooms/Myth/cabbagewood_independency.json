@@ -1,0 +1,49 @@
+{
+  "position": [10, -17],
+  "size": [19, 11],
+  "ambientColor": "606060",
+  "reverb": 0.435,
+  "zoom": 2,
+  "legend": {
+    "E": "ember"
+  },
+  "tiles": [
+    "EEEEEEEEEEEEEEEEEEE",
+    "EEEEEEEEEEEEEEEEEEE",
+    "EE000000EEEE0000EEE",
+    "E00000000000000000E",
+    "E00000000000000000E",
+    "E00000000000000000E",
+    "E00000000000000000E",
+    "E000EEEE0000000000E",
+    "E00EEEEEE000000000E",
+    "E00EEEEEE000000000E",
+    "EEEEEEEEEEEEEEEEEEE"
+  ],
+  "slopes": [[8, 2],[10, 2],[11, 2],[16, 2],[17, 2]
+  ],
+  "actors": [
+    {
+      "Id": "1693094ae90b63d2",
+      "Type": "BurrowLine",
+      "Position": [71, 48],
+      "Points": [[-32, 39],[-32, 24],[-1, 24]
+      ]
+    },
+    {
+      "Id": "d3de9a69f1eb6cbe",
+      "From": "FloLight",
+      "Position": [39, 16]
+    },
+    {
+      "Id": "3c3b132afa43fbec",
+      "From": "FloLight",
+      "Position": [111, 16]
+    },
+    {
+      "Id": "6d58a60e5954adbe",
+      "Type": "Chest",
+      "Position": [117, 80]
+    }
+  ]
+}

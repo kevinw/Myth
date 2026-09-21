@@ -12,7 +12,7 @@ namespace Myth;
 //     revealed area intersects this rect opens.
 // Blockers should bite in from a room edge/corner (not float in the interior) so the camera
 // clamp stays continuous -- see Game.ClampViewToRoomAndBlockers.
-[GameActor(Sprite = "door", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 4, LivePositionEditable = true)]
+[GameActor(Sprite = "door", BoundsW = Game.TileSize * 4, BoundsH = Game.TileSize * 4, LivePositionEditable = true, ShowFacing = false)]
 public class CameraBlocker : Actor, IResizable
 {
 	public static readonly Point2 DefaultSize = new(Game.TileSize * 4, Game.TileSize * 4);
@@ -60,10 +60,9 @@ public class CameraBlocker : Actor, IResizable
 	}
 
 	// Turn the bite off; the camera notices the clamp target jump and eases over it.
-	public void Deactivate()
+	internal void Deactivate()
 	{
-		if (!Active)
-			return;
+		if (!Active) return;
 		Active = false;
 	}
 }

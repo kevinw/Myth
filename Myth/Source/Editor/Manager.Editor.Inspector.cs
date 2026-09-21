@@ -564,6 +564,9 @@ public partial class Manager
 			return;
 		}
 
+		actorPropertyScratch.Clear();
+		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
+
 		var inspectorAction = false;
 		if (actorId is not null && game?.GetActorById(actorId) is RigPuppet)
 		{
@@ -599,11 +602,70 @@ public partial class Manager
 				SetTooltip($"Open {sourceFilename}");
 			inspectorAction = true;
 		}
+		// Locking is one bit wanted on every actor, so it's an icon here rather than an editorFlags
+		// dropdown costing a row in every inspector (see HideInactiveActorProperty).
+		{
+			if (inspectorAction)
+				SameLine();
+			var locked = RoomActorIsLocked(actor);
+			if (Button((locked ? EditorIcons.Lock : EditorIcons.Unlock) + "##ToggleActorLock"))
+			{
+				using (CaptureRoomUndo(locked ? "Unlock Actor" : "Lock Actor", room))
+					ActorSpecs.SetProperty(actor, nameof(Actor.editorFlags), JsonValue.Create(
+						(locked ? Actor.EditorFlags.None : Actor.EditorFlags.Locked).ToString()));
+				changed = true;
+			}
+			if (IsItemHovered())
+				SetTooltip(locked
+					? "Locked: can't be picked or dragged in the room. Click to unlock."
+					: "Unlocked. Click to lock it against picking and dragging.");
+			inspectorAction = true;
+		}
+		// Facing is one bit too, and its arrow says which way without needing a label or a row.
+		if (FindActorProperty(nameof(Actor.Facing)) is { } facing)
+		{
+			if (inspectorAction)
+				SameLine();
+			var value = ActorSpecs.ReadSigns(facing.Value);
+			var left = value.AsInt < 0;
+			if (Button((left ? EditorIcons.ArrowLeft : EditorIcons.ArrowRight) + "##ToggleFacing"))
+			{
+				SetActorProperty(null, room, actor, facing, JsonValue.Create((-value).ToString()), continuous: false);
+				changed = true;
+			}
+			if (IsItemHovered())
+				SetTooltip(left ? "Facing left. Click to face right." : "Facing right. Click to face left.");
+			inspectorAction = true;
+		}
+		// Inversion is three states, so one button cycles them. Only shown where it can do anything:
+		// a room the burrow doesn't flip never has an inverted version for the actor to be absent from.
+		if (room.BurrowInverts && FindActorProperty(nameof(Actor.Invert)) is { } invert)
+		{
+			if (inspectorAction)
+				SameLine();
+			if (!Enum.TryParse<ActorInversion>(ActorSpecs.ReadStringValue(invert.Value), true, out var inversion))
+				inversion = ActorInversion.Both;
+			var (icon, tooltip, next) = inversion switch
+			{
+				ActorInversion.UninvertedOnly =>
+					(EditorIcons.Sun, "Uninverted world only. Click for inverted only.", ActorInversion.InvertedOnly),
+				ActorInversion.InvertedOnly =>
+					(EditorIcons.Moon, "Inverted world only. Click for both.", ActorInversion.Both),
+				_ =>
+					(EditorIcons.CircleHalfStroke, "In both worlds. Click for uninverted only.", ActorInversion.UninvertedOnly),
+			};
+			if (Button(icon + "##CycleInversion"))
+			{
+				SetActorEnumProperty(null, room, actor, invert, next.ToString());
+				changed = true;
+			}
+			if (IsItemHovered())
+				SetTooltip(tooltip);
+			inspectorAction = true;
+		}
 		if (inspectorAction)
 			Separator();
 
-		actorPropertyScratch.Clear();
-		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
 		string? propertyGroup = null;
 		var propertyGroupOpen = true;
 		foreach (var property in actorPropertyScratch)
@@ -771,8 +833,19 @@ public partial class Manager
 		draw.PopClipRect();
 	}
 
+	ActorSpecs.EditableProperty? FindActorProperty(string name)
+	{
+		foreach (var property in actorPropertyScratch)
+			if (property.Name == name)
+				return property;
+		return null;
+	}
+
 	bool HideInactiveActorProperty(JsonObject actor, ActorSpecs.EditableProperty property)
 	{
+		// Both are single bits edited by icons in the inspector header, so they don't need a row.
+		if (property.Name is nameof(Actor.editorFlags) or nameof(Actor.Facing) or nameof(Actor.Invert))
+			return true;
 		if (property.VisibleWhen is { } visibleWhen && !visibleWhen.IsVisibleForActor(actor))
 			return true;
 
