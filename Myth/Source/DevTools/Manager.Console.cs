@@ -292,6 +292,34 @@ public partial class Manager
 		consoleRooms.Sort(static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Label, b.Label));
 	}
 
+	// Jot a line into Notes/TODO.md without leaving the game: the point is to not break flow when
+	// something occurs to you mid-playtest. Newest first, matching how the file is kept by hand.
+	[ConsoleCommand("todo")]
+	void AddTodo(string text)
+	{
+		text = text.Trim();
+		if (text.Length == 0)
+			throw new InvalidOperationException("Usage: todo <text>");
+		if (FindSourceFile("Notes", "TODO.md") is not { } path)
+			throw new InvalidOperationException("Notes/TODO.md not found (needs the source tree)");
+
+		File.WriteAllText(path, text + Environment.NewLine + File.ReadAllText(path));
+		DisplayMessage("New TODO added.");
+	}
+
+	// Walks up from the binary to find a file in the source tree; null in a shipped build, where
+	// there is none to write to.
+	static string? FindSourceFile(params string[] parts)
+	{
+		for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+		{
+			var path = Path.Combine([dir.FullName, .. parts]);
+			if (File.Exists(path))
+				return path;
+		}
+		return null;
+	}
+
 	[ConsoleCommand("quit")]
 	void Quit(string _) => RequestQuit();
 
