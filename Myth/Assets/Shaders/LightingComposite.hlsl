@@ -26,6 +26,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
     float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
     float4 IndirectSettings; // x = background strength, y = foreground strength, z = actor gain, w = hero fill
+    float4 HdrSettings; // x = exposure in stops, y = highlight shoulder start
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -313,11 +314,10 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     float threshold = threshold_for_pattern(dither_position, pattern);
     threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
     threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
-    threshold = saturate(threshold + 0.5 - detail_priority);
-    float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
+    threshold = clamp(threshold + 0.5 - detail_priority, 0.0001, 0.9999);
+    // Quantize between adjacent HDR bands; never discard energy above one.
+    float dithered_intensity = floor(intensity) + (frac(intensity) > threshold ? 1.0 : 0.0);
 
-#if 1
-    // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
     float scale = dithered_intensity / intensity;
     float strength = saturate((DitherSettings.x > 0.0 ? DitherSettings.z * dither_mask : 0.0) + normal_slope * NormalDitherSettings.x);
     float3 result = light * lerp(1.0, scale, strength);
@@ -326,29 +326,23 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     {
         float result_intensity = max(max(result.r, result.g), result.b);
         float steps = NormalDitherSettings.y - 1.0;
-        float quantized = floor(saturate(result_intensity) * steps + threshold) / steps;
+        float quantized = floor(result_intensity * steps + threshold) / steps;
         result *= lerp(1.0, quantized / max(result_intensity, 0.0001), normal_slope);
     }
 
     return result;
-#else
-    // This looks worse because it has less interesting behaviour in dark solid areas, but is more "physically plausible" lighting wise...
-    float strength = saturate(DitherSettings.z * dither_mask);
-    float shadow = lerp(0.18, 1.0, dithered_intensity);
-    return light * lerp(1.0, shadow, strength);
-#endif
 }
 
 float4 light_scene(float4 scene, float4 light, float3 indirect, float4 emissive, float2 world_pixel, float2 pattern_pixel,
     float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
 {
-    light.rgb += indirect;
+    light.rgb = max(light.rgb + indirect, 0.0) * exp2(HdrSettings.x);
     light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
     float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
-    color = lerp(color, emissive.rgb, emissive.a);
-    return float4(saturate(color), scene.a);
+    color = lerp(color, emissive.rgb * exp2(HdrSettings.x), emissive.a);
+    return float4(color, scene.a);
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
@@ -411,7 +405,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float3 background_indirect = indirect_light * IndirectSettings.x * actor_indirect + indirect_light * hero_indirect;
     float4 background = light_scene(background_scene, background_light, background_indirect, background_emissive, world_pixel,
         background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
-    background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
+    background.rgb += SporeFogTexture.Sample(SporeFogSampler, sample).rgb * exp2(HdrSettings.x);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
@@ -423,5 +417,15 @@ float4 fragment_main(VsOutput input) : SV_Target0
         dither_mask,
         normal_slope,
         0.5);
-    return saturate(foreground + background * (1.0 - foreground.a));
+    float4 composite = foreground + background * (1.0 - foreground.a);
+    // Tone-map once after layer composition. Work in straight color so coverage stays linear.
+    float3 color = max(composite.rgb / max(composite.a, 0.0001), 0.0);
+    float peak = max(max(color.r, color.g), color.b);
+    float shoulder = HdrSettings.y;
+    float span = max(1.0 - shoulder, 0.0001);
+    float excess = max(peak - shoulder, 0.0);
+    float mapped = shoulder + span * excess / (span + excess);
+    if (peak > shoulder)
+        color *= mapped / peak;
+    return float4(color * composite.a, saturate(composite.a));
 }

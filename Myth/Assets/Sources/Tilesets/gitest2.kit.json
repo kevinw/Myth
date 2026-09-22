@@ -1,0 +1,112 @@
+{
+  "substance": "Brick",
+  "layer": "Background",
+  "char": "V",
+  "mask": "stone-kit",
+  "seed": 1328148339,
+  "edgeWidth": "2",
+  "wobble": 0.6,
+  "fillTiles": 2,
+  "palette": {
+    "a": "262B44",
+    "b": "3A4466",
+    "c": "21233A",
+    "d": "323A58",
+    "e": "333B5A"
+  },
+  "heights": {
+    "a": 0.132,
+    "b": 1,
+    "c": 0,
+    "d": 0.811,
+    "e": 0.845
+  },
+  "fills": [
+    [
+      "ababcbab",
+      "ababcbab",
+      "adababab",
+      "adcdabae",
+      "cdcdabce",
+      "cdadaece",
+      "cdabaecb",
+      "cdcbaecb"
+    ],
+    [
+      "ababcbab",
+      "ababcbab",
+      "adababab",
+      "adcdabae",
+      "cdcdabce",
+      "cdadaece",
+      "cdabaecb",
+      "cdcbaecb"
+    ],
+    [
+      "ababcbab",
+      "ababcbab",
+      "adababab",
+      "adcdabae",
+      "cdcdabce",
+      "cdadaece",
+      "cdabaecb",
+      "cdcbaecb"
+    ],
+    [
+      "ababcbab",
+      "ababcbab",
+      "adababab",
+      "adcdabae",
+      "cdcdabce",
+      "cdadaece",
+      "cdabaecb",
+      "cdcbaecb"
+    ]
+  ],
+  "edge": [
+    [
+      "BF4830",
+      62
+    ],
+    [
+      "C28569",
+      27
+    ],
+    [
+      "D77643",
+      11
+    ]
+  ],
+  "edgeTop": [
+    [
+      "C28569",
+      55
+    ],
+    [
+      "D77643",
+      30
+    ],
+    [
+      "BF4830",
+      15
+    ]
+  ],
+  "edgeBottom": [
+    [
+      "BF4830",
+      55
+    ],
+    [
+      "D77643",
+      30
+    ],
+    [
+      "C28569",
+      15
+    ],
+    [
+      "000000",
+      25
+    ]
+  ]
+}

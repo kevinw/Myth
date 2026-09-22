@@ -28,6 +28,8 @@ sealed class VisualTuning
 	public float SpriteShadowMinLength = 4.0f;
 	public float SpriteShadowMaxLength = 28.0f;
 	public float ShadowBias = 0.5f;
+	public float LightingExposure = 0.0f;
+	public float LightingShoulder = 0.75f;
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
@@ -157,6 +159,10 @@ public partial class Manager
 				"Keeps authored emissive pixels visible regardless of ordinary lighting. Light emission into GI is authored separately, although disabling this also disables those emission passes.");
 			VisualToggle("Noise", ref PerfToggles.LightingNoise,
 				"Multiplies the completed lit scene by the room's scrolling lighting-noise texture. It currently affects direct light, GI, emissive pixels and sprites together.");
+			VisualRow("Exposure (stops)", ref Visuals.LightingExposure, VisualDefaults.LightingExposure, -4, 4,
+				"Scales displayed lighting before dithering: +1 doubles it, -1 halves it. Does not change the energy used by GI propagation.");
+			VisualRow("Highlight Shoulder", ref Visuals.LightingShoulder, VisualDefaults.LightingShoulder, 0, 0.95f,
+				"Brightness where highlights begin rolling smoothly toward the display limit. Lower values soften more highlights; higher values preserve more contrast. Scales RGB together to preserve light color.");
 			VisualRow("Normal Floor", ref Visuals.NormalLightFloor, VisualDefaults.NormalLightFloor, 0, 1,
 				"Minimum diffuse response allowed when a normal faces away from a light. Raise it for readable, softly wrapped forms; lower it for stronger directional modeling.");
 			VisualRow("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4,
@@ -166,7 +172,7 @@ public partial class Manager
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2,
 				"Scales how strongly lighting is expressed through the ordered dither pattern. Zero gives smooth lighting; larger values make light and shadow more graphic and textured.");
 			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16,
-				"Number of lighting bands available to the normal-aware dither quantizer. Fewer levels look bolder and more posterized; more levels preserve subtle gradients.");
+				"Lighting levels per unit of exposed light in the normal-aware quantizer. Bands continue above one for HDR highlights. Fewer levels look bolder; more preserve subtle gradients.");
 			PopID();
 		}
 

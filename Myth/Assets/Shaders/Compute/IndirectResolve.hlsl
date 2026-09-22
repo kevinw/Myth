@@ -5,7 +5,7 @@ SamplerState NormalSampler : register(s0, space0);
 StructuredBuffer<float4> Field : register(t1, space0);
 
 #if BROWSER
-[[vk::image_format("rgba8")]]
+[[vk::image_format("rgba16f")]]
 #endif
 RWTexture2D<float4> IndirectLight : register(u0, space1);
 
@@ -67,5 +67,5 @@ void compute_main(uint3 id : SV_DispatchThreadID)
     float directionalWeight = saturate((dot(normal, lightDirection) + NormalWrap) / (1.0 + NormalWrap));
     irradiance *= lerp(1.0, directionalWeight, normalStrength * Directionality * gradientStrength);
     irradiance = pow(max(irradiance, 0.0), ResponseCurve);
-    IndirectLight[id.xy] = float4(saturate(irradiance), saturate(max(max(irradiance.r, irradiance.g), irradiance.b)));
+    IndirectLight[id.xy] = float4(irradiance, saturate(max(max(irradiance.r, irradiance.g), irradiance.b)));
 }

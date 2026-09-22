@@ -245,10 +245,10 @@ sealed class GpuGlobalIllumination : IDisposable
 		var bounds = atlasBounds;
 		atlasBackgroundScene = NewAtlas(bounds, "BackgroundScene");
 		atlasForegroundScene = NewAtlas(bounds, "ForegroundScene");
-		atlasBackgroundLight = NewComputeAtlas(bounds, "BackgroundLight");
-		atlasForegroundLight = NewComputeAtlas(bounds, "ForegroundLight");
-		atlasBackgroundLightEmission = NewAtlas(bounds, "BackgroundLightEmission");
-		atlasForegroundLightEmission = NewAtlas(bounds, "ForegroundLightEmission");
+		atlasBackgroundLight = NewComputeAtlas(bounds, "BackgroundLight", TextureFormat.R16G16B16A16Float);
+		atlasForegroundLight = NewComputeAtlas(bounds, "ForegroundLight", TextureFormat.R16G16B16A16Float);
+		atlasBackgroundLightEmission = NewAtlas(bounds, "BackgroundLightEmission", TextureFormat.R16G16B16A16Float);
+		atlasForegroundLightEmission = NewAtlas(bounds, "ForegroundLightEmission", TextureFormat.R16G16B16A16Float);
 		atlasTileField = NewAtlas(bounds, "TileField");
 		atlasBackgroundCoverage = NewAtlas(bounds, "BackgroundCoverage");
 		atlasNormal = NewAtlas(bounds, "Normal");
@@ -263,16 +263,17 @@ sealed class GpuGlobalIllumination : IDisposable
 			DisposeAtlas();
 	}
 
-	Target NewAtlas(RectInt bounds, string name)
+	Target NewAtlas(RectInt bounds, string name, TextureFormat format = TextureFormat.Color)
 	{
-		var target = new Target(graphicsDevice, bounds.Width, bounds.Height, $"IndirectAtlas/{name}");
+		ReadOnlySpan<TextureFormat> attachments = [format];
+		var target = new Target(graphicsDevice, bounds.Width, bounds.Height, attachments, name: $"IndirectAtlas/{name}");
 		target.Clear(Color.Transparent);
 		return target;
 	}
 
-	Target NewComputeAtlas(RectInt bounds, string name)
+	Target NewComputeAtlas(RectInt bounds, string name, TextureFormat format = TextureFormat.Color)
 	{
-		ReadOnlySpan<TextureFormat> attachments = [TextureFormat.Color];
+		ReadOnlySpan<TextureFormat> attachments = [format];
 		var target = new Target(graphicsDevice, bounds.Width, bounds.Height, attachments, TextureFlags.ComputeWrite, $"IndirectAtlas/{name}");
 		target.Clear(Color.Transparent);
 		return target;

@@ -1,7 +1,8 @@
 {
   "position": [80, -23],
   "size": [40, 23],
-  "ambientColor": "545459",
+  "backdropColor": "000000",
+  "ambientColor": "000000",
   "lightNoise": 0.392,
   "sporeFogStrength": 0.328,
   "reverb": 0.726,
@@ -117,7 +118,10 @@
     {
       "Id": "df0b806bb56ced0b",
       "From": "FloLight",
-      "Position": [45, 57]
+      "Position": [45, 56],
+      "Radius": 178.395,
+      "Intensity": 1.286,
+      "Height": 8.844
     },
     {
       "Id": "06928e3f21647f3f",
@@ -128,10 +132,11 @@
       "Id": "58c2c2a0705f5ebf",
       "From": "FloLight",
       "Position": [176, 1],
-      "Radius": 50.049,
       "CookieAngleDegrees": 40.39,
       "Cookie": "None",
-      "DrawSprite": false
+      "DrawSprite": false,
+      "Intensity": 0.663,
+      "Radius": 154.608
     },
     {
       "Id": "dc15f257c5697a18",
@@ -157,9 +162,9 @@
     {
       "Id": "0f9501f28f2dca60",
       "Type": "Light",
-      "Position": [320, 48],
-      "Intensity": 0.692,
-      "DrawSprite": false
+      "Position": [283, 21],
+      "Radius": 131.156,
+      "Intensity": 0.633
     }
   ]
 }
