@@ -254,7 +254,15 @@ public partial class Game
 		catch (Exception e)
 		{
 			if (audioFailures.Add($"param:{name}"))
-				Console.Error.WriteLine($"Failed to set FMOD parameter '{name}' for event {instance.EventPath}': {e}");
+			{
+				var message = e.ToString();
+
+				// shorten the exception tostring output for our known ERR_EVENT_NOT_FOUND case.
+				if (message.Contains("Failed to set FMOD event parameter") && e.Message.Contains("ERR_EVENT_NOT_FOUND"))
+					message = "ERR_EVENT_NOT_FOUND";
+
+				Console.Error.WriteLine($"Failed to set FMOD parameter '{name}' for event {instance.EventPath}': {message}");
+			}
 		}
 	}
 

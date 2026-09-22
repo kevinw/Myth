@@ -120,6 +120,7 @@ public class PatternProjectile : Actor
 			batcher.Circle(Vector2.Zero, DrawRadius, CircleSegments, Color);
 		}
 	}
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 
 	void BuildFan(Span<Surface.Vertex> fan, float radius, float stretch, float squash)
 	{

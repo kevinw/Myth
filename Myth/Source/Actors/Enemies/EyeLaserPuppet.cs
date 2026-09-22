@@ -1438,6 +1438,7 @@ public sealed class EyeLaserPuppet : RigPuppet, ILiveStatus
 	}
 
 	public override void RenderEmissive(Batcher batcher) => RenderLaser(batcher, true);
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 
 	void RenderLaser(Batcher batcher, bool emissive)
 	{

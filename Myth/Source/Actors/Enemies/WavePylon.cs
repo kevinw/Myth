@@ -217,6 +217,7 @@ public sealed class WavePylon : Actor
 
 	public override void Render(Batcher batcher) => DrawPylon(batcher, false);
 	public override void RenderEmissive(Batcher batcher) => DrawPylon(batcher, true);
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 
 	void DrawPylon(Batcher batcher, bool emissive)
 	{

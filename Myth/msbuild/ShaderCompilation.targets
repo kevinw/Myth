@@ -10,7 +10,7 @@
   <Import Project="$(MSBuildThisFileDirectory)../../Foster/msbuild/ShaderCompilation.targets" />
 
   <ItemGroup>
-    <_ShaderCompile Update="$(ShaderSourceDir)/Compute/NCAPresent.hlsl;$(ShaderSourceDir)/Compute/NeuralTextureDecode.hlsl;$(ShaderSourceDir)/Compute/LightMasks.hlsl">
+    <_ShaderCompile Update="$(ShaderSourceDir)/Compute/NCAPresent.hlsl;$(ShaderSourceDir)/Compute/NeuralTextureDecode.hlsl;$(ShaderSourceDir)/Compute/LightMasks.hlsl;$(ShaderSourceDir)/Compute/IndirectResolve.hlsl">
       <WebWriteOnlyStorageTexture>true</WebWriteOnlyStorageTexture>
     </_ShaderCompile>
   </ItemGroup>

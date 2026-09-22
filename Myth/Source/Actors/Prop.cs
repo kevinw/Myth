@@ -40,6 +40,7 @@ public class Prop : Actor
 	public string Category = "";
 	public Factory.TileLayer Layer;
 	public bool Decal;
+	public bool EmitsLight = true;
 	public int Health = 1;
 	[I(0, 1)] public float AnimationSpeedRandomness;
 	float animationRate = 1;
@@ -63,6 +64,11 @@ public class Prop : Actor
 	{
 		if (runtimePropFlags.Has(RuntimePropFlags.RenderEmissive))
 			RenderSpriteSubtexture(batcher, SubtextureType.Emissive, PropColor);
+	}
+	public override void RenderLightEmission(Batcher batcher)
+	{
+		if (EmitsLight)
+			RenderEmissive(batcher);
 	}
 
 	ActorDestructionTrigger? destroyTrigger;

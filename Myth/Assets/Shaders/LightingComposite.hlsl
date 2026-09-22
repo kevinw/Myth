@@ -25,6 +25,7 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
     float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
+    float4 IndirectSettings; // x = background strength, y = foreground strength, z = actor gain, w = hero fill
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -63,6 +64,9 @@ SamplerState SporeFogSampler : register(s10, space2);
 
 Texture2D ActorTileFieldTexture : register(t11, space2);
 SamplerState ActorTileFieldSampler : register(s11, space2);
+
+Texture2D IndirectLightTexture : register(t12, space2);
+SamplerState IndirectLightSampler : register(s12, space2);
 
 struct VsInput
 {
@@ -335,9 +339,10 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
 #endif
 }
 
-float4 light_scene(float4 scene, float4 light, float4 emissive, float2 world_pixel, float2 pattern_pixel,
+float4 light_scene(float4 scene, float4 light, float3 indirect, float4 emissive, float2 world_pixel, float2 pattern_pixel,
     float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
 {
+    light.rgb += indirect;
     light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
     float brightness = max(max(scene.r, scene.g), scene.b);
     float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
@@ -361,6 +366,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background_light = LightTexture.Sample(LightSampler, sample);
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
+    float3 indirect_light = IndirectLightTexture.Sample(IndirectLightSampler, sample).rgb;
     float4 normal_data = NormalTexture.Sample(NormalSampler, sample);
     float dither_mask = normal_data.b;
     float normal_slope = normal_data.a * saturate(length(normal_data.rg * 2.0 - 1.0));
@@ -369,13 +375,14 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float4 background_tile_field = tile_field;
     float2 background_pattern_pixel = pattern_pixel;
     float background_detail_priority = 0.5;
+    float actor_coverage = 0.0;
     if (NormalDitherSettings.z > 0.5)
     {
         float4 actor_tile_field = ActorTileFieldTexture.Sample(ActorTileFieldSampler, sample);
         float packed_actor_family_variant = floor(actor_tile_field.r * 255.0 + 0.5);
         float actor_family = floor(packed_actor_family_variant / 32.0);
         float actor_variant = fmod(packed_actor_family_variant, 32.0);
-        float actor_coverage = step(0.5, actor_family);
+        actor_coverage = step(0.5, actor_family);
         float4 decoded_actor_tile_field = float4(actor_variant / 255.0, actor_family * 32.0 / 255.0, 0.0, 1.0);
         background_tile_field = lerp(tile_field, decoded_actor_tile_field, actor_coverage);
         float packed_actor_scale_priority = floor(actor_tile_field.g * 255.0 + 0.5);
@@ -399,12 +406,16 @@ float4 fragment_main(VsOutput input) : SV_Target0
         background_light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
     }
 
-    float4 background = light_scene(background_scene, background_light, background_emissive, world_pixel,
+    float actor_indirect = lerp(1.0, IndirectSettings.z, actor_coverage);
+    float hero_indirect = actor_coverage * IndirectSettings.w;
+    float3 background_indirect = indirect_light * IndirectSettings.x * actor_indirect + indirect_light * hero_indirect;
+    float4 background = light_scene(background_scene, background_light, background_indirect, background_emissive, world_pixel,
         background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
     background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
         ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
+        indirect_light * IndirectSettings.y,
         ForegroundEmissiveTexture.Sample(ForegroundEmissiveSampler, sample),
         world_pixel,
         pattern_pixel,

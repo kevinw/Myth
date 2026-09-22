@@ -42,7 +42,7 @@ public sealed partial class GameView
 			Manager.Visuals.AmbientOcclusionStrength > 0 && blurMaterial != null;
 		if (hasForegroundDecals)
 			DrawParticleSolidMask();
-		if (hasBackgroundDecals || buildAo)
+		if (hasBackgroundDecals || buildAo || PerfToggles.GlobalIllumination)
 			DrawBackgroundCoverage();
 
 		using (PerfStats.Time(PerfStat.World))
@@ -75,12 +75,26 @@ public sealed partial class GameView
 					DrawEmissiveLayer(BackgroundEmissive, background: true);
 				using (GraphicsDevice.DebugGroup("Myth/foreground emissive"))
 					DrawEmissiveLayer(ForegroundEmissive, background: false);
+				if (PerfToggles.GlobalIllumination)
+				{
+					using (GraphicsDevice.DebugGroup("Myth/background light emission"))
+						DrawEmissiveLayer(BackgroundLightEmission, background: true, lightEmission: true);
+					using (GraphicsDevice.DebugGroup("Myth/foreground light emission"))
+						DrawEmissiveLayer(ForegroundLightEmission, background: false, lightEmission: true);
+				}
+				else
+				{
+					BackgroundLightEmission.Clear(Color.Transparent);
+					ForegroundLightEmission.Clear(Color.Transparent);
+				}
 			}
 		}
 		else
 		{
 			BackgroundEmissive.Clear(Color.Transparent);
 			ForegroundEmissive.Clear(Color.Transparent);
+			BackgroundLightEmission.Clear(Color.Transparent);
+			ForegroundLightEmission.Clear(Color.Transparent);
 		}
 
 		if (
@@ -153,6 +167,8 @@ public sealed partial class GameView
 			}
 			if (debugView == DebugView.LightMask)
 				output = BackgroundLightMask;
+			else if (debugView == DebugView.IndirectLight)
+				output = IndirectLight;
 			else if (debugView == DebugView.NormalBuffer)
 				output = NormalBuffer;
 			else if (debugView == DebugView.Reflection)
@@ -174,7 +190,8 @@ public sealed partial class GameView
 				}
 			}
 		}
-		if (PerfToggles.Particles && particleSystem is { Supported: true })
+		if (debugView is not DebugView.LightMask and not DebugView.IndirectLight &&
+			PerfToggles.Particles && particleSystem is { Supported: true })
 		{
 			using (GraphicsDevice.DebugGroup("Myth/particles"))
 				particleSystem.Render(output, BackgroundLightMask, RenderCamera, zoomLevel,
@@ -644,7 +661,7 @@ public sealed partial class GameView
 		return true;
 	}
 
-	void DrawEmissiveLayer(Target target, bool background)
+	void DrawEmissiveLayer(Target target, bool background, bool lightEmission = false)
 	{
 		target.Clear(Color.Transparent);
 		if (background && ShowBackgroundLayer && hasProceduralWalls)
@@ -663,7 +680,10 @@ public sealed partial class GameView
 			Batcher.PushBlend(EmissiveOccluderBlend);
 			actor.RenderEmissiveOccluder(Batcher);
 			Batcher.PopBlend();
-			actor.RenderEmissive(Batcher);
+			if (lightEmission)
+				actor.RenderLightEmission(Batcher);
+			else
+				actor.RenderEmissive(Batcher);
 			if (decal)
 				Batcher.PopMaterial();
 			Batcher.PopMatrix();
@@ -874,6 +894,7 @@ public sealed partial class GameView
 			return ForegroundScreen;
 
 		DrawGpuLightMasks();
+		DrawGlobalIllumination();
 		if (PerfToggles.DitherAndTileField && debugView != DebugView.NormalBuffer)
 		{
 			using (GraphicsDevice.DebugGroup("Myth/dither mask"))
@@ -894,6 +915,105 @@ public sealed partial class GameView
 			ApplyLightingNoise(Screen);
 
 		return Screen;
+	}
+
+	void DrawGlobalIllumination()
+	{
+		if (!PerfToggles.GlobalIllumination || gpuGlobalIllumination is not { Supported: true } renderer ||
+			game.CurrentRoom is not { } currentRoom)
+		{
+			IndirectLight.Clear(Color.Transparent);
+			return;
+		}
+
+		if (renderer.EnsureRooms(currentRoom, nextRoom))
+			SeedGlobalIlluminationAtlas(renderer);
+
+		using (GraphicsDevice.DebugGroup("Myth/global illumination"))
+			renderer.Render(
+				Batcher,
+				renderer.AtlasBounds,
+				BackgroundScreen,
+				ForegroundScreen,
+				BackgroundLightMask,
+				ForegroundLightMask,
+				BackgroundLightEmission,
+				ForegroundLightEmission,
+				TileField,
+				BackgroundCoverage,
+				NormalBuffer,
+				IndirectLight,
+				RenderCamera,
+				zoomLevel,
+				CurrentAmbientColor(),
+				CurrentAmbientIntensity(),
+				Manager.Visuals);
+	}
+
+	void SeedGlobalIlluminationAtlas(GpuGlobalIllumination renderer)
+	{
+		var oldCamera = Camera;
+		var oldShake = shake;
+		var oldZoom = zoomLevel;
+		var oldVisibleWorldBounds = game.VisibleWorldBounds;
+		var oldBackgroundColorField = hasBackgroundColorField;
+		var oldForegroundColorField = hasForegroundColorField;
+		var oldHasRoomReflections = hasRoomReflections;
+		var oldReflections = PerfToggles.Reflections;
+		var oldNormalBuffer = NormalBuffer;
+		var oldTileField = TileField;
+		var oldBackgroundCoverage = BackgroundCoverage;
+		var oldSpriteShadowMask = SpriteShadowMask;
+		var oldBackgroundLightMask = BackgroundLightMask;
+		var oldForegroundLightMask = ForegroundLightMask;
+		var oldSporeFogMask = SporeFogMask;
+
+		try
+		{
+			var bounds = renderer.AtlasBounds;
+			Camera = bounds.TopLeft;
+			shake = Point2.Zero;
+			zoomLevel = 1;
+			game.VisibleWorldBounds = new(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+			hasBackgroundColorField = hasForegroundColorField = false;
+			PerfToggles.Reflections = false;
+			NormalBuffer = renderer.AtlasNormal;
+			TileField = renderer.AtlasTileField;
+			BackgroundCoverage = renderer.AtlasBackgroundCoverage;
+			SpriteShadowMask = renderer.AtlasSpriteShadow;
+			BackgroundLightMask = renderer.AtlasBackgroundLight;
+			ForegroundLightMask = renderer.AtlasForegroundLight;
+			SporeFogMask = renderer.AtlasSporeFog;
+
+			DrawWorldLayer(renderer.AtlasBackgroundScene, background: true);
+			DrawWorldLayer(renderer.AtlasForegroundScene, background: false);
+			DrawWaterBodies(renderer.AtlasForegroundScene);
+			DrawHiddenCovers(renderer.AtlasForegroundScene);
+			DrawEmissiveLayer(renderer.AtlasBackgroundLightEmission, background: true, lightEmission: true);
+			DrawEmissiveLayer(renderer.AtlasForegroundLightEmission, background: false, lightEmission: true);
+			DrawNormalBuffer();
+			DrawTileField();
+			DrawBackgroundCoverage();
+			DrawGpuLightMasks();
+		}
+		finally
+		{
+			NormalBuffer = oldNormalBuffer;
+			TileField = oldTileField;
+			BackgroundCoverage = oldBackgroundCoverage;
+			SpriteShadowMask = oldSpriteShadowMask;
+			BackgroundLightMask = oldBackgroundLightMask;
+			ForegroundLightMask = oldForegroundLightMask;
+			SporeFogMask = oldSporeFogMask;
+			hasBackgroundColorField = oldBackgroundColorField;
+			hasForegroundColorField = oldForegroundColorField;
+			hasRoomReflections = oldHasRoomReflections;
+			PerfToggles.Reflections = oldReflections;
+			game.VisibleWorldBounds = oldVisibleWorldBounds;
+			Camera = oldCamera;
+			shake = oldShake;
+			zoomLevel = oldZoom;
+		}
 	}
 
 	void ApplyLightingNoise(Target target)
@@ -1096,10 +1216,11 @@ public sealed partial class GameView
 		material.Fragment.Samplers[9] = new(NormalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
+		material.Fragment.Samplers[12] = new(IndirectLight, new(TextureFilter.Linear, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[24 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[28 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
 		uniforms[i++] = Screen.Height;
@@ -1125,6 +1246,10 @@ public sealed partial class GameView
 		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
 		uniforms[i++] = Manager.Visuals.RimLightStrength;
+		uniforms[i++] = Manager.Visuals.IndirectLightStrength;
+		uniforms[i++] = Manager.Visuals.IndirectForegroundStrength;
+		uniforms[i++] = Manager.Visuals.IndirectActorGain;
+		uniforms[i++] = Manager.Visuals.IndirectHeroFill;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
 		material.Fragment.SetUniformBuffer(uniforms);
 
@@ -1348,6 +1473,7 @@ public sealed partial class GameView
 	{
 		if (roomTileFieldCaches.TryGetValue(renderRoom, out var cache))
 			cache.Dirty = true;
+		gpuGlobalIllumination?.InvalidateRoom(renderRoom);
 	}
 
 	void RebuildRoomTileFieldCache(RoomTileFieldCache cache)
@@ -1921,6 +2047,7 @@ public sealed partial class GameView
 	{
 		if (roomNormalCaches.TryGetValue(renderRoom, out var cache))
 			cache.Dirty = true;
+		gpuGlobalIllumination?.InvalidateRoom(renderRoom);
 	}
 
 	// Scratch for RebuildRoomNormalCache, reused across rooms. The solid mask is one byte per room
@@ -2260,9 +2387,12 @@ public sealed partial class GameView
 		ColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ColorField"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
+		BackgroundLightEmission = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundLightEmission"));
+		ForegroundLightEmission = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundLightEmission"));
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
+		IndirectLight = Track(CreateComputeTarget(width, height, "IndirectLight"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
 		InversionSnapshot = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "InversionSnapshot"));
@@ -2321,7 +2451,7 @@ public sealed partial class GameView
 	{
 		layerTransitionCaptured = false;
 		foreach (var target in debugTargets)
-			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask)
+			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask || target == IndirectLight)
 				target.Dispose();
 			else
 				RenderTargetPool.Return(target);
@@ -2519,7 +2649,7 @@ public sealed partial class GameView
 	static readonly BlendMode TileFieldStampBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
 		BlendOp.Add, BlendFactor.One, BlendFactor.Zero,
-		BlendMask.Red | BlendMask.Green | BlendMask.Blue, Color.White);
+		BlendMask.RGBA, Color.White);
 	static readonly BlendMode NormalBufferBlend = new(
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
 		BlendOp.Add, BlendFactor.One, BlendFactor.OneMinusSrcAlpha,
@@ -2538,6 +2668,7 @@ public sealed partial class GameView
 	const float ActorDitherAmount = 0.2f;
 	readonly Batcher Batcher;
 	readonly GpuLighting? gpuLighting;
+	readonly GpuGlobalIllumination? gpuGlobalIllumination;
 	readonly ProceduralWallRenderer? proceduralWallRenderer;
 	readonly float[] ditherAnchorOffsets = new float[DitherAnchorFloatCount];
 	bool hasProceduralWalls;
@@ -2549,9 +2680,12 @@ public sealed partial class GameView
 	Target ColorField { get; set; } = null!;
 	Target BackgroundEmissive { get; set; } = null!;
 	Target ForegroundEmissive { get; set; } = null!;
+	Target BackgroundLightEmission { get; set; } = null!;
+	Target ForegroundLightEmission { get; set; } = null!;
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
+	Target IndirectLight { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target DistortionMask { get; set; } = null!;
 	Target InversionSnapshot { get; set; } = null!;

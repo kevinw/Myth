@@ -144,6 +144,7 @@ public class Door : Actor, IActivatable, IResizable
 	public override void Render(Batcher batcher) => RenderSized(batcher, SubtextureType.Color, Color.White);
 	public override void RenderNormals(Batcher batcher) => RenderSized(batcher, SubtextureType.Normals, Color.White);
 	public override void RenderEmissive(Batcher batcher) => RenderSized(batcher, SubtextureType.Emissive, Color.White);
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 	public override void RenderShadow(Batcher batcher, Color color) => RenderSized(batcher, SubtextureType.Color, color);
 	public override void RenderReflection(Batcher batcher, Color color) => RenderSized(batcher, SubtextureType.Color, color);
 

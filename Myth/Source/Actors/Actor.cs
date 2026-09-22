@@ -759,6 +759,7 @@ public class Actor
 	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 
 	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
+	public virtual void RenderLightEmission(Batcher batcher) { }
 	public virtual void RenderEmissiveOccluder(Batcher batcher) => Render(batcher);
 	public virtual void Render(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Color);
 	public virtual bool HasWorldDistortion => false;

@@ -143,6 +143,7 @@ public class Floater : Actor
 		else if (laserFadeTimer > 0)
 			RenderLasers(batcher, laserFadeTimer / LaserFadeTime, laserFadeTimer / LaserFadeTime);
 	}
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 
 	public override void ForEachLight(Action<Vector2, float, float, float, Color> action)
 	{

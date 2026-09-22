@@ -31,6 +31,25 @@ sealed class VisualTuning
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
 	public float RimLightStrength = 0.18f;
+	public float IndirectLightStrength = 0.9f;
+	public float IndirectForegroundStrength = 0.85f;
+	public float IndirectResponseCurve = 0.85f;
+	public float IndirectActorGain = 1.25f;
+	public float IndirectHeroFill = 0.12f;
+	public float IndirectLightRange = 192.0f;
+	public float IndirectLightFalloff = 0.012f;
+	public float IndirectBounceGain = 1.05f;
+	public float IndirectBounceSaturation = 1.25f;
+	public float IndirectBounceAlbedoFloor = 0.3f;
+	public float IndirectBounceWarmth = 0.35f;
+	public float IndirectColorBleed = 1.1f;
+	public float IndirectForegroundReflectivity = 0.65f;
+	public float IndirectStoneReflectivity = 0.95f;
+	public float IndirectOrganicReflectivity = 1.25f;
+	public float IndirectWaterReflectivity = 0.55f;
+	public float IndirectOtherReflectivity = 1.0f;
+	public float IndirectDirectionality = 0.7f;
+	public float IndirectNormalWrap = 0.35f;
 	public float DitherStrength = 1.0f;
 	public int NormalDitherLevels = 4;
 	public float SporeFogScale = 1.0f / 80.0f;
@@ -83,6 +102,7 @@ public partial class Manager
 				PerfToggles.LightingNoise = true;
 				PerfToggles.Crt = true;
 				PerfToggles.AmbientOcclusion = true;
+				PerfToggles.GlobalIllumination = true;
 				PerfToggles.SoftShadows = true;
 			}
 		}
@@ -144,6 +164,34 @@ public partial class Manager
 				VisualRow("Bias", ref Visuals.ShadowBias, VisualDefaults.ShadowBias, 0, 4);
 				TreePop();
 			}
+			PopID();
+		}
+
+		if (CollapsingHeader("Global Illumination", ImGuiTreeNodeFlags.DefaultOpen))
+		{
+			PushID("GlobalIllumination");
+			VisualToggle("Enabled", ref PerfToggles.GlobalIllumination);
+			VisualRow("Background Strength", ref Visuals.IndirectLightStrength, VisualDefaults.IndirectLightStrength, 0, 2);
+			VisualRow("Foreground Strength", ref Visuals.IndirectForegroundStrength, VisualDefaults.IndirectForegroundStrength, 0, 2);
+			VisualRow("Response Curve", ref Visuals.IndirectResponseCurve, VisualDefaults.IndirectResponseCurve, 0.25f, 2);
+			VisualRow("Actor Gain", ref Visuals.IndirectActorGain, VisualDefaults.IndirectActorGain, 0, 4);
+			VisualRow("Hero Fill", ref Visuals.IndirectHeroFill, VisualDefaults.IndirectHeroFill, 0, 0.5f);
+			VisualRow("Reach", ref Visuals.IndirectLightRange, VisualDefaults.IndirectLightRange, 16, 384);
+			VisualRow("Distance Falloff", ref Visuals.IndirectLightFalloff, VisualDefaults.IndirectLightFalloff, 0, 0.15f);
+			VisualRow("Bounce Gain", ref Visuals.IndirectBounceGain, VisualDefaults.IndirectBounceGain, 0, 1.5f);
+			VisualRow("Bounce Saturation", ref Visuals.IndirectBounceSaturation, VisualDefaults.IndirectBounceSaturation, 0, 3);
+			VisualRow("Bounce Albedo Floor", ref Visuals.IndirectBounceAlbedoFloor, VisualDefaults.IndirectBounceAlbedoFloor, 0, 1);
+			VisualRow("Bounce Warmth", ref Visuals.IndirectBounceWarmth, VisualDefaults.IndirectBounceWarmth, 0, 1);
+			VisualRow("Color Bleed", ref Visuals.IndirectColorBleed, VisualDefaults.IndirectColorBleed, 0, 2);
+			VisualRow("Foreground Reflectivity", ref Visuals.IndirectForegroundReflectivity, VisualDefaults.IndirectForegroundReflectivity, 0, 2);
+			VisualRow("Stone Reflectivity", ref Visuals.IndirectStoneReflectivity, VisualDefaults.IndirectStoneReflectivity, 0, 2);
+			VisualRow("Organic Reflectivity", ref Visuals.IndirectOrganicReflectivity, VisualDefaults.IndirectOrganicReflectivity, 0, 2);
+			VisualRow("Water Reflectivity", ref Visuals.IndirectWaterReflectivity, VisualDefaults.IndirectWaterReflectivity, 0, 2);
+			VisualRow("Other Reflectivity", ref Visuals.IndirectOtherReflectivity, VisualDefaults.IndirectOtherReflectivity, 0, 2);
+			VisualRow("Directionality", ref Visuals.IndirectDirectionality, VisualDefaults.IndirectDirectionality, 0, 1);
+			VisualRow("Normal Wrap", ref Visuals.IndirectNormalWrap, VisualDefaults.IndirectNormalWrap, 0, 2);
+			if (Button("Toggle Indirect Debug", new Vector2(-1, 0)))
+				game?.ToggleDebugView(Game.DebugView.IndirectLight);
 			PopID();
 		}
 

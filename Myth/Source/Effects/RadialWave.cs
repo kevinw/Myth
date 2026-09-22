@@ -605,6 +605,7 @@ public sealed class RadialWave : Actor, INeuralTextureAgent, IRoomInversionListe
 
 	public override void Render(Batcher batcher) => RenderWave(batcher, false);
 	public override void RenderEmissive(Batcher batcher) => RenderWave(batcher, true);
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 	public override bool HasWorldDistortion => !Finished && birthEmitted && preEchoRadius > 0 && preEchoFade > 0;
 
 	public override void RenderWorldDistortion(Batcher batcher)

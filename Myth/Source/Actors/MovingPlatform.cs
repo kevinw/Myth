@@ -349,6 +349,7 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 			batcher.Circle(NortheastActivationLight, ActivationLightLensRadius, ActivationLightSteps, ActivationLightColor * alpha);
 		}
 	}
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 	// Position, Visible and Material are Actor fields, which can't satisfy interface properties.
 	Point2 IDualGridRect.Position => Position;
 	bool IDualGridRect.Visible => Visible;

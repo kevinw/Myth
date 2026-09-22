@@ -3,7 +3,7 @@
   "size": [40, 23],
   "backdropColor": "3F1C59",
   "backdropColor2": "5A1F7B",
-  "ambientColor": "727272",
+  "ambientColor": "404040",
   "BurrowInverts": true,
   "legend": {
     "#": "back",
@@ -71,16 +71,20 @@
     {
       "Id": "a44b0b0e74bfcf97",
       "Type": "Light",
-      "Position": [44, 76],
+      "Position": [44, 68],
       "Height": 4.714,
-      "Invert": "UninvertedOnly"
+      "Invert": "UninvertedOnly",
+      "Radius": 126.383,
+      "Intensity": 0.361
     },
     {
       "Id": "5029ed8570a4772e",
       "Type": "Light",
       "Position": [220, 36],
       "Height": 11.786,
-      "Invert": "UninvertedOnly"
+      "Invert": "UninvertedOnly",
+      "Radius": 148.94,
+      "Intensity": 0.623
     },
     {
       "Id": "27e49f1c1d826637",
@@ -98,9 +102,11 @@
     {
       "Id": "e24f0d397b33f4de",
       "Type": "Light",
-      "Position": [100, 128],
+      "Position": [97, 124],
       "Height": 4.714,
-      "Invert": "InvertedOnly"
+      "Invert": "InvertedOnly",
+      "Radius": 97.443,
+      "Intensity": 0.639
     },
     {
       "Id": "0b52dbe1e050e2f5",
@@ -132,6 +138,15 @@
       "From": "FloLight",
       "Position": [125, -18],
       "Intensity": 1.433
+    },
+    {
+      "Id": "1d641740a1cc290c",
+      "Type": "Light",
+      "Position": [203, 93],
+      "Height": 4.714,
+      "Invert": "InvertedOnly",
+      "Radius": 97.443,
+      "Intensity": 0.639
     }
   ]
 }

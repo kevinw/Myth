@@ -53,4 +53,5 @@ public class Pop : Actor
 		if (Flags.Has(PopFlags.Emissive))
 			Render(batch);
 	}
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 }

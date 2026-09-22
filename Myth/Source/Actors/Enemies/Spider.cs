@@ -416,6 +416,7 @@ public class Spider : Actor
 		if (!SpriteBlinkHidden)
 			DrawBody(batcher, Color.White, emissive: true, flatTint: false);
 	}
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 
 	Vector2 BodyOffset => bodyPosition - (Vector2)Position - surface.TowardSurface * LayBulge * 3 * Scale;
 

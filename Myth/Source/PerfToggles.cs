@@ -13,6 +13,7 @@ internal static class PerfToggles
 	internal static bool Reflections = true;
 	internal static bool LightingNoise = true;
 	internal static bool AmbientOcclusion = true;
+	internal static bool GlobalIllumination = true;
 	internal static bool SoftShadows = true;
 	internal static bool Particles = true;
 	internal static bool BurrowParticles = true;
@@ -30,6 +31,7 @@ internal static class PerfToggles
 		Reflections = false;
 		LightingNoise = false;
 		AmbientOcclusion = false;
+		GlobalIllumination = false;
 		SoftShadows = false;
 		BudAIEnabled = false;
 	}
@@ -57,6 +59,7 @@ internal static class PerfToggles
 			() => Set(ref LightingNoise, nameof(LightingNoise)),
 			() => Set(ref NormalBuffer, nameof(NormalBuffer)),
 			() => Set(ref AmbientOcclusion, nameof(AmbientOcclusion)),
+			() => Set(ref GlobalIllumination, nameof(GlobalIllumination)),
 			() => {
 				if (reveal) {
 					if (game.Manager.Visuals.DitherStrength != 1.0f) {

@@ -95,4 +95,5 @@ public class PatternTurret : Actor
 
 	public override void RenderEmissive(Batcher batcher)
 		=> batcher.Circle(Vector2.Zero, Radius * (0.6f + charge), 12, new Color(0x88e7ff) * charge);
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 }

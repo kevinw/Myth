@@ -1749,6 +1749,11 @@ public partial class Manager : App
 #endif
 
 		var chordActive = false;
+		if (!keyboardShortcutsBlocked && playing && !Input.Keyboard.CtrlOrCommand && debugControls.GlobalIllumination.Pressed)
+		{
+			ToggleGlobalIllumination();
+			chordActive = true;
+		}
 		foreach (var controller in Input.Controllers)
 		{
 			if (!controller.Connected || !PerfModifierDown(controller))
@@ -1889,6 +1894,12 @@ public partial class Manager : App
 	{
 		PerfToggles.Lighting = !PerfToggles.Lighting;
 		ShowPerfToggleMessage("Lighting", PerfToggles.Lighting);
+	}
+
+	void ToggleGlobalIllumination()
+	{
+		PerfToggles.GlobalIllumination = !PerfToggles.GlobalIllumination;
+		ShowPerfToggleMessage("Global Illumination", PerfToggles.GlobalIllumination);
 	}
 
 #if EDITOR

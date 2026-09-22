@@ -33,6 +33,7 @@ public class DebugControls
 	public readonly VirtualAction RenderTargetShake;
 	public readonly VirtualAction CenterCamera;
 	public readonly VirtualAction PerfReveal;
+	public readonly VirtualAction GlobalIllumination;
 	public readonly VirtualAction VoiceTest;
 	public readonly VirtualAction TimeScaleDown;
 	public readonly VirtualAction TimeScaleUp;
@@ -115,6 +116,9 @@ public class DebugControls
 		PerfReveal = Make("DebugPerfReveal",
 			new ActionBindingSet().Add(Keys.U),
 			"U / Shift+U", "Perf toggles: reveal / hide one", Context.Playing);
+		GlobalIllumination = Make("DebugGlobalIllumination",
+			new ActionBindingSet().Add(Keys.Z),
+			"Z", "Toggle global illumination", Context.Playing);
 		VoiceTest = Make("DebugVoiceTest",
 			new ActionBindingSet().Add(Keys.V),
 			"V", "Bud voice test line", Context.Playing);

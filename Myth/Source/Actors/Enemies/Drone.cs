@@ -359,6 +359,7 @@ public class Drone : Actor
 	{
 		DrawEye(batcher);
 	}
+	public override void RenderLightEmission(Batcher batcher) => RenderEmissive(batcher);
 
 	void RenderShapes(Batcher batcher, Color? color = null)
 	{

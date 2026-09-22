@@ -116,11 +116,7 @@ public class SavePoint : Actor
 
 	public override void RenderEmissive(Batcher batcher)
 	{
-		// Soft column of light rising from the line, brighter at the base, fading up.
-		var alpha = LightIntensity;
-		var top = LightColor * 0f;
-		var bottom = LightColor * alpha;
-		batcher.Rect(new Rect(-LineWidth / 2f, -LightHeight, LineWidth, LightHeight), top, top, bottom, bottom);
+		RenderLightColumn(batcher);
 
 		if (!showInteract)
 			return;
@@ -131,6 +127,15 @@ public class SavePoint : Actor
 			var frame = interactSprite.GetFrameAt(interactSprite.Animations[0], interactTime, true);
 			batcher.Image(frame.Subtexture, new Vector2(-8, -31), interactSprite.Origin, Vector2.One, 0, Color.White);
 		}
+	}
+
+	public override void RenderLightEmission(Batcher batcher) => RenderLightColumn(batcher);
+
+	void RenderLightColumn(Batcher batcher)
+	{
+		var top = LightColor * 0f;
+		var bottom = LightColor * LightIntensity;
+		batcher.Rect(new Rect(-LineWidth / 2f, -LightHeight, LineWidth, LightHeight), top, top, bottom, bottom);
 	}
 
 	// A faint point light a couple tiles up so the save point actually lights its surroundings.
