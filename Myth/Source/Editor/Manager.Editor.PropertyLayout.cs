@@ -17,7 +17,8 @@ public partial class Manager
 
 	readonly record struct PropertyRowLayout(float ControlWidth);
 
-	static PropertyRowLayout BeginPropertyRow(string label, bool hasTrailingButton = false, int additionalTrailingButtons = 0)
+	static PropertyRowLayout BeginPropertyRow(string label, bool hasTrailingButton = false, int additionalTrailingButtons = 0,
+		string? tooltip = null)
 	{
 		const float MinimumLabelWidth = 94;
 		const float MinimumControlWidth = 72;
@@ -33,7 +34,7 @@ public partial class Manager
 		AlignTextToFramePadding();
 		if (stacked)
 		{
-			DrawPropertyLabel(label, available, rowStartX, rightAligned: false);
+			DrawPropertyLabel(label, available, rowStartX, rightAligned: false, tooltip);
 			var stackedControlWidth = MathF.Max(1, available - trailingWidth);
 			SetNextItemWidth(stackedControlWidth);
 			return new(stackedControlWidth);
@@ -41,7 +42,7 @@ public partial class Manager
 
 		var labelWidth = Math.Clamp(available * 0.25f, MinimumLabelWidth, MaximumLabelWidth);
 		var controlWidth = available - labelWidth - trailingWidth - style.ItemSpacing.X;
-		DrawPropertyLabel(label, labelWidth, rowStartX, rightAligned: true);
+		DrawPropertyLabel(label, labelWidth, rowStartX, rightAligned: true, tooltip);
 		SameLine();
 		SetCursorPosX(rowStartX + labelWidth + style.ItemSpacing.X);
 		SetNextItemWidth(controlWidth);
@@ -49,7 +50,7 @@ public partial class Manager
 		return new(controlWidth);
 	}
 
-	static void DrawPropertyLabel(string label, float width, float startX, bool rightAligned)
+	static void DrawPropertyLabel(string label, float width, float startX, bool rightAligned, string? tooltip)
 	{
 		var fullSize = CalcTextSize(label);
 		var clipped = fullSize.X > width;
@@ -62,8 +63,13 @@ public partial class Manager
 		var textSize = CalcTextSize(text.AsSpan());
 		SetCursorPosX(startX + (rightAligned ? MathF.Max(0, width - textSize.X) : 0));
 		TextUnformatted(text.AsSpan());
-		if (clipped && IsItemHovered())
-			SetTooltip(label);
+		if (IsItemHovered())
+		{
+			if (tooltip != null)
+				VisualTooltip(tooltip);
+			else if (clipped)
+				SetTooltip(label);
+		}
 		text.Dispose();
 	}
 

@@ -235,9 +235,7 @@ sealed class GpuGlobalIllumination : IDisposable
 
 	public bool EnsureRooms(Room room, Room? nextRoom)
 	{
-		var containsRoom = ReferenceEquals(atlasRoom, room) || ReferenceEquals(atlasNextRoom, room);
-		var containsNextRoom = nextRoom == null || ReferenceEquals(atlasRoom, nextRoom) || ReferenceEquals(atlasNextRoom, nextRoom);
-		if (containsRoom && containsNextRoom)
+		if (ReferenceEquals(atlasRoom, room) && ReferenceEquals(atlasNextRoom, nextRoom))
 			return false;
 
 		DisposeAtlas();

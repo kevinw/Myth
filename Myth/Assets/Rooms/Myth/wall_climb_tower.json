@@ -1,6 +1,7 @@
 {
   "position": [160, -52],
   "size": [40, 52],
+  "ambientColor": "3D3D3E",
   "reverb": 0.532,
   "colorFields": {
     "foreground": "d90d86d2f90132cb.png"
