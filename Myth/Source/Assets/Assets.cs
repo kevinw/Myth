@@ -81,7 +81,7 @@ public static partial class Assets
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 14; // v14: per-frame sprite socket visibility
+	const int visualAssetPackVersion = 15; // v15: slope normal textures
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string worldManifestName = "world.json";
@@ -749,10 +749,12 @@ public static partial class Assets
 			if (!name.EndsWith("-kit", StringComparison.OrdinalIgnoreCase))
 				continue;
 
-			GenerateDualTilesetFromKit(name, ase, out var baseName, out var baseTiles, out var baseSlopeEdges, out var dualName, out var dualVariants, out var dualNormals, out var dualOccluders);
+			GenerateDualTilesetFromKit(name, ase, out var baseName, out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualName, out var dualVariants, out var dualNormals, out var dualOccluders);
 			generatedTileImages[baseName] = baseTiles;
 			generatedTileImages[dualName] = dualVariants;
 			generatedNormalImages[dualName] = dualNormals;
+			if (baseNormals.Count > 0)
+				generatedNormalImages[baseName] = baseNormals;
 			generatedOccluders[dualName] = dualOccluders;
 			if (baseSlopeEdges.Count > 0)
 				generatedSlopeEdgeImages[baseName] = baseSlopeEdges;
@@ -767,10 +769,12 @@ public static partial class Assets
 			if (!tilesetFiles.TryGetValue(spec.MaskKit, out var maskKit))
 				throw new InvalidOperationException($"Tile kit '{spec.Name}' references missing mask kit '{spec.MaskKit}'.");
 
-			GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var dualVariants, out var dualNormals, out var dualOccluders);
+			GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualVariants, out var dualNormals, out var dualOccluders);
 			generatedTileImages[spec.Name] = baseTiles;
 			generatedTileImages[spec.DualName] = dualVariants;
 			generatedNormalImages[spec.DualName] = dualNormals;
+			if (baseNormals.Count > 0)
+				generatedNormalImages[spec.Name] = baseNormals;
 			generatedOccluders[spec.DualName] = dualOccluders;
 			if (baseSlopeEdges.Count > 0)
 				generatedSlopeEdgeImages[spec.Name] = baseSlopeEdges;
@@ -815,6 +819,7 @@ public static partial class Assets
 						packer.Add($"tilesets/{name}/normal/{x}x{y}", normal, new RectInt(x, y, 1, 1) * Game.TileSize);
 				}
 
+			using var baseNormal = normal != null ? ExtractTile(normal, new RectInt(0, 0, 1, 1) * Game.TileSize) : null;
 			var variantIndex = 0;
 			foreach (var layer in variantLayers)
 			{
@@ -823,12 +828,12 @@ public static partial class Assets
 					for (int y = 0; y < rows; y++)
 						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", variant, new RectInt(x, y, 1, 1) * Game.TileSize);
 				using var variantBaseTile = ExtractTile(variant, new RectInt(0, 0, 1, 1) * Game.TileSize);
-				AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex);
+				AddSlopeSubtextures(packer, name, variantBaseTile, variantIndex: variantIndex, normal: baseNormal);
 				variantIndex++;
 			}
 
 			using var baseTile = ExtractTile(image, new RectInt(0, 0, 1, 1) * Game.TileSize);
-			AddSlopeSubtextures(packer, name, baseTile);
+			AddSlopeSubtextures(packer, name, baseTile, normal: baseNormal);
 		}
 
 		foreach (var (name, variants) in generatedTileImages)
@@ -847,12 +852,14 @@ public static partial class Assets
 						packer.Add($"tilesets/{name}/variants/{variantIndex}/{x}x{y}", image, new RectInt(x, y, 1, 1) * Game.TileSize);
 					}
 
+				var normals = generatedNormalImages.GetValueOrDefault(name);
+				var normal = normals != null && variantIndex < normals.Count ? normals[variantIndex] : null;
 				var slopeEdges = generatedSlopeEdgeImages.GetValueOrDefault(name);
 				var slopeEdge = slopeEdges != null && variantIndex < slopeEdges.Count ? slopeEdges[variantIndex] : null;
 				if (variantIndex == 0 && image.Width == Game.TileSize && image.Height == Game.TileSize)
-					AddSlopeSubtextures(packer, name, image, slopeEdge);
+					AddSlopeSubtextures(packer, name, image, slopeEdge, normal);
 				if (image.Width == Game.TileSize && image.Height == Game.TileSize)
-					AddSlopeSubtextures(packer, name, image, variantIndex, slopeEdge);
+					AddSlopeSubtextures(packer, name, image, slopeEdge, normal, variantIndex);
 			}
 		}
 
@@ -1868,11 +1875,12 @@ public static partial class Assets
 	static List<Aseprite.Layer> GetVariantLayers(Aseprite ase, HashSet<Aseprite.Layer> nonDebugLayers)
 		=> [.. ase.Layers.Where(it => nonDebugLayers.Contains(it) && it.Visible && it.Type == Aseprite.LayerType.Normal)];
 
-	static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	static void GenerateDualTilesetFromKit(string kitName, Aseprite ase, out string baseName, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out List<Image> baseNormals, out string dualName, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		baseName = kitName[..^"-kit".Length];
 		baseTiles = [];
 		baseSlopeEdges = [];
+		baseNormals = [];
 		dualName = $"{baseName}-dual";
 		dualVariants = [];
 		dualNormals = [];
@@ -1912,16 +1920,17 @@ public static partial class Assets
 		var edgeWidth = ParseEdgeWidthRange(kitName, edgeSlice);
 		var wobble = ParseMaskWobble(kitName, maskSlice);
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, 1, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, edgeSides, edgeBottoms, edgeWidth, wobble, 1, baseTiles, baseSlopeEdges, baseNormals, dualVariants, dualNormals, dualOccluders);
 	}
 
 	/// Generates the tileset outputs for a JSON kit spec: images come from the spec's
 	/// palette/patterns/noise instead of an .ase, and the silhouette mask is borrowed from
 	/// the referenced .ase kit. Everything downstream is shared with the .ase path.
-	static void GenerateDualTilesetFromSpec(TileKitSpec spec, Aseprite maskKit, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	static void GenerateDualTilesetFromSpec(TileKitSpec spec, Aseprite maskKit, out List<Image> baseTiles, out List<Image> baseSlopeEdges, out List<Image> baseNormals, out List<Image> dualVariants, out List<Image> dualNormals, out List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		baseTiles = [];
 		baseSlopeEdges = [];
+		baseNormals = [];
 		dualVariants = [];
 		dualNormals = [];
 		dualOccluders = [];
@@ -1943,7 +1952,7 @@ public static partial class Assets
 		var (edges, edgeTops, edgeBottoms) = TileKits.RasterizeEdges(spec);
 		var edgeWidth = ParseEdgeWidthValue(spec.Name, spec.EdgeWidth);
 
-		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, spec.FillTiles, baseTiles, baseSlopeEdges, dualVariants, dualNormals, dualOccluders);
+		GenerateDualTilesetCore(mask, fills, heights, edges, edgeTops, [], edgeBottoms, edgeWidth, spec.Wobble, spec.FillTiles, baseTiles, baseSlopeEdges, baseNormals, dualVariants, dualNormals, dualOccluders);
 	}
 
 	// Shared dual-tileset generation. Takes ownership of every image list (disposed here);
@@ -1953,7 +1962,7 @@ public static partial class Assets
 	// this many groups, cycling the fills, so their edges still break up.
 	const int MinWobbleGroups = 4;
 
-	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
+	static void GenerateDualTilesetCore(Image mask, List<Image> fills, List<Image> heights, List<Image> edges, List<Image> edgeTops, List<Image> edgeSides, List<Image> edgeBottoms, (int Min, int Max) edgeWidthRange, float wobble, int fillTiles, List<Image> baseTiles, List<Image> baseSlopeEdges, List<Image> baseNormals, List<Image> dualVariants, List<Image> dualNormals, List<List<Tileset.OccluderSegment[]>> dualOccluders)
 	{
 		static Image? Pick(List<Image> tiles, int i) => tiles.Count > 0 ? tiles[i % tiles.Count] : null;
 
@@ -1980,6 +1989,8 @@ public static partial class Assets
 				if (variant == 0)
 				{
 					baseTiles.Add(ExtractTile(fill, fill.Bounds));
+					if (heights.Count > 0)
+						baseNormals.Add(GenerateNormalImage(heights[fillIndex], wrap: true));
 					if (edges.Count > 0)
 						baseSlopeEdges.Add(ExtractTile(edges[0], edges[0].Bounds));
 				}
@@ -2005,7 +2016,7 @@ public static partial class Assets
 	public static Image GenerateTileKitPreviewImage(TileKitSpec spec, string[] solidMap)
 	{
 		var maskKit = new Aseprite(Path.Join(SourcesPath, "Tilesets", $"{spec.MaskKit}.ase"));
-		GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var dualVariants, out var dualNormals, out _);
+		GenerateDualTilesetFromSpec(spec, maskKit, out var baseTiles, out var baseSlopeEdges, out var baseNormals, out var dualVariants, out var dualNormals, out _);
 
 		var rows = solidMap.Length;
 		var columns = solidMap.Max(row => row.Length);
@@ -2038,7 +2049,7 @@ public static partial class Assets
 					}
 			}
 
-		foreach (var list in (List<Image>[])[baseTiles, baseSlopeEdges, dualVariants, dualNormals])
+		foreach (var list in (List<Image>[])[baseTiles, baseSlopeEdges, baseNormals, dualVariants, dualNormals])
 			foreach (var image in list)
 				image.Dispose();
 		return output;
@@ -3284,9 +3295,14 @@ public static partial class Assets
 		if (x < 0 || y < 0 || x >= Game.TileSize || y >= Game.TileSize)
 			return false;
 
+		return IsSlopeSurfaceSolid(x, y, direction, fill, runLength, runIndex);
+	}
+
+	static bool IsSlopeSurfaceSolid(int x, int y, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
+	{
 		var totalWidth = runLength * Game.TileSize;
 		var runX = runIndex * Game.TileSize + x + 0.5f;
-		var t = Math.Clamp(runX / totalWidth, 0, 1);
+		var t = runX / totalWidth;
 		var surface = direction == Room.SlopeDirection.DownRight
 			? t * Game.TileSize
 			: (1 - t) * Game.TileSize;
@@ -3316,28 +3332,49 @@ public static partial class Assets
 		return false;
 	}
 
-	static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, Image? edge = null)
+	static Image GenerateSlopeNormals(Image color, Image? normal, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
 	{
-		for (var run = 1; run <= MaxSlopeRun; run++)
-			for (var index = 0; index < run; index++)
+		var output = new Image(color.Width, color.Height);
+		// Sample the continuous slope across tile boundaries, avoiding bevels at internal seams.
+		float Solid(int x, int y) => IsSlopeSurfaceSolid(x, y, direction, fill, runLength, runIndex) ? 1 : 0;
+		for (var y = 0; y < color.Height; y++)
+			for (var x = 0; x < color.Width; x++)
 			{
-				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index, edge));
-				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index, edge));
-				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index, edge));
-				packer.Add(SlopeSubtextureName(tilesetName, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index, edge));
+				var alpha = AlphaAt(color, x, y);
+				if (alpha <= 0)
+					continue;
+				var sx = Solid(x - 1, y) - Solid(x + 1, y);
+				var sy = Solid(x, y - 1) - Solid(x, y + 1);
+				if (sx != 0 || sy != 0)
+				{
+					var n = Vector3.Normalize(new Vector3(sx * 1.25f, sy * 1.25f, 1));
+					output[x, y] = new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, alpha);
+				}
+				else
+				{
+					var n = normal != null && normal[x, y].A > 0 ? normal[x, y] : new Color(0.5f, 0.5f, 1f, 1f);
+					n.A = color[x, y].A;
+					output[x, y] = n;
+				}
 			}
+		return output;
 	}
 
-	static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, int variantIndex, Image? edge = null)
+	static void AddSlopeSubtextures(Packer packer, string tilesetName, Image baseTile, Image? edge = null, Image? normal = null, int? variantIndex = null)
 	{
 		for (var run = 1; run <= MaxSlopeRun; run++)
 			for (var index = 0; index < run; index++)
-			{
-				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.BelowLine, run, index, edge));
-				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.BelowLine, run, index, edge));
-				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.DownRight, Room.SlopeFill.AboveLine, run, index, edge));
-				packer.Add(SlopeVariantSubtextureName(tilesetName, variantIndex, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index), GenerateSlopeTile(baseTile, Room.SlopeDirection.UpRight, Room.SlopeFill.AboveLine, run, index, edge));
-			}
+				foreach (var direction in Enum.GetValues<Room.SlopeDirection>())
+					foreach (var fill in Enum.GetValues<Room.SlopeFill>())
+					{
+						var name = variantIndex is { } variant
+							? SlopeVariantSubtextureName(tilesetName, variant, direction, fill, run, index)
+							: SlopeSubtextureName(tilesetName, direction, fill, run, index);
+						using var color = GenerateSlopeTile(baseTile, direction, fill, run, index, edge);
+						using var normals = GenerateSlopeNormals(color, normal, direction, fill, run, index);
+						packer.Add(name, color);
+						packer.Add($"{name}/normal", normals);
+					}
 	}
 
 	static float AlphaAt(Image image, int x, int y)
@@ -3489,7 +3526,7 @@ public static partial class Assets
 		return GetSubtexture(SlopeSubtextureName(tilesetName, direction, fill, clampedRun, clampedIndex));
 	}
 
-	public static Subtexture GetSlopeSubtexture(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex, int seed)
+	public static Subtexture GetSlopeSubtexture(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex, int seed, bool normals = false)
 	{
 		var clampedRun = Math.Clamp(runLength, 1, MaxSlopeRun);
 		var clampedIndex = Math.Clamp(runIndex, 0, clampedRun - 1);
@@ -3497,12 +3534,14 @@ public static partial class Assets
 		if (GetTileset(tilesetName) is { Variants.Count: > 0 } tileset)
 		{
 			var variantIndex = (seed & int.MaxValue) % tileset.Variants.Count;
-			var variant = GetSubtexture(SlopeVariantSubtextureName(tilesetName, variantIndex, direction, fill, clampedRun, clampedIndex));
+			var name = SlopeVariantSubtextureName(tilesetName, variantIndex, direction, fill, clampedRun, clampedIndex);
+			var variant = GetSubtexture(normals ? $"{name}/normal" : name);
 			if (variant.Texture != null)
 				return variant;
 		}
 
-		return GetSubtexture(SlopeSubtextureName(tilesetName, direction, fill, clampedRun, clampedIndex));
+		var baseName = SlopeSubtextureName(tilesetName, direction, fill, clampedRun, clampedIndex);
+		return GetSubtexture(normals ? $"{baseName}/normal" : baseName);
 	}
 
 	static string SlopeSubtextureName(string tilesetName, Room.SlopeDirection direction, Room.SlopeFill fill, int runLength, int runIndex)
