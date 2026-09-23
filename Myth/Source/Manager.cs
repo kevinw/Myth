@@ -782,6 +782,10 @@ public partial class Manager : App
 		ShutdownGame();
 		Steam.Shutdown();
 		Audio.Shutdown();
+#if EDITOR
+		if (UserQuitRequested && !Assets.ContentIsPak)
+			BlobContent.DeleteUnreferenced();
+#endif
 	}
 
 	void ShutdownGame()
