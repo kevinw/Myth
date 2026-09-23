@@ -61,7 +61,7 @@ cbuffer FragmentParams : register(b0, space3)
 {
     float2 TargetSize;
     float LightingEnabled;
-    float _fragmentPad0;
+    float DirectPresence;
     float3 AmbientLight;
     float _fragmentPad1;
 };
@@ -121,7 +121,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     if (response > 0.0)
     {
         float3 light = LightTexture.SampleLevel(LightSampler, input.position.xy / TargetSize, 0.0).rgb;
-        float3 directLight = max(light - AmbientLight, 0.0);
+        float3 directLight = max(light - AmbientLight, 0.0) * DirectPresence;
         float illumination = max(directLight.r, max(directLight.g, directLight.b));
         color.rgb = lerp(color.rgb, color.rgb * directLight * 2.0, response);
         color.a *= lerp(1.0, smoothstep(0.02, 0.45, illumination), response);

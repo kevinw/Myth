@@ -1,7 +1,10 @@
 {
   "position": [-138, 0],
   "size": [40, 45],
-  "ambientColor": "606060",
+  "ambientColor": "000000",
+  "ambientIntensity": 0.585,
+  "lightNoise": 0.059,
+  "sporeFogStrength": 0.424,
   "reverb": 0.347,
   "colorFields": {
     "foreground": "24bed6b397db02bc.png"
@@ -155,16 +158,17 @@
       "Id": "c3d52eaaf4406d05",
       "Type": "Light",
       "Position": [177, 244],
-      "Radius": 65.0,
-      "Height": 5.8
+      "Height": 5.8,
+      "Radius": 171.646,
+      "Intensity": 0.49
     },
     {
       "Id": "c3d52eaaf4406d06",
       "From": "BlueMemoryLight",
       "Position": [230, 120],
-      "Radius": 120.0,
-      "Intensity": 0.6,
-      "Height": 10.25
+      "Height": 10.25,
+      "Radius": 43.429,
+      "Intensity": 0.478
     },
     {
       "Id": "c3d52eaaf4406d07",

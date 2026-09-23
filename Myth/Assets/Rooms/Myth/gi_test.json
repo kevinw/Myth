@@ -78,6 +78,13 @@
       "Position": [74, 106],
       "Radius": 202.231,
       "Intensity": 0.421
+    },
+    {
+      "Id": "4396a0e136c01f22",
+      "Type": "Light",
+      "Position": [231, 36],
+      "Radius": 202.231,
+      "Intensity": 0.421
     }
   ]
 }

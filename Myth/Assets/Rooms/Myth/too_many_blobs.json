@@ -1,7 +1,7 @@
 {
   "position": [0, -6],
   "size": [40, 29],
-  "ambientColor": "606060",
+  "ambientColor": "2C2C2C",
   "reverb": 0.826,
   "legend": {
     "#": "back",
@@ -84,15 +84,17 @@
     {
       "Id": "401c3f08fa07ce16",
       "Type": "Light",
-      "Position": [68, 124],
-      "Height": 3.592
+      "Position": [68, 116],
+      "Height": 3.592,
+      "Radius": 94.966,
+      "Intensity": 0.755
     },
     {
       "Id": "eb17a3bd78a2788e",
       "Type": "Light",
       "Position": [242, 127],
-      "Intensity": 0.694,
-      "Height": 4.898
+      "Height": 4.898,
+      "Intensity": 0.102
     },
     {
       "Id": "14037cef7b8fc351",
@@ -168,8 +170,8 @@
       "Id": "fe250b02f5c722ca",
       "Type": "Light",
       "Position": [148, 148],
-      "Intensity": 1.163,
-      "Height": 4.898
+      "Height": 4.898,
+      "Intensity": 0.543
     },
     {
       "Id": "a6a56bbb347ec4ee",

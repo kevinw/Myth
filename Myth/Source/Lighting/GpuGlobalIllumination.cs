@@ -25,6 +25,8 @@ sealed class GpuGlobalIllumination : IDisposable
 		public float Padding;
 		public Vector4 Ambient;
 		public Vector4 MaterialResponse;
+		public Vector4 RoomBounds;
+		public Vector4 NextRoomBounds;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -34,6 +36,13 @@ sealed class GpuGlobalIllumination : IDisposable
 		public uint GridHeight;
 		public float CardinalDecay;
 		public float DiagonalDecay;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	struct WrapParams
+	{
+		public uint GridWidth, GridHeight;
+		public float GridSpacing, Depth;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -49,6 +58,7 @@ sealed class GpuGlobalIllumination : IDisposable
 		public float ResponseCurve;
 		public Vector2 ViewOrigin;
 		public Vector2 ViewScale;
+		public Vector4 ShadingSettings;
 	}
 
 	static readonly BlendMode CopyBlend = new(BlendOp.Add, BlendFactor.One, BlendFactor.Zero);
@@ -60,10 +70,12 @@ sealed class GpuGlobalIllumination : IDisposable
 	readonly ComputeStorageBuffer<Vector4> fieldB;
 	readonly UniformBuffer injectUniforms = new();
 	readonly UniformBuffer propagateUniforms = new();
+	readonly UniformBuffer wrapUniforms = new();
 	readonly UniformBuffer resolveUniforms = new();
 	Shader? injectShader;
 	Shader? propagateShader;
 	Shader? resolveShader;
+	Shader? wrapShader;
 	int fieldCapacity;
 	Room? atlasRoom;
 	Room? atlasNextRoom;
@@ -80,7 +92,7 @@ sealed class GpuGlobalIllumination : IDisposable
 	Target? atlasSpriteShadow;
 	Target? atlasSporeFog;
 
-	public bool Supported => injectShader != null && propagateShader != null && resolveShader != null;
+	public bool Supported => injectShader != null && propagateShader != null && resolveShader != null && wrapShader != null;
 	public Target AtlasBackgroundScene => atlasBackgroundScene!;
 	public Target AtlasForegroundScene => atlasForegroundScene!;
 	public Target AtlasBackgroundLight => atlasBackgroundLight!;
@@ -117,6 +129,7 @@ sealed class GpuGlobalIllumination : IDisposable
 		Target backgroundCoverage,
 		Target normalBuffer,
 		Target output,
+		Target wrapOutput,
 		Vector2 camera,
 		float zoom,
 		Color ambientColor,
@@ -126,6 +139,7 @@ sealed class GpuGlobalIllumination : IDisposable
 		if (!Supported)
 		{
 			output.Clear(Color.Transparent);
+			wrapOutput.Clear(Color.Transparent);
 			return;
 		}
 
@@ -145,6 +159,8 @@ sealed class GpuGlobalIllumination : IDisposable
 		var gridHeight = (backgroundScene.Height + GridSpacing - 1) / GridSpacing;
 		var cellCount = gridWidth * gridHeight;
 		EnsureCapacity(cellCount);
+		var roomRect = atlasRoom!.WorldBounds - bounds.TopLeft;
+		var nextRect = atlasNextRoom != null ? atlasNextRoom.WorldBounds - bounds.TopLeft : default;
 		injectUniforms.Set(new InjectParams
 		{
 			Width = (uint)backgroundScene.Width,
@@ -159,6 +175,8 @@ sealed class GpuGlobalIllumination : IDisposable
 			Warmth = visuals.IndirectBounceWarmth,
 			ColorBleed = visuals.IndirectColorBleed,
 			Ambient = (Vector4)ambientColor * ambientIntensity,
+			RoomBounds = new(roomRect.X, roomRect.Y, roomRect.Width, roomRect.Height),
+			NextRoomBounds = new(nextRect.X, nextRect.Y, nextRect.Width, nextRect.Height),
 			MaterialResponse = new(
 				visuals.IndirectStoneReflectivity,
 				visuals.IndirectOrganicReflectivity,
@@ -206,6 +224,22 @@ sealed class GpuGlobalIllumination : IDisposable
 			(previous, current) = (current, previous);
 		}
 
+		wrapUniforms.Set(new WrapParams
+		{
+			GridWidth = (uint)gridWidth,
+			GridHeight = (uint)gridHeight,
+			GridSpacing = GridSpacing,
+			Depth = visuals.IndirectForegroundWrapStrength > 0 ? visuals.IndirectForegroundWrapDepth : 0,
+		});
+		// Reuse the idle propagation buffer; the original GI field stays untouched.
+		new ComputeCommand(wrapShader!)
+		{
+			ReadOnlyStorageBuffers = [previous, surface, emission],
+			ReadWriteStorageBuffers = [current],
+			UniformBuffers = [wrapUniforms],
+			GroupCountX = (cellCount + 63) / 64,
+		}.Submit(graphicsDevice);
+
 		resolveUniforms.Set(new ResolveParams
 		{
 			Width = (uint)output.Width,
@@ -218,6 +252,7 @@ sealed class GpuGlobalIllumination : IDisposable
 			ResponseCurve = visuals.IndirectResponseCurve,
 			ViewOrigin = camera - (Vector2)bounds.TopLeft,
 			ViewScale = Vector2.One / zoom,
+			ShadingSettings = new(visuals.IndirectForegroundWrapStrength, visuals.IndirectHighlightColorRetention, 0, 0),
 		});
 		new ComputeCommand(resolveShader!)
 		{
@@ -225,8 +260,8 @@ sealed class GpuGlobalIllumination : IDisposable
 			[
 				new(normalBuffer, new(TextureFilter.Nearest, TextureWrap.Clamp, TextureWrap.Clamp)),
 			],
-			ReadOnlyStorageBuffers = [previous],
-			ReadWriteStorageTextures = [output.Attachments[0]],
+			ReadOnlyStorageBuffers = [previous, current],
+			ReadWriteStorageTextures = [output.Attachments[0], wrapOutput.Attachments[0]],
 			UniformBuffers = [resolveUniforms],
 			GroupCountX = (output.Width + 7) / 8,
 			GroupCountY = (output.Height + 7) / 8,
@@ -359,8 +394,9 @@ sealed class GpuGlobalIllumination : IDisposable
 			var ext = graphicsDevice.Driver.GetShaderExtension();
 			var injectCode = Assets.TryReadCompiledShader($"IndirectInject.compute.{ext}");
 			var propagateCode = Assets.TryReadCompiledShader($"IndirectPropagate.compute.{ext}");
+			var wrapCode = Assets.TryReadCompiledShader($"IndirectWrap.compute.{ext}");
 			var resolveCode = Assets.TryReadCompiledShader($"IndirectResolve.compute.{ext}");
-			if (injectCode == null || propagateCode == null || resolveCode == null)
+			if (injectCode == null || propagateCode == null || resolveCode == null || wrapCode == null)
 				return;
 			injectShader = new(graphicsDevice, ShaderStage.Compute, injectCode, samplerCount: 8, uniformBufferCount: 1,
 				readWriteStorageBufferCount: 4, threadCountX: 64, threadCountY: 1, threadCountZ: 1,
@@ -368,8 +404,11 @@ sealed class GpuGlobalIllumination : IDisposable
 			propagateShader = new(graphicsDevice, ShaderStage.Compute, propagateCode, uniformBufferCount: 1,
 				readOnlyStorageBufferCount: 3, readWriteStorageBufferCount: 1, threadCountX: 64, threadCountY: 1, threadCountZ: 1,
 				entryPoint: "compute_main", name: "IndirectPropagate");
+			wrapShader = new(graphicsDevice, ShaderStage.Compute, wrapCode, uniformBufferCount: 1,
+				readOnlyStorageBufferCount: 3, readWriteStorageBufferCount: 1, threadCountX: 64,
+				entryPoint: "compute_main", name: "IndirectWrap");
 			resolveShader = new(graphicsDevice, ShaderStage.Compute, resolveCode, samplerCount: 1, uniformBufferCount: 1,
-				readOnlyStorageBufferCount: 1, readWriteStorageTextureCount: 1, threadCountX: 8, threadCountY: 8, threadCountZ: 1,
+				readOnlyStorageBufferCount: 2, readWriteStorageTextureCount: 2, threadCountX: 8, threadCountY: 8, threadCountZ: 1,
 				entryPoint: "compute_main", name: "IndirectResolve");
 		}
 		catch (Exception e)
@@ -378,7 +417,8 @@ sealed class GpuGlobalIllumination : IDisposable
 			injectShader?.Dispose();
 			propagateShader?.Dispose();
 			resolveShader?.Dispose();
-			injectShader = propagateShader = resolveShader = null;
+			wrapShader?.Dispose();
+			injectShader = propagateShader = resolveShader = wrapShader = null;
 		}
 	}
 
@@ -388,7 +428,8 @@ sealed class GpuGlobalIllumination : IDisposable
 		injectShader?.Dispose();
 		propagateShader?.Dispose();
 		resolveShader?.Dispose();
-		injectShader = propagateShader = resolveShader = null;
+		wrapShader?.Dispose();
+		injectShader = propagateShader = resolveShader = wrapShader = null;
 		LoadShaders();
 	}
 #endif
@@ -398,6 +439,7 @@ sealed class GpuGlobalIllumination : IDisposable
 		injectShader?.Dispose();
 		propagateShader?.Dispose();
 		resolveShader?.Dispose();
+		wrapShader?.Dispose();
 		emission.Dispose();
 		surface.Dispose();
 		fieldA.Dispose();

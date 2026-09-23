@@ -28,12 +28,17 @@ sealed class VisualTuning
 	public float SpriteShadowMinLength = 4.0f;
 	public float SpriteShadowMaxLength = 28.0f;
 	public float ShadowBias = 0.5f;
+	public float DirectLightPresence = 1.0f;
+	public float IndirectUnderpaint = 0.0f;
 	public float LightingExposure = 0.0f;
 	public float LightingShoulder = 0.75f;
 	public float NormalLightFloor = 0.12f;
 	public float NormalLightGain = 2.15f;
-	public float RimLightStrength = 0.18f;
+	public float IndirectBackdropStrength = 1.0f;
 	public float IndirectLightStrength = 0.9f;
+	public float IndirectForegroundWrapDepth = 8.0f;
+	public float IndirectForegroundWrapStrength = 1.0f;
+	public float IndirectWrapPatternStrength = 1.0f;
 	public float IndirectForegroundStrength = 0.85f;
 	public float IndirectResponseCurve = 0.85f;
 	public float IndirectActorGain = 1.25f;
@@ -42,6 +47,7 @@ sealed class VisualTuning
 	public float IndirectLightFalloff = 0.012f;
 	public float IndirectBounceGain = 1.05f;
 	public float IndirectBounceSaturation = 1.25f;
+	public float IndirectHighlightColorRetention = 1.0f;
 	public float IndirectBounceAlbedoFloor = 0.3f;
 	public float IndirectBounceWarmth = 0.35f;
 	public float IndirectColorBleed = 1.1f;
@@ -53,7 +59,7 @@ sealed class VisualTuning
 	public float IndirectDirectionality = 0.7f;
 	public float IndirectNormalWrap = 0.35f;
 	public float DitherStrength = 1.0f;
-	public int NormalDitherLevels = 4;
+	public float DitherBandSpacing = 1.0f;
 	public float SporeFogScale = 1.0f / 80.0f;
 	public Vector2 SporeFogDrift = new(2.0f, -0.5f);
 	public float SporeFogContrast = 1.8f;
@@ -159,6 +165,8 @@ public partial class Manager
 				"Keeps authored emissive pixels visible regardless of ordinary lighting. Light emission into GI is authored separately, although disabling this also disables those emission passes.");
 			VisualToggle("Noise", ref PerfToggles.LightingNoise,
 				"Multiplies the completed lit scene by the room's scrolling lighting-noise texture. It currently affects direct light, GI, emissive pixels and sprites together.");
+			VisualRow("Direct Presence", ref Visuals.DirectLightPresence, VisualDefaults.DirectLightPresence, 0, 2,
+				"Scales visible lamp and sunlight on surfaces and light-responsive particles. Zero hides direct surface light while it still feeds GI. Fog uses its own Point and Sun Response controls.");
 			VisualRow("Exposure (stops)", ref Visuals.LightingExposure, VisualDefaults.LightingExposure, -4, 4,
 				"Scales displayed lighting before dithering: +1 doubles it, -1 halves it. Does not change the energy used by GI propagation.");
 			VisualRow("Highlight Shoulder", ref Visuals.LightingShoulder, VisualDefaults.LightingShoulder, 0, 0.95f,
@@ -167,12 +175,10 @@ public partial class Manager
 				"Minimum diffuse response allowed when a normal faces away from a light. Raise it for readable, softly wrapped forms; lower it for stronger directional modeling.");
 			VisualRow("Normal Gain", ref Visuals.NormalLightGain, VisualDefaults.NormalLightGain, 0, 4,
 				"Amplifies contrast produced by normal maps. High values make surface relief dramatic, but can overpower pixel values and create harsh sparkling during motion.");
-			VisualRow("Dark Rim", ref Visuals.RimLightStrength, VisualDefaults.RimLightStrength, 0, 0.5f,
-				"Adds a light-colored lift to dark sprite pixels in illuminated areas. It improves silhouette readability, but high values can look like a uniform outline rather than reflected light.");
 			VisualRow("Dither Multiplier", ref Visuals.DitherStrength, VisualDefaults.DitherStrength, 0, 2,
 				"Scales how strongly lighting is expressed through the ordered dither pattern. Zero gives smooth lighting; larger values make light and shadow more graphic and textured.");
-			VisualRow("Quantization Levels", ref Visuals.NormalDitherLevels, VisualDefaults.NormalDitherLevels, 2, 16,
-				"Lighting levels per unit of exposed light in the normal-aware quantizer. Bands continue above one for HDR highlights. Fewer levels look bolder; more preserve subtle gradients.");
+			VisualRow("Band Spacing", ref Visuals.DitherBandSpacing, VisualDefaults.DitherBandSpacing, 0.05f, 2,
+				"Distance between exposed lighting bands. Small steps preserve gradients; larger steps produce sparse, bold marks. Pattern strength blends between smooth and quantized lighting.");
 			PopID();
 		}
 
@@ -206,10 +212,20 @@ public partial class Manager
 				"Propagates bounced radiance through the room after direct lighting. Disable it for a direct-light-only comparison; Z provides the same playtime toggle.");
 
 			SeparatorText("Composition");
+			VisualRow("GI Underpaint", ref Visuals.IndirectUnderpaint, VisualDefaults.IndirectUnderpaint, 0, 1,
+				"Moves GI beneath the dither pattern. Zero dithers direct and indirect light together; one keeps GI smooth so the darker pattern pixels retain bounced color. Does not change GI propagation.");
+			VisualRow("Backdrop GI", ref Visuals.IndirectBackdropStrength, VisualDefaults.IndirectBackdropStrength, 0, 4,
+				"Bounced light on untiled room backdrop, using its existing color, gradient and surface as pigment. Zero hides backdrop GI; empty space still carries light. Tiles and actors use World Presence.");
 			VisualRow("World Presence", ref Visuals.IndirectLightStrength, VisualDefaults.IndirectLightStrength, 0, 2,
-				"Final multiplier for indirect light on the background world. Raise it to make bounce obvious; lower it when rooms lose their dark hierarchy or begin to look uniformly filled.");
+				"Final multiplier for indirect light on background tiles and actors; untiled backdrop uses Backdrop GI. Raise it to make bounce obvious; lower it when rooms lose their dark hierarchy or begin to look uniformly filled.");
 			VisualRow("Foreground Presence", ref Visuals.IndirectForegroundStrength, VisualDefaults.IndirectForegroundStrength, 0, 2,
 				"Final indirect-light multiplier for solid foreground tiles. This is independent of how much foreground participates in generating bounce, so it primarily changes visible foreground response.");
+			VisualRow("Wrap Depth (px)", ref Visuals.IndirectForegroundWrapDepth, VisualDefaults.IndirectForegroundWrapDepth, 0, 32,
+				"Distance that nearby GI reaches into solid foreground artwork. Thin platforms catch color across their face; thick masses keep dark centers. Does not transmit light through walls.");
+			VisualRow("Wrap Strength", ref Visuals.IndirectForegroundWrapStrength, VisualDefaults.IndirectForegroundWrapStrength, 0, 3,
+				"Strength of borrowed boundary light on foreground tiles. Zero disables wrap. Wrap Pattern controls its texture independently of GI Underpaint, and Foreground Presence scales the result.");
+			VisualRow("Wrap Pattern", ref Visuals.IndirectWrapPatternStrength, VisualDefaults.IndirectWrapPatternStrength, 0, 1,
+				"Zero paints smooth boundary color into foreground; one expresses it through material marks. Independent of room dither strength and GI Underpaint; shares Band Spacing.");
 			VisualRow("Actor Response", ref Visuals.IndirectActorGain, VisualDefaults.IndirectActorGain, 0, 4,
 				"Multiplies GI where the actor tile field covers background-layer actors. Raise it to wrap characters and props in room color; high values can wash out their authored palettes.");
 			VisualRow("Hero Lift", ref Visuals.IndirectHeroFill, VisualDefaults.IndirectHeroFill, 0, 0.5f,
@@ -235,6 +251,8 @@ public partial class Manager
 				"Scales radiance as it enters the GI field, before distance falloff and final presence multipliers. High values create richer bounce but can make small emissive sources dominate whole rooms.");
 			VisualRow("Saturation", ref Visuals.IndirectBounceSaturation, VisualDefaults.IndirectBounceSaturation, 0, 3,
 				"Controls saturation retained by bounced radiance. Zero makes bounce luminance-only; one preserves source color; values above one exaggerate colorful light separation.");
+			VisualRow("Highlight Color Retention", ref Visuals.IndirectHighlightColorRetention, VisualDefaults.IndirectHighlightColorRetention, 0, 1,
+				"One preserves all GI color. Lower values ease bright GI toward neutral while retaining weak shadow color and luminance. Applies to visible GI and wrap, without changing propagation.");
 			VisualRow("Dark Surface Lift", ref Visuals.IndirectBounceAlbedoFloor, VisualDefaults.IndirectBounceAlbedoFloor, 0, 1,
 				"Minimum diffuse color used when a very dark surface reflects light. Raise it to let black materials return useful bounce; too much makes material darkness stop mattering.");
 			VisualRow("Warmth", ref Visuals.IndirectBounceWarmth, VisualDefaults.IndirectBounceWarmth, 0, 1,
@@ -285,9 +303,9 @@ public partial class Manager
 			VisualRow("Contrast", ref Visuals.SporeFogContrast, VisualDefaults.SporeFogContrast, 0.1f, 5,
 				"Expands or compresses differences in procedural fog density. Low values form an even veil; high values create distinct empty gaps and dense tendrils.");
 			VisualRow("Point Response", ref Visuals.SporeFogPointStrength, VisualDefaults.SporeFogPointStrength, 0, 2,
-				"How strongly point lights illuminate spore fog. Raise it for visible pools and shafts around fixtures; high values can make fog brighter than the surfaces it surrounds.");
+				"How strongly point lights illuminate spore fog, independently of Direct Presence. Requires room fog strength or a Spore Fog Volume. Raise it for visible shadowed pools and shafts.");
 			VisualRow("Sun Response", ref Visuals.SporeFogSunStrength, VisualDefaults.SporeFogSunStrength, 0, 2,
-				"How strongly directional sunlight illuminates spore fog. Raise it for room-wide atmospheric wash; lower it when sunlit fog flattens local point-light composition.");
+				"How strongly sunlight illuminates spore fog, independently of Direct Presence. Requires room fog strength or a Spore Fog Volume. Lower it when sunlit fog flattens local point-light composition.");
 			PopID();
 		}
 
@@ -371,7 +389,12 @@ public partial class Manager
 
 	void ResetGiComposition()
 	{
+		SetVisual(ref Visuals.IndirectUnderpaint, VisualDefaults.IndirectUnderpaint);
+		SetVisual(ref Visuals.IndirectBackdropStrength, VisualDefaults.IndirectBackdropStrength);
 		SetVisual(ref Visuals.IndirectLightStrength, VisualDefaults.IndirectLightStrength);
+		SetVisual(ref Visuals.IndirectForegroundWrapDepth, VisualDefaults.IndirectForegroundWrapDepth);
+		SetVisual(ref Visuals.IndirectForegroundWrapStrength, VisualDefaults.IndirectForegroundWrapStrength);
+		SetVisual(ref Visuals.IndirectWrapPatternStrength, VisualDefaults.IndirectWrapPatternStrength);
 		SetVisual(ref Visuals.IndirectForegroundStrength, VisualDefaults.IndirectForegroundStrength);
 		SetVisual(ref Visuals.IndirectActorGain, VisualDefaults.IndirectActorGain);
 		SetVisual(ref Visuals.IndirectHeroFill, VisualDefaults.IndirectHeroFill);
@@ -387,6 +410,7 @@ public partial class Manager
 	{
 		SetVisual(ref Visuals.IndirectBounceGain, VisualDefaults.IndirectBounceGain);
 		SetVisual(ref Visuals.IndirectBounceSaturation, VisualDefaults.IndirectBounceSaturation);
+		SetVisual(ref Visuals.IndirectHighlightColorRetention, VisualDefaults.IndirectHighlightColorRetention);
 		SetVisual(ref Visuals.IndirectBounceAlbedoFloor, VisualDefaults.IndirectBounceAlbedoFloor);
 		SetVisual(ref Visuals.IndirectBounceWarmth, VisualDefaults.IndirectBounceWarmth);
 		SetVisual(ref Visuals.IndirectColorBleed, VisualDefaults.IndirectColorBleed);

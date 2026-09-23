@@ -199,7 +199,7 @@ public sealed partial class GameView
 					!Manager.FullBright &&
 #endif
 					PerfToggles.Lighting,
-					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()));
+					ScaleColor(CurrentAmbientColor(), CurrentAmbientIntensity()), Manager.Visuals.DirectLightPresence);
 		}
 		if (debugView == DebugView.None && game.AirFlashAmount > 0)
 			output = ApplyAirFlash(output);
@@ -923,6 +923,7 @@ public sealed partial class GameView
 			game.CurrentRoom is not { } currentRoom)
 		{
 			IndirectLight.Clear(Color.Transparent);
+			ForegroundWrap.Clear(Color.Transparent);
 			return;
 		}
 
@@ -943,6 +944,7 @@ public sealed partial class GameView
 				BackgroundCoverage,
 				NormalBuffer,
 				IndirectLight,
+				ForegroundWrap,
 				RenderCamera,
 				zoomLevel,
 				CurrentAmbientColor(),
@@ -1217,10 +1219,11 @@ public sealed partial class GameView
 		material.Fragment.Samplers[10] = new(SporeFogMask, new(TextureFilter.Linear, TextureWrap.Clamp));
 		material.Fragment.Samplers[11] = new(ActorTileField, new(TextureFilter.Nearest, TextureWrap.Clamp));
 		material.Fragment.Samplers[12] = new(IndirectLight, new(TextureFilter.Linear, TextureWrap.Clamp));
+		material.Fragment.Samplers[13] = new(ForegroundWrap, new(TextureFilter.Linear, TextureWrap.Clamp));
 		var glitchPosition = PlayerDitherGlitchPosition();
 		var renderCamera = RenderCamera;
 		var aoOffset = Manager.Visuals.AmbientOcclusionOffset;
-		Span<float> uniforms = stackalloc float[32 + DitherAnchorFloatCount];
+		Span<float> uniforms = stackalloc float[40 + DitherAnchorFloatCount];
 		var i = 0;
 		uniforms[i++] = Screen.Width;
 		uniforms[i++] = Screen.Height;
@@ -1243,15 +1246,24 @@ public sealed partial class GameView
 		uniforms[i++] = aoOffset.Y;
 		uniforms[i++] = Manager.Visuals.AmbientOcclusionMinVisibility;
 		uniforms[i++] = CurrentDitherSlopeBoost();
-		uniforms[i++] = CurrentDitherQuantization() ? Manager.Visuals.NormalDitherLevels : 0;
+		uniforms[i++] = CurrentDitherQuantization() ? 1 : 0;
 		uniforms[i++] = actorTileFieldPopulated ? 1 : 0;
-		uniforms[i++] = Manager.Visuals.RimLightStrength;
+		uniforms[i++] = Manager.Visuals.DitherBandSpacing;
 		uniforms[i++] = Manager.Visuals.IndirectLightStrength;
 		uniforms[i++] = Manager.Visuals.IndirectForegroundStrength;
 		uniforms[i++] = Manager.Visuals.IndirectActorGain;
 		uniforms[i++] = Manager.Visuals.IndirectHeroFill;
 		uniforms[i++] = Manager.Visuals.LightingExposure;
 		uniforms[i++] = Manager.Visuals.LightingShoulder;
+		uniforms[i++] = Manager.Visuals.DirectLightPresence;
+		uniforms[i++] = Manager.Visuals.IndirectUnderpaint;
+		var ambient = (Vector4)CurrentAmbientColor() * CurrentAmbientIntensity();
+		uniforms[i++] = ambient.X;
+		uniforms[i++] = ambient.Y;
+		uniforms[i++] = ambient.Z;
+		uniforms[i++] = Math.Clamp(ambient.W, 0, 1);
+		uniforms[i++] = Manager.Visuals.IndirectBackdropStrength;
+		uniforms[i++] = Manager.Visuals.IndirectWrapPatternStrength;
 		uniforms[i++] = 0;
 		uniforms[i++] = 0;
 		ditherAnchorOffsets.CopyTo(uniforms[i..]);
@@ -2396,6 +2408,7 @@ public sealed partial class GameView
 		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask", TextureFormat.R16G16B16A16Float));
 		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask", TextureFormat.R16G16B16A16Float));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
+		ForegroundWrap = Track(CreateComputeTarget(width, height, "ForegroundWrap", TextureFormat.R16G16B16A16Float));
 		IndirectLight = Track(CreateComputeTarget(width, height, "IndirectLight", TextureFormat.R16G16B16A16Float));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
@@ -2455,7 +2468,7 @@ public sealed partial class GameView
 	{
 		layerTransitionCaptured = false;
 		foreach (var target in debugTargets)
-			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask || target == IndirectLight)
+			if (target == BackgroundLightMask || target == ForegroundLightMask || target == SporeFogMask || target == IndirectLight || target == ForegroundWrap)
 				target.Dispose();
 			else
 				RenderTargetPool.Return(target);
@@ -2689,6 +2702,7 @@ public sealed partial class GameView
 	Target BackgroundLightMask { get; set; } = null!;
 	Target ForegroundLightMask { get; set; } = null!;
 	Target SporeFogMask { get; set; } = null!;
+	Target ForegroundWrap { get; set; } = null!;
 	Target IndirectLight { get; set; } = null!;
 	Target GlitchScreen { get; set; } = null!;
 	Target DistortionMask { get; set; } = null!;
