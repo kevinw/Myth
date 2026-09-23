@@ -83,11 +83,11 @@
       "Position": [194, 86],
       "FlickerFrequency": 1.25,
       "FlickerIntensity": 0.07,
-      "Radius": 65.361,
       "LightColor": "EFDFBE",
       "SpriteName": "fire",
-      "Intensity": 0.994,
-      "Height": 6.259
+      "Height": 6.259,
+      "Intensity": 0.862,
+      "Radius": 114.065
     },
     {
       "Id": "a242c29e39016aef",

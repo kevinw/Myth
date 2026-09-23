@@ -756,6 +756,18 @@ public class Actor
 	protected Matrix3x2 SpriteSkewMatrix(Sprite.Frame frame)
 		=> new(1, 0, -Skew, 1, Skew * SpriteBaseY(frame) * Squish.Y, 0);
 
+	protected Vector2 SpritePointToWorld(Vector2 point)
+	{
+		if (sprite == null || sprite.Frames.Count <= 0)
+			return Position + point;
+
+		ref readonly var frame = ref sprite.GetFrameRefAt(Animation, animationTime, animationLooping);
+		var transform = Matrix3x2.CreateScale(Facing * Squish.X, (FlipY ? -1 : 1) * Squish.Y);
+		if (Skew != 0)
+			transform *= SpriteSkewMatrix(frame);
+		return Position + Vector2.Transform(Shift - Origin + point, transform);
+	}
+
 	protected bool SpriteBlinkHidden => hitCooldown > 0 && Time.BetweenInterval(0.05f);
 
 	public virtual void RenderEmissive(Batcher batcher) => RenderSpriteSubtexture(batcher, SubtextureType.Emissive);
@@ -774,6 +786,7 @@ public class Actor
 	public virtual void RenderReflection(Batcher batcher, Color color) => RenderSpriteSubtexture(batcher, SubtextureType.Color, color);
 
 	public virtual void ForEachLight(Action<Vector2, float, float, float, Color> action) { }
+	public virtual void ForEachAutomaticLight(Action<Vector2, float, float, float, Color> action) { }
 
 
 	public virtual Rect GetVisualBounds()

@@ -1561,9 +1561,16 @@ public sealed partial class GameView
 	}
 
 	Action<Vector2, float, float, float, Color>? gatherGpuLightAction;
+	Action<Vector2, float, float, float, Color>? gatherAutomaticLightAction;
 	readonly List<ShadowSegment> gpuSegmentScratch = [];
 	readonly HashSet<Actor> gpuLightEmitters = [];
+	readonly List<AutomaticLight> automaticLights = [];
 	Actor? gatheringGpuLightActor;
+	readonly record struct AutomaticLight(Vector2 Position, float Radius, float Intensity, float Height, Color Color)
+	{
+		public float Score => Radius * Radius * Intensity;
+	}
+	const int MaxAutomaticLights = 16;
 
 	void DrawGpuLightMasks()
 	{
@@ -1606,15 +1613,15 @@ public sealed partial class GameView
 		gpuLightEmitters.Clear();
 		gatherGpuLightAction ??= (position, radius, intensity, height, color) =>
 		{
-			gpuLighting!.AddLight(position, radius, intensity, height, color);
-			gpuLightEmitters.Add(gatheringGpuLightActor!);
+			if (gpuLighting!.AddLight(position, radius, intensity, height, color))
+				gpuLightEmitters.Add(gatheringGpuLightActor!);
 		};
 		foreach (var actor in Actors)
 		{
 			if (actor is Light { Intensity: > 0, Enabled: true } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
 			{
 				var renderScale = light.RenderScale;
-				renderer.AddLight(
+				var added = renderer.AddLight(
 					light.Position,
 					light.Radius * renderScale,
 					light.Intensity * renderScale,
@@ -1631,13 +1638,29 @@ public sealed partial class GameView
 					light.ShadowSoftness,
 					light.ShadowNoise,
 					light.ShadowNoiseSpeed);
-				if (light.SpriteShadowOwner is { } owner)
+				if (added && light.SpriteShadowOwner is { } owner)
 					gpuLightEmitters.Add(owner);
 			}
 			gatheringGpuLightActor = actor;
 			actor.ForEachLight(gatherGpuLightAction);
 		}
 		gatheringGpuLightActor = null;
+
+		automaticLights.Clear();
+		gatherAutomaticLightAction ??= (position, radius, intensity, height, color) =>
+		{
+			if (radius > 0 && intensity > 0 &&
+				(position - Vector2.Clamp(position, game.VisibleWorldBounds.TopLeft, game.VisibleWorldBounds.BottomRight)).LengthSquared() < radius * radius)
+				automaticLights.Add(new(position, radius, intensity, height, color));
+		};
+		foreach (var actor in Actors)
+			actor.ForEachAutomaticLight(gatherAutomaticLightAction);
+		automaticLights.Sort(static (a, b) => b.Score.CompareTo(a.Score));
+		for (var i = 0; i < automaticLights.Count && i < MaxAutomaticLights; i++)
+		{
+			var light = automaticLights[i];
+			renderer.AddLight(light.Position, light.Radius, light.Intensity, light.Height, light.Color);
+		}
 		DrawGpuSpriteShadowMask();
 
 		renderer.Render(

@@ -5,6 +5,9 @@
   "backdropColor2": "5A1F7B",
   "ambientColor": "727272",
   "BurrowInverts": true,
+  "colorFields": {
+    "foreground": "7f09e3bb7c10b7fd.png"
+  },
   "legend": {
     "#": "back",
     "-": "back-right",

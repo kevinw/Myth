@@ -26,10 +26,12 @@ public class Sprite(string name, Vector2 origin)
 	public readonly record struct Frame(Subtexture Subtexture, Subtexture VisibleSubtexture, Subtexture NormalSubtexture, Subtexture EmissiveSubtexture, float Duration, string? UserData = null);
 	public readonly record struct Animation(string Name, int FrameStart, int FrameCount, float Duration);
 	public readonly record struct Socket(Vector2 Position, Vector2 Normal, bool Visible = true);
+	public readonly record struct EmissiveLight(Vector2 Position, Color Color, float Energy, float Extent);
 
 	public string Name { get; } = name;
 	public Vector2 Origin { get; private set; } = origin;
 	public readonly List<Frame> Frames = new();
+	public readonly List<EmissiveLight> EmissiveLights = new();
 	public readonly List<Animation> Animations = new();
 	// Named Aseprite slices: a slice is one region that spans the whole animation (we take its
 	// first key's canvas-space bounds). Origin lookups use the pivot slice; these are for
@@ -93,12 +95,16 @@ public class Sprite(string name, Vector2 origin)
 	}
 
 	public void Reload(Vector2 origin, List<Frame> frames, List<Animation> animations,
-		IReadOnlyDictionary<string, RectInt>? slices = null, IReadOnlyDictionary<string, Socket[]>? sockets = null)
+		IReadOnlyDictionary<string, RectInt>? slices = null, IReadOnlyDictionary<string, Socket[]>? sockets = null,
+		List<EmissiveLight>? emissiveLights = null)
 	{
 		Origin = origin;
 
 		Frames.Clear();
 		Frames.AddRange(frames);
+		EmissiveLights.Clear();
+		if (emissiveLights != null)
+			EmissiveLights.AddRange(emissiveLights);
 
 		Animations.Clear();
 		Animations.AddRange(animations);
@@ -112,6 +118,18 @@ public class Sprite(string name, Vector2 origin)
 		if (sockets != null)
 			foreach (var (name, poses) in sockets)
 				Sockets[name] = poses;
+	}
+
+	public bool TryGetEmissiveLight(int frameIndex, out EmissiveLight light)
+	{
+		if (frameIndex >= 0 && frameIndex < EmissiveLights.Count && EmissiveLights[frameIndex].Energy > 0)
+		{
+			light = EmissiveLights[frameIndex];
+			return true;
+		}
+
+		light = default;
+		return false;
 	}
 
 	public Frame? FrameForAnimationIndex(int animationIndex, float time, bool loop)

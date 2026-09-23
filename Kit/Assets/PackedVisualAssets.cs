@@ -55,6 +55,21 @@ public sealed class PackedSpriteFrame
 	public PackedSubtexture EmissiveSubtexture { get; set; } = new();
 	public float Duration { get; set; }
 	public string? UserData { get; set; }
+	public PackedEmissiveLight EmissiveLight { get; set; } = new();
+}
+
+public sealed class PackedEmissiveLight
+{
+	public PackedVector Position { get; set; } = new();
+	public uint Color { get; set; }
+	public float Energy { get; set; }
+	public float Extent { get; set; }
+
+	public static PackedEmissiveLight From(Sprite.EmissiveLight light)
+		=> new() { Position = PackedVector.From(light.Position), Color = light.Color.RGBA, Energy = light.Energy, Extent = light.Extent };
+
+	public Sprite.EmissiveLight ToEmissiveLight()
+		=> new(Position.ToVector2(), new Color(Color), Energy, Extent);
 }
 
 public sealed class PackedSpriteAnimation
@@ -79,7 +94,8 @@ public static class AsepriteSpriteBaker
 		IReadOnlyDictionary<string, float[]> expandedFrameDurations,
 		IReadOnlyDictionary<string, int[]> expandedFrameMap,
 		IReadOnlyDictionary<string, List<GeneratedSpriteTransition>> generatedTransitions,
-		Func<string, Aseprite, Dictionary<string, Sprite.Socket[]>> buildSocketPoses)
+		Func<string, Aseprite, Dictionary<string, Sprite.Socket[]>> buildSocketPoses,
+		Func<string, Sprite.EmissiveLight>? emissiveLight = null)
 	{
 		var origin = Vector2.Zero;
 		foreach (var slice in ase.Slices)
@@ -122,7 +138,8 @@ public static class AsepriteSpriteBaker
 				NormalSubtexture = subtexture($"{name}/normal/{i}"),
 				EmissiveSubtexture = subtextureOrDefault($"{name}/emissive/{i}"),
 				Duration = useExpanded ? expDurations![i] : ase.Frames[i].Duration / 1000.0f,
-				UserData = frameUserData[i]
+				UserData = frameUserData[i],
+				EmissiveLight = PackedEmissiveLight.From(emissiveLight?.Invoke($"{name}/emissive/{i}") ?? default)
 			});
 
 		foreach (var tag in ase.Tags)
@@ -179,7 +196,8 @@ public static class AsepriteSpriteBaker
 						VisibleSubtexture = PackedSubtexture.VisibleFrom(frame),
 						NormalSubtexture = subtexture($"{name}/transition/{trans.FromTag}->{trans.ToTag}/normal/{i}"),
 						EmissiveSubtexture = subtextureOrDefault($"{name}/transition/{trans.FromTag}->{trans.ToTag}/emissive/{i}"),
-						Duration = trans.Durations[i]
+						Duration = trans.Durations[i],
+						EmissiveLight = PackedEmissiveLight.From(emissiveLight?.Invoke($"{name}/transition/{trans.FromTag}->{trans.ToTag}/emissive/{i}") ?? default)
 					});
 					duration += trans.Durations[i];
 				}
@@ -269,6 +287,10 @@ public static class PackedSpriteLoader
 			foreach (var animation in packed.Animations)
 				animations.Add(new(animation.Name, animation.FrameStart, animation.FrameCount, animation.Duration));
 
+			var emissiveLights = new List<Sprite.EmissiveLight>(packed.Frames.Count);
+			foreach (var frame in packed.Frames)
+				emissiveLights.Add(frame.EmissiveLight.ToEmissiveLight());
+
 			var sockets = new Dictionary<string, Sprite.Socket[]>(StringComparer.OrdinalIgnoreCase);
 			foreach (var (socketName, packedPoses) in packed.Sockets)
 			{
@@ -278,7 +300,7 @@ public static class PackedSpriteLoader
 				sockets[socketName] = poses;
 			}
 
-			sprite.Reload(packed.Origin.ToVector2(), frames, animations, packed.Slices, sockets);
+			sprite.Reload(packed.Origin.ToVector2(), frames, animations, packed.Slices, sockets, emissiveLights);
 		}
 
 		foreach (var (name, sprite) in sprites.ToArray())

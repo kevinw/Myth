@@ -84,17 +84,19 @@
       "Id": "14f7919f67fc2fb3",
       "Type": "Light",
       "Position": [56, 28],
-      "Intensity": 1.9,
-      "Radius": 126.95,
       "FlickerFrequency": 0.1,
       "FlickerIntensity": 0.13,
-      "Height": 20.6
+      "Height": 20.6,
+      "Radius": 203.148,
+      "LightColor": "FAC864",
+      "Intensity": 0.606
     },
     {
       "Id": "885a0ba804dd8fc3",
       "Type": "Light",
       "Position": [292, 124],
-      "Height": 9.8
+      "Height": 9.8,
+      "Intensity": 0.869
     },
     {
       "Id": "d9c88435dfb351ec",

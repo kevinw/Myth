@@ -67,6 +67,19 @@
       "WeightsFile": "crowd_circular.bin",
       "WeightsFile1": "grid_0002_circular.bin",
       "PaintedMask": "41fe30058e736826.png"
+    },
+    {
+      "Id": "89f54d4a1754b8c1",
+      "Type": "Light",
+      "Position": [2, 94],
+      "Radius": 141.606,
+      "LightColor": "49A1FF",
+      "ShadowSourceRadius": 16,
+      "ShadowSoftness": 3,
+      "ShadowNoise": 0.825,
+      "DrawSprite": false,
+      "FlickerIntensity": 0.077,
+      "FlickerFrequency": 0
     }
   ]
 }

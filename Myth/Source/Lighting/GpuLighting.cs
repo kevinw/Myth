@@ -142,10 +142,10 @@ sealed class GpuLighting : IDisposable
 		sporeFogVolumes[sporeFogVolumeCount++] = new(rect, Math.Clamp(strength, 0, 4), MathF.Max(0, feather));
 	}
 
-	public void AddLight(Vector2 position, float radius, float intensity, float height, Color color)
+	public bool AddLight(Vector2 position, float radius, float intensity, float height, Color color)
 		=> AddLight(position, radius, intensity, height, color, LightCookie.None, 0, 0, 1, 1, 0.12f, 0, Light.DefaultShadowSourceRadius, 1, 0, 0);
 
-	public void AddLight(
+	public bool AddLight(
 		Vector2 position,
 		float radius,
 		float intensity,
@@ -164,7 +164,7 @@ sealed class GpuLighting : IDisposable
 		float shadowNoiseSpeed)
 	{
 		if (lightCount >= lights.Length || radius <= 0 || intensity <= 0)
-			return;
+			return false;
 
 		// Exact, not an approximation: LightMasks.hlsl attenuates by saturate(1 - distance/radius),
 		// which is zero at and beyond the radius, and the cookie only ever multiplies that down.
@@ -173,7 +173,7 @@ sealed class GpuLighting : IDisposable
 		// and leaves their own bookkeeping alone, and it makes the MaxLights cap mean "64 lights
 		// you can see" instead of "the first 64 actors".
 		if ((position - Vector2.Clamp(position, visibleWorld.TopLeft, visibleWorld.BottomRight)).LengthSquared() >= radius * radius)
-			return;
+			return false;
 
 		var value = (Vector4)color;
 		lights[lightCount++] = new(
@@ -184,6 +184,7 @@ sealed class GpuLighting : IDisposable
 			new((float)cookie, cookieAngleDegrees * MathF.PI / 180, cookieSpeedDegrees * MathF.PI / 180, cookieScale),
 			new(cookieStrength, cookieFeather, cookieCutoff, 0),
 			new(shadowSourceRadius, shadowSoftness, shadowNoise, shadowNoiseSpeed));
+		return true;
 	}
 
 	public void AddSegment(Vector2 a, Vector2 b, bool castsSunShadow = true)

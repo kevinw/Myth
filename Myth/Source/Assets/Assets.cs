@@ -75,13 +75,15 @@ public static partial class Assets
 	// for sprites that had within-animation in-betweens baked. Replaces the old
 	// uniform "tag.From * (count + 1)" math now that counts vary per tag.
 	static readonly Dictionary<string, int[]> ExpandedFrameMap = new();
+	static readonly Dictionary<string, Sprite.EmissiveLight> BakedEmissiveLights = new(StringComparer.OrdinalIgnoreCase);
+	static readonly Dictionary<string, Vector2> EmissiveLightCenters = new(StringComparer.OrdinalIgnoreCase);
 
 	const string assetsFolderName = "Assets";
 	const string roomsFolderName = "Rooms";
 	const string packedVisualsFolderName = "Packed/Visuals";
 	const string packedVisualsManifestName = "manifest.bin";
 	const uint visualAssetPackMagic = 0x5356494D; // MIVS, little-endian.
-	const int visualAssetPackVersion = 15; // v15: slope normal textures
+	const int visualAssetPackVersion = 16; // v16: baked sprite emissive lights
 	const string socketLayerSuffix = "_socket";
 	const string defaultWorldId = "Myth";
 	const string worldManifestName = "world.json";
@@ -723,6 +725,8 @@ public static partial class Assets
 		GeneratedTransitions.Clear();
 		ExpandedFrameDurations.Clear();
 		ExpandedFrameMap.Clear();
+		BakedEmissiveLights.Clear();
+		EmissiveLightCenters.Clear();
 		LoadInbetweenConfig();
 
 		foreach (var file in EnumerateAsepriteFiles(spritesPath))
@@ -1109,7 +1113,8 @@ public static partial class Assets
 			ExpandedFrameDurations,
 			ExpandedFrameMap,
 			GeneratedTransitions,
-			BuildSocketPoses);
+			BuildSocketPoses,
+			key => BakedEmissiveLights.GetValueOrDefault(key));
 
 	static PackedTileset BuildPackedTilesetAsset(VisualAssetBake bake, string name, Aseprite ase)
 	{
@@ -1211,6 +1216,10 @@ public static partial class Assets
 				WritePackedSubtexture(writer, frame.EmissiveSubtexture);
 				writer.Write(frame.Duration);
 				writer.Write(frame.UserData ?? "");
+				WritePackedVector(writer, frame.EmissiveLight.Position);
+				writer.Write(frame.EmissiveLight.Color);
+				writer.Write(frame.EmissiveLight.Energy);
+				writer.Write(frame.EmissiveLight.Extent);
 			}
 
 			WriteCount(writer, sprite.Animations.Count, $"{sprite.Name} animations");
@@ -1355,7 +1364,14 @@ public static partial class Assets
 					NormalSubtexture = ReadPackedSubtexture(reader),
 					EmissiveSubtexture = ReadPackedSubtexture(reader),
 					Duration = reader.ReadSingle(),
-					UserData = reader.ReadString() is { Length: > 0 } text ? text : null
+					UserData = reader.ReadString() is { Length: > 0 } text ? text : null,
+					EmissiveLight = new()
+					{
+						Position = ReadPackedVector(reader),
+						Color = reader.ReadUInt32(),
+						Energy = reader.ReadSingle(),
+						Extent = reader.ReadSingle()
+					}
 				});
 
 			var animationCount = ReadCount(reader, $"{sprite.Name} animations");
@@ -2799,6 +2815,9 @@ public static partial class Assets
 	// in-betweens) and packs them, then bakes any whitelisted transitions.
 	static void PackSpriteFrames(string name, Aseprite ase, Image[] frames, Image[]? normals, Image[]? heights, Image[]? emissives, Packer packer)
 	{
+		if (emissives != null)
+			EmissiveLightCenters[name] = FindEmissiveLightCenter(emissives);
+
 		var benchCount = InbetweenBenchCount(name);
 		if (Inbetweens.BenchMode && benchCount > 0)
 			_ = Inbetweens.Generate(name, frames, ase, benchCount);
@@ -2817,7 +2836,10 @@ public static partial class Assets
 				packer.Add($"{name}/normal/{i}", expNormals?[i] ??
 					(expHeights != null ? GenerateNormalMap(expHeights[i], expFrames[i]) : GenerateNormalMap(expFrames[i])));
 				if (expEmissives != null)
+				{
 					packer.Add($"{name}/emissive/{i}", expEmissives[i]);
+					BakedEmissiveLights[$"{name}/emissive/{i}"] = BakeEmissiveLight(expEmissives[i], EmissiveLightCenters[name]);
+				}
 			}
 		}
 		else
@@ -2828,11 +2850,55 @@ public static partial class Assets
 				packer.Add($"{name}/normal/{i}", normals?[i] ??
 					(heights != null ? GenerateNormalMap(heights[i], frames[i]) : GenerateNormalMap(frames[i])));
 				if (emissives != null)
+				{
 					packer.Add($"{name}/emissive/{i}", emissives[i]);
+					BakedEmissiveLights[$"{name}/emissive/{i}"] = BakeEmissiveLight(emissives[i], EmissiveLightCenters[name]);
+				}
 			}
 		}
 
 		GenerateTransitionFrames(name, ase, frames, normals, heights, emissives, packer);
+	}
+
+	static Vector2 FindEmissiveLightCenter(Image[] frames)
+	{
+		var weightedPosition = Vector2.Zero;
+		float totalWeight = 0;
+		foreach (var frame in frames)
+			for (var i = 0; i < frame.Data.Length; i++)
+			{
+				var color = frame.Data[i];
+				var weight = color.A / 255f * Math.Max(color.R, Math.Max(color.G, color.B)) / 255f;
+				weightedPosition += new Vector2(i % frame.Width + 0.5f, i / frame.Width + 0.5f) * weight;
+				totalWeight += weight;
+			}
+		return totalWeight > 0 ? weightedPosition / totalWeight : Vector2.Zero;
+	}
+
+	static Sprite.EmissiveLight BakeEmissiveLight(Image frame, Vector2 position)
+	{
+		var colorSum = Vector3.Zero;
+		float energy = 0;
+		float distanceSquaredSum = 0;
+		for (var i = 0; i < frame.Data.Length; i++)
+		{
+			var color = frame.Data[i];
+			var alpha = color.A / 255f;
+			var rgb = color.ToVector3();
+			var weight = alpha * Math.Max(rgb.X, Math.Max(rgb.Y, rgb.Z));
+			if (weight <= 0)
+				continue;
+			var offset = new Vector2(i % frame.Width + 0.5f, i / frame.Width + 0.5f) - position;
+			colorSum += rgb * weight;
+			energy += weight;
+			distanceSquaredSum += offset.LengthSquared() * weight;
+		}
+		if (energy <= 0)
+			return default;
+
+		var colorValue = colorSum / energy;
+		colorValue /= Math.Max(colorValue.X, Math.Max(colorValue.Y, colorValue.Z));
+		return new(position, new Color(colorValue), energy, MathF.Sqrt(distanceSquaredSum / energy));
 	}
 
 	static int InbetweenBenchCount(string name)
@@ -2958,7 +3024,10 @@ public static partial class Assets
 				packer.Add($"{prefix}/normal/{j}", normalResults?[i][j] ??
 					(heightResults != null ? GenerateNormalMap(heightResults[i][j], transFrames[j]) : GenerateNormalMap(transFrames[j])));
 				if (emissiveResults != null)
+				{
 					packer.Add($"{prefix}/emissive/{j}", emissiveResults[i][j]);
+					BakedEmissiveLights[$"{prefix}/emissive/{j}"] = BakeEmissiveLight(emissiveResults[i][j], EmissiveLightCenters[name]);
+				}
 			}
 
 			transitions.Add(new(p.FromTag, p.ToTag, transFrames.Length, transDurations));

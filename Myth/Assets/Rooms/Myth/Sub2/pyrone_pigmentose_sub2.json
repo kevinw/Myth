@@ -72,13 +72,18 @@
       "Id": "4466ec5b82eca27b",
       "From": "StrongFireLight",
       "Position": [116, 60],
-      "Invert": "UninvertedOnly"
+      "Invert": "UninvertedOnly",
+      "Radius": 153.803,
+      "Intensity": 0.687
     },
     {
       "Id": "42932b410a142e11",
       "From": "StrongFireLight",
       "Position": [92, 116],
-      "Invert": "InvertedOnly"
+      "Invert": "InvertedOnly",
+      "Intensity": 0.954,
+      "Height": 11.643,
+      "Radius": 139.277
     },
     {
       "Id": "405a3e78814110a0",
@@ -101,7 +106,8 @@
       "Invert": "UninvertedOnly",
       "Height": 10.623,
       "Radius": 118,
-      "Intensity": 0.744
+      "Intensity": 0.744,
+      "TintSprite": true
     },
     {
       "Id": "e8fab4688d903482",

@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Foster.Framework;
 
@@ -42,6 +43,9 @@ public class Prop : Actor
 	public bool Decal;
 	public int Health = 1;
 	[I(0, 1)] public float AnimationSpeedRandomness;
+	[InspectorGroup("Emissive Light"), I(0, 3)] public float EmissiveLightIntensity = 0.35f;
+	[I(0, 4)] public float EmissiveLightRadiusScale = 1;
+	[I(0, 64)] public float EmissiveLightHeight = 8;
 	float animationRate = 1;
 
 	public override bool CastsSpriteShadow => !Decal;
@@ -63,6 +67,26 @@ public class Prop : Actor
 	{
 		if (runtimePropFlags.Has(RuntimePropFlags.RenderEmissive))
 			RenderSpriteSubtexture(batcher, SubtextureType.Emissive, PropColor);
+	}
+
+	public override void ForEachAutomaticLight(Action<Vector2, float, float, float, Color> action)
+	{
+		if (!Visible || EmissiveLightIntensity <= 0 || !runtimePropFlags.Has(RuntimePropFlags.RenderEmissive) ||
+			Sprite?.TryGetEmissiveLight(AnimationFrameIndex, out var light) != true)
+			return;
+
+		var energy = Math.Clamp(MathF.Sqrt(light.Energy) / 4, 0.2f, 1.5f);
+		var color = new Color(
+			(byte)(light.Color.R * PropColor.R / 255),
+			(byte)(light.Color.G * PropColor.G / 255),
+			(byte)(light.Color.B * PropColor.B / 255),
+			(byte)255);
+		action(
+			SpritePointToWorld(light.Position),
+			(24 + light.Extent * 2) * EmissiveLightRadiusScale,
+			EmissiveLightIntensity * energy * PropColor.A / 255,
+			EmissiveLightHeight,
+			color);
 	}
 
 	ActorDestructionTrigger? destroyTrigger;

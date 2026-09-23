@@ -162,7 +162,8 @@
       "Position": [102, 150],
       "SpriteName": "Props/server",
       "Layer": "Background",
-      "ChangeOnActorDestroyed": "574c49f8e2ee020d"
+      "ChangeOnActorDestroyed": "574c49f8e2ee020d",
+      "EmissiveLightIntensity": 0.358
     },
     {
       "Id": "fb87b8221a829aff",
@@ -186,7 +187,9 @@
       "Type": "Prop",
       "Position": [33, 153],
       "ChangeOnActorDestroyed": "574c49f8e2ee020d",
-      "SpriteName": "Props/computer_terminal_sm"
+      "SpriteName": "Props/computer_terminal_sm",
+      "EmissiveLightIntensity": 0.672,
+      "EmissiveLightRadiusScale": 0.77
     },
     {
       "Id": "eb47f55e7ac57f5a",
