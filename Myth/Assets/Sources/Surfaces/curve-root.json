@@ -1,0 +1,22 @@
+{
+  "Layers": [
+    {
+      "Texture": "patterns/pattern_39",
+      "Blend": "Over",
+      "Tint": "97745cff",
+      "BlackColor": "392d30ff",
+      "Tiling": [32, 32]
+    },
+    {
+      "Texture": "patterns/pattern_83",
+      "Blend": "Multiply",
+      "Tint": "d7b18aff",
+      "BlackColor": "523f3aff",
+      "Opacity": 0.25,
+      "Tiling": [16, 16]
+    }
+  ],
+  "NormalFromHeight": true,
+  "NormalStrength": 1.2,
+  "HeightFromLayer": 0
+}

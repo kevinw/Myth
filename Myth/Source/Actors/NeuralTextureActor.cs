@@ -747,6 +747,24 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		return maskData.Name;
 	}
 
+	public Image CreatePaintedMaskPreview()
+	{
+		if (paintedImage == null && !string.IsNullOrEmpty(maskData.Name))
+			paintedImage = new Image(BlobContent.Read(maskData));
+		var preview = new Image(Size.X, Size.Y);
+		var pixels = preview.Data;
+		for (var y = 0; y < Size.Y; y++)
+			for (var x = 0; x < Size.X; x++)
+			{
+				var mask = paintedImage != null && paintedImage.Bounds.Contains(new Point2(x, y))
+					? paintedImage[x, y] : new Color(255, 0, 0, 0);
+				pixels[y * Size.X + x] = new Color(
+					(byte)Math.Min(255, mask.R + mask.A),
+					(byte)Math.Min(255, mask.G + mask.A), mask.B, 255);
+			}
+		return preview;
+	}
+
 	public static string ReframeMask(string blob, Point2 newSize, Point2 offset)
 	{
 		if (string.IsNullOrEmpty(blob))

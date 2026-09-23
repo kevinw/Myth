@@ -152,6 +152,8 @@ public partial class Manager
 	float maskPaintStrength = 1.0f;
 	int maskPaintPreviewSteps = 128;
 	bool maskPaintStroke;
+	bool maskPaintPreviewHeld;
+	Texture? maskPaintPreviewTexture;
 	readonly RoomColorFieldPainter roomColorFieldPainter = new();
 	readonly JsonUndoManager undo = new();
 	// Mutable struct on purpose: methods called through this field update its state in place.
@@ -1943,6 +1945,20 @@ public partial class Manager
 	static bool IsPointPathActor(JsonObject actor)
 		=> ActorTypesAssignableTo(typeof(IPointPath)).Contains(ActorSpecs.GetTypeName(actor) ?? "");
 
+	static bool IsCurveRibbonActor(JsonObject actor)
+		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(CurveRibbon), StringComparison.OrdinalIgnoreCase);
+
+	static Vector2 CurvePathPoint(JsonArray? nodes, int count, int segment, float t)
+		=> CurveRibbon.Sample(
+			PointPathPoint(nodes, Math.Max(0, segment - 1)),
+			PointPathPoint(nodes, segment),
+			PointPathPoint(nodes, segment + 1),
+			PointPathPoint(nodes, Math.Min(count - 1, segment + 2)), t);
+
+	static int CurvePathSteps(JsonArray? nodes, int segment)
+		=> Math.Clamp((int)MathF.Ceiling(Vector2.Distance(PointPathPoint(nodes, segment),
+			PointPathPoint(nodes, segment + 1)) / 6f), 8, 128);
+
 	static Point2[] PointPathPoints(JsonObject actor)
 	{
 		if (PointPathNodes(actor) is not { } nodes)
@@ -2163,8 +2179,23 @@ public partial class Manager
 		var origin = PointPathOrigin(room, actor);
 		var tolerance = MathF.Max(3, 6 / editorZoom);
 		for (var i = 1; i < count; i++)
-			if (new Line(origin + PointPathPoint(points, i - 1), origin + PointPathPoint(points, i)).DistanceSquared(world) <= tolerance * tolerance)
-				return true;
+		{
+			if (!IsCurveRibbonActor(actor))
+			{
+				if (new Line(origin + PointPathPoint(points, i - 1), origin + PointPathPoint(points, i)).DistanceSquared(world) <= tolerance * tolerance)
+					return true;
+				continue;
+			}
+			var steps = CurvePathSteps(points, i - 1);
+			var previous = origin + CurvePathPoint(points, count, i - 1, 0);
+			for (var step = 1; step <= steps; step++)
+			{
+				var current = origin + CurvePathPoint(points, count, i - 1, step / (float)steps);
+				if (new Line(previous, current).DistanceSquared(world) <= tolerance * tolerance)
+					return true;
+				previous = current;
+			}
+		}
 		return false;
 	}
 
@@ -2302,7 +2333,21 @@ public partial class Manager
 			var color = typeName == nameof(BurrowLine) ? new Color(0x54e6c1) : new Color(0xffb454);
 			var weight = lineWeight * (selected ? 3 : 2);
 			for (var i = 1; i < count; i++)
-				batcher.Line(origin + PointPathPoint(points, i - 1), origin + PointPathPoint(points, i), weight, color * (selected ? 1 : 0.65f));
+			{
+				if (!IsCurveRibbonActor(actor))
+				{
+					batcher.Line(origin + PointPathPoint(points, i - 1), origin + PointPathPoint(points, i), weight, color * (selected ? 1 : 0.65f));
+					continue;
+				}
+				var steps = CurvePathSteps(points, i - 1);
+				var previous = origin + CurvePathPoint(points, count, i - 1, 0);
+				for (var step = 1; step <= steps; step++)
+				{
+					var current = origin + CurvePathPoint(points, count, i - 1, step / (float)steps);
+					batcher.Line(previous, current, weight, color * (selected ? 1 : 0.65f));
+					previous = current;
+				}
+			}
 
 			if (!selected)
 				continue;
@@ -2402,14 +2447,23 @@ public partial class Manager
 		var bestDistance = tolerance * tolerance;
 		for (var i = 1; i < count; i++)
 		{
-			var line = new Line(origin + PointPathPoint(nodes, i - 1), origin + PointPathPoint(nodes, i));
-			var distance = line.DistanceSquared(world);
-			if (distance > bestDistance)
-				continue;
-
-			bestDistance = distance;
-			best = i - 1;
-			onLine = line.ClosestPoint(world);
+			var steps = IsCurveRibbonActor(actor) ? CurvePathSteps(nodes, i - 1) : 1;
+			var previous = origin + PointPathPoint(nodes, i - 1);
+			for (var step = 1; step <= steps; step++)
+			{
+				var current = IsCurveRibbonActor(actor)
+					? origin + CurvePathPoint(nodes, count, i - 1, step / (float)steps)
+					: origin + PointPathPoint(nodes, i);
+				var line = new Line(previous, current);
+				var distance = line.DistanceSquared(world);
+				if (distance <= bestDistance)
+				{
+					bestDistance = distance;
+					best = i - 1;
+					onLine = line.ClosestPoint(world);
+				}
+				previous = current;
+			}
 		}
 		return best;
 	}
@@ -4146,6 +4200,7 @@ public partial class Manager
 
 	void EndMaskPainting()
 	{
+		maskPaintPreviewHeld = false;
 		if (maskPaintActorId != null && maskPaintStroke && FindLiveNeuralTextureActor(maskPaintActorId) is { } live)
 			CommitMaskStroke(live);
 		maskPaintActorId = null;
@@ -4359,6 +4414,20 @@ public partial class Manager
 			inner.Size / editorZoom);
 		batcher.PushMatrix(worldMatrix);
 		DrawEditorRooms(visibleWorld);
+		if (maskPaintPreviewHeld && maskPaintActorId != null && FindLiveNeuralTextureActor(maskPaintActorId) is { } maskActor)
+		{
+			if (maskPaintPreviewTexture == null)
+			{
+				using var maskPreview = maskActor.CreatePaintedMaskPreview();
+				maskPaintPreviewTexture = new Texture(GraphicsDevice, maskPreview, name: "NeuralMaskPreview");
+			}
+			batcher.Image(maskPaintPreviewTexture, maskActor.Position, Color.White);
+		}
+		else if (maskPaintPreviewTexture != null)
+		{
+			maskPaintPreviewTexture.Dispose();
+			maskPaintPreviewTexture = null;
+		}
 		DrawMusicRegionsOverlay(visibleWorld);
 		DrawEditorScreenGrid(visibleWorld);
 

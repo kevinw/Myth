@@ -144,6 +144,17 @@
       "EdgeTrim": 1,
       "PaintedMask": "125675521feacdf5.png",
       "WeightsFile1": "interlaced_0191_circular.bin"
+    },
+    {
+      "Id": "5e3bd326a465cfcf",
+      "Type": "CurveRibbon",
+      "Position": [291, 22],
+      "Width": 24.102,
+      "Points": [[0, 0],[88, 16],[72, 72],[192, 136]
+      ],
+      "BranchWidth": 0.19,
+      "BranchLength": 38.033,
+      "Tint": "C0C0C0"
     }
   ]
 }

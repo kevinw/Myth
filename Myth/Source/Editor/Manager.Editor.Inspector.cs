@@ -1225,6 +1225,8 @@ public partial class Manager
 			EndMaskPainting();
 			return;
 		}
+		Button("Hold to Show Mask");
+		maskPaintPreviewHeld = IsItemActive();
 
 		// Which material you're painting with reads far better as its own swatch than as a filename.
 		var swatch = new Vector2(ButtonSize, ButtonSize);

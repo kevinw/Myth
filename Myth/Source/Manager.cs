@@ -809,6 +809,7 @@ public partial class Manager : App
 		imguiCursors.Clear();
 #endif
 #if EDITOR
+		maskPaintPreviewTexture?.Dispose();
 		ClearRoomPreviewCache(deferDisposal: false);
 		ClearSurfacePreviewCache(deferDisposal: false);
 		surfacePreviewBatcher?.Dispose();
