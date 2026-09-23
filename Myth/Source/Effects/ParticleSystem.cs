@@ -103,7 +103,7 @@ public sealed class ParticleSystem : IDisposable
 	[StructLayout(LayoutKind.Sequential)]
 	struct FragmentParams
 	{
-		public float TargetWidth, TargetHeight, LightingEnabled, Pad0;
+		public float TargetWidth, TargetHeight, LightingEnabled, DirectPresence;
 		public float AmbientR, AmbientG, AmbientB, Pad1;
 	}
 
@@ -542,7 +542,7 @@ public sealed class ParticleSystem : IDisposable
 		Array.Clear(fieldData);
 	}
 
-	public void Render(Target target, Target lightMask, Vector2 camera, float zoom, bool lightingEnabled, Color ambientLight)
+	public void Render(Target target, Target lightMask, Vector2 camera, float zoom, bool lightingEnabled, Color ambientLight, float directPresence)
 	{
 		if (!supported)
 			return;
@@ -561,6 +561,7 @@ public sealed class ParticleSystem : IDisposable
 			TargetWidth = target.Width,
 			TargetHeight = target.Height,
 			LightingEnabled = lightingEnabled ? 1 : 0,
+			DirectPresence = directPresence,
 			AmbientR = ambient.X,
 			AmbientG = ambient.Y,
 			AmbientB = ambient.Z,

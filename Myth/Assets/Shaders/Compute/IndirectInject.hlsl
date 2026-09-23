@@ -37,7 +37,14 @@ cbuffer Params : register(b0, space2)
     float Padding;
     float4 Ambient;
     float4 MaterialResponse;
+    float4 RoomBounds;
+    float4 NextRoomBounds;
 };
+
+bool in_room(float2 pixel, float4 bounds)
+{
+    return all(pixel >= bounds.xy) && all(pixel < bounds.xy + bounds.zw);
+}
 
 float material_response(float4 tile)
 {
@@ -80,7 +87,12 @@ void compute_main(uint3 id : SV_DispatchThreadID)
         {
             float2 sampleOffset = (float2(sampleX, sampleY) + 0.5) * 0.5;
             float2 pixel = min((float2(cell) + sampleOffset) * GridSpacing, float2(Width, Height) - 0.5);
+            if (!in_room(pixel, RoomBounds) && !in_room(pixel, NextRoomBounds))
+                continue;
+            // All room cells may carry GI; only actual surfaces/emission seed it.
+            coverage = 1.0;
             float2 uv = target_uv(pixel / float2(Width, Height));
+            float backgroundCoverage = BackgroundCoverage.SampleLevel(BackgroundCoverageSampler, uv, 0.0).r;
             float4 background = BackgroundScene.SampleLevel(BackgroundSceneSampler, uv, 0.0);
             float4 foreground = ForegroundScene.SampleLevel(ForegroundSceneSampler, uv, 0.0);
             float4 tile = TileField.SampleLevel(TileFieldSampler, uv, 0.0);
@@ -91,14 +103,12 @@ void compute_main(uint3 id : SV_DispatchThreadID)
             float3 foregroundLighting = max(ForegroundLight.SampleLevel(ForegroundLightSampler, uv, 0.0).rgb - Ambient.rgb, 0.0);
             float4 backgroundLightEmission = BackgroundLightEmission.SampleLevel(BackgroundLightEmissionSampler, uv, 0.0);
             float4 foregroundLightEmission = ForegroundLightEmission.SampleLevel(ForegroundLightEmissionSampler, uv, 0.0);
-            float3 sampleRadiance = lerp(backgroundColor * backgroundLighting, backgroundLightEmission.rgb, backgroundLightEmission.a);
+            float3 sampleRadiance = lerp(backgroundColor * backgroundLighting * backgroundCoverage, backgroundLightEmission.rgb, backgroundLightEmission.a);
             float solidForeground = foreground.a * step(0.5, tile.b);
             sampleRadiance = lerp(sampleRadiance, foregroundColor * foregroundLighting, solidForeground);
             sampleRadiance = lerp(sampleRadiance, foregroundLightEmission.rgb, foregroundLightEmission.a);
             radiance += sampleRadiance;
             surfaceColor += lerp(backgroundColor, foregroundColor, solidForeground);
-            float backgroundCoverage = BackgroundCoverage.SampleLevel(BackgroundCoverageSampler, uv, 0.0).r;
-            coverage = max(coverage, max(backgroundCoverage, max(tile.b * foreground.a, foregroundLightEmission.a)));
             solid += tile.b;
         }
     }

@@ -24,8 +24,11 @@ cbuffer FragmentUniformBlock : register(b0, space3)
     float4 DitherGlitch;
     float4 DitherGlitchAxis;
     float4 AoSettings; // x = strength, yz = sample offset in pixels, w = min visibility
-    float4 NormalDitherSettings; // x = slope boost, y = quantization levels, z = actor tile field populated, w = rim strength
+    float4 NormalDitherSettings; // x = slope boost, y = normal quantization enabled, z = actor tile field populated, w = band spacing
     float4 IndirectSettings; // x = background strength, y = foreground strength, z = actor gain, w = hero fill
+    float4 HdrSettings; // x = exposure in stops, y = shoulder start, z = direct presence, w = GI underpaint
+    float4 AmbientLight;
+    float4 BackdropSettings; // x = GI strength on untiled backdrop, y = wrap pattern strength
     float4 DitherAnchorOffsets[MAX_DITHER_ANCHORS];
 };
 
@@ -67,6 +70,8 @@ SamplerState ActorTileFieldSampler : register(s11, space2);
 
 Texture2D IndirectLightTexture : register(t12, space2);
 SamplerState IndirectLightSampler : register(s12, space2);
+Texture2D ForegroundWrapTexture : register(t13, space2);
+SamplerState ForegroundWrapSampler : register(s13, space2);
 
 struct VsInput
 {
@@ -129,7 +134,7 @@ float bayer4_threshold(float2 position)
         else rank = 11.0;
     }
 
-    return rank / 17.0;
+    return (rank - 0.5) / 16.0;
 }
 
 float hash_threshold(float2 position)
@@ -146,66 +151,106 @@ float hash_threshold(float value)
 float stripe_threshold(float2 position)
 {
     float x = fmod(position.x, 4.0);
-    return (x + 1.0) / 5.0;
+    return (x + 0.5) / 4.0;
 }
 
 float vertical_stripe_threshold(float2 position)
 {
     float y = fmod(position.y, 4.0);
-    return (y + 1.0) / 5.0;
+    return (y + 0.5) / 4.0;
 }
 
 float diagonal_threshold(float2 position)
 {
     float diagonal = fmod(position.x + position.y * 2.0, 6.0);
-    return (diagonal + 1.0) / 7.0;
+    return (diagonal + 0.5) / 6.0;
 }
 
 float crosshatch_threshold(float2 position)
 {
-    float a = fmod(position.x + position.y, 4.0);
-    float b = fmod(position.x - position.y + 8.0, 4.0);
-    return (min(a, b) + 1.0) / 5.0;
+    // Equal-area ranks retain the motif without adding a lighting bias.
+    static const float ranks[16] = {
+        5, 11, 13, 15,
+        9, 3, 7, 1,
+        12, 14, 4, 10,
+        6, 0, 8, 2
+    };
+    int2 p = int2(fmod(position, 4.0));
+    return (ranks[p.y * 4 + p.x] + 0.5) / 16.0;
 }
 
 float cluster_threshold(float2 position)
 {
-    float2 p = fmod(position, 4.0) - 1.5;
-    float distanceRank = dot(p, p);
-    return saturate((distanceRank + 0.5) / 5.0);
+    // Equal-area ranks retain the motif without adding a lighting bias.
+    static const float ranks[16] = {
+        15, 7, 11, 13,
+        5, 2, 0, 9,
+        10, 1, 3, 6,
+        12, 8, 4, 14
+    };
+    int2 p = int2(fmod(position, 4.0));
+    return (ranks[p.y * 4 + p.x] + 0.5) / 16.0;
 }
 
 float checker_threshold(float2 position)
 {
-    float2 p = fmod(position, 4.0);
-    float checker = fmod(floor(p.x) + floor(p.y), 2.0);
-    float bayer = bayer4_threshold(position);
-    return checker == 0.0 ? bayer * 0.75 : 0.35 + bayer * 0.65;
+    // Equal-area ranks retain the motif without adding a lighting bias.
+    static const float ranks[16] = {
+        7, 15, 5, 13,
+        12, 3, 9, 1,
+        4, 11, 6, 14,
+        8, 0, 10, 2
+    };
+    int2 p = int2(fmod(position, 4.0));
+    return (ranks[p.y * 4 + p.x] + 0.5) / 16.0;
 }
 
 float brick_threshold(float2 position)
 {
-    float2 p = position;
-    p.x += fmod(floor(p.y / 2.0), 2.0) * 2.0;
-    float mortar = min(fmod(p.x, 4.0), fmod(p.y, 4.0));
-    return saturate((mortar + 1.0) / 5.0);
+    // Equal-area ranks retain the motif without adding a lighting bias.
+    static const float ranks[64] = {
+        24, 12, 16, 8, 25, 13, 17, 9,
+        4, 44, 28, 36, 5, 45, 29, 37,
+        56, 52, 20, 32, 57, 53, 21, 33,
+        48, 60, 0, 40, 49, 61, 1, 41,
+        26, 14, 18, 10, 27, 15, 19, 11,
+        6, 46, 30, 38, 7, 47, 31, 39,
+        58, 54, 22, 34, 59, 55, 23, 35,
+        50, 62, 2, 42, 51, 63, 3, 43
+    };
+    int2 p = int2(fmod(position, 8.0));
+    return (ranks[p.y * 8 + p.x] + 0.5) / 64.0;
 }
 
 float saw_threshold(float2 position)
 {
     float saw = fmod(position.x * 2.0 + position.y, 8.0);
-    return (saw + 1.0) / 9.0;
+    return (saw + 0.5) / 8.0;
 }
 
 float edge_threshold(float2 position)
 {
-    float2 p = abs(fmod(position, 8.0) - 3.5);
-    float edge = max(p.x, p.y);
-    return saturate((edge - 0.5) / 3.5);
+    // Equal-area ranks retain the motif without adding a lighting bias.
+    static const float ranks[64] = {
+        61, 48, 59, 43, 62, 49, 60, 44,
+        41, 28, 16, 27, 23, 29, 17, 52,
+        57, 20, 15, 8, 13, 6, 33, 46,
+        36, 26, 5, 2, 0, 10, 19, 54,
+        63, 25, 14, 1, 3, 9, 32, 45,
+        42, 30, 4, 11, 7, 12, 18, 53,
+        58, 21, 34, 24, 31, 22, 35, 47,
+        37, 50, 39, 55, 38, 51, 40, 56
+    };
+    int2 p = int2(fmod(position, 8.0));
+    return (ranks[p.y * 8 + p.x] + 0.5) / 64.0;
 }
 
 float threshold_for_pattern(float2 position, float pattern)
 {
+    position = floor(position);
+    // Positive coordinates for all periodic motifs, including mirrored material patterns.
+    if (pattern != 4.0)
+        position = position - floor(position / 24.0) * 24.0;
     if (pattern == 1.0)
         return diagonal_threshold(position);
     if (pattern == 2.0)
@@ -283,16 +328,8 @@ float ellipse_distance(float2 position, float2 origin, float2 axis, float long_r
     return sqrt(along * along + across * across);
 }
 
-float3 dither_light_intensity(float3 light, float2 world_position, float2 pattern_position, float4 tile_field,
-    float dither_mask, float normal_slope, float detail_priority)
+float lighting_threshold(float2 world_position, float2 pattern_position, float4 tile_field)
 {
-    if (DitherSettings.x <= 0.0 && NormalDitherSettings.x <= 0.0 && NormalDitherSettings.y <= 1.0)
-        return light;
-
-    float intensity = max(max(light.r, light.g), light.b);
-    if (intensity <= 0.0001)
-        return light;
-
     float family = tile_field_family(tile_field);
     float variant = floor(tile_field.r * 255.0 + 0.5);
     float amount = DitherSettings.w * DitherSettings.w * (3.0 - 2.0 * DitherSettings.w);
@@ -310,45 +347,41 @@ float3 dither_light_intensity(float3 light, float2 world_position, float2 patter
     float2 glitch_offset = float2(dirty - 0.5, glitch_hash - 0.5) * local_glitch * 9.0;
     float2 dither_position = glitch_dither_position(pattern_position + glitch_offset, tile_field);
     float pattern = local_glitch > 0.65 ? floor(glitch_hash * 11.0) : pattern_for_family(family, variant);
-    float threshold = threshold_for_pattern(dither_position, pattern);
-    threshold = saturate(threshold + (frac(variant * 0.61803398875) - 0.5) * 0.10);
-    threshold = saturate(threshold + (dirty - 0.5) * local_glitch * 0.18);
-    threshold = saturate(threshold + 0.5 - detail_priority);
-    float dithered_intensity = saturate(intensity) < threshold ? 0.0 : 1.0;
-
-#if 1
-    // This looks better on average, but makes things fullbright when dither strength is up (dither strength becomes a sort of ambient light)
-    float scale = dithered_intensity / intensity;
-    float strength = saturate((DitherSettings.x > 0.0 ? DitherSettings.z * dither_mask : 0.0) + normal_slope * NormalDitherSettings.x);
-    float3 result = light * lerp(1.0, scale, strength);
-
-    if (NormalDitherSettings.y > 1.0 && normal_slope > 0.0)
-    {
-        float result_intensity = max(max(result.r, result.g), result.b);
-        float steps = NormalDitherSettings.y - 1.0;
-        float quantized = floor(saturate(result_intensity) * steps + threshold) / steps;
-        result *= lerp(1.0, quantized / max(result_intensity, 0.0001), normal_slope);
-    }
-
-    return result;
-#else
-    // This looks worse because it has less interesting behaviour in dark solid areas, but is more "physically plausible" lighting wise...
-    float strength = saturate(DitherSettings.z * dither_mask);
-    float shadow = lerp(0.18, 1.0, dithered_intensity);
-    return light * lerp(1.0, shadow, strength);
-#endif
+    return threshold_for_pattern(dither_position, pattern);
 }
 
-float4 light_scene(float4 scene, float4 light, float3 indirect, float4 emissive, float2 world_pixel, float2 pattern_pixel,
+float3 quantize_light(float3 light, float threshold, float strength)
+{
+    float intensity = max(max(light.r, light.g), light.b);
+    float spacing = max(NormalDitherSettings.w, 0.0001);
+    float band = intensity / spacing;
+    float quantized = (floor(band) + (frac(band) > threshold ? 1.0 : 0.0)) * spacing;
+    return light * lerp(1.0, quantized / max(intensity, 0.0001), strength);
+}
+
+float4 visible_direct_light(float4 light)
+{
+    return min(light, AmbientLight) + max(light - AmbientLight, 0.0) * HdrSettings.z;
+}
+
+float4 light_scene(float4 scene, float4 light, float3 indirect, float3 patternedIndirect, float4 emissive, float2 world_pixel, float2 pattern_pixel,
     float4 tile_field, float dither_mask, float normal_slope, float detail_priority)
 {
-    light.rgb += indirect;
-    light.rgb = dither_light_intensity(light.rgb, world_pixel, pattern_pixel, tile_field, dither_mask, normal_slope, detail_priority);
-    float brightness = max(max(scene.r, scene.g), scene.b);
-    float rim_light = light.a * saturate(1.0 - brightness * 2.2) * NormalDitherSettings.w;
-    float3 color = scene.rgb * light.rgb + light.rgb * rim_light;
-    color = lerp(color, emissive.rgb, emissive.a);
-    return float4(saturate(color), scene.a);
+    float exposure = exp2(HdrSettings.x);
+    float3 underpaint = indirect * HdrSettings.w;
+    float threshold = lighting_threshold(world_pixel, pattern_pixel, tile_field);
+    float strength = saturate((DitherSettings.x > 0.0 ? DitherSettings.z * dither_mask : 0.0)
+        + normal_slope * max(NormalDitherSettings.x, NormalDitherSettings.y));
+    // Protect detailed actor art through pattern contrast, not a brightness-biased threshold.
+    strength *= saturate(1.5 - detail_priority);
+    float3 baseLight = max(light.rgb + indirect - underpaint, 0.0) * exposure;
+    light.rgb = quantize_light(baseLight, threshold, strength);
+    // Wrap has its own contrast; both components use the same material ranks and band spacing.
+    light.rgb += quantize_light(patternedIndirect * exposure, threshold, BackdropSettings.y);
+    light.rgb += underpaint * exposure;
+    float3 color = scene.rgb * light.rgb;
+    color = lerp(color, emissive.rgb * exp2(HdrSettings.x), emissive.a);
+    return float4(color, scene.a);
 }
 
 float4 fragment_main(VsOutput input) : SV_Target0
@@ -363,7 +396,7 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float2 art_pixel = floor(screen_pixel(input.position, TextureSizeCamera.y) / zoom);
     float2 sample = target_uv((art_pixel + 0.5) * zoom / TextureSizeCamera.xy);
     float4 background_scene = Texture.Sample(Sampler, sample) * input.color;
-    float4 background_light = LightTexture.Sample(LightSampler, sample);
+    float4 background_light = visible_direct_light(LightTexture.Sample(LightSampler, sample));
     float4 tile_field = TileFieldTexture.Sample(TileFieldSampler, sample);
     float4 background_emissive = EmissiveTexture.Sample(EmissiveSampler, sample);
     float3 indirect_light = IndirectLightTexture.Sample(IndirectLightSampler, sample).rgb;
@@ -406,16 +439,19 @@ float4 fragment_main(VsOutput input) : SV_Target0
         background_light.rgb *= lerp(1.0, AoSettings.w, occlusion * coverage);
     }
 
+    float background_coverage = BackgroundCoverageTexture.Sample(BackgroundCoverageSampler, sample).r;
+    float world_presence = lerp(BackdropSettings.x, IndirectSettings.x, max(background_coverage, actor_coverage));
     float actor_indirect = lerp(1.0, IndirectSettings.z, actor_coverage);
     float hero_indirect = actor_coverage * IndirectSettings.w;
-    float3 background_indirect = indirect_light * IndirectSettings.x * actor_indirect + indirect_light * hero_indirect;
-    float4 background = light_scene(background_scene, background_light, background_indirect, background_emissive, world_pixel,
+    float3 background_indirect = indirect_light * world_presence * actor_indirect + indirect_light * hero_indirect;
+    float4 background = light_scene(background_scene, background_light, background_indirect, 0.0, background_emissive, world_pixel,
         background_pattern_pixel, background_tile_field, dither_mask, normal_slope, background_detail_priority);
-    background.rgb = saturate(background.rgb + SporeFogTexture.Sample(SporeFogSampler, sample).rgb);
+    background.rgb += SporeFogTexture.Sample(SporeFogSampler, sample).rgb * exp2(HdrSettings.x);
     float4 foreground = light_scene(
         ForegroundTexture.Sample(ForegroundSampler, sample) * input.color,
-        ForegroundLightTexture.Sample(ForegroundLightSampler, sample),
+        visible_direct_light(ForegroundLightTexture.Sample(ForegroundLightSampler, sample)),
         indirect_light * IndirectSettings.y,
+        max(ForegroundWrapTexture.Sample(ForegroundWrapSampler, sample).rgb - indirect_light, 0.0) * IndirectSettings.y,
         ForegroundEmissiveTexture.Sample(ForegroundEmissiveSampler, sample),
         world_pixel,
         pattern_pixel,
@@ -423,5 +459,15 @@ float4 fragment_main(VsOutput input) : SV_Target0
         dither_mask,
         normal_slope,
         0.5);
-    return saturate(foreground + background * (1.0 - foreground.a));
+    float4 composite = foreground + background * (1.0 - foreground.a);
+    // Tone-map once after layer composition. Work in straight color so coverage stays linear.
+    float3 color = max(composite.rgb / max(composite.a, 0.0001), 0.0);
+    float peak = max(max(color.r, color.g), color.b);
+    float shoulder = HdrSettings.y;
+    float span = max(1.0 - shoulder, 0.0001);
+    float excess = max(peak - shoulder, 0.0);
+    float mapped = shoulder + span * excess / (span + excess);
+    if (peak > shoulder)
+        color *= mapped / peak;
+    return float4(color * composite.a, saturate(composite.a));
 }

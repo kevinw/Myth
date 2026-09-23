@@ -1,7 +1,8 @@
 {
   "position": [-98, 0],
   "size": [58, 23],
-  "ambientColor": "424242",
+  "ambientColor": "6C6C6C",
+  "sporeFogStrength": 0.353,
   "reverb": 0.555,
   "colorFields": {
     "foreground": "6cfd6e32df2b5a80.png"

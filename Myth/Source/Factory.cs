@@ -347,7 +347,12 @@ public static class Factory
 		{
 			var grid = layer == TileLayer.Foreground ? fg : bg;
 			if (hasSlope && room.TryGetSlopeTile(tile, layer, out var slope))
-				grid.Set(tile.X, tile.Y, Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, StableVariantSeed(room, tilesetName, tile)));
+			{
+				var seed = StableVariantSeed(room, tilesetName, tile);
+				grid.Set(tile.X, tile.Y,
+					Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed),
+					normal: Assets.GetSlopeSubtexture(tilesetName, slope.Direction, slope.Fill, slope.RunLength, slope.RunIndex, seed, normals: true));
+			}
 			else
 				grid.Set(tile.X, tile.Y, new());
 		}, substance, blocksMovement: layer == TileLayer.Foreground, castsShadow: layer == TileLayer.Foreground, reflection: reflection, reflectionOpacity: reflectionOpacity, slopeTilesetName: hasSlope ? tilesetName : null, dualTilesetName: dualTilesetName, layer: layer, tilesetName: tilesetName, acousticReflectivity: acousticReflectivity);

@@ -31,7 +31,7 @@ public sealed partial class GameView : IDisposable
 		crtMaterial = loadVisualShaders ? CreateFragmentMaterial("Crt", samplerCount: 2, uniformBufferCount: 1) : null;
 		atlasWanderMaterial = loadVisualShaders ? CreateFragmentMaterial("AtlasWander", samplerCount: 1, uniformBufferCount: 1) : null;
 		colorFieldMaterial = loadVisualShaders ? CreateFragmentMaterial("ColorField", samplerCount: 2, uniformBufferCount: 1) : null;
-		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 13, uniformBufferCount: 1) : null;
+		lightingCompositeMaterial = loadVisualShaders ? CreateFragmentMaterial("LightingComposite", samplerCount: 14, uniformBufferCount: 1) : null;
 		blurMaterial = loadVisualShaders ? CreateFragmentMaterial("Blur", samplerCount: 1, uniformBufferCount: 1) : null;
 		sdfAuraMaterial = loadVisualShaders ? CreateFragmentMaterial("SdfAura", samplerCount: 1, uniformBufferCount: 1) : null;
 		backgroundDecalMaskMaterial = loadVisualShaders ? CreateFragmentMaterial("DecalMask", samplerCount: 2, uniformBufferCount: 1) : null;

@@ -30,11 +30,11 @@ StructuredBuffer<float2> ShadowDepth : register(t3, space0);
 StructuredBuffer<SporeFogVolume> SporeFogVolumes : register(t4, space0);
 
 #if BROWSER
-[[vk::image_format("rgba8")]]
+[[vk::image_format("rgba16f")]]
 #endif
 RWTexture2D<float4> BackgroundMask : register(u0, space1);
 #if BROWSER
-[[vk::image_format("rgba8")]]
+[[vk::image_format("rgba16f")]]
 #endif
 RWTexture2D<float4> ForegroundMask : register(u1, space1);
 #if BROWSER
@@ -309,7 +309,7 @@ void compute_main(uint3 id : SV_DispatchThreadID)
 
     sporeFog *= spore_density(world) * spore_strength(world) * SporeFogTint.rgb;
     sporeFog = 1.0 - exp(-sporeFog);
-    BackgroundMask[id.xy] = saturate(shadowed);
-    ForegroundMask[id.xy] = saturate(unshadowed);
+    BackgroundMask[id.xy] = float4(max(shadowed.rgb, 0.0), saturate(shadowed.a));
+    ForegroundMask[id.xy] = float4(max(unshadowed.rgb, 0.0), saturate(unshadowed.a));
     SporeFogMask[id.xy] = float4(saturate(sporeFog), saturate(max(max(sporeFog.r, sporeFog.g), sporeFog.b)));
 }

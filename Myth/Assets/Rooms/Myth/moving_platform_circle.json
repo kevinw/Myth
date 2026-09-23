@@ -1,6 +1,7 @@
 {
   "position": [388, -73],
   "size": [80, 46],
+  "ambientColor": "0F0F0F",
   "reverb": 0.477,
   "legend": {
     "#": "back",
