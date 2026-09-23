@@ -34,6 +34,7 @@ public class DebugControls
 	public readonly VirtualAction CenterCamera;
 	public readonly VirtualAction PerfReveal;
 	public readonly VirtualAction VoiceTest;
+	public readonly VirtualAction ToggleVisuals;
 	public readonly VirtualAction TimeScaleDown;
 	public readonly VirtualAction TimeScaleUp;
 	public readonly VirtualAction AdvanceGym;
@@ -116,8 +117,12 @@ public class DebugControls
 			new ActionBindingSet().Add(Keys.U),
 			"U / Shift+U", "Perf toggles: reveal / hide one", Context.Playing);
 		VoiceTest = Make("DebugVoiceTest",
-			new ActionBindingSet().Add(Keys.V),
-			"V", "Bud voice test line", Context.Playing);
+			new ActionBindingSet()
+				//.Add(Keys.V)
+			, "", "Bud voice test line", Context.Playing);
+		ToggleVisuals = Make("DebugVisuals",
+			new ActionBindingSet().Add(Keys.V), "V", "Show/hide visuals panel", Context.Anywhere);
+
 		TimeScaleDown = Make("DebugTimeScaleDown",
 			new ActionBindingSet().Add(Keys.Minus, Keys.KeypadMinus),//.Add(Buttons.LeftShoulder),
 			"- / LB", "Time scale down", Context.Playing);

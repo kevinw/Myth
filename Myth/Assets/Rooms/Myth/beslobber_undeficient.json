@@ -70,15 +70,16 @@
       "Id": "be39ba7482630d41",
       "Type": "BurrowLine",
       "Position": [192, 168],
-      "Points": [[-72, 8],[0, 8]
-      ],
-      "ProceduralInnerColor": "FF0093",
-      "ProceduralOuterColor": "7E195A"
+      "Points": [[-72, 8],[-21, 8],[0, 8]
+      ]
     },
     {
       "Id": "3d673250060ac538",
       "From": "BlueMemoryLight",
-      "Position": [220, 148]
+      "Position": [220, 148],
+      "Radius": 130.612,
+      "Intensity": 0.776,
+      "Height": 18.857
     },
     {
       "Id": "9b4b9f66caec512d",

@@ -106,10 +106,12 @@ public class Light : Actor, IHitByHitbox
 		(byte)(a.B * b.B / 255),
 		(byte)(a.A * b.A / 255));
 
-	public float FlickerScale => 1 + CurrentFlicker * FlickerIntensity;
-	public float FlickerScaleMax => 1 + FlickerIntensity;
+	public float FlickerScale => FlickerBaseScale * (1 + CurrentFlicker * FlickerIntensity);
+	public float FlickerBaseScale => 1 + FlickerIntensity;
 	public bool Enabled => string.IsNullOrWhiteSpace(EnabledByPersistentButtonId) || Game.IsButtonPressed(EnabledByPersistentButtonId);
-	float CurrentFlicker => MathF.Sin(Timer * FlickerFrequency * MathF.Tau + FlickerRandomOffset);
+	float CurrentFlicker => FlickerFrequency <= 0 ? 0 :
+		0.7f * MathF.Sin(Timer * FlickerFrequency * 0.23f * MathF.Tau + FlickerRandomOffset * 1.7f) +
+		0.3f * MathF.Sin(Timer * FlickerFrequency * MathF.Tau + FlickerRandomOffset);
 
 	// Struck by a sword swing: the light flares and shudders, settling back over HitFlickerTime.
 	[I(0, 2)] public float HitFlickerStrength = 0.174f;
@@ -124,9 +126,9 @@ public class Light : Actor, IHitByHitbox
 	[I(0.05f, 2)] public float HitFlickerTime = 0.408f;
 	float hitFlickerAge = -1; // negative while at rest
 
-	// What the renderer scales radius and intensity by: the authored flicker headroom, times
-	// the decaying wobble of a recent hit.
-	public float RenderScale => FlickerScaleMax * HitFlickerScale;
+	// Keep the old flicker headroom as the average while the light breathes around it.
+	public float RenderScale => FlickerScale * HitFlickerScale;
+	public float RenderShadowSourceRadius => ShadowSourceRadius * (1 + (RenderScale / FlickerBaseScale - 1) * 0.45f);
 
 	float HitFlickerScale
 	{
@@ -234,7 +236,8 @@ public class Light : Actor, IHitByHitbox
 	public override void RenderEmissive(Batcher batcher)
 	{
 		if (DrawSprite && Enabled)
-			base.RenderEmissive(batcher);
+			RenderSpriteSubtexture(batcher, SubtextureType.Emissive,
+				Color.White * Math.Clamp(1 + (RenderScale / FlickerBaseScale - 1) * 1.5f, 0, 1));
 	}
 
 	public override void RenderReflection(Batcher batcher, Color color)

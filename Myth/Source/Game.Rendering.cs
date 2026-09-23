@@ -1613,10 +1613,11 @@ public sealed partial class GameView
 		{
 			if (actor is Light { Intensity: > 0, Enabled: true } light && (game.IsEditorPreview || !LightIsCovered(light.Position)))
 			{
+				var renderScale = light.RenderScale;
 				renderer.AddLight(
 					light.Position,
-					light.Radius * light.RenderScale,
-					light.Intensity * light.RenderScale,
+					light.Radius * renderScale,
+					light.Intensity * renderScale,
 					light.Height,
 					light.LightColor,
 					light.Cookie,
@@ -1626,7 +1627,7 @@ public sealed partial class GameView
 					light.CookieStrength,
 					light.CookieFeather,
 					light.CookieCutoff,
-					light.ShadowSourceRadius,
+					light.RenderShadowSourceRadius,
 					light.ShadowSoftness,
 					light.ShadowNoise,
 					light.ShadowNoiseSpeed);
@@ -2260,8 +2261,8 @@ public sealed partial class GameView
 		ColorField = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ColorField"));
 		BackgroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "BackgroundEmissive"));
 		ForegroundEmissive = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "ForegroundEmissive"));
-		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask"));
-		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask"));
+		BackgroundLightMask = Track(CreateComputeTarget(width, height, "BackgroundLightMask", TextureFormat.R16G16B16A16Float));
+		ForegroundLightMask = Track(CreateComputeTarget(width, height, "ForegroundLightMask", TextureFormat.R16G16B16A16Float));
 		SporeFogMask = Track(CreateComputeTarget(width, height, "SporeFogMask"));
 		GlitchScreen = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "GlitchScreen"));
 		DistortionMask = Track(RenderTargetPool.RentColor(GraphicsDevice, width, height, "DistortionMask"));
@@ -2289,9 +2290,9 @@ public sealed partial class GameView
 		return target;
 	}
 
-	Target CreateComputeTarget(int width, int height, string name)
+	Target CreateComputeTarget(int width, int height, string name, TextureFormat format = TextureFormat.Color)
 	{
-		ReadOnlySpan<TextureFormat> attachments = [TextureFormat.Color];
+		ReadOnlySpan<TextureFormat> attachments = [format];
 		return new Target(GraphicsDevice, width, height, attachments, TextureFlags.ComputeWrite, name);
 	}
 

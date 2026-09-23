@@ -95,13 +95,19 @@
       "Id": "fbde6ede12457dad",
       "From": "StrongFireLight",
       "Position": [96, 143],
-      "FlickerIntensity": 0.02
+      "FlickerIntensity": 0.02,
+      "Height": 10.014,
+      "Intensity": 1.044,
+      "Radius": 161.459
     },
     {
       "Id": "0c32b548d90da209",
       "From": "StrongFireLight",
       "Position": [208, 143],
-      "FlickerIntensity": 0.02
+      "FlickerIntensity": 0.02,
+      "Height": 14.367,
+      "Intensity": 0.961,
+      "Radius": 149.127
     },
     {
       "Id": "d0dd85cebbf835fe",

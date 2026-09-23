@@ -57,6 +57,11 @@ public partial class Manager
 
 	const string VisualsUndoSlot = "visuals";
 
+	internal void ToggleVisuals()
+	{
+		visualsOpen = !visualsOpen;
+	}
+
 	void VisualsImGui()
 	{
 		if (!visualsOpen)

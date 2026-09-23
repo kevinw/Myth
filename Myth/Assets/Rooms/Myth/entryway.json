@@ -1,6 +1,7 @@
 {
   "position": [160, 0],
   "size": [40, 23],
+  "ambientColor": "58585F",
   "colorFields": {
     "foreground": "dd7bdfb0c6ba0305.png",
     "background": "5b99a7a957ca6bd1.png"
@@ -82,8 +83,11 @@
       "Position": [194, 86],
       "FlickerFrequency": 1.25,
       "FlickerIntensity": 0.07,
-      "Radius": 96.7,
-      "Intensity": 1.15
+      "Radius": 65.361,
+      "LightColor": "EFDFBE",
+      "SpriteName": "fire",
+      "Intensity": 0.994,
+      "Height": 6.259
     },
     {
       "Id": "a242c29e39016aef",

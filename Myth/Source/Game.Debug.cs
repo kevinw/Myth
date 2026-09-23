@@ -43,6 +43,9 @@ public partial class Game
 		if (debug.CollisionView.Pressed) ToggleDebugView(DebugView.CollisionRects);
 		if (debug.NormalsView.Pressed) ToggleDebugView(DebugView.NormalBuffer);
 		if (debug.AtlasWander.Pressed) ToggleAtlasWander();
+#if EDITOR
+		if (debug.ToggleVisuals.Pressed) Manager.ToggleVisuals();
+#endif
 		if (debug.RenderTargetShake.Pressed)
 		{
 			if (Input.Keyboard.Shift)
