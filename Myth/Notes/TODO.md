@@ -8,7 +8,7 @@ decoration layer tiles; dual grid can feed it for underhangs for example
 play all the metroidbrania games here https://note.com/opticalglass/n/n7de04c1e56c3
 bud and player both do a lot of blinking if you duck. make them signal to each other in morse code.
 Demo polish
-- need a "wall push walk"
+- need a "wall push walk" sprite animation
 - bringing up the steam overlay pauses the game
 - demo has links to socials/support from the main menu (discord, steam discussions, etc)
 - demo doesn't soft-lock non querty players (e.g., azerty or qwertz)
@@ -19,7 +19,6 @@ Demo polish
 - walking into a wall, or against a conveyor belt looks bad: walk speed translates into a very slow walk cycle.
 - make ropes that span room boundaries more reliable
 - compress orthogonal burrow to launch or railgun 
-- put an evolving world map online with a timeline scrubber https://leafletjs.com
 - investigate gpu perf
   - https://developer.apple.com/documentation/xcode/debugging-with-interactive-command-line-tools
   - https://developer.apple.com/documentation/xcode/investigating-gpu-issues-with-ai-agents
@@ -63,6 +62,7 @@ TALK AND PLAY FEEDBACK
 - fer's feedback, echoed: the shadow in the floater room looks "safe" but it is not. one idea that comes to mind: the floater itself could cast a very big warning light ahead of time. then the shadows WOULD be safe
 
 LATER
+- put an evolving world map online with a timeline scrubber https://leafletjs.com
 - what would it look like to be able to create your own burrow line? 
 - Game should own "death", not Player. Today Player.HurtState() mass-destroys every actor except itself/light on death; Transition() does the same on room change. It's fragile. Make death an atomic Game-level reset that notices the player died, instead of the player iterating and destroying actors. (The TimeScale strand-a-frozen-modal symptom of this is already handled: see Game.TimeScale.cs -- time bending is now a registry of composable factors, each optionally owned by an actor and auto-dropped when that actor is destroyed, so a mass-destroy can no longer leave the sim frozen. Same pattern is worth reaching for anytime a future death/reset path needs to be robust against half-torn-down state.)
 - the moving platform puzzle is too slow
