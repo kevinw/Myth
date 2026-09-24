@@ -1,4 +1,5 @@
 #if !BROWSER
+using System.Collections.Concurrent;
 using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,6 +13,8 @@ static class DevHost
 	static readonly string pidPath = Path.GetFullPath("obj/myth-dev-host.pid");
 	static readonly string runRequestPath = Path.GetFullPath("obj/myth-dev-run.request");
 	static int sessionState;
+	// Commands that touch game state wait here until Pump answers them on the game thread.
+	static readonly ConcurrentQueue<(string Command, TaskCompletionSource<string> Reply)> pending = new();
 
 	public static void Run(StartArgs args)
 	{
@@ -42,6 +45,8 @@ static class DevHost
 				PlatformSpecific.ManagerSetup(manager);
 				manager.Run();
 				PlatformSpecific.ManagerCleanup(manager);
+				while (pending.TryDequeue(out var stale))
+					stale.Reply.TrySetResult("error: the Myth session closed.");
 				if (manager.UserQuitRequested)
 				{
 					Console.WriteLine("Game quit requested; stopping Myth dev host.");
@@ -121,6 +126,8 @@ static class DevHost
 			using var reader = new StreamReader(server, Encoding.UTF8, leaveOpen: true);
 			using var writer = new StreamWriter(server, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
 			var command = await reader.ReadLineAsync();
+			if (command == null)
+				continue;
 			await writer.WriteLineAsync(command switch
 			{
 				"run" when Interlocked.CompareExchange(ref sessionState, 1, 0) == 0 => QueueRun(),
@@ -131,7 +138,7 @@ static class DevHost
 					1 => "Myth is starting.",
 					_ => "Myth is running.",
 				},
-				_ => $"Unknown dev-host command '{command}'.",
+				_ => await OnGameThread(command),
 			});
 		}
 	}
@@ -140,6 +147,35 @@ static class DevHost
 	{
 		runRequested.Set();
 		return "Myth launch requested.";
+	}
+
+	// Hand the command to the running game and wait for its single-line answer.
+	static async Task<string> OnGameThread(string command)
+	{
+		if (Volatile.Read(ref sessionState) != 2)
+			return "error: no Myth session is running.";
+
+		var reply = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+		pending.Enqueue((command, reply));
+		try
+		{
+			return await reply.Task.WaitAsync(TimeSpan.FromSeconds(10));
+		}
+		catch (TimeoutException)
+		{
+			reply.TrySetCanceled();
+			return "error: the game thread did not answer within 10s.";
+		}
+	}
+
+	// Drains queued commands on the game thread; called once per frame from Manager.Update.
+	public static void Pump(Manager manager)
+	{
+		while (pending.TryDequeue(out var item))
+		{
+			try { item.Reply.TrySetResult(manager.RunDevCommand(item.Command)); }
+			catch (Exception e) { item.Reply.TrySetResult($"error: {e.Message}"); }
+		}
 	}
 }
 #endif

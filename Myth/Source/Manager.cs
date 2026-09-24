@@ -1212,6 +1212,9 @@ public partial class Manager : App
 		debugShowValues.Clear();
 		UpdateGame();
 		ScenarioUpdate?.Invoke(this);
+#if !BROWSER
+		DevHost.Pump(this);
+#endif
 		Audio.Update();
 	}
 

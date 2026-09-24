@@ -18,7 +18,6 @@ Demo polish
 - demo has an ambient sound layer 
 - toggling vsync on the deck crashes the game
 - hitting tab to go editor mode on a zoomed in room doesn't preserve that zoom---we get zoomed out
-- walking into a wall, or against a conveyor belt looks bad: walk speed translates into a very slow walk cycle.
 - make ropes that span room boundaries more reliable
 - compress orthogonal burrow to launch or railgun 
 - put an evolving world map online with a timeline scrubber https://leafletjs.com

@@ -132,28 +132,38 @@ public partial class Manager
 
 	void ExecuteConsoleCommand()
 	{
-		var input = commandConsoleInput.Trim();
+		if (TryRunConsoleCommand(commandConsoleInput, out commandConsoleError))
+		{
+			commandConsoleInput = "";
+			commandConsoleOpen = false;
+		}
+		else
+			focusCommandConsole = true;
+	}
+
+	// Shared by the ImGui console and the dev host's `eval` verb (see Manager.DevCommands).
+	internal bool TryRunConsoleCommand(string input, out string error)
+	{
+		RefreshConsoleRooms(); // `go` resolves against this list, and dev-host callers never open the console.
+		input = input.Trim();
 		var space = input.IndexOf(' ');
 		var name = space < 0 ? input : input[..space];
-		var argument = space < 0 ? "" : input[(space + 1)..].Trim();
 		if (!consoleCommands.TryGetValue(name, out var command))
 		{
-			commandConsoleError = $"Unknown command: {name}";
-			focusCommandConsole = true;
-			return;
+			error = $"Unknown command: {name}";
+			return false;
 		}
 
 		try
 		{
-			command.Executor.Invoke(this, [argument]);
-			commandConsoleError = "";
-			commandConsoleInput = "";
-			commandConsoleOpen = false;
+			command.Executor.Invoke(this, [space < 0 ? "" : input[(space + 1)..].Trim()]);
+			error = "";
+			return true;
 		}
 		catch (TargetInvocationException e)
 		{
-			commandConsoleError = e.InnerException?.Message ?? e.Message;
-			focusCommandConsole = true;
+			error = e.InnerException?.Message ?? e.Message;
+			return false;
 		}
 	}
 
