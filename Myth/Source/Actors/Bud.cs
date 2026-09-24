@@ -25,6 +25,9 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	static float BurrowPopDelay => 0.25f;
 	static float BurrowPopInputMirrorTime => 0.25f;
 	private readonly Navigator nav;
+	// BUD_NAV=graph runs the old PlatformNavGraph navigator instead, for comparing in the gym.
+	internal static bool ReachNav = Environment.GetEnvironmentVariable("BUD_NAV") != "graph";
+	readonly ReachPilot pilot;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
 	private Point2? enterWalkTarget;
@@ -76,7 +79,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	public int? DebugNavStartNodeId => nav.DebugNavStartNodeId;
 	public int? DebugNavGoalNodeId => nav.DebugNavGoalNodeId;
 	public int? DebugNavTargetNodeId => nav.DebugNavTargetNodeId;
-	public string DebugNavLabel => nav.DebugNavLabel;
+	public string DebugNavLabel => ReachNav ? pilot.Label : nav.DebugNavLabel;
 	public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => nav.DebugNavPath;
 	public IReadOnlyList<PlatformNavGraph.SurfaceEdge> DebugSurfaceNavPath => nav.DebugSurfaceNavPath;
 	public RectInt? DebugNavProbeRect => nav.DebugNavProbeRect;
@@ -85,6 +88,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	public Bud()
 	{
 		nav = new(this);
+		pilot = new(this);
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = Depths.BehindPlayer;
 		Play("idle");
@@ -192,7 +196,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Velocity.X = -(int)Facing * BackDashSpeed;
 		jumpTimer = 0;
 		Squish = new Vector2(0.75f, 1.3f);
-		nav.ClearActiveEdge("back dash"); // whatever he was in the middle of, re-path after landing
+		CancelNav("back dash"); // whatever he was in the middle of, re-path after landing
 		State = States.BackDash;
 		Play("back_dash", looping: false);
 		AudioEvent("hurt");
@@ -225,6 +229,15 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			EndBackDash();
 	}
 
+	void CancelNav(string reason = "")
+	{
+		pilot.Cancel();
+		if (reason.Length > 0)
+			nav.ClearActiveEdge(reason);
+		else
+			nav.ClearBlockedPathEdges();
+	}
+
 	void EndBackDash()
 	{
 		backDashTimer = 0;
@@ -241,7 +254,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			Game.Controls.TryGetBudControllerInput(Game.Manager.Time.Elapsed, out var controllerInput))
 		{
 			if (!secondControllerControlling)
-				nav.ClearActiveEdge("controller 2");
+				CancelNav("controller 2");
 			secondControllerControlling = true;
 			nav.SetDebugNavState("controller 2");
 			return controllerInput;
@@ -251,6 +264,18 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		if (!PerfToggles.BudAIEnabled) return new();
 		if (lingerTimer > 0 && State == States.Normal)
 			return new(); // lingering where the carry launch landed us
+
+		if (ReachNav)
+		{
+			if (TryWalkInFromEntrance(out var enterX, out var enterY))
+				return new(enterX, enterY, false, false, false);
+			var reach = pilot.GetInput(Game.reachField);
+			if (reach.MoveX == 0 && State == States.Normal &&
+				(Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>()) is { } faceTarget &&
+				Math.Sign(faceTarget.Position.X - Position.X) is var face and not 0)
+				Facing = face;
+			return reach;
+		}
 
 		// On a rope: climb toward the player's height, then hop off toward them.
 		if (State == States.Climb && !nav.ActiveEdgeIsRope && Game.GetFirst<Player>() is { } climbTarget)
@@ -547,7 +572,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		fallRespawnTimer = FallRespawnDelay;
 		Visible = false;
 		CollidesWithSolids = false;
-		nav.ClearActiveEdge("fell off the world");
+		CancelNav("fell off the world");
 	}
 
 	void FinishFallRespawn()
@@ -953,7 +978,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			pendingRoomChange = null;
 			enterWalkTarget = null;
 			enterWalkDucking = false;
-			nav.ClearBlockedPathEdges();
+			CancelNav();
 			return;
 		}
 		if ((change.To.BudSpawn & Room.BudSpawnFlags.SkipThisRoom) != 0)
@@ -974,7 +999,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Visible = false;
 		CollidesWithSolids = false;
 		Velocity = Vector2.Zero;
-		nav.ClearBlockedPathEdges();
+		CancelNav();
 	}
 
 	private void SkipRoomSpawn()
@@ -987,7 +1012,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Visible = false;
 		CollidesWithSolids = false;
 		Velocity = Vector2.Zero;
-		nav.ClearBlockedPathEdges();
+		CancelNav();
 	}
 
 	private void EnterRoom(RoomChange change)

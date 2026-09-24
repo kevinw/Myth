@@ -34,6 +34,8 @@ public sealed class ReachField
 	static float JumpPenalty => 0.1f;
 	static float FallPenalty => 0.05f;
 	static float RopePenalty => 0.2f;
+	// A landing that misses when the arc runs a pixel off (the pawn's sub-pixel remainder) is a gamble.
+	static float KnifeEdgePenalty => 1f;
 	static float WalkSpeed => Pawn.MaxGroundSpeed;
 	static float CrawlSpeed => 28f;
 	static float SwimSpeed => Pawn.MaxGroundSpeed * Pawn.WaterHorizontalSpeedMultiplier;
@@ -108,7 +110,9 @@ public sealed class ReachField
 			}
 		}
 
-		if (!solved || Target != target)
+		// Following a moving target only re-solves once it has moved a few px.
+		if (!solved || Target is not { } solvedFor || solvedFor.Size != target.Size ||
+			Math.Abs(solvedFor.X - target.X) >= 4 || Math.Abs(solvedFor.Y - target.Y) >= 4)
 		{
 			Solve(target);
 			Target = target;
@@ -245,6 +249,9 @@ public sealed class ReachField
 
 		for (var i = 0; i < Nodes.Count; i++)
 			Expand(i);
+		for (var e = 0; e < Edges.Count; e++)
+			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && KnifeEdge(edge))
+				Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty };
 
 		incomingStart = new int[Nodes.Count + 1];
 		incoming = new int[Edges.Count];
@@ -418,6 +425,18 @@ public sealed class ReachField
 			AddEdge(index, to, moveIndex, start, sweep.Frame, sweep.Frame * ReachMoves.Dt + penalty + extra);
 	}
 
+	bool KnifeEdge(Edge edge)
+	{
+		var landing = Nodes[edge.To].Position;
+		foreach (var shift in (ReadOnlySpan<int>)[-1, 1])
+		{
+			var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, null, shift);
+			if (sweep.Hit != Hit.Land || Math.Abs(sweep.At.Y - landing.Y) > 2 || Math.Abs(sweep.At.X - landing.X) > Game.TileSize)
+				return true;
+		}
+		return false;
+	}
+
 	void AddEdge(int from, int to, int move, Point2 start, int frames, float edgeCost)
 	{
 		if (edgeTo.TryGetValue(to, out var existing))
@@ -433,32 +452,56 @@ public sealed class ReachField
 	// The stand a landing belongs to: an existing one a short walk along the surface, or a new one right there.
 	int LandingStand(Point2 p, out float walk)
 	{
-		walk = 0;
-		if (standAt.TryGetValue(p, out var exact))
+		var found = StandNear(p, Game.TileSize, out var distance);
+		walk = distance / WalkSpeed;
+		return found >= 0 ? found : TryStand(p, out var ducking) && !ducking ? AddStand(p, 0, false) : -1;
+	}
+
+	// The stand at these feet, or the nearest one a short walk along the same surface.
+	public int StandNear(Point2 feet, int maxWalk, out int distance)
+	{
+		distance = 0;
+		if (standAt.TryGetValue(feet, out var exact))
 			return exact;
 		var found = -1;
-		var nearest = int.MaxValue;
+		distance = int.MaxValue;
 		foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
 		{
-			var q = p;
+			var q = feet;
 			var crawl = false;
-			for (var n = 1; n < nearest && n <= Game.TileSize; n++)
+			for (var n = 1; n < distance && n <= maxWalk; n++)
 			{
-				if (WalkStep(ref q, dir, ref crawl) != Step.Walked || crawl)
+				if (WalkStep(ref q, dir, ref crawl) != Step.Walked)
 					break;
 				if (standAt.TryGetValue(q, out var stand))
 				{
 					found = stand;
-					nearest = n;
+					distance = n;
 				}
 			}
 		}
-		if (found >= 0)
-		{
-			walk = nearest / WalkSpeed;
-			return found;
-		}
-		return TryStand(p, out var ducking) && !ducking ? AddStand(p, 0, false) : -1;
+		return found;
+	}
+
+	public int WallNodeNear(Point2 feet, int side)
+	{
+		foreach (var dy in (ReadOnlySpan<int>)[0, -1, 1])
+			if (wallAt.TryGetValue((feet.X, (feet.Y >> 2) + dy, side), out var node))
+				return node;
+		return -1;
+	}
+
+	public int RopeNodeNear(Point2 feet, int radius)
+	{
+		var found = -1;
+		var nearest = radius * radius + 1f;
+		foreach (var node in ropeNodes)
+			if ((Nodes[node].Position - feet).LengthSquared() is var d && d < nearest)
+			{
+				nearest = d;
+				found = node;
+			}
+		return found;
 	}
 
 	// Contacts a few px apart on the same wall share one node: kicks from them go nearly the same places.
@@ -474,7 +517,7 @@ public sealed class ReachField
 		return Nodes.Count - 1;
 	}
 
-	int SwimNodeAt(Point2 feet)
+	public int SwimNodeAt(Point2 feet)
 		=> swimAt.TryGetValue(TileOf(feet + BodyCenter), out var node) ? node : -1;
 
 	Point2 TileOf(Point2 p)
@@ -498,7 +541,7 @@ public sealed class ReachField
 		return solid.Any(underfoot) || jumpthru.Any(underfoot) && !jumpthru.Any(body + p);
 	}
 
-	bool WallBeside(Point2 p, int side)
+	public bool WallBeside(Point2 p, int side)
 		=> solid.Any(new RectInt(side > 0 ? p.X + Body.Right : p.X + Body.Left - 1, p.Y + Body.Top, 1, Body.Height));
 
 	// One pixel of walking the way Actor.Move takes it: level, a step up, or a step down, crouching under
@@ -532,7 +575,7 @@ public sealed class ReachField
 
 	// Replays a move's recorded path over the raster until something interrupts it: the pixels of each frame go
 	// X first, then Y, as Actor.Move takes them.
-	Sweep SweepMove(ReachMove move, Point2 start, bool fromRope, RectInt? target)
+	Sweep SweepMove(ReachMove move, Point2 start, bool fromRope, RectInt? target, int shiftX = 0)
 	{
 		sweeps++;
 		var result = new Sweep { RopeNode = -1, TouchFrame = target is { } t && t.Overlaps(Body + start) ? 0 : -1 };
@@ -548,7 +591,12 @@ public sealed class ReachField
 				p = next;
 				continue;
 			}
+			next.X += shiftX;
 
+			// Walking off a lip that isn't there: the recorded pawn left the ground here, the raster's wouldn't.
+			if (k == move.GroundedFrames + 1 && move.Kind == ReachMove.Kinds.WalkOff &&
+				(solid.Any(Body + next) || Grounded(next, Body)))
+				return Stop(ref result, Hit.Invalid, p, k);
 			var descending = next.Y >= p.Y;
 			var swept = (Body + p).Conflate(Body + next);
 			if (descending)
@@ -560,7 +608,7 @@ public sealed class ReachField
 				var dx = Math.Sign(next.X - p.X);
 				for (; p.X != next.X; p.X += dx)
 					if (solid.Any(Body + p + new Point2(dx, 0)))
-						return Stop(ref result, Hit.Wall, p, k, dx);
+						return Stop(ref result, Grounded(p, Body) ? Hit.Invalid : Hit.Wall, p, k, dx);
 				var dy = Math.Sign(next.Y - p.Y);
 				for (; p.Y != next.Y; p.Y += dy)
 				{

@@ -130,7 +130,7 @@ public partial class Game
 
 	void UpdateReachField()
 	{
-		if (debugView != DebugView.ReachField || room == null)
+		if (room == null || debugView != DebugView.ReachField && !(Bud.ReachNav && GetFirst<Bud>() != null))
 			return;
 		RectInt? target = GymTarget is { } goal ? (goal.Hitbox.Rect + goal.Position).Inflate(1)
 			: GetFirst<Player>() is { } player ? player.Hitbox.Rect + player.Position : null;
