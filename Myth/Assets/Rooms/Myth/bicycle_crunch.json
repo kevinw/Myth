@@ -62,11 +62,11 @@
     "000000000000000000vmm000000000v00000mm0v0000000v00000000000pp000000",
     "000000000000000000vmm000000000v00000mm000000000v00000000000pp000000",
     "000000000000000000vmm00ppp0000vppp00mm000000000v00000000000pp000000",
-    "0000000000000000000mm000p00000v0p000mm000000000000000000000pp000000",
+    "0000000000000000000mm00vp00000v0p000mm000000000000000000000pp000000",
     "000000000000000000mmum00p0000000p00mumm000000000000000ppp00pp000000",
     "000000000000000000mumm00p0000000p00mmum000000000000ppppppppppp00000",
     "0000000000000000000mm000p0000000p000mm00000000000muup0ppp0pppp00000",
-    "0000000000000mm0000mm000p0a0a0a0p000mm0000mm00000umu0000v0pppp00000",
+    "0000000000000mm0000mm000p0a000a0p000mm0000mm00000umu0000v0pppp00000",
     "0000000000000mm0000mm000p0VVVVV0p000mm0000mm00000uuu000000pp0000000",
     "0000000000000mm0000mm00p00VVVVV00000mm0000mm00000mmm000000pppp00000",
     "0000000000000mm0000mm000000000000000mm0000mm00000uuu000000pppp00000",
@@ -99,25 +99,27 @@
     {
       "Id": "fa3021e6b55875ec",
       "Type": "RigPuppetProp",
-      "Position": [233, 124],
+      "Position": [228, 109],
       "BackgroundBrightness": 0.383,
-      "PoseAnimationName": "Bicycle_Crunch",
       "PoseProgress": 0.449,
       "PixelsPerMeter": 26.308,
-      "ProjectionYaw": 8.12,
       "EyeSize": 0.549,
       "NeckExtension": 0.932,
       "ForearmSize": 2.353,
       "ThighSize": 4.97,
       "LimbTaper": 0.367,
       "DepthColorContrast": 0.291,
-      "CostumeId": "brass-boots"
+      "CostumeId": "brass-boots",
+      "SkinMode": "Surface",
+      "SurfaceId": "blorg",
+      "PoseAnimationName": "Yes",
+      "ProjectionYaw": 128.711
     },
     {
       "Id": "ff5475495198347b",
       "Type": "InspectPoint",
       "Position": [230, 120],
-      "Text": "It seems to be doing a bicycle crunch."
+      "Text": "It's pointing west."
     },
     {
       "Id": "4bfb37499a6fa437",
