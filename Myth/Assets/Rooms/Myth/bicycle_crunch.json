@@ -154,7 +154,22 @@
       ],
       "BranchWidth": 0.19,
       "BranchLength": 38.033,
-      "Tint": "C0C0C0"
+      "Tint": "C0C0C0",
+      "WobbleFrequency": 0.851,
+      "WobbleIntensity": 15.249
+    },
+    {
+      "Id": "71352d20fd2c83ab",
+      "Type": "CurveRibbon",
+      "Position": [152, 39],
+      "Width": 24.102,
+      "BranchWidth": 0.19,
+      "BranchLength": 38.033,
+      "Tint": "C0C0C0",
+      "Points": [[0, -8],[-32, 24],[24, 64],[-56, 120]
+      ],
+      "WobbleFrequency": 0.389,
+      "WobbleIntensity": 9.015
     }
   ]
 }

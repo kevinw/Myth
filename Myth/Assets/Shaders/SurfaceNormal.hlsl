@@ -13,7 +13,7 @@ cbuffer VertexUniformBlock : register(b0, space1)
 cbuffer FragmentUniformBlock : register(b0, space3)
 {
     float4 NormalConfig; // xy = tile size in world px, z = strength, w = elapsed seconds
-    float4 NormalMotion; // xy = visual motion in world px / second
+    float4 NormalMotion; // xy = visual motion, z = rotate normal map with texture coordinates
 };
 
 Texture2D NormalMap : register(t0, space2);
@@ -51,6 +51,19 @@ float4 fragment_main(VsOutput input) : SV_Target0
     float3 n = NormalMap.Sample(NormalSampler, uv).xyz * 2.0 - 1.0;
     // Scale the tangent-space tilt by strength, keep it normalized.
     n.xy *= max(NormalConfig.z, 0.0);
+    if (NormalMotion.z > 0.5)
+    {
+        float2 dx = ddx(input.TexCoord);
+        float2 dy = ddy(input.TexCoord);
+        float determinant = dx.x * dy.y - dy.x * dx.y;
+        if (abs(determinant) > 0.00001)
+        {
+            float direction = determinant < 0.0 ? -1.0 : 1.0;
+            float2 across = normalize(float2(dy.y, -dx.y) * direction);
+            float2 along = normalize(float2(-dy.x, dx.x) * direction);
+            n.xy = across * n.x + along * n.y;
+        }
+    }
     n = normalize(n);
     return float4(n * 0.5 + 0.5, 1.0);
 }

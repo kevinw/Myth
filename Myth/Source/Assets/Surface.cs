@@ -239,7 +239,7 @@ public sealed class Surface : IDisposable
 		Render(batcher, triangles, time, opacity);
 	}
 
-	public void RenderNormals(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time)
+	public void RenderNormals(Batcher batcher, ReadOnlySpan<Vertex> triangles, float time, bool orientToUv = false)
 	{
 		if (normalTexture == null || triangles.Length < 3)
 			return;
@@ -248,7 +248,7 @@ public sealed class Surface : IDisposable
 		material.Fragment.SetUniformBuffer(stackalloc float[]
 		{
 			normalTiling.X, normalTiling.Y, normalStrength, time,
-			normalScroll.X, normalScroll.Y, 0f, 0f
+			normalScroll.X, normalScroll.Y, orientToUv ? 1f : 0f, 0f
 		});
 		batcher.PushMaterial(material);
 		DrawTriangles(batcher, normalTexture, triangles, Color.White);

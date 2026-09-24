@@ -848,6 +848,11 @@ public partial class Manager
 			return true;
 		if (property.VisibleWhen is { } visibleWhen && !visibleWhen.IsVisibleForActor(actor))
 			return true;
+		if (ActorSpecs.GetTypeName(actor) == nameof(CurveRibbon) &&
+			string.Equals(ActorSpecs.ReadResolvedString(actor, nameof(CurveRibbon.Mode)), nameof(CurveRibbonMode.Cable), StringComparison.OrdinalIgnoreCase) &&
+			property.Name is nameof(CurveRibbon.SurfaceId) or nameof(CurveRibbon.EndWidth) or
+				nameof(CurveRibbon.BranchSpacing) or nameof(CurveRibbon.BranchLength) or nameof(CurveRibbon.BranchWidth))
+			return true;
 
 		var typeName = ActorSpecs.GetTypeName(actor);
 		if (typeName is nameof(RigPuppet) or nameof(RigPuppetProp) or nameof(Stalker))
