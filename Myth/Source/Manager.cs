@@ -782,6 +782,10 @@ public partial class Manager : App
 		ShutdownGame();
 		Steam.Shutdown();
 		Audio.Shutdown();
+#if EDITOR
+		if (UserQuitRequested && !Assets.ContentIsPak)
+			BlobContent.DeleteUnreferenced();
+#endif
 	}
 
 	void ShutdownGame()
@@ -805,6 +809,7 @@ public partial class Manager : App
 		imguiCursors.Clear();
 #endif
 #if EDITOR
+		maskPaintPreviewTexture?.Dispose();
 		ClearRoomPreviewCache(deferDisposal: false);
 		ClearSurfacePreviewCache(deferDisposal: false);
 		surfacePreviewBatcher?.Dispose();

@@ -101,12 +101,14 @@
     {
       "Id": "d9c88435dfb351ec",
       "Type": "Jumpthru",
-      "Position": [192, 168]
+      "Position": [190, 168],
+      "Size": [10, 8]
     },
     {
       "Id": "073d6ce30ffe7462",
       "Type": "Jumpthru",
-      "Position": [192, 144]
+      "Position": [190, 144],
+      "Size": [10, 8]
     },
     {
       "Id": "e4e8eacaee941703",
