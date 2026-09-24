@@ -152,11 +152,12 @@
       "Width": 24.102,
       "Points": [[0, 0],[88, 16],[72, 72],[192, 136]
       ],
-      "BranchWidth": 0.19,
-      "BranchLength": 38.033,
       "Tint": "C0C0C0",
       "WobbleFrequency": 0.851,
-      "WobbleIntensity": 15.249
+      "WobbleIntensity": 15.249,
+      "WobbleSpeed": 0.072,
+      "BranchLength": 22.826,
+      "BranchWidth": 0.209
     },
     {
       "Id": "71352d20fd2c83ab",
@@ -169,7 +170,8 @@
       "Points": [[0, -8],[-32, 24],[24, 64],[-56, 120]
       ],
       "WobbleFrequency": 0.389,
-      "WobbleIntensity": 9.015
+      "WobbleIntensity": 9.015,
+      "WobbleSpeed": 0.096
     }
   ]
 }

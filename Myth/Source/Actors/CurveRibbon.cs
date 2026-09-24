@@ -30,6 +30,7 @@ public class CurveRibbon : PointPathActor
 	// Frequency sets noise cells per 16 world pixels; authored path points remain fixed.
 	[I(0, 1)] public float WobbleFrequency;
 	[I(0, 24)] public float WobbleIntensity;
+	[I(0, 4)] public float WobbleSpeed;
 	[I(0, 1)] public float Roundness = 0.8f;
 	[I(1, 9999)] public int Seed = 1;
 
@@ -43,7 +44,8 @@ public class CurveRibbon : PointPathActor
 	Point2 builtPosition;
 	CurveRibbonMode builtMode;
 	bool builtFollowCurveTexture;
-	float builtWidth, builtEndWidth, builtBranchSpacing, builtBranchLength, builtBranchWidth, builtWobbleFrequency, builtWobbleIntensity, builtRoundness;
+	float builtWidth, builtEndWidth, builtBranchSpacing, builtBranchLength, builtBranchWidth, builtWobbleFrequency, builtWobbleIntensity, builtWobblePhase, builtRoundness;
+	float wobblePhase;
 	int builtSeed;
 	Rect visualBounds;
 
@@ -57,6 +59,13 @@ public class CurveRibbon : PointPathActor
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
 	ContentRef<SurfaceContent> ActiveSurface => Mode == CurveRibbonMode.Cable ? CableSurfaceId : SurfaceId;
+
+	public override void Update()
+	{
+		base.Update();
+		if (WobbleSpeed > 0 && WobbleFrequency > 0 && WobbleIntensity > 0)
+			wobblePhase += Time.Delta * WobbleSpeed;
+	}
 
 	public static Vector2 Sample(Point2 before, Point2 start, Point2 end, Point2 after, float t)
 		=> Calc.Bezier((Vector2)start, (Vector2)start + (end - before) / 6f,
@@ -95,12 +104,14 @@ public class CurveRibbon : PointPathActor
 
 	void EnsureGeometry()
 	{
+		var phase = WobbleSpeed > 0 ? wobblePhase : 0;
+		var pointsChanged = !builtPoints.AsSpan().SequenceEqual(Points);
 		if (builtPosition == Position && builtMode == Mode && builtFollowCurveTexture == FollowCurveTexture &&
 			builtWidth == Width && builtEndWidth == EndWidth &&
 			builtBranchSpacing == BranchSpacing && builtBranchLength == BranchLength &&
 			builtBranchWidth == BranchWidth && builtWobbleFrequency == WobbleFrequency &&
-			builtWobbleIntensity == WobbleIntensity && builtRoundness == Roundness && builtSeed == Seed &&
-			builtPoints.AsSpan().SequenceEqual(Points))
+			builtWobbleIntensity == WobbleIntensity && builtWobblePhase == phase && builtRoundness == Roundness && builtSeed == Seed &&
+			!pointsChanged)
 			return;
 
 		builtPosition = Position;
@@ -113,9 +124,15 @@ public class CurveRibbon : PointPathActor
 		builtBranchWidth = BranchWidth;
 		builtWobbleFrequency = WobbleFrequency;
 		builtWobbleIntensity = WobbleIntensity;
+		builtWobblePhase = phase;
 		builtRoundness = Roundness;
 		builtSeed = Seed;
-		builtPoints = (Point2[])Points.Clone();
+		if (pointsChanged)
+		{
+			if (builtPoints.Length != Points.Length)
+				builtPoints = new Point2[Points.Length];
+			Points.CopyTo(builtPoints, 0);
+		}
 		spine.Clear();
 		triangles.Clear();
 		normalTriangles.Clear();
@@ -149,7 +166,7 @@ public class CurveRibbon : PointPathActor
 					if (tangent.LengthSquared() > 0.0001f)
 					{
 						var side = Vector2.Normalize(new Vector2(-tangent.Y, tangent.X));
-						point += side * (WobbleNoise(traveled * WobbleFrequency / 16f) * WobbleIntensity * MathF.Sin(MathF.PI * t));
+						point += side * (WobbleNoise(traveled * WobbleFrequency / 16f + phase) * WobbleIntensity * MathF.Sin(MathF.PI * t));
 					}
 				}
 				spine.Add(point);
