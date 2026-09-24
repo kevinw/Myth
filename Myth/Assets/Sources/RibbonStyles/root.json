@@ -1,4 +1,5 @@
 {
   "Surface": "curve-root",
-  "GrowParticles": "elp_ground_dust"
+  "GrowParticles": "elp_ground_dust",
+  "Substance": "Wood"
 }

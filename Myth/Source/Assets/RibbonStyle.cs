@@ -54,6 +54,8 @@ public sealed class RibbonStripe
 // On-disk authoring spec (Sources/RibbonStyles/<id>.json): what kind of thing a CurveRibbon is.
 // While a ribbon grows or retracts, GrowParticles (a particle effect name) trail its growth front and
 // GrowSound (a looping FMOD event path) plays there, its "speed" parameter set to the front's px/second.
+// Substance is the footstep material when something stands on a collidable ribbon; WalkableEdge colors
+// its lit top edge.
 public sealed class RibbonStyle
 {
 	public string Surface { get; set; } = "";
@@ -62,12 +64,17 @@ public sealed class RibbonStyle
 	public RibbonCap Cap { get; set; }
 	public string GrowParticles { get; set; } = "";
 	public string GrowSound { get; set; } = "";
+	public string Substance { get; set; } = "";
+	public string WalkableEdge { get; set; } = "fff2c880";
 	public List<RibbonStripe> Stripes { get; set; } = [];
 	public List<RibbonStamp> Stamps { get; set; } = [];
+
+	[JsonIgnore] public Color WalkableEdgeFill { get; private set; }
 
 	public static RibbonStyle Parse(string json)
 	{
 		var style = JsonSerializer.Deserialize(json, RibbonStyleJsonContext.Default.RibbonStyle) ?? new RibbonStyle();
+		style.WalkableEdgeFill = SurfaceSpec.ParseTint(style.WalkableEdge).Premultiply();
 		foreach (var stripe in style.Stripes)
 			stripe.Resolve();
 		foreach (var stamp in style.Stamps)

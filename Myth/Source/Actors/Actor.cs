@@ -406,7 +406,7 @@ public class Actor
 			else
 			{
 				move.X -= sign;
-				if (wasGrounded && TryStepDown())
+				if (wasGrounded && (TryStepOntoJumpthru() || TryStepDown()))
 					stepDebt += Sqrt2 - 1;
 			}
 
@@ -448,6 +448,18 @@ public class Actor
 
 		Position += step;
 		Game.ActorMoved(this, step);
+		return true;
+	}
+
+	// Jumpthrus don't block sideways, so walking up a sloped one (a CurveRibbon) steps into it;
+	// rise back onto its surface, unless it climbs more than a pixel per pixel.
+	private bool TryStepOntoJumpthru()
+	{
+		if (!CollidesWithSolids || !OverlapsAny(Point2.Zero, Masks.Jumpthru) || OverlapsAny(Point2.Up, Masks.Solid | Masks.Jumpthru))
+			return false;
+
+		Position += Point2.Up;
+		Game.ActorMoved(this, Point2.Up);
 		return true;
 	}
 

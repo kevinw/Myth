@@ -510,7 +510,15 @@ public partial class Game
 		// Jumpthru platforms are one-way, so only their TOP face is burrowable: the air
 		// cell must sit directly above the jumpthru cell. This lets the player ride along
 		// the top of a jumpthru run without wrapping under it or around its ends.
-		return JumpthruSolid(solidCell) && airCell == solidCell + new Point2(0, -1);
+		if (JumpthruAt(solidCell) is not { } jumpthru)
+			return false;
+		if (airCell == solidCell + Point2.Up)
+			return true;
+
+		// A curved (per-pixel) jumpthru's top is a staircase, so its risers count too: any
+		// edge beside or above a pixel on its top skin, never one below.
+		return jumpthru.Hitbox.Shape == Hitbox.Shapes.Pixels && airCell.Y <= solidCell.Y &&
+			!jumpthru.Hitbox.Contains(solidCell + Point2.Up - jumpthru.Position);
 	}
 
 	bool InRoom(Point2 cell) => room?.WorldBounds.Contains(cell) ?? false;
@@ -525,11 +533,10 @@ public partial class Game
 		{
 			// ICarryable actors (crates, buds) are transparent to the burrow surface walk so
 			// the player can travel underneath them; they're still solid for normal physics.
-			if (other is Grid || other is ICarryable || !other.Mask.Has(Actor.Masks.Solid) || other.Hitbox.Shape != Hitbox.Shapes.Rect)
+			if (other is Grid || other is ICarryable || !other.Mask.Has(Actor.Masks.Solid))
 				continue;
 
-			var rect = other.Hitbox.Rect + other.Position;
-			if (point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom)
+			if (other.Hitbox.Contains(cell - other.Position))
 				return true;
 		}
 
@@ -538,22 +545,16 @@ public partial class Game
 
 	internal bool BurrowLineSolidAt(Vector2 point) => SolidPixel(CellAt(point));
 
-	// A jumpthru (one-way platform) cell — same rect test as SolidPixel but for the
-	// Jumpthru mask. The burrow boundary walk uses this to ride the *top* of jumpthru runs.
-	bool JumpthruSolid(Point2 cell)
+	// A jumpthru (one-way platform) cell — same test as SolidPixel but for the Jumpthru
+	// mask. The burrow boundary walk uses this to ride the *top* of jumpthru runs.
+	bool JumpthruSolid(Point2 cell) => JumpthruAt(cell) != null;
+
+	Actor? JumpthruAt(Point2 cell)
 	{
-		var point = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
 		foreach (var other in Actors)
-		{
-			if (other is Grid || !other.Mask.Has(Actor.Masks.Jumpthru) || other.Hitbox.Shape != Hitbox.Shapes.Rect)
-				continue;
-
-			var rect = other.Hitbox.Rect + other.Position;
-			if (point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom)
-				return true;
-		}
-
-		return false;
+			if (other is not Grid && other.Mask.Has(Actor.Masks.Jumpthru) && other.Hitbox.Contains(cell - other.Position))
+				return other;
+		return null;
 	}
 
 	/// True when the burrow surface just inside `toward` from `position` is a jumpthru

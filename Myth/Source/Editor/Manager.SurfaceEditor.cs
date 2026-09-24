@@ -678,7 +678,7 @@ public partial class Manager
 		{
 			var strength = draft.NormalStrength;
 			BeginPropertyRow("Strength");
-			if (SliderFloat("##Strength", ref strength, 0, 4))
+			if (SliderFloat("##Strength", ref strength, 0, 16))
 			{
 				BeginSurfaceUndo(draft.Id);
 				draft.NormalStrength = strength;

@@ -11,6 +11,9 @@ using static ImGuiNET.ImGui;
 
 namespace Myth;
 
+// Pixel-art upscalers the final pass can apply before (or without) the CRT; the value is the shader's mode.
+enum PixelScaler { None, Scale2x, SuperEagle, Mmpx, Xbr }
+
 sealed class VisualTuning
 {
 	public float CrtBloomAmount = 0.09f;
@@ -19,6 +22,9 @@ sealed class VisualTuning
 	// In output pixels: the fringe is a property of the display, not of the art.
 	public float CrtRgbOffset = 1.5f;
 	public float CrtScanlineStrength = 0.1f;
+	public int PixelScaler = int.Parse(Environment.GetEnvironmentVariable("TMP_SCALER") ?? "0"); // a PixelScaler
+	// How different two lit colors can be (luma-weighted) and still count as the same pixel color.
+	public float PixelScalerTolerance = 0.06f;
 	public float AmbientOcclusionStrength = 1.0f;
 	public float AmbientOcclusionBlur = 8.0f;
 	public Vector2 AmbientOcclusionOffset = new(0, -3);
@@ -106,6 +112,19 @@ public partial class Manager
 			VisualRow("Bloom Threshold", ref Visuals.CrtBloomThreshold, VisualDefaults.CrtBloomThreshold, 0, 1);
 			if (Button("Preview Bloom", new Vector2(-1, 0)))
 				game?.fx.Bloom();
+			PopID();
+		}
+
+		if (CollapsingHeader("Pixel Scaler", ImGuiTreeNodeFlags.DefaultOpen))
+		{
+			PushID("PixelScaler");
+			BeginPropertyRow("Scaler", hasTrailingButton: true);
+			var scaler = Visuals.PixelScaler;
+			var changed = Combo("##Value", ref scaler, Enum.GetNames<PixelScaler>(), Enum.GetValues<PixelScaler>().Length);
+			changed |= VisualResetButton(VisualDefaults.PixelScaler, ref scaler);
+			if (changed)
+				SetVisual(ref Visuals.PixelScaler, scaler);
+			VisualRow("Color Tolerance", ref Visuals.PixelScalerTolerance, VisualDefaults.PixelScalerTolerance, 0, 0.3f);
 			PopID();
 		}
 

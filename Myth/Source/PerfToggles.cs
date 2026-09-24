@@ -9,7 +9,7 @@ internal static class PerfToggles
 	internal static bool NormalBuffer = true;
 	internal static bool Emissive = true;
 	internal static bool Glitch = true;
-	internal static bool Crt = true;
+	internal static bool Crt = Environment.GetEnvironmentVariable("TMP_CRT") != "0";
 	internal static bool Reflections = true;
 	internal static bool LightingNoise = true;
 	internal static bool AmbientOcclusion = true;

@@ -4512,9 +4512,6 @@ public partial class Manager
 				tileOver = (Point2)(localMouse / Game.TileSize);
 			}
 			var overGame = new Rect(0, 0, width, height).Contains(localMouse);
-			proposedRoomTiles = editorDrag.Kind != EditorDragKind.None || worldMouseBlocked || overGame
-				? null
-				: (!editingRoomGeometry ? GetProposedRoomTiles(editing, worldMouse) : null) ?? GetEmptyRoomCellProposal(worldMouse);
 			if (selectedRoomActorIndex >= editing.Actors.Count)
 				selectedRoomActorIndex = -1;
 			var actorSelectActive = actorSelectTool && !eyedropper;
@@ -4522,9 +4519,13 @@ public partial class Manager
 				worldMouseBlocked |= RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,
 					draw: false, canInteract: !worldMouseBlocked && inner.Contains(Cursor), keyboardBlocked);
 			var hoveredActorIndex = !worldMouseBlocked && overGame ? HitTestRoomActor(editing, worldMouse) : -1;
-			var hoveredPathPoint = !worldMouseBlocked && actorSelectActive && overGame
+			// The selected path's points can sit outside the room; hovering one wins over proposing a new room there.
+			var hoveredPathPoint = !worldMouseBlocked && actorSelectActive && !editingRoomGeometry
 				? HitTestPointPathHandle(editing, selectedRoomActorIndex, worldMouse, gridWeight)
 				: -1;
+			proposedRoomTiles = editorDrag.Kind != EditorDragKind.None || worldMouseBlocked || overGame || hoveredPathPoint >= 0
+				? null
+				: (!editingRoomGeometry ? GetProposedRoomTiles(editing, worldMouse) : null) ?? GetEmptyRoomCellProposal(worldMouse);
 			var revealDoorFocused =
 				hoveredActorIndex >= 0 && hoveredActorIndex < editing.Actors.Count && IsRevealDoorActor(editing.Actors[hoveredActorIndex]) ||
 				selectedRoomActorIndex >= 0 && selectedRoomActorIndex < editing.Actors.Count && IsRevealDoorActor(editing.Actors[selectedRoomActorIndex]);
@@ -4566,8 +4567,8 @@ public partial class Manager
 			var ctrlClick =
 				Input.Mouse.LeftPressed &&
 				(Input.Keyboard.Down(Keys.LeftControl) || Input.Keyboard.Down(Keys.RightControl));
-			if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame &&
-				Input.Mouse.RightPressed && hoveredActorIndex >= 0)
+			if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive &&
+				Input.Mouse.RightPressed && (overGame && hoveredActorIndex >= 0 || hoveredPathPoint >= 0))
 			{
 				var contextActor = hoveredPathPoint >= 0 ? selectedRoomActorIndex : hoveredActorIndex;
 				var contextPoint = hoveredPathPoint >= 0 ? hoveredPathPoint
@@ -4600,7 +4601,7 @@ public partial class Manager
 			{
 				BeginRoomSelectPress(editing, worldMouse, hoveredRoomGeometryHandle);
 			}
-			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && overGame && Input.Mouse.LeftPressed && hoveredPathPoint >= 0)
+			else if (!editingRoomGeometry && !worldMouseBlocked && actorSelectActive && Input.Mouse.LeftPressed && hoveredPathPoint >= 0)
 			{
 				ClearEditorDragState();
 				SelectPathPoint(hoveredPathPoint);
@@ -4930,9 +4931,12 @@ public partial class Manager
 			DrawPlaytestPlayerMarker(editing);
 			DrawRoomActorMarkers(editing);
 			DrawRevealDoorMarkers(editing, gridWeight);
-			DrawPointPaths(editing, gridWeight);
-			RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,
-				draw: true, canInteract: false, keyboardBlocked);
+			if (!editingRoomGeometry)
+			{
+				DrawPointPaths(editing, gridWeight);
+				RunActorGizmos(editing, selectedRoomActorIndex, worldMouse, gridWeight,
+					draw: true, canInteract: false, keyboardBlocked);
+			}
 			if (!editingRoomGeometry && actorSelectActive)
 				DrawRoomActorOverlays(editing, gridWeight, hoveredActorIndex, worldMouse);
 			if (maskPaintActorId != null)

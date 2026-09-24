@@ -4,12 +4,17 @@ using Foster.Framework;
 
 namespace Myth;
 
+// Top: stand on it and jump up through it (a jumpthru). Solid: blocks from every side. Hazard: hurts on contact.
+public enum RibbonCollision { None, Top, Solid, Hazard }
+
 [GameActor(Icon = "seedling", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
 	Tags = ActorTag.Decoration, ShowFacing = false, LivePositionEditable = true)]
 public class CurveRibbon : PointPathActor, IActivatable
 {
 	public static ContentRef<RibbonStyleContent> DefaultStyle => new("root");
 	public ContentRef<RibbonStyleContent> Style = DefaultStyle;
+	// Foreground draws over the foreground tiles and with them, so a ribbon the player can stand on reads as part of the play space.
+	public Factory.TileLayer Layer = Factory.TileLayer.Background;
 	public ContentRef<SurfaceContent> SurfaceOverride = new("");
 	public bool FollowCurveTexture = true;
 	public Color Tint = Color.White;
@@ -22,7 +27,10 @@ public class CurveRibbon : PointPathActor, IActivatable
 	[I(0, 1)] public float WobbleFrequency;
 	[I(0, 24)] public float WobbleIntensity;
 	[I(0, 4)] public float WobbleSpeed;
+	// Roundness is how strongly the generated shading applies; Bulge is how steeply the cross-section curves
+	// away toward the edges (1: 45° at the edge, higher: closer to a cylinder's sideways-facing edges).
 	[I(0, 1)] public float Roundness = 0.8f;
+	[I(0, 8)] public float Bulge = 1;
 	[I(1, 9999)] public int Seed = 1;
 	// A flat strip turning about its spine: one full turn every TwistPeriod px (0: no twist).
 	[InspectorGroup("Twist"), I(0, 512)] public float TwistPeriod;
@@ -31,17 +39,25 @@ public class CurveRibbon : PointPathActor, IActivatable
 	// GrowTo drives it anywhere. Both move the growth front at GrowSpeed px/second.
 	[InspectorGroup("Grow"), I(0, 1)] public float Grow = 1;
 	[I(1, 512)] public float GrowSpeed = 96;
+	// Built from the unanimated shape (no wobble motion or twist), so a swaying ribbon is a steady floor.
+	[InspectorGroup("Collision")] public RibbonCollision Collision;
 
 	readonly record struct NormalTriangle(Vector2 A, Vector2 B, Vector2 C, Color AColor, Color BColor, Color CColor);
 	// Sign: +1 on the left edge, -1 on the right, 0 on the spine.
 	readonly record struct StampInstance(RibbonStamp Stamp, RibbonEdge Edge, float Sign);
 	readonly record struct BuildKey(Point2 Position, RibbonStyle? Style, bool FollowCurveTexture, float Width, float EndWidth,
 		float BranchSpacing, float BranchLength, float BranchWidth, float WobbleFrequency, float WobbleIntensity, float WobblePhase,
-		float Roundness, int Seed, float Grown, float TwistPeriod, float TwistPhase);
+		float Roundness, float Bulge, int Seed, float Grown, float TwistPeriod, float TwistPhase, RibbonCollision Collision);
+	readonly record struct CollisionKey(RibbonCollision Collision, float Width, float EndWidth, bool Taper,
+		float WobbleFrequency, float WobbleIntensity, int Seed, float Front);
 
 	readonly List<SplineSample> spline = [];
 	readonly List<Vector2> spine = [];
 	readonly List<Vector2> grownSpine = [];
+	readonly List<Vector2> collisionSpine = [];
+	readonly List<Vector2> collisionTrimmed = [];
+	readonly List<RibbonEdge> collisionEdges = [];
+	CollisionKey builtCollisionKey;
 	readonly List<RibbonEdge> spineEdges = [];
 	readonly List<float> spineTwist = []; // turn angle per spine edge, empty when untwisted
 	readonly List<Vector2> branch = [];
@@ -66,12 +82,18 @@ public class CurveRibbon : PointPathActor, IActivatable
 	{
 		Sprite = null;
 		CollidesWithSolids = false;
-		Depth = 9;
+	}
+
+	public override void Added()
+	{
+		base.Added();
+		Depth = Layer == Factory.TileLayer.Background ? Depths.BackgroundProp : Depths.ForegroundProp;
 	}
 
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
 	RibbonStyle? ActiveStyle => Assets.GetRibbonStyle(Style);
+	public override string? SurfaceSubstance => ActiveStyle?.Substance is { Length: > 0 } substance ? substance : null;
 	float Grown => grown < 0 ? Grow : grown;
 
 	public void SetActive(Actor source, bool active)
@@ -155,6 +177,8 @@ public class CurveRibbon : PointPathActor, IActivatable
 				triangle.AColor, triangle.BColor, triangle.CColor);
 	}
 
+	public override void RenderEmissive(Batcher batcher) => DrawWalkableEdge(batcher);
+
 	public override void RenderShadow(Batcher batcher, Color color) { }
 	public override void RenderReflection(Batcher batcher, Color color) { }
 
@@ -169,7 +193,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 		var style = ActiveStyle;
 		var phase = WobbleSpeed > 0 ? wobblePhase : 0;
 		var key = new BuildKey(Position, style, FollowCurveTexture, Width, EndWidth, BranchSpacing, BranchLength, BranchWidth,
-			WobbleFrequency, WobbleIntensity, phase, Roundness, Seed, Grown, TwistPeriod, TwistPeriod > 0 ? twistPhase : 0);
+			WobbleFrequency, WobbleIntensity, phase, Roundness, Bulge, Seed, Grown, TwistPeriod, TwistPeriod > 0 ? twistPhase : 0, Collision);
 		var pointsChanged = !builtPoints.AsSpan().SequenceEqual(Points);
 		if (key == builtKey && !pointsChanged)
 			return;
@@ -179,7 +203,6 @@ public class CurveRibbon : PointPathActor, IActivatable
 			builtPoints = [.. Points];
 		spline.Clear();
 		spine.Clear();
-		grownSpine.Clear();
 		spineEdges.Clear();
 		spineTwist.Clear();
 		triangles.Clear();
@@ -193,32 +216,21 @@ public class CurveRibbon : PointPathActor, IActivatable
 
 		var wobble = WobbleFrequency > 0 && WobbleIntensity > 0;
 		Ribbon.AppendSpline(spline, Points, wobble ? 4 : 12, wobble ? 256 : 128);
-		var traveled = 0f;
-		for (var i = 0; i < spline.Count; i++)
-		{
-			var (point, tangent, t) = spline[i];
-			if (i > 0)
-				traveled += Vector2.Distance(spline[i - 1].Position, point);
-			if (wobble && t is > 0 and < 1 && tangent.LengthSquared() > 0.0001f)
-				point += Vector2.Normalize(tangent.TurnRight()) *
-					(SmoothNoise.Signed(traveled * WobbleFrequency / 16f + phase, (uint)Seed) * WobbleIntensity * MathF.Sin(MathF.PI * t));
-			spine.Add(point);
-		}
+		AppendSpine(spine, phase);
 
 		var branches = style?.Branches != false && BranchSpacing > 0;
-		var pathLength = 0f;
-		for (var i = 1; i < spine.Count; i++)
-			pathLength += Vector2.Distance(spine[i - 1], spine[i]);
+		var pathLength = PathLength(spine);
 		growthLength = pathLength + (branches ? BranchLength : 0);
 		var front = Grown * growthLength;
-		var visible = CollectionsMarshal.AsSpan(spine);
-		if (front < pathLength)
+		var taper = style?.Taper != false;
+		var collisionKey = new CollisionKey(Collision, Width, EndWidth, taper, WobbleFrequency, WobbleIntensity, Seed, front);
+		if (pointsChanged || collisionKey != builtCollisionKey)
 		{
-			TrimSpine(front);
-			visible = CollectionsMarshal.AsSpan(grownSpine);
+			builtCollisionKey = collisionKey;
+			BuildCollision(front, taper);
 		}
 
-		Ribbon.AppendEdges(spineEdges, visible, Width, style?.Taper != false ? Width * EndWidth : Width);
+		Ribbon.AppendEdges(spineEdges, Trimmed(spine, front, grownSpine), Width, taper ? Width * EndWidth : Width);
 		if (TwistPeriod > 0)
 			for (var i = 0; i < spineEdges.Count; i++)
 			{
@@ -250,21 +262,84 @@ public class CurveRibbon : PointPathActor, IActivatable
 		visualBounds = triangles.Count > 0 ? Rect.Between(min, max).Inflate(reach) : new Rect(Position, Vector2.Zero);
 	}
 
-	void TrimSpine(float length)
+	void AppendSpine(List<Vector2> into, float phase)
 	{
-		grownSpine.Add(spine[0]);
+		var wobble = WobbleFrequency > 0 && WobbleIntensity > 0;
 		var traveled = 0f;
-		for (var i = 1; i < spine.Count; i++)
+		for (var i = 0; i < spline.Count; i++)
 		{
-			var step = Vector2.Distance(spine[i - 1], spine[i]);
-			if (traveled + step >= length)
+			var (point, tangent, t) = spline[i];
+			if (i > 0)
+				traveled += Vector2.Distance(spline[i - 1].Position, point);
+			if (wobble && t is > 0 and < 1 && tangent.LengthSquared() > 0.0001f)
+				point += Vector2.Normalize(tangent.TurnRight()) *
+					(SmoothNoise.Signed(traveled * WobbleFrequency / 16f + phase, (uint)Seed) * WobbleIntensity * MathF.Sin(MathF.PI * t));
+			into.Add(point);
+		}
+	}
+
+	static float PathLength(List<Vector2> points)
+	{
+		var length = 0f;
+		for (var i = 1; i < points.Count; i++)
+			length += Vector2.Distance(points[i - 1], points[i]);
+		return length;
+	}
+
+	// points cut off at length along them (into scratch), or all of them when they're no longer.
+	static ReadOnlySpan<Vector2> Trimmed(List<Vector2> points, float length, List<Vector2> scratch)
+	{
+		var traveled = 0f;
+		for (var i = 1; i < points.Count; i++)
+		{
+			var step = Vector2.Distance(points[i - 1], points[i]);
+			if (traveled + step > length)
 			{
-				grownSpine.Add(Vector2.Lerp(spine[i - 1], spine[i], step > 0 ? (length - traveled) / step : 1));
-				return;
+				scratch.Clear();
+				scratch.AddRange(CollectionsMarshal.AsSpan(points)[..i]);
+				scratch.Add(Vector2.Lerp(points[i - 1], points[i], (length - traveled) / step));
+				return CollectionsMarshal.AsSpan(scratch);
 			}
 			traveled += step;
-			grownSpine.Add(spine[i]);
 		}
+		return CollectionsMarshal.AsSpan(points);
+	}
+
+	void BuildCollision(float front, bool taper)
+	{
+		Mask = Collision switch
+		{
+			RibbonCollision.Top => Masks.Jumpthru,
+			RibbonCollision.Solid => Masks.Solid,
+			RibbonCollision.Hazard => Masks.Hazard,
+			_ => Masks.None,
+		};
+		Hitbox = new();
+		if (Collision == RibbonCollision.None)
+			return;
+
+		collisionSpine.Clear();
+		collisionEdges.Clear();
+		AppendSpine(collisionSpine, 0);
+		Ribbon.AppendEdges(collisionEdges, Trimmed(collisionSpine, front, collisionTrimmed), Width, taper ? Width * EndWidth : Width);
+		if (collisionEdges.Count < 2)
+			return;
+
+		var min = new Vector2(float.PositiveInfinity);
+		var max = new Vector2(float.NegativeInfinity);
+		foreach (var edge in collisionEdges)
+		{
+			min = Vector2.Min(min, Vector2.Min(edge.Left, edge.Right));
+			max = Vector2.Max(max, Vector2.Max(edge.Left, edge.Right));
+		}
+		var mask = new PixelMask(RectInt.Between(min.FloorToPoint2(), max.CeilingToPoint2()));
+		for (var i = 1; i < collisionEdges.Count; i++)
+		{
+			var (previous, current) = (collisionEdges[i - 1], collisionEdges[i]);
+			mask.FillTriangle(previous.Left, previous.Right, current.Left);
+			mask.FillTriangle(current.Left, previous.Right, current.Right);
+		}
+		Hitbox = new(mask);
 	}
 
 	// Branches sprout to full size over BranchLength behind the growth front.
@@ -334,27 +409,35 @@ public class CurveRibbon : PointPathActor, IActivatable
 			var rightAfter = new Vector2(-currentU, current.Distance);
 			AddTriangle(previous.Left, previous.Right, current.Left, leftBefore, rightBefore, leftAfter);
 			AddTriangle(current.Left, previous.Right, current.Right, leftAfter, rightBefore, rightAfter);
-			if (Roundness > 0)
+			if (Roundness <= 0)
+				continue;
+			for (var column = 1; column < NormalColumns.Length; column++)
 			{
-				var (previousLeft, previousCenter, previousRight) = EdgeNormals(previous, twist, i - 1);
-				var (currentLeft, currentCenter, currentRight) = EdgeNormals(current, twist, i);
-				AddNormalTriangle(previous.Left, previous.Center, current.Left, previousLeft, previousCenter, currentLeft);
-				AddNormalTriangle(current.Left, previous.Center, current.Center, currentLeft, previousCenter, currentCenter);
-				AddNormalTriangle(previous.Center, previous.Right, current.Center, previousCenter, previousRight, currentCenter);
-				AddNormalTriangle(current.Center, previous.Right, current.Right, currentCenter, previousRight, currentRight);
+				var (u0, u1) = (NormalColumns[column - 1], NormalColumns[column]);
+				AddNormalTriangle(Across(previous, u0), Across(previous, u1), Across(current, u0),
+					ColumnNormal(previous, twist, i - 1, u0), ColumnNormal(previous, twist, i - 1, u1), ColumnNormal(current, twist, i, u0));
+				AddNormalTriangle(Across(current, u0), Across(previous, u1), Across(current, u1),
+					ColumnNormal(current, twist, i, u0), ColumnNormal(previous, twist, i - 1, u1), ColumnNormal(current, twist, i, u1));
 			}
 		}
 	}
 
+	// Positions across the strip (-1 right edge, +1 left edge) that carry their own normal, so a high
+	// Bulge curves across the face instead of interpolating flat between edge and center.
+	static ReadOnlySpan<float> NormalColumns => [-1, -0.5f, 0, 0.5f, 1];
+
+	static Vector2 Across(RibbonEdge edge, float u) => edge.Center + edge.Side * edge.HalfWidth * u;
+
 	static float MaterialHalfWidth(RibbonEdge edge, ReadOnlySpan<float> twist, int index)
 		=> twist.IsEmpty ? edge.HalfWidth : edge.HalfWidth / FaceScale(twist[index]) * (MathF.Cos(twist[index]) < 0 ? -1 : 1);
 
-	(Color Left, Color Center, Color Right) EdgeNormals(RibbonEdge edge, ReadOnlySpan<float> twist, int index)
+	// A twisted strip is flat across its face, which turns toward the viewer on both sides of the twist.
+	Color ColumnNormal(RibbonEdge edge, ReadOnlySpan<float> twist, int index, float u)
 	{
 		if (twist.IsEmpty)
-			return (NormalColor(edge.Side), NormalColor(Vector2.Zero), NormalColor(-edge.Side));
-		var face = NormalColor(edge.Side * MathF.Sin(twist[index]) * (MathF.Cos(twist[index]) < 0 ? -1 : 1));
-		return (face, face, face);
+			return SlopeNormal(edge.Side * u);
+		var facing = MathF.Cos(twist[index]) < 0 ? -1 : 1;
+		return NormalColor(new Vector3(edge.Side * MathF.Sin(twist[index]) * facing, MathF.Abs(MathF.Cos(twist[index]))));
 	}
 
 	void AppendRoundCap(RibbonEdge edge, Vector2 forward)
@@ -362,7 +445,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 		const int Segments = 8;
 		if (edge.HalfWidth <= 0.5f)
 			return;
-		var flat = NormalColor(Vector2.Zero);
+		var flat = SlopeNormal(Vector2.Zero);
 		var previous = edge.Side;
 		for (var i = 1; i <= Segments; i++)
 		{
@@ -372,7 +455,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 				CapUv(edge, Vector2.Zero), CapUv(edge, previous * edge.HalfWidth), CapUv(edge, current * edge.HalfWidth));
 			if (Roundness > 0)
 				AddNormalTriangle(edge.Center, edge.Center + previous * edge.HalfWidth, edge.Center + current * edge.HalfWidth,
-					flat, NormalColor(previous), NormalColor(current));
+					flat, SlopeNormal(previous), SlopeNormal(current));
 			previous = current;
 		}
 	}
@@ -380,9 +463,12 @@ public class CurveRibbon : PointPathActor, IActivatable
 	static Vector2 CapUv(RibbonEdge edge, Vector2 offset)
 		=> new(Vector2.Dot(offset, edge.Side), edge.Distance + Vector2.Dot(offset, edge.Tangent));
 
-	Color NormalColor(Vector2 side)
-		=> new Color(side.X * Roundness * 0.5f + 0.5f, side.Y * Roundness * 0.5f + 0.5f, 1, 1)
-			* (Roundness * 0.9f);
+	// outward runs from 0 at the spine to a unit vector at the edge.
+	Color SlopeNormal(Vector2 outward) => NormalColor(Vector3.Normalize(new Vector3(outward * Bulge, 1)));
+
+	// Encodes a unit normal, premultiplied by Roundness so it blends over the normals beneath.
+	Color NormalColor(Vector3 normal)
+		=> new Color(normal.X * 0.5f + 0.5f, normal.Y * 0.5f + 0.5f, normal.Z * 0.5f + 0.5f, 1) * (Roundness * 0.9f);
 
 	void AddNormalTriangle(Vector2 a, Vector2 b, Vector2 c, Color aColor, Color bColor, Color cColor)
 		=> normalTriangles.Add(new(a, b, c, aColor, bColor, cColor));
@@ -394,8 +480,27 @@ public class CurveRibbon : PointPathActor, IActivatable
 		triangles.Add(new(c, FollowCurveTexture ? cUv : Position + c));
 	}
 
+	// Lights the top edge where it's flat enough to walk up: brightest when level, fading out toward
+	// the 45° a walker can step up.
+	void DrawWalkableEdge(Batcher batcher)
+	{
+		if (Collision is not (RibbonCollision.Top or RibbonCollision.Solid) || ActiveStyle is not { } style)
+			return;
+		var edges = CollectionsMarshal.AsSpan(spineEdges);
+		var color = RigDraw.Multiply(style.WalkableEdgeFill, Tint);
+		for (var i = 1; i < edges.Length; i++)
+		{
+			var walkable = Math.Clamp((MathF.Abs(edges[i].Side.Y) - 0.707f) / 0.2f, 0, 1);
+			if (walkable > 0)
+				batcher.Line(TopEdge(edges[i - 1]), TopEdge(edges[i]), 1, color * walkable);
+		}
+
+		static Vector2 TopEdge(RibbonEdge edge) => edge.Side.Y < 0 ? edge.Left : edge.Right;
+	}
+
 	void DrawDetails(Batcher batcher)
 	{
+		DrawWalkableEdge(batcher);
 		if (ActiveStyle is not { } style)
 			return;
 		var edges = CollectionsMarshal.AsSpan(spineEdges);

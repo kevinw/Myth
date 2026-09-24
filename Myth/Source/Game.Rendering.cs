@@ -215,7 +215,7 @@ public sealed partial class GameView
 		}
 
 		// draw screen to window
-		var crt = applyCrt && PerfToggles.Crt ? crtMaterial : null;
+		var crt = applyCrt && (PerfToggles.Crt || Manager.Visuals.PixelScaler != 0) ? crtMaterial : null;
 		var useCrt = crt != null;
 		var present = game.PresentRect(viewport);
 		var scale = game.PresentScale(present, output.Width, output.Height);
@@ -258,6 +258,9 @@ public sealed partial class GameView
 					Manager.Visuals.CrtScanlineStrength,
 					zoomLevel,
 					composite != null ? compositeScale : scale,
+					Manager.Visuals.PixelScaler,
+					Manager.Visuals.PixelScalerTolerance,
+					PerfToggles.Crt ? 1 : 0,
 				]);
 				Batcher.PushMaterial(crt.Material);
 			}
@@ -604,7 +607,7 @@ public sealed partial class GameView
 		=> actor switch
 		{
 			ProceduralWall => true,
-			CurveRibbon => true,
+			CurveRibbon ribbon => ribbon.Layer == Factory.TileLayer.Background,
 			Grid grid => grid.Layer == Factory.TileLayer.Background,
 			DualGrid dualGrid => dualGrid.Layer == Factory.TileLayer.Background,
 			Prop prop => prop.Layer == Factory.TileLayer.Background,

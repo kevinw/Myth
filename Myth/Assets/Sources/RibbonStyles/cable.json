@@ -4,6 +4,7 @@
   "Branches": false,
   "Cap": "Round",
   "GrowParticles": "sparks",
+  "Substance": "Metal",
   "Stripes": [
     {
       "Offset": 0.22,
