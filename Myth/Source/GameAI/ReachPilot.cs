@@ -22,6 +22,9 @@ public sealed class ReachPilot(Pawn owner)
 	int moveFrames;
 	int lastFrame;
 	bool toRope;
+	ReachField.Node intended; // where the move should have ended up
+	Point2 edgeStart;
+	bool strayed;
 	bool checkStray;
 	bool release;   // a drop through a jumpthru or off a rope starts with down+jump
 	bool released;
@@ -33,6 +36,8 @@ public sealed class ReachPilot(Pawn owner)
 	{
 		if (move >= 0 && Continue(field, out var input))
 			return input;
+		if (move >= 0 && !Arrived())
+			field.ReportMiss(edgeStart, move);
 		move = -1;
 		var p = owner.Position;
 		if (owner.State == Pawn.States.Climb)
@@ -79,6 +84,7 @@ public sealed class ReachPilot(Pawn owner)
 			if (Math.Abs(off.X) > StrayTolerance || Math.Abs(off.Y) > StrayTolerance)
 			{
 				Label = "strayed";
+				strayed = true;
 				return false;
 			}
 		}
@@ -100,12 +106,27 @@ public sealed class ReachPilot(Pawn owner)
 		moveTime = 0;
 		lastFrame = -1;
 		moveFrames = edge.Frames;
-		toRope = field.Nodes[edge.To].Kind == ReachField.NodeKind.Rope;
+		intended = field.Nodes[edge.To];
+		edgeStart = edge.Start;
+		strayed = false;
+		toRope = intended.Kind == ReachField.NodeKind.Rope;
 		checkStray = !fromRope;
 		release = field.Moves[move].Kind == ReachMove.Kinds.Fall && (fromRope || owner.IsGrounded);
 		released = false;
 		Label = field.Moves[move].Kind.ToString();
 		return Continue(field, out var input) ? input : default;
+	}
+
+	bool Arrived()
+	{
+		var off = owner.Position - intended.Position;
+		return !strayed && intended.Kind switch
+		{
+			ReachField.NodeKind.Stand => owner.IsGrounded && Math.Abs(off.X) <= Game.TileSize + 2 && Math.Abs(off.Y) <= 3,
+			ReachField.NodeKind.Rope => owner.State == Pawn.States.Climb,
+			ReachField.NodeKind.Swim => owner.InWater,
+			_ => !owner.IsGrounded && Math.Abs(off.X) <= 1 && Math.Abs(off.Y) <= 3,
+		};
 	}
 
 	bool Settled(ReachField field, int node, out ReachField.Edge edge)
@@ -158,23 +179,27 @@ public sealed class ReachPilot(Pawn owner)
 		return new(moveX, crawl ? 1 : 0, false, false, false);
 	}
 
-	// Airborne between moves: against a wall the route asks for, kick off it or slide down it.
+	// Airborne between moves: against a wall the route asks for, kick off it, slide down it or let go.
 	PawnInput Air(ReachField field, Point2 p)
 	{
+		// Bobbing up out of the water: keep swimming.
+		if (field.SwimNodeAt(p + new Point2(0, Game.TileSize)) >= 0)
+			return Swim(field, p, p + new Point2(0, Game.TileSize));
 		foreach (var side in (ReadOnlySpan<int>)[-1, 1])
 		{
 			if (!field.WallBeside(p, side) || field.WallNodeNear(p, side) is not (var wall and >= 0) || Settled(field, wall, out var edge))
 				continue;
-			if (edge.Move >= 0 && field.Moves[edge.Move].Kind == ReachMove.Kinds.Kick)
-				return Start(field, edge, p, false);
 			if (edge.Move >= 0)
-				break; // letting go is just not pressing into it
+				return Start(field, edge, p, false);
 			Label = "slide";
 			return new(side, 0, false, false, false);
 		}
-		// Bobbing up out of the water: keep swimming.
-		if (field.SwimNodeAt(p + new Point2(0, Game.TileSize)) >= 0)
-			return Swim(field, p, p + new Point2(0, Game.TileSize));
+		// A rope in reach: grab it rather than fall past (the route re-decides from it).
+		if (field.RopeNodeNear(p, Game.TileSize * 2) >= 0)
+		{
+			Label = "grab";
+			return new(0, -1, false, false, false);
+		}
 		Label = "airborne";
 		return default;
 	}

@@ -5,7 +5,7 @@ namespace Myth;
 // A maneuver recorded once, from a standstill, by running the real Pawn physics in empty space: the input
 // pressed on each frame and where the body went. Swept through the live room raster (ReachField), the path
 // holds until its first contact, so a move that sweeps clean there is the move the pawn will make.
-public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runup, int groundedFrames, Point2[] offsets, PawnInput[] inputs)
+public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runup, bool crawl, int groundedFrames, Point2[] offsets, PawnInput[] inputs)
 {
 	// Jump: from standing, after running Runup px. WalkOff: run Runup px off a ledge. Fall: drop from rest in
 	// the air. Kick: kick off a wall on the Dir side.
@@ -15,6 +15,8 @@ public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runu
 	public readonly int Dir = dir;
 	public readonly int Steer = steer;
 	public readonly int Runup = runup;
+	// Crouched until it leaves the ground: crawling off the end of a low tunnel.
+	public readonly bool Crawl = crawl;
 	// Offsets[1..GroundedFrames] are on the ground; the rest airborne.
 	public readonly int GroundedFrames = groundedFrames;
 	// Offsets[k] is where Inputs[k - 1] left the body; Offsets[0] is the start.
@@ -48,7 +50,7 @@ public static class ReachMoves
 				}
 			}
 			foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
-			foreach (var runup in (ReadOnlySpan<int>)[0, 8, 16, 32, 48])
+			foreach (var runup in (ReadOnlySpan<int>)[-1, 0, 8, 16, 32, 48])
 			{
 				moves.Add(RecordWalkOff(game, dir, runup, dir, 99));
 				moves.Add(RecordWalkOff(game, dir, runup, 0, 0.1f));
@@ -77,9 +79,11 @@ public static class ReachMoves
 		});
 	}
 
-	// The floor ends where a body standing `runup` px back from the lip has walked it off.
+	// The floor ends where a body standing `runup` px back from the lip has walked it off; -1 crawls off from the lip.
 	static ReachMove RecordWalkOff(Game game, int dir, int runup, int steer, float switchTime)
 	{
+		var crawl = runup < 0;
+		runup = Math.Max(0, runup);
 		var floor = dir > 0
 			? new RectInt(SimOrigin.X - 4000, SimOrigin.Y, 4000 - 3 + runup, 8)
 			: new RectInt(SimOrigin.X + 3 - runup, SimOrigin.Y, 4000, 8);
@@ -90,8 +94,8 @@ public static class ReachMoves
 			if (leftGround < 0 && !pawn.IsGrounded && frame > 0)
 				leftGround = frame;
 			var move = leftGround >= 0 && (frame - leftGround) * Dt >= switchTime ? steer : dir;
-			return new(move, 0, false, false, false, AllowWallJump: false);
-		}, runup);
+			return new(move, crawl && leftGround < 0 ? 1 : 0, false, false, false, AllowWallJump: false);
+		}, runup, crawl);
 	}
 
 	static ReachMove RecordFall(Game game, int steer)
@@ -113,7 +117,7 @@ public static class ReachMoves
 	}
 
 	// Removes the floor (or wall) once the body leaves it, so it can't catch the rest of the path.
-	static ReachMove Run(SimPawn pawn, ReachMove.Kinds kind, int dir, int steer, Func<int, PawnInput> input, int runup = -1)
+	static ReachMove Run(SimPawn pawn, ReachMove.Kinds kind, int dir, int steer, Func<int, PawnInput> input, int runup = -1, bool crawl = false)
 	{
 		var offsets = new List<Point2> { Point2.Zero };
 		var inputs = new List<PawnInput>();
@@ -138,7 +142,7 @@ public static class ReachMoves
 			if (offsets[^1].Y > MaxDrop)
 				break;
 		}
-		return new(kind, dir, steer, runup >= 0 ? runup : Math.Abs(offsets[groundedFrames].X), groundedFrames, [.. offsets], [.. inputs]);
+		return new(kind, dir, steer, runup >= 0 ? runup : Math.Abs(offsets[groundedFrames].X), crawl, groundedFrames, [.. offsets], [.. inputs]);
 	}
 
 	sealed class SimPawn : Pawn

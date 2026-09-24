@@ -36,15 +36,18 @@ public sealed class ReachField
 	static float RopePenalty => 0.2f;
 	// A landing that misses when the arc runs a pixel off (the pawn's sub-pixel remainder) is a gamble.
 	static float KnifeEdgePenalty => 1f;
+	// Each time a move is tried from a spot and doesn't arrive, it costs this much more (for this room visit).
+	static float MissPenalty => 1.5f;
 	static float WalkSpeed => Pawn.MaxGroundSpeed;
 	static float CrawlSpeed => 28f;
 	static float SwimSpeed => Pawn.MaxGroundSpeed * Pawn.WaterHorizontalSpeedMultiplier;
 	static float SwimExitCost => 0.4f;
 	static float ClimbSpeed => 40f;
 	static float SlideSpeed => 80f;
-	static int RopeReach => 13; // the pawn's 9px grab radius, plus half the spacing between rope nodes
+	static float RopeGrabRadius => 7f; // the pawn grabs within 9px; the margin covers the rope's sway
 	static int RopeGraceFrames => 15;
 	static int MaxNodes => 6000;
+	const int RasterMargin = 4; // tiles
 	static int TouchSearchRadius => 200;
 	// REACH_REBUILD=1 rebuilds every refresh, to profile a build warm.
 	static readonly bool AlwaysRebuild = Environment.GetEnvironmentVariable("REACH_REBUILD") == "1";
@@ -64,10 +67,12 @@ public sealed class ReachField
 	float refreshTimer;
 	bool solved;
 	RectInt bounds;
+	int roomBottom;
 	readonly Dictionary<Point2, int> standAt = [];
 	readonly Dictionary<Point2, int> swimAt = [];
 	readonly Dictionary<(int X, int Y, int Side), int> wallAt = [];
 	readonly List<int> ropeNodes = [];
+	readonly List<(Vector2 Point, int Node)> ropePoints = [];
 	readonly Dictionary<int, int> edgeTo = []; // cheapest edge so far from the node being expanded, by destination
 	readonly List<int> runups = [];
 	float[] cost = [];
@@ -76,7 +81,14 @@ public sealed class ReachField
 	int[] incomingStart = [];
 	int[] incoming = [];
 	readonly PriorityQueue<int, float> queue = new();
+	readonly Dictionary<(Point2 Start, int Move), int> misses = [];
 	int sweeps;
+
+	public void ReportMiss(Point2 start, int move)
+	{
+		misses[(start, move)] = misses.GetValueOrDefault((start, move)) + 1;
+		solved = false;
+	}
 
 	public void Update(Game game, Room room, RectInt target)
 	{
@@ -100,6 +112,8 @@ public sealed class ReachField
 				(solid, nextSolid) = (nextSolid, solid);
 				(jumpthru, nextJumpthru) = (nextJumpthru, jumpthru);
 				(water, nextWater) = (nextWater, water);
+				if (room != builtRoom)
+					misses.Clear();
 				builtRoom = room;
 				builtRopes = ropes;
 				var start = Stopwatch.GetTimestamp();
@@ -122,18 +136,22 @@ public sealed class ReachField
 
 	void Rasterize(Game game, Room room)
 	{
+		// Room collision clamps queries outside the room to its edge tiles, so the raster runs a margin past
+		// the edges with them repeated: standing on top of the room's top row is real ground.
 		var roomBounds = room.WorldBounds;
-		nextSolid.Reset(roomBounds);
-		nextJumpthru.Reset(roomBounds);
-		nextWater.Reset(roomBounds);
-		for (var ty = 0; ty < room.Size.Y; ty++)
-		for (var tx = 0; tx < room.Size.X; tx++)
+		var rasterBounds = roomBounds.Inflate(RasterMargin * Game.TileSize);
+		nextSolid.Reset(rasterBounds);
+		nextJumpthru.Reset(rasterBounds);
+		nextWater.Reset(rasterBounds);
+		for (var ty = -RasterMargin; ty < room.Size.Y + RasterMargin; ty++)
+		for (var tx = -RasterMargin; tx < room.Size.X + RasterMargin; tx++)
 		{
 			var tile = new Point2(tx, ty);
+			var clamped = new Point2(Math.Clamp(tx, 0, room.Size.X - 1), Math.Clamp(ty, 0, room.Size.Y - 1));
 			var rect = new RectInt(roomBounds.TopLeft + tile * Game.TileSize, Game.TileSize, Game.TileSize);
-			if (room.SolidTiles.Length > 0 && room.SolidTiles[ty * room.Size.X + tx])
+			if (room.SolidTiles.Length > 0 && room.SolidTiles[clamped.Y * room.Size.X + clamped.X])
 				nextSolid.Fill(rect);
-			else if (room.TryGetSlopeTile(tile, out _))
+			else if (room.TryGetSlopeTile(clamped, out _))
 				for (var y = rect.Top; y < rect.Bottom; y++)
 				for (var x = rect.Left; x < rect.Right; x++)
 					if (Game.OverlapsRoomCollision(room, new RectInt(x, y, 1, 1)))
@@ -187,8 +205,10 @@ public sealed class ReachField
 		swimAt.Clear();
 		wallAt.Clear();
 		ropeNodes.Clear();
+		ropePoints.Clear();
 		sweeps = 0;
 		bounds = solid.Bounds;
+		roomBottom = game.Bounds.Bottom;
 
 		for (var ty = bounds.Top; ty < bounds.Bottom; ty += Game.TileSize)
 		for (var tx = bounds.Left; tx < bounds.Right; tx += Game.TileSize)
@@ -196,8 +216,8 @@ public sealed class ReachField
 			var feet = new Point2(tx + Game.TileSize / 2, ty + Game.TileSize);
 			if (!water[feet + BodyCenter])
 				continue;
-			var ducking = solid.Any(Body + feet);
-			if (!ducking || !solid.Any(DuckBody + feet))
+			var ducking = Solid(Body + feet);
+			if (!ducking || !Solid(DuckBody + feet))
 			{
 				swimAt[new(tx, ty)] = Nodes.Count;
 				Nodes.Add(new(feet, NodeKind.Swim, Ducking: ducking));
@@ -211,13 +231,16 @@ public sealed class ReachField
 				continue;
 			ropeId++;
 			var points = rope.GrabPoints;
-			for (var i = 0; i < points.Length; i += 2)
+			for (var i = 0; i < points.Length; i++)
 			{
 				var feet = points[i].RoundToPoint2() - BodyCenter;
-				if (!bounds.Contains(feet) || solid.Any(Body + feet))
-					continue;
-				ropeNodes.Add(Nodes.Count);
-				Nodes.Add(new(feet, NodeKind.Rope, ropeId));
+				if (i % 2 == 0 && bounds.Contains(feet) && !Solid(Body + feet))
+				{
+					ropeNodes.Add(Nodes.Count);
+					Nodes.Add(new(feet, NodeKind.Rope, ropeId));
+				}
+				if (ropeNodes.Count > 0 && Nodes[ropeNodes[^1]].Side == ropeId)
+					ropePoints.Add((points[i], ropeNodes[^1]));
 			}
 		}
 
@@ -229,19 +252,20 @@ public sealed class ReachField
 		// Lips, where a walk-off or a max-distance jump leaves, and the spots a runup to each lip starts from.
 		for (int i = 0, sampled = Nodes.Count; i < sampled; i++)
 		{
-			if (Nodes[i] is not { Kind: NodeKind.Stand, Ducking: false } stand)
+			if (Nodes[i] is not { Kind: NodeKind.Stand } stand)
 				continue;
 			foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
 			{
 				var p = stand.Position;
-				var crawl = false;
+				var crawl = stand.Ducking;
 				for (var n = 0; n < Game.TileSize; n++)
 				{
 					var from = p;
+					var wasCrawling = crawl;
 					var step = WalkStep(ref p, dir, ref crawl);
 					if (step == Step.Off)
-						AddLip(from, dir);
-					if (step != Step.Walked || crawl || standAt.ContainsKey(p))
+						AddLip(from, dir, wasCrawling);
+					if (step != Step.Walked || crawl != stand.Ducking || standAt.ContainsKey(p))
 						break;
 				}
 			}
@@ -264,10 +288,10 @@ public sealed class ReachField
 			incoming[fill[Edges[e].To]++] = e;
 	}
 
-	void AddLip(Point2 lip, int dir)
+	void AddLip(Point2 lip, int dir, bool ducking)
 	{
-		var index = AddStand(lip, dir, false);
-		if (index < 0)
+		var index = AddStand(lip, dir, ducking);
+		if (index < 0 || ducking)
 			return;
 		foreach (var runup in runups)
 		{
@@ -306,11 +330,11 @@ public sealed class ReachField
 			case NodeKind.Stand:
 				foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
 					WalkEdge(index, dir);
-				if (node.Ducking)
-					break;
-				var onJumpthruOnly = !solid.Any(new RectInt(p.X + Body.Left, p.Y, Body.Width, 1));
+				var onJumpthruOnly = !Solid(new RectInt(p.X + Body.Left, p.Y, Body.Width, 1));
 				for (var m = 0; m < Moves.Count; m++)
 				{
+					if (node.Ducking != Moves[m].Crawl)
+						continue;
 					if (Moves[m].Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.WalkOff)
 						TryMove(index, m, p, false);
 					else if (Moves[m].Kind == ReachMove.Kinds.Fall && onJumpthruOnly)
@@ -397,7 +421,7 @@ public sealed class ReachField
 				return;
 			}
 			var below = p + Point2.Down;
-			if (solid.Any(Body + below) || !WallBeside(below, node.Side) || water[below + BodyCenter])
+			if (Solid(Body + below) || !WallBeside(below, node.Side) || water[below + BodyCenter])
 				return;
 			p = below;
 		}
@@ -410,7 +434,7 @@ public sealed class ReachField
 		var move = Moves[moveIndex];
 		var sweep = SweepMove(move, start, fromRope, null);
 		var penalty = move.Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.Kick ? JumpPenalty : FallPenalty;
-		if (sweep.RopeNode >= 0 && sweep.RopeNode != index)
+		if (sweep.RopeNode >= 0 && !(Nodes[index].Kind == NodeKind.Rope && Nodes[sweep.RopeNode].Side == Nodes[index].Side))
 			AddEdge(index, sweep.RopeNode, moveIndex, start, sweep.RopeFrame, sweep.RopeFrame * ReachMoves.Dt + RopePenalty);
 
 		var extra = 0f;
@@ -428,7 +452,7 @@ public sealed class ReachField
 	bool KnifeEdge(Edge edge)
 	{
 		var landing = Nodes[edge.To].Position;
-		foreach (var shift in (ReadOnlySpan<int>)[-1, 1])
+		foreach (var shift in (ReadOnlySpan<Point2>)[Point2.Left, Point2.Right, Point2.Down])
 		{
 			var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, null, shift);
 			if (sweep.Hit != Hit.Land || Math.Abs(sweep.At.Y - landing.Y) > 2 || Math.Abs(sweep.At.X - landing.X) > Game.TileSize)
@@ -528,21 +552,29 @@ public sealed class ReachField
 		ducking = false;
 		if (water[p + BodyCenter])
 			return false;
-		if (!solid.Any(Body + p))
+		if (!Solid(Body + p))
 			return Grounded(p, Body);
 		ducking = true;
-		return !solid.Any(DuckBody + p) && Grounded(p, DuckBody);
+		return !Solid(DuckBody + p) && Grounded(p, DuckBody);
+	}
+
+	// Above the raster the room's top row carries on up, as it does for room collision.
+	bool Solid(RectInt rect)
+	{
+		if (rect.Top < bounds.Top)
+			rect = new RectInt(rect.X, bounds.Top, rect.Width, Math.Max(1, rect.Bottom - bounds.Top));
+		return solid.Any(rect);
 	}
 
 	// Actor.Grounded on the raster: solid underfoot, or a jumpthru underfoot that the body isn't already inside.
 	bool Grounded(Point2 p, RectInt body)
 	{
 		var underfoot = new RectInt(p.X + body.Left, p.Y, body.Width, 1);
-		return solid.Any(underfoot) || jumpthru.Any(underfoot) && !jumpthru.Any(body + p);
+		return Solid(underfoot) || jumpthru.Any(underfoot) && !jumpthru.Any(body + p);
 	}
 
 	public bool WallBeside(Point2 p, int side)
-		=> solid.Any(new RectInt(side > 0 ? p.X + Body.Right : p.X + Body.Left - 1, p.Y + Body.Top, 1, Body.Height));
+		=> Solid(new RectInt(side > 0 ? p.X + Body.Right : p.X + Body.Left - 1, p.Y + Body.Top, 1, Body.Height));
 
 	// One pixel of walking the way Actor.Move takes it: level, a step up, or a step down, crouching under
 	// anything too low to stand.
@@ -552,18 +584,18 @@ public sealed class ReachField
 		foreach (var duck in (ReadOnlySpan<bool>)[false, true])
 		{
 			var body = duck ? DuckBody : Body;
-			if (!solid.Any(body + next))
+			if (!Solid(body + next))
 			{
 				ducking = duck;
 				if (Grounded(next, body))
 					p = next;
-				else if (!solid.Any(body + next + Point2.Down) && Grounded(next + Point2.Down, body))
+				else if (!Solid(body + next + Point2.Down) && Grounded(next + Point2.Down, body))
 					p = next + Point2.Down;
 				else
 					return Step.Off;
 				return Step.Walked;
 			}
-			if (!solid.Any(body + p + Point2.Up) && !solid.Any(body + next + Point2.Up))
+			if (!Solid(body + p + Point2.Up) && !Solid(body + next + Point2.Up))
 			{
 				ducking = duck;
 				p = next + Point2.Up;
@@ -575,69 +607,83 @@ public sealed class ReachField
 
 	// Replays a move's recorded path over the raster until something interrupts it: the pixels of each frame go
 	// X first, then Y, as Actor.Move takes them.
-	Sweep SweepMove(ReachMove move, Point2 start, bool fromRope, RectInt? target, int shiftX = 0)
+	Sweep SweepMove(ReachMove move, Point2 start, bool fromRope, RectInt? target, Point2 shift = default)
 	{
 		sweeps++;
 		var result = new Sweep { RopeNode = -1, TouchFrame = target is { } t && t.Overlaps(Body + start) ? 0 : -1 };
 		var p = start;
 		var offsets = move.Offsets;
+		var body = move.Crawl ? DuckBody : Body;
 		for (var k = 1; k < offsets.Length; k++)
 		{
 			var next = start + offsets[k];
 			if (k <= move.GroundedFrames)
 			{
-				if (solid.Any(Body + next) || !Grounded(next, Body))
+				if (Solid(body + next) || !Grounded(next, body))
 					return Stop(ref result, Hit.Invalid, p, k);
 				p = next;
 				continue;
 			}
-			next.X += shiftX;
+			// A crawl stays crouched in the air until there's room to stand, as Pawn does.
+			if (body != Body && !Solid(Body + p))
+				body = Body;
+			next += shift;
 
 			// Walking off a lip that isn't there: the recorded pawn left the ground here, the raster's wouldn't.
 			if (k == move.GroundedFrames + 1 && move.Kind == ReachMove.Kinds.WalkOff &&
-				(solid.Any(Body + next) || Grounded(next, Body)))
+				(Solid(body + next) || Grounded(next, body)))
 				return Stop(ref result, Hit.Invalid, p, k);
 			var descending = next.Y >= p.Y;
-			var swept = (Body + p).Conflate(Body + next);
+			var swept = (body + p).Conflate(body + next);
 			if (descending)
 				swept = new RectInt(swept.X, swept.Y, swept.Width, swept.Height + 1);
-			if (!solid.Any(swept) && !(descending && jumpthru.Any(swept)))
+			if (!Solid(swept) && !(descending && jumpthru.Any(swept)))
 				p = next;
 			else
 			{
 				var dx = Math.Sign(next.X - p.X);
+				var wall = 0;
 				for (; p.X != next.X; p.X += dx)
-					if (solid.Any(Body + p + new Point2(dx, 0)))
-						return Stop(ref result, Grounded(p, Body) ? Hit.Invalid : Hit.Wall, p, k, dx);
+					if (Solid(body + p + new Point2(dx, 0)))
+					{
+						if (Grounded(p, body))
+							return Stop(ref result, Hit.Invalid, p, k);
+						wall = dx; // Actor.Move still takes the frame's Y pixels after the X ones stop
+						break;
+					}
 				var dy = Math.Sign(next.Y - p.Y);
 				for (; p.Y != next.Y; p.Y += dy)
 				{
-					if (dy > 0 && Grounded(p, Body))
+					if (dy > 0 && Grounded(p, body))
 						break;
-					if (solid.Any(Body + p + new Point2(0, dy)))
+					if (Solid(body + p + new Point2(0, dy)))
 					{
 						if (dy < 0)
 							return Stop(ref result, Hit.Invalid, p, k);
 						break;
 					}
 				}
-				if (descending && Grounded(p, Body))
+				if (descending && Grounded(p, body))
 					return Stop(ref result, k == move.GroundedFrames + 1 ? Hit.Invalid : Hit.Land, p, k);
+				if (wall != 0)
+					return Stop(ref result, Hit.Wall, p, k, wall);
 			}
 
 			if (water[p + BodyCenter])
 				return Stop(ref result, Hit.Water, p, k);
 			if (result.RopeNode < 0 && (!fromRope || k > RopeGraceFrames))
-				foreach (var rope in ropeNodes)
-					if (Vector2.DistanceSquared(p, Nodes[rope].Position) <= RopeReach * RopeReach)
+				foreach (var (point, node) in ropePoints)
+					if (Vector2.DistanceSquared(p + BodyCenter, point) <= RopeGrabRadius * RopeGrabRadius)
 					{
-						result.RopeNode = rope;
+						result.RopeNode = node;
 						result.RopeFrame = k;
 						break;
 					}
-			if (result.TouchFrame < 0 && target is { } touch && touch.Overlaps(Body + p))
+			if (result.TouchFrame < 0 && target is { } touch && touch.Overlaps(body + p))
 				result.TouchFrame = k;
-			if (p.Y > bounds.Bottom + Game.TileSize * 2)
+			if (p.Y < bounds.Top)
+				return Stop(ref result, Hit.Invalid, p, k);
+			if (p.Y > roomBottom + Game.TileSize * 2)
 				return Stop(ref result, Hit.Dead, p, k);
 		}
 		return Stop(ref result, Hit.None, p, offsets.Length - 1);
@@ -689,7 +735,8 @@ public sealed class ReachField
 			for (var i = incomingStart[node]; i < incomingStart[node + 1]; i++)
 			{
 				var edge = Edges[incoming[i]];
-				var through = reached + edge.Cost;
+				var through = reached + edge.Cost +
+					(misses.Count > 0 && edge.Move >= 0 ? misses.GetValueOrDefault((edge.Start, edge.Move)) * MissPenalty : 0);
 				if (through < cost[edge.From])
 				{
 					cost[edge.From] = through;
