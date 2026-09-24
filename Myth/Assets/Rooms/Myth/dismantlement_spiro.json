@@ -220,6 +220,16 @@
         "suspicious",
         "looking terrain"
       ]
+    },
+    {
+      "Id": "b564baa082cf0f0d",
+      "Type": "CurveRibbon",
+      "Position": [160, 92],
+      "Points": [[-56, -88],[-80, -64],[-64, -48],[-72, -40]
+      ],
+      "Tint": "558CFF",
+      "WobbleFrequency": 0.329,
+      "WobbleIntensity": 8.113
     }
   ]
 }

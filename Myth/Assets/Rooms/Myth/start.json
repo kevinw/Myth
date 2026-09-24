@@ -192,6 +192,20 @@
       "From": "TutorialText",
       "Position": [167, 21],
       "Text": "press {Jump} to jump"
+    },
+    {
+      "Id": "d6ac10f9f551bb66",
+      "Type": "CurveRibbon",
+      "Position": [166, 127],
+      "Tint": "558CFF",
+      "Points": [[-88, 16],[-80, -40],[-40, -32],[8, -72],[216, -80]
+      ],
+      "BranchLength": 11.599,
+      "BranchWidth": 0.642,
+      "WobbleIntensity": 12.282,
+      "WobbleFrequency": 0.501,
+      "WobbleSpeed": 0.038,
+      "BranchSpacing": 7.061
     }
   ]
 }

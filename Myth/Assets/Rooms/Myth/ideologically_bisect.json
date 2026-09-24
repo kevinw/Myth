@@ -20,7 +20,7 @@
     "0000000000000000000000000000000000000000",
     "000000000000000000000000000000000000000N",
     "000000000000000000000000000000000000000N",
-    "0000000000000000000000000gggggffg00ggggN",
+    "00000000000000000000000000000gffg00ggggN",
     "00NNNNNNNNNNNNN0000000000NNNNNNNNNNNNNNN",
     "00NNNNNNNNNNNNNNN000000gNNNNNNNNNNNNNNNN",
     "00NNNNNNNNNNNNNNN000000NNNNNNNNNNNNNNNNN",
@@ -78,6 +78,15 @@
       "Id": "0bb0cc4bb4ea0aff",
       "From": "FloLight",
       "Position": [304, 31]
+    },
+    {
+      "Id": "194b86b67121c54f",
+      "Type": "CurveRibbon",
+      "Position": [160, 94],
+      "Points": [[112, 0],[88, -40],[8, -48],[-8, 32],[-8, 136]
+      ],
+      "Roundness": 1,
+      "Tint": "575757"
     }
   ]
 }

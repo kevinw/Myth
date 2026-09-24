@@ -220,6 +220,13 @@
       "Id": "8b242ed9eb56a2f4",
       "From": "FloLight",
       "Position": [92, 20]
+    },
+    {
+      "Id": "85849e1bc019fde9",
+      "Type": "CurveRibbon",
+      "Position": [160, 140],
+      "Points": [[-152, 88],[-112, 72],[-72, 80],[16, 72]
+      ]
     }
   ]
 }
