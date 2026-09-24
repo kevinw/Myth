@@ -426,6 +426,8 @@ public sealed partial class GameView
 
 		if (!background && debugView == DebugView.CollisionRects)
 			DrawCollisionRects(); // TODO: don't do this in post-processing context
+		if (!background && debugView == DebugView.ReachField)
+			game.reachField.Render(Batcher, game.GetFirst<Bud>()?.Position);
 
 		if (atlasWander)
 			Batcher.PopMaterial();

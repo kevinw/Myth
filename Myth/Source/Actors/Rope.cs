@@ -314,6 +314,8 @@ public class Rope : Actor, IResizable
 
 	public bool Broken => chains.Count > 1 || PinnedChain == null;
 
+	internal Vector2[] GrabPoints => PinnedChain?.Points ?? [];
+
 	Chain? PinnedChain
 	{
 		get

@@ -102,6 +102,14 @@ public partial class Game : IDisposable
 	internal void AdvanceReplayClock(float dt) => replayClock = (replayClock ?? default).Advance(TimeSpan.FromSeconds(dt));
 	internal void EndReplayClock() => replayClock = null;
 
+	// Runs an offline sim (see ReachMoves) whose steps call AdvanceReplayClock, then hands the clock back.
+	internal void WithSimClock(Action run)
+	{
+		var saved = replayClock;
+		try { run(); }
+		finally { replayClock = saved; }
+	}
+
 	internal Room? room;
 	internal Room? nextRoom;
 	Room? loadingRoom;
@@ -772,6 +780,7 @@ public partial class Game : IDisposable
 	{
 		ResolveActorAttachments();
 		View?.UpdateParticles(Time.Delta);
+		UpdateReachField();
 	}
 
 	void ResolveActorAttachments()

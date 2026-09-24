@@ -261,6 +261,7 @@ public partial class Manager : App
 	static int BackgroundSleepMilliseconds => 50;
 #endif
 	internal bool PlatformNavDebugVisible { get; set; }
+	internal string? StartDebugView => args.debugView;
 	readonly NavTrace? navTrace;
 
 	public bool MusicEnabled => musicVolume > 0;

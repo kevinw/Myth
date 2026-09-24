@@ -17,7 +17,8 @@ public partial class Game
 		DitherMask,
 		Reflection,
 		ShadowSegments,
-		PlatformNav
+		PlatformNav,
+		ReachField
 	}
 
 	// Debug/dev keyboard + controller shortcuts. Host concern: Manager reads input and
@@ -32,7 +33,8 @@ public partial class Game
 		if (debug.ReloadRoom.Pressed)
 			ReloadRoom();
 		// TODO: use an ingame console instead?
-		if (debug.PlatformNavView.Pressed) ToggleDebugView(DebugView.PlatformNav);
+		if (debug.PlatformNavView.Pressed)
+			SetDebugView(debugView switch { DebugView.ReachField => DebugView.PlatformNav, DebugView.PlatformNav => DebugView.None, _ => DebugView.ReachField });
 		if (debug.RenderTargets.Pressed)
 		{
 			if (Input.Keyboard.Shift)
@@ -124,6 +126,17 @@ public partial class Game
 	Room? platformNavGraphRoom;
 	bool platformNavGraphPristine = true;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
+	internal readonly ReachField reachField = new();
+
+	void UpdateReachField()
+	{
+		if (debugView != DebugView.ReachField || room == null)
+			return;
+		RectInt? target = GymTarget is { } goal ? (goal.Hitbox.Rect + goal.Position).Inflate(1)
+			: GetFirst<Player>() is { } player ? player.Hitbox.Rect + player.Position : null;
+		if (target is { } rect)
+			reachField.Update(this, room, rect);
+	}
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
 	public List<(RectInt, float)> CollisionRectsThisFrame = [];
@@ -192,6 +205,8 @@ public partial class Game
 	{
 		if (Manager.PlatformNavDebugVisible)
 			debugView = DebugView.PlatformNav;
+		if (Enum.TryParse<DebugView>(Manager.StartDebugView, ignoreCase: true, out var view))
+			debugView = view;
 	}
 
 	// Forwards to the Manager, which owns the message so it survives Game recreation.
@@ -230,6 +245,7 @@ public partial class Game
 			DebugView.Reflection => "Reflection Screen",
 			DebugView.ShadowSegments => "GPU Shadow Segments",
 			DebugView.PlatformNav => "Platform Nav",
+			DebugView.ReachField => "Reach Field",
 			_ => view.ToString()
 		};
 
