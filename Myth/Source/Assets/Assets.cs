@@ -228,7 +228,7 @@ public static partial class Assets
 			(@"^Packed/Visuals/(manifest\.bin|atlas\.qoi|lighting-noise\.qoi)$", []),
 			($@"^Packed/Visuals/{WorldMap.Folder}/{world}\.(qoi|json)$", []),
 			(@"^Packed/Visuals/textures/", ["png"]),
-			(@"^Packed/Visuals/(surfaces|costumes)/[^/]+$", ["json"]),
+			(@"^Packed/Visuals/(surfaces|costumes|ribbon-styles)/[^/]+$", ["json"]),
 			(@"^Rigs/[^/]+$", ["json", "ozzpack"]),
 			($@"^Rooms/{world}\.regions\.json$", []),
 			($"^Rooms/{world}/", ["json"]),
@@ -693,6 +693,7 @@ public static partial class Assets
 		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, BuildVisualAssetPackManifest(bake, "", null));
 		BuildSurfaces(gfx, Content, "Sources/Surfaces");
 		LoadCostumes(Content, "Sources/Costumes");
+		LoadRibbonStyles(Content, "Sources/RibbonStyles");
 
 		if (buildPackPath != null)
 			WriteVisualAssetPack(buildPackPath, bake);
@@ -932,6 +933,7 @@ public static partial class Assets
 		LoadVisualAssetPackManifest(atlas, lightingNoise, textures2D, manifest);
 		BuildSurfaces(gfx, pack, "surfaces");
 		LoadCostumes(pack, "costumes");
+		LoadRibbonStyles(pack, "ribbon-styles");
 		// Registration data ships inside the pack (baked with the images), so pack mode
 		// never depends on spec files being present or current.
 		TileKits.SetRegistrations(manifest.TileKits);
@@ -990,8 +992,6 @@ public static partial class Assets
 		var surfacesDir = Path.Join(directory, "surfaces");
 		if (Directory.Exists(texturesDir))
 			Directory.Delete(texturesDir, recursive: true);
-		if (Directory.Exists(surfacesDir))
-			Directory.Delete(surfacesDir, recursive: true);
 
 		var sourceTextures = Path.Join(SourcesPath, "Textures", "Patterns");
 		if (Directory.Exists(sourceTextures))
@@ -1003,24 +1003,20 @@ public static partial class Assets
 				File.Copy(file, dest, overwrite: true);
 			}
 
-		var sourceSurfaces = Path.Join(SourcesPath, "Surfaces");
-		if (Directory.Exists(sourceSurfaces))
-		{
-			Directory.CreateDirectory(surfacesDir);
-			foreach (var file in Directory.EnumerateFiles(sourceSurfaces, "*.json"))
-				File.Copy(file, Path.Join(surfacesDir, Path.GetFileName(file)), overwrite: true);
-		}
+		CopyJsonFolder(Path.Join(SourcesPath, "Surfaces"), surfacesDir);
+		CopyJsonFolder(Path.Join(SourcesPath, "Costumes"), Path.Join(directory, "costumes"));
+		CopyJsonFolder(Path.Join(SourcesPath, "RibbonStyles"), Path.Join(directory, "ribbon-styles"));
+	}
 
-		var costumesDir = Path.Join(directory, "costumes");
-		if (Directory.Exists(costumesDir))
-			Directory.Delete(costumesDir, recursive: true);
-		var sourceCostumes = Path.Join(SourcesPath, "Costumes");
-		if (Directory.Exists(sourceCostumes))
-		{
-			Directory.CreateDirectory(costumesDir);
-			foreach (var file in Directory.EnumerateFiles(sourceCostumes, "*.json"))
-				File.Copy(file, Path.Join(costumesDir, Path.GetFileName(file)), overwrite: true);
-		}
+	static void CopyJsonFolder(string source, string destination)
+	{
+		if (Directory.Exists(destination))
+			Directory.Delete(destination, recursive: true);
+		if (!Directory.Exists(source))
+			return;
+		Directory.CreateDirectory(destination);
+		foreach (var file in Directory.EnumerateFiles(source, "*.json"))
+			File.Copy(file, Path.Join(destination, Path.GetFileName(file)), overwrite: true);
 	}
 
 	static VisualAssetPackManifest BuildVisualAssetPackManifest(VisualAssetBake bake, string atlas, string? lightingNoise)

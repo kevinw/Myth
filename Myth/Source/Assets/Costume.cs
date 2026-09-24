@@ -73,14 +73,18 @@ public static partial class Assets
 		=> Costumes.GetValueOrDefault(reference.Name ?? "");
 
 	internal static void LoadCostumes(StorageContainer storage, string dir)
+		=> LoadJsonLibrary(Costumes, storage, dir, Costume.Parse, "costume");
+
+	// Each <dir>/<id>.json becomes library[id]; a file that fails to parse is logged and skipped.
+	static void LoadJsonLibrary<T>(Dictionary<string, T> library, StorageContainer storage, string dir, Func<string, T> parse, string kind)
 	{
-		Costumes.Clear();
+		library.Clear();
 		if (!storage.DirectoryExists(dir))
 			return;
 		foreach (var file in storage.EnumerateDirectory(dir, "*.json", SearchOption.TopDirectoryOnly))
 		{
-			try { Costumes[Path.GetFileNameWithoutExtension(file)] = Costume.Parse(storage.ReadAllText(file)); }
-			catch (Exception e) { Console.Error.WriteLine($"Failed to load costume '{file}': {e.Message}"); }
+			try { library[Path.GetFileNameWithoutExtension(file)] = parse(storage.ReadAllText(file)); }
+			catch (Exception e) { Console.Error.WriteLine($"Failed to load {kind} '{file}': {e.Message}"); }
 		}
 	}
 }

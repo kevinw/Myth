@@ -168,7 +168,10 @@
       "From": "StrongFireLight",
       "Position": [404, 148],
       "Radius": 62.8,
-      "Intensity": 0.8
+      "Height": 13.29,
+      "Intensity": 0.669,
+      "TintSprite": true,
+      "DrawSprite": true
     },
     {
       "Id": "47fbf51bec2b801e",
@@ -235,6 +238,26 @@
       "PipeMinWidth": 1.639,
       "PipeBend": 1.241,
       "GreebleScale": 0.25
+    },
+    {
+      "Id": "055ddc45e475d12e",
+      "Type": "CurveRibbon",
+      "Position": [377, 100],
+      "Style": "cable",
+      "SurfaceOverride": "crawler-metal",
+      "Points": [[-40, -80],[0, -8],[-24, 24],[-8, 80]
+      ],
+      "Width": 11.479
+    },
+    {
+      "Id": "143fb606fb73cf26",
+      "Type": "CurveRibbon",
+      "Position": [385, 100],
+      "Style": "cable",
+      "SurfaceOverride": "crawler-metal",
+      "Width": 3.789,
+      "Points": [[32, -88],[40, -48],[96, -16],[112, 80]
+      ]
     }
   ]
 }

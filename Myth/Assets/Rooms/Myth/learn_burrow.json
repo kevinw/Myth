@@ -309,7 +309,7 @@
       "Id": "64aaaba76aaa5353",
       "Type": "CurveRibbon",
       "Position": [160, 248],
-      "SurfaceId": "robot_body_1",
+      "SurfaceOverride": "robot_body_1",
       "Points": [[16, 16],[24, -24],[16, -48]
       ],
       "BranchSpacing": 7.305,

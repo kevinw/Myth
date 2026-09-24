@@ -317,21 +317,27 @@
       "Type": "Prop",
       "Position": [67, 341],
       "SpriteName": "Props/server",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.129,
+      "EmissiveLightRadiusScale": 0,
+      "EmissiveLightHeight": 0
     },
     {
       "Id": "029cdade50729997",
       "Type": "Prop",
       "Position": [61, 324],
       "SpriteName": "Props/server",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.258,
+      "EmissiveLightRadiusScale": 0.315
     },
     {
       "Id": "bdfe264d0dc78c5e",
       "Type": "Prop",
       "Position": [59, 344],
       "SpriteName": "Props/server",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.23
     },
     {
       "Id": "a074fed1707d796a",

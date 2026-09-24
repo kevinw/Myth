@@ -192,7 +192,7 @@ public partial class Manager
 				return true;
 			}
 		}
-		else if (property.Type == typeof(ContentRef<CostumeContent>))
+		else if (property.Type == typeof(ContentRef<CostumeContent>) || property.Type == typeof(ContentRef<RibbonStyleContent>))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
 			var changed = false;
@@ -203,7 +203,7 @@ public partial class Manager
 					value = "";
 					changed = true;
 				}
-				foreach (var name in Assets.Costumes.Keys)
+				foreach (var name in property.Type == typeof(ContentRef<CostumeContent>) ? (IEnumerable<string>)Assets.Costumes.Keys : Assets.RibbonStyles.Keys)
 					if (Selectable(name, value == name))
 					{
 						value = name;
@@ -849,9 +849,9 @@ public partial class Manager
 		if (property.VisibleWhen is { } visibleWhen && !visibleWhen.IsVisibleForActor(actor))
 			return true;
 		if (ActorSpecs.GetTypeName(actor) == nameof(CurveRibbon) &&
-			string.Equals(ActorSpecs.ReadResolvedString(actor, nameof(CurveRibbon.Mode)), nameof(CurveRibbonMode.Cable), StringComparison.OrdinalIgnoreCase) &&
-			property.Name is nameof(CurveRibbon.SurfaceId) or nameof(CurveRibbon.EndWidth) or
-				nameof(CurveRibbon.BranchSpacing) or nameof(CurveRibbon.BranchLength) or nameof(CurveRibbon.BranchWidth))
+			Assets.GetRibbonStyle(ActorSpecs.ReadResolvedString(actor, nameof(CurveRibbon.Style)) ?? CurveRibbon.DefaultStyle.Name) is { } ribbonStyle &&
+			(!ribbonStyle.Taper && property.Name == nameof(CurveRibbon.EndWidth) || !ribbonStyle.Branches &&
+				property.Name is nameof(CurveRibbon.BranchSpacing) or nameof(CurveRibbon.BranchLength) or nameof(CurveRibbon.BranchWidth)))
 			return true;
 
 		var typeName = ActorSpecs.GetTypeName(actor);

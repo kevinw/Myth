@@ -86,17 +86,26 @@ public partial class Manager
 			RequestRigReload();
 		else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sources", "Costumes")))
 			costumeReloadRequested = true;
+		else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase) && IsAssetDirectory(relative, Path.Join("Sources", "RibbonStyles")))
+			ribbonStyleReloadRequested = true;
 	}
 
-	volatile bool costumeReloadRequested;
+	volatile bool costumeReloadRequested, ribbonStyleReloadRequested;
 
-	void UpdateCostumeReload()
+	void UpdateJsonLibraryReload()
 	{
-		if (!costumeReloadRequested)
-			return;
-		costumeReloadRequested = false;
-		Assets.LoadCostumes(Assets.Content, "Sources/Costumes");
-		Game.NotifyHotReload("Reloaded costumes");
+		if (costumeReloadRequested)
+		{
+			costumeReloadRequested = false;
+			Assets.LoadCostumes(Assets.Content, "Sources/Costumes");
+			Game.NotifyHotReload("Reloaded costumes");
+		}
+		if (ribbonStyleReloadRequested)
+		{
+			ribbonStyleReloadRequested = false;
+			Assets.LoadRibbonStyles(Assets.Content, "Sources/RibbonStyles");
+			Game.NotifyHotReload("Reloaded ribbon styles");
+		}
 	}
 
 	void RequestRigReload()

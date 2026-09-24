@@ -4,18 +4,13 @@ using Foster.Framework;
 
 namespace Myth;
 
-public enum CurveRibbonMode { Root, Cable }
-
 [GameActor(Icon = "seedling", BoundsX = -4, BoundsY = -4, BoundsW = 8, BoundsH = 8,
 	Tags = ActorTag.Decoration, ShowFacing = false, LivePositionEditable = true)]
-public class CurveRibbon : PointPathActor
+public class CurveRibbon : PointPathActor, IActivatable
 {
-	public static ContentRef<SurfaceContent> DefaultSurface => new("curve-root");
-	public static ContentRef<SurfaceContent> DefaultCableSurface => new("curve-cable");
-	public CurveRibbonMode Mode;
-	public ContentRef<SurfaceContent> SurfaceId = DefaultSurface;
-	[VisibleWhen(nameof(Mode), CurveRibbonMode.Cable)]
-	public ContentRef<SurfaceContent> CableSurfaceId = DefaultCableSurface;
+	public static ContentRef<RibbonStyleContent> DefaultStyle => new("root");
+	public ContentRef<RibbonStyleContent> Style = DefaultStyle;
+	public ContentRef<SurfaceContent> SurfaceOverride = new("");
 	public bool FollowCurveTexture = true;
 	public Color Tint = Color.White;
 	[I(1, 64)] public float Width = 12;
@@ -23,31 +18,49 @@ public class CurveRibbon : PointPathActor
 	[I(0, 128)] public float BranchSpacing = 28;
 	[I(2, 96)] public float BranchLength = 24;
 	[I(0.05f, 1)] public float BranchWidth = 0.35f;
-	[VisibleWhen(nameof(Mode), CurveRibbonMode.Cable)]
-	[I(6, 64)] public float CollarSpacing = 24;
-	[VisibleWhen(nameof(Mode), CurveRibbonMode.Cable)]
-	public Color CollarColor = new(0x8faab4);
 	// Frequency sets noise cells per 16 world pixels; authored path points remain fixed.
 	[I(0, 1)] public float WobbleFrequency;
 	[I(0, 24)] public float WobbleIntensity;
 	[I(0, 4)] public float WobbleSpeed;
 	[I(0, 1)] public float Roundness = 0.8f;
 	[I(1, 9999)] public int Seed = 1;
+	// A flat strip turning about its spine: one full turn every TwistPeriod px (0: no twist).
+	[InspectorGroup("Twist"), I(0, 512)] public float TwistPeriod;
+	[I(-4, 4)] public float TwistSpeed;
+	// Grow shows the ribbon from its base out to that fraction of its length. Activation grows it fully;
+	// GrowTo drives it anywhere. Both move the growth front at GrowSpeed px/second.
+	[InspectorGroup("Grow"), I(0, 1)] public float Grow = 1;
+	[I(1, 512)] public float GrowSpeed = 96;
 
 	readonly record struct NormalTriangle(Vector2 A, Vector2 B, Vector2 C, Color AColor, Color BColor, Color CColor);
+	// Sign: +1 on the left edge, -1 on the right, 0 on the spine.
+	readonly record struct StampInstance(RibbonStamp Stamp, RibbonEdge Edge, float Sign);
+	readonly record struct BuildKey(Point2 Position, RibbonStyle? Style, bool FollowCurveTexture, float Width, float EndWidth,
+		float BranchSpacing, float BranchLength, float BranchWidth, float WobbleFrequency, float WobbleIntensity, float WobblePhase,
+		float Roundness, int Seed, float Grown, float TwistPeriod, float TwistPhase);
 
+	readonly List<SplineSample> spline = [];
 	readonly List<Vector2> spine = [];
+	readonly List<Vector2> grownSpine = [];
+	readonly List<RibbonEdge> spineEdges = [];
+	readonly List<float> spineTwist = []; // turn angle per spine edge, empty when untwisted
 	readonly List<Vector2> branch = [];
+	readonly List<RibbonEdge> branchEdges = [];
 	readonly List<Surface.Vertex> triangles = [];
 	readonly List<NormalTriangle> normalTriangles = [];
+	readonly List<StampInstance> stamps = [];
 	Point2[] builtPoints = [];
-	Point2 builtPosition;
-	CurveRibbonMode builtMode;
-	bool builtFollowCurveTexture;
-	float builtWidth, builtEndWidth, builtBranchSpacing, builtBranchLength, builtBranchWidth, builtWobbleFrequency, builtWobbleIntensity, builtWobblePhase, builtRoundness;
-	float wobblePhase;
-	int builtSeed;
+	BuildKey builtKey;
+	float wobblePhase, twistPhase;
 	Rect visualBounds;
+	readonly HashSet<Actor> activators = [];
+	float? growOverride;
+	float grown = -1; // snaps to its target on the first update, so a room loads already grown
+	float growthLength; // distance the growth front travels: the path plus time for the last branches to sprout
+	float grownDistance;
+	int growParticles = -1;
+	string growParticlesName = "";
+	SoundInstance? growSound;
 
 	public CurveRibbon()
 	{
@@ -58,18 +71,68 @@ public class CurveRibbon : PointPathActor
 
 	public override bool CastsSpriteShadow => false;
 	public override bool CastsReflection => false;
-	ContentRef<SurfaceContent> ActiveSurface => Mode == CurveRibbonMode.Cable ? CableSurfaceId : SurfaceId;
+	RibbonStyle? ActiveStyle => Assets.GetRibbonStyle(Style);
+	float Grown => grown < 0 ? Grow : grown;
+
+	public void SetActive(Actor source, bool active)
+	{
+		if (active)
+			activators.Add(source);
+		else
+			activators.Remove(source);
+	}
+
+	public void GrowTo(float value) => growOverride = Math.Clamp(value, 0, 1);
+	ContentRef<SurfaceContent> ActiveSurface => SurfaceOverride.Name != "" ? SurfaceOverride : ActiveStyle?.Surface ?? "";
 
 	public override void Update()
 	{
 		base.Update();
 		if (WobbleSpeed > 0 && WobbleFrequency > 0 && WobbleIntensity > 0)
 			wobblePhase += Time.Delta * WobbleSpeed;
+		if (TwistPeriod > 0)
+			twistPhase += Time.Delta * TwistSpeed;
+
+		var target = activators.Count > 0 ? 1 : growOverride ?? Grow;
+		var previous = grown < 0 ? target : grown;
+		grown = Calc.Approach(previous, target, Time.Delta * GrowSpeed / MathF.Max(1, growthLength));
+		UpdateGrowthFeedback((grown - previous) * growthLength);
 	}
 
-	public static Vector2 Sample(Point2 before, Point2 start, Point2 end, Point2 after, float t)
-		=> Calc.Bezier((Vector2)start, (Vector2)start + (end - before) / 6f,
-			(Vector2)end - (after - start) / 6f, (Vector2)end, t);
+	public override void Destroyed()
+	{
+		StopAndReleaseSound(ref growSound);
+		ReleaseParticleEffect(ref growParticles);
+	}
+
+	void UpdateGrowthFeedback(float moved)
+	{
+		EnsureGeometry();
+		if (moved == 0 || Time.Delta <= 0 || spineEdges.Count == 0 || ActiveStyle is not { } style)
+		{
+			StopAndReleaseSound(ref growSound);
+			return;
+		}
+		var front = spineEdges[^1];
+		var direction = front.Tangent * MathF.Sign(moved);
+		if (style.GrowParticles != growParticlesName)
+		{
+			ReleaseParticleEffect(ref growParticles);
+			growParticlesName = style.GrowParticles;
+			if (growParticlesName != "")
+				growParticles = AcquireParticleEffect(growParticlesName);
+		}
+		const float ParticleSpacing = 6;
+		var emitted = (int)(grownDistance / ParticleSpacing);
+		grownDistance += MathF.Abs(moved);
+		if (growParticles >= 0 && (int)(grownDistance / ParticleSpacing) > emitted)
+			Game.Particles?.Emit(growParticles, Position + front.Center, (int)(grownDistance / ParticleSpacing) - emitted,
+				MathF.Atan2(direction.Y, direction.X), 0.5f, MathF.PI * 0.5f);
+		if (growSound == null && style.GrowSound != "")
+			growSound = Game.CreateAudioEvent(style.GrowSound, Position + front.Center, start: true);
+		Game.SetAudioEventPosition(growSound, Position + front.Center);
+		Game.SetAudioEventParameter(growSound, "speed", MathF.Abs(moved) / Time.Delta);
+	}
 
 	public override void Render(Batcher batcher)
 	{
@@ -79,8 +142,7 @@ public class CurveRibbon : PointPathActor
 		else
 			for (var i = 0; i + 2 < triangles.Count; i += 3)
 				batcher.Triangle(triangles[i].Pos, triangles[i + 1].Pos, triangles[i + 2].Pos, Tint);
-		if (Mode == CurveRibbonMode.Cable)
-			DrawCableDetails(batcher);
+		DrawDetails(batcher);
 	}
 
 	public override void RenderNormals(Batcher batcher)
@@ -104,79 +166,79 @@ public class CurveRibbon : PointPathActor
 
 	void EnsureGeometry()
 	{
+		var style = ActiveStyle;
 		var phase = WobbleSpeed > 0 ? wobblePhase : 0;
+		var key = new BuildKey(Position, style, FollowCurveTexture, Width, EndWidth, BranchSpacing, BranchLength, BranchWidth,
+			WobbleFrequency, WobbleIntensity, phase, Roundness, Seed, Grown, TwistPeriod, TwistPeriod > 0 ? twistPhase : 0);
 		var pointsChanged = !builtPoints.AsSpan().SequenceEqual(Points);
-		if (builtPosition == Position && builtMode == Mode && builtFollowCurveTexture == FollowCurveTexture &&
-			builtWidth == Width && builtEndWidth == EndWidth &&
-			builtBranchSpacing == BranchSpacing && builtBranchLength == BranchLength &&
-			builtBranchWidth == BranchWidth && builtWobbleFrequency == WobbleFrequency &&
-			builtWobbleIntensity == WobbleIntensity && builtWobblePhase == phase && builtRoundness == Roundness && builtSeed == Seed &&
-			!pointsChanged)
+		if (key == builtKey && !pointsChanged)
 			return;
 
-		builtPosition = Position;
-		builtMode = Mode;
-		builtFollowCurveTexture = FollowCurveTexture;
-		builtWidth = Width;
-		builtEndWidth = EndWidth;
-		builtBranchSpacing = BranchSpacing;
-		builtBranchLength = BranchLength;
-		builtBranchWidth = BranchWidth;
-		builtWobbleFrequency = WobbleFrequency;
-		builtWobbleIntensity = WobbleIntensity;
-		builtWobblePhase = phase;
-		builtRoundness = Roundness;
-		builtSeed = Seed;
+		builtKey = key;
 		if (pointsChanged)
-		{
-			if (builtPoints.Length != Points.Length)
-				builtPoints = new Point2[Points.Length];
-			Points.CopyTo(builtPoints, 0);
-		}
+			builtPoints = [.. Points];
+		spline.Clear();
 		spine.Clear();
+		grownSpine.Clear();
+		spineEdges.Clear();
+		spineTwist.Clear();
 		triangles.Clear();
 		normalTriangles.Clear();
+		stamps.Clear();
 		if (Points.Length < 2)
 		{
 			visualBounds = new Rect(Position, Vector2.Zero);
 			return;
 		}
 
-		var traveled = 0f;
-		var previous = (Vector2)Points[0];
 		var wobble = WobbleFrequency > 0 && WobbleIntensity > 0;
-		for (var segment = 0; segment < Points.Length - 1; segment++)
+		Ribbon.AppendSpline(spline, Points, wobble ? 4 : 12, wobble ? 256 : 128);
+		var traveled = 0f;
+		for (var i = 0; i < spline.Count; i++)
 		{
-			var before = Points[Math.Max(0, segment - 1)];
-			var start = Points[segment];
-			var end = Points[segment + 1];
-			var after = Points[Math.Min(Points.Length - 1, segment + 2)];
-			var steps = Math.Clamp((int)MathF.Ceiling((Vector2.Distance(before, start) +
-				Vector2.Distance(start, end) + Vector2.Distance(end, after)) / (wobble ? 4 : 12)), 4, wobble ? 256 : 128);
-			for (var step = segment == 0 ? 0 : 1; step <= steps; step++)
-			{
-				var t = step / (float)steps;
-				var point = Sample(before, start, end, after, t);
-				traveled += Vector2.Distance(previous, point);
-				previous = point;
-				if (wobble && step > 0 && step < steps)
-				{
-					var tangent = Sample(before, start, end, after, MathF.Min(1, t + 0.01f)) -
-						Sample(before, start, end, after, MathF.Max(0, t - 0.01f));
-					if (tangent.LengthSquared() > 0.0001f)
-					{
-						var side = Vector2.Normalize(new Vector2(-tangent.Y, tangent.X));
-						point += side * (WobbleNoise(traveled * WobbleFrequency / 16f + phase) * WobbleIntensity * MathF.Sin(MathF.PI * t));
-					}
-				}
-				spine.Add(point);
-			}
+			var (point, tangent, t) = spline[i];
+			if (i > 0)
+				traveled += Vector2.Distance(spline[i - 1].Position, point);
+			if (wobble && t is > 0 and < 1 && tangent.LengthSquared() > 0.0001f)
+				point += Vector2.Normalize(tangent.TurnRight()) *
+					(SmoothNoise.Signed(traveled * WobbleFrequency / 16f + phase, (uint)Seed) * WobbleIntensity * MathF.Sin(MathF.PI * t));
+			spine.Add(point);
 		}
 
-		if (Mode == CurveRibbonMode.Root && BranchSpacing > 0)
-			AppendBranches();
-		AppendRibbon(CollectionsMarshal.AsSpan(spine), MathF.Max(0, Width),
-			MathF.Max(0, Width * (Mode == CurveRibbonMode.Cable ? 1 : EndWidth)));
+		var branches = style?.Branches != false && BranchSpacing > 0;
+		var pathLength = 0f;
+		for (var i = 1; i < spine.Count; i++)
+			pathLength += Vector2.Distance(spine[i - 1], spine[i]);
+		growthLength = pathLength + (branches ? BranchLength : 0);
+		var front = Grown * growthLength;
+		var visible = CollectionsMarshal.AsSpan(spine);
+		if (front < pathLength)
+		{
+			TrimSpine(front);
+			visible = CollectionsMarshal.AsSpan(grownSpine);
+		}
+
+		Ribbon.AppendEdges(spineEdges, visible, Width, style?.Taper != false ? Width * EndWidth : Width);
+		if (TwistPeriod > 0)
+			for (var i = 0; i < spineEdges.Count; i++)
+			{
+				var angle = MathF.Tau * (spineEdges[i].Distance / TwistPeriod + twistPhase);
+				spineTwist.Add(angle);
+				spineEdges[i] = spineEdges[i] with { HalfWidth = spineEdges[i].HalfWidth * FaceScale(angle) };
+			}
+		if (branches)
+			AppendBranches(front);
+		AppendStrip(CollectionsMarshal.AsSpan(spineEdges), CollectionsMarshal.AsSpan(spineTwist));
+		if (style?.Cap == RibbonCap.Round && spineEdges.Count > 1)
+		{
+			AppendRoundCap(spineEdges[0], -spineEdges[0].Tangent);
+			AppendRoundCap(spineEdges[^1], spineEdges[^1].Tangent);
+		}
+
+		var reach = 0f;
+		if (style != null)
+			foreach (var stamp in style.Stamps)
+				reach = MathF.Max(reach, PlaceStamps(stamp));
 
 		var min = new Vector2(float.PositiveInfinity);
 		var max = new Vector2(float.NegativeInfinity);
@@ -185,100 +247,138 @@ public class CurveRibbon : PointPathActor
 			min = Vector2.Min(min, Position + vertex.Pos);
 			max = Vector2.Max(max, Position + vertex.Pos);
 		}
-		visualBounds = triangles.Count > 0 ? Rect.Between(min, max).Inflate(Mode == CurveRibbonMode.Cable ? MathF.Max(2, Width * 0.12f) : 0)
-			: new Rect(Position, Vector2.Zero);
+		visualBounds = triangles.Count > 0 ? Rect.Between(min, max).Inflate(reach) : new Rect(Position, Vector2.Zero);
 	}
 
-	float WobbleNoise(float coordinate)
+	void TrimSpine(float length)
 	{
-		var cell = (int)MathF.Floor(coordinate);
-		var t = coordinate - cell;
-		t = t * t * (3 - 2 * t);
-		return float.Lerp(Value(cell), Value(cell + 1), t);
-
-		float Value(int index) => (Hash32.Mix((uint)Seed ^ (uint)index * 0x9e3779b9u) & 0xffff) / 32767.5f - 1f;
-	}
-
-	void AppendBranches()
-	{
-		var rng = new Rng(Seed);
-		var spacing = MathF.Max(4, BranchSpacing);
-		var nextBranch = spacing * 0.75f;
-		var distance = 0f;
+		grownSpine.Add(spine[0]);
+		var traveled = 0f;
 		for (var i = 1; i < spine.Count; i++)
 		{
-			var from = spine[i - 1];
-			var to = spine[i];
-			var length = Vector2.Distance(from, to);
-			if (length <= 0.001f)
-				continue;
-			while (nextBranch <= distance + length)
+			var step = Vector2.Distance(spine[i - 1], spine[i]);
+			if (traveled + step >= length)
 			{
-				var origin = Vector2.Lerp(from, to, (nextBranch - distance) / length);
-				var tangent = (to - from) / length;
-				var side = new Vector2(-tangent.Y, tangent.X) * (rng.Chance(0.5f) ? 1 : -1);
-				var direction = Vector2.Normalize(tangent * rng.Float(0.15f, 0.5f) + side * rng.Float(0.75f, 1.25f));
-				var reach = BranchLength * rng.Float(0.65f, 1.25f);
-				var control = origin + direction * reach * 0.55f;
-				var tip = origin + direction * reach + tangent * reach * 0.2f;
-				branch.Clear();
-				for (var step = 0; step <= 6; step++)
-					branch.Add(Calc.Bezier(origin, control, tip, step / 6f));
-				AppendRibbon(CollectionsMarshal.AsSpan(branch), Width * BranchWidth, 0.5f, nextBranch);
-				nextBranch += spacing * rng.Float(0.75f, 1.25f);
+				grownSpine.Add(Vector2.Lerp(spine[i - 1], spine[i], step > 0 ? (length - traveled) / step : 1));
+				return;
 			}
-			distance += length;
+			traveled += step;
+			grownSpine.Add(spine[i]);
 		}
 	}
 
-	void AppendRibbon(ReadOnlySpan<Vector2> points, float startWidth, float endWidth, float textureOffset = 0)
+	// Branches sprout to full size over BranchLength behind the growth front.
+	void AppendBranches(float front)
 	{
-		if (points.Length < 2)
-			return;
-		var length = 0f;
-		for (var i = 1; i < points.Length; i++)
-			length += Vector2.Distance(points[i - 1], points[i]);
-		if (length <= 0.001f)
-			return;
-
-		var traveled = 0f;
-		var previous = Edges(points, 0, 0, startWidth, endWidth);
-		for (var i = 1; i < points.Length; i++)
+		var rng = new Rng(Seed);
+		var spacing = MathF.Max(4, BranchSpacing);
+		var cursor = 0;
+		for (var at = spacing * 0.75f; Ribbon.TryEdgeAt(CollectionsMarshal.AsSpan(spineEdges), ref cursor, at, out var edge);
+			at += spacing * rng.Float(0.75f, 1.25f))
 		{
-			var previousDistance = traveled;
-			traveled += Vector2.Distance(points[i - 1], points[i]);
-			var current = Edges(points, i, traveled / length, startWidth, endWidth);
-			var leftBefore = new Vector2(previous.HalfWidth, previousDistance + textureOffset);
-			var rightBefore = new Vector2(-previous.HalfWidth, previousDistance + textureOffset);
-			var leftAfter = new Vector2(current.HalfWidth, traveled + textureOffset);
-			var rightAfter = new Vector2(-current.HalfWidth, traveled + textureOffset);
+			var tangent = edge.Tangent;
+			var side = edge.Side * (rng.Chance(0.5f) ? 1 : -1);
+			var direction = Vector2.Normalize(tangent * rng.Float(0.15f, 0.5f) + side * rng.Float(0.75f, 1.25f));
+			var sprout = Math.Clamp((front - at) / BranchLength, 0, 1);
+			var reach = BranchLength * rng.Float(0.65f, 1.25f) * sprout;
+			if (sprout <= 0)
+				continue;
+			var control = edge.Center + direction * reach * 0.55f;
+			var tip = edge.Center + direction * reach + tangent * reach * 0.2f;
+			branch.Clear();
+			for (var step = 0; step <= 6; step++)
+				branch.Add(Calc.Bezier(edge.Center, control, tip, step / 6f));
+			branchEdges.Clear();
+			Ribbon.AppendEdges(branchEdges, CollectionsMarshal.AsSpan(branch), Width * BranchWidth * sprout, 0.5f, at);
+			AppendStrip(CollectionsMarshal.AsSpan(branchEdges));
+		}
+	}
+
+	// Returns how far the stamps reach past the spine, for visual bounds.
+	float PlaceStamps(RibbonStamp stamp)
+	{
+		var rng = new Rng(Seed + stamps.Count);
+		var cursor = 0;
+		var alternate = -1f;
+		for (var at = stamp.Spacing * 0.5f; Ribbon.TryEdgeAt(CollectionsMarshal.AsSpan(spineEdges), ref cursor, at, out var edge);
+			at += stamp.Spacing * (1 + rng.Float(-stamp.Jitter, stamp.Jitter)))
+			stamps.Add(new(stamp, edge, stamp.Side switch
+			{
+				RibbonSide.Left => 1,
+				RibbonSide.Right => -1,
+				RibbonSide.Alternate => alternate = -alternate,
+				_ => 0,
+			}));
+		return stamp.Kind == RibbonStampKind.Band
+			? Width * stamp.Size * 0.5f + MathF.Max(2, Width * stamp.Outline)
+			: Assets.GetSprite(stamp.Sprite) is { Frames.Count: > 0 } sprite
+				? MathF.Max(sprite.Frames[0].Subtexture.Width, sprite.Frames[0].Subtexture.Height) * stamp.Size + Width * 0.5f
+				: 0;
+	}
+
+	// Seen edge-on, a twisted strip keeps a sliver of width rather than vanishing.
+	static float FaceScale(float twist) => MathF.Max(0.1f, MathF.Abs(MathF.Cos(twist)));
+
+	// twist (one angle per edge, or empty) narrows the strip to its projected width, squashes the texture
+	// rather than cropping it, mirrors it on the back face, and tilts the normals flat across the face.
+	void AppendStrip(ReadOnlySpan<RibbonEdge> edges, ReadOnlySpan<float> twist = default)
+	{
+		for (var i = 1; i < edges.Length; i++)
+		{
+			var (previous, current) = (edges[i - 1], edges[i]);
+			var previousU = MaterialHalfWidth(previous, twist, i - 1);
+			var currentU = MaterialHalfWidth(current, twist, i);
+			var leftBefore = new Vector2(previousU, previous.Distance);
+			var rightBefore = new Vector2(-previousU, previous.Distance);
+			var leftAfter = new Vector2(currentU, current.Distance);
+			var rightAfter = new Vector2(-currentU, current.Distance);
 			AddTriangle(previous.Left, previous.Right, current.Left, leftBefore, rightBefore, leftAfter);
 			AddTriangle(current.Left, previous.Right, current.Right, leftAfter, rightBefore, rightAfter);
 			if (Roundness > 0)
 			{
-				var flat = NormalColor(Vector2.Zero);
-				var previousLeft = NormalColor(previous.Side);
-				var previousRight = NormalColor(-previous.Side);
-				var currentLeft = NormalColor(current.Side);
-				var currentRight = NormalColor(-current.Side);
-				AddNormalTriangle(previous.Left, points[i - 1], current.Left, previousLeft, flat, currentLeft);
-				AddNormalTriangle(current.Left, points[i - 1], points[i], currentLeft, flat, flat);
-				AddNormalTriangle(points[i - 1], previous.Right, points[i], flat, previousRight, flat);
-				AddNormalTriangle(points[i], previous.Right, current.Right, flat, previousRight, currentRight);
+				var (previousLeft, previousCenter, previousRight) = EdgeNormals(previous, twist, i - 1);
+				var (currentLeft, currentCenter, currentRight) = EdgeNormals(current, twist, i);
+				AddNormalTriangle(previous.Left, previous.Center, current.Left, previousLeft, previousCenter, currentLeft);
+				AddNormalTriangle(current.Left, previous.Center, current.Center, currentLeft, previousCenter, currentCenter);
+				AddNormalTriangle(previous.Center, previous.Right, current.Center, previousCenter, previousRight, currentCenter);
+				AddNormalTriangle(current.Center, previous.Right, current.Right, currentCenter, previousRight, currentRight);
 			}
+		}
+	}
+
+	static float MaterialHalfWidth(RibbonEdge edge, ReadOnlySpan<float> twist, int index)
+		=> twist.IsEmpty ? edge.HalfWidth : edge.HalfWidth / FaceScale(twist[index]) * (MathF.Cos(twist[index]) < 0 ? -1 : 1);
+
+	(Color Left, Color Center, Color Right) EdgeNormals(RibbonEdge edge, ReadOnlySpan<float> twist, int index)
+	{
+		if (twist.IsEmpty)
+			return (NormalColor(edge.Side), NormalColor(Vector2.Zero), NormalColor(-edge.Side));
+		var face = NormalColor(edge.Side * MathF.Sin(twist[index]) * (MathF.Cos(twist[index]) < 0 ? -1 : 1));
+		return (face, face, face);
+	}
+
+	void AppendRoundCap(RibbonEdge edge, Vector2 forward)
+	{
+		const int Segments = 8;
+		if (edge.HalfWidth <= 0.5f)
+			return;
+		var flat = NormalColor(Vector2.Zero);
+		var previous = edge.Side;
+		for (var i = 1; i <= Segments; i++)
+		{
+			var angle = MathF.PI * i / Segments;
+			var current = edge.Side * MathF.Cos(angle) + forward * MathF.Sin(angle);
+			AddTriangle(edge.Center, edge.Center + previous * edge.HalfWidth, edge.Center + current * edge.HalfWidth,
+				CapUv(edge, Vector2.Zero), CapUv(edge, previous * edge.HalfWidth), CapUv(edge, current * edge.HalfWidth));
+			if (Roundness > 0)
+				AddNormalTriangle(edge.Center, edge.Center + previous * edge.HalfWidth, edge.Center + current * edge.HalfWidth,
+					flat, NormalColor(previous), NormalColor(current));
 			previous = current;
 		}
 	}
 
-	static (Vector2 Left, Vector2 Right, Vector2 Side, float HalfWidth) Edges(ReadOnlySpan<Vector2> points, int index, float t, float startWidth, float endWidth)
-	{
-		var direction = points[Math.Min(index + 1, points.Length - 1)] - points[Math.Max(index - 1, 0)];
-		var normal = direction.LengthSquared() > 0.0001f
-			? Vector2.Normalize(new Vector2(-direction.Y, direction.X)) : Vector2.UnitY;
-		var halfWidth = MathF.Max(0, float.Lerp(startWidth, endWidth, t)) * 0.5f;
-		var offset = normal * halfWidth;
-		return (points[index] + offset, points[index] - offset, normal, halfWidth);
-	}
+	static Vector2 CapUv(RibbonEdge edge, Vector2 offset)
+		=> new(Vector2.Dot(offset, edge.Side), edge.Distance + Vector2.Dot(offset, edge.Tangent));
 
 	Color NormalColor(Vector2 side)
 		=> new Color(side.X * Roundness * 0.5f + 0.5f, side.Y * Roundness * 0.5f + 0.5f, 1, 1)
@@ -294,33 +394,37 @@ public class CurveRibbon : PointPathActor
 		triangles.Add(new(c, FollowCurveTexture ? cUv : Position + c));
 	}
 
-	void DrawCableDetails(Batcher batcher)
+	void DrawDetails(Batcher batcher)
 	{
-		if (spine.Count < 2 || Width <= 0)
+		if (ActiveStyle is not { } style)
 			return;
-		var points = CollectionsMarshal.AsSpan(spine);
-		var trim = RigDraw.Multiply(CollarColor, Tint);
-		var traveled = 0f;
-		var nextCollar = MathF.Max(6, CollarSpacing) * 0.5f;
-		var previous = Edges(points, 0, 0, Width, Width);
-		for (var i = 1; i < points.Length; i++)
+		var edges = CollectionsMarshal.AsSpan(spineEdges);
+		foreach (var stripe in style.Stripes)
 		{
-			var current = Edges(points, i, 1, Width, Width);
-			batcher.Line(points[i - 1] + previous.Side * Width * 0.22f,
-				points[i] + current.Side * Width * 0.22f, MathF.Max(1, Width * 0.08f), trim * 0.65f);
-			var length = Vector2.Distance(points[i - 1], points[i]);
-			if (length > 0.001f)
-				while (nextCollar <= traveled + length)
-				{
-					var center = Vector2.Lerp(points[i - 1], points[i], (nextCollar - traveled) / length);
-					var side = Vector2.Normalize(new Vector2(-(points[i] - points[i - 1]).Y, (points[i] - points[i - 1]).X));
-					var offset = side * Width * 0.52f;
-					batcher.Line(center - offset, center + offset, MathF.Max(2, Width * 0.18f), new Color(0x182026));
-					batcher.Line(center - offset, center + offset, MathF.Max(1, Width * 0.08f), trim);
-					nextCollar += MathF.Max(6, CollarSpacing);
-				}
-			traveled += length;
-			previous = current;
+			var color = RigDraw.Multiply(stripe.Fill, Tint);
+			for (var i = 1; i < edges.Length; i++)
+				batcher.Line(edges[i - 1].Center + edges[i - 1].Side * edges[i - 1].HalfWidth * 2 * stripe.Offset,
+					edges[i].Center + edges[i].Side * edges[i].HalfWidth * 2 * stripe.Offset,
+					MathF.Max(1, edges[i].HalfWidth * 2 * stripe.Thickness), color);
+		}
+
+		foreach (var (stamp, edge, sign) in stamps)
+		{
+			var width = edge.HalfWidth * 2;
+			var center = edge.Center + edge.Side * edge.HalfWidth * sign;
+			if (stamp.Kind == RibbonStampKind.Band)
+			{
+				var offset = edge.Side * width * stamp.Size * 0.5f;
+				if (stamp.Outline > 0)
+					batcher.Line(center - offset, center + offset, MathF.Max(2, width * stamp.Outline), RigDraw.Multiply(stamp.OutlineFill, Tint));
+				batcher.Line(center - offset, center + offset, MathF.Max(1, width * stamp.Thickness), RigDraw.Multiply(stamp.Fill, Tint));
+			}
+			else if (Assets.GetSprite(stamp.Sprite) is { Frames.Count: > 0 } sprite)
+			{
+				var outward = sign < 0 ? -edge.Side : edge.Side;
+				batcher.Image(sprite.Frames[0].Subtexture, center, sprite.Origin, new Vector2(stamp.Size),
+					stamp.Align ? MathF.Atan2(outward.Y, outward.X) + MathF.PI / 2 : 0, RigDraw.Multiply(stamp.Fill, Tint));
+			}
 		}
 	}
 }

@@ -1278,7 +1278,7 @@ public partial class Manager : App
 		UpdateParticleEffectReload();
 		UpdateAudioBankReload();
 		UpdateRigReload();
-		UpdateCostumeReload();
+		UpdateJsonLibraryReload();
 #endif
 
 #if EDITOR

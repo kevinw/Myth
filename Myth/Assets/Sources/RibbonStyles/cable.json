@@ -1,0 +1,26 @@
+{
+  "Surface": "curve-cable",
+  "Taper": false,
+  "Branches": false,
+  "Cap": "Round",
+  "GrowParticles": "sparks",
+  "Stripes": [
+    {
+      "Offset": 0.22,
+      "Thickness": 0.08,
+      "Color": "8faab4",
+      "Opacity": 0.65
+    }
+  ],
+  "Stamps": [
+    {
+      "Kind": "Band",
+      "Spacing": 24,
+      "Size": 1.04,
+      "Thickness": 0.08,
+      "Outline": 0.18,
+      "Color": "8faab4",
+      "OutlineColor": "182026"
+    }
+  ]
+}

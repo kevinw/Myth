@@ -59,18 +59,8 @@ public readonly struct SurfaceContent : IContentKind
 
 	public static void Collect(ContentDependencyCollector collector, string name, string origin)
 	{
-		var key = ContentKey(name);
-		if (!collector.IncludeFile(key, origin))
+		if (collector.IncludeParsed(ContentKey(name), origin, json => SurfaceSpec.Parse(json, name)) is not { } spec)
 			return;
-		var path = Path.Join(Assets.AssetsPath, key.Replace('/', Path.DirectorySeparatorChar));
-		if (!File.Exists(path))
-			return;
-		SurfaceSpec spec;
-		try { spec = SurfaceSpec.Parse(File.ReadAllText(path), name); }
-		catch (Exception exception)
-		{
-			throw new InvalidDataException($"Could not parse surface '{name}' referenced by {origin}.", exception);
-		}
 		foreach (var texture in spec.ReferencedTextures())
 			collector.Add(new ContentRef<VisualTextureContent>(texture), $"{origin} -> surface '{name}' texture '{texture}'");
 	}
@@ -84,11 +74,22 @@ public readonly struct CostumeContent : IContentKind
 
 	public static void Collect(ContentDependencyCollector collector, string name, string origin)
 	{
-		if (!collector.IncludeFile(ContentKey(name), origin) || Assets.GetCostume(name) is not { } costume)
+		if (collector.IncludeParsed(ContentKey(name), origin, Costume.Parse) is not { } costume)
 			return;
 		foreach (var piece in costume.Pieces)
 			if (piece.Surface != "")
 				collector.Add(new ContentRef<SurfaceContent>(piece.Surface), $"{origin} -> costume '{name}'");
+	}
+}
+
+public readonly struct RibbonStyleContent : IContentKind
+{
+	public static string ContentKey(string name) => $"Packed/Visuals/ribbon-styles/{name}.json";
+
+	public static void Collect(ContentDependencyCollector collector, string name, string origin)
+	{
+		if (collector.IncludeParsed(ContentKey(name), origin, RibbonStyle.Parse) is { Surface: not "" } style)
+			collector.Add(new ContentRef<SurfaceContent>(style.Surface), $"{origin} -> ribbon style '{name}'");
 	}
 }
 
@@ -159,6 +160,19 @@ public sealed class ContentDependencyCollector
 		if (key.Length == 0 || key.Split('/').Contains(".."))
 			throw new InvalidDataException($"Invalid content path '{key}' from {origin}.");
 		return files.TryAdd(key, origin);
+	}
+
+	// Includes key and parses it from disk, since runtime registries aren't loaded while a pak is built.
+	// Null when already included or missing (Validate reports missing files).
+	public T? IncludeParsed<T>(string key, string origin, Func<string, T> parse) where T : class
+	{
+		if (!IncludeFile(key, origin))
+			return null;
+		var path = Path.Join(Assets.AssetsPath, key.Replace('/', Path.DirectorySeparatorChar));
+		if (!File.Exists(path))
+			return null;
+		try { return parse(File.ReadAllText(path)); }
+		catch (Exception exception) { throw new InvalidDataException($"Could not parse '{key}' referenced by {origin}.", exception); }
 	}
 
 	public bool Includes(string key) => files.ContainsKey(key);

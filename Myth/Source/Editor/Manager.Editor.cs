@@ -1949,7 +1949,7 @@ public partial class Manager
 		=> string.Equals(ActorSpecs.GetTypeName(actor), nameof(CurveRibbon), StringComparison.OrdinalIgnoreCase);
 
 	static Vector2 CurvePathPoint(JsonArray? nodes, int count, int segment, float t)
-		=> CurveRibbon.Sample(
+		=> Ribbon.CatmullRom(
 			PointPathPoint(nodes, Math.Max(0, segment - 1)),
 			PointPathPoint(nodes, segment),
 			PointPathPoint(nodes, segment + 1),
