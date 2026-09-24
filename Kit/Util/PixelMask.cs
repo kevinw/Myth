@@ -6,8 +6,21 @@ namespace Kit;
 // One flag per pixel over Bounds, in the owner's local pixel coordinates.
 public sealed class PixelMask(RectInt bounds)
 {
-	public readonly RectInt Bounds = bounds;
-	readonly bool[] pixels = new bool[bounds.Width * bounds.Height];
+	public RectInt Bounds { get; private set; } = bounds;
+	bool[] pixels = new bool[bounds.Width * bounds.Height];
+
+	// Aim an existing mask at new bounds and clear it, keeping the buffer whenever it is already big
+	// enough. A shape rebuilt every frame -- a CurveRibbon whose Grow is animating -- would otherwise
+	// allocate its entire mask per frame; reused, it settles at the largest it has ever needed.
+	public void Reset(RectInt bounds)
+	{
+		var needed = bounds.Width * bounds.Height;
+		if (pixels.Length < needed)
+			pixels = new bool[needed];
+		else
+			Array.Clear(pixels, 0, needed);
+		Bounds = bounds;
+	}
 
 	public bool this[Point2 pixel] => Bounds.Contains(pixel) && pixels[Index(pixel.X, pixel.Y)];
 

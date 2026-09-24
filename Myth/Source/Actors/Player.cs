@@ -320,6 +320,7 @@ public abstract partial class Pawn : Actor
 		if (input.JumpPressed)
 			jumpBufferTimer = JumpBufferTime;
 
+		FollowDeformingGround();
 		RefreshGrounded(previousVelocity);
 		if (!grounded)
 		{
@@ -455,16 +456,72 @@ public abstract partial class Pawn : Actor
 		state.Update(State == States.Roll && RollingDownSlope() ? 0 : Time.Delta);
 	}
 
+	// A surface that deforms under us -- a root growing or shrinking -- moves a pixel or two a frame.
+	// Left alone that reads as a fall: the ground thins away and we land again one pixel lower,
+	// stamping a landing sound every time, or it swells into us and a jumpthru we now overlap stops
+	// counting as ground at all, so we drop straight through. Instead, step back onto the surface we
+	// were already standing on and keep the contact. Rising is always safe to follow, so it gets more
+	// room than dropping -- past the drop limit the root really has pulled away, and letting go is
+	// the honest outcome.
+	// Budgets are in surface-normal pixels: how far the surface itself may travel and still carry us.
+	static float GroundFollowRise => 3;
+	static float GroundFollowDrop => 2;
+	// How much a surface must face up to be followed at all (1 flat, 0 vertical). ~72 degrees.
+	static float GroundFollowMinFacing => 0.3f;
+
+	Actor? groundActor;
+
+	void FollowDeformingGround()
+	{
+		if (groundActor is not { } ground || !grounded || Velocity.Y < 0 ||
+			State is States.Burrow or States.Climb || StandsOn(ground, 0))
+			return;
+
+		// The surface moves along its own normal, but we can only probe straight up and down: on a
+		// slope, a normal step of n pixels reads as n / cos(theta) vertically. Convert the budget
+		// through the normal so a steep root gets the same real tolerance a flat one does -- without
+		// it a swelling slope outruns a fixed vertical budget and drops the rider through.
+		var facing = Math.Clamp(-ground.SurfaceNormalAt(Position).Y, GroundFollowMinFacing, 1);
+		var rise = (int)MathF.Ceiling(GroundFollowRise / facing);
+		var drop = (int)MathF.Ceiling(GroundFollowDrop / facing);
+
+		for (var step = 1; step <= rise; step++)
+			if (StandsOn(ground, -step))
+			{
+				MovePixels(new Point2(0, -step));
+				return;
+			}
+		for (var step = 1; step <= drop; step++)
+			if (StandsOn(ground, step))
+			{
+				MovePixels(new Point2(0, step));
+				return;
+			}
+	}
+
+	// Actor.GroundActor's test against one actor, with us shifted dy pixels.
+	bool StandsOn(Actor ground, int dy)
+	{
+		var at = new Point2(0, dy);
+		return OverlapsAny(at + Point2.Down, ground)
+			&& !(ground.Mask.Has(Masks.Jumpthru) && OverlapsAny(at, ground));
+	}
+
 	void RefreshGrounded(Vector2 previousVelocity)
 	{
 		// While burrowing the player rides the surface as a point; skip the normal
 		// grounded/landing machinery so it doesn't re-trigger landings mid-burrow.
-		var nowGrounded = State != States.Burrow && State != States.Climb && Velocity.Y >= 0 && Grounded();
+		groundActor = GroundActor();
+		var nowGrounded = State != States.Burrow && State != States.Climb && Velocity.Y >= 0 &&
+			(groundActor != null || Game.OverlapsRoomCollision(this, Point2.Down));
 		if (nowGrounded && !grounded && !TryBurrowOnLanding(previousVelocity))
 			OnLanded(previousVelocity);
 		grounded = nowGrounded;
 		if (!grounded)
+		{
+			groundActor = null;
 			return;
+		}
 
 		coyoteJumpTimer = CoyoteJumpTime;
 		coyoteJumpY = Position.Y;

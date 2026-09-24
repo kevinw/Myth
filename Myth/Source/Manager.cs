@@ -435,8 +435,58 @@ public partial class Manager : App
 
 	void QuitNow()
 	{
+		// A dev host keeps one App for the life of the host. Ending the session instead would mean
+		// building a second Manager in this process, which renders with shaders the first one's
+		// Dispose already destroyed -- and tearing the process down costs a full rebuild before the
+		// next Play. So quitting parks the window here and a later run request wakes it.
+		if (args.devHost)
+		{
+			DevHostIdle = true;
+			Audio.SetPaused(true);
+			devHostFullscreen = Window?.Fullscreen ?? false;
+			if (devHostFullscreen)
+				Window!.Fullscreen = false;
+			HideWhileIdle();
+			return;
+		}
+
 		UserQuitRequested = true;
 		Exit();
+	}
+
+	// Parked by QuitNow, woken by the dev host's `run`. Wakes into the state a fresh launch with
+	// these args would have reached, so Play stays predictable however the last session ended.
+	internal bool DevHostIdle { get; private set; }
+	bool devHostFullscreen;
+	bool devHostHidden;
+
+	// Hiding a window that is still fullscreen leaves its macOS Space behind -- a black desktop you
+	// can swipe to with nothing in it. Drop out of fullscreen first and hide only once SDL reports
+	// the (animated) exit finished, which is why this is retried from the idle tick.
+	void HideWhileIdle()
+	{
+		if (devHostHidden || Window is not { Fullscreen: false } window)
+			return;
+		window.Hide();
+		devHostHidden = true;
+	}
+
+	internal void DevHostWake()
+	{
+		DevHostIdle = false;
+		devHostHidden = false;
+		Audio.SetPaused(false);
+		if (Window is { } window)
+		{
+			window.Show();
+			window.Fullscreen = devHostFullscreen;
+		}
+		if (playOnStartup)
+			StartGame(immediate: true);
+#if EDITOR
+		else if (playing)
+			StopGame();
+#endif
 	}
 
 	internal static bool DOTNET_WATCH = Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1";
@@ -1213,7 +1263,7 @@ public partial class Manager : App
 		UpdateGame();
 		ScenarioUpdate?.Invoke(this);
 #if !BROWSER
-		DevHost.Pump(this);
+		UpdateDevCommands();
 #endif
 		Audio.Update();
 	}
@@ -1221,6 +1271,15 @@ public partial class Manager : App
 	void UpdateGame()
 	{
 		using var updatePerf = PerfStats.Time(PerfStat.Update);
+
+#if !BROWSER
+		if (DevHostIdle)
+		{
+			HideWhileIdle();
+			Thread.Sleep(BackgroundSleepMilliseconds);
+			return;
+		}
+#endif
 
 		if (Time.Seconds >= args.maxTimeSeconds)
 		{
@@ -1952,7 +2011,7 @@ public partial class Manager : App
 			return;
 
 #if !BROWSER
-		if (backgroundSuspended)
+		if (backgroundSuspended || DevHostIdle)
 			return;
 #endif
 

@@ -5,6 +5,7 @@
   "ambientColor": "201F1F",
   "sporeFogStrength": 0.745,
   "sporeFogColor": "FFB651",
+  "ditherStrength": 0.1,
   "sun": {
     "strength": 0,
     "color": "FFE5B7",
@@ -53,8 +54,8 @@
   ],
   "backgroundTiles": [
     "0000000000000000ppppppp0000ppppppppp00000000pppppp",
-    "0000000000000000ppppppp0000ppppppppp00000000pppppp",
-    "0000000000000000ppppppp0000ppppppppp00000000pppppp",
+    "0000000000000000ppppppp0p00ppppppppp00000000pppppp",
+    "0000000000000000pppppppp000ppppppppp00000000pppppp",
     "0000000000000000ppppppp0000ppppppppp00000000pppppp",
     "0000000000000000ppppppp0000ppppppppp00000000pppppp",
     "0000000000000000ppppppp0000ppppppppp00000000pppppp",
@@ -95,7 +96,6 @@
       "Type": "CurveRibbon",
       "Position": [174, 124],
       "BranchWidth": 0.05,
-      "Collision": "Top",
       "Width": 44.836,
       "Layer": "Foreground",
       "Points": [[240, -24],[112, -56],[56, -24],[8, -48],[-80, -40],[-8, 136]
@@ -103,7 +103,9 @@
       "BranchLength": 21.564,
       "SurfaceOverride": "curve-root",
       "Roundness": 1,
-      "Bulge": 2.718
+      "Bulge": 2.718,
+      "Grow": 0.282,
+      "Collision": "Solid"
     },
     {
       "Id": "62ab6bb5614b35e8",
@@ -131,6 +133,12 @@
       "Intensity": 0.852,
       "LightColor": "FDFDFD",
       "FlickerIntensity": 0.025
+    },
+    {
+      "Id": "3217e351a7ede2f5",
+      "Type": "CurveControl",
+      "Position": [250, 116],
+      "TargetActorId": "194b86b67121c54f"
     }
   ]
 }

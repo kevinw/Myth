@@ -57,6 +57,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 	readonly List<Vector2> collisionSpine = [];
 	readonly List<Vector2> collisionTrimmed = [];
 	readonly List<RibbonEdge> collisionEdges = [];
+	readonly PixelMask collisionMask = new(new RectInt());
 	CollisionKey builtCollisionKey;
 	readonly List<RibbonEdge> spineEdges = [];
 	readonly List<float> spineTwist = []; // turn angle per spine edge, empty when untwisted
@@ -332,14 +333,34 @@ public class CurveRibbon : PointPathActor, IActivatable
 			min = Vector2.Min(min, Vector2.Min(edge.Left, edge.Right));
 			max = Vector2.Max(max, Vector2.Max(edge.Left, edge.Right));
 		}
-		var mask = new PixelMask(RectInt.Between(min.FloorToPoint2(), max.CeilingToPoint2()));
+		// Reused rather than rebuilt: an animating Grow rebuilds this every frame.
+		collisionMask.Reset(RectInt.Between(min.FloorToPoint2(), max.CeilingToPoint2()));
 		for (var i = 1; i < collisionEdges.Count; i++)
 		{
 			var (previous, current) = (collisionEdges[i - 1], collisionEdges[i]);
-			mask.FillTriangle(previous.Left, previous.Right, current.Left);
-			mask.FillTriangle(current.Left, previous.Right, current.Right);
+			collisionMask.FillTriangle(previous.Left, previous.Right, current.Left);
+			collisionMask.FillTriangle(current.Left, previous.Right, current.Right);
 		}
-		Hitbox = new(mask);
+		Hitbox = new(collisionMask);
+	}
+
+	// The collision cross-section nearest this point, oriented upward. Growth moves the surface along
+	// this normal, so a rider needs it to know how much vertical travel a given swell really means.
+	public override Vector2 SurfaceNormalAt(Point2 worldPosition)
+	{
+		EnsureGeometry();
+		var local = (Vector2)(worldPosition - Position);
+		var nearest = float.PositiveInfinity;
+		var normal = -Vector2.UnitY;
+		foreach (var edge in collisionEdges)
+		{
+			var distance = Vector2.DistanceSquared(edge.Center, local);
+			if (distance >= nearest)
+				continue;
+			nearest = distance;
+			normal = edge.Side.Y > 0 ? -edge.Side : edge.Side;
+		}
+		return normal;
 	}
 
 	// Branches sprout to full size over BranchLength behind the growth front.
@@ -424,7 +445,8 @@ public class CurveRibbon : PointPathActor, IActivatable
 
 	// Positions across the strip (-1 right edge, +1 left edge) that carry their own normal, so a high
 	// Bulge curves across the face instead of interpolating flat between edge and center.
-	static ReadOnlySpan<float> NormalColumns => [-1, -0.5f, 0, 0.5f, 1];
+	static readonly float[] normalColumns = [-1, -0.5f, 0, 0.5f, 1];
+	static ReadOnlySpan<float> NormalColumns => normalColumns;
 
 	static Vector2 Across(RibbonEdge edge, float u) => edge.Center + edge.Side * edge.HalfWidth * u;
 

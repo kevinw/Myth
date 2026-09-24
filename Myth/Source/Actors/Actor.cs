@@ -311,11 +311,16 @@ public class Actor
 	}
 
 	/// Checks if we're on the Ground
-	public bool Grounded()
-	{
-		if (Game.OverlapsRoomCollision(this, Point2.Down))
-			return true;
+	public bool Grounded() => Game.OverlapsRoomCollision(this, Point2.Down) || GroundActor() != null;
 
+	// Which way the surface we present faces at a world position. Boxes and tiles face straight up;
+	// anything with real geometry (see CurveRibbon) answers from it. Used to size how far a rider
+	// follows a surface that moves -- see Pawn.FollowDeformingGround.
+	public virtual Vector2 SurfaceNormalAt(Point2 worldPosition) => -Vector2.UnitY;
+
+	// The actor holding us up, or null when that's room geometry (or nothing at all).
+	public Actor? GroundActor()
+	{
 		foreach (var other in CollisionActors)
 		{
 			if (other is Grid && other.Mask.Has(Masks.Solid))
@@ -330,10 +335,10 @@ public class Actor
 			if (other.Mask.Has(Masks.Jumpthru) && OverlapsAny(Point2.Zero, other))
 				continue;
 
-			return true;
+			return other;
 		}
 
-		return false;
+		return null;
 	}
 
 	/// Moves a single Pixel

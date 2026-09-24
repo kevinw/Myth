@@ -18,6 +18,18 @@ static class DevHost
 
 	public static void Run(StartArgs args)
 	{
+		// The pipe name is derived from the working directory, so only one host per directory can own
+		// it -- a second would silently steal the name and commands would land on whichever bound
+		// last. Ask the pipe rather than the pid file: the pipe is what a command actually reaches,
+		// and the file can be stale or name a process that no longer holds it. Separate worktrees
+		// hash to different names and still coexist.
+		if (TrySend("status", out var owner))
+		{
+			Console.Error.WriteLine($"Myth dev host is already running for this directory. {owner}");
+			Environment.ExitCode = 1;
+			return;
+		}
+
 		Directory.CreateDirectory(Path.GetDirectoryName(pidPath)!);
 		File.WriteAllText(pidPath, Environment.ProcessId.ToString());
 		File.Delete(runRequestPath);
@@ -36,25 +48,20 @@ static class DevHost
 
 		try
 		{
-			while (true)
-			{
-				runRequested.WaitOne();
-				Volatile.Write(ref sessionState, 2);
-				Console.WriteLine("Starting Myth session.");
-				var manager = Manager.Create(args);
-				PlatformSpecific.ManagerSetup(manager);
-				manager.Run();
-				PlatformSpecific.ManagerCleanup(manager);
-				while (pending.TryDequeue(out var stale))
-					stale.Reply.TrySetResult("error: the Myth session closed.");
-				if (manager.UserQuitRequested)
-				{
-					Console.WriteLine("Game quit requested; stopping Myth dev host.");
-					return;
-				}
-				Volatile.Write(ref sessionState, 0);
-				Console.WriteLine("Myth session closed; dev host remains ready.");
-			}
+			// One App for the life of the host. Quitting the game parks it (Manager.QuitNow) rather
+			// than returning here, because a second Manager in this process renders with shaders the
+			// first one's Dispose destroyed -- and exiting would make the next Play wait on a rebuild.
+			runRequested.WaitOne();
+			Volatile.Write(ref sessionState, 2);
+			Console.WriteLine("Starting Myth session.");
+			var manager = Manager.Create(args);
+			PlatformSpecific.ManagerSetup(manager);
+			manager.Run();
+			PlatformSpecific.ManagerCleanup(manager);
+			Volatile.Write(ref sessionState, 0);
+			while (pending.TryDequeue(out var stale))
+				stale.Reply.TrySetResult("error: the Myth session closed.");
+			Console.WriteLine("Myth dev host stopped.");
 		}
 		finally
 		{
@@ -131,12 +138,13 @@ static class DevHost
 			await writer.WriteLineAsync(command switch
 			{
 				"run" when Interlocked.CompareExchange(ref sessionState, 1, 0) == 0 => QueueRun(),
-				"run" => "Myth is already running.",
+				"run" when Volatile.Read(ref sessionState) == 1 => "Myth is starting.",
+				"run" => await OnGameThread("wake"),
 				"status" => Volatile.Read(ref sessionState) switch
 				{
-					0 => "Myth dev host is ready.",
-					1 => "Myth is starting.",
-					_ => "Myth is running.",
+					0 => $"Myth dev host is ready (PID {Environment.ProcessId}).",
+					1 => $"Myth is starting (PID {Environment.ProcessId}).",
+					_ => $"Myth is running (PID {Environment.ProcessId}).",
 				},
 				_ => await OnGameThread(command),
 			});

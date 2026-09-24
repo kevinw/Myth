@@ -1590,6 +1590,13 @@ public partial class Game : IDisposable
 		return null;
 	}
 
+	public T? GetActorById<T>(string actorId) where T : Actor
+	{
+		var actor = GetActorById(actorId);
+		if (actor is T) return actor as T; // TODO: better way to phrase this i'm sure
+		return default(T);
+	}
+
 	public Actor? GetActorById(string actorId)
 	{
 		foreach (var it in Actors)
