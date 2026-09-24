@@ -216,8 +216,9 @@ public sealed class ReachField
 			var feet = new Point2(tx + Game.TileSize / 2, ty + Game.TileSize);
 			if (!water[feet + BodyCenter])
 				continue;
+			// A pawn only crouches in water standing on the bottom, so a cell too low to swim through upright needs floor.
 			var ducking = Solid(Body + feet);
-			if (!ducking || !Solid(DuckBody + feet))
+			if (!ducking || !Solid(DuckBody + feet) && Grounded(feet, DuckBody))
 			{
 				swimAt[new(tx, ty)] = Nodes.Count;
 				Nodes.Add(new(feet, NodeKind.Swim, Ducking: ducking));
@@ -375,7 +376,7 @@ public sealed class ReachField
 				for (var i = 0; i < Nodes.Count; i++)
 				{
 					var delta = Nodes[i].Position - p;
-					if (Nodes[i].Kind == NodeKind.Stand && Math.Abs(delta.X) <= 16 && delta.Y is >= -24 and <= 8)
+					if (Nodes[i].Kind == NodeKind.Stand && Math.Abs(delta.X) <= 16 && delta.Y is >= -24 and <= 8 && ClearPath(p, Nodes[i].Position))
 						AddEdge(index, i, -1, p, 0, SwimExitCost);
 				}
 				break;
@@ -437,16 +438,36 @@ public sealed class ReachField
 		if (sweep.RopeNode >= 0 && !(Nodes[index].Kind == NodeKind.Rope && Nodes[sweep.RopeNode].Side == Nodes[index].Side))
 			AddEdge(index, sweep.RopeNode, moveIndex, start, sweep.RopeFrame, sweep.RopeFrame * ReachMoves.Dt + RopePenalty);
 
-		var extra = 0f;
+		var walk = 0f;
 		var to = sweep.Hit switch
 		{
-			Hit.Land => LandingStand(sweep.At, out extra),
+			Hit.Land => LandingStand(sweep.At, out walk),
 			Hit.Wall => WallNode(sweep.At, sweep.Side),
 			Hit.Water => SwimNodeAt(sweep.At),
 			_ => -1,
 		};
 		if (to >= 0 && to != index)
-			AddEdge(index, to, moveIndex, start, sweep.Frame, sweep.Frame * ReachMoves.Dt + penalty + extra);
+			AddEdge(index, to, moveIndex, start, sweep.Frame, sweep.Frame * ReachMoves.Dt + penalty + walk +
+				(sweep.Hit == Hit.Land && SlidesOff(move, sweep) ? KnifeEdgePenalty : 0));
+	}
+
+	// Even braking hard (a small input caps speed at 2000px/s²), a landing carries on a few px: off a narrow
+	// ledge, that's a fall.
+	bool SlidesOff(ReachMove move, Sweep landing)
+	{
+		var speed = (move.Offsets[landing.Frame].X - move.Offsets[landing.Frame - 1].X) / ReachMoves.Dt;
+		var dir = Math.Sign(speed);
+		var p = landing.At;
+		var crawl = false;
+		for (var n = (int)(speed * speed / 4000) + 2; n > 0 && dir != 0; n--)
+		{
+			var step = WalkStep(ref p, dir, ref crawl);
+			if (step == Step.Off)
+				return true;
+			if (step == Step.Blocked)
+				return false;
+		}
+		return false;
 	}
 
 	bool KnifeEdge(Edge edge)
@@ -556,6 +577,13 @@ public sealed class ReachField
 			return Grounded(p, Body);
 		ducking = true;
 		return !Solid(DuckBody + p) && Grounded(p, DuckBody);
+	}
+
+	// Up out of the water first, then across: the way a swimmer climbs out onto a ledge.
+	bool ClearPath(Point2 from, Point2 to)
+	{
+		var corner = new Point2(from.X, Math.Min(from.Y, to.Y));
+		return !Solid((Body + from).Conflate(Body + corner)) && !Solid((Body + corner).Conflate(Body + to));
 	}
 
 	// Above the raster the room's top row carries on up, as it does for room collision.

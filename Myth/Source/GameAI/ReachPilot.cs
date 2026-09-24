@@ -222,12 +222,14 @@ public sealed class ReachPilot(Pawn owner)
 			node = field.NearestNode(at, Game.TileSize * 2);
 		if (node < 0 || Settled(field, node, out var edge))
 			return default;
-		var delta = field.Nodes[edge.To].Position - p;
+		var to = field.Nodes[edge.To];
+		var delta = to.Position - p;
+		var crouch = (to.Ducking || field.Nodes[node].Ducking) && Math.Abs(delta.Y) <= 2; // along a low passage
 		strokeTimer -= owner.Time.Delta;
 		var stroke = delta.Y < -2 && strokeTimer <= 0;
 		if (stroke)
 			strokeTimer = SwimStrokeInterval;
 		Label = "swim";
-		return new(Math.Clamp(delta.X / 8f, -1, 1), delta.Y > 2 ? 1 : 0, stroke, stroke, false);
+		return new(Math.Clamp(delta.X / 8f, -1, 1), delta.Y > 2 || crouch ? 1 : 0, stroke && !crouch, stroke && !crouch, false);
 	}
 }
