@@ -25,6 +25,7 @@ public sealed class ReachPilot(Pawn owner)
 	ReachField.Node intended; // where the move should have ended up
 	Point2 edgeStart;
 	bool strayed;
+	int bonk; // past here the recording no longer describes the path
 	bool checkStray;
 	bool release;   // a drop through a jumpthru or off a rope starts with down+jump
 	bool released;
@@ -78,7 +79,7 @@ public sealed class ReachPilot(Pawn owner)
 			k > 0 && owner.InWater ||
 			k > recorded.GroundedFrames + 1 && owner.IsGrounded)
 			return false;
-		if (checkStray && k > 0)
+		if (checkStray && k > 0 && (bonk == 0 || k < bonk))
 		{
 			var off = owner.Position - (moveStart + recorded.Offsets[k]);
 			if (Math.Abs(off.X) > StrayTolerance || Math.Abs(off.Y) > StrayTolerance)
@@ -107,6 +108,7 @@ public sealed class ReachPilot(Pawn owner)
 		lastFrame = -1;
 		moveFrames = edge.Frames;
 		intended = field.Nodes[edge.To];
+		bonk = edge.Bonk;
 		edgeStart = edge.Start;
 		strayed = false;
 		toRope = intended.Kind == ReachField.NodeKind.Rope;

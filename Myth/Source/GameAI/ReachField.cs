@@ -14,15 +14,16 @@ public sealed class ReachField
 	public enum NodeKind { Stand, Wall, Swim, Rope }
 	// Side: which way a Stand's lip drops off, the wall a Wall node touches, or a Rope node's rope.
 	public readonly record struct Node(Point2 Position, NodeKind Kind, int Side = 0, bool Ducking = false);
-	// Move indexes Moves, swept from Start for Frames; -1 walks, crawls, climbs or swims straight to To.
-	public readonly record struct Edge(int From, int To, int Move, Point2 Start, int Frames, float Cost);
+	// Move indexes Moves, swept from Start for Frames; -1 walks, crawls, climbs or swims straight to To. Bonk is
+	// the frame the move hits its head, after which it falls from there instead of following its recording.
+	public readonly record struct Edge(int From, int To, int Move, Point2 Start, int Frames, float Cost, int Bonk = 0);
 
 	enum Hit { None, Invalid, Land, Wall, Water, Dead }
 	struct Sweep
 	{
 		public Hit Hit;
 		public Point2 At;
-		public int Frame, Side, RopeNode, RopeFrame, TouchFrame;
+		public int Frame, Side, RopeNode, RopeFrame, TouchFrame, Bonk;
 	}
 
 	enum Step { Walked, Off, Blocked }
@@ -75,6 +76,7 @@ public sealed class ReachField
 	readonly List<(Vector2 Point, int Node)> ropePoints = [];
 	readonly Dictionary<int, int> edgeTo = []; // cheapest edge so far from the node being expanded, by destination
 	readonly List<int> runups = [];
+	ReachMove fall = null!; // straight down from rest: how a bonked head comes back down
 	float[] cost = [];
 	int[] best = [];
 	int[] touchFrame = []; // > 0 where the target is reached partway through the node's best move
@@ -98,6 +100,7 @@ public sealed class ReachField
 			foreach (var move in Moves)
 				if (move.Runup > 0 && !runups.Contains(move.Runup))
 					runups.Add(move.Runup);
+			fall = Moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: 0 });
 		}
 
 		refreshTimer -= game.Time.Delta;
@@ -436,7 +439,7 @@ public sealed class ReachField
 		var sweep = SweepMove(move, start, fromRope, null);
 		var penalty = move.Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.Kick ? JumpPenalty : FallPenalty;
 		if (sweep.RopeNode >= 0 && !(Nodes[index].Kind == NodeKind.Rope && Nodes[sweep.RopeNode].Side == Nodes[index].Side))
-			AddEdge(index, sweep.RopeNode, moveIndex, start, sweep.RopeFrame, sweep.RopeFrame * ReachMoves.Dt + RopePenalty);
+			AddEdge(index, sweep.RopeNode, moveIndex, start, sweep.RopeFrame, sweep.RopeFrame * ReachMoves.Dt + RopePenalty, sweep.Bonk);
 
 		var walk = 0f;
 		var to = sweep.Hit switch
@@ -448,7 +451,7 @@ public sealed class ReachField
 		};
 		if (to >= 0 && to != index)
 			AddEdge(index, to, moveIndex, start, sweep.Frame, sweep.Frame * ReachMoves.Dt + penalty + walk +
-				(sweep.Hit == Hit.Land && SlidesOff(move, sweep) ? KnifeEdgePenalty : 0));
+				(sweep.Hit == Hit.Land && SlidesOff(move, sweep) ? KnifeEdgePenalty : 0), sweep.Bonk);
 	}
 
 	// Even braking hard (a small input caps speed at 2000px/s²), a landing carries on a few px: off a narrow
@@ -482,16 +485,16 @@ public sealed class ReachField
 		return false;
 	}
 
-	void AddEdge(int from, int to, int move, Point2 start, int frames, float edgeCost)
+	void AddEdge(int from, int to, int move, Point2 start, int frames, float edgeCost, int bonk = 0)
 	{
 		if (edgeTo.TryGetValue(to, out var existing))
 		{
 			if (Edges[existing].Cost > edgeCost)
-				Edges[existing] = new(from, to, move, start, frames, edgeCost);
+				Edges[existing] = new(from, to, move, start, frames, edgeCost, bonk);
 			return;
 		}
 		edgeTo[to] = Edges.Count;
-		Edges.Add(new(from, to, move, start, frames, edgeCost));
+		Edges.Add(new(from, to, move, start, frames, edgeCost, bonk));
 	}
 
 	// The stand a landing belongs to: an existing one a short walk along the surface, or a new one right there.
@@ -642,9 +645,12 @@ public sealed class ReachField
 		var p = start;
 		var offsets = move.Offsets;
 		var body = move.Crawl ? DuckBody : Body;
+		var bonkY = 0;
 		for (var k = 1; k < offsets.Length; k++)
 		{
 			var next = start + offsets[k];
+			if (result.Bonk > 0)
+				next.Y = bonkY + fall.Offsets[Math.Min(k - result.Bonk, fall.Offsets.Length - 1)].Y;
 			if (k <= move.GroundedFrames)
 			{
 				if (Solid(body + next) || !Grounded(next, body))
@@ -686,8 +692,11 @@ public sealed class ReachField
 						break;
 					if (Solid(body + p + new Point2(0, dy)))
 					{
-						if (dy < 0)
-							return Stop(ref result, Hit.Invalid, p, k);
+						if (dy < 0 && result.Bonk == 0)
+						{
+							result.Bonk = k;
+							bonkY = p.Y;
+						}
 						break;
 					}
 				}
