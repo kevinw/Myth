@@ -11,6 +11,7 @@ public class Boss : Pawn
 	private const float ThrowInterval = 4.0f;
 	private const float ThrowPauseTime = 0.55f;
 	private const int MaxHealth = 8;
+	static ReachManner Manner => new(WindupMin: 0.05f, WindupMax: 0.3f, MissHesitation: 0.1f);
 
 	// Wall-jump escape: when the player crowds the boss and there's a wall on his
 	// far side, he leaps at that wall, clings, then wall-jumps back over the
@@ -53,7 +54,7 @@ public class Boss : Pawn
 
 	public Boss()
 	{
-		pilot = new(this);
+		pilot = new(this, () => Manner);
 		Sprite = Assets.GetSprite("bud");
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Mask = Masks.Enemy;

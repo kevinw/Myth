@@ -20,6 +20,18 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	static float FallRespawnDelay => 3f;
 	static float BurrowPopDelay => 0.25f;
 	static float BurrowPopInputMirrorTime => 0.25f;
+	// He gathers himself briefly for a sure thing and visibly longer for a risky leap, and longer still for
+	// one that's already failed him.
+	static ReachManner Manner => new(WindupMin: 0.06f, WindupMax: 0.5f, MissHesitation: 0.3f);
+	static Vector2 WindupCrouch => new(1.25f, 0.75f);
+	static float RiskTremble => 0.12f;
+	static float TrembleRate => 55f;
+	static Vector2 MissFlinch => new(1.35f, 0.7f);
+	// This long without a way to the player and he says so; with them overhead, he looks up at them.
+	static float StuckPatience => 2.5f;
+	static int LookUpHeight => Game.TileSize * 2;
+	int missesSeen;
+	bool frettedAboutReach;
 	readonly ReachPilot pilot;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
@@ -69,7 +81,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 	public Bud()
 	{
-		pilot = new(this);
+		pilot = new(this, () => Manner);
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = Depths.BehindPlayer;
 		Play("idle");
@@ -239,10 +251,13 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		if (TryWalkInFromEntrance(out var enterX, out var enterY))
 			return new(enterX, enterY, false, false, false);
 		var input = Game.reach.Field is { } field ? pilot.GetInput(field) : default;
-		if (input.MoveX == 0 && State == States.Normal &&
-			(Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>()) is { } faceTarget &&
-			Math.Sign(faceTarget.Position.X - Position.X) is var face and not 0)
+		var target = Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>();
+		// Gathering for a move he looks where he's going; otherwise at whoever he's after.
+		var look = pilot.Phase is ReachPilot.Phases.Winding or ReachPilot.Phases.Timing ? pilot.Heading : target?.Position;
+		if (input.MoveX == 0 && State == States.Normal && look is { } at && Math.Sign(at.X - Position.X) is var face and not 0)
 			Facing = face;
+		if (pilot.Phase == ReachPilot.Phases.Stuck && grounded && target != null && Position.Y - target.Position.Y > LookUpHeight)
+			input = input with { MoveY = -1 };
 		return input;
 	}
 
@@ -320,7 +335,32 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			BeginFallRespawn();
 		}
 
+		ExpressReach();
 		UpdatePlayerLight();
+	}
+
+	// Shows what the pilot is up to: a crouch that deepens through a windup (and so counts down to a moving
+	// platform's arrival), a tremble as big as the risk, a flinch at a missed move, and a word when he's stuck.
+	void ExpressReach()
+	{
+		if (pilot.Phase is ReachPilot.Phases.Winding or ReachPilot.Phases.Timing)
+		{
+			Squish = Vector2.Lerp(Vector2.One, WindupCrouch, Ease.Cube.In(pilot.Windup));
+			Skew = pilot.Risk * RiskTremble * MathF.Sin(Time.SecondsF * TrembleRate);
+		}
+		if (pilot.Misses != missesSeen)
+		{
+			missesSeen = pilot.Misses;
+			Squish = MissFlinch;
+			Game.TryBudStorylet("bud_missed_move");
+		}
+		if (pilot.StuckTime < StuckPatience)
+			frettedAboutReach = false;
+		else if (!frettedAboutReach)
+		{
+			frettedAboutReach = true;
+			Game.TryBudStorylet("bud_cant_reach");
+		}
 	}
 
 	void UpdatePlayerLight()

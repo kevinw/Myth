@@ -18,8 +18,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	// the typical Wait for the platform to come round. A weight-activated one only boards where it rests.
 	internal sealed record Ride(MovingPlatform Platform, List<Point2> Phases, int RestPhase, float Wait);
 	// Move indexes Moves, swept from Start for Frames; -1 walks, crawls, climbs or swims straight to To. Bonk is
-	// the frame the move hits its head, after which it falls from there instead of following its recording.
-	public readonly record struct Edge(int From, int To, int Move, Point2 Start, int Frames, float Cost, int Bonk = 0);
+	// the frame the move hits its head, after which it falls from there instead of following its recording. Risk,
+	// 0 to 1, is how much could go wrong: a narrow landing, a head bonk, a long drop, a moving target.
+	public readonly record struct Edge(int From, int To, int Move, Point2 Start, int Frames, float Cost, int Bonk = 0, float Risk = 0);
 
 	enum Hit { None, Invalid, Land, Wall, Water, Dead }
 	struct Sweep
@@ -41,6 +42,13 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	static float KnifeEdgePenalty => 1f;
 	// Each time a move is tried from a spot and doesn't arrive, it costs this much more (for this room visit).
 	static float MissPenalty => 1.5f;
+	static float KnifeEdgeRisk => 0.5f;
+	static float SlideOffRisk => 0.3f;
+	static float BonkRisk => 0.2f;
+	static float BoardingRisk => 0.3f;
+	// A drop past DropRiskStart px adds risk at this much per px.
+	static float DropRiskStart => 32f;
+	static float DropRiskPerPx => 1 / 96f;
 	static float WalkSpeed => Pawn.MaxGroundSpeed;
 	static float CrawlSpeed => 28f;
 	static float SwimSpeed => Pawn.MaxGroundSpeed * Pawn.WaterHorizontalSpeedMultiplier;
@@ -86,6 +94,8 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	int[] incoming = [];
 	readonly PriorityQueue<int, float> queue = new();
 	int sweeps;
+
+	public int MissCount(Point2 start, int move) => misses.GetValueOrDefault((start, move));
 
 	public void ReportMiss(Point2 start, int move)
 	{
@@ -207,8 +217,13 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		}
 		for (var e = 0; e < Edges.Count; e++)
 		{
-			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && KnifeEdge(edge))
-				Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty };
+			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && Margins(edge) is var (knife, tooShort))
+			{
+				if (tooShort)
+					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty * 2, Risk = 1 };
+				else if (knife)
+					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty, Risk = MathF.Min(1, edge.Risk + KnifeEdgeRisk) };
+			}
 			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
 			{
 				longestSlice = Math.Max(longestSlice, sliced);
@@ -475,7 +490,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 					continue;
 				var slot = Math.Clamp((sweep.At.X - ghost.X) / Game.TileSize, 0, platform.Size.X / Game.TileSize - 1);
 				if (rideAt.TryGetValue((ride, phase, slot), out var to))
-					AddEdge(from, to, m, node.Position, sweep.Frame, sweep.Frame * ReachMoves.Dt + JumpPenalty + Rides[ride].Wait, sweep.Bonk);
+					AddEdge(from, to, m, node.Position, sweep.Frame, sweep.Frame * ReachMoves.Dt + JumpPenalty + Rides[ride].Wait, sweep.Bonk, BoardingRisk);
 			}
 		}
 		ghost = default;
@@ -572,9 +587,13 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			Hit.Water => SwimNodeAt(sweep.At),
 			_ => -1,
 		};
-		if (to >= 0 && to != index)
-			AddEdge(index, to, moveIndex, start, sweep.Frame, sweep.Frame * ReachMoves.Dt + penalty + walk +
-				(sweep.Hit == Hit.Land && SlidesOff(move, sweep) ? KnifeEdgePenalty : 0), sweep.Bonk);
+		if (to < 0 || to == index)
+			return;
+		var slides = sweep.Hit == Hit.Land && SlidesOff(move, sweep);
+		var risk = (slides ? SlideOffRisk : 0) + (sweep.Bonk > 0 ? BonkRisk : 0) +
+			MathF.Max(0, sweep.At.Y - start.Y - DropRiskStart) * DropRiskPerPx;
+		AddEdge(index, to, moveIndex, start, sweep.Frame, sweep.Frame * ReachMoves.Dt + penalty + walk + (slides ? KnifeEdgePenalty : 0),
+			sweep.Bonk, MathF.Min(1, risk));
 	}
 
 	// Only a landing a few px from where its surface ends can be knocked off it by a pixel's error.
@@ -612,30 +631,32 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		return false;
 	}
 
-	bool KnifeEdge(Edge edge)
+	// Near a lip, would the landing survive the arc running a pixel off either way, or two px low? An arc that only
+	// just tops a ledge (or a jumpthru, at its apex) is a coin flip on the pawn's sub-pixel remainder.
+	(bool Knife, bool Short) Margins(Edge edge)
 	{
 		var landing = Nodes[edge.To].Position;
 		if (!NearLip(landing))
-			return false;
-		foreach (var shift in (ReadOnlySpan<Point2>)[Point2.Left, Point2.Right, Point2.Down])
+			return default;
+		return (!Holds(Point2.Left) || !Holds(Point2.Right), !Holds(new(0, 2)));
+
+		bool Holds(Point2 shift)
 		{
 			var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, null, shift);
-			if (sweep.Hit != Hit.Land || Math.Abs(sweep.At.Y - landing.Y) > 2 || Math.Abs(sweep.At.X - landing.X) > Game.TileSize)
-				return true;
+			return sweep.Hit == Hit.Land && Math.Abs(sweep.At.Y - landing.Y) <= 2 && Math.Abs(sweep.At.X - landing.X) <= Game.TileSize;
 		}
-		return false;
 	}
 
-	void AddEdge(int from, int to, int move, Point2 start, int frames, float edgeCost, int bonk = 0)
+	void AddEdge(int from, int to, int move, Point2 start, int frames, float edgeCost, int bonk = 0, float risk = 0)
 	{
 		if (edgeTo.TryGetValue(to, out var existing))
 		{
 			if (Edges[existing].Cost > edgeCost)
-				Edges[existing] = new(from, to, move, start, frames, edgeCost, bonk);
+				Edges[existing] = new(from, to, move, start, frames, edgeCost, bonk, risk);
 			return;
 		}
 		edgeTo[to] = Edges.Count;
-		Edges.Add(new(from, to, move, start, frames, edgeCost, bonk));
+		Edges.Add(new(from, to, move, start, frames, edgeCost, bonk, risk));
 	}
 
 	// The stand a landing belongs to: an existing one a short walk along the surface, or a new one right there.
@@ -808,7 +829,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			if (k == move.GroundedFrames + 1 && move.Kind == ReachMove.Kinds.WalkOff &&
 				(Solid(body + next) || Grounded(next, body)))
 				return Stop(ref result, Hit.Invalid, p, k);
-			var descending = next.Y >= p.Y;
+			// Level at the top of the arc still counts as rising until the recording heads down: the pawn only lands
+			// once it's falling.
+			var descending = next.Y > p.Y || next.Y == p.Y && result.Bonk == 0 && (k + 1 >= offsets.Length || offsets[k + 1].Y >= offsets[k].Y);
 			var swept = (body + p).Conflate(body + next);
 			if (descending)
 				swept = new RectInt(swept.X, swept.Y, swept.Width, swept.Height + 1);

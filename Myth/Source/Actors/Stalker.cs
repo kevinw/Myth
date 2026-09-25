@@ -57,6 +57,8 @@ public class Stalker : Pawn, INeuralTextureAgent
 	[I(1, 12)] public float RigNeuralJostleRadius = 5;
 
 	static float TelegraphTime => 0.9f;
+	// Relentless but fair: it always stops to set itself before a leap, long enough for the player to read.
+	static ReachManner Manner => new(WindupMin: 0.25f, WindupMax: 0.7f, MissHesitation: 0);
 
 	readonly ReachPilot pilot;
 	ReachSense? sense;
@@ -83,7 +85,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	public Stalker()
 	{
-		pilot = new(this);
+		pilot = new(this, () => Manner);
 		rigVisual = new(this);
 		rigVisual.Settings.TurnWhileMoving = true;
 		rigVisual.Settings.CoreColor = new(0x4b334f);
