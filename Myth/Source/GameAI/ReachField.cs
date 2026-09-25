@@ -1113,9 +1113,15 @@ public sealed class ReachSense(ReachBody body)
 {
 	static float RefreshInterval => 0.25f;
 	static double BuildBudgetMs => 2;
+	// Until there is a field the pawn has no idea where it can go, so a cold build spends more of each frame:
+	// nothing is in use to go stale, and the frames it lands on are a room transition's anyway.
+	// 8ms is as much as fits a 60fps frame: the floor for a slice is one SweepMove, which is 5-7ms for a long
+	// arc in a Debug build.
+	static double ColdBudgetMs => 8;
 	// REACH_REBUILD=1 rebuilds every refresh, to profile a build warm.
 	static readonly bool AlwaysRebuild = Environment.GetEnvironmentVariable("REACH_REBUILD") == "1";
-	static readonly double? Budget = double.TryParse(Environment.GetEnvironmentVariable("REACH_BUDGET"), out var b) ? b : null;
+	// REACH_SLICE=1 makes the gym slice as it would in play; nothing else exercises the sliced path.
+	static readonly bool AlwaysSlice = Environment.GetEnvironmentVariable("REACH_SLICE") == "1";
 
 	public ReachField? Field { get; private set; }
 	ReachField? next;
@@ -1144,10 +1150,12 @@ public sealed class ReachSense(ReachBody body)
 			refreshTimer = RefreshInterval;
 			next ??= new(body, moves, misses);
 			next.Rasterize(game, room);
-			// The gym runs unthrottled and must build on the same frame every run; REACH_BUDGET forces it to
-			// slice there anyway, since nothing else exercises the sliced path.
+			// The gym runs unthrottled and must build on the same frame every run.
 			if (Field == null || AlwaysRebuild || !next.SameAs(Field))
-				building = next.Build(game, Budget ?? (game.Manager.Unthrottled ? double.PositiveInfinity : BuildBudgetMs)).GetEnumerator();
+			{
+				var budget = Field == null ? ColdBudgetMs : BuildBudgetMs;
+				building = next.Build(game, game.Manager.Unthrottled && !AlwaysSlice ? double.PositiveInfinity : budget).GetEnumerator();
+			}
 		}
 		if (building != null && !building.MoveNext())
 		{
