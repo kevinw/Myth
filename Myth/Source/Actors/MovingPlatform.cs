@@ -18,7 +18,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 	const float WAIT_TIME = 0.856f;
 	[I(5, 160)] public float Speed = 30f;
 	[I(0, 24)] public float StartFriction = 8f;
-	float currentSpeed;
 	[I(8, 512)] public int TravelDistance = 80;
 	[I(1f, 5f)] public float ReverseSpeedMultiplier = 1f;
 	public bool ActivatedByWeight;
@@ -40,13 +39,18 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 
 	// Room-local center of the circular orbit. Null places the initial authoring handle below us.
 	public Point2? CircleCenter { get; set; }
-	int direction;
-	float circleAngle;
-	Vector2 circleOffset;
+	// Where we are along the route, apart from Position. Advance steps it the same way for Update and for
+	// PredictPosition, so a prediction is the real thing run ahead.
+	struct Motion
+	{
+		public int Direction;
+		public float Speed, Wait, CircleAngle;
+		public Vector2 CircleOffset;
+		public Vector2 Remainder; // sub-pixel travel accumulator (we move in whole pixels)
+	}
+	Motion motion = new() { Wait = WAIT_TIME };
 	Vector2 circleCenterOffset;
-	float waitTimer = WAIT_TIME;
 	bool activationLightsOn;
-	Vector2 moveRemainder;             // sub-pixel travel accumulator (we move in whole pixels)
 	static readonly List<Actor> riders = [];  // reusable scratch: actors standing on top this frame
 	Point2 originalPosition;
 	RectInt routeBounds;
@@ -56,9 +60,9 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 	internal Point2 NavStartPosition => routeBounds.TopLeft;
 	internal float NavRouteLength => TravelDistance;
 	internal float NavRoutePosition => Math.Clamp(Position.X - routeBounds.Left, 0, TravelDistance);
-	internal int NavRouteDirection => direction;
-	internal bool NavWaiting => waitTimer > 0;
-	internal float NavVelocityX => waitTimer > 0 ? 0 : direction * currentSpeed;
+	internal int NavRouteDirection => motion.Direction;
+	internal bool NavWaiting => motion.Wait > 0;
+	internal float NavVelocityX => motion.Wait > 0 ? 0 : motion.Direction * motion.Speed;
 
 	static Cardinal? StartingDirection(MovementMode mode, Signs facing) => mode switch
 	{
@@ -84,11 +88,11 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 		// hitbox here to match the authored footprint rather than the construction-time default.
 		Hitbox = new Hitbox(new RectInt(0, 0, Size.X, Size.Y));
 		originalPosition = Position;
-		waitTimer = WaitTime;
+		motion.Wait = WaitTime;
 		activationLightsOn = !ActivatedByWeight || Mode == MovementMode.Circle;
 		if (StartingDirection(Mode, Facing) is { } startingDirection)
 		{
-			direction = Facing;
+			motion.Direction = Facing;
 			routeBounds = RectInt.Between(originalPosition, originalPosition + startingDirection * TravelDistance);
 		}
 		var platformCenter = (Vector2)Position + (Vector2)Size / 2;
@@ -129,106 +133,110 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 
 			var forward = (int)Facing;
 			var heading = activationLightsOn ? forward : ReturnsWhenUnweighted ? -forward : 0;
-			if (heading == 0 || IsAtRouteEnd(heading))
+			if (heading == 0 || IsAtRouteEnd(Position, heading))
 			{
 				Park();
 				return;
 			}
-			if (heading != direction)
+			if (heading != motion.Direction)
 			{
-				direction = heading;
+				motion.Direction = heading;
 				Park(); // the wait plays out before we set off the other way
 			}
 		}
 		else
 			activationLightsOn = true;
 
-		if (waitTimer > 0)
-		{
-			waitTimer -= Time.Delta;
-			if (waitTimer <= 0) {
-				moveSound?.Stop();
-				moveSound = Game.CreateAudioEvent("moving_stone", Position);
-				moveSound?.Start();
-			}
-			return;
-		}
-
-		float mult = direction == -1 ? ReverseSpeedMultiplier : 1f;
-		currentSpeed = Calc.Approach(currentSpeed, Speed * mult, StartFriction * Time.Delta * mult);
-		switch (Mode) {
-			case MovementMode.Circle:
-				MoveCircle(currentSpeed * Time.Delta);
-				break;
-			case MovementMode.Horizontal:
-			case MovementMode.Vertical:
-				MoveStraight(currentSpeed * Time.Delta);
-				break;
-		}
-
-		if (moveSound != null) {
-			Game.SetAudioEventPosition(moveSound, Position);
-		}
-	}
-
-	void MoveStraight(float distance)
-	{
-		// Accumulate fractional travel and move in whole pixels, clamped to the patrol range so
-		// the platform and its riders never drift apart by rounding.
-		moveRemainder += (Mode == MovementMode.Vertical ? Vector2.UnitY : Vector2.UnitX) * direction * distance;
-		var step = (Position + TakeMoveStep()).Clamp(routeBounds) - Position;
-
+		var wasWaiting = motion.Wait > 0;
+		var step = Advance(ref motion, Position, Time.Delta);
 		if (step != Point2.Zero)
 			MoveSolid(step);
-
-		if (IsAtRouteEnd(direction))
+		if (wasWaiting && motion.Wait <= 0)
 		{
-			moveRemainder = Vector2.Zero;
-			currentSpeed = 0;
-			StopAndReleaseSound(ref moveSound, false);
-			if (ActivatedByWeight)
-				return; // Update turns us around when the weight on top changes
-
-			waitTimer = WaitTime;
-			direction = -direction;
+			moveSound?.Stop();
+			moveSound = Game.CreateAudioEvent("moving_stone", Position);
+			moveSound?.Start();
 		}
+		else if (!wasWaiting && motion.Speed == 0)
+			StopAndReleaseSound(ref moveSound, false); // arrived at a route end
+		if (moveSound != null)
+			Game.SetAudioEventPosition(moveSound, Position);
+	}
+
+	// Where we'll be after this long, left to ourselves: the same stepping Update does, on a copy. A
+	// weight-activated platform nobody is standing on stays put (or heads home, which it predicts the same).
+	internal Point2 PredictPosition(float seconds)
+	{
+		if (ActivatedByWeight && Mode != MovementMode.Circle && !activationLightsOn)
+			return Position;
+		var ahead = motion;
+		var position = Position;
+		const float Step = 1f / 60;
+		for (var t = 0f; t < seconds; t += Step)
+			position += Advance(ref ahead, position, MathF.Min(Step, seconds - t));
+		return position;
+	}
+
+	// Steps the route by dt: the wait at each end, the speed ramp, and whole-pixel travel along the line or
+	// around the circle. Returns how far to move.
+	Point2 Advance(ref Motion m, Point2 position, float dt)
+	{
+		if (m.Wait > 0)
+		{
+			m.Wait -= dt;
+			return Point2.Zero;
+		}
+
+		var mult = m.Direction == -1 ? ReverseSpeedMultiplier : 1f;
+		m.Speed = Calc.Approach(m.Speed, Speed * mult, StartFriction * dt * mult);
+		var distance = m.Speed * dt;
+		if (Mode == MovementMode.Circle)
+		{
+			var radiusVector = -circleCenterOffset;
+			var radius = radiusVector.Length();
+			if (radius <= 0)
+				return Point2.Zero;
+			m.CircleAngle = Calc.AngleWrap(m.CircleAngle + distance / radius);
+			var nextOffset = circleCenterOffset + Calc.AngleToVector(radiusVector.Angle() + m.CircleAngle, radius);
+			m.Remainder += nextOffset - m.CircleOffset;
+			m.CircleOffset = nextOffset;
+			return TakeMoveStep(ref m);
+		}
+
+		// Clamped to the patrol range so the platform and its riders never drift apart by rounding.
+		m.Remainder += (Mode == MovementMode.Vertical ? Vector2.UnitY : Vector2.UnitX) * m.Direction * distance;
+		var step = (position + TakeMoveStep(ref m)).Clamp(routeBounds) - position;
+		if (IsAtRouteEnd(position + step, m.Direction))
+		{
+			m.Remainder = Vector2.Zero;
+			m.Speed = 0;
+			if (!ActivatedByWeight) // weight-activated: Update turns us around when the weight on top changes
+			{
+				m.Wait = WaitTime;
+				m.Direction = -m.Direction;
+			}
+		}
+		return step;
 	}
 
 	// Only the bound we're heading toward ends the leg — checking both would trip the min
 	// bound instantly, since the platform starts there.
-	bool IsAtRouteEnd(int heading)
-		=> Position == (heading > 0 ? routeBounds.BottomRight : routeBounds.TopLeft);
+	bool IsAtRouteEnd(Point2 position, int heading)
+		=> position == (heading > 0 ? routeBounds.BottomRight : routeBounds.TopLeft);
 
 	// Sit still with the departure wait armed, so the next leg starts from a standstill.
 	void Park()
 	{
-		waitTimer = WaitTime;
-		currentSpeed = 0;
-		moveRemainder = Vector2.Zero;
+		motion.Wait = WaitTime;
+		motion.Speed = 0;
+		motion.Remainder = Vector2.Zero;
 		StopAndReleaseSound(ref moveSound, false);
 	}
 
-	void MoveCircle(float distance)
+	static Point2 TakeMoveStep(ref Motion m)
 	{
-		var radiusVector = -circleCenterOffset;
-		var radius = radiusVector.Length();
-		if (radius <= 0)
-			return;
-
-		circleAngle = Calc.AngleWrap(circleAngle + distance / radius);
-		var nextOffset = circleCenterOffset + Calc.AngleToVector(radiusVector.Angle() + circleAngle, radius);
-		moveRemainder += nextOffset - circleOffset;
-		circleOffset = nextOffset;
-
-		var step = TakeMoveStep();
-		if (step != Point2.Zero)
-			MoveSolid(step);
-	}
-
-	Point2 TakeMoveStep()
-	{
-		var step = (Point2)moveRemainder;
-		moveRemainder -= (Vector2)step;
+		var step = (Point2)m.Remainder;
+		m.Remainder -= (Vector2)step;
 		return step;
 	}
 
