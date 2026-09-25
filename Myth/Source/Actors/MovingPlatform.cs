@@ -163,6 +163,35 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 			Game.SetAudioEventPosition(moveSound, Position);
 	}
 
+	// The route for navigation: top-left positions about `spacing` px of travel apart, in the order we travel them
+	// (a circle's evenly spaced around it).
+	internal void RoutePoints(List<Point2> into, int spacing)
+	{
+		into.Clear();
+		if (Mode == MovementMode.Circle)
+		{
+			var radiusVector = -circleCenterOffset;
+			var radius = radiusVector.Length();
+			var count = Math.Max(4, (int)(MathF.Tau * radius / spacing));
+			for (var i = 0; i < count; i++)
+				into.Add(originalPosition + (circleCenterOffset + Calc.AngleToVector(radiusVector.Angle() + MathF.Tau * i / count, radius)).RoundToPoint2());
+			return;
+		}
+		var span = routeBounds.BottomRight - routeBounds.TopLeft;
+		var steps = Math.Max(1, (int)MathF.Round(TravelDistance / (float)spacing));
+		for (var i = 0; i <= steps; i++)
+			into.Add(routeBounds.TopLeft + (span * i / (float)steps).RoundToPoint2());
+	}
+
+	internal bool Circles => Mode == MovementMode.Circle;
+	internal bool WaitsForWeight => ActivatedByWeight && Mode != MovementMode.Circle;
+	internal bool Parked => motion.Wait > 0 || motion.Speed == 0;
+
+	// Roughly how long one full cycle of the route takes.
+	internal float RoutePeriod => Mode == MovementMode.Circle
+		? MathF.Tau * (-circleCenterOffset).Length() / Speed
+		: TravelDistance / Speed * (1 + 1 / ReverseSpeedMultiplier) + WaitTime * 2;
+
 	// Where we'll be after this long, left to ourselves: the same stepping Update does, on a copy. A
 	// weight-activated platform nobody is standing on stays put (or heads home, which it predicts the same).
 	internal Point2 PredictPosition(float seconds)

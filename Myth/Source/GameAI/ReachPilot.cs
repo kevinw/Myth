@@ -14,6 +14,7 @@ public sealed class ReachPilot(Pawn owner)
 	static float CrawlSpeed => 28f;
 	static float SwimStrokeInterval => 0.25f;
 	static int RopeBoardTolerance => 3;
+	static int PlatformTolerance => 3;
 
 	public string Label { get; private set; } = "";
 	int move = -1;
@@ -47,6 +48,8 @@ public sealed class ReachPilot(Pawn owner)
 			return Swim(field, p, p);
 		if (!owner.IsGrounded)
 			return Air(field, p);
+		if (owner.GroundActor() is MovingPlatform platform)
+			return Ride(field, platform, p);
 		var node = field.StandNear(p, Game.TileSize * 2, out _);
 		if (node < 0)
 		{
@@ -126,6 +129,7 @@ public sealed class ReachPilot(Pawn owner)
 		{
 			ReachField.NodeKind.Stand => owner.IsGrounded && Math.Abs(off.X) <= Game.TileSize + 2 && Math.Abs(off.Y) <= 3,
 			ReachField.NodeKind.Rope => owner.State == Pawn.States.Climb,
+			ReachField.NodeKind.Ride => owner.IsGrounded && owner.GroundActor() is MovingPlatform,
 			ReachField.NodeKind.Swim => owner.InWater,
 			_ => !owner.IsGrounded && Math.Abs(off.X) <= 1 && Math.Abs(off.Y) <= 3,
 		};
@@ -156,7 +160,14 @@ public sealed class ReachPilot(Pawn owner)
 			{
 				var takeoff = field.Nodes[edge.From].Position;
 				if (at == node && p == takeoff && owner.Velocity.X == 0)
+				{
+					if (field.Nodes[edge.To] is { Kind: ReachField.NodeKind.Ride } boarding && !OnTime(field, boarding, edge.Frames))
+					{
+						Label = "timing";
+						return default;
+					}
 					return Start(field, edge, edge.Start, false);
+				}
 				target = takeoff;
 				break;
 			}
@@ -170,6 +181,39 @@ public sealed class ReachPilot(Pawn owner)
 		}
 		Label = "walk";
 		return Arrive(p, target, crawl);
+	}
+
+	// Will the platform be where this landing needs it, `frames` from now?
+	static bool OnTime(ReachField field, ReachField.Node ride, int frames)
+	{
+		var off = field.Rides[ride.Side].Platform.PredictPosition(frames * ReachMoves.Dt) - field.RidePhase(ride);
+		return Math.Abs(off.X) <= PlatformTolerance && Math.Abs(off.Y) <= PlatformTolerance;
+	}
+
+	// Standing on a moving platform: keep to the route's spot on it (or walk along it) while it carries us, and
+	// jump off when it reaches the phase the next move leaves from.
+	PawnInput Ride(ReachField field, MovingPlatform platform, Point2 p)
+	{
+		if (field.RideNodeNear(platform, p) is not (var node and >= 0))
+		{
+			Label = "no ride";
+			return default;
+		}
+		var here = field.Nodes[node];
+		var slot = here.Position.X - field.RidePhase(here).X;
+		if (Settled(field, node, out var edge))
+			return field.Cost(node) == 0 ? Arrive(p, platform.Position + new Point2(slot, 0), false) : default;
+		if (edge.Move >= 0)
+		{
+			var off = platform.Position - field.RidePhase(here);
+			if (Math.Abs(off.X) <= PlatformTolerance && Math.Abs(off.Y) <= PlatformTolerance && p.X - platform.Position.X == slot)
+				return Start(field, edge, p, false);
+			Label = "ride to jump";
+			return Arrive(p, platform.Position + new Point2(slot, 0), false);
+		}
+		var to = field.Nodes[edge.To];
+		Label = "ride";
+		return Arrive(p, platform.Position + new Point2(to.Phase == here.Phase ? to.Position.X - field.RidePhase(to).X : slot, 0), false);
 	}
 
 	// Full speed, easing off to come to rest on the target pixel.

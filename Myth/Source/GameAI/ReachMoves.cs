@@ -22,6 +22,8 @@ public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runu
 	// Offsets[k] is where Inputs[k - 1] left the body; Offsets[0] is the start.
 	public readonly Point2[] Offsets = offsets;
 	public readonly PawnInput[] Inputs = inputs;
+	// Everywhere the body goes along the whole recording, relative to the start.
+	public readonly RectInt Reach = offsets.Aggregate(new RectInt(-4, -12, 8, 12), (reach, offset) => reach.Conflate(new RectInt(-4, -12, 8, 12) + offset));
 }
 
 public static class ReachMoves

@@ -10,9 +10,13 @@ namespace Myth;
 // gives every spot its cost to reach it. ReachSense keeps one current as the room changes.
 public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, int Move), int> misses)
 {
-	public enum NodeKind { Stand, Wall, Swim, Rope }
-	// Side: which way a Stand's lip drops off, the wall a Wall node touches, or a Rope node's rope.
-	public readonly record struct Node(Point2 Position, NodeKind Kind, int Side = 0, bool Ducking = false);
+	public enum NodeKind { Stand, Wall, Swim, Rope, Ride }
+	// Side: which way a Stand's lip drops off, the wall a Wall node touches, a Rope node's rope, or a Ride node's
+	// ride. Phase: where along its route the ride's platform is.
+	public readonly record struct Node(Point2 Position, NodeKind Kind, int Side = 0, bool Ducking = false, int Phase = 0);
+	// A moving platform sampled along its route. Its top at each phase is a row of Ride nodes; boarding one costs
+	// the typical Wait for the platform to come round. A weight-activated one only boards where it rests.
+	internal sealed record Ride(MovingPlatform Platform, List<Point2> Phases, int RestPhase, float Wait);
 	// Move indexes Moves, swept from Start for Frames; -1 walks, crawls, climbs or swims straight to To. Bonk is
 	// the frame the move hits its head, after which it falls from there instead of following its recording.
 	public readonly record struct Edge(int From, int To, int Move, Point2 Start, int Frames, float Cost, int Bonk = 0);
@@ -48,6 +52,8 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 	static int MaxNodes => 6000;
 	const int RasterMargin = 4; // tiles
 	static int TouchSearchRadius => 200;
+	static int RidePhaseSpacing => 12;
+	static int BoardReach => 160;
 	static readonly bool LogBuilds = Environment.GetEnvironmentVariable("LOG_REACH") == "1";
 
 	public readonly List<Node> Nodes = [];
@@ -67,6 +73,9 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 	readonly Dictionary<(int X, int Y, int Side), int> wallAt = [];
 	readonly List<int> ropeNodes = [];
 	readonly List<(Vector2 Point, int Node)> ropePoints = [];
+	internal readonly List<Ride> Rides = [];
+	readonly Dictionary<(int Ride, int Phase, int Slot), int> rideAt = [];
+	RectInt ghost; // a platform's footprint at one phase, solid while sweeping for landings on it
 	readonly Dictionary<int, int> edgeTo = []; // cheapest edge so far from the node being expanded, by destination
 	readonly List<int> runups = [.. moves.Where(move => move.Runup > 0).Select(move => move.Runup).Distinct()];
 	readonly ReachMove fall = moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: 0 }); // how a bonked head comes back down
@@ -161,6 +170,8 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 				hash.Add(rope.Broken);
 				hash.Add(rope.GrabPoints.Length);
 			}
+			else if (actor is MovingPlatform { WaitsForWeight: true, Parked: true } platform)
+				hash.Add(platform.Position);
 		return hash.ToHashCode();
 	}
 
@@ -174,6 +185,19 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 		for (var i = 0; i < Nodes.Count; i++)
 		{
 			Expand(i);
+			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
+			{
+				longestSlice = Math.Max(longestSlice, sliced);
+				yield return false;
+				slice = Stopwatch.GetTimestamp();
+			}
+		}
+		for (var ride = 0; ride < Rides.Count; ride++)
+		for (var phase = 0; phase < Rides[ride].Phases.Count; phase++)
+		{
+			if (Rides[ride].RestPhase is var rest and >= 0 && phase != rest)
+				continue;
+			Board(ride, phase);
 			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
 			{
 				longestSlice = Math.Max(longestSlice, sliced);
@@ -253,6 +277,29 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 				if (ropeNodes.Count > 0 && Nodes[ropeNodes[^1]].Side == ropeId)
 					ropePoints.Add((points[i], ropeNodes[^1]));
 			}
+		}
+
+		Rides.Clear();
+		rideAt.Clear();
+		foreach (var actor in game.Actors)
+		{
+			if (actor is not MovingPlatform { Visible: true } platform || !platform.Mask.Has(Actor.Masks.Solid) ||
+				platform.Room != null && platform.Room != game.room)
+				continue;
+			var phases = new List<Point2>();
+			platform.RoutePoints(phases, RidePhaseSpacing);
+			var rest = platform.WaitsForWeight ? NearestPhase(phases, platform.Position) : -1;
+			var ride = Rides.Count;
+			Rides.Add(new(platform, phases, rest, platform.WaitsForWeight ? 0 : platform.RoutePeriod / 2));
+			for (var phase = 0; phase < phases.Count; phase++)
+				for (var slot = 0; slot * Game.TileSize + Game.TileSize <= platform.Size.X; slot++)
+				{
+					var feet = phases[phase] + new Point2(slot * Game.TileSize + Game.TileSize / 2, 0);
+					if (Solid(Body + feet) || Nodes.Count >= MaxNodes)
+						continue;
+					rideAt[(ride, phase, slot)] = Nodes.Count;
+					Nodes.Add(new(feet, NodeKind.Ride, ride, Phase: phase));
+				}
 		}
 
 		for (var x = bounds.Left + Game.TileSize / 2; x < bounds.Right; x += Game.TileSize)
@@ -355,6 +402,28 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 						TryMove(index, m, p, true);
 				break;
 
+			case NodeKind.Ride:
+				var ride = Rides[node.Side];
+				var slot = SlotOf(node);
+				foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
+					if (rideAt.TryGetValue((node.Side, node.Phase, slot + dir), out var beside))
+						AddEdge(index, beside, -1, p, 0, Game.TileSize / WalkSpeed);
+				// Riding on: a back-and-forth route goes both ways, a circle onward; a weight-activated one only out.
+				var count = ride.Phases.Count;
+				foreach (var step in (ReadOnlySpan<int>)[1, -1])
+				{
+					if (step < 0 && (ride.Platform.Circles || ride.RestPhase >= 0))
+						continue;
+					var next = ride.Platform.Circles ? (node.Phase + step + count) % count : node.Phase + step;
+					if (next >= 0 && next < count && rideAt.TryGetValue((node.Side, next, slot), out var onward))
+						AddEdge(index, onward, -1, p, 0, Vector2.Distance(ride.Phases[node.Phase], ride.Phases[next]) / ride.Platform.Speed);
+				}
+				// Off again: jumps that take off straight away, so the platform's carry doesn't matter.
+				for (var m = 0; m < Moves.Count; m++)
+					if (Moves[m] is { Kind: ReachMove.Kinds.Jump, GroundedFrames: 0 })
+						TryMove(index, m, p, false);
+				break;
+
 			case NodeKind.Swim:
 				var tile = TileOf(p - new Point2(0, 1));
 				for (var dy = -1; dy <= 1; dy++)
@@ -376,6 +445,68 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 				}
 				break;
 		}
+	}
+
+	// Moves from nearby spots that land on the platform's top at this phase.
+	void Board(int ride, int phase)
+	{
+		var platform = Rides[ride].Platform;
+		ghost = new RectInt(Rides[ride].Phases[phase], platform.Size);
+		var near = ghost.Inflate(BoardReach);
+		for (var from = 0; from < Nodes.Count; from++)
+		{
+			var node = Nodes[from];
+			if (!near.Contains(node.Position) || node.Kind is NodeKind.Ride or NodeKind.Swim || node.Ducking)
+				continue;
+			edgeTo.Clear();
+			for (var m = 0; m < Moves.Count; m++)
+			{
+				var move = Moves[m];
+				var fits = node.Kind switch
+				{
+					NodeKind.Stand => move.Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.WalkOff && !move.Crawl,
+					NodeKind.Wall => move.Kind == ReachMove.Kinds.Kick && move.Dir == node.Side,
+					_ => move is { Kind: ReachMove.Kinds.Jump, GroundedFrames: 0 },
+				};
+				if (!fits || !(move.Reach + node.Position).Overlaps(ghost))
+					continue;
+				var sweep = SweepMove(move, node.Position, node.Kind == NodeKind.Rope, null);
+				if (sweep.Hit != Hit.Land || !new RectInt(sweep.At.X + Body.Left, sweep.At.Y, Body.Width, 1).Overlaps(ghost))
+					continue;
+				var slot = Math.Clamp((sweep.At.X - ghost.X) / Game.TileSize, 0, platform.Size.X / Game.TileSize - 1);
+				if (rideAt.TryGetValue((ride, phase, slot), out var to))
+					AddEdge(from, to, m, node.Position, sweep.Frame, sweep.Frame * ReachMoves.Dt + JumpPenalty + Rides[ride].Wait, sweep.Bonk);
+			}
+		}
+		ghost = default;
+	}
+
+	static int NearestPhase(List<Point2> phases, Point2 at)
+	{
+		var nearest = 0;
+		for (var i = 1; i < phases.Count; i++)
+			if ((phases[i] - at).LengthSquared() < (phases[nearest] - at).LengthSquared())
+				nearest = i;
+		return nearest;
+	}
+
+	int SlotOf(Node node) => (node.Position.X - Rides[node.Side].Phases[node.Phase].X) / Game.TileSize;
+
+	// Where a Ride node's platform has to be for it: its top-left at that phase.
+	public Point2 RidePhase(Node node) => Rides[node.Side].Phases[node.Phase];
+
+	// The Ride node for feet standing on a platform, at whichever phase it's nearest now.
+	internal int RideNodeNear(MovingPlatform platform, Point2 feet)
+	{
+		var ride = Rides.FindIndex(ride => ride.Platform == platform);
+		if (ride < 0)
+			return -1;
+		var phase = NearestPhase(Rides[ride].Phases, platform.Position);
+		var slot = Math.Clamp((feet.X - platform.Position.X) / Game.TileSize, 0, platform.Size.X / Game.TileSize - 1);
+		foreach (var nudge in (ReadOnlySpan<int>)[0, -1, 1])
+			if (rideAt.TryGetValue((ride, phase, slot + nudge), out var node))
+				return node;
+		return -1;
 	}
 
 	void WalkEdge(int index, int dir)
@@ -604,7 +735,7 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 	{
 		if (rect.Top < bounds.Top)
 			rect = new RectInt(rect.X, bounds.Top, rect.Width, Math.Max(1, rect.Bottom - bounds.Top));
-		return solid.Any(rect);
+		return solid.Any(rect) || ghost.Width > 0 && rect.Overlaps(ghost);
 	}
 
 	// Actor.Grounded on the raster: solid underfoot, or a jumpthru underfoot that the body isn't already inside.
@@ -844,6 +975,9 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 			var p = (Vector2)node.Position;
 			switch (node.Kind)
 			{
+				case NodeKind.Ride:
+					batcher.Rect(new Rect(p.X - 1, p.Y - 2, 2, 2), color * 0.6f);
+					break;
 				case NodeKind.Stand:
 					batcher.Rect(new Rect(p.X - 1.5f, p.Y - 3, 3, 3), color);
 					if (node.Side != 0)
