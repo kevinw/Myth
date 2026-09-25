@@ -269,7 +269,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		{
 			if (TryWalkInFromEntrance(out var enterX, out var enterY))
 				return new(enterX, enterY, false, false, false);
-			var reach = pilot.GetInput(Game.reachField);
+			var reach = Game.reach.Field is { } field ? pilot.GetInput(field) : default;
 			if (reach.MoveX == 0 && State == States.Normal &&
 				(Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>()) is { } faceTarget &&
 				Math.Sign(faceTarget.Position.X - Position.X) is var face and not 0)

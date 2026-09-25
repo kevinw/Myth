@@ -4,12 +4,11 @@ using Foster.Framework;
 
 namespace Myth;
 
-// Bud's sense of where he can get to in the room as it is right now. The live room collision (tiles, solid and
-// jumpthru actors, ribbon pixel masks) is rasterized into SummedMasks; standing spots are found on that raster;
-// recorded ReachMoves are swept from each spot to see where they end up; then a Dijkstra run backwards from the
-// target gives every spot its cost to reach it. The raster is re-checked every RefreshInterval and everything
-// rebuilds when it differs, so opened doors, grown ribbons and broken tiles are simply part of the next build.
-public sealed class ReachField
+// Where a pawn can get to in the room as it was when rasterized. The room collision (tiles, solid and jumpthru
+// actors, ribbon pixel masks) is rasterized into SummedMasks; standing spots are found on that raster; recorded
+// ReachMoves are swept from each spot to see where they end up; then a Dijkstra run backwards from the target
+// gives every spot its cost to reach it. ReachSense keeps one current as the room changes.
+public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, int Move), int> misses)
 {
 	public enum NodeKind { Stand, Wall, Swim, Rope }
 	// Side: which way a Stand's lip drops off, the wall a Wall node touches, or a Rope node's rope.
@@ -31,7 +30,6 @@ public sealed class ReachField
 	static RectInt Body => new(-4, -12, 8, 12);
 	static RectInt DuckBody => new(-4, -6, 8, 6);
 	static Point2 BodyCenter => new(0, -6);
-	static float RefreshInterval => 0.25f;
 	static float JumpPenalty => 0.1f;
 	static float FallPenalty => 0.05f;
 	static float RopePenalty => 0.2f;
@@ -50,22 +48,17 @@ public sealed class ReachField
 	static int MaxNodes => 6000;
 	const int RasterMargin = 4; // tiles
 	static int TouchSearchRadius => 200;
-	// REACH_REBUILD=1 rebuilds every refresh, to profile a build warm.
-	static readonly bool AlwaysRebuild = Environment.GetEnvironmentVariable("REACH_REBUILD") == "1";
+	static readonly bool LogBuilds = Environment.GetEnvironmentVariable("LOG_REACH") == "1";
 
 	public readonly List<Node> Nodes = [];
 	public readonly List<Edge> Edges = [];
-	public List<ReachMove> Moves { get; private set; } = [];
+	public List<ReachMove> Moves => moves;
 	public RectInt? Target { get; private set; }
-	public double BuildMs { get; private set; }
 	public float Cost(int node) => cost[node];
 	public int BestEdge(int node) => best[node];
 
-	SummedMask solid = new(), jumpthru = new(), water = new();
-	SummedMask nextSolid = new(), nextJumpthru = new(), nextWater = new();
-	Room? builtRoom;
-	int builtRopes;
-	float refreshTimer;
+	readonly SummedMask solid = new(), jumpthru = new(), water = new();
+	int ropes; // a signature of the room's ropes, which aren't in the raster
 	bool solved;
 	RectInt bounds;
 	int roomBottom;
@@ -75,15 +68,14 @@ public sealed class ReachField
 	readonly List<int> ropeNodes = [];
 	readonly List<(Vector2 Point, int Node)> ropePoints = [];
 	readonly Dictionary<int, int> edgeTo = []; // cheapest edge so far from the node being expanded, by destination
-	readonly List<int> runups = [];
-	ReachMove fall = null!; // straight down from rest: how a bonked head comes back down
+	readonly List<int> runups = [.. moves.Where(move => move.Runup > 0).Select(move => move.Runup).Distinct()];
+	readonly ReachMove fall = moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: 0 }); // how a bonked head comes back down
 	float[] cost = [];
 	int[] best = [];
 	int[] touchFrame = []; // > 0 where the target is reached partway through the node's best move
 	int[] incomingStart = [];
 	int[] incoming = [];
 	readonly PriorityQueue<int, float> queue = new();
-	readonly Dictionary<(Point2 Start, int Move), int> misses = [];
 	int sweeps;
 
 	public void ReportMiss(Point2 start, int move)
@@ -92,60 +84,29 @@ public sealed class ReachField
 		solved = false;
 	}
 
-	public void Update(Game game, Room room, RectInt target)
+	// Following a moving target only re-solves once it has moved a few px.
+	public void SolveFor(RectInt target)
 	{
-		if (Moves.Count == 0)
-		{
-			Moves = ReachMoves.Record(game);
-			foreach (var move in Moves)
-				if (move.Runup > 0 && !runups.Contains(move.Runup))
-					runups.Add(move.Runup);
-			fall = Moves.First(move => move is { Kind: ReachMove.Kinds.Fall, Steer: 0 });
-		}
-
-		refreshTimer -= game.Time.Delta;
-		if (room != builtRoom || refreshTimer <= 0)
-		{
-			refreshTimer = RefreshInterval;
-			Rasterize(game, room);
-			var ropes = RopeSignature(game);
-			if (room != builtRoom || ropes != builtRopes || AlwaysRebuild || !nextSolid.SamePixels(solid) ||
-				!nextJumpthru.SamePixels(jumpthru) || !nextWater.SamePixels(water))
-			{
-				(solid, nextSolid) = (nextSolid, solid);
-				(jumpthru, nextJumpthru) = (nextJumpthru, jumpthru);
-				(water, nextWater) = (nextWater, water);
-				if (room != builtRoom)
-					misses.Clear();
-				builtRoom = room;
-				builtRopes = ropes;
-				var start = Stopwatch.GetTimestamp();
-				Build(game);
-				BuildMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-				Console.WriteLine($"[Reach] {room.Id}: {Nodes.Count} nodes, {Edges.Count} edges, {sweeps} sweeps, {BuildMs:0.0}ms");
-				solved = false;
-			}
-		}
-
-		// Following a moving target only re-solves once it has moved a few px.
-		if (!solved || Target is not { } solvedFor || solvedFor.Size != target.Size ||
-			Math.Abs(solvedFor.X - target.X) >= 4 || Math.Abs(solvedFor.Y - target.Y) >= 4)
-		{
-			Solve(target);
-			Target = target;
-			solved = true;
-		}
+		if (solved && Target is { } solvedFor && solvedFor.Size == target.Size &&
+			Math.Abs(solvedFor.X - target.X) < 4 && Math.Abs(solvedFor.Y - target.Y) < 4)
+			return;
+		Solve(target);
+		Target = target;
+		solved = true;
 	}
 
-	void Rasterize(Game game, Room room)
+	public bool SameAs(ReachField other)
+		=> ropes == other.ropes && solid.SamePixels(other.solid) && jumpthru.SamePixels(other.jumpthru) && water.SamePixels(other.water);
+
+	public void Rasterize(Game game, Room room)
 	{
 		// Room collision clamps queries outside the room to its edge tiles, so the raster runs a margin past
 		// the edges with them repeated: standing on top of the room's top row is real ground.
 		var roomBounds = room.WorldBounds;
 		var rasterBounds = roomBounds.Inflate(RasterMargin * Game.TileSize);
-		nextSolid.Reset(rasterBounds);
-		nextJumpthru.Reset(rasterBounds);
-		nextWater.Reset(rasterBounds);
+		solid.Reset(rasterBounds);
+		jumpthru.Reset(rasterBounds);
+		water.Reset(rasterBounds);
 		for (var ty = -RasterMargin; ty < room.Size.Y + RasterMargin; ty++)
 		for (var tx = -RasterMargin; tx < room.Size.X + RasterMargin; tx++)
 		{
@@ -153,14 +114,14 @@ public sealed class ReachField
 			var clamped = new Point2(Math.Clamp(tx, 0, room.Size.X - 1), Math.Clamp(ty, 0, room.Size.Y - 1));
 			var rect = new RectInt(roomBounds.TopLeft + tile * Game.TileSize, Game.TileSize, Game.TileSize);
 			if (room.SolidTiles.Length > 0 && room.SolidTiles[clamped.Y * room.Size.X + clamped.X])
-				nextSolid.Fill(rect);
+				solid.Fill(rect);
 			else if (room.TryGetSlopeTile(clamped, out _))
 				for (var y = rect.Top; y < rect.Bottom; y++)
 				for (var x = rect.Left; x < rect.Right; x++)
 					if (Game.OverlapsRoomCollision(room, new RectInt(x, y, 1, 1)))
-						nextSolid[new(x, y)] = true;
+						solid[new(x, y)] = true;
 			if (room.IsWaterTile(tile))
-				nextWater.Fill(rect);
+				water.Fill(rect);
 		}
 
 		// Things that walk or ride around (pawns, enemies, moving platforms) aren't terrain: stamping them
@@ -170,7 +131,7 @@ public sealed class ReachField
 			if (actor is Grid or Pawn or MovingPlatform || actor.Tags.Has(ActorTag.Enemy) ||
 				actor.Room != null && actor.Room != room || game.destroying.Contains(actor))
 				continue;
-			var layer = actor.Mask.Has(Actor.Masks.Solid) ? nextSolid : actor.Mask.Has(Actor.Masks.Jumpthru) ? nextJumpthru : null;
+			var layer = actor.Mask.Has(Actor.Masks.Solid) ? solid : actor.Mask.Has(Actor.Masks.Jumpthru) ? jumpthru : null;
 			if (layer == null)
 				continue;
 			var rect = actor.Hitbox.Rect + actor.Position;
@@ -183,9 +144,12 @@ public sealed class ReachField
 						layer[new(x, y)] = true;
 		}
 
-		nextSolid.Commit();
-		nextJumpthru.Commit();
-		nextWater.Commit();
+		solid.Commit();
+		jumpthru.Commit();
+		water.Commit();
+		ropes = RopeSignature(game);
+		bounds = solid.Bounds;
+		roomBottom = room.WorldBounds.Bottom;
 	}
 
 	static int RopeSignature(Game game)
@@ -200,7 +164,52 @@ public sealed class ReachField
 		return hash.ToHashCode();
 	}
 
-	void Build(Game game)
+	// Builds a few ms at a time (budgetMs per step) so a rebuild never hitches a frame.
+	public IEnumerable<bool> Build(Game game, double budgetMs)
+	{
+		var buildStart = Stopwatch.GetTimestamp();
+		var slice = buildStart;
+		var longestSlice = 0.0;
+		Prepare(game);
+		for (var i = 0; i < Nodes.Count; i++)
+		{
+			Expand(i);
+			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
+			{
+				longestSlice = Math.Max(longestSlice, sliced);
+				yield return false;
+				slice = Stopwatch.GetTimestamp();
+			}
+		}
+		for (var e = 0; e < Edges.Count; e++)
+		{
+			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && KnifeEdge(edge))
+				Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty };
+			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
+			{
+				longestSlice = Math.Max(longestSlice, sliced);
+				yield return false;
+				slice = Stopwatch.GetTimestamp();
+			}
+		}
+
+		incomingStart = new int[Nodes.Count + 1];
+		incoming = new int[Edges.Count];
+		foreach (var edge in Edges)
+			incomingStart[edge.To + 1]++;
+		for (var i = 0; i < Nodes.Count; i++)
+			incomingStart[i + 1] += incomingStart[i];
+		var fill = incomingStart[..^1];
+		for (var e = 0; e < Edges.Count; e++)
+			incoming[fill[Edges[e].To]++] = e;
+		solved = false;
+		longestSlice = Math.Max(longestSlice, Stopwatch.GetElapsedTime(slice).TotalMilliseconds);
+		if (LogBuilds)
+			Console.WriteLine($"[Reach] {Nodes.Count} nodes, {Edges.Count} edges, {sweeps} sweeps, " +
+				$"{Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds:0.0}ms start to finish, longest slice {longestSlice:0.0}ms");
+	}
+
+	void Prepare(Game game)
 	{
 		Nodes.Clear();
 		Edges.Clear();
@@ -210,8 +219,6 @@ public sealed class ReachField
 		ropeNodes.Clear();
 		ropePoints.Clear();
 		sweeps = 0;
-		bounds = solid.Bounds;
-		roomBottom = game.Bounds.Bottom;
 
 		for (var ty = bounds.Top; ty < bounds.Bottom; ty += Game.TileSize)
 		for (var tx = bounds.Left; tx < bounds.Right; tx += Game.TileSize)
@@ -275,21 +282,6 @@ public sealed class ReachField
 			}
 		}
 
-		for (var i = 0; i < Nodes.Count; i++)
-			Expand(i);
-		for (var e = 0; e < Edges.Count; e++)
-			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && KnifeEdge(edge))
-				Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty };
-
-		incomingStart = new int[Nodes.Count + 1];
-		incoming = new int[Edges.Count];
-		foreach (var edge in Edges)
-			incomingStart[edge.To + 1]++;
-		for (var i = 0; i < Nodes.Count; i++)
-			incomingStart[i + 1] += incomingStart[i];
-		var fill = incomingStart[..^1];
-		for (var e = 0; e < Edges.Count; e++)
-			incoming[fill[Edges[e].To]++] = e;
 	}
 
 	void AddLip(Point2 lip, int dir, bool ducking)
@@ -454,6 +446,22 @@ public sealed class ReachField
 				(sweep.Hit == Hit.Land && SlidesOff(move, sweep) ? KnifeEdgePenalty : 0), sweep.Bonk);
 	}
 
+	// Only a landing a few px from where its surface ends can be knocked off it by a pixel's error.
+	bool NearLip(Point2 p)
+	{
+		foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
+		{
+			var q = p;
+			var crawl = false;
+			for (var n = 0; n < Game.TileSize + 3; n++)
+				if (WalkStep(ref q, dir, ref crawl) is var step && step == Step.Off)
+					return true;
+				else if (step == Step.Blocked)
+					break;
+		}
+		return false;
+	}
+
 	// Even braking hard (a small input caps speed at 2000px/s²), a landing carries on a few px: off a narrow
 	// ledge, that's a fall.
 	bool SlidesOff(ReachMove move, Sweep landing)
@@ -476,6 +484,8 @@ public sealed class ReachField
 	bool KnifeEdge(Edge edge)
 	{
 		var landing = Nodes[edge.To].Position;
+		if (!NearLip(landing))
+			return false;
 		foreach (var shift in (ReadOnlySpan<Point2>)[Point2.Left, Point2.Right, Point2.Down])
 		{
 			var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, null, shift);
@@ -872,5 +882,55 @@ public sealed class ReachField
 				break;
 			at = edge.To;
 		}
+	}
+}
+
+// Keeps a ReachField current: re-rasterizes the room every RefreshInterval and, when it differs, builds the next
+// field a slice per frame while the last one stays in use, then swaps it in. Opened doors, grown ribbons and
+// broken tiles are simply part of the next build.
+public sealed class ReachSense
+{
+	static float RefreshInterval => 0.25f;
+	static double BuildBudgetMs => 2;
+	// REACH_REBUILD=1 rebuilds every refresh, to profile a build warm.
+	static readonly bool AlwaysRebuild = Environment.GetEnvironmentVariable("REACH_REBUILD") == "1";
+
+	public ReachField? Field { get; private set; }
+	ReachField? next;
+	IEnumerator<bool>? building;
+	List<ReachMove>? moves;
+	Room? room;
+	float refreshTimer;
+	// Moves tried and missed this room visit, by where they started: they cost more from then on.
+	readonly Dictionary<(Point2 Start, int Move), int> misses = [];
+
+	public void Update(Game game, Room room, RectInt target)
+	{
+		moves ??= ReachMoves.Record(game);
+		if (room != this.room)
+		{
+			this.room = room;
+			Field = null;
+			building = null;
+			refreshTimer = 0;
+			misses.Clear();
+		}
+
+		refreshTimer -= game.Time.Delta;
+		if (building == null && refreshTimer <= 0)
+		{
+			refreshTimer = RefreshInterval;
+			next ??= new(moves, misses);
+			next.Rasterize(game, room);
+			// The gym runs unthrottled and must build on the same frame every run.
+			if (Field == null || AlwaysRebuild || !next.SameAs(Field))
+				building = next.Build(game, game.Manager.Unthrottled ? double.PositiveInfinity : BuildBudgetMs).GetEnumerator();
+		}
+		if (building != null && !building.MoveNext())
+		{
+			building = null;
+			(Field, next) = (next, Field);
+		}
+		Field?.SolveFor(target);
 	}
 }

@@ -126,7 +126,7 @@ public partial class Game
 	Room? platformNavGraphRoom;
 	bool platformNavGraphPristine = true;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
-	internal readonly ReachField reachField = new();
+	internal readonly ReachSense reach = new();
 
 	void UpdateReachField()
 	{
@@ -135,7 +135,7 @@ public partial class Game
 		RectInt? target = GymTarget is { } goal ? (goal.Hitbox.Rect + goal.Position).Inflate(1)
 			: GetFirst<Player>() is { } player ? player.Hitbox.Rect + player.Position : null;
 		if (target is { } rect)
-			reachField.Update(this, room, rect);
+			reach.Update(this, room, rect);
 	}
 	internal bool IsCollisionDebugVisible => debugView == DebugView.CollisionRects;
 
