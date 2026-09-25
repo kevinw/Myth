@@ -89,6 +89,20 @@
       "Intensity": 0.926,
       "Height": 15.85,
       "Radius": 199.211
+    },
+    {
+      "Id": "9aa88e7d8f095d8e",
+      "Type": "CurveRibbon",
+      "Position": [160, 136],
+      "Width": 24.102,
+      "Tint": "C0C0C0",
+      "WobbleFrequency": 0.851,
+      "WobbleIntensity": 15.249,
+      "WobbleSpeed": 0.072,
+      "BranchLength": 22.826,
+      "BranchWidth": 0.209,
+      "Points": [[152, -24],[0, -56],[-136, -112],[-184, -112]
+      ]
     }
   ]
 }

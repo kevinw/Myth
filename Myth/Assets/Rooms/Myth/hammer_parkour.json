@@ -138,6 +138,37 @@
       "Position": [31, 153],
       "PixelsPerMeter": 60,
       "ProjectionYaw": 100.976
+    },
+    {
+      "Id": "f3897a5d2032a193",
+      "Type": "CurveRibbon",
+      "Position": [160, 92],
+      "Tint": "190B3B",
+      "BranchSpacing": 16.821,
+      "BranchWidth": 0.246,
+      "BranchLength": 12.444,
+      "Points": [[-104, -96],[-32, -80],[48, -48],[24, 37],[72, 64],[160, 64]
+      ]
+    },
+    {
+      "Id": "19e17fcd2c40688d",
+      "Type": "CurveRibbon",
+      "Position": [158, 87],
+      "Tint": "190B3B",
+      "BranchSpacing": 16.821,
+      "BranchWidth": 0.246,
+      "BranchLength": 12.444,
+      "Width": 6.41,
+      "Points": [[24, -60],[32, -40],[24, -8],[64, 40]
+      ]
+    },
+    {
+      "Id": "694e16b68020bb93",
+      "Type": "Wildlife",
+      "Position": [160, 92],
+      "FishCount": 0,
+      "BugCount": 0,
+      "FlyCount": 3
     }
   ]
 }

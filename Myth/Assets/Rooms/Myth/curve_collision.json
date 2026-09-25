@@ -98,14 +98,14 @@
       "BranchWidth": 0.05,
       "Width": 44.836,
       "Layer": "Foreground",
-      "Points": [[240, -24],[112, -56],[56, -24],[8, -48],[-80, -40],[-8, 136]
-      ],
       "BranchLength": 21.564,
       "SurfaceOverride": "curve-root",
       "Roundness": 1,
       "Bulge": 2.718,
       "Grow": 0.282,
-      "Collision": "Solid"
+      "Collision": "Solid",
+      "Points": [[240, -24],[112, -56],[64, -16],[8, -48],[-80, -40],[-8, 136]
+      ]
     },
     {
       "Id": "62ab6bb5614b35e8",

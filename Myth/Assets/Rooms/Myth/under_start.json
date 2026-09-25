@@ -60,6 +60,15 @@
       "PaintedMask": "d3648ed16124b18c.png",
       "EdgeTrim": 1,
       "ShutdownSourceActorId": "7f03eaee29c5ffb4"
+    },
+    {
+      "Id": "6530a126bf0cde6f",
+      "Type": "CurveRibbon",
+      "Position": [245, 29],
+      "Layer": "Foreground",
+      "Points": [[-272, 0],[-192, 24],[-120, 104],[-26, 99],[208, 112]
+      ],
+      "Width": 49.192
     }
   ]
 }
