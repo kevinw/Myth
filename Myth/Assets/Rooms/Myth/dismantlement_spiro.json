@@ -159,15 +159,15 @@
       "Type": "NeuralTextureActor",
       "Position": [248, 0],
       "SimulationScale": 0.36682329,
-      "FlowOrigin": [0.0, -44.0],
       "FlowSize": [216, 216],
-      "DetailOrigin": [108.0, 64.0],
-      "Size": [216, 128],
       "WeightsFile": "smoke_plume_2_diverge.bin",
-      "PaintedMask": "db31c52a0d65187e.png",
       "EdgeTrim": 2,
-      "editorFlags": "Locked",
-      "StepsPerSecond": 60.5
+      "StepsPerSecond": 60.5,
+      "FlowOrigin": [0, -44],
+      "DetailOrigin": [108, 64],
+      "Size": [223, 128],
+      "PaintedMask": "6b63c85d4d4b59a3.png",
+      "editorFlags": "Locked"
     },
     {
       "Id": "123bcea46474b806",

@@ -258,6 +258,7 @@ public partial class Manager
 			DockNextToolWindow("Procedural Sounds");
 		proceduralSoundEditor.Draw(NoteDockedWindow);
 #endif
+		ClearStaleContentPickerPreview();
 	}
 
 #if EDITOR
@@ -1524,12 +1525,16 @@ public partial class Manager
 
 		BeginPropertyRow("Surface");
 		var backdropSurface = room.BackdropSurfaceId;
-		if (DrawSurfacePicker(ref backdropSurface))
+		var pickedBackdropSurface = DrawSurfacePicker(ref backdropSurface, out var backdropSurfacePreview);
+		if (pickedBackdropSurface)
 		{
+			ClearContentPickerPreview(restore: false);
 			using (CaptureRoomUndo("Edit Room Backdrop", room))
 				room.BackdropSurfaceId = backdropSurface;
 			changed = true;
 		}
+		else
+			PreviewRoomSurface(room, backdropSurface, backdropSurfacePreview);
 
 		BeginPropertyRow("Ambient");
 		var ambient = room.AmbientColor.ToVector3();

@@ -1,7 +1,7 @@
 {
   "position": [-244, -5],
   "size": [20, 11],
-  "ambientColor": "818181",
+  "ambientColor": "515151",
   "reverb": 0.446,
   "zoom": 2,
   "legend": {
@@ -54,7 +54,7 @@
       "Id": "739a8b723ede45cd",
       "Type": "InspectPoint",
       "Position": [64, 80],
-      "Text": "Subject showed successful quantum tunneling. They always had it. "
+      "Text": "LOG_2138.dat: I always knew macroscopic quantum tunneling was possible. I just had to try it #$!XA"
     },
     {
       "Id": "eeb68452e0611961",

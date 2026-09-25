@@ -93,6 +93,7 @@ public abstract partial class Pawn
 		AudioEvent("player/burrow_tunnel"); // wants its own event; missing ones are logged once
 		AudioEvent("player/burrow_start");
 		Game.Shake(0.1f, intensity: 1.2f);
+		Game.HitStun(0.15f);
 	}
 
 	// Off the face, not along it: the digging sparks fire with zero spread, which on a flat wall

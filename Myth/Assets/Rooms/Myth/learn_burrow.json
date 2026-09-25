@@ -128,6 +128,21 @@
       "Position": [132, 304]
     },
     {
+      "Id": "64aaaba76aaa5353",
+      "Type": "CurveRibbon",
+      "Position": [160, 248],
+      "SurfaceOverride": "robot_body_1",
+      "Points": [[16, 16],[24, -24],[16, -48]
+      ],
+      "BranchSpacing": 7.305,
+      "BranchWidth": 0.303,
+      "BranchLength": 16.507,
+      "WobbleFrequency": 0.117,
+      "WobbleIntensity": 8.648,
+      "Roundness": 1,
+      "Seed": 2430
+    },
+    {
       "Id": "c3d52eaaf4406d02",
       "Type": "Light",
       "Position": [40, 120],
@@ -306,19 +321,19 @@
       "behaviourFlags": "RevealOnBurrow"
     },
     {
-      "Id": "64aaaba76aaa5353",
+      "Id": "7e590cb22a3b2b24",
       "Type": "CurveRibbon",
-      "Position": [160, 248],
+      "Position": [168, 304],
       "SurfaceOverride": "robot_body_1",
-      "Points": [[16, 16],[24, -24],[16, -48]
-      ],
       "BranchSpacing": 7.305,
       "BranchWidth": 0.303,
       "BranchLength": 16.507,
       "WobbleFrequency": 0.117,
       "WobbleIntensity": 8.648,
       "Roundness": 1,
-      "Seed": 2430
+      "Seed": 2430,
+      "Points": [[16, 16],[0, -16],[16, -48]
+      ]
     }
   ]
 }

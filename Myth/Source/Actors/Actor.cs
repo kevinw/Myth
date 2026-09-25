@@ -90,6 +90,7 @@ public class Actor
 	// height to the right, with the base planted. Set it and it eases back to zero like Squish.
 	internal float Skew = 0;
 	internal int Depth = 0;
+	internal int CreationOrder;
 	internal float Timer = 0;
 	internal float IFrameTime = 0.50f;
 

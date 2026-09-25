@@ -36,7 +36,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 	[InspectorGroup("Twist"), I(0, 512)] public float TwistPeriod;
 	[I(-4, 4)] public float TwistSpeed;
 	// Grow shows the ribbon from its base out to that fraction of its length. Activation grows it fully;
-	// GrowTo drives it anywhere. Both move the growth front at GrowSpeed px/second.
+	// GrowTo drives it anywhere. Both limit the growth front to GrowSpeed px/second.
 	[InspectorGroup("Grow"), I(0, 1)] public float Grow = 1;
 	[I(1, 512)] public float GrowSpeed = 96;
 	// Built from the unanimated shape (no wobble motion or twist), so a swaying ribbon is a steady floor.
@@ -73,6 +73,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 	readonly HashSet<Actor> activators = [];
 	float? growOverride;
 	float grown = -1; // snaps to its target on the first update, so a room loads already grown
+	float growVelocity;
 	float growthLength; // distance the growth front travels: the path plus time for the last branches to sprout
 	float grownDistance;
 	int growParticles = -1;
@@ -96,6 +97,7 @@ public class CurveRibbon : PointPathActor, IActivatable
 	RibbonStyle? ActiveStyle => Assets.GetRibbonStyle(Style);
 	public override string? SurfaceSubstance => ActiveStyle?.Substance is { Length: > 0 } substance ? substance : null;
 	float Grown => grown < 0 ? Grow : grown;
+	static float GrowEaseTime => 0.15f;
 
 	public void SetActive(Actor source, bool active)
 	{
@@ -118,7 +120,18 @@ public class CurveRibbon : PointPathActor, IActivatable
 
 		var target = activators.Count > 0 ? 1 : growOverride ?? Grow;
 		var previous = grown < 0 ? target : grown;
-		grown = Calc.Approach(previous, target, Time.Delta * GrowSpeed / MathF.Max(1, growthLength));
+		if (grown < 0)
+			grown = target;
+		else if (Time.Delta > 0)
+		{
+			grown = Calc.SmoothDamp(grown, target, ref growVelocity, GrowEaseTime,
+				GrowSpeed / MathF.Max(1, growthLength), Time.Delta);
+			if (MathF.Abs(grown - target) * growthLength < 0.01f && MathF.Abs(growVelocity) * growthLength < 0.01f)
+			{
+				grown = target;
+				growVelocity = 0;
+			}
+		}
 		UpdateGrowthFeedback((grown - previous) * growthLength);
 	}
 

@@ -279,9 +279,7 @@ public sealed partial class GameView : IDisposable
 			var full = layout.Lines[i];
 			var shown = remaining >= full.Length ? full : full[..Math.Max(0, remaining)];
 			var lineWidth = MathF.Ceiling(font.WidthOf(full));
-			var at = new Point2(
-				(int)MathF.Round(box.Left + layout.Padding.X + (layout.Width - lineWidth) * 0.5f),
-				(int)MathF.Round(box.Top + layout.Padding.Y + i * layout.LineHeight));
+			var at = StorySpeechGlyphPosition(layout, box, i, lineWidth);
 			if (shown.Length > 0)
 			{
 				// Same drop shadow TitleText uses, so speech sits on busy tiles as readably.
@@ -293,6 +291,11 @@ public sealed partial class GameView : IDisposable
 				break;
 		}
 	}
+
+	static Point2 StorySpeechGlyphPosition(in Game.StorySpeechLayout layout, Rect box, int index, float width)
+		=> box.TopLeft.RoundToPoint2() + new Vector2(
+			layout.Padding.X + (layout.Width - width) * 0.5f,
+			layout.Padding.Y + index * layout.LineHeight).RoundToPoint2();
 
 	static bool SpeechLineFollowsSpeaker => true;
 	static float SpeechLineSpeakerGap => 1.5f;
@@ -309,11 +312,8 @@ public sealed partial class GameView : IDisposable
 	static Rect StorySpeechGlyphRun(SpriteFont font, in Game.StorySpeechLayout layout, Rect box, int index)
 	{
 		var width = MathF.Ceiling(font.WidthOf(layout.Lines[index]));
-		return new(
-			MathF.Round(box.Left + layout.Padding.X + (layout.Width - width) * 0.5f),
-			MathF.Round(box.Top + layout.Padding.Y + index * layout.LineHeight),
-			width,
-			MathF.Ceiling(font.LineHeight));
+		var position = StorySpeechGlyphPosition(layout, box, index, width);
+		return new(position.X, position.Y, width, MathF.Ceiling(font.LineHeight));
 	}
 
 	static Vector2 ClippedStorySpeechGlyphPoint(SpriteFont font, in Game.StorySpeechLayout layout, Rect box,

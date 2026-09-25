@@ -83,7 +83,11 @@ public partial class Manager
 	// The model picker shared by the inspector's four weight slots: material thumbnail (click for
 	// the grid) and, beside it, the motion this material was trained to drift in.
 	bool DrawNeuralModelPicker(ref string value, bool allowNone)
+		=> DrawNeuralModelPicker(ref value, allowNone, out _);
+
+	bool DrawNeuralModelPicker(ref string value, bool allowNone, out string? previewValue)
 	{
+		previewValue = null;
 		var changed = false;
 		var cell = new Vector2(ButtonSize, ButtonSize);
 		var index = NeuralTextureCatalog.FindModel(value);
@@ -146,6 +150,8 @@ public partial class Manager
 						changed = true;
 						CloseCurrentPopup();
 					}
+					if (IsItemHovered())
+						previewValue = string.Empty;
 					column = 1;
 				}
 				// Switching material keeps the current motion where it exists; the thumbnail always
@@ -155,15 +161,18 @@ public partial class Manager
 					SwatchGridWrap(ref column, NeuralModelPickerColumns);
 					var selected = index >= 0 && string.Equals(image, current.Image, StringComparison.OrdinalIgnoreCase);
 					var name = NeuralTextureCatalog.ImageLabel(image);
+					var previewModel = NeuralTextureCatalog.BestModel(image, index).FileName;
 					var clicked = GetNeuralModelPreview(NeuralTextureCatalog.ThumbnailModel(image)) is { } thumb
 						? SwatchGridButton($"##nca{image}", thumb, name, selected)
 						: Button($"...##nca{image}", swatch);
 					if (clicked)
 					{
-						value = NeuralTextureCatalog.BestModel(image, index).FileName;
+						value = previewModel;
 						changed = true;
 						CloseCurrentPopup();
 					}
+					if (IsItemHovered())
+						previewValue = previewModel;
 				}
 			}
 			EndPopup();

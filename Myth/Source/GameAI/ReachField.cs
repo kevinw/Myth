@@ -1136,7 +1136,7 @@ public sealed class ReachSense(ReachBody body)
 	// nothing is in use to go stale, and the frames it lands on are a room transition's anyway.
 	// 8ms is as much as fits a 60fps frame: the floor for a slice is one SweepMove, which is 5-7ms for a long
 	// arc in a Debug build.
-	static double ColdBudgetMs => 8;
+	static double ColdBudgetMs => 4;
 	// REACH_REBUILD=1 rebuilds every refresh, to profile a build warm.
 	static readonly bool AlwaysRebuild = Environment.GetEnvironmentVariable("REACH_REBUILD") == "1";
 	// REACH_SLICE=1 makes the gym slice as it would in play; nothing else exercises the sliced path.

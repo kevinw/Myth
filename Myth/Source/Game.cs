@@ -92,6 +92,7 @@ public partial class Game : IDisposable
 	public readonly List<Actor> Actors = [];
 	readonly List<Actor> attachedActors = [];
 	readonly List<Actor> parkedActors = [];
+	int nextActorCreationOrder;
 
 	// The sim reads time only through this. Normally it's the wall clock scaled by TimeScale (the
 	// product of all live time factors -- see Game.TimeScale.cs); during replay playback it's a
@@ -1536,7 +1537,8 @@ public partial class Game : IDisposable
 			Room = loadingRoom ?? room,
 			Position = position ?? Point2.Zero,
 			Tags = Factory.TagsForType(typeof(T)),
-			Anchor = Factory.AnchorForType(typeof(T).Name)
+			Anchor = Factory.AnchorForType(typeof(T).Name),
+			CreationOrder = nextActorCreationOrder++
 		};
 		init?.Invoke(instance);
 		AddOrParkActor(instance);
@@ -1555,6 +1557,7 @@ public partial class Game : IDisposable
 		instance.Position = position ?? Point2.Zero;
 		instance.Tags = Factory.TagsForType(type);
 		instance.Anchor = Factory.AnchorForType(type.Name);
+		instance.CreationOrder = nextActorCreationOrder++;
 		init?.Invoke(instance);
 		AddOrParkActor(instance);
 		return instance;

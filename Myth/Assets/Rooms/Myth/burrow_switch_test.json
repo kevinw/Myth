@@ -1,5 +1,5 @@
 {
-  "position": [99, -100],
+  "position": [-98, -55],
   "size": [40, 23],
   "sporeFogStrength": 0.097,
   "reverb": 0.842,
@@ -59,6 +59,17 @@
       "TargetActorId": "424784db9cdc0b11",
       "Points": [[-20, 16],[-56, 16],[-56, 48]
       ]
+    },
+    {
+      "Id": "08e4906937734647",
+      "Type": "MachineWall",
+      "Position": [0, 2],
+      "ControlPanelDensity": 0,
+      "GreebleScale": 0.568,
+      "GreebleDepth": 0.236,
+      "PipeColor2": "7A6937",
+      "PipeColor1": "358083",
+      "PipeColor4": "5C7067"
     }
   ]
 }

@@ -11,6 +11,9 @@ namespace Myth;
 // editor to the one you pick.
 public partial class Manager
 {
+	const string ActorListDragPayload = "MYTH_ACTOR_LIST";
+	JsonObject? actorListDraggingActor;
+
 	readonly record struct ActorInstanceSearchResult(string RoomId, string ActorId, string Position, string Modified);
 
 	readonly List<ActorInstanceSearchResult> actorInstanceSearchResults = [];
@@ -20,7 +23,7 @@ public partial class Manager
 	string actorInstanceSearchWorldId = "";
 	bool actorInstanceSearchOpen;
 
-	void DrawActorListSection()
+	unsafe void DrawActorListSection()
 	{
 		if (CurrentRoom is not { } room)
 			return;
@@ -32,6 +35,7 @@ public partial class Manager
 		}
 
 		var label = new ValueStringBuilder(stackalloc char[128]);
+		var reorderAt = -1;
 		for (var i = 0; i < room.Actors.Count; i++)
 		{
 			var actor = room.Actors[i];
@@ -53,9 +57,59 @@ public partial class Manager
 
 			if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
 				TweenEditorCameraToActor(room, i);
+
+			var rowMin = ImGui.GetItemRectMin();
+			var rowMax = ImGui.GetItemRectMax();
+			if (ImGui.BeginDragDropSource())
+			{
+				actorListDraggingActor = actor;
+				ImGui.SetDragDropPayload(ActorListDragPayload, IntPtr.Zero, 0);
+				ImGui.TextUnformatted(label.AsSpan());
+				ImGui.EndDragDropSource();
+			}
+			if (ImGui.BeginDragDropTarget())
+			{
+				var payload = ImGui.AcceptDragDropPayload(ActorListDragPayload);
+				if (payload.NativePtr != null && actorListDraggingActor != null)
+				{
+					var after = ImGui.GetMousePos().Y >= (rowMin.Y + rowMax.Y) * 0.5f;
+					var y = after ? rowMax.Y : rowMin.Y;
+					ImGui.GetWindowDrawList().AddLine(new(rowMin.X, y), new(rowMax.X, y),
+						ImGui.GetColorU32(ImGuiCol.DragDropTarget), 2);
+					if (payload.IsDelivery())
+						reorderAt = i + (after ? 1 : 0);
+				}
+				ImGui.EndDragDropTarget();
+			}
 			ImGui.PopID();
 		}
 		label.Dispose();
+
+		if (reorderAt >= 0 && actorListDraggingActor is { } dragged)
+		{
+			var from = room.Actors.IndexOf(dragged);
+			if (from >= 0)
+			{
+				if (from < reorderAt)
+					reorderAt--;
+				if (from != reorderAt)
+				{
+					using (CaptureRoomUndo("Reorder Actors", room))
+					{
+						room.Actors.RemoveAt(from);
+						room.Actors.Insert(reorderAt, dragged);
+						SelectEditorActorTool();
+						selectedRoomActorIndex = reorderAt;
+						ClearEditorDragState();
+						editorSelectionRect = null;
+						CancelTilePaint();
+						editorGameDirty = true;
+					}
+				}
+			}
+		}
+		if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
+			actorListDraggingActor = null;
 	}
 
 	void OpenActorInstanceSearch(Factory.ActorPaletteEntry entry)

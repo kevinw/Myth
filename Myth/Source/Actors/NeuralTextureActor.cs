@@ -676,14 +676,50 @@ public class NeuralTextureActor : Actor, IResizable, IShapeOccluder
 		if (!supported)
 			return;
 		WeightsFile = new(fileName);
+		PackPreviewWeights();
+		normalSlots = 0; // thumbnails are raw decode colour, so nothing reads the normal channels
+		SimulateFromSeed(settleSteps);
+	}
+
+	internal void SetEditorPreviewModel(int slot, string fileName)
+	{
+		if (!supported || slot is < 0 or >= MaxSlots)
+			return;
+		var current = slot switch
+		{
+			0 => WeightsFile.Name,
+			1 => WeightsFile1.Name,
+			2 => WeightsFile2.Name,
+			_ => WeightsFile3.Name,
+		};
+		if (current == fileName)
+			return;
+		switch (slot)
+		{
+			case 0: WeightsFile = fileName; break;
+			case 1: WeightsFile1 = fileName; break;
+			case 2: WeightsFile2 = fileName; break;
+			case 3: WeightsFile3 = fileName; break;
+		}
+		normalSlots = PackPreviewWeights();
+		if (HasNormalOutput && normalOutput is { } normal && (normal.Width != Size.X || normal.Height != Size.Y))
+		{
+			normal.Dispose();
+			normalOutput = new(graphicsDevice, Size.X, Size.Y, TextureFormat.Color, TextureFlags.ComputeWrite,
+				"NeuralTextureNormalOutput");
+		}
+		SimulateFromSeed(EditorPreviewSteps);
+	}
+
+	uint PackPreviewWeights()
+	{
 		previewWeights ??= new StorageBuffer<Vector4>(graphicsDevice, "NeuralTexturePreviewWeights");
 		previewPacked ??= new Vector4[MaxSlots * PairedWeightCount];
 		Array.Clear(previewPacked);
-		SharedGpuResources.PackWeights(SlotWeightsFiles, previewPacked);
+		var packedNormalSlots = SharedGpuResources.PackWeights(SlotWeightsFiles, previewPacked);
 		previewWeights.Upload(previewPacked);
 		weights = previewWeights;
-		normalSlots = 0; // thumbnails are raw decode colour, so nothing reads the normal channels
-		SimulateFromSeed(settleSteps);
+		return packedNormalSlots;
 	}
 #endif
 

@@ -186,11 +186,15 @@ public partial class Manager
 		if (IsActorSurfaceProperty(property))
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
-			if (DrawSurfacePicker(ref value))
+			var picked = DrawSurfacePicker(ref value, out var preview);
+			if (picked)
 			{
+				ClearContentPickerPreview(restore: false);
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
 				return true;
 			}
+			if (room != null)
+				PreviewActorSurface(room, actor, property.Name, value, preview);
 		}
 		else if (property.Type == typeof(ContentRef<CostumeContent>) || property.Type == typeof(ContentRef<RibbonStyleContent>))
 		{
@@ -289,11 +293,15 @@ public partial class Manager
 		else if (NeuralTextureWeightsSlot(actor, property) is >= 0 and var weightsSlot)
 		{
 			var value = ActorSpecs.ReadStringValue(property.Value) ?? string.Empty;
-			if (DrawNeuralModelPicker(ref value, allowNone: weightsSlot > 0))
+			var picked = DrawNeuralModelPicker(ref value, allowNone: weightsSlot > 0, out var preview);
+			if (picked)
 			{
+				ClearContentPickerPreview(restore: false);
 				SetActorProperty(specId, room, actor, property, JsonValue.Create(value), continuous: false);
 				return true;
 			}
+			if (room != null)
+				PreviewNeuralModel(room, actor, weightsSlot, value, preview);
 		}
 		else if (property.Name == nameof(NeuralTextureActor.PaintedMask) && IsNeuralTextureActor(actor))
 		{
@@ -327,6 +335,15 @@ public partial class Manager
 			if (DragInt2("##Value", ref values[0]))
 			{
 				SetActorProperty(specId, room, actor, property, new JsonArray(values[0], values[1]), continuous: true);
+				return true;
+			}
+		}
+		else if (property.Type == typeof(Vector2))
+		{
+			var value = JsonUtil.ReadVector2(property.Value) ?? Vector2.Zero;
+			if (DragFloat2("##Value", ref value, 0.05f))
+			{
+				SetActorProperty(specId, room, actor, property, ActorSpecs.ToJsonNode(value), continuous: true);
 				return true;
 			}
 		}
@@ -1371,13 +1388,124 @@ public partial class Manager
 	static bool IsActorSurfaceProperty(ActorSpecs.EditableProperty property)
 		=> property.Type == typeof(ContentRef<SurfaceContent>);
 
+	enum ContentPickerPreviewKind { None, RoomSurface, ActorSurface, NeuralModel }
+	ContentPickerPreviewKind contentPickerPreviewKind;
+	string contentPickerPreviewRoomId = "";
+	string contentPickerPreviewActorId = "";
+	string contentPickerPreviewProperty = "";
+	string contentPickerPreviewOriginal = "";
+	string contentPickerPreviewValue = "";
+	int contentPickerPreviewSlot = -1;
+	int contentPickerPreviewFrame = -1;
+
+	bool BeginContentPickerPreview(ContentPickerPreviewKind kind, Room room, string actorId, string property, int slot,
+		string original, string? preview)
+	{
+		var sameTarget = contentPickerPreviewKind == kind && contentPickerPreviewRoomId == room.Id &&
+			contentPickerPreviewActorId == actorId && contentPickerPreviewProperty == property &&
+			contentPickerPreviewSlot == slot;
+		if (preview == null)
+		{
+			if (sameTarget)
+				ClearContentPickerPreview();
+			return false;
+		}
+		if (!sameTarget)
+			ClearContentPickerPreview();
+		if (string.Equals(preview, original, StringComparison.OrdinalIgnoreCase))
+		{
+			if (sameTarget)
+				ClearContentPickerPreview();
+			return false;
+		}
+		if (sameTarget && string.Equals(preview, contentPickerPreviewValue, StringComparison.OrdinalIgnoreCase))
+		{
+			contentPickerPreviewFrame = GetFrameCount();
+			return false;
+		}
+
+		contentPickerPreviewKind = kind;
+		contentPickerPreviewRoomId = room.Id;
+		contentPickerPreviewActorId = actorId;
+		contentPickerPreviewProperty = property;
+		contentPickerPreviewOriginal = original;
+		contentPickerPreviewValue = preview;
+		contentPickerPreviewSlot = slot;
+		contentPickerPreviewFrame = GetFrameCount();
+		return true;
+	}
+
+	void PreviewRoomSurface(Room room, string original, string? preview)
+	{
+		if (game is not { IsEditorPreview: true, CurrentRoom: { } runtimeRoom } || runtimeRoom.Id != room.Id ||
+			!BeginContentPickerPreview(ContentPickerPreviewKind.RoomSurface, room, "", "", -1, original, preview))
+			return;
+		runtimeRoom.BackdropSurfaceId = preview!;
+	}
+
+	void PreviewActorSurface(Room room, JsonObject actor, string property, string original, string? preview)
+	{
+		if (ActorSpecs.GetActorId(actor) is not { } actorId ||
+			game is not { IsEditorPreview: true, CurrentRoom: { } runtimeRoom } || runtimeRoom.Id != room.Id ||
+			game.GetActorById(actorId) is not { } runtime ||
+			!BeginContentPickerPreview(ContentPickerPreviewKind.ActorSurface, room, actorId, property, -1, original, preview))
+			return;
+		ActorSpecs.SetEditableProperty(runtime, property, JsonValue.Create(preview));
+	}
+
+	void PreviewNeuralModel(Room room, JsonObject actor, int slot, string original, string? preview)
+	{
+		if (ActorSpecs.GetActorId(actor) is not { } actorId ||
+			game is not { IsEditorPreview: true, CurrentRoom: { } runtimeRoom } || runtimeRoom.Id != room.Id ||
+			game.GetActorById<NeuralTextureActor>(actorId) is not { } texture ||
+			!BeginContentPickerPreview(ContentPickerPreviewKind.NeuralModel, room, actorId, "", slot, original, preview))
+			return;
+		texture.SetEditorPreviewModel(slot, preview!);
+	}
+
+	void ClearContentPickerPreview(bool restore = true)
+	{
+		if (restore && game is { IsEditorPreview: true, CurrentRoom: { } room } && room.Id == contentPickerPreviewRoomId)
+			switch (contentPickerPreviewKind)
+			{
+				case ContentPickerPreviewKind.RoomSurface:
+					room.BackdropSurfaceId = contentPickerPreviewOriginal;
+					break;
+				case ContentPickerPreviewKind.ActorSurface:
+					if (game.GetActorById(contentPickerPreviewActorId) is { } actor)
+						ActorSpecs.SetEditableProperty(actor, contentPickerPreviewProperty,
+							JsonValue.Create(contentPickerPreviewOriginal));
+					break;
+				case ContentPickerPreviewKind.NeuralModel:
+					game.GetActorById<NeuralTextureActor>(contentPickerPreviewActorId)?
+						.SetEditorPreviewModel(contentPickerPreviewSlot, contentPickerPreviewOriginal);
+					break;
+			}
+
+		contentPickerPreviewKind = ContentPickerPreviewKind.None;
+		contentPickerPreviewRoomId = "";
+		contentPickerPreviewActorId = "";
+		contentPickerPreviewProperty = "";
+		contentPickerPreviewOriginal = "";
+		contentPickerPreviewValue = "";
+		contentPickerPreviewSlot = -1;
+		contentPickerPreviewFrame = -1;
+	}
+
+	void ClearStaleContentPickerPreview()
+	{
+		if (contentPickerPreviewKind != ContentPickerPreviewKind.None && contentPickerPreviewFrame != GetFrameCount())
+			ClearContentPickerPreview();
+	}
+
 	// A "color picker"-style surface selector: a preview button that opens a grid of
 	// surface previews. Returns true (and updates value) when a surface is chosen; an
 	// empty string selects "None" (solid fill).
 	const int SurfacePickerColumns = 8;
 
-	bool DrawSurfacePicker(ref string value)
+	bool DrawSurfacePicker(ref string value, out string? preview)
 	{
+		preview = null;
 		var changed = false;
 		var cell = new Vector2(ButtonSize, ButtonSize);
 		var current = Assets.GetSurface(value);
@@ -1421,6 +1549,8 @@ public partial class Manager
 					changed = true;
 					CloseCurrentPopup();
 				}
+				if (IsItemHovered())
+					preview = string.Empty;
 				column = 1;
 				foreach (var (id, surface) in Assets.Surfaces)
 				{
@@ -1431,6 +1561,8 @@ public partial class Manager
 						changed = true;
 						CloseCurrentPopup();
 					}
+					if (IsItemHovered())
+						preview = id;
 				}
 			}
 			SwatchGridWrap(ref column, SurfacePickerColumns);

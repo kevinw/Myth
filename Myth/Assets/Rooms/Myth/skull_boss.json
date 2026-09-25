@@ -131,7 +131,8 @@
       "Position": [160, 120],
       "SpriteName": "Props/server",
       "ChangeOnActorDestroyed": "79ca3193f6281d40",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.14
     },
     {
       "Id": "2059f0fe71bf6ce5",
@@ -179,7 +180,8 @@
       "Position": [177, 126],
       "SpriteName": "Props/server",
       "ChangeOnActorDestroyed": "79ca3193f6281d40",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.197
     },
     {
       "Id": "f856c2427c5fec65",
@@ -203,7 +205,8 @@
       "Position": [145, 127],
       "SpriteName": "Props/server",
       "ChangeOnActorDestroyed": "79ca3193f6281d40",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.14
     },
     {
       "Id": "9af68887fdf9dc8c",
@@ -211,7 +214,8 @@
       "Position": [128, 132],
       "SpriteName": "Props/server",
       "ChangeOnActorDestroyed": "79ca3193f6281d40",
-      "Layer": "Background"
+      "Layer": "Background",
+      "EmissiveLightIntensity": 0.205
     },
     {
       "Id": "fff87c82b1ffb240",

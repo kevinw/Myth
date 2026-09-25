@@ -356,7 +356,12 @@ public sealed partial class GameView
 	{
 		rendering.Clear();
 		rendering.AddRange(Actors);
-		rendering.Sort((a, b) => b.Depth - a.Depth);
+		// Equal-depth actors keep authored/creation order, with later actors drawn on top.
+		rendering.Sort(static (a, b) =>
+		{
+			var depth = b.Depth.CompareTo(a.Depth);
+			return depth != 0 ? depth : a.CreationOrder.CompareTo(b.CreationOrder);
+		});
 		hasProceduralWalls = proceduralWallRenderer?.Prepare(rendering) ?? false;
 	}
 
