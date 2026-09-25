@@ -16,7 +16,7 @@ public class Boss : Pawn
 	// far side, he leaps at that wall, clings, then wall-jumps back over the
 	// player and bolts away. This is a dynamic, sensor-driven move (the trigger
 	// geometry depends on the live player position), so it lives here rather than
-	// in the static nav graph.
+	// in the reach field.
 	private const float WallJumpEscapeMinDistance = 6f;
 	private const float WallJumpEscapeMaxDistance = 40f;
 	private const float WallJumpEscapeVerticalRange = 14f;
@@ -34,7 +34,8 @@ public class Boss : Pawn
 
 	private enum EscapePhase { None, Leap, Cling, Flee }
 
-	private readonly Navigator nav;
+	readonly ReachPilot pilot;
+	readonly ReachSense sense = new(ReachBody.Bud);
 	private int health = MaxHealth;
 	private Vector2? navTarget;
 	private float retargetTimer;
@@ -52,7 +53,7 @@ public class Boss : Pawn
 
 	public Boss()
 	{
-		nav = new(this);
+		pilot = new(this);
 		Sprite = Assets.GetSprite("bud");
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Mask = Masks.Enemy;
@@ -84,7 +85,7 @@ public class Boss : Pawn
 		if (throwPauseTimer > 0)
 		{
 			throwPauseTimer -= Time.Delta;
-			nav.UpdateJumpHeld(false);
+			pilot.Cancel();
 			return new(MoveX: 0, MoveY: 0, JumpPressed: false, JumpDown: false, DashPressed: false);
 		}
 
@@ -103,32 +104,18 @@ public class Boss : Pawn
 
 		// Pick or refresh the random nav target
 		retargetTimer -= Time.Delta;
-		if (navTarget == null || retargetTimer <= 0 || nav.IsNearNode(navTarget.Value))
+		if (navTarget == null || retargetTimer <= 0 || Vector2.DistanceSquared(Position, navTarget.Value) < 8 * 8)
 		{
 			navTarget = FindRandomNode();
 			retargetTimer = RetargetInterval;
 		}
-
-		var moveX = 0f;
-		var moveY = 0;
-		var jumpPressed = false;
-
-		if (navTarget != null && !nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
-		{
-			if (!nav.TryNavigateToPosition(navTarget.Value, out moveX, out moveY, out jumpPressed))
-				moveX = Math.Sign(navTarget.Value.X - Position.X);
-		}
-
-		nav.UpdateJumpHeld(jumpPressed);
-
-		return new(
-			MoveX: moveX,
-			MoveY: moveY,
-			JumpPressed: jumpPressed,
-			JumpDown: nav.JumpHeld,
-			DashPressed: false,
-			AllowWallJump: false
-		);
+		if (Game.room is not { } room)
+			return new();
+		sense.Update(Game, room, Hitbox.Rect + (navTarget ?? Position).RoundToPoint2());
+		if (navTarget is not { } target)
+			return new();
+		var input = sense.Field is { } field ? pilot.GetInput(field) : default;
+		return pilot.Label.StartsWith("no ") ? input with { MoveX = Math.Sign(target.X - Position.X) } : input;
 	}
 
 	public override void Render(Batcher batcher)
@@ -176,30 +163,19 @@ public class Boss : Pawn
 		});
 	}
 
+	// Somewhere to stand, anywhere in the room.
 	private Vector2? FindRandomNode()
 	{
-		if (Game.GetPlatformNavGraph() is not { } graph)
+		if (sense.Field is not { } field)
 			return null;
-
-		// Count valid candidates (skip room exits)
 		var count = 0;
-		foreach (var node in graph.Nodes)
-			if (node.Kind != PlatformNavGraph.NodeKind.RoomExit)
+		foreach (var node in field.Nodes)
+			if (node.Kind == ReachField.NodeKind.Stand)
 				count++;
-
-		if (count == 0)
-			return null;
-
-		var pick = Game.rng.Int(count);
-		var i = 0;
-		foreach (var node in graph.Nodes)
-		{
-			if (node.Kind == PlatformNavGraph.NodeKind.RoomExit)
-				continue;
-			if (i++ == pick)
+		var pick = count > 0 ? Game.rng.Int(count) : -1;
+		foreach (var node in field.Nodes)
+			if (node.Kind == ReachField.NodeKind.Stand && pick-- == 0)
 				return node.Position;
-		}
-
 		return null;
 	}
 

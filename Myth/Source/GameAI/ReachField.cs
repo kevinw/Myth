@@ -8,7 +8,7 @@ namespace Myth;
 // actors, ribbon pixel masks) is rasterized into SummedMasks; standing spots are found on that raster; recorded
 // ReachMoves are swept from each spot to see where they end up; then a Dijkstra run backwards from the target
 // gives every spot its cost to reach it. ReachSense keeps one current as the room changes.
-public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, int Move), int> misses)
+public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary<(Point2 Start, int Move), int> misses)
 {
 	public enum NodeKind { Stand, Wall, Swim, Rope, Ride }
 	// Side: which way a Stand's lip drops off, the wall a Wall node touches, a Rope node's rope, or a Ride node's
@@ -31,9 +31,9 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 
 	enum Step { Walked, Off, Blocked }
 
-	static RectInt Body => new(-4, -12, 8, 12);
-	static RectInt DuckBody => new(-4, -6, 8, 6);
-	static Point2 BodyCenter => new(0, -6);
+	readonly RectInt Body = body.Stand;
+	readonly RectInt DuckBody = body.Duck;
+	readonly Point2 BodyCenter = new(0, body.Stand.Top / 2); // where Actor checks for water
 	static float JumpPenalty => 0.1f;
 	static float FallPenalty => 0.05f;
 	static float RopePenalty => 0.2f;
@@ -1022,7 +1022,7 @@ public sealed class ReachField(List<ReachMove> moves, Dictionary<(Point2 Start, 
 // Keeps a ReachField current: re-rasterizes the room every RefreshInterval and, when it differs, builds the next
 // field a slice per frame while the last one stays in use, then swaps it in. Opened doors, grown ribbons and
 // broken tiles are simply part of the next build.
-public sealed class ReachSense
+public sealed class ReachSense(ReachBody body)
 {
 	static float RefreshInterval => 0.25f;
 	static double BuildBudgetMs => 2;
@@ -1040,7 +1040,7 @@ public sealed class ReachSense
 
 	public void Update(Game game, Room room, RectInt target)
 	{
-		moves ??= ReachMoves.Record(game);
+		moves ??= ReachMoves.For(game, body);
 		if (room != this.room)
 		{
 			this.room = room;
@@ -1054,7 +1054,7 @@ public sealed class ReachSense
 		if (building == null && refreshTimer <= 0)
 		{
 			refreshTimer = RefreshInterval;
-			next ??= new(moves, misses);
+			next ??= new(body, moves, misses);
 			next.Rasterize(game, room);
 			// The gym runs unthrottled and must build on the same frame every run.
 			if (Field == null || AlwaysRebuild || !next.SameAs(Field))

@@ -3,14 +3,14 @@ using System.Numerics;
 namespace Myth;
 
 // A slow, relentless hunter: a double-size Bud that paths to the player with the same
-// Navigator machinery, and never stops. It is dormant until it first sees the player, then
+// reach-field machinery, and never stops. It is dormant until it first sees the player, then
 // hunts across rooms forever — leaving a room doesn't unload it. Instead the chase continues
 // off-screen as a timer: how far it still had to travel to the exit you took, at its own
 // travel speed, is how long before it walks in through the entry of your new room.
 //
-// Because its body is twice Bud's, it navigates on its own graph (Game.GetStalkerNavGraph),
-// probed with the bigger rects below. Gaps that body can't fit produce no edges at all, so
-// crawl spaces are genuinely safe from it.
+// Because its body is twice Bud's, it keeps its own ReachSense, built for the bigger rects
+// below and its slower speed. Gaps that body can't fit produce no edges at all, so crawl
+// spaces are genuinely safe from it.
 //
 // Only one exists at a time: the authored instance becomes the persistent one, and any
 // duplicate created by re-entering its home room removes itself in Added.
@@ -58,7 +58,8 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	static float TelegraphTime => 0.9f;
 
-	readonly Navigator nav;
+	readonly ReachPilot pilot;
+	ReachSense? sense;
 	readonly HumanoidRigVisual rigVisual;
 	DitherCorruption? corruption;
 	bool rigReady;
@@ -82,7 +83,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	public Stalker()
 	{
-		nav = new(this);
+		pilot = new(this);
 		rigVisual = new(this);
 		rigVisual.Settings.TurnWhileMoving = true;
 		rigVisual.Settings.CoreColor = new(0x4b334f);
@@ -110,6 +111,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 				return;
 			}
 
+		sense = new(new(NavProbe, NavDuckingProbe, SpeedMultiplier));
 		SyncRigSettings();
 		rigVisual.Initialize("Zombie_Idle_Loop");
 		rigReady = true;
@@ -142,65 +144,24 @@ public class Stalker : Pawn, INeuralTextureAgent
 
 	public override PawnInput GetInput()
 	{
-		if (!hunting || pendingArrival)
+		if (!hunting || pendingArrival || Game.GetFirst<Player>() is not { } player)
 			return new();
 
-		var player = Game.GetFirst<Player>();
-		if (player == null)
-			return new();
-
-		var moveX = 0f;
-		var moveY = 0;
-		var jumpPressed = false;
-		var recoverWallJump = false;
-
-		if (!nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
-		{
-			if (nav.TryRecoverLanding(out moveX, out jumpPressed, out recoverWallJump))
-			{
-				// Mid-air with no edge to run: steer onto a reachable surface.
-			}
-			else if (nav.TryClimbWellToward(player.Position, out moveX, out moveY, out jumpPressed, out recoverWallJump))
-			{
-				// Player overhead in a walled shaft: chained wall kicks are the only way up.
-			}
-			else if (!nav.TryNavigateToPosition(player.Position, out moveX, out moveY, out jumpPressed))
-			{
-				if (nav.TryRecoverPit(out moveX, out jumpPressed, out recoverWallJump))
-					moveY = 0;
-				else
-				{
-					// No path at all: shamble toward the player so it never just stands there.
-					moveX = Math.Sign(player.Position.X - Position.X);
-					moveY = 0;
-					if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
-						moveX = 0;
-				}
-			}
-		}
-
-		nav.UpdateJumpHeld(jumpPressed);
-
-		if (moveX == 0)
-		{
-			var face = Math.Sign(player.Position.X - Position.X);
-			if (face != 0)
-				Facing = face;
-		}
-
-		return new(
-			MoveX: moveX,
-			MoveY: moveY,
-			JumpPressed: jumpPressed,
-			JumpDown: nav.JumpHeld,
-			DashPressed: false,
-			AllowWallJump: nav.ActiveEdgeAllowsWallJump || recoverWallJump
-		);
+		var input = sense?.Field is { } field ? pilot.GetInput(field) : default;
+		var toward = Math.Sign(player.Position.X - Position.X);
+		// No way through at all: shamble toward the player so it never just stands there.
+		if (pilot.Label.StartsWith("no ") && grounded && toward != 0 &&
+			Game.OverlapsRoomCollision(new RectInt(Position.X + toward * (NavProbe.Width / 2 + 2), Position.Y, 2, Game.TileSize)))
+			input = input with { MoveX = toward };
+		if (input.MoveX == 0 && toward != 0)
+			Facing = toward;
+		return input;
 	}
 
 	public override void Update()
 	{
-		nav.GraphOverride = Game.GetStalkerNavGraph();
+		if (hunting && !pendingArrival && Game.room is { } room && Game.GetFirst<Player>() is { } player)
+			sense?.Update(Game, room, player.Hitbox.Rect + player.Position);
 
 		if (pendingArrival)
 		{
@@ -367,7 +328,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 		CollidesWithSolids = false;
 		Mask = Masks.None;
 		Velocity = Vector2.Zero;
-		nav.ClearBlockedPathEdges();
+		pilot.Cancel();
 	}
 
 	void ResetToHome(RoomChange change)
@@ -387,7 +348,7 @@ public class Stalker : Pawn, INeuralTextureAgent
 		Visible = true;
 		CollidesWithSolids = true;
 		Mask = Masks.Enemy;
-		nav.ClearBlockedPathEdges();
+		pilot.Cancel();
 	}
 
 	// Where the player left the room we were chasing them through: the edge of the old room

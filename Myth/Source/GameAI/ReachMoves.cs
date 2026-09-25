@@ -5,7 +5,7 @@ namespace Myth;
 // A maneuver recorded once, from a standstill, by running the real Pawn physics in empty space: the input
 // pressed on each frame and where the body went. Swept through the live room raster (ReachField), the path
 // holds until its first contact, so a move that sweeps clean there is the move the pawn will make.
-public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runup, bool crawl, int groundedFrames, Point2[] offsets, PawnInput[] inputs)
+public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runup, bool crawl, int groundedFrames, Point2[] offsets, PawnInput[] inputs, RectInt body)
 {
 	// Jump: from standing, after running Runup px. WalkOff: run Runup px off a ledge. Fall: drop from rest in
 	// the air. Kick: kick off a wall on the Dir side.
@@ -23,7 +23,14 @@ public sealed class ReachMove(ReachMove.Kinds kind, int dir, int steer, int runu
 	public readonly Point2[] Offsets = offsets;
 	public readonly PawnInput[] Inputs = inputs;
 	// Everywhere the body goes along the whole recording, relative to the start.
-	public readonly RectInt Reach = offsets.Aggregate(new RectInt(-4, -12, 8, 12), (reach, offset) => reach.Conflate(new RectInt(-4, -12, 8, 12) + offset));
+	public readonly RectInt Reach = offsets.Aggregate(body, (reach, offset) => reach.Conflate(body + offset));
+}
+
+// The shape and speed of whoever is moving: its standing and crouching hitboxes, and its ground/air speed
+// multiplier. Moves are recorded per body, since a bigger or slower pawn jumps differently.
+public readonly record struct ReachBody(RectInt Stand, RectInt Duck, float Speed = 1)
+{
+	public static ReachBody Bud => new(new(-4, -12, 8, 12), new(-4, -6, 8, 6));
 }
 
 public static class ReachMoves
@@ -34,7 +41,16 @@ public static class ReachMoves
 	// So far outside any room that room collision, water and ropes never reach the recording.
 	static readonly Point2 SimOrigin = new(-1 << 20, -1 << 20);
 
-	public static List<ReachMove> Record(Game game)
+	static readonly Dictionary<ReachBody, List<ReachMove>> recorded = [];
+
+	public static List<ReachMove> For(Game game, ReachBody body)
+	{
+		if (!recorded.TryGetValue(body, out var moves))
+			recorded[body] = moves = Record(game, body);
+		return moves;
+	}
+
+	static List<ReachMove> Record(Game game, ReachBody body)
 	{
 		var moves = new List<ReachMove>();
 		game.WithSimClock(() =>
@@ -42,36 +58,36 @@ public static class ReachMoves
 			foreach (var hold in (ReadOnlySpan<float>)[0.055f, 0.1f, 0.16f, 0.22f])
 			{
 				foreach (var steer in (ReadOnlySpan<int>)[0, -1, 1])
-					moves.Add(RecordJump(game, 0, 0, hold, steer, steer == 0 ? 99 : 0.1f));
+					moves.Add(RecordJump(game, body, 0, 0, hold, steer, steer == 0 ? 99 : 0.1f));
 				foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
 				foreach (var runup in (ReadOnlySpan<float>)[0, 0.1f, 0.2f, 0.35f])
 				{
-					moves.Add(RecordJump(game, dir, runup, hold, dir, 99));
-					moves.Add(RecordJump(game, dir, runup, hold, 0, 0.2f));
-					moves.Add(RecordJump(game, dir, runup, hold, -dir, 0.25f));
+					moves.Add(RecordJump(game, body, dir, runup, hold, dir, 99));
+					moves.Add(RecordJump(game, body, dir, runup, hold, 0, 0.2f));
+					moves.Add(RecordJump(game, body, dir, runup, hold, -dir, 0.25f));
 				}
 			}
 			foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
 			foreach (var runup in (ReadOnlySpan<int>)[-1, 0, 8, 16, 32, 48])
 			{
-				moves.Add(RecordWalkOff(game, dir, runup, dir, 99));
-				moves.Add(RecordWalkOff(game, dir, runup, 0, 0.1f));
-				moves.Add(RecordWalkOff(game, dir, runup, -dir, 0.15f));
+				moves.Add(RecordWalkOff(game, body, dir, runup, dir, 99));
+				moves.Add(RecordWalkOff(game, body, dir, runup, 0, 0.1f));
+				moves.Add(RecordWalkOff(game, body, dir, runup, -dir, 0.15f));
 			}
 			foreach (var steer in (ReadOnlySpan<int>)[0, -1, 1])
-				moves.Add(RecordFall(game, steer));
+				moves.Add(RecordFall(game, body, steer));
 			foreach (var side in (ReadOnlySpan<int>)[-1, 1])
 			foreach (var hold in (ReadOnlySpan<float>)[0.1f, 0.22f])
 			foreach (var steer in (ReadOnlySpan<int>)[-side, 0, side])
-				if (RecordKick(game, side, hold, steer) is { } kick)
+				if (RecordKick(game, body, side, hold, steer) is { } kick)
 					moves.Add(kick);
 		});
 		return moves;
 	}
 
-	static ReachMove RecordJump(Game game, int dir, float runupTime, float hold, int steer, float switchTime)
+	static ReachMove RecordJump(Game game, ReachBody body, int dir, float runupTime, float hold, int steer, float switchTime)
 	{
-		var pawn = new SimPawn(game, new RectInt(SimOrigin.X - 4000, SimOrigin.Y, 8000, 8));
+		var pawn = new SimPawn(game, body, new RectInt(SimOrigin.X - 4000, SimOrigin.Y, 8000, 8));
 		var jumpFrame = (int)MathF.Ceiling(runupTime / Dt - 0.001f);
 		return Run(pawn, ReachMove.Kinds.Jump, dir, steer, frame =>
 		{
@@ -82,14 +98,14 @@ public static class ReachMoves
 	}
 
 	// The floor ends where a body standing `runup` px back from the lip has walked it off; -1 crawls off from the lip.
-	static ReachMove RecordWalkOff(Game game, int dir, int runup, int steer, float switchTime)
+	static ReachMove RecordWalkOff(Game game, ReachBody body, int dir, int runup, int steer, float switchTime)
 	{
 		var crawl = runup < 0;
 		runup = Math.Max(0, runup);
 		var floor = dir > 0
-			? new RectInt(SimOrigin.X - 4000, SimOrigin.Y, 4000 - 3 + runup, 8)
-			: new RectInt(SimOrigin.X + 3 - runup, SimOrigin.Y, 4000, 8);
-		var pawn = new SimPawn(game, floor);
+			? new RectInt(SimOrigin.X - 4000, SimOrigin.Y, 4000 + body.Stand.Left + 1 + runup, 8)
+			: new RectInt(SimOrigin.X + body.Stand.Right - 1 - runup, SimOrigin.Y, 4000, 8);
+		var pawn = new SimPawn(game, body, floor);
 		var leftGround = -1;
 		return Run(pawn, ReachMove.Kinds.WalkOff, dir, steer, frame =>
 		{
@@ -100,15 +116,15 @@ public static class ReachMoves
 		}, runup, crawl);
 	}
 
-	static ReachMove RecordFall(Game game, int steer)
-		=> Run(new SimPawn(game, null), ReachMove.Kinds.Fall, 0, steer, _ => new(steer, 0, false, false, false, AllowWallJump: false));
+	static ReachMove RecordFall(Game game, ReachBody body, int steer)
+		=> Run(new SimPawn(game, body, null), ReachMove.Kinds.Fall, 0, steer, _ => new(steer, 0, false, false, false, AllowWallJump: false));
 
-	static ReachMove? RecordKick(Game game, int side, float hold, int steer)
+	static ReachMove? RecordKick(Game game, ReachBody body, int side, float hold, int steer)
 	{
 		var wall = side > 0
-			? new RectInt(SimOrigin.X + 4, SimOrigin.Y - 400, 8, 800)
-			: new RectInt(SimOrigin.X - 12, SimOrigin.Y - 400, 8, 800);
-		var pawn = new SimPawn(game, wall);
+			? new RectInt(SimOrigin.X + body.Stand.Right, SimOrigin.Y - 400, 8, 800)
+			: new RectInt(SimOrigin.X + body.Stand.Left - 8, SimOrigin.Y - 400, 8, 800);
+		var pawn = new SimPawn(game, body, wall);
 		var move = Run(pawn, ReachMove.Kinds.Kick, side, steer, frame => frame == 0
 			? new(side, 0, JumpPressed: true, JumpDown: true, DashPressed: false)
 			: new(steer, 0, JumpPressed: false, JumpDown: frame * Dt < hold, DashPressed: false, AllowWallJump: false));
@@ -144,22 +160,28 @@ public static class ReachMoves
 			if (offsets[^1].Y > MaxDrop)
 				break;
 		}
-		return new(kind, dir, steer, runup >= 0 ? runup : Math.Abs(offsets[groundedFrames].X), crawl, groundedFrames, [.. offsets], [.. inputs]);
+		return new(kind, dir, steer, runup >= 0 ? runup : Math.Abs(offsets[groundedFrames].X), crawl, groundedFrames, [.. offsets], [.. inputs], pawn.Body.Stand);
 	}
 
 	sealed class SimPawn : Pawn
 	{
 		static readonly List<Actor> noWind = [];
 		public readonly List<Actor> Solids = [];
+		public readonly ReachBody Body;
 		public PawnInput Input;
 		internal override List<Actor> CollisionActors => Solids;
 		internal override List<Actor> WindActors => noWind;
+		protected override RectInt CurrentStandingHitboxRect => Body.Stand;
+		protected override RectInt CurrentDuckingHitboxRect => Body.Duck;
+		protected override float GroundSpeedMultiplier => Body.Speed;
+		protected override float AirSpeedMultiplier => Body.Speed;
 
-		public SimPawn(Game game, RectInt? solid)
+		public SimPawn(Game game, ReachBody body, RectInt? solid)
 		{
 			Game = game;
+			Body = body;
 			Position = SimOrigin;
-			Hitbox = new(StandingHitboxRect);
+			Hitbox = new(body.Stand);
 			if (solid is { } rect)
 				Solids.Add(new Actor { Mask = Masks.Solid, Hitbox = new(rect) });
 			grounded = Grounded();

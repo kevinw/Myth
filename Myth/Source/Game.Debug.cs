@@ -126,7 +126,7 @@ public partial class Game
 	Room? platformNavGraphRoom;
 	bool platformNavGraphPristine = true;
 	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
-	internal readonly ReachSense reach = new();
+	internal readonly ReachSense reach = new(ReachBody.Bud);
 
 	void UpdateReachField()
 	{
