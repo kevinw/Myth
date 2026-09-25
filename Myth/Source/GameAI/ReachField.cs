@@ -81,6 +81,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	readonly Dictionary<(int X, int Y, int Side), int> wallAt = [];
 	readonly List<int> ropeNodes = [];
 	readonly List<(Vector2 Point, int Node)> ropePoints = [];
+	RectInt ropeReach; // every rope point plus the grab radius, so a sweep clear of it skips the rope search
 	internal readonly List<Ride> Rides = [];
 	readonly Dictionary<(int Ride, int Phase, int Slot), int> rideAt = [];
 	RectInt ghost; // a platform's footprint at one phase, solid while sweeping for landings on it
@@ -117,6 +118,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	public bool SameAs(ReachField other)
 		=> ropes == other.ropes && solid.SamePixels(other.solid) && jumpthru.SamePixels(other.jumpthru) && water.SamePixels(other.water);
 
+	// Lays the pixels down; Build sums them.
 	public void Rasterize(Game game, Room room)
 	{
 		// Room collision clamps queries outside the room to its edge tiles, so the raster runs a margin past
@@ -163,9 +165,6 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 						layer[new(x, y)] = true;
 		}
 
-		solid.Commit();
-		jumpthru.Commit();
-		water.Commit();
 		ropes = RopeSignature(game);
 		bounds = solid.Bounds;
 		roomBottom = room.WorldBounds.Bottom;
@@ -191,46 +190,13 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		var buildStart = Stopwatch.GetTimestamp();
 		var slice = buildStart;
 		var longestSlice = 0.0;
-		Prepare(game);
-		for (var i = 0; i < Nodes.Count; i++)
-		{
-			Expand(i);
+		foreach (var _ in Steps(game))
 			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
 			{
 				longestSlice = Math.Max(longestSlice, sliced);
 				yield return false;
 				slice = Stopwatch.GetTimestamp();
 			}
-		}
-		for (var ride = 0; ride < Rides.Count; ride++)
-		for (var phase = 0; phase < Rides[ride].Phases.Count; phase++)
-		{
-			if (Rides[ride].RestPhase is var rest and >= 0 && phase != rest)
-				continue;
-			Board(ride, phase);
-			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
-			{
-				longestSlice = Math.Max(longestSlice, sliced);
-				yield return false;
-				slice = Stopwatch.GetTimestamp();
-			}
-		}
-		for (var e = 0; e < Edges.Count; e++)
-		{
-			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && Margins(edge) is var (knife, tooShort))
-			{
-				if (tooShort)
-					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty * 2, Risk = 1 };
-				else if (knife)
-					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty, Risk = MathF.Min(1, edge.Risk + KnifeEdgeRisk) };
-			}
-			if (Stopwatch.GetElapsedTime(slice).TotalMilliseconds is var sliced && sliced > budgetMs)
-			{
-				longestSlice = Math.Max(longestSlice, sliced);
-				yield return false;
-				slice = Stopwatch.GetTimestamp();
-			}
-		}
 
 		incomingStart = new int[Nodes.Count + 1];
 		incoming = new int[Edges.Count];
@@ -248,7 +214,55 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				$"{Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds:0.0}ms start to finish, longest slice {longestSlice:0.0}ms");
 	}
 
-	void Prepare(Game game)
+	// A build in pieces, each small enough that stopping after any one of them is quick.
+	IEnumerable<bool> Steps(Game game)
+	{
+		// Summing the raster costs more than laying it down and only a build reads the sums, so a refresh that
+		// finds the room unchanged (most of them) stops at Rasterize and never pays for this.
+		solid.Commit();
+		yield return false;
+		jumpthru.Commit();
+		yield return false;
+		water.Commit();
+		yield return false;
+		foreach (var step in Prepare(game))
+			yield return step;
+		for (var i = 0; i < Nodes.Count; i++)
+		{
+			Expand(i);
+			for (var m = 0; m < Moves.Count; m++)
+			{
+				ExpandMove(i, m);
+				yield return false;
+			}
+		}
+		for (var ride = 0; ride < Rides.Count; ride++)
+		for (var phase = 0; phase < Rides[ride].Phases.Count; phase++)
+		{
+			if (Rides[ride].RestPhase is var rest and >= 0 && phase != rest)
+				continue;
+			for (var from = 0; from < Nodes.Count; from++)
+			{
+				Board(ride, phase, from);
+				yield return false;
+			}
+		}
+		for (var e = 0; e < Edges.Count; e++)
+		{
+			if (Edges[e] is { Move: >= 0 } edge && Nodes[edge.To].Kind == NodeKind.Stand && Margins(edge) is var (knife, tooShort))
+			{
+				if (tooShort)
+					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty * 2, Risk = 1 };
+				else if (knife)
+					Edges[e] = edge with { Cost = edge.Cost + KnifeEdgePenalty, Risk = MathF.Min(1, edge.Risk + KnifeEdgeRisk) };
+			}
+			yield return false;
+		}
+	}
+
+	// Finds the spots worth standing, swimming, climbing and riding on, yielding between columns of the room
+	// and between spots so a build can stop partway.
+	IEnumerable<bool> Prepare(Game game)
 	{
 		Nodes.Clear();
 		Edges.Clear();
@@ -257,6 +271,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		wallAt.Clear();
 		ropeNodes.Clear();
 		ropePoints.Clear();
+		ropeReach = default;
 		sweeps = 0;
 
 		for (var ty = bounds.Top; ty < bounds.Bottom; ty += Game.TileSize)
@@ -274,6 +289,8 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			}
 		}
 
+		yield return false;
+
 		var ropeId = 0;
 		foreach (var actor in game.Actors)
 		{
@@ -290,9 +307,15 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 					Nodes.Add(new(feet, NodeKind.Rope, ropeId));
 				}
 				if (ropeNodes.Count > 0 && Nodes[ropeNodes[^1]].Side == ropeId)
+				{
+					var grab = new RectInt(points[i].RoundToPoint2(), Point2.Zero).Inflate((int)RopeGrabRadius + 1);
+					ropeReach = ropePoints.Count == 0 ? grab : ropeReach.Conflate(grab);
 					ropePoints.Add((points[i], ropeNodes[^1]));
+				}
 			}
 		}
+
+		yield return false;
 
 		Rides.Clear();
 		rideAt.Clear();
@@ -317,14 +340,20 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				}
 		}
 
+		yield return false;
+
 		for (var x = bounds.Left + Game.TileSize / 2; x < bounds.Right; x += Game.TileSize)
-		for (var y = bounds.Top + 1; y <= bounds.Bottom; y++)
-			if (TryStand(new(x, y), out var ducking))
-				AddStand(new(x, y), 0, ducking);
+		{
+			for (var y = bounds.Top + 1; y <= bounds.Bottom; y++)
+				if (TryStand(new(x, y), out var ducking))
+					AddStand(new(x, y), 0, ducking);
+			yield return false;
+		}
 
 		// Lips, where a walk-off or a max-distance jump leaves, and the spots a runup to each lip starts from.
 		for (int i = 0, sampled = Nodes.Count; i < sampled; i++)
 		{
+			yield return false;
 			if (Nodes[i] is not { Kind: NodeKind.Stand } stand)
 				continue;
 			foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
@@ -378,6 +407,8 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		return Nodes.Count - 1;
 	}
 
+	// One node's own edges: the walks, slides, climbs and swims that don't replay a recorded move. Replaying the
+	// moves is ExpandMove, one at a time, so a build can stop between them.
 	void Expand(int index)
 	{
 		edgeTo.Clear();
@@ -388,23 +419,9 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			case NodeKind.Stand:
 				foreach (var dir in (ReadOnlySpan<int>)[-1, 1])
 					WalkEdge(index, dir);
-				var onJumpthruOnly = !Solid(new RectInt(p.X + Body.Left, p.Y, Body.Width, 1));
-				for (var m = 0; m < Moves.Count; m++)
-				{
-					if (node.Ducking != Moves[m].Crawl)
-						continue;
-					if (Moves[m].Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.WalkOff)
-						TryMove(index, m, p, false);
-					else if (Moves[m].Kind == ReachMove.Kinds.Fall && onJumpthruOnly)
-						TryMove(index, m, p + new Point2(0, 2), false);
-				}
 				break;
 
 			case NodeKind.Wall:
-				for (var m = 0; m < Moves.Count; m++)
-					if (Moves[m].Kind == ReachMove.Kinds.Kick && Moves[m].Dir == node.Side ||
-						Moves[m].Kind == ReachMove.Kinds.Fall && Moves[m].Steer != node.Side)
-						TryMove(index, m, p, false);
 				Slide(index);
 				break;
 
@@ -412,9 +429,6 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				foreach (var neighbor in (ReadOnlySpan<int>)[index - 1, index + 1])
 					if (neighbor >= 0 && neighbor < Nodes.Count && Nodes[neighbor] is { Kind: NodeKind.Rope } other && other.Side == node.Side)
 						AddEdge(index, neighbor, -1, p, 0, Vector2.Distance(p, other.Position) / ClimbSpeed);
-				for (var m = 0; m < Moves.Count; m++)
-					if (Moves[m] is { Kind: ReachMove.Kinds.Jump, Runup: 0 } or { Kind: ReachMove.Kinds.Fall })
-						TryMove(index, m, p, true);
 				break;
 
 			case NodeKind.Ride:
@@ -433,10 +447,6 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 					if (next >= 0 && next < count && rideAt.TryGetValue((node.Side, next, slot), out var onward))
 						AddEdge(index, onward, -1, p, 0, Vector2.Distance(ride.Phases[node.Phase], ride.Phases[next]) / ride.Platform.Speed);
 				}
-				// Off again: jumps that take off straight away, so the platform's carry doesn't matter.
-				for (var m = 0; m < Moves.Count; m++)
-					if (Moves[m] is { Kind: ReachMove.Kinds.Jump, GroundedFrames: 0 })
-						TryMove(index, m, p, false);
 				break;
 
 			case NodeKind.Swim:
@@ -462,36 +472,66 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		}
 	}
 
-	// Moves from nearby spots that land on the platform's top at this phase.
-	void Board(int ride, int phase)
+	// Where one recorded move takes this node, for the moves its kind can make.
+	void ExpandMove(int index, int m)
 	{
-		var platform = Rides[ride].Platform;
-		ghost = new RectInt(Rides[ride].Phases[phase], platform.Size);
-		var near = ghost.Inflate(BoardReach);
-		for (var from = 0; from < Nodes.Count; from++)
+		var node = Nodes[index];
+		var p = node.Position;
+		var move = Moves[m];
+		switch (node.Kind)
 		{
-			var node = Nodes[from];
-			if (!near.Contains(node.Position) || node.Kind is NodeKind.Ride or NodeKind.Swim || node.Ducking)
-				continue;
-			edgeTo.Clear();
-			for (var m = 0; m < Moves.Count; m++)
+			case NodeKind.Stand when node.Ducking == move.Crawl:
+				if (move.Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.WalkOff)
+					TryMove(index, m, p, false);
+				// Standing on nothing but a jumpthru, a fall drops through it.
+				else if (move.Kind == ReachMove.Kinds.Fall && !Solid(new RectInt(p.X + Body.Left, p.Y, Body.Width, 1)))
+					TryMove(index, m, p + new Point2(0, 2), false);
+				break;
+
+			case NodeKind.Wall when move.Kind == ReachMove.Kinds.Kick && move.Dir == node.Side ||
+				move.Kind == ReachMove.Kinds.Fall && move.Steer != node.Side:
+				TryMove(index, m, p, false);
+				break;
+
+			case NodeKind.Rope when move is { Kind: ReachMove.Kinds.Jump, Runup: 0 } or { Kind: ReachMove.Kinds.Fall }:
+				TryMove(index, m, p, true);
+				break;
+
+			// Off a platform: jumps that take off straight away, so the platform's carry doesn't matter.
+			case NodeKind.Ride when move is { Kind: ReachMove.Kinds.Jump, GroundedFrames: 0 }:
+				TryMove(index, m, p, false);
+				break;
+		}
+	}
+
+	// Moves from one nearby spot that land on the platform's top at this phase.
+	void Board(int ride, int phase, int from)
+	{
+		var node = Nodes[from];
+		var platform = Rides[ride].Platform;
+		var top = new RectInt(Rides[ride].Phases[phase], platform.Size);
+		if (!top.Inflate(BoardReach).Contains(node.Position) || node.Kind is NodeKind.Ride or NodeKind.Swim || node.Ducking)
+			return;
+
+		ghost = top;
+		edgeTo.Clear();
+		for (var m = 0; m < Moves.Count; m++)
+		{
+			var move = Moves[m];
+			var fits = node.Kind switch
 			{
-				var move = Moves[m];
-				var fits = node.Kind switch
-				{
-					NodeKind.Stand => move.Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.WalkOff && !move.Crawl,
-					NodeKind.Wall => move.Kind == ReachMove.Kinds.Kick && move.Dir == node.Side,
-					_ => move is { Kind: ReachMove.Kinds.Jump, GroundedFrames: 0 },
-				};
-				if (!fits || !(move.Reach + node.Position).Overlaps(ghost))
-					continue;
-				var sweep = SweepMove(move, node.Position, node.Kind == NodeKind.Rope, null);
-				if (sweep.Hit != Hit.Land || !new RectInt(sweep.At.X + Body.Left, sweep.At.Y, Body.Width, 1).Overlaps(ghost))
-					continue;
-				var slot = Math.Clamp((sweep.At.X - ghost.X) / Game.TileSize, 0, platform.Size.X / Game.TileSize - 1);
-				if (rideAt.TryGetValue((ride, phase, slot), out var to))
-					AddEdge(from, to, m, node.Position, sweep.Frame, sweep.Frame * ReachMoves.Dt + JumpPenalty + Rides[ride].Wait, sweep.Bonk, BoardingRisk);
-			}
+				NodeKind.Stand => move.Kind is ReachMove.Kinds.Jump or ReachMove.Kinds.WalkOff && !move.Crawl,
+				NodeKind.Wall => move.Kind == ReachMove.Kinds.Kick && move.Dir == node.Side,
+				_ => move is { Kind: ReachMove.Kinds.Jump, GroundedFrames: 0 },
+			};
+			if (!fits || !(move.Reach + node.Position).Overlaps(ghost))
+				continue;
+			var sweep = SweepMove(move, node.Position, node.Kind == NodeKind.Rope, null);
+			if (sweep.Hit != Hit.Land || !new RectInt(sweep.At.X + Body.Left, sweep.At.Y, Body.Width, 1).Overlaps(ghost))
+				continue;
+			var slot = Math.Clamp((sweep.At.X - ghost.X) / Game.TileSize, 0, platform.Size.X / Game.TileSize - 1);
+			if (rideAt.TryGetValue((ride, phase, slot), out var to))
+				AddEdge(from, to, m, node.Position, sweep.Frame, sweep.Frame * ReachMoves.Dt + JumpPenalty + Rides[ride].Wait, sweep.Bonk, BoardingRisk);
 		}
 		ghost = default;
 	}
@@ -807,6 +847,7 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		var p = start;
 		var offsets = move.Offsets;
 		var body = move.Crawl ? DuckBody : Body;
+		var grabRadius = RopeGrabRadius * RopeGrabRadius;
 		var bonkY = 0;
 		for (var k = 1; k < offsets.Length; k++)
 		{
@@ -872,9 +913,10 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 
 			if (water[p + BodyCenter])
 				return Stop(ref result, Hit.Water, p, k);
-			if (result.RopeNode < 0 && (!fromRope || k > RopeGraceFrames))
+			// Most of a sweep is nowhere near a rope, and this runs every frame of every one of them.
+			if (result.RopeNode < 0 && ropeReach.Contains(p + BodyCenter) && (!fromRope || k > RopeGraceFrames))
 				foreach (var (point, node) in ropePoints)
-					if (Vector2.DistanceSquared(p + BodyCenter, point) <= RopeGrabRadius * RopeGrabRadius)
+					if (Vector2.DistanceSquared(p + BodyCenter, point) <= grabRadius)
 					{
 						result.RopeNode = node;
 						result.RopeFrame = k;
@@ -922,7 +964,8 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 			for (var e = 0; e < Edges.Count; e++)
 			{
 				var edge = Edges[e];
-				if (edge.Move < 0 || Vector2.DistanceSquared(edge.Start, target.Center) > TouchSearchRadius * TouchSearchRadius)
+				if (edge.Move < 0 || Vector2.DistanceSquared(edge.Start, target.Center) > TouchSearchRadius * TouchSearchRadius ||
+					!MayTouch(edge, target))
 					continue;
 				var sweep = SweepMove(Moves[edge.Move], edge.Start, Nodes[edge.From].Kind == NodeKind.Rope, target);
 				if (sweep.TouchFrame > 0 && sweep.TouchFrame <= sweep.Frame)
@@ -947,6 +990,27 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 				}
 			}
 		}
+	}
+
+	// Could this edge's move put the body in the target, judging by the recording alone? A sweep over the raster
+	// costs many times a look at the offsets, so this stands in front of one: the reach of the whole recording
+	// first, then frame by frame. Past a bonk the path leaves the recording -- its X still follows it, but its Y
+	// runs from the bonk on down to wherever the edge ended.
+	bool MayTouch(Edge edge, RectInt target)
+	{
+		var offsets = Moves[edge.Move].Offsets;
+		var landing = Body + Nodes[edge.To].Position;
+		if (!(Moves[edge.Move].Reach + edge.Start).Conflate(landing).Overlaps(target))
+			return false;
+		var bonked = edge.Bonk > 0 && edge.Bonk < offsets.Length;
+		var falling = bonked ? (Body + edge.Start + offsets[edge.Bonk]).Conflate(landing) : default;
+		for (var k = 1; k <= edge.Frames && k < offsets.Length; k++)
+		{
+			var at = Body + edge.Start + offsets[k];
+			if (target.Overlaps(bonked && k >= edge.Bonk ? new RectInt(at.X, falling.Y, at.Width, falling.Height) : at))
+				return true;
+		}
+		return false;
 	}
 
 	void Seed(int node, float at, int edge, int frame)
@@ -1051,6 +1115,7 @@ public sealed class ReachSense(ReachBody body)
 	static double BuildBudgetMs => 2;
 	// REACH_REBUILD=1 rebuilds every refresh, to profile a build warm.
 	static readonly bool AlwaysRebuild = Environment.GetEnvironmentVariable("REACH_REBUILD") == "1";
+	static readonly double? Budget = double.TryParse(Environment.GetEnvironmentVariable("REACH_BUDGET"), out var b) ? b : null;
 
 	public ReachField? Field { get; private set; }
 	ReachField? next;
@@ -1079,9 +1144,10 @@ public sealed class ReachSense(ReachBody body)
 			refreshTimer = RefreshInterval;
 			next ??= new(body, moves, misses);
 			next.Rasterize(game, room);
-			// The gym runs unthrottled and must build on the same frame every run.
+			// The gym runs unthrottled and must build on the same frame every run; REACH_BUDGET forces it to
+			// slice there anyway, since nothing else exercises the sliced path.
 			if (Field == null || AlwaysRebuild || !next.SameAs(Field))
-				building = next.Build(game, game.Manager.Unthrottled ? double.PositiveInfinity : BuildBudgetMs).GetEnumerator();
+				building = next.Build(game, Budget ?? (game.Manager.Unthrottled ? double.PositiveInfinity : BuildBudgetMs)).GetEnumerator();
 		}
 		if (building != null && !building.MoveNext())
 		{
