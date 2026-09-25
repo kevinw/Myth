@@ -179,9 +179,6 @@ partial class Manager
 	const double GymNoPathTimeout = 5.0;
 	double gymNoPathStartTime = -1;
 
-	// Last run index whose nav-graph nodes were dumped by the dense gym trace (GYM_TRACE_DENSE).
-	int gymNodesDumpRunIndex = -1;
-
 	// World position the player (and thus Bud) should spawn at for the current gym
 	// run, taken from the run's PlayerStart marker. Null means use the default spawn.
 	Point2? gymStartOverride;
@@ -228,7 +225,6 @@ partial class Manager
 		var current = gym.runs[gym.runIndex];
 		var simTime = Time.Seconds - gym.roomStartTime;
 		var reason = success ? "goal" : failureReason ?? (game?.GymBudDied == true ? "fell" : "timeout");
-		game?.GetPlatformNavGraph()?.LogPathStats();
 		if (gym.exitAfterAll)
 		{
 			gym.results ??= [];
@@ -333,7 +329,6 @@ partial class Manager
 				!string.IsNullOrWhiteSpace(run.GoalName) && string.Equals(goal.Name, run.GoalName, StringComparison.OrdinalIgnoreCase))
 			{
 				game.GymTarget = goal;
-				game.NavTrace?.Event(game, "gymTarget", ("target", NavTrace.Vec(goal.Position)));
 				return;
 			}
 		}
@@ -342,8 +337,6 @@ partial class Manager
 		game.GymTarget = game.Actors.OfType<Goal>()
 			.OrderBy(goal => Vector2.DistanceSquared(goal.Position, worldPosition))
 			.FirstOrDefault();
-		if (game.GymTarget is Goal fallbackGoal)
-			game.NavTrace?.Event(game, "gymTarget", ("target", NavTrace.Vec(fallbackGoal.Position)));
 	}
 
 }

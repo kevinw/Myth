@@ -17,7 +17,6 @@ public partial class Game
 		DitherMask,
 		Reflection,
 		ShadowSegments,
-		PlatformNav,
 		ReachField
 	}
 
@@ -33,8 +32,7 @@ public partial class Game
 		if (debug.ReloadRoom.Pressed)
 			ReloadRoom();
 		// TODO: use an ingame console instead?
-		if (debug.PlatformNavView.Pressed)
-			SetDebugView(debugView switch { DebugView.ReachField => DebugView.PlatformNav, DebugView.PlatformNav => DebugView.None, _ => DebugView.ReachField });
+		if (debug.ReachFieldView.Pressed) ToggleDebugView(DebugView.ReachField);
 		if (debug.RenderTargets.Pressed)
 		{
 			if (Input.Keyboard.Shift)
@@ -122,15 +120,11 @@ public partial class Game
 	internal PlayerRewinder rewinder;
 	internal bool Rewinding => rewinder.Rewinding;
 	internal DebugView debugView;
-	PlatformNavGraph platformNavGraph = new();
-	Room? platformNavGraphRoom;
-	bool platformNavGraphPristine = true;
-	public bool IsPlatformNavDebugVisible => debugView == DebugView.PlatformNav;
 	internal readonly ReachSense reach = new(ReachBody.Bud);
 
 	void UpdateReachField()
 	{
-		if (room == null || debugView != DebugView.ReachField && !(Bud.ReachNav && GetFirst<Bud>() != null))
+		if (room == null || debugView != DebugView.ReachField && GetFirst<Bud>() == null)
 			return;
 		RectInt? target = GymTarget is { } goal ? (goal.Hitbox.Rect + goal.Position).Inflate(1)
 			: GetFirst<Player>() is { } player ? player.Hitbox.Rect + player.Position : null;
@@ -197,14 +191,14 @@ public partial class Game
 	void SetDebugView(DebugView view)
 	{
 		debugView = view;
-		Manager.PlatformNavDebugVisible = view == DebugView.PlatformNav;
+		Manager.ReachDebugVisible = view == DebugView.ReachField;
 		DisplayMessage($"Debug: {DebugViewName(view)}");
 	}
 
 	void RestorePersistentDebugViews()
 	{
-		if (Manager.PlatformNavDebugVisible)
-			debugView = DebugView.PlatformNav;
+		if (Manager.ReachDebugVisible)
+			debugView = DebugView.ReachField;
 		if (Enum.TryParse<DebugView>(Manager.StartDebugView, ignoreCase: true, out var view))
 			debugView = view;
 	}
@@ -244,103 +238,18 @@ public partial class Game
 			DebugView.DitherMask => "Dither Mask",
 			DebugView.Reflection => "Reflection Screen",
 			DebugView.ShadowSegments => "GPU Shadow Segments",
-			DebugView.PlatformNav => "Platform Nav",
 			DebugView.ReachField => "Reach Field",
 			_ => view.ToString()
 		};
 
-	// Hold the per-frame nav build off while a room camera slide is animating (and briefly
-	// after, while it settles) so the budgeted build doesn't compete with the slide and
-	// hitch it. Set by Manager from the editor camera tween; gameplay transitions are
-	// detected from nextRoom + this settle timer.
-#if EDITOR
-	internal bool navBuildSuppressedByHost;
-#else
-	internal const bool navBuildSuppressedByHost = false;
-#endif
-	const float NavBuildSettleSeconds = 0.3f;
-	float navBuildSettleTimer;
-
-	public PlatformNavGraph? GetPlatformNavGraph()
-		=> room == null ? null : TickNavGraph(platformNavGraph, ref platformNavGraphRoom, ref navBuildSettleTimer);
-
-	// Second graph, probed with the Stalker's larger body so its paths only use gaps that
-	// body fits through. Built lazily — rooms without a Stalker never pay for it.
-	PlatformNavGraph? stalkerNavGraph;
-	Room? stalkerNavGraphRoom;
-	float stalkerNavBuildSettleTimer;
-
-	public PlatformNavGraph? GetStalkerNavGraph()
-	{
-		if (room == null)
-			return null;
-		stalkerNavGraph ??= new PlatformNavGraph(Stalker.NavProbe, Stalker.NavDuckingProbe);
-		return TickNavGraph(stalkerNavGraph, ref stalkerNavGraphRoom, ref stalkerNavBuildSettleTimer);
-	}
-
-	PlatformNavGraph? TickNavGraph(PlatformNavGraph graph, ref Room? graphRoom, ref float settleTimer)
-	{
-		// Unthrottled (gym) builds the whole graph in one tick so it becomes ready on a
-		// deterministic frame, and never defers — its determinism must not depend on
-		// camera/slide state.
-		var unthrottled = Manager.Unthrottled;
-
-		if (graphRoom != room)
-		{
-			graph.Rebuild(this, room!);
-			graphRoom = room;
-			settleTimer = unthrottled ? 0f : NavBuildSettleSeconds;
-		}
-
-		// While a room transition is sliding or the post-slide camera is still settling,
-		// skip the budgeted build (return the existing graph, or null if none yet).
-		if (!unthrottled && (nextRoom != null || navBuildSuppressedByHost || settleTimer > 0f))
-		{
-			if (nextRoom == null && !navBuildSuppressedByHost && settleTimer > 0f)
-				settleTimer = MathF.Max(0f, settleTimer - Time.Delta);
-			return graph.IsReady ? graph : null;
-		}
-
-		graph.Tick(unthrottled ? float.MaxValue : 2.0f);
-		return graph.IsReady ? graph : null;
-	}
-
-	internal PlatformNavGraph? ReadyPlatformNavGraph
-		=> platformNavGraphPristine && platformNavGraph.IsReady ? platformNavGraph : null;
-
-	internal void ReusePlatformNavGraph(PlatformNavGraph graph)
-	{
-		platformNavGraph = graph;
-		platformNavGraphRoom = room;
-		platformNavGraphPristine = true;
-		graph.ResetPathStats();
-	}
-
 	void OnRoomGeoChanged(RoomGeoChange change)
 	{
 		RoomGeoChanged?.Invoke(change);
-		if (change.Room != room)
-			return;
-
-		platformNavGraphPristine = false;
-		if (platformNavGraphRoom == room)
-		{
-			platformNavGraph.Rebuild(this, room, change.DirtyWorldBounds);
-			navBuildSettleTimer = 0;
-		}
-		if (stalkerNavGraph != null && stalkerNavGraphRoom == room)
-		{
-			stalkerNavGraph.Rebuild(this, room, change.DirtyWorldBounds);
-			stalkerNavBuildSettleTimer = 0;
-		}
 	}
-
-	void ResetPlatformNavGraphRoomState()
-		=> platformNavGraphPristine = true;
 
 	public bool TryGetBudDebugOverlay(out Vector2 worldPosition, out string label)
 	{
-		if (debugView == DebugView.PlatformNav && GetFirst<Bud>() is { } bud)
+		if (debugView == DebugView.ReachField && GetFirst<Bud>() is { } bud)
 		{
 			worldPosition = bud.Position + new Vector2(0, -22);
 			label = bud.DebugNavLabel;

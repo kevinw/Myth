@@ -209,10 +209,6 @@ public sealed partial class GameView
 			using (GraphicsDevice.DebugGroup("Myth/shadow-segment debug"))
 				DrawShadowDebug(output);
 		}
-		if (debugView == DebugView.PlatformNav)
-		{
-			game.GetPlatformNavGraph();
-		}
 
 		// draw screen to window
 		var crt = applyCrt && (PerfToggles.Crt || Manager.Visuals.PixelScaler != 0) ? crtMaterial : null;

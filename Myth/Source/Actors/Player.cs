@@ -148,7 +148,6 @@ public abstract partial class Pawn : Actor
 	public static float JumpTime => 0.22f;
 	// Gravity is scaled by this while the jump button is held (floatier ascent), and
 	// vertical velocity is multiplied by JumpCutMultiplier when the jump is released early.
-	// Centralized here so the jump-arc sweep (JumpPhysics) reads the same numbers as Update.
 	public const float JumpHoldGravityMultiplier = 0.35f;
 	public const float JumpCutMultiplier = 0.5f;
 	protected static float CoyoteJumpTime => 0.08f;

@@ -260,9 +260,8 @@ public partial class Manager : App
 	bool backgroundSuspended;
 	static int BackgroundSleepMilliseconds => 50;
 #endif
-	internal bool PlatformNavDebugVisible { get; set; }
+	internal bool ReachDebugVisible { get; set; }
 	internal string? StartDebugView => args.debugView;
-	readonly NavTrace? navTrace;
 
 	public bool MusicEnabled => musicVolume > 0;
 
@@ -379,15 +378,6 @@ public partial class Manager : App
 		Inbetweens.BenchMode = args.bench;
 		Inbetweens.BenchSourceFrames = args.benchSourceFrames;
 		playOnStartup = args.play;
-		navTrace = NavTrace.Create(new(
-			args.traceNav,
-			args.traceJsonPath,
-			args.traceRoomId,
-			args.traceGoalId,
-			args.traceEdgeFrom,
-			args.traceEdgeTo,
-			args.traceNavFrames
-		));
 		if (args.simple)
 		{
 			PerfToggles.UseSimpleDefaults();
@@ -762,10 +752,6 @@ public partial class Manager : App
 				return;
 			}
 
-			// The looping tune mode rebuilds the graph every trial; silence the per-build
-			// dump so the per-trial result lines stay readable. The one-shot --gym-cli keeps it.
-			PlatformNavGraph.VerboseBuildLog = gym.exitAfterAll;
-
 			gym.runIndex = 0;
 			var run = gym.runs![gym.runIndex];
 			Console.WriteLine($"[Gym] found {gym.runs.Count} goal run(s), starting {run.DisplayId}@{run.StartDisplay}");
@@ -850,7 +836,6 @@ public partial class Manager : App
 #endif
 		game?.Dispose();
 		DisposeStartupAttribution();
-		navTrace?.Dispose();
 		menuImgui?.Dispose();
 		InputPrompts?.Dispose();
 		InputPrompts = null;
@@ -1249,12 +1234,6 @@ public partial class Manager : App
 			var bud = game.GetFirst<Bud>();
 			if (bud != null)
 				Console.WriteLine($"[Gym] t={traceT:F2}s bud=({bud.Position.X:F1},{bud.Position.Y:F1}) vel=({bud.Velocity.X:F1},{bud.Velocity.Y:F1}) lbl={bud.DebugNavLabel}");
-			if (denseTrace && bud != null && gymNodesDumpRunIndex != gym.runIndex &&
-				game.GetPlatformNavGraph() is { IsReady: true } dumpGraph)
-			{
-				gymNodesDumpRunIndex = gym.runIndex;
-				dumpGraph.DumpNodesNear(bud.Position, 4096);
-			}
 		}
 	}
 
@@ -2601,9 +2580,6 @@ public partial class Manager : App
 
 		// In the gym, carry the live background music across the dispose/recreate so it
 		// keeps playing seamlessly between runs instead of restarting on each goal.
-		var reusableGymNavGraph = gymMode && game?.CurrentRoom?.Id == room.Id
-			? game.ReadyPlatformNavGraph
-			: null;
 		var carriedMusic = gymMode ? game?.DetachMusic() : null;
 		game?.Dispose();
 		game = new Game(
@@ -2620,11 +2596,7 @@ public partial class Manager : App
 		)
 		{
 			AudioMuted = gymMode || headless,
-			NavTrace = navTrace
 		};
-		if (reusableGymNavGraph != null)
-			game.ReusePlatformNavGraph(reusableGymNavGraph);
-		game.NavTrace?.Event(game, "gameStart");
 		if (immediate)
 		{
 			playTransition = 1.0f;

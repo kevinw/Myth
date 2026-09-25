@@ -56,13 +56,6 @@ class MovingPlatform : Actor, IResizable, IShapeOccluder, IDualGridRect
 	RectInt routeBounds;
 	ActorDestructionTrigger? appearanceTrigger;
 
-	internal bool SupportsPlatformNav => Mode == MovementMode.Horizontal && TravelDistance > 0 && ActorId != null;
-	internal Point2 NavStartPosition => routeBounds.TopLeft;
-	internal float NavRouteLength => TravelDistance;
-	internal float NavRoutePosition => Math.Clamp(Position.X - routeBounds.Left, 0, TravelDistance);
-	internal int NavRouteDirection => motion.Direction;
-	internal bool NavWaiting => motion.Wait > 0;
-	internal float NavVelocityX => motion.Wait > 0 ? 0 : motion.Direction * motion.Speed;
 
 	static Cardinal? StartingDirection(MovementMode mode, Signs facing) => mode switch
 	{

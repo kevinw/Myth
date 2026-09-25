@@ -28,7 +28,7 @@ public class DebugControls
 	public readonly VirtualAction CollisionView;
 	public readonly VirtualAction NormalsView;
 	public readonly VirtualAction RenderTargets;
-	public readonly VirtualAction PlatformNavView;
+	public readonly VirtualAction ReachFieldView;
 	public readonly VirtualAction AtlasWander;
 	public readonly VirtualAction RenderTargetShake;
 	public readonly VirtualAction CenterCamera;
@@ -101,9 +101,9 @@ public class DebugControls
 		RenderTargets = Make("DebugRenderTargets",
 			new ActionBindingSet().Add(Keys.G),
 			"G / Shift+G", "Render-target overlay / god mode", Context.Playing);
-		PlatformNavView = Make("DebugPlatformNavView",
+		ReachFieldView = Make("DebugReachFieldView",
 			new ActionBindingSet().Add(Keys.P),
-			"P", "Platform-nav view", Context.Playing);
+			"P", "Reach-field view (Bud navigation)", Context.Playing);
 		AtlasWander = Make("DebugAtlasWander",
 			new ActionBindingSet().Add(Keys.J),
 			"J", "Atlas wander", Context.Playing);

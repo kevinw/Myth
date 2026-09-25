@@ -12,8 +12,6 @@ public struct StartArgs
 	public bool checkRooms;
 	public bool unthrottled;
 	public bool gymExitAfterAll;
-	public bool traceNav;
-	public bool traceNavFrames;
 	public bool simple;
 	public bool bench;
 	public bool devHost;
@@ -32,7 +30,7 @@ public struct StartArgs
 	// warmup against a cold driver shader cache: with this set, pipelines compile lazily on first
 	// room entry (the original hitch) instead of up front. See tools/windows/clear-system-shader-caches.mjs.
 	public bool noWarmup;
-	public bool noNav; // skip Bud spawn + navgraph (--no-nav); isolates per-frame allocs from nav work
+	public bool noNav; // skip Bud spawn (--no-nav); isolates per-frame allocs from nav work
 	public bool buildAssetPack;
 	public bool writeAllRooms;
 	// Render every room into the world map image the map overlay samples, then exit
@@ -65,12 +63,7 @@ public struct StartArgs
 	// Debug overlay to start with (a Game.DebugView name), e.g. for screenshots.
 	public string? debugView;
 	public string? worldId;
-	public string? traceJsonPath;
-	public string? traceRoomId;
-	public string? traceGoalId;
 	public string[] gymGoalIds = [];
-	public int? traceEdgeFrom;
-	public int? traceEdgeTo;
 
 	// Automated screenshot capture (desktop). When screenshotPath is set the
 	// game plays immediately, captures the window at screenshotFrame and every
@@ -101,8 +94,6 @@ public struct StartArgs
 				case "--check-rooms": checkRooms = true; break;
 				case "--unthrottled": unthrottled = true; break;
 				case "--gym-exit-after-all": gymExitAfterAll = true; break;
-				case "--trace-nav": traceNav = true; break;
-				case "--trace-nav-frames": traceNavFrames = true; break;
 				case "--simple": simple = true; break;
 				case "--bench": bench = true; break;
 				case "--dev-host": devHost = true; break;
@@ -170,9 +161,6 @@ public struct StartArgs
 				case "--room": playRoomId = ReadValue(args, ref i, option); break;
 				case "--debug-view": debugView = ReadValue(args, ref i, option); break;
 				case "--world": worldId = ReadValue(args, ref i, option); break;
-				case "--trace-json": traceJsonPath = ReadValue(args, ref i, option); break;
-				case "--trace-room": traceRoomId = ReadValue(args, ref i, option); break;
-				case "--trace-goal": traceGoalId = ReadValue(args, ref i, option); break;
 				case "--gym-goal":
 				{
 					var goals = ParseList(ReadValue(args, ref i, option));
@@ -181,10 +169,6 @@ public struct StartArgs
 					gymGoalIds = [..gymGoalIds, ..goals];
 					break;
 				}
-				case "--trace-edge":
-					if (!TryParseTraceEdge(ReadValue(args, ref i, option), out traceEdgeFrom, out traceEdgeTo))
-						throw Invalid(option, "expected FROM:TO or FROM->TO with non-negative integer node IDs");
-					break;
 
 				// The visual pack path is optional; omitting it uses Assets/Packed/Visuals.
 				case "--build-asset-pack":
@@ -217,7 +201,6 @@ public struct StartArgs
 			audio = false;
 		unthrottled |= gymCli;
 		gymExitAfterAll |= gymCli;
-		traceNav |= traceJsonPath != null;
 		play |= screenshotPath != null || playRoomId != null;
 
 		if (benchSourceFramesProvided && !bench)
@@ -226,19 +209,6 @@ public struct StartArgs
 
 	static string[] ParseList(string value)
 		=> value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-
-	static bool TryParseTraceEdge(string value, out int? from, out int? to)
-	{
-		from = null;
-		to = null;
-		var parts = value.Replace("->", ":", StringComparison.Ordinal).Split(':', StringSplitOptions.TrimEntries);
-		if (parts.Length != 2 || !int.TryParse(parts[0], out var parsedFrom) || parsedFrom < 0 ||
-			!int.TryParse(parts[1], out var parsedTo) || parsedTo < 0)
-			return false;
-		from = parsedFrom;
-		to = parsedTo;
-		return true;
-	}
 
 	static string ReadValue(string[] args, ref int index, string option)
 	{

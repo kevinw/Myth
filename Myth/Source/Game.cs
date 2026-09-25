@@ -406,7 +406,6 @@ public partial class Game : IDisposable
 	internal bool Disposed => disposed;
 	public bool AudioMuted { get; set; }
 	public bool Simulating { get; set; }
-	public NavTrace? NavTrace { get; set; }
 	public event Action<RoomChange>? RoomChanged;
 	public event Action<RoomGeoChange>? RoomGeoChanged;
 	// Raised when the editor (re)builds or switches this preview game's room, so preview-only
@@ -1143,7 +1142,6 @@ public partial class Game : IDisposable
 
 	void FinishRoomActivation(RoomChangeKind kind)
 	{
-		ResetPlatformNavGraphRoomState();
 		// The player has been placed into the (new) room by now, so this is the way back in.
 		if (GetFirst<Player>() is { } player)
 		{
@@ -1159,7 +1157,6 @@ public partial class Game : IDisposable
 		for (var i = 0; i < Actors.Count; i++)
 			Actors[i].Room = room;
 		View?.PruneInactiveRoomCaches();
-		PrepareRoomTransitionGc();
 		RequestRoomTransitionGc(kind);
 	}
 
@@ -1435,15 +1432,6 @@ public partial class Game : IDisposable
 		roomSwappedThisFrame = true;
 		RaiseRoomChanged(fromRoom, room, kind, direction);
 		FinishRoomActivation(kind);
-	}
-
-	void PrepareRoomTransitionGc()
-	{
-		// TODO: make this an event which Actors or Systems can subscribe to
-		if (spawnBud && GetFirst<Bud>() != null)
-		{
-			GetPlatformNavGraph();
-		}
 	}
 
 	void RequestRoomTransitionGc(RoomChangeKind kind)

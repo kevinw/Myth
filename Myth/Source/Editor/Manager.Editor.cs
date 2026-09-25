@@ -226,7 +226,6 @@ public partial class Manager
 				EditorMenuImGui();
 		}
 		ResetDebugOverlayLayout();
-		PlatformNavDebugOverlayImGui();
 		ActorPositionDebugOverlayImGui();
 		BudDebugOverlayImGui();
 		LiveTileEditingImGui();
@@ -983,10 +982,6 @@ public partial class Manager
 
 	void UpdateEditorCameraTween()
 	{
-		// Don't let the editor preview build its nav graph mid-slide (see GetPlatformNavGraph).
-		if (game != null)
-			game.navBuildSuppressedByHost = editorCameraTween < 1.0f;
-
 		if (editorCameraTween >= 1.0f)
 			return;
 

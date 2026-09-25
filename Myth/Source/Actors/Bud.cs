@@ -8,12 +8,8 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	internal static readonly Color Tint = new(0x7fb6ff);
 	// His speech reads as his own blue, lifted toward white so it stays legible over dark rooms.
 	internal static readonly Color SpeechColor = Color.Lerp(Tint, Color.White, 0.45f);
-	private const int FollowStopDistance = 18;
-	private const int DesiredPlayerSpacing = 20;
 	private const int StruckSpeechEnemyDistance = Game.TileSize * 4;
 	private const float EnterDelay = 1.0f;
-	private const float MirrorPlayerCrawlDelay = 0.25f;
-	private const float MirrorPlayerCrawlReleaseDelay = 0.25f;
 	private const int EnterGroundProbeDepth = 4;
 	private const int EnterSearchRadiusTiles = 5;
 	private const int EnterWalkDistance = Game.TileSize * 3;
@@ -24,9 +20,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	static float FallRespawnDelay => 3f;
 	static float BurrowPopDelay => 0.25f;
 	static float BurrowPopInputMirrorTime => 0.25f;
-	private readonly Navigator nav;
-	// BUD_NAV=graph runs the old PlatformNavGraph navigator instead, for comparing in the gym.
-	internal static bool ReachNav = Environment.GetEnvironmentVariable("BUD_NAV") != "graph";
 	readonly ReachPilot pilot;
 	private RoomChange? pendingRoomChange;
 	private float enterTimer;
@@ -35,9 +28,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 	private bool roomSpawnSkipped;
 	private bool enteredRoom;
 	private Point2 entryPosition;
-	private float mirrorPlayerCrawlTimer;
-	private float mirrorPlayerCrawlReleaseTimer;
-	private bool mirrorPlayerCrawl;
 	static float LaunchLingerTime => 2.5f;
 	static float BackDashSpeed => 120;
 	static float BackDashDuration => 0.22f;
@@ -75,19 +65,10 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		secondControllerControlling ? PawnAbilities.Burrow : PawnAbilities.None;
 	public bool CanSay => Game.CanShowBudSpeech();
 
-	// Forwarded for editor nav debug visualization
-	public int? DebugNavStartNodeId => nav.DebugNavStartNodeId;
-	public int? DebugNavGoalNodeId => nav.DebugNavGoalNodeId;
-	public int? DebugNavTargetNodeId => nav.DebugNavTargetNodeId;
-	public string DebugNavLabel => ReachNav ? pilot.Label : nav.DebugNavLabel;
-	public IReadOnlyList<PlatformNavGraph.Edge> DebugNavPath => nav.DebugNavPath;
-	public IReadOnlyList<PlatformNavGraph.SurfaceEdge> DebugSurfaceNavPath => nav.DebugSurfaceNavPath;
-	public RectInt? DebugNavProbeRect => nav.DebugNavProbeRect;
-	public bool DebugNavProbeHit => nav.DebugNavProbeHit;
+	public string DebugNavLabel => pilot.Label;
 
 	public Bud()
 	{
-		nav = new(this);
 		pilot = new(this);
 		Hitbox = new(new RectInt(-4, -12, 8, 12));
 		Depth = Depths.BehindPlayer;
@@ -196,7 +177,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Velocity.X = -(int)Facing * BackDashSpeed;
 		jumpTimer = 0;
 		Squish = new Vector2(0.75f, 1.3f);
-		CancelNav("back dash"); // whatever he was in the middle of, re-path after landing
+		pilot.Cancel(); // whatever he was in the middle of, re-path after landing
 		State = States.BackDash;
 		Play("back_dash", looping: false);
 		AudioEvent("hurt");
@@ -229,15 +210,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			EndBackDash();
 	}
 
-	void CancelNav(string reason = "")
-	{
-		pilot.Cancel();
-		if (reason.Length > 0)
-			nav.ClearActiveEdge(reason);
-		else
-			nav.ClearBlockedPathEdges();
-	}
-
 	void EndBackDash()
 	{
 		backDashTimer = 0;
@@ -254,9 +226,8 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			Game.Controls.TryGetBudControllerInput(Game.Manager.Time.Elapsed, out var controllerInput))
 		{
 			if (!secondControllerControlling)
-				CancelNav("controller 2");
+				pilot.Cancel();
 			secondControllerControlling = true;
-			nav.SetDebugNavState("controller 2");
 			return controllerInput;
 		}
 		secondControllerControlling = false;
@@ -265,128 +236,14 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		if (lingerTimer > 0 && State == States.Normal)
 			return new(); // lingering where the carry launch landed us
 
-		if (ReachNav)
-		{
-			if (TryWalkInFromEntrance(out var enterX, out var enterY))
-				return new(enterX, enterY, false, false, false);
-			var reach = Game.reach.Field is { } field ? pilot.GetInput(field) : default;
-			if (reach.MoveX == 0 && State == States.Normal &&
-				(Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>()) is { } faceTarget &&
-				Math.Sign(faceTarget.Position.X - Position.X) is var face and not 0)
-				Facing = face;
-			return reach;
-		}
-
-		// On a rope: climb toward the player's height, then hop off toward them.
-		if (State == States.Climb && !nav.ActiveEdgeIsRope && Game.GetFirst<Player>() is { } climbTarget)
-		{
-			var dy = climbTarget.Position.Y - Position.Y;
-			if (MathF.Abs(dy) <= 10)
-			{
-				var dir = Math.Sign(climbTarget.Position.X - Position.X);
-				return new(dir, 0, JumpPressed: true, JumpDown: true, DashPressed: false);
-			}
-			return new(0, Math.Sign(dy), false, false, false);
-		}
-
-		var moveX = 0f;
-		var moveY = 0;
-		var jumpPressed = false;
-		var player = Game.GetFirst<Player>();
-		var gymTarget = Game.GymMode ? Game.GymTarget : null;
-		var followTarget = gymTarget != null
-			? (Vector2?)gymTarget.Position
-			: player != null ? DesiredFollowPosition(player) : null;
-		var recoverWallJump = false;
-		if (!nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed))
-		{
-			if (TryWalkInFromEntrance(out moveX, out moveY))
-			{
-				// Finishing the room-entry reveal; normal following resumes at the target.
-			}
-			else if (nav.TryRecoverLanding(out moveX, out jumpPressed, out recoverWallJump))
-			{
-				// Mid-air with no edge to run (a missed/aborted arc): steer onto a reachable
-				// surface — or over a pit, onto a wall to kick back up — pathing resumes
-				// once grounded.
-			}
-			else if (gymTarget != null)
-			{
-				if (nav.TryClimbWellToward(gymTarget.Position, out moveX, out moveY, out jumpPressed, out recoverWallJump))
-				{
-					// Goal overhead in a walled shaft: chained wall kicks are the only way up.
-				}
-				else if (!nav.TryNavigateToPosition(gymTarget.Position, out moveX, out moveY, out jumpPressed))
-				{
-					var navLabel = nav.DebugNavLabel;
-					if (nav.TryRecoverPit(out moveX, out jumpPressed, out recoverWallJump))
-					{
-						moveY = 0;
-					}
-					else if (navLabel == "no graph")
-					{
-						moveX = 0;
-						moveY = 0;
-						nav.SetDebugNavState(navLabel);
-					}
-					else
-					{
-						moveX = GetFallbackMoveX(followTarget);
-						moveY = 0;
-						if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
-							moveX = 0;
-						nav.SetDebugNavState(moveX == 0
-							? navLabel
-							: Game.IsPlatformNavDebugVisible ? $"gym fallback {moveX}" : "gym fallback");
-					}
-				}
-			}
-			else if (player == null || !TryNavigateToPlayer(player, out moveX, out moveY, out jumpPressed))
-			{
-				var navLabel = nav.DebugNavLabel;
-				if (nav.TryRecoverPit(out moveX, out jumpPressed, out recoverWallJump))
-				{
-					moveY = 0;
-				}
-				else
-				{
-					moveX = GetFallbackMoveX(followTarget, player);
-					moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
-					if (grounded && moveX != 0 && !nav.HasGroundSupportAhead(moveX))
-						moveX = 0;
-					if (TryApproachRope(player, ref moveX, ref moveY))
-						nav.SetDebugNavState("rope approach");
-					else if (player == null)
-						nav.SetDebugNavState("no player");
-					else
-						nav.SetDebugNavState(moveX == 0
-							? IsBesidePlayer(player) ? "beside player" : navLabel
-							: Game.IsPlatformNavDebugVisible ? $"fallback walk {moveX}" : "fallback walk");
-				}
-			}
-		}
-
-		nav.UpdateJumpHeld(jumpPressed);
-
-		if (moveX == 0)
-		{
-			var faceTarget = gymTarget?.Position ?? player?.Position;
-			if (faceTarget != null)
-			{
-				var face = Math.Sign(faceTarget.Value.X - Position.X);
-				if (face != 0)
-					Facing = face;
-			}
-		}
-
-		return new(
-			MoveX: moveX,
-			MoveY: moveY,
-			JumpPressed: jumpPressed,
-			JumpDown: nav.JumpHeld,
-			DashPressed: false,
-			AllowWallJump: nav.ActiveEdgeAllowsWallJump || recoverWallJump
-		);
+		if (TryWalkInFromEntrance(out var enterX, out var enterY))
+			return new(enterX, enterY, false, false, false);
+		var input = Game.reach.Field is { } field ? pilot.GetInput(field) : default;
+		if (input.MoveX == 0 && State == States.Normal &&
+			(Game.GymMode ? Game.GymTarget : Game.GetFirst<Player>()) is { } faceTarget &&
+			Math.Sign(faceTarget.Position.X - Position.X) is var face and not 0)
+			Facing = face;
+		return input;
 	}
 
 	public override void Update()
@@ -419,7 +276,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		if (fallRespawnTimer > 0)
 		{
 			fallRespawnTimer = Calc.Approach(fallRespawnTimer, 0, Time.Delta);
-			nav.SetDebugNavState(Game.IsPlatformNavDebugVisible ? $"fell {fallRespawnTimer:0.0}s" : "fell");
 			if (fallRespawnTimer <= 0)
 				FinishFallRespawn();
 			return;
@@ -431,7 +287,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		if (pendingRoomChange is { } change)
 		{
 			enterTimer = Calc.Approach(enterTimer, 0, Time.Delta);
-			nav.SetDebugNavState(Game.IsPlatformNavDebugVisible ? $"entering {enterTimer:0.0}s" : "entering");
 			if (enterTimer <= 0)
 				EnterRoom(change);
 			return;
@@ -462,11 +317,9 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		if (Position.Y > Game.Bounds.Bottom + 12)
 		{
 			Game.GymBudDied = true;
-			Game.NavTrace?.Event(Game, "budFell", ("pos", NavTrace.Vec(Position)), ("vel", NavTrace.Vec(Velocity)));
 			BeginFallRespawn();
 		}
 
-		Game.NavTrace?.Frame(Game, this);
 		UpdatePlayerLight();
 	}
 
@@ -572,7 +425,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		fallRespawnTimer = FallRespawnDelay;
 		Visible = false;
 		CollidesWithSolids = false;
-		CancelNav("fell off the world");
+		pilot.Cancel();
 	}
 
 	void FinishFallRespawn()
@@ -599,371 +452,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		CollidesWithSolids = true;
 	}
 
-	private bool TryNavigateToPlayer(Player player, out float moveX, out int moveY, out bool jumpPressed)
-	{
-		moveX = 0;
-		moveY = 0;
-		jumpPressed = false;
-
-		// Following through water needs the swim-capable navigation; the beside-player,
-		// same-surface logic below is land-only. Head straight for the player instead.
-		if (InWater || player.InWater)
-			return nav.TryNavigateToPosition(player.Position, out moveX, out moveY, out jumpPressed);
-
-		if (Game.GetPlatformNavGraph() is not { } graph)
-		{
-			nav.SetDebugNavState("no graph");
-			return false;
-		}
-
-		var playerPlatform = player.OverlapsFirst(Point2.Down, Masks.Solid) as MovingPlatform;
-		if (playerPlatform is { SupportsPlatformNav: false })
-			playerPlatform = null;
-		if (playerPlatform != null && nav.TryFollowPlayerOnPlatform(player, playerPlatform, out moveX))
-			return true;
-
-		if (playerPlatform == null)
-		{
-			var preferredSide = Position.X <= player.Position.X ? -1 : 1;
-			if (TryNavigateSameSurfaceBesidePlayer(graph, player, preferredSide, out moveX, out moveY))
-				return true;
-			if (TryNavigateSameSurfaceBesidePlayer(graph, player, -preferredSide, out moveX, out moveY))
-				return true;
-		}
-
-		var pathTarget = playerPlatform?.NavStartPosition ?? player.Position;
-		var start = graph.FindNearestNode(Position, Navigator.NavSearchDistance);
-		PlatformNavGraph.Node? goal;
-		PlatformNavGraph.Node cachedGoal = default;
-		bool pathFound;
-		var reusedPath = start.HasValue &&
-			nav.TryReuseNavPath(graph, start.Value.Id, pathTarget, out cachedGoal) &&
-			PathMatchesPlayerPlatform(playerPlatform);
-		if (reusedPath)
-		{
-			goal = cachedGoal;
-			pathFound = true;
-		}
-		else if (playerPlatform != null)
-			goal = FindGoalOnMovingPlatform(graph, playerPlatform, start, out pathFound);
-		else
-			goal = FindGoalNodeBesidePlayer(graph, player, start, out pathFound);
-		if (!start.HasValue || !goal.HasValue || start.Value.Id == goal.Value.Id && !pathFound)
-		{
-			nav.SetDebugNavState(start.HasValue && goal.HasValue ? "at goal" : "no node");
-			return false;
-		}
-
-		if ((!pathFound && !graph.TryFindPath(start.Value.Id, goal.Value.Id, nav.NavPath)) || nav.NavPath.Count <= 0)
-		{
-			nav.ClearDebugSurfacePath();
-			nav.DebugNavStartNodeId = start.Value.Id;
-			nav.DebugNavGoalNodeId = goal.Value.Id;
-			nav.DebugNavTargetNodeId = null;
-			nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"no path {start.Value.Id}->{goal.Value.Id}" : "no path";
-			return false;
-		}
-		if (!reusedPath)
-			nav.RememberNavPath(graph, start.Value.Id, goal.Value.Id, pathTarget);
-		nav.UpdateDebugSurfacePath(graph, start.Value.Id, goal.Value.Id);
-
-		if (!nav.TryGetActionableEdge(graph, out var edge))
-		{
-			nav.DebugNavStartNodeId = start.Value.Id;
-			nav.DebugNavGoalNodeId = goal.Value.Id;
-			nav.DebugNavTargetNodeId = null;
-			nav.DebugNavLabel = "edge reached";
-			return false;
-		}
-
-		if (edge.Kind is PlatformNavGraph.EdgeKind.Jump or PlatformNavGraph.EdgeKind.Fall or PlatformNavGraph.EdgeKind.WellClimb or PlatformNavGraph.EdgeKind.Rope or PlatformNavGraph.EdgeKind.MovingPlatform)
-		{
-			nav.DebugNavStartNodeId = start.Value.Id;
-			nav.DebugNavGoalNodeId = goal.Value.Id;
-			nav.DebugNavTargetNodeId = edge.To;
-			nav.StartActiveEdge(edge);
-			return nav.TryExecuteActiveEdge(out moveX, out moveY, out jumpPressed);
-		}
-
-		var from = graph.Nodes[edge.From];
-		var to = graph.Nodes[edge.To];
-		var target = to.Position;
-		switch (edge.Kind)
-		{
-			case PlatformNavGraph.EdgeKind.Walk:
-			case PlatformNavGraph.EdgeKind.Crawl:
-				moveX = nav.MoveTowardNavTarget(target);
-				moveY = edge.Kind == PlatformNavGraph.EdgeKind.Crawl || to.RequiresDucking || ShouldMirrorPlayerCrawl(player) ? 1 : 0;
-				if (moveX != 0 && !nav.HasGroundSupportAhead(moveX))
-				{
-					if (nav.TryContinueWithJumpAfterBlockedWalk(graph, edge, start.Value.Id, goal.Value.Id, out moveX, out moveY, out jumpPressed))
-						return true;
-
-					nav.DebugNavStartNodeId = start.Value.Id;
-					nav.DebugNavGoalNodeId = goal.Value.Id;
-					nav.DebugNavTargetNodeId = to.Id;
-					nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"edge stop {edge.Kind} {edge.From}->{edge.To}" : "edge stop";
-					return false;
-				}
-				if (moveX == 0 && !nav.IsNearNode(target))
-				{
-					nav.DebugNavStartNodeId = start.Value.Id;
-					nav.DebugNavGoalNodeId = goal.Value.Id;
-					nav.DebugNavTargetNodeId = to.Id;
-					nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"stalled {edge.Kind} {edge.From}->{edge.To}" : "stalled";
-					return false;
-				}
-				break;
-
-			case PlatformNavGraph.EdgeKind.RoomExit:
-				moveX = nav.MoveTowardNavTarget(target);
-				moveY = ShouldMirrorPlayerCrawl(player) ? 1 : 0;
-				break;
-
-			case PlatformNavGraph.EdgeKind.Swim:
-				(moveX, moveY, jumpPressed) = nav.ExecuteSwimEdge(graph, edge);
-				break;
-
-			default:
-				nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"unsupported {edge.Kind}" : "unsupported";
-				return false;
-		}
-
-		nav.DebugNavStartNodeId = start.Value.Id;
-		nav.DebugNavGoalNodeId = goal.Value.Id;
-		nav.DebugNavTargetNodeId = to.Id;
-		nav.DebugNavLabel = Game.IsPlatformNavDebugVisible ? $"{edge.Kind} {edge.From}->{edge.To} len {nav.NavPath.Count}" : "following path";
-		return true;
-	}
-
-	private bool TryNavigateSameSurfaceBesidePlayer(PlatformNavGraph graph, Player player, int side, out float moveX, out int moveY)
-	{
-		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
-		return nav.TryFollowSameSurface(graph, desired, ShouldMirrorPlayerCrawl(player), out moveX, out moveY);
-	}
-
-	private bool ShouldMirrorPlayerCrawl(Player? player)
-	{
-		if (player == null || !grounded || !player.IsGrounded || !player.IsDucking)
-			return UpdateMirrorPlayerCrawl(false);
-
-		var nearby = MathF.Abs(player.Position.X - Position.X) <= DesiredPlayerSpacing * 2 &&
-			MathF.Abs(player.Position.Y - Position.Y) <= Game.TileSize + 2;
-		if (!nearby)
-			return UpdateMirrorPlayerCrawl(false);
-
-		return UpdateMirrorPlayerCrawl(true);
-	}
-
-	private bool UpdateMirrorPlayerCrawl(bool wantsCrawl)
-	{
-		if (!wantsCrawl)
-		{
-			mirrorPlayerCrawlTimer = 0;
-			if (!mirrorPlayerCrawl)
-				return false;
-
-			mirrorPlayerCrawlReleaseTimer += Time.Delta;
-			if (mirrorPlayerCrawlReleaseTimer >= MirrorPlayerCrawlReleaseDelay)
-				mirrorPlayerCrawl = false;
-			return mirrorPlayerCrawl;
-		}
-
-		mirrorPlayerCrawlReleaseTimer = 0;
-		if (mirrorPlayerCrawl)
-			return true;
-
-		mirrorPlayerCrawlTimer += Time.Delta;
-		if (mirrorPlayerCrawlTimer >= MirrorPlayerCrawlDelay)
-			mirrorPlayerCrawl = true;
-		return mirrorPlayerCrawl;
-	}
-
-	private Vector2 DesiredFollowPosition(Player player)
-	{
-		var side = Position.X <= player.Position.X ? -1 : 1;
-		return player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
-	}
-
-	private bool IsBesidePlayer(Player player)
-		=> MathF.Abs(Position.X - player.Position.X) <= FollowStopDistance &&
-		   MathF.Abs(Position.Y - player.Position.Y) <= Game.TileSize + Navigator.NavNodeReachDistance;
-
-	private readonly List<PlatformNavGraph.Node> goalCandidates = [];
-	readonly List<PlatformNavGraph.Edge> movingPlatformPathCandidate = [];
-	readonly List<PlatformNavGraph.Edge> movingPlatformBestPath = [];
-
-	bool PathMatchesPlayerPlatform(MovingPlatform? platform)
-	{
-		if (nav.NavPath[^1] is not { Kind: PlatformNavGraph.EdgeKind.MovingPlatform, PlatformRide.StayAboard: true } edge)
-			return platform == null;
-		return platform?.ActorId == edge.ConnectorActorId;
-	}
-
-	PlatformNavGraph.Node? FindGoalOnMovingPlatform(
-		PlatformNavGraph graph,
-		MovingPlatform platform,
-		PlatformNavGraph.Node? start,
-		out bool pathFound)
-	{
-		pathFound = false;
-		if (!start.HasValue || platform.ActorId is not { } actorId)
-			return null;
-
-		PlatformNavGraph.MovingPlatformAttachment? best = null;
-		var bestCost = float.MaxValue;
-		var bestDistance = float.MaxValue;
-		movingPlatformBestPath.Clear();
-		foreach (var attachment in graph.MovingPlatformAttachments)
-		{
-			if (attachment.ActorId != actorId ||
-				!graph.TryFindPath(start.Value.Id, attachment.NodeId, movingPlatformPathCandidate))
-				continue;
-
-			var distance = Vector2.DistanceSquared(Position, graph.Nodes[attachment.NodeId].Position);
-			var cost = graph.PathCost(movingPlatformPathCandidate);
-			if (cost > bestCost || cost == bestCost && distance >= bestDistance)
-				continue;
-
-			best = attachment;
-			bestCost = cost;
-			bestDistance = distance;
-			movingPlatformBestPath.Clear();
-			movingPlatformBestPath.AddRange(movingPlatformPathCandidate);
-		}
-
-		if (best is not { } destination)
-			return null;
-
-		nav.NavPath.Clear();
-		nav.NavPath.AddRange(movingPlatformBestPath);
-		nav.NavPath.Add(new(
-			destination.NodeId,
-			destination.NodeId,
-			PlatformNavGraph.EdgeKind.MovingPlatform,
-			ConnectorActorId: actorId,
-			PlatformRide: new(
-				destination.RouteStart,
-				destination.RouteEnd,
-				destination.RouteStart,
-				destination.RouteEnd,
-				0,
-				StayAboard: true)));
-		pathFound = true;
-		return graph.Nodes[destination.NodeId];
-	}
-
-	PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, PlatformNavGraph.Node? start, out bool pathFound)
-	{
-		pathFound = false;
-		// Head for the nearest node Bud can actually path to, not just the nearest node:
-		// otherwise, standing in a slot, he'd pick a closer-looking node across a thin
-		// wall (which is only reachable the long way around) instead of the platform
-		// right next to the player.
-		if (start.HasValue)
-		{
-			graph.FindNearestNodes(player.Position, Navigator.GoalNodeSearchDistance, goalCandidates);
-			foreach (var node in goalCandidates) // nearest-first
-			{
-				if (node.Id == start.Value.Id)
-					return node;
-				if (graph.TryFindPath(start.Value.Id, node.Id, nav.NavPath))
-				{
-					pathFound = true;
-					return node;
-				}
-			}
-		}
-
-		// Nothing reachable found: fall back to the beside-the-player heuristic.
-		var preferredSide = Position.X <= player.Position.X ? -1 : 1;
-		return FindGoalNodeBesidePlayer(graph, player, preferredSide)
-			?? FindGoalNodeBesidePlayer(graph, player, -preferredSide)
-			?? graph.FindNearestNode(player.Position, Navigator.GoalNodeSearchDistance);
-	}
-
-	private static PlatformNavGraph.Node? FindGoalNodeBesidePlayer(PlatformNavGraph graph, Player player, int side)
-	{
-		var desired = player.Position + new Vector2(side * DesiredPlayerSpacing, 0);
-		PlatformNavGraph.Node? best = null;
-		var bestScore = Navigator.GoalNodeSearchDistance * Navigator.GoalNodeSearchDistance;
-		foreach (var node in graph.Nodes)
-		{
-			if (node.Kind == PlatformNavGraph.NodeKind.RoomExit)
-				continue;
-
-			var distanceSquared = Vector2.DistanceSquared(node.Position, desired);
-			if (distanceSquared >= bestScore)
-				continue;
-
-			if (MathF.Abs(node.Position.X - player.Position.X) < DesiredPlayerSpacing * 0.5f)
-				continue;
-
-			best = node;
-			bestScore = distanceSquared;
-		}
-		return best;
-	}
-
-	private int GetFallbackMoveX(Vector2? target, Player? player = null)
-	{
-		if (target == null)
-			return 0;
-
-		var dx = target.Value.X - Position.X;
-		if (MathF.Abs(dx) > FollowStopDistance)
-			return Math.Sign(dx);
-
-		if (player != null && !IsBesidePlayer(player))
-			return Position.X <= player.Position.X ? -1 : 1;
-
-		return 0;
-	}
-
-	// Nav can't path to the player (a sheer drop or climb), but a rope bridges the vertical
-	// gap: head for it -- walking off the lip if needed -- and hold up so the Pawn grab takes
-	// over once a rope point is in reach. No nav-graph integration yet; this is the "player
-	// paved the way with a RopePile" case.
-	private bool TryApproachRope(Player? player, ref float moveX, ref int moveY)
-	{
-		if (player == null || State != States.Normal)
-			return false;
-
-		var dy = player.Position.Y - Position.Y;
-		if (MathF.Abs(dy) < Game.TileSize * 3)
-			return false;
-
-		Rope? best = null;
-		var bestDx = Game.TileSize * 5f;
-		foreach (var actor in Game.Actors)
-		{
-			if (actor is not Rope rope || rope.Broken)
-				continue;
-
-			// The rope must roughly span from our height toward the player's.
-			var bounds = rope.GetVisualBounds();
-			var spans = dy > 0
-				? bounds.Top <= Position.Y + Game.TileSize && bounds.Bottom >= player.Position.Y - Game.TileSize * 2
-				: bounds.Bottom >= Position.Y - Game.TileSize && bounds.Top <= player.Position.Y + Game.TileSize * 2;
-			if (!spans)
-				continue;
-
-			var dx = MathF.Abs(bounds.Center.X - Position.X);
-			if (dx < bestDx)
-			{
-				bestDx = dx;
-				best = rope;
-			}
-		}
-		if (best == null)
-			return false;
-
-		var targetX = best.GetVisualBounds().Center.X;
-		moveX = MathF.Abs(targetX - Position.X) > 2 ? Math.Sign(targetX - Position.X) : 0;
-		moveY = -1; // hold up: grabs as soon as a rope point is in reach
-		return true;
-	}
-
 	private void OnRoomChanged(RoomChange change)
 	{
 		if (change.Kind == RoomChangeKind.InitialLoad)
@@ -978,7 +466,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 			pendingRoomChange = null;
 			enterWalkTarget = null;
 			enterWalkDucking = false;
-			CancelNav();
+			pilot.Cancel();
 			return;
 		}
 		if ((change.To.BudSpawn & Room.BudSpawnFlags.SkipThisRoom) != 0)
@@ -999,7 +487,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Visible = false;
 		CollidesWithSolids = false;
 		Velocity = Vector2.Zero;
-		CancelNav();
+		pilot.Cancel();
 	}
 
 	private void SkipRoomSpawn()
@@ -1012,7 +500,7 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 		Visible = false;
 		CollidesWithSolids = false;
 		Velocity = Vector2.Zero;
-		CancelNav();
+		pilot.Cancel();
 	}
 
 	private void EnterRoom(RoomChange change)
@@ -1221,7 +709,6 @@ public class Bud : Pawn, ICarryable, IHitByHitbox
 
 		moveX = Math.Sign(dx);
 		moveY = enterWalkDucking ? 1 : 0;
-		nav.SetDebugNavState(Game.IsPlatformNavDebugVisible ? $"enter walk {target}" : "enter walk");
 		return true;
 	}
 
