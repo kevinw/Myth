@@ -1148,6 +1148,7 @@ public sealed class ReachSense(ReachBody body)
 	List<ReachMove>? moves;
 	Room? room;
 	float refreshTimer;
+	float buildTime; // how long the build in flight has taken, in game time so the gym and a rewind agree
 	// Moves tried and missed this room visit, by where they started: they cost more from then on.
 	readonly Dictionary<(Point2 Start, int Move), int> misses = [];
 
@@ -1167,6 +1168,7 @@ public sealed class ReachSense(ReachBody body)
 		if (building == null && refreshTimer <= 0)
 		{
 			refreshTimer = RefreshInterval;
+			buildTime = 0;
 			next ??= new(body, moves, misses);
 			next.Rasterize(game, room);
 			// The gym runs unthrottled and must build on the same frame every run.
@@ -1176,10 +1178,18 @@ public sealed class ReachSense(ReachBody body)
 				building = next.Build(game, game.Manager.Unthrottled && !AlwaysSlice ? double.PositiveInfinity : budget).GetEnumerator();
 			}
 		}
-		if (building != null && !building.MoveNext())
+		if (building != null)
 		{
-			building = null;
-			(Field, next) = (next, Field);
+			buildTime += game.Time.Delta;
+			if (!building.MoveNext())
+			{
+				building = null;
+				// A room that keeps changing -- a surface that grows -- would otherwise start the next build on the
+				// very next frame, since refreshTimer ran down the whole time this one took. Resting as long as the
+				// build did caps that at half the frames, and changes nothing where builds are rare.
+				refreshTimer = Math.Max(refreshTimer, buildTime);
+				(Field, next) = (next, Field);
+			}
 		}
 		Field?.SolveFor(target);
 	}
