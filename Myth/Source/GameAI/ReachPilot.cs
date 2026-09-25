@@ -86,7 +86,7 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 			return Air(field, p);
 		if (owner.GroundActor() is MovingPlatform platform)
 			return Ride(field, platform, p);
-		var node = field.StandNear(p, Game.TileSize * 2, out _);
+		var node = field.StandUnder(p, Game.TileSize * 2);
 		if (node < 0)
 		{
 			Label = "no stand";
@@ -203,7 +203,10 @@ public sealed class ReachPilot(Pawn owner, Func<ReachManner> manner)
 			if (edge.Move >= 0)
 			{
 				var takeoff = field.Nodes[edge.From].Position;
-				if (at == node && p == takeoff && owner.Velocity.X == 0)
+				// X exact -- Arrive puts us on that pixel and it places the arc -- but the surface we stand on may
+				// have drifted since the field last saw it.
+				if (at == node && p.X == takeoff.X && Math.Abs(p.Y - takeoff.Y) <= ReachField.DriftTolerance &&
+					owner.Velocity.X == 0)
 					return WindUp(field, edge);
 				target = takeoff;
 				break;

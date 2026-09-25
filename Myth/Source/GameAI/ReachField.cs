@@ -59,6 +59,10 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 	static int RopeGraceFrames => 15;
 	static int MaxNodes => 6000;
 	const int RasterMargin = 4; // tiles
+	// The room can shift under a pawn between builds -- a surface that grows, a door that moves -- so this much
+	// vertical drift still counts as standing in the same place, both for finding the stand it is on and for
+	// reaching a takeoff. Every other localizer already forgives drift; StandNear walks exact pixels.
+	public static int DriftTolerance => 3;
 	static int TouchSearchRadius => 200;
 	static int RidePhaseSpacing => 12;
 	static int BoardReach => 160;
@@ -707,8 +711,23 @@ public sealed class ReachField(ReachBody body, List<ReachMove> moves, Dictionary
 		return found >= 0 ? found : TryStand(p, out var ducking) && !ducking ? AddStand(p, 0, false) : -1;
 	}
 
-	// The stand at these feet, or the nearest one a short walk along the same surface.
-	public int StandNear(Point2 feet, int maxWalk, out int distance)
+	// Which stand a pawn on the ground here is on, forgiving a few px of drift since the field was built, least
+	// drift first. A pawn whose feet the raster puts inside a surface (or off the end of one) still gets an
+	// answer, where walking the raster from the exact pixel gives up at once.
+	public int StandUnder(Point2 feet, int maxWalk)
+	{
+		for (var drift = 0; drift <= DriftTolerance; drift++)
+		{
+			if (StandNear(feet - new Point2(0, drift), maxWalk, out _) is var above and >= 0)
+				return above;
+			if (drift > 0 && StandNear(feet + new Point2(0, drift), maxWalk, out _) is var below and >= 0)
+				return below;
+		}
+		return -1;
+	}
+
+	// The stand at these feet exactly, or the nearest one a short walk along the same surface.
+	int StandNear(Point2 feet, int maxWalk, out int distance)
 	{
 		distance = 0;
 		if (standAt.TryGetValue(feet, out var exact))
