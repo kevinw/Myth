@@ -171,6 +171,7 @@ public partial class Manager
 			ImGui.MenuItem("SFX", null, ref proceduralSoundEditor.Open);
 #endif
 			ImGui.MenuItem("Preferences", null, ref preferencesOpen);
+			ImGui.MenuItem("MIDI Controls", null, ref midiWindowOpen);
 			ImGui.Separator();
 			ImGui.MenuItem("Dear ImGui Demo", null, ref imguiDemoOpen);
 			if (ImGui.MenuItem("Reset Layout"))

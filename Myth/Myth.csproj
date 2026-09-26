@@ -275,6 +275,7 @@
   </ItemGroup>
 
 	<ItemGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm' and '$(MythTestShip)' != 'true' and '$(MythShip)' != 'true'">
+		<PackageReference Include="Melanchall.DryWetMidi" Version="8.0.3" />
 		<None Remove="EditorAssets/**" />
 		<Content Include="EditorAssets/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>

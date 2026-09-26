@@ -205,11 +205,15 @@ public partial class Manager
 
 	internal void EditorUI()
 	{
+		UpdateMidiEditing();
 		// End-of-gesture commit for the inspector undo scopes (see OpenRoomSettingsUndo).
 		if (!IsAnyItemActive())
 		{
-			undo.CommitPending(RoomSettingsUndoSlot);
-			undo.CommitPending(ActorPropertyUndoSlot);
+			if (!midiGestureActive)
+			{
+				undo.CommitPending(RoomSettingsUndoSlot);
+				undo.CommitPending(ActorPropertyUndoSlot);
+			}
 			undo.CommitPending(SurfaceUndoSlot);
 			undo.CommitPending(VisualsUndoSlot);
 		}
@@ -239,6 +243,7 @@ public partial class Manager
 		TransitionViewerImGui();
 		RigAnimationViewerImGui();
 		PreferencesImGui();
+		MidiEditingImGui();
 		VisualsImGui();
 		if (imguiDemoOpen)
 			ShowDemoWindow(ref imguiDemoOpen);
@@ -1547,7 +1552,7 @@ public partial class Manager
 
 		BeginPropertyRow("Intensity");
 		var ambientIntensity = room.AmbientIntensity;
-		if (SliderFloat("##RoomAmbientIntensity", ref ambientIntensity, 0.0f, 2.0f))
+		if (MidiRoomSlider("AmbientIntensity", "##RoomAmbientIntensity", ref ambientIntensity, 0.0f, 2.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
 			room.AmbientIntensity = ambientIntensity;
@@ -1556,7 +1561,7 @@ public partial class Manager
 
 		BeginPropertyRow("Noise");
 		var lightNoise = room.LightNoise;
-		if (SliderFloat("##RoomLightNoise", ref lightNoise, 0.0f, 1.0f))
+		if (MidiRoomSlider("LightNoise", "##RoomLightNoise", ref lightNoise, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
 			room.LightNoise = lightNoise;
@@ -1574,7 +1579,7 @@ public partial class Manager
 
 		BeginPropertyRow("Spore Fog");
 		var sporeFogStrength = room.SporeFogStrength;
-		if (SliderFloat("##RoomSporeFogStrength", ref sporeFogStrength, 0.0f, 1.0f))
+		if (MidiRoomSlider("SporeFogStrength", "##RoomSporeFogStrength", ref sporeFogStrength, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Lighting", room);
 			room.SporeFogStrength = sporeFogStrength;
@@ -1605,7 +1610,7 @@ public partial class Manager
 
 		BeginPropertyRow("Reverb");
 		var reverb = room.Reverb;
-		if (SliderFloat("##RoomReverb", ref reverb, 0.0f, 1.0f))
+		if (MidiRoomSlider("Reverb", "##RoomReverb", ref reverb, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Reverb", room);
 			room.ReverbAuto = false;
@@ -1617,7 +1622,7 @@ public partial class Manager
 		// frame pixels, so the doubling is permanently uneven.
 		BeginPropertyRow("Camera Zoom");
 		var zoom = (int)MathF.Round(room.Zoom);
-		if (SliderInt("##RoomZoom", ref zoom, 1, 4))
+		if (MidiRoomSlider("Zoom", "##RoomZoom", ref zoom, 1, 4))
 		{
 			OpenRoomSettingsUndo("Edit Room Zoom", room);
 			room.Zoom = Math.Clamp(zoom, 1, 4);
@@ -1626,7 +1631,7 @@ public partial class Manager
 
 		BeginPropertyRow("Music Muffle");
 		var musicMuffle = room.MusicMuffle;
-		if (SliderFloat("##RoomMusicMuffle", ref musicMuffle, 0.0f, 1.0f))
+		if (MidiRoomSlider("MusicMuffle", "##RoomMusicMuffle", ref musicMuffle, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Music Muffle", room);
 			room.MusicMuffle = Math.Clamp(musicMuffle, 0.0f, 1.0f);
@@ -1635,7 +1640,7 @@ public partial class Manager
 
 		BeginPropertyRow("Sun Strength");
 		var sunStrength = room.SunStrength;
-		if (SliderFloat("##RoomSunStrength", ref sunStrength, 0.0f, 2.0f))
+		if (MidiRoomSlider("SunStrength", "##RoomSunStrength", ref sunStrength, 0.0f, 2.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Sun", room);
 			room.SunStrength = sunStrength;
@@ -1709,7 +1714,7 @@ public partial class Manager
 
 		BeginPropertyRow("Scale");
 		var ditherScale = room.LightingDitherScale;
-		if (SliderFloat("##RoomDitherScale", ref ditherScale, 1.0f, 8.0f))
+		if (MidiRoomSlider("LightingDitherScale", "##RoomDitherScale", ref ditherScale, 1.0f, 8.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Dither", room);
 			room.LightingDitherScale = ditherScale;
@@ -1718,7 +1723,7 @@ public partial class Manager
 
 		BeginPropertyRow("Strength");
 		var ditherStrength = room.LightingDitherStrength;
-		if (SliderFloat("##RoomDitherStrength", ref ditherStrength, 0.0f, 1.0f))
+		if (MidiRoomSlider("LightingDitherStrength", "##RoomDitherStrength", ref ditherStrength, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Dither", room);
 			room.LightingDitherStrength = ditherStrength;
@@ -1727,7 +1732,7 @@ public partial class Manager
 
 		BeginPropertyRow("Slope Boost");
 		var ditherSlopeBoost = room.NormalDitherSlopeBoost;
-		if (SliderFloat("##RoomDitherSlopeBoost", ref ditherSlopeBoost, 0.0f, 1.0f))
+		if (MidiRoomSlider("NormalDitherSlopeBoost", "##RoomDitherSlopeBoost", ref ditherSlopeBoost, 0.0f, 1.0f))
 		{
 			OpenRoomSettingsUndo("Edit Room Dither", room);
 			room.NormalDitherSlopeBoost = ditherSlopeBoost;

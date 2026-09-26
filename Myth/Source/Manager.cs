@@ -870,6 +870,7 @@ public partial class Manager : App
 		imguiCursors.Clear();
 #endif
 #if EDITOR
+		DisposeMidiEditing();
 		maskPaintPreviewTexture?.Dispose();
 		ClearRoomPreviewCache(deferDisposal: false);
 		ClearSurfacePreviewCache(deferDisposal: false);

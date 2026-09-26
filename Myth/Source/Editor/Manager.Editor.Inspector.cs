@@ -145,6 +145,13 @@ public partial class Manager
 		{
 			if (MenuItem(property.Inspector != null ? "Open [I] in Zed" : "Open declaration in Zed"))
 				ActorZedLauncher.OpenActorProperty(property.DeclaringType, property.Name);
+			if (specId == null && property.Inspector != null && (property.Type == typeof(float) || property.Type == typeof(int)))
+				if (MenuItem("MIDI Learn"))
+				{
+					midiRoomTarget = false;
+					midiWindowOpen = true;
+					midiLearnParameter = $"actor:{ActorSpecs.GetTypeName(actor)}:{property.Name}";
+				}
 			EndPopup();
 		}
 		PushID("Value");
@@ -583,6 +590,7 @@ public partial class Manager
 
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(actor));
+		BeginMidiActorInspector($"actor:{room.Id}:{actorId}");
 
 		var inspectorAction = false;
 		if (actorId is not null && game?.GetActorById(actorId) is RigPuppet)
@@ -691,6 +699,7 @@ public partial class Manager
 				continue;
 			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
 				continue;
+			NoteMidiActorProperty(property);
 			PushID(property.JsonName);
 			changed |= DrawActorInstanceProperty(room, actor, property);
 			PopID();
@@ -743,6 +752,7 @@ public partial class Manager
 
 		actorPropertyScratch.Clear();
 		actorPropertyScratch.AddRange(ActorSpecs.GetEditableProperties(runtime));
+		BeginMidiActorInspector($"live:{runtime.ActorId}");
 		livePropertyTarget = runtime;
 		string? propertyGroup = null;
 		var propertyGroupOpen = true;
@@ -757,6 +767,7 @@ public partial class Manager
 				continue;
 			if (!PropertyGroupVisible(property, ref propertyGroup, ref propertyGroupOpen))
 				continue;
+			NoteMidiActorProperty(property);
 			PushID(property.JsonName);
 			DrawActorProperty(null, null, authored, property);
 			PopID();
